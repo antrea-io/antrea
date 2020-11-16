@@ -20,14 +20,7 @@ package main
 import (
 	"context"
 	"fmt"
-	"sync"
 	"time"
-
-	"github.com/vmware-tanzu/antrea/pkg/agent"
-	crdclientset "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned"
-	"github.com/vmware-tanzu/antrea/pkg/signals"
-	"github.com/vmware-tanzu/antrea/pkg/util/env"
-	"github.com/vmware-tanzu/antrea/pkg/version"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
@@ -35,31 +28,27 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
 	componentbaseconfig "k8s.io/component-base/config"
 	"k8s.io/klog"
 	aggregatorclientset "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
+
+	"github.com/vmware-tanzu/antrea/pkg/agent"
+	crdclientset "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned"
+	"github.com/vmware-tanzu/antrea/pkg/signals"
+	"github.com/vmware-tanzu/antrea/pkg/util/env"
+	"github.com/vmware-tanzu/antrea/pkg/version"
 )
 
-func createOutClusterCli(configFile string) (clientset.Interface, aggregatorclientset.Interface, crdclientset.Interface, error) {
-	kubeConfig, err := clientcmd.BuildConfigFromFlags("", configFile)
-	if err != nil {
-		klog.Errorf("Failed to get incluster config: %s", err.Error())
-		return nil, nil, nil, err
+func createClientSet(kubeConfig *rest.Config) (clientset.Interface, aggregatorclientset.Interface, crdclientset.Interface, error) {
+	var err error
+	if kubeConfig == nil {
+		klog.Infof("kubeConfig is not specified, will fallback to incluster")
+		kubeConfig, err = rest.InClusterConfig()
+		if err != nil {
+			klog.Errorf("Failed to get incluster config: %s", err.Error())
+			return nil, nil, nil, err
+		}
 	}
-	return createClusterCli(kubeConfig)
-}
-
-func createInClusterCli() (clientset.Interface, aggregatorclientset.Interface, crdclientset.Interface, error) {
-	kubeConfig, err := rest.InClusterConfig()
-	if err != nil {
-		klog.Errorf("Failed to get incluster config: %s", err.Error())
-		return nil, nil, nil, err
-	}
-	return createClusterCli(kubeConfig)
-}
-
-func createClusterCli(kubeConfig *rest.Config) (clientset.Interface, aggregatorclientset.Interface, crdclientset.Interface, error) {
 	client, err := clientset.NewForConfig(kubeConfig)
 	if err != nil {
 		klog.Errorf("Failed to create clientset: %s", err.Error())
@@ -77,9 +66,9 @@ func createClusterCli(kubeConfig *rest.Config) (clientset.Interface, aggregatorc
 	return client, aggregatorClient, crdClient, nil
 }
 
-func run(configFile string) error {
+func run() error {
 	klog.Infof("Starting Antrea agent simulator (version %s)", version.GetFullVersion())
-	k8sClient, _, _, err := createInClusterCli()
+	k8sClient, _, _, err := createClientSet(nil)
 	if err != nil {
 		return fmt.Errorf("error creating K8s clients: %v", err)
 	}
@@ -124,8 +113,6 @@ func run(configFile string) error {
 	}
 	klog.Infof("nodename: %s", nodeName)
 
-	fullSyncWaitGroup := sync.WaitGroup{}
-
 	// Wrapper watcher to call watch
 	networkPolicyControllerWatcher := &watchWrapper{
 		func() (watch.Interface, error) {
@@ -136,7 +123,6 @@ func run(configFile string) error {
 			return antreaClient.ControlplaneV1beta1().NetworkPolicies("").Watch(context.TODO(), options)
 		},
 		"networkPolicy",
-		&fullSyncWaitGroup,
 	}
 	addressGroupWatcher := &watchWrapper{
 		func() (watch.Interface, error) {
@@ -147,7 +133,6 @@ func run(configFile string) error {
 			return antreaClient.ControlplaneV1beta1().AddressGroups().Watch(context.TODO(), options)
 		},
 		"addressGroup",
-		&fullSyncWaitGroup,
 	}
 	appliedGroupWatcher := &watchWrapper{
 		func() (watch.Interface, error) {
@@ -158,15 +143,12 @@ func run(configFile string) error {
 			return antreaClient.ControlplaneV1beta1().AppliedToGroups().Watch(context.TODO(), options)
 		},
 		"appliedGroup",
-		&fullSyncWaitGroup,
 	}
-	fullSyncWaitGroup.Add(3)
 
 	// watch NetworkPolicies, AddressGroups, AppliedToGroups
 	go wait.NonSlidingUntil(networkPolicyControllerWatcher.watch, 5*time.Second, stopCh)
 	go wait.NonSlidingUntil(addressGroupWatcher.watch, 5*time.Second, stopCh)
 	go wait.NonSlidingUntil(appliedGroupWatcher.watch, 5*time.Second, stopCh)
-	fullSyncWaitGroup.Wait()
 
 	<-stopCh
 	klog.Info("Stopping Antrea agent simulator")
@@ -174,15 +156,8 @@ func run(configFile string) error {
 }
 
 type watchWrapper struct {
-	watchFunc         func() (watch.Interface, error)
-	name              string
-	fullSyncWaitGroup *sync.WaitGroup
-}
-
-type simulator struct {
-	networkPolicyWatcher *watchWrapper
-	addressGroupWatcher  *watchWrapper
-	appliedGroupWatcher  *watchWrapper
+	watchFunc func() (watch.Interface, error)
+	name      string
 }
 
 func (w *watchWrapper) watch() {
@@ -202,7 +177,6 @@ func (w *watchWrapper) watch() {
 		watcher.Stop()
 	}()
 	initCount := 0
-	w.fullSyncWaitGroup.Done()
 
 	// Watch the init events from chan, and log the events
 loop:
@@ -215,7 +189,7 @@ loop:
 			}
 			switch event.Type {
 			case watch.Added:
-				klog.V(2).Info("Added %s (%#v)", w.name, event.Object)
+				klog.V(2).Infof("Added %s (%#v)", w.name, event.Object)
 				initCount++
 			case watch.Bookmark:
 				break loop

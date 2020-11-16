@@ -26,7 +26,16 @@ spec:
         app: antrea
         component: antrea-agent-simulator
     spec:
-      serviceAccountName: antrea-agent-simulator
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: antrea/instance
+                    operator: NotIn
+                    values:
+                      - simulator
+      serviceAccountName: antrea-agent
       initContainers:
       - name: init-inotify-limit
         image: projects.registry.vmware.com/library/busybox:latest
@@ -44,7 +53,7 @@ spec:
       - name: simulator
         image: harbor-repo.vmware.com/dockerhub-proxy-cache/antrea/antrea-ubuntu-simulator:latest
         imagePullPolicy: IfNotPresent
-        command: ['/antrea-agent-simulator', '-v', '5']
+        command: ['/usr/local/bin/antrea-agent-simulator', '-v', '5']
         env:
           - name: POD_NAME
             valueFrom:

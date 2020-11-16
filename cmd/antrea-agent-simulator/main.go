@@ -41,14 +41,13 @@ func main() {
 }
 
 func newSimulatorCommand() *cobra.Command {
-	configFile := ""
 	cmd := &cobra.Command{
 		Use:  "antrea-agent-simulator",
 		Long: "The Antrea agent simulator.",
 		Run: func(cmd *cobra.Command, args []string) {
 			log.InitLogFileLimits(cmd.Flags())
 
-			if err := run(configFile); err != nil {
+			if err := run(); err != nil {
 				klog.Fatalf("Error running agent: %v", err)
 			}
 		},
@@ -57,10 +56,7 @@ func newSimulatorCommand() *cobra.Command {
 
 	flags := cmd.Flags()
 	log.AddFlags(flags)
-	flags.StringVar(&configFile, "config", configFile, "The path to the configuration file")
-	if configFile == "" {
-		configFile = "/kubeconfig/kubelet.kubeconfig"
-	}
+
 	// Install log flags
 	flags.AddGoFlagSet(flag.CommandLine)
 	return cmd
