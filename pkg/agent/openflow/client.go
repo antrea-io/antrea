@@ -45,7 +45,8 @@ type Client interface {
 	InstallGatewayFlows(gatewayAddrs []net.IP, gatewayMAC net.HardwareAddr, gatewayOFPort uint32) error
 
 	// InstallBridgeUplinkFlows installs Openflow flows between bridge local port and uplink port to support
-	// host networking. These flows are only needed on windows platform.
+	// host networking.
+	// This function is only used for Windows platform.
 	InstallBridgeUplinkFlows(uplinkPort uint32, bridgeLocalPort uint32) error
 
 	// InstallClusterServiceCIDRFlows sets up the appropriate flows so that traffic can reach
@@ -149,6 +150,7 @@ type Client interface {
 	// InstallExternalFlows sets up flows to enable Pods to communicate to the external IP addresses. The corresponding
 	// OpenFlow entries include: 1) identify the packets from local Pods to the external IP address, 2) mark the traffic
 	// in the connection tracking context, and 3) SNAT the packets with Node IP.
+	// This function is only used for Windows platform.
 	InstallExternalFlows(nodeIP net.IP, localSubnet net.IPNet) error
 
 	// Disconnect disconnects the connection between client and OFSwitch.
@@ -343,12 +345,12 @@ func (c *client) InstallPodFlows(interfaceName string, podInterfaceIPs []net.IP,
 	// Add IP SpoofGuard flows for all validate IPs.
 	flows = append(flows, c.podIPSpoofGuardFlow(podInterfaceIPs, podInterfaceMAC, ofPort, cookie.Pod)...)
 	// Add L3 Routing flows to rewrite Pod's dst MAC for all validate IPs.
-	flows = append(flows, c.l3FlowsToPod(gatewayMAC, podInterfaceIPs, podInterfaceMAC, cookie.Pod)...)
+	flows = append(flows, c.l3FwdFlowToPod(gatewayMAC, podInterfaceIPs, podInterfaceMAC, cookie.Pod)...)
 
 	if c.encapMode.IsNetworkPolicyOnly() {
 		// In policy-only mode, traffic to local Pod is routed based on destination IP.
 		flows = append(flows,
-			c.l3ToPodFlow(podInterfaceIPs, podInterfaceMAC, cookie.Pod)...,
+			c.l3FwdFlowRouteToPod(podInterfaceIPs, podInterfaceMAC, cookie.Pod)...,
 		)
 	}
 	return c.addFlows(c.podFlowCache, interfaceName, flows)
@@ -460,7 +462,7 @@ func (c *client) InstallLoadBalancerServiceFromOutsideFlows(svcIP net.IP, svcPor
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
 	var flows []binding.Flow
-	flows = append(flows, c.loadBalancerServiceFromOutsideFlow(config.UplinkOFPort, config.HostGatewayOFPort, svcIP, svcPort, protocol))
+	flows = append(flows, c.loadBalancerServiceFromOutsideFlow(config.HostGatewayOFPort, svcIP, svcPort, protocol))
 	cacheKey := fmt.Sprintf("LoadBalancerService_%s_%d_%s", svcIP, svcPort, protocol)
 	return c.addFlows(c.serviceFlowCache, cacheKey, flows)
 }
@@ -514,7 +516,7 @@ func (c *client) InstallGatewayFlows(gatewayAddrs []net.IP, gatewayMAC net.Hardw
 	flows = append(flows, c.ctRewriteDstMACFlows(gatewayMAC, cookie.Default)...)
 	// In NoEncap , no traffic from tunnel port
 	if c.encapMode.SupportsEncap() {
-		flows = append(flows, c.l3ToGatewayFlow(gatewayAddrs, gatewayMAC, cookie.Default)...)
+		flows = append(flows, c.l3FwdFlowToGateway(gatewayAddrs, gatewayMAC, cookie.Default)...)
 	}
 
 	if err := c.ofEntryOperations.AddAll(flows); err != nil {
@@ -534,7 +536,7 @@ func (c *client) InstallDefaultTunnelFlows(tunnelOFPort uint32) error {
 }
 
 func (c *client) InstallBridgeUplinkFlows(uplinkPort uint32, bridgeLocalPort uint32) error {
-	flows := c.hostBridgeUplinkFlows(uplinkPort, bridgeLocalPort, cookie.Default)
+	flows := c.hostBridgeUplinkFlows(uplinkPort, bridgeLocalPort, *c.nodeConfig.PodIPv4CIDR, cookie.Default)
 	c.hostNetworkingFlows = flows
 	if err := c.ofEntryOperations.AddAll(flows); err != nil {
 		return err
@@ -606,8 +608,8 @@ func (c *client) Initialize(roundInfo types.RoundInfo, nodeConfig *config.NodeCo
 }
 
 func (c *client) InstallExternalFlows(nodeIP net.IP, localSubnet net.IPNet) error {
-	flows := c.bridgeAndUplinkFlows(config.UplinkOFPort, config.BridgeOFPort, nodeIP, localSubnet, cookie.SNAT)
-	flows = append(flows, c.l3ToExternalFlows(nodeIP, localSubnet, config.HostGatewayOFPort, cookie.SNAT)...)
+	flows := c.uplinkSNATFlows(config.BridgeOFPort, cookie.SNAT)
+	flows = append(flows, c.snatFlows(nodeIP, localSubnet, cookie.SNAT)...)
 	if err := c.ofEntryOperations.AddAll(flows); err != nil {
 		return fmt.Errorf("failed to install flows for external communication: %v", err)
 	}
@@ -684,7 +686,7 @@ func (c *client) DeleteStaleFlows() error {
 
 func (c *client) setupPolicyOnlyFlows() error {
 	// Rewrites MAC to gw port if the packet received is unmatched by local Pod flows.
-	flows := c.l3ToGWFlow(c.nodeConfig.GatewayConfig.MAC, cookie.Default)
+	flows := c.l3FwdFlowRouteToGW(c.nodeConfig.GatewayConfig.MAC, cookie.Default)
 	if c.IsIPv4Enabled() {
 		flows = append(flows,
 			// Replies any ARP request with the same global virtual MAC.

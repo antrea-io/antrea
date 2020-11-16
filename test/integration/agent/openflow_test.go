@@ -95,7 +95,15 @@ type testConfig struct {
 var (
 	_, podIPv4CIDR, _ = net.ParseCIDR("192.168.1.0/24")
 	_, podIPv6CIDR, _ = net.ParseCIDR("fd74:ca9b:172:19::/64")
+
+	ofTestNodeConfig config1.NodeConfig
 )
+
+func init() {
+	nodeIP, nodeSubnet, _ := net.ParseCIDR("10.10.10.1/24")
+	nodeSubnet.IP = nodeIP
+	ofTestNodeConfig.NodeIPAddr = nodeSubnet
+}
 
 func TestConnectivityFlows(t *testing.T) {
 	// Initialize ovs metrics (Prometheus) to test them
@@ -207,12 +215,12 @@ func TestReplayFlowsNetworkPolicyFlows(t *testing.T) {
 }
 
 func testExternalFlows(t *testing.T, config *testConfig) {
-	nodeIP := net.ParseIP("10.10.10.1")
-	_, localSubnet, _ := net.ParseCIDR("172.16.1.0/24")
+	nodeIP := ofTestNodeConfig.NodeIPAddr.IP
+	localSubnet := ofTestNodeConfig.PodIPv4CIDR
 	if err := c.InstallExternalFlows(nodeIP, *localSubnet); err != nil {
 		t.Errorf("Failed to install OpenFlow entries to allow Pod to communicate to the external addresses: %v", err)
 	}
-	for _, tableFlow := range prepareExternalFlows(nodeIP, localSubnet) {
+	for _, tableFlow := range prepareExternalFlows(nodeIP, localSubnet, config.globalMAC) {
 		ofTestUtils.CheckFlowExists(t, ovsCtlClient, tableFlow.tableID, true, tableFlow.flows)
 	}
 }
@@ -239,14 +247,17 @@ func testReplayFlows(t *testing.T) {
 }
 
 func testInitialize(t *testing.T, config *testConfig) {
-	nodeConfig := &config1.NodeConfig{}
 	if config.enableIPv4 {
-		nodeConfig.PodIPv4CIDR = podIPv4CIDR
+		ofTestNodeConfig.PodIPv4CIDR = podIPv4CIDR
+	} else {
+		ofTestNodeConfig.PodIPv4CIDR = nil
 	}
 	if config.enableIPv6 {
-		nodeConfig.PodIPv6CIDR = podIPv6CIDR
+		ofTestNodeConfig.PodIPv6CIDR = podIPv6CIDR
+	} else {
+		ofTestNodeConfig.PodIPv6CIDR = nil
 	}
-	if _, err := c.Initialize(roundInfo, nodeConfig, config1.TrafficEncapModeEncap, config1.HostGatewayOFPort); err != nil {
+	if _, err := c.Initialize(roundInfo, &ofTestNodeConfig, config1.TrafficEncapModeEncap, config1.HostGatewayOFPort); err != nil {
 		t.Errorf("Failed to initialize openflow client: %v", err)
 	}
 	for _, tableFlow := range prepareDefaultFlows(config) {
@@ -1035,7 +1046,7 @@ func prepareGatewayFlows(gwIPs []net.IP, gwMAC net.HardwareAddr, gwOFPort uint32
 				[]*ofTestUtils.ExpectFlow{
 					{
 						MatchStr: fmt.Sprintf("priority=200,ct_state=-new+trk,ct_mark=0x20,%s", ipProtoStr),
-						ActStr:   fmt.Sprintf("load:0x%s->NXM_OF_ETH_DST[],goto_table:42", strings.Replace(gwMAC.String(), ":", "", -1)),
+						ActStr:   fmt.Sprintf("set_field:%s->eth_dst,goto_table:42", gwMAC.String()),
 					},
 				},
 			},
@@ -1219,23 +1230,14 @@ func prepareIPNetAddresses(addresses []string) []types.Address {
 	return ipAddresses
 }
 
-func prepareExternalFlows(nodeIP net.IP, localSubnet *net.IPNet) []expectTableFlows {
+func prepareExternalFlows(nodeIP net.IP, localSubnet *net.IPNet, vMAC net.HardwareAddr) []expectTableFlows {
 	return []expectTableFlows{
-		{
-			uint8(0),
-			[]*ofTestUtils.ExpectFlow{
-				{
-					MatchStr: fmt.Sprintf("priority=210,ip,in_port=LOCAL,nw_dst=%s", localSubnet.String()),
-					ActStr:   "load:0x1->NXM_NX_REG0[19],goto_table:30",
-				},
-			},
-		},
 		{
 			uint8(5),
 			[]*ofTestUtils.ExpectFlow{
 				{
-					MatchStr: fmt.Sprintf("priority=200,ip"),
-					ActStr:   "load:0x4->NXM_NX_REG0[0..15],goto_table:30",
+					MatchStr: fmt.Sprintf("priority=200,ip,reg0=0x4/0xffff"),
+					ActStr:   "goto_table:30",
 				},
 			},
 		},
@@ -1252,14 +1254,10 @@ func prepareExternalFlows(nodeIP net.IP, localSubnet *net.IPNet) []expectTableFl
 			[]*ofTestUtils.ExpectFlow{
 				{
 					MatchStr: "priority=210,ct_state=-new+trk,ct_mark=0x40,ip,reg0=0x4/0xffff",
-					ActStr:   "load:0xaabbccddeeff->NXM_OF_ETH_DST[],load:0x1->NXM_NX_REG0[19],goto_table:42",
+					ActStr:   fmt.Sprintf("set_field:%s->eth_dst,load:0x1->NXM_NX_REG0[19],goto_table:42", vMAC.String()),
 				},
 				{
-					MatchStr: "priority=200,ct_state=-new+trk,ct_mark=0x40,ip",
-					ActStr:   "goto_table:42",
-				},
-				{
-					MatchStr: fmt.Sprintf("priority=200,ip,in_port=%d", config1.UplinkOFPort),
+					MatchStr: fmt.Sprintf("priority=200,ip,reg0=0x4/0xffff"),
 					ActStr:   "LOCAL",
 				},
 			},
@@ -1268,15 +1266,19 @@ func prepareExternalFlows(nodeIP net.IP, localSubnet *net.IPNet) []expectTableFl
 			uint8(70),
 			[]*ofTestUtils.ExpectFlow{
 				{
-					MatchStr: "priority=200,ct_mark=0x20,ip,reg0=0x2/0xffff", ActStr: "goto_table:80",
-				},
-				{
-					MatchStr: fmt.Sprintf("priority=190,ip,reg0=0x2/0xffff,nw_dst=%s", nodeIP.String()),
+					MatchStr: fmt.Sprintf("priority=200,ip,reg0=0x2/0xffff,nw_dst=%s", localSubnet.String()),
 					ActStr:   "goto_table:80",
 				},
 				{
-					MatchStr: "priority=180,ip,reg0=0x2/0xffff",
-					ActStr:   "load:0x1->NXM_NX_REG0[17],goto_table:90",
+					MatchStr: fmt.Sprintf("priority=200,ip,reg0=0x2/0xffff,nw_dst=%s", nodeIP.String()),
+					ActStr:   "goto_table:80",
+				},
+				{
+					MatchStr: "priority=200,ct_mark=0x20,ip,reg0=0x2/0xffff", ActStr: "goto_table:80",
+				},
+				{
+					MatchStr: "priority=190,ct_state=+new+trk,ip,reg0=0x2/0xffff",
+					ActStr:   "load:0x1->NXM_NX_REG0[17],goto_table:80",
 				},
 			},
 		},
@@ -1286,15 +1288,6 @@ func prepareExternalFlows(nodeIP net.IP, localSubnet *net.IPNet) []expectTableFl
 				{
 					MatchStr: "priority=200,ct_state=+new+trk,ip,reg0=0x20000/0x20000",
 					ActStr:   fmt.Sprintf("ct(commit,table=110,zone=65520,nat(src=%s),exec(load:0x40->NXM_NX_CT_MARK[]))", nodeIP.String()),
-				},
-			},
-		},
-		{
-			uint8(110),
-			[]*ofTestUtils.ExpectFlow{
-				{
-					MatchStr: "priority=200,ip,reg0=0x20000/0x20000",
-					ActStr:   fmt.Sprintf("output:%d", config1.HostGatewayOFPort),
 				},
 			},
 		},
