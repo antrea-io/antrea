@@ -116,7 +116,7 @@ func ensureAntreaRunning(tb testing.TB, data *TestData) error {
 }
 
 func createDirectory(path string) error {
-	return os.Mkdir(path, 0700)
+	return os.MkdirAll(path, 0700)
 }
 
 func (data *TestData) setupLogDirectoryForTest(testName string) error {

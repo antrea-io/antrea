@@ -19,6 +19,7 @@ import (
 	"flag"
 	"fmt"
 	"net/url"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -28,6 +29,9 @@ import (
 	networkv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
+
+	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
+	secClient "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/security/v1alpha1"
 )
 
 const (
@@ -36,6 +40,7 @@ const (
 	perfTestAppLabel                = "antrea-perf-test"
 	podsConnectionNetworkPolicyName = "pods.ingress"
 	workloadNetworkPolicyName       = "workloads.ingress"
+	workloadACNPName                = "acnp.ingress"
 	perftoolContainerName           = "perftool"
 	nginxContainerName              = "nginx"
 )
@@ -75,6 +80,19 @@ func BenchmarkRealizeNetworkPolicy(b *testing.B) {
 	for _, policyRules := range []int{5000, 10000, 15000} {
 		b.Run(fmt.Sprintf("RealizeNetworkPolicy%d", policyRules), func(b *testing.B) {
 			withPerfTestSetup(func(data *TestData) { networkPolicyRealize(policyRules, data, b) }, b)
+		})
+	}
+}
+
+func BenchmarkRealizeACNP(b *testing.B) {
+	for _, policyRules := range []int{5000, 10000, 15000} {
+		b.Run(fmt.Sprintf("RealizeACNP-Single-Policy-%d-Rules", policyRules), func(b *testing.B) {
+			withPerfTestSetup(func(data *TestData) { acnpRealize(policyRules, 1, data, b) }, b)
+		})
+	}
+	for _, numCNP := range []int{50, 100, 150} {
+		b.Run(fmt.Sprintf("RealizeACNP-%d-Policies-%d-Rules-each", numCNP, 100), func(b *testing.B) {
+			withPerfTestSetup(func(data *TestData) { acnpRealize(100, numCNP, data, b) }, b)
 		})
 	}
 }
@@ -172,6 +190,61 @@ func generateWorkloadNetworkPolicy(policyRules int) *networkv1.NetworkPolicy {
 func populateWorkloadNetworkPolicy(np *networkv1.NetworkPolicy, data *TestData) error {
 	_, err := data.clientset.NetworkingV1().NetworkPolicies(testNamespace).Create(context.TODO(), np, metav1.CreateOptions{})
 	return err
+}
+
+func generateWorkloadACNPs(numPolicyRules, numCNPs int) []*secv1alpha1.ClusterNetworkPolicy {
+	acnps := make([]*secv1alpha1.ClusterNetworkPolicy, numCNPs)
+	ingressRules := make([]secv1alpha1.NetworkPolicyPeer, numPolicyRules*numCNPs)
+	rndSrc := rand.NewSource(seed)
+	existingCIDRs := make(map[string]struct{}) // ensure no duplicated cidrs
+	for i := 0; i < numPolicyRules*numCNPs; i++ {
+		cidr := randCidr(rndSrc)
+		for _, ok := existingCIDRs[cidr]; ok; {
+			cidr = randCidr(rndSrc)
+		}
+		existingCIDRs[cidr] = struct{}{}
+		ingressRules[i] = secv1alpha1.NetworkPolicyPeer{IPBlock: &secv1alpha1.IPBlock{CIDR: cidr}}
+	}
+	for i := 0; i < numCNPs; i++ {
+		ruleAction := secv1alpha1.RuleActionAllow
+		cnpSpec := secv1alpha1.ClusterNetworkPolicySpec{
+			Priority:  float64(i + 1),
+			AppliedTo: []secv1alpha1.NetworkPolicyPeer{{PodSelector: labelSelector}},
+			Ingress: []secv1alpha1.Rule{{
+				Action: &ruleAction,
+				From:   ingressRules[numPolicyRules*i : numPolicyRules*(i+1)],
+				Ports:  []secv1alpha1.NetworkPolicyPort{},
+			}},
+			Egress: []secv1alpha1.Rule{},
+		}
+		acnps[i] = &secv1alpha1.ClusterNetworkPolicy{
+			ObjectMeta: metav1.ObjectMeta{Name: workloadACNPName + strconv.Itoa(i)},
+			Spec:       cnpSpec,
+		}
+	}
+	return acnps
+}
+
+func populateACNPs(cnps []*secv1alpha1.ClusterNetworkPolicy, data *TestData) error {
+	for _, cnp := range cnps {
+		securityClient := data.securityClient.(*secClient.SecurityV1alpha1Client)
+		_, err := securityClient.ClusterNetworkPolicies().Create(context.TODO(), cnp, metav1.CreateOptions{})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func cleanupACNPs(numCNPs int, data *TestData) error {
+	for i := 0; i < numCNPs; i++ {
+		cnpName := workloadACNPName + strconv.Itoa(i)
+		securityClient := data.securityClient.(*secClient.SecurityV1alpha1Client)
+		if err := securityClient.ClusterNetworkPolicies().Delete(context.TODO(), cnpName, metav1.DeleteOptions{}); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func setupTestPods(data *TestData, b *testing.B) (nginxPodIP, perfPodIP *PodIPs) {
@@ -275,9 +348,49 @@ func networkPolicyRealize(policyRules int, data *TestData, b *testing.B) {
 	}
 }
 
+// acnpRealize runs a benchmark to measure how long it takes for <numACNPs> ACNPs, each with <numPolicyRules> CIDR rules,
+// to be realized as OVS flows. In order to have entities for the Network Policy to be applied to, we create two dummy
+// Pods with the "antrea-perf-test" app label, but they do not generate any traffic.
+func acnpRealize(numPolicyRules, numCNPs int, data *TestData, b *testing.B) {
+	setupTestPods(data, b)
+	for i := 0; i < b.N; i++ {
+		cnps := generateWorkloadACNPs(numPolicyRules, numCNPs)
+		go func() {
+			err := populateACNPs(cnps, data)
+			if err != nil {
+				b.Fatalf("Error when populating workload ACNP: %v", err)
+			}
+		}()
+
+		b.Log("Waiting for ACNPs to be realized")
+		b.StartTimer()
+		err := waitACNPRealize(numPolicyRules, numCNPs, data)
+		if err != nil {
+			b.Fatalf("Checking ACNP realization failed: %v", err)
+		}
+		b.StopTimer()
+		b.Log("All ACNPs have been realized")
+
+		err = cleanupACNPs(numCNPs, data)
+		if err != nil {
+			b.Fatalf("Error when cleaning up ACNPs after running one bench iteration: %v", err)
+		}
+	}
+}
+
 func WaitNetworkPolicyRealize(policyRules int, data *TestData) error {
 	return wait.PollImmediate(50*time.Millisecond, *realizeTimeout, func() (bool, error) {
-		return checkRealize(policyRules, data)
+		return checkRealize(policyRules+2, 90, data)
+	})
+}
+
+// For ACNP, the two match flows created for the two pods with perfTestAppLabel need to be created at
+// each ofPriority corresponded to CNP priority. Each ACNP also leads to <policyRules> flows for the
+// CIDR rules. Hence we verify if numACNPs * (2 + policyRules) are realized on table 85.
+func waitACNPRealize(policyRules, numACNPs int, data *TestData) error {
+	expectedNumFlows := numACNPs * (2 + policyRules)
+	return wait.PollImmediate(50*time.Millisecond, *realizeTimeout, func() (bool, error) {
+		return checkRealize(expectedNumFlows, 85, data)
 	})
 }
 
@@ -293,13 +406,15 @@ func checkRealize(policyRules int, data *TestData) (bool, error) {
 		return false, err
 	}
 	// table 90 is the ingressRuleTable where the rules in workload network policy is being applied to.
-	cmd := []string{"ovs-ofctl", "dump-flows", defaultBridgeName, "table=90"}
+	// table 85 is the ingressRuleTable where the rules in workload CNP is being applied to.
+	tableStr := fmt.Sprintf("table=%s", strconv.Itoa(tableNum))
+	cmd := []string{"ovs-ofctl", "dump-flows", defaultBridgeName, tableStr}
 	stdout, _, err := data.runCommandFromPod(antreaNamespace, antreaPodName, "antrea-agent", cmd)
 	if err != nil {
 		return false, err
 	}
 	flowNums := strings.Count(stdout, "\n")
-	return flowNums > policyRules, nil
+	return flowNums > expectedFlowCount, nil
 }
 
 // withPerfTestSetup runs function fn in a clean test environment.
