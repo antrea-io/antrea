@@ -40,7 +40,7 @@ the Agent configuration:
       AntreaProxy: true
 ```
 
-For antrea-octant-plugin installation, please refer to [antrea-octant-installation](/docs/octant-plugin-installation.md).
+For antrea-octant-plugin installation, please refer to [antrea-octant-installation](octant-plugin-installation.md).
 
 ## Start a New Trace
 You can choose to use kubectl together with YAML file, antctl with spec information or Octant UI to start a new trace.

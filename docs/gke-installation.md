@@ -73,6 +73,7 @@ assign this permission.
 1. Prepare the Cluster Nodes
 
     Deploy ``antrea-node-init`` DaemonSet to enable ``kubelet`` to operate in CNI mode.
+
     ```bash
     kubectl apply -f https://raw.githubusercontent.com/vmware-tanzu/antrea/master/build/yamls/antrea-gke-node-init.yml
     ```
@@ -84,12 +85,14 @@ assign this permission.
 Note that GKE support was added in release 0.5.0, which means you cannot
 pick a release older than 0.5.0. For any given release `<TAG>` (e.g. `v0.5.0`),
 you can deploy Antrea as follows:
+
     ```bash
     kubectl apply -f https://github.com/vmware-tanzu/antrea/releases/download/<TAG>/antrea-gke.yml
     ```
 
     To deploy the latest version of Antrea (built from the master branch), use the
 checked-in [deployment yaml](/build/yamls/antrea-gke.yml):
+
     ```bash
     kubectl apply -f https://raw.githubusercontent.com/vmware-tanzu/antrea/master/build/yamls/antrea-gke.yml
     ```
@@ -97,6 +100,7 @@ checked-in [deployment yaml](/build/yamls/antrea-gke.yml):
     The command will deploy a single replica of Antrea controller to the GKE
 cluster and deploy Antrea agent to every Node. After a successful deployment
 you should be able to see these Pods running in your cluster:
+
     ```bash
     $ kubectl get pods --namespace kube-system  -l app=antrea -o wide
     NAME                                READY   STATUS    RESTARTS   AGE   IP              NODE                                      NOMINATED NODE   READINESS GATES
@@ -108,6 +112,7 @@ you should be able to see these Pods running in your cluster:
 3. Restart remaining Pods
 
     Once Antrea is up and running, restart all Pods in all Namespaces (kube-system, etc) so they can be managed by Antrea.
+
     ```bash
     $ kubectl delete pods -n kube-system $(kubectl get pods -n kube-system -o custom-columns=NAME:.metadata.name,HOSTNETWORK:.spec.hostNetwork --no-headers=true | grep '<none>' | awk '{ print $1 }')
     pod "event-exporter-v0.2.5-7df89f4b8f-cm5r5" deleted

@@ -107,7 +107,7 @@ for more information. Alternatively, you can also restart all the Pods yourself,
 or simply reboot your Nodes.
 
 To build the image locally, you can follow the instructions in the [Contributor
-Guide](/CONTRIBUTING.md#building-and-testing-your-change).
+Guide](../CONTRIBUTING.md#building-and-testing-your-change).
 
 Antrea components can also be run manually as processes for development
 purposes. See [Manual Installation](contributors/manual-installation.md) for

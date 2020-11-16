@@ -61,7 +61,7 @@ https://kubernetes.io/docs/tasks/access-application-cluster/configure-access-mul
     kubectl config --kubeconfig=antrea-controller.kubeconfig use-context antrea-controller@kubernetes
     ```
 
-3. Create the `antrea-controller` config file, see [Configuration](/docs/configuration.md) for details.
+3. Create the `antrea-controller` config file, see [Configuration](../configuration.md) for details.
 
     ```bash
     cat >antrea-controller.conf <<EOF
@@ -113,7 +113,7 @@ created in the above step.
     kubectl config --kubeconfig=antrea-agent.antrea.kubeconfig use-context antrea-agent@antrea
     ```
 
-4. Create the `antrea-agent` config file, see [Configuration](/docs/configuration.md) for details.
+4. Create the `antrea-agent` config file, see [Configuration](../configuration.md) for details.
 
     ```bash
     cat >antrea-agent.conf <<EOF

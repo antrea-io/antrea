@@ -12,7 +12,7 @@ features. Reach us through Issues, Slack and / or Google Group!
 The following features are considered for the near future:
 
 * **Windows support improvements**
-Antrea [supports Windows K8s Node](/docs/windows.md) since version 0.7.0.
+Antrea [supports Windows K8s Node](docs/windows.md) since version 0.7.0.
 However, a few features like network flow export are not supported for Windows
 Node yet. We will continue to add more features for Windows, and improve Antrea
 Agent and OVS installation on Windows Nodes.
@@ -22,7 +22,7 @@ Support IPv6 and IPv4/IPv6 dual-stack for Pod network. Right now Antrea supports
 only IPv4.
 
 * **Antrea NetworkPolicy**
-Antrea has started adding support for [Antrea native NetworkPolicy](/docs/network-policy.md)
+Antrea has started adding support for [Antrea native NetworkPolicy](docs/antrea-network-policy.md)
 in addition to K8s NetworkPolicy since version 0.8.0. We already support
 ClusterNetworkPolicy and tiering, and will continue to add more NetworkPolicy
 extensions, like traffic logging, policy statistics, policy realization status,
@@ -31,10 +31,10 @@ more matching criteria and actions, and external endpoints.
 * **Network diagnostics and observability**
 Network diagnostics and observability is one area we want to focus on. Antrea
 already implements some useful features on this front, including [Octant UI
-plugin](/docs/octant-plugin-installation.md), [CLI](/docs/antctl.md),
-[Traceflow](/docs/traceflow-guide.md), [network flow export and visualization](/docs/network-flow-visibility.md),
-[Prometheus metrics](/docs/prometheus-integration.md), [OVS flow dumping](/docs/antctl.md#dumping-ovs-flows)
-and [packet tracing](/docs/antctl.md#ovs-packet-tracing). We will continue to
+plugin](docs/octant-plugin-installation.md), [CLI](docs/antctl.md),
+[Traceflow](docs/traceflow-guide.md), [network flow export and visualization](docs/network-flow-visibility.md),
+[Prometheus metrics](docs/prometheus-integration.md), [OVS flow dumping](docs/antctl.md#dumping-ovs-flows)
+and [packet tracing](docs/antctl.md#ovs-packet-tracing). We will continue to
 enhance existing features and add new features to help diagnose K8s networking
 and NetworkPolicy implementation, and to provide good visibility into the Antrea
 network.

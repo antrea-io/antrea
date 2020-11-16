@@ -223,6 +223,7 @@ number of cache misses while accessing key decryption key(KEK).
 out by username.
 
 ### Authentication Metrics
+
 - **authentication_attempts:** Counter of authenticated attempts.
 - **authentication_duration_seconds:** Authentication duration in seconds
 broken out by result.
