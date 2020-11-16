@@ -110,13 +110,15 @@ func (data *TestData) testDeletePod(t *testing.T, podName string, nodeName strin
 	t.Logf("Host interface name for Pod is '%s'", ifName)
 
 	doesInterfaceExist := func() bool {
-		cmd := fmt.Sprintf("ip link show %s", ifName)
-		if rc, _, _, err := RunCommandOnNode(nodeName, cmd); err != nil {
-			t.Fatalf("Error when running ip command on Node '%s': %v", nodeName, err)
-		} else {
-			return rc == 0
+		cmd := []string{"ip", "link", "show", ifName}
+		stdout, stderr, err := data.runCommandFromPod(antreaNamespace, antreaPodName, agentContainerName, cmd)
+		if err != nil {
+			if strings.Contains(stderr, "does not exist") {
+				return false
+			}
+			t.Fatalf("Error when running ip command in Pod '%s': %v - stdout: %s - stderr: %s", antreaPodName, err, stdout, stderr)
 		}
-		return false
+		return true
 	}
 
 	doesOVSPortExist := func() bool {
@@ -331,18 +333,16 @@ func testReconcileGatewayRoutesOnStartup(t *testing.T, data *TestData, isIPv6 bo
 	}
 
 	getGatewayRoutes := func() (routes []Route, err error) {
-		var cmd string
+		var cmd []string
 		if !isIPv6 {
-			cmd = fmt.Sprintf("ip route list dev %s", antreaGWName)
+			cmd = []string{"ip", "route", "list", "dev", antreaGWName}
 		} else {
-			cmd = fmt.Sprintf("ip -6 route list dev %s", antreaGWName)
+			cmd = []string{"ip", "-6", "route", "list", "dev", antreaGWName}
 		}
-		rc, stdout, _, err := RunCommandOnNode(nodeName, cmd)
+		podName := antreaPodName()
+		stdout, stderr, err := data.runCommandFromPod(antreaNamespace, podName, agentContainerName, cmd)
 		if err != nil {
-			return nil, fmt.Errorf("error when running ip command on Node '%s': %v", nodeName, err)
-		}
-		if rc != 0 {
-			return nil, fmt.Errorf("running ip command on Node '%s' returned error", nodeName)
+			return nil, fmt.Errorf("error when running ip command in Pod '%s': %v - stdout: %s - stderr: %s", podName, err, stdout, stderr)
 		}
 		re := regexp.MustCompile(`([^\s]+) via ([^\s]+)`)
 		for _, line := range strings.Split(stdout, "\n") {
