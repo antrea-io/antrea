@@ -20,11 +20,6 @@ import (
 	"net"
 )
 
-// setupExternalConnectivity returns immediately on Linux. The corresponding functions are provided in routeClient.
-func (i *Initializer) setupExternalConnectivity() error {
-	return nil
-}
-
 // prepareHostNetwork returns immediately on Linux.
 func (i *Initializer) prepareHostNetwork() error {
 	return nil
@@ -37,6 +32,11 @@ func (i *Initializer) prepareOVSBridge() error {
 
 // initHostNetworkFlows returns immediately on Linux.
 func (i *Initializer) initHostNetworkFlows() error {
+	return nil
+}
+
+// initExternalConnectivityFlows returns immediately on Linux. The corresponding functions are provided in routeClient.
+func (i *Initializer) initExternalConnectivityFlows() error {
 	return nil
 }
 

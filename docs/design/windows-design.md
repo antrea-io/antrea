@@ -146,50 +146,48 @@ The following changes in the OVS pipeline are needed:
 
 * Identify the packet that is sent from local Pod-to-external address and set the SNAT bit in the register
  in the `L3Forwarding` table. The packet should have these characteristics:
-  1) it enters the OVS pipeline from a local Pod,
-  2) the destination IP address does not meet any of these conditions: cluster IP (local or any of the remote
-  Subnet CIDR), or Node's internal IP,
-  3) the traffic is not for Service.
+  1) it enters the OVS pipeline from a local Pod;
+  2) the destination IP address is not in the cluster Pod CIDRs (Pod subnets of the local or any remote
+  Node), and is not the local Node's management IP;
+  3) the traffic is not for Services;
+  4) it is not the return traffic for a connection from an external IP to a local Pod.
 * Implement SNAT rules and commit the new connection to the ct context in the `ConntrackCommit` table. The SNAT
  rule should change the source address to the Node's internal IP.
-* Forward the IP packet to the `Conntrack` table if it is from the uplink interface in the `Classifier` table.
- This is to ensure the reply packets from the external address to the Pod can be forwarded correctly.
+* Forward the IP packet to the `Conntrack` table if it is from the uplink interface in the `Uplink` table.
+ This is to ensure the reply packets from the external address to the Pod will be "unSNAT'd".
 * Ensure that the packet is translated based on the NAT information provided when committing the connection by
  using the `nat` argument with the `ct` action.
-* Rewrite the dMAC with the global virtual MAC (aa:bb:cc:dd:ee:ff) in the `ConntrackState` table if the packet
- is from the uplink interface and has the SNAT ct_mark.
-* Forward the packet to the `DNAT` table in the `ConntrackState` table if it has the SNAT ct_mark but is not
- from the uplink interface.
+* Rewrite the destination MAC with the global virtual MAC (aa:bb:cc:dd:ee:ff) in the `ConntrackState` table if
+ the packet is from the uplink interface and has the SNAT ct_mark.
 
 Following is an example for SNAT relevant OpenFlow entries.
 
 ```text
 Classifier Table: 0
-table=0, priority=200, in_port=$uplink, ip actions=load:0x3->NXM_NX_REG0[0..15],goto_table:30
+table=0, priority=200, in_port=$uplink,ip actions=load:0x4->NXM_NX_REG0[0..15],goto_table:5
+
+Uplink Table: 5
+table=5, priority=200, ip,reg0=0x4/0xffff actions=goto_table:30
 
 Conntrack Table: 30
 table=30, priority=200, ip actions=ct(table=31,zone=65520,nat)
 
 ConntrackState Table: 31
-table=31, priority=210,ct_state=-new+trk,ct_mark=0x40,ip, reg0=0x3/0xffff actions= load:aabbccddeeff->NXM_OF_ETH_DST[],goto_table:40
-table=31, priority=200, ct_state=-new+trk,ct_mark=0x40,ip actions=goto_table:40
-table=31, priority=200, in_port=$uplink,ip actions=output:br-int
+table=31, priority=210,ct_state=-new+trk,ct_mark=0x40,ip,reg0=0x4/0xffff actions=mod_dl_dst:aa:bb:cc:dd:ee:ff,goto_table:40
+table=31, priority=200, ip,reg0=0x4/0xffff actions=output:br-int
 
 L3Forwarding Table: 70
-// Forward the packet to L2ForwardingCalculation table if it is for Service traffic.
-table=70, priority=200, ip,reg0=0x2/0xffff,ct_mark=0x20 actions=goto_table:80
-// Forward the packet to L2ForwardingCalculation table if it is Pod-to-Node traffic.
-table=70,priority=190,ip,reg0=0x2/0xffff,nw_dst=$local_nodeIP,actions=goto_table:80
 // Forward the packet to L2ForwardingCalculation table if it is traffic to the local Pods.
-table=70,priority=190,ip,nw_dst=10.10.0.0/24,actions=goto_table:80
+table=70, priority=200, ip,reg0=0x2/0xffff,nw_dst=10.10.0.0/24 actions=goto_table:80
+// Forward the packet to L2ForwardingCalculation table if it is Pod-to-Node traffic.
+table=70, priority=200, ip,reg0=0x2/0xffff,nw_dst=$local_nodeIP actions=goto_table:80
+// Forward the packet to L2ForwardingCalculation table if it is return traffic of an external-to-Pod connection.
+table=70, priority=200, ip,reg0=0x2/0xffff,ct_mark=0x20 actions=goto_table:80
 // Add SNAT mark if it is Pod-to-external traffic.
-table=70, priority=0,reg0=0x2/0xffff,ip actions=load:0x1->NXM_NX_REG0[17], goto_table:90
+table=70, priority=190, ct_state=+new+trk,ip,reg0=0x2/0xffff actions=load:0x1->NXM_NX_REG0[17], goto_table:80
 
 ConntrackCommit Table: 105
-table=105, priority=200,ip,reg0=0x20000/0x20000, ct_state=+new+trk, actions=ct(commit,table=110,zone=65520,nat(src=${nodeIP}:10000-20000),exec(load:0x40->NXM_NX_CT_MARK[])))
-
-L2ForwardingOut Table: 110
-table=110, priority=200,ip,reg0=0x20000/0x20000 actions=output:antrea-gw0
+table=105, priority=200, ct_state=+new+trk,ip,reg0=0x20000/0x20000, actions=ct(commit,table=110,zone=65520,nat(src=${nodeIP}:10000-20000),exec(load:0x40->NXM_NX_CT_MARK[])))
 ```
 
 ### Using Windows named pipe for internal connections

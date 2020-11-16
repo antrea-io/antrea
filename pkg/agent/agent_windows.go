@@ -31,22 +31,6 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsctl"
 )
 
-// setupExternalConnectivity installs OpenFlow entries to SNAT Pod traffic using Node IP, and then Pod could communicate
-// to the external IP address.
-func (i *Initializer) setupExternalConnectivity() error {
-	subnetCIDR := i.nodeConfig.PodIPv4CIDR
-	if subnetCIDR == nil {
-		return fmt.Errorf("Failed to find valid IPv4 PodCIDR")
-	}
-	nodeIP := i.nodeConfig.NodeIPAddr.IP
-	// Install OpenFlow entries on the OVS to enable Pod traffic to communicate to external IP addresses.
-	if err := i.ofClient.InstallExternalFlows(nodeIP, *subnetCIDR); err != nil {
-		klog.Errorf("Failed to setup SNAT openflow entries: %v", err)
-		return err
-	}
-	return nil
-}
-
 // prepareHostNetwork creates HNS Network for containers.
 func (i *Initializer) prepareHostNetwork() error {
 	// If the HNS Network already exists, return immediately.
@@ -195,9 +179,24 @@ func (i *Initializer) prepareOVSBridge() error {
 }
 
 // initHostNetworkFlows installs Openflow flows between bridge local port and uplink port to support
-// host networking. These flows are only needed on windows platform.
+// host networking.
 func (i *Initializer) initHostNetworkFlows() error {
 	if err := i.ofClient.InstallBridgeUplinkFlows(config.UplinkOFPort, config.BridgeOFPort); err != nil {
+		return err
+	}
+	return nil
+}
+
+// initExternalConnectivityFlows installs OpenFlow entries to SNAT Pod traffic
+// using Node IP, and then Pod could communicate to the external IP addresses.
+func (i *Initializer) initExternalConnectivityFlows() error {
+	subnetCIDR := i.nodeConfig.PodIPv4CIDR
+	if subnetCIDR == nil {
+		return fmt.Errorf("Failed to find valid IPv4 PodCIDR")
+	}
+	nodeIP := i.nodeConfig.NodeIPAddr.IP
+	// Install OpenFlow entries on the OVS to enable Pod traffic to communicate to external IP addresses.
+	if err := i.ofClient.InstallExternalFlows(nodeIP, *subnetCIDR); err != nil {
 		return err
 	}
 	return nil
