@@ -5,8 +5,8 @@
 Antrea uses [protoc](https://github.com/protocolbuffers/protobuf) and [protoc-gen-go](
 https://github.com/golang/protobuf) to generate CNI gRPC service code. 
 
-If you make any change to [cni.proto](pkg/apis/cni/v1beta1/cni.proto), you can re-generate the code by invoking
-`make codegen`.
+If you make any change to [cni.proto](/pkg/apis/cni/v1beta1/cni.proto), you can
+re-generate the code by invoking `make codegen`.
 
 ## Extension API Resources and Custom Resource Definitions
 
@@ -31,10 +31,10 @@ Same as above, you can re-generate the mock source code (with `mockgen`) by invo
 
 ## Generated Documentation
 
-[Prometheus integration document](/docs/prometheus-integration.md) contains a 
-list of supported metrics, which could be affected by third party component 
-changes. The collection of metrics is done from a running Kind deployment, in 
-order to reflect the current list of metrics which is exposed by Antrea 
+[Prometheus integration document](../prometheus-integration.md) contains a list
+of supported metrics, which could be affected by third party component
+changes. The collection of metrics is done from a running Kind deployment, in
+order to reflect the current list of metrics which is exposed by Antrea
 Controller and Agents.
 
 To regenerate the metrics list within the document, use [make-metrics-doc.sh](/hack/make-metrics-doc.sh)

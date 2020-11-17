@@ -296,6 +296,8 @@ verify:
 	$(CURDIR)/hack/verify-spelling.sh
 	@echo "===> Verifying Table of Contents <==="
 	$(CURDIR)/hack/verify-toc.sh
+	@echo "===> Verifying documentation formatting for website <==="
+	$(CURDIR)/hack/verify-docs-for-website.sh
 
 .PHONY: toc
 toc:

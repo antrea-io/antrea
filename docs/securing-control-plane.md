@@ -84,6 +84,7 @@ should replace it with the actual one of your Kubernetes cluster.**
 
 You can then create the `antrea-controller-tls` Secret with the certificate key
 pair and the CA certificate in the following form:
+
 ```yaml
 apiVersion: v1
 kind: Secret
@@ -102,6 +103,7 @@ data:
 
 You can use `kubectl apply -f <PATH TO SECRET YAML>` to create the above secret,
 or use `kubectl create secret`:
+
 ```bash
 kubectl create secret generic antrea-controller-tls -n kube-system \
   --from-file=ca.crt=<PATH TO CA CERTIFICATE> --from-file=tls.crt=<PATH TO TLS CERTIFICATE> --from-file=tls.key=<PATH TO TLS KEY>
@@ -119,6 +121,7 @@ and configure `Issuer` or `ClusterIssuer` resources.
 
 The `Certificate` should be created in the `kube-system` namespace. For example,
 A `Certificate` may look like:
+
 ```yaml
 apiVersion: cert-manager.io/v1alpha2
 kind: Certificate

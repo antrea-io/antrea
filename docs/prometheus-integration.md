@@ -29,6 +29,7 @@ Prometheus integration with Antrea is validated as part of CI using Prometheus v
 Prometheus requires access to Kubernetes API resources for the service discovery
 capability. Reading metrics also requires access to the "/metrics" API
 endpoints.
+
 ```yaml
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -55,6 +56,7 @@ rules:
 ### Antrea Metrics Listener Access
 To scrape the metrics from Antrea Controller and Agent, Prometheus needs the
 following permissions
+
 ```yaml
 kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1
@@ -75,6 +77,7 @@ value is 10350). Antrea Controller metrics endpoint is exposed through Antrea ap
 on `apiport` config parameter given in `antrea-controller.conf` (default value is 10349). 
 
 #### Controller Scraping
+
 ```yaml
 - job_name: 'antrea-controllers'
 kubernetes_sd_configs:
@@ -93,6 +96,7 @@ relabel_configs:
 ```
 
 #### Agent Scraping
+
 ```yaml
 - job_name: 'antrea-agents'
 kubernetes_sd_configs:
@@ -109,6 +113,7 @@ relabel_configs:
 - source_labels: [__meta_kubernetes_pod_node_name, __meta_kubernetes_pod_name]
   target_label: instance
 ```
+
 For further reference see the enclosed 
 [configuration file](/build/yamls/antrea-prometheus.yml).
 
@@ -124,7 +129,8 @@ used by the Antrea components.
 
 Below is a list of metrics, provided by the components and by 3rd parties.
 
-## Antrea Agent Metrics
+### Antrea Agent Metrics
+
 - **antrea_agent_conntrack_antrea_connection_count:** Number of connections
 in the Antrea ZoneID of the conntrack table. This metric gets updated at
 an interval specified by flowPollInterval, a configuration parameter for
@@ -154,7 +160,8 @@ flow operations, partitioned by operation type (add, modify and delete).
 - **antrea_agent_ovs_total_flow_count:** Total flow count of all OVS flow
 tables.
 
-## Antrea Controller Metrics
+### Antrea Controller Metrics
+
 - **antrea_controller_address_group_processed:** The total number of
 address-group processed
 - **antrea_controller_address_group_sync_duration_milliseconds:** The duration
@@ -175,7 +182,9 @@ internal-networkpolicy processed
 duration of syncing internal-networkpolicy
 
 ## Common Metrics Provided by Infrastructure
-## Apiserver Metrics
+
+### Apiserver Metrics
+
 - **apiserver_audit_event_total:** Counter of audit events generated and
 sent to the audit backend.
 - **apiserver_audit_requests_rejected_total:** Counter of apiserver requests
@@ -208,11 +217,13 @@ number of cache misses while accessing key decryption key(KEK).
 - **apiserver_watch_events_sizes:** Watch event size distribution in bytes
 - **apiserver_watch_events_total:** Number of events sent in watch clients
 
-## Authenticated Metrics
+### Authenticated Metrics
+
 - **authenticated_user_requests:** Counter of authenticated requests broken
 out by username.
 
-## Authentication Metrics
+### Authentication Metrics
+
 - **authentication_attempts:** Counter of authenticated attempts.
 - **authentication_duration_seconds:** Authentication duration in seconds
 broken out by result.
@@ -221,7 +232,8 @@ broken out by result.
 - **authentication_token_cache_request_duration_seconds:**
 - **authentication_token_cache_request_total:**
 
-## Go Metrics
+### Go Metrics
+
 - **go_gc_duration_seconds:** A summary of the GC invocation durations.
 - **go_goroutines:** Number of goroutines that currently exist.
 - **go_info:** Information about the Go environment.
@@ -265,7 +277,8 @@ stack allocator.
 - **go_memstats_sys_bytes:** Number of bytes obtained from system.
 - **go_threads:** Number of OS threads created.
 
-## Process Metrics
+### Process Metrics
+
 - **process_cpu_seconds_total:** Total user and system CPU time spent
 in seconds.
 - **process_max_fds:** Maximum number of open file descriptors.
