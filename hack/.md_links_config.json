@@ -1,0 +1,18 @@
+{
+    "ignorePatterns": [
+        {
+            "pattern": "^/build/*"
+        },
+        {
+            "pattern": "^/hack/*"
+        },
+        {
+            "pattern": "^/test/*"
+        },
+        {
+            "pattern": "^/pkg/*"
+        }
+    ],
+    "retryOn429": false,
+    "aliveStatusCodes": [200, 206, 429]
+}

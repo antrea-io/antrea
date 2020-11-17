@@ -5,7 +5,7 @@ cluster, and in particular a [multi-tenancy
 cluster](https://cloud.google.com/kubernetes-engine/docs/concepts/multitenancy-overview#what_is_multi-tenancy).
 
 To report a vulnerability in Antrea, please refer to
-[SECURITY.md](/SECURITY.md).
+[SECURITY.md](../SECURITY.md).
 
 For information about securing Antrea control-plane communications, refer to
 this [document](securing-control-plane.md).

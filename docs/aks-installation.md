@@ -59,12 +59,14 @@ You can use any method to create an AKS cluster. The example given here is using
 Note that AKS support was added in release 0.9.0, which means you cannot
 pick a release older than 0.9.0. For any given release `<TAG>` (e.g. `v0.9.0`),
 you can deploy Antrea as follows:
+
     ```bash
     kubectl apply -f https://github.com/vmware-tanzu/antrea/releases/download/<TAG>/antrea-aks.yml
     ```
 
     To deploy the latest version of Antrea (built from the master branch), use the
 checked-in [deployment yaml](/build/yamls/antrea-aks.yml):
+
     ```bash
     kubectl apply -f https://raw.githubusercontent.com/vmware-tanzu/antrea/master/build/yamls/antrea-aks.yml
     ```
@@ -72,6 +74,7 @@ checked-in [deployment yaml](/build/yamls/antrea-aks.yml):
     The command will deploy a single replica of Antrea controller to the AKS
 cluster and deploy Antrea agent to every Node. After a successful deployment
 you should be able to see these Pods running in your cluster:
+
     ```bash
     $ kubectl get pods --namespace kube-system  -l app=antrea
     NAME                                 READY   STATUS    RESTARTS   AGE
@@ -85,6 +88,7 @@ you should be able to see these Pods running in your cluster:
 3. Restart remaining Pods
 
     Once Antrea is up and running, restart all Pods in all Namespaces (kube-system, etc) so they can be managed by Antrea.
+
     ```bash
     kubectl delete pods -n kube-system $(kubectl get pods -n kube-system -o custom-columns=NAME:.metadata.name,HOSTNETWORK:.spec.hostNetwork --no-headers=true | grep '<none>' | awk '{ print $1 }')
     pod "coredns-544d979687-96xm9" deleted

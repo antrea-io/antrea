@@ -54,18 +54,20 @@ encountered when running Antrea on specific OSes are documented
 To deploy a released version of Antrea, pick a deployment manifest from the
 [list of releases](https://github.com/vmware-tanzu/antrea/releases). For any
 given release `<TAG>` (e.g. `v0.1.0`), you can deploy Antrea as follows:
+
 ```bash
 kubectl apply -f https://github.com/vmware-tanzu/antrea/releases/download/<TAG>/antrea.yml
 ```
 
 To deploy the latest version of Antrea (built from the master branch), use the
 checked-in [deployment yaml](/build/yamls/antrea.yml):
+
 ```bash
 kubectl apply -f https://raw.githubusercontent.com/vmware-tanzu/antrea/master/build/yamls/antrea.yml
 ```
 
 If you want to add Windows Nodes to your cluster, please refer to the
-installation instructions in [windows.md](/docs/windows.md).
+installation instructions in [windows.md](windows.md).
 
 Antrea supports some experimental features that can be enabled or disabled,
 please refer to the [Feature Gates documentation](feature-gates.md) for more
@@ -105,7 +107,7 @@ for more information. Alternatively, you can also restart all the Pods yourself,
 or simply reboot your Nodes.
 
 To build the image locally, you can follow the instructions in the [Contributor
-Guide](/CONTRIBUTING.md#building-and-testing-your-change).
+Guide](../CONTRIBUTING.md#building-and-testing-your-change).
 
 Antrea components can also be run manually as processes for development
 purposes. See [Manual Installation](contributors/manual-installation.md) for
@@ -114,25 +116,25 @@ information.
 ### Deploying Antrea in Kind
 
 To deploy Antrea in a [Kind](https://github.com/kubernetes-sigs/kind) cluster,
-please refer to this [guide](/docs/kind.md).
+please refer to this [guide](kind.md).
 
 ### Deploying Antrea in EKS and GKE
 
 Antrea can be deployed in NetworkPolicy only mode to an EKS cluster or a GKE
 cluster, and enforce NetworkPolicies for the cluster.
 
-* To deploy Antrea in an EKS cluster, please refer to [the EKS installation guide](/docs/eks-installation.md).
-* To deploy Antrea in a GKE cluster, please refer to [the GKE installation guide](/docs/gke-installation.md).
+* To deploy Antrea in an EKS cluster, please refer to [the EKS installation guide](eks-installation.md).
+* To deploy Antrea in a GKE cluster, please refer to [the GKE installation guide](gke-installation.md).
 
 ### Deploying Antrea with Custom Certificates
 
 By default, Antrea generates the certificates needed for itself to run. To
-provide your own certificates, please refer to [Securing Control Plane](/docs/securing-control-plane.md).
+provide your own certificates, please refer to [Securing Control Plane](securing-control-plane.md).
 
 ### Antctl: Installation and Usage
 
 To use antctl, the Antrea command-line tool, please refer to this
-[guide](/docs/antctl.md).
+[guide](antctl.md).
 
 ## Features
 
@@ -144,7 +146,7 @@ Antrea Network Policies, refer to the [Antrea Network Policy document](antrea-ne
 
 ### IPsec Encryption
 Antrea supports encrypting GRE tunnel traffic with IPsec. To deploy Antrea with
-IPsec encryption enabled, please refer to [this guide](/docs/ipsec-tunnel.md).
+IPsec encryption enabled, please refer to [this guide](ipsec-tunnel.md).
 
 ### Network Flow Visibility
 Antrea supports exporting network flow information using IPFIX, and provides a

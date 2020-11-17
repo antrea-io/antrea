@@ -3,10 +3,12 @@
 ## antrea-agent
 
 ### Command line options
+
 ```
 --config string                    The path to the configuration file
 --v Level                          number for the log level verbosity
 ```
+
 Use `antrea-agent -h` to see complete options.
 
 ### Configuration
@@ -19,10 +21,12 @@ configuration file](/build/yamls/windows/base/conf/antrea-agent.conf)
 ## antrea-controller
 
 ### Command line options
+
 ```
 --config string                    The path to the configuration file
 --v Level                          number for the log level verbosity
 ```
+
 Use `antrea-controller -h` to see complete options.
 
 ### Configuration
@@ -33,6 +37,7 @@ refer to this [base configuration file](/build/yamls/base/conf/antrea-controller
 ## CNI configuration
 
 A typical CNI configuration looks like this:
+
 ```json
   {
     "cniVersion":"0.3.0",
@@ -72,7 +77,8 @@ Antrea enables portmap and bandwidth CNI plugins by default to support `hostPort
 and traffic shaping functionalities for Pods respectively. In order to disable
 them, remove the corresponding section from `antrea-cni.conflist` in the Antrea
 manifest. For example, removing the following section disables portmap plugin:
-```
+
+```json
 {
   "type": "portmap",
   "capabilities": {
