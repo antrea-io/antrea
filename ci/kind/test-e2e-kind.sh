@@ -37,7 +37,7 @@ function print_usage {
 
 TESTBED_CMD=$(dirname $0)"/kind-setup.sh"
 YML_CMD=$(dirname $0)"/../../hack/generate-manifest.sh"
-COMMON_IMAGES="busybox nginx antrea/antrea-ubuntu:latest"
+COMMON_IMAGES="busybox nginx antrea/antrea-ubuntu:latest projects.registry.vmware.com/antrea/ipfix-collector:10282020.1"
 
 function quit {
   if [[ $? != 0 ]]; then
@@ -93,7 +93,7 @@ if $np; then
 fi
 if $coverage; then
     manifest_args="$manifest_args --coverage"
-    COMMON_IMAGES="busybox nginx antrea/antrea-ubuntu-coverage:latest"
+    COMMON_IMAGES="busybox nginx antrea/antrea-ubuntu-coverage:latest projects.registry.vmware.com/antrea/ipfix-collector:10282020.1"
 fi
 
 function run_test {
@@ -119,6 +119,7 @@ function run_test {
 
 docker pull busybox
 docker pull nginx
+docker pull projects.registry.vmware.com/antrea/ipfix-collector:10282020.1
 
 if [[ "$mode" == "" ]] || [[ "$mode" == "encap" ]]; then
   echo "======== Test encap mode =========="
