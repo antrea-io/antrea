@@ -65,20 +65,18 @@ var (
 	// reservedTierNames stores the set of Tier names which cannot be deleted
 	// since they are created by Antrea.
 	reservedTierNames = sets.NewString("baseline", "application", "platform", "networkops", "securityops", "emergency")
-	// apv is an instance of antreaPolicyValidator to validate Antrea-native
-	// policy events.
-	apv = antreaPolicyValidator{}
-	// tv is an instance of tierValidator to validate Tier resource events.
-	tv = tierValidator{}
 )
 
-// RegisterAntreaPolicyValidator registers an Antrea-native policy validator to
-// the resource registry.
+// RegisterAntreaPolicyValidator registers an Antrea-native policy validator
+// to the resource registry. A new validator must be registered by calling
+// this function before the Run phase of the APIServer.
 func (v *NetworkPolicyValidator) RegisterAntreaPolicyValidator(a validator) {
 	v.antreaPolicyValidators = append(v.antreaPolicyValidators, a)
 }
 
 // RegisterTierValidator registers a Tier validator to the resource registry.
+// A new validator must be registered by calling this function before the Run
+// phase of the APIServer.
 func (v *NetworkPolicyValidator) RegisterTierValidator(t validator) {
 	v.tierValidators = append(v.tierValidators, t)
 }
@@ -99,9 +97,16 @@ func NewNetworkPolicyValidator(networkPolicyController *NetworkPolicyController)
 	// initialize the validator registry with the default validators that need to
 	// be called.
 	vr := NetworkPolicyValidator{}
-	apv.networkPolicyController = networkPolicyController
+	// apv is an instance of antreaPolicyValidator to validate Antrea-native
+	// policy events.
+	apv := antreaPolicyValidator{
+		networkPolicyController: networkPolicyController,
+	}
+	// tv is an instance of tierValidator to validate Tier resource events.
+	tv := tierValidator{
+		networkPolicyController: networkPolicyController,
+	}
 	vr.RegisterAntreaPolicyValidator(&apv)
-	tv.networkPolicyController = networkPolicyController
 	vr.RegisterTierValidator(&tv)
 	return &vr
 }
@@ -181,13 +186,14 @@ func (v *NetworkPolicyValidator) validateAntreaPolicy(curObj, oldObj interface{}
 	allowed := true
 	reason := ""
 	switch op {
-	case admv1.Create, admv1.Update:
+	case admv1.Create:
 		for _, val := range v.antreaPolicyValidators {
 			reason, allowed = val.createValidate(curObj, userInfo)
 			if !allowed {
 				return reason, allowed
 			}
 		}
+	case admv1.Update:
 		for _, val := range v.antreaPolicyValidators {
 			reason, allowed = val.updateValidate(curObj, oldObj, userInfo)
 			if !allowed {
@@ -223,9 +229,11 @@ func (v *NetworkPolicyValidator) validateTier(curTier, oldTier *secv1alpha1.Tier
 	case admv1.Update:
 		// Tier priority updates are not allowed
 		klog.V(2).Info("Validating UPDATE request for Tier")
-		if curTier.Spec.Priority != oldTier.Spec.Priority {
-			allowed = false
-			reason = "update to Tier priority is not allowed"
+		for _, val := range v.antreaPolicyValidators {
+			reason, allowed = val.updateValidate(curTier, oldTier, userInfo)
+			if !allowed {
+				return reason, allowed
+			}
 		}
 	case admv1.Delete:
 		klog.V(2).Info("Validating DELETE request for Tier")
@@ -354,7 +362,15 @@ func (t *tierValidator) createValidate(curObj interface{}, userInfo authenticati
 
 // updateValidate validates the UPDATE events of Tier resources.
 func (t *tierValidator) updateValidate(curObj, oldObj interface{}, userInfo authenticationv1.UserInfo) (string, bool) {
-	return "", true
+	allowed := true
+	reason := ""
+	curTier := curObj.(*secv1alpha1.Tier)
+	oldTier := oldObj.(*secv1alpha1.Tier)
+	if curTier.Spec.Priority != oldTier.Spec.Priority {
+		allowed = false
+		reason = "update to Tier priority is not allowed"
+	}
+	return reason, allowed
 }
 
 // deleteValidate validates the DELETE events of Tier resources.
