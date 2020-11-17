@@ -89,7 +89,7 @@ func (b *AntreaNetworkPolicySpecBuilder) AddIngress(protoc v1.Protocol,
 	port *int, portName *string, cidr *string,
 	podSelector map[string]string, nsSelector map[string]string,
 	podSelectorMatchExp *[]metav1.LabelSelectorRequirement, nsSelectorMatchExp *[]metav1.LabelSelectorRequirement,
-	action secv1alpha1.RuleAction) *AntreaNetworkPolicySpecBuilder {
+	action secv1alpha1.RuleAction, name string) *AntreaNetworkPolicySpecBuilder {
 
 	var ps *metav1.LabelSelector
 	var ns *metav1.LabelSelector
@@ -162,6 +162,7 @@ func (b *AntreaNetworkPolicySpecBuilder) AddIngress(protoc v1.Protocol,
 		From:   policyPeer,
 		Ports:  ports,
 		Action: &action,
+		Name:   name,
 	}
 	b.Spec.Ingress = append(b.Spec.Ingress, newRule)
 	return b
@@ -171,18 +172,19 @@ func (b *AntreaNetworkPolicySpecBuilder) AddEgress(protoc v1.Protocol,
 	port *int, portName *string, cidr *string,
 	podSelector map[string]string, nsSelector map[string]string,
 	podSelectorMatchExp *[]metav1.LabelSelectorRequirement, nsSelectorMatchExp *[]metav1.LabelSelectorRequirement,
-	action secv1alpha1.RuleAction) *AntreaNetworkPolicySpecBuilder {
+	action secv1alpha1.RuleAction, name string) *AntreaNetworkPolicySpecBuilder {
 
 	// For simplicity, we just reuse the Ingress code here.  The underlying data model for ingress/egress is identical
 	// With the exception of calling the rule `To` vs. `From`.
 	c := &AntreaNetworkPolicySpecBuilder{}
-	c.AddIngress(protoc, port, portName, cidr, podSelector, nsSelector, podSelectorMatchExp, nsSelectorMatchExp, action)
+	c.AddIngress(protoc, port, portName, cidr, podSelector, nsSelector, podSelectorMatchExp, nsSelectorMatchExp, action, name)
 	theRule := c.Get().Spec.Ingress[0]
 
 	b.Spec.Egress = append(b.Spec.Egress, secv1alpha1.Rule{
 		To:     theRule.From,
 		Ports:  theRule.Ports,
 		Action: theRule.Action,
+		Name:   theRule.Name,
 	})
 	return b
 }
