@@ -54,6 +54,24 @@ function copy_markdowns_to_docs_master {
       sed -i.bak '/<!-- \/toc -->/d' ${doc}
       rm -f ${doc}.bak
   done
+
+  printf "Removing absolute links to non-docs\n"
+  for doc in $(find "$PWD" -type f -name "*.md"); do
+      sed -i.bak 's/\[\(.*\)\](\/\(.*\))/\1 (`\/\2`)/' ${doc}
+      rm -f ${doc}.bak
+  done
+
+  printf "Removing '..' from links to root docs\n"
+  for doc in $(find "$PWD" -type f -name "*.md"); do
+      sed -i.bak 's/\[\(.*\)\](\.\.\/\(.*\)\([README\|CONTRIBUTING\|CODE_OF_CONDUCT\|CHANGELOG\|ROADMAP]\)\.md/[\1](\2\3.md/' ${doc}
+      rm -f ${doc}.bak
+  done
+
+  printf "Changing links to VERSION file\n"
+  for doc in $(find "$PWD" -type f -name "*.md"); do
+      sed -i.bak 's/\[\(.*\)\](.*VERSION)/[\1](https:\/\/github.com\/vmware-tanzu\/antrea\/blob\/master\/VERSION)/' ${doc}
+      rm -f ${doc}.bak
+  done
 }
 
 pushd $THIS_DIR/docs/master
