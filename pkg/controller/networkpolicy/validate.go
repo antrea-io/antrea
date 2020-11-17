@@ -217,16 +217,18 @@ func (v *NetworkPolicyValidator) validateAntreaPolicy(curObj, oldObj interface{}
 func (a *antreaPolicyValidator) validatePortRange(ingress, egress []secv1alpha1.Rule) error {
 	isValid := func(rules []secv1alpha1.Rule) error {
 		for _, rule := range rules {
-			for _, port := range rule.Ports {
-				if port.PortRange != nil {
-					if port.PortRange.Port != nil && (port.PortRange.From != nil || port.PortRange.To != nil) {
-						return fmt.Errorf("inside portRange, `port` and `from`/`to` cannot be set at the same time")
-					}
-					if (port.PortRange.From != nil) != (port.PortRange.To != nil) {
-						return fmt.Errorf("inside portRange, `from` and `to` have be set at the same time")
-					}
-					if port.PortRange.From != nil && port.PortRange.To != nil && *port.PortRange.From > *port.PortRange.To {
+			for _, portRange := range rule.PortRanges {
+				if (portRange.Range.From != nil) != (portRange.Range.To != nil) {
+					return fmt.Errorf("inside portRange, `from` and `to` have be set at the same time")
+				}
+				if portRange.Range.From != nil && portRange.Range.To != nil {
+					if *portRange.Range.From > *portRange.Range.To {
 						return fmt.Errorf("inside portRange, `from` cannot be bigger than `to`")
+					}
+					for _, except := range portRange.Range.Except {
+						if except <= *portRange.Range.From || except >= *portRange.Range.To {
+							return fmt.Errorf("ports in portRange.except should be inside (portRange.From, portRange.To) exclusive")
+						}
 					}
 				}
 			}

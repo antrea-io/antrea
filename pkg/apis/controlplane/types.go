@@ -215,7 +215,8 @@ type Service struct {
 	// field defaults to TCP.
 	// +optional
 	Protocol *Protocol
-	// A PortMask is a representation of a single port name/number or a range of ports from base port with a bitmask applied.
+	// A PortMask is a representation of a single port name/number or a range of ports
+	// from base port with a bitmask applied.
 	// +optional
 	PortMask *PortMask
 }
@@ -287,9 +288,11 @@ type NetworkPolicyNodeStatus struct {
 	Generation int64
 }
 
-// A PortMask is a representation of a single port name or number or a range of ports from base port with a bitmask applied.
+// A PortMask is a representation of a single port name or number or a range of
+// ports from base port with a bitmask applied.
 type PortMask struct {
-	// The port name or number on the given protocol. If not specified, this matches all port numbers.
+	// The port name or number on the given protocol. If not specified, this matches
+	// all port numbers.
 	// +optional
 	Port *intstr.IntOrString
 	// The mask applied on given port. If not specified, means no mask applied.

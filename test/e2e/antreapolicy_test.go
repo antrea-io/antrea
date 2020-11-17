@@ -974,7 +974,7 @@ func testCNPPortRange(t *testing.T) {
 	})
 
 	testSteps = append(testSteps, &TestStep{
-		fmt.Sprintf("8082 is exception"),
+		fmt.Sprintf("Don't Drop Port 8082"),
 		reachability2,
 		[]metav1.Object{builder2.Get()},
 		[]int{8082},

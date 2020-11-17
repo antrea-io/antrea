@@ -170,22 +170,21 @@ func (b *AntreaNetworkPolicySpecBuilder) AddIngress(protoc v1.Protocol,
 			},
 		}
 	}
-	if portRange != nil {
-		if len(ports) == 0 {
-			ports = []secv1alpha1.NetworkPolicyPort{
-				{
-					PortRange: portRange,
-					Protocol:  &protoc,
-				},
-			}
-		} else {
-			ports[0].PortRange = portRange
-		}
 
+	var portRanges []secv1alpha1.NetworkPolicyPortRanges
+	if portRange != nil {
+		portRanges = []secv1alpha1.NetworkPolicyPortRanges{
+			{
+				Range:    portRange,
+				Protocol: &protoc,
+			},
+		}
 	}
+
 	newRule := secv1alpha1.Rule{
 		From:      policyPeer,
 		Ports:     ports,
+		PortRanges: portRanges,
 		Action:    &action,
 		Name:      name,
 		AppliedTo: appliedTos,

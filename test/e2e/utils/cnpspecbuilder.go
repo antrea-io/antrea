@@ -191,21 +191,20 @@ func (b *ClusterNetworkPolicySpecBuilder) AddIngress(protoc v1.Protocol,
 			},
 		}
 	}
+
+	var portRanges []secv1alpha1.NetworkPolicyPortRanges
 	if portRange != nil {
-		if len(ports) == 0 {
-			ports = []secv1alpha1.NetworkPolicyPort{
-				{
-					PortRange: portRange,
-					Protocol:  &protoc,
-				},
-			}
-		} else {
-			ports[0].PortRange = portRange
+		portRanges = []secv1alpha1.NetworkPolicyPortRanges{
+			{
+				Range:    portRange,
+				Protocol: &protoc,
+			},
 		}
 	}
 	newRule := secv1alpha1.Rule{
 		From:      policyPeer,
 		Ports:     ports,
+		PortRanges: portRanges,
 		Action:    &action,
 		Name:      name,
 		AppliedTo: appliedTos,
@@ -230,6 +229,7 @@ func (b *ClusterNetworkPolicySpecBuilder) AddEgress(protoc v1.Protocol,
 	b.Spec.Egress = append(b.Spec.Egress, secv1alpha1.Rule{
 		To:        theRule.From,
 		Ports:     theRule.Ports,
+		PortRanges: theRule.PortRanges,
 		Action:    theRule.Action,
 		Name:      theRule.Name,
 		AppliedTo: theRule.AppliedTo,

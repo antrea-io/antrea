@@ -30,6 +30,7 @@ import (
 func TestToAntreaServicesForCRD(t *testing.T) {
 	tables := []struct {
 		ports              []secv1alpha1.NetworkPolicyPort
+		portRanges         []secv1alpha1.NetworkPolicyPortRanges
 		expServices        []controlplane.Service
 		expNamedPortExists bool
 	}{
@@ -64,40 +65,10 @@ func TestToAntreaServicesForCRD(t *testing.T) {
 			expNamedPortExists: true,
 		},
 		{
-			ports: []secv1alpha1.NetworkPolicyPort{
+			portRanges: []secv1alpha1.NetworkPolicyPortRanges{
 				{
-					Protocol:  &k8sProtocolTCP,
-					PortRange: &secv1alpha1.PortRange{Port: &int80},
-				},
-			},
-			expServices: []controlplane.Service{
-				{
-					Protocol: toAntreaProtocol(&k8sProtocolTCP),
-					PortMask: &controlplane.PortMask{Port: &int80},
-				},
-			},
-			expNamedPortExists: false,
-		},
-		{
-			ports: []secv1alpha1.NetworkPolicyPort{
-				{
-					Protocol:  &k8sProtocolTCP,
-					PortRange: &secv1alpha1.PortRange{Port: &strHTTP},
-				},
-			},
-			expServices: []controlplane.Service{
-				{
-					Protocol: toAntreaProtocol(&k8sProtocolTCP),
-					PortMask: &controlplane.PortMask{Port: &strHTTP},
-				},
-			},
-			expNamedPortExists: true,
-		},
-		{
-			ports: []secv1alpha1.NetworkPolicyPort{
-				{
-					Protocol:  &k8sProtocolTCP,
-					PortRange: &secv1alpha1.PortRange{From: &uint16For998, To: &uint16For1999, Except: []uint16{999}},
+					Protocol: &k8sProtocolTCP,
+					Range:    &secv1alpha1.PortRange{From: &uint16For998, To: &uint16For1999, Except: []uint16{999}},
 				},
 			},
 			expServices: []controlplane.Service{
@@ -138,7 +109,7 @@ func TestToAntreaServicesForCRD(t *testing.T) {
 		},
 	}
 	for _, table := range tables {
-		services, namedPortExist := toAntreaServicesForCRD(table.ports)
+		services, namedPortExist := toAntreaServicesForCRD(table.ports, table.portRanges)
 		assert.Equal(t, table.expServices, services)
 		assert.Equal(t, table.expNamedPortExists, namedPortExist)
 	}

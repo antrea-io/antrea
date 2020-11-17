@@ -111,9 +111,9 @@ spec:
                       type: string
                       pattern: ^(((([1]?\d)?\d|2[0-4]\d|25[0-5])\.){3}(([1]?\d)?\d|2[0-4]\d|25[0-5]))|([\da-fA-F]{1,4}(\:[\da-fA-F]{1,4}){7})|(([\da-fA-F]{1,4}:){0,5}::([\da-fA-F]{1,4}:){0,5}[\da-fA-F]{1,4})$
                   oneOf:
-                    - required: ["pod", "namespace"]
-                    - required: ["service", "namespace"]
-                    - required: ["ip"]
+                    - required: [ "pod", "namespace" ]
+                    - required: [ "service", "namespace" ]
+                    - required: [ "ip" ]
                 packet:
                   type: object
                   properties:
@@ -201,7 +201,7 @@ spec:
                             tunnelDstIP:
                               type: string
       subresources:
-        status: {}
+        status: { }
   scope: Cluster
   names:
     plural: traceflows
@@ -332,7 +332,7 @@ spec:
                       # Ensure that Action field allows only ALLOW and DROP values
                       action:
                         type: string
-                        enum: ['Allow', 'Drop']
+                        enum: [ 'Allow', 'Drop' ]
                       ports:
                         type: array
                         items:
@@ -342,15 +342,20 @@ spec:
                               type: string
                             port:
                               x-kubernetes-int-or-string: true
-                            portRange:
+                      portRanges:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            protocol:
+                              type: string
+                            range:
                               type: object
                               properties:
                                 from:
                                   type: integer
                                 to:
                                   type: integer
-                                port:
-                                  x-kubernetes-int-or-string: true
                                 except:
                                   type: array
                                   items:
@@ -394,7 +399,7 @@ spec:
                       # Ensure that Action field allows only ALLOW and DROP values
                       action:
                         type: string
-                        enum: ['Allow', 'Drop']
+                        enum: [ 'Allow', 'Drop' ]
                       ports:
                         type: array
                         items:
@@ -404,15 +409,20 @@ spec:
                               type: string
                             port:
                               x-kubernetes-int-or-string: true
-                            portRange:
+                      portRanges:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            protocol:
+                              type: string
+                            range:
                               type: object
                               properties:
                                 from:
                                   type: integer
                                 to:
                                   type: integer
-                                port:
-                                  x-kubernetes-int-or-string: true
                                 except:
                                   type: array
                                   items:
@@ -448,7 +458,7 @@ spec:
                 desiredNodesRealized:
                   type: integer
       subresources:
-        status: {}
+        status: { }
   scope: Cluster
   names:
     plural: clusternetworkpolicies
@@ -538,7 +548,7 @@ spec:
                       # Ensure that Action field allows only ALLOW and DROP values
                       action:
                         type: string
-                        enum: ['Allow', 'Drop']
+                        enum: [ 'Allow', 'Drop' ]
                       ports:
                         type: array
                         items:
@@ -548,15 +558,20 @@ spec:
                               type: string
                             port:
                               x-kubernetes-int-or-string: true
-                            portRange:
+                      portRanges:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            protocol:
+                              type: string
+                            range:
                               type: object
                               properties:
                                 from:
                                   type: integer
                                 to:
                                   type: integer
-                                port:
-                                  x-kubernetes-int-or-string: true
                                 except:
                                   type: array
                                   items:
@@ -601,7 +616,7 @@ spec:
                       # Ensure that Action field allows only ALLOW and DROP values
                       action:
                         type: string
-                        enum: ['Allow', 'Drop']
+                        enum: [ 'Allow', 'Drop' ]
                       ports:
                         type: array
                         items:
@@ -611,15 +626,20 @@ spec:
                               type: string
                             port:
                               x-kubernetes-int-or-string: true
-                            portRange:
+                      portRanges:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            protocol:
+                              type: string
+                            range:
                               type: object
                               properties:
                                 from:
                                   type: integer
                                 to:
                                   type: integer
-                                port:
-                                  x-kubernetes-int-or-string: true
                                 except:
                                   type: array
                                   items:
@@ -657,7 +677,7 @@ spec:
                 desiredNodesRealized:
                   type: integer
       subresources:
-        status: {}
+        status: { }
   scope: Namespaced
   names:
     plural: networkpolicies

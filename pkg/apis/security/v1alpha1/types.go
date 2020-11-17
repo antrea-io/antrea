@@ -92,10 +92,14 @@ type NetworkPolicyStatus struct {
 type Rule struct {
 	// Action specifies the action to be applied on the rule.
 	Action *RuleAction `json:"action"`
-	// Set of port and protocol allowed/denied by the rule. If this field is unset
-	// or empty, this rule matches all ports.
+	// Set of port and protocol allowed/denied by the rule. If Ports and PortRanges
+	// are unset or empty at the same time, this rule matches all ports.
 	// +optional
-	Ports []NetworkPolicyPort `json:"ports"`
+	Ports []NetworkPolicyPort `json:"ports,omitempty"`
+	// Set of ranges and protocol allowed/denied by the rule. If Ports and PortRanges
+	// are unset or empty at the same time, this rule matches all ports.
+	// +optional
+	PortRanges []NetworkPolicyPortRanges `json:"portRanges,omitempty"`
 	// Rule is matched if traffic originates from workloads selected by
 	// this field. If this field is empty, this rule matches all sources.
 	// +optional
@@ -161,36 +165,35 @@ type NetworkPolicyPort struct {
 	// If not specified, this field defaults to TCP.
 	// +optional
 	Protocol *v1.Protocol `json:"protocol"`
-	// The port on the given protocol. This can either be a numerical
+	// The port on the given protocol. This can be either a numerical
 	// or named port on a Pod. If this field is not provided, this
 	// matches all port names and numbers.
 	// +optional
 	Port *intstr.IntOrString `json:"port,omitempty"`
-	// The portRange on the given protocol. This can either be a
-	// a range of ports with some optional exception
-	// or a numerical or named port on a Pod
-	// +optional
-	PortRange *PortRange `json:"portRange,omitempty"`
 }
 
-// PortRange describes a range of ports.
-// It could be a range of ports with some optional exception
-// or a numerical or named port on a Pod
+// NetworkPolicyPortRanges describes the portRange and protocol to match in a rule.
+type NetworkPolicyPortRanges struct {
+	// The protocol (TCP, UDP, or SCTP) which traffic must match.
+	// If not specified, this field defaults to TCP.
+	// +optional
+	Protocol *v1.Protocol `json:"protocol"`
+	// Range represents a range of port with optional exceptions.
+	// +optional
+	Range *PortRange `json:"range"`
+}
+
+// PortRange describes a range of port with optional exceptions.
 type PortRange struct {
-	// From represent the start port number of a range of ports, inclusive.
-	// Must be set if To is set, cannot be set with Port
+	// From represents the start port number of a range of ports, inclusive.
+	// Must be set if To is set.
 	// +optional
-	From *uint16 `json:"from,omitempty"`
-	// To represent the end port number of a range of ports, inclusive.
-	// Must be set if From is set, cannot be set with Port
+	From *uint16 `json:"from"`
+	// To represents the end port number of a range of ports, inclusive.
+	// Must be set if From is set.
 	// +optional
-	To *uint16 `json:"to,omitempty"`
-	// Port is a single entry represent the port name or number.
-	// Cannot be set with From and To
-	// +optional
-	Port *intstr.IntOrString `json:"port,omitempty"`
-	// Except is a list of except ports
-	// These ports won't be included in this range
+	To *uint16 `json:"to"`
+	// Except is a list of except ports. These ports won't be included in this range.
 	// +optional
 	Except []uint16 `json:"except,omitempty"`
 }

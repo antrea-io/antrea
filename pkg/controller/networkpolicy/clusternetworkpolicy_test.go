@@ -315,32 +315,15 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 					Priority: p10,
 					Ingress: []secv1alpha1.Rule{
 						{
-							Ports: []secv1alpha1.NetworkPolicyPort{
+							PortRanges: []secv1alpha1.NetworkPolicyPortRanges{
 								{
-									Protocol:  &k8sProtocolTCP,
-									PortRange: &secv1alpha1.PortRange{From: &uint16For998, To: &uint16For1999, Except: []uint16{999}},
+									Protocol: &k8sProtocolTCP,
+									Range:    &secv1alpha1.PortRange{From: &uint16For998, To: &uint16For1999, Except: []uint16{999}},
 								},
 							},
 							From: []secv1alpha1.NetworkPolicyPeer{
 								{
 									PodSelector: &selectorB,
-								},
-							},
-							Action: &allowAction,
-						},
-					},
-					Egress: []secv1alpha1.Rule{
-						{
-							Ports: []secv1alpha1.NetworkPolicyPort{
-								{
-									Protocol:  &k8sProtocolTCP,
-									PortRange: &secv1alpha1.PortRange{Port: &int81},
-								},
-							},
-							To: []secv1alpha1.NetworkPolicyPeer{
-								{
-									PodSelector:       &selectorB,
-									NamespaceSelector: &selectorC,
 								},
 							},
 							Action: &allowAction,
@@ -401,24 +384,11 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 						Priority: 0,
 						Action:   &allowAction,
 					},
-					{
-						Direction: controlplane.DirectionOut,
-						To: controlplane.NetworkPolicyPeer{
-							AddressGroups: []string{getNormalizedUID(toGroupSelector("", &selectorB, &selectorC, nil).NormalizedName)},
-						},
-						Services: []controlplane.Service{
-							{
-								Protocol: toAntreaProtocol(&k8sProtocolTCP),
-								PortMask: &controlplane.PortMask{Port: &int81},
-							},
-						},
-						Priority: 0,
-						Action:   &allowAction,
-					},
 				},
 				AppliedToGroups: []string{getNormalizedUID(toGroupSelector("", &selectorA, nil, nil).NormalizedName)},
 			},
 			expectedAppliedToGroups: 1,
+			expectedAddressGroups:   1,
 		},
 		{
 			name: "appliedTo-per-rule",
@@ -982,32 +952,15 @@ func TestAddCNP(t *testing.T) {
 					Priority: p10,
 					Ingress: []secv1alpha1.Rule{
 						{
-							Ports: []secv1alpha1.NetworkPolicyPort{
+							PortRanges: []secv1alpha1.NetworkPolicyPortRanges{
 								{
-									Protocol:  &k8sProtocolTCP,
-									PortRange: &secv1alpha1.PortRange{From: &uint16For998, To: &uint16For1999, Except: []uint16{999}},
+									Protocol: &k8sProtocolTCP,
+									Range:    &secv1alpha1.PortRange{From: &uint16For998, To: &uint16For1999, Except: []uint16{999}},
 								},
 							},
 							From: []secv1alpha1.NetworkPolicyPeer{
 								{
 									PodSelector: &selectorB,
-								},
-							},
-							Action: &allowAction,
-						},
-					},
-					Egress: []secv1alpha1.Rule{
-						{
-							Ports: []secv1alpha1.NetworkPolicyPort{
-								{
-									Protocol:  &k8sProtocolTCP,
-									PortRange: &secv1alpha1.PortRange{Port: &int81},
-								},
-							},
-							To: []secv1alpha1.NetworkPolicyPeer{
-								{
-									PodSelector:       &selectorB,
-									NamespaceSelector: &selectorC,
 								},
 							},
 							Action: &allowAction,
@@ -1068,25 +1021,11 @@ func TestAddCNP(t *testing.T) {
 						Priority: 0,
 						Action:   &allowAction,
 					},
-					{
-						Direction: controlplane.DirectionOut,
-						To: controlplane.NetworkPolicyPeer{
-							AddressGroups: []string{getNormalizedUID(toGroupSelector("", &selectorB, &selectorC, nil).NormalizedName)},
-						},
-						Services: []controlplane.Service{
-							{
-								Protocol: toAntreaProtocol(&k8sProtocolTCP),
-								PortMask: &controlplane.PortMask{Port: &int81},
-							},
-						},
-						Priority: 0,
-						Action:   &allowAction,
-					},
 				},
 				AppliedToGroups: []string{getNormalizedUID(toGroupSelector("", &selectorA, nil, nil).NormalizedName)},
 			},
 			expAppliedToGroups: 1,
-			expAddressGroups:   2,
+			expAddressGroups:   1,
 		},
 	}
 	for _, tt := range tests {
