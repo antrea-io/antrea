@@ -24,6 +24,7 @@ to effectively get it merged upstream.
 
 To get started, let's ensure you have completed the following prerequisites for
 contributing to project Antrea:
+
 1. Read and observe the [code of conduct](CODE_OF_CONDUCT.md).
 2. Sign the [CLA](#cla).
 3. Check out the [Architecture document](docs/design/architecture.md) for the Antrea
@@ -45,6 +46,7 @@ tracker.
 ### Accounts Setup
 
 At minimum, you need the following accounts for effective participation:
+
 1. **Github**: Committing any change requires you to have a [github
    account](https://github.com/join).
 2. **Slack**: Join the [Kubernetes Slack](http://slack.k8s.io/) and look for our
@@ -71,38 +73,52 @@ project's repository.
 1. Fork your own copy of the repository to your GitHub account by clicking on
    `Fork` button on [Antrea's GitHub repository](https://github.com/vmware-tanzu/antrea).
 2. Clone the forked repository on your local setup.
-    ```
+
+    ```bash
     git clone https://github.com/$user/antrea
     ```
+
     Add a remote upstream to track upstream Antrea repository.
-    ```
+
+    ```bash
     git remote add upstream https://github.com/vmware-tanzu/antrea
     ```
+
     Never push to upstream master
-    ```
+
+    ```bash
     git remote set-url --push upstream no_push
     ```
+
 3. Create a topic branch.
-    ```
+
+    ```bash
     git checkout -b branchName
     ```
+
 4. Make changes and commit it locally.
-    ```
+
+    ```bash
     git add <modifiedFile>
     git commit
     ```
+
 5. Update the "Unreleased" section of the [CHANGELOG](CHANGELOG.md) for any
    significant change that impacts users.
 6. Keeping branch in sync with upstream.
-    ```
+
+    ```bash
     git checkout branchName
     git fetch upstream
     git rebase upstream/master
     ```
+
 7. Push local branch to your forked repository.
-    ```
+
+    ```bash
     git push -f $remoteBranchName branchName
     ```
+
 8. Create a Pull request on GitHub.
    Visit your fork at `https://github.com/vmware-tanzu/antrea` and click
    `Compare & Pull Request` button next to your `remoteBranchName` branch.
@@ -116,6 +132,7 @@ fork. Once a PR is ready to merge, squash any *fix review feedback, typo*
 and *merged* sorts of commits.
 
 To make it easier for reviewers to review your PR, consider the following:
+
 1. Follow the golang [coding conventions](https://github.com/golang/go/wiki/CodeReviewComments).
 2. Format your code with `make golangci-fix`; if the [linters](ci/README.md) flag an issue that
    cannot be fixed automatically, an error message will be displayed so you can address the issue.
@@ -159,22 +176,30 @@ For more information about the tests we run as part of CI, please refer to
 ### Reverting a commit
 
 1. Create a branch in your forked repo
-    ```
+
+    ```bash
     git checkout -b revertName
     ```
+
 2. Sync the branch with upstream
-    ```
+
+    ```bash
     git fetch upstream
     git rebase upstream/master
     ```
+
 3. Create a revert based on the SHA of the commit.
-    ```
+
+    ```bash
     git revert SHA
     ```
+
 4. Push this new commit.
-    ```
+
+    ```bash
     git push $remoteRevertName revertName
     ```
+
 5. Create a Pull Request on GitHub.
    Visit your fork at `https://github.com/vmware-tanzu/antrea` and click
    `Compare & Pull Request` button next to your `remoteRevertName` branch.
@@ -203,13 +228,13 @@ labels are included on your issue:
 * **kind** -- common ones are `kind/feature`, `kind/support`, `kind/bug`,
   `kind/documentation`, or `kind/design`. For an overview of the different types
   of issues that can be submitted, see [Issue and PR
-  Kinds](#issue-and-pr-kinds). 
+  Kinds](#issue-and-pr-kinds).
   The kind of issue will determine the issue workflow.
 * **area** (optional) -- if you know the area the issue belongs in, you can assign it.
   Otherwise, another community member will label the issue during triage. The
   area label will identify the area of interest an issue or PR belongs in and
   will ensure the appropriate reviewers shepherd the issue or PR through to its
-  closure. For an overview of areas, see the 
+  closure. For an overview of areas, see the
   [`docs/github-labels.md`](docs/contributors/github-labels.md).
 * **size** (optional) -- if you have an idea of the size (lines of code, complexity,
   effort) of the issue, you can label it using a [size label](#size). The size

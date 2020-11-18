@@ -42,12 +42,12 @@ You can use any method to create an AKS cluster. The example given here is using
     aks-nodepool1-84330359-vmss000001   Ready    agent   6m25s   v1.16.10
     ```
 
-
 ## Deploying Antrea
 
 1. Prepare the Cluster Nodes
 
     Deploy ``antrea-node-init`` DaemonSet to enable ``azure cni`` to operate in transparent mode.
+
     ```bash
     kubectl apply -f https://raw.githubusercontent.com/vmware-tanzu/antrea/master/build/yamls/antrea-aks-node-init.yml
     ```
