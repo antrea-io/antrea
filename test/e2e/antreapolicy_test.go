@@ -146,9 +146,8 @@ func testInvalidACNPNoPriority(t *testing.T) {
 	builder = builder.SetName("acnp-no-priority").SetAppliedToGroup(map[string]string{"pod": "a"}, nil, nil, nil)
 	acnp := builder.Get()
 	log.Debugf("creating ACNP %v", acnp.Name)
-	_, err := k8sUtils.CreateOrUpdateCNP(acnp)
-	// Above creation of ACNP must fail as it is an invalid spec.
-	if err == nil {
+	if _, err := k8sUtils.CreateOrUpdateCNP(acnp); err == nil {
+		// Above creation of ACNP must fail as it is an invalid spec.
 		failOnError(invalidNpErr, t)
 	}
 }
@@ -163,9 +162,8 @@ func testInvalidACNPRuleNameNotUnique(t *testing.T) {
 			nil, nil, secv1alpha1.RuleActionAllow, "not-unique")
 	acnp := builder.Get()
 	log.Debugf("creating ACNP %v", acnp.Name)
-	_, err := k8sUtils.CreateOrUpdateCNP(acnp)
-	// Above creation of ACNP must fail as it is an invalid spec.
-	if err == nil {
+	if _, err := k8sUtils.CreateOrUpdateCNP(acnp); err == nil {
+		// Above creation of ACNP must fail as it is an invalid spec.
 		failOnError(invalidNpErr, t)
 	}
 }
@@ -177,9 +175,8 @@ func testInvalidACNPTierDoesNotExist(t *testing.T) {
 		SetTier("i-dont-exist")
 	acnp := builder.Get()
 	log.Debugf("creating ACNP %v", acnp.Name)
-	_, err := k8sUtils.CreateOrUpdateCNP(acnp)
-	// Above creation of ACNP must fail as it is an invalid spec.
-	if err == nil {
+	if _, err := k8sUtils.CreateOrUpdateCNP(acnp); err == nil {
+		// Above creation of ACNP must fail as it is an invalid spec.
 		failOnError(invalidNpErr, t)
 	}
 }
@@ -190,9 +187,8 @@ func testInvalidANPNoPriority(t *testing.T) {
 	builder = builder.SetName("x", "anp-no-priority").SetAppliedToGroup(map[string]string{"pod": "a"}, nil)
 	anp := builder.Get()
 	log.Debugf("creating ANP %v", anp.Name)
-	_, err := k8sUtils.CreateOrUpdateANP(anp)
-	// Above creation of ANP must fail as it is an invalid spec.
-	if err == nil {
+	if _, err := k8sUtils.CreateOrUpdateANP(anp); err == nil {
+		// Above creation of ANP must fail as it is an invalid spec.
 		failOnError(invalidNpErr, t)
 	}
 }
@@ -207,9 +203,8 @@ func testInvalidANPRuleNameNotUnique(t *testing.T) {
 			nil, nil, secv1alpha1.RuleActionAllow, "not-unique")
 	anp := builder.Get()
 	log.Debugf("creating ANP %v", anp.Name)
-	_, err := k8sUtils.CreateOrUpdateANP(anp)
-	// Above creation of ANP must fail as it is an invalid spec.
-	if err == nil {
+	if _, err := k8sUtils.CreateOrUpdateANP(anp); err == nil {
+		// Above creation of ANP must fail as it is an invalid spec.
 		failOnError(invalidNpErr, t)
 	}
 }
@@ -221,18 +216,16 @@ func testInvalidANPTierDoesNotExist(t *testing.T) {
 		SetTier("i-dont-exist")
 	anp := builder.Get()
 	log.Debugf("creating ANP %v", anp.Name)
-	_, err := k8sUtils.CreateOrUpdateANP(anp)
-	// Above creation of ANP must fail as it is an invalid spec.
-	if err == nil {
+	if _, err := k8sUtils.CreateOrUpdateANP(anp); err == nil {
+		// Above creation of ANP must fail as it is an invalid spec.
 		failOnError(invalidNpErr, t)
 	}
 }
 
 func testInvalidTierReservedDelete(t *testing.T) {
 	invalidErr := fmt.Errorf("reserved Tier deleted")
-	err := k8sUtils.DeleteTier("emergency")
-	// Above deletion of reserved Tier must fail.
-	if err == nil {
+	if err := k8sUtils.DeleteTier("emergency"); err == nil {
+		// Above deletion of reserved Tier must fail.
 		failOnError(invalidErr, t)
 	}
 }
@@ -251,23 +244,21 @@ func testInvalidTierPriorityUpdate(t *testing.T) {
 	// Attempt to update Tier's priority
 	newTier.Spec.Priority = 31
 	// Above update of Tier must fail as it is an invalid case.
-	_, err = k8sUtils.UpdateTier(&newTier)
-	if err == nil {
+	if _, err = k8sUtils.UpdateTier(&newTier); err == nil {
 		failOnError(invalidErr, t)
 	}
 	failOnError(k8sUtils.DeleteTier(oldTier.Name), t)
 }
 
 func testInvalidTierPriorityOverlap(t *testing.T) {
-	invalidErr := fmt.Errorf("Tier created with overlapped priorities")
+	invalidErr := fmt.Errorf("Tiers created with overlapping priorities")
 	tr, err := k8sUtils.CreateNewTier("tier-prio-20", 20)
 	if err != nil {
 		failOnError(fmt.Errorf("create Tier failed for tier tier-prio-20: %v", err), t)
 	}
 	// Attempt to create Tier with same priority.
-	_, err = k8sUtils.CreateNewTier("another-tier-prio-20", 20)
-	// Above creation of Tier must fail as it is an invalid spec.
-	if err == nil {
+	if _, err = k8sUtils.CreateNewTier("another-tier-prio-20", 20); err == nil {
+		// Above creation of Tier must fail as it is an invalid spec.
 		failOnError(invalidErr, t)
 	}
 	failOnError(k8sUtils.DeleteTier(tr.Name), t)
@@ -275,9 +266,8 @@ func testInvalidTierPriorityOverlap(t *testing.T) {
 
 func testInvalidTierReservedPriority(t *testing.T) {
 	invalidErr := fmt.Errorf("Tier created with reserved priority")
-	_, err := k8sUtils.CreateNewTier("tier-reserved-prio", 251)
-	// Above creation of Tier must fail as it is an invalid spec.
-	if err == nil {
+	if _, err := k8sUtils.CreateNewTier("tier-reserved-prio", 251); err == nil {
+		// Above creation of Tier must fail as it is an invalid spec.
 		failOnError(invalidErr, t)
 	}
 }
@@ -295,13 +285,11 @@ func testInvalidTierACNPRefDelete(t *testing.T) {
 		SetPriority(13.0)
 	acnp := builder.Get()
 	log.Debugf("creating ACNP %v", acnp.Name)
-	_, err = k8sUtils.CreateOrUpdateCNP(acnp)
-	if err != nil {
+	if _, err = k8sUtils.CreateOrUpdateCNP(acnp); err != nil {
 		failOnError(fmt.Errorf("create ACNP failed for ACNP %s: %v", acnp.Name, err), t)
 	}
 	// Deleting this Tier must fail as it has referenced ACNP
-	err = k8sUtils.DeleteTier(tr.Name)
-	if err == nil {
+	if err = k8sUtils.DeleteTier(tr.Name); err == nil {
 		failOnError(invalidErr, t)
 	}
 	failOnError(k8sUtils.CleanCNPs(), t)
@@ -321,13 +309,11 @@ func testInvalidTierANPRefDelete(t *testing.T) {
 		SetPriority(13.0)
 	anp := builder.Get()
 	log.Debugf("creating ANP %v", anp.Name)
-	_, err = k8sUtils.CreateOrUpdateANP(anp)
-	if err != nil {
+	if _, err = k8sUtils.CreateOrUpdateANP(anp); err != nil {
 		failOnError(fmt.Errorf("create ANP failed for ANP %s: %v", anp.Name, err), t)
 	}
 	// Deleting this Tier must fail as it has referenced ANP
-	err = k8sUtils.DeleteTier(tr.Name)
-	if err == nil {
+	if err = k8sUtils.DeleteTier(tr.Name); err == nil {
 		failOnError(invalidErr, t)
 	}
 	failOnError(k8sUtils.CleanANPs([]string{anp.Namespace}), t)
