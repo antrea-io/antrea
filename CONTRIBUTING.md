@@ -103,7 +103,7 @@ project's repository.
     git commit
     ```
 
-5. Update the "Unreleased" section of the [CHANGELOG](/CHANGELOG.md) for any
+5. Update the "Unreleased" section of the [CHANGELOG](CHANGELOG.md) for any
    significant change that impacts users.
 
 6. Keeping branch in sync with upstream.

@@ -82,6 +82,7 @@ You can follow the steps listed below to install octant and antrea-octant-plugin
     ```
 
     or
+
     ```bash
     wget https://github.com/vmware-tanzu/octant/releases/download/v0.16.1/octant_0.16.1_Linux-64bit.rpm
     rpm -i octant_0.16.1_Linux-64bit.rpm

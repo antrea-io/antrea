@@ -33,7 +33,7 @@ Antrea has been tested with Kubernetes clusters running version 1.16 or later.
 ## Getting Started
 
 Getting started with Antrea is very simple, and takes only a few minutes.
-See how it's done in the [Getting started](/docs/getting-started.md) document.
+See how it's done in the [Getting started](docs/getting-started.md) document.
 
 ## Contributing
 
