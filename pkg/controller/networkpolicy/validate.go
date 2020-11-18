@@ -229,7 +229,7 @@ func (v *NetworkPolicyValidator) validateTier(curTier, oldTier *secv1alpha1.Tier
 	case admv1.Update:
 		// Tier priority updates are not allowed
 		klog.V(2).Info("Validating UPDATE request for Tier")
-		for _, val := range v.antreaPolicyValidators {
+		for _, val := range v.tierValidators {
 			reason, allowed = val.updateValidate(curTier, oldTier, userInfo)
 			if !allowed {
 				return reason, allowed
@@ -238,7 +238,7 @@ func (v *NetworkPolicyValidator) validateTier(curTier, oldTier *secv1alpha1.Tier
 	case admv1.Delete:
 		klog.V(2).Info("Validating DELETE request for Tier")
 		for _, val := range v.tierValidators {
-			reason, allowed = val.deleteValidate(curTier, userInfo)
+			reason, allowed = val.deleteValidate(oldTier, userInfo)
 			if !allowed {
 				return reason, allowed
 			}
