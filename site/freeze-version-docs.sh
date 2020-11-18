@@ -61,7 +61,7 @@ defaults:
     gh: https://github.com/vmware-tanzu/antrea/tree/$VERSION
     layout: "docs"
 EOF
-    yq m -a -i "${THIS_DIR}/_config.yml" "$version_page_scope"
+    yq m -a=append -i "${THIS_DIR}/_config.yml" "$version_page_scope"
     rm -f "$version_page_scope"
   fi
 }
