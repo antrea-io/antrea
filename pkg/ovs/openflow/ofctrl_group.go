@@ -81,9 +81,16 @@ type bucketBuilder struct {
 	bucket *openflow13.Bucket
 }
 
-// LoadRegRange is an action to Load data to the target register at range[0..31].
+// LoadReg makes the learned flow to load data to reg[regID] with specific range.
 func (b *bucketBuilder) LoadReg(regID int, data uint32) BucketBuilder {
 	return b.LoadRegRange(regID, data, Range{0, 31})
+}
+
+// LoadXXReg makes the learned flow to load data to xxreg[regID] with specific range.
+func (b *bucketBuilder) LoadXXReg(regID int, data []byte) BucketBuilder {
+	regAction := &ofctrl.NXLoadXXRegAction{FieldNumber: uint8(regID), Value: data, Mask: nil}
+	b.bucket.AddAction(regAction.GetActionMessage())
+	return b
 }
 
 // LoadRegRange is an action to Load data to the target register at specified range.

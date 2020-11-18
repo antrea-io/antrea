@@ -29,6 +29,7 @@ const iperfPort = 5201
 // TestBenchmarkBandwidthIntraNode runs the bandwidth benchmark between Pods on same node.
 func TestBenchmarkBandwidthIntraNode(t *testing.T) {
 	skipIfNotBenchmarkTest(t)
+	skipIfNotIPv4Cluster(t)
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
@@ -43,10 +44,11 @@ func TestBenchmarkBandwidthIntraNode(t *testing.T) {
 	if err := data.createPodOnNode("perftest-b", masterNodeName(), perftoolImage, nil, nil, nil, []v1.ContainerPort{{Protocol: v1.ProtocolTCP, ContainerPort: iperfPort}}, false, nil); err != nil {
 		t.Fatalf("Error when creating the perftest server Pod: %v", err)
 	}
-	podBIP, err := data.podWaitForIP(defaultTimeout, "perftest-b", testNamespace)
+	podBIPs, err := data.podWaitForIPs(defaultTimeout, "perftest-b", testNamespace)
 	if err != nil {
 		t.Fatalf("Error when getting the perftest server Pod's IP: %v", err)
 	}
+	podBIP := podBIPs.ipv4.String()
 	stdout, _, err := data.runCommandFromPod(testNamespace, "perftest-a", "perftool", []string{"bash", "-c", fmt.Sprintf("iperf3 -c %s|grep sender|awk '{print $7,$8}'", podBIP)})
 	if err != nil {
 		t.Fatalf("Error when running iperf3 client: %v", err)
@@ -104,6 +106,11 @@ func TestBenchmarkBandwidthServiceRemoteAccess(t *testing.T) {
 func TestPodTrafficShaping(t *testing.T) {
 	// TODO: tc configuration succeeded, however it didn't take effect, need to understand the reason.
 	skipIfProviderIs(t, "kind", "tc does not work with Kind")
+	// Test is flaky on dual-stack clusters: https://github.com/vmware-tanzu/antrea/issues/1543.
+	// So we disable it except for IPv4 single-stack clusters for now.
+	skipIfIPv6Cluster(t)
+	nodeName := masterNodeName()
+	skipIfMissingKernelModule(t, nodeName, []string{"ifb", "sch_tbf", "sch_ingress"})
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
@@ -133,7 +140,7 @@ func TestPodTrafficShaping(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			clientPodName := fmt.Sprintf("client-a-%d", i)
 			serverPodName := fmt.Sprintf("server-a-%d", i)
-			if err := data.createPodOnNode(clientPodName, masterNodeName(), perftoolImage, nil, nil, nil, nil, false, func(pod *v1.Pod) {
+			if err := data.createPodOnNode(clientPodName, nodeName, perftoolImage, nil, nil, nil, nil, false, func(pod *v1.Pod) {
 				pod.Annotations = map[string]string{
 					"kubernetes.io/egress-bandwidth": fmt.Sprintf("%dM", tt.clientEgressBandwidth),
 				}
@@ -144,7 +151,7 @@ func TestPodTrafficShaping(t *testing.T) {
 			if err := data.podWaitForRunning(defaultTimeout, clientPodName, testNamespace); err != nil {
 				t.Fatalf("Error when waiting for the perftest client Pod: %v", err)
 			}
-			if err := data.createPodOnNode(serverPodName, masterNodeName(), perftoolImage, nil, nil, nil, []v1.ContainerPort{{Protocol: v1.ProtocolTCP, ContainerPort: iperfPort}}, false, func(pod *v1.Pod) {
+			if err := data.createPodOnNode(serverPodName, nodeName, perftoolImage, nil, nil, nil, []v1.ContainerPort{{Protocol: v1.ProtocolTCP, ContainerPort: iperfPort}}, false, func(pod *v1.Pod) {
 				pod.Annotations = map[string]string{
 					"kubernetes.io/ingress-bandwidth": fmt.Sprintf("%dM", tt.serverIngressBandwidth),
 				}
@@ -152,19 +159,28 @@ func TestPodTrafficShaping(t *testing.T) {
 				t.Fatalf("Error when creating the perftest server Pod: %v", err)
 			}
 			defer deletePodWrapper(t, data, serverPodName)
-			podBIP, err := data.podWaitForIP(defaultTimeout, serverPodName, testNamespace)
+			podIPs, err := data.podWaitForIPs(defaultTimeout, serverPodName, testNamespace)
 			if err != nil {
 				t.Fatalf("Error when getting the perftest server Pod's IP: %v", err)
 			}
-			stdout, _, err := data.runCommandFromPod(testNamespace, clientPodName, "perftool", []string{"bash", "-c", fmt.Sprintf("iperf3 -c %s -f m -O 1|grep sender|awk '{print $7}'", podBIP)})
-			if err != nil {
-				t.Fatalf("Error when running iperf3 client: %v", err)
+
+			runIperf := func(cmd []string) {
+				stdout, _, err := data.runCommandFromPod(testNamespace, clientPodName, "perftool", cmd)
+				if err != nil {
+					t.Fatalf("Error when running iperf3 client: %v", err)
+				}
+				stdout = strings.TrimSpace(stdout)
+				actualBandwidth, _ := strconv.ParseFloat(strings.TrimSpace(stdout), 64)
+				t.Logf("Actual bandwidth: %v Mbits/sec", actualBandwidth)
+				// Allow a certain deviation.
+				assert.InEpsilon(t, actualBandwidth, tt.expectedBandwidth, 0.1)
 			}
-			stdout = strings.TrimSpace(stdout)
-			actualBandwidth, _ := strconv.ParseFloat(strings.TrimSpace(stdout), 64)
-			t.Logf("Actual bandwidth: %v Mbits/sec", actualBandwidth)
-			// Allow a certain deviation.
-			assert.InEpsilon(t, actualBandwidth, tt.expectedBandwidth, 0.1)
+			if podIPs.ipv4 != nil {
+				runIperf([]string{"bash", "-c", fmt.Sprintf("iperf3 -c %s -f m -O 1|grep sender|awk '{print $7}'", podIPs.ipv4.String())})
+			}
+			if podIPs.ipv6 != nil {
+				runIperf([]string{"bash", "-c", fmt.Sprintf("iperf3 -6 -c %s -f m -O 1|grep sender|awk '{print $7}'", podIPs.ipv6.String())})
+			}
 		})
 	}
 }

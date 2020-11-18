@@ -86,9 +86,14 @@ var (
 	// uuid.NewV4() function.
 	uuidNamespace = uuid.FromStringOrNil("5a5e7dd9-e3fb-49bb-b263-9bab25c95841")
 
-	// matchAllPeer is a NetworkPolicyPeer matching all source/destination IP addresses.
+	// matchAllPeer is a NetworkPolicyPeer matching all source/destination IP addresses. Both IPv4 Any (0.0.0.0/0) and
+	// IPv6 Any (::/0) are added into the IPBlocks, and Antrea Agent should decide if both two are used according the
+	// supported IP protocols configured in the cluster.
 	matchAllPeer = controlplane.NetworkPolicyPeer{
-		IPBlocks: []controlplane.IPBlock{{CIDR: controlplane.IPNet{IP: controlplane.IPAddress(net.IPv4zero), PrefixLength: 0}}},
+		IPBlocks: []controlplane.IPBlock{
+			{CIDR: controlplane.IPNet{IP: controlplane.IPAddress(net.IPv4zero), PrefixLength: 0}},
+			{CIDR: controlplane.IPNet{IP: controlplane.IPAddress(net.IPv6zero), PrefixLength: 0}},
+		},
 	}
 	// matchAllPodsPeer is a networkingv1.NetworkPolicyPeer matching all Pods from all Namespaces.
 	matchAllPodsPeer = networkingv1.NetworkPolicyPeer{
@@ -348,9 +353,10 @@ func (n *NetworkPolicyController) GetAppliedToGroupNum() int {
 // GetConnectedAgentNum gets the number of Agents which are connected to this Controller.
 // Since Agent will watch all the three stores (internalNetworkPolicyStore, appliedToGroupStore, addressGroupStore),
 // the number of watchers of one of these three stores is equal to the number of connected Agents.
-// Here, we uses the number of watchers of internalNetworkPolicyStore to represent the number of connected Agents.
+// Here, we uses the number of watchers of appliedToGroupStore to represent the number of connected Agents as
+// internalNetworkPolicyStore is also watched by the StatusController of the process itself.
 func (n *NetworkPolicyController) GetConnectedAgentNum() int {
-	return n.internalNetworkPolicyStore.GetWatchersNum()
+	return n.appliedToGroupStore.GetWatchersNum()
 }
 
 // toGroupSelector converts the podSelector, namespaceSelector and externalEntitySelector
@@ -684,6 +690,7 @@ func (n *NetworkPolicyController) processNetworkPolicy(np *networkingv1.NetworkP
 		},
 		AppliedToGroups: appliedToGroupNames,
 		Rules:           rules,
+		Generation:      np.Generation,
 	}
 	return internalNetworkPolicy
 }
@@ -1279,7 +1286,9 @@ func podToGroupMember(pod *v1.Pod, includeIP bool) *controlplane.GroupMember {
 		}
 	}
 	if includeIP {
-		memberPod.IPs = []controlplane.IPAddress{ipStrToIPAddress(pod.Status.PodIP)}
+		for _, podIP := range pod.Status.PodIPs {
+			memberPod.IPs = append(memberPod.IPs, ipStrToIPAddress(podIP.IP))
+		}
 	}
 	podRef := controlplane.PodReference{
 		Name:      pod.Name,
@@ -1478,6 +1487,7 @@ func (n *NetworkPolicyController) syncInternalNetworkPolicy(key string) error {
 		Priority:        internalNP.Priority,
 		TierPriority:    internalNP.TierPriority,
 		SpanMeta:        antreatypes.SpanMeta{NodeNames: nodeNames},
+		Generation:      internalNP.Generation,
 	}
 	klog.V(4).Infof("Updating internal NetworkPolicy %s with %d Nodes", key, nodeNames.Len())
 	n.internalNetworkPolicyStore.Update(updatedNetworkPolicy)

@@ -77,14 +77,15 @@ func init() {
 
 // ExtraConfig holds custom apiserver config.
 type ExtraConfig struct {
-	addressGroupStore       storage.Interface
-	appliedToGroupStore     storage.Interface
-	networkPolicyStore      storage.Interface
-	controllerQuerier       querier.ControllerQuerier
-	endpointQuerier         controllernetworkpolicy.EndpointQuerier
-	networkPolicyController *controllernetworkpolicy.NetworkPolicyController
-	caCertController        *certificate.CACertController
-	statsAggregator         *stats.Aggregator
+	addressGroupStore             storage.Interface
+	appliedToGroupStore           storage.Interface
+	networkPolicyStore            storage.Interface
+	controllerQuerier             querier.ControllerQuerier
+	endpointQuerier               controllernetworkpolicy.EndpointQuerier
+	networkPolicyController       *controllernetworkpolicy.NetworkPolicyController
+	caCertController              *certificate.CACertController
+	statsAggregator               *stats.Aggregator
+	networkPolicyStatusController *controllernetworkpolicy.StatusController
 }
 
 // Config defines the config for Antrea apiserver.
@@ -120,19 +121,21 @@ func NewConfig(
 	caCertController *certificate.CACertController,
 	statsAggregator *stats.Aggregator,
 	controllerQuerier querier.ControllerQuerier,
+	networkPolicyStatusController *controllernetworkpolicy.StatusController,
 	endpointQuerier controllernetworkpolicy.EndpointQuerier,
 	npController *controllernetworkpolicy.NetworkPolicyController) *Config {
 	return &Config{
 		genericConfig: genericConfig,
 		extraConfig: ExtraConfig{
-			addressGroupStore:       addressGroupStore,
-			appliedToGroupStore:     appliedToGroupStore,
-			networkPolicyStore:      networkPolicyStore,
-			caCertController:        caCertController,
-			statsAggregator:         statsAggregator,
-			controllerQuerier:       controllerQuerier,
-			endpointQuerier:         endpointQuerier,
-			networkPolicyController: npController,
+			addressGroupStore:             addressGroupStore,
+			appliedToGroupStore:           appliedToGroupStore,
+			networkPolicyStore:            networkPolicyStore,
+			caCertController:              caCertController,
+			statsAggregator:               statsAggregator,
+			controllerQuerier:             controllerQuerier,
+			endpointQuerier:               endpointQuerier,
+			networkPolicyController:       npController,
+			networkPolicyStatusController: networkPolicyStatusController,
 		},
 	}
 }
@@ -145,14 +148,22 @@ func installAPIGroup(s *APIServer, c completedConfig) error {
 	addressGroupStorage := addressgroup.NewREST(c.extraConfig.addressGroupStore)
 	appliedToGroupStorage := appliedtogroup.NewREST(c.extraConfig.appliedToGroupStore)
 	networkPolicyStorage := networkpolicy.NewREST(c.extraConfig.networkPolicyStore)
+	networkPolicyStatusStorage := networkpolicy.NewStatusREST(c.extraConfig.networkPolicyStatusController)
+	nodeStatsSummaryStorage := nodestatssummary.NewREST(c.extraConfig.statsAggregator)
 	cpGroup := genericapiserver.NewDefaultAPIGroupInfo(controlplane.GroupName, Scheme, metav1.ParameterCodec, Codecs)
-	cpStorage := map[string]rest.Storage{}
-	cpStorage["addressgroups"] = addressGroupStorage
-	cpStorage["appliedtogroups"] = appliedToGroupStorage
-	cpStorage["networkpolicies"] = networkPolicyStorage
-	cpStorage["nodestatssummaries"] = nodestatssummary.NewREST(c.extraConfig.statsAggregator)
-	cpGroup.VersionedResourcesStorageMap["v1beta1"] = cpStorage
-	cpGroup.VersionedResourcesStorageMap["v1beta2"] = cpStorage
+	cpv1beta1Storage := map[string]rest.Storage{}
+	cpv1beta1Storage["addressgroups"] = addressGroupStorage
+	cpv1beta1Storage["appliedtogroups"] = appliedToGroupStorage
+	cpv1beta1Storage["networkpolicies"] = networkPolicyStorage
+	cpv1beta1Storage["nodestatssummaries"] = nodeStatsSummaryStorage
+	cpGroup.VersionedResourcesStorageMap["v1beta1"] = cpv1beta1Storage
+	cpv1beta2Storage := map[string]rest.Storage{}
+	cpv1beta2Storage["addressgroups"] = addressGroupStorage
+	cpv1beta2Storage["appliedtogroups"] = appliedToGroupStorage
+	cpv1beta2Storage["networkpolicies"] = networkPolicyStorage
+	cpv1beta2Storage["networkpolicies/status"] = networkPolicyStatusStorage
+	cpv1beta2Storage["nodestatssummaries"] = nodeStatsSummaryStorage
+	cpGroup.VersionedResourcesStorageMap["v1beta2"] = cpv1beta2Storage
 
 	// TODO: networkingGroup is the legacy group of controlplane NetworkPolicy APIs. To allow live upgrades from up to
 	// two minor versions, the APIs must be kept for two minor releases before it can be deleted.
@@ -230,6 +241,12 @@ func installHandlers(c *ExtraConfig, s *genericapiserver.GenericAPIServer) {
 	s.Handler.NonGoRestfulMux.HandleFunc("/loglevel", loglevel.HandleFunc())
 	s.Handler.NonGoRestfulMux.HandleFunc("/endpoint", endpoint.HandleFunc(c.endpointQuerier))
 	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
+		// Get new NetworkPolicyMutator
+		m := controllernetworkpolicy.NewNetworkPolicyMutator(c.networkPolicyController)
+		// Install handlers for NetworkPolicy related mutation
+		s.Handler.NonGoRestfulMux.HandleFunc("/mutate/acnp", webhook.HandleMutationNetworkPolicy(m))
+		s.Handler.NonGoRestfulMux.HandleFunc("/mutate/anp", webhook.HandleMutationNetworkPolicy(m))
+
 		// Get new NetworkPolicyValidator
 		v := controllernetworkpolicy.NewNetworkPolicyValidator(c.networkPolicyController)
 		// Install handlers for NetworkPolicy related validation

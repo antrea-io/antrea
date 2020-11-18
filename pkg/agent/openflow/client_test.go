@@ -23,6 +23,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/contiv/ofnet/ofctrl"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -31,6 +32,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow/cookie"
 	oftest "github.com/vmware-tanzu/antrea/pkg/agent/openflow/testing"
 	ofconfig "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
+	ovsoftest "github.com/vmware-tanzu/antrea/pkg/ovs/openflow/testing"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
 )
 
@@ -41,9 +43,12 @@ var bridgeMgmtAddr = ofconfig.GetMgmtAddress(ovsconfig.DefaultOVSRunDir, bridgeN
 func installNodeFlows(ofClient Client, cacheKey string) (int, error) {
 	hostName := cacheKey
 	gwMAC, _ := net.ParseMAC("AA:BB:CC:DD:EE:FF")
-	gwIP, IPNet, _ := net.ParseCIDR("10.0.1.1/24")
+	gwIP, ipNet, _ := net.ParseCIDR("10.0.1.1/24")
 	peerNodeIP := net.ParseIP("192.168.1.1")
-	err := ofClient.InstallNodeFlows(hostName, gwMAC, *IPNet, gwIP, peerNodeIP, config.DefaultTunOFPort, 0)
+	peerConfig := map[*net.IPNet]net.IP{
+		ipNet: gwIP,
+	}
+	err := ofClient.InstallNodeFlows(hostName, gwMAC, peerConfig, peerNodeIP, config.DefaultTunOFPort, 0)
 	client := ofClient.(*client)
 	fCacheI, ok := client.nodeFlowCache.Load(hostName)
 	if ok {
@@ -59,7 +64,7 @@ func installPodFlows(ofClient Client, cacheKey string) (int, error) {
 	podMAC, _ := net.ParseMAC("AA:BB:CC:DD:EE:EE")
 	podIP := net.ParseIP("10.0.0.2")
 	ofPort := uint32(10)
-	err := ofClient.InstallPodFlows(containerID, podIP, podMAC, gwMAC, ofPort)
+	err := ofClient.InstallPodFlows(containerID, []net.IP{podIP}, podMAC, gwMAC, ofPort)
 	client := ofClient.(*client)
 	fCacheI, ok := client.podFlowCache.Load(containerID)
 	if ok {
@@ -236,4 +241,58 @@ func TestConcurrentFlowInstallation(t *testing.T) {
 		})
 	}
 
+}
+
+func Test_client_InstallTraceflowFlows(t *testing.T) {
+	type ofSwitch struct {
+		ofctrl.OFSwitch
+	}
+	type fields struct {
+	}
+	type args struct {
+		dataplaneTag uint8
+	}
+	tests := []struct {
+		name        string
+		fields      fields
+		args        args
+		wantErr     bool
+		prepareFunc func(*gomock.Controller) *client
+	}{
+		{
+			name:        "traceflow flow",
+			fields:      fields{},
+			args:        args{dataplaneTag: 1},
+			wantErr:     false,
+			prepareFunc: prepareTraceflowFlow,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			c := tt.prepareFunc(ctrl)
+			if err := c.InstallTraceflowFlows(tt.args.dataplaneTag); (err != nil) != tt.wantErr {
+				t.Errorf("InstallTraceflowFlows() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func prepareTraceflowFlow(ctrl *gomock.Controller) *client {
+	ofClient := NewClient(bridgeName, bridgeMgmtAddr, true, true)
+	c := ofClient.(*client)
+	c.cookieAllocator = cookie.NewAllocator(0)
+	c.nodeConfig = &config.NodeConfig{}
+	m := ovsoftest.NewMockBridge(ctrl)
+	m.EXPECT().AddFlowsInBundle(gomock.Any(), nil, nil).Return(nil).Times(3)
+	c.bridge = m
+
+	mFlow := ovsoftest.NewMockFlow(ctrl)
+	ctx := &conjMatchFlowContext{dropFlow: mFlow}
+	mFlow.EXPECT().FlowProtocol().Return(ofconfig.Protocol("ip"))
+	mFlow.EXPECT().CopyToBuilder(priorityNormal+2, false).Return(c.pipeline[EgressDefaultTable].BuildFlow(priorityNormal + 2)).Times(1)
+	c.globalConjMatchFlowCache["mockContext"] = ctx
+	c.policyCache.Add(&policyRuleConjunction{metricFlows: []ofconfig.Flow{c.dropRuleMetricFlow(123, false)}})
+	return c
 }

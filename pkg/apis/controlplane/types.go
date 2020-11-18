@@ -264,3 +264,20 @@ type NetworkPolicyStats struct {
 	// The stats of the NetworkPolicy.
 	TrafficStats statsv1alpha1.TrafficStats
 }
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// NetworkPolicyStatus is the status of a NetworkPolicy.
+type NetworkPolicyStatus struct {
+	metav1.TypeMeta
+	metav1.ObjectMeta
+	// Nodes contains statuses produced on a list of Nodes.
+	Nodes []NetworkPolicyNodeStatus
+}
+
+// NetworkPolicyNodeStatus is the status of a NetworkPolicy on a Node.
+type NetworkPolicyNodeStatus struct {
+	// The name of the Node that produces the status.
+	NodeName string
+	// The generation realized by the Node.
+	Generation int64
+}

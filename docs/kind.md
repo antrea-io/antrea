@@ -6,7 +6,6 @@ the legacy [Docker
 Toolbox](https://docs.docker.com/docker-for-mac/docker-toolbox/).
 
 To deploy a released version of Antrea on an existing Kind cluster, you can use:
-
 ```bash
 # "fix" the host's veth interfaces (for the different Kind Nodes)
 kind get nodes | xargs ./hack/kind-fix-networking.sh

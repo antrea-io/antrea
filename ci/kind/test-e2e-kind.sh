@@ -22,9 +22,9 @@ function echoerr {
     >&2 echo "$@"
 }
 
-_usage="Usage: $0 [--encap-mode <mode>] [--proxy] [--np] [--coverage] [--help|-h]
+_usage="Usage: $0 [--encap-mode <mode>] [--no-proxy] [--np] [--coverage] [--help|-h]
         --encap-mode                  Traffic encapsulation mode. (default is 'encap')
-        --proxy                       Enables Antrea proxy.
+        --no-proxy                    Disables Antrea proxy.
         --np                          Enables Namespaced Antrea NetworkPolicy CRDs and ClusterNetworkPolicy related CRDs.
         --coverage                    Enables measure Antrea code coverage when run e2e tests on kind.
         --help, -h                    Print this message and exit
@@ -48,7 +48,7 @@ function quit {
 trap "quit" INT EXIT
 
 mode=""
-proxy=false
+proxy=true
 np=false
 coverage=false
 while [[ $# -gt 0 ]]
@@ -56,8 +56,8 @@ do
 key="$1"
 
 case $key in
-    --proxy)
-    proxy=true
+    --no-proxy)
+    proxy=false
     shift
     ;;
     --np)
@@ -84,8 +84,8 @@ esac
 done
 
 manifest_args=""
-if $proxy; then
-    manifest_args="$manifest_args --proxy"
+if ! $proxy; then
+    manifest_args="$manifest_args --no-proxy"
 fi
 if $np; then
     # See https://github.com/vmware-tanzu/antrea/issues/897
@@ -110,7 +110,7 @@ function run_test {
   fi
   sleep 1
   if $coverage; then
-      go test -v -timeout=40m github.com/vmware-tanzu/antrea/test/e2e -provider=kind --logs-export-dir=$ANTREA_LOG_DIR --coverage --coverage-dir $ANTREA_COV_DIR
+      go test -v -timeout=35m github.com/vmware-tanzu/antrea/test/e2e -provider=kind --logs-export-dir=$ANTREA_LOG_DIR --coverage --coverage-dir $ANTREA_COV_DIR
   else
       go test -v -timeout=30m github.com/vmware-tanzu/antrea/test/e2e -provider=kind --logs-export-dir=$ANTREA_LOG_DIR
   fi

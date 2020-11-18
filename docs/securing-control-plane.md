@@ -84,6 +84,7 @@ should replace it with the actual one of your Kubernetes cluster.**
 
 You can then create the `antrea-controller-tls` Secret with the certificate key
 pair and the CA certificate in the following form:
+
 ```yaml
 apiVersion: v1
 kind: Secret

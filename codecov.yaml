@@ -1,5 +1,4 @@
 codecov:
-  token: a2b1c854-8627-4747-89cb-c312da33227d
   require_ci_to_pass: no
 
 comment:
@@ -9,6 +8,24 @@ comment:
   require_base: no
   require_head: no
   after_n_builds: 1
+
+coverage:
+  status:
+    project:
+      default:
+        target: auto
+      antrea-unit-tests:
+        target: auto
+        flags:
+          - unit-tests
+      antrea-integration-tests:
+        target: auto
+        flags:
+          - integration-tests
+      antrea-e2e-tests:
+        target: auto
+        flags:
+          - e2e-tests
 
 ignore:
   - "**/testing/mock_*.go"

@@ -220,6 +220,26 @@ func (c *ruleCache) getAppliedNetworkPolicies(pod, namespace string, npFilter *q
 	return policies
 }
 
+func (c *ruleCache) getRule(ruleID string) (*rule, bool) {
+	obj, exists, _ := c.rules.GetByKey(ruleID)
+	if !exists {
+		return nil, false
+	}
+	return obj.(*rule), true
+}
+
+func (c *ruleCache) getRulesByNetworkPolicy(uid string) []*rule {
+	objs, _ := c.rules.ByIndex(policyIndex, uid)
+	if len(objs) == 0 {
+		return nil
+	}
+	rules := make([]*rule, len(objs))
+	for i, obj := range objs {
+		rules[i] = obj.(*rule)
+	}
+	return rules
+}
+
 func (c *ruleCache) GetAddressGroups() []v1beta.AddressGroup {
 	var ret []v1beta.AddressGroup
 	c.addressSetLock.RLock()
@@ -566,8 +586,12 @@ func (c *ruleCache) ReplaceNetworkPolicies(policies []*v1beta.NetworkPolicy) {
 	}
 
 	for i := range policies {
-		oldKeys.Delete(string(policies[i].UID))
-		c.addNetworkPolicyLocked(policies[i])
+		if oldKeys.Has(string(policies[i].UID)) {
+			oldKeys.Delete(string(policies[i].UID))
+		} else {
+			metrics.NetworkPolicyCount.Inc()
+		}
+		c.updateNetworkPolicyLocked(policies[i])
 	}
 
 	for key := range oldKeys {
@@ -581,21 +605,22 @@ func (c *ruleCache) ReplaceNetworkPolicies(policies []*v1beta.NetworkPolicy) {
 // watcher reconnects to the Apiserver, we use the same processing as
 // UpdateNetworkPolicy to ensure orphan rules are removed.
 func (c *ruleCache) AddNetworkPolicy(policy *v1beta.NetworkPolicy) error {
+	metrics.NetworkPolicyCount.Inc()
 	c.policyMapLock.Lock()
 	defer c.policyMapLock.Unlock()
-
-	return c.addNetworkPolicyLocked(policy)
-}
-
-func (c *ruleCache) addNetworkPolicyLocked(policy *v1beta.NetworkPolicy) error {
-	c.policyMap[string(policy.UID)] = policy
-	metrics.NetworkPolicyCount.Inc()
-	return c.UpdateNetworkPolicy(policy)
+	return c.updateNetworkPolicyLocked(policy)
 }
 
 // UpdateNetworkPolicy updates a cached *v1beta.NetworkPolicy.
 // The added rules and removed rules will be regarded as dirty.
 func (c *ruleCache) UpdateNetworkPolicy(policy *v1beta.NetworkPolicy) error {
+	c.policyMapLock.Lock()
+	defer c.policyMapLock.Unlock()
+	return c.updateNetworkPolicyLocked(policy)
+}
+
+func (c *ruleCache) updateNetworkPolicyLocked(policy *v1beta.NetworkPolicy) error {
+	c.policyMap[string(policy.UID)] = policy
 	existingRules, _ := c.rules.ByIndex(policyIndex, string(policy.UID))
 	ruleByID := map[string]interface{}{}
 	for _, r := range existingRules {

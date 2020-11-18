@@ -43,20 +43,25 @@ type Connection struct {
 	// IsActive flag helps in cleaning up connections when they are not in conntrack any module more.
 	IsActive bool
 	// DoExport flag helps in tagging connections that can be exported by Flow Exporter
-	DoExport   bool
-	Zone       uint16
-	Mark       uint32
-	StatusFlag uint32
+	DoExport           bool
+	Zone               uint16
+	Mark               uint32
+	StatusFlag         uint32
+	Labels, LabelsMask []byte
 	// TODO: Have a separate field for protocol. No need to keep it in Tuple.
 	TupleOrig, TupleReply          Tuple
 	OriginalPackets, OriginalBytes uint64
 	ReversePackets, ReverseBytes   uint64
 	// Fields specific to Antrea
-	SourcePodNamespace         string
-	SourcePodName              string
-	DestinationPodNamespace    string
-	DestinationPodName         string
-	DestinationServicePortName string
+	SourcePodNamespace            string
+	SourcePodName                 string
+	DestinationPodNamespace       string
+	DestinationPodName            string
+	DestinationServicePortName    string
+	IngressNetworkPolicyName      string
+	IngressNetworkPolicyNamespace string
+	EgressNetworkPolicyName       string
+	EgressNetworkPolicyNamespace  string
 }
 
 type FlowRecord struct {

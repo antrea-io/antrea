@@ -24,6 +24,7 @@
       - [Pod-to-Service Traffic](#pod-to-service-traffic)
     - [Flow Records](#flow-records)
     - [Node Throughput](#node-throughput)
+    - [Network Policy](#network-policy)
 <!-- /toc -->
 
 ## Overview
@@ -112,23 +113,29 @@ the flow. All the IEs used by the Antrea Flow Exporter are listed below:
 
 | IPFIX Information Element| Enterprise ID | Field ID | Type           |
 |--------------------------|---------------|----------|----------------|
-| packetTotalCount         | 29305         | 86       | unsigned64     |
-| octetTotalCount          | 29305         | 85       | unsigned64     |
-| packetDeltaCount         | 29305         | 2        | unsigned64     |
-| octetDeltaCount          | 29305         | 1        | unsigned64     |
+| reversePacketTotalCount  | 29305         | 86       | unsigned64     |
+| reverseOctetTotalCount   | 29305         | 85       | unsigned64     |
+| reversePacketDeltaCount  | 29305         | 2        | unsigned64     |
+| reverseOctetDeltaCount   | 29305         | 1        | unsigned64     |
 
 #### IEs from Antrea IE Registry
 
-| IPFIX Information Element | Enterprise ID | Field ID | Type        |
-|---------------------------|---------------|----------|-------------|
-| sourcePodNamespace        | 55829         | 100      | string      |
-| sourcePodName             | 55829         | 101      | string      |
-| destinationPodNamespace   | 55829         | 102      | string      |
-| destinationPodName        | 55829         | 103      | string      |
-| sourceNodeName            | 55829         | 104      | string      |
-| destinationNodeName       | 55829         | 105      | string      |
-| destinationClusterIP      | 55829         | 106      | ipv4Address |
-| destinationServicePortName| 55829         | 108      | string      |
+| IPFIX Information Element    | Enterprise ID | Field ID | Type        |
+|------------------------------|---------------|----------|-------------|
+| sourcePodNamespace           | 56506         | 100      | string      |
+| sourcePodName                | 56506         | 101      | string      |
+| destinationPodNamespace      | 56506         | 102      | string      |
+| destinationPodName           | 56506         | 103      | string      |
+| sourceNodeName               | 56506         | 104      | string      |
+| destinationNodeName          | 56506         | 105      | string      |
+| destinationClusterIPv4       | 56506         | 106      | ipv4Address |
+| destinationClusterIPv6       | 56506         | 107      | ipv6Address |
+| destinationServicePort       | 56506         | 108      | unsigned16  |
+| destinationServicePortName   | 56506         | 109      | string      |
+| ingressNetworkPolicyName     | 56506         | 110      | string      |
+| ingressNetworkPolicyNamespace| 56506         | 111      | string      |
+| egressNetworkPolicyName      | 56506         | 112      | string      |
+| egressNetworkPolicyNamespace | 56506         | 113      | string      |
 
 ### Supported capabilities
 
@@ -140,18 +147,20 @@ statistics such as data throughput (bits per second), packet throughput (packets
 per second), cumulative byte count, cumulative packet count etc. Pod-To-Service
 flow visibility is supported only [when Antrea Proxy enabled](feature-gates.md). 
 
-Kubernetes information such as Node name, Pod name, Pod Namespace, Service name
-etc. is added to the flow records. For flow records that are exported from any given
-Antrea Agent, we only provide the information of Kubernetes entities that are local
-to the Antrea Agent. In the future, we plan to extend this feature to provide
-information about remote Kubernetes entities such as remote Node name, remote Pod
-name etc.
+Kubernetes information such as Node name, Pod name, Pod Namespace, Service name, 
+NetworkPolicy name and NetworkPolicy Namespace, is added to the flow records. For
+flow records that are exported from any given Antrea Agent, we only provide the
+information of Kubernetes entities that are local to the Antrea Agent. In the future,
+we plan to extend this feature to provide information about remote Kubernetes entities
+such as remote Node name, remote Pod name etc.
 
 Please note that in the case of inter-Node flows, we are exporting only one copy
-of the flow record from the source Node, where the flow is originated from, and
-ignore the flow record from the destination Node, where the destination Pod resides.
-In the future, this behavior will be changed when the support for Network Policy
-is added as both hosts may apply different Network Policies and Rules.
+of the flow record from the source Node, where the flow originates from, and ignore
+the flow record from the destination Node, where the destination Pod resides. Due
+to this we miss key information such as destination Pod info, ingress NetworkPolicy
+info, stats from the destination Node, etc. In the future, this behavior will be
+changed when we add support for correlating the different flow records (from source
+and destination Nodes) that belong to the same flow.
 
 #### Connection Metrics
 
@@ -251,3 +260,14 @@ Visualization Node Throughput Dashboard">
 
 <img src="https://downloads.antrea.io/static/flow-visualization-node-2.png" width="900" alt="Flow
 Visualization Node Throughput Dashboard">
+
+#### Network Policy 
+Network Policy dashboard provides filters over ingress network policy name and namespace, egress 
+network policy name and namespace to view corresponding flow throughput under network policy.
+<img src="https://downloads.antrea.io/static/flow-visualization-np-1.png" width="900" alt="Flow
+Visualization Network Policy Dashboard">
+
+With filters applied:
+
+<img src="https://downloads.antrea.io/static/flow-visualization-np-2.png" width="900" alt="Flow
+Visualization Network Policy Dashboard">

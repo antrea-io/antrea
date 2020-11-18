@@ -53,6 +53,9 @@ var (
 	validatingWebhooks = []string{
 		"crdvalidator.antrea.tanzu.vmware.com",
 	}
+	mutationWebhooks = []string{
+		"crdmutator.antrea.tanzu.vmware.com",
+	}
 )
 
 // CACertController is responsible for taking the CA certificate from the
@@ -132,8 +135,38 @@ func (c *CACertController) syncCACert() error {
 	}
 
 	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
+		if err := c.syncMutatingWebhooks(caCert); err != nil {
+			return err
+		}
 		if err := c.syncValidatingWebhooks(caCert); err != nil {
 			return err
+		}
+	}
+	return nil
+}
+
+// syncMutatingWebhooks updates the CABundle of the MutatingWebhookConfiguration backed by antrea-controller.
+func (c *CACertController) syncMutatingWebhooks(caCert []byte) error {
+	klog.Info("Syncing CA certificate with MutatingWebhookConfigurations")
+	for _, name := range mutationWebhooks {
+		updated := false
+		mWebhook, err := c.client.AdmissionregistrationV1().MutatingWebhookConfigurations().Get(context.TODO(), name, metav1.GetOptions{})
+		if err != nil {
+			return fmt.Errorf("error getting MutatingWebhookConfiguration %s: %v", name, err)
+		}
+		for idx, webhook := range mWebhook.Webhooks {
+			if bytes.Equal(webhook.ClientConfig.CABundle, caCert) {
+				continue
+			} else {
+				updated = true
+				webhook.ClientConfig.CABundle = caCert
+				mWebhook.Webhooks[idx] = webhook
+			}
+		}
+		if updated {
+			if _, err := c.client.AdmissionregistrationV1().MutatingWebhookConfigurations().Update(context.TODO(), mWebhook, metav1.UpdateOptions{}); err != nil {
+				return fmt.Errorf("error updating antrea CA cert of MutatingWebhookConfiguration %s: %v", name, err)
+			}
 		}
 	}
 	return nil

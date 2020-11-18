@@ -167,6 +167,7 @@ func (n *NetworkPolicyController) processAntreaNetworkPolicy(np *secv1alpha1.Net
 		},
 		Name:            internalNetworkPolicyKeyFunc(np),
 		UID:             np.UID,
+		Generation:      np.Generation,
 		AppliedToGroups: appliedToGroupNames,
 		Rules:           rules,
 		Priority:        &np.Spec.Priority,

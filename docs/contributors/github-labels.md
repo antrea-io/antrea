@@ -107,7 +107,7 @@ https://github.com/kubernetes/test-infra/blob/master/label_sync/labels.md.
 
 | Label | Description | Added By |
 |-------|-------------|----------|
-| approved                           | Indicates a PR has been approved by owners in accordance with [GOVERNANCE.md](/GOVERNANCE.md) guidelines. | Maintainers |
+| approved                           | Indicates a PR has been approved by owners in accordance with [GOVERNANCE.md](../../GOVERNANCE.md) guidelines. | Maintainers |
 | vmware-cla: no                     | Indicates the PR's author has not signed the [VMware CLA](https://cla.vmware.com/faq) | VMware CLA Bot |
 | vmware-cla: yes                    | Indicates the PR's author has signed the [VMware CLA](https://cla.vmware.com/faq) | VMware CLA Bot |
 | do-not-merge/hold                  | Indicates a PR should not be merged because someone has issued a /hold command | Merge Bot |

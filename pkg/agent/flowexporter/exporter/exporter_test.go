@@ -56,7 +56,7 @@ func TestFlowExporter_sendTemplateRecord(t *testing.T) {
 		elemList = append(elemList, ipfixentities.NewInfoElement(ie, 0, 0, ipfixregistry.IANAEnterpriseID, 0))
 	}
 	for _, ie := range IANAReverseInfoElements {
-		elemList = append(elemList, ipfixentities.NewInfoElement(ie, 0, 0, ipfixregistry.ReverseEnterpriseID, 0))
+		elemList = append(elemList, ipfixentities.NewInfoElement(ie, 0, 0, ipfixregistry.IANAReversedEnterpriseID, 0))
 	}
 	for _, ie := range AntreaInfoElements {
 		elemList = append(elemList, ipfixentities.NewInfoElement(ie, 0, 0, ipfixregistry.AntreaEnterpriseID, 0))
@@ -71,7 +71,7 @@ func TestFlowExporter_sendTemplateRecord(t *testing.T) {
 		mockTempRec.EXPECT().AddInfoElement(elemList[i], nil).Return(tempBytes, nil)
 	}
 	for i, ie := range IANAReverseInfoElements {
-		mockIPFIXRegistry.EXPECT().GetInfoElement(ie, ipfixregistry.ReverseEnterpriseID).Return(elemList[i+len(IANAInfoElements)], nil)
+		mockIPFIXRegistry.EXPECT().GetInfoElement(ie, ipfixregistry.IANAReversedEnterpriseID).Return(elemList[i+len(IANAInfoElements)], nil)
 		mockTempRec.EXPECT().AddInfoElement(elemList[i+len(IANAInfoElements)], nil).Return(tempBytes, nil)
 	}
 	for i, ie := range AntreaInfoElements {
@@ -139,7 +139,7 @@ func TestFlowExporter_sendDataRecord(t *testing.T) {
 		elemList[i] = ipfixentities.NewInfoElement(ie, 0, 0, 0, 0)
 	}
 	for i, ie := range IANAReverseInfoElements {
-		elemList[i+len(IANAInfoElements)] = ipfixentities.NewInfoElement(ie, 0, 0, ipfixregistry.ReverseEnterpriseID, 0)
+		elemList[i+len(IANAInfoElements)] = ipfixentities.NewInfoElement(ie, 0, 0, ipfixregistry.IANAReversedEnterpriseID, 0)
 	}
 	for i, ie := range AntreaInfoElements {
 		elemList[i+len(IANAInfoElements)+len(IANAReverseInfoElements)] = ipfixentities.NewInfoElement(ie, 0, 0, 0, 0)
@@ -163,18 +163,20 @@ func TestFlowExporter_sendDataRecord(t *testing.T) {
 	for _, ie := range flowExp.elementsList {
 		switch ieName := ie.Name; ieName {
 		case "flowStartSeconds", "flowEndSeconds":
-			mockDataRec.EXPECT().AddInfoElement(ie, time.Time{}.Unix()).Return(tempBytes, nil)
+			mockDataRec.EXPECT().AddInfoElement(ie, uint32(time.Time{}.Unix())).Return(tempBytes, nil)
 		case "sourceIPv4Address", "destinationIPv4Address":
 			mockDataRec.EXPECT().AddInfoElement(ie, nil).Return(tempBytes, nil)
-		case "destinationClusterIP":
+		case "destinationClusterIPv4":
 			mockDataRec.EXPECT().AddInfoElement(ie, net.IP{0, 0, 0, 0}).Return(tempBytes, nil)
 		case "sourceTransportPort", "destinationTransportPort":
 			mockDataRec.EXPECT().AddInfoElement(ie, uint16(0)).Return(tempBytes, nil)
 		case "protocolIdentifier":
 			mockDataRec.EXPECT().AddInfoElement(ie, uint8(0)).Return(tempBytes, nil)
-		case "packetTotalCount", "octetTotalCount", "packetDeltaCount", "octetDeltaCount", "reverse_PacketTotalCount", "reverse_OctetTotalCount", "reverse_PacketDeltaCount", "reverse_OctetDeltaCount":
+		case "packetTotalCount", "octetTotalCount", "packetDeltaCount", "octetDeltaCount", "reversePacketTotalCount", "reverseOctetTotalCount", "reversePacketDeltaCount", "reverseOctetDeltaCount":
 			mockDataRec.EXPECT().AddInfoElement(ie, uint64(0)).Return(tempBytes, nil)
 		case "sourcePodName", "sourcePodNamespace", "sourceNodeName", "destinationPodName", "destinationPodNamespace", "destinationNodeName", "destinationServicePortName":
+			mockDataRec.EXPECT().AddInfoElement(ie, "").Return(tempBytes, nil)
+		case "ingressNetworkPolicyName", "ingressNetworkPolicyNamespace", "egressNetworkPolicyName", "egressNetworkPolicyNamespace":
 			mockDataRec.EXPECT().AddInfoElement(ie, "").Return(tempBytes, nil)
 		}
 	}

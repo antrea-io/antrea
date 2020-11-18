@@ -26,7 +26,7 @@ POD_CIDR="10.10.0.0/16"
 NUM_WORKERS=2
 SUBNETS=""
 ENCAP_MODE=""
-PROXY=false
+PROXY=true
 PROMETHEUS=false
 
 THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
@@ -47,9 +47,9 @@ where:
   modify-node: modify kind node with name NODE_NAME
   --pod-cidr: specifies pod cidr used in kind cluster, default is $POD_CIDR
   --encap-mode: inter-node pod traffic encap mode, default is encap
-  --proxy: enable Antrea proxy, default is false
-  --antrea-cni: specifies install Antrea CNI in kind cluster, default is true.
-  --prometheus: enable Prometheus metrics listener for Antrea Controller and Agents, default is false
+  --no-proxy: disable Antrea proxy
+  --antrea-cni: specifies install Antrea CNI in kind cluster, default is true
+  --prometheus: create RBAC resources for Prometheus, default is false
   --num-workers: specifies number of worker nodes in kind cluster, default is $NUM_WORKERS
   --images: specifies images loaded to kind cluster, default is $IMAGES
   --subnets: a subnet creates a separate docker bridge network (named 'antrea-<idx>') with assigned subnet that worker nodes may connect to. Default is empty: all worker
@@ -271,11 +271,8 @@ EOF
   if [[ $ANTREA_CNI == true ]]; then
     cmd=$(dirname $0)
     cmd+="/../../hack/generate-manifest.sh"
-    if [[ $PROXY == true ]]; then
-      cmd+=" --proxy"
-    fi
-    if [[ $PROMETHEUS == true ]]; then
-      cmd+=" --prometheus"
+    if [[ $PROXY == false ]]; then
+      cmd+=" --no-proxy"
     fi
     echo "$cmd --kind $(get_encap_mode) | kubectl apply --context kind-$CLUSTER_NAME -f -"
     eval "$cmd --kind $(get_encap_mode) | kubectl apply --context kind-$CLUSTER_NAME -f -"
@@ -327,8 +324,8 @@ while [[ $# -gt 0 ]]
       ENCAP_MODE="$2"
       shift 2
       ;;
-    --proxy)
-      PROXY=true
+    --no-proxy)
+      PROXY=false
       shift
       ;;
     --prometheus)

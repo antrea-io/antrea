@@ -28,7 +28,7 @@ type ControllerConfig struct {
 	// Defaults to 10349.
 	APIPort int `yaml:"apiPort,omitempty"`
 	// Enable metrics exposure via Prometheus. Initializes Prometheus metrics listener
-	// Defaults to false.
+	// Defaults to true.
 	EnablePrometheusMetrics bool `yaml:"enablePrometheusMetrics,omitempty"`
 	// Indicates whether to use auto-generated self-signed TLS certificate.
 	// If false, A Secret named "antrea-controller-tls" must be provided with the following keys:

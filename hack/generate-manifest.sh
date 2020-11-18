@@ -20,7 +20,7 @@ function echoerr {
     >&2 echo "$@"
 }
 
-_usage="Usage: $0 [--mode (dev|release)] [--encap-mode] [--kind] [--ipsec] [--proxy] [--np] [--keep] [--tun (geneve|vxlan|gre|stt)] [--verbose-log] [--help|-h]
+_usage="Usage: $0 [--mode (dev|release)] [--encap-mode] [--kind] [--ipsec] [--no-proxy] [--np] [--keep] [--tun (geneve|vxlan|gre|stt)] [--verbose-log] [--help|-h]
 Generate a YAML manifest for Antrea using Kustomize and print it to stdout.
         --mode (dev|release)          Choose the configuration variant that you need (default is 'dev')
         --encap-mode                  Traffic encapsulation mode. (default is 'encap')
@@ -28,9 +28,8 @@ Generate a YAML manifest for Antrea using Kustomize and print it to stdout.
         --cloud                       Generate a manifest appropriate for running Antrea in Public Cloud
         --ipsec                       Generate a manifest with IPSec encryption of tunnel traffic enabled
         --all-features                Generate a manifest with all alpha features enabled
-        --proxy                       Generate a manifest with Antrea proxy enabled
+        --no-proxy                    Generate a manifest with Antrea proxy disabled
         --np                          Generate a manifest with ClusterNetworkPolicy and Antrea NetworkPolicy features enabled
-        --prometheus                  Generate a manifest with Antrea Controller and Agent Prometheus metrics listener enabled
         --keep                        Debug flag which will preserve the generated kustomization.yml
         --tun (geneve|vxlan|gre|stt)  Choose encap tunnel type from geneve, gre, stt and vxlan (default is geneve)
         --verbose-log                 Generate a manifest with increased log-level (level 4) for Antrea agent and controller.
@@ -60,7 +59,7 @@ MODE="dev"
 KIND=false
 IPSEC=false
 ALLFEATURES=false
-PROXY=false
+PROXY=true
 NP=false
 KEEP=false
 ENCAP_MODE=""
@@ -69,7 +68,6 @@ TUN_TYPE="geneve"
 VERBOSE_LOG=false
 ON_DELETE=false
 COVERAGE=false
-PROMETHEUS=false
 
 while [[ $# -gt 0 ]]
 do
@@ -100,16 +98,12 @@ case $key in
     ALLFEATURES=true
     shift
     ;;
-    --proxy)
-    PROXY=true
+    --no-proxy)
+    PROXY=false
     shift
     ;;
     --np)
     NP=true
-    shift
-    ;;
-    --prometheus)
-    PROMETHEUS=true
     shift
     ;;
     --keep)
@@ -179,9 +173,9 @@ if ! $KIND && $ON_DELETE; then
     exit 1
 fi
 
-# noEncap/policy-only mode works with antrea-proxy.
-if [[ "$ENCAP_MODE" != "" ]] && [[ "$ENCAP_MODE" != "encap" ]]; then
-      PROXY=true
+if [[ "$ENCAP_MODE" != "" ]] && [[ "$ENCAP_MODE" != "encap" ]] && ! $PROXY; then
+    echoerr "Cannot use '--no-proxy' when '--encap-mode' is not 'encap'"
+    exit 1
 fi
 
 THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
@@ -221,25 +215,18 @@ if $IPSEC; then
 fi
 
 if $ALLFEATURES; then
-    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*AntreaProxy[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  AntreaProxy: true/" antrea-agent.conf
-    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*Traceflow[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  Traceflow: true/" antrea-agent.conf
     sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*AntreaPolicy[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  AntreaPolicy: true/" antrea-agent.conf
     sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*FlowExporter[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  FlowExporter: true/" antrea-agent.conf
     sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*NetworkPolicyStats[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  NetworkPolicyStats: true/" antrea-agent.conf
 fi
 
-if $PROXY; then
-    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*AntreaProxy[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  AntreaProxy: true/" antrea-agent.conf
+if ! $PROXY; then
+    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*AntreaProxy[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  AntreaProxy: false/" antrea-agent.conf
 fi
 
 if $NP; then
     sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*AntreaPolicy[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  AntreaPolicy: true/" antrea-controller.conf
     sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*AntreaPolicy[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  AntreaPolicy: true/" antrea-agent.conf
-fi
-
-if $PROMETHEUS; then
-    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*enablePrometheusMetrics[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/enablePrometheusMetrics: true/" antrea-controller.conf
-    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*enablePrometheusMetrics[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/enablePrometheusMetrics: true/" antrea-agent.conf
 fi
 
 if [[ $ENCAP_MODE != "" ]]; then

@@ -17,7 +17,6 @@ package e2e
 import (
 	"encoding/hex"
 	"fmt"
-	"net"
 	"strings"
 	"testing"
 	"time"
@@ -38,11 +37,15 @@ func skipIfProxyDisabled(t *testing.T, data *TestData) {
 	if featureGate, err := data.GetAgentFeatures(antreaNamespace); err != nil {
 		t.Fatalf("Error when detecting proxy: %v", err)
 	} else if !featureGate.Enabled(features.AntreaProxy) {
-		t.Skip()
+		t.Skip("Skipping test because AntreaProxy is not enabled")
 	}
 }
 
 func TestProxyServiceSessionAffinity(t *testing.T) {
+	// TODO: add check for IPv6 address after Antrea Proxy supports IPv6
+	skipIfIPv6Cluster(t)
+	skipIfNotIPv4Cluster(t)
+	skipIfProviderIs(t, "kind", "#881 Does not work in Kind, needs to be investigated.")
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
@@ -53,7 +56,7 @@ func TestProxyServiceSessionAffinity(t *testing.T) {
 
 	nodeName := nodeName(1)
 	require.NoError(t, data.createNginxPod("nginx", nodeName))
-	nginxIP, err := data.podWaitForIP(defaultTimeout, "nginx", testNamespace)
+	nginxIP, err := data.podWaitForIPs(defaultTimeout, "nginx", testNamespace)
 	require.NoError(t, err)
 	require.NoError(t, data.podWaitForRunning(defaultTimeout, "nginx", testNamespace))
 	svc, err := data.createNginxClusterIPService(true)
@@ -75,13 +78,17 @@ func TestProxyServiceSessionAffinity(t *testing.T) {
 	table40Output, _, err := data.runCommandFromPod(metav1.NamespaceSystem, agentName, "antrea-agent", []string{"ovs-ofctl", "dump-flows", defaultBridgeName, "table=40"})
 	require.NoError(t, err)
 	require.Contains(t, table40Output, fmt.Sprintf("nw_dst=%s,tp_dst=80", svc.Spec.ClusterIP))
-	require.Contains(t, table40Output, fmt.Sprintf("load:0x%s->NXM_NX_REG3[]", strings.TrimLeft(hex.EncodeToString(net.ParseIP(nginxIP).To4()), "0")))
+	// TODO: add check for IPv6 address after Antrea Proxy is supported with IPv6
+	require.Contains(t, table40Output, fmt.Sprintf("load:0x%s->NXM_NX_REG3[]", strings.TrimLeft(hex.EncodeToString(nginxIP.ipv4.To4()), "0")))
 	for _, ingressIP := range ingressIPs {
 		require.Contains(t, table40Output, fmt.Sprintf("nw_dst=%s,tp_dst=80", ingressIP))
 	}
 }
 
 func TestProxyHairpin(t *testing.T) {
+	// TODO: add check for IPv6 address after Antrea Proxy supports IPv6
+	skipIfIPv6Cluster(t)
+	skipIfNotIPv4Cluster(t)
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
@@ -101,6 +108,9 @@ func TestProxyHairpin(t *testing.T) {
 }
 
 func TestProxyEndpointLifeCycle(t *testing.T) {
+	// TODO: add check for IPv6 address after Antrea Proxy supports IPv6
+	skipIfIPv6Cluster(t)
+	skipIfNotIPv4Cluster(t)
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
@@ -111,12 +121,14 @@ func TestProxyEndpointLifeCycle(t *testing.T) {
 
 	nodeName := nodeName(1)
 	require.NoError(t, data.createNginxPod("nginx", nodeName))
-	nginxIP, err := data.podWaitForIP(defaultTimeout, "nginx", testNamespace)
+	nginxIPs, err := data.podWaitForIPs(defaultTimeout, "nginx", testNamespace)
 	require.NoError(t, err)
 	_, err = data.createNginxClusterIPService(false)
 	require.NoError(t, err)
 	agentName, err := data.getAntreaPodOnNode(nodeName)
 	require.NoError(t, err)
+	// TODO: Add support for IPv6 address after Antrea Proxy in IPv6 is supported
+	nginxIP := nginxIPs.ipv4.String()
 
 	keywords := map[int]string{
 		42: fmt.Sprintf("nat(dst=%s:80)", nginxIP), // endpointNATTable
@@ -138,6 +150,9 @@ func TestProxyEndpointLifeCycle(t *testing.T) {
 }
 
 func TestProxyServiceLifeCycle(t *testing.T) {
+	// TODO: add check for IPv6 address after Antrea Proxy supports IPv6
+	skipIfIPv6Cluster(t)
+	skipIfNotIPv4Cluster(t)
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
@@ -148,8 +163,10 @@ func TestProxyServiceLifeCycle(t *testing.T) {
 
 	nodeName := nodeName(1)
 	require.NoError(t, data.createNginxPod("nginx", nodeName))
-	nginxIP, err := data.podWaitForIP(defaultTimeout, "nginx", testNamespace)
+	nginxIPs, err := data.podWaitForIPs(defaultTimeout, "nginx", testNamespace)
 	require.NoError(t, err)
+	// TODO: Add support for IPv6 address after Antrea Proxy in IPv6 is supported
+	nginxIP := nginxIPs.ipv4.String()
 	svc, err := data.createNginxClusterIPService(false)
 	require.NoError(t, err)
 	ingressIPs := []string{"169.254.169.253", "169.254.169.254"}
@@ -174,7 +191,8 @@ func TestProxyServiceLifeCycle(t *testing.T) {
 		},
 	}
 
-	groupKeyword := fmt.Sprintf("load:0x%s->NXM_NX_REG3[],load:0x%x->NXM_NX_REG4[0..15],load:0x2->NXM_NX_REG4[16..18]", strings.TrimLeft(string(hex.EncodeToString(net.ParseIP(nginxIP).To4())), "0"), 80)
+	// TODO : add check for IPv6 address after Antrea Proxy is supported with IPv6
+	groupKeyword := fmt.Sprintf("load:0x%s->NXM_NX_REG3[],load:0x%x->NXM_NX_REG4[0..15],load:0x2->NXM_NX_REG4[16..18]", strings.TrimLeft(hex.EncodeToString(nginxIPs.ipv4.To4()), "0"), 80)
 	groupOutput, _, err := data.runCommandFromPod(metav1.NamespaceSystem, agentName, "antrea-agent", []string{"ovs-ofctl", "dump-groups", defaultBridgeName})
 	require.NoError(t, err)
 	require.Contains(t, groupOutput, groupKeyword)

@@ -101,7 +101,18 @@ func testMain(m *testing.M) int {
 	if err := collectClusterInfo(); err != nil {
 		log.Fatalf("Error when collecting information about K8s cluster: %v", err)
 	} else {
-		log.Printf("Pod network: '%s'", clusterInfo.podNetworkCIDR)
+		if clusterInfo.podV4NetworkCIDR != "" {
+			log.Printf("Pod IPv4 network: '%s'", clusterInfo.podV4NetworkCIDR)
+		}
+		if clusterInfo.podV6NetworkCIDR != "" {
+			log.Printf("Pod IPv6 network: '%s'", clusterInfo.podV6NetworkCIDR)
+		}
+		if clusterInfo.svcV4NetworkCIDR != "" {
+			log.Printf("Service IPv4 network: '%s'", clusterInfo.svcV4NetworkCIDR)
+		}
+		if clusterInfo.svcV6NetworkCIDR != "" {
+			log.Printf("Service IPv6 network: '%s'", clusterInfo.svcV6NetworkCIDR)
+		}
 		log.Printf("Num nodes: %d", clusterInfo.numNodes)
 	}
 
@@ -119,6 +130,9 @@ func gracefulExitAntrea(testData *TestData) {
 		}
 		if err := testData.gracefulExitAntreaAgent(testOptions.coverageDir, "all"); err != nil {
 			log.Fatalf("Error when gracefully exit antrea agent: %v", err)
+		}
+		if err := testData.collectAntctlCovFilesFromMasterNode(testOptions.coverageDir); err != nil {
+			log.Fatalf("Error when collecting antctl coverage files from master node: %v", err)
 		}
 
 	}

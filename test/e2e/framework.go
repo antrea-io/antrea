@@ -35,6 +35,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -88,11 +89,14 @@ type ClusterNode struct {
 }
 
 type ClusterInfo struct {
-	numWorkerNodes int
-	numNodes       int
-	podNetworkCIDR string
-	masterNodeName string
-	nodes          map[int]ClusterNode
+	numWorkerNodes   int
+	numNodes         int
+	podV4NetworkCIDR string
+	podV6NetworkCIDR string
+	svcV4NetworkCIDR string
+	svcV6NetworkCIDR string
+	masterNodeName   string
+	nodes            map[int]ClusterNode
 }
 
 var clusterInfo ClusterInfo
@@ -122,6 +126,36 @@ type TestData struct {
 }
 
 var testData *TestData
+
+type PodIPs struct {
+	ipv4      *net.IP
+	ipv6      *net.IP
+	ipStrings []string
+}
+
+func (p PodIPs) String() string {
+	res := ""
+	if p.ipv4 != nil {
+		res += fmt.Sprintf("IPv4: %s, ", p.ipv4.String())
+	}
+	if p.ipv6 != nil {
+		res += fmt.Sprintf("IPv6: %s, ", p.ipv6.String())
+	}
+	return fmt.Sprintf("%sIP strings: %s", res, strings.Join(p.ipStrings, ", "))
+}
+
+func (p *PodIPs) hasSameIP(p1 *PodIPs) bool {
+	if len(p.ipStrings) == 0 && len(p1.ipStrings) == 0 {
+		return true
+	}
+	if p.ipv4 != nil && p1.ipv4 != nil && p.ipv4.Equal(*(p1.ipv4)) {
+		return true
+	}
+	if p.ipv6 != nil && p1.ipv6 != nil && p.ipv6.Equal(*(p1.ipv6)) {
+		return true
+	}
+	return false
+}
 
 // workerNodeName returns an empty string if there is no worker Node with the provided idx
 // (including if idx is 0, which is reserved for the master Node)
@@ -208,23 +242,61 @@ func collectClusterInfo() error {
 	clusterInfo.numNodes = workerIdx
 	clusterInfo.numWorkerNodes = clusterInfo.numNodes - 1
 
-	// retrieve cluster CIDR
-	if err := func() error {
-		cmd := "kubectl cluster-info dump | grep cluster-cidr"
+	retrieveCIDRs := func(cmd string, reg string) ([]string, error) {
+		res := make([]string, 2)
 		rc, stdout, _, err := RunCommandOnNode(clusterInfo.masterNodeName, cmd)
 		if err != nil || rc != 0 {
-			return fmt.Errorf("error when running the following command `%s` on master Node: %v, %s", cmd, err, stdout)
+			return res, fmt.Errorf("error when running the following command `%s` on master Node: %v, %s", cmd, err, stdout)
 		}
-		re := regexp.MustCompile(`cluster-cidr=([^"]+)`)
+		re := regexp.MustCompile(reg)
 		if matches := re.FindStringSubmatch(stdout); len(matches) == 0 {
-			return fmt.Errorf("cannot retrieve cluster CIDR, unexpected kubectl output: %s", stdout)
+			return res, fmt.Errorf("cannot retrieve CIDR, unexpected kubectl output: %s", stdout)
 		} else {
-			clusterInfo.podNetworkCIDR = matches[1]
+			cidrs := strings.Split(matches[1], ",")
+			if len(cidrs) == 1 {
+				_, cidr, err := net.ParseCIDR(cidrs[0])
+				if err != nil {
+					return res, fmt.Errorf("CIDR cannot be parsed: %s", cidrs[0])
+				}
+				if cidr.IP.To4() != nil {
+					res[0] = cidrs[0]
+				} else {
+					res[1] = cidrs[0]
+				}
+			} else if len(cidrs) == 2 {
+				_, cidr, err := net.ParseCIDR(cidrs[0])
+				if err != nil {
+					return res, fmt.Errorf("CIDR cannot be parsed: %s", cidrs[0])
+				}
+				if cidr.IP.To4() != nil {
+					res[0] = cidrs[0]
+					res[1] = cidrs[1]
+				} else {
+					res[0] = cidrs[1]
+					res[1] = cidrs[0]
+				}
+			} else {
+				return res, fmt.Errorf("unexpected cluster CIDR: %s", matches[1])
+			}
 		}
-		return nil
-	}(); err != nil {
+		return res, nil
+	}
+
+	// retrieve cluster CIDRs
+	podCIDRs, err := retrieveCIDRs("kubectl cluster-info dump | grep cluster-cidr", `cluster-cidr=([^"]+)`)
+	if err != nil {
 		return err
 	}
+	clusterInfo.podV4NetworkCIDR = podCIDRs[0]
+	clusterInfo.podV6NetworkCIDR = podCIDRs[1]
+
+	// retrieve service CIDRs
+	svcCIDRs, err := retrieveCIDRs("kubectl cluster-info dump | grep service-cluster-ip-range", `service-cluster-ip-range=([^"]+)`)
+	if err != nil {
+		return err
+	}
+	clusterInfo.svcV4NetworkCIDR = svcCIDRs[0]
+	clusterInfo.svcV6NetworkCIDR = svcCIDRs[1]
 
 	return nil
 }
@@ -708,22 +780,73 @@ func (data *TestData) podWaitForRunning(timeout time.Duration, name, namespace s
 	return err
 }
 
-// podWaitForIP polls the K8s apiserver until the specified Pod is in the "running" state (or until
-// the provided timeout expires). The function then returns the IP address assigned to the Pod.
-func (data *TestData) podWaitForIP(timeout time.Duration, name, namespace string) (string, error) {
+// podWaitForIPs polls the K8s apiserver until the specified Pod is in the "running" state (or until
+// the provided timeout expires). The function then returns the IP addresses assigned to the Pod. If the
+// Pod is not using "hostNetwork", the function also checks that an IP address exists in each required
+// Address Family in the cluster.
+func (data *TestData) podWaitForIPs(timeout time.Duration, name, namespace string) (*PodIPs, error) {
 	pod, err := data.podWaitFor(timeout, name, namespace, func(pod *corev1.Pod) (bool, error) {
 		return pod.Status.Phase == corev1.PodRunning, nil
 	})
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	// According to the K8s API documentation (https://godoc.org/k8s.io/api/core/v1#PodStatus),
 	// the PodIP field should only be empty if the Pod has not yet been scheduled, and "running"
 	// implies scheduled.
 	if pod.Status.PodIP == "" {
-		return "", fmt.Errorf("pod is running but has no assigned IP, which should never happen")
+		return nil, fmt.Errorf("Pod is running but has no assigned IP, which should never happen")
 	}
-	return pod.Status.PodIP, nil
+	podIPStrings := sets.NewString(pod.Status.PodIP)
+	for _, podIP := range pod.Status.PodIPs {
+		ipStr := strings.TrimSpace(podIP.IP)
+		if ipStr != "" {
+			podIPStrings.Insert(ipStr)
+		}
+	}
+	ips, err := parsePodIPs(podIPStrings)
+	if err != nil {
+		return nil, err
+	}
+
+	if !pod.Spec.HostNetwork {
+		if clusterInfo.podV4NetworkCIDR != "" && ips.ipv4 == nil {
+			return nil, fmt.Errorf("no IPv4 address is assigned while cluster was configured with IPv4 Pod CIDR %s", clusterInfo.podV4NetworkCIDR)
+		}
+		if clusterInfo.podV6NetworkCIDR != "" && ips.ipv6 == nil {
+			return nil, fmt.Errorf("no IPv6 address is assigned while cluster was configured with IPv6 Pod CIDR %s", clusterInfo.podV6NetworkCIDR)
+		}
+	}
+	return ips, nil
+}
+
+func parsePodIPs(podIPStrings sets.String) (*PodIPs, error) {
+	ips := new(PodIPs)
+	for idx := range podIPStrings.List() {
+		ipStr := podIPStrings.List()[idx]
+		ip := net.ParseIP(ipStr)
+		if ip.To4() != nil {
+			if ips.ipv4 != nil && ipStr != ips.ipv4.String() {
+				return nil, fmt.Errorf("Pod is assigned multiple IPv4 addresses: %s and %s", ips.ipv4.String(), ipStr)
+			}
+			if ips.ipv4 == nil {
+				ips.ipv4 = &ip
+				ips.ipStrings = append(ips.ipStrings, ipStr)
+			}
+		} else {
+			if ips.ipv6 != nil && ipStr != ips.ipv6.String() {
+				return nil, fmt.Errorf("Pod is assigned multiple IPv6 addresses: %s and %s", ips.ipv6.String(), ipStr)
+			}
+			if ips.ipv6 == nil {
+				ips.ipv6 = &ip
+				ips.ipStrings = append(ips.ipStrings, ipStr)
+			}
+		}
+	}
+	if len(ips.ipStrings) == 0 {
+		return nil, fmt.Errorf("pod is running but has no assigned IP, which should never happen")
+	}
+	return ips, nil
 }
 
 // deleteAntreaAgentOnNode deletes the antrea-agent Pod on a specific Node and measure how long it
@@ -899,11 +1022,7 @@ func (data *TestData) restartAntreaAgentPods(timeout time.Duration) error {
 }
 
 // validatePodIP checks that the provided IP address is in the Pod Network CIDR for the cluster.
-func validatePodIP(podNetworkCIDR, podIP string) (bool, error) {
-	ip := net.ParseIP(podIP)
-	if ip == nil {
-		return false, fmt.Errorf("'%s' is not a valid IP address", podIP)
-	}
+func validatePodIP(podNetworkCIDR string, ip net.IP) (bool, error) {
 	_, cidr, err := net.ParseCIDR(podNetworkCIDR)
 	if err != nil {
 		return false, fmt.Errorf("podNetworkCIDR '%s' is not a valid CIDR", podNetworkCIDR)
@@ -1096,10 +1215,21 @@ func parseArpingStdout(out string) (sent uint32, received uint32, loss float32, 
 	return sent, received, loss, nil
 }
 
-func (data *TestData) runPingCommandFromTestPod(podName string, targetIP string, count int) error {
-	cmd := []string{"ping", "-c", strconv.Itoa(count), targetIP}
-	_, _, err := data.runCommandFromPod(testNamespace, podName, busyboxContainerName, cmd)
-	return err
+func (data *TestData) runPingCommandFromTestPod(podName string, targetPodIPs *PodIPs, count int) error {
+	var cmd []string
+	if targetPodIPs.ipv4 != nil {
+		cmd = []string{"ping", "-c", strconv.Itoa(count), targetPodIPs.ipv4.String()}
+		if _, _, err := data.runCommandFromPod(testNamespace, podName, busyboxContainerName, cmd); err != nil {
+			return err
+		}
+	}
+	if targetPodIPs.ipv6 != nil {
+		cmd = []string{"ping", "-6", "-c", strconv.Itoa(count), targetPodIPs.ipv6.String()}
+		if _, _, err := data.runCommandFromPod(testNamespace, podName, busyboxContainerName, cmd); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (data *TestData) runNetcatCommandFromTestPod(podName string, server string, port int) error {
@@ -1253,21 +1383,28 @@ func (data *TestData) gracefulExitAntreaController(covDir string) error {
 		return fmt.Errorf("error when getting antrea-controller Pod: %v", err)
 	}
 	podName := antreaController.Name
+
+	err = data.collectAntctlCovFiles(podName, "antrea-controller", antreaNamespace, covDir)
+
+	if err != nil {
+		return fmt.Errorf("error when graceful exit Antrea controller - copy antctl coverage files out: %v", err)
+	}
+
 	cmds := []string{"pgrep", "-f", antreaControllerCovBinary, "-P", "1"}
 	stdout, stderr, err := data.runCommandFromPod(antreaNamespace, podName, "antrea-controller", cmds)
 	if err != nil {
-		return fmt.Errorf("error when getting pid of '%s': <%v>, err: <%v>", antreaControllerCovBinary, stderr, err)
+		return fmt.Errorf("error when getting pid of '%s', stderr: <%v>, err: <%v>", antreaControllerCovBinary, stderr, err)
 	}
 	cmds = []string{"kill", "-SIGINT", strings.TrimSpace(stdout)}
 
 	_, stderr, err = data.runCommandFromPod(antreaNamespace, podName, "antrea-controller", cmds)
 	if err != nil {
-		return fmt.Errorf("error when sending SIGINT signal to '%s': <%v>, err: <%v>", antreaControllerCovBinary, stderr, err)
+		return fmt.Errorf("error when sending SIGINT signal to '%s', stderr: <%v>, err: <%v>", antreaControllerCovBinary, stderr, err)
 	}
 	err = data.copyPodFiles(podName, "antrea-controller", antreaNamespace, antreaControllerCovFile, covDir)
 
 	if err != nil {
-		return fmt.Errorf("error when graceful exit Antrea controller: copy pod files out, error:%v", err)
+		return fmt.Errorf("error when graceful exit Antrea controller - copy antrea-controller coverage files out: %v", err)
 	}
 
 	return nil
@@ -1288,63 +1425,145 @@ func (data *TestData) gracefulExitAntreaAgent(covDir string, nodeName string) er
 	}
 	for _, pod := range pods.Items {
 		podName := pod.Name
+		err := data.collectAntctlCovFiles(podName, "antrea-agent", antreaNamespace, covDir)
+
+		if err != nil {
+			return fmt.Errorf("error when graceful exit Antrea agent - copy antctl coverage files out: %v", err)
+		}
+
 		cmds := []string{"pgrep", "-f", antreaAgentCovBinary, "-P", "1"}
 		stdout, stderr, err := data.runCommandFromPod(antreaNamespace, podName, "antrea-agent", cmds)
 		if err != nil {
-			return fmt.Errorf("error when getting pid of '%s': <%v>, err: <%v>", antreaAgentCovBinary, stderr, err)
+			return fmt.Errorf("error when getting pid of '%s', stderr: <%v>, err: <%v>", antreaAgentCovBinary, stderr, err)
 		}
 		cmds = []string{"kill", "-SIGINT", strings.TrimSpace(stdout)}
 		_, stderr, err = data.runCommandFromPod(antreaNamespace, podName, "antrea-agent", cmds)
 		if err != nil {
-			return fmt.Errorf("error when sending SIGINT signal to '%s': <%v>, err: <%v>", antreaAgentCovBinary, stderr, err)
+			return fmt.Errorf("error when sending SIGINT signal to '%s', stderr: <%v>, err: <%v>", antreaAgentCovBinary, stderr, err)
 		}
 		err = data.copyPodFiles(podName, "antrea-agent", antreaNamespace, antreaAgentCovFile, covDir)
 
 		if err != nil {
-			return fmt.Errorf("error when graceful exit Antrea agent: copy pod files out, error:%v", err)
+			return fmt.Errorf("error when graceful exit Antrea agent - copy antrea-agent coverage files out: %v", err)
 		}
 	}
 	return nil
 }
 
-// gracefulExitAntreaAgent copies the Antrea agent binary coverage data file out before terminating the Pod
-func (data *TestData) copyPodFiles(podName string, containerName string, nsName string, fileName string, covDir string) error {
-	fmt.Printf("Copying file %s from pod %s podName to '%s'", fileName, podName, covDir)
+// collectAntctlCovFiles collects coverage files for the antctl binary from the Pod and saves them to the coverage directory
+func (data *TestData) collectAntctlCovFiles(podName string, containerName string, nsName string, covDir string) error {
+	// copy antctl coverage files from Pod to the coverage directory
+	cmds := []string{"bash", "-c", "find . -maxdepth 1 -name 'antctl*.out' -exec basename {} ';'"}
+	stdout, stderr, err := data.runCommandFromPod(nsName, podName, containerName, cmds)
+	if err != nil {
+		return fmt.Errorf("error when running this find command '%s' on Pod '%s', stderr: <%v>, err: <%v>", cmds, podName, stderr, err)
+	}
+	stdout = strings.TrimSpace(stdout)
+	files := strings.Split(stdout, "\n")
+	for _, file := range files {
+		if len(file) == 0 {
+			continue
+		}
+		err := data.copyPodFiles(podName, containerName, nsName, file, covDir)
+		if err != nil {
+			return fmt.Errorf("error when copying coverage files for antctl from Pod '%s' to coverage directory '%s': %v", podName, covDir, err)
+		}
+	}
+	return nil
+}
 
-	// getPodWriter creates the file with name podName-suffix. It returns nil if the
+// collectAntctlCovFilesFromMasterNode collects coverage files for the antctl binary from the master Node and saves them to the coverage directory
+func (data *TestData) collectAntctlCovFilesFromMasterNode(covDir string) error {
+	// copy antctl coverage files from node to the coverage directory
+	var cmd string
+	if testOptions.providerName == "kind" {
+		cmd = "/bin/sh -c find . -maxdepth 1 -name 'antctl*.out' -exec basename {} ';'"
+	} else {
+		cmd = "find . -maxdepth 1 -name 'antctl*.out' -exec basename {} ';'"
+	}
+	rc, stdout, stderr, err := RunCommandOnNode(masterNodeName(), cmd)
+	if err != nil || rc != 0 {
+		return fmt.Errorf("error when running this find command '%s' on master Node '%s', stderr: <%v>, err: <%v>", cmd, masterNodeName(), stderr, err)
+
+	}
+	stdout = strings.TrimSpace(stdout)
+	files := strings.Split(stdout, "\n")
+	for _, file := range files {
+		if len(file) == 0 {
+			continue
+		}
+		err := data.copyNodeFiles(masterNodeName(), file, covDir)
+		if err != nil {
+			return fmt.Errorf("error when copying coverage files for antctl from Node '%s' to coverage directory '%s': %v", masterNodeName(), covDir, err)
+		}
+	}
+	return nil
+
+}
+
+// copyPodFiles copies file from a Pod and save it to specified directory
+func (data *TestData) copyPodFiles(podName string, containerName string, nsName string, fileName string, covDir string) error {
+	// getPodWriter creates the file with name podName-fileName-suffix. It returns nil if the
 	// file cannot be created. File must be closed by the caller.
-	getPodWriter := func(podName, suffix string) *os.File {
-		covFile := filepath.Join(covDir, fmt.Sprintf("%s-%s", podName, suffix))
+	getPodWriter := func(podName, fileName, suffix string) *os.File {
+		covFile := filepath.Join(covDir, fmt.Sprintf("%s-%s-%s", podName, fileName, suffix))
 		f, err := os.Create(covFile)
 		if err != nil {
-			_ = fmt.Errorf("error when creating coverage file '%s': '%v'", covFile, err)
+			_ = fmt.Errorf("error when creating coverage file '%s': %v", covFile, err)
 			return nil
 		}
 		return f
-	}
-
-	// runKubectl runs the provided kubectl command on the master Node and returns the
-	// output. It returns an empty string in case of error.
-	runKubectl := func(cmd string) string {
-		rc, stdout, _, err := RunCommandOnNode(masterNodeName(), cmd)
-		if err != nil || rc != 0 {
-			_ = fmt.Errorf("error when running this kubectl command on master Node: %s", cmd)
-			return ""
-		}
-		return stdout
 	}
 
 	// dump the file from Antrea Pods to disk.
 	// a filepath-friendly timestamp format.
 	const timeFormat = "Jan02-15-04-05"
 	timeStamp := time.Now().Format(timeFormat)
-	w := getPodWriter(podName, timeStamp)
+	w := getPodWriter(podName, fileName, timeStamp)
 	if w == nil {
 		return nil
 	}
 	defer w.Close()
-	cmd := fmt.Sprintf("kubectl exec -i %s -c %s -n %s -- cat %s", podName, containerName, nsName, fileName)
-	stdout := runKubectl(cmd)
+	cmd := []string{"cat", fileName}
+	stdout, stderr, err := data.runCommandFromPod(nsName, podName, containerName, cmd)
+	if err != nil {
+		return fmt.Errorf("cannot retrieve content of file '%s' from Pod '%s', stderr: <%v>, err: <%v>", fileName, podName, stderr, err)
+	}
+	if stdout == "" {
+		return nil
+	}
+	w.WriteString(stdout)
+	return nil
+}
+
+// copyNodeFiles copies a file from a Node and save it to specified directory
+func (data *TestData) copyNodeFiles(nodeName string, fileName string, covDir string) error {
+	// getNodeWriter creates the file with name nodeName-suffix. It returns nil if the file
+	// cannot be created. File must be closed by the caller.
+	getNodeWriter := func(nodeName, fileName, suffix string) *os.File {
+		covFile := filepath.Join(covDir, fmt.Sprintf("%s-%s-%s", nodeName, fileName, suffix))
+		f, err := os.Create(covFile)
+		if err != nil {
+			_ = fmt.Errorf("error when creating coverage file '%s': %v", covFile, err)
+			return nil
+		}
+		return f
+	}
+
+	// dump the file from Antrea Pods to disk.
+	// a filepath-friendly timestamp format.
+	const timeFormat = "Jan02-15-04-05"
+	timeStamp := time.Now().Format(timeFormat)
+	w := getNodeWriter(nodeName, fileName, timeStamp)
+	if w == nil {
+		return nil
+	}
+	defer w.Close()
+	cmd := fmt.Sprintf("cat %s", fileName)
+	rc, stdout, stderr, err := RunCommandOnNode(masterNodeName(), cmd)
+	if err != nil || rc != 0 {
+		return fmt.Errorf("cannot retrieve content of file '%s' from Node '%s', stderr: <%v>, err: <%v>", fileName, masterNodeName(), stderr, err)
+	}
 	if stdout == "" {
 		return nil
 	}

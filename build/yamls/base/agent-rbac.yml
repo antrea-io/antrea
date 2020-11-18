@@ -55,6 +55,13 @@ rules:
     verbs:
       - create
   - apiGroups:
+      - controlplane.antrea.tanzu.vmware.com
+    resources:
+      - networkpolicies/status
+    verbs:
+      - create
+      - get
+  - apiGroups:
       - authentication.k8s.io
     resources:
       - tokenreviews

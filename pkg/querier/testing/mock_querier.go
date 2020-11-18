@@ -147,6 +147,20 @@ func (mr *MockAgentNetworkPolicyInfoQuerierMockRecorder) GetNetworkPolicies(arg0
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNetworkPolicies", reflect.TypeOf((*MockAgentNetworkPolicyInfoQuerier)(nil).GetNetworkPolicies), arg0)
 }
 
+// GetNetworkPolicyByRuleFlowID mocks base method
+func (m *MockAgentNetworkPolicyInfoQuerier) GetNetworkPolicyByRuleFlowID(arg0 uint32) *v1beta2.NetworkPolicyReference {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetNetworkPolicyByRuleFlowID", arg0)
+	ret0, _ := ret[0].(*v1beta2.NetworkPolicyReference)
+	return ret0
+}
+
+// GetNetworkPolicyByRuleFlowID indicates an expected call of GetNetworkPolicyByRuleFlowID
+func (mr *MockAgentNetworkPolicyInfoQuerierMockRecorder) GetNetworkPolicyByRuleFlowID(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNetworkPolicyByRuleFlowID", reflect.TypeOf((*MockAgentNetworkPolicyInfoQuerier)(nil).GetNetworkPolicyByRuleFlowID), arg0)
+}
+
 // GetNetworkPolicyNum mocks base method
 func (m *MockAgentNetworkPolicyInfoQuerier) GetNetworkPolicyNum() int {
 	m.ctrl.T.Helper()

@@ -21,7 +21,6 @@ import (
 )
 
 // +genclient
-// +genclient:noStatus
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 type NetworkPolicy struct {
@@ -31,6 +30,8 @@ type NetworkPolicy struct {
 
 	// Specification of the desired behavior of NetworkPolicy.
 	Spec NetworkPolicySpec `json:"spec"`
+	// Most recently observed status of the NetworkPolicy.
+	Status NetworkPolicyStatus `json:"status"`
 }
 
 // NetworkPolicySpec defines the desired state for NetworkPolicy.
@@ -56,6 +57,31 @@ type NetworkPolicySpec struct {
 	// field within a Rule.
 	// +optional
 	Egress []Rule `json:"egress"`
+}
+
+// NetworkPolicyPhase defines the phase in which a NetworkPolicy is.
+type NetworkPolicyPhase string
+
+// These are the valid values for NetworkPolicyPhase.
+const (
+	// NetworkPolicyPending means the NetworkPolicy has been accepted by the system, but it has not been processed by Antrea.
+	NetworkPolicyPending NetworkPolicyPhase = "Pending"
+	// NetworkPolicyRealizing means the NetworkPolicy has been observed by Antrea and is being realized.
+	NetworkPolicyRealizing NetworkPolicyPhase = "Realizing"
+	// NetworkPolicyRealized means the NetworkPolicy has been enforced to all Pods on all Nodes it applies to.
+	NetworkPolicyRealized NetworkPolicyPhase = "Realized"
+)
+
+// NetworkPolicyStatus represents information about the status of a NetworkPolicy.
+type NetworkPolicyStatus struct {
+	// The phase of a NetworkPolicy is a simple, high-level summary of the NetworkPolicy's status.
+	Phase NetworkPolicyPhase `json:"phase"`
+	// The generation observed by Antrea.
+	ObservedGeneration int64 `json:"observedGeneration"`
+	// The number of nodes that have realized the NetworkPolicy.
+	CurrentNodesRealized int32 `json:"currentNodesRealized"`
+	// The total number of nodes that should realize the NetworkPolicy.
+	DesiredNodesRealized int32 `json:"desiredNodesRealized"`
 }
 
 // Rule describes the traffic allowed to/from the workloads selected by
@@ -158,7 +184,6 @@ type NetworkPolicyList struct {
 
 // +genclient
 // +genclient:nonNamespaced
-// +genclient:noStatus
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 type ClusterNetworkPolicy struct {
@@ -168,6 +193,8 @@ type ClusterNetworkPolicy struct {
 
 	// Specification of the desired behavior of ClusterNetworkPolicy.
 	Spec ClusterNetworkPolicySpec `json:"spec"`
+	// Most recently observed status of the NetworkPolicy.
+	Status NetworkPolicyStatus `json:"status"`
 }
 
 // ClusterNetworkPolicySpec defines the desired state for ClusterNetworkPolicy.

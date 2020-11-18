@@ -231,7 +231,7 @@ the following rules:
    altogether.
 
 [Semantic Versioning]: https://semver.org/
-[CHANGELOG]: /CHANGELOG.md
+[CHANGELOG]: ../CHANGELOG.md
 [EKS]: https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html
 [AKS]: https://docs.microsoft.com/en-us/azure/aks/supported-kubernetes-versions
 [GKE]: https://cloud.google.com/kubernetes-engine/docs/release-notes

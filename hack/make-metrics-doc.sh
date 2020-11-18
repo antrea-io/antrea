@@ -30,53 +30,55 @@ function exit_handler() {
 trap exit_handler INT EXIT
 
 function get_metrics_url() {
-	pod_name=$1
-	host_ip=$(kubectl get pod -n kube-system $pod_name -o jsonpath="{.status.hostIP}")
-	host_port=$(kubectl get pod -n kube-system $pod_name -o jsonpath="{.spec.containers[*].ports[*].hostPort}")
+        pod_name=$1
+        host_ip=$(kubectl get pod -n kube-system $pod_name -o jsonpath="{.status.hostIP}")
+        host_port=$(kubectl get pod -n kube-system $pod_name -o jsonpath="{.spec.containers[*].ports[*].hostPort}")
 
-	echo "https://$host_ip:$host_port/metrics"
+        echo "https://$host_ip:$host_port/metrics"
 }
 
 function format_metrics() {
-	sorted_metrics=$1
-	# Gather list of metric names
-	metrics_types_unarranged=$(awk '/# TYPE/{print $3}' <<< $sorted_metrics)
-	# Put Antrea-specific metrics at the beginning, push 3rd parties after
-	metrics_types=$(grep antrea <<< $metrics_types_unarranged)$'\n'$(grep -v antrea <<< $metrics_types_unarranged)
-	# Gather metrics descriptions
-	metrics_help=$(grep '# HELP' <<< $sorted_metrics | sed 's/\[.*\] //i')
-	last_pfx=""
-	echo 'Below is a list of metrics, provided by the components and by 3rd parties.'
-	for metric in $metrics_types; do
-        	metric_pfx=$(sed 's/_/ /g' <<< $metric | awk '{print $1}')
-	        if [ "$metric_pfx" == 'antrea' ]; then
-			# For Antrea metrics, add Agent, Controller to title
-                	metric_pfx=$(sed 's/_/ /g' <<< $metric | awk '{print $1" "$2}')
-        	fi
-	        if [ "$last_pfx" != "$metric_pfx" ]; then
-        	        echo
-			# Ouptut metrics title
-			# Ouptut 3rd party metrics title
-			if [[ "$last_pfx" =~ ^antrea.* ]] && [[ ! "$metric_pfx" =~ ^antrea.* ]]; then
-				echo "## Common Metrics Provided by Infrastructure"
-			fi
-			# Ouptut metrics title
-	                echo "## "$(sed -e "s/\b\(.\)/\u\1/g" <<< $metric_pfx)" Metrics"
-                	last_pfx=$metric_pfx
-        	fi
-	        metric_help=$(grep " $metric " <<< $metrics_help | sed "s/.*$metric //")
-        	echo "- **$metric:** $metric_help"
-	done
+        sorted_metrics=$1
+        # Gather list of metric names
+        metrics_types_unarranged=$(awk '/# TYPE/{print $3}' <<< $sorted_metrics)
+        # Put Antrea-specific metrics at the beginning, push 3rd parties after
+        metrics_types=$(grep antrea <<< $metrics_types_unarranged)$'\n'$(grep -v antrea <<< $metrics_types_unarranged)
+        # Gather metrics descriptions
+        metrics_help=$(grep '# HELP' <<< $sorted_metrics | sed 's/\[.*\] //i')
+        last_pfx=""
+        echo 'Below is a list of metrics, provided by the components and by 3rd parties.'
+        for metric in $metrics_types; do
+                metric_pfx=$(sed 's/_/ /g' <<< $metric | awk '{print $1}')
+                if [ "$metric_pfx" == 'antrea' ]; then
+                        # For Antrea metrics, add Agent, Controller to title
+                        metric_pfx=$(sed 's/_/ /g' <<< $metric | awk '{print $1" "$2}')
+                fi
+                if [ "$last_pfx" != "$metric_pfx" ]; then
+                        echo
+                        # Ouptut metrics title
+                        # Ouptut 3rd party metrics title
+                        if [[ "$last_pfx" =~ ^antrea.* ]] && [[ ! "$metric_pfx" =~ ^antrea.* ]]; then
+                                echo "## Common Metrics Provided by Infrastructure"
+                                echo ""
+                        fi
+                        # Ouptut metrics title
+                        echo "### "$(sed -e "s/\b\(.\)/\u\1/g" <<< $metric_pfx)" Metrics"
+                        echo ""
+                        last_pfx=$metric_pfx
+                fi
+                metric_help=$(grep " $metric " <<< $metrics_help | sed "s/.*$metric //")
+                echo "- **$metric:** $metric_help"
+        done
 }
 
 if [ "$1" == "-h" ] || [ "$1" == "--help" ]; then
-	echo 'Usage: make-metrics-doc.sh [-h|--help|<metrics_document>]'
-	exit 0
+        echo 'Usage: make-metrics-doc.sh [-h|--help|<metrics_document>]'
+        exit 0
 fi
 metrics_doc=$1
 if [ "$metrics_doc" != "" ] && [ ! -f $metrics_doc ]; then
-	echo "Metrics document not found at $metrics_doc"
-	exit 1
+        echo "Metrics document not found at $metrics_doc"
+        exit 1
 fi
 
 set -eo pipefail
@@ -113,8 +115,8 @@ sorted_metrics=$(sort -u <<< "${agent_metrics}"$'\n'"${controller_metrics}")
 formatted_metrics=$(format_metrics "$sorted_metrics")
 
 if [ "$metrics_doc" == "" ]; then
-	fmt -w 80 -s <<< $formatted_metrics
+        fmt -w 80 -s <<< $formatted_metrics
 else
-	sed -i '/^Below is a list of metrics, provided by the components and by 3rd parties.$/,$d' $metrics_doc
-	fmt -w 80 -s <<< $formatted_metrics >> $metrics_doc
+        sed -i '/^Below is a list of metrics, provided by the components and by 3rd parties.$/,$d' $metrics_doc
+        fmt -w 80 -s <<< $formatted_metrics >> $metrics_doc
 fi

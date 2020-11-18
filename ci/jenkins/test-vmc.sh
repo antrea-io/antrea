@@ -32,6 +32,7 @@ RUN_CLEANUP_ONLY=false
 COVERAGE=false
 RUN_TEST_ONLY=false
 TESTCASE=""
+CODECOV_TOKEN=""
 SECRET_EXIST=false
 TEST_FAILURE=false
 CLUSTER_READY=false
@@ -51,7 +52,8 @@ Setup a VMC cluster to run K8s e2e community tests (E2e, Conformance, all featur
         --setup-only             Only perform setting up the cluster and run test.
         --cleanup-only           Only perform cleaning up the cluster.
         --coverage               Run e2e with coverage.
-        --test-only              Only run test on current cluster. Not set up/clean up the cluster."
+        --test-only              Only run test on current cluster. Not set up/clean up the cluster.
+        --codecov-token          Token used to upload coverage report(s) to Codecov."
 
 function print_usage {
     echoerr "$_usage"
@@ -100,10 +102,15 @@ case $key in
     ;;
     --coverage)
     COVERAGE=true
+    shift
     ;;
     --test-only)
     RUN_TEST_ONLY=true
     shift
+    ;;
+    --codecov-token)
+    CODECOV_TOKEN="$2"
+    shift 2
     ;;
     -h|--help)
     print_usage
@@ -269,8 +276,7 @@ function deliver_antrea {
 
     sed -i "s|#serviceCIDR: 10.96.0.0/12|serviceCIDR: 100.64.0.0/13|g" $GIT_CHECKOUT_DIR/build/yamls/$antrea_yml
 
-    # Configure and append antrea-prometheus.yml to antrea.yml
-    sed -i "s|#enablePrometheusMetrics: false|enablePrometheusMetrics: true|g" $GIT_CHECKOUT_DIR/build/yamls/$antrea_yml
+    # Append antrea-prometheus.yml to antrea.yml
     echo "---" >> $GIT_CHECKOUT_DIR/build/yamls/$antrea_yml
     cat $GIT_CHECKOUT_DIR/build/yamls/antrea-prometheus.yml >> $GIT_CHECKOUT_DIR/build/yamls/$antrea_yml
 
@@ -316,6 +322,9 @@ function run_integration {
     set -x
     echo "===== Run Integration test ====="
     ssh -q -o StrictHostKeyChecking=no -i "${WORKDIR}/utils/key" -n jenkins@${VM_IP} "git clone ${ghprbAuthorRepoGitUrl} antrea && cd antrea && git checkout ${GIT_BRANCH} && make docker-test-integration"
+    if [[ "$COVERAGE" == true ]]; then
+        ssh -q -o StrictHostKeyChecking=no -i "${WORKDIR}/utils/key" -n jenkins@${VM_IP} "curl -s https://codecov.io/bash | bash -s -- -c -t ${CODECOV_TOKEN} -F integration-tests -f '.coverage/coverage-integration.txt'"
+    fi
 }
 
 function run_e2e {
@@ -364,11 +373,9 @@ function run_e2e {
     fi
 
     tar -zcf ${GIT_CHECKOUT_DIR}/antrea-test-logs.tar.gz ${GIT_CHECKOUT_DIR}/antrea-test-logs
-
     if [[ "$COVERAGE" == true ]]; then
         tar -zcf ${GIT_CHECKOUT_DIR}/e2e-coverage.tar.gz ${GIT_CHECKOUT_DIR}/e2e-coverage
-        export CODECOV_TOKEN="a2b1c854-8627-4747-89cb-c312da33227d"
-        curl -s https://codecov.io/bash | bash -s -- -c -F jenkins-e2e -f '*antrea*' -s ${GIT_CHECKOUT_DIR}/e2e-coverage
+        curl -s https://codecov.io/bash | bash -s -- -c -t ${CODECOV_TOKEN} -F e2e-tests -f '*antrea*' -s ${GIT_CHECKOUT_DIR}/e2e-coverage
     fi
 }
 
@@ -382,12 +389,22 @@ function run_conformance {
     export PATH=$GOROOT/bin:$PATH
     export KUBECONFIG=$GIT_CHECKOUT_DIR/jenkins/out/kubeconfig
 
-    if [[ "$TESTCASE" == "all-features-conformance" ]]; then
-      $GIT_CHECKOUT_DIR/hack/generate-manifest.sh --mode dev --all-features > $GIT_CHECKOUT_DIR/build/yamls/antrea-all.yml
-      kubectl apply -f $GIT_CHECKOUT_DIR/build/yamls/antrea-all.yml
-    else
-      kubectl apply -f $GIT_CHECKOUT_DIR/build/yamls/antrea.yml
+    antrea_yml="antrea.yml"
+    if [[ "$COVERAGE" == true ]]; then
+        antrea_yml="antrea-coverage.yml"
     fi
+
+    if [[ "$TESTCASE" == "all-features-conformance" ]]; then
+      if [[ "$COVERAGE" == true ]]; then
+        $GIT_CHECKOUT_DIR/hack/generate-manifest.sh --mode dev --all-features --coverage > $GIT_CHECKOUT_DIR/build/yamls/antrea-all-coverage.yml
+        antrea_yml="antrea-all-coverage.yml"
+      else
+        $GIT_CHECKOUT_DIR/hack/generate-manifest.sh --mode dev --all-features > $GIT_CHECKOUT_DIR/build/yamls/antrea-all.yml
+        antrea_yml="antrea-all.yml"
+      fi
+    fi
+
+    kubectl apply -f $GIT_CHECKOUT_DIR/build/yamls/$antrea_yml
     kubectl rollout restart deployment/coredns -n kube-system
     kubectl rollout status --timeout=5m deployment/coredns -n kube-system
     kubectl rollout status --timeout=5m deployment.apps/antrea-controller -n kube-system
@@ -416,6 +433,31 @@ function run_conformance {
     else
         echo "All tests passed."
     fi
+
+    if [[ "$COVERAGE" == true ]]; then
+        rm -rf ${GIT_CHECKOUT_DIR}/conformance-coverage
+        mkdir -p ${GIT_CHECKOUT_DIR}/conformance-coverage
+        collect_coverage
+        tar -zcf ${GIT_CHECKOUT_DIR}/$TESTCASE-coverage.tar.gz ${GIT_CHECKOUT_DIR}/conformance-coverage
+        curl -s https://codecov.io/bash | bash -s -- -c -t ${CODECOV_TOKEN} -F e2e-tests -f '*antrea*' -s ${GIT_CHECKOUT_DIR}/conformance-coverage
+    fi
+}
+
+function collect_coverage() {
+        antrea_controller_pod_name="$(kubectl get pods --selector=app=antrea,component=antrea-controller -n kube-system --no-headers=true | awk '{ print $1 }')"
+        controller_pid="$(kubectl exec -i $antrea_controller_pod_name -n kube-system -- pgrep antrea)"
+        kubectl exec -i $antrea_controller_pod_name -n kube-system -- kill -SIGINT $controller_pid
+        timestamp=$(date +%Y%m%d%H%M%S)
+        kubectl cp kube-system/$antrea_controller_pod_name:antrea-controller.cov.out ${GIT_CHECKOUT_DIR}/conformance-coverage/$antrea_controller_pod_name-$timestamp
+
+        antrea_agent_pod_names="$(kubectl get pods --selector=app=antrea,component=antrea-agent -n kube-system --no-headers=true | awk '{ print $1 }')"
+        for agent in ${antrea_agent_pod_names}
+        do
+            agent_pid="$(kubectl exec -i $agent -n kube-system -- pgrep antrea)"
+            kubectl exec -i $agent -c antrea-agent -n kube-system -- kill -SIGINT $agent_pid
+            timestamp=$(date +%Y%m%d%H%M%S)
+            kubectl cp kube-system/$agent:antrea-agent.cov.out -c antrea-agent ${GIT_CHECKOUT_DIR}/conformance-coverage/$agent-$timestamp
+        done
 }
 
 function cleanup_cluster() {

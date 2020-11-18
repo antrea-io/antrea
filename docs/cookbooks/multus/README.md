@@ -80,7 +80,7 @@ use as an example in this guide.
 
 For detailed information on the Antrea requirements and instructions on how to
 deploy Antrea, please refer to
-[getting-started.md](/docs/getting-started.md). To deploy the latest version of
+[getting-started.md](../../getting-started.md). To deploy the latest version of
 Antrea, use:
 
 ```bash

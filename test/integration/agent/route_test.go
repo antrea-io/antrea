@@ -23,15 +23,18 @@ import (
 	"os/exec"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/vishvananda/netlink"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/agent/route"
 	"github.com/vmware-tanzu/antrea/pkg/agent/util"
 	"github.com/vmware-tanzu/antrea/pkg/agent/util/ipset"
+	"github.com/vmware-tanzu/antrea/pkg/agent/util/iptables"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
 )
 
@@ -57,10 +60,10 @@ var (
 	gwIP              = net.ParseIP("10.10.10.1")
 	gwMAC, _          = net.ParseMAC("12:34:56:78:bb:cc")
 	gwName            = "antrea-gw0"
-	gwConfig          = &config.GatewayConfig{IP: gwIP, MAC: gwMAC, Name: gwName}
+	gwConfig          = &config.GatewayConfig{IPv4: gwIP, MAC: gwMAC, Name: gwName}
 	nodeConfig        = &config.NodeConfig{
 		Name:          "test",
-		PodCIDR:       podCIDR,
+		PodIPv4CIDR:   podCIDR,
 		NodeIPAddr:    nodeIP,
 		GatewayConfig: gwConfig,
 	}
@@ -95,6 +98,7 @@ func TestInitialize(t *testing.T) {
 		// variations
 		networkConfig        *config.NetworkConfig
 		noSNAT               bool
+		xtablesHoldDuration  time.Duration
 		expectNoTrackRules   bool
 		expectUDPPortInRules int
 	}{
@@ -121,6 +125,13 @@ func TestInitialize(t *testing.T) {
 			expectNoTrackRules:   true,
 			expectUDPPortInRules: 4789,
 		},
+		{
+			networkConfig: &config.NetworkConfig{
+				TrafficEncapMode: config.TrafficEncapModeNoEncap,
+			},
+			xtablesHoldDuration: 5 * time.Second,
+			expectNoTrackRules:  false,
+		},
 	}
 
 	for _, tc := range tcs {
@@ -129,13 +140,47 @@ func TestInitialize(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
-		if err := routeClient.Initialize(nodeConfig); err != nil {
+
+		var xtablesReleasedTime, initializedTime time.Time
+		if tc.xtablesHoldDuration > 0 {
+			closeFn, err := iptables.Lock(iptables.XtablesLockFilePath, 1*time.Second)
+			require.NoError(t, err)
+			go func() {
+				time.Sleep(tc.xtablesHoldDuration)
+				xtablesReleasedTime = time.Now()
+				closeFn()
+			}()
+		}
+		inited1 := make(chan struct{})
+		if err := routeClient.Initialize(nodeConfig, func() {
+			initializedTime = time.Now()
+			close(inited1)
+		}); err != nil {
 			t.Error(err)
 		}
 
+		select {
+		case <-time.After(tc.xtablesHoldDuration + 3*time.Second):
+			t.Errorf("Initialize didn't finish in time when the xtables was held by others for %v", tc.xtablesHoldDuration)
+		case <-inited1:
+		}
+
+		if tc.xtablesHoldDuration > 0 {
+			assert.True(t, initializedTime.After(xtablesReleasedTime), "Initialize shouldn't finish before xtables lock was released")
+		}
+
+		inited2 := make(chan struct{})
 		// Call initialize twice and verify no duplicates
-		if err := routeClient.Initialize(nodeConfig); err != nil {
+		if err := routeClient.Initialize(nodeConfig, func() {
+			close(inited2)
+		}); err != nil {
 			t.Error(err)
+		}
+
+		select {
+		case <-time.After(3 * time.Second):
+			t.Errorf("Initialize didn't finish in time when the xtables was not held by others")
+		case <-inited2:
 		}
 
 		// verify ipset
@@ -222,7 +267,7 @@ func TestAddAndDeleteRoutes(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
-		if err := routeClient.Initialize(nodeConfig); err != nil {
+		if err := routeClient.Initialize(nodeConfig, func() {}); err != nil {
 			t.Error(err)
 		}
 
@@ -330,7 +375,7 @@ func TestReconcile(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
-		if err := routeClient.Initialize(nodeConfig); err != nil {
+		if err := routeClient.Initialize(nodeConfig, func() {}); err != nil {
 			t.Error(err)
 		}
 
@@ -378,7 +423,7 @@ func TestRouteTablePolicyOnly(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	if err := routeClient.Initialize(nodeConfig); err != nil {
+	if err := routeClient.Initialize(nodeConfig, func() {}); err != nil {
 		t.Error(err)
 	}
 	// Verify gw IP
@@ -439,4 +484,83 @@ func TestRouteTablePolicyOnly(t *testing.T) {
 	output, _ = ExecOutputTrim(fmt.Sprintf("ip add show %s", gwName))
 	assert.Containsf(t, output, ipAddr.String(), output)
 	_ = netlink.LinkDel(gwLink)
+}
+
+func TestIPv6RoutesAndNeighbors(t *testing.T) {
+	if _, incontainer := os.LookupEnv("INCONTAINER"); !incontainer {
+		// test changes file system, routing table. Run in contain only
+		t.Skipf("Skip test runs only in container")
+	}
+
+	gwLink := createDummyGW(t)
+	defer netlink.LinkDel(gwLink)
+
+	routeClient, err := route.NewClient(serviceCIDR, &config.NetworkConfig{TrafficEncapMode: config.TrafficEncapModeEncap}, false)
+	assert.Nil(t, err)
+	_, ipv6Subnet, _ := net.ParseCIDR("fd74:ca9b:172:19::/64")
+	gwIPv6 := net.ParseIP("fd74:ca9b:172:19::1")
+	dualGWConfig := &config.GatewayConfig{IPv4: gwIP, IPv6: gwIPv6, MAC: gwMAC, Name: gwName, LinkIndex: gwLink.Attrs().Index}
+	dualNodeConfig := &config.NodeConfig{
+		Name:          "test",
+		PodIPv4CIDR:   podCIDR,
+		PodIPv6CIDR:   ipv6Subnet,
+		NodeIPAddr:    nodeIP,
+		GatewayConfig: dualGWConfig,
+	}
+	err = routeClient.Initialize(dualNodeConfig, func() {})
+	assert.Nil(t, err)
+
+	tcs := []struct {
+		// variations
+		peerCIDR string
+		// expectations
+		uplink netlink.Link
+	}{
+		{peerCIDR: "10.10.20.0/24", uplink: gwLink},
+		{peerCIDR: "fd74:ca9b:172:18::/64", uplink: gwLink},
+	}
+
+	for _, tc := range tcs {
+		_, peerCIDR, _ := net.ParseCIDR(tc.peerCIDR)
+		nhCIDRIP := ip.NextIP(peerCIDR.IP)
+		if err := routeClient.AddRoutes(peerCIDR, localPeerIP, nhCIDRIP); err != nil {
+			t.Errorf("route add failed with err %v", err)
+		}
+
+		link := tc.uplink
+		nhIP := nhCIDRIP
+		var expRouteStr, ipRoute, expNeighStr, ipNeigh string
+		if nhIP.To4() != nil {
+			onlink := "onlink"
+			expRouteStr = fmt.Sprintf("%s via %s dev %s %s", peerCIDR, nhIP, link.Attrs().Name, onlink)
+			ipRoute, _ = ExecOutputTrim(fmt.Sprintf("ip route show | grep %s", tc.peerCIDR))
+		} else {
+			expRouteStr = fmt.Sprintf("%s via %s dev %s", peerCIDR, nhIP, link.Attrs().Name)
+			ipRoute, _ = ExecOutputTrim(fmt.Sprintf("ip -6 route show | grep %s", tc.peerCIDR))
+			expNeighStr = fmt.Sprintf("%s dev %s lladdr aa:bb:cc:dd:ee:ff PERMANENT", nhIP, link.Attrs().Name)
+			ipNeigh, _ = ExecOutputTrim(fmt.Sprintf("ip -6 neighbor show | grep %s", nhIP))
+		}
+		expRouteStr = strings.Join(strings.Fields(expRouteStr), "")
+		if len(ipRoute) > len(expRouteStr) {
+			ipRoute = ipRoute[:len(expRouteStr)]
+		}
+		if !assert.Equal(t, expRouteStr, ipRoute) {
+			t.Errorf("mismatch route")
+		}
+		if expNeighStr != "" {
+			expNeighStr = strings.Join(strings.Fields(expNeighStr), "")
+			if len(ipNeigh) > len(expNeighStr) {
+				ipNeigh = ipNeigh[:len(expNeighStr)]
+			}
+			if !assert.Equal(t, expNeighStr, ipNeigh) {
+				t.Errorf("mismatch IPv6 Neighbor")
+			}
+		}
+		if err := routeClient.DeleteRoutes(peerCIDR); err != nil {
+			t.Errorf("route delete failed with err %v", err)
+		}
+		output, err := ExecOutputTrim(fmt.Sprintf("ip route show table 0 exact %s", peerCIDR))
+		assert.NoError(t, err)
+		assert.Equal(t, "", output, "expected no routes to %s", peerCIDR)
+	}
 }

@@ -24,6 +24,7 @@ import (
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/klog"
+	utilnet "k8s.io/utils/net"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/agent/proxy/types"
@@ -37,13 +38,6 @@ const (
 	resyncPeriod  = time.Minute
 	componentName = "antrea-agent-proxy"
 )
-
-var _ Proxier = new(proxier)
-
-type Proxier interface {
-	Run(stopCh <-chan struct{})
-	GetServiceByIP(serviceStr string) (k8sproxy.ServicePortName, bool)
-}
 
 // TODO: Add metrics
 type proxier struct {
@@ -74,6 +68,7 @@ type proxier struct {
 	stopChan     <-chan struct{}
 	agentQuerier querier.AgentQuerier
 	ofClient     openflow.Client
+	isIPv6       bool
 }
 
 func (p *proxier) isInitialized() bool {
@@ -115,15 +110,30 @@ func (p *proxier) removeStaleServices() {
 	}
 }
 
-func (p *proxier) removeStaleEndpoints(staleEndpoints map[k8sproxy.ServicePortName]map[string]k8sproxy.Endpoint) {
-	for svcPortName, endpoints := range staleEndpoints {
-		bindingProtocol := binding.ProtocolTCP
-		if svcPortName.Protocol == corev1.ProtocolUDP {
+func getBindingProtoForIPProto(endpointIP string, protocol corev1.Protocol) binding.Protocol {
+	var bindingProtocol binding.Protocol
+	if utilnet.IsIPv6String(endpointIP) {
+		bindingProtocol = binding.ProtocolTCPv6
+		if protocol == corev1.ProtocolUDP {
+			bindingProtocol = binding.ProtocolUDPv6
+		} else if protocol == corev1.ProtocolSCTP {
+			bindingProtocol = binding.ProtocolSCTPv6
+		}
+	} else {
+		bindingProtocol = binding.ProtocolTCP
+		if protocol == corev1.ProtocolUDP {
 			bindingProtocol = binding.ProtocolUDP
-		} else if svcPortName.Protocol == corev1.ProtocolSCTP {
+		} else if protocol == corev1.ProtocolSCTP {
 			bindingProtocol = binding.ProtocolSCTP
 		}
+	}
+	return bindingProtocol
+}
+
+func (p *proxier) removeStaleEndpoints(staleEndpoints map[k8sproxy.ServicePortName]map[string]k8sproxy.Endpoint) {
+	for svcPortName, endpoints := range staleEndpoints {
 		for _, endpoint := range endpoints {
+			bindingProtocol := getBindingProtoForIPProto(endpoint.IP(), svcPortName.Protocol)
 			if err := p.ofClient.UninstallEndpointFlows(bindingProtocol, endpoint); err != nil {
 				klog.Errorf("Error when removing Endpoint %v for %v", endpoint, svcPortName)
 				continue
@@ -169,7 +179,7 @@ func (p *proxier) installServices() {
 			continue
 		}
 
-		if err := p.ofClient.InstallEndpointFlows(svcInfo.OFProtocol, endpointUpdateList); err != nil {
+		if err := p.ofClient.InstallEndpointFlows(svcInfo.OFProtocol, endpointUpdateList, p.isIPv6); err != nil {
 			klog.Errorf("Error when installing Endpoints flows: %v", err)
 			continue
 		}
@@ -253,8 +263,16 @@ func (p *proxier) OnServiceAdd(service *corev1.Service) {
 }
 
 func (p *proxier) OnServiceUpdate(oldService, service *corev1.Service) {
-	if p.serviceChanges.OnServiceUpdate(oldService, service) && p.isInitialized() {
-		p.runner.Run()
+	var isIPv6 bool
+	if oldService != nil {
+		isIPv6 = utilnet.IsIPv6String(oldService.Spec.ClusterIP)
+	} else {
+		isIPv6 = utilnet.IsIPv6String(service.Spec.ClusterIP)
+	}
+	if isIPv6 == p.isIPv6 {
+		if p.serviceChanges.OnServiceUpdate(oldService, service) && p.isInitialized() {
+			p.runner.Run()
+		}
 	}
 }
 
@@ -300,16 +318,22 @@ func (p *proxier) Run(stopCh <-chan struct{}) {
 	})
 }
 
-func New(hostname string, informerFactory informers.SharedInformerFactory, ofClient openflow.Client) *proxier {
+func NewProxier(
+	hostname string,
+	informerFactory informers.SharedInformerFactory,
+	ofClient openflow.Client,
+	isIPv6 bool) *proxier {
 	recorder := record.NewBroadcaster().NewRecorder(
 		runtime.NewScheme(),
 		corev1.EventSource{Component: componentName, Host: hostname},
 	)
+
+	klog.Infof("Creating proxier with IPv6 enabled=%t", isIPv6)
 	p := &proxier{
 		endpointsConfig:      config.NewEndpointsConfig(informerFactory.Core().V1().Endpoints(), resyncPeriod),
 		serviceConfig:        config.NewServiceConfig(informerFactory.Core().V1().Services(), resyncPeriod),
 		endpointsChanges:     newEndpointsChangesTracker(hostname),
-		serviceChanges:       newServiceChangesTracker(recorder),
+		serviceChanges:       newServiceChangesTracker(recorder, isIPv6),
 		serviceMap:           k8sproxy.ServiceMap{},
 		serviceInstalledMap:  k8sproxy.ServiceMap{},
 		endpointInstalledMap: map[k8sproxy.ServicePortName]map[string]struct{}{},
@@ -317,9 +341,25 @@ func New(hostname string, informerFactory informers.SharedInformerFactory, ofCli
 		serviceStringMap:     map[string]k8sproxy.ServicePortName{},
 		groupCounter:         types.NewGroupCounter(),
 		ofClient:             ofClient,
+		isIPv6:               isIPv6,
 	}
 	p.serviceConfig.RegisterEventHandler(p)
 	p.endpointsConfig.RegisterEventHandler(p)
 	p.runner = k8sproxy.NewBoundedFrequencyRunner(componentName, p.syncProxyRules, 0, 30*time.Second, -1)
 	return p
+}
+
+func NewDualStackProxier(
+	hostname string, informerFactory informers.SharedInformerFactory, ofClient openflow.Client) k8sproxy.Provider {
+
+	// Create an ipv4 instance of the single-stack proxier
+	ipv4Proxier := NewProxier(hostname, informerFactory, ofClient, false)
+
+	// Create an ipv6 instance of the single-stack proxier
+	ipv6Proxier := NewProxier(hostname, informerFactory, ofClient, true)
+
+	// Return a meta-proxier that dispatch calls between the two
+	// single-stack proxier instances
+	metaProxier := k8sproxy.NewMetaProxier(ipv4Proxier, ipv6Proxier)
+	return metaProxier
 }
