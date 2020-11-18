@@ -37,7 +37,6 @@ function print_usage {
 
 TESTBED_CMD=$(dirname $0)"/kind-setup.sh"
 YML_CMD=$(dirname $0)"/../../hack/generate-manifest.sh"
-COMMON_IMAGES="busybox nginx antrea/antrea-ubuntu:latest"
 
 function quit {
   if [[ $? != 0 ]]; then
@@ -91,10 +90,18 @@ if $np; then
     # See https://github.com/vmware-tanzu/antrea/issues/897
     manifest_args="$manifest_args --np --tun vxlan"
 fi
+
+COMMON_IMAGES_LIST=("gcr.io/kubernetes-e2e-test-images/agnhost:2.8" "projects.registry.vmware.com/library/busybox" "projects.registry.vmware.com/antrea/nginx" "projects.registry.vmware.com/antrea/perftool" "projects.registry.vmware.com/antrea/ipfix-collector:10282020.1")
+for image in "${COMMON_IMAGES_LIST[@]}"; do
+    docker pull $image
+done
 if $coverage; then
     manifest_args="$manifest_args --coverage"
-    COMMON_IMAGES="busybox nginx antrea/antrea-ubuntu-coverage:latest"
+    COMMON_IMAGES_LIST+=("antrea/antrea-ubuntu-coverage:latest")
+else
+    COMMON_IMAGES_LIST+=("antrea/antrea-ubuntu:latest")
 fi
+printf -v COMMON_IMAGES "%s " "${COMMON_IMAGES_LIST[@]}"
 
 function run_test {
   current_mode=$1
@@ -116,9 +123,6 @@ function run_test {
   fi
   $TESTBED_CMD destroy kind
 }
-
-docker pull busybox
-docker pull nginx
 
 if [[ "$mode" == "" ]] || [[ "$mode" == "encap" ]]; then
   echo "======== Test encap mode =========="
