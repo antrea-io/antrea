@@ -101,7 +101,7 @@ func (m *NetworkPolicyMutator) Mutate(ar *admv1.AdmissionReview) *admv1.Admissio
 
 // mutateAntreaPolicy mutates names of rules of an Antrea NetworkPolicy CRD.
 // If users didn't specify the name of an ingress or egress rule,
-// mutateAntreaPolicyRuleName will auto-generate a name for this rule. In
+// mutateAntreaPolicy will auto-generate a name for this rule. In
 // addition to the rule names, it also mutates the Tier field to the default
 // tier name if it is unset.
 func (m *NetworkPolicyMutator) mutateAntreaPolicy(op admv1.Operation, ingress, egress []secv1alpha1.Rule, tier string) (string, bool, []byte) {
