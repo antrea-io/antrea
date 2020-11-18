@@ -64,6 +64,7 @@ Pod-to-external and Pod-to-ClusterIP-Service connectivity.
 CNIAdd request might be called multiple times for a given Pod. This is because kubelet on Windows
 assumes CNIAdd is an idempotent event, and it uses this event to query the Pod networking status.
 Antrea needs to identify the container type (sandbox or workload) from the CNIAdd request:
+
 * we create the HNS Endpoint only when the request is for the sandbox container
 * we attach the HNS Endpoint no matter whether it is a sandbox container or a workload container.
 
@@ -88,6 +89,7 @@ remote subnet CIDR should be routed with the remote gateway address as the nexth
 ### Tunnel port configuration
 
 Tunnel port configuration should be similar to Antrea on Linux:
+
 * tunnel port is added after OVS bridge is created;
 * a flow-based tunnel with the appropriate remote address is created for each Node in the cluster with OpenFlow.
 
@@ -108,13 +110,14 @@ OVS bridge is used in OpenFlow spec.
 
 In the OVS `Classifier` table, new OpenFlow entries are needed to match the packets from this interface.
 There are two kinds of packets entering OVS pipeline from this interface:
+
  1) the packet is sent from the Windows host to an external address
  2) the packet is forwarded from the Windows host to the local Pod (e.g., this happens if the traffic is initiated
   from a Pod to a NodePort Service, and the chosen Node is where the Pod is located)
 
 For 1, the packet is always output to the uplink interface directly. For 2, the packet is injected into
 the OVS pipeline and output to the backend Pod finally.
- 
+
 ### OVS uplink interface configuration
 
 After the OVS bridge is created, the original physical adapter is added to the OVS bridge as the uplink interface.
@@ -124,6 +127,7 @@ interface.
 
 We should differentiate the traffic if it is entering OVS from the uplink interface in OVS `Classifier`
 table. There are two kinds of packets entering the OVS bridge from the uplink interface:
+
  1) reply traffic for the traffic that is sent from local Pods to external addresses,
  2) traffic on the host network
 
@@ -132,10 +136,12 @@ context first, and then processed by the OVS pipeline.
 For 2, the packets are output to the OVS bridge interface directly.
 
 ### SNAT configuration
+
 SNAT is an important feature of the Antrea Agent on Windows Nodes, required to support Pods accessing external
 addresses. It is implemented using OpenFlow.
 
 To support this feature, two additional marks are introduced:
+
 * The 17th bit of NXM Register0 is set  for Pod-to-external traffic. This bit is set in the `L3Forwarding` table,
  and is consumed in the `ConntrackCommit` table.
 * The SNATed traffic is marked with **0x40** in the ct context. This mark is set in the `ConntrackCommit`
@@ -191,20 +197,24 @@ table=105, priority=200, ct_state=+new+trk,ip,reg0=0x20000/0x20000, actions=ct(c
 ```
 
 ### Using Windows named pipe for internal connections
+
 Named pipe is used for local connections on Windows Nodes instead of Unix Domain Socket (UDS). It is used in
 these scenarios:
+
 * OVSDB connection
 * OpenFlow connection
 * The connection between CNI plugin and CNI server
- 
+
 ## Antrea Management on Windows
 
 ### Antrea Agent Management
+
 The Antrea Agent is running as a process on the Windows Node, but it is managed using a DaemonSet. The utility
 [Rancher Wins](https://github.com/rancher/wins) is used to manage the host process from inside the DaemonSet Pod.
 The Antrea Agent is configured using a ConfigMap, and the environment variables are set by kubelet on Windows.
 
 ### OVS Management
+
 OVS is running as 2 Windows Services: one for ovsdb-server and one for ovs-vswitchd.
 
 ## Traffic walkthrough

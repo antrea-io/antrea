@@ -199,6 +199,7 @@ To create a cleanup issue or PR:
   * for what reason it is being cleaned (technical debt, deprecation, etc.)
 
 Examples of a cleanup include:
+
 * Adding comments to describe code execution
 * Making code easier to read and follow
 * Removing dead code related to deprecated features or implementations
@@ -222,6 +223,7 @@ Before you begin work on your feature it is import to ensure that you have
 proper review and approval from the project maintainers.
 
 Examples of a new feature include:
+
 * Adding a new set of metrics for enabling additional telemetry.
 * Adding additional supported transport layer protocol options for network policy.
 * Adding support for IPsec.
@@ -322,9 +324,9 @@ to which an issue relates. An issue or PR could have multiple areas. These label
 used to sort issues and PRs into categories such as:
 
 * operating systems
-* cloud platform, 
+* cloud platform,
 * functional area,
-* operating or legal area (i.e., licensing), 
+* operating or legal area (i.e., licensing),
 * etc.
 
 A list of areas is maintained in [`github-labels.md`](github-labels.md).
@@ -334,7 +336,7 @@ An area may be changed, added or deleted during issue or PR triage.
 ### Size
 
 Size labels begin with `size/<size>` and estimate the relative complexity or work
-required to resolve an issue or PR. 
+required to resolve an issue or PR.
 
 TODO: For submitted PRs, the size can be automatically calculated and the
 appropriate label assigned.

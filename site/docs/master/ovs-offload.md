@@ -29,20 +29,20 @@ below.
 
 Check the Number of VF Supported on the NIC
 
-```
+```bash
 cat /sys/class/net/enp3s0f0/device/sriov_totalvfs
 8
 ```
 
 Create the VFs
 
-```
+```bash
 echo '4' > /sys/class/net/enp3s0f0/device/sriov_numvfs
 ```
 
 Verify that the VFs are created
 
-```
+```bash
 ip link show enp3s0f0
 8: enp3s0f0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc mq state UP mode DEFAULT qlen 1000
    link/ether a0:36:9f:8f:3f:b8 brd ff:ff:ff:ff:ff:ff
@@ -54,13 +54,13 @@ ip link show enp3s0f0
 
 Set up the PF to be up
 
-```
+```bash
 ip link set enp3s0f0 up
 ```
 
 Unbind the VFs from the driver
 
-```
+```bash
 echo 0000:03:00.2 > /sys/bus/pci/drivers/mlx5_core/unbind
 echo 0000:03:00.3 > /sys/bus/pci/drivers/mlx5_core/unbind
 echo 0000:03:00.4 > /sys/bus/pci/drivers/mlx5_core/unbind
@@ -69,14 +69,14 @@ echo 0000:03:00.5 > /sys/bus/pci/drivers/mlx5_core/unbind
 
 Configure SR-IOV VFs to switchdev mode
 
-```
+```bash
 devlink dev eswitch set pci/0000:03:00.0 mode switchdev
 ethtool -K enp3s0f0 hw-tc-offload on
 ```
 
 Bind the VFs to the driver
 
-```
+```bash
 echo 0000:03:00.2 > /sys/bus/pci/drivers/mlx5_core/bind
 echo 0000:03:00.3 > /sys/bus/pci/drivers/mlx5_core/bind
 echo 0000:03:00.4 > /sys/bus/pci/drivers/mlx5_core/bind
@@ -110,9 +110,9 @@ data:
     }
 ```
 
-Deploy SR-IOV network device plugin as DaemonSet. See https://github.com/intel/sriov-network-device-plugin.
+Deploy SR-IOV network device plugin as DaemonSet. See <https://github.com/intel/sriov-network-device-plugin>.
 
-Deploy multus CNI as DaemonSet. See https://github.com/intel/multus-cni.
+Deploy multus CNI as DaemonSet. See <https://github.com/intel/multus-cni>.
 
 Create NetworkAttachementDefinition CRD with Antrea CNI config.
 
@@ -130,8 +130,11 @@ spec:
     "name": "antrea",
     "plugins": [ { "type": "antrea", "ipam": { "type": "host-local" } }, { "type": "portmap", "capabilities": {"portMappings": true}, { "type": "bandwidth", "capabilities": {"bandwidth": true} }]
 }'
+
 ```
+
 ## Deploy Antrea Image with hw-offload enabled
+
 Modify the build/yamls/antrea.yml with offload flag
 
 ```yaml
@@ -165,17 +168,20 @@ spec:
 ## Verify Hardware-Offloads is Working
 
 Run iperf3 server on POD 1
-```
+
+```bash
 kubectl exec -it ovs-offload-pod1 -- iperf3 -s
 ```
+
 Run iperf3 client on POD 2
 
-```
+```bash
 kubectl exec -it ovs-offload-pod2 -- iperf3 -c 192.168.1.17 -t 100
 ```
 
 Check traffic on the VF representor port. Verify only TCP connection establishment appears
-```
+
+```text
 tcpdump -i mofed-te-b5583b tcp
 listening on mofed-te-b5583b, link-type EN10MB (Ethernet), capture size 262144 bytes
 22:24:44.969516 IP 192.168.1.16.43558 > 192.168.1.17.targus-getdata1: Flags [S], seq 89800743, win 64860, options [mss 1410,sackOK,TS val 491087056 ecr 0,nop,wscale 7], length 0
@@ -190,7 +196,8 @@ listening on mofed-te-b5583b, link-type EN10MB (Ethernet), capture size 262144 b
 ```
 
 Check datapath rules are offloaded
-```
+
+```text
 ovs-appctl dpctl/dump-flows --names type=offloaded
 recirc_id(0),in_port(eth0),eth(src=16:fd:c6:0b:60:52),eth_type(0x0800),ipv4(src=192.168.1.17,frag=no), packets:2235857, bytes:147599302, used:0.550s, actions:ct(zone=65520),recirc(0x18)
 ct_state(+est+trk),ct_mark(0),recirc_id(0x18),in_port(eth0),eth(dst=42:66:d7:45:0d:7e),eth_type(0x0800),ipv4(dst=192.168.1.0/255.255.255.0,frag=no), packets:2235857, bytes:147599302, used:0.550s, actions:eth1

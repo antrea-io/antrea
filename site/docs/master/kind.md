@@ -97,7 +97,7 @@ document](/test/e2e#running-the-e2e-tests-on-a-kind-cluster).
 
 ## FAQ
 
-### Why is the YAML manifest different when using Kind?
+### Why is the YAML manifest different when using Kind
 
 By default Antrea uses the Open vSwitch (OVS) kernel datapath type to provide
 connectivity between Pods, and each Kubernetes Node runs its own datapath
@@ -107,17 +107,17 @@ datapath type for Kind clusters. Instead, we use OVS in [userspace
 mode](http://docs.openvswitch.org/en/latest/intro/install/userspace/), which
 requires some changes to the way Antrea is deployed. Most notably:
 
- * the tun device driver needs to be mounted in the antrea-ovs container
- * the Antrea agent's ConfigMap needs to be updated so that the userspace
-   (`netdev`) OVS datapath type is used
- * the Antrea agent's Init Container no longer needs to load the `openvswitch`
-   kernel module
- * the `start_ovs` script used by the `antrea-ovs` container needs to be
-   replaced with the `start_ovs_netdev` script, which creates an additional
-   bridge (`br-phy`) as required for [OVS userspace
-   tunneling](http://docs.openvswitch.org/en/latest/howto/userspace-tunneling/)
+* the tun device driver needs to be mounted in the antrea-ovs container
+* the Antrea agent's ConfigMap needs to be updated so that the userspace
+  (`netdev`) OVS datapath type is used
+* the Antrea agent's Init Container no longer needs to load the `openvswitch`
+  kernel module
+* the `start_ovs` script used by the `antrea-ovs` container needs to be replaced
+  with the `start_ovs_netdev` script, which creates an additional bridge
+  (`br-phy`) as required for [OVS userspace
+  tunneling](http://docs.openvswitch.org/en/latest/howto/userspace-tunneling/)
 
-### Why do I need to run the `hack/kind-fix-networking.sh` script on my host?
+### Why do I need to run the `hack/kind-fix-networking.sh` script on my host
 
 The script is required for Antrea to work properly in a Kind cluster. It takes
 care of disabling TX hardware checksum offload for the veth interface (in the

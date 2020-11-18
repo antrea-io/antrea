@@ -32,10 +32,11 @@ that Antrea can easily be used in commercial derivative works.
 
 We chose golicense, which uses binary-based dependency analysis, for two
 reasons:
- * It works very well, and there is no source-based analysis alternative which
-   is as popular and as easy to use. If we find one, we would consider running
-   it as well.
- * Binary-based analysis avoids "false positives" by ensuring that all the
-   reported dependencies are actually used in the distributed binary assets. It
-   is possible for a dependency to be included in the go.mod file, but only used
-   in tests or code examples.
+
+* It works very well, and there is no source-based analysis alternative which is
+  as popular and as easy to use. If we find one, we would consider running it as
+  well.
+* Binary-based analysis avoids "false positives" by ensuring that all the
+  reported dependencies are actually used in the distributed binary assets. It
+  is possible for a dependency to be included in the go.mod file, but only used
+  in tests or code examples.

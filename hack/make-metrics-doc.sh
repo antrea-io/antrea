@@ -47,6 +47,8 @@ function format_metrics() {
         metrics_help=$(grep '# HELP' <<< $sorted_metrics | sed 's/\[.*\] //i')
         last_pfx=""
         echo 'Below is a list of metrics, provided by the components and by 3rd parties.'
+        echo
+        echo "### Antrea Metrics"
         for metric in $metrics_types; do
                 metric_pfx=$(sed 's/_/ /g' <<< $metric | awk '{print $1}')
                 if [ "$metric_pfx" == 'antrea' ]; then
@@ -58,12 +60,12 @@ function format_metrics() {
                         # Ouptut metrics title
                         # Ouptut 3rd party metrics title
                         if [[ "$last_pfx" =~ ^antrea.* ]] && [[ ! "$metric_pfx" =~ ^antrea.* ]]; then
-                                echo "## Common Metrics Provided by Infrastructure"
-                                echo ""
+                                echo "### Common Metrics Provided by Infrastructure"
+                                echo
                         fi
                         # Ouptut metrics title
-                        echo "### "$(sed -e "s/\b\(.\)/\u\1/g" <<< $metric_pfx)" Metrics"
-                        echo ""
+                        echo "#### "$(sed -e "s/\b\(.\)/\u\1/g" <<< $metric_pfx)" Metrics"
+                        echo
                         last_pfx=$metric_pfx
                 fi
                 metric_help=$(grep " $metric " <<< $metrics_help | sed "s/.*$metric //")

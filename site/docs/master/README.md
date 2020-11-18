@@ -1,3 +1,5 @@
+# Antrea
+
 ![Antrea Logo](assets/logo/antrea_logo.svg)
 
 ![Build Status](https://github.com/vmware-tanzu/antrea/workflows/Go/badge.svg?branch=master)
@@ -94,8 +96,9 @@ introduced for each version release.
 
 ## Roadmap
 
-We are adding features very quickly to Antrea. Check out the list of features we are considering 
-on our [Roadmap](ROADMAP.md) page. Feel free to throw your ideas in!
+We are adding features very quickly to Antrea. Check out the list of features we
+are considering on our [Roadmap](ROADMAP.md) page. Feel free to throw your ideas
+in!
 
 ## License
 

@@ -43,10 +43,9 @@
 
 **This document currently makes the following assumptions:**
 
- * Antrea is used in encap mode (an overlay network is created between all
-   Nodes)
- * AntreaProxy is disabled
- * All the Nodes are Linux Nodes
+* Antrea is used in encap mode (an overlay network is created between all Nodes)
+* AntreaProxy is disabled
+* All the Nodes are Linux Nodes
 
 ## Dumping the Flows
 
@@ -66,16 +65,16 @@ that Node and `<BRIDGE_NAME>` is the name of the bridge created by Antrea
 
 We use 2 32-bit OVS registers to carry information throughout the pipeline:
 
- * reg0 (NXM_NX_REG0):
-   - bits [0..15] are used to store the traffic source (from tunnel: 0, from
-   local gateway: 1, from local Pod: 2). It is set in the [ClassifierTable].
-   - bit 16 is used to indicate whether the destination MAC address of a packet
-   is "known", i.e. corresponds to an entry in [L2ForwardingCalcTable], which is
-   essentially a "dmac" table.
- * reg1 (NXM_NX_REG1): it is used to store the egress OF port for the packet. It
- is set by [DNATTable] for traffic destined to services and by
- [L2ForwardingCalcTable] otherwise. It is consumed by [L2ForwardingOutTable] to
- output each packet to the correct port.
+* reg0 (NXM_NX_REG0):
+  - bits [0..15] are used to store the traffic source (from tunnel: 0, from
+    local gateway: 1, from local Pod: 2). It is set in the [ClassifierTable].
+  - bit 16 is used to indicate whether the destination MAC address of a packet
+    is "known", i.e. corresponds to an entry in [L2ForwardingCalcTable], which
+    is essentially a "dmac" table.
+* reg1 (NXM_NX_REG1): it is used to store the egress OF port for the packet. It
+  is set by [DNATTable] for traffic destined to services and by
+  [L2ForwardingCalcTable] otherwise. It is consumed by [L2ForwardingOutTable] to
+  output each packet to the correct port.
 
 ## Network Policy Implementation
 
@@ -179,6 +178,7 @@ label `app: dns`. Similar to K8s NetworkPolicy, Antrea will only install OVS
 flows for this ACNP on Nodes for which some of the Pods are the target of the
 policy. Thus, we have scheduled three Pods (appServer, appDns, appNotClient)
 on the same Node and they have the following IP addresses:
+
 - appServer: 10.10.1.6
 - appNotClient: 10.10.1.7
 - appDns: 10.10.1.8
@@ -219,11 +219,12 @@ unmatched packets (in practice this flow entry should almost never be used).
 This table prevents IP and ARP
 [spoofing](https://en.wikipedia.org/wiki/Spoofing_attack) from local Pods. For
 each Pod (as identified by the ingress port), we ensure that:
- * for IP traffic, the source IP and MAC addresses are correct, i.e. match the
- values configured on the interface when Antrea set-up networking for the Pod.
- * for ARP traffic, the advertised IP and MAC addresses are correct, i.e. match
- the values configured on the interface when Antrea set-up networking for the
- Pod.
+
+* for IP traffic, the source IP and MAC addresses are correct, i.e. match the
+  values configured on the interface when Antrea set-up networking for the Pod.
+* for ARP traffic, the advertised IP and MAC addresses are correct, i.e. match
+  the values configured on the interface when Antrea set-up networking for the
+  Pod.
 
 Because Antrea currently relies on kube-proxy to load-balance traffic destined
 to services, implementing that kind of IP spoofing check for traffic coming-in
@@ -327,29 +328,29 @@ This table handles all "tracked" packets (all packets are moved to the tracked
 state by the previous table, [ConntrackTable]). It serves the following
 purposes:
 
- * keeps track of connections initiated through the gateway port, i.e. for which
- the first packet of the connection (SYN packet for TCP) was received through
- the gateway. For all reply packets belonging to such connections we overwrite
- the destination MAC to the local gateway MAC to ensure that they get forwarded
- though the gateway port. This is required to handle the following cases:
-   - reply traffic for connections from a local Pod to a ClusterIP Service,
-     which are handled by kube-proxy and go through DNAT. In this case the
-     destination IP address of the reply traffic is the Pod which initiated the
-     connection to the Service (no SNAT by kube-proxy). We need to make sure
-     that these packets are sent back through the gateway so that the source IP
-     can be rewritten to the ClusterIP ("undo" DNAT). If we do not use
-     connection tracking and do not rewrite the destination MAC, reply traffic
-     from the backend will go directly to the originating Pod without going
-     first through the gateway and kube-proxy.  This means that the reply
-     traffic will arrive at the originating Pod with the incorrect source IP (it
-     will be set to the backend's IP instead of the service IP).
-   - when hair-pinning is involved, i.e. for connections between 2 local Pods
-     and for which NAT is performed. One example is a Pod accessing a NodePort
-     Service for which `externalTrafficPolicy` is set to `Local` using the local
-     Node's IP address, as there will be no SNAT for such traffic. Another
-     example could be `hostPort` support, depending on how the feature is
-     implemented.
- * drop packets reported as invalid by conntrack
+* keeps track of connections initiated through the gateway port, i.e. for which
+  the first packet of the connection (SYN packet for TCP) was received through
+  the gateway. For all reply packets belonging to such connections we overwrite
+  the destination MAC to the local gateway MAC to ensure that they get forwarded
+  though the gateway port. This is required to handle the following cases:
+  - reply traffic for connections from a local Pod to a ClusterIP Service, which
+    are handled by kube-proxy and go through DNAT. In this case the destination
+    IP address of the reply traffic is the Pod which initiated the connection to
+    the Service (no SNAT by kube-proxy). We need to make sure that these packets
+    are sent back through the gateway so that the source IP can be rewritten to
+    the ClusterIP ("undo" DNAT). If we do not use connection tracking and do not
+    rewrite the destination MAC, reply traffic from the backend will go directly
+    to the originating Pod without going first through the gateway and
+    kube-proxy.  This means that the reply traffic will arrive at the
+    originating Pod with the incorrect source IP (it will be set to the
+    backend's IP instead of the service IP).
+  - when hair-pinning is involved, i.e. for connections between 2 local Pods and
+    for which NAT is performed. One example is a Pod accessing a NodePort
+    Service for which `externalTrafficPolicy` is set to `Local` using the local
+    Node's IP address, as there will be no SNAT for such traffic. Another
+    example could be `hostPort` support, depending on how the feature is
+    implemented.
+* drop packets reported as invalid by conntrack
 
 If you dump the flows for this table, you should see the following:
 
@@ -435,6 +436,7 @@ table 45, you should see something like this:
 5. table=45, priority=14000,udp,tp_dst=53 actions=conjunction(1,3/3)
 6. table=45, priority=0 actions=resubmit(,50)
 ```
+
 Similar to [K8s NetworkPolicy implementation](#egressruletable-50),
 AntreaPolicyEgressRuleTable also relies on the OVS built-in `conjunction` action to
 implement policies efficiently.
@@ -452,7 +454,7 @@ If the `conjunction` action is matched, packets are "allowed" or "dropped"
 based on the `action` field of the policy rule. If allowed, they follow a similar
 path as described in the following [EgressRuleTable] section.
 
-Unlike the default of K8s NetworkPolicies, Antrea-native policies have no such 
+Unlike the default of K8s NetworkPolicies, Antrea-native policies have no such
 default rules. Hence, they are evaluated as-is, and there is no need for a
 AntreaPolicyEgressDefaultTable.
 
@@ -476,6 +478,7 @@ you dump the flows for this table, you should see something like this:
 7. table=50, priority=190,conj_id=2,ip actions=load:0x2->NXM_NX_REG5[],ct(commit,table=61,zone=65520,exec(load:0x2->NXM_NX_CT_LABEL[32..63]))
 8. table=50, priority=0 actions=goto_table:60
 ```
+
 Notice how we use the OVS built-in `conjunction` action to implement policies
 efficiently. This enables us to do a conjunctive match across multiple
 dimensions (source IP, destination IP, port) efficiently without "exploding" the
@@ -556,39 +559,39 @@ traffic to the next table EgressMetricsTable, then ([L3ForwardingTable]).
 
 This is the L3 routing table. It implements the following functionality:
 
- * Tunnelled traffic coming-in from a peer Node and destined to a local Pod is
-   directly forwarded to the Pod. This requires setting the source MAC to the
-   MAC of the local gateway interface and setting the destination MAC to the
-   Pod's MAC address. Such traffic is identified by matching on the packet's
-   destination MAC address (should be set to the Global Virtual MAC for all
-   tunnelled traffic) and its destination IP address (should match the IP
-   address of a local Pod). We therefore install one flow for each Pod created
-   locally on the Node. For example:
+* Tunnelled traffic coming-in from a peer Node and destined to a local Pod is
+  directly forwarded to the Pod. This requires setting the source MAC to the MAC
+  of the local gateway interface and setting the destination MAC to the Pod's
+  MAC address. Such traffic is identified by matching on the packet's
+  destination MAC address (should be set to the Global Virtual MAC for all
+  tunnelled traffic) and its destination IP address (should match the IP address
+  of a local Pod). We therefore install one flow for each Pod created locally on
+  the Node. For example:
 
 ```text
 table=70, priority=200,ip,dl_dst=aa:bb:cc:dd:ee:ff,nw_dst=10.10.0.2 actions=mod_dl_src:e2:e5:a4:9b:1c:b1,mod_dl_dst:12:9e:a6:47:d0:70,dec_ttl,goto_table:80
 ```
 
- * All tunnelled traffic destined to the local gateway (i.e. for which the
-   destination IP matches the local gateway's IP) is forwarded to the gateway
-   port by rewriting the destination MAC (from the Global Virtual MAC to the
-   local gateway's MAC).
+* All tunnelled traffic destined to the local gateway (i.e. for which the
+  destination IP matches the local gateway's IP) is forwarded to the gateway
+  port by rewriting the destination MAC (from the Global Virtual MAC to the
+  local gateway's MAC).
 
 ```text
 table=70, priority=200,ip,dl_dst=aa:bb:cc:dd:ee:ff,nw_dst=10.10.0.1 actions=mod_dl_dst:e2:e5:a4:9b:1c:b1,goto_table:80
 ```
 
- * All traffic destined to a remote Pod is forwarded through the appropriate
-   tunnel. This means that we install one flow for each peer Node, each one
-   matching the destination IP address of the packet against the Pod subnet for
-   the Node. In case of a match the source MAC is set to the local gateway MAC,
-   the destination MAC is set to the Global Virtual MAC and we set the OF
-   `tun_dst` field to the appropriate value (i.e. the IP address of the remote
-   gateway). Traffic then goes to [ConntrackCommitTable], thus
-   skipping [L2ForwardingCalcTable] and the ingress policy rules tables, which
-   are not relevant for traffic destined to a tunnel (the destination port is
-   the tunnel port and the ingress policy rules will be enforced at the
-   destination Node). For a given peer Node, the flow may look like this:
+* All traffic destined to a remote Pod is forwarded through the appropriate
+  tunnel. This means that we install one flow for each peer Node, each one
+  matching the destination IP address of the packet against the Pod subnet for
+  the Node. In case of a match the source MAC is set to the local gateway MAC,
+  the destination MAC is set to the Global Virtual MAC and we set the OF
+  `tun_dst` field to the appropriate value (i.e. the IP address of the remote
+  gateway). Traffic then goes to [ConntrackCommitTable], thus skipping
+  [L2ForwardingCalcTable] and the ingress policy rules tables, which are not
+  relevant for traffic destined to a tunnel (the destination port is the tunnel
+  port and the ingress policy rules will be enforced at the destination
+  Node). For a given peer Node, the flow may look like this:
 
 ```text
 table=70, priority=200,ip,nw_dst=10.10.1.0/24 actions=dec_ttl,mod_dl_src:e2:e5:a4:9b:1c:b1,mod_dl_dst:aa:bb:cc:dd:ee:ff,load:0x1->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],load:0xc0a84d65->NXM_NX_TUN_IPV4_DST[],goto_table:105
@@ -816,7 +819,6 @@ see 2 flows:
 The first flow outputs all unicast packets to the correct port (the port was
 resolved by the "dmac" table, [L2ForwardingCalcTable]). IP packets for which
 [L2ForwardingCalcTable] did not set bit 16 of NXM_NX_REG0 will be dropped.
-
 
 [ClassifierTable]: #classifiertable-0
 [SpoofGuardTable]: #spoofguardtable-10

@@ -53,6 +53,7 @@ in the [Controller API server section](#Controller-API-server).
 Antrea Controller leverages the Kubernetes apiserver library to implement its
 own API server. The API server implementation is customized and optimized for
 publishing the computed NetworkPolicies to Agents:
+
 - The API server keeps all the state in in-memory caches and does not require a
 datastore to persist the data.
 - It sends the NetworkPolicy objects to only those Nodes that need to apply the
@@ -64,6 +65,7 @@ Agents.
 for reduced size and higher efficiency.
 
 The Antrea Controller API server also leverages Kubernetes Service for:
+
 - service discovery, and
 - authentication and authorization.
 
@@ -98,6 +100,7 @@ the OVS bridge and installs the necessary flows in OVS. To learn more about the
 OVS flows check out the [OVS pipeline doc](ovs-pipeline.md).
 
 Antrea Agent includes two Kubernetes controllers:
+
 - The Node controller watches the Kubernetes API server for new Nodes, and
 creates an OVS (Geneve / VXLAN / GRE / STT) tunnel to each remote Node.
 - The NetworkPolicy controller watches the computed NetworkPolicies from the
@@ -224,6 +227,7 @@ An important design choice Antrea took regarding the NetworkPolicy
 implementation is centralized policy computation. Antrea Controller watches
 NetworkPolicy, Pod, and Namespace resources from the Kubernetes API. It
 processes podSelectors, namespaceSelectors, and ipBlocks as follows:
+
 - PodSelectors directly under the NetworkPolicy spec (which define the Pods to
 which the NetworkPolicy is applied) will be translated to member Pods.
 - Selectors (podSelectors and namespaceSelectors) and ipBlocks in rules (which
@@ -255,6 +259,7 @@ As described earlier, Antrea Controller leverages the Kubernetes apiserver
 library to build the API and communication channel to Agents.
 
 ### Hybrid, NoEncap, NetworkPolicyOnly TrafficEncapMode
+
 Besides the default `Encap` mode, which always creates overlay tunnels among
 Nodes and encapsulates inter-Node Pod traffic, Antrea also supports other
 TrafficEncapModes including `Hybrid`, `NoEncap`, `NetworkPolicyOnly` modes. This
@@ -296,6 +301,7 @@ mode.
 ## Features
 
 ### Antrea Network Policy
+
 Besides Kubernetes NetworkPolicy, Antrea supports two extra types of
 Network Policies available as CRDs - Antrea Namespaced NetworkPolicy and
 ClusterNetworkPolicy. The former is scoped to a specific Namespace, while the
@@ -311,6 +317,7 @@ Agents. Antrea Agents create OVS flows to enforce the NetworkPolicies applied
 to the local Pods on their Nodes.
 
 ### IPsec encryption
+
 Antrea supports encrypting GRE tunnel traffic with IPsec ESP. The IPsec
 implementation leverages [OVS IPsec](http://docs.openvswitch.org/en/latest/tutorials/ipsec)
 and leverages [strongSwan](https://www.strongswan.org) as the IKE daemon.
@@ -336,12 +343,14 @@ However, the traffic from a remote Node will be received from the Node's IPsec
 tunnel port.
 
 ### Network flow visibility
+
 Antrea supports exporting network flow information with Kubernetes context
 using IPFIX. The exported network flows can be visualized using Elastic Stack
 and Kibana dashboards. For more information, refer to the [network flow
 visibility document](../network-flow-visibility.md).
 
 ### Windows Node
+
 On a Windows Node, Antrea acts very much like it does on a Linux Node. Antrea
 Agent and OVS are still run on the Node, Windows Pods are still connected to the
 OVS bridge, and Pod networking is still mostly implemented with OVS flows. Even

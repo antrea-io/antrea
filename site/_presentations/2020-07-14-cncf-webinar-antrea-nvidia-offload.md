@@ -1,5 +1,6 @@
 ---
 title: "Securing and Accelerating the Kubernetes CNI Data Plane with Project Antrea and NVIDIA Mellanox ConnectX SmartNICs"
+date: 2020-07-14
 excerpt: CNCF Webinar presentation by Antonin Bas, Moshe Levi, Cody McCain, and Itay Ozery
 external: https://youtu.be/KtSJCt_n3Gs
 embed: https://www.youtube.com/embed/KtSJCt_n3Gs

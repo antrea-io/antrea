@@ -554,7 +554,7 @@ The Monitoring [CRDs] feature is graduated from Alpha to Beta.
 [Flow Exporter]: https://github.com/vmware-tanzu/antrea/blob/master/docs/network-flow-visibility.md
 [Elastic Stack]: https://www.elastic.co/elastic-stack
 [strongSwan]: https://www.strongswan.org/
-[Antrea Policy CRDs documentation]: https://github.com/vmware-tanzu/antrea/blob/master/docs/network-policy.md
+[Antrea Policy CRDs documentation]: https://github.com/vmware-tanzu/antrea/blob/master/docs/antrea-network-policy.md
 [Default cluster roles]: https://kubernetes.io/docs/reference/access-authn-authz/rbac/#user-facing-roles
 [Aggregated ClusterRoles]: https://kubernetes.io/docs/reference/access-authn-authz/rbac/#aggregated-clusterroles
 [Admission webhooks]: https://kubernetes.io/docs/reference/access-authn-authz/extensible-admission-controllers/

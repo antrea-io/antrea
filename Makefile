@@ -127,7 +127,11 @@ docker-test-unit: $(DOCKER_CACHE)
 .PHONY: docker-test-integration
 docker-test-integration: .coverage
 	@echo "===> Building Antrea Integration Test Docker image <==="
-	@docker build --pull -t antrea/test -f build/images/test/Dockerfile .
+ifneq ($(DOCKER_REGISTRY),"")
+	docker build -t antrea/test -f build/images/test/Dockerfile .
+else
+	docker build --pull -t antrea/test -f build/images/test/Dockerfile .
+endif
 	@docker run --privileged --rm \
 		-e "GOCACHE=/tmp/gocache" \
 		-e "GOPATH=/tmp/gopath" \
@@ -253,19 +257,31 @@ ubuntu:
 .PHONY: build-ubuntu
 build-ubuntu:
 	@echo "===> Building Antrea bins and antrea/antrea-ubuntu Docker image <==="
+ifneq ($(DOCKER_REGISTRY),"")
+	docker build -t antrea/antrea-ubuntu:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.build.ubuntu .
+else
 	docker build --pull -t antrea/antrea-ubuntu:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.build.ubuntu .
+endif
 	docker tag antrea/antrea-ubuntu:$(DOCKER_IMG_VERSION) antrea/antrea-ubuntu
 
 .PHONY: build-windows
 build-windows:
 	@echo "===> Building Antrea bins and antrea/antrea-windows Docker image <==="
+ifneq ($(DOCKER_REGISTRY),"")
+	docker build -t antrea/antrea-windows:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.build.windows .
+else
 	docker build --pull -t antrea/antrea-windows:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.build.windows .
+endif
 	docker tag antrea/antrea-windows:$(DOCKER_IMG_VERSION) antrea/antrea-windows
 
 .PHONY: build-ubuntu-coverage
 build-ubuntu-coverage:
 	@echo "===> Building Antrea bins and antrea/antrea-ubuntu-coverage Docker image <==="
+ifneq ($(DOCKER_REGISTRY),"")
 	docker build -t antrea/antrea-ubuntu-coverage:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.build.coverage .
+else
+	docker build --pull -t antrea/antrea-ubuntu-coverage:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.build.coverage .
+endif
 	docker tag antrea/antrea-ubuntu-coverage:$(DOCKER_IMG_VERSION) antrea/antrea-ubuntu-coverage
 
 .PHONY: manifest
@@ -303,3 +319,13 @@ verify:
 toc:
 	@echo "===> Generating Table of Contents for Antrea docs <==="
 	$(CURDIR)/hack/update-toc.sh
+
+.PHONE: markdownlint
+markdownlint:
+	@echo "===> Running markdownlint <==="
+	markdownlint -c .markdownlint-config.yml -i CHANGELOG.md -i hack/netpol -i CODE_OF_CONDUCT.md .
+
+.PHONE: markdownlint-fix
+markdownlint-fix:
+	@echo "===> Running markdownlint <==="
+	markdownlint --fix -c .markdownlint-config.yml -i CHANGELOG.md -i hack/netpol -i CODE_OF_CONDUCT.md .

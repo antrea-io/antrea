@@ -1,31 +1,36 @@
 # Prometheus Integration
 
 ## Purpose
-Prometheus server can monitor various metrics and provide an observation of the 
-Antrea Controller and Agent components. The doc provides general guidelines to 
+
+Prometheus server can monitor various metrics and provide an observation of the
+Antrea Controller and Agent components. The doc provides general guidelines to
 the configuration of Prometheus server to operate with the Antrea components.
 
 ## About Prometheus
-[Prometheus](https://prometheus.io/) is an open source monitoring and alerting 
-server. Prometheus is capable of collecting metrics from various Kubernetes 
+
+[Prometheus](https://prometheus.io/) is an open source monitoring and alerting
+server. Prometheus is capable of collecting metrics from various Kubernetes
 components, storing and providing alerts.
-Prometheus can provide visibility by integrating with other products such as 
+Prometheus can provide visibility by integrating with other products such as
 [Grafana](https://grafana.com/).
- 
+
 One of Prometheus capabilities is self-discovery of Kubernetes services which
-expose their metrics. So Prometheus can scrape the metrics of any additional 
-components which are added to the cluster without further configuration changes. 
- 
+expose their metrics. So Prometheus can scrape the metrics of any additional
+components which are added to the cluster without further configuration changes.
+
 ## Antrea Configuration
-Enable Prometheus metrics listener by setting `enablePrometheusMetrics` 
+
+Enable Prometheus metrics listener by setting `enablePrometheusMetrics`
 parameter to true in the Controller and the Agent configurations.
- 
+
 ## Prometheus Configuration
 
 ### Prometheus version
+
 Prometheus integration with Antrea is validated as part of CI using Prometheus v2.19.3.
-  
+
 ### Prometheus RBAC
+
 Prometheus requires access to Kubernetes API resources for the service discovery
 capability. Reading metrics also requires access to the "/metrics" API
 endpoints.
@@ -54,6 +59,7 @@ rules:
 ```
 
 ### Antrea Metrics Listener Access
+
 To scrape the metrics from Antrea Controller and Agent, Prometheus needs the
 following permissions
 
@@ -70,11 +76,12 @@ rules:
 ```
 
 ### Antrea Components Scraping configuration
+
 Add the following jobs to Prometheus scraping configuration to enable metrics
 collection from Antrea components. Antrea Agent metrics endpoint is exposed through
 Antrea apiserver on `apiport` config parameter given in `antrea-agent.conf` (default
 value is 10350). Antrea Controller metrics endpoint is exposed through Antrea apiserver
-on `apiport` config parameter given in `antrea-controller.conf` (default value is 10349). 
+on `apiport` config parameter given in `antrea-controller.conf` (default value is 10349).
 
 #### Controller Scraping
 
@@ -114,22 +121,25 @@ relabel_configs:
   target_label: instance
 ```
 
-For further reference see the enclosed 
+For further reference see the enclosed
 [configuration file](/build/yamls/antrea-prometheus.yml).
 
-The configuration file above can be used to deploy Prometheus Server with 
+The configuration file above can be used to deploy Prometheus Server with
 scraping configuration for Antrea services.
 To deploy this configuration use
 `kubectl apply -f build/yamls/antrea-prometheus.yml`
 
-# Antrea Prometheus Metrics
-Antrea Controller and Agents expose various metrics, some of which are provided 
-by the Antrea components and others which are provided by 3rd party components 
+## Antrea Prometheus Metrics
+
+Antrea Controller and Agents expose various metrics, some of which are provided
+by the Antrea components and others which are provided by 3rd party components
 used by the Antrea components.
 
 Below is a list of metrics, provided by the components and by 3rd parties.
 
-### Antrea Agent Metrics
+### Antrea Metrics
+
+#### Antrea Agent Metrics
 
 - **antrea_agent_conntrack_antrea_connection_count:** Number of connections
 in the Antrea ZoneID of the conntrack table. This metric gets updated at
@@ -160,7 +170,7 @@ flow operations, partitioned by operation type (add, modify and delete).
 - **antrea_agent_ovs_total_flow_count:** Total flow count of all OVS flow
 tables.
 
-### Antrea Controller Metrics
+#### Antrea Controller Metrics
 
 - **antrea_controller_address_group_processed:** The total number of
 address-group processed
@@ -181,9 +191,9 @@ internal-networkpolicy processed
 - **antrea_controller_network_policy_sync_duration_milliseconds:** The
 duration of syncing internal-networkpolicy
 
-## Common Metrics Provided by Infrastructure
+### Common Metrics Provided by Infrastructure
 
-### Apiserver Metrics
+#### Apiserver Metrics
 
 - **apiserver_audit_event_total:** Counter of audit events generated and
 sent to the audit backend.
@@ -217,12 +227,12 @@ number of cache misses while accessing key decryption key(KEK).
 - **apiserver_watch_events_sizes:** Watch event size distribution in bytes
 - **apiserver_watch_events_total:** Number of events sent in watch clients
 
-### Authenticated Metrics
+#### Authenticated Metrics
 
 - **authenticated_user_requests:** Counter of authenticated requests broken
 out by username.
 
-### Authentication Metrics
+#### Authentication Metrics
 
 - **authentication_attempts:** Counter of authenticated attempts.
 - **authentication_duration_seconds:** Authentication duration in seconds
@@ -232,7 +242,7 @@ broken out by result.
 - **authentication_token_cache_request_duration_seconds:**
 - **authentication_token_cache_request_total:**
 
-### Go Metrics
+#### Go Metrics
 
 - **go_gc_duration_seconds:** A summary of the GC invocation durations.
 - **go_goroutines:** Number of goroutines that currently exist.
@@ -277,7 +287,7 @@ stack allocator.
 - **go_memstats_sys_bytes:** Number of bytes obtained from system.
 - **go_threads:** Number of OS threads created.
 
-### Process Metrics
+#### Process Metrics
 
 - **process_cpu_seconds_total:** Total user and system CPU time spent
 in seconds.

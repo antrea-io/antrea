@@ -66,7 +66,8 @@ To increase the log level for the `antrea-agent` and the `antrea-controller`, yo
 can edit the `--v=0` arg in the Antrea manifest to a desired level.
 Alternatively, you can generate an Antrea manifest with increased log level of
 4 (maximum debug level) using `generate_manifest.sh`:
-```
+
+```bash
 hack/generate-manifest.sh --mode dev --verbose-log
 ```  
 

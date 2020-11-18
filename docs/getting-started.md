@@ -79,13 +79,13 @@ The instructions above only apply when deploying Antrea in a new cluster. If you
 need to migrate your existing cluster from another CNI plugin to Antrea, you
 will need to do the following:
 
- * Delete previous CNI, including all resources (K8s objects, iptables rules,
- interfaces, ...) created by that CNI.
- * Deploy Antrea.
- * Restart all Pods in the CNI network in order for Antrea to set-up networking
- for them. This does not apply to Pods which use the Node's network namespace
- (i.e. Pods configured with `hostNetwork: true`). You may use `kubectl drain` to
- drain each Node or reboot all your Nodes.
+* Delete previous CNI, including all resources (K8s objects, iptables rules,
+interfaces, ...) created by that CNI.
+* Deploy Antrea.
+* Restart all Pods in the CNI network in order for Antrea to set-up networking
+for them. This does not apply to Pods which use the Node's network namespace
+(i.e. Pods configured with `hostNetwork: true`). You may use `kubectl drain` to
+drain each Node or reboot all your Nodes.
 
 While this is in-progress, networking will be disrupted in your cluster. After
 deleting the previous CNI, existing Pods may not be reachable anymore.
@@ -141,37 +141,44 @@ To use antctl, the Antrea command-line tool, please refer to this
 ## Features
 
 ### Antrea Network Policy
+
 Besides Kubernetes NetworkPolicy, Antrea also implements its own Network Policy
 CRDs, which provide advanced features including: policy priority, tiering, deny
 action, external entity, and policy statistics. For more information on usage of
 Antrea Network Policies, refer to the [Antrea Network Policy document](antrea-network-policy.md).
 
 ### IPsec Encryption
+
 Antrea supports encrypting GRE tunnel traffic with IPsec. To deploy Antrea with
 IPsec encryption enabled, please refer to [this guide](ipsec-tunnel.md).
 
 ### Network Flow Visibility
+
 Antrea supports exporting network flow information using IPFIX, and provides a
 reference cookbook on how to visualize the exported network flows using Elastic
 Stack and Kibana dashboards. For more information, refer to the [network flow
 visibility document](network-flow-visibility.md).
 
 ### Octant UI
+
 Antrea ships with an Octant UI plugin which can show runtime information of Antrea
 components and perform Antrea Traceflow operations. Refer to [this guide](octant-plugin-installation.md)
 to learn how to install Octant and the Antrea plugin.
 
 ### OVS Hardware Offload
+
 Antrea can offload OVS flow processing to the NICs that support OVS kernel
 hardware offload using TC. The hardware offload can improve OVS performance
 significantly. For more information on how to configure OVS offload, refer to
 the [OVS hardware offload guide](ovs-offload.md).
 
 ### Prometheus Metrics
+
 Antrea supports exporting metrics to Prometheus. For more information, refer to
 the [Prometheus integration document](prometheus-integration.md).
 
 ### Traceflow
+
 Traceflow is a very useful network diagnosis feature in Antrea. It can trace
 and report the forwarding path of a specified packet in the Antrea network.
 For usage of this feature, refer to the [Traceflow user guide](traceflow-guide.md).
