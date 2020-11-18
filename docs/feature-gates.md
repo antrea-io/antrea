@@ -6,11 +6,12 @@ on or off for Antrea components. We follow the same convention as the
 gates](https://kubernetes.io/docs/reference/command-line-tools-reference/feature-gates/).
 
 In particular:
- * a feature in the Alpha stage will be disabled by default but can be enabled
- by editing the appropriate `.conf` entry in the Antrea manifest.
- * a feature in the Beta stage will be enabled by default but can be disabled
- by editing the appropriate `.conf` entry in the Antrea manifest.
- * a feature in the GA stage will be enabled by default and cannot be disabled.
+
+* a feature in the Alpha stage will be disabled by default but can be enabled by
+  editing the appropriate `.conf` entry in the Antrea manifest.
+* a feature in the Beta stage will be enabled by default but can be disabled by
+  editing the appropriate `.conf` entry in the Antrea manifest.
+* a feature in the GA stage will be enabled by default and cannot be disabled.
 
 Some features are specific to the Agent, others are specific to the Controller,
 and some apply to both and should be enabled / disabled consistently in both

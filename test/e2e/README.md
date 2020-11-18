@@ -19,10 +19,10 @@ file to use your favorite Vagrant provider.
 
 We require the following to be installed on your host machine:
 
- * `vagrant` (`>= 2.0.0`)
- * `ansible` (`>= 2.4.0`)
- * `virtualbox` (See supported versions
-   [here](https://www.vagrantup.com/docs/virtualbox/)).
+* `vagrant` (`>= 2.0.0`)
+* `ansible` (`>= 2.4.0`)
+* `virtualbox` (See supported versions
+  [here](https://www.vagrantup.com/docs/virtualbox/)).
 
 ##### Ubuntu 18.04 (or later)
 
@@ -33,9 +33,9 @@ virtualbox`.
 
 You can install all the dependencies with [brew](https://brew.sh/):
 
- * `brew cask install virtualbox`
- * `brew cask install vagrant`
- * `brew install ansible`
+* `brew cask install virtualbox`
+* `brew cask install vagrant`
+* `brew install ansible`
 
 If an action is required on your part, `brew` will let you know in its log
 messages.
@@ -44,13 +44,13 @@ messages.
 
 Use the following Bash scripts to manage the Kubernetes nodes with Vagrant:
 
- * `./infra/vagrant/provision.sh`: create the required VMs and provision them
- * `./infra/vagrant/push_antrea.sh`: load the antrea/antrea-ubuntu Docker image
-   to each node, along with the Antrea deployment YAML
- * `./infra/vagrant/suspend.sh`: suspend all node VMs
- * `./infra/vagrant/resume.sh`: resume all node VMs
- * `./infra/vagrant/destroy.sh`: destoy all node VMs, you will need to run
-   `provision.sh` again to create a new cluster
+* `./infra/vagrant/provision.sh`: create the required VMs and provision them
+* `./infra/vagrant/push_antrea.sh`: load the antrea/antrea-ubuntu Docker image
+  to each node, along with the Antrea deployment YAML
+* `./infra/vagrant/suspend.sh`: suspend all node VMs
+* `./infra/vagrant/resume.sh`: resume all node VMs
+* `./infra/vagrant/destroy.sh`: destoy all node VMs, you will need to run
+  `provision.sh` again to create a new cluster
 
 Note that `./infra/vagrant/provision.sh` can take a while to complete but it
 only needs to be run once.
@@ -71,6 +71,7 @@ file for the cluster can also be found locally on your machine at
 set the `KUBECONFIG` environment variable to the absolute path of this
 kubeconfig file, you can run commands against your test cluster created with
 Vagrant. For example:
+
 ```bash
 cd <directory containing this README file>
 export KUBECONFIG=`pwd`/infra/vagrant/playbook/kube/config
@@ -109,22 +110,24 @@ mkdir antrea-test-logs
 go test -count=1 -v -run=TestDeletePod github.com/vmware-tanzu/antrea/test/e2e --logs-export-dir `pwd`/antrea-test-logs
 ```
 
-If the user provides a log directory which was used for a previous run, existing 
-contents (subdirectories for each test case) will be overridden.  
+If the user provides a log directory which was used for a previous run, existing
+contents (subdirectories for each test case) will be overridden.
 By default the description and logs for Antrea Pods are only written to disk if a
 test fails. You can choose to dump this information unconditionally with
 `--logs-export-on-success`.
 
 ### Testing the Prometheus Integration
-The Prometheus integration tests can be run as part of the e2e tests when 
+
+The Prometheus integration tests can be run as part of the e2e tests when
 enabled explicitly.
-* To load Antrea into the cluster with Prometheus enabled, use: 
+
+* To load Antrea into the cluster with Prometheus enabled, use:
 `./infra/vagrant/push_antrea.sh --prometheus`
 * To run the Prometheus tests within the e2e suite, use:
 `go test -v github.com/vmware-tanzu/antrea/test/e2e --prometheus`
 
-
 ## Running the e2e tests on a Kind cluster
+
 The simplest way is to run the following command:
 
 ```bash
@@ -151,18 +154,31 @@ manifest to the master Docker container:
 go test -v github.com/vmware-tanzu/antrea/test/e2e -provider=kind
 ```
 
+As part of code development, if you want to run the tests with local changes,
+then make the code changes on the local repo and
+[build the image](../../CONTRIBUTING.md#building-and-testing-your-change).
+You can load the new image into the kind cluster using the command below:
+
+```bash
+kind load docker-image antrea/antrea-ubuntu:latest --name <kind_cluster_name>
+```
+
 ## Running the performance test
+
 To run all benchmarks, without the standard e2e tests:
+
 ```bash
 go test -v -timeout=30m -run=XXX -bench=. \
     github.com/vmware-tanzu/antrea/test/e2e \
     --performance.http.concurrency=16
 ```
+
 The above command uses `-run=XXX` to deselect all `Test*` tests and uses `-bench=.` to select
 all `Benchmark*` tests. Since performance tests take a while to complete, you need to extend
 the timeout duration `-timeout` from the default `10m` to a longer one like `30m`.
 
 If you would like to run the performance tests in a different scale, you could run:
+
 ```bash
 go test -v -timeout=30m -run=XXX -bench=BenchmarkCustomize \
     github.com/vmware-tanzu/antrea/test/e2e \
@@ -172,7 +188,8 @@ go test -v -timeout=30m -run=XXX -bench=BenchmarkCustomize \
 ```
 
 All flags of performance tests includes:
-- `performance.http.concurrency (int)`: Number of allowed concurrent http requests (default 1)
-- `performance.http.requests (int)`: Total Number of http requests
-- `performance.http.policy_rules (int)`: Number of CIDRs in the network policy
-- `performance.realize.timeout (duration)`: Timeout of the realization of network policies (default 5m0s)
+
+* `performance.http.concurrency (int)`: Number of allowed concurrent http requests (default 1)
+* `performance.http.requests (int)`: Total Number of http requests
+* `performance.http.policy_rules (int)`: Number of CIDRs in the network policy
+* `performance.realize.timeout (duration)`: Timeout of the realization of network policies (default 5m0s)

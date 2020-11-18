@@ -20,6 +20,7 @@ that Antrea requires and how to configure and rotate them for Antrea.
 
 Currently Antrea only requires a single server certificate for the
 antrea-controller API server endpoint, which is for the following communication:
+
 - The antrea-agents talks to the antrea-controller for fetching the computed
  NetworkPolicies
 - The kube-aggregator (i.e. kube-apiserver) talks to the antrea-controller for
@@ -71,11 +72,13 @@ You can generate the required certificate manually, or through
 be issued with the following key usages and DNS names:
 
 X509 key usages:
+
 - digital signature
 - key encipherment
 - server auth
 
 DNS names:
+
 - antrea.kube-system.svc
 - antrea.kube-system.svc.cluster.local
 

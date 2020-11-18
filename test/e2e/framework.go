@@ -81,6 +81,13 @@ const (
 	antreaControllerConfName string = "antrea-controller.conf"
 
 	nameSuffixLength int = 8
+
+	agnhostImage        = "gcr.io/kubernetes-e2e-test-images/agnhost:2.8"
+	busyboxImage        = "projects.registry.vmware.com/library/busybox"
+	nginxImage          = "projects.registry.vmware.com/antrea/nginx"
+	perftoolImage       = "projects.registry.vmware.com/antrea/perftool"
+	ipfixCollectorImage = "projects.registry.vmware.com/antrea/ipfix-collector:10282020.1"
+	ipfixCollectorPort  = "4739"
 )
 
 type ClusterNode struct {
@@ -674,7 +681,7 @@ func (data *TestData) createPodOnNode(name string, nodeName string, image string
 // Pod will be scheduled on the specified Node (if nodeName is not empty).
 func (data *TestData) createBusyboxPodOnNode(name string, nodeName string) error {
 	sleepDuration := 3600 // seconds
-	return data.createPodOnNode(name, nodeName, "busybox", []string{"sleep", strconv.Itoa(sleepDuration)}, nil, nil, nil, false, nil)
+	return data.createPodOnNode(name, nodeName, busyboxImage, []string{"sleep", strconv.Itoa(sleepDuration)}, nil, nil, nil, false, nil)
 }
 
 // createBusyboxPod creates a Pod in the test namespace with a single busybox container.
@@ -685,7 +692,7 @@ func (data *TestData) createBusyboxPod(name string) error {
 // createNginxPodOnNode creates a Pod in the test namespace with a single nginx container. The
 // Pod will be scheduled on the specified Node (if nodeName is not empty).
 func (data *TestData) createNginxPodOnNode(name string, nodeName string) error {
-	return data.createPodOnNode(name, nodeName, "nginx", []string{}, nil, nil, []corev1.ContainerPort{
+	return data.createPodOnNode(name, nodeName, nginxImage, []string{}, nil, nil, []corev1.ContainerPort{
 		{
 			Name:          "http",
 			ContainerPort: 80,
@@ -702,7 +709,6 @@ func (data *TestData) createNginxPod(name, nodeName string) error {
 // createServerPod creates a Pod that can listen to specified port and have named port set.
 func (data *TestData) createServerPod(name string, portName string, portNum int, setHostPort bool) error {
 	// See https://github.com/kubernetes/kubernetes/blob/master/test/images/agnhost/porter/porter.go#L17 for the image's detail.
-	image := "gcr.io/kubernetes-e2e-test-images/agnhost:2.8"
 	cmd := "porter"
 	env := corev1.EnvVar{Name: fmt.Sprintf("SERVE_PORT_%d", portNum), Value: "foo"}
 	port := corev1.ContainerPort{Name: portName, ContainerPort: int32(portNum)}
@@ -710,7 +716,7 @@ func (data *TestData) createServerPod(name string, portName string, portNum int,
 		// If hostPort is to be set, it must match the container port number.
 		port.HostPort = int32(portNum)
 	}
-	return data.createPodOnNode(name, "", image, nil, []string{cmd}, []corev1.EnvVar{env}, []corev1.ContainerPort{port}, false, nil)
+	return data.createPodOnNode(name, "", agnhostImage, nil, []string{cmd}, []corev1.EnvVar{env}, []corev1.ContainerPort{port}, false, nil)
 }
 
 // deletePod deletes a Pod in the test namespace.

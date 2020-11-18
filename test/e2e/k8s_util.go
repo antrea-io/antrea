@@ -273,6 +273,13 @@ func (k *KubernetesUtils) CreateNewTier(name string, tierPriority int32) (*secv1
 	return nil, fmt.Errorf("tier with name %s already exists", name)
 }
 
+// UpdateTier is a convenience function for updating an Antrea Policy Tier.
+func (k *KubernetesUtils) UpdateTier(tier *secv1alpha1.Tier) (*secv1alpha1.Tier, error) {
+	log.Infof("updating tier %s", tier.Name)
+	updatedTier, err := k.securityClient.Tiers().Update(context.TODO(), tier, metav1.UpdateOptions{})
+	return updatedTier, err
+}
+
 // CleanCNPs is a convenience function for deleting AntreaClusterNetworkPolicies before startup of any new test.
 func (k *KubernetesUtils) CleanCNPs() error {
 	l, err := k.securityClient.ClusterNetworkPolicies().List(context.TODO(), metav1.ListOptions{})

@@ -35,6 +35,7 @@ route to the Pod to local host gateway(`antrea-gw0`) interface from the PtP devi
 illustrated by the diagram on the right.
 
 Antrea needs to satisfy that
+
 1. All IP packets, sent on ``antrea-gw0`` in the host network, are received by the Pods exactly the same
 as if the OVS bridge had not been inserted.
 1. All IP packets, sent by Pods, are received by other Pods or the host network exactly

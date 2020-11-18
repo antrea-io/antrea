@@ -20,6 +20,7 @@ result via CRD, antctl or UI graph.
 <!-- /toc -->
 
 ## Prerequisites
+
 You need to enable Traceflow from the featureGates map defined in antrea.yml for
 both Controller and Agent. In order to use a Service as the destination in
 traces, you also need to ensure [AntreaProxy](feature-gates.md) is enabled in
@@ -43,15 +44,18 @@ the Agent configuration:
 For antrea-octant-plugin installation, please refer to [antrea-octant-installation](octant-plugin-installation.md).
 
 ## Start a New Trace
+
 You can choose to use kubectl together with YAML file, antctl with spec information or Octant UI to start a new trace.
 
 When starting a new trace, you can provide the following information which will be used to build the trace packet:
+
 * source Pod
 * destination Pod, Service or destination IP address
 * transport protocol (TCP/UDP/ICMP)
 * transport ports
 
 ### Using kubectl and YAML file
+
 You can start a new trace by creating Traceflow CRD via kubectl and a YAML file which contains the essential
 configuration of Traceflow CRD. An example YAML file of Traceflow CRD might look like this:
 
