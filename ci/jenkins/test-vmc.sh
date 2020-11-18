@@ -36,10 +36,11 @@ CODECOV_TOKEN=""
 SECRET_EXIST=false
 TEST_FAILURE=false
 CLUSTER_READY=false
+DOCKER_REGISTRY=""
 
 _usage="Usage: $0 [--cluster-name <VMCClusterNameToUse>] [--kubeconfig <KubeconfigSavePath>] [--workdir <HomePath>]
                   [--log-mode <SonobuoyResultLogLevel>] [--testcase <e2e|conformance|all-features-conformance|whole-conformance|networkpolicy>]
-                  [--garbage-collection] [--setup-only] [--cleanup-only] [--coverage] [--test-only]
+                  [--garbage-collection] [--setup-only] [--cleanup-only] [--coverage] [--test-only] [--registry]
 
 Setup a VMC cluster to run K8s e2e community tests (E2e, Conformance, all features Conformance, whole Conformance & Network Policy).
 
@@ -53,7 +54,8 @@ Setup a VMC cluster to run K8s e2e community tests (E2e, Conformance, all featur
         --cleanup-only           Only perform cleaning up the cluster.
         --coverage               Run e2e with coverage.
         --test-only              Only run test on current cluster. Not set up/clean up the cluster.
-        --codecov-token          Token used to upload coverage report(s) to Codecov."
+        --codecov-token          Token used to upload coverage report(s) to Codecov.
+        --registry               Using private registry to pull images."
 
 function print_usage {
     echoerr "$_usage"
@@ -86,6 +88,10 @@ case $key in
     ;;
     --testcase)
     TESTCASE="$2"
+    shift 2
+    ;;
+    --registry)
+    DOCKER_REGISTRY="$2"
     shift 2
     ;;
     --garbage-collection)
@@ -253,12 +259,18 @@ function deliver_antrea {
     # because they might be being used in other builds running simultaneously.
     docker image prune -f --filter "until=1h" || true > /dev/null
     cd $GIT_CHECKOUT_DIR
+    if [[ ${DOCKER_REGISTRY} != "" ]]; then
+        docker pull ${DOCKER_REGISTRY}/antrea/antrea-ubuntu:latest
+        docker tag ${DOCKER_REGISTRY}/antrea/antrea-ubuntu:latest antrea/antrea-ubuntu:latest
+        docker pull ${DOCKER_REGISTRY}/antrea/golang:1.15
+        docker tag ${DOCKER_REGISTRY}/antrea/golang:1.15 golang:1.15
+    fi
     for i in `seq 2`
     do
         if [[ "$COVERAGE" == true ]]; then
-            VERSION="$CLUSTER" make build-ubuntu-coverage && break
+            VERSION="$CLUSTER" DOCKER_REGISTRY="${DOCKER_REGISTRY}" make build-ubuntu-coverage && break
         else
-            VERSION="$CLUSTER" make && break
+            VERSION="$CLUSTER" DOCKER_REGISTRY="${DOCKER_REGISTRY}" make && break
         fi
     done
     cd ci/jenkins
@@ -321,7 +333,11 @@ function run_integration {
 
     set -x
     echo "===== Run Integration test ====="
-    ssh -q -o StrictHostKeyChecking=no -i "${WORKDIR}/utils/key" -n jenkins@${VM_IP} "git clone ${ghprbAuthorRepoGitUrl} antrea && cd antrea && git checkout ${GIT_BRANCH} && make docker-test-integration"
+    if [[ ${DOCKER_REGISTRY} != "" ]]; then
+        docker pull ${DOCKER_REGISTRY}/antrea/openvswitch:2.14.0
+        docker tag ${DOCKER_REGISTRY}/antrea/openvswitch:2.14.0 antrea/openvswitch:2.14.0
+    fi
+    ssh -q -o StrictHostKeyChecking=no -i "${WORKDIR}/utils/key" -n jenkins@${VM_IP} "git clone ${ghprbAuthorRepoGitUrl} antrea && cd antrea && git checkout ${GIT_BRANCH} && DOCKER_REGISTRY=${DOCKER_REGISTRY} make docker-test-integration"
     if [[ "$COVERAGE" == true ]]; then
         ssh -q -o StrictHostKeyChecking=no -i "${WORKDIR}/utils/key" -n jenkins@${VM_IP} "curl -s https://codecov.io/bash | bash -s -- -c -t ${CODECOV_TOKEN} -F integration-tests -f '.coverage/coverage-integration.txt'"
     fi
