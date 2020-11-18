@@ -151,6 +151,15 @@ manifest to the master Docker container:
 go test -v github.com/vmware-tanzu/antrea/test/e2e -provider=kind
 ```
 
+As part of code development, if you want to run the tests with local changes,
+then make the code changes on the local repo and
+[build the image](/CONTRIBUTING.md#building-and-testing-your-change).
+You can load the new image into the kind cluster using the command below:
+
+```
+kind load docker-image antrea/antrea-ubuntu:latest --name <kind_cluster_name>
+```
+
 ## Running the performance test
 To run all benchmarks, without the standard e2e tests:
 ```bash
