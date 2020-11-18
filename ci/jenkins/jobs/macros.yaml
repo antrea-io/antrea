@@ -12,7 +12,8 @@
         - shell: |-
             #!/bin/bash
             set -e
-            ./ci/jenkins/test-vmc.sh --testcase integration --coverage --codecov-token "${CODECOV_TOKEN}"
+            DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
+            ./ci/jenkins/test-vmc.sh --testcase integration --coverage --codecov-token "${CODECOV_TOKEN}" --registry ${DOCKER_REGISTRY}
 
 - builder:
     name: builder-eks-cluster-cleanup
@@ -101,7 +102,8 @@
       - shell: |-
           #!/bin/bash
           set -ex
-          ./ci/jenkins/test-vmc.sh --cluster-name "${JOB_NAME}-${BUILD_NUMBER}" --testcase e2e --coverage --codecov-token "${CODECOV_TOKEN}"
+          DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
+          ./ci/jenkins/test-vmc.sh --cluster-name "${JOB_NAME}-${BUILD_NUMBER}" --testcase e2e --coverage --codecov-token "${CODECOV_TOKEN}" --registry ${DOCKER_REGISTRY}
 
 - builder:
     name: builder-conformance
@@ -109,7 +111,8 @@
       - shell: |-
           #!/bin/bash
           set -ex
-          ./ci/jenkins/test-vmc.sh --cluster-name "${{JOB_NAME}}-${{BUILD_NUMBER}}" --testcase '{conformance_type}' --coverage --codecov-token "${{CODECOV_TOKEN}}"
+          DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
+          ./ci/jenkins/test-vmc.sh --cluster-name "${{JOB_NAME}}-${{BUILD_NUMBER}}" --testcase '{conformance_type}' --coverage --codecov-token "${{CODECOV_TOKEN}}" --registry ${{DOCKER_REGISTRY}}
 
 - builder:
     name: builder-elk-flow-collector
@@ -137,11 +140,12 @@
           TEST_FAIL_E2E=0
           TEST_FAIL_NP=0
           TEST_FAIL_CONFORMANCE=0
+          DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
           export JOB_NAME="matrix-${TEST_OS}-k8s-${K8S_VERSION//./-}-build-num"
           ./ci/jenkins/test-vmc.sh --cluster-name "${JOB_NAME}-${BUILD_NUMBER}" --setup-only
-          ./ci/jenkins/test-vmc.sh --cluster-name "${JOB_NAME}-${BUILD_NUMBER}" --testcase 'whole-conformance' --test-only || TEST_FAIL_CONFORMANCE=1
-          ./ci/jenkins/test-vmc.sh --cluster-name "${JOB_NAME}-${BUILD_NUMBER}" --testcase 'networkpolicy' --test-only || TEST_FAIL_NP=1
-          ./ci/jenkins/test-vmc.sh --cluster-name "${JOB_NAME}-${BUILD_NUMBER}" --testcase e2e --test-only || TEST_FAIL_E2E=1
+          ./ci/jenkins/test-vmc.sh --cluster-name "${JOB_NAME}-${BUILD_NUMBER}" --testcase 'whole-conformance' --test-only || TEST_FAIL_CONFORMANCE=1 --registry ${DOCKER_REGISTRY}
+          ./ci/jenkins/test-vmc.sh --cluster-name "${JOB_NAME}-${BUILD_NUMBER}" --testcase 'networkpolicy' --test-only || TEST_FAIL_NP=1 --registry ${DOCKER_REGISTRY}
+          ./ci/jenkins/test-vmc.sh --cluster-name "${JOB_NAME}-${BUILD_NUMBER}" --testcase e2e --test-only || TEST_FAIL_E2E=1 --registry ${DOCKER_REGISTRY}
           ./ci/jenkins/test-vmc.sh --cluster-name "${JOB_NAME}-${BUILD_NUMBER}" --cleanup-only
           if [ "${TEST_FAIL_E2E}" -eq 1 ]; then
             echo "E2E Test failed!"
