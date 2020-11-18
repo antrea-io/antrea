@@ -132,6 +132,7 @@ created in the above step.
     ```
 
 ### antrea-cni
+
 `antrea-cni` should be installed on all worker nodes.
 
 1. Create the cni config file on all worker nodes.

@@ -1,3 +1,5 @@
+# Assets
+
 ## SVG images
 
 The SVG images / diagrams in this directory have been created using

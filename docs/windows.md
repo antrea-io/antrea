@@ -1,6 +1,7 @@
 # Deploying Antrea on Windows
 
 ## Overview
+
 Antrea supports Windows worker Node. On Windows Node, Antrea sets up an overlay
 network to forward packets between Nodes and implements NetworkPolicies. Currently
 Geneve, VXLAN, and STT tunnels are supported.
@@ -28,6 +29,7 @@ directly without Pod, please see [Manually run kube-proxy and antrea-agent on Wi
 section for details.
 
 ### Antrea Windows demo
+
 Watch this [demo video](https://www.youtube.com/watch?v=NjeVPGgaNFU) of running
 Antrea in a Kubernetes cluster with both Linux and Windows nodes. The demo also
 shows the Antrea OVS bridge configuration on a Windows Node, NetworkPolicy
@@ -47,16 +49,18 @@ and daemons are pre-installed on the Windows Nodes in the demo.
 * Install [Docker](https://docs.microsoft.com/en-us/virtualization/windowscontainers/quick-start/set-up-environment?tabs=Windows-Server).
 * [Install OVS](http://docs.openvswitch.org/en/latest/intro/install/windows/)
   and configure the daemons as Windows service.
-    * The kernel driver of OVS should be [signed by Windows Hardware Dev Center](https://docs.microsoft.com/en-us/windows-hardware/drivers/install/driver-signing).
-    * If OVS driver is not signed, please refer to the Windows doc about how to
-      [install a test-signed driver package on the test computer](https://docs.microsoft.com/en-us/windows-hardware/drivers/install/installing-a-test-signed-driver-package-on-the-test-computer).
-    * If you don't have a self-signed OVS package and just want to try the
-      Antrea on windows, Antrea provides a test-signed OVS package for you.
-      See details in [Join Windows worker Nodes](#Join-Windows-worker-nodes)
-      section.
+  - The kernel driver of OVS should be [signed by Windows Hardware Dev Center](https://docs.microsoft.com/en-us/windows-hardware/drivers/install/driver-signing).
+  - If OVS driver is not signed, please refer to the Windows doc about how to
+    [install a test-signed driver package on the test computer](https://docs.microsoft.com/en-us/windows-hardware/drivers/install/installing-a-test-signed-driver-package-on-the-test-computer).
+  - If you don't have a self-signed OVS package and just want to try the
+    Antrea on windows, Antrea provides a test-signed OVS package for you.
+    See details in [Join Windows worker Nodes](#Join-Windows-worker-nodes)
+    section.
 
 ### Installation
+
 #### Download & Configure Antrea for Linux
+
 Configure the Antrea for Linux on master Node following [Getting started](getting-started.md)
 document.
 
@@ -66,6 +70,7 @@ kubectl apply -f https://github.com/vmware-tanzu/antrea/releases/download/<TAG>/
 ```
 
 #### Add Windows kube-proxy DaemonSet
+
 Add Windows-compatible versions of kube-proxy by applying file `kube-proxy.yaml`.
 
 Download `kube-proxy.yaml` from kubernetes official repository and set
@@ -130,6 +135,7 @@ kubectl apply -f kube-proxy.yml
 ```
 
 #### Add Windows antrea-agent DaemonSet
+
 Now you can deploy antrea-agent Windows DaemonSet by applying file `antrea-windows.yml`.
 
 Download and apply `antrea-windows.yml`.
@@ -141,11 +147,11 @@ kubectl apply -f https://github.com/vmware-tanzu/antrea/releases/download/<TAG>/
 
 #### Join Windows worker Nodes
 
-1. (Optional, Test-Only) Install OVS provided by Antrea
+#### 1. (Optional, Test-Only) Install OVS provided by Antrea
 
 Antrea provides a pre-built OVS package which contains test-signed OVS kernel
 driver. If you don't have a self-signed OVS package and just want to try the
-Antrea on windows, this package can be used for testing. We also provide a help 
+Antrea on windows, this package can be used for testing. We also provide a help
 script to install the OVS driver and register userspace binaries as services.
 
 Firstly, please make sure to [enable test-signed](https://docs.microsoft.com/en-us/windows-hardware/drivers/install/the-testsigning-boot-configuration-option)
@@ -170,13 +176,13 @@ get-service ovsdb-server
 get-service ovs-vswitchd
 ```
 
-2. Disable Windows Firewall
+#### 2. Disable Windows Firewall
 
 ```powershell
 Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled False
 ```
 
-3. Install wins, kubelet, kubeadm and configure kubelet startup params
+#### 3. Install wins, kubelet, kubeadm and configure kubelet startup params
 
 Firstly, install wins, kubelet, kubeadm using script `PrepareNode.ps1` provided
 by kubernetes. The third component [`wins`](https://github.com/rancher/wins) is
@@ -189,7 +195,7 @@ curl.exe -LO https://github.com/kubernetes-sigs/sig-windows-tools/releases/lates
 .\PrepareNode.ps1 -KubernetesVersion v1.18.0
 ```
 
-4. Prepare Node environment needed by antrea-agent
+#### 4. Prepare Node environment needed by antrea-agent
 
 Run the following commands to prepare the Node environment needed by antrea-agent:
 
@@ -204,14 +210,14 @@ curl.exe -LO https://raw.githubusercontent.com/vmware-tanzu/antrea/master/hack/w
 
 The script `Prepare-AntreaAgent.ps1` performs following tasks:
 
-- Prepare network adapter for kube-proxy.
+* Prepare network adapter for kube-proxy.
 
     kube-proxy needs a network adapter to configure Kubernetes Services IPs and
     uses the adapter for proxying connections to Service. Use following script
     to create the network adapter. The adapter will be deleted automatically by
     Windows after the Windows Node reboots.
 
-- Remove stale network resources created by antrea-agent.
+* Remove stale network resources created by antrea-agent.
 
     After the Windows Node reboots, there will be stale network resources which
     need to be cleaned before starting antrea-agent.
@@ -222,7 +228,7 @@ time you restart the Node to prepare the environment for antrea-agent.
 You could make the script be executed automatically after Windows startup by
 using different methods. Here're two examples for your reference:
 
-- Example1: Update kubelet service.
+* Example1: Update kubelet service.
 
 Insert following line in kubelet service script `c:\k\StartKubelet.ps1` to invoke
 `Prepare-AntreaAgent.ps1` when starting kubelet service:
@@ -231,7 +237,7 @@ Insert following line in kubelet service script `c:\k\StartKubelet.ps1` to invok
 & C:\k\Prepare-AntreaAgent.ps1
 ```
 
-- Example2: Create a ScheduledJob that runs at startup.
+* Example2: Create a ScheduledJob that runs at startup.
 
 ```powershell
 $trigger = New-JobTrigger -AtStartup
@@ -239,9 +245,9 @@ $options = New-ScheduledJobOption -RunElevated
 Register-ScheduledJob -Name PrepareAntreaAgent -Trigger $trigger  -ScriptBlock { Invoke-Expression C:\k\antrea\Prepare-AntreaAgent.ps1 } -ScheduledJobOption $options
 ```
 
-5. Run kubeadm to join the Node
+#### 5. Run kubeadm to join the Node
 
-On Windows Node, run the `kubeadm join` command to join the cluster. The token 
+On Windows Node, run the `kubeadm join` command to join the cluster. The token
 is provided by the master Node.
 
 If you forgot the token, or the token has expired, you can run
@@ -274,6 +280,7 @@ restart-service kubelet
 ```
 
 #### Verify your installation
+
 There will be temporary network interruption on Windows worker Node on the
 first startup of antrea-agent. It's because antrea-agent will set the OVS to
 take over the host network. After that you should be able to view the Windows
@@ -308,7 +315,7 @@ cd c:\k\antrea
 curl.exe -LO https://github.com/vmware-tanzu/antrea/releases/download/<TAG>/Start.ps1
 # $KubeConfigPath is the path of kubeconfig file
 ./Start.ps1 -kubeconfig $KubeConfigPath
-``` 
+```
 
 > Note: Some features such as supportbundle collection are not supported in this
 > way. It's recommended to start kube-proxy and antrea-agent through management

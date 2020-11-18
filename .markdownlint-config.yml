@@ -1,0 +1,9 @@
+default: true
+# ul-style
+MD004: false
+# line-length
+MD013: false
+# no-duplicate-heading/no-duplicate-header
+MD024: false
+# no-inline-html
+MD033: false

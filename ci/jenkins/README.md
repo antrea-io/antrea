@@ -1,10 +1,12 @@
-## Antrea CI: Jenkins
+# Antrea CI: Jenkins
 
-### Reasons for Jenkins
+## Reasons for Jenkins
+
 We have tests as Github Actions but Jenkins allows tests running on a cluster of
 multiple nodes and offers better environment setup options.
 
-### Jenkins on cloud
+## Jenkins on cloud
+
 At the moment these Jenkins jobs are running on VMC (VMware on AWS). As a
 result, all jobs' results and details are available publicly
 [here](https://jenkins.antrea-ci.rocks/). We are using Cluster API for vSphere
@@ -14,7 +16,8 @@ on Jenkins node. For each job build, a completely new workload cluster will be c
 by this management cluster. As soon as the build finishes, the cluster
 should be deleted. This ensures that all tests are run on a clean testbed.
 
-### List of Jenkins jobs
+## List of Jenkins jobs
+
 [![Build Status](http://jenkins.antrea-ci.rocks/buildStatus/icon?job=cloud-antrea-eks-conformance-net-policy&subject=EKS%20Conformance/NetworkPolicy)](http://jenkins.antrea-ci.rocks/view/cloud/job/cloud-antrea-eks-conformance-net-policy/) [![Build Status](http://jenkins.antrea-ci.rocks/buildStatus/icon?job=cloud-antrea-gke-conformance-net-policy&subject=GKE%20Conformance/NetworkPolicy%20)](http://jenkins.antrea-ci.rocks/view/cloud/job/cloud-antrea-gke-conformance-net-policy/) [![Build Status](http://jenkins.antrea-ci.rocks/buildStatus/icon?job=cloud-antrea-aks-conformance-net-policy&subject=AKS%20Conformance/NetworkPolicy%20)](http://jenkins.antrea-ci.rocks/view/cloud/job/cloud-antrea-aks-conformance-net-policy/)
 
 * [e2e [gated check-in]](https://jenkins.antrea-ci.rocks/job/antrea-e2e-for-pull-request/):
@@ -97,6 +100,7 @@ If you need to run the K8s community tests locally, you may use the
 installing the correct version of
 [sonobuoy](https://github.com/vmware-tanzu/sonobuoy) and running the correct
 subset of community tests for Antrea:
+
 * To run conformance tests: `./run-k8s-e2e-tests.sh --e2e-conformance
   [--kubeconfig <Kubeconfig>]`.
 * To run whole conformance tests: `./run-k8s-e2e-tests.sh --e2e-whole-conformance
@@ -106,10 +110,12 @@ subset of community tests for Antrea:
 * To run a single test by name: `./run-k8s-e2e-tests.sh --e2e-focus <TestRegex>
   [--kubeconfig <Kubeconfig>]`.
 
-### Requirements
+## Requirements
+
 Yaml files under [ci/jenkins/jobs](/ci/jenkins/jobs) can be generated via
 jenkins-job-builder. If you want to try out the tests on your local jenkins
 setup, please notice the following requirements:
+
 * Jenkins setup
   * Plugins: ghprb, throttle-concurrents
 * Install
@@ -122,21 +128,26 @@ setup, please notice the following requirements:
   variables in a separate file
 
 ### Apply the jobs
+
 Run the command to test if jobs can be generated correctly.  
+
 ```bash
 jenkins-jobs test -r ci/jenkins/jobs
 ```
 
 Run the command to apply these jobs.  
+
 ```bash
 jenkins-jobs update -r ci/jenkins/jobs
 ```
 
-### Jenkins job updater
+## Jenkins job updater
+
 To follow GitOps best practices, there is a job-updater job in Jenkins to detect
 any change in [ci/jenkins/jobs](/ci/jenkins/jobs) for every 15 min. As long as
 a PR to modify code under that path is merged, Jenkins jobs on cloud should be
 updated with new code.
 
-### Tips for Developer
+## Tips for Developer
+
 * [macro.yaml](/ci/jenkins/jobs/macros.yaml): Use "{{}}" instead of "{}" in "builder-list-tests" and "builder-conformance".

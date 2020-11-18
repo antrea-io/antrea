@@ -2,13 +2,14 @@
 
 Antctl is the command-line tool for Antrea. At the moment, antctl supports
 running in two different modes:
- * "controller mode": when run out-of-cluster or from within the Antrea
- Controller Pod, antctl can connect to the Antrea Controller and query
- information from it (e.g. the set of computed NetworkPolicies).
- * "agent mode": when run from within an Antrea Agent Pod, antctl can connect to
- the Antrea Agent and query information local to that Agent (e.g. the set of
- computed NetworkPolicies received by that Agent from the Antrea Controller, as
- opposed to the entire set of computed policies).
+
+* "controller mode": when run out-of-cluster or from within the Antrea
+  Controller Pod, antctl can connect to the Antrea Controller and query
+  information from it (e.g. the set of computed NetworkPolicies).
+* "agent mode": when run from within an Antrea Agent Pod, antctl can connect to
+  the Antrea Agent and query information local to that Agent (e.g. the set of
+  computed NetworkPolicies received by that Agent from the Antrea Controller, as
+  opposed to the entire set of computed policies).
 
 ## Table of Contents
 
@@ -78,6 +79,7 @@ The following sub-sections introduce a few commands which are useful for
 troubleshooting the Antrea system.
 
 ### Showing or changing log verbosity level
+
 Starting from version 0.10.0, Antrea supports showing or changing the log
 verbosity level of Antrea Controller or Agent using the `antctl log-level`
 command. The command can only run locally inside the `antrea-controller` or
@@ -117,15 +119,16 @@ provides additional flags to filter the results: run `antctl supportbundle
 
 The collected support bundle will include the following (more information may be
 included over time):
- * cluster information: description of the different K8s resources in the
-   cluster (Nodes, Deployments, etc.).
- * Antrea Controller information: all the available logs (contents will vary
-   based on the verbosity selected when running the controller) and state stored
-   at the controller (e.g. computed NetworkPolicy objects).
- * Antrea Agent information: all the available logs from the agent and the OVS
-   daemons, network configuration of the Node (e.g. routes, iptables rules, OVS
-   flows) and state stored at the agent (e.g. computed NetworkPolicy objects
-   received from the controller).
+
+* cluster information: description of the different K8s resources in the cluster
+  (Nodes, Deployments, etc.).
+* Antrea Controller information: all the available logs (contents will vary
+  based on the verbosity selected when running the controller) and state stored
+  at the controller (e.g. computed NetworkPolicy objects).
+* Antrea Agent information: all the available logs from the agent and the OVS
+  daemons, network configuration of the Node (e.g. routes, iptables rules, OVS
+  flows) and state stored at the agent (e.g. computed NetworkPolicy objects
+  received from the controller).
 
 **Be aware that the generated support bundle includes a lot of information,
   including logs, so please review the contents of the directory before sharing
@@ -148,6 +151,7 @@ antctl get agentinfo
 ### NetworkPolicy commands
 
 Both Antrea Controller and Agent support querying NetworkPolicy objects.
+
 - `antctl` `get networkpolicy` (or `get netpol`) command can print all
 NetworkPolicies, a specified NetworkPolicy, or NetworkPolicies in a specified
 Namespace.
@@ -396,14 +400,14 @@ essentially the same.
 To run a reverse proxy for the Antrea Controller API, use:
 
 ```bash
-$ antctl proxy --controller
+antctl proxy --controller
 ````
 
 To run a reverse proxy for the Antrea Agent API for the antrea-agent Pod running
 on Node <TARGET_NODE>, use:
 
 ```bash
-$ antctl proxy --agent-node
+antctl proxy --agent-node
 ```
 
 You can then access the API at `127.0.0.1:8001`. To implement this

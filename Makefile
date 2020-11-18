@@ -319,3 +319,13 @@ verify:
 toc:
 	@echo "===> Generating Table of Contents for Antrea docs <==="
 	$(CURDIR)/hack/update-toc.sh
+
+.PHONE: markdownlint
+markdownlint:
+	@echo "===> Running markdownlint <==="
+	markdownlint -c .markdownlint-config.yml -i CHANGELOG.md -i hack/netpol -i CODE_OF_CONDUCT.md .
+
+.PHONE: markdownlint-fix
+markdownlint-fix:
+	@echo "===> Running markdownlint <==="
+	markdownlint --fix -c .markdownlint-config.yml -i CHANGELOG.md -i hack/netpol -i CODE_OF_CONDUCT.md .
