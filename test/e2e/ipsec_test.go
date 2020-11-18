@@ -59,6 +59,7 @@ func (data *TestData) readSecurityAssociationsStatus(nodeName string) (up int, c
 // them ping each other.
 func TestIPSecTunnelConnectivity(t *testing.T) {
 	skipIfProviderIs(t, "kind", "IPSec tunnel does not work with Kind")
+	skipIfIPv6Cluster(t)
 	skipIfNumNodesLessThan(t, 2)
 
 	data, err := setupTest(t)
@@ -92,6 +93,7 @@ func TestIPSecTunnelConnectivity(t *testing.T) {
 // correctly.
 func TestIPSecDeleteStaleTunnelPorts(t *testing.T) {
 	skipIfProviderIs(t, "kind", "IPSec tunnel does not work with Kind")
+	skipIfIPv6Cluster(t)
 	skipIfNumNodesLessThan(t, 2)
 
 	data, err := setupTest(t)

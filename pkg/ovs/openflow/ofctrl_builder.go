@@ -71,6 +71,18 @@ func (b *ofFlowBuilder) MatchReg(regID int, data uint32) FlowBuilder {
 	return b
 }
 
+// MatchXXReg adds match condition for matching data in the target xx-register.
+func (b *ofFlowBuilder) MatchXXReg(regID int, data []byte) FlowBuilder {
+	s := fmt.Sprintf("xxreg%d=0x%x", regID, data)
+	b.matchers = append(b.matchers, s)
+	reg := &ofctrl.XXRegister{
+		ID:   regID,
+		Data: data,
+	}
+	b.Match.XxRegs = append(b.Match.XxRegs, reg)
+	return b
+}
+
 // MatchRegRange adds match condition for matching data in the target register at specified range.
 func (b *ofFlowBuilder) MatchRegRange(regID int, data uint32, rng Range) FlowBuilder {
 	if rng[0] > 0 {
@@ -244,36 +256,64 @@ func (b *ofFlowBuilder) MatchInPort(inPort uint32) FlowBuilder {
 
 // MatchDstIP adds match condition for matching destination IP address.
 func (b *ofFlowBuilder) MatchDstIP(ip net.IP) FlowBuilder {
-	b.matchers = append(b.matchers, fmt.Sprintf("nw_dst=%s", ip.String()))
+	if ip.To4() != nil {
+		b.matchers = append(b.matchers, fmt.Sprintf("nw_dst=%s", ip.String()))
+	} else {
+		b.matchers = append(b.matchers, fmt.Sprintf("ipv6_dst=%s", ip.String()))
+	}
 	b.Match.IpDa = &ip
 	return b
 }
 
 // MatchDstIPNet adds match condition for matching destination IP CIDR.
 func (b *ofFlowBuilder) MatchDstIPNet(ipnet net.IPNet) FlowBuilder {
-	b.matchers = append(b.matchers, fmt.Sprintf("nw_dst=%s", ipnet.String()))
+	if ipnet.IP.To4() != nil {
+		b.matchers = append(b.matchers, fmt.Sprintf("nw_dst=%s", ipnet.String()))
+	} else {
+		b.matchers = append(b.matchers, fmt.Sprintf("ipv6_dst=%s", ipnet.String()))
+	}
 	b.Match.IpDa = &ipnet.IP
-	b.Match.IpDaMask = maskToIPv4(ipnet.Mask)
+	b.Match.IpDaMask = maskToIP(ipnet.Mask)
 	return b
 }
 
-func maskToIPv4(mask net.IPMask) *net.IP {
-	ip := net.IPv4(mask[0], mask[1], mask[2], mask[3])
+func (b *ofFlowBuilder) MatchICMPv6Type(icmp6Type byte) FlowBuilder {
+	b.matchers = append(b.matchers, fmt.Sprintf("icmp_type=%d", icmp6Type))
+	b.Match.Icmp6Type = &icmp6Type
+	return b
+}
+
+func (b *ofFlowBuilder) MatchICMPv6Code(icmp6Code byte) FlowBuilder {
+	b.matchers = append(b.matchers, fmt.Sprintf("icmp_code=%d", icmp6Code))
+	b.Match.Icmp6Code = &icmp6Code
+	return b
+}
+
+func maskToIP(mask net.IPMask) *net.IP {
+	ip := net.IP(mask)
 	return &ip
 }
 
 // MatchSrcIP adds match condition for matching source IP address.
 func (b *ofFlowBuilder) MatchSrcIP(ip net.IP) FlowBuilder {
-	b.matchers = append(b.matchers, fmt.Sprintf("nw_src=%s", ip.String()))
+	if ip.To4() != nil {
+		b.matchers = append(b.matchers, fmt.Sprintf("nw_src=%s", ip.String()))
+	} else {
+		b.matchers = append(b.matchers, fmt.Sprintf("ipv6_src=%s", ip.String()))
+	}
 	b.Match.IpSa = &ip
 	return b
 }
 
 // MatchSrcIPNet adds match condition for matching source IP CIDR.
 func (b *ofFlowBuilder) MatchSrcIPNet(ipnet net.IPNet) FlowBuilder {
-	b.matchers = append(b.matchers, fmt.Sprintf("nw_src=%s", ipnet.String()))
+	if ipnet.IP.To4() != nil {
+		b.matchers = append(b.matchers, fmt.Sprintf("nw_src=%s", ipnet.String()))
+	} else {
+		b.matchers = append(b.matchers, fmt.Sprintf("ipv6_src=%s", ipnet.String()))
+	}
 	b.Match.IpSa = &ipnet.IP
-	b.Match.IpSaMask = maskToIPv4(ipnet.Mask)
+	b.Match.IpSaMask = maskToIP(ipnet.Mask)
 	return b
 }
 
@@ -352,20 +392,34 @@ func (b *ofFlowBuilder) MatchProtocol(protocol Protocol) FlowBuilder {
 	switch protocol {
 	case ProtocolIP:
 		b.Match.Ethertype = 0x0800
+	case ProtocolIPv6:
+		b.Match.Ethertype = 0x86dd
 	case ProtocolARP:
 		b.Match.Ethertype = 0x0806
 	case ProtocolTCP:
 		b.Match.Ethertype = 0x0800
 		b.Match.IpProto = 6
+	case ProtocolTCPv6:
+		b.Match.Ethertype = 0x86dd
+		b.Match.IpProto = 6
 	case ProtocolUDP:
 		b.Match.Ethertype = 0x0800
+		b.Match.IpProto = 17
+	case ProtocolUDPv6:
+		b.Match.Ethertype = 0x86dd
 		b.Match.IpProto = 17
 	case ProtocolSCTP:
 		b.Match.Ethertype = 0x0800
 		b.Match.IpProto = 132
+	case ProtocolSCTPv6:
+		b.Match.Ethertype = 0x86dd
+		b.Match.IpProto = 132
 	case ProtocolICMP:
 		b.Match.Ethertype = 0x0800
 		b.Match.IpProto = 1
+	case ProtocolICMPv6:
+		b.Match.Ethertype = 0x86dd
+		b.Match.IpProto = 58
 	}
 	b.protocol = protocol
 	return b
@@ -397,7 +451,7 @@ func (b *ofFlowBuilder) MatchCTSrcIP(ip net.IP) FlowBuilder {
 func (b *ofFlowBuilder) MatchCTSrcIPNet(ipNet net.IPNet) FlowBuilder {
 	b.matchers = append(b.matchers, fmt.Sprintf("nw_dst=%s", ipNet.String()))
 	b.Match.CtIpSa = &ipNet.IP
-	b.Match.CtIpSaMask = maskToIPv4(ipNet.Mask)
+	b.Match.CtIpSaMask = maskToIP(ipNet.Mask)
 	return b
 }
 
@@ -413,7 +467,7 @@ func (b *ofFlowBuilder) MatchCTDstIP(ip net.IP) FlowBuilder {
 // MatchCTDstIPNet is the same as MatchCTDstIP but supports IP masking.
 func (b *ofFlowBuilder) MatchCTDstIPNet(ipNet net.IPNet) FlowBuilder {
 	b.Match.CtIpDa = &ipNet.IP
-	b.Match.CtIpDaMask = maskToIPv4(ipNet.Mask)
+	b.Match.CtIpDaMask = maskToIP(ipNet.Mask)
 	b.matchers = append(b.matchers, fmt.Sprintf("ct_nw_dst=%s", ipNet.String()))
 	return b
 }

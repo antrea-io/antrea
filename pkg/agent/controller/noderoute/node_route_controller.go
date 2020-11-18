@@ -17,7 +17,6 @@ package noderoute
 import (
 	"fmt"
 	"net"
-	"sync"
 	"time"
 
 	"github.com/containernetworking/plugins/pkg/ip"
@@ -45,12 +44,14 @@ const (
 	// Interval of reprocessing every node.
 	nodeResyncPeriod = 60 * time.Second
 	// How long to wait before retrying the processing of a node change
-	minRetryDelay = 5 * time.Second
-	maxRetryDelay = 300 * time.Second
+	minRetryDelay = 2 * time.Second
+	maxRetryDelay = 120 * time.Second
 	// Default number of workers processing a node change
 	defaultWorkers = 4
 
 	ovsExternalIDNodeName = "node-name"
+
+	nodeRouteInfoPodCIDRIndexName = "podCIDR"
 )
 
 // Controller is responsible for setting up necessary IP routes and Openflow entries for inter-node traffic.
@@ -69,7 +70,7 @@ type Controller struct {
 	// installedNodes records routes and flows installation states of Nodes.
 	// The key is the host name of the Node, the value is the nodeRouteInfo of the Node.
 	// A node will be in the map after its flows and routes are installed successfully.
-	installedNodes *sync.Map
+	installedNodes cache.Indexer
 }
 
 // NewNodeRouteController instantiates a new Controller object which will process Node events
@@ -96,7 +97,7 @@ func NewNodeRouteController(
 		nodeLister:       nodeInformer.Lister(),
 		nodeListerSynced: nodeInformer.Informer().HasSynced,
 		queue:            workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "noderoute"),
-		installedNodes:   &sync.Map{}}
+		installedNodes:   cache.NewIndexer(nodeRouteInfoKeyFunc, cache.Indexers{nodeRouteInfoPodCIDRIndexName: nodeRouteInfoPodCIDRIndexFunc})}
 	nodeInformer.Informer().AddEventHandlerWithResyncPeriod(
 		cache.ResourceEventHandlerFuncs{
 			AddFunc: func(cur interface{}) {
@@ -114,11 +115,24 @@ func NewNodeRouteController(
 	return controller
 }
 
+func nodeRouteInfoKeyFunc(obj interface{}) (string, error) {
+	return obj.(*nodeRouteInfo).nodeName, nil
+}
+
+func nodeRouteInfoPodCIDRIndexFunc(obj interface{}) ([]string, error) {
+	var podCIDRs []string
+	for _, podCIDR := range obj.(*nodeRouteInfo).podCIDRs {
+		podCIDRs = append(podCIDRs, podCIDR.String())
+	}
+	return podCIDRs, nil
+}
+
 // nodeRouteInfo is the route related information extracted from corev1.Node.
 type nodeRouteInfo struct {
-	podCIDR   *net.IPNet
+	nodeName  string
+	podCIDRs  []*net.IPNet
 	nodeIP    net.IP
-	gatewayIP net.IP
+	gatewayIP []net.IP
 }
 
 // enqueueNode adds an object to the controller work queue
@@ -157,12 +171,11 @@ func (c *Controller) removeStaleGatewayRoutes() error {
 	// running, so the route to local Pods will be desired as well.
 	var desiredPodCIDRs []string
 	for _, node := range nodes {
-		// PodCIDR is allocated by K8s NodeIpamController asynchronously so it's possible we see a Node
-		// with no PodCIDR set when it just joins the cluster.
-		if node.Spec.PodCIDR == "" {
+		podCIDRs := getPodCIDRsOnNode(node)
+		if len(podCIDRs) == 0 {
 			continue
 		}
-		desiredPodCIDRs = append(desiredPodCIDRs, node.Spec.PodCIDR)
+		desiredPodCIDRs = append(desiredPodCIDRs, podCIDRs...)
 	}
 
 	// routeClient will remove orphaned routes whose destinations are not in desiredPodCIDRs.
@@ -360,20 +373,22 @@ func (c *Controller) syncNodeRoute(nodeName string) error {
 func (c *Controller) deleteNodeRoute(nodeName string) error {
 	klog.Infof("Deleting routes and flows to Node %s", nodeName)
 
-	obj, installed := c.installedNodes.Load(nodeName)
+	obj, installed, _ := c.installedNodes.GetByKey(nodeName)
 	if !installed {
 		// Route is not added for this Node.
 		return nil
 	}
 	nodeRouteInfo := obj.(*nodeRouteInfo)
-	if err := c.routeClient.DeleteRoutes(nodeRouteInfo.podCIDR); err != nil {
-		return fmt.Errorf("failed to delete the route to Node %s: %v", nodeName, err)
-	}
 
+	for _, podCIDR := range nodeRouteInfo.podCIDRs {
+		if err := c.routeClient.DeleteRoutes(podCIDR); err != nil {
+			return fmt.Errorf("failed to delete the route to Node %s: %v", nodeName, err)
+		}
+	}
 	if err := c.ofClient.UninstallNodeFlows(nodeName); err != nil {
 		return fmt.Errorf("failed to uninstall flows to Node %s: %v", nodeName, err)
 	}
-	c.installedNodes.Delete(nodeName)
+	c.installedNodes.Delete(obj)
 
 	if c.networkConfig.EnableIPSecTunnel {
 		interfaceConfig, ok := c.interfaceStore.GetNodeTunnelInterface(nodeName)
@@ -392,30 +407,61 @@ func (c *Controller) deleteNodeRoute(nodeName string) error {
 }
 
 func (c *Controller) addNodeRoute(nodeName string, node *corev1.Node) error {
-	if _, installed := c.installedNodes.Load(nodeName); installed {
+	if _, installed, _ := c.installedNodes.GetByKey(nodeName); installed {
 		// Route is already added for this Node.
 		return nil
 	}
 
-	klog.Infof("Adding routes and flows to Node %s, podCIDR: %s, addresses: %v",
-		nodeName, node.Spec.PodCIDR, node.Status.Addresses)
+	podCIDRStrs := getPodCIDRsOnNode(node)
+	if len(podCIDRStrs) == 0 {
+		// If no valid PodCIDR is configured in Node.Spec, return immediately.
+		return nil
+	}
+	klog.Infof("Adding routes and flows to Node %s, podCIDRs: %v, addresses: %v",
+		nodeName, podCIDRStrs, node.Status.Addresses)
 
-	if node.Spec.PodCIDR == "" {
-		klog.Errorf("PodCIDR is empty for Node %s", nodeName)
-		// Does not help to return an error and trigger controller retries.
-		return nil
+	var podCIDRs []*net.IPNet
+	peerConfig := make(map[*net.IPNet]net.IP, len(podCIDRStrs))
+	for _, podCIDR := range podCIDRStrs {
+		klog.Infof("Adding routes and flows to Node %s, podCIDR: %s, addresses: %v",
+			nodeName, podCIDR, node.Status.Addresses)
+
+		if podCIDR == "" {
+			klog.Errorf("PodCIDR is empty for Node %s", nodeName)
+			// Does not help to return an error and trigger controller retries.
+			return nil
+		}
+
+		nodesHaveSamePodCIDR, _ := c.installedNodes.ByIndex(nodeRouteInfoPodCIDRIndexName, podCIDR)
+		// PodCIDRs can be released from deleted Nodes and allocated to new Nodes. For server side, it won't happen that a
+		// PodCIDR is allocated to more than one Node at any point. However, for client side, if a resync happens to occur
+		// when there are Node creation and deletion events, the informer will generate the events in a way that all
+		// creation events come before deletion ones even they actually happen in the opposite order on the server side.
+		// See https://github.com/kubernetes/kubernetes/blob/v1.18.2/staging/src/k8s.io/client-go/tools/cache/delta_fifo.go#L503-L512
+		// Therefore, a PodCIDR may appear in a new Node before the Node that previously owns it is removed. To ensure the
+		// stale routes, flows, and relevant cache of this podCIDR are removed appropriately, we wait for the Node deletion
+		// event to be processed before proceeding, or the route installation and uninstallation operations may override or
+		// conflict with each other.
+		if len(nodesHaveSamePodCIDR) > 0 {
+			// Return an error so that the Node will be put back to the workqueue and will be retried later.
+			return fmt.Errorf("skipping addNodeRoute for Node %s because podCIDR %s is duplicate with Node %s, will retry later", nodeName, podCIDR, nodesHaveSamePodCIDR[0].(*nodeRouteInfo).nodeName)
+		}
+
+		peerPodCIDRAddr, peerPodCIDR, err := net.ParseCIDR(podCIDR)
+		if err != nil {
+			klog.Errorf("Failed to parse PodCIDR %s for Node %s", node.Spec.PodCIDR, nodeName)
+			return nil
+		}
+		peerGatewayIP := ip.NextIP(peerPodCIDRAddr)
+		peerConfig[peerPodCIDR] = peerGatewayIP
+		podCIDRs = append(podCIDRs, peerPodCIDR)
 	}
-	peerPodCIDRAddr, peerPodCIDR, err := net.ParseCIDR(node.Spec.PodCIDR)
-	if err != nil {
-		klog.Errorf("Failed to parse PodCIDR %s for Node %s", node.Spec.PodCIDR, nodeName)
-		return nil
-	}
+
 	peerNodeIP, err := GetNodeAddr(node)
 	if err != nil {
 		klog.Errorf("Failed to retrieve IP address of Node %s: %v", nodeName, err)
 		return nil
 	}
-	peerGatewayIP := ip.NextIP(peerPodCIDRAddr)
 
 	ipsecTunOFPort := int32(0)
 	if c.networkConfig.EnableIPSecTunnel {
@@ -430,8 +476,7 @@ func (c *Controller) addNodeRoute(nodeName string, node *corev1.Node) error {
 	err = c.ofClient.InstallNodeFlows(
 		nodeName,
 		c.nodeConfig.GatewayConfig.MAC,
-		*peerPodCIDR,
-		peerGatewayIP,
+		peerConfig,
 		peerNodeIP,
 		config.DefaultTunOFPort,
 		uint32(ipsecTunOFPort))
@@ -439,15 +484,33 @@ func (c *Controller) addNodeRoute(nodeName string, node *corev1.Node) error {
 		return fmt.Errorf("failed to install flows to Node %s: %v", nodeName, err)
 	}
 
-	if err := c.routeClient.AddRoutes(peerPodCIDR, peerNodeIP, peerGatewayIP); err != nil {
-		return err
+	var peerGatewayIPs []net.IP
+	for peerPodCIDR, peerGatewayIP := range peerConfig {
+		if err := c.routeClient.AddRoutes(peerPodCIDR, peerNodeIP, peerGatewayIP); err != nil {
+			return err
+		}
+		peerGatewayIPs = append(peerGatewayIPs, peerGatewayIP)
 	}
-	c.installedNodes.Store(nodeName, &nodeRouteInfo{
-		podCIDR:   peerPodCIDR,
+	c.installedNodes.Add(&nodeRouteInfo{
+		nodeName:  nodeName,
+		podCIDRs:  podCIDRs,
 		nodeIP:    peerNodeIP,
-		gatewayIP: peerGatewayIP,
+		gatewayIP: peerGatewayIPs,
 	})
 	return err
+}
+
+func getPodCIDRsOnNode(node *corev1.Node) []string {
+	if node.Spec.PodCIDRs != nil {
+		return node.Spec.PodCIDRs
+	}
+
+	if node.Spec.PodCIDR == "" {
+		klog.Errorf("PodCIDR is empty for Node %s", node.Name)
+		// Does not help to return an error and trigger controller retries.
+		return nil
+	}
+	return []string{node.Spec.PodCIDR}
 }
 
 // createIPSecTunnelPort creates an IPSec tunnel port for the remote Node if the
@@ -535,6 +598,9 @@ func ParseTunnelInterfaceConfig(
 
 // GetNodeAddr gets the available IP address of a Node. GetNodeAddr will first try to get the
 // NodeInternalIP, then try to get the NodeExternalIP.
+// Note: Although K8s supports dual-stack, there is only a single Internal address per Node because of issue (
+// kubernetes/kubernetes#91940 ). The Node might have multiple addresses after the issue is fixed, and one per address
+// family. And we should change the return type at that time.
 func GetNodeAddr(node *corev1.Node) (net.IP, error) {
 	addresses := make(map[corev1.NodeAddressType]string)
 	for _, addr := range node.Status.Addresses {

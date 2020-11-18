@@ -54,7 +54,9 @@ type Options struct {
 
 func newOptions() *Options {
 	return &Options{
-		config: new(AgentConfig),
+		config: &AgentConfig{
+			EnablePrometheusMetrics: true,
+		},
 	}
 }
 
@@ -66,11 +68,9 @@ func (o *Options) addFlags(fs *pflag.FlagSet) {
 // complete completes all the required options.
 func (o *Options) complete(args []string) error {
 	if len(o.configFile) > 0 {
-		c, err := o.loadConfigFromFile(o.configFile)
-		if err != nil {
+		if err := o.loadConfigFromFile(); err != nil {
 			return err
 		}
-		o.config = c
 	}
 	o.setDefaults()
 	return features.DefaultMutableFeatureGate.SetFromMap(o.config.FeatureGates)
@@ -85,7 +85,13 @@ func (o *Options) validate(args []string) error {
 	// Validate service CIDR configuration
 	_, _, err := net.ParseCIDR(o.config.ServiceCIDR)
 	if err != nil {
-		return fmt.Errorf("service CIDR %s is invalid", o.config.ServiceCIDR)
+		return fmt.Errorf("Service CIDR %s is invalid", o.config.ServiceCIDR)
+	}
+	if o.config.ServiceCIDRv6 != "" {
+		_, _, err := net.ParseCIDR(o.config.ServiceCIDRv6)
+		if err != nil {
+			return fmt.Errorf("Service CIDR v6 %s is invalid", o.config.ServiceCIDRv6)
+		}
 	}
 	if o.config.TunnelType != ovsconfig.VXLANTunnel && o.config.TunnelType != ovsconfig.GeneveTunnel &&
 		o.config.TunnelType != ovsconfig.GRETunnel && o.config.TunnelType != ovsconfig.STTTunnel {
@@ -130,18 +136,13 @@ func (o *Options) validate(args []string) error {
 	return nil
 }
 
-func (o *Options) loadConfigFromFile(file string) (*AgentConfig, error) {
-	data, err := ioutil.ReadFile(file)
+func (o *Options) loadConfigFromFile() error {
+	data, err := ioutil.ReadFile(o.configFile)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	var c AgentConfig
-	err = yaml.UnmarshalStrict(data, &c)
-	if err != nil {
-		return nil, err
-	}
-	return &c, nil
+	return yaml.UnmarshalStrict(data, &o.config)
 }
 
 func (o *Options) setDefaults() {

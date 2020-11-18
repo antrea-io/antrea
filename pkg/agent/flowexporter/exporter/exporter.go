@@ -43,12 +43,11 @@ var (
 		"packetDeltaCount",
 		"octetDeltaCount",
 	}
-	// Substring "reverse" is an indication to get reverse element of go-ipfix library.
 	IANAReverseInfoElements = []string{
-		"reverse_PacketTotalCount",
-		"reverse_OctetTotalCount",
-		"reverse_PacketDeltaCount",
-		"reverse_OctetDeltaCount",
+		"reversePacketTotalCount",
+		"reverseOctetTotalCount",
+		"reversePacketDeltaCount",
+		"reverseOctetDeltaCount",
 	}
 	AntreaInfoElements = []string{
 		"sourcePodName",
@@ -57,8 +56,12 @@ var (
 		"destinationPodName",
 		"destinationPodNamespace",
 		"destinationNodeName",
-		"destinationClusterIP",
+		"destinationClusterIPv4",
 		"destinationServicePortName",
+		"ingressNetworkPolicyName",
+		"ingressNetworkPolicyNamespace",
+		"egressNetworkPolicyName",
+		"egressNetworkPolicyNamespace",
 	}
 )
 
@@ -208,7 +211,7 @@ func (exp *flowExporter) sendTemplateRecord(templateRec ipfix.IPFIXRecord) (int,
 		}
 	}
 	for _, ie := range IANAReverseInfoElements {
-		element, err := exp.registry.GetInfoElement(ie, ipfixregistry.ReverseEnterpriseID)
+		element, err := exp.registry.GetInfoElement(ie, ipfixregistry.IANAReversedEnterpriseID)
 		if err != nil {
 			return 0, fmt.Errorf("%s not present. returned error: %v", ie, err)
 		}
@@ -244,9 +247,9 @@ func (exp *flowExporter) sendDataRecord(dataRec ipfix.IPFIXRecord, record flowex
 		var err error
 		switch ieName := ie.Name; ieName {
 		case "flowStartSeconds":
-			_, err = dataRec.AddInfoElement(ie, record.Conn.StartTime.Unix())
+			_, err = dataRec.AddInfoElement(ie, uint32(record.Conn.StartTime.Unix()))
 		case "flowEndSeconds":
-			_, err = dataRec.AddInfoElement(ie, record.Conn.StopTime.Unix())
+			_, err = dataRec.AddInfoElement(ie, uint32(record.Conn.StopTime.Unix()))
 		case "sourceIPv4Address":
 			_, err = dataRec.AddInfoElement(ie, record.Conn.TupleOrig.SourceAddress)
 		case "destinationIPv4Address":
@@ -262,43 +265,43 @@ func (exp *flowExporter) sendDataRecord(dataRec ipfix.IPFIXRecord, record flowex
 		case "octetTotalCount":
 			_, err = dataRec.AddInfoElement(ie, record.Conn.OriginalBytes)
 		case "packetDeltaCount":
-			deltaPkts := 0
+			deltaPkts := int64(0)
 			if record.PrevPackets != 0 {
-				deltaPkts = int(record.Conn.OriginalPackets) - int(record.PrevPackets)
+				deltaPkts = int64(record.Conn.OriginalPackets) - int64(record.PrevPackets)
 			}
 			if deltaPkts < 0 {
-				klog.Warningf("Delta packets is not expected to be negative: %d", deltaPkts)
+				klog.Warningf("Packet delta count for connection should not be negative: %d", deltaPkts)
 			}
 			_, err = dataRec.AddInfoElement(ie, uint64(deltaPkts))
 		case "octetDeltaCount":
-			deltaBytes := 0
+			deltaBytes := int64(0)
 			if record.PrevBytes != 0 {
-				deltaBytes = int(record.Conn.OriginalBytes) - int(record.PrevBytes)
+				deltaBytes = int64(record.Conn.OriginalBytes) - int64(record.PrevBytes)
 			}
 			if deltaBytes < 0 {
-				klog.Warningf("Delta bytes is not expected to be negative: %d", deltaBytes)
+				klog.Warningf("Byte delta count for connection should not be negative: %d", deltaBytes)
 			}
 			_, err = dataRec.AddInfoElement(ie, uint64(deltaBytes))
-		case "reverse_PacketTotalCount":
+		case "reversePacketTotalCount":
 			_, err = dataRec.AddInfoElement(ie, record.Conn.ReversePackets)
-		case "reverse_OctetTotalCount":
+		case "reverseOctetTotalCount":
 			_, err = dataRec.AddInfoElement(ie, record.Conn.ReverseBytes)
-		case "reverse_PacketDeltaCount":
-			deltaPkts := 0
+		case "reversePacketDeltaCount":
+			deltaPkts := int64(0)
 			if record.PrevReversePackets != 0 {
-				deltaPkts = int(record.Conn.ReversePackets) - int(record.PrevReversePackets)
+				deltaPkts = int64(record.Conn.ReversePackets) - int64(record.PrevReversePackets)
 			}
 			if deltaPkts < 0 {
-				klog.Warningf("Delta packets is not expected to be negative: %d", deltaPkts)
+				klog.Warningf("Packet delta count for connection should not be negative: %d", deltaPkts)
 			}
 			_, err = dataRec.AddInfoElement(ie, uint64(deltaPkts))
-		case "reverse_OctetDeltaCount":
-			deltaBytes := 0
+		case "reverseOctetDeltaCount":
+			deltaBytes := int64(0)
 			if record.PrevReverseBytes != 0 {
-				deltaBytes = int(record.Conn.ReverseBytes) - int(record.PrevReverseBytes)
+				deltaBytes = int64(record.Conn.ReverseBytes) - int64(record.PrevReverseBytes)
 			}
 			if deltaBytes < 0 {
-				klog.Warningf("Delta bytes is not expected to be negative: %d", deltaBytes)
+				klog.Warningf("Byte delta count for connection should not be negative: %d", deltaBytes)
 			}
 			_, err = dataRec.AddInfoElement(ie, uint64(deltaBytes))
 		case "sourcePodNamespace":
@@ -323,7 +326,7 @@ func (exp *flowExporter) sendDataRecord(dataRec ipfix.IPFIXRecord, record flowex
 			} else {
 				_, err = dataRec.AddInfoElement(ie, "")
 			}
-		case "destinationClusterIP":
+		case "destinationClusterIPv4":
 			if record.Conn.DestinationServicePortName != "" {
 				_, err = dataRec.AddInfoElement(ie, record.Conn.TupleOrig.DestinationAddress)
 			} else {
@@ -333,11 +336,15 @@ func (exp *flowExporter) sendDataRecord(dataRec ipfix.IPFIXRecord, record flowex
 				_, err = dataRec.AddInfoElement(ie, net.IP{0, 0, 0, 0})
 			}
 		case "destinationServicePortName":
-			if record.Conn.DestinationServicePortName != "" {
-				_, err = dataRec.AddInfoElement(ie, record.Conn.DestinationServicePortName)
-			} else {
-				_, err = dataRec.AddInfoElement(ie, "")
-			}
+			_, err = dataRec.AddInfoElement(ie, record.Conn.DestinationServicePortName)
+		case "ingressNetworkPolicyName":
+			_, err = dataRec.AddInfoElement(ie, record.Conn.IngressNetworkPolicyName)
+		case "ingressNetworkPolicyNamespace":
+			_, err = dataRec.AddInfoElement(ie, record.Conn.IngressNetworkPolicyNamespace)
+		case "egressNetworkPolicyName":
+			_, err = dataRec.AddInfoElement(ie, record.Conn.EgressNetworkPolicyName)
+		case "egressNetworkPolicyNamespace":
+			_, err = dataRec.AddInfoElement(ie, record.Conn.EgressNetworkPolicyNamespace)
 		}
 		if err != nil {
 			return fmt.Errorf("error while adding info element: %s to data record: %v", ie.Name, err)

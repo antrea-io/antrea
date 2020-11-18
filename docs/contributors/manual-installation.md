@@ -19,14 +19,14 @@ Prior to bringing up the individual components, follow the common steps:
 * Ensure Go v1.15 is [installed](https://golang.org/doc/install)
 
 * Git clone your forked Antrea repository and `cd` into the `antrea` directory
-  
+
     ```bash
     git clone https://github.com/$user/antrea
     cd antrea
     ```
 
 * Build the binaries for all components under `bin` directory
-  
+
     ```bash
     make bin
     ```
@@ -61,9 +61,9 @@ https://kubernetes.io/docs/tasks/access-application-cluster/configure-access-mul
     kubectl config --kubeconfig=antrea-controller.kubeconfig use-context antrea-controller@kubernetes
     ```
 
-3. Create the `antrea-controller` config file, see [Configuration](/docs/configuration.md) for details.
+3. Create the `antrea-controller` config file, see [Configuration](../configuration.md) for details.
 
-    ```shell script
+    ```bash
     cat >antrea-controller.conf <<EOF
     clientConnection:
       kubeconfig: antrea-controller.kubeconfig
@@ -71,7 +71,7 @@ https://kubernetes.io/docs/tasks/access-application-cluster/configure-access-mul
     ```
 
 4. Start `antrea-controller`.
-  
+
     ```bash
     bin/antrea-controller --config antrea-controller.conf
     ```
@@ -80,8 +80,8 @@ https://kubernetes.io/docs/tasks/access-application-cluster/configure-access-mul
 
 `antrea-agent` must run all worker nodes.
 
-1. Grant the `antrea-agent` ServiceAccount necessary permissions to Kubernetes APIs. You can apply 
-[agent-rbac.yaml](/build/yamls/base/agent-rbac.yml) to do it.
+1. Grant the `antrea-agent` ServiceAccount necessary permissions to Kubernetes APIs. You can apply [agent-rbac.yaml](
+/build/yamls/base/agent-rbac.yml) to do it.
 
     ```bash
     kubectl apply -f build/yamls/base/agent-rbac.yml
@@ -113,9 +113,9 @@ created in the above step.
     kubectl config --kubeconfig=antrea-agent.antrea.kubeconfig use-context antrea-agent@antrea
     ```
 
-4. Create the `antrea-agent` config file, see [Configuration](/docs/configuration.md) for details.
-    
-    ```shell script
+4. Create the `antrea-agent` config file, see [Configuration](../configuration.md) for details.
+
+    ```bash
     cat >antrea-agent.conf <<EOF
     clientConnection:
       kubeconfig: antrea-agent.kubeconfig
@@ -127,7 +127,7 @@ created in the above step.
 
 5. Start `antrea-agent`.
 
-    ```shell script
+    ```bash
     bin/antrea-agent --config antrea-agent.conf
     ```
 

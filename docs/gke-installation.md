@@ -73,6 +73,7 @@ assign this permission.
 1. Prepare the Cluster Nodes
 
     Deploy ``antrea-node-init`` DaemonSet to enable ``kubelet`` to operate in CNI mode.
+
     ```bash
     kubectl apply -f https://raw.githubusercontent.com/vmware-tanzu/antrea/master/build/yamls/antrea-gke-node-init.yml
     ```
@@ -111,7 +112,7 @@ you should be able to see these Pods running in your cluster:
 3. Restart remaining Pods
 
     Once Antrea is up and running, restart all Pods in all Namespaces (kube-system, etc) so they can be managed by Antrea.
-    
+
     ```bash
     $ kubectl delete pods -n kube-system $(kubectl get pods -n kube-system -o custom-columns=NAME:.metadata.name,HOSTNETWORK:.spec.hostNetwork --no-headers=true | grep '<none>' | awk '{ print $1 }')
     pod "event-exporter-v0.2.5-7df89f4b8f-cm5r5" deleted

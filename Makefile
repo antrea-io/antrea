@@ -59,6 +59,11 @@ antctl-ubuntu:
 	@mkdir -p $(BINDIR)
 	GOOS=linux $(GO) build -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' github.com/vmware-tanzu/antrea/cmd/antctl
 
+.PHONY: antctl-instr-binary
+antctl-instr-binary:
+	@mkdir -p $(BINDIR)
+	GOOS=linux $(GO) test -tags testbincover -covermode count -coverpkg=github.com/vmware-tanzu/antrea/pkg/... -c -o $(BINDIR)/antctl-coverage $(GOFLAGS) -ldflags '$(LDFLAGS)' github.com/vmware-tanzu/antrea/cmd/antctl
+
 .PHONY: windows-bin
 windows-bin:
 	@mkdir -p $(BINDIR)
@@ -69,9 +74,13 @@ windows-bin:
 ifeq ($(UNAME_S),Linux)
 test-unit: .linux-test-unit
 test-integration: .linux-test-integration
+else ifneq (,$(findstring MSYS_NT-,$(UNAME_S)))
+test-unit: .windows-test-unit
+test-integration:
+	$(error Cannot use target 'test-integration' on Windows, but you can run integration tests with 'docker-test-integration')
 else
 test-unit:
-	$(error Cannot use target 'test-unit' on a non-Linux OS, but you can run unit tests with 'docker-test-unit')
+	$(error Cannot use target 'test-unit' on OS $(UNAME_S), but you can run unit tests with 'docker-test-unit')
 test-integration:
 	$(error Cannot use target 'test-integration' on a non-Linux OS, but you can run integration tests with 'docker-test-integration')
 endif
@@ -128,6 +137,7 @@ docker-test-integration: .coverage
 		-v $(DOCKER_CACHE)/gocache:/tmp/gocache \
 		-v $(CURDIR)/.coverage:/usr/src/github.com/vmware-tanzu/antrea/.coverage \
 		-v $(CURDIR):/usr/src/github.com/vmware-tanzu/antrea:ro \
+		-v /lib/modules:/lib/modules \
 		antrea/test test-integration $(USERID) $(GRPID)
 
 .PHONY: docker-tidy
@@ -160,6 +170,12 @@ antctl-release:
 	@echo
 	@echo "==> Running unit tests <=="
 	$(GO) test -race -coverprofile=.coverage/coverage-unit.txt -covermode=atomic -cover github.com/vmware-tanzu/antrea/cmd/... github.com/vmware-tanzu/antrea/pkg/...
+
+.PHONY: .windows-test-unit
+.windows-test-unit:
+	@echo
+	@echo "==> Running unit tests <=="
+	$(GO) test -race github.com/vmware-tanzu/antrea/cmd/... github.com/vmware-tanzu/antrea/pkg/...
 
 .PHONY: tidy
 tidy:
@@ -280,6 +296,8 @@ verify:
 	$(CURDIR)/hack/verify-spelling.sh
 	@echo "===> Verifying Table of Contents <==="
 	$(CURDIR)/hack/verify-toc.sh
+	@echo "===> Verifying documentation formatting for website <==="
+	$(CURDIR)/hack/verify-docs-for-website.sh
 
 .PHONY: toc
 toc:

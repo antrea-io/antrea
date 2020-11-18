@@ -26,7 +26,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 
+	"github.com/vmware-tanzu/antrea/pkg/agent/config"
+	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
 	"github.com/vmware-tanzu/antrea/pkg/apis/ops/v1alpha1"
+	"github.com/vmware-tanzu/antrea/pkg/features"
 )
 
 type testcase struct {
@@ -36,16 +39,36 @@ type testcase struct {
 	expectedResults []v1alpha1.NodeResult
 }
 
+func skipIfTraceflowDisabled(t *testing.T, data *TestData) {
+	if featureGate, err := data.GetAgentFeatures(antreaNamespace); err != nil {
+		t.Fatalf("Error when detecting traceflow: %v", err)
+	} else if !featureGate.Enabled(features.AntreaProxy) {
+		t.Skip("Skipping test because Traceflow is not enabled in the Agent")
+	}
+	if featureGate, err := data.GetControllerFeatures(antreaNamespace); err != nil {
+		t.Fatalf("Error when detecting traceflow: %v", err)
+	} else if !featureGate.Enabled(features.AntreaProxy) {
+		t.Skip("Skipping test because Traceflow is not enabled in the Controller")
+	}
+}
+
 // TestTraceflowIntraNode verifies if traceflow can trace intra node traffic with some NetworkPolicies set.
 func TestTraceflowIntraNode(t *testing.T) {
+	skipIfNotIPv4Cluster(t)
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
 	defer teardownTest(t, data)
 
-	if err = data.enableTraceflow(t); err != nil {
-		t.Fatal("Error when enabling Traceflow")
+	skipIfTraceflowDisabled(t, data)
+	encapMode, err := data.GetEncapMode()
+	if err != nil {
+		t.Fatalf("Failed to retrieve encap mode: %v", err)
+	}
+	if encapMode != config.TrafficEncapModeNoEncap {
+		// https://github.com/vmware-tanzu/antrea/issues/897
+		skipIfProviderIs(t, "kind", "Skipping inter-Node Traceflow test for Kind because of #897")
 	}
 
 	node1 := nodeName(0)
@@ -199,7 +222,7 @@ func TestTraceflowIntraNode(t *testing.T) {
 			name: "intraNodeUDPDstIPTraceflow",
 			tf: &v1alpha1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: randName(fmt.Sprintf("%s-%s-to-%s-", testNamespace, node1Pods[0], node1IPs[2])),
+					Name: randName(fmt.Sprintf("%s-%s-to-%s-", testNamespace, node1Pods[0], node1IPs[2].ipv4.String())),
 				},
 				Spec: v1alpha1.TraceflowSpec{
 					Source: v1alpha1.Source{
@@ -207,7 +230,7 @@ func TestTraceflowIntraNode(t *testing.T) {
 						Pod:       node1Pods[0],
 					},
 					Destination: v1alpha1.Destination{
-						IP: node1IPs[2],
+						IP: node1IPs[2].ipv4.String(),
 					},
 					Packet: v1alpha1.Packet{
 						IPHeader: v1alpha1.IPHeader{
@@ -248,7 +271,7 @@ func TestTraceflowIntraNode(t *testing.T) {
 			name: "intraNodeICMPDstIPTraceflow",
 			tf: &v1alpha1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: randName(fmt.Sprintf("%s-%s-to-%s-", testNamespace, node1Pods[0], node1IPs[2])),
+					Name: randName(fmt.Sprintf("%s-%s-to-%s-", testNamespace, node1Pods[0], node1IPs[2].ipv4.String())),
 				},
 				Spec: v1alpha1.TraceflowSpec{
 					Source: v1alpha1.Source{
@@ -256,7 +279,7 @@ func TestTraceflowIntraNode(t *testing.T) {
 						Pod:       node1Pods[0],
 					},
 					Destination: v1alpha1.Destination{
-						IP: node1IPs[2],
+						IP: node1IPs[2].ipv4.String(),
 					},
 					Packet: v1alpha1.Packet{
 						IPHeader: v1alpha1.IPHeader{
@@ -323,6 +346,7 @@ func TestTraceflowIntraNode(t *testing.T) {
 // TestTraceflowInterNode verifies if traceflow can trace inter nodes traffic with some NetworkPolicies set.
 func TestTraceflowInterNode(t *testing.T) {
 	skipIfNumNodesLessThan(t, 2)
+	skipIfNotIPv4Cluster(t)
 
 	data, err := setupTest(t)
 	if err != nil {
@@ -330,9 +354,7 @@ func TestTraceflowInterNode(t *testing.T) {
 	}
 	defer teardownTest(t, data)
 
-	if err = data.enableTraceflow(t); err != nil {
-		t.Fatal("Error when enabling Traceflow")
-	}
+	skipIfTraceflowDisabled(t, data)
 
 	node1 := nodeName(0)
 	node2 := nodeName(1)
@@ -343,10 +365,13 @@ func TestTraceflowInterNode(t *testing.T) {
 	defer node2CleanupFn()
 
 	require.NoError(t, data.createNginxPod("nginx", node2))
-	nginxIP, err := data.podWaitForIP(defaultTimeout, "nginx", testNamespace)
+	nginxIP, err := data.podWaitForIPs(defaultTimeout, "nginx", testNamespace)
 	require.NoError(t, err)
 	svc, err := data.createNginxClusterIPService(false)
 	require.NoError(t, err)
+
+	// TODO: Extend the test cases to support IPv6 address after Traceflow IPv6 is supported. Currently we only use IPv4 address.
+	nginxIPStr := nginxIP.ipv4.String()
 
 	// Setup 2 NetworkPolicies:
 	// 1. Allow all egress traffic.
@@ -459,7 +484,7 @@ func TestTraceflowInterNode(t *testing.T) {
 			name: "interNodeUDPDstIPTraceflow",
 			tf: &v1alpha1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: randName(fmt.Sprintf("%s-%s-to-%s-", testNamespace, node1Pods[0], node2IPs[0])),
+					Name: randName(fmt.Sprintf("%s-%s-to-%s-", testNamespace, node1Pods[0], node2IPs[0].ipv4.String())),
 				},
 				Spec: v1alpha1.TraceflowSpec{
 					Source: v1alpha1.Source{
@@ -467,7 +492,7 @@ func TestTraceflowInterNode(t *testing.T) {
 						Pod:       node1Pods[0],
 					},
 					Destination: v1alpha1.Destination{
-						IP: node2IPs[0],
+						IP: node2IPs[0].ipv4.String(),
 					},
 					Packet: v1alpha1.Packet{
 						IPHeader: v1alpha1.IPHeader{
@@ -523,7 +548,7 @@ func TestTraceflowInterNode(t *testing.T) {
 			name: "interNodeICMPDstIPTraceflow",
 			tf: &v1alpha1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: randName(fmt.Sprintf("%s-%s-to-%s-", testNamespace, node1Pods[0], node2IPs[0])),
+					Name: randName(fmt.Sprintf("%s-%s-to-%s-", testNamespace, node1Pods[0], node2IPs[0].ipv4.String())),
 				},
 				Spec: v1alpha1.TraceflowSpec{
 					Source: v1alpha1.Source{
@@ -531,7 +556,7 @@ func TestTraceflowInterNode(t *testing.T) {
 						Pod:       node1Pods[0],
 					},
 					Destination: v1alpha1.Destination{
-						IP: node2IPs[0],
+						IP: node2IPs[0].ipv4.String(),
 					},
 					Packet: v1alpha1.Packet{
 						IPHeader: v1alpha1.IPHeader{
@@ -618,7 +643,7 @@ func TestTraceflowInterNode(t *testing.T) {
 						{
 							Component:       v1alpha1.LB,
 							Pod:             fmt.Sprintf("%s/%s", testNamespace, "nginx"),
-							TranslatedDstIP: nginxIP,
+							TranslatedDstIP: nginxIPStr,
 							Action:          v1alpha1.Forwarded,
 						},
 						{
@@ -681,21 +706,6 @@ func (data *TestData) waitForTraceflow(t *testing.T, name string, phase v1alpha1
 	return tf, nil
 }
 
-func (data *TestData) enableTraceflow(t *testing.T) error {
-	// Enable Traceflow in antrea-controller and antrea-agent ConfigMap.
-	// Use Geneve tunnel.
-	return data.mutateAntreaConfigMap(func(data map[string]string) {
-		antreaControllerConf, _ := data["antrea-controller.conf"]
-		antreaControllerConf = strings.Replace(antreaControllerConf, "#  Traceflow: false", "  Traceflow: true", 1)
-		data["antrea-controller.conf"] = antreaControllerConf
-		antreaAgentConf, _ := data["antrea-agent.conf"]
-		antreaAgentConf = strings.Replace(antreaAgentConf, "#  Traceflow: false", "  Traceflow: true", 1)
-		antreaAgentConf = strings.Replace(antreaAgentConf, "#  AntreaProxy: false", "  AntreaProxy: true", 1)
-		antreaAgentConf = strings.Replace(antreaAgentConf, "#tunnelType: geneve", "tunnelType: geneve", 1)
-		data["antrea-agent.conf"] = antreaAgentConf
-	}, true, true)
-}
-
 // compareObservations compares expected results and actual results.
 func compareObservations(expected v1alpha1.NodeResult, actual v1alpha1.NodeResult) error {
 	if expected.Node != actual.Node {
@@ -746,18 +756,16 @@ func (data *TestData) createNPAllowAllEgress(name string) (*networkingv1.Network
 // waitForNetworkpolicyRealized waits for the NetworkPolicy to be realized by the antrea-agent Pod.
 func (data *TestData) waitForNetworkpolicyRealized(pod string, networkpolicy string) error {
 	if err := wait.Poll(200*time.Millisecond, 5*time.Second, func() (bool, error) {
-		cmds := []string{"antctl", "get", "networkpolicy", "-S", networkpolicy, "-n", testNamespace}
-		if _, stderr, err := runAntctl(pod, cmds, data); err != nil {
-			if strings.Contains(stderr, "server could not find the requested resource") {
-				return false, nil
-			}
-			return false, err
+		cmds := []string{"antctl", "get", "networkpolicy", "-S", networkpolicy, "-n", testNamespace, "-T", "K8sNP"}
+		stdout, stderr, err := runAntctl(pod, cmds, data)
+		if err != nil {
+			return false, fmt.Errorf("Error when executing antctl get NetworkPolicy, stdout: %s, stderr: %s, err: %v", stdout, stderr, err)
 		}
-		return true, nil
+		return strings.Contains(stdout, fmt.Sprintf("%s:%s/%s", v1beta2.K8sNetworkPolicy, testNamespace, networkpolicy)), nil
 	}); err == wait.ErrWaitTimeout {
 		return fmt.Errorf("NetworkPolicy %s isn't realized in time", networkpolicy)
 	} else if err != nil {
-		return fmt.Errorf("Error when executing antctl get NetworkPolicy: %v", err)
+		return err
 	}
 	return nil
 }

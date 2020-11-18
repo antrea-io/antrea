@@ -21,9 +21,11 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
@@ -52,6 +54,13 @@ type Reconciler interface {
 
 	// Forget cleanups the actual state of Openflow entries of the specified ruleID.
 	Forget(ruleID string) error
+
+	// GetRuleByFlowID returns the rule from the async rule cache in idAllocator cache.
+	GetRuleByFlowID(ruleID uint32) (*types.PolicyRule, bool, error)
+
+	// RunIDAllocatorWorker runs the worker that deletes the rules from the cache
+	// in idAllocator.
+	RunIDAllocatorWorker(stopCh <-chan struct{})
 }
 
 // servicesKey is used to identify Services based on their numbered ports.
@@ -172,15 +181,19 @@ type reconciler struct {
 	// It's a mapping from ruleID to *lastRealized.
 	lastRealizeds sync.Map
 
-	// idAllocator provides interfaces to allocate and release uint32 id.
+	// idAllocator provides interfaces to allocateForRule and release uint32 id.
 	idAllocator *idAllocator
 
 	// priorityAssigners provides interfaces to manage OF priorities for each OVS table.
 	priorityAssigners map[binding.TableIDType]*tablePriorityAssigner
+	// ipv4Enabled tells if IPv4 is supported on this Node or not.
+	ipv4Enabled bool
+	// ipv6Enabled tells is IPv6 is supported on this Node or not.
+	ipv6Enabled bool
 }
 
 // newReconciler returns a new *reconciler.
-func newReconciler(ofClient openflow.Client, ifaceStore interfacestore.InterfaceStore) *reconciler {
+func newReconciler(ofClient openflow.Client, ifaceStore interfacestore.InterfaceStore, asyncRuleDeleteInterval time.Duration) *reconciler {
 	priorityAssigners := map[binding.TableIDType]*tablePriorityAssigner{}
 	for _, table := range openflow.GetAntreaPolicyBaselineTierTables() {
 		priorityAssigners[table] = &tablePriorityAssigner{
@@ -196,10 +209,23 @@ func newReconciler(ofClient openflow.Client, ifaceStore interfacestore.Interface
 		ofClient:          ofClient,
 		ifaceStore:        ifaceStore,
 		lastRealizeds:     sync.Map{},
-		idAllocator:       newIDAllocator(),
+		idAllocator:       newIDAllocator(asyncRuleDeleteInterval),
 		priorityAssigners: priorityAssigners,
 	}
+	// Check if ofClient is nil or not to be compatible with unit tests.
+	if ofClient != nil {
+		reconciler.ipv4Enabled = ofClient.IsIPv4Enabled()
+		reconciler.ipv6Enabled = ofClient.IsIPv6Enabled()
+	}
 	return reconciler
+}
+
+// RunIDAllocatorWorker runs the worker that deletes the rules from the cache in
+// idAllocator.
+func (r *reconciler) RunIDAllocatorWorker(stopCh <-chan struct{}) {
+	defer r.idAllocator.deleteQueue.ShutDown()
+	go wait.Until(r.idAllocator.worker, time.Second, stopCh)
+	<-stopCh
 }
 
 // Reconcile checks whether the provided rule have been enforced or not, and
@@ -366,16 +392,15 @@ func (r *reconciler) add(rule *CompletedRule, ofPriority *uint16, table binding.
 	ofRuleByServicesMap, lastRealized := r.computeOFRulesForAdd(rule, ofPriority, table)
 	for svcKey, ofRule := range ofRuleByServicesMap {
 		// Each pod group gets an Openflow ID.
-		ofID, err := r.idAllocator.allocate()
+		err := r.idAllocator.allocateForRule(ofRule)
 		if err != nil {
 			return fmt.Errorf("error allocating Openflow ID")
 		}
-		ofRule.FlowID = ofID
 		if err = r.installOFRule(ofRule); err != nil {
 			return err
 		}
 		// Record ofID only if its Openflow is installed successfully.
-		lastRealized.ofIDs[svcKey] = ofID
+		lastRealized.ofIDs[svcKey] = ofRule.FlowID
 	}
 	return nil
 }
@@ -392,7 +417,7 @@ func (r *reconciler) computeOFRulesForAdd(rule *CompletedRule, ofPriority *uint1
 		// Addresses got from source GroupMembers' IPs.
 		from1 := groupMembersToOFAddresses(rule.FromAddresses)
 		// Get addresses that in From IPBlock but not in Except IPBlocks.
-		from2 := ipBlocksToOFAddresses(rule.From.IPBlocks)
+		from2 := ipBlocksToOFAddresses(rule.From.IPBlocks, r.ipv4Enabled, r.ipv6Enabled)
 
 		podsByServicesMap, servicesMap := groupMembersByServices(rule.Services, rule.TargetMembers)
 
@@ -455,7 +480,7 @@ func (r *reconciler) computeOFRulesForAdd(rule *CompletedRule, ofPriority *uint1
 			}
 			if len(rule.To.IPBlocks) > 0 {
 				// Diff Addresses between To and Except of IPBlocks
-				to := ipBlocksToOFAddresses(rule.To.IPBlocks)
+				to := ipBlocksToOFAddresses(rule.To.IPBlocks, r.ipv4Enabled, r.ipv6Enabled)
 				ofRule.To = append(ofRule.To, to...)
 			}
 		}
@@ -475,21 +500,20 @@ func (r *reconciler) batchAdd(rules []*CompletedRule, ofPriorities []*uint16) er
 		ofRuleByServicesMap, lastRealized := r.computeOFRulesForAdd(rule, ofPriorities[idx], ruleTable)
 		lastRealizeds[idx] = lastRealized
 		for svcKey, ofRule := range ofRuleByServicesMap {
-			ofID, err := r.idAllocator.allocate()
+			err := r.idAllocator.allocateForRule(ofRule)
 			if err != nil {
 				return fmt.Errorf("error allocating Openflow ID")
 			}
-			ofRule.FlowID = ofID
 			allOFRules = append(allOFRules, ofRule)
 			if ofIDUpdateMaps[idx] == nil {
 				ofIDUpdateMaps[idx] = make(map[servicesKey]uint32)
 			}
-			ofIDUpdateMaps[idx][svcKey] = ofID
+			ofIDUpdateMaps[idx][svcKey] = ofRule.FlowID
 		}
 	}
 	if err := r.ofClient.BatchInstallPolicyRuleFlows(allOFRules); err != nil {
 		for _, rule := range allOFRules {
-			r.idAllocator.release(rule.FlowID)
+			r.idAllocator.forgetRule(rule.FlowID)
 		}
 		return err
 	}
@@ -517,7 +541,7 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule, 
 	// only happen to Group members.
 	if newRule.Direction == v1beta2.DirectionIn {
 		from1 := groupMembersToOFAddresses(newRule.FromAddresses)
-		from2 := ipBlocksToOFAddresses(newRule.From.IPBlocks)
+		from2 := ipBlocksToOFAddresses(newRule.From.IPBlocks, r.ipv4Enabled, r.ipv6Enabled)
 		addedFrom := groupMembersToOFAddresses(newRule.FromAddresses.Difference(lastRealized.FromAddresses))
 		deletedFrom := groupMembersToOFAddresses(lastRealized.FromAddresses.Difference(newRule.FromAddresses))
 
@@ -527,10 +551,6 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule, 
 			ofID, exists := lastRealized.ofIDs[svcKey]
 			// Install a new Openflow rule if this group doesn't exist, otherwise do incremental update.
 			if !exists {
-				ofID, err := r.idAllocator.allocate()
-				if err != nil {
-					return fmt.Errorf("error allocating Openflow ID")
-				}
 				ofRule := &types.PolicyRule{
 					Direction:     v1beta2.DirectionIn,
 					From:          append(from1, from2...),
@@ -543,10 +563,14 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule, 
 					PolicyRef:     newRule.SourceRef,
 					EnableLogging: newRule.EnableLogging,
 				}
+				err := r.idAllocator.allocateForRule(ofRule)
+				if err != nil {
+					return err
+				}
 				if err = r.installOFRule(ofRule); err != nil {
 					return err
 				}
-				lastRealized.ofIDs[svcKey] = ofID
+				lastRealized.ofIDs[svcKey] = ofRule.FlowID
 			} else {
 				addedTo := ofPortsToOFAddresses(newOFPorts.Difference(lastRealized.podOFPorts[svcKey]))
 				deletedTo := ofPortsToOFAddresses(lastRealized.podOFPorts[svcKey].Difference(newOFPorts))
@@ -576,10 +600,6 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule, 
 		for svcKey, members := range memberByServicesMap {
 			ofID, exists := lastRealized.ofIDs[svcKey]
 			if !exists {
-				ofID, err := r.idAllocator.allocate()
-				if err != nil {
-					return fmt.Errorf("error allocating Openflow ID")
-				}
 				ofRule := &types.PolicyRule{
 					Direction:     v1beta2.DirectionOut,
 					From:          from,
@@ -592,10 +612,14 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule, 
 					PolicyRef:     newRule.SourceRef,
 					EnableLogging: newRule.EnableLogging,
 				}
+				err := r.idAllocator.allocateForRule(ofRule)
+				if err != nil {
+					return fmt.Errorf("error allocating Openflow ID")
+				}
 				if err = r.installOFRule(ofRule); err != nil {
 					return err
 				}
-				lastRealized.ofIDs[svcKey] = ofID
+				lastRealized.ofIDs[svcKey] = ofRule.FlowID
 			} else {
 				addedTo := groupMembersToOFAddresses(members.Difference(prevMembersByServicesMap[svcKey]))
 				deletedTo := groupMembersToOFAddresses(prevMembersByServicesMap[svcKey].Difference(members))
@@ -624,7 +648,7 @@ func (r *reconciler) installOFRule(ofRule *types.PolicyRule) error {
 	klog.V(2).Infof("Installing ofRule %d (Direction: %v, From: %d, To: %d, Service: %d)",
 		ofRule.FlowID, ofRule.Direction, len(ofRule.From), len(ofRule.To), len(ofRule.Service))
 	if err := r.ofClient.InstallPolicyRuleFlows(ofRule); err != nil {
-		r.idAllocator.release(ofRule.FlowID)
+		r.idAllocator.forgetRule(ofRule.FlowID)
 		return fmt.Errorf("error installing ofRule %v: %v", ofRule.FlowID, err)
 	}
 	return nil
@@ -676,10 +700,7 @@ func (r *reconciler) uninstallOFRule(ofID uint32, table binding.TableIDType) err
 			priorityAssigner.assigner.Release(uint16(priorityNum))
 		}
 	}
-	if err := r.idAllocator.release(ofID); err != nil {
-		// This should never happen. If it does, it is a programming error.
-		klog.Errorf("Error releasing Openflow ID for ofRule %v: %v", ofID, err)
-	}
+	r.idAllocator.forgetRule(ofID)
 	return nil
 }
 
@@ -711,6 +732,10 @@ func (r *reconciler) Forget(ruleID string) error {
 
 	r.lastRealizeds.Delete(ruleID)
 	return nil
+}
+
+func (r *reconciler) GetRuleByFlowID(ruleFlowID uint32) (*types.PolicyRule, bool, error) {
+	return r.idAllocator.getRuleFromAsyncCache(ruleFlowID)
 }
 
 func (r *reconciler) getPodOFPorts(members v1beta2.GroupMemberSet) sets.Int32 {
@@ -746,8 +771,12 @@ func (r *reconciler) getPodIPs(members v1beta2.GroupMemberSet) sets.String {
 			continue
 		}
 		for _, iface := range ifaces {
-			klog.V(2).Infof("Got IP %v for Pod %s/%s", iface.IP, m.Pod.Namespace, m.Pod.Name)
-			ips.Insert(iface.IP.String())
+			for _, ipAddr := range iface.IPs {
+				if ipAddr != nil {
+					klog.V(2).Infof("Got IP %v for Pod %s/%s", iface.IPs, m.Pod.Namespace, m.Pod.Name)
+					ips.Insert(ipAddr.String())
+				}
+			}
 		}
 	}
 	return ips
@@ -813,35 +842,39 @@ func groupMembersToOFAddresses(groupMemberSet v1beta2.GroupMemberSet) []types.Ad
 	return addresses
 }
 
-func ipBlocksToOFAddresses(ipBlocks []v1beta2.IPBlock) []types.Address {
+func ipBlocksToOFAddresses(ipBlocks []v1beta2.IPBlock, ipv4Enabled, ipv6Enabled bool) []types.Address {
 	// Must not return nil as it means not restricted by addresses in Openflow implementation.
 	addresses := make([]types.Address, 0)
 	for _, b := range ipBlocks {
-		exceptIPNet := make([]*net.IPNet, 0, len(b.Except))
+		blockCIDR := ip.IPNetToNetIPNet(&b.CIDR)
+		if !isIPNetSupportedByAF(blockCIDR, ipv4Enabled, ipv6Enabled) {
+			klog.Infof("IPBlock %s is using unsupported address family, skip it", blockCIDR.String())
+			continue
+		}
+		exceptIPNets := make([]*net.IPNet, 0, len(b.Except))
 		for i := range b.Except {
 			c := b.Except[i]
-			exceptIPNet = append(exceptIPNet, ip.IPNetToNetIPNet(&c))
+			except := ip.IPNetToNetIPNet(&c)
+			exceptIPNets = append(exceptIPNets, except)
 		}
-		diffCIDRs, err := ip.DiffFromCIDRs(ip.IPNetToNetIPNet(&b.CIDR), exceptIPNet)
+		diffCIDRs, err := ip.DiffFromCIDRs(blockCIDR, exceptIPNets)
 		if err != nil {
-			// Currently only IPv4 addresses are supported
 			klog.Errorf("Error when determining diffCIDRs: %v", err)
 			continue
 		}
 		for _, d := range diffCIDRs {
-			addresses = append(addresses, ipNetToOFAddress(*ip.NetIPNetToIPNet(d)))
+			addresses = append(addresses, openflow.NewIPNetAddress(*d))
 		}
 	}
 
 	return addresses
 }
 
-func ipNetToOFAddress(in v1beta2.IPNet) *openflow.IPNetAddress {
-	ipNet := net.IPNet{
-		IP:   net.IP(in.IP),
-		Mask: net.CIDRMask(int(in.PrefixLength), 32),
+func isIPNetSupportedByAF(ipnet *net.IPNet, ipv4Enabled, ipv6Enabled bool) bool {
+	if (ipnet.IP.To4() != nil && ipv4Enabled) || (ipnet.IP.To4() == nil && ipv6Enabled) {
+		return true
 	}
-	return openflow.NewIPNetAddress(ipNet)
+	return false
 }
 
 func ipsToOFAddresses(ips sets.String) []types.Address {

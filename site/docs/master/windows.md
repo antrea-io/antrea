@@ -14,6 +14,7 @@ the [design doc](design/windows-design.md).
 ### Components that run on Windows
 
 The following components should be configured and run on the Windows Node.
+
 * [kubernetes components](https://kubernetes.io/docs/setup/production-environment/windows/user-guide-windows-nodes/)
 * OVS daemons
 * antrea-agent
@@ -36,6 +37,7 @@ and daemons are pre-installed on the Windows Nodes in the demo.
 ## Deploying Antrea on Windows Worker Node
 
 ### Prerequisites
+
 * Obtain a Windows Server 2019 license (or higher) in order to configure the
   Windows Node that hosts Windows containers. And install the latest Windows
   updates.
@@ -62,6 +64,7 @@ document.
 # Example:
 kubectl apply -f https://github.com/vmware-tanzu/antrea/releases/download/<TAG>/antrea.yml
 ```
+
 #### Add Windows kube-proxy DaemonSet
 Add Windows-compatible versions of kube-proxy by applying file `kube-proxy.yaml`.
 
@@ -96,7 +99,7 @@ metadata:
     app: kube-proxy
   name: kube-proxy-windows
   namespace: kube-system
-``` 
+```
 
 Set the `hostNetwork` option as true in spec of kube-proxy-windows daemonset.
 
@@ -130,12 +133,14 @@ kubectl apply -f kube-proxy.yml
 Now you can deploy antrea-agent Windows DaemonSet by applying file `antrea-windows.yml`.
 
 Download and apply `antrea-windows.yml`.
-```
+
+```bash
 # Example:
 kubectl apply -f https://github.com/vmware-tanzu/antrea/releases/download/<TAG>/antrea-windows.yml
 ```
 
 #### Join Windows worker Nodes
+
 1. (Optional, Test-Only) Install OVS provided by Antrea
 
 Antrea provides a pre-built OVS package which contains test-signed OVS kernel
@@ -184,19 +189,55 @@ curl.exe -LO https://github.com/kubernetes-sigs/sig-windows-tools/releases/lates
 .\PrepareNode.ps1 -KubernetesVersion v1.18.0
 ```
 
-4. Prepare network adapter for kube-proxy
+4. Prepare Node environment needed by antrea-agent
 
-kube-proxy needs a network adapter to configure Kubernetes Service IPs and uses
-the adapter for proxying connections to Service. Use following script to create the network
-adapter.
+Run the following commands to prepare the Node environment needed by antrea-agent:
 
 ```powershell
+mkdir c:\k\antrea
+cd c:\k\antrea
+curl.exe -LO https://raw.githubusercontent.com/vmware-tanzu/antrea/master/hack/windows/Clean-AntreaNetwork.ps1
 curl.exe -LO https://raw.githubusercontent.com/vmware-tanzu/antrea/master/hack/windows/Prepare-ServiceInterface.ps1
-.\Prepare-ServiceInterface.ps1
+curl.exe -LO https://raw.githubusercontent.com/vmware-tanzu/antrea/master/hack/windows/Prepare-AntreaAgent.ps1
+.\Prepare-AntreaAgent.ps1
 ```
 
-> Note: The interface will be deleted automatically by Windows after Windows
-> Node reboots. So the script needs to be executed after rebooting the Node.
+The script `Prepare-AntreaAgent.ps1` performs following tasks:
+
+- Prepare network adapter for kube-proxy.
+
+    kube-proxy needs a network adapter to configure Kubernetes Services IPs and
+    uses the adapter for proxying connections to Service. Use following script
+    to create the network adapter. The adapter will be deleted automatically by
+    Windows after the Windows Node reboots.
+
+- Remove stale network resources created by antrea-agent.
+
+    After the Windows Node reboots, there will be stale network resources which
+    need to be cleaned before starting antrea-agent.
+
+As you know from the task details from above, the script must be executed every
+time you restart the Node to prepare the environment for antrea-agent.
+
+You could make the script be executed automatically after Windows startup by
+using different methods. Here're two examples for your reference:
+
+- Example1: Update kubelet service.
+
+Insert following line in kubelet service script `c:\k\StartKubelet.ps1` to invoke
+`Prepare-AntreaAgent.ps1` when starting kubelet service:
+
+```powershell
+& C:\k\Prepare-AntreaAgent.ps1
+```
+
+- Example2: Create a ScheduledJob that runs at startup.
+
+```powershell
+$trigger = New-JobTrigger -AtStartup
+$options = New-ScheduledJobOption -RunElevated
+Register-ScheduledJob -Name PrepareAntreaAgent -Trigger $trigger  -ScriptBlock { Invoke-Expression C:\k\antrea\Prepare-AntreaAgent.ps1 } -ScheduledJobOption $options
+```
 
 5. Run kubeadm to join the Node
 
@@ -207,7 +248,7 @@ If you forgot the token, or the token has expired, you can run
 `kubeadm token create --print-join-command` (on the master Node) to
 generate a new token and join command.
 
-```bash
+```powershell
 # Example:
 kubeadm join 192.168.101.5:6443 --token tdp0jt.rshv3uobkuoobb4v  --discovery-token-ca-cert-hash sha256:84a163e57bf470f18565e44eaa2a657bed4da9748b441e9643ac856a274a30b9
 ```
@@ -215,14 +256,14 @@ kubeadm join 192.168.101.5:6443 --token tdp0jt.rshv3uobkuoobb4v  --discovery-tok
 Then, set the Node IP used by kubelet.
 Open file `/var/lib/kubelet/kubeadm-flags.env`:
 
-```bash
+```text
 KUBELET_KUBEADM_ARGS="--cgroup-driver= --network-plugin=cni --pod-infra-container-image=k8s.gcr.io/pause:3.1"
 ```
 
 Append `--node-ip=$NODE_IP` at the end of params. Replace `$NODE_IP` with
 the address for kubelet. It should look like:
 
-```bash
+```text
 KUBELET_KUBEADM_ARGS="--cgroup-driver= --network-plugin=cni --pod-infra-container-image=k8s.gcr.io/pause:3.1 --node-ip=$NODE_IP"
 ```
 
@@ -251,6 +292,7 @@ kubectl get pods -o wide -n kube-system | grep windows
 antrea-agent-windows-6hvkw                             1/1     Running     0          100s
 kube-proxy-windows-2d45w                               1/1     Running     0          102s
 ```
+
 ### Manually run kube-proxy and antrea-agent on Windows worker Nodes
 
 Aside from starting kube-proxy and antrea-agent from the management Pods, Antrea
@@ -259,7 +301,8 @@ directly without Pod. Please complete the steps in [Installation](#Installation)
 section, skip [Add Windows kube-proxy DaemonSet](#Add-Windows-kube-proxy-DaemonSet)
 and [Add Windows antrea-agent DaemonSet](#Add-Windows-antrea-agent-DaemonSet)
 steps. And then run the following commands in powershell.
-```
+
+```powershell
 mkdir c:\k\antrea
 cd c:\k\antrea
 curl.exe -LO https://github.com/vmware-tanzu/antrea/releases/download/<TAG>/Start.ps1
@@ -272,8 +315,9 @@ curl.exe -LO https://github.com/vmware-tanzu/antrea/releases/download/<TAG>/Star
 > Pods.
 
 ## Known issues
+
 1. HNS Network is not persistent on Windows. So after the Windows Node reboots,
 the HNS Network created by antrea-agent is removed, and the Open vSwitch
 Extension is disabled by default. In this case, the stale OVS bridge and ports
-should be removed. A help script [Clean-AntreaNetwork.ps1](https://raw.githubusercontent.com/tanzu/antrea/master/hack/windows/Clean-AntreaNetwork.ps1)
+should be removed. A help script [Clean-AntreaNetwork.ps1](https://raw.githubusercontent.com/vmware-tanzu/antrea/master/hack/windows/Clean-AntreaNetwork.ps1)
 can be used to clean the OVS bridge.

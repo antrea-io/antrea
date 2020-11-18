@@ -18,6 +18,7 @@ import (
 	"context"
 	"log"
 	"strconv"
+	"strings"
 
 	"github.com/vmware-tanzu/octant/pkg/plugin/service"
 	"github.com/vmware-tanzu/octant/pkg/view/component"
@@ -33,7 +34,7 @@ const (
 	nodeCol           = "Node"
 	serviceCol        = "Service"
 	clusterInfoCrdCol = "Monitoring CRD"
-	subnetCol         = "NodeSubnet"
+	subnetsCol        = "NodeSubnets"
 	bridgeCol         = "OVS Bridge"
 	podNumCol         = "Local Pod Num"
 	heartbeatCol      = "Last Heartbeat Time"
@@ -100,14 +101,14 @@ func (p *antreaOctantPlugin) getAgentTable(request service.Request) *component.T
 				"/overview/namespace/"+agent.PodRef.Namespace+"/workloads/pods/"+agent.PodRef.Name),
 			nodeCol: component.NewLink(agent.NodeRef.Name, agent.NodeRef.Name,
 				"/cluster-overview/nodes/"+agent.NodeRef.Name),
-			subnetCol: component.NewText(agent.NodeSubnet[0]),
-			bridgeCol: component.NewText(agent.OVSInfo.BridgeName),
-			podNumCol: component.NewText(strconv.Itoa(int(agent.LocalPodNum))),
+			subnetsCol: component.NewText(strings.Join(agent.NodeSubnets, ", ")),
+			bridgeCol:  component.NewText(agent.OVSInfo.BridgeName),
+			podNumCol:  component.NewText(strconv.Itoa(int(agent.LocalPodNum))),
 			clusterInfoCrdCol: component.NewLink(agent.Name, agent.Name,
 				"/cluster-overview/custom-resources/antreaagentinfos.clusterinformation.antrea.tanzu.vmware.com/v1beta1/"+agent.Name),
 			heartbeatCol: component.NewText(agent.AgentConditions[0].LastHeartbeatTime.String()),
 		})
 	}
-	agentCols := component.NewTableCols(versionCol, podCol, nodeCol, subnetCol, bridgeCol, podNumCol, clusterInfoCrdCol, heartbeatCol)
+	agentCols := component.NewTableCols(versionCol, podCol, nodeCol, subnetsCol, bridgeCol, podNumCol, clusterInfoCrdCol, heartbeatCol)
 	return component.NewTableWithRows(agentTitle, "We couldn't find any Antrea agents!", agentCols, agentRows)
 }

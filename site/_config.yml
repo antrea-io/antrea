@@ -80,6 +80,12 @@ defaults:
       version: v0.10.2
       gh: https://github.com/vmware-tanzu/antrea/tree/v0.10.2
       layout: "docs"
+  - scope:
+      path: docs/v0.11.0
+    values:
+      version: v0.11.0
+      gh: https://github.com/vmware-tanzu/antrea/tree/v0.11.0
+      layout: "docs"
 page_gen:
   - data: shortlinks
     template: redirect
@@ -90,9 +96,10 @@ collections:
   - features
   - presentations
 versioning: true
-latest: v0.10.2
+latest: v0.11.0
 versions:
   - master
+  - v0.11.0
   - v0.10.2
   - v0.10.1
   - v0.10.0

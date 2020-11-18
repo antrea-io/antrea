@@ -27,7 +27,7 @@ contributing to project Antrea:
 
 1. Read and observe the [code of conduct](CODE_OF_CONDUCT.md).
 2. Sign the [CLA](#cla).
-3. Check out the [Architecture document](/docs/design/architecture.md) for the Antrea
+3. Check out the [Architecture document](docs/design/architecture.md) for the Antrea
    architecture and design.
 4. Set up necessary [accounts](#accounts-setup).
 5. Set up your [development environment](docs/contributors/manual-installation.md)
@@ -103,7 +103,7 @@ project's repository.
     git commit
     ```
 
-5. Update the "Unreleased" section of the [CHANGELOG](/CHANGELOG.md) for any
+5. Update the "Unreleased" section of the [CHANGELOG](CHANGELOG.md) for any
    significant change that impacts users.
 
 6. Keeping branch in sync with upstream.
@@ -133,6 +133,7 @@ fork. Once a PR is ready to merge, squash any *fix review feedback, typo*
 and *merged* sorts of commits.
 
 To make it easier for reviewers to review your PR, consider the following:
+
 1. Follow the golang [coding conventions](https://github.com/golang/go/wiki/CodeReviewComments).
 2. Format your code with `make golangci-fix`; if the [linters](ci/README.md) flag an issue that
    cannot be fixed automatically, an error message will be displayed so you can address the issue.

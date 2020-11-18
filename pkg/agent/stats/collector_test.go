@@ -25,6 +25,7 @@ import (
 	agenttypes "github.com/vmware-tanzu/antrea/pkg/agent/types"
 	cpv1beta "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
 	statsv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/stats/v1alpha1"
+	queriertest "github.com/vmware-tanzu/antrea/pkg/querier/testing"
 )
 
 var (
@@ -187,12 +188,13 @@ func TestCollect(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ofClient := oftest.NewMockClient(ctrl)
+			npQuerier := queriertest.NewMockAgentNetworkPolicyInfoQuerier(ctrl)
 			ofClient.EXPECT().NetworkPolicyMetrics().Return(tt.ruleStats).Times(1)
 			for ofID, policy := range tt.ofIDToPolicyMap {
-				ofClient.EXPECT().GetPolicyFromConjunction(ofID).Return(policy)
+				npQuerier.EXPECT().GetNetworkPolicyByRuleFlowID(ofID).Return(policy)
 			}
 
-			m := &Collector{ofClient: ofClient}
+			m := &Collector{ofClient: ofClient, networkPolicyQuerier: npQuerier}
 			actualPolicyStats := m.collect()
 			assert.Equal(t, tt.expectedStatsCollection, actualPolicyStats)
 		})

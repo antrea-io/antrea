@@ -276,3 +276,20 @@ type NetworkPolicyStats struct {
 	// The stats of the NetworkPolicy.
 	TrafficStats statsv1alpha1.TrafficStats `json:"trafficStats,omitempty" protobuf:"bytes,2,opt,name=trafficStats"`
 }
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// NetworkPolicyStatus is the status of a NetworkPolicy.
+type NetworkPolicyStatus struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
+	// Nodes contains statuses produced on a list of Nodes.
+	Nodes []NetworkPolicyNodeStatus `json:"nodes,omitempty" protobuf:"bytes,2,rep,name=nodes"`
+}
+
+// NetworkPolicyNodeStatus is the status of a NetworkPolicy on a Node.
+type NetworkPolicyNodeStatus struct {
+	// The name of the Node that produces the status.
+	NodeName string `json:"nodeName,omitempty" protobuf:"bytes,1,opt,name=nodeName"`
+	// The generation realized by the Node.
+	Generation int64 `json:"generation,omitempty" protobuf:"varint,2,opt,name=generation"`
+}

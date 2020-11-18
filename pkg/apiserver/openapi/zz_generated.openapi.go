@@ -72,10 +72,12 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.NamedPort":                         schema_pkg_apis_controlplane_v1beta2_NamedPort(ref),
 		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicy":                     schema_pkg_apis_controlplane_v1beta2_NetworkPolicy(ref),
 		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyList":                 schema_pkg_apis_controlplane_v1beta2_NetworkPolicyList(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyNodeStatus":           schema_pkg_apis_controlplane_v1beta2_NetworkPolicyNodeStatus(ref),
 		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyPeer":                 schema_pkg_apis_controlplane_v1beta2_NetworkPolicyPeer(ref),
 		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyReference":            schema_pkg_apis_controlplane_v1beta2_NetworkPolicyReference(ref),
 		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyRule":                 schema_pkg_apis_controlplane_v1beta2_NetworkPolicyRule(ref),
 		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyStats":                schema_pkg_apis_controlplane_v1beta2_NetworkPolicyStats(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyStatus":               schema_pkg_apis_controlplane_v1beta2_NetworkPolicyStatus(ref),
 		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.NodeStatsSummary":                  schema_pkg_apis_controlplane_v1beta2_NodeStatsSummary(ref),
 		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.PodReference":                      schema_pkg_apis_controlplane_v1beta2_PodReference(ref),
 		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.Service":                           schema_pkg_apis_controlplane_v1beta2_Service(ref),
@@ -435,7 +437,7 @@ func schema_pkg_apis_clusterinformation_v1beta1_AntreaAgentInfo(ref common.Refer
 							Ref:         ref("k8s.io/api/core/v1.ObjectReference"),
 						},
 					},
-					"nodeSubnet": {
+					"nodeSubnets": {
 						SchemaProps: spec.SchemaProps{
 							Description: "The Node that Antrea Agent is running in",
 							Type:        []string{"array"},
@@ -451,7 +453,7 @@ func schema_pkg_apis_clusterinformation_v1beta1_AntreaAgentInfo(ref common.Refer
 					},
 					"ovsInfo": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Node subnet",
+							Description: "Node subnets",
 							Ref:         ref("github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1.OVSInfo"),
 						},
 					},
@@ -2447,6 +2449,33 @@ func schema_pkg_apis_controlplane_v1beta2_NetworkPolicyList(ref common.Reference
 	}
 }
 
+func schema_pkg_apis_controlplane_v1beta2_NetworkPolicyNodeStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "NetworkPolicyNodeStatus is the status of a NetworkPolicy on a Node.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"nodeName": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The name of the Node that produces the status.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"generation": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The generation realized by the Node.",
+							Type:        []string{"integer"},
+							Format:      "int64",
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
 func schema_pkg_apis_controlplane_v1beta2_NetworkPolicyPeer(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -2622,6 +2651,53 @@ func schema_pkg_apis_controlplane_v1beta2_NetworkPolicyStats(ref common.Referenc
 		},
 		Dependencies: []string{
 			"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyReference", "github.com/vmware-tanzu/antrea/pkg/apis/stats/v1alpha1.TrafficStats"},
+	}
+}
+
+func schema_pkg_apis_controlplane_v1beta2_NetworkPolicyStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "NetworkPolicyStatus is the status of a NetworkPolicy.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+						},
+					},
+					"nodes": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Nodes contains statuses produced on a list of Nodes.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyNodeStatus"),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyNodeStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
 	}
 }
 

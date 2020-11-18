@@ -109,7 +109,7 @@ for more information. Alternatively, you can also restart all the Pods yourself,
 or simply reboot your Nodes.
 
 To build the image locally, you can follow the instructions in the [Contributor
-Guide](/CONTRIBUTING.md#building-and-testing-your-change).
+Guide](../CONTRIBUTING.md#building-and-testing-your-change).
 
 Antrea components can also be run manually as processes for development
 purposes. See [Manual Installation](contributors/manual-installation.md) for
@@ -136,7 +136,7 @@ provide your own certificates, please refer to [Securing Control Plane](securing
 ### Antctl: Installation and Usage
 
 To use antctl, the Antrea command-line tool, please refer to this
-[guide](/docs/antctl.md).
+[guide](antctl.md).
 
 ## Features
 
@@ -148,7 +148,7 @@ Antrea Network Policies, refer to the [Antrea Network Policy document](antrea-ne
 
 ### IPsec Encryption
 Antrea supports encrypting GRE tunnel traffic with IPsec. To deploy Antrea with
-IPsec encryption enabled, please refer to [this guide](/docs/ipsec-tunnel.md).
+IPsec encryption enabled, please refer to [this guide](ipsec-tunnel.md).
 
 ### Network Flow Visibility
 Antrea supports exporting network flow information using IPFIX, and provides a

@@ -34,7 +34,10 @@ type Options struct {
 
 func newOptions() *Options {
 	return &Options{
-		config: new(ControllerConfig),
+		config: &ControllerConfig{
+			EnablePrometheusMetrics: true,
+			SelfSignedCert:          true,
+		},
 	}
 }
 
@@ -46,11 +49,9 @@ func (o *Options) addFlags(fs *pflag.FlagSet) {
 // complete completes all the required options.
 func (o *Options) complete(args []string) error {
 	if len(o.configFile) > 0 {
-		c, err := o.loadConfigFromFile(o.configFile)
-		if err != nil {
+		if err := o.loadConfigFromFile(); err != nil {
 			return err
 		}
-		o.config = c
 	}
 	o.setDefaults()
 	return features.DefaultMutableFeatureGate.SetFromMap(o.config.FeatureGates)
@@ -64,20 +65,13 @@ func (o *Options) validate(args []string) error {
 	return nil
 }
 
-func (o *Options) loadConfigFromFile(file string) (*ControllerConfig, error) {
-	data, err := ioutil.ReadFile(file)
+func (o *Options) loadConfigFromFile() error {
+	data, err := ioutil.ReadFile(o.configFile)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	c := ControllerConfig{
-		SelfSignedCert: true,
-	}
-	err = yaml.UnmarshalStrict(data, &c)
-	if err != nil {
-		return nil, err
-	}
-	return &c, nil
+	return yaml.UnmarshalStrict(data, &o.config)
 }
 
 func (o *Options) setDefaults() {

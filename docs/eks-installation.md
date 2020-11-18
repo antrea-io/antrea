@@ -8,7 +8,8 @@ the kubeconfig file of that cluster.
 With Antrea >=v0.9.0 release, you should apply `antrea-eks-node-init.yaml` before deploying Antrea.
 This will restart existing Pods (except those in host network), so that Antrea can also manage them
 (i.e. enforce NetworkPolicies on them) once it is installed.
-```
+
+```bash
 kubectl apply -f https://raw.githubusercontent.com/vmware-tanzu/antrea/master/build/yamls/antrea-eks-node-init.yml
 ```
 

@@ -34,6 +34,7 @@ import (
 	interfacestoretest "github.com/vmware-tanzu/antrea/pkg/agent/interfacestore/testing"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/agent/util/sysctl"
+	queriertest "github.com/vmware-tanzu/antrea/pkg/querier/testing"
 )
 
 const testPollInterval = 0 // Not used in the test, hence 0.
@@ -106,7 +107,7 @@ func prepareInterfaceConfigs(contID, podName, podNS, ifName string, ip *net.IP) 
 	}
 	iface := &interfacestore.InterfaceConfig{
 		InterfaceName:            ifName,
-		IP:                       *ip,
+		IPs:                      []net.IP{*ip},
 		ContainerInterfaceConfig: podConfig,
 	}
 	return iface
@@ -142,8 +143,9 @@ func TestConnectionStoreAndFlowRecords(t *testing.T) {
 	// Create ConnectionStore, FlowRecords and associated mocks
 	connDumperMock := connectionstest.NewMockConnTrackDumper(ctrl)
 	ifStoreMock := interfacestoretest.NewMockInterfaceStore(ctrl)
+	npQuerier := queriertest.NewMockAgentNetworkPolicyInfoQuerier(ctrl)
 	// TODO: Enhance the integration test by testing service.
-	connStore := connections.NewConnectionStore(connDumperMock, ifStoreMock, nil, testPollInterval)
+	connStore := connections.NewConnectionStore(connDumperMock, ifStoreMock, nil, npQuerier, testPollInterval)
 	// Expect calls for connStore.poll and other callees
 	connDumperMock.EXPECT().DumpFlows(uint16(openflow.CtZone)).Return(testConns, 0, nil)
 	connDumperMock.EXPECT().GetMaxConnections().Return(0, nil)

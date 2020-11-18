@@ -60,7 +60,7 @@ var responses = []Response{
 		PodName:       podNames[0],
 		PodNamespace:  "namespaceA",
 		InterfaceName: "interface0",
-		IP:            ipStrs[0],
+		IPs:           []string{ipStrs[0]},
 		MAC:           macStrs[0],
 		PortUUID:      "portuuid0",
 		OFPort:        0,
@@ -70,7 +70,7 @@ var responses = []Response{
 		PodName:       podNames[1],
 		PodNamespace:  "namespaceA",
 		InterfaceName: "interface1",
-		IP:            ipStrs[1],
+		IPs:           []string{ipStrs[1]},
 		MAC:           macStrs[1],
 		PortUUID:      "portuuid1",
 		OFPort:        1,
@@ -80,7 +80,7 @@ var responses = []Response{
 		PodName:       podNames[0],
 		PodNamespace:  "namespaceB",
 		InterfaceName: "interface2",
-		IP:            ipStrs[2],
+		IPs:           []string{ipStrs[2]},
 		MAC:           macStrs[2],
 		PortUUID:      "portuuid2",
 		OFPort:        2,
@@ -91,7 +91,7 @@ var responses = []Response{
 var testInterfaceConfigs = []*interfacestore.InterfaceConfig{
 	{
 		InterfaceName: "interface0",
-		IP:            net.ParseIP(ipStrs[0]),
+		IPs:           []net.IP{net.ParseIP(ipStrs[0])},
 		MAC:           macs[0],
 		OVSPortConfig: &interfacestore.OVSPortConfig{
 			PortUUID: "portuuid0",
@@ -105,7 +105,7 @@ var testInterfaceConfigs = []*interfacestore.InterfaceConfig{
 	},
 	{
 		InterfaceName: "interface1",
-		IP:            net.ParseIP(ipStrs[1]),
+		IPs:           []net.IP{net.ParseIP(ipStrs[1])},
 		MAC:           macs[1],
 		OVSPortConfig: &interfacestore.OVSPortConfig{
 			PortUUID: "portuuid1",
@@ -119,7 +119,7 @@ var testInterfaceConfigs = []*interfacestore.InterfaceConfig{
 	},
 	{
 		InterfaceName: "interface2",
-		IP:            net.ParseIP(ipStrs[2]),
+		IPs:           []net.IP{net.ParseIP(ipStrs[2])},
 		MAC:           macs[2],
 		OVSPortConfig: &interfacestore.OVSPortConfig{
 			PortUUID: "portuuid2",

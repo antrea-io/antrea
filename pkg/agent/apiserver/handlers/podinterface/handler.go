@@ -16,7 +16,9 @@ package podinterface
 
 import (
 	"encoding/json"
+	"net"
 	"net/http"
+	"strings"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	"github.com/vmware-tanzu/antrea/pkg/agent/querier"
@@ -25,14 +27,14 @@ import (
 
 // Response describes the response struct of pod-interface command.
 type Response struct {
-	PodName       string `json:"name,omitempty" antctl:"name,Name of the Pod"`
-	PodNamespace  string `json:"podNamespace,omitempty"`
-	InterfaceName string `json:"interfaceName,omitempty"`
-	IP            string `json:"ip,omitempty"`
-	MAC           string `json:"mac,omitempty"`
-	PortUUID      string `json:"portUUID,omitempty"`
-	OFPort        int32  `json:"ofPort,omitempty"`
-	ContainerID   string `json:"containerID,omitempty"`
+	PodName       string   `json:"name,omitempty" antctl:"name,Name of the Pod"`
+	PodNamespace  string   `json:"podNamespace,omitempty"`
+	InterfaceName string   `json:"interfaceName,omitempty"`
+	IPs           []string `json:"ips,omitempty"`
+	MAC           string   `json:"mac,omitempty"`
+	PortUUID      string   `json:"portUUID,omitempty"`
+	OFPort        int32    `json:"ofPort,omitempty"`
+	ContainerID   string   `json:"containerID,omitempty"`
 }
 
 func generateResponse(i *interfacestore.InterfaceConfig) Response {
@@ -40,12 +42,20 @@ func generateResponse(i *interfacestore.InterfaceConfig) Response {
 		PodName:       i.ContainerInterfaceConfig.PodName,
 		PodNamespace:  i.ContainerInterfaceConfig.PodNamespace,
 		InterfaceName: i.InterfaceName,
-		IP:            i.IP.String(),
+		IPs:           getPodIPs(i.IPs),
 		MAC:           i.MAC.String(),
 		PortUUID:      i.OVSPortConfig.PortUUID,
 		OFPort:        i.OVSPortConfig.OFPort,
 		ContainerID:   i.ContainerInterfaceConfig.ContainerID,
 	}
+}
+
+func getPodIPs(ips []net.IP) []string {
+	ipStrs := make([]string, len(ips))
+	for i := range ips {
+		ipStrs[i] = ips[i].String()
+	}
+	return ipStrs
 }
 
 // HandleFunc returns the function which can handle queries issued by the pod-interface command,
@@ -87,8 +97,8 @@ func (r Response) GetContainerIDStr() string {
 	return r.ContainerID
 }
 
-func (r Response) GetTableRow(maxColumnLength int) []string {
-	return []string{r.PodNamespace, r.PodName, r.InterfaceName, r.IP, r.MAC, r.PortUUID, common.Int32ToString(r.OFPort), r.GetContainerIDStr()}
+func (r Response) GetTableRow(_ int) []string {
+	return []string{r.PodNamespace, r.PodName, r.InterfaceName, strings.Join(r.IPs, ", "), r.MAC, r.PortUUID, common.Int32ToString(r.OFPort), r.GetContainerIDStr()}
 }
 
 func (r Response) SortRows() bool {

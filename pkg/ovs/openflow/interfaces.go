@@ -35,12 +35,17 @@ const (
 )
 
 const (
-	ProtocolIP   Protocol = "ip"
-	ProtocolARP  Protocol = "arp"
-	ProtocolTCP  Protocol = "tcp"
-	ProtocolUDP  Protocol = "udp"
-	ProtocolSCTP Protocol = "sctp"
-	ProtocolICMP Protocol = "icmp"
+	ProtocolIP     Protocol = "ip"
+	ProtocolIPv6   Protocol = "ipv6"
+	ProtocolARP    Protocol = "arp"
+	ProtocolTCP    Protocol = "tcp"
+	ProtocolTCPv6  Protocol = "tcpv6"
+	ProtocolUDP    Protocol = "udp"
+	ProtocolUDPv6  Protocol = "udpv6"
+	ProtocolSCTP   Protocol = "sctp"
+	ProtocolSCTPv6 Protocol = "sctpv6"
+	ProtocolICMP   Protocol = "icmp"
+	ProtocolICMPv6 Protocol = "icmpv6"
 )
 
 const (
@@ -63,6 +68,7 @@ const (
 	NxmFieldReg         = "NXM_NX_REG"
 	NxmFieldTunMetadata = "NXM_NX_TUN_METADATA"
 	NxmFieldIPToS       = "NXM_OF_IP_TOS"
+	NxmFieldXXReg       = "NXM_NX_XXREG"
 )
 
 const (
@@ -152,11 +158,13 @@ type Flow interface {
 	OFEntry
 	// Returns the flow priority associated with OFEntry
 	FlowPriority() uint16
+	FlowProtocol() Protocol
 	MatchString() string
 	// CopyToBuilder returns a new FlowBuilder that copies the matches of the Flow.
 	// It copies the original actions of the Flow only if copyActions is set to true, and
 	// resets the priority in the new FlowBuilder if the provided priority is not 0.
 	CopyToBuilder(priority uint16, copyActions bool) FlowBuilder
+	IsDropFlow() bool
 }
 
 type Action interface {
@@ -196,6 +204,7 @@ type FlowBuilder interface {
 	MatchPriority(uint16) FlowBuilder
 	MatchProtocol(name Protocol) FlowBuilder
 	MatchReg(regID int, data uint32) FlowBuilder
+	MatchXXReg(regID int, data []byte) FlowBuilder
 	MatchRegRange(regID int, data uint32, rng Range) FlowBuilder
 	MatchInPort(inPort uint32) FlowBuilder
 	MatchDstIP(ip net.IP) FlowBuilder
@@ -220,6 +229,8 @@ type FlowBuilder interface {
 	MatchCTLabelRange(high, low uint64, bitRange Range) FlowBuilder
 	MatchConjID(value uint32) FlowBuilder
 	MatchDstPort(port uint16, portMask *uint16) FlowBuilder
+	MatchICMPv6Type(icmp6Type byte) FlowBuilder
+	MatchICMPv6Code(icmp6Code byte) FlowBuilder
 	MatchTunMetadata(index int, data uint32) FlowBuilder
 	// MatchCTSrcIP matches the source IPv4 address of the connection tracker original direction tuple.
 	MatchCTSrcIP(ip net.IP) FlowBuilder
@@ -244,16 +255,20 @@ type FlowBuilder interface {
 
 type LearnAction interface {
 	DeleteLearned() LearnAction
-	MatchEthernetProtocolIP() LearnAction
+	MatchEthernetProtocolIP(isIPv6 bool) LearnAction
 	MatchTransportDst(protocol Protocol) LearnAction
 	MatchLearnedTCPDstPort() LearnAction
 	MatchLearnedUDPDstPort() LearnAction
 	MatchLearnedSCTPDstPort() LearnAction
+	MatchLearnedTCPv6DstPort() LearnAction
+	MatchLearnedUDPv6DstPort() LearnAction
+	MatchLearnedSCTPv6DstPort() LearnAction
 	MatchLearnedSrcIP() LearnAction
 	MatchLearnedDstIP() LearnAction
 	MatchReg(regID int, data uint32, rng Range) LearnAction
 	LoadReg(regID int, data uint32, rng Range) LearnAction
 	LoadRegToReg(fromRegID, toRegID int, fromRng, toRng Range) LearnAction
+	LoadXXRegToXXReg(fromRegID, toRegID int, fromRng, toRng Range) LearnAction
 	SetDstMAC(mac net.HardwareAddr) LearnAction
 	Done() FlowBuilder
 }
@@ -267,6 +282,7 @@ type Group interface {
 type BucketBuilder interface {
 	Weight(val uint16) BucketBuilder
 	LoadReg(regID int, data uint32) BucketBuilder
+	LoadXXReg(regID int, data []byte) BucketBuilder
 	LoadRegRange(regID int, data uint32, rng Range) BucketBuilder
 	ResubmitToTable(tableID TableIDType) BucketBuilder
 	Done() Group

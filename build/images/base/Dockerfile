@@ -8,7 +8,7 @@ RUN apt-get update && \
 ENV CNI_PLUGINS="./host-local ./loopback ./portmap ./bandwidth"
 
 RUN mkdir -p /opt/cni/bin && \
-    wget -q -O - https://github.com/containernetworking/plugins/releases/download/v0.8.6/cni-plugins-linux-amd64-v0.8.6.tgz | tar xz -C /opt/cni/bin $CNI_PLUGINS
+    wget -q -O - https://github.com/containernetworking/plugins/releases/download/v0.8.7/cni-plugins-linux-amd64-v0.8.7.tgz | tar xz -C /opt/cni/bin $CNI_PLUGINS
 
 
 FROM antrea/openvswitch:${OVS_VERSION}

@@ -158,7 +158,8 @@ func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *secv1alpha1.C
 	}
 	tierPriority := n.getTierPriority(cnp.Spec.Tier)
 	internalNetworkPolicy := &antreatypes.NetworkPolicy{
-		Name: internalNetworkPolicyKeyFunc(cnp),
+		Name:       internalNetworkPolicyKeyFunc(cnp),
+		Generation: cnp.Generation,
 		SourceRef: &controlplane.NetworkPolicyReference{
 			Type: controlplane.AntreaClusterNetworkPolicy,
 			Name: cnp.Name,

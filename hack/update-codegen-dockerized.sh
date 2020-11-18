@@ -106,7 +106,7 @@ MOCKGEN_TARGETS=(
   "pkg/querier AgentNetworkPolicyInfoQuerier"
   "pkg/agent/flowexporter/connections ConnTrackDumper,NetFilterConnTrack"
   "pkg/agent/flowexporter/ipfix IPFIXExportingProcess,IPFIXRecord,IPFIXRegistry"
-  "pkg/agent/proxy Proxier"
+  "third_party/proxy Provider"
 )
 
 # Command mockgen does not automatically replace variable YEAR with current year

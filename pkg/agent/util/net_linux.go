@@ -135,14 +135,21 @@ func ConfigureLinkAddress(idx int, gwIPNet *net.IPNet) error {
 	link, _ := netlink.LinkByIndex(idx)
 	gwAddr := &netlink.Addr{IPNet: gwIPNet, Label: ""}
 
-	if addrs, err := netlink.AddrList(link, netlink.FAMILY_V4); err != nil {
-		klog.Errorf("Failed to query IPv4 address list for interface %s: %v", link.Attrs().Name, err)
+	var addrFamily int
+	if gwIPNet.IP.To4() != nil {
+		addrFamily = netlink.FAMILY_V4
+	} else {
+		addrFamily = netlink.FAMILY_V6
+	}
+
+	if addrs, err := netlink.AddrList(link, addrFamily); err != nil {
+		klog.Errorf("Failed to query address list for interface %s: %v", link.Attrs().Name, err)
 		return err
 	} else if addrs != nil {
 		for _, addr := range addrs {
-			klog.V(4).Infof("Found IPv4 address %s for interface %s", addr.IP.String(), link.Attrs().Name)
+			klog.V(4).Infof("Found address %s for interface %s", addr.IP.String(), link.Attrs().Name)
 			if addr.IP.Equal(gwAddr.IPNet.IP) {
-				klog.V(2).Infof("IPv4 address %s already assigned to interface %s", addr.IP.String(), link.Attrs().Name)
+				klog.V(2).Infof("Address %s already assigned to interface %s", addr.IP.String(), link.Attrs().Name)
 				return nil
 			}
 		}

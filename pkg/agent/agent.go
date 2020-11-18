@@ -20,6 +20,7 @@ import (
 	"net"
 	"os"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/containernetworking/plugins/pkg/ip"
@@ -63,9 +64,13 @@ type Initializer struct {
 	hostGateway     string // name of gateway port on the OVS bridge
 	mtu             int
 	serviceCIDR     *net.IPNet // K8s Service ClusterIP CIDR
+	serviceCIDRv6   *net.IPNet // K8s Service ClusterIP CIDR in IPv6
 	networkConfig   *config.NetworkConfig
 	nodeConfig      *config.NodeConfig
 	enableProxy     bool
+	// networkReadyCh should be closed once the Node's network is ready.
+	// The CNI server will wait for it before handling any CNI Add requests.
+	networkReadyCh chan<- struct{}
 }
 
 func NewInitializer(
@@ -78,7 +83,9 @@ func NewInitializer(
 	hostGateway string,
 	mtu int,
 	serviceCIDR *net.IPNet,
+	serviceCIDRv6 *net.IPNet,
 	networkConfig *config.NetworkConfig,
+	networkReadyCh chan<- struct{},
 	enableProxy bool) *Initializer {
 	return &Initializer{
 		ovsBridgeClient: ovsBridgeClient,
@@ -90,7 +97,9 @@ func NewInitializer(
 		hostGateway:     hostGateway,
 		mtu:             mtu,
 		serviceCIDR:     serviceCIDR,
+		serviceCIDRv6:   serviceCIDRv6,
 		networkConfig:   networkConfig,
+		networkReadyCh:  networkReadyCh,
 		enableProxy:     enableProxy,
 	}
 }
@@ -194,6 +203,8 @@ func (i *Initializer) initInterfaceStore() error {
 // Initialize sets up agent initial configurations.
 func (i *Initializer) Initialize() error {
 	klog.Info("Setting up node network")
+	// wg is used to wait for the asynchronous initialization.
+	var wg sync.WaitGroup
 
 	if err := i.initNodeLocalConfig(); err != nil {
 		return err
@@ -206,7 +217,15 @@ func (i *Initializer) Initialize() error {
 	if err := i.prepareHostNetwork(); err != nil {
 		return err
 	}
+
 	if err := i.setupOVSBridge(); err != nil {
+		return err
+	}
+
+	wg.Add(1)
+	// routeClient.Initialize() should be after i.setupOVSBridge() which
+	// creates the host gateway interface.
+	if err := i.routeClient.Initialize(i.nodeConfig, wg.Done); err != nil {
 		return err
 	}
 
@@ -215,14 +234,11 @@ func (i *Initializer) Initialize() error {
 		return err
 	}
 
-	if err := i.routeClient.Initialize(i.nodeConfig); err != nil {
-		return err
-	}
-
-	if err := i.setupExternalConnectivity(); err != nil {
-		return err
-	}
-
+	// The Node's network is ready only when both synchronous and asynchronous initialization are done.
+	go func() {
+		wg.Wait()
+		close(i.networkReadyCh)
+	}()
 	klog.Infof("Agent initialized NodeConfig=%v, NetworkConfig=%v", i.nodeConfig, i.networkConfig)
 	return nil
 }
@@ -277,15 +293,22 @@ func (i *Initializer) initOpenFlowPipeline() error {
 		return err
 	}
 
-	// On windows platform, host network flows are needed for host traffic.
+	// On Windows platform, host network flows are needed for host traffic.
 	if err := i.initHostNetworkFlows(); err != nil {
-		klog.Errorf("Failed to setup openflow entires for host network: %v", err)
+		klog.Errorf("Failed to install openflow entries for host network: %v", err)
+		return err
+	}
+
+	// On Windows platform, extra flows are needed to perform SNAT for the
+	// traffic to external network.
+	if err := i.initExternalConnectivityFlows(); err != nil {
+		klog.Errorf("Failed to install openflow entries for external connectivity: %v", err)
 		return err
 	}
 
 	// Set up flow entries for gateway interface, including classifier, skip spoof guard check,
 	// L3 forwarding and L2 forwarding
-	if err := i.ofClient.InstallGatewayFlows(gateway.IP, gateway.MAC, gatewayOFPort); err != nil {
+	if err := i.ofClient.InstallGatewayFlows(gateway.IPs, gateway.MAC, gatewayOFPort); err != nil {
 		klog.Errorf("Failed to setup openflow entries for gateway: %v", err)
 		return err
 	}
@@ -304,15 +327,16 @@ func (i *Initializer) initOpenFlowPipeline() error {
 		// from local Pods to any Service address can be forwarded to the host gateway interface
 		// correctly. Otherwise packets might be dropped by egress rules before they are DNATed to
 		// backend Pods.
-		if err := i.ofClient.InstallClusterServiceCIDRFlows(i.serviceCIDR, gatewayOFPort); err != nil {
-			klog.Errorf("Failed to setup openflow entries for Cluster Service CIDR %s: %v", i.serviceCIDR, err)
+		if err := i.ofClient.InstallClusterServiceCIDRFlows([]*net.IPNet{i.serviceCIDR, i.serviceCIDRv6}, gatewayOFPort); err != nil {
+			klog.Errorf("Failed to setup OpenFlow entries for Service CIDRs: %v", err)
 			return err
 		}
 	} else {
 		// Set up flow entries to enable Service connectivity. The agent proxy handles
 		// ClusterIP Services while the upstream kube-proxy is leveraged to handle
 		// any other kinds of Services.
-		if err := i.ofClient.InstallClusterServiceFlows(); err != nil {
+		if err := i.ofClient.InstallClusterServiceFlows(
+			i.nodeConfig.PodIPv4CIDR != nil, i.nodeConfig.PodIPv6CIDR != nil); err != nil {
 			klog.Errorf("Failed to setup default OpenFlow entries for ClusterIP Services: %v", err)
 			return err
 		}
@@ -445,29 +469,26 @@ func (i *Initializer) configureGatewayInterface(gatewayIface *interfacestore.Int
 	gatewayIface.MAC = gwMAC
 	if i.networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {
 		// Assign IP to gw as required by SpoofGuard.
-		i.nodeConfig.GatewayConfig.IP = i.nodeConfig.NodeIPAddr.IP
-		gatewayIface.IP = i.nodeConfig.NodeIPAddr.IP
+		// NodeIPAddr can be either IPv4 or IPv6.
+		if i.nodeConfig.NodeIPAddr.IP.To4() != nil {
+			i.nodeConfig.GatewayConfig.IPv4 = i.nodeConfig.NodeIPAddr.IP
+		} else {
+			i.nodeConfig.GatewayConfig.IPv6 = i.nodeConfig.NodeIPAddr.IP
+		}
+		gatewayIface.IPs = []net.IP{i.nodeConfig.NodeIPAddr.IP}
 		// No need to assign local CIDR to gw0 because local CIDR is not managed by Antrea
 		return nil
 	}
 
-	// Configure host gateway IP using the first address of node localSubnet.
-	localSubnet := i.nodeConfig.PodCIDR
-	subnetID := localSubnet.IP.Mask(localSubnet.Mask)
-	gwIP := &net.IPNet{IP: ip.NextIP(subnetID), Mask: localSubnet.Mask}
-
-	// Check IP address configuration on existing interface first, return if the interface has the desired address.
-	// We perform this check unconditionally, even if the OVS port does not exist when this function is called
-	// (i.e. portExists is false). Indeed, it may be possible for the interface to exist even if the OVS bridge does
-	// not exist.
-	// Configure the IP address on the interface if it does not exist.
-	if err := util.ConfigureLinkAddress(gwLinkIdx, gwIP); err != nil {
-		return err
+	i.nodeConfig.GatewayConfig.LinkIndex = gwLinkIdx
+	// Allocate the gateway IP address from the Pod CIDRs if it exists. The gateway IP should be the first address
+	// in the Subnet and configure on the host gateway.
+	for _, podCIDR := range []*net.IPNet{i.nodeConfig.PodIPv4CIDR, i.nodeConfig.PodIPv6CIDR} {
+		if err := i.allocateGatewayAddress(podCIDR, gatewayIface); err != nil {
+			return err
+		}
 	}
 
-	i.nodeConfig.GatewayConfig.LinkIndex = gwLinkIdx
-	i.nodeConfig.GatewayConfig.IP = gwIP.IP
-	gatewayIface.IP = gwIP.IP
 	return nil
 }
 
@@ -568,25 +589,51 @@ func (i *Initializer) initNodeLocalConfig() error {
 		return fmt.Errorf("failed to get local IPNet:  %v", err)
 	}
 
-	mtu, err := i.getNodeMTU(localIntf)
-	if err != nil {
-		return err
-	}
-	klog.Infof("Setting Node MTU=%d", mtu)
-
 	i.nodeConfig = &config.NodeConfig{
 		Name:            nodeName,
 		OVSBridge:       i.ovsBridge,
 		DefaultTunName:  defaultTunInterfaceName,
 		NodeIPAddr:      localAddr,
-		NodeMTU:         mtu,
 		UplinkNetConfig: new(config.AdapterNetConfig)}
+
+	mtu, err := i.getNodeMTU(localIntf)
+	if err != nil {
+		return err
+	}
+	i.nodeConfig.NodeMTU = mtu
+	klog.Infof("Setting Node MTU=%d", mtu)
 
 	if i.networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {
 		return nil
 	}
 
-	// Spec.PodCIDR can be empty due to misconfiguration
+	// Parse all PodCIDRs first, so that we could support IPv4/IPv6 dual-stack configurations.
+	if node.Spec.PodCIDRs != nil {
+		for _, podCIDR := range node.Spec.PodCIDRs {
+			_, localSubnet, err := net.ParseCIDR(podCIDR)
+			if err != nil {
+				klog.Errorf("Failed to parse subnet from CIDR string %s: %v", node.Spec.PodCIDR, err)
+				return err
+			}
+			if localSubnet.IP.To4() != nil {
+				if i.nodeConfig.PodIPv4CIDR != nil {
+					klog.Warningf("One IPv4 PodCIDR is already configured on this Node, ignore the IPv4 Subnet CIDR %s", localSubnet.String())
+				} else {
+					i.nodeConfig.PodIPv4CIDR = localSubnet
+					klog.V(2).Infof("Configure IPv4 Subnet CIDR %s on this Node", localSubnet.String())
+				}
+				continue
+			}
+			if i.nodeConfig.PodIPv6CIDR != nil {
+				klog.Warningf("One IPv6 PodCIDR is already configured on this Node, ignore the IPv6 subnet CIDR %s", localSubnet.String())
+			} else {
+				i.nodeConfig.PodIPv6CIDR = localSubnet
+				klog.V(2).Infof("Configure IPv6 Subnet CIDR %s on this Node", localSubnet.String())
+			}
+		}
+		return nil
+	}
+	// Spec.PodCIDR can be empty due to misconfiguration.
 	if node.Spec.PodCIDR == "" {
 		klog.Errorf("Spec.PodCIDR is empty for Node %s. Please make sure --allocate-node-cidrs is enabled "+
 			"for kube-controller-manager and --cluster-cidr specifies a sufficient CIDR range", nodeName)
@@ -597,7 +644,11 @@ func (i *Initializer) initNodeLocalConfig() error {
 		klog.Errorf("Failed to parse subnet from CIDR string %s: %v", node.Spec.PodCIDR, err)
 		return err
 	}
-	i.nodeConfig.PodCIDR = localSubnet
+	if localSubnet.IP.To4() != nil {
+		i.nodeConfig.PodIPv4CIDR = localSubnet
+	} else {
+		i.nodeConfig.PodIPv6CIDR = localSubnet
+	}
 	return nil
 }
 
@@ -613,7 +664,7 @@ func (i *Initializer) initializeIPSec() error {
 	// PID files before starting the OVS daemons, it is safe to assume that
 	// if this file exists, the IPsec monitor is indeed running.
 	const ovsMonitorIPSecPID = "/var/run/openvswitch/ovs-monitor-ipsec.pid"
-	timer := time.NewTimer(5 * time.Second)
+	timer := time.NewTimer(10 * time.Second)
 	defer timer.Stop()
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
@@ -716,9 +767,37 @@ func (i *Initializer) getNodeMTU(localIntf *net.Interface) (int, error) {
 		} else if i.networkConfig.TunnelType == ovsconfig.GRETunnel {
 			mtu -= config.GREOverhead
 		}
+		if i.nodeConfig.NodeIPAddr.IP.To4() == nil {
+			mtu -= config.IPv6ExtraOverhead
+		}
 	}
 	if i.networkConfig.EnableIPSecTunnel {
-		mtu -= config.IpsecESPOverhead
+		mtu -= config.IPSecESPOverhead
 	}
 	return mtu, nil
+}
+
+func (i *Initializer) allocateGatewayAddress(localSubnet *net.IPNet, gatewayIface *interfacestore.InterfaceConfig) error {
+	if localSubnet == nil {
+		return nil
+	}
+	subnetID := localSubnet.IP.Mask(localSubnet.Mask)
+	gwIP := &net.IPNet{IP: ip.NextIP(subnetID), Mask: localSubnet.Mask}
+
+	// Check IP address configuration on existing interface first, return if the interface has the desired address.
+	// We perform this check unconditionally, even if the OVS port does not exist when this function is called
+	// (i.e. portExists is false). Indeed, it may be possible for the interface to exist even if the OVS bridge does
+	// not exist.
+	// Configure the IP address on the interface if it does not exist.
+	if err := util.ConfigureLinkAddress(i.nodeConfig.GatewayConfig.LinkIndex, gwIP); err != nil {
+		return err
+	}
+	if gwIP.IP.To4() != nil {
+		i.nodeConfig.GatewayConfig.IPv4 = gwIP.IP
+	} else {
+		i.nodeConfig.GatewayConfig.IPv6 = gwIP.IP
+	}
+
+	gatewayIface.IPs = append(gatewayIface.IPs, gwIP.IP)
+	return nil
 }

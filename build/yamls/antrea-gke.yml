@@ -73,6 +73,16 @@ spec:
       jsonPath: .spec.priority
       name: Priority
       type: number
+    - description: The total number of Nodes that should realize the NetworkPolicy.
+      format: int32
+      jsonPath: .status.desiredNodesRealized
+      name: Desired Nodes
+      type: number
+    - description: The number of Nodes that have realized the NetworkPolicy.
+      format: int32
+      jsonPath: .status.currentNodesRealized
+      name: Current Nodes
+      type: number
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
@@ -182,9 +192,22 @@ spec:
             - appliedTo
             - priority
             type: object
+          status:
+            properties:
+              currentNodesRealized:
+                type: integer
+              desiredNodesRealized:
+                type: integer
+              observedGeneration:
+                type: integer
+              phase:
+                type: string
+            type: object
         type: object
     served: true
     storage: true
+    subresources:
+      status: {}
 ---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
@@ -212,7 +235,7 @@ spec:
                 items:
                   properties:
                     ip:
-                      format: ipv4
+                      pattern: ^(((([1]?\d)?\d|2[0-4]\d|25[0-5])\.){3}(([1]?\d)?\d|2[0-4]\d|25[0-5]))|([\da-fA-F]{1,4}(\:[\da-fA-F]{1,4}){7})|(([\da-fA-F]{1,4}:){0,5}::([\da-fA-F]{1,4}:){0,5}[\da-fA-F]{1,4})$
                       type: string
                     name:
                       type: string
@@ -268,6 +291,16 @@ spec:
       format: float
       jsonPath: .spec.priority
       name: Priority
+      type: number
+    - description: The total number of Nodes that should realize the NetworkPolicy.
+      format: int32
+      jsonPath: .status.desiredNodesRealized
+      name: Desired Nodes
+      type: number
+    - description: The number of Nodes that have realized the NetworkPolicy.
+      format: int32
+      jsonPath: .status.currentNodesRealized
+      name: Current Nodes
       type: number
     - jsonPath: .metadata.creationTimestamp
       name: Age
@@ -381,9 +414,22 @@ spec:
             - appliedTo
             - priority
             type: object
+          status:
+            properties:
+              currentNodesRealized:
+                type: integer
+              desiredNodesRealized:
+                type: integer
+              observedGeneration:
+                type: integer
+              phase:
+                type: string
+            type: object
         type: object
     served: true
     storage: true
+    subresources:
+      status: {}
 ---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
@@ -485,7 +531,7 @@ spec:
                   - ip
                 properties:
                   ip:
-                    format: ipv4
+                    pattern: ^(((([1]?\d)?\d|2[0-4]\d|25[0-5])\.){3}(([1]?\d)?\d|2[0-4]\d|25[0-5]))|([\da-fA-F]{1,4}(\:[\da-fA-F]{1,4}){7})|(([\da-fA-F]{1,4}:){0,5}::([\da-fA-F]{1,4}:){0,5}[\da-fA-F]{1,4})$
                     type: string
                   namespace:
                     type: string
@@ -503,7 +549,7 @@ spec:
                       protocol:
                         type: integer
                       srcIP:
-                        format: ipv4
+                        pattern: ^(((([1]?\d)?\d|2[0-4]\d|25[0-5])\.){3}(([1]?\d)?\d|2[0-4]\d|25[0-5]))|([\da-fA-F]{1,4}(\:[\da-fA-F]{1,4}){7})|(([\da-fA-F]{1,4}:){0,5}::([\da-fA-F]{1,4}:){0,5}[\da-fA-F]{1,4})$
                         type: string
                       ttl:
                         type: integer
@@ -816,6 +862,13 @@ rules:
   verbs:
   - create
 - apiGroups:
+  - controlplane.antrea.tanzu.vmware.com
+  resources:
+  - networkpolicies/status
+  verbs:
+  - create
+  - get
+- apiGroups:
   - authentication.k8s.io
   resources:
   - tokenreviews
@@ -949,8 +1002,10 @@ rules:
 - apiGroups:
   - admissionregistration.k8s.io
   resourceNames:
+  - crdmutator.antrea.tanzu.vmware.com
   - crdvalidator.antrea.tanzu.vmware.com
   resources:
+  - mutatingwebhookconfigurations
   - validatingwebhookconfigurations
   verbs:
   - get
@@ -964,6 +1019,13 @@ rules:
   - get
   - watch
   - list
+- apiGroups:
+  - security.antrea.tanzu.vmware.com
+  resources:
+  - clusternetworkpolicies/status
+  - networkpolicies/status
+  verbs:
+  - update
 - apiGroups:
   - security.antrea.tanzu.vmware.com
   resources:
@@ -1057,10 +1119,10 @@ data:
     # Enable AntreaProxy which provides ServiceLB for in-cluster Services in antrea-agent.
     # It should be enabled on Windows, otherwise NetworkPolicy will not take effect on
     # Service traffic.
-      AntreaProxy: true
+    #  AntreaProxy: true
 
     # Enable traceflow which provides packet tracing feature to diagnose network issue.
-    #  Traceflow: false
+    #  Traceflow: true
 
     # Enable Antrea ClusterNetworkPolicy feature to complement K8s NetworkPolicy for cluster admins
     # to define security policies which apply to the entire cluster, and Antrea NetworkPolicy
@@ -1124,13 +1186,19 @@ data:
     # for the GRE tunnel type.
     #enableIPSecTunnel: false
 
+    # ClusterIP CIDR range for IPv6 Services. It's required when using kube-proxy to provide IPv6 Service in a Dual-Stack
+    # cluster or an IPv6 only cluster. The value should be the same as the configuration for kube-apiserver specified by
+    # --service-cluster-ip-range. When AntreaProxy is enabled, this parameter is not needed.
+    # No default value for this field.
+    #serviceCIDRv6:
+
     # The port for the antrea-agent APIServer to serve on.
     # Note that if it's set to another value, the `containerPort` of the `api` port of the
     # `antrea-agent` container must be set to the same value.
     #apiPort: 10350
 
     # Enable metrics exposure via Prometheus. Initializes Prometheus metrics listener.
-    #enablePrometheusMetrics: false
+    #enablePrometheusMetrics: true
 
     # Provide flow collector address as string with format <IP>:<port>[:<proto>], where proto is tcp or udp. This also enables
     # the flow exporter that sends IPFIX flow records of conntrack flows on OVS bridge. If no L4 transport proto is given,
@@ -1171,7 +1239,7 @@ data:
     # FeatureGates is a map of feature names to bools that enable or disable experimental features.
     featureGates:
     # Enable traceflow which provides packet tracing feature to diagnose network issue.
-    #  Traceflow: false
+    #  Traceflow: true
 
     # Enable Antrea ClusterNetworkPolicy feature to complement K8s NetworkPolicy for cluster admins
     # to define security policies which apply to the entire cluster, and Antrea NetworkPolicy
@@ -1187,7 +1255,7 @@ data:
     #apiPort: 10349
 
     # Enable metrics exposure via Prometheus. Initializes Prometheus metrics listener.
-    #enablePrometheusMetrics: false
+    #enablePrometheusMetrics: true
 
     # Indicates whether to use auto-generated self-signed TLS certificate.
     # If false, A Secret named "antrea-controller-tls" must be provided with the following keys:
@@ -1202,7 +1270,7 @@ metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-m742b78ct4
+  name: antrea-config-gmt86d9t68
   namespace: kube-system
 ---
 apiVersion: v1
@@ -1309,7 +1377,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-m742b78ct4
+          name: antrea-config-gmt86d9t68
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -1573,7 +1641,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-m742b78ct4
+          name: antrea-config-gmt86d9t68
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d
@@ -1607,6 +1675,58 @@ spec:
         name: xtables-lock
   updateStrategy:
     type: RollingUpdate
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  labels:
+    app: antrea
+  name: crdmutator.antrea.tanzu.vmware.com
+webhooks:
+- admissionReviewVersions:
+  - v1
+  - v1beta1
+  clientConfig:
+    service:
+      name: antrea
+      namespace: kube-system
+      path: /mutate/acnp
+  name: acnpmutator.antrea.tanzu.vmware.com
+  rules:
+  - apiGroups:
+    - security.antrea.tanzu.vmware.com
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - clusternetworkpolicies
+    scope: Cluster
+  sideEffects: None
+  timeoutSeconds: 5
+- admissionReviewVersions:
+  - v1
+  - v1beta1
+  clientConfig:
+    service:
+      name: antrea
+      namespace: kube-system
+      path: /mutate/anp
+  name: anpmutator.antrea.tanzu.vmware.com
+  rules:
+  - apiGroups:
+    - security.antrea.tanzu.vmware.com
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - networkpolicies
+    scope: Namespaced
+  sideEffects: None
+  timeoutSeconds: 5
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingWebhookConfiguration

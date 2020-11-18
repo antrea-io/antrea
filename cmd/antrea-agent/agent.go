@@ -51,6 +51,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
 	"github.com/vmware-tanzu/antrea/pkg/signals"
 	"github.com/vmware-tanzu/antrea/pkg/version"
+	k8sproxy "github.com/vmware-tanzu/antrea/third_party/proxy"
 )
 
 // informerDefaultResync is the default resync period if a handler doesn't specify one.
@@ -93,14 +94,13 @@ func run(o *Options) error {
 		features.DefaultFeatureGate.Enabled(features.AntreaProxy),
 		features.DefaultFeatureGate.Enabled(features.AntreaPolicy))
 
-	// statsCollector collects stats and reports to the antrea-controller periodically. For now it's only used for
-	// NetworkPolicy stats.
-	var statsCollector *stats.Collector
-	if features.DefaultFeatureGate.Enabled(features.NetworkPolicyStats) {
-		statsCollector = stats.NewCollector(antreaClientProvider, ofClient)
+	_, serviceCIDRNet, _ := net.ParseCIDR(o.config.ServiceCIDR)
+	var serviceCIDRNetv6 *net.IPNet
+	// Todo: use FeatureGate to check if IPv6 is enabled and then read configuration item "ServiceCIDRv6".
+	if o.config.ServiceCIDRv6 != "" {
+		_, serviceCIDRNetv6, _ = net.ParseCIDR(o.config.ServiceCIDRv6)
 	}
 
-	_, serviceCIDRNet, _ := net.ParseCIDR(o.config.ServiceCIDR)
 	_, encapMode := config.GetTrafficEncapModeFromStr(o.config.TrafficEncapMode)
 	networkConfig := &config.NetworkConfig{
 		TunnelType:        ovsconfig.TunnelType(o.config.TunnelType),
@@ -115,6 +115,9 @@ func run(o *Options) error {
 	// Create an ifaceStore that caches network interfaces managed by this node.
 	ifaceStore := interfacestore.NewInterfaceStore()
 
+	// networkReadyCh is used to notify that the Node's network is ready.
+	// Functions that rely on the Node's network should wait for the channel to close.
+	networkReadyCh := make(chan struct{})
 	// Initialize agent and node network.
 	agentInitializer := agent.NewInitializer(
 		k8sClient,
@@ -126,7 +129,9 @@ func run(o *Options) error {
 		o.config.HostGateway,
 		o.config.DefaultMTU,
 		serviceCIDRNet,
+		serviceCIDRNetv6,
 		networkConfig,
+		networkReadyCh,
 		features.DefaultFeatureGate.Enabled(features.AntreaProxy))
 	err = agentInitializer.Initialize()
 	if err != nil {
@@ -144,42 +149,47 @@ func run(o *Options) error {
 		networkConfig,
 		nodeConfig)
 
-	var traceflowController *traceflow.Controller
-	if features.DefaultFeatureGate.Enabled(features.Traceflow) {
-		traceflowController = traceflow.NewTraceflowController(
-			k8sClient,
-			informerFactory,
-			crdClient,
-			traceflowInformer,
-			ofClient,
-			ovsBridgeClient,
-			ifaceStore,
-			networkConfig,
-			nodeConfig,
-			serviceCIDRNet)
-	}
-
 	// podUpdates is a channel for receiving Pod updates from CNIServer and
 	// notifying NetworkPolicyController to reconcile rules related to the
 	// updated Pods.
 	podUpdates := make(chan v1beta2.PodReference, 100)
+	// We set flow poll interval as the time interval for rule deletion in the async
+	// rule cache, which is implemented as part of the idAllocator. This is to preserve
+	// the rule info for populating NetworkPolicy fields in the Flow Exporter even
+	// after rule deletion.
+	asyncRuleDeleteInterval := o.pollInterval
 	networkPolicyController, err := networkpolicy.NewNetworkPolicyController(
 		antreaClientProvider,
 		ofClient,
 		ifaceStore,
 		nodeConfig.Name,
 		podUpdates,
-		features.DefaultFeatureGate.Enabled(features.AntreaPolicy))
+		features.DefaultFeatureGate.Enabled(features.AntreaPolicy),
+		asyncRuleDeleteInterval)
 	if err != nil {
 		return fmt.Errorf("error creating new NetworkPolicy controller: %v", err)
 	}
+
+	// statsCollector collects stats and reports to the antrea-controller periodically. For now it's only used for
+	// NetworkPolicy stats.
+	var statsCollector *stats.Collector
+	if features.DefaultFeatureGate.Enabled(features.NetworkPolicyStats) {
+		statsCollector = stats.NewCollector(antreaClientProvider, ofClient, networkPolicyController)
+	}
+
 	isChaining := false
 	if networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {
 		isChaining = true
 	}
-	var proxier proxy.Proxier
+	var proxier k8sproxy.Provider
 	if features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
-		proxier = proxy.New(nodeConfig.Name, informerFactory, ofClient)
+		if nodeConfig.PodIPv4CIDR != nil && nodeConfig.PodIPv6CIDR != nil {
+			proxier = proxy.NewDualStackProxier(nodeConfig.Name, informerFactory, ofClient)
+		} else if nodeConfig.PodIPv4CIDR != nil {
+			proxier = proxy.NewProxier(nodeConfig.Name, informerFactory, ofClient, false)
+		} else {
+			proxier = proxy.NewProxier(nodeConfig.Name, informerFactory, ofClient, true)
+		}
 	}
 	cniServer := cniserver.New(
 		o.config.CNISocket,
@@ -188,10 +198,27 @@ func run(o *Options) error {
 		k8sClient,
 		podUpdates,
 		isChaining,
-		routeClient)
+		routeClient,
+		networkReadyCh)
 	err = cniServer.Initialize(ovsBridgeClient, ofClient, ifaceStore, o.config.OVSDatapathType)
 	if err != nil {
 		return fmt.Errorf("error initializing CNI server: %v", err)
+	}
+
+	var traceflowController *traceflow.Controller
+	if features.DefaultFeatureGate.Enabled(features.Traceflow) {
+		traceflowController = traceflow.NewTraceflowController(
+			k8sClient,
+			informerFactory,
+			crdClient,
+			traceflowInformer,
+			ofClient,
+			networkPolicyController,
+			ovsBridgeClient,
+			ifaceStore,
+			networkConfig,
+			nodeConfig,
+			serviceCIDRNet)
 	}
 
 	// TODO: we should call this after installing flows for initial node routes
@@ -275,6 +302,7 @@ func run(o *Options) error {
 			connections.InitializeConnTrackDumper(nodeConfig, serviceCIDRNet, o.config.OVSDatapathType, features.DefaultFeatureGate.Enabled(features.AntreaProxy)),
 			ifaceStore,
 			proxier,
+			networkPolicyController,
 			o.pollInterval)
 		pollDone := make(chan struct{})
 		go connStore.Run(stopCh, pollDone)

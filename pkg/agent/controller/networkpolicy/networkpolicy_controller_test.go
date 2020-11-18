@@ -32,6 +32,7 @@ import (
 	"k8s.io/component-base/metrics/testutil"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/metrics"
+	agenttypes "github.com/vmware-tanzu/antrea/pkg/agent/types"
 	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
 	"github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned"
 	"github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/fake"
@@ -51,7 +52,7 @@ func (g *antreaClientGetter) GetAntreaClient() (versioned.Interface, error) {
 func newTestController() (*Controller, *fake.Clientset, *mockReconciler) {
 	clientset := &fake.Clientset{}
 	ch := make(chan v1beta2.PodReference, 100)
-	controller, _ := NewNetworkPolicyController(&antreaClientGetter{clientset}, nil, nil, "node1", ch, true)
+	controller, _ := NewNetworkPolicyController(&antreaClientGetter{clientset}, nil, nil, "node1", ch, true, testDeleteInterval)
 	reconciler := newMockReconciler()
 	controller.reconciler = reconciler
 	return controller, clientset, reconciler
@@ -99,6 +100,14 @@ func (r *mockReconciler) Forget(ruleID string) error {
 	delete(r.lastRealized, ruleID)
 	r.deleted <- ruleID
 	return nil
+}
+
+func (r *mockReconciler) RunIDAllocatorWorker(_ <-chan struct{}) {
+	return
+}
+
+func (r *mockReconciler) GetRuleByFlowID(_ uint32) (*agenttypes.PolicyRule, bool, error) {
+	return nil, false, nil
 }
 
 func (r *mockReconciler) getLastRealized(ruleID string) (*CompletedRule, bool) {

@@ -42,7 +42,6 @@ var antreaAgentMetrics = []string{
 	"antrea_agent_ovs_flow_ops_error_count",
 	"antrea_agent_ovs_flow_ops_latency_milliseconds",
 	"antrea_agent_ovs_total_flow_count",
-	"antrea_agent_runtime_info",
 	"antrea_agent_conntrack_total_connection_count",
 	"antrea_agent_conntrack_antrea_connection_count",
 	"antrea_agent_conntrack_max_connection_count",
@@ -59,7 +58,6 @@ var antreaControllerMetrics = []string{
 	"antrea_controller_length_network_policy_queue",
 	"antrea_controller_network_policy_processed",
 	"antrea_controller_network_policy_sync_duration_milliseconds",
-	"antrea_controller_runtime_info",
 }
 
 var prometheusEnabled bool
