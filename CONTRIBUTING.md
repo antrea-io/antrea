@@ -133,6 +133,7 @@ fork. Once a PR is ready to merge, squash any *fix review feedback, typo*
 and *merged* sorts of commits.
 
 To make it easier for reviewers to review your PR, consider the following:
+
 1. Follow the golang [coding conventions](https://github.com/golang/go/wiki/CodeReviewComments).
 2. Format your code with `make golangci-fix`; if the [linters](ci/README.md) flag an issue that
    cannot be fixed automatically, an error message will be displayed so you can address the issue.

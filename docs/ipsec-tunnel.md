@@ -20,14 +20,14 @@ Note that IPsec support was added in release 0.3.0, which means you can not
 pick a release older than 0.3.0. For any given release `<TAG>` (e.g. `v0.8.2`),
 get the Antrea IPsec deployment yaml at:
 
-```
+```text
 https://github.com/vmware-tanzu/antrea/releases/download/<TAG>/antrea-ipsec.yml
 ```
 
 To deploy the latest version of Antrea (built from the master branch), get the
 IPsec deployment yaml at:
 
-```
+```text
 https://raw.githubusercontent.com/vmware-tanzu/antrea/master/build/yamls/antrea-ipsec.yml
 ```
 
@@ -52,6 +52,6 @@ type: Opaque
 
 After updating the PSK value, deploy Antrea with:
 
-```
+```bash
 kubectl apply -f antrea-ipsec.yml
 ```
