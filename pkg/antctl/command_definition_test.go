@@ -304,7 +304,7 @@ func TestFormat(t *testing.T) {
 	for _, tc := range []struct {
 		name            string
 		single          bool
-		transform       func(reader io.Reader, single bool) (interface{}, error)
+		transform       func(reader io.Reader, single bool, opts map[string]string) (interface{}, error)
 		rawResponseData interface{}
 		responseStruct  reflect.Type
 		expected        string
@@ -328,7 +328,7 @@ func TestFormat(t *testing.T) {
 		{
 			name:   "StructureData-Transform-Single-Yaml",
 			single: true,
-			transform: func(reader io.Reader, single bool) (i interface{}, err error) {
+			transform: func(reader io.Reader, single bool, opts map[string]string) (i interface{}, err error) {
 				foo := &Foobar{}
 				err = json.NewDecoder(reader).Decode(foo)
 				return &struct{ Bar string }{Bar: foo.Foo}, err
@@ -363,7 +363,7 @@ func TestFormat(t *testing.T) {
 			responseData, err := json.Marshal(tc.rawResponseData)
 			assert.Nil(t, err)
 			var outputBuf bytes.Buffer
-			err = opt.output(bytes.NewBuffer(responseData), &outputBuf, tc.formatter, tc.single)
+			err = opt.output(bytes.NewBuffer(responseData), &outputBuf, tc.formatter, tc.single, map[string]string{})
 			assert.Nil(t, err)
 			assert.Equal(t, tc.expected, outputBuf.String())
 		})

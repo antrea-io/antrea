@@ -172,20 +172,20 @@ antctl get appliedtogroup [name] [-o yaml]
 antctl get addressgroup [name] [-o yaml]
 ```
 
-Antrea Agent additionally supports printing NetworkPolicies applied to a
-specified local Pod using this `antctl` command:
-
-```bash
-antctl get networkpolicy -p pod -n namespace
-```
-
-Antrea Agent also supports `sort-by=effectivePriority` option, which can be used to
+NetworkPolicy also supports `sort-by=effectivePriority` option, which can be used to
 view the effective order in which the NetworkPolicies are evaluated. Antrea-native
 NetworkPolicy ordering is documented [here](
 antrea-network-policy.md#antrea-native-policy-ordering-based-on-priorities).
 
 ```bash
 antctl get networkpolicy --sort-by=effectivePriority
+```
+
+Antrea Agent additionally supports printing NetworkPolicies applied to a
+specified local Pod using this `antctl` command:
+
+```bash
+antctl get networkpolicy -p pod -n namespace
 ```
 
 #### Mapping endpoints to NetworkPolicies

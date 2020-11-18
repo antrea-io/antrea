@@ -19,14 +19,14 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"sort"
 	"strings"
 
 	agentquerier "github.com/vmware-tanzu/antrea/pkg/agent/querier"
 	cpv1beta "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
-	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy"
 	"github.com/vmware-tanzu/antrea/pkg/querier"
 )
+
+const sortByEffectivePriority = "effectivePriority"
 
 // HandleFunc creates a http.HandlerFunc which uses an AgentNetworkPolicyInfoQuerier
 // to query network policy rules in current agent.
@@ -50,61 +50,11 @@ func HandleFunc(aq agentquerier.AgentQuerier) http.HandlerFunc {
 		} else {
 			nps = npq.GetNetworkPolicies(npFilter)
 		}
-		npSorter := &NPSorter{
-			networkPolicies: nps,
-			sortBy:          r.URL.Query().Get("sort-by"),
-		}
-		sort.Sort(npSorter)
-		obj = cpv1beta.NetworkPolicyList{Items: npSorter.networkPolicies}
+		obj = cpv1beta.NetworkPolicyList{Items: nps}
 
 		if err := json.NewEncoder(w).Encode(obj); err != nil {
 			http.Error(w, "Failed to encode response: "+err.Error(), http.StatusInternalServerError)
 		}
-	}
-}
-
-var (
-	sortByEffectivePriority = "effectivePriority"
-	// Compute a tierPriority value in between the application tier and the baseline tier,
-	// which can be used to sort policies by tier.
-	effectiveTierPriorityK8sNP = (networkpolicy.DefaultTierPriority + networkpolicy.BaselineTierPriority) / 2
-)
-
-type NPSorter struct {
-	networkPolicies []cpv1beta.NetworkPolicy
-	sortBy          string
-}
-
-func (nps *NPSorter) Len() int { return len(nps.networkPolicies) }
-func (nps *NPSorter) Swap(i, j int) {
-	nps.networkPolicies[i], nps.networkPolicies[j] = nps.networkPolicies[j], nps.networkPolicies[i]
-}
-func (nps *NPSorter) Less(i, j int) bool {
-	switch nps.sortBy {
-	case sortByEffectivePriority:
-		var ti, tj int32
-		if nps.networkPolicies[i].TierPriority == nil {
-			ti = effectiveTierPriorityK8sNP
-		} else {
-			ti = *nps.networkPolicies[i].TierPriority
-		}
-		if nps.networkPolicies[j].TierPriority == nil {
-			tj = effectiveTierPriorityK8sNP
-		} else {
-			tj = *nps.networkPolicies[j].TierPriority
-		}
-		pi, pj := nps.networkPolicies[i].Priority, nps.networkPolicies[j].Priority
-		if ti != tj {
-			return ti < tj
-		}
-		if pi != nil && pj != nil && *pi != *pj {
-			return *pi < *pj
-		}
-		fallthrough
-	default:
-		// Do not need a tie-breaker here since NetworkPolicy names are set as UID
-		// of the source policy and will be unique.
-		return nps.networkPolicies[i].Name < nps.networkPolicies[j].Name
 	}
 }
 
@@ -138,8 +88,9 @@ func parseURLQuery(query url.Values) (*querier.NetworkPolicyQueryFilter, error) 
 
 	sortBy := query.Get("sort-by")
 	if sortBy != "" && sortBy != sortByEffectivePriority {
-		return nil, fmt.Errorf("unsupported sort-by option. Supported value is %s", sortByEffectivePriority)
+		return nil, fmt.Errorf("unsupported value for sort-by option. Current supported value is %s", sortByEffectivePriority)
 	}
+
 	return &querier.NetworkPolicyQueryFilter{
 		Name:       name,
 		SourceName: source,

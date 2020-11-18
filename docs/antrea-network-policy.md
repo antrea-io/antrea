@@ -505,8 +505,9 @@ policy rules match, the packet is then enforced for rules created for K8s NP.
 If the packet still does not match any rule for K8s NP, it will then be evaluated
 against policies created in the "baseline" Tier.
 
-The [antctl command](antctl.md#networkPolicy-commands) with 'sort-by' flag can be used
-to check the order of policy enforcement on a specific Node. An example output will look like
+The [antctl command](antctl.md#networkPolicy-commands) with 'sort-by=effectivePriority'
+flag can be used to check the order of policy enforcement.
+An example output will look like the following:
 
 ```text
 antctl get netpol --sort-by=effectivePriority
