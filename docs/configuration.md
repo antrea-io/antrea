@@ -4,7 +4,7 @@
 
 ### Command line options
 
-```
+```text
 --config string                    The path to the configuration file
 --v Level                          number for the log level verbosity
 ```
@@ -12,6 +12,7 @@
 Use `antrea-agent -h` to see complete options.
 
 ### Configuration
+
 The `antrea-agent` configuration file specifies the agent configuration
 parameters. For all the agent configuration parameters of a Linux Node, refer to
 this [base configuration file](/build/yamls/base/conf/antrea-agent.conf).
@@ -22,7 +23,7 @@ configuration file](/build/yamls/windows/base/conf/antrea-agent.conf)
 
 ### Command line options
 
-```
+```text
 --config string                    The path to the configuration file
 --v Level                          number for the log level verbosity
 ```
@@ -30,6 +31,7 @@ configuration file](/build/yamls/windows/base/conf/antrea-agent.conf)
 Use `antrea-controller -h` to see complete options.
 
 ### Configuration
+
 The `antrea-controller` configuration file specifies the controller
 configuration parameters. For all the controller configuration parameters,
 refer to this [base configuration file](/build/yamls/base/conf/antrea-controller.conf).

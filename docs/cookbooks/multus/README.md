@@ -14,11 +14,11 @@ e.g. [ipvlan](https://github.com/containernetworking/plugins/tree/master/plugins
 
 The only prerequisites are:
 
- * a K8s cluster (Linux Nodes) running a K8s version supported by Antrea. At the
-   time of writing, we recommend version 1.16 or later. Typically the cluster
-   needs to be running on a network infrastructure that you control. For
-   example, using macvlan networking will not work on public clouds like AWS.
- * [`kubectl`](https://kubernetes.io/docs/tasks/tools/install-kubectl/)
+* a K8s cluster (Linux Nodes) running a K8s version supported by Antrea. At the
+  time of writing, we recommend version 1.16 or later. Typically the cluster
+  needs to be running on a network infrastructure that you control. For example,
+  using macvlan networking will not work on public clouds like AWS.
+* [`kubectl`](https://kubernetes.io/docs/tasks/tools/install-kubectl/)
 
 All the required software will be deployed using YAML manifests, and the
 corresponding container images will be downloaded from public registries.
@@ -33,13 +33,13 @@ MAC addresses. When using a virtual network for the Nodes, some configuration
 changes are usually required, which depend on the virtualization technology. For
 example:
 
- * when using VirtualBox and [Internal
-   Networking](https://www.virtualbox.org/manual/ch06.html#network_internal),
-   set the `Promiscuous Mode` to `Allow All`
- * when using VMware Fusion, enable "promiscuous mode" in the guest (Node) for
-   the appropriate interface (e.g. using `ifconfig`); this may prompt for your
-   password on the host unless you uncheck `Require authentication to enter
-   promiscuous mode` in `Preferences ... > Network`
+* when using VirtualBox and [Internal
+  Networking](https://www.virtualbox.org/manual/ch06.html#network_internal), set
+  the `Promiscuous Mode` to `Allow All`
+* when using VMware Fusion, enable "promiscuous mode" in the guest (Node) for
+  the appropriate interface (e.g. using `ifconfig`); this may prompt for your
+  password on the host unless you uncheck `Require authentication to enter
+  promiscuous mode` in `Preferences ... > Network`
 
 This needs to be done for every Node VM, so it's best if you can automate this
 when provisioning your VMs.
@@ -145,12 +145,13 @@ parent network interface.
 
 This manifest will create a DaemonSet that will run a bash script once on every
 Node. It will:
- * Enable promiscuous mode on the parent interface using `ifconfig`; if using a
-   virtual network for the Nodes, this needs to be done in addition to enabling
-   promiscuous mode in the hypervisor for the virtual adapters, as described in
-   the [Prerequisites](#prerequisites).
- * Create a macvlan subinterface for the Node
- * Move the IP address from the parent interface to the new subinterface
+
+* Enable promiscuous mode on the parent interface using `ifconfig`; if using a
+  virtual network for the Nodes, this needs to be done in addition to enabling
+  promiscuous mode in the hypervisor for the virtual adapters, as described in
+  the [Prerequisites](#prerequisites).
+* Create a macvlan subinterface for the Node
+* Move the IP address from the parent interface to the new subinterface
 
 ### Step 5: Run a DHCP server
 

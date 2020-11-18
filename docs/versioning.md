@@ -28,10 +28,10 @@ not yet established a definitive list of features that should be GA before we
 switch to a major version number of 1, but here are a few important features
 that are likely to be included.
 
- * Antrea-native policies (in particular, `security.antrea.tanzu.vmware.com` API
-   group should be stable and in version `v1`)
- * Antrea Proxy
- * IPv6 and dual-stack support
+* Antrea-native policies (in particular, `security.antrea.tanzu.vmware.com` API
+  group should be stable and in version `v1`)
+* Antrea Proxy
+* IPv6 and dual-stack support
 
 ### Minor releases and patch releases
 
@@ -49,15 +49,14 @@ products) which rely on Antrea.
 When it comes to dependencies, the following rules are observed between patch
 versions of the same Antrea minor versions:
 
- * the same minor OVS version should be used
- * the same minor version should be used for all Go dependencies, unless
-   updating to a new minor / major version is required for an important bug fix
- * for Antrea Docker images shipped as part of a patch release, the same version
-   must be used for the base Operating System (Linux distribution / Windows
-   server), unless an update is required to fix a critical bug. If important
-   updates are available for a given Operating System version (e.g. which
-   address security vulnerabilities), they should be included in Antrea patch
-   releases.
+* the same minor OVS version should be used
+* the same minor version should be used for all Go dependencies, unless
+  updating to a new minor / major version is required for an important bug fix
+* for Antrea Docker images shipped as part of a patch release, the same version
+  must be used for the base Operating System (Linux distribution / Windows
+  server), unless an update is required to fix a critical bug. If important
+  updates are available for a given Operating System version (e.g. which address
+  security vulnerabilities), they should be included in Antrea patch releases.
 
 ### Feature stability
 
@@ -75,12 +74,11 @@ change in the future. Compared to deploying the top-of-tree of the Antrea master
 branch, using a released version should provide more stability
 guarantees:
 
- * despite our CI pipelines, some bugs can sneak into the branch and be fixed
-   shortly after
- * merge conflicts can break the top-of-tree temporarily
- * some CI jobs are run periodically and not for every pull request before
-   merge; as much as possible we run the entire test suite for each release
-   candidate
+* despite our CI pipelines, some bugs can sneak into the branch and be fixed
+  shortly after
+* merge conflicts can break the top-of-tree temporarily
+* some CI jobs are run periodically and not for every pull request before merge;
+  as much as possible we run the entire test suite for each release candidate
 
 Antrea maintains release branches for the two most recent minor releases
 (e.g. the `release-0.10` and `release-0.11` branches are maintained until Antrea
@@ -100,14 +98,14 @@ mean that there should be no significant disruption to data-plane connectivity
 nor to policy enforcement, beyond the necessary disruption incurred by the
 restart of individual components:
 
- * during the Antrea Controller restart, new policies will not be
-   processed. Because the Controller also runs the validation webhook for
-   [Antrea-native policies](antrea-network-policy.md), an attempt to create an
-   Antrea-native policy resource before the restart is complete may return an
-   error.
- * during an Antrea Agent restart, the Node's data-plane will be impacted: new
-   connections to & from the Node will not be possible, and existing connections
-   may break.
+* during the Antrea Controller restart, new policies will not be
+  processed. Because the Controller also runs the validation webhook for
+  [Antrea-native policies](antrea-network-policy.md), an attempt to create an
+  Antrea-native policy resource before the restart is complete may return an
+  error.
+* during an Antrea Agent restart, the Node's data-plane will be impacted: new
+  connections to & from the Node will not be possible, and existing connections
+  may break.
 
 In particular, it should be possible to upgrade Antrea without compromising
 enforcement of existing network policies for both new and existing Pods.
@@ -115,11 +113,11 @@ enforcement of existing network policies for both new and existing Pods.
 In order to achieve this, the different Antrea components need to support
 version skew.
 
- * **Antrea Controller**: must be upgraded first
- * **Antrea Agent**: must not be newer than the **Antrea Controller**, and may
-   be up to 4 minor versions older
- * **Antctl**: must not be newer than the **Antrea Controller**, and may be up
-   to 4 minor versions older
+* **Antrea Controller**: must be upgraded first
+* **Antrea Agent**: must not be newer than the **Antrea Controller**, and may be
+  up to 4 minor versions older
+* **Antctl**: must not be newer than the **Antrea Controller**, and may be up to
+  4 minor versions older
 
 The supported version skew means that we only recommend Antrea upgrades to a new
 release up to 4 minor versions newer. For example, a cluster using 0.10 can be
@@ -162,8 +160,8 @@ deleted at any time.
 
 Stable metrics are guaranteed to not change; specifically, stability means:
 
- * the metric itself will not be renamed
- * the type of metric will not be modified
+* the metric itself will not be renamed
+* the type of metric will not be modified
 
 Eventually, even a stable metric can be deleted. In this case, the metric must
 be marked as deprecated first and the metric must stay deprecated for at least
@@ -200,9 +198,9 @@ policy](https://kubernetes.io/docs/reference/using-api/deprecation-policy/).
 Other than the most recent API versions in each track, older API versions must
 be supported after their announced deprecation for a duration of no less than:
 
- * GA: 12 months
- * Beta: 9 months
- * Alpha: N/A (can be removed immediately)
+* GA: 12 months
+* Beta: 9 months
+* Alpha: N/A (can be removed immediately)
 
 This also applies to the `controlplane` API. In particular, introduction and
 removal of new versions for this API must respect the ["graceful" upgrade
@@ -221,14 +219,14 @@ objects to storage. So the only objects we need to worry about are
 CustomResources, which are persisted by the K8s apiserver. For them, we adopt
 the following rules:
 
- * Alpha API versions may be removed at any time.
- * The [`deprecated` field] must be used for CRDs to indicate that a particular
-   version of the resource has been deprecated.
- * Beta and GA API versions must be supported after deprecation for the
-   respective durations stipulated above before they can be removed.
- * For deprecated Beta and GA API versions, a [conversion webhook] must be
-   provided along with each Antrea release, until the API version is removed
-   altogether.
+* Alpha API versions may be removed at any time.
+* The [`deprecated` field] must be used for CRDs to indicate that a particular
+  version of the resource has been deprecated.
+* Beta and GA API versions must be supported after deprecation for the
+  respective durations stipulated above before they can be removed.
+* For deprecated Beta and GA API versions, a [conversion webhook] must be
+  provided along with each Antrea release, until the API version is removed
+  altogether.
 
 [Semantic Versioning]: https://semver.org/
 [CHANGELOG]: ../CHANGELOG.md
