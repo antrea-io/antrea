@@ -9,7 +9,7 @@ labels will be added either by automation or manual grooming by other
 contributors and maintainers.
 
 The labels in this list originated within Kubernetes at
-https://github.com/kubernetes/test-infra/blob/master/label_sync/labels.md.
+<https://github.com/kubernetes/test-infra/blob/master/label_sync/labels.md>.
 
 ## Labels that apply to issues or PRs
 

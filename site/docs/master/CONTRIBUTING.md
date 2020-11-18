@@ -74,31 +74,31 @@ project's repository.
    `Fork` button on [Antrea's GitHub repository](https://github.com/vmware-tanzu/antrea).
 2. Clone the forked repository on your local setup.
 
-    ```
+    ```bash
     git clone https://github.com/$user/antrea
     ```
 
     Add a remote upstream to track upstream Antrea repository.
 
-    ```
+    ```bash
     git remote add upstream https://github.com/vmware-tanzu/antrea
     ```
 
     Never push to upstream master
 
-    ```
+    ```bash
     git remote set-url --push upstream no_push
     ```
 
 3. Create a topic branch.
 
-    ```
+    ```bash
     git checkout -b branchName
     ```
 
 4. Make changes and commit it locally.
 
-    ```
+    ```bash
     git add <modifiedFile>
     git commit
     ```
@@ -108,7 +108,7 @@ project's repository.
 
 6. Keeping branch in sync with upstream.
 
-    ```
+    ```bash
     git checkout branchName
     git fetch upstream
     git rebase upstream/master
@@ -116,7 +116,7 @@ project's repository.
 
 7. Push local branch to your forked repository.
 
-    ```
+    ```bash
     git push -f $remoteBranchName branchName
     ```
 
@@ -178,26 +178,26 @@ For more information about the tests we run as part of CI, please refer to
 
 1. Create a branch in your forked repo
 
-    ```
+    ```bash
     git checkout -b revertName
     ```
 
 2. Sync the branch with upstream
 
-    ```
+    ```bash
     git fetch upstream
     git rebase upstream/master
     ```
 
 3. Create a revert based on the SHA of the commit.
 
-    ```
+    ```bash
     git revert SHA
     ```
 
 4. Push this new commit.
 
-    ```
+    ```bash
     git push $remoteRevertName revertName
     ```
 
@@ -229,13 +229,13 @@ labels are included on your issue:
 * **kind** -- common ones are `kind/feature`, `kind/support`, `kind/bug`,
   `kind/documentation`, or `kind/design`. For an overview of the different types
   of issues that can be submitted, see [Issue and PR
-  Kinds](#issue-and-pr-kinds). 
+  Kinds](#issue-and-pr-kinds).
   The kind of issue will determine the issue workflow.
 * **area** (optional) -- if you know the area the issue belongs in, you can assign it.
   Otherwise, another community member will label the issue during triage. The
   area label will identify the area of interest an issue or PR belongs in and
   will ensure the appropriate reviewers shepherd the issue or PR through to its
-  closure. For an overview of areas, see the 
+  closure. For an overview of areas, see the
   [`docs/github-labels.md`](contributors/github-labels.md).
 * **size** (optional) -- if you have an idea of the size (lines of code, complexity,
   effort) of the issue, you can label it using a [size label](#size). The size

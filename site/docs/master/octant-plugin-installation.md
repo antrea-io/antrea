@@ -8,8 +8,8 @@ There are two ways to deploy Octant and antrea-octant-plugin.
 
 * Deploy Octant and antrea-octant-plugin as a process.
 
-
 ### Prerequisites
+
 antrea-octant-plugin depends on the Antrea monitoring CRDs (AntreaControllerInfo and AntreaAgentInfo) and Traceflow CRD (Traceflow).
 
 To run Octant together with antrea-octant-plugin, please make sure you have these CRDs defined in you K8s cluster.
@@ -45,7 +45,8 @@ your environment and preference.
     kubectl describe service antrea-octant -n kube-system
     ```
 
-Now, you are supposed to see Octant is running together with antrea-octant-plugin via URL http://(IP or $HOSTNAME):NodePort.
+Now, you are supposed to see Octant is running together with
+antrea-octant-plugin via URL `http://(IP or $HOSTNAME):NodePort`.
 
 Note:
 
@@ -114,12 +115,13 @@ based on your environment and move the binary to OCTANT_PLUGIN_PATH.
     OCTANT_LISTENER_ADDR=0.0.0.0:80 OCTANT_ACCEPTED_HOSTS=0.0.0.0 OCTANT_DISABLE_OPEN_BROWSER=true nohup octant &
     ```
 
-Now, you are supposed to see Octant is running together with antrea-octant-plugin via URL http://(IP or $HOSTNAME):80.
+Now, you are supposed to see Octant is running together with
+antrea-octant-plugin via URL `http://(IP or $HOSTNAME):80`.
 
 Note:
 
-1.  You can also build the plugin binary yourself with the command below,
-with the remaining steps being almost the same as the ones above.
+1. You can also build the plugin binary yourself with the command below, with
+the remaining steps being almost the same as the ones above.
 
     ```bash
     # You will find the compliled binary under folder antrea/plugins/octant/bin.
