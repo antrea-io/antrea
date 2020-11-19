@@ -126,6 +126,7 @@ spec:
       apiServer:
         extraArgs:
           cloud-provider: external
+          feature-gates: SCTPSupport=true
       controllerManager:
         extraArgs:
           cloud-provider: external
