@@ -87,8 +87,8 @@ func (p *proxier) removeStaleServices() {
 		}
 		for _, ingress := range svcInfo.LoadBalancerIPStrings() {
 			if ingress != "" {
-				if err := p.ofClient.UninstallServiceFlows(net.ParseIP(ingress), uint16(svcInfo.Port()), svcInfo.OFProtocol); err != nil {
-					klog.Errorf("Error when installing Service flows: %v", err)
+				if err := p.uninstallLoadBalancerServiceFlows(net.ParseIP(ingress), uint16(svcInfo.Port()), svcInfo.OFProtocol); err != nil {
+					klog.Errorf("Error when removing Service flows: %v", err)
 					continue
 				}
 			}
@@ -148,6 +148,33 @@ func (p *proxier) removeStaleEndpoints(staleEndpoints map[k8sproxy.ServicePortNa
 	}
 }
 
+func serviceIdentityChanged(svcInfo, pSvcInfo *types.ServiceInfo) bool {
+	return svcInfo.ClusterIP().String() != pSvcInfo.ClusterIP().String() ||
+		svcInfo.Port() != pSvcInfo.Port() ||
+		svcInfo.OFProtocol != pSvcInfo.OFProtocol
+}
+
+// smallSliceDifference builds a slice which includes all the strings from s1
+// which are not in s2.
+func smallSliceDifference(s1, s2 []string) []string {
+	var diff []string
+
+	for _, e1 := range s1 {
+		found := false
+		for _, e2 := range s2 {
+			if e1 == e2 {
+				found = true
+				break
+			}
+		}
+		if !found {
+			diff = append(diff, e1)
+		}
+	}
+
+	return diff
+}
+
 func (p *proxier) installServices() {
 	for svcPortName, svcPort := range p.serviceMap {
 		svcInfo := svcPort.(*types.ServiceInfo)
@@ -164,7 +191,14 @@ func (p *proxier) installServices() {
 		}
 
 		installedSvcPort, ok := p.serviceInstalledMap[svcPortName]
-		needUpdate := !ok || !installedSvcPort.(*types.ServiceInfo).Equal(svcInfo)
+		var pSvcInfo *types.ServiceInfo
+		needRemoval := false
+		needUpdate := true
+		if ok {
+			pSvcInfo = installedSvcPort.(*types.ServiceInfo)
+			needRemoval = serviceIdentityChanged(svcInfo, pSvcInfo) || (svcInfo.SessionAffinityType() != pSvcInfo.SessionAffinityType())
+			needUpdate = needRemoval || (svcInfo.StickyMaxAgeSeconds() != pSvcInfo.StickyMaxAgeSeconds())
+		}
 
 		var endpointUpdateList []k8sproxy.Endpoint
 		for _, endpoint := range endpoints {
@@ -173,6 +207,18 @@ func (p *proxier) installServices() {
 				endpointInstalled[endpoint.String()] = struct{}{}
 			}
 			endpointUpdateList = append(endpointUpdateList, endpoint)
+		}
+
+		var deletedLoadBalancerIPs, addedLoadBalancerIPs []string
+		if pSvcInfo != nil {
+			deletedLoadBalancerIPs = smallSliceDifference(pSvcInfo.LoadBalancerIPStrings(), svcInfo.LoadBalancerIPStrings())
+			addedLoadBalancerIPs = smallSliceDifference(svcInfo.LoadBalancerIPStrings(), pSvcInfo.LoadBalancerIPStrings())
+		} else {
+			deletedLoadBalancerIPs = []string{}
+			addedLoadBalancerIPs = svcInfo.LoadBalancerIPStrings()
+		}
+		if len(deletedLoadBalancerIPs) > 0 || len(addedLoadBalancerIPs) > 0 {
+			needUpdate = true
 		}
 
 		if !needUpdate {
@@ -189,14 +235,38 @@ func (p *proxier) installServices() {
 			p.endpointInstalledMap[svcPortName] = nil
 			continue
 		}
+		// Delete previous flow.
+		if needRemoval {
+			if err := p.ofClient.UninstallServiceFlows(pSvcInfo.ClusterIP(), uint16(pSvcInfo.Port()), pSvcInfo.OFProtocol); err != nil {
+				klog.Errorf("Failed to remove flows of Service %v: %v", svcPortName, err)
+			}
+		}
 		if err := p.ofClient.InstallServiceFlows(groupID, svcInfo.ClusterIP(), uint16(svcInfo.Port()), svcInfo.OFProtocol, uint16(svcInfo.StickyMaxAgeSeconds())); err != nil {
 			klog.Errorf("Error when installing Service flows: %v", err)
 			continue
 		}
 		// Install OpenFlow entries for the ingress IPs of LoadBalancer Service.
-		// The LoadBalancer Service should can be accessed from Pod, Node and
+		// The LoadBalancer Service should be accessible from Pod, Node and
 		// external host.
-		for _, ingress := range svcInfo.LoadBalancerIPStrings() {
+		var toDelete, toAdd []string
+		if needRemoval {
+			toDelete = pSvcInfo.LoadBalancerIPStrings()
+			toAdd = svcInfo.LoadBalancerIPStrings()
+		} else {
+			toDelete = deletedLoadBalancerIPs
+			toAdd = addedLoadBalancerIPs
+		}
+		for _, ingress := range toDelete {
+			if ingress != "" {
+				// It is safe to access pSvcInfo here. If this is a new Service,
+				// then toDelete will be an empty slice.
+				if err := p.uninstallLoadBalancerServiceFlows(net.ParseIP(ingress), uint16(pSvcInfo.Port()), pSvcInfo.OFProtocol); err != nil {
+					klog.Errorf("Error when removing LoadBalancer Service flows: %v", err)
+					continue
+				}
+			}
+		}
+		for _, ingress := range toAdd {
 			if ingress != "" {
 				if err := p.installLoadBalancerServiceFlows(groupID, net.ParseIP(ingress), uint16(svcInfo.Port()), svcInfo.OFProtocol, uint16(svcInfo.StickyMaxAgeSeconds())); err != nil {
 					klog.Errorf("Error when installing LoadBalancer Service flows: %v", err)
@@ -204,6 +274,7 @@ func (p *proxier) installServices() {
 				}
 			}
 		}
+
 		p.serviceInstalledMap[svcPortName] = svcPort
 		p.addServiceByIP(svcInfo.String(), svcPortName)
 	}

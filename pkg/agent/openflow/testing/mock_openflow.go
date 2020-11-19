@@ -567,6 +567,20 @@ func (mr *MockClientMockRecorder) UninstallEndpointFlows(arg0, arg1 interface{})
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UninstallEndpointFlows", reflect.TypeOf((*MockClient)(nil).UninstallEndpointFlows), arg0, arg1)
 }
 
+// UninstallLoadBalancerServiceFromOutsideFlows mocks base method
+func (m *MockClient) UninstallLoadBalancerServiceFromOutsideFlows(arg0 net.IP, arg1 uint16, arg2 openflow.Protocol) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UninstallLoadBalancerServiceFromOutsideFlows", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UninstallLoadBalancerServiceFromOutsideFlows indicates an expected call of UninstallLoadBalancerServiceFromOutsideFlows
+func (mr *MockClientMockRecorder) UninstallLoadBalancerServiceFromOutsideFlows(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UninstallLoadBalancerServiceFromOutsideFlows", reflect.TypeOf((*MockClient)(nil).UninstallLoadBalancerServiceFromOutsideFlows), arg0, arg1, arg2)
+}
+
 // UninstallNodeFlows mocks base method
 func (m *MockClient) UninstallNodeFlows(arg0 string) error {
 	m.ctrl.T.Helper()
