@@ -24,6 +24,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	apimachinerytypes "k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/tools/record"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
@@ -520,4 +521,77 @@ func TestSessionAffinityIPv4(t *testing.T) {
 
 func TestSessionAffinityIPv6(t *testing.T) {
 	testSessionAffinity(t, net.ParseIP("5060:70::81"), net.ParseIP("10:20::41"), true)
+}
+
+func testPortChange(t *testing.T, svcIP net.IP, epIP net.IP, isIPv6 bool) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockOFClient := ofmock.NewMockClient(ctrl)
+	fp := NewFakeProxier(mockOFClient, isIPv6)
+
+	svcPort1 := 80
+	svcPort2 := 8080
+	svcPortName := k8sproxy.ServicePortName{
+		NamespacedName: makeNamespaceName("ns1", "svc1"),
+		Port:           "http",
+		Protocol:       corev1.ProtocolTCP,
+	}
+	service := makeTestService(svcPortName.Namespace, svcPortName.Name, func(svc *corev1.Service) {
+		svc.Spec.ClusterIP = svcIP.String()
+		svc.Spec.Ports = []corev1.ServicePort{{
+			Name:       svcPortName.Port,
+			Port:       int32(svcPort1),
+			TargetPort: intstr.FromInt(80),
+			Protocol:   corev1.ProtocolTCP,
+		}}
+	})
+	makeServiceMap(fp, service)
+
+	epFunc := func(ept *corev1.Endpoints) {
+		ept.Subsets = []corev1.EndpointSubset{{
+			Addresses: []corev1.EndpointAddress{{
+				IP: epIP.String(),
+			}},
+			Ports: []corev1.EndpointPort{{
+				Name:     svcPortName.Port,
+				Port:     int32(80),
+				Protocol: corev1.ProtocolTCP,
+			}},
+		}}
+	}
+
+	bindingProtocol := binding.ProtocolTCP
+	if isIPv6 {
+		bindingProtocol = binding.ProtocolTCPv6
+	}
+	ep := makeTestEndpoints(svcPortName.Namespace, svcPortName.Name, epFunc)
+	makeEndpointsMap(fp, ep)
+	groupID, _ := fp.groupCounter.Get(svcPortName)
+	mockOFClient.EXPECT().InstallServiceGroup(groupID, false, gomock.Any()).Times(2)
+	mockOFClient.EXPECT().InstallEndpointFlows(bindingProtocol, gomock.Any(), isIPv6).Times(2)
+	mockOFClient.EXPECT().InstallServiceFlows(groupID, svcIP, uint16(svcPort1), bindingProtocol, uint16(0))
+	mockOFClient.EXPECT().UninstallServiceFlows(svcIP, uint16(svcPort1), bindingProtocol)
+	mockOFClient.EXPECT().InstallServiceFlows(groupID, svcIP, uint16(svcPort2), bindingProtocol, uint16(0))
+
+	fp.syncProxyRules()
+
+	serviceNew := makeTestService(svcPortName.Namespace, svcPortName.Name, func(svc *corev1.Service) {
+		svc.Spec.ClusterIP = svcIP.String()
+		svc.Spec.Ports = []corev1.ServicePort{{
+			Name:     svcPortName.Port,
+			Port:     int32(svcPort2),
+			Protocol: corev1.ProtocolTCP,
+		}}
+	})
+
+	fp.serviceChanges.OnServiceUpdate(service, serviceNew)
+	fp.syncProxyRules()
+}
+
+func TestPortChangeIPv4(t *testing.T) {
+	testPortChange(t, net.ParseIP("10.20.30.41"), net.ParseIP("10.180.0.1"), false)
+}
+
+func TestPortChangeIPv6(t *testing.T) {
+	testPortChange(t, net.ParseIP("10:20::41"), net.ParseIP("10:180::1"), true)
 }
