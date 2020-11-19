@@ -687,12 +687,11 @@ func (c *client) DeleteStaleFlows() error {
 func (c *client) setupPolicyOnlyFlows() error {
 	// Rewrites MAC to gw port if the packet received is unmatched by local Pod flows.
 	flows := c.l3FwdFlowRouteToGW(c.nodeConfig.GatewayConfig.MAC, cookie.Default)
-	if c.IsIPv4Enabled() {
-		flows = append(flows,
-			// Replies any ARP request with the same global virtual MAC.
-			c.arpResponderStaticFlow(cookie.Default),
-		)
-	}
+	// If IPv6 is enabled, this flow will never get hit.
+	flows = append(flows,
+		// Replies any ARP request with the same global virtual MAC.
+		c.arpResponderStaticFlow(cookie.Default),
+	)
 	if err := c.ofEntryOperations.AddAll(flows); err != nil {
 		return fmt.Errorf("failed to setup policy-only flows: %w", err)
 	}
