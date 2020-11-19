@@ -33,3 +33,11 @@ func (p *proxier) installLoadBalancerServiceFlows(groupID binding.GroupIDType, s
 	}
 	return nil
 }
+
+func (p *proxier) uninstallLoadBalancerServiceFlows(svcIP net.IP, svcPort uint16, protocol binding.Protocol) error {
+	if err := p.ofClient.UninstallServiceFlows(svcIP, svcPort, protocol); err != nil {
+		klog.Errorf("Error when removing LoadBalancer Service flows: %v", err)
+		return err
+	}
+	return nil
+}

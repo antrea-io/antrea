@@ -121,6 +121,8 @@ type Client interface {
 	// kube-proxy will handle the traffic.
 	// This function is only used for Windows platform.
 	InstallLoadBalancerServiceFromOutsideFlows(svcIP net.IP, svcPort uint16, protocol binding.Protocol) error
+	// UninstallLoadBalancerServiceFromOutsideFlows removes flows installed by InstallLoadBalancerServiceFromOutsideFlows.
+	UninstallLoadBalancerServiceFromOutsideFlows(svcIP net.IP, svcPort uint16, protocol binding.Protocol) error
 
 	// GetFlowTableStatus should return an array of flow table status, all existing flow tables should be included in the list.
 	GetFlowTableStatus() []binding.TableStatus
@@ -465,6 +467,13 @@ func (c *client) InstallLoadBalancerServiceFromOutsideFlows(svcIP net.IP, svcPor
 	flows = append(flows, c.loadBalancerServiceFromOutsideFlow(config.HostGatewayOFPort, svcIP, svcPort, protocol))
 	cacheKey := fmt.Sprintf("LoadBalancerService_%s_%d_%s", svcIP, svcPort, protocol)
 	return c.addFlows(c.serviceFlowCache, cacheKey, flows)
+}
+
+func (c *client) UninstallLoadBalancerServiceFromOutsideFlows(svcIP net.IP, svcPort uint16, protocol binding.Protocol) error {
+	c.replayMutex.RLock()
+	defer c.replayMutex.RUnlock()
+	cacheKey := fmt.Sprintf("LoadBalancerService_%s_%d_%s", svcIP, svcPort, protocol)
+	return c.deleteFlows(c.serviceFlowCache, cacheKey)
 }
 
 func (c *client) InstallClusterServiceFlows(useIPv4, useIPv6 bool) error {
