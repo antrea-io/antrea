@@ -56,10 +56,10 @@ func assignPodAnnotation(pod *corev1.Pod, containerPort, nodeIP, nodePort string
 		current = make(map[string]string)
 	}
 
-	klog.V(0).Infof("Building annotation for pod: %s\tport: %s --> %s:%s", pod.Name, containerPort, nodeIP, nodePort)
+	klog.V(0).Infof("Building annotation for Pod: %s\tport: %s --> %s:%s", pod.Name, containerPort, nodeIP, nodePort)
 
 	var annotations []NPLEPAnnotation
-	// nplEP annotation exists
+	// nplEP annotation exists.
 	if current[NPLAnnotationStr] != "" {
 		if err = json.Unmarshal([]byte(current[NPLAnnotationStr]), &annotations); err != nil {
 			klog.Warningf("Unable to unmarshal NPLEP annotation: %v", current[NPLAnnotationStr])
@@ -106,11 +106,11 @@ func removeFromPodAnnotation(pod *corev1.Pod, containerPort string) {
 	pod.Annotations = current
 }
 
-// RemoveNPLAnnotationFromPods Removes npl annotations from all pods
+// RemoveNPLAnnotationFromPods removes npl annotations from all Pods.
 func (c *Controller) RemoveNPLAnnotationFromPods() {
 	nodeName, err := env.GetNodeName()
 	if err != nil {
-		klog.Warningf("Failed to get nodename, NPL annotation can not be removed for pods")
+		klog.Warningf("Failed to get nodename, NPL annotation can not be removed for Pods")
 		return
 	}
 	podList, err := c.kubeClient.CoreV1().Pods("").List(context.TODO(), metav1.ListOptions{
@@ -129,7 +129,7 @@ func (c *Controller) RemoveNPLAnnotationFromPods() {
 		if _, exists := podAnnotation[NPLAnnotationStr]; !exists {
 			continue
 		}
-		klog.Infof("Removing all NPL annotation from pod: %s, ns: %s", pod.Name, pod.Namespace)
+		klog.Infof("Removing all NPL annotation from Pod: %s, ns: %s", pod.Name, pod.Namespace)
 		delete(podAnnotation, NPLAnnotationStr)
 		pod.Annotations = podAnnotation
 		c.updatePodAnnotation(&podList.Items[i])
@@ -138,14 +138,14 @@ func (c *Controller) RemoveNPLAnnotationFromPods() {
 
 func (c *Controller) updatePodAnnotation(pod *corev1.Pod) error {
 	if _, err := c.kubeClient.CoreV1().Pods(pod.Namespace).Update(context.TODO(), pod, metav1.UpdateOptions{}); err != nil {
-		klog.Warningf("Unable to update pod %s with annotation: %+v", pod.Name, err)
+		klog.Warningf("Unable to update Pod %s with annotation: %+v", pod.Name, err)
 		return err
 	}
-	klog.V(0).Infof("Successfully updated pod %s/%s annotation", pod.Namespace, pod.Name)
+	klog.V(0).Infof("Successfully updated Pod %s/%s annotation", pod.Namespace, pod.Name)
 	return nil
 }
 
-// returns nodeport for podport
+// Returns a Node port for a Pod port.
 func getNodeportFromPodAnnotation(pod *corev1.Pod, port string) string {
 	current := pod.Annotations
 	var annotations []NPLEPAnnotation
@@ -160,6 +160,6 @@ func getNodeportFromPodAnnotation(pod *corev1.Pod, port string) string {
 		}
 	}
 
-	klog.Warningf("Corresponding nodeport for pod: %s port: %s Not found", pod.Name, port)
+	klog.Warningf("Corresponding nodeport for Pod: %s port: %s Not found", pod.Name, port)
 	return ""
 }

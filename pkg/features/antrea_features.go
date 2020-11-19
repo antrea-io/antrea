@@ -88,7 +88,9 @@ var (
 	// In future, if a feature is supported on both Linux and Windows, but
 	// can have different FeatureSpecs between Linux and Windows, we should
 	// still define a separate defaultAntreaFeatureGates map for Windows.
-	unsupportedFeaturesOnWindows = map[featuregate.Feature]struct{}{}
+	unsupportedFeaturesOnWindows = map[featuregate.Feature]struct{}{
+		NodePortLocal: {},
+	}
 )
 
 func init() {

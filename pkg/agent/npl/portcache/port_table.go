@@ -20,9 +20,8 @@ import (
 	"fmt"
 	"sync"
 
-	nplutils "github.com/vmware-tanzu/antrea/pkg/agent/nplagent/lib"
-
-	"github.com/vmware-tanzu/antrea/pkg/agent/nplagent/rules"
+	nplutils "github.com/vmware-tanzu/antrea/pkg/agent/npl/lib"
+	"github.com/vmware-tanzu/antrea/pkg/agent/npl/rules"
 
 	"k8s.io/klog"
 )

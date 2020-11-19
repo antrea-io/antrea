@@ -17,14 +17,10 @@
 package k8s
 
 import (
-	"time"
-
-	"github.com/vmware-tanzu/antrea/pkg/agent/nplagent/portcache"
+	"github.com/vmware-tanzu/antrea/pkg/agent/npl/portcache"
 
 	clientset "k8s.io/client-go/kubernetes"
 )
-
-const podResyncPeriod = 60 * time.Minute
 
 type Controller struct {
 	portTable  *portcache.PortTable

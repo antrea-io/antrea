@@ -14,16 +14,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package nplagent
+package npl
 
 import (
 	"errors"
 	"fmt"
 	"time"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/nplagent/k8s"
-	"github.com/vmware-tanzu/antrea/pkg/agent/nplagent/lib"
-	"github.com/vmware-tanzu/antrea/pkg/agent/nplagent/portcache"
+	"github.com/vmware-tanzu/antrea/pkg/agent/npl/k8s"
+	"github.com/vmware-tanzu/antrea/pkg/agent/npl/portcache"
+	"github.com/vmware-tanzu/antrea/pkg/agent/util"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -35,16 +35,18 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/util/env"
 )
 
-// InitializeNPLAgent : start NodePortLocal (NPL) agent
-// Initialize port table cache to keep a track of node ports available for use of NPL
-// SetupEventHandlers to handle pod add, update and delete events
-// When a Pod gets created, a free node port is obtained from the port table cache and a DNAT rule is added to send traffic to the pod ip:port
+const resyncPeriod = 60 * time.Minute
+
+// InitializeNPLAgent starts NodePortLocal (NPL) agent.
+// It initializes port table cache to keep a track of Node ports available for use of NPL,
+// sets up event handlers to handle Pod add, update and delete events.
+// When a Pod gets created, a free Node port is obtained from the port table cache and a DNAT rule is added to send traffic to the Pod ip:port.
 func InitializeNPLAgent(kubeClient clientset.Interface, informerFactory informers.SharedInformerFactory, portRange string, stop <-chan struct{}) error {
 	nodeName, err := env.GetNodeName()
 	if err != nil {
 		return fmt.Errorf("Could not get node name while initializing NPL: %v", err)
 	}
-	start, end, err := lib.ParsePortsRange(portRange)
+	start, end, err := util.ParsePortsRange(portRange)
 	if err != nil {
 		return fmt.Errorf("something went wrong while fetching port range: %v", err)
 	}
@@ -60,10 +62,10 @@ func InitializeNPLAgent(kubeClient clientset.Interface, informerFactory informer
 	c := k8s.NewNPLController(kubeClient, portTable)
 	c.RemoveNPLAnnotationFromPods()
 
-	// Watch only the pods which belong to the node where the agent is running
+	// Watch only the Pods which belong to the node where the agent is running
 	fieldSelector := fields.OneTermEqualSelector("spec.nodeName", nodeName)
 	lw := cache.NewListWatchFromClient(kubeClient.CoreV1().RESTClient(), "pods", metav1.NamespaceAll, fieldSelector)
-	_, controller := cache.NewInformer(lw, &corev1.Pod{}, 5*time.Second,
+	_, controller := cache.NewInformer(lw, &corev1.Pod{}, resyncPeriod,
 		cache.ResourceEventHandlerFuncs{
 			AddFunc:    c.HandleAddPod,
 			DeleteFunc: c.HandleDeletePod,

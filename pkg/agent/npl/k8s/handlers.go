@@ -19,8 +19,6 @@ package k8s
 import (
 	"fmt"
 
-	nplutils "github.com/vmware-tanzu/antrea/pkg/agent/nplagent/lib"
-
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/klog"
 )
@@ -45,8 +43,7 @@ func (c *Controller) addRuleForPod(pod *corev1.Pod) {
 	}
 }
 
-// HandleAddPod handles pod annotations in NPL for an added pod
-//func (c *Controller) HandleAddPod(pod *corev1.Pod) {
+// HandleAddPod handles Pod annotations in NPL for an added pod.
 func (c *Controller) HandleAddPod(obj interface{}) {
 	klog.Infof("Got add pod")
 	pod := obj.(*corev1.Pod).DeepCopy()
@@ -57,13 +54,13 @@ func (c *Controller) HandleAddPod(obj interface{}) {
 	}
 }
 
-// HandleDeletePod handles pod annotations for a deleted pod
-//func (c *Controller) HandleDeletePod(pod *corev1.Pod) {
+// HandleDeletePod handles pod annotations for a deleted pod.
 func (c *Controller) HandleDeletePod(obj interface{}) {
 	pod := obj.(*corev1.Pod).DeepCopy()
 	klog.Infof("Got delete event for pod: %s/%s", pod.Namespace, pod.Name)
 	podIP := pod.Status.PodIP
 	if podIP == "" {
+		klog.Infof("ip address not found for pod: %s/%s", pod.Namespace, pod.Name)
 		return
 	}
 
@@ -74,8 +71,7 @@ func (c *Controller) HandleDeletePod(obj interface{}) {
 	}
 }
 
-// HandleUpdatePod handles pod annotations for a updated pod
-//func (c *Controller) HandleUpdatePod(old, newp *corev1.Pod) {
+// HandleUpdatePod handles pod annotations for a updated pod.
 func (c *Controller) HandleUpdatePod(oldObj, newObj interface{}) {
 	oldPod := oldObj.(*corev1.Pod).DeepCopy()
 	newPod := newObj.(*corev1.Pod).DeepCopy()
@@ -87,19 +83,20 @@ func (c *Controller) HandleUpdatePod(oldObj, newObj interface{}) {
 		return
 	}
 
-	var newPodPorts []string
+	newPodPorts := make(map[string]struct{})
 	newPodContainers := newPod.Spec.Containers
 	for _, container := range newPodContainers {
 		for _, cport := range container.Ports {
 			port := fmt.Sprint(cport.ContainerPort)
-			newPodPorts = append(newPodPorts, port)
+			newPodPorts[port] = struct{}{}
+			//newPodPorts = append(newPodPorts, port)
 			if !c.portTable.RuleExists(podIP, int(cport.ContainerPort)) {
 				c.addRuleForPod(newPod)
 			}
 		}
 	}
 
-	// oldPodPorts: [8080, 8081] newPodPorts: [8082, 8081] portsToRemove should have: [8080]
+	// Example - oldPodPorts: [8080, 8081], newPodPorts: [8082, 8081], portsToRemove should have: [8080].
 	oldPodContainers := oldPod.Spec.Containers
 	oldPodIP := oldPod.Status.PodIP
 
@@ -108,8 +105,8 @@ func (c *Controller) HandleUpdatePod(oldObj, newObj interface{}) {
 			for _, cport := range container.Ports {
 				port := fmt.Sprint(cport.ContainerPort)
 
-				if !nplutils.HasElem(newPodPorts, port) {
-					// removed port
+				if _, ok := newPodPorts[port]; !ok {
+					// The port has been removed.
 					nodePort := getNodeportFromPodAnnotation(newPod, port)
 					if nodePort == "" && c.portTable.GetEntryByPodIPPort(oldPodIP, int(cport.ContainerPort)) == nil {
 						break

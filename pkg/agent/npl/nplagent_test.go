@@ -14,7 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package nplagent
+package npl
 
 import (
 	"context"
@@ -27,8 +27,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/nplagent/k8s"
-	"github.com/vmware-tanzu/antrea/pkg/agent/nplagent/portcache"
+	"github.com/vmware-tanzu/antrea/pkg/agent/npl/k8s"
+	"github.com/vmware-tanzu/antrea/pkg/agent/npl/portcache"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -204,7 +204,7 @@ func TestPodAdd(t *testing.T) {
 	a.Equal(portTable.RuleExists(defaultPodIP, defaultPort), true)
 }
 
-// Test that any update in the Pod container port is reflected in pod annotation and local port cache
+// Test that any update in the Pod container port is reflected in Pod annotation and local port cache
 func TestPodUpdate(t *testing.T) {
 	fmt.Println("here start update")
 	var ann map[string]string
@@ -252,7 +252,7 @@ func TestPodDel(t *testing.T) {
 	}, false, 20*time.Second)
 }
 
-// Create a pod with multiple ports and verify that pod annotation and local port cache are updated correctly
+// Create a Pod with multiple ports and verify that Pod annotation and local port cache are updated correctly
 func TestPodAddMultiPort(t *testing.T) {
 	var ann map[string]string
 	var data string
