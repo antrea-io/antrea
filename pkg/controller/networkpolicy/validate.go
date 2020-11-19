@@ -204,7 +204,7 @@ func (v *NetworkPolicyValidator) validateAntreaPolicy(curObj, oldObj interface{}
 		// Delete of Antrea Policies have no validation. This will be an
 		// empty for loop.
 		for _, val := range v.antreaPolicyValidators {
-			reason, allowed = val.deleteValidate(curObj, userInfo)
+			reason, allowed = val.deleteValidate(oldObj, userInfo)
 			if !allowed {
 				return reason, allowed
 			}
