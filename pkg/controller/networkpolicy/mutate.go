@@ -39,7 +39,7 @@ func NewNetworkPolicyMutator(networkPolicyController *NetworkPolicyController) *
 	}
 }
 
-// Mutate function mutate a Antrea Policy object
+// Mutate function mutates an Antrea-native policy object
 func (m *NetworkPolicyMutator) Mutate(ar *admv1.AdmissionReview) *admv1.AdmissionResponse {
 	var result *metav1.Status
 	var msg string
@@ -67,7 +67,7 @@ func (m *NetworkPolicyMutator) Mutate(ar *admv1.AdmissionReview) *admv1.Admissio
 				return GetAdmissionResponseForErr(err)
 			}
 		}
-		msg, allowed, patch = m.mutateAntreaPolicyRuleName(op, curACNP.Spec.Ingress, curACNP.Spec.Egress)
+		msg, allowed, patch = m.mutateAntreaPolicy(op, curACNP.Spec.Ingress, curACNP.Spec.Egress, curACNP.Spec.Tier)
 	case "NetworkPolicy":
 		klog.V(2).Info("Mutating Antrea NetworkPolicy CRD")
 		var curANP, oldANP secv1alpha1.NetworkPolicy
@@ -83,7 +83,7 @@ func (m *NetworkPolicyMutator) Mutate(ar *admv1.AdmissionReview) *admv1.Admissio
 				return GetAdmissionResponseForErr(err)
 			}
 		}
-		msg, allowed, patch = m.mutateAntreaPolicyRuleName(op, curANP.Spec.Ingress, curANP.Spec.Egress)
+		msg, allowed, patch = m.mutateAntreaPolicy(op, curANP.Spec.Ingress, curANP.Spec.Egress, curANP.Spec.Tier)
 	}
 
 	if msg != "" {
@@ -99,19 +99,28 @@ func (m *NetworkPolicyMutator) Mutate(ar *admv1.AdmissionReview) *admv1.Admissio
 	}
 }
 
-// mutateAntreaPolicyRuleName mutates names of rules of an Antrea NetworkPolicy CRD.
+// mutateAntreaPolicy mutates names of rules of an Antrea NetworkPolicy CRD.
 // If users didn't specify the name of an ingress or egress rule,
-// mutateAntreaPolicyRuleName will auto-generate a name for this rule.
-func (m *NetworkPolicyMutator) mutateAntreaPolicyRuleName(op admv1.Operation, ingress, egress []secv1alpha1.Rule) (string, bool, []byte) {
+// mutateAntreaPolicy will auto-generate a name for this rule. In
+// addition to the rule names, it also mutates the Tier field to the default
+// tier name if it is unset.
+func (m *NetworkPolicyMutator) mutateAntreaPolicy(op admv1.Operation, ingress, egress []secv1alpha1.Rule, tier string) (string, bool, []byte) {
 	allowed := true
 	reason := ""
 	var patch []byte
 	switch op {
 	case admv1.Create, admv1.Update:
+		// Mutate Antrea-native policy rule names.
 		ingressRulePaths, ingressRuleNames := generateRuleNames("ingress", ingress)
 		egressRulePaths, egressRuleNames := generateRuleNames("egress", egress)
-
-		genPatch, err := createReplacePatch(append(ingressRulePaths, egressRulePaths...), append(ingressRuleNames, egressRuleNames...))
+		allPaths := append(ingressRulePaths, egressRulePaths...)
+		allValues := append(ingressRuleNames, egressRuleNames...)
+		// Mutate empty tier name to the name of the Default application Tier.
+		if tier == "" {
+			allPaths = append(allPaths, fmt.Sprintf("/spec/tier"))
+			allValues = append(allValues, defaultTierName)
+		}
+		genPatch, err := createReplacePatch(allPaths, allValues)
 		if err != nil {
 			allowed = false
 			reason = "unable to generate mutating patch"

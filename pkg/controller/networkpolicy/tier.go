@@ -40,15 +40,17 @@ var (
 	// baselineTierPriority maintains the priority for the system generated baseline Tier.
 	// This is the tier that will be enforced after K8s NetworkPolicies.
 	baselineTierPriority = int32(253)
+	// defaultTierName maintains the name of the default Tier in Antrea.
+	defaultTierName = "application"
 	// priorityMap maintains the Tier priority associated with system generated
 	// Tier names.
 	priorityMap = map[string]int32{
-		"baseline":    baselineTierPriority,
-		"application": defaultTierPriority,
-		"platform":    int32(150),
-		"networkops":  int32(100),
-		"securityops": int32(50),
-		"emergency":   int32(5),
+		"baseline":      baselineTierPriority,
+		defaultTierName: defaultTierPriority,
+		"platform":      int32(150),
+		"networkops":    int32(100),
+		"securityops":   int32(50),
+		"emergency":     int32(5),
 	}
 	// staticTierSet maintains the names of the static tiers such that they can
 	// be converted to corresponding Tier CRD names.
@@ -66,10 +68,10 @@ var (
 		},
 		{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: "application",
+				Name: defaultTierName,
 			},
 			Spec: secv1alpha1.TierSpec{
-				Priority:    priorityMap["application"],
+				Priority:    priorityMap[defaultTierName],
 				Description: "[READ-ONLY]: System generated default Application Tier",
 			},
 		},
