@@ -28,7 +28,6 @@ import (
 // For the LoadBalancer Service traffic from outside, kube-proxy will handle it.
 func (p *proxier) installLoadBalancerServiceFlows(groupID binding.GroupIDType, svcIP net.IP, svcPort uint16, protocol binding.Protocol, affinityTimeout uint16) error {
 	if err := p.ofClient.InstallServiceFlows(groupID, svcIP, svcPort, protocol, affinityTimeout); err != nil {
-		klog.Errorf("Error when installing LoadBalancer Service flows: %v", err)
 		return err
 	}
 	return nil
@@ -36,7 +35,6 @@ func (p *proxier) installLoadBalancerServiceFlows(groupID binding.GroupIDType, s
 
 func (p *proxier) uninstallLoadBalancerServiceFlows(svcIP net.IP, svcPort uint16, protocol binding.Protocol) error {
 	if err := p.ofClient.UninstallServiceFlows(svcIP, svcPort, protocol); err != nil {
-		klog.Errorf("Error when removing LoadBalancer Service flows: %v", err)
 		return err
 	}
 	return nil

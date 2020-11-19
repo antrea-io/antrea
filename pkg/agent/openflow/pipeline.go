@@ -1625,8 +1625,7 @@ func (c *client) serviceLearnFlow(groupID binding.GroupIDType, svcIP net.IP, svc
 	// affinityTimeout is used as the OpenFlow "hard timeout": learned flow will be removed from
 	// OVS after that time regarding of whether traffic is still hitting the flow. This is the
 	// desired behavior based on the K8s spec. Note that existing connections will keep going to
-	// the same endpoint because that's how OVS group selection works; and that is also the
-	// desired behavior.
+	// the same endpoint because of connection tracking; and that is also the desired behavior.
 	learnFlowBuilderLearnAction := learnFlowBuilder.
 		Action().Learn(sessionAffinityTable, priorityNormal, 0, affinityTimeout, cookieID).
 		DeleteLearned()

@@ -258,7 +258,9 @@ func (p *proxier) installServices() {
 		}
 		for _, ingress := range toDelete {
 			if ingress != "" {
-				if err := p.uninstallLoadBalancerServiceFlows(net.ParseIP(ingress), uint16(svcInfo.Port()), svcInfo.OFProtocol); err != nil {
+				// It is safe to access pSvcInfo here. If this is a new Service,
+				// then toDelete will be an empty slice.
+				if err := p.uninstallLoadBalancerServiceFlows(net.ParseIP(ingress), uint16(pSvcInfo.Port()), pSvcInfo.OFProtocol); err != nil {
 					klog.Errorf("Error when removing LoadBalancer Service flows: %v", err)
 					continue
 				}
