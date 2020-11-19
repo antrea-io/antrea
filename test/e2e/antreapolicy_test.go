@@ -47,8 +47,9 @@ const (
 	// provide enough time for policies to be enforced & deleted by the CNI plugin.
 	networkPolicyDelay = 2 * time.Second
 	// audit log directory on Antrea Agent
-	logDir      = "/var/log/antrea/networkpolicy/"
-	logfileName = "np.log"
+	logDir          = "/var/log/antrea/networkpolicy/"
+	logfileName     = "np.log"
+	defaultTierName = "application"
 )
 
 func failOnError(err error, t *testing.T) {
@@ -138,6 +139,42 @@ func cleanupDefaultDenyNPs(k8s *KubernetesUtils, namespaces []string) error {
 		return fmt.Errorf("error when cleaning default deny k8s NetworkPolicies")
 	}
 	return nil
+}
+
+func testMutateACNPNoTier(t *testing.T) {
+	invalidNpErr := fmt.Errorf("ACNP tier not mutated to default tier")
+	builder := &ClusterNetworkPolicySpecBuilder{}
+	builder = builder.SetName("acnp-no-tier").
+		SetAppliedToGroup(map[string]string{"pod": "a"}, nil, nil, nil).
+		SetPriority(10.0)
+	acnp := builder.Get()
+	log.Debugf("creating ACNP %v", acnp.Name)
+	acnp, err := k8sUtils.CreateOrUpdateCNP(acnp)
+	if err != nil {
+		failOnError(fmt.Errorf("ACNP create failed %v", err), t)
+	}
+	if acnp.Spec.Tier != defaultTierName {
+		failOnError(invalidNpErr, t)
+	}
+	failOnError(k8sUtils.CleanCNPs(), t)
+}
+
+func testMutateANPNoTier(t *testing.T) {
+	invalidNpErr := fmt.Errorf("ANP tier not mutated to default tier")
+	builder := &AntreaNetworkPolicySpecBuilder{}
+	builder = builder.SetName("x", "anp-no-tier").
+		SetAppliedToGroup(map[string]string{"pod": "a"}, nil).
+		SetPriority(10.0)
+	anp := builder.Get()
+	log.Debugf("creating ANP %v", anp.Name)
+	anp, err := k8sUtils.CreateOrUpdateANP(anp)
+	if err != nil {
+		failOnError(fmt.Errorf("ANP create failed %v", err), t)
+	}
+	if anp.Spec.Tier != defaultTierName {
+		failOnError(invalidNpErr, t)
+	}
+	failOnError(k8sUtils.CleanANPs([]string{anp.Namespace}), t)
 }
 
 func testInvalidACNPNoPriority(t *testing.T) {
@@ -1036,12 +1073,17 @@ func TestAntreaPolicy(t *testing.T) {
 		t.Run("Case=TierReservedDeleteDenied", func(t *testing.T) { testInvalidTierReservedDelete(t) })
 	})
 
+	t.Run("TestGroupMutateAntreaNativePolicies", func(t *testing.T) {
+		t.Run("Case=ACNPNoTierSetDefaultTier", func(t *testing.T) { testMutateACNPNoTier(t) })
+		t.Run("Case=ANPNoTierSetDefaultTier", func(t *testing.T) { testMutateANPNoTier(t) })
+	})
+
 	t.Run("TestGroupDefaultDENY", func(t *testing.T) {
 		// testcases below require default deny k8s NetworkPolicies to work
 		applyDefaultDenyToAllNamespaces(k8sUtils, namespaces)
 		t.Run("Case=CNPAllowXBtoA", func(t *testing.T) { testCNPAllowXBtoA(t) })
 		t.Run("Case=CNPAllowXBtoYA", func(t *testing.T) { testCNPAllowXBtoYA(t) })
-		t.Run("Case=CNPPrioirtyOverrideDefaultDeny", func(t *testing.T) { testCNPPriorityOverrideDefaultDeny(t) })
+		t.Run("Case=CNPPriorityOverrideDefaultDeny", func(t *testing.T) { testCNPPriorityOverrideDefaultDeny(t) })
 		cleanupDefaultDenyNPs(k8sUtils, namespaces)
 	})
 

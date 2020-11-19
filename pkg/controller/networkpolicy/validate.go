@@ -129,7 +129,7 @@ func (v *NetworkPolicyValidator) validateAntreaPolicy(op admv1.Operation, tier s
 			reason = "rules names are not unique, or policy has duplicate rules, or collision occurred in generated rule names"
 			break
 		}
-		// "tier" must exist before referencing
+		// "tier" must exist before referencing.
 		if tier == "" || staticTierSet.Has(tier) {
 			// Empty Tier name corresponds to default Tier
 			break
