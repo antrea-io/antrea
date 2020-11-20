@@ -157,27 +157,43 @@ func TestDifferentNamedPorts(t *testing.T) {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
 	defer teardownTest(t, data)
-	data.testDifferentNamedPorts(t)
+	checkFn, cleanupFn := data.setupDifferentNamedPorts(t)
+	defer cleanupFn()
+	checkFn()
 }
 
-func (data *TestData) testDifferentNamedPorts(t *testing.T) {
+func (data *TestData) setupDifferentNamedPorts(t *testing.T) (checkFn func(), cleanupFn func()) {
+	var success bool
+	var cleanupFuncs []func()
+	cleanupFn = func() {
+		for i := len(cleanupFuncs) - 1; i >= 0; i-- {
+			cleanupFuncs[i]()
+		}
+	}
+	// Call cleanupFn only if the function fails. In case of success, we will call cleanupFn in callers.
+	defer func() {
+		if !success {
+			cleanupFn()
+		}
+	}()
+
 	server0Port := 80
-	_, server0IPs, cleanupFunc := createAndWaitForPod(t, data, func(name string, nodeName string) error {
+	server0Name, server0IPs, cleanupFunc := createAndWaitForPod(t, data, func(name string, nodeName string) error {
 		return data.createServerPod(name, "http", server0Port, false)
 	}, "test-server-", "")
-	defer cleanupFunc()
+	cleanupFuncs = append(cleanupFuncs, cleanupFunc)
 
 	server1Port := 8080
-	_, server1IPs, cleanupFunc := createAndWaitForPod(t, data, func(name string, nodeName string) error {
+	server1Name, server1IPs, cleanupFunc := createAndWaitForPod(t, data, func(name string, nodeName string) error {
 		return data.createServerPod(name, "http", server1Port, false)
 	}, "test-server-", "")
-	defer cleanupFunc()
+	cleanupFuncs = append(cleanupFuncs, cleanupFunc)
 
 	client0Name, _, cleanupFunc := createAndWaitForPod(t, data, data.createBusyboxPodOnNode, "test-client-", "")
-	defer cleanupFunc()
+	cleanupFuncs = append(cleanupFuncs, cleanupFunc)
 
 	client1Name, _, cleanupFunc := createAndWaitForPod(t, data, data.createBusyboxPodOnNode, "test-client-", "")
-	defer cleanupFunc()
+	cleanupFuncs = append(cleanupFuncs, cleanupFunc)
 
 	preCheckFunc := func(server0IP, server1IP string) {
 		// Both clients can connect to both servers.
@@ -201,8 +217,14 @@ func (data *TestData) testDifferentNamedPorts(t *testing.T) {
 
 	// Create NetworkPolicy rule.
 	spec := &networkingv1.NetworkPolicySpec{
-		// Apply to all Pods.
-		PodSelector: metav1.LabelSelector{},
+		// Apply to two server Pods.
+		PodSelector: metav1.LabelSelector{MatchExpressions: []metav1.LabelSelectorRequirement{
+			{
+				Key:      "antrea-e2e",
+				Operator: metav1.LabelSelectorOpIn,
+				Values:   []string{server0Name, server1Name},
+			},
+		}},
 		// Allow client0 to access named port: "http".
 		Ingress: []networkingv1.NetworkPolicyIngressRule{{
 			Ports: []networkingv1.NetworkPolicyPort{{
@@ -217,15 +239,16 @@ func (data *TestData) testDifferentNamedPorts(t *testing.T) {
 			},
 		}},
 	}
-	np, err := data.createNetworkPolicy("test-networkpolicy-allow-client0-to-http", spec)
+	np, err := data.createNetworkPolicy(randName("test-networkpolicy-allow-client0-to-http"), spec)
 	if err != nil {
 		t.Fatalf("Error when creating network policy: %v", err)
 	}
-	defer func() {
+	cleanupFuncs = append(cleanupFuncs, func() {
 		if err = data.deleteNetworkpolicy(np); err != nil {
 			t.Fatalf("Error when deleting network policy: %v", err)
 		}
-	}()
+	})
+	time.Sleep(networkPolicyDelay)
 
 	npCheck := func(server0IP, server1IP string) {
 		// client0 can connect to both servers.
@@ -244,15 +267,18 @@ func (data *TestData) testDifferentNamedPorts(t *testing.T) {
 		}
 	}
 
-	// NetworkPolicy check.
-	if clusterInfo.podV4NetworkCIDR != "" {
-		npCheck(server0IPs.ipv4.String(), server1IPs.ipv4.String())
-	}
+	checkFn = func() {
+		// NetworkPolicy check.
+		if clusterInfo.podV4NetworkCIDR != "" {
+			npCheck(server0IPs.ipv4.String(), server1IPs.ipv4.String())
+		}
 
-	if clusterInfo.podV6NetworkCIDR != "" {
-		npCheck(server0IPs.ipv6.String(), server1IPs.ipv6.String())
+		if clusterInfo.podV6NetworkCIDR != "" {
+			npCheck(server0IPs.ipv6.String(), server1IPs.ipv6.String())
+		}
 	}
-
+	success = true
+	return
 }
 
 func TestDefaultDenyEgressPolicy(t *testing.T) {

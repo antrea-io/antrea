@@ -109,9 +109,11 @@ func Convert_controlplane_GroupMember_To_v1beta1_GroupMember(in *controlplane.Gr
 }
 
 func Convert_v1beta1_GroupMemberPod_To_controlplane_GroupMember(in *GroupMemberPod, out *controlplane.GroupMember, s conversion.Scope) error {
-	out.Pod = &controlplane.PodReference{
-		Name:      in.Pod.Name,
-		Namespace: in.Pod.Namespace,
+	if in.Pod != nil {
+		out.Pod = &controlplane.PodReference{
+			Name:      in.Pod.Name,
+			Namespace: in.Pod.Namespace,
+		}
 	}
 	out.IPs = []controlplane.IPAddress{controlplane.IPAddress(in.IP)}
 	ports := make([]controlplane.NamedPort, len(in.Ports))
@@ -124,13 +126,20 @@ func Convert_v1beta1_GroupMemberPod_To_controlplane_GroupMember(in *GroupMemberP
 	return nil
 }
 
-func Convert_controlplane_GroupMember_To_v1beta1_GroupMemberPod(in *controlplane.GroupMember, out *GroupMemberPod, s conversion.Scope) error {
+// Convert_controlplane_GroupMember_To_v1beta1_GroupMemberPod converts controlplane GroupMember to v1beta1 GroupMember
+// based on whether it's required to include Pod reference in the result. We must not include Pod reference when the
+// conversion is called for an AddressGroup as agents don't expect it in v1beta1 version.
+// This function doesn't match the pattern of conversion function which requires the last parameter to be
+// conversion.Scope so won't be registered to schema.
+func Convert_controlplane_GroupMember_To_v1beta1_GroupMemberPod(in *controlplane.GroupMember, out *GroupMemberPod, includePodRef bool) error {
 	if in.Pod == nil || len(in.IPs) > 1 {
 		return fmt.Errorf("cannot convert ExternalEntity or dual stack Pod into GroupMemberPod")
 	}
-	out.Pod = &PodReference{
-		Name:      in.Pod.Name,
-		Namespace: in.Pod.Namespace,
+	if includePodRef {
+		out.Pod = &PodReference{
+			Name:      in.Pod.Name,
+			Namespace: in.Pod.Namespace,
+		}
 	}
 	if len(in.IPs) > 0 {
 		out.IP = IPAddress(in.IPs[0])
@@ -172,7 +181,7 @@ func Convert_controlplane_AddressGroup_To_v1beta1_AddressGroup(in *controlplane.
 		m := in.GroupMembers[i]
 		if m.Pod != nil {
 			var pod GroupMemberPod
-			if err := Convert_controlplane_GroupMember_To_v1beta1_GroupMemberPod(&m, &pod, nil); err != nil {
+			if err := Convert_controlplane_GroupMember_To_v1beta1_GroupMemberPod(&m, &pod, false); err != nil {
 				return err
 			}
 			pods = append(pods, pod)
@@ -227,7 +236,7 @@ func Convert_controlplane_AddressGroupPatch_To_v1beta1_AddressGroupPatch(in *con
 		m := in.AddedGroupMembers[i]
 		if m.Pod != nil {
 			var pod GroupMemberPod
-			if err := Convert_controlplane_GroupMember_To_v1beta1_GroupMemberPod(&m, &pod, nil); err != nil {
+			if err := Convert_controlplane_GroupMember_To_v1beta1_GroupMemberPod(&m, &pod, false); err != nil {
 				return err
 			}
 			addedPods = append(addedPods, pod)
@@ -241,7 +250,7 @@ func Convert_controlplane_AddressGroupPatch_To_v1beta1_AddressGroupPatch(in *con
 		m := in.RemovedGroupMembers[i]
 		if m.Pod != nil {
 			var pod GroupMemberPod
-			if err := Convert_controlplane_GroupMember_To_v1beta1_GroupMemberPod(&m, &pod, nil); err != nil {
+			if err := Convert_controlplane_GroupMember_To_v1beta1_GroupMemberPod(&m, &pod, false); err != nil {
 				return err
 			}
 			removedPods = append(removedPods, pod)
@@ -285,7 +294,7 @@ func Convert_controlplane_AppliedToGroup_To_v1beta1_AppliedToGroup(in *controlpl
 		m := in.GroupMembers[i]
 		if m.Pod != nil {
 			var pod GroupMemberPod
-			if err := Convert_controlplane_GroupMember_To_v1beta1_GroupMemberPod(&m, &pod, nil); err != nil {
+			if err := Convert_controlplane_GroupMember_To_v1beta1_GroupMemberPod(&m, &pod, true); err != nil {
 				return err
 			}
 			pods = append(pods, pod)
@@ -341,7 +350,7 @@ func Convert_controlplane_AppliedToGroupPatch_To_v1beta1_AppliedToGroupPatch(in 
 		m := in.AddedGroupMembers[i]
 		if m.Pod != nil {
 			var pod GroupMemberPod
-			if err := Convert_controlplane_GroupMember_To_v1beta1_GroupMemberPod(&m, &pod, nil); err != nil {
+			if err := Convert_controlplane_GroupMember_To_v1beta1_GroupMemberPod(&m, &pod, true); err != nil {
 				return err
 			}
 			addedPods = append(addedPods, pod)
@@ -355,7 +364,7 @@ func Convert_controlplane_AppliedToGroupPatch_To_v1beta1_AppliedToGroupPatch(in 
 		m := in.RemovedGroupMembers[i]
 		if m.Pod != nil {
 			var pod GroupMemberPod
-			if err := Convert_controlplane_GroupMember_To_v1beta1_GroupMemberPod(&m, &pod, nil); err != nil {
+			if err := Convert_controlplane_GroupMember_To_v1beta1_GroupMemberPod(&m, &pod, true); err != nil {
 				return err
 			}
 			removedPods = append(removedPods, pod)

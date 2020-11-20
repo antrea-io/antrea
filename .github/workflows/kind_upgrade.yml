@@ -73,7 +73,18 @@ jobs:
         sudo mv kind /usr/local/bin
     - name: Run test
       run: |
-        ./ci/kind/test-upgrade-antrea.sh --from-version-n-minus 1
+        mkdir log
+        ANTREA_LOG_DIR=$PWD/log ./ci/kind/test-upgrade-antrea.sh --from-version-n-minus 1
+    - name: Tar log files
+      if: ${{ failure() }}
+      run: tar -czf log.tar.gz log
+    - name: Upload test log
+      uses: actions/upload-artifact@v2
+      if: ${{ failure() }}
+      with:
+        name: upgrade-from-antrea-version-n-1.tar.gz
+        path: log.tar.gz
+        retention-days: 30
 
   from-N-2:
     name: Upgrade from Antrea version N-2
@@ -102,7 +113,18 @@ jobs:
         sudo mv kind /usr/local/bin
     - name: Run test
       run: |
-        ./ci/kind/test-upgrade-antrea.sh --from-version-n-minus 2
+        mkdir log
+        ANTREA_LOG_DIR=$PWD/log ./ci/kind/test-upgrade-antrea.sh --from-version-n-minus 2
+    - name: Tar log files
+      if: ${{ failure() }}
+      run: tar -czf log.tar.gz log
+    - name: Upload test log
+      uses: actions/upload-artifact@v2
+      if: ${{ failure() }}
+      with:
+        name: upgrade-from-antrea-version-n-2.tar.gz
+        path: log.tar.gz
+        retention-days: 30
 
   compatible-N-1:
     name: API compatible with client version N-1
@@ -131,7 +153,18 @@ jobs:
           sudo mv kind /usr/local/bin
       - name: Run test
         run: |
-          ./ci/kind/test-upgrade-antrea.sh --from-version-n-minus 1 --controller-only
+          mkdir log
+          ANTREA_LOG_DIR=$PWD/log ./ci/kind/test-upgrade-antrea.sh --from-version-n-minus 1 --controller-only
+      - name: Tar log files
+        if: ${{ failure() }}
+        run: tar -czf log.tar.gz log
+      - name: Upload test log
+        uses: actions/upload-artifact@v2
+        if: ${{ failure() }}
+        with:
+          name: api-compatible-with-client-version-n-1.tar.gz
+          path: log.tar.gz
+          retention-days: 30
 
   compatible-N-2:
     name: API compatible with client version N-2
@@ -160,7 +193,18 @@ jobs:
           sudo mv kind /usr/local/bin
       - name: Run test
         run: |
-          ./ci/kind/test-upgrade-antrea.sh --from-version-n-minus 2 --controller-only
+          mkdir log
+          ANTREA_LOG_DIR=$PWD/log ./ci/kind/test-upgrade-antrea.sh --from-version-n-minus 2 --controller-only
+      - name: Tar log files
+        if: ${{ failure() }}
+        run: tar -czf log.tar.gz log
+      - name: Upload test log
+        uses: actions/upload-artifact@v2
+        if: ${{ failure() }}
+        with:
+          name: api-compatible-with-client-version-n-2.tar.gz
+          path: log.tar.gz
+          retention-days: 30
 
   # Runs after all other jobs in the workflow and deletes Antrea Docker images uploaded as temporary
   # artifacts. It uses a third-party, MIT-licensed action (geekyeggo/delete-artifact). While Github
