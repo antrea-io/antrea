@@ -211,11 +211,6 @@ func RegisterConversions(s *runtime.Scheme) error {
 	}); err != nil {
 		return err
 	}
-	if err := s.AddConversionFunc((*controlplane.GroupMember)(nil), (*GroupMemberPod)(nil), func(a, b interface{}, scope conversion.Scope) error {
-		return Convert_controlplane_GroupMember_To_v1beta1_GroupMemberPod(a.(*controlplane.GroupMember), b.(*GroupMemberPod), scope)
-	}); err != nil {
-		return err
-	}
 	if err := s.AddConversionFunc((*AddressGroupPatch)(nil), (*controlplane.AddressGroupPatch)(nil), func(a, b interface{}, scope conversion.Scope) error {
 		return Convert_v1beta1_AddressGroupPatch_To_controlplane_AddressGroupPatch(a.(*AddressGroupPatch), b.(*controlplane.AddressGroupPatch), scope)
 	}); err != nil {
