@@ -94,7 +94,7 @@ func dumpNetworkPolicyResources(fs afero.Fs, executor exec.Interface, basedir st
 }
 
 // directoryCopy copies files under the srcDir to the targetDir. Only files whose
-// name matches the prefixFilter will be copied, at the same time, if the timeFilter is set,
+// name matches the prefixFilter will be copied. At the same time, if the timeFilter is set,
 // only files whose modTime later than the timeFilter will be copied. Copied files will be
 // located under the same relative path.
 func directoryCopy(fs afero.Fs, targetDir string, srcDir string, prefixFilter string, timeFilter *time.Time) error {

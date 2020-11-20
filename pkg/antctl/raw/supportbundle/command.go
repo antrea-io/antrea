@@ -110,7 +110,7 @@ func init() {
 		Command.Flags().StringVarP(&option.labelSelector, "label-selector", "l", "", "selector (label query) to filter Nodes for agent bundles, supports '=', '==', and '!='.(e.g. -l key1=value1,key2=value2)")
 		Command.Flags().BoolVar(&option.controllerOnly, "controller-only", false, "only collect the support bundle of Antrea controller")
 		Command.Flags().StringVarP(&option.nodeListFile, "node-list-file", "f", "", "only collect the support bundle of Antrea controller")
-		Command.Flags().Uint32Var(&option.days, "days", 0, "only collect logs that generated since specific days ago")
+		Command.Flags().Uint32Var(&option.days, "days", 0, "only collect logs that are generated since specific days ago")
 		Command.RunE = controllerRemoteRunE
 	}
 }
