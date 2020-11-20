@@ -587,14 +587,11 @@ table=70, priority=200,ip,dl_dst=aa:bb:cc:dd:ee:ff,nw_dst=10.10.0.1 actions=mod_
   the Node. In case of a match the source MAC is set to the local gateway MAC,
   the destination MAC is set to the Global Virtual MAC and we set the OF
   `tun_dst` field to the appropriate value (i.e. the IP address of the remote
-  gateway). Traffic then goes to [ConntrackCommitTable], thus skipping
-  [L2ForwardingCalcTable] and the ingress policy rules tables, which are not
-  relevant for traffic destined to a tunnel (the destination port is the tunnel
-  port and the ingress policy rules will be enforced at the destination
-  Node). For a given peer Node, the flow may look like this:
+  gateway). Traffic then goes to [L3DecTTLTable].
+  For a given peer Node, the flow may look like this:
 
 ```text
-table=70, priority=200,ip,nw_dst=10.10.1.0/24 actions=dec_ttl,mod_dl_src:e2:e5:a4:9b:1c:b1,mod_dl_dst:aa:bb:cc:dd:ee:ff,load:0x1->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],load:0xc0a84d65->NXM_NX_TUN_IPV4_DST[],goto_table:105
+table=70, priority=200,ip,nw_dst=10.10.1.0/24 actions=mod_dl_src:e2:e5:a4:9b:1c:b1,mod_dl_dst:aa:bb:cc:dd:ee:ff,load:0x1->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],load:0xc0a84d65->NXM_NX_TUN_IPV4_DST[],goto_table:71
 ```
 
 If none of the flows described above are hit, traffic goes directly to
@@ -605,6 +602,26 @@ is required), as well as for local Pod-to-Pod traffic.
 
 ```text
 table=70, priority=0 actions=goto_table:80
+```
+
+### L3DecTTLTable (71)
+
+This is the table to decrement TTL for L3 traffic on the source Node. It implements the following functionality:
+
+* TTL is decremented by one on the packets which are sent from a local Pod and are destined
+  for a remote Pod. But for the packets that enter OVS pipeline from the local gateway
+  and are destined for a remote Pod, TTL is not decremented in OVS on the source Node. TTL is
+  also decremented on the destination Node. See the flows in [L3ForwardingTable].
+  Traffic then goes to [ConntrackCommitTable], thus skips [L2ForwardingCalcTable] and
+  the ingress policy rules tables, which are not relevant for traffic destined to a tunnel
+  (the destination port is the tunnel port and the ingress policy rules will be enforced
+  at the destination Node).
+
+If you dump the flows for this table, you should see flows like this:
+
+```text
+1. table=71, priority=200,ip,reg0=0x2/0xffff, actions=dec_ttl,goto_table:105
+2. table=71, priority=0, actions=goto_table:105
 ```
 
 ### L2ForwardingCalcTable (80)
