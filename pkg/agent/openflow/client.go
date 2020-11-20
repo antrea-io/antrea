@@ -74,7 +74,7 @@ type Client interface {
 		localGatewayMAC net.HardwareAddr,
 		peerConfigs map[*net.IPNet]net.IP,
 		tunnelPeerIP net.IP,
-		tunOFPort, ipsecTunOFPort uint32) error
+		tunOFPort, gwOFPort, ipsecTunOFPort uint32) error
 
 	// UninstallNodeFlows removes the connection to the remote Node specified with the
 	// hostname. UninstallNodeFlows will do nothing if no connection to the host was established.
@@ -295,7 +295,7 @@ func (c *client) InstallNodeFlows(hostname string,
 	localGatewayMAC net.HardwareAddr,
 	peerConfigs map[*net.IPNet]net.IP,
 	tunnelPeerIP net.IP,
-	tunOFPort, ipsecTunOFPort uint32) error {
+	tunOFPort, gwOFPort, ipsecTunOFPort uint32) error {
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
 
@@ -312,7 +312,7 @@ func (c *client) InstallNodeFlows(hostname string,
 			// IPv6 one is decided by the address family of Node Internal Address.
 			flows = append(flows, c.l3FwdFlowToRemote(localGatewayMAC, *peerPodCIDR, tunnelPeerIP, tunOFPort, cookie.Node))
 		} else {
-			flows = append(flows, c.l3FwdFlowToRemoteViaGW(localGatewayMAC, *peerPodCIDR, cookie.Node))
+			flows = append(flows, c.l3FwdFlowToRemoteViaGW(localGatewayMAC, *peerPodCIDR, gwOFPort, cookie.Node))
 		}
 	}
 
@@ -563,6 +563,9 @@ func (c *client) initialize() error {
 	}
 	if err := c.ofEntryOperations.AddAll(c.ipv6Flows(cookie.Default)); err != nil {
 		return fmt.Errorf("failed to install ipv6 flows: %v", err)
+	}
+	if err := c.ofEntryOperations.AddAll(c.decTTLFlows(cookie.Default)); err != nil {
+		return fmt.Errorf("failed to install dec TTL flow on source Node: %v", err)
 	}
 	if err := c.ofEntryOperations.AddAll(c.l2ForwardOutputFlows(cookie.Default)); err != nil {
 		return fmt.Errorf("failed to install L2 forward output flows: %v", err)

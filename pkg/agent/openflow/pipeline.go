@@ -52,6 +52,7 @@ const (
 	EgressDefaultTable           binding.TableIDType = 60
 	EgressMetricTable            binding.TableIDType = 61
 	l3ForwardingTable            binding.TableIDType = 70
+	l3DecTTLTable                binding.TableIDType = 71
 	l2ForwardingCalcTable        binding.TableIDType = 80
 	AntreaPolicyIngressRuleTable binding.TableIDType = 85
 	DefaultTierIngressRuleTable  binding.TableIDType = 89
@@ -697,15 +698,6 @@ func (c *client) l2ForwardCalcFlow(dstMAC net.HardwareAddr, ofPort uint32, categ
 		Done()
 }
 
-// l2ForwardOutputFlow generates the flow that outputs packets to OVS port after L2 forwarding calculation.
-func (c *client) l2ForwardOutputFlow(category cookie.Category) binding.Flow {
-	return c.pipeline[L2ForwardingOutTable].BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
-		MatchRegRange(int(marksReg), portFoundMark, ofPortMarkRange).
-		Action().OutputRegRange(int(PortCacheReg), ofPortRegRange).
-		Cookie(c.cookieAllocator.Request(category).Raw()).
-		Done()
-}
-
 // traceflowL2ForwardOutputFlows generates Traceflow specific flows that outputs traceflow packets to OVS port and Antrea
 // Agent after L2forwarding calculation.
 func (c *client) traceflowL2ForwardOutputFlows(dataplaneTag uint8, category cookie.Category) []binding.Flow {
@@ -871,7 +863,6 @@ func (c *client) l3FwdFlowToRemote(
 	ipProto := getIPProtocol(peerSubnet.IP)
 	return c.pipeline[l3ForwardingTable].BuildFlow(priorityNormal).MatchProtocol(ipProto).
 		MatchDstIPNet(peerSubnet).
-		Action().DecTTL().
 		// Rewrite src MAC to local gateway MAC and rewrite dst MAC to virtual MAC.
 		Action().SetSrcMAC(localGatewayMAC).
 		Action().SetDstMAC(globalVirtualMAC).
@@ -881,9 +872,7 @@ func (c *client) l3FwdFlowToRemote(
 		Action().LoadRegRange(int(marksReg), portFoundMark, ofPortMarkRange).
 		// Flow based tunnel. Set tunnel destination.
 		Action().SetTunnelDst(tunnelPeer).
-		// Bypass l2ForwardingCalcTable and tables for ingress rules (which won't
-		// apply to packets to remote Nodes).
-		Action().GotoTable(conntrackCommitTable).
+		Action().GotoTable(l3DecTTLTable).
 		Cookie(c.cookieAllocator.Request(category).Raw()).
 		Done()
 }
@@ -894,14 +883,17 @@ func (c *client) l3FwdFlowToRemote(
 func (c *client) l3FwdFlowToRemoteViaGW(
 	localGatewayMAC net.HardwareAddr,
 	peerSubnet net.IPNet,
+	gwOFPort uint32,
 	category cookie.Category) binding.Flow {
 	ipProto := getIPProtocol(peerSubnet.IP)
 	l3FwdTable := c.pipeline[l3ForwardingTable]
 	return l3FwdTable.BuildFlow(priorityNormal).MatchProtocol(ipProto).
 		MatchDstIPNet(peerSubnet).
-		Action().DecTTL().
 		Action().SetDstMAC(localGatewayMAC).
-		Action().GotoTable(l3FwdTable.GetNext()).
+		Action().LoadRegRange(int(PortCacheReg), gwOFPort, ofPortRegRange).
+		// Set MAC-known.
+		Action().LoadRegRange(int(marksReg), portFoundMark, ofPortMarkRange).
+		Action().GotoTable(conntrackCommitTable).
 		Cookie(c.cookieAllocator.Request(category).Raw()).
 		Done()
 }
@@ -1785,6 +1777,25 @@ func (c *client) serviceEndpointGroup(groupID binding.GroupIDType, withSessionAf
 	return group
 }
 
+// decTTLFlows decrements TTL by one for the packets from a local Pod to a remote Pod. Antrea doesn't
+// decrement TTL for the packets which enter OVS pipeline from antrea-gw0 on the source Node.
+// TTL is also decremented on the destination Node in L3Routing Table when the packet is received.
+// See the functions of "l3FlowsToPod", "l3ToPodFlow", and "l3ToGWFlow".
+func (c *client) decTTLFlows(category cookie.Category) []binding.Flow {
+	var flows []binding.Flow
+	for _, proto := range c.ipProtocols {
+		flows = append(flows, c.pipeline[l3DecTTLTable].BuildFlow(priorityNormal).MatchPriority(priorityNormal).
+			MatchProtocol(proto).
+			MatchRegRange(int(marksReg), markTrafficFromLocal, binding.Range{0, 15}).
+			Action().DecTTL().
+			// Bypass l2ForwardingCalcTable and tables for ingress rules (which won't
+			// apply to packets to remote Nodes).
+			Action().GotoTable(conntrackCommitTable).
+			Done())
+	}
+	return flows
+}
+
 // policyConjKeyFuncKeyFunc knows how to get key of a *policyRuleConjunction.
 func policyConjKeyFunc(obj interface{}) (string, error) {
 	conj := obj.(*policyRuleConjunction)
@@ -1823,6 +1834,7 @@ func generatePipeline(bridge binding.Bridge, enableProxy, enableAntreaNP bool) m
 			EgressDefaultTable:    bridge.CreateTable(EgressDefaultTable, EgressMetricTable, binding.TableMissActionNext),
 			EgressMetricTable:     bridge.CreateTable(EgressMetricTable, l3ForwardingTable, binding.TableMissActionNext),
 			l3ForwardingTable:     bridge.CreateTable(l3ForwardingTable, l2ForwardingCalcTable, binding.TableMissActionNext),
+			l3DecTTLTable:         bridge.CreateTable(l3DecTTLTable, conntrackCommitTable, binding.TableMissActionNext),
 			l2ForwardingCalcTable: bridge.CreateTable(l2ForwardingCalcTable, IngressEntryTable, binding.TableMissActionNext),
 			IngressRuleTable:      bridge.CreateTable(IngressRuleTable, IngressDefaultTable, binding.TableMissActionNext),
 			IngressDefaultTable:   bridge.CreateTable(IngressDefaultTable, IngressMetricTable, binding.TableMissActionNext),
@@ -1844,6 +1856,7 @@ func generatePipeline(bridge binding.Bridge, enableProxy, enableAntreaNP bool) m
 			EgressDefaultTable:    bridge.CreateTable(EgressDefaultTable, EgressMetricTable, binding.TableMissActionNext),
 			EgressMetricTable:     bridge.CreateTable(EgressMetricTable, l3ForwardingTable, binding.TableMissActionNext),
 			l3ForwardingTable:     bridge.CreateTable(l3ForwardingTable, l2ForwardingCalcTable, binding.TableMissActionNext),
+			l3DecTTLTable:         bridge.CreateTable(l3DecTTLTable, conntrackCommitTable, binding.TableMissActionNext),
 			l2ForwardingCalcTable: bridge.CreateTable(l2ForwardingCalcTable, IngressEntryTable, binding.TableMissActionNext),
 			IngressRuleTable:      bridge.CreateTable(IngressRuleTable, IngressDefaultTable, binding.TableMissActionNext),
 			IngressDefaultTable:   bridge.CreateTable(IngressDefaultTable, IngressMetricTable, binding.TableMissActionNext),

@@ -48,7 +48,7 @@ func installNodeFlows(ofClient Client, cacheKey string) (int, error) {
 	peerConfig := map[*net.IPNet]net.IP{
 		ipNet: gwIP,
 	}
-	err := ofClient.InstallNodeFlows(hostName, gwMAC, peerConfig, peerNodeIP, config.DefaultTunOFPort, 0)
+	err := ofClient.InstallNodeFlows(hostName, gwMAC, peerConfig, peerNodeIP, config.DefaultTunOFPort, config.HostGatewayOFPort, 0)
 	client := ofClient.(*client)
 	fCacheI, ok := client.nodeFlowCache.Load(hostName)
 	if ok {
