@@ -479,6 +479,7 @@ func (c *Controller) addNodeRoute(nodeName string, node *corev1.Node) error {
 		peerConfig,
 		peerNodeIP,
 		config.DefaultTunOFPort,
+		config.HostGatewayOFPort,
 		uint32(ipsecTunOFPort))
 	if err != nil {
 		return fmt.Errorf("failed to install flows to Node %s: %v", nodeName, err)

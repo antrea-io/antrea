@@ -291,7 +291,7 @@ func testInstallNodeFlows(t *testing.T, config *testConfig) {
 		peerConfig := map[*net.IPNet]net.IP{
 			&node.subnet: node.gateway,
 		}
-		err := c.InstallNodeFlows(node.name, config.localGateway.mac, peerConfig, node.nodeAddress, config.tunnelOFPort, 0)
+		err := c.InstallNodeFlows(node.name, config.localGateway.mac, peerConfig, node.nodeAddress, config.tunnelOFPort, config.localGateway.ofPort, 0)
 		if err != nil {
 			t.Fatalf("Failed to install Openflow entries for node connectivity: %v", err)
 		}
@@ -1094,7 +1094,8 @@ func prepareNodeFlows(tunnelPort uint32, peerSubnet net.IPNet, peerGwIP, peerNod
 		[]*ofTestUtils.ExpectFlow{
 			{
 				MatchStr: fmt.Sprintf("priority=200,%s,%s=%s", ipProtoStr, nwDstFieldName, peerSubnet.String()),
-				ActStr:   fmt.Sprintf("dec_ttl,set_field:%s->eth_src,set_field:%s->eth_dst,load:0x%x->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],set_field:%s->tun_dst,goto_table:105", localGwMAC.String(), vMAC.String(), tunnelPort, peerNodeIP.String())},
+				ActStr:   fmt.Sprintf("set_field:%s->eth_src,set_field:%s->eth_dst,load:0x%x->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],set_field:%s->tun_dst,goto_table:71", localGwMAC.String(), vMAC.String(), tunnelPort, peerNodeIP.String()),
+			},
 		},
 	})
 
@@ -1124,6 +1125,10 @@ func prepareDefaultFlows(config *testConfig) []expectTableFlows {
 		tableID: 105,
 		flows:   []*ofTestUtils.ExpectFlow{{MatchStr: "priority=0", ActStr: "goto_table:106"}},
 	}
+	table71Flows := expectTableFlows{
+		tableID: 71,
+		flows:   []*ofTestUtils.ExpectFlow{{MatchStr: "priority=0", ActStr: "goto_table:105"}},
+	}
 	if config.enableIPv4 {
 		table31Flows.flows = append(table31Flows.flows,
 			&ofTestUtils.ExpectFlow{MatchStr: "priority=210,ct_state=-new+trk,ct_mark=0x20,ip,reg0=0x1/0xffff", ActStr: "goto_table:42"},
@@ -1132,6 +1137,9 @@ func prepareDefaultFlows(config *testConfig) []expectTableFlows {
 		table105Flows.flows = append(table105Flows.flows,
 			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ct_state=+new+trk,ip,reg0=0x1/0xffff", ActStr: "ct(commit,table=106,zone=65520,exec(load:0x20->NXM_NX_CT_MARK[])"},
 			&ofTestUtils.ExpectFlow{MatchStr: "priority=190,ct_state=+new+trk,ip", ActStr: "ct(commit,table=106,zone=65520)"},
+		)
+		table71Flows.flows = append(table71Flows.flows,
+			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ip,reg0=0x2/0xffff", ActStr: "dec_ttl,goto_table:105"},
 		)
 	}
 	if config.enableIPv6 {
@@ -1143,9 +1151,12 @@ func prepareDefaultFlows(config *testConfig) []expectTableFlows {
 			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ct_state=+new+trk,ipv6,reg0=0x1/0xffff", ActStr: "ct(commit,table=106,zone=65510,exec(load:0x20->NXM_NX_CT_MARK[])"},
 			&ofTestUtils.ExpectFlow{MatchStr: "priority=190,ct_state=+new+trk,ipv6", ActStr: "ct(commit,table=106,zone=65510)"},
 		)
+		table71Flows.flows = append(table71Flows.flows,
+			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ipv6,reg0=0x2/0xffff", ActStr: "dec_ttl,goto_table:105"},
+		)
 	}
 	return []expectTableFlows{
-		table31Flows, table105Flows,
+		table31Flows, table105Flows, table71Flows,
 		{
 			uint8(0),
 			[]*ofTestUtils.ExpectFlow{{MatchStr: "priority=0", ActStr: "drop"}},
@@ -1186,6 +1197,10 @@ func prepareDefaultFlows(config *testConfig) []expectTableFlows {
 		{
 			uint8(70),
 			[]*ofTestUtils.ExpectFlow{{MatchStr: "priority=0", ActStr: "goto_table:80"}},
+		},
+		{
+			uint8(71),
+			[]*ofTestUtils.ExpectFlow{{MatchStr: "priority=0", ActStr: "goto_table:105"}},
 		},
 		{
 			uint8(80),
