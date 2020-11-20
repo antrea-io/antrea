@@ -19,12 +19,20 @@ spec:
     spec:
       hostPID: true
       hostNetwork: true
+      volumes:
+      - hostPath:
+          path: /var/run/aws-node
+          type: DirectoryOrCreate
+        name: host-aws-node-run-dir
       containers:
         - name: node-init
           image: gcr.io/google-containers/startup-script:v1
           imagePullPolicy: IfNotPresent
           securityContext:
             privileged: true
+          volumeMounts:
+          - mountPath: /var/run/aws-node
+            name: host-aws-node-run-dir
           env:
           - name: STARTUP_SCRIPT
             value: |
@@ -38,6 +46,8 @@ spec:
                   echo "Antrea node init already done. Exiting"
                   exit
               fi
+
+              echo "Initializing node for Antrea"
 
               while true; do
                   cni_conf=$(ls /etc/cni/net.d | head -n1)
@@ -64,13 +74,10 @@ spec:
                   echo "Waiting for aws-k8s-agent"
               done
 
-              # copied from https://github.com/cilium/cilium/blob/master/install/kubernetes/cilium/charts/nodeinit/templates/daemonset.yaml#L199
-              # Fetch running containers from aws-k8s-agent and kill it
+              # Fetch running containers from aws-k8s-agent and kill them
               echo "\n"
-              for pod in $(curl "localhost:61679/v1/pods" 2> /dev/null | jq -r '. | keys[]'); do
-                  container_name=$(echo "$pod" | awk -F_ ' { print $1 } ')
-                  container_id=$(echo "$pod" | awk -F_ ' { print $3 } ' | cut -c1-12)
-                  echo "Restarting container. Name: ${container_name}, ID: ${container_id}"
+              for container_id in $(cat /var/run/aws-node/ipam.json | jq -r '.allocations | .[] | .containerID'); do
+                  echo "Restarting container with ID: ${container_id}"
                   docker kill "${container_id}" || true
               done
 

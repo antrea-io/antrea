@@ -94,6 +94,20 @@ func (mr *MockAgentQuerierMockRecorder) GetK8sClient() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetK8sClient", reflect.TypeOf((*MockAgentQuerier)(nil).GetK8sClient))
 }
 
+// GetNetworkConfig mocks base method
+func (m *MockAgentQuerier) GetNetworkConfig() *config.NetworkConfig {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetNetworkConfig")
+	ret0, _ := ret[0].(*config.NetworkConfig)
+	return ret0
+}
+
+// GetNetworkConfig indicates an expected call of GetNetworkConfig
+func (mr *MockAgentQuerierMockRecorder) GetNetworkConfig() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNetworkConfig", reflect.TypeOf((*MockAgentQuerier)(nil).GetNetworkConfig))
+}
+
 // GetNetworkPolicyInfoQuerier mocks base method
 func (m *MockAgentQuerier) GetNetworkPolicyInfoQuerier() querier.AgentNetworkPolicyInfoQuerier {
 	m.ctrl.T.Helper()

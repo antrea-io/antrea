@@ -31,6 +31,7 @@ RUN_CLEANUP_ONLY=false
 KUBECONFIG_PATH="$HOME/jenkins/out/eks"
 MODE="report"
 TEST_FAILURE=false
+KUBE_CONFORMANCE_IMAGE_VERSION=v1.18.5
 
 _usage="Usage: $0 [--cluster-name <EKSClusterNameToUse>] [--kubeconfig <KubeconfigSavePath>] [--k8s-version <ClusterVersion>]\
                   [--aws-access-key <AccessKey>] [--aws-secret-key <SecretKey>] [--aws-region <Region>] [--ssh-key <SSHKey] \
@@ -187,6 +188,7 @@ function run_conformance() {
     # access through node external IP. See https://github.com/vmware-tanzu/antrea/issues/690
     skip_regex="\[Slow\]|\[Serial\]|\[Disruptive\]|\[Flaky\]|\[Feature:.+\]|\[sig-cli\]|\[sig-storage\]|\[sig-auth\]|\[sig-api-machinery\]|\[sig-apps\]|\[sig-node\]|NodePort"
     ${GIT_CHECKOUT_DIR}/ci/run-k8s-e2e-tests.sh --e2e-conformance --e2e-network-policy --e2e-conformance-skip ${skip_regex} \
+       --kube-conformance-image-version ${KUBE_CONFORMANCE_IMAGE_VERSION} \
        --log-mode ${MODE} > ${GIT_CHECKOUT_DIR}/eks-test.log
 
     if grep -Fxq "Failed tests:" ${GIT_CHECKOUT_DIR}/eks-test.log

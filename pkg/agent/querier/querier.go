@@ -35,6 +35,7 @@ var _ AgentQuerier = new(agentQuerier)
 
 type AgentQuerier interface {
 	GetNodeConfig() *config.NodeConfig
+	GetNetworkConfig() *config.NetworkConfig
 	GetInterfaceStore() interfacestore.InterfaceStore
 	GetK8sClient() clientset.Interface
 	GetAgentInfo(agentInfo *v1beta1.AntreaAgentInfo, partial bool)
@@ -45,6 +46,7 @@ type AgentQuerier interface {
 
 type agentQuerier struct {
 	nodeConfig               *config.NodeConfig
+	networkConfig            *config.NetworkConfig
 	interfaceStore           interfacestore.InterfaceStore
 	k8sClient                clientset.Interface
 	ofClient                 openflow.Client
@@ -55,6 +57,7 @@ type agentQuerier struct {
 
 func NewAgentQuerier(
 	nodeConfig *config.NodeConfig,
+	networkConfig *config.NetworkConfig,
 	interfaceStore interfacestore.InterfaceStore,
 	k8sClient clientset.Interface,
 	ofClient openflow.Client,
@@ -64,6 +67,7 @@ func NewAgentQuerier(
 ) *agentQuerier {
 	return &agentQuerier{
 		nodeConfig:               nodeConfig,
+		networkConfig:            networkConfig,
 		interfaceStore:           interfaceStore,
 		k8sClient:                k8sClient,
 		ofClient:                 ofClient,
@@ -75,6 +79,11 @@ func NewAgentQuerier(
 // GetNodeConfig returns NodeConfig.
 func (aq agentQuerier) GetNodeConfig() *config.NodeConfig {
 	return aq.nodeConfig
+}
+
+// GetNetworkConfig returns NetworkConfig.
+func (aq agentQuerier) GetNetworkConfig() *config.NetworkConfig {
+	return aq.networkConfig
 }
 
 // GetInterfaceStore returns InterfaceStore.
