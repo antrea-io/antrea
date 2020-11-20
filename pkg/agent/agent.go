@@ -335,8 +335,9 @@ func (i *Initializer) initOpenFlowPipeline() error {
 		// Set up flow entries to enable Service connectivity. The agent proxy handles
 		// ClusterIP Services while the upstream kube-proxy is leveraged to handle
 		// any other kinds of Services.
-		if err := i.ofClient.InstallClusterServiceFlows(
-			i.nodeConfig.PodIPv4CIDR != nil, i.nodeConfig.PodIPv6CIDR != nil); err != nil {
+		v4Enabled := config.IsIPv4Enabled(i.nodeConfig, i.networkConfig.TrafficEncapMode)
+		v6Enabled := config.IsIPv6Enabled(i.nodeConfig, i.networkConfig.TrafficEncapMode)
+		if err := i.ofClient.InstallClusterServiceFlows(v4Enabled, v6Enabled); err != nil {
 			klog.Errorf("Failed to setup default OpenFlow entries for ClusterIP Services: %v", err)
 			return err
 		}

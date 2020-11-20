@@ -589,10 +589,10 @@ func (c *client) Initialize(roundInfo types.RoundInfo, nodeConfig *config.NodeCo
 	c.encapMode = encapMode
 	c.gatewayPort = gatewayOFPort
 
-	if c.nodeConfig.PodIPv4CIDR != nil {
+	if config.IsIPv4Enabled(nodeConfig, encapMode) {
 		c.ipProtocols = append(c.ipProtocols, binding.ProtocolIP)
 	}
-	if c.nodeConfig.PodIPv6CIDR != nil {
+	if config.IsIPv6Enabled(nodeConfig, encapMode) {
 		c.ipProtocols = append(c.ipProtocols, binding.ProtocolIPv6)
 	}
 
@@ -836,9 +836,9 @@ func (c *client) InitialTLVMap() error {
 }
 
 func (c *client) IsIPv4Enabled() bool {
-	return c.nodeConfig.PodIPv4CIDR != nil
+	return config.IsIPv4Enabled(c.nodeConfig, c.encapMode)
 }
 
 func (c *client) IsIPv6Enabled() bool {
-	return c.nodeConfig.PodIPv6CIDR != nil
+	return config.IsIPv6Enabled(c.nodeConfig, c.encapMode)
 }
