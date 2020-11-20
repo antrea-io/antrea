@@ -23,7 +23,7 @@ import (
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/npl/k8s"
 	"github.com/vmware-tanzu/antrea/pkg/agent/npl/portcache"
-	"github.com/vmware-tanzu/antrea/pkg/agent/util"
+	"github.com/vmware-tanzu/antrea/pkg/agent/npl/util"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

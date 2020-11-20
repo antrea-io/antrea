@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"sync"
 
-	nplutils "github.com/vmware-tanzu/antrea/pkg/agent/npl/lib"
+	util "github.com/vmware-tanzu/antrea/pkg/agent/util"
 	"github.com/vmware-tanzu/antrea/pkg/agent/npl/rules"
 
 	"k8s.io/klog"
@@ -136,7 +136,7 @@ func (pt *PortTable) getFreePort() int {
 	pt.tableLock.RLock()
 	defer pt.tableLock.RUnlock()
 	for i := pt.StartPort; i <= pt.EndPort; i++ {
-		if _, ok := pt.Table[i]; !ok && nplutils.IsPortAvailable(i) {
+		if _, ok := pt.Table[i]; !ok && util.IsPortAvailable(i) {
 			return i
 		}
 	}
