@@ -70,7 +70,12 @@ func TestUpgrade(t *testing.T) {
 
 	data.testPodConnectivitySameNode(t)
 	data.testPodConnectivityDifferentNodes(t)
-	data.testDifferentNamedPorts(t)
+	// We test NetworkPolicy with 2 scenarios:
+	// 1. The NetworkPolicy is created before upgrading controller.
+	// 2. The NetworkPolicy is created after upgrading controller.
+	checkFn, cleanupFn := data.setupDifferentNamedPorts(t)
+	defer cleanupFn()
+	checkFn()
 
 	if t.Failed() {
 		t.FailNow()
@@ -97,7 +102,13 @@ func TestUpgrade(t *testing.T) {
 
 	data.testPodConnectivitySameNode(t)
 	data.testPodConnectivityDifferentNodes(t)
-	data.testDifferentNamedPorts(t)
+	// Verify that the NetworkPolicy created before upgrading still works.
+	checkFn()
+	// Verify that the NetworkPolicy created after upgrading works.
+	// random resource names are used in the test so it's OK to call setupDifferentNamedPorts the second time.
+	checkFn, cleanupFn = data.setupDifferentNamedPorts(t)
+	defer cleanupFn()
+	checkFn()
 
 	t.Logf("Deleting namespace '%s'", namespace)
 	if err := data.deleteNamespace(namespace, defaultTimeout); err != nil {
