@@ -28,6 +28,7 @@ RUN_CLEANUP_ONLY=false
 KUBECONFIG_PATH="$HOME/jenkins/out/aks"
 TEST_FAILURE=false
 MODE="report"
+KUBE_CONFORMANCE_IMAGE_VERSION=v1.18.5
 
 _usage="Usage: $0 [--cluster-name <AKSClusterNameToUse>] [--kubeconfig <KubeconfigSavePath>] [--k8s-version <ClusterVersion>]\
                   [--azure-app-id <AppID>] [--azure-tenant-id <TenantID>] [--azure-password <Password>] \
@@ -189,6 +190,7 @@ function deliver_antrea_to_aks() {
 function run_conformance() {
     echo "=== Running Antrea Conformance and Network Policy Tests ==="
     ${GIT_CHECKOUT_DIR}/ci/run-k8s-e2e-tests.sh --e2e-conformance --e2e-network-policy \
+      --kube-conformance-image-version ${KUBE_CONFORMANCE_IMAGE_VERSION} \
       --log-mode ${MODE} > ${GIT_CHECKOUT_DIR}/aks-test.log
 
     if grep -Fxq "Failed tests:" ${GIT_CHECKOUT_DIR}/aks-test.log

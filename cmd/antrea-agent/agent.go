@@ -177,19 +177,25 @@ func run(o *Options) error {
 		statsCollector = stats.NewCollector(antreaClientProvider, ofClient, networkPolicyController)
 	}
 
+	var proxier k8sproxy.Provider
+	if features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
+		v4Enabled := config.IsIPv4Enabled(nodeConfig, networkConfig.TrafficEncapMode)
+		v6Enabled := config.IsIPv6Enabled(nodeConfig, networkConfig.TrafficEncapMode)
+		switch {
+		case v4Enabled && v6Enabled:
+			proxier = proxy.NewDualStackProxier(nodeConfig.Name, informerFactory, ofClient)
+		case v4Enabled:
+			proxier = proxy.NewProxier(nodeConfig.Name, informerFactory, ofClient, false)
+		case v6Enabled:
+			proxier = proxy.NewProxier(nodeConfig.Name, informerFactory, ofClient, true)
+		default:
+			return fmt.Errorf("at least one of IPv4 or IPv6 should be enabled")
+		}
+	}
+
 	isChaining := false
 	if networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {
 		isChaining = true
-	}
-	var proxier k8sproxy.Provider
-	if features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
-		if nodeConfig.PodIPv4CIDR != nil && nodeConfig.PodIPv6CIDR != nil {
-			proxier = proxy.NewDualStackProxier(nodeConfig.Name, informerFactory, ofClient)
-		} else if nodeConfig.PodIPv4CIDR != nil {
-			proxier = proxy.NewProxier(nodeConfig.Name, informerFactory, ofClient, false)
-		} else {
-			proxier = proxy.NewProxier(nodeConfig.Name, informerFactory, ofClient, true)
-		}
 	}
 	cniServer := cniserver.New(
 		o.config.CNISocket,
@@ -258,6 +264,7 @@ func run(o *Options) error {
 
 	agentQuerier := querier.NewAgentQuerier(
 		nodeConfig,
+		networkConfig,
 		ifaceStore,
 		k8sClient,
 		ofClient,
