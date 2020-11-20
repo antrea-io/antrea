@@ -26,11 +26,11 @@ GKE_SERVICE_CIDR="10.94.0.0/16"
 GKE_PROJECT="antrea"
 KUBECONFIG_PATH="$HOME/jenkins/out/gke"
 MODE="report"
-
 RUN_ALL=true
 RUN_SETUP_ONLY=false
 RUN_CLEANUP_ONLY=false
 TEST_FAILURE=false
+KUBE_CONFORMANCE_IMAGE_VERSION=v1.18.5
 
 _usage="Usage: $0 [--cluster-name <GKEClusterNameToUse>]  [--kubeconfig <KubeconfigSavePath>] [--k8s-version <ClusterVersion>] \
                   [--svc-account <Name>] [--user <Name>] [--gke-project <Project>] [--gke-zone <Zone>] [--log-mode <SonobuoyResultLogLevel>] \
@@ -218,6 +218,7 @@ function run_conformance() {
     ${GCLOUD_PATH} compute firewall-rules create allow-nodeport --allow tcp:30000-32767
 
     ${GIT_CHECKOUT_DIR}/ci/run-k8s-e2e-tests.sh --e2e-conformance --e2e-network-policy \
+      --kube-conformance-image-version ${KUBE_CONFORMANCE_IMAGE_VERSION} \
       --log-mode ${MODE} > ${GIT_CHECKOUT_DIR}/gke-test.log
 
     ${GCLOUD_PATH} compute firewall-rules delete allow-nodeport
