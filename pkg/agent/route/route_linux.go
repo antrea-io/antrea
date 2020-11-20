@@ -185,7 +185,9 @@ func (c *Client) writeEKSMangleRule(iptablesData *bytes.Buffer) {
 // It's idempotent and can safely be called on every startup.
 func (c *Client) initIPTables() error {
 	var err error
-	c.ipt, err = iptables.New(c.nodeConfig.PodIPv4CIDR != nil, c.nodeConfig.PodIPv6CIDR != nil)
+	v4Enabled := config.IsIPv4Enabled(c.nodeConfig, c.networkConfig.TrafficEncapMode)
+	v6Enabled := config.IsIPv6Enabled(c.nodeConfig, c.networkConfig.TrafficEncapMode)
+	c.ipt, err = iptables.New(v4Enabled, v6Enabled)
 	if err != nil {
 		return fmt.Errorf("error creating IPTables instance: %v", err)
 	}
@@ -210,7 +212,7 @@ func (c *Client) initIPTables() error {
 	}
 
 	// Use iptables-restore to configure IPv4 settings.
-	if c.nodeConfig.PodIPv4CIDR != nil {
+	if v4Enabled {
 		iptablesData := c.restoreIptablesData(c.nodeConfig.PodIPv4CIDR, antreaPodIPSet)
 		// Setting --noflush to keep the previous contents (i.e. non antrea managed chains) of the tables.
 		if err := c.ipt.Restore(iptablesData.Bytes(), false, false); err != nil {
@@ -219,7 +221,7 @@ func (c *Client) initIPTables() error {
 	}
 
 	// Use ip6tables-restore to configure IPv6 settings.
-	if c.nodeConfig.PodIPv6CIDR != nil {
+	if v6Enabled {
 		iptablesData := c.restoreIptablesData(c.nodeConfig.PodIPv6CIDR, antreaPodIP6Set)
 		// Setting --noflush to keep the previous contents (i.e. non antrea managed chains) of the tables.
 		if err := c.ipt.Restore(iptablesData.Bytes(), false, true); err != nil {

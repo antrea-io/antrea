@@ -107,3 +107,17 @@ type NetworkConfig struct {
 	EnableIPSecTunnel bool
 	IPSecPSK          string
 }
+
+// IsIPv4Enabled returns true if the cluster network supports IPv4.
+// TODO: support dual-stack in networkPolicyOnly mode.
+func IsIPv4Enabled(nodeConfig *NodeConfig, trafficEncapMode TrafficEncapModeType) bool {
+	return nodeConfig.PodIPv4CIDR != nil ||
+		(trafficEncapMode.IsNetworkPolicyOnly() && nodeConfig.NodeIPAddr.IP.To4() != nil)
+}
+
+// IsIPv6Enabled returns true if the cluster network supports IPv6.
+// TODO: support dual-stack in networkPolicyOnly mode.
+func IsIPv6Enabled(nodeConfig *NodeConfig, trafficEncapMode TrafficEncapModeType) bool {
+	return nodeConfig.PodIPv6CIDR != nil ||
+		(trafficEncapMode.IsNetworkPolicyOnly() && nodeConfig.NodeIPAddr.IP.To4() == nil)
+}
