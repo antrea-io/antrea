@@ -250,11 +250,11 @@ func (r *supportBundleREST) collect(ctx context.Context, dumpers ...func(string)
 	}, nil
 }
 
-func (r *supportBundleREST) collectAgent(ctx context.Context, cacheCopy *systemv1beta1.SupportBundle) (*systemv1beta1.SupportBundle, error) {
+func (r *supportBundleREST) collectAgent(ctx context.Context, supportBundle *systemv1beta1.SupportBundle) (*systemv1beta1.SupportBundle, error) {
 	dumper := support.NewAgentDumper(defaultFS, defaultExecutor, r.ovsCtlClient, r.aq, r.npq)
 	return r.collect(
 		ctx,
-		func(basedir string) error { return dumper.DumpLog(basedir, cacheCopy.Days) },
+		func(basedir string) error { return dumper.DumpLog(basedir, supportBundle.Days) },
 		dumper.DumpHostNetworkInfo,
 		dumper.DumpFlows,
 		dumper.DumpNetworkPolicyResources,
@@ -264,11 +264,11 @@ func (r *supportBundleREST) collectAgent(ctx context.Context, cacheCopy *systemv
 	)
 }
 
-func (r *supportBundleREST) collectController(ctx context.Context, cacheCopy *systemv1beta1.SupportBundle) (*systemv1beta1.SupportBundle, error) {
+func (r *supportBundleREST) collectController(ctx context.Context, supportBundle *systemv1beta1.SupportBundle) (*systemv1beta1.SupportBundle, error) {
 	dumper := support.NewControllerDumper(defaultFS, defaultExecutor)
 	return r.collect(
 		ctx,
-		func(basedir string) error { return dumper.DumpLog(basedir, cacheCopy.Days) },
+		func(basedir string) error { return dumper.DumpLog(basedir, supportBundle.Days) },
 		dumper.DumpNetworkPolicyResources,
 		dumper.DumpControllerInfo,
 		dumper.DumpHeapPprof,

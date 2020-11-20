@@ -93,10 +93,10 @@ func dumpNetworkPolicyResources(fs afero.Fs, executor exec.Interface, basedir st
 	return dumpAntctlGet(fs, executor, "addressgroups", basedir)
 }
 
-// directoryCopy copies files under the srcDir to the targetDir. Only files whose
-// name matches the prefixFilter will be copied. At the same time, if the timeFilter is set,
-// only files whose modTime is later than the timeFilter will be copied. Copied files will be
-// located under the same relative path.
+// directoryCopy copies files under the srcDir to the targetDir. Only files whose name matches
+// the prefixFilter will be copied. At the same time, if the timeFilter is set, only files
+// whose modTime is later than the timeFilter will be copied. Copied files will be located
+// under the same relative path.
 func directoryCopy(fs afero.Fs, targetDir string, srcDir string, prefixFilter string, timeFilter *time.Time) error {
 	err := fs.MkdirAll(targetDir, os.ModePerm)
 	if err != nil {
