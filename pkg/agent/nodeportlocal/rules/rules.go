@@ -14,19 +14,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package k8s
+package rules
 
-import (
-	"github.com/vmware-tanzu/antrea/pkg/agent/npl/portcache"
-
-	clientset "k8s.io/client-go/kubernetes"
-)
-
-type Controller struct {
-	portTable  *portcache.PortTable
-	kubeClient clientset.Interface
+type PodPortRules interface {
+	Init() error
+	AddRule(port int, podip string) error
+	DeleteRule(port int, podip string) error
+	GetAllRules() (map[int]string, error)
+	DeleteAllRules() error
 }
 
-func NewNPLController(kubeClient clientset.Interface, pt *portcache.PortTable) *Controller {
-	return &Controller{kubeClient: kubeClient, portTable: pt}
+func Initrules() PodPortRules {
+	// Currently we only support IPTABLES. Later this can be extended based on the system capability.
+	return NewIPTableRules()
+
 }

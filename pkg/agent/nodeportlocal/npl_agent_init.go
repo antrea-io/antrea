@@ -14,16 +14,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package npl
+package nodeportlocal
 
 import (
 	"errors"
 	"fmt"
 	"time"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/npl/k8s"
-	"github.com/vmware-tanzu/antrea/pkg/agent/npl/portcache"
-	"github.com/vmware-tanzu/antrea/pkg/agent/npl/util"
+	"github.com/vmware-tanzu/antrea/pkg/agent/nodeportlocal/k8s"
+	"github.com/vmware-tanzu/antrea/pkg/agent/nodeportlocal/portcache"
+	"github.com/vmware-tanzu/antrea/pkg/agent/nodeportlocal/util"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -55,9 +55,9 @@ func InitializeNPLAgent(kubeClient clientset.Interface, informerFactory informer
 	if !ok {
 		return errors.New("NPL port table could not be initialized")
 	}
-	ok = portTable.PodPortRules.Init()
-	if !ok {
-		return errors.New("NPL rules for pod ports could not be initialized")
+	err = portTable.PodPortRules.Init()
+	if err != nil {
+		return fmt.Errorf("NPL rules for pod ports could not be initialized, error: %v", err)
 	}
 	c := k8s.NewNPLController(kubeClient, portTable)
 	c.RemoveNPLAnnotationFromPods()

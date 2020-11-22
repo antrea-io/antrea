@@ -17,16 +17,16 @@
 package util
 
 import (
+	"fmt"
+
 	"golang.org/x/sys/unix"
-	"k8s.io/klog"
 )
 
 // IsPortAvailable checks if a port is free or being used by any other process.
-func IsPortAvailable(mPort int) bool {
+func IsPortAvailable(mPort int) error {
 	fd, err := unix.Socket(unix.AF_INET, unix.SOCK_STREAM, unix.IPPROTO_TCP)
 	if err != nil {
-		klog.Warningf("unix socket creation failed with error: %v", err)
-		return false
+		return fmt.Errorf("unix socket creation failed with error: %v", err)
 	}
 	defer unix.Close(fd)
 
@@ -36,8 +36,8 @@ func IsPortAvailable(mPort int) bool {
 	})
 
 	if err != nil {
-		return false
+		return fmt.Errorf("unix socket bind failed with error: %v", err)
 	}
 
-	return true
+	return nil
 }

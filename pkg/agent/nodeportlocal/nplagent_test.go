@@ -14,7 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package npl
+package nodeportlocal
 
 import (
 	"context"
@@ -25,10 +25,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/npl/k8s"
-	"github.com/vmware-tanzu/antrea/pkg/agent/npl/portcache"
+	"github.com/vmware-tanzu/antrea/pkg/agent/nodeportlocal/k8s"
+	"github.com/vmware-tanzu/antrea/pkg/agent/nodeportlocal/portcache"
+	npltest "github.com/vmware-tanzu/antrea/pkg/agent/nodeportlocal/rules/testing"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -42,29 +44,29 @@ import (
 type PPRTest struct {
 }
 
-func (PPRTest) Init() bool {
-	return true
+func (PPRTest) Init() error {
+	return nil
 }
 
-func (PPRTest) AddRule(port int, podip string) bool {
-	return true
+func (PPRTest) AddRule(port int, podip string) error {
+	return nil
 }
 
-func (PPRTest) DeleteRule(port int, podip string) bool {
-	return true
+func (PPRTest) DeleteRule(port int, podip string) error {
+	return nil
 }
 
-func (PPRTest) SyncState(podPort map[int]string) bool {
-	return true
+func (PPRTest) SyncState(podPort map[int]string) error {
+	return nil
 }
 
-func (PPRTest) GetAllRules() (map[int]string, bool) {
+func (PPRTest) GetAllRules() (map[int]string, error) {
 	m := make(map[int]string)
-	return m, true
+	return m, nil
 }
 
-func (PPRTest) DeleteAllRules() bool {
-	return true
+func (PPRTest) DeleteAllRules() error {
+	return nil
 }
 
 type nplAnnotation struct {
@@ -73,10 +75,15 @@ type nplAnnotation struct {
 	Nodeport string
 }
 
-func NewPortTable() *portcache.PortTable {
+func NewPortTable(c *gomock.Controller) *portcache.PortTable {
 	ptable := portcache.PortTable{StartPort: 40000, EndPort: 45000}
 	ptable.Table = make(map[int]portcache.NodePortData)
-	ptable.PodPortRules = &PPRTest{}
+
+	mockTable := npltest.NewMockPodPortRules(c)
+	mockTable.EXPECT().AddRule(gomock.Any(), gomock.Any()).AnyTimes()
+	mockTable.EXPECT().DeleteRule(gomock.Any(), gomock.Any()).AnyTimes()
+
+	ptable.PodPortRules = mockTable
 	return &ptable
 }
 
@@ -150,7 +157,9 @@ func TestMain(t *testing.T) {
 	kubeClient = k8sfake.NewSimpleClientset()
 
 	informerFactory := informers.NewSharedInformerFactory(kubeClient, 5*time.Second)
-	portTable = NewPortTable()
+	mockCtrl := gomock.NewController(t)
+	//defer mockCtrl.Finish()
+	portTable = NewPortTable(mockCtrl)
 	c = k8s.NewNPLController(kubeClient, portTable)
 
 	podEventHandler := cache.ResourceEventHandlerFuncs{
@@ -163,6 +172,7 @@ func TestMain(t *testing.T) {
 
 	stopCh := make(chan struct{})
 	informerFactory.Start(stopCh)
+
 }
 
 // Add a new Pod with fake k8s client and verify that npl annotation gets updated
@@ -206,7 +216,6 @@ func TestPodAdd(t *testing.T) {
 
 // Test that any update in the Pod container port is reflected in Pod annotation and local port cache
 func TestPodUpdate(t *testing.T) {
-	fmt.Println("here start update")
 	var ann map[string]string
 	var nplData []nplAnnotation
 	var data string
@@ -241,6 +250,7 @@ func TestPodUpdate(t *testing.T) {
 
 // Make sure that when a pod gets deleted, corresponding entry gets deleted from local port cache also
 func TestPodDel(t *testing.T) {
+
 	err := kubeClient.CoreV1().Pods(defaultNS).Delete(context.TODO(), defaultPodName, metav1.DeleteOptions{})
 	if err != nil {
 		t.Fatalf("Pod deletion failed with err: %v", err)

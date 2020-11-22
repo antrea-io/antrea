@@ -45,7 +45,6 @@ func (c *Controller) addRuleForPod(pod *corev1.Pod) {
 
 // HandleAddPod handles Pod annotations in NPL for an added pod.
 func (c *Controller) HandleAddPod(obj interface{}) {
-	klog.Infof("Got add pod")
 	pod := obj.(*corev1.Pod).DeepCopy()
 	klog.Infof("Got add event for pod: %s/%s", pod.Namespace, pod.Name)
 	c.addRuleForPod(pod)
@@ -56,7 +55,7 @@ func (c *Controller) HandleAddPod(obj interface{}) {
 
 // HandleDeletePod handles pod annotations for a deleted pod.
 func (c *Controller) HandleDeletePod(obj interface{}) {
-	pod := obj.(*corev1.Pod).DeepCopy()
+	pod := obj.(*corev1.Pod)
 	klog.Infof("Got delete event for pod: %s/%s", pod.Namespace, pod.Name)
 	podIP := pod.Status.PodIP
 	if podIP == "" {
@@ -73,7 +72,7 @@ func (c *Controller) HandleDeletePod(obj interface{}) {
 
 // HandleUpdatePod handles pod annotations for a updated pod.
 func (c *Controller) HandleUpdatePod(oldObj, newObj interface{}) {
-	oldPod := oldObj.(*corev1.Pod).DeepCopy()
+	oldPod := oldObj.(*corev1.Pod)
 	newPod := newObj.(*corev1.Pod).DeepCopy()
 
 	klog.Infof("Got update for pod: %s/%s", newPod.Namespace, newPod.Name)
@@ -89,14 +88,12 @@ func (c *Controller) HandleUpdatePod(oldObj, newObj interface{}) {
 		for _, cport := range container.Ports {
 			port := fmt.Sprint(cport.ContainerPort)
 			newPodPorts[port] = struct{}{}
-			//newPodPorts = append(newPodPorts, port)
 			if !c.portTable.RuleExists(podIP, int(cport.ContainerPort)) {
 				c.addRuleForPod(newPod)
 			}
 		}
 	}
 
-	// Example - oldPodPorts: [8080, 8081], newPodPorts: [8082, 8081], portsToRemove should have: [8080].
 	oldPodContainers := oldPod.Spec.Containers
 	oldPodIP := oldPod.Status.PodIP
 

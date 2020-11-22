@@ -42,62 +42,59 @@ func NewIPTableRules() *IPTableRules {
 	return &iptRule
 }
 
-func (ipt *IPTableRules) Init() bool {
-	if !ipt.DeleteAllRules() {
-		return false
+func (ipt *IPTableRules) Init() error {
+	err := ipt.DeleteAllRules()
+	if err != nil {
+		return err
 	}
 	return ipt.CreateChains()
 }
 
-// CreateChains : Create the chain NodePortLocalChain in NAT table
-// All DNAT rules for NPL would be added in this chain
-func (ipt *IPTableRules) CreateChains() bool {
+// CreateChains creates the chain NodePortLocalChain in NAT table.
+// All DNAT rules for NPL would be added in this chain.
+func (ipt *IPTableRules) CreateChains() error {
 	ipt.table.EnsureChain(iptables.NATTable, NodePortLocalChain)
 	ruleSpec := []string{
 		"-p", "tcp", "-j", NodePortLocalChain,
 	}
 	ipt.table.EnsureRule(iptables.NATTable, iptables.PreRoutingChain, ruleSpec)
-	return true
+	return nil
 }
 
-// AddRule : Appends a DNAT rule in NodePortLocalChain chain of NAT table
-func (ipt *IPTableRules) AddRule(port int, podip string) bool {
+// AddRule appends a DNAT rule in NodePortLocalChain chain of NAT table
+func (ipt *IPTableRules) AddRule(port int, podip string) error {
 	ruleSpec := []string{
 		"-p", "tcp", "-m", "tcp", "--dport",
 		fmt.Sprint(port), "-j", "DNAT", "--to-destination", podip,
 	}
 	err := ipt.table.EnsureRule(iptables.NATTable, NodePortLocalChain, ruleSpec)
 	if err != nil {
-		klog.Warningf("IPTABLES rule creation in failed for NPL with error: %v", err)
-		return false
+		return fmt.Errorf("IPTABLES rule creation in failed for NPL with error: %v", err)
 	}
 	klog.Infof("successfully added rule for pod %s: %d", podip, port)
-	return true
+	return nil
 }
 
-// DeleteRule : Delete a specific NPL rule from NodePortLocalChain chain
-func (ipt *IPTableRules) DeleteRule(port int, podip string) bool {
+// DeleteRule deletes a specific NPL rule from NodePortLocalChain chain
+func (ipt *IPTableRules) DeleteRule(port int, podip string) error {
 	klog.Infof("Deleting rule with port %v and podip %v", port, podip)
 	ruleSpec := []string{
 		"-p", "tcp", "-m", "tcp", "--dport",
 		fmt.Sprint(port), "-j", "DNAT", "--to-destination", podip,
 	}
 	err := ipt.table.DeleteRule(iptables.NATTable, NodePortLocalChain, ruleSpec)
-
 	if err != nil {
-		klog.Infof("Failed to delete IPTABLES rule for NPL: %v", err)
-		return false
+		return fmt.Errorf("failed to delete IPTABLES rule for NPL: %v", err)
 	}
-	return true
+	return nil
 }
 
-// GetAllRules : Get list of all NPL rules progammed in the node
-func (ipt *IPTableRules) GetAllRules() (map[int]string, bool) {
+// GetAllRules obtains list of all NPL rules progammed in the node
+func (ipt *IPTableRules) GetAllRules() (map[int]string, error) {
 	m := make(map[int]string)
 	rules, err := ipt.table.ListRules(iptables.NATTable, NodePortLocalChain)
 	if err != nil {
-		klog.Warningf("Failed to list IPTABLES rules for NPL: %v", err)
-		return m, false
+		return m, fmt.Errorf("failed to list IPTABLES rules for NPL: %v", err)
 	}
 	for i := range rules {
 		splitRule := strings.Fields(rules[i])
@@ -118,25 +115,23 @@ func (ipt *IPTableRules) GetAllRules() (map[int]string, bool) {
 		//TODO: Need to check whether it's a proper ip:port combination
 		m[port] = splitRule[11]
 	}
-	//podPort = m
-	return m, true
+	return m, nil
 }
 
-// DeleteAllRules : Delete all NPL rules progammed in the node
-func (ipt *IPTableRules) DeleteAllRules() bool {
+// DeleteAllRules deletes all NPL rules progammed in the node
+func (ipt *IPTableRules) DeleteAllRules() error {
 	ruleSpec := []string{
 		"-p", "tcp", "-j", NodePortLocalChain,
 	}
 	err := ipt.table.DeleteRule(iptables.NATTable, iptables.PreRoutingChain, ruleSpec)
 	if err != nil {
-		klog.Warningf("Failed to delete rule from prerouting chain for NPL: %v", err)
-		return false
+		return fmt.Errorf("failed to delete rule from prerouting chain for NPL: %v", err)
+
 	}
 
 	err = ipt.table.DeleteChain(iptables.NATTable, NodePortLocalChain)
 	if err != nil {
-		klog.Warningf("Failed to delete NodePortLocal Chain from NAT table: %v", err)
-		return false
+		return fmt.Errorf("failed to delete NodePortLocal Chain from NAT table: %v", err)
 	}
-	return true
+	return nil
 }

@@ -20,8 +20,8 @@ import (
 	"fmt"
 	"sync"
 
-	util "github.com/vmware-tanzu/antrea/pkg/agent/util"
-	"github.com/vmware-tanzu/antrea/pkg/agent/npl/rules"
+	"github.com/vmware-tanzu/antrea/pkg/agent/nodeportlocal/rules"
+	"github.com/vmware-tanzu/antrea/pkg/agent/util"
 
 	"k8s.io/klog"
 )
@@ -31,7 +31,6 @@ type NodePortData struct {
 	Podport  int
 	Podip    string
 	Status   int
-	//podname  string
 }
 
 type PortTable struct {
@@ -63,9 +62,9 @@ func GetPortTable() *PortTable {
 }
 
 func (pt *PortTable) PopulatePortTable(r rules.PodPortRules) {
-	portMap, ok := r.GetAllRules()
-	if !ok {
-		klog.Warningf("Could not populate port table cache")
+	portMap, err := r.GetAllRules()
+	if err != nil {
+		klog.Warningf("Could not populate port table cache, error: %v", err)
 		return
 	}
 	table := make(map[int]NodePortData)
@@ -136,8 +135,13 @@ func (pt *PortTable) getFreePort() int {
 	pt.tableLock.RLock()
 	defer pt.tableLock.RUnlock()
 	for i := pt.StartPort; i <= pt.EndPort; i++ {
-		if _, ok := pt.Table[i]; !ok && util.IsPortAvailable(i) {
-			return i
+		if _, ok := pt.Table[i]; !ok {
+			err := util.IsPortAvailable(i)
+			if err != nil {
+				klog.Warningf("Got error while checking availability of port: %v", err)
+			} else {
+				return i
+			}
 		}
 	}
 	return -1
@@ -151,8 +155,8 @@ func (pt *PortTable) AddRule(podip string, podport int) (int, bool) {
 	if pt == nil {
 		return 0, false
 	}
-	ok := pt.PodPortRules.AddRule(nodeport, fmt.Sprintf("%s:%d", podip, podport))
-	if !ok {
+	err := pt.PodPortRules.AddRule(nodeport, fmt.Sprintf("%s:%d", podip, podport))
+	if err != nil {
 		return 0, false
 	}
 	pt.AddUpdateEntry(nodeport, podport, podip)
@@ -161,8 +165,8 @@ func (pt *PortTable) AddRule(podip string, podport int) (int, bool) {
 
 func (pt *PortTable) DeleteRule(podip string, podport int) bool {
 	data := pt.GetEntryByPodIPPort(podip, podport)
-	ok := pt.PodPortRules.DeleteRule(data.Nodeport, fmt.Sprintf("%s:%d", podip, podport))
-	if !ok {
+	err := pt.PodPortRules.DeleteRule(data.Nodeport, fmt.Sprintf("%s:%d", podip, podport))
+	if err != nil {
 		return false
 	}
 	pt.DeleteEntry(data.Nodeport)

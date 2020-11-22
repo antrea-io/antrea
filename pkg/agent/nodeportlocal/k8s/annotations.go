@@ -27,20 +27,21 @@ import (
 	"k8s.io/klog"
 )
 
-const NPLAnnotationStr = "npl.antrea.io"
+const NPLAnnotationStr = "nodeportlocal.antrea.io"
 
-type NPLEPAnnotation struct {
+// NPLAnnotation is the structure used for setting NodePortLocal annotation on the Pods
+type NPLAnnotation struct {
 	PodPort  string `json:"podPort"`
 	NodeIP   string `json:"nodeIP"`
 	NodePort string `json:"nodePort"`
 }
 
-func stringify(serialize interface{}) string {
+func toJSON(serialize interface{}) string {
 	jsonMarshalled, _ := json.Marshal(serialize)
 	return string(jsonMarshalled)
 }
 
-func isNodePortInAnnotation(s []NPLEPAnnotation, nodeport string) bool {
+func isNodePortInAnnotation(s []NPLAnnotation, nodeport string) bool {
 	for _, i := range s {
 		if i.NodePort == nodeport {
 			return true
@@ -56,31 +57,30 @@ func assignPodAnnotation(pod *corev1.Pod, containerPort, nodeIP, nodePort string
 		current = make(map[string]string)
 	}
 
-	klog.V(0).Infof("Building annotation for Pod: %s\tport: %s --> %s:%s", pod.Name, containerPort, nodeIP, nodePort)
+	klog.V(2).Infof("Building annotation for Pod: %s\tport: %s --> %s:%s", pod.Name, containerPort, nodeIP, nodePort)
 
-	var annotations []NPLEPAnnotation
-	// nplEP annotation exists.
+	var annotations []NPLAnnotation
 	if current[NPLAnnotationStr] != "" {
 		if err = json.Unmarshal([]byte(current[NPLAnnotationStr]), &annotations); err != nil {
 			klog.Warningf("Unable to unmarshal NPLEP annotation: %v", current[NPLAnnotationStr])
 		}
 
 		if !isNodePortInAnnotation(annotations, nodePort) {
-			annotations = append(annotations, NPLEPAnnotation{
+			annotations = append(annotations, NPLAnnotation{
 				PodPort:  containerPort,
 				NodeIP:   nodeIP,
 				NodePort: nodePort,
 			})
 		}
 	} else {
-		annotations = []NPLEPAnnotation{{
+		annotations = []NPLAnnotation{{
 			PodPort:  containerPort,
 			NodeIP:   nodeIP,
 			NodePort: nodePort,
 		}}
 	}
 
-	current[NPLAnnotationStr] = stringify(annotations)
+	current[NPLAnnotationStr] = toJSON(annotations)
 	pod.Annotations = current
 }
 
@@ -88,8 +88,8 @@ func removeFromPodAnnotation(pod *corev1.Pod, containerPort string) {
 	var err error
 	current := pod.Annotations
 
-	klog.V(0).Infof("Removing annotation from pod: %s\tport: %s", pod.Name, containerPort)
-	var annotations []NPLEPAnnotation
+	klog.V(2).Infof("Removing annotation from pod: %s\tport: %s", pod.Name, containerPort)
+	var annotations []NPLAnnotation
 	if err = json.Unmarshal([]byte(current[NPLAnnotationStr]), &annotations); err != nil {
 		klog.Warningf("Unable to unmarshal NPLEP annotation: %v", current[NPLAnnotationStr])
 		return
@@ -102,7 +102,7 @@ func removeFromPodAnnotation(pod *corev1.Pod, containerPort string) {
 		}
 	}
 
-	current[NPLAnnotationStr] = stringify(annotations)
+	current[NPLAnnotationStr] = toJSON(annotations)
 	pod.Annotations = current
 }
 
@@ -141,14 +141,14 @@ func (c *Controller) updatePodAnnotation(pod *corev1.Pod) error {
 		klog.Warningf("Unable to update Pod %s with annotation: %+v", pod.Name, err)
 		return err
 	}
-	klog.V(0).Infof("Successfully updated Pod %s/%s annotation", pod.Namespace, pod.Name)
+	klog.V(2).Infof("Successfully updated Pod %s/%s annotation", pod.Namespace, pod.Name)
 	return nil
 }
 
-// Returns a Node port for a Pod port.
+// getNodeportFromPodAnnotation Returns a Node port for a Pod port.
 func getNodeportFromPodAnnotation(pod *corev1.Pod, port string) string {
 	current := pod.Annotations
-	var annotations []NPLEPAnnotation
+	var annotations []NPLAnnotation
 	if err := json.Unmarshal([]byte(current[NPLAnnotationStr]), &annotations); err != nil {
 		klog.Warningf("Unable to unmarshal NPLEP annotation")
 		return ""

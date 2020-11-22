@@ -108,6 +108,7 @@ MOCKGEN_TARGETS=(
   "pkg/querier AgentNetworkPolicyInfoQuerier"
   "pkg/agent/flowexporter/connections ConnTrackDumper,NetFilterConnTrack"
   "pkg/ipfix IPFIXExportingProcess,IPFIXSet,IPFIXRegistry,IPFIXCollectingProcess,IPFIXAggregationProcess"
+  "pkg/agent/nodeportlocal/rules PodPortRules"
   "third_party/proxy Provider"
 )
 
