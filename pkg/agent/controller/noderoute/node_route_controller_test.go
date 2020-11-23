@@ -126,7 +126,7 @@ func TestControllerWithDuplicatePodCIDR(t *testing.T) {
 		c.clientset.CoreV1().Nodes().Create(context.TODO(), node1, metav1.CreateOptions{})
 		// The 2nd argument is Any() because the argument is unpredictable when it uses pointer as the key of map.
 		// The argument type is map[*net.IPNet]net.IP.
-		c.ofClient.EXPECT().InstallNodeFlows("node1", gatewayMAC, gomock.Any(), nodeIP1, uint32(config.DefaultTunOFPort), uint32(config.HostGatewayOFPort), uint32(0)).Times(1)
+		c.ofClient.EXPECT().InstallNodeFlows("node1", gomock.Any(), nodeIP1, uint32(0)).Times(1)
 		c.routeClient.EXPECT().AddRoutes(podCIDR, nodeIP1, podCIDRGateway).Times(1)
 		c.processNextWorkItem()
 
@@ -143,7 +143,7 @@ func TestControllerWithDuplicatePodCIDR(t *testing.T) {
 		// After node1 is deleted, routes and flows should be installed for node2 successfully.
 		// The 2nd argument is Any() because the argument is unpredictable when it uses pointer as the key of map.
 		// The argument type is map[*net.IPNet]net.IP.
-		c.ofClient.EXPECT().InstallNodeFlows("node2", gatewayMAC, gomock.Any(), nodeIP2, uint32(config.DefaultTunOFPort), uint32(config.HostGatewayOFPort), uint32(0)).Times(1)
+		c.ofClient.EXPECT().InstallNodeFlows("node2", gomock.Any(), nodeIP2, uint32(0)).Times(1)
 		c.routeClient.EXPECT().AddRoutes(podCIDR, nodeIP2, podCIDRGateway).Times(1)
 		c.processNextWorkItem()
 	}()
