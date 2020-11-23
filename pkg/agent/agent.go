@@ -280,14 +280,9 @@ func persistRoundNum(num uint64, bridgeClient ovsconfig.OVSBridgeClient, interva
 // time.
 func (i *Initializer) initOpenFlowPipeline() error {
 	roundInfo := getRoundInfo(i.ovsBridgeClient)
-	gateway, ok := i.ifaceStore.GetInterface(i.hostGateway)
-	if !ok {
-		return fmt.Errorf("cannot find local gateway %s from interface store", i.hostGateway)
-	}
-	gatewayOFPort := uint32(gateway.OFPort)
 
 	// Set up all basic flows.
-	ofConnCh, err := i.ofClient.Initialize(roundInfo, i.nodeConfig, i.networkConfig.TrafficEncapMode, gatewayOFPort)
+	ofConnCh, err := i.ofClient.Initialize(roundInfo, i.nodeConfig, i.networkConfig.TrafficEncapMode)
 	if err != nil {
 		klog.Errorf("Failed to initialize openflow client: %v", err)
 		return err
@@ -308,14 +303,14 @@ func (i *Initializer) initOpenFlowPipeline() error {
 
 	// Set up flow entries for gateway interface, including classifier, skip spoof guard check,
 	// L3 forwarding and L2 forwarding
-	if err := i.ofClient.InstallGatewayFlows(gateway.IPs, gateway.MAC, gatewayOFPort); err != nil {
+	if err := i.ofClient.InstallGatewayFlows(); err != nil {
 		klog.Errorf("Failed to setup openflow entries for gateway: %v", err)
 		return err
 	}
 
 	if i.networkConfig.TrafficEncapMode.SupportsEncap() {
 		// Set up flow entries for the default tunnel port interface.
-		if err := i.ofClient.InstallDefaultTunnelFlows(config.DefaultTunOFPort); err != nil {
+		if err := i.ofClient.InstallDefaultTunnelFlows(); err != nil {
 			klog.Errorf("Failed to setup openflow entries for tunnel interface: %v", err)
 			return err
 		}
@@ -327,7 +322,7 @@ func (i *Initializer) initOpenFlowPipeline() error {
 		// from local Pods to any Service address can be forwarded to the host gateway interface
 		// correctly. Otherwise packets might be dropped by egress rules before they are DNATed to
 		// backend Pods.
-		if err := i.ofClient.InstallClusterServiceCIDRFlows([]*net.IPNet{i.serviceCIDR, i.serviceCIDRv6}, gatewayOFPort); err != nil {
+		if err := i.ofClient.InstallClusterServiceCIDRFlows([]*net.IPNet{i.serviceCIDR, i.serviceCIDRv6}); err != nil {
 			klog.Errorf("Failed to setup OpenFlow entries for Service CIDRs: %v", err)
 			return err
 		}
@@ -335,9 +330,7 @@ func (i *Initializer) initOpenFlowPipeline() error {
 		// Set up flow entries to enable Service connectivity. The agent proxy handles
 		// ClusterIP Services while the upstream kube-proxy is leveraged to handle
 		// any other kinds of Services.
-		v4Enabled := config.IsIPv4Enabled(i.nodeConfig, i.networkConfig.TrafficEncapMode)
-		v6Enabled := config.IsIPv6Enabled(i.nodeConfig, i.networkConfig.TrafficEncapMode)
-		if err := i.ofClient.InstallClusterServiceFlows(v4Enabled, v6Enabled); err != nil {
+		if err := i.ofClient.InstallClusterServiceFlows(); err != nil {
 			klog.Errorf("Failed to setup default OpenFlow entries for ClusterIP Services: %v", err)
 			return err
 		}

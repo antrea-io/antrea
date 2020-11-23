@@ -330,10 +330,10 @@ type client struct {
 	// conjMatchFlowContext.
 	globalConjMatchFlowCache map[string]*conjMatchFlowContext
 	// replayMutex provides exclusive access to the OFSwitch to the ReplayFlows method.
-	replayMutex sync.RWMutex
-	nodeConfig  *config.NodeConfig
-	encapMode   config.TrafficEncapModeType
-	gatewayPort uint32 // OVSOFPort number
+	replayMutex   sync.RWMutex
+	nodeConfig    *config.NodeConfig
+	encapMode     config.TrafficEncapModeType
+	gatewayOFPort uint32
 	// packetInHandlers stores handler to process PacketIn event. Each packetin reason can have multiple handlers registered.
 	// When a packetin arrives, openflow send packet to registered handlers in this map.
 	packetInHandlers map[uint8]map[string]PacketInHandler
@@ -476,10 +476,10 @@ func (c *client) tunnelClassifierFlow(tunnelOFPort uint32, category cookie.Categ
 }
 
 // gatewayClassifierFlow generates the flow to mark traffic comes from the gatewayOFPort.
-func (c *client) gatewayClassifierFlow(gatewayOFPort uint32, category cookie.Category) binding.Flow {
+func (c *client) gatewayClassifierFlow(category cookie.Category) binding.Flow {
 	classifierTable := c.pipeline[ClassifierTable]
 	return classifierTable.BuildFlow(priorityNormal).
-		MatchInPort(gatewayOFPort).
+		MatchInPort(config.HostGatewayOFPort).
 		Action().LoadRegRange(int(marksReg), markTrafficFromGateway, binding.Range{0, 15}).
 		Action().GotoTable(classifierTable.GetNext()).
 		Cookie(c.cookieAllocator.Request(category).Raw()).
@@ -858,7 +858,6 @@ func (c *client) l3FwdFlowToRemote(
 	localGatewayMAC net.HardwareAddr,
 	peerSubnet net.IPNet,
 	tunnelPeer net.IP,
-	tunOFPort uint32,
 	category cookie.Category) binding.Flow {
 	ipProto := getIPProtocol(peerSubnet.IP)
 	return c.pipeline[l3ForwardingTable].BuildFlow(priorityNormal).MatchProtocol(ipProto).
@@ -867,7 +866,7 @@ func (c *client) l3FwdFlowToRemote(
 		Action().SetSrcMAC(localGatewayMAC).
 		Action().SetDstMAC(globalVirtualMAC).
 		// Load ofport of the tunnel interface.
-		Action().LoadRegRange(int(PortCacheReg), tunOFPort, ofPortRegRange).
+		Action().LoadRegRange(int(PortCacheReg), config.DefaultTunOFPort, ofPortRegRange).
 		// Set MAC-known.
 		Action().LoadRegRange(int(marksReg), portFoundMark, ofPortMarkRange).
 		// Flow based tunnel. Set tunnel destination.
@@ -883,14 +882,13 @@ func (c *client) l3FwdFlowToRemote(
 func (c *client) l3FwdFlowToRemoteViaGW(
 	localGatewayMAC net.HardwareAddr,
 	peerSubnet net.IPNet,
-	gwOFPort uint32,
 	category cookie.Category) binding.Flow {
 	ipProto := getIPProtocol(peerSubnet.IP)
 	l3FwdTable := c.pipeline[l3ForwardingTable]
 	return l3FwdTable.BuildFlow(priorityNormal).MatchProtocol(ipProto).
 		MatchDstIPNet(peerSubnet).
 		Action().SetDstMAC(localGatewayMAC).
-		Action().LoadRegRange(int(PortCacheReg), gwOFPort, ofPortRegRange).
+		Action().LoadRegRange(int(PortCacheReg), config.HostGatewayOFPort, ofPortRegRange).
 		// Set MAC-known.
 		Action().LoadRegRange(int(marksReg), portFoundMark, ofPortMarkRange).
 		Action().GotoTable(conntrackCommitTable).
@@ -995,9 +993,9 @@ func (c *client) serviceHairpinResponseDNATFlow(ipProtocol binding.Protocol) bin
 }
 
 // gatewayARPSpoofGuardFlow generates the flow to check ARP traffic sent out from the local gateway interface.
-func (c *client) gatewayARPSpoofGuardFlow(gatewayOFPort uint32, gatewayIP net.IP, gatewayMAC net.HardwareAddr, category cookie.Category) binding.Flow {
+func (c *client) gatewayARPSpoofGuardFlow(gatewayIP net.IP, gatewayMAC net.HardwareAddr, category cookie.Category) binding.Flow {
 	return c.pipeline[spoofGuardTable].BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolARP).
-		MatchInPort(gatewayOFPort).
+		MatchInPort(config.HostGatewayOFPort).
 		MatchARPSha(gatewayMAC).
 		MatchARPSpa(gatewayIP).
 		Action().GotoTable(arpResponderTable).
@@ -1030,7 +1028,7 @@ func (c *client) sessionAffinityReselectFlow() binding.Flow {
 }
 
 // gatewayIPSpoofGuardFlow generates the flow to skip spoof guard checking for traffic sent from gateway interface.
-func (c *client) gatewayIPSpoofGuardFlows(gatewayOFPort uint32, category cookie.Category) []binding.Flow {
+func (c *client) gatewayIPSpoofGuardFlows(category cookie.Category) []binding.Flow {
 	ipPipeline := c.pipeline
 	ipSpoofGuardTable := ipPipeline[spoofGuardTable]
 	var flows []binding.Flow
@@ -1041,7 +1039,7 @@ func (c *client) gatewayIPSpoofGuardFlows(gatewayOFPort uint32, category cookie.
 		}
 		flows = append(flows,
 			ipSpoofGuardTable.BuildFlow(priorityNormal).MatchProtocol(proto).
-				MatchInPort(gatewayOFPort).
+				MatchInPort(config.HostGatewayOFPort).
 				Action().GotoTable(nextTable).
 				Cookie(c.cookieAllocator.Request(category).Raw()).
 				Done(),
@@ -1051,14 +1049,14 @@ func (c *client) gatewayIPSpoofGuardFlows(gatewayOFPort uint32, category cookie.
 }
 
 // serviceCIDRDNATFlow generates flows to match dst IP in service CIDR and output to host gateway interface directly.
-func (c *client) serviceCIDRDNATFlows(serviceCIDRs []*net.IPNet, gatewayOFPort uint32) []binding.Flow {
+func (c *client) serviceCIDRDNATFlows(serviceCIDRs []*net.IPNet) []binding.Flow {
 	var flows []binding.Flow
 	for _, serviceCIDR := range serviceCIDRs {
 		if serviceCIDR != nil {
 			ipProto := getIPProtocol(serviceCIDR.IP)
 			flows = append(flows, c.pipeline[dnatTable].BuildFlow(priorityNormal).MatchProtocol(ipProto).
 				MatchDstIPNet(*serviceCIDR).
-				Action().LoadRegRange(int(PortCacheReg), gatewayOFPort, ofPortRegRange).
+				Action().LoadRegRange(int(PortCacheReg), config.HostGatewayOFPort, ofPortRegRange).
 				Action().LoadRegRange(int(marksReg), portFoundMark, ofPortMarkRange).
 				Action().GotoTable(conntrackCommitTable).
 				Cookie(c.cookieAllocator.Request(cookie.Service).Raw()).
@@ -1420,16 +1418,17 @@ func (c *client) localProbeFlow(localGatewayIPs []net.IP, category cookie.Catego
 // hostBridgeUplinkFlows generates the flows that forward traffic between the
 // bridge local port and the uplink port to support the host traffic with
 // outside. These flows are needed only on Windows Nodes.
-func (c *client) hostBridgeUplinkFlows(uplinkPort uint32, bridgeLocalPort uint32, localSubnet net.IPNet, category cookie.Category) (flows []binding.Flow) {
+func (c *client) hostBridgeUplinkFlows(localSubnet net.IPNet, category cookie.Category) (flows []binding.Flow) {
+	bridgeOFPort := uint32(config.BridgeOFPort)
 	flows = []binding.Flow{
 		c.pipeline[ClassifierTable].BuildFlow(priorityNormal).
-			MatchInPort(uplinkPort).
+			MatchInPort(config.UplinkOFPort).
 			Action().LoadRegRange(int(marksReg), markTrafficFromUplink, binding.Range{0, 15}).
 			Action().GotoTable(uplinkTable).
 			Cookie(c.cookieAllocator.Request(category).Raw()).
 			Done(),
 		c.pipeline[ClassifierTable].BuildFlow(priorityNormal).
-			MatchInPort(bridgeLocalPort).
+			MatchInPort(config.BridgeOFPort).
 			Action().LoadRegRange(int(marksReg), markTrafficFromBridge, binding.Range{0, 15}).
 			Action().GotoTable(uplinkTable).
 			Cookie(c.cookieAllocator.Request(category).Raw()).
@@ -1439,7 +1438,7 @@ func (c *client) hostBridgeUplinkFlows(uplinkPort uint32, bridgeLocalPort uint32
 		// case they need unSNAT).
 		c.pipeline[uplinkTable].BuildFlow(priorityLow).
 			MatchRegRange(int(marksReg), markTrafficFromUplink, binding.Range{0, 15}).
-			Action().Output(int(bridgeLocalPort)).
+			Action().Output(int(bridgeOFPort)).
 			Cookie(c.cookieAllocator.Request(category).Raw()).
 			Done(),
 		// Forward the packet to conntrackTable if it enters the OVS
@@ -1465,7 +1464,7 @@ func (c *client) hostBridgeUplinkFlows(uplinkPort uint32, bridgeLocalPort uint32
 		// directly.
 		c.pipeline[uplinkTable].BuildFlow(priorityLow).
 			MatchRegRange(int(marksReg), markTrafficFromBridge, binding.Range{0, 15}).
-			Action().Output(int(uplinkPort)).
+			Action().Output(config.UplinkOFPort).
 			Cookie(c.cookieAllocator.Request(category).Raw()).
 			Done(),
 	}
@@ -1475,11 +1474,12 @@ func (c *client) hostBridgeUplinkFlows(uplinkPort uint32, bridgeLocalPort uint32
 // uplinkSNATFlows installs flows for traffic from the uplink port that help
 // the SNAT implementation of the external traffic. It is for the Windows Nodes
 // only.
-func (c *client) uplinkSNATFlows(bridgeLocalPort uint32, category cookie.Category) []binding.Flow {
+func (c *client) uplinkSNATFlows(category cookie.Category) []binding.Flow {
 	ctStateNext := dnatTable
 	if c.enableProxy {
 		ctStateNext = endpointDNATTable
 	}
+	bridgeOFPort := uint32(config.BridgeOFPort)
 	flows := []binding.Flow{
 		// Forward the IP packets from the uplink interface to
 		// conntrackTable. This is for unSNAT the traffic from the local
@@ -1507,7 +1507,7 @@ func (c *client) uplinkSNATFlows(bridgeLocalPort uint32, category cookie.Categor
 		c.pipeline[conntrackStateTable].BuildFlow(priorityNormal).
 			MatchProtocol(binding.ProtocolIP).
 			MatchRegRange(int(marksReg), markTrafficFromUplink, binding.Range{0, 15}).
-			Action().Output(int(bridgeLocalPort)).
+			Action().Output(int(bridgeOFPort)).
 			Cookie(c.cookieAllocator.Request(category).Raw()).
 			Done(),
 	}
@@ -1592,13 +1592,13 @@ func (c *client) snatFlows(nodeIP net.IP, localSubnet net.IPNet, category cookie
 // loadBalancerServiceFromOutsideFlow generates the flow to forward LoadBalancer service traffic from outside node
 // to gateway. kube-proxy will then handle the traffic.
 // This flow is for Windows Node only.
-func (c *client) loadBalancerServiceFromOutsideFlow(gwPort uint32, svcIP net.IP, svcPort uint16, protocol binding.Protocol) binding.Flow {
+func (c *client) loadBalancerServiceFromOutsideFlow(svcIP net.IP, svcPort uint16, protocol binding.Protocol) binding.Flow {
 	return c.pipeline[uplinkTable].BuildFlow(priorityHigh).
 		MatchProtocol(protocol).
 		MatchDstPort(svcPort, nil).
 		MatchRegRange(int(marksReg), markTrafficFromUplink, binding.Range{0, 15}).
 		MatchDstIP(svcIP).
-		Action().Output(int(gwPort)).
+		Action().Output(config.HostGatewayOFPort).
 		Cookie(c.cookieAllocator.Request(cookie.Service).Raw()).
 		Done()
 }
