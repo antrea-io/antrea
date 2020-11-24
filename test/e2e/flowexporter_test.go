@@ -15,7 +15,6 @@
 package e2e
 
 import (
-	"encoding/hex"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -130,40 +129,40 @@ func checkRecordsWithPodIPs(t *testing.T, data *TestData, podAIP string, podBIP 
 		t.Fatalf("Error when getting logs %v, rc: %v", err, rc)
 	}
 
-	/* Parse through IPFIX collector output. Sample output (with truncated fields) is given below:
-	 IPFIX-HDR:
-	 version=10, length=158
-	 unixtime=1596608557 (2020-08-04 23:22:37 PDT)
-	 seqno=51965, odid=4093457084
-	DATA RECORD:
-	 template id:  256
-	 nfields:      21
-	 sourceIPv4Address: 100.10.0.117
-	 destinationIPv4Address: 100.10.1.128
-	 sourceTransportPort: 44586
-	 destinationTransportPort: 8080
-	 protocolIdentifier: 6
-	 packetTotalCount: 7
-	 octetTotalCount: 420
-	 packetDeltaCount: 0
-	 octetDeltaCount: 0
-	 55829_101: 0x7765622d636c69
+	/* Parse through IPFIX collector output. Sample output is given below:
 	IPFIX-HDR:
-	 version=10, length=119
-	 unixtime=1596608558 (2020-08-04 23:22:38 PDT)
-	 seqno=159, odid=1269807227
-	DATA RECORD:
-	 template id:  256
-	 nfields:      21
-	 sourceIPv4Address: 100.10.0.114
-	 destinationIPv4Address: 100.10.1.127
-	 sourceTransportPort: 42872
-	 destinationTransportPort: 8080
-	 protocolIdentifier: 6
-	 packetTotalCount: 7
-	 octetTotalCount: 420
-	 packetDeltaCount: 0
-	 octetDeltaCount: 0
+	  version: 10,  Message Length: 288
+	  Exported Time: 1605749238 (2020-11-19 01:27:18 +0000 UTC)
+	  Sequence No.: 9,  Observation Domain ID: 2134708971
+	DATA SET:
+	  DATA RECORD-0:
+	    flowStartSeconds: 1605749227
+	    flowEndSeconds: 2288912640
+	    sourceIPv4Address: 10.10.0.27
+	    destinationIPv4Address: 10.10.0.28
+	    sourceTransportPort: 34540
+	    destinationTransportPort: 5201
+	    protocolIdentifier: 6
+	    packetTotalCount: 1037047
+	    octetTotalCount: 45371902943
+	    packetDeltaCount: 410256
+	    octetDeltaCount: 18018632100
+	    reversePacketTotalCount: 854967
+	    reverseOctetTotalCount: 44461736
+	    reversePacketDeltaCount: 330362
+	    reverseOctetDeltaCount: 17180264
+	    sourcePodName: perftest-a
+	    sourcePodNamespace: antrea-test
+	    sourceNodeName: k8s-node-master
+	    destinationPodName: perftest-b
+	    destinationPodNamespace: antrea-test
+	    destinationNodeName: k8s-node-master
+	    destinationClusterIPv4: 0.0.0.0
+	    destinationServicePortName:
+	    ingressNetworkPolicyName: test-networkpolicy-ingress
+	    ingressNetworkPolicyNamespace: antrea-test
+	    egressNetworkPolicyName: test-networkpolicy-egress
+	    egressNetworkPolicyNamespace: antrea-test
 	*/
 	re := regexp.MustCompile("(?m)^.*" + "#" + ".*$[\r\n]+")
 	collectorOutput = re.ReplaceAllString(collectorOutput, "")
@@ -184,23 +183,23 @@ func checkRecordsWithPodIPs(t *testing.T, data *TestData, podAIP string, podBIP 
 		if strings.Contains(record, podAIP) && strings.Contains(record, podBIP) {
 			dataRecordsIntraNode = dataRecordsIntraNode + 1
 			// Check if records have both Pod name and Pod namespace or not.
-			if !strings.Contains(record, hex.EncodeToString([]byte("perftest-a"))) {
+			if !strings.Contains(record, "perftest-a") {
 				t.Fatalf("Records with PodAIP does not have Pod name")
 			}
-			if !strings.Contains(record, hex.EncodeToString([]byte("perftest-b"))) {
+			if !strings.Contains(record, "perftest-b") {
 				t.Fatalf("Records with PodBIP does not have Pod name")
 			}
-			if !strings.Contains(record, hex.EncodeToString([]byte(testNamespace))) {
+			if !strings.Contains(record, testNamespace) {
 				t.Fatalf("Records with PodAIP and PodBIP does not have Pod Namespace")
 			}
 			// In Kind clusters, there are two flow records for the iperf flow.
 			// One of them has no bytes and we ignore that flow record.
 			if !strings.Contains(record, "octetDeltaCount: 0") {
 				// Check if records have both ingress and egress network policies.
-				if !strings.Contains(record, hex.EncodeToString([]byte("test-networkpolicy-ingress"))) {
+				if !strings.Contains(record, "test-networkpolicy-ingress") {
 					t.Fatalf("Records does not have NetworkPolicy name with ingress rule")
 				}
-				if !strings.Contains(record, hex.EncodeToString([]byte("test-networkpolicy-egress"))) {
+				if !strings.Contains(record, "test-networkpolicy-egress") {
 					t.Fatalf("Records does not have NetworkPolicy name with egress rule")
 				}
 			}
