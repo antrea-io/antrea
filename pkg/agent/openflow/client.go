@@ -545,11 +545,14 @@ func (c *client) InstallGatewayFlows() error {
 }
 
 func (c *client) InstallDefaultTunnelFlows() error {
-	flow := c.tunnelClassifierFlow(config.DefaultTunOFPort, cookie.Default)
-	if err := c.ofEntryOperations.Add(flow); err != nil {
+	flows := []binding.Flow{
+		c.tunnelClassifierFlow(config.DefaultTunOFPort, cookie.Default),
+		c.l2ForwardCalcFlow(globalVirtualMAC, config.DefaultTunOFPort, cookie.Default),
+	}
+	if err := c.ofEntryOperations.AddAll(flows); err != nil {
 		return err
 	}
-	c.defaultTunnelFlows = []binding.Flow{flow}
+	c.defaultTunnelFlows = flows
 	return nil
 }
 

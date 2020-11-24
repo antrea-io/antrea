@@ -313,6 +313,8 @@ type client struct {
 	roundInfo                                     types.RoundInfo
 	cookieAllocator                               cookie.Allocator
 	bridge                                        binding.Bridge
+	egressEntryTable                              binding.TableIDType
+	ingressEntryTable                             binding.TableIDType
 	pipeline                                      map[binding.TableIDType]binding.Table
 	nodeFlowCache, podFlowCache, serviceFlowCache *flowCategoryCache // cache for corresponding deletions
 	// "fixed" flows installed by the agent after initialization and which do not change during
@@ -689,13 +691,21 @@ func (c *client) serviceLBBypassFlow(ipProtocol binding.Protocol) binding.Flow {
 // l2ForwardCalcFlow generates the flow that matches dst MAC and loads ofPort to reg.
 func (c *client) l2ForwardCalcFlow(dstMAC net.HardwareAddr, ofPort uint32, category cookie.Category) binding.Flow {
 	l2FwdCalcTable := c.pipeline[l2ForwardingCalcTable]
+	// Skip ingress NetworkPolicy enforcement for traffic to the tunnel or
+	// gateway interface.
+	nextTable := l2FwdCalcTable.GetNext()
+	if ofPort != config.DefaultTunOFPort && ofPort != config.HostGatewayOFPort {
+		nextTable = c.ingressEntryTable
+	}
 	return l2FwdCalcTable.BuildFlow(priorityNormal).
 		MatchDstMAC(dstMAC).
 		Action().LoadRegRange(int(PortCacheReg), ofPort, ofPortRegRange).
 		Action().LoadRegRange(int(marksReg), portFoundMark, ofPortMarkRange).
-		Action().GotoTable(l2FwdCalcTable.GetNext()).
+		Action().GotoTable(nextTable).
 		Cookie(c.cookieAllocator.Request(category).Raw()).
 		Done()
+	// Broadcast, multicast, and unknown unicast packets will be dropped by
+	// the default flow of L2ForwardingOutTable.
 }
 
 // traceflowL2ForwardOutputFlows generates Traceflow specific flows that outputs traceflow packets to OVS port and Antrea
@@ -785,8 +795,7 @@ func (c *client) l3FwdFlowToPod(localGatewayMAC net.HardwareAddr, podInterfaceIP
 		flows = append(flows, flowBuilder.MatchDstIP(ip).
 			Action().SetSrcMAC(localGatewayMAC).
 			Action().SetDstMAC(podInterfaceMAC).
-			Action().DecTTL().
-			Action().GotoTable(l3FwdTable.GetNext()).
+			Action().GotoTable(l3DecTTLTable).
 			Cookie(c.cookieAllocator.Request(category).Raw()).
 			Done())
 	}
@@ -805,8 +814,7 @@ func (c *client) l3FwdFlowRouteToPod(podInterfaceIPs []net.IP, podInterfaceMAC n
 		flows = append(flows, l3FwdTable.BuildFlow(priorityNormal).MatchProtocol(ipProtocol).
 			MatchDstIP(ip).
 			Action().SetDstMAC(podInterfaceMAC).
-			Action().DecTTL().
-			Action().GotoTable(l3FwdTable.GetNext()).
+			Action().GotoTable(l3DecTTLTable).
 			Cookie(c.cookieAllocator.Request(category).Raw()).
 			Done())
 	}
@@ -815,16 +823,14 @@ func (c *client) l3FwdFlowRouteToPod(podInterfaceIPs []net.IP, podInterfaceMAC n
 
 // l3FwdFlowRouteToGW generates the flows to route the traffic to the gateway
 // interface. It rewrites the destination MAC of the packets to the gateway
-// interface MAC and decreases the TTL. The flow is used in the
-// networkPolicyOnly mode for the traffic from a local Pod to remote Pods,
-// Nodes, or external network.
+// interface MAC. The flow is used in the networkPolicyOnly mode for the traffic
+// from a local Pod to remote Pods, Nodes, or external network.
 func (c *client) l3FwdFlowRouteToGW(gwMAC net.HardwareAddr, category cookie.Category) []binding.Flow {
 	l3FwdTable := c.pipeline[l3ForwardingTable]
 	var flows []binding.Flow
 	for _, ipProto := range c.ipProtocols {
 		flows = append(flows, l3FwdTable.BuildFlow(priorityLow).MatchProtocol(ipProto).
 			Action().SetDstMAC(gwMAC).
-			Action().DecTTL().
 			Action().GotoTable(l3FwdTable.GetNext()).
 			Cookie(c.cookieAllocator.Request(category).Raw()).
 			Done(),
@@ -865,10 +871,6 @@ func (c *client) l3FwdFlowToRemote(
 		// Rewrite src MAC to local gateway MAC and rewrite dst MAC to virtual MAC.
 		Action().SetSrcMAC(localGatewayMAC).
 		Action().SetDstMAC(globalVirtualMAC).
-		// Load ofport of the tunnel interface.
-		Action().LoadRegRange(int(PortCacheReg), config.DefaultTunOFPort, ofPortRegRange).
-		// Set MAC-known.
-		Action().LoadRegRange(int(marksReg), portFoundMark, ofPortMarkRange).
 		// Flow based tunnel. Set tunnel destination.
 		Action().SetTunnelDst(tunnelPeer).
 		Action().GotoTable(l3DecTTLTable).
@@ -888,10 +890,7 @@ func (c *client) l3FwdFlowToRemoteViaGW(
 	return l3FwdTable.BuildFlow(priorityNormal).MatchProtocol(ipProto).
 		MatchDstIPNet(peerSubnet).
 		Action().SetDstMAC(localGatewayMAC).
-		Action().LoadRegRange(int(PortCacheReg), config.HostGatewayOFPort, ofPortRegRange).
-		// Set MAC-known.
-		Action().LoadRegRange(int(marksReg), portFoundMark, ofPortMarkRange).
-		Action().GotoTable(conntrackCommitTable).
+		Action().GotoTable(l3FwdTable.GetNext()).
 		Cookie(c.cookieAllocator.Request(category).Raw()).
 		Done()
 }
@@ -1096,7 +1095,6 @@ func (c *client) allowRulesMetricFlows(conjunctionID uint32, ingress bool) []bin
 	metricFlow := func(isCTNew bool, protocol binding.Protocol) binding.Flow {
 		return c.pipeline[metricTableID].BuildFlow(priorityNormal).
 			MatchProtocol(protocol).
-			MatchPriority(priorityNormal).
 			MatchCTStateNew(isCTNew).
 			MatchCTLabelRange(0, uint64(conjunctionID)<<offset, labelRange).
 			Action().GotoTable(c.pipeline[metricTableID].GetNext()).
@@ -1120,7 +1118,6 @@ func (c *client) dropRuleMetricFlow(conjunctionID uint32, ingress bool) binding.
 		metricTableID = EgressMetricTable
 	}
 	return c.pipeline[metricTableID].BuildFlow(priorityNormal).
-		MatchPriority(priorityNormal).
 		MatchRegRange(int(marksReg), cnpDropMark, cnpDropMarkRange).
 		MatchReg(int(CNPDropConjunctionIDReg), conjunctionID).
 		Action().Drop().
@@ -1190,7 +1187,6 @@ func (c *client) conjunctionActionFlow(conjunctionID uint32, tableID binding.Tab
 		if enableLogging {
 			return c.pipeline[tableID].BuildFlow(ofPriority).MatchProtocol(proto).
 				MatchConjID(conjunctionID).
-				MatchPriority(ofPriority).
 				Action().LoadRegRange(int(conjReg), conjunctionID, binding.Range{0, 31}).       // Traceflow.
 				Action().LoadRegRange(int(marksReg), DispositionAllow, APDispositionMarkRange). // AntreaPolicy
 				Action().SendToController(uint8(PacketInReasonNP)).
@@ -1202,7 +1198,6 @@ func (c *client) conjunctionActionFlow(conjunctionID uint32, tableID binding.Tab
 		} else {
 			return c.pipeline[tableID].BuildFlow(ofPriority).MatchProtocol(proto).
 				MatchConjID(conjunctionID).
-				MatchPriority(ofPriority).
 				Action().LoadRegRange(int(conjReg), conjunctionID, binding.Range{0, 31}). // Traceflow.
 				Action().CT(true, nextTable, ctZone).                                     // CT action requires commit flag if actions other than NAT without arguments are specified.
 				LoadToLabelRange(uint64(conjunctionID), &labelRange).
@@ -1230,7 +1225,6 @@ func (c *client) conjunctionActionDropFlow(conjunctionID uint32, tableID binding
 	if enableLogging {
 		return c.pipeline[tableID].BuildFlow(ofPriority).
 			MatchConjID(conjunctionID).
-			MatchPriority(ofPriority).
 			Action().LoadRegRange(int(CNPDropConjunctionIDReg), conjunctionID, binding.Range{0, 31}).
 			Action().LoadRegRange(int(marksReg), cnpDropMark, cnpDropMarkRange).
 			Action().LoadRegRange(int(marksReg), DispositionDrop, APDispositionMarkRange). //Logging
@@ -1241,7 +1235,6 @@ func (c *client) conjunctionActionDropFlow(conjunctionID uint32, tableID binding
 	} else {
 		return c.pipeline[tableID].BuildFlow(ofPriority).
 			MatchConjID(conjunctionID).
-			MatchPriority(ofPriority).
 			Action().LoadRegRange(int(CNPDropConjunctionIDReg), conjunctionID, binding.Range{0, 31}).
 			Action().LoadRegRange(int(marksReg), cnpDropMark, cnpDropMarkRange).
 			Action().GotoTable(metricTableID).
@@ -1777,21 +1770,27 @@ func (c *client) serviceEndpointGroup(groupID binding.GroupIDType, withSessionAf
 	return group
 }
 
-// decTTLFlows decrements TTL by one for the packets from a local Pod to a remote Pod. Antrea doesn't
-// decrement TTL for the packets which enter OVS pipeline from antrea-gw0 on the source Node.
-// TTL is also decremented on the destination Node in L3Routing Table when the packet is received.
-// See the functions of "l3FlowsToPod", "l3ToPodFlow", and "l3ToGWFlow".
+// decTTLFlows decrements TTL by one for the packets forwarded across Nodes.
+// The TTL decrement should be skipped for the packets which enter OVS pipeline
+// from the gateway interface, as the host IP stack should have decremented the
+// TTL already for such packets.
 func (c *client) decTTLFlows(category cookie.Category) []binding.Flow {
 	var flows []binding.Flow
+	decTTLTable := c.pipeline[l3DecTTLTable]
 	for _, proto := range c.ipProtocols {
-		flows = append(flows, c.pipeline[l3DecTTLTable].BuildFlow(priorityNormal).MatchPriority(priorityNormal).
-			MatchProtocol(proto).
-			MatchRegRange(int(marksReg), markTrafficFromLocal, binding.Range{0, 15}).
-			Action().DecTTL().
-			// Bypass l2ForwardingCalcTable and tables for ingress rules (which won't
-			// apply to packets to remote Nodes).
-			Action().GotoTable(conntrackCommitTable).
-			Done())
+		flows = append(flows,
+			// Skip packets from the gateway interface.
+			decTTLTable.BuildFlow(priorityHigh).
+				MatchProtocol(proto).
+				MatchRegRange(int(marksReg), markTrafficFromGateway, binding.Range{0, 15}).
+				Action().GotoTable(decTTLTable.GetNext()).
+				Done(),
+			decTTLTable.BuildFlow(priorityNormal).
+				MatchProtocol(proto).
+				Action().DecTTL().
+				Action().GotoTable(decTTLTable.GetNext()).
+				Done(),
+		)
 	}
 	return flows
 }
@@ -1809,16 +1808,10 @@ func priorityIndexFunc(obj interface{}) ([]string, error) {
 	return conj.ActionFlowPriorities(), nil
 }
 
-func generatePipeline(bridge binding.Bridge, enableProxy, enableAntreaNP bool) map[binding.TableIDType]binding.Table {
-	var egressEntryTable, IngressEntryTable binding.TableIDType
-	if enableAntreaNP {
-		egressEntryTable, IngressEntryTable = AntreaPolicyEgressRuleTable, AntreaPolicyIngressRuleTable
-	} else {
-		egressEntryTable, IngressEntryTable = EgressRuleTable, IngressRuleTable
-	}
-	var pipeline map[binding.TableIDType]binding.Table
-	if enableProxy {
-		pipeline = map[binding.TableIDType]binding.Table{
+func (c *client) generatePipeline() {
+	bridge := c.bridge
+	if c.enableProxy {
+		c.pipeline = map[binding.TableIDType]binding.Table{
 			ClassifierTable:       bridge.CreateTable(ClassifierTable, spoofGuardTable, binding.TableMissActionDrop),
 			uplinkTable:           bridge.CreateTable(uplinkTable, spoofGuardTable, binding.TableMissActionNone),
 			spoofGuardTable:       bridge.CreateTable(spoofGuardTable, serviceHairpinTable, binding.TableMissActionDrop),
@@ -1829,13 +1822,13 @@ func generatePipeline(bridge binding.Bridge, enableProxy, enableAntreaNP bool) m
 			conntrackStateTable:   bridge.CreateTable(conntrackStateTable, endpointDNATTable, binding.TableMissActionNext),
 			sessionAffinityTable:  bridge.CreateTable(sessionAffinityTable, binding.LastTableID, binding.TableMissActionNone),
 			serviceLBTable:        bridge.CreateTable(serviceLBTable, endpointDNATTable, binding.TableMissActionNext),
-			endpointDNATTable:     bridge.CreateTable(endpointDNATTable, egressEntryTable, binding.TableMissActionNext),
+			endpointDNATTable:     bridge.CreateTable(endpointDNATTable, c.egressEntryTable, binding.TableMissActionNext),
 			EgressRuleTable:       bridge.CreateTable(EgressRuleTable, EgressDefaultTable, binding.TableMissActionNext),
 			EgressDefaultTable:    bridge.CreateTable(EgressDefaultTable, EgressMetricTable, binding.TableMissActionNext),
 			EgressMetricTable:     bridge.CreateTable(EgressMetricTable, l3ForwardingTable, binding.TableMissActionNext),
 			l3ForwardingTable:     bridge.CreateTable(l3ForwardingTable, l2ForwardingCalcTable, binding.TableMissActionNext),
-			l3DecTTLTable:         bridge.CreateTable(l3DecTTLTable, conntrackCommitTable, binding.TableMissActionNext),
-			l2ForwardingCalcTable: bridge.CreateTable(l2ForwardingCalcTable, IngressEntryTable, binding.TableMissActionNext),
+			l3DecTTLTable:         bridge.CreateTable(l3DecTTLTable, l2ForwardingCalcTable, binding.TableMissActionNext),
+			l2ForwardingCalcTable: bridge.CreateTable(l2ForwardingCalcTable, conntrackCommitTable, binding.TableMissActionNext),
 			IngressRuleTable:      bridge.CreateTable(IngressRuleTable, IngressDefaultTable, binding.TableMissActionNext),
 			IngressDefaultTable:   bridge.CreateTable(IngressDefaultTable, IngressMetricTable, binding.TableMissActionNext),
 			IngressMetricTable:    bridge.CreateTable(IngressMetricTable, conntrackCommitTable, binding.TableMissActionNext),
@@ -1844,20 +1837,20 @@ func generatePipeline(bridge binding.Bridge, enableProxy, enableAntreaNP bool) m
 			L2ForwardingOutTable:  bridge.CreateTable(L2ForwardingOutTable, binding.LastTableID, binding.TableMissActionDrop),
 		}
 	} else {
-		pipeline = map[binding.TableIDType]binding.Table{
+		c.pipeline = map[binding.TableIDType]binding.Table{
 			ClassifierTable:       bridge.CreateTable(ClassifierTable, spoofGuardTable, binding.TableMissActionDrop),
 			spoofGuardTable:       bridge.CreateTable(spoofGuardTable, conntrackTable, binding.TableMissActionDrop),
 			arpResponderTable:     bridge.CreateTable(arpResponderTable, binding.LastTableID, binding.TableMissActionDrop),
 			ipv6Table:             bridge.CreateTable(ipv6Table, conntrackTable, binding.TableMissActionNext),
 			conntrackTable:        bridge.CreateTable(conntrackTable, conntrackStateTable, binding.TableMissActionNone),
 			conntrackStateTable:   bridge.CreateTable(conntrackStateTable, dnatTable, binding.TableMissActionNext),
-			dnatTable:             bridge.CreateTable(dnatTable, egressEntryTable, binding.TableMissActionNext),
+			dnatTable:             bridge.CreateTable(dnatTable, c.egressEntryTable, binding.TableMissActionNext),
 			EgressRuleTable:       bridge.CreateTable(EgressRuleTable, EgressDefaultTable, binding.TableMissActionNext),
 			EgressDefaultTable:    bridge.CreateTable(EgressDefaultTable, EgressMetricTable, binding.TableMissActionNext),
 			EgressMetricTable:     bridge.CreateTable(EgressMetricTable, l3ForwardingTable, binding.TableMissActionNext),
 			l3ForwardingTable:     bridge.CreateTable(l3ForwardingTable, l2ForwardingCalcTable, binding.TableMissActionNext),
-			l3DecTTLTable:         bridge.CreateTable(l3DecTTLTable, conntrackCommitTable, binding.TableMissActionNext),
-			l2ForwardingCalcTable: bridge.CreateTable(l2ForwardingCalcTable, IngressEntryTable, binding.TableMissActionNext),
+			l3DecTTLTable:         bridge.CreateTable(l3DecTTLTable, l2ForwardingCalcTable, binding.TableMissActionNext),
+			l2ForwardingCalcTable: bridge.CreateTable(l2ForwardingCalcTable, conntrackCommitTable, binding.TableMissActionNext),
 			IngressRuleTable:      bridge.CreateTable(IngressRuleTable, IngressDefaultTable, binding.TableMissActionNext),
 			IngressDefaultTable:   bridge.CreateTable(IngressDefaultTable, IngressMetricTable, binding.TableMissActionNext),
 			IngressMetricTable:    bridge.CreateTable(IngressMetricTable, conntrackCommitTable, binding.TableMissActionNext),
@@ -1865,12 +1858,10 @@ func generatePipeline(bridge binding.Bridge, enableProxy, enableAntreaNP bool) m
 			L2ForwardingOutTable:  bridge.CreateTable(L2ForwardingOutTable, binding.LastTableID, binding.TableMissActionDrop),
 		}
 	}
-	if !enableAntreaNP {
-		return pipeline
+	if c.enableAntreaPolicy {
+		c.pipeline[AntreaPolicyEgressRuleTable] = bridge.CreateTable(AntreaPolicyEgressRuleTable, EgressRuleTable, binding.TableMissActionNext)
+		c.pipeline[AntreaPolicyIngressRuleTable] = bridge.CreateTable(AntreaPolicyIngressRuleTable, IngressRuleTable, binding.TableMissActionNext)
 	}
-	pipeline[AntreaPolicyEgressRuleTable] = bridge.CreateTable(AntreaPolicyEgressRuleTable, EgressRuleTable, binding.TableMissActionNext)
-	pipeline[AntreaPolicyIngressRuleTable] = bridge.CreateTable(AntreaPolicyIngressRuleTable, IngressRuleTable, binding.TableMissActionNext)
-	return pipeline
 }
 
 // NewClient is the constructor of the Client interface.
@@ -1882,7 +1873,8 @@ func NewClient(bridgeName, mgmtAddr string, enableProxy, enableAntreaPolicy bool
 	)
 	c := &client{
 		bridge:                   bridge,
-		pipeline:                 generatePipeline(bridge, enableProxy, enableAntreaPolicy),
+		enableProxy:              enableProxy,
+		enableAntreaPolicy:       enableAntreaPolicy,
 		nodeFlowCache:            newFlowCategoryCache(),
 		podFlowCache:             newFlowCategoryCache(),
 		serviceFlowCache:         newFlowCategoryCache(),
@@ -1892,7 +1884,11 @@ func NewClient(bridgeName, mgmtAddr string, enableProxy, enableAntreaPolicy bool
 		packetInHandlers:         map[uint8]map[string]PacketInHandler{},
 	}
 	c.ofEntryOperations = c
-	c.enableProxy = enableProxy
-	c.enableAntreaPolicy = enableAntreaPolicy
+	if enableAntreaPolicy {
+		c.egressEntryTable, c.ingressEntryTable = AntreaPolicyEgressRuleTable, AntreaPolicyIngressRuleTable
+	} else {
+		c.egressEntryTable, c.ingressEntryTable = EgressRuleTable, IngressRuleTable
+	}
+	c.generatePipeline()
 	return c
 }
