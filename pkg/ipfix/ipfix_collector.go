@@ -16,7 +16,6 @@ package ipfix
 
 import (
 	"fmt"
-	"net"
 
 	ipfixcollect "github.com/vmware/go-ipfix/pkg/collector"
 	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
@@ -35,8 +34,8 @@ type ipfixCollectingProcess struct {
 	CollectingProcess *ipfixcollect.CollectingProcess
 }
 
-func NewIPFIXCollectingProcess(address net.Addr, maxBufferSize uint16, templateTTL uint32) (*ipfixCollectingProcess, error) {
-	cp, err := ipfixcollect.InitCollectingProcess(address, maxBufferSize, templateTTL)
+func NewIPFIXCollectingProcess(input ipfixcollect.CollectorInput) (*ipfixCollectingProcess, error) {
+	cp, err := ipfixcollect.InitCollectingProcess(input)
 	if err != nil {
 		return nil, fmt.Errorf("error while initializing IPFIX collecting process: %v", err)
 	}

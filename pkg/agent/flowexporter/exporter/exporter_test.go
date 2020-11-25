@@ -65,6 +65,7 @@ func testFlowExporter_sendTemplateSet(t *testing.T, v4Enabled bool, v6Enabled bo
 		mockIPFIXRegistry,
 		v4Enabled,
 		v6Enabled,
+		nil,
 	}
 
 	if v4Enabled {
@@ -112,12 +113,10 @@ func sendTemplateSet(t *testing.T, ctrl *gomock.Controller, mockIPFIXExpProc *ip
 
 	// Passing 0 for sentBytes as it is not used anywhere in the test. If this not a call to mock, the actual sentBytes
 	// above elements: IANAInfoElements, IANAReverseInfoElements and AntreaInfoElements.
-	mockIPFIXExpProc.EXPECT().AddSetAndSendMsg(ipfixentities.Template, tempSet).Return(0, nil)
+	mockIPFIXExpProc.EXPECT().SendSet(tempSet).Return(0, nil)
 
 	_, err := flowExp.sendTemplateSet(mockTempSet, isIPv6)
-	if err != nil {
-		t.Errorf("Error in sending templated record: %v", err)
-	}
+	assert.NoError(t, err, "Error in sending template set")
 
 	eL := flowExp.elementsListv4
 	if isIPv6 {
@@ -171,9 +170,9 @@ func testFlowExporter_sendDataSet(t *testing.T, v4Enabled bool, v6Enabled bool) 
 		mockIPFIXRegistry,
 		v4Enabled,
 		v6Enabled,
+		nil,
 	}
 
-	// TODO: add tests for data fields
 	sendDataSet := func(elemList []*ipfixentities.InfoElementWithValue, templateID uint16, record flowexporter.FlowRecord) {
 		var dataSet ipfixentities.Set
 		mockDataSet.EXPECT().AddRecord(gomock.AssignableToTypeOf(elemList), templateID).DoAndReturn(
@@ -186,12 +185,11 @@ func testFlowExporter_sendDataSet(t *testing.T, v4Enabled bool, v6Enabled bool) 
 			},
 		)
 		mockDataSet.EXPECT().GetSet().Return(dataSet)
-		mockIPFIXExpProc.EXPECT().AddSetAndSendMsg(ipfixentities.Data, dataSet).Return(0, nil)
-
-		err := flowExp.sendDataSet(mockDataSet, record)
-		if err != nil {
-			t.Errorf("Error in sending data set: %v", err)
-		}
+		mockIPFIXExpProc.EXPECT().SendSet(dataSet).Return(0, nil)
+		err := flowExp.addRecordToSet(mockDataSet, record)
+		assert.NoError(t, err, "Error when adding record to data set")
+		_, err = flowExp.sendDataSet(mockDataSet)
+		assert.NoError(t, err, "Error in sending data set")
 	}
 
 	if v4Enabled {

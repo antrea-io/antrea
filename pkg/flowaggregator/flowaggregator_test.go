@@ -80,7 +80,7 @@ func TestFlowAggregator_sendTemplateSet(t *testing.T) {
 
 	// Passing 0 for sentBytes as it is not used anywhere in the test. If this not a call to mock, the actual sentBytes
 	// above elements: ianaInfoElements, ianaReverseInfoElements and antreaInfoElements.
-	mockIPFIXExpProc.EXPECT().AddSetAndSendMsg(ipfixentities.Template, tempSet).Return(0, nil)
+	mockIPFIXExpProc.EXPECT().SendSet(tempSet).Return(0, nil)
 
 	_, err := fa.sendTemplateSet(mockTempSet)
 	assert.NoErrorf(t, err, "Error in sending template record: %v", err)
