@@ -15,6 +15,8 @@
 package main
 
 import (
+	"fmt"
+
 	"k8s.io/klog"
 
 	aggregator "github.com/vmware-tanzu/antrea/pkg/flowaggregator"
@@ -27,7 +29,15 @@ func run(o *Options) error {
 	// cause the stopCh channel to be closed; if another signal is received before the program
 	// exits, we will force exit.
 	stopCh := signals.RegisterSignalHandlers()
-	flowAggregator := aggregator.InitFlowAggregator(o.flowCollectorAddr, o.exportInterval)
+	flowAggregator := aggregator.NewFlowAggregator(o.externalFlowCollectorAddr, o.exportInterval, o.aggregatorTransportProtocol)
+	err := flowAggregator.InitCollectingProcess()
+	if err != nil {
+		return fmt.Errorf("error when creating collecting process: %v", err)
+	}
+	err = flowAggregator.InitAggregationProcess()
+	if err != nil {
+		return fmt.Errorf("error when creating aggregation process: %v", err)
+	}
 	go flowAggregator.Run(stopCh)
 	<-stopCh
 	klog.Infof("Stopping flow aggregator")

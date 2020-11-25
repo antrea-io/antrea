@@ -14,15 +14,20 @@
 
 package main
 
+import "github.com/vmware-tanzu/antrea/pkg/flowaggregator"
+
 type FlowAggregatorConfig struct {
 	// Provide the flow collector address as string with format <IP>:<port>[:<proto>], where proto is tcp or udp.
 	// If no L4 transport proto is given, we consider tcp as default.
 	// Defaults to "".
-	FlowCollectorAddr string `yaml:"flowCollectorAddr,omitempty"`
+	ExternalFlowCollectorProtocol string `yaml:"externalFlowCollectorAddr,omitempty"`
 	// Provide flow export interval as a duration string. This determines how often the flow aggregator exports flow
 	// records to the flow collector.
 	// Flow export interval should be greater than or equal to 1s (one second).
 	// Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
 	// Defaults to "60s".
 	FlowExportInterval string `yaml:"flowExportInterval,omitempty"`
+	// Transport protocol over which the aggregator collects IPFIX records from all Agents.
+	// Defaults to "tcp"
+	AggregatorTransportProtocol flowaggregator.AggregatorTransportProtocol `yaml:"aggregatorTransportProtocol,omitempty"`
 }

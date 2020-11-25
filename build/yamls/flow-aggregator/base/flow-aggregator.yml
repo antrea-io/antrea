@@ -1,3 +1,9 @@
+# Create a namespace for Flow Aggregator service
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: flow-aggregator
+---
 apiVersion: v1
 kind: Service
 metadata:
@@ -7,8 +13,13 @@ spec:
   selector:
     app: flow-aggregator
   ports:
-  - port: 4739
+  - name: ipfix-udp
+    port: 4739
     protocol: UDP
+    targetPort: 4739
+  - name: ipfix-tcp
+    port: 4739
+    protocol: TCP
     targetPort: 4739
 ---
 apiVersion: apps/v1
