@@ -177,6 +177,56 @@ func testMutateANPNoTier(t *testing.T) {
 	failOnError(k8sUtils.CleanANPs([]string{anp.Namespace}), t)
 }
 
+func testMutateACNPNoRuleName(t *testing.T) {
+	mutateErr := fmt.Errorf("ACNP Rule name not mutated automatically")
+	builder := &ClusterNetworkPolicySpecBuilder{}
+	builder = builder.SetName("acnp-no-rule-name").
+		SetAppliedToGroup(map[string]string{"pod": "a"}, nil, nil, nil).
+		SetPriority(10.0).
+		AddIngress(v1.ProtocolTCP, &p80, nil, nil, map[string]string{"pod": "b"}, map[string]string{"ns": "x"},
+			nil, nil, secv1alpha1.RuleActionAllow, "")
+	acnp := builder.Get()
+	log.Debugf("creating ACNP %v", acnp.Name)
+	acnp, err := k8sUtils.CreateOrUpdateCNP(acnp)
+	if err != nil {
+		failOnError(fmt.Errorf("ACNP create failed %v", err), t)
+	}
+	ir := acnp.Spec.Ingress
+	if len(ir) != 1 {
+		failOnError(fmt.Errorf("unexpected number of rules present in ACNP: %d rules present instead of 1", len(ir)), t)
+	}
+	// Here we created a single rule
+	if ir[0].Name == "" {
+		failOnError(mutateErr, t)
+	}
+	failOnError(k8sUtils.CleanCNPs(), t)
+}
+
+func testMutateANPNoRuleName(t *testing.T) {
+	mutateErr := fmt.Errorf("ANP Rule name not mutated automatically")
+	builder := &AntreaNetworkPolicySpecBuilder{}
+	builder = builder.SetName("x", "anp-no-rule-name").
+		SetAppliedToGroup(map[string]string{"pod": "a"}, nil).
+		SetPriority(10.0).
+		AddIngress(v1.ProtocolTCP, &p80, nil, nil, map[string]string{"pod": "b"}, map[string]string{"ns": "x"},
+			nil, nil, secv1alpha1.RuleActionAllow, "")
+	anp := builder.Get()
+	log.Debugf("creating ANP %v", anp.Name)
+	anp, err := k8sUtils.CreateOrUpdateANP(anp)
+	if err != nil {
+		failOnError(fmt.Errorf("ANP create failed %v", err), t)
+	}
+	ir := anp.Spec.Ingress
+	if len(ir) != 1 {
+		failOnError(fmt.Errorf("unexpected number of rules present in ANP: %d rules present instead of 1", len(ir)), t)
+	}
+	// Here we created a single rule
+	if ir[0].Name == "" {
+		failOnError(mutateErr, t)
+	}
+	failOnError(k8sUtils.CleanANPs([]string{anp.Namespace}), t)
+}
+
 func testInvalidACNPNoPriority(t *testing.T) {
 	invalidNpErr := fmt.Errorf("invalid Antrea ClusterNetworkPolicy without a priority accepted")
 	builder := &ClusterNetworkPolicySpecBuilder{}
@@ -1076,6 +1126,8 @@ func TestAntreaPolicy(t *testing.T) {
 	t.Run("TestGroupMutateAntreaNativePolicies", func(t *testing.T) {
 		t.Run("Case=ACNPNoTierSetDefaultTier", func(t *testing.T) { testMutateACNPNoTier(t) })
 		t.Run("Case=ANPNoTierSetDefaultTier", func(t *testing.T) { testMutateANPNoTier(t) })
+		t.Run("Case=ANPNoRuleNameSetRuleName", func(t *testing.T) { testMutateANPNoRuleName(t) })
+		t.Run("Case=ACNPNoRuleNameSetRuleName", func(t *testing.T) { testMutateACNPNoRuleName(t) })
 	})
 
 	t.Run("TestGroupDefaultDENY", func(t *testing.T) {
