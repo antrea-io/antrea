@@ -328,10 +328,11 @@ func TestProcessAntreaNetworkPolicy(t *testing.T) {
 					Priority: p10,
 					Ingress: []secv1alpha1.Rule{
 						{
-							PortRanges: []secv1alpha1.NetworkPolicyPortRanges{
+							Ports: []secv1alpha1.NetworkPolicyPort{
 								{
 									Protocol: &k8sProtocolTCP,
-									Range:    &secv1alpha1.PortRange{From: &uint16For998, To: &uint16For1999, Except: []uint16{999}},
+									Port:     &int1000,
+									EndPort:  &int32For1999,
 								},
 							},
 							From: []secv1alpha1.NetworkPolicyPeer{
@@ -363,10 +364,6 @@ func TestProcessAntreaNetworkPolicy(t *testing.T) {
 							AddressGroups: []string{getNormalizedUID(toGroupSelector("", &selectorB, &selectorC, nil).NormalizedName)},
 						},
 						Services: []controlplane.Service{
-							{
-								Protocol: toAntreaProtocol(&k8sProtocolTCP),
-								PortMask: &controlplane.PortMask{Port: &int998, Mask: &int32For65535},
-							},
 							{
 								Protocol: toAntreaProtocol(&k8sProtocolTCP),
 								PortMask: &controlplane.PortMask{Port: &int1000, Mask: &int32For65528},
@@ -504,10 +501,11 @@ func TestAddANP(t *testing.T) {
 					Priority: p10,
 					Ingress: []secv1alpha1.Rule{
 						{
-							PortRanges: []secv1alpha1.NetworkPolicyPortRanges{
+							Ports: []secv1alpha1.NetworkPolicyPort{
 								{
 									Protocol: &k8sProtocolTCP,
-									Range:    &secv1alpha1.PortRange{From: &uint16For998, To: &uint16For1999, Except: []uint16{999}},
+									Port:     &int1000,
+									EndPort:  &int32For1999,
 								},
 							},
 							From: []secv1alpha1.NetworkPolicyPeer{
@@ -539,10 +537,6 @@ func TestAddANP(t *testing.T) {
 							AddressGroups: []string{getNormalizedUID(toGroupSelector("", &selectorB, &selectorC, nil).NormalizedName)},
 						},
 						Services: []controlplane.Service{
-							{
-								Protocol: toAntreaProtocol(&k8sProtocolTCP),
-								PortMask: &controlplane.PortMask{Port: &int998, Mask: &int32For65535},
-							},
 							{
 								Protocol: toAntreaProtocol(&k8sProtocolTCP),
 								PortMask: &controlplane.PortMask{Port: &int1000, Mask: &int32For65528},

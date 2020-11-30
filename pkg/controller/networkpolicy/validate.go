@@ -22,6 +22,7 @@ import (
 	admv1 "k8s.io/api/admission/v1"
 	authenticationv1 "k8s.io/api/authentication/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog"
 
@@ -213,23 +214,22 @@ func (v *NetworkPolicyValidator) validateAntreaPolicy(curObj, oldObj interface{}
 	return reason, allowed
 }
 
-// validatePortRange validates if portRange is valid
-func (a *antreaPolicyValidator) validatePortRange(ingress, egress []secv1alpha1.Rule) error {
+// validatePort validates if ports is valid
+func (a *antreaPolicyValidator) validatePort(ingress, egress []secv1alpha1.Rule) error {
 	isValid := func(rules []secv1alpha1.Rule) error {
 		for _, rule := range rules {
-			for _, portRange := range rule.PortRanges {
-				if (portRange.Range.From != nil) != (portRange.Range.To != nil) {
-					return fmt.Errorf("inside portRange, `from` and `to` have be set at the same time")
+			for _, port := range rule.Ports {
+				if port.EndPort == nil {
+					continue
 				}
-				if portRange.Range.From != nil && portRange.Range.To != nil {
-					if *portRange.Range.From > *portRange.Range.To {
-						return fmt.Errorf("inside portRange, `from` cannot be bigger than `to`")
-					}
-					for _, except := range portRange.Range.Except {
-						if except <= *portRange.Range.From || except >= *portRange.Range.To {
-							return fmt.Errorf("ports in portRange.except should be inside (portRange.From, portRange.To) exclusive")
-						}
-					}
+				if port.Port == nil {
+					return fmt.Errorf("if `endPort` is specified `port` must be specified")
+				}
+				if port.Port.Type == intstr.String {
+					return fmt.Errorf("if `port` is a string `endPort` cannot be specified")
+				}
+				if *port.EndPort <= port.Port.IntVal {
+					return fmt.Errorf("`endPort` should be greater than `port`")
 				}
 			}
 		}
@@ -329,7 +329,7 @@ func (a *antreaPolicyValidator) createValidate(curObj interface{}, userInfo auth
 	if !allowed {
 		return reason, allowed
 	}
-	if err := a.validatePortRange(ingress, egress); err != nil {
+	if err := a.validatePort(ingress, egress); err != nil {
 		return err.Error(), false
 	}
 	return "", true
@@ -410,6 +410,12 @@ func (a *antreaPolicyValidator) updateValidate(curObj, oldObj interface{}, userI
 	reason, allowed := a.validateAppliedTo(ingress, egress, specAppliedTo)
 	if !allowed {
 		return reason, allowed
+	}
+	if ruleNameUnique := a.validateRuleName(ingress, egress); !ruleNameUnique {
+		return fmt.Sprint("rules names must be unique within the policy"), false
+	}
+	if err := a.validatePort(ingress, egress); err != nil {
+		return err.Error(), false
 	}
 	return a.validateTierForPolicy(tier)
 }

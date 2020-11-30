@@ -287,8 +287,8 @@ func (k *KubernetesUtils) UpdateTier(tier *secv1alpha1.Tier) (*secv1alpha1.Tier,
 	return updatedTier, err
 }
 
-// CleanCNPs is a convenience function for deleting AntreaClusterNetworkPolicies before startup of any new test.
-func (k *KubernetesUtils) CleanCNPs() error {
+// CleanACNPs is a convenience function for deleting AntreaClusterNetworkPolicies before startup of any new test.
+func (k *KubernetesUtils) CleanACNPs() error {
 	l, err := k.securityClient.ClusterNetworkPolicies().List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		return errors.Wrapf(err, "unable to list AntreaClusterNetworkPolicies")
@@ -303,8 +303,8 @@ func (k *KubernetesUtils) CleanCNPs() error {
 	return nil
 }
 
-// CreateOrUpdateCNP is a convenience function for updating/creating AntreaClusterNetworkPolicies.
-func (k *KubernetesUtils) CreateOrUpdateCNP(cnp *secv1alpha1.ClusterNetworkPolicy) (*secv1alpha1.ClusterNetworkPolicy, error) {
+// CreateOrUpdateACNP is a convenience function for updating/creating AntreaClusterNetworkPolicies.
+func (k *KubernetesUtils) CreateOrUpdateACNP(cnp *secv1alpha1.ClusterNetworkPolicy) (*secv1alpha1.ClusterNetworkPolicy, error) {
 	log.Infof("creating/updating ClusterNetworkPolicy %s", cnp.Name)
 	cnpReturned, err := k.securityClient.ClusterNetworkPolicies().Get(context.TODO(), cnp.Name, metav1.GetOptions{})
 	if err != nil {
@@ -340,7 +340,7 @@ func (k *KubernetesUtils) CleanANPs(namespaces []string) error {
 	return nil
 }
 
-// CreateOrUpdateCNP is a convenience function for updating/creating Antrea NetworkPolicies.
+// CreateOrUpdateANP is a convenience function for updating/creating Antrea NetworkPolicies.
 func (k *KubernetesUtils) CreateOrUpdateANP(anp *secv1alpha1.NetworkPolicy) (*secv1alpha1.NetworkPolicy, error) {
 	log.Infof("creating/updating Antrea NetworkPolicy %s", anp.Name)
 	cnpReturned, err := k.securityClient.NetworkPolicies(anp.Namespace).Get(context.TODO(), anp.Name, metav1.GetOptions{})
@@ -477,7 +477,7 @@ func (k *KubernetesUtils) Bootstrap(namespaces, pods []string) (*map[string]stri
 }
 
 func (k *KubernetesUtils) Cleanup(namespaces []string) error {
-	if err := k.CleanCNPs(); err != nil {
+	if err := k.CleanACNPs(); err != nil {
 		return err
 	}
 	for _, ns := range namespaces {

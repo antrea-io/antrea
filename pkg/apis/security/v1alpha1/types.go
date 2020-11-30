@@ -92,14 +92,10 @@ type NetworkPolicyStatus struct {
 type Rule struct {
 	// Action specifies the action to be applied on the rule.
 	Action *RuleAction `json:"action"`
-	// Set of port and protocol allowed/denied by the rule. If Ports and PortRanges
-	// are unset or empty at the same time, this rule matches all ports.
+	// Set of port and protocol allowed/denied by the rule. If this field is unset
+	// or empty, this rule matches all ports.
 	// +optional
 	Ports []NetworkPolicyPort `json:"ports,omitempty"`
-	// Set of ranges and protocol allowed/denied by the rule. If Ports and PortRanges
-	// are unset or empty at the same time, this rule matches all ports.
-	// +optional
-	PortRanges []NetworkPolicyPortRanges `json:"portRanges,omitempty"`
 	// Rule is matched if traffic originates from workloads selected by
 	// this field. If this field is empty, this rule matches all sources.
 	// +optional
@@ -170,32 +166,9 @@ type NetworkPolicyPort struct {
 	// matches all port names and numbers.
 	// +optional
 	Port *intstr.IntOrString `json:"port,omitempty"`
-}
-
-// NetworkPolicyPortRanges describes the portRange and protocol to match in a rule.
-type NetworkPolicyPortRanges struct {
-	// The protocol (TCP, UDP, or SCTP) which traffic must match.
-	// If not specified, this field defaults to TCP.
+	// To defines the end of the port range, being the end included within the range
 	// +optional
-	Protocol *v1.Protocol `json:"protocol"`
-	// Range represents a range of port with optional exceptions.
-	// +optional
-	Range *PortRange `json:"range"`
-}
-
-// PortRange describes a range of port with optional exceptions.
-type PortRange struct {
-	// From represents the start port number of a range of ports, inclusive.
-	// Must be set if To is set.
-	// +optional
-	From *uint16 `json:"from"`
-	// To represents the end port number of a range of ports, inclusive.
-	// Must be set if From is set.
-	// +optional
-	To *uint16 `json:"to"`
-	// Except is a list of except ports. These ports won't be included in this range.
-	// +optional
-	Except []uint16 `json:"except,omitempty"`
+	EndPort *int32 `json:"endPort,omitempty"`
 }
 
 // RuleAction describes the action to be applied on traffic matching a rule.

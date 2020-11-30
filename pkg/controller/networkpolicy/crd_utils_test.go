@@ -30,7 +30,6 @@ import (
 func TestToAntreaServicesForCRD(t *testing.T) {
 	tables := []struct {
 		ports              []secv1alpha1.NetworkPolicyPort
-		portRanges         []secv1alpha1.NetworkPolicyPortRanges
 		expServices        []controlplane.Service
 		expNamedPortExists bool
 	}{
@@ -65,17 +64,14 @@ func TestToAntreaServicesForCRD(t *testing.T) {
 			expNamedPortExists: true,
 		},
 		{
-			portRanges: []secv1alpha1.NetworkPolicyPortRanges{
+			ports: []secv1alpha1.NetworkPolicyPort{
 				{
 					Protocol: &k8sProtocolTCP,
-					Range:    &secv1alpha1.PortRange{From: &uint16For998, To: &uint16For1999, Except: []uint16{999}},
+					Port:     &int1000,
+					EndPort:  &int32For1999,
 				},
 			},
 			expServices: []controlplane.Service{
-				{
-					Protocol: toAntreaProtocol(&k8sProtocolTCP),
-					PortMask: &controlplane.PortMask{Port: &int998, Mask: &int32For65535},
-				},
 				{
 					Protocol: toAntreaProtocol(&k8sProtocolTCP),
 					PortMask: &controlplane.PortMask{Port: &int1000, Mask: &int32For65528},
@@ -109,7 +105,7 @@ func TestToAntreaServicesForCRD(t *testing.T) {
 		},
 	}
 	for _, table := range tables {
-		services, namedPortExist := toAntreaServicesForCRD(table.ports, table.portRanges)
+		services, namedPortExist := toAntreaServicesForCRD(table.ports)
 		assert.Equal(t, table.expServices, services)
 		assert.Equal(t, table.expNamedPortExists, namedPortExist)
 	}

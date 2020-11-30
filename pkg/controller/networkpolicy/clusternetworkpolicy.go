@@ -138,7 +138,7 @@ func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *secv1alpha1.C
 	// Compute NetworkPolicyRule for Ingress Rule.
 	for idx, ingressRule := range cnp.Spec.Ingress {
 		// Set default action to ALLOW to allow traffic.
-		services, namedPortExists := toAntreaServicesForCRD(ingressRule.Ports, ingressRule.PortRanges)
+		services, namedPortExists := toAntreaServicesForCRD(ingressRule.Ports)
 		var appliedToGroupNamesForRule []string
 		// Create AppliedToGroup for each AppliedTo present in the ingress rule.
 		for _, at := range ingressRule.AppliedTo {
@@ -159,7 +159,7 @@ func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *secv1alpha1.C
 	// Compute NetworkPolicyRule for Egress Rule.
 	for idx, egressRule := range cnp.Spec.Egress {
 		// Set default action to ALLOW to allow traffic.
-		services, namedPortExists := toAntreaServicesForCRD(egressRule.Ports, egressRule.PortRanges)
+		services, namedPortExists := toAntreaServicesForCRD(egressRule.Ports)
 		var appliedToGroupNamesForRule []string
 		// Create AppliedToGroup for each AppliedTo present in the ingress rule.
 		for _, at := range egressRule.AppliedTo {

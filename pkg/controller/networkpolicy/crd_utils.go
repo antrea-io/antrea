@@ -16,7 +16,6 @@ package networkpolicy
 
 import (
 	"fmt"
-	"sort"
 	"strings"
 
 	v1 "k8s.io/api/core/v1"
@@ -42,42 +41,24 @@ var (
 // toAntreaServicesForCRD converts a slice of secv1alpha1.NetworkPolicyPort
 // objects to a slice of Antrea Service objects. A bool is returned along with
 // the Service objects to indicate whether any named port exists.
-func toAntreaServicesForCRD(npPorts []secv1alpha1.NetworkPolicyPort, npPortRanges []secv1alpha1.NetworkPolicyPortRanges) ([]controlplane.Service, bool) {
+func toAntreaServicesForCRD(npPorts []secv1alpha1.NetworkPolicyPort) ([]controlplane.Service, bool) {
 	var antreaServices []controlplane.Service
 	var namedPortExists bool
 	for _, npPort := range npPorts {
 		if npPort.Port != nil && npPort.Port.Type == intstr.String {
 			namedPortExists = true
 		}
-		antreaServices = append(antreaServices, controlplane.Service{
-			Protocol: toAntreaProtocol(npPort.Protocol),
-			PortMask: &controlplane.PortMask{Port: npPort.Port},
-		})
-	}
-	for _, npPortRange := range npPortRanges {
-		if npPortRange.Range.Except != nil {
-			portSplitRanges := rangeSplit(*npPortRange.Range.From, *npPortRange.Range.To, npPortRange.Range.Except)
-			for _, portSplitRange := range portSplitRanges {
-				err := addRangeAntreaServiceForCRD(npPortRange.Protocol, portSplitRange, &antreaServices)
-				if err != nil {
-					klog.Error(err.Error())
-				}
-
-			}
-		} else {
-			err := addRangeAntreaServiceForCRD(npPortRange.Protocol, thirdPartyNP.PortRange{Start: *npPortRange.Range.From, End: *npPortRange.Range.To}, &antreaServices)
+		if npPort.Port != nil && npPort.EndPort != nil {
+			err := addRangeAntreaServiceForCRD(npPort.Protocol, thirdPartyNP.PortRange{Start: uint16(npPort.Port.IntVal), End: uint16(*npPort.EndPort)}, &antreaServices)
 			if err != nil {
 				klog.Error(err.Error())
 			}
-
+		} else {
+			antreaServices = append(antreaServices, controlplane.Service{
+				Protocol: toAntreaProtocol(npPort.Protocol),
+				PortMask: &controlplane.PortMask{Port: npPort.Port},
+			})
 		}
-	}
-	// If Ports and PortRanges are empty at the same time, this rule matches all ports.
-	if len(antreaServices) == 0 {
-		antreaServices = append(antreaServices, controlplane.Service{
-			Protocol: toAntreaProtocol(nil),
-			PortMask: &controlplane.PortMask{Port: nil},
-		})
 	}
 	return antreaServices, namedPortExists
 }
@@ -101,22 +82,6 @@ func addRangeAntreaServiceForCRD(protocol *v1.Protocol, portRange thirdPartyNP.P
 		*antreaServices = append(*antreaServices, antreaService)
 	}
 	return nil
-}
-
-// Transform a range with exception to several range
-func rangeSplit(from uint16, to uint16, excepts []uint16) []thirdPartyNP.PortRange {
-	var portRanges []thirdPartyNP.PortRange
-	sort.Slice(excepts, func(i, j int) bool { return excepts[i] < excepts[j] })
-	for _, except := range excepts {
-		if except == from {
-			from++
-		} else {
-			portRanges = append(portRanges, thirdPartyNP.PortRange{Start: from, End: except - 1})
-			from = except + 1
-		}
-	}
-	portRanges = append(portRanges, thirdPartyNP.PortRange{Start: from, End: to})
-	return portRanges
 }
 
 // toAntreaIPBlockForCRD converts a secv1alpha1.IPBlock to an Antrea IPBlock.
