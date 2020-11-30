@@ -178,9 +178,9 @@ func (exp *flowExporter) initFlowExporter(collector net.Addr) error {
 }
 
 func (exp *flowExporter) sendFlowRecords() error {
-	dataSet := ipfix.NewSet(ipfixentities.Data, exp.templateID, false)
-	addAndUpdateFlowRecord := func(key flowexporter.ConnectionKey, record flowexporter.FlowRecord) error {
-		if err := exp.addRecordToDataSet(dataSet, record, exp.templateID); err != nil {
+	sendAndUpdateFlowRecord := func(key flowexporter.ConnectionKey, record flowexporter.FlowRecord) error {
+		dataSet := ipfix.NewSet(ipfixentities.Data, exp.templateID, false)
+		if err := exp.sendDataSet(dataSet, record, exp.templateID); err != nil {
 			return err
 		}
 		if err := exp.flowRecords.ValidateAndUpdateStats(key, record); err != nil {
@@ -188,13 +188,9 @@ func (exp *flowExporter) sendFlowRecords() error {
 		}
 		return nil
 	}
-	err := exp.flowRecords.ForAllFlowRecordsDo(addAndUpdateFlowRecord)
+	err := exp.flowRecords.ForAllFlowRecordsDo(sendAndUpdateFlowRecord)
 	if err != nil {
 		return fmt.Errorf("error when iterating flow records: %v", err)
-	}
-	err = exp.sendDataSet(dataSet)
-	if err != nil {
-		return fmt.Errorf("error when sending flow records: %v", err)
 	}
 	return nil
 }
@@ -229,7 +225,7 @@ func (exp *flowExporter) sendTemplateSet(templateSet ipfix.IPFIXSet, templateID 
 
 	err := templateSet.AddRecord(elements, templateID)
 	if err != nil {
-		fmt.Errorf("error in adding record to template set: %v", err)
+		return 0, fmt.Errorf("error in adding record to template set: %v", err)
 	}
 
 	sentBytes, err := exp.process.AddSetAndSendMsg(ipfixentities.Template, templateSet.GetSet())
@@ -243,7 +239,7 @@ func (exp *flowExporter) sendTemplateSet(templateSet ipfix.IPFIXSet, templateID 
 	return sentBytes, nil
 }
 
-func (exp *flowExporter) addRecordToDataSet(dataSet ipfix.IPFIXSet, record flowexporter.FlowRecord, templateID uint16) error {
+func (exp *flowExporter) sendDataSet(dataSet ipfix.IPFIXSet, record flowexporter.FlowRecord, templateID uint16) error {
 	nodeName, _ := env.GetNodeName()
 
 	// Iterate over all infoElements in the list
@@ -357,13 +353,9 @@ func (exp *flowExporter) addRecordToDataSet(dataSet ipfix.IPFIXSet, record flowe
 
 	err := dataSet.AddRecord(exp.elementsList, templateID)
 	if err != nil {
-		fmt.Errorf("error in adding record to data set: %v", err)
+		return fmt.Errorf("error in adding record to data set: %v", err)
 	}
 
-	return nil
-}
-
-func (exp *flowExporter) sendDataSet(dataSet ipfix.IPFIXSet) error {
 	sentBytes, err := exp.process.AddSetAndSendMsg(ipfixentities.Data, dataSet.GetSet())
 	if err != nil {
 		return fmt.Errorf("error in IPFIX exporting process when sending data record: %v", err)

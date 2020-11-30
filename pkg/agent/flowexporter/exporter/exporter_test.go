@@ -189,11 +189,7 @@ func TestFlowExporter_sendDataSet(t *testing.T) {
 	mockDataSet.EXPECT().GetSet().Return(dataSet)
 	mockIPFIXExpProc.EXPECT().AddSetAndSendMsg(ipfixentities.Data, dataSet).Return(0, nil)
 
-	err := flowExp.addRecordToDataSet(mockDataSet, record1, testTemplateID)
-	if err != nil {
-		t.Errorf("Error in adding data record: %v", err)
-	}
-	err = flowExp.sendDataSet(mockDataSet)
+	err := flowExp.sendDataSet(mockDataSet, record1, testTemplateID)
 	if err != nil {
 		t.Errorf("Error in sending data set: %v", err)
 	}
