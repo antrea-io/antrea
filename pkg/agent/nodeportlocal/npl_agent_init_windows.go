@@ -19,12 +19,17 @@ package nodeportlocal
 import (
 	"errors"
 
-	"k8s.io/client-go/informers"
 	clientset "k8s.io/client-go/kubernetes"
 )
 
 // InitializeNPLAgent starts NodePortLocal (NPL) agent.
 // Currently NPL is disabled for windows.
-func InitializeNPLAgent(kubeClient clientset.Interface, informerFactory informers.SharedInformerFactory, portRange string, stop <-chan struct{}) error {
-	return errors.New("Windows Platform not supported fot NPL")
+func InitializeNPLAgent(kubeClient clientset.Interface, portRange, nodeName string, stop <-chan struct{}) (*windowsCtrl, error) {
+	return nil, errors.New("Windows Platform not supported fot NPL")
+}
+
+type windowsCtrl struct {
+}
+
+func (*windowsCtrl) Run(stop <-chan struct{}) {
 }

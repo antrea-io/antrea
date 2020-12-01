@@ -28,11 +28,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
-	"k8s.io/client-go/informers"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
-
-	"github.com/vmware-tanzu/antrea/pkg/util/env"
 )
 
 const resyncPeriod = 60 * time.Minute
@@ -41,23 +38,19 @@ const resyncPeriod = 60 * time.Minute
 // It initializes port table cache to keep a track of Node ports available for use of NPL,
 // sets up event handlers to handle Pod add, update and delete events.
 // When a Pod gets created, a free Node port is obtained from the port table cache and a DNAT rule is added to send traffic to the Pod ip:port.
-func InitializeNPLAgent(kubeClient clientset.Interface, informerFactory informers.SharedInformerFactory, portRange string, stop <-chan struct{}) error {
-	nodeName, err := env.GetNodeName()
-	if err != nil {
-		return fmt.Errorf("Could not get node name while initializing NPL: %v", err)
-	}
+func InitializeNPLAgent(kubeClient clientset.Interface, portRange, nodeName string, stop <-chan struct{}) (*k8s.Controller, error) {
 	start, end, err := util.ParsePortsRange(portRange)
 	if err != nil {
-		return fmt.Errorf("something went wrong while fetching port range: %v", err)
+		return nil, fmt.Errorf("something went wrong while fetching port range: %v", err)
 	}
 	var ok bool
 	portTable, ok := portcache.NewPortTable(start, end)
 	if !ok {
-		return errors.New("NPL port table could not be initialized")
+		return nil, errors.New("NPL port table could not be initialized")
 	}
 	err = portTable.PodPortRules.Init()
 	if err != nil {
-		return fmt.Errorf("NPL rules for pod ports could not be initialized, error: %v", err)
+		return nil, fmt.Errorf("NPL rules for pod ports could not be initialized, error: %v", err)
 	}
 	c := k8s.NewNPLController(kubeClient, portTable)
 	c.RemoveNPLAnnotationFromPods()
@@ -72,7 +65,6 @@ func InitializeNPLAgent(kubeClient clientset.Interface, informerFactory informer
 			UpdateFunc: c.HandleUpdatePod,
 		},
 	)
-
-	go controller.Run(stop)
-	return nil
+	c.Ctrl = controller
+	return c, nil
 }

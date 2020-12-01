@@ -21,15 +21,12 @@ import (
 	"sync"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/nodeportlocal/rules"
-	"github.com/vmware-tanzu/antrea/pkg/agent/util"
-
-	"k8s.io/klog"
 )
 
 type NodePortData struct {
-	Nodeport int
-	Podport  int
-	Podip    string
+	NodePort int
+	PodPort  int
+	PodIP    string
 	Status   int
 }
 
@@ -41,49 +38,22 @@ type PortTable struct {
 	tableLock    sync.RWMutex
 }
 
-var once sync.Once
-var ptable PortTable
-
 func NewPortTable(start, end int) (*PortTable, bool) {
 	var ok bool
-	once.Do(func() {
-		ptable = PortTable{StartPort: start, EndPort: end}
-		ptable.Table = make(map[int]NodePortData)
-		ptable.PodPortRules = rules.Initrules()
-	})
+	ptable := PortTable{StartPort: start, EndPort: end}
+	ptable.Table = make(map[int]NodePortData)
+	ptable.PodPortRules = rules.InitRules()
+
 	if ptable.PodPortRules != nil {
 		ok = true
 	}
 	return &ptable, ok
 }
 
-func GetPortTable() *PortTable {
-	return &ptable
-}
-
-func (pt *PortTable) PopulatePortTable(r rules.PodPortRules) {
-	portMap, err := r.GetAllRules()
-	if err != nil {
-		klog.Warningf("Could not populate port table cache, error: %v", err)
-		return
-	}
-	table := make(map[int]NodePortData)
-	for nodeport, podip := range portMap {
-		entry := NodePortData{
-			Nodeport: nodeport,
-			Podip:    podip,
-		}
-		table[nodeport] = entry
-	}
-	pt.tableLock.Lock()
-	defer pt.tableLock.Unlock()
-	pt.Table = table
-}
-
 func (pt *PortTable) AddUpdateEntry(nodeport, podport int, podip string) {
 	pt.tableLock.Lock()
 	defer pt.tableLock.Unlock()
-	data := NodePortData{Nodeport: nodeport, Podport: podport, Podip: podip}
+	data := NodePortData{NodePort: nodeport, PodPort: podport, PodIP: podip}
 	pt.Table[nodeport] = data
 }
 
@@ -97,7 +67,7 @@ func (pt *PortTable) DeleteEntryByPodIP(ip string) {
 	pt.tableLock.Lock()
 	defer pt.tableLock.Unlock()
 	for i, data := range pt.Table {
-		if data.Podip == ip {
+		if data.PodIP == ip {
 			delete(pt.Table, i)
 		}
 	}
@@ -107,7 +77,7 @@ func (pt *PortTable) DeleteEntryByPodIPPort(ip string, port int) {
 	pt.tableLock.Lock()
 	defer pt.tableLock.Unlock()
 	for i, data := range pt.Table {
-		if data.Podip == ip && data.Podport == port {
+		if data.PodIP == ip && data.PodPort == port {
 			delete(pt.Table, i)
 		}
 	}
@@ -124,7 +94,7 @@ func (pt *PortTable) GetEntryByPodIPPort(ip string, port int) *NodePortData {
 	pt.tableLock.RLock()
 	defer pt.tableLock.RUnlock()
 	for _, data := range pt.Table {
-		if data.Podip == ip && data.Podport == port {
+		if data.PodIP == ip && data.PodPort == port {
 			return &data
 		}
 	}
@@ -136,12 +106,7 @@ func (pt *PortTable) getFreePort() int {
 	defer pt.tableLock.RUnlock()
 	for i := pt.StartPort; i <= pt.EndPort; i++ {
 		if _, ok := pt.Table[i]; !ok {
-			err := util.IsPortAvailable(i)
-			if err != nil {
-				klog.Warningf("Got error while checking availability of port: %v", err)
-			} else {
-				return i
-			}
+			return i
 		}
 	}
 	return -1
@@ -165,11 +130,11 @@ func (pt *PortTable) AddRule(podip string, podport int) (int, bool) {
 
 func (pt *PortTable) DeleteRule(podip string, podport int) bool {
 	data := pt.GetEntryByPodIPPort(podip, podport)
-	err := pt.PodPortRules.DeleteRule(data.Nodeport, fmt.Sprintf("%s:%d", podip, podport))
+	err := pt.PodPortRules.DeleteRule(data.NodePort, fmt.Sprintf("%s:%d", podip, podport))
 	if err != nil {
 		return false
 	}
-	pt.DeleteEntry(data.Nodeport)
+	pt.DeleteEntry(data.NodePort)
 	return true
 }
 

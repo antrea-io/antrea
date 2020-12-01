@@ -129,7 +129,7 @@ func (c *Controller) RemoveNPLAnnotationFromPods() {
 		if _, exists := podAnnotation[NPLAnnotationStr]; !exists {
 			continue
 		}
-		klog.Infof("Removing all NPL annotation from Pod: %s, ns: %s", pod.Name, pod.Namespace)
+		klog.V(2).Infof("Removing all NPL annotation from Pod: %s, ns: %s", pod.Name, pod.Namespace)
 		delete(podAnnotation, NPLAnnotationStr)
 		pod.Annotations = podAnnotation
 		c.updatePodAnnotation(&podList.Items[i])

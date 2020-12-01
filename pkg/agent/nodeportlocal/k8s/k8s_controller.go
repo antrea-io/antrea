@@ -20,13 +20,20 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/nodeportlocal/portcache"
 
 	clientset "k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/cache"
 )
 
 type Controller struct {
 	portTable  *portcache.PortTable
 	kubeClient clientset.Interface
+	Ctrl       cache.Controller
 }
 
 func NewNPLController(kubeClient clientset.Interface, pt *portcache.PortTable) *Controller {
 	return &Controller{kubeClient: kubeClient, portTable: pt}
+}
+
+// Run starts watching and processing Pod updates for the node where Antrea Agent is running
+func (c *Controller) Run(stop <-chan struct{}) {
+	go c.Ctrl.Run(stop)
 }

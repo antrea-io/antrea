@@ -24,7 +24,7 @@ type PodPortRules interface {
 	DeleteAllRules() error
 }
 
-func Initrules() PodPortRules {
+func InitRules() PodPortRules {
 	// Currently we only support IPTABLES. Later this can be extended based on the system capability.
 	return NewIPTableRules()
 
