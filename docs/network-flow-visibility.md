@@ -199,22 +199,42 @@ exploration.
 
 ### Deployment Steps
 
-To create all the necessary resources in the `elk-flow-collector` Namespace
-and get everything up-and-running, run:
+First step is to fetch the necessary resources from the Antrea repository. You can
+either clone the entire repo or download the particular folder using the subversion (svn)
+utility. If the deployed version of Antrea has a release `<TAG>` (e.g. `v0.10.0`),
+then you can use the following command:
+
+```shell
+git clone --depth 1 --branch <TAG> https://github.com/vmware-tanzu/antrea.git && cd antrea/build/yamls/
+or
+svn export https://github.com/vmware-tanzu/antrea/tags/<TAG>/build/yamls/elk-flow-collector/
+```
+
+If the deployed version of Antrea is the latest version, i.e., built from the master
+branch, then you can use the following command:
+
+```shell
+git clone --depth 1 --branch master https://github.com/vmware-tanzu/antrea.git && cd antrea/build/yamls/
+or
+svn export https://github.com/vmware-tanzu/antrea/trunk/build/yamls/elk-flow-collector/
+```
+
+To create the required K8s resources in the `elk-flow-collector` folder and get
+everything up-and-running, run following commands:
 
 ```shell
 kubectl create namespace elk-flow-collector
-kubectl create configmap logstash-configmap -n elk-flow-collector --from-file=build/yamls/elk-flow-collector/logstash/
-kubectl apply -f build/yamls/elk-flow-collector/elk-flow-collector.yml -n elk-flow-collector
+kubectl create configmap logstash-configmap -n elk-flow-collector --from-file=./elk-flow-collector/logstash/
+kubectl apply -f ./elk-flow-collector/elk-flow-collector.yml -n elk-flow-collector
 ```
 
 Kibana dashboard is exposed as a Nodeport Service, which can be accessed via
 `http://[NodeIP]: 30007`
 
-`build/yamls/flow/kibana.ndjson` is an auto-generated reusable file containing
+`elk-flow-collector/kibana.ndjson` is an auto-generated reusable file containing
 pre-built objects for visualizing Pod-to-Pod, Pod-to-Service and Node-to-Node
 flow records. To import the dashboards into Kibana, go to
-**Management -> Saved Objects** and import `build/yamls/flow/kibana.ndjson`.
+**Management -> Saved Objects** and import `elk-flow-collector/kibana.ndjson`.
 
 ### Pre-built Dashboards
 
