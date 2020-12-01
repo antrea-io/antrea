@@ -174,13 +174,12 @@
          days-to-keep: 7
          num-to-keep: 30
      - github:
-         url: https://github.com/vmware-tanzu/antrea/
+         url: '{repo_url}'
      scm:
      - git:
-         branches:
-         - master
+         branches: '{branches}'
          name: origin
-         url: https://github.com/vmware-tanzu/antrea
+         url: '{repo_url}'
      publishers: '{publishers}'
      wrappers: '{wrappers}'
 
