@@ -47,7 +47,8 @@ const (
 )
 
 const (
-	maxTableOutputColumnLength int = 50
+	maxTableOutputColumnLength int    = 50
+	sortByEffectivePriority    string = "effectivePriority"
 )
 
 // commandGroup is used to group commands, it could be specified in commandDefinition.
@@ -129,9 +130,10 @@ func (e *resourceEndpoint) flags() []flagInfo {
 	}
 	if e.groupVersionResource == &v1beta2.NetworkPolicyVersionResource {
 		flags = append(flags, flagInfo{
-			name:         "sort-by",
-			defaultValue: "",
-			usage:        "Get NetworkPolicies in specific order. Current supported value is effectivePriority.",
+			name:            "sort-by",
+			defaultValue:    "",
+			supportedValues: []string{sortByEffectivePriority},
+			usage:           "Get NetworkPolicies in specific order. Current supported value is effectivePriority.",
 		})
 	}
 	return flags
@@ -163,11 +165,12 @@ type endpoint struct {
 
 // flagInfo represents a command-line flag that can be provided when invoking an antctl command.
 type flagInfo struct {
-	name         string
-	shorthand    string
-	defaultValue string
-	arg          bool
-	usage        string
+	name            string
+	shorthand       string
+	defaultValue    string
+	supportedValues []string
+	arg             bool
+	usage           string
 }
 
 // rawCommand defines a full function cobra.Command which lets developers
@@ -725,7 +728,7 @@ func (cd *commandDefinition) output(resp io.Reader, writer io.Writer, ft formatt
 			return cd.tableOutput(obj, writer)
 		}
 	default:
-		return fmt.Errorf("unsupport format type: %v", ft)
+		return fmt.Errorf("unsupported format type: %v", ft)
 	}
 	return nil
 }
@@ -741,6 +744,9 @@ func (cd *commandDefinition) collectFlags(cmd *cobra.Command, args []string) (ma
 			} else {
 				vs, err := cmd.Flags().GetString(f.name)
 				if err == nil && len(vs) != 0 {
+					if f.supportedValues != nil && !cd.validateFlagValue(vs, f.supportedValues) {
+						return nil, fmt.Errorf("unsupported value %s for flag %s", vs, f.name)
+					}
 					argMap[f.name] = vs
 					continue
 				}
@@ -751,6 +757,15 @@ func (cd *commandDefinition) collectFlags(cmd *cobra.Command, args []string) (ma
 		argMap["namespace"], _ = cmd.Flags().GetString("namespace")
 	}
 	return argMap, nil
+}
+
+func (cd *commandDefinition) validateFlagValue(val string, supportedValues []string) bool {
+	for _, s := range supportedValues {
+		if s == val {
+			return true
+		}
+	}
+	return false
 }
 
 // newCommandRunE creates the RunE function for the command. The RunE function

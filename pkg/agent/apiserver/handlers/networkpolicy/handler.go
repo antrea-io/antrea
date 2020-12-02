@@ -26,13 +26,11 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/querier"
 )
 
-const sortByEffectivePriority = "effectivePriority"
-
 // HandleFunc creates a http.HandlerFunc which uses an AgentNetworkPolicyInfoQuerier
 // to query network policy rules in current agent.
 func HandleFunc(aq agentquerier.AgentQuerier) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		npFilter, err := parseURLQuery(r.URL.Query())
+		npFilter, err := newFilterFromURLQuery(r.URL.Query())
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
@@ -67,7 +65,7 @@ var mapToNetworkPolicyType = map[string]cpv1beta.NetworkPolicyType{
 }
 
 // Create a Network Policy Filter from URL Query
-func parseURLQuery(query url.Values) (*querier.NetworkPolicyQueryFilter, error) {
+func newFilterFromURLQuery(query url.Values) (*querier.NetworkPolicyQueryFilter, error) {
 	namespace := query.Get("namespace")
 	pod := query.Get("pod")
 	if pod != "" && namespace == "" {
@@ -84,11 +82,6 @@ func parseURLQuery(query url.Values) (*querier.NetworkPolicyQueryFilter, error) 
 	name := query.Get("name")
 	if name != "" && (source != "" || namespace != "" || pod != "" || strSourceType != "") {
 		return nil, fmt.Errorf("with a name, none of the other fields can be set")
-	}
-
-	sortBy := query.Get("sort-by")
-	if sortBy != "" && sortBy != sortByEffectivePriority {
-		return nil, fmt.Errorf("unsupported value for sort-by option. Current supported value is %s", sortByEffectivePriority)
 	}
 
 	return &querier.NetworkPolicyQueryFilter{
