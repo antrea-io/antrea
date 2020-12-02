@@ -4,12 +4,10 @@ on:
     branches:
     - master
     - release-*
-    - ipv6
   push:
     branches:
     - master
     - release-*
-    - ipv6
 jobs:
 
 
