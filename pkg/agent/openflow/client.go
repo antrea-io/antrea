@@ -828,12 +828,22 @@ func (c *client) InstallTraceflowFlows(dataplaneTag uint8) error {
 	for _, conj := range c.policyCache.List() {
 		for _, flow := range conj.(*policyRuleConjunction).metricFlows {
 			if flow.IsDropFlow() {
+				copyFlowBuilder := flow.CopyToBuilder(priorityNormal+2, false)
+				// Generate both IPv4 and IPv6 flows if the original drop flow doesn't match IP/IPv6
+				if flow.FlowProtocol() == "" {
+					copyFlowBuilderIPv6 := flow.CopyToBuilder(priorityNormal+2, false)
+					copyFlowBuilderIPv6 = copyFlowBuilderIPv6.MatchProtocol(binding.ProtocolIPv6)
+					flows = append(
+						flows, copyFlowBuilderIPv6.MatchIPDscp(dataplaneTag).
+							SetHardTimeout(300).
+							Action().SendToController(uint8(PacketInReasonTF)).
+							Done())
+					copyFlowBuilder = copyFlowBuilder.MatchProtocol(binding.ProtocolIP)
+				}
 				flows = append(
-					flows,
-					flow.CopyToBuilder(priorityNormal+2, false).
-						MatchIPDscp(dataplaneTag).
+					flows, copyFlowBuilder.MatchIPDscp(dataplaneTag).
 						SetHardTimeout(300).
-						Action().SendToController(1).
+						Action().SendToController(uint8(PacketInReasonTF)).
 						Done())
 			}
 		}
