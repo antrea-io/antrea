@@ -18,6 +18,7 @@ import (
 	"net"
 	"strconv"
 
+	"github.com/vmware-tanzu/antrea/pkg/agent/util"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
 )
 
@@ -58,13 +59,16 @@ type TunnelInterfaceConfig struct {
 	// IP address of the remote Node.
 	RemoteIP net.IP
 	PSK      string
+	// Whether options:csum is set for this tunnel interface.
+	// If true, encapsulation header UDP checksums will be computed on outgoing packets.
+	Csum bool
 }
 
 type InterfaceConfig struct {
 	Type InterfaceType
 	// Unique name of the interface, also used for the OVS port name.
 	InterfaceName string
-	IP            net.IP
+	IPs           []net.IP
 	MAC           net.HardwareAddr
 	*OVSPortConfig
 	*ContainerInterfaceConfig
@@ -81,6 +85,7 @@ type InterfaceStore interface {
 	GetInterfaceByName(interfaceName string) (*InterfaceConfig, bool)
 	GetContainerInterface(containerID string) (*InterfaceConfig, bool)
 	GetContainerInterfacesByPod(podName string, podNamespace string) []*InterfaceConfig
+	GetInterfaceByIP(interfaceIP string) (*InterfaceConfig, bool)
 	GetNodeTunnelInterface(nodeName string) (*InterfaceConfig, bool)
 	GetContainerInterfaceNum() int
 	GetInterfacesByType(interfaceType InterfaceType) []*InterfaceConfig
@@ -95,7 +100,7 @@ func NewContainerInterface(
 	podName string,
 	podNamespace string,
 	mac net.HardwareAddr,
-	ip net.IP) *InterfaceConfig {
+	ips []net.IP) *InterfaceConfig {
 	containerConfig := &ContainerInterfaceConfig{
 		ContainerID:  containerID,
 		PodName:      podName,
@@ -103,7 +108,7 @@ func NewContainerInterface(
 	return &InterfaceConfig{
 		InterfaceName:            interfaceName,
 		Type:                     ContainerInterface,
-		IP:                       ip,
+		IPs:                      ips,
 		MAC:                      mac,
 		ContainerInterfaceConfig: containerConfig}
 }
@@ -116,8 +121,8 @@ func NewGatewayInterface(gatewayName string) *InterfaceConfig {
 
 // NewTunnelInterface creates InterfaceConfig for the default tunnel port
 // interface.
-func NewTunnelInterface(tunnelName string, tunnelType ovsconfig.TunnelType, localIP net.IP) *InterfaceConfig {
-	tunnelConfig := &TunnelInterfaceConfig{Type: tunnelType, LocalIP: localIP}
+func NewTunnelInterface(tunnelName string, tunnelType ovsconfig.TunnelType, localIP net.IP, csum bool) *InterfaceConfig {
+	tunnelConfig := &TunnelInterfaceConfig{Type: tunnelType, LocalIP: localIP, Csum: csum}
 	return &InterfaceConfig{InterfaceName: tunnelName, Type: TunnelInterface, TunnelInterfaceConfig: tunnelConfig}
 }
 
@@ -132,4 +137,9 @@ func NewIPSecTunnelInterface(interfaceName string, tunnelType ovsconfig.TunnelTy
 func NewUplinkInterface(uplinkName string) *InterfaceConfig {
 	uplinkConfig := &InterfaceConfig{InterfaceName: uplinkName, Type: UplinkInterface}
 	return uplinkConfig
+}
+
+// TODO: remove this method after IPv4/IPv6 dual-stack is supported completely.
+func (c *InterfaceConfig) GetIPv4Addr() net.IP {
+	return util.GetIPv4Addr(c.IPs)
 }

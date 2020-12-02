@@ -16,10 +16,11 @@ package providers
 
 import (
 	"fmt"
-	"github.com/vmware-tanzu/antrea/test/e2e/providers/exec"
 	"os"
 	"path"
 	"strings"
+
+	"github.com/vmware-tanzu/antrea/test/e2e/providers/exec"
 )
 
 type KindProvider struct {

@@ -20,18 +20,19 @@ import (
 
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/common"
-	networkingv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
+	cpv1beta "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
 )
 
 type Response struct {
-	Name string                  `json:"name" yaml:"name"`
-	Pods []common.GroupMemberPod `json:"pods,omitempty"`
+	Name string               `json:"name" yaml:"name"`
+	Pods []common.GroupMember `json:"pods,omitempty"`
 }
 
 func listTransform(l interface{}) (interface{}, error) {
-	groups := l.(*networkingv1beta1.AddressGroupList)
+	groups := l.(*cpv1beta.AddressGroupList)
 	result := []interface{}{}
-	for _, item := range groups.Items {
+	for i := range groups.Items {
+		item := groups.Items[i]
 		o, _ := objectTransform(&item)
 		result = append(result, o.(Response))
 	}
@@ -39,9 +40,9 @@ func listTransform(l interface{}) (interface{}, error) {
 }
 
 func objectTransform(o interface{}) (interface{}, error) {
-	group := o.(*networkingv1beta1.AddressGroup)
-	var pods []common.GroupMemberPod
-	for _, pod := range group.Pods {
+	group := o.(*cpv1beta.AddressGroup)
+	var pods []common.GroupMember
+	for _, pod := range group.GroupMembers {
 		pods = append(pods, common.GroupMemberPodTransform(pod))
 	}
 	return Response{Name: group.Name, Pods: pods}, nil
@@ -49,8 +50,8 @@ func objectTransform(o interface{}) (interface{}, error) {
 
 func Transform(reader io.Reader, single bool) (interface{}, error) {
 	return transform.GenericFactory(
-		reflect.TypeOf(networkingv1beta1.AddressGroup{}),
-		reflect.TypeOf(networkingv1beta1.AddressGroupList{}),
+		reflect.TypeOf(cpv1beta.AddressGroup{}),
+		reflect.TypeOf(cpv1beta.AddressGroupList{}),
 		objectTransform,
 		listTransform,
 	)(reader, single)

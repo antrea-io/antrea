@@ -15,7 +15,7 @@
 package rule
 
 import (
-	networkingv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
+	cpv1beta "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
 	"github.com/vmware-tanzu/antrea/pkg/util/ip"
 )
 
@@ -31,7 +31,7 @@ type ipBlock struct {
 
 type peer struct {
 	AddressGroups []string  `json:"addressGroups,omitempty"`
-	IPBlocks      []ipBlock `json:"ipBlocks,omitempty" json:"ipBlocks,omitempty"`
+	IPBlocks      []ipBlock `json:"ipBlocks,omitempty"`
 }
 
 type Response struct {
@@ -41,7 +41,7 @@ type Response struct {
 	Services  []service `json:"services,omitempty"`
 }
 
-func serviceTransform(services ...networkingv1beta1.Service) []service {
+func serviceTransform(services ...cpv1beta.Service) []service {
 	var ret []service
 	for _, s := range services {
 		ret = append(ret, service{
@@ -52,7 +52,7 @@ func serviceTransform(services ...networkingv1beta1.Service) []service {
 	return ret
 }
 
-func ipBlockTransform(block networkingv1beta1.IPBlock) ipBlock {
+func ipBlockTransform(block cpv1beta.IPBlock) ipBlock {
 	var ib ipBlock
 	except := []string{}
 	for i := range block.Except {
@@ -65,7 +65,7 @@ func ipBlockTransform(block networkingv1beta1.IPBlock) ipBlock {
 	return ib
 }
 
-func peerTransform(p networkingv1beta1.NetworkPolicyPeer) peer {
+func peerTransform(p cpv1beta.NetworkPolicyPeer) peer {
 	blocks := []ipBlock{}
 	for _, originBlock := range p.IPBlocks {
 		blocks = append(blocks, ipBlockTransform(originBlock))
@@ -74,7 +74,7 @@ func peerTransform(p networkingv1beta1.NetworkPolicyPeer) peer {
 }
 
 func ObjectTransform(o interface{}) (interface{}, error) {
-	originRules := o.(*[]networkingv1beta1.NetworkPolicyRule)
+	originRules := o.(*[]cpv1beta.NetworkPolicyRule)
 	var rules []Response
 	for _, rule := range *originRules {
 		rules = append(rules, Response{

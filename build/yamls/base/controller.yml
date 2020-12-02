@@ -19,6 +19,33 @@ metadata:
 apiVersion: apiregistration.k8s.io/v1
 kind: APIService
 metadata:
+  name: v1beta2.controlplane.antrea.tanzu.vmware.com
+spec:
+  group: controlplane.antrea.tanzu.vmware.com
+  groupPriorityMinimum: 100
+  version: v1beta2
+  versionPriority: 100
+  service:
+    name: antrea
+    namespace: kube-system
+---
+apiVersion: apiregistration.k8s.io/v1
+kind: APIService
+metadata:
+  name: v1beta1.controlplane.antrea.tanzu.vmware.com
+spec:
+  group: controlplane.antrea.tanzu.vmware.com
+  groupPriorityMinimum: 100
+  version: v1beta1
+  versionPriority: 100
+  service:
+    name: antrea
+    namespace: kube-system
+---
+# Deprecated in v0.10, planned for removal in v0.12.
+apiVersion: apiregistration.k8s.io/v1
+kind: APIService
+metadata:
   name: v1beta1.networking.antrea.tanzu.vmware.com
 spec:
   group: networking.antrea.tanzu.vmware.com
@@ -37,6 +64,106 @@ spec:
   group: system.antrea.tanzu.vmware.com
   groupPriorityMinimum: 100
   version: v1beta1
+  versionPriority: 100
+  service:
+    name: antrea
+    namespace: kube-system
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: "crdmutator.antrea.tanzu.vmware.com"
+webhooks:
+  - name: "acnpmutator.antrea.tanzu.vmware.com"
+    clientConfig:
+      service:
+        name: "antrea"
+        namespace: "kube-system"
+        path: "/mutate/acnp"
+    rules:
+      - operations: ["CREATE", "UPDATE"]
+        apiGroups: ["security.antrea.tanzu.vmware.com"]
+        apiVersions: ["v1alpha1"]
+        resources: ["clusternetworkpolicies"]
+        scope: "Cluster"
+    admissionReviewVersions: ["v1", "v1beta1"]
+    sideEffects: None
+    timeoutSeconds: 5
+  - name: "anpmutator.antrea.tanzu.vmware.com"
+    clientConfig:
+      service:
+        name: "antrea"
+        namespace: "kube-system"
+        path: "/mutate/anp"
+    rules:
+      - operations: ["CREATE", "UPDATE"]
+        apiGroups: ["security.antrea.tanzu.vmware.com"]
+        apiVersions: ["v1alpha1"]
+        resources: ["networkpolicies"]
+        scope: "Namespaced"
+    admissionReviewVersions: ["v1", "v1beta1"]
+    sideEffects: None
+    timeoutSeconds: 5
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: "crdvalidator.antrea.tanzu.vmware.com"
+webhooks:
+- name: "tiervalidator.antrea.tanzu.vmware.com"
+  clientConfig:
+    service:
+      name: "antrea"
+      namespace: "kube-system"
+      path: "/validate/tier"
+  rules:
+  - operations: ["CREATE", "UPDATE", "DELETE"]
+    apiGroups: ["security.antrea.tanzu.vmware.com"]
+    apiVersions: ["v1alpha1"]
+    resources: ["tiers"]
+    scope: "Cluster"
+  admissionReviewVersions: ["v1", "v1beta1"]
+  sideEffects: None
+  timeoutSeconds: 5
+- name: "acnpvalidator.antrea.tanzu.vmware.com"
+  clientConfig:
+    service:
+      name: "antrea"
+      namespace: "kube-system"
+      path: "/validate/acnp"
+  rules:
+  - operations: ["CREATE", "UPDATE"]
+    apiGroups: ["security.antrea.tanzu.vmware.com"]
+    apiVersions: ["v1alpha1"]
+    resources: ["clusternetworkpolicies"]
+    scope: "Cluster"
+  admissionReviewVersions: ["v1", "v1beta1"]
+  sideEffects: None
+  timeoutSeconds: 5
+- name: "anpvalidator.antrea.tanzu.vmware.com"
+  clientConfig:
+    service:
+      name: "antrea"
+      namespace: "kube-system"
+      path: "/validate/anp"
+  rules:
+  - operations: ["CREATE", "UPDATE"]
+    apiGroups: ["security.antrea.tanzu.vmware.com"]
+    apiVersions: ["v1alpha1"]
+    resources: ["networkpolicies"]
+    scope: "Namespaced"
+  admissionReviewVersions: ["v1", "v1beta1"]
+  sideEffects: None
+  timeoutSeconds: 5
+---
+apiVersion: apiregistration.k8s.io/v1
+kind: APIService
+metadata:
+  name: v1alpha1.stats.antrea.tanzu.vmware.com
+spec:
+  group: stats.antrea.tanzu.vmware.com
+  groupPriorityMinimum: 100
+  version: v1alpha1
   versionPriority: 100
   service:
     name: antrea
@@ -80,7 +207,7 @@ spec:
               cpu: "200m"
           command: ["antrea-controller"]
           # Log to both "/var/log/antrea/" and stderr (so "kubectl logs" can work).
-          args: ["--config", "/etc/antrea/antrea-controller.conf", "--logtostderr=false", "--log_dir", "/var/log/antrea", "--alsologtostderr"]
+          args: ["--config", "/etc/antrea/antrea-controller.conf", "--logtostderr=false", "--log_dir=/var/log/antrea", "--alsologtostderr", "--log_file_max_size=100", "--log_file_max_num=4", "--v=0"]
           env:
             # Provide pod and node information for clusterinformation CRD.
             - name: POD_NAME
@@ -132,3 +259,4 @@ spec:
           hostPath:
             path: /var/log/antrea
             type: DirectoryOrCreate
+

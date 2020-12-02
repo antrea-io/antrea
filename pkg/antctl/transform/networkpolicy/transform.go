@@ -21,36 +21,22 @@ import (
 
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/common"
-	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/rule"
-	networkingv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
+	cpv1beta "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
 )
 
 type Response struct {
-	NameSpace       string          `json:"namespace" yaml:"namespace"`
-	Name            string          `json:"name" yaml:"name"`
-	Rules           []rule.Response `json:"rules" yaml:"rules"`
-	AppliedToGroups []string        `json:"appliedToGroups" yaml:"appliedToGroups"`
+	*cpv1beta.NetworkPolicy
 }
 
 func objectTransform(o interface{}) (interface{}, error) {
-	policy := o.(*networkingv1beta1.NetworkPolicy)
-	rules, _ := rule.ObjectTransform(&policy.Rules)
-	if policy.AppliedToGroups == nil {
-		policy.AppliedToGroups = []string{}
-	}
-	return Response{
-		NameSpace:       policy.Namespace,
-		Name:            policy.Name,
-		Rules:           rules.([]rule.Response),
-		AppliedToGroups: policy.AppliedToGroups,
-	}, nil
+	return Response{o.(*cpv1beta.NetworkPolicy)}, nil
 }
 
 func listTransform(l interface{}) (interface{}, error) {
-	policyList := l.(*networkingv1beta1.NetworkPolicyList)
-	result := []Response{}
-	for _, item := range policyList.Items {
-		o, _ := objectTransform(&item)
+	policyList := l.(*cpv1beta.NetworkPolicyList)
+	result := make([]Response, 0, len(policyList.Items))
+	for i := range policyList.Items {
+		o, _ := objectTransform(&policyList.Items[i])
 		result = append(result, o.(Response))
 	}
 	return result, nil
@@ -58,8 +44,8 @@ func listTransform(l interface{}) (interface{}, error) {
 
 func Transform(reader io.Reader, single bool) (interface{}, error) {
 	return transform.GenericFactory(
-		reflect.TypeOf(networkingv1beta1.NetworkPolicy{}),
-		reflect.TypeOf(networkingv1beta1.NetworkPolicyList{}),
+		reflect.TypeOf(cpv1beta.NetworkPolicy{}),
+		reflect.TypeOf(cpv1beta.NetworkPolicyList{}),
 		objectTransform,
 		listTransform,
 	)(reader, single)
@@ -68,11 +54,11 @@ func Transform(reader io.Reader, single bool) (interface{}, error) {
 var _ common.TableOutput = new(Response)
 
 func (r Response) GetTableHeader() []string {
-	return []string{"NAMESPACE", "NAME", "APPLIED-TO", "RULES"}
+	return []string{"NAME", "APPLIED-TO", "RULES", "SOURCE"}
 }
 
 func (r Response) GetTableRow(maxColumnLength int) []string {
-	return []string{r.NameSpace, r.Name, common.GenerateTableElementWithSummary(r.AppliedToGroups, maxColumnLength), strconv.Itoa(len(r.Rules))}
+	return []string{r.Name, common.GenerateTableElementWithSummary(r.AppliedToGroups, maxColumnLength), strconv.Itoa(len(r.Rules)), r.SourceRef.ToString()}
 }
 
 func (r Response) SortRows() bool {

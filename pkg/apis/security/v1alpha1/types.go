@@ -21,7 +21,6 @@ import (
 )
 
 // +genclient
-// +genclient:noStatus
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 type NetworkPolicy struct {
@@ -31,10 +30,18 @@ type NetworkPolicy struct {
 
 	// Specification of the desired behavior of NetworkPolicy.
 	Spec NetworkPolicySpec `json:"spec"`
+	// Most recently observed status of the NetworkPolicy.
+	Status NetworkPolicyStatus `json:"status"`
 }
 
 // NetworkPolicySpec defines the desired state for NetworkPolicy.
 type NetworkPolicySpec struct {
+	// Tier specifies the tier to which this NetworkPolicy belongs to.
+	// The NetworkPolicy order will be determined based on the combination of the
+	// Tier's Priority and the NetworkPolicy's own Priority. If not specified,
+	// this policy will be created in the Application Tier right above the K8s
+	// NetworkPolicy which resides at the bottom.
+	Tier string `json:"tier,omitempty"`
 	// Priority specfies the order of the NetworkPolicy relative to other
 	// NetworkPolicies.
 	Priority float64 `json:"priority"`
@@ -50,6 +57,31 @@ type NetworkPolicySpec struct {
 	// field within a Rule.
 	// +optional
 	Egress []Rule `json:"egress"`
+}
+
+// NetworkPolicyPhase defines the phase in which a NetworkPolicy is.
+type NetworkPolicyPhase string
+
+// These are the valid values for NetworkPolicyPhase.
+const (
+	// NetworkPolicyPending means the NetworkPolicy has been accepted by the system, but it has not been processed by Antrea.
+	NetworkPolicyPending NetworkPolicyPhase = "Pending"
+	// NetworkPolicyRealizing means the NetworkPolicy has been observed by Antrea and is being realized.
+	NetworkPolicyRealizing NetworkPolicyPhase = "Realizing"
+	// NetworkPolicyRealized means the NetworkPolicy has been enforced to all Pods on all Nodes it applies to.
+	NetworkPolicyRealized NetworkPolicyPhase = "Realized"
+)
+
+// NetworkPolicyStatus represents information about the status of a NetworkPolicy.
+type NetworkPolicyStatus struct {
+	// The phase of a NetworkPolicy is a simple, high-level summary of the NetworkPolicy's status.
+	Phase NetworkPolicyPhase `json:"phase"`
+	// The generation observed by Antrea.
+	ObservedGeneration int64 `json:"observedGeneration"`
+	// The number of nodes that have realized the NetworkPolicy.
+	CurrentNodesRealized int32 `json:"currentNodesRealized"`
+	// The total number of nodes that should realize the NetworkPolicy.
+	DesiredNodesRealized int32 `json:"desiredNodesRealized"`
 }
 
 // Rule describes the traffic allowed to/from the workloads selected by
@@ -71,6 +103,13 @@ type Rule struct {
 	// destinations.
 	// +optional
 	To []NetworkPolicyPeer `json:"to"`
+	// Name describes the intention of this rule.
+	// Name should be unique within the policy.
+	// +optional
+	Name string `json:"name"`
+	// EnableLogging is used to indicate if agent should generate logs
+	// when rules are matched. Should be default to false.
+	EnableLogging bool `json:"enableLogging"`
 }
 
 // NetworkPolicyPeer describes the grouping selector of workloads.
@@ -145,7 +184,6 @@ type NetworkPolicyList struct {
 
 // +genclient
 // +genclient:nonNamespaced
-// +genclient:noStatus
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 type ClusterNetworkPolicy struct {
@@ -155,12 +193,20 @@ type ClusterNetworkPolicy struct {
 
 	// Specification of the desired behavior of ClusterNetworkPolicy.
 	Spec ClusterNetworkPolicySpec `json:"spec"`
+	// Most recently observed status of the NetworkPolicy.
+	Status NetworkPolicyStatus `json:"status"`
 }
 
 // ClusterNetworkPolicySpec defines the desired state for ClusterNetworkPolicy.
 type ClusterNetworkPolicySpec struct {
+	// Tier specifies the tier to which this ClusterNetworkPolicy belongs to.
+	// The ClusterNetworkPolicy order will be determined based on the
+	// combination of the Tier's Priority and the ClusterNetworkPolicy's own
+	// Priority. If not specified, this policy will be created in the Application
+	// Tier right above the K8s NetworkPolicy which resides at the bottom.
+	Tier string `json:"tier,omitempty"`
 	// Priority specfies the order of the ClusterNetworkPolicy relative to
-	// other ClusterNetworkPolicies.
+	// other AntreaClusterNetworkPolicies.
 	Priority float64 `json:"priority"`
 	// Select workloads on which the rules will be applied to.
 	AppliedTo []NetworkPolicyPeer `json:"appliedTo"`
@@ -184,4 +230,37 @@ type ClusterNetworkPolicyList struct {
 	metav1.ListMeta `json:"metadata,omitempty"`
 
 	Items []ClusterNetworkPolicy `json:"items"`
+}
+
+// +genclient
+// +genclient:nonNamespaced
+// +genclient:noStatus
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+type Tier struct {
+	metav1.TypeMeta `json:",inline"`
+	// Standard metadata of the object.
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	// Specification of the desired behavior of Tier.
+	Spec TierSpec `json:"spec"`
+}
+
+// TierSpec defines the desired state for Tier.
+type TierSpec struct {
+	// Priority specfies the order of the Tier relative to other Tiers.
+	Priority int32 `json:"priority"`
+	// Description is an optional field to add more information regarding
+	// the purpose of this Tier.
+	Description string `json:"description,omitempty"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+type TierList struct {
+	metav1.TypeMeta `json:",inline"`
+	// +optional
+	metav1.ListMeta `json:"metadata,omitempty"`
+
+	Items []Tier `json:"items"`
 }

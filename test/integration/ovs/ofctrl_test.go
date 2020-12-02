@@ -66,6 +66,8 @@ var (
 	tunnelPeer       = net.ParseIP("10.1.1.2")
 	peerGW           = net.ParseIP("192.168.2.1")
 	vMAC, _          = net.ParseMAC("aa:bb:cc:dd:ee:ff")
+
+	ipDscp = uint8(10)
 )
 
 func newOFBridge(brName string) binding.Bridge {
@@ -423,6 +425,7 @@ func TestBundleErrorWhenOVSRestart(t *testing.T) {
 	for i < loop {
 		// Sending Bundle message in parallel.
 		go func() {
+			defer wg.Done()
 			// Sending OpenFlow messages when OVS is disconnected is not in this case's scope.
 			if !bridge.IsConnected() {
 				return
@@ -451,7 +454,6 @@ func TestBundleErrorWhenOVSRestart(t *testing.T) {
 			case <-ch:
 				successCount++
 			}
-			wg.Done()
 		}()
 		i++
 	}
@@ -529,7 +531,7 @@ func TestBundleWithGroupAndFlow(t *testing.T) {
 		Cookie(getCookieID()).
 		MatchProtocol(binding.ProtocolTCP).
 		MatchDstIP(net.ParseIP("10.96.0.10")).
-		MatchTCPDstPort(uint16(53)).
+		MatchDstPort(uint16(53), nil).
 		MatchReg(3, uint32(0xfff2)).
 		Action().Group(groupID).Done()
 	expectedFlows := []*ExpectFlow{
@@ -818,9 +820,10 @@ func TestNoteAction(t *testing.T) {
 	}
 
 	err = flow1.Add()
-	assert.Nil(t, err, "no error returned when adding flow")
+	assert.Nil(t, err, "expected no error when adding flow")
 	CheckFlowExists(t, ofctlClient, uint8(table.GetID()), true, expectFlows)
 	err = flow1.Delete()
+	assert.Nil(t, err, "expected no error when deleting flow")
 	CheckFlowExists(t, ofctlClient, uint8(table.GetID()), false, expectFlows)
 }
 
@@ -829,6 +832,8 @@ func prepareFlows(table binding.Table) ([]binding.Flow, []*ExpectFlow) {
 	_, AllIPs, _ := net.ParseCIDR("0.0.0.0/0")
 	_, conjSrcIPNet, _ := net.ParseCIDR("192.168.3.0/24")
 	gwMACData, _ := strconv.ParseUint(strings.Replace(gwMAC.String(), ":", "", -1), 16, 64)
+	_, peerSubnetIPv6, _ := net.ParseCIDR("fd74:ca9b:172:21::/64")
+	tunnelPeerIPv6 := net.ParseIP("20:ca9b:172:35::3")
 	flows = append(flows,
 		table.BuildFlow(priorityNormal-10).
 			Cookie(getCookieID()).
@@ -884,7 +889,7 @@ func prepareFlows(table binding.Table) ([]binding.Flow, []*ExpectFlow) {
 		table.BuildFlow(priorityNormal+10).MatchProtocol(binding.ProtocolIP).
 			Cookie(getCookieID()).
 			MatchRegRange(int(marksReg), markTrafficFromGateway, binding.Range{0, 15}).
-			MatchCTMark(gatewayCTMark).
+			MatchCTMark(gatewayCTMark, nil).
 			MatchCTStateNew(false).MatchCTStateTrk(true).
 			Action().GotoTable(table.GetNext()).
 			Done(),
@@ -900,7 +905,7 @@ func prepareFlows(table binding.Table) ([]binding.Flow, []*ExpectFlow) {
 			Done(),
 		table.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
 			Cookie(getCookieID()).
-			MatchCTMark(gatewayCTMark).
+			MatchCTMark(gatewayCTMark, nil).
 			MatchCTStateNew(false).MatchCTStateTrk(true).
 			Action().LoadRange(binding.NxmFieldDstMAC, gwMACData, binding.Range{0, 47}).
 			Action().GotoTable(table.GetNext()).
@@ -933,6 +938,15 @@ func prepareFlows(table binding.Table) ([]binding.Flow, []*ExpectFlow) {
 			Action().SetTunnelDst(tunnelPeer).
 			Action().GotoTable(table.GetNext()).
 			Done(),
+		table.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIPv6).
+			Cookie(getCookieID()).
+			MatchDstIPNet(*peerSubnetIPv6).
+			Action().DecTTL().
+			Action().SetSrcMAC(gwMAC).
+			Action().SetDstMAC(vMAC).
+			Action().SetTunnelDst(tunnelPeerIPv6).
+			Action().GotoTable(table.GetNext()).
+			Done(),
 		table.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
 			Cookie(getCookieID()).
 			MatchDstIP(gwIP).
@@ -956,7 +970,14 @@ func prepareFlows(table binding.Table) ([]binding.Flow, []*ExpectFlow) {
 			MatchDstIPNet(*serviceCIDR).
 			Action().Output(int(gwOFPort)).
 			Done(),
-		table.BuildFlow(priorityNormal+20).MatchProtocol(binding.ProtocolIP).Cookie(getCookieID()).MatchTCPDstPort(uint16(8080)).
+		table.BuildFlow(priorityNormal).
+			Cookie(getCookieID()).
+			MatchProtocol(binding.ProtocolIP).
+			MatchSrcIP(podIP).
+			MatchIPDscp(ipDscp).
+			Action().GotoTable(table.GetNext()).
+			Done(),
+		table.BuildFlow(priorityNormal+20).MatchProtocol(binding.ProtocolTCP).Cookie(getCookieID()).MatchDstPort(uint16(8080), nil).
 			Action().Conjunction(uint32(1001), uint8(3), uint8(3)).Done(),
 		table.BuildFlow(priorityNormal+20).MatchProtocol(binding.ProtocolIP).Cookie(getCookieID()).MatchSrcIP(podIP).
 			Action().Conjunction(uint32(1001), uint8(1), uint8(3)).Done(),
@@ -989,10 +1010,12 @@ func prepareFlows(table binding.Table) ([]binding.Flow, []*ExpectFlow) {
 		&ExpectFlow{"priority=190,ct_state=+new+trk,ip", fmt.Sprintf("ct(commit,table=%d,zone=65520)", table.GetNext())},
 		&ExpectFlow{"priority=200,ip,dl_dst=aa:bb:cc:dd:ee:ff,nw_dst=192.168.1.3", fmt.Sprintf("set_field:aa:aa:aa:aa:aa:11->eth_src,set_field:aa:aa:aa:aa:aa:13->eth_dst,dec_ttl,%s", gotoTableAction)},
 		&ExpectFlow{"priority=200,ip,nw_dst=192.168.2.0/24", fmt.Sprintf("dec_ttl,set_field:aa:aa:aa:aa:aa:11->eth_src,set_field:aa:bb:cc:dd:ee:ff->eth_dst,set_field:10.1.1.2->tun_dst,%s", gotoTableAction)},
+		&ExpectFlow{"priority=200,ipv6,ipv6_dst=fd74:ca9b:172:21::/64", fmt.Sprintf("dec_ttl,set_field:aa:aa:aa:aa:aa:11->eth_src,set_field:aa:bb:cc:dd:ee:ff->eth_dst,set_field:20:ca9b:172:35::3->tun_ipv6_dst,%s", gotoTableAction)},
 		&ExpectFlow{"priority=200,ip,nw_dst=192.168.1.1", fmt.Sprintf("set_field:aa:aa:aa:aa:aa:11->eth_dst,%s", gotoTableAction)},
 		&ExpectFlow{"priority=200,dl_dst=aa:aa:aa:aa:aa:13", fmt.Sprintf("load:0x3->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],%s", gotoTableAction)},
 		&ExpectFlow{"priority=200,ip,reg0=0x10000/0x10000", "output:NXM_NX_REG1[]"},
 		&ExpectFlow{"priority=200,ip,nw_dst=172.16.0.0/16", "output:1"},
+		&ExpectFlow{fmt.Sprintf("priority=200,ip,nw_src=192.168.1.3,nw_tos=%d", ipDscp<<2), gotoTableAction},
 		&ExpectFlow{"priority=220,tcp,tp_dst=8080", "conjunction(1001,3/3)"},
 		&ExpectFlow{"priority=220,ip,nw_src=192.168.1.3", "conjunction(1001,1/3)"},
 		&ExpectFlow{"priority=220,ip,nw_dst=192.168.3.0/24", "conjunction(1001,2/3)"},
@@ -1008,8 +1031,8 @@ func prepareFlows(table binding.Table) ([]binding.Flow, []*ExpectFlow) {
 func prepareNATflows(table binding.Table) ([]binding.Flow, []*ExpectFlow) {
 	natedIP1 := net.ParseIP("10.10.0.1")
 	natedIP2 := net.ParseIP("10.10.0.10")
-	natIPRange1 := &binding.IPRange{natedIP1, natedIP1}
-	natIPRange2 := &binding.IPRange{natedIP1, natedIP2}
+	natIPRange1 := &binding.IPRange{StartIP: natedIP1, EndIP: natedIP1}
+	natIPRange2 := &binding.IPRange{StartIP: natedIP1, EndIP: natedIP2}
 	snatCTMark := uint32(0x40)
 	natRequireMark := uint32(0x1)
 	snatMarkRange1 := binding.Range{17, 17}

@@ -16,8 +16,10 @@ package main
 
 import (
 	"flag"
+	"math/rand"
 	"os"
 	"path"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -45,6 +47,7 @@ func main() {
 	logs.InitLogs()
 	defer logs.FlushLogs()
 
+	rand.Seed(time.Now().UTC().UnixNano())
 	antctl.CommandList.ApplyToRootCommand(rootCmd)
 	err := rootCmd.Execute()
 	if err != nil {

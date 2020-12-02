@@ -42,7 +42,7 @@ type ifConfigurator struct {
 	epCache    *sync.Map
 }
 
-func newInterfaceConfigurator(ovsDataPathType string) (*ifConfigurator, error) {
+func newInterfaceConfigurator(ovsDataPathType string, isOvsHardwareOffloadEnabled bool) (*ifConfigurator, error) {
 	eps, err := hcsshim.HNSListEndpointRequest()
 	if err != nil {
 		return nil, err
@@ -89,6 +89,16 @@ func (ic *ifConfigurator) delEndpoint(name string) {
 	ic.epCache.Delete(name)
 }
 
+// findContainerIPConfig finds a valid IPv4 address since IPv6 is not supported for Windows at this stage.
+func findContainerIPConfig(ips []*current.IPConfig) (*current.IPConfig, error) {
+	for _, ipc := range ips {
+		if ipc.Version == "4" {
+			return ipc, nil
+		}
+	}
+	return nil, fmt.Errorf("failed to find a valid IP address")
+}
+
 // configureContainerLink creates a HNSEndpoint for the container using the IPAM result, and then attach it on the container interface.
 func (ic *ifConfigurator) configureContainerLink(
 	podName string,
@@ -97,8 +107,12 @@ func (ic *ifConfigurator) configureContainerLink(
 	containerNetNS string,
 	containerIFDev string,
 	mtu int,
+	sriovVFDeviceID string,
 	result *current.Result,
 ) error {
+	if sriovVFDeviceID != "" {
+		return fmt.Errorf("OVS hardware offload is not supported on windows")
+	}
 	// We must use the infra container to generate the endpoint name to ensure infra and workload containers use the
 	// same HNSEndpoint.
 	infraContainerID := getInfraContainer(containerID, containerNetNS)
@@ -253,7 +267,12 @@ func (ic *ifConfigurator) checkContainerInterface(
 	sandboxID, containerID string,
 	containerIface *current.Interface,
 	containerIPs []*current.IPConfig,
-	containerRoutes []*cnitypes.Route) (*vethPair, error) {
+	containerRoutes []*cnitypes.Route,
+	sriovVFDeviceID string) (interface{}, error) {
+
+	if sriovVFDeviceID != "" {
+		return "", fmt.Errorf("OVS hardware offload is not supported in windows")
+	}
 
 	// Check container sandbox configuration.
 	if sandboxID != containerIface.Sandbox {
@@ -309,6 +328,10 @@ func validateExpectedInterfaceIPs(containerIPConfig *current.IPConfig, intf *net
 		}
 	}
 	return fmt.Errorf("container IP %s not exist on target interface %d", containerIPConfig.Address.String(), intf.Index)
+}
+
+func (ic *ifConfigurator) validateVFRepInterface(sriovVFDeviceID string) (string, error) {
+	return "", fmt.Errorf("OVS hardware offload is not supported in windows")
 }
 
 // validateContainerPeerInterface checks HNSEndpoint configuration.

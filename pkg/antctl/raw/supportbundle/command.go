@@ -15,6 +15,7 @@
 package supportbundle
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -24,6 +25,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -42,16 +44,18 @@ import (
 	agentapiserver "github.com/vmware-tanzu/antrea/pkg/agent/apiserver"
 	"github.com/vmware-tanzu/antrea/pkg/agent/controller/noderoute"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/runtime"
+	"github.com/vmware-tanzu/antrea/pkg/apis"
 	systemv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/system/v1beta1"
 	controllerapiserver "github.com/vmware-tanzu/antrea/pkg/apiserver"
 	antrea "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned"
 )
 
 const (
-	barTmpl      pb.ProgressBarTemplate = `{{string . "prefix"}}{{bar . }} {{percent . }} {{rtime . "ETA %s"}}` // Example: 'Prefix[-->______] 20%'
-	requestRate                         = 50
-	requestBurst                        = 100
-	timeFormat                          = "20060102T150405Z0700"
+	barTmpl pb.ProgressBarTemplate = `{{string . "prefix"}}{{bar . }} {{percent . }} {{rtime . "ETA %s"}}` // Example: 'Prefix[-->______] 20%'
+
+	requestRate  = 50
+	requestBurst = 100
+	timeFormat   = "20060102T150405Z0700"
 )
 
 // Command is the support bundle command implementation.
@@ -61,6 +65,7 @@ var option = &struct {
 	dir            string
 	labelSelector  string
 	controllerOnly bool
+	nodeListFile   string
 }{}
 
 var remoteControllerLongDescription = strings.TrimSpace(`
@@ -68,15 +73,19 @@ Generate support bundles for the cluster, which include: information about each 
 `)
 
 var remoteControllerExample = strings.Trim(`
-  Generate support bundles of controller and agent on all Nodes and save them to current working dir
+  Generate support bundles of the controller and agents on all Nodes and save them to current working dir
   $ antctl supportbundle
-  Generate support bundle of controller
+  Generate support bundle of the controller
   $ antctl supportbundle --controller-only
-  Generate support bundles of agent on specific Nodes filtered by name, with support for wildcard expressions
+  Generate support bundles of agents on specific Nodes filtered by name list, no wildcard support
+  $ antctl supportbundle node_a node_b node_c
+  Generate support bundles of agents on specific Nodes filtered by names in a file (one Node name per line)
+  $ antctl supportbundle -f ~/nodelistfile
+  Generate support bundles of agents on specific Nodes filtered by name, with support for wildcard expressions
   $ antctl supportbundle '*worker*'
-  Generate support bundles of agent on specific Nodes filtered by name and label selectors
+  Generate support bundles of agents on specific Nodes filtered by name and label selectors
   $ antctl supportbundle '*worker*' -l kubernetes.io/os=linux
-  Generate support bundles of controller and agent on all Nodes and save them to specific dir
+  Generate support bundles of the controller and agents on all Nodes and save them to specific dir
   $ antctl supportbundle -d ~/Downloads
 `, "\n")
 
@@ -93,13 +102,13 @@ func init() {
 		Command.RunE = controllerLocalRunE
 		Command.Long = "Generate the support bundle of current Antrea controller."
 	} else if runtime.Mode == runtime.ModeController && !runtime.InPod {
-		Command.Args = cobra.MaximumNArgs(1)
-		Command.Use += " [nodeName]"
+		Command.Use += " [nodeName...]"
 		Command.Long = remoteControllerLongDescription
 		Command.Example = remoteControllerExample
 		Command.Flags().StringVarP(&option.dir, "dir", "d", "", "support bundles output dir, the path will be created if it doesn't exist")
 		Command.Flags().StringVarP(&option.labelSelector, "label-selector", "l", "", "selector (label query) to filter Nodes for agent bundles, supports '=', '==', and '!='.(e.g. -l key1=value1,key2=value2)")
 		Command.Flags().BoolVar(&option.controllerOnly, "controller-only", false, "only collect the support bundle of Antrea controller")
+		Command.Flags().StringVarP(&option.nodeListFile, "node-list-file", "f", "", "only collect the support bundle of Antrea controller")
 		Command.RunE = controllerRemoteRunE
 	}
 }
@@ -115,10 +124,10 @@ func setupKubeconfig(kubeconfig *rest.Config) {
 	kubeconfig.CAData = nil
 	if runtime.InPod {
 		if runtime.Mode == runtime.ModeAgent {
-			kubeconfig.Host = net.JoinHostPort("127.0.0.1", "10350")
+			kubeconfig.Host = net.JoinHostPort("127.0.0.1", strconv.Itoa(apis.AntreaAgentAPIPort))
 			kubeconfig.BearerTokenFile = agentapiserver.TokenPath
 		} else {
-			kubeconfig.Host = net.JoinHostPort("127.0.0.1", "10349")
+			kubeconfig.Host = net.JoinHostPort("127.0.0.1", strconv.Itoa(apis.AntreaControllerAPIPort))
 			kubeconfig.BearerTokenFile = controllerapiserver.TokenPath
 		}
 	}
@@ -277,22 +286,40 @@ func downloadAll(agentClients map[string]*rest.RESTClient, controllerClient *res
 	)
 }
 
-func createAgentClients(k8sClientset kubernetes.Interface, antreaClientset antrea.Interface, cfgTmpl *rest.Config, nameFilter string) (map[string]*rest.RESTClient, error) {
+// createAgentClients creates clients for agents on specified nodes. If nameList is set, then nameFilter will be ignored.
+func createAgentClients(k8sClientset kubernetes.Interface, antreaClientset antrea.Interface, cfgTmpl *rest.Config, nameFilter string, nameList []string) (map[string]*rest.RESTClient, error) {
 	clients := map[string]*rest.RESTClient{}
 	nodeAgentInfoMap := map[string]string{}
-	agentInfoList, err := antreaClientset.ClusterinformationV1beta1().AntreaAgentInfos().List(context.TODO(), metav1.ListOptions{})
+	agentInfoList, err := antreaClientset.ClusterinformationV1beta1().AntreaAgentInfos().List(context.TODO(), metav1.ListOptions{ResourceVersion: "0"})
 	if err != nil {
 		return nil, err
 	}
 	for _, agentInfo := range agentInfoList.Items {
 		nodeAgentInfoMap[agentInfo.NodeRef.Name] = fmt.Sprint(agentInfo.APIPort)
 	}
-	nodeList, err := k8sClientset.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{LabelSelector: option.labelSelector})
+	nodeList, err := k8sClientset.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{LabelSelector: option.labelSelector, ResourceVersion: "0"})
 	if err != nil {
 		return nil, err
 	}
-	for _, node := range nodeList.Items {
-		if match, _ := filepath.Match(nameFilter, node.Name); !match {
+	var matcher func(name string) bool
+	if len(nameList) > 0 {
+		matchSet := make(map[string]struct{})
+		for _, name := range nameList {
+			matchSet[name] = struct{}{}
+		}
+		matcher = func(name string) bool {
+			_, ok := matchSet[name]
+			return ok
+		}
+	} else {
+		matcher = func(name string) bool {
+			hit, _ := filepath.Match(nameFilter, name)
+			return hit
+		}
+	}
+	for i := range nodeList.Items {
+		node := nodeList.Items[i]
+		if !matcher(node.Name) {
 			continue
 		}
 		port, ok := nodeAgentInfoMap[node.Name]
@@ -369,7 +396,7 @@ func getClusterInfo(k8sClient kubernetes.Interface) (io.Reader, error) {
 	}
 
 	g.Go(func() error {
-		pods, err := k8sClient.CoreV1().Pods(metav1.NamespaceAll).List(context.TODO(), metav1.ListOptions{})
+		pods, err := k8sClient.CoreV1().Pods(metav1.NamespaceAll).List(context.TODO(), metav1.ListOptions{ResourceVersion: "0"})
 		if err != nil {
 			return err
 		}
@@ -379,7 +406,7 @@ func getClusterInfo(k8sClient kubernetes.Interface) (io.Reader, error) {
 		return nil
 	})
 	g.Go(func() error {
-		nodes, err := k8sClient.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{})
+		nodes, err := k8sClient.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{ResourceVersion: "0"})
 		if err != nil {
 			return err
 		}
@@ -389,7 +416,7 @@ func getClusterInfo(k8sClient kubernetes.Interface) (io.Reader, error) {
 		return nil
 	})
 	g.Go(func() error {
-		deployments, err := k8sClient.AppsV1().Deployments(metav1.NamespaceAll).List(context.TODO(), metav1.ListOptions{})
+		deployments, err := k8sClient.AppsV1().Deployments(metav1.NamespaceAll).List(context.TODO(), metav1.ListOptions{ResourceVersion: "0"})
 		if err != nil {
 			return err
 		}
@@ -399,7 +426,7 @@ func getClusterInfo(k8sClient kubernetes.Interface) (io.Reader, error) {
 		return nil
 	})
 	g.Go(func() error {
-		replicas, err := k8sClient.AppsV1().ReplicaSets(metav1.NamespaceAll).List(context.TODO(), metav1.ListOptions{})
+		replicas, err := k8sClient.AppsV1().ReplicaSets(metav1.NamespaceAll).List(context.TODO(), metav1.ListOptions{ResourceVersion: "0"})
 		if err != nil {
 			return err
 		}
@@ -409,7 +436,7 @@ func getClusterInfo(k8sClient kubernetes.Interface) (io.Reader, error) {
 		return nil
 	})
 	g.Go(func() error {
-		daemonsets, err := k8sClient.AppsV1().DaemonSets(metav1.NamespaceAll).List(context.TODO(), metav1.ListOptions{})
+		daemonsets, err := k8sClient.AppsV1().DaemonSets(metav1.NamespaceAll).List(context.TODO(), metav1.ListOptions{ResourceVersion: "0"})
 		if err != nil {
 			return err
 		}
@@ -419,7 +446,7 @@ func getClusterInfo(k8sClient kubernetes.Interface) (io.Reader, error) {
 		return nil
 	})
 	g.Go(func() error {
-		configs, err := k8sClient.CoreV1().ConfigMaps(metav1.NamespaceSystem).List(context.TODO(), metav1.ListOptions{LabelSelector: "app=antrea"})
+		configs, err := k8sClient.CoreV1().ConfigMaps(metav1.NamespaceSystem).List(context.TODO(), metav1.ListOptions{LabelSelector: "app=antrea", ResourceVersion: "0"})
 		if err != nil {
 			return err
 		}
@@ -468,7 +495,7 @@ func controllerRemoteRunE(cmd *cobra.Command, args []string) error {
 
 	// Collect controller bundle when no Node name or label filter is specified, or
 	// when --controller-only is set.
-	if (len(args) == 0 && option.labelSelector == "") || option.controllerOnly {
+	if (len(args) == 0 && len(option.nodeListFile) == 0 && option.labelSelector == "") || option.controllerOnly {
 		controllerClient, err = createControllerClient(k8sClientset, antreaClientset, restconfigTmpl)
 		if err != nil {
 			return fmt.Errorf("error when creating controller client: %w", err)
@@ -476,10 +503,28 @@ func controllerRemoteRunE(cmd *cobra.Command, args []string) error {
 	}
 	if !option.controllerOnly {
 		nameFilter := "*"
+		var nameList []string
 		if len(args) == 1 {
 			nameFilter = args[0]
+		} else if len(option.nodeListFile) != 0 {
+			nodeListFile, err := filepath.Abs(option.nodeListFile)
+			if err != nil {
+				return fmt.Errorf("error when resolving node-list-file path: %w", err)
+			}
+			f, err := os.Open(nodeListFile)
+			if err != nil {
+				return fmt.Errorf("error when opening node-list-file: %w", err)
+			}
+			defer f.Close()
+			scanner := bufio.NewScanner(f)
+			scanner.Split(bufio.ScanLines)
+			for scanner.Scan() {
+				nameList = append(nameList, strings.TrimSpace(scanner.Text()))
+			}
+		} else if len(args) > 1 {
+			nameList = args
 		}
-		agentClients, err = createAgentClients(k8sClientset, antreaClientset, restconfigTmpl, nameFilter)
+		agentClients, err = createAgentClients(k8sClientset, antreaClientset, restconfigTmpl, nameFilter, nameList)
 		if err != nil {
 			return fmt.Errorf("error when creating agent clients: %w", err)
 		}

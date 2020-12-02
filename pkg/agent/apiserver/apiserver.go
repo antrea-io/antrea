@@ -40,6 +40,7 @@ import (
 	agentquerier "github.com/vmware-tanzu/antrea/pkg/agent/querier"
 	systeminstall "github.com/vmware-tanzu/antrea/pkg/apis/system/install"
 	systemv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/system/v1beta1"
+	"github.com/vmware-tanzu/antrea/pkg/apiserver/handlers/loglevel"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/system/supportbundle"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsctl"
 	"github.com/vmware-tanzu/antrea/pkg/querier"
@@ -49,8 +50,9 @@ import (
 const Name = "antrea-agent-api"
 
 var (
-	scheme    = runtime.NewScheme()
-	codecs    = serializer.NewCodecFactory(scheme)
+	scheme = runtime.NewScheme()
+	codecs = serializer.NewCodecFactory(scheme)
+	// #nosec G101: false positive triggered by variable name which includes "token"
 	TokenPath = "/var/run/antrea/apiserver/loopback-client-token"
 )
 
@@ -68,6 +70,7 @@ func (s *agentAPIServer) Run(stopCh <-chan struct{}) error {
 }
 
 func installHandlers(aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolicyInfoQuerier, s *genericapiserver.GenericAPIServer) {
+	s.Handler.NonGoRestfulMux.HandleFunc("/loglevel", loglevel.HandleFunc())
 	s.Handler.NonGoRestfulMux.HandleFunc("/agentinfo", agentinfo.HandleFunc(aq))
 	s.Handler.NonGoRestfulMux.HandleFunc("/podinterfaces", podinterface.HandleFunc(aq))
 	s.Handler.NonGoRestfulMux.HandleFunc("/networkpolicies", networkpolicy.HandleFunc(aq))
@@ -89,8 +92,8 @@ func installAPIGroup(s *genericapiserver.GenericAPIServer, aq agentquerier.Agent
 
 // New creates an APIServer for running in antrea agent.
 func New(aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolicyInfoQuerier, bindPort int,
-	enableMetrics bool) (*agentAPIServer, error) {
-	cfg, err := newConfig(bindPort, enableMetrics)
+	enableMetrics bool, kubeconfig string) (*agentAPIServer, error) {
+	cfg, err := newConfig(bindPort, enableMetrics, kubeconfig)
 	if err != nil {
 		return nil, err
 	}
@@ -105,10 +108,16 @@ func New(aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolicyInfoQuerier
 	return &agentAPIServer{GenericAPIServer: s}, nil
 }
 
-func newConfig(bindPort int, enableMetrics bool) (*genericapiserver.CompletedConfig, error) {
+func newConfig(bindPort int, enableMetrics bool, kubeconfig string) (*genericapiserver.CompletedConfig, error) {
 	secureServing := genericoptions.NewSecureServingOptions().WithLoopback()
 	authentication := genericoptions.NewDelegatingAuthenticationOptions()
 	authorization := genericoptions.NewDelegatingAuthorizationOptions().WithAlwaysAllowPaths("/healthz")
+
+	// kubeconfig file is useful when antrea-agent isn't not running as a pod
+	if len(kubeconfig) > 0 {
+		authentication.RemoteKubeConfigFile = kubeconfig
+		authorization.RemoteKubeConfigFile = kubeconfig
+	}
 
 	// Set the PairName but leave certificate directory blank to generate in-memory by default.
 	secureServing.ServerCert.CertDirectory = ""

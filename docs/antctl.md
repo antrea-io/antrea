@@ -2,24 +2,31 @@
 
 Antctl is the command-line tool for Antrea. At the moment, antctl supports
 running in two different modes:
- * "controller mode": when run out-of-cluster or from within the Antrea
- Controller Pod, antctl can connect to the Antrea Controller and query
- information from it (e.g. the set of computed NetworkPolicies).
- * "agent mode": when run from within an Antrea Agent Pod, antctl can connect to
- the Antrea Agent and query information local to that Agent (e.g. the set of
- computed NetworkPolicies received by that Agent from the Antrea Controller, as
- opposed to the entire set of computed policies).
+
+* "controller mode": when run out-of-cluster or from within the Antrea
+  Controller Pod, antctl can connect to the Antrea Controller and query
+  information from it (e.g. the set of computed NetworkPolicies).
+* "agent mode": when run from within an Antrea Agent Pod, antctl can connect to
+  the Antrea Agent and query information local to that Agent (e.g. the set of
+  computed NetworkPolicies received by that Agent from the Antrea Controller, as
+  opposed to the entire set of computed policies).
 
 ## Table of Contents
 
+<!-- toc -->
 - [Installation](#installation)
 - [Usage](#usage)
+  - [Showing or changing log verbosity level](#showing-or-changing-log-verbosity-level)
   - [Collecting support information](#collecting-support-information)
-  - [`controllerinfo` and `agentinfo` commands](#controllerinfo-and-agentinfo-commands)
+  - [controllerinfo and agentinfo commands](#controllerinfo-and-agentinfo-commands)
   - [NetworkPolicy commands](#networkpolicy-commands)
+    - [Mapping endpoints to NetworkPolicies](#mapping-endpoints-to-networkpolicies)
   - [Dumping Pod network interface information](#dumping-pod-network-interface-information)
   - [Dumping OVS flows](#dumping-ovs-flows)
   - [OVS packet tracing](#ovs-packet-tracing)
+  - [Traceflow](#traceflow)
+  - [Antctl Proxy](#antctl-proxy)
+<!-- /toc -->
 
 ## Installation
 
@@ -41,7 +48,7 @@ appropriate one for your machine. For example:
 On Mac & Linux:
 
 ```bash
-curl -Lo ./antctl "https://github.com/vmware-tanzu/antrea/releases/download/v0.5.0/antctl-$(uname)-x86_64"
+curl -Lo ./antctl "https://github.com/vmware-tanzu/antrea/releases/download/<TAG>/antctl-$(uname)-x86_64"
 chmod +x ./antctl
 mv ./antctl /some-dir-in-your-PATH/antctl
 antctl version
@@ -52,7 +59,7 @@ For Linux, we also publish binaries for Arm-based systems.
 On Windows, using PowerShell:
 
 ```powershell
-Invoke-WebRequest -Uri https://github.com/vmware-tanzu/antrea/releases/download/v0.5.0/antctl-windows-x86_64.exe -Outfile antctl.exe
+Invoke-WebRequest -Uri https://github.com/vmware-tanzu/antrea/releases/download/<TAG>/antctl-windows-x86_64.exe -Outfile antctl.exe
 Move-Item .\antctl.exe c:\some-dir-in-your-PATH\antctl.exe
 antctl version
 ```
@@ -70,6 +77,26 @@ one by setting the `KUBECONFIG` environment variable or with `--kubeconfig`
 
 The following sub-sections introduce a few commands which are useful for
 troubleshooting the Antrea system.
+
+### Showing or changing log verbosity level
+
+Starting from version 0.10.0, Antrea supports showing or changing the log
+verbosity level of Antrea Controller or Agent using the `antctl log-level`
+command. The command can only run locally inside the `antrea-controller` or
+`antrea-agent` container.
+
+The following command prints the current log verbosity level:
+
+```bash
+antctl log-level
+```
+
+This command updates the log verbosity level (the `level` argument must be an
+integer):
+
+```bash
+antctl log-level <level>
+```
 
 ### Collecting support information
 
@@ -92,15 +119,16 @@ provides additional flags to filter the results: run `antctl supportbundle
 
 The collected support bundle will include the following (more information may be
 included over time):
- * cluster information: description of the different K8s resources in the
-   cluster (Nodes, Deployments, etc.).
- * Antrea Controller information: all the available logs (contents will vary
-   based on the verbosity selected when running the controller) and state stored
-   at the controller (e.g. computed NetworkPolicy objects).
- * Antrea Agent information: all the available logs from the agent and the OVS
-   daemons, network configuration of the Node (e.g. routes, iptables rules, OVS
-   flows) and state stored at the agent (e.g. computed NetworkPolicy objects
-   received from the controller).
+
+* cluster information: description of the different K8s resources in the cluster
+  (Nodes, Deployments, etc.).
+* Antrea Controller information: all the available logs (contents will vary
+  based on the verbosity selected when running the controller) and state stored
+  at the controller (e.g. computed NetworkPolicy objects).
+* Antrea Agent information: all the available logs from the agent and the OVS
+  daemons, network configuration of the Node (e.g. routes, iptables rules, OVS
+  flows) and state stored at the agent (e.g. computed NetworkPolicy objects
+  received from the controller).
 
 **Be aware that the generated support bundle includes a lot of information,
   including logs, so please review the contents of the directory before sharing
@@ -109,7 +137,7 @@ included over time):
 The `antctl supportbundle` command can also be run inside a Controller or Agent
 Pod, in which case only local information will be collected.
 
-### `controllerinfo` and `agentinfo` commands
+### controllerinfo and agentinfo commands
 
 `antctl` controller command `get controllerinfo` (or `get ci`) and agent command
 `get agentinfo` (or `get ai`) print the runtime information of
@@ -123,6 +151,7 @@ antctl get agentinfo
 ### NetworkPolicy commands
 
 Both Antrea Controller and Agent support querying NetworkPolicy objects.
+
 - `antctl` `get networkpolicy` (or `get netpol`) command can print all
 NetworkPolicies, a specified NetworkPolicy, or NetworkPolicies in a specified
 Namespace.
@@ -150,6 +179,22 @@ specified local Pod using this `antctl` command:
 antctl get networkpolicy -p pod -n namespace
 ```
 
+#### Mapping endpoints to NetworkPolicies
+
+`antctl` supports mapping a specific Pod to the NetworkPolicies which "select"
+this Pod, either because they apply to the Pod directly or because one of their
+policy rules selects the Pod.
+
+```bash
+antctl query endpoint -p pod [-n namespace]
+```
+
+If no Namespace is provided with `-n`, the command will default to the "default"
+Namespace.
+
+This command only works in "controller mode" and **as of now it can only be run
+from inside the Antrea Controller Pod, and not from out-of-cluster**.
+
 ### Dumping Pod network interface information
 
 `antctl` agent command `get podinterface` (or `get pi`) can dump network
@@ -176,7 +221,7 @@ antctl get ovsflows -T table
 
 An OVS flow table can be specified using the table name or the table number.
 `antctl get ovsflow --help` lists all Antrea flow tables. For more information
-about Antrea OVS pipeline and flows, please refer to the [OVS pipeline doc](/docs/ovs-pipeline.md).
+about Antrea OVS pipeline and flows, please refer to the [OVS pipeline doc](design/ovs-pipeline.md).
 
 Example outputs of dumping Pod and NetworkPolicy OVS flows:
 
@@ -313,3 +358,69 @@ result: |
   Megaflow: recirc_id=0x54,eth,ip,in_port=1,nw_frag=no
   Datapath actions: 3
 ```
+
+### Traceflow
+
+`antctl traceflow` command is used to start a traceflow and retrieve its result. After the
+result is collected, the traceflow will be deleted. Users can also create a traceflow with
+`kubectl`, but `antctl traceflow` offers a simpler approach.
+
+The required options for this command
+are `source` and `destination`, which consist of namespace and pod, service or IP. The command supports
+yaml and json output. If users want a non blocking operation, an option: `--wait=false` can
+be added to start the traceflow without waiting for result. Then, the deletion operation
+will not be conducted. Besides, users can specify header protocol (ICMP, TCP and UDP),
+source/destination ports and TCP flags.
+
+For example:
+
+```bash
+$ antctl traceflow -S busybox0 -D busybox1
+name: default-busybox0-to-default-busybox1-fpllngzi
+phase: Succeeded
+source: default/busybox0
+destination: default/busybox1
+results:
+- node: antrea-linux-testbed7-1
+  timestamp: 1596435607
+  observations:
+  - component: SpoofGuard
+    action: Forwarded
+  - component: Forwarding
+    componentInfo: Output
+    action: Delivered
+```
+
+### Antctl Proxy
+
+Antctl can run as a reverse proxy for the Antrea API (Controller or arbitrary
+Agent). Usage is very similar to `kubectl proxy` and the implementation is
+essentially the same.
+
+To run a reverse proxy for the Antrea Controller API, use:
+
+```bash
+antctl proxy --controller
+````
+
+To run a reverse proxy for the Antrea Agent API for the antrea-agent Pod running
+on Node <TARGET_NODE>, use:
+
+```bash
+antctl proxy --agent-node
+```
+
+You can then access the API at `127.0.0.1:8001`. To implement this
+functionality, antctl retrieves the Node IP address and API server port for the
+Antrea Controller or for the specified Agent from the K8s API, and it proxies
+all the requests received on `127.0.0.1:8001` directly to that IP / port. One
+thing to keep in mind is that the TLS connection between the proxy and the
+Antrea Agent or Controller will not be secure (no certificate verification), and
+the proxy should be used for debugging only.
+
+To see the full list of supported options, run `antctl proxy --help`.
+
+This feature is useful if one wants to use the Go
+[pprof](https://golang.org/pkg/net/http/pprof/) tool to collect runtime
+profiling data about the Antrea components. Please refer to this
+[document](troubleshooting.md#profiling-antrea-components) for more information.

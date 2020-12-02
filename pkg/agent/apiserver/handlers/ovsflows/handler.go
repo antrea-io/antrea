@@ -22,9 +22,10 @@ import (
 	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
-	"github.com/vmware-tanzu/antrea/pkg/agent/querier"
+	agentquerier "github.com/vmware-tanzu/antrea/pkg/agent/querier"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/common"
 	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
+	"github.com/vmware-tanzu/antrea/pkg/querier"
 )
 
 // Response is the response struct of ovsflows command.
@@ -32,7 +33,7 @@ type Response struct {
 	Flow string `json:"flow,omitempty"`
 }
 
-func dumpMatchedFlows(aq querier.AgentQuerier, flowKeys []string) ([]Response, error) {
+func dumpMatchedFlows(aq agentquerier.AgentQuerier, flowKeys []string) ([]Response, error) {
 	resps := []Response{}
 	for _, f := range flowKeys {
 		flowStr, err := aq.GetOVSCtlClient().DumpMatchedFlow(f)
@@ -47,7 +48,7 @@ func dumpMatchedFlows(aq querier.AgentQuerier, flowKeys []string) ([]Response, e
 	return resps, nil
 }
 
-func dumpFlows(aq querier.AgentQuerier, table binding.TableIDType) ([]Response, error) {
+func dumpFlows(aq agentquerier.AgentQuerier, table binding.TableIDType) ([]Response, error) {
 	resps := []Response{}
 	var flowStrs []string
 	var err error
@@ -67,7 +68,7 @@ func dumpFlows(aq querier.AgentQuerier, table binding.TableIDType) ([]Response, 
 
 // nil is returned if the flow table can not be found (the passed table name or
 // number is invalid).
-func getTableFlows(aq querier.AgentQuerier, table string) ([]Response, error) {
+func getTableFlows(aq agentquerier.AgentQuerier, table string) ([]Response, error) {
 	var tableNumber binding.TableIDType
 	// Table nubmer is a 8-bit unsigned integer.
 	n, err := strconv.ParseUint(table, 10, 8)
@@ -85,7 +86,7 @@ func getTableFlows(aq querier.AgentQuerier, table string) ([]Response, error) {
 	return dumpFlows(aq, tableNumber)
 }
 
-func getPodFlows(aq querier.AgentQuerier, podName, namespace string) ([]Response, error) {
+func getPodFlows(aq agentquerier.AgentQuerier, podName, namespace string) ([]Response, error) {
 	interfaces := aq.GetInterfaceStore().GetContainerInterfacesByPod(podName, namespace)
 	if len(interfaces) == 0 {
 		return nil, nil
@@ -96,8 +97,8 @@ func getPodFlows(aq querier.AgentQuerier, podName, namespace string) ([]Response
 
 }
 
-func getNetworkPolicyFlows(aq querier.AgentQuerier, npName, namespace string) ([]Response, error) {
-	if aq.GetNetworkPolicyInfoQuerier().GetNetworkPolicy(npName, namespace) == nil {
+func getNetworkPolicyFlows(aq agentquerier.AgentQuerier, npName, namespace string) ([]Response, error) {
+	if len(aq.GetNetworkPolicyInfoQuerier().GetNetworkPolicies(&querier.NetworkPolicyQueryFilter{SourceName: npName, Namespace: namespace})) == 0 {
 		// NetworkPolicy not found.
 		return nil, nil
 	}
@@ -107,7 +108,7 @@ func getNetworkPolicyFlows(aq querier.AgentQuerier, npName, namespace string) ([
 }
 
 // HandleFunc returns the function which can handle API requests to "/ovsflows".
-func HandleFunc(aq querier.AgentQuerier) http.HandlerFunc {
+func HandleFunc(aq agentquerier.AgentQuerier) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
 		var resps []Response

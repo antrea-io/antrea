@@ -8,6 +8,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"runtime/pprof"
 	"strings"
 
 	"github.com/spf13/afero"
@@ -41,6 +42,11 @@ type AgentDumper interface {
 	// DumpNetworkPolicyResources should create files that contains networkpolicy
 	// resources on the agent Pod under the base dir.
 	DumpNetworkPolicyResources(basedir string) error
+	// DumpHeapPprof should create a pprof file of heap usage of the agent.
+	DumpHeapPprof(basedir string) error
+
+	// DumpOVSPorts should create file that contains OF port descriptions under the basedir.
+	DumpOVSPorts(basedir string) error
 }
 
 // ControllerDumper is the interface for dumping runtime information of the
@@ -55,6 +61,17 @@ type ControllerDumper interface {
 	// DumpNetworkPolicyResources should create files that contains networkpolicy
 	// resources on the controller Pod under the base dir.
 	DumpNetworkPolicyResources(basedir string) error
+	// DumpHeapPprof should create a pprof file of the heap usage of the controller.
+	DumpHeapPprof(basedir string) error
+}
+
+func DumpHeapPprof(fs afero.Fs, basedir string) error {
+	f, err := fs.Create(filepath.Join(basedir, "memprofile"))
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	return pprof.WriteHeapProfile(f)
 }
 
 func dumpAntctlGet(fs afero.Fs, executor exec.Interface, name, basedir string) error {
@@ -62,11 +79,7 @@ func dumpAntctlGet(fs afero.Fs, executor exec.Interface, name, basedir string) e
 	if err != nil {
 		return fmt.Errorf("error when dumping %s: %w", name, err)
 	}
-	err = afero.WriteFile(fs, filepath.Join(basedir, name), output, 0644)
-	if err != nil {
-		return fmt.Errorf("error when writing %s dumps: %w", name, err)
-	}
-	return nil
+	return writeFile(fs, filepath.Join(basedir, name), name, output)
 }
 
 func dumpNetworkPolicyResources(fs afero.Fs, executor exec.Interface, basedir string) error {
@@ -113,6 +126,16 @@ func fileCopy(fs afero.Fs, targetDir string, srcDir string, prefixFilter string)
 	})
 }
 
+// writeFile writes the given data to the specified filePath. Param "resource" is used to identify the type of the given
+// data in the error message.
+func writeFile(fs afero.Fs, filePath string, resource string, data []byte) error {
+	err := afero.WriteFile(fs, filePath, data, 0644)
+	if err != nil {
+		return fmt.Errorf("error when writing %s to file: %w", resource, err)
+	}
+	return nil
+}
+
 type controllerDumper struct {
 	fs       afero.Fs
 	executor exec.Interface
@@ -138,6 +161,10 @@ func (d *controllerDumper) DumpLog(basedir string) error {
 		logDir = logDirFlag.Value.String()
 	}
 	return fileCopy(d.fs, path.Join(basedir, "logs", "controller"), logDir, "antrea-controller")
+}
+
+func (d *controllerDumper) DumpHeapPprof(basedir string) error {
+	return DumpHeapPprof(d.fs, basedir)
 }
 
 func NewControllerDumper(fs afero.Fs, executor exec.Interface) ControllerDumper {
@@ -182,7 +209,7 @@ func (d *agentDumper) DumpNetworkPolicyResources(basedir string) error {
 	if err := dump(d.npq.GetAddressGroups(), "addressgroups"); err != nil {
 		return err
 	}
-	if err := dump(d.npq.GetNetworkPolicies(""), "networkpolicies"); err != nil {
+	if err := dump(d.npq.GetNetworkPolicies(&querier.NetworkPolicyQueryFilter{}), "networkpolicies"); err != nil {
 		return err
 	}
 	return dump(d.npq.GetAppliedToGroups(), "appliedtogroups")
@@ -193,11 +220,23 @@ func (d *agentDumper) DumpFlows(basedir string) error {
 	if err != nil {
 		return fmt.Errorf("error when dumping flows: %w", err)
 	}
-	err = afero.WriteFile(d.fs, filepath.Join(basedir, "flows"), []byte(strings.Join(flows, "\n")), 0644)
+	return writeFile(d.fs, filepath.Join(basedir, "flows"), "flows", []byte(strings.Join(flows, "\n")))
+}
+
+func (d *agentDumper) DumpHeapPprof(basedir string) error {
+	return DumpHeapPprof(d.fs, basedir)
+}
+
+func (d *agentDumper) DumpOVSPorts(basedir string) error {
+	portsDesc, err := d.ovsCtlClient.DumpPortsDesc()
 	if err != nil {
-		return fmt.Errorf("error when creating flows output file: %w", err)
+		return fmt.Errorf("error when dumping ports desc: %w", err)
 	}
-	return nil
+	portData := make([]string, len(portsDesc))
+	for idx := range portsDesc {
+		portData[idx] = strings.Join(portsDesc[idx], "\n")
+	}
+	return writeFile(d.fs, filepath.Join(basedir, "ovsports"), "ports", []byte(strings.Join(portData, "\n")))
 }
 
 func NewAgentDumper(fs afero.Fs, executor exec.Interface, ovsCtlClient ovsctl.OVSCtlClient, aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolicyInfoQuerier) AgentDumper {

@@ -25,7 +25,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
@@ -47,9 +47,9 @@ NAMESPACES   PODS    NETWORK-POLICIES    TIME(s)    MEMORY(M)    EXECUTIONS    E
 The metrics are not accurate under the race detector, and will be skipped when testing with "-race".
 */
 func TestInitXLargeScaleWithSmallNamespaces(t *testing.T) {
-	getObjects := func() ([]*v1.Namespace, []*networkingv1.NetworkPolicy, []*v1.Pod) {
+	getObjects := func() ([]*corev1.Namespace, []*networkingv1.NetworkPolicy, []*corev1.Pod) {
 		namespace := rand.String(8)
-		namespaces := []*v1.Namespace{
+		namespaces := []*corev1.Namespace{
 			{
 				ObjectMeta: metav1.ObjectMeta{Name: namespace, Labels: map[string]string{"app": namespace}},
 			},
@@ -99,26 +99,26 @@ func TestInitXLargeScaleWithSmallNamespaces(t *testing.T) {
 				},
 			},
 		}
-		pods := []*v1.Pod{
+		pods := []*corev1.Pod{
 			{
 				ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: "pod1", UID: types.UID(uuid.New().String()), Labels: map[string]string{"app-1": "scale-1"}},
-				Spec:       v1.PodSpec{NodeName: getRandomNodeName()},
-				Status:     v1.PodStatus{PodIP: getRandomIP()},
+				Spec:       corev1.PodSpec{NodeName: getRandomNodeName()},
+				Status:     corev1.PodStatus{PodIP: getRandomIP()},
 			},
 			{
 				ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: "pod2", UID: types.UID(uuid.New().String()), Labels: map[string]string{"app-1": "scale-1"}},
-				Spec:       v1.PodSpec{NodeName: getRandomNodeName()},
-				Status:     v1.PodStatus{PodIP: getRandomIP()},
+				Spec:       corev1.PodSpec{NodeName: getRandomNodeName()},
+				Status:     corev1.PodStatus{PodIP: getRandomIP()},
 			},
 			{
 				ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: "pod3", UID: types.UID(uuid.New().String()), Labels: map[string]string{"app-2": "scale-2"}},
-				Spec:       v1.PodSpec{NodeName: getRandomNodeName()},
-				Status:     v1.PodStatus{PodIP: getRandomIP()},
+				Spec:       corev1.PodSpec{NodeName: getRandomNodeName()},
+				Status:     corev1.PodStatus{PodIP: getRandomIP()},
 			},
 			{
 				ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: "pod4", UID: types.UID(uuid.New().String()), Labels: map[string]string{"app-2": "scale-2"}},
-				Spec:       v1.PodSpec{NodeName: getRandomNodeName()},
-				Status:     v1.PodStatus{PodIP: getRandomIP()},
+				Spec:       corev1.PodSpec{NodeName: getRandomNodeName()},
+				Status:     corev1.PodStatus{PodIP: getRandomIP()},
 			},
 		}
 		return namespaces, networkPolicies, pods
@@ -127,18 +127,59 @@ func TestInitXLargeScaleWithSmallNamespaces(t *testing.T) {
 	testComputeNetworkPolicy(t, 10*time.Second, namespaces, networkPolicies, pods)
 }
 
-func testComputeNetworkPolicy(t *testing.T, maxExecutionTime time.Duration, namespaces []*v1.Namespace, networkPolicies []*networkingv1.NetworkPolicy, pods []*v1.Pod) {
-	objs := make([]runtime.Object, 0, len(namespaces)+len(networkPolicies)+len(pods))
-	for i := range namespaces {
-		objs = append(objs, namespaces[i])
-	}
-	for i := range networkPolicies {
-		objs = append(objs, networkPolicies[i])
-	}
-	for i := range pods {
-		objs = append(objs, pods[i])
-	}
+/*
+TestInitXLargeScaleWithOneNamespaces tests the execution time and the memory usage of computing a scale
+of 1 Namespaces, 10k NetworkPolicies, 10k Pods where each network policy selects each pod (applied + ingress).
 
+NAMESPACES   PODS    NETWORK-POLICIES    TIME(s)    MEMORY(M)    EXECUTIONS    EVENTS(ag, atg, np)
+1            10000   10000               10.66       1157         30380         20368 5 20368
+
+The metrics are not accurate under the race detector, and will be skipped when testing with "-race".
+*/
+func TestInitXLargeScaleWithOneNamespace(t *testing.T) {
+	namespace := rand.String(8)
+	getObjects := func() ([]*corev1.Namespace, []*networkingv1.NetworkPolicy, []*corev1.Pod) {
+		namespaces := []*corev1.Namespace{
+			{
+				ObjectMeta: metav1.ObjectMeta{Name: namespace, Labels: map[string]string{"app": namespace}},
+			},
+		}
+		uid := rand.String(8)
+		networkPolicies := []*networkingv1.NetworkPolicy{
+			{
+				ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: "np-1" + uid, UID: types.UID(uuid.New().String())},
+				Spec: networkingv1.NetworkPolicySpec{
+					PodSelector: metav1.LabelSelector{MatchLabels: map[string]string{"app-1": "scale-1"}},
+					PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress, networkingv1.PolicyTypeEgress},
+					Ingress: []networkingv1.NetworkPolicyIngressRule{
+						{
+							From: []networkingv1.NetworkPolicyPeer{
+								{
+									PodSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{"app-1": "scale-1"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+		pods := []*corev1.Pod{
+			{
+				ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: "pod1" + uid, UID: types.UID(uuid.New().String()), Labels: map[string]string{"app-1": "scale-1"}},
+				Spec:       corev1.PodSpec{NodeName: getRandomNodeName()},
+				Status:     corev1.PodStatus{PodIP: getRandomIP()},
+			},
+		}
+		return namespaces, networkPolicies, pods
+	}
+	namespaces, networkPolicies, pods := getXObjects(10000, getObjects)
+	testComputeNetworkPolicy(t, 15*time.Second, namespaces[0:1], networkPolicies, pods)
+}
+
+func testComputeNetworkPolicy(t *testing.T, maxExecutionTime time.Duration, namespaces []*corev1.Namespace, networkPolicies []*networkingv1.NetworkPolicy, pods []*corev1.Pod) {
+	objs := toRunTimeObjects(namespaces, networkPolicies, pods)
 	_, c := newController(objs...)
 	c.heartbeatCh = make(chan heartbeat, 1000)
 
@@ -264,10 +305,10 @@ func getRandomNodeName() string {
 }
 
 // getXObjects calls the provided getObjectsFunc x times and aggregate the objects.
-func getXObjects(x int, getObjectsFunc func() ([]*v1.Namespace, []*networkingv1.NetworkPolicy, []*v1.Pod)) ([]*v1.Namespace, []*networkingv1.NetworkPolicy, []*v1.Pod) {
-	var namespaces []*v1.Namespace
+func getXObjects(x int, getObjectsFunc func() ([]*corev1.Namespace, []*networkingv1.NetworkPolicy, []*corev1.Pod)) ([]*corev1.Namespace, []*networkingv1.NetworkPolicy, []*corev1.Pod) {
+	var namespaces []*corev1.Namespace
 	var networkPolicies []*networkingv1.NetworkPolicy
-	var pods []*v1.Pod
+	var pods []*corev1.Pod
 	for i := 0; i < x; i++ {
 		newNamespaces, newNetworkPolicies, newPods := getObjectsFunc()
 		namespaces = append(namespaces, newNamespaces...)
@@ -275,4 +316,18 @@ func getXObjects(x int, getObjectsFunc func() ([]*v1.Namespace, []*networkingv1.
 		pods = append(pods, newPods...)
 	}
 	return namespaces, networkPolicies, pods
+}
+
+func toRunTimeObjects(namespaces []*corev1.Namespace, networkPolicies []*networkingv1.NetworkPolicy, pods []*corev1.Pod) []runtime.Object {
+	objs := make([]runtime.Object, 0, len(namespaces)+len(networkPolicies)+len(pods))
+	for i := range namespaces {
+		objs = append(objs, namespaces[i])
+	}
+	for i := range networkPolicies {
+		objs = append(objs, networkPolicies[i])
+	}
+	for i := range pods {
+		objs = append(objs, pods[i])
+	}
+	return objs
 }

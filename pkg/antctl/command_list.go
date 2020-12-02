@@ -50,7 +50,7 @@ func (cl *commandList) ApplyToRootCommand(root *cobra.Command) {
 		root.AddCommand(groupCommand)
 	}
 	for i := range cl.definitions {
-		def := cl.definitions[i]
+		def := &cl.definitions[i]
 		if (runtime.Mode == runtime.ModeAgent && def.agentEndpoint == nil) ||
 			(runtime.Mode == runtime.ModeController && def.controllerEndpoint == nil) {
 			continue
@@ -106,8 +106,15 @@ func (cl *commandList) validate() []error {
 // are used for debugging purpose.
 func (cl *commandList) GetDebugCommands(mode string) [][]string {
 	var allCommands [][]string
-	for i := range cl.definitions {
-		def := cl.definitions[i]
+	for _, def := range cl.definitions {
+		// TODO: incorporate query commands into e2e testing once proxy access is implemented
+		if def.commandGroup == query {
+			continue
+		}
+		if mode == runtime.ModeController && def.use == "log-level" {
+			// log-level command does not support remote execution.
+			continue
+		}
 		if mode == runtime.ModeAgent && def.agentEndpoint != nil ||
 			mode == runtime.ModeController && def.controllerEndpoint != nil {
 			var currentCommand []string
@@ -118,10 +125,15 @@ func (cl *commandList) GetDebugCommands(mode string) [][]string {
 			allCommands = append(allCommands, currentCommand)
 		}
 	}
-	for i := range cl.rawCommands {
-		if mode == runtime.ModeController && cl.rawCommands[i].supportController ||
-			mode == runtime.ModeAgent && cl.rawCommands[i].supportAgent {
-			allCommands = append(allCommands, strings.Split(cl.rawCommands[i].cobraCommand.Use, " ")[:1])
+	for _, cmd := range cl.rawCommands {
+		if cmd.cobraCommand.Use == "proxy" {
+			// proxy will keep running until interrupted so it
+			// cannot be used as is in e2e tests.
+			continue
+		}
+		if mode == runtime.ModeController && cmd.supportController ||
+			mode == runtime.ModeAgent && cmd.supportAgent {
+			allCommands = append(allCommands, strings.Split(cmd.cobraCommand.Use, " ")[:1])
 		}
 	}
 	return allCommands

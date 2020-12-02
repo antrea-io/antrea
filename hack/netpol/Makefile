@@ -1,5 +1,5 @@
 # TODO: use kustomize if the code stays in the Antrea repo for a long time.
-VERSION ?= alpha6
+VERSION ?= alpha7
 
 .PHONY: all
 all: build
@@ -23,7 +23,7 @@ push-release: build
 
 .golangci-bin:
 	@echo "===> Installing Golangci-lint <==="
-	@curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $@ v1.21.0
+	@curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $@ v1.32.1
 
 .PHONY: golangci
 golangci: .golangci-bin

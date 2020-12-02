@@ -38,6 +38,7 @@ rules:
       - update
       - delete
   - apiGroups:
+      - controlplane.antrea.tanzu.vmware.com
       - networking.antrea.tanzu.vmware.com
     resources:
       - networkpolicies
@@ -47,6 +48,19 @@ rules:
       - get
       - watch
       - list
+  - apiGroups:
+      - controlplane.antrea.tanzu.vmware.com
+    resources:
+      - nodestatssummaries
+    verbs:
+      - create
+  - apiGroups:
+      - controlplane.antrea.tanzu.vmware.com
+    resources:
+      - networkpolicies/status
+    verbs:
+      - create
+      - get
   - apiGroups:
       - authentication.k8s.io
     resources:
@@ -89,15 +103,18 @@ rules:
       - ops.antrea.tanzu.vmware.com
     resources:
       - traceflows
+      - traceflows/status
     verbs:
       - get
       - watch
       - list
       - update
       - patch
+      - create
+      - delete
 ---
 kind: ClusterRoleBinding
-apiVersion: rbac.authorization.k8s.io/v1beta1
+apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   name: antrea-agent
 roleRef:

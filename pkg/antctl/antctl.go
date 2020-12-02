@@ -23,16 +23,19 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/apiserver/handlers/ovstracing"
 	"github.com/vmware-tanzu/antrea/pkg/agent/apiserver/handlers/podinterface"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
+	"github.com/vmware-tanzu/antrea/pkg/antctl/raw/proxy"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/raw/supportbundle"
+	"github.com/vmware-tanzu/antrea/pkg/antctl/raw/traceflow"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/addressgroup"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/appliedtogroup"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/controllerinfo"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/networkpolicy"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/version"
-	networkingv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
+	cpv1beta "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
 	systemv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/system/v1beta1"
 	controllerinforest "github.com/vmware-tanzu/antrea/pkg/apiserver/registry/system/controllerinfo"
 	"github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/scheme"
+	controllernetworkpolicy "github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy"
 )
 
 // CommandList defines all commands that could be used in the antctl for both agents
@@ -57,27 +60,67 @@ var CommandList = &commandList{
 				},
 				addonTransform: version.AgentTransform,
 			},
+
 			transformedResponse: reflect.TypeOf(version.Response{}),
+		},
+		{
+			use:   "log-level",
+			short: "Show or set log verbosity level",
+			long:  "Show or set the log verbosity level of ${component}",
+			example: `  Show the current log verbosity level
+  $ antctl log-level
+  Set the log verbosity level to 2
+  $ antctl log-level 2`,
+			commandGroup: flat,
+			controllerEndpoint: &endpoint{
+				nonResourceEndpoint: &nonResourceEndpoint{
+					path: "/loglevel",
+					params: []flagInfo{
+						{
+							name:  "level",
+							usage: "The integer log verbosity level to set",
+							arg:   true,
+						},
+					},
+					outputType: single,
+				},
+			},
+			agentEndpoint: &endpoint{
+				nonResourceEndpoint: &nonResourceEndpoint{
+					path: "/loglevel",
+					params: []flagInfo{
+						{
+							name:  "level",
+							usage: "The integer log verbosity level to set",
+							arg:   true,
+						},
+					},
+					outputType: single,
+				},
+			},
+			transformedResponse: reflect.TypeOf(0),
 		},
 		{
 			use:     "networkpolicy",
 			aliases: []string{"networkpolicies", "netpol"},
-			short:   "Print NetworkPolicies",
-			long:    "Print NetworkPolicies in ${component}. 'namespace' is required if 'name' is provided.",
-			example: `  Get a specific NetworkPolicy
-  $ antctl get networkpolicy np1 -n ns1
-  Get the list of NetworkPolicies in a Namespace
-  $ antctl get networkpolicy -n ns1
-  Get the list of NetworkPolicies in all Namespaces
+			short:   "Print control plane NetworkPolicies",
+			long:    "Print control plane NetworkPolicies in ${component}. 'namespace' is required if 'pod' is provided.",
+			example: `  Get a specific control plane NetworkPolicy
+  $ antctl get networkpolicy 6001549b-ba63-4752-8267-30f52b4332db
+  Get the list of all control plane NetworkPolicies
   $ antctl get networkpolicy
-  Get the list of NetworkPolicies applied to a Pod (supported by agent only)
+  Get the control plane NetworkPolicy with a specific source (supported by agent only)
+  $ antctl get networkpolicy -S allow-http -n ns1
+  Get the list of control plane NetworkPolicies whose source NetworkPolicies are in a Namespace (supported by agent only)
+  $ antctl get networkpolicy -n ns1
+  Get the list of control plane NetworkPolicies with a specific source Type (supported by agent only)
+  $ antctl get networkpolicy -T acnp
+  Get the list of control plane NetworkPolicies applied to a Pod (supported by agent only)
   $ antctl get networkpolicy -p pod1 -n ns1`,
 			commandGroup: get,
 			controllerEndpoint: &endpoint{
 				resourceEndpoint: &resourceEndpoint{
-					groupVersionResource: &networkingv1beta1.NetworkPolicyVersionResource,
-					resourceName:         "",
-					namespaced:           true,
+					groupVersionResource: &cpv1beta.NetworkPolicyVersionResource,
 				},
 				addonTransform: networkpolicy.Transform,
 			},
@@ -87,12 +130,17 @@ var CommandList = &commandList{
 					params: []flagInfo{
 						{
 							name:  "name",
-							usage: "Get NetworkPolicy by name. If present, Namespace must be provided.",
+							usage: "Get NetworkPolicy by name.",
 							arg:   true,
 						},
 						{
+							name:      "source",
+							usage:     "Get NetworkPolicies for which the source has the provided name. The source of a control plane NetworkPolicy is the original policy resource (K8s NetworkPolicy or Antrea-native Policy) from which the control plane NetworkPolicy was derived.",
+							shorthand: "S",
+						},
+						{
 							name:      "namespace",
-							usage:     "Get Networkpolicies from specific Namespace",
+							usage:     "Get Networkpolicies from specific Namespace.",
 							shorthand: "n",
 						},
 						{
@@ -100,7 +148,13 @@ var CommandList = &commandList{
 							usage:     "Get NetworkPolicies applied to the Pod. If present, Namespace must be provided.",
 							shorthand: "p",
 						},
+						{
+							name:      "type",
+							usage:     "Get NetworkPolicies with specific type. Type means the type of its source network policy: K8sNP, ACNP, ANP",
+							shorthand: "T",
+						},
 					},
+					outputType: multiple,
 				},
 				addonTransform: networkpolicy.Transform,
 			},
@@ -114,7 +168,7 @@ var CommandList = &commandList{
 			commandGroup: get,
 			controllerEndpoint: &endpoint{
 				resourceEndpoint: &resourceEndpoint{
-					groupVersionResource: &networkingv1beta1.AppliedToGroupVersionResource,
+					groupVersionResource: &cpv1beta.AppliedToGroupVersionResource,
 				},
 				addonTransform: appliedtogroup.Transform,
 			},
@@ -141,7 +195,7 @@ var CommandList = &commandList{
 			commandGroup: get,
 			controllerEndpoint: &endpoint{
 				resourceEndpoint: &resourceEndpoint{
-					groupVersionResource: &networkingv1beta1.AddressGroupVersionResource,
+					groupVersionResource: &cpv1beta.AddressGroupVersionResource,
 				},
 				addonTransform: addressgroup.Transform,
 			},
@@ -297,18 +351,23 @@ var CommandList = &commandList{
 						},
 						{
 							name:      "source",
-							usage:     "Source of the packet. Can be an OVS port name, or a (local or remote) Pod (specified by <Namespace>/<name>), or an IP address. If specified, the source's IP addresss will be used as the tracing packet's source IP address, and the 'nw_src' field should not be added in the 'flow' argument.",
+							usage:     "Source of the packet. Can be an OVS port name, or a (local or remote) Pod (specified by <Namespace>/<name>), or an IP address. If specified, the source's IP address will be used as the tracing packet's source IP address, and the 'nw_src'/'ipv6_src' field should not be added in the 'flow' argument.",
 							shorthand: "S",
 						},
 						{
 							name:      "destination",
-							usage:     "Destination of the packet. Can be an OVS port name, or a (local or remote) Pod or a Service (specified by <Namespace>/<name>), or an IP address. If specified, the destination's IP address (the ClusterIP for a Service) will be used as the tacing packet's destination IP address, and the 'nw_dst' field should not be added in the 'flow' argument.",
+							usage:     "Destination of the packet. Can be an OVS port name, or a (local or remote) Pod or a Service (specified by <Namespace>/<name>). If there are both a Pod and a Service matching the destination name in a Namespace, the Pod will be set as the destination. It can also be an IP address. If specified, the destination's IP address (the ClusterIP for a Service) will be used as the tacing packet's destination IP address, and the 'nw_dst' field should not be added in the 'flow' argument.",
 							shorthand: "D",
 						},
 						{
 							name:      "flow",
 							usage:     "Specify the flow (packet headers) of the tracing packet. Check the flow syntax descriptions in ovs-ofctl(8) manpage.",
 							shorthand: "f",
+						},
+						{
+							name:      "addressFamily",
+							usage:     "Specify the address family fo the packet. Can be 4 (IPv4) or 6 (IPv6). If not specified, the addressFamily will be automatically figured out based on the 'flow'. If no IP address or address family is given in the 'flow', IPv4 is used by default.",
+							shorthand: "F",
 						},
 					},
 					outputType: single,
@@ -317,11 +376,50 @@ var CommandList = &commandList{
 			commandGroup:        flat,
 			transformedResponse: reflect.TypeOf(ovstracing.Response{}),
 		},
+		{ // TODO: implement as a "rawCommand" (see supportbundle) so that the command can be run out-of-cluster
+			use:     "endpoint",
+			aliases: []string{"endpoints"},
+			short:   "Filter network policies relevant to an endpoint.",
+			long:    "Filter network policies relevant to an endpoint into three categories: network policies which apply to the endpoint and policies which select the endpoint in an ingress and/or egress rule.",
+			example: `  Query network policies given Pod and Namespace
+  $ antctl query endpoint -p pod1 -n ns1
+`,
+			commandGroup: query,
+			controllerEndpoint: &endpoint{
+				nonResourceEndpoint: &nonResourceEndpoint{
+					path: "/endpoint",
+					params: []flagInfo{
+						{
+							name:      "namespace",
+							usage:     "Namespace of the endpoint (defaults to 'default')",
+							shorthand: "n",
+						},
+						{
+							name:      "pod",
+							usage:     "Name of a Pod endpoint",
+							shorthand: "p",
+						},
+					},
+					outputType: single,
+				},
+			},
+			transformedResponse: reflect.TypeOf(controllernetworkpolicy.EndpointQueryResponse{}),
+		},
 	},
 	rawCommands: []rawCommand{
 		{
 			cobraCommand:      supportbundle.Command,
 			supportAgent:      true,
+			supportController: true,
+		},
+		{
+			cobraCommand:      traceflow.Command,
+			supportAgent:      true,
+			supportController: true,
+		},
+		{
+			cobraCommand:      proxy.Command,
+			supportAgent:      false,
 			supportController: true,
 		},
 	},

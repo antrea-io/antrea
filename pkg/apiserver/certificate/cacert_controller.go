@@ -18,9 +18,10 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
-	"k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apiserver/pkg/server/dynamiccertificates"
 	"k8s.io/client-go/kubernetes"
@@ -28,6 +29,7 @@ import (
 	"k8s.io/klog"
 	"k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 
+	"github.com/vmware-tanzu/antrea/pkg/features"
 	"github.com/vmware-tanzu/antrea/pkg/util/env"
 )
 
@@ -39,19 +41,28 @@ const (
 )
 
 var (
-	// Use the Antrea Pod Namespace for the CA cert ConfigMap.
-	caConfigMapNamespace = GetCAConfigMapNamespace()
-
 	// apiServiceNames contains all the APIServices backed by antrea-controller.
 	apiServiceNames = []string{
+		"v1alpha1.stats.antrea.tanzu.vmware.com",
+		"v1beta1.controlplane.antrea.tanzu.vmware.com",
+		"v1beta2.controlplane.antrea.tanzu.vmware.com",
 		"v1beta1.networking.antrea.tanzu.vmware.com",
 		"v1beta1.system.antrea.tanzu.vmware.com",
+	}
+	// validatingWebhooks contains all the ValidatingWebhookConfigurations backed by antrea-controller.
+	validatingWebhooks = []string{
+		"crdvalidator.antrea.tanzu.vmware.com",
+	}
+	mutationWebhooks = []string{
+		"crdmutator.antrea.tanzu.vmware.com",
 	}
 )
 
 // CACertController is responsible for taking the CA certificate from the
 // caContentProvider and publishing it to the ConfigMap and the APIServices.
 type CACertController struct {
+	mutex sync.RWMutex
+
 	// caContentProvider provides the very latest content of the ca bundle.
 	caContentProvider dynamiccertificates.CAContentProvider
 	// queue only ever has one item, but it has nice error handling backoff/retry semantics
@@ -89,6 +100,23 @@ func newCACertController(caContentProvider dynamiccertificates.CAContentProvider
 	return c
 }
 
+func (c *CACertController) UpdateCertificate() error {
+	if controller, ok := c.caContentProvider.(dynamiccertificates.ControllerRunner); ok {
+		if err := controller.RunOnce(); err != nil {
+			klog.Warningf("Updating of CA content failed: %v", err)
+			c.Enqueue()
+			return err
+		}
+	}
+
+	return nil
+}
+
+// getCertificate exposes the certificate for testing.
+func (c *CACertController) getCertificate() []byte {
+	return c.caContentProvider.CurrentCABundleContent()
+}
+
 // Enqueue will be called after CACertController is registered as a listener of CA cert change.
 func (c *CACertController) Enqueue() {
 	// The key can be anything as we only have single item.
@@ -105,6 +133,69 @@ func (c *CACertController) syncCACert() error {
 	if err := c.syncAPIServices(caCert); err != nil {
 		return err
 	}
+
+	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
+		if err := c.syncMutatingWebhooks(caCert); err != nil {
+			return err
+		}
+		if err := c.syncValidatingWebhooks(caCert); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// syncMutatingWebhooks updates the CABundle of the MutatingWebhookConfiguration backed by antrea-controller.
+func (c *CACertController) syncMutatingWebhooks(caCert []byte) error {
+	klog.Info("Syncing CA certificate with MutatingWebhookConfigurations")
+	for _, name := range mutationWebhooks {
+		updated := false
+		mWebhook, err := c.client.AdmissionregistrationV1().MutatingWebhookConfigurations().Get(context.TODO(), name, metav1.GetOptions{})
+		if err != nil {
+			return fmt.Errorf("error getting MutatingWebhookConfiguration %s: %v", name, err)
+		}
+		for idx, webhook := range mWebhook.Webhooks {
+			if bytes.Equal(webhook.ClientConfig.CABundle, caCert) {
+				continue
+			} else {
+				updated = true
+				webhook.ClientConfig.CABundle = caCert
+				mWebhook.Webhooks[idx] = webhook
+			}
+		}
+		if updated {
+			if _, err := c.client.AdmissionregistrationV1().MutatingWebhookConfigurations().Update(context.TODO(), mWebhook, metav1.UpdateOptions{}); err != nil {
+				return fmt.Errorf("error updating antrea CA cert of MutatingWebhookConfiguration %s: %v", name, err)
+			}
+		}
+	}
+	return nil
+}
+
+// syncValidatingWebhooks updates the CABundle of the ValidatingWebhookConfiguration backed by antrea-controller.
+func (c *CACertController) syncValidatingWebhooks(caCert []byte) error {
+	klog.Info("Syncing CA certificate with ValidatingWebhookConfigurations")
+	for _, name := range validatingWebhooks {
+		updated := false
+		vWebhook, err := c.client.AdmissionregistrationV1().ValidatingWebhookConfigurations().Get(context.TODO(), name, metav1.GetOptions{})
+		if err != nil {
+			return fmt.Errorf("error getting ValidatingWebhookConfiguration %s: %v", name, err)
+		}
+		for idx, webhook := range vWebhook.Webhooks {
+			if bytes.Equal(webhook.ClientConfig.CABundle, caCert) {
+				continue
+			} else {
+				updated = true
+				webhook.ClientConfig.CABundle = caCert
+				vWebhook.Webhooks[idx] = webhook
+			}
+		}
+		if updated {
+			if _, err := c.client.AdmissionregistrationV1().ValidatingWebhookConfigurations().Update(context.TODO(), vWebhook, metav1.UpdateOptions{}); err != nil {
+				return fmt.Errorf("error updating antrea CA cert of ValidatingWebhookConfiguration %s: %v", name, err)
+			}
+		}
+	}
 	return nil
 }
 
@@ -112,7 +203,7 @@ func (c *CACertController) syncCACert() error {
 func (c *CACertController) syncAPIServices(caCert []byte) error {
 	klog.Info("Syncing CA certificate with APIServices")
 	for _, name := range apiServiceNames {
-		apiService, err := c.aggregatorClient.ApiregistrationV1().APIServices().Get(context.TODO(), name, v1.GetOptions{})
+		apiService, err := c.aggregatorClient.ApiregistrationV1().APIServices().Get(context.TODO(), name, metav1.GetOptions{})
 		if err != nil {
 			return fmt.Errorf("error getting APIService %s: %v", name, err)
 		}
@@ -120,7 +211,7 @@ func (c *CACertController) syncAPIServices(caCert []byte) error {
 			continue
 		}
 		apiService.Spec.CABundle = caCert
-		if _, err := c.aggregatorClient.ApiregistrationV1().APIServices().Update(context.TODO(), apiService, v1.UpdateOptions{}); err != nil {
+		if _, err := c.aggregatorClient.ApiregistrationV1().APIServices().Update(context.TODO(), apiService, metav1.UpdateOptions{}); err != nil {
 			return fmt.Errorf("error updating antrea CA cert of APIService %s: %v", name, err)
 		}
 	}
@@ -130,7 +221,9 @@ func (c *CACertController) syncAPIServices(caCert []byte) error {
 // syncConfigMap updates the ConfigMap that holds the CA bundle, which will be read by API clients, e.g. antrea-agent.
 func (c *CACertController) syncConfigMap(caCert []byte) error {
 	klog.Info("Syncing CA certificate with ConfigMap")
-	caConfigMap, err := c.client.CoreV1().ConfigMaps(caConfigMapNamespace).Get(context.TODO(), CAConfigMapName, v1.GetOptions{})
+	// Use the Antrea Pod Namespace for the CA cert ConfigMap.
+	caConfigMapNamespace := GetCAConfigMapNamespace()
+	caConfigMap, err := c.client.CoreV1().ConfigMaps(caConfigMapNamespace).Get(context.TODO(), CAConfigMapName, metav1.GetOptions{})
 	if err != nil {
 		return fmt.Errorf("error getting ConfigMap %s: %v", CAConfigMapName, err)
 	}
@@ -140,7 +233,7 @@ func (c *CACertController) syncConfigMap(caCert []byte) error {
 	caConfigMap.Data = map[string]string{
 		CAConfigMapKey: string(caCert),
 	}
-	if _, err := c.client.CoreV1().ConfigMaps(caConfigMapNamespace).Update(context.TODO(), caConfigMap, v1.UpdateOptions{}); err != nil {
+	if _, err := c.client.CoreV1().ConfigMaps(caConfigMapNamespace).Update(context.TODO(), caConfigMap, metav1.UpdateOptions{}); err != nil {
 		return fmt.Errorf("error updating ConfigMap %s: %v", CAConfigMapName, err)
 	}
 	return nil

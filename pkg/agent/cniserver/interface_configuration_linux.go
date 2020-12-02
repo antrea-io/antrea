@@ -19,50 +19,204 @@ package cniserver
 import (
 	"fmt"
 	"net"
+	"runtime"
 	"time"
 
+	"github.com/Mellanox/sriovnet"
 	cnitypes "github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/containernetworking/plugins/pkg/ipam"
 	"github.com/containernetworking/plugins/pkg/ns"
-	"github.com/j-keck/arping"
 	"github.com/vishvananda/netlink"
 	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/util"
+	"github.com/vmware-tanzu/antrea/pkg/agent/util/arping"
 	"github.com/vmware-tanzu/antrea/pkg/agent/util/ethtool"
 	cnipb "github.com/vmware-tanzu/antrea/pkg/apis/cni/v1beta1"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
 )
 
+// NetDeviceType type Enum
+const (
+	netDeviceTypeVeth = "veth"
+	netDeviceTypeVF   = "vf"
+)
+
 type ifConfigurator struct {
-	ovsDatapathType string
+	ovsDatapathType             string
+	isOvsHardwareOffloadEnabled bool
 }
 
-func newInterfaceConfigurator(ovsDatapathType string) (*ifConfigurator, error) {
-	return &ifConfigurator{ovsDatapathType: ovsDatapathType}, nil
+func newInterfaceConfigurator(ovsDatapathType string, isOvsHardwareOffloadEnabled bool) (*ifConfigurator, error) {
+	return &ifConfigurator{ovsDatapathType: ovsDatapathType, isOvsHardwareOffloadEnabled: isOvsHardwareOffloadEnabled}, nil
 }
 
-// setupInterfaces creates a veth pair: containerIface is in the container
-// network namespace and hostIface is in the host network namespace.
-func (ic *ifConfigurator) setupInterfaces(
-	hostIfaceName, containerIfaceName string,
-	netns ns.NetNS,
-	mtu int) (hostIface *current.Interface, containerIface *current.Interface, err error) {
-	hostIface = &current.Interface{}
-	containerIface = &current.Interface{}
+func renameLink(curName, newName string) error {
+	link, err := netlink.LinkByName(curName)
+	if err != nil {
+		return err
+	}
+	if err := netlink.LinkSetDown(link); err != nil {
+		return err
+	}
+	if err := netlink.LinkSetName(link, newName); err != nil {
+		return err
+	}
+	if err := netlink.LinkSetUp(link); err != nil {
+		return err
+	}
 
-	if err := netns.Do(func(hostNS ns.NetNS) error {
+	return nil
+}
+
+func moveIfToNetns(ifname string, netns ns.NetNS) error {
+	vfDev, err := netlink.LinkByName(ifname)
+	if err != nil {
+		return fmt.Errorf("failed to lookup VF device %v: %q", ifname, err)
+	}
+	// move VF device to ns
+	if err = netlink.LinkSetNsFd(vfDev, int(netns.Fd())); err != nil {
+		return fmt.Errorf("failed to move VF device %+v to netns: %q", ifname, err)
+	}
+
+	return nil
+}
+
+// configureContainerLinkSriov move VF to the container namesapce
+func (ic *ifConfigurator) configureContainerLinkSriov(
+	podName string,
+	podNamespace string,
+	containerID string,
+	containerNetNS string,
+	containerIfaceName string,
+	mtu int,
+	pciAddress string,
+	result *current.Result,
+) error {
+	hostIfaceName := util.GenerateContainerInterfaceName(podName, podNamespace, containerID)
+
+	hostIface := &current.Interface{Name: hostIfaceName}
+	containerIface := &current.Interface{Name: containerIfaceName, Sandbox: containerNetNS}
+	result.Interfaces = []*current.Interface{hostIface, containerIface}
+
+	// 1. get VF netdevice from PCI
+	vfNetdevices, err := sriovnet.GetNetDevicesFromPci(pciAddress)
+	if err != nil {
+		return err
+	}
+	// Make sure we have 1 netdevice per PCI address
+	if len(vfNetdevices) != 1 {
+		return fmt.Errorf("failed to get one netdevice interface per %s", pciAddress)
+	}
+	vfNetdevice := vfNetdevices[0]
+	// 2. get Uplink netdevice
+	uplink, err := sriovnet.GetUplinkRepresentor(pciAddress)
+	if err != nil {
+		return fmt.Errorf("failed to get uplink representor error: %s", err)
+	}
+	// 3. get VF index from PCI
+	vfIndex, err := sriovnet.GetVfIndexByPciAddress(pciAddress)
+	if err != nil {
+		return fmt.Errorf("failed to get VF index error: %s", err)
+	}
+	// 4. lookup representor
+	repPortName, err := sriovnet.GetVfRepresentor(uplink, vfIndex)
+	if err != nil {
+		return fmt.Errorf("failed to get VF representor error: %s", err)
+	}
+	// 5. rename VF representor to hostIfaceName
+	if err = renameLink(repPortName, hostIfaceName); err != nil {
+		return fmt.Errorf("failed to rename %s to %s: %v", repPortName, hostIfaceName, err)
+	}
+	hostIface.Name = hostIfaceName
+	link, err := netlink.LinkByName(hostIface.Name)
+	if err != nil {
+		return err
+	}
+	hostIface.Mac = link.Attrs().HardwareAddr.String()
+	// 6. Move VF to Container namespace
+	netns, err := ns.GetNS(containerNetNS)
+	if err != nil {
+		return fmt.Errorf("failed to open netns %s: %v", containerNetNS, err)
+	}
+	err = moveIfToNetns(vfNetdevice, netns)
+	if err != nil {
+		return err
+	}
+	netns.Close()
+	if err := ns.WithNetNSPath(containerNetNS, func(hostNS ns.NetNS) error {
+		err = renameLink(vfNetdevice, containerIfaceName)
+		if err != nil {
+			return fmt.Errorf("failed to rename VF netdevice %s: %v", containerIfaceName, err)
+		}
+		link, err = netlink.LinkByName(containerIfaceName)
+		if err != nil {
+			return fmt.Errorf("failed to find VF netdevice %s: %v", containerIfaceName, err)
+		}
+		err = netlink.LinkSetMTU(link, mtu)
+		if err != nil {
+			return fmt.Errorf("failed to set MTU for VF netdevice %s: %v", containerIfaceName, err)
+		}
+		err = netlink.LinkSetUp(link)
+		if err != nil {
+			return fmt.Errorf("failed to set link up to VF netdevice %s: %v", containerIfaceName, err)
+		}
+		klog.V(2).Infof("Setup interfaces host: %s, container %s", repPortName, containerIfaceName)
+		containerIface.Name = containerIfaceName
+		containerIface.Mac = link.Attrs().HardwareAddr.String()
+		containerIface.Sandbox = netns.Path()
+		klog.V(2).Infof("Configuring IP address for container %s", containerID)
+		// result.Interfaces must be set before this.
+		if err := ipam.ConfigureIface(containerIface.Name, result); err != nil {
+			return fmt.Errorf("failed to configure IP address for container %s: %v", containerID, err)
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+	return nil
+}
+
+// configureContainerLinkVeth creates a veth pair: one in the container netns and one in the host netns, and configures IP
+// address and routes to the container veth.
+func (ic *ifConfigurator) configureContainerLinkVeth(
+	podName string,
+	podNamespace string,
+	containerID string,
+	containerNetNS string,
+	containerIfaceName string,
+	mtu int,
+	result *current.Result,
+) error {
+	hostIfaceName := util.GenerateContainerInterfaceName(podName, podNamespace, containerID)
+
+	hostIface := &current.Interface{Name: hostIfaceName}
+	containerIface := &current.Interface{Name: containerIfaceName, Sandbox: containerNetNS}
+	result.Interfaces = []*current.Interface{hostIface, containerIface}
+
+	// This is a workaround for issue #1113, which is caused by https://github.com/containernetworking/plugins/issues/524.
+	// Instead of using the provided netns argument, which might not be the real hostNS, it fixes it by getting the
+	// hostNS in advance with the OS thread locked.
+	// TODO: remove this once the upstream issue is fixed.
+	hostNS, err := func() (ns.NetNS, error) {
+		runtime.LockOSThread()
+		defer runtime.UnlockOSThread()
+		return ns.GetCurrentNS()
+	}()
+	if err != nil {
+		return fmt.Errorf("failed to get host netns: %v", err)
+	}
+	defer hostNS.Close()
+
+	if err := ns.WithNetNSPath(containerNetNS, func(_ ns.NetNS) error {
+		klog.V(2).Infof("Creating veth devices (%s, %s) for container %s", containerIfaceName, hostIfaceName, containerID)
 		hostVeth, containerVeth, err := ip.SetupVethWithName(containerIfaceName, hostIfaceName, mtu, hostNS)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to create veth devices for container %s: %v", containerID, err)
 		}
-		klog.V(2).Infof("Setup interfaces host: %s, container %s", hostVeth.Name, containerVeth.Name)
-		containerIface.Name = containerVeth.Name
 		containerIface.Mac = containerVeth.HardwareAddr.String()
-		containerIface.Sandbox = netns.Path()
-		hostIface.Name = hostVeth.Name
 		hostIface.Mac = hostVeth.HardwareAddr.String()
 		// OVS netdev datapath doesn't support TX checksum offloading, i.e. if packet
 		// arrives with bad/no checksum it will be sent to the output port with same bad/no checksum.
@@ -71,12 +225,17 @@ func (ic *ifConfigurator) setupInterfaces(
 				return fmt.Errorf("error when disabling TX checksum offload on container veth: %v", err)
 			}
 		}
+
+		klog.V(2).Infof("Configuring IP address for container %s", containerID)
+		// result.Interfaces must be set before this.
+		if err := ipam.ConfigureIface(containerIface.Name, result); err != nil {
+			return fmt.Errorf("failed to configure IP address for container %s: %v", containerID, err)
+		}
 		return nil
 	}); err != nil {
-		return nil, nil, err
+		return err
 	}
-
-	return hostIface, containerIface, nil
+	return nil
 }
 
 // advertiseContainerAddr sends 3 GARP packets in another goroutine with 50ms interval. It's because Openflow entries are
@@ -109,7 +268,9 @@ func (ic *ifConfigurator) advertiseContainerAddr(containerNetNS string, containe
 		for {
 			// Send gratuitous ARP to network in case of stale mappings for this IP address
 			// (e.g. if a previous - deleted - Pod was using the same IP).
-			arping.GratuitousArpOverIface(targetIP, *iface)
+			if err := arping.GratuitousARPOverIface(targetIP, iface); err != nil {
+				klog.Warningf("Failed to send gratuitous ARP #%d: %v", count, err)
+			}
 			count++
 			if count == 3 {
 				break
@@ -121,6 +282,8 @@ func (ic *ifConfigurator) advertiseContainerAddr(containerNetNS string, containe
 	return nil
 }
 
+// configureContainerLink creates a veth pair: one in the container netns and one in the host netns, and configures IP
+// address and routes to the container veth.
 func (ic *ifConfigurator) configureContainerLink(
 	podName string,
 	podNamespace string,
@@ -128,29 +291,21 @@ func (ic *ifConfigurator) configureContainerLink(
 	containerNetNS string,
 	containerIfaceName string,
 	mtu int,
+	sriovVFDeviceID string,
 	result *current.Result,
 ) error {
-	netns, err := ns.GetNS(containerNetNS)
-	if err != nil {
-		return fmt.Errorf("failed to open netns %s: %v", containerNetNS, err)
+	if sriovVFDeviceID != "" {
+		if !ic.isOvsHardwareOffloadEnabled {
+			return fmt.Errorf("OVS is configured with hardware offload disabled, but SR-IOV VF was requested; please set hardware offload to true via antrea yaml")
+		}
+		klog.V(2).Infof("Moving SR-IOV %s device to network namespace of container %s", sriovVFDeviceID, containerID)
+		// Move SR-IOV VF to network namespace
+		return ic.configureContainerLinkSriov(podName, podNamespace, containerID, containerNetNS, containerIfaceName, mtu, sriovVFDeviceID, result)
+	} else {
+		klog.V(2).Infof("Create veth pair for container %s", containerID)
+		// Create veth pair and link up
+		return ic.configureContainerLinkVeth(podName, podNamespace, containerID, containerNetNS, containerIfaceName, mtu, result)
 	}
-	defer netns.Close()
-	// Create veth pair and link up
-	hostIfaceName := util.GenerateContainerInterfaceName(podName, podNamespace, containerID)
-	hostIface, containerIface, err := ic.setupInterfaces(hostIfaceName, containerIfaceName, netns, mtu)
-	if err != nil {
-		return fmt.Errorf("failed to create veth devices for container %s: %v", containerID, err)
-	}
-
-	result.Interfaces = []*current.Interface{hostIface, containerIface}
-
-	klog.V(2).Infof("Configuring IP address for container %s", containerID)
-	if err := netns.Do(func(_ ns.NetNS) error {
-		return ipam.ConfigureIface(containerIface.Name, result)
-	}); err != nil {
-		return fmt.Errorf("failed to configure IP address for container %s: %v", containerID, err)
-	}
-	return nil
 }
 
 func (ic *ifConfigurator) removeContainerLink(containerID, hostInterfaceName string) error {
@@ -178,8 +333,9 @@ func (ic *ifConfigurator) checkContainerInterface(
 	containerNetns, containerID string,
 	containerIface *current.Interface,
 	containerIPs []*current.IPConfig,
-	containerRoutes []*cnitypes.Route) (*vethPair, error) {
-	var contVeth *vethPair
+	containerRoutes []*cnitypes.Route,
+	sriovVFDeviceID string) (interface{}, error) {
+	var networkInterface interface{}
 	// Check netns configuration
 	if containerNetns != containerIface.Sandbox {
 		klog.Errorf("Sandbox in prevResult %s doesn't match configured netns: %s",
@@ -187,17 +343,16 @@ func (ic *ifConfigurator) checkContainerInterface(
 		return nil, fmt.Errorf("sandbox in prevResult %s doesn't match configured netns: %s",
 			containerIface.Sandbox, containerNetns)
 	}
-	netns, err := ns.GetNS(containerNetns)
-	if err != nil {
-		klog.Errorf("Failed to check netns config %s: %v", containerNetns, err)
-		return nil, err
-	}
-	defer netns.Close()
+
 	// Check container interface configuration
-	if err := netns.Do(func(netNS ns.NetNS) error {
+	if err := ns.WithNetNSPath(containerNetns, func(_ ns.NetNS) error {
 		var errlink error
 		// Check container link config
-		contVeth, errlink = validateContainerInterface(containerIface)
+		if sriovVFDeviceID != "" {
+			networkInterface, errlink = validateContainerVFInterface(containerIface, sriovVFDeviceID)
+		} else {
+			networkInterface, errlink = validateContainerVethInterface(containerIface)
+		}
 		if errlink != nil {
 			return errlink
 		}
@@ -215,28 +370,64 @@ func (ic *ifConfigurator) checkContainerInterface(
 			containerID, containerNetns, err)
 		return nil, err
 	}
-	return contVeth, nil
+	return networkInterface, nil
 }
 
-func validateContainerInterface(intf *current.Interface) (*vethPair, error) {
-	link, err := validateInterface(intf, true)
+func validateContainerVFInterface(intf *current.Interface, sriovVFDeviceID string) (netlink.Link, error) {
+	link, err := validateInterface(intf, true, netDeviceTypeVF)
 	if err != nil {
 		return nil, err
 	}
+	netdevices, _ := sriovnet.GetNetDevicesFromPci(sriovVFDeviceID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find netdevice to PCI address %s: %v", sriovVFDeviceID, err)
+	}
+	// the check makes sure that the SR-IOV VF netdevice is not in the host namespace
+	// the GetNetDevicesFromPci is using linux sysfs to find the VF netdevice
+	// the method is running in container network namespace, but we are still in the antrea agent filesystem
+	// the antrea agent container is privileged, which allow access to the host sysfs
+	// therefore the validation is to make sure that the VF netdevice is not in the host network
+	// namespace
+	if len(netdevices) != 0 {
+		return nil, fmt.Errorf("VF netdevice still in host network namespace %s %+v", sriovVFDeviceID, netdevices)
+	}
+	if intf.Mac != link.Attrs().HardwareAddr.String() {
+		return nil, fmt.Errorf("interface %s MAC %s doesn't match container MAC: %s",
+			intf.Name, intf.Mac, link.Attrs().HardwareAddr.String())
+	}
+	return link, nil
+}
 
-	linkName := link.Attrs().Name
+func validateContainerVethInterface(intf *current.Interface) (*vethPair, error) {
+	link, err := validateInterface(intf, true, netDeviceTypeVeth)
+	if err != nil {
+		return nil, err
+	}
 	veth := &vethPair{}
+	linkName := link.Attrs().Name
+	veth.ifIndex = link.Attrs().Index
 	_, veth.peerIndex, err = ip.GetVethPeerIfindex(linkName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get veth peer index for veth %s: %v", linkName, err)
 	}
-	veth.ifIndex = link.Attrs().Index
 	if intf.Mac != link.Attrs().HardwareAddr.String() {
 		return nil, fmt.Errorf("interface %s MAC %s doesn't match container MAC: %s",
 			intf.Name, intf.Mac, link.Attrs().HardwareAddr.String())
 	}
 	veth.name = linkName
 	return veth, nil
+}
+
+func (ic *ifConfigurator) validateVFRepInterface(sriovVFDeviceID string) (string, error) {
+	uplink, err := sriovnet.GetUplinkRepresentor(sriovVFDeviceID)
+	if err != nil {
+		return "", fmt.Errorf("failed to get uplink representor for PCI Address %s", sriovVFDeviceID)
+	}
+	vfIndex, err := sriovnet.GetVfIndexByPciAddress(sriovVFDeviceID)
+	if err != nil {
+		return "", fmt.Errorf("failed to vf index for PCI Address %s", sriovVFDeviceID)
+	}
+	return sriovnet.GetVfRepresentor(uplink, vfIndex)
 }
 
 func (ic *ifConfigurator) validateContainerPeerInterface(interfaces []*current.Interface, containerVeth *vethPair) (*vethPair, error) {
@@ -247,7 +438,7 @@ func (ic *ifConfigurator) validateContainerPeerInterface(interfaces []*current.I
 			// Not in the default Namespace. Must be the container interface.
 			continue
 		}
-		link, err := validateInterface(hostIntf, false)
+		link, err := validateInterface(hostIntf, false, netDeviceTypeVeth)
 		if err != nil {
 			klog.Errorf("Failed to validate interface %s: %v", hostIntf.Name, err)
 			continue
@@ -313,7 +504,7 @@ func (ic *ifConfigurator) getInterceptedInterfaces(
 	return containerIface, hostIface, nil
 }
 
-func validateInterface(intf *current.Interface, inNetns bool) (netlink.Link, error) {
+func validateInterface(intf *current.Interface, inNetns bool, ifType string) (netlink.Link, error) {
 	if intf.Name == "" {
 		return nil, fmt.Errorf("interface name is missing")
 	}
@@ -326,17 +517,24 @@ func validateInterface(intf *current.Interface, inNetns bool) (netlink.Link, err
 			return nil, fmt.Errorf("interface %s is expected not in netns", intf.Name)
 		}
 	}
-
 	link, err := netlink.LinkByName(intf.Name)
 	if err != nil {
 		return nil, fmt.Errorf("failed to find link for interface %s", intf.Name)
 	}
+	if ifType == netDeviceTypeVeth {
+		if !isVeth(link) {
+			return nil, fmt.Errorf("interface %s is not of type veth", intf.Name)
+		}
+	} else if ifType == netDeviceTypeVF {
 
-	_, isVeth := link.(*netlink.Veth)
-	if !isVeth {
-		return nil, fmt.Errorf("interface %s is not of type veth", intf.Name)
+		return link, nil
 	}
-	return link, nil
+	return nil, fmt.Errorf("unknown device type %s", ifType)
+}
+
+func isVeth(link netlink.Link) bool {
+	_, isVeth := link.(*netlink.Veth)
+	return isVeth
 }
 
 func (ic *ifConfigurator) getOVSInterfaceType() int {

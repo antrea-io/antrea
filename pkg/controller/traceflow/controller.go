@@ -16,15 +16,17 @@ package traceflow
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 
-	"k8s.io/apimachinery/pkg/apis/meta/v1"
+	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
+	coreinformers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog"
@@ -38,26 +40,38 @@ import (
 const (
 	// Set resyncPeriod to 0 to disable resyncing.
 	resyncPeriod time.Duration = 0
+
 	// How long to wait before retrying the processing of a traceflow.
 	minRetryDelay = 5 * time.Second
 	maxRetryDelay = 300 * time.Second
+
 	// Default number of workers processing traceflow request.
 	defaultWorkers = 4
 
-	// Min and max data plane tag for traceflow. dataplaneTag=0 means it's not a Traceflow packet.
-	// dataplaneTag=15 is reserved.
-	minTagNum uint8 = 1
-	maxTagNum uint8 = 14
+	// Min and max data plane tag for traceflow. minTagNum is 7 (0b000111), maxTagNum is 59 (0b111011).
+	// As per RFC2474, 16 different DSCP values are we reserved for Experimental or Local Use, which we use as the 16 possible data plane tag values.
+	// tagStep is 4 (0b100) to keep last 2 bits at 0b11.
+	tagStep   uint8 = 0b100
+	minTagNum uint8 = 0b1*tagStep + 0b11
+	maxTagNum uint8 = 0b1110*tagStep + 0b11
+
+	// PodIP index name for Pod cache.
+	podIPIndex = "podIP"
+
+	// String set to TraceflowStatus.Reason.
+	traceflowTimeout = "Traceflow timeout"
 )
 
 var (
 	// Traceflow timeout period.
-	timeout = (300 * time.Second).Seconds()
+	timeoutDuration      = 2 * time.Minute
+	timeoutCheckInterval = timeoutDuration / 2
 )
 
 // Controller is for traceflow.
 type Controller struct {
 	client                 versioned.Interface
+	podInformer            coreinformers.PodInformer
 	traceflowInformer      opsinformers.TraceflowInformer
 	traceflowLister        opslisters.TraceflowLister
 	traceflowListerSynced  cache.InformerSynced
@@ -66,10 +80,11 @@ type Controller struct {
 	runningTraceflows      map[uint8]string // tag->traceflowName if tf.Status.Phase is Running.
 }
 
-// NewTraceflowController creates a new traceflow controller.
-func NewTraceflowController(client versioned.Interface, traceflowInformer opsinformers.TraceflowInformer) *Controller {
+// NewTraceflowController creates a new traceflow controller and adds podIP indexer to podInformer.
+func NewTraceflowController(client versioned.Interface, podInformer coreinformers.PodInformer, traceflowInformer opsinformers.TraceflowInformer) *Controller {
 	c := &Controller{
 		client:                client,
+		podInformer:           podInformer,
 		traceflowInformer:     traceflowInformer,
 		traceflowLister:       traceflowInformer.Lister(),
 		traceflowListerSynced: traceflowInformer.Informer().HasSynced,
@@ -84,7 +99,21 @@ func NewTraceflowController(client versioned.Interface, traceflowInformer opsinf
 		},
 		resyncPeriod,
 	)
+	// Add IP-Pod index. Each Pod has only 1 IP, the extra overhead is constant and acceptable.
+	// @tnqn evaluated the performance without/with IP index is 3us vs 4us per pod, i.e. 300ms vs 400ms for 100k Pods.
+	podInformer.Informer().AddIndexers(cache.Indexers{podIPIndex: podIPIndexFunc})
 	return c
+}
+
+func podIPIndexFunc(obj interface{}) ([]string, error) {
+	pod, ok := obj.(*corev1.Pod)
+	if !ok {
+		return nil, fmt.Errorf("obj is not pod: %+v", obj)
+	}
+	if pod.Status.PodIP != "" && pod.Status.Phase != corev1.PodSucceeded && pod.Status.Phase != corev1.PodFailed {
+		return []string{pod.Status.PodIP}, nil
+	}
+	return nil, nil
 }
 
 // enqueueTraceflow adds an object to the controller work queue.
@@ -118,6 +147,10 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 		}
 	}
 
+	go func() {
+		wait.Until(c.checkTraceflowTimeout, timeoutCheckInterval, stopCh)
+	}()
+
 	for i := 0; i < defaultWorkers; i++ {
 		go wait.Until(c.worker, time.Second, stopCh)
 	}
@@ -130,7 +163,7 @@ func (c *Controller) addTraceflow(obj interface{}) {
 	c.enqueueTraceflow(tf)
 }
 
-func (c *Controller) updateTraceflow(oldObj, curObj interface{}) {
+func (c *Controller) updateTraceflow(_, curObj interface{}) {
 	tf := curObj.(*opsv1alpha1.Traceflow)
 	klog.Infof("Processing Traceflow %s UPDATE event", tf.Name)
 	c.enqueueTraceflow(tf)
@@ -139,7 +172,7 @@ func (c *Controller) updateTraceflow(oldObj, curObj interface{}) {
 func (c *Controller) deleteTraceflow(old interface{}) {
 	tf := old.(*opsv1alpha1.Traceflow)
 	klog.Infof("Processing Traceflow %s DELETE event", tf.Name)
-	c.deallocateTag(tf)
+	c.deallocateTagForTF(tf)
 }
 
 // worker is a long-running function that will continually call the processTraceflowItem function
@@ -149,12 +182,27 @@ func (c *Controller) worker() {
 	}
 }
 
+func (c *Controller) checkTraceflowTimeout() {
+	c.runningTraceflowsMutex.Lock()
+	tfs := make([]string, 0, len(c.runningTraceflows))
+	for _, tfName := range c.runningTraceflows {
+		tfs = append(tfs, tfName)
+	}
+	c.runningTraceflowsMutex.Unlock()
+
+	for _, tfName := range tfs {
+		// Re-post all running Traceflow requests to the work queue to
+		// be processed and checked for timeout.
+		c.queue.Add(tfName)
+	}
+}
+
 // processTraceflowItem processes an item in the "traceflow" work queue, by calling syncTraceflow
 // after casting the item to a string (Traceflow name). If syncTraceflow returns an error, this
-// function logs error. If syncTraceflow returns retry flag is false, the Traceflow will be added
-// to queue with rate limit. If syncTraceflow returns retry flag is false, the Traceflow is removed
-// from the queue until we get notified of a new change. This function returns false if and only if
-// the work queue was shutdown (no more items will be processed).
+// function logs the error and adds the Traceflow request back to the queue with a rate limit. If
+// no error occurs, the Traceflow request is removed from the queue until we get notified of a new
+// change. This function returns false if and only if the work queue was shutdown (no more items
+// will be processed).
 func (c *Controller) processTraceflowItem() bool {
 	obj, quit := c.queue.Get()
 	if quit {
@@ -175,12 +223,9 @@ func (c *Controller) processTraceflowItem() bool {
 		klog.Errorf("Expected string in work queue but got %#v", obj)
 		return true
 	} else {
-		retry, err := c.syncTraceflow(key)
+		err := c.syncTraceflow(key)
 		if err != nil {
 			klog.Errorf("Error syncing Traceflow %s, Aborting. Error: %v", key, err)
-		}
-		// Add key to queue if retry flag is true, forget key if retry flag is false.
-		if retry {
 			c.queue.AddRateLimited(key)
 		} else {
 			c.queue.Forget(key)
@@ -189,105 +234,97 @@ func (c *Controller) processTraceflowItem() bool {
 	return true
 }
 
-func (c *Controller) syncTraceflow(traceflowName string) (retry bool, err error) {
+func (c *Controller) syncTraceflow(traceflowName string) error {
 	startTime := time.Now()
 	defer func() {
 		klog.V(4).Infof("Finished syncing Traceflow for %s. (%v)", traceflowName, time.Since(startTime))
 	}()
 
-	retry = false
 	tf, err := c.traceflowLister.Get(traceflowName)
 	if err != nil {
-		return
+		if apierrors.IsNotFound(err) {
+			// Traceflow CRD has been deleted.
+			return nil
+		}
+		return err
 	}
 	switch tf.Status.Phase {
 	case "", opsv1alpha1.Pending:
-		_, err = c.startTraceflow(tf)
+		err = c.startTraceflow(tf)
 	case opsv1alpha1.Running:
-		retry, err = c.checkTraceflowStatus(tf)
-	default:
-		c.deallocateTag(tf)
+		err = c.checkTraceflowStatus(tf)
+	case opsv1alpha1.Failed:
+		// Deallocate tag when agent set Traceflow status to Failed.
+		c.deallocateTagForTF(tf)
 	}
-	return
+	return err
 }
 
-func (c *Controller) startTraceflow(tf *opsv1alpha1.Traceflow) (*opsv1alpha1.Traceflow, error) {
-	// Validate if the traceflow request meets requirement.
-	if err := validate(tf); err != nil {
-		c.errorTraceflowCRD(tf, err.Error())
-		return nil, err
-	}
-
+func (c *Controller) startTraceflow(tf *opsv1alpha1.Traceflow) error {
 	// Allocate data plane tag.
-	tag, err := c.allocateTag(tf)
+	tag, err := c.allocateTag(tf.Name)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	return c.runningTraceflowCRD(tf, tag)
+	if tag == 0 {
+		return nil
+	}
+
+	err = c.updateTraceflowStatus(tf, opsv1alpha1.Running, "", tag)
+	if err != nil {
+		c.deallocateTag(tf.Name, tag)
+	}
+	return err
 }
 
-func (c *Controller) checkTraceflowStatus(tf *opsv1alpha1.Traceflow) (retry bool, err error) {
-	retry = false
+func (c *Controller) checkTraceflowStatus(tf *opsv1alpha1.Traceflow) error {
 	sender := false
 	receiver := false
-	for _, nodeResult := range tf.Status.Results {
-		for _, ob := range nodeResult.Observations {
+	for i, nodeResult := range tf.Status.Results {
+		for j, ob := range nodeResult.Observations {
 			if ob.Component == opsv1alpha1.SpoofGuard {
 				sender = true
 			}
 			if ob.Action == opsv1alpha1.Delivered || ob.Action == opsv1alpha1.Dropped {
 				receiver = true
 			}
+			if ob.TranslatedDstIP != "" {
+				// Add Pod ns/name to observation if TranslatedDstIP (a.k.a. Service Endpoint address) is Pod IP.
+				pods, err := c.podInformer.Informer().GetIndexer().ByIndex("podIP", ob.TranslatedDstIP)
+				if err != nil {
+					klog.Infof("Unable to find Pod from IP, error: %+v", err)
+				} else if len(pods) > 0 {
+					pod, ok := pods[0].(*corev1.Pod)
+					if !ok {
+						klog.Warningf("Invalid Pod obj in cache")
+					} else {
+						tf.Status.Results[i].Observations[j].Pod = fmt.Sprintf("%s/%s", pod.Namespace, pod.Name)
+					}
+				}
+			}
 		}
 	}
 	if sender && receiver {
-		tf.Status.Phase = opsv1alpha1.Succeeded
-		_, err = c.client.OpsV1alpha1().Traceflows().Update(context.TODO(), tf, v1.UpdateOptions{})
-		return
+		c.deallocateTagForTF(tf)
+		return c.updateTraceflowStatus(tf, opsv1alpha1.Succeeded, "", 0)
 	}
-	if time.Now().UTC().Sub(tf.CreationTimestamp.UTC()).Seconds() > timeout {
-		_, err = c.errorTraceflowCRD(tf, "traceflow timeout")
-		return
-	}
-	retry = true
-	return
-}
-
-func (c *Controller) runningTraceflowCRD(tf *opsv1alpha1.Traceflow, dataPlaneTag uint8) (*opsv1alpha1.Traceflow, error) {
-	tf.Status.DataplaneTag = dataPlaneTag
-	tf.Status.Phase = opsv1alpha1.Running
-
-	type Traceflow struct {
-		Status opsv1alpha1.TraceflowStatus `json:"status,omitempty"`
-	}
-	patchData := Traceflow{Status: opsv1alpha1.TraceflowStatus{Phase: tf.Status.Phase, DataplaneTag: dataPlaneTag}}
-	payloads, _ := json.Marshal(patchData)
-	return c.client.OpsV1alpha1().Traceflows().Patch(context.TODO(), tf.Name, types.MergePatchType, payloads, v1.PatchOptions{})
-}
-
-func (c *Controller) errorTraceflowCRD(tf *opsv1alpha1.Traceflow, reason string) (*opsv1alpha1.Traceflow, error) {
-	tf.Status.Phase = opsv1alpha1.Failed
-
-	type Traceflow struct {
-		Status opsv1alpha1.TraceflowStatus `json:"status,omitempty"`
-	}
-	patchData := Traceflow{Status: opsv1alpha1.TraceflowStatus{Phase: tf.Status.Phase, Reason: reason}}
-	payloads, _ := json.Marshal(patchData)
-	return c.client.OpsV1alpha1().Traceflows().Patch(context.TODO(), tf.Name, types.MergePatchType, payloads, v1.PatchOptions{})
-}
-
-// TODO: more restrictive validation in this function and CRD definition
-func validate(tf *opsv1alpha1.Traceflow) error {
-	if len(tf.Spec.Destination.Service) != 0 {
-		return errors.New("destination service is not supported")
-	}
-	if len(tf.Spec.Destination.Pod) != 0 && len(tf.Spec.Destination.IP) != 0 {
-		return errors.New("destination pod and IP cannot be both set")
-	}
-	if len(tf.Spec.Destination.Pod) == 0 && len(tf.Spec.Destination.IP) == 0 {
-		return errors.New("destination pod and IP cannot be both not set")
+	// CreationTimestamp is of second accuracy.
+	if time.Now().Unix() > tf.CreationTimestamp.Unix()+int64(timeoutDuration.Seconds()) {
+		c.deallocateTagForTF(tf)
+		return c.updateTraceflowStatus(tf, opsv1alpha1.Failed, traceflowTimeout, 0)
 	}
 	return nil
+}
+
+func (c *Controller) updateTraceflowStatus(tf *opsv1alpha1.Traceflow, phase opsv1alpha1.TraceflowPhase, reason string, dataPlaneTag uint8) error {
+	update := tf.DeepCopy()
+	update.Status.Phase = phase
+	update.Status.DataplaneTag = dataPlaneTag
+	if reason != "" {
+		update.Status.Reason = reason
+	}
+	_, err := c.client.OpsV1alpha1().Traceflows().UpdateStatus(context.TODO(), update, metav1.UpdateOptions{})
+	return err
 }
 
 func (c *Controller) occupyTag(tf *opsv1alpha1.Traceflow) error {
@@ -310,28 +347,41 @@ func (c *Controller) occupyTag(tf *opsv1alpha1.Traceflow) error {
 	return nil
 }
 
-func (c *Controller) allocateTag(tf *opsv1alpha1.Traceflow) (uint8, error) {
+// Allocates a tag. If the Traceflow request has been allocated with a tag
+// already, 0 is returned. If number of existing Traceflow requests reaches
+// the upper limit, an error is returned.
+func (c *Controller) allocateTag(name string) (uint8, error) {
 	c.runningTraceflowsMutex.Lock()
 	defer c.runningTraceflowsMutex.Unlock()
-	for i := minTagNum; i <= maxTagNum; i++ {
+
+	for _, n := range c.runningTraceflows {
+		if n == name {
+			// The Traceflow request has been processed already.
+			return 0, nil
+		}
+	}
+	for i := minTagNum; i <= maxTagNum; i += tagStep {
 		if _, ok := c.runningTraceflows[i]; !ok {
-			c.runningTraceflows[i] = tf.Name
+			c.runningTraceflows[i] = name
 			return i, nil
 		}
 	}
-	return 0, errors.New("Too much traceflow currently")
+	return 0, fmt.Errorf("number of on-going Traceflow operations already reached the upper limit: %d", maxTagNum)
 }
 
-// Deallocate tag from cache. Ignore DataplaneTag == 0 which is invalid case.
-func (c *Controller) deallocateTag(tf *opsv1alpha1.Traceflow) {
-	if tf.Status.DataplaneTag == 0 {
-		return
+// Deallocates tag from cache. Ignore DataplaneTag == 0 which is an invalid case.
+func (c *Controller) deallocateTagForTF(tf *opsv1alpha1.Traceflow) {
+	if tf.Status.DataplaneTag != 0 {
+		c.deallocateTag(tf.Name, tf.Status.DataplaneTag)
 	}
+}
+
+func (c *Controller) deallocateTag(name string, tag uint8) {
 	c.runningTraceflowsMutex.Lock()
 	defer c.runningTraceflowsMutex.Unlock()
-	if existingTraceflowName, ok := c.runningTraceflows[tf.Status.DataplaneTag]; ok {
-		if tf.Name == existingTraceflowName {
-			delete(c.runningTraceflows, tf.Status.DataplaneTag)
+	if existingTraceflowName, ok := c.runningTraceflows[tag]; ok {
+		if name == existingTraceflowName {
+			delete(c.runningTraceflows, tag)
 		}
 	}
 }

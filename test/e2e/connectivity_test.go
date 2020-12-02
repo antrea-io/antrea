@@ -20,18 +20,18 @@ import (
 	"testing"
 	"time"
 
-	"k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 )
 
 const pingCount = 5
 
-func waitForPodIPs(t *testing.T, data *TestData, podNames []string) map[string]string {
+func waitForPodIPs(t *testing.T, data *TestData, podNames []string) map[string]*PodIPs {
 	t.Logf("Waiting for Pods to be ready and retrieving IPs")
-	podIPs := make(map[string]string)
+	podIPs := make(map[string]*PodIPs)
 	for _, podName := range podNames {
-		if podIP, err := data.podWaitForIP(defaultTimeout, podName, testNamespace); err != nil {
+		if podIP, err := data.podWaitForIPs(defaultTimeout, podName, testNamespace); err != nil {
 			t.Fatalf("Error when waiting for IP for Pod '%s': %v", podName, err)
 		} else {
 			podIPs[podName] = podIP
@@ -41,7 +41,7 @@ func waitForPodIPs(t *testing.T, data *TestData, podNames []string) map[string]s
 	return podIPs
 }
 
-// runPingMesh runs a ping mesh between all the provided Pods after first retrieveing their IP
+// runPingMesh runs a ping mesh between all the provided Pods after first retrieving their IP
 // addresses.
 func (data *TestData) runPingMesh(t *testing.T, podNames []string) {
 	podIPs := waitForPodIPs(t, data, podNames)
@@ -101,8 +101,8 @@ func (data *TestData) testHostPortPodConnectivity(t *testing.T) {
 	}
 	defer deletePodWrapper(t, data, hpPodName)
 	// Retrieve the IP Address of the Node on which the Pod is scheduled.
-	hpPod, err := data.podWaitFor(defaultTimeout, hpPodName, testNamespace, func(pod *v1.Pod) (bool, error) {
-		return pod.Status.Phase == v1.PodRunning, nil
+	hpPod, err := data.podWaitFor(defaultTimeout, hpPodName, testNamespace, func(pod *corev1.Pod) (bool, error) {
+		return pod.Status.Phase == corev1.PodRunning, nil
 	})
 	if err != nil {
 		t.Fatalf("Error when waiting for Pod '%s': %v", hpPodName, err)
@@ -110,11 +110,11 @@ func (data *TestData) testHostPortPodConnectivity(t *testing.T) {
 	hpPodHostIP := hpPod.Status.HostIP
 	// Create client Pod to test connectivity.
 	clientName := randName("test-client-")
-	if err := data.createBusyboxPod(clientName); err != nil {
-		t.Fatalf("Error when creating busybox test Pod: %v", err)
+	if err := data.createBusyboxPodOnNode(clientName, ""); err != nil {
+		t.Fatalf("Error when creating test client Pod: %v", err)
 	}
 	defer deletePodWrapper(t, data, clientName)
-	if _, err := data.podWaitForIP(defaultTimeout, clientName, testNamespace); err != nil {
+	if _, err := data.podWaitForIPs(defaultTimeout, clientName, testNamespace); err != nil {
 		t.Fatalf("Error when waiting for IP for Pod '%s': %v", clientName, err)
 	}
 
@@ -192,7 +192,12 @@ func TestPodConnectivityDifferentNodes(t *testing.T) {
 
 func (data *TestData) redeployAntrea(t *testing.T, enableIPSec bool) {
 	var err error
-
+	// export logs before deleting Antrea
+	if enableIPSec {
+		exportLogs(t, data, "beforeRedeployWithIPsec", false)
+	} else {
+		exportLogs(t, data, "beforeRedploy", false)
+	}
 	t.Logf("Deleting Antrea Agent DaemonSet")
 	if err = data.deleteAntrea(defaultTimeout); err != nil {
 		t.Fatalf("Error when deleting Antrea DaemonSet: %v", err)
@@ -208,6 +213,13 @@ func (data *TestData) redeployAntrea(t *testing.T, enableIPSec bool) {
 		t.Fatalf("Error when applying Antrea YAML: %v", err)
 	}
 
+	// After redeploying Antrea with / without IPsec, we wait for watchForRestartsDuration and
+	// count the number of container restarts. watchForRestartsDuration should be large enough
+	// to detect issues, e.g. if there is an issue with the antrea-ipsec container.
+	const watchForRestartsDuration = 20 * time.Second
+	timer := time.NewTimer(watchForRestartsDuration)
+	defer timer.Stop()
+
 	t.Logf("Waiting for all Antrea DaemonSet Pods")
 	if err := data.waitForAntreaDaemonSetPods(defaultTimeout); err != nil {
 		t.Fatalf("Error when restarting Antrea: %v", err)
@@ -217,6 +229,15 @@ func (data *TestData) redeployAntrea(t *testing.T, enableIPSec bool) {
 	t.Logf("Restarting CoreDNS Pods")
 	if err := data.restartCoreDNSPods(defaultTimeout); err != nil {
 		t.Fatalf("Error when restarting CoreDNS Pods: %v", err)
+	}
+
+	<-timer.C
+	containerRestarts, err := data.getAgentContainersRestartCount()
+	if err != nil {
+		t.Fatalf("Cannot retrieve number of container restarts across Agent Pods: %v", err)
+	}
+	if containerRestarts > 0 {
+		t.Errorf("Unexpected container restarts (%d) after deploying new YAML", containerRestarts)
 	}
 }
 
@@ -250,6 +271,7 @@ func TestPodConnectivityAfterAntreaRestart(t *testing.T) {
 // br-int bridge is to implement normal L2 forwarding.
 func TestOVSRestartSameNode(t *testing.T) {
 	skipIfProviderIs(t, "kind", "test not valid for the netdev datapath type")
+	skipIfNotIPv4Cluster(t)
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
@@ -268,7 +290,7 @@ func TestOVSRestartSameNode(t *testing.T) {
 		// that restarting Antrea takes less than that time. Unfortunately, the arping
 		// utility in busybox does not let us choose a smaller interval than 1 second.
 		count := 25
-		cmd := fmt.Sprintf("arping -c %d %s", count, podIPs[1])
+		cmd := fmt.Sprintf("arping -c %d %s", count, podIPs[1].ipv4.String())
 		stdout, stderr, err := data.runCommandFromPod(testNamespace, podNames[0], busyboxContainerName, strings.Fields(cmd))
 		if err != nil {
 			return fmt.Errorf("error when running arping command: %v - stdout: %s - stderr: %s", err, stdout, stderr)
@@ -375,10 +397,20 @@ func TestPingLargeMTU(t *testing.T) {
 	podIPs := waitForPodIPs(t, data, podNames)
 
 	pingSize := 2000
-	cmd := fmt.Sprintf("ping -c %d -s %d %s", pingCount, pingSize, podIPs[podName1])
+	var cmd string
 	t.Logf("Running ping with size %d between Pods %s and %s", pingSize, podName0, podName1)
-	stdout, stderr, err := data.runCommandFromPod(testNamespace, podName0, busyboxContainerName, strings.Fields(cmd))
-	if err != nil {
-		t.Errorf("Error when running ping command: %v - stdout: %s - stderr: %s", err, stdout, stderr)
+	if podIPs[podName1].ipv4 != nil {
+		cmd = fmt.Sprintf("ping -c %d -s %d %s", pingCount, pingSize, podIPs[podName1].ipv4.String())
+		stdout, stderr, err := data.runCommandFromPod(testNamespace, podName0, busyboxContainerName, strings.Fields(cmd))
+		if err != nil {
+			t.Errorf("Error when running ping command: %v - stdout: %s - stderr: %s", err, stdout, stderr)
+		}
+	}
+	if podIPs[podName1].ipv6 != nil {
+		cmd = fmt.Sprintf("ping -6 -c %d -s %d %s", pingCount, pingSize, podIPs[podName1].ipv6.String())
+		stdout, stderr, err := data.runCommandFromPod(testNamespace, podName0, busyboxContainerName, strings.Fields(cmd))
+		if err != nil {
+			t.Errorf("Error when running ping command: %v - stdout: %s - stderr: %s", err, stdout, stderr)
+		}
 	}
 }

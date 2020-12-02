@@ -19,8 +19,8 @@ package externalversions
 import (
 	"fmt"
 
-	v1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/core/v1alpha1"
-	opsv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/ops/v1alpha1"
+	v1alpha2 "github.com/vmware-tanzu/antrea/pkg/apis/core/v1alpha2"
+	v1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/ops/v1alpha1"
 	securityv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	cache "k8s.io/client-go/tools/cache"
@@ -52,12 +52,12 @@ func (f *genericInformer) Lister() cache.GenericLister {
 // TODO extend this to unknown resources with a client pool
 func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource) (GenericInformer, error) {
 	switch resource {
-	// Group=core.antrea.tanzu.vmware.com, Version=v1alpha1
-	case v1alpha1.SchemeGroupVersion.WithResource("externalentities"):
-		return &genericInformer{resource: resource.GroupResource(), informer: f.Core().V1alpha1().ExternalEntities().Informer()}, nil
+	// Group=core.antrea.tanzu.vmware.com, Version=v1alpha2
+	case v1alpha2.SchemeGroupVersion.WithResource("externalentities"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Core().V1alpha2().ExternalEntities().Informer()}, nil
 
 		// Group=ops.antrea.tanzu.vmware.com, Version=v1alpha1
-	case opsv1alpha1.SchemeGroupVersion.WithResource("traceflows"):
+	case v1alpha1.SchemeGroupVersion.WithResource("traceflows"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Ops().V1alpha1().Traceflows().Informer()}, nil
 
 		// Group=security.antrea.tanzu.vmware.com, Version=v1alpha1
@@ -65,6 +65,8 @@ func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Security().V1alpha1().ClusterNetworkPolicies().Informer()}, nil
 	case securityv1alpha1.SchemeGroupVersion.WithResource("networkpolicies"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Security().V1alpha1().NetworkPolicies().Informer()}, nil
+	case securityv1alpha1.SchemeGroupVersion.WithResource("tiers"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Security().V1alpha1().Tiers().Informer()}, nil
 
 	}
 

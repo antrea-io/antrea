@@ -202,29 +202,6 @@ func EnableHNSNetworkExtension(hnsNetID string, vSwitchExtension string) error {
 	return nil
 }
 
-// GetIPNetDeviceFromIP returns a local IP/mask and associated device from IP.
-func GetIPNetDeviceFromIP(localIP net.IP) (*net.IPNet, *net.Interface, error) {
-	linkList, err := net.Interfaces()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	for _, link := range linkList {
-		addrList, err := link.Addrs()
-		if err != nil {
-			continue
-		}
-		for _, addr := range addrList {
-			if ipNet, ok := addr.(*net.IPNet); ok {
-				if ipNet.IP.Equal(localIP) {
-					return ipNet, &link, nil
-				}
-			}
-		}
-	}
-	return nil, nil, fmt.Errorf("unable to find local IP and device")
-}
-
 func SetLinkUp(name string) (net.HardwareAddr, int, error) {
 	// Set host gateway interface up.
 	if err := EnableHostInterface(name); err != nil {
@@ -248,6 +225,11 @@ func SetLinkUp(name string) (net.HardwareAddr, int, error) {
 }
 
 func ConfigureLinkAddress(idx int, gwIPNet *net.IPNet) error {
+	if gwIPNet.IP.To4() == nil {
+		klog.Warningf("Windows only supports IPv4 addresses. Skip this address %s", gwIPNet.String())
+		return nil
+	}
+
 	iface, _ := net.InterfaceByIndex(idx)
 	gwIP := gwIPNet.IP
 	name := iface.Name
@@ -267,7 +249,7 @@ func ConfigureLinkAddress(idx int, gwIPNet *net.IPNet) error {
 
 	klog.V(2).Infof("Adding address %v to gateway interface %s", gwIP, name)
 	if err := ConfigureInterfaceAddress(iface.Name, gwIPNet); err != nil {
-		klog.Errorf("Failed to set gateway interface %s with address %v: %v", iface, gwIP, err)
+		klog.Errorf("Failed to set gateway interface %v with address %v: %v", iface, gwIP, err)
 		return err
 	}
 	return nil

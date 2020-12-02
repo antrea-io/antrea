@@ -29,7 +29,7 @@ type AntreaAgentInfo struct {
 	Version                     string                      `json:"version,omitempty"`                     // Antrea binary version
 	PodRef                      corev1.ObjectReference      `json:"podRef,omitempty"`                      // The Pod that Antrea Agent is running in
 	NodeRef                     corev1.ObjectReference      `json:"nodeRef,omitempty"`                     // The Node that Antrea Agent is running in
-	NodeSubnet                  []string                    `json:"nodeSubnet,omitempty"`                  // Node subnet
+	NodeSubnets                 []string                    `json:"nodeSubnets,omitempty"`                 // Node subnets
 	OVSInfo                     OVSInfo                     `json:"ovsInfo,omitempty"`                     // OVS Information
 	NetworkPolicyControllerInfo NetworkPolicyControllerInfo `json:"networkPolicyControllerInfo,omitempty"` // Antrea Agent NetworkPolicy information
 	LocalPodNum                 int32                       `json:"localPodNum,omitempty"`                 // The number of Pods which the agent is in charge of
@@ -78,7 +78,7 @@ type AntreaControllerInfo struct {
 	Version                     string                      `json:"version,omitempty"`                     // Antrea binary version
 	PodRef                      corev1.ObjectReference      `json:"podRef,omitempty"`                      // The Pod that Antrea Controller is running in
 	NodeRef                     corev1.ObjectReference      `json:"nodeRef,omitempty"`                     // The Node that Antrea Controller is running in
-	ServiceRef                  corev1.ObjectReference      `json:"serviceRef, omitempty"`                 // Antrea Controller Service
+	ServiceRef                  corev1.ObjectReference      `json:"serviceRef,omitempty"`                  // Antrea Controller Service
 	NetworkPolicyControllerInfo NetworkPolicyControllerInfo `json:"networkPolicyControllerInfo,omitempty"` // Antrea Controller NetworkPolicy information
 	ConnectedAgentNum           int32                       `json:"connectedAgentNum,omitempty"`           // Number of agents which are connected to this controller
 	ControllerConditions        []ControllerCondition       `json:"controllerConditions,omitempty"`        // Controller condition contains types like ControllerHealthy

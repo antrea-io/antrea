@@ -1,4 +1,4 @@
-// +build linux darwin
+// +build !windows
 
 // Copyright 2020 Antrea Authors
 //

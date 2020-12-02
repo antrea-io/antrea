@@ -1,0 +1,62 @@
+kind: DaemonSet
+apiVersion: apps/v1
+metadata:
+  name: macvlan-host-init
+  namespace: kube-system
+  labels:
+    environment: antrea-multus-demo
+    app: macvlan-host-init
+spec:
+  selector:
+    matchLabels:
+      environment: antrea-multus-demo
+      app: macvlan-host-init
+  template:
+    metadata:
+      labels:
+        environment: antrea-multus-demo
+        app: macvlan-host-init
+    spec:
+      hostNetwork: true
+      hostPID: true
+      nodeSelector:
+        kubernetes.io/os: linux
+      priorityClassName: system-node-critical
+      tolerations:
+      - key: CriticalAddonsOnly
+        operator: Exists
+      - effect: NoSchedule
+        operator: Exists
+      - effect: NoExecute
+        operator: Exists
+      containers:
+      - name: host-init
+        image: gcr.io/google-containers/startup-script:v1
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          privileged: true
+        env:
+          - name: STARTUP_SCRIPT
+            value: |
+              #! /bin/bash
+
+              set -o errexit
+              set -o pipefail
+              set -o nounset
+
+              if ip link show mac0; then
+                  exit 0
+              fi
+
+              parent="enp0s9"
+              inet=$(ip addr show $parent | grep "inet " | awk '{ print $2 }')
+              # does not work with that version of iproute
+              # ip link dev $parent promisc on
+              ifconfig $parent promisc
+              ip addr flush dev $parent
+
+              ip link add mac0 link $parent type macvlan mode bridge
+              ip addr add $inet dev mac0
+              ip link set dev mac0 up
+
+              echo "macvlan-host initialization completed"

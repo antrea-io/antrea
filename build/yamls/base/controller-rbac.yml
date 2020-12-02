@@ -86,8 +86,22 @@ rules:
     resources:
       - apiservices
     resourceNames:
+      - v1alpha1.stats.antrea.tanzu.vmware.com
       - v1beta1.system.antrea.tanzu.vmware.com
+      - v1beta2.controlplane.antrea.tanzu.vmware.com
+      - v1beta1.controlplane.antrea.tanzu.vmware.com
       - v1beta1.networking.antrea.tanzu.vmware.com
+    verbs:
+      - get
+      - update
+  - apiGroups:
+      - admissionregistration.k8s.io
+    resources:
+      - mutatingwebhookconfigurations
+      - validatingwebhookconfigurations
+    resourceNames:
+      - crdmutator.antrea.tanzu.vmware.com
+      - crdvalidator.antrea.tanzu.vmware.com
     verbs:
       - get
       - update
@@ -95,23 +109,51 @@ rules:
       - security.antrea.tanzu.vmware.com
     resources:
       - clusternetworkpolicies
+      - networkpolicies
     verbs:
       - get
       - watch
       - list
   - apiGroups:
+      - security.antrea.tanzu.vmware.com
+    resources:
+      - clusternetworkpolicies/status
+      - networkpolicies/status
+    verbs:
+      - update
+  - apiGroups:
+      - security.antrea.tanzu.vmware.com
+    resources:
+      - tiers
+    verbs:
+      - get
+      - watch
+      - list
+      - create
+  - apiGroups:
       - ops.antrea.tanzu.vmware.com
     resources:
       - traceflows
+      - traceflows/status
     verbs:
       - get
       - watch
       - list
       - update
       - patch
+      - create
+      - delete
+  - apiGroups:
+    - core.antrea.tanzu.vmware.com
+    resources:
+      - externalentities
+    verbs:
+      - get
+      - watch
+      - list
 ---
 kind: ClusterRoleBinding
-apiVersion: rbac.authorization.k8s.io/v1beta1
+apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   name: antrea-controller
 roleRef:

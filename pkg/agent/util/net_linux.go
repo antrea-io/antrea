@@ -25,31 +25,8 @@ import (
 	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/vishvananda/netlink"
-	"golang.org/x/sys/unix"
 	"k8s.io/klog"
 )
-
-// GetIPNetDeviceFromIP returns a local IP/mask and associated device from IP.
-func GetIPNetDeviceFromIP(localIP net.IP) (*net.IPNet, netlink.Link, error) {
-	linkList, err := netlink.LinkList()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	for _, link := range linkList {
-		addrList, err := netlink.AddrList(link, unix.AF_INET)
-		if err != nil {
-			klog.Errorf("Failed to get addr list for device %s", link)
-			continue
-		}
-		for _, addr := range addrList {
-			if addr.IP.Equal(localIP) {
-				return addr.IPNet, link, nil
-			}
-		}
-	}
-	return nil, nil, fmt.Errorf("unable to find local IP and device")
-}
 
 // GetNetLink returns dev link from name.
 func GetNetLink(dev string) netlink.Link {
@@ -158,14 +135,21 @@ func ConfigureLinkAddress(idx int, gwIPNet *net.IPNet) error {
 	link, _ := netlink.LinkByIndex(idx)
 	gwAddr := &netlink.Addr{IPNet: gwIPNet, Label: ""}
 
-	if addrs, err := netlink.AddrList(link, netlink.FAMILY_V4); err != nil {
-		klog.Errorf("Failed to query IPv4 address list for interface %s: %v", link.Attrs().Name, err)
+	var addrFamily int
+	if gwIPNet.IP.To4() != nil {
+		addrFamily = netlink.FAMILY_V4
+	} else {
+		addrFamily = netlink.FAMILY_V6
+	}
+
+	if addrs, err := netlink.AddrList(link, addrFamily); err != nil {
+		klog.Errorf("Failed to query address list for interface %s: %v", link.Attrs().Name, err)
 		return err
 	} else if addrs != nil {
 		for _, addr := range addrs {
-			klog.V(4).Infof("Found IPv4 address %s for interface %s", addr.IP.String(), link.Attrs().Name)
+			klog.V(4).Infof("Found address %s for interface %s", addr.IP.String(), link.Attrs().Name)
 			if addr.IP.Equal(gwAddr.IPNet.IP) {
-				klog.V(2).Infof("IPv4 address %s already assigned to interface %s", addr.IP.String(), link.Attrs().Name)
+				klog.V(2).Infof("Address %s already assigned to interface %s", addr.IP.String(), link.Attrs().Name)
 				return nil
 			}
 		}

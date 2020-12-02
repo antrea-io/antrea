@@ -30,18 +30,28 @@ const (
 	// MyFeature featuregate.Feature = "MyFeature"
 
 	// alpha: v0.8
-	// Allows to apply cluster-wide NetworkPolicies.
-	ClusterNetworkPolicy featuregate.Feature = "ClusterNetworkPolicy"
+	// Allows to apply ClusterNetworkPolicy and AntreaNetworkPolicy CRDs.
+	AntreaPolicy featuregate.Feature = "AntreaPolicy"
 
 	// alpha: v0.8
+	// beta: v0.11
 	// Enable antrea proxy which provides ServiceLB for in-cluster services in antrea agent.
 	// It should be enabled on Windows, otherwise NetworkPolicy will not take effect on
 	// Service traffic.
 	AntreaProxy featuregate.Feature = "AntreaProxy"
 
 	// alpha: v0.8
+	// beta: v0.11
 	// Allows to trace path from a generated packet.
 	Traceflow featuregate.Feature = "Traceflow"
+
+	// alpha: v0.9
+	// Flow exporter exports IPFIX flow records of Antrea flows seen in conntrack module.
+	FlowExporter featuregate.Feature = "FlowExporter"
+
+	// alpha: v0.10
+	// Enable collecting and exposing NetworkPolicy statistics.
+	NetworkPolicyStats featuregate.Feature = "NetworkPolicyStats"
 )
 
 var (
@@ -56,12 +66,36 @@ var (
 	// To add a new feature, define a key for it above and add it here. The features will be
 	// available throughout Antrea binaries.
 	defaultAntreaFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
-		ClusterNetworkPolicy: {Default: false, PreRelease: featuregate.Alpha},
-		AntreaProxy:          {Default: false, PreRelease: featuregate.Alpha},
-		Traceflow:            {Default: false, PreRelease: featuregate.Alpha},
+		AntreaPolicy:       {Default: false, PreRelease: featuregate.Alpha},
+		AntreaProxy:        {Default: true, PreRelease: featuregate.Beta},
+		Traceflow:          {Default: true, PreRelease: featuregate.Beta},
+		FlowExporter:       {Default: false, PreRelease: featuregate.Alpha},
+		NetworkPolicyStats: {Default: false, PreRelease: featuregate.Alpha},
 	}
+
+	// UnsupportedFeaturesOnWindows records the features not supported on
+	// a Windows Node. Antrea Agent on a Windows Node checks the enabled
+	// features, and fails the startup if an unsupported feature is enabled.
+	// We do not define a separate defaultAntreaFeatureGates map for
+	// Windows, because Agent code assumes all features are registered (
+	// FeatureGate.Enabled(feature) will panic if the feature is not added
+	// to the FeatureGate).
+	// In future, if a feature is supported on both Linux and Windows, but
+	// can have different FeatureSpecs between Linux and Windows, we should
+	// still define a separate defaultAntreaFeatureGates map for Windows.
+	unsupportedFeaturesOnWindows = map[featuregate.Feature]struct{}{}
 )
 
 func init() {
 	runtime.Must(DefaultMutableFeatureGate.Add(defaultAntreaFeatureGates))
+}
+
+// SupportedOnWindows checks whether a feature is supported on a Windows Node.
+func SupportedOnWindows(feature featuregate.Feature) bool {
+	_, exists := defaultAntreaFeatureGates[feature]
+	if !exists {
+		return false
+	}
+	_, exists = unsupportedFeaturesOnWindows[feature]
+	return !exists
 }

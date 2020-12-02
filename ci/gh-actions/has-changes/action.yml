@@ -1,0 +1,9 @@
+# action.yml
+name: 'Has Changes'
+description: 'Checks if diff includes changes outside of a provided path exclusion list'
+outputs:
+  has_changes:
+    description: 'Whether (yes/no) the diff includes changes'
+runs:
+  using: 'docker'
+  image: 'Dockerfile'

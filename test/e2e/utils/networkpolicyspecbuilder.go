@@ -17,7 +17,6 @@ package utils
 import (
 	v1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
-
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
@@ -144,8 +143,9 @@ func (n *NetworkPolicySpecBuilder) WithEgressDNS() *NetworkPolicySpecBuilder {
 		Port:     &intstr.IntOrString{Type: intstr.Int, IntVal: 53},
 	}
 
-	for _, e := range n.Spec.Egress {
+	for i, e := range n.Spec.Egress {
 		e.Ports = append(e.Ports, route53)
+		n.Spec.Egress[i] = e
 	}
 	return n
 }

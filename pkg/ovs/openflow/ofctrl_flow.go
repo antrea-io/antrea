@@ -19,7 +19,7 @@ type ofFlow struct {
 	// The Flow.Table field can be updated by Reset(), which can be called by
 	// ReplayFlows() when replaying the Flow to OVS. For thread safety, any access
 	// to Flow.Table should hold the replayMutex read lock.
-	ofctrl.Flow
+	*ofctrl.Flow
 
 	// matchers is string slice, it is used to generate a readable match string of the Flow.
 	matchers []string
@@ -31,6 +31,8 @@ type ofFlow struct {
 	// ctStates is a temporary variable to maintain openflow13.CTStates. When FlowBuilder.Done is called, it is used to
 	// set the CtStates field in ofctrl.Flow.Match.
 	ctStates *openflow13.CTStates
+	// isDropFlow is true if this flow actions contain "drop"
+	isDropFlow bool
 }
 
 // Reset updates the ofFlow.Flow.Table field with ofFlow.table.Table.
@@ -93,6 +95,10 @@ func (f *ofFlow) FlowPriority() uint16 {
 	return f.Match.Priority
 }
 
+func (f *ofFlow) FlowProtocol() Protocol {
+	return f.protocol
+}
+
 func (f *ofFlow) GetBundleMessage(entryOper OFOperation) (ofctrl.OpenFlowModMessage, error) {
 	var operation int
 	switch entryOper {
@@ -111,36 +117,37 @@ func (f *ofFlow) GetBundleMessage(entryOper OFOperation) (ofctrl.OpenFlowModMess
 }
 
 // CopyToBuilder returns a new FlowBuilder that copies the table, protocols,
-// matches, and CookieID of the Flow, but does not copy the actions,
-// and other private status fields of the ofctrl.Flow, e.g. "realized" and
-// "isInstalled". Reset the priority in the new FlowBuilder if it is provided.
-func (f *ofFlow) CopyToBuilder(priority uint16) FlowBuilder {
+// matches, and CookieID of the Flow, but does not copy private status fields
+// of the ofctrl.Flow, e.g. "realized" and "isInstalled". It copies the
+// original actions of the Flow only if copyActions is set to true, and
+// resets the priority in the new FlowBuilder if it is provided.
+func (f *ofFlow) CopyToBuilder(priority uint16, copyActions bool) FlowBuilder {
+	flow := &ofctrl.Flow{
+		Table:      f.Flow.Table,
+		CookieID:   f.Flow.CookieID,
+		CookieMask: f.Flow.CookieMask,
+		Match:      f.Flow.Match,
+	}
+	if copyActions {
+		f.Flow.CopyActionsToNewFlow(flow)
+	}
+	if priority > 0 {
+		flow.Match.Priority = priority
+	}
 	newFlow := ofFlow{
-		table: f.table,
-		Flow: ofctrl.Flow{
-			Table:      f.Flow.Table,
-			CookieID:   f.Flow.CookieID,
-			CookieMask: f.Flow.CookieMask,
-			Match:      f.Flow.Match,
-		},
+		table:    f.table,
+		Flow:     flow,
 		matchers: f.matchers,
 		protocol: f.protocol,
 	}
-	if priority > 0 {
-		newFlow.Flow.Match.Priority = priority
+	if copyActions {
+		newFlow.isDropFlow = f.isDropFlow
 	}
 	return &ofFlowBuilder{newFlow}
 }
 
-// ToBuilder returns a new FlowBuilder with all the contents of the original Flow
-func (f *ofFlow) ToBuilder() FlowBuilder {
-	newFlow := ofFlow{
-		table:    f.table,
-		Flow:     f.Flow,
-		matchers: f.matchers,
-		protocol: f.protocol,
-	}
-	return &ofFlowBuilder{newFlow}
+func (f *ofFlow) IsDropFlow() bool {
+	return f.isDropFlow
 }
 
 func (r *Range) ToNXRange() *openflow13.NXRange {

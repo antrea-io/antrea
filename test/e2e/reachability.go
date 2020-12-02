@@ -16,9 +16,10 @@ package e2e
 
 import (
 	"fmt"
+	"strings"
+
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
-	"strings"
 )
 
 type Pod string

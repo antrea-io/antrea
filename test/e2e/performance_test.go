@@ -24,22 +24,20 @@ import (
 	"time"
 
 	"golang.org/x/exp/rand"
-	"k8s.io/apimachinery/pkg/util/wait"
-
 	corev1 "k8s.io/api/core/v1"
 	networkv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 )
 
 const (
-	seed                            uint64 = 0xA1E47 // Use a specific rand seed to make the generated workloads always same
-	perfTestAppLabel                       = "antrea-perf-test"
-	podsConnectionNetworkPolicyName        = "pods.ingress"
-	workloadNetworkPolicyName              = "workloads.ingress"
-	perftoolImage                          = "antrea/perftool"
-	nginxImage                             = "nginx"
-	perftoolContainerName                  = "perftool"
-	nginxContainerName                     = "nginx"
+	seed uint64 = 0xA1E47 // Use a specific rand seed to make the generated workloads always same
+
+	perfTestAppLabel                = "antrea-perf-test"
+	podsConnectionNetworkPolicyName = "pods.ingress"
+	workloadNetworkPolicyName       = "workloads.ingress"
+	perftoolContainerName           = "perftool"
+	nginxContainerName              = "nginx"
 )
 
 var (
@@ -62,6 +60,7 @@ var (
 )
 
 func BenchmarkHTTPRequest(b *testing.B) {
+	skipIfNotIPv4Cluster(b)
 	for _, scale := range []struct{ requests, policyRules int }{
 		{100000, 0},
 		{1000000, 0},
@@ -76,6 +75,7 @@ func BenchmarkHTTPRequest(b *testing.B) {
 }
 
 func BenchmarkRealizeNetworkPolicy(b *testing.B) {
+	skipIfNotIPv4Cluster(b)
 	for _, policyRules := range []int{5000, 10000, 15000} {
 		b.Run(fmt.Sprintf("RealizeNetworkPolicy%d", policyRules), func(b *testing.B) {
 			withPerfTestSetup(func(data *TestData) { networkPolicyRealize(policyRules, data, b) }, b)
@@ -84,6 +84,7 @@ func BenchmarkRealizeNetworkPolicy(b *testing.B) {
 }
 
 func BenchmarkCustomizeHTTPRequest(b *testing.B) {
+	skipIfNotIPv4Cluster(b)
 	if *customizeRequests == 0 {
 		b.Skip("The value of perf.http.requests=0, skipped")
 	}
@@ -91,6 +92,7 @@ func BenchmarkCustomizeHTTPRequest(b *testing.B) {
 }
 
 func BenchmarkCustomizeRealizeNetworkPolicy(b *testing.B) {
+	skipIfNotIPv4Cluster(b)
 	if *customizePolicyRules == 0 {
 		b.Skip("The value of perf.http.policy_rules=0, skipped")
 	}
@@ -176,7 +178,7 @@ func populateWorkloadNetworkPolicy(np *networkv1.NetworkPolicy, data *TestData) 
 	return err
 }
 
-func setupTestPods(data *TestData, b *testing.B) (nginxPodIP, perfPodIP string) {
+func setupTestPods(data *TestData, b *testing.B) (nginxPodIP, perfPodIP *PodIPs) {
 	b.Logf("Creating a nginx test Pod")
 	nginxPod := createPerfTestPodDefinition(benchNginxPodName, nginxContainerName, nginxImage)
 	_, err := data.clientset.CoreV1().Pods(testNamespace).Create(context.TODO(), nginxPod, metav1.CreateOptions{})
@@ -184,7 +186,7 @@ func setupTestPods(data *TestData, b *testing.B) (nginxPodIP, perfPodIP string) 
 		b.Fatalf("Error when creating nginx test pod: %v", err)
 	}
 	b.Logf("Waiting IP assignment of the nginx test Pod")
-	nginxPodIP, err = data.podWaitForIP(defaultTimeout, benchNginxPodName, testNamespace)
+	nginxPodIP, err = data.podWaitForIPs(defaultTimeout, benchNginxPodName, testNamespace)
 	if err != nil {
 		b.Fatalf("Error when waiting for IP assignment of nginx test Pod: %v", err)
 	}
@@ -196,7 +198,7 @@ func setupTestPods(data *TestData, b *testing.B) (nginxPodIP, perfPodIP string) 
 		b.Fatalf("Error when creating perftool test Pod: %v", err)
 	}
 	b.Logf("Waiting for IP assignment of the perftool test Pod")
-	perfPodIP, err = data.podWaitForIP(defaultTimeout, perftoolPodName, testNamespace)
+	perfPodIP, err = data.podWaitForIPs(defaultTimeout, perftoolPodName, testNamespace)
 	if err != nil {
 		b.Fatalf("Error when waiting for IP assignment of perftool test Pod: %v", err)
 	}
@@ -211,6 +213,9 @@ func setupTestPods(data *TestData, b *testing.B) (nginxPodIP, perfPodIP string) 
 func httpRequest(requests, policyRules int, data *TestData, b *testing.B) {
 	nginxPodIP, _ := setupTestPods(data, b)
 
+	// performance_test only runs in IPv4 cluster, so here only check the IPv4 address of nginx server Pod.
+	nginxPodIPStr := nginxPodIP.ipv4.String()
+
 	err := setupTestPodsConnection(data) // enable Pods connectivity policy first
 	if err != nil {
 		b.Fatalf("Error when adding network policy to set up connection between test Pods")
@@ -223,13 +228,13 @@ func httpRequest(requests, policyRules int, data *TestData, b *testing.B) {
 	}
 
 	b.Log("Waiting for the workload network policy to be realized")
-	err = waitNetworkPolicyRealize(policyRules, data)
+	err = WaitNetworkPolicyRealize(policyRules, data)
 	if err != nil {
 		b.Fatalf("Checking network policies realization failed: %v", err)
 	}
 	b.Log("Network policy realized")
 
-	serverURL := &url.URL{Scheme: "http", Host: nginxPodIP, Path: "/"}
+	serverURL := &url.URL{Scheme: "http", Host: nginxPodIPStr, Path: "/"}
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
 		b.Logf("Running http request bench %d/%d", i+1, b.N)
@@ -250,13 +255,17 @@ func networkPolicyRealize(policyRules int, data *TestData, b *testing.B) {
 		go func() {
 			err := populateWorkloadNetworkPolicy(generateWorkloadNetworkPolicy(policyRules), data)
 			if err != nil {
-				b.Fatalf("Error when populating workload network policy: %v", err)
+				// cannot use Fatal in a goroutine
+				// if populating policies fails, WaitNetworkPolicyRealize will
+				// eventually time out and the test will fail, although it would be
+				// better to fail early in that case.
+				b.Errorf("Error when populating workload network policy: %v", err)
 			}
 		}()
 
 		b.Log("Waiting for the network policy to be realized")
 		b.StartTimer()
-		err := waitNetworkPolicyRealize(policyRules, data)
+		err := WaitNetworkPolicyRealize(policyRules, data)
 		if err != nil {
 			b.Fatalf("Checking network policies realization failed: %v", err)
 		}
@@ -270,7 +279,7 @@ func networkPolicyRealize(policyRules int, data *TestData, b *testing.B) {
 	}
 }
 
-func waitNetworkPolicyRealize(policyRules int, data *TestData) error {
+func WaitNetworkPolicyRealize(policyRules int, data *TestData) error {
 	return wait.PollImmediate(50*time.Millisecond, *realizeTimeout, func() (bool, error) {
 		return checkRealize(policyRules, data)
 	})

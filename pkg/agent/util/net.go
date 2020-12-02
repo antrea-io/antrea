@@ -15,8 +15,9 @@
 package util
 
 import (
-	"crypto/sha1"
+	"crypto/sha1" // #nosec G505: not used for security purposes
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -26,10 +27,13 @@ const (
 	interfaceNameLength   = 15
 	interfacePrefixLength = 8
 	interfaceKeyLength    = interfaceNameLength - (interfacePrefixLength + 1)
+
+	FamilyIPv4 uint8 = 4
+	FamilyIPv6 uint8 = 6
 )
 
 func generateInterfaceName(key string, name string, useHead bool) string {
-	hash := sha1.New()
+	hash := sha1.New() // #nosec G401: not used for security purposes
 	io.WriteString(hash, key)
 	interfaceKey := hex.EncodeToString(hash.Sum(nil))
 	prefix := name
@@ -94,4 +98,54 @@ func listenUnix(address string) (net.Listener, error) {
 
 func dialUnix(address string) (net.Conn, error) {
 	return net.Dial("unix", address)
+}
+
+// GetIPNetDeviceFromIP returns a local IP/mask and associated device from IP.
+func GetIPNetDeviceFromIP(localIP net.IP) (*net.IPNet, *net.Interface, error) {
+	linkList, err := net.Interfaces()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	for _, link := range linkList {
+		addrList, err := link.Addrs()
+		if err != nil {
+			continue
+		}
+		for _, addr := range addrList {
+			if ipNet, ok := addr.(*net.IPNet); ok {
+				if ipNet.IP.Equal(localIP) {
+					return ipNet, &link, nil
+				}
+			}
+		}
+	}
+	return nil, nil, fmt.Errorf("unable to find local IP and device")
+}
+
+func GetIPv4Addr(ips []net.IP) net.IP {
+	for _, ip := range ips {
+		if ip.To4() != nil {
+			return ip
+		}
+	}
+	return nil
+}
+
+func GetIPWithFamily(ips []net.IP, addrFamily uint8) (net.IP, error) {
+	if addrFamily == FamilyIPv6 {
+		for _, ip := range ips {
+			if ip.To4() == nil {
+				return ip, nil
+			}
+		}
+		return nil, errors.New("no IP found with IPv6 AddressFamily")
+	} else {
+		for _, ip := range ips {
+			if ip.To4() != nil {
+				return ip, nil
+			}
+		}
+		return nil, errors.New("no IP found with IPv4 AddressFamily")
+	}
 }

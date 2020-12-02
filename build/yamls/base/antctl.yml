@@ -11,11 +11,21 @@ metadata:
   name: antctl
 rules:
   - apiGroups:
+      - controlplane.antrea.tanzu.vmware.com
       - networking.antrea.tanzu.vmware.com
     resources:
       - networkpolicies
       - appliedtogroups
       - addressgroups
+    verbs:
+      - get
+      - list
+  - apiGroups:
+      - stats.antrea.tanzu.vmware.com
+    resources:
+      - networkpolicystats
+      - antreaclusternetworkpolicystats
+      - antreanetworkpolicystats
     verbs:
       - get
       - list
@@ -43,6 +53,7 @@ rules:
       - /agentinfo
       - /addressgroups
       - /appliedtogroups
+      - /loglevel
       - /networkpolicies
       - /ovsflows
       - /ovstracing

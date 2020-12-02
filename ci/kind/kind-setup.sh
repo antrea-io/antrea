@@ -26,7 +26,10 @@ POD_CIDR="10.10.0.0/16"
 NUM_WORKERS=2
 SUBNETS=""
 ENCAP_MODE=""
-PROXY=false
+PROXY=true
+PROMETHEUS=false
+
+THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
 set -eo pipefail
 function echoerr {
@@ -44,12 +47,13 @@ where:
   modify-node: modify kind node with name NODE_NAME
   --pod-cidr: specifies pod cidr used in kind cluster, default is $POD_CIDR
   --encap-mode: inter-node pod traffic encap mode, default is encap
-  --proxy: enable Antrea proxy, default is false
-  --antrea-cni: specifies install Antrea CNI in kind cluster, default is true.
+  --no-proxy: disable Antrea proxy
+  --antrea-cni: specifies install Antrea CNI in kind cluster, default is true
+  --prometheus: create RBAC resources for Prometheus, default is false
   --num-workers: specifies number of worker nodes in kind cluster, default is $NUM_WORKERS
   --images: specifies images loaded to kind cluster, default is $IMAGES
-  --subnets: a subnet creates a separate docker bridge network with assigned subnet that worker nodes may connect to. Default is empty all worker
-    Node connected to docker0 bridge network
+  --subnets: a subnet creates a separate docker bridge network (named 'antrea-<idx>') with assigned subnet that worker nodes may connect to. Default is empty: all worker
+    Node connected to default docker bridge network created by Kind.
 "
 
 function print_usage {
@@ -80,19 +84,19 @@ function modify {
 
 function configure_networks {
   echo "Configuring networks"
-  networks=$(docker network ls -f name=$CLUSTER_NAME --format '{{.Name}}')
+  networks=$(docker network ls -f name=antrea --format '{{.Name}}')
   networks="$(echo $networks)"
   if [[ -z $SUBNETS ]] && [[ -z $networks ]]; then
-    echo "Using default docker bridges"
+    echo "Using default kind docker network"
     return
   fi
 
   # Inject allow all iptables to preempt docker bridge isolation rules
   if [[ ! -z $SUBNETS ]]; then
     set +e
-    sudo iptables -C DOCKER-USER -j ACCEPT > /dev/null 2>&1
+    docker run --net=host --privileged antrea/ethtool:latest iptables -C DOCKER-USER -j ACCEPT > /dev/null 2>&1
     if [[ $? -ne 0 ]]; then
-      sudo iptables -I DOCKER-USER -j ACCEPT
+      docker run --net=host --privileged antrea/ethtool:latest iptables -I DOCKER-USER -j ACCEPT
     fi
     set -e
   fi
@@ -101,7 +105,7 @@ function configure_networks {
   nodes="$(kind get nodes --name $CLUSTER_NAME | grep worker)"
   node_cnt=$(kind get nodes --name $CLUSTER_NAME | grep worker | wc -l)
   nodes=$(echo $nodes)
-  networks+=" bridge"
+  networks+=" kind"
   echo "removing worker nodes $nodes from networks $networks"
   for n in $networks; do
     rm_nodes=$(docker network inspect $n --format '{{range $i, $conf:=.Containers}}{{$conf.Name}} {{end}}')
@@ -111,7 +115,7 @@ function configure_networks {
         echo "disconnected worker $rn from network $n"
       fi
     done
-    if [[ $n != "bridge" ]]; then
+    if [[ $n != "kind" ]]; then
       docker network rm $n > /dev/null 2>&1
       echo "removed network $n"
     fi
@@ -121,7 +125,7 @@ function configure_networks {
   i=0
   networks=()
   for s in $SUBNETS; do
-    network=$CLUSTER_NAME-$i
+    network=antrea-$i
     echo "creating network $network with $s"
     docker network create -d bridge --subnet $s $network >/dev/null 2>&1
     networks+=($network)
@@ -130,9 +134,11 @@ function configure_networks {
 
   num_networks=${#networks[@]}
   if [[ $num_networks -eq 0 ]]; then
-    networks+=("bridge")
+    networks+=("kind")
     num_networks=$((num_networks+1))
   fi
+
+  control_plane_ip=$(docker inspect $CLUSTER_NAME-control-plane --format '{{range $i, $conf:=.NetworkSettings.Networks}}{{$conf.IPAddress}}{{end}}')
 
   i=0
   for node in $nodes; do
@@ -151,6 +157,8 @@ function configure_networks {
 
     # change kubelet config before reset network
     docker exec -t $node sed -i "s/node-ip=.*/node-ip=$node_ip/g" /var/lib/kubelet/kubeadm-flags.env
+    # this is needed to ensure that the worker node can still connect to the apiserver
+    docker exec -t $node bash -c "echo '$control_plane_ip $CLUSTER_NAME-control-plane' >> /etc/hosts"
     docker exec -t $node pkill kubelet
     docker exec -t $node pkill kube-proxy
     i=$((i+1))
@@ -173,7 +181,7 @@ function configure_networks {
 }
 
 function delete_networks {
-  networks=$(docker network ls -f name=$CLUSTER_NAME --format '{{.Name}}')
+  networks=$(docker network ls -f name=antrea --format '{{.Name}}')
   networks="$(echo $networks)"
   if [[ ! -z $networks ]]; then
     docker network rm $networks > /dev/null 2>&1
@@ -224,7 +232,7 @@ function create {
   config_file="/tmp/kind.yml"
   cat <<EOF > $config_file
 kind: Cluster
-apiVersion: kind.sigs.k8s.io/v1alpha3
+apiVersion: kind.x-k8s.io/v1alpha4
 networking:
   disableDefaultCNI: true
   podSubnet: $POD_CIDR
@@ -237,7 +245,7 @@ EOF
   kind create cluster --name $CLUSTER_NAME --config $config_file
 
   # force coredns to run on control-plane node because it
-  # is attached to docker0 bridge and uses host dns.
+  # is attached to kind bridge and uses host dns.
   # Worker Node may be configured to attach to custom bridges
   # which use dockerd as dns, causing coredns to detect
   # dns loop and crash
@@ -263,11 +271,15 @@ EOF
   if [[ $ANTREA_CNI == true ]]; then
     cmd=$(dirname $0)
     cmd+="/../../hack/generate-manifest.sh"
-    if [[ $PROXY == true ]]; then
-      cmd+=" --proxy"
+    if [[ $PROXY == false ]]; then
+      cmd+=" --no-proxy"
     fi
     echo "$cmd --kind $(get_encap_mode) | kubectl apply --context kind-$CLUSTER_NAME -f -"
     eval "$cmd --kind $(get_encap_mode) | kubectl apply --context kind-$CLUSTER_NAME -f -"
+
+    if [[ $PROMETHEUS == true ]]; then
+      kubectl apply --context kind-$CLUSTER_NAME -f $THIS_DIR/../../build/yamls/antrea-prometheus-rbac.yml
+    fi
   fi
 
   # wait for cluster info
@@ -312,9 +324,13 @@ while [[ $# -gt 0 ]]
       ENCAP_MODE="$2"
       shift 2
       ;;
-    --proxy)
-      PROXY=true
-      shift 2
+    --no-proxy)
+      PROXY=false
+      shift
+      ;;
+    --prometheus)
+      PROMETHEUS=true
+      shift
       ;;
     --subnets)
       SUBNETS="$2"

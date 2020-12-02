@@ -4,22 +4,27 @@ on:
     branches:
     - master
     - release-*
+    - ipv6
   push:
     branches:
     - master
     - release-*
+    - ipv6
 jobs:
 
 
   test-unit:
     name: Unit test
-    runs-on: [ubuntu-18.04]
+    strategy:
+      matrix:
+        os: [ubuntu-18.04, windows-2019]
+    runs-on: ${{ matrix.os }}
     steps:
 
-    - name: Set up Go 1.13
+    - name: Set up Go 1.15
       uses: actions/setup-go@v1
       with:
-        go-version: 1.13
+        go-version: 1.15
 
     - name: Check-out code
       uses: actions/checkout@v2
@@ -27,15 +32,26 @@ jobs:
     - name: Run unit tests
       run: make test-unit
 
+    - name: Codecov
+      uses: codecov/codecov-action@v1
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
+        file: .coverage/coverage-unit.txt
+        flags: unit-tests
+        name: codecov-unit-test
+
 
   golangci-lint:
     name: Golangci-lint
-    runs-on: [ubuntu-18.04]
+    strategy:
+      matrix:
+        platform: [ubuntu-18.04, macos-latest]
+    runs-on: ${{ matrix.platform }}
     steps:
-    - name: Set up Go 1.13
+    - name: Set up Go 1.15
       uses: actions/setup-go@v1
       with:
-        go-version: 1.13
+        go-version: 1.15
     - name: Check-out code
       uses: actions/checkout@v2
     - name: Run golangci-lint
@@ -46,10 +62,10 @@ jobs:
     name: Golangci-lint for netpol code
     runs-on: [ubuntu-18.04]
     steps:
-    - name: Set up Go 1.13
+    - name: Set up Go 1.15
       uses: actions/setup-go@v1
       with:
-        go-version: 1.13
+        go-version: 1.15
     - name: Check-out code
       uses: actions/checkout@v2
     - name: Run golangci-lint
@@ -62,10 +78,10 @@ jobs:
     runs-on: [ubuntu-18.04]
     steps:
 
-    - name: Set up Go 1.13
+    - name: Set up Go 1.15
       uses: actions/setup-go@v1
       with:
-        go-version: 1.13
+        go-version: 1.15
 
     - name: Check-out code
       uses: actions/checkout@v2
@@ -81,10 +97,10 @@ jobs:
     runs-on: [ubuntu-18.04]
     steps:
 
-      - name: Set up Go 1.13
+      - name: Set up Go 1.15
         uses: actions/setup-go@v1
         with:
-          go-version: 1.13
+          go-version: 1.15
 
       - name: Check-out code
         uses: actions/checkout@v2
@@ -98,10 +114,10 @@ jobs:
     runs-on: [ubuntu-18.04]
     steps:
 
-    - name: Set up Go 1.13
+    - name: Set up Go 1.15
       uses: actions/setup-go@v1
       with:
-        go-version: 1.13
+        go-version: 1.15
 
     - name: Check-out code
       uses: actions/checkout@v2
@@ -115,10 +131,10 @@ jobs:
     runs-on: [ubuntu-18.04]
     steps:
 
-    - name: Set up Go 1.13
+    - name: Set up Go 1.15
       uses: actions/setup-go@v1
       with:
-        go-version: 1.13
+        go-version: 1.15
 
     - name: Check-out code
       uses: actions/checkout@v2
@@ -132,10 +148,10 @@ jobs:
     runs-on: [ubuntu-18.04]
     steps:
 
-    - name: Set up Go 1.13
+    - name: Set up Go 1.15
       uses: actions/setup-go@v1
       with:
-        go-version: 1.13
+        go-version: 1.15
 
     - name: Check-out code
       uses: actions/checkout@v2
@@ -143,18 +159,30 @@ jobs:
     - name: Check tidy
       run: make test-tidy
 
-  verify-spelling:
-    name: Verify common spelling mistakes
+  verify:
+    name: Verify docs and spelling
     runs-on: [ubuntu-18.04]
     steps:
 
-    - name: Set up Go 1.13
+    - name: Set up Go 1.15
       uses: actions/setup-go@v1
       with:
-        go-version: 1.13
+        go-version: 1.15
 
     - name: Check-out code
       uses: actions/checkout@v2
 
     - name: Run verify scripts
-      run: make verify-spelling
+      run: make verify
+
+    - name: Checking for broken Markdown links
+      uses: antoninbas/github-action-markdown-link-check@1.0.9-pre
+      with:
+        folder-path: './docs'
+        file-path: './README.md, ./CHANGELOG.md, ./CONTRIBUTING.md, ./GOVERNANCE.md, ./MAINTAINERS.md, ./ROADMAP.md, ./SECURITY.md'
+        config-file: 'hack/.md_links_config.json'
+
+    - name: Markdownlint
+      run: |
+        sudo npm install -g markdownlint-cli
+        make markdownlint

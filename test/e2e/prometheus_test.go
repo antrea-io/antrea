@@ -31,17 +31,20 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-const monitoringNamespace string = "monitoring"
-
 // Agent metrics to validate
 var antreaAgentMetrics = []string{
 	"antrea_agent_egress_networkpolicy_rule_count",
 	"antrea_agent_ingress_networkpolicy_rule_count",
 	"antrea_agent_local_pod_count",
 	"antrea_agent_networkpolicy_count",
-	"antrea_agent_ovs_total_flow_count",
 	"antrea_agent_ovs_flow_count",
-	"antrea_agent_runtime_info",
+	"antrea_agent_ovs_flow_ops_count",
+	"antrea_agent_ovs_flow_ops_error_count",
+	"antrea_agent_ovs_flow_ops_latency_milliseconds",
+	"antrea_agent_ovs_total_flow_count",
+	"antrea_agent_conntrack_total_connection_count",
+	"antrea_agent_conntrack_antrea_connection_count",
+	"antrea_agent_conntrack_max_connection_count",
 }
 
 // Controller metrics to validate
@@ -55,7 +58,6 @@ var antreaControllerMetrics = []string{
 	"antrea_controller_length_network_policy_queue",
 	"antrea_controller_network_policy_processed",
 	"antrea_controller_network_policy_sync_duration_milliseconds",
-	"antrea_controller_runtime_info",
 }
 
 var prometheusEnabled bool
@@ -63,7 +65,9 @@ var prometheusEnabled bool
 // Prometheus server JSON output
 type prometheusServerOutput struct {
 	Status string
-	Data   []map[string]string
+	Data   []struct {
+		Metric string
+	}
 }
 
 func init() {
@@ -101,6 +105,7 @@ func getMonitoringAuthToken(t *testing.T, data *TestData) string {
 
 // getMetricsFromApiServer retrieves Antrea metrics from Pod apiserver
 func getMetricsFromApiServer(t *testing.T, url string, token string) string {
+	// #nosec G402: ignore insecure options in test code
 	config := &tls.Config{
 		InsecureSkipVerify: true,
 	}
@@ -251,8 +256,10 @@ func testMetricsFromPrometheusServer(t *testing.T, data *TestData, prometheusJob
 	hostIP, nodePort := getPrometheusEndpoint(t, data)
 
 	// Build the Prometheus query URL
-	path := url.PathEscape("match[]={job=\"" + prometheusJob + "\"}")
-	queryUrl := fmt.Sprintf("http://%s:%d/api/v1/series?%s", hostIP, nodePort, path)
+	// Target metadata API(/api/v1/targets/metadata) has been available since Prometheus v2.4.0.
+	// This API is still experimental in Prometheus v2.19.3.
+	path := url.PathEscape("match_target={job=\"" + prometheusJob + "\"}")
+	queryUrl := fmt.Sprintf("http://%s:%d/api/v1/targets/metadata?%s", hostIP, nodePort, path)
 
 	client := &http.Client{}
 	resp, err := client.Get(queryUrl)
@@ -276,7 +283,7 @@ func testMetricsFromPrometheusServer(t *testing.T, data *TestData, prometheusJob
 	// Create a map of all the metrics which were found on the server
 	testMap := make(map[string]bool)
 	for _, metric := range output.Data {
-		testMap[metric["__name__"]] = true
+		testMap[metric.Metric] = true
 	}
 
 	// Validate that all the required metrics exist in the server's output

@@ -1,4 +1,4 @@
-// Copyright 2019 Antrea Authors
+// Copyright 2020 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -78,17 +78,17 @@ func (mr *MockInterfaceMockRecorder) DeleteRoutes(arg0 interface{}) *gomock.Call
 }
 
 // Initialize mocks base method
-func (m *MockInterface) Initialize(arg0 *config.NodeConfig) error {
+func (m *MockInterface) Initialize(arg0 *config.NodeConfig, arg1 func()) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Initialize", arg0)
+	ret := m.ctrl.Call(m, "Initialize", arg0, arg1)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Initialize indicates an expected call of Initialize
-func (mr *MockInterfaceMockRecorder) Initialize(arg0 interface{}) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) Initialize(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Initialize", reflect.TypeOf((*MockInterface)(nil).Initialize), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Initialize", reflect.TypeOf((*MockInterface)(nil).Initialize), arg0, arg1)
 }
 
 // MigrateRoutesToGw mocks base method

@@ -242,14 +242,52 @@ func (k *KubernetesUtils) CreateOrUpdateNetworkPolicy(ns string, netpol *v1net.N
 	return np, err
 }
 
-// CleanCNPs is a convenience function for deleting ClusterNetworkPolicies before startup of any new test.
+// DeleteTier is a convenience function for deleting an Antrea Policy Tier with specific name.
+func (k *KubernetesUtils) DeleteTier(name string) error {
+	_, err := k.securityClient.Tiers().Get(context.TODO(), name, metav1.GetOptions{})
+	if err != nil {
+		return errors.Wrapf(err, "unable to get tier %s", name)
+	}
+	log.Infof("deleting tier %s", name)
+	if err = k.securityClient.Tiers().Delete(context.TODO(), name, metav1.DeleteOptions{}); err != nil {
+		return errors.Wrapf(err, "unable to delete tier %s", name)
+	}
+	return nil
+}
+
+// CreateTier is a convenience function for creating an Antrea Policy Tier by name and priority.
+func (k *KubernetesUtils) CreateNewTier(name string, tierPriority int32) (*secv1alpha1.Tier, error) {
+	log.Infof("creating tier %s", name)
+	_, err := k.securityClient.Tiers().Get(context.TODO(), name, metav1.GetOptions{})
+	if err != nil {
+		tr := &secv1alpha1.Tier{
+			ObjectMeta: metav1.ObjectMeta{Name: name},
+			Spec:       secv1alpha1.TierSpec{Priority: tierPriority},
+		}
+		tr, err = k.securityClient.Tiers().Create(context.TODO(), tr, metav1.CreateOptions{})
+		if err != nil {
+			log.Debugf("unable to create tier %s: %s", name, err)
+		}
+		return tr, err
+	}
+	return nil, fmt.Errorf("tier with name %s already exists", name)
+}
+
+// UpdateTier is a convenience function for updating an Antrea Policy Tier.
+func (k *KubernetesUtils) UpdateTier(tier *secv1alpha1.Tier) (*secv1alpha1.Tier, error) {
+	log.Infof("updating tier %s", tier.Name)
+	updatedTier, err := k.securityClient.Tiers().Update(context.TODO(), tier, metav1.UpdateOptions{})
+	return updatedTier, err
+}
+
+// CleanCNPs is a convenience function for deleting AntreaClusterNetworkPolicies before startup of any new test.
 func (k *KubernetesUtils) CleanCNPs() error {
 	l, err := k.securityClient.ClusterNetworkPolicies().List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
-		return errors.Wrapf(err, "unable to list ClusterNetworkPolicies")
+		return errors.Wrapf(err, "unable to list AntreaClusterNetworkPolicies")
 	}
 	for _, cnp := range l.Items {
-		log.Infof("deleting ClusterNetworkPolicies %s", cnp.Name)
+		log.Infof("deleting AntreaClusterNetworkPolicies %s", cnp.Name)
 		err = k.securityClient.ClusterNetworkPolicies().Delete(context.TODO(), cnp.Name, metav1.DeleteOptions{})
 		if err != nil {
 			return errors.Wrapf(err, "unable to delete ClusterNetworkPolicy %s", cnp.Name)
@@ -258,7 +296,7 @@ func (k *KubernetesUtils) CleanCNPs() error {
 	return nil
 }
 
-// CreateOrUpdateCNP is a convenience function for updating/creating ClusterNetworkPolicies.
+// CreateOrUpdateCNP is a convenience function for updating/creating AntreaClusterNetworkPolicies.
 func (k *KubernetesUtils) CreateOrUpdateCNP(cnp *secv1alpha1.ClusterNetworkPolicy) (*secv1alpha1.ClusterNetworkPolicy, error) {
 	log.Infof("creating/updating ClusterNetworkPolicy %s", cnp.Name)
 	cnpReturned, err := k.securityClient.ClusterNetworkPolicies().Get(context.TODO(), cnp.Name, metav1.GetOptions{})
@@ -275,6 +313,43 @@ func (k *KubernetesUtils) CreateOrUpdateCNP(cnp *secv1alpha1.ClusterNetworkPolic
 		return cnp, err
 	}
 	return nil, fmt.Errorf("error occurred in creating/updating ClusterNetworkPolicy %s", cnp.Name)
+}
+
+// CleanANPs is a convenience function for deleting Antrea NetworkPolicies before startup of any new test.
+func (k *KubernetesUtils) CleanANPs(namespaces []string) error {
+	for _, ns := range namespaces {
+		l, err := k.securityClient.NetworkPolicies(ns).List(context.TODO(), metav1.ListOptions{})
+		if err != nil {
+			return errors.Wrapf(err, "unable to list Antrea NetworkPolicies in ns %s", ns)
+		}
+		for _, anp := range l.Items {
+			log.Infof("deleting Antrea NetworkPolicies %s in ns %s", anp.Name, ns)
+			err = k.securityClient.NetworkPolicies(anp.Namespace).Delete(context.TODO(), anp.Name, metav1.DeleteOptions{})
+			if err != nil {
+				return errors.Wrapf(err, "unable to delete Antrea NetworkPolicy %s", anp.Name)
+			}
+		}
+	}
+	return nil
+}
+
+// CreateOrUpdateCNP is a convenience function for updating/creating Antrea NetworkPolicies.
+func (k *KubernetesUtils) CreateOrUpdateANP(anp *secv1alpha1.NetworkPolicy) (*secv1alpha1.NetworkPolicy, error) {
+	log.Infof("creating/updating Antrea NetworkPolicy %s", anp.Name)
+	cnpReturned, err := k.securityClient.NetworkPolicies(anp.Namespace).Get(context.TODO(), anp.Name, metav1.GetOptions{})
+	if err != nil {
+		log.Debugf("creating Antrea NetworkPolicy %s", anp.Name)
+		anp, err = k.securityClient.NetworkPolicies(anp.Namespace).Create(context.TODO(), anp, metav1.CreateOptions{})
+		if err != nil {
+			log.Debugf("unable to create Antrea NetworkPolicy: %s", err)
+		}
+		return anp, err
+	} else if cnpReturned.Name != "" {
+		log.Debugf("Antrea NetworkPolicy with name %s already exists, updating", anp.Name)
+		anp, err = k.securityClient.NetworkPolicies(anp.Namespace).Update(context.TODO(), anp, metav1.UpdateOptions{})
+		return anp, err
+	}
+	return nil, fmt.Errorf("error occurred in creating/updating Antrea NetworkPolicy %s", anp.Name)
 }
 
 func (k *KubernetesUtils) waitForPodInNamespace(ns string, pod string) (*string, error) {

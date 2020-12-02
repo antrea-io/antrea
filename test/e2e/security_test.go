@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"strings"
 	"testing"
@@ -53,19 +54,16 @@ func TestUserProvidedCert(t *testing.T) {
 
 	// Re-configure antrea-controller to use user-provided cert.
 	// Note antrea-controller must be restarted to take effect.
-	configMap, err := data.GetAntreaConfigMap(antreaNamespace)
-	if err != nil {
-		t.Fatalf("Failed to get ConfigMap: %v", err)
-	}
-	antreaControllerConf, _ := configMap.Data["antrea-controller.conf"]
-	antreaControllerConf = strings.Replace(antreaControllerConf, "#selfSignedCert: true", "selfSignedCert: false", 1)
-	configMap.Data["antrea-controller.conf"] = antreaControllerConf
-	if _, err := data.clientset.CoreV1().ConfigMaps(antreaNamespace).Update(context.TODO(), configMap, metav1.UpdateOptions{}); err != nil {
-		t.Fatalf("Failed to update ConfigMap %s: %v", configMap.Name, err)
+	if err := data.mutateAntreaConfigMap(func(data map[string]string) {
+		antreaControllerConf, _ := data["antrea-controller.conf"]
+		antreaControllerConf = strings.Replace(antreaControllerConf, "#selfSignedCert: true", "selfSignedCert: false", 1)
+		data["antrea-controller.conf"] = antreaControllerConf
+	}, false, false); err != nil {
+		t.Fatalf("Failed to update ConfigMap: %v", err)
 	}
 
 	genCertKeyAndUpdateSecret := func() ([]byte, []byte) {
-		certPem, keyPem, err := certutil.GenerateSelfSignedCertKey("antrea", nil, certificate.GetAntreaServerNames())
+		certPem, keyPem, _ := certutil.GenerateSelfSignedCertKey("antrea", nil, certificate.GetAntreaServerNames())
 		secret, err := data.clientset.CoreV1().Secrets(tlsSecretNamespace).Get(context.TODO(), tlsSecretName, metav1.GetOptions{})
 		exists := true
 		if err != nil {
@@ -176,7 +174,13 @@ func testCert(t *testing.T, data *TestData, expectedCABundle string, restartPod 
 		}
 		trans, _ := restclient.TransportFor(&clientConfig)
 		hc := &http.Client{Transport: trans, Timeout: 5 * time.Second}
-		req, err := http.NewRequest("GET", fmt.Sprintf("https://%s:%d/healthz", antreaController.Status.PodIP, apis.AntreaControllerAPIPort), nil)
+		var reqURL string
+		if net.ParseIP(antreaController.Status.PodIP).To4() != nil {
+			reqURL = fmt.Sprintf("https://%s:%d/healthz", antreaController.Status.PodIP, apis.AntreaControllerAPIPort)
+		} else {
+			reqURL = fmt.Sprintf("https://[%s]:%d/healthz", antreaController.Status.PodIP, apis.AntreaControllerAPIPort)
+		}
+		req, err := http.NewRequest("GET", reqURL, nil)
 		if err != nil {
 			return false, err
 		}
@@ -213,7 +217,10 @@ func testCert(t *testing.T, data *TestData, expectedCABundle string, restartPod 
 	// antrea-agents reconnect every 5 seconds, we expect their connections are restored in a few seconds.
 	if err := wait.Poll(2*time.Second, 30*time.Second, func() (bool, error) {
 		cmds := []string{"antctl", "get", "controllerinfo", "-o", "json"}
-		stdout, _, err := runAntctl(antreaController.Name, cmds, data, t)
+		stdout, _, err := runAntctl(antreaController.Name, cmds, data)
+		if err != nil {
+			return true, err
+		}
 		var controllerInfo v1beta1.AntreaControllerInfo
 		err = json.Unmarshal([]byte(stdout), &controllerInfo)
 		if err != nil {

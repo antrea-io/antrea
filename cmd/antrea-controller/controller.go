@@ -39,18 +39,43 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy"
 	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy/store"
 	"github.com/vmware-tanzu/antrea/pkg/controller/querier"
+	"github.com/vmware-tanzu/antrea/pkg/controller/stats"
 	"github.com/vmware-tanzu/antrea/pkg/controller/traceflow"
 	"github.com/vmware-tanzu/antrea/pkg/features"
 	"github.com/vmware-tanzu/antrea/pkg/k8s"
+	"github.com/vmware-tanzu/antrea/pkg/log"
 	"github.com/vmware-tanzu/antrea/pkg/monitor"
 	"github.com/vmware-tanzu/antrea/pkg/signals"
 	"github.com/vmware-tanzu/antrea/pkg/version"
 )
 
-// informerDefaultResync is the default resync period if a handler doesn't specify one.
-// Use the same default value as kube-controller-manager:
-// https://github.com/kubernetes/kubernetes/blob/release-1.17/pkg/controller/apis/config/v1alpha1/defaults.go#L120
-const informerDefaultResync = 12 * time.Hour
+const (
+	// informerDefaultResync is the default resync period if a handler doesn't specify one.
+	// Use the same default value as kube-controller-manager:
+	// https://github.com/kubernetes/kubernetes/blob/release-1.17/pkg/controller/apis/config/v1alpha1/defaults.go#L120
+	informerDefaultResync = 12 * time.Hour
+
+	// serverMinWatchTimeout determines the timeout allocated to watches from Antrea
+	// clients. Each watch will be allocated a random timeout between this value and twice this
+	// value, to help randomly distribute reconnections over time.
+	// This parameter corresponds to the MinRequestTimeout server config parameter in
+	// https://godoc.org/k8s.io/apiserver/pkg/server#Config.
+	// When the Antrea client re-creates a watch, all relevant NetworkPolicy objects need to be
+	// sent again by the controller. It may be a good idea to use a value which is larger than
+	// the kube-apiserver default (1800s). The K8s documentation states that clients should be
+	// able to handle watch timeouts gracefully but recommends using a large value in
+	// production.
+	serverMinWatchTimeout = 2 * time.Hour
+)
+
+var allowedPaths = []string{
+	"/healthz",
+	"/mutate/acnp",
+	"/mutate/anp",
+	"/validate/tier",
+	"/validate/acnp",
+	"/validate/anp",
+}
 
 // run starts Antrea Controller with the given options and waits for termination signal.
 func run(o *Options) error {
@@ -69,6 +94,9 @@ func run(o *Options) error {
 	networkPolicyInformer := informerFactory.Networking().V1().NetworkPolicies()
 	nodeInformer := informerFactory.Core().V1().Nodes()
 	cnpInformer := crdInformerFactory.Security().V1alpha1().ClusterNetworkPolicies()
+	externalEntityInformer := crdInformerFactory.Core().V1alpha2().ExternalEntities()
+	anpInformer := crdInformerFactory.Security().V1alpha1().NetworkPolicies()
+	tierInformer := crdInformerFactory.Security().V1alpha1().Tiers()
 	traceflowInformer := crdInformerFactory.Ops().V1alpha1().Traceflows()
 
 	// Create Antrea object storage.
@@ -80,11 +108,21 @@ func run(o *Options) error {
 		crdClient,
 		podInformer,
 		namespaceInformer,
+		externalEntityInformer,
 		networkPolicyInformer,
 		cnpInformer,
+		anpInformer,
+		tierInformer,
 		addressGroupStore,
 		appliedToGroupStore,
 		networkPolicyStore)
+
+	var networkPolicyStatusController *networkpolicy.StatusController
+	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
+		networkPolicyStatusController = networkpolicy.NewStatusController(crdClient, networkPolicyStore, cnpInformer, anpInformer)
+	}
+
+	endpointQuerier := networkpolicy.NewEndpointQuerier(networkPolicyController)
 
 	controllerQuerier := querier.NewControllerQuerier(networkPolicyController, o.config.APIPort)
 
@@ -92,7 +130,14 @@ func run(o *Options) error {
 
 	var traceflowController *traceflow.Controller
 	if features.DefaultFeatureGate.Enabled(features.Traceflow) {
-		traceflowController = traceflow.NewTraceflowController(crdClient, traceflowInformer)
+		traceflowController = traceflow.NewTraceflowController(crdClient, podInformer, traceflowInformer)
+	}
+
+	// statsAggregator takes stats summaries from antrea-agents, aggregates them, and serves the Stats APIs with the
+	// aggregated data. For now it's only used for NetworkPolicy stats.
+	var statsAggregator *stats.Aggregator
+	if features.DefaultFeatureGate.Enabled(features.NetworkPolicyStats) {
+		statsAggregator = stats.NewAggregator(networkPolicyInformer, cnpInformer, anpInformer)
 	}
 
 	apiServerConfig, err := createAPIServerConfig(o.config.ClientConnection.Kubeconfig,
@@ -104,6 +149,10 @@ func run(o *Options) error {
 		appliedToGroupStore,
 		networkPolicyStore,
 		controllerQuerier,
+		endpointQuerier,
+		networkPolicyController,
+		networkPolicyStatusController,
+		statsAggregator,
 		o.config.EnablePrometheusMetrics)
 	if err != nil {
 		return fmt.Errorf("error creating API server config: %v", err)
@@ -113,10 +162,17 @@ func run(o *Options) error {
 		return fmt.Errorf("error creating API server: %v", err)
 	}
 
+	err = apiserver.CleanupDeprecatedAPIServices(aggregatorClient)
+	if err != nil {
+		return fmt.Errorf("failed to clean up the deprecated APIServices: %v", err)
+	}
+
 	// Set up signal capture: the first SIGTERM / SIGINT signal is handled gracefully and will
 	// cause the stopCh channel to be closed; if another signal is received before the program
 	// exits, we will force exit.
 	stopCh := signals.RegisterSignalHandlers()
+
+	log.StartLogFileNumberMonitor(stopCh)
 
 	informerFactory.Start(stopCh)
 	crdInformerFactory.Start(stopCh)
@@ -127,12 +183,20 @@ func run(o *Options) error {
 
 	go apiServer.Run(stopCh)
 
+	if features.DefaultFeatureGate.Enabled(features.NetworkPolicyStats) {
+		go statsAggregator.Run(stopCh)
+	}
+
 	if o.config.EnablePrometheusMetrics {
 		metrics.InitializePrometheusMetrics()
 	}
 
 	if features.DefaultFeatureGate.Enabled(features.Traceflow) {
 		go traceflowController.Run(stopCh)
+	}
+
+	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
+		go networkPolicyStatusController.Run(stopCh)
 	}
 
 	<-stopCh
@@ -149,10 +213,14 @@ func createAPIServerConfig(kubeconfig string,
 	appliedToGroupStore storage.Interface,
 	networkPolicyStore storage.Interface,
 	controllerQuerier querier.ControllerQuerier,
+	endpointQuerier networkpolicy.EndpointQuerier,
+	npController *networkpolicy.NetworkPolicyController,
+	networkPolicyStatusController *networkpolicy.StatusController,
+	statsAggregator *stats.Aggregator,
 	enableMetrics bool) (*apiserver.Config, error) {
 	secureServing := genericoptions.NewSecureServingOptions().WithLoopback()
 	authentication := genericoptions.NewDelegatingAuthenticationOptions()
-	authorization := genericoptions.NewDelegatingAuthorizationOptions().WithAlwaysAllowPaths("/healthz")
+	authorization := genericoptions.NewDelegatingAuthorizationOptions().WithAlwaysAllowPaths(allowedPaths...)
 
 	caCertController, err := certificate.ApplyServerCert(selfSignedCert, client, aggregatorClient, secureServing)
 	if err != nil {
@@ -189,6 +257,7 @@ func createAPIServerConfig(kubeconfig string,
 		genericopenapi.NewDefinitionNamer(apiserver.Scheme))
 	serverConfig.OpenAPIConfig.Info.Title = "Antrea"
 	serverConfig.EnableMetrics = enableMetrics
+	serverConfig.MinRequestTimeout = int(serverMinWatchTimeout.Seconds())
 
 	return apiserver.NewConfig(
 		serverConfig,
@@ -196,5 +265,9 @@ func createAPIServerConfig(kubeconfig string,
 		appliedToGroupStore,
 		networkPolicyStore,
 		caCertController,
-		controllerQuerier), nil
+		statsAggregator,
+		controllerQuerier,
+		networkPolicyStatusController,
+		endpointQuerier,
+		npController), nil
 }

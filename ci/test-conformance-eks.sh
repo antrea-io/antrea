@@ -21,28 +21,31 @@ function echoerr {
 }
 
 REGION="us-east-2"
-K8S_VERSION="1.15"
+K8S_VERSION="1.17"
 AWS_NODE_TYPE="t3.medium"
 SSH_KEY_PATH="$HOME/.ssh/id_rsa.pub"
+SSH_PRIVATE_KEY_PATH="$HOME/.ssh/id_rsa"
 RUN_ALL=true
 RUN_SETUP_ONLY=false
 RUN_CLEANUP_ONLY=false
-KUBECONFIG_PATH="$HOME/jenkins/out/"
+KUBECONFIG_PATH="$HOME/jenkins/out/eks"
+MODE="report"
 TEST_FAILURE=false
 
 _usage="Usage: $0 [--cluster-name <EKSClusterNameToUse>] [--kubeconfig <KubeconfigSavePath>] [--k8s-version <ClusterVersion>]\
                   [--aws-access-key <AccessKey>] [--aws-secret-key <SecretKey>] [--aws-region <Region>] [--ssh-key <SSHKey] \
-                  [--setup-only] [--cleanup-only]
+                  [--ssh-private-key <SSHPrivateKey] [--log-mode <SonobuoyResultLogLevel>] [--setup-only] [--cleanup-only]
 
 Setup a EKS cluster to run K8s e2e community tests (Conformance & Network Policy).
 
         --cluster-name           The cluster name to be used for the generated EKS cluster. Must be specified if not run in Jenkins environment.
         --kubeconfig             Path to save kubeconfig of generated EKS cluster.
-        --k8s-version            GKE K8s cluster version. Defaults to 1.15.
+        --k8s-version            GKE K8s cluster version. Defaults to 1.17.
         --aws-access-key         AWS Acess Key for logging in to awscli.
         --aws-secret-key         AWS Secret Key for logging in to awscli.
         --aws-region             The AWS region where the cluster will be initiated. Defaults to us-east-2.
         --ssh-key                The path of key to be used for ssh access to worker nodes.
+        --log-mode               Use the flag to set either 'report', 'detail', or 'dump' level data for sonobouy results.
         --setup-only             Only perform setting up the cluster and run test.
         --cleanup-only           Only perform cleaning up the cluster."
 
@@ -79,12 +82,20 @@ case $key in
     SSH_KEY_PATH="$2"
     shift 2
     ;;
+    --ssh-private-key)
+    SSH_PRIVATE_KEY_PATH="$2"
+    shift 2
+    ;;
     --kubeconfig)
     KUBECONFIG_PATH="$2"
     shift 2
     ;;
     --k8s-version)
     K8S_VERSION="$2"
+    shift 2
+    ;;
+    --log-mode)
+    MODE="$2"
     shift 2
     ;;
     --setup-only)
@@ -108,19 +119,11 @@ case $key in
 esac
 done
 
-if [[ -z ${CLUSTER+x} ]]; then
-    if [[ -z ${JOB_NAME+x} ]]; then
-        echoerr "Use --cluster-name to set the name of the EKS cluster"
-        exit 1
-    fi
-    CLUSTER="${JOB_NAME}-${BUILD_NUMBER}"
-fi
-
 function setup_eks() {
 
     echo "=== This cluster to be created is named: ${CLUSTER} ==="
-    echo "CLUSTERNAME=${CLUSTER}" > ci_properties.txt
-
+    # Save the cluster information for cleanup on Jenkins environment
+    echo "CLUSTERNAME=${CLUSTER}" > ${GIT_CHECKOUT_DIR}/ci_properties.txt
     echo "=== Using the following awscli version ==="
     aws --version
 
@@ -131,6 +134,9 @@ ${AWS_SECRET_KEY}
 ${REGION}
 JSON
 EOF
+    echo "=== Installing latest version of eksctl ==="
+    curl --silent --location "https://github.com/weaveworks/eksctl/releases/latest/download/eksctl_$(uname -s)_amd64.tar.gz" | tar xz -C /tmp
+    sudo mv /tmp/eksctl /usr/local/bin
     set -e
     printf "\n"
     echo "=== Using the following kubectl ==="
@@ -165,36 +171,9 @@ function deliver_antrea_to_eks() {
 
     echo "=== Configuring Antrea for cluster ==="
 
-    # EKS service CIDR is currently assigned by AWS,
-    # either from 172.20.0.0/16 or 10.100.0.0/16 depending on the range of VPC
-    # https://forums.aws.amazon.com/thread.jspa?messageID=859958
-    k8s_svc_addr=$(kubectl get svc -A | grep kubernetes | awk '{print $4}')
-
-    if [[ $k8s_svc_addr == 10.100.* ]]; then
-    	 k8s_svc_cidr='10.100.0.0/16'
-    elif [[ $k8s_svc_addr == 172.20.* ]]; then
-    	 k8s_svc_cidr='172.20.0.0/16'
-    else
-    	 echo "Cannot determine EKS serviceCIDR!"
-         exit 1
-    fi
-
-    set +e
-    worker_node_ip_1=$(kubectl get nodes -o wide | sed -n '2 p' | awk '{print $7}')
-    node_mtu=$(ssh -o StrictHostKeyChecking=no -l "ec2-user" $worker_node_ip_1 \
-      'export PATH=$PATH:/usr/sbin; ip a | grep -E eth0.*mtu | cut -d " " -f5')
-
-    if [[ -z ${GIT_CHECKOUT_DIR+x} ]]; then
-        GIT_CHECKOUT_DIR=..
-    fi
-    sed -i "s|#defaultMTU: 1450|defaultMTU: ${node_mtu}|g"  ${GIT_CHECKOUT_DIR}/build/yamls/antrea-eks.yml
-    sed -i "s|#serviceCIDR: 10.96.0.0/12|serviceCIDR: ${k8s_svc_cidr}|g"  ${GIT_CHECKOUT_DIR}/build/yamls/antrea-eks.yml
-    echo "defaultMTU set as ${node_mtu}"
-    echo "seviceCIDR set as ${k8s_svc_cidr}"
+    kubectl apply -f ${GIT_CHECKOUT_DIR}/build/yamls/antrea-eks-node-init.yml
 
     kubectl apply -f ${GIT_CHECKOUT_DIR}/build/yamls/antrea-eks.yml
-    set -e
-
     kubectl rollout status --timeout=2m deployment.apps/antrea-controller -n kube-system
     kubectl rollout status --timeout=2m daemonset/antrea-agent -n kube-system
 
@@ -204,15 +183,13 @@ function deliver_antrea_to_eks() {
 function run_conformance() {
     echo "=== Running Antrea Conformance and Network Policy Tests ==="
 
-    if [[ -z ${GIT_CHECKOUT_DIR+x} ]]; then
-        GIT_CHECKOUT_DIR=..
-    fi
     # Skip NodePort related cases for EKS since by default eksctl does not create security groups for nodeport service
     # access through node external IP. See https://github.com/vmware-tanzu/antrea/issues/690
     skip_regex="\[Slow\]|\[Serial\]|\[Disruptive\]|\[Flaky\]|\[Feature:.+\]|\[sig-cli\]|\[sig-storage\]|\[sig-auth\]|\[sig-api-machinery\]|\[sig-apps\]|\[sig-node\]|NodePort"
-     ${GIT_CHECKOUT_DIR}/ci/run-k8s-e2e-tests.sh --e2e-conformance --e2e-network-policy --e2e-conformance-skip ${skip_regex} > eks-test.log
+    ${GIT_CHECKOUT_DIR}/ci/run-k8s-e2e-tests.sh --e2e-conformance --e2e-network-policy --e2e-conformance-skip ${skip_regex} \
+       --log-mode ${MODE} > ${GIT_CHECKOUT_DIR}/eks-test.log
 
-    if grep -Fxq "Failed tests:" eks-test.log
+    if grep -Fxq "Failed tests:" ${GIT_CHECKOUT_DIR}/eks-test.log
     then
         echo "Failed cases exist."
         TEST_FAILURE=true
@@ -228,12 +205,13 @@ function run_conformance() {
 
     if [[ "$TEST_FAILURE" == false ]]; then
         echo "=== SUCCESS !!! ==="
+    else
+        echo "=== FAILURE !!! ==="
     fi
-    echo "=== FAILURE !!! ==="
 }
 
 function cleanup_cluster() {
-    echo '=== Cleaning up EKS cluster ${cluster} ==='
+    echo '=== Cleaning up EKS cluster ${CLUSTER} ==='
     retry=5
     while [[ "${retry}" -gt 0 ]]; do
        eksctl delete cluster --name ${CLUSTER} --region $REGION
@@ -253,6 +231,7 @@ function cleanup_cluster() {
 
 # ensures that the script can be run from anywhere
 THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+GIT_CHECKOUT_DIR=${THIS_DIR}/..
 pushd "$THIS_DIR" > /dev/null
 
 if [[ "$RUN_ALL" == true || "$RUN_SETUP_ONLY" == true ]]; then

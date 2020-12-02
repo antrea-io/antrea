@@ -6,6 +6,8 @@ import (
 	"net"
 	"strings"
 
+	utilnet "k8s.io/utils/net"
+
 	"github.com/contiv/libOpenflow/openflow13"
 	"github.com/contiv/ofnet/ofctrl"
 )
@@ -17,6 +19,7 @@ type ofFlowAction struct {
 // Drop is an action to drop packets.
 func (a *ofFlowAction) Drop() FlowBuilder {
 	a.builder.Drop()
+	a.builder.isDropFlow = true
 	return a.builder
 }
 
@@ -104,7 +107,7 @@ func (a *ofCTAction) load(field *openflow13.MatchField, value uint64, rng *Range
 	a.actions = append(a.actions, action)
 }
 
-// MoveToLabel is an action to move data into ct_mark.
+// MoveToLabel is an action to move data into ct_label.
 func (a *ofCTAction) MoveToLabel(fromName string, fromRng, labelRng *Range) CTAction {
 	fromField, _ := openflow13.FindFieldHeaderByName(fromName, false)
 	toField, _ := openflow13.FindFieldHeaderByName(NxmFieldCtLabel, false)
@@ -127,8 +130,13 @@ func (a *ofCTAction) natAction(isSNAT bool, ipRange *IPRange, portRange *PortRan
 
 	// ipRange should not be nil. The check here is for code safety.
 	if ipRange != nil {
-		action.SetRangeIPv4Min(ipRange.StartIP)
-		action.SetRangeIPv4Max(ipRange.EndIP)
+		if utilnet.IsIPv6(ipRange.StartIP) {
+			action.SetRangeIPv6Min(ipRange.StartIP)
+			action.SetRangeIPv6Max(ipRange.EndIP)
+		} else {
+			action.SetRangeIPv4Min(ipRange.StartIP)
+			action.SetRangeIPv4Max(ipRange.EndIP)
+		}
 	}
 	if portRange != nil {
 		action.SetRangeProtoMin(&portRange.StartPort)
@@ -318,11 +326,13 @@ func (a *ofFlowAction) Note(notes string) FlowBuilder {
 }
 
 func (a *ofFlowAction) SendToController(reason uint8) FlowBuilder {
-	controllerAct := &ofctrl.NXController{
-		ControllerID: a.builder.ofFlow.Table.Switch.GetControllerID(),
-		Reason:       reason,
+	if a.builder.ofFlow.Table != nil && a.builder.ofFlow.Table.Switch != nil {
+		controllerAct := &ofctrl.NXController{
+			ControllerID: a.builder.ofFlow.Table.Switch.GetControllerID(),
+			Reason:       reason,
+		}
+		a.builder.ApplyAction(controllerAct)
 	}
-	a.builder.ApplyAction(controllerAct)
 	return a.builder
 }
 
@@ -349,26 +359,52 @@ func (a *ofLearnAction) DeleteLearned() LearnAction {
 
 // MatchEthernetProtocolIP specifies that the NXM_OF_ETH_TYPE field in the
 // learned flow must match IP(0x800).
-func (a *ofLearnAction) MatchEthernetProtocolIP() LearnAction {
+func (a *ofLearnAction) MatchEthernetProtocolIP(isIPv6 bool) LearnAction {
 	ethTypeVal := make([]byte, 2)
-	binary.BigEndian.PutUint16(ethTypeVal, 0x800)
+	var ipProto uint16 = 0x800
+	if isIPv6 {
+		ipProto = 0x86dd
+	}
+	binary.BigEndian.PutUint16(ethTypeVal, ipProto)
 	a.nxLearn.AddMatch(&ofctrl.LearnField{Name: "NXM_OF_ETH_TYPE"}, 2*8, nil, ethTypeVal)
 	return a
 }
 
 // MatchTransportDst specifies that the transport layer destination field
 // {tcp|udp}_dst in the learned flow must match the same field of the packet
-// currently being processed. It only accepts ProtocolTCP or ProtocolUDP,
-// otherwise this does nothing.
+// currently being processed. It only accepts ProtocolTCP, ProtocolUDP, or
+// ProtocolSCTP, otherwise this does nothing.
 func (a *ofLearnAction) MatchTransportDst(protocol Protocol) LearnAction {
-	if protocol != ProtocolTCP && protocol != ProtocolUDP && protocol != ProtocolSCTP {
+	var ipProtoValue int
+	isIPv6 := false
+	switch protocol {
+	case ProtocolTCP:
+		ipProtoValue = ofctrl.IP_PROTO_TCP
+	case ProtocolUDP:
+		ipProtoValue = ofctrl.IP_PROTO_UDP
+	case ProtocolSCTP:
+		ipProtoValue = ofctrl.IP_PROTO_SCTP
+	case ProtocolTCPv6:
+		ipProtoValue = ofctrl.IP_PROTO_TCP
+		isIPv6 = true
+	case ProtocolUDPv6:
+		ipProtoValue = ofctrl.IP_PROTO_UDP
+		isIPv6 = true
+	case ProtocolSCTPv6:
+		ipProtoValue = ofctrl.IP_PROTO_SCTP
+		isIPv6 = true
+	default:
+		// Return directly if the protocol is not acceptable.
 		return a
 	}
-	a.MatchEthernetProtocolIP()
+
+	a.MatchEthernetProtocolIP(isIPv6)
 	ipTypeVal := make([]byte, 2)
-	ipTypeVal[1] = byte(ofctrl.IP_PROTO_TCP)
+	ipTypeVal[1] = byte(ipProtoValue)
 	a.nxLearn.AddMatch(&ofctrl.LearnField{Name: "NXM_OF_IP_PROTO"}, 1*8, nil, ipTypeVal)
-	fieldName := fmt.Sprintf("NXM_OF_%s_DST", strings.ToUpper(string(protocol)))
+	// OXM_OF fields support TCP, UDP and SCTP, but NXM_OF fields only support TCP and UDP. So here using "OXM_OF_" to
+	// generate the field name.
+	fieldName := fmt.Sprintf("OXM_OF_%s_DST", strings.ToUpper(string(protocol)))
 	a.nxLearn.AddMatch(&ofctrl.LearnField{Name: fieldName}, 2*8, &ofctrl.LearnField{Name: fieldName}, nil)
 	return a
 }
@@ -379,16 +415,34 @@ func (a *ofLearnAction) MatchLearnedTCPDstPort() LearnAction {
 	return a.MatchTransportDst(ProtocolTCP)
 }
 
+// MatchLearnedTCPv6DstPort specifies that the tcp_dst field in the learned flow
+// must match the tcp_dst of the packet currently being processed.
+func (a *ofLearnAction) MatchLearnedTCPv6DstPort() LearnAction {
+	return a.MatchTransportDst(ProtocolTCPv6)
+}
+
 // MatchLearnedUDPDstPort specifies that the udp_dst field in the learned flow
 // must match the udp_dst of the packet currently being processed.
 func (a *ofLearnAction) MatchLearnedUDPDstPort() LearnAction {
 	return a.MatchTransportDst(ProtocolUDP)
 }
 
-// MatchLearnedUDPDstPort specifies that the sctp_dst field in the learned flow
+// MatchLearnedUDPv6DstPort specifies that the udp_dst field in the learned flow
+// must match the udp_dst of the packet currently being processed.
+func (a *ofLearnAction) MatchLearnedUDPv6DstPort() LearnAction {
+	return a.MatchTransportDst(ProtocolUDPv6)
+}
+
+// MatchLearnedSTCPDstPort specifies that the sctp_dst field in the learned flow
 // must match the sctp_dst of the packet currently being processed.
 func (a *ofLearnAction) MatchLearnedSCTPDstPort() LearnAction {
 	return a.MatchTransportDst(ProtocolSCTP)
+}
+
+// MatchLearnedSTCPv6DstPort specifies that the sctp_dst field in the learned flow
+// must match the sctp_dst of the packet currently being processed.
+func (a *ofLearnAction) MatchLearnedSCTPv6DstPort() LearnAction {
+	return a.MatchTransportDst(ProtocolSCTPv6)
 }
 
 // MatchLearnedSrcIP makes the learned flow to match the nw_src of current IP packet.
@@ -416,11 +470,32 @@ func (a *ofLearnAction) MatchReg(regID int, data uint32, rng Range) LearnAction 
 	return a
 }
 
+// MatchXXReg makes the learned flow to match the data in the xxreg of specific range.
+func (a *ofLearnAction) MatchXXReg(regID int, data []byte, rng Range) LearnAction {
+	s := fmt.Sprintf("NXM_NX_XXREG%d", regID)
+	toField := &ofctrl.LearnField{Name: s, Start: uint16(rng[0])}
+	offset := (rng.Length()-1)/8 + 1
+	if offset < 2 {
+		offset = 2
+	}
+	a.nxLearn.AddMatch(toField, uint16(rng.Length()), nil, data[16-offset:])
+	return a
+}
+
 // LoadRegToReg makes the learned flow to load reg[fromRegID] to reg[toRegID]
 // with specific ranges.
 func (a *ofLearnAction) LoadRegToReg(fromRegID, toRegID int, fromRng, toRng Range) LearnAction {
 	fromField := &ofctrl.LearnField{Name: fmt.Sprintf("NXM_NX_REG%d", fromRegID), Start: uint16(fromRng[0])}
 	toField := &ofctrl.LearnField{Name: fmt.Sprintf("NXM_NX_REG%d", toRegID), Start: uint16(toRng[0])}
+	a.nxLearn.AddLoadAction(toField, uint16(toRng.Length()), fromField, nil)
+	return a
+}
+
+// LoadXXRegToXXReg makes the learned flow to load reg[fromXxRegID] to reg[toXxRegID]
+// with specific ranges.
+func (a *ofLearnAction) LoadXXRegToXXReg(fromXxRegID, toXxRegID int, fromRng, toRng Range) LearnAction {
+	fromField := &ofctrl.LearnField{Name: fmt.Sprintf("NXM_NX_XXREG%d", fromXxRegID), Start: uint16(fromRng[0])}
+	toField := &ofctrl.LearnField{Name: fmt.Sprintf("NXM_NX_XXREG%d", toXxRegID), Start: uint16(toRng[0])}
 	a.nxLearn.AddLoadAction(toField, uint16(toRng.Length()), fromField, nil)
 	return a
 }

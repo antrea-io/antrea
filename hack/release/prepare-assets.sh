@@ -59,13 +59,18 @@ for build in "${ANTREA_BUILDS[@]}"; do
     BINDIR="$OUTPUT_DIR" make antrea-octant-plugin-release && cd ../..
 done
 
+BINDIR="$OUTPUT_DIR" make windows-bin
+sed "s/AntreaVersion=\"latest\"/AntreaVersion=\"$VERSION\"/" ./hack/windows/Start.ps1 > "$OUTPUT_DIR"/Start.ps1
+
 export IMG_TAG=$VERSION
 
 export IMG_NAME=antrea/antrea-ubuntu
 ./hack/generate-manifest.sh --mode release > "$OUTPUT_DIR"/antrea.yml
 ./hack/generate-manifest.sh --mode release --ipsec > "$OUTPUT_DIR"/antrea-ipsec.yml
-./hack/generate-manifest.sh --mode release --encap-mode networkPolicyOnly > "$OUTPUT_DIR"/antrea-eks.yml
+./hack/generate-manifest.sh --mode release --cloud EKS --encap-mode networkPolicyOnly > "$OUTPUT_DIR"/antrea-eks.yml
 ./hack/generate-manifest.sh --mode release --cloud GKE --encap-mode noEncap > "$OUTPUT_DIR"/antrea-gke.yml
+./hack/generate-manifest.sh --mode release --cloud AKS --encap-mode networkPolicyOnly > "$OUTPUT_DIR"/antrea-aks.yml
+./hack/generate-manifest.sh --mode release --kind > "$OUTPUT_DIR"/antrea-kind.yml
 
 export IMG_NAME=antrea/octant-antrea-ubuntu
 ./hack/generate-manifest-octant.sh --mode release > "$OUTPUT_DIR"/antrea-octant.yml

@@ -17,29 +17,19 @@
 package agent
 
 import (
+	"fmt"
 	"net"
 	"strings"
 
 	"github.com/Microsoft/hcsshim"
+	"github.com/rakelkar/gonetsh/netroute"
 	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	"github.com/vmware-tanzu/antrea/pkg/agent/util"
+	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsctl"
 )
-
-// setupExternalConnectivity installs OpenFlow entries to SNAT Pod traffic using Node IP, and then Pod could communicate
-// to the external IP address.
-func (i *Initializer) setupExternalConnectivity() error {
-	subnetCIDR := i.nodeConfig.PodCIDR
-	nodeIP := i.nodeConfig.NodeIPAddr.IP
-	// Install OpenFlow entries on the OVS to enable Pod traffic to communicate to external IP addresses.
-	if err := i.ofClient.InstallExternalFlows(nodeIP, *subnetCIDR); err != nil {
-		klog.Errorf("Failed to setup SNAT openflow entries: %v", err)
-		return err
-	}
-	return nil
-}
 
 // prepareHostNetwork creates HNS Network for containers.
 func (i *Initializer) prepareHostNetwork() error {
@@ -72,8 +62,18 @@ func (i *Initializer) prepareHostNetwork() error {
 		return err
 	}
 	i.nodeConfig.UplinkNetConfig.DNSServers = dnsServers
+	// Save routes which are configured on the uplink interface.
+	// The routes on the host will be lost when moving the network configuration of the uplink interface
+	// to the OVS bridge local interface. The saved routes will be restored on host after that.
+	if err = i.saveHostRoutes(); err != nil {
+		return err
+	}
 	// Create HNS network.
-	return util.PrepareHNSNetwork(i.nodeConfig.PodCIDR, i.nodeConfig.NodeIPAddr, adapter)
+	subnetCIDR := i.nodeConfig.PodIPv4CIDR
+	if subnetCIDR == nil {
+		return fmt.Errorf("Failed to find valid IPv4 PodCIDR")
+	}
+	return util.PrepareHNSNetwork(subnetCIDR, i.nodeConfig.NodeIPAddr, adapter)
 }
 
 // prepareOVSBridge adds local port and uplink to ovs bridge.
@@ -138,8 +138,9 @@ func (i *Initializer) prepareOVSBridge() error {
 		return err
 	}
 	uplinkInterface := interfacestore.NewUplinkInterface(uplink)
-	uplinkInterface.OVSPortConfig = &interfacestore.OVSPortConfig{uplinkPortUUId, config.UplinkOFPort}
+	uplinkInterface.OVSPortConfig = &interfacestore.OVSPortConfig{uplinkPortUUId, config.UplinkOFPort} //nolint: govet
 	i.ifaceStore.AddInterface(uplinkInterface)
+	ovsCtlClient := ovsctl.NewClient(i.ovsBridge)
 
 	// Move network configuration of uplink interface to OVS bridge local interface.
 	// - The net configuration of uplink will be restored by OS if the attached HNS network is deleted.
@@ -158,18 +159,44 @@ func (i *Initializer) prepareOVSBridge() error {
 	if err = util.ConfigureInterfaceAddressWithDefaultGateway(brName, uplinkNetConfig.IP, uplinkNetConfig.Gateway); err != nil {
 		return err
 	}
+	// Restore the host routes which are lost when moving the network configuration of the uplink interface to OVS bridge interface.
+	if err = i.restoreHostRoutes(); err != nil {
+		return err
+	}
+
 	if uplinkNetConfig.DNSServers != "" {
 		if err = util.SetAdapterDNSServers(brName, uplinkNetConfig.DNSServers); err != nil {
 			return err
 		}
 	}
+	// Set the uplink with "no-flood" config, so that the IP of local Pods and "antrea-gw0" will not be leaked to the
+	// underlay network by the "normal" flow entry.
+	if err := ovsCtlClient.SetPortNoFlood(config.UplinkOFPort); err != nil {
+		klog.Errorf("Failed to set the uplink port with no-flood config: %v", err)
+		return err
+	}
 	return nil
 }
 
 // initHostNetworkFlows installs Openflow flows between bridge local port and uplink port to support
-// host networking. These flows are only needed on windows platform.
+// host networking.
 func (i *Initializer) initHostNetworkFlows() error {
 	if err := i.ofClient.InstallBridgeUplinkFlows(config.UplinkOFPort, config.BridgeOFPort); err != nil {
+		return err
+	}
+	return nil
+}
+
+// initExternalConnectivityFlows installs OpenFlow entries to SNAT Pod traffic
+// using Node IP, and then Pod could communicate to the external IP addresses.
+func (i *Initializer) initExternalConnectivityFlows() error {
+	subnetCIDR := i.nodeConfig.PodIPv4CIDR
+	if subnetCIDR == nil {
+		return fmt.Errorf("Failed to find valid IPv4 PodCIDR")
+	}
+	nodeIP := i.nodeConfig.NodeIPAddr.IP
+	// Install OpenFlow entries on the OVS to enable Pod traffic to communicate to external IP addresses.
+	if err := i.ofClient.InstallExternalFlows(nodeIP, *subnetCIDR); err != nil {
 		return err
 	}
 	return nil
@@ -178,4 +205,57 @@ func (i *Initializer) initHostNetworkFlows() error {
 // getTunnelLocalIP returns local_ip of tunnel port
 func (i *Initializer) getTunnelPortLocalIP() net.IP {
 	return i.nodeConfig.NodeIPAddr.IP
+}
+
+// saveHostRoutes saves routes which are configured on uplink interface before
+// the interface the configured as the uplink of antrea HNS network.
+// The routes will be restored on OVS bridge interface after the IP configuration
+// is moved to the OVS bridge.
+func (i *Initializer) saveHostRoutes() error {
+	nr := netroute.New()
+	defer nr.Exit()
+	routes, err := nr.GetNetRoutesAll()
+	if err != nil {
+		return err
+	}
+	for _, route := range routes {
+		if route.LinkIndex != i.nodeConfig.UplinkNetConfig.Index {
+			continue
+		}
+		if route.GatewayAddress.String() != i.nodeConfig.UplinkNetConfig.Gateway {
+			continue
+		}
+		// Skip IPv6 routes before we support IPv6 stack.
+		if route.DestinationSubnet.IP.To4() == nil {
+			continue
+		}
+		// Skip default route. The default route will be added automatically when
+		// configuring IP address on OVS bridge interface.
+		if route.DestinationSubnet.IP.IsUnspecified() {
+			continue
+		}
+		klog.V(4).Infof("Got host route: %v", route)
+		i.nodeConfig.UplinkNetConfig.Routes = append(i.nodeConfig.UplinkNetConfig.Routes, route)
+	}
+	return nil
+}
+
+// restoreHostRoutes restores the host routes which are lost when moving the IP
+// configuration of uplink interface to the OVS bridge interface during
+// the antrea network initialize stage.
+// The backup routes are restored after the IP configuration change.
+func (i *Initializer) restoreHostRoutes() error {
+	nr := netroute.New()
+	defer nr.Exit()
+	brInterface, err := net.InterfaceByName(i.ovsBridge)
+	if err != nil {
+		return nil
+	}
+	for _, route := range i.nodeConfig.UplinkNetConfig.Routes {
+		rt := route.(netroute.Route)
+		if err := nr.NewNetRoute(brInterface.Index, rt.DestinationSubnet, rt.GatewayAddress); err != nil {
+			return err
+		}
+	}
+	return nil
 }

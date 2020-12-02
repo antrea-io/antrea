@@ -18,6 +18,8 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net"
+	"strings"
+	"time"
 
 	"github.com/spf13/pflag"
 	"gopkg.in/yaml.v2"
@@ -30,19 +32,13 @@ import (
 )
 
 const (
-	defaultOVSBridge          = "br-int"
-	defaultHostGateway        = "antrea-gw0"
-	defaultHostProcPathPrefix = "/host"
-	defaultServiceCIDR        = "10.96.0.0/12"
-	defaultTunnelType         = ovsconfig.VXLANTunnel
-	defaultMTUGeneve          = 1450
-	defaultMTUVXLAN           = 1450
-	defaultMTUGRE             = 1462
-	defaultMTUSTT             = 1500
-	defaultMTU                = 1500
-	// IPsec ESP can add a maximum of 38 bytes to the packet including the ESP
-	// header and trailer.
-	ipsecESPOverhead = 38
+	defaultOVSBridge           = "br-int"
+	defaultHostGateway         = "antrea-gw0"
+	defaultHostProcPathPrefix  = "/host"
+	defaultServiceCIDR         = "10.96.0.0/12"
+	defaultTunnelType          = ovsconfig.GeneveTunnel
+	defaultFlowPollInterval    = 5 * time.Second
+	defaultFlowExportFrequency = 12
 )
 
 type Options struct {
@@ -50,11 +46,17 @@ type Options struct {
 	configFile string
 	// The configuration object
 	config *AgentConfig
+	// IPFIX flow collector
+	flowCollector net.Addr
+	// Flow exporter poll interval
+	pollInterval time.Duration
 }
 
 func newOptions() *Options {
 	return &Options{
-		config: new(AgentConfig),
+		config: &AgentConfig{
+			EnablePrometheusMetrics: true,
+		},
 	}
 }
 
@@ -66,11 +68,9 @@ func (o *Options) addFlags(fs *pflag.FlagSet) {
 // complete completes all the required options.
 func (o *Options) complete(args []string) error {
 	if len(o.configFile) > 0 {
-		c, err := o.loadConfigFromFile(o.configFile)
-		if err != nil {
+		if err := o.loadConfigFromFile(); err != nil {
 			return err
 		}
-		o.config = c
 	}
 	o.setDefaults()
 	return features.DefaultMutableFeatureGate.SetFromMap(o.config.FeatureGates)
@@ -81,10 +81,17 @@ func (o *Options) validate(args []string) error {
 	if len(args) != 0 {
 		return fmt.Errorf("no positional arguments are supported")
 	}
+
 	// Validate service CIDR configuration
 	_, _, err := net.ParseCIDR(o.config.ServiceCIDR)
 	if err != nil {
-		return fmt.Errorf("service CIDR %s is invalid", o.config.ServiceCIDR)
+		return fmt.Errorf("Service CIDR %s is invalid", o.config.ServiceCIDR)
+	}
+	if o.config.ServiceCIDRv6 != "" {
+		_, _, err := net.ParseCIDR(o.config.ServiceCIDRv6)
+		if err != nil {
+			return fmt.Errorf("Service CIDR v6 %s is invalid", o.config.ServiceCIDRv6)
+		}
 	}
 	if o.config.TunnelType != ovsconfig.VXLANTunnel && o.config.TunnelType != ovsconfig.GeneveTunnel &&
 		o.config.TunnelType != ovsconfig.GRETunnel && o.config.TunnelType != ovsconfig.STTTunnel {
@@ -100,24 +107,42 @@ func (o *Options) validate(args []string) error {
 	if !ok {
 		return fmt.Errorf("TrafficEncapMode %s is unknown", o.config.TrafficEncapMode)
 	}
-	if encapMode.SupportsNoEncap() && o.config.EnableIPSecTunnel {
-		return fmt.Errorf("IPSec tunnel may only be enabled on %s mode", config.TrafficEncapModeEncap)
+
+	// Check if the enabled features are supported on the OS.
+	err = o.checkUnsupportedFeatures()
+	if err != nil {
+		return err
+	}
+
+	if encapMode.SupportsNoEncap() {
+		if !features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
+			return fmt.Errorf("TrafficEncapMode %s requires AntreaProxy to be enabled", o.config.TrafficEncapMode)
+		}
+		if o.config.EnableIPSecTunnel {
+			return fmt.Errorf("IPsec tunnel may only be enabled in %s mode", config.TrafficEncapModeEncap)
+		}
+	}
+	if o.config.NoSNAT && !(encapMode == config.TrafficEncapModeNoEncap || encapMode == config.TrafficEncapModeNetworkPolicyOnly) {
+		return fmt.Errorf("noSNAT is only applicable to the %s mode", config.TrafficEncapModeNoEncap)
+	}
+	if encapMode == config.TrafficEncapModeNetworkPolicyOnly {
+		// In the NetworkPolicyOnly mode, Antrea will not perform SNAT
+		// (but SNAT can be done by the primary CNI).
+		o.config.NoSNAT = true
+	}
+	if err := o.validateFlowExporterConfig(); err != nil {
+		return fmt.Errorf("failed to validate flow exporter config: %v", err)
 	}
 	return nil
 }
 
-func (o *Options) loadConfigFromFile(file string) (*AgentConfig, error) {
-	data, err := ioutil.ReadFile(file)
+func (o *Options) loadConfigFromFile() error {
+	data, err := ioutil.ReadFile(o.configFile)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	var c AgentConfig
-	err = yaml.UnmarshalStrict(data, &c)
-	if err != nil {
-		return nil, err
-	}
-	return &c, nil
+	return yaml.UnmarshalStrict(data, &o.config)
 }
 
 func (o *Options) setDefaults() {
@@ -136,6 +161,9 @@ func (o *Options) setDefaults() {
 	if o.config.HostGateway == "" {
 		o.config.HostGateway = defaultHostGateway
 	}
+	if o.config.TrafficEncapMode == "" {
+		o.config.TrafficEncapMode = config.TrafficEncapModeEncap.String()
+	}
 	if o.config.TunnelType == "" {
 		o.config.TunnelType = defaultTunnelType
 	}
@@ -145,30 +173,69 @@ func (o *Options) setDefaults() {
 	if o.config.ServiceCIDR == "" {
 		o.config.ServiceCIDR = defaultServiceCIDR
 	}
-	if o.config.TrafficEncapMode == "" {
-		o.config.TrafficEncapMode = config.TrafficEncapModeEncap.String()
-	}
-
-	if o.config.DefaultMTU == 0 {
-		ok, encapMode := config.GetTrafficEncapModeFromStr(o.config.TrafficEncapMode)
-		if ok && !encapMode.SupportsEncap() {
-			o.config.DefaultMTU = defaultMTU
-		} else if o.config.TunnelType == ovsconfig.VXLANTunnel {
-			o.config.DefaultMTU = defaultMTUVXLAN
-		} else if o.config.TunnelType == ovsconfig.GeneveTunnel {
-			o.config.DefaultMTU = defaultMTUGeneve
-		} else if o.config.TunnelType == ovsconfig.GRETunnel {
-			o.config.DefaultMTU = defaultMTUGRE
-		} else if o.config.TunnelType == ovsconfig.STTTunnel {
-			o.config.DefaultMTU = defaultMTUSTT
-		}
-
-		if o.config.EnableIPSecTunnel {
-			o.config.DefaultMTU -= ipsecESPOverhead
-		}
-	}
-
 	if o.config.APIPort == 0 {
 		o.config.APIPort = apis.AntreaAgentAPIPort
 	}
+
+	if o.config.FeatureGates[string(features.FlowExporter)] {
+		if o.config.FlowPollInterval == "" {
+			o.pollInterval = defaultFlowPollInterval
+		}
+		if o.config.FlowExportFrequency == 0 {
+			// This frequency value makes flow export interval as 60s by default.
+			o.config.FlowExportFrequency = defaultFlowExportFrequency
+		}
+	}
+}
+
+func (o *Options) validateFlowExporterConfig() error {
+	if features.DefaultFeatureGate.Enabled(features.FlowExporter) {
+		if o.config.FlowCollectorAddr == "" {
+			return fmt.Errorf("IPFIX flow collector address should be provided")
+		} else {
+			// Check if it is TCP or UDP
+			strSlice := strings.Split(o.config.FlowCollectorAddr, ":")
+			var proto string
+			if len(strSlice) == 2 {
+				// If no separator ":" and proto is given, then default to TCP.
+				proto = "tcp"
+			} else if len(strSlice) > 2 {
+				if (strSlice[2] != "udp") && (strSlice[2] != "tcp") {
+					return fmt.Errorf("IPFIX flow collector over %s proto is not supported", strSlice[2])
+				}
+				proto = strSlice[2]
+			} else {
+				return fmt.Errorf("IPFIX flow collector is given in invalid format")
+			}
+
+			// Convert the string input in net.Addr format
+			hostPortAddr := strSlice[0] + ":" + strSlice[1]
+			_, _, err := net.SplitHostPort(hostPortAddr)
+			if err != nil {
+				return fmt.Errorf("IPFIX flow collector is given in invalid format: %v", err)
+			}
+			if proto == "udp" {
+				o.flowCollector, err = net.ResolveUDPAddr("udp", hostPortAddr)
+				if err != nil {
+					return fmt.Errorf("IPFIX flow collector over UDP proto cannot be resolved: %v", err)
+				}
+			} else {
+				o.flowCollector, err = net.ResolveTCPAddr("tcp", hostPortAddr)
+				if err != nil {
+					return fmt.Errorf("IPFIX flow collector over TCP proto cannot be resolved: %v", err)
+				}
+			}
+		}
+		if o.config.FlowPollInterval != "" {
+			var err error
+			o.pollInterval, err = time.ParseDuration(o.config.FlowPollInterval)
+			if err != nil {
+				return fmt.Errorf("FlowPollInterval is not provided in right format: %v", err)
+			}
+			if o.pollInterval < time.Second {
+				return fmt.Errorf("FlowPollInterval should be greater than or equal to one second")
+			}
+		}
+	}
+	return nil
 }

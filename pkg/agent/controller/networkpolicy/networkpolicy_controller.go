@@ -31,7 +31,8 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent"
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
-	"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
+	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
+	"github.com/vmware-tanzu/antrea/pkg/querier"
 )
 
 const (
@@ -54,6 +55,9 @@ const (
 //              b. Notify dirty rules
 //
 type Controller struct {
+	// antreaPolicyEnabled indicates whether Antrea NetworkPolicy and
+	// ClusterNetworkPolicy are enabled.
+	antreaPolicyEnabled bool
 	// antreaClientProvider provides interfaces to get antreaClient, which can be
 	// used to watch Antrea AddressGroups, AppliedToGroups, and NetworkPolicies.
 	// We need to get antreaClient dynamically because the apiserver cert can be
@@ -69,10 +73,15 @@ type Controller struct {
 	// reconciler provides interfaces to reconcile the desired state of
 	// NetworkPolicy rules with the actual state of Openflow entries.
 	reconciler Reconciler
-
+	// ofClient registers packetin for Antrea Policy logging.
+	ofClient openflow.Client
+	// statusManager syncs NetworkPolicy statuses with the antrea-controller.
+	// It's only for Antrea NetworkPolicies.
+	statusManager         StatusManager
 	networkPolicyWatcher  *watcher
 	appliedToGroupWatcher *watcher
 	addressGroupWatcher   *watcher
+	fullSyncGroup         sync.WaitGroup
 }
 
 // NewNetworkPolicyController returns a new *Controller.
@@ -80,13 +89,36 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 	ofClient openflow.Client,
 	ifaceStore interfacestore.InterfaceStore,
 	nodeName string,
-	podUpdates <-chan v1beta1.PodReference) *Controller {
+	podUpdates <-chan v1beta2.PodReference,
+	antreaPolicyEnabled bool,
+	asyncRuleDeleteInterval time.Duration) (*Controller, error) {
 	c := &Controller{
 		antreaClientProvider: antreaClientGetter,
 		queue:                workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "networkpolicyrule"),
-		reconciler:           newReconciler(ofClient, ifaceStore),
+		reconciler:           newReconciler(ofClient, ifaceStore, asyncRuleDeleteInterval),
+		ofClient:             ofClient,
+		antreaPolicyEnabled:  antreaPolicyEnabled,
 	}
 	c.ruleCache = newRuleCache(c.enqueueRule, podUpdates)
+	if antreaPolicyEnabled {
+		c.statusManager = newStatusController(antreaClientGetter, nodeName, c.ruleCache)
+	}
+
+	// Create a WaitGroup that is used to block network policy workers from asynchronously processing
+	// NP rules until the events preceding bookmark are synced. It can also be used as part of the
+	// solution to a deterministic mechanism for when to cleanup flows from previous round.
+	// Wait until appliedToGroupWatcher, addressGroupWatcher and networkPolicyWatcher to receive bookmark event.
+	c.fullSyncGroup.Add(3)
+
+	if c.ofClient != nil && antreaPolicyEnabled {
+		// Register packetInHandler
+		c.ofClient.RegisterPacketInHandler(uint8(openflow.PacketInReasonNP), "networkpolicy", c)
+		// Initiate logger for Antrea Policy audit logging
+		err := initLogger()
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	// Use nodeName to filter resources when watching resources.
 	options := metav1.ListOptions{
@@ -100,47 +132,76 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 			if err != nil {
 				return nil, err
 			}
-			return antreaClient.NetworkingV1beta1().NetworkPolicies("").Watch(context.TODO(), options)
+			return antreaClient.ControlplaneV1beta2().NetworkPolicies().Watch(context.TODO(), options)
 		},
 		AddFunc: func(obj runtime.Object) error {
-			policy, ok := obj.(*v1beta1.NetworkPolicy)
+			policy, ok := obj.(*v1beta2.NetworkPolicy)
 			if !ok {
 				return fmt.Errorf("cannot convert to *v1beta1.NetworkPolicy: %v", obj)
 			}
+			if !c.antreaPolicyEnabled && policy.SourceRef.Type != v1beta2.K8sNetworkPolicy {
+				klog.Infof("Ignore Antrea NetworkPolicy %s since AntreaPolicy feature gate is not enabled",
+					policy.SourceRef.ToString())
+				return nil
+			}
 			c.ruleCache.AddNetworkPolicy(policy)
-			klog.Infof("NetworkPolicy %s/%s applied to Pods on this Node", policy.Namespace, policy.Name)
+			klog.Infof("NetworkPolicy %s applied to Pods on this Node", policy.SourceRef.ToString())
 			return nil
 		},
 		UpdateFunc: func(obj runtime.Object) error {
-			policy, ok := obj.(*v1beta1.NetworkPolicy)
+			policy, ok := obj.(*v1beta2.NetworkPolicy)
 			if !ok {
 				return fmt.Errorf("cannot convert to *v1beta1.NetworkPolicy: %v", obj)
+			}
+			if !c.antreaPolicyEnabled && policy.SourceRef.Type != v1beta2.K8sNetworkPolicy {
+				klog.Infof("Ignore Antrea NetworkPolicy %s since AntreaPolicy feature gate is not enabled",
+					policy.SourceRef.ToString())
+				return nil
 			}
 			c.ruleCache.UpdateNetworkPolicy(policy)
 			return nil
 		},
 		DeleteFunc: func(obj runtime.Object) error {
-			policy, ok := obj.(*v1beta1.NetworkPolicy)
+			policy, ok := obj.(*v1beta2.NetworkPolicy)
 			if !ok {
 				return fmt.Errorf("cannot convert to *v1beta1.NetworkPolicy: %v", obj)
 			}
+			if !c.antreaPolicyEnabled && policy.SourceRef.Type != v1beta2.K8sNetworkPolicy {
+				klog.Infof("Ignore Antrea NetworkPolicy %s since AntreaPolicy feature gate is not enabled",
+					policy.SourceRef.ToString())
+				return nil
+			}
 			c.ruleCache.DeleteNetworkPolicy(policy)
-			klog.Infof("NetworkPolicy %s/%s no longer applied to Pods on this Node", policy.Namespace, policy.Name)
+			klog.Infof("NetworkPolicy %s no longer applied to Pods on this Node", policy.SourceRef.ToString())
 			return nil
 		},
 		ReplaceFunc: func(objs []runtime.Object) error {
-			policies := make([]*v1beta1.NetworkPolicy, len(objs))
+			policies := make([]*v1beta2.NetworkPolicy, len(objs))
 			var ok bool
 			for i := range objs {
-				policies[i], ok = objs[i].(*v1beta1.NetworkPolicy)
+				policies[i], ok = objs[i].(*v1beta2.NetworkPolicy)
 				if !ok {
-					return fmt.Errorf("Cannot convert to *v1beta1.NetworkPolicy: %v", objs[i])
+					return fmt.Errorf("cannot convert to *v1beta1.NetworkPolicy: %v", objs[i])
 				}
-				klog.Infof("NetworkPolicy %s/%s applied to Pods on this Node", policies[i].Namespace, policies[i].Name)
+				if !c.antreaPolicyEnabled && policies[i].SourceRef.Type != v1beta2.K8sNetworkPolicy {
+					klog.Infof("Ignore Antrea NetworkPolicy %s since AntreaPolicy feature gate is not enabled",
+						policies[i].SourceRef.ToString())
+					return nil
+				}
+				klog.Infof("NetworkPolicy %s applied to Pods on this Node", policies[i].SourceRef.ToString())
+				// When ReplaceFunc is called, either the controller restarted or this was a regular reconnection.
+				// For the former case, agent must resync the statuses as the controller lost the previous statuses.
+				// For the latter case, agent doesn't need to do anything. However, we are not able to differentiate the
+				// two cases. Anyway there's no harm to do a periodical resync.
+				if c.antreaPolicyEnabled && policies[i].SourceRef.Type != v1beta2.K8sNetworkPolicy {
+					c.statusManager.Resync(policies[i].UID)
+				}
 			}
 			c.ruleCache.ReplaceNetworkPolicies(policies)
 			return nil
 		},
+		fullSyncWaitGroup: &c.fullSyncGroup,
+		fullSynced:        false,
 	}
 
 	c.appliedToGroupWatcher = &watcher{
@@ -150,10 +211,10 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 			if err != nil {
 				return nil, err
 			}
-			return antreaClient.NetworkingV1beta1().AppliedToGroups().Watch(context.TODO(), options)
+			return antreaClient.ControlplaneV1beta2().AppliedToGroups().Watch(context.TODO(), options)
 		},
 		AddFunc: func(obj runtime.Object) error {
-			group, ok := obj.(*v1beta1.AppliedToGroup)
+			group, ok := obj.(*v1beta2.AppliedToGroup)
 			if !ok {
 				return fmt.Errorf("cannot convert to *v1beta1.AppliedToGroup: %v", obj)
 			}
@@ -161,7 +222,7 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 			return nil
 		},
 		UpdateFunc: func(obj runtime.Object) error {
-			group, ok := obj.(*v1beta1.AppliedToGroupPatch)
+			group, ok := obj.(*v1beta2.AppliedToGroupPatch)
 			if !ok {
 				return fmt.Errorf("cannot convert to *v1beta1.AppliedToGroup: %v", obj)
 			}
@@ -169,7 +230,7 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 			return nil
 		},
 		DeleteFunc: func(obj runtime.Object) error {
-			group, ok := obj.(*v1beta1.AppliedToGroup)
+			group, ok := obj.(*v1beta2.AppliedToGroup)
 			if !ok {
 				return fmt.Errorf("cannot convert to *v1beta1.AppliedToGroup: %v", obj)
 			}
@@ -177,10 +238,10 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 			return nil
 		},
 		ReplaceFunc: func(objs []runtime.Object) error {
-			groups := make([]*v1beta1.AppliedToGroup, len(objs))
+			groups := make([]*v1beta2.AppliedToGroup, len(objs))
 			var ok bool
 			for i := range objs {
-				groups[i], ok = objs[i].(*v1beta1.AppliedToGroup)
+				groups[i], ok = objs[i].(*v1beta2.AppliedToGroup)
 				if !ok {
 					return fmt.Errorf("cannot convert to *v1beta1.AppliedToGroup: %v", objs[i])
 				}
@@ -188,6 +249,8 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 			c.ruleCache.ReplaceAppliedToGroups(groups)
 			return nil
 		},
+		fullSyncWaitGroup: &c.fullSyncGroup,
+		fullSynced:        false,
 	}
 
 	c.addressGroupWatcher = &watcher{
@@ -197,10 +260,10 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 			if err != nil {
 				return nil, err
 			}
-			return antreaClient.NetworkingV1beta1().AddressGroups().Watch(context.TODO(), options)
+			return antreaClient.ControlplaneV1beta2().AddressGroups().Watch(context.TODO(), options)
 		},
 		AddFunc: func(obj runtime.Object) error {
-			group, ok := obj.(*v1beta1.AddressGroup)
+			group, ok := obj.(*v1beta2.AddressGroup)
 			if !ok {
 				return fmt.Errorf("cannot convert to *v1beta1.AddressGroup: %v", obj)
 			}
@@ -208,7 +271,7 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 			return nil
 		},
 		UpdateFunc: func(obj runtime.Object) error {
-			group, ok := obj.(*v1beta1.AddressGroupPatch)
+			group, ok := obj.(*v1beta2.AddressGroupPatch)
 			if !ok {
 				return fmt.Errorf("cannot convert to *v1beta1.AddressGroup: %v", obj)
 			}
@@ -216,7 +279,7 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 			return nil
 		},
 		DeleteFunc: func(obj runtime.Object) error {
-			group, ok := obj.(*v1beta1.AddressGroup)
+			group, ok := obj.(*v1beta2.AddressGroup)
 			if !ok {
 				return fmt.Errorf("cannot convert to *v1beta1.AddressGroup: %v", obj)
 			}
@@ -224,10 +287,10 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 			return nil
 		},
 		ReplaceFunc: func(objs []runtime.Object) error {
-			groups := make([]*v1beta1.AddressGroup, len(objs))
+			groups := make([]*v1beta2.AddressGroup, len(objs))
 			var ok bool
 			for i := range objs {
-				groups[i], ok = objs[i].(*v1beta1.AddressGroup)
+				groups[i], ok = objs[i].(*v1beta2.AddressGroup)
 				if !ok {
 					return fmt.Errorf("cannot convert to *v1beta1.AddressGroup: %v", objs[i])
 				}
@@ -235,8 +298,10 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 			c.ruleCache.ReplaceAddressGroups(groups)
 			return nil
 		},
+		fullSyncWaitGroup: &c.fullSyncGroup,
+		fullSynced:        false,
 	}
-	return c
+	return c, nil
 }
 
 func (c *Controller) GetNetworkPolicyNum() int {
@@ -252,30 +317,35 @@ func (c *Controller) GetAppliedToGroupNum() int {
 }
 
 // GetNetworkPolicies returns the requested NetworkPolicies.
-// If namespace is provided, only NetworkPolicies in the Namespace are returned.
-// If namespace is not provided, NetworkPolicies in all the Namespace are
-// returned.
-func (c *Controller) GetNetworkPolicies(namespace string) []v1beta1.NetworkPolicy {
-	return c.ruleCache.getNetworkPolicies(namespace)
+// This func will return all NetworkPolicies that can match all provided attributes in NetworkPolicyQueryFilter.
+// These not provided attributes in NetworkPolicyQueryFilter means match all.
+func (c *Controller) GetNetworkPolicies(npFilter *querier.NetworkPolicyQueryFilter) []v1beta2.NetworkPolicy {
+	return c.ruleCache.getNetworkPolicies(npFilter)
 }
 
-// GetAppliedToNetworkPolicies returns the NetworkPolicies applied to the Pod.
-func (c *Controller) GetAppliedNetworkPolicies(pod, namespace string) []v1beta1.NetworkPolicy {
-	return c.ruleCache.getAppliedNetworkPolicies(pod, namespace)
+// GetAppliedToNetworkPolicies returns the NetworkPolicies applied to the Pod and match the filter.
+func (c *Controller) GetAppliedNetworkPolicies(pod, namespace string, npFilter *querier.NetworkPolicyQueryFilter) []v1beta2.NetworkPolicy {
+	return c.ruleCache.getAppliedNetworkPolicies(pod, namespace, npFilter)
 }
 
-// GetNetworkPolicy looks up and returns the cached NetworkPolicy.
-// nil is returned if the specified NetworkPolicy is not found.
-func (c *Controller) GetNetworkPolicy(npName, npNamespace string) *v1beta1.NetworkPolicy {
-	return c.ruleCache.getNetworkPolicy(npName, npNamespace)
-}
-
-func (c *Controller) GetAddressGroups() []v1beta1.AddressGroup {
+func (c *Controller) GetAddressGroups() []v1beta2.AddressGroup {
 	return c.ruleCache.GetAddressGroups()
 }
 
-func (c *Controller) GetAppliedToGroups() []v1beta1.AppliedToGroup {
+func (c *Controller) GetAppliedToGroups() []v1beta2.AppliedToGroup {
 	return c.ruleCache.GetAppliedToGroups()
+}
+
+func (c *Controller) GetNetworkPolicyByRuleFlowID(ruleFlowID uint32) *v1beta2.NetworkPolicyReference {
+	rule, exists, err := c.reconciler.GetRuleByFlowID(ruleFlowID)
+	if err != nil {
+		klog.Errorf("Error when getting network policy by rule flow ID: %v", err)
+		return nil
+	}
+	if !exists {
+		return nil
+	}
+	return rule.PolicyRef
 }
 
 func (c *Controller) GetControllerConnectionStatus() bool {
@@ -286,7 +356,23 @@ func (c *Controller) GetControllerConnectionStatus() bool {
 // Run begins watching and processing Antrea AddressGroups, AppliedToGroups
 // and NetworkPolicies, and spawns workers that reconciles NetworkPolicy rules.
 // Run will not return until stopCh is closed.
-func (c *Controller) Run(stopCh <-chan struct{}) error {
+func (c *Controller) Run(stopCh <-chan struct{}) {
+	attempts := 0
+	if err := wait.PollImmediateUntil(200*time.Millisecond, func() (bool, error) {
+		if attempts%10 == 0 {
+			klog.Info("Waiting for Antrea client to be ready")
+		}
+		if _, err := c.antreaClientProvider.GetAntreaClient(); err != nil {
+			attempts++
+			return false, nil
+		}
+		return true, nil
+	}, stopCh); err != nil {
+		klog.Info("Stopped waiting for Antrea client")
+		return
+	}
+	klog.Info("Antrea client is ready")
+
 	// Use NonSlidingUntil so that normal reconnection (disconnected after
 	// running a while) can reconnect immediately while abnormal reconnection
 	// won't be too aggressive.
@@ -294,12 +380,26 @@ func (c *Controller) Run(stopCh <-chan struct{}) error {
 	go wait.NonSlidingUntil(c.addressGroupWatcher.watch, 5*time.Second, stopCh)
 	go wait.NonSlidingUntil(c.networkPolicyWatcher.watch, 5*time.Second, stopCh)
 
+	klog.Infof("Waiting for all watchers to complete full sync")
+	c.fullSyncGroup.Wait()
+	klog.Infof("All watchers have completed full sync, installing flows for init events")
+	// Batch install all rules in queue after fullSync is finished.
+	c.processAllItemsInQueue()
+
+	klog.Infof("Starting NetworkPolicy workers now")
+	defer c.queue.ShutDown()
 	for i := 0; i < defaultWorkers; i++ {
 		go wait.Until(c.worker, time.Second, stopCh)
 	}
 
+	klog.Infof("Starting IDAllocator worker to maintain the async rule cache")
+	go c.reconciler.RunIDAllocatorWorker(stopCh)
+
+	if c.antreaPolicyEnabled {
+		go c.statusManager.Run(stopCh)
+	}
+
 	<-stopCh
-	return nil
 }
 
 func (c *Controller) enqueueRule(ruleID string) {
@@ -328,6 +428,26 @@ func (c *Controller) processNextWorkItem() bool {
 	return true
 }
 
+// processAllItemsInQueue pops all rule keys queued at the moment and calls syncRules to
+// reconcile those rules in batch.
+func (c *Controller) processAllItemsInQueue() {
+	numRules := c.queue.Len()
+	batchSyncRuleKeys := make([]string, numRules)
+	for i := 0; i < numRules; i++ {
+		ruleKey, _ := c.queue.Get()
+		batchSyncRuleKeys[i] = ruleKey.(string)
+		// set key to done to prevent missing watched updates between here and fullSync finish.
+		c.queue.Done(ruleKey)
+	}
+	// Reconcile all rule keys at once.
+	if err := c.syncRules(batchSyncRuleKeys); err != nil {
+		klog.Errorf("Error occurred when reconciling all rules for init events: %v", err)
+		for _, k := range batchSyncRuleKeys {
+			c.queue.AddRateLimited(k)
+		}
+	}
+}
+
 func (c *Controller) syncRule(key string) error {
 	startTime := time.Now()
 	defer func() {
@@ -340,6 +460,11 @@ func (c *Controller) syncRule(key string) error {
 		if err := c.reconciler.Forget(key); err != nil {
 			return err
 		}
+		if c.antreaPolicyEnabled {
+			// We don't know whether this is a rule owned by Antrea Policy, but
+			// harmless to delete it.
+			c.statusManager.DeleteRuleRealization(key)
+		}
 		return nil
 	}
 	// If the rule is not complete, we can simply skip it as it will be marked as dirty
@@ -350,6 +475,40 @@ func (c *Controller) syncRule(key string) error {
 	}
 	if err := c.reconciler.Reconcile(rule); err != nil {
 		return err
+	}
+	if c.antreaPolicyEnabled && rule.SourceRef.Type != v1beta2.K8sNetworkPolicy {
+		c.statusManager.SetRuleRealization(key, rule.PolicyUID)
+	}
+	return nil
+}
+
+// syncRules calls the reconciler to sync all the rules after watchers complete full sync.
+// After flows for those init events are installed, subsequent rules will be handled asynchronously
+// by the syncRule() function.
+func (c *Controller) syncRules(keys []string) error {
+	startTime := time.Now()
+	defer func() {
+		klog.V(4).Infof("Finished syncing all rules before bookmark event (%v)", time.Since(startTime))
+	}()
+
+	var allRules []*CompletedRule
+	for _, key := range keys {
+		rule, exists, completed := c.ruleCache.GetCompletedRule(key)
+		if !exists || !completed {
+			klog.Errorf("Rule %s is not complete or does not exist in cache", key)
+		} else {
+			allRules = append(allRules, rule)
+		}
+	}
+	if err := c.reconciler.BatchReconcile(allRules); err != nil {
+		return err
+	}
+	if c.antreaPolicyEnabled {
+		for _, rule := range allRules {
+			if rule.SourceRef.Type != v1beta2.K8sNetworkPolicy {
+				c.statusManager.SetRuleRealization(rule.ID, rule.PolicyUID)
+			}
+		}
 	}
 	return nil
 }
@@ -383,6 +542,10 @@ type watcher struct {
 	connected bool
 	// lock protects connected.
 	lock sync.RWMutex
+	// group to be notified when each watcher receives bookmark event
+	fullSyncWaitGroup *sync.WaitGroup
+	// fullSynced indicates if the resource has been synced at least once since agent started.
+	fullSynced bool
 }
 
 func (w *watcher) isConnected() bool {
@@ -441,6 +604,11 @@ loop:
 	if err := w.ReplaceFunc(initObjects); err != nil {
 		klog.Errorf("Failed to handle init events: %v", err)
 		return
+	}
+	if !w.fullSynced {
+		w.fullSynced = true
+		// Notify fullSyncWaitGroup that all events before bookmark is handled
+		w.fullSyncWaitGroup.Done()
 	}
 
 	for {

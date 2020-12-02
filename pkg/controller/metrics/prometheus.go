@@ -18,8 +18,6 @@ import (
 	"k8s.io/component-base/metrics"
 	"k8s.io/component-base/metrics/legacyregistry"
 	"k8s.io/klog"
-
-	"github.com/vmware-tanzu/antrea/pkg/util/env"
 )
 
 var (
@@ -38,20 +36,20 @@ var (
 		Help:           "The total number of internal-networkpolicy processed",
 		StabilityLevel: metrics.STABLE,
 	})
-	DurationAppliedToGroupSyncing = metrics.NewSummary(&metrics.SummaryOpts{
+	DurationAppliedToGroupSyncing = metrics.NewHistogram(&metrics.HistogramOpts{
 		Name:           "antrea_controller_applied_to_group_sync_duration_milliseconds",
 		Help:           "The duration of syncing applied-to-group",
-		StabilityLevel: metrics.STABLE,
+		StabilityLevel: metrics.ALPHA,
 	})
-	DurationAddressGroupSyncing = metrics.NewSummary(&metrics.SummaryOpts{
+	DurationAddressGroupSyncing = metrics.NewHistogram(&metrics.HistogramOpts{
 		Name:           "antrea_controller_address_group_sync_duration_milliseconds",
 		Help:           "The duration of syncing address-group",
-		StabilityLevel: metrics.STABLE,
+		StabilityLevel: metrics.ALPHA,
 	})
-	DurationInternalNetworkPolicySyncing = metrics.NewSummary(&metrics.SummaryOpts{
+	DurationInternalNetworkPolicySyncing = metrics.NewHistogram(&metrics.HistogramOpts{
 		Name:           "antrea_controller_network_policy_sync_duration_milliseconds",
 		Help:           "The duration of syncing internal-networkpolicy",
-		StabilityLevel: metrics.STABLE,
+		StabilityLevel: metrics.ALPHA,
 	})
 	LengthAppliedToGroupQueue = metrics.NewGauge(&metrics.GaugeOpts{
 		Name:           "antrea_controller_length_applied_to_group_queue",
@@ -72,24 +70,8 @@ var (
 
 // Initialize Prometheus metrics collection.
 func InitializePrometheusMetrics() {
-	nodeName, err := env.GetNodeName()
-	if err != nil {
-		klog.Errorf("Failed to retrieve controller K8S node name: %v", err)
-	}
-
 	klog.Info("Initializing prometheus metrics")
-	gaugeHost := metrics.NewGauge(&metrics.GaugeOpts{
-		Name:           "antrea_controller_runtime_info",
-		Help:           "Antrea controller runtime info, defined as labels. The value of the gauge is always set to 1.",
-		ConstLabels:    metrics.Labels{"k8s_nodename": nodeName, "k8s_podname": env.GetPodName()},
-		StabilityLevel: metrics.STABLE,
-	})
-	if err = legacyregistry.Register(gaugeHost); err != nil {
-		klog.Errorf("Failed to register antrea_controller_runtime_info with Prometheus: %s", err.Error())
-	}
-	// This must be after registering the metrics.Gauge as it is lazily instantiated
-	// and will not measure anything unless the collector is first registered.
-	gaugeHost.Set(1)
+
 	if err := legacyregistry.Register(OpsAppliedToGroupProcessed); err != nil {
 		klog.Errorf("Failed to register antrea_controller_applied_to_group_processed with Prometheus: %s", err.Error())
 	}

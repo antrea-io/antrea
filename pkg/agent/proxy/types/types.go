@@ -16,6 +16,7 @@ package types
 
 import (
 	corev1 "k8s.io/api/core/v1"
+	utilnet "k8s.io/utils/net"
 
 	"github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
 	k8sproxy "github.com/vmware-tanzu/antrea/third_party/proxy"
@@ -32,17 +33,27 @@ func (si *ServiceInfo) Equal(bSvcInfo *ServiceInfo) bool {
 	return si.SessionAffinityType() == bSvcInfo.SessionAffinityType() &&
 		si.StickyMaxAgeSeconds() == bSvcInfo.StickyMaxAgeSeconds() &&
 		si.OFProtocol == bSvcInfo.OFProtocol &&
-		si.Port() == bSvcInfo.Port()
+		si.Port() == bSvcInfo.Port() &&
+		len(si.LoadBalancerIPStrings()) == len(bSvcInfo.LoadBalancerIPStrings())
 }
 
 // NewServiceInfo returns a new k8sproxy.ServicePort which abstracts a serviceInfo.
 func NewServiceInfo(port *corev1.ServicePort, service *corev1.Service, baseInfo *k8sproxy.BaseServiceInfo) k8sproxy.ServicePort {
 	info := &ServiceInfo{BaseServiceInfo: baseInfo}
-	info.OFProtocol = openflow.ProtocolTCP
-	if port.Protocol == corev1.ProtocolUDP {
-		info.OFProtocol = openflow.ProtocolUDP
-	} else if port.Protocol == corev1.ProtocolSCTP {
-		info.OFProtocol = openflow.ProtocolSCTP
+	if utilnet.IsIPv6String(service.Spec.ClusterIP) {
+		info.OFProtocol = openflow.ProtocolTCPv6
+		if port.Protocol == corev1.ProtocolUDP {
+			info.OFProtocol = openflow.ProtocolUDPv6
+		} else if port.Protocol == corev1.ProtocolSCTP {
+			info.OFProtocol = openflow.ProtocolSCTPv6
+		}
+	} else {
+		info.OFProtocol = openflow.ProtocolTCP
+		if port.Protocol == corev1.ProtocolUDP {
+			info.OFProtocol = openflow.ProtocolUDP
+		} else if port.Protocol == corev1.ProtocolSCTP {
+			info.OFProtocol = openflow.ProtocolSCTP
+		}
 	}
 	return info
 }

@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"strings"
 
 	cnitypes "github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types/current"
@@ -56,15 +57,16 @@ const (
 )
 
 const (
-	defaultOVSInterfaceType int = iota
+	defaultOVSInterfaceType int = iota //nolint suppress deadcode check for windows
 	internalOVSInterfaceType
 )
 
 type interfaceConfigurator interface {
-	configureContainerLink(podName, podNameSpace, containerID, containerNetNS, containerIFDev string, mtu int, result *current.Result) error
+	configureContainerLink(podName, podNameSpace, containerID, containerNetNS, containerIFDev string, mtu int, sriovVFDeviceID string, result *current.Result) error
 	advertiseContainerAddr(containerNetNS string, containerIfaceName string, result *current.Result) error
 	removeContainerLink(containerID, hostInterfaceName string) error
-	checkContainerInterface(containerNetns, containerID string, containerIface *current.Interface, containerIPs []*current.IPConfig, containerRoutes []*cnitypes.Route) (*vethPair, error)
+	checkContainerInterface(containerNetns, containerID string, containerIface *current.Interface, containerIPs []*current.IPConfig, containerRoutes []*cnitypes.Route, sriovVFDeviceID string) (interface{}, error)
+	validateVFRepInterface(sriovVFDeviceID string) (string, error)
 	validateContainerPeerInterface(interfaces []*current.Interface, containerVeth *vethPair) (*vethPair, error)
 	getOVSInterfaceType() int
 	getInterceptedInterfaces(sandbox, containerNS, containerIFDev string) (*current.Interface, *current.Interface, error)
@@ -86,8 +88,9 @@ func newPodConfigurator(
 	ifaceStore interfacestore.InterfaceStore,
 	gatewayMAC net.HardwareAddr,
 	ovsDatapathType string,
+	isOvsHardwareOffloadEnabled bool,
 ) (*podConfigurator, error) {
-	ifConfigurator, err := newInterfaceConfigurator(ovsDatapathType)
+	ifConfigurator, err := newInterfaceConfigurator(ovsDatapathType, isOvsHardwareOffloadEnabled)
 	if err != nil {
 		return nil, err
 	}
@@ -101,28 +104,23 @@ func newPodConfigurator(
 	}, nil
 }
 
-func findContainerIPConfig(ips []*current.IPConfig) (*current.IPConfig, error) {
-	for _, ipc := range ips {
-		if ipc.Version == "4" {
-			return ipc, nil
-		}
+func parseContainerIPs(ipcs []*current.IPConfig) ([]net.IP, error) {
+	var ips []net.IP
+	for _, ipc := range ipcs {
+		ips = append(ips, ipc.Address.IP)
 	}
-	return nil, fmt.Errorf("failed to find a valid IP address")
-}
-
-func parseContainerIP(ips []*current.IPConfig) (net.IP, error) {
-	ipc, err := findContainerIPConfig(ips)
-	if err == nil {
-		return ipc.Address.IP, nil
+	if len(ips) > 0 {
+		return ips, nil
+	} else {
+		return nil, fmt.Errorf("failed to find a valid IP address")
 	}
-	return nil, fmt.Errorf("failed to find a valid IP address")
 }
 
 func buildContainerConfig(
 	interfaceName, containerID, podName, podNamespace string,
 	containerIface *current.Interface,
 	ips []*current.IPConfig) *interfacestore.InterfaceConfig {
-	containerIP, err := parseContainerIP(ips)
+	containerIPs, err := parseContainerIPs(ips)
 	if err != nil {
 		klog.Errorf("Failed to find container %s IP", containerID)
 	}
@@ -134,7 +132,7 @@ func buildContainerConfig(
 		podName,
 		podNamespace,
 		containerMAC,
-		containerIP)
+		containerIPs)
 }
 
 // BuildOVSPortExternalIDs parses OVS port external_ids from InterfaceConfig.
@@ -143,10 +141,18 @@ func BuildOVSPortExternalIDs(containerConfig *interfacestore.InterfaceConfig) ma
 	externalIDs := make(map[string]interface{})
 	externalIDs[ovsExternalIDMAC] = containerConfig.MAC.String()
 	externalIDs[ovsExternalIDContainerID] = containerConfig.ContainerID
-	externalIDs[ovsExternalIDIP] = containerConfig.IP.String()
+	externalIDs[ovsExternalIDIP] = getContainerIPsString(containerConfig.IPs)
 	externalIDs[ovsExternalIDPodName] = containerConfig.PodName
 	externalIDs[ovsExternalIDPodNamespace] = containerConfig.PodNamespace
 	return externalIDs
+}
+
+func getContainerIPsString(ips []net.IP) string {
+	var containerIPs []string
+	for _, ip := range ips {
+		containerIPs = append(containerIPs, ip.String())
+	}
+	return strings.Join(containerIPs, ",")
 }
 
 // ParseOVSPortInterfaceConfig reads the Pod properties saved in the OVS port
@@ -164,7 +170,12 @@ func ParseOVSPortInterfaceConfig(portData *ovsconfig.OVSPortData, portConfig *in
 		klog.V(2).Infof("OVS port %s has no %s in external_ids", portData.Name, ovsExternalIDContainerID)
 		return nil
 	}
-	containerIP := net.ParseIP(portData.ExternalIDs[ovsExternalIDIP])
+	containerIPStrs := strings.Split(portData.ExternalIDs[ovsExternalIDIP], ",")
+	var containerIPs []net.IP
+	for _, ipStr := range containerIPStrs {
+		containerIPs = append(containerIPs, net.ParseIP(ipStr))
+	}
+
 	containerMAC, err := net.ParseMAC(portData.ExternalIDs[ovsExternalIDMAC])
 	if err != nil {
 		klog.Errorf("Failed to parse MAC address from OVS external config %s: %v",
@@ -179,7 +190,7 @@ func ParseOVSPortInterfaceConfig(portData *ovsconfig.OVSPortData, portConfig *in
 		podName,
 		podNamespace,
 		containerMAC,
-		containerIP)
+		containerIPs)
 	interfaceConfig.OVSPortConfig = portConfig
 	return interfaceConfig
 }
@@ -191,10 +202,11 @@ func (pc *podConfigurator) configureInterfaces(
 	containerNetNS string,
 	containerIFDev string,
 	mtu int,
+	sriovVFDeviceID string,
 	result *current.Result,
 	createOVSPort bool,
 ) error {
-	err := pc.ifConfigurator.configureContainerLink(podName, podNameSpace, containerID, containerNetNS, containerIFDev, mtu, result)
+	err := pc.ifConfigurator.configureContainerLink(podName, podNameSpace, containerID, containerNetNS, containerIFDev, mtu, sriovVFDeviceID, result)
 	if err != nil {
 		return err
 	}
@@ -294,20 +306,22 @@ func (pc *podConfigurator) removeInterfaces(containerID string) error {
 func (pc *podConfigurator) checkInterfaces(
 	containerID, containerNetNS string,
 	containerIface *current.Interface,
-	prevResult *current.Result) error {
-	if containerVeth, err := pc.ifConfigurator.checkContainerInterface(
+	prevResult *current.Result, sriovVFDeviceID string) error {
+	if link, err := pc.ifConfigurator.checkContainerInterface(
 		containerNetNS,
 		containerID,
 		containerIface,
 		prevResult.IPs,
-		prevResult.Routes); err != nil {
+		prevResult.Routes,
+		sriovVFDeviceID); err != nil {
 		return err
 	} else if err := pc.checkHostInterface(
 		containerID,
 		containerIface,
-		containerVeth,
+		link,
 		prevResult.IPs,
-		prevResult.Interfaces); err != nil {
+		prevResult.Interfaces,
+		sriovVFDeviceID); err != nil {
 		return err
 	}
 	return nil
@@ -316,18 +330,33 @@ func (pc *podConfigurator) checkInterfaces(
 func (pc *podConfigurator) checkHostInterface(
 	containerID string,
 	containerIntf *current.Interface,
-	containerVeth *vethPair,
+	containerIfKind interface{},
 	containerIPs []*current.IPConfig,
-	interfaces []*current.Interface) error {
-	hostVeth, errlink := pc.ifConfigurator.validateContainerPeerInterface(interfaces, containerVeth)
-	if errlink != nil {
-		klog.Errorf("Failed to check container %s interface on the host: %v",
-			containerID, errlink)
-		return errlink
+	interfaces []*current.Interface,
+	sriovVFDeviceID string,
+) error {
+	var ifname string
+	if sriovVFDeviceID != "" {
+		vfRep, errlink := pc.ifConfigurator.validateVFRepInterface(sriovVFDeviceID)
+		if errlink != nil {
+			klog.Errorf("Failed to check container %s interface on the host: %v",
+				containerID, errlink)
+			return errlink
+		}
+		ifname = vfRep
+	} else {
+		containerVeth := containerIfKind.(*vethPair)
+		hostVeth, errlink := pc.ifConfigurator.validateContainerPeerInterface(interfaces, containerVeth)
+		if errlink != nil {
+			klog.Errorf("Failed to check container %s interface on the host: %v",
+				containerID, errlink)
+			return errlink
+		}
+		ifname = hostVeth.name
 	}
 	if err := pc.validateOVSInterfaceConfig(containerID, containerIntf.Mac, containerIPs); err != nil {
 		klog.Errorf("Failed to check host link %s for container %s attaching status on ovs. err: %v",
-			hostVeth.name, containerID, err)
+			ifname, containerID, err)
 		return err
 	}
 	return nil
@@ -342,13 +371,14 @@ func (pc *podConfigurator) validateOVSInterfaceConfig(containerID string, contai
 
 		for _, ipc := range ips {
 			if ipc.Version == "4" {
-				if containerConfig.IP.Equal(ipc.Address.IP) {
+				ipv4Addr := util.GetIPv4Addr(containerConfig.IPs)
+				if ipv4Addr != nil && ipv4Addr.Equal(ipc.Address.IP) {
 					return nil
 				}
 			}
 		}
 		return fmt.Errorf("interface IP %s does not match container %s IP",
-			containerConfig.IP.String(), containerID)
+			getContainerIPsString(containerConfig.IPs), containerID)
 	} else {
 		return fmt.Errorf("container %s interface not found from local cache", containerID)
 	}
@@ -400,7 +430,7 @@ func (pc *podConfigurator) reconcile(pods []corev1.Pod) error {
 			klog.V(4).Infof("Syncing interface %s for Pod %s", containerConfig.InterfaceName, namespacedName)
 			if err := pc.ofClient.InstallPodFlows(
 				containerConfig.InterfaceName,
-				containerConfig.IP,
+				containerConfig.IPs,
 				containerConfig.MAC,
 				pc.gatewayMAC,
 				uint32(containerConfig.OFPort),
@@ -466,7 +496,7 @@ func (pc *podConfigurator) connectInterfaceToOVS(
 	}
 
 	klog.V(2).Infof("Setting up Openflow entries for container %s", containerID)
-	err = pc.ofClient.InstallPodFlows(ovsPortName, containerConfig.IP, containerConfig.MAC, pc.gatewayMAC, uint32(ofPort))
+	err = pc.ofClient.InstallPodFlows(ovsPortName, containerConfig.IPs, containerConfig.MAC, pc.gatewayMAC, uint32(ofPort))
 	if err != nil {
 		return nil, fmt.Errorf("failed to add Openflow entries for container %s: %v", containerID, err)
 	}
@@ -531,11 +561,13 @@ func (pc *podConfigurator) disconnectInterceptedInterface(podName, podNamespace,
 		klog.V(2).Infof("Did not find the port for container %s in local cache", containerID)
 		return nil
 	}
-	if err := pc.routeClient.UnMigrateRoutesFromGw(&net.IPNet{
-		IP:   containerConfig.IP,
-		Mask: net.CIDRMask(32, 32),
-	}, ""); err != nil {
-		return fmt.Errorf("connectInterceptedInterface failed to migrate: %w", err)
+	for _, ip := range containerConfig.IPs {
+		if err := pc.routeClient.UnMigrateRoutesFromGw(&net.IPNet{
+			IP:   ip,
+			Mask: net.CIDRMask(32, 32),
+		}, ""); err != nil {
+			return fmt.Errorf("connectInterceptedInterface failed to migrate: %w", err)
+		}
 	}
 	return pc.disconnectInterfaceFromOVS(containerConfig)
 	// TODO recover pre-connect state? repatch vethpair to original bridge etc ?? to make first CNI happy??

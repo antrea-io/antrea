@@ -26,6 +26,8 @@ type Interface interface {
 	ClusterNetworkPolicies() ClusterNetworkPolicyInformer
 	// NetworkPolicies returns a NetworkPolicyInformer.
 	NetworkPolicies() NetworkPolicyInformer
+	// Tiers returns a TierInformer.
+	Tiers() TierInformer
 }
 
 type version struct {
@@ -47,4 +49,9 @@ func (v *version) ClusterNetworkPolicies() ClusterNetworkPolicyInformer {
 // NetworkPolicies returns a NetworkPolicyInformer.
 func (v *version) NetworkPolicies() NetworkPolicyInformer {
 	return &networkPolicyInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+}
+
+// Tiers returns a TierInformer.
+func (v *version) Tiers() TierInformer {
+	return &tierInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
 }

@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 )
@@ -40,6 +41,45 @@ func skipIfNumNodesLessThan(tb testing.TB, required int) {
 	}
 }
 
+func skipIfRunCoverage(tb testing.TB, reason string) {
+	if testOptions.enableCoverage {
+		tb.Skipf("Skipping test for the '%s' when run coverage: %s", tb.Name(), reason)
+	}
+}
+
+func skipIfNotIPv4Cluster(tb testing.TB) {
+	if clusterInfo.podV4NetworkCIDR == "" {
+		tb.Skipf("Skipping test as it requires IPv4 addresses but the IPv4 network CIDR is not set")
+	}
+}
+
+func skipIfIPv6Cluster(tb testing.TB) {
+	if clusterInfo.podV6NetworkCIDR != "" {
+		tb.Skipf("Skipping test as it is not supported in IPv6 cluster")
+	}
+}
+
+func skipIfNotIPv6Cluster(tb testing.TB) {
+	if clusterInfo.podV6NetworkCIDR == "" {
+		tb.Skipf("Skipping test as it is not needed in IPv4 cluster")
+	}
+}
+
+func skipIfMissingKernelModule(tb testing.TB, nodeName string, requiredModules []string) {
+	for _, module := range requiredModules {
+		// modprobe with "--dry-run" does not require root privileges
+		cmd := fmt.Sprintf("modprobe --dry-run %s", module)
+		rc, stdout, stderr, err := RunCommandOnNode(nodeName, cmd)
+		if err != nil {
+			tb.Skipf("Skipping test as modprobe could not be run to confirm the presence of module '%s': %v", module, err)
+		}
+		if rc != 0 {
+			tb.Skipf("Skipping test as modprobe exited with an error when trying to confirm the presence of module '%s' - stdout: %s - stderr: %s", module, stdout, stderr)
+		}
+	}
+	tb.Logf("The following modules have been found on Node '%s': %v", nodeName, requiredModules)
+}
+
 func ensureAntreaRunning(tb testing.TB, data *TestData) error {
 	tb.Logf("Applying Antrea YAML")
 	if err := data.deployAntrea(); err != nil {
@@ -56,11 +96,45 @@ func ensureAntreaRunning(tb testing.TB, data *TestData) error {
 	return nil
 }
 
+func createDirectory(path string) error {
+	return os.Mkdir(path, 0700)
+}
+
+func (data *TestData) setupLogDirectoryForTest(testName string) error {
+	path := filepath.Join(testOptions.logsExportDir, testName)
+	// remove directory if it already exists. This ensures that we start with an empty
+	// directory
+	_ = os.RemoveAll(path)
+	err := createDirectory(path)
+	if err != nil {
+		return err
+	}
+	data.logsDirForTestCase = path
+	return nil
+}
+
 func setupTest(tb testing.TB) (*TestData, error) {
+	if err := testData.setupLogDirectoryForTest(tb.Name()); err != nil {
+		tb.Errorf("Error creating logs directory '%s': %v", testData.logsDirForTestCase, err)
+		return nil, err
+	}
+	tb.Logf("Creating '%s' K8s Namespace", testNamespace)
+	if err := ensureAntreaRunning(tb, testData); err != nil {
+		return nil, err
+	}
+	if err := testData.createTestNamespace(); err != nil {
+		return nil, err
+	}
+	return testData, nil
+}
+
+func setupTestWithIPFIXCollector(tb testing.TB) (*TestData, error) {
 	data := &TestData{}
+	if err := data.setupLogDirectoryForTest(tb.Name()); err != nil {
+		tb.Errorf("Error creating logs directory '%s': %v", data.logsDirForTestCase, err)
+		return nil, err
+	}
 	tb.Logf("Creating K8s clientset")
-	// TODO: it is probably not needed to re-create the clientset in each test, maybe we could
-	// just keep it in clusterInfo?
 	if err := data.createClient(); err != nil {
 		return nil, err
 	}
@@ -68,21 +142,28 @@ func setupTest(tb testing.TB) (*TestData, error) {
 	if err := data.createTestNamespace(); err != nil {
 		return nil, err
 	}
-	if err := ensureAntreaRunning(tb, data); err != nil {
-		return nil, err
+	// Create pod using ipfix collector image
+	if err := data.createPodOnNode("ipfix-collector", masterNodeName(), ipfixCollectorImage, nil, nil, nil, nil, true, nil); err != nil {
+		tb.Fatalf("Error when creating the ipfix collector Pod: %v", err)
+	}
+	ipfixCollectorIP, err := data.podWaitForIPs(defaultTimeout, "ipfix-collector", testNamespace)
+	if err != nil {
+		tb.Fatalf("Error when waiting to get ipfix collector Pod IP: %v", err)
+	}
+	tb.Logf("Applying Antrea YAML with ipfix collector address")
+	// TODO: Deploy the collector using IPv6 address after flow_exporter supports IPv6.
+	ipStr := ipfixCollectorIP.ipv4.String()
+	if err := data.deployAntreaFlowExporter(ipStr + ":" + ipfixCollectorPort + ":tcp"); err != nil {
+		return data, err
+	}
+	tb.Logf("Checking CoreDNS deployment")
+	if err := data.checkCoreDNSPods(defaultTimeout); err != nil {
+		return data, err
 	}
 	return data, nil
 }
 
-func logsDirForTest(testName string) string {
-	// a filepath-friendly timestamp format.
-	const timeFormat = "Jan02-15-04-05"
-	timeStamp := time.Now().Format(timeFormat)
-	logsDir := filepath.Join(testOptions.logsExportDir, fmt.Sprintf("%s.%s", testName, timeStamp))
-	return logsDir
-}
-
-func exportLogs(tb testing.TB, data *TestData) {
+func exportLogs(tb testing.TB, data *TestData, logsSubDir string, writeNodeLogs bool) {
 	if tb.Skipped() {
 		return
 	}
@@ -91,17 +172,15 @@ func exportLogs(tb testing.TB, data *TestData) {
 	if !tb.Failed() && !testOptions.logsExportOnSuccess {
 		return
 	}
-	logsDir := logsDirForTest(tb.Name())
-	tb.Logf("Exporting test logs to '%s'", logsDir)
-	// remove directory if it already exists. This ensures that we start with an empty
-	// directory. Given that we append a timestamp at the end of the path it is very unlikely to
-	// happen.
-	_ = os.RemoveAll(logsDir)
-	if err := os.Mkdir(logsDir, 0700); err != nil {
+	const timeFormat = "Jan02-15-04-05"
+	timeStamp := time.Now().Format(timeFormat)
+	logsDir := filepath.Join(data.logsDirForTestCase, fmt.Sprintf("%s.%s", logsSubDir, timeStamp))
+	err := createDirectory(logsDir)
+	if err != nil {
 		tb.Errorf("Error when creating logs directory '%s': %v", logsDir, err)
 		return
 	}
-
+	tb.Logf("Exporting test logs to '%s'", logsDir)
 	// for now we just retrieve the logs for the Antrea Pods, but maybe we can find a good way to
 	// retrieve the logs for the test Pods in the future (before deleting them) if it is useful
 	// for debugging.
@@ -110,18 +189,6 @@ func exportLogs(tb testing.TB, data *TestData) {
 	// file cannot be created. File must be closed by the caller.
 	getPodWriter := func(nodeName, podName, suffix string) *os.File {
 		logFile := filepath.Join(logsDir, fmt.Sprintf("%s-%s-%s", nodeName, podName, suffix))
-		f, err := os.Create(logFile)
-		if err != nil {
-			tb.Errorf("Error when creating log file '%s': '%v'", logFile, err)
-			return nil
-		}
-		return f
-	}
-
-	// getNodeWriter creates the file with name nodeName-suffix. It returns nil if the file
-	// cannot be created. File must be closed by the caller.
-	getNodeWriter := func(nodeName, suffix string) *os.File {
-		logFile := filepath.Join(logsDir, fmt.Sprintf("%s-%s", nodeName, suffix))
 		f, err := os.Create(logFile)
 		if err != nil {
 			tb.Errorf("Error when creating log file '%s': '%v'", logFile, err)
@@ -142,29 +209,33 @@ func exportLogs(tb testing.TB, data *TestData) {
 	}
 
 	// dump the logs for Antrea Pods to disk.
-	data.forAllAntreaPods(func(nodeName, podName string) error {
+	writePodLogs := func(nodeName, podName, nsName string) error {
 		w := getPodWriter(nodeName, podName, "logs")
 		if w == nil {
 			return nil
 		}
 		defer w.Close()
-		cmd := fmt.Sprintf("kubectl -n %s logs --all-containers %s", antreaNamespace, podName)
+		cmd := fmt.Sprintf("kubectl -n %s logs --all-containers %s", nsName, podName)
 		stdout := runKubectl(cmd)
 		if stdout == "" {
 			return nil
 		}
 		w.WriteString(stdout)
 		return nil
-	})
+	}
+	data.forAllMatchingPodsInNamespace("app=antrea", antreaNamespace, writePodLogs)
+
+	// dump the logs for monitoring Pods to disk.
+	data.forAllMatchingPodsInNamespace("", monitoringNamespace, writePodLogs)
 
 	// dump the output of "kubectl describe" for Antrea pods to disk.
-	data.forAllAntreaPods(func(nodeName, podName string) error {
+	data.forAllMatchingPodsInNamespace("app=antrea", antreaNamespace, func(nodeName, podName, nsName string) error {
 		w := getPodWriter(nodeName, podName, "describe")
 		if w == nil {
 			return nil
 		}
 		defer w.Close()
-		cmd := fmt.Sprintf("kubectl -n %s describe pod %s", antreaNamespace, podName)
+		cmd := fmt.Sprintf("kubectl -n %s describe pod %s", nsName, podName)
 		stdout := runKubectl(cmd)
 		if stdout == "" {
 			return nil
@@ -173,6 +244,20 @@ func exportLogs(tb testing.TB, data *TestData) {
 		return nil
 	})
 
+	if !writeNodeLogs {
+		return
+	}
+	// getNodeWriter creates the file with name nodeName-suffix. It returns nil if the file
+	// cannot be created. File must be closed by the caller.
+	getNodeWriter := func(nodeName, suffix string) *os.File {
+		logFile := filepath.Join(logsDir, fmt.Sprintf("%s-%s", nodeName, suffix))
+		f, err := os.Create(logFile)
+		if err != nil {
+			tb.Errorf("Error when creating log file '%s': '%v'", logFile, err)
+			return nil
+		}
+		return f
+	}
 	// export kubelet logs with journalctl for each Node. If the Nodes do not use journalctl we
 	// print a log message. If kubelet is not run with systemd, the log file will be empty.
 	if err := forAllNodes(func(nodeName string) error {
@@ -198,7 +283,10 @@ func exportLogs(tb testing.TB, data *TestData) {
 }
 
 func teardownTest(tb testing.TB, data *TestData) {
-	exportLogs(tb, data)
+	exportLogs(tb, data, "beforeTeardown", true)
+	if empty, _ := IsDirEmpty(data.logsDirForTestCase); empty {
+		_ = os.Remove(data.logsDirForTestCase)
+	}
 	tb.Logf("Deleting '%s' K8s Namespace", testNamespace)
 	if err := data.deleteTestNamespace(defaultTimeout); err != nil {
 		tb.Logf("Error when tearing down test: %v", err)
@@ -220,32 +308,38 @@ func deletePodWrapper(tb testing.TB, data *TestData, name string) {
 // Node. createTestBusyboxPods returns the cleanupFn function which can be used to delete the
 // created Pods. Pods are created in parallel to reduce the time required to run the tests.
 func createTestBusyboxPods(tb testing.TB, data *TestData, num int, nodeName string) (
-	podNames []string, podIPs []string, cleanupFn func(),
+	podNames []string, podIPs []*PodIPs, cleanupFn func(),
 ) {
 	cleanupFn = func() {
+		var wg sync.WaitGroup
 		for _, podName := range podNames {
-			deletePodWrapper(tb, data, podName)
+			wg.Add(1)
+			go func(name string) {
+				deletePodWrapper(tb, data, name)
+				wg.Done()
+			}(podName)
 		}
+		wg.Wait()
 	}
 
 	type podData struct {
 		podName string
-		podIP   string
+		podIP   *PodIPs
 		err     error
 	}
 
-	createPodAndGetIP := func() (string, string, error) {
+	createPodAndGetIP := func() (string, *PodIPs, error) {
 		podName := randName("test-pod-")
 
 		tb.Logf("Creating a busybox test Pod '%s' and waiting for IP", podName)
 		if err := data.createBusyboxPodOnNode(podName, nodeName); err != nil {
 			tb.Errorf("Error when creating busybox test Pod '%s': %v", podName, err)
-			return "", "", err
+			return "", nil, err
 		}
 
-		if podIP, err := data.podWaitForIP(defaultTimeout, podName, testNamespace); err != nil {
+		if podIP, err := data.podWaitForIPs(defaultTimeout, podName, testNamespace); err != nil {
 			tb.Errorf("Error when waiting for IP for Pod '%s': %v", podName, err)
-			return podName, "", err
+			return podName, nil, err
 		} else {
 			return podName, podIP, nil
 		}

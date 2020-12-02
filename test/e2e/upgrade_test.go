@@ -20,8 +20,9 @@ import (
 )
 
 var (
-	upgradeToYML = flag.String("upgrade.toYML", "", "Path to new Antrea manifest (on master Node)")
-	pruneAll     = flag.Bool("upgrade.pruneAll", false, "Prune all Antrea resources when upgrading")
+	upgradeToYML   = flag.String("upgrade.toYML", "", "Path to new Antrea manifest (on master Node)")
+	pruneAll       = flag.Bool("upgrade.pruneAll", false, "Prune all Antrea resources when upgrading")
+	controllerOnly = flag.Bool("upgrade.controllerOnly", false, "Update antrea-controller only when upgrading")
 )
 
 func skipIfNotUpgradeTest(t *testing.T) {
@@ -34,6 +35,7 @@ func skipIfNotUpgradeTest(t *testing.T) {
 // upgrading from one version of Antrea to another. At the moment it checks
 // that:
 //  * connectivity (intra and inter Node) is not broken
+//  * NetworkPolicy can take effect
 //  * namespaces can be deleted
 //  * Pod deletion leads to correct resource cleanup
 // To run the test, provide the -upgrade.toYML flag.
@@ -68,6 +70,7 @@ func TestUpgrade(t *testing.T) {
 
 	data.testPodConnectivitySameNode(t)
 	data.testPodConnectivityDifferentNodes(t)
+	data.testDifferentNamedPorts(t)
 
 	if t.Failed() {
 		t.FailNow()
@@ -79,19 +82,22 @@ func TestUpgrade(t *testing.T) {
 		extraOptions = "--prune -l app=antrea --prune-whitelist=apiregistration.k8s.io/v1/APIService"
 	}
 	data.deployAntreaCommon(*upgradeToYML, extraOptions)
-	t.Logf("Waiting for all Antrea DaemonSet Pods")
-	if err := data.waitForAntreaDaemonSetPods(defaultTimeout); err != nil {
-		t.Fatalf("Error when restarting Antrea: %v", err)
-	}
-	// Restart CoreDNS Pods to avoid issues caused by disrupting the datapath (when restarting
-	// Antrea Agent Pods).
-	t.Logf("Restarting CoreDNS Pods")
-	if err := data.restartCoreDNSPods(defaultTimeout); err != nil {
-		t.Fatalf("Error when restarting CoreDNS Pods: %v", err)
+	if *controllerOnly == false {
+		t.Logf("Restarting all Antrea DaemonSet Pods")
+		if err := data.restartAntreaAgentPods(defaultTimeout); err != nil {
+			t.Fatalf("Error when restarting Antrea: %v", err)
+		}
+		// Restart CoreDNS Pods to avoid issues caused by disrupting the datapath (when restarting
+		// Antrea Agent Pods).
+		t.Logf("Restarting CoreDNS Pods")
+		if err := data.restartCoreDNSPods(defaultTimeout); err != nil {
+			t.Fatalf("Error when restarting CoreDNS Pods: %v", err)
+		}
 	}
 
 	data.testPodConnectivitySameNode(t)
 	data.testPodConnectivityDifferentNodes(t)
+	data.testDifferentNamedPorts(t)
 
 	t.Logf("Deleting namespace '%s'", namespace)
 	if err := data.deleteNamespace(namespace, defaultTimeout); err != nil {

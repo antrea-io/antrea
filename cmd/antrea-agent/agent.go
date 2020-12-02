@@ -19,6 +19,7 @@ import (
 	"net"
 	"time"
 
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/informers"
 	"k8s.io/klog"
 
@@ -30,21 +31,27 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/controller/networkpolicy"
 	"github.com/vmware-tanzu/antrea/pkg/agent/controller/noderoute"
 	"github.com/vmware-tanzu/antrea/pkg/agent/controller/traceflow"
+	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter/connections"
+	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter/exporter"
+	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter/flowrecords"
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	"github.com/vmware-tanzu/antrea/pkg/agent/metrics"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/agent/proxy"
 	"github.com/vmware-tanzu/antrea/pkg/agent/querier"
 	"github.com/vmware-tanzu/antrea/pkg/agent/route"
-	"github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
+	"github.com/vmware-tanzu/antrea/pkg/agent/stats"
+	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
 	crdinformers "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions"
 	"github.com/vmware-tanzu/antrea/pkg/features"
 	"github.com/vmware-tanzu/antrea/pkg/k8s"
+	"github.com/vmware-tanzu/antrea/pkg/log"
 	"github.com/vmware-tanzu/antrea/pkg/monitor"
 	ofconfig "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
 	"github.com/vmware-tanzu/antrea/pkg/signals"
 	"github.com/vmware-tanzu/antrea/pkg/version"
+	k8sproxy "github.com/vmware-tanzu/antrea/third_party/proxy"
 )
 
 // informerDefaultResync is the default resync period if a handler doesn't specify one.
@@ -66,9 +73,6 @@ func run(o *Options) error {
 
 	// Create Antrea Clientset for the given config.
 	antreaClientProvider := agent.NewAntreaClientProvider(o.config.AntreaClientConnection, k8sClient)
-	if err != nil {
-		return fmt.Errorf("error creating Antrea client: %v", err)
-	}
 
 	// Register Antrea Agent metrics if EnablePrometheusMetrics is set
 	if o.config.EnablePrometheusMetrics {
@@ -86,16 +90,24 @@ func run(o *Options) error {
 
 	ovsBridgeClient := ovsconfig.NewOVSBridge(o.config.OVSBridge, o.config.OVSDatapathType, ovsdbConnection)
 	ovsBridgeMgmtAddr := ofconfig.GetMgmtAddress(o.config.OVSRunDir, o.config.OVSBridge)
-	ofClient := openflow.NewClient(o.config.OVSBridge, ovsBridgeMgmtAddr, features.DefaultFeatureGate.Enabled(features.AntreaProxy))
+	ofClient := openflow.NewClient(o.config.OVSBridge, ovsBridgeMgmtAddr,
+		features.DefaultFeatureGate.Enabled(features.AntreaProxy),
+		features.DefaultFeatureGate.Enabled(features.AntreaPolicy))
 
 	_, serviceCIDRNet, _ := net.ParseCIDR(o.config.ServiceCIDR)
+	var serviceCIDRNetv6 *net.IPNet
+	// Todo: use FeatureGate to check if IPv6 is enabled and then read configuration item "ServiceCIDRv6".
+	if o.config.ServiceCIDRv6 != "" {
+		_, serviceCIDRNetv6, _ = net.ParseCIDR(o.config.ServiceCIDRv6)
+	}
+
 	_, encapMode := config.GetTrafficEncapModeFromStr(o.config.TrafficEncapMode)
 	networkConfig := &config.NetworkConfig{
 		TunnelType:        ovsconfig.TunnelType(o.config.TunnelType),
 		TrafficEncapMode:  encapMode,
 		EnableIPSecTunnel: o.config.EnableIPSecTunnel}
 
-	routeClient, err := route.NewClient(serviceCIDRNet, encapMode)
+	routeClient, err := route.NewClient(serviceCIDRNet, networkConfig, o.config.NoSNAT)
 	if err != nil {
 		return fmt.Errorf("error creating route client: %v", err)
 	}
@@ -103,6 +115,9 @@ func run(o *Options) error {
 	// Create an ifaceStore that caches network interfaces managed by this node.
 	ifaceStore := interfacestore.NewInterfaceStore()
 
+	// networkReadyCh is used to notify that the Node's network is ready.
+	// Functions that rely on the Node's network should wait for the channel to close.
+	networkReadyCh := make(chan struct{})
 	// Initialize agent and node network.
 	agentInitializer := agent.NewInitializer(
 		k8sClient,
@@ -114,7 +129,9 @@ func run(o *Options) error {
 		o.config.HostGateway,
 		o.config.DefaultMTU,
 		serviceCIDRNet,
+		serviceCIDRNetv6,
 		networkConfig,
+		networkReadyCh,
 		features.DefaultFeatureGate.Enabled(features.AntreaProxy))
 	err = agentInitializer.Initialize()
 	if err != nil {
@@ -132,44 +149,76 @@ func run(o *Options) error {
 		networkConfig,
 		nodeConfig)
 
-	var traceflowController *traceflow.Controller
-	if features.DefaultFeatureGate.Enabled(features.Traceflow) {
-		traceflowController = traceflow.NewTraceflowController(
-			k8sClient,
-			crdClient,
-			traceflowInformer,
-			ofClient,
-			ovsBridgeClient,
-			ifaceStore,
-			networkConfig,
-			nodeConfig)
-	}
-
 	// podUpdates is a channel for receiving Pod updates from CNIServer and
 	// notifying NetworkPolicyController to reconcile rules related to the
 	// updated Pods.
-	podUpdates := make(chan v1beta1.PodReference, 100)
-	networkPolicyController := networkpolicy.NewNetworkPolicyController(antreaClientProvider, ofClient, ifaceStore, nodeConfig.Name, podUpdates)
+	podUpdates := make(chan v1beta2.PodReference, 100)
+	// We set flow poll interval as the time interval for rule deletion in the async
+	// rule cache, which is implemented as part of the idAllocator. This is to preserve
+	// the rule info for populating NetworkPolicy fields in the Flow Exporter even
+	// after rule deletion.
+	asyncRuleDeleteInterval := o.pollInterval
+	networkPolicyController, err := networkpolicy.NewNetworkPolicyController(
+		antreaClientProvider,
+		ofClient,
+		ifaceStore,
+		nodeConfig.Name,
+		podUpdates,
+		features.DefaultFeatureGate.Enabled(features.AntreaPolicy),
+		asyncRuleDeleteInterval)
+	if err != nil {
+		return fmt.Errorf("error creating new NetworkPolicy controller: %v", err)
+	}
+
+	// statsCollector collects stats and reports to the antrea-controller periodically. For now it's only used for
+	// NetworkPolicy stats.
+	var statsCollector *stats.Collector
+	if features.DefaultFeatureGate.Enabled(features.NetworkPolicyStats) {
+		statsCollector = stats.NewCollector(antreaClientProvider, ofClient, networkPolicyController)
+	}
+
 	isChaining := false
 	if networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {
 		isChaining = true
 	}
-	var proxier *proxy.Proxier
+	var proxier k8sproxy.Provider
 	if features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
-		proxier = proxy.New(nodeConfig.Name, informerFactory, ofClient)
+		if nodeConfig.PodIPv4CIDR != nil && nodeConfig.PodIPv6CIDR != nil {
+			proxier = proxy.NewDualStackProxier(nodeConfig.Name, informerFactory, ofClient)
+		} else if nodeConfig.PodIPv4CIDR != nil {
+			proxier = proxy.NewProxier(nodeConfig.Name, informerFactory, ofClient, false)
+		} else {
+			proxier = proxy.NewProxier(nodeConfig.Name, informerFactory, ofClient, true)
+		}
 	}
 	cniServer := cniserver.New(
 		o.config.CNISocket,
 		o.config.HostProcPathPrefix,
-		o.config.DefaultMTU,
 		nodeConfig,
 		k8sClient,
 		podUpdates,
 		isChaining,
-		routeClient)
+		routeClient,
+		networkReadyCh)
 	err = cniServer.Initialize(ovsBridgeClient, ofClient, ifaceStore, o.config.OVSDatapathType)
 	if err != nil {
 		return fmt.Errorf("error initializing CNI server: %v", err)
+	}
+
+	var traceflowController *traceflow.Controller
+	if features.DefaultFeatureGate.Enabled(features.Traceflow) {
+		traceflowController = traceflow.NewTraceflowController(
+			k8sClient,
+			informerFactory,
+			crdClient,
+			traceflowInformer,
+			ofClient,
+			networkPolicyController,
+			ovsBridgeClient,
+			ifaceStore,
+			networkConfig,
+			nodeConfig,
+			serviceCIDRNet)
 	}
 
 	// TODO: we should call this after installing flows for initial node routes
@@ -186,6 +235,8 @@ func run(o *Options) error {
 	// exits, we will force exit.
 	stopCh := signals.RegisterSignalHandlers()
 
+	log.StartLogFileNumberMonitor(stopCh)
+
 	go cniServer.Run(stopCh)
 
 	informerFactory.Start(stopCh)
@@ -196,6 +247,10 @@ func run(o *Options) error {
 	go nodeRouteController.Run(stopCh)
 
 	go networkPolicyController.Run(stopCh)
+
+	if features.DefaultFeatureGate.Enabled(features.NetworkPolicyStats) {
+		go statsCollector.Run(stopCh)
+	}
 
 	if features.DefaultFeatureGate.Enabled(features.Traceflow) {
 		go traceflowController.Run(stopCh)
@@ -222,14 +277,40 @@ func run(o *Options) error {
 		agentQuerier,
 		networkPolicyController,
 		o.config.APIPort,
-		o.config.EnablePrometheusMetrics)
+		o.config.EnablePrometheusMetrics,
+		o.config.ClientConnection.Kubeconfig)
 	if err != nil {
 		return fmt.Errorf("error when creating agent API server: %v", err)
 	}
 	go apiServer.Run(stopCh)
 
+	// Start PacketIn for features and specify their own reason.
+	var packetInReasons []uint8
 	if features.DefaultFeatureGate.Enabled(features.Traceflow) {
-		go ofClient.StartPacketInHandler(stopCh)
+		packetInReasons = append(packetInReasons, uint8(openflow.PacketInReasonTF))
+	}
+	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
+		packetInReasons = append(packetInReasons, uint8(openflow.PacketInReasonNP))
+	}
+	if len(packetInReasons) > 0 {
+		go ofClient.StartPacketInHandler(packetInReasons, stopCh)
+	}
+
+	// Initialize flow exporter to start go routines to poll conntrack flows and export IPFIX flow records
+	if features.DefaultFeatureGate.Enabled(features.FlowExporter) {
+		connStore := connections.NewConnectionStore(
+			connections.InitializeConnTrackDumper(nodeConfig, serviceCIDRNet, o.config.OVSDatapathType, features.DefaultFeatureGate.Enabled(features.AntreaProxy)),
+			ifaceStore,
+			proxier,
+			networkPolicyController,
+			o.pollInterval)
+		pollDone := make(chan struct{})
+		go connStore.Run(stopCh, pollDone)
+
+		flowExporter := exporter.NewFlowExporter(
+			flowrecords.NewFlowRecords(connStore),
+			o.config.FlowExportFrequency)
+		go wait.Until(func() { flowExporter.Export(o.flowCollector, stopCh, pollDone) }, 0, stopCh)
 	}
 
 	<-stopCh

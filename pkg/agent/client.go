@@ -69,9 +69,8 @@ func NewAntreaClientProvider(config config.ClientConnectionConfiguration, kubeCl
 	return antreaClientProvider
 }
 
-// RunOnce runs the task a single time synchronously, ensuring client is initialized.
+// RunOnce runs the task a single time synchronously, ensuring client is initialized if kubeconfig is specified.
 func (p *antreaClientProvider) RunOnce() error {
-	p.caContentProvider.RunOnce()
 	return p.updateAntreaClient()
 }
 
@@ -93,18 +92,22 @@ func (p *antreaClientProvider) Enqueue() {
 func (p *antreaClientProvider) GetAntreaClient() (versioned.Interface, error) {
 	p.mutex.RLock()
 	defer p.mutex.RUnlock()
+	if p.client == nil {
+		return nil, fmt.Errorf("Antrea client is not ready")
+	}
 	return p.client, nil
 }
 
 func (p *antreaClientProvider) updateAntreaClient() error {
-	caBundle := p.caContentProvider.CurrentCABundleContent()
-	if caBundle == nil {
-		klog.Warningf("Didn't get CA certificate from ConfigMap. May not be able to verify server cert")
-	}
 	var kubeConfig *rest.Config
 	var err error
 	if len(p.config.Kubeconfig) == 0 {
 		klog.Info("No antrea kubeconfig file was specified. Falling back to in-cluster config")
+		caBundle := p.caContentProvider.CurrentCABundleContent()
+		if caBundle == nil {
+			klog.Info("Didn't get CA certificate, skip updating Antrea Client")
+			return nil
+		}
 		kubeConfig, err = inClusterConfig(caBundle)
 	} else {
 		kubeConfig, err = clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
@@ -137,6 +140,7 @@ func (p *antreaClientProvider) updateAntreaClient() error {
 // running inside a pod running on kubernetes. It will return error
 // if called from a process not running in a kubernetes environment.
 func inClusterConfig(caBundle []byte) (*rest.Config, error) {
+	// #nosec G101: false positive triggered by variable name which includes "token"
 	const tokenFile = "/var/run/secrets/kubernetes.io/serviceaccount/token"
 	host, port := os.Getenv("ANTREA_SERVICE_HOST"), os.Getenv("ANTREA_SERVICE_PORT")
 	if len(host) == 0 || len(port) == 0 {

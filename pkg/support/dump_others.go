@@ -22,8 +22,6 @@ import (
 	"path"
 	"path/filepath"
 
-	"github.com/spf13/afero"
-
 	"github.com/vmware-tanzu/antrea/pkg/agent/util/iptables"
 )
 
@@ -54,7 +52,8 @@ func (d *agentDumper) DumpHostNetworkInfo(basedir string) error {
 }
 
 func (d *agentDumper) dumpIPTables(basedir string) error {
-	c, err := iptables.New()
+	nodeConfig := d.aq.GetNodeConfig()
+	c, err := iptables.New(nodeConfig.PodIPv4CIDR != nil, nodeConfig.PodIPv6CIDR != nil)
 	if err != nil {
 		return err
 	}
@@ -62,11 +61,7 @@ func (d *agentDumper) dumpIPTables(basedir string) error {
 	if err != nil {
 		return err
 	}
-	err = afero.WriteFile(d.fs, filepath.Join(basedir, "iptables"), data, 0644)
-	if err != nil {
-		return fmt.Errorf("error when writing iptables dumps: %w", err)
-	}
-	return nil
+	return writeFile(d.fs, filepath.Join(basedir, "iptables"), "iptables", data)
 }
 
 func (d *agentDumper) dumpIPToolInfo(basedir string) error {
@@ -75,11 +70,7 @@ func (d *agentDumper) dumpIPToolInfo(basedir string) error {
 		if err != nil {
 			return fmt.Errorf("error when dumping %s: %w", name, err)
 		}
-		err = afero.WriteFile(d.fs, filepath.Join(basedir, name), output, 0644)
-		if err != nil {
-			return fmt.Errorf("error when writing %s: %w", name, err)
-		}
-		return nil
+		return writeFile(d.fs, filepath.Join(basedir, name), name, output)
 	}
 	for _, item := range []string{"route", "link", "address"} {
 		if err := dump(item); err != nil {

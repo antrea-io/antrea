@@ -66,13 +66,13 @@ spec:
       cloud:
         controllerImage: gcr.io/cloud-provider-vsphere/cpi/release/manager:v1.0.0
       storage:
-        attacherImage: quay.io/k8scsi/csi-attacher:v1.1.1
-        controllerImage: gcr.io/cloud-provider-vsphere/csi/release/driver:v1.0.2
+        attacherImage: quay.io/k8scsi/csi-attacher:v2.0.0
+        controllerImage: gcr.io/cloud-provider-vsphere/csi/release/driver:v2.0.0
         livenessProbeImage: quay.io/k8scsi/livenessprobe:v1.1.0
         metadataSyncerImage: gcr.io/cloud-provider-vsphere/csi/release/syncer:v2.0.0
-        nodeDriverImage: gcr.io/cloud-provider-vsphere/csi/release/driver:v1.0.2
-        provisionerImage: quay.io/k8scsi/csi-provisioner:v1.2.1
-        registrarImage: quay.io/k8scsi/csi-node-driver-registrar:v1.1.0
+        nodeDriverImage: gcr.io/cloud-provider-vsphere/csi/release/driver:v2.0.0
+        provisionerImage: quay.io/k8scsi/csi-provisioner:v1.4.0
+        registrarImage: quay.io/k8scsi/csi-node-driver-registrar:v1.2.0
     virtualCenter:
       VCENTERNAME:
         datacenters: DATACENTERNAME
@@ -109,7 +109,7 @@ spec:
       numCPUs: 2
       resourcePool: RESOURCEPOOLPATH
       server: VCENTERNAME
-      template: ubuntu-1804-kube-v1.17.3
+      template: OVATEMPLATENAME
 ---
 apiVersion: controlplane.cluster.x-k8s.io/v1alpha3
 kind: KubeadmControlPlane
@@ -147,14 +147,13 @@ spec:
     - echo "127.0.0.1   localhost" >>/etc/hosts
     - echo "127.0.0.1   {{ ds.meta_data.hostname }}" >>/etc/hosts
     - echo "{{ ds.meta_data.hostname }}" >/etc/hostname
-    useExperimentalRetryJoin: true
     users:
     - name: capv
       sshAuthorizedKeys:
       - SSHAUTHORIZEDKEYS
       sudo: ALL=(ALL) NOPASSWD:ALL
   replicas: 1
-  version: v1.17.3
+  version: K8SVERSION
 ---
 apiVersion: bootstrap.cluster.x-k8s.io/v1alpha3
 kind: KubeadmConfigTemplate
@@ -194,8 +193,7 @@ spec:
   clusterName: CLUSTERNAME
   replicas: 2
   selector:
-    matchLabels:
-      cluster.x-k8s.io/cluster-name: CLUSTERNAME
+    matchLabels: {}
   template:
     metadata:
       labels:
@@ -211,5 +209,4 @@ spec:
         apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
         kind: VSphereMachineTemplate
         name: CLUSTERNAME
-      version: v1.17.3
-
+      version: K8SVERSION

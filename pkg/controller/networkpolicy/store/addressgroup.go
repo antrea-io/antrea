@@ -22,7 +22,7 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/tools/cache"
 
-	"github.com/vmware-tanzu/antrea/pkg/apis/networking"
+	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage/ram"
 	"github.com/vmware-tanzu/antrea/pkg/controller/types"
@@ -35,12 +35,12 @@ type addressGroupEvent struct {
 	// The previous version of the stored AddressGroup.
 	PrevGroup *types.AddressGroup
 	// The current version of the transferred AddressGroup, which will be used in Added events.
-	CurrObject *networking.AddressGroup
+	CurrObject *controlplane.AddressGroup
 	// The previous version of the transferred AddressGroup, which will be used in Deleted events.
 	// Note that only metadata will be set in Deleted events for efficiency.
-	PrevObject *networking.AddressGroup
+	PrevObject *controlplane.AddressGroup
 	// The patch object of the message for transferring, which will be used in Modified events.
-	PatchObject *networking.AddressGroupPatch
+	PatchObject *controlplane.AddressGroupPatch
 	// The key of this AddressGroup.
 	Key             string
 	ResourceVersion uint64
@@ -79,14 +79,14 @@ func (event *addressGroupEvent) GetResourceVersion() uint64 {
 
 // ToAddressGroupMsg converts the stored AddressGroup to its message form.
 // If includeBody is true, IPAddresses will be copied.
-func ToAddressGroupMsg(in *types.AddressGroup, out *networking.AddressGroup, includeBody bool) {
+func ToAddressGroupMsg(in *types.AddressGroup, out *controlplane.AddressGroup, includeBody bool) {
 	out.Name = in.Name
 	out.UID = in.UID
 	if !includeBody {
 		return
 	}
-	for _, p := range in.Pods {
-		out.Pods = append(out.Pods, *p)
+	for _, member := range in.GroupMembers {
+		out.GroupMembers = append(out.GroupMembers, *member)
 	}
 }
 
@@ -104,38 +104,37 @@ func genAddressGroupEvent(key string, prevObj, currObj interface{}, rv uint64) (
 
 	if prevObj != nil {
 		event.PrevGroup = prevObj.(*types.AddressGroup)
-		event.PrevObject = new(networking.AddressGroup)
+		event.PrevObject = new(controlplane.AddressGroup)
 		ToAddressGroupMsg(event.PrevGroup, event.PrevObject, false)
 	}
 
 	if currObj != nil {
 		event.CurrGroup = currObj.(*types.AddressGroup)
-		event.CurrObject = new(networking.AddressGroup)
+		event.CurrObject = new(controlplane.AddressGroup)
 		ToAddressGroupMsg(event.CurrGroup, event.CurrObject, true)
 	}
 
 	// Calculate PatchObject in advance so that we don't need to do it for
 	// each watcher when generating *event.Event.
 	if event.PrevGroup != nil && event.CurrGroup != nil {
-		var addedPods, removedPods []networking.GroupMemberPod
-
-		for podHash, pod := range event.CurrGroup.Pods {
-			if _, exists := event.PrevGroup.Pods[podHash]; !exists {
-				addedPods = append(addedPods, *pod)
+		var addedMembers, removedMembers []controlplane.GroupMember
+		for memberHash, member := range event.CurrGroup.GroupMembers {
+			if _, exists := event.PrevGroup.GroupMembers[memberHash]; !exists {
+				addedMembers = append(addedMembers, *member)
 			}
 		}
-		for podHash, pod := range event.PrevGroup.Pods {
-			if _, exists := event.CurrGroup.Pods[podHash]; !exists {
-				removedPods = append(removedPods, *pod)
+		for memberHash, member := range event.PrevGroup.GroupMembers {
+			if _, exists := event.CurrGroup.GroupMembers[memberHash]; !exists {
+				removedMembers = append(removedMembers, *member)
 			}
 		}
 		// PatchObject will not be generated when only span changes.
-		if len(addedPods)+len(removedPods) > 0 {
-			event.PatchObject = new(networking.AddressGroupPatch)
+		if len(addedMembers)+len(removedMembers) > 0 {
+			event.PatchObject = new(controlplane.AddressGroupPatch)
 			event.PatchObject.UID = event.CurrGroup.UID
 			event.PatchObject.Name = event.CurrGroup.Name
-			event.PatchObject.AddedPods = addedPods
-			event.PatchObject.RemovedPods = removedPods
+			event.PatchObject.AddedGroupMembers = addedMembers
+			event.PatchObject.RemovedGroupMembers = removedMembers
 		}
 	}
 
@@ -163,5 +162,5 @@ func NewAddressGroupStore() storage.Interface {
 			return []string{ag.Selector.Namespace}, nil
 		},
 	}
-	return ram.NewStore(AddressGroupKeyFunc, indexers, genAddressGroupEvent, keyAndSpanSelectFunc, func() runtime.Object { return new(networking.AddressGroup) })
+	return ram.NewStore(AddressGroupKeyFunc, indexers, genAddressGroupEvent, keyAndSpanSelectFunc, func() runtime.Object { return new(controlplane.AddressGroup) })
 }

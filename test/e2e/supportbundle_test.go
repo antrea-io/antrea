@@ -70,8 +70,15 @@ func testSupportBundle(name string, t *testing.T) {
 	// Acquire token.
 	token, err := getAccessToken(podName, fmt.Sprintf("antrea-%s", name), tokenPath, data)
 	require.NoError(t, err)
-	podIP, err := data.podWaitForIP(defaultTimeout, podName, metav1.NamespaceSystem)
+	podIP, err := data.podWaitForIPs(defaultTimeout, podName, metav1.NamespaceSystem)
 	require.NoError(t, err)
+
+	for _, podIPStr := range podIP.ipStrings {
+		getAndCheckSupportBundle(t, name, podIPStr, podPort, token, data)
+	}
+}
+
+func getAndCheckSupportBundle(t *testing.T, name, podIP, podPort, token string, data *TestData) {
 	// Setup clients.
 	localConfig := rest.CopyConfig(data.kubeConfig)
 	localConfig.Host = net.JoinHostPort(podIP, podPort)
@@ -83,7 +90,7 @@ func testSupportBundle(name string, t *testing.T) {
 	require.NoError(t, err)
 	// Clearing any existing support bundle.
 	err = clients.SystemV1beta1().SupportBundles().Delete(context.TODO(), name, metav1.DeleteOptions{})
-	require.NoError(t, nil)
+	require.NoError(t, err)
 	time.Sleep(100 * time.Millisecond)
 	// Checking the initial status.
 	bundle, err := clients.SystemV1beta1().SupportBundles().Get(context.TODO(), name, metav1.GetOptions{})
@@ -125,12 +132,13 @@ func testSupportBundle(name string, t *testing.T) {
 	require.Equal(t, bundle.Sum, fmt.Sprintf("%x", hasher.Sum(nil)))
 	// Deleting the bundle.
 	err = clients.SystemV1beta1().SupportBundles().Delete(context.TODO(), name, metav1.DeleteOptions{})
-	require.NoError(t, nil)
+	require.NoError(t, err)
 	time.Sleep(100 * time.Millisecond)
 	// Checking that the bundle was deleted.
 	bundle, err = clients.SystemV1beta1().SupportBundles().Get(context.TODO(), name, metav1.GetOptions{})
 	require.NoError(t, err)
 	require.Equal(t, systemv1beta1.SupportBundleStatusNone, bundle.Status)
+
 }
 
 func TestSupportBundleController(t *testing.T) {

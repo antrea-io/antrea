@@ -7,17 +7,20 @@ that Antrea requires and how to configure and rotate them for Antrea.
 
 ## Table of Contents
 
+<!-- toc -->
 - [What certificates are required by Antrea](#what-certificates-are-required-by-antrea)
 - [How certificates are used by Antrea](#how-certificates-are-used-by-antrea)
 - [Providing your own certificates](#providing-your-own-certificates)
   - [Using kubectl](#using-kubectl)
   - [Using cert-manager](#using-cert-manager)
 - [Certificate rotation](#certificate-rotation)
+<!-- /toc -->
 
 ## What certificates are required by Antrea
 
 Currently Antrea only requires a single server certificate for the
 antrea-controller API server endpoint, which is for the following communication:
+
 - The antrea-agents talks to the antrea-controller for fetching the computed
  NetworkPolicies
 - The kube-aggregator (i.e. kube-apiserver) talks to the antrea-controller for
@@ -43,7 +46,7 @@ the `antrea-ca` ConfigMap.
 
 ## Providing your own certificates
 
-Since Antrea v0.7.0, you can provide your own certificates to Antrea. To do so,
+Since Antrea v0.8.2, you can provide your own certificates to Antrea. To do so,
 you must set the `selfSignedCert` field of `antrea-controller.conf` to `false`,
 so that the antrea-controller will read the certificate key pair from the
 `antrea-controller-tls` Secret. The example manifests and descriptions below
@@ -69,11 +72,13 @@ You can generate the required certificate manually, or through
 be issued with the following key usages and DNS names:
 
 X509 key usages:
+
 - digital signature
 - key encipherment
 - server auth
 
 DNS names:
+
 - antrea.kube-system.svc
 - antrea.kube-system.svc.cluster.local
 
@@ -82,6 +87,7 @@ should replace it with the actual one of your Kubernetes cluster.**
 
 You can then create the `antrea-controller-tls` Secret with the certificate key
 pair and the CA certificate in the following form:
+
 ```yaml
 apiVersion: v1
 kind: Secret
@@ -100,6 +106,7 @@ data:
 
 You can use `kubectl apply -f <PATH TO SECRET YAML>` to create the above secret,
 or use `kubectl create secret`:
+
 ```bash
 kubectl create secret generic antrea-controller-tls -n kube-system \
   --from-file=ca.crt=<PATH TO CA CERTIFICATE> --from-file=tls.crt=<PATH TO TLS CERTIFICATE> --from-file=tls.key=<PATH TO TLS KEY>
@@ -117,6 +124,7 @@ and configure `Issuer` or `ClusterIssuer` resources.
 
 The `Certificate` should be created in the `kube-system` namespace. For example,
 A `Certificate` may look like:
+
 ```yaml
 apiVersion: cert-manager.io/v1alpha2
 kind: Certificate
@@ -149,10 +157,13 @@ to the antrea-controller Pod if the Pod starts before the Secret is created.**
 
 ## Certificate rotation
 
-Antrea v0.7.0 and higher supports certificate rotation. It can be achieved by
+Antrea v0.8.2 and higher supports certificate rotation. It can be achieved by
 simply updating the `antrea-controller-tls` Secret. The
 antrea-controller will react to the change, updating its serving certificate and
 re-distributing the latest CA certificate (if applicable).
 
 If you are using cert-manager to issue the certificate, it will renew the
 certificate before expiry and update the Secret automatically.
+
+If you are using certificates signed by Antrea, Antrea will rotate the
+certificate automatically before expiration.

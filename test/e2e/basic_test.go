@@ -59,18 +59,29 @@ func TestPodAssignIP(t *testing.T) {
 	defer deletePodWrapper(t, data, podName)
 
 	t.Logf("Checking Pod networking")
-	if podIP, err := data.podWaitForIP(defaultTimeout, podName, testNamespace); err != nil {
+	if podIPs, err := data.podWaitForIPs(defaultTimeout, podName, testNamespace); err != nil {
 		t.Errorf("Error when waiting for Pod IP: %v", err)
 	} else {
-		t.Logf("Pod IP is '%s'", podIP)
-		isValid, err := validatePodIP(clusterInfo.podNetworkCIDR, podIP)
-		if err != nil {
-			t.Errorf("Error when trying to validate Pod IP: %v", err)
-		} else if !isValid {
-			t.Errorf("Pod IP is not in the expected Pod Network CIDR")
-		} else {
-			t.Logf("Pod IP is valid!")
+		if clusterInfo.podV4NetworkCIDR != "" {
+			checkPodIP(t, clusterInfo.podV4NetworkCIDR, podIPs.ipv4)
 		}
+		if clusterInfo.podV6NetworkCIDR != "" {
+			checkPodIP(t, clusterInfo.podV6NetworkCIDR, podIPs.ipv6)
+		}
+	}
+}
+
+// checkPodIP verifies that the given IP is a valid address, and checks it is in the provided Pod Network CIDR.
+func checkPodIP(t *testing.T, podNetworkCIDR string, podIP *net.IP) {
+	t.Logf("Pod IP is '%s'", podIP.String())
+	isValid, err := validatePodIP(podNetworkCIDR, *podIP)
+
+	if err != nil {
+		t.Errorf("Error when trying to validate Pod IP: %v", err)
+	} else if !isValid {
+		t.Errorf("Pod IP is not in the expected Pod Network CIDR")
+	} else {
+		t.Logf("Pod IP is valid!")
 	}
 }
 
@@ -83,7 +94,10 @@ func (data *TestData) testDeletePod(t *testing.T, podName string, nodeName strin
 	t.Logf("The Antrea Pod for Node '%s' is '%s'", nodeName, antreaPodName)
 
 	cmds := []string{"antctl", "get", "podinterface", podName, "-n", testNamespace, "-o", "json"}
-	stdout, _, err := runAntctl(antreaPodName, cmds, data, t)
+	stdout, _, err := runAntctl(antreaPodName, cmds, data)
+	if err != nil {
+		t.Fatalf("Error when running antctl: %v", err)
+	}
 	var podInterfaces []podinterface.Response
 	if err := json.Unmarshal([]byte(stdout), &podInterfaces); err != nil {
 		t.Fatalf("Error when querying the pod interface: %v", err)
@@ -92,17 +106,19 @@ func (data *TestData) testDeletePod(t *testing.T, podName string, nodeName strin
 		t.Fatalf("Expected 1 pod interface, got %d", len(podInterfaces))
 	}
 	ifName := podInterfaces[0].InterfaceName
-	podIP := podInterfaces[0].IP
+	podIPs := podInterfaces[0].IPs
 	t.Logf("Host interface name for Pod is '%s'", ifName)
 
 	doesInterfaceExist := func() bool {
-		cmd := fmt.Sprintf("ip link show %s", ifName)
-		if rc, _, _, err := RunCommandOnNode(nodeName, cmd); err != nil {
-			t.Fatalf("Error when running ip command on Node '%s': %v", nodeName, err)
-		} else {
-			return rc == 0
+		cmd := []string{"ip", "link", "show", ifName}
+		stdout, stderr, err := data.runCommandFromPod(antreaNamespace, antreaPodName, agentContainerName, cmd)
+		if err != nil {
+			if strings.Contains(stderr, "does not exist") {
+				return false
+			}
+			t.Fatalf("Error when running ip command in Pod '%s': %v - stdout: %s - stderr: %s", antreaPodName, err, stdout, stderr)
 		}
-		return false
+		return true
 	}
 
 	doesOVSPortExist := func() bool {
@@ -113,7 +129,7 @@ func (data *TestData) testDeletePod(t *testing.T, podName string, nodeName strin
 		return exists
 	}
 
-	doesIPAllocationExist := func() bool {
+	doesIPAllocationExist := func(podIP string) bool {
 		cmd := fmt.Sprintf("test -f /var/run/antrea/cni/networks/antrea/%s", podIP)
 		if rc, _, _, err := RunCommandOnNode(nodeName, cmd); err != nil {
 			t.Fatalf("Error when running ip command on Node '%s': %v", nodeName, err)
@@ -130,8 +146,10 @@ func (data *TestData) testDeletePod(t *testing.T, podName string, nodeName strin
 	if !doesOVSPortExist() {
 		t.Errorf("OVS port '%s' does not exist on Node '%s'", ifName, nodeName)
 	}
-	if !doesIPAllocationExist() {
-		t.Errorf("IP allocation '%s' does not exist on Node '%s'", podIP, nodeName)
+	for _, podIP := range podIPs {
+		if !doesIPAllocationExist(podIP) {
+			t.Errorf("IP allocation '%s' does not exist on Node '%s'", podIP, nodeName)
+		}
 	}
 
 	t.Logf("Deleting Pod '%s'", podName)
@@ -146,8 +164,10 @@ func (data *TestData) testDeletePod(t *testing.T, podName string, nodeName strin
 	if doesOVSPortExist() {
 		t.Errorf("OVS port '%s' still exists on Node '%s' after Pod deletion", ifName, nodeName)
 	}
-	if doesIPAllocationExist() {
-		t.Errorf("IP allocation '%s' still exists on Node '%s'", podIP, nodeName)
+	for _, podIP := range podIPs {
+		if doesIPAllocationExist(podIP) {
+			t.Errorf("IP allocation '%s' still exists on Node '%s'", podIP, nodeName)
+		}
 	}
 }
 
@@ -184,9 +204,17 @@ func TestAntreaGracefulExit(t *testing.T) {
 
 	var gracePeriodSeconds int64 = 60
 	t.Logf("Deleting one Antrea Pod")
+	maxDeleteTimeout := 20 * time.Second
+	// When running Antrea instrumented binary to collect e2e coverage,
+	// we need to set the maxDeleteTimeout to a larger value
+	// since it needs to collect coverage data files
+	if testOptions.enableCoverage {
+		maxDeleteTimeout = 80 * time.Second
+	}
+
 	if timeToDelete, err := data.deleteAntreaAgentOnNode(nodeName(0), gracePeriodSeconds, defaultTimeout); err != nil {
 		t.Fatalf("Error when deleting Antrea Pod: %v", err)
-	} else if timeToDelete > 20*time.Second {
+	} else if timeToDelete > maxDeleteTimeout {
 		t.Errorf("Antrea Pod took too long to delete: %v", timeToDelete)
 	}
 	// At the moment we only check that the Pod terminates in a reasonable amout of time (less
@@ -210,7 +238,7 @@ func TestIPAMRestart(t *testing.T) {
 	podName1 := randName("test-pod-")
 	podName2 := randName("test-pod-")
 	pods := make([]string, 0, 2)
-	var podIP1, podIP2 string
+	var podIP1, podIP2 *PodIPs
 
 	defer func() {
 		for _, pod := range pods {
@@ -218,15 +246,15 @@ func TestIPAMRestart(t *testing.T) {
 		}
 	}()
 
-	createPodAndGetIP := func(podName string) (string, error) {
+	createPodAndGetIP := func(podName string) (*PodIPs, error) {
 		t.Logf("Creating a busybox test Pod '%s' and waiting for IP", podName)
 		if err := data.createBusyboxPodOnNode(podName, nodeName); err != nil {
 			t.Fatalf("Error when creating busybox test Pod '%s': %v", podName, err)
-			return "", err
+			return nil, err
 		}
 		pods = append(pods, podName)
-		if podIP, err := data.podWaitForIP(defaultTimeout, podName, testNamespace); err != nil {
-			return "", err
+		if podIP, err := data.podWaitForIPs(defaultTimeout, podName, testNamespace); err != nil {
+			return nil, err
 		} else {
 			return podIP, nil
 		}
@@ -235,7 +263,7 @@ func TestIPAMRestart(t *testing.T) {
 	if podIP1, err = createPodAndGetIP(podName1); err != nil {
 		t.Fatalf("Failed to retrieve IP for Pod '%s': %v", podName1, err)
 	}
-	t.Logf("Pod '%s' has IP address %s", podName1, podIP1)
+	t.Logf("Pod '%s' has IP address %v", podName1, podIP1)
 
 	t.Logf("Restarting antrea-agent on Node '%s'", nodeName)
 	if _, err := data.deleteAntreaAgentOnNode(nodeName, 30 /* grace period in seconds */, defaultTimeout); err != nil {
@@ -250,10 +278,10 @@ func TestIPAMRestart(t *testing.T) {
 	if podIP2, err = createPodAndGetIP(podName2); err != nil {
 		t.Fatalf("Failed to retrieve IP for Pod '%s': %v", podName2, err)
 	}
-	t.Logf("Pod '%s' has IP address %s", podName2, podIP2)
+	t.Logf("Pod '%s' has IP addresses %v", podName2, podIP2)
 
-	if podIP1 == podIP2 {
-		t.Errorf("Pods '%s' and '%s' were assigned the same IP %s", podName1, podName2, podIP1)
+	if podIP1.hasSameIP(podIP2) {
+		t.Errorf("Pods '%s' and '%s' were assigned the same IP %v", podName1, podName2, podIP1)
 	}
 }
 
@@ -268,6 +296,17 @@ func TestReconcileGatewayRoutesOnStartup(t *testing.T) {
 	}
 	defer teardownTest(t, data)
 
+	if len(clusterInfo.podV4NetworkCIDR) != 0 {
+		t.Logf("Running IPv4 test")
+		testReconcileGatewayRoutesOnStartup(t, data, false)
+	}
+	if len(clusterInfo.podV6NetworkCIDR) != 0 {
+		t.Logf("Running IPv6 test")
+		testReconcileGatewayRoutesOnStartup(t, data, true)
+	}
+}
+
+func testReconcileGatewayRoutesOnStartup(t *testing.T, data *TestData, isIPv6 bool) {
 	encapMode, err := data.GetEncapMode()
 	if err != nil {
 		t.Fatalf(" failed to get encap mode, err %v", err)
@@ -292,14 +331,18 @@ func TestReconcileGatewayRoutesOnStartup(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to detect gateway interface name from ConfigMap: %v", err)
 	}
+
 	getGatewayRoutes := func() (routes []Route, err error) {
-		cmd := fmt.Sprintf("ip route list dev %s", antreaGWName)
-		rc, stdout, _, err := RunCommandOnNode(nodeName, cmd)
-		if err != nil {
-			return nil, fmt.Errorf("error when running ip command on Node '%s': %v", nodeName, err)
+		var cmd []string
+		if !isIPv6 {
+			cmd = []string{"ip", "route", "list", "dev", antreaGWName}
+		} else {
+			cmd = []string{"ip", "-6", "route", "list", "dev", antreaGWName}
 		}
-		if rc != 0 {
-			return nil, fmt.Errorf("running ip command on Node '%s' returned error", nodeName)
+		podName := antreaPodName()
+		stdout, stderr, err := data.runCommandFromPod(antreaNamespace, podName, agentContainerName, cmd)
+		if err != nil {
+			return nil, fmt.Errorf("error when running ip command in Pod '%s': %v - stdout: %s - stderr: %s", podName, err, stdout, stderr)
 		}
 		re := regexp.MustCompile(`([^\s]+) via ([^\s]+)`)
 		for _, line := range strings.Split(stdout, "\n") {
@@ -357,14 +400,24 @@ func TestReconcileGatewayRoutesOnStartup(t *testing.T) {
 	}
 	// A dummy route
 	routeToAdd := &Route{}
-	_, routeToAdd.peerPodCIDR, _ = net.ParseCIDR("99.99.99.0/24")
-	routeToAdd.peerPodGW = net.ParseIP("99.99.99.1")
+	if !isIPv6 {
+		_, routeToAdd.peerPodCIDR, _ = net.ParseCIDR("99.99.99.0/24")
+		routeToAdd.peerPodGW = net.ParseIP("99.99.99.1")
+	} else {
+		_, routeToAdd.peerPodCIDR, _ = net.ParseCIDR("fe80::0/112")
+		routeToAdd.peerPodGW = net.ParseIP("fe80::1")
+	}
 
 	// We run the ip command from the antrea-agent container for delete / add since they need to
 	// be run as root and the antrea-agent container is privileged. If we used RunCommandOnNode,
 	// we may need to use "sudo" for some providers (e.g. vagrant).
 	deleteGatewayRoute := func(route *Route) error {
-		cmd := []string{"ip", "route", "del", route.peerPodCIDR.String()}
+		var cmd []string
+		if !isIPv6 {
+			cmd = []string{"ip", "route", "del", route.peerPodCIDR.String()}
+		} else {
+			cmd = []string{"ip", "-6", "route", "del", route.peerPodCIDR.String()}
+		}
 		_, _, err := data.runCommandFromPod(antreaNamespace, antreaPodName(), agentContainerName, cmd)
 		if err != nil {
 			return fmt.Errorf("error when running ip command on Node '%s': %v", nodeName, err)
@@ -373,7 +426,12 @@ func TestReconcileGatewayRoutesOnStartup(t *testing.T) {
 	}
 
 	addGatewayRoute := func(route *Route) error {
-		cmd := []string{"ip", "route", "add", route.peerPodCIDR.String(), "via", route.peerPodGW.String(), "dev", antreaGWName, "onlink"}
+		var cmd []string
+		if !isIPv6 {
+			cmd = []string{"ip", "route", "add", route.peerPodCIDR.String(), "via", route.peerPodGW.String(), "dev", antreaGWName, "onlink"}
+		} else {
+			cmd = []string{"ip", "-6", "route", "add", route.peerPodCIDR.String(), "via", route.peerPodGW.String(), "dev", antreaGWName, "onlink"}
+		}
 		_, _, err := data.runCommandFromPod(antreaNamespace, antreaPodName(), agentContainerName, cmd)
 		if err != nil {
 			return fmt.Errorf("error when running ip command on Node '%s': %v", nodeName, err)
@@ -502,6 +560,7 @@ func getRoundNumber(data *TestData, podName string) (uint64, error) {
 // the previous "round" which are no longer needed (e.g. in case of changes to the cluster / to
 // Network Policies) are removed correctly.
 func TestDeletePreviousRoundFlowsOnStartup(t *testing.T) {
+	skipIfRunCoverage(t, "killAgent does not work with Coverage")
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
@@ -628,6 +687,7 @@ func TestDeletePreviousRoundFlowsOnStartup(t *testing.T) {
 // There might be ARP packets other than GARP sent if there is any unintentional
 // traffic. So we just check the number of ARP packets is greater than 3.
 func TestGratuitousARP(t *testing.T) {
+	skipIfNotIPv4Cluster(t)
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
@@ -648,7 +708,7 @@ func TestGratuitousARP(t *testing.T) {
 		t.Fatalf("Error when retrieving the name of the Antrea Pod running on Node '%s': %v", nodeName, err)
 	}
 
-	podIP, err := data.podWaitForIP(defaultTimeout, podName, testNamespace)
+	podIP, err := data.podWaitForIPs(defaultTimeout, podName, testNamespace)
 	if err != nil {
 		t.Fatalf("Error when waiting for IP for Pod '%s': %v", podName, err)
 	}
@@ -657,7 +717,7 @@ func TestGratuitousARP(t *testing.T) {
 	// be sent 100ms after processing CNI ADD request.
 	time.Sleep(100 * time.Millisecond)
 
-	cmd := []string{"ovs-ofctl", "dump-flows", defaultBridgeName, fmt.Sprintf("table=10,arp,arp_spa=%s", podIP)}
+	cmd := []string{"ovs-ofctl", "dump-flows", defaultBridgeName, fmt.Sprintf("table=10,arp,arp_spa=%s", podIP.ipv4.String())}
 	stdout, _, err := data.runCommandFromPod(antreaNamespace, antreaPodName, ovsContainerName, cmd)
 	if err != nil {
 		t.Fatalf("Error when querying openflow: %v", err)

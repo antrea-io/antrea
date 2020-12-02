@@ -22,6 +22,7 @@ function echoerr {
 
 FROM_TAG=
 FROM_VERSION_N_MINUS=
+CONTROLLER_ONLY=false
 
 _usage="Usage: $0 [--from-tag <TAG>] [--from-version-n-minus <COUNT>]
 Perform some basic tests to make sure that Antrea can be upgraded from the provided version to the
@@ -32,6 +33,7 @@ provided.
         --from-version-n-minus <COUNT>  Get all the released versions of Antrea and run the upgrade
                                         test from the latest bug fix release for *minor* version
                                         N-{COUNT}. N-1 designates the latest minor release.
+        --controller-only               Update antrea-controller only when upgrading.
         --help, -h                      Print this message and exit
 "
 
@@ -58,6 +60,10 @@ case $key in
     --from-version-n-minus)
     FROM_VERSION_N_MINUS="$2"
     shift 2
+    ;;
+    --controller-only)
+    CONTROLLER_ONLY=true
+    shift
     ;;
     -h|--help)
     print_usage
@@ -127,6 +133,20 @@ echo "Creating Kind cluster"
 IMAGES="${DOCKER_IMAGES[@]}"
 $THIS_DIR/kind-setup.sh create kind --antrea-cni false --images "$IMAGES"
 
+# We ensure that the appropriate kustomize binary is installed by running a
+# recent version of generate-manifest.sh, then export the KUSTOMIZE env variable
+# to ensure that the binary will be used to generate older manifests as well.
+# When running this script as part of a Github Action, we do *not* want to use
+# the pre-installed version of kustomize, as it is a snap and cannot access
+# /tmp. See:
+#  * https://github.com/actions/virtual-environments/issues/1514
+#  * https://forum.snapcraft.io/t/interfaces-allow-access-tmp-directory/5129
+# "--on-delete" is specified so that the upgrade can be done in a controlled
+# fashion, e.g. upgrading controller only and specific antrea-agents for
+# compatibility test.
+$ROOT_DIR/hack/generate-manifest.sh --kind --on-delete | docker exec -i kind-control-plane dd of=/root/antrea-new.yml
+export KUSTOMIZE=$ROOT_DIR/hack/.bin/kustomize
+
 TMP_ANTREA_DIR=$(mktemp -d)
 git clone --branch $FROM_TAG --depth 1 https://github.com/vmware-tanzu/antrea.git $TMP_ANTREA_DIR
 pushd $TMP_ANTREA_DIR > /dev/null
@@ -137,10 +157,8 @@ export IMG_TAG=$FROM_TAG
 popd
 rm -rf $TMP_DIR
 
-$ROOT_DIR/hack/generate-manifest.sh --kind | docker exec -i kind-control-plane dd of=/root/antrea-new.yml
-
 rc=0
-go test -v -run=TestUpgrade github.com/vmware-tanzu/antrea/test/e2e -provider=kind -upgrade.toYML=antrea-new.yml || rc=$?
+go test -v -run=TestUpgrade github.com/vmware-tanzu/antrea/test/e2e -provider=kind -upgrade.toYML=antrea-new.yml --upgrade.controllerOnly=$CONTROLLER_ONLY || rc=$?
 
 $THIS_DIR/kind-setup.sh destroy kind
 

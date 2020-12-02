@@ -20,24 +20,32 @@ function echoerr {
     >&2 echo "$@"
 }
 
-_usage="Usage: $0 [--mode (dev|release)] [--kind] [--ipsec] [--keep] [--help|-h]
+_usage="Usage: $0 [--mode (dev|release)] [--encap-mode] [--kind] [--ipsec] [--no-proxy] [--np] [--keep] [--tun (geneve|vxlan|gre|stt)] [--verbose-log] [--help|-h]
 Generate a YAML manifest for Antrea using Kustomize and print it to stdout.
-        --mode (dev|release)  Choose the configuration variant that you need (default is 'dev')
-        --encap-mode          Traffic encapsulation mode. (default is 'encap')
-        --kind                Generate a manifest appropriate for running Antrea in a Kind cluster
-        --cloud               Generate a manifest appropriate for running Antrea in Public Cloud
-        --ipsec               Generate a manifest with IPSec encryption of tunnel traffic enabled
-        --proxy               Generate a manifest with Antrea proxy enabled
-        --np                  Generate a manifest with Namespaced Antrea NetworkPolicy CRDs and ClusterNetworkPolicy related CRDs enabled
-        --keep                Debug flag which will preserve the generated kustomization.yml
-        --help, -h            Print this message and exit
+        --mode (dev|release)          Choose the configuration variant that you need (default is 'dev')
+        --encap-mode                  Traffic encapsulation mode. (default is 'encap')
+        --kind                        Generate a manifest appropriate for running Antrea in a Kind cluster
+        --cloud                       Generate a manifest appropriate for running Antrea in Public Cloud
+        --ipsec                       Generate a manifest with IPSec encryption of tunnel traffic enabled
+        --all-features                Generate a manifest with all alpha features enabled
+        --no-proxy                    Generate a manifest with Antrea proxy disabled
+        --np                          Generate a manifest with ClusterNetworkPolicy and Antrea NetworkPolicy features enabled
+        --keep                        Debug flag which will preserve the generated kustomization.yml
+        --tun (geneve|vxlan|gre|stt)  Choose encap tunnel type from geneve, gre, stt and vxlan (default is geneve)
+        --verbose-log                 Generate a manifest with increased log-level (level 4) for Antrea agent and controller.
+                                      This option will work only with 'dev' mode.
+        --on-delete                   Generate a manifest with antrea-agent's update strategy set to OnDelete.
+                                      This option will work only for Kind clusters (when using '--kind').
+        --coverage                    Generates a manifest which supports measuring code coverage of Antrea binaries.
+        --help, -h                    Print this message and exit
 
 In 'release' mode, environment variables IMG_NAME and IMG_TAG must be set.
 
 This tool uses kustomize (https://github.com/kubernetes-sigs/kustomize) to generate manifests for
 Antrea. You can set the KUSTOMIZE environment variable to the path of the kustomize binary you want
-us to use. Otherwise we will look for kustomize in your PATH and your GOPATH. If we cannot find
-kustomize there, we will try to install it."
+us to use. Otherwise we will download the appropriate version of the kustomize binary and use
+it (this is the recommended approach since different versions of kustomize may create different
+output YAMLs)."
 
 function print_usage {
     echoerr "$_usage"
@@ -50,11 +58,16 @@ function print_help {
 MODE="dev"
 KIND=false
 IPSEC=false
-PROXY=false
+ALLFEATURES=false
+PROXY=true
 NP=false
 KEEP=false
 ENCAP_MODE=""
 CLOUD=""
+TUN_TYPE="geneve"
+VERBOSE_LOG=false
+ON_DELETE=false
+COVERAGE=false
 
 while [[ $# -gt 0 ]]
 do
@@ -81,8 +94,12 @@ case $key in
     IPSEC=true
     shift
     ;;
-    --proxy)
-    PROXY=true
+    --all-features)
+    ALLFEATURES=true
+    shift
+    ;;
+    --no-proxy)
+    PROXY=false
     shift
     ;;
     --np)
@@ -91,6 +108,22 @@ case $key in
     ;;
     --keep)
     KEEP=true
+    shift
+    ;;
+    --tun)
+    TUN_TYPE="$2"
+    shift 2
+    ;;
+    --verbose-log)
+    VERBOSE_LOG=true
+    shift
+    ;;
+    --on-delete)
+    ON_DELETE=true
+    shift
+    ;;
+    --coverage)
+    COVERAGE=true
     shift
     ;;
     -h|--help)
@@ -110,6 +143,12 @@ if [ "$MODE" != "dev" ] && [ "$MODE" != "release" ]; then
     exit 1
 fi
 
+if [ "$TUN_TYPE" != "geneve" ] && [ "$TUN_TYPE" != "vxlan" ] && [ "$TUN_TYPE" != "gre" ] && [ "$TUN_TYPE" != "stt" ]; then
+    echoerr "--tun must be one of 'geneve', 'gre', 'stt' or 'vxlan'"
+    print_help
+    exit 1
+fi
+
 if [ "$MODE" == "release" ] && [ -z "$IMG_NAME" ]; then
     echoerr "In 'release' mode, environment variable IMG_NAME must be set"
     print_help
@@ -119,6 +158,23 @@ fi
 if [ "$MODE" == "release" ] && [ -z "$IMG_TAG" ]; then
     echoerr "In 'release' mode, environment variable IMG_TAG must be set"
     print_help
+    exit 1
+fi
+
+if [ "$MODE" == "release" ] && $VERBOSE_LOG; then
+    echoerr "--verbose-log works only with 'dev' mode"
+    print_help
+    exit 1
+fi
+
+if ! $KIND && $ON_DELETE; then
+    echoerr "--on-delete works only for Kind clusters"
+    print_help
+    exit 1
+fi
+
+if [[ "$ENCAP_MODE" != "" ]] && [[ "$ENCAP_MODE" != "encap" ]] && ! $PROXY; then
+    echoerr "Cannot use '--no-proxy' when '--encap-mode' is not 'encap'"
     exit 1
 fi
 
@@ -158,16 +214,37 @@ if $IPSEC; then
     sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*tunnelType[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/tunnelType: gre/" antrea-agent.conf
 fi
 
-if $PROXY; then
-    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*AntreaProxy[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  AntreaProxy: true/" antrea-agent.conf
+if $ALLFEATURES; then
+    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*AntreaPolicy[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  AntreaPolicy: true/" antrea-agent.conf
+    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*FlowExporter[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  FlowExporter: true/" antrea-agent.conf
+    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*NetworkPolicyStats[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  NetworkPolicyStats: true/" antrea-agent.conf
+fi
+
+if ! $PROXY; then
+    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*AntreaProxy[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  AntreaProxy: false/" antrea-agent.conf
 fi
 
 if $NP; then
-    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*enableSecurityCRDs[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/enableSecurityCRDs: true/" antrea-controller.conf
+    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*AntreaPolicy[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  AntreaPolicy: true/" antrea-controller.conf
+    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*AntreaPolicy[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  AntreaPolicy: true/" antrea-agent.conf
 fi
 
 if [[ $ENCAP_MODE != "" ]]; then
     sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*trafficEncapMode[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/trafficEncapMode: $ENCAP_MODE/" antrea-agent.conf
+fi
+
+if [[ $TUN_TYPE != "geneve" ]]; then
+    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*tunnelType[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/tunnelType: $TUN_TYPE/" antrea-agent.conf
+fi
+
+if [[ $CLOUD != "" ]]; then
+    # Delete the serviceCIDR parameter for the cloud (AKS, EKS, GKE) deployment yamls, because
+    # AntreaProxy is always enabled for the cloud managed K8s clusters, and the serviceCIDR
+    # parameter is not needed in this case.
+    # delete all blank lines after "#serviceCIDR:"
+    sed -i.bak '/#serviceCIDR:/,/^$/{/^$/d;}' antrea-agent.conf
+    # delete lines from "# ClusterIP CIDR range for Services" to "#serviceCIDR:"
+    sed -i.bak '/# ClusterIP CIDR range for Services/,/#serviceCIDR:/d' antrea-agent.conf
 fi
 
 # unfortunately 'kustomize edit add configmap' does not support specifying 'merge' as the behavior,
@@ -194,22 +271,18 @@ if $IPSEC; then
     cd ..
 fi
 
-if $NP; then
-    mkdir np && cd np
-    cp ../../patches/np/*.yml .
-    cp ../../base/security-crds.yml .
-    cp ../../base/core-crds.yml .
+if $COVERAGE; then
+    mkdir coverage && cd coverage
+    cp ../../patches/coverage/*.yml .
     touch kustomization.yml
     $KUSTOMIZE edit add base $BASE
-    # add RBAC to antrea-controller for ANP and CNP CRD access.
-    $KUSTOMIZE edit add patch npRbac.yml
-    # create NetworkPolicy related CRDs.
-    $KUSTOMIZE edit add resource security-crds.yml
-    # create ExternalEntity related CRDs.
-    $KUSTOMIZE edit add resource core-crds.yml
-    BASE=../np
+    # this runs antrea-controller via the instrumented binary.
+    $KUSTOMIZE edit add patch startControllerCov.yml
+    # this runs antrea-agent via the instrumented binary.
+    $KUSTOMIZE edit add patch startAgentCov.yml
+    BASE=../coverage
     cd ..
-fi
+fi 
 
 if [[ $ENCAP_MODE == "networkPolicyOnly" ]] ; then
     mkdir chaining && cd chaining
@@ -256,9 +329,18 @@ if $KIND; then
     # this adds a small delay before running the antrea-agent process, to give the antrea-ovs
     # container enough time to set up the br-phy bridge.
     # workaround for https://github.com/vmware-tanzu/antrea/issues/801
-    $KUSTOMIZE edit add patch startAgent.yml
+    if $COVERAGE; then
+        cp ../../patches/coverage/startAgentCov.yml .
+        $KUSTOMIZE edit add patch startAgentCov.yml 
+    else
+        $KUSTOMIZE edit add patch startAgent.yml
+    fi
     # change initContainer script and remove SYS_MODULE capability
     $KUSTOMIZE edit add patch installCni.yml
+
+    if $ON_DELETE; then
+        $KUSTOMIZE edit add patch onDeleteUpdateStrategy.yml
+    fi
 
     BASE=../kind
     cd ..
@@ -274,6 +356,11 @@ if [ "$MODE" == "dev" ]; then
     $KUSTOMIZE edit set image antrea=antrea/antrea-ubuntu:latest
     $KUSTOMIZE edit add patch agentImagePullPolicy.yml
     $KUSTOMIZE edit add patch controllerImagePullPolicy.yml
+    if $VERBOSE_LOG; then
+        $KUSTOMIZE edit add patch agentVerboseLog.yml
+        $KUSTOMIZE edit add patch controllerVerboseLog.yml
+    fi
+
     # only required because there is no good way at the moment to update the imagePullPolicy for all
     # containers. See https://github.com/kubernetes-sigs/kustomize/issues/1493
     if $IPSEC; then

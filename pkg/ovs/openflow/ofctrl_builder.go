@@ -1,3 +1,17 @@
+// Copyright 2020 Antrea Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package openflow
 
 import (
@@ -54,6 +68,18 @@ func (b *ofFlowBuilder) MatchReg(regID int, data uint32) FlowBuilder {
 		Data: data,
 	}
 	b.Match.NxRegs = append(b.Match.NxRegs, reg)
+	return b
+}
+
+// MatchXXReg adds match condition for matching data in the target xx-register.
+func (b *ofFlowBuilder) MatchXXReg(regID int, data []byte) FlowBuilder {
+	s := fmt.Sprintf("xxreg%d=0x%x", regID, data)
+	b.matchers = append(b.matchers, s)
+	reg := &ofctrl.XXRegister{
+		ID:   regID,
+		Data: data,
+	}
+	b.Match.XxRegs = append(b.Match.XxRegs, reg)
 	return b
 }
 
@@ -163,10 +189,12 @@ func (b *ofFlowBuilder) MatchCTStateInv(set bool) FlowBuilder {
 	return b
 }
 
-// MatchCTMark adds match condition for matching ct_mark.
-func (b *ofFlowBuilder) MatchCTMark(value uint32) FlowBuilder {
+// MatchCTMark adds match condition for matching ct_mark. If mask is nil, the mask should be not set in the OpenFlow
+// message which is sent to OVS, and OVS should match the value exactly.
+func (b *ofFlowBuilder) MatchCTMark(value uint32, mask *uint32) FlowBuilder {
 	b.matchers = append(b.matchers, fmt.Sprintf("ct_mark=%d", value))
 	b.ofFlow.Match.CtMark = value
+	b.ofFlow.Match.CtMarkMask = mask
 	return b
 }
 
@@ -184,6 +212,41 @@ func (b *ofFlowBuilder) MatchCTMarkMask(mask uint32) FlowBuilder {
 	return b
 }
 
+func ctLabelRange(high, low uint64, rng Range, match *ofctrl.FlowMatch) {
+	// [127..64] [63..0]
+	//   high     low
+	match.CtLabelHi = high
+	match.CtLabelLo = low
+	match.CtLabelHiMask = 0xffff_ffff_ffff_ffff
+	match.CtLabelLoMask = 0xffff_ffff_ffff_ffff
+	if rng[0] == rng[1] {
+		if rng[0] < 64 {
+			match.CtLabelLoMask = 1 << rng[0]
+			match.CtLabelHiMask = 0
+		} else {
+			match.CtLabelHiMask = 1 << (rng[0] - 64)
+			match.CtLabelLoMask = 0
+		}
+	} else if rng[0] < 64 && rng[1] >= 64 {
+		match.CtLabelLoMask <<= rng[0]
+		match.CtLabelHiMask >>= 127 - rng[1]
+	} else if rng[1] < 64 {
+		match.CtLabelLoMask &= 0xffff_ffff_ffff_ffff << rng[0]
+		match.CtLabelLoMask &= 0xffff_ffff_ffff_ffff >> (63 - rng[1])
+		match.CtLabelHiMask = 0
+	} else if rng[0] >= 64 {
+		match.CtLabelHiMask &= 0xffff_ffff_ffff_ffff << (rng[0] - 64)
+		match.CtLabelHiMask &= 0xffff_ffff_ffff_ffff >> (127 - rng[1])
+		match.CtLabelLoMask = 0
+	}
+}
+
+func (b *ofFlowBuilder) MatchCTLabelRange(high, low uint64, bitRange Range) FlowBuilder {
+	b.matchers = append(b.matchers, fmt.Sprintf("ct_label[%d..%d]=0x%x%x", bitRange[0], bitRange[1], high, low))
+	ctLabelRange(high, low, bitRange, &b.ofFlow.Match)
+	return b
+}
+
 // MatchInPort adds match condition for matching in_port.
 func (b *ofFlowBuilder) MatchInPort(inPort uint32) FlowBuilder {
 	b.matchers = append(b.matchers, fmt.Sprintf("in_port=%d", inPort))
@@ -193,36 +256,64 @@ func (b *ofFlowBuilder) MatchInPort(inPort uint32) FlowBuilder {
 
 // MatchDstIP adds match condition for matching destination IP address.
 func (b *ofFlowBuilder) MatchDstIP(ip net.IP) FlowBuilder {
-	b.matchers = append(b.matchers, fmt.Sprintf("nw_dst=%s", ip.String()))
+	if ip.To4() != nil {
+		b.matchers = append(b.matchers, fmt.Sprintf("nw_dst=%s", ip.String()))
+	} else {
+		b.matchers = append(b.matchers, fmt.Sprintf("ipv6_dst=%s", ip.String()))
+	}
 	b.Match.IpDa = &ip
 	return b
 }
 
 // MatchDstIPNet adds match condition for matching destination IP CIDR.
 func (b *ofFlowBuilder) MatchDstIPNet(ipnet net.IPNet) FlowBuilder {
-	b.matchers = append(b.matchers, fmt.Sprintf("nw_dst=%s", ipnet.String()))
+	if ipnet.IP.To4() != nil {
+		b.matchers = append(b.matchers, fmt.Sprintf("nw_dst=%s", ipnet.String()))
+	} else {
+		b.matchers = append(b.matchers, fmt.Sprintf("ipv6_dst=%s", ipnet.String()))
+	}
 	b.Match.IpDa = &ipnet.IP
-	b.Match.IpDaMask = maskToIPv4(ipnet.Mask)
+	b.Match.IpDaMask = maskToIP(ipnet.Mask)
 	return b
 }
 
-func maskToIPv4(mask net.IPMask) *net.IP {
-	ip := net.IPv4(mask[0], mask[1], mask[2], mask[3])
+func (b *ofFlowBuilder) MatchICMPv6Type(icmp6Type byte) FlowBuilder {
+	b.matchers = append(b.matchers, fmt.Sprintf("icmp_type=%d", icmp6Type))
+	b.Match.Icmp6Type = &icmp6Type
+	return b
+}
+
+func (b *ofFlowBuilder) MatchICMPv6Code(icmp6Code byte) FlowBuilder {
+	b.matchers = append(b.matchers, fmt.Sprintf("icmp_code=%d", icmp6Code))
+	b.Match.Icmp6Code = &icmp6Code
+	return b
+}
+
+func maskToIP(mask net.IPMask) *net.IP {
+	ip := net.IP(mask)
 	return &ip
 }
 
 // MatchSrcIP adds match condition for matching source IP address.
 func (b *ofFlowBuilder) MatchSrcIP(ip net.IP) FlowBuilder {
-	b.matchers = append(b.matchers, fmt.Sprintf("nw_src=%s", ip.String()))
+	if ip.To4() != nil {
+		b.matchers = append(b.matchers, fmt.Sprintf("nw_src=%s", ip.String()))
+	} else {
+		b.matchers = append(b.matchers, fmt.Sprintf("ipv6_src=%s", ip.String()))
+	}
 	b.Match.IpSa = &ip
 	return b
 }
 
 // MatchSrcIPNet adds match condition for matching source IP CIDR.
 func (b *ofFlowBuilder) MatchSrcIPNet(ipnet net.IPNet) FlowBuilder {
-	b.matchers = append(b.matchers, fmt.Sprintf("nw_src=%s", ipnet.String()))
+	if ipnet.IP.To4() != nil {
+		b.matchers = append(b.matchers, fmt.Sprintf("nw_src=%s", ipnet.String()))
+	} else {
+		b.matchers = append(b.matchers, fmt.Sprintf("ipv6_src=%s", ipnet.String()))
+	}
 	b.Match.IpSa = &ipnet.IP
-	b.Match.IpSaMask = maskToIPv4(ipnet.Mask)
+	b.Match.IpSaMask = maskToIP(ipnet.Mask)
 	return b
 }
 
@@ -275,6 +366,15 @@ func (b *ofFlowBuilder) MatchARPOp(op uint16) FlowBuilder {
 	return b
 }
 
+// MatchIPDscp adds match condition for matching DSCP field in the IP header. Note, OVS use TOS to present DSCP, and
+// the field name is shown as "nw_tos" with OVS command line, and the value is calculated by shifting the given value
+// left 2 bits.
+func (b *ofFlowBuilder) MatchIPDscp(dscp uint8) FlowBuilder {
+	b.matchers = append(b.matchers, fmt.Sprintf("nw_tos=%d", dscp<<2))
+	b.Match.IpDscp = dscp
+	return b
+}
+
 // MatchConjID adds match condition for matching conj_id.
 func (b *ofFlowBuilder) MatchConjID(value uint32) FlowBuilder {
 	b.matchers = append(b.matchers, fmt.Sprintf("conj_id=%d", value))
@@ -292,52 +392,49 @@ func (b *ofFlowBuilder) MatchProtocol(protocol Protocol) FlowBuilder {
 	switch protocol {
 	case ProtocolIP:
 		b.Match.Ethertype = 0x0800
+	case ProtocolIPv6:
+		b.Match.Ethertype = 0x86dd
 	case ProtocolARP:
 		b.Match.Ethertype = 0x0806
 	case ProtocolTCP:
 		b.Match.Ethertype = 0x0800
 		b.Match.IpProto = 6
+	case ProtocolTCPv6:
+		b.Match.Ethertype = 0x86dd
+		b.Match.IpProto = 6
 	case ProtocolUDP:
 		b.Match.Ethertype = 0x0800
+		b.Match.IpProto = 17
+	case ProtocolUDPv6:
+		b.Match.Ethertype = 0x86dd
 		b.Match.IpProto = 17
 	case ProtocolSCTP:
 		b.Match.Ethertype = 0x0800
 		b.Match.IpProto = 132
+	case ProtocolSCTPv6:
+		b.Match.Ethertype = 0x86dd
+		b.Match.IpProto = 132
 	case ProtocolICMP:
 		b.Match.Ethertype = 0x0800
 		b.Match.IpProto = 1
+	case ProtocolICMPv6:
+		b.Match.Ethertype = 0x86dd
+		b.Match.IpProto = 58
 	}
 	b.protocol = protocol
 	return b
 }
 
-// MatchTCPDstPort adds match condition for matching TCP destination port.
-func (b *ofFlowBuilder) MatchTCPDstPort(port uint16) FlowBuilder {
-	b.MatchProtocol(ProtocolTCP)
-	b.Match.TcpDstPort = port
-	// According to ovs-ofctl(8) man page, "tp_dst" is deprecated and "tcp_dst",
-	// "udp_dst", "sctp_dst" should be used for the destination port of TCP, UDP,
-	// SCTP respectively. However, OVS command line tools like ovs-ofctl and
-	// ovs-appctl still print flows with "tp_dst", so we also  use "tp_dst" in flow
-	// matching string, as flow matching string can be used to look up matched
-	// flows from these tools' outputs.
-	b.matchers = append(b.matchers, fmt.Sprintf("tp_dst=%d", port))
-	return b
-}
-
-// MatchUDPDstPort adds match condition for matching UDP destination port.
-func (b *ofFlowBuilder) MatchUDPDstPort(port uint16) FlowBuilder {
-	b.MatchProtocol(ProtocolUDP)
-	b.Match.UdpDstPort = port
-	b.matchers = append(b.matchers, fmt.Sprintf("tp_dst=%d", port))
-	return b
-}
-
-// MatchSCTPDstPort adds match condition for matching SCTP destination port.
-func (b *ofFlowBuilder) MatchSCTPDstPort(port uint16) FlowBuilder {
-	b.MatchProtocol(ProtocolSCTP)
-	b.Match.SctpDstPort = port
-	b.matchers = append(b.matchers, fmt.Sprintf("tp_dst=%d", port))
+// MatchDstPort adds match condition for matching destination port in transport layer. OVS will match the port exactly
+// if portMask is nil.
+func (b *ofFlowBuilder) MatchDstPort(port uint16, portMask *uint16) FlowBuilder {
+	b.Match.DstPort = port
+	b.Match.DstPortMask = portMask
+	matchStr := fmt.Sprintf("tp_dst=0x%x", port)
+	if portMask != nil {
+		matchStr = fmt.Sprintf("%s/0x%x", matchStr, portMask)
+	}
+	b.matchers = append(b.matchers, matchStr)
 	return b
 }
 
@@ -354,7 +451,7 @@ func (b *ofFlowBuilder) MatchCTSrcIP(ip net.IP) FlowBuilder {
 func (b *ofFlowBuilder) MatchCTSrcIPNet(ipNet net.IPNet) FlowBuilder {
 	b.matchers = append(b.matchers, fmt.Sprintf("nw_dst=%s", ipNet.String()))
 	b.Match.CtIpSa = &ipNet.IP
-	b.Match.CtIpSaMask = maskToIPv4(ipNet.Mask)
+	b.Match.CtIpSaMask = maskToIP(ipNet.Mask)
 	return b
 }
 
@@ -370,7 +467,7 @@ func (b *ofFlowBuilder) MatchCTDstIP(ip net.IP) FlowBuilder {
 // MatchCTDstIPNet is the same as MatchCTDstIP but supports IP masking.
 func (b *ofFlowBuilder) MatchCTDstIPNet(ipNet net.IPNet) FlowBuilder {
 	b.Match.CtIpDa = &ipNet.IP
-	b.Match.CtIpDaMask = maskToIPv4(ipNet.Mask)
+	b.Match.CtIpDaMask = maskToIP(ipNet.Mask)
 	b.matchers = append(b.matchers, fmt.Sprintf("ct_nw_dst=%s", ipNet.String()))
 	return b
 }
@@ -419,7 +516,7 @@ func (b *ofFlowBuilder) Cookie(cookieID uint64) FlowBuilder {
 
 // CookieMask sets cookie mask for the flow entry.
 func (b *ofFlowBuilder) CookieMask(cookieMask uint64) FlowBuilder {
-	b.Flow.CookieMask = cookieMask
+	b.Flow.CookieMask = &cookieMask
 	return b
 }
 

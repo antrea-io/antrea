@@ -8,9 +8,29 @@ on:
     branches:
     - master
     - release-*
+
+env:
+  KIND_VERSION: v0.9.0
+
 jobs:
+  check-changes:
+    name: Check whether tests need to be run based on diff
+    runs-on: [ubuntu-18.04]
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+    - uses: vmware-tanzu/antrea/ci/gh-actions/has-changes@master
+      id: check_diff
+      with:
+        args: docs/* ci/jenkins/* *.md
+    outputs:
+      has_changes: ${{ steps.check_diff.outputs.has_changes }}
+
   build-antrea-image:
     name: Build Antrea image to be used for Kind upgrade test
+    needs: check-changes
+    if: ${{ needs.check-changes.outputs.has_changes == 'yes' }}
     runs-on: [ubuntu-18.04]
     steps:
     - uses: actions/checkout@v2
@@ -18,10 +38,11 @@ jobs:
     - name: Save Antrea image to tarball
       run:  docker save -o antrea-ubuntu.tar antrea/antrea-ubuntu:latest
     - name: Upload Antrea image for subsequent jobs
-      uses: actions/upload-artifact@v1
+      uses: actions/upload-artifact@v2
       with:
         name: antrea-ubuntu
         path: antrea-ubuntu.tar
+        retention-days: 1 # minimum value, in case artifact deletion by 'artifact-cleanup' job fails
 
 # TODO: define an action to avoid repetition?
 
@@ -38,7 +59,7 @@ jobs:
     - uses: actions/checkout@v2
     - uses: actions/setup-go@v1
       with:
-        go-version: 1.13
+        go-version: 1.15
     - name: Download Antrea image from previous job
       uses: actions/download-artifact@v1
       with:
@@ -46,8 +67,6 @@ jobs:
     - name: Load Antrea image
       run:  docker load -i antrea-ubuntu/antrea-ubuntu.tar
     - name: Install Kind
-      env:
-        KIND_VERSION: v0.7.0
       run: |
         curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-$(uname)-amd64
         chmod +x ./kind
@@ -69,7 +88,7 @@ jobs:
     - uses: actions/checkout@v2
     - uses: actions/setup-go@v1
       with:
-        go-version: 1.13
+        go-version: 1.15
     - name: Download Antrea image from previous job
       uses: actions/download-artifact@v1
       with:
@@ -77,8 +96,6 @@ jobs:
     - name: Load Antrea image
       run:  docker load -i antrea-ubuntu/antrea-ubuntu.tar
     - name: Install Kind
-      env:
-        KIND_VERSION: v0.7.0
       run: |
         curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-$(uname)-amd64
         chmod +x ./kind
@@ -86,3 +103,78 @@ jobs:
     - name: Run test
       run: |
         ./ci/kind/test-upgrade-antrea.sh --from-version-n-minus 2
+
+  compatible-N-1:
+    name: API compatible with client version N-1
+    needs: build-antrea-image
+    runs-on: [ubuntu-18.04]
+    steps:
+      - name: Free disk space
+        # https://github.com/actions/virtual-environments/issues/709
+        run: |
+          sudo apt-get clean
+          df -h
+      - uses: actions/checkout@v2
+      - uses: actions/setup-go@v1
+        with:
+          go-version: 1.15
+      - name: Download Antrea image from previous job
+        uses: actions/download-artifact@v1
+        with:
+          name: antrea-ubuntu
+      - name: Load Antrea image
+        run:  docker load -i antrea-ubuntu/antrea-ubuntu.tar
+      - name: Install Kind
+        run: |
+          curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-$(uname)-amd64
+          chmod +x ./kind
+          sudo mv kind /usr/local/bin
+      - name: Run test
+        run: |
+          ./ci/kind/test-upgrade-antrea.sh --from-version-n-minus 1 --controller-only
+
+  compatible-N-2:
+    name: API compatible with client version N-2
+    needs: build-antrea-image
+    runs-on: [ubuntu-18.04]
+    steps:
+      - name: Free disk space
+        # https://github.com/actions/virtual-environments/issues/709
+        run: |
+          sudo apt-get clean
+          df -h
+      - uses: actions/checkout@v2
+      - uses: actions/setup-go@v1
+        with:
+          go-version: 1.15
+      - name: Download Antrea image from previous job
+        uses: actions/download-artifact@v1
+        with:
+          name: antrea-ubuntu
+      - name: Load Antrea image
+        run:  docker load -i antrea-ubuntu/antrea-ubuntu.tar
+      - name: Install Kind
+        run: |
+          curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-$(uname)-amd64
+          chmod +x ./kind
+          sudo mv kind /usr/local/bin
+      - name: Run test
+        run: |
+          ./ci/kind/test-upgrade-antrea.sh --from-version-n-minus 2 --controller-only
+
+  # Runs after all other jobs in the workflow and deletes Antrea Docker images uploaded as temporary
+  # artifacts. It uses a third-party, MIT-licensed action (geekyeggo/delete-artifact). While Github
+  # exposes an API for deleting artifacts, they do not support an official delete-artifact action
+  # yet.
+  artifact-cleanup:
+    name: Delete uploaded images
+    needs: [build-antrea-image, from-N-1, from-N-2, compatible-N-1, compatible-N-2]
+    if: ${{ always() }}
+    runs-on: [ubuntu-18.04]
+    steps:
+    - name: Delete antrea-ubuntu
+      if: ${{ needs.build-antrea-image.result == 'success' }}
+      uses: geekyeggo/delete-artifact@v1
+      with:
+        name: antrea-ubuntu
+        failOnError: false

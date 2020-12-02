@@ -18,8 +18,6 @@ import (
 	"k8s.io/component-base/metrics"
 	"k8s.io/component-base/metrics/legacyregistry"
 	"k8s.io/klog"
-
-	"github.com/vmware-tanzu/antrea/pkg/util/env"
 )
 
 var (
@@ -67,33 +65,75 @@ var (
 		Help:           "Flow count for each OVS flow table. The TableID is used as a label.",
 		StabilityLevel: metrics.STABLE,
 	}, []string{"table_id"})
+
+	OVSFlowOpsCount = metrics.NewCounterVec(
+		&metrics.CounterOpts{
+			Name:           "antrea_agent_ovs_flow_ops_count",
+			Help:           "Number of OVS flow operations, partitioned by operation type (add, modify and delete).",
+			StabilityLevel: metrics.ALPHA,
+		},
+		[]string{"operation"},
+	)
+
+	OVSFlowOpsErrorCount = metrics.NewCounterVec(
+		&metrics.CounterOpts{
+			Name:           "antrea_agent_ovs_flow_ops_error_count",
+			Help:           "Number of OVS flow operation errors, partitioned by operation type (add, modify and delete).",
+			StabilityLevel: metrics.ALPHA,
+		},
+		[]string{"operation"},
+	)
+
+	OVSFlowOpsLatency = metrics.NewHistogramVec(
+		&metrics.HistogramOpts{
+			Name:           "antrea_agent_ovs_flow_ops_latency_milliseconds",
+			Help:           "The latency of OVS flow operations, partitioned by operation type (add, modify and delete).",
+			StabilityLevel: metrics.ALPHA,
+		},
+		[]string{"operation"},
+	)
+
+	TotalConnectionsInConnTrackTable = metrics.NewGauge(
+		&metrics.GaugeOpts{
+			Name:           "antrea_agent_conntrack_total_connection_count",
+			Help:           "Number of connections in the conntrack table. This metric gets updated at an interval specified by flowPollInterval, a configuration parameter for the Agent.",
+			StabilityLevel: metrics.ALPHA,
+		},
+	)
+
+	TotalAntreaConnectionsInConnTrackTable = metrics.NewGauge(
+		&metrics.GaugeOpts{
+			Name:           "antrea_agent_conntrack_antrea_connection_count",
+			Help:           "Number of connections in the Antrea ZoneID of the conntrack table. This metric gets updated at an interval specified by flowPollInterval, a configuration parameter for the Agent.",
+			StabilityLevel: metrics.ALPHA,
+		},
+	)
+
+	MaxConnectionsInConnTrackTable = metrics.NewGauge(
+		&metrics.GaugeOpts{
+			Name:           "antrea_agent_conntrack_max_connection_count",
+			Help:           "Size of the conntrack table. This metric gets updated at an interval specified by flowPollInterval, a configuration parameter for the Agent.",
+			StabilityLevel: metrics.ALPHA,
+		},
+	)
 )
 
 func InitializePrometheusMetrics() {
 	klog.Info("Initializing prometheus metrics")
 
+	InitializePodMetrics()
+	InitializeNetworkPolicyMetrics()
+	InitializeOVSMetrics()
+	InitializeConnectionMetrics()
+}
+
+func InitializePodMetrics() {
 	if err := legacyregistry.Register(PodCount); err != nil {
 		klog.Error("Failed to register antrea_agent_local_pod_count with Prometheus")
 	}
+}
 
-	nodeName, err := env.GetNodeName()
-	if err != nil {
-		klog.Errorf("Failed to retrieve agent K8S node name: %v", err)
-	}
-
-	gaugeHost := metrics.NewGauge(&metrics.GaugeOpts{
-		Name:           "antrea_agent_runtime_info",
-		Help:           "Antrea agent runtime info , defined as labels. The value of the gauge is always set to 1.",
-		ConstLabels:    metrics.Labels{"k8s_nodename": nodeName, "k8s_podname": env.GetPodName()},
-		StabilityLevel: metrics.STABLE,
-	})
-	if err := legacyregistry.Register(gaugeHost); err != nil {
-		klog.Error("Failed to register antrea_agent_runtime_info with Prometheus")
-	}
-	// This must be after registering the metrics.Gauge as it is lazily instantiated
-	// and will not measure anything unless the collector is first registered.
-	gaugeHost.Set(1)
-
+func InitializeNetworkPolicyMetrics() {
 	if err := legacyregistry.Register(EgressNetworkPolicyRuleCount); err != nil {
 		klog.Error("Failed to register antrea_agent_egress_networkpolicy_rule_count with Prometheus")
 	}
@@ -105,11 +145,43 @@ func InitializePrometheusMetrics() {
 	if err := legacyregistry.Register(NetworkPolicyCount); err != nil {
 		klog.Error("Failed to register antrea_agent_networkpolicy_count with Prometheus")
 	}
+}
 
+func InitializeOVSMetrics() {
 	if err := legacyregistry.Register(OVSTotalFlowCount); err != nil {
 		klog.Error("Failed to register antrea_agent_ovs_total_flow_count with Prometheus")
 	}
 	if err := legacyregistry.Register(OVSFlowCount); err != nil {
 		klog.Error("Failed to register antrea_agent_ovs_flow_count with Prometheus")
+	}
+
+	if err := legacyregistry.Register(OVSFlowOpsCount); err != nil {
+		klog.Error("Failed to register antrea_agent_ovs_flow_ops_count with Prometheus")
+	}
+	if err := legacyregistry.Register(OVSFlowOpsErrorCount); err != nil {
+		klog.Error("Failed to register antrea_agent_ovs_flow_ops_error_count with Prometheus")
+	}
+	if err := legacyregistry.Register(OVSFlowOpsLatency); err != nil {
+		klog.Error("Failed to register antrea_agent_ovs_flow_ops_latency_milliseconds with Prometheus")
+	}
+	// Initialize OpenFlow operations metrics with label add, modify and delete
+	// since those metrics won't come out until observation.
+	opsArray := [3]string{"add", "modify", "delete"}
+	for _, ops := range opsArray {
+		OVSFlowOpsCount.WithLabelValues(ops)
+		OVSFlowOpsErrorCount.WithLabelValues(ops)
+		OVSFlowOpsLatency.WithLabelValues(ops)
+	}
+}
+
+func InitializeConnectionMetrics() {
+	if err := legacyregistry.Register(TotalConnectionsInConnTrackTable); err != nil {
+		klog.Errorf("Failed to register antrea_agent_conntrack_total_connection_count with error: %v", err)
+	}
+	if err := legacyregistry.Register(TotalAntreaConnectionsInConnTrackTable); err != nil {
+		klog.Errorf("Failed to register antrea_agent_conntrack_antrea_connection_count with error: %v", err)
+	}
+	if err := legacyregistry.Register(MaxConnectionsInConnTrackTable); err != nil {
+		klog.Errorf("Failed to register antrea_agent_conntrack_max_connection_count with error: %v", err)
 	}
 }

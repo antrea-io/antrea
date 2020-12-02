@@ -16,7 +16,6 @@ package utils
 
 import (
 	v1 "k8s.io/api/core/v1"
-
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
@@ -50,6 +49,11 @@ func (b *ClusterNetworkPolicySpecBuilder) SetName(name string) *ClusterNetworkPo
 
 func (b *ClusterNetworkPolicySpecBuilder) SetPriority(p float64) *ClusterNetworkPolicySpecBuilder {
 	b.Spec.Priority = p
+	return b
+}
+
+func (b *ClusterNetworkPolicySpecBuilder) SetTier(tier string) *ClusterNetworkPolicySpecBuilder {
+	b.Spec.Tier = tier
 	return b
 }
 
@@ -101,7 +105,7 @@ func (b *ClusterNetworkPolicySpecBuilder) AddIngress(protoc v1.Protocol,
 	port *int, portName *string, cidr *string,
 	podSelector map[string]string, nsSelector map[string]string,
 	podSelectorMatchExp *[]metav1.LabelSelectorRequirement, nsSelectorMatchExp *[]metav1.LabelSelectorRequirement,
-	action secv1alpha1.RuleAction) *ClusterNetworkPolicySpecBuilder {
+	action secv1alpha1.RuleAction, name string) *ClusterNetworkPolicySpecBuilder {
 
 	var ps *metav1.LabelSelector
 	var ns *metav1.LabelSelector
@@ -174,6 +178,7 @@ func (b *ClusterNetworkPolicySpecBuilder) AddIngress(protoc v1.Protocol,
 		From:   policyPeer,
 		Ports:  ports,
 		Action: &action,
+		Name:   name,
 	}
 	b.Spec.Ingress = append(b.Spec.Ingress, newRule)
 	return b
@@ -183,18 +188,19 @@ func (b *ClusterNetworkPolicySpecBuilder) AddEgress(protoc v1.Protocol,
 	port *int, portName *string, cidr *string,
 	podSelector map[string]string, nsSelector map[string]string,
 	podSelectorMatchExp *[]metav1.LabelSelectorRequirement, nsSelectorMatchExp *[]metav1.LabelSelectorRequirement,
-	action secv1alpha1.RuleAction) *ClusterNetworkPolicySpecBuilder {
+	action secv1alpha1.RuleAction, name string) *ClusterNetworkPolicySpecBuilder {
 
 	// For simplicity, we just reuse the Ingress code here.  The underlying data model for ingress/egress is identical
 	// With the exception of calling the rule `To` vs. `From`.
 	c := &ClusterNetworkPolicySpecBuilder{}
-	c.AddIngress(protoc, port, portName, cidr, podSelector, nsSelector, podSelectorMatchExp, nsSelectorMatchExp, action)
+	c.AddIngress(protoc, port, portName, cidr, podSelector, nsSelector, podSelectorMatchExp, nsSelectorMatchExp, action, name)
 	theRule := c.Get().Spec.Ingress[0]
 
 	b.Spec.Egress = append(b.Spec.Egress, secv1alpha1.Rule{
 		To:     theRule.From,
 		Ports:  theRule.Ports,
 		Action: theRule.Action,
+		Name:   theRule.Name,
 	})
 	return b
 }
@@ -207,8 +213,17 @@ func (b *ClusterNetworkPolicySpecBuilder) WithEgressDNS() *ClusterNetworkPolicyS
 		Port:     &intstr.IntOrString{Type: intstr.Int, IntVal: 53},
 	}
 
-	for _, e := range b.Spec.Egress {
+	for i, e := range b.Spec.Egress {
 		e.Ports = append(e.Ports, route53)
+		b.Spec.Egress[i] = e
+	}
+	return b
+}
+
+func (b *ClusterNetworkPolicySpecBuilder) AddEgressLogging() *ClusterNetworkPolicySpecBuilder {
+	for i, e := range b.Spec.Egress {
+		e.EnableLogging = true
+		b.Spec.Egress[i] = e
 	}
 	return b
 }

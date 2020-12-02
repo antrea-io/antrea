@@ -19,13 +19,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"sync"
 	"time"
 
-	"k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/informers"
 	clientset "k8s.io/client-go/kubernetes"
+	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog"
@@ -37,8 +40,13 @@ import (
 	clientsetversioned "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned"
 	opsinformers "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions/ops/v1alpha1"
 	opslisters "github.com/vmware-tanzu/antrea/pkg/client/listers/ops/v1alpha1"
+	"github.com/vmware-tanzu/antrea/pkg/features"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
+	"github.com/vmware-tanzu/antrea/pkg/querier"
 )
+
+type icmpType uint8
+type icmpCode uint8
 
 const (
 	controllerName = "AntreaAgentTraceflowController"
@@ -52,21 +60,28 @@ const (
 	// Seconds delay before injecting packet into OVS. The time of different nodes may not be completely
 	// synchronized, which requires a delay before inject packet.
 	injectPacketDelay = 5
+	// ICMP Echo Request type and code.
+	icmpEchoRequestType icmpType = 8
+	icmpEchoRequestCode icmpCode = 0
 )
 
 // Controller is responsible for setting up Openflow entries and injecting traceflow packet into
 // the switch for traceflow request.
 type Controller struct {
 	kubeClient             clientset.Interface
+	serviceLister          corelisters.ServiceLister
+	serviceListerSynced    cache.InformerSynced
 	traceflowClient        clientsetversioned.Interface
 	traceflowInformer      opsinformers.TraceflowInformer
 	traceflowLister        opslisters.TraceflowLister
 	traceflowListerSynced  cache.InformerSynced
 	ovsBridgeClient        ovsconfig.OVSBridgeClient
 	ofClient               openflow.Client
+	networkPolicyQuerier   querier.AgentNetworkPolicyInfoQuerier
 	interfaceStore         interfacestore.InterfaceStore
 	networkConfig          *config.NetworkConfig
 	nodeConfig             *config.NodeConfig
+	serviceCIDR            *net.IPNet // K8s Service ClusterIP CIDR
 	queue                  workqueue.RateLimitingInterface
 	runningTraceflowsMutex sync.RWMutex
 	runningTraceflows      map[uint8]string // tag->traceflowName if tf.Status.Phase is Running.
@@ -78,13 +93,16 @@ type Controller struct {
 // events.
 func NewTraceflowController(
 	kubeClient clientset.Interface,
+	informerFactory informers.SharedInformerFactory,
 	traceflowClient clientsetversioned.Interface,
 	traceflowInformer opsinformers.TraceflowInformer,
 	client openflow.Client,
+	npQuerier querier.AgentNetworkPolicyInfoQuerier,
 	ovsBridgeClient ovsconfig.OVSBridgeClient,
 	interfaceStore interfacestore.InterfaceStore,
 	networkConfig *config.NetworkConfig,
-	nodeConfig *config.NodeConfig) *Controller {
+	nodeConfig *config.NodeConfig,
+	serviceCIDR *net.IPNet) *Controller {
 	c := &Controller{
 		kubeClient:            kubeClient,
 		traceflowClient:       traceflowClient,
@@ -93,14 +111,16 @@ func NewTraceflowController(
 		traceflowListerSynced: traceflowInformer.Informer().HasSynced,
 		ovsBridgeClient:       ovsBridgeClient,
 		ofClient:              client,
+		networkPolicyQuerier:  npQuerier,
 		interfaceStore:        interfaceStore,
 		networkConfig:         networkConfig,
 		nodeConfig:            nodeConfig,
+		serviceCIDR:           serviceCIDR,
 		queue:                 workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "traceflow"),
 		runningTraceflows:     make(map[uint8]string),
 		injectedTags:          make(map[uint8]string)}
 
-	// Add handlers for ClusterNetworkPolicy events.
+	// Add handlers for Traceflow events.
 	traceflowInformer.Informer().AddEventHandlerWithResyncPeriod(
 		cache.ResourceEventHandlerFuncs{
 			AddFunc:    c.addTraceflow,
@@ -110,7 +130,12 @@ func NewTraceflowController(
 		resyncPeriod,
 	)
 	// Register packetInHandler
-	c.ofClient.RegisterPacketInHandler("traceflow", c)
+	c.ofClient.RegisterPacketInHandler(uint8(openflow.PacketInReasonTF), "traceflow", c)
+	// Add serviceLister if AntreaProxy enabled
+	if features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
+		c.serviceLister = informerFactory.Core().V1().Services().Lister()
+		c.serviceListerSynced = informerFactory.Core().V1().Services().Informer().HasSynced
+	}
 	return c
 }
 
@@ -128,6 +153,12 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 	defer klog.Infof("Shutting down %s", controllerName)
 
 	klog.Infof("Waiting for caches to sync for %s", controllerName)
+	if features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
+		if !cache.WaitForCacheSync(stopCh, c.serviceListerSynced) {
+			klog.Errorf("Unable to sync service cache for %s", controllerName)
+			return
+		}
+	}
 	if !cache.WaitForCacheSync(stopCh, c.traceflowListerSynced) {
 		klog.Errorf("Unable to sync caches for %s", controllerName)
 		return
@@ -146,7 +177,7 @@ func (c *Controller) addTraceflow(obj interface{}) {
 	c.enqueueTraceflow(tf)
 }
 
-func (c *Controller) updateTraceflow(oldObj, curObj interface{}) {
+func (c *Controller) updateTraceflow(_, curObj interface{}) {
 	tf := curObj.(*opsv1alpha1.Traceflow)
 	klog.Infof("Processing Traceflow %s UPDATE event", tf.Name)
 	c.enqueueTraceflow(tf)
@@ -237,14 +268,18 @@ func (c *Controller) syncTraceflow(traceflowName string) error {
 // startTraceflow deploys OVS flow entries for Traceflow and inject packet if current Node
 // is Sender Node.
 func (c *Controller) startTraceflow(tf *opsv1alpha1.Traceflow) error {
-	// Deploy flow entries for traceflow
-	klog.V(2).Infof("Deploy flow entries for Traceflow %s", tf.Name)
-	err := c.ofClient.InstallTraceflowFlows(tf.Status.DataplaneTag)
+	err := c.validateTraceflow(tf)
 	defer func() {
 		if err != nil {
-			c.errorTraceflowCRD(tf, fmt.Sprintf("Node: %s, error: %+v", tf.Name, err))
+			c.errorTraceflowCRD(tf, fmt.Sprintf("Node: %s, error: %+v", c.nodeConfig.Name, err))
 		}
 	}()
+	if err != nil {
+		return err
+	}
+	// Deploy flow entries for traceflow
+	klog.V(2).Infof("Deploy flow entries for Traceflow %s", tf.Name)
+	err = c.ofClient.InstallTraceflowFlows(tf.Status.DataplaneTag)
 	if err != nil {
 		return err
 	}
@@ -261,6 +296,24 @@ func (c *Controller) startTraceflow(tf *opsv1alpha1.Traceflow) error {
 	return err
 }
 
+func (c *Controller) validateTraceflow(tf *opsv1alpha1.Traceflow) error {
+	if tf.Spec.Destination.Service != "" && !features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
+		return errors.New("using Service destination requires AntreaProxy feature enabled")
+	}
+	if tf.Spec.Destination.IP != "" {
+		destIP := net.ParseIP(tf.Spec.Destination.IP)
+		if destIP == nil {
+			return fmt.Errorf("destination IP is not valid: %s", tf.Spec.Destination.IP)
+		}
+		// When AntreaProxy is enabled, serviceCIDR is not required and may be set to a
+		// default value which does not match the cluster configuration.
+		if !features.DefaultFeatureGate.Enabled(features.AntreaProxy) && c.serviceCIDR.Contains(destIP) {
+			return errors.New("using ClusterIP destination requires AntreaProxy feature enabled")
+		}
+	}
+	return nil
+}
+
 func (c *Controller) injectPacket(tf *opsv1alpha1.Traceflow) error {
 	podInterfaces := c.interfaceStore.GetContainerInterfacesByPod(tf.Spec.Source.Pod, tf.Spec.Source.Namespace)
 	// Update Traceflow phase to Running.
@@ -269,34 +322,41 @@ func (c *Controller) injectPacket(tf *opsv1alpha1.Traceflow) error {
 	c.injectedTags[tf.Status.DataplaneTag] = tf.Name
 	c.injectedTagsMutex.Unlock()
 
+	var srcTCPPort, dstTCPPort, srcUDPPort, dstUDPPort, idICMP, sequenceICMP uint16
+	var flagsTCP uint8
+
 	// Calculate destination MAC/IP.
 	dstMAC := ""
 	dstIP := tf.Spec.Destination.IP
-	isInterNode := true
-	// TODO: Find MAC by dstIP
-	if dstIP == "" {
+	if dstIP != "" {
+		dstPodInterface, hasInterface := c.interfaceStore.GetInterfaceByIP(dstIP)
+		if hasInterface {
+			dstMAC = dstPodInterface.MAC.String()
+		}
+	} else if tf.Spec.Destination.Pod != "" {
 		dstPodInterfaces := c.interfaceStore.GetContainerInterfacesByPod(tf.Spec.Destination.Pod, tf.Spec.Destination.Namespace)
 		if len(dstPodInterfaces) > 0 {
 			dstMAC = dstPodInterfaces[0].MAC.String()
-			dstIP = dstPodInterfaces[0].IP.String()
-			isInterNode = false
+			dstIP = dstPodInterfaces[0].GetIPv4Addr().String()
 		} else {
-			dstPod, err := c.kubeClient.CoreV1().Pods(tf.Spec.Destination.Namespace).Get(context.TODO(), tf.Spec.Destination.Pod, v1.GetOptions{})
+			dstPod, err := c.kubeClient.CoreV1().Pods(tf.Spec.Destination.Namespace).Get(context.TODO(), tf.Spec.Destination.Pod, metav1.GetOptions{})
 			if err != nil {
 				return err
 			}
 			// dstMAC is "" here, will be set to Gateway MAC in ofClient.SendTraceflowPacket
 			dstIP = dstPod.Status.PodIP
 		}
-	}
-	if isInterNode {
-		if c.networkConfig.TunnelType != ovsconfig.GeneveTunnel {
-			// Inter-node traceflow is only available in Geneve tunnel.
-			return errors.New(fmt.Sprintf("inter-node traceflow is only available in Geneve tunnel, current mode: %s", c.networkConfig.TunnelType))
-		} else {
-			// Wait a small period for other Nodes.
-			time.Sleep(time.Duration(injectPacketDelay) * time.Second)
+	} else if tf.Spec.Destination.Service != "" {
+		dstSvc, err := c.serviceLister.Services(tf.Spec.Destination.Namespace).Get(tf.Spec.Destination.Service)
+		if err != nil {
+			return err
 		}
+		dstIP = dstSvc.Spec.ClusterIP
+		flagsTCP = 2
+	}
+	if dstMAC == "" {
+		// If the destination is Service/IP or the packet will be sent to remote Node, wait a small period for other Nodes.
+		time.Sleep(time.Duration(injectPacketDelay) * time.Second)
 	}
 
 	// Protocol is 0 (IPv6 Hop-by-Hop Option) if not set in CRD, which is not supported by Traceflow
@@ -304,44 +364,38 @@ func (c *Controller) injectPacket(tf *opsv1alpha1.Traceflow) error {
 	if tf.Spec.Packet.IPHeader.Protocol == 0 {
 		tf.Spec.Packet.IPHeader.Protocol = 1
 	}
-	TCPSrcPort := uint16(0)
-	TCPDstPort := uint16(0)
-	TCPFlags := uint8(0)
-	UDPSrcPort := uint16(0)
-	UDPDstPort := uint16(0)
-	ICMPID := uint16(0)
-	ICMPSequence := uint16(0)
+
 	if tf.Spec.Packet.TransportHeader.TCP != nil {
-		TCPSrcPort = uint16(tf.Spec.Packet.TransportHeader.TCP.SrcPort)
-		TCPDstPort = uint16(tf.Spec.Packet.TransportHeader.TCP.DstPort)
-		TCPFlags = uint8(tf.Spec.Packet.TransportHeader.TCP.Flags)
+		srcTCPPort = uint16(tf.Spec.Packet.TransportHeader.TCP.SrcPort)
+		dstTCPPort = uint16(tf.Spec.Packet.TransportHeader.TCP.DstPort)
+		flagsTCP = uint8(tf.Spec.Packet.TransportHeader.TCP.Flags)
 	}
 	if tf.Spec.Packet.TransportHeader.UDP != nil {
-		UDPSrcPort = uint16(tf.Spec.Packet.TransportHeader.UDP.SrcPort)
-		UDPDstPort = uint16(tf.Spec.Packet.TransportHeader.UDP.DstPort)
+		srcUDPPort = uint16(tf.Spec.Packet.TransportHeader.UDP.SrcPort)
+		dstUDPPort = uint16(tf.Spec.Packet.TransportHeader.UDP.DstPort)
 	}
 	if tf.Spec.Packet.TransportHeader.ICMP != nil {
-		ICMPID = uint16(tf.Spec.Packet.TransportHeader.ICMP.ID)
-		ICMPSequence = uint16(tf.Spec.Packet.TransportHeader.ICMP.Sequence)
+		idICMP = uint16(tf.Spec.Packet.TransportHeader.ICMP.ID)
+		sequenceICMP = uint16(tf.Spec.Packet.TransportHeader.ICMP.Sequence)
 	}
 	return c.ofClient.SendTraceflowPacket(
 		tf.Status.DataplaneTag,
 		podInterfaces[0].MAC.String(),
 		dstMAC,
-		podInterfaces[0].IP.String(),
+		podInterfaces[0].GetIPv4Addr().String(),
 		dstIP,
 		uint8(tf.Spec.Packet.IPHeader.Protocol),
 		uint8(tf.Spec.Packet.IPHeader.TTL),
 		uint16(tf.Spec.Packet.IPHeader.Flags),
-		TCPSrcPort,
-		TCPDstPort,
-		TCPFlags,
-		UDPSrcPort,
-		UDPDstPort,
-		0,
-		0,
-		ICMPID,
-		ICMPSequence,
+		srcTCPPort,
+		dstTCPPort,
+		flagsTCP,
+		srcUDPPort,
+		dstUDPPort,
+		uint8(icmpEchoRequestType),
+		uint8(icmpEchoRequestCode),
+		idICMP,
+		sequenceICMP,
 		uint32(podInterfaces[0].OFPort),
 		-1)
 }
@@ -354,34 +408,37 @@ func (c *Controller) errorTraceflowCRD(tf *opsv1alpha1.Traceflow, reason string)
 	}
 	patchData := Traceflow{Status: opsv1alpha1.TraceflowStatus{Phase: tf.Status.Phase, Reason: reason}}
 	payloads, _ := json.Marshal(patchData)
-	return c.traceflowClient.OpsV1alpha1().Traceflows().Patch(context.TODO(), tf.Name, types.MergePatchType, payloads, v1.PatchOptions{})
+	return c.traceflowClient.OpsV1alpha1().Traceflows().Patch(context.TODO(), tf.Name, types.MergePatchType, payloads, metav1.PatchOptions{}, "status")
 }
 
-// Deallocate tag from cache. Ignore DataplaneTag == 0 which is invalid case.
+// Deallocate tag from cache.
 func (c *Controller) deallocateTag(tf *opsv1alpha1.Traceflow) {
-	if tf.Status.DataplaneTag == 0 {
-		return
-	}
-	c.injectedTagsMutex.Lock()
-	if existingTraceflowName, ok := c.injectedTags[tf.Status.DataplaneTag]; ok {
-		if tf.Name == existingTraceflowName {
-			delete(c.injectedTags, tf.Status.DataplaneTag)
-		} else {
-			klog.Warningf("injectedTags cache mismatch tag: %d name: %s existingName: %s",
-				tf.Status.DataplaneTag, tf.Name, existingTraceflowName)
-		}
-	}
-	c.injectedTagsMutex.Unlock()
+	dataplaneTag := uint8(0)
 	c.runningTraceflowsMutex.Lock()
-	if existingTraceflowName, ok := c.runningTraceflows[tf.Status.DataplaneTag]; ok {
+	// Controller could have deallocated the tag and cleared the DataplaneTag
+	// field in the Traceflow Status, so try looking up the tag from the
+	// cache by Traceflow name.
+	for tag, existingTraceflowName := range c.runningTraceflows {
 		if tf.Name == existingTraceflowName {
-			delete(c.runningTraceflows, tf.Status.DataplaneTag)
-		} else {
-			klog.Warningf("runningTraceflows cache mismatch tag: %d name: %s existingName: %s",
-				tf.Status.DataplaneTag, tf.Name, existingTraceflowName)
+			delete(c.runningTraceflows, tag)
+			dataplaneTag = tag
+			break
 		}
 	}
 	c.runningTraceflowsMutex.Unlock()
+	if dataplaneTag == 0 {
+		return
+	}
+	c.injectedTagsMutex.Lock()
+	if existingTraceflowName, ok := c.injectedTags[dataplaneTag]; ok {
+		if tf.Name == existingTraceflowName {
+			delete(c.injectedTags, dataplaneTag)
+		} else {
+			klog.Warningf("runningTraceflows cache mismatch tag: %d name: %s existingName: %s",
+				dataplaneTag, tf.Name, existingTraceflowName)
+		}
+	}
+	c.injectedTagsMutex.Unlock()
 }
 
 func (c *Controller) isSender(tag uint8) bool {

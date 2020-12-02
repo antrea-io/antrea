@@ -17,7 +17,7 @@ package querier
 import (
 	v1 "k8s.io/api/core/v1"
 
-	networkingv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
+	cpv1beta "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
 	"github.com/vmware-tanzu/antrea/pkg/util/env"
 	"github.com/vmware-tanzu/antrea/pkg/version"
 )
@@ -31,11 +31,11 @@ type NetworkPolicyInfoQuerier interface {
 type AgentNetworkPolicyInfoQuerier interface {
 	NetworkPolicyInfoQuerier
 	GetControllerConnectionStatus() bool
-	GetNetworkPolicies(namespace string) []networkingv1beta1.NetworkPolicy
-	GetAddressGroups() []networkingv1beta1.AddressGroup
-	GetAppliedToGroups() []networkingv1beta1.AppliedToGroup
-	GetNetworkPolicy(npName, npNamespace string) *networkingv1beta1.NetworkPolicy
-	GetAppliedNetworkPolicies(pod, namespace string) []networkingv1beta1.NetworkPolicy
+	GetNetworkPolicies(npFilter *NetworkPolicyQueryFilter) []cpv1beta.NetworkPolicy
+	GetAddressGroups() []cpv1beta.AddressGroup
+	GetAppliedToGroups() []cpv1beta.AppliedToGroup
+	GetAppliedNetworkPolicies(pod, namespace string, npFilter *NetworkPolicyQueryFilter) []cpv1beta.NetworkPolicy
+	GetNetworkPolicyByRuleFlowID(ruleFlowID uint32) *cpv1beta.NetworkPolicyReference
 }
 
 type ControllerNetworkPolicyInfoQuerier interface {
@@ -71,4 +71,22 @@ func GetSelfNode(isAgent bool, node string) v1.ObjectReference {
 // GetVersion gets current version.
 func GetVersion() string {
 	return version.GetFullVersion()
+}
+
+// NetworkPolicyQueryFilter is used to filter the result while retrieve network policy
+// An empty attribute, which won't be used as a condition, means match all.
+// e.g SourceType = "" means all type network policy will be retrieved
+// Can have more attributes in future if more args are required
+type NetworkPolicyQueryFilter struct {
+	// The Name of the controlplane network policy. If this field is set then
+	// none of the other fields can be.
+	Name string
+	// The Name of the original network policy.
+	SourceName string
+	// The namespace of the original Namespace that the internal NetworkPolicy is created for.
+	Namespace string
+	// Name of the pod that the network policy is applied on.
+	Pod string
+	// The type of the original NetworkPolicy that the internal NetworkPolicy is created for.(K8sNP, CNP, ANP)
+	SourceType cpv1beta.NetworkPolicyType
 }

@@ -1,4 +1,4 @@
-// Copyright 2019 Antrea Authors
+// Copyright 2020 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,6 +17,8 @@ package networking
 import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+
+	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
 )
 
 // GroupName is the group name used in this package.
@@ -45,14 +47,14 @@ var (
 // Adds the list of known types to the given scheme.
 func addKnownTypes(scheme *runtime.Scheme) error {
 	scheme.AddKnownTypes(SchemeGroupVersion,
-		&AppliedToGroup{},
-		&AppliedToGroupPatch{},
-		&AppliedToGroupList{},
-		&AddressGroup{},
-		&AddressGroupPatch{},
-		&AddressGroupList{},
-		&NetworkPolicy{},
-		&NetworkPolicyList{},
+		&controlplane.AppliedToGroup{},
+		&controlplane.AppliedToGroupPatch{},
+		&controlplane.AppliedToGroupList{},
+		&controlplane.AddressGroup{},
+		&controlplane.AddressGroupPatch{},
+		&controlplane.AddressGroupList{},
+		&controlplane.NetworkPolicy{},
+		&controlplane.NetworkPolicyList{},
 	)
 	return nil
 }

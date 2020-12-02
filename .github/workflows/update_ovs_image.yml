@@ -15,12 +15,14 @@ jobs:
       env:
         DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
         DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
-        OVS_VERSION: 2.13.0
+        OVS_VERSION: 2.14.0
       run: |
         cd build/images/ovs/
         docker pull antrea/openvswitch-debs:$OVS_VERSION || true
         docker pull antrea/openvswitch:$OVS_VERSION || true
         echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+        ./build_and_push.sh
+        cd ../base/
         ./build_and_push.sh
   skip:
     if: github.repository != 'vmware-tanzu/antrea'

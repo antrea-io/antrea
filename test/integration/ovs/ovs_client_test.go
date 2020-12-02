@@ -19,6 +19,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strconv"
 	"testing"
 	"time"
 
@@ -208,6 +209,57 @@ func TestOVSOtherConfig(t *testing.T) {
 	require.Equal(t, map[string]string{"foo1": "bar1", "foo2": "bar2"}, gotOtherConfigs, "other_config mismatched")
 }
 
+func TestTunnelOptionCsum(t *testing.T) {
+	testCases := map[string]struct {
+		initialCsum bool
+		updatedCsum bool
+	}{
+		"initial false, kept false": {
+			initialCsum: false,
+			updatedCsum: false,
+		},
+		"initial false, updated to true": {
+			initialCsum: false,
+			updatedCsum: true,
+		},
+		"initial true, kept true": {
+			initialCsum: true,
+			updatedCsum: true,
+		},
+		"initial true, updated to false": {
+			initialCsum: true,
+			updatedCsum: false,
+		},
+	}
+	for name, testCase := range testCases {
+		t.Run(name, func(t *testing.T) {
+			data := &testData{}
+			data.setup(t)
+			defer data.teardown(t)
+
+			name := "vxlan0"
+			_, err := data.br.CreateTunnelPortExt(name, ovsconfig.VXLANTunnel, ofPortRequest, testCase.initialCsum, "", "", "", nil)
+			require.Nil(t, err, "Error when creating tunnel port")
+			options, err := data.br.GetInterfaceOptions(name)
+			require.Nil(t, err, "Error when getting interface options")
+			actualInitialCsum, _ := strconv.ParseBool(options["csum"])
+			require.Equal(t, testCase.initialCsum, actualInitialCsum)
+
+			updatedOptions := map[string]interface{}{}
+			for k, v := range options {
+				updatedOptions[k] = v
+			}
+			updatedOptions["csum"] = strconv.FormatBool(testCase.updatedCsum)
+			err = data.br.SetInterfaceOptions(name, updatedOptions)
+			require.Nil(t, err, "Error when setting interface options")
+			options, err = data.br.GetInterfaceOptions(name)
+			require.Nil(t, err, "Error when getting interface options")
+			actualCsum, _ := strconv.ParseBool(options["csum"])
+			require.Equal(t, testCase.updatedCsum, actualCsum)
+		})
+	}
+}
+
 func deleteAllPorts(t *testing.T, br *ovsconfig.OVSBridge) {
 	portList, err := br.GetPortUUIDList()
 	require.Nil(t, err, "Error when retrieving port list")
@@ -241,13 +293,12 @@ func testCreatePort(t *testing.T, br *ovsconfig.OVSBridge, name string, ifType s
 	require.Nilf(t, err, "Failed to create %s port: %s", ifType, err)
 
 	ofPort, err := br.GetOFPort(name)
-	require.Nilf(t, err, "Failed to get ofport for %s port: %s", ifType, err)
 	if ifType != "" {
+		require.NoErrorf(t, err, "Failed to get ofport for %s port: %s", ifType, err)
 		assert.Equal(t, ofPortRequest, ofPort, "ofport does not match the requested value for %s port", ifType)
 		ofPortRequest++
 	} else {
-		// -1 will be assigned to a port without a valid interface backing.
-		assert.Equal(t, int32(-1), ofPort)
+		require.Error(t, err, "GetOFPort should return an error for a port without a valid interface backing")
 	}
 
 	port, err := br.GetPortData(uuid, ifName)
@@ -256,7 +307,9 @@ func testCreatePort(t *testing.T, br *ovsconfig.OVSBridge, name string, ifType s
 
 	assert.Equal(t, name, port.Name)
 	assert.Equal(t, ifName, port.IFName)
-	assert.Equal(t, ofPort, port.OFPort)
+	if ifType != "" {
+		assert.Equal(t, ofPort, port.OFPort)
+	}
 
 	for k, v := range externalIDs {
 		rv, ok := port.ExternalIDs[k]

@@ -193,9 +193,15 @@ func (aq agentQuerier) GetAgentInfo(agentInfo *v1beta1.AntreaAgentInfo, partial 
 		agentInfo.Version = querier.GetVersion()
 		agentInfo.PodRef = querier.GetSelfPod()
 		agentInfo.NodeRef = querier.GetSelfNode(true, aq.nodeConfig.Name)
-		if aq.nodeConfig.PodCIDR != nil {
-			agentInfo.NodeSubnet = []string{aq.nodeConfig.PodCIDR.String()}
+		// Make a new string slice instead of appending agentInfo.NodeSubnets directly to avoid duplicate CIDRs.
+		nodeSubnets := make([]string, 0)
+		if aq.nodeConfig.PodIPv4CIDR != nil {
+			nodeSubnets = append(nodeSubnets, aq.nodeConfig.PodIPv4CIDR.String())
 		}
+		if aq.nodeConfig.PodIPv6CIDR != nil {
+			nodeSubnets = append(nodeSubnets, aq.nodeConfig.PodIPv6CIDR.String())
+		}
+		agentInfo.NodeSubnets = nodeSubnets
 		agentInfo.OVSInfo.BridgeName = aq.nodeConfig.OVSBridge
 		agentInfo.APIPort = aq.apiPort
 	}

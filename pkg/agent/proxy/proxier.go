@@ -15,6 +15,7 @@
 package proxy
 
 import (
+	"net"
 	"sync"
 	"time"
 
@@ -23,6 +24,7 @@ import (
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/klog"
+	utilnet "k8s.io/utils/net"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/agent/proxy/types"
@@ -38,7 +40,7 @@ const (
 )
 
 // TODO: Add metrics
-type Proxier struct {
+type proxier struct {
 	once            sync.Once
 	endpointsConfig *config.EndpointsConfig
 	serviceConfig   *config.ServiceConfig
@@ -48,8 +50,6 @@ type Proxier struct {
 	// have been synced, syncProxyRules will start syncing rules to OVS.
 	endpointsChanges *endpointsChangesTracker
 	serviceChanges   *serviceChangesTracker
-	// syncProxyRulesMutex protects internal caches and states.
-	syncProxyRulesMutex sync.Mutex
 	// serviceMap stores services we expect to be installed.
 	serviceMap k8sproxy.ServiceMap
 	// serviceInstalledMap stores services we actually installed.
@@ -59,18 +59,23 @@ type Proxier struct {
 	// endpointInstalledMap stores endpoints we actually installed.
 	endpointInstalledMap map[k8sproxy.ServicePortName]map[string]struct{}
 	groupCounter         types.GroupCounter
+	// serviceStringMap provides map from serviceString(ClusterIP:Port/Proto) to ServicePortName.
+	serviceStringMap map[string]k8sproxy.ServicePortName
+	// serviceStringMapMutex protects serviceStringMap object.
+	serviceStringMapMutex sync.Mutex
 
 	runner       *k8sproxy.BoundedFrequencyRunner
 	stopChan     <-chan struct{}
 	agentQuerier querier.AgentQuerier
 	ofClient     openflow.Client
+	isIPv6       bool
 }
 
-func (p *Proxier) isInitialized() bool {
+func (p *proxier) isInitialized() bool {
 	return p.endpointsChanges.Synced() && p.serviceChanges.Synced()
 }
 
-func (p *Proxier) removeStaleServices() {
+func (p *proxier) removeStaleServices() {
 	for svcPortName, svcPort := range p.serviceInstalledMap {
 		if _, ok := p.serviceMap[svcPortName]; ok {
 			continue
@@ -80,10 +85,12 @@ func (p *Proxier) removeStaleServices() {
 			klog.Errorf("Failed to remove flows of Service %v: %v", svcPortName, err)
 			continue
 		}
-		for _, endpoint := range p.endpointsMap[svcPortName] {
-			if err := p.ofClient.UninstallEndpointFlows(svcInfo.OFProtocol, endpoint); err != nil {
-				klog.Errorf("Failed to remove flows of Service Endpoints %v: %v", svcPortName, err)
-				continue
+		for _, ingress := range svcInfo.LoadBalancerIPStrings() {
+			if ingress != "" {
+				if err := p.ofClient.UninstallServiceFlows(net.ParseIP(ingress), uint16(svcInfo.Port()), svcInfo.OFProtocol); err != nil {
+					klog.Errorf("Error when installing Service flows: %v", err)
+					continue
+				}
 			}
 		}
 		groupID, _ := p.groupCounter.Get(svcPortName)
@@ -91,20 +98,42 @@ func (p *Proxier) removeStaleServices() {
 			klog.Errorf("Failed to remove flows of Service %v: %v", svcPortName, err)
 			continue
 		}
+		for _, endpoint := range p.endpointsMap[svcPortName] {
+			if err := p.ofClient.UninstallEndpointFlows(svcInfo.OFProtocol, endpoint); err != nil {
+				klog.Errorf("Failed to remove flows of Service Endpoints %v: %v", svcPortName, err)
+				continue
+			}
+		}
 		delete(p.serviceInstalledMap, svcPortName)
+		p.deleteServiceByIP(svcInfo.String())
 		p.groupCounter.Recycle(svcPortName)
 	}
 }
 
-func (p *Proxier) removeStaleEndpoints(staleEndpoints map[k8sproxy.ServicePortName]map[string]k8sproxy.Endpoint) {
-	for svcPortName, endpoints := range staleEndpoints {
-		bindingProtocol := binding.ProtocolTCP
-		if svcPortName.Protocol == corev1.ProtocolUDP {
+func getBindingProtoForIPProto(endpointIP string, protocol corev1.Protocol) binding.Protocol {
+	var bindingProtocol binding.Protocol
+	if utilnet.IsIPv6String(endpointIP) {
+		bindingProtocol = binding.ProtocolTCPv6
+		if protocol == corev1.ProtocolUDP {
+			bindingProtocol = binding.ProtocolUDPv6
+		} else if protocol == corev1.ProtocolSCTP {
+			bindingProtocol = binding.ProtocolSCTPv6
+		}
+	} else {
+		bindingProtocol = binding.ProtocolTCP
+		if protocol == corev1.ProtocolUDP {
 			bindingProtocol = binding.ProtocolUDP
-		} else if svcPortName.Protocol == corev1.ProtocolSCTP {
+		} else if protocol == corev1.ProtocolSCTP {
 			bindingProtocol = binding.ProtocolSCTP
 		}
+	}
+	return bindingProtocol
+}
+
+func (p *proxier) removeStaleEndpoints(staleEndpoints map[k8sproxy.ServicePortName]map[string]k8sproxy.Endpoint) {
+	for svcPortName, endpoints := range staleEndpoints {
 		for _, endpoint := range endpoints {
+			bindingProtocol := getBindingProtoForIPProto(endpoint.IP(), svcPortName.Protocol)
 			if err := p.ofClient.UninstallEndpointFlows(bindingProtocol, endpoint); err != nil {
 				klog.Errorf("Error when removing Endpoint %v for %v", endpoint, svcPortName)
 				continue
@@ -119,7 +148,7 @@ func (p *Proxier) removeStaleEndpoints(staleEndpoints map[k8sproxy.ServicePortNa
 	}
 }
 
-func (p *Proxier) installServices() {
+func (p *proxier) installServices() {
 	for svcPortName, svcPort := range p.serviceMap {
 		svcInfo := svcPort.(*types.ServiceInfo)
 		groupID, _ := p.groupCounter.Get(svcPortName)
@@ -150,7 +179,7 @@ func (p *Proxier) installServices() {
 			continue
 		}
 
-		if err := p.ofClient.InstallEndpointFlows(svcInfo.OFProtocol, endpointUpdateList); err != nil {
+		if err := p.ofClient.InstallEndpointFlows(svcInfo.OFProtocol, endpointUpdateList, p.isIPv6); err != nil {
 			klog.Errorf("Error when installing Endpoints flows: %v", err)
 			continue
 		}
@@ -164,17 +193,29 @@ func (p *Proxier) installServices() {
 			klog.Errorf("Error when installing Service flows: %v", err)
 			continue
 		}
+		// Install OpenFlow entries for the ingress IPs of LoadBalancer Service.
+		// The LoadBalancer Service should can be accessed from Pod, Node and
+		// external host.
+		for _, ingress := range svcInfo.LoadBalancerIPStrings() {
+			if ingress != "" {
+				if err := p.installLoadBalancerServiceFlows(groupID, net.ParseIP(ingress), uint16(svcInfo.Port()), svcInfo.OFProtocol, uint16(svcInfo.StickyMaxAgeSeconds())); err != nil {
+					klog.Errorf("Error when installing LoadBalancer Service flows: %v", err)
+					continue
+				}
+			}
+		}
 		p.serviceInstalledMap[svcPortName] = svcPort
+		p.addServiceByIP(svcInfo.String(), svcPortName)
 	}
 }
 
-// syncProxyRulesMutex applies current changes in change trackers and then updates
+// syncProxyRules applies current changes in change trackers and then updates
 // flows for services and endpoints. It will abort if either endpoints or services
-// resources is not synced.
-func (p *Proxier) syncProxyRules() {
-	p.syncProxyRulesMutex.Lock()
-	defer p.syncProxyRulesMutex.Unlock()
-
+// resources is not synced. syncProxyRules is only called through the Run method
+// of the runner object, and all calls are serialized. Since this method is the
+// only one accessing internal state (e.g. serviceMap), no synchronization
+// mechanism, such as a mutex, is required.
+func (p *proxier) syncProxyRules() {
 	start := time.Now()
 	defer func() {
 		klog.V(4).Infof("syncProxyRules took %v", time.Since(start))
@@ -187,58 +228,88 @@ func (p *Proxier) syncProxyRules() {
 	staleEndpoints := p.endpointsChanges.Update(p.endpointsMap)
 	p.serviceChanges.Update(p.serviceMap)
 
-	p.removeStaleEndpoints(staleEndpoints)
 	p.removeStaleServices()
 	p.installServices()
+	p.removeStaleEndpoints(staleEndpoints)
 }
 
-func (p *Proxier) SyncLoop() {
+func (p *proxier) SyncLoop() {
 	p.runner.Loop(p.stopChan)
 }
 
-func (p *Proxier) OnEndpointsAdd(endpoints *corev1.Endpoints) {
+func (p *proxier) OnEndpointsAdd(endpoints *corev1.Endpoints) {
 	p.OnEndpointsUpdate(nil, endpoints)
 }
 
-func (p *Proxier) OnEndpointsUpdate(oldEndpoints, endpoints *corev1.Endpoints) {
+func (p *proxier) OnEndpointsUpdate(oldEndpoints, endpoints *corev1.Endpoints) {
 	if p.endpointsChanges.OnEndpointUpdate(oldEndpoints, endpoints) && p.isInitialized() {
 		p.runner.Run()
 	}
 }
 
-func (p *Proxier) OnEndpointsDelete(endpoints *corev1.Endpoints) {
+func (p *proxier) OnEndpointsDelete(endpoints *corev1.Endpoints) {
 	p.OnEndpointsUpdate(endpoints, nil)
 }
 
-func (p *Proxier) OnEndpointsSynced() {
+func (p *proxier) OnEndpointsSynced() {
 	p.endpointsChanges.OnEndpointsSynced()
 	if p.isInitialized() {
 		p.runner.Run()
 	}
 }
 
-func (p *Proxier) OnServiceAdd(service *corev1.Service) {
+func (p *proxier) OnServiceAdd(service *corev1.Service) {
 	p.OnServiceUpdate(nil, service)
 }
 
-func (p *Proxier) OnServiceUpdate(oldService, service *corev1.Service) {
-	if p.serviceChanges.OnServiceUpdate(oldService, service) && p.isInitialized() {
-		p.runner.Run()
+func (p *proxier) OnServiceUpdate(oldService, service *corev1.Service) {
+	var isIPv6 bool
+	if oldService != nil {
+		isIPv6 = utilnet.IsIPv6String(oldService.Spec.ClusterIP)
+	} else {
+		isIPv6 = utilnet.IsIPv6String(service.Spec.ClusterIP)
+	}
+	if isIPv6 == p.isIPv6 {
+		if p.serviceChanges.OnServiceUpdate(oldService, service) && p.isInitialized() {
+			p.runner.Run()
+		}
 	}
 }
 
-func (p *Proxier) OnServiceDelete(service *corev1.Service) {
+func (p *proxier) OnServiceDelete(service *corev1.Service) {
 	p.OnServiceUpdate(service, nil)
 }
 
-func (p *Proxier) OnServiceSynced() {
+func (p *proxier) OnServiceSynced() {
 	p.serviceChanges.OnServiceSynced()
 	if p.isInitialized() {
 		p.runner.Run()
 	}
 }
 
-func (p *Proxier) Run(stopCh <-chan struct{}) {
+func (p *proxier) GetServiceByIP(serviceStr string) (k8sproxy.ServicePortName, bool) {
+	p.serviceStringMapMutex.Lock()
+	defer p.serviceStringMapMutex.Unlock()
+
+	serviceInfo, exists := p.serviceStringMap[serviceStr]
+	return serviceInfo, exists
+}
+
+func (p *proxier) addServiceByIP(serviceStr string, servicePortName k8sproxy.ServicePortName) {
+	p.serviceStringMapMutex.Lock()
+	defer p.serviceStringMapMutex.Unlock()
+
+	p.serviceStringMap[serviceStr] = servicePortName
+}
+
+func (p *proxier) deleteServiceByIP(serviceStr string) {
+	p.serviceStringMapMutex.Lock()
+	defer p.serviceStringMapMutex.Unlock()
+
+	delete(p.serviceStringMap, serviceStr)
+}
+
+func (p *proxier) Run(stopCh <-chan struct{}) {
 	p.once.Do(func() {
 		go p.serviceConfig.Run(stopCh)
 		go p.endpointsConfig.Run(stopCh)
@@ -247,25 +318,48 @@ func (p *Proxier) Run(stopCh <-chan struct{}) {
 	})
 }
 
-func New(hostname string, informerFactory informers.SharedInformerFactory, ofClient openflow.Client) *Proxier {
+func NewProxier(
+	hostname string,
+	informerFactory informers.SharedInformerFactory,
+	ofClient openflow.Client,
+	isIPv6 bool) *proxier {
 	recorder := record.NewBroadcaster().NewRecorder(
 		runtime.NewScheme(),
 		corev1.EventSource{Component: componentName, Host: hostname},
 	)
-	p := &Proxier{
+
+	klog.Infof("Creating proxier with IPv6 enabled=%t", isIPv6)
+	p := &proxier{
 		endpointsConfig:      config.NewEndpointsConfig(informerFactory.Core().V1().Endpoints(), resyncPeriod),
 		serviceConfig:        config.NewServiceConfig(informerFactory.Core().V1().Services(), resyncPeriod),
 		endpointsChanges:     newEndpointsChangesTracker(hostname),
-		serviceChanges:       newServiceChangesTracker(recorder),
+		serviceChanges:       newServiceChangesTracker(recorder, isIPv6),
 		serviceMap:           k8sproxy.ServiceMap{},
 		serviceInstalledMap:  k8sproxy.ServiceMap{},
 		endpointInstalledMap: map[k8sproxy.ServicePortName]map[string]struct{}{},
 		endpointsMap:         types.EndpointsMap{},
+		serviceStringMap:     map[string]k8sproxy.ServicePortName{},
 		groupCounter:         types.NewGroupCounter(),
 		ofClient:             ofClient,
+		isIPv6:               isIPv6,
 	}
 	p.serviceConfig.RegisterEventHandler(p)
 	p.endpointsConfig.RegisterEventHandler(p)
 	p.runner = k8sproxy.NewBoundedFrequencyRunner(componentName, p.syncProxyRules, 0, 30*time.Second, -1)
 	return p
+}
+
+func NewDualStackProxier(
+	hostname string, informerFactory informers.SharedInformerFactory, ofClient openflow.Client) k8sproxy.Provider {
+
+	// Create an ipv4 instance of the single-stack proxier
+	ipv4Proxier := NewProxier(hostname, informerFactory, ofClient, false)
+
+	// Create an ipv6 instance of the single-stack proxier
+	ipv6Proxier := NewProxier(hostname, informerFactory, ofClient, true)
+
+	// Return a meta-proxier that dispatch calls between the two
+	// single-stack proxier instances
+	metaProxier := k8sproxy.NewMetaProxier(ipv4Proxier, ipv6Proxier)
+	return metaProxier
 }

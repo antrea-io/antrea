@@ -21,49 +21,130 @@ import (
 	"testing"
 	"time"
 
-	"github.com/vmware-tanzu/antrea/pkg/apis/ops/v1alpha1"
+	"github.com/stretchr/testify/require"
 	networkingv1 "k8s.io/api/networking/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
+
+	"github.com/vmware-tanzu/antrea/pkg/agent/config"
+	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
+	"github.com/vmware-tanzu/antrea/pkg/apis/ops/v1alpha1"
+	"github.com/vmware-tanzu/antrea/pkg/features"
 )
 
-const traceflowTimeout = 40 * time.Second
-
 type testcase struct {
+	name            string
 	tf              *v1alpha1.Traceflow
 	expectedPhase   v1alpha1.TraceflowPhase
 	expectedResults []v1alpha1.NodeResult
 }
 
-// TestTraceflow verifies if traceflow can trace intra/inter nodes traffic with some NetworkPolicies set.
-func TestTraceflow(t *testing.T) {
-	skipIfProviderIs(t, "kind", "Inter nodes test needs Geneve tunnel")
+func skipIfTraceflowDisabled(t *testing.T, data *TestData) {
+	if featureGate, err := data.GetAgentFeatures(antreaNamespace); err != nil {
+		t.Fatalf("Error when detecting traceflow: %v", err)
+	} else if !featureGate.Enabled(features.AntreaProxy) {
+		t.Skip("Skipping test because Traceflow is not enabled in the Agent")
+	}
+	if featureGate, err := data.GetControllerFeatures(antreaNamespace); err != nil {
+		t.Fatalf("Error when detecting traceflow: %v", err)
+	} else if !featureGate.Enabled(features.AntreaProxy) {
+		t.Skip("Skipping test because Traceflow is not enabled in the Controller")
+	}
+}
 
+// TestTraceflowIntraNode verifies if traceflow can trace intra node traffic with some NetworkPolicies set.
+func TestTraceflowIntraNode(t *testing.T) {
+	skipIfNotIPv4Cluster(t)
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
 	defer teardownTest(t, data)
 
-	if err = data.enableTraceflow(t); err != nil {
-		t.Fatal("Error when enabling Traceflow")
+	skipIfTraceflowDisabled(t, data)
+	encapMode, err := data.GetEncapMode()
+	if err != nil {
+		t.Fatalf("Failed to retrieve encap mode: %v", err)
+	}
+	if encapMode != config.TrafficEncapModeNoEncap {
+		// https://github.com/vmware-tanzu/antrea/issues/897
+		skipIfProviderIs(t, "kind", "Skipping inter-Node Traceflow test for Kind because of #897")
 	}
 
-	node1 := workerNodeName(1)
-	node2 := workerNodeName(2)
+	node1 := nodeName(0)
 
-	node1Pods, _, node1CleanupFn := createTestBusyboxPods(t, data, 2, node1)
-	node2Pods, _, node2CleanupFn := createTestBusyboxPods(t, data, 1, node2)
+	node1Pods, node1IPs, node1CleanupFn := createTestBusyboxPods(t, data, 3, node1)
 	defer node1CleanupFn()
-	defer node2CleanupFn()
 
-	intraNodeTraceflow := newTraceflow(node1Pods[0], node1Pods[1])
-	interNodeTraceflow := newTraceflow(node1Pods[0], node2Pods[0])
+	// Setup 2 NetworkPolicies:
+	// 1. Allow all egress traffic.
+	// 2. Deny ingress traffic on pod with label antrea-e2e = node1Pods[1]. So flow node1Pods[0] -> node1Pods[1] will be dropped.
+	var allowAllEgress *networkingv1.NetworkPolicy
+	allowAllEgressName := "test-networkpolicy-allow-all-egress"
+	if allowAllEgress, err = data.createNPAllowAllEgress(allowAllEgressName); err != nil {
+		t.Fatalf("Error when creating network policy: %v", err)
+	}
+	defer func() {
+		if err = data.deleteNetworkpolicy(allowAllEgress); err != nil {
+			t.Errorf("Error when deleting network policy: %v", err)
+		}
+	}()
 
+	var denyAllIngress *networkingv1.NetworkPolicy
+	denyAllIngressName := "test-networkpolicy-deny-ingress"
+	if denyAllIngress, err = data.createNPDenyAllIngress("antrea-e2e", node1Pods[1], denyAllIngressName); err != nil {
+		t.Fatalf("Error when creating network policy: %v", err)
+	}
+	defer func() {
+		if err = data.deleteNetworkpolicy(denyAllIngress); err != nil {
+			t.Errorf("Error when deleting network policy: %v", err)
+		}
+	}()
+
+	antreaPod, err := data.getAntreaPodOnNode(node1)
+	if err = data.waitForNetworkpolicyRealized(antreaPod, allowAllEgressName); err != nil {
+		t.Fatal(err)
+	}
+	if err = data.waitForNetworkpolicyRealized(antreaPod, denyAllIngressName); err != nil {
+		t.Fatal(err)
+	}
+
+	// Creates 6 traceflows:
+	// 1. node1Pods[0] -> node1Pods[1], intra node1.
+	// 2. node1Pods[0] -> node2Pods[0], inter node1 and node2.
+	// 3. node1Pods[0] -> node1IPs[1], intra node1.
+	// 4. node1Pods[0] -> node2IPs[0], inter node1 and node2.
+	// 5. node1Pods[0] -> service, inter node1 and node2.
+	// 6. node1Pods[0] -> non-existing Pod
 	testcases := []testcase{
 		{
-			tf:            intraNodeTraceflow,
+			name: "intraNodeTraceflow",
+			tf: &v1alpha1.Traceflow{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: randName(fmt.Sprintf("%s-%s-to-%s-%s-", testNamespace, node1Pods[0], testNamespace, node1Pods[1])),
+				},
+				Spec: v1alpha1.TraceflowSpec{
+					Source: v1alpha1.Source{
+						Namespace: testNamespace,
+						Pod:       node1Pods[0],
+					},
+					Destination: v1alpha1.Destination{
+						Namespace: testNamespace,
+						Pod:       node1Pods[1],
+					},
+					Packet: v1alpha1.Packet{
+						IPHeader: v1alpha1.IPHeader{
+							Protocol: 6,
+						},
+						TransportHeader: v1alpha1.TransportHeader{
+							TCP: &v1alpha1.TCPHeader{
+								DstPort: 80,
+								Flags:   2,
+							},
+						},
+					},
+				},
+			},
 			expectedPhase: v1alpha1.Succeeded,
 			expectedResults: []v1alpha1.NodeResult{
 				{
@@ -88,7 +169,279 @@ func TestTraceflow(t *testing.T) {
 			},
 		},
 		{
-			tf:            interNodeTraceflow,
+			name: "intraNodeUDPDstPodTraceflow",
+			tf: &v1alpha1.Traceflow{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: randName(fmt.Sprintf("%s-%s-to-%s-", testNamespace, node1Pods[0], node1Pods[2])),
+				},
+				Spec: v1alpha1.TraceflowSpec{
+					Source: v1alpha1.Source{
+						Namespace: testNamespace,
+						Pod:       node1Pods[0],
+					},
+					Destination: v1alpha1.Destination{
+						Namespace: testNamespace,
+						Pod:       node1Pods[2],
+					},
+					Packet: v1alpha1.Packet{
+						IPHeader: v1alpha1.IPHeader{
+							Protocol: 17,
+						},
+						TransportHeader: v1alpha1.TransportHeader{
+							UDP: &v1alpha1.UDPHeader{
+								DstPort: 321,
+							},
+						},
+					},
+				},
+			},
+			expectedPhase: v1alpha1.Succeeded,
+			expectedResults: []v1alpha1.NodeResult{
+				{
+					Node: node1,
+					Observations: []v1alpha1.Observation{
+						{
+							Component: v1alpha1.SpoofGuard,
+							Action:    v1alpha1.Forwarded,
+						},
+						{
+							Component:     v1alpha1.NetworkPolicy,
+							ComponentInfo: "EgressRule",
+							Action:        v1alpha1.Forwarded,
+						},
+						{
+							Component:     v1alpha1.Forwarding,
+							ComponentInfo: "Output",
+							Action:        v1alpha1.Delivered,
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "intraNodeUDPDstIPTraceflow",
+			tf: &v1alpha1.Traceflow{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: randName(fmt.Sprintf("%s-%s-to-%s-", testNamespace, node1Pods[0], node1IPs[2].ipv4.String())),
+				},
+				Spec: v1alpha1.TraceflowSpec{
+					Source: v1alpha1.Source{
+						Namespace: testNamespace,
+						Pod:       node1Pods[0],
+					},
+					Destination: v1alpha1.Destination{
+						IP: node1IPs[2].ipv4.String(),
+					},
+					Packet: v1alpha1.Packet{
+						IPHeader: v1alpha1.IPHeader{
+							Protocol: 17,
+						},
+						TransportHeader: v1alpha1.TransportHeader{
+							UDP: &v1alpha1.UDPHeader{
+								DstPort: 321,
+							},
+						},
+					},
+				},
+			},
+			expectedPhase: v1alpha1.Succeeded,
+			expectedResults: []v1alpha1.NodeResult{
+				{
+					Node: node1,
+					Observations: []v1alpha1.Observation{
+						{
+							Component: v1alpha1.SpoofGuard,
+							Action:    v1alpha1.Forwarded,
+						},
+						{
+							Component:     v1alpha1.NetworkPolicy,
+							ComponentInfo: "EgressRule",
+							Action:        v1alpha1.Forwarded,
+						},
+						{
+							Component:     v1alpha1.Forwarding,
+							ComponentInfo: "Output",
+							Action:        v1alpha1.Delivered,
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "intraNodeICMPDstIPTraceflow",
+			tf: &v1alpha1.Traceflow{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: randName(fmt.Sprintf("%s-%s-to-%s-", testNamespace, node1Pods[0], node1IPs[2].ipv4.String())),
+				},
+				Spec: v1alpha1.TraceflowSpec{
+					Source: v1alpha1.Source{
+						Namespace: testNamespace,
+						Pod:       node1Pods[0],
+					},
+					Destination: v1alpha1.Destination{
+						IP: node1IPs[2].ipv4.String(),
+					},
+					Packet: v1alpha1.Packet{
+						IPHeader: v1alpha1.IPHeader{
+							Protocol: 1,
+						},
+					},
+				},
+			},
+			expectedPhase: v1alpha1.Succeeded,
+			expectedResults: []v1alpha1.NodeResult{
+				{
+					Node: node1,
+					Observations: []v1alpha1.Observation{
+						{
+							Component: v1alpha1.SpoofGuard,
+							Action:    v1alpha1.Forwarded,
+						},
+						{
+							Component:     v1alpha1.NetworkPolicy,
+							ComponentInfo: "EgressRule",
+							Action:        v1alpha1.Forwarded,
+						},
+						{
+							Component:     v1alpha1.Forwarding,
+							ComponentInfo: "Output",
+							Action:        v1alpha1.Delivered,
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "nonExistingDstPod",
+			tf: &v1alpha1.Traceflow{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: randName(fmt.Sprintf("%s-%s-to-%s-%s-", testNamespace, node1Pods[0], testNamespace, "non-existing-pod")),
+				},
+				Spec: v1alpha1.TraceflowSpec{
+					Source: v1alpha1.Source{
+						Namespace: testNamespace,
+						Pod:       node1Pods[0],
+					},
+					Destination: v1alpha1.Destination{
+						Namespace: testNamespace,
+						Pod:       "non-existing-pod",
+					},
+				},
+			},
+			expectedPhase: v1alpha1.Failed,
+		},
+	}
+
+	t.Run("traceflowGroupTest", func(t *testing.T) {
+		for _, tc := range testcases {
+			tc := tc
+			t.Run(tc.name, func(t *testing.T) {
+				// t.Parallel()
+				runTestTraceflow(t, data, tc)
+			})
+		}
+	})
+}
+
+// TestTraceflowInterNode verifies if traceflow can trace inter nodes traffic with some NetworkPolicies set.
+func TestTraceflowInterNode(t *testing.T) {
+	skipIfNumNodesLessThan(t, 2)
+	skipIfNotIPv4Cluster(t)
+
+	data, err := setupTest(t)
+	if err != nil {
+		t.Fatalf("Error when setting up test: %v", err)
+	}
+	defer teardownTest(t, data)
+
+	skipIfTraceflowDisabled(t, data)
+
+	node1 := nodeName(0)
+	node2 := nodeName(1)
+
+	node1Pods, _, node1CleanupFn := createTestBusyboxPods(t, data, 1, node1)
+	node2Pods, node2IPs, node2CleanupFn := createTestBusyboxPods(t, data, 2, node2)
+	defer node1CleanupFn()
+	defer node2CleanupFn()
+
+	require.NoError(t, data.createNginxPod("nginx", node2))
+	nginxIP, err := data.podWaitForIPs(defaultTimeout, "nginx", testNamespace)
+	require.NoError(t, err)
+	svc, err := data.createNginxClusterIPService(false)
+	require.NoError(t, err)
+
+	// TODO: Extend the test cases to support IPv6 address after Traceflow IPv6 is supported. Currently we only use IPv4 address.
+	nginxIPStr := nginxIP.ipv4.String()
+
+	// Setup 2 NetworkPolicies:
+	// 1. Allow all egress traffic.
+	// 2. Deny ingress traffic on pod with label antrea-e2e = node1Pods[1]. So flow node1Pods[0] -> node1Pods[1] will be dropped.
+	var allowAllEgress *networkingv1.NetworkPolicy
+	allowAllEgressName := "test-networkpolicy-allow-all-egress"
+	if allowAllEgress, err = data.createNPAllowAllEgress(allowAllEgressName); err != nil {
+		t.Fatalf("Error when creating network policy: %v", err)
+	}
+	defer func() {
+		if err = data.deleteNetworkpolicy(allowAllEgress); err != nil {
+			t.Errorf("Error when deleting network policy: %v", err)
+		}
+	}()
+
+	var denyAllIngress *networkingv1.NetworkPolicy
+	denyAllIngressName := "test-networkpolicy-deny-ingress"
+	if denyAllIngress, err = data.createNPDenyAllIngress("antrea-e2e", node2Pods[1], denyAllIngressName); err != nil {
+		t.Fatalf("Error when creating network policy: %v", err)
+	}
+	defer func() {
+		if err = data.deleteNetworkpolicy(denyAllIngress); err != nil {
+			t.Errorf("Error when deleting network policy: %v", err)
+		}
+	}()
+
+	antreaPod, err := data.getAntreaPodOnNode(node2)
+	if err = data.waitForNetworkpolicyRealized(antreaPod, allowAllEgressName); err != nil {
+		t.Fatal(err)
+	}
+	if err = data.waitForNetworkpolicyRealized(antreaPod, denyAllIngressName); err != nil {
+		t.Fatal(err)
+	}
+
+	// Creates 6 traceflows:
+	// 1. node1Pods[0] -> node1Pods[1], intra node1.
+	// 2. node1Pods[0] -> node2Pods[0], inter node1 and node2.
+	// 3. node1Pods[0] -> node1IPs[1], intra node1.
+	// 4. node1Pods[0] -> node2IPs[0], inter node1 and node2.
+	// 5. node1Pods[0] -> service, inter node1 and node2.
+	// 6. node1Pods[0] -> non-existing Pod
+	testcases := []testcase{
+		{
+			name: "interNodeTraceflow",
+			tf: &v1alpha1.Traceflow{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: randName(fmt.Sprintf("%s-%s-to-%s-%s-", testNamespace, node1Pods[0], testNamespace, node2Pods[0])),
+				},
+				Spec: v1alpha1.TraceflowSpec{
+					Source: v1alpha1.Source{
+						Namespace: testNamespace,
+						Pod:       node1Pods[0],
+					},
+					Destination: v1alpha1.Destination{
+						Namespace: testNamespace,
+						Pod:       node2Pods[0],
+					},
+					Packet: v1alpha1.Packet{
+						IPHeader: v1alpha1.IPHeader{
+							Protocol: 6,
+						},
+						TransportHeader: v1alpha1.TransportHeader{
+							TCP: &v1alpha1.TCPHeader{
+								DstPort: 80,
+								Flags:   2,
+							},
+						},
+					},
+				},
+			},
 			expectedPhase: v1alpha1.Succeeded,
 			expectedResults: []v1alpha1.NodeResult{
 				{
@@ -127,157 +480,234 @@ func TestTraceflow(t *testing.T) {
 				},
 			},
 		},
-	}
-
-	// Setup 2 NetworkPolicies:
-	// 1. Allow all egress traffic.
-	// 2. Deny ingress traffic on pod with label antrea-e2e = node1Pods[1]. So flow node1Pods[0] -> node1Pods[1] will be dropped.
-	var allowAllEgress *networkingv1.NetworkPolicy
-	if allowAllEgress, err = data.createNPAllowAllEgress("test-networkpolicy-allow-all-egress"); err != nil {
-		t.Fatalf("Error when creating network policy: %v", err)
-	}
-	defer func() {
-		if err = data.deleteNetworkpolicy(allowAllEgress); err != nil {
-			t.Fatalf("Error when deleting network policy: %v", err)
-		}
-	}()
-
-	var denyAllIngress *networkingv1.NetworkPolicy
-	if denyAllIngress, err = data.createNPDenyAllIngress("antrea-e2e", node1Pods[1], "test-networkpolicy-deny-ingress"); err != nil {
-		t.Fatalf("Error when creating network policy: %v", err)
-	}
-	defer func() {
-		if err = data.deleteNetworkpolicy(denyAllIngress); err != nil {
-			t.Fatalf("Error when deleting network policy: %v", err)
-		}
-	}()
-
-	// Create 2 traceflows:
-	// 1. node1Pods[0] -> node1Pods[1], intra node1.
-	// 2. node1Pods[0] -> node2Pods[0], inter node1 and node2.
-	if intraNodeTraceflow, err = data.crdClient.OpsV1alpha1().Traceflows().Create(context.TODO(), intraNodeTraceflow, v1.CreateOptions{}); err != nil {
-		t.Fatalf("Error when creating traceflow: %v", err)
-	}
-	defer func() {
-		if err := data.crdClient.OpsV1alpha1().Traceflows().Delete(context.TODO(), intraNodeTraceflow.Name, v1.DeleteOptions{}); err != nil {
-			t.Fatalf("Error when deleting traceflow: %v", err)
-		}
-	}()
-
-	if interNodeTraceflow, err = data.crdClient.OpsV1alpha1().Traceflows().Create(context.TODO(), interNodeTraceflow, v1.CreateOptions{}); err != nil {
-		t.Fatalf("Error when creating traceflow: %v", err)
-	}
-	defer func() {
-		if err := data.crdClient.OpsV1alpha1().Traceflows().Delete(context.TODO(), interNodeTraceflow.Name, v1.DeleteOptions{}); err != nil {
-			t.Fatalf("Error when deleting traceflow: %v", err)
-		}
-	}()
-
-	// Wait for traceflows to finish.
-	if err = wait.Poll(1*time.Second, traceflowTimeout, func() (bool, error) {
-		done := 0
-		for i := 0; i < len(testcases); i++ {
-			tc := testcases[i]
-			tf := tc.tf
-			if tf, err = data.crdClient.OpsV1alpha1().Traceflows().Get(context.TODO(), tf.Name, v1.GetOptions{}); err != nil || tf.Status.Phase != tc.expectedPhase {
-				return false, nil
-			}
-			if tf.Status.Results == nil || (len(tf.Status.Results) != len(tc.expectedResults)) {
-				return false, fmt.Errorf("Error: Traceflow Results should be %v, but got %v", tc.expectedResults, tf.Status.Results)
-			}
-			if len(tc.expectedResults) == 1 {
-				if err = compareObservations(tc.expectedResults[0], tf.Status.Results[0], t); err != nil {
-					return false, err
-				}
-			} else {
-				if tf.Status.Results[0].Observations[0].Component == v1alpha1.SpoofGuard {
-					if err = compareObservations(tc.expectedResults[0], tf.Status.Results[0], t); err != nil {
-						return false, err
-					}
-					if err = compareObservations(tc.expectedResults[1], tf.Status.Results[1], t); err != nil {
-						return false, err
-					}
-				} else {
-					if err = compareObservations(tc.expectedResults[0], tf.Status.Results[1], t); err != nil {
-						return false, err
-					}
-					if err = compareObservations(tc.expectedResults[1], tf.Status.Results[0], t); err != nil {
-						return false, err
-					}
-				}
-			}
-			done++
-		}
-		if done == len(testcases) {
-			return true, nil
-		}
-		return false, nil
-	}); err != nil {
-		t.Errorf("Error: Get Traceflow failed: %v", err)
-	}
-}
-
-func (data *TestData) enableTraceflow(t *testing.T) error {
-	configMap, err := data.GetAntreaConfigMap(antreaNamespace)
-	if err != nil {
-		t.Fatalf("Failed to get ConfigMap: %v", err)
-	}
-
-	// Enable Traceflow in antrea-controller and antrea-agent ConfigMap.
-	// Use Geneve tunnel.
-	antreaControllerConf, _ := configMap.Data["antrea-controller.conf"]
-	antreaControllerConf = strings.Replace(antreaControllerConf, "#  Traceflow: false", " Traceflow: true", 1)
-	configMap.Data["antrea-controller.conf"] = antreaControllerConf
-	antreaAgentConf, _ := configMap.Data["antrea-agent.conf"]
-	antreaAgentConf = strings.Replace(antreaAgentConf, "#  Traceflow: false", " Traceflow: true", 1)
-	antreaAgentConf = strings.Replace(antreaAgentConf, "#tunnelType: geneve", "tunnelType: geneve", 1)
-	configMap.Data["antrea-agent.conf"] = antreaAgentConf
-
-	if _, err := data.clientset.CoreV1().ConfigMaps(antreaNamespace).Update(context.TODO(), configMap, metav1.UpdateOptions{}); err != nil {
-		return fmt.Errorf("failed to update ConfigMap %s: %v", configMap.Name, err)
-	}
-	_, err = data.restartAntreaControllerPod(defaultTimeout)
-	if err != nil {
-		return fmt.Errorf("error when restarting antrea-controller Pod: %v", err)
-	}
-	_, err = data.restartAntreaAgentPod(defaultTimeout)
-	if err != nil {
-		return fmt.Errorf("error when restarting antrea-agent Pod: %v", err)
-	}
-
-	return nil
-}
-
-func newTraceflow(src string, dest string) *v1alpha1.Traceflow {
-	return &v1alpha1.Traceflow{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: randName("test-traceflow-"),
-		},
-		Spec: v1alpha1.TraceflowSpec{
-			Source: v1alpha1.Source{
-				Namespace: testNamespace,
-				Pod:       src,
-			},
-			Destination: v1alpha1.Destination{
-				Namespace: testNamespace,
-				Pod:       dest,
-			},
-			Packet: v1alpha1.Packet{
-				IPHeader: v1alpha1.IPHeader{
-					Protocol: 6,
+		{
+			name: "interNodeUDPDstIPTraceflow",
+			tf: &v1alpha1.Traceflow{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: randName(fmt.Sprintf("%s-%s-to-%s-", testNamespace, node1Pods[0], node2IPs[0].ipv4.String())),
 				},
-				TransportHeader: v1alpha1.TransportHeader{
-					TCP: &v1alpha1.TCPHeader{
-						DstPort: 80,
+				Spec: v1alpha1.TraceflowSpec{
+					Source: v1alpha1.Source{
+						Namespace: testNamespace,
+						Pod:       node1Pods[0],
+					},
+					Destination: v1alpha1.Destination{
+						IP: node2IPs[0].ipv4.String(),
+					},
+					Packet: v1alpha1.Packet{
+						IPHeader: v1alpha1.IPHeader{
+							Protocol: 17,
+						},
+						TransportHeader: v1alpha1.TransportHeader{
+							UDP: &v1alpha1.UDPHeader{
+								DstPort: 321,
+							},
+						},
+					},
+				},
+			},
+			expectedPhase: v1alpha1.Succeeded,
+			expectedResults: []v1alpha1.NodeResult{
+				{
+					Node: node1,
+					Observations: []v1alpha1.Observation{
+						{
+							Component: v1alpha1.SpoofGuard,
+							Action:    v1alpha1.Forwarded,
+						},
+						{
+							Component:     v1alpha1.NetworkPolicy,
+							ComponentInfo: "EgressRule",
+							Action:        v1alpha1.Forwarded,
+						},
+						{
+							Component:     v1alpha1.Forwarding,
+							ComponentInfo: "Output",
+							Action:        v1alpha1.Forwarded,
+						},
+					},
+				},
+				{
+					Node: node2,
+					Observations: []v1alpha1.Observation{
+						{
+							Component:     v1alpha1.Forwarding,
+							ComponentInfo: "Classification",
+							Action:        v1alpha1.Received,
+						},
+						{
+							Component:     v1alpha1.Forwarding,
+							ComponentInfo: "Output",
+							Action:        v1alpha1.Delivered,
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "interNodeICMPDstIPTraceflow",
+			tf: &v1alpha1.Traceflow{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: randName(fmt.Sprintf("%s-%s-to-%s-", testNamespace, node1Pods[0], node2IPs[0].ipv4.String())),
+				},
+				Spec: v1alpha1.TraceflowSpec{
+					Source: v1alpha1.Source{
+						Namespace: testNamespace,
+						Pod:       node1Pods[0],
+					},
+					Destination: v1alpha1.Destination{
+						IP: node2IPs[0].ipv4.String(),
+					},
+					Packet: v1alpha1.Packet{
+						IPHeader: v1alpha1.IPHeader{
+							Protocol: 1,
+						},
+					},
+				},
+			},
+			expectedPhase: v1alpha1.Succeeded,
+			expectedResults: []v1alpha1.NodeResult{
+				{
+					Node: node1,
+					Observations: []v1alpha1.Observation{
+						{
+							Component: v1alpha1.SpoofGuard,
+							Action:    v1alpha1.Forwarded,
+						},
+						{
+							Component:     v1alpha1.NetworkPolicy,
+							ComponentInfo: "EgressRule",
+							Action:        v1alpha1.Forwarded,
+						},
+						{
+							Component:     v1alpha1.Forwarding,
+							ComponentInfo: "Output",
+							Action:        v1alpha1.Forwarded,
+						},
+					},
+				},
+				{
+					Node: node2,
+					Observations: []v1alpha1.Observation{
+						{
+							Component:     v1alpha1.Forwarding,
+							ComponentInfo: "Classification",
+							Action:        v1alpha1.Received,
+						},
+						{
+							Component:     v1alpha1.Forwarding,
+							ComponentInfo: "Output",
+							Action:        v1alpha1.Delivered,
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "serviceTraceflow",
+			tf: &v1alpha1.Traceflow{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: randName(fmt.Sprintf("%s-%s-to-svc-%s-", testNamespace, node1Pods[0], svc.Name)),
+				},
+				Spec: v1alpha1.TraceflowSpec{
+					Source: v1alpha1.Source{
+						Namespace: testNamespace,
+						Pod:       node1Pods[0],
+					},
+					Destination: v1alpha1.Destination{
+						Namespace: testNamespace,
+						Service:   svc.Name,
+					},
+					Packet: v1alpha1.Packet{
+						IPHeader: v1alpha1.IPHeader{
+							Protocol: 6,
+						},
+						TransportHeader: v1alpha1.TransportHeader{
+							TCP: &v1alpha1.TCPHeader{
+								DstPort: 80,
+								Flags:   2,
+							},
+						},
+					},
+				},
+			},
+			expectedPhase: v1alpha1.Succeeded,
+			expectedResults: []v1alpha1.NodeResult{
+				{
+					Node: node1,
+					Observations: []v1alpha1.Observation{
+						{
+							Component: v1alpha1.SpoofGuard,
+							Action:    v1alpha1.Forwarded,
+						},
+						{
+							Component:       v1alpha1.LB,
+							Pod:             fmt.Sprintf("%s/%s", testNamespace, "nginx"),
+							TranslatedDstIP: nginxIPStr,
+							Action:          v1alpha1.Forwarded,
+						},
+						{
+							Component:     v1alpha1.NetworkPolicy,
+							ComponentInfo: "EgressRule",
+							Action:        v1alpha1.Forwarded,
+						},
+						{
+							Component:     v1alpha1.Forwarding,
+							ComponentInfo: "Output",
+							Action:        v1alpha1.Forwarded,
+						},
+					},
+				},
+				{
+					Node: node2,
+					Observations: []v1alpha1.Observation{
+						{
+							Component:     v1alpha1.Forwarding,
+							ComponentInfo: "Classification",
+							Action:        v1alpha1.Received,
+						},
+						{
+							Component:     v1alpha1.Forwarding,
+							ComponentInfo: "Output",
+							Action:        v1alpha1.Delivered,
+						},
 					},
 				},
 			},
 		},
 	}
+
+	t.Run("traceflowGroupTest", func(t *testing.T) {
+		for _, tc := range testcases {
+			tc := tc
+			t.Run(tc.name, func(t *testing.T) {
+				runTestTraceflow(t, data, tc)
+			})
+		}
+	})
+}
+
+func (data *TestData) waitForTraceflow(t *testing.T, name string, phase v1alpha1.TraceflowPhase) (*v1alpha1.Traceflow, error) {
+	var tf *v1alpha1.Traceflow
+	var err error
+	timeout := 15 * time.Second
+	if err = wait.PollImmediate(1*time.Second, timeout, func() (bool, error) {
+		tf, err = data.crdClient.OpsV1alpha1().Traceflows().Get(context.TODO(), name, metav1.GetOptions{})
+		if err != nil || tf.Status.Phase != phase {
+			return false, nil
+		}
+		return true, nil
+	}); err != nil {
+		if tf != nil {
+			t.Errorf("Latest Traceflow status: %v", tf.Status)
+		}
+		return nil, err
+	}
+	return tf, nil
 }
 
 // compareObservations compares expected results and actual results.
-func compareObservations(expected v1alpha1.NodeResult, actual v1alpha1.NodeResult, t *testing.T) error {
+func compareObservations(expected v1alpha1.NodeResult, actual v1alpha1.NodeResult) error {
 	if expected.Node != actual.Node {
 		return fmt.Errorf("NodeResult should be on %s, but is on %s", expected.Node, actual.Node)
 	}
@@ -289,6 +719,8 @@ func compareObservations(expected v1alpha1.NodeResult, actual v1alpha1.NodeResul
 	for i := 0; i < len(exObs); i++ {
 		if exObs[i].Component != acObs[i].Component ||
 			exObs[i].ComponentInfo != acObs[i].ComponentInfo ||
+			exObs[i].Pod != acObs[i].Pod ||
+			exObs[i].TranslatedDstIP != acObs[i].TranslatedDstIP ||
 			exObs[i].Action != acObs[i].Action {
 			return fmt.Errorf("Observations should be %v, but got %v", exObs, acObs)
 		}
@@ -319,4 +751,68 @@ func (data *TestData) createNPAllowAllEgress(name string) (*networkingv1.Network
 		PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeEgress},
 	}
 	return data.createNetworkPolicy(name, spec)
+}
+
+// waitForNetworkpolicyRealized waits for the NetworkPolicy to be realized by the antrea-agent Pod.
+func (data *TestData) waitForNetworkpolicyRealized(pod string, networkpolicy string) error {
+	if err := wait.Poll(200*time.Millisecond, 5*time.Second, func() (bool, error) {
+		cmds := []string{"antctl", "get", "networkpolicy", "-S", networkpolicy, "-n", testNamespace, "-T", "K8sNP"}
+		stdout, stderr, err := runAntctl(pod, cmds, data)
+		if err != nil {
+			return false, fmt.Errorf("Error when executing antctl get NetworkPolicy, stdout: %s, stderr: %s, err: %v", stdout, stderr, err)
+		}
+		return strings.Contains(stdout, fmt.Sprintf("%s:%s/%s", v1beta2.K8sNetworkPolicy, testNamespace, networkpolicy)), nil
+	}); err == wait.ErrWaitTimeout {
+		return fmt.Errorf("NetworkPolicy %s isn't realized in time", networkpolicy)
+	} else if err != nil {
+		return err
+	}
+	return nil
+}
+
+func runTestTraceflow(t *testing.T, data *TestData, tc testcase) {
+	if _, err := data.crdClient.OpsV1alpha1().Traceflows().Create(context.TODO(), tc.tf, metav1.CreateOptions{}); err != nil {
+		t.Fatalf("Error when creating traceflow: %v", err)
+	}
+	defer func() {
+		if err := data.crdClient.OpsV1alpha1().Traceflows().Delete(context.TODO(), tc.tf.Name, metav1.DeleteOptions{}); err != nil {
+			t.Errorf("Error when deleting traceflow: %v", err)
+		}
+	}()
+
+	tf, err := data.waitForTraceflow(t, tc.tf.Name, tc.expectedPhase)
+	if err != nil {
+		t.Fatalf("Error: Get Traceflow failed: %v", err)
+		return
+	}
+	if len(tf.Status.Results) != len(tc.expectedResults) {
+		t.Fatalf("Error: Traceflow Results should be %v, but got %v", tc.expectedResults, tf.Status.Results)
+		return
+	}
+	if len(tc.expectedResults) == 1 {
+		if err = compareObservations(tc.expectedResults[0], tf.Status.Results[0]); err != nil {
+			t.Fatal(err)
+			return
+		}
+	} else if len(tc.expectedResults) > 0 {
+		if tf.Status.Results[0].Observations[0].Component == v1alpha1.SpoofGuard {
+			if err = compareObservations(tc.expectedResults[0], tf.Status.Results[0]); err != nil {
+				t.Fatal(err)
+				return
+			}
+			if err = compareObservations(tc.expectedResults[1], tf.Status.Results[1]); err != nil {
+				t.Fatal(err)
+				return
+			}
+		} else {
+			if err = compareObservations(tc.expectedResults[0], tf.Status.Results[1]); err != nil {
+				t.Fatal(err)
+				return
+			}
+			if err = compareObservations(tc.expectedResults[1], tf.Status.Results[0]); err != nil {
+				t.Fatal(err)
+				return
+			}
+		}
+	}
 }

@@ -1,4 +1,4 @@
-// Copyright 2019 Antrea Authors
+// Copyright 2020 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,7 +30,7 @@ func addConversionFuncs(scheme *runtime.Scheme) error {
 		err := scheme.AddFieldLabelConversionFunc(SchemeGroupVersion.WithKind(kind),
 			func(label, value string) (string, string, error) {
 				switch label {
-				// Antrea Agents selects resources by nodeName.
+				// Antrea Agents select resources by nodeName.
 				case "metadata.name", "nodeName":
 					return label, value, nil
 				default:

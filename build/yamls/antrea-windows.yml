@@ -1,16 +1,16 @@
 apiVersion: v1
 data:
-  Run-AntreaAgent.ps1: |-
+  Run-AntreaAgent.ps1: |
     $ErrorActionPreference = "Stop"
     # wins will rename the binary when executing it. So we need to copy the binary everytime before running it.
     mkdir -force /host/k/antrea/bin
     cp /k/antrea/bin/* /host/k/antrea/bin/
-    C:/k/antrea/utils/wins.exe cli process run --path /k/antrea/bin/antrea-agent.exe --args "--config=/k/antrea/etc/antrea-agent.conf --logtostderr=false --log_dir=/k/antrea/logs/ --alsologtostderr" --envs "KUBERNETES_SERVICE_HOST=$env:KUBERNETES_SERVICE_HOST KUBERNETES_SERVICE_PORT=$env:KUBERNETES_SERVICE_PORT ANTREA_SERVICE_HOST=$env:ANTREA_SERVICE_HOST ANTREA_SERVICE_PORT=$env:ANTREA_SERVICE_PORT NODE_NAME=$env:NODE_NAME"
+    C:/k/antrea/utils/wins.exe cli process run --path /k/antrea/bin/antrea-agent.exe --args "--config=/k/antrea/etc/antrea-agent.conf --logtostderr=false --log_dir=/k/antrea/logs/ --alsologtostderr --log_file_max_size=100 --log_file_max_num=4" --envs "KUBERNETES_SERVICE_HOST=$env:KUBERNETES_SERVICE_HOST KUBERNETES_SERVICE_PORT=$env:KUBERNETES_SERVICE_PORT ANTREA_SERVICE_HOST=$env:ANTREA_SERVICE_HOST ANTREA_SERVICE_PORT=$env:ANTREA_SERVICE_PORT NODE_NAME=$env:NODE_NAME"
 kind: ConfigMap
 metadata:
   labels:
     app: antrea
-  name: antrea-agent-windows-9ffbt88hmc
+  name: antrea-agent-windows-h7td2mh9gm
   namespace: kube-system
 ---
 apiVersion: v1
@@ -21,7 +21,10 @@ data:
     # Enable antrea proxy which provides ServiceLB for in-cluster services in antrea agent.
     # It should be enabled on Windows, otherwise NetworkPolicy will not take effect on
     # Service traffic.
-      AntreaProxy: true
+    #  AntreaProxy: true
+
+    # Enable flowexporter which exports polled conntrack connections as IPFIX flow records from each agent to a configured collector.
+    #  FlowExporter: false
 
     # Name of the OpenVSwitch bridge antrea-agent will create and use.
     # Make sure it doesn't conflict with your existing OpenVSwitch bridges.
@@ -37,20 +40,36 @@ data:
     # - stt
     #tunnelType: geneve
 
-    # Default MTU to use for the host gateway interface and the network interface of each Pod. If
-    # omitted, antrea-agent will default this value to 1450 to accommodate for tunnel encapsulate
-    # overhead.
+    # Default MTU to use for the host gateway interface and the network interface of each Pod.
+    # If omitted, antrea-agent will discover the MTU of the Node's primary interface and
+    # also adjust MTU to accommodate for tunnel encapsulation overhead.
     #defaultMTU: 1450
 
-    # CIDR Range for services in cluster. It's required to support egress network policy, should
-    # be set to the same value as the one specified by --service-cluster-ip-range for kube-apiserver.
+    # ClusterIP CIDR range for Services. It's required when AntreaProxy is not enabled, and should be
+    # set to the same value as the one specified by --service-cluster-ip-range for kube-apiserver. When
+    # AntreaProxy is enabled, this parameter is not needed and will be ignored if provided.
     #serviceCIDR: 10.96.0.0/12
 
     # The port for the antrea-agent APIServer to serve on.
     #apiPort: 10350
 
     # Enable metrics exposure via Prometheus. Initializes Prometheus metrics listener.
-    #enablePrometheusMetrics: false
+    #enablePrometheusMetrics: true
+
+    # Provide flow collector address as string with format <IP>:<port>[:<proto>], where proto is tcp or udp. This also enables
+    # the flow exporter that sends IPFIX flow records of conntrack flows on OVS bridge. If no L4 transport proto is given,
+    # we consider tcp as default.
+    #flowCollectorAddr: ""
+
+    # Provide flow poll interval as a duration string. This determines how often the flow exporter dumps connections from the conntrack module.
+    # Flow poll interval should be greater than or equal to 1s (one second).
+    # Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
+    #flowPollInterval: "5s"
+
+    # Provide flow export frequency, which is the number of poll cycles elapsed before flow exporter exports flow records to
+    # the flow collector.
+    # Flow export frequency should be greater than or equal to 1.
+    #flowExportFrequency: 12
   antrea-cni.conflist: |
     {
         "cniVersion":"0.3.0",
@@ -69,7 +88,7 @@ kind: ConfigMap
 metadata:
   labels:
     app: antrea
-  name: antrea-windows-config-2b4h888dt2
+  name: antrea-windows-config-6d4gc5kdc8
   namespace: kube-system
 ---
 apiVersion: apps/v1
@@ -157,11 +176,11 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-windows-config-2b4h888dt2
+          name: antrea-windows-config-6d4gc5kdc8
         name: antrea-windows-config
       - configMap:
           defaultMode: 420
-          name: antrea-agent-windows-9ffbt88hmc
+          name: antrea-agent-windows-h7td2mh9gm
         name: antrea-agent-windows
       - hostPath:
           path: /etc/cni/net.d
@@ -180,7 +199,6 @@ spec:
         name: host
       - hostPath:
           path: \\.\pipe\rancher_wins
-          type: null
         name: wins
   updateStrategy:
     type: RollingUpdate

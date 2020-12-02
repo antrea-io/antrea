@@ -1,16 +1,16 @@
 module github.com/vmware-tanzu/antrea/plugins/octant
 
-go 1.13
+go 1.15
 
 require (
 	github.com/vmware-tanzu/antrea v0.0.0
-	github.com/vmware-tanzu/octant v0.13.1
-	k8s.io/apimachinery v0.19.0-alpha.3
+	github.com/vmware-tanzu/octant v0.16.1
+	k8s.io/apimachinery v0.19.0-beta.2
 	k8s.io/client-go v0.19.0-alpha.3
 )
 
 replace (
-	github.com/contiv/ofnet => github.com/wenyingd/ofnet v0.0.0-20200601065543-2c7a62482f16
+	github.com/contiv/ofnet => github.com/wenyingd/ofnet v0.0.0-20201109024835-6fd225d8c8d1
 	github.com/vmware-tanzu/antrea => ../../
 	// Octant v0.13.1 and Antrea use different versions of github.com/googleapis/gnostic.
 	// Octant v0.13.1 uses v0.4.1 and Antrea uses v0.1.0.

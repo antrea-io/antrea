@@ -20,14 +20,18 @@ import (
 	clientset "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned"
 	clusterinformationv1beta1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/clusterinformation/v1beta1"
 	fakeclusterinformationv1beta1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/clusterinformation/v1beta1/fake"
-	corev1alpha1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/core/v1alpha1"
-	fakecorev1alpha1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/core/v1alpha1/fake"
-	networkingv1beta1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/networking/v1beta1"
-	fakenetworkingv1beta1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/networking/v1beta1/fake"
+	controlplanev1beta1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/controlplane/v1beta1"
+	fakecontrolplanev1beta1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/controlplane/v1beta1/fake"
+	controlplanev1beta2 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/controlplane/v1beta2"
+	fakecontrolplanev1beta2 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/controlplane/v1beta2/fake"
+	corev1alpha2 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/core/v1alpha2"
+	fakecorev1alpha2 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/core/v1alpha2/fake"
 	opsv1alpha1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/ops/v1alpha1"
 	fakeopsv1alpha1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/ops/v1alpha1/fake"
 	securityv1alpha1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/security/v1alpha1"
 	fakesecurityv1alpha1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/security/v1alpha1/fake"
+	statsv1alpha1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/stats/v1alpha1"
+	fakestatsv1alpha1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/stats/v1alpha1/fake"
 	systemv1beta1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/system/v1beta1"
 	fakesystemv1beta1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/system/v1beta1/fake"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -89,14 +93,19 @@ func (c *Clientset) ClusterinformationV1beta1() clusterinformationv1beta1.Cluste
 	return &fakeclusterinformationv1beta1.FakeClusterinformationV1beta1{Fake: &c.Fake}
 }
 
-// CoreV1alpha1 retrieves the CoreV1alpha1Client
-func (c *Clientset) CoreV1alpha1() corev1alpha1.CoreV1alpha1Interface {
-	return &fakecorev1alpha1.FakeCoreV1alpha1{Fake: &c.Fake}
+// ControlplaneV1beta1 retrieves the ControlplaneV1beta1Client
+func (c *Clientset) ControlplaneV1beta1() controlplanev1beta1.ControlplaneV1beta1Interface {
+	return &fakecontrolplanev1beta1.FakeControlplaneV1beta1{Fake: &c.Fake}
 }
 
-// NetworkingV1beta1 retrieves the NetworkingV1beta1Client
-func (c *Clientset) NetworkingV1beta1() networkingv1beta1.NetworkingV1beta1Interface {
-	return &fakenetworkingv1beta1.FakeNetworkingV1beta1{Fake: &c.Fake}
+// ControlplaneV1beta2 retrieves the ControlplaneV1beta2Client
+func (c *Clientset) ControlplaneV1beta2() controlplanev1beta2.ControlplaneV1beta2Interface {
+	return &fakecontrolplanev1beta2.FakeControlplaneV1beta2{Fake: &c.Fake}
+}
+
+// CoreV1alpha2 retrieves the CoreV1alpha2Client
+func (c *Clientset) CoreV1alpha2() corev1alpha2.CoreV1alpha2Interface {
+	return &fakecorev1alpha2.FakeCoreV1alpha2{Fake: &c.Fake}
 }
 
 // OpsV1alpha1 retrieves the OpsV1alpha1Client
@@ -107,6 +116,11 @@ func (c *Clientset) OpsV1alpha1() opsv1alpha1.OpsV1alpha1Interface {
 // SecurityV1alpha1 retrieves the SecurityV1alpha1Client
 func (c *Clientset) SecurityV1alpha1() securityv1alpha1.SecurityV1alpha1Interface {
 	return &fakesecurityv1alpha1.FakeSecurityV1alpha1{Fake: &c.Fake}
+}
+
+// StatsV1alpha1 retrieves the StatsV1alpha1Client
+func (c *Clientset) StatsV1alpha1() statsv1alpha1.StatsV1alpha1Interface {
+	return &fakestatsv1alpha1.FakeStatsV1alpha1{Fake: &c.Fake}
 }
 
 // SystemV1beta1 retrieves the SystemV1beta1Client
