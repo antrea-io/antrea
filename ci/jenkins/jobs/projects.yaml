@@ -584,7 +584,20 @@
           test_name: eks-conformance-net-policy
           node: antrea-cloud
           description: 'This is EKS conformance and network policy test for antrea.'
-          parameters: []
+          parameters:
+          - string:
+              default: https://github.com/vmware-tanzu/antrea/
+              description: The repository to checkout Antrea for this test.
+              name: ANTREA_REPO
+              trim: 'true'
+          - string:
+              default: master
+              description: The branch or SHA commit ID to checkout and build Antrea for this test.
+              name: ANTREA_GIT_REVISION
+              trim: 'true'
+          branches:
+          - '${{ANTREA_GIT_REVISION}}'
+          repo_url: '${{ANTREA_REPO}}'
           builders:
           - shell: |-
               #!/bin/bash
@@ -605,6 +618,9 @@
             - project:
               - cloud-{name}-eks-cleanup
               property-file: 'ci_properties.txt'
+          - email:
+              notify-every-unstable-build: true
+              recipients: projectantrea-dev@googlegroups.com
           wrappers:
           - credentials-binding:
             - text:
@@ -627,18 +643,33 @@
               description: The cluster name of the last finished build.
               name: CLUSTERNAME
               trim: 'false'
+          branches:
+          - '${{ANTREA_GIT_REVISION}}'
+          repo_url: '${{ANTREA_REPO}}'
           publishers:
           - email:
               notify-every-unstable-build: true
-              recipients: dingyang@vmware.com zhengshengz@vmware.com
-              send-to-individuals: false
+              recipients: projectantrea-dev@googlegroups.com
           triggers: []
           wrappers: []
       - 'cloud-{name}-{test_name}':
           test_name: gke-conformance-net-policy
           node: antrea-cloud
           description: 'This is GKE conformance and network policy test for antrea.'
-          parameters: []
+          parameters:
+          - string:
+              default: https://github.com/vmware-tanzu/antrea/
+              description: The repository to checkout Antrea for this test.
+              name: ANTREA_REPO
+              trim: 'true'
+          - string:
+              default: master
+              description: The branch or SHA commit ID to checkout and build Antrea for this test.
+              name: ANTREA_GIT_REVISION
+              trim: 'true'
+          branches:
+          - '${{ANTREA_GIT_REVISION}}'
+          repo_url: '${{ANTREA_REPO}}'
           builders:
           - shell: |-
               #!/bin/bash
@@ -662,6 +693,9 @@
             - project:
               - cloud-{name}-gke-cleanup
               property-file: 'ci_properties.txt'
+          - email:
+              notify-every-unstable-build: true
+              recipients: projectantrea-dev@googlegroups.com
           wrappers: []
       - 'cloud-{name}-{test_name}':
           test_name: gke-cleanup
@@ -677,18 +711,33 @@
               description: The cluster name of the last finished build.
               name: CLUSTERNAME
               trim: 'false'
+          branches:
+          - '${{ANTREA_GIT_REVISION}}'
+          repo_url: '${{ANTREA_REPO}}'
           publishers:
           - email:
               notify-every-unstable-build: true
-              recipients: dingyang@vmware.com zhengshengz@vmware.com
-              send-to-individuals: false
+              recipients: projectantrea-dev@googlegroups.com
           triggers: []
           wrappers: []
       - 'cloud-{name}-{test_name}':
           test_name: aks-conformance-net-policy
           node: antrea-cloud
           description: 'This is AKS conformance and network policy test for antrea.'
-          parameters: []
+          parameters:
+          - string:
+              default: https://github.com/vmware-tanzu/antrea/
+              description: The repository to checkout Antrea for this test.
+              name: ANTREA_REPO
+              trim: 'true'
+          - string:
+              default: master
+              description: The branch or SHA commit ID to checkout and build Antrea for this test.
+              name: ANTREA_GIT_REVISION
+              trim: 'true'
+          branches:
+          - '${{ANTREA_GIT_REVISION}}'
+          repo_url: '${{ANTREA_REPO}}'
           builders:
           - shell: |-
               #!/bin/bash
@@ -710,6 +759,9 @@
             - project:
               - cloud-{name}-aks-cleanup
               property-file: 'ci_properties.txt'
+          - email:
+              notify-every-unstable-build: true
+              recipients: projectantrea-dev@googlegroups.com
           wrappers:
           - credentials-binding:
             - text:
@@ -735,11 +787,13 @@
               description: The cluster name of the last finished build.
               name: CLUSTERNAME
               trim: 'false'
+          branches:
+          - '${{ANTREA_GIT_REVISION}}'
+          repo_url: '${{ANTREA_REPO}}'
           publishers:
           - email:
               notify-every-unstable-build: true
-              recipients: dingyang@vmware.com zhengshengz@vmware.com rahulj@vmware.com
-              send-to-individuals: false
+              recipients: projectantrea-dev@googlegroups.com rahulj@vmware.com
           triggers: []
           wrappers: []
       - '{name}-{test_name}-matrix-compatibility-test':
