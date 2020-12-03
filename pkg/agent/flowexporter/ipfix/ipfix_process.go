@@ -27,7 +27,7 @@ var _ IPFIXExportingProcess = new(ipfixExportingProcess)
 // IPFIXExportingProcess interface is added to facilitate unit testing without involving the code from go-ipfix library.
 type IPFIXExportingProcess interface {
 	NewTemplateID() uint16
-	AddRecordAndSendMsg(setType ipfixentities.ContentType, record ipfixentities.Record) (int, error)
+	AddSetAndSendMsg(setType ipfixentities.ContentType, set ipfixentities.Set) (int, error)
 	CloseConnToCollector()
 }
 
@@ -46,8 +46,8 @@ func NewIPFIXExportingProcess(collector net.Addr, obsID uint32, tempRefTimeout u
 	}, nil
 }
 
-func (exp *ipfixExportingProcess) AddRecordAndSendMsg(setType ipfixentities.ContentType, record ipfixentities.Record) (int, error) {
-	sentBytes, err := exp.ExportingProcess.AddRecordAndSendMsg(setType, record)
+func (exp *ipfixExportingProcess) AddSetAndSendMsg(setType ipfixentities.ContentType, set ipfixentities.Set) (int, error) {
+	sentBytes, err := exp.ExportingProcess.AddSetAndSendMsg(setType, set)
 	return sentBytes, err
 }
 
