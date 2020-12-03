@@ -175,60 +175,61 @@ func checkRecordsWithPodIPs(t *testing.T, data *TestData, podAIP string, podBIP 
 	// Iterate over recordSlices and build some results to test with expected results
 	templateRecords := 0
 	dataRecordsIntraNode := 0
-	for _, record := range recordSlices {
-		if strings.Contains(record, "TEMPLATE RECORD") {
+	for _, records := range recordSlices {
+		if strings.Contains(records, "TEMPLATE RECORD") {
 			templateRecords = templateRecords + 1
 		}
-
-		if strings.Contains(record, podAIP) && strings.Contains(record, podBIP) {
-			dataRecordsIntraNode = dataRecordsIntraNode + 1
-			// Check if records have both Pod name and Pod namespace or not.
-			if !strings.Contains(record, "perftest-a") {
-				t.Fatalf("Records with PodAIP does not have Pod name")
-			}
-			if !strings.Contains(record, "perftest-b") {
-				t.Fatalf("Records with PodBIP does not have Pod name")
-			}
-			if !strings.Contains(record, testNamespace) {
-				t.Fatalf("Records with PodAIP and PodBIP does not have Pod Namespace")
-			}
-			// In Kind clusters, there are two flow records for the iperf flow.
-			// One of them has no bytes and we ignore that flow record.
-			if !strings.Contains(record, "octetDeltaCount: 0") {
-				// Check if records have both ingress and egress network policies.
-				if !strings.Contains(record, "test-networkpolicy-ingress") {
-					t.Fatalf("Records does not have NetworkPolicy name with ingress rule")
+		for _, record := range strings.Split(records, "DATA RECORD") {
+			if strings.Contains(record, podAIP) && strings.Contains(record, podBIP) {
+				dataRecordsIntraNode = dataRecordsIntraNode + 1
+				// Check if records have both Pod name and Pod namespace or not.
+				if !strings.Contains(record, "perftest-a") {
+					t.Fatalf("Records with PodAIP does not have Pod name")
 				}
-				if !strings.Contains(record, "test-networkpolicy-egress") {
-					t.Fatalf("Records does not have NetworkPolicy name with egress rule")
+				if !strings.Contains(record, "perftest-b") {
+					t.Fatalf("Records with PodBIP does not have Pod name")
 				}
-			}
-			// Check the bandwidth using octetDeltaCount in data records sent in second ipfix interval
-			if strings.Contains(record, "seqno=2") || strings.Contains(record, "seqno=3") {
+				if !strings.Contains(record, testNamespace) {
+					t.Fatalf("Records with PodAIP and PodBIP does not have Pod Namespace")
+				}
 				// In Kind clusters, there are two flow records for the iperf flow.
 				// One of them has no bytes and we ignore that flow record.
 				if !strings.Contains(record, "octetDeltaCount: 0") {
-					//split the record in lines to compute bandwidth
-					splitLines := strings.Split(record, "\n")
-					for _, line := range splitLines {
-						if strings.Contains(line, "octetDeltaCount") {
-							lineSlice := strings.Split(line, ":")
-							deltaBytes, err := strconv.ParseFloat(strings.TrimSpace(lineSlice[1]), 64)
-							if err != nil {
-								t.Fatalf("Error in converting octetDeltaCount to int type")
+					// Check if records have both ingress and egress network policies.
+					if !strings.Contains(record, "test-networkpolicy-ingress") {
+						t.Fatalf("Records does not have NetworkPolicy name with ingress rule")
+					}
+					if !strings.Contains(record, "test-networkpolicy-egress") {
+						t.Fatalf("Records does not have NetworkPolicy name with egress rule")
+					}
+				}
+				// Check the bandwidth using octetDeltaCount in data records sent in second ipfix interval
+				if strings.Contains(record, "seqno=2") || strings.Contains(record, "seqno=3") {
+					// In Kind clusters, there are two flow records for the iperf flow.
+					// One of them has no bytes and we ignore that flow record.
+					if !strings.Contains(record, "octetDeltaCount: 0") {
+						//split the record in lines to compute bandwidth
+						splitLines := strings.Split(record, "\n")
+						for _, line := range splitLines {
+							if strings.Contains(line, "octetDeltaCount") {
+								lineSlice := strings.Split(line, ":")
+								deltaBytes, err := strconv.ParseFloat(strings.TrimSpace(lineSlice[1]), 64)
+								if err != nil {
+									t.Fatalf("Error in converting octetDeltaCount to int type")
+								}
+								// compute the bandwidth using 5s as interval
+								recBandwidth := (deltaBytes * 8.0) / float64(5*time.Second.Nanoseconds())
+								// bandwidth from iperf output
+								bwSlice := strings.Split(bandwidth, " ")
+								iperfBandwidth, err := strconv.ParseFloat(bwSlice[0], 64)
+								if err != nil {
+									t.Fatalf("Error in converting iperf bandwidth to float64 type")
+								}
+								t.Logf("Iperf bandwidth: %v", iperfBandwidth)
+								t.Logf("IPFIX record bandwidth: %v", recBandwidth)
+								assert.InDeltaf(t, recBandwidth, iperfBandwidth, 5, "Difference between Iperf bandwidth and IPFIX record bandwidth should be less than 5Gb/s")
+								break
 							}
-							// compute the bandwidth using 5s as interval
-							recBandwidth := (deltaBytes * 8.0) / float64(5*time.Second.Nanoseconds())
-							// bandwidth from iperf output
-							bwSlice := strings.Split(bandwidth, " ")
-							iperfBandwidth, err := strconv.ParseFloat(bwSlice[0], 64)
-							if err != nil {
-								t.Fatalf("Error in converting iperf bandwidth to float64 type")
-							}
-							t.Logf("Iperf bandwidth: %v", iperfBandwidth)
-							t.Logf("IPFIX record bandwidth: %v", recBandwidth)
-							assert.InEpsilonf(t, recBandwidth, iperfBandwidth, 5, "Difference between Iperf bandwidth and IPFIX record bandwidth should be less than 5Gb/s")
-							break
 						}
 					}
 				}

@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"hash/fnv"
 	"net"
+	"time"
 
 	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
 	ipfixregistry "github.com/vmware/go-ipfix/pkg/registry"
@@ -68,7 +69,7 @@ var (
 type flowExporter struct {
 	flowRecords     *flowrecords.FlowRecords
 	process         ipfix.IPFIXExportingProcess
-	elementsList    []*ipfixentities.InfoElement
+	elementsList    []*ipfixentities.InfoElementWithValue
 	exportFrequency uint
 	pollCycle       uint
 	templateID      uint16
@@ -165,9 +166,9 @@ func (exp *flowExporter) initFlowExporter(collector net.Addr) error {
 	exp.process = expProcess
 	exp.templateID = expProcess.NewTemplateID()
 
-	templateRec := ipfix.NewIPFIXTemplateRecord(uint16(len(IANAInfoElements)+len(IANAReverseInfoElements)+len(AntreaInfoElements)), exp.templateID)
+	templateSet := ipfix.NewSet(ipfixentities.Template, exp.templateID, false)
 
-	sentBytes, err := exp.sendTemplateRecord(templateRec)
+	sentBytes, err := exp.sendTemplateSet(templateSet, exp.templateID)
 	if err != nil {
 		return err
 	}
@@ -178,8 +179,8 @@ func (exp *flowExporter) initFlowExporter(collector net.Addr) error {
 
 func (exp *flowExporter) sendFlowRecords() error {
 	sendAndUpdateFlowRecord := func(key flowexporter.ConnectionKey, record flowexporter.FlowRecord) error {
-		dataRec := ipfix.NewIPFIXDataRecord(exp.templateID)
-		if err := exp.sendDataRecord(dataRec, record); err != nil {
+		dataSet := ipfix.NewSet(ipfixentities.Data, exp.templateID, false)
+		if err := exp.sendDataSet(dataSet, record, exp.templateID); err != nil {
 			return err
 		}
 		if err := exp.flowRecords.ValidateAndUpdateStats(key, record); err != nil {
@@ -194,76 +195,74 @@ func (exp *flowExporter) sendFlowRecords() error {
 	return nil
 }
 
-func (exp *flowExporter) sendTemplateRecord(templateRec ipfix.IPFIXRecord) (int, error) {
-	// Add template header
-	_, err := templateRec.PrepareRecord()
-	if err != nil {
-		return 0, fmt.Errorf("error when writing template header: %v", err)
-	}
+func (exp *flowExporter) sendTemplateSet(templateSet ipfix.IPFIXSet, templateID uint16) (int, error) {
+	elements := make([]*ipfixentities.InfoElementWithValue, 0)
 
 	for _, ie := range IANAInfoElements {
 		element, err := exp.registry.GetInfoElement(ie, ipfixregistry.IANAEnterpriseID)
 		if err != nil {
 			return 0, fmt.Errorf("%s not present. returned error: %v", ie, err)
 		}
-		if _, err = templateRec.AddInfoElement(element, nil); err != nil {
-			return 0, fmt.Errorf("error when adding %s to template: %v", element.Name, err)
-		}
+		ieWithValue := ipfixentities.NewInfoElementWithValue(element, nil)
+		elements = append(elements, ieWithValue)
 	}
 	for _, ie := range IANAReverseInfoElements {
 		element, err := exp.registry.GetInfoElement(ie, ipfixregistry.IANAReversedEnterpriseID)
 		if err != nil {
 			return 0, fmt.Errorf("%s not present. returned error: %v", ie, err)
 		}
-		if _, err = templateRec.AddInfoElement(element, nil); err != nil {
-			return 0, fmt.Errorf("error when adding %s to template: %v", element.Name, err)
-		}
+		ieWithValue := ipfixentities.NewInfoElementWithValue(element, nil)
+		elements = append(elements, ieWithValue)
 	}
 	for _, ie := range AntreaInfoElements {
 		element, err := exp.registry.GetInfoElement(ie, ipfixregistry.AntreaEnterpriseID)
 		if err != nil {
 			return 0, fmt.Errorf("information element %s is not present in Antrea registry", ie)
 		}
-		if _, err := templateRec.AddInfoElement(element, nil); err != nil {
-			return 0, fmt.Errorf("error when adding %s to template: %v", element.Name, err)
-		}
+		ieWithValue := ipfixentities.NewInfoElementWithValue(element, nil)
+		elements = append(elements, ieWithValue)
 	}
 
-	sentBytes, err := exp.process.AddRecordAndSendMsg(ipfixentities.Template, templateRec.GetRecord())
+	err := templateSet.AddRecord(elements, templateID)
+	if err != nil {
+		return 0, fmt.Errorf("error in adding record to template set: %v", err)
+	}
+
+	sentBytes, err := exp.process.AddSetAndSendMsg(ipfixentities.Template, templateSet.GetSet())
 	if err != nil {
 		return 0, fmt.Errorf("error in IPFIX exporting process when sending template record: %v", err)
 	}
 
 	// Get all elements from template record.
-	exp.elementsList = templateRec.GetTemplateElements()
+	exp.elementsList = elements
 
 	return sentBytes, nil
 }
 
-func (exp *flowExporter) sendDataRecord(dataRec ipfix.IPFIXRecord, record flowexporter.FlowRecord) error {
+func (exp *flowExporter) sendDataSet(dataSet ipfix.IPFIXSet, record flowexporter.FlowRecord, templateID uint16) error {
 	nodeName, _ := env.GetNodeName()
+
 	// Iterate over all infoElements in the list
 	for _, ie := range exp.elementsList {
-		var err error
-		switch ieName := ie.Name; ieName {
+		switch ieName := ie.Element.Name; ieName {
 		case "flowStartSeconds":
-			_, err = dataRec.AddInfoElement(ie, uint32(record.Conn.StartTime.Unix()))
+			ie.Value = uint32(record.Conn.StartTime.Unix())
 		case "flowEndSeconds":
-			_, err = dataRec.AddInfoElement(ie, uint32(record.Conn.StopTime.Unix()))
+			ie.Value = uint32(time.Now().Unix())
 		case "sourceIPv4Address":
-			_, err = dataRec.AddInfoElement(ie, record.Conn.TupleOrig.SourceAddress)
+			ie.Value = record.Conn.TupleOrig.SourceAddress
 		case "destinationIPv4Address":
-			_, err = dataRec.AddInfoElement(ie, record.Conn.TupleReply.SourceAddress)
+			ie.Value = record.Conn.TupleReply.SourceAddress
 		case "sourceTransportPort":
-			_, err = dataRec.AddInfoElement(ie, record.Conn.TupleOrig.SourcePort)
+			ie.Value = record.Conn.TupleOrig.SourcePort
 		case "destinationTransportPort":
-			_, err = dataRec.AddInfoElement(ie, record.Conn.TupleReply.SourcePort)
+			ie.Value = record.Conn.TupleReply.SourcePort
 		case "protocolIdentifier":
-			_, err = dataRec.AddInfoElement(ie, record.Conn.TupleOrig.Protocol)
+			ie.Value = record.Conn.TupleOrig.Protocol
 		case "packetTotalCount":
-			_, err = dataRec.AddInfoElement(ie, record.Conn.OriginalPackets)
+			ie.Value = record.Conn.OriginalPackets
 		case "octetTotalCount":
-			_, err = dataRec.AddInfoElement(ie, record.Conn.OriginalBytes)
+			ie.Value = record.Conn.OriginalBytes
 		case "packetDeltaCount":
 			deltaPkts := int64(0)
 			if record.PrevPackets != 0 {
@@ -272,7 +271,7 @@ func (exp *flowExporter) sendDataRecord(dataRec ipfix.IPFIXRecord, record flowex
 			if deltaPkts < 0 {
 				klog.Warningf("Packet delta count for connection should not be negative: %d", deltaPkts)
 			}
-			_, err = dataRec.AddInfoElement(ie, uint64(deltaPkts))
+			ie.Value = uint64(deltaPkts)
 		case "octetDeltaCount":
 			deltaBytes := int64(0)
 			if record.PrevBytes != 0 {
@@ -281,11 +280,11 @@ func (exp *flowExporter) sendDataRecord(dataRec ipfix.IPFIXRecord, record flowex
 			if deltaBytes < 0 {
 				klog.Warningf("Byte delta count for connection should not be negative: %d", deltaBytes)
 			}
-			_, err = dataRec.AddInfoElement(ie, uint64(deltaBytes))
+			ie.Value = uint64(deltaBytes)
 		case "reversePacketTotalCount":
-			_, err = dataRec.AddInfoElement(ie, record.Conn.ReversePackets)
+			ie.Value = record.Conn.ReversePackets
 		case "reverseOctetTotalCount":
-			_, err = dataRec.AddInfoElement(ie, record.Conn.ReverseBytes)
+			ie.Value = record.Conn.ReverseBytes
 		case "reversePacketDeltaCount":
 			deltaPkts := int64(0)
 			if record.PrevReversePackets != 0 {
@@ -294,7 +293,7 @@ func (exp *flowExporter) sendDataRecord(dataRec ipfix.IPFIXRecord, record flowex
 			if deltaPkts < 0 {
 				klog.Warningf("Packet delta count for connection should not be negative: %d", deltaPkts)
 			}
-			_, err = dataRec.AddInfoElement(ie, uint64(deltaPkts))
+			ie.Value = uint64(deltaPkts)
 		case "reverseOctetDeltaCount":
 			deltaBytes := int64(0)
 			if record.PrevReverseBytes != 0 {
@@ -303,59 +302,64 @@ func (exp *flowExporter) sendDataRecord(dataRec ipfix.IPFIXRecord, record flowex
 			if deltaBytes < 0 {
 				klog.Warningf("Byte delta count for connection should not be negative: %d", deltaBytes)
 			}
-			_, err = dataRec.AddInfoElement(ie, uint64(deltaBytes))
+			ie.Value = uint64(deltaBytes)
 		case "sourcePodNamespace":
-			_, err = dataRec.AddInfoElement(ie, record.Conn.SourcePodNamespace)
+			ie.Value = record.Conn.SourcePodNamespace
 		case "sourcePodName":
-			_, err = dataRec.AddInfoElement(ie, record.Conn.SourcePodName)
+			ie.Value = record.Conn.SourcePodName
 		case "sourceNodeName":
 			// Add nodeName for only local pods whose pod names are resolved.
 			if record.Conn.SourcePodName != "" {
-				_, err = dataRec.AddInfoElement(ie, nodeName)
+				ie.Value = nodeName
 			} else {
-				_, err = dataRec.AddInfoElement(ie, "")
+				ie.Value = ""
 			}
 		case "destinationPodNamespace":
-			_, err = dataRec.AddInfoElement(ie, record.Conn.DestinationPodNamespace)
+			ie.Value = record.Conn.DestinationPodNamespace
 		case "destinationPodName":
-			_, err = dataRec.AddInfoElement(ie, record.Conn.DestinationPodName)
+			ie.Value = record.Conn.DestinationPodName
 		case "destinationNodeName":
 			// Add nodeName for only local pods whose pod names are resolved.
 			if record.Conn.DestinationPodName != "" {
-				_, err = dataRec.AddInfoElement(ie, nodeName)
+				ie.Value = nodeName
 			} else {
-				_, err = dataRec.AddInfoElement(ie, "")
+				ie.Value = ""
 			}
 		case "destinationClusterIPv4":
 			if record.Conn.DestinationServicePortName != "" {
-				_, err = dataRec.AddInfoElement(ie, record.Conn.TupleOrig.DestinationAddress)
+				ie.Value = record.Conn.TupleOrig.DestinationAddress
 			} else {
 				// Sending dummy IP as IPFIX collector expects constant length of data for IP field.
 				// We should probably think of better approach as this involves customization of IPFIX collector to ignore
 				// this dummy IP address.
-				_, err = dataRec.AddInfoElement(ie, net.IP{0, 0, 0, 0})
+				ie.Value = net.IP{0, 0, 0, 0}
 			}
 		case "destinationServicePortName":
-			_, err = dataRec.AddInfoElement(ie, record.Conn.DestinationServicePortName)
+			if record.Conn.DestinationServicePortName != "" {
+				ie.Value = record.Conn.DestinationServicePortName
+			} else {
+				ie.Value = ""
+			}
 		case "ingressNetworkPolicyName":
-			_, err = dataRec.AddInfoElement(ie, record.Conn.IngressNetworkPolicyName)
+			ie.Value = record.Conn.IngressNetworkPolicyName
 		case "ingressNetworkPolicyNamespace":
-			_, err = dataRec.AddInfoElement(ie, record.Conn.IngressNetworkPolicyNamespace)
+			ie.Value = record.Conn.IngressNetworkPolicyNamespace
 		case "egressNetworkPolicyName":
-			_, err = dataRec.AddInfoElement(ie, record.Conn.EgressNetworkPolicyName)
+			ie.Value = record.Conn.EgressNetworkPolicyName
 		case "egressNetworkPolicyNamespace":
-			_, err = dataRec.AddInfoElement(ie, record.Conn.EgressNetworkPolicyNamespace)
-		}
-		if err != nil {
-			return fmt.Errorf("error while adding info element: %s to data record: %v", ie.Name, err)
+			ie.Value = record.Conn.EgressNetworkPolicyNamespace
 		}
 	}
 
-	sentBytes, err := exp.process.AddRecordAndSendMsg(ipfixentities.Data, dataRec.GetRecord())
+	err := dataSet.AddRecord(exp.elementsList, templateID)
+	if err != nil {
+		return fmt.Errorf("error in adding record to data set: %v", err)
+	}
+
+	sentBytes, err := exp.process.AddSetAndSendMsg(ipfixentities.Data, dataSet.GetSet())
 	if err != nil {
 		return fmt.Errorf("error in IPFIX exporting process when sending data record: %v", err)
 	}
 	klog.V(4).Infof("Flow record created and sent. Bytes sent: %d", sentBytes)
-
 	return nil
 }
