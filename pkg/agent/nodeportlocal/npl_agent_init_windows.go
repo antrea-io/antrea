@@ -24,12 +24,12 @@ import (
 
 // InitializeNPLAgent starts NodePortLocal (NPL) agent.
 // Currently NPL is disabled for windows.
-func InitializeNPLAgent(kubeClient clientset.Interface, portRange, nodeName string, stop <-chan struct{}) (*windowsCtrl, error) {
-	return nil, errors.New("Windows Platform not supported fot NPL")
+func InitializeNPLAgent(kubeClient clientset.Interface, portRange, nodeName string) (*windowsCtrl, error) {
+	return nil, errors.New("Windows Platform not supported for NPL")
 }
 
 type windowsCtrl struct {
 }
 
-func (*windowsCtrl) Run(stop <-chan struct{}) {
+func (*windowsCtrl) Run(stopCh <-chan struct{}) {
 }

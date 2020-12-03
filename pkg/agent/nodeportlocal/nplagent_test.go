@@ -39,36 +39,6 @@ import (
 	"k8s.io/client-go/tools/cache"
 )
 
-// Mock PortPortRule for tests to simulate IPTable
-// Currently the functions always return true to adhere to the interface requirement
-type PPRTest struct {
-}
-
-func (PPRTest) Init() error {
-	return nil
-}
-
-func (PPRTest) AddRule(port int, podip string) error {
-	return nil
-}
-
-func (PPRTest) DeleteRule(port int, podip string) error {
-	return nil
-}
-
-func (PPRTest) SyncState(podPort map[int]string) error {
-	return nil
-}
-
-func (PPRTest) GetAllRules() (map[int]string, error) {
-	m := make(map[int]string)
-	return m, nil
-}
-
-func (PPRTest) DeleteAllRules() error {
-	return nil
-}
-
 type nplAnnotation struct {
 	Podport  string
 	Nodeip   string
@@ -87,12 +57,14 @@ func NewPortTable(c *gomock.Controller) *portcache.PortTable {
 	return &ptable
 }
 
-var defaultPodName = "test-pod"
-var defaultNS = "default"
-var defaultNodeName = "test-node"
-var defaultHostIP = "10.10.10.10"
-var defaultPodIP = "192.168.32.10"
-var defaultPort = 80
+const (
+	defaultPodName  = "test-pod"
+	defaultNS       = "default"
+	defaultNodeName = "test-node"
+	defaultHostIP   = "10.10.10.10"
+	defaultPodIP    = "192.168.32.10"
+	defaultPort     = 80
+)
 
 var kubeClient *k8sfake.Clientset
 var c *k8s.Controller
@@ -158,13 +130,22 @@ func TestMain(t *testing.T) {
 
 	informerFactory := informers.NewSharedInformerFactory(kubeClient, 5*time.Second)
 	mockCtrl := gomock.NewController(t)
-	//defer mockCtrl.Finish()
 	portTable = NewPortTable(mockCtrl)
 	c = k8s.NewNPLController(kubeClient, portTable)
+	c.OldObjStore = cache.NewStore(cache.MetaNamespaceKeyFunc)
 
 	podEventHandler := cache.ResourceEventHandlerFuncs{
-		AddFunc:    func(obj interface{}) { c.HandleAddPod(obj) },
-		DeleteFunc: func(obj interface{}) { c.HandleDeletePod(obj) },
+		AddFunc: func(obj interface{}) {
+			podObj := obj.(*corev1.Pod)
+			key := podObj.Namespace + "/" + podObj.Name
+			c.HandleAddPod(key, obj)
+		},
+		DeleteFunc: func(obj interface{}) {
+			podObj := obj.(*corev1.Pod)
+			key := podObj.Namespace + "/" + podObj.Name
+			c.OldObjStore.Add(podObj)
+			c.HandleDeletePod(key)
+		},
 		UpdateFunc: func(old, new interface{}) { c.HandleUpdatePod(old, new) },
 	}
 	podInformer := informerFactory.Core().V1().Pods()

@@ -34,11 +34,11 @@ import (
 
 const resyncPeriod = 60 * time.Minute
 
-// InitializeNPLAgent starts NodePortLocal (NPL) agent.
-// It initializes port table cache to keep a track of Node ports available for use of NPL,
+// InitializeNPLAgent initializes the NodePortLocal (NPL) agent.
+// It initializes the port table cache to keep rack of Node ports available for use by NPL,
 // sets up event handlers to handle Pod add, update and delete events.
-// When a Pod gets created, a free Node port is obtained from the port table cache and a DNAT rule is added to send traffic to the Pod ip:port.
-func InitializeNPLAgent(kubeClient clientset.Interface, portRange, nodeName string, stop <-chan struct{}) (*k8s.Controller, error) {
+// When a Pod gets created, a free Node port is obtained from the port table cache and a DNAT rule is added to NAT traffic to the Pod's ip:port.
+func InitializeNPLAgent(kubeClient clientset.Interface, portRange, nodeName string) (*k8s.Controller, error) {
 	start, end, err := util.ParsePortsRange(portRange)
 	if err != nil {
 		return nil, fmt.Errorf("something went wrong while fetching port range: %v", err)
@@ -55,16 +55,17 @@ func InitializeNPLAgent(kubeClient clientset.Interface, portRange, nodeName stri
 	c := k8s.NewNPLController(kubeClient, portTable)
 	c.RemoveNPLAnnotationFromPods()
 
-	// Watch only the Pods which belong to the node where the agent is running
+	// Watch only the Pods which belong to the Node where the agent is running
 	fieldSelector := fields.OneTermEqualSelector("spec.nodeName", nodeName)
 	lw := cache.NewListWatchFromClient(kubeClient.CoreV1().RESTClient(), "pods", metav1.NamespaceAll, fieldSelector)
-	_, controller := cache.NewInformer(lw, &corev1.Pod{}, resyncPeriod,
+	cacheStore, controller := cache.NewInformer(lw, &corev1.Pod{}, resyncPeriod,
 		cache.ResourceEventHandlerFuncs{
-			AddFunc:    c.HandleAddPod,
-			DeleteFunc: c.HandleDeletePod,
-			UpdateFunc: c.HandleUpdatePod,
+			AddFunc:    c.EnqueueObjAdd,
+			DeleteFunc: c.EnqueueObjDel,
+			UpdateFunc: c.EnqueueObjUpdate,
 		},
 	)
+	c.CacheStore = cacheStore
 	c.Ctrl = controller
 	return c, nil
 }

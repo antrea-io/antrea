@@ -101,41 +101,39 @@ func (pt *PortTable) GetEntryByPodIPPort(ip string, port int) *NodePortData {
 	return nil
 }
 
-func (pt *PortTable) getFreePort() int {
-	pt.tableLock.RLock()
-	defer pt.tableLock.RUnlock()
+func (pt *PortTable) getFreePort(podip string, podport int) int {
+	pt.tableLock.Lock()
+	defer pt.tableLock.Unlock()
 	for i := pt.StartPort; i <= pt.EndPort; i++ {
 		if _, ok := pt.Table[i]; !ok {
+			pt.Table[i] = NodePortData{PodIP: podip, PodPort: podport}
 			return i
 		}
 	}
 	return -1
 }
 
-func (pt *PortTable) AddRule(podip string, podport int) (int, bool) {
-	nodeport := pt.getFreePort()
+func (pt *PortTable) AddRule(podip string, podport int) (int, error) {
+	nodeport := pt.getFreePort(podip, podport)
 	if nodeport < 0 {
-		return 0, false
-	}
-	if pt == nil {
-		return 0, false
+		return 0, fmt.Errorf("no free port found")
 	}
 	err := pt.PodPortRules.AddRule(nodeport, fmt.Sprintf("%s:%d", podip, podport))
 	if err != nil {
-		return 0, false
+		return 0, err
 	}
 	pt.AddUpdateEntry(nodeport, podport, podip)
-	return nodeport, true
+	return nodeport, nil
 }
 
-func (pt *PortTable) DeleteRule(podip string, podport int) bool {
+func (pt *PortTable) DeleteRule(podip string, podport int) error {
 	data := pt.GetEntryByPodIPPort(podip, podport)
 	err := pt.PodPortRules.DeleteRule(data.NodePort, fmt.Sprintf("%s:%d", podip, podport))
 	if err != nil {
-		return false
+		return err
 	}
 	pt.DeleteEntry(data.NodePort)
-	return true
+	return nil
 }
 
 func (pt *PortTable) RuleExists(podip string, podport int) bool {
