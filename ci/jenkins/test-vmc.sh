@@ -260,8 +260,8 @@ function deliver_antrea {
     docker image prune -f --filter "until=1h" || true > /dev/null
     cd $GIT_CHECKOUT_DIR
     if [[ ${DOCKER_REGISTRY} != "" ]]; then
-        docker pull ${DOCKER_REGISTRY}/antrea/antrea-ubuntu:latest
-        docker tag ${DOCKER_REGISTRY}/antrea/antrea-ubuntu:latest antrea/antrea-ubuntu:latest
+        docker pull ${DOCKER_REGISTRY}/antrea/base-ubuntu:2.14.0
+        docker tag ${DOCKER_REGISTRY}/antrea/base-ubuntu:2.14.0 antrea/base-ubuntu:2.14.0
         docker pull ${DOCKER_REGISTRY}/antrea/golang:1.15
         docker tag ${DOCKER_REGISTRY}/antrea/golang:1.15 golang:1.15
     fi
