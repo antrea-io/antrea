@@ -481,10 +481,10 @@ policies will be enforced last.
 Within a tier, Antrea-native Policy CRDs are ordered by the `priority` at the policy
 level. Thus, the policy with the highest precedence (lowest priority number
 value) is enforced first. This ordering is performed solely based on the
-`priority` assigned as opposed to the "Kind" of the resource, i.e. the relative
-ordering between a [ClusterNetworkPolicy resource](#antrea-clusternetworkpolicy) and an [Antrea NetworkPolicy
-resource](#antrea-networkpolicy) within a Tier depends only on the `priority`
-set in each of the two resources.
+`priority` assigned, as opposed to the "Kind" of the resource, i.e. the relative
+ordering between a [ClusterNetworkPolicy resource](#antrea-clusternetworkpolicy) and
+an [Antrea NetworkPolicy resource](#antrea-networkpolicy) within a Tier depends only
+on the `priority` set in each of the two resources.
 
 ### Rule enforcement based on priorities
 
@@ -504,6 +504,25 @@ Once a rule is matched, it is executed based on the action set. If none of the
 policy rules match, the packet is then enforced for rules created for K8s NP.
 If the packet still does not match any rule for K8s NP, it will then be evaluated
 against policies created in the "baseline" Tier.
+
+The [antctl command](antctl.md#networkPolicy-commands) with 'sort-by=effectivePriority'
+flag can be used to check the order of policy enforcement.
+An example output will look like the following:
+
+```text
+antctl get netpol --sort-by=effectivePriority
+NAME                                 APPLIED-TO                           RULES SOURCE                                 TIER-PRIORITY PRIORITY
+4c504456-9158-4838-bfab-f81665dfae12 85b88ddb-b474-5b44-93d3-c9192c09085e 1     AntreaClusterNetworkPolicy:acnp-1      250           1
+41e510e0-e430-4606-b4d9-261424184fba e36f8beb-9b0b-5b49-b1b7-5c5307cddd83 1     AntreaClusterNetworkPolicy:acnp-2      250           2
+819b8482-ede5-4423-910c-014b731fdba6 bb6711a1-87c7-5a15-9a4a-71bf49a78056 2     AntreaNetworkPolicy:anp-10             250           10
+4d18e031-f05a-48f6-bd91-0197b556ccca e216c104-770c-5731-bfd3-ff4ccbc38c39 2     K8sNetworkPolicy:default/test-1        <NONE>        <NONE>
+c547002a-d8c7-40f1-bdd1-8eb6d0217a67 e216c104-770c-5731-bfd3-ff4ccbc38c39 1     K8sNetworkPolicy:default/test-2        <NONE>        <NONE>
+aac8b8bc-f3bf-4c41-b6e0-2af1863204eb bb6711a1-87c7-5a15-9a4a-71bf49a78056 3     AntreaClusterNetworkPolicy:baseline    253           10
+```
+
+The [ovs-pipeline doc](design/ovs-pipeline.md) contains more information on how
+policy rules are realized by OpenFlow, and how the priority of flows reflects the
+order in which they are enforced.
 
 ## RBAC
 

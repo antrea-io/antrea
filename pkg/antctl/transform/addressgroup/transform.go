@@ -28,18 +28,18 @@ type Response struct {
 	Pods []common.GroupMember `json:"pods,omitempty"`
 }
 
-func listTransform(l interface{}) (interface{}, error) {
+func listTransform(l interface{}, opts map[string]string) (interface{}, error) {
 	groups := l.(*cpv1beta.AddressGroupList)
 	result := []interface{}{}
 	for i := range groups.Items {
 		item := groups.Items[i]
-		o, _ := objectTransform(&item)
+		o, _ := objectTransform(&item, opts)
 		result = append(result, o.(Response))
 	}
 	return result, nil
 }
 
-func objectTransform(o interface{}) (interface{}, error) {
+func objectTransform(o interface{}, _ map[string]string) (interface{}, error) {
 	group := o.(*cpv1beta.AddressGroup)
 	var pods []common.GroupMember
 	for _, pod := range group.GroupMembers {
@@ -48,12 +48,13 @@ func objectTransform(o interface{}) (interface{}, error) {
 	return Response{Name: group.Name, Pods: pods}, nil
 }
 
-func Transform(reader io.Reader, single bool) (interface{}, error) {
+func Transform(reader io.Reader, single bool, opts map[string]string) (interface{}, error) {
 	return transform.GenericFactory(
 		reflect.TypeOf(cpv1beta.AddressGroup{}),
 		reflect.TypeOf(cpv1beta.AddressGroupList{}),
 		objectTransform,
 		listTransform,
+		opts,
 	)(reader, single)
 }
 

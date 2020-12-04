@@ -38,7 +38,7 @@ type Response struct {
 	ControllerConditions        []clusterinfo.ControllerCondition       `json:"controllerConditions,omitempty"`        // Controller condition contains types like ControllerHealthy
 }
 
-func Transform(reader io.Reader, _ bool) (interface{}, error) {
+func Transform(reader io.Reader, _ bool, _ map[string]string) (interface{}, error) {
 	b, err := ioutil.ReadAll(reader)
 	if err != nil {
 		return nil, err
