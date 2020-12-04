@@ -109,6 +109,8 @@ var CommandList = &commandList{
   $ antctl get networkpolicy 6001549b-ba63-4752-8267-30f52b4332db
   Get the list of all control plane NetworkPolicies
   $ antctl get networkpolicy
+  Get the list of all control plane NetworkPolicies, sorted by the order in which the policies are evaluated.
+  $ antctl get networkpolicy --sort-by=effectivePriority
   Get the control plane NetworkPolicy with a specific source (supported by agent only)
   $ antctl get networkpolicy -S allow-http -n ns1
   Get the list of control plane NetworkPolicies whose source NetworkPolicies are in a Namespace (supported by agent only)

@@ -35,7 +35,7 @@ type Response struct {
 // AgentVersion is the AddonTransform for the version command. This function
 // will try to parse the response as a AgentVersionResponse and then populate
 // it with the version of antctl to a transformedVersionResponse object.
-func AgentTransform(reader io.Reader, _ bool) (interface{}, error) {
+func AgentTransform(reader io.Reader, _ bool, _ map[string]string) (interface{}, error) {
 	b, err := ioutil.ReadAll(reader)
 	if err != nil {
 		return nil, err
@@ -60,7 +60,7 @@ func AgentTransform(reader io.Reader, _ bool) (interface{}, error) {
 	return resp, nil
 }
 
-func ControllerTransform(reader io.Reader, _ bool) (interface{}, error) {
+func ControllerTransform(reader io.Reader, _ bool, _ map[string]string) (interface{}, error) {
 	b, err := ioutil.ReadAll(reader)
 	if err != nil {
 		return nil, err

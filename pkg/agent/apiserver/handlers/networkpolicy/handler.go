@@ -48,7 +48,6 @@ func HandleFunc(aq agentquerier.AgentQuerier) http.HandlerFunc {
 		} else {
 			nps = npq.GetNetworkPolicies(npFilter)
 		}
-
 		obj = cpv1beta.NetworkPolicyList{Items: nps}
 
 		if err := json.NewEncoder(w).Encode(obj); err != nil {
@@ -80,7 +79,6 @@ func newFilterFromURLQuery(query url.Values) (*querier.NetworkPolicyQueryFilter,
 	}
 
 	source := query.Get("source")
-
 	name := query.Get("name")
 	if name != "" && (source != "" || namespace != "" || pod != "" || strSourceType != "") {
 		return nil, fmt.Errorf("with a name, none of the other fields can be set")
