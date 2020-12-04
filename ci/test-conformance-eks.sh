@@ -198,11 +198,12 @@ function deliver_antrea_to_eks() {
     echo "=== Loading the Antrea image to each Node ==="
     antrea_image="antrea-ubuntu"
     DOCKER_IMG_VERSION=${CLUSTER}
-    docker save -o ${antrea_image}.tar antrea/antrea-ubuntu:${DOCKER_IMG_VERSION}
+    DOCKER_IMG_NAME="projects.registry.vmware.com/antrea/antrea-ubuntu"
+    docker save -o ${antrea_image}.tar ${DOCKER_IMG_NAME}:${DOCKER_IMG_VERSION}
 
     kubectl get nodes -o wide --no-headers=true | awk '{print $7}' | while read IP; do
         scp -o StrictHostKeyChecking=no -i ${SSH_PRIVATE_KEY_PATH} ${antrea_image}.tar ec2-user@${IP}:~
-        ssh -o StrictHostKeyChecking=no -i ${SSH_PRIVATE_KEY_PATH} -n ec2-user@${IP} "sudo docker load -i ~/${antrea_image}.tar ; sudo docker tag antrea/antrea-ubuntu:${DOCKER_IMG_VERSION} antrea/antrea-ubuntu:latest"
+        ssh -o StrictHostKeyChecking=no -i ${SSH_PRIVATE_KEY_PATH} -n ec2-user@${IP} "sudo docker load -i ~/${antrea_image}.tar ; sudo docker tag ${DOCKER_IMG_NAME}:${DOCKER_IMG_VERSION} ${DOCKER_IMG_NAME}:latest"
     done
     rm ${antrea_image}.tar
 

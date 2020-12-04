@@ -212,12 +212,13 @@ function deliver_antrea_to_gke() {
     echo "=== Loading the Antrea image to each Node ==="
     antrea_image="antrea-ubuntu"
     DOCKER_IMG_VERSION=${CLUSTER}
-    docker save -o ${antrea_image}.tar antrea/antrea-ubuntu:${DOCKER_IMG_VERSION}
+    DOCKER_IMG_NAME="projects.registry.vmware.com/antrea/antrea-ubuntu"
+    docker save -o ${antrea_image}.tar ${DOCKER_IMG_NAME}:${DOCKER_IMG_VERSION}
 
     node_names=$(kubectl get nodes -o wide --no-headers=true | awk '{print $1}')
     for node_name in ${node_names}; do
         ${GCLOUD_PATH} compute scp ${antrea_image}.tar ubuntu@${node_name}:~ --zone ${GKE_ZONE}
-        ${GCLOUD_PATH} compute ssh ubuntu@${node_name} --command="sudo docker load -i ~/${antrea_image}.tar ; sudo docker tag antrea/antrea-ubuntu:${DOCKER_IMG_VERSION} antrea/antrea-ubuntu:latest" --zone ${GKE_ZONE}
+        ${GCLOUD_PATH} compute ssh ubuntu@${node_name} --command="sudo docker load -i ~/${antrea_image}.tar ; sudo docker tag ${DOCKER_IMG_NAME}:${DOCKER_IMG_VERSION} ${DOCKER_IMG_NAME}:latest" --zone ${GKE_ZONE}
     done
     rm ${antrea_image}.tar
 

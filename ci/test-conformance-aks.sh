@@ -210,7 +210,8 @@ function deliver_antrea_to_aks() {
 
     antrea_image="antrea-ubuntu"
     DOCKER_IMG_VERSION=${CLUSTER}
-    docker save -o ${antrea_image}.tar antrea/antrea-ubuntu:${DOCKER_IMG_VERSION}
+    DOCKER_IMG_NAME="projects.registry.vmware.com/antrea/antrea-ubuntu"
+    docker save -o ${antrea_image}.tar ${DOCKER_IMG_NAME}:${DOCKER_IMG_VERSION}
 
     CLUSTER_RESOURCE_GROUP=$(az aks show --resource-group ${RESOURCE_GROUP} --name ${CLUSTER} --query nodeResourceGroup -o tsv)
     SCALE_SET_NAME=$(az vmss list --resource-group ${CLUSTER_RESOURCE_GROUP} --query [0].name -o tsv)
@@ -225,7 +226,7 @@ function deliver_antrea_to_aks() {
 
     for IP in ${NODE_IPS}; do
         scp -o StrictHostKeyChecking=no -i ${SSH_PRIVATE_KEY_PATH} ${antrea_image}.tar azureuser@${IP}:~
-        ssh -o StrictHostKeyChecking=no -i ${SSH_PRIVATE_KEY_PATH} -n azureuser@${IP} "sudo docker load -i ~/${antrea_image}.tar ; sudo docker tag antrea/antrea-ubuntu:${DOCKER_IMG_VERSION} antrea/antrea-ubuntu:latest"
+        ssh -o StrictHostKeyChecking=no -i ${SSH_PRIVATE_KEY_PATH} -n azureuser@${IP} "sudo docker load -i ~/${antrea_image}.tar ; sudo docker tag ${DOCKER_IMG_NAME}:${DOCKER_IMG_VERSION} ${DOCKER_IMG_NAME}:latest"
     done
     rm ${antrea_image}.tar
 
