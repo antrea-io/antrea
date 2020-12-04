@@ -47,6 +47,7 @@ $GOPATH/bin/client-gen \
 $GOPATH/bin/lister-gen \
   --input-dirs "${ANTREA_PKG}/pkg/apis/security/v1alpha1,${ANTREA_PKG}/pkg/apis/core/v1alpha2" \
   --input-dirs "${ANTREA_PKG}/pkg/apis/ops/v1alpha1" \
+  --input-dirs "${ANTREA_PKG}/pkg/apis/clusterinformation/v1beta1" \
   --output-package "${ANTREA_PKG}/pkg/client/listers" \
   --go-header-file hack/boilerplate/license_header.go.txt
 
@@ -54,6 +55,7 @@ $GOPATH/bin/lister-gen \
 $GOPATH/bin/informer-gen \
   --input-dirs "${ANTREA_PKG}/pkg/apis/security/v1alpha1,${ANTREA_PKG}/pkg/apis/core/v1alpha2" \
   --input-dirs "${ANTREA_PKG}/pkg/apis/ops/v1alpha1" \
+  --input-dirs "${ANTREA_PKG}/pkg/apis/clusterinformation/v1beta1" \
   --versioned-clientset-package "${ANTREA_PKG}/pkg/client/clientset/versioned" \
   --listers-package "${ANTREA_PKG}/pkg/client/listers" \
   --output-package "${ANTREA_PKG}/pkg/client/informers" \
