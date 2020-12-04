@@ -136,7 +136,7 @@ func (n *NetworkPolicyController) createAddressGroupForCRD(peer secv1alpha1.Netw
 // is returned.
 func (n *NetworkPolicyController) getTierPriority(tier string) int32 {
 	if tier == "" {
-		return defaultTierPriority
+		return DefaultTierPriority
 	}
 	// If the tier name is part of the static tier name set, we need to convert
 	// tier name to lowercase to match the corresponding Tier CRD name. This is
@@ -151,7 +151,7 @@ func (n *NetworkPolicyController) getTierPriority(tier string) int32 {
 	if err != nil {
 		// This error should ideally not occur as we perform validation.
 		klog.Errorf("Failed to retrieve Tier %s. Setting default tier priority: %v", tier, err)
-		return defaultTierPriority
+		return DefaultTierPriority
 	}
 	return t.Spec.Priority
 }

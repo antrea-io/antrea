@@ -45,6 +45,11 @@ type Foobar struct {
 	Foo string `json:"foo"`
 }
 
+var (
+	AntreaPolicyTierPriority = int32(250)
+	AntreaPolicyPriority     = float64(1.0)
+)
+
 func TestCommandList_tableOutputForGetCommands(t *testing.T) {
 	for _, tc := range []struct {
 		name            string
@@ -172,6 +177,8 @@ foo2
 						ObjectMeta: metav1.ObjectMeta{
 							Name: "880db7e8-fc2a-4030-aefe-09afc5f341ad",
 						},
+						TierPriority:    &AntreaPolicyTierPriority,
+						Priority:        &AntreaPolicyPriority,
 						AppliedToGroups: []string{"32ef631b-6817-5a18-86eb-93f4abf0467c"},
 						Rules: []cpv1beta.NetworkPolicyRule{
 							{
@@ -192,9 +199,9 @@ foo2
 					},
 				},
 			},
-			expected: `NAME                                 APPLIED-TO                                       RULES SOURCE                               
-6001549b-ba63-4752-8267-30f52b4332db 32ef631b-6817-5a18-86eb-93f4abf0467c + 1 more... 1     K8sNetworkPolicy:default/allow-all   
-880db7e8-fc2a-4030-aefe-09afc5f341ad 32ef631b-6817-5a18-86eb-93f4abf0467c             2     AntreaNetworkPolicy:default/allow-all
+			expected: `NAME                                 APPLIED-TO                                       RULES SOURCE                                TIER-PRIORITY PRIORITY
+6001549b-ba63-4752-8267-30f52b4332db 32ef631b-6817-5a18-86eb-93f4abf0467c + 1 more... 1     K8sNetworkPolicy:default/allow-all    <NONE>        <NONE>  
+880db7e8-fc2a-4030-aefe-09afc5f341ad 32ef631b-6817-5a18-86eb-93f4abf0467c             2     AntreaNetworkPolicy:default/allow-all 250           1       
 `,
 		},
 		{
@@ -297,7 +304,7 @@ func TestFormat(t *testing.T) {
 	for _, tc := range []struct {
 		name            string
 		single          bool
-		transform       func(reader io.Reader, single bool) (interface{}, error)
+		transform       func(reader io.Reader, single bool, opts map[string]string) (interface{}, error)
 		rawResponseData interface{}
 		responseStruct  reflect.Type
 		expected        string
@@ -321,7 +328,7 @@ func TestFormat(t *testing.T) {
 		{
 			name:   "StructureData-Transform-Single-Yaml",
 			single: true,
-			transform: func(reader io.Reader, single bool) (i interface{}, err error) {
+			transform: func(reader io.Reader, single bool, opts map[string]string) (i interface{}, err error) {
 				foo := &Foobar{}
 				err = json.NewDecoder(reader).Decode(foo)
 				return &struct{ Bar string }{Bar: foo.Foo}, err
@@ -356,7 +363,7 @@ func TestFormat(t *testing.T) {
 			responseData, err := json.Marshal(tc.rawResponseData)
 			assert.Nil(t, err)
 			var outputBuf bytes.Buffer
-			err = opt.output(bytes.NewBuffer(responseData), &outputBuf, tc.formatter, tc.single)
+			err = opt.output(bytes.NewBuffer(responseData), &outputBuf, tc.formatter, tc.single, map[string]string{})
 			assert.Nil(t, err)
 			assert.Equal(t, tc.expected, outputBuf.String())
 		})

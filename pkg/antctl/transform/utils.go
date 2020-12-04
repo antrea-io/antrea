@@ -20,10 +20,10 @@ import (
 	"reflect"
 )
 
-type unary func(interface{}) (interface{}, error)
+type unary func(interface{}, map[string]string) (interface{}, error)
 type FuncType func(reader io.Reader, single bool) (interface{}, error)
 
-func GenericFactory(objType, listType reflect.Type, objTransform, listTransform unary) FuncType {
+func GenericFactory(objType, listType reflect.Type, objTransform, listTransform unary, opts map[string]string) FuncType {
 	return func(reader io.Reader, single bool) (interface{}, error) {
 		var refType reflect.Type
 		if single {
@@ -36,9 +36,9 @@ func GenericFactory(objType, listType reflect.Type, objTransform, listTransform 
 			return nil, err
 		}
 		if single && objTransform != nil {
-			return objTransform(refVal.Interface())
+			return objTransform(refVal.Interface(), opts)
 		} else if !single && listTransform != nil {
-			return listTransform(refVal.Interface())
+			return listTransform(refVal.Interface(), opts)
 		}
 		return refVal.Interface(), nil
 	}

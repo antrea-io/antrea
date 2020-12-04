@@ -47,7 +47,8 @@ const (
 )
 
 const (
-	maxTableOutputColumnLength int = 50
+	maxTableOutputColumnLength int    = 50
+	sortByEffectivePriority    string = "effectivePriority"
 )
 
 // commandGroup is used to group commands, it could be specified in commandDefinition.
@@ -127,6 +128,14 @@ func (e *resourceEndpoint) flags() []flagInfo {
 			usage:        "Filter the resource by namespace",
 		})
 	}
+	if e.groupVersionResource == &v1beta2.NetworkPolicyVersionResource {
+		flags = append(flags, flagInfo{
+			name:            "sort-by",
+			defaultValue:    "",
+			supportedValues: []string{sortByEffectivePriority},
+			usage:           "Get NetworkPolicies in specific order. Current supported value is effectivePriority.",
+		})
+	}
 	return flags
 }
 
@@ -151,16 +160,17 @@ type endpoint struct {
 	// addonTransform is used to transform or update the response data received
 	// from the handler, it must returns an interface which has same type as
 	// TransformedResponse.
-	addonTransform func(reader io.Reader, single bool) (interface{}, error)
+	addonTransform func(reader io.Reader, single bool, opts map[string]string) (interface{}, error)
 }
 
 // flagInfo represents a command-line flag that can be provided when invoking an antctl command.
 type flagInfo struct {
-	name         string
-	shorthand    string
-	defaultValue string
-	arg          bool
-	usage        string
+	name            string
+	shorthand       string
+	defaultValue    string
+	supportedValues []string
+	arg             bool
+	usage           string
 }
 
 // rawCommand defines a full function cobra.Command which lets developers
@@ -200,7 +210,7 @@ func (cd *commandDefinition) namespaced() bool {
 	return false
 }
 
-func (cd *commandDefinition) getAddonTransform() func(reader io.Reader, single bool) (interface{}, error) {
+func (cd *commandDefinition) getAddonTransform() func(reader io.Reader, single bool, opts map[string]string) (interface{}, error) {
 	if runtime.Mode == runtime.ModeAgent && cd.agentEndpoint != nil {
 		return cd.agentEndpoint.addonTransform
 	} else if runtime.Mode == runtime.ModeController && cd.controllerEndpoint != nil {
@@ -681,7 +691,7 @@ func (cd *commandDefinition) tableOutput(obj interface{}, writer io.Writer) erro
 // format. If the AddonTransform is set, it will use the function to transform
 // the data first. It will try to output the resp in the format ft specified after
 // doing transform.
-func (cd *commandDefinition) output(resp io.Reader, writer io.Writer, ft formatterType, single bool) (err error) {
+func (cd *commandDefinition) output(resp io.Reader, writer io.Writer, ft formatterType, single bool, args map[string]string) (err error) {
 	var obj interface{}
 	addonTransform := cd.getAddonTransform()
 
@@ -695,7 +705,7 @@ func (cd *commandDefinition) output(resp io.Reader, writer io.Writer, ft formatt
 			return fmt.Errorf("error when decoding response %v: %w", resp, err)
 		}
 	} else {
-		obj, err = addonTransform(resp, single)
+		obj, err = addonTransform(resp, single, args)
 		if err != nil {
 			return fmt.Errorf("error when doing local transform: %w", err)
 		}
@@ -718,7 +728,7 @@ func (cd *commandDefinition) output(resp io.Reader, writer io.Writer, ft formatt
 			return cd.tableOutput(obj, writer)
 		}
 	default:
-		return fmt.Errorf("unsupport format type: %v", ft)
+		return fmt.Errorf("unsupported format type: %v", ft)
 	}
 	return nil
 }
@@ -734,6 +744,9 @@ func (cd *commandDefinition) collectFlags(cmd *cobra.Command, args []string) (ma
 			} else {
 				vs, err := cmd.Flags().GetString(f.name)
 				if err == nil && len(vs) != 0 {
+					if f.supportedValues != nil && !cd.validateFlagValue(vs, f.supportedValues) {
+						return nil, fmt.Errorf("unsupported value %s for flag %s", vs, f.name)
+					}
 					argMap[f.name] = vs
 					continue
 				}
@@ -744,6 +757,15 @@ func (cd *commandDefinition) collectFlags(cmd *cobra.Command, args []string) (ma
 		argMap["namespace"], _ = cmd.Flags().GetString("namespace")
 	}
 	return argMap, nil
+}
+
+func (cd *commandDefinition) validateFlagValue(val string, supportedValues []string) bool {
+	for _, s := range supportedValues {
+		if s == val {
+			return true
+		}
+	}
+	return false
 }
 
 // newCommandRunE creates the RunE function for the command. The RunE function
@@ -780,7 +802,7 @@ func (cd *commandDefinition) newCommandRunE(c *client) func(*cobra.Command, []st
 			return err
 		}
 		isSingle := cd.getEndpoint().OutputType() != multiple && (cd.getEndpoint().OutputType() == single || argGet)
-		return cd.output(resp, os.Stdout, formatterType(outputFormat), isSingle)
+		return cd.output(resp, os.Stdout, formatterType(outputFormat), isSingle, argMap)
 	}
 }
 
