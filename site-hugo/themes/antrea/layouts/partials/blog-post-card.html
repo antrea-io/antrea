@@ -1,0 +1,15 @@
+<div class="col">
+    <div class="icon">
+        <img src="{{ .Params.Image }}" alt="{{ .Title }}" />
+    </div>
+    <div class="content">
+        <h3>
+            {{ if (.Params.External) }}
+                <a href="{{ .Params.External }}">{{ .Title }}</a>
+            {{ else }}
+                <a href="{{ .RelPermalink }}">{{ .Title }}</a>
+            {{ end }}
+        </h3>
+        <p>{{ .Params.Excerpt }}</p>
+    </div>
+</div>
