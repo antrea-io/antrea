@@ -24,6 +24,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/nodeportlocal/portcache"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
@@ -33,7 +34,7 @@ import (
 const (
 	minRetryDelay = 2 * time.Second
 	maxRetryDelay = 120 * time.Second
-	numQueues     = 4
+	numWorkers    = 4
 )
 
 func bkt(key string, numWorkers uint32) uint32 {
@@ -46,7 +47,7 @@ func bkt(key string, numWorkers uint32) uint32 {
 type Controller struct {
 	portTable   *portcache.PortTable
 	kubeClient  clientset.Interface
-	queue       []workqueue.RateLimitingInterface
+	queue       workqueue.RateLimitingInterface
 	Ctrl        cache.Controller
 	CacheStore  cache.Store
 	OldObjStore cache.Store
@@ -58,10 +59,7 @@ func NewNPLController(kubeClient clientset.Interface, pt *portcache.PortTable) *
 		portTable:   pt,
 		OldObjStore: cache.NewStore(cache.MetaNamespaceKeyFunc),
 	}
-	nplCtrl.queue = make([]workqueue.RateLimitingInterface, numQueues)
-	for i := 0; i < numQueues; i++ {
-		nplCtrl.queue[i] = workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "nodeportlocal")
-	}
+	nplCtrl.queue = workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "nodeportlocal")
 	return &nplCtrl
 }
 
@@ -70,11 +68,9 @@ func NewNPLController(kubeClient clientset.Interface, pt *portcache.PortTable) *
 // Each object is mapped to one queue based on the hash of the object key. This ensures that
 // update for one object always gets processes by the same worker.
 func (c *Controller) Run(stopCh <-chan struct{}) {
-	for i := 0; i < numQueues; i++ {
-		defer c.queue[i].ShutDown()
-	}
-	for i := 0; i < numQueues; i++ {
-		go c.worker(i)
+	defer c.queue.ShutDown()
+	for i := 0; i < numWorkers; i++ {
+		go wait.Until(c.worker, time.Second, stopCh)
 	}
 	c.Ctrl.Run(stopCh)
 	cache.WaitForCacheSync(stopCh, c.Ctrl.HasSynced)
@@ -116,7 +112,7 @@ func (c *Controller) EnqueueObjAdd(obj interface{}) {
 		}
 	}
 	podKey := pod.Namespace + "/" + pod.Name
-	c.queue[bkt(podKey, numQueues)].Add(podKey)
+	c.queue.Add(podKey)
 
 }
 
@@ -133,7 +129,7 @@ func (c *Controller) EnqueueObjUpdate(oldObj, newObj interface{}) {
 		}
 	}
 	podKey := pod.Namespace + "/" + pod.Name
-	c.queue[bkt(podKey, numQueues)].Add(podKey)
+	c.queue.Add(podKey)
 
 }
 
@@ -150,32 +146,31 @@ func (c *Controller) EnqueueObjDel(obj interface{}) {
 		}
 	}
 	podKey := pod.Namespace + "/" + pod.Name
-	c.queue[bkt(podKey, numQueues)].Add(podKey)
+	c.queue.Add(podKey)
 
 }
 
-func (c *Controller) worker(queueID int) {
-	for c.processNextWorkItem(queueID) {
+func (c *Controller) worker() {
+	for c.processNextWorkItem() {
 	}
 }
 
-func (c *Controller) processNextWorkItem(queueID int) bool {
-	queue := c.queue[queueID]
-	obj, quit := queue.Get()
+func (c *Controller) processNextWorkItem() bool {
+	obj, quit := c.queue.Get()
 	if quit {
 		return false
 	}
-	defer queue.Done(obj)
+	defer c.queue.Done(obj)
 
 	if key, ok := obj.(string); !ok {
-		queue.Forget(obj)
+		c.queue.Forget(obj)
 		klog.Errorf("Expected string in work queue but got %#v", obj)
 		return true
 	} else if err := c.syncPod(key); err == nil {
-		klog.V(2).Infof("Successfully proceed key: %s, in queue: %d", key, queueID)
-		queue.Forget(key)
+		klog.V(2).Infof("Successfully proceed key: %s, in queue", key)
+		c.queue.Forget(key)
 	} else {
-		queue.AddRateLimited(key)
+		c.queue.AddRateLimited(key)
 		klog.Errorf("Error syncing pod %s, requeuing. Error: %v", key, err)
 	}
 	return true
