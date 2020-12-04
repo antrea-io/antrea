@@ -1,6 +1,6 @@
 - name: "Checking that Ansible version >= '2.4.0'"
   assert:
-    that: ansible_version.full >= "2.4.0"
+    that: ansible_version.full is version_compare('2.4.0', '>=')
 
 - import_tasks: base.yml
 
