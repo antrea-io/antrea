@@ -1,0 +1,30 @@
+<div class="wrapper features">
+    <h2>Features</h2>
+    <div class="grid two">
+        <div class="col image">
+            <img src="/img/icon-kubernetes.svg" />
+        </div>
+        <div class="col text">
+            <p class="strong">Create overlay networks</p>
+            <p>Enable Kubernetes pod networking with IP overlay networks using VXLAN or Geneve for encapsulation. Optionally encrypt node-to-node communication using IPSec packet encryption.</p>
+        </div>
+    </div>
+    <div class="grid two image-right">
+        <div class="col text">
+            <p class="strong">Enforce Network Polices</p>
+            <p>Antrea enforces Kubernetes Network Policy API which assigns network traffic filtering rules to pods. Extending firewall functionality to the pod edge enables nano-segmentation of workloads; service graphs are strictly enforced, policies follow workload rescheduling and scaling events, and if pods become compromised, egress restrictions limit further propagation.</p>
+        </div>
+        <div class="col image">
+            <img src="/img/icon-scroll.svg" />
+        </div>
+    </div>
+    <div class="grid two">
+        <div class="col image">
+            <img src="/img/icon-key.svg" />
+        </div>
+        <div class="col text">
+            <p class="strong">Improved Network Performance</p>
+            <p>OVS performs better than iptables, especially as the number of rules increases. There are numerous efforts in the OVS community to speed up packet IO and packet processing through technologies like Intel DPDK, AF_XDP sockets, hardware offloading, etc.</p>
+        </div>
+    </div>
+</div>
