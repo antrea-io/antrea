@@ -19,6 +19,7 @@ package externalversions
 import (
 	"fmt"
 
+	v1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1"
 	v1alpha2 "github.com/vmware-tanzu/antrea/pkg/apis/core/v1alpha2"
 	v1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/ops/v1alpha1"
 	securityv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
@@ -52,7 +53,13 @@ func (f *genericInformer) Lister() cache.GenericLister {
 // TODO extend this to unknown resources with a client pool
 func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource) (GenericInformer, error) {
 	switch resource {
-	// Group=core.antrea.tanzu.vmware.com, Version=v1alpha2
+	// Group=clusterinformation.antrea.tanzu.vmware.com, Version=v1beta1
+	case v1beta1.SchemeGroupVersion.WithResource("antreaagentinfos"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Clusterinformation().V1beta1().AntreaAgentInfos().Informer()}, nil
+	case v1beta1.SchemeGroupVersion.WithResource("antreacontrollerinfos"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Clusterinformation().V1beta1().AntreaControllerInfos().Informer()}, nil
+
+		// Group=core.antrea.tanzu.vmware.com, Version=v1alpha2
 	case v1alpha2.SchemeGroupVersion.WithResource("externalentities"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Core().V1alpha2().ExternalEntities().Informer()}, nil
 
