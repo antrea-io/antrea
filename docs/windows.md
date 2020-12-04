@@ -263,14 +263,14 @@ Then, set the Node IP used by kubelet.
 Open file `/var/lib/kubelet/kubeadm-flags.env`:
 
 ```text
-KUBELET_KUBEADM_ARGS="--cgroup-driver= --network-plugin=cni --pod-infra-container-image=k8s.gcr.io/pause:3.1"
+KUBELET_KUBEADM_ARGS="--network-plugin=cni --pod-infra-container-image=mcr.microsoft.com/oss/kubernetes/pause:1.3.0"
 ```
 
 Append `--node-ip=$NODE_IP` at the end of params. Replace `$NODE_IP` with
 the address for kubelet. It should look like:
 
 ```text
-KUBELET_KUBEADM_ARGS="--cgroup-driver= --network-plugin=cni --pod-infra-container-image=k8s.gcr.io/pause:3.1 --node-ip=$NODE_IP"
+KUBELET_KUBEADM_ARGS="--network-plugin=cni --pod-infra-container-image=mcr.microsoft.com/oss/kubernetes/pause:1.3.0 --node-ip=$NODE_IP"
 ```
 
 Restart kubelet service for changes to take effect.
