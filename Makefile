@@ -329,3 +329,8 @@ markdownlint:
 markdownlint-fix:
 	@echo "===> Running markdownlint <==="
 	markdownlint --fix -c .markdownlint-config.yml -i CHANGELOG.md -i hack/netpol -i CODE_OF_CONDUCT.md .
+
+.PHONY: spelling-fix
+spelling-fix:
+	@echo "===> Updating incorrect spellings <==="
+	$(CURDIR)/hack/update-spelling.sh
