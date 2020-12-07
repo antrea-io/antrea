@@ -453,8 +453,10 @@
     margin-top: -90px;
     padding: 30px 30px 50px 30px;
     .grid {
+        word-break: break-word;
         .col {
             border: 1px solid #F2F2F2;
+            word-break: break-word;
             .icon {
                 display: flex;
                 align-items: center;
