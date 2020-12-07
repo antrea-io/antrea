@@ -62,20 +62,18 @@
 }
 
 .introduction {
-    background-color: $darkblue;
-    color: $white;
     .grid.two {
         column-gap: 140px;
         padding: 35px 20px;
         p {
             margin: 0px;
             font-size: 16px;
-            color: $white;
+            color: $black;
             a {
-                color: $white;
+                color: $black;
             }
             &.strong {
-                color: $white;
+                color: $black;
             }
         }
     }
@@ -90,6 +88,7 @@
 .features {
     .grid { 
         grid-template-columns: 220px 1fr;
+        column-gap: 0px;
         margin-bottom: 30px;
         grid-template-areas:
                 "image text";
@@ -398,10 +397,10 @@
 }
 
 .getting-started {
-    background-color: $darkblue;
-    color: $white;
+    background-color: $lightgrey;
+    color: $black;
     p {
-        color: $white;
+        color: $black;
         font-size: 16px;
     }
     .left-side {
