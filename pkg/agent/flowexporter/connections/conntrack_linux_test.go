@@ -83,7 +83,7 @@ func TestConnTrackSystem_DumpFlows(t *testing.T) {
 	}
 	// Test the DumpFlows implementation of connTrackSystem
 	mockNetlinkCT := connectionstest.NewMockNetFilterConnTrack(ctrl)
-	connDumperDPSystem := NewConnTrackSystem(nodeConfig, serviceCIDR, false)
+	connDumperDPSystem := NewConnTrackSystem(nodeConfig, serviceCIDR, nil, false)
 
 	connDumperDPSystem.connTrack = mockNetlinkCT
 	// Set expects for mocks
@@ -121,6 +121,7 @@ func TestConnTrackOvsAppCtl_DumpFlows(t *testing.T) {
 	connDumper := &connTrackOvsCtl{
 		nodeConfig,
 		serviceCIDR,
+		nil,
 		mockOVSCtlClient,
 		false,
 	}
@@ -174,7 +175,7 @@ func TestConnTrackOvsAppCtl_DumpFlows(t *testing.T) {
 }
 
 func TestConnTrackSystem_GetMaxConnections(t *testing.T) {
-	connDumperDPSystem := NewConnTrackSystem(&config.NodeConfig{}, &net.IPNet{}, false)
+	connDumperDPSystem := NewConnTrackSystem(&config.NodeConfig{}, &net.IPNet{}, &net.IPNet{}, false)
 	maxConns, err := connDumperDPSystem.GetMaxConnections()
 	assert.NoErrorf(t, err, "GetMaxConnections function returned error: %v", err)
 	expMaxConns, err := sysctl.GetSysctlNet("netfilter/nf_conntrack_max")
@@ -191,6 +192,7 @@ func TestConnTrackOvsAppCtl_GetMaxConnections(t *testing.T) {
 	mockOVSCtlClient.EXPECT().RunAppctlCmd("dpctl/ct-get-maxconns", false).Return([]byte(strconv.Itoa(expMaxConns)), nil)
 	connDumper := &connTrackOvsCtl{
 		&config.NodeConfig{},
+		&net.IPNet{},
 		&net.IPNet{},
 		mockOVSCtlClient,
 		false,

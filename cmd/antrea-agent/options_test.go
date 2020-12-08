@@ -51,3 +51,28 @@ func TestOptions_validateFlowExporterConfig(t *testing.T) {
 	}
 
 }
+
+func TestParseFlowCollectorAddr(t *testing.T) {
+	testcases := []struct {
+		addr     string
+		expected []string
+	}{
+		{
+			"1.2.3.4:80:udp",
+			[]string{"1.2.3.4", "80", "udp"},
+		},
+		{
+			"1.2.3.4:80",
+			[]string{"1.2.3.4", "80"},
+		},
+		{
+			"[fe80:ffff:ffff:ffff:ffff:ffff:ffff:ffff]:80:tcp",
+			[]string{"[fe80:ffff:ffff:ffff:ffff:ffff:ffff:ffff]", "80", "tcp"},
+		},
+	}
+	for _, tc := range testcases {
+		res, err := parseFlowCollectorAddr(tc.addr)
+		assert.Nil(t, err)
+		assert.Equal(t, tc.expected, res)
+	}
+}
