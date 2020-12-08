@@ -16,6 +16,7 @@ package e2e
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"sync"
@@ -128,39 +129,43 @@ func setupTest(tb testing.TB) (*TestData, error) {
 	return testData, nil
 }
 
-func setupTestWithIPFIXCollector(tb testing.TB) (*TestData, error) {
+func setupTestWithIPFIXCollector(tb testing.TB) (*TestData, error, bool) {
 	data := &TestData{}
+	isIPv6 := false
 	if err := data.setupLogDirectoryForTest(tb.Name()); err != nil {
 		tb.Errorf("Error creating logs directory '%s': %v", data.logsDirForTestCase, err)
-		return nil, err
+		return nil, err, isIPv6
 	}
 	tb.Logf("Creating K8s clientset")
 	if err := data.createClient(); err != nil {
-		return nil, err
+		return nil, err, isIPv6
 	}
 	tb.Logf("Creating '%s' K8s Namespace", testNamespace)
 	if err := data.createTestNamespace(); err != nil {
-		return nil, err
+		return nil, err, isIPv6
 	}
 	// Create pod using ipfix collector image
 	if err := data.createPodOnNode("ipfix-collector", masterNodeName(), ipfixCollectorImage, nil, nil, nil, nil, true, nil); err != nil {
 		tb.Fatalf("Error when creating the ipfix collector Pod: %v", err)
 	}
 	ipfixCollectorIP, err := data.podWaitForIPs(defaultTimeout, "ipfix-collector", testNamespace)
-	if err != nil {
+	if err != nil || len(ipfixCollectorIP.ipStrings) == 0 {
 		tb.Fatalf("Error when waiting to get ipfix collector Pod IP: %v", err)
 	}
 	tb.Logf("Applying Antrea YAML with ipfix collector address")
-	// TODO: Deploy the collector using IPv6 address after flow_exporter supports IPv6.
-	ipStr := ipfixCollectorIP.ipv4.String()
-	if err := data.deployAntreaFlowExporter(ipStr + ":" + ipfixCollectorPort + ":tcp"); err != nil {
-		return data, err
+	ipStr := ipfixCollectorIP.ipStrings[0]
+	if net.ParseIP(ipStr).To4() == nil {
+		ipStr = fmt.Sprintf("[%s]", ipStr)
+		isIPv6 = true
+	}
+	if err := data.deployAntreaFlowExporter(fmt.Sprintf("%s:%s:tcp", ipStr, ipfixCollectorPort)); err != nil {
+		return data, err, isIPv6
 	}
 	tb.Logf("Checking CoreDNS deployment")
 	if err := data.checkCoreDNSPods(defaultTimeout); err != nil {
-		return data, err
+		return data, err, isIPv6
 	}
-	return data, nil
+	return data, nil, isIPv6
 }
 
 func exportLogs(tb testing.TB, data *TestData, logsSubDir string, writeNodeLogs bool) {

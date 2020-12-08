@@ -145,7 +145,7 @@ func TestConnectionStoreAndFlowRecords(t *testing.T) {
 	ifStoreMock := interfacestoretest.NewMockInterfaceStore(ctrl)
 	npQuerier := queriertest.NewMockAgentNetworkPolicyInfoQuerier(ctrl)
 	// TODO: Enhance the integration test by testing service.
-	connStore := connections.NewConnectionStore(connDumperMock, ifStoreMock, nil, npQuerier, testPollInterval)
+	connStore := connections.NewConnectionStore(connDumperMock, ifStoreMock, true, false, nil, npQuerier, testPollInterval)
 	// Expect calls for connStore.poll and other callees
 	connDumperMock.EXPECT().DumpFlows(uint16(openflow.CtZone)).Return(testConns, 0, nil)
 	connDumperMock.EXPECT().GetMaxConnections().Return(0, nil)
@@ -159,9 +159,10 @@ func TestConnectionStoreAndFlowRecords(t *testing.T) {
 		}
 	}
 	// Execute connStore.Poll
-	connsLen, err := connStore.Poll()
+	connsLens, err := connStore.Poll()
 	require.Nil(t, err, fmt.Sprintf("Failed to add connections to connection store: %v", err))
-	assert.Equal(t, connsLen, len(testConns), "expected connections should be equal to number of testConns")
+	assert.Len(t, connsLens, 1, "length of connsLens is expected to be 1")
+	assert.Len(t, testConns, connsLens[0], "expected connections should be equal to number of testConns")
 
 	// Check if connections in connectionStore are same as testConns or not
 	for i, expConn := range testConns {

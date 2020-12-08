@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net"
+	"regexp"
 	"strings"
 	"time"
 
@@ -194,7 +195,10 @@ func (o *Options) validateFlowExporterConfig() error {
 			return fmt.Errorf("IPFIX flow collector address should be provided")
 		} else {
 			// Check if it is TCP or UDP
-			strSlice := strings.Split(o.config.FlowCollectorAddr, ":")
+			strSlice, err := parseFlowCollectorAddr(o.config.FlowCollectorAddr)
+			if err != nil {
+				return err
+			}
 			var proto string
 			if len(strSlice) == 2 {
 				// If no separator ":" and proto is given, then default to TCP.
@@ -210,7 +214,7 @@ func (o *Options) validateFlowExporterConfig() error {
 
 			// Convert the string input in net.Addr format
 			hostPortAddr := strSlice[0] + ":" + strSlice[1]
-			_, _, err := net.SplitHostPort(hostPortAddr)
+			_, _, err = net.SplitHostPort(hostPortAddr)
 			if err != nil {
 				return fmt.Errorf("IPFIX flow collector is given in invalid format: %v", err)
 			}
@@ -238,4 +242,20 @@ func (o *Options) validateFlowExporterConfig() error {
 		}
 	}
 	return nil
+}
+
+func parseFlowCollectorAddr(addr string) ([]string, error) {
+	var strSlice []string
+	match, err := regexp.MatchString("\\[.*\\]:.*", addr)
+	if err != nil {
+		return strSlice, fmt.Errorf("Failed to parse FlowCollectorAddr: %s", addr)
+	}
+	if match {
+		idx := strings.Index(addr, "]")
+		strSlice = append(strSlice, addr[:idx+1])
+		strSlice = append(strSlice, strings.Split(addr[idx+2:], ":")...)
+	} else {
+		strSlice = strings.Split(addr, ":")
+	}
+	return strSlice, nil
 }

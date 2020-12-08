@@ -22,6 +22,6 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 )
 
-func NewConnTrackSystem(nodeConfig *config.NodeConfig, serviceCIDR *net.IPNet, isAntreaProxyEnabled bool) *connTrackOvsCtl {
-	return NewConnTrackOvsAppCtl(nodeConfig, serviceCIDR, isAntreaProxyEnabled)
+func NewConnTrackSystem(nodeConfig *config.NodeConfig, serviceCIDRv4 *net.IPNet, serviceCIDRv6 *net.IPNet, isAntreaProxyEnabled bool) *connTrackOvsCtl {
+	return NewConnTrackOvsAppCtl(nodeConfig, serviceCIDRv4, serviceCIDRv6, isAntreaProxyEnabled)
 }

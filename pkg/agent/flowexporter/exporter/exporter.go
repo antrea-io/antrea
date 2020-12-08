@@ -31,11 +31,9 @@ import (
 )
 
 var (
-	IANAInfoElements = []string{
+	IANAInfoElementsCommon = []string{
 		"flowStartSeconds",
 		"flowEndSeconds",
-		"sourceIPv4Address",
-		"destinationIPv4Address",
 		"sourceTransportPort",
 		"destinationTransportPort",
 		"protocolIdentifier",
@@ -44,36 +42,44 @@ var (
 		"packetDeltaCount",
 		"octetDeltaCount",
 	}
+	IANAInfoElementsIPv4 = append(IANAInfoElementsCommon, []string{"sourceIPv4Address", "destinationIPv4Address"}...)
+	IANAInfoElementsIPv6 = append(IANAInfoElementsCommon, []string{"sourceIPv6Address", "destinationIPv6Address"}...)
+	// Substring "reverse" is an indication to get reverse element of go-ipfix library.
 	IANAReverseInfoElements = []string{
 		"reversePacketTotalCount",
 		"reverseOctetTotalCount",
 		"reversePacketDeltaCount",
 		"reverseOctetDeltaCount",
 	}
-	AntreaInfoElements = []string{
+	antreaInfoElementsCommon = []string{
 		"sourcePodName",
 		"sourcePodNamespace",
 		"sourceNodeName",
 		"destinationPodName",
 		"destinationPodNamespace",
 		"destinationNodeName",
-		"destinationClusterIPv4",
 		"destinationServicePortName",
 		"ingressNetworkPolicyName",
 		"ingressNetworkPolicyNamespace",
 		"egressNetworkPolicyName",
 		"egressNetworkPolicyNamespace",
 	}
+	AntreaInfoElementsIPv4 = append(antreaInfoElementsCommon, []string{"destinationClusterIPv4"}...)
+	AntreaInfoElementsIPv6 = append(antreaInfoElementsCommon, []string{"destinationClusterIPv6"}...)
 )
 
 type flowExporter struct {
 	flowRecords     *flowrecords.FlowRecords
 	process         ipfix.IPFIXExportingProcess
-	elementsList    []*ipfixentities.InfoElementWithValue
+	elementsListv4  []*ipfixentities.InfoElementWithValue
+	elementsListv6  []*ipfixentities.InfoElementWithValue
 	exportFrequency uint
 	pollCycle       uint
-	templateID      uint16
+	templateIDv4    uint16
+	templateIDv6    uint16
 	registry        ipfix.IPFIXRegistry
+	v4Enabled       bool
+	v6Enabled       bool
 }
 
 func genObservationID() (uint32, error) {
@@ -86,17 +92,21 @@ func genObservationID() (uint32, error) {
 	return h.Sum32(), nil
 }
 
-func NewFlowExporter(records *flowrecords.FlowRecords, exportFrequency uint) *flowExporter {
+func NewFlowExporter(records *flowrecords.FlowRecords, exportFrequency uint, v4Enabled bool, v6Enabled bool) *flowExporter {
 	registry := ipfix.NewIPFIXRegistry()
 	registry.LoadRegistry()
 	return &flowExporter{
 		records,
 		nil,
 		nil,
+		nil,
 		exportFrequency,
 		0,
 		0,
+		0,
 		registry,
+		v4Enabled,
+		v6Enabled,
 	}
 }
 
@@ -164,23 +174,38 @@ func (exp *flowExporter) initFlowExporter(collector net.Addr) error {
 		return err
 	}
 	exp.process = expProcess
-	exp.templateID = expProcess.NewTemplateID()
-
-	templateSet := ipfix.NewSet(ipfixentities.Template, exp.templateID, false)
-
-	sentBytes, err := exp.sendTemplateSet(templateSet, exp.templateID)
-	if err != nil {
-		return err
+	if exp.v4Enabled {
+		templateID := expProcess.NewTemplateID()
+		exp.templateIDv4 = templateID
+		templateSet := ipfix.NewSet(ipfixentities.Template, exp.templateIDv4, false)
+		sentBytes, err := exp.sendTemplateSet(templateSet, false)
+		if err != nil {
+			return err
+		}
+		klog.V(2).Infof("Initialized flow exporter for IPv4 flow records and sent %d bytes size of template record", sentBytes)
 	}
-	klog.V(2).Infof("Initialized flow exporter and sent %d bytes size of template record", sentBytes)
+	if exp.v6Enabled {
+		templateID := expProcess.NewTemplateID()
+		exp.templateIDv6 = templateID
+		templateSet := ipfix.NewSet(ipfixentities.Template, exp.templateIDv6, false)
+		sentBytes, err := exp.sendTemplateSet(templateSet, true)
+		if err != nil {
+			return err
+		}
+		klog.V(2).Infof("Initialized flow exporter for IPv6 flow records and sent %d bytes size of template record", sentBytes)
+	}
 
 	return nil
 }
 
 func (exp *flowExporter) sendFlowRecords() error {
 	sendAndUpdateFlowRecord := func(key flowexporter.ConnectionKey, record flowexporter.FlowRecord) error {
-		dataSet := ipfix.NewSet(ipfixentities.Data, exp.templateID, false)
-		if err := exp.sendDataSet(dataSet, record, exp.templateID); err != nil {
+		templateID := exp.templateIDv4
+		if record.IsIPv6 {
+			templateID = exp.templateIDv6
+		}
+		dataSet := ipfix.NewSet(ipfixentities.Data, templateID, false)
+		if err := exp.sendDataSet(dataSet, record); err != nil {
 			return err
 		}
 		if err := exp.flowRecords.ValidateAndUpdateStats(key, record); err != nil {
@@ -195,9 +220,17 @@ func (exp *flowExporter) sendFlowRecords() error {
 	return nil
 }
 
-func (exp *flowExporter) sendTemplateSet(templateSet ipfix.IPFIXSet, templateID uint16) (int, error) {
+func (exp *flowExporter) sendTemplateSet(templateSet ipfix.IPFIXSet, isIPv6 bool) (int, error) {
 	elements := make([]*ipfixentities.InfoElementWithValue, 0)
 
+	IANAInfoElements := IANAInfoElementsIPv4
+	AntreaInfoElements := AntreaInfoElementsIPv4
+	templateID := exp.templateIDv4
+	if isIPv6 {
+		IANAInfoElements = IANAInfoElementsIPv6
+		AntreaInfoElements = AntreaInfoElementsIPv6
+		templateID = exp.templateIDv6
+	}
 	for _, ie := range IANAInfoElements {
 		element, err := exp.registry.GetInfoElement(ie, ipfixregistry.IANAEnterpriseID)
 		if err != nil {
@@ -234,16 +267,24 @@ func (exp *flowExporter) sendTemplateSet(templateSet ipfix.IPFIXSet, templateID 
 	}
 
 	// Get all elements from template record.
-	exp.elementsList = elements
+	if !isIPv6 {
+		exp.elementsListv4 = elements
+	} else {
+		exp.elementsListv6 = elements
+	}
 
 	return sentBytes, nil
 }
 
-func (exp *flowExporter) sendDataSet(dataSet ipfix.IPFIXSet, record flowexporter.FlowRecord, templateID uint16) error {
+func (exp *flowExporter) sendDataSet(dataSet ipfix.IPFIXSet, record flowexporter.FlowRecord) error {
 	nodeName, _ := env.GetNodeName()
 
 	// Iterate over all infoElements in the list
-	for _, ie := range exp.elementsList {
+	eL := exp.elementsListv4
+	if record.IsIPv6 {
+		eL = exp.elementsListv6
+	}
+	for _, ie := range eL {
 		switch ieName := ie.Element.Name; ieName {
 		case "flowStartSeconds":
 			ie.Value = uint32(record.Conn.StartTime.Unix())
@@ -252,6 +293,10 @@ func (exp *flowExporter) sendDataSet(dataSet ipfix.IPFIXSet, record flowexporter
 		case "sourceIPv4Address":
 			ie.Value = record.Conn.TupleOrig.SourceAddress
 		case "destinationIPv4Address":
+			ie.Value = record.Conn.TupleReply.SourceAddress
+		case "sourceIPv6Address":
+			ie.Value = record.Conn.TupleOrig.SourceAddress
+		case "destinationIPv6Address":
 			ie.Value = record.Conn.TupleReply.SourceAddress
 		case "sourceTransportPort":
 			ie.Value = record.Conn.TupleOrig.SourcePort
@@ -334,6 +379,13 @@ func (exp *flowExporter) sendDataSet(dataSet ipfix.IPFIXSet, record flowexporter
 				// this dummy IP address.
 				ie.Value = net.IP{0, 0, 0, 0}
 			}
+		case "destinationClusterIPv6":
+			if record.Conn.DestinationServicePortName != "" {
+				ie.Value = record.Conn.TupleOrig.DestinationAddress
+			} else {
+				// Same as destinationClusterIPv4.
+				ie.Value = net.ParseIP("::")
+			}
 		case "destinationServicePortName":
 			if record.Conn.DestinationServicePortName != "" {
 				ie.Value = record.Conn.DestinationServicePortName
@@ -351,7 +403,11 @@ func (exp *flowExporter) sendDataSet(dataSet ipfix.IPFIXSet, record flowexporter
 		}
 	}
 
-	err := dataSet.AddRecord(exp.elementsList, templateID)
+	templateID := exp.templateIDv4
+	if record.IsIPv6 {
+		templateID = exp.templateIDv6
+	}
+	err := dataSet.AddRecord(eL, templateID)
 	if err != nil {
 		return fmt.Errorf("error in adding record to data set: %v", err)
 	}

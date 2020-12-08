@@ -25,6 +25,7 @@ import (
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter"
+	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/agent/util/sysctl"
 )
 
@@ -33,19 +34,21 @@ var _ ConnTrackDumper = new(connTrackSystem)
 
 type connTrackSystem struct {
 	nodeConfig           *config.NodeConfig
-	serviceCIDR          *net.IPNet
+	serviceCIDRv4        *net.IPNet
+	serviceCIDRv6        *net.IPNet
 	isAntreaProxyEnabled bool
 	connTrack            NetFilterConnTrack
 }
 
-func NewConnTrackSystem(nodeConfig *config.NodeConfig, serviceCIDR *net.IPNet, isAntreaProxyEnabled bool) *connTrackSystem {
+func NewConnTrackSystem(nodeConfig *config.NodeConfig, serviceCIDRv4 *net.IPNet, serviceCIDRv6 *net.IPNet, isAntreaProxyEnabled bool) *connTrackSystem {
 	if err := SetupConntrackParameters(); err != nil {
 		// Do not fail, but continue after logging an error as we can still dump flows with missing information.
 		klog.Errorf("Error when setting up conntrack parameters, some information may be missing from exported flows: %v", err)
 	}
 	return &connTrackSystem{
 		nodeConfig,
-		serviceCIDR,
+		serviceCIDRv4,
+		serviceCIDRv6,
 		isAntreaProxyEnabled,
 		&netFilterConnTrack{},
 	}
@@ -53,6 +56,10 @@ func NewConnTrackSystem(nodeConfig *config.NodeConfig, serviceCIDR *net.IPNet, i
 
 // DumpFlows opens netlink connection and dumps all the flows in Antrea ZoneID of conntrack table.
 func (ct *connTrackSystem) DumpFlows(zoneFilter uint16) ([]*flowexporter.Connection, int, error) {
+	svcCIDR := ct.serviceCIDRv4
+	if zoneFilter == openflow.CtZoneV6 {
+		svcCIDR = ct.serviceCIDRv6
+	}
 	// Get connection to netlink socket
 	err := ct.connTrack.Dial()
 	if err != nil {
@@ -67,7 +74,7 @@ func (ct *connTrackSystem) DumpFlows(zoneFilter uint16) ([]*flowexporter.Connect
 		return nil, 0, fmt.Errorf("error when dumping flows from conntrack: %v", err)
 	}
 
-	filteredConns := filterAntreaConns(conns, ct.nodeConfig, ct.serviceCIDR, zoneFilter, ct.isAntreaProxyEnabled)
+	filteredConns := filterAntreaConns(conns, ct.nodeConfig, svcCIDR, zoneFilter, ct.isAntreaProxyEnabled)
 	klog.V(2).Infof("No. of flow exporter considered flows in Antrea zoneID: %d", len(filteredConns))
 
 	return filteredConns, len(conns), nil
