@@ -56,9 +56,10 @@ data:
     # Enable metrics exposure via Prometheus. Initializes Prometheus metrics listener.
     #enablePrometheusMetrics: true
 
-    # Provide flow collector address as string with format <IP>:<port>[:<proto>], where proto is tcp or udp. This also enables
-    # the flow exporter that sends IPFIX flow records of conntrack flows on OVS bridge. If no L4 transport proto is given,
-    # we consider tcp as default.
+    # Provide flow collector address as string with format <IP>:<port>[:<proto>], where proto is tcp or udp.
+    # IP can be either IPv4 or IPv6. However, IPv6 address should be wrapped with [].
+    # This also enables the flow exporter that sends IPFIX flow records of conntrack flows on OVS bridge.
+    # If no L4 transport proto is given, we consider tcp as default.
     #flowCollectorAddr: ""
 
     # Provide flow poll interval as a duration string. This determines how often the flow exporter dumps connections from the conntrack module.
@@ -88,7 +89,7 @@ kind: ConfigMap
 metadata:
   labels:
     app: antrea
-  name: antrea-windows-config-6d4gc5kdc8
+  name: antrea-windows-config-kc6bfhk4mg
   namespace: kube-system
 ---
 apiVersion: apps/v1
@@ -176,7 +177,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-windows-config-6d4gc5kdc8
+          name: antrea-windows-config-kc6bfhk4mg
         name: antrea-windows-config
       - configMap:
           defaultMode: 420
