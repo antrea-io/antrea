@@ -30,12 +30,12 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 
-	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
-	secClient "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/security/v1alpha1"
+	secv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	clientset "antrea.io/antrea/pkg/client/clientset/versioned"
 )
 
 const (
-	seed uint64 = 0xA1E47 // Use a specific rand seed to make the generated workloads always same
+	seed uint64 = 0xA1E47C // Use a specific rand seed to make the generated workloads always same
 
 	perfTestAppLabel                = "antrea-perf-test"
 	podsConnectionNetworkPolicyName = "pods.ingress"
@@ -225,22 +225,19 @@ func generateWorkloadACNPs(numPolicyRules, numCNPs int) []*secv1alpha1.ClusterNe
 	return acnps
 }
 
-func populateACNPs(cnps []*secv1alpha1.ClusterNetworkPolicy, data *TestData) error {
-	for _, cnp := range cnps {
-		securityClient := data.securityClient.(*secClient.SecurityV1alpha1Client)
-		_, err := securityClient.ClusterNetworkPolicies().Create(context.TODO(), cnp, metav1.CreateOptions{})
-		if err != nil {
+func populateACNPs(acnps []*secv1alpha1.ClusterNetworkPolicy, data *TestData) error {
+	for _, acnp := range acnps {
+		if _, err := data.crdClient.(*clientset.Clientset).CrdV1alpha1().ClusterNetworkPolicies().Create(context.TODO(), acnp, metav1.CreateOptions{}); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func cleanupACNPs(numCNPs int, data *TestData) error {
-	for i := 0; i < numCNPs; i++ {
-		cnpName := workloadACNPName + strconv.Itoa(i)
-		securityClient := data.securityClient.(*secClient.SecurityV1alpha1Client)
-		if err := securityClient.ClusterNetworkPolicies().Delete(context.TODO(), cnpName, metav1.DeleteOptions{}); err != nil {
+func cleanupACNPs(numACNPs int, data *TestData) error {
+	for i := 0; i < numACNPs; i++ {
+		acnpName := workloadACNPName + strconv.Itoa(i)
+		if err := data.crdClient.(*clientset.Clientset).CrdV1alpha1().ClusterNetworkPolicies().Delete(context.TODO(), acnpName, metav1.DeleteOptions{}); err != nil {
 			return err
 		}
 	}
@@ -358,7 +355,11 @@ func acnpRealize(numPolicyRules, numCNPs int, data *TestData, b *testing.B) {
 		go func() {
 			err := populateACNPs(cnps, data)
 			if err != nil {
-				b.Fatalf("Error when populating workload ACNP: %v", err)
+				// cannot use Fatal in a goroutine
+				// if populating policies fails, waitACNPRealize will
+				// eventually time out and the test will fail, although it would be
+				// better to fail early in that case.
+				b.Errorf("Error when populating workload ACNP: %v", err)
 			}
 		}()
 
@@ -400,7 +401,7 @@ func waitACNPRealize(policyRules, numACNPs int, data *TestData) error {
 // checkRealize returns true when the number of flows exceeds the number of CIDR, because each table has a default flow
 // entry which is used for default matching.
 // Since the check is done over SSH, the time measurement is not completely accurate.
-func checkRealize(policyRules int, data *TestData) (bool, error) {
+func checkRealize(expectedFlowCount, tableNum int, data *TestData) (bool, error) {
 	antreaPodName, err := data.getAntreaPodOnNode(controlPlaneNodeName())
 	if err != nil {
 		return false, err
