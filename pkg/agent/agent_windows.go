@@ -79,6 +79,7 @@ func (i *Initializer) prepareHostNetwork() error {
 // prepareOVSBridge adds local port and uplink to ovs bridge.
 // This function will delete OVS bridge and HNS network created by antrea on failure.
 func (i *Initializer) prepareOVSBridge() error {
+	klog.Info("preparing ovs bridge ...")
 	hnsNetwork, err := hcsshim.GetHNSNetworkByName(util.LocalHNSNetwork)
 	defer func() {
 		// prepareOVSBridge only works on windows platform. The operation has a chance to fail on the first time agent
@@ -107,6 +108,7 @@ func (i *Initializer) prepareOVSBridge() error {
 	// implementer-defined. Antrea uses "0x0000" for the upper 16-bits.
 	datapathID := strings.Replace(hnsNetwork.SourceMac, ":", "", -1)
 	datapathID = "0000" + datapathID
+	klog.Info("Setting ovs bridge datapath...")
 	if err = i.ovsBridgeClient.SetDatapathID(datapathID); err != nil {
 		klog.Errorf("Failed to set datapath_id %s: %v", datapathID, err)
 		return err
@@ -114,6 +116,8 @@ func (i *Initializer) prepareOVSBridge() error {
 
 	// Create local port.
 	brName := i.ovsBridgeClient.GetBridgeName()
+	klog.Infof("Creating local port for the bridge %v on auto-assigned port %v", brName, config.AutoAssignedOFPort)
+
 	if _, err = i.ovsBridgeClient.GetOFPort(brName); err == nil {
 		klog.Infof("OVS bridge local port %s already exists, skip the configuration", brName)
 	} else {
@@ -125,12 +129,16 @@ func (i *Initializer) prepareOVSBridge() error {
 	}
 
 	// If uplink is already exists, return.
+	klog.Info("Checking if uplink exists...")
 	uplinkNetConfig := i.nodeConfig.UplinkNetConfig
 	uplink := uplinkNetConfig.Name
 	if _, err := i.ovsBridgeClient.GetOFPort(uplink); err == nil {
-		klog.Infof("Uplink %s already exists, skip the configuration", uplink)
+		klog.Infof("... Uplink %s already exists, cannot proceed", uplink)
 		return err
 	}
+	klog.Info("... Uplink is valid")
+
+	klog.Info("Creating uplink port: %v ...", config.UplinkOFPort)
 	// Create uplink port.
 	uplinkPortUUId, err := i.ovsBridgeClient.CreateUplinkPort(uplink, config.UplinkOFPort, nil)
 	if err != nil {
@@ -150,8 +158,8 @@ func (i *Initializer) prepareOVSBridge() error {
 	if err = util.SetAdapterMACAddress(brName, &uplinkNetConfig.MAC); err != nil {
 		return err
 	}
-	// Remove existing IP addresses to avoid a candidate error of "Instance MSFT_NetIPAddress already exists" when
-	// adding it on the adapter.
+
+	klog.Info("Removing MSFT_NetIPAddress from the adapter, to avoid 'already exists' error...")
 	if err = util.RemoveIPv4AddrsFromAdapter(brName); err != nil {
 		return err
 	}
@@ -160,9 +168,13 @@ func (i *Initializer) prepareOVSBridge() error {
 		return err
 	}
 	// Restore the host routes which are lost when moving the network configuration of the uplink interface to OVS bridge interface.
+	klog.Info("Restoring HostRoutes for moved network config (uplink interface -> OVS bridge interface) ...")
+
 	if err = i.restoreHostRoutes(); err != nil {
 		return err
 	}
+
+	klog.Info("Setting Adapter for DNS Servers...")
 
 	if uplinkNetConfig.DNSServers != "" {
 		if err = util.SetAdapterDNSServers(brName, uplinkNetConfig.DNSServers); err != nil {
@@ -171,6 +183,8 @@ func (i *Initializer) prepareOVSBridge() error {
 	}
 	// Set the uplink with "no-flood" config, so that the IP of local Pods and "antrea-gw0" will not be leaked to the
 	// underlay network by the "normal" flow entry.
+	klog.Info("Setting uplink with no-flood config...")
+	// to ensure local no leaking of pod IPs, and no leaking of antrea-gw0 to the underlay via the normal flow entry...")
 	if err := ovsCtlClient.SetPortNoFlood(config.UplinkOFPort); err != nil {
 		klog.Errorf("Failed to set the uplink port with no-flood config: %v", err)
 		return err
