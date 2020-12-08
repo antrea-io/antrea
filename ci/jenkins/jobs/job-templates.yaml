@@ -162,7 +162,58 @@
      node: '{node}'
      triggers: '{triggers}'
      builders: '{builders}'
-     parameters: '{parameters}'
+     parameters:
+     - string:
+         default: https://github.com/vmware-tanzu/antrea/
+         description: The repository to checkout Antrea for this test.
+         name: ANTREA_REPO
+         trim: 'true'
+     - string:
+         default: master
+         description: The branch or SHA commit ID to checkout and build Antrea for this test.
+         name: ANTREA_GIT_REVISION
+         trim: 'true'
+     description: '{description}'
+     block-downstream: false
+     block-upstream: false
+     project-type: freestyle
+     properties:
+     - build-discarder:
+         artifact-days-to-keep: -1
+         artifact-num-to-keep: -1
+         days-to-keep: 7
+         num-to-keep: 30
+     - github:
+         url: '{repo_url}'
+     scm:
+     - git:
+         branches: '{branches}'
+         name: origin
+         url: '{repo_url}'
+     publishers: '{publishers}'
+     wrappers: '{wrappers}'
+
+- job-template:
+     name: 'cloud-{name}-{test_name}-cleanup'
+     node: '{node}'
+     triggers: '{triggers}'
+     builders: '{builders}'
+     parameters:
+     - string:
+         default: ''
+         description: The cluster name of the last finished build.
+         name: CLUSTERNAME
+         trim: 'false'
+     - string:
+         default: https://github.com/vmware-tanzu/antrea/
+         description: The repository to checkout Antrea for this test.
+         name: ANTREA_REPO
+         trim: 'true'
+     - string:
+         default: master
+         description: The branch or SHA commit ID to checkout and build Antrea for this test.
+         name: ANTREA_GIT_REVISION
+         trim: 'true'
      description: '{description}'
      block-downstream: false
      block-upstream: false

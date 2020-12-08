@@ -37,7 +37,7 @@ IMAGE_PULL_POLICY="Always"
 CONFORMANCE_IMAGE_CONFIG_PATH="${THIS_DIR}/conformance-image-config.yaml"
 SONOBUOY_IMAGE="projects.registry.vmware.com/sonobuoy/sonobuoy:v0.19.0"
 
-_usage="Usage: $0 [--e2e-conformance] [--e2e-network-policy] [--e2e-focus <TestRegex>] [--e2e-conformance-skip <SkipRegex>] [--e2e-networkpolicy-skip <SkipRegex>]
+_usage="Usage: $0 [--e2e-conformance] [--e2e-network-policy] [--e2e-focus <TestRegex>] [--e2e-skip <SkipRegex>] [--e2e-networkpolicy-skip <SkipRegex>]
                   [--kubeconfig <Kubeconfig>] [--kube-conformance-image-version <ConformanceImageVersion>]
                   [--log-mode <SonobuoyResultLogLevel>]
 Run the K8s e2e community tests (Conformance & Network Policy) which are relevant to Project Antrea,
