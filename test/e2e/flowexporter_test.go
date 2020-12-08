@@ -56,7 +56,7 @@ func TestFlowExporter(t *testing.T) {
 	}
 
 	// Add NetworkPolicy between two iperf Pods.
-	np1, err := data.createNetworkPolicy("test-networkpolicy-ingress", &networkingv1.NetworkPolicySpec{
+	np1, err := data.createNetworkPolicy("test-flow-exporter-networkpolicy-ingress", &networkingv1.NetworkPolicySpec{
 		PodSelector: metav1.LabelSelector{},
 		PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
 		Ingress: []networkingv1.NetworkPolicyIngressRule{{
@@ -77,7 +77,7 @@ func TestFlowExporter(t *testing.T) {
 			t.Fatalf("Error when deleting network policy: %v", err)
 		}
 	}()
-	np2, err := data.createNetworkPolicy("test-networkpolicy-egress", &networkingv1.NetworkPolicySpec{
+	np2, err := data.createNetworkPolicy("test-flow-exporter-networkpolicy-egress", &networkingv1.NetworkPolicySpec{
 		PodSelector: metav1.LabelSelector{},
 		PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeEgress},
 		Egress: []networkingv1.NetworkPolicyEgressRule{{
@@ -196,10 +196,10 @@ func checkRecordsWithPodIPs(t *testing.T, data *TestData, podAIP string, podBIP 
 				// One of them has no bytes and we ignore that flow record.
 				if !strings.Contains(record, "octetDeltaCount: 0") {
 					// Check if records have both ingress and egress network policies.
-					if !strings.Contains(record, "test-networkpolicy-ingress") {
+					if !strings.Contains(record, "test-flow-exporter-networkpolicy-ingress") {
 						t.Fatalf("Records does not have NetworkPolicy name with ingress rule")
 					}
-					if !strings.Contains(record, "test-networkpolicy-egress") {
+					if !strings.Contains(record, "test-flow-exporter-networkpolicy-egress") {
 						t.Fatalf("Records does not have NetworkPolicy name with egress rule")
 					}
 				}
