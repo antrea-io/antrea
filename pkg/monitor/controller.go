@@ -31,7 +31,10 @@ import (
 	controllerquerier "github.com/vmware-tanzu/antrea/pkg/controller/querier"
 )
 
-const crdName = "antrea-controller"
+const (
+	crdName        = "antrea-controller"
+	controllerName = "AntreaControllerMonitor"
+)
 
 type controllerMonitor struct {
 	client       clientset.Interface
@@ -57,14 +60,13 @@ func NewControllerMonitor(client clientset.Interface, nodeInformer coreinformers
 // Run creates AntreaControllerInfo CRD first after controller is running.
 // Then updates AntreaControllerInfo CRD every 60 seconds if there is any change.
 func (monitor *controllerMonitor) Run(stopCh <-chan struct{}) {
-	klog.Info("Starting Antrea Controller Monitor")
+	klog.Infof("Starting %s", controllerName)
+	defer klog.Infof("Shutting down %s", controllerName)
 
-	klog.Info("Waiting for node synced for Controller Monitor")
-	if !cache.WaitForCacheSync(stopCh, monitor.nodeListerSynced) {
-		klog.Error("Unable to sync node for Controller Monitor")
+	if !cache.WaitForNamedCacheSync(controllerName, stopCh, monitor.nodeListerSynced) {
 		return
 	}
-	klog.Info("Caches are synced for Controller Monitor")
+
 	monitor.deleteStaleAgentCRDs()
 
 	// Sync controller monitoring CRD every minute util stopCh is closed.
