@@ -131,10 +131,11 @@ git checkout HEAD -- hack/boilerplate/license_header.raw.txt
 go mod vendor
 # In Go 1.14, vendoring changed (see release notes at
 # https://golang.org/doc/go1.14), and the presence of a go.mod file specifying
-# go 1.14 or higher causes the go command to default to -mod=vendor. This causes
-# the go-to-protobuf command below to complain about missing packages under
-# vendor/, which were not downloaded by "go mod vendor". We can workaround this
-# easily by renaming the vendor directory.
+# go 1.14 or higher causes the go command to default to -mod=vendor when a
+# top-level vendor directory is present in the module. This causes the
+# go-to-protobuf command below to complain about missing packages under vendor/,
+# which were not downloaded by "go mod vendor". We can workaround this easily by
+# renaming the vendor directory.
 mv vendor /tmp/includes
 $GOPATH/bin/go-to-protobuf \
   --proto-import /tmp/includes \
