@@ -34,6 +34,7 @@ WINDOWS_CONFORMANCE_FOCUS="\[sig-network\].+\[Conformance\]|\[sig-windows\]"
 WINDOWS_CONFORMANCE_SKIP="\[LinuxOnly\]|\[Slow\]|\[Serial\]|\[Disruptive\]|\[Flaky\]|\[Feature:.+\]|\[sig-cli\]|\[sig-storage\]|\[sig-auth\]|\[sig-api-machinery\]|\[sig-apps\]|\[sig-node\]|\[Privileged\]|should be able to change the type from|\[sig-network\] Services should be able to create a functioning NodePort service \[Conformance\]|Service endpoints latency should not be very high"
 WINDOWS_NETWORKPOLICY_FOCUS="\[Feature:NetworkPolicy\]"
 WINDOWS_NETWORKPOLICY_SKIP="SKIP_NO_TESTCASE"
+CONFORMANCE_SKIP="\[Slow\]|\[Serial\]|\[Disruptive\]|\[Flaky\]|\[Feature:.+\]|\[sig-cli\]|\[sig-storage\]|\[sig-auth\]|\[sig-api-machinery\]|\[sig-apps\]|\[sig-node\]"
 NETWORKPOLICY_SKIP="should allow egress access to server in CIDR block|should enforce except clause while egress access to server in CIDR block"
 
 _usage="Usage: $0 [--kubeconfig <KubeconfigSavePath>] [--workdir <HomePath>]
@@ -275,6 +276,8 @@ function deliver_antrea {
     docker images | grep '<none>' | awk '{print $3}' | xargs -r docker rmi || true
     if [[ "${DOCKER_REGISTRY}" != "" ]]; then
         pull_antrea_ubuntu_image
+        docker pull "${DOCKER_REGISTRY}/antrea/sonobuoy-systemd-logs:v0.3"
+        docker tag "${DOCKER_REGISTRY}/antrea/sonobuoy-systemd-logs:v0.3" "sonobuoy/systemd-logs:v0.3"
     fi
     DOCKER_REGISTRY=${DOCKER_REGISTRY} make
 
@@ -299,6 +302,9 @@ function deliver_antrea {
     kubectl get nodes -o wide --no-headers=true | awk '$3 != "master" {print $6}' | while read IP; do
         rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no" antrea-ubuntu.tar jenkins@[${IP}]:${WORKDIR}/antrea-ubuntu.tar
         ssh -o StrictHostKeyChecking=no -n jenkins@${IP} "docker images | grep 'antrea-ubuntu' | awk '{print \$3}' | xargs -r docker rmi ; docker load -i ${WORKDIR}/antrea-ubuntu.tar ; docker images | grep '<none>' | awk '{print \$3}' | xargs -r docker rmi" || true
+        if [[ "${DOCKER_REGISTRY}" != "" ]]; then
+            ssh -o StrictHostKeyChecking=no -n jenkins@${IP} "docker pull ${DOCKER_REGISTRY}/antrea/sonobuoy-systemd-logs:v0.3 ; docker tag ${DOCKER_REGISTRY}/antrea/sonobuoy-systemd-logs:v0.3 sonobuoy/systemd-logs:v0.3"
+        fi
     done
 }
 
@@ -342,9 +348,9 @@ function run_conformance {
     kubectl rollout status daemonset/antrea-agent -n kube-system
 
     if [[ "$TESTCASE" =~ "conformance" ]]; then
-        ${WORKSPACE}/ci/run-k8s-e2e-tests.sh --e2e-conformance --log-mode $MODE --image-pull-policy ${IMAGE_PULL_POLICY} > ${WORKSPACE}/test-result.log
+        ${WORKSPACE}/ci/run-k8s-e2e-tests.sh --e2e-conformance --e2e-skip "$CONFORMANCE_SKIP" --log-mode $MODE --image-pull-policy ${IMAGE_PULL_POLICY} --kube-conformance-image-version "auto" > ${WORKSPACE}/test-result.log
     else
-        ${WORKSPACE}/ci/run-k8s-e2e-tests.sh --e2e-network-policy --e2e-networkpolicy-skip $NETWORKPOLICY_SKIP --log-mode $MODE --image-pull-policy ${IMAGE_PULL_POLICY} > ${WORKSPACE}/test-result.log
+        ${WORKSPACE}/ci/run-k8s-e2e-tests.sh --e2e-network-policy --e2e-skip "$NETWORKPOLICY_SKIP" --log-mode $MODE --image-pull-policy ${IMAGE_PULL_POLICY} --kube-conformance-image-version "auto" > ${WORKSPACE}/test-result.log
     fi
 
     cat ${WORKSPACE}/test-result.log

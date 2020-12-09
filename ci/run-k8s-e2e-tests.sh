@@ -37,7 +37,7 @@ IMAGE_PULL_POLICY="Always"
 CONFORMANCE_IMAGE_CONFIG_PATH="${THIS_DIR}/conformance-image-config.yaml"
 SONOBUOY_IMAGE="projects.registry.vmware.com/sonobuoy/sonobuoy:v0.19.0"
 
-_usage="Usage: $0 [--e2e-conformance] [--e2e-network-policy] [--e2e-focus <TestRegex>] [--e2e-skip <SkipRegex>] [--e2e-networkpolicy-skip <SkipRegex>]
+_usage="Usage: $0 [--e2e-conformance] [--e2e-network-policy] [--e2e-focus <TestRegex>] [--e2e-skip <SkipRegex>]
                   [--kubeconfig <Kubeconfig>] [--kube-conformance-image-version <ConformanceImageVersion>]
                   [--log-mode <SonobuoyResultLogLevel>]
 Run the K8s e2e community tests (Conformance & Network Policy) which are relevant to Project Antrea,
@@ -139,15 +139,16 @@ echoerr "Using this sonobuoy: $SONOBUOY"
 function run_sonobuoy() {
     local focus_regex="$1"
     local skip_regex="$2"
+
     $SONOBUOY delete --wait $KUBECONFIG_OPTION
     echo "Running tests with sonobuoy. While test is running, check logs with: $SONOBUOY $KUBECONFIG_OPTION logs -f."
+    set -x
     if [[ "$focus_regex" == "" && "$skip_regex" == "" ]]; then
         $SONOBUOY run --wait \
                 $KUBECONFIG_OPTION \
                 --kube-conformance-image-version $KUBE_CONFORMANCE_IMAGE_VERSION \
                 --mode "certified-conformance" --image-pull-policy ${IMAGE_PULL_POLICY} \
                 --sonobuoy-image ${SONOBUOY_IMAGE} --e2e-repo-config ${CONFORMANCE_IMAGE_CONFIG_PATH}
-
     else
         $SONOBUOY run --wait \
                 $KUBECONFIG_OPTION \
@@ -155,6 +156,7 @@ function run_sonobuoy() {
                 --e2e-focus "$focus_regex" --e2e-skip "$skip_regex" --image-pull-policy ${IMAGE_PULL_POLICY} \
                 --sonobuoy-image ${SONOBUOY_IMAGE} --e2e-repo-config ${CONFORMANCE_IMAGE_CONFIG_PATH}
     fi
+    set +x
     results=$($SONOBUOY retrieve $KUBECONFIG_OPTION)
     $SONOBUOY results $results --mode=$MODE
 }
@@ -165,9 +167,9 @@ function run_conformance() {
         exit 1
     fi
     if [[ "$RUN_E2E_SKIP" == "" ]]; then
-        RUN_E2E_SKIP=${DEFAULT_E2E_CONFORMANCE_SKIP}
+        RUN_E2E_SKIP="${DEFAULT_E2E_CONFORMANCE_SKIP}"
     fi
-    run_sonobuoy ${DEFAULT_E2E_CONFORMANCE_FOCUS} ${RUN_E2E_SKIP}
+    run_sonobuoy "${DEFAULT_E2E_CONFORMANCE_FOCUS}" "${RUN_E2E_SKIP}"
 }
 
 function run_whole_conformance() {
@@ -180,9 +182,9 @@ function run_network_policy() {
         exit 1
     fi
     if [[ "$RUN_E2E_SKIP" == "" ]]; then
-        RUN_E2E_SKIP=${DEFAULT_E2E_NETWORKPOLICY_SKIP}
+        RUN_E2E_SKIP="${DEFAULT_E2E_NETWORKPOLICY_SKIP}"
     fi
-    run_sonobuoy ${DEFAULT_E2E_NETWORKPOLICY_FOCUS} ${E2E_NETWORKPOLICY_SKIP}
+    run_sonobuoy "${DEFAULT_E2E_NETWORKPOLICY_FOCUS}" "${RUN_E2E_SKIP}"
 }
 
 if [[ "$RUN_E2E_FOCUS" != "" ]]; then

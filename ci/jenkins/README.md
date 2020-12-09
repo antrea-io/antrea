@@ -31,6 +31,18 @@ should be deleted. This ensures that all tests are run on a clean testbed.
 * [network policy [gated check-in]](https://jenkins.antrea-ci.rocks/job/antrea-networkpolicy-for-pull-request/):
   community tests using sonobuoy, focusing on "Feature:NetworkPolicy".
 
+* ipv6-ds-e2e: e2e tests in a dual-stack setup.
+
+* ipv6-ds-conformance: conformance tests in a dual-stack setup.
+
+* ipv6-ds-networkpolicy: NetworkPolicy tests in a dual-stack setup.
+
+* ipv6-only-e2e: e2e tests in an IPv6 only setup.
+
+* ipv6-only-conformance: conformance tests in an IPv6 only setup.
+
+* ipv6-only-networkpolicy: NetworkPolicy tests in an IPv6 only setup.
+
 * windows conformance: community tests on Windows cluster, focusing on "Conformance|sig-windows" and "sig-network",
   and skipping "LinuxOnly", "Slow", "Serial", "Disruptive", "Flaky", "Feature", "sig-cli", "sig-storage", "sig-auth",
   "sig-api-machinery", "sig-apps", "sig-node", "Privileged", "should be able to change the type from", "[sig-network]
