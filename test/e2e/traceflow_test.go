@@ -62,14 +62,6 @@ func TestTraceflowIntraNode(t *testing.T) {
 	defer teardownTest(t, data)
 
 	skipIfTraceflowDisabled(t, data)
-	encapMode, err := data.GetEncapMode()
-	if err != nil {
-		t.Fatalf("Failed to retrieve encap mode: %v", err)
-	}
-	if encapMode != config.TrafficEncapModeNoEncap {
-		// https://github.com/vmware-tanzu/antrea/issues/897
-		skipIfProviderIs(t, "kind", "Skipping inter-Node Traceflow test for Kind because of #897")
-	}
 
 	node1 := nodeName(0)
 
@@ -109,13 +101,6 @@ func TestTraceflowIntraNode(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Creates 6 traceflows:
-	// 1. node1Pods[0] -> node1Pods[1], intra node1.
-	// 2. node1Pods[0] -> node2Pods[0], inter node1 and node2.
-	// 3. node1Pods[0] -> node1IPs[1], intra node1.
-	// 4. node1Pods[0] -> node2IPs[0], inter node1 and node2.
-	// 5. node1Pods[0] -> service, inter node1 and node2.
-	// 6. node1Pods[0] -> non-existing Pod
 	testcases := []testcase{
 		{
 			name: "intraNodeTraceflow",
@@ -355,6 +340,14 @@ func TestTraceflowInterNode(t *testing.T) {
 	defer teardownTest(t, data)
 
 	skipIfTraceflowDisabled(t, data)
+	encapMode, err := data.GetEncapMode()
+	if err != nil {
+		t.Fatalf("Failed to retrieve encap mode: %v", err)
+	}
+	if encapMode != config.TrafficEncapModeNoEncap {
+		// https://github.com/vmware-tanzu/antrea/issues/897
+		skipIfProviderIs(t, "kind", "Skipping inter-Node Traceflow test for Kind because of #897")
+	}
 
 	node1 := nodeName(0)
 	node2 := nodeName(1)
@@ -406,13 +399,6 @@ func TestTraceflowInterNode(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Creates 6 traceflows:
-	// 1. node1Pods[0] -> node1Pods[1], intra node1.
-	// 2. node1Pods[0] -> node2Pods[0], inter node1 and node2.
-	// 3. node1Pods[0] -> node1IPs[1], intra node1.
-	// 4. node1Pods[0] -> node2IPs[0], inter node1 and node2.
-	// 5. node1Pods[0] -> service, inter node1 and node2.
-	// 6. node1Pods[0] -> non-existing Pod
 	testcases := []testcase{
 		{
 			name: "interNodeTraceflow",
