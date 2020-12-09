@@ -108,7 +108,7 @@ func (i *Initializer) prepareOVSBridge() error {
 	// implementer-defined. Antrea uses "0x0000" for the upper 16-bits.
 	datapathID := strings.Replace(hnsNetwork.SourceMac, ":", "", -1)
 	datapathID = "0000" + datapathID
-	klog.Info("Setting ovs bridge datapath...")
+	klog.Info("Setting OVS bridge datapath...")
 	if err = i.ovsBridgeClient.SetDatapathID(datapathID); err != nil {
 		klog.Errorf("Failed to set datapath_id %s: %v", datapathID, err)
 		return err
