@@ -76,10 +76,10 @@ func (i *Initializer) prepareHostNetwork() error {
 	return util.PrepareHNSNetwork(subnetCIDR, i.nodeConfig.NodeIPAddr, adapter)
 }
 
-// prepareOVSBridge adds local port and uplink to ovs bridge.
+// prepareOVSBridge adds local port and uplink to OVS bridge.
 // This function will delete OVS bridge and HNS network created by antrea on failure.
 func (i *Initializer) prepareOVSBridge() error {
-	klog.Info("preparing ovs bridge ...")
+	klog.Info("preparing OVS bridge ...")
 	hnsNetwork, err := hcsshim.GetHNSNetworkByName(util.LocalHNSNetwork)
 	defer func() {
 		// prepareOVSBridge only works on windows platform. The operation has a chance to fail on the first time agent
@@ -133,7 +133,7 @@ func (i *Initializer) prepareOVSBridge() error {
 	uplinkNetConfig := i.nodeConfig.UplinkNetConfig
 	uplink := uplinkNetConfig.Name
 	if _, err := i.ovsBridgeClient.GetOFPort(uplink); err == nil {
-		klog.Infof("... Uplink %s already exists, cannot proceed", uplink)
+		klog.Errorf("... Uplink %v already exists, cannot proceed", uplink)
 		return err
 	}
 	klog.Info("... Uplink is valid")
