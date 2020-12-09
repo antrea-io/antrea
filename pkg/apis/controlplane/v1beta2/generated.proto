@@ -167,10 +167,6 @@ message NetworkPolicy {
 
   // Reference to the original NetworkPolicy that the internal NetworkPolicy is created for.
   optional NetworkPolicyReference sourceRef = 6;
-
-  // AppliedToPerRule tracks if appliedTo is set per rule basis rather than in policy spec.
-  // Must be false for K8s NetworkPolicy.
-  optional bool appliedToPerRule = 7;
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

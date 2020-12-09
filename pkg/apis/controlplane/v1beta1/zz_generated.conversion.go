@@ -657,7 +657,6 @@ func autoConvert_controlplane_NetworkPolicy_To_v1beta1_NetworkPolicy(in *control
 	out.Priority = (*float64)(unsafe.Pointer(in.Priority))
 	out.TierPriority = (*int32)(unsafe.Pointer(in.TierPriority))
 	out.SourceRef = (*NetworkPolicyReference)(unsafe.Pointer(in.SourceRef))
-	// WARNING: in.AppliedToPerRule requires manual conversion: does not exist in peer-type
 	return nil
 }
 

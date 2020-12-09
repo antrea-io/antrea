@@ -384,8 +384,16 @@ func Convert_controlplane_AppliedToGroupPatch_To_v1beta1_AppliedToGroupPatch(in 
 }
 
 func Convert_controlplane_NetworkPolicy_To_v1beta1_NetworkPolicy(in *controlplane.NetworkPolicy, out *NetworkPolicy, s conversion.Scope) error {
+	v1beta1Rules := make([]NetworkPolicyRule, len(in.Rules))
+	for i := range in.Rules {
+		var v1beta1Rule NetworkPolicyRule
+		if err := Convert_controlplane_NetworkPolicyRule_To_v1beta1_NetworkPolicyRule(&in.Rules[i], &v1beta1Rule, nil); err != nil {
+			return err
+		}
+		v1beta1Rules[i] = v1beta1Rule
+	}
 	out.ObjectMeta = in.ObjectMeta
-	out.Rules = *(*[]NetworkPolicyRule)(unsafe.Pointer(&in.Rules))
+	out.Rules = v1beta1Rules
 	out.AppliedToGroups = *(*[]string)(unsafe.Pointer(&in.AppliedToGroups))
 	out.Priority = (*float64)(unsafe.Pointer(in.Priority))
 	out.TierPriority = (*int32)(unsafe.Pointer(in.TierPriority))

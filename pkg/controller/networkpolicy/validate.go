@@ -317,17 +317,25 @@ func (v *antreaPolicyValidator) validateRuleName(ingress, egress []secv1alpha1.R
 }
 
 func (a *antreaPolicyValidator) validateAppliedTo(ingress, egress []secv1alpha1.Rule, specAppliedTo []secv1alpha1.NetworkPolicyPeer) (string, bool) {
-	appliedToInSpec, appliedToInRules := specAppliedTo != nil, false
-	for i, rule := range append(ingress, egress...) {
-		if i == 0 {
-			appliedToInRules = rule.AppliedTo != nil
+	appliedToInSpec := len(specAppliedTo) != 0
+	countAppliedToInRules := func(rules []secv1alpha1.Rule) int {
+		num := 0
+		for _, rule := range rules {
+			if len(rule.AppliedTo) != 0 {
+				num++
+			}
 		}
-		if (rule.AppliedTo != nil) != appliedToInRules {
-			return fmt.Sprintf("appliedTo field does not appear consistently in all rules"), false
-		}
+		return num
 	}
-	if appliedToInSpec == appliedToInRules {
-		return fmt.Sprintf("appliedTo is set in both spec and rules"), false
+	numAppliedToInRules := countAppliedToInRules(ingress) + countAppliedToInRules(egress)
+	if appliedToInSpec && (numAppliedToInRules > 0) {
+		return "appliedTo should not be set in both spec and rules", false
+	}
+	if !appliedToInSpec && (numAppliedToInRules == 0) {
+		return "appliedTo needs to be set in either spec or rules", false
+	}
+	if numAppliedToInRules > 0 && (numAppliedToInRules != len(ingress)+len(egress)) {
+		return "appliedTo field should either be set in all rules or in none of them", false
 	}
 	return "", true
 }

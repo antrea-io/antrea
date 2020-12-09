@@ -168,9 +168,6 @@ type NetworkPolicy struct {
 	TierPriority *int32 `json:"tierPriority,omitempty" protobuf:"varint,5,opt,name=tierPriority"`
 	// Reference to the original NetworkPolicy that the internal NetworkPolicy is created for.
 	SourceRef *NetworkPolicyReference `json:"sourceRef,omitempty" protobuf:"bytes,6,opt,name=sourceRef"`
-	// AppliedToPerRule tracks if appliedTo is set per rule basis rather than in policy spec.
-	// Must be false for K8s NetworkPolicy.
-	AppliedToPerRule bool `json:"appliedToPerRule,omitempty" protobuf:"bytes,7,opt,name=appliedToPerRule"`
 }
 
 // Direction defines traffic direction of NetworkPolicyRule.

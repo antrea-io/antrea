@@ -124,9 +124,10 @@ func (n *NetworkPolicyController) deleteANP(old interface{}) {
 // in case of ADD event or modified and store the updated instance, in case
 // of an UPDATE event.
 func (n *NetworkPolicyController) processAntreaNetworkPolicy(np *secv1alpha1.NetworkPolicy) *antreatypes.NetworkPolicy {
-	appliedToPerRule := np.Spec.AppliedTo == nil
+	appliedToPerRule := len(np.Spec.AppliedTo) == 0
 	// appliedToGroupNames tracks all distinct appliedToGroups referred to by the Antrea NetworkPolicy,
 	// either in the spec section or in ingress/egress rules.
+	// The span calculation and stale appliedToGroup cleanup logic would work seamlessly for both cases.
 	appliedToGroupNamesSet := sets.String{}
 	// Create AppliedToGroup for each AppliedTo present in AntreaNetworkPolicy spec.
 	for _, at := range np.Spec.AppliedTo {

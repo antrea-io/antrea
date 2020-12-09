@@ -689,10 +689,9 @@ func (n *NetworkPolicyController) processNetworkPolicy(np *networkingv1.NetworkP
 			Name:      np.Name,
 			UID:       np.UID,
 		},
-		AppliedToGroups:  appliedToGroupNames,
-		Rules:            rules,
-		AppliedToPerRule: false,
-		Generation:       np.Generation,
+		AppliedToGroups: appliedToGroupNames,
+		Rules:           rules,
+		Generation:      np.Generation,
 	}
 	return internalNetworkPolicy
 }
@@ -1472,16 +1471,15 @@ func (n *NetworkPolicyController) syncInternalNetworkPolicy(key string) error {
 		nodeNames = nodeNames.Union(appGroup.SpanMeta.NodeNames)
 	}
 	updatedNetworkPolicy := &antreatypes.NetworkPolicy{
-		UID:              internalNP.UID,
-		Name:             internalNP.Name,
-		SourceRef:        internalNP.SourceRef,
-		Rules:            internalNP.Rules,
-		AppliedToGroups:  internalNP.AppliedToGroups,
-		Priority:         internalNP.Priority,
-		TierPriority:     internalNP.TierPriority,
-		AppliedToPerRule: internalNP.AppliedToPerRule,
-		SpanMeta:         antreatypes.SpanMeta{NodeNames: nodeNames},
-		Generation:       internalNP.Generation,
+		UID:             internalNP.UID,
+		Name:            internalNP.Name,
+		SourceRef:       internalNP.SourceRef,
+		Rules:           internalNP.Rules,
+		AppliedToGroups: internalNP.AppliedToGroups,
+		Priority:        internalNP.Priority,
+		TierPriority:    internalNP.TierPriority,
+		SpanMeta:        antreatypes.SpanMeta{NodeNames: nodeNames},
+		Generation:      internalNP.Generation,
 	}
 	klog.V(4).Infof("Updating internal NetworkPolicy %s with %d Nodes", key, nodeNames.Len())
 	n.internalNetworkPolicyStore.Update(updatedNetworkPolicy)

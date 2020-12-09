@@ -522,7 +522,6 @@ func autoConvert_v1beta2_NetworkPolicy_To_controlplane_NetworkPolicy(in *Network
 	out.Priority = (*float64)(unsafe.Pointer(in.Priority))
 	out.TierPriority = (*int32)(unsafe.Pointer(in.TierPriority))
 	out.SourceRef = (*controlplane.NetworkPolicyReference)(unsafe.Pointer(in.SourceRef))
-	out.AppliedToPerRule = in.AppliedToPerRule
 	return nil
 }
 
@@ -538,7 +537,6 @@ func autoConvert_controlplane_NetworkPolicy_To_v1beta2_NetworkPolicy(in *control
 	out.Priority = (*float64)(unsafe.Pointer(in.Priority))
 	out.TierPriority = (*int32)(unsafe.Pointer(in.TierPriority))
 	out.SourceRef = (*NetworkPolicyReference)(unsafe.Pointer(in.SourceRef))
-	out.AppliedToPerRule = in.AppliedToPerRule
 	return nil
 }
 

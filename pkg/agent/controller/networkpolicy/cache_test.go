@@ -628,9 +628,8 @@ func TestRuleCacheAddNetworkPolicy(t *testing.T) {
 		},
 	}
 	networkPolicy3 := &v1beta2.NetworkPolicy{
-		ObjectMeta:      metav1.ObjectMeta{UID: "policy3", Namespace: "ns3", Name: "name3"},
-		Rules:           []v1beta2.NetworkPolicyRule{*networkPolicyRule3},
-		AppliedToGroups: nil,
+		ObjectMeta: metav1.ObjectMeta{UID: "policy3", Namespace: "ns3", Name: "name3"},
+		Rules:      []v1beta2.NetworkPolicyRule{*networkPolicyRule3},
 		SourceRef: &v1beta2.NetworkPolicyReference{
 			Type:      v1beta2.AntreaNetworkPolicy,
 			Namespace: "ns3",

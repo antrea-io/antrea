@@ -2394,13 +2394,6 @@ func schema_pkg_apis_controlplane_v1beta2_NetworkPolicy(ref common.ReferenceCall
 							Ref:         ref("github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyReference"),
 						},
 					},
-					"appliedToPerRule": {
-						SchemaProps: spec.SchemaProps{
-							Description: "AppliedToPerRule tracks if appliedTo is set per rule basis rather than in policy spec. Must be false for K8s NetworkPolicy.",
-							Type:        []string{"boolean"},
-							Format:      "",
-						},
-					},
 				},
 			},
 		},
