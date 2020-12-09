@@ -338,7 +338,7 @@ func (c *client) InstallPodFlows(interfaceName string, podInterfaceIPs []net.IP,
 	localGatewayMAC := c.nodeConfig.GatewayConfig.MAC
 	flows := []binding.Flow{
 		c.podClassifierFlow(ofPort, cookie.Pod),
-		c.l2ForwardCalcFlow(podInterfaceMAC, ofPort, cookie.Pod),
+		c.l2ForwardCalcFlow(podInterfaceMAC, ofPort, false, cookie.Pod),
 	}
 
 	// Add support for IPv4 ARP responder.
@@ -516,7 +516,7 @@ func (c *client) InstallGatewayFlows() error {
 
 	flows := []binding.Flow{
 		c.gatewayClassifierFlow(cookie.Default),
-		c.l2ForwardCalcFlow(gatewayConfig.MAC, config.HostGatewayOFPort, cookie.Default),
+		c.l2ForwardCalcFlow(gatewayConfig.MAC, config.HostGatewayOFPort, true, cookie.Default),
 	}
 	flows = append(flows, c.gatewayIPSpoofGuardFlows(cookie.Default)...)
 
@@ -547,7 +547,7 @@ func (c *client) InstallGatewayFlows() error {
 func (c *client) InstallDefaultTunnelFlows() error {
 	flows := []binding.Flow{
 		c.tunnelClassifierFlow(config.DefaultTunOFPort, cookie.Default),
-		c.l2ForwardCalcFlow(globalVirtualMAC, config.DefaultTunOFPort, cookie.Default),
+		c.l2ForwardCalcFlow(globalVirtualMAC, config.DefaultTunOFPort, true, cookie.Default),
 	}
 	if err := c.ofEntryOperations.AddAll(flows); err != nil {
 		return err

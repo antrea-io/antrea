@@ -689,12 +689,11 @@ func (c *client) serviceLBBypassFlow(ipProtocol binding.Protocol) binding.Flow {
 }
 
 // l2ForwardCalcFlow generates the flow that matches dst MAC and loads ofPort to reg.
-func (c *client) l2ForwardCalcFlow(dstMAC net.HardwareAddr, ofPort uint32, category cookie.Category) binding.Flow {
+func (c *client) l2ForwardCalcFlow(dstMAC net.HardwareAddr, ofPort uint32, skipIngressRules bool, category cookie.Category) binding.Flow {
 	l2FwdCalcTable := c.pipeline[l2ForwardingCalcTable]
-	// Skip ingress NetworkPolicy enforcement for traffic to the tunnel or
-	// gateway interface.
 	nextTable := l2FwdCalcTable.GetNext()
-	if ofPort != config.DefaultTunOFPort && ofPort != config.HostGatewayOFPort {
+	if !skipIngressRules {
+		// Go to ingress NetworkPolicy tables for traffic to local Pods.
 		nextTable = c.ingressEntryTable
 	}
 	return l2FwdCalcTable.BuildFlow(priorityNormal).
