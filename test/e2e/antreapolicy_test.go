@@ -419,7 +419,7 @@ func testACNPAllowXBtoA(t *testing.T) {
 	builder = builder.SetName("acnp-allow-xb-to-a").
 		SetPriority(1.0).
 		SetAppliedToGroup(map[string]string{"pod": "a"}, nil, nil, nil)
-	builder.AddIngress(v1.ProtocolTCP, &p80, nil, nil,nil, map[string]string{"pod": "b"}, map[string]string{"ns": "x"},
+	builder.AddIngress(v1.ProtocolTCP, &p80, nil, nil, nil, map[string]string{"pod": "b"}, map[string]string{"ns": "x"},
 		nil, nil, nil, secv1alpha1.RuleActionAllow, "")
 
 	reachability := NewReachability(allPods, false)
@@ -524,7 +524,7 @@ func testACNPAllowNoDefaultIsolation(t *testing.T) {
 		SetAppliedToGroup(nil, map[string]string{"ns": "x"}, nil, nil)
 	builder.AddIngress(v1.ProtocolTCP, &p81, nil, nil, nil, nil, map[string]string{"ns": "y"},
 		nil, nil, nil, secv1alpha1.RuleActionAllow, "")
-	builder.AddEgress(v1.ProtocolTCP, &p81, nil, nil,nil, nil, map[string]string{"ns": "z"},
+	builder.AddEgress(v1.ProtocolTCP, &p81, nil, nil, nil, nil, map[string]string{"ns": "z"},
 		nil, nil, nil, secv1alpha1.RuleActionAllow, "")
 
 	reachability := NewReachability(allPods, true)
@@ -855,9 +855,8 @@ func testACNPPriorityConflictingRule(t *testing.T) {
 		SetAppliedToGroup(nil, map[string]string{"ns": "x"}, nil, nil)
 	// The following ingress rule will take no effect as it is exactly the same as ingress rule of cnp-drop,
 	// but cnp-allow has lower priority.
-	builder2.AddIngress(v1.ProtocolTCP, &p80, nil, nil,  nil, nil, map[string]string{"ns": "z"},
+	builder2.AddIngress(v1.ProtocolTCP, &p80, nil, nil, nil, nil, map[string]string{"ns": "z"},
 		nil, nil, nil, secv1alpha1.RuleActionAllow, "")
-
 
 	reachabilityBothACNP := NewReachability(allPods, true)
 	reachabilityBothACNP.Expect(Pod("z/a"), Pod("x/a"), false)
@@ -944,7 +943,7 @@ func testACNPPortRange(t *testing.T) {
 		SetPriority(1.0).
 		SetAppliedToGroup(map[string]string{"pod": "a"}, nil, nil, nil)
 	builder.AddEgress(v1.ProtocolTCP, &p8080, nil, &p8085, nil, nil, map[string]string{"ns": "z"},
-		nil, nil,nil, secv1alpha1.RuleActionDrop, "acnp-port-range")
+		nil, nil, nil, secv1alpha1.RuleActionDrop, "acnp-port-range")
 
 	reachability := NewReachability(allPods, true)
 	reachability.Expect(Pod("x/a"), Pod("z/a"), false)
@@ -967,6 +966,33 @@ func testACNPPortRange(t *testing.T) {
 
 	testCase := []*TestCase{
 		{"ACNP Drop Egress From All Pod:a to NS:z with a portRange", testSteps},
+	}
+	executeTests(t, testCase)
+}
+
+// testANPPortRange tests the port range in a ANP can work.
+func testANPPortRange(t *testing.T) {
+	builder := &AntreaNetworkPolicySpecBuilder{}
+	builder = builder.SetName("y", "anp-deny-yb-to-xc-egress-port-range").
+		SetPriority(1.0).
+		SetAppliedToGroup(map[string]string{"pod": "b"}, nil)
+	builder.AddEgress(v1.ProtocolTCP, &p8080, nil, &p8085, nil, map[string]string{"pod": "c"}, map[string]string{"ns": "x"},
+		nil, nil, nil, secv1alpha1.RuleActionDrop, "anp-port-range")
+
+	reachability := NewReachability(allPods, true)
+	reachability.Expect(Pod("y/b"), Pod("x/c"), false)
+
+	var testSteps []*TestStep
+	testSteps = append(testSteps, &TestStep{
+		fmt.Sprintf("ANP Drop Port 8080:8085"),
+		reachability,
+		[]metav1.Object{builder.Get()},
+		[]int{8080, 8081, 8082, 8083, 8084, 8085},
+		0,
+	})
+
+	testCase := []*TestCase{
+		{"ANP Drop Egreee y/b to x/c with a portRange", testSteps},
 	}
 	executeTests(t, testCase)
 }
@@ -1011,33 +1037,6 @@ func testANPBasic(t *testing.T) {
 	testCase := []*TestCase{
 		{"ANP Drop X/B to Y/A", testStep},
 		{"With K8s NetworkPolicy of the same name", testStep2},
-	}
-	executeTests(t, testCase)
-}
-
-// testANPPortRange tests the port range in a ANP can work.
-func testANPPortRange(t *testing.T) {
-	builder := &AntreaNetworkPolicySpecBuilder{}
-	builder = builder.SetName("y", "anp-deny-ya-from-zb-ingress-port-range").
-		SetPriority(1.0).
-		SetAppliedToGroup(map[string]string{"pod": "a"}, nil)
-	builder.AddIngress(v1.ProtocolTCP, &p8080, nil, &p8085, nil, map[string]string{"pod": "b"}, map[string]string{"ns": "z"},
-		nil, nil, nil, secv1alpha1.RuleActionDrop, "anp-port-range")
-
-	reachability := NewReachability(allPods, true)
-	reachability.Expect(Pod("z/b"), Pod("y/a"), false)
-
-	var testSteps []*TestStep
-	testSteps = append(testSteps, &TestStep{
-		fmt.Sprintf("ANP Drop Port 8080:8085"),
-		reachability,
-		[]metav1.Object{builder.Get()},
-		[]int{8080, 8081, 8082, 8083, 8084, 8085},
-		0,
-	})
-
-	testCase := []*TestCase{
-		{"ANP Drop Ingress From z/b to y/a with a portRange", testSteps},
 	}
 	executeTests(t, testCase)
 }
@@ -1276,9 +1275,10 @@ func TestAntreaPolicy(t *testing.T) {
 		t.Run("Case=ACNPCustomTiers", func(t *testing.T) { testACNPCustomTiers(t) })
 		t.Run("Case=ACNPPriorityConflictingRule", func(t *testing.T) { testACNPPriorityConflictingRule(t) })
 		t.Run("Case=ACNPRulePriority", func(t *testing.T) { testACNPRulePrioirty(t) })
+		t.Run("Case=ANPPortRange", func(t *testing.T) { testANPPortRange(t) })
 		t.Run("Case=ANPBasic", func(t *testing.T) { testANPBasic(t) })
 		t.Run("Case=AppliedToPerRule", func(t *testing.T) { testAppliedToPerRule(t) })
-		t.Run("Case=ANPPortRange", func(t *testing.T) { testANPPortRange(t) })
+
 	})
 	// print results for reachability tests
 	printResults()

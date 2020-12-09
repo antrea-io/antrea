@@ -80,7 +80,6 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyStatus":               schema_pkg_apis_controlplane_v1beta2_NetworkPolicyStatus(ref),
 		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.NodeStatsSummary":                  schema_pkg_apis_controlplane_v1beta2_NodeStatsSummary(ref),
 		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.PodReference":                      schema_pkg_apis_controlplane_v1beta2_PodReference(ref),
-		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.PortMask":                          schema_pkg_apis_controlplane_v1beta2_PortMask(ref),
 		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.Service":                           schema_pkg_apis_controlplane_v1beta2_Service(ref),
 		"github.com/vmware-tanzu/antrea/pkg/apis/stats/v1alpha1.AntreaClusterNetworkPolicyStats":         schema_pkg_apis_stats_v1alpha1_AntreaClusterNetworkPolicyStats(ref),
 		"github.com/vmware-tanzu/antrea/pkg/apis/stats/v1alpha1.AntreaClusterNetworkPolicyStatsList":     schema_pkg_apis_stats_v1alpha1_AntreaClusterNetworkPolicyStatsList(ref),
@@ -2816,34 +2815,6 @@ func schema_pkg_apis_controlplane_v1beta2_PodReference(ref common.ReferenceCallb
 	}
 }
 
-func schema_pkg_apis_controlplane_v1beta2_PortMask(ref common.ReferenceCallback) common.OpenAPIDefinition {
-	return common.OpenAPIDefinition{
-		Schema: spec.Schema{
-			SchemaProps: spec.SchemaProps{
-				Description: "A PortMask is a representation of a single port name or number or a range of ports from base port with a bitmask applied.",
-				Type:        []string{"object"},
-				Properties: map[string]spec.Schema{
-					"port": {
-						SchemaProps: spec.SchemaProps{
-							Description: "The port name or number on the given protocol. If not specified, this matches all port numbers.",
-							Ref:         ref("k8s.io/apimachinery/pkg/util/intstr.IntOrString"),
-						},
-					},
-					"mask": {
-						SchemaProps: spec.SchemaProps{
-							Description: "The mask applied on given port. If not specified, means no mask applied.",
-							Type:        []string{"integer"},
-							Format:      "int32",
-						},
-					},
-				},
-			},
-		},
-		Dependencies: []string{
-			"k8s.io/apimachinery/pkg/util/intstr.IntOrString"},
-	}
-}
-
 func schema_pkg_apis_controlplane_v1beta2_Service(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -2858,17 +2829,24 @@ func schema_pkg_apis_controlplane_v1beta2_Service(ref common.ReferenceCallback) 
 							Format:      "",
 						},
 					},
-					"portMask": {
+					"port": {
 						SchemaProps: spec.SchemaProps{
-							Description: "A PortMask is a representation of a single port name/number or a range of ports from base port with a bitmask applied.",
-							Ref:         ref("github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.PortMask"),
+							Description: "The port name or number on the given protocol. If not specified, this matches all port numbers.",
+							Ref:         ref("k8s.io/apimachinery/pkg/util/intstr.IntOrString"),
+						},
+					},
+					"endPort": {
+						SchemaProps: spec.SchemaProps{
+							Description: "EndPort defines the end of the port range, being the end included within the range. It can only be specified when a numerical `port` is specified.",
+							Type:        []string{"integer"},
+							Format:      "int32",
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.PortMask"},
+			"k8s.io/apimachinery/pkg/util/intstr.IntOrString"},
 	}
 }
 

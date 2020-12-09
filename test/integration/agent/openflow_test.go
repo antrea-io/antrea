@@ -175,7 +175,7 @@ func TestReplayFlowsNetworkPolicyFlows(t *testing.T) {
 	port2 := intstr.FromInt(8080)
 	tcpProtocol := v1beta2.ProtocolTCP
 	defaultAction := secv1alpha1.RuleActionAllow
-	npPort1 := v1beta2.Service{Protocol: &tcpProtocol, PortMask: &v1beta2.PortMask{Port: &port2}}
+	npPort1 := v1beta2.Service{Protocol: &tcpProtocol, Port: &port2}
 	toIPList := prepareIPAddresses(toList)
 	rule := &types.PolicyRule{
 		Direction: v1beta2.DirectionIn,
@@ -347,7 +347,7 @@ func TestNetworkPolicyFlows(t *testing.T) {
 	port2 := intstr.FromInt(8080)
 	tcpProtocol := v1beta2.ProtocolTCP
 	defaultAction := secv1alpha1.RuleActionAllow
-	npPort1 := v1beta2.Service{Protocol: &tcpProtocol, PortMask: &v1beta2.PortMask{Port: &port2}}
+	npPort1 := v1beta2.Service{Protocol: &tcpProtocol, Port: &port2}
 	toIPList := prepareIPAddresses(toList)
 	rule := &types.PolicyRule{
 		Direction: v1beta2.DirectionIn,
@@ -746,12 +746,12 @@ func checkConjunctionFlows(t *testing.T, ruleTable uint8, dropTable uint8, allow
 
 	for _, service := range rule.Service {
 		if useIPv4 {
-			conjMatch1 := fmt.Sprintf("priority=%d,%s,tp_dst=%d", priority, strings.ToLower(string(*service.Protocol)), service.PortMask.Port.IntVal)
+			conjMatch1 := fmt.Sprintf("priority=%d,%s,tp_dst=%d", priority, strings.ToLower(string(*service.Protocol)), service.Port.IntVal)
 			flow := &ofTestUtils.ExpectFlow{MatchStr: conjMatch1, ActStr: fmt.Sprintf("conjunction(%d,3/3)", ruleID)}
 			testFunc(t, ofTestUtils.OfctlFlowMatch(flowList, ruleTable, flow), "Failed to install conjunctive match flow for clause3")
 		}
 		if useIPv6 {
-			conjMatch1 := fmt.Sprintf("priority=%d,%s6,tp_dst=%d", priority, strings.ToLower(string(*service.Protocol)), service.PortMask.Port.IntVal)
+			conjMatch1 := fmt.Sprintf("priority=%d,%s6,tp_dst=%d", priority, strings.ToLower(string(*service.Protocol)), service.Port.IntVal)
 			flow := &ofTestUtils.ExpectFlow{MatchStr: conjMatch1, ActStr: fmt.Sprintf("conjunction(%d,3/3)", ruleID)}
 			testFunc(t, ofTestUtils.OfctlFlowMatch(flowList, ruleTable, flow), "Failed to install conjunctive match flow for clause3")
 		}

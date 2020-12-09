@@ -43,7 +43,7 @@ func TestToAntreaServicesForCRD(t *testing.T) {
 			expServices: []controlplane.Service{
 				{
 					Protocol: toAntreaProtocol(&k8sProtocolTCP),
-					PortMask: &controlplane.PortMask{Port: &int80},
+					Port:     &int80,
 				},
 			},
 			expNamedPortExists: false,
@@ -58,7 +58,7 @@ func TestToAntreaServicesForCRD(t *testing.T) {
 			expServices: []controlplane.Service{
 				{
 					Protocol: toAntreaProtocol(&k8sProtocolTCP),
-					PortMask: &controlplane.PortMask{Port: &strHTTP},
+					Port:     &strHTTP,
 				},
 			},
 			expNamedPortExists: true,
@@ -74,31 +74,8 @@ func TestToAntreaServicesForCRD(t *testing.T) {
 			expServices: []controlplane.Service{
 				{
 					Protocol: toAntreaProtocol(&k8sProtocolTCP),
-					PortMask: &controlplane.PortMask{Port: &int1000, Mask: &int32For65528},
-				},
-				{
-					Protocol: toAntreaProtocol(&k8sProtocolTCP),
-					PortMask: &controlplane.PortMask{Port: &int1008, Mask: &int32For65520},
-				},
-				{
-					Protocol: toAntreaProtocol(&k8sProtocolTCP),
-					PortMask: &controlplane.PortMask{Port: &int1024, Mask: &int32For65024},
-				},
-				{
-					Protocol: toAntreaProtocol(&k8sProtocolTCP),
-					PortMask: &controlplane.PortMask{Port: &int1536, Mask: &int32For65280},
-				},
-				{
-					Protocol: toAntreaProtocol(&k8sProtocolTCP),
-					PortMask: &controlplane.PortMask{Port: &int1792, Mask: &int32For65408},
-				},
-				{
-					Protocol: toAntreaProtocol(&k8sProtocolTCP),
-					PortMask: &controlplane.PortMask{Port: &int1920, Mask: &int32For65472},
-				},
-				{
-					Protocol: toAntreaProtocol(&k8sProtocolTCP),
-					PortMask: &controlplane.PortMask{Port: &int1984, Mask: &int32For65520},
+					Port:     &int1000,
+					EndPort:  &int32For1999,
 				},
 			},
 			expNamedPortExists: false,

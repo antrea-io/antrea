@@ -134,7 +134,7 @@ var (
 	}
 	cpService = controlplane.Service{
 		Protocol: &cpTCP,
-		PortMask: &controlplane.PortMask{Port: &int80},
+		Port:     &int80,
 	}
 )
 

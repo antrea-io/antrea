@@ -160,13 +160,14 @@ type NetworkPolicyPort struct {
 	// The protocol (TCP, UDP, or SCTP) which traffic must match.
 	// If not specified, this field defaults to TCP.
 	// +optional
-	Protocol *v1.Protocol `json:"protocol"`
+	Protocol *v1.Protocol `json:"protocol,omitempty"`
 	// The port on the given protocol. This can be either a numerical
 	// or named port on a Pod. If this field is not provided, this
 	// matches all port names and numbers.
 	// +optional
 	Port *intstr.IntOrString `json:"port,omitempty"`
-	// To defines the end of the port range, being the end included within the range
+	// EndPort defines the end of the port range, being the end included within the range.
+	// It can only be specified when a numerical `port` is specified.
 	// +optional
 	EndPort *int32 `json:"endPort,omitempty"`
 }

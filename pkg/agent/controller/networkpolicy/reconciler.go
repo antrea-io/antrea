@@ -76,11 +76,11 @@ type servicesKey string
 func normalizeServices(services []v1beta2.Service) servicesKey {
 	var b strings.Builder
 	for _, svc := range services {
-		if svc.PortMask != nil && svc.PortMask.Port != nil {
-			if svc.PortMask.Port.Type == intstr.String {
+		if svc.Port != nil {
+			if svc.Port.Type == intstr.String {
 				binary.Write(&b, binary.BigEndian, int32(0))
 			} else {
-				binary.Write(&b, binary.BigEndian, svc.PortMask.Port.IntVal)
+				binary.Write(&b, binary.BigEndian, svc.Port.IntVal)
 			}
 		}
 	}
@@ -791,7 +791,7 @@ func groupMembersByServices(services []v1beta2.Service, memberSet v1beta2.GroupM
 	// If there is no named port in services, all members are in same group.
 	namedPortServiceExist := false
 	for _, svc := range services {
-		if svc.PortMask != nil && svc.PortMask.Port != nil && svc.PortMask.Port.Type == intstr.String {
+		if svc.Port != nil && svc.Port.Type == intstr.String {
 			namedPortServiceExist = true
 			break
 		}
@@ -897,10 +897,10 @@ func filterUnresolvablePort(in []v1beta2.Service) []v1beta2.Service {
 	// allowing no port, instead of all ports.
 	out := make([]v1beta2.Service, 0, len(in))
 	for _, s := range in {
-		if s.PortMask != nil && s.PortMask.Port != nil {
+		if s.Port != nil {
 			// All resolvable named port have been converted to intstr.Int,
 			// ignore unresolvable ones.
-			if s.PortMask.Port.Type == intstr.String {
+			if s.Port.Type == intstr.String {
 				continue
 			}
 		}
@@ -913,16 +913,16 @@ func filterUnresolvablePort(in []v1beta2.Service) []v1beta2.Service {
 // This function should eventually supersede resolveServiceForPod.
 func resolveService(service *v1beta2.Service, member *v1beta2.GroupMember) *v1beta2.Service {
 	// If port is not specified or is already a number, return it as is.
-	if service.PortMask == nil || service.PortMask.Port == nil || service.PortMask.Port.Type == intstr.Int {
+	if service.Port == nil || service.Port.Type == intstr.Int {
 		return service
 	}
 	for _, port := range member.Ports {
-		if port.Name == service.PortMask.Port.StrVal && port.Protocol == *service.Protocol {
+		if port.Name == service.Port.StrVal && port.Protocol == *service.Protocol {
 			resolvedPort := intstr.FromInt(int(port.Port))
-			return &v1beta2.Service{Protocol: service.Protocol, PortMask: &v1beta2.PortMask{Port: &resolvedPort}}
+			return &v1beta2.Service{Protocol: service.Protocol, Port: &resolvedPort}
 		}
 	}
-	klog.Warningf("Can not resolve port %s for endpoints %v", service.PortMask.Port.StrVal, member)
+	klog.Warningf("Can not resolve port %s for endpoints %v", service.Port.StrVal, member)
 	// If not resolvable, return it as is.
 	// The group members that cannot resolve it will be grouped together.
 	return service

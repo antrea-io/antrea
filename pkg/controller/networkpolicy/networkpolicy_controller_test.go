@@ -56,24 +56,11 @@ var (
 
 	protocolTCP = controlplane.ProtocolTCP
 
-	int80 = intstr.FromInt(80)
-	int81 = intstr.FromInt(81)
-
+	int80   = intstr.FromInt(80)
+	int81   = intstr.FromInt(81)
 	int1000 = intstr.FromInt(1000)
-	int1008 = intstr.FromInt(1008)
-	int1024 = intstr.FromInt(1024)
-	int1536 = intstr.FromInt(1536)
-	int1792 = intstr.FromInt(1792)
-	int1920 = intstr.FromInt(1920)
-	int1984 = intstr.FromInt(1984)
 
-	int32For1999  = int32(1999)
-	int32For65528 = int32(65528)
-	int32For65520 = int32(65520)
-	int32For65024 = int32(65024)
-	int32For65280 = int32(65280)
-	int32For65408 = int32(65408)
-	int32For65472 = int32(65472)
+	int32For1999 = int32(1999)
 
 	strHTTP = intstr.FromString("http")
 )
@@ -263,7 +250,7 @@ func TestAddNetworkPolicy(t *testing.T) {
 					Services: []controlplane.Service{
 						{
 							Protocol: &protocolTCP,
-							PortMask: &controlplane.PortMask{Port: &strHTTP},
+							Port:     &strHTTP,
 						},
 					},
 					Priority: defaultRulePriority,
@@ -382,7 +369,7 @@ func TestAddNetworkPolicy(t *testing.T) {
 						Services: []controlplane.Service{
 							{
 								Protocol: &protocolTCP,
-								PortMask: &controlplane.PortMask{Port: &int80},
+								Port:     &int80,
 							},
 						},
 						Priority: defaultRulePriority,
@@ -396,7 +383,7 @@ func TestAddNetworkPolicy(t *testing.T) {
 						Services: []controlplane.Service{
 							{
 								Protocol: &protocolTCP,
-								PortMask: &controlplane.PortMask{Port: &int81},
+								Port:     &int81,
 							},
 						},
 						Priority: defaultRulePriority,
@@ -460,7 +447,7 @@ func TestAddNetworkPolicy(t *testing.T) {
 						Services: []controlplane.Service{
 							{
 								Protocol: &protocolTCP,
-								PortMask: &controlplane.PortMask{Port: &int80},
+								Port:     &int80,
 							},
 						},
 						Priority: defaultRulePriority,
@@ -474,7 +461,7 @@ func TestAddNetworkPolicy(t *testing.T) {
 						Services: []controlplane.Service{
 							{
 								Protocol: &protocolTCP,
-								PortMask: &controlplane.PortMask{Port: &int81},
+								Port:     &int81,
 							},
 						},
 						Priority: defaultRulePriority,
@@ -1936,7 +1923,7 @@ func TestToAntreaServices(t *testing.T) {
 			expSedrvices: []controlplane.Service{
 				{
 					Protocol: toAntreaProtocol(&k8sProtocolTCP),
-					PortMask: &controlplane.PortMask{Port: &int80},
+					Port:     &int80,
 				},
 			},
 			expNamedPortExists: false,
@@ -1951,7 +1938,7 @@ func TestToAntreaServices(t *testing.T) {
 			expSedrvices: []controlplane.Service{
 				{
 					Protocol: toAntreaProtocol(&k8sProtocolTCP),
-					PortMask: &controlplane.PortMask{Port: &strHTTP},
+					Port:     &strHTTP,
 				},
 			},
 			expNamedPortExists: true,
@@ -2306,7 +2293,7 @@ func TestProcessNetworkPolicy(t *testing.T) {
 						Services: []controlplane.Service{
 							{
 								Protocol: &protocolTCP,
-								PortMask: &controlplane.PortMask{Port: &int80},
+								Port:     &int80,
 							},
 						},
 						Priority: defaultRulePriority,
@@ -2320,7 +2307,7 @@ func TestProcessNetworkPolicy(t *testing.T) {
 						Services: []controlplane.Service{
 							{
 								Protocol: &protocolTCP,
-								PortMask: &controlplane.PortMask{Port: &int81},
+								Port:     &int81,
 							},
 						},
 						Priority: defaultRulePriority,
@@ -2384,7 +2371,7 @@ func TestProcessNetworkPolicy(t *testing.T) {
 						Services: []controlplane.Service{
 							{
 								Protocol: &protocolTCP,
-								PortMask: &controlplane.PortMask{Port: &int80},
+								Port:     &int80,
 							},
 						},
 						Priority: defaultRulePriority,
@@ -2398,7 +2385,7 @@ func TestProcessNetworkPolicy(t *testing.T) {
 						Services: []controlplane.Service{
 							{
 								Protocol: &protocolTCP,
-								PortMask: &controlplane.PortMask{Port: &int81},
+								Port:     &int81,
 							},
 						},
 						Priority: defaultRulePriority,

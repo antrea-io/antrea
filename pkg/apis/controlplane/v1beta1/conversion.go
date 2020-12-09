@@ -422,7 +422,7 @@ func Convert_v1beta1_Service_To_controlplane_Service(in *Service, out *controlpl
 		out.Protocol = &outProtocol
 	}
 	if in.Port != nil {
-		out.PortMask = &controlplane.PortMask{Port: in.Port}
+		out.Port = in.Port
 	}
 	return nil
 }
@@ -432,8 +432,8 @@ func Convert_controlplane_Service_To_v1beta1_Service(in *controlplane.Service, o
 		outProtocol := Protocol(*in.Protocol)
 		out.Protocol = &outProtocol
 	}
-	if in.PortMask != nil {
-		out.Port = in.PortMask.Port
+	if in.Port != nil {
+		out.Port = in.Port
 	}
 	return nil
 }

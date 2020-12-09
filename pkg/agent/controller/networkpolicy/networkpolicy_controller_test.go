@@ -194,7 +194,7 @@ func TestAddSingleGroupRule(t *testing.T) {
 
 	protocolTCP := v1beta2.ProtocolTCP
 	port := intstr.FromInt(80)
-	services := []v1beta2.Service{{Protocol: &protocolTCP, PortMask: &v1beta2.PortMask{Port: &port}}}
+	services := []v1beta2.Service{{Protocol: &protocolTCP, Port: &port}}
 	desiredRule := &CompletedRule{
 		rule:          &rule{Direction: v1beta2.DirectionIn, Services: services},
 		FromAddresses: v1beta2.NewGroupMemberSet(newAddressGroupMember("1.1.1.1"), newAddressGroupMember("2.2.2.2")),
@@ -273,7 +273,7 @@ func TestAddMultipleGroupsRule(t *testing.T) {
 
 	protocolTCP := v1beta2.ProtocolTCP
 	port := intstr.FromInt(80)
-	services := []v1beta2.Service{{Protocol: &protocolTCP, PortMask: &v1beta2.PortMask{Port: &port}}}
+	services := []v1beta2.Service{{Protocol: &protocolTCP, Port: &port}}
 	desiredRule := &CompletedRule{
 		rule:          &rule{Direction: v1beta2.DirectionIn, Services: services},
 		FromAddresses: v1beta2.NewGroupMemberSet(newAddressGroupMember("1.1.1.1"), newAddressGroupMember("2.2.2.2"), newAddressGroupMember("3.3.3.3")),
@@ -356,7 +356,7 @@ func TestDeleteRule(t *testing.T) {
 
 	protocolTCP := v1beta2.ProtocolTCP
 	port := intstr.FromInt(80)
-	services := []v1beta2.Service{{Protocol: &protocolTCP, PortMask: &v1beta2.PortMask{Port: &port}}}
+	services := []v1beta2.Service{{Protocol: &protocolTCP, Port: &port}}
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 	go controller.Run(stopCh)
@@ -403,7 +403,7 @@ func TestAddNetworkPolicyWithMultipleRules(t *testing.T) {
 
 	protocolTCP := v1beta2.ProtocolTCP
 	port := intstr.FromInt(80)
-	services := []v1beta2.Service{{Protocol: &protocolTCP, PortMask: &v1beta2.PortMask{Port: &port}}}
+	services := []v1beta2.Service{{Protocol: &protocolTCP, Port: &port}}
 	desiredRule1 := &CompletedRule{
 		rule:          &rule{Direction: v1beta2.DirectionIn, Services: services},
 		FromAddresses: v1beta2.NewGroupMemberSet(newAddressGroupMember("1.1.1.1"), newAddressGroupMember("2.2.2.2")),
@@ -554,7 +554,7 @@ func TestNetworkPolicyMetrics(t *testing.T) {
 
 	protocolTCP := v1beta2.ProtocolTCP
 	port := intstr.FromInt(80)
-	services := []v1beta2.Service{{Protocol: &protocolTCP, PortMask: &v1beta2.PortMask{Port: &port}}}
+	services := []v1beta2.Service{{Protocol: &protocolTCP, Port: &port}}
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 	go controller.Run(stopCh)

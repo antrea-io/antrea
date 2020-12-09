@@ -107,7 +107,7 @@ func TestProcessAntreaNetworkPolicy(t *testing.T) {
 						Services: []controlplane.Service{
 							{
 								Protocol: &protocolTCP,
-								PortMask: &controlplane.PortMask{Port: &int80},
+								Port:     &int80,
 							},
 						},
 						Priority: 0,
@@ -121,7 +121,7 @@ func TestProcessAntreaNetworkPolicy(t *testing.T) {
 						Services: []controlplane.Service{
 							{
 								Protocol: &protocolTCP,
-								PortMask: &controlplane.PortMask{Port: &int81},
+								Port:     &int81,
 							},
 						},
 						Priority: 0,
@@ -192,7 +192,7 @@ func TestProcessAntreaNetworkPolicy(t *testing.T) {
 						Services: []controlplane.Service{
 							{
 								Protocol: &protocolTCP,
-								PortMask: &controlplane.PortMask{Port: &int80},
+								Port:     &int80,
 							},
 						},
 						Priority: 0,
@@ -206,7 +206,7 @@ func TestProcessAntreaNetworkPolicy(t *testing.T) {
 						Services: []controlplane.Service{
 							{
 								Protocol: &protocolTCP,
-								PortMask: &controlplane.PortMask{Port: &int81},
+								Port:     &int81,
 							},
 						},
 						Priority: 1,
@@ -286,7 +286,7 @@ func TestProcessAntreaNetworkPolicy(t *testing.T) {
 						Services: []controlplane.Service{
 							{
 								Protocol: &protocolTCP,
-								PortMask: &controlplane.PortMask{Port: &int80},
+								Port:     &int80,
 							},
 						},
 						Priority: 0,
@@ -301,7 +301,7 @@ func TestProcessAntreaNetworkPolicy(t *testing.T) {
 						Services: []controlplane.Service{
 							{
 								Protocol: &protocolTCP,
-								PortMask: &controlplane.PortMask{Port: &int81},
+								Port:     &int81,
 							},
 						},
 						Priority: 1,
@@ -320,7 +320,7 @@ func TestProcessAntreaNetworkPolicy(t *testing.T) {
 		{
 			name: "with-port-range",
 			inputPolicy: &secv1alpha1.NetworkPolicy{
-				ObjectMeta: metav1.ObjectMeta{Namespace: "ns3", Name: "npC", UID: "uidC"},
+				ObjectMeta: metav1.ObjectMeta{Namespace: "ns4", Name: "npD", UID: "uidD"},
 				Spec: secv1alpha1.NetworkPolicySpec{
 					AppliedTo: []secv1alpha1.NetworkPolicyPeer{
 						{PodSelector: &selectorA},
@@ -366,38 +366,15 @@ func TestProcessAntreaNetworkPolicy(t *testing.T) {
 						Services: []controlplane.Service{
 							{
 								Protocol: toAntreaProtocol(&k8sProtocolTCP),
-								PortMask: &controlplane.PortMask{Port: &int1000, Mask: &int32For65528},
-							},
-							{
-								Protocol: toAntreaProtocol(&k8sProtocolTCP),
-								PortMask: &controlplane.PortMask{Port: &int1008, Mask: &int32For65520},
-							},
-							{
-								Protocol: toAntreaProtocol(&k8sProtocolTCP),
-								PortMask: &controlplane.PortMask{Port: &int1024, Mask: &int32For65024},
-							},
-							{
-								Protocol: toAntreaProtocol(&k8sProtocolTCP),
-								PortMask: &controlplane.PortMask{Port: &int1536, Mask: &int32For65280},
-							},
-							{
-								Protocol: toAntreaProtocol(&k8sProtocolTCP),
-								PortMask: &controlplane.PortMask{Port: &int1792, Mask: &int32For65408},
-							},
-							{
-								Protocol: toAntreaProtocol(&k8sProtocolTCP),
-								PortMask: &controlplane.PortMask{Port: &int1920, Mask: &int32For65472},
-							},
-							{
-								Protocol: toAntreaProtocol(&k8sProtocolTCP),
-								PortMask: &controlplane.PortMask{Port: &int1984, Mask: &int32For65520},
+								Port:     &int1000,
+								EndPort:  &int32For1999,
 							},
 						},
 						Priority: 0,
 						Action:   &allowAction,
 					},
 				},
-				AppliedToGroups: []string{getNormalizedUID(toGroupSelector("ns3", &selectorA, nil, nil).NormalizedName)},
+				AppliedToGroups: []string{getNormalizedUID(toGroupSelector("ns4", &selectorA, nil, nil).NormalizedName)},
 			},
 			expectedAppliedToGroups: 1,
 			expectedAddressGroups:   1,
@@ -417,7 +394,6 @@ func TestAddANP(t *testing.T) {
 	p10 := float64(10)
 	allowAction := secv1alpha1.RuleActionAllow
 	protocolTCP := controlplane.ProtocolTCP
-	intstr80 := intstr.FromInt(80)
 	int80 := intstr.FromInt(80)
 	selectorAll := metav1.LabelSelector{}
 	matchAllPeerEgress := matchAllPeer
@@ -443,7 +419,7 @@ func TestAddANP(t *testing.T) {
 						{
 							Ports: []secv1alpha1.NetworkPolicyPort{
 								{
-									Port: &intstr80,
+									Port: &int80,
 								},
 							},
 							From: []secv1alpha1.NetworkPolicyPeer{
@@ -478,7 +454,7 @@ func TestAddANP(t *testing.T) {
 						Services: []controlplane.Service{
 							{
 								Protocol: &protocolTCP,
-								PortMask: &controlplane.PortMask{Port: &int80},
+								Port:     &int80,
 							},
 						},
 						Priority: 0,
@@ -539,31 +515,8 @@ func TestAddANP(t *testing.T) {
 						Services: []controlplane.Service{
 							{
 								Protocol: toAntreaProtocol(&k8sProtocolTCP),
-								PortMask: &controlplane.PortMask{Port: &int1000, Mask: &int32For65528},
-							},
-							{
-								Protocol: toAntreaProtocol(&k8sProtocolTCP),
-								PortMask: &controlplane.PortMask{Port: &int1008, Mask: &int32For65520},
-							},
-							{
-								Protocol: toAntreaProtocol(&k8sProtocolTCP),
-								PortMask: &controlplane.PortMask{Port: &int1024, Mask: &int32For65024},
-							},
-							{
-								Protocol: toAntreaProtocol(&k8sProtocolTCP),
-								PortMask: &controlplane.PortMask{Port: &int1536, Mask: &int32For65280},
-							},
-							{
-								Protocol: toAntreaProtocol(&k8sProtocolTCP),
-								PortMask: &controlplane.PortMask{Port: &int1792, Mask: &int32For65408},
-							},
-							{
-								Protocol: toAntreaProtocol(&k8sProtocolTCP),
-								PortMask: &controlplane.PortMask{Port: &int1920, Mask: &int32For65472},
-							},
-							{
-								Protocol: toAntreaProtocol(&k8sProtocolTCP),
-								PortMask: &controlplane.PortMask{Port: &int1984, Mask: &int32For65520},
+								Port:     &int1000,
+								EndPort:  &int32For1999,
 							},
 						},
 						Priority: 0,

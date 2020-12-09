@@ -26,6 +26,7 @@ import (
 	conversion "k8s.io/apimachinery/pkg/conversion"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	types "k8s.io/apimachinery/pkg/types"
+	intstr "k8s.io/apimachinery/pkg/util/intstr"
 )
 
 func init() {
@@ -197,6 +198,9 @@ func RegisterConversions(s *runtime.Scheme) error {
 	}
 	if err := s.AddConversionFunc((*controlplane.NetworkPolicy)(nil), (*NetworkPolicy)(nil), func(a, b interface{}, scope conversion.Scope) error {
 		return Convert_controlplane_NetworkPolicy_To_v1beta1_NetworkPolicy(a.(*controlplane.NetworkPolicy), b.(*NetworkPolicy), scope)
+	}); err != nil {
+		return err
+	}
 	if err := s.AddConversionFunc((*controlplane.Service)(nil), (*Service)(nil), func(a, b interface{}, scope conversion.Scope) error {
 		return Convert_controlplane_Service_To_v1beta1_Service(a.(*controlplane.Service), b.(*Service), scope)
 	}); err != nil {
@@ -878,12 +882,13 @@ func Convert_controlplane_PodReference_To_v1beta1_PodReference(in *controlplane.
 
 func autoConvert_v1beta1_Service_To_controlplane_Service(in *Service, out *controlplane.Service, s conversion.Scope) error {
 	out.Protocol = (*controlplane.Protocol)(unsafe.Pointer(in.Protocol))
-	// WARNING: in.Port requires manual conversion: does not exist in peer-type
+	out.Port = (*intstr.IntOrString)(unsafe.Pointer(in.Port))
 	return nil
 }
 
 func autoConvert_controlplane_Service_To_v1beta1_Service(in *controlplane.Service, out *Service, s conversion.Scope) error {
 	out.Protocol = (*Protocol)(unsafe.Pointer(in.Protocol))
-	// WARNING: in.PortMask requires manual conversion: does not exist in peer-type
+	out.Port = (*intstr.IntOrString)(unsafe.Pointer(in.Port))
+	// WARNING: in.EndPort requires manual conversion: does not exist in peer-type
 	return nil
 }

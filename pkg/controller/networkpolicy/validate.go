@@ -228,8 +228,8 @@ func (a *antreaPolicyValidator) validatePort(ingress, egress []secv1alpha1.Rule)
 				if port.Port.Type == intstr.String {
 					return fmt.Errorf("if `port` is a string `endPort` cannot be specified")
 				}
-				if *port.EndPort <= port.Port.IntVal {
-					return fmt.Errorf("`endPort` should be greater than `port`")
+				if *port.EndPort < port.Port.IntVal {
+					return fmt.Errorf("`endPort` should be greater than or equal to `port`")
 				}
 			}
 		}

@@ -201,7 +201,7 @@ spec:
                             tunnelDstIP:
                               type: string
       subresources:
-        status: { }
+        status: {}
   scope: Cluster
   names:
     plural: traceflows
@@ -426,7 +426,7 @@ spec:
                 desiredNodesRealized:
                   type: integer
       subresources:
-        status: { }
+        status: {}
   scope: Cluster
   names:
     plural: clusternetworkpolicies
@@ -613,7 +613,7 @@ spec:
                 desiredNodesRealized:
                   type: integer
       subresources:
-        status: { }
+        status: {}
   scope: Namespaced
   names:
     plural: networkpolicies

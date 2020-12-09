@@ -15,10 +15,8 @@
 package networkpolicy
 
 import (
-	"fmt"
 	"strings"
 
-	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -27,7 +25,6 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
 	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
 	antreatypes "github.com/vmware-tanzu/antrea/pkg/controller/types"
-	thirdPartyNP "github.com/vmware-tanzu/antrea/third_party/network_policy"
 )
 
 var (
@@ -48,40 +45,13 @@ func toAntreaServicesForCRD(npPorts []secv1alpha1.NetworkPolicyPort) ([]controlp
 		if npPort.Port != nil && npPort.Port.Type == intstr.String {
 			namedPortExists = true
 		}
-		if npPort.Port != nil && npPort.EndPort != nil {
-			err := addRangeAntreaServiceForCRD(npPort.Protocol, thirdPartyNP.PortRange{Start: uint16(npPort.Port.IntVal), End: uint16(*npPort.EndPort)}, &antreaServices)
-			if err != nil {
-				klog.Error(err.Error())
-			}
-		} else {
-			antreaServices = append(antreaServices, controlplane.Service{
-				Protocol: toAntreaProtocol(npPort.Protocol),
-				PortMask: &controlplane.PortMask{Port: npPort.Port},
-			})
-		}
+		antreaServices = append(antreaServices, controlplane.Service{
+			Protocol: toAntreaProtocol(npPort.Protocol),
+			Port:     npPort.Port,
+			EndPort:  npPort.EndPort,
+		})
 	}
 	return antreaServices, namedPortExists
-}
-
-// Add several antrea range service with a port range
-func addRangeAntreaServiceForCRD(protocol *v1.Protocol, portRange thirdPartyNP.PortRange, antreaServices *[]controlplane.Service) error {
-	bitRanges, err := portRange.BitwiseMatch()
-	if err != nil {
-		return fmt.Errorf("error when get bitMatch: %s", err.Error())
-	}
-	for _, bitRange := range bitRanges {
-		port := intstr.FromInt(int(bitRange.Value))
-		mask := int32(bitRange.Mask)
-		antreaService := controlplane.Service{
-			Protocol: toAntreaProtocol(protocol),
-			PortMask: &controlplane.PortMask{
-				Port: &port,
-				Mask: &mask,
-			},
-		}
-		*antreaServices = append(*antreaServices, antreaService)
-	}
-	return nil
 }
 
 // toAntreaIPBlockForCRD converts a secv1alpha1.IPBlock to an Antrea IPBlock.

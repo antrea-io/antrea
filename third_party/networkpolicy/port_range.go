@@ -14,7 +14,7 @@
 
 // This whole file is from
 // https://github.com/digitalocean/go-openvswitch/blob/master/ovs/portrange.go
-package network_policy
+package networkpolicy
 
 import (
 	"errors"

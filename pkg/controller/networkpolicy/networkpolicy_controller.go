@@ -592,7 +592,7 @@ func toAntreaServices(npPorts []networkingv1.NetworkPolicyPort) ([]controlplane.
 		}
 		antreaService := controlplane.Service{
 			Protocol: toAntreaProtocol(npPort.Protocol),
-			PortMask: &controlplane.PortMask{Port: npPort.Port},
+			Port:     npPort.Port,
 		}
 		antreaServices = append(antreaServices, antreaService)
 	}

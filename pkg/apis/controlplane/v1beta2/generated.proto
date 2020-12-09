@@ -285,19 +285,6 @@ message PodReference {
   optional string namespace = 2;
 }
 
-// A PortMask is a representation of a single port name or number or a range of
-// ports from base port with a bitmask applied.
-message PortMask {
-  // The port name or number on the given protocol. If not specified, this matches
-  // all port numbers.
-  // +optional
-  optional k8s.io.apimachinery.pkg.util.intstr.IntOrString port = 1;
-
-  // The mask applied on given port. If not specified, means no mask applied.
-  // +optional
-  optional int32 mask = 2;
-}
-
 // Service describes a port to allow traffic on.
 message Service {
   // The protocol (TCP, UDP, or SCTP) which traffic must match. If not specified, this
@@ -305,9 +292,13 @@ message Service {
   // +optional
   optional string protocol = 1;
 
-  // A PortMask is a representation of a single port name/number or a range of ports
-  // from base port with a bitmask applied.
+  // The port name or number on the given protocol. If not specified, this matches all port numbers.
   // +optional
-  optional PortMask portMask = 3;
+  optional k8s.io.apimachinery.pkg.util.intstr.IntOrString port = 2;
+
+  // EndPort defines the end of the port range, being the end included within the range.
+  // It can only be specified when a numerical `port` is specified.
+  // +optional
+  optional int32 endPort = 3;
 }
 
