@@ -43,7 +43,8 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/controlplane/nodestatssummary"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/networkpolicy/addressgroup"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/networkpolicy/appliedtogroup"
-	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/networkpolicy/group"
+	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/networkpolicy/clustergroupmember"
+	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/networkpolicy/groupassociation"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/networkpolicy/networkpolicy"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/stats/antreaclusternetworkpolicystats"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/stats/antreanetworkpolicystats"
@@ -81,7 +82,6 @@ type ExtraConfig struct {
 	addressGroupStore             storage.Interface
 	appliedToGroupStore           storage.Interface
 	networkPolicyStore            storage.Interface
-	groupStore                    storage.Interface
 	controllerQuerier             querier.ControllerQuerier
 	endpointQuerier               controllernetworkpolicy.EndpointQuerier
 	networkPolicyController       *controllernetworkpolicy.NetworkPolicyController
@@ -138,7 +138,6 @@ func NewConfig(
 			endpointQuerier:               endpointQuerier,
 			networkPolicyController:       npController,
 			networkPolicyStatusController: networkPolicyStatusController,
-			groupStore:                    groupStore,
 		},
 	}
 }
@@ -151,8 +150,9 @@ func installAPIGroup(s *APIServer, c completedConfig) error {
 	addressGroupStorage := addressgroup.NewREST(c.extraConfig.addressGroupStore)
 	appliedToGroupStorage := appliedtogroup.NewREST(c.extraConfig.appliedToGroupStore)
 	networkPolicyStorage := networkpolicy.NewREST(c.extraConfig.networkPolicyStore)
-	groupStorage := group.NewREST(c.extraConfig.groupStore)
 	networkPolicyStatusStorage := networkpolicy.NewStatusREST(c.extraConfig.networkPolicyStatusController)
+	clusterGroupMembershipStorage := clustergroupmember.NewREST(c.extraConfig.networkPolicyController)
+	groupAssociationStorage := groupassociation.NewREST(c.extraConfig.networkPolicyController)
 	nodeStatsSummaryStorage := nodestatssummary.NewREST(c.extraConfig.statsAggregator)
 	cpGroup := genericapiserver.NewDefaultAPIGroupInfo(controlplane.GroupName, Scheme, metav1.ParameterCodec, Codecs)
 	cpv1beta1Storage := map[string]rest.Storage{}
@@ -167,7 +167,8 @@ func installAPIGroup(s *APIServer, c completedConfig) error {
 	cpv1beta2Storage["networkpolicies"] = networkPolicyStorage
 	cpv1beta2Storage["networkpolicies/status"] = networkPolicyStatusStorage
 	cpv1beta2Storage["nodestatssummaries"] = nodeStatsSummaryStorage
-	cpv1beta2Storage["groups"] = groupStorage
+	cpv1beta2Storage["groupassociations"] = groupAssociationStorage
+	cpv1beta2Storage["clustergroupmembers"] = clusterGroupMembershipStorage
 	cpGroup.VersionedResourcesStorageMap["v1beta2"] = cpv1beta2Storage
 
 	// TODO: networkingGroup is the legacy group of controlplane NetworkPolicy APIs. To allow live upgrades from up to

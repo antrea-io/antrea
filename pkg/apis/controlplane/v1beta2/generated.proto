@@ -86,6 +86,14 @@ message AppliedToGroupPatch {
   repeated GroupMember removedGroupMembers = 3;
 }
 
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// ClusterGroupMembers is a list of GroupMember objects that are currently selected by a ClusterGroup.
+message ClusterGroupMembers {
+  optional k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
+
+  repeated GroupMember effectiveMembers = 2;
+}
+
 // ExternalEntityReference represents a ExternalEntity Reference.
 message ExternalEntityReference {
   // The name of this ExternalEntity.
@@ -111,6 +119,16 @@ message Group {
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// GroupAssociation is the message format in an API response for groupassociation queries.
+message GroupAssociation {
+  optional k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
+
+  // AssociatedGroups is a list of GroupReferences that is associated with the
+  // Pod/ExternalEntity being queried.
+  repeated GroupReference associatedGroups = 2;
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // GroupList is a list of Group objects.
 message GroupList {
   optional k8s.io.apimachinery.pkg.apis.meta.v1.ListMeta metadata = 1;
@@ -119,7 +137,6 @@ message GroupList {
 }
 
 // GroupMember represents resource member to be populated in Groups.
-// This supersedes GroupMemberPod, and will eventually replace it.
 message GroupMember {
   // Pod maintains the reference to the Pod.
   optional PodReference pod = 1;
@@ -132,6 +149,17 @@ message GroupMember {
 
   // Ports is the list NamedPort of the GroupMember.
   repeated NamedPort ports = 4;
+}
+
+message GroupReference {
+  // Namespace of the Group. Empty for ClusterGroup.
+  optional string namespace = 1;
+
+  // Name of the Group.
+  optional string name = 2;
+
+  // UID of the Group.
+  optional string uid = 3;
 }
 
 // IPBlock describes a particular CIDR (Ex. "192.168.1.1/24"). The except entry describes CIDRs that should

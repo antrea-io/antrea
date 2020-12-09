@@ -71,6 +71,14 @@ type GroupMember struct {
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// ClusterGroupMembers is a list of GroupMember objects that are currently selected by a ClusterGroup.
+type ClusterGroupMembers struct {
+	metav1.TypeMeta
+	metav1.ObjectMeta
+	EffectiveMembers []GroupMember
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // AppliedToGroupPatch describes the incremental update of an AppliedToGroup.
 type AppliedToGroupPatch struct {
 	metav1.TypeMeta
@@ -309,4 +317,23 @@ type GroupList struct {
 	metav1.TypeMeta
 	metav1.ListMeta
 	Items []Group
+}
+
+type GroupReference struct {
+	// Namespace of the Group. Empty for ClusterGroup.
+	Namespace string
+	// Name of the Group.
+	Name string
+	// UID of the Group.
+	UID types.UID
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// GroupAssociation is a list of GroupReferences for responses to groupassociation queries.
+type GroupAssociation struct {
+	metav1.TypeMeta
+	metav1.ObjectMeta
+	// AssociatedGroups is a list of GroupReferences that is associated with the
+	// Pod/ExternalEntity being queried.
+	AssociatedGroups []GroupReference
 }

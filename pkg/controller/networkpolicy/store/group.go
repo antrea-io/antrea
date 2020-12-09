@@ -29,6 +29,10 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/k8s"
 )
 
+const (
+	GroupMemberIndex = "groupMember"
+)
+
 // groupEvent implements storage.InternalEvent.
 type groupEvent struct {
 	// The current version of the stored Group.
@@ -130,6 +134,21 @@ func NewGroupStore() storage.Interface {
 				return []string{}, nil
 			}
 			return []string{g.Selector.Namespace}, nil
+		},
+		GroupMemberIndex: func(obj interface{}) ([]string, error) {
+			g, ok := obj.(*antreatypes.Group)
+			if !ok {
+				return []string{}, nil
+			}
+			var members []string
+			for _, m := range g.GroupMembers {
+				if m.Pod != nil {
+					members = append(members, k8s.NamespacedName(m.Pod.Namespace, m.Pod.Name))
+				} else if m.ExternalEntity != nil {
+					members = append(members, k8s.NamespacedName(m.ExternalEntity.Namespace, m.ExternalEntity.Name))
+				}
+			}
+			return members, nil
 		},
 	}
 	return ram.NewStore(GroupKeyFunc, indexers, genGroupEvent, keyAndSpanSelectFunc, func() runtime.Object { return new(controlplane.Group) })
