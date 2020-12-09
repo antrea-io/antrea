@@ -57,6 +57,7 @@ var (
 		"destinationPodNamespace",
 		"destinationNodeName",
 		"destinationClusterIPv4",
+		"destinationServicePort",
 		"destinationServicePortName",
 		"ingressNetworkPolicyName",
 		"ingressNetworkPolicyNamespace",
@@ -335,6 +336,8 @@ func (exp *flowExporter) sendDataRecord(dataRec ipfix.IPFIXRecord, record flowex
 				// this dummy IP address.
 				_, err = dataRec.AddInfoElement(ie, net.IP{0, 0, 0, 0})
 			}
+		case "destinationServicePort":
+			_, err = dataRec.AddInfoElement(ie, record.Conn.TupleOrig.DestinationPort)
 		case "destinationServicePortName":
 			_, err = dataRec.AddInfoElement(ie, record.Conn.DestinationServicePortName)
 		case "ingressNetworkPolicyName":

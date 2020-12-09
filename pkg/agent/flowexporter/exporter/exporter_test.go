@@ -168,7 +168,7 @@ func TestFlowExporter_sendDataRecord(t *testing.T) {
 			mockDataRec.EXPECT().AddInfoElement(ie, nil).Return(tempBytes, nil)
 		case "destinationClusterIPv4":
 			mockDataRec.EXPECT().AddInfoElement(ie, net.IP{0, 0, 0, 0}).Return(tempBytes, nil)
-		case "sourceTransportPort", "destinationTransportPort":
+		case "sourceTransportPort", "destinationTransportPort", "destinationServicePort":
 			mockDataRec.EXPECT().AddInfoElement(ie, uint16(0)).Return(tempBytes, nil)
 		case "protocolIdentifier":
 			mockDataRec.EXPECT().AddInfoElement(ie, uint8(0)).Return(tempBytes, nil)
