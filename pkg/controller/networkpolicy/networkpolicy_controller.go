@@ -1078,8 +1078,7 @@ func (n *NetworkPolicyController) Run(stopCh <-chan struct{}) {
 	cacheSyncs := []cache.InformerSynced{n.podListerSynced, n.namespaceListerSynced, n.networkPolicyListerSynced}
 	// Only wait for cnpListerSynced and anpListerSynced when AntreaPolicy feature gate is enabled.
 	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
-		cacheSyncs = append(cacheSyncs, n.cnpListerSynced)
-		cacheSyncs = append(cacheSyncs, n.anpListerSynced)
+		cacheSyncs = append(cacheSyncs, n.cnpListerSynced, n.anpListerSynced)
 	}
 	if !cache.WaitForNamedCacheSync(controllerName, stopCh, cacheSyncs...) {
 		return

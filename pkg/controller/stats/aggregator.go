@@ -313,8 +313,7 @@ func (a *Aggregator) Run(stopCh <-chan struct{}) {
 
 	cacheSyncs := []cache.InformerSynced{a.npListerSynced}
 	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
-		cacheSyncs = append(cacheSyncs, a.cnpListerSynced)
-		cacheSyncs = append(cacheSyncs, a.anpListerSynced)
+		cacheSyncs = append(cacheSyncs, a.cnpListerSynced, a.anpListerSynced)
 	}
 	if !cache.WaitForNamedCacheSync("stats aggregator", stopCh, cacheSyncs...) {
 		return
