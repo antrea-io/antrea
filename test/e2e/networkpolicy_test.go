@@ -105,9 +105,9 @@ func TestNetworkPolicyStats(t *testing.T) {
 	// Wait for a few seconds in case that connections are established before policies are enforced.
 	time.Sleep(2 * time.Second)
 
-	sessions := 10
+	sessionsPerAddressFamily := 10
 	var wg sync.WaitGroup
-	for i := 0; i < sessions; i++ {
+	for i := 0; i < sessionsPerAddressFamily; i++ {
 		wg.Add(1)
 		go func() {
 			if clusterInfo.podV4NetworkCIDR != "" {
@@ -123,25 +123,25 @@ func TestNetworkPolicyStats(t *testing.T) {
 	}
 	wg.Wait()
 
-	multiple := 0
+	totalSessions := 0
 	if clusterInfo.podV4NetworkCIDR != "" {
-		multiple++
+		totalSessions += sessionsPerAddressFamily
 	}
 	if clusterInfo.podV6NetworkCIDR != "" {
-		multiple++
+		totalSessions += sessionsPerAddressFamily
 	}
-	totalSessions := sessions * multiple
+
 	if err := wait.Poll(5*time.Second, defaultTimeout, func() (bool, error) {
 		for _, np := range []string{"test-networkpolicy-ingress", "test-networkpolicy-egress"} {
-			metric, err := data.crdClient.StatsV1alpha1().NetworkPolicyStats(testNamespace).Get(context.TODO(), np, metav1.GetOptions{})
+			stats, err := data.crdClient.StatsV1alpha1().NetworkPolicyStats(testNamespace).Get(context.TODO(), np, metav1.GetOptions{})
 			if err != nil {
 				return false, err
 			}
-			t.Logf("Got NetworkPolicy metric: %v", metric)
-			if metric.TrafficStats.Sessions != int64(totalSessions) {
+			t.Logf("Got NetworkPolicy stats: %v", stats)
+			if stats.TrafficStats.Sessions != int64(totalSessions) {
 				return false, nil
 			}
-			if metric.TrafficStats.Packets < metric.TrafficStats.Sessions || metric.TrafficStats.Bytes < metric.TrafficStats.Sessions {
+			if stats.TrafficStats.Packets < stats.TrafficStats.Sessions || stats.TrafficStats.Bytes < stats.TrafficStats.Sessions {
 				return false, fmt.Errorf("Neither 'Packets' nor 'Bytes' should be smaller than 'Sessions'")
 			}
 		}
