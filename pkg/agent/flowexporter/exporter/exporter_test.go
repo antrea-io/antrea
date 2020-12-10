@@ -228,7 +228,7 @@ func getElemList(ianaIE []string, antreaIE []string) []*ipfixentities.InfoElemen
 			elemList[i] = ipfixentities.NewInfoElementWithValue(ie.Element, net.IP{0, 0, 0, 0})
 		case "destinationClusterIPv6":
 			elemList[i] = ipfixentities.NewInfoElementWithValue(ie.Element, net.ParseIP("::"))
-		case "sourceTransportPort", "destinationTransportPort":
+		case "sourceTransportPort", "destinationTransportPort", "destinationServicePort":
 			elemList[i] = ipfixentities.NewInfoElementWithValue(ie.Element, uint16(0))
 		case "protocolIdentifier":
 			elemList[i] = ipfixentities.NewInfoElementWithValue(ie.Element, uint8(0))
