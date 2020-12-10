@@ -1395,33 +1395,29 @@ func (c *client) ReassignFlowPriorities(updates map[uint16]uint16, table binding
 	return nil
 }
 
-func parseDropFlow(flow string) (uint32, types.RuleMetric) {
-	// example format:
-	// table=101, n_packets=9, n_bytes=666, priority=200,ip,reg0=0x100000/0x100000,reg3=0x5 actions=drop
-	segs := strings.Split(flow, ",")
+func parseDropFlow(flowMap map[string]string) (uint32, types.RuleMetric) {
 	m := types.RuleMetric{}
-	pkts, _ := strconv.ParseUint(segs[1][strings.Index(segs[1], "=")+1:], 10, 64)
+	pkts, _ := strconv.ParseUint(flowMap["n_packets"], 10, 64)
 	m.Packets = pkts
 	m.Sessions = pkts
-	bytes, _ := strconv.ParseUint(segs[2][strings.Index(segs[2], "=")+1:], 10, 64)
+	bytes, _ := strconv.ParseUint(flowMap["n_bytes"], 10, 64)
 	m.Bytes = bytes
-	id, _ := strconv.ParseUint(segs[6][strings.Index(segs[6], "0x")+2:strings.Index(segs[6], " ")], 16, 64)
+	reg3 := flowMap["reg3"]
+	id, _ := strconv.ParseUint(reg3[:strings.Index(reg3, " ")], 0, 64)
 	return uint32(id), m
 }
 
-func parseAllowFlow(flow string) (uint32, types.RuleMetric) {
-	// example format:
-	// table=101, n_packets=0, n_bytes=0, priority=200,ct_state=-new,ct_label=0x1/0xffffffff,ip actions=goto_table:105
-	segs := strings.Split(flow, ",")
+func parseAllowFlow(flowMap map[string]string) (uint32, types.RuleMetric) {
 	m := types.RuleMetric{}
-	pkts, _ := strconv.ParseUint(segs[1][strings.Index(segs[1], "=")+1:], 10, 64)
+	pkts, _ := strconv.ParseUint(flowMap["n_packets"], 10, 64)
 	m.Packets = pkts
-	if strings.Contains(segs[4], "+") { // ct_state=+new
+	if strings.Contains(flowMap["ct_state"], "+") { // ct_state=+new
 		m.Sessions = pkts
 	}
-	bytes, _ := strconv.ParseUint(segs[2][strings.Index(segs[2], "=")+1:], 10, 64)
+	bytes, _ := strconv.ParseUint(flowMap["n_bytes"], 10, 64)
 	m.Bytes = bytes
-	idRaw := segs[5][strings.Index(segs[5], "0x")+2 : strings.Index(segs[5], "/")]
+	ct_label := flowMap["ct_label"]
+	idRaw := ct_label[strings.Index(ct_label, "0x")+2 : strings.Index(ct_label, "/")]
 	if len(idRaw) > 8 { // only 32 bits are valid.
 		idRaw = idRaw[:len(idRaw)-8]
 	}
@@ -1429,12 +1425,27 @@ func parseAllowFlow(flow string) (uint32, types.RuleMetric) {
 	return uint32(id), m
 }
 
+func parseFlowToMap(flow string) map[string]string {
+	split := strings.Split(flow, ",")
+	flowMap := make(map[string]string)
+	for _, seg := range split {
+		equalIndex := strings.Index(seg, "=")
+		flowMap[strings.TrimSpace(seg[:equalIndex])] = strings.TrimSpace(seg[equalIndex+1:])
+	}
+	return flowMap
+}
+
 func parseMetricFlow(flow string) (uint32, types.RuleMetric) {
 	dropIdentifier := "reg0"
-	if strings.Contains(flow, dropIdentifier) {
-		return parseDropFlow(flow)
+	flowMap := parseFlowToMap(flow)
+	// example allow flow format:
+	// table=101, n_packets=0, n_bytes=0, priority=200,ct_state=-new,ct_label=0x1/0xffffffff,ip actions=goto_table:105
+	// example drop flow format:
+	// table=101, n_packets=9, n_bytes=666, priority=200,reg0=0x100000/0x100000,reg3=0x5 actions=drop
+	if _, ok := flowMap[dropIdentifier]; ok {
+		return parseDropFlow(flowMap)
 	} else {
-		return parseAllowFlow(flow)
+		return parseAllowFlow(flowMap)
 	}
 }
 
