@@ -769,7 +769,7 @@ func TestParseMetricFlow(t *testing.T) {
 		metric types.RuleMetric
 	}{
 		"Drop flow": {
-			flow: "table=101, n_packets=9, n_bytes=666, priority=200,ip,reg0=0x100000/0x100000,reg3=0x5 actions=drop",
+			flow: "table=101, n_packets=9, n_bytes=666, priority=200,reg0=0x100000/0x100000,reg3=0x5 actions=drop",
 			rule: 5,
 			metric: types.RuleMetric{
 				Bytes:    666,

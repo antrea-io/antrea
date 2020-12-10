@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -26,6 +27,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	v1net "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/wait"
 
 	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
@@ -986,4 +988,118 @@ func TestAntreaPolicyStatus(t *testing.T) {
 		return anp.Status == expectedStatus, nil
 	})
 	assert.NoError(t, err, "Antrea ClusterNetworkPolicy failed to reach expected status")
+}
+
+// TestANPNetworkPolicyStatsWithDropAction tests antreanetworkpolicystats can correctly collect dropped packets stats from ANP if
+// networkpolicystats feature is enabled
+func TestANPNetworkPolicyStatsWithDropAction(t *testing.T) {
+	data, err := setupTest(t)
+	if err != nil {
+		t.Fatalf("Error when setting up test: %v", err)
+	}
+	defer teardownTest(t, data)
+	skipIfAntreaPolicyDisabled(t, data)
+
+	if err := testData.mutateAntreaConfigMap(func(data map[string]string) {
+		antreaControllerConf, _ := data["antrea-controller.conf"]
+		antreaControllerConf = strings.Replace(antreaControllerConf, "#  NetworkPolicyStats: false", "  NetworkPolicyStats: true", 1)
+		data["antrea-controller.conf"] = antreaControllerConf
+		antreaAgentConf, _ := data["antrea-agent.conf"]
+		antreaAgentConf = strings.Replace(antreaAgentConf, "#  NetworkPolicyStats: false", "  NetworkPolicyStats: true", 1)
+		data["antrea-agent.conf"] = antreaAgentConf
+	}, true, true); err != nil {
+		t.Fatalf("Failed to enable NetworkPolicyStats feature: %v", err)
+	}
+
+	serverName, serverIPs, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "test-server-", "")
+	defer cleanupFunc()
+
+	clientName, _, cleanupFunc := createAndWaitForPod(t, data, data.createBusyboxPodOnNode, "test-client-", "")
+	defer cleanupFunc()
+	k8sUtils, err = NewKubernetesUtils(data)
+	failOnError(err, t)
+	p10 := float64(10)
+	intstr80 := intstr.FromInt(80)
+	dropAction := secv1alpha1.RuleActionDrop
+	selectorB := metav1.LabelSelector{MatchLabels: map[string]string{"antrea-e2e": clientName}}
+	selectorC := metav1.LabelSelector{MatchLabels: map[string]string{"antrea-e2e": serverName}}
+	protocol := v1.ProtocolUDP
+
+	var anp = &secv1alpha1.NetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: "np1", Labels: map[string]string{"antrea-e2e": "np1"}},
+		Spec: secv1alpha1.NetworkPolicySpec{
+			AppliedTo: []secv1alpha1.NetworkPolicyPeer{
+				{PodSelector: &selectorC},
+			},
+			Priority: p10,
+			Ingress: []secv1alpha1.Rule{
+				{
+					Ports: []secv1alpha1.NetworkPolicyPort{
+						{
+							Port:     &intstr80,
+							Protocol: &protocol,
+						},
+					},
+					From: []secv1alpha1.NetworkPolicyPeer{
+						{
+							PodSelector: &selectorB,
+						},
+					},
+					Action: &dropAction,
+				},
+			},
+			Egress: []secv1alpha1.Rule{},
+		},
+	}
+
+	if _, err = k8sUtils.CreateOrUpdateANP(anp); err != nil {
+		failOnError(fmt.Errorf("create ANP failed for ANP %s: %v", anp.Name, err), t)
+	}
+
+	// Wait for a few seconds in case that connections are established before policies are enforced.
+	time.Sleep(networkPolicyDelay)
+
+	sessionsPerAddressFamily := 10
+	var wg sync.WaitGroup
+	for i := 0; i < sessionsPerAddressFamily; i++ {
+		wg.Add(1)
+		go func() {
+			if clusterInfo.podV4NetworkCIDR != "" {
+				cmd := []string{"/bin/sh", "-c", fmt.Sprintf("echo test | nc -w 4 -u %s 80", serverIPs.ipv4.String())}
+				data.runCommandFromPod(testNamespace, clientName, busyboxContainerName, cmd)
+			}
+			if clusterInfo.podV6NetworkCIDR != "" {
+				cmd := []string{"/bin/sh", "-c", fmt.Sprintf("echo test | nc -w 4 -u %s 80", serverIPs.ipv6.String())}
+				data.runCommandFromPod(testNamespace, clientName, busyboxContainerName, cmd)
+			}
+			wg.Done()
+		}()
+	}
+	wg.Wait()
+
+	totalSessions := 0
+	if clusterInfo.podV4NetworkCIDR != "" {
+		totalSessions += sessionsPerAddressFamily
+	}
+	if clusterInfo.podV6NetworkCIDR != "" {
+		totalSessions += sessionsPerAddressFamily
+	}
+
+	if err := wait.Poll(5*time.Second, defaultTimeout, func() (bool, error) {
+		stats, err := data.crdClient.StatsV1alpha1().AntreaNetworkPolicyStats(testNamespace).Get(context.TODO(), "np1", metav1.GetOptions{})
+		if err != nil {
+			return false, err
+		}
+		t.Logf("Got AntreaNetworkPolicy stats: %v", stats)
+		if stats.TrafficStats.Sessions != int64(totalSessions) {
+			return false, nil
+		}
+		if stats.TrafficStats.Packets < stats.TrafficStats.Sessions || stats.TrafficStats.Bytes < stats.TrafficStats.Sessions {
+			return false, fmt.Errorf("Neither 'Packets' nor 'Bytes' should be smaller than 'Sessions'")
+		}
+		return true, nil
+	}); err != nil {
+		failOnError(err, t)
+	}
+	k8sUtils.Cleanup(namespaces)
 }
