@@ -101,10 +101,15 @@ type AgentConfig struct {
 	// Enable metrics exposure via Prometheus. Initializes Prometheus metrics listener
 	// Defaults to true.
 	EnablePrometheusMetrics bool `yaml:"enablePrometheusMetrics,omitempty"`
-	// Provide the flow collector address as string with format <IP>:<port>[:<proto>], where proto is tcp or udp. This also
-	// enables the flow exporter that sends IPFIX flow records of conntrack flows on OVS bridge. If no L4 transport proto
-	// is given, we consider tcp as default.
-	// Defaults to "".
+	// Provide the IPFIX collector address as a string with format <HOST>:[<PORT>][:<PROTO>].
+	// HOST can either be the DNS name or the IP of the Flow Collector. For example,
+	// "flow-aggregator.flow-aggregator.svc" can be provided as DNS name to connect
+	// to the Antrea Flow Aggregator service. If IP, it can be either IPv4 or IPv6.
+	// However, IPv6 address should be wrapped with [].
+	// If PORT is empty, we default to 4739, the standard IPFIX port.
+	// If no PROTO is given, we consider "tcp" as default. We support "tcp" and
+	// "udp" L4 transport protocols.
+	// Defaults to "flow-aggregator.flow-aggregator.svc:4739:tcp".
 	FlowCollectorAddr string `yaml:"flowCollectorAddr,omitempty"`
 	// Provide flow poll interval in format "0s". This determines how often flow exporter dumps connections in conntrack module.
 	// Flow poll interval should be greater than or equal to 1s(one second).

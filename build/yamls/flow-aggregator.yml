@@ -1,0 +1,93 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  labels:
+    app: flow-aggregator
+  name: flow-aggregator
+---
+apiVersion: v1
+data:
+  flow-aggregator.conf: |
+    # Provide the flow collector address as string with format <IP>:<port>[:<proto>], where proto is tcp or udp.
+    # If no L4 transport proto is given, we consider tcp as default.
+    #externalFlowCollectorAddr: ""
+
+    # Provide flow export interval as a duration string. This determines how often the flow aggregator exports flow
+    # records to the flow collector.
+    # Flow export interval should be greater than or equal to 1s (one second).
+    # Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
+    #flowExportInterval: 60s
+
+    # Provide the transport protocol for the flow aggregator collecting process, which is tcp or udp.
+    #aggregatorTransportProtocol: "tcp"
+kind: ConfigMap
+metadata:
+  annotations: {}
+  labels:
+    app: flow-aggregator
+  name: flow-aggregator-configmap-kggb5829gb
+  namespace: flow-aggregator
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: flow-aggregator
+  name: flow-aggregator
+  namespace: flow-aggregator
+spec:
+  ports:
+  - name: ipfix-udp
+    port: 4739
+    protocol: UDP
+    targetPort: 4739
+  - name: ipfix-tcp
+    port: 4739
+    protocol: TCP
+    targetPort: 4739
+  selector:
+    app: flow-aggregator
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: flow-aggregator
+  name: flow-aggregator
+  namespace: flow-aggregator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: flow-aggregator
+  template:
+    metadata:
+      labels:
+        app: flow-aggregator
+    spec:
+      containers:
+      - args:
+        - --config
+        - /etc/flow-aggregator/flow-aggregator.conf
+        - --logtostderr=false
+        - --log_dir=/var/log/flowaggregator
+        - --alsologtostderr
+        - --log_file_max_size=100
+        - --log_file_max_num=4
+        - --v=0
+        command:
+        - flow-aggregator
+        image: projects.registry.vmware.com/antrea/flow-aggregator:latest
+        imagePullPolicy: IfNotPresent
+        name: flow-aggregator
+        ports:
+        - containerPort: 4739
+        volumeMounts:
+        - mountPath: /etc/flow-aggregator/flow-aggregator.conf
+          name: flow-aggregator-config
+          readOnly: true
+          subPath: flow-aggregator.conf
+      volumes:
+      - configMap:
+          name: flow-aggregator-configmap-kggb5829gb
+        name: flow-aggregator-config

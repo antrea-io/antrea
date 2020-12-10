@@ -18,15 +18,17 @@ import (
 	"fmt"
 	"hash/fnv"
 	"net"
+	"strings"
 	"time"
 
 	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
+	"github.com/vmware/go-ipfix/pkg/exporter"
 	ipfixregistry "github.com/vmware/go-ipfix/pkg/registry"
 	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter"
 	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter/flowrecords"
-	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter/ipfix"
+	"github.com/vmware-tanzu/antrea/pkg/ipfix"
 	"github.com/vmware-tanzu/antrea/pkg/util/env"
 )
 
@@ -58,6 +60,7 @@ var (
 		"destinationPodName",
 		"destinationPodNamespace",
 		"destinationNodeName",
+		"destinationServicePort",
 		"destinationServicePortName",
 		"ingressNetworkPolicyName",
 		"ingressNetworkPolicyNamespace",
@@ -66,6 +69,14 @@ var (
 	}
 	AntreaInfoElementsIPv4 = append(antreaInfoElementsCommon, []string{"destinationClusterIPv4"}...)
 	AntreaInfoElementsIPv6 = append(antreaInfoElementsCommon, []string{"destinationClusterIPv6"}...)
+)
+
+const (
+	// flowAggregatorDNSName is a static DNS name for the deployed Flow Aggregator
+	// Service in the K8s cluster. By default, both the Name and Namespace of the
+	// Service are set to "flow-aggregator".
+	flowAggregatorDNSName = "flow-aggregator.flow-aggregator.svc"
+	defaultIPFIXPort      = "4739"
 )
 
 type flowExporter struct {
@@ -80,6 +91,7 @@ type flowExporter struct {
 	registry        ipfix.IPFIXRegistry
 	v4Enabled       bool
 	v6Enabled       bool
+	collectorAddr   net.Addr
 }
 
 func genObservationID() (uint32, error) {
@@ -107,11 +119,12 @@ func NewFlowExporter(records *flowrecords.FlowRecords, exportFrequency uint, v4E
 		registry,
 		v4Enabled,
 		v6Enabled,
+		nil,
 	}
 }
 
 // DoExport enables us to export flow records periodically at a given flow export frequency.
-func (exp *flowExporter) Export(collector net.Addr, stopCh <-chan struct{}, pollDone <-chan struct{}) {
+func (exp *flowExporter) Export(collectorAddr string, collectorProto string, stopCh <-chan struct{}, pollDone <-chan struct{}) {
 	for {
 		select {
 		case <-stopCh:
@@ -123,7 +136,7 @@ func (exp *flowExporter) Export(collector net.Addr, stopCh <-chan struct{}, poll
 			if exp.pollCycle%exp.exportFrequency == 0 {
 				// Retry to connect to IPFIX collector if the exporting process gets reset
 				if exp.process == nil {
-					err := exp.initFlowExporter(collector)
+					err := exp.initFlowExporter(collectorAddr, collectorProto)
 					if err != nil {
 						klog.Errorf("Error when initializing flow exporter: %v", err)
 						// There could be other errors while initializing flow exporter other than connecting to IPFIX collector,
@@ -155,24 +168,65 @@ func (exp *flowExporter) Export(collector net.Addr, stopCh <-chan struct{}, poll
 
 }
 
-func (exp *flowExporter) initFlowExporter(collector net.Addr) error {
+func (exp *flowExporter) initFlowExporter(collectorAddr string, collectorProto string) error {
 	// Create IPFIX exporting expProcess, initialize registries and other related entities
 	obsID, err := genObservationID()
 	if err != nil {
 		return fmt.Errorf("cannot generate obsID for IPFIX ipfixexport: %v", err)
 	}
 
-	var expProcess ipfix.IPFIXExportingProcess
-	if collector.Network() == "tcp" {
-		// TCP transport do not need any tempRefTimeout, so sending 0.
-		expProcess, err = ipfix.NewIPFIXExportingProcess(collector, obsID, 0)
+	if strings.Contains(collectorAddr, flowAggregatorDNSName) {
+		hostIPs, err := net.LookupIP(flowAggregatorDNSName)
+		if err != nil {
+			return err
+		}
+		// Currently, supporting only IPv4 for Flow Aggregator.
+		ip := hostIPs[0].To4()
+		if ip != nil {
+			// Update the collector address with resolved IP of flow aggregator
+			collectorAddr = net.JoinHostPort(ip.String(), defaultIPFIXPort)
+		} else {
+			return fmt.Errorf("resolved Flow Aggregator address %v is not supported", hostIPs[0])
+		}
+	}
+
+	// TODO: This code can be further simplified by changing the go-ipfix API to accept
+	// collectorAddr and collectorProto instead of net.Addr input.
+	var expInput exporter.ExporterInput
+	if collectorProto == "tcp" {
+		collector, err := net.ResolveTCPAddr("tcp", collectorAddr)
+		if err != nil {
+			return err
+		}
+		// TCP transport does not need any tempRefTimeout, so sending 0.
+		// tempRefTimeout is the template refresh timeout, which specifies how often
+		// the exporting process should send the template again.
+		expInput = exporter.ExporterInput{
+			CollectorAddr:       collector,
+			ObservationDomainID: obsID,
+			TempRefTimeout:      0,
+			PathMTU:             0,
+			IsEncrypted:         false,
+		}
 	} else {
+		collector, err := net.ResolveUDPAddr("udp", collectorAddr)
+		if err != nil {
+			return err
+		}
 		// For UDP transport, hardcoding tempRefTimeout value as 1800s.
-		expProcess, err = ipfix.NewIPFIXExportingProcess(collector, obsID, 1800)
+		expInput = exporter.ExporterInput{
+			CollectorAddr:       collector,
+			ObservationDomainID: obsID,
+			TempRefTimeout:      1800,
+			PathMTU:             0,
+			IsEncrypted:         false,
+		}
 	}
+	expProcess, err := ipfix.NewIPFIXExportingProcess(expInput)
 	if err != nil {
-		return err
+		return fmt.Errorf("error when starting exporter: %v", err)
 	}
+
 	exp.process = expProcess
 	if exp.v4Enabled {
 		templateID := expProcess.NewTemplateID()
@@ -199,21 +253,32 @@ func (exp *flowExporter) initFlowExporter(collector net.Addr) error {
 }
 
 func (exp *flowExporter) sendFlowRecords() error {
-	sendAndUpdateFlowRecord := func(key flowexporter.ConnectionKey, record flowexporter.FlowRecord) error {
-		templateID := exp.templateIDv4
+	addAndSendFlowRecord := func(key flowexporter.ConnectionKey, record flowexporter.FlowRecord) error {
 		if record.IsIPv6 {
-			templateID = exp.templateIDv6
-		}
-		dataSet := ipfix.NewSet(ipfixentities.Data, templateID, false)
-		if err := exp.sendDataSet(dataSet, record); err != nil {
-			return err
+			dataSetIPv6 := ipfix.NewSet(ipfixentities.Data, exp.templateIDv6, false)
+			// TODO: more records per data set will be supported when go-ipfix supports size check when adding records
+			if err := exp.addRecordToSet(dataSetIPv6, record); err != nil {
+				return err
+			}
+			if _, err := exp.sendDataSet(dataSetIPv6); err != nil {
+				return err
+			}
+		} else {
+			dataSetIPv4 := ipfix.NewSet(ipfixentities.Data, exp.templateIDv4, false)
+			// TODO: more records per data set will be supported when go-ipfix supports size check when adding records
+			if err := exp.addRecordToSet(dataSetIPv4, record); err != nil {
+				return err
+			}
+			if _, err := exp.sendDataSet(dataSetIPv4); err != nil {
+				return err
+			}
 		}
 		if err := exp.flowRecords.ValidateAndUpdateStats(key, record); err != nil {
 			return err
 		}
 		return nil
 	}
-	err := exp.flowRecords.ForAllFlowRecordsDo(sendAndUpdateFlowRecord)
+	err := exp.flowRecords.ForAllFlowRecordsDo(addAndSendFlowRecord)
 	if err != nil {
 		return fmt.Errorf("error when iterating flow records: %v", err)
 	}
@@ -261,7 +326,7 @@ func (exp *flowExporter) sendTemplateSet(templateSet ipfix.IPFIXSet, isIPv6 bool
 		return 0, fmt.Errorf("error in adding record to template set: %v", err)
 	}
 
-	sentBytes, err := exp.process.AddSetAndSendMsg(ipfixentities.Template, templateSet.GetSet())
+	sentBytes, err := exp.process.SendSet(templateSet.GetSet())
 	if err != nil {
 		return 0, fmt.Errorf("error in IPFIX exporting process when sending template record: %v", err)
 	}
@@ -276,7 +341,7 @@ func (exp *flowExporter) sendTemplateSet(templateSet ipfix.IPFIXSet, isIPv6 bool
 	return sentBytes, nil
 }
 
-func (exp *flowExporter) sendDataSet(dataSet ipfix.IPFIXSet, record flowexporter.FlowRecord) error {
+func (exp *flowExporter) addRecordToSet(dataSet ipfix.IPFIXSet, record flowexporter.FlowRecord) error {
 	nodeName, _ := env.GetNodeName()
 
 	// Iterate over all infoElements in the list
@@ -386,6 +451,8 @@ func (exp *flowExporter) sendDataSet(dataSet ipfix.IPFIXSet, record flowexporter
 				// Same as destinationClusterIPv4.
 				ie.Value = net.ParseIP("::")
 			}
+		case "destinationServicePort":
+			ie.Value = record.Conn.TupleOrig.DestinationPort
 		case "destinationServicePortName":
 			if record.Conn.DestinationServicePortName != "" {
 				ie.Value = record.Conn.DestinationServicePortName
@@ -411,11 +478,14 @@ func (exp *flowExporter) sendDataSet(dataSet ipfix.IPFIXSet, record flowexporter
 	if err != nil {
 		return fmt.Errorf("error in adding record to data set: %v", err)
 	}
-
-	sentBytes, err := exp.process.AddSetAndSendMsg(ipfixentities.Data, dataSet.GetSet())
-	if err != nil {
-		return fmt.Errorf("error in IPFIX exporting process when sending data record: %v", err)
-	}
-	klog.V(4).Infof("Flow record created and sent. Bytes sent: %d", sentBytes)
 	return nil
+}
+
+func (exp *flowExporter) sendDataSet(dataSet ipfix.IPFIXSet) (int, error) {
+	sentBytes, err := exp.process.SendSet(dataSet.GetSet())
+	if err != nil {
+		return 0, fmt.Errorf("error when sending data set: %v", err)
+	}
+	klog.V(4).Infof("Data set sent successfully. Bytes sent: %d", sentBytes)
+	return sentBytes, nil
 }

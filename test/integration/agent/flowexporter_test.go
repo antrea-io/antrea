@@ -173,7 +173,7 @@ func TestConnectionStoreAndFlowRecords(t *testing.T) {
 		} else {
 			expConn.DestinationPodName = testIfConfigs[i].PodName
 			expConn.DestinationPodNamespace = testIfConfigs[i].PodNamespace
-			expConn.DoExport = false
+			expConn.DoExport = true
 		}
 		actualConn, found := connStore.GetConnByKey(*testConnKeys[i])
 		assert.Equal(t, found, true, "testConn should be present in connection store")
