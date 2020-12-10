@@ -215,6 +215,14 @@ func (data *TestData) setupDifferentNamedPorts(t *testing.T) (checkFn func(), cl
 		preCheckFunc(server0IPs.ipv6.String(), server1IPs.ipv6.String())
 	}
 
+	if testOptions.providerName == "kind" {
+		// Due to netdev datapath bug, sometimes datapath flows are not flushed after new openflows that change the
+		// actions are installed, causing client1 to still be able to connect to the servers after creating a policy
+		// that disallows it. The test waits for 10 seconds so that the datapath flows will expire.
+		// See https://github.com/vmware-tanzu/antrea/issues/1608 for more details.
+		time.Sleep(10 * time.Second)
+	}
+
 	// Create NetworkPolicy rule.
 	spec := &networkingv1.NetworkPolicySpec{
 		// Apply to two server Pods.
@@ -248,7 +256,6 @@ func (data *TestData) setupDifferentNamedPorts(t *testing.T) (checkFn func(), cl
 			t.Fatalf("Error when deleting network policy: %v", err)
 		}
 	})
-	time.Sleep(networkPolicyDelay)
 
 	npCheck := func(server0IP, server1IP string) {
 		// client0 can connect to both servers.
