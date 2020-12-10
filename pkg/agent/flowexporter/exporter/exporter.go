@@ -58,6 +58,7 @@ var (
 		"destinationPodName",
 		"destinationPodNamespace",
 		"destinationNodeName",
+		"destinationServicePort",
 		"destinationServicePortName",
 		"ingressNetworkPolicyName",
 		"ingressNetworkPolicyNamespace",
@@ -386,6 +387,8 @@ func (exp *flowExporter) sendDataSet(dataSet ipfix.IPFIXSet, record flowexporter
 				// Same as destinationClusterIPv4.
 				ie.Value = net.ParseIP("::")
 			}
+		case "destinationServicePort":
+			ie.Value = record.Conn.TupleOrig.DestinationPort
 		case "destinationServicePortName":
 			if record.Conn.DestinationServicePortName != "" {
 				ie.Value = record.Conn.DestinationServicePortName
