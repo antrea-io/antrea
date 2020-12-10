@@ -1205,11 +1205,15 @@ data:
     # Enable metrics exposure via Prometheus. Initializes Prometheus metrics listener.
     #enablePrometheusMetrics: true
 
-    # Provide flow collector address as string with format <IP>:<port>[:<proto>], where proto is tcp or udp.
-    # IP can be either IPv4 or IPv6. However, IPv6 address should be wrapped with [].
-    # This also enables the flow exporter that sends IPFIX flow records of conntrack flows on OVS bridge.
-    # If no L4 transport proto is given, we consider tcp as default.
-    #flowCollectorAddr: ""
+    # Provide the IPFIX collector address as a string with format <HOST>:[<PORT>][:<PROTO>].
+    # HOST can either be the DNS name or the IP of the Flow Collector. For example,
+    # "flow-aggregator.flow-aggregator.svc" can be provided as DNS name to connect
+    # to the Antrea Flow Aggregator service. If IP, it can be either IPv4 or IPv6.
+    # However, IPv6 address should be wrapped with [].
+    # If PORT is empty, we default to 4739, the standard IPFIX port.
+    # If no PROTO is given, we consider "tcp" as default. We support "tcp" and "udp"
+    # L4 transport protocols.
+    #flowCollectorAddr: "flow-aggregator.flow-aggregator.svc:tcp"
 
     # Provide flow poll interval as a duration string. This determines how often the flow exporter dumps connections from the conntrack module.
     # Flow poll interval should be greater than or equal to 1s (one second).
@@ -1276,7 +1280,7 @@ metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-6kg9kdbg49
+  name: antrea-config-mcfc2b62gk
   namespace: kube-system
 ---
 apiVersion: v1
@@ -1392,7 +1396,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-6kg9kdbg49
+          name: antrea-config-mcfc2b62gk
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -1649,6 +1653,7 @@ spec:
         - mountPath: /var/log/strongswan
           name: host-var-log-antrea
           subPath: strongswan
+      dnsPolicy: ClusterFirstWithHostNet
       hostNetwork: true
       initContainers:
       - command:
@@ -1691,7 +1696,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-6kg9kdbg49
+          name: antrea-config-mcfc2b62gk
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d

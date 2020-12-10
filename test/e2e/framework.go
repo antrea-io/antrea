@@ -412,7 +412,7 @@ func (data *TestData) deployAntreaFlowExporter(ipfixCollector string) error {
 	return data.mutateAntreaConfigMap(func(data map[string]string) {
 		antreaAgentConf, _ := data["antrea-agent.conf"]
 		antreaAgentConf = strings.Replace(antreaAgentConf, "#  FlowExporter: false", "  FlowExporter: true", 1)
-		antreaAgentConf = strings.Replace(antreaAgentConf, "#flowCollectorAddr: \"\"", fmt.Sprintf("flowCollectorAddr: \"%s\"", ipfixCollector), 1)
+		antreaAgentConf = strings.Replace(antreaAgentConf, "#flowCollectorAddr: \"flow-aggregator.flow-aggregator.svc:tcp\"", fmt.Sprintf("flowCollectorAddr: \"%s\"", ipfixCollector), 1)
 		antreaAgentConf = strings.Replace(antreaAgentConf, "#flowPollInterval: \"5s\"", "flowPollInterval: \"1s\"", 1)
 		antreaAgentConf = strings.Replace(antreaAgentConf, "#flowExportFrequency: 12", "flowExportFrequency: 5", 1)
 		data["antrea-agent.conf"] = antreaAgentConf

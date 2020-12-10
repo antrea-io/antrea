@@ -324,7 +324,7 @@ func run(o *Options) error {
 			o.config.FlowExportFrequency,
 			v4Enabled,
 			v6Enabled)
-		go wait.Until(func() { flowExporter.Export(o.flowCollector, stopCh, pollDone) }, 0, stopCh)
+		go wait.Until(func() { flowExporter.Export(o.flowCollectorAddr, o.flowCollectorProto, stopCh, pollDone) }, 0, stopCh)
 	}
 
 	<-stopCh
