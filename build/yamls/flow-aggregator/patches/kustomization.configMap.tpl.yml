@@ -1,0 +1,5 @@
+configMapGenerator:
+- name: flow-aggregator-configmap
+  behavior: merge
+  files:
+  - <FLOW_AGG_CONF_FILE>
