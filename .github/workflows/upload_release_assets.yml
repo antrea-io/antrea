@@ -178,6 +178,15 @@ jobs:
         asset_path: ./assets/antrea-windows.yml
         asset_name: antrea-windows.yml
         asset_content_type: application/octet-stream
+    - name: Upload flow-aggregator.yml
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./assets/flow-aggregator.yml
+        asset_name: flow-aggregator.yml
+        asset_content_type: application/octet-stream
     - name: Upload antrea-agent-windows-x86_64.exe
       uses: actions/upload-release-asset@v1
       env:
