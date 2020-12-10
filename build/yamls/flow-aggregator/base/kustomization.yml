@@ -1,0 +1,11 @@
+resources:
+- flow-aggregator.yml
+configMapGenerator:
+- files:
+  - conf/flow-aggregator.conf
+  name: flow-aggregator-configmap
+commonLabels:
+  app: flow-aggregator
+namespace: flow-aggregator
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization

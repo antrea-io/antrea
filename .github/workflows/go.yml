@@ -4,10 +4,12 @@ on:
     branches:
     - master
     - release-*
+    - feature/flow-aggregator
   push:
     branches:
     - master
     - release-*
+    - feature/flow-aggregator
 jobs:
 
 
