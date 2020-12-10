@@ -79,7 +79,7 @@ func (i *Initializer) prepareHostNetwork() error {
 // prepareOVSBridge adds local port and uplink to OVS bridge.
 // This function will delete OVS bridge and HNS network created by antrea on failure.
 func (i *Initializer) prepareOVSBridge() error {
-	klog.Info("preparing OVS bridge ...")
+	klog.Info("Preparing OVS bridge")
 	hnsNetwork, err := hcsshim.GetHNSNetworkByName(util.LocalHNSNetwork)
 	defer func() {
 		// prepareOVSBridge only works on windows platform. The operation has a chance to fail on the first time agent
@@ -108,7 +108,7 @@ func (i *Initializer) prepareOVSBridge() error {
 	// implementer-defined. Antrea uses "0x0000" for the upper 16-bits.
 	datapathID := strings.Replace(hnsNetwork.SourceMac, ":", "", -1)
 	datapathID = "0000" + datapathID
-	klog.Info("Setting OVS bridge datapath...")
+	klog.Info("Setting OVS bridge datapath")
 	if err = i.ovsBridgeClient.SetDatapathID(datapathID); err != nil {
 		klog.Errorf("Failed to set datapath_id %s: %v", datapathID, err)
 		return err
@@ -133,12 +133,12 @@ func (i *Initializer) prepareOVSBridge() error {
 	uplinkNetConfig := i.nodeConfig.UplinkNetConfig
 	uplink := uplinkNetConfig.Name
 	if _, err := i.ovsBridgeClient.GetOFPort(uplink); err == nil {
-		klog.Errorf("... Uplink %v already exists, cannot proceed", uplink)
+		klog.Errorf"Uplink %v already exists, cannot proceed", uplink)
 		return err
 	}
-	klog.Info("... Uplink is valid")
+	klog.Info("Uplink is valid")
 
-	klog.Infof("Creating uplink port: %v ...", config.UplinkOFPort)
+	klog.Info("Creating uplink port: %v ...", config.UplinkOFPort)
 	// Create uplink port.
 	uplinkPortUUId, err := i.ovsBridgeClient.CreateUplinkPort(uplink, config.UplinkOFPort, nil)
 	if err != nil {
@@ -159,7 +159,7 @@ func (i *Initializer) prepareOVSBridge() error {
 		return err
 	}
 
-	klog.Info("Removing MSFT_NetIPAddress from the adapter, to avoid 'already exists' error...")
+	klog.Info("Removing MSFT_NetIPAddress from the adapter, to avoid 'already exists' error")
 	if err = util.RemoveIPv4AddrsFromAdapter(brName); err != nil {
 		return err
 	}
