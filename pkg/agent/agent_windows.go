@@ -138,7 +138,7 @@ func (i *Initializer) prepareOVSBridge() error {
 	}
 	klog.Info("... Uplink is valid")
 
-	klog.Info("Creating uplink port: %v ...", config.UplinkOFPort)
+	klog.Infof("Creating uplink port: %v ...", config.UplinkOFPort)
 	// Create uplink port.
 	uplinkPortUUId, err := i.ovsBridgeClient.CreateUplinkPort(uplink, config.UplinkOFPort, nil)
 	if err != nil {
