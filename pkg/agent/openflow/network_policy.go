@@ -26,7 +26,6 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
 	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
 	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
-	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsctl"
 )
 
 var (
@@ -47,6 +46,11 @@ var (
 	MatchSCTPDstPort   = types.NewMatchKey(binding.ProtocolSCTP, types.L4PortAddr, "tp_dst")
 	MatchSCTPv6DstPort = types.NewMatchKey(binding.ProtocolSCTPv6, types.L4PortAddr, "tp_dst")
 	Unsupported        = types.NewMatchKey(binding.ProtocolIP, types.UnSupported, "unknown")
+
+	// metricFlowIdentifier is used to identify metric flows in metric table.
+	// There could be other flows like default flow and Traceflow flows in the table. Only metric flows are supposed to
+	// have normal priority.
+	metricFlowIdentifier = fmt.Sprintf("priority=%d,", priorityNormal)
 )
 
 // IP address calculated from Pod's address.
@@ -1430,6 +1434,10 @@ func parseFlowToMap(flow string) map[string]string {
 	flowMap := make(map[string]string)
 	for _, seg := range split {
 		equalIndex := strings.Index(seg, "=")
+		// Some substrings spilt by "," may have no "=", for instance, if "resubmit(,70)" is present.
+		if equalIndex == -1 {
+			continue
+		}
 		flowMap[strings.TrimSpace(seg[:equalIndex])] = strings.TrimSpace(seg[equalIndex+1:])
 	}
 	return flowMap
@@ -1451,12 +1459,12 @@ func parseMetricFlow(flow string) (uint32, types.RuleMetric) {
 
 func (c *client) NetworkPolicyMetrics() map[uint32]*types.RuleMetric {
 	result := map[uint32]*types.RuleMetric{}
-	ovsctlClient := ovsctl.NewClient(c.nodeConfig.OVSBridge)
-	egressFlows, _ := ovsctlClient.DumpTableFlows(uint8(EgressMetricTable))
-	ingressFlows, _ := ovsctlClient.DumpTableFlows(uint8(IngressMetricTable))
+	egressFlows, _ := c.ovsctlClient.DumpTableFlows(uint8(EgressMetricTable))
+	ingressFlows, _ := c.ovsctlClient.DumpTableFlows(uint8(IngressMetricTable))
+
 	collectMetricsFromFlows := func(flows []string) {
 		for _, flow := range flows {
-			if strings.Contains(flow, "priority=0") {
+			if !strings.Contains(flow, metricFlowIdentifier) {
 				continue
 			}
 			ruleID, metric := parseMetricFlow(flow)
