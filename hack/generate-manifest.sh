@@ -334,6 +334,7 @@ if $SIMULATOR; then
     $KUSTOMIZE edit add base $BASE
     $KUSTOMIZE edit add patch --path agentNodeAffinity.yml
     $KUSTOMIZE edit add patch --path controllerNodeAffinity.yml
+    $KUSTOMIZE edit add resource antrea-agent-simulator.yml
     BASE=../simulator
     cd ..
 fi
