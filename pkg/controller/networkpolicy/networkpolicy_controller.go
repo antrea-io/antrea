@@ -61,6 +61,7 @@ import (
 )
 
 const (
+	controllerName = "NetworkPolicyController"
 	// NetworkPolicyController is the only writer of the antrea network policy
 	// storages and will keep re-enqueuing failed items until they succeed.
 	// Set resyncPeriod to 0 to disable resyncing.
@@ -1071,26 +1072,17 @@ func (n *NetworkPolicyController) Run(stopCh <-chan struct{}) {
 	defer n.addressGroupQueue.ShutDown()
 	defer n.internalNetworkPolicyQueue.ShutDown()
 
-	klog.Info("Starting NetworkPolicy controller")
-	defer klog.Info("Shutting down NetworkPolicy controller")
+	klog.Infof("Starting %s", controllerName)
+	defer klog.Infof("Shutting down %s", controllerName)
 
-	klog.Info("Waiting for caches to sync for NetworkPolicy controller")
-	if !cache.WaitForCacheSync(stopCh, n.podListerSynced, n.namespaceListerSynced, n.networkPolicyListerSynced) {
-		klog.Error("Unable to sync caches for NetworkPolicy controller")
-		return
-	}
+	cacheSyncs := []cache.InformerSynced{n.podListerSynced, n.namespaceListerSynced, n.networkPolicyListerSynced}
 	// Only wait for cnpListerSynced and anpListerSynced when AntreaPolicy feature gate is enabled.
 	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
-		if !cache.WaitForCacheSync(stopCh, n.cnpListerSynced) {
-			klog.Error("Unable to sync CNP caches for NetworkPolicy controller")
-			return
-		}
-		if !cache.WaitForCacheSync(stopCh, n.anpListerSynced) {
-			klog.Error("Unable to sync ANP caches for NetworkPolicy controller")
-			return
-		}
+		cacheSyncs = append(cacheSyncs, n.cnpListerSynced, n.anpListerSynced)
 	}
-	klog.Info("Caches are synced for NetworkPolicy controller")
+	if !cache.WaitForNamedCacheSync(controllerName, stopCh, cacheSyncs...) {
+		return
+	}
 
 	for i := 0; i < defaultWorkers; i++ {
 		go wait.Until(n.appliedToGroupWorker, time.Second, stopCh)

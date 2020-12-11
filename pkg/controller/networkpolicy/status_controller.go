@@ -37,6 +37,10 @@ import (
 	antreatypes "github.com/vmware-tanzu/antrea/pkg/controller/types"
 )
 
+const (
+	statusControllerName = "NetworkPolicyStatusController"
+)
+
 // StatusController is responsible for synchronizing the status of Antrea ClusterNetworkPolicy and Antrea NetworkPolicy.
 type StatusController struct {
 	// npControlInterface knows how to update Antrea NetworkPolicy status.
@@ -178,17 +182,14 @@ func (c *StatusController) deleteNodeStatus(key string, nodeName string) {
 func (c *StatusController) Run(stopCh <-chan struct{}) {
 	defer c.queue.ShutDown()
 
-	klog.Info("Starting NetworkPolicyStatus controller")
-	defer klog.Info("Shutting down NetworkPolicyStatus controller")
+	klog.Infof("Starting %s", statusControllerName)
+	defer klog.Infof("Shutting down %s", statusControllerName)
 
-	klog.Info("Waiting for caches to sync for NetworkPolicyStatus controller")
-	if !cache.WaitForCacheSync(stopCh, c.cnpListerSynced, c.anpListerSynced) {
-		klog.Error("Unable to sync CNP caches for NetworkPolicy controller")
+	if !cache.WaitForNamedCacheSync(statusControllerName, stopCh, c.cnpListerSynced, c.anpListerSynced) {
 		return
 	}
-	klog.Info("Caches are synced for NetworkPolicyStatus controller")
 
-	go wait.NonSlidingUntil(c.watchInternelNetworkPolicy, 5*time.Second, stopCh)
+	go wait.NonSlidingUntil(c.watchInternalNetworkPolicy, 5*time.Second, stopCh)
 
 	for i := 0; i < defaultWorkers; i++ {
 		go wait.Until(c.runWorker, time.Second, stopCh)
@@ -196,7 +197,7 @@ func (c *StatusController) Run(stopCh <-chan struct{}) {
 	<-stopCh
 }
 
-func (c *StatusController) watchInternelNetworkPolicy() {
+func (c *StatusController) watchInternalNetworkPolicy() {
 	watcher, err := c.internalNetworkPolicyStore.Watch(context.TODO(), "", labels.Everything(), fields.Everything())
 	if err != nil {
 		klog.Errorf("Failed to start watch for internal NetworkPolicy: %v", err)

@@ -311,18 +311,13 @@ func (a *Aggregator) Run(stopCh <-chan struct{}) {
 	klog.Info("Starting stats aggregator")
 	defer klog.Info("Shutting down stats aggregator")
 
-	klog.Info("Waiting for caches to sync for stats aggregator")
-	if !cache.WaitForCacheSync(stopCh, a.npListerSynced) {
-		klog.Error("Unable to sync caches for stats aggregator")
+	cacheSyncs := []cache.InformerSynced{a.npListerSynced}
+	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
+		cacheSyncs = append(cacheSyncs, a.cnpListerSynced, a.anpListerSynced)
+	}
+	if !cache.WaitForNamedCacheSync("stats aggregator", stopCh, cacheSyncs...) {
 		return
 	}
-	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
-		if !cache.WaitForCacheSync(stopCh, a.cnpListerSynced, a.anpListerSynced) {
-			klog.Error("Unable to sync Antrea policy caches for stats aggregator")
-			return
-		}
-	}
-	klog.Info("Caches are synced for stats aggregator")
 
 	for {
 		select {
