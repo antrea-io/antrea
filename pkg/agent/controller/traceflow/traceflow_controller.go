@@ -152,18 +152,13 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 	klog.Infof("Starting %s", controllerName)
 	defer klog.Infof("Shutting down %s", controllerName)
 
-	klog.Infof("Waiting for caches to sync for %s", controllerName)
+	cacheSyncs := []cache.InformerSynced{c.traceflowListerSynced}
 	if features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
-		if !cache.WaitForCacheSync(stopCh, c.serviceListerSynced) {
-			klog.Errorf("Unable to sync service cache for %s", controllerName)
-			return
-		}
+		cacheSyncs = append(cacheSyncs, c.serviceListerSynced)
 	}
-	if !cache.WaitForCacheSync(stopCh, c.traceflowListerSynced) {
-		klog.Errorf("Unable to sync caches for %s", controllerName)
+	if !cache.WaitForNamedCacheSync(controllerName, stopCh, cacheSyncs...) {
 		return
 	}
-	klog.Infof("Caches are synced for %s", controllerName)
 
 	for i := 0; i < defaultWorkers; i++ {
 		go wait.Until(c.worker, time.Second, stopCh)
