@@ -24,10 +24,13 @@ import (
 )
 
 // AntreaAgentInfoLister helps list AntreaAgentInfos.
+// All objects returned here must be treated as read-only.
 type AntreaAgentInfoLister interface {
 	// List lists all AntreaAgentInfos in the indexer.
+	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1beta1.AntreaAgentInfo, err error)
 	// Get retrieves the AntreaAgentInfo from the index for a given name.
+	// Objects returned here must be treated as read-only.
 	Get(name string) (*v1beta1.AntreaAgentInfo, error)
 	AntreaAgentInfoListerExpansion
 }
