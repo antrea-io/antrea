@@ -20,7 +20,7 @@ function echoerr {
     >&2 echo "$@"
 }
 
-_usage="Usage: $0 [--mode (dev|release)] [--encap-mode] [--kind] [--ipsec] [--no-proxy] [--np] [--keep] [--tun (geneve|vxlan|gre|stt)] [--verbose-log] [--help|-h]
+_usage="Usage: $0 [--mode (dev|release)] [--encap-mode] [--kind] [--ipsec] [--no-proxy] [--np] [--k8s-1.15] [--keep] [--tun (geneve|vxlan|gre|stt)] [--verbose-log] [--help|-h]
 Generate a YAML manifest for Antrea using Kustomize and print it to stdout.
         --mode (dev|release)          Choose the configuration variant that you need (default is 'dev')
         --encap-mode                  Traffic encapsulation mode. (default is 'encap')
@@ -30,6 +30,7 @@ Generate a YAML manifest for Antrea using Kustomize and print it to stdout.
         --all-features                Generate a manifest with all alpha features enabled
         --no-proxy                    Generate a manifest with Antrea proxy disabled
         --np                          Generate a manifest with ClusterNetworkPolicy and Antrea NetworkPolicy features enabled
+        --k8s-1.15                    Generates a manifest which supports Kubernetes 1.15.
         --keep                        Debug flag which will preserve the generated kustomization.yml
         --tun (geneve|vxlan|gre|stt)  Choose encap tunnel type from geneve, gre, stt and vxlan (default is geneve)
         --verbose-log                 Generate a manifest with increased log-level (level 4) for Antrea agent and controller.
@@ -68,6 +69,7 @@ TUN_TYPE="geneve"
 VERBOSE_LOG=false
 ON_DELETE=false
 COVERAGE=false
+K8S_115=false
 
 while [[ $# -gt 0 ]]
 do
@@ -104,6 +106,10 @@ case $key in
     ;;
     --np)
     NP=true
+    shift
+    ;;
+    --k8s-1.15)
+    K8S_115=true
     shift
     ;;
     --keep)
@@ -374,6 +380,23 @@ fi
 
 if [ "$MODE" == "release" ]; then
     $KUSTOMIZE edit set image antrea=$IMG_NAME:$IMG_TAG
+fi
+
+# If --k8s-1.15 flag is set, then we have to patch certain resources.
+# For instance, the apiVersion/schema of CustomResourceDefinition and admission webhooks
+if $K8S_115; then
+    cp -a $THIS_DIR/legacy ./
+    # adding for controller.yml
+    $KUSTOMIZE edit add patch --path legacy/controller_patch.json --kind MutatingWebhookConfiguration
+    $KUSTOMIZE edit add patch --path legacy/controller_patch.json --kind ValidatingWebhookConfiguration
+    $KUSTOMIZE edit add patch --path legacy/crds_version_patch.json --kind CustomResourceDefinition
+    $KUSTOMIZE edit add patch --path legacy/crds_move_schema_patch.json --kind CustomResourceDefinition --name antreaagentinfos.clusterinformation.antrea.tanzu.vmware.com
+    $KUSTOMIZE edit add patch --path legacy/crds_move_schema_patch.json --kind CustomResourceDefinition --name antreacontrollerinfos.clusterinformation.antrea.tanzu.vmware.com
+    $KUSTOMIZE edit add patch --path legacy/crds_traceflows_patch.json --kind CustomResourceDefinition --name traceflows.ops.antrea.tanzu.vmware.com
+    $KUSTOMIZE edit add patch --path legacy/crds_tiers_patch.json --kind CustomResourceDefinition --name tiers.security.antrea.tanzu.vmware.com
+    $KUSTOMIZE edit add patch --path legacy/crds_clusternetworkpolicies_patch.json --kind CustomResourceDefinition --name clusternetworkpolicies.security.antrea.tanzu.vmware.com
+    $KUSTOMIZE edit add patch --path legacy/crds_networkpolicies_patch.json --kind CustomResourceDefinition --name networkpolicies.security.antrea.tanzu.vmware.com
+    $KUSTOMIZE edit add patch --path legacy/crds_externalentities_patch.json --kind CustomResourceDefinition --name externalentities.core.antrea.tanzu.vmware.com
 fi
 
 $KUSTOMIZE build

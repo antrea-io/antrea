@@ -1,0 +1,11 @@
+[
+	{
+		"op": "remove",
+		"path": "/spec/versions/0/schema"
+	},
+	{
+		"op": "move",
+		"from": "/spec/versions/1/schema",
+		"path": "/spec/validation"
+	}
+]
