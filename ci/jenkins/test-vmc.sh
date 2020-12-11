@@ -299,7 +299,7 @@ function deliver_antrea {
     if [[ "$COVERAGE" == true ]]; then
         docker save -o antrea-ubuntu-coverage.tar antrea/antrea-ubuntu-coverage:${DOCKER_IMG_VERSION}
     else
-        docker save -o antrea-ubuntu.tar antrea/antrea-ubuntu:${DOCKER_IMG_VERSION}
+        docker save -o antrea-ubuntu.tar projects.registry.vmware.com/antrea/antrea-ubuntu:${DOCKER_IMG_VERSION}
     fi
 
     kubectl get nodes -o wide --no-headers=true | awk '$3 == "master" {print $6}' | while read master_ip; do

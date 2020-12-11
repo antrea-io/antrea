@@ -113,7 +113,7 @@ $KUSTOMIZE edit add base $BASE
 find ../../patches/$MODE -name \*.yml -exec cp {} . \;
 
 if [ "$MODE" == "dev" ]; then
-    $KUSTOMIZE edit set image antrea-windows=antrea/antrea-windows:latest
+    $KUSTOMIZE edit set image antrea-windows=projects.registry.vmware.com/antrea/antrea-windows:latest
     $KUSTOMIZE edit add patch imagePullPolicy.yml
 fi
 

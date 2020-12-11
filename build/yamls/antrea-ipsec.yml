@@ -1351,7 +1351,7 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: spec.nodeName
-        image: antrea/antrea-ubuntu:latest
+        image: projects.registry.vmware.com/antrea/antrea-ubuntu:latest
         imagePullPolicy: IfNotPresent
         name: antrea-controller
         ports:
@@ -1528,7 +1528,7 @@ spec:
             secretKeyRef:
               key: psk
               name: antrea-ipsec
-        image: antrea/antrea-ubuntu:latest
+        image: projects.registry.vmware.com/antrea/antrea-ubuntu:latest
         imagePullPolicy: IfNotPresent
         livenessProbe:
           exec:
@@ -1589,7 +1589,7 @@ spec:
         - --log_file_max_num=4
         command:
         - start_ovs
-        image: antrea/antrea-ubuntu:latest
+        image: projects.registry.vmware.com/antrea/antrea-ubuntu:latest
         imagePullPolicy: IfNotPresent
         livenessProbe:
           exec:
@@ -1621,7 +1621,7 @@ spec:
           subPath: openvswitch
       - command:
         - start_ovs_ipsec
-        image: antrea/antrea-ubuntu:latest
+        image: projects.registry.vmware.com/antrea/antrea-ubuntu:latest
         imagePullPolicy: IfNotPresent
         livenessProbe:
           exec:
@@ -1653,7 +1653,7 @@ spec:
       initContainers:
       - command:
         - install_cni
-        image: antrea/antrea-ubuntu:latest
+        image: projects.registry.vmware.com/antrea/antrea-ubuntu:latest
         imagePullPolicy: IfNotPresent
         name: install-cni
         resources:

@@ -114,7 +114,7 @@ $KUSTOMIZE edit add base $BASE
 find ../../patches/$MODE -name \*.yml -exec cp {} . \;
 
 if [ "$MODE" == "dev" ]; then
-    $KUSTOMIZE edit set image octant-antrea=antrea/octant-antrea-ubuntu:latest
+    $KUSTOMIZE edit set image octant-antrea=projects.registry.vmware.com/antrea/octant-antrea-ubuntu:latest
     $KUSTOMIZE edit add patch imagePullPolicy.yml
 fi
 

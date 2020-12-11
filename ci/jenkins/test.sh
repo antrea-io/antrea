@@ -197,7 +197,7 @@ function deliver_antrea_windows {
     export_govc_env_var
 
     cp -f build/yamls/*.yml $WORKDIR
-    docker save -o antrea-ubuntu.tar antrea/antrea-ubuntu:latest
+    docker save -o antrea-ubuntu.tar projects.registry.vmware.com/antrea/antrea-ubuntu:latest
 
     echo "===== Deliver Antrea to Linux nodes ====="
     kubectl get nodes -o wide --no-headers=true | awk '$3 != "master" && $1 !~ /win/ {print $6}' | while read IP; do
@@ -240,7 +240,7 @@ function deliver_antrea_windows {
         elif [ "$TESTCASE" == "windows-conformance" ]; then
             if ! (test -f antrea-windows.tar.gz); then
                 ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "docker pull ${DOCKER_REGISTRY}/antrea/golang:1.15 && docker tag ${DOCKER_REGISTRY}/antrea/golang:1.15 golang:1.15"
-                ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "rm -rf antrea && git clone ${ghprbAuthorRepoGitUrl} antrea && cd antrea && git checkout $GIT_BRANCH && sed -i \"s|build/images/Dockerfile.build.windows .|build/images/Dockerfile.build.windows . --network host|g\" Makefile && DOCKER_REGISTRY=${DOCKER_REGISTRY} make build-windows && docker save -o antrea-windows.tar antrea/antrea-windows:latest && gzip -f antrea-windows.tar" || true
+                ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "rm -rf antrea && git clone ${ghprbAuthorRepoGitUrl} antrea && cd antrea && git checkout $GIT_BRANCH && sed -i \"s|build/images/Dockerfile.build.windows .|build/images/Dockerfile.build.windows . --network host|g\" Makefile && DOCKER_REGISTRY=${DOCKER_REGISTRY} make build-windows && docker save -o antrea-windows.tar projects.registry.vmware.com/antrea/antrea-windows:latest && gzip -f antrea-windows.tar" || true
                 for i in `seq 2`; do
                     timeout 2m scp -o StrictHostKeyChecking=no -T Administrator@${IP}:antrea/antrea-windows.tar.gz . && break
                 done
@@ -297,7 +297,7 @@ function deliver_antrea {
     done
 
     cp -f build/yamls/*.yml $WORKDIR
-    docker save -o antrea-ubuntu.tar antrea/antrea-ubuntu:latest
+    docker save -o antrea-ubuntu.tar projects.registry.vmware.com/antrea/antrea-ubuntu:latest
 
     kubectl get nodes -o wide --no-headers=true | awk '$3 != "master" {print $6}' | while read IP; do
         rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no" antrea-ubuntu.tar jenkins@[${IP}]:${WORKDIR}/antrea-ubuntu.tar

@@ -99,7 +99,7 @@ if $coverage; then
     manifest_args="$manifest_args --coverage"
     COMMON_IMAGES_LIST+=("antrea/antrea-ubuntu-coverage:latest")
 else
-    COMMON_IMAGES_LIST+=("antrea/antrea-ubuntu:latest")
+    COMMON_IMAGES_LIST+=("projects.registry.vmware.com/antrea/antrea-ubuntu:latest")
 fi
 printf -v COMMON_IMAGES "%s " "${COMMON_IMAGES_LIST[@]}"
 

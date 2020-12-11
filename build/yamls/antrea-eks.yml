@@ -1337,7 +1337,7 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: spec.nodeName
-        image: antrea/antrea-ubuntu:latest
+        image: projects.registry.vmware.com/antrea/antrea-ubuntu:latest
         imagePullPolicy: IfNotPresent
         name: antrea-controller
         ports:
@@ -1511,7 +1511,7 @@ spec:
               fieldPath: spec.nodeName
         - name: ANTREA_CLOUD_EKS
           value: "true"
-        image: antrea/antrea-ubuntu:latest
+        image: projects.registry.vmware.com/antrea/antrea-ubuntu:latest
         imagePullPolicy: IfNotPresent
         livenessProbe:
           exec:
@@ -1572,7 +1572,7 @@ spec:
         - --log_file_max_num=4
         command:
         - start_ovs
-        image: antrea/antrea-ubuntu:latest
+        image: projects.registry.vmware.com/antrea/antrea-ubuntu:latest
         imagePullPolicy: IfNotPresent
         livenessProbe:
           exec:
@@ -1606,7 +1606,7 @@ spec:
       initContainers:
       - command:
         - install_cni_chaining
-        image: antrea/antrea-ubuntu:latest
+        image: projects.registry.vmware.com/antrea/antrea-ubuntu:latest
         imagePullPolicy: IfNotPresent
         name: install-cni
         resources:

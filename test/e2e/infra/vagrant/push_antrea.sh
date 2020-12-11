@@ -24,7 +24,7 @@ done
 
 : "${NUM_WORKERS:=1}"
 SAVED_IMG=/tmp/antrea-ubuntu.tar
-IMG_NAME=antrea/antrea-ubuntu:latest
+IMG_NAME=projects.registry.vmware.com/antrea/antrea-ubuntu:latest
 
 THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 

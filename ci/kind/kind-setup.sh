@@ -19,7 +19,7 @@
 # and docker bridge network connecting to worker Node.
 
 CLUSTER_NAME=""
-ANTREA_IMAGE="antrea/antrea-ubuntu:latest"
+ANTREA_IMAGE="projects.registry.vmware.com/antrea/antrea-ubuntu:latest"
 IMAGES=$ANTREA_IMAGE
 ANTREA_CNI=true
 POD_CIDR="10.10.0.0/16"
