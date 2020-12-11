@@ -50,7 +50,7 @@ spec:
           value: "true"
         - name: KUBECONFIG
           value: /kube/admin.conf
-        image: antrea/octant-antrea-ubuntu:latest
+        image: projects.registry.vmware.com/antrea/octant-antrea-ubuntu:latest
         imagePullPolicy: IfNotPresent
         name: antrea-octant
         ports:

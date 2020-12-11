@@ -252,6 +252,7 @@ ubuntu:
 	@echo "===> Building antrea/antrea-ubuntu Docker image <==="
 	docker build --pull -t antrea/antrea-ubuntu:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.ubuntu .
 	docker tag antrea/antrea-ubuntu:$(DOCKER_IMG_VERSION) antrea/antrea-ubuntu
+	docker tag antrea/antrea-ubuntu:$(DOCKER_IMG_VERSION) projects.registry.vmware.com/antrea/antrea-ubuntu
 
 # Build bins in a golang container, and build the antrea-ubuntu Docker image.
 .PHONY: build-ubuntu
@@ -263,6 +264,7 @@ else
 	docker build --pull -t antrea/antrea-ubuntu:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.build.ubuntu .
 endif
 	docker tag antrea/antrea-ubuntu:$(DOCKER_IMG_VERSION) antrea/antrea-ubuntu
+	docker tag antrea/antrea-ubuntu:$(DOCKER_IMG_VERSION) projects.registry.vmware.com/antrea/antrea-ubuntu
 
 .PHONY: build-windows
 build-windows:
@@ -273,6 +275,7 @@ else
 	docker build --pull -t antrea/antrea-windows:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.build.windows .
 endif
 	docker tag antrea/antrea-windows:$(DOCKER_IMG_VERSION) antrea/antrea-windows
+	docker tag antrea/antrea-windows:$(DOCKER_IMG_VERSION) projects.registry.vmware.com/antrea/antrea-windows
 
 .PHONY: build-ubuntu-coverage
 build-ubuntu-coverage:
@@ -283,6 +286,7 @@ else
 	docker build --pull -t antrea/antrea-ubuntu-coverage:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.build.coverage .
 endif
 	docker tag antrea/antrea-ubuntu-coverage:$(DOCKER_IMG_VERSION) antrea/antrea-ubuntu-coverage
+	docker tag antrea/antrea-ubuntu-coverage:$(DOCKER_IMG_VERSION) projects.registry.vmware.com/antrea/antrea-ubuntu-coverage
 
 .PHONY: manifest
 manifest:
@@ -305,6 +309,7 @@ octant-antrea-ubuntu:
 	@echo "===> Building antrea/octant-antrea-ubuntu Docker image <==="
 	docker build --pull -t antrea/octant-antrea-ubuntu:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.octant.ubuntu .
 	docker tag antrea/octant-antrea-ubuntu:$(DOCKER_IMG_VERSION) antrea/octant-antrea-ubuntu
+	docker tag antrea/octant-antrea-ubuntu:$(DOCKER_IMG_VERSION) projects.registry.vmware.com/antrea/octant-antrea-ubuntu
 
 .PHONY: verify
 verify:

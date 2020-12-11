@@ -353,7 +353,11 @@ $KUSTOMIZE edit add base $BASE
 find ../../patches/$MODE -name \*.yml -exec cp {} . \;
 
 if [ "$MODE" == "dev" ]; then
-    $KUSTOMIZE edit set image antrea=antrea/antrea-ubuntu:latest
+    if $COVERAGE; then
+        $KUSTOMIZE edit set image antrea=antrea/antrea-ubuntu-coverage:latest
+    else
+        $KUSTOMIZE edit set image antrea=projects.registry.vmware.com/antrea/antrea-ubuntu:latest
+    fi
     $KUSTOMIZE edit add patch agentImagePullPolicy.yml
     $KUSTOMIZE edit add patch controllerImagePullPolicy.yml
     if $VERBOSE_LOG; then
