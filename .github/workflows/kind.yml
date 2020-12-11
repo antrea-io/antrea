@@ -338,7 +338,7 @@ jobs:
     - uses: actions/checkout@v2
     - run: make
     - name: Save Antrea image to tarball
-      run:  docker save -o antrea-ubuntu.tar antrea/antrea-ubuntu:latest
+      run:  docker save -o antrea-ubuntu.tar projects.registry.vmware.com/antrea/antrea-ubuntu:latest
     - name: Upload Antrea image for subsequent jobs
       uses: actions/upload-artifact@v2
       with:

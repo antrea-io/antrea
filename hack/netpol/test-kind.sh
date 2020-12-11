@@ -14,7 +14,7 @@ echo "===> Creating Kind cluster <==="
 
 kind create cluster --config $KIND_CONFIG
 kind get nodes | xargs $ROOT_DIR/hack/kind-fix-networking.sh
-kind load docker-image antrea/antrea-ubuntu:latest
+kind load docker-image projects.registry.vmware.com/antrea/antrea-ubuntu:latest
 kind load docker-image antrea/netpol:latest
 # pre-load the test container image on all the Nodes
 docker pull antrea/netpol-test

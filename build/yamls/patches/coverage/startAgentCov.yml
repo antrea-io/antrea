@@ -12,6 +12,3 @@ spec:
       - name: antrea-agent
         command: ["/bin/sh"]
         args: ["-c", "sleep 2; antrea-agent-coverage -test.run=TestBincoverRunMain -test.coverprofile=antrea-agent.cov.out -args-file=/agent-arg-file; while true; do sleep 5 & wait $!; done"]
-        image: antrea/antrea-ubuntu-coverage:latest
-      - name: antrea-ovs
-        image: antrea/antrea-ubuntu-coverage:latest
