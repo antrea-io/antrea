@@ -37,6 +37,7 @@ function print_usage {
 
 TESTBED_CMD=$(dirname $0)"/kind-setup.sh"
 YML_CMD=$(dirname $0)"/../../hack/generate-manifest.sh"
+FLOWAGGREGATOR_YML_CMD=$(dirname $0)"/../../hack/generate-manifest-flow-aggregator.sh"
 
 function quit {
   if [[ $? != 0 ]]; then
@@ -115,6 +116,7 @@ function run_test {
   else
       $YML_CMD --kind --encap-mode $current_mode $manifest_args | docker exec -i kind-control-plane dd of=/root/antrea.yml
   fi
+  $FLOWAGGREGATOR_YML_CMD | docker exec -i kind-control-plane dd of=/root/flow-aggregator.yml
   sleep 1
   if $coverage; then
       go test -v -timeout=35m github.com/vmware-tanzu/antrea/test/e2e -provider=kind --logs-export-dir=$ANTREA_LOG_DIR --coverage --coverage-dir $ANTREA_COV_DIR

@@ -16,7 +16,6 @@ package e2e
 
 import (
 	"fmt"
-	"net"
 	"os"
 	"path/filepath"
 	"sync"
@@ -130,42 +129,38 @@ func setupTest(tb testing.TB) (*TestData, error) {
 }
 
 func setupTestWithIPFIXCollector(tb testing.TB) (*TestData, error, bool) {
-	data := &TestData{}
+	// TODO: remove hardcoding to IPv4 after flow aggregator supports IPv6
 	isIPv6 := false
-	if err := data.setupLogDirectoryForTest(tb.Name()); err != nil {
-		tb.Errorf("Error creating logs directory '%s': %v", data.logsDirForTestCase, err)
-		return nil, err, isIPv6
-	}
-	tb.Logf("Creating K8s clientset")
-	if err := data.createClient(); err != nil {
+	if err := testData.setupLogDirectoryForTest(tb.Name()); err != nil {
+		tb.Errorf("Error creating logs directory '%s': %v", testData.logsDirForTestCase, err)
 		return nil, err, isIPv6
 	}
 	tb.Logf("Creating '%s' K8s Namespace", testNamespace)
-	if err := data.createTestNamespace(); err != nil {
+	if err := testData.createTestNamespace(); err != nil {
 		return nil, err, isIPv6
 	}
 	// Create pod using ipfix collector image
-	if err := data.createPodOnNode("ipfix-collector", "", ipfixCollectorImage, nil, nil, nil, nil, true, nil); err != nil {
+	if err := testData.createPodOnNode("ipfix-collector", "", ipfixCollectorImage, nil, nil, nil, nil, true, nil); err != nil {
 		tb.Errorf("Error when creating the ipfix collector Pod: %v", err)
 	}
-	ipfixCollectorIP, err := data.podWaitForIPs(defaultTimeout, "ipfix-collector", testNamespace)
+	ipfixCollectorIP, err := testData.podWaitForIPs(defaultTimeout, "ipfix-collector", testNamespace)
 	if err != nil || len(ipfixCollectorIP.ipStrings) == 0 {
 		tb.Errorf("Error when waiting to get ipfix collector Pod IP: %v", err)
 	}
-	tb.Logf("Applying Antrea YAML with ipfix collector address")
-	ipStr := ipfixCollectorIP.ipStrings[0]
-	if net.ParseIP(ipStr).To4() == nil {
-		ipStr = fmt.Sprintf("[%s]", ipStr)
-		isIPv6 = true
+	ipStr := ipfixCollectorIP.ipv4.String()
+	tb.Logf("Applying flow aggregator YAML with ipfix collector address: %s", ipStr)
+	if err := testData.deployFlowAggregator(fmt.Sprintf("%s:%s:tcp", ipStr, ipfixCollectorPort)); err != nil {
+		return testData, err, isIPv6
 	}
-	if err := data.deployAntreaFlowExporter(fmt.Sprintf("%s:%s:tcp", ipStr, ipfixCollectorPort)); err != nil {
-		return data, err, isIPv6
+	tb.Logf("Deploying flow exporter")
+	if err := testData.deployAntreaFlowExporter(""); err != nil {
+		return testData, err, isIPv6
 	}
 	tb.Logf("Checking CoreDNS deployment")
-	if err := data.checkCoreDNSPods(defaultTimeout); err != nil {
-		return data, err, isIPv6
+	if err := testData.checkCoreDNSPods(defaultTimeout); err != nil {
+		return testData, err, isIPv6
 	}
-	return data, nil, isIPv6
+	return testData, nil, isIPv6
 }
 
 func exportLogs(tb testing.TB, data *TestData, logsSubDir string, writeNodeLogs bool) {
@@ -284,6 +279,13 @@ func exportLogs(tb testing.TB, data *TestData, logsSubDir string, writeNodeLogs 
 		return nil
 	}); err != nil {
 		tb.Logf("Error when exporting kubelet logs: %v", err)
+	}
+}
+
+func teardownFlowAggregator(tb testing.TB, data *TestData) {
+	tb.Logf("Deleting '%s' K8s Namespace", flowAggregatorNamespace)
+	if err := data.deleteNamespace(flowAggregatorNamespace, defaultTimeout); err != nil {
+		tb.Logf("Error when tearing down flow aggregator: %v", err)
 	}
 }
 
