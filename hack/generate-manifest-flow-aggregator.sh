@@ -113,7 +113,7 @@ $KUSTOMIZE edit add base $BASE
 find ../../patches/$MODE -name \*.yml -exec cp {} . \;
 
 if [ "$MODE" == "dev" ]; then
-    $KUSTOMIZE edit set image flow-aggregator=antrea/flow-aggregator:latest
+    $KUSTOMIZE edit set image flow-aggregator=projects.registry.vmware.com/antrea/flow-aggregator:latest
     $KUSTOMIZE edit add patch imagePullPolicy.yml
 fi
 

@@ -61,7 +61,7 @@ spec:
         - --v=0
         command:
         - flow-aggregator
-        image: antrea/flow-aggregator
+        image: projects.registry.vmware.com/antrea/flow-aggregator:latest
         imagePullPolicy: IfNotPresent
         name: flow-aggregator
         ports:
