@@ -29,7 +29,7 @@ RUN go get k8s.io/code-generator/cmd/client-gen@kubernetes-$K8S_VERSION && \
     go get k8s.io/kube-openapi/cmd/openapi-gen@$KUBEOPENAPI_VERSION && \
     go get k8s.io/code-generator/cmd/go-to-protobuf@kubernetes-$K8S_VERSION && \
     go get k8s.io/code-generator/cmd/go-to-protobuf/protoc-gen-gogo@kubernetes-$K8S_VERSION && \
-    go get github.com/golang/mock/mockgen@1.3.1 && \
+    go get github.com/golang/mock/mockgen@v1.4.4 && \
     go get github.com/golang/protobuf/protoc-gen-go@v1.3.2 && \
     go get golang.org/x/tools/cmd/goimports
 
