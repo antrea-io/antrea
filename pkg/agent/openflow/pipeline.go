@@ -30,6 +30,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow/cookie"
 	"github.com/vmware-tanzu/antrea/pkg/agent/types"
 	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
+	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsctl"
 	"github.com/vmware-tanzu/antrea/third_party/proxy"
 )
 
@@ -336,6 +337,8 @@ type client struct {
 	packetInHandlers map[uint8]map[string]PacketInHandler
 	// Supported IP Protocols (IP or IPv6) on the current Node.
 	ipProtocols []binding.Protocol
+	// ovsctlClient is the interface for executing OVS "ovs-ofctl" and "ovs-appctl" commands.
+	ovsctlClient ovsctl.OVSCtlClient
 }
 
 func (c *client) GetTunnelVirtualMAC() net.HardwareAddr {
@@ -1834,6 +1837,7 @@ func NewClient(bridgeName, mgmtAddr string, enableProxy, enableAntreaPolicy bool
 		groupCache:               sync.Map{},
 		globalConjMatchFlowCache: map[string]*conjMatchFlowContext{},
 		packetInHandlers:         map[uint8]map[string]PacketInHandler{},
+		ovsctlClient:             ovsctl.NewClient(bridgeName),
 	}
 	c.ofEntryOperations = c
 	c.enableProxy = enableProxy
