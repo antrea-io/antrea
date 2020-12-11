@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package main under directory cmd parses and validates user input,
-// instantiates and initializes objects imported from pkg, and runs
-// the process.
+// The simulator binary is responsible to run simulated nodes for antrea agent.
+// It watches NetworkPolicies, AddressGroups and AppliedToGroups from antrea controller
+// and prints the events of these resources to log.
 package main
 
 import (

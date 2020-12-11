@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package main under directory cmd parses and validates user input,
-// instantiates and initializes objects imported from pkg, and runs
-// the process.
+// The simulator binary is responsible to run simulated nodes for antrea agent.
+// It watches NetworkPolicies, AddressGroups and AppliedToGroups from antrea controller
+// and prints the events of these resources to log.
 package main
 
 import (
@@ -26,49 +26,19 @@ import (
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/watch"
-	clientset "k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
 	componentbaseconfig "k8s.io/component-base/config"
 	"k8s.io/klog"
-	aggregatorclientset "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent"
-	crdclientset "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned"
+	"github.com/vmware-tanzu/antrea/pkg/k8s"
 	"github.com/vmware-tanzu/antrea/pkg/signals"
 	"github.com/vmware-tanzu/antrea/pkg/util/env"
 	"github.com/vmware-tanzu/antrea/pkg/version"
 )
 
-func createClientSet(kubeConfig *rest.Config) (clientset.Interface, aggregatorclientset.Interface, crdclientset.Interface, error) {
-	var err error
-	if kubeConfig == nil {
-		klog.Infof("kubeConfig is not specified, will fallback to incluster")
-		kubeConfig, err = rest.InClusterConfig()
-		if err != nil {
-			klog.Errorf("Failed to get incluster config: %s", err.Error())
-			return nil, nil, nil, err
-		}
-	}
-	client, err := clientset.NewForConfig(kubeConfig)
-	if err != nil {
-		klog.Errorf("Failed to create clientset: %s", err.Error())
-		return nil, nil, nil, err
-	}
-	aggregatorClient, err := aggregatorclientset.NewForConfig(kubeConfig)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	// Create client for crd operations
-	crdClient, err := crdclientset.NewForConfig(kubeConfig)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	return client, aggregatorClient, crdClient, nil
-}
-
 func run() error {
 	klog.Infof("Starting Antrea agent simulator (version %s)", version.GetFullVersion())
-	k8sClient, _, _, err := createClientSet(nil)
+	k8sClient, _, _, err := k8s.CreateClients(componentbaseconfig.ClientConnectionConfiguration{})
 	if err != nil {
 		return fmt.Errorf("error creating K8s clients: %v", err)
 	}
@@ -111,7 +81,7 @@ func run() error {
 	options := metav1.ListOptions{
 		FieldSelector: fields.OneTermEqualSelector("nodeName", nodeName).String(),
 	}
-	klog.Infof("nodename: %s", nodeName)
+	klog.Infof("Nodename: %s", nodeName)
 
 	// Wrapper watcher to call watch
 	networkPolicyControllerWatcher := &watchWrapper{
