@@ -145,12 +145,12 @@ func setupTestWithIPFIXCollector(tb testing.TB) (*TestData, error, bool) {
 		return nil, err, isIPv6
 	}
 	// Create pod using ipfix collector image
-	if err := data.createPodOnNode("ipfix-collector", masterNodeName(), ipfixCollectorImage, nil, nil, nil, nil, true, nil); err != nil {
-		tb.Fatalf("Error when creating the ipfix collector Pod: %v", err)
+	if err := data.createPodOnNode("ipfix-collector", "", ipfixCollectorImage, nil, nil, nil, nil, true, nil); err != nil {
+		tb.Errorf("Error when creating the ipfix collector Pod: %v", err)
 	}
 	ipfixCollectorIP, err := data.podWaitForIPs(defaultTimeout, "ipfix-collector", testNamespace)
 	if err != nil || len(ipfixCollectorIP.ipStrings) == 0 {
-		tb.Fatalf("Error when waiting to get ipfix collector Pod IP: %v", err)
+		tb.Errorf("Error when waiting to get ipfix collector Pod IP: %v", err)
 	}
 	tb.Logf("Applying Antrea YAML with ipfix collector address")
 	ipStr := ipfixCollectorIP.ipStrings[0]
