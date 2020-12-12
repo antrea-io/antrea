@@ -777,7 +777,7 @@ func (c *client) SendTraceflowPacket(
 	case 6:
 		packetOutBuilder = packetOutBuilder.SetIPProtocol(binding.ProtocolTCP)
 		if TCPSrcPort == 0 {
-			// #nosec G404: random number generator not used for security purposes
+			// #nosec G404: random number generator not used for security purposes.
 			TCPSrcPort = uint16(rand.Uint32())
 		}
 		packetOutBuilder = packetOutBuilder.SetTCPSrcPort(TCPSrcPort)
@@ -810,7 +810,7 @@ func (c *client) InstallTraceflowFlows(dataplaneTag uint8) error {
 	}
 	c.conjMatchFlowLock.Lock()
 	defer c.conjMatchFlowLock.Unlock()
-	// Copy default drop rules
+	// Copy default drop rules.
 	for _, ctx := range c.globalConjMatchFlowCache {
 		if ctx.dropFlow != nil {
 			copyFlowBuilder := ctx.dropFlow.CopyToBuilder(priorityNormal+2, false)
@@ -824,16 +824,27 @@ func (c *client) InstallTraceflowFlows(dataplaneTag uint8) error {
 					Done())
 		}
 	}
-	// Copy Antrea NetworkPolicy drop rules
+	// Copy Antrea NetworkPolicy drop rules.
 	for _, conj := range c.policyCache.List() {
 		for _, flow := range conj.(*policyRuleConjunction).metricFlows {
 			if flow.IsDropFlow() {
+				copyFlowBuilder := flow.CopyToBuilder(priorityNormal+2, false)
+				// Generate both IPv4 and IPv6 flows if the original drop flow doesn't match IP/IPv6.
+				// DSCP field is in IP/IPv6 headers so IP/IPv6 match is required in a flow.
+				if flow.FlowProtocol() == "" {
+					copyFlowBuilderIPv6 := flow.CopyToBuilder(priorityNormal+2, false)
+					copyFlowBuilderIPv6 = copyFlowBuilderIPv6.MatchProtocol(binding.ProtocolIPv6)
+					flows = append(
+						flows, copyFlowBuilderIPv6.MatchIPDscp(dataplaneTag).
+							SetHardTimeout(300).
+							Action().SendToController(uint8(PacketInReasonTF)).
+							Done())
+					copyFlowBuilder = copyFlowBuilder.MatchProtocol(binding.ProtocolIP)
+				}
 				flows = append(
-					flows,
-					flow.CopyToBuilder(priorityNormal+2, false).
-						MatchIPDscp(dataplaneTag).
+					flows, copyFlowBuilder.MatchIPDscp(dataplaneTag).
 						SetHardTimeout(300).
-						Action().SendToController(1).
+						Action().SendToController(uint8(PacketInReasonTF)).
 						Done())
 			}
 		}
