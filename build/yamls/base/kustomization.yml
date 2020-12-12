@@ -19,5 +19,16 @@ namespace: kube-system
 replicas:
 - count: 1
   name: antrea-controller
+configurations:
+- kustomizeconfig.yml
+vars:
+  # Not using a namereference configuration for this purposely: it does not seem
+  # like the right thing to do for something as generic as a environment
+  # variable's value
+  - name: ANTREA_CONFIG_MAP_NAME
+    objref:
+      kind: ConfigMap
+      name: antrea-config
+      apiVersion: v1
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization

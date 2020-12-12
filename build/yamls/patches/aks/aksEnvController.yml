@@ -1,0 +1,14 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: antrea-controller
+spec:
+  template:
+    spec:
+      containers:
+        - name: antrea-controller
+          env:
+            # Enables the Controller to report the distribution correctly when
+            # usage reporting is enabled.
+            - name: ANTREA_CLOUD_AKS
+              value: "true"

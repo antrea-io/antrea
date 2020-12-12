@@ -39,4 +39,10 @@ type ControllerConfig struct {
 	// antrea-controller container.
 	// Defaults to true.
 	SelfSignedCert bool `yaml:"selfSignedCert,omitempty"`
+	// Enable usage reporting (telemetry) to a centralized server location. This
+	// enables the Antrea maintainers to gather useful statistics about which
+	// versions of Antrea are the most used, which features are enabled, etc. All the
+	// data is fully anonymized and the collected data can be accessed publicly.
+	// Defaults to false
+	EnableUsageReporting bool `yaml:"enableUsageReporting,omitempty"`
 }

@@ -78,9 +78,18 @@ rules:
       - configmaps
     resourceNames:
       - antrea-ca
+      - antrea-cluster-uuid
     verbs:
       - get
       - update
+  - apiGroups:
+      - ""
+    resources:
+      - configmaps
+    resourceNames:
+      - antrea-config
+    verbs:
+      - get
   - apiGroups:
       - apiregistration.k8s.io
     resources:

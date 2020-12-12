@@ -41,6 +41,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/controller/querier"
 	"github.com/vmware-tanzu/antrea/pkg/controller/stats"
 	"github.com/vmware-tanzu/antrea/pkg/controller/traceflow"
+	"github.com/vmware-tanzu/antrea/pkg/controller/usagereport"
 	"github.com/vmware-tanzu/antrea/pkg/features"
 	"github.com/vmware-tanzu/antrea/pkg/k8s"
 	"github.com/vmware-tanzu/antrea/pkg/log"
@@ -140,6 +141,11 @@ func run(o *Options) error {
 		statsAggregator = stats.NewAggregator(networkPolicyInformer, cnpInformer, anpInformer)
 	}
 
+	var usageReporter *usagereport.Reporter
+	if o.config.EnableUsageReporting {
+		usageReporter = usagereport.NewReporter(client, nodeInformer, networkPolicyController)
+	}
+
 	apiServerConfig, err := createAPIServerConfig(o.config.ClientConnection.Kubeconfig,
 		client,
 		aggregatorClient,
@@ -197,6 +203,10 @@ func run(o *Options) error {
 
 	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
 		go networkPolicyStatusController.Run(stopCh)
+	}
+
+	if o.config.EnableUsageReporting {
+		go usageReporter.Run(stopCh)
 	}
 
 	<-stopCh

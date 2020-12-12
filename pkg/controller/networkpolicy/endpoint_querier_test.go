@@ -152,28 +152,14 @@ func makeControllerAndEndpointQuerier(objects ...runtime.Object) *endpointQuerie
 	_, c := newController(objects...)
 	c.heartbeatCh = make(chan heartbeat, 1000)
 	stopCh := make(chan struct{})
+	defer close(stopCh)
 	// create querier with stores inside controller
 	querier := NewEndpointQuerier(c.NetworkPolicyController)
 	// start informers and run controller
 	c.informerFactory.Start(stopCh)
 	go c.Run(stopCh)
 	// wait until computation is done, we assume it is done when no signal has been received on heartbeat channel for 3s.
-	idleTimeout := 3 * time.Second
-	timer := time.NewTimer(idleTimeout)
-	func() {
-		for {
-			timer.Reset(idleTimeout)
-			select {
-			case <-c.heartbeatCh:
-				continue
-			case <-timer.C:
-				close(stopCh)
-				return
-			}
-		}
-	}()
-	// block until computation complete
-	<-stopCh
+	c.waitForIdleController(3 * time.Second)
 	return querier
 }
 

@@ -21,6 +21,7 @@ USER root
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ipset \
     jq \
+    ca-certificates \
  && rm -rf /var/lib/apt/lists/*
 
 COPY --from=cni-binaries /opt/cni/bin /opt/cni/bin

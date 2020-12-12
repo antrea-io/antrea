@@ -1,0 +1,8 @@
+# this configuration adds namereference resolution for ConfigMaps in Role/ClusterRole
+namereference:
+- kind: ConfigMap
+  fieldSpecs:
+  - path: rules/resourceNames
+    kind: Role
+  - path: rules/resourceNames
+    kind: ClusterRole

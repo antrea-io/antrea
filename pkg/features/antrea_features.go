@@ -65,7 +65,7 @@ var (
 	// defaultAntreaFeatureGates consists of all known Antrea-specific feature keys.
 	// To add a new feature, define a key for it above and add it here. The features will be
 	// available throughout Antrea binaries.
-	defaultAntreaFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
+	DefaultAntreaFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
 		AntreaPolicy:       {Default: false, PreRelease: featuregate.Alpha},
 		AntreaProxy:        {Default: true, PreRelease: featuregate.Beta},
 		Traceflow:          {Default: true, PreRelease: featuregate.Beta},
@@ -76,23 +76,23 @@ var (
 	// UnsupportedFeaturesOnWindows records the features not supported on
 	// a Windows Node. Antrea Agent on a Windows Node checks the enabled
 	// features, and fails the startup if an unsupported feature is enabled.
-	// We do not define a separate defaultAntreaFeatureGates map for
+	// We do not define a separate DefaultAntreaFeatureGates map for
 	// Windows, because Agent code assumes all features are registered (
 	// FeatureGate.Enabled(feature) will panic if the feature is not added
 	// to the FeatureGate).
 	// In future, if a feature is supported on both Linux and Windows, but
 	// can have different FeatureSpecs between Linux and Windows, we should
-	// still define a separate defaultAntreaFeatureGates map for Windows.
+	// still define a separate DefaultAntreaFeatureGates map for Windows.
 	unsupportedFeaturesOnWindows = map[featuregate.Feature]struct{}{}
 )
 
 func init() {
-	runtime.Must(DefaultMutableFeatureGate.Add(defaultAntreaFeatureGates))
+	runtime.Must(DefaultMutableFeatureGate.Add(DefaultAntreaFeatureGates))
 }
 
 // SupportedOnWindows checks whether a feature is supported on a Windows Node.
 func SupportedOnWindows(feature featuregate.Feature) bool {
-	_, exists := defaultAntreaFeatureGates[feature]
+	_, exists := DefaultAntreaFeatureGates[feature]
 	if !exists {
 		return false
 	}

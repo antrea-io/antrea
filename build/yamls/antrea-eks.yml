@@ -1021,11 +1021,20 @@ rules:
   - ""
   resourceNames:
   - antrea-ca
+  - antrea-cluster-uuid
   resources:
   - configmaps
   verbs:
   - get
   - update
+- apiGroups:
+  - ""
+  resourceNames:
+  - antrea-config-m28mbc8bmc
+  resources:
+  - configmaps
+  verbs:
+  - get
 - apiGroups:
   - apiregistration.k8s.io
   resourceNames:
@@ -1150,6 +1159,14 @@ metadata:
   labels:
     app: antrea
   name: antrea-ca
+  namespace: kube-system
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  labels:
+    app: antrea
+  name: antrea-cluster-uuid
   namespace: kube-system
 ---
 apiVersion: v1
@@ -1311,12 +1328,18 @@ data:
     # And the Secret must be mounted to directory "/var/run/antrea/antrea-controller-tls" of the
     # antrea-controller container.
     #selfSignedCert: true
+
+    # Enable usage reporting (telemetry) to a centralized server location. This
+    # enables the Antrea maintainers to gather useful statistics about which
+    # versions of Antrea are the most used, which features are enabled, etc. All the
+    # data is fully anonymized and the collected data can be accessed publicly.
+    #enableUsageReporting: false
 kind: ConfigMap
 metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-gm7dcbm584
+  name: antrea-config-m28mbc8bmc
   namespace: kube-system
 ---
 apiVersion: v1
@@ -1370,6 +1393,8 @@ spec:
         command:
         - antrea-controller
         env:
+        - name: ANTREA_CLOUD_EKS
+          value: "true"
         - name: POD_NAME
           valueFrom:
             fieldRef:
@@ -1386,6 +1411,8 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: spec.serviceAccountName
+        - name: ANTREA_CONFIG_MAP_NAME
+          value: antrea-config-m28mbc8bmc
         image: projects.registry.vmware.com/antrea/antrea-ubuntu:latest
         imagePullPolicy: IfNotPresent
         name: antrea-controller
@@ -1427,7 +1454,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-gm7dcbm584
+          name: antrea-config-m28mbc8bmc
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -1694,7 +1721,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-gm7dcbm584
+          name: antrea-config-m28mbc8bmc
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d

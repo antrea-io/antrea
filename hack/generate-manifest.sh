@@ -307,6 +307,7 @@ if [[ $CLOUD == "GKE" ]]; then
     touch kustomization.yml
     $KUSTOMIZE edit add base $BASE
     $KUSTOMIZE edit add patch --path cniPath.yml
+    $KUSTOMIZE edit add patch --path gkeEnvController.yml
     BASE=../gke
     cd ..
 fi
@@ -316,8 +317,19 @@ if [[ $CLOUD == "EKS" ]]; then
     cp ../../patches/eks/*.yml .
     touch kustomization.yml
     $KUSTOMIZE edit add base $BASE
-    $KUSTOMIZE edit add patch --path eksEnv.yml
+    $KUSTOMIZE edit add patch --path eksEnvAgent.yml
+    $KUSTOMIZE edit add patch --path eksEnvController.yml
     BASE=../eks
+    cd ..
+fi
+
+if [[ $CLOUD == "AKS" ]]; then
+    mkdir aks && cd aks
+    cp ../../patches/aks/*.yml .
+    touch kustomization.yml
+    $KUSTOMIZE edit add base $BASE
+    $KUSTOMIZE edit add patch --path aksEnvController.yml
+    BASE=../aks
     cd ..
 fi
 
