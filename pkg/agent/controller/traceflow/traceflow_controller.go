@@ -368,7 +368,9 @@ func (c *Controller) injectPacket(tf *opsv1alpha1.Traceflow) error {
 	if tf.Spec.Packet.TransportHeader.TCP != nil {
 		srcTCPPort = uint16(tf.Spec.Packet.TransportHeader.TCP.SrcPort)
 		dstTCPPort = uint16(tf.Spec.Packet.TransportHeader.TCP.DstPort)
-		flagsTCP = uint8(tf.Spec.Packet.TransportHeader.TCP.Flags)
+		if tf.Spec.Packet.TransportHeader.TCP.Flags != 0 {
+			flagsTCP = uint8(tf.Spec.Packet.TransportHeader.TCP.Flags)
+		}
 	}
 	if tf.Spec.Packet.TransportHeader.UDP != nil {
 		srcUDPPort = uint16(tf.Spec.Packet.TransportHeader.UDP.SrcPort)
