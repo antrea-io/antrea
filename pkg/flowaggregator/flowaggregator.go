@@ -33,6 +33,7 @@ var (
 	ianaInfoElements = []string{
 		"flowStartSeconds",
 		"flowEndSeconds",
+		"flowEndReason",
 		"sourceTransportPort",
 		"destinationTransportPort",
 		"protocolIdentifier",
@@ -409,12 +410,12 @@ func (fa *flowAggregator) sendTemplateSet(templateSet ipfix.IPFIXSet) (int, erro
 	if err != nil {
 		return 0, fmt.Errorf("error when adding record to set, error: %v", err)
 	}
-	bytesSent, err := fa.exportingProcess.SendSet(templateSet.GetSet())
+	bytesSent, err := fa.exportingProcess.SendSet(templateSet)
 	return bytesSent, err
 }
 
 func (fa *flowAggregator) sendDataSet(dataSet ipfix.IPFIXSet) (int, error) {
-	sentBytes, err := fa.exportingProcess.SendSet(dataSet.GetSet())
+	sentBytes, err := fa.exportingProcess.SendSet(dataSet)
 	if err != nil {
 		return 0, fmt.Errorf("error when sending data set: %v", err)
 	}

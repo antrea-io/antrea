@@ -22,6 +22,7 @@ import (
 
 	"github.com/spf13/pflag"
 	"gopkg.in/yaml.v2"
+	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/apis"
@@ -32,17 +33,18 @@ import (
 )
 
 const (
-	defaultOVSBridge              = "br-int"
-	defaultHostGateway            = "antrea-gw0"
-	defaultHostProcPathPrefix     = "/host"
-	defaultServiceCIDR            = "10.96.0.0/12"
-	defaultTunnelType             = ovsconfig.GeneveTunnel
-	defaultFlowCollectorAddress   = "flow-aggregator.flow-aggregator.svc:4739:tcp"
-	defaultFlowCollectorTransport = "tcp"
-	defaultFlowCollectorPort      = "4739"
-	defaultFlowPollInterval       = 5 * time.Second
-	defaultFlowExportFrequency    = 12
-	defaultNPLPortRange           = "40000-41000"
+	defaultOVSBridge               = "br-int"
+	defaultHostGateway             = "antrea-gw0"
+	defaultHostProcPathPrefix      = "/host"
+	defaultServiceCIDR             = "10.96.0.0/12"
+	defaultTunnelType              = ovsconfig.GeneveTunnel
+	defaultFlowCollectorAddress    = "flow-aggregator.flow-aggregator.svc:4739:tcp"
+	defaultFlowCollectorTransport  = "tcp"
+	defaultFlowCollectorPort       = "4739"
+	defaultFlowPollInterval        = 5 * time.Second
+	defaultActiveFlowExportTimeout = 60 * time.Second
+	defaultIdleFlowExportTimeout   = 15 * time.Second
+	defaultNPLPortRange            = "40000-41000"
 )
 
 type Options struct {
@@ -56,6 +58,10 @@ type Options struct {
 	flowCollectorProto string
 	// Flow exporter poll interval
 	pollInterval time.Duration
+	// Active flow timeout to export records of active flows
+	activeFlowTimeout time.Duration
+	// Idle flow timeout to export records of inactive flows
+	idleFlowTimeout time.Duration
 }
 
 func newOptions() *Options {
@@ -195,9 +201,11 @@ func (o *Options) setDefaults() {
 		if o.config.FlowPollInterval == "" {
 			o.pollInterval = defaultFlowPollInterval
 		}
-		if o.config.FlowExportFrequency == 0 {
-			// This frequency value makes flow export interval as 60s by default.
-			o.config.FlowExportFrequency = defaultFlowExportFrequency
+		if o.config.ActiveFlowExportTimeout == "" {
+			o.activeFlowTimeout = defaultActiveFlowExportTimeout
+		}
+		if o.config.IdleFlowExportTimeout == "" {
+			o.idleFlowTimeout = defaultIdleFlowExportTimeout
 		}
 	}
 
@@ -224,6 +232,28 @@ func (o *Options) validateFlowExporterConfig() error {
 				return err
 			}
 			o.pollInterval = flowPollInterval
+		}
+		// Parse the given activeFlowExportTimeout config
+		if o.config.ActiveFlowExportTimeout != "" {
+			o.activeFlowTimeout, err = time.ParseDuration(o.config.ActiveFlowExportTimeout)
+			if err != nil {
+				return fmt.Errorf("ActiveFlowExportTimeout is not provided in right format")
+			}
+			if o.activeFlowTimeout < o.pollInterval {
+				o.activeFlowTimeout = o.pollInterval
+				klog.Warningf("ActiveFlowExportTimeout must be greater than or equal to FlowPollInterval")
+			}
+		}
+		// Parse the given inactiveFlowExportTimeout config
+		if o.config.IdleFlowExportTimeout != "" {
+			o.idleFlowTimeout, err = time.ParseDuration(o.config.IdleFlowExportTimeout)
+			if err != nil {
+				return fmt.Errorf("IdleFlowExportTimeout is not provided in right format")
+			}
+			if o.idleFlowTimeout < o.pollInterval {
+				o.activeFlowTimeout = o.pollInterval
+				klog.Warningf("IdleFlowExportTimeout must be greater than or equal to FlowPollInterval")
+			}
 		}
 	}
 	return nil

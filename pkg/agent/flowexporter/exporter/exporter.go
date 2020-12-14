@@ -23,10 +23,12 @@ import (
 	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
 	"github.com/vmware/go-ipfix/pkg/exporter"
 	ipfixregistry "github.com/vmware/go-ipfix/pkg/registry"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter"
+	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter/connections"
 	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter/flowrecords"
 	"github.com/vmware-tanzu/antrea/pkg/ipfix"
 	"github.com/vmware-tanzu/antrea/pkg/util/env"
@@ -36,6 +38,7 @@ var (
 	IANAInfoElementsCommon = []string{
 		"flowStartSeconds",
 		"flowEndSeconds",
+		"flowEndReason",
 		"sourceTransportPort",
 		"destinationTransportPort",
 		"protocolIdentifier",
@@ -71,22 +74,27 @@ var (
 	AntreaInfoElementsIPv6 = append(antreaInfoElementsCommon, []string{"destinationClusterIPv6"}...)
 )
 
+const (
+	idleTimeoutReason   = uint8(0x01)
+	activeTimeoutReason = uint8(0x02)
+)
+
 type flowExporter struct {
-	flowRecords               *flowrecords.FlowRecords
-	process                   ipfix.IPFIXExportingProcess
-	elementsListv4            []*ipfixentities.InfoElementWithValue
-	elementsListv6            []*ipfixentities.InfoElementWithValue
-	exportFrequency           uint
-	pollCycle                 uint
-	templateIDv4              uint16
-	templateIDv6              uint16
-	set                       ipfix.IPFIXSet
-	registry                  ipfix.IPFIXRegistry
-	v4Enabled                 bool
-	v6Enabled                 bool
-	collectorAddr             net.Addr
-	enableTLSToFlowAggregator bool
-	k8sClient                 kubernetes.Interface
+	connStore         connections.ConnectionStore
+	flowRecords       *flowrecords.FlowRecords
+	process           ipfix.IPFIXExportingProcess
+	elementsListv4    []*ipfixentities.InfoElementWithValue
+	elementsListv6    []*ipfixentities.InfoElementWithValue
+	ipfixSet          ipfix.IPFIXSet
+	numDataSetsSent   uint64 // used for unit tests.
+	templateIDv4      uint16
+	templateIDv6      uint16
+	registry          ipfix.IPFIXRegistry
+	v4Enabled         bool
+	v6Enabled         bool
+	exporterInput     exporter.ExporterInput
+	activeFlowTimeout time.Duration
+	idleFlowTimeout   time.Duration
 }
 
 func genObservationID() (uint32, error) {
@@ -99,195 +107,215 @@ func genObservationID() (uint32, error) {
 	return h.Sum32(), nil
 }
 
-func NewFlowExporter(records *flowrecords.FlowRecords, exportFrequency uint, enableTLSToFlowAggregator bool, v4Enabled bool, v6Enabled bool, k8sClient kubernetes.Interface) *flowExporter {
-	registry := ipfix.NewIPFIXRegistry()
-	registry.LoadRegistry()
-	return &flowExporter{
-		records,
-		nil,
-		nil,
-		nil,
-		exportFrequency,
-		0,
-		0,
-		0,
-		ipfix.NewSet(false),
-		registry,
-		v4Enabled,
-		v6Enabled,
-		nil,
-		enableTLSToFlowAggregator,
-		k8sClient,
-	}
-}
-
-// DoExport enables us to export flow records periodically at a given flow export frequency.
-func (exp *flowExporter) Export(collectorAddr string, collectorProto string, stopCh <-chan struct{}, pollDone <-chan struct{}) {
-	for {
-		select {
-		case <-stopCh:
-			return
-		case <-pollDone:
-			// Number of pollDone signals received or poll cycles should be equal to export frequency before starting
-			// the export cycle. This is necessary because IPFIX collector computes throughput based on flow records received interval.
-			exp.pollCycle++
-			if exp.pollCycle%exp.exportFrequency == 0 {
-				// Retry to connect to IPFIX collector if the exporting process gets reset
-				if exp.process == nil {
-					err := exp.initFlowExporter(collectorAddr, collectorProto)
-					if err != nil {
-						klog.Errorf("Error when initializing flow exporter: %v", err)
-						// There could be other errors while initializing flow exporter other than connecting to IPFIX collector,
-						// therefore closing the connection and resetting the process.
-						if exp.process != nil {
-							exp.process.CloseConnToCollector()
-							exp.process = nil
-						}
-						return
-					}
-				}
-				// Build and send flow records to IPFIX collector.
-				exp.flowRecords.BuildFlowRecords()
-				err := exp.sendFlowRecords()
-				if err != nil {
-					klog.Errorf("Error when sending flow records: %v", err)
-					// If there is an error when sending flow records because of intermittent connectivity, we reset the connection
-					// to IPFIX collector and retry in the next export cycle to reinitialize the connection and send flow records.
-					exp.process.CloseConnToCollector()
-					exp.process = nil
-					return
-				}
-
-				exp.pollCycle = 0
-				klog.V(2).Infof("Successfully exported IPFIX flow records")
-			}
-		}
-	}
-
-}
-
-func (exp *flowExporter) initFlowExporter(collectorAddr string, collectorProto string) error {
-	// Create IPFIX exporting expProcess, initialize registries and other related entities
-	obsID, err := genObservationID()
+func prepareExporterInputArgs(collectorAddr, collectorProto string, enableTLSToFlowAggregator bool, k8sClient kubernetes.Interface) (exporter.ExporterInput, error) {
+	expInput := exporter.ExporterInput{}
+	var err error
+	// Exporting process requires domain observation ID.
+	expInput.ObservationDomainID, err = genObservationID()
 	if err != nil {
-		return fmt.Errorf("cannot generate obsID for IPFIX ipfixexport: %v", err)
+		return expInput, err
 	}
 
-	var expInput exporter.ExporterInput
-	if exp.enableTLSToFlowAggregator {
+	if enableTLSToFlowAggregator {
 		// if CA certificate, client certificate and key do not exist during initialization,
 		// it will retry to obtain the credentials in next export cycle
-		caCert, err := getCACert(exp.k8sClient)
+		expInput.CACert, err = getCACert(k8sClient)
 		if err != nil {
-			return fmt.Errorf("cannot retrieve CA cert: %v", err)
+			return expInput, fmt.Errorf("cannot retrieve CA cert: %v", err)
 		}
-		clientCert, clientKey, err := getClientCertKey(exp.k8sClient)
+		expInput.ClientCert, expInput.ClientKey, err = getClientCertKey(k8sClient)
 		if err != nil {
-			return fmt.Errorf("cannot retrieve client cert and key: %v", err)
+			return expInput, fmt.Errorf("cannot retrieve client cert and key: %v", err)
 		}
-		// TLS transport does not need any tempRefTimeout, so sending 0.
-		expInput = exporter.ExporterInput{
-			CollectorAddress:    collectorAddr,
-			CollectorProtocol:   collectorProto,
-			ObservationDomainID: obsID,
-			TempRefTimeout:      0,
-			PathMTU:             0,
-			IsEncrypted:         true,
-			CACert:              caCert,
-			ClientCert:          clientCert,
-			ClientKey:           clientKey,
-		}
+		// TLS transport does not need any tempRefTimeout as it is applicable only
+		// for TCP transport, so sending 0.
+		expInput.TempRefTimeout = 0
+		expInput.IsEncrypted = true
 	} else if collectorProto == "tcp" {
 		// TCP transport does not need any tempRefTimeout, so sending 0.
 		// tempRefTimeout is the template refresh timeout, which specifies how often
 		// the exporting process should send the template again.
-		expInput = exporter.ExporterInput{
-			CollectorAddress:    collectorAddr,
-			CollectorProtocol:   collectorProto,
-			ObservationDomainID: obsID,
-			TempRefTimeout:      0,
-			PathMTU:             0,
-			IsEncrypted:         false,
-		}
+		expInput.TempRefTimeout = 0
+		expInput.IsEncrypted = false
 	} else {
 		// For UDP transport, hardcoding tempRefTimeout value as 1800s.
-		expInput = exporter.ExporterInput{
-			CollectorAddress:    collectorAddr,
-			CollectorProtocol:   collectorProto,
-			ObservationDomainID: obsID,
-			TempRefTimeout:      1800,
-			PathMTU:             0,
-			IsEncrypted:         false,
+		expInput.TempRefTimeout = 1800
+		expInput.IsEncrypted = false
+	}
+	expInput.CollectorAddress = collectorAddr
+	expInput.CollectorProtocol = collectorProto
+	expInput.PathMTU = 0
+
+	return expInput, nil
+}
+
+func NewFlowExporter(connStore connections.ConnectionStore, records *flowrecords.FlowRecords,
+	collectorAddr string, collectorProto string, activeFlowTimeout time.Duration, idleFlowTimeout time.Duration,
+	enableTLSToFlowAggregator bool, v4Enabled bool, v6Enabled bool, k8sClient kubernetes.Interface) (*flowExporter, error) {
+	// Initialize IPFIX registry
+	registry := ipfix.NewIPFIXRegistry()
+	registry.LoadRegistry()
+
+	// Prepare input args for IPFIX exporting process.
+	expInput, err := prepareExporterInputArgs(collectorAddr, collectorProto, enableTLSToFlowAggregator, k8sClient)
+	if err != nil {
+		return nil, err
+	}
+	return &flowExporter{
+		connStore:         connStore,
+		flowRecords:       records,
+		registry:          registry,
+		v4Enabled:         v4Enabled,
+		v6Enabled:         v6Enabled,
+		exporterInput:     expInput,
+		activeFlowTimeout: activeFlowTimeout,
+		idleFlowTimeout:   idleFlowTimeout,
+		ipfixSet:          ipfix.NewSet(false),
+	}, nil
+}
+
+// Run calls Export function periodically to check if flow records need to be exported
+// based on active flow and idle flow timeouts.
+func (exp *flowExporter) Run(stopCh <-chan struct{}) {
+	go wait.Until(exp.Export, time.Second, stopCh)
+
+	<-stopCh
+}
+
+func (exp *flowExporter) Export() {
+	// Retry to connect to IPFIX collector if the exporting process gets reset
+	if exp.process == nil {
+		err := exp.initFlowExporter()
+		if err != nil {
+			klog.Errorf("Error when initializing flow exporter: %v", err)
+			// There could be other errors while initializing flow exporter other than connecting to IPFIX collector,
+			// therefore closing the connection and resetting the process.
+			if exp.process != nil {
+				exp.process.CloseConnToCollector()
+				exp.process = nil
+			}
+			return
 		}
 	}
-	expProcess, err := ipfix.NewIPFIXExportingProcess(expInput)
+	// Send flow records to IPFIX collector.
+	err := exp.sendFlowRecords()
+	if err != nil {
+		klog.Errorf("Error when sending flow records: %v", err)
+		// If there is an error when sending flow records because of intermittent connectivity, we reset the connection
+		// to IPFIX collector and retry in the next export cycle to reinitialize the connection and send flow records.
+		exp.process.CloseConnToCollector()
+		exp.process = nil
+		return
+	}
+	klog.V(2).Infof("Successfully exported IPFIX flow records")
+}
+
+func (exp *flowExporter) initFlowExporter() error {
+	var err error
+	exp.process, err = ipfix.NewIPFIXExportingProcess(exp.exporterInput)
 	if err != nil {
 		return fmt.Errorf("error when starting exporter: %v", err)
 	}
-
-	exp.process = expProcess
 	if exp.v4Enabled {
-		templateID := expProcess.NewTemplateID()
+		templateID := exp.process.NewTemplateID()
 		exp.templateIDv4 = templateID
-		if err := exp.set.PrepareSet(ipfixentities.Template, exp.templateIDv4); err != nil {
-			return fmt.Errorf("error when preparing set: %v", err)
+		if err = exp.ipfixSet.PrepareSet(ipfixentities.Template, exp.templateIDv4); err != nil {
+			return err
 		}
-		sentBytes, err := exp.sendTemplateSet(exp.set, false)
-		exp.set.ResetSet()
+		sentBytes, err := exp.sendTemplateSet(exp.ipfixSet, false)
+		exp.ipfixSet.ResetSet()
 		if err != nil {
 			return err
 		}
+
 		klog.V(2).Infof("Initialized flow exporter for IPv4 flow records and sent %d bytes size of template record", sentBytes)
 	}
 	if exp.v6Enabled {
-		templateID := expProcess.NewTemplateID()
+		templateID := exp.process.NewTemplateID()
 		exp.templateIDv6 = templateID
-		if err := exp.set.PrepareSet(ipfixentities.Template, exp.templateIDv6); err != nil {
-			return fmt.Errorf("error when preparing set: %v", err)
+		if err = exp.ipfixSet.PrepareSet(ipfixentities.Template, exp.templateIDv6); err != nil {
+			return err
 		}
-		sentBytes, err := exp.sendTemplateSet(exp.set, true)
-		exp.set.ResetSet()
+		sentBytes, err := exp.sendTemplateSet(exp.ipfixSet, true)
+		exp.ipfixSet.ResetSet()
 		if err != nil {
 			return err
 		}
 		klog.V(2).Infof("Initialized flow exporter for IPv6 flow records and sent %d bytes size of template record", sentBytes)
 	}
-
 	return nil
 }
 
 func (exp *flowExporter) sendFlowRecords() error {
-	addAndSendFlowRecord := func(key flowexporter.ConnectionKey, record flowexporter.FlowRecord) error {
-		exp.set.ResetSet()
-		if record.IsIPv6 {
-			if err := exp.set.PrepareSet(ipfixentities.Data, exp.templateIDv6); err != nil {
-				return fmt.Errorf("error when preparing set: %v", err)
-			}
-			// TODO: more records per data set will be supported when go-ipfix supports size check when adding records
-			if err := exp.addRecordToSet(record); err != nil {
-				return err
-			}
-			if _, err := exp.sendDataSet(exp.set); err != nil {
-				return err
-			}
-		} else {
-			if err := exp.set.PrepareSet(ipfixentities.Data, exp.templateIDv4); err != nil {
-				return fmt.Errorf("error when preparing set: %v", err)
-			}
-			// TODO: more records per data set will be supported when go-ipfix supports size check when adding records
-			if err := exp.addRecordToSet(record); err != nil {
-				return err
-			}
-			if _, err := exp.sendDataSet(exp.set); err != nil {
-				return err
+	updateOrSendFlowRecord := func(key flowexporter.ConnectionKey, record flowexporter.FlowRecord) error {
+		recordNeedsSending := false
+		// We do not check for any timeout as the connection is still idle since
+		// the idleFlowTimeout was triggered.
+		if !record.IsActive {
+			return nil
+		}
+		// Send a flow record if the conditions for either timeout
+		// (activeFlowTimeout or idleFlowTimeout) are met. A flow is considered
+		// to be idle if its packet counts haven't changed since the last export.
+		if time.Since(record.LastExportTime) >= exp.idleFlowTimeout {
+			if ((record.Conn.OriginalPackets <= record.PrevPackets) && (record.Conn.ReversePackets <= record.PrevReversePackets)) || !record.Conn.IsPresent {
+				// Idle flow timeout
+				record.IsActive = false
+				recordNeedsSending = true
 			}
 		}
-		if err := exp.flowRecords.ValidateAndUpdateStats(key, record); err != nil {
-			return err
+		if time.Since(record.LastExportTime) >= exp.activeFlowTimeout {
+			// Active flow timeout
+			recordNeedsSending = true
+		}
+		if recordNeedsSending {
+			exp.ipfixSet.ResetSet()
+			if record.IsIPv6 {
+				if err := exp.ipfixSet.PrepareSet(ipfixentities.Data, exp.templateIDv6); err != nil {
+					return err
+				}
+				// TODO: more records per data set will be supported when go-ipfix supports size check when adding records
+				if err := exp.addRecordToSet(record); err != nil {
+					return err
+				}
+				if _, err := exp.sendDataSet(); err != nil {
+					return err
+				}
+				exp.numDataSetsSent = exp.numDataSetsSent + 1
+			} else {
+				if err := exp.ipfixSet.PrepareSet(ipfixentities.Data, exp.templateIDv4); err != nil {
+					return err
+				}
+				// TODO: more records per data set will be supported when go-ipfix supports size check when adding records
+				if err := exp.addRecordToSet(record); err != nil {
+					return err
+				}
+				if _, err := exp.sendDataSet(); err != nil {
+					return err
+				}
+				exp.numDataSetsSent = exp.numDataSetsSent + 1
+			}
+			// If the connection is not present in the conntrack table anymore,
+			// then we delete the connection in connection store and record store.
+			// Please note that our record cache policy is that we keep the record in
+			// the record map as long as the corresponding connection is present in
+			// the conntrack table.
+			if !record.Conn.IsPresent {
+				klog.V(2).Infof("Deleting the inactive connection with key: %v from both connection map and record map", key)
+				if err := exp.connStore.DeleteConnectionByKey(key); err != nil {
+					return err
+				}
+				if err := exp.flowRecords.DeleteFlowRecordWithoutLock(key); err != nil {
+					return err
+				}
+			} else {
+				exp.flowRecords.ValidateAndUpdateStats(key, record)
+			}
 		}
 		return nil
 	}
-	err := exp.flowRecords.ForAllFlowRecordsDo(addAndSendFlowRecord)
+
+	err := exp.flowRecords.ForAllFlowRecordsDo(updateOrSendFlowRecord)
 	if err != nil {
 		return fmt.Errorf("error when iterating flow records: %v", err)
 	}
@@ -335,7 +363,7 @@ func (exp *flowExporter) sendTemplateSet(templateSet ipfix.IPFIXSet, isIPv6 bool
 		return 0, fmt.Errorf("error in adding record to template set: %v", err)
 	}
 
-	sentBytes, err := exp.process.SendSet(templateSet.GetSet())
+	sentBytes, err := exp.process.SendSet(templateSet)
 	if err != nil {
 		return 0, fmt.Errorf("error in IPFIX exporting process when sending template record: %v", err)
 	}
@@ -363,7 +391,13 @@ func (exp *flowExporter) addRecordToSet(record flowexporter.FlowRecord) error {
 		case "flowStartSeconds":
 			ie.Value = uint32(record.Conn.StartTime.Unix())
 		case "flowEndSeconds":
-			ie.Value = uint32(time.Now().Unix())
+			ie.Value = uint32(record.Conn.StopTime.Unix())
+		case "flowEndReason":
+			if record.IsActive {
+				ie.Value = activeTimeoutReason
+			} else {
+				ie.Value = idleTimeoutReason
+			}
 		case "sourceIPv4Address":
 			ie.Value = record.Conn.TupleOrig.SourceAddress
 		case "destinationIPv4Address":
@@ -487,15 +521,15 @@ func (exp *flowExporter) addRecordToSet(record flowexporter.FlowRecord) error {
 	if record.IsIPv6 {
 		templateID = exp.templateIDv6
 	}
-	err := exp.set.AddRecord(eL, templateID)
+	err := exp.ipfixSet.AddRecord(eL, templateID)
 	if err != nil {
 		return fmt.Errorf("error in adding record to data set: %v", err)
 	}
 	return nil
 }
 
-func (exp *flowExporter) sendDataSet(dataSet ipfix.IPFIXSet) (int, error) {
-	sentBytes, err := exp.process.SendSet(dataSet.GetSet())
+func (exp *flowExporter) sendDataSet() (int, error) {
+	sentBytes, err := exp.process.SendSet(exp.ipfixSet)
 	if err != nil {
 		return 0, fmt.Errorf("error when sending data set: %v", err)
 	}

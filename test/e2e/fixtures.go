@@ -146,7 +146,6 @@ func setupTestWithIPFIXCollector(tb testing.TB) (*TestData, error, bool) {
 	if _, err := setupTest(tb); err != nil {
 		return nil, err, isIPv6
 	}
-
 	// Create pod using ipfix collector image
 	if err := testData.createPodOnNode("ipfix-collector", "", ipfixCollectorImage, nil, nil, nil, nil, true, nil); err != nil {
 		tb.Errorf("Error when creating the ipfix collector Pod: %v", err)

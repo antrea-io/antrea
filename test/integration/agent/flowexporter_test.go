@@ -74,7 +74,6 @@ func createConnsForTest() ([]*flowexporter.Connection, []*flowexporter.Connectio
 		ReverseBytes:    0xbaaa,
 		TupleOrig:       *tuple1,
 		TupleReply:      *revTuple1,
-		DoExport:        true,
 	}
 	testConnKey1 := flowexporter.NewConnectionKey(testConn1)
 	testConns[0] = testConn1
@@ -90,7 +89,6 @@ func createConnsForTest() ([]*flowexporter.Connection, []*flowexporter.Connectio
 		ReverseBytes:    0xcbbbb0000000000,
 		TupleOrig:       *tuple2,
 		TupleReply:      *revTuple2,
-		DoExport:        true,
 	}
 	testConnKey2 := flowexporter.NewConnectionKey(testConn2)
 	testConns[1] = testConn2
@@ -113,21 +111,6 @@ func prepareInterfaceConfigs(contID, podName, podNS, ifName string, ip *net.IP) 
 	return iface
 }
 
-func testBuildFlowRecords(t *testing.T, flowRecords *flowrecords.FlowRecords, conns []*flowexporter.Connection, connKeys []*flowexporter.ConnectionKey) {
-	err := flowRecords.BuildFlowRecords()
-	require.Nil(t, err, fmt.Sprintf("Failed to build flow records from connection store: %v", err))
-	// Check if records in flow records are built as expected or not
-	for i, expRecConn := range conns {
-		actualRec, found := flowRecords.GetFlowRecordByConnKey(*connKeys[i])
-		if expRecConn.DoExport {
-			assert.Equal(t, found, true, "testConn should be part of flow records")
-			assert.Equal(t, actualRec.Conn, expRecConn, "testConn and connection in connection store should be equal")
-		} else {
-			assert.Equal(t, found, false, "testConn should be not part of flow records")
-		}
-	}
-}
-
 // TestConnectionStoreAndFlowRecords covers two scenarios: (i.) Add connections to connection store through connectionStore.Poll
 // execution and build flow records. (ii.) Flush the connections and check records are sti:w
 func TestConnectionStoreAndFlowRecords(t *testing.T) {
@@ -140,12 +123,12 @@ func TestConnectionStoreAndFlowRecords(t *testing.T) {
 	testIfConfigs := make([]*interfacestore.InterfaceConfig, 2)
 	testIfConfigs[0] = prepareInterfaceConfigs("1", "pod1", "ns1", "interface1", &testConns[0].TupleOrig.SourceAddress)
 	testIfConfigs[1] = prepareInterfaceConfigs("2", "pod2", "ns2", "interface2", &testConns[1].TupleOrig.DestinationAddress)
-	// Create ConnectionStore, FlowRecords and associated mocks
+	// Create connectionStore, FlowRecords and associated mocks
 	connDumperMock := connectionstest.NewMockConnTrackDumper(ctrl)
 	ifStoreMock := interfacestoretest.NewMockInterfaceStore(ctrl)
 	npQuerier := queriertest.NewMockAgentNetworkPolicyInfoQuerier(ctrl)
 	// TODO: Enhance the integration test by testing service.
-	connStore := connections.NewConnectionStore(connDumperMock, ifStoreMock, true, false, nil, npQuerier, testPollInterval)
+	connStore := connections.NewConnectionStore(connDumperMock, flowrecords.NewFlowRecords(), ifStoreMock, true, false, nil, npQuerier, testPollInterval)
 	// Expect calls for connStore.poll and other callees
 	connDumperMock.EXPECT().DumpFlows(uint16(openflow.CtZone)).Return(testConns, 0, nil)
 	connDumperMock.EXPECT().GetMaxConnections().Return(0, nil)
@@ -169,20 +152,14 @@ func TestConnectionStoreAndFlowRecords(t *testing.T) {
 		if i == 0 {
 			expConn.SourcePodName = testIfConfigs[i].PodName
 			expConn.SourcePodNamespace = testIfConfigs[i].PodNamespace
-			expConn.DoExport = true
 		} else {
 			expConn.DestinationPodName = testIfConfigs[i].PodName
 			expConn.DestinationPodNamespace = testIfConfigs[i].PodNamespace
-			expConn.DoExport = true
 		}
 		actualConn, found := connStore.GetConnByKey(*testConnKeys[i])
 		assert.Equal(t, found, true, "testConn should be present in connection store")
 		assert.Equal(t, expConn, actualConn, "testConn and connection in connection store should be equal")
 	}
-
-	// Test for build flow records
-	flowRecords := flowrecords.NewFlowRecords(connStore)
-	testBuildFlowRecords(t, flowRecords, testConns, testConnKeys)
 }
 
 func TestSetupConnTrackParameters(t *testing.T) {

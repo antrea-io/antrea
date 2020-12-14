@@ -19,7 +19,6 @@ import (
 	"net"
 	"time"
 
-	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/informers"
 	"k8s.io/klog"
 
@@ -343,25 +342,33 @@ func run(o *Options) error {
 		if proxier != nil {
 			proxyProvider = proxier.GetProxyProvider()
 		}
+		flowRecords := flowrecords.NewFlowRecords()
 		connStore := connections.NewConnectionStore(
 			connections.InitializeConnTrackDumper(nodeConfig, serviceCIDRNet, serviceCIDRNetv6, ovsDatapathType, features.DefaultFeatureGate.Enabled(features.AntreaProxy)),
+			flowRecords,
 			ifaceStore,
 			v4Enabled,
 			v6Enabled,
 			proxyProvider,
 			networkPolicyController,
 			o.pollInterval)
-		pollDone := make(chan struct{})
-		go connStore.Run(stopCh, pollDone)
+		go connStore.Run(stopCh)
 
-		flowExporter := exporter.NewFlowExporter(
-			flowrecords.NewFlowRecords(connStore),
-			o.config.FlowExportFrequency,
+		flowExporter, err := exporter.NewFlowExporter(
+			connStore,
+			flowRecords,
+			o.flowCollectorAddr,
+			o.flowCollectorProto,
+			o.activeFlowTimeout,
+			o.idleFlowTimeout,
 			o.config.EnableTLSToFlowAggregator,
 			v4Enabled,
 			v6Enabled,
 			k8sClient)
-		go wait.Until(func() { flowExporter.Export(o.flowCollectorAddr, o.flowCollectorProto, stopCh, pollDone) }, 0, stopCh)
+		if err != nil {
+			return fmt.Errorf("error when creating IPFIX flow exporter: %v", err)
+		}
+		go flowExporter.Run(stopCh)
 	}
 
 	<-stopCh

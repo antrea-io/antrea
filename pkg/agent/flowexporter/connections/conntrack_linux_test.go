@@ -24,6 +24,7 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/ti-mo/conntrack"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter"
@@ -32,6 +33,20 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/agent/util/sysctl"
 	ovsctltest "github.com/vmware-tanzu/antrea/pkg/ovs/ovsctl/testing"
+)
+
+var (
+	conntrackFlowTuple = conntrack.Tuple{
+		IP: conntrack.IPTuple{
+			SourceAddress:      net.IP{1, 2, 3, 4},
+			DestinationAddress: net.IP{4, 3, 2, 1},
+		},
+		Proto: conntrack.ProtoTuple{
+			Protocol:        6,
+			SourcePort:      65280,
+			DestinationPort: 255,
+		},
+	}
 )
 
 func TestConnTrackSystem_DumpFlows(t *testing.T) {
@@ -135,8 +150,7 @@ func TestConnTrackOvsAppCtl_DumpFlows(t *testing.T) {
 		Timeout:    86399,
 		StartTime:  time.Date(2020, 7, 25, 8, 40, 8, 959000000, time.UTC),
 		StopTime:   time.Time{},
-		IsActive:   true,
-		DoExport:   true,
+		IsPresent:  true,
 		Zone:       65520,
 		StatusFlag: 302,
 		Mark:       0x21,
@@ -170,6 +184,9 @@ func TestConnTrackOvsAppCtl_DumpFlows(t *testing.T) {
 		t.Errorf("conntrackNetdev.DumpConnections function returned error: %v", err)
 	}
 	assert.Equal(t, len(conns), 1)
+	// stop time is the current time when the dumped flows are parsed. Therefore,
+	// validating is difficult.
+	expConn.StopTime = conns[0].StopTime
 	assert.Equal(t, conns[0], expConn, "filtered connection and expected connection should be same")
 	assert.Equal(t, len(outputFlow), totalConns, "Number of connections in conntrack table should be equal to outputFlow")
 }
@@ -200,4 +217,70 @@ func TestConnTrackOvsAppCtl_GetMaxConnections(t *testing.T) {
 	maxConns, err := connDumper.GetMaxConnections()
 	assert.NoErrorf(t, err, "GetMaxConnections function returned error: %v", err)
 	assert.Equal(t, expMaxConns, maxConns, "The return value of GetMaxConnections function should be equal to the previous hard-coded value")
+}
+
+func TestNetLinkFlowToAntreaConnection(t *testing.T) {
+	// Create new conntrack flow with status set to assured.
+	netlinkFlow := &conntrack.Flow{
+		TupleOrig: conntrackFlowTuple, TupleReply: conntrackFlowTuple, TupleMaster: conntrackFlowTuple,
+		Timeout: 123, Status: conntrack.Status{Value: conntrack.StatusAssured}, Mark: 0x1234, Zone: 2,
+		Timestamp: conntrack.Timestamp{Start: time.Date(2020, 7, 25, 8, 40, 8, 959000000, time.UTC)},
+	}
+	tuple, _ := makeTuple(&conntrackFlowTuple.IP.SourceAddress, &conntrackFlowTuple.IP.DestinationAddress, conntrackFlowTuple.Proto.Protocol, conntrackFlowTuple.Proto.SourcePort, conntrackFlowTuple.Proto.DestinationPort)
+	expectedAntreaFlow := &flowexporter.Connection{
+		Timeout:                 netlinkFlow.Timeout,
+		StartTime:               netlinkFlow.Timestamp.Start,
+		IsPresent:               true,
+		Zone:                    2,
+		StatusFlag:              0x4,
+		Mark:                    0x1234,
+		TupleOrig:               tuple,
+		TupleReply:              tuple,
+		OriginalPackets:         netlinkFlow.CountersOrig.Packets,
+		OriginalBytes:           netlinkFlow.CountersOrig.Bytes,
+		ReversePackets:          netlinkFlow.CountersReply.Packets,
+		ReverseBytes:            netlinkFlow.CountersReply.Bytes,
+		SourcePodNamespace:      "",
+		SourcePodName:           "",
+		DestinationPodNamespace: "",
+		DestinationPodName:      "",
+	}
+
+	antreaFlow := NetlinkFlowToAntreaConnection(netlinkFlow)
+	// Just add the stop time directly as it will be set to the time of day at
+	// which the function was executed.
+	expectedAntreaFlow.StopTime = antreaFlow.StopTime
+	assert.Equalf(t, expectedAntreaFlow, antreaFlow, "both flows should be equal")
+
+	// Create new conntrack flow with status set to dying connection.
+	netlinkFlow = &conntrack.Flow{
+		TupleOrig: conntrackFlowTuple, TupleReply: conntrackFlowTuple, TupleMaster: conntrackFlowTuple,
+		Timeout: 123, Status: conntrack.Status{Value: conntrack.StatusAssured | conntrack.StatusDying}, Mark: 0x1234, Zone: 2,
+		Timestamp: conntrack.Timestamp{
+			Start: time.Date(2020, 7, 25, 8, 40, 8, 959000000, time.UTC),
+			Stop:  time.Date(2020, 7, 25, 8, 45, 10, 959683808, time.UTC),
+		},
+	}
+	expectedAntreaFlow = &flowexporter.Connection{
+		Timeout:                 netlinkFlow.Timeout,
+		StartTime:               netlinkFlow.Timestamp.Start,
+		StopTime:                netlinkFlow.Timestamp.Stop,
+		IsPresent:               true,
+		Zone:                    2,
+		StatusFlag:              0x204,
+		Mark:                    0x1234,
+		TupleOrig:               tuple,
+		TupleReply:              tuple,
+		OriginalPackets:         netlinkFlow.CountersOrig.Packets,
+		OriginalBytes:           netlinkFlow.CountersOrig.Bytes,
+		ReversePackets:          netlinkFlow.CountersReply.Packets,
+		ReverseBytes:            netlinkFlow.CountersReply.Bytes,
+		SourcePodNamespace:      "",
+		SourcePodName:           "",
+		DestinationPodNamespace: "",
+		DestinationPodName:      "",
+	}
+
+	antreaFlow = NetlinkFlowToAntreaConnection(netlinkFlow)
+	assert.Equalf(t, expectedAntreaFlow, antreaFlow, "both flows should be equal")
 }
