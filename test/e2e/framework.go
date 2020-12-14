@@ -310,6 +310,13 @@ func collectClusterInfo() error {
 
 // createNamespace creates the provided namespace.
 func (data *TestData) createNamespace(namespace string) error {
+	oldNS, err := data.clientset.CoreV1().Namespaces().Get(context.TODO(), namespace, metav1.GetOptions{})
+	if err == nil && oldNS.Status.Phase == corev1.NamespaceTerminating {
+		if err = data.deleteNamespace(namespace, defaultTimeout); err != nil {
+			return fmt.Errorf("error when ensuring a terminating Namespace is deleted before create '%s': %v", namespace, err)
+		}
+	}
+
 	ns := corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: namespace,
