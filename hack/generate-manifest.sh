@@ -264,9 +264,9 @@ if $IPSEC; then
     # create a K8s Secret to save the PSK (pre-shared key) for IKE authentication.
     $KUSTOMIZE edit add resource ipsecSecret.yml
     # add a container to the Agent DaemonSet that runs the OVS IPSec and strongSwan daemons.
-    $KUSTOMIZE edit add patch ipsecContainer.yml
+    $KUSTOMIZE edit add patch --path ipsecContainer.yml
     # add an environment variable to the antrea-agent container for passing the PSK to Agent.
-    $KUSTOMIZE edit add patch pskEnv.yml
+    $KUSTOMIZE edit add patch --path pskEnv.yml
     BASE=../ipsec
     cd ..
 fi
@@ -277,9 +277,9 @@ if $COVERAGE; then
     touch kustomization.yml
     $KUSTOMIZE edit add base $BASE
     # this runs antrea-controller via the instrumented binary.
-    $KUSTOMIZE edit add patch startControllerCov.yml
+    $KUSTOMIZE edit add patch --path startControllerCov.yml
     # this runs antrea-agent via the instrumented binary.
-    $KUSTOMIZE edit add patch startAgentCov.yml
+    $KUSTOMIZE edit add patch --path startAgentCov.yml
     BASE=../coverage
     cd ..
 fi 
@@ -290,7 +290,7 @@ if [[ $ENCAP_MODE == "networkPolicyOnly" ]] ; then
     touch kustomization.yml
     $KUSTOMIZE edit add base $BASE
     # change initContainer script and add antrea to CNI chain
-    $KUSTOMIZE edit add patch installCni.yml
+    $KUSTOMIZE edit add patch --path installCni.yml
     BASE=../chaining
     cd ..
 fi
@@ -300,7 +300,7 @@ if [[ $CLOUD == "GKE" ]]; then
     cp ../../patches/gke/*.yml .
     touch kustomization.yml
     $KUSTOMIZE edit add base $BASE
-    $KUSTOMIZE edit add patch cniPath.yml
+    $KUSTOMIZE edit add patch --path cniPath.yml
     BASE=../gke
     cd ..
 fi
@@ -310,7 +310,7 @@ if [[ $CLOUD == "EKS" ]]; then
     cp ../../patches/eks/*.yml .
     touch kustomization.yml
     $KUSTOMIZE edit add base $BASE
-    $KUSTOMIZE edit add patch eksEnv.yml
+    $KUSTOMIZE edit add patch --path eksEnv.yml
     BASE=../eks
     cd ..
 fi
@@ -322,24 +322,24 @@ if $KIND; then
     $KUSTOMIZE edit add base $BASE
 
     # add tun device to antrea OVS container
-    $KUSTOMIZE edit add patch tunDevice.yml
+    $KUSTOMIZE edit add patch --path tunDevice.yml
     # antrea-ovs should use start_ovs_netdev instead of start_ovs to ensure that the br-phy bridge
     # is created.
-    $KUSTOMIZE edit add patch startOvs.yml
+    $KUSTOMIZE edit add patch --path startOvs.yml
     # this adds a small delay before running the antrea-agent process, to give the antrea-ovs
     # container enough time to set up the br-phy bridge.
     # workaround for https://github.com/vmware-tanzu/antrea/issues/801
     if $COVERAGE; then
         cp ../../patches/coverage/startAgentCov.yml .
-        $KUSTOMIZE edit add patch startAgentCov.yml 
+        $KUSTOMIZE edit add patch --path startAgentCov.yml
     else
-        $KUSTOMIZE edit add patch startAgent.yml
+        $KUSTOMIZE edit add patch --path startAgent.yml
     fi
     # change initContainer script and remove SYS_MODULE capability
-    $KUSTOMIZE edit add patch installCni.yml
+    $KUSTOMIZE edit add patch --path installCni.yml
 
     if $ON_DELETE; then
-        $KUSTOMIZE edit add patch onDeleteUpdateStrategy.yml
+        $KUSTOMIZE edit add patch --path onDeleteUpdateStrategy.yml
     fi
 
     BASE=../kind
@@ -358,17 +358,17 @@ if [ "$MODE" == "dev" ]; then
     else
         $KUSTOMIZE edit set image antrea=projects.registry.vmware.com/antrea/antrea-ubuntu:latest
     fi
-    $KUSTOMIZE edit add patch agentImagePullPolicy.yml
-    $KUSTOMIZE edit add patch controllerImagePullPolicy.yml
+    $KUSTOMIZE edit add patch --path agentImagePullPolicy.yml
+    $KUSTOMIZE edit add patch --path controllerImagePullPolicy.yml
     if $VERBOSE_LOG; then
-        $KUSTOMIZE edit add patch agentVerboseLog.yml
-        $KUSTOMIZE edit add patch controllerVerboseLog.yml
+        $KUSTOMIZE edit add patch --path agentVerboseLog.yml
+        $KUSTOMIZE edit add patch --path controllerVerboseLog.yml
     fi
 
     # only required because there is no good way at the moment to update the imagePullPolicy for all
     # containers. See https://github.com/kubernetes-sigs/kustomize/issues/1493
     if $IPSEC; then
-        $KUSTOMIZE edit add patch agentIpsecImagePullPolicy.yml
+        $KUSTOMIZE edit add patch --path agentIpsecImagePullPolicy.yml
     fi
 fi
 
