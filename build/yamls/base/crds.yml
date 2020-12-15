@@ -371,6 +371,10 @@ spec:
                                 cidr:
                                   type: string
                                   format: cidr
+                      sourceGroups:
+                        type: array
+                        items:
+                          type: string
                       name:
                         type: string
                       enableLogging:
@@ -422,6 +426,10 @@ spec:
                                 cidr:
                                   type: string
                                   format: cidr
+                      destinationGroups:
+                        type: array
+                        items:
+                          type: string
                       name:
                         type: string
                       enableLogging:

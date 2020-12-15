@@ -24,6 +24,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
+	corev1a2 "github.com/vmware-tanzu/antrea/pkg/apis/core/v1alpha2"
 	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
 )
 
@@ -156,6 +157,7 @@ func TestToAntreaPeerForCRD(t *testing.T) {
 		outPeer         controlplane.NetworkPolicyPeer
 		direction       controlplane.Direction
 		namedPortExists bool
+		cgExists        bool
 	}{
 		{
 			name: "pod-ns-selector-peer-ingress",
@@ -234,6 +236,13 @@ func TestToAntreaPeerForCRD(t *testing.T) {
 			direction: controlplane.DirectionIn,
 		},
 		{
+			name:      "empty-peer-ingress-with-cg-exists-true",
+			inPeers:   []secv1alpha1.NetworkPolicyPeer{},
+			outPeer:   controlplane.NetworkPolicyPeer{},
+			direction: controlplane.DirectionIn,
+			cgExists:  true,
+		},
+		{
 			name:            "empty-peer-egress-with-named-port",
 			inPeers:         []secv1alpha1.NetworkPolicyPeer{},
 			outPeer:         matchAllPodsPeer,
@@ -246,22 +255,79 @@ func TestToAntreaPeerForCRD(t *testing.T) {
 			outPeer:   matchAllPeer,
 			direction: controlplane.DirectionOut,
 		},
+		{
+			name:      "empty-peer-egress-with-cg-exists-true",
+			inPeers:   []secv1alpha1.NetworkPolicyPeer{},
+			outPeer:   controlplane.NetworkPolicyPeer{},
+			direction: controlplane.DirectionOut,
+			cgExists:  true,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, npc := newController()
-			actualPeer := npc.toAntreaPeerForCRD(tt.inPeers, testCNPObj, tt.direction, tt.namedPortExists)
-			if !reflect.DeepEqual(tt.outPeer.AddressGroups, (*actualPeer).AddressGroups) {
-				t.Errorf("Unexpected AddressGroups in Antrea Peer conversion. Expected %v, got %v", tt.outPeer.AddressGroups, (*actualPeer).AddressGroups)
+			actualPeer := npc.toAntreaPeerForCRD(tt.inPeers, testCNPObj, tt.direction, tt.namedPortExists, tt.cgExists)
+			if !reflect.DeepEqual(tt.outPeer.AddressGroups, actualPeer.AddressGroups) {
+				t.Errorf("Unexpected AddressGroups in Antrea Peer conversion. Expected %v, got %v", tt.outPeer.AddressGroups, actualPeer.AddressGroups)
 			}
-			if len(tt.outPeer.IPBlocks) != len((*actualPeer).IPBlocks) {
-				t.Errorf("Unexpected number of IPBlocks in Antrea Peer conversion. Expected %v, got %v", len(tt.outPeer.IPBlocks), len((*actualPeer).IPBlocks))
+			if len(tt.outPeer.IPBlocks) != len(actualPeer.IPBlocks) {
+				t.Errorf("Unexpected number of IPBlocks in Antrea Peer conversion. Expected %v, got %v", len(tt.outPeer.IPBlocks), len(actualPeer.IPBlocks))
 			}
 			for i := 0; i < len(tt.outPeer.IPBlocks); i++ {
-				if !compareIPBlocks(&(tt.outPeer.IPBlocks[i]), &((*actualPeer).IPBlocks[i])) {
-					t.Errorf("Unexpected IPBlocks in Antrea Peer conversion. Expected %v, got %v", tt.outPeer.IPBlocks[i], (*actualPeer).IPBlocks[i])
+				if !compareIPBlocks(&(tt.outPeer.IPBlocks[i]), &(actualPeer.IPBlocks[i])) {
+					t.Errorf("Unexpected IPBlocks in Antrea Peer conversion. Expected %v, got %v", tt.outPeer.IPBlocks[i], actualPeer.IPBlocks[i])
 				}
 			}
+		})
+	}
+}
+
+func TestCreateAddressGroupForClusterGroupCRD(t *testing.T) {
+	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
+	selectorB := metav1.LabelSelector{MatchLabels: map[string]string{"foo2": "bar2"}}
+	cgA := corev1a2.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{Name: "cgA", UID: "uidA"},
+		Spec: corev1a2.GroupSpec{
+			NamespaceSelector: &selectorA,
+		},
+	}
+	cgB := corev1a2.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{Name: "cgB", UID: "uidB"},
+		Spec: corev1a2.GroupSpec{
+			NamespaceSelector: &selectorB,
+		},
+	}
+	tests := []struct {
+		name                   string
+		inCG                   *corev1a2.ClusterGroup
+		expectedKey            string
+		expectedAddressGroups  int
+		expectedInternalGroups int
+	}{
+		{
+			name:                   "group-not-found",
+			inCG:                   &cgB,
+			expectedKey:            "",
+			expectedAddressGroups:  0,
+			expectedInternalGroups: 1,
+		},
+		{
+			name:                   "cluster-group-with-selector",
+			inCG:                   &cgA,
+			expectedKey:            string(cgA.UID),
+			expectedAddressGroups:  1,
+			expectedInternalGroups: 1,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, c := newController()
+			c.addClusterGroup(&cgA)
+			c.cgStore.Add(&cgA)
+			actualKey := c.createAddressGroupForClusterGroupCRD(tt.inCG)
+			assert.Equal(t, tt.expectedKey, actualKey)
+			assert.Equal(t, tt.expectedInternalGroups, len(c.internalGroupStore.List()))
+			assert.Equal(t, tt.expectedAddressGroups, len(c.addressGroupStore.List()))
 		})
 	}
 }

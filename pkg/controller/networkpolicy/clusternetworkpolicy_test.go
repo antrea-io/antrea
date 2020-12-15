@@ -21,6 +21,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
+	corev1a2 "github.com/vmware-tanzu/antrea/pkg/apis/core/v1alpha2"
 	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
 	antreatypes "github.com/vmware-tanzu/antrea/pkg/controller/types"
 )
@@ -35,11 +36,18 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 			Description: "tier-A",
 		},
 	}
+
 	allowAction := secv1alpha1.RuleActionAllow
 	protocolTCP := controlplane.ProtocolTCP
 	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
 	selectorB := metav1.LabelSelector{MatchLabels: map[string]string{"foo2": "bar2"}}
 	selectorC := metav1.LabelSelector{MatchLabels: map[string]string{"foo3": "bar3"}}
+	cgA := corev1a2.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{Name: "cgA", UID: "uidA"},
+		Spec: corev1a2.GroupSpec{
+			NamespaceSelector: &selectorA,
+		},
+	}
 	tests := []struct {
 		name                    string
 		inputPolicy             *secv1alpha1.ClusterNetworkPolicy
@@ -463,11 +471,90 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 			expectedAppliedToGroups: 2,
 			expectedAddressGroups:   2,
 		},
+		{
+			name: "with-cluster-group-ingress-egress",
+			inputPolicy: &secv1alpha1.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "cnpI", UID: "uidI"},
+				Spec: secv1alpha1.ClusterNetworkPolicySpec{
+					AppliedTo: []secv1alpha1.NetworkPolicyPeer{
+						{PodSelector: &selectorA},
+					},
+					Priority: p10,
+					Ingress: []secv1alpha1.Rule{
+						{
+							Ports: []secv1alpha1.NetworkPolicyPort{
+								{
+									Port: &int80,
+								},
+							},
+							SourceGroups: []string{cgA.Name},
+							Action:       &allowAction,
+						},
+					},
+					Egress: []secv1alpha1.Rule{
+						{
+							Ports: []secv1alpha1.NetworkPolicyPort{
+								{
+									Port: &int81,
+								},
+							},
+							DestinationGroups: []string{cgA.Name},
+							Action:            &allowAction,
+						},
+					},
+				},
+			},
+			expectedPolicy: &antreatypes.NetworkPolicy{
+				UID:  "uidI",
+				Name: "uidI",
+				SourceRef: &controlplane.NetworkPolicyReference{
+					Type: controlplane.AntreaClusterNetworkPolicy,
+					Name: "cnpI",
+					UID:  "uidI",
+				},
+				Priority:     &p10,
+				TierPriority: &DefaultTierPriority,
+				Rules: []controlplane.NetworkPolicyRule{
+					{
+						Direction: controlplane.DirectionIn,
+						From: controlplane.NetworkPolicyPeer{
+							AddressGroups: []string{string(cgA.UID)},
+						},
+						Services: []controlplane.Service{
+							{
+								Protocol: &protocolTCP,
+								Port:     &int80,
+							},
+						},
+						Priority: 0,
+						Action:   &allowAction,
+					},
+					{
+						Direction: controlplane.DirectionOut,
+						To: controlplane.NetworkPolicyPeer{
+							AddressGroups: []string{string(cgA.UID)},
+						},
+						Services: []controlplane.Service{
+							{
+								Protocol: &protocolTCP,
+								Port:     &int81,
+							},
+						},
+						Priority: 0,
+						Action:   &allowAction,
+					},
+				},
+				AppliedToGroups: []string{getNormalizedUID(toGroupSelector("", &selectorA, nil, nil).NormalizedName)},
+			},
+			expectedAppliedToGroups: 1,
+			expectedAddressGroups:   1,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, c := newController()
-
+			c.addClusterGroup(&cgA)
+			c.cgStore.Add(&cgA)
 			if tt.inputPolicy.Spec.Tier != "" {
 				c.tierStore.Add(&tierA)
 			}
@@ -1049,6 +1136,96 @@ func TestGetTierPriority(t *testing.T) {
 			}
 			actualPrio := npc.getTierPriority(name)
 			assert.Equal(t, tt.expPrio, actualPrio, "tier priorities do not match")
+		})
+	}
+}
+
+func TestProcessRefCGs(t *testing.T) {
+	var emptyIpb []controlplane.IPBlock
+	var emptyAg []string
+	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
+	cidr := "10.0.0.0/24"
+	cidrIPNet, _ := cidrStrToIPNet(cidr)
+	// cgA with selector present in cache
+	cgA := corev1a2.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{Name: "cgA", UID: "uidA"},
+		Spec: corev1a2.GroupSpec{
+			NamespaceSelector: &selectorA,
+		},
+	}
+	// cgB with IPBlock present in cache
+	cgB := corev1a2.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{Name: "cgB", UID: "uidB"},
+		Spec: corev1a2.GroupSpec{
+			IPBlock: &secv1alpha1.IPBlock{
+				CIDR: cidr,
+			},
+		},
+	}
+	// cgC not found in cache
+	cgC := corev1a2.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{Name: "cgC", UID: "uidC"},
+		Spec: corev1a2.GroupSpec{
+			NamespaceSelector: &selectorA,
+		},
+	}
+	_, npc := newController()
+	npc.addClusterGroup(&cgA)
+	npc.addClusterGroup(&cgB)
+	npc.cgStore.Add(&cgA)
+	npc.cgStore.Add(&cgB)
+	tests := []struct {
+		name        string
+		inputCGs    []string
+		expectedAG  []string
+		expectedIPB []controlplane.IPBlock
+	}{
+		{
+			name:        "empty-cgs-no-result",
+			inputCGs:    []string{},
+			expectedAG:  emptyAg,
+			expectedIPB: emptyIpb,
+		},
+		{
+			name:        "cg-with-selector",
+			inputCGs:    []string{cgA.Name},
+			expectedAG:  []string{string(cgA.UID)},
+			expectedIPB: emptyIpb,
+		},
+		{
+			name:        "cg-with-selector-not-found",
+			inputCGs:    []string{cgC.Name},
+			expectedAG:  emptyAg,
+			expectedIPB: emptyIpb,
+		},
+		{
+			name:       "cg-with-ipblock",
+			inputCGs:   []string{cgB.Name},
+			expectedAG: emptyAg,
+			expectedIPB: []controlplane.IPBlock{
+				{
+					CIDR:   *cidrIPNet,
+					Except: []controlplane.IPNet{},
+				},
+			},
+		},
+		{
+			name:       "cgs-with-selector-ipblock",
+			inputCGs:   []string{cgA.Name, cgB.Name},
+			expectedAG: []string{string(cgA.UID)},
+			expectedIPB: []controlplane.IPBlock{
+				{
+					CIDR:   *cidrIPNet,
+					Except: []controlplane.IPNet{},
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			actualAG, actualIPB := npc.processRefCGs(tt.inputCGs)
+			assert.Equal(t, tt.expectedIPB, actualIPB, "IPBlock list does not match")
+			assert.Equal(t, tt.expectedAG, actualAG, "addressGroup list does not match")
 		})
 	}
 }

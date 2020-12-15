@@ -23,6 +23,7 @@ import (
 	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
+	"github.com/vmware-tanzu/antrea/pkg/apis/core/v1alpha2"
 	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
 	antreatypes "github.com/vmware-tanzu/antrea/pkg/controller/types"
 )
@@ -70,11 +71,15 @@ func toAntreaIPBlockForCRD(ipBlock *secv1alpha1.IPBlock) (*controlplane.IPBlock,
 }
 
 func (n *NetworkPolicyController) toAntreaPeerForCRD(peers []secv1alpha1.NetworkPolicyPeer,
-	np metav1.Object, dir controlplane.Direction, namedPortExists bool) *controlplane.NetworkPolicyPeer {
+	np metav1.Object, dir controlplane.Direction, namedPortExists, cgExists bool) controlplane.NetworkPolicyPeer {
 	var addressGroups []string
-	// Empty NetworkPolicyPeer is supposed to match all addresses.
+	// NetworkPolicyPeer is supposed to match all addresses when it is empty and no clusterGroup is present.
 	// It's treated as an IPBlock "0.0.0.0/0".
 	if len(peers) == 0 {
+		if cgExists {
+			// If empty and clusterGroup exists in the rule, the peer will be evaluated by the ClusterGroup.
+			return controlplane.NetworkPolicyPeer{}
+		}
 		// For an egress Peer that specifies any named ports, it creates or
 		// reuses the AddressGroup matching all Pods in all Namespaces and
 		// appends the AddressGroup UID to the returned Peer such that it can be
@@ -82,12 +87,12 @@ func (n *NetworkPolicyController) toAntreaPeerForCRD(peers []secv1alpha1.Network
 		// For other cases it uses the IPBlock "0.0.0.0/0" to avoid the overhead
 		// of handling member updates of the AddressGroup.
 		if dir == controlplane.DirectionIn || !namedPortExists {
-			return &matchAllPeer
+			return matchAllPeer
 		}
 		allPodsGroupUID := n.createAddressGroupForCRD(matchAllPodsPeerCrd, np)
 		podsPeer := matchAllPeer
 		podsPeer.AddressGroups = append(addressGroups, allPodsGroupUID)
-		return &podsPeer
+		return podsPeer
 	}
 	var ipBlocks []controlplane.IPBlock
 	for _, peer := range peers {
@@ -105,7 +110,7 @@ func (n *NetworkPolicyController) toAntreaPeerForCRD(peers []secv1alpha1.Network
 			addressGroups = append(addressGroups, normalizedUID)
 		}
 	}
-	return &controlplane.NetworkPolicyPeer{AddressGroups: addressGroups, IPBlocks: ipBlocks}
+	return controlplane.NetworkPolicyPeer{AddressGroups: addressGroups, IPBlocks: ipBlocks}
 }
 
 // createAddressGroupForCRD creates an AddressGroup object corresponding to a
@@ -129,6 +134,36 @@ func (n *NetworkPolicyController) createAddressGroupForCRD(peer secv1alpha1.Netw
 	klog.V(2).Infof("Creating new AddressGroup %s with selector (%s)", addressGroup.Name, addressGroup.Selector.NormalizedName)
 	n.addressGroupStore.Create(addressGroup)
 	return normalizedUID
+}
+
+// createAddressGroupForClusterGroupCRD creates an AddressGroup object corresponding to a
+// ClusterGroup spec. If the AddressGroup already exists, it returns the key
+// otherwise it copies the ClusterGroup CRD contents to an AddressGroup resource and returns
+// its key.
+func (n *NetworkPolicyController) createAddressGroupForClusterGroupCRD(cg *v1alpha2.ClusterGroup) string {
+	// Find the internal Group corresponding to this ClusterGroup
+	igKey := internalGroupKeyFunc(cg)
+	ig, found, _ := n.internalGroupStore.Get(igKey)
+	if !found {
+		klog.V(2).Infof("Internal group %s not found.", igKey)
+		return ""
+	}
+	intGrp := ig.(*antreatypes.Group)
+	// Check to see if the AddressGroup already exists
+	_, found, _ = n.addressGroupStore.Get(igKey)
+	if found {
+		return igKey
+	}
+	// Create an AddressGroup object for this internal Group.
+	addressGroup := &antreatypes.AddressGroup{
+		UID:          types.UID(igKey),
+		Name:         igKey,
+		Selector:     intGrp.Selector,
+		GroupMembers: intGrp.GroupMembers,
+	}
+	klog.V(2).Infof("Creating new AddressGroup %s with selector (%s) corresponding to ClusterGroup CRD", addressGroup.Name, addressGroup.Selector.NormalizedName)
+	n.addressGroupStore.Create(addressGroup)
+	return igKey
 }
 
 // getTierPriority retrieves the priority associated with the input Tier name.

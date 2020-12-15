@@ -1296,8 +1296,28 @@ func (n *NetworkPolicyController) syncAddressGroup(key string) error {
 		internalNP := internalNPObj.(*antreatypes.NetworkPolicy)
 		addrGroupNodeNames = addrGroupNodeNames.Union(internalNP.SpanMeta.NodeNames)
 	}
+	memberSet := n.populateAddressGroupMemberSet(addressGroup)
+	updatedAddressGroup := &antreatypes.AddressGroup{
+		Name:         addressGroup.Name,
+		UID:          addressGroup.UID,
+		Selector:     addressGroup.Selector,
+		GroupMembers: memberSet,
+		SpanMeta:     antreatypes.SpanMeta{NodeNames: addrGroupNodeNames},
+	}
+	klog.V(2).Infof("Updating existing AddressGroup %s with %d Pods/ExternalEntities and %d Nodes", key, len(memberSet), addrGroupNodeNames.Len())
+	n.addressGroupStore.Update(updatedAddressGroup)
+	return nil
+}
+
+func (n *NetworkPolicyController) populateAddressGroupMemberSet(g *antreatypes.AddressGroup) controlplane.GroupMemberSet {
+	// Check if an internal Group object exists corresponding to this AddressGroup.
+	intGroup, found, _ := n.internalGroupStore.Get(string(g.UID))
+	if found {
+		ig := intGroup.(*antreatypes.Group)
+		return ig.GroupMembers
+	}
 	// Find all Pods and ExternalEntities matching its selectors and update store.
-	groupSelector := addressGroup.Selector
+	groupSelector := g.Selector
 	pods, externalEntities := n.processSelector(groupSelector)
 	memberSet := controlplane.GroupMemberSet{}
 	for _, pod := range pods {
@@ -1310,16 +1330,7 @@ func (n *NetworkPolicyController) syncAddressGroup(key string) error {
 	for _, entity := range externalEntities {
 		memberSet.Insert(externalEntityToGroupMember(entity))
 	}
-	updatedAddressGroup := &antreatypes.AddressGroup{
-		Name:         addressGroup.Name,
-		UID:          addressGroup.UID,
-		Selector:     addressGroup.Selector,
-		GroupMembers: memberSet,
-		SpanMeta:     antreatypes.SpanMeta{NodeNames: addrGroupNodeNames},
-	}
-	klog.V(2).Infof("Updating existing AddressGroup %s with %d Pods/ExternalEntities and %d Nodes", key, len(memberSet), addrGroupNodeNames.Len())
-	n.addressGroupStore.Update(updatedAddressGroup)
-	return nil
+	return memberSet
 }
 
 // podToGroupMember is util function to convert a Pod to a GroupMember type.

@@ -116,6 +116,12 @@ type Rule struct {
 	// conjunction with NetworkPolicySpec/ClusterNetworkPolicySpec.AppliedTo.
 	// +optional
 	AppliedTo []NetworkPolicyPeer `json:"appliedTo,omitempty"`
+	// SourceGroups is a list of ClusterGroup names which must be set as the
+	// source for this rule.
+	SourceGroups []string `json:"sourceGroups,omitempty"`
+	// DestinationGroups is a list of ClusterGroup names which must be set as the
+	// destination for this rule.
+	DestinationGroups []string `json:"destinationGroups,omitempty"`
 }
 
 // NetworkPolicyPeer describes the grouping selector of workloads.

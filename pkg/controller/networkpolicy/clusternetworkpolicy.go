@@ -146,9 +146,15 @@ func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *secv1alpha1.C
 			appliedToGroupNamesForRule = append(appliedToGroupNamesForRule, atGroup)
 			appliedToGroupNamesSet.Insert(atGroup)
 		}
+		cgExists := len(ingressRule.SourceGroups) > 0
+		iFromPeers := n.toAntreaPeerForCRD(ingressRule.From, cnp, controlplane.DirectionIn, namedPortExists, cgExists)
+		// If ClusterGroups are set in Rule, then create AddressGroups corresponding to the CG and append to From Peers.
+		ag, ipb := n.processRefCGs(ingressRule.SourceGroups)
+		iFromPeers.IPBlocks = append(iFromPeers.IPBlocks, ipb...)
+		iFromPeers.AddressGroups = append(iFromPeers.AddressGroups, ag...)
 		rules = append(rules, controlplane.NetworkPolicyRule{
 			Direction:       controlplane.DirectionIn,
-			From:            *n.toAntreaPeerForCRD(ingressRule.From, cnp, controlplane.DirectionIn, namedPortExists),
+			From:            iFromPeers,
 			Services:        services,
 			Action:          ingressRule.Action,
 			Priority:        int32(idx),
@@ -167,9 +173,15 @@ func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *secv1alpha1.C
 			appliedToGroupNamesForRule = append(appliedToGroupNamesForRule, atGroup)
 			appliedToGroupNamesSet.Insert(atGroup)
 		}
+		cgExists := len(egressRule.DestinationGroups) > 0
+		eToPeers := n.toAntreaPeerForCRD(egressRule.To, cnp, controlplane.DirectionOut, namedPortExists, cgExists)
+		// If ClusterGroups are set in Rule, then create AddressGroups corresponding to the CG and append to To Peers.
+		ag, ipb := n.processRefCGs(egressRule.DestinationGroups)
+		eToPeers.IPBlocks = append(eToPeers.IPBlocks, ipb...)
+		eToPeers.AddressGroups = append(eToPeers.AddressGroups, ag...)
 		rules = append(rules, controlplane.NetworkPolicyRule{
 			Direction:       controlplane.DirectionOut,
-			To:              *n.toAntreaPeerForCRD(egressRule.To, cnp, controlplane.DirectionOut, namedPortExists),
+			To:              eToPeers,
 			Services:        services,
 			Action:          egressRule.Action,
 			Priority:        int32(idx),
@@ -194,4 +206,35 @@ func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *secv1alpha1.C
 		AppliedToPerRule: appliedToPerRule,
 	}
 	return internalNetworkPolicy
+}
+
+// processRefCGs processes the ClusterGroup references present in the rules and returns the
+// NetworkPolicyPeer with the corresponding AddressGroups and IPBlocks.
+func (n *NetworkPolicyController) processRefCGs(cgs []string) ([]string, []controlplane.IPBlock) {
+	var ipb []controlplane.IPBlock
+	var ag []string
+	for _, g := range cgs {
+		// Retrieve ClusterGroup for corresponding entry in the rule.
+		cg, err := n.cgInformer.Lister().Get(g)
+		if err != nil {
+			klog.V(2).Infof("ClusterGroup %s not found. %v", g, err)
+			continue
+		}
+		if cg.Spec.IPBlock != nil {
+			ipBlock, err := toAntreaIPBlockForCRD(cg.Spec.IPBlock)
+			if err != nil {
+				klog.Errorf("Failure processing ClusterGroup %s IPBlock %v: %v", cg.Name, cg.Spec.IPBlock, err)
+				continue
+			}
+			ipb = append(ipb, *ipBlock)
+			// No need to process further as a ClusterGroup with IPBlock has no other selector.
+			continue
+		}
+		agKey := n.createAddressGroupForClusterGroupCRD(cg)
+		// If addressGroup was created or found, append this to peers.
+		if agKey != "" {
+			ag = append(ag, agKey)
+		}
+	}
+	return ag, ipb
 }

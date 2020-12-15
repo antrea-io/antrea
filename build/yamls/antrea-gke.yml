@@ -171,6 +171,10 @@ spec:
                             x-kubernetes-preserve-unknown-fields: true
                         type: object
                       type: array
+                    destinationGroups:
+                      items:
+                        type: string
+                      type: array
                     enableLogging:
                       type: boolean
                     name:
@@ -251,6 +255,10 @@ spec:
                           protocol:
                             type: string
                         type: object
+                      type: array
+                    sourceGroups:
+                      items:
+                        type: string
                       type: array
                   required:
                   - action
