@@ -152,12 +152,11 @@ func (i *Initializer) prepareOVSBridge() error {
 	}
 	// TODO: Configure IPv6 Address.
 	if err = util.ConfigureInterfaceAddressWithDefaultGateway(brName, uplinkNetConfig.IP, uplinkNetConfig.Gateway); err != nil {
-		if strings.Contains(err.Error(), "Instance MSFT_NetIPAddress already exists") {
-			err = nil
-			klog.V(4).Infof("Address: %s already exists on interface %s", uplinkNetConfig.IP.String(), brName)
-		} else {
+		if !strings.Contains(err.Error(), "Instance MSFT_NetIPAddress already exists") {
 			return err
 		}
+		err = nil
+		klog.V(4).Infof("Address: %s already exists when configuring IP on interface %s", uplinkNetConfig.IP.String(), brName)
 	}
 	// Restore the host routes which are lost when moving the network configuration of the uplink interface to OVS bridge interface.
 	if err = i.restoreHostRoutes(); err != nil {
