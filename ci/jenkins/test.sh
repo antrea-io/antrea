@@ -239,8 +239,14 @@ function deliver_antrea_windows {
             scp -o StrictHostKeyChecking=no -T build/yamls/windows/base/conf/antrea-agent.conf Administrator@${IP}:/cygdrive/c/k/antrea/etc
         elif [ "$TESTCASE" == "windows-conformance" ]; then
             if ! (test -f antrea-windows.tar.gz); then
+                # Compress antrea repo and copy it to a Windows node
+                mkdir -p jenkins
+                tar --exclude='./jenkins' -czvf jenkins/antrea_repo.tar.gz -C "$(pwd)" .
+                for i in `seq 2`; do
+                    timeout 2m scp -o StrictHostKeyChecking=no -T jenkins/antrea_repo.tar.gz Administrator@${IP}: && break
+                done
                 ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "docker pull ${DOCKER_REGISTRY}/antrea/golang:1.15 && docker tag ${DOCKER_REGISTRY}/antrea/golang:1.15 golang:1.15"
-                ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "rm -rf antrea && git clone ${ghprbAuthorRepoGitUrl} antrea && cd antrea && git checkout $GIT_BRANCH && sed -i \"s|build/images/Dockerfile.build.windows .|build/images/Dockerfile.build.windows . --network host|g\" Makefile && DOCKER_REGISTRY=${DOCKER_REGISTRY} make build-windows && docker save -o antrea-windows.tar projects.registry.vmware.com/antrea/antrea-windows:latest && gzip -f antrea-windows.tar" || true
+                ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "rm -rf antrea && mkdir antrea && cd antrea && tar -xzvf ../antrea_repo.tar.gz && sed -i \"s|build/images/Dockerfile.build.windows .|build/images/Dockerfile.build.windows . --network host|g\" Makefile && DOCKER_REGISTRY=${DOCKER_REGISTRY} make build-windows && docker save -o antrea-windows.tar projects.registry.vmware.com/antrea/antrea-windows:latest && gzip -f antrea-windows.tar" || true
                 for i in `seq 2`; do
                     timeout 2m scp -o StrictHostKeyChecking=no -T Administrator@${IP}:antrea/antrea-windows.tar.gz . && break
                 done
@@ -323,7 +329,7 @@ function run_e2e {
 
     set +e
     mkdir -p `pwd`/antrea-test-logs
-    go test -v github.com/vmware-tanzu/antrea/test/e2e --logs-export-dir `pwd`/antrea-test-logs -timeout=40m
+    go test -v github.com/vmware-tanzu/antrea/test/e2e --logs-export-dir `pwd`/antrea-test-logs -timeout=50m
     if [[ "$?" != "0" ]]; then
         TEST_FAILURE=true
     fi

@@ -217,7 +217,7 @@ func TestAntreaGracefulExit(t *testing.T) {
 	} else if timeToDelete > maxDeleteTimeout {
 		t.Errorf("Antrea Pod took too long to delete: %v", timeToDelete)
 	}
-	// At the moment we only check that the Pod terminates in a reasonable amout of time (less
+	// At the moment we only check that the Pod terminates in a reasonable amount of time (less
 	// than the grace period), which means that all containers "honor" the SIGTERM signal.
 	// TODO: ideally we would be able to also check the exit code but it may not be possible.
 }
