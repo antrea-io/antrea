@@ -150,14 +150,13 @@ func (i *Initializer) prepareOVSBridge() error {
 	if err = util.SetAdapterMACAddress(brName, &uplinkNetConfig.MAC); err != nil {
 		return err
 	}
-	// Remove existing IP addresses to avoid a candidate error of "Instance MSFT_NetIPAddress already exists" when
-	// adding it on the adapter.
-	if err = util.RemoveIPv4AddrsFromAdapter(brName); err != nil {
-		return err
-	}
 	// TODO: Configure IPv6 Address.
 	if err = util.ConfigureInterfaceAddressWithDefaultGateway(brName, uplinkNetConfig.IP, uplinkNetConfig.Gateway); err != nil {
-		return err
+		if !strings.Contains(err.Error(), "Instance MSFT_NetIPAddress already exists") {
+			return err
+		}
+		err = nil
+		klog.V(4).Infof("Address: %s already exists when configuring IP on interface %s", uplinkNetConfig.IP.String(), brName)
 	}
 	// Restore the host routes which are lost when moving the network configuration of the uplink interface to OVS bridge interface.
 	if err = i.restoreHostRoutes(); err != nil {
