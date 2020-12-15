@@ -17,6 +17,7 @@ package main
 import (
 	"log"
 	"os"
+	"path/filepath"
 
 	"github.com/vmware-tanzu/octant/pkg/navigation"
 	"github.com/vmware-tanzu/octant/pkg/plugin"
@@ -33,8 +34,7 @@ var (
 )
 
 const (
-	kubeConfig = "KUBECONFIG"
-	title      = "Antrea"
+	title = "Antrea"
 )
 
 type antreaOctantPlugin struct {
@@ -44,8 +44,12 @@ type antreaOctantPlugin struct {
 }
 
 func newAntreaOctantPlugin() *antreaOctantPlugin {
+	kubeconfig := os.Getenv("KUBECONFIG")
+	if kubeconfig == "" {
+		kubeconfig = filepath.Join(os.Getenv("HOME"), ".kube", "config")
+	}
 	// Create a k8s client.
-	config, err := clientcmd.BuildConfigFromFlags("", os.Getenv(kubeConfig))
+	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
 	if err != nil {
 		log.Fatalf("Failed to build kubeConfig %v", err)
 	}
