@@ -385,20 +385,19 @@ fi
 # If --k8s-1.15 flag is set, then we have to patch certain resources.
 # For instance, the apiVersion/schema of CustomResourceDefinition and admission webhooks
 if $K8S_115; then
-    cp -a ../../patches/legacy ./ && cd legacy
+    cp -a ../../patches/legacy ./
     # Patch for controller.yml
-    $KUSTOMIZE edit add patch --path controller.json --kind MutatingWebhookConfiguration
-    $KUSTOMIZE edit add patch --path controller.json --kind ValidatingWebhookConfiguration
+    $KUSTOMIZE edit add patch --path legacy/controller.json --kind MutatingWebhookConfiguration
+    $KUSTOMIZE edit add patch --path legacy/controller.json --kind ValidatingWebhookConfiguration
     # Patch for all CustomResourceDefinition
-    $KUSTOMIZE edit add patch --path crdVersion.json --kind CustomResourceDefinition
-    $KUSTOMIZE edit add patch --path crdClusterInformation.json --kind CustomResourceDefinition --name antreaagentinfos.clusterinformation.antrea.tanzu.vmware.com
-    $KUSTOMIZE edit add patch --path crdClusterInformation.json --kind CustomResourceDefinition --name antreacontrollerinfos.clusterinformation.antrea.tanzu.vmware.com
-    $KUSTOMIZE edit add patch --path crdTraceflow.json --kind CustomResourceDefinition --name traceflows.ops.antrea.tanzu.vmware.com
-    $KUSTOMIZE edit add patch --path crdTier.json --kind CustomResourceDefinition --name tiers.security.antrea.tanzu.vmware.com
-    $KUSTOMIZE edit add patch --path crdClusterNetworkPolicy.json --kind CustomResourceDefinition --name clusternetworkpolicies.security.antrea.tanzu.vmware.com
-    $KUSTOMIZE edit add patch --path crdNetworkPolicy.json --kind CustomResourceDefinition --name networkpolicies.security.antrea.tanzu.vmware.com
-    $KUSTOMIZE edit add patch --path crdExternalEntity.json --kind CustomResourceDefinition --name externalentities.core.antrea.tanzu.vmware.com
-    cd ..
+    $KUSTOMIZE edit add patch --path legacy/crdVersion.json --kind CustomResourceDefinition
+    $KUSTOMIZE edit add patch --path legacy/crdClusterInformation.json --kind CustomResourceDefinition --name antreaagentinfos.clusterinformation.antrea.tanzu.vmware.com
+    $KUSTOMIZE edit add patch --path legacy/crdClusterInformation.json --kind CustomResourceDefinition --name antreacontrollerinfos.clusterinformation.antrea.tanzu.vmware.com
+    $KUSTOMIZE edit add patch --path legacy/crdTraceflow.json --kind CustomResourceDefinition --name traceflows.ops.antrea.tanzu.vmware.com
+    $KUSTOMIZE edit add patch --path legacy/crdTier.json --kind CustomResourceDefinition --name tiers.security.antrea.tanzu.vmware.com
+    $KUSTOMIZE edit add patch --path legacy/crdClusterNetworkPolicy.json --kind CustomResourceDefinition --name clusternetworkpolicies.security.antrea.tanzu.vmware.com
+    $KUSTOMIZE edit add patch --path legacy/crdNetworkPolicy.json --kind CustomResourceDefinition --name networkpolicies.security.antrea.tanzu.vmware.com
+    $KUSTOMIZE edit add patch --path legacy/crdExternalEntity.json --kind CustomResourceDefinition --name externalentities.core.antrea.tanzu.vmware.com
 fi
 
 $KUSTOMIZE build
