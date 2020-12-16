@@ -50,10 +50,10 @@ func newFlowAggregatorCommand() *cobra.Command {
 		Run: func(cmd *cobra.Command, args []string) {
 			log.InitLogFileLimits(cmd.Flags())
 			if err := opts.complete(args); err != nil {
-				klog.Fatalf("Failed to complete: %v", err)
+				klog.Fatalf("Failed to complete args: %v", err)
 			}
 			if err := opts.validate(args); err != nil {
-				klog.Fatalf("Failed to validate: %v", err)
+				klog.Fatalf("Failed to validate args: %v", err)
 			}
 			if err := run(opts); err != nil {
 				klog.Fatalf("Error running flow aggregator: %v", err)
