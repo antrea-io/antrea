@@ -1,20 +1,30 @@
 apiVersion: v1
+kind: Namespace
+metadata:
+  labels:
+    app: flow-aggregator
+  name: flow-aggregator
+---
+apiVersion: v1
 data:
   flow-aggregator.conf: |
     # Provide the flow collector address as string with format <IP>:<port>[:<proto>], where proto is tcp or udp.
     # If no L4 transport proto is given, we consider tcp as default.
-    flowCollectorAddr: ""
+    #externalFlowCollectorAddr: ""
 
     # Provide flow export interval as a duration string. This determines how often the flow aggregator exports flow
     # records to the flow collector.
     # Flow export interval should be greater than or equal to 1s (one second).
     # Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
-    flowExportInterval: 60s
+    #flowExportInterval: 60s
+
+    # Provide the transport protocol for the flow aggregator collecting process, which is tcp or udp.
+    #aggregatorTransportProtocol: "tcp"
 kind: ConfigMap
 metadata:
   labels:
     app: flow-aggregator
-  name: flow-aggregator-configmap-gcd5tkk2dd
+  name: flow-aggregator-configmap-kggb5829gb
   namespace: flow-aggregator
 ---
 apiVersion: v1
@@ -26,8 +36,13 @@ metadata:
   namespace: flow-aggregator
 spec:
   ports:
-  - port: 4739
+  - name: ipfix-udp
+    port: 4739
     protocol: UDP
+    targetPort: 4739
+  - name: ipfix-tcp
+    port: 4739
+    protocol: TCP
     targetPort: 4739
   selector:
     app: flow-aggregator
@@ -73,5 +88,5 @@ spec:
           subPath: flow-aggregator.conf
       volumes:
       - configMap:
-          name: flow-aggregator-configmap-gcd5tkk2dd
+          name: flow-aggregator-configmap-kggb5829gb
         name: flow-aggregator-config

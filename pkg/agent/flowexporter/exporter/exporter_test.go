@@ -25,7 +25,7 @@ import (
 	ipfixregistry "github.com/vmware/go-ipfix/pkg/registry"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter"
-	ipfixtest "github.com/vmware-tanzu/antrea/pkg/agent/flowexporter/ipfix/testing"
+	ipfixtest "github.com/vmware-tanzu/antrea/pkg/ipfix/testing"
 )
 
 const (

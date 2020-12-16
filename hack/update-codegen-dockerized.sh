@@ -107,7 +107,7 @@ MOCKGEN_TARGETS=(
   "pkg/controller/querier ControllerQuerier"
   "pkg/querier AgentNetworkPolicyInfoQuerier"
   "pkg/agent/flowexporter/connections ConnTrackDumper,NetFilterConnTrack"
-  "pkg/agent/flowexporter/ipfix IPFIXExportingProcess,IPFIXSet,IPFIXRegistry"
+  "pkg/ipfix IPFIXExportingProcess,IPFIXSet,IPFIXRegistry,IPFIXCollectingProcess,IPFIXAggregationProcess"
   "third_party/proxy Provider"
 )
 

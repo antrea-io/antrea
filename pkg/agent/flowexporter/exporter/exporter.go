@@ -26,7 +26,7 @@ import (
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter"
 	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter/flowrecords"
-	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter/ipfix"
+	"github.com/vmware-tanzu/antrea/pkg/ipfix"
 	"github.com/vmware-tanzu/antrea/pkg/util/env"
 )
 

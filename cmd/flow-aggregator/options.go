@@ -24,6 +24,13 @@ import (
 
 	"github.com/spf13/pflag"
 	"gopkg.in/yaml.v2"
+
+	"github.com/vmware-tanzu/antrea/pkg/flowaggregator"
+)
+
+const (
+	defaultFlowExportInterval          = 60 * time.Second
+	defaultAggregatorTransportProtocol = flowaggregator.AggregatorTransportProtocolTCP
 )
 
 type Options struct {
@@ -32,9 +39,11 @@ type Options struct {
 	// The configuration object
 	config *FlowAggregatorConfig
 	// IPFIX flow collector address
-	flowCollectorAddr net.Addr
+	externalFlowCollectorAddr net.Addr
 	// Flow export interval of the flow aggregator
 	exportInterval time.Duration
+	// Transport protocol over which the aggregator collects IPFIX records from all Agents
+	aggregatorTransportProtocol flowaggregator.AggregatorTransportProtocol
 }
 
 func newOptions() *Options {
@@ -65,11 +74,11 @@ func (o *Options) validate(args []string) error {
 	if len(args) != 0 {
 		return errors.New("no positional arguments are supported")
 	}
-	if o.config.FlowCollectorAddr == "" {
+	if o.config.ExternalFlowCollectorProtocol == "" {
 		return fmt.Errorf("IPFIX flow collector address should be provided")
 	} else {
 		// Check if it is TCP or UDP
-		strSlice := strings.Split(o.config.FlowCollectorAddr, ":")
+		strSlice := strings.Split(o.config.ExternalFlowCollectorProtocol, ":")
 		var proto string
 		if len(strSlice) == 2 {
 			// If no separator ":" and proto is given, then default to TCP.
@@ -90,26 +99,36 @@ func (o *Options) validate(args []string) error {
 			return fmt.Errorf("IPFIX flow collector is given in invalid format: %v", err)
 		}
 		if proto == "udp" {
-			o.flowCollectorAddr, err = net.ResolveUDPAddr("udp", hostPortAddr)
+			o.externalFlowCollectorAddr, err = net.ResolveUDPAddr("udp", hostPortAddr)
 			if err != nil {
 				return fmt.Errorf("IPFIX flow collector over UDP proto cannot be resolved: %v", err)
 			}
 		} else {
-			o.flowCollectorAddr, err = net.ResolveTCPAddr("tcp", hostPortAddr)
+			o.externalFlowCollectorAddr, err = net.ResolveTCPAddr("tcp", hostPortAddr)
 			if err != nil {
 				return fmt.Errorf("IPFIX flow collector over TCP proto cannot be resolved: %v", err)
 			}
 		}
 	}
-	if o.config.FlowExportInterval != "" {
+	if o.config.FlowExportInterval == "" {
+		o.exportInterval = defaultFlowExportInterval
+	} else {
 		var err error
 		o.exportInterval, err = time.ParseDuration(o.config.FlowExportInterval)
 		if err != nil {
-			return fmt.Errorf("ExportInterval is not provided in right format: %v", err)
+			return fmt.Errorf("FlowExportInterval is not provided in right format: %v", err)
 		}
 		if o.exportInterval < time.Second {
-			return fmt.Errorf("ExportInterval should be greater than or equal to one second")
+			return fmt.Errorf("FlowExportInterval should be greater than or equal to one second")
 		}
+	}
+	if o.config.AggregatorTransportProtocol == "" {
+		o.aggregatorTransportProtocol = defaultAggregatorTransportProtocol
+	} else {
+		if (o.config.AggregatorTransportProtocol != flowaggregator.AggregatorTransportProtocolUDP) && (o.config.AggregatorTransportProtocol != flowaggregator.AggregatorTransportProtocolTCP) {
+			return fmt.Errorf("collecting process over %s proto is not supported", o.config.AggregatorTransportProtocol)
+		}
+		o.aggregatorTransportProtocol = o.config.AggregatorTransportProtocol
 	}
 	return nil
 }
@@ -119,7 +138,6 @@ func (o *Options) loadConfigFromFile(file string) (*FlowAggregatorConfig, error)
 	if err != nil {
 		return nil, err
 	}
-
 	c := FlowAggregatorConfig{}
 	err = yaml.UnmarshalStrict(data, &c)
 	if err != nil {
