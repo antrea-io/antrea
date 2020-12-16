@@ -24,7 +24,7 @@ require (
 	github.com/evanphx/json-patch v4.5.0+incompatible // indirect
 	github.com/go-openapi/spec v0.19.3
 	github.com/gogo/protobuf v1.3.1
-	github.com/golang/mock v1.4.3
+	github.com/golang/mock v1.4.4
 	github.com/golang/protobuf v1.3.2
 	github.com/google/uuid v1.1.1
 	github.com/kevinburke/ssh_config v0.0.0-20190725054713-01f96b0aa0cd
@@ -40,7 +40,7 @@ require (
 	github.com/stretchr/testify v1.5.1
 	github.com/ti-mo/conntrack v0.3.0
 	github.com/vishvananda/netlink v1.1.0
-	github.com/vmware/go-ipfix v0.3.1
+	github.com/vmware/go-ipfix v0.3.2
 	golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9
 	golang.org/x/exp v0.0.0-20190312203227-4b39c73a6495
 	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
