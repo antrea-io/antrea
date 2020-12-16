@@ -1075,6 +1075,7 @@ rules:
   - watch
   - list
   - create
+  - update
 - apiGroups:
   - ops.antrea.tanzu.vmware.com
   resources:

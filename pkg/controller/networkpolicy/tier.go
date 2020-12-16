@@ -42,15 +42,17 @@ var (
 	BaselineTierPriority = int32(253)
 	// defaultTierName maintains the name of the default Tier in Antrea.
 	defaultTierName = "application"
+	// emergencyTierName maintains the name of the Emergency Tier in Antrea.
+	emergencyTierName = "emergency"
 	// priorityMap maintains the Tier priority associated with system generated
 	// Tier names.
 	priorityMap = map[string]int32{
-		"baseline":      BaselineTierPriority,
-		defaultTierName: DefaultTierPriority,
-		"platform":      int32(150),
-		"networkops":    int32(100),
-		"securityops":   int32(50),
-		"emergency":     int32(20),
+		"baseline":        BaselineTierPriority,
+		defaultTierName:   DefaultTierPriority,
+		"platform":        int32(150),
+		"networkops":      int32(100),
+		"securityops":     int32(50),
+		emergencyTierName: int32(20),
 	}
 	// staticTierSet maintains the names of the static tiers such that they can
 	// be converted to corresponding Tier CRD names.
@@ -104,10 +106,10 @@ var (
 		},
 		{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: "emergency",
+				Name: emergencyTierName,
 			},
 			Spec: secv1alpha1.TierSpec{
-				Priority:    priorityMap["emergency"],
+				Priority:    priorityMap[emergencyTierName],
 				Description: "[READ-ONLY]: System generated Emergency Tier",
 			},
 		},
@@ -121,10 +123,16 @@ var (
 func (n *NetworkPolicyController) InitializeTiers() {
 	for _, t := range systemGeneratedTiers {
 		// Check if Tier is already present.
-		_, err := n.tierLister.Get(t.Name)
+		oldTier, err := n.tierLister.Get(t.Name)
 		if err == nil {
 			// Tier is already present.
 			klog.V(2).Infof("%s Tier already created", t.Name)
+			// Update existing Emergency Tier's priority from 5 to 20.
+			if t.Name == emergencyTierName && oldTier.Spec.Priority == 5 {
+				tToUpdate := oldTier.DeepCopy()
+				tToUpdate.Spec.Priority = 20
+				n.initTierUpdates(tToUpdate)
+			}
 			continue
 		}
 		n.initTier(t)
@@ -145,6 +153,34 @@ func (n *NetworkPolicyController) initTier(t *secv1alpha1.Tier) {
 		if err != nil && !errors.IsAlreadyExists(err) {
 			klog.Warningf("Failed to create %s Tier on init: %v. Retry attempt: %d", t.Name, err, retryAttempt)
 			// Tier creation may fail because antrea APIService is not yet ready
+			// to accept requests for validation. Retry fixed number of times
+			// not exceeding 2 * 5 = 10s.
+			time.Sleep(backoff)
+			backoff *= 2
+			if backoff > maxBackoffTime {
+				backoff = maxBackoffTime
+			}
+			retryAttempt += 1
+			continue
+		}
+		return
+	}
+}
+
+// initTierUpdates attempts to update Tiers using an
+// exponential backoff period from 1 to max of 8secs.
+func (n *NetworkPolicyController) initTierUpdates(t *secv1alpha1.Tier) {
+	var err error
+	const maxBackoffTime = 8 * time.Second
+	backoff := 1 * time.Second
+	retryAttempt := 1
+	for {
+		klog.V(2).Infof("Updating %s Tier", t.Name)
+		_, err = n.crdClient.SecurityV1alpha1().Tiers().Update(context.TODO(), t, metav1.UpdateOptions{})
+		// Attempt to recreate Tier after a backoff only if it does not exist.
+		if err != nil {
+			klog.Warningf("Failed to update %s Tier on init: %v. Retry attempt: %d", t.Name, err, retryAttempt)
+			// Tier update may fail because antrea APIService is not yet ready
 			// to accept requests for validation. Retry fixed number of times
 			// not exceeding 2 * 5 = 10s.
 			time.Sleep(backoff)
