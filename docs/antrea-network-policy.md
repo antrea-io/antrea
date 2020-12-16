@@ -86,7 +86,7 @@ Tier CRD object, that will be enforced after developer-created K8s NetworkPolici
 The details for these tiers are shown below:
 
 ```text
-    Emergency   -> Tier name "emergency" with priority "5"
+    Emergency   -> Tier name "emergency" with priority "20"
     SecurityOps -> Tier name "securityops" with priority "50"
     NetworkOps  -> Tier name "networkops" with priority "100"
     Platform    -> Tier name "platform" with priority "150"
@@ -149,7 +149,7 @@ All of the above commands produce output similar to what is shown below:
 
 ```text
     NAME          PRIORITY   AGE
-    emergency     5          27h
+    emergency     20         27h
     securityops   50         27h
     networkops    100        27h
     platform      150        27h

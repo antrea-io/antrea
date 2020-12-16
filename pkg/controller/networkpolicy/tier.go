@@ -50,7 +50,7 @@ var (
 		"platform":      int32(150),
 		"networkops":    int32(100),
 		"securityops":   int32(50),
-		"emergency":     int32(5),
+		"emergency":     int32(20),
 	}
 	// staticTierSet maintains the names of the static tiers such that they can
 	// be converted to corresponding Tier CRD names.
