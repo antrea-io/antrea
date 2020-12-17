@@ -1,0 +1,156 @@
+- builder:
+    name: run_ci
+    builders:
+         - shell: |
+            #!/bin/bash -x
+            status=0
+            echo "I am" $(whoami)
+            env
+            
+            cd $WORKSPACE/ci/jenkins/mellanox-ci/
+            
+            TMP_WORKSPACE=/tmp/k8s_$$
+            sudo WORKSPACE=${TMP_WORKSPACE} ./scripts/stop_ci.sh
+            sudo rm -rf /var/lib/kubelet
+            ADD_OPTS=$(env|egrep "_PR")
+            sudo WORKSPACE=${TMP_WORKSPACE} $ADD_OPTS ./scripts/start_ci.sh
+            let status=status+$?
+            sudo chown -R stack $TMP_WORKSPACE/
+            if [[ $status -eq 0 ]]; then
+                sleep 120
+                WORKSPACE=${TMP_WORKSPACE} ./scripts/test.sh
+                let status=status+$?
+                fi
+            else
+                echo "ERROR!! Failed to start the HW offload CI!"
+            fi
+            sudo WORKSPACE=${TMP_WORKSPACE} ./scripts/stop_ci.sh
+            
+            echo "Saving logs"
+            UPLOAD_LOGPATH=${JOB_NAME}/${BUILD_NUMBER}
+            sudo mkdir -p ${TMP_WORKSPACE}/${UPLOAD_LOGPATH}
+            sudo mv $(ls /tmp/*.log |grep kube) ${TMP_WORKSPACE}/logs
+            sudo mv ${TMP_WORKSPACE}/artifacts ${TMP_WORKSPACE}/logs ${TMP_WORKSPACE}/${UPLOAD_LOGPATH}
+            sudo chmod 777 -R ${TMP_WORKSPACE}/${UPLOAD_LOGPATH}
+            gzip -9 -r ${TMP_WORKSPACE}/${UPLOAD_LOGPATH} 2>&1|tee > /dev/null
+            target=/var/www/html/${UPLOAD_LOGPATH}
+            ssh $LOGSERVER mkdir -p ${target}
+            scp -r ${TMP_WORKSPACE}/${UPLOAD_LOGPATH}/* $LOGSERVER:$target 2>&1 | tee > /dev/null
+            echo ""
+            echo "Further Logs can be found at: http://$EXT_SERVER/${UPLOAD_LOGPATH}"
+            echo ""
+            sudo rm -rf ${TMP_WORKSPACE}
+            exit $status
+
+- builder:
+    name: get-ci-scripts
+    builders:
+         - shell: |
+            #!/bin/bash -x
+            if [[ ! -d $WORKSPACE/ci/jenkins/mellanox-ci ]];then
+                git clone $ANTREA_REPO $WORKSPACE/antrea
+                mv $WORKSPACE/antrea/* $WORKSPACE/
+                rm -fr $WORKSPACE/antrea
+            fi
+
+- builder:
+    name: builder-pending-label
+    builders:
+      - shell: 'exit 1 # fail on purpose'
+
+- builder:
+    name: post_pending_page
+    builders:
+      - shell: |
+          ssh $LOGSERVER mkdir -p /var/www/html/${JOB_NAME}
+          ssh $LOGSERVER mkdir -p /var/www/html/${JOB_NAME}/${BUILD_ID}
+          scp /home_stack/pending_page.html $LOGSERVER:/var/www/html/${JOB_NAME}/${BUILD_ID}/consoleFull
+
+- builder:
+    name: post_in_progress_page
+    builders:
+      - shell: |
+          scp /jenkins/in_progress.html $LOGSERVER:/var/www/html/${UPSTREAM_JOB_NAME}/${UPSTREAM_BUILD_ID}/consoleFull
+
+- builder:
+    name: post_full_console
+    builders:
+      - shell: |
+          #!/bin/bash +x
+          set -x
+          sleep 10
+
+          env
+
+          # note(abdallahyas): we need to check if the downstream job was finished
+          # normally (either succeeded or failed) within the timeout period. This
+          # can be done by checking if the LAST_TRIGGERED_JOB_NAME is  passed to the
+          # upstream job, if not that means either the downstream job was aborted for
+          # some reason, or the upstream job was timed out before the downstream job
+          # is finished. In both cases it is impossible to know the downstream job id
+          # using jenkins normal means.
+
+          target_job_name=""
+          target_job_id=""
+          if [[ -z "${LAST_TRIGGERED_JOB_NAME}" ]];then
+              target_job_name="${JOB_NAME}"
+              target_job_id="${BUILD_ID}"
+          else
+              job_id_variable="TRIGGERED_BUILD_NUMBER_${LAST_TRIGGERED_JOB_NAME}"
+              LAST_TRIGGERED_JOB_ID=${!job_id_variable}
+              target_job_name="${LAST_TRIGGERED_JOB_NAME}"
+              target_job_id="${LAST_TRIGGERED_JOB_ID}"
+          fi
+
+          mkdir -p /jenkins/workspace/${target_job_name}
+          mkdir -p /jenkins/workspace/${target_job_name}/${target_job_id}/
+
+          cat > /jenkins/workspace/${target_job_name}/${target_job_id}/consoleFull << EOF
+          <!-- HTML meta refresh URL redirection -->
+          <html>
+          <head>
+             <meta http-equiv="refresh"
+             content="0; url=http://13.74.249.42:8080/job/${target_job_name}/${target_job_id}/consoleFull">
+          </head>
+          <body>
+             <p>The page has moved to:
+             <a href="http://13.74.249.42:8080/job/${target_job_name}/${target_job_id}/consoleFull">this page</a></p>
+          </body>
+          </html>
+          EOF
+
+          scp -r /jenkins/workspace/${target_job_name}/${target_job_id}/consoleFull $LOGSERVER:/var/www/html/${JOB_NAME}/${BUILD_ID}/
+
+- builder:
+    name: construct_downstream_fail_email
+    builders:
+         - shell: |
+            #!/bin/bash
+            cat > /tmp/failling_email_body.html << EOF
+            <html><body>
+            <br/><br/>Dear <i>Friend</i>,<br/>
+            <br/>Please check the failing <a href=${ghprbPullLink}> PR</a> :<br/>
+            <br/>Title: ${ghprbPullTitle}:<br/>
+            <br/>You can find the console output <a href=http://${EXT_SERVER}/${JOB_NAME}/${BUILD_ID}/consoleFull>here</a>.
+            <br/>You can find further logs <a href=http://${EXT_SERVER}/${LAST_TRIGGERED_JOB_NAME}/${LAST_TRIGGERED_JOB_ID}/>here</a>.
+            <br/>
+            <br/> Best Regards. <br/> <a href=http://dev-l-vrt-019-4:8080> Jenkins </a><br/>
+            EOF
+            exit 0
+
+- builder:
+    name: construct_fail_email
+    builders:
+         - shell: |
+            #!/bin/bash
+            cat > /tmp/failling_email_body.html << EOF
+            <html><body>
+            <br/><br/>Dear <i>Friend</i>,<br/>
+            <br/>Please check the failing <a href=${ghprbPullLink}> PR</a> :<br/>
+            <br/>Title: ${ghprbPullTitle}:<br/>
+            <br/>You can find the console output <a href=http://${EXT_SERVER}:8080/job/${JOB_NAME}/${BUILD_ID}/consoleFull>here</a>.
+            <br/>You can find further logs <a href=http://${EXT_SERVER}/${JOB_NAME}/${BUILD_ID}/>here</a>.
+            <br/>
+            <br/> Best Regards. <br/> <a href=http://dev-l-vrt-019-4:8080> Jenkins </a><br/>
+            EOF
+            exit 0
