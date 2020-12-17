@@ -449,10 +449,10 @@ func (t *tierValidator) updateValidate(curObj, oldObj interface{}, userInfo auth
 	reason := ""
 	curTier := curObj.(*secv1alpha1.Tier)
 	oldTier := oldObj.(*secv1alpha1.Tier)
-	// Allow an exception of Emergency Tier Priority update from 5 to 20 as we downgrade its priority intentionally
+	// Allow exception of Tier Priority updates as we downgrade their priority intentionally
 	// from antrea-controller.
-	if curTier.Name == emergencyTierName {
-		if curTier.Spec.Priority == 20 && oldTier.Spec.Priority == 5 {
+	if oldPrio, ok := oldPriorityMap[curTier.Name]; ok {
+		if oldPrio == oldTier.Spec.Priority && priorityMap[curTier.Name] == curTier.Spec.Priority {
 			return "", true
 		}
 	}

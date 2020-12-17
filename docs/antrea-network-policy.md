@@ -149,10 +149,10 @@ All of the above commands produce output similar to what is shown below:
 
 ```text
     NAME          PRIORITY   AGE
-    emergency     20         27h
-    securityops   50         27h
-    networkops    100        27h
-    platform      150        27h
+    emergency     50         27h
+    securityops   100        27h
+    networkops    150        27h
+    platform      200        27h
     application   250        27h
 ```
 

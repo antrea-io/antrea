@@ -43,16 +43,26 @@ var (
 	// defaultTierName maintains the name of the default Tier in Antrea.
 	defaultTierName = "application"
 	// emergencyTierName maintains the name of the Emergency Tier in Antrea.
-	emergencyTierName = "emergency"
+	emergencyTierName   = "emergency"
+	securityOpsTierName = "securityops"
+	networkOpsTierName  = "networkops"
+	platformTierName    = "platform"
+	baselineTierName    = "baseline"
 	// priorityMap maintains the Tier priority associated with system generated
 	// Tier names.
 	priorityMap = map[string]int32{
-		"baseline":        BaselineTierPriority,
-		defaultTierName:   DefaultTierPriority,
-		"platform":        int32(150),
-		"networkops":      int32(100),
-		"securityops":     int32(50),
-		emergencyTierName: int32(20),
+		baselineTierName:    BaselineTierPriority,
+		defaultTierName:     DefaultTierPriority,
+		platformTierName:    int32(200),
+		networkOpsTierName:  int32(150),
+		securityOpsTierName: int32(100),
+		emergencyTierName:   int32(50),
+	}
+	oldPriorityMap = map[string]int32{
+		platformTierName:    int32(150),
+		networkOpsTierName:  int32(100),
+		securityOpsTierName: int32(50),
+		emergencyTierName:   int32(5),
 	}
 	// staticTierSet maintains the names of the static tiers such that they can
 	// be converted to corresponding Tier CRD names.
@@ -61,10 +71,10 @@ var (
 	systemGeneratedTiers = []*secv1alpha1.Tier{
 		{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: "baseline",
+				Name: baselineTierName,
 			},
 			Spec: secv1alpha1.TierSpec{
-				Priority:    priorityMap["baseline"],
+				Priority:    priorityMap[baselineTierName],
 				Description: "[READ-ONLY]: System generated Baseline Tier",
 			},
 		},
@@ -79,28 +89,28 @@ var (
 		},
 		{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: "platform",
+				Name: platformTierName,
 			},
 			Spec: secv1alpha1.TierSpec{
-				Priority:    priorityMap["platform"],
+				Priority:    priorityMap[platformTierName],
 				Description: "[READ-ONLY]: System generated Platform Tier",
 			},
 		},
 		{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: "networkops",
+				Name: networkOpsTierName,
 			},
 			Spec: secv1alpha1.TierSpec{
-				Priority:    priorityMap["networkops"],
+				Priority:    priorityMap[networkOpsTierName],
 				Description: "[READ-ONLY]: System generated NetworkOps Tier",
 			},
 		},
 		{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: "securityops",
+				Name: securityOpsTierName,
 			},
 			Spec: secv1alpha1.TierSpec{
-				Priority:    priorityMap["securityops"],
+				Priority:    priorityMap[securityOpsTierName],
 				Description: "[READ-ONLY]: System generated SecurityOps Tier",
 			},
 		},
@@ -128,9 +138,10 @@ func (n *NetworkPolicyController) InitializeTiers() {
 			// Tier is already present.
 			klog.V(2).Infof("%s Tier already created", t.Name)
 			// Update existing Emergency Tier's priority from 5 to 20.
-			if t.Name == emergencyTierName && oldTier.Spec.Priority == 5 {
+			oldPrio, ok := oldPriorityMap[t.Name]
+			if ok && oldPrio != oldTier.Spec.Priority {
 				tToUpdate := oldTier.DeepCopy()
-				tToUpdate.Spec.Priority = 20
+				tToUpdate.Spec.Priority = priorityMap[t.Name]
 				n.initTierUpdates(tToUpdate)
 			}
 			continue
