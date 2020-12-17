@@ -109,6 +109,15 @@ spec:
                       - Allow
                       - Drop
                       type: string
+                    appliedTo:
+                      items:
+                        properties:
+                          namespaceSelector:
+                            x-kubernetes-preserve-unknown-fields: true
+                          podSelector:
+                            x-kubernetes-preserve-unknown-fields: true
+                        type: object
+                      type: array
                     enableLogging:
                       type: boolean
                     name:
@@ -149,6 +158,15 @@ spec:
                       - Allow
                       - Drop
                       type: string
+                    appliedTo:
+                      items:
+                        properties:
+                          namespaceSelector:
+                            x-kubernetes-preserve-unknown-fields: true
+                          podSelector:
+                            x-kubernetes-preserve-unknown-fields: true
+                        type: object
+                      type: array
                     enableLogging:
                       type: boolean
                     from:
@@ -189,7 +207,6 @@ spec:
               tier:
                 type: string
             required:
-            - appliedTo
             - priority
             type: object
           status:
@@ -327,6 +344,14 @@ spec:
                       - Allow
                       - Drop
                       type: string
+                    appliedTo:
+                      items:
+                        properties:
+                          podSelector:
+                            type: object
+                            x-kubernetes-preserve-unknown-fields: true
+                        type: object
+                      type: array
                     enableLogging:
                       type: boolean
                     name:
@@ -369,6 +394,14 @@ spec:
                       - Allow
                       - Drop
                       type: string
+                    appliedTo:
+                      items:
+                        properties:
+                          podSelector:
+                            type: object
+                            x-kubernetes-preserve-unknown-fields: true
+                        type: object
+                      type: array
                     enableLogging:
                       type: boolean
                     from:
@@ -411,7 +444,6 @@ spec:
               tier:
                 type: string
             required:
-            - appliedTo
             - priority
             type: object
           status:

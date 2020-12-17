@@ -344,6 +344,13 @@ func (in *Rule) DeepCopyInto(out *Rule) {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
 	}
+	if in.AppliedTo != nil {
+		in, out := &in.AppliedTo, &out.AppliedTo
+		*out = make([]NetworkPolicyPeer, len(*in))
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
+		}
+	}
 	return
 }
 

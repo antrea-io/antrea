@@ -111,7 +111,13 @@ func ToNetworkPolicyMsg(in *types.NetworkPolicy, out *controlplane.NetworkPolicy
 	}
 	// Since stored objects are immutable, we just reference the fields here.
 	out.Rules = in.Rules
-	out.AppliedToGroups = in.AppliedToGroups
+	// AppliedToGroups at policy level only need to be populated to controlplane msg if
+	// appliedTo is not set per rule. Otherwise, the agent will read appliedTo from each
+	// rule, and in that case, the policy level appliedTo only contains span information,
+	// which the Antrea agent does not care about.
+	if !in.AppliedToPerRule {
+		out.AppliedToGroups = in.AppliedToGroups
+	}
 	out.Priority = in.Priority
 	out.TierPriority = in.TierPriority
 }

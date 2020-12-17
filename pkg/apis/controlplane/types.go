@@ -149,6 +149,7 @@ type NetworkPolicy struct {
 	// Rules is a list of rules to be applied to the selected GroupMembers.
 	Rules []NetworkPolicyRule
 	// AppliedToGroups is a list of names of AppliedToGroups to which this policy applies.
+	// Cannot be set in conjunction with any NetworkPolicyRule.AppliedToGroups in Rules.
 	AppliedToGroups []string
 	// Priority represents the relative priority of this NetworkPolicy as compared to
 	// other NetworkPolicies. Priority will be unset (nil) for K8s NetworkPolicy.
@@ -190,6 +191,10 @@ type NetworkPolicyRule struct {
 	// EnableLogging is used to indicate if agent should generate logs
 	// when rules are matched. Should be default to false.
 	EnableLogging bool
+	// AppliedToGroups is a list of names of AppliedToGroups to which this rule applies.
+	// Cannot be set in conjunction with NetworkPolicy.AppliedToGroups of the NetworkPolicy
+	// that this Rule is referred to.
+	AppliedToGroups []string
 }
 
 // Protocol defines network protocols supported for things like container ports.
