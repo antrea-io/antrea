@@ -28,6 +28,11 @@ type AntreaNetworkPolicySpecBuilder struct {
 	Namespace string
 }
 
+type ANPRuleAppliedToSpec struct {
+	PodSelector         map[string]string
+	PodSelectorMatchExp *[]metav1.LabelSelectorRequirement
+}
+
 func (b *AntreaNetworkPolicySpecBuilder) Get() *secv1alpha1.NetworkPolicy {
 	if b.Spec.Ingress == nil {
 		b.Spec.Ingress = []secv1alpha1.Rule{}
@@ -60,11 +65,9 @@ func (b *AntreaNetworkPolicySpecBuilder) SetTier(tier string) *AntreaNetworkPoli
 	return b
 }
 
-func (b *AntreaNetworkPolicySpecBuilder) SetAppliedToGroup(podSelector map[string]string,
-	podSelectorMatchExp *[]metav1.LabelSelectorRequirement) *AntreaNetworkPolicySpecBuilder {
-
+func (b *AntreaNetworkPolicySpecBuilder) GetAppliedToPeer(podSelector map[string]string,
+	podSelectorMatchExp *[]metav1.LabelSelectorRequirement) secv1alpha1.NetworkPolicyPeer {
 	var ps *metav1.LabelSelector
-
 	if podSelector != nil {
 		ps = &metav1.LabelSelector{
 			MatchLabels: podSelector,
@@ -78,9 +81,14 @@ func (b *AntreaNetworkPolicySpecBuilder) SetAppliedToGroup(podSelector map[strin
 			MatchExpressions: *podSelectorMatchExp,
 		}
 	}
-	appliedToPeer := secv1alpha1.NetworkPolicyPeer{
+	return secv1alpha1.NetworkPolicyPeer{
 		PodSelector: ps,
 	}
+}
+
+func (b *AntreaNetworkPolicySpecBuilder) SetAppliedToGroup(podSelector map[string]string,
+	podSelectorMatchExp *[]metav1.LabelSelectorRequirement) *AntreaNetworkPolicySpecBuilder {
+	appliedToPeer := b.GetAppliedToPeer(podSelector, podSelectorMatchExp)
 	b.Spec.AppliedTo = append(b.Spec.AppliedTo, appliedToPeer)
 	return b
 }
@@ -89,10 +97,11 @@ func (b *AntreaNetworkPolicySpecBuilder) AddIngress(protoc v1.Protocol,
 	port *int, portName *string, cidr *string,
 	podSelector map[string]string, nsSelector map[string]string,
 	podSelectorMatchExp *[]metav1.LabelSelectorRequirement, nsSelectorMatchExp *[]metav1.LabelSelectorRequirement,
-	action secv1alpha1.RuleAction, name string) *AntreaNetworkPolicySpecBuilder {
+	ruleAppliedToSpecs []ANPRuleAppliedToSpec, action secv1alpha1.RuleAction, name string) *AntreaNetworkPolicySpecBuilder {
 
 	var ps *metav1.LabelSelector
 	var ns *metav1.LabelSelector
+	var appliedTos []secv1alpha1.NetworkPolicyPeer
 	if b.Spec.Ingress == nil {
 		b.Spec.Ingress = []secv1alpha1.Rule{}
 	}
@@ -129,6 +138,9 @@ func (b *AntreaNetworkPolicySpecBuilder) AddIngress(protoc v1.Protocol,
 			CIDR: *cidr,
 		}
 	}
+	for _, at := range ruleAppliedToSpecs {
+		appliedTos = append(appliedTos, b.GetAppliedToPeer(at.PodSelector, at.PodSelectorMatchExp))
+	}
 	var policyPeer []secv1alpha1.NetworkPolicyPeer
 	if ps != nil || ns != nil || ipBlock != nil {
 		policyPeer = []secv1alpha1.NetworkPolicyPeer{{
@@ -159,10 +171,11 @@ func (b *AntreaNetworkPolicySpecBuilder) AddIngress(protoc v1.Protocol,
 		}
 	}
 	newRule := secv1alpha1.Rule{
-		From:   policyPeer,
-		Ports:  ports,
-		Action: &action,
-		Name:   name,
+		From:      policyPeer,
+		Ports:     ports,
+		Action:    &action,
+		Name:      name,
+		AppliedTo: appliedTos,
 	}
 	b.Spec.Ingress = append(b.Spec.Ingress, newRule)
 	return b
@@ -172,19 +185,21 @@ func (b *AntreaNetworkPolicySpecBuilder) AddEgress(protoc v1.Protocol,
 	port *int, portName *string, cidr *string,
 	podSelector map[string]string, nsSelector map[string]string,
 	podSelectorMatchExp *[]metav1.LabelSelectorRequirement, nsSelectorMatchExp *[]metav1.LabelSelectorRequirement,
-	action secv1alpha1.RuleAction, name string) *AntreaNetworkPolicySpecBuilder {
+	ruleAppliedToSpecs []ANPRuleAppliedToSpec, action secv1alpha1.RuleAction, name string) *AntreaNetworkPolicySpecBuilder {
 
 	// For simplicity, we just reuse the Ingress code here.  The underlying data model for ingress/egress is identical
 	// With the exception of calling the rule `To` vs. `From`.
 	c := &AntreaNetworkPolicySpecBuilder{}
-	c.AddIngress(protoc, port, portName, cidr, podSelector, nsSelector, podSelectorMatchExp, nsSelectorMatchExp, action, name)
+	c.AddIngress(protoc, port, portName, cidr, podSelector, nsSelector,
+		podSelectorMatchExp, nsSelectorMatchExp, ruleAppliedToSpecs, action, name)
 	theRule := c.Get().Spec.Ingress[0]
 
 	b.Spec.Egress = append(b.Spec.Egress, secv1alpha1.Rule{
-		To:     theRule.From,
-		Ports:  theRule.Ports,
-		Action: theRule.Action,
-		Name:   theRule.Name,
+		To:        theRule.From,
+		Ports:     theRule.Ports,
+		Action:    theRule.Action,
+		Name:      theRule.Name,
+		AppliedTo: theRule.AppliedTo,
 	})
 	return b
 }

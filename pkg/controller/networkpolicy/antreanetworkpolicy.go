@@ -15,6 +15,7 @@
 package networkpolicy
 
 import (
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog"
 
@@ -123,38 +124,57 @@ func (n *NetworkPolicyController) deleteANP(old interface{}) {
 // in case of ADD event or modified and store the updated instance, in case
 // of an UPDATE event.
 func (n *NetworkPolicyController) processAntreaNetworkPolicy(np *secv1alpha1.NetworkPolicy) *antreatypes.NetworkPolicy {
-	appliedToGroupNames := make([]string, 0, len(np.Spec.AppliedTo))
-	// Create AppliedToGroup for each AppliedTo present in
-	// AntreaNetworkPolicy spec.
+	appliedToPerRule := len(np.Spec.AppliedTo) == 0
+	// appliedToGroupNames tracks all distinct appliedToGroups referred to by the Antrea NetworkPolicy,
+	// either in the spec section or in ingress/egress rules.
+	// The span calculation and stale appliedToGroup cleanup logic would work seamlessly for both cases.
+	appliedToGroupNamesSet := sets.String{}
+	// Create AppliedToGroup for each AppliedTo present in AntreaNetworkPolicy spec.
 	for _, at := range np.Spec.AppliedTo {
-		appliedToGroupNames = append(appliedToGroupNames, n.createAppliedToGroup(
+		appliedToGroupNamesSet.Insert(n.createAppliedToGroup(
 			np.Namespace, at.PodSelector, at.NamespaceSelector, at.ExternalEntitySelector))
 	}
 	rules := make([]controlplane.NetworkPolicyRule, 0, len(np.Spec.Ingress)+len(np.Spec.Egress))
-	// Compute NetworkPolicyRule for Egress Rule.
+	// Compute NetworkPolicyRule for Ingress Rule.
 	for idx, ingressRule := range np.Spec.Ingress {
 		// Set default action to ALLOW to allow traffic.
 		services, namedPortExists := toAntreaServicesForCRD(ingressRule.Ports)
+		var appliedToGroupNamesForRule []string
+		// Create AppliedToGroup for each AppliedTo present in the ingress rule.
+		for _, at := range ingressRule.AppliedTo {
+			atGroup := n.createAppliedToGroup(np.Namespace, at.PodSelector, at.NamespaceSelector, at.ExternalEntitySelector)
+			appliedToGroupNamesForRule = append(appliedToGroupNamesForRule, atGroup)
+			appliedToGroupNamesSet.Insert(atGroup)
+		}
 		rules = append(rules, controlplane.NetworkPolicyRule{
-			Direction:     controlplane.DirectionIn,
-			From:          *n.toAntreaPeerForCRD(ingressRule.From, np, controlplane.DirectionIn, namedPortExists),
-			Services:      services,
-			Action:        ingressRule.Action,
-			Priority:      int32(idx),
-			EnableLogging: ingressRule.EnableLogging,
+			Direction:       controlplane.DirectionIn,
+			From:            *n.toAntreaPeerForCRD(ingressRule.From, np, controlplane.DirectionIn, namedPortExists),
+			Services:        services,
+			Action:          ingressRule.Action,
+			Priority:        int32(idx),
+			EnableLogging:   ingressRule.EnableLogging,
+			AppliedToGroups: appliedToGroupNamesForRule,
 		})
 	}
 	// Compute NetworkPolicyRule for Egress Rule.
 	for idx, egressRule := range np.Spec.Egress {
 		// Set default action to ALLOW to allow traffic.
 		services, namedPortExists := toAntreaServicesForCRD(egressRule.Ports)
+		var appliedToGroupNamesForRule []string
+		// Create AppliedToGroup for each AppliedTo present in the ingress rule.
+		for _, at := range egressRule.AppliedTo {
+			atGroup := n.createAppliedToGroup(np.Namespace, at.PodSelector, at.NamespaceSelector, at.ExternalEntitySelector)
+			appliedToGroupNamesForRule = append(appliedToGroupNamesForRule, atGroup)
+			appliedToGroupNamesSet.Insert(atGroup)
+		}
 		rules = append(rules, controlplane.NetworkPolicyRule{
-			Direction:     controlplane.DirectionOut,
-			To:            *n.toAntreaPeerForCRD(egressRule.To, np, controlplane.DirectionOut, namedPortExists),
-			Services:      services,
-			Action:        egressRule.Action,
-			Priority:      int32(idx),
-			EnableLogging: egressRule.EnableLogging,
+			Direction:       controlplane.DirectionOut,
+			To:              *n.toAntreaPeerForCRD(egressRule.To, np, controlplane.DirectionOut, namedPortExists),
+			Services:        services,
+			Action:          egressRule.Action,
+			Priority:        int32(idx),
+			EnableLogging:   egressRule.EnableLogging,
+			AppliedToGroups: appliedToGroupNamesForRule,
 		})
 	}
 	tierPriority := n.getTierPriority(np.Spec.Tier)
@@ -165,13 +185,14 @@ func (n *NetworkPolicyController) processAntreaNetworkPolicy(np *secv1alpha1.Net
 			Name:      np.Name,
 			UID:       np.UID,
 		},
-		Name:            internalNetworkPolicyKeyFunc(np),
-		UID:             np.UID,
-		Generation:      np.Generation,
-		AppliedToGroups: appliedToGroupNames,
-		Rules:           rules,
-		Priority:        &np.Spec.Priority,
-		TierPriority:    &tierPriority,
+		Name:             internalNetworkPolicyKeyFunc(np),
+		UID:              np.UID,
+		Generation:       np.Generation,
+		AppliedToGroups:  appliedToGroupNamesSet.List(),
+		Rules:            rules,
+		Priority:         &np.Spec.Priority,
+		TierPriority:     &tierPriority,
+		AppliedToPerRule: appliedToPerRule,
 	}
 	return internalNetworkPolicy
 }

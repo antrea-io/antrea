@@ -154,10 +154,11 @@ message NetworkPolicy {
   repeated NetworkPolicyRule rules = 2;
 
   // AppliedToGroups is a list of names of AppliedToGroups to which this policy applies.
+  // Cannot be set in conjunction with any NetworkPolicyRule.AppliedToGroups in Rules.
   repeated string appliedToGroups = 3;
 
   // Priority represents the relative priority of this Network Policy as compared to
-  // other Network Policies. Priority will be unset (nil) for K8s Network Policy.
+  // other Network Policies. Priority will be unset (nil) for K8s NetworkPolicy.
   optional double priority = 4;
 
   // TierPriority represents the priority of the Tier associated with this Network
@@ -236,6 +237,11 @@ message NetworkPolicyRule {
 
   // EnableLogging indicates whether or not to generate logs when rules are matched. Default to false.
   optional bool enableLogging = 7;
+
+  // AppliedToGroups is a list of names of AppliedToGroups to which this rule applies.
+  // Cannot be set in conjunction with NetworkPolicy.AppliedToGroups of the NetworkPolicy
+  // that this Rule is referred to.
+  repeated string appliedToGroups = 8;
 }
 
 // NetworkPolicyStats contains the information and traffic stats of a NetworkPolicy.
