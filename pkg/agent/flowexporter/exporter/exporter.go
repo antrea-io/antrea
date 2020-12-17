@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"hash/fnv"
 	"net"
+	"strings"
 	"time"
 
 	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
@@ -69,6 +70,14 @@ var (
 	AntreaInfoElementsIPv6 = append(antreaInfoElementsCommon, []string{"destinationClusterIPv6"}...)
 )
 
+const (
+	// flowAggregatorDNSName is a static DNS name for the deployed Flow Aggregator
+	// Service in the K8s cluster. By default, both the Name and Namespace of the
+	// Service are set to "flow-aggregator".
+	flowAggregatorDNSName = "flow-aggregator.flow-aggregator.svc"
+	defaultIPFIXPort      = "4739"
+)
+
 type flowExporter struct {
 	flowRecords     *flowrecords.FlowRecords
 	process         ipfix.IPFIXExportingProcess
@@ -112,7 +121,7 @@ func NewFlowExporter(records *flowrecords.FlowRecords, exportFrequency uint, v4E
 }
 
 // DoExport enables us to export flow records periodically at a given flow export frequency.
-func (exp *flowExporter) Export(collector net.Addr, stopCh <-chan struct{}, pollDone <-chan struct{}) {
+func (exp *flowExporter) Export(collectorAddr string, collectorProto string, stopCh <-chan struct{}, pollDone <-chan struct{}) {
 	for {
 		select {
 		case <-stopCh:
@@ -124,7 +133,7 @@ func (exp *flowExporter) Export(collector net.Addr, stopCh <-chan struct{}, poll
 			if exp.pollCycle%exp.exportFrequency == 0 {
 				// Retry to connect to IPFIX collector if the exporting process gets reset
 				if exp.process == nil {
-					err := exp.initFlowExporter(collector)
+					err := exp.initFlowExporter(collectorAddr, collectorProto)
 					if err != nil {
 						klog.Errorf("Error when initializing flow exporter: %v", err)
 						// There could be other errors while initializing flow exporter other than connecting to IPFIX collector,
@@ -156,24 +165,55 @@ func (exp *flowExporter) Export(collector net.Addr, stopCh <-chan struct{}, poll
 
 }
 
-func (exp *flowExporter) initFlowExporter(collector net.Addr) error {
+func (exp *flowExporter) initFlowExporter(collectorAddr string, collectorProto string) error {
 	// Create IPFIX exporting expProcess, initialize registries and other related entities
 	obsID, err := genObservationID()
 	if err != nil {
 		return fmt.Errorf("cannot generate obsID for IPFIX ipfixexport: %v", err)
 	}
 
+	if strings.Contains(collectorAddr, flowAggregatorDNSName) {
+		hostIPs, err := net.LookupIP(flowAggregatorDNSName)
+		if err != nil {
+			return err
+		}
+		// Currently, supporting only IPv4 for Flow Aggregator.
+		ip := hostIPs[0].To4()
+		if ip != nil {
+			// Update the collector address with resolved IP of flow aggregator
+			collectorAddr = net.JoinHostPort(ip.String(), defaultIPFIXPort)
+		} else {
+			return fmt.Errorf("resolved Flow Aggregator address %v is not supported", hostIPs[0])
+		}
+	}
+
 	var expProcess ipfix.IPFIXExportingProcess
-	if collector.Network() == "tcp" {
-		// TCP transport do not need any tempRefTimeout, so sending 0.
+	// TODO: This code can be further simplified by changing the go-ipfix API to accept
+	// collectorAddr and collectorProto instead of net.Addr input.
+	if collectorProto == "tcp" {
+		collector, err := net.ResolveTCPAddr("tcp", collectorAddr)
+		if err != nil {
+			return err
+		}
+		// TCP transport does not need any tempRefTimeout, so sending 0.
+		// tempRefTimeout is the template refresh timeout, which specifies how often
+		// the exporting process should send the template again.
 		expProcess, err = ipfix.NewIPFIXExportingProcess(collector, obsID, 0)
+		if err != nil {
+			return err
+		}
 	} else {
+		collector, err := net.ResolveUDPAddr("udp", collectorAddr)
+		if err != nil {
+			return err
+		}
 		// For UDP transport, hardcoding tempRefTimeout value as 1800s.
 		expProcess, err = ipfix.NewIPFIXExportingProcess(collector, obsID, 1800)
+		if err != nil {
+			return err
+		}
 	}
-	if err != nil {
-		return err
-	}
+
 	exp.process = expProcess
 	if exp.v4Enabled {
 		templateID := expProcess.NewTemplateID()
