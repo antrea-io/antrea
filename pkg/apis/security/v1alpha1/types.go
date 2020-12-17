@@ -45,8 +45,10 @@ type NetworkPolicySpec struct {
 	// Priority specfies the order of the NetworkPolicy relative to other
 	// NetworkPolicies.
 	Priority float64 `json:"priority"`
-	// Select workloads on which the rules will be applied to.
-	AppliedTo []NetworkPolicyPeer `json:"appliedTo"`
+	// Select workloads on which the rules will be applied to. Cannot be set in
+	// conjunction with AppliedTo in each rule.
+	// +optional
+	AppliedTo []NetworkPolicyPeer `json:"appliedTo,omitempty"`
 	// Set of ingress rules evaluated based on the order in which they are set.
 	// Currently Ingress rule supports setting the `From` field but not the `To`
 	// field within a Rule.
@@ -110,6 +112,10 @@ type Rule struct {
 	// EnableLogging is used to indicate if agent should generate logs
 	// when rules are matched. Should be default to false.
 	EnableLogging bool `json:"enableLogging"`
+	// Select workloads on which this rule will be applied to. Cannot be set in
+	// conjunction with NetworkPolicySpec/ClusterNetworkPolicySpec.AppliedTo.
+	// +optional
+	AppliedTo []NetworkPolicyPeer `json:"appliedTo,omitempty"`
 }
 
 // NetworkPolicyPeer describes the grouping selector of workloads.
@@ -137,6 +143,7 @@ type NetworkPolicyPeer struct {
 	// ExternalEntities are matched from Namespaces matched by the
 	// NamespaceSelector.
 	// Cannot be set with any other selector except NamespaceSelector.
+	// +optional
 	ExternalEntitySelector *metav1.LabelSelector `json:"externalEntitySelector,omitempty"`
 }
 
@@ -208,8 +215,10 @@ type ClusterNetworkPolicySpec struct {
 	// Priority specfies the order of the ClusterNetworkPolicy relative to
 	// other AntreaClusterNetworkPolicies.
 	Priority float64 `json:"priority"`
-	// Select workloads on which the rules will be applied to.
-	AppliedTo []NetworkPolicyPeer `json:"appliedTo"`
+	// Select workloads on which the rules will be applied to. Cannot be set in
+	// conjunction with AppliedTo in each rule.
+	// +optional
+	AppliedTo []NetworkPolicyPeer `json:"appliedTo,omitempty"`
 	// Set of ingress rules evaluated based on the order in which they are set.
 	// Currently Ingress rule supports setting the `From` field but not the `To`
 	// field within a Rule.

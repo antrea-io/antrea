@@ -649,6 +649,7 @@ func autoConvert_v1beta2_NetworkPolicyRule_To_controlplane_NetworkPolicyRule(in 
 	out.Priority = in.Priority
 	out.Action = (*v1alpha1.RuleAction)(unsafe.Pointer(in.Action))
 	out.EnableLogging = in.EnableLogging
+	out.AppliedToGroups = *(*[]string)(unsafe.Pointer(&in.AppliedToGroups))
 	return nil
 }
 
@@ -669,6 +670,7 @@ func autoConvert_controlplane_NetworkPolicyRule_To_v1beta2_NetworkPolicyRule(in 
 	out.Priority = in.Priority
 	out.Action = (*v1alpha1.RuleAction)(unsafe.Pointer(in.Action))
 	out.EnableLogging = in.EnableLogging
+	out.AppliedToGroups = *(*[]string)(unsafe.Pointer(&in.AppliedToGroups))
 	return nil
 }
 

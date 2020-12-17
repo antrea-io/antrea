@@ -219,11 +219,109 @@ func TestProcessAntreaNetworkPolicy(t *testing.T) {
 			expectedAppliedToGroups: 1,
 			expectedAddressGroups:   2,
 		},
+		{
+			name: "appliedTo-per-rule",
+			inputPolicy: &secv1alpha1.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Namespace: "ns3", Name: "npC", UID: "uidC"},
+				Spec: secv1alpha1.NetworkPolicySpec{
+					AppliedTo: nil,
+					Priority:  p10,
+					Ingress: []secv1alpha1.Rule{
+						{
+							AppliedTo: []secv1alpha1.NetworkPolicyPeer{
+								{
+									PodSelector: &selectorA,
+								},
+							},
+							Ports: []secv1alpha1.NetworkPolicyPort{
+								{
+									Port: &intstr80,
+								},
+							},
+							From: []secv1alpha1.NetworkPolicyPeer{
+								{
+									PodSelector: &selectorB,
+								},
+							},
+							Action: &allowAction,
+						},
+						{
+							AppliedTo: []secv1alpha1.NetworkPolicyPeer{
+								{
+									PodSelector: &selectorB,
+								},
+							},
+							Ports: []secv1alpha1.NetworkPolicyPort{
+								{
+									Port: &intstr81,
+								},
+							},
+							From: []secv1alpha1.NetworkPolicyPeer{
+								{
+									NamespaceSelector: &selectorC,
+								},
+							},
+							Action: &allowAction,
+						},
+					},
+				},
+			},
+			expectedPolicy: &antreatypes.NetworkPolicy{
+				UID:  "uidC",
+				Name: "uidC",
+				SourceRef: &controlplane.NetworkPolicyReference{
+					Type:      controlplane.AntreaNetworkPolicy,
+					Namespace: "ns3",
+					Name:      "npC",
+					UID:       "uidC",
+				},
+				Priority:     &p10,
+				TierPriority: &DefaultTierPriority,
+				Rules: []controlplane.NetworkPolicyRule{
+					{
+						Direction:       controlplane.DirectionIn,
+						AppliedToGroups: []string{getNormalizedUID(toGroupSelector("ns3", &selectorA, nil, nil).NormalizedName)},
+						From: controlplane.NetworkPolicyPeer{
+							AddressGroups: []string{getNormalizedUID(toGroupSelector("ns3", &selectorB, nil, nil).NormalizedName)},
+						},
+						Services: []controlplane.Service{
+							{
+								Protocol: &protocolTCP,
+								Port:     &intstr80,
+							},
+						},
+						Priority: 0,
+						Action:   &allowAction,
+					},
+					{
+						Direction:       controlplane.DirectionIn,
+						AppliedToGroups: []string{getNormalizedUID(toGroupSelector("ns3", &selectorB, nil, nil).NormalizedName)},
+						From: controlplane.NetworkPolicyPeer{
+							AddressGroups: []string{getNormalizedUID(toGroupSelector("", nil, &selectorC, nil).NormalizedName)},
+						},
+						Services: []controlplane.Service{
+							{
+								Protocol: &protocolTCP,
+								Port:     &intstr81,
+							},
+						},
+						Priority: 1,
+						Action:   &allowAction,
+					},
+				},
+				AppliedToGroups: []string{
+					getNormalizedUID(toGroupSelector("ns3", &selectorA, nil, nil).NormalizedName),
+					getNormalizedUID(toGroupSelector("ns3", &selectorB, nil, nil).NormalizedName),
+				},
+				AppliedToPerRule: true,
+			},
+			expectedAppliedToGroups: 2,
+			expectedAddressGroups:   2,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, c := newController()
-
 			assert.Equal(t, tt.expectedPolicy, c.processAntreaNetworkPolicy(tt.inputPolicy))
 			assert.Equal(t, tt.expectedAddressGroups, len(c.addressGroupStore.List()))
 			assert.Equal(t, tt.expectedAppliedToGroups, len(c.appliedToGroupStore.List()))

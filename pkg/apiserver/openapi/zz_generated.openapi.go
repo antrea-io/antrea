@@ -1464,7 +1464,7 @@ func schema_pkg_apis_controlplane_v1beta1_NetworkPolicy(ref common.ReferenceCall
 					},
 					"priority": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Priority represents the relative priority of this Network Policy as compared to other Network Policies. Priority will be unset (nil) for K8s Network Policy.",
+							Description: "Priority represents the relative priority of this Network Policy as compared to other Network Policies. Priority will be unset (nil) for K8s NetworkPolicy.",
 							Type:        []string{"number"},
 							Format:      "double",
 						},
@@ -2362,7 +2362,7 @@ func schema_pkg_apis_controlplane_v1beta2_NetworkPolicy(ref common.ReferenceCall
 					},
 					"appliedToGroups": {
 						SchemaProps: spec.SchemaProps{
-							Description: "AppliedToGroups is a list of names of AppliedToGroups to which this policy applies.",
+							Description: "AppliedToGroups is a list of names of AppliedToGroups to which this policy applies. Cannot be set in conjunction with any NetworkPolicyRule.AppliedToGroups in Rules.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -2376,7 +2376,7 @@ func schema_pkg_apis_controlplane_v1beta2_NetworkPolicy(ref common.ReferenceCall
 					},
 					"priority": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Priority represents the relative priority of this Network Policy as compared to other Network Policies. Priority will be unset (nil) for K8s Network Policy.",
+							Description: "Priority represents the relative priority of this Network Policy as compared to other Network Policies. Priority will be unset (nil) for K8s NetworkPolicy.",
 							Type:        []string{"number"},
 							Format:      "double",
 						},
@@ -2616,6 +2616,20 @@ func schema_pkg_apis_controlplane_v1beta2_NetworkPolicyRule(ref common.Reference
 							Description: "EnableLogging indicates whether or not to generate logs when rules are matched. Default to false.",
 							Type:        []string{"boolean"},
 							Format:      "",
+						},
+					},
+					"appliedToGroups": {
+						SchemaProps: spec.SchemaProps{
+							Description: "AppliedToGroups is a list of names of AppliedToGroups to which this rule applies. Cannot be set in conjunction with NetworkPolicy.AppliedToGroups of the NetworkPolicy that this Rule is referred to.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Type:   []string{"string"},
+										Format: "",
+									},
+								},
+							},
 						},
 					},
 				},
