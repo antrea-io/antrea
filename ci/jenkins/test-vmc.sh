@@ -251,13 +251,21 @@ function copy_image {
   image=$2
   IP=$3
   version=$4
+  need_cleanup=$5
   scp -o StrictHostKeyChecking=no -i ${GIT_CHECKOUT_DIR}/jenkins/key/antrea-ci-key $filename capv@${IP}:/home/capv
   if [ $TEST_OS == 'centos-7' ]; then
       ssh -q -o StrictHostKeyChecking=no -i ${GIT_CHECKOUT_DIR}/jenkins/key/antrea-ci-key -n capv@${IP} "sudo chmod 777 /run/containerd/containerd.sock"
-      ssh -q -o StrictHostKeyChecking=no -i ${GIT_CHECKOUT_DIR}/jenkins/key/antrea-ci-key -n capv@${IP} "sudo crictl images | grep $image | awk '{print \$3}' | xargs -r crictl rmi ; ctr -n=k8s.io images import /home/capv/$filename ; ctr -n=k8s.io images tag $image:$version $image:latest ; sudo crictl images | grep '<none>' | awk '{print \$3}' | xargs -r crictl rmi"
+      if [[ $need_cleanup == 'true' ]]; then
+          ssh -q -o StrictHostKeyChecking=no -i ${GIT_CHECKOUT_DIR}/jenkins/key/antrea-ci-key -n capv@${IP} "sudo crictl images | grep $image | awk '{print \$3}' | uniq | xargs -r crictl rmi"
+      fi
+      ssh -q -o StrictHostKeyChecking=no -i ${GIT_CHECKOUT_DIR}/jenkins/key/antrea-ci-key -n capv@${IP} "ctr -n=k8s.io images import /home/capv/$filename ; ctr -n=k8s.io images tag $image:$version $image:latest --force"
   else
-      ssh -q -o StrictHostKeyChecking=no -i ${GIT_CHECKOUT_DIR}/jenkins/key/antrea-ci-key -n capv@${IP} "sudo crictl images | grep $image | awk '{print \$3}' | xargs -r crictl rmi ; sudo ctr -n=k8s.io images import /home/capv/$filename ; sudo ctr -n=k8s.io images tag $image:$version $image:latest ; sudo crictl images | grep '<none>' | awk '{print \$3}' | xargs -r crictl rmi"
+      if [[ $need_cleanup == 'true' ]]; then
+          ssh -q -o StrictHostKeyChecking=no -i ${GIT_CHECKOUT_DIR}/jenkins/key/antrea-ci-key -n capv@${IP} "sudo crictl images | grep $image | awk '{print \$3}' | uniq | xargs -r crictl rmi"
+      fi
+      ssh -q -o StrictHostKeyChecking=no -i ${GIT_CHECKOUT_DIR}/jenkins/key/antrea-ci-key -n capv@${IP} "sudo ctr -n=k8s.io images import /home/capv/$filename ; sudo ctr -n=k8s.io images tag $image:$version $image:latest --force"
   fi
+  ssh -q -o StrictHostKeyChecking=no -i ${GIT_CHECKOUT_DIR}/jenkins/key/antrea-ci-key -n capv@${IP} "sudo crictl images | grep '<none>' | awk '{print \$3}' | xargs -r crictl rmi"
 }
 
 function deliver_antrea {
@@ -271,7 +279,7 @@ function deliver_antrea {
     export PATH=$GOROOT/bin:$PATH
 
     make clean -C $GIT_CHECKOUT_DIR
-    docker images | grep "${JOB_NAME}" | awk '{print $3}' | xargs -r docker rmi -f || true > /dev/null
+    docker images | grep "${JOB_NAME}" | awk '{print $3}' | uniq | xargs -r docker rmi -f || true > /dev/null
     # Clean up dangling images generated in previous builds. Recent ones must be excluded
     # because they might be being used in other builds running simultaneously.
     docker image prune -f --filter "until=1h" || true > /dev/null
@@ -304,6 +312,15 @@ function deliver_antrea {
         antrea_yml="antrea-coverage.yml"
     fi
 
+    DOCKER_IMG_VERSION=$CLUSTER
+    if [[ -n $OLD_ANTREA_VERSION ]]; then
+        if [[ $OLD_ANTREA_VERSION == 'LATEST' ]]; then
+            OLD_ANTREA_VERSION="$(cd $GIT_CHECKOUT_DIR | git tag | sort -Vr | head -n 1)"
+        fi
+        # Let antrea controller use new Antrea image
+        sed -i "0,/antrea-ubuntu:latest/{s/antrea-ubuntu:latest/antrea-ubuntu:$DOCKER_IMG_VERSION/}" ${GIT_CHECKOUT_DIR}/build/yamls/$antrea_yml
+    fi
+
     sed -i "s|#serviceCIDR: 10.96.0.0/12|serviceCIDR: 100.64.0.0/13|g" $GIT_CHECKOUT_DIR/build/yamls/$antrea_yml
 
     # Append antrea-prometheus.yml to antrea.yml
@@ -312,7 +329,6 @@ function deliver_antrea {
 
     echo "====== Delivering Antrea to all the Nodes ======"
     export KUBECONFIG=${GIT_CHECKOUT_DIR}/jenkins/out/kubeconfig
-    DOCKER_IMG_VERSION=$CLUSTER
 
     if [[ "$COVERAGE" == true ]]; then
         docker save -o antrea-ubuntu-coverage.tar antrea/antrea-ubuntu-coverage:${DOCKER_IMG_VERSION}
@@ -325,14 +341,41 @@ function deliver_antrea {
         scp -q -o StrictHostKeyChecking=no -i ${GIT_CHECKOUT_DIR}/jenkins/key/antrea-ci-key $GIT_CHECKOUT_DIR/build/yamls/*.yml capv@${control_plane_ip}:~
     done
 
-    kubectl get nodes -o wide --no-headers=true | awk '{print $6}' | while read IP; do
-        ssh-keygen -f "/var/lib/jenkins/.ssh/known_hosts" -R ${IP}
+    IPs=($(kubectl get nodes -o wide --no-headers=true | awk '{print $6}' | xargs))
+    for i in "${!IPs[@]}"
+    do
+        ssh-keygen -f "/var/lib/jenkins/.ssh/known_hosts" -R ${IPs[$i]}
         if [[ "$COVERAGE" == true ]]; then
-            copy_image antrea-ubuntu-coverage.tar docker.io/antrea/antrea-ubuntu-coverage $IP ${DOCKER_IMG_VERSION}
+            copy_image antrea-ubuntu-coverage.tar docker.io/antrea/antrea-ubuntu-coverage ${IPs[$i]} ${DOCKER_IMG_VERSION} true
         else
-            copy_image antrea-ubuntu.tar projects.registry.vmware.com/antrea/antrea-ubuntu $IP ${DOCKER_IMG_VERSION}
+            copy_image antrea-ubuntu.tar projects.registry.vmware.com/antrea/antrea-ubuntu ${IPs[$i]} ${DOCKER_IMG_VERSION} true
         fi
-        copy_image flow-aggregator.tar projects.registry.vmware.com/antrea/flow-aggregator $IP ${DOCKER_IMG_VERSION}
+        copy_image flow-aggregator.tar projects.registry.vmware.com/antrea/flow-aggregator ${IPs[$i]} ${DOCKER_IMG_VERSION} true
+    done
+
+    if [[ -z $OLD_ANTREA_VERSION ]]; then
+        return 0
+    fi
+
+    echo "====== Pulling old Antrea images ======"
+    if [[ ${DOCKER_REGISTRY} != "" ]]; then
+        docker pull ${DOCKER_REGISTRY}/antrea/antrea-ubuntu:$OLD_ANTREA_VERSION
+    else
+        docker pull antrea/antrea-ubuntu:$OLD_ANTREA_VERSION
+        docker tag antrea/antrea-ubuntu:$OLD_ANTREA_VERSION projects.registry.vmware.com/antrea/antrea-ubuntu:$OLD_ANTREA_VERSION
+    fi
+
+    echo "====== Delivering old Antrea images to all the Nodes ======"
+    docker save -o antrea-ubuntu-old.tar projects.registry.vmware.com/antrea/antrea-ubuntu:$OLD_ANTREA_VERSION
+    node_num=$(kubectl get nodes --no-headers=true | wc -l)
+    antrea_image="antrea-ubuntu"
+    for i in "${!IPs[@]}"
+    do
+        # We want old-versioned Antrea agents to be more than half in cluster
+        if [[ $i -ge $((${node_num}/2)) ]]; then
+            # Tag old image to latest if we want Antrea agent to be old-versioned
+            copy_image antrea-ubuntu-old.tar projects.registry.vmware.com/antrea/antrea-ubuntu ${IPs[$i]} $OLD_ANTREA_VERSION false
+        fi
     done
 }
 
