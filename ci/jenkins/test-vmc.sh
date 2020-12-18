@@ -162,7 +162,7 @@ function saveLogs() {
 function setup_cluster() {
     export KUBECONFIG=$KUBECONFIG_PATH
     if [ -z $K8S_VERSION ]; then
-      export K8S_VERSION=v1.18.2
+      export K8S_VERSION=v1.19.1
     fi
     if [ -z $TEST_OS ]; then
       export TEST_OS=ubuntu-1804
