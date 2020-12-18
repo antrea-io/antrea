@@ -20,7 +20,9 @@ import (
 	"net"
 	"time"
 
+	"github.com/vmware/go-ipfix/pkg/collector"
 	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
+	"github.com/vmware/go-ipfix/pkg/exporter"
 	ipfixintermediate "github.com/vmware/go-ipfix/pkg/intermediate"
 	ipfixregistry "github.com/vmware/go-ipfix/pkg/registry"
 	"k8s.io/klog"
@@ -67,7 +69,51 @@ var (
 		"originalExporterIPv4Address",
 		"originalObservationDomainId",
 	}
-	aggregationFields = []string{
+
+	nonStatsElementList = []string{
+		"flowEndSeconds",
+	}
+	statsElementList = []string{
+		"octetDeltaCount",
+		"octetTotalCount",
+		"packetDeltaCount",
+		"packetTotalCount",
+		"reverseOctetDeltaCount",
+		"reverseOctetTotalCount",
+		"reversePacketDeltaCount",
+		"reversePacketTotalCount",
+	}
+	antreaSourceStatsElementList = []string{
+		"octetDeltaCountFromSourceNode",
+		"octetTotalCountFromSourceNode",
+		"packetDeltaCountFromSourceNode",
+		"packetTotalCountFromSourceNode",
+		"reverseOctetDeltaCountFromSourceNode",
+		"reverseOctetTotalCountFromSourceNode",
+		"reversePacketDeltaCountFromSourceNode",
+		"reversePacketTotalCountFromSourceNode",
+	}
+	antreaDestinationStatsElementList = []string{
+		"octetDeltaCountFromDestinationNode",
+		"octetTotalCountFromDestinationNode",
+		"packetDeltaCountFromDestinationNode",
+		"packetTotalCountFromDestinationNode",
+		"reverseOctetDeltaCountFromDestinationNode",
+		"reverseOctetTotalCountFromDestinationNode",
+		"reversePacketDeltaCountFromDestinationNode",
+		"reversePacketTotalCountFromDestinationNode",
+	}
+	aggregationElements = &ipfixintermediate.AggregationElements{
+		NonStatsElements:                   nonStatsElementList,
+		StatsElements:                      statsElementList,
+		AggregatedSourceStatsElements:      antreaSourceStatsElementList,
+		AggregatedDestinationStatsElements: antreaDestinationStatsElementList,
+	}
+
+	correlateFields = []string{
+		"sourcePodName",
+		"sourcePodNamespace",
+		"sourceNodeName",
 		"destinationPodName",
 		"destinationPodNamespace",
 		"destinationNodeName",
@@ -76,6 +122,9 @@ var (
 		"ingressNetworkPolicyName",
 		"ingressNetworkPolicyNamespace",
 	}
+)
+
+const (
 	aggregationWorkerNum = 2
 )
 
@@ -124,19 +173,37 @@ func genObservationID() (uint32, error) {
 func (fa *flowAggregator) InitCollectingProcess() error {
 	var collectAddr net.Addr
 	var err error
+	var cpInput collector.CollectorInput
 	if fa.aggregatorTransportProtocol == AggregatorTransportProtocolTCP {
 		collectAddr, _ = net.ResolveTCPAddr("tcp", "0.0.0.0:4739")
-		fa.collectingProcess, err = ipfix.NewIPFIXCollectingProcess(collectAddr, 65535, 0)
+		cpInput = collector.CollectorInput{
+			Address:       collectAddr,
+			MaxBufferSize: 65535,
+			TemplateTTL:   0,
+			IsEncrypted:   false,
+		}
 	} else {
 		collectAddr, _ = net.ResolveUDPAddr("udp", "0.0.0.0:4739")
-		fa.collectingProcess, err = ipfix.NewIPFIXCollectingProcess(collectAddr, 1024, 0)
+		cpInput = collector.CollectorInput{
+			Address:       collectAddr,
+			MaxBufferSize: 1024,
+			TemplateTTL:   0,
+			IsEncrypted:   false,
+		}
 	}
+	fa.collectingProcess, err = ipfix.NewIPFIXCollectingProcess(cpInput)
 	return err
 }
 
 func (fa *flowAggregator) InitAggregationProcess() error {
 	var err error
-	fa.aggregationProcess, err = ipfix.NewIPFIXAggregationProcess(fa.collectingProcess.GetMsgChan(), aggregationWorkerNum, aggregationFields)
+	apInput := ipfixintermediate.AggregationInput{
+		MessageChan:       fa.collectingProcess.GetMsgChan(),
+		WorkerNum:         aggregationWorkerNum,
+		CorrelateFields:   correlateFields,
+		AggregateElements: aggregationElements,
+	}
+	fa.aggregationProcess, err = ipfix.NewIPFIXAggregationProcess(apInput)
 	return err
 }
 
@@ -145,14 +212,27 @@ func (fa *flowAggregator) initExportingProcess() error {
 	if err != nil {
 		return fmt.Errorf("cannot generate observation ID for flow aggregator: %v", err)
 	}
-	var ep ipfix.IPFIXExportingProcess
+	var expInput exporter.ExporterInput
 	if fa.externalFlowCollectorAddr.Network() == "tcp" {
-		// tempRefTimeout is the template refresh timeout. TCP transport does not need send template periodically, so sending 0.
-		ep, err = ipfix.NewIPFIXExportingProcess(fa.externalFlowCollectorAddr, obsID, 0)
+		// TCP transport does not need any tempRefTimeout, so sending 0.
+		expInput = exporter.ExporterInput{
+			CollectorAddr:       fa.externalFlowCollectorAddr,
+			ObservationDomainID: obsID,
+			TempRefTimeout:      0,
+			PathMTU:             0,
+			IsEncrypted:         false,
+		}
 	} else {
 		// For UDP transport, hardcoding tempRefTimeout value as 1800s. So we will send out template every 30 minutes.
-		ep, err = ipfix.NewIPFIXExportingProcess(fa.externalFlowCollectorAddr, obsID, 1800)
+		expInput = exporter.ExporterInput{
+			CollectorAddr:       fa.externalFlowCollectorAddr,
+			ObservationDomainID: obsID,
+			TempRefTimeout:      1800,
+			PathMTU:             0,
+			IsEncrypted:         false,
+		}
 	}
+	ep, err := ipfix.NewIPFIXExportingProcess(expInput)
 	if err != nil {
 		return fmt.Errorf("got error when initializing IPFIX exporting process: %v", err)
 	}
@@ -194,7 +274,7 @@ func (fa *flowAggregator) Run(stopCh <-chan struct{}) {
 					continue
 				}
 			}
-			err := fa.aggregationProcess.ForAllRecordsDo(fa.sendFlowKeyRecords)
+			err := fa.aggregationProcess.ForAllRecordsDo(fa.sendFlowKeyRecord)
 			if err != nil {
 				klog.Errorf("Error when sending flow records: %v", err)
 				// If there is an error when sending flow records because of intermittent connectivity, we reset the connection
@@ -207,21 +287,22 @@ func (fa *flowAggregator) Run(stopCh <-chan struct{}) {
 	}
 }
 
-func (fa *flowAggregator) sendFlowKeyRecords(key ipfixintermediate.FlowKey, records []ipfixentities.Record) error {
-	setSent := ipfix.NewSet(ipfixentities.Data, fa.templateID, false)
-	for _, record := range records {
-		err := setSent.AddRecord(record.GetOrderedElementList(), fa.templateID)
-		if err != nil {
-			return fmt.Errorf("AddRecord failed, error: %v", err)
-		}
+func (fa *flowAggregator) sendFlowKeyRecord(key ipfixintermediate.FlowKey, record ipfixintermediate.AggregationFlowRecord) error {
+	if !record.ReadyToSend {
+		klog.V(4).Info("Skip sending record that is not correlated.")
+		return nil
 	}
-	bytesSent, err := fa.exportingProcess.AddSetAndSendMsg(ipfixentities.Data, setSent.GetSet())
+	// TODO: more records per data set will be supported when go-ipfix supports size check when adding records
+	dataSet := ipfix.NewSet(ipfixentities.Data, fa.templateID, false)
+	err := dataSet.AddRecord(record.Record.GetOrderedElementList(), fa.templateID)
 	if err != nil {
-		return fmt.Errorf("send data record for key %+v failed, error: %v", key, err)
+		return fmt.Errorf("error when adding the record to the set: %v", err)
 	}
-	// TODO: We will delete only inactive flows when intermediate process supports it in go-ipfix.
+	_, err = fa.sendDataSet(dataSet)
+	if err != nil {
+		return err
+	}
 	fa.aggregationProcess.DeleteFlowKeyFromMapWithoutLock(key)
-	klog.V(4).Infof("Sent key: %+v, sent bytes: %d, records num: %d\n", key, bytesSent, len(records))
 	return nil
 }
 
@@ -261,8 +342,17 @@ func (fa *flowAggregator) sendTemplateSet(templateSet ipfix.IPFIXSet) (int, erro
 	}
 	err := templateSet.AddRecord(elements, fa.templateID)
 	if err != nil {
-		return 0, fmt.Errorf("AddRecord failed, error: %v", err)
+		return 0, fmt.Errorf("error when adding record to set, error: %v", err)
 	}
-	bytesSent, err := fa.exportingProcess.AddSetAndSendMsg(ipfixentities.Template, templateSet.GetSet())
+	bytesSent, err := fa.exportingProcess.SendSet(templateSet.GetSet())
 	return bytesSent, err
+}
+
+func (fa *flowAggregator) sendDataSet(dataSet ipfix.IPFIXSet) (int, error) {
+	sentBytes, err := fa.exportingProcess.SendSet(dataSet.GetSet())
+	if err != nil {
+		return 0, fmt.Errorf("error when sending data set: %v", err)
+	}
+	klog.V(4).Infof("Data set sent successfully. Bytes sent: %d", sentBytes)
+	return sentBytes, nil
 }

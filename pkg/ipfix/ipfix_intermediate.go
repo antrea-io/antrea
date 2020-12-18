@@ -17,7 +17,6 @@ package ipfix
 import (
 	"fmt"
 
-	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
 	ipfixintermediate "github.com/vmware/go-ipfix/pkg/intermediate"
 )
 
@@ -35,8 +34,8 @@ type ipfixAggregationProcess struct {
 	AggregationProcess *ipfixintermediate.AggregationProcess
 }
 
-func NewIPFIXAggregationProcess(messageChan chan *ipfixentities.Message, workerNum int, correlateFields []string) (*ipfixAggregationProcess, error) {
-	ap, err := ipfixintermediate.InitAggregationProcess(messageChan, workerNum, correlateFields)
+func NewIPFIXAggregationProcess(input ipfixintermediate.AggregationInput) (*ipfixAggregationProcess, error) {
+	ap, err := ipfixintermediate.InitAggregationProcess(input)
 	if err != nil {
 		return nil, fmt.Errorf("error while initializing IPFIX intermediate process: %v", err)
 	}

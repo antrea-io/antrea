@@ -38,10 +38,10 @@ require (
 	github.com/spf13/cobra v0.0.5
 	github.com/spf13/pflag v1.0.5
 	github.com/streamrail/concurrent-map v0.0.0-20160823150647-8bf1e9bacbf6 // indirect
-	github.com/stretchr/testify v1.5.1
+	github.com/stretchr/testify v1.6.1
 	github.com/ti-mo/conntrack v0.3.0
 	github.com/vishvananda/netlink v1.1.0
-	github.com/vmware/go-ipfix v0.3.2
+	github.com/vmware/go-ipfix v0.4.2
 	golang.org/x/crypto v0.0.0-20200820211705-5c72a883971a
 	golang.org/x/exp v0.0.0-20190312203227-4b39c73a6495
 	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
