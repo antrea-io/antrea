@@ -230,12 +230,14 @@ func (o *Options) validateFlowExporterConfig() error {
 		o.flowCollectorProto = proto
 
 		// Parse the given flowPollInterval config
-		o.pollInterval, err = time.ParseDuration(o.config.FlowPollInterval)
-		if err != nil {
-			return fmt.Errorf("FlowPollInterval is not provided in right format")
-		}
-		if o.pollInterval < time.Second {
-			return fmt.Errorf("FlowPollInterval should be greater than or equal to one second")
+		if o.config.FlowPollInterval != "" {
+			o.pollInterval, err = time.ParseDuration(o.config.FlowPollInterval)
+			if err != nil {
+				return fmt.Errorf("FlowPollInterval is not provided in right format")
+			}
+			if o.pollInterval < time.Second {
+				return fmt.Errorf("FlowPollInterval should be greater than or equal to one second")
+			}
 		}
 	}
 	return nil
