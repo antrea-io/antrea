@@ -137,7 +137,7 @@ func (n *NetworkPolicyController) InitializeTiers() {
 		if err == nil {
 			// Tier is already present.
 			klog.V(2).Infof("%s Tier already created", t.Name)
-			// Update existing Emergency Tier's priority from 5 to 20.
+			// Update Tier Priority if it is not set to desired Priority.
 			oldPrio, ok := oldPriorityMap[t.Name]
 			if ok && oldPrio == oldTier.Spec.Priority {
 				tToUpdate := oldTier.DeepCopy()
