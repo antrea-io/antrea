@@ -20,9 +20,11 @@ function echoerr {
     >&2 echo "$@"
 }
 
-_usage="Usage: $0 [--mode (dev|release)] [--keep] [--help|-h]
+_usage="Usage: $0 [--mode (dev|release)] [-fc|--flow-collector] [--keep] [--help|-h]
 Generate a YAML manifest for flow aggregator, using Kustomize, and print it to stdout.
         --mode (dev|release)  Choose the configuration variant that you need (default is 'dev')
+        --flow-collector      Flow collector is the externalFlowCollectorAddr configMap parameter
+                              It should be given in format IP:port:proto. Example: 192.168.1.100:4739:udp
         --keep                Debug flag which will preserve the generated kustomization.yml
         --help, -h            Print this message and exit
 
@@ -43,7 +45,7 @@ function print_help {
 
 MODE="dev"
 KEEP=false
-
+FLOW_COLLECTOR=""
 while [[ $# -gt 0 ]]
 do
 key="$1"
@@ -51,6 +53,10 @@ key="$1"
 case $key in
     --mode)
     MODE="$2"
+    shift 2
+    ;;
+    -fc|--flow-collector)
+    FLOW_COLLECTOR="$2"
     shift 2
     ;;
     --keep)
@@ -105,6 +111,22 @@ TMP_DIR=$(mktemp -d $KUSTOMIZATION_DIR/overlays.XXXXXXXX)
 pushd $TMP_DIR > /dev/null
 
 BASE=../../base
+
+# do all ConfigMap edits
+mkdir configMap && cd configMap
+# user is not expected to make changes directly to flow-aggregator.conf,
+# but instead to the generated YAML manifest, so our regexs need not be too robust.
+cp $KUSTOMIZATION_DIR/base/conf/flow-aggregator.conf flow-aggregator.conf
+if [[ $FLOW_COLLECTOR != "" ]]; then
+    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*externalFlowCollectorAddr[[:space:]]*:[[:space:]]\"\"+[[:space:]]*$/externalFlowCollectorAddr:  \"$FLOW_COLLECTOR\"/" flow-aggregator.conf
+fi
+
+# unfortunately 'kustomize edit add configmap' does not support specifying 'merge' as the behavior,
+# which is why we use a template kustomization file.
+sed -e "s/<FLOW_AGG_CONF_FILE>/flow-aggregator.conf/" ../../patches/kustomization.configMap.tpl.yml > kustomization.yml
+$KUSTOMIZE edit add base $BASE
+BASE=../configMap
+cd ..
 
 mkdir $MODE && cd $MODE
 touch kustomization.yml
