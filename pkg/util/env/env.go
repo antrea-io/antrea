@@ -67,7 +67,7 @@ func GetPodNamespace() string {
 	return podNamespace
 }
 
-// GetAntreaControllerServiceAccountName returns the ServiceAccount's name associated with antrea-controller.
+// GetAntreaControllerServiceAccountName returns the ServiceAccount name associated with antrea-controller.
 func GetAntreaControllerServiceAccount() string {
 	svcAcctName := os.Getenv(svcAcctNameEnvKey)
 	if svcAcctName == "" {
