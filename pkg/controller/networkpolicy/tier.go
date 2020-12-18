@@ -139,10 +139,10 @@ func (n *NetworkPolicyController) InitializeTiers() {
 			klog.V(2).Infof("%s Tier already created", t.Name)
 			// Update existing Emergency Tier's priority from 5 to 20.
 			oldPrio, ok := oldPriorityMap[t.Name]
-			if ok && oldPrio != oldTier.Spec.Priority {
+			if ok && oldPrio == oldTier.Spec.Priority {
 				tToUpdate := oldTier.DeepCopy()
 				tToUpdate.Spec.Priority = priorityMap[t.Name]
-				n.initTierUpdates(tToUpdate)
+				n.updateTier(tToUpdate)
 			}
 			continue
 		}
@@ -178,9 +178,9 @@ func (n *NetworkPolicyController) initTier(t *secv1alpha1.Tier) {
 	}
 }
 
-// initTierUpdates attempts to update Tiers using an
+// updateTier attempts to update Tiers using an
 // exponential backoff period from 1 to max of 8secs.
-func (n *NetworkPolicyController) initTierUpdates(t *secv1alpha1.Tier) {
+func (n *NetworkPolicyController) updateTier(t *secv1alpha1.Tier) {
 	var err error
 	const maxBackoffTime = 8 * time.Second
 	backoff := 1 * time.Second
@@ -188,7 +188,7 @@ func (n *NetworkPolicyController) initTierUpdates(t *secv1alpha1.Tier) {
 	for {
 		klog.V(2).Infof("Updating %s Tier", t.Name)
 		_, err = n.crdClient.SecurityV1alpha1().Tiers().Update(context.TODO(), t, metav1.UpdateOptions{})
-		// Attempt to recreate Tier after a backoff only if it does not exist.
+		// Attempt to update Tier after a backoff.
 		if err != nil {
 			klog.Warningf("Failed to update %s Tier on init: %v. Retry attempt: %d", t.Name, err, retryAttempt)
 			// Tier update may fail because antrea APIService is not yet ready

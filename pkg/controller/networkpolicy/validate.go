@@ -24,9 +24,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/apiserver/pkg/authentication/serviceaccount"
 	"k8s.io/klog"
 
 	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
+	"github.com/vmware-tanzu/antrea/pkg/util/env"
 )
 
 // validator interface introduces the set of functions that must be implemented
@@ -449,12 +451,9 @@ func (t *tierValidator) updateValidate(curObj, oldObj interface{}, userInfo auth
 	reason := ""
 	curTier := curObj.(*secv1alpha1.Tier)
 	oldTier := oldObj.(*secv1alpha1.Tier)
-	// Allow exception of Tier Priority updates as we downgrade their priority intentionally
-	// from antrea-controller.
-	if oldPrio, ok := oldPriorityMap[curTier.Name]; ok {
-		if oldPrio == oldTier.Spec.Priority && priorityMap[curTier.Name] == curTier.Spec.Priority {
-			return "", true
-		}
+	// Allow exception of Tier Priority updates performed by the antrea-controller
+	if serviceaccount.MatchesUsername("kube-system", env.GetAntreaControllerServiceAccount(), userInfo.Username) {
+		return "", true
 	}
 	if curTier.Spec.Priority != oldTier.Spec.Priority {
 		allowed = false

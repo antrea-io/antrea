@@ -86,10 +86,10 @@ Tier CRD object, that will be enforced after developer-created K8s NetworkPolici
 The details for these tiers are shown below:
 
 ```text
-    Emergency   -> Tier name "emergency" with priority "20"
-    SecurityOps -> Tier name "securityops" with priority "50"
-    NetworkOps  -> Tier name "networkops" with priority "100"
-    Platform    -> Tier name "platform" with priority "150"
+    Emergency   -> Tier name "emergency" with priority "50"
+    SecurityOps -> Tier name "securityops" with priority "100"
+    NetworkOps  -> Tier name "networkops" with priority "150"
+    Platform    -> Tier name "platform" with priority "200"
     Application -> Tier name "application" with priority "250"
     Baseline    -> Tier name "baseline" with priority "253"
 ```
