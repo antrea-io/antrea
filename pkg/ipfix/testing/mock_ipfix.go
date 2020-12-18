@@ -49,21 +49,6 @@ func (m *MockIPFIXExportingProcess) EXPECT() *MockIPFIXExportingProcessMockRecor
 	return m.recorder
 }
 
-// AddSetAndSendMsg mocks base method
-func (m *MockIPFIXExportingProcess) AddSetAndSendMsg(arg0 entities.ContentType, arg1 entities.Set) (int, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AddSetAndSendMsg", arg0, arg1)
-	ret0, _ := ret[0].(int)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// AddSetAndSendMsg indicates an expected call of AddSetAndSendMsg
-func (mr *MockIPFIXExportingProcessMockRecorder) AddSetAndSendMsg(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddSetAndSendMsg", reflect.TypeOf((*MockIPFIXExportingProcess)(nil).AddSetAndSendMsg), arg0, arg1)
-}
-
 // CloseConnToCollector mocks base method
 func (m *MockIPFIXExportingProcess) CloseConnToCollector() {
 	m.ctrl.T.Helper()
@@ -88,6 +73,21 @@ func (m *MockIPFIXExportingProcess) NewTemplateID() uint16 {
 func (mr *MockIPFIXExportingProcessMockRecorder) NewTemplateID() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NewTemplateID", reflect.TypeOf((*MockIPFIXExportingProcess)(nil).NewTemplateID))
+}
+
+// SendSet mocks base method
+func (m *MockIPFIXExportingProcess) SendSet(arg0 entities.Set) (int, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SendSet", arg0)
+	ret0, _ := ret[0].(int)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SendSet indicates an expected call of SendSet
+func (mr *MockIPFIXExportingProcessMockRecorder) SendSet(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendSet", reflect.TypeOf((*MockIPFIXExportingProcess)(nil).SendSet), arg0)
 }
 
 // MockIPFIXSet is a mock of IPFIXSet interface

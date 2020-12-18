@@ -22,6 +22,7 @@ import (
 	"time"
 
 	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
+	"github.com/vmware/go-ipfix/pkg/exporter"
 	ipfixregistry "github.com/vmware/go-ipfix/pkg/registry"
 	"k8s.io/klog"
 
@@ -90,6 +91,7 @@ type flowExporter struct {
 	registry        ipfix.IPFIXRegistry
 	v4Enabled       bool
 	v6Enabled       bool
+	collectorAddr   net.Addr
 }
 
 func genObservationID() (uint32, error) {
@@ -117,6 +119,7 @@ func NewFlowExporter(records *flowrecords.FlowRecords, exportFrequency uint, v4E
 		registry,
 		v4Enabled,
 		v6Enabled,
+		nil,
 	}
 }
 
@@ -187,9 +190,9 @@ func (exp *flowExporter) initFlowExporter(collectorAddr string, collectorProto s
 		}
 	}
 
-	var expProcess ipfix.IPFIXExportingProcess
 	// TODO: This code can be further simplified by changing the go-ipfix API to accept
 	// collectorAddr and collectorProto instead of net.Addr input.
+	var expInput exporter.ExporterInput
 	if collectorProto == "tcp" {
 		collector, err := net.ResolveTCPAddr("tcp", collectorAddr)
 		if err != nil {
@@ -198,9 +201,12 @@ func (exp *flowExporter) initFlowExporter(collectorAddr string, collectorProto s
 		// TCP transport does not need any tempRefTimeout, so sending 0.
 		// tempRefTimeout is the template refresh timeout, which specifies how often
 		// the exporting process should send the template again.
-		expProcess, err = ipfix.NewIPFIXExportingProcess(collector, obsID, 0)
-		if err != nil {
-			return err
+		expInput = exporter.ExporterInput{
+			CollectorAddr:       collector,
+			ObservationDomainID: obsID,
+			TempRefTimeout:      0,
+			PathMTU:             0,
+			IsEncrypted:         false,
 		}
 	} else {
 		collector, err := net.ResolveUDPAddr("udp", collectorAddr)
@@ -208,10 +214,17 @@ func (exp *flowExporter) initFlowExporter(collectorAddr string, collectorProto s
 			return err
 		}
 		// For UDP transport, hardcoding tempRefTimeout value as 1800s.
-		expProcess, err = ipfix.NewIPFIXExportingProcess(collector, obsID, 1800)
-		if err != nil {
-			return err
+		expInput = exporter.ExporterInput{
+			CollectorAddr:       collector,
+			ObservationDomainID: obsID,
+			TempRefTimeout:      1800,
+			PathMTU:             0,
+			IsEncrypted:         false,
 		}
+	}
+	expProcess, err := ipfix.NewIPFIXExportingProcess(expInput)
+	if err != nil {
+		return fmt.Errorf("error when starting exporter: %v", err)
 	}
 
 	exp.process = expProcess
@@ -240,21 +253,29 @@ func (exp *flowExporter) initFlowExporter(collectorAddr string, collectorProto s
 }
 
 func (exp *flowExporter) sendFlowRecords() error {
-	sendAndUpdateFlowRecord := func(key flowexporter.ConnectionKey, record flowexporter.FlowRecord) error {
-		templateID := exp.templateIDv4
+	addAndSendFlowRecord := func(key flowexporter.ConnectionKey, record flowexporter.FlowRecord) error {
 		if record.IsIPv6 {
-			templateID = exp.templateIDv6
-		}
-		dataSet := ipfix.NewSet(ipfixentities.Data, templateID, false)
-		if err := exp.sendDataSet(dataSet, record); err != nil {
-			return err
-		}
-		if err := exp.flowRecords.ValidateAndUpdateStats(key, record); err != nil {
-			return err
+			dataSetIPv6 := ipfix.NewSet(ipfixentities.Data, exp.templateIDv6, false)
+			// TODO: more records per data set will be supported when go-ipfix supports size check when adding records
+			if err := exp.addRecordToSet(dataSetIPv6, record); err != nil {
+				return err
+			}
+			if _, err := exp.sendDataSet(dataSetIPv6); err != nil {
+				return err
+			}
+		} else {
+			dataSetIPv4 := ipfix.NewSet(ipfixentities.Data, exp.templateIDv4, false)
+			// TODO: more records per data set will be supported when go-ipfix supports size check when adding records
+			if err := exp.addRecordToSet(dataSetIPv4, record); err != nil {
+				return err
+			}
+			if _, err := exp.sendDataSet(dataSetIPv4); err != nil {
+				return err
+			}
 		}
 		return nil
 	}
-	err := exp.flowRecords.ForAllFlowRecordsDo(sendAndUpdateFlowRecord)
+	err := exp.flowRecords.ForAllFlowRecordsDo(addAndSendFlowRecord)
 	if err != nil {
 		return fmt.Errorf("error when iterating flow records: %v", err)
 	}
@@ -302,7 +323,7 @@ func (exp *flowExporter) sendTemplateSet(templateSet ipfix.IPFIXSet, isIPv6 bool
 		return 0, fmt.Errorf("error in adding record to template set: %v", err)
 	}
 
-	sentBytes, err := exp.process.AddSetAndSendMsg(ipfixentities.Template, templateSet.GetSet())
+	sentBytes, err := exp.process.SendSet(templateSet.GetSet())
 	if err != nil {
 		return 0, fmt.Errorf("error in IPFIX exporting process when sending template record: %v", err)
 	}
@@ -317,7 +338,7 @@ func (exp *flowExporter) sendTemplateSet(templateSet ipfix.IPFIXSet, isIPv6 bool
 	return sentBytes, nil
 }
 
-func (exp *flowExporter) sendDataSet(dataSet ipfix.IPFIXSet, record flowexporter.FlowRecord) error {
+func (exp *flowExporter) addRecordToSet(dataSet ipfix.IPFIXSet, record flowexporter.FlowRecord) error {
 	nodeName, _ := env.GetNodeName()
 
 	// Iterate over all infoElements in the list
@@ -454,11 +475,14 @@ func (exp *flowExporter) sendDataSet(dataSet ipfix.IPFIXSet, record flowexporter
 	if err != nil {
 		return fmt.Errorf("error in adding record to data set: %v", err)
 	}
-
-	sentBytes, err := exp.process.AddSetAndSendMsg(ipfixentities.Data, dataSet.GetSet())
-	if err != nil {
-		return fmt.Errorf("error in IPFIX exporting process when sending data record: %v", err)
-	}
-	klog.V(4).Infof("Flow record created and sent. Bytes sent: %d", sentBytes)
 	return nil
+}
+
+func (exp *flowExporter) sendDataSet(dataSet ipfix.IPFIXSet) (int, error) {
+	sentBytes, err := exp.process.SendSet(dataSet.GetSet())
+	if err != nil {
+		return 0, fmt.Errorf("error when sending data set: %v", err)
+	}
+	klog.V(4).Infof("Data set sent successfully. Bytes sent: %d", sentBytes)
+	return sentBytes, nil
 }
