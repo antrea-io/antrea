@@ -340,6 +340,22 @@ func (fa *flowAggregator) sendTemplateSet(templateSet ipfix.IPFIXSet) (int, erro
 		ie := ipfixentities.NewInfoElementWithValue(element, nil)
 		elements = append(elements, ie)
 	}
+	for _, ie := range antreaSourceStatsElementList {
+		element, err := fa.registry.GetInfoElement(ie, ipfixregistry.AntreaEnterpriseID)
+		if err != nil {
+			return 0, fmt.Errorf("%s not present. returned error: %v", ie, err)
+		}
+		ie := ipfixentities.NewInfoElementWithValue(element, nil)
+		elements = append(elements, ie)
+	}
+	for _, ie := range antreaDestinationStatsElementList {
+		element, err := fa.registry.GetInfoElement(ie, ipfixregistry.AntreaEnterpriseID)
+		if err != nil {
+			return 0, fmt.Errorf("%s not present. returned error: %v", ie, err)
+		}
+		ie := ipfixentities.NewInfoElementWithValue(element, nil)
+		elements = append(elements, ie)
+	}
 	err := templateSet.AddRecord(elements, fa.templateID)
 	if err != nil {
 		return 0, fmt.Errorf("error when adding record to set, error: %v", err)
