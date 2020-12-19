@@ -56,21 +56,25 @@ const (
 	defaultTimeout = 90 * time.Second
 
 	// antreaNamespace is the K8s Namespace in which all Antrea resources are running.
-	antreaNamespace      string = "kube-system"
-	antreaConfigVolume   string = "antrea-config"
-	antreaDaemonSet      string = "antrea-agent"
-	antreaDeployment     string = "antrea-controller"
-	antreaDefaultGW      string = "antrea-gw0"
-	testNamespace        string = "antrea-test"
-	busyboxContainerName string = "busybox"
-	ovsContainerName     string = "antrea-ovs"
-	agentContainerName   string = "antrea-agent"
-	antreaYML            string = "antrea.yml"
-	antreaIPSecYML       string = "antrea-ipsec.yml"
-	antreaCovYML         string = "antrea-coverage.yml"
-	antreaIPSecCovYML    string = "antrea-ipsec-coverage.yml"
-	defaultBridgeName    string = "br-int"
-	monitoringNamespace  string = "monitoring"
+	antreaNamespace            string = "kube-system"
+	flowAggregatorNamespace    string = "flow-aggregator"
+	antreaConfigVolume         string = "antrea-config"
+	flowAggregatorConfigVolume string = "flow-aggregator-config"
+	antreaDaemonSet            string = "antrea-agent"
+	antreaDeployment           string = "antrea-controller"
+	flowAggregatorDeployment   string = "flow-aggregator"
+	antreaDefaultGW            string = "antrea-gw0"
+	testNamespace              string = "antrea-test"
+	busyboxContainerName       string = "busybox"
+	ovsContainerName           string = "antrea-ovs"
+	agentContainerName         string = "antrea-agent"
+	antreaYML                  string = "antrea.yml"
+	antreaIPSecYML             string = "antrea-ipsec.yml"
+	antreaCovYML               string = "antrea-coverage.yml"
+	antreaIPSecCovYML          string = "antrea-ipsec-coverage.yml"
+	flowaggregatorYML          string = "flow-aggregator.yml"
+	defaultBridgeName          string = "br-int"
+	monitoringNamespace        string = "monitoring"
 
 	antreaControllerCovBinary string = "antrea-controller-coverage"
 	antreaAgentCovBinary      string = "antrea-agent-coverage"
@@ -79,6 +83,7 @@ const (
 
 	antreaAgentConfName      string = "antrea-agent.conf"
 	antreaControllerConfName string = "antrea-controller.conf"
+	flowAggregatorConfName   string = "flow-aggregator.conf"
 
 	nameSuffixLength int = 8
 
@@ -417,6 +422,61 @@ func (data *TestData) deployAntreaFlowExporter(ipfixCollector string) error {
 		antreaAgentConf = strings.Replace(antreaAgentConf, "#flowExportFrequency: 12", "flowExportFrequency: 5", 1)
 		data["antrea-agent.conf"] = antreaAgentConf
 	}, false, true)
+}
+
+// deployFlowAggregator deploys flow aggregator with ipfix collector address.
+func (data *TestData) deployFlowAggregator(ipfixCollector string) error {
+	rc, _, _, err := provider.RunCommandOnNode(masterNodeName(), fmt.Sprintf("kubectl apply -f %s", flowaggregatorYML))
+	if err != nil || rc != 0 {
+		return fmt.Errorf("error when deploying flow aggregator; is %s available on the master Node?", flowaggregatorYML)
+	}
+	err = data.mutateFlowAggregatorConfigMap(ipfixCollector)
+	if err != nil {
+		return err
+	}
+	rc, _, _, err = provider.RunCommandOnNode(masterNodeName(), fmt.Sprintf("kubectl -n %s rollout status deployment/%s --timeout=%v", flowAggregatorNamespace, flowAggregatorDeployment, defaultTimeout))
+	if err != nil || rc != 0 {
+		return fmt.Errorf("error when waiting for flow aggregator rollout to complete")
+	}
+	return nil
+}
+
+func (data *TestData) mutateFlowAggregatorConfigMap(ipfixCollector string) error {
+	// get flow aggregator config map
+	configMap, err := data.GetFlowAggregatorConfigMap()
+	if err != nil {
+		return err
+	}
+	flowAggregatorConf, _ := configMap.Data[flowAggregatorConfName]
+	flowAggregatorConf = strings.Replace(flowAggregatorConf, "#externalFlowCollectorAddr: \"\"", fmt.Sprintf("externalFlowCollectorAddr: \"%s\"", ipfixCollector), 1)
+	flowAggregatorConf = strings.Replace(flowAggregatorConf, "#flowExportInterval: 60s", "flowExportInterval: 5s", 1)
+	configMap.Data[flowAggregatorConfName] = flowAggregatorConf
+	if _, err := data.clientset.CoreV1().ConfigMaps(flowAggregatorNamespace).Update(context.TODO(), configMap, metav1.UpdateOptions{}); err != nil {
+		return fmt.Errorf("failed to update ConfigMap %s: %v", configMap.Name, err)
+	}
+	return nil
+}
+
+func (data *TestData) GetFlowAggregatorConfigMap() (*corev1.ConfigMap, error) {
+	deployment, err := data.clientset.AppsV1().Deployments(flowAggregatorNamespace).Get(context.TODO(), flowAggregatorDeployment, metav1.GetOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve Flow aggregator deployment: %v", err)
+	}
+	var configMapName string
+	for _, volume := range deployment.Spec.Template.Spec.Volumes {
+		if volume.ConfigMap != nil && volume.Name == flowAggregatorConfigVolume {
+			configMapName = volume.ConfigMap.Name
+			break
+		}
+	}
+	if len(configMapName) == 0 {
+		return nil, fmt.Errorf("failed to locate %s ConfigMap volume", flowAggregatorConfigVolume)
+	}
+	configMap, err := data.clientset.CoreV1().ConfigMaps(flowAggregatorNamespace).Get(context.TODO(), configMapName, metav1.GetOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get ConfigMap %s: %v", configMapName, err)
+	}
+	return configMap, nil
 }
 
 // getAgentContainersRestartCount reads the restart count for every container across all Antrea

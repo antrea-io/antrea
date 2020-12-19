@@ -134,19 +134,6 @@ func (cs *ConnectionStore) addOrUpdateConn(conn *flowexporter.Connection) {
 			conn.DestinationPodNamespace = dIface.ContainerInterfaceConfig.PodNamespace
 		}
 
-		// Do not export the flow records of connections whose destination is local
-		// Pod and source is remote Pod. We export flow records only from source node,
-		// where the connection originates from. This is to avoid duplicate copies
-		// of flow records at flow collector. This restriction will be removed when
-		// flow aggregator is implemented. We miss some key information such as
-		// destination Pod info, ingress NetworkPolicy info, stats from destination
-		// node etc.
-		// TODO: Remove this when flow aggregator that correlates the flow records
-		// is implemented.
-		if !srcFound && dstFound {
-			conn.DoExport = false
-		}
-
 		// Process Pod-to-Service flows when Antrea Proxy is enabled.
 		if cs.antreaProxier != nil {
 			if conn.Mark == openflow.ServiceCTMark {

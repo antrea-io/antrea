@@ -22,47 +22,66 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	corev1 "k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-	"github.com/stretchr/testify/assert"
-	v1 "k8s.io/api/core/v1"
 )
 
 /* Sample output from the collector:
 IPFIX-HDR:
-  version: 10,  Message Length: 288
-  Exported Time: 1605749238 (2020-11-19 01:27:18 +0000 UTC)
-  Sequence No.: 9,  Observation Domain ID: 2134708971
+  version: 10,  Message Length: 435
+  Exported Time: 1608338076 (2020-12-19 00:34:36 +0000 UTC)
+  Sequence No.: 3,  Observation Domain ID: 1350683189
 DATA SET:
   DATA RECORD-0:
-    flowStartSeconds: 1605749227
-    flowEndSeconds: 2288912640
-    sourceIPv4Address: 10.10.0.27
-    destinationIPv4Address: 10.10.0.28
-    sourceTransportPort: 34540
+    flowStartSeconds: 1608338066
+    flowEndSeconds: 1608338072
+    sourceTransportPort: 43600
     destinationTransportPort: 5201
     protocolIdentifier: 6
-    packetTotalCount: 1037047
-    octetTotalCount: 45371902943
-    packetDeltaCount: 410256
-    octetDeltaCount: 18018632100
-    reversePacketTotalCount: 854967
-    reverseOctetTotalCount: 44461736
-    reversePacketDeltaCount: 330362
-    reverseOctetDeltaCount: 17180264
+    packetTotalCount: 537924
+    octetTotalCount: 23459802093
+    packetDeltaCount: 0
+    octetDeltaCount: 0
+    sourceIPv4Address: 10.10.0.22
+    destinationIPv4Address: 10.10.0.23
+    reversePacketTotalCount: 444320
+    reverseOctetTotalCount: 23108308
+    reversePacketDeltaCount: 0
+    reverseOctetDeltaCount: 0
     sourcePodName: perftest-a
     sourcePodNamespace: antrea-test
     sourceNodeName: k8s-node-master
     destinationPodName: perftest-b
     destinationPodNamespace: antrea-test
     destinationNodeName: k8s-node-master
-    destinationClusterIPv4: 10.103.234.179
-    destinationServicePortName: antrea-test/perftest-b:
-    ingressNetworkPolicyName: test-networkpolicy-ingress
+    destinationServicePort: 5201
+    destinationServicePortName:
+    ingressNetworkPolicyName: test-flow-aggregator-networkpolicy-ingress
     ingressNetworkPolicyNamespace: antrea-test
-    egressNetworkPolicyName: test-networkpolicy-egress
+    egressNetworkPolicyName: test-flow-aggregator-networkpolicy-egress
     egressNetworkPolicyNamespace: antrea-test
+    destinationClusterIPv4: 0.0.0.0
+    originalExporterIPv4Address: 10.10.0.1
+    originalObservationDomainId: 2134708971
+    octetDeltaCountFromSourceNode: 0
+    octetTotalCountFromSourceNode: 23459802093
+    packetDeltaCountFromSourceNode: 0
+    packetTotalCountFromSourceNode: 537924
+    reverseOctetDeltaCountFromSourceNode: 0
+    reverseOctetTotalCountFromSourceNode: 23108308
+    reversePacketDeltaCountFromSourceNode: 0
+    reversePacketTotalCountFromSourceNode: 444320
+    octetDeltaCountFromDestinationNode: 0
+    octetTotalCountFromDestinationNode: 23459802093
+    packetDeltaCountFromDestinationNode: 0
+    packetTotalCountFromDestinationNode: 537924
+    reverseOctetDeltaCountFromDestinationNode: 0
+    reverseOctetTotalCountFromDestinationNode: 23108308
+    reversePacketDeltaCountFromDestinationNode: 0
+    reversePacketTotalCountFromDestinationNode: 444320
 
 Intra-Node: Flow record information is complete for source and destination e.g. sourcePodName, destinationPodName
 Inter-Node: Flow record from destination Node is ignored, so only flow record from the source Node has its K8s info e.g., sourcePodName, sourcePodNamespace, sourceNodeName etc.
@@ -70,46 +89,31 @@ AntreaProxy enabled (Intra-Node): Flow record information is complete for source
 AntreaProxy enabled (Inter-Node): Flow record from destination Node is ignored, so only flow record from the source Node has its K8s info like in Inter-Node case along with K8s Service info such as destinationClusterIP, destinationServicePort, destinationServicePortName etc.
 */
 
-func TestFlowExporter(t *testing.T) {
-	// Should I add skipBenchmark as this runs iperf?
+const (
+	ingressNetworkPolicyName   = "test-flow-aggregator-networkpolicy-ingress"
+	egressNetworkPolicyName    = "test-flow-aggregator-networkpolicy-egress"
+	collectorCheckDelay        = 5 * time.Second
+	expectedNumTemplateRecords = 1
+	// Single iperf run results in two connections with separate ports (control connection and actual data connection).
+	// As 5s is export interval and iperf traffic runs for 10s, we expect about 4 records exporting to the flow aggregator.
+	// Since flow aggregator will aggregate records based on 5-tuple connection key, we expect 2 records.
+	expectedNumDataRecords = 2
+)
+
+func TestFlowAggregator(t *testing.T) {
+	// TODO: remove this limitation after flow aggregator supports IPv6
+	skipIfIPv6Cluster(t)
+	skipIfNotIPv4Cluster(t)
 	data, err, isIPv6 := setupTestWithIPFIXCollector(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
+	defer teardownFlowAggregator(t, data)
 	defer teardownTest(t, data)
 
-	if err := data.createPodOnNode("perftest-a", masterNodeName(), perftoolImage, nil, nil, nil, nil, false, nil); err != nil {
-		t.Errorf("Error when creating the perftest client Pod: %v", err)
-	}
-	podAIP, err := data.podWaitForIPs(defaultTimeout, "perftest-a", testNamespace)
+	podAIP, podBIP, podCIP, svcB, svcC, err := createPerftestPods(data)
 	if err != nil {
-		t.Errorf("Error when waiting for the perftest client Pod: %v", err)
-	}
-
-	svcB, err := data.createService("perftest-b", iperfPort, iperfPort, map[string]string{"antrea-e2e": "perftest-b"}, false, v1.ServiceTypeClusterIP)
-	if err != nil {
-		t.Errorf("Error when creating perftest service: %v", err)
-	}
-
-	if err := data.createPodOnNode("perftest-b", masterNodeName(), perftoolImage, nil, nil, nil, []v1.ContainerPort{{Protocol: v1.ProtocolTCP, ContainerPort: iperfPort}}, false, nil); err != nil {
-		t.Errorf("Error when creating the perftest server Pod: %v", err)
-	}
-	podBIP, err := data.podWaitForIPs(defaultTimeout, "perftest-b", testNamespace)
-	if err != nil {
-		t.Errorf("Error when getting the perftest server Pod's IP: %v", err)
-	}
-
-	svcC, err := data.createService("perftest-c", iperfPort, iperfPort, map[string]string{"antrea-e2e": "perftest-c"}, false, v1.ServiceTypeClusterIP)
-	if err != nil {
-		t.Errorf("Error when creating perftest service: %v", err)
-	}
-
-	if err := data.createPodOnNode("perftest-c", workerNodeName(1), perftoolImage, nil, nil, nil, []v1.ContainerPort{{Protocol: v1.ProtocolTCP, ContainerPort: iperfPort}}, false, nil); err != nil {
-		t.Errorf("Error when creating the perftest server Pod: %v", err)
-	}
-	podCIP, err := data.podWaitForIPs(defaultTimeout, "perftest-c", testNamespace)
-	if err != nil {
-		t.Errorf("Error when getting the perftest server Pod's IP: %v", err)
+		t.Fatalf("Error when creating perftest pods and services: %v", err)
 	}
 
 	// IntraNodeFlows tests the case, where Pods are deployed on same Node and their flow information is exported as IPFIX flow records.
@@ -133,6 +137,7 @@ func TestFlowExporter(t *testing.T) {
 			checkRecordsForFlows(t, data, podAIP.ipv6.String(), podBIP.ipv6.String(), isIPv6, true, false, true)
 		}
 	})
+
 	// InterNodeFlows tests the case, where Pods are deployed on different Nodes and their flow information is exported as IPFIX flow records.
 	t.Run("InterNodeFlows", func(t *testing.T) {
 		if !isIPv6 {
@@ -177,7 +182,7 @@ func checkRecordsForFlows(t *testing.T, data *TestData, srcIP string, dstIP stri
 	bandwidth := strings.TrimSpace(stdout)
 
 	// Adding some delay to make sure all the data records corresponding to iperf flow are received.
-	time.Sleep(250 * time.Millisecond)
+	time.Sleep(collectorCheckDelay)
 
 	rc, collectorOutput, _, err := provider.RunCommandOnNode(masterNodeName(), fmt.Sprintf("kubectl logs ipfix-collector -n antrea-test"))
 	if err != nil || rc != 0 {
@@ -187,6 +192,7 @@ func checkRecordsForFlows(t *testing.T, data *TestData, srcIP string, dstIP stri
 	// Iterate over recordSlices and build some results to test with expected results
 	templateRecords := 0
 	dataRecordsCount := 0
+
 	for _, record := range recordSlices {
 		if strings.Contains(record, "TEMPLATE RECORD") {
 			templateRecords = templateRecords + 1
@@ -194,33 +200,37 @@ func checkRecordsForFlows(t *testing.T, data *TestData, srcIP string, dstIP stri
 
 		if strings.Contains(record, srcIP) && strings.Contains(record, dstIP) {
 			dataRecordsCount = dataRecordsCount + 1
-			// Check if records have both Pod name and Pod namespace or not.
+			// Check if record has both Pod name of source and destination pod.
 			if !strings.Contains(record, "perftest-a") {
-				t.Errorf("Records with srcIP does not have Pod name")
+				t.Errorf("Record with srcIP does not have Pod name")
 			}
 			if !strings.Contains(record, "perftest-b") && isIntraNode {
-				t.Errorf("Records with dstIP does not have Pod name")
+				t.Errorf("Record with dstIP does not have Pod name")
 			}
+			if !strings.Contains(record, "perftest-c") && !isIntraNode {
+				t.Errorf("Record with dstIP does not have Pod name")
+			}
+
 			if checkService {
 				if !strings.Contains(record, "antrea-test/perftest-b") && isIntraNode {
-					t.Errorf("Records with ServiceIP does not have Service name")
+					t.Errorf("Record with ServiceIP does not have Service name")
 				}
 				if !strings.Contains(record, "antrea-test/perftest-c") && !isIntraNode {
-					t.Errorf("Records with ServiceIP does not have Service name")
+					t.Errorf("Record with ServiceIP does not have Service name")
 				}
 			}
 			if !strings.Contains(record, testNamespace) {
-				t.Errorf("Records do not have Pod Namespace")
+				t.Errorf("Record does not have Pod Namespace")
 			}
 			// In Kind clusters, there are two flow records for the iperf flow.
 			// One of them has no bytes and we ignore that flow record.
 			if checkNetworkPolicy && !strings.Contains(record, "octetDeltaCount: 0") {
 				// Check if records have both ingress and egress network policies.
-				if !strings.Contains(record, "test-flow-exporter-networkpolicy-ingress") {
-					t.Errorf("Records does not have NetworkPolicy name with ingress rule")
+				if !strings.Contains(record, ingressNetworkPolicyName) {
+					t.Errorf("Record does not have NetworkPolicy name with ingress rule")
 				}
-				if !strings.Contains(record, "test-flow-exporter-networkpolicy-egress") {
-					t.Errorf("Records does not have NetworkPolicy name with egress rule")
+				if !strings.Contains(record, egressNetworkPolicyName) {
+					t.Errorf("Record does not have NetworkPolicy name with egress rule")
 				}
 			}
 			// Check the bandwidth using octetDeltaCount in data records sent in second ipfix interval
@@ -253,17 +263,47 @@ func checkRecordsForFlows(t *testing.T, data *TestData, srcIP string, dstIP stri
 					}
 				}
 			}
+			// Check the aggregation results in infra tests
+			if !strings.Contains(record, fmt.Sprintf("%s: %s", "destinationPodNamespace", testNamespace)) {
+				t.Errorf("Record does not have correct destinationPodNamespace")
+			}
+			if isIntraNode {
+				if !strings.Contains(record, fmt.Sprintf("%s: %s", "destinationPodName", "perftest-b")) {
+					t.Errorf("Record does not have correct destinationPodName")
+				}
+				if !strings.Contains(record, fmt.Sprintf("%s: %s", "destinationNodeName", masterNodeName())) {
+					t.Errorf("Record does not have correct destinationNodeName")
+				}
+				if checkService {
+					if !strings.Contains(record, fmt.Sprintf("%s: %s", "destinationServicePortName", "antrea-test/perftest-b")) {
+						t.Errorf("Record does not have correct destinationServicePortName")
+					}
+				}
+			} else {
+				if !strings.Contains(record, fmt.Sprintf("%s: %s", "destinationPodName", "perftest-c")) {
+					t.Errorf("Record does not have correct destinationPodName")
+				}
+				if !strings.Contains(record, fmt.Sprintf("%s: %s", "destinationNodeName", workerNodeName(1))) {
+					t.Errorf("Record does not have correct destinationNodeName")
+				}
+				if checkService {
+					if !strings.Contains(record, fmt.Sprintf("%s: %s", "destinationServicePortName", "antrea-test/perftest-c")) {
+						t.Errorf("Record does not have correct destinationServicePortName")
+					}
+				}
+			}
+			if checkNetworkPolicy && !strings.Contains(record, "octetDeltaCount: 0") {
+				if !strings.Contains(record, fmt.Sprintf("%s: %s", "ingressNetworkPolicyName", ingressNetworkPolicyName)) {
+					t.Errorf("Record does not have correct ingressNetworkPolicyName")
+				}
+				if !strings.Contains(record, fmt.Sprintf("%s: %s", "ingressNetworkPolicyNamespace", testNamespace)) {
+					t.Errorf("Record does not have correct ingressNetworkPolicyNamespace")
+				}
+			}
 		}
 	}
-	expectedNumTemplateRecords := clusterInfo.numNodes
-	if len(clusterInfo.podV4NetworkCIDR) != 0 && len(clusterInfo.podV6NetworkCIDR) != 0 {
-		expectedNumTemplateRecords = clusterInfo.numNodes * 2
-	}
-	assert.Equal(t, expectedNumTemplateRecords, templateRecords, "Each agent should send out a template record per supported family address")
-
-	// Single iperf resulting in two connections with separate ports. Suspecting second flow to be control flow to exchange
-	// stats info. As 5s is export interval and iperf traffic runs for 10s, we expect 4 records.
-	assert.GreaterOrEqual(t, dataRecordsCount, 4, "Iperf flow should have expected number of flow records")
+	assert.Equal(t, expectedNumTemplateRecords, templateRecords, "Flow aggregator should send out 1 template record")
+	assert.GreaterOrEqual(t, dataRecordsCount, expectedNumDataRecords, "IPFIX collector should receive expected number of flow records")
 }
 
 func getRecordsFromOutput(output string) []string {
@@ -281,7 +321,7 @@ func getRecordsFromOutput(output string) []string {
 func deployNetworkPolicies(t *testing.T, data *TestData) (np1 *networkingv1.NetworkPolicy, np2 *networkingv1.NetworkPolicy) {
 	// Add NetworkPolicy between two iperf Pods.
 	var err error
-	np1, err = data.createNetworkPolicy("test-flow-exporter-networkpolicy-ingress", &networkingv1.NetworkPolicySpec{
+	np1, err = data.createNetworkPolicy(ingressNetworkPolicyName, &networkingv1.NetworkPolicySpec{
 		PodSelector: metav1.LabelSelector{},
 		PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
 		Ingress: []networkingv1.NetworkPolicyIngressRule{{
@@ -297,7 +337,7 @@ func deployNetworkPolicies(t *testing.T, data *TestData) (np1 *networkingv1.Netw
 	if err != nil {
 		t.Errorf("Error when creating Network Policy: %v", err)
 	}
-	np2, err = data.createNetworkPolicy("test-flow-exporter-networkpolicy-egress", &networkingv1.NetworkPolicySpec{
+	np2, err = data.createNetworkPolicy(egressNetworkPolicyName, &networkingv1.NetworkPolicySpec{
 		PodSelector: metav1.LabelSelector{},
 		PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeEgress},
 		Egress: []networkingv1.NetworkPolicyEgressRule{{
@@ -319,4 +359,42 @@ func deployNetworkPolicies(t *testing.T, data *TestData) (np1 *networkingv1.Netw
 	}
 	t.Log("Network Policies are realized.")
 	return np1, np2
+}
+
+func createPerftestPods(data *TestData) (podAIP *PodIPs, podBIP *PodIPs, podCIP *PodIPs, svcB *corev1.Service, svcC *corev1.Service, err error) {
+	if err := data.createPodOnNode("perftest-a", masterNodeName(), perftoolImage, nil, nil, nil, nil, false, nil); err != nil {
+		return nil, nil, nil, nil, nil, fmt.Errorf("Error when creating the perftest client Pod: %v", err)
+	}
+	podAIP, err = data.podWaitForIPs(defaultTimeout, "perftest-a", testNamespace)
+	if err != nil {
+		return nil, nil, nil, nil, nil, fmt.Errorf("Error when waiting for the perftest client Pod: %v", err)
+	}
+
+	svcB, err = data.createService("perftest-b", iperfPort, iperfPort, map[string]string{"antrea-e2e": "perftest-b"}, false, v1.ServiceTypeClusterIP)
+	if err != nil {
+		return nil, nil, nil, nil, nil, fmt.Errorf("Error when creating perftest service: %v", err)
+	}
+
+	if err := data.createPodOnNode("perftest-b", masterNodeName(), perftoolImage, nil, nil, nil, []v1.ContainerPort{{Protocol: v1.ProtocolTCP, ContainerPort: iperfPort}}, false, nil); err != nil {
+		return nil, nil, nil, nil, nil, fmt.Errorf("Error when creating the perftest server Pod: %v", err)
+	}
+	podBIP, err = data.podWaitForIPs(defaultTimeout, "perftest-b", testNamespace)
+	if err != nil {
+		return nil, nil, nil, nil, nil, fmt.Errorf("Error when getting the perftest server Pod's IP: %v", err)
+	}
+
+	// svcC will be needed when adding RemoteServiceAccess testcase
+	svcC, err = data.createService("perftest-c", iperfPort, iperfPort, map[string]string{"antrea-e2e": "perftest-c"}, false, v1.ServiceTypeClusterIP)
+	if err != nil {
+		return nil, nil, nil, nil, nil, fmt.Errorf("Error when creating perftest service: %v", err)
+	}
+
+	if err := data.createPodOnNode("perftest-c", workerNodeName(1), perftoolImage, nil, nil, nil, []v1.ContainerPort{{Protocol: v1.ProtocolTCP, ContainerPort: iperfPort}}, false, nil); err != nil {
+		return nil, nil, nil, nil, nil, fmt.Errorf("Error when creating the perftest server Pod: %v", err)
+	}
+	podCIP, err = data.podWaitForIPs(defaultTimeout, "perftest-c", testNamespace)
+	if err != nil {
+		return nil, nil, nil, nil, nil, fmt.Errorf("Error when getting the perftest server Pod's IP: %v", err)
+	}
+	return podAIP, podBIP, podCIP, svcB, svcC, nil
 }
