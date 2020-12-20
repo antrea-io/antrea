@@ -1248,7 +1248,7 @@ data:
     # If PORT is empty, we default to 4739, the standard IPFIX port.
     # If no PROTO is given, we consider "tcp" as default. We support "tcp" and "udp"
     # L4 transport protocols.
-    #flowCollectorAddr: "flow-aggregator.flow-aggregator.svc:tcp"
+    #flowCollectorAddr: "flow-aggregator.flow-aggregator.svc:4739:tcp"
 
     # Provide flow poll interval as a duration string. This determines how often the flow exporter dumps connections from the conntrack module.
     # Flow poll interval should be greater than or equal to 1s (one second).
@@ -1315,7 +1315,7 @@ metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-ccm9d925m4
+  name: antrea-config-h7t8ffthht
   namespace: kube-system
 ---
 apiVersion: v1
@@ -1422,7 +1422,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-ccm9d925m4
+          name: antrea-config-h7t8ffthht
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -1687,7 +1687,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-ccm9d925m4
+          name: antrea-config-h7t8ffthht
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d

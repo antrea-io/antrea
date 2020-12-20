@@ -5,12 +5,10 @@ on:
     branches:
       - master
       - release-*
-      - feature/flow-aggregator
   push:
     branches:
       - master
       - release-*
-      - feature/flow-aggregator
 
 jobs:
   check-changes:
@@ -109,7 +107,7 @@ jobs:
       run: make flow-aggregator-ubuntu
     - name: Push flow-aggregator Docker image to registry
       # Will remove the feature/flow-aggregator branch later
-      if: ${{ github.repository == 'vmware-tanzu/antrea' && github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/feature/flow-aggregator')}}
+      if: ${{ github.repository == 'vmware-tanzu/antrea' && github.event_name == 'push' && github.ref == 'refs/heads/master' }}
       env:
         DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
         DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}

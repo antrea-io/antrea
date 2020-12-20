@@ -6,7 +6,7 @@ function usage() {
           --prometheus           Deploy Prometheus service to scrape metrics from Antrea Agents and Controllers
           --flow-collector       Provide the IPFIX flow collector address to collect the flows from the Flow Aggregator service
                                  It should be given in the format IP:port:proto. Example: 192.168.1.100:4739:udp
-                                 Please note that with this option we deploy the Flow Aggregator service along with the Antrea daemonset."
+                                 Please note that with this option we deploy the Flow Aggregator Service along with Antrea."
 }
 
 # Process execution flags

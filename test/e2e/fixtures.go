@@ -146,18 +146,21 @@ func setupTestWithIPFIXCollector(tb testing.TB) (*TestData, error, bool) {
 	ipfixCollectorIP, err := testData.podWaitForIPs(defaultTimeout, "ipfix-collector", testNamespace)
 	if err != nil || len(ipfixCollectorIP.ipStrings) == 0 {
 		tb.Errorf("Error when waiting to get ipfix collector Pod IP: %v", err)
+		return nil, err, isIPv6
 	}
 	ipStr := ipfixCollectorIP.ipv4.String()
-	tb.Logf("Applying flow aggregator YAML with ipfix collector address: %s", ipStr)
-	if err := testData.deployFlowAggregator(fmt.Sprintf("%s:%s:tcp", ipStr, ipfixCollectorPort)); err != nil {
+
+	tb.Logf("Applying flow aggregator YAML with ipfix collector address: %s:%s:tcp", ipStr, ipfixCollectorPort)
+	faClusterIP, err := testData.deployFlowAggregator(fmt.Sprintf("%s:%s:tcp", ipStr, ipfixCollectorPort))
+	if err != nil {
 		return testData, err, isIPv6
 	}
-	tb.Logf("Deploying flow exporter")
-	if err := testData.deployAntreaFlowExporter(""); err != nil {
+	tb.Logf("Deploying flow exporter with collector address: %s:%s:tcp", faClusterIP, ipfixCollectorPort)
+	if err = testData.deployAntreaFlowExporter(fmt.Sprintf("%s:%s:tcp", faClusterIP, ipfixCollectorPort)); err != nil {
 		return testData, err, isIPv6
 	}
 	tb.Logf("Checking CoreDNS deployment")
-	if err := testData.checkCoreDNSPods(defaultTimeout); err != nil {
+	if err = testData.checkCoreDNSPods(defaultTimeout); err != nil {
 		return testData, err, isIPv6
 	}
 	return testData, nil, isIPv6

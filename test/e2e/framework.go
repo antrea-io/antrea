@@ -417,28 +417,32 @@ func (data *TestData) deployAntreaFlowExporter(ipfixCollector string) error {
 	return data.mutateAntreaConfigMap(func(data map[string]string) {
 		antreaAgentConf, _ := data["antrea-agent.conf"]
 		antreaAgentConf = strings.Replace(antreaAgentConf, "#  FlowExporter: false", "  FlowExporter: true", 1)
-		antreaAgentConf = strings.Replace(antreaAgentConf, "#flowCollectorAddr: \"flow-aggregator.flow-aggregator.svc:tcp\"", fmt.Sprintf("flowCollectorAddr: \"%s\"", ipfixCollector), 1)
+		if ipfixCollector != "" {
+			antreaAgentConf = strings.Replace(antreaAgentConf, "#flowCollectorAddr: \"flow-aggregator.flow-aggregator.svc:4739:tcp\"", fmt.Sprintf("flowCollectorAddr: \"%s\"", ipfixCollector), 1)
+		}
 		antreaAgentConf = strings.Replace(antreaAgentConf, "#flowPollInterval: \"5s\"", "flowPollInterval: \"1s\"", 1)
-		antreaAgentConf = strings.Replace(antreaAgentConf, "#flowExportFrequency: 12", "flowExportFrequency: 5", 1)
+		antreaAgentConf = strings.Replace(antreaAgentConf, "#flowExportFrequency: 12", "flowExportFrequency: 2", 1)
 		data["antrea-agent.conf"] = antreaAgentConf
 	}, false, true)
 }
 
 // deployFlowAggregator deploys flow aggregator with ipfix collector address.
-func (data *TestData) deployFlowAggregator(ipfixCollector string) error {
+func (data *TestData) deployFlowAggregator(ipfixCollector string) (string, error) {
 	rc, _, _, err := provider.RunCommandOnNode(masterNodeName(), fmt.Sprintf("kubectl apply -f %s", flowaggregatorYML))
 	if err != nil || rc != 0 {
-		return fmt.Errorf("error when deploying flow aggregator; is %s available on the master Node?", flowaggregatorYML)
+		return "", fmt.Errorf("error when deploying flow aggregator; %s not available on the master Node", flowaggregatorYML)
 	}
-	err = data.mutateFlowAggregatorConfigMap(ipfixCollector)
+	if err = data.mutateFlowAggregatorConfigMap(ipfixCollector); err != nil {
+		return "", err
+	}
+	if rc, _, _, err = provider.RunCommandOnNode(masterNodeName(), fmt.Sprintf("kubectl -n %s rollout status deployment/%s --timeout=%v", flowAggregatorNamespace, flowAggregatorDeployment, 2*defaultTimeout)); err != nil || rc != 0 {
+		return "", fmt.Errorf("error when waiting for flow aggregator rollout to complete")
+	}
+	svc, err := data.clientset.CoreV1().Services(flowAggregatorNamespace).Get(context.TODO(), flowAggregatorDeployment, metav1.GetOptions{})
 	if err != nil {
-		return err
+		return "", fmt.Errorf("unable to get service %v: %v", flowAggregatorDeployment, err)
 	}
-	rc, _, _, err = provider.RunCommandOnNode(masterNodeName(), fmt.Sprintf("kubectl -n %s rollout status deployment/%s --timeout=%v", flowAggregatorNamespace, flowAggregatorDeployment, defaultTimeout))
-	if err != nil || rc != 0 {
-		return fmt.Errorf("error when waiting for flow aggregator rollout to complete")
-	}
-	return nil
+	return svc.Spec.ClusterIP, nil
 }
 
 func (data *TestData) mutateFlowAggregatorConfigMap(ipfixCollector string) error {
