@@ -120,7 +120,7 @@ func TestFlowAggregator(t *testing.T) {
 
 	// IntraNodeFlows tests the case, where Pods are deployed on same Node and their flow information is exported as IPFIX flow records.
 	t.Run("IntraNodeFlows", func(t *testing.T) {
-		np1, np2 := deployNetworkPolicies(t, data)
+		np1, np2 := deployNetworkPolicies(t, data, "perftest-a", "perftest-b")
 		defer func() {
 			if np1 != nil {
 				if err = data.deleteNetworkpolicy(np1); err != nil {
@@ -143,6 +143,19 @@ func TestFlowAggregator(t *testing.T) {
 	// InterNodeFlows tests the case, where Pods are deployed on different Nodes
 	// and their flow information is exported as IPFIX flow records.
 	t.Run("InterNodeFlows", func(t *testing.T) {
+		np1, np2 := deployNetworkPolicies(t, data, "perftest-a", "perftest-c")
+		defer func() {
+			if np1 != nil {
+				if err = data.deleteNetworkpolicy(np1); err != nil {
+					t.Errorf("Error when deleting network policy: %v", err)
+				}
+			}
+			if np2 != nil {
+				if err = data.deleteNetworkpolicy(np2); err != nil {
+					t.Errorf("Error when deleting network policy: %v", err)
+				}
+			}
+		}()
 		if !isIPv6 {
 			checkRecordsForFlows(t, data, podAIP.ipv4.String(), podCIP.ipv4.String(), isIPv6, false, false, true)
 		} else {
@@ -227,7 +240,7 @@ func checkRecordsForFlows(t *testing.T, data *TestData, srcIP string, dstIP stri
 						}
 					}
 				}
-				if checkNetworkPolicy && isIntraNode {
+				if checkNetworkPolicy {
 					// Check if records have both ingress and egress network policies.
 					if !strings.Contains(record, ingressNetworkPolicyName) {
 						t.Errorf("Record does not have NetworkPolicy name with ingress rule")
@@ -247,7 +260,7 @@ func checkRecordsForFlows(t *testing.T, data *TestData, srcIP string, dstIP stri
 					// Split the record in lines to compute bandwidth
 					splitLines := strings.Split(record, "\n")
 					for _, line := range splitLines {
-						if strings.Contains(line, "octetDeltaCount") {
+						if strings.Contains(line, "octetDeltaCount:") {
 							lineSlice := strings.Split(line, ":")
 							deltaBytes, err := strconv.ParseFloat(strings.TrimSpace(lineSlice[1]), 64)
 							if err != nil {
@@ -260,6 +273,9 @@ func checkRecordsForFlows(t *testing.T, data *TestData, srcIP string, dstIP stri
 							iperfBandwidth, err := strconv.ParseFloat(bwSlice[0], 64)
 							if err != nil {
 								t.Errorf("Error in converting iperf bandwidth to float64 type")
+							}
+							if strings.Contains(bwSlice[1], "Mbits") {
+								iperfBandwidth = iperfBandwidth / float64(1000)
 							}
 							t.Logf("Iperf bandwidth: %v", iperfBandwidth)
 							t.Logf("IPFIX record bandwidth: %v", recBandwidth)
@@ -309,7 +325,7 @@ func getRecordsFromOutput(output string) []string {
 	return recordSlices
 }
 
-func deployNetworkPolicies(t *testing.T, data *TestData) (np1 *networkingv1.NetworkPolicy, np2 *networkingv1.NetworkPolicy) {
+func deployNetworkPolicies(t *testing.T, data *TestData, srcPod, dstPod string) (np1 *networkingv1.NetworkPolicy, np2 *networkingv1.NetworkPolicy) {
 	// Add NetworkPolicy between two iperf Pods.
 	var err error
 	np1, err = data.createNetworkPolicy(ingressNetworkPolicyName, &networkingv1.NetworkPolicySpec{
@@ -319,7 +335,7 @@ func deployNetworkPolicies(t *testing.T, data *TestData) (np1 *networkingv1.Netw
 			From: []networkingv1.NetworkPolicyPeer{{
 				PodSelector: &metav1.LabelSelector{
 					MatchLabels: map[string]string{
-						"antrea-e2e": "perftest-a",
+						"antrea-e2e": srcPod,
 					},
 				}},
 			},
@@ -335,7 +351,7 @@ func deployNetworkPolicies(t *testing.T, data *TestData) (np1 *networkingv1.Netw
 			To: []networkingv1.NetworkPolicyPeer{{
 				PodSelector: &metav1.LabelSelector{
 					MatchLabels: map[string]string{
-						"antrea-e2e": "perftest-b",
+						"antrea-e2e": dstPod,
 					},
 				}},
 			},
