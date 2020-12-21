@@ -186,7 +186,8 @@ function setup_cluster() {
     sed -i "s/CLUSTERNAMESPACE/${CLUSTER}/g" ${GIT_CHECKOUT_DIR}/jenkins/out/namespace.yaml
 
     echo "=== network spec value substitution==="
-    cluster_defaults=${WORKDIR}/utils/CLUSTERDEFAULTS
+    index="$(($BUILD_NUMBER % 2))"
+    cluster_defaults="${WORKDIR}/utils/CLUSTERDEFAULTS-${index}"
     while IFS= read -r line; do
         IFS='=' read -ra kv <<< "$line"
         sed -i "s|${kv[0]}|${kv[1]}|g" ${GIT_CHECKOUT_DIR}/jenkins/out/cluster.yaml
