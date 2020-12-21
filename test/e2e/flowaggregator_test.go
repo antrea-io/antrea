@@ -387,7 +387,7 @@ func createPerftestPods(data *TestData) (podAIP *PodIPs, podBIP *PodIPs, podCIP 
 		return nil, nil, nil, nil, nil, fmt.Errorf("Error when waiting for the perftest client Pod: %v", err)
 	}
 
-	svcB, err = data.createService("perftest-b", iperfPort, iperfPort, map[string]string{"antrea-e2e": "perftest-b"}, false, v1.ServiceTypeClusterIP)
+	svcB, err = data.createService("perftest-b", iperfPort, iperfPort, map[string]string{"antrea-e2e": "perftest-b"}, false, v1.ServiceTypeClusterIP, nil)
 	if err != nil {
 		return nil, nil, nil, nil, nil, fmt.Errorf("Error when creating perftest service: %v", err)
 	}
@@ -401,7 +401,7 @@ func createPerftestPods(data *TestData) (podAIP *PodIPs, podBIP *PodIPs, podCIP 
 	}
 
 	// svcC will be needed when adding RemoteServiceAccess testcase
-	svcC, err = data.createService("perftest-c", iperfPort, iperfPort, map[string]string{"antrea-e2e": "perftest-c"}, false, v1.ServiceTypeClusterIP)
+	svcC, err = data.createService("perftest-c", iperfPort, iperfPort, map[string]string{"antrea-e2e": "perftest-c"}, false, v1.ServiceTypeClusterIP, nil)
 	if err != nil {
 		return nil, nil, nil, nil, nil, fmt.Errorf("Error when creating perftest service: %v", err)
 	}

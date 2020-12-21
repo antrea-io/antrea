@@ -289,7 +289,7 @@ var (
 
 	globalVirtualMAC, _ = net.ParseMAC("aa:bb:cc:dd:ee:ff")
 	hairpinIP           = net.ParseIP("169.254.169.252").To4()
-	hairpinIPv6         = net.ParseIP("FE80::aabb:ccdd:eeff").To16()
+	hairpinIPv6         = net.ParseIP("fc00::aabb:ccdd:eeff").To16()
 )
 
 type OFEntryOperations interface {
@@ -982,7 +982,7 @@ func (c *client) serviceHairpinResponseDNATFlow(ipProtocol binding.Protocol) bin
 	if ipProtocol == binding.ProtocolIPv6 {
 		hpIP = hairpinIPv6
 		from = "NXM_NX_IPV6_SRC"
-		to = "NXM_NX_IPV6_SRC"
+		to = "NXM_NX_IPV6_DST"
 	}
 	return c.pipeline[serviceHairpinTable].BuildFlow(priorityNormal).MatchProtocol(ipProtocol).
 		MatchDstIP(hpIP).
@@ -1648,8 +1648,8 @@ func (c *client) serviceLearnFlow(groupID binding.GroupIDType, svcIP net.IP, svc
 			Done()
 	} else if ipProtocol == binding.ProtocolIPv6 {
 		return learnFlowBuilderLearnAction.
-			MatchLearnedDstIP().
-			MatchLearnedSrcIP().
+			MatchLearnedDstIPv6().
+			MatchLearnedSrcIPv6().
 			LoadXXRegToXXReg(int(endpointIPv6XXReg), int(endpointIPv6XXReg), endpointIPv6XXRegRange, endpointIPv6XXRegRange).
 			LoadRegToReg(int(endpointPortReg), int(endpointPortReg), endpointPortRegRange, endpointPortRegRange).
 			LoadReg(int(serviceLearnReg), marksRegServiceSelected, serviceLearnRegRange).
