@@ -127,6 +127,7 @@
         wipe-workspace: true
         included-regions: '{included_regions}'
     publishers: '{publishers}'
+    wrappers: '{wrappers}'
 
 - job-template:
     name: '{name}-{test_name}-for-gc'
