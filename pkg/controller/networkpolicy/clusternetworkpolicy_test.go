@@ -19,7 +19,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/intstr"
 
 	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
 	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
@@ -38,7 +37,6 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 	}
 	allowAction := secv1alpha1.RuleActionAllow
 	protocolTCP := controlplane.ProtocolTCP
-	intstr80, intstr81 := intstr.FromInt(80), intstr.FromInt(81)
 	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
 	selectorB := metav1.LabelSelector{MatchLabels: map[string]string{"foo2": "bar2"}}
 	selectorC := metav1.LabelSelector{MatchLabels: map[string]string{"foo3": "bar3"}}
@@ -62,7 +60,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 						{
 							Ports: []secv1alpha1.NetworkPolicyPort{
 								{
-									Port: &intstr80,
+									Port: &int80,
 								},
 							},
 							From: []secv1alpha1.NetworkPolicyPeer{
@@ -78,7 +76,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 						{
 							Ports: []secv1alpha1.NetworkPolicyPort{
 								{
-									Port: &intstr81,
+									Port: &int81,
 								},
 							},
 							To: []secv1alpha1.NetworkPolicyPeer{
@@ -111,7 +109,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 						Services: []controlplane.Service{
 							{
 								Protocol: &protocolTCP,
-								Port:     &intstr80,
+								Port:     &int80,
 							},
 						},
 						Priority: 0,
@@ -125,7 +123,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 						Services: []controlplane.Service{
 							{
 								Protocol: &protocolTCP,
-								Port:     &intstr81,
+								Port:     &int81,
 							},
 						},
 						Priority: 0,
@@ -150,7 +148,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 						{
 							Ports: []secv1alpha1.NetworkPolicyPort{
 								{
-									Port: &intstr80,
+									Port: &int80,
 								},
 							},
 							From: []secv1alpha1.NetworkPolicyPeer{
@@ -163,7 +161,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 						{
 							Ports: []secv1alpha1.NetworkPolicyPort{
 								{
-									Port: &intstr81,
+									Port: &int81,
 								},
 							},
 							From: []secv1alpha1.NetworkPolicyPeer{
@@ -195,7 +193,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 						Services: []controlplane.Service{
 							{
 								Protocol: &protocolTCP,
-								Port:     &intstr80,
+								Port:     &int80,
 							},
 						},
 						Priority: 0,
@@ -209,7 +207,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 						Services: []controlplane.Service{
 							{
 								Protocol: &protocolTCP,
-								Port:     &intstr81,
+								Port:     &int81,
 							},
 						},
 						Priority: 1,
@@ -235,7 +233,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 						{
 							Ports: []secv1alpha1.NetworkPolicyPort{
 								{
-									Port: &intstr80,
+									Port: &int80,
 								},
 							},
 							From: []secv1alpha1.NetworkPolicyPeer{
@@ -248,7 +246,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 						{
 							Ports: []secv1alpha1.NetworkPolicyPort{
 								{
-									Port: &intstr81,
+									Port: &int81,
 								},
 							},
 							From: []secv1alpha1.NetworkPolicyPeer{
@@ -280,7 +278,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 						Services: []controlplane.Service{
 							{
 								Protocol: &protocolTCP,
-								Port:     &intstr80,
+								Port:     &int80,
 							},
 						},
 						Priority: 0,
@@ -294,7 +292,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 						Services: []controlplane.Service{
 							{
 								Protocol: &protocolTCP,
-								Port:     &intstr81,
+								Port:     &int81,
 							},
 						},
 						Priority: 1,
@@ -305,6 +303,66 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 			},
 			expectedAppliedToGroups: 1,
 			expectedAddressGroups:   2,
+		},
+		{
+			name: "with-port-range",
+			inputPolicy: &secv1alpha1.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Namespace: "", Name: "cnpD", UID: "uidD"},
+				Spec: secv1alpha1.ClusterNetworkPolicySpec{
+					AppliedTo: []secv1alpha1.NetworkPolicyPeer{
+						{PodSelector: &selectorA},
+					},
+					Priority: p10,
+					Ingress: []secv1alpha1.Rule{
+						{
+							Ports: []secv1alpha1.NetworkPolicyPort{
+								{
+									Protocol: &k8sProtocolTCP,
+									Port:     &int1000,
+									EndPort:  &int32For1999,
+								},
+							},
+							From: []secv1alpha1.NetworkPolicyPeer{
+								{
+									PodSelector: &selectorB,
+								},
+							},
+							Action: &allowAction,
+						},
+					},
+				},
+			},
+			expectedPolicy: &antreatypes.NetworkPolicy{
+				UID:  "uidD",
+				Name: "uidD",
+				SourceRef: &controlplane.NetworkPolicyReference{
+					Type: controlplane.AntreaClusterNetworkPolicy,
+					Name: "cnpD",
+					UID:  "uidD",
+				},
+				Priority:     &p10,
+				TierPriority: &DefaultTierPriority,
+				Rules: []controlplane.NetworkPolicyRule{
+					{
+						Direction: controlplane.DirectionIn,
+						From: controlplane.NetworkPolicyPeer{
+							AddressGroups: []string{getNormalizedUID(toGroupSelector("", &selectorB, nil, nil).NormalizedName)},
+						},
+						Services: []controlplane.Service{
+							{
+								Protocol: toAntreaProtocol(&k8sProtocolTCP),
+								Port:     &int1000,
+								EndPort:  &int32For1999,
+							},
+						},
+						Priority: 0,
+						Action:   &allowAction,
+					},
+				},
+				AppliedToGroups: []string{getNormalizedUID(toGroupSelector("", &selectorA, nil, nil).NormalizedName)},
+			},
+			expectedAppliedToGroups: 1,
+			expectedAddressGroups:   1,
 		},
 		{
 			name: "appliedTo-per-rule",
@@ -322,7 +380,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 							},
 							Ports: []secv1alpha1.NetworkPolicyPort{
 								{
-									Port: &intstr80,
+									Port: &int80,
 								},
 							},
 							From: []secv1alpha1.NetworkPolicyPeer{
@@ -341,7 +399,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 							},
 							Ports: []secv1alpha1.NetworkPolicyPort{
 								{
-									Port: &intstr81,
+									Port: &int81,
 								},
 							},
 							From: []secv1alpha1.NetworkPolicyPeer{
@@ -437,8 +495,6 @@ func TestAddCNP(t *testing.T) {
 	}
 	allowAction := secv1alpha1.RuleActionAllow
 	protocolTCP := controlplane.ProtocolTCP
-	intstr80, intstr81 := intstr.FromInt(80), intstr.FromInt(81)
-	int80, int81 := intstr.FromInt(80), intstr.FromInt(81)
 	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
 	selectorB := metav1.LabelSelector{MatchLabels: map[string]string{"foo2": "bar2"}}
 	selectorC := metav1.LabelSelector{MatchLabels: map[string]string{"foo3": "bar3"}}
@@ -466,7 +522,7 @@ func TestAddCNP(t *testing.T) {
 						{
 							Ports: []secv1alpha1.NetworkPolicyPort{
 								{
-									Port: &intstr80,
+									Port: &int80,
 								},
 							},
 							From: []secv1alpha1.NetworkPolicyPeer{
@@ -524,7 +580,7 @@ func TestAddCNP(t *testing.T) {
 						{
 							Ports: []secv1alpha1.NetworkPolicyPort{
 								{
-									Port: &intstr80,
+									Port: &int80,
 								},
 							},
 							From: []secv1alpha1.NetworkPolicyPeer{
@@ -583,7 +639,7 @@ func TestAddCNP(t *testing.T) {
 						{
 							Ports: []secv1alpha1.NetworkPolicyPort{
 								{
-									Port: &intstr80,
+									Port: &int80,
 								},
 							},
 							From: []secv1alpha1.NetworkPolicyPeer{
@@ -642,7 +698,7 @@ func TestAddCNP(t *testing.T) {
 						{
 							Ports: []secv1alpha1.NetworkPolicyPort{
 								{
-									Port: &intstr80,
+									Port: &int80,
 								},
 							},
 							From: []secv1alpha1.NetworkPolicyPeer{
@@ -700,7 +756,7 @@ func TestAddCNP(t *testing.T) {
 						{
 							Ports: []secv1alpha1.NetworkPolicyPort{
 								{
-									Port: &intstr80,
+									Port: &int80,
 								},
 							},
 							From: []secv1alpha1.NetworkPolicyPeer{
@@ -716,7 +772,7 @@ func TestAddCNP(t *testing.T) {
 						{
 							Ports: []secv1alpha1.NetworkPolicyPort{
 								{
-									Port: &intstr81,
+									Port: &int81,
 								},
 							},
 							To: []secv1alpha1.NetworkPolicyPeer{
@@ -788,7 +844,7 @@ func TestAddCNP(t *testing.T) {
 						{
 							Ports: []secv1alpha1.NetworkPolicyPort{
 								{
-									Port: &intstr80,
+									Port: &int80,
 								},
 							},
 							From: []secv1alpha1.NetworkPolicyPeer{
@@ -801,7 +857,7 @@ func TestAddCNP(t *testing.T) {
 						{
 							Ports: []secv1alpha1.NetworkPolicyPort{
 								{
-									Port: &intstr81,
+									Port: &int81,
 								},
 							},
 							From: []secv1alpha1.NetworkPolicyPeer{
@@ -859,6 +915,66 @@ func TestAddCNP(t *testing.T) {
 			expAppliedToGroups: 1,
 			expAddressGroups:   2,
 		},
+		{
+			name: "with-port-range",
+			inputPolicy: &secv1alpha1.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Namespace: "", Name: "cnpH", UID: "uidH"},
+				Spec: secv1alpha1.ClusterNetworkPolicySpec{
+					AppliedTo: []secv1alpha1.NetworkPolicyPeer{
+						{PodSelector: &selectorA},
+					},
+					Priority: p10,
+					Ingress: []secv1alpha1.Rule{
+						{
+							Ports: []secv1alpha1.NetworkPolicyPort{
+								{
+									Protocol: &k8sProtocolTCP,
+									Port:     &int1000,
+									EndPort:  &int32For1999,
+								},
+							},
+							From: []secv1alpha1.NetworkPolicyPeer{
+								{
+									PodSelector: &selectorB,
+								},
+							},
+							Action: &allowAction,
+						},
+					},
+				},
+			},
+			expPolicy: &antreatypes.NetworkPolicy{
+				UID:  "uidH",
+				Name: "uidH",
+				SourceRef: &controlplane.NetworkPolicyReference{
+					Type: controlplane.AntreaClusterNetworkPolicy,
+					Name: "cnpH",
+					UID:  "uidH",
+				},
+				Priority:     &p10,
+				TierPriority: &DefaultTierPriority,
+				Rules: []controlplane.NetworkPolicyRule{
+					{
+						Direction: controlplane.DirectionIn,
+						From: controlplane.NetworkPolicyPeer{
+							AddressGroups: []string{getNormalizedUID(toGroupSelector("", &selectorB, nil, nil).NormalizedName)},
+						},
+						Services: []controlplane.Service{
+							{
+								Protocol: toAntreaProtocol(&k8sProtocolTCP),
+								Port:     &int1000,
+								EndPort:  &int32For1999,
+							},
+						},
+						Priority: 0,
+						Action:   &allowAction,
+					},
+				},
+				AppliedToGroups: []string{getNormalizedUID(toGroupSelector("", &selectorA, nil, nil).NormalizedName)},
+			},
+			expAppliedToGroups: 1,
+			expAddressGroups:   1,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -878,7 +994,7 @@ func TestAddCNP(t *testing.T) {
 	for _, tt := range tests {
 		npc.addCNP(tt.inputPolicy)
 	}
-	assert.Equal(t, 6, npc.GetNetworkPolicyNum(), "number of NetworkPolicies do not match")
+	assert.Equal(t, 7, npc.GetNetworkPolicyNum(), "number of NetworkPolicies do not match")
 	assert.Equal(t, 3, npc.GetAddressGroupNum(), "number of AddressGroups do not match")
 	assert.Equal(t, 1, npc.GetAppliedToGroupNum(), "number of AppliedToGroups do not match")
 }

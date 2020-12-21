@@ -295,5 +295,10 @@ message Service {
   // The port name or number on the given protocol. If not specified, this matches all port numbers.
   // +optional
   optional k8s.io.apimachinery.pkg.util.intstr.IntOrString port = 2;
+
+  // EndPort defines the end of the port range, being the end included within the range.
+  // It can only be specified when a numerical `port` is specified.
+  // +optional
+  optional int32 endPort = 3;
 }
 

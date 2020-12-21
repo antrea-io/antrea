@@ -95,7 +95,7 @@ type Rule struct {
 	// Set of port and protocol allowed/denied by the rule. If this field is unset
 	// or empty, this rule matches all ports.
 	// +optional
-	Ports []NetworkPolicyPort `json:"ports"`
+	Ports []NetworkPolicyPort `json:"ports,omitempty"`
 	// Rule is matched if traffic originates from workloads selected by
 	// this field. If this field is empty, this rule matches all sources.
 	// +optional
@@ -160,13 +160,16 @@ type NetworkPolicyPort struct {
 	// The protocol (TCP, UDP, or SCTP) which traffic must match.
 	// If not specified, this field defaults to TCP.
 	// +optional
-	Protocol *v1.Protocol `json:"protocol"`
-	// The port on the given protocol. This can either be a numerical
+	Protocol *v1.Protocol `json:"protocol,omitempty"`
+	// The port on the given protocol. This can be either a numerical
 	// or named port on a Pod. If this field is not provided, this
 	// matches all port names and numbers.
-	// TODO: extend it to include Port Range.
 	// +optional
-	Port *intstr.IntOrString `json:"port"`
+	Port *intstr.IntOrString `json:"port,omitempty"`
+	// EndPort defines the end of the port range, being the end included within the range.
+	// It can only be specified when a numerical `port` is specified.
+	// +optional
+	EndPort *int32 `json:"endPort,omitempty"`
 }
 
 // RuleAction describes the action to be applied on traffic matching a rule.

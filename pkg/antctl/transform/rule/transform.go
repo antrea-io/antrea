@@ -22,6 +22,7 @@ import (
 type service struct {
 	Protocol string `json:"protocol,omitempty"`
 	Port     string `json:"port,omitempty"`
+	EndPort  string `json:"endPort,omitempty"`
 }
 
 type ipBlock struct {
@@ -44,9 +45,18 @@ type Response struct {
 func serviceTransform(services ...cpv1beta.Service) []service {
 	var ret []service
 	for _, s := range services {
+		port := "nil"
+		endPort := "nil"
+		if s.Port != nil {
+			port = s.Port.String()
+		}
+		if s.EndPort != nil {
+			endPort = string(*s.EndPort)
+		}
 		ret = append(ret, service{
 			Protocol: string(*s.Protocol),
-			Port:     s.Port.String(),
+			Port:     port,
+			EndPort:  endPort,
 		})
 	}
 	return ret
