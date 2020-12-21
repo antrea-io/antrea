@@ -118,9 +118,12 @@ var (
 		"destinationPodNamespace",
 		"destinationNodeName",
 		"destinationClusterIPv4",
+		"destinationServicePort",
 		"destinationServicePortName",
 		"ingressNetworkPolicyName",
 		"ingressNetworkPolicyNamespace",
+		"egressNetworkPolicyName",
+		"egressNetworkPolicyNamespace",
 	}
 )
 

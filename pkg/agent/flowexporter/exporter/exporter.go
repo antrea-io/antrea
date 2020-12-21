@@ -273,6 +273,9 @@ func (exp *flowExporter) sendFlowRecords() error {
 				return err
 			}
 		}
+		if err := exp.flowRecords.ValidateAndUpdateStats(key, record); err != nil {
+			return err
+		}
 		return nil
 	}
 	err := exp.flowRecords.ForAllFlowRecordsDo(addAndSendFlowRecord)
