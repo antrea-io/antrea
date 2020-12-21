@@ -58,12 +58,6 @@ var (
 		securityOpsTierName: int32(100),
 		emergencyTierName:   int32(50),
 	}
-	oldPriorityMap = map[string]int32{
-		platformTierName:    int32(150),
-		networkOpsTierName:  int32(100),
-		securityOpsTierName: int32(50),
-		emergencyTierName:   int32(5),
-	}
 	// staticTierSet maintains the names of the static tiers such that they can
 	// be converted to corresponding Tier CRD names.
 	staticTierSet = sets.NewString("Emergency", "SecurityOps", "NetworkOps", "Platform", "Application", "Baseline")
@@ -138,10 +132,10 @@ func (n *NetworkPolicyController) InitializeTiers() {
 			// Tier is already present.
 			klog.V(2).Infof("%s Tier already created", t.Name)
 			// Update Tier Priority if it is not set to desired Priority.
-			oldPrio, ok := oldPriorityMap[t.Name]
-			if ok && oldPrio == oldTier.Spec.Priority {
+			expPrio := priorityMap[t.Name]
+			if oldTier.Spec.Priority != expPrio {
 				tToUpdate := oldTier.DeepCopy()
-				tToUpdate.Spec.Priority = priorityMap[t.Name]
+				tToUpdate.Spec.Priority = expPrio
 				n.updateTier(tToUpdate)
 			}
 			continue
@@ -165,7 +159,7 @@ func (n *NetworkPolicyController) initTier(t *secv1alpha1.Tier) {
 			klog.Warningf("Failed to create %s Tier on init: %v. Retry attempt: %d", t.Name, err, retryAttempt)
 			// Tier creation may fail because antrea APIService is not yet ready
 			// to accept requests for validation. Retry fixed number of times
-			// not exceeding 2 * 5 = 10s.
+			// not exceeding 8s.
 			time.Sleep(backoff)
 			backoff *= 2
 			if backoff > maxBackoffTime {
@@ -193,7 +187,7 @@ func (n *NetworkPolicyController) updateTier(t *secv1alpha1.Tier) {
 			klog.Warningf("Failed to update %s Tier on init: %v. Retry attempt: %d", t.Name, err, retryAttempt)
 			// Tier update may fail because antrea APIService is not yet ready
 			// to accept requests for validation. Retry fixed number of times
-			// not exceeding 2 * 5 = 10s.
+			// not exceeding 8s.
 			time.Sleep(backoff)
 			backoff *= 2
 			if backoff > maxBackoffTime {
