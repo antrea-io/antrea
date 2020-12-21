@@ -18,6 +18,7 @@
           cron: 'H/15 * * * *'
           ignore_post_commit_hooks: false
           publishers: []
+          wrappers: []
       - '{name}-{test_name}-for-period':
           test_name: daily-whole-conformance
           node: 'antrea-test-node'
@@ -33,6 +34,23 @@
           publishers:
           - email:
               recipients: projectantrea-dev@googlegroups.com
+          wrappers:
+          - credentials-binding:
+            - text:
+                credential-id: VMC_NETWORK_0
+                variable: VMC_NETWORK_0
+            - text:
+                credential-id: VMC_NETWORK_1
+                variable: VMC_NETWORK_1
+            - text:
+                credential-id: VCENTERNAME
+                variable: VCENTERNAME
+            - text:
+                credential-id: DATACENTERNAME
+                variable: DATACENTERNAME
+            - text:
+                credential-id: RESOURCEPOOLPATH
+                variable: RESOURCEPOOLPATH
       - '{name}-{test_name}-for-period':
           test_name: daily-elk-flow-collector-validate
           node: 'antrea-test-node'
@@ -47,6 +65,7 @@
           publishers:
           - email:
               recipients: projectantrea-dev@googlegroups.com
+          wrappers: []
       - '{name}-{test_name}-for-gc':
           test_name: workload-cluster
           node: 'antrea-test-node'
@@ -196,7 +215,7 @@
           org_list: '{antrea_org_list}'
           white_list: '{antrea_white_list}'
           only_trigger_phrase: true
-          trigger_permit_all: false
+          trigger_permit_all: true
           status_context: jenkins-e2e
           status_url: null
           success_status: Build finished.
@@ -213,6 +232,22 @@
               fail: true
               timeout: 80
               type: absolute
+          - credentials-binding:
+            - text:
+                credential-id: VMC_NETWORK_0
+                variable: VMC_NETWORK_0
+            - text:
+                credential-id: VMC_NETWORK_1
+                variable: VMC_NETWORK_1
+            - text:
+                credential-id: VCENTERNAME
+                variable: VCENTERNAME
+            - text:
+                credential-id: DATACENTERNAME
+                variable: DATACENTERNAME
+            - text:
+                credential-id: RESOURCEPOOLPATH
+                variable: RESOURCEPOOLPATH
           publishers:
           - archive:
               allow-empty: true
@@ -286,7 +321,7 @@
           org_list: '{antrea_org_list}'
           white_list: '{antrea_white_list}'
           only_trigger_phrase: true
-          trigger_permit_all: false
+          trigger_permit_all: true
           status_context: jenkins-conformance
           status_url: null
           success_status: Build finished.
@@ -303,6 +338,22 @@
               fail: true
               timeout: 80
               type: absolute
+          - credentials-binding:
+            - text:
+                credential-id: VMC_NETWORK_0
+                variable: VMC_NETWORK_0
+            - text:
+                credential-id: VMC_NETWORK_1
+                variable: VMC_NETWORK_1
+            - text:
+                credential-id: VCENTERNAME
+                variable: VCENTERNAME
+            - text:
+                credential-id: DATACENTERNAME
+                variable: DATACENTERNAME
+            - text:
+                credential-id: RESOURCEPOOLPATH
+                variable: RESOURCEPOOLPATH
           publishers:
           - archive:
               allow-empty: true
@@ -376,7 +427,7 @@
           org_list: '{antrea_org_list}'
           white_list: '{antrea_white_list}'
           only_trigger_phrase: true
-          trigger_permit_all: false
+          trigger_permit_all: true
           status_context: jenkins-all-features-conformance
           status_url: null
           success_status: Build finished.
@@ -441,7 +492,7 @@
           org_list: '{antrea_org_list}'
           white_list: '{antrea_white_list}'
           only_trigger_phrase: true
-          trigger_permit_all: false
+          trigger_permit_all: true
           status_context: jenkins-whole-conformance
           status_url: null
           success_status: Build finished.
@@ -458,6 +509,22 @@
               fail: true
               timeout: 150
               type: absolute
+          - credentials-binding:
+            - text:
+                credential-id: VMC_NETWORK_0
+                variable: VMC_NETWORK_0
+            - text:
+                credential-id: VMC_NETWORK_1
+                variable: VMC_NETWORK_1
+            - text:
+                credential-id: VCENTERNAME
+                variable: VCENTERNAME
+            - text:
+                credential-id: DATACENTERNAME
+                variable: DATACENTERNAME
+            - text:
+                credential-id: RESOURCEPOOLPATH
+                variable: RESOURCEPOOLPATH
           publishers:
           - archive:
               allow-empty: true
@@ -531,7 +598,7 @@
           org_list: '{antrea_org_list}'
           white_list: '{antrea_white_list}'
           only_trigger_phrase: true
-          trigger_permit_all: false
+          trigger_permit_all: true
           status_context: jenkins-networkpolicy
           status_url: null
           success_status: Build finished.
@@ -548,6 +615,22 @@
               fail: true
               timeout: 80
               type: absolute
+          - credentials-binding:
+            - text:
+                credential-id: VMC_NETWORK_0
+                variable: VMC_NETWORK_0
+            - text:
+                credential-id: VMC_NETWORK_1
+                variable: VMC_NETWORK_1
+            - text:
+                credential-id: VCENTERNAME
+                variable: VCENTERNAME
+            - text:
+                credential-id: DATACENTERNAME
+                variable: DATACENTERNAME
+            - text:
+                credential-id: RESOURCEPOOLPATH
+                variable: RESOURCEPOOLPATH
           publishers:
           - archive:
               allow-empty: true
