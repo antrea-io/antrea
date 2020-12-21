@@ -2835,6 +2835,13 @@ func schema_pkg_apis_controlplane_v1beta2_Service(ref common.ReferenceCallback) 
 							Ref:         ref("k8s.io/apimachinery/pkg/util/intstr.IntOrString"),
 						},
 					},
+					"endPort": {
+						SchemaProps: spec.SchemaProps{
+							Description: "EndPort defines the end of the port range, being the end included within the range. It can only be specified when a numerical `port` is specified.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
 				},
 			},
 		},

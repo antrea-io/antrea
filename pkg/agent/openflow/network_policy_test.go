@@ -219,10 +219,11 @@ func TestInstallPolicyRuleFlows(t *testing.T) {
 
 	ruleID3 := uint32(103)
 	port1 := intstr.FromInt(8080)
-	port2 := intstr.FromInt(8081)
+	port2 := intstr.FromInt(1000)
+	port3 := int32(1007)
 	tcpProtocol := v1beta2.ProtocolTCP
 	npPort1 := v1beta2.Service{Protocol: &tcpProtocol, Port: &port1}
-	npPort2 := v1beta2.Service{Protocol: &tcpProtocol, Port: &port2}
+	npPort2 := v1beta2.Service{Protocol: &tcpProtocol, Port: &port2, EndPort: &port3}
 	rule3 := &types.PolicyRule{
 		Direction: v1beta2.DirectionOut,
 		From:      parseAddresses([]string{"192.168.1.40", "192.168.1.60"}),
@@ -665,7 +666,7 @@ func newMockRuleFlowBuilder(ctrl *gomock.Controller) *mocks.MockFlowBuilder {
 	ruleFlowBuilder.EXPECT().MatchSrcIP(gomock.Any()).Return(ruleFlowBuilder).AnyTimes()
 	ruleFlowBuilder.EXPECT().MatchInPort(gomock.Any()).Return(ruleFlowBuilder).AnyTimes()
 	ruleFlowBuilder.EXPECT().MatchRegRange(gomock.Any(), gomock.Any(), gomock.Any()).Return(ruleFlowBuilder).AnyTimes()
-	ruleFlowBuilder.EXPECT().MatchDstPort(gomock.Any(), gomock.Nil()).Return(ruleFlowBuilder).AnyTimes()
+	ruleFlowBuilder.EXPECT().MatchDstPort(gomock.Any(), gomock.Any()).Return(ruleFlowBuilder).AnyTimes()
 	ruleFlowBuilder.EXPECT().MatchConjID(gomock.Any()).Return(ruleFlowBuilder).AnyTimes()
 	ruleFlowBuilder.EXPECT().MatchPriority(gomock.Any()).Return(ruleFlowBuilder).AnyTimes()
 	ruleAction = mocks.NewMockAction(ctrl)

@@ -21,6 +21,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/intstr"
 
 	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
 )
@@ -123,6 +124,17 @@ var (
 		Pod:   &PodReference{"test-pod2", "test-ns"},
 		IP:    IPAddress(net.ParseIP("10.0.0.2")),
 		Ports: v1b1Ports,
+	}
+	v1b1TCP     = ProtocolTCP
+	cpTCP       = controlplane.ProtocolTCP
+	int80       = intstr.FromInt(80)
+	v1b1Service = Service{
+		Protocol: &v1b1TCP,
+		Port:     &int80,
+	}
+	cpService = controlplane.Service{
+		Protocol: &cpTCP,
+		Port:     &int80,
 	}
 )
 
@@ -255,4 +267,18 @@ func TestConvertBetweenV1beta1AndControlplaneAppliedToGroupPatch(t *testing.T) {
 	require.NoError(t,
 		Convert_v1beta1_AppliedToGroupPatch_To_controlplane_AppliedToGroupPatch(&v1b1AppliedToGroupPatch, &convertedCPPatch, nil))
 	assert.Equal(t, cpAppliedToGroupPatch, convertedCPPatch)
+}
+
+func TestConvertBetweenV1beta1AndControlplaneService(t *testing.T) {
+	scheme := runtime.NewScheme()
+	assert.NoError(t, RegisterConversions(scheme))
+
+	var convertedCPService controlplane.Service
+	var convertedV1B1Service Service
+	require.NoError(t,
+		Convert_controlplane_Service_To_v1beta1_Service(&cpService, &convertedV1B1Service, nil))
+	assert.Equal(t, v1b1Service, convertedV1B1Service, "controlplane.GroupMember -> v1beta1.GroupMember")
+	require.NoError(t,
+		Convert_v1beta1_Service_To_controlplane_Service(&v1b1Service, &convertedCPService, nil))
+	assert.Equal(t, cpService, convertedCPService, "v1beta1.GroupMember -> controlplane.GroupMember")
 }

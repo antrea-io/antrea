@@ -140,3 +140,10 @@ func (m *RuleMetric) Merge(m1 *RuleMetric) {
 	m.Packets += m1.Packets
 	m.Sessions += m1.Sessions
 }
+
+// A BitRange is a representation of a range of values from base value with a
+// bitmask applied.
+type BitRange struct {
+	Value uint16
+	Mask  *uint16
+}
