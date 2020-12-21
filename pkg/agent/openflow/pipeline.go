@@ -1347,9 +1347,9 @@ func (c *client) addFlowMatch(fb binding.FlowBuilder, matchKey *types.MatchKey, 
 		fallthrough
 	case MatchSCTPv6DstPort:
 		fb = fb.MatchProtocol(matchKey.GetOFProtocol())
-		portValue := matchValue.(uint16)
-		if portValue > 0 {
-			fb = fb.MatchDstPort(portValue, nil)
+		portValue := matchValue.(types.BitRange)
+		if portValue.Value > 0 {
+			fb = fb.MatchDstPort(portValue.Value, portValue.Mask)
 		}
 	}
 	return fb

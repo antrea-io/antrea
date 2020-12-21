@@ -125,6 +125,8 @@ spec:
                     ports:
                       items:
                         properties:
+                          endPort:
+                            type: integer
                           port:
                             x-kubernetes-int-or-string: true
                           protocol:
@@ -189,6 +191,8 @@ spec:
                     ports:
                       items:
                         properties:
+                          endPort:
+                            type: integer
                           port:
                             x-kubernetes-int-or-string: true
                           protocol:
@@ -359,6 +363,8 @@ spec:
                     ports:
                       items:
                         properties:
+                          endPort:
+                            type: integer
                           port:
                             x-kubernetes-int-or-string: true
                           protocol:
@@ -426,6 +432,8 @@ spec:
                     ports:
                       items:
                         properties:
+                          endPort:
+                            type: integer
                           port:
                             x-kubernetes-int-or-string: true
                           protocol:

@@ -342,6 +342,8 @@ spec:
                               type: string
                             port:
                               x-kubernetes-int-or-string: true
+                            endPort:
+                              type: integer
                       from:
                         type: array
                         items:
@@ -391,6 +393,8 @@ spec:
                               type: string
                             port:
                               x-kubernetes-int-or-string: true
+                            endPort:
+                              type: integer
                       to:
                         type: array
                         items:
@@ -522,6 +526,8 @@ spec:
                               type: string
                             port:
                               x-kubernetes-int-or-string: true
+                            endPort:
+                              type: integer
                       from:
                         type: array
                         items:
@@ -572,6 +578,8 @@ spec:
                               type: string
                             port:
                               x-kubernetes-int-or-string: true
+                            endPort:
+                              type: integer
                       to:
                         type: array
                         items:

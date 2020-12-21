@@ -185,7 +185,14 @@ func (k *KubernetesUtils) CreateOrUpdateDeployment(ns, deploymentName string, re
 				Spec: v1.PodSpec{
 					TerminationGracePeriodSeconds: &zero,
 					Containers: []v1.Container{
-						makeContainerSpec(80), makeContainerSpec(81),
+						makeContainerSpec(80),
+						makeContainerSpec(81),
+						makeContainerSpec(8080),
+						makeContainerSpec(8081),
+						makeContainerSpec(8082),
+						makeContainerSpec(8083),
+						makeContainerSpec(8084),
+						makeContainerSpec(8085),
 					},
 				},
 			},
@@ -280,8 +287,8 @@ func (k *KubernetesUtils) UpdateTier(tier *secv1alpha1.Tier) (*secv1alpha1.Tier,
 	return updatedTier, err
 }
 
-// CleanCNPs is a convenience function for deleting AntreaClusterNetworkPolicies before startup of any new test.
-func (k *KubernetesUtils) CleanCNPs() error {
+// CleanACNPs is a convenience function for deleting AntreaClusterNetworkPolicies before startup of any new test.
+func (k *KubernetesUtils) CleanACNPs() error {
 	l, err := k.securityClient.ClusterNetworkPolicies().List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		return errors.Wrapf(err, "unable to list AntreaClusterNetworkPolicies")
@@ -296,8 +303,8 @@ func (k *KubernetesUtils) CleanCNPs() error {
 	return nil
 }
 
-// CreateOrUpdateCNP is a convenience function for updating/creating AntreaClusterNetworkPolicies.
-func (k *KubernetesUtils) CreateOrUpdateCNP(cnp *secv1alpha1.ClusterNetworkPolicy) (*secv1alpha1.ClusterNetworkPolicy, error) {
+// CreateOrUpdateACNP is a convenience function for updating/creating AntreaClusterNetworkPolicies.
+func (k *KubernetesUtils) CreateOrUpdateACNP(cnp *secv1alpha1.ClusterNetworkPolicy) (*secv1alpha1.ClusterNetworkPolicy, error) {
 	log.Infof("creating/updating ClusterNetworkPolicy %s", cnp.Name)
 	cnpReturned, err := k.securityClient.ClusterNetworkPolicies().Get(context.TODO(), cnp.Name, metav1.GetOptions{})
 	if err != nil {
@@ -333,7 +340,7 @@ func (k *KubernetesUtils) CleanANPs(namespaces []string) error {
 	return nil
 }
 
-// CreateOrUpdateCNP is a convenience function for updating/creating Antrea NetworkPolicies.
+// CreateOrUpdateANP is a convenience function for updating/creating Antrea NetworkPolicies.
 func (k *KubernetesUtils) CreateOrUpdateANP(anp *secv1alpha1.NetworkPolicy) (*secv1alpha1.NetworkPolicy, error) {
 	log.Infof("creating/updating Antrea NetworkPolicy %s", anp.Name)
 	cnpReturned, err := k.securityClient.NetworkPolicies(anp.Namespace).Get(context.TODO(), anp.Name, metav1.GetOptions{})
@@ -379,12 +386,15 @@ func (k *KubernetesUtils) waitForPodInNamespace(ns string, pod string) (*string,
 func (k *KubernetesUtils) waitForHTTPServers(allPods []Pod) error {
 	const maxTries = 10
 	const sleepInterval = 1 * time.Second
-	log.Infof("waiting for HTTP servers (ports 80 and 81) to become ready")
+	log.Infof("waiting for HTTP servers (ports 80, 81 and 8080:8085) to become ready")
 	var wrong int
 	for i := 0; i < maxTries; i++ {
 		reachability := NewReachability(allPods, true)
 		k.Validate(allPods, reachability, 80)
 		k.Validate(allPods, reachability, 81)
+		for j := 8080; j < 8086; j++ {
+			k.Validate(allPods, reachability, j)
+		}
 		_, wrong, _ = reachability.Summary()
 		if wrong == 0 {
 			log.Infof("all HTTP servers are ready")
@@ -467,7 +477,7 @@ func (k *KubernetesUtils) Bootstrap(namespaces, pods []string) (*map[string]stri
 }
 
 func (k *KubernetesUtils) Cleanup(namespaces []string) error {
-	if err := k.CleanCNPs(); err != nil {
+	if err := k.CleanACNPs(); err != nil {
 		return err
 	}
 	for _, ns := range namespaces {

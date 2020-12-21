@@ -22,6 +22,7 @@ import (
 	admv1 "k8s.io/api/admission/v1"
 	authenticationv1 "k8s.io/api/authentication/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog"
 
@@ -213,6 +214,36 @@ func (v *NetworkPolicyValidator) validateAntreaPolicy(curObj, oldObj interface{}
 	return reason, allowed
 }
 
+// validatePort validates if ports is valid
+func (a *antreaPolicyValidator) validatePort(ingress, egress []secv1alpha1.Rule) error {
+	isValid := func(rules []secv1alpha1.Rule) error {
+		for _, rule := range rules {
+			for _, port := range rule.Ports {
+				if port.EndPort == nil {
+					continue
+				}
+				if port.Port == nil {
+					return fmt.Errorf("if `endPort` is specified `port` must be specified")
+				}
+				if port.Port.Type == intstr.String {
+					return fmt.Errorf("if `port` is a string `endPort` cannot be specified")
+				}
+				if *port.EndPort < port.Port.IntVal {
+					return fmt.Errorf("`endPort` should be greater than or equal to `port`")
+				}
+			}
+		}
+		return nil
+	}
+	if err := isValid(ingress); err != nil {
+		return err
+	}
+	if err := isValid(egress); err != nil {
+		return err
+	}
+	return nil
+}
+
 // validateTier validates the admission of a Tier resource
 func (v *NetworkPolicyValidator) validateTier(curTier, oldTier *secv1alpha1.Tier, op admv1.Operation, userInfo authenticationv1.UserInfo) (string, bool) {
 	allowed := true
@@ -298,6 +329,9 @@ func (a *antreaPolicyValidator) createValidate(curObj interface{}, userInfo auth
 	if !allowed {
 		return reason, allowed
 	}
+	if err := a.validatePort(ingress, egress); err != nil {
+		return err.Error(), false
+	}
 	return "", true
 }
 
@@ -376,6 +410,12 @@ func (a *antreaPolicyValidator) updateValidate(curObj, oldObj interface{}, userI
 	reason, allowed := a.validateAppliedTo(ingress, egress, specAppliedTo)
 	if !allowed {
 		return reason, allowed
+	}
+	if ruleNameUnique := a.validateRuleName(ingress, egress); !ruleNameUnique {
+		return fmt.Sprint("rules names must be unique within the policy"), false
+	}
+	if err := a.validatePort(ingress, egress); err != nil {
+		return err.Error(), false
 	}
 	return a.validateTierForPolicy(tier)
 }

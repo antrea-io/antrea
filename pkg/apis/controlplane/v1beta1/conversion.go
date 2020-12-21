@@ -415,3 +415,25 @@ func Convert_controlplane_NetworkPolicyRule_To_v1beta1_NetworkPolicyRule(in *con
 	out.EnableLogging = in.EnableLogging
 	return nil
 }
+
+func Convert_v1beta1_Service_To_controlplane_Service(in *Service, out *controlplane.Service, s conversion.Scope) error {
+	if in.Protocol != nil {
+		outProtocol := controlplane.Protocol(*in.Protocol)
+		out.Protocol = &outProtocol
+	}
+	if in.Port != nil {
+		out.Port = in.Port
+	}
+	return nil
+}
+
+func Convert_controlplane_Service_To_v1beta1_Service(in *controlplane.Service, out *Service, s conversion.Scope) error {
+	if in.Protocol != nil {
+		outProtocol := Protocol(*in.Protocol)
+		out.Protocol = &outProtocol
+	}
+	if in.Port != nil {
+		out.Port = in.Port
+	}
+	return nil
+}

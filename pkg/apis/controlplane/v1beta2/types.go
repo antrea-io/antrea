@@ -226,6 +226,10 @@ type Service struct {
 	// The port name or number on the given protocol. If not specified, this matches all port numbers.
 	// +optional
 	Port *intstr.IntOrString `json:"port,omitempty" protobuf:"bytes,2,opt,name=port"`
+	// EndPort defines the end of the port range, being the end included within the range.
+	// It can only be specified when a numerical `port` is specified.
+	// +optional
+	EndPort *int32 `json:"endPort,omitempty" protobuf:"bytes,3,opt,name=endPort"`
 }
 
 // NetworkPolicyPeer describes a peer of NetworkPolicyRules.
