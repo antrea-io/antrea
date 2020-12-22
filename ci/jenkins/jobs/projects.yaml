@@ -34,6 +34,13 @@
           publishers:
           - email:
               recipients: projectantrea-dev@googlegroups.com
+          - archive:
+              allow-empty: true
+              artifacts: 'ci/jenkins/*sonobuoy*.tar.gz, whole-conformance-coverage.tar.gz'
+              case-sensitive: true
+              default-excludes: true
+              fingerprint: false
+              only-if-success: false
           wrappers:
           - credentials-binding:
             - text:
@@ -154,6 +161,48 @@
           success_status: Build finished.
           failure_status: Failed.
           error_status: Failed.
+          triggered_status: null
+          started_status: null
+          wrappers:
+          - timeout:
+              fail: true
+              timeout: 10
+              type: absolute
+          - credentials-binding:
+              - text:
+                  credential-id: GOVC_URL
+                  variable: GOVC_URL
+              - text:
+                  credential-id: GOVC_USERNAME
+                  variable: GOVC_USERNAME
+              - text:
+                  credential-id: GOVC_PASSWORD
+                  variable: GOVC_PASSWORD
+              - text:
+                  credential-id: CODECOV_TOKEN # Jenkins secret that stores codecov token
+                  variable: CODECOV_TOKEN
+          publishers: []
+      - '{name}-{test_name}-for-pull-request':
+          test_name: integration-manual
+          node: 'antrea-test-node'
+          description: 'This is the {test_name} test for {name}.'
+          branches:
+          - ${{sha1}}
+          builders:
+          - builder-integration
+          trigger_phrase: ^(?!Thanks for your PR).*/test-integration).*
+          white_list_target_branches: []
+          allow_whitelist_orgs_as_admins: true
+          admin_list: '{antrea_admin_list}'
+          org_list: '{antrea_org_list}'
+          white_list: '{antrea_white_list}'
+          only_trigger_phrase: true
+          trigger_permit_all: true
+          status_context: Integration tests
+          status_url: null
+          success_status: Build finished.
+          failure_status: Failed. Add comment /test-integration to re-trigger.
+          error_status: Failed. Add comment /test-integration to re-trigger.
           triggered_status: null
           started_status: null
           wrappers:
