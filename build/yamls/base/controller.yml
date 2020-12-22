@@ -222,6 +222,11 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: spec.nodeName
+            # Provide ServiceAccount name for validation webhook.
+            - name: SERVICEACCOUNT_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.serviceAccountName
           ports:
             - containerPort: 10349
               name: api

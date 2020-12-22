@@ -24,9 +24,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/apiserver/pkg/authentication/serviceaccount"
 	"k8s.io/klog"
 
 	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
+	"github.com/vmware-tanzu/antrea/pkg/util/env"
 )
 
 // validator interface introduces the set of functions that must be implemented
@@ -67,6 +69,8 @@ var (
 	// since they are created by Antrea.
 	reservedTierNames = sets.NewString("baseline", "application", "platform", "networkops", "securityops", "emergency")
 )
+
+const defaultControllerNamespace = "kube-system"
 
 // RegisterAntreaPolicyValidator registers an Antrea-native policy validator
 // to the resource registry. A new validator must be registered by calling
@@ -449,6 +453,16 @@ func (t *tierValidator) updateValidate(curObj, oldObj interface{}, userInfo auth
 	reason := ""
 	curTier := curObj.(*secv1alpha1.Tier)
 	oldTier := oldObj.(*secv1alpha1.Tier)
+	// Retrieve antrea-controller's Namespace
+	namespace := env.GetPodNamespace()
+	if namespace == "" {
+		// antrea-controller by default is created in the kube-system Namespace
+		namespace = defaultControllerNamespace
+	}
+	// Allow exception of Tier Priority updates performed by the antrea-controller
+	if serviceaccount.MatchesUsername(namespace, env.GetAntreaControllerServiceAccount(), userInfo.Username) {
+		return "", true
+	}
 	if curTier.Spec.Priority != oldTier.Spec.Priority {
 		allowed = false
 		reason = "update to Tier priority is not allowed"
