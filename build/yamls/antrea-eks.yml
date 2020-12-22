@@ -1542,6 +1542,8 @@ spec:
         command:
         - antrea-agent
         env:
+        - name: ANTREA_CLOUD_EKS
+          value: "true"
         - name: POD_NAME
           valueFrom:
             fieldRef:
@@ -1554,8 +1556,6 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: spec.nodeName
-        - name: ANTREA_CLOUD_EKS
-          value: "true"
         image: projects.registry.vmware.com/antrea/antrea-ubuntu:latest
         imagePullPolicy: IfNotPresent
         livenessProbe:

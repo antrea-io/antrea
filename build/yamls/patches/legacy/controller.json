@@ -1,0 +1,7 @@
+[
+	{
+		"op": "replace",
+		"path": "/apiVersion",
+		"value": "admissionregistration.k8s.io/v1beta1"
+	}
+]
