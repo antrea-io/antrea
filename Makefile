@@ -54,8 +54,8 @@ antrea-cni:
 	@mkdir -p $(BINDIR)
 	GOOS=linux $(GO) build -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' github.com/vmware-tanzu/antrea/cmd/antrea-cni
 
-.PHONY: antctl-ubuntu
-antctl-ubuntu:
+.PHONY: antctl-linux
+antctl-linux:
 	@mkdir -p $(BINDIR)
 	GOOS=linux $(GO) build -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' github.com/vmware-tanzu/antrea/cmd/antctl
 
@@ -91,7 +91,7 @@ test-integration:
 endif
 
 .PHONY: build
-build: build-ubuntu build-ubi
+build: build-ubuntu
 
 .PHONY: test
 test: golangci
@@ -272,14 +272,6 @@ endif
 	docker tag antrea/antrea-ubuntu:$(DOCKER_IMG_VERSION) antrea/antrea-ubuntu
 	docker tag antrea/antrea-ubuntu:$(DOCKER_IMG_VERSION) projects.registry.vmware.com/antrea/antrea-ubuntu
 	docker tag antrea/antrea-ubuntu:$(DOCKER_IMG_VERSION) projects.registry.vmware.com/antrea/antrea-ubuntu:$(DOCKER_IMG_VERSION)
-
-.PHONY: ubi
-ubi:
-	@echo "===> Building antrea/antrea-ubi Docker image <==="
-	docker build --pull -t antrea/antrea-ubi:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.ubi .
-	docker tag antrea/antrea-ubi:$(DOCKER_IMG_VERSION) antrea/antrea-ubi
-	docker tag antrea/antrea-ubi:$(DOCKER_IMG_VERSION) projects.registry.vmware.com/antrea/antrea-ubi
-	docker tag antrea/antrea-ubi:$(DOCKER_IMG_VERSION) projects.registry.vmware.com/antrea/antrea-ubi:$(DOCKER_IMG_VERSION)
 
 # Build bins in a golang container, and build the antrea-ubi Docker image.
 .PHONY: build-ubi
