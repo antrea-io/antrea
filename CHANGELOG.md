@@ -11,6 +11,18 @@ Some experimental features can be enabled / disabled using [Feature Gates](docs/
 
 ## Unreleased
 
+## 0.11.1 - 2020-11-20
+
+### Fixed
+
+- Fix SessionAffinity implementation in AntreaProxy: the timeout value was not honored correctly and flows were not updated correctly when the SessionAffinity type changed. ([#1576](https://github.com/vmware-tanzu/antrea/pull/1576), [@antoninbas])
+- Ensure that AntreaProxy deletes stale flows when a Service's port number changes. ([#1576](https://github.com/vmware-tanzu/antrea/pull/1576), [@antoninbas])
+- Fix networkPolicyOnly traffic mode and support for AKS and EKS by ensuring that the proper criteria are used when determining whether to install IPv4 flows and / or IPv6 flows. ([#1585](https://github.com/vmware-tanzu/antrea/pull/1585) [#1575](https://github.com/vmware-tanzu/antrea/pull/1575), [@antoninbas] [@Dyanngg])
+- Ensure backwards-compatibility of "controlplane.antrea.tanzu.vmware.com" for older Agents using the v1beta1 API version to communicate with a new Controller which defaults to v1beta2. ([#1586](https://github.com/vmware-tanzu/antrea/pull/1586), [@tnqn])
+  * During upgrade from 0.10.x to 0.11.0, NetworkPolicy enforcement was broken for older Agents (0.10.x) because of an API change
+  * Upgrading from 0.10.x to 0.11.1 or from 0.11.0 to 0.11.1 is supported without disruption
+- Mutate empty "tier" field in Antrea-native policies to the default "Application" tier to ensure that the correct tier is reported when dumping policies (e.g. with kubectl). ([#1567](https://github.com/vmware-tanzu/antrea/pull/1567), [@abhiraut])
+
 ## 0.11.0 - 2020-11-13
 
 Includes all the changes from [0.10.1] and [0.10.2].
