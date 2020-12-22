@@ -1544,6 +1544,36 @@ spec:
         component: antrea-agent
     spec:
       containers:
+      - command:
+        - start_ovs_ipsec
+        image: projects.registry.vmware.com/antrea/antrea-ubuntu:latest
+        imagePullPolicy: IfNotPresent
+        livenessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - timeout 5 container_liveness_probe ovs-ipsec
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        name: antrea-ipsec
+        resources:
+          requests:
+            cpu: 50m
+        securityContext:
+          capabilities:
+            add:
+            - NET_ADMIN
+        volumeMounts:
+        - mountPath: /var/run/openvswitch
+          name: host-var-run-antrea
+          subPath: openvswitch
+        - mountPath: /var/log/openvswitch
+          name: host-var-log-antrea
+          subPath: openvswitch
+        - mountPath: /var/log/strongswan
+          name: host-var-log-antrea
+          subPath: strongswan
       - args:
         - --config
         - /etc/antrea/antrea-agent.conf
@@ -1556,6 +1586,11 @@ spec:
         command:
         - antrea-agent
         env:
+        - name: ANTREA_IPSEC_PSK
+          valueFrom:
+            secretKeyRef:
+              key: psk
+              name: antrea-ipsec
         - name: POD_NAME
           valueFrom:
             fieldRef:
@@ -1568,11 +1603,6 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: spec.nodeName
-        - name: ANTREA_IPSEC_PSK
-          valueFrom:
-            secretKeyRef:
-              key: psk
-              name: antrea-ipsec
         image: projects.registry.vmware.com/antrea/antrea-ubuntu:latest
         imagePullPolicy: IfNotPresent
         livenessProbe:
@@ -1664,36 +1694,6 @@ spec:
         - mountPath: /var/log/openvswitch
           name: host-var-log-antrea
           subPath: openvswitch
-      - command:
-        - start_ovs_ipsec
-        image: projects.registry.vmware.com/antrea/antrea-ubuntu:latest
-        imagePullPolicy: IfNotPresent
-        livenessProbe:
-          exec:
-            command:
-            - /bin/sh
-            - -c
-            - timeout 5 container_liveness_probe ovs-ipsec
-          initialDelaySeconds: 5
-          periodSeconds: 5
-        name: antrea-ipsec
-        resources:
-          requests:
-            cpu: 50m
-        securityContext:
-          capabilities:
-            add:
-            - NET_ADMIN
-        volumeMounts:
-        - mountPath: /var/run/openvswitch
-          name: host-var-run-antrea
-          subPath: openvswitch
-        - mountPath: /var/log/openvswitch
-          name: host-var-log-antrea
-          subPath: openvswitch
-        - mountPath: /var/log/strongswan
-          name: host-var-log-antrea
-          subPath: strongswan
       hostNetwork: true
       initContainers:
       - command:
