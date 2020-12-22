@@ -251,7 +251,7 @@ Specific Pods from specific Namespaces can be selected by providing both a
 `podSelector` and a `namespaceSelector` in the same `appliedTo` entry.
 IPBlock cannot be set in the `appliedTo` field.
 This `appliedTo` field must not be set, if `appliedTo` per
-rule is set.
+rule is used.
 In the example, the policy applies to Pods, which either match the labels
 "role=db" in all the Namespaces, or are from Namespaces which match the
 labels "env=prod".
@@ -320,12 +320,12 @@ format:
     2020/11/02 22:21:21.148395 AntreaPolicyAppTierIngressRule AntreaNetworkPolicy:default/test-anp Allow 61800 SRC: 10.0.0.4 DEST: 10.0.0.5 60 TCP
 ```
 
-**`appliedTo` per Rule**: A ClusterNetworkPolicy ingress or egress rule may
+**`appliedTo` per rule**: A ClusterNetworkPolicy ingress or egress rule may
 optionally contain the `appliedTo` field. Semantically, the `appliedTo` field
 per rule is similar to the `appliedTo` field at the policy level, except that
 it is valid for that rule itself, as opposed to spanning over all the rules.
 If used, the `appliedTo` field must be set for all the rules existing in the
-policy and cannot be set along with `appliedTo` at policy level.
+policy and cannot be set along with `appliedTo` at the policy level.
 
 ### Behavior of *to* and *from* selectors
 
