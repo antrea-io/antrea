@@ -1075,6 +1075,7 @@ rules:
   - watch
   - list
   - create
+  - update
 - apiGroups:
   - ops.antrea.tanzu.vmware.com
   resources:
@@ -1382,6 +1383,10 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: spec.nodeName
+        - name: SERVICEACCOUNT_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.serviceAccountName
         image: projects.registry.vmware.com/antrea/antrea-ubuntu:latest
         imagePullPolicy: IfNotPresent
         name: antrea-controller
