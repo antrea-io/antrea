@@ -437,7 +437,7 @@ function run_conformance {
     elif [[ "$TESTCASE" == "all-features-conformance" ]]; then
         ${GIT_CHECKOUT_DIR}/ci/run-k8s-e2e-tests.sh --e2e-conformance --log-mode ${MODE} --kubeconfig ${GIT_CHECKOUT_DIR}/jenkins/out/kubeconfig > ${GIT_CHECKOUT_DIR}/vmc-test.log
     elif [[ "$TESTCASE" == "whole-conformance" ]]; then
-        ${GIT_CHECKOUT_DIR}/ci/run-k8s-e2e-tests.sh --kube-conformance-image-version v1.18.12 --e2e-whole-conformance --log-mode ${MODE} --kubeconfig ${GIT_CHECKOUT_DIR}/jenkins/out/kubeconfig > ${GIT_CHECKOUT_DIR}/vmc-test.log
+        ${GIT_CHECKOUT_DIR}/ci/run-k8s-e2e-tests.sh --e2e-whole-conformance --log-mode ${MODE} --kubeconfig ${GIT_CHECKOUT_DIR}/jenkins/out/kubeconfig > ${GIT_CHECKOUT_DIR}/vmc-test.log
     else
         ${GIT_CHECKOUT_DIR}/ci/run-k8s-e2e-tests.sh --e2e-network-policy --log-mode ${MODE} --kubeconfig ${GIT_CHECKOUT_DIR}/jenkins/out/kubeconfig > ${GIT_CHECKOUT_DIR}/vmc-test.log
     fi
@@ -496,14 +496,14 @@ function garbage_collection() {
         echo "=== Old namespace ${cluster} has been deleted !!! ==="
     done
 
-    kubectl get ns -l antrea-ci -o custom-columns=Name:.metadata.name,DATE:.metadata.creationTimestamp --no-headers=true | awk '{cmd="echo $(( $(date +%s) - $(date -d "$2" +%s) ))"; cmd | getline t ; print $1, t}' | awk '$1 ~ "whole-conformance" && $2 > 7200 {print $1}' | while read cluster; do
-        echo "=== Currently ${cluster} has been live for more than 2h ==="
+    kubectl get ns -l antrea-ci -o custom-columns=Name:.metadata.name,DATE:.metadata.creationTimestamp --no-headers=true | awk '{cmd="echo $(( $(date +%s) - $(date -d "$2" +%s) ))"; cmd | getline t ; print $1, t}' | awk '$1 ~ "whole-conformance" && $2 > 10800 {print $1}' | while read cluster; do
+        echo "=== Currently ${cluster} has been live for more than 3h ==="
         kubectl delete ns ${cluster}
         echo "=== Old namespace ${cluster} has been deleted !!! ==="
     done
 
-    kubectl get ns -l antrea-ci -o custom-columns=Name:.metadata.name,DATE:.metadata.creationTimestamp --no-headers=true | awk '{cmd="echo $(( $(date +%s) - $(date -d "$2" +%s) ))"; cmd | getline t ; print $1, t}' | awk '$1 !~ "matrix" && $1 !~ "whole-conformance" && $2 > 3600 {print $1}' | while read cluster; do
-        echo "=== Currently ${cluster} has been live for more than 1h ==="
+    kubectl get ns -l antrea-ci -o custom-columns=Name:.metadata.name,DATE:.metadata.creationTimestamp --no-headers=true | awk '{cmd="echo $(( $(date +%s) - $(date -d "$2" +%s) ))"; cmd | getline t ; print $1, t}' | awk '$1 !~ "matrix" && $1 !~ "whole-conformance" && $2 > 5400 {print $1}' | while read cluster; do
+        echo "=== Currently ${cluster} has been live for more than 1.5h ==="
         kubectl delete ns ${cluster}
         echo "=== Old namespace ${cluster} has been deleted !!! ==="
     done
