@@ -1686,15 +1686,15 @@ spec:
       - effect: NoExecute
         operator: Exists
       volumes:
+      - hostPath:
+          path: /home/kubernetes/bin
+        name: host-cni-bin
       - configMap:
           name: antrea-config-b5dkk776t2
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d
         name: host-cni-conf
-      - hostPath:
-          path: /home/kubernetes/bin
-        name: host-cni-bin
       - hostPath:
           path: /proc
         name: host-proc
