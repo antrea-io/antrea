@@ -24,6 +24,9 @@ RUN cd /tmp/openvswitch* && \
 
 FROM registry.access.redhat.com/ubi8
 
+LABEL maintainer="Antrea <projectantrea-dev@googlegroups.com>"
+LABEL description="A Docker image based on UBI8 which includes Open vSwitch built from source."
+
 # Change Repository from UBI8’s to CentOS because UBI8's repository does not contain
 # enough packages required by OVS installation.
 # Use the RHEL offical repository is the best choice but it's not for free.
