@@ -1182,6 +1182,7 @@ rules:
   resourceNames:
   - crdmutator.antrea.tanzu.vmware.com
   - crdvalidator.antrea.tanzu.vmware.com
+  - labelsmutator.antrea.tanzu.vmware.com
   resources:
   - mutatingwebhookconfigurations
   - validatingwebhookconfigurations
@@ -1506,6 +1507,7 @@ apiVersion: v1
 kind: Service
 metadata:
   labels:
+    antrea.io/metadata.name: antrea
     app: antrea
   name: antrea
   namespace: kube-system
@@ -1965,6 +1967,58 @@ webhooks:
     - UPDATE
     resources:
     - networkpolicies
+    scope: Namespaced
+  sideEffects: None
+  timeoutSeconds: 5
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  labels:
+    app: antrea
+  name: labelsmutator.antrea.tanzu.vmware.com
+webhooks:
+- admissionReviewVersions:
+  - v1
+  - v1beta1
+  clientConfig:
+    service:
+      name: antrea
+      namespace: kube-system
+      path: /mutate/nslabels
+  name: nsmutator.antrea.tanzu.vmware.com
+  rules:
+  - apiGroups:
+    - ""
+    apiVersions:
+    - v1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - namespaces
+    scope: Cluster
+  sideEffects: None
+  timeoutSeconds: 5
+- admissionReviewVersions:
+  - v1
+  - v1beta1
+  clientConfig:
+    service:
+      name: antrea
+      namespace: kube-system
+      path: /mutate/svclabels
+  name: svcmutator.antrea.tanzu.vmware.com
+  rules:
+  - apiGroups:
+    - ""
+    apiVersions:
+    - v1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - services
     scope: Namespaced
   sideEffects: None
   timeoutSeconds: 5

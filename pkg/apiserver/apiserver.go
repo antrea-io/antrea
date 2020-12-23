@@ -247,6 +247,11 @@ func installHandlers(c *ExtraConfig, s *genericapiserver.GenericAPIServer) {
 	s.Handler.NonGoRestfulMux.HandleFunc("/loglevel", loglevel.HandleFunc())
 	s.Handler.NonGoRestfulMux.HandleFunc("/endpoint", endpoint.HandleFunc(c.endpointQuerier))
 	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
+		// Webhook to mutate Namespace labels and add it's metadata.name as a label
+		s.Handler.NonGoRestfulMux.HandleFunc("/mutate/nslabels", webhook.HandleMutationLabels())
+		// Webhook to mutate Service labels and add it's metadata.name as a label
+		s.Handler.NonGoRestfulMux.HandleFunc("/mutate/svclabels", webhook.HandleMutationLabels())
+
 		// Get new NetworkPolicyMutator
 		m := controllernetworkpolicy.NewNetworkPolicyMutator(c.networkPolicyController)
 		// Install handlers for NetworkPolicy related mutation

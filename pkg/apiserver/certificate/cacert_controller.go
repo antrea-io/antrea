@@ -55,6 +55,7 @@ var (
 	}
 	mutationWebhooks = []string{
 		"crdmutator.antrea.tanzu.vmware.com",
+		"labelsmutator.antrea.tanzu.vmware.com",
 	}
 )
 
