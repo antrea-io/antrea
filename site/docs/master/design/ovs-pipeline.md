@@ -562,14 +562,15 @@ This is the L3 routing table. It implements the following functionality:
 * Tunnelled traffic coming-in from a peer Node and destined to a local Pod is
   directly forwarded to the Pod. This requires setting the source MAC to the MAC
   of the local gateway interface and setting the destination MAC to the Pod's
-  MAC address. Such traffic is identified by matching on the packet's
+  MAC address. Then the packets will go to [L3DecTTLTable] for decrementing
+  the IP TTL value. Such traffic is identified by matching on the packet's
   destination MAC address (should be set to the Global Virtual MAC for all
   tunnelled traffic) and its destination IP address (should match the IP address
   of a local Pod). We therefore install one flow for each Pod created locally on
   the Node. For example:
 
 ```text
-table=70, priority=200,ip,dl_dst=aa:bb:cc:dd:ee:ff,nw_dst=10.10.0.2 actions=mod_dl_src:e2:e5:a4:9b:1c:b1,mod_dl_dst:12:9e:a6:47:d0:70,dec_ttl,goto_table:80
+table=70, priority=200,ip,dl_dst=aa:bb:cc:dd:ee:ff,nw_dst=10.10.0.2 actions=mod_dl_src:e2:e5:a4:9b:1c:b1,mod_dl_dst:12:9e:a6:47:d0:70,goto_table:71
 ```
 
 * All tunnelled traffic destined to the local gateway (i.e. for which the
@@ -587,14 +588,11 @@ table=70, priority=200,ip,dl_dst=aa:bb:cc:dd:ee:ff,nw_dst=10.10.0.1 actions=mod_
   the Node. In case of a match the source MAC is set to the local gateway MAC,
   the destination MAC is set to the Global Virtual MAC and we set the OF
   `tun_dst` field to the appropriate value (i.e. the IP address of the remote
-  gateway). Traffic then goes to [ConntrackCommitTable], thus skipping
-  [L2ForwardingCalcTable] and the ingress policy rules tables, which are not
-  relevant for traffic destined to a tunnel (the destination port is the tunnel
-  port and the ingress policy rules will be enforced at the destination
-  Node). For a given peer Node, the flow may look like this:
+  gateway). Traffic then goes to [L3DecTTLTable].
+  For a given peer Node, the flow may look like this:
 
 ```text
-table=70, priority=200,ip,nw_dst=10.10.1.0/24 actions=dec_ttl,mod_dl_src:e2:e5:a4:9b:1c:b1,mod_dl_dst:aa:bb:cc:dd:ee:ff,load:0x1->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],load:0xc0a84d65->NXM_NX_TUN_IPV4_DST[],goto_table:105
+table=70, priority=200,ip,nw_dst=10.10.1.0/24 actions=mod_dl_src:e2:e5:a4:9b:1c:b1,mod_dl_dst:aa:bb:cc:dd:ee:ff,load:0x1->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],load:0xc0a84d65->NXM_NX_TUN_IPV4_DST[],goto_table:71
 ```
 
 If none of the flows described above are hit, traffic goes directly to
@@ -607,20 +605,40 @@ is required), as well as for local Pod-to-Pod traffic.
 table=70, priority=0 actions=goto_table:80
 ```
 
+### L3DecTTLTable (71)
+
+This is the table to decrement TTL for the IP packets destined to remote Nodes
+through a tunnel, or the IP packets received from a tunnel. But for the packets
+that enter the OVS pipeline from the local gateway and are destined to a remote
+Node, TTL should not be decremented in OVS on the source Node, because the host
+IP stack should have already decremented TTL if that is needed.
+
+If you dump the flows for this table, you should see flows like the following:
+
+```text
+1. table=71, priority=210,ip,reg0=0x1/0xffff, actions=goto_table:80
+2. table=71, priority=200,ip, actions=dec_ttl,goto_table:80
+3. table=71, priority=0, actions=goto_table:80
+```
+
+The first flow is to bypass the TTL decrement for the packets from the gateway
+port.
+
 ### L2ForwardingCalcTable (80)
 
 This is essentially the "dmac" table of the switch. We program one flow for each
-port (gateway port, Pod ports and tunnel port), as you can see if you dump the
-flows:
+port (tunnel port, gateway port, and local Pod ports), as you can see if you
+dump the flows:
 
 ```text
-1. table=80, priority=200,dl_dst=e2:e5:a4:9b:1c:b1 actions=load:0x2->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],goto_table:90
-2. table=80, priority=200,dl_dst=12:9e:a6:47:d0:70 actions=load:0x3->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],goto_table:90
-3. table=80, priority=200,dl_dst=ba:a8:13:ca:ed:cf actions=load:0x4->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],goto_table:90
-4. table=80, priority=0 actions=goto_table:90
+1. table=80, priority=200,dl_dst=aa:bb:cc:dd:ee:ff actions=load:0x1->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],goto_table:105
+2. table=80, priority=200,dl_dst=e2:e5:a4:9b:1c:b1 actions=load:0x2->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],goto_table:105
+3. table=80, priority=200,dl_dst=12:9e:a6:47:d0:70 actions=load:0x3->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],goto_table:90
+4. table=80, priority=200,dl_dst=ba:a8:13:ca:ed:cf actions=load:0x4->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],goto_table:90
+5. table=80, priority=0 actions=goto_table:105
 ```
 
-For each port flow (1 through 4 in the example above), we set bit 16 of the
+For each port flow (1 through 5 in the example above), we set bit 16 of the
 NXM_NX_REG0 register to indicate that there was a matching entry for the
 destination MAC address and that the packet must be forwarded. In the last table
 of the pipeline ([L2ForwardingOutTable]), we will drop all packets for which
@@ -628,18 +646,23 @@ this bit is not set. We also use the NXM_NX_REG1 register to store the egress
 port for the packet, which will be used as a parameter to the `output` OpenFlow
 action in [L2ForwardingOutTable].
 
-All packets - whether they have a matching dmac entry or not - then goes
-to the next table, [IngressRuleTable].
+The packets that match local Pods' MAC entries will go to the first table
+([AntreaPolicyIngressRuleTable] when AntreaPolicy is enabled, or
+[IngressRuleTable] when AntreaPolicy is not enabled) for NetworkPolicy ingress
+rules. Other packets will go to [ConntrackCommitTable]. Specifically, packets
+to the gateway port or the tunnel port will also go to [ConntrackCommitTable]
+and bypass the NetworkPolicy ingress rule tables, as NetworkPolicy ingress rules
+are not enforced for these packets on the source Node.
 
 What about L2 multicast / broadcast traffic? ARP requests will never reach this
 table, as they will be handled by the OpenFlow `normal` action in the
 [ArpResponderTable]. As for the rest, if it is IP traffic, it will hit the
-"last" flow in this table and go to [IngressRuleTable]. Assuming it
-makes it to the last table of the pipeline ([L2ForwardingOutTable]), it will be
-dropped there since bit 16 of the NXM_NX_REG0 will not be set. Traffic which is
-non-ARP and non-IP (assuming any can be received by the switch) is actually
-dropped much earlier in the pipeline ([SpoofGuardTable]). In the future, we may
-need to support more cases for L2 multicast / broadcast traffic.
+"last" flow in this table and go to [ConntrackCommitTable]; and finally the last
+table of the pipeline ([L2ForwardingOutTable]), and get dropped there since bit
+16 of the NXM_NX_REG0 will not be set. Traffic which is non-ARP and non-IP
+(assuming any can be received by the switch) is actually dropped much earlier in
+the pipeline ([SpoofGuardTable]). In the future, we may need to support more
+cases for L2 multicast / broadcast traffic.
 
 ### AntreaPolicyIngressRuleTable (85)
 
@@ -830,6 +853,7 @@ resolved by the "dmac" table, [L2ForwardingCalcTable]). IP packets for which
 [EgressRuleTable]: #egressruletable-50
 [EgressDefaultTable]: #egressdefaulttable-60
 [L3ForwardingTable]: #l3forwardingtable-70
+[L3DecTTLTable]: #l3decttltable-71
 [L2ForwardingCalcTable]: #l2forwardingcalctable-80
 [AntreaPolicyIngressRuleTable]: #antreapolicyingressruletable-85
 [IngressRuleTable]: #ingressruletable-90

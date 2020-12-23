@@ -1,6 +1,9 @@
 <p>Packages:</p>
 <ul>
 <li>
+<a href="#core.antrea.tanzu.vmware.com%2fv1alpha2">core.antrea.tanzu.vmware.com/v1alpha2</a>
+</li>
+<li>
 <a href="#ops.antrea.tanzu.vmware.com%2fv1alpha1">ops.antrea.tanzu.vmware.com/v1alpha1</a>
 </li>
 <li>
@@ -21,10 +24,276 @@
 <li>
 <a href="#controlplane.antrea.tanzu.vmware.com%2fv1beta2">controlplane.antrea.tanzu.vmware.com/v1beta2</a>
 </li>
-<li>
-<a href="#core.antrea.tanzu.vmware.com%2fv1alpha2">core.antrea.tanzu.vmware.com/v1alpha2</a>
-</li>
 </ul>
+<h2 id="core.antrea.tanzu.vmware.com/v1alpha2">core.antrea.tanzu.vmware.com/v1alpha2</h2>
+Resource Types:
+<ul><li>
+<a href="#core.antrea.tanzu.vmware.com/v1alpha2.ExternalEntity">ExternalEntity</a>
+</li></ul>
+<h3 id="core.antrea.tanzu.vmware.com/v1alpha2.ExternalEntity">ExternalEntity
+</h3>
+<p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>apiVersion</code></br>
+string</td>
+<td>
+<code>
+core.antrea.tanzu.vmware.com/v1alpha2
+</code>
+</td>
+</tr>
+<tr>
+<td>
+<code>kind</code></br>
+string
+</td>
+<td><code>ExternalEntity</code></td>
+</tr>
+<tr>
+<td>
+<code>metadata</code></br>
+<em>
+<a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#objectmeta-v1-meta">
+Kubernetes meta/v1.ObjectMeta
+</a>
+</em>
+</td>
+<td>
+<p>Standard metadata of the object.</p>
+Refer to the Kubernetes API documentation for the fields of the
+<code>metadata</code> field.
+</td>
+</tr>
+<tr>
+<td>
+<code>spec</code></br>
+<em>
+<a href="#core.antrea.tanzu.vmware.com/v1alpha2.ExternalEntitySpec">
+ExternalEntitySpec
+</a>
+</em>
+</td>
+<td>
+<p>Desired state of the external entity.</p>
+<br/>
+<br/>
+<table>
+<tr>
+<td>
+<code>endpoints</code></br>
+<em>
+<a href="#core.antrea.tanzu.vmware.com/v1alpha2.Endpoint">
+[]Endpoint
+</a>
+</em>
+</td>
+<td>
+<p>Endpoints is a list of external endpoints associated with this entity.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>ports</code></br>
+<em>
+<a href="#core.antrea.tanzu.vmware.com/v1alpha2.NamedPort">
+[]NamedPort
+</a>
+</em>
+</td>
+<td>
+<p>Ports maintain the list of named ports.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>externalNode</code></br>
+<em>
+string
+</em>
+</td>
+<td>
+<p>ExternalNode is the opaque identifier of the agent/controller responsible
+for additional processing or handling of this external entity.</p>
+</td>
+</tr>
+</table>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="core.antrea.tanzu.vmware.com/v1alpha2.Endpoint">Endpoint
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#core.antrea.tanzu.vmware.com/v1alpha2.ExternalEntitySpec">ExternalEntitySpec</a>)
+</p>
+<p>
+<p>Endpoint refers to an endpoint associated with the ExternalEntity.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>ip</code></br>
+<em>
+string
+</em>
+</td>
+<td>
+<p>IP associated with this endpoint.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>name</code></br>
+<em>
+string
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Name identifies this endpoint. Could be the network interface name in case of VMs.</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="core.antrea.tanzu.vmware.com/v1alpha2.ExternalEntitySpec">ExternalEntitySpec
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#core.antrea.tanzu.vmware.com/v1alpha2.ExternalEntity">ExternalEntity</a>)
+</p>
+<p>
+<p>ExternalEntitySpec defines the desired state for ExternalEntity.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>endpoints</code></br>
+<em>
+<a href="#core.antrea.tanzu.vmware.com/v1alpha2.Endpoint">
+[]Endpoint
+</a>
+</em>
+</td>
+<td>
+<p>Endpoints is a list of external endpoints associated with this entity.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>ports</code></br>
+<em>
+<a href="#core.antrea.tanzu.vmware.com/v1alpha2.NamedPort">
+[]NamedPort
+</a>
+</em>
+</td>
+<td>
+<p>Ports maintain the list of named ports.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>externalNode</code></br>
+<em>
+string
+</em>
+</td>
+<td>
+<p>ExternalNode is the opaque identifier of the agent/controller responsible
+for additional processing or handling of this external entity.</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="core.antrea.tanzu.vmware.com/v1alpha2.NamedPort">NamedPort
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#core.antrea.tanzu.vmware.com/v1alpha2.ExternalEntitySpec">ExternalEntitySpec</a>)
+</p>
+<p>
+<p>NamedPort describes the port and protocol to match in a rule.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>protocol</code></br>
+<em>
+<a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#protocol-v1-core">
+Kubernetes core/v1.Protocol
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>The protocol (TCP, UDP, or SCTP) which traffic must match.
+If not specified, this field defaults to TCP.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>port</code></br>
+<em>
+int32
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>The port on the given protocol.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>name</code></br>
+<em>
+string
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Name associated with the Port.</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="core.antrea.tanzu.vmware.com/v1alpha2.WebhookImpl">WebhookImpl
+</h3>
+<p>
+<p>WebhookImpl implements webhook validator of a resource.</p>
+</p>
+<hr/>
 <h2 id="ops.antrea.tanzu.vmware.com/v1alpha1">ops.antrea.tanzu.vmware.com/v1alpha1</h2>
 Resource Types:
 <ul></ul>
@@ -376,7 +645,7 @@ string
 </em>
 </td>
 <td>
-<p>TranslatedSrcIP is the translated destination IP.</p>
+<p>TranslatedDstIP is the translated destination IP.</p>
 </td>
 </tr>
 <tr>
@@ -967,7 +1236,9 @@ other AntreaClusterNetworkPolicies.</p>
 </em>
 </td>
 <td>
-<p>Select workloads on which the rules will be applied to.</p>
+<em>(Optional)</em>
+<p>Select workloads on which the rules will be applied to. Cannot be set in
+conjunction with AppliedTo in each rule.</p>
 </td>
 </tr>
 <tr>
@@ -1003,6 +1274,19 @@ field within a Rule.</p>
 </td>
 </tr>
 </table>
+</td>
+</tr>
+<tr>
+<td>
+<code>status</code></br>
+<em>
+<a href="#security.antrea.tanzu.vmware.com/v1alpha1.NetworkPolicyStatus">
+NetworkPolicyStatus
+</a>
+</em>
+</td>
+<td>
+<p>Most recently observed status of the NetworkPolicy.</p>
 </td>
 </tr>
 </tbody>
@@ -1102,7 +1386,9 @@ NetworkPolicies.</p>
 </em>
 </td>
 <td>
-<p>Select workloads on which the rules will be applied to.</p>
+<em>(Optional)</em>
+<p>Select workloads on which the rules will be applied to. Cannot be set in
+conjunction with AppliedTo in each rule.</p>
 </td>
 </tr>
 <tr>
@@ -1138,6 +1424,19 @@ field within a Rule.</p>
 </td>
 </tr>
 </table>
+</td>
+</tr>
+<tr>
+<td>
+<code>status</code></br>
+<em>
+<a href="#security.antrea.tanzu.vmware.com/v1alpha1.NetworkPolicyStatus">
+NetworkPolicyStatus
+</a>
+</em>
+</td>
+<td>
+<p>Most recently observed status of the NetworkPolicy.</p>
 </td>
 </tr>
 </tbody>
@@ -1282,7 +1581,9 @@ other AntreaClusterNetworkPolicies.</p>
 </em>
 </td>
 <td>
-<p>Select workloads on which the rules will be applied to.</p>
+<em>(Optional)</em>
+<p>Select workloads on which the rules will be applied to. Cannot be set in
+conjunction with AppliedTo in each rule.</p>
 </td>
 </tr>
 <tr>
@@ -1431,6 +1732,7 @@ Kubernetes meta/v1.LabelSelector
 </em>
 </td>
 <td>
+<em>(Optional)</em>
 <p>Select ExternalEntities from NetworkPolicy&rsquo;s Namespace as workloads
 in AppliedTo/To/From fields. If set with NamespaceSelector,
 ExternalEntities are matched from Namespaces matched by the
@@ -1440,6 +1742,15 @@ Cannot be set with any other selector except NamespaceSelector.</p>
 </tr>
 </tbody>
 </table>
+<h3 id="security.antrea.tanzu.vmware.com/v1alpha1.NetworkPolicyPhase">NetworkPolicyPhase
+(<code>string</code> alias)</p></h3>
+<p>
+(<em>Appears on:</em>
+<a href="#security.antrea.tanzu.vmware.com/v1alpha1.NetworkPolicyStatus">NetworkPolicyStatus</a>)
+</p>
+<p>
+<p>NetworkPolicyPhase defines the phase in which a NetworkPolicy is.</p>
+</p>
 <h3 id="security.antrea.tanzu.vmware.com/v1alpha1.NetworkPolicyPort">NetworkPolicyPort
 </h3>
 <p>
@@ -1483,10 +1794,22 @@ k8s.io/apimachinery/pkg/util/intstr.IntOrString
 </td>
 <td>
 <em>(Optional)</em>
-<p>The port on the given protocol. This can either be a numerical
+<p>The port on the given protocol. This can be either a numerical
 or named port on a Pod. If this field is not provided, this
-matches all port names and numbers.
-TODO: extend it to include Port Range.</p>
+matches all port names and numbers.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>endPort</code></br>
+<em>
+int32
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>EndPort defines the end of the port range, being the end included within the range.
+It can only be specified when a numerical <code>port</code> is specified.</p>
 </td>
 </tr>
 </tbody>
@@ -1545,7 +1868,9 @@ NetworkPolicies.</p>
 </em>
 </td>
 <td>
-<p>Select workloads on which the rules will be applied to.</p>
+<em>(Optional)</em>
+<p>Select workloads on which the rules will be applied to. Cannot be set in
+conjunction with AppliedTo in each rule.</p>
 </td>
 </tr>
 <tr>
@@ -1578,6 +1903,72 @@ field within a Rule.</p>
 <p>Set of egress rules evaluated based on the order in which they are set.
 Currently Egress rule supports setting the <code>To</code> field but not the <code>From</code>
 field within a Rule.</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="security.antrea.tanzu.vmware.com/v1alpha1.NetworkPolicyStatus">NetworkPolicyStatus
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#security.antrea.tanzu.vmware.com/v1alpha1.ClusterNetworkPolicy">ClusterNetworkPolicy</a>, 
+<a href="#security.antrea.tanzu.vmware.com/v1alpha1.NetworkPolicy">NetworkPolicy</a>)
+</p>
+<p>
+<p>NetworkPolicyStatus represents information about the status of a NetworkPolicy.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>phase</code></br>
+<em>
+<a href="#security.antrea.tanzu.vmware.com/v1alpha1.NetworkPolicyPhase">
+NetworkPolicyPhase
+</a>
+</em>
+</td>
+<td>
+<p>The phase of a NetworkPolicy is a simple, high-level summary of the NetworkPolicy&rsquo;s status.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>observedGeneration</code></br>
+<em>
+int64
+</em>
+</td>
+<td>
+<p>The generation observed by Antrea.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>currentNodesRealized</code></br>
+<em>
+int32
+</em>
+</td>
+<td>
+<p>The number of nodes that have realized the NetworkPolicy.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>desiredNodesRealized</code></br>
+<em>
+int32
+</em>
+</td>
+<td>
+<p>The total number of nodes that should realize the NetworkPolicy.</p>
 </td>
 </tr>
 </tbody>
@@ -1684,6 +2075,21 @@ bool
 <td>
 <p>EnableLogging is used to indicate if agent should generate logs
 when rules are matched. Should be default to false.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>appliedTo</code></br>
+<em>
+<a href="#security.antrea.tanzu.vmware.com/v1alpha1.NetworkPolicyPeer">
+[]NetworkPolicyPeer
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Select workloads on which this rule will be applied to. Cannot be set in
+conjunction with NetworkPolicySpec/ClusterNetworkPolicySpec.AppliedTo.</p>
 </td>
 </tr>
 </tbody>
@@ -2227,7 +2633,7 @@ Kubernetes core/v1.ObjectReference
 </tr>
 <tr>
 <td>
-<code>nodeSubnet</code></br>
+<code>nodeSubnets</code></br>
 <em>
 []string
 </em>
@@ -2246,7 +2652,7 @@ OVSInfo
 </em>
 </td>
 <td>
-<p>Node subnet</p>
+<p>Node subnets</p>
 </td>
 </tr>
 <tr>
@@ -3406,7 +3812,7 @@ float64
 </td>
 <td>
 <p>Priority represents the relative priority of this Network Policy as compared to
-other Network Policies. Priority will be unset (nil) for K8s Network Policy.</p>
+other Network Policies. Priority will be unset (nil) for K8s NetworkPolicy.</p>
 </td>
 </tr>
 <tr>
@@ -4425,7 +4831,8 @@ Refer to the Kubernetes API documentation for the fields of the
 </em>
 </td>
 <td>
-<p>AppliedToGroups is a list of names of AppliedToGroups to which this policy applies.</p>
+<p>AppliedToGroups is a list of names of AppliedToGroups to which this policy applies.
+Cannot be set in conjunction with any NetworkPolicyRule.AppliedToGroups in Rules.</p>
 </td>
 </tr>
 <tr>
@@ -4437,7 +4844,7 @@ float64
 </td>
 <td>
 <p>Priority represents the relative priority of this Network Policy as compared to
-other Network Policies. Priority will be unset (nil) for K8s Network Policy.</p>
+other Network Policies. Priority will be unset (nil) for K8s NetworkPolicy.</p>
 </td>
 </tr>
 <tr>
@@ -4463,6 +4870,47 @@ NetworkPolicyReference
 </td>
 <td>
 <p>Reference to the original NetworkPolicy that the internal NetworkPolicy is created for.</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="controlplane.antrea.tanzu.vmware.com/v1beta2.NetworkPolicyNodeStatus">NetworkPolicyNodeStatus
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.NetworkPolicyStatus">NetworkPolicyStatus</a>)
+</p>
+<p>
+<p>NetworkPolicyNodeStatus is the status of a NetworkPolicy on a Node.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>nodeName</code></br>
+<em>
+string
+</em>
+</td>
+<td>
+<p>The name of the Node that produces the status.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>generation</code></br>
+<em>
+int64
+</em>
+</td>
+<td>
+<p>The generation realized by the Node.</p>
 </td>
 </tr>
 </tbody>
@@ -4687,6 +5135,19 @@ bool
 <p>EnableLogging indicates whether or not to generate logs when rules are matched. Default to false.</p>
 </td>
 </tr>
+<tr>
+<td>
+<code>appliedToGroups</code></br>
+<em>
+[]string
+</em>
+</td>
+<td>
+<p>AppliedToGroups is a list of names of AppliedToGroups to which this rule applies.
+Cannot be set in conjunction with NetworkPolicy.AppliedToGroups of the NetworkPolicy
+that this Rule is referred to.</p>
+</td>
+</tr>
 </tbody>
 </table>
 <h3 id="controlplane.antrea.tanzu.vmware.com/v1beta2.NetworkPolicyStats">NetworkPolicyStats
@@ -4730,6 +5191,48 @@ TrafficStats
 </td>
 <td>
 <p>The stats of the NetworkPolicy.</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="controlplane.antrea.tanzu.vmware.com/v1beta2.NetworkPolicyStatus">NetworkPolicyStatus
+</h3>
+<p>
+<p>NetworkPolicyStatus is the status of a NetworkPolicy.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>metadata</code></br>
+<em>
+<a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#objectmeta-v1-meta">
+Kubernetes meta/v1.ObjectMeta
+</a>
+</em>
+</td>
+<td>
+Refer to the Kubernetes API documentation for the fields of the
+<code>metadata</code> field.
+</td>
+</tr>
+<tr>
+<td>
+<code>nodes</code></br>
+<em>
+<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.NetworkPolicyNodeStatus">
+[]NetworkPolicyNodeStatus
+</a>
+</em>
+</td>
+<td>
+<p>Nodes contains statuses produced on a list of Nodes.</p>
 </td>
 </tr>
 </tbody>
@@ -4839,279 +5342,23 @@ k8s.io/apimachinery/pkg/util/intstr.IntOrString
 <p>The port name or number on the given protocol. If not specified, this matches all port numbers.</p>
 </td>
 </tr>
-</tbody>
-</table>
-<hr/>
-<h2 id="core.antrea.tanzu.vmware.com/v1alpha2">core.antrea.tanzu.vmware.com/v1alpha2</h2>
-Resource Types:
-<ul><li>
-<a href="#core.antrea.tanzu.vmware.com/v1alpha2.ExternalEntity">ExternalEntity</a>
-</li></ul>
-<h3 id="core.antrea.tanzu.vmware.com/v1alpha2.ExternalEntity">ExternalEntity
-</h3>
-<p>
-</p>
-<table>
-<thead>
-<tr>
-<th>Field</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
 <tr>
 <td>
-<code>apiVersion</code></br>
-string</td>
-<td>
-<code>
-core.antrea.tanzu.vmware.com/v1alpha2
-</code>
-</td>
-</tr>
-<tr>
-<td>
-<code>kind</code></br>
-string
-</td>
-<td><code>ExternalEntity</code></td>
-</tr>
-<tr>
-<td>
-<code>metadata</code></br>
-<em>
-<a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#objectmeta-v1-meta">
-Kubernetes meta/v1.ObjectMeta
-</a>
-</em>
-</td>
-<td>
-<p>Standard metadata of the object.</p>
-Refer to the Kubernetes API documentation for the fields of the
-<code>metadata</code> field.
-</td>
-</tr>
-<tr>
-<td>
-<code>spec</code></br>
-<em>
-<a href="#core.antrea.tanzu.vmware.com/v1alpha2.ExternalEntitySpec">
-ExternalEntitySpec
-</a>
-</em>
-</td>
-<td>
-<p>Desired state of the external entity.</p>
-<br/>
-<br/>
-<table>
-<tr>
-<td>
-<code>endpoints</code></br>
-<em>
-<a href="#core.antrea.tanzu.vmware.com/v1alpha2.Endpoint">
-[]Endpoint
-</a>
-</em>
-</td>
-<td>
-<p>Endpoints is a list of external endpoints associated with this entity.</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>ports</code></br>
-<em>
-<a href="#core.antrea.tanzu.vmware.com/v1alpha2.NamedPort">
-[]NamedPort
-</a>
-</em>
-</td>
-<td>
-<p>Ports maintain the list of named ports.</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>externalNode</code></br>
-<em>
-string
-</em>
-</td>
-<td>
-<p>ExternalNode is the opaque identifier of the agent/controller responsible
-for additional processing or handling of this external entity.</p>
-</td>
-</tr>
-</table>
-</td>
-</tr>
-</tbody>
-</table>
-<h3 id="core.antrea.tanzu.vmware.com/v1alpha2.Endpoint">Endpoint
-</h3>
-<p>
-(<em>Appears on:</em>
-<a href="#core.antrea.tanzu.vmware.com/v1alpha2.ExternalEntitySpec">ExternalEntitySpec</a>)
-</p>
-<p>
-<p>Endpoint refers to an endpoint associated with the ExternalEntity.</p>
-</p>
-<table>
-<thead>
-<tr>
-<th>Field</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>
-<code>ip</code></br>
-<em>
-string
-</em>
-</td>
-<td>
-<p>IP associated with this endpoint.</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>name</code></br>
-<em>
-string
-</em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>Name identifies this endpoint. Could be the network interface name in case of VMs.</p>
-</td>
-</tr>
-</tbody>
-</table>
-<h3 id="core.antrea.tanzu.vmware.com/v1alpha2.ExternalEntitySpec">ExternalEntitySpec
-</h3>
-<p>
-(<em>Appears on:</em>
-<a href="#core.antrea.tanzu.vmware.com/v1alpha2.ExternalEntity">ExternalEntity</a>)
-</p>
-<p>
-<p>ExternalEntitySpec defines the desired state for ExternalEntity.</p>
-</p>
-<table>
-<thead>
-<tr>
-<th>Field</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>
-<code>endpoints</code></br>
-<em>
-<a href="#core.antrea.tanzu.vmware.com/v1alpha2.Endpoint">
-[]Endpoint
-</a>
-</em>
-</td>
-<td>
-<p>Endpoints is a list of external endpoints associated with this entity.</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>ports</code></br>
-<em>
-<a href="#core.antrea.tanzu.vmware.com/v1alpha2.NamedPort">
-[]NamedPort
-</a>
-</em>
-</td>
-<td>
-<p>Ports maintain the list of named ports.</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>externalNode</code></br>
-<em>
-string
-</em>
-</td>
-<td>
-<p>ExternalNode is the opaque identifier of the agent/controller responsible
-for additional processing or handling of this external entity.</p>
-</td>
-</tr>
-</tbody>
-</table>
-<h3 id="core.antrea.tanzu.vmware.com/v1alpha2.NamedPort">NamedPort
-</h3>
-<p>
-(<em>Appears on:</em>
-<a href="#core.antrea.tanzu.vmware.com/v1alpha2.ExternalEntitySpec">ExternalEntitySpec</a>)
-</p>
-<p>
-<p>NamedPort describes the port and protocol to match in a rule.</p>
-</p>
-<table>
-<thead>
-<tr>
-<th>Field</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>
-<code>protocol</code></br>
-<em>
-<a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#protocol-v1-core">
-Kubernetes core/v1.Protocol
-</a>
-</em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>The protocol (TCP, UDP, or SCTP) which traffic must match.
-If not specified, this field defaults to TCP.</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>port</code></br>
+<code>endPort</code></br>
 <em>
 int32
 </em>
 </td>
 <td>
 <em>(Optional)</em>
-<p>The port on the given protocol.</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>name</code></br>
-<em>
-string
-</em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>Name associated with the Port.</p>
+<p>EndPort defines the end of the port range, being the end included within the range.
+It can only be specified when a numerical <code>port</code> is specified.</p>
 </td>
 </tr>
 </tbody>
 </table>
-<h3 id="core.antrea.tanzu.vmware.com/v1alpha2.WebhookImpl">WebhookImpl
-</h3>
-<p>
-<p>WebhookImpl implements webhook validator of a resource.</p>
-</p>
 <hr/>
 <p><em>
 Generated with <code>gen-crd-api-reference-docs</code>
-on git commit <code>d8e9c978</code>.
+on git commit <code>307b8c75</code>.
 </em></p>
