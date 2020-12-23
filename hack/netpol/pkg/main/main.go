@@ -155,7 +155,7 @@ func validate(k8s *Kubernetes, reachability *Reachability, port int) {
 		}
 		reachability.Observe(r.podFrom, r.podTo, r.connected)
 		if !r.connected && reachability.Expected.Get(r.podFrom.String(), r.podTo.String()) {
-			log.Warnf("FAILED CONNECTION FOR WHITELISTED PODS %s -> %s !!!! ", r.podFrom, r.podTo)
+			log.Warnf("FAILED CONNECTION FOR ALLOWED PODS %s -> %s !!!! ", r.podFrom, r.podTo)
 		}
 	}
 }
@@ -177,7 +177,7 @@ func main() {
 
 	testList := []*TestCase{
 		{"DefaultDeny", testDefaultDeny()},
-		{"PodLabelWhitelistingFromBToA", testPodLabelWhitelistingFromBToA()},
+		{"PodLabelAllowTrafficFromBToA", testPodLabelAllowTrafficFromBToA()},
 		{"InnerNamespaceTraffic", testInnerNamespaceTraffic()},
 		{"EnforcePodAndNSSelector", testEnforcePodAndNSSelector()},
 		{"EnforcePodOrNSSelector", testEnforcePodOrNSSelector()},
@@ -259,100 +259,6 @@ func executeTests(k8s *Kubernetes, testList []*TestCase) []*TestCase {
 	}
 	return modifiedTestList
 }
-
-/**
-	ginkgo.It("should allow ingress access from updated namespace [Feature:NetworkPolicy]", func() {
-	ginkgo.It("should allow ingress access from updated pod [Feature:NetworkPolicy]", func() {
-
-	TODO: These 3 tests should be implemented using a different strategy, possibly combined.
-
-	ginkgo.It("should deny ingress access to updated pod [Feature:NetworkPolicy]", func() {
-	ginkgo.It("should stop enforcing policies after they are deleted [Feature:NetworkPolicy]", func() {
-**/
-/* TODO rewrite this using steps
-func testMultipleUpdates() {
-	func() {
-		builder := &NetworkPolicySpecBuilder{}
-		builder = builder.SetName("x", "deny-all").SetPodSelector(map[string]string{"pod": "a"})
-		builder.SetTypeIngress()
-		builder.AddIngress(nil, &p80, nil, nil, nil, map[string]string{"ns-updated": "true", "ns": "y"}, nil, nil)
-		builder.AddIngress(nil, &p80, nil, nil, map[string]string{"pod-updated": "true", "pod": "b"}, nil, nil, nil)
-
-		k8s.CreateOrUpdateNetworkPolicy("deny-all-to-x", builder.Get())
-		reachability1 := NewReachability(allPods, true)
-		reachability1.ExpectAllIngress(Pod("x/a"), false)
-		validate(k8s, reachability1, 80)
-
-		reachability1.PrintSummary(true, true, true)
-	}()
-
-	func() {
-		k8s.CreateOrUpdateNamespace("y", map[string]string{"ns-updated": "true", "ns": "y"})
-		reachability1 := NewReachability(allPods, true)
-		reachability1.ExpectAllIngress(Pod("x/a"), false)
-		reachability1.Expect(Pod("y/a"), Pod("x/a"), true)
-		reachability1.Expect(Pod("y/b"), Pod("x/a"), true)
-		reachability1.Expect(Pod("y/c"), Pod("x/a"), true)
-		validate(k8s, reachability1, 80)
-
-		reachability1.PrintSummary(true, true, true)
-	}()
-
-	func() {
-		k8s.CreateOrUpdateNamespace("y", map[string]string{"ns-updated": "true", "ns": "y"})
-		reachability1 := NewReachability(allPods, true)
-		reachability1.ExpectAllIngress(Pod("x/a"), false)
-		reachability1.Expect(Pod("y/a"), Pod("x/a"), true)
-		reachability1.Expect(Pod("y/b"), Pod("x/a"), true)
-		reachability1.Expect(Pod("y/c"), Pod("x/a"), true)
-		validate(k8s, reachability1, 80)
-
-		reachability1.PrintSummary(true, true, true)
-	}()
-
-	func() {
-		k8s.CreateOrUpdateDeployment("z", "zb", 1,
-			map[string]string{
-				"pod":     "b",
-				"updated": "true",
-			}) // old nginx cause it was before people deleted everything useful from containers
-		// copied from above
-		reachability1 := NewReachability(allPods, true)
-		reachability1.ExpectAllIngress(Pod("x/a"), false)
-		reachability1.Expect(Pod("y/a"), Pod("x/a"), true)
-		reachability1.Expect(Pod("y/b"), Pod("x/a"), true)
-		reachability1.Expect(Pod("y/c"), Pod("x/a"), true)
-
-		// delta... pod z in b has 'updated=true' so its whitelisted.
-		reachability1.Expect(Pod("z/b"), Pod("x/a"), true)
-
-		validate(k8s, reachability1, 80)
-
-		reachability1.PrintSummary(true, true, true)
-	}()
-
-	// NOTE THIS TEST IS COPIED FROM THE ABOVE TEST, only delta being that we
-	// dont have the updated=true annotation above.
-	func() {
-		k8s.CreateOrUpdateDeployment("z", "zb", 1,
-			map[string]string{
-				"pod": "b",
-				// REMOVE UPDATED ANNOTATION, otherwise identical to above function.
-			}) // old nginx cause it was before people deleted everything useful from containers
-		// copied from above
-		reachability1 := NewReachability(allPods, true)
-		reachability1.ExpectAllIngress(Pod("x/a"), false)
-		reachability1.Expect(Pod("y/a"), Pod("x/a"), true)
-		reachability1.Expect(Pod("y/b"), Pod("x/a"), true)
-		reachability1.Expect(Pod("y/c"), Pod("x/a"), true)
-
-		// REMOVED DELTA, otherwise identical... this confirms that access is blocked again.
-		validate(k8s, reachability1, 80)
-
-		reachability1.PrintSummary(true, true, true)
-	}()
-}
-*/
 
 /**
 ginkgo.It("should enforce multiple egress policies with egress allow-all policy taking precedence [Feature:NetworkPolicy]", func() {
@@ -647,7 +553,7 @@ func testPortsPoliciesStackedOrUpdated() []*TestStep {
 	}
 
 	/***
-	Initially, only whitelist port 80, and verify 81 is blocked.
+	Initially, only allow port 80, and verify 81 is blocked.
 	*/
 	policyName := "policy-that-will-update-for-ports"
 	builder := &NetworkPolicySpecBuilder{}
@@ -663,8 +569,8 @@ func testPortsPoliciesStackedOrUpdated() []*TestStep {
 	builder2.AddIngress(v1.ProtocolTCP, &p81, nil, nil, nil, nil, nil, nil, nil)
 	policy2 := builder2.Get()
 
-	// The first policy was on port 80, which was whitelisted, while 81 wasn't.
-	// The second policy was on port 81, which was whitelisted.
+	// The first policy was on port 80, which was allowed, while 81 wasn't.
+	// The second policy was on port 81, which was allowed.
 	// At this point, if we stacked, make sure 80 is still unblocked
 	// Whereas if we DIDNT stack, make sure 80 is blocked.
 	return []*TestStep{
@@ -936,7 +842,7 @@ func testDefaultDeny() []*TestStep {
 }
 
 // TODO: Check if there is a similar upstream test
-func testPodLabelWhitelistingFromBToA() []*TestStep {
+func testPodLabelAllowTrafficFromBToA() []*TestStep {
 	builder := &NetworkPolicySpecBuilder{}
 	builder = builder.SetName("x", "allow-client-a-via-pod-selector").SetPodSelector(map[string]string{"pod": "a"})
 	builder.SetTypeIngress()

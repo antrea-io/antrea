@@ -67,7 +67,7 @@ func TestCommandList_tableOutputForGetCommands(t *testing.T) {
 				},
 				NodeRef: v1.ObjectReference{
 					Kind: "Node",
-					Name: "node-master",
+					Name: "node-control-plane",
 				},
 				ServiceRef: v1.ObjectReference{
 					Kind: "Service",
@@ -87,8 +87,8 @@ func TestCommandList_tableOutputForGetCommands(t *testing.T) {
 					},
 				},
 			},
-			expected: `POD                                            NODE        STATUS  NETWORK-POLICIES ADDRESS-GROUPS APPLIED-TO-GROUPS CONNECTED-AGENTS
-kube-system/antrea-controller-55b9bcd59f-h9ll4 node-master Healthy 1                1              2                 2               
+			expected: `POD                                            NODE               STATUS  NETWORK-POLICIES ADDRESS-GROUPS APPLIED-TO-GROUPS CONNECTED-AGENTS
+kube-system/antrea-controller-55b9bcd59f-h9ll4 node-control-plane Healthy 1                1              2                 2               
 `,
 		},
 		{

@@ -14,11 +14,11 @@
    viewBox="0 0 210 297"
    version="1.1"
    id="svg8"
-   inkscape:version="0.92.4 (unknown)"
+   inkscape:version="0.92.3 (2405546, 2018-03-11)"
    sodipodi:docname="antrea_overview.svg"
-   inkscape:export-filename="/home/salvatore/antrea_overview.svg.png"
-   inkscape:export-xdpi="300.01001"
-   inkscape:export-ydpi="300.01001">
+   inkscape:export-filename="/home/abas/vmware/antrea/docs/assets/antrea_overview.svg.png"
+   inkscape:export-xdpi="129.1506"
+   inkscape:export-ydpi="129.1506">
   <defs
      id="defs2">
     <marker
@@ -150,13 +150,13 @@
      inkscape:pageopacity="0.0"
      inkscape:pageshadow="2"
      inkscape:zoom="1.979899"
-     inkscape:cx="408.72411"
-     inkscape:cy="686.97684"
+     inkscape:cx="196.35025"
+     inkscape:cy="606.16464"
      inkscape:document-units="mm"
      inkscape:current-layer="layer1"
      showgrid="false"
-     inkscape:window-width="1853"
-     inkscape:window-height="1145"
+     inkscape:window-width="1613"
+     inkscape:window-height="995"
      inkscape:window-x="67"
      inkscape:window-y="27"
      inkscape:window-maximized="1" />
@@ -272,7 +272,7 @@
          id="tspan5531"
          x="70.303558"
          y="178.91008"
-         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:6.3499999px;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-feature-settings:normal;text-align:start;writing-mode:lr-tb;text-anchor:start;fill:#5da7ef;fill-opacity:1;stroke:none;stroke-width:0.26458332;stroke-opacity:1">K8s Master</tspan></text>
+         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:6.3499999px;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-feature-settings:normal;text-align:start;writing-mode:lr-tb;text-anchor:start;fill:#5da7ef;fill-opacity:1;stroke:none;stroke-width:0.26458332;stroke-opacity:1">K8s Control Plane</tspan></text>
     <rect
        id="rect4711-1"
        width="86.810928"

@@ -37,6 +37,9 @@ WINDOWS_NETWORKPOLICY_SKIP="SKIP_NO_TESTCASE"
 CONFORMANCE_SKIP="\[Slow\]|\[Serial\]|\[Disruptive\]|\[Flaky\]|\[Feature:.+\]|\[sig-cli\]|\[sig-storage\]|\[sig-auth\]|\[sig-api-machinery\]|\[sig-apps\]|\[sig-node\]"
 NETWORKPOLICY_SKIP="should allow egress access to server in CIDR block|should enforce except clause while egress access to server in CIDR block"
 
+# TODO: change to "control-plane" when testbeds are updated to K8s v1.20
+CONTROL_PLANE_NODE_ROLE="master"
+
 _usage="Usage: $0 [--kubeconfig <KubeconfigSavePath>] [--workdir <HomePath>]
                   [--testcase <windows-install-ovs|windows-conformance|windows-networkpolicy|e2e|conformance|networkpolicy>]
 
@@ -128,7 +131,7 @@ function clean_antrea {
 
 function clean_for_windows_install_cni {
     # https://github.com/vmware-tanzu/antrea/issues/1577
-    kubectl get nodes -o wide --no-headers=true | awk '$3 != "master" && $1 ~ /win/ {print $6}' | while read IP; do
+    kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 != role && $1 ~ /win/ {print $6}' | while read IP; do
         CLEAN_LIST=("/cygdrive/c/opt/cni/bin/antrea.exe" "/cygdrive/c/opt/cni/bin/host-local.exe" "/cygdrive/c/k/antrea/etc/antrea-agent.conf" "/cygdrive/c/etc/cni/net.d/10-antrea.conflist" "/cygdrive/c/k/antrea/bin/antrea-agent.exe")
         for file in "${CLEAN_LIST[@]}"; do
             ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "rm ${file}" || true
@@ -145,7 +148,7 @@ function collect_windows_network_info_and_logs {
         kubectl exec "$AGENTNAME" -c antrea-agent -n kube-system -- ovs-vsctl show > "network_info/$AGENTNAME/db" || true
         kubectl exec "$AGENTNAME" -c antrea-agent -n kube-system -- ip a > "network_info/${AGENTNAME}/addrs" || true
     done
-    kubectl get nodes -o wide --no-headers=true | awk '$3 != "master" && $1 ~ /win/ {print $6}' | while read IP; do
+    kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 != role && $1 ~ /win/ {print $6}' | while read IP; do
         mkdir network_info/${IP}
         ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "powershell.exe get-NetAdapter" > "network_info/${IP}/adapters" || true
         ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "ipconfig.exe" > "network_info/${IP}/ipconfig" || true
@@ -200,7 +203,7 @@ function deliver_antrea_windows {
     docker save -o antrea-ubuntu.tar projects.registry.vmware.com/antrea/antrea-ubuntu:latest
 
     echo "===== Deliver Antrea to Linux nodes ====="
-    kubectl get nodes -o wide --no-headers=true | awk '$3 != "master" && $1 !~ /win/ {print $6}' | while read IP; do
+    kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 != role && $1 !~ /win/ {print $6}' | while read IP; do
         rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no" antrea-ubuntu.tar jenkins@${IP}:${WORKDIR}/antrea-ubuntu.tar
         ssh -o StrictHostKeyChecking=no -n jenkins@${IP} "docker images | grep 'antrea-ubuntu' | awk '{print \$3}' | xargs -r docker rmi ; docker load -i ${WORKDIR}/antrea-ubuntu.tar ; docker images | grep '<none>' | awk '{print \$3}' | xargs -r docker rmi" || true
     done
@@ -208,7 +211,7 @@ function deliver_antrea_windows {
     echo "===== Deliver Antrea Windows to Windows nodes ====="
     rm antrea-windows.tar.gz || true
     sed -i 's/if (!(Test-Path $AntreaAgentConfigPath))/if ($true)/' hack/windows/Helper.psm1
-    kubectl get nodes -o wide --no-headers=true | awk '$3 != "master" && $1 ~ /win/ {print $6}' | while read IP; do
+    kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 != role && $1 ~ /win/ {print $6}' | while read IP; do
         govc snapshot.revert -vm.ip ${IP} win-initial
         harbor_images=("sigwindowstools-kube-proxy:v1.18.0" "e2eteam-agnhost:2.13" "e2eteam-jessie-dnsutils:1.0" "e2eteam-pause:3.2")
         antrea_images=("sigwindowstools/kube-proxy:v1.18.0" "e2eteam/agnhost:2.13" "e2eteam/jessie-dnsutils:1.0" "e2eteam/pause:3.2")
@@ -305,7 +308,7 @@ function deliver_antrea {
     cp -f build/yamls/*.yml $WORKDIR
     docker save -o antrea-ubuntu.tar projects.registry.vmware.com/antrea/antrea-ubuntu:latest
 
-    kubectl get nodes -o wide --no-headers=true | awk '$3 != "master" {print $6}' | while read IP; do
+    kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 != role {print $6}' | while read IP; do
         rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no" antrea-ubuntu.tar jenkins@[${IP}]:${WORKDIR}/antrea-ubuntu.tar
         ssh -o StrictHostKeyChecking=no -n jenkins@${IP} "docker images | grep 'antrea-ubuntu' | awk '{print \$3}' | xargs -r docker rmi ; docker load -i ${WORKDIR}/antrea-ubuntu.tar ; docker images | grep '<none>' | awk '{print \$3}' | xargs -r docker rmi" || true
         if [[ "${DOCKER_REGISTRY}" != "" ]]; then
@@ -388,7 +391,7 @@ function run_conformance_windows {
         kubectl rollout status daemonset/antrea-agent -n kube-system
         kubectl rollout status daemonset.apps/antrea-agent-windows -n kube-system
         kubectl rollout status daemonset/kube-proxy-windows -n kube-system
-        kubectl get nodes -o wide --no-headers=true | awk '$3 != "master" && $1 ~ /win/ {print $6}' | while read IP; do
+        kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 != role && $1 ~ /win/ {print $6}' | while read IP; do
             for i in `seq 5`; do
                 sleep 5
                 timeout 5s ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "powershell Get-NetAdapter -Name br-int -ErrorAction SilentlyContinue" && break
@@ -401,7 +404,7 @@ function run_conformance_windows {
         kubectl rollout status deployment/coredns -n kube-system
         kubectl rollout status deployment.apps/antrea-controller -n kube-system
         kubectl rollout status daemonset/antrea-agent -n kube-system
-        kubectl get nodes -o wide --no-headers=true | awk '$3 != "master" && $1 ~ /win/ {print $6}' | while read IP; do
+        kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 != role && $1 ~ /win/ {print $6}' | while read IP; do
             echo "===== Run script to startup antrea agent ====="
             ANTREA_VERSION=$(ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "/cygdrive/c/k/antrea/bin/antrea-agent.exe --version" | awk '{print $3}')
             ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "chmod +x /cygdrive/c/k/antrea/Start.ps1 && powershell 'c:\k\antrea\Start.ps1 -AntreaVersion ${ANTREA_VERSION}'"

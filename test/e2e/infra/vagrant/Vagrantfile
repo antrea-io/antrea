@@ -14,12 +14,12 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
   end
 
   groups = {
-    "master" => ["k8s-node-master"],
+    "controlplane" => ["k8s-node-control-plane"],
     "workers" => ["k8s-node-worker-[1:#{NUM_WORKERS}]"],
   }
 
-  config.vm.define "k8s-node-master" do |node|
-    node.vm.hostname = "k8s-node-master"
+  config.vm.define "k8s-node-control-plane" do |node|
+    node.vm.hostname = "k8s-node-control-plane"
     node_ip = "192.168.77.100"
     node.vm.network "private_network", ip: node_ip
 
@@ -30,7 +30,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
         # Ubuntu bionic does not ship with python2
         ansible_python_interpreter:"/usr/bin/python3",
         node_ip: node_ip,
-        node_name: "k8s-node-master",
+        node_name: "k8s-node-control-plane",
         k8s_pod_network_cidr: K8S_POD_NETWORK_CIDR,
         k8s_api_server_ip: node_ip,
       }

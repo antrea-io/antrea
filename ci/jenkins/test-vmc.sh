@@ -37,6 +37,8 @@ SECRET_EXIST=false
 TEST_FAILURE=false
 CLUSTER_READY=false
 DOCKER_REGISTRY=""
+# TODO: change to "control-plane" when testbeds are updated to K8s v1.20
+CONTROL_PLANE_NODE_ROLE="master"
 
 _usage="Usage: $0 [--cluster-name <VMCClusterNameToUse>] [--kubeconfig <KubeconfigSavePath>] [--workdir <HomePath>]
                   [--log-mode <SonobuoyResultLogLevel>] [--testcase <e2e|conformance|all-features-conformance|whole-conformance|networkpolicy>]
@@ -319,8 +321,8 @@ function deliver_antrea {
     fi
     docker save -o flow-aggregator.tar projects.registry.vmware.com/antrea/flow-aggregator:${DOCKER_IMG_VERSION}
 
-    kubectl get nodes -o wide --no-headers=true | awk '$3 == "master" {print $6}' | while read master_ip; do
-        scp -q -o StrictHostKeyChecking=no -i ${GIT_CHECKOUT_DIR}/jenkins/key/antrea-ci-key $GIT_CHECKOUT_DIR/build/yamls/*.yml capv@${master_ip}:~
+    kubectl get nodes -o wide --no-headers=true | awk '$3 == "$CONTROL_PLANE_NODE_ROLE" {print $6}' | while read control_plane_ip; do
+        scp -q -o StrictHostKeyChecking=no -i ${GIT_CHECKOUT_DIR}/jenkins/key/antrea-ci-key $GIT_CHECKOUT_DIR/build/yamls/*.yml capv@${control_plane_ip}:~
     done
 
     kubectl get nodes -o wide --no-headers=true | awk '{print $6}' | while read IP; do
@@ -370,14 +372,14 @@ function run_e2e {
 
     echo "=== Generate ssh-config ==="
     cp -f $GIT_CHECKOUT_DIR/ci/jenkins/ssh-config $GIT_CHECKOUT_DIR/test/e2e/infra/vagrant/ssh-config
-    master_name="$(kubectl get nodes -o wide --no-headers=true | awk '$3 == "master" {print $1}')"
-    master_ip="""$(kubectl get nodes -o wide --no-headers=true | awk '$3 == "master" {print $6}')"
-    echo "=== Master node ip: ${master_ip} ==="
-    sed -i "s/MASTERNODEIP/${master_ip}/g" $GIT_CHECKOUT_DIR/test/e2e/infra/vagrant/ssh-config
-    echo "=== Move kubeconfig to master ==="
-    ssh -q -o StrictHostKeyChecking=no -i $GIT_CHECKOUT_DIR/jenkins/key/antrea-ci-key -n capv@${master_ip} "if [ ! -d ".kube" ]; then mkdir .kube; fi"
-    scp -q -o StrictHostKeyChecking=no -i $GIT_CHECKOUT_DIR/jenkins/key/antrea-ci-key $GIT_CHECKOUT_DIR/jenkins/out/kubeconfig capv@${master_ip}:~/.kube/config
-    sed -i "s/CONTROLPLANENODE/${master_name}/g" $GIT_CHECKOUT_DIR/test/e2e/infra/vagrant/ssh-config
+    control_plane_name="$(kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 == role {print $1}')"
+    control_plane_ip="$(kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 == role {print $6}')"
+    echo "=== Control-plane Node ip: ${control_plane_ip} ==="
+    sed -i "s/CONTROLPLANENODEIP/${control_plane_ip}/g" $GIT_CHECKOUT_DIR/test/e2e/infra/vagrant/ssh-config
+    echo "=== Move kubeconfig to control-plane Node ==="
+    ssh -q -o StrictHostKeyChecking=no -i $GIT_CHECKOUT_DIR/jenkins/key/antrea-ci-key -n capv@${control_plane_ip} "if [ ! -d ".kube" ]; then mkdir .kube; fi"
+    scp -q -o StrictHostKeyChecking=no -i $GIT_CHECKOUT_DIR/jenkins/key/antrea-ci-key $GIT_CHECKOUT_DIR/jenkins/out/kubeconfig capv@${control_plane_ip}:~/.kube/config
+    sed -i "s/CONTROLPLANENODE/${control_plane_name}/g" $GIT_CHECKOUT_DIR/test/e2e/infra/vagrant/ssh-config
     echo "    IdentityFile ${GIT_CHECKOUT_DIR}/jenkins/key/antrea-ci-key" >> $GIT_CHECKOUT_DIR/test/e2e/infra/vagrant/ssh-config
 
     set +e
@@ -438,10 +440,10 @@ function run_conformance {
     kubectl rollout status --timeout=5m deployment.apps/antrea-controller -n kube-system
     kubectl rollout status --timeout=5m daemonset/antrea-agent -n kube-system
 
-    master_ip="$(kubectl get nodes -o wide --no-headers=true | awk '$3 == "master" {print $6}')"
-    echo "=== Move kubeconfig to master ==="
-    ssh -q -o StrictHostKeyChecking=no -i $GIT_CHECKOUT_DIR/jenkins/key/antrea-ci-key -n capv@${master_ip} "if [ ! -d ".kube" ]; then mkdir .kube; fi"
-    scp -q -o StrictHostKeyChecking=no -i $GIT_CHECKOUT_DIR/jenkins/key/antrea-ci-key $GIT_CHECKOUT_DIR/jenkins/out/kubeconfig capv@${master_ip}:~/.kube/config
+    control_plane_ip="$(kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 == role {print $6}')"
+    echo "=== Move kubeconfig to control-plane Node ==="
+    ssh -q -o StrictHostKeyChecking=no -i $GIT_CHECKOUT_DIR/jenkins/key/antrea-ci-key -n capv@${control_plane_ip} "if [ ! -d ".kube" ]; then mkdir .kube; fi"
+    scp -q -o StrictHostKeyChecking=no -i $GIT_CHECKOUT_DIR/jenkins/key/antrea-ci-key $GIT_CHECKOUT_DIR/jenkins/out/kubeconfig capv@${control_plane_ip}:~/.kube/config
 
     if [[ "$TESTCASE" == "conformance" ]]; then
         ${GIT_CHECKOUT_DIR}/ci/run-k8s-e2e-tests.sh --e2e-conformance --log-mode ${MODE} --kubeconfig ${GIT_CHECKOUT_DIR}/jenkins/out/kubeconfig > ${GIT_CHECKOUT_DIR}/vmc-test.log
