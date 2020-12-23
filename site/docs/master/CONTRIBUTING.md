@@ -135,13 +135,13 @@ and *merged* sorts of commits.
 To make it easier for reviewers to review your PR, consider the following:
 
 1. Follow the golang [coding conventions](https://github.com/golang/go/wiki/CodeReviewComments).
-2. Format your code with `make golangci-fix`; if the [linters](ci/README.md) flag an issue that
+2. Format your code with `make golangci-fix`; if the [linters](https://github.com/vmware-tanzu/antrea/blob/master/ci/README.md) flag an issue that
    cannot be fixed automatically, an error message will be displayed so you can address the issue.
 3. Follow [git commit](https://chris.beams.io/posts/git-commit/) guidelines.
 4. Follow [logging](https://github.com/kubernetes/community/blob/master/contributors/devel/sig-instrumentation/logging.md) guidelines.
 
 If your PR fixes a bug or implements a new feature, add the appropriate test
-cases to our [automated test suite](ci/README.md) to guarantee enough
+cases to our [automated test suite](https://github.com/vmware-tanzu/antrea/blob/master/ci/README.md) to guarantee enough
 coverage. A PR that makes significant code changes without contributing new test
 cases will be flagged by reviewers and will not be accepted.
 
@@ -172,7 +172,7 @@ To develop locally, you can follow these steps:
 ### CI testing
 
 For more information about the tests we run as part of CI, please refer to
-[ci/README.md](ci/README.md).
+[ci/README.md](https://github.com/vmware-tanzu/antrea/blob/master/ci/README.md).
 
 ### Reverting a commit
 

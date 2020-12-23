@@ -81,6 +81,13 @@ copy_markdowns_to_docs_master
 # This is done after copy_markdowns_to_docs_master, to overwrite changes made by
 # that function
 copy_root_markdowns_to_docs_master
+
+printf "Updating links to ci/README.md\n"
+for doc in $(find "$PWD" -type f -name "*.md"); do
+    sed -i.bak 's/(ci\/README\.md)/(https:\/\/github.com\/vmware-tanzu\/antrea\/blob\/master\/ci\/README.md)/' ${doc}
+    rm -f ${doc}.bak
+done
+
 cp -f ../../api-reference.md .
 
 popd
