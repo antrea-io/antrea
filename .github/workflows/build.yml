@@ -96,3 +96,20 @@ jobs:
         echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
         make push
         make push-release
+
+  build-flow-aggregator:
+    needs: check-changes
+    if: ${{ needs.check-changes.outputs.has_changes == 'yes' || github.event_name == 'push' }}
+    runs-on: [ubuntu-18.04]
+    steps:
+    - uses: actions/checkout@v2
+    - name: Build flow-aggregator Docker image
+      run: make flow-aggregator-ubuntu
+    - name: Push flow-aggregator Docker image to registry
+      if: ${{ github.repository == 'vmware-tanzu/antrea' && github.event_name == 'push' && github.ref == 'refs/heads/master' }}
+      env:
+        DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+        DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+      run: |
+        echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+        docker push antrea/flow-aggregator:latest
