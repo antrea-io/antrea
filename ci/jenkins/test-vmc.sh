@@ -244,6 +244,20 @@ function setup_cluster() {
     fi
 }
 
+function copy_image {
+  filename=$1
+  image=$2
+  IP=$3
+  version=$4
+  scp -o StrictHostKeyChecking=no -i ${GIT_CHECKOUT_DIR}/jenkins/key/antrea-ci-key $filename capv@${IP}:/home/capv
+  if [ $TEST_OS == 'centos-7' ]; then
+      ssh -q -o StrictHostKeyChecking=no -i ${GIT_CHECKOUT_DIR}/jenkins/key/antrea-ci-key -n capv@${IP} "sudo chmod 777 /run/containerd/containerd.sock"
+      ssh -q -o StrictHostKeyChecking=no -i ${GIT_CHECKOUT_DIR}/jenkins/key/antrea-ci-key -n capv@${IP} "sudo crictl images | grep $image | awk '{print \$3}' | xargs -r crictl rmi ; ctr -n=k8s.io images import /home/capv/$filename ; ctr -n=k8s.io images tag $image:$version $image:latest ; sudo crictl images | grep '<none>' | awk '{print \$3}' | xargs -r crictl rmi"
+  else
+      ssh -q -o StrictHostKeyChecking=no -i ${GIT_CHECKOUT_DIR}/jenkins/key/antrea-ci-key -n capv@${IP} "sudo crictl images | grep $image | awk '{print \$3}' | xargs -r crictl rmi ; sudo ctr -n=k8s.io images import /home/capv/$filename ; sudo ctr -n=k8s.io images tag $image:$version $image:latest ; sudo crictl images | grep '<none>' | awk '{print \$3}' | xargs -r crictl rmi"
+  fi
+}
+
 function deliver_antrea {
     echo "====== Building Antrea for the Following Commit ======"
     git show --numstat
@@ -274,10 +288,11 @@ function deliver_antrea {
             VERSION="$CLUSTER" DOCKER_REGISTRY="${DOCKER_REGISTRY}" make && break
         fi
     done
+    VERSION="$CLUSTER" DOCKER_REGISTRY="${DOCKER_REGISTRY}" make flow-aggregator-ubuntu
     cd ci/jenkins
 
     if [ "$?" -ne "0" ]; then
-        echo "=== Antrea Image build failed ==="
+        echo "=== Antrea Image or Flow Aggregator Image build failed ==="
         exit 1
     fi
 
@@ -302,24 +317,20 @@ function deliver_antrea {
     else
         docker save -o antrea-ubuntu.tar projects.registry.vmware.com/antrea/antrea-ubuntu:${DOCKER_IMG_VERSION}
     fi
+    docker save -o flow-aggregator.tar projects.registry.vmware.com/antrea/flow-aggregator:${DOCKER_IMG_VERSION}
 
     kubectl get nodes -o wide --no-headers=true | awk '$3 == "master" {print $6}' | while read master_ip; do
         scp -q -o StrictHostKeyChecking=no -i ${GIT_CHECKOUT_DIR}/jenkins/key/antrea-ci-key $GIT_CHECKOUT_DIR/build/yamls/*.yml capv@${master_ip}:~
     done
 
     kubectl get nodes -o wide --no-headers=true | awk '{print $6}' | while read IP; do
-        antrea_image="antrea-ubuntu"
-        if [[ "$COVERAGE" == true ]]; then
-            antrea_image="antrea-ubuntu-coverage"
-        fi
         ssh-keygen -f "/var/lib/jenkins/.ssh/known_hosts" -R ${IP}
-        scp -o StrictHostKeyChecking=no -i ${GIT_CHECKOUT_DIR}/jenkins/key/antrea-ci-key $antrea_image.tar capv@${IP}:/home/capv
-        if [ $TEST_OS == 'centos-7' ]; then
-            ssh -q -o StrictHostKeyChecking=no -i ${GIT_CHECKOUT_DIR}/jenkins/key/antrea-ci-key -n capv@${IP} "sudo chmod 777 /run/containerd/containerd.sock"
-            ssh -q -o StrictHostKeyChecking=no -i ${GIT_CHECKOUT_DIR}/jenkins/key/antrea-ci-key -n capv@${IP} "sudo crictl images | grep $antrea_image | awk '{print \$3}' | xargs -r crictl rmi ; ctr -n=k8s.io images import /home/capv/$antrea_image.tar ; ctr -n=k8s.io images tag docker.io/antrea/$antrea_image:${DOCKER_IMG_VERSION} docker.io/antrea/$antrea_image:latest ; sudo crictl images | grep '<none>' | awk '{print \$3}' | xargs -r crictl rmi"
+        if [[ "$COVERAGE" == true ]]; then
+            copy_image antrea-ubuntu-coverage.tar docker.io/antrea/antrea-ubuntu-coverage $IP ${DOCKER_IMG_VERSION}
         else
-            ssh -q -o StrictHostKeyChecking=no -i ${GIT_CHECKOUT_DIR}/jenkins/key/antrea-ci-key -n capv@${IP} "sudo crictl images | grep $antrea_image | awk '{print \$3}' | xargs -r crictl rmi ; sudo ctr -n=k8s.io images import /home/capv/$antrea_image.tar ; sudo ctr -n=k8s.io images tag docker.io/antrea/$antrea_image:${DOCKER_IMG_VERSION} docker.io/antrea/$antrea_image:latest ; sudo crictl images | grep '<none>' | awk '{print \$3}' | xargs -r crictl rmi"
+            copy_image antrea-ubuntu.tar projects.registry.vmware.com/antrea/antrea-ubuntu $IP ${DOCKER_IMG_VERSION}
         fi
+        copy_image flow-aggregator.tar projects.registry.vmware.com/antrea/flow-aggregator $IP ${DOCKER_IMG_VERSION}
     done
 }
 

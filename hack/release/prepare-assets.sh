@@ -78,4 +78,7 @@ export IMG_NAME=projects.registry.vmware.com/antrea/octant-antrea-ubuntu
 export IMG_NAME=projects.registry.vmware.com/antrea/antrea-windows
 ./hack/generate-manifest-windows.sh --mode release > "$OUTPUT_DIR"/antrea-windows.yml
 
+export IMG_NAME=projects.registry.vmware.com/antrea/flow-aggregator
+./hack/generate-manifest-flow-aggregator.sh --mode release > "$OUTPUT_DIR"/flow-aggregator.yml
+
 ls "$OUTPUT_DIR" | cat
