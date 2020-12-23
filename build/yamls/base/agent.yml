@@ -17,6 +17,7 @@ spec:
         component: antrea-agent
     spec:
       hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
       priorityClassName: system-node-critical
       tolerations:
         # Mark it as a critical add-on.

@@ -1,30 +1,44 @@
 #!/usr/bin/env bash
 
 function usage() {
-    echo "Usage: push_antrea.sh [--prometheus] [-h|--help]"
+    echo "Usage: push_antrea.sh [--prometheus] [-fc|--flow-collector] [-h|--help]
+    Push the latest Antrea image to all vagrant nodes and restart the Antrea daemons
+          --prometheus           Deploy Prometheus service to scrape metrics from Antrea Agents and Controllers
+          --flow-collector       Provide the IPFIX flow collector address to collect the flows from the Flow Aggregator service
+                                 It should be given in the format IP:port:proto. Example: 192.168.1.100:4739:udp
+                                 Please note that with this option we deploy the Flow Aggregator Service along with Antrea."
 }
 
 # Process execution flags
 RUN_PROMETHEUS=false
-for i in "$@"; do
-    case $i in
-        --prometheus)
-            RUN_PROMETHEUS=true
-            shift
-            ;;
-        -h|--help)
-            usage
-            exit 0
-            ;;
-        *)
-            usage
-            exit 1
-    esac
+FLOW_COLLECTOR=""
+
+while [[ $# -gt 0 ]]
+do
+key="$1"
+
+case $key in
+    --prometheus)
+    RUN_PROMETHEUS=true
+    shift
+    ;;
+    -fc|--flow-collector)
+    FLOW_COLLECTOR="$2"
+    shift 2
+    ;;
+    -h|--help)
+    usage
+    exit 0
+    ;;
+    *)
+    usage
+    exit 1
+esac
 done
 
 : "${NUM_WORKERS:=1}"
-SAVED_IMG=/tmp/antrea-ubuntu.tar
-IMG_NAME=projects.registry.vmware.com/antrea/antrea-ubuntu:latest
+SAVED_ANTREA_IMG=/tmp/antrea-ubuntu.tar
+ANTREA_IMG_NAME=projects.registry.vmware.com/antrea/antrea-ubuntu:latest
 
 THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
@@ -35,6 +49,7 @@ ANTREA_IPSEC_YML=$THIS_DIR/../../../../build/yamls/antrea-ipsec.yml
 ANTREA_PROMETHEUS_YML=$THIS_DIR/../../../../build/yamls/antrea-prometheus.yml
 
 ANTREA_YML="/tmp/antrea.yml"
+
 cp "${ANTREA_BASE_YML}" "${ANTREA_YML}"
 
 if [ "$RUN_PROMETHEUS" == "true" ]; then
@@ -49,15 +64,6 @@ if [ ! -f ssh-config ]; then
     exit 1
 fi
 
-docker inspect $IMG_NAME > /dev/null
-if [ $? -ne 0 ]; then
-    echo "Docker image $IMG_NAME was not found"
-    exit 1
-fi
-
-echo "Saving $IMG_NAME image to $SAVED_IMG"
-docker save -o $SAVED_IMG $IMG_NAME
-
 function waitForNodes {
     pids=("$@")
     for pid in "${pids[@]}"; do
@@ -69,45 +75,89 @@ function waitForNodes {
     done
 }
 
-echo "Copying $IMG_NAME image to every node..."
-# Copy image to master
-scp -F ssh-config $SAVED_IMG k8s-node-master:/tmp/antrea-ubuntu.tar &
-pids[0]=$!
-# Loop over all worker nodes and copy image to each one
-for ((i=1; i<=$NUM_WORKERS; i++)); do
-    name="k8s-node-worker-$i"
-    scp -F ssh-config $SAVED_IMG $name:/tmp/antrea-ubuntu.tar &
-    pids[$i]=$!
-done
-# Wait for all child processes to complete
-waitForNodes "${pids[@]}"
-echo "Done!"
+function pushImgToNodes() {
+    IMG_NAME=$1
+    SAVED_IMG=$2
 
-echo "Loading $IMG_NAME image in every node..."
-ssh -F ssh-config k8s-node-master docker load -i /tmp/antrea-ubuntu.tar &
-pids[0]=$!
-# Loop over all worker nodes and copy image to each one
-for ((i=1; i<=$NUM_WORKERS; i++)); do
-    name="k8s-node-worker-$i"
-    ssh -F ssh-config $name docker load -i /tmp/antrea-ubuntu.tar &
-    pids[$i]=$!
-done
-# Wait for all child processes to complete
-waitForNodes "${pids[@]}"
-echo "Done!"
+    docker inspect $IMG_NAME > /dev/null
+    if [ $? -ne 0 ]; then
+        echo "Docker image $IMG_NAME was not found"
+        exit 1
+    fi
 
-echo "Copying Antrea deployment YAML to every node..."
-scp -F ssh-config $ANTREA_YML $ANTREA_IPSEC_YML k8s-node-master:~/ &
-pids[0]=$!
-# Loop over all worker nodes and copy image to each one
-for ((i=1; i<=$NUM_WORKERS; i++)); do
-    name="k8s-node-worker-$i"
-    scp -F ssh-config $ANTREA_YML $ANTREA_IPSEC_YML $name:~/ &
-    pids[$i]=$!
-done
-# Wait for all child processes to complete
-waitForNodes "${pids[@]}"
-echo "Done!"
+    echo "Saving $IMG_NAME image to $SAVED_IMG"
+    docker save -o $SAVED_IMG $IMG_NAME
+
+    echo "Copying $IMG_NAME image to every node..."
+    # Copy image to master
+    scp -F ssh-config $SAVED_IMG k8s-node-master:/tmp/antrea-ubuntu.tar &
+    pids[0]=$!
+    # Loop over all worker nodes and copy image to each one
+    for ((i=1; i<=$NUM_WORKERS; i++)); do
+        name="k8s-node-worker-$i"
+        scp -F ssh-config $SAVED_IMG $name:/tmp/antrea-ubuntu.tar &
+        pids[$i]=$!
+    done
+    # Wait for all child processes to complete
+    waitForNodes "${pids[@]}"
+    echo "Done!"
+
+    echo "Loading $IMG_NAME image in every node..."
+    ssh -F ssh-config k8s-node-master docker load -i $SAVED_IMG &
+    pids[0]=$!
+    # Loop over all worker nodes and copy image to each one
+    for ((i=1; i<=$NUM_WORKERS; i++)); do
+        name="k8s-node-worker-$i"
+        ssh -F ssh-config $name docker load -i $SAVED_IMG &
+        pids[$i]=$!
+    done
+    # Wait for all child processes to complete
+    waitForNodes "${pids[@]}"
+    echo "Done!"
+}
+
+function copyManifestToNodes() {
+    YAML=$1
+    echo "Copying $YAML to every node..."
+    scp -F ssh-config $YAML k8s-node-master:~/ &
+    pids[0]=$!
+    # Loop over all worker nodes and copy manifest to each one
+    for ((i=1; i<=$NUM_WORKERS; i++)); do
+        name="k8s-node-worker-$i"
+        scp -F ssh-config $YAML $name:~/ &
+        pids[$i]=$!
+    done
+    # Wait for all child processes to complete
+    waitForNodes "${pids[@]}"
+    echo "Done!"
+}
+
+if [[ $FLOW_COLLECTOR != "" ]]; then
+    echo "Generating manifest with all features enabled along with FlowExporter feature"
+    $THIS_DIR/../../../../hack/generate-manifest.sh --mode dev --all-features > "${ANTREA_YML}"
+
+    SAVED_FLOW_AGG_IMG=/tmp/flow-aggregator.tar
+    FLOW_AGG_IMG_NAME=projects.registry.vmware.com/antrea/flow-aggregator:latest
+
+    FLOW_AGG_BASE_YML=$THIS_DIR/../../../../build/yamls/flow-aggregator.yml
+    FLOW_AGG_YML="/tmp/flow-aggregator.yml"
+
+    $THIS_DIR/../../../../hack/generate-manifest-flow-aggregator.sh --mode dev -fc $FLOW_COLLECTOR > "${FLOW_AGG_YML}"
+
+    pushImgToNodes "$FLOW_AGG_IMG_NAME" "$SAVED_FLOW_AGG_IMG"
+    copyManifestToNodes "$FLOW_AGG_YML"
+
+    echo "Restarting Flow Aggregator deployment"
+    ssh -F ssh-config k8s-node-master kubectl -n flow-aggregator delete pod --all
+    ssh -F ssh-config k8s-node-master kubectl apply -f flow-aggregator.yml
+
+    rm "${FLOW_AGG_YML}"
+fi
+
+# Push Antrea image and related manifest.
+pushImgToNodes "$ANTREA_IMG_NAME" "$SAVED_ANTREA_IMG"
+copyManifestToNodes "$ANTREA_YML"
+copyManifestToNodes "$ANTREA_IPSEC_YML"
 
 # To ensure that the most recent version of Antrea (that we just pushed) will be
 # used.

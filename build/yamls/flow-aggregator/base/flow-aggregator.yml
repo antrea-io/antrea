@@ -1,0 +1,62 @@
+# Create a namespace for Flow Aggregator service
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: flow-aggregator
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: flow-aggregator
+  namespace: flow-aggregator
+spec:
+  selector:
+    app: flow-aggregator
+  ports:
+  - name: ipfix-udp
+    port: 4739
+    protocol: UDP
+    targetPort: 4739
+  - name: ipfix-tcp
+    port: 4739
+    protocol: TCP
+    targetPort: 4739
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: flow-aggregator
+  namespace: flow-aggregator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: flow-aggregator
+  template:
+    spec:
+      containers:
+      - args:
+        - --config
+        - /etc/flow-aggregator/flow-aggregator.conf
+        - --logtostderr=false
+        - --log_dir=/var/log/flowaggregator
+        - --alsologtostderr
+        - --log_file_max_size=100
+        - --log_file_max_num=4
+        - --v=0
+        command:
+          - flow-aggregator
+        name: flow-aggregator
+        image: flow-aggregator
+        ports:
+          - containerPort: 4739
+        volumeMounts:
+        - mountPath: /etc/flow-aggregator/flow-aggregator.conf
+          name: flow-aggregator-config
+          readOnly: true
+          subPath: flow-aggregator.conf
+      volumes:
+      - name: flow-aggregator-config
+        configMap:
+          name: flow-aggregator-configmap
+        
