@@ -16,7 +16,6 @@ package ipfix
 
 import (
 	"fmt"
-	"net"
 
 	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
 	ipfixexport "github.com/vmware/go-ipfix/pkg/exporter"
@@ -27,7 +26,7 @@ var _ IPFIXExportingProcess = new(ipfixExportingProcess)
 // IPFIXExportingProcess interface is added to facilitate unit testing without involving the code from go-ipfix library.
 type IPFIXExportingProcess interface {
 	NewTemplateID() uint16
-	AddRecordAndSendMsg(setType ipfixentities.ContentType, record ipfixentities.Record) (int, error)
+	SendSet(set ipfixentities.Set) (int, error)
 	CloseConnToCollector()
 }
 
@@ -35,8 +34,8 @@ type ipfixExportingProcess struct {
 	*ipfixexport.ExportingProcess
 }
 
-func NewIPFIXExportingProcess(collector net.Addr, obsID uint32, tempRefTimeout uint32) (*ipfixExportingProcess, error) {
-	expProcess, err := ipfixexport.InitExportingProcess(collector, obsID, tempRefTimeout)
+func NewIPFIXExportingProcess(input ipfixexport.ExporterInput) (*ipfixExportingProcess, error) {
+	expProcess, err := ipfixexport.InitExportingProcess(input)
 	if err != nil {
 		return nil, fmt.Errorf("error while initializing IPFIX exporting process: %v", err)
 	}
@@ -46,8 +45,8 @@ func NewIPFIXExportingProcess(collector net.Addr, obsID uint32, tempRefTimeout u
 	}, nil
 }
 
-func (exp *ipfixExportingProcess) AddRecordAndSendMsg(setType ipfixentities.ContentType, record ipfixentities.Record) (int, error) {
-	sentBytes, err := exp.ExportingProcess.AddRecordAndSendMsg(setType, record)
+func (exp *ipfixExportingProcess) SendSet(set ipfixentities.Set) (int, error) {
+	sentBytes, err := exp.ExportingProcess.SendSet(set)
 	return sentBytes, err
 }
 

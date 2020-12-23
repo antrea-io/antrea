@@ -150,14 +150,13 @@ func (i *Initializer) prepareOVSBridge() error {
 	if err = util.SetAdapterMACAddress(brName, &uplinkNetConfig.MAC); err != nil {
 		return err
 	}
-	// Remove existing IP addresses to avoid a candidate error of "Instance MSFT_NetIPAddress already exists" when
-	// adding it on the adapter.
-	if err = util.RemoveIPv4AddrsFromAdapter(brName); err != nil {
-		return err
-	}
 	// TODO: Configure IPv6 Address.
 	if err = util.ConfigureInterfaceAddressWithDefaultGateway(brName, uplinkNetConfig.IP, uplinkNetConfig.Gateway); err != nil {
-		return err
+		if !strings.Contains(err.Error(), "Instance MSFT_NetIPAddress already exists") {
+			return err
+		}
+		err = nil
+		klog.V(4).Infof("Address: %s already exists when configuring IP on interface %s", uplinkNetConfig.IP.String(), brName)
 	}
 	// Restore the host routes which are lost when moving the network configuration of the uplink interface to OVS bridge interface.
 	if err = i.restoreHostRoutes(); err != nil {
@@ -181,7 +180,7 @@ func (i *Initializer) prepareOVSBridge() error {
 // initHostNetworkFlows installs Openflow flows between bridge local port and uplink port to support
 // host networking.
 func (i *Initializer) initHostNetworkFlows() error {
-	if err := i.ofClient.InstallBridgeUplinkFlows(config.UplinkOFPort, config.BridgeOFPort); err != nil {
+	if err := i.ofClient.InstallBridgeUplinkFlows(); err != nil {
 		return err
 	}
 	return nil
@@ -190,13 +189,11 @@ func (i *Initializer) initHostNetworkFlows() error {
 // initExternalConnectivityFlows installs OpenFlow entries to SNAT Pod traffic
 // using Node IP, and then Pod could communicate to the external IP addresses.
 func (i *Initializer) initExternalConnectivityFlows() error {
-	subnetCIDR := i.nodeConfig.PodIPv4CIDR
-	if subnetCIDR == nil {
+	if i.nodeConfig.PodIPv4CIDR == nil {
 		return fmt.Errorf("Failed to find valid IPv4 PodCIDR")
 	}
-	nodeIP := i.nodeConfig.NodeIPAddr.IP
 	// Install OpenFlow entries on the OVS to enable Pod traffic to communicate to external IP addresses.
-	if err := i.ofClient.InstallExternalFlows(nodeIP, *subnetCIDR); err != nil {
+	if err := i.ofClient.InstallExternalFlows(); err != nil {
 		return err
 	}
 	return nil

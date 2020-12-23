@@ -155,20 +155,21 @@ func getSrcNodeName(tf *opsv1alpha1.Traceflow) string {
 }
 
 func getDstNodeName(tf *opsv1alpha1.Traceflow) string {
-	if len(tf.Spec.Destination.Namespace) > 0 && len(tf.Spec.Destination.Pod) > 0 {
-		return getWrappedStr(tf.Spec.Destination.Namespace + "/" + tf.Spec.Destination.Pod)
-	}
 	if len(tf.Spec.Destination.Namespace) > 0 && len(tf.Spec.Destination.Service) > 0 {
-		return getWrappedStr(tf.Spec.Destination.Namespace + "/" + tf.Spec.Destination.Service)
+		return getWrappedStr(tf.Spec.Destination.Namespace + "/" + tf.Spec.Destination.Pod +
+			"\nService: " + tf.Spec.Destination.Service)
 	}
 	if len(tf.Spec.Destination.IP) > 0 {
 		return getWrappedStr(tf.Spec.Destination.IP)
+	}
+	if len(tf.Spec.Destination.Namespace) > 0 && len(tf.Spec.Destination.Pod) > 0 {
+		return getWrappedStr(tf.Spec.Destination.Namespace + "/" + tf.Spec.Destination.Pod)
 	}
 	return ""
 }
 
 // getTraceflowMessage gets the shown message string in traceflow graph.
-func getTraceflowMessage(o *opsv1alpha1.Observation) string {
+func getTraceflowMessage(o *opsv1alpha1.Observation, spec *opsv1alpha1.TraceflowSpec) string {
 	str := string(o.Component)
 	if len(o.ComponentInfo) > 0 {
 		str += "\n" + o.ComponentInfo
@@ -177,8 +178,17 @@ func getTraceflowMessage(o *opsv1alpha1.Observation) string {
 	if o.Component == opsv1alpha1.NetworkPolicy && len(o.NetworkPolicy) > 0 {
 		str += "\nNetpol: " + o.NetworkPolicy
 	}
+	if len(o.Pod) > 0 {
+		str += "\nTo: " + o.Pod
+		if len(spec.Destination.Pod) == 0 {
+			spec.Destination.Pod = o.Pod[strings.Index(o.Pod, `/`)+1:]
+		}
+	}
+	if o.Action != opsv1alpha1.Dropped && len(o.TranslatedDstIP) > 0 {
+		str += "\nTranslated Destination IP: " + o.TranslatedDstIP
+	}
 	if o.Action != opsv1alpha1.Dropped && len(o.TunnelDstIP) > 0 {
-		str += "\nTo: " + o.TunnelDstIP
+		str += "\nTunnel Destination IP : " + o.TunnelDstIP
 	}
 	return str
 }
@@ -232,11 +242,11 @@ func getTraceflowStatusMessage(tf *opsv1alpha1.Traceflow) string {
 	case opsv1alpha1.Pending:
 		return getWrappedStr(fmt.Sprintf("Traceflow %s is pending...", tf.Name))
 	default:
-		return getWrappedStr("Unknown Traceflow status. Please check Antrea is running with Traceflow feature gate enabled.")
+		return getWrappedStr("Unknown Traceflow status. Please check whether Antrea is running.")
 	}
 }
 
-func genSubGraph(graph *gographviz.Graph, cluster *gographviz.SubGraph, result *opsv1alpha1.NodeResult,
+func genSubGraph(graph *gographviz.Graph, cluster *gographviz.SubGraph, result *opsv1alpha1.NodeResult, spec *opsv1alpha1.TraceflowSpec,
 	endpointNodeName string, isForwardDir bool, addNodeNum int) ([]*gographviz.Node, error) {
 	var nodes []*gographviz.Node
 
@@ -305,7 +315,7 @@ func genSubGraph(graph *gographviz.Graph, cluster *gographviz.SubGraph, result *
 			node.Attrs[gographviz.FillColor] = gainsboro
 		}
 		// Set the message shown inside node.
-		labelStr := getTraceflowMessage(&o)
+		labelStr := getTraceflowMessage(&o, spec)
 		node.Attrs[gographviz.Label] = getWrappedStr(labelStr)
 	}
 	return nodes, nil
@@ -340,7 +350,7 @@ func GenGraph(tf *opsv1alpha1.Traceflow) (string, error) {
 	}
 	// Handle single node traceflow.
 	if receiverRst == nil {
-		nodes, err := genSubGraph(graph, cluster1, senderRst, getSrcNodeName(tf), true, 0)
+		nodes, err := genSubGraph(graph, cluster1, senderRst, &tf.Spec, getSrcNodeName(tf), true, 0)
 		if err != nil {
 			return "", err
 		}
@@ -386,7 +396,7 @@ func GenGraph(tf *opsv1alpha1.Traceflow) (string, error) {
 	}
 
 	// Draw the nodes for the sender.
-	nodes1, err := genSubGraph(graph, cluster1, senderRst, getSrcNodeName(tf), true, nodeNum-len(senderRst.Observations))
+	nodes1, err := genSubGraph(graph, cluster1, senderRst, &tf.Spec, getSrcNodeName(tf), true, nodeNum-len(senderRst.Observations))
 	if err != nil {
 		return "", err
 	}
@@ -396,7 +406,7 @@ func GenGraph(tf *opsv1alpha1.Traceflow) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	nodes2, err := genSubGraph(graph, cluster2, receiverRst, getDstNodeName(tf), false, nodeNum-len(receiverRst.Observations))
+	nodes2, err := genSubGraph(graph, cluster2, receiverRst, &tf.Spec, getDstNodeName(tf), false, nodeNum-len(receiverRst.Observations))
 	if err != nil {
 		return "", err
 	}

@@ -209,74 +209,74 @@ func (mr *MockClientMockRecorder) InitialTLVMap() *gomock.Call {
 }
 
 // Initialize mocks base method
-func (m *MockClient) Initialize(arg0 types.RoundInfo, arg1 *config.NodeConfig, arg2 config.TrafficEncapModeType, arg3 uint32) (<-chan struct{}, error) {
+func (m *MockClient) Initialize(arg0 types.RoundInfo, arg1 *config.NodeConfig, arg2 config.TrafficEncapModeType) (<-chan struct{}, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Initialize", arg0, arg1, arg2, arg3)
+	ret := m.ctrl.Call(m, "Initialize", arg0, arg1, arg2)
 	ret0, _ := ret[0].(<-chan struct{})
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Initialize indicates an expected call of Initialize
-func (mr *MockClientMockRecorder) Initialize(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+func (mr *MockClientMockRecorder) Initialize(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Initialize", reflect.TypeOf((*MockClient)(nil).Initialize), arg0, arg1, arg2, arg3)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Initialize", reflect.TypeOf((*MockClient)(nil).Initialize), arg0, arg1, arg2)
 }
 
 // InstallBridgeUplinkFlows mocks base method
-func (m *MockClient) InstallBridgeUplinkFlows(arg0, arg1 uint32) error {
+func (m *MockClient) InstallBridgeUplinkFlows() error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "InstallBridgeUplinkFlows", arg0, arg1)
+	ret := m.ctrl.Call(m, "InstallBridgeUplinkFlows")
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // InstallBridgeUplinkFlows indicates an expected call of InstallBridgeUplinkFlows
-func (mr *MockClientMockRecorder) InstallBridgeUplinkFlows(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockClientMockRecorder) InstallBridgeUplinkFlows() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallBridgeUplinkFlows", reflect.TypeOf((*MockClient)(nil).InstallBridgeUplinkFlows), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallBridgeUplinkFlows", reflect.TypeOf((*MockClient)(nil).InstallBridgeUplinkFlows))
 }
 
 // InstallClusterServiceCIDRFlows mocks base method
-func (m *MockClient) InstallClusterServiceCIDRFlows(arg0 []*net.IPNet, arg1 uint32) error {
+func (m *MockClient) InstallClusterServiceCIDRFlows(arg0 []*net.IPNet) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "InstallClusterServiceCIDRFlows", arg0, arg1)
+	ret := m.ctrl.Call(m, "InstallClusterServiceCIDRFlows", arg0)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // InstallClusterServiceCIDRFlows indicates an expected call of InstallClusterServiceCIDRFlows
-func (mr *MockClientMockRecorder) InstallClusterServiceCIDRFlows(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockClientMockRecorder) InstallClusterServiceCIDRFlows(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallClusterServiceCIDRFlows", reflect.TypeOf((*MockClient)(nil).InstallClusterServiceCIDRFlows), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallClusterServiceCIDRFlows", reflect.TypeOf((*MockClient)(nil).InstallClusterServiceCIDRFlows), arg0)
 }
 
 // InstallClusterServiceFlows mocks base method
-func (m *MockClient) InstallClusterServiceFlows(arg0, arg1 bool) error {
+func (m *MockClient) InstallClusterServiceFlows() error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "InstallClusterServiceFlows", arg0, arg1)
+	ret := m.ctrl.Call(m, "InstallClusterServiceFlows")
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // InstallClusterServiceFlows indicates an expected call of InstallClusterServiceFlows
-func (mr *MockClientMockRecorder) InstallClusterServiceFlows(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockClientMockRecorder) InstallClusterServiceFlows() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallClusterServiceFlows", reflect.TypeOf((*MockClient)(nil).InstallClusterServiceFlows), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallClusterServiceFlows", reflect.TypeOf((*MockClient)(nil).InstallClusterServiceFlows))
 }
 
 // InstallDefaultTunnelFlows mocks base method
-func (m *MockClient) InstallDefaultTunnelFlows(arg0 uint32) error {
+func (m *MockClient) InstallDefaultTunnelFlows() error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "InstallDefaultTunnelFlows", arg0)
+	ret := m.ctrl.Call(m, "InstallDefaultTunnelFlows")
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // InstallDefaultTunnelFlows indicates an expected call of InstallDefaultTunnelFlows
-func (mr *MockClientMockRecorder) InstallDefaultTunnelFlows(arg0 interface{}) *gomock.Call {
+func (mr *MockClientMockRecorder) InstallDefaultTunnelFlows() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallDefaultTunnelFlows", reflect.TypeOf((*MockClient)(nil).InstallDefaultTunnelFlows), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallDefaultTunnelFlows", reflect.TypeOf((*MockClient)(nil).InstallDefaultTunnelFlows))
 }
 
 // InstallEndpointFlows mocks base method
@@ -294,31 +294,31 @@ func (mr *MockClientMockRecorder) InstallEndpointFlows(arg0, arg1, arg2 interfac
 }
 
 // InstallExternalFlows mocks base method
-func (m *MockClient) InstallExternalFlows(arg0 net.IP, arg1 net.IPNet) error {
+func (m *MockClient) InstallExternalFlows() error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "InstallExternalFlows", arg0, arg1)
+	ret := m.ctrl.Call(m, "InstallExternalFlows")
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // InstallExternalFlows indicates an expected call of InstallExternalFlows
-func (mr *MockClientMockRecorder) InstallExternalFlows(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockClientMockRecorder) InstallExternalFlows() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallExternalFlows", reflect.TypeOf((*MockClient)(nil).InstallExternalFlows), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallExternalFlows", reflect.TypeOf((*MockClient)(nil).InstallExternalFlows))
 }
 
 // InstallGatewayFlows mocks base method
-func (m *MockClient) InstallGatewayFlows(arg0 []net.IP, arg1 net.HardwareAddr, arg2 uint32) error {
+func (m *MockClient) InstallGatewayFlows() error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "InstallGatewayFlows", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "InstallGatewayFlows")
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // InstallGatewayFlows indicates an expected call of InstallGatewayFlows
-func (mr *MockClientMockRecorder) InstallGatewayFlows(arg0, arg1, arg2 interface{}) *gomock.Call {
+func (mr *MockClientMockRecorder) InstallGatewayFlows() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallGatewayFlows", reflect.TypeOf((*MockClient)(nil).InstallGatewayFlows), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallGatewayFlows", reflect.TypeOf((*MockClient)(nil).InstallGatewayFlows))
 }
 
 // InstallLoadBalancerServiceFromOutsideFlows mocks base method
@@ -336,31 +336,31 @@ func (mr *MockClientMockRecorder) InstallLoadBalancerServiceFromOutsideFlows(arg
 }
 
 // InstallNodeFlows mocks base method
-func (m *MockClient) InstallNodeFlows(arg0 string, arg1 net.HardwareAddr, arg2 map[*net.IPNet]net.IP, arg3 net.IP, arg4, arg5 uint32) error {
+func (m *MockClient) InstallNodeFlows(arg0 string, arg1 map[*net.IPNet]net.IP, arg2 net.IP, arg3 uint32) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "InstallNodeFlows", arg0, arg1, arg2, arg3, arg4, arg5)
+	ret := m.ctrl.Call(m, "InstallNodeFlows", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // InstallNodeFlows indicates an expected call of InstallNodeFlows
-func (mr *MockClientMockRecorder) InstallNodeFlows(arg0, arg1, arg2, arg3, arg4, arg5 interface{}) *gomock.Call {
+func (mr *MockClientMockRecorder) InstallNodeFlows(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallNodeFlows", reflect.TypeOf((*MockClient)(nil).InstallNodeFlows), arg0, arg1, arg2, arg3, arg4, arg5)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallNodeFlows", reflect.TypeOf((*MockClient)(nil).InstallNodeFlows), arg0, arg1, arg2, arg3)
 }
 
 // InstallPodFlows mocks base method
-func (m *MockClient) InstallPodFlows(arg0 string, arg1 []net.IP, arg2, arg3 net.HardwareAddr, arg4 uint32) error {
+func (m *MockClient) InstallPodFlows(arg0 string, arg1 []net.IP, arg2 net.HardwareAddr, arg3 uint32) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "InstallPodFlows", arg0, arg1, arg2, arg3, arg4)
+	ret := m.ctrl.Call(m, "InstallPodFlows", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // InstallPodFlows indicates an expected call of InstallPodFlows
-func (mr *MockClientMockRecorder) InstallPodFlows(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
+func (mr *MockClientMockRecorder) InstallPodFlows(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallPodFlows", reflect.TypeOf((*MockClient)(nil).InstallPodFlows), arg0, arg1, arg2, arg3, arg4)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallPodFlows", reflect.TypeOf((*MockClient)(nil).InstallPodFlows), arg0, arg1, arg2, arg3)
 }
 
 // InstallPolicyRuleFlows mocks base method
@@ -565,6 +565,20 @@ func (m *MockClient) UninstallEndpointFlows(arg0 openflow.Protocol, arg1 proxy.E
 func (mr *MockClientMockRecorder) UninstallEndpointFlows(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UninstallEndpointFlows", reflect.TypeOf((*MockClient)(nil).UninstallEndpointFlows), arg0, arg1)
+}
+
+// UninstallLoadBalancerServiceFromOutsideFlows mocks base method
+func (m *MockClient) UninstallLoadBalancerServiceFromOutsideFlows(arg0 net.IP, arg1 uint16, arg2 openflow.Protocol) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UninstallLoadBalancerServiceFromOutsideFlows", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UninstallLoadBalancerServiceFromOutsideFlows indicates an expected call of UninstallLoadBalancerServiceFromOutsideFlows
+func (mr *MockClientMockRecorder) UninstallLoadBalancerServiceFromOutsideFlows(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UninstallLoadBalancerServiceFromOutsideFlows", reflect.TypeOf((*MockClient)(nil).UninstallLoadBalancerServiceFromOutsideFlows), arg0, arg1, arg2)
 }
 
 // UninstallNodeFlows mocks base method

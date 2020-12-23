@@ -39,27 +39,22 @@ type Client interface {
 	// be called to ensure that the set of OVS flows is correct. All flows programmed in the
 	// switch which match the current round number will be deleted before any new flow is
 	// installed.
-	Initialize(roundInfo types.RoundInfo, config *config.NodeConfig, encapMode config.TrafficEncapModeType, gatewayOFPort uint32) (<-chan struct{}, error)
+	Initialize(roundInfo types.RoundInfo, config *config.NodeConfig, encapMode config.TrafficEncapModeType) (<-chan struct{}, error)
 
 	// InstallGatewayFlows sets up flows related to an OVS gateway port, the gateway must exist.
-	InstallGatewayFlows(gatewayAddrs []net.IP, gatewayMAC net.HardwareAddr, gatewayOFPort uint32) error
-
-	// InstallBridgeUplinkFlows installs Openflow flows between bridge local port and uplink port to support
-	// host networking.
-	// This function is only used for Windows platform.
-	InstallBridgeUplinkFlows(uplinkPort uint32, bridgeLocalPort uint32) error
+	InstallGatewayFlows() error
 
 	// InstallClusterServiceCIDRFlows sets up the appropriate flows so that traffic can reach
 	// the different Services running in the Cluster. This method needs to be invoked once with
 	// the Cluster Service CIDR as a parameter.
-	InstallClusterServiceCIDRFlows(serviceNets []*net.IPNet, gatewayOFPort uint32) error
+	InstallClusterServiceCIDRFlows(serviceNets []*net.IPNet) error
 
 	// InstallClusterServiceFlows sets up the appropriate flows so that traffic can reach
 	// the different Services running in the Cluster. This method needs to be invoked once.
-	InstallClusterServiceFlows(useIPv4, useIPv6 bool) error
+	InstallClusterServiceFlows() error
 
 	// InstallDefaultTunnelFlows sets up the classification flow for the default (flow based) tunnel.
-	InstallDefaultTunnelFlows(tunnelOFPort uint32) error
+	InstallDefaultTunnelFlows() error
 
 	// InstallNodeFlows should be invoked when a connection to a remote Node is going to be set
 	// up. The hostname is used to identify the added flows. When IPSec tunnel is enabled,
@@ -71,10 +66,9 @@ type Client interface {
 	// are all for different hostnames.
 	InstallNodeFlows(
 		hostname string,
-		localGatewayMAC net.HardwareAddr,
 		peerConfigs map[*net.IPNet]net.IP,
 		tunnelPeerIP net.IP,
-		tunOFPort, ipsecTunOFPort uint32) error
+		ipsecTunOFPort uint32) error
 
 	// UninstallNodeFlows removes the connection to the remote Node specified with the
 	// hostname. UninstallNodeFlows will do nothing if no connection to the host was established.
@@ -86,7 +80,7 @@ type Client interface {
 	// flows will be installed). Calls to InstallPodFlows are idempotent. Concurrent calls
 	// to InstallPodFlows and / or UninstallPodFlows are supported as long as they are all
 	// for different interfaceNames.
-	InstallPodFlows(interfaceName string, podInterfaceIPs []net.IP, podInterfaceMAC, gatewayMAC net.HardwareAddr, ofPort uint32) error
+	InstallPodFlows(interfaceName string, podInterfaceIPs []net.IP, podInterfaceMAC net.HardwareAddr, ofPort uint32) error
 
 	// UninstallPodFlows removes the connection to the local Pod specified with the
 	// interfaceName. UninstallPodFlows will do nothing if no connection to the Pod was established.
@@ -121,6 +115,8 @@ type Client interface {
 	// kube-proxy will handle the traffic.
 	// This function is only used for Windows platform.
 	InstallLoadBalancerServiceFromOutsideFlows(svcIP net.IP, svcPort uint16, protocol binding.Protocol) error
+	// UninstallLoadBalancerServiceFromOutsideFlows removes flows installed by InstallLoadBalancerServiceFromOutsideFlows.
+	UninstallLoadBalancerServiceFromOutsideFlows(svcIP net.IP, svcPort uint16, protocol binding.Protocol) error
 
 	// GetFlowTableStatus should return an array of flow table status, all existing flow tables should be included in the list.
 	GetFlowTableStatus() []binding.TableStatus
@@ -147,11 +143,16 @@ type Client interface {
 	// are removed from PolicyRule.From, else from PolicyRule.To.
 	DeletePolicyRuleAddress(ruleID uint32, addrType types.AddressType, addresses []types.Address, priority *uint16) error
 
+	// InstallBridgeUplinkFlows installs Openflow flows between bridge local port and uplink port to support
+	// host networking.
+	// This function is only used for Windows platform.
+	InstallBridgeUplinkFlows() error
+
 	// InstallExternalFlows sets up flows to enable Pods to communicate to the external IP addresses. The corresponding
 	// OpenFlow entries include: 1) identify the packets from local Pods to the external IP address, 2) mark the traffic
 	// in the connection tracking context, and 3) SNAT the packets with Node IP.
 	// This function is only used for Windows platform.
-	InstallExternalFlows(nodeIP net.IP, localSubnet net.IPNet) error
+	InstallExternalFlows() error
 
 	// Disconnect disconnects the connection between client and OFSwitch.
 	Disconnect() error
@@ -290,14 +291,14 @@ func (c *client) deleteFlows(cache *flowCategoryCache, flowCacheKey string) erro
 }
 
 func (c *client) InstallNodeFlows(hostname string,
-	localGatewayMAC net.HardwareAddr,
 	peerConfigs map[*net.IPNet]net.IP,
 	tunnelPeerIP net.IP,
-	tunOFPort, ipsecTunOFPort uint32) error {
+	ipsecTunOFPort uint32) error {
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
 
 	var flows []binding.Flow
+	localGatewayMAC := c.nodeConfig.GatewayConfig.MAC
 
 	for peerPodCIDR, peerGatewayIP := range peerConfigs {
 		if peerGatewayIP.To4() != nil {
@@ -308,7 +309,7 @@ func (c *client) InstallNodeFlows(hostname string,
 		if c.encapMode.NeedsEncapToPeer(tunnelPeerIP, c.nodeConfig.NodeIPAddr) {
 			// tunnelPeerIP is the Node Internal Address. In a dual-stack setup, whether this address is an IPv4 address or an
 			// IPv6 one is decided by the address family of Node Internal Address.
-			flows = append(flows, c.l3FwdFlowToRemote(localGatewayMAC, *peerPodCIDR, tunnelPeerIP, tunOFPort, cookie.Node))
+			flows = append(flows, c.l3FwdFlowToRemote(localGatewayMAC, *peerPodCIDR, tunnelPeerIP, cookie.Node))
 		} else {
 			flows = append(flows, c.l3FwdFlowToRemoteViaGW(localGatewayMAC, *peerPodCIDR, cookie.Node))
 		}
@@ -330,13 +331,16 @@ func (c *client) UninstallNodeFlows(hostname string) error {
 	return c.deleteFlows(c.nodeFlowCache, hostname)
 }
 
-func (c *client) InstallPodFlows(interfaceName string, podInterfaceIPs []net.IP, podInterfaceMAC, gatewayMAC net.HardwareAddr, ofPort uint32) error {
+func (c *client) InstallPodFlows(interfaceName string, podInterfaceIPs []net.IP, podInterfaceMAC net.HardwareAddr, ofPort uint32) error {
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
+
+	localGatewayMAC := c.nodeConfig.GatewayConfig.MAC
 	flows := []binding.Flow{
 		c.podClassifierFlow(ofPort, cookie.Pod),
-		c.l2ForwardCalcFlow(podInterfaceMAC, ofPort, cookie.Pod),
+		c.l2ForwardCalcFlow(podInterfaceMAC, ofPort, false, cookie.Pod),
 	}
+
 	// Add support for IPv4 ARP responder.
 	podInterfaceIPv4 := util.GetIPv4Addr(podInterfaceIPs)
 	if podInterfaceIPv4 != nil {
@@ -345,7 +349,7 @@ func (c *client) InstallPodFlows(interfaceName string, podInterfaceIPs []net.IP,
 	// Add IP SpoofGuard flows for all validate IPs.
 	flows = append(flows, c.podIPSpoofGuardFlow(podInterfaceIPs, podInterfaceMAC, ofPort, cookie.Pod)...)
 	// Add L3 Routing flows to rewrite Pod's dst MAC for all validate IPs.
-	flows = append(flows, c.l3FwdFlowToPod(gatewayMAC, podInterfaceIPs, podInterfaceMAC, cookie.Pod)...)
+	flows = append(flows, c.l3FwdFlowToPod(localGatewayMAC, podInterfaceIPs, podInterfaceMAC, cookie.Pod)...)
 
 	if c.encapMode.IsNetworkPolicyOnly() {
 		// In policy-only mode, traffic to local Pod is routed based on destination IP.
@@ -462,23 +466,30 @@ func (c *client) InstallLoadBalancerServiceFromOutsideFlows(svcIP net.IP, svcPor
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
 	var flows []binding.Flow
-	flows = append(flows, c.loadBalancerServiceFromOutsideFlow(config.HostGatewayOFPort, svcIP, svcPort, protocol))
+	flows = append(flows, c.loadBalancerServiceFromOutsideFlow(svcIP, svcPort, protocol))
 	cacheKey := fmt.Sprintf("LoadBalancerService_%s_%d_%s", svcIP, svcPort, protocol)
 	return c.addFlows(c.serviceFlowCache, cacheKey, flows)
 }
 
-func (c *client) InstallClusterServiceFlows(useIPv4, useIPv6 bool) error {
+func (c *client) UninstallLoadBalancerServiceFromOutsideFlows(svcIP net.IP, svcPort uint16, protocol binding.Protocol) error {
+	c.replayMutex.RLock()
+	defer c.replayMutex.RUnlock()
+	cacheKey := fmt.Sprintf("LoadBalancerService_%s_%d_%s", svcIP, svcPort, protocol)
+	return c.deleteFlows(c.serviceFlowCache, cacheKey)
+}
+
+func (c *client) InstallClusterServiceFlows() error {
 	flows := []binding.Flow{
 		c.serviceNeedLBFlow(),
 		c.sessionAffinityReselectFlow(),
 		c.l2ForwardOutputServiceHairpinFlow(),
 	}
-	if useIPv4 {
+	if c.IsIPv4Enabled() {
 		flows = append(flows,
 			c.serviceHairpinResponseDNATFlow(binding.ProtocolIP),
 			c.serviceLBBypassFlow(binding.ProtocolIP))
 	}
-	if useIPv6 {
+	if c.IsIPv6Enabled() {
 		flows = append(flows,
 			c.serviceHairpinResponseDNATFlow(binding.ProtocolIPv6),
 			c.serviceLBBypassFlow(binding.ProtocolIPv6))
@@ -490,8 +501,8 @@ func (c *client) InstallClusterServiceFlows(useIPv4, useIPv6 bool) error {
 	return nil
 }
 
-func (c *client) InstallClusterServiceCIDRFlows(serviceNets []*net.IPNet, gatewayOFPort uint32) error {
-	flows := c.serviceCIDRDNATFlows(serviceNets, gatewayOFPort)
+func (c *client) InstallClusterServiceCIDRFlows(serviceNets []*net.IPNet) error {
+	flows := c.serviceCIDRDNATFlows(serviceNets)
 	if err := c.ofEntryOperations.AddAll(flows); err != nil {
 		return err
 	}
@@ -499,24 +510,31 @@ func (c *client) InstallClusterServiceCIDRFlows(serviceNets []*net.IPNet, gatewa
 	return nil
 }
 
-func (c *client) InstallGatewayFlows(gatewayAddrs []net.IP, gatewayMAC net.HardwareAddr, gatewayOFPort uint32) error {
+func (c *client) InstallGatewayFlows() error {
+	gatewayConfig := c.nodeConfig.GatewayConfig
+	gatewayIPs := []net.IP{}
+
 	flows := []binding.Flow{
-		c.gatewayClassifierFlow(gatewayOFPort, cookie.Default),
-		c.l2ForwardCalcFlow(gatewayMAC, gatewayOFPort, cookie.Default),
+		c.gatewayClassifierFlow(cookie.Default),
+		c.l2ForwardCalcFlow(gatewayConfig.MAC, config.HostGatewayOFPort, true, cookie.Default),
 	}
-	flows = append(flows, c.gatewayIPSpoofGuardFlows(gatewayOFPort, cookie.Default)...)
+	flows = append(flows, c.gatewayIPSpoofGuardFlows(cookie.Default)...)
 
 	// Add ARP SpoofGuard flow for local gateway interface.
-	gwIPv4 := util.GetIPv4Addr(gatewayAddrs)
-	if gwIPv4 != nil {
-		flows = append(flows, c.gatewayARPSpoofGuardFlow(gatewayOFPort, gwIPv4, gatewayMAC, cookie.Default))
+	if gatewayConfig.IPv4 != nil {
+		gatewayIPs = append(gatewayIPs, gatewayConfig.IPv4)
+		flows = append(flows, c.gatewayARPSpoofGuardFlow(gatewayConfig.IPv4, gatewayConfig.MAC, cookie.Default))
 	}
+	if gatewayConfig.IPv6 != nil {
+		gatewayIPs = append(gatewayIPs, gatewayConfig.IPv6)
+	}
+
 	// Add flow to ensure the liveness check packet could be forwarded correctly.
-	flows = append(flows, c.localProbeFlow(gatewayAddrs, cookie.Default)...)
-	flows = append(flows, c.ctRewriteDstMACFlows(gatewayMAC, cookie.Default)...)
+	flows = append(flows, c.localProbeFlow(gatewayIPs, cookie.Default)...)
+	flows = append(flows, c.ctRewriteDstMACFlows(gatewayConfig.MAC, cookie.Default)...)
 	// In NoEncap , no traffic from tunnel port
 	if c.encapMode.SupportsEncap() {
-		flows = append(flows, c.l3FwdFlowToGateway(gatewayAddrs, gatewayMAC, cookie.Default)...)
+		flows = append(flows, c.l3FwdFlowToGateway(gatewayIPs, gatewayConfig.MAC, cookie.Default)...)
 	}
 
 	if err := c.ofEntryOperations.AddAll(flows); err != nil {
@@ -526,17 +544,20 @@ func (c *client) InstallGatewayFlows(gatewayAddrs []net.IP, gatewayMAC net.Hardw
 	return nil
 }
 
-func (c *client) InstallDefaultTunnelFlows(tunnelOFPort uint32) error {
-	flow := c.tunnelClassifierFlow(tunnelOFPort, cookie.Default)
-	if err := c.ofEntryOperations.Add(flow); err != nil {
+func (c *client) InstallDefaultTunnelFlows() error {
+	flows := []binding.Flow{
+		c.tunnelClassifierFlow(config.DefaultTunOFPort, cookie.Default),
+		c.l2ForwardCalcFlow(globalVirtualMAC, config.DefaultTunOFPort, true, cookie.Default),
+	}
+	if err := c.ofEntryOperations.AddAll(flows); err != nil {
 		return err
 	}
-	c.defaultTunnelFlows = []binding.Flow{flow}
+	c.defaultTunnelFlows = flows
 	return nil
 }
 
-func (c *client) InstallBridgeUplinkFlows(uplinkPort uint32, bridgeLocalPort uint32) error {
-	flows := c.hostBridgeUplinkFlows(uplinkPort, bridgeLocalPort, *c.nodeConfig.PodIPv4CIDR, cookie.Default)
+func (c *client) InstallBridgeUplinkFlows() error {
+	flows := c.hostBridgeUplinkFlows(*c.nodeConfig.PodIPv4CIDR, cookie.Default)
 	c.hostNetworkingFlows = flows
 	if err := c.ofEntryOperations.AddAll(flows); err != nil {
 		return err
@@ -555,6 +576,9 @@ func (c *client) initialize() error {
 	if err := c.ofEntryOperations.AddAll(c.ipv6Flows(cookie.Default)); err != nil {
 		return fmt.Errorf("failed to install ipv6 flows: %v", err)
 	}
+	if err := c.ofEntryOperations.AddAll(c.decTTLFlows(cookie.Default)); err != nil {
+		return fmt.Errorf("failed to install dec TTL flow on source Node: %v", err)
+	}
 	if err := c.ofEntryOperations.AddAll(c.l2ForwardOutputFlows(cookie.Default)); err != nil {
 		return fmt.Errorf("failed to install L2 forward output flows: %v", err)
 	}
@@ -572,15 +596,14 @@ func (c *client) initialize() error {
 	return nil
 }
 
-func (c *client) Initialize(roundInfo types.RoundInfo, nodeConfig *config.NodeConfig, encapMode config.TrafficEncapModeType, gatewayOFPort uint32) (<-chan struct{}, error) {
+func (c *client) Initialize(roundInfo types.RoundInfo, nodeConfig *config.NodeConfig, encapMode config.TrafficEncapModeType) (<-chan struct{}, error) {
 	c.nodeConfig = nodeConfig
 	c.encapMode = encapMode
-	c.gatewayPort = gatewayOFPort
 
-	if c.nodeConfig.PodIPv4CIDR != nil {
+	if config.IsIPv4Enabled(nodeConfig, encapMode) {
 		c.ipProtocols = append(c.ipProtocols, binding.ProtocolIP)
 	}
-	if c.nodeConfig.PodIPv6CIDR != nil {
+	if config.IsIPv6Enabled(nodeConfig, encapMode) {
 		c.ipProtocols = append(c.ipProtocols, binding.ProtocolIPv6)
 	}
 
@@ -607,9 +630,11 @@ func (c *client) Initialize(roundInfo types.RoundInfo, nodeConfig *config.NodeCo
 	return connCh, c.initialize()
 }
 
-func (c *client) InstallExternalFlows(nodeIP net.IP, localSubnet net.IPNet) error {
-	flows := c.uplinkSNATFlows(config.BridgeOFPort, cookie.SNAT)
-	flows = append(flows, c.snatFlows(nodeIP, localSubnet, cookie.SNAT)...)
+func (c *client) InstallExternalFlows() error {
+	nodeIP := c.nodeConfig.NodeIPAddr.IP
+	podSubnet := c.nodeConfig.PodIPv4CIDR
+	flows := c.uplinkSNATFlows(cookie.SNAT)
+	flows = append(flows, c.snatFlows(nodeIP, *podSubnet, cookie.SNAT)...)
 	if err := c.ofEntryOperations.AddAll(flows); err != nil {
 		return fmt.Errorf("failed to install flows for external communication: %v", err)
 	}
@@ -687,12 +712,11 @@ func (c *client) DeleteStaleFlows() error {
 func (c *client) setupPolicyOnlyFlows() error {
 	// Rewrites MAC to gw port if the packet received is unmatched by local Pod flows.
 	flows := c.l3FwdFlowRouteToGW(c.nodeConfig.GatewayConfig.MAC, cookie.Default)
-	if c.IsIPv4Enabled() {
-		flows = append(flows,
-			// Replies any ARP request with the same global virtual MAC.
-			c.arpResponderStaticFlow(cookie.Default),
-		)
-	}
+	// If IPv6 is enabled, this flow will never get hit.
+	flows = append(flows,
+		// Replies any ARP request with the same global virtual MAC.
+		c.arpResponderStaticFlow(cookie.Default),
+	)
 	if err := c.ofEntryOperations.AddAll(flows); err != nil {
 		return fmt.Errorf("failed to setup policy-only flows: %w", err)
 	}
@@ -753,7 +777,7 @@ func (c *client) SendTraceflowPacket(
 	case 6:
 		packetOutBuilder = packetOutBuilder.SetIPProtocol(binding.ProtocolTCP)
 		if TCPSrcPort == 0 {
-			// #nosec G404: random number generator not used for security purposes
+			// #nosec G404: random number generator not used for security purposes.
 			TCPSrcPort = uint16(rand.Uint32())
 		}
 		packetOutBuilder = packetOutBuilder.SetTCPSrcPort(TCPSrcPort)
@@ -786,7 +810,7 @@ func (c *client) InstallTraceflowFlows(dataplaneTag uint8) error {
 	}
 	c.conjMatchFlowLock.Lock()
 	defer c.conjMatchFlowLock.Unlock()
-	// Copy default drop rules
+	// Copy default drop rules.
 	for _, ctx := range c.globalConjMatchFlowCache {
 		if ctx.dropFlow != nil {
 			copyFlowBuilder := ctx.dropFlow.CopyToBuilder(priorityNormal+2, false)
@@ -800,16 +824,27 @@ func (c *client) InstallTraceflowFlows(dataplaneTag uint8) error {
 					Done())
 		}
 	}
-	// Copy Antrea NetworkPolicy drop rules
+	// Copy Antrea NetworkPolicy drop rules.
 	for _, conj := range c.policyCache.List() {
 		for _, flow := range conj.(*policyRuleConjunction).metricFlows {
 			if flow.IsDropFlow() {
+				copyFlowBuilder := flow.CopyToBuilder(priorityNormal+2, false)
+				// Generate both IPv4 and IPv6 flows if the original drop flow doesn't match IP/IPv6.
+				// DSCP field is in IP/IPv6 headers so IP/IPv6 match is required in a flow.
+				if flow.FlowProtocol() == "" {
+					copyFlowBuilderIPv6 := flow.CopyToBuilder(priorityNormal+2, false)
+					copyFlowBuilderIPv6 = copyFlowBuilderIPv6.MatchProtocol(binding.ProtocolIPv6)
+					flows = append(
+						flows, copyFlowBuilderIPv6.MatchIPDscp(dataplaneTag).
+							SetHardTimeout(300).
+							Action().SendToController(uint8(PacketInReasonTF)).
+							Done())
+					copyFlowBuilder = copyFlowBuilder.MatchProtocol(binding.ProtocolIP)
+				}
 				flows = append(
-					flows,
-					flow.CopyToBuilder(priorityNormal+2, false).
-						MatchIPDscp(dataplaneTag).
+					flows, copyFlowBuilder.MatchIPDscp(dataplaneTag).
 						SetHardTimeout(300).
-						Action().SendToController(1).
+						Action().SendToController(uint8(PacketInReasonTF)).
 						Done())
 			}
 		}
@@ -825,9 +860,9 @@ func (c *client) InitialTLVMap() error {
 }
 
 func (c *client) IsIPv4Enabled() bool {
-	return c.nodeConfig.PodIPv4CIDR != nil
+	return config.IsIPv4Enabled(c.nodeConfig, c.encapMode)
 }
 
 func (c *client) IsIPv6Enabled() bool {
-	return c.nodeConfig.PodIPv6CIDR != nil
+	return config.IsIPv6Enabled(c.nodeConfig, c.encapMode)
 }

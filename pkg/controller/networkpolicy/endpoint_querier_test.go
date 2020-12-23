@@ -157,8 +157,8 @@ func makeControllerAndEndpointQuerier(objects ...runtime.Object) *endpointQuerie
 	// start informers and run controller
 	c.informerFactory.Start(stopCh)
 	go c.Run(stopCh)
-	// wait until computation is done, we assume it is done when no signal has been received on heartbeat channel for 500ms
-	idleTimeout := 500 * time.Millisecond
+	// wait until computation is done, we assume it is done when no signal has been received on heartbeat channel for 3s.
+	idleTimeout := 3 * time.Second
 	timer := time.NewTimer(idleTimeout)
 	func() {
 		for {

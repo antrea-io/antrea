@@ -154,10 +154,11 @@ message NetworkPolicy {
   repeated NetworkPolicyRule rules = 2;
 
   // AppliedToGroups is a list of names of AppliedToGroups to which this policy applies.
+  // Cannot be set in conjunction with any NetworkPolicyRule.AppliedToGroups in Rules.
   repeated string appliedToGroups = 3;
 
   // Priority represents the relative priority of this Network Policy as compared to
-  // other Network Policies. Priority will be unset (nil) for K8s Network Policy.
+  // other Network Policies. Priority will be unset (nil) for K8s NetworkPolicy.
   optional double priority = 4;
 
   // TierPriority represents the priority of the Tier associated with this Network
@@ -236,6 +237,11 @@ message NetworkPolicyRule {
 
   // EnableLogging indicates whether or not to generate logs when rules are matched. Default to false.
   optional bool enableLogging = 7;
+
+  // AppliedToGroups is a list of names of AppliedToGroups to which this rule applies.
+  // Cannot be set in conjunction with NetworkPolicy.AppliedToGroups of the NetworkPolicy
+  // that this Rule is referred to.
+  repeated string appliedToGroups = 8;
 }
 
 // NetworkPolicyStats contains the information and traffic stats of a NetworkPolicy.
@@ -289,5 +295,10 @@ message Service {
   // The port name or number on the given protocol. If not specified, this matches all port numbers.
   // +optional
   optional k8s.io.apimachinery.pkg.util.intstr.IntOrString port = 2;
+
+  // EndPort defines the end of the port range, being the end included within the range.
+  // It can only be specified when a numerical `port` is specified.
+  // +optional
+  optional int32 endPort = 3;
 }
 

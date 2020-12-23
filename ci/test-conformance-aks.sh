@@ -22,12 +22,15 @@ function echoerr {
 
 REGION="westus"
 RESOURCE_GROUP="antrea-ci-rg"
+SSH_KEY_PATH="$HOME/.ssh/id_rsa.pub"
+SSH_PRIVATE_KEY_PATH="$HOME/.ssh/id_rsa"
 RUN_ALL=true
 RUN_SETUP_ONLY=false
 RUN_CLEANUP_ONLY=false
 KUBECONFIG_PATH="$HOME/jenkins/out/aks"
 TEST_FAILURE=false
 MODE="report"
+KUBE_CONFORMANCE_IMAGE_VERSION=v1.18.5
 
 _usage="Usage: $0 [--cluster-name <AKSClusterNameToUse>] [--kubeconfig <KubeconfigSavePath>] [--k8s-version <ClusterVersion>]\
                   [--azure-app-id <AppID>] [--azure-tenant-id <TenantID>] [--azure-password <Password>] \
@@ -117,12 +120,19 @@ function setup_aks() {
 
     # Save the cluster information for cleanup on Jenkins environment
     echo "CLUSTERNAME=${CLUSTER}" > ${GIT_CHECKOUT_DIR}/ci_properties.txt
+    if [[ -n ${ANTREA_GIT_REVISION+x} ]]; then
+        echo "ANTREA_REPO=${ANTREA_REPO}" > ${GIT_CHECKOUT_DIR}/ci_properties.txt
+        echo "ANTREA_GIT_REVISION=${ANTREA_GIT_REVISION}" > ${GIT_CHECKOUT_DIR}/ci_properties.txt
+    fi
 
     echo "=== Using the following az cli version ==="
     az --version
 
     echo "=== Logging into Azure Cloud ==="
     az login --service-principal --username ${AZURE_APP_ID} --password ${AZURE_PASSWORD} --tenant ${AZURE_TENANT_ID}
+    # enable the 'Node Public IP' preview feature
+    az feature register --name NodePublicIPPreview --namespace Microsoft.ContainerService
+    az provider register -n Microsoft.ContainerService
 
     printf "\n"
     echo "=== Using the following kubectl ==="
@@ -136,10 +146,17 @@ function setup_aks() {
     fi
 
     echo '=== Creating a cluster in AKS ==='
+    # enable-node-public-ip is a preview feature and may be changed/removed in a future release. For more details, see
+    # https://docs.microsoft.com/en-us/azure/aks/use-multiple-node-pools#assign-a-public-ip-per-node-for-your-node-pools-preview
+    # without public node ip, ssh into worker nodes in the AKS cluster can only be done through a `jump` pod deployed
+    # in the cluster, which is very tedious and makes loading Antrea tarball into Nodes challenging.
+    # https://docs.microsoft.com/en-us/azure/aks/ssh
     az aks create \
         --resource-group ${RESOURCE_GROUP} \
         --name ${CLUSTER} \
         --node-count 2 \
+        --enable-node-public-ip \
+        --ssh-key-value ${SSH_KEY_PATH} \
         --network-plugin azure \
         --kubernetes-version ${K8S_VERSION} \
         --service-principal ${AZURE_APP_ID} \
@@ -164,6 +181,55 @@ function setup_aks() {
 }
 
 function deliver_antrea_to_aks() {
+    echo "====== Building Antrea for the Following Commit ======"
+    git show --numstat
+
+    export GO111MODULE=on
+    export GOROOT=/usr/local/go
+    export PATH=${GOROOT}/bin:$PATH
+
+    if [[ -z ${GIT_CHECKOUT_DIR+x} ]]; then
+        GIT_CHECKOUT_DIR=..
+    fi
+    make clean -C ${GIT_CHECKOUT_DIR}
+    if [[ -n ${JOB_NAME+x} ]]; then
+        docker images | grep "${JOB_NAME}" | awk '{print $3}' | xargs -r docker rmi -f || true > /dev/null
+    fi
+    # Clean up dangling images generated in previous builds. Recent ones must be excluded
+    # because they might be being used in other builds running simultaneously.
+    docker image prune -f --filter "until=2h" || true > /dev/null
+
+    cd ${GIT_CHECKOUT_DIR}
+    VERSION="$CLUSTER" make
+    if [[ "$?" -ne "0" ]]; then
+        echo "=== Antrea Image build failed ==="
+        exit 1
+    fi
+
+    echo "=== Loading the Antrea image to each Node ==="
+
+    antrea_image="antrea-ubuntu"
+    DOCKER_IMG_VERSION=${CLUSTER}
+    DOCKER_IMG_NAME="projects.registry.vmware.com/antrea/antrea-ubuntu"
+    docker save -o ${antrea_image}.tar ${DOCKER_IMG_NAME}:${DOCKER_IMG_VERSION}
+
+    CLUSTER_RESOURCE_GROUP=$(az aks show --resource-group ${RESOURCE_GROUP} --name ${CLUSTER} --query nodeResourceGroup -o tsv)
+    SCALE_SET_NAME=$(az vmss list --resource-group ${CLUSTER_RESOURCE_GROUP} --query [0].name -o tsv)
+    NODE_IPS=$(az vmss list-instance-public-ips --resource-group ${CLUSTER_RESOURCE_GROUP}  --name ${SCALE_SET_NAME} | grep ipAddress | awk -F'"' '{print $4}')
+
+    NETWORK_NSG=$(az network nsg list -g ${CLUSTER_RESOURCE_GROUP} -o table | grep ${CLUSTER_RESOURCE_GROUP} | awk -F' ' '{print $2}')
+    # Create a firewall rule to allow ssh access into the worker node through public IPs
+    az network nsg rule create -g ${CLUSTER_RESOURCE_GROUP} --nsg-name ${NETWORK_NSG} -n SshRule --priority 100 \
+        --source-address-prefixes Internet --destination-port-ranges 22 --access Allow --protocol Tcp --direction Inbound
+    # Wait for the rule to take effect
+    sleep 30
+
+    for IP in ${NODE_IPS}; do
+        scp -o StrictHostKeyChecking=no -i ${SSH_PRIVATE_KEY_PATH} ${antrea_image}.tar azureuser@${IP}:~
+        ssh -o StrictHostKeyChecking=no -i ${SSH_PRIVATE_KEY_PATH} -n azureuser@${IP} "sudo docker load -i ~/${antrea_image}.tar ; sudo docker tag ${DOCKER_IMG_NAME}:${DOCKER_IMG_VERSION} ${DOCKER_IMG_NAME}:latest"
+    done
+    rm ${antrea_image}.tar
+
     echo "=== Configuring Antrea for AKS cluster ==="
 
     if [[ -z ${GIT_CHECKOUT_DIR+x} ]]; then
@@ -176,7 +242,7 @@ function deliver_antrea_to_aks() {
     kubectl rollout status --timeout=2m deployment.apps/antrea-controller -n kube-system
     kubectl rollout status --timeout=2m daemonset/antrea-agent -n kube-system
 
-  # Restart all Pods in all Namespaces (kube-system, etc) so they can be managed by Antrea.
+    # Restart all Pods in all Namespaces (kube-system, etc) so they can be managed by Antrea.
     kubectl delete pods -n kube-system $(kubectl get pods -n kube-system -o custom-columns=NAME:.metadata.name,HOSTNETWORK:.spec.hostNetwork \
                         --no-headers=true | grep '<none>' | awk '{ print $1 }')
     kubectl rollout status --timeout=2m deployment.apps/coredns -n kube-system
@@ -189,6 +255,7 @@ function deliver_antrea_to_aks() {
 function run_conformance() {
     echo "=== Running Antrea Conformance and Network Policy Tests ==="
     ${GIT_CHECKOUT_DIR}/ci/run-k8s-e2e-tests.sh --e2e-conformance --e2e-network-policy \
+      --kube-conformance-image-version ${KUBE_CONFORMANCE_IMAGE_VERSION} \
       --log-mode ${MODE} > ${GIT_CHECKOUT_DIR}/aks-test.log
 
     if grep -Fxq "Failed tests:" ${GIT_CHECKOUT_DIR}/aks-test.log

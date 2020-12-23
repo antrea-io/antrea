@@ -26,7 +26,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
 	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
 	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
-	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsctl"
+	thirdpartynp "github.com/vmware-tanzu/antrea/third_party/networkpolicy"
 )
 
 var (
@@ -47,6 +47,11 @@ var (
 	MatchSCTPDstPort   = types.NewMatchKey(binding.ProtocolSCTP, types.L4PortAddr, "tp_dst")
 	MatchSCTPv6DstPort = types.NewMatchKey(binding.ProtocolSCTPv6, types.L4PortAddr, "tp_dst")
 	Unsupported        = types.NewMatchKey(binding.ProtocolIP, types.UnSupported, "unknown")
+
+	// metricFlowIdentifier is used to identify metric flows in metric table.
+	// There could be other flows like default flow and Traceflow flows in the table. Only metric flows are supposed to
+	// have normal priority.
+	metricFlowIdentifier = fmt.Sprintf("priority=%d,", priorityNormal)
 )
 
 // IP address calculated from Pod's address.
@@ -208,8 +213,16 @@ func (m *conjunctiveMatch) generateGlobalMapKey() string {
 		}
 	case net.IPNet:
 		valueStr = v.String()
+	case types.BitRange:
+		bitRange := m.matchValue.(types.BitRange)
+		if bitRange.Mask != nil {
+			valueStr = fmt.Sprintf("%d/%d", bitRange.Value, *bitRange.Mask)
+		} else {
+			// To normalize the key, set full mask while a single port is provided.
+			valueStr = fmt.Sprintf("%d/65535", bitRange.Value)
+		}
 	default:
-		// The default cases include the matchValue is a Service port or an ofport Number.
+		// The default cases include the matchValue is an ofport Number.
 		valueStr = fmt.Sprintf("%s", m.matchValue)
 	}
 	if m.priority == nil {
@@ -612,24 +625,56 @@ func getServiceMatchType(protocol *v1beta2.Protocol, ipv4Enabled, ipv6Enabled bo
 	return matchKeys
 }
 
-func (c *clause) generateServicePortConjMatches(port v1beta2.Service, priority *uint16, ipv4Enabled, ipv6Enabled bool) []*conjunctiveMatch {
-	matchKeys := getServiceMatchType(port.Protocol, ipv4Enabled, ipv6Enabled)
-	// Match all ports with the given protocol type if the matchValue is not specified (value is 0).
-	matchValue := uint16(0)
-	if port.Port != nil {
-		matchValue = uint16(port.Port.IntVal)
-	}
+func (c *clause) generateServicePortConjMatches(service v1beta2.Service, priority *uint16, ipv4Enabled, ipv6Enabled bool) []*conjunctiveMatch {
+	matchKeys := getServiceMatchType(service.Protocol, ipv4Enabled, ipv6Enabled)
+	ovsBitRanges := c.serviceToBitRanges(service)
 	var matches []*conjunctiveMatch
 	for _, matchKey := range matchKeys {
-		matches = append(matches,
-			&conjunctiveMatch{
-				tableID:    c.ruleTable.GetID(),
-				matchKey:   matchKey,
-				matchValue: matchValue,
-				priority:   priority,
-			})
+		for _, ovsBitRange := range ovsBitRanges {
+			matches = append(matches,
+				&conjunctiveMatch{
+					tableID:    c.ruleTable.GetID(),
+					matchKey:   matchKey,
+					matchValue: ovsBitRange,
+					priority:   priority,
+				})
+		}
 	}
 	return matches
+}
+
+// serviceToBitRanges converts a Service to a list of BitRange.
+func (c *clause) serviceToBitRanges(service v1beta2.Service) []types.BitRange {
+	var ovsBitRanges []types.BitRange
+	// If `EndPort` is equal to `Port`, then treat it as single port case.
+	if service.EndPort != nil && *service.EndPort > service.Port.IntVal {
+		// Add several antrea range services based on a port range.
+		portRange := thirdpartynp.PortRange{Start: uint16(service.Port.IntVal), End: uint16(*service.EndPort)}
+		bitRanges, err := portRange.BitwiseMatch()
+		if err != nil {
+			klog.Errorf("Error when getting BitRanges from %v: %v", portRange, err)
+			return ovsBitRanges
+		}
+		for _, bitRange := range bitRanges {
+			curBitRange := bitRange
+			ovsBitRanges = append(ovsBitRanges, types.BitRange{
+				Value: curBitRange.Value,
+				Mask:  &curBitRange.Mask,
+			})
+		}
+	} else if service.Port != nil {
+		// Add single antrea service based on a single port.
+		ovsBitRanges = append(ovsBitRanges, types.BitRange{
+			Value: uint16(service.Port.IntVal),
+		})
+	} else {
+		// Match all ports with the given protocol type if `Port` and `EndPort` are not
+		// specified (value is 0).
+		ovsBitRanges = append(ovsBitRanges, types.BitRange{
+			Value: uint16(0),
+		})
+	}
+	return ovsBitRanges
 }
 
 // addAddrFlows translates the specified addresses to conjunctiveMatchFlows, and returns the corresponding changes on the
@@ -1395,33 +1440,29 @@ func (c *client) ReassignFlowPriorities(updates map[uint16]uint16, table binding
 	return nil
 }
 
-func parseDropFlow(flow string) (uint32, types.RuleMetric) {
-	// example format:
-	// table=101, n_packets=9, n_bytes=666, priority=200,ip,reg0=0x100000/0x100000,reg3=0x5 actions=drop
-	segs := strings.Split(flow, ",")
+func parseDropFlow(flowMap map[string]string) (uint32, types.RuleMetric) {
 	m := types.RuleMetric{}
-	pkts, _ := strconv.ParseUint(segs[1][strings.Index(segs[1], "=")+1:], 10, 64)
+	pkts, _ := strconv.ParseUint(flowMap["n_packets"], 10, 64)
 	m.Packets = pkts
 	m.Sessions = pkts
-	bytes, _ := strconv.ParseUint(segs[2][strings.Index(segs[2], "=")+1:], 10, 64)
+	bytes, _ := strconv.ParseUint(flowMap["n_bytes"], 10, 64)
 	m.Bytes = bytes
-	id, _ := strconv.ParseUint(segs[6][strings.Index(segs[6], "0x")+2:strings.Index(segs[6], " ")], 16, 64)
+	reg3 := flowMap["reg3"]
+	id, _ := strconv.ParseUint(reg3[:strings.Index(reg3, " ")], 0, 64)
 	return uint32(id), m
 }
 
-func parseAllowFlow(flow string) (uint32, types.RuleMetric) {
-	// example format:
-	// table=101, n_packets=0, n_bytes=0, priority=200,ct_state=-new,ct_label=0x1/0xffffffff,ip actions=goto_table:105
-	segs := strings.Split(flow, ",")
+func parseAllowFlow(flowMap map[string]string) (uint32, types.RuleMetric) {
 	m := types.RuleMetric{}
-	pkts, _ := strconv.ParseUint(segs[1][strings.Index(segs[1], "=")+1:], 10, 64)
+	pkts, _ := strconv.ParseUint(flowMap["n_packets"], 10, 64)
 	m.Packets = pkts
-	if strings.Contains(segs[4], "+") { // ct_state=+new
+	if strings.Contains(flowMap["ct_state"], "+") { // ct_state=+new
 		m.Sessions = pkts
 	}
-	bytes, _ := strconv.ParseUint(segs[2][strings.Index(segs[2], "=")+1:], 10, 64)
+	bytes, _ := strconv.ParseUint(flowMap["n_bytes"], 10, 64)
 	m.Bytes = bytes
-	idRaw := segs[5][strings.Index(segs[5], "0x")+2 : strings.Index(segs[5], "/")]
+	ct_label := flowMap["ct_label"]
+	idRaw := ct_label[strings.Index(ct_label, "0x")+2 : strings.Index(ct_label, "/")]
 	if len(idRaw) > 8 { // only 32 bits are valid.
 		idRaw = idRaw[:len(idRaw)-8]
 	}
@@ -1429,23 +1470,42 @@ func parseAllowFlow(flow string) (uint32, types.RuleMetric) {
 	return uint32(id), m
 }
 
+func parseFlowToMap(flow string) map[string]string {
+	split := strings.Split(flow, ",")
+	flowMap := make(map[string]string)
+	for _, seg := range split {
+		equalIndex := strings.Index(seg, "=")
+		// Some substrings spilt by "," may have no "=", for instance, if "resubmit(,70)" is present.
+		if equalIndex == -1 {
+			continue
+		}
+		flowMap[strings.TrimSpace(seg[:equalIndex])] = strings.TrimSpace(seg[equalIndex+1:])
+	}
+	return flowMap
+}
+
 func parseMetricFlow(flow string) (uint32, types.RuleMetric) {
 	dropIdentifier := "reg0"
-	if strings.Contains(flow, dropIdentifier) {
-		return parseDropFlow(flow)
+	flowMap := parseFlowToMap(flow)
+	// example allow flow format:
+	// table=101, n_packets=0, n_bytes=0, priority=200,ct_state=-new,ct_label=0x1/0xffffffff,ip actions=goto_table:105
+	// example drop flow format:
+	// table=101, n_packets=9, n_bytes=666, priority=200,reg0=0x100000/0x100000,reg3=0x5 actions=drop
+	if _, ok := flowMap[dropIdentifier]; ok {
+		return parseDropFlow(flowMap)
 	} else {
-		return parseAllowFlow(flow)
+		return parseAllowFlow(flowMap)
 	}
 }
 
 func (c *client) NetworkPolicyMetrics() map[uint32]*types.RuleMetric {
 	result := map[uint32]*types.RuleMetric{}
-	ovsctlClient := ovsctl.NewClient(c.nodeConfig.OVSBridge)
-	egressFlows, _ := ovsctlClient.DumpTableFlows(uint8(EgressMetricTable))
-	ingressFlows, _ := ovsctlClient.DumpTableFlows(uint8(IngressMetricTable))
+	egressFlows, _ := c.ovsctlClient.DumpTableFlows(uint8(EgressMetricTable))
+	ingressFlows, _ := c.ovsctlClient.DumpTableFlows(uint8(IngressMetricTable))
+
 	collectMetricsFromFlows := func(flows []string) {
 		for _, flow := range flows {
-			if strings.Contains(flow, "priority=0") {
+			if !strings.Contains(flow, metricFlowIdentifier) {
 				continue
 			}
 			ruleID, metric := parseMetricFlow(flow)

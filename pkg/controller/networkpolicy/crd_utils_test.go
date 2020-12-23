@@ -63,6 +63,23 @@ func TestToAntreaServicesForCRD(t *testing.T) {
 			},
 			expNamedPortExists: true,
 		},
+		{
+			ports: []secv1alpha1.NetworkPolicyPort{
+				{
+					Protocol: &k8sProtocolTCP,
+					Port:     &int1000,
+					EndPort:  &int32For1999,
+				},
+			},
+			expServices: []controlplane.Service{
+				{
+					Protocol: toAntreaProtocol(&k8sProtocolTCP),
+					Port:     &int1000,
+					EndPort:  &int32For1999,
+				},
+			},
+			expNamedPortExists: false,
+		},
 	}
 	for _, table := range tables {
 		services, namedPortExist := toAntreaServicesForCRD(table.ports)

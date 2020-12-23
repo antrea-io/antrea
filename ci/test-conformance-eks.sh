@@ -31,6 +31,7 @@ RUN_CLEANUP_ONLY=false
 KUBECONFIG_PATH="$HOME/jenkins/out/eks"
 MODE="report"
 TEST_FAILURE=false
+KUBE_CONFORMANCE_IMAGE_VERSION=v1.18.5
 
 _usage="Usage: $0 [--cluster-name <EKSClusterNameToUse>] [--kubeconfig <KubeconfigSavePath>] [--k8s-version <ClusterVersion>]\
                   [--aws-access-key <AccessKey>] [--aws-secret-key <SecretKey>] [--aws-region <Region>] [--ssh-key <SSHKey] \
@@ -124,6 +125,10 @@ function setup_eks() {
     echo "=== This cluster to be created is named: ${CLUSTER} ==="
     # Save the cluster information for cleanup on Jenkins environment
     echo "CLUSTERNAME=${CLUSTER}" > ${GIT_CHECKOUT_DIR}/ci_properties.txt
+    if [[ -n ${ANTREA_GIT_REVISION+x} ]]; then
+        echo "ANTREA_REPO=${ANTREA_REPO}" > ${GIT_CHECKOUT_DIR}/ci_properties.txt
+        echo "ANTREA_GIT_REVISION=${ANTREA_GIT_REVISION}" > ${GIT_CHECKOUT_DIR}/ci_properties.txt
+    fi
     echo "=== Using the following awscli version ==="
     aws --version
 
@@ -168,11 +173,42 @@ EOF
 }
 
 function deliver_antrea_to_eks() {
+    echo "====== Building Antrea for the Following Commit ======"
+    git show --numstat
+
+    export GO111MODULE=on
+    export GOROOT=/usr/local/go
+    export PATH=${GOROOT}/bin:$PATH
+
+    make clean -C ${GIT_CHECKOUT_DIR}
+    if [[ -n ${JOB_NAME+x} ]]; then
+        docker images | grep "${JOB_NAME}" | awk '{print $3}' | xargs -r docker rmi -f || true > /dev/null
+    fi
+    # Clean up dangling images generated in previous builds. Recent ones must be excluded
+    # because they might be being used in other builds running simultaneously.
+    docker image prune -f --filter "until=2h" || true > /dev/null
+
+    cd ${GIT_CHECKOUT_DIR}
+    VERSION="$CLUSTER" make
+    if [[ "$?" -ne "0" ]]; then
+        echo "=== Antrea Image build failed ==="
+        exit 1
+    fi
+
+    echo "=== Loading the Antrea image to each Node ==="
+    antrea_image="antrea-ubuntu"
+    DOCKER_IMG_VERSION=${CLUSTER}
+    DOCKER_IMG_NAME="projects.registry.vmware.com/antrea/antrea-ubuntu"
+    docker save -o ${antrea_image}.tar ${DOCKER_IMG_NAME}:${DOCKER_IMG_VERSION}
+
+    kubectl get nodes -o wide --no-headers=true | awk '{print $7}' | while read IP; do
+        scp -o StrictHostKeyChecking=no -i ${SSH_PRIVATE_KEY_PATH} ${antrea_image}.tar ec2-user@${IP}:~
+        ssh -o StrictHostKeyChecking=no -i ${SSH_PRIVATE_KEY_PATH} -n ec2-user@${IP} "sudo docker load -i ~/${antrea_image}.tar ; sudo docker tag ${DOCKER_IMG_NAME}:${DOCKER_IMG_VERSION} ${DOCKER_IMG_NAME}:latest"
+    done
+    rm ${antrea_image}.tar
 
     echo "=== Configuring Antrea for cluster ==="
-
     kubectl apply -f ${GIT_CHECKOUT_DIR}/build/yamls/antrea-eks-node-init.yml
-
     kubectl apply -f ${GIT_CHECKOUT_DIR}/build/yamls/antrea-eks.yml
     kubectl rollout status --timeout=2m deployment.apps/antrea-controller -n kube-system
     kubectl rollout status --timeout=2m daemonset/antrea-agent -n kube-system
@@ -186,7 +222,8 @@ function run_conformance() {
     # Skip NodePort related cases for EKS since by default eksctl does not create security groups for nodeport service
     # access through node external IP. See https://github.com/vmware-tanzu/antrea/issues/690
     skip_regex="\[Slow\]|\[Serial\]|\[Disruptive\]|\[Flaky\]|\[Feature:.+\]|\[sig-cli\]|\[sig-storage\]|\[sig-auth\]|\[sig-api-machinery\]|\[sig-apps\]|\[sig-node\]|NodePort"
-    ${GIT_CHECKOUT_DIR}/ci/run-k8s-e2e-tests.sh --e2e-conformance --e2e-network-policy --e2e-conformance-skip ${skip_regex} \
+    ${GIT_CHECKOUT_DIR}/ci/run-k8s-e2e-tests.sh --e2e-conformance --e2e-network-policy --e2e-skip ${skip_regex} \
+       --kube-conformance-image-version ${KUBE_CONFORMANCE_IMAGE_VERSION} \
        --log-mode ${MODE} > ${GIT_CHECKOUT_DIR}/eks-test.log
 
     if grep -Fxq "Failed tests:" ${GIT_CHECKOUT_DIR}/eks-test.log

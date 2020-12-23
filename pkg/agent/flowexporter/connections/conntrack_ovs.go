@@ -25,6 +25,7 @@ import (
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter"
+	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsctl"
 )
 
@@ -42,15 +43,17 @@ var _ ConnTrackDumper = new(connTrackOvsCtl)
 
 type connTrackOvsCtl struct {
 	nodeConfig           *config.NodeConfig
-	serviceCIDR          *net.IPNet
+	serviceCIDRv4        *net.IPNet
+	serviceCIDRv6        *net.IPNet
 	ovsctlClient         ovsctl.OVSCtlClient
 	isAntreaProxyEnabled bool
 }
 
-func NewConnTrackOvsAppCtl(nodeConfig *config.NodeConfig, serviceCIDR *net.IPNet, isAntreaProxyEnabled bool) *connTrackOvsCtl {
+func NewConnTrackOvsAppCtl(nodeConfig *config.NodeConfig, serviceCIDRv4 *net.IPNet, serviceCIDRv6 *net.IPNet, isAntreaProxyEnabled bool) *connTrackOvsCtl {
 	return &connTrackOvsCtl{
 		nodeConfig,
-		serviceCIDR,
+		serviceCIDRv4,
+		serviceCIDRv6,
 		ovsctl.NewClient(nodeConfig.OVSBridge),
 		isAntreaProxyEnabled,
 	}
@@ -58,12 +61,16 @@ func NewConnTrackOvsAppCtl(nodeConfig *config.NodeConfig, serviceCIDR *net.IPNet
 
 // DumpFlows uses "ovs-appctl dpctl/dump-conntrack" to dump conntrack flows in the Antrea ZoneID.
 func (ct *connTrackOvsCtl) DumpFlows(zoneFilter uint16) ([]*flowexporter.Connection, int, error) {
+	svcCIDR := ct.serviceCIDRv4
+	if zoneFilter == openflow.CtZoneV6 {
+		svcCIDR = ct.serviceCIDRv6
+	}
 	conns, totalConns, err := ct.ovsAppctlDumpConnections(zoneFilter)
 	if err != nil {
 		return nil, 0, fmt.Errorf("error when dumping flows from conntrack: %v", err)
 	}
 
-	filteredConns := filterAntreaConns(conns, ct.nodeConfig, ct.serviceCIDR, zoneFilter, ct.isAntreaProxyEnabled)
+	filteredConns := filterAntreaConns(conns, ct.nodeConfig, svcCIDR, zoneFilter, ct.isAntreaProxyEnabled)
 	klog.V(2).Infof("FlowExporter considered flows: %d", len(filteredConns))
 
 	return filteredConns, totalConns, nil

@@ -22,6 +22,7 @@ import (
 	time "time"
 
 	versioned "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned"
+	clusterinformation "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions/clusterinformation"
 	core "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions/core"
 	internalinterfaces "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions/internalinterfaces"
 	ops "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions/ops"
@@ -172,9 +173,14 @@ type SharedInformerFactory interface {
 	ForResource(resource schema.GroupVersionResource) (GenericInformer, error)
 	WaitForCacheSync(stopCh <-chan struct{}) map[reflect.Type]bool
 
+	Clusterinformation() clusterinformation.Interface
 	Core() core.Interface
 	Ops() ops.Interface
 	Security() security.Interface
+}
+
+func (f *sharedInformerFactory) Clusterinformation() clusterinformation.Interface {
+	return clusterinformation.New(f, f.namespace, f.tweakListOptions)
 }
 
 func (f *sharedInformerFactory) Core() core.Interface {

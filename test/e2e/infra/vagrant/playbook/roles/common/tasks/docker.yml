@@ -33,7 +33,7 @@
     groups: docker
     append: yes
     create_home: yes
-  when: ansible_version.full >= "2.5.0"
+  when: ansible_version.full is version_compare('2.5.0', '>=')
 
 - name: Add test user to docker group (Ansible < 2.5.0)
   user:
@@ -41,7 +41,7 @@
     groups: docker
     append: yes
     createhome: yes
-  when: ansible_version.full < "2.5.0"
+  when: ansible_version.full is version_compare('2.5.0', '<')
 
 # Install docker-py so that docker images can be pulled
 - pip:

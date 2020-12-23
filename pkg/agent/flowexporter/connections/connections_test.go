@@ -165,7 +165,7 @@ func TestConnectionStore_addAndUpdateConn(t *testing.T) {
 	mockConnDumper := connectionstest.NewMockConnTrackDumper(ctrl)
 	mockProxier := k8proxytest.NewMockProvider(ctrl)
 	npQuerier := queriertest.NewMockAgentNetworkPolicyInfoQuerier(ctrl)
-	connStore := NewConnectionStore(mockConnDumper, mockIfaceStore, mockProxier, npQuerier, testPollInterval)
+	connStore := NewConnectionStore(mockConnDumper, mockIfaceStore, true, false, mockProxier, npQuerier, testPollInterval)
 
 	// Add flow1conn to the Connection map
 	testFlow1Tuple := flowexporter.NewConnectionKey(&testFlow1)
@@ -268,7 +268,7 @@ func TestConnectionStore_ForAllConnectionsDo(t *testing.T) {
 	// Create ConnectionStore
 	mockIfaceStore := interfacestoretest.NewMockInterfaceStore(ctrl)
 	mockConnDumper := connectionstest.NewMockConnTrackDumper(ctrl)
-	connStore := NewConnectionStore(mockConnDumper, mockIfaceStore, nil, nil, testPollInterval)
+	connStore := NewConnectionStore(mockConnDumper, mockIfaceStore, true, false, nil, nil, testPollInterval)
 	// Add flows to the Connection store
 	for i, flow := range testFlows {
 		connStore.connections[*testFlowKeys[i]] = *flow
@@ -333,7 +333,7 @@ func TestConnectionStore_DeleteConnectionByKey(t *testing.T) {
 	// Create ConnectionStore
 	mockIfaceStore := interfacestoretest.NewMockInterfaceStore(ctrl)
 	mockConnDumper := connectionstest.NewMockConnTrackDumper(ctrl)
-	connStore := NewConnectionStore(mockConnDumper, mockIfaceStore, nil, nil, testPollInterval)
+	connStore := NewConnectionStore(mockConnDumper, mockIfaceStore, true, false, nil, nil, testPollInterval)
 	// Add flows to the connection store.
 	for i, flow := range testFlows {
 		connStore.connections[*testFlowKeys[i]] = *flow
@@ -357,15 +357,16 @@ func TestConnectionStore_MetricSettingInPoll(t *testing.T) {
 	// Create ConnectionStore
 	mockIfaceStore := interfacestoretest.NewMockInterfaceStore(ctrl)
 	mockConnDumper := connectionstest.NewMockConnTrackDumper(ctrl)
-	connStore := NewConnectionStore(mockConnDumper, mockIfaceStore, nil, nil, testPollInterval)
+	connStore := NewConnectionStore(mockConnDumper, mockIfaceStore, true, false, nil, nil, testPollInterval)
 	// Hard-coded conntrack occupancy metrics for test
 	TotalConnections := 0
 	MaxConnections := 300000
 	mockConnDumper.EXPECT().DumpFlows(uint16(openflow.CtZone)).Return(testFlows, TotalConnections, nil)
 	mockConnDumper.EXPECT().GetMaxConnections().Return(MaxConnections, nil)
-	connsLen, err := connStore.Poll()
+	connsLens, err := connStore.Poll()
 	require.Nil(t, err, fmt.Sprintf("Failed to add connections to connection store: %v", err))
-	assert.Equal(t, connsLen, len(testFlows), "expected connections should be equal to number of testFlows")
+	assert.Equal(t, len(connsLens), 1, "length of connsLens is expected to be 1")
+	assert.Equal(t, connsLens[0], len(testFlows), "expected connections should be equal to number of testFlows")
 	checkTotalConnectionsMetric(t, TotalConnections)
 	checkMaxConnectionsMetric(t, MaxConnections)
 }

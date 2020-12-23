@@ -42,14 +42,14 @@ messages.
 
 #### Managing the cluster
 
-Use the following Bash scripts to manage the Kubernetes nodes with Vagrant:
+Use the following Bash scripts to manage the Kubernetes Nodes with Vagrant:
 
 * `./infra/vagrant/provision.sh`: create the required VMs and provision them
-* `./infra/vagrant/push_antrea.sh`: load the antrea/antrea-ubuntu Docker image
-  to each node, along with the Antrea deployment YAML
-* `./infra/vagrant/suspend.sh`: suspend all node VMs
-* `./infra/vagrant/resume.sh`: resume all node VMs
-* `./infra/vagrant/destroy.sh`: destoy all node VMs, you will need to run
+* `./infra/vagrant/push_antrea.sh`: load Antrea Docker image to each Node, along
+  with the Antrea deployment YAML
+* `./infra/vagrant/suspend.sh`: suspend all Node VMs
+* `./infra/vagrant/resume.sh`: resume all Node VMs
+* `./infra/vagrant/destroy.sh`: destoy all Node VMs, you will need to run
   `provision.sh` again to create a new cluster
 
 Note that `./infra/vagrant/provision.sh` can take a while to complete but it
@@ -160,7 +160,7 @@ then make the code changes on the local repo and
 You can load the new image into the kind cluster using the command below:
 
 ```bash
-kind load docker-image antrea/antrea-ubuntu:latest --name <kind_cluster_name>
+kind load docker-image projects.registry.vmware.com/antrea/antrea-ubuntu:latest --name <kind_cluster_name>
 ```
 
 ## Running the performance test

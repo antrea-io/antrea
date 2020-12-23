@@ -538,6 +538,11 @@ func (in *NetworkPolicyRule) DeepCopyInto(out *NetworkPolicyRule) {
 		*out = new(v1alpha1.RuleAction)
 		**out = **in
 	}
+	if in.AppliedToGroups != nil {
+		in, out := &in.AppliedToGroups, &out.AppliedToGroups
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
 	return
 }
 
@@ -668,6 +673,11 @@ func (in *Service) DeepCopyInto(out *Service) {
 	if in.Port != nil {
 		in, out := &in.Port, &out.Port
 		*out = new(intstr.IntOrString)
+		**out = **in
+	}
+	if in.EndPort != nil {
+		in, out := &in.EndPort, &out.EndPort
+		*out = new(int32)
 		**out = **in
 	}
 	return

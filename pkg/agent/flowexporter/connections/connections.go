@@ -41,6 +41,8 @@ type ConnectionStore struct {
 	connections          map[flowexporter.ConnectionKey]flowexporter.Connection
 	connDumper           ConnTrackDumper
 	ifaceStore           interfacestore.InterfaceStore
+	v4Enabled            bool
+	v6Enabled            bool
 	antreaProxier        proxy.Provider
 	networkPolicyQuerier querier.AgentNetworkPolicyInfoQuerier
 	pollInterval         time.Duration
@@ -50,6 +52,8 @@ type ConnectionStore struct {
 func NewConnectionStore(
 	connTrackDumper ConnTrackDumper,
 	ifaceStore interfacestore.InterfaceStore,
+	v4Enabled bool,
+	v6Enabled bool,
 	proxier proxy.Provider,
 	npQuerier querier.AgentNetworkPolicyInfoQuerier,
 	pollInterval time.Duration,
@@ -58,6 +62,8 @@ func NewConnectionStore(
 		connections:          make(map[flowexporter.ConnectionKey]flowexporter.Connection),
 		connDumper:           connTrackDumper,
 		ifaceStore:           ifaceStore,
+		v4Enabled:            v4Enabled,
+		v6Enabled:            v6Enabled,
 		antreaProxier:        proxier,
 		networkPolicyQuerier: npQuerier,
 		pollInterval:         pollInterval,
@@ -126,19 +132,6 @@ func (cs *ConnectionStore) addOrUpdateConn(conn *flowexporter.Connection) {
 		if dstFound && dIface.Type == interfacestore.ContainerInterface {
 			conn.DestinationPodName = dIface.ContainerInterfaceConfig.PodName
 			conn.DestinationPodNamespace = dIface.ContainerInterfaceConfig.PodNamespace
-		}
-
-		// Do not export the flow records of connections whose destination is local
-		// Pod and source is remote Pod. We export flow records only from source node,
-		// where the connection originates from. This is to avoid duplicate copies
-		// of flow records at flow collector. This restriction will be removed when
-		// flow aggregator is implemented. We miss some key information such as
-		// destination Pod info, ingress NetworkPolicy info, stats from destination
-		// node etc.
-		// TODO: Remove this when flow aggregator that correlates the flow records
-		// is implemented.
-		if !srcFound && dstFound {
-			conn.DoExport = false
 		}
 
 		// Process Pod-to-Service flows when Antrea Proxy is enabled.
@@ -219,9 +212,11 @@ func (cs *ConnectionStore) ForAllConnectionsDo(callback flowexporter.ConnectionM
 	return nil
 }
 
-// Poll calls into conntrackDumper interface to dump conntrack flows
+// Poll calls into conntrackDumper interface to dump conntrack flows. It returns the number of connections for each
+// address family, as a slice. In dual-stack clusters, the slice will contain 2 values (number of IPv4 connections first,
+// then number of IPv6 connections).
 // TODO: As optimization, only poll invalid/closed connections during every poll, and poll the established connections right before the export.
-func (cs *ConnectionStore) Poll() (int, error) {
+func (cs *ConnectionStore) Poll() ([]int, error) {
 	klog.V(2).Infof("Polling conntrack")
 
 	// Reset isActive flag for all connections in connection map before dumping flows in conntrack module.
@@ -234,26 +229,36 @@ func (cs *ConnectionStore) Poll() (int, error) {
 	// We do not expect any error as resetConn is not returning any error
 	cs.ForAllConnectionsDo(resetConn)
 
-	filteredConnsList, totalConns, err := cs.connDumper.DumpFlows(openflow.CtZone)
-	if err != nil {
-		return 0, err
+	var zones []uint16
+	var connsLens []int
+	if cs.v4Enabled {
+		zones = append(zones, openflow.CtZone)
 	}
-	// Update only the Connection store. IPFIX records are generated based on Connection store.
-	for _, conn := range filteredConnsList {
-		cs.addOrUpdateConn(conn)
+	if cs.v6Enabled {
+		zones = append(zones, openflow.CtZoneV6)
 	}
-	connsLen := len(filteredConnsList)
-	filteredConnsList = nil
+	var totalConns int
+	for _, zone := range zones {
+		filteredConnsList, totalConnsPerZone, err := cs.connDumper.DumpFlows(zone)
+		if err != nil {
+			return []int{}, err
+		}
+		totalConns += totalConnsPerZone
+		// Update only the Connection store. IPFIX records are generated based on Connection store.
+		for _, conn := range filteredConnsList {
+			cs.addOrUpdateConn(conn)
+		}
+		connsLens = append(connsLens, len(filteredConnsList))
+	}
 	metrics.TotalConnectionsInConnTrackTable.Set(float64(totalConns))
 	maxConns, err := cs.connDumper.GetMaxConnections()
 	if err != nil {
-		return 0, err
+		return []int{}, err
 	}
 	metrics.MaxConnectionsInConnTrackTable.Set(float64(maxConns))
-
 	klog.V(2).Infof("Conntrack polling successful")
 
-	return connsLen, nil
+	return connsLens, nil
 }
 
 // DeleteConnectionByKey deletes the connection in connection map given the connection key

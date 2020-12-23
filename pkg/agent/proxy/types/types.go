@@ -29,14 +29,6 @@ type ServiceInfo struct {
 	OFProtocol openflow.Protocol
 }
 
-func (si *ServiceInfo) Equal(bSvcInfo *ServiceInfo) bool {
-	return si.SessionAffinityType() == bSvcInfo.SessionAffinityType() &&
-		si.StickyMaxAgeSeconds() == bSvcInfo.StickyMaxAgeSeconds() &&
-		si.OFProtocol == bSvcInfo.OFProtocol &&
-		si.Port() == bSvcInfo.Port() &&
-		len(si.LoadBalancerIPStrings()) == len(bSvcInfo.LoadBalancerIPStrings())
-}
-
 // NewServiceInfo returns a new k8sproxy.ServicePort which abstracts a serviceInfo.
 func NewServiceInfo(port *corev1.ServicePort, service *corev1.Service, baseInfo *k8sproxy.BaseServiceInfo) k8sproxy.ServicePort {
 	info := &ServiceInfo{BaseServiceInfo: baseInfo}

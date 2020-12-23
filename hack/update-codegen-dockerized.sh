@@ -47,6 +47,7 @@ $GOPATH/bin/client-gen \
 $GOPATH/bin/lister-gen \
   --input-dirs "${ANTREA_PKG}/pkg/apis/security/v1alpha1,${ANTREA_PKG}/pkg/apis/core/v1alpha2" \
   --input-dirs "${ANTREA_PKG}/pkg/apis/ops/v1alpha1" \
+  --input-dirs "${ANTREA_PKG}/pkg/apis/clusterinformation/v1beta1" \
   --output-package "${ANTREA_PKG}/pkg/client/listers" \
   --go-header-file hack/boilerplate/license_header.go.txt
 
@@ -54,6 +55,7 @@ $GOPATH/bin/lister-gen \
 $GOPATH/bin/informer-gen \
   --input-dirs "${ANTREA_PKG}/pkg/apis/security/v1alpha1,${ANTREA_PKG}/pkg/apis/core/v1alpha2" \
   --input-dirs "${ANTREA_PKG}/pkg/apis/ops/v1alpha1" \
+  --input-dirs "${ANTREA_PKG}/pkg/apis/clusterinformation/v1beta1" \
   --versioned-clientset-package "${ANTREA_PKG}/pkg/client/clientset/versioned" \
   --listers-package "${ANTREA_PKG}/pkg/client/listers" \
   --output-package "${ANTREA_PKG}/pkg/client/informers" \
@@ -105,7 +107,7 @@ MOCKGEN_TARGETS=(
   "pkg/controller/querier ControllerQuerier"
   "pkg/querier AgentNetworkPolicyInfoQuerier"
   "pkg/agent/flowexporter/connections ConnTrackDumper,NetFilterConnTrack"
-  "pkg/agent/flowexporter/ipfix IPFIXExportingProcess,IPFIXRecord,IPFIXRegistry"
+  "pkg/ipfix IPFIXExportingProcess,IPFIXSet,IPFIXRegistry,IPFIXCollectingProcess,IPFIXAggregationProcess"
   "third_party/proxy Provider"
 )
 
@@ -127,12 +129,19 @@ git checkout HEAD -- hack/boilerplate/license_header.raw.txt
 # Download vendored modules to the vendor directory so it's easier to
 # specify the search path of required protobuf files.
 go mod vendor
+# In Go 1.14, vendoring changed (see release notes at
+# https://golang.org/doc/go1.14), and the presence of a go.mod file specifying
+# go 1.14 or higher causes the go command to default to -mod=vendor when a
+# top-level vendor directory is present in the module. This causes the
+# go-to-protobuf command below to complain about missing packages under vendor/,
+# which were not downloaded by "go mod vendor". We can workaround this easily by
+# renaming the vendor directory.
+mv vendor /tmp/includes
 $GOPATH/bin/go-to-protobuf \
-  --proto-import vendor \
+  --proto-import /tmp/includes \
   --packages "${ANTREA_PKG}/pkg/apis/stats/v1alpha1,${ANTREA_PKG}/pkg/apis/controlplane/v1beta1,${ANTREA_PKG}/pkg/apis/controlplane/v1beta2" \
   --go-header-file hack/boilerplate/license_header.go.txt
-# Clean up vendor directory.
-rm -rf vendor
+rm -rf /tmp/includes
 
 set +x
 

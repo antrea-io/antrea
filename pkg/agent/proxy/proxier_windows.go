@@ -18,8 +18,6 @@ package proxy
 import (
 	"net"
 
-	"k8s.io/klog"
-
 	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
 )
 
@@ -29,11 +27,19 @@ import (
 // to the host network to let kube-proxy handle the traffic.
 func (p *proxier) installLoadBalancerServiceFlows(groupID binding.GroupIDType, svcIP net.IP, svcPort uint16, protocol binding.Protocol, affinityTimeout uint16) error {
 	if err := p.ofClient.InstallServiceFlows(groupID, svcIP, svcPort, protocol, affinityTimeout); err != nil {
-		klog.Errorf("Error when installing LoadBalancer Service flows: %v", err)
 		return err
 	}
 	if err := p.ofClient.InstallLoadBalancerServiceFromOutsideFlows(svcIP, svcPort, protocol); err != nil {
-		klog.Errorf("Error when installing LoadBalancer Service flows: %v", err)
+		return err
+	}
+	return nil
+}
+
+func (p *proxier) uninstallLoadBalancerServiceFlows(svcIP net.IP, svcPort uint16, protocol binding.Protocol) error {
+	if err := p.ofClient.UninstallServiceFlows(svcIP, svcPort, protocol); err != nil {
+		return err
+	}
+	if err := p.ofClient.UninstallLoadBalancerServiceFromOutsideFlows(svcIP, svcPort, protocol); err != nil {
 		return err
 	}
 	return nil

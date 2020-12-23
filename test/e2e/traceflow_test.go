@@ -29,6 +29,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
 	"github.com/vmware-tanzu/antrea/pkg/apis/ops/v1alpha1"
+	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
 	"github.com/vmware-tanzu/antrea/pkg/features"
 )
 
@@ -52,6 +53,96 @@ func skipIfTraceflowDisabled(t *testing.T, data *TestData) {
 	}
 }
 
+// TestTraceflowIntraNodeANP verifies if traceflow can trace intra node traffic with some Antrea NetworkPolicy sets.
+func TestTraceflowIntraNodeANP(t *testing.T) {
+	skipIfNotIPv4Cluster(t)
+	data, err := setupTest(t)
+	if err != nil {
+		t.Fatalf("Error when setting up test: %v", err)
+	}
+	defer teardownTest(t, data)
+	skipIfAntreaPolicyDisabled(t, data)
+	skipIfTraceflowDisabled(t, data)
+	k8sUtils, err = NewKubernetesUtils(data)
+	failOnError(err, t)
+
+	node1 := nodeName(0)
+	node1Pods, _, node1CleanupFn := createTestBusyboxPods(t, data, 2, node1)
+	defer node1CleanupFn()
+
+	var denyIngress *secv1alpha1.NetworkPolicy
+	denyIngressName := "test-anp-deny-ingress"
+	if denyIngress, err = data.createANPDenyIngress("antrea-e2e", node1Pods[1], denyIngressName); err != nil {
+		t.Fatalf("Error when creating Antrea NetworkPolicy: %v", err)
+	}
+	defer func() {
+		if err = data.deleteAntreaNetworkpolicy(denyIngress); err != nil {
+			t.Errorf("Error when deleting Antrea NetworkPolicy: %v", err)
+		}
+	}()
+	antreaPod, err := data.getAntreaPodOnNode(node1)
+	if err = data.waitForNetworkpolicyRealized(antreaPod, denyIngressName, v1beta2.AntreaNetworkPolicy); err != nil {
+		t.Fatal(err)
+	}
+
+	testcases := []testcase{
+		{
+			name: "ANPDenyIngress",
+			tf: &v1alpha1.Traceflow{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: randName(fmt.Sprintf("%s-%s-to-%s-%s-", testNamespace, node1Pods[0], testNamespace, node1Pods[1])),
+				},
+				Spec: v1alpha1.TraceflowSpec{
+					Source: v1alpha1.Source{
+						Namespace: testNamespace,
+						Pod:       node1Pods[0],
+					},
+					Destination: v1alpha1.Destination{
+						Namespace: testNamespace,
+						Pod:       node1Pods[1],
+					},
+					Packet: v1alpha1.Packet{
+						IPHeader: v1alpha1.IPHeader{
+							Protocol: 6,
+						},
+						TransportHeader: v1alpha1.TransportHeader{
+							TCP: &v1alpha1.TCPHeader{
+								DstPort: 80,
+								Flags:   2,
+							},
+						},
+					},
+				},
+			},
+			expectedPhase: v1alpha1.Succeeded,
+			expectedResults: []v1alpha1.NodeResult{
+				{
+					Node: node1,
+					Observations: []v1alpha1.Observation{
+						{
+							Component: v1alpha1.SpoofGuard,
+							Action:    v1alpha1.Forwarded,
+						},
+						{
+							Component:     v1alpha1.NetworkPolicy,
+							ComponentInfo: "IngressMetric",
+							Action:        v1alpha1.Dropped,
+						},
+					},
+				},
+			},
+		},
+	}
+	t.Run("traceflowANPGroupTest", func(t *testing.T) {
+		for _, tc := range testcases {
+			tc := tc
+			t.Run(tc.name, func(t *testing.T) {
+				runTestTraceflow(t, data, tc)
+			})
+		}
+	})
+}
+
 // TestTraceflowIntraNode verifies if traceflow can trace intra node traffic with some NetworkPolicies set.
 func TestTraceflowIntraNode(t *testing.T) {
 	skipIfNotIPv4Cluster(t)
@@ -62,14 +153,6 @@ func TestTraceflowIntraNode(t *testing.T) {
 	defer teardownTest(t, data)
 
 	skipIfTraceflowDisabled(t, data)
-	encapMode, err := data.GetEncapMode()
-	if err != nil {
-		t.Fatalf("Failed to retrieve encap mode: %v", err)
-	}
-	if encapMode != config.TrafficEncapModeNoEncap {
-		// https://github.com/vmware-tanzu/antrea/issues/897
-		skipIfProviderIs(t, "kind", "Skipping inter-Node Traceflow test for Kind because of #897")
-	}
 
 	node1 := nodeName(0)
 
@@ -102,20 +185,13 @@ func TestTraceflowIntraNode(t *testing.T) {
 	}()
 
 	antreaPod, err := data.getAntreaPodOnNode(node1)
-	if err = data.waitForNetworkpolicyRealized(antreaPod, allowAllEgressName); err != nil {
+	if err = data.waitForNetworkpolicyRealized(antreaPod, allowAllEgressName, v1beta2.K8sNetworkPolicy); err != nil {
 		t.Fatal(err)
 	}
-	if err = data.waitForNetworkpolicyRealized(antreaPod, denyAllIngressName); err != nil {
+	if err = data.waitForNetworkpolicyRealized(antreaPod, denyAllIngressName, v1beta2.K8sNetworkPolicy); err != nil {
 		t.Fatal(err)
 	}
 
-	// Creates 6 traceflows:
-	// 1. node1Pods[0] -> node1Pods[1], intra node1.
-	// 2. node1Pods[0] -> node2Pods[0], inter node1 and node2.
-	// 3. node1Pods[0] -> node1IPs[1], intra node1.
-	// 4. node1Pods[0] -> node2IPs[0], inter node1 and node2.
-	// 5. node1Pods[0] -> service, inter node1 and node2.
-	// 6. node1Pods[0] -> non-existing Pod
 	testcases := []testcase{
 		{
 			name: "intraNodeTraceflow",
@@ -355,6 +431,14 @@ func TestTraceflowInterNode(t *testing.T) {
 	defer teardownTest(t, data)
 
 	skipIfTraceflowDisabled(t, data)
+	encapMode, err := data.GetEncapMode()
+	if err != nil {
+		t.Fatalf("Failed to retrieve encap mode: %v", err)
+	}
+	if encapMode != config.TrafficEncapModeNoEncap {
+		// https://github.com/vmware-tanzu/antrea/issues/897
+		skipIfProviderIs(t, "kind", "Skipping inter-Node Traceflow test for Kind because of #897")
+	}
 
 	node1 := nodeName(0)
 	node2 := nodeName(1)
@@ -399,20 +483,13 @@ func TestTraceflowInterNode(t *testing.T) {
 	}()
 
 	antreaPod, err := data.getAntreaPodOnNode(node2)
-	if err = data.waitForNetworkpolicyRealized(antreaPod, allowAllEgressName); err != nil {
+	if err = data.waitForNetworkpolicyRealized(antreaPod, allowAllEgressName, v1beta2.K8sNetworkPolicy); err != nil {
 		t.Fatal(err)
 	}
-	if err = data.waitForNetworkpolicyRealized(antreaPod, denyAllIngressName); err != nil {
+	if err = data.waitForNetworkpolicyRealized(antreaPod, denyAllIngressName, v1beta2.K8sNetworkPolicy); err != nil {
 		t.Fatal(err)
 	}
 
-	// Creates 6 traceflows:
-	// 1. node1Pods[0] -> node1Pods[1], intra node1.
-	// 2. node1Pods[0] -> node2Pods[0], inter node1 and node2.
-	// 3. node1Pods[0] -> node1IPs[1], intra node1.
-	// 4. node1Pods[0] -> node2IPs[0], inter node1 and node2.
-	// 5. node1Pods[0] -> service, inter node1 and node2.
-	// 6. node1Pods[0] -> non-existing Pod
 	testcases := []testcase{
 		{
 			name: "interNodeTraceflow",
@@ -728,6 +805,54 @@ func compareObservations(expected v1alpha1.NodeResult, actual v1alpha1.NodeResul
 	return nil
 }
 
+// createANPDenyIngress creates an Antrea NetworkPolicy that denies ingress traffic for pods of specific label.
+func (data *TestData) createANPDenyIngress(key string, value string, name string) (*secv1alpha1.NetworkPolicy, error) {
+	dropACT := secv1alpha1.RuleActionDrop
+	anp := secv1alpha1.NetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+			Labels: map[string]string{
+				"antrea-e2e": name,
+			},
+		},
+		Spec: secv1alpha1.NetworkPolicySpec{
+			Tier:     defaultTierName,
+			Priority: 250,
+			AppliedTo: []secv1alpha1.NetworkPolicyPeer{
+				{
+					PodSelector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							key: value,
+						},
+					},
+				},
+			},
+			Ingress: []secv1alpha1.Rule{
+				{
+					Action: &dropACT,
+					Ports:  []secv1alpha1.NetworkPolicyPort{},
+					From:   []secv1alpha1.NetworkPolicyPeer{},
+					To:     []secv1alpha1.NetworkPolicyPeer{},
+				},
+			},
+			Egress: []secv1alpha1.Rule{},
+		},
+	}
+	anpCreated, err := k8sUtils.securityClient.NetworkPolicies(testNamespace).Create(context.TODO(), &anp, metav1.CreateOptions{})
+	if err != nil {
+		return nil, err
+	}
+	return anpCreated, nil
+}
+
+// deleteAntreaNetworkpolicy deletes an Antrea NetworkPolicy.
+func (data *TestData) deleteAntreaNetworkpolicy(policy *secv1alpha1.NetworkPolicy) error {
+	if err := k8sUtils.securityClient.NetworkPolicies(testNamespace).Delete(context.TODO(), policy.Name, metav1.DeleteOptions{}); err != nil {
+		return fmt.Errorf("unable to cleanup policy %v: %v", policy.Name, err)
+	}
+	return nil
+}
+
 // createNPDenyAllIngress creates a NetworkPolicy that denies all ingress traffic for pods of specific label.
 func (data *TestData) createNPDenyAllIngress(key string, value string, name string) (*networkingv1.NetworkPolicy, error) {
 	spec := &networkingv1.NetworkPolicySpec{
@@ -754,14 +879,18 @@ func (data *TestData) createNPAllowAllEgress(name string) (*networkingv1.Network
 }
 
 // waitForNetworkpolicyRealized waits for the NetworkPolicy to be realized by the antrea-agent Pod.
-func (data *TestData) waitForNetworkpolicyRealized(pod string, networkpolicy string) error {
+func (data *TestData) waitForNetworkpolicyRealized(pod string, networkpolicy string, npType v1beta2.NetworkPolicyType) error {
+	npOption := "K8sNP"
+	if npType == v1beta2.AntreaNetworkPolicy {
+		npOption = "ANP"
+	}
 	if err := wait.Poll(200*time.Millisecond, 5*time.Second, func() (bool, error) {
-		cmds := []string{"antctl", "get", "networkpolicy", "-S", networkpolicy, "-n", testNamespace, "-T", "K8sNP"}
+		cmds := []string{"antctl", "get", "networkpolicy", "-S", networkpolicy, "-n", testNamespace, "-T", npOption}
 		stdout, stderr, err := runAntctl(pod, cmds, data)
 		if err != nil {
 			return false, fmt.Errorf("Error when executing antctl get NetworkPolicy, stdout: %s, stderr: %s, err: %v", stdout, stderr, err)
 		}
-		return strings.Contains(stdout, fmt.Sprintf("%s:%s/%s", v1beta2.K8sNetworkPolicy, testNamespace, networkpolicy)), nil
+		return strings.Contains(stdout, fmt.Sprintf("%s:%s/%s", npType, testNamespace, networkpolicy)), nil
 	}); err == wait.ErrWaitTimeout {
 		return fmt.Errorf("NetworkPolicy %s isn't realized in time", networkpolicy)
 	} else if err != nil {

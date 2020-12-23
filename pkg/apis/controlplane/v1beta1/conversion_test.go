@@ -21,6 +21,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/intstr"
 
 	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
 )
@@ -124,6 +125,17 @@ var (
 		IP:    IPAddress(net.ParseIP("10.0.0.2")),
 		Ports: v1b1Ports,
 	}
+	v1b1TCP     = ProtocolTCP
+	cpTCP       = controlplane.ProtocolTCP
+	int80       = intstr.FromInt(80)
+	v1b1Service = Service{
+		Protocol: &v1b1TCP,
+		Port:     &int80,
+	}
+	cpService = controlplane.Service{
+		Protocol: &cpTCP,
+		Port:     &int80,
+	}
 )
 
 func TestConvertBetweenV1beta1AndControlplaneGroupMember(t *testing.T) {
@@ -146,11 +158,17 @@ func TestConvertBetweenV1beta1GroupMemberPodAndControlplaneGroupMember(t *testin
 
 	var convertedCPGroupMember controlplane.GroupMember
 	var convertedV1B1GroupMemberPod GroupMemberPod
-	err := Convert_controlplane_GroupMember_To_v1beta1_GroupMemberPod(&cpGroupMember, &convertedV1B1GroupMemberPod, nil)
+	err := Convert_controlplane_GroupMember_To_v1beta1_GroupMemberPod(&cpGroupMember, &convertedV1B1GroupMemberPod, true)
 	require.Errorf(t, err, "should not be able to convert group member with multiple IPs to GroupMemberPod")
 	require.NoError(t,
-		Convert_controlplane_GroupMember_To_v1beta1_GroupMemberPod(&cpPodGroupMember, &convertedV1B1GroupMemberPod, nil))
+		Convert_controlplane_GroupMember_To_v1beta1_GroupMemberPod(&cpPodGroupMember, &convertedV1B1GroupMemberPod, true))
 	assert.Equal(t, v1b1GroupMemberPod, convertedV1B1GroupMemberPod, "controlplane.GroupMember -> v1beta1.GroupMemberPod")
+	var convertedV1B1GroupMemberPodWithoutPodRef GroupMemberPod
+	require.NoError(t,
+		Convert_controlplane_GroupMember_To_v1beta1_GroupMemberPod(&cpPodGroupMember, &convertedV1B1GroupMemberPodWithoutPodRef, false))
+	expectedV1b1GroupMemberPodWithoutPodRef := *v1b1GroupMemberPod.DeepCopy()
+	expectedV1b1GroupMemberPodWithoutPodRef.Pod = nil
+	assert.Equal(t, expectedV1b1GroupMemberPodWithoutPodRef, convertedV1B1GroupMemberPodWithoutPodRef, "controlplane.GroupMember -> v1beta1.GroupMemberPod")
 	require.NoError(t,
 		Convert_v1beta1_GroupMemberPod_To_controlplane_GroupMember(&v1b1GroupMemberPod, &convertedCPGroupMember, nil))
 	assert.Equal(t, cpPodGroupMember, convertedCPGroupMember, "v1beta1.GroupMemberPod -> controlplane.GroupMember")
@@ -169,9 +187,11 @@ func TestConvertBetweenV1beta1AndControlplaneAddressGroup(t *testing.T) {
 	}
 	var convertedCPAddressGroup controlplane.AddressGroup
 	var convertedV1B1AddressGroup AddressGroup
+	expectedV1B1AddressGroup := v1b1AddressGroup.DeepCopy()
+	expectedV1B1AddressGroup.Pods[0].Pod = nil
 	require.NoError(t,
 		Convert_controlplane_AddressGroup_To_v1beta1_AddressGroup(&cpAddressGroup, &convertedV1B1AddressGroup, nil))
-	assert.Equal(t, v1b1AddressGroup, convertedV1B1AddressGroup)
+	assert.Equal(t, *expectedV1B1AddressGroup, convertedV1B1AddressGroup)
 	require.NoError(t,
 		Convert_v1beta1_AddressGroup_To_controlplane_AddressGroup(&v1b1AddressGroup, &convertedCPAddressGroup, nil))
 	assert.Equal(t, cpAddressGroup, convertedCPAddressGroup)
@@ -193,9 +213,12 @@ func TestConvertBetweenV1beta1AndControlplaneAddressGroupPatch(t *testing.T) {
 	}
 	var convertedCPPatch controlplane.AddressGroupPatch
 	var convertedV1B1Patch AddressGroupPatch
+	expectedV1B1AddressGroupPatch := v1b1AddressGroupPatch.DeepCopy()
+	expectedV1B1AddressGroupPatch.AddedPods[0].Pod = nil
+	expectedV1B1AddressGroupPatch.RemovedPods[0].Pod = nil
 	require.NoError(t,
 		Convert_controlplane_AddressGroupPatch_To_v1beta1_AddressGroupPatch(&cpAddressGroupPatch, &convertedV1B1Patch, nil))
-	assert.Equal(t, v1b1AddressGroupPatch, convertedV1B1Patch)
+	assert.Equal(t, *expectedV1B1AddressGroupPatch, convertedV1B1Patch)
 	require.NoError(t,
 		Convert_v1beta1_AddressGroupPatch_To_controlplane_AddressGroupPatch(&v1b1AddressGroupPatch, &convertedCPPatch, nil))
 	assert.Equal(t, cpAddressGroupPatch, convertedCPPatch)
@@ -244,4 +267,18 @@ func TestConvertBetweenV1beta1AndControlplaneAppliedToGroupPatch(t *testing.T) {
 	require.NoError(t,
 		Convert_v1beta1_AppliedToGroupPatch_To_controlplane_AppliedToGroupPatch(&v1b1AppliedToGroupPatch, &convertedCPPatch, nil))
 	assert.Equal(t, cpAppliedToGroupPatch, convertedCPPatch)
+}
+
+func TestConvertBetweenV1beta1AndControlplaneService(t *testing.T) {
+	scheme := runtime.NewScheme()
+	assert.NoError(t, RegisterConversions(scheme))
+
+	var convertedCPService controlplane.Service
+	var convertedV1B1Service Service
+	require.NoError(t,
+		Convert_controlplane_Service_To_v1beta1_Service(&cpService, &convertedV1B1Service, nil))
+	assert.Equal(t, v1b1Service, convertedV1B1Service, "controlplane.GroupMember -> v1beta1.GroupMember")
+	require.NoError(t,
+		Convert_v1beta1_Service_To_controlplane_Service(&v1b1Service, &convertedCPService, nil))
+	assert.Equal(t, cpService, convertedCPService, "v1beta1.GroupMember -> controlplane.GroupMember")
 }

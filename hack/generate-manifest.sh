@@ -20,7 +20,7 @@ function echoerr {
     >&2 echo "$@"
 }
 
-_usage="Usage: $0 [--mode (dev|release)] [--encap-mode] [--kind] [--ipsec] [--no-proxy] [--np] [--keep] [--tun (geneve|vxlan|gre|stt)] [--verbose-log] [--help|-h]
+_usage="Usage: $0 [--mode (dev|release)] [--encap-mode] [--kind] [--ipsec] [--no-proxy] [--np] [--k8s-1.15] [--keep] [--tun (geneve|vxlan|gre|stt)] [--verbose-log] [--help|-h]
 Generate a YAML manifest for Antrea using Kustomize and print it to stdout.
         --mode (dev|release)          Choose the configuration variant that you need (default is 'dev')
         --encap-mode                  Traffic encapsulation mode. (default is 'encap')
@@ -30,6 +30,7 @@ Generate a YAML manifest for Antrea using Kustomize and print it to stdout.
         --all-features                Generate a manifest with all alpha features enabled
         --no-proxy                    Generate a manifest with Antrea proxy disabled
         --np                          Generate a manifest with ClusterNetworkPolicy and Antrea NetworkPolicy features enabled
+        --k8s-1.15                    Generates a manifest which supports Kubernetes 1.15.
         --keep                        Debug flag which will preserve the generated kustomization.yml
         --tun (geneve|vxlan|gre|stt)  Choose encap tunnel type from geneve, gre, stt and vxlan (default is geneve)
         --verbose-log                 Generate a manifest with increased log-level (level 4) for Antrea agent and controller.
@@ -68,6 +69,7 @@ TUN_TYPE="geneve"
 VERBOSE_LOG=false
 ON_DELETE=false
 COVERAGE=false
+K8S_115=false
 
 while [[ $# -gt 0 ]]
 do
@@ -104,6 +106,10 @@ case $key in
     ;;
     --np)
     NP=true
+    shift
+    ;;
+    --k8s-1.15)
+    K8S_115=true
     shift
     ;;
     --keep)
@@ -264,9 +270,9 @@ if $IPSEC; then
     # create a K8s Secret to save the PSK (pre-shared key) for IKE authentication.
     $KUSTOMIZE edit add resource ipsecSecret.yml
     # add a container to the Agent DaemonSet that runs the OVS IPSec and strongSwan daemons.
-    $KUSTOMIZE edit add patch ipsecContainer.yml
+    $KUSTOMIZE edit add patch --path ipsecContainer.yml
     # add an environment variable to the antrea-agent container for passing the PSK to Agent.
-    $KUSTOMIZE edit add patch pskEnv.yml
+    $KUSTOMIZE edit add patch --path pskEnv.yml
     BASE=../ipsec
     cd ..
 fi
@@ -277,9 +283,9 @@ if $COVERAGE; then
     touch kustomization.yml
     $KUSTOMIZE edit add base $BASE
     # this runs antrea-controller via the instrumented binary.
-    $KUSTOMIZE edit add patch startControllerCov.yml
+    $KUSTOMIZE edit add patch --path startControllerCov.yml
     # this runs antrea-agent via the instrumented binary.
-    $KUSTOMIZE edit add patch startAgentCov.yml
+    $KUSTOMIZE edit add patch --path startAgentCov.yml
     BASE=../coverage
     cd ..
 fi 
@@ -290,7 +296,7 @@ if [[ $ENCAP_MODE == "networkPolicyOnly" ]] ; then
     touch kustomization.yml
     $KUSTOMIZE edit add base $BASE
     # change initContainer script and add antrea to CNI chain
-    $KUSTOMIZE edit add patch installCni.yml
+    $KUSTOMIZE edit add patch --path installCni.yml
     BASE=../chaining
     cd ..
 fi
@@ -300,7 +306,7 @@ if [[ $CLOUD == "GKE" ]]; then
     cp ../../patches/gke/*.yml .
     touch kustomization.yml
     $KUSTOMIZE edit add base $BASE
-    $KUSTOMIZE edit add patch cniPath.yml
+    $KUSTOMIZE edit add patch --path cniPath.yml
     BASE=../gke
     cd ..
 fi
@@ -310,7 +316,7 @@ if [[ $CLOUD == "EKS" ]]; then
     cp ../../patches/eks/*.yml .
     touch kustomization.yml
     $KUSTOMIZE edit add base $BASE
-    $KUSTOMIZE edit add patch eksEnv.yml
+    $KUSTOMIZE edit add patch --path eksEnv.yml
     BASE=../eks
     cd ..
 fi
@@ -322,24 +328,24 @@ if $KIND; then
     $KUSTOMIZE edit add base $BASE
 
     # add tun device to antrea OVS container
-    $KUSTOMIZE edit add patch tunDevice.yml
+    $KUSTOMIZE edit add patch --path tunDevice.yml
     # antrea-ovs should use start_ovs_netdev instead of start_ovs to ensure that the br-phy bridge
     # is created.
-    $KUSTOMIZE edit add patch startOvs.yml
+    $KUSTOMIZE edit add patch --path startOvs.yml
     # this adds a small delay before running the antrea-agent process, to give the antrea-ovs
     # container enough time to set up the br-phy bridge.
     # workaround for https://github.com/vmware-tanzu/antrea/issues/801
     if $COVERAGE; then
         cp ../../patches/coverage/startAgentCov.yml .
-        $KUSTOMIZE edit add patch startAgentCov.yml 
+        $KUSTOMIZE edit add patch --path startAgentCov.yml
     else
-        $KUSTOMIZE edit add patch startAgent.yml
+        $KUSTOMIZE edit add patch --path startAgent.yml
     fi
     # change initContainer script and remove SYS_MODULE capability
-    $KUSTOMIZE edit add patch installCni.yml
+    $KUSTOMIZE edit add patch --path installCni.yml
 
     if $ON_DELETE; then
-        $KUSTOMIZE edit add patch onDeleteUpdateStrategy.yml
+        $KUSTOMIZE edit add patch --path onDeleteUpdateStrategy.yml
     fi
 
     BASE=../kind
@@ -353,23 +359,45 @@ $KUSTOMIZE edit add base $BASE
 find ../../patches/$MODE -name \*.yml -exec cp {} . \;
 
 if [ "$MODE" == "dev" ]; then
-    $KUSTOMIZE edit set image antrea=antrea/antrea-ubuntu:latest
-    $KUSTOMIZE edit add patch agentImagePullPolicy.yml
-    $KUSTOMIZE edit add patch controllerImagePullPolicy.yml
+    if $COVERAGE; then
+        $KUSTOMIZE edit set image antrea=antrea/antrea-ubuntu-coverage:latest
+    else
+        $KUSTOMIZE edit set image antrea=projects.registry.vmware.com/antrea/antrea-ubuntu:latest
+    fi
+    $KUSTOMIZE edit add patch --path agentImagePullPolicy.yml
+    $KUSTOMIZE edit add patch --path controllerImagePullPolicy.yml
     if $VERBOSE_LOG; then
-        $KUSTOMIZE edit add patch agentVerboseLog.yml
-        $KUSTOMIZE edit add patch controllerVerboseLog.yml
+        $KUSTOMIZE edit add patch --path agentVerboseLog.yml
+        $KUSTOMIZE edit add patch --path controllerVerboseLog.yml
     fi
 
     # only required because there is no good way at the moment to update the imagePullPolicy for all
     # containers. See https://github.com/kubernetes-sigs/kustomize/issues/1493
     if $IPSEC; then
-        $KUSTOMIZE edit add patch agentIpsecImagePullPolicy.yml
+        $KUSTOMIZE edit add patch --path agentIpsecImagePullPolicy.yml
     fi
 fi
 
 if [ "$MODE" == "release" ]; then
     $KUSTOMIZE edit set image antrea=$IMG_NAME:$IMG_TAG
+fi
+
+# If --k8s-1.15 flag is set, then we have to patch certain resources.
+# For instance, the apiVersion/schema of CustomResourceDefinition and admission webhooks
+if $K8S_115; then
+    cp -a ../../patches/legacy ./
+    # Patch for controller.yml
+    $KUSTOMIZE edit add patch --path legacy/controller.json --kind MutatingWebhookConfiguration
+    $KUSTOMIZE edit add patch --path legacy/controller.json --kind ValidatingWebhookConfiguration
+    # Patch for all CustomResourceDefinition
+    $KUSTOMIZE edit add patch --path legacy/crdVersion.json --kind CustomResourceDefinition
+    $KUSTOMIZE edit add patch --path legacy/crdClusterInformation.json --kind CustomResourceDefinition --name antreaagentinfos.clusterinformation.antrea.tanzu.vmware.com
+    $KUSTOMIZE edit add patch --path legacy/crdClusterInformation.json --kind CustomResourceDefinition --name antreacontrollerinfos.clusterinformation.antrea.tanzu.vmware.com
+    $KUSTOMIZE edit add patch --path legacy/crdTraceflow.json --kind CustomResourceDefinition --name traceflows.ops.antrea.tanzu.vmware.com
+    $KUSTOMIZE edit add patch --path legacy/crdTier.json --kind CustomResourceDefinition --name tiers.security.antrea.tanzu.vmware.com
+    $KUSTOMIZE edit add patch --path legacy/crdClusterNetworkPolicy.json --kind CustomResourceDefinition --name clusternetworkpolicies.security.antrea.tanzu.vmware.com
+    $KUSTOMIZE edit add patch --path legacy/crdNetworkPolicy.json --kind CustomResourceDefinition --name networkpolicies.security.antrea.tanzu.vmware.com
+    $KUSTOMIZE edit add patch --path legacy/crdExternalEntity.json --kind CustomResourceDefinition --name externalentities.core.antrea.tanzu.vmware.com
 fi
 
 $KUSTOMIZE build

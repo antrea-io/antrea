@@ -25,12 +25,12 @@ import (
 )
 
 // InitializeConnTrackDumper initializes the ConnTrackDumper interface for different OS and datapath types.
-func InitializeConnTrackDumper(nodeConfig *config.NodeConfig, serviceCIDR *net.IPNet, ovsDatapathType string, isAntreaProxyEnabled bool) ConnTrackDumper {
+func InitializeConnTrackDumper(nodeConfig *config.NodeConfig, serviceCIDRv4 *net.IPNet, serviceCIDRv6 *net.IPNet, ovsDatapathType string, isAntreaProxyEnabled bool) ConnTrackDumper {
 	var connTrackDumper ConnTrackDumper
 	if ovsDatapathType == ovsconfig.OVSDatapathSystem {
-		connTrackDumper = NewConnTrackSystem(nodeConfig, serviceCIDR, isAntreaProxyEnabled)
+		connTrackDumper = NewConnTrackSystem(nodeConfig, serviceCIDRv4, serviceCIDRv6, isAntreaProxyEnabled)
 	} else if ovsDatapathType == ovsconfig.OVSDatapathNetdev {
-		connTrackDumper = NewConnTrackOvsAppCtl(nodeConfig, serviceCIDR, isAntreaProxyEnabled)
+		connTrackDumper = NewConnTrackOvsAppCtl(nodeConfig, serviceCIDRv4, serviceCIDRv6, isAntreaProxyEnabled)
 	}
 	return connTrackDumper
 }
@@ -44,13 +44,13 @@ func filterAntreaConns(conns []*flowexporter.Connection, nodeConfig *config.Node
 		srcIP := conn.TupleOrig.SourceAddress
 		dstIP := conn.TupleReply.SourceAddress
 
-		// Only get Pod-to-Pod flows.
+		// Consider Pod-to-Pod, Pod-To-Service and Pod-To-External flows.
 		if srcIP.Equal(nodeConfig.GatewayConfig.IPv4) || dstIP.Equal(nodeConfig.GatewayConfig.IPv4) {
-			klog.V(4).Infof("Detected flow through IPv4 gateway :%v", conn)
+			klog.V(4).Infof("Detected flow for which one of the endpoint is host gateway %s :%+v", nodeConfig.GatewayConfig.IPv4.String(), conn)
 			continue
 		}
 		if srcIP.Equal(nodeConfig.GatewayConfig.IPv6) || dstIP.Equal(nodeConfig.GatewayConfig.IPv6) {
-			klog.V(4).Infof("Detected flow through IPv6 gateway :%v", conn)
+			klog.V(4).Infof("Detected flow for which one of the endpoint is host gateway %s :%+v", nodeConfig.GatewayConfig.IPv6.String(), conn)
 			continue
 		}
 

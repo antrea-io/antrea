@@ -19,7 +19,6 @@ package cniserver
 import (
 	"fmt"
 	"net"
-	"runtime"
 	"time"
 
 	"github.com/Mellanox/sriovnet"
@@ -196,21 +195,7 @@ func (ic *ifConfigurator) configureContainerLinkVeth(
 	containerIface := &current.Interface{Name: containerIfaceName, Sandbox: containerNetNS}
 	result.Interfaces = []*current.Interface{hostIface, containerIface}
 
-	// This is a workaround for issue #1113, which is caused by https://github.com/containernetworking/plugins/issues/524.
-	// Instead of using the provided netns argument, which might not be the real hostNS, it fixes it by getting the
-	// hostNS in advance with the OS thread locked.
-	// TODO: remove this once the upstream issue is fixed.
-	hostNS, err := func() (ns.NetNS, error) {
-		runtime.LockOSThread()
-		defer runtime.UnlockOSThread()
-		return ns.GetCurrentNS()
-	}()
-	if err != nil {
-		return fmt.Errorf("failed to get host netns: %v", err)
-	}
-	defer hostNS.Close()
-
-	if err := ns.WithNetNSPath(containerNetNS, func(_ ns.NetNS) error {
+	if err := ns.WithNetNSPath(containerNetNS, func(hostNS ns.NetNS) error {
 		klog.V(2).Infof("Creating veth devices (%s, %s) for container %s", containerIfaceName, hostIfaceName, containerID)
 		hostVeth, containerVeth, err := ip.SetupVethWithName(containerIfaceName, hostIfaceName, mtu, hostNS)
 		if err != nil {

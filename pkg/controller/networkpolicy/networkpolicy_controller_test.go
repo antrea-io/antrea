@@ -56,8 +56,11 @@ var (
 
 	protocolTCP = controlplane.ProtocolTCP
 
-	int80 = intstr.FromInt(80)
-	int81 = intstr.FromInt(81)
+	int80   = intstr.FromInt(80)
+	int81   = intstr.FromInt(81)
+	int1000 = intstr.FromInt(1000)
+
+	int32For1999 = int32(1999)
 
 	strHTTP = intstr.FromString("http")
 )

@@ -15,6 +15,8 @@
 package flowrecords
 
 import (
+	"net"
+
 	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter"
@@ -36,8 +38,35 @@ func NewFlowRecords(connStore *connections.ConnectionStore) *FlowRecords {
 
 // BuildFlowRecords builds the flow record map from connection map in connection store
 func (fr *FlowRecords) BuildFlowRecords() error {
-	// fr.addOrUpdateFlowRecord method does not return any error, hence no error handling required.
-	fr.connStore.ForAllConnectionsDo(fr.addOrUpdateFlowRecord)
+	addOrUpdateFlowRecord := func(key flowexporter.ConnectionKey, conn flowexporter.Connection) error {
+		// If DoExport flag is not set return immediately.
+		if !conn.DoExport {
+			return nil
+		}
+		record, exists := fr.recordsMap[key]
+
+		isIPv6 := false
+		if net.ParseIP(key[0]).To4() == nil {
+			isIPv6 = true
+		}
+		if !exists {
+			record = flowexporter.FlowRecord{
+				Conn:               &conn,
+				PrevPackets:        0,
+				PrevBytes:          0,
+				PrevReversePackets: 0,
+				PrevReverseBytes:   0,
+				IsIPv6:             isIPv6,
+			}
+		} else {
+			record.Conn = &conn
+		}
+		fr.recordsMap[key] = record
+		return nil
+	}
+
+	// addOrUpdateFlowRecord method does not return any error, hence no error handling required.
+	fr.connStore.ForAllConnectionsDo(addOrUpdateFlowRecord)
 	klog.V(2).Infof("No. of flow records built: %d", len(fr.recordsMap))
 	return nil
 }
@@ -80,27 +109,5 @@ func (fr *FlowRecords) ForAllFlowRecordsDo(callback flowexporter.FlowRecordCallB
 		}
 	}
 
-	return nil
-}
-
-func (fr *FlowRecords) addOrUpdateFlowRecord(key flowexporter.ConnectionKey, conn flowexporter.Connection) error {
-	// If DoExport flag is not set return immediately.
-	if !conn.DoExport {
-		return nil
-	}
-
-	record, exists := fr.recordsMap[key]
-	if !exists {
-		record = flowexporter.FlowRecord{
-			Conn:               &conn,
-			PrevPackets:        0,
-			PrevBytes:          0,
-			PrevReversePackets: 0,
-			PrevReverseBytes:   0,
-		}
-	} else {
-		record.Conn = &conn
-	}
-	fr.recordsMap[key] = record
 	return nil
 }

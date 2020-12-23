@@ -81,29 +81,20 @@ type testPeerConfig struct {
 }
 
 type testConfig struct {
-	bridge       string
-	localGateway *testPortConfig
-	localPods    []*testLocalPodConfig
-	peers        []*testPeerConfig
-	tunnelOFPort uint32
-	serviceCIDR  *net.IPNet
-	globalMAC    net.HardwareAddr
-	enableIPv6   bool
-	enableIPv4   bool
+	bridge      string
+	nodeConfig  *config1.NodeConfig
+	localPods   []*testLocalPodConfig
+	peers       []*testPeerConfig
+	serviceCIDR *net.IPNet
+	globalMAC   net.HardwareAddr
+	enableIPv6  bool
+	enableIPv4  bool
 }
 
 var (
 	_, podIPv4CIDR, _ = net.ParseCIDR("192.168.1.0/24")
 	_, podIPv6CIDR, _ = net.ParseCIDR("fd74:ca9b:172:19::/64")
-
-	ofTestNodeConfig config1.NodeConfig
 )
-
-func init() {
-	nodeIP, nodeSubnet, _ := net.ParseCIDR("10.10.10.1/24")
-	nodeSubnet.IP = nodeIP
-	ofTestNodeConfig.NodeIPAddr = nodeSubnet
-}
 
 func TestConnectivityFlows(t *testing.T) {
 	// Initialize ovs metrics (Prometheus) to test them
@@ -167,7 +158,7 @@ func TestReplayFlowsNetworkPolicyFlows(t *testing.T) {
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge: %v", err))
 
-	_, err = c.Initialize(roundInfo, &config1.NodeConfig{}, config1.TrafficEncapModeEncap, config1.HostGatewayOFPort)
+	_, err = c.Initialize(roundInfo, &config1.NodeConfig{}, config1.TrafficEncapModeEncap)
 	require.Nil(t, err, "Failed to initialize OFClient")
 
 	defer func() {
@@ -215,9 +206,9 @@ func TestReplayFlowsNetworkPolicyFlows(t *testing.T) {
 }
 
 func testExternalFlows(t *testing.T, config *testConfig) {
-	nodeIP := ofTestNodeConfig.NodeIPAddr.IP
-	localSubnet := ofTestNodeConfig.PodIPv4CIDR
-	if err := c.InstallExternalFlows(nodeIP, *localSubnet); err != nil {
+	nodeIP := config.nodeConfig.NodeIPAddr.IP
+	localSubnet := config.nodeConfig.PodIPv4CIDR
+	if err := c.InstallExternalFlows(); err != nil {
 		t.Errorf("Failed to install OpenFlow entries to allow Pod to communicate to the external addresses: %v", err)
 	}
 	for _, tableFlow := range prepareExternalFlows(nodeIP, localSubnet, config.globalMAC) {
@@ -247,17 +238,7 @@ func testReplayFlows(t *testing.T) {
 }
 
 func testInitialize(t *testing.T, config *testConfig) {
-	if config.enableIPv4 {
-		ofTestNodeConfig.PodIPv4CIDR = podIPv4CIDR
-	} else {
-		ofTestNodeConfig.PodIPv4CIDR = nil
-	}
-	if config.enableIPv6 {
-		ofTestNodeConfig.PodIPv6CIDR = podIPv6CIDR
-	} else {
-		ofTestNodeConfig.PodIPv6CIDR = nil
-	}
-	if _, err := c.Initialize(roundInfo, &ofTestNodeConfig, config1.TrafficEncapModeEncap, config1.HostGatewayOFPort); err != nil {
+	if _, err := c.Initialize(roundInfo, config.nodeConfig, config1.TrafficEncapModeEncap); err != nil {
 		t.Errorf("Failed to initialize openflow client: %v", err)
 	}
 	for _, tableFlow := range prepareDefaultFlows(config) {
@@ -267,17 +248,17 @@ func testInitialize(t *testing.T, config *testConfig) {
 }
 
 func testInstallTunnelFlows(t *testing.T, config *testConfig) {
-	err := c.InstallDefaultTunnelFlows(config.tunnelOFPort)
+	err := c.InstallDefaultTunnelFlows()
 	if err != nil {
 		t.Fatalf("Failed to install Openflow entries for tunnel port: %v", err)
 	}
-	for _, tableFlow := range prepareTunnelFlows(config.tunnelOFPort, config.globalMAC) {
+	for _, tableFlow := range prepareTunnelFlows(config1.DefaultTunOFPort, config.globalMAC) {
 		ofTestUtils.CheckFlowExists(t, ovsCtlClient, tableFlow.tableID, true, tableFlow.flows)
 	}
 }
 
 func testInstallServiceFlows(t *testing.T, config *testConfig) {
-	err := c.InstallClusterServiceFlows(true, true)
+	err := c.InstallClusterServiceFlows()
 	if err != nil {
 		t.Fatalf("Failed to install Openflow entries to skip service CIDR from egress table: %v", err)
 	}
@@ -287,51 +268,55 @@ func testInstallServiceFlows(t *testing.T, config *testConfig) {
 }
 
 func testInstallNodeFlows(t *testing.T, config *testConfig) {
+	gatewayConfig := config.nodeConfig.GatewayConfig
 	for _, node := range config.peers {
 		peerConfig := map[*net.IPNet]net.IP{
 			&node.subnet: node.gateway,
 		}
-		err := c.InstallNodeFlows(node.name, config.localGateway.mac, peerConfig, node.nodeAddress, config.tunnelOFPort, 0)
+		err := c.InstallNodeFlows(node.name, peerConfig, node.nodeAddress, 0)
 		if err != nil {
 			t.Fatalf("Failed to install Openflow entries for node connectivity: %v", err)
 		}
-		for _, tableFlow := range prepareNodeFlows(config.tunnelOFPort, node.subnet, node.gateway, node.nodeAddress, config.globalMAC, config.localGateway.mac) {
+		for _, tableFlow := range prepareNodeFlows(node.subnet, node.gateway, node.nodeAddress, config.globalMAC, gatewayConfig.MAC) {
 			ofTestUtils.CheckFlowExists(t, ovsCtlClient, tableFlow.tableID, true, tableFlow.flows)
 		}
 	}
 }
 
 func testUninstallNodeFlows(t *testing.T, config *testConfig) {
+	gatewayConfig := config.nodeConfig.GatewayConfig
 	for _, node := range config.peers {
 		err := c.UninstallNodeFlows(node.name)
 		if err != nil {
 			t.Fatalf("Failed to uninstall Openflow entries for node connectivity: %v", err)
 		}
-		for _, tableFlow := range prepareNodeFlows(config.tunnelOFPort, node.subnet, node.gateway, node.nodeAddress, config.globalMAC, config.localGateway.mac) {
+		for _, tableFlow := range prepareNodeFlows(node.subnet, node.gateway, node.nodeAddress, config.globalMAC, gatewayConfig.MAC) {
 			ofTestUtils.CheckFlowExists(t, ovsCtlClient, tableFlow.tableID, false, tableFlow.flows)
 		}
 	}
 }
 
 func testInstallPodFlows(t *testing.T, config *testConfig) {
+	gatewayConfig := config.nodeConfig.GatewayConfig
 	for _, pod := range config.localPods {
-		err := c.InstallPodFlows(pod.name, pod.ips, pod.mac, config.localGateway.mac, pod.ofPort)
+		err := c.InstallPodFlows(pod.name, pod.ips, pod.mac, pod.ofPort)
 		if err != nil {
 			t.Fatalf("Failed to install Openflow entries for pod: %v", err)
 		}
-		for _, tableFlow := range preparePodFlows(pod.ips, pod.mac, pod.ofPort, config.localGateway.mac, config.globalMAC) {
+		for _, tableFlow := range preparePodFlows(pod.ips, pod.mac, pod.ofPort, gatewayConfig.MAC, config.globalMAC) {
 			ofTestUtils.CheckFlowExists(t, ovsCtlClient, tableFlow.tableID, true, tableFlow.flows)
 		}
 	}
 }
 
 func testUninstallPodFlows(t *testing.T, config *testConfig) {
+	gatewayConfig := config.nodeConfig.GatewayConfig
 	for _, pod := range config.localPods {
 		err := c.UninstallPodFlows(pod.name)
 		if err != nil {
 			t.Fatalf("Failed to uninstall Openflow entries for pod: %v", err)
 		}
-		for _, tableFlow := range preparePodFlows(pod.ips, pod.mac, pod.ofPort, config.localGateway.mac, config.globalMAC) {
+		for _, tableFlow := range preparePodFlows(pod.ips, pod.mac, pod.ofPort, gatewayConfig.MAC, config.globalMAC) {
 			ofTestUtils.CheckFlowExists(t, ovsCtlClient, tableFlow.tableID, false, tableFlow.flows)
 		}
 	}
@@ -345,7 +330,7 @@ func TestNetworkPolicyFlows(t *testing.T) {
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge %s", br))
 
-	_, err = c.Initialize(roundInfo, &config1.NodeConfig{PodIPv4CIDR: podIPv4CIDR, PodIPv6CIDR: podIPv6CIDR}, config1.TrafficEncapModeEncap, config1.HostGatewayOFPort)
+	_, err = c.Initialize(roundInfo, &config1.NodeConfig{PodIPv4CIDR: podIPv4CIDR, PodIPv6CIDR: podIPv6CIDR}, config1.TrafficEncapModeEncap)
 	require.Nil(t, err, "Failed to initialize OFClient")
 
 	defer func() {
@@ -486,7 +471,7 @@ func TestProxyServiceFlows(t *testing.T) {
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge %s", br))
 
-	_, err = c.Initialize(roundInfo, &config1.NodeConfig{}, config1.TrafficEncapModeEncap, config1.HostGatewayOFPort)
+	_, err = c.Initialize(roundInfo, &config1.NodeConfig{}, config1.TrafficEncapModeEncap)
 	require.Nil(t, err, "Failed to initialize OFClient")
 
 	defer func() {
@@ -605,7 +590,7 @@ func expectedProxyServiceGroupAndFlows(gid uint32, svc svcConfig, endpointList [
 		},
 		{
 			MatchStr: fmt.Sprintf("priority=190,%s,reg4=0x30000/0x70000,nw_dst=%s,tp_dst=%d", string(svc.protocol), svc.ip.String(), svc.port),
-			ActStr:   fmt.Sprintf("learn(table=40,idle_timeout=%d,priority=200,delete_learned,cookie=0x%x,eth_type=0x800,nw_proto=%d,%s,NXM_OF_IP_DST[],NXM_OF_IP_SRC[],load:NXM_NX_REG3[]->NXM_NX_REG3[],load:NXM_NX_REG4[0..15]->NXM_NX_REG4[0..15],load:0x2->NXM_NX_REG4[16..18],load:0x1->NXM_NX_REG0[19]),load:0x2->NXM_NX_REG4[16..18],goto_table:42", stickyAge, cookieAllocator.RequestWithObjectID(4, gid).Raw(), nw_proto, learnProtoField),
+			ActStr:   fmt.Sprintf("learn(table=40,hard_timeout=%d,priority=200,delete_learned,cookie=0x%x,eth_type=0x800,nw_proto=%d,%s,NXM_OF_IP_DST[],NXM_OF_IP_SRC[],load:NXM_NX_REG3[]->NXM_NX_REG3[],load:NXM_NX_REG4[0..15]->NXM_NX_REG4[0..15],load:0x2->NXM_NX_REG4[16..18],load:0x1->NXM_NX_REG0[19]),load:0x2->NXM_NX_REG4[16..18],goto_table:42", stickyAge, cookieAllocator.RequestWithObjectID(4, gid).Raw(), nw_proto, learnProtoField),
 		},
 	}}
 	epDNATFlows := expectTableFlows{tableID: 42, flows: []*ofTestUtils.ExpectFlow{}}
@@ -819,11 +804,19 @@ func checkOVSFlowMetrics(t *testing.T, client ofClient.Client) {
 }
 
 func testInstallGatewayFlows(t *testing.T, config *testConfig) {
-	err := c.InstallGatewayFlows(config.localGateway.ips, config.localGateway.mac, config.localGateway.ofPort)
+	gatewayConfig := config.nodeConfig.GatewayConfig
+	err := c.InstallGatewayFlows()
 	if err != nil {
 		t.Fatalf("Failed to install Openflow entries for gateway: %v", err)
 	}
-	for _, tableFlow := range prepareGatewayFlows(config.localGateway.ips, config.localGateway.mac, config.localGateway.ofPort, config.globalMAC) {
+	var ips []net.IP
+	if config.enableIPv4 {
+		ips = append(ips, gatewayConfig.IPv4)
+	}
+	if config.enableIPv6 {
+		ips = append(ips, gatewayConfig.IPv6)
+	}
+	for _, tableFlow := range prepareGatewayFlows(ips, gatewayConfig.MAC, config.globalMAC) {
 		ofTestUtils.CheckFlowExists(t, ovsCtlClient, tableFlow.tableID, true, tableFlow.flows)
 	}
 }
@@ -831,18 +824,26 @@ func testInstallGatewayFlows(t *testing.T, config *testConfig) {
 func prepareConfiguration() *testConfig {
 	podMAC, _ := net.ParseMAC("aa:aa:aa:aa:aa:13")
 	gwMAC, _ := net.ParseMAC("aa:aa:aa:aa:aa:11")
+	nodeIP, nodeSubnet, _ := net.ParseCIDR("10.10.10.1/24")
+	nodeSubnet.IP = nodeIP
+
+	gatewayConfig := &config1.GatewayConfig{
+		IPv4: net.ParseIP("192.168.1.1"),
+		MAC:  gwMAC,
+	}
+	nodeConfig := &config1.NodeConfig{
+		NodeIPAddr:    nodeSubnet,
+		GatewayConfig: gatewayConfig,
+		PodIPv4CIDR:   podIPv4CIDR,
+	}
+
 	podCfg := &testLocalPodConfig{
 		name: "container-1",
 		testPortConfig: &testPortConfig{
 			ips:    []net.IP{net.ParseIP("192.168.1.3")},
 			mac:    podMAC,
-			ofPort: uint32(3),
+			ofPort: uint32(11),
 		},
-	}
-	gwCfg := &testPortConfig{
-		ips:    []net.IP{net.ParseIP("192.168.1.1")},
-		mac:    gwMAC,
-		ofPort: uint32(1),
 	}
 	_, serviceCIDR, _ := net.ParseCIDR("172.16.0.0/16")
 	_, peerSubnet, _ := net.ParseCIDR("192.168.2.0/24")
@@ -854,33 +855,37 @@ func prepareConfiguration() *testConfig {
 	}
 	vMAC, _ := net.ParseMAC("aa:bb:cc:dd:ee:ff")
 	return &testConfig{
-		bridge:       br,
-		localGateway: gwCfg,
-		localPods:    []*testLocalPodConfig{podCfg},
-		peers:        []*testPeerConfig{peerNode},
-		tunnelOFPort: uint32(2),
-		serviceCIDR:  serviceCIDR,
-		globalMAC:    vMAC,
-		enableIPv4:   true,
-		enableIPv6:   false,
+		bridge:      br,
+		nodeConfig:  nodeConfig,
+		localPods:   []*testLocalPodConfig{podCfg},
+		peers:       []*testPeerConfig{peerNode},
+		serviceCIDR: serviceCIDR,
+		globalMAC:   vMAC,
+		enableIPv4:  true,
+		enableIPv6:  false,
 	}
 }
 
 func prepareIPv6Configuration() *testConfig {
 	podMAC, _ := net.ParseMAC("aa:aa:aa:aa:aa:13")
 	gwMAC, _ := net.ParseMAC("aa:aa:aa:aa:aa:11")
+
+	gatewayConfig := &config1.GatewayConfig{
+		IPv6: net.ParseIP("fd74:ca9b:172:19::1"),
+		MAC:  gwMAC,
+	}
+	nodeConfig := &config1.NodeConfig{
+		GatewayConfig: gatewayConfig,
+		PodIPv6CIDR:   podIPv6CIDR,
+	}
+
 	podCfg := &testLocalPodConfig{
 		name: "container-1",
 		testPortConfig: &testPortConfig{
 			ips:    []net.IP{net.ParseIP("fd74:ca9b:172:19::3")},
 			mac:    podMAC,
-			ofPort: uint32(3),
+			ofPort: uint32(11),
 		},
-	}
-	gwCfg := &testPortConfig{
-		ips:    []net.IP{net.ParseIP("fd74:ca9b:172:19::1")},
-		mac:    gwMAC,
-		ofPort: uint32(1),
 	}
 	_, serviceCIDR, _ := net.ParseCIDR("ee74:ca9b:2345:a33::/64")
 	_, peerSubnet, _ := net.ParseCIDR("fd74:ca9b:172:20::/64")
@@ -892,15 +897,14 @@ func prepareIPv6Configuration() *testConfig {
 	}
 	vMAC, _ := net.ParseMAC("aa:bb:cc:dd:ee:ff")
 	return &testConfig{
-		bridge:       br,
-		localGateway: gwCfg,
-		localPods:    []*testLocalPodConfig{podCfg},
-		peers:        []*testPeerConfig{peerNode},
-		tunnelOFPort: uint32(2),
-		serviceCIDR:  serviceCIDR,
-		globalMAC:    vMAC,
-		enableIPv4:   false,
-		enableIPv6:   true,
+		bridge:      br,
+		nodeConfig:  nodeConfig,
+		localPods:   []*testLocalPodConfig{podCfg},
+		peers:       []*testPeerConfig{peerNode},
+		serviceCIDR: serviceCIDR,
+		globalMAC:   vMAC,
+		enableIPv4:  false,
+		enableIPv6:  true,
 	}
 }
 
@@ -965,7 +969,7 @@ func preparePodFlows(podIPs []net.IP, podMAC net.HardwareAddr, podOFPort uint32,
 				[]*ofTestUtils.ExpectFlow{
 					{
 						MatchStr: fmt.Sprintf("priority=200,%s,reg0=0x80000/0x80000,%s=%s", ipProto, nwDstField, podIP.String()),
-						ActStr:   fmt.Sprintf("set_field:%s->eth_src,set_field:%s->eth_dst,dec_ttl,goto_table:80", gwMAC.String(), podMAC.String()),
+						ActStr:   fmt.Sprintf("set_field:%s->eth_src,set_field:%s->eth_dst,goto_table:71", gwMAC.String(), podMAC.String()),
 					},
 				},
 			},
@@ -975,13 +979,13 @@ func preparePodFlows(podIPs []net.IP, podMAC net.HardwareAddr, podOFPort uint32,
 	return flows
 }
 
-func prepareGatewayFlows(gwIPs []net.IP, gwMAC net.HardwareAddr, gwOFPort uint32, vMAC net.HardwareAddr) []expectTableFlows {
+func prepareGatewayFlows(gwIPs []net.IP, gwMAC net.HardwareAddr, vMAC net.HardwareAddr) []expectTableFlows {
 	flows := []expectTableFlows{
 		{
 			uint8(0),
 			[]*ofTestUtils.ExpectFlow{
 				{
-					MatchStr: fmt.Sprintf("priority=200,in_port=%d", gwOFPort),
+					MatchStr: fmt.Sprintf("priority=200,in_port=%d", config1.HostGatewayOFPort),
 					ActStr:   "load:0x1->NXM_NX_REG0[0..15],goto_table:10",
 				},
 			},
@@ -991,7 +995,7 @@ func prepareGatewayFlows(gwIPs []net.IP, gwMAC net.HardwareAddr, gwOFPort uint32
 			[]*ofTestUtils.ExpectFlow{
 				{
 					MatchStr: fmt.Sprintf("priority=200,dl_dst=%s", gwMAC.String()),
-					ActStr:   fmt.Sprintf("load:0x%x->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],goto_table:90", gwOFPort),
+					ActStr:   fmt.Sprintf("load:0x%x->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],goto_table:105", config1.HostGatewayOFPort),
 				},
 			},
 		},
@@ -1008,11 +1012,11 @@ func prepareGatewayFlows(gwIPs []net.IP, gwMAC net.HardwareAddr, gwOFPort uint32
 					uint8(10),
 					[]*ofTestUtils.ExpectFlow{
 						{
-							MatchStr: fmt.Sprintf("priority=200,arp,in_port=%d,arp_spa=%s,arp_sha=%s", gwOFPort, gwIP, gwMAC),
+							MatchStr: fmt.Sprintf("priority=200,arp,in_port=%d,arp_spa=%s,arp_sha=%s", config1.HostGatewayOFPort, gwIP, gwMAC),
 							ActStr:   "goto_table:20",
 						},
 						{
-							MatchStr: fmt.Sprintf("priority=200,ip,in_port=%d", gwOFPort),
+							MatchStr: fmt.Sprintf("priority=200,ip,in_port=%d", config1.HostGatewayOFPort),
 							ActStr:   "goto_table:29",
 						},
 					},
@@ -1067,10 +1071,19 @@ func prepareTunnelFlows(tunnelPort uint32, vMAC net.HardwareAddr) []expectTableF
 				},
 			},
 		},
+		{
+			uint8(80),
+			[]*ofTestUtils.ExpectFlow{
+				{
+					MatchStr: fmt.Sprintf("priority=200,dl_dst=%s", vMAC.String()),
+					ActStr:   fmt.Sprintf("load:0x%x->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],goto_table:105", config1.DefaultTunOFPort),
+				},
+			},
+		},
 	}
 }
 
-func prepareNodeFlows(tunnelPort uint32, peerSubnet net.IPNet, peerGwIP, peerNodeIP net.IP, vMAC, localGwMAC net.HardwareAddr) []expectTableFlows {
+func prepareNodeFlows(peerSubnet net.IPNet, peerGwIP, peerNodeIP net.IP, vMAC, localGwMAC net.HardwareAddr) []expectTableFlows {
 	var expFlows []expectTableFlows
 	var ipProtoStr, nwDstFieldName string
 	if peerGwIP.To4() != nil {
@@ -1094,7 +1107,8 @@ func prepareNodeFlows(tunnelPort uint32, peerSubnet net.IPNet, peerGwIP, peerNod
 		[]*ofTestUtils.ExpectFlow{
 			{
 				MatchStr: fmt.Sprintf("priority=200,%s,%s=%s", ipProtoStr, nwDstFieldName, peerSubnet.String()),
-				ActStr:   fmt.Sprintf("dec_ttl,set_field:%s->eth_src,set_field:%s->eth_dst,load:0x%x->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],set_field:%s->tun_dst,goto_table:105", localGwMAC.String(), vMAC.String(), tunnelPort, peerNodeIP.String())},
+				ActStr:   fmt.Sprintf("set_field:%s->eth_src,set_field:%s->eth_dst,set_field:%s->tun_dst,goto_table:71", localGwMAC.String(), vMAC.String(), peerNodeIP.String()),
+			},
 		},
 	})
 
@@ -1124,6 +1138,10 @@ func prepareDefaultFlows(config *testConfig) []expectTableFlows {
 		tableID: 105,
 		flows:   []*ofTestUtils.ExpectFlow{{MatchStr: "priority=0", ActStr: "goto_table:106"}},
 	}
+	table71Flows := expectTableFlows{
+		tableID: 71,
+		flows:   []*ofTestUtils.ExpectFlow{{MatchStr: "priority=0", ActStr: "goto_table:80"}},
+	}
 	if config.enableIPv4 {
 		table31Flows.flows = append(table31Flows.flows,
 			&ofTestUtils.ExpectFlow{MatchStr: "priority=210,ct_state=-new+trk,ct_mark=0x20,ip,reg0=0x1/0xffff", ActStr: "goto_table:42"},
@@ -1132,6 +1150,10 @@ func prepareDefaultFlows(config *testConfig) []expectTableFlows {
 		table105Flows.flows = append(table105Flows.flows,
 			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ct_state=+new+trk,ip,reg0=0x1/0xffff", ActStr: "ct(commit,table=106,zone=65520,exec(load:0x20->NXM_NX_CT_MARK[])"},
 			&ofTestUtils.ExpectFlow{MatchStr: "priority=190,ct_state=+new+trk,ip", ActStr: "ct(commit,table=106,zone=65520)"},
+		)
+		table71Flows.flows = append(table71Flows.flows,
+			&ofTestUtils.ExpectFlow{MatchStr: "priority=210,ip,reg0=0x1/0xffff", ActStr: "goto_table:80"},
+			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ip", ActStr: "dec_ttl,goto_table:80"},
 		)
 	}
 	if config.enableIPv6 {
@@ -1143,9 +1165,13 @@ func prepareDefaultFlows(config *testConfig) []expectTableFlows {
 			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ct_state=+new+trk,ipv6,reg0=0x1/0xffff", ActStr: "ct(commit,table=106,zone=65510,exec(load:0x20->NXM_NX_CT_MARK[])"},
 			&ofTestUtils.ExpectFlow{MatchStr: "priority=190,ct_state=+new+trk,ipv6", ActStr: "ct(commit,table=106,zone=65510)"},
 		)
+		table71Flows.flows = append(table71Flows.flows,
+			&ofTestUtils.ExpectFlow{MatchStr: "priority=210,ipv6,reg0=0x1/0xffff", ActStr: "goto_table:80"},
+			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ipv6", ActStr: "dec_ttl,goto_table:80"},
+		)
 	}
 	return []expectTableFlows{
-		table31Flows, table105Flows,
+		table31Flows, table105Flows, table71Flows,
 		{
 			uint8(0),
 			[]*ofTestUtils.ExpectFlow{{MatchStr: "priority=0", ActStr: "drop"}},
@@ -1189,7 +1215,7 @@ func prepareDefaultFlows(config *testConfig) []expectTableFlows {
 		},
 		{
 			uint8(80),
-			[]*ofTestUtils.ExpectFlow{{MatchStr: "priority=0", ActStr: "goto_table:90"}},
+			[]*ofTestUtils.ExpectFlow{{MatchStr: "priority=0", ActStr: "goto_table:105"}},
 		},
 		{
 			uint8(90),

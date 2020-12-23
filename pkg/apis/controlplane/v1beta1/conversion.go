@@ -16,11 +16,13 @@ package v1beta1
 
 import (
 	"fmt"
+	"unsafe"
 
 	"k8s.io/apimachinery/pkg/conversion"
 	"k8s.io/apimachinery/pkg/runtime"
 
 	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
+	"github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
 )
 
 func init() {
@@ -109,9 +111,11 @@ func Convert_controlplane_GroupMember_To_v1beta1_GroupMember(in *controlplane.Gr
 }
 
 func Convert_v1beta1_GroupMemberPod_To_controlplane_GroupMember(in *GroupMemberPod, out *controlplane.GroupMember, s conversion.Scope) error {
-	out.Pod = &controlplane.PodReference{
-		Name:      in.Pod.Name,
-		Namespace: in.Pod.Namespace,
+	if in.Pod != nil {
+		out.Pod = &controlplane.PodReference{
+			Name:      in.Pod.Name,
+			Namespace: in.Pod.Namespace,
+		}
 	}
 	out.IPs = []controlplane.IPAddress{controlplane.IPAddress(in.IP)}
 	ports := make([]controlplane.NamedPort, len(in.Ports))
@@ -124,13 +128,20 @@ func Convert_v1beta1_GroupMemberPod_To_controlplane_GroupMember(in *GroupMemberP
 	return nil
 }
 
-func Convert_controlplane_GroupMember_To_v1beta1_GroupMemberPod(in *controlplane.GroupMember, out *GroupMemberPod, s conversion.Scope) error {
+// Convert_controlplane_GroupMember_To_v1beta1_GroupMemberPod converts controlplane GroupMember to v1beta1 GroupMember
+// based on whether it's required to include Pod reference in the result. We must not include Pod reference when the
+// conversion is called for an AddressGroup as agents don't expect it in v1beta1 version.
+// This function doesn't match the pattern of conversion function which requires the last parameter to be
+// conversion.Scope so won't be registered to schema.
+func Convert_controlplane_GroupMember_To_v1beta1_GroupMemberPod(in *controlplane.GroupMember, out *GroupMemberPod, includePodRef bool) error {
 	if in.Pod == nil || len(in.IPs) > 1 {
 		return fmt.Errorf("cannot convert ExternalEntity or dual stack Pod into GroupMemberPod")
 	}
-	out.Pod = &PodReference{
-		Name:      in.Pod.Name,
-		Namespace: in.Pod.Namespace,
+	if includePodRef {
+		out.Pod = &PodReference{
+			Name:      in.Pod.Name,
+			Namespace: in.Pod.Namespace,
+		}
 	}
 	if len(in.IPs) > 0 {
 		out.IP = IPAddress(in.IPs[0])
@@ -172,7 +183,7 @@ func Convert_controlplane_AddressGroup_To_v1beta1_AddressGroup(in *controlplane.
 		m := in.GroupMembers[i]
 		if m.Pod != nil {
 			var pod GroupMemberPod
-			if err := Convert_controlplane_GroupMember_To_v1beta1_GroupMemberPod(&m, &pod, nil); err != nil {
+			if err := Convert_controlplane_GroupMember_To_v1beta1_GroupMemberPod(&m, &pod, false); err != nil {
 				return err
 			}
 			pods = append(pods, pod)
@@ -227,7 +238,7 @@ func Convert_controlplane_AddressGroupPatch_To_v1beta1_AddressGroupPatch(in *con
 		m := in.AddedGroupMembers[i]
 		if m.Pod != nil {
 			var pod GroupMemberPod
-			if err := Convert_controlplane_GroupMember_To_v1beta1_GroupMemberPod(&m, &pod, nil); err != nil {
+			if err := Convert_controlplane_GroupMember_To_v1beta1_GroupMemberPod(&m, &pod, false); err != nil {
 				return err
 			}
 			addedPods = append(addedPods, pod)
@@ -241,7 +252,7 @@ func Convert_controlplane_AddressGroupPatch_To_v1beta1_AddressGroupPatch(in *con
 		m := in.RemovedGroupMembers[i]
 		if m.Pod != nil {
 			var pod GroupMemberPod
-			if err := Convert_controlplane_GroupMember_To_v1beta1_GroupMemberPod(&m, &pod, nil); err != nil {
+			if err := Convert_controlplane_GroupMember_To_v1beta1_GroupMemberPod(&m, &pod, false); err != nil {
 				return err
 			}
 			removedPods = append(removedPods, pod)
@@ -285,7 +296,7 @@ func Convert_controlplane_AppliedToGroup_To_v1beta1_AppliedToGroup(in *controlpl
 		m := in.GroupMembers[i]
 		if m.Pod != nil {
 			var pod GroupMemberPod
-			if err := Convert_controlplane_GroupMember_To_v1beta1_GroupMemberPod(&m, &pod, nil); err != nil {
+			if err := Convert_controlplane_GroupMember_To_v1beta1_GroupMemberPod(&m, &pod, true); err != nil {
 				return err
 			}
 			pods = append(pods, pod)
@@ -341,7 +352,7 @@ func Convert_controlplane_AppliedToGroupPatch_To_v1beta1_AppliedToGroupPatch(in 
 		m := in.AddedGroupMembers[i]
 		if m.Pod != nil {
 			var pod GroupMemberPod
-			if err := Convert_controlplane_GroupMember_To_v1beta1_GroupMemberPod(&m, &pod, nil); err != nil {
+			if err := Convert_controlplane_GroupMember_To_v1beta1_GroupMemberPod(&m, &pod, true); err != nil {
 				return err
 			}
 			addedPods = append(addedPods, pod)
@@ -355,7 +366,7 @@ func Convert_controlplane_AppliedToGroupPatch_To_v1beta1_AppliedToGroupPatch(in 
 		m := in.RemovedGroupMembers[i]
 		if m.Pod != nil {
 			var pod GroupMemberPod
-			if err := Convert_controlplane_GroupMember_To_v1beta1_GroupMemberPod(&m, &pod, nil); err != nil {
+			if err := Convert_controlplane_GroupMember_To_v1beta1_GroupMemberPod(&m, &pod, true); err != nil {
 				return err
 			}
 			removedPods = append(removedPods, pod)
@@ -369,5 +380,60 @@ func Convert_controlplane_AppliedToGroupPatch_To_v1beta1_AppliedToGroupPatch(in 
 	out.RemovedPods = removedPods
 	out.AddedGroupMembers = addedMembers
 	out.RemovedGroupMembers = removedMembers
+	return nil
+}
+
+func Convert_controlplane_NetworkPolicy_To_v1beta1_NetworkPolicy(in *controlplane.NetworkPolicy, out *NetworkPolicy, s conversion.Scope) error {
+	v1beta1Rules := make([]NetworkPolicyRule, len(in.Rules))
+	for i := range in.Rules {
+		var v1beta1Rule NetworkPolicyRule
+		if err := Convert_controlplane_NetworkPolicyRule_To_v1beta1_NetworkPolicyRule(&in.Rules[i], &v1beta1Rule, nil); err != nil {
+			return err
+		}
+		v1beta1Rules[i] = v1beta1Rule
+	}
+	out.ObjectMeta = in.ObjectMeta
+	out.Rules = v1beta1Rules
+	out.AppliedToGroups = *(*[]string)(unsafe.Pointer(&in.AppliedToGroups))
+	out.Priority = (*float64)(unsafe.Pointer(in.Priority))
+	out.TierPriority = (*int32)(unsafe.Pointer(in.TierPriority))
+	out.SourceRef = (*NetworkPolicyReference)(unsafe.Pointer(in.SourceRef))
+	return nil
+}
+
+func Convert_controlplane_NetworkPolicyRule_To_v1beta1_NetworkPolicyRule(in *controlplane.NetworkPolicyRule, out *NetworkPolicyRule, s conversion.Scope) error {
+	out.Direction = Direction(in.Direction)
+	if err := Convert_controlplane_NetworkPolicyPeer_To_v1beta1_NetworkPolicyPeer(&in.From, &out.From, s); err != nil {
+		return err
+	}
+	if err := Convert_controlplane_NetworkPolicyPeer_To_v1beta1_NetworkPolicyPeer(&in.To, &out.To, s); err != nil {
+		return err
+	}
+	out.Services = *(*[]Service)(unsafe.Pointer(&in.Services))
+	out.Priority = in.Priority
+	out.Action = (*v1alpha1.RuleAction)(unsafe.Pointer(in.Action))
+	out.EnableLogging = in.EnableLogging
+	return nil
+}
+
+func Convert_v1beta1_Service_To_controlplane_Service(in *Service, out *controlplane.Service, s conversion.Scope) error {
+	if in.Protocol != nil {
+		outProtocol := controlplane.Protocol(*in.Protocol)
+		out.Protocol = &outProtocol
+	}
+	if in.Port != nil {
+		out.Port = in.Port
+	}
+	return nil
+}
+
+func Convert_controlplane_Service_To_v1beta1_Service(in *controlplane.Service, out *Service, s conversion.Scope) error {
+	if in.Protocol != nil {
+		outProtocol := Protocol(*in.Protocol)
+		out.Protocol = &outProtocol
+	}
+	if in.Port != nil {
+		out.Port = in.Port
+	}
 	return nil
 }

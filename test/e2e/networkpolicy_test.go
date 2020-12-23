@@ -105,9 +105,9 @@ func TestNetworkPolicyStats(t *testing.T) {
 	// Wait for a few seconds in case that connections are established before policies are enforced.
 	time.Sleep(2 * time.Second)
 
-	sessions := 10
+	sessionsPerAddressFamily := 10
 	var wg sync.WaitGroup
-	for i := 0; i < sessions; i++ {
+	for i := 0; i < sessionsPerAddressFamily; i++ {
 		wg.Add(1)
 		go func() {
 			if clusterInfo.podV4NetworkCIDR != "" {
@@ -123,25 +123,25 @@ func TestNetworkPolicyStats(t *testing.T) {
 	}
 	wg.Wait()
 
-	multiple := 0
+	totalSessions := 0
 	if clusterInfo.podV4NetworkCIDR != "" {
-		multiple++
+		totalSessions += sessionsPerAddressFamily
 	}
 	if clusterInfo.podV6NetworkCIDR != "" {
-		multiple++
+		totalSessions += sessionsPerAddressFamily
 	}
-	totalSessions := sessions * multiple
+
 	if err := wait.Poll(5*time.Second, defaultTimeout, func() (bool, error) {
 		for _, np := range []string{"test-networkpolicy-ingress", "test-networkpolicy-egress"} {
-			metric, err := data.crdClient.StatsV1alpha1().NetworkPolicyStats(testNamespace).Get(context.TODO(), np, metav1.GetOptions{})
+			stats, err := data.crdClient.StatsV1alpha1().NetworkPolicyStats(testNamespace).Get(context.TODO(), np, metav1.GetOptions{})
 			if err != nil {
 				return false, err
 			}
-			t.Logf("Got NetworkPolicy metric: %v", metric)
-			if metric.TrafficStats.Sessions != int64(totalSessions) {
+			t.Logf("Got NetworkPolicy stats: %v", stats)
+			if stats.TrafficStats.Sessions != int64(totalSessions) {
 				return false, nil
 			}
-			if metric.TrafficStats.Packets < metric.TrafficStats.Sessions || metric.TrafficStats.Bytes < metric.TrafficStats.Sessions {
+			if stats.TrafficStats.Packets < stats.TrafficStats.Sessions || stats.TrafficStats.Bytes < stats.TrafficStats.Sessions {
 				return false, fmt.Errorf("Neither 'Packets' nor 'Bytes' should be smaller than 'Sessions'")
 			}
 		}
@@ -157,27 +157,43 @@ func TestDifferentNamedPorts(t *testing.T) {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
 	defer teardownTest(t, data)
-	data.testDifferentNamedPorts(t)
+	checkFn, cleanupFn := data.setupDifferentNamedPorts(t)
+	defer cleanupFn()
+	checkFn()
 }
 
-func (data *TestData) testDifferentNamedPorts(t *testing.T) {
+func (data *TestData) setupDifferentNamedPorts(t *testing.T) (checkFn func(), cleanupFn func()) {
+	var success bool
+	var cleanupFuncs []func()
+	cleanupFn = func() {
+		for i := len(cleanupFuncs) - 1; i >= 0; i-- {
+			cleanupFuncs[i]()
+		}
+	}
+	// Call cleanupFn only if the function fails. In case of success, we will call cleanupFn in callers.
+	defer func() {
+		if !success {
+			cleanupFn()
+		}
+	}()
+
 	server0Port := 80
-	_, server0IPs, cleanupFunc := createAndWaitForPod(t, data, func(name string, nodeName string) error {
+	server0Name, server0IPs, cleanupFunc := createAndWaitForPod(t, data, func(name string, nodeName string) error {
 		return data.createServerPod(name, "http", server0Port, false)
 	}, "test-server-", "")
-	defer cleanupFunc()
+	cleanupFuncs = append(cleanupFuncs, cleanupFunc)
 
 	server1Port := 8080
-	_, server1IPs, cleanupFunc := createAndWaitForPod(t, data, func(name string, nodeName string) error {
+	server1Name, server1IPs, cleanupFunc := createAndWaitForPod(t, data, func(name string, nodeName string) error {
 		return data.createServerPod(name, "http", server1Port, false)
 	}, "test-server-", "")
-	defer cleanupFunc()
+	cleanupFuncs = append(cleanupFuncs, cleanupFunc)
 
 	client0Name, _, cleanupFunc := createAndWaitForPod(t, data, data.createBusyboxPodOnNode, "test-client-", "")
-	defer cleanupFunc()
+	cleanupFuncs = append(cleanupFuncs, cleanupFunc)
 
 	client1Name, _, cleanupFunc := createAndWaitForPod(t, data, data.createBusyboxPodOnNode, "test-client-", "")
-	defer cleanupFunc()
+	cleanupFuncs = append(cleanupFuncs, cleanupFunc)
 
 	preCheckFunc := func(server0IP, server1IP string) {
 		// Both clients can connect to both servers.
@@ -199,10 +215,24 @@ func (data *TestData) testDifferentNamedPorts(t *testing.T) {
 		preCheckFunc(server0IPs.ipv6.String(), server1IPs.ipv6.String())
 	}
 
+	if testOptions.providerName == "kind" {
+		// Due to netdev datapath bug, sometimes datapath flows are not flushed after new openflows that change the
+		// actions are installed, causing client1 to still be able to connect to the servers after creating a policy
+		// that disallows it. The test waits for 10 seconds so that the datapath flows will expire.
+		// See https://github.com/vmware-tanzu/antrea/issues/1608 for more details.
+		time.Sleep(10 * time.Second)
+	}
+
 	// Create NetworkPolicy rule.
 	spec := &networkingv1.NetworkPolicySpec{
-		// Apply to all Pods.
-		PodSelector: metav1.LabelSelector{},
+		// Apply to two server Pods.
+		PodSelector: metav1.LabelSelector{MatchExpressions: []metav1.LabelSelectorRequirement{
+			{
+				Key:      "antrea-e2e",
+				Operator: metav1.LabelSelectorOpIn,
+				Values:   []string{server0Name, server1Name},
+			},
+		}},
 		// Allow client0 to access named port: "http".
 		Ingress: []networkingv1.NetworkPolicyIngressRule{{
 			Ports: []networkingv1.NetworkPolicyPort{{
@@ -217,15 +247,15 @@ func (data *TestData) testDifferentNamedPorts(t *testing.T) {
 			},
 		}},
 	}
-	np, err := data.createNetworkPolicy("test-networkpolicy-allow-client0-to-http", spec)
+	np, err := data.createNetworkPolicy(randName("test-networkpolicy-allow-client0-to-http"), spec)
 	if err != nil {
 		t.Fatalf("Error when creating network policy: %v", err)
 	}
-	defer func() {
+	cleanupFuncs = append(cleanupFuncs, func() {
 		if err = data.deleteNetworkpolicy(np); err != nil {
 			t.Fatalf("Error when deleting network policy: %v", err)
 		}
-	}()
+	})
 
 	npCheck := func(server0IP, server1IP string) {
 		// client0 can connect to both servers.
@@ -244,15 +274,18 @@ func (data *TestData) testDifferentNamedPorts(t *testing.T) {
 		}
 	}
 
-	// NetworkPolicy check.
-	if clusterInfo.podV4NetworkCIDR != "" {
-		npCheck(server0IPs.ipv4.String(), server1IPs.ipv4.String())
-	}
+	checkFn = func() {
+		// NetworkPolicy check.
+		if clusterInfo.podV4NetworkCIDR != "" {
+			npCheck(server0IPs.ipv4.String(), server1IPs.ipv4.String())
+		}
 
-	if clusterInfo.podV6NetworkCIDR != "" {
-		npCheck(server0IPs.ipv6.String(), server1IPs.ipv6.String())
+		if clusterInfo.podV6NetworkCIDR != "" {
+			npCheck(server0IPs.ipv6.String(), server1IPs.ipv6.String())
+		}
 	}
-
+	success = true
+	return
 }
 
 func TestDefaultDenyEgressPolicy(t *testing.T) {
