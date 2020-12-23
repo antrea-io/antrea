@@ -61,6 +61,10 @@ toc:
         url: /octant-plugin-installation
       - page: Prometheus Integration
         url: /prometheus-integration
+  - title: Cookbooks
+    subfolderitems:
+      - page: Using Antrea with Multus
+        url: /cookbooks/multus
   - title: Developer Guide
     subfolderitems:
       - page: Code Generation
