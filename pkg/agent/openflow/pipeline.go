@@ -678,17 +678,29 @@ func (c *client) ctRewriteDstMACFlows(gatewayMAC net.HardwareAddr, category cook
 	return flows
 }
 
-// serviceLBBypassFlow makes packets that belong to a tracked connection bypass
+// serviceLBBypassFlows makes packets that belong to a tracked connection bypass
 // service LB tables and enter egressRuleTable directly.
-func (c *client) serviceLBBypassFlow(ipProtocol binding.Protocol) binding.Flow {
+func (c *client) serviceLBBypassFlows(ipProtocol binding.Protocol) []binding.Flow {
 	connectionTrackStateTable := c.pipeline[conntrackStateTable]
-	return connectionTrackStateTable.BuildFlow(priorityNormal).MatchProtocol(ipProtocol).
-		MatchCTMark(ServiceCTMark, nil).
-		MatchCTStateNew(false).MatchCTStateTrk(true).
-		Action().LoadRegRange(int(marksReg), macRewriteMark, macRewriteMarkRange).
-		Action().GotoTable(EgressRuleTable).
-		Cookie(c.cookieAllocator.Request(cookie.Service).Raw()).
-		Done()
+	return []binding.Flow{
+		// Tracked connections with the ServiceCTMark (load-balanced by AntreaProxy) receive
+		// the macRewriteMark and are sent to egressRuleTable.
+		connectionTrackStateTable.BuildFlow(priorityNormal).MatchProtocol(ipProtocol).
+			MatchCTMark(ServiceCTMark, nil).
+			MatchCTStateNew(false).MatchCTStateTrk(true).
+			Action().LoadRegRange(int(marksReg), macRewriteMark, macRewriteMarkRange).
+			Action().GotoTable(EgressRuleTable).
+			Cookie(c.cookieAllocator.Request(cookie.Service).Raw()).
+			Done(),
+		// Tracked connections without the ServiceCTMark are sent to egressRuleTable
+		// directly. This is meant to match connections which were load-balanced by
+		// kube-proxy before AntreaProxy got enabled.
+		connectionTrackStateTable.BuildFlow(priorityLow).MatchProtocol(ipProtocol).
+			MatchCTStateNew(false).MatchCTStateTrk(true).
+			Action().GotoTable(EgressRuleTable).
+			Cookie(c.cookieAllocator.Request(cookie.Service).Raw()).
+			Done(),
+	}
 }
 
 // l2ForwardCalcFlow generates the flow that matches dst MAC and loads ofPort to reg.
