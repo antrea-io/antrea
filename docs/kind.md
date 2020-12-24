@@ -93,7 +93,7 @@ antrea-controller-775f4d79f8-6tksp   1/1     Running   0          8m56s
 ## Run the Antrea e2e tests
 
 To run the Antrea e2e test suite on your Kind cluster, please refer to [this
-document](/test/e2e#running-the-e2e-tests-on-a-kind-cluster).
+document](../test/e2e/README.md#running-the-e2e-tests-on-a-kind-cluster).
 
 ## FAQ
 
