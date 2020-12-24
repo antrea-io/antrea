@@ -17,6 +17,7 @@ package noderoute
 import (
 	"context"
 	"net"
+	"runtime"
 	"testing"
 	"time"
 
@@ -148,8 +149,14 @@ func TestControllerWithDuplicatePodCIDR(t *testing.T) {
 		c.processNextWorkItem()
 	}()
 
+	var testTimeout time.Duration
+	if runtime.GOOS == "windows" {
+		testTimeout = 10 * time.Second
+	} else {
+		testTimeout = 5 * time.Second
+	}
 	select {
-	case <-time.After(5 * time.Second):
+	case <-time.After(testTimeout):
 		t.Errorf("Test didn't finish in time")
 	case <-finishCh:
 	}
