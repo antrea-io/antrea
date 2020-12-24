@@ -276,7 +276,7 @@ func testInvalidACNPTierDoesNotExist(t *testing.T) {
 }
 
 func testInvalidACNPPortRangePortUnset(t *testing.T) {
-	invalidNpErr := fmt.Errorf("invalid Antrea ClusterNetworkPolicy egress rule ports set with endPort but no Port accepted")
+	invalidNpErr := fmt.Errorf("invalid Antrea ClusterNetworkPolicy egress rule with endPort but no port accepted")
 	builder := &ClusterNetworkPolicySpecBuilder{}
 	builder = builder.SetName("acnp-egress-port-range-port-unset").
 		SetPriority(1.0).
@@ -293,7 +293,7 @@ func testInvalidACNPPortRangePortUnset(t *testing.T) {
 }
 
 func testInvalidACNPPortRangeEndPortSmall(t *testing.T) {
-	invalidNpErr := fmt.Errorf("invalid Antrea ClusterNetworkPolicy egress rule ports set with endPort smaller than Port accepted")
+	invalidNpErr := fmt.Errorf("invalid Antrea ClusterNetworkPolicy egress rule with endPort smaller than port accepted")
 	builder := &ClusterNetworkPolicySpecBuilder{}
 	builder = builder.SetName("acnp-egress-port-range-endport-small").
 		SetPriority(1.0).
@@ -351,7 +351,7 @@ func testInvalidANPTierDoesNotExist(t *testing.T) {
 }
 
 func testInvalidANPPortRangePortUnset(t *testing.T) {
-	invalidNpErr := fmt.Errorf("invalid Antrea NetworkPolicy egress rule ports set with endPort but no Port accepted")
+	invalidNpErr := fmt.Errorf("invalid Antrea NetworkPolicy egress rule with endPort but no port accepted")
 	builder := &AntreaNetworkPolicySpecBuilder{}
 	builder = builder.SetName("y", "anp-egress-port-range-port-unset").
 		SetPriority(1.0).
@@ -368,7 +368,7 @@ func testInvalidANPPortRangePortUnset(t *testing.T) {
 }
 
 func testInvalidANPPortRangeEndPortSmall(t *testing.T) {
-	invalidNpErr := fmt.Errorf("invalid Antrea NetworkPolicy egress rule ports set with endPort smaller than Port accepted")
+	invalidNpErr := fmt.Errorf("invalid Antrea NetworkPolicy egress rule with endPort smaller than port accepted")
 	builder := &AntreaNetworkPolicySpecBuilder{}
 	builder = builder.SetName("y", "anp-egress-port-range-endport-small").
 		SetPriority(1.0).
