@@ -23,7 +23,6 @@
   - [Rule enforcement based on priorities](#rule-enforcement-based-on-priorities)
 - [RBAC](#rbac)
 - [Notes](#notes)
-- [Known Issues](#known-issues)
 <!-- /toc -->
 
 ## Summary
@@ -567,9 +566,3 @@ the policies that may affect their workloads.
   considered equal if they share the same tier, and have the same policy priority
   as well as rule priority.
 - For the "baseline" tier, the max supported unique priorities (at rule level）is 150.
-
-## Known Issues
-
-- Creating an Antrea NetworkPolicy with the same name as a K8s NetworkPolicy
-  under the same Namespace creates a collision and causes unexpected behavior.
-  See issue [1173](https://github.com/vmware-tanzu/antrea/issues/1173) for more details.
