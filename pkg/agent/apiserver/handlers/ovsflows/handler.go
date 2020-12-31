@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"k8s.io/klog"
 
@@ -69,21 +70,30 @@ func dumpFlows(aq agentquerier.AgentQuerier, table binding.TableIDType) ([]Respo
 // nil is returned if the flow table can not be found (the passed table name or
 // number is invalid).
 func getTableFlows(aq agentquerier.AgentQuerier, table string) ([]Response, error) {
-	var tableNumber binding.TableIDType
-	// Table nubmer is a 8-bit unsigned integer.
-	n, err := strconv.ParseUint(table, 10, 8)
-	if err == nil {
-		tableNumber = binding.TableIDType(n)
-		if openflow.GetFlowTableName(tableNumber) == "" {
-			return nil, nil
+	var resps []Response
+	for _, tableSeg := range strings.Split(strings.TrimSpace(table), ",") {
+		tableSeg = strings.TrimSpace(tableSeg)
+		var tableNumber binding.TableIDType
+		// Table nubmer is a 8-bit unsigned integer.
+		n, err := strconv.ParseUint(tableSeg, 10, 8)
+		if err == nil {
+			tableNumber = binding.TableIDType(n)
+			if openflow.GetFlowTableName(tableNumber) == "" {
+				return nil, nil
+			}
+		} else {
+			tableNumber = openflow.GetFlowTableNumber(tableSeg)
+			if tableNumber == binding.TableIDAll {
+				return nil, nil
+			}
 		}
-	} else {
-		tableNumber = openflow.GetFlowTableNumber(table)
-		if tableNumber == binding.TableIDAll {
-			return nil, nil
+		resp, err := dumpFlows(aq, tableNumber)
+		if err != nil {
+			return nil, err
 		}
+		resps = append(resps, resp...)
 	}
-	return dumpFlows(aq, tableNumber)
+	return resps, nil
 }
 
 func getPodFlows(aq agentquerier.AgentQuerier, podName, namespace string) ([]Response, error) {
