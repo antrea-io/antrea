@@ -146,7 +146,10 @@ rm -rf /tmp/includes
 set +x
 
 echo "=== Start resetting changes introduced by YEAR ==="
-git diff  --numstat | awk '$1 == "1" && $2 == "1" {print $3}' | while read file; do
+# The call to 'tac' ensures that we cannot have concurrent git processes, by
+# waiting for the call to 'git diff  --numstat' to complete before iterating
+# over the files and calling 'git diff ${file}'.
+git diff  --numstat | awk '$1 == "1" && $2 == "1" {print $3}' | tac | while read file; do
   if [[ "$(git diff ${file})" == *"-// Copyright "*" Antrea Authors"* ]]; then
     git checkout HEAD -- "${file}"
     echo "=== ${file} is reset ==="
