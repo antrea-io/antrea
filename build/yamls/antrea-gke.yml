@@ -1322,7 +1322,7 @@ metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-h7t8ffthht
+  name: antrea-config-74649gk446
   namespace: kube-system
 ---
 apiVersion: v1
@@ -1433,7 +1433,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-h7t8ffthht
+          name: antrea-config-74649gk446
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -1701,7 +1701,7 @@ spec:
           path: /home/kubernetes/bin
         name: host-cni-bin
       - configMap:
-          name: antrea-config-h7t8ffthht
+          name: antrea-config-74649gk446
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d

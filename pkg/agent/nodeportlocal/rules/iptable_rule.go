@@ -26,13 +26,16 @@ import (
 	"k8s.io/klog"
 )
 
+// NodePortLocalChain is the name of the chain in IPTABLES for Node Port Local
 const NodePortLocalChain = "ANTREA-NODE-PORT-LOCAL"
 
+// IPTableRules provides a client to perform IPTABLES operations
 type IPTableRules struct {
 	name  string
 	table *iptables.Client
 }
 
+// NewIPTableRules retruns a new instance of IPTableRules
 func NewIPTableRules() *IPTableRules {
 	iptInstance, _ := iptables.New(true, false)
 	iptRule := IPTableRules{
@@ -42,6 +45,7 @@ func NewIPTableRules() *IPTableRules {
 	return &iptRule
 }
 
+// Init initializes IPTABLES rules for NPL. Currently it deletes existing rules to ensure that no stale entries are present.
 func (ipt *IPTableRules) Init() error {
 	err := ipt.DeleteAllRules()
 	if err != nil {

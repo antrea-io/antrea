@@ -17,7 +17,7 @@
 package k8s
 
 import (
-	"fmt"
+	"encoding/json"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/klog"
@@ -32,123 +32,89 @@ func (c *Controller) addRuleForPod(pod *corev1.Pod) error {
 
 	for _, container := range podContainers {
 		for _, cport := range container.Ports {
-			if c.portTable.RuleExists(podIP, int(cport.ContainerPort)) {
+			port := int(cport.ContainerPort)
+			if c.portTable.RuleExists(podIP, port) {
 				continue
 			}
-			port := fmt.Sprint(cport.ContainerPort)
-			nodePort, err := c.portTable.AddRule(podIP, int(cport.ContainerPort))
+			nodePort, err := c.portTable.AddRule(podIP, port)
 			if err != nil {
 				return err
 			}
-			assignPodAnnotation(pod, port, nodeIP, fmt.Sprint(nodePort))
+			assignPodAnnotation(pod, nodeIP, port, nodePort)
 		}
-	}
-	return nil
-}
-
-// HandleAddPod handles Pod annotations in NPL for an added pod.
-func (c *Controller) HandleAddPod(key string, obj interface{}) error {
-	oldObj, exists, _ := c.OldObjStore.GetByKey(key)
-	if exists {
-		defer c.OldObjStore.Delete(oldObj)
-		return c.HandleUpdatePod(oldObj, obj)
-	}
-
-	pod := obj.(*corev1.Pod).DeepCopy()
-	klog.Infof("Got add event for pod: %s/%s", pod.Namespace, pod.Name)
-	err := c.addRuleForPod(pod)
-	if err != nil {
-		return err
-	}
-	if pod.Annotations[NPLAnnotationStr] != "" {
-		return c.updatePodAnnotation(pod)
 	}
 	return nil
 }
 
 // HandleDeletePod handles pod annotations for a deleted pod.
 func (c *Controller) HandleDeletePod(key string) error {
-	obj, exists, err := c.OldObjStore.GetByKey(key)
-	if err != nil {
-		return err
-	}
-	if !exists {
-		klog.Infof("Could not find old object for key: %v", key)
+	klog.Infof("Got delete event for pod: %s", key)
+	podIP, found := c.PodToIP[key]
+	if !found {
+		klog.Infof("IP address not found for pod: %s", key)
 		return nil
 	}
-	defer c.OldObjStore.Delete(obj)
-	pod := obj.(*corev1.Pod)
-	klog.Infof("Got delete event for pod: %s/%s", pod.Namespace, pod.Name)
-	podIP := pod.Status.PodIP
-	if podIP == "" {
-		klog.Infof("IP address not found for pod: %s/%s", pod.Namespace, pod.Name)
-		return nil
-	}
-
-	for _, container := range pod.Spec.Containers {
-		for _, cport := range container.Ports {
-			err = c.portTable.DeleteRule(podIP, int(cport.ContainerPort))
-			if err != nil {
-				return err
-			}
+	data := c.portTable.GetDataForPodIP(podIP)
+	for _, d := range data {
+		err := c.portTable.DeleteRule(d.PodIP, int(d.PodPort))
+		if err != nil {
+			return err
 		}
 	}
 	return nil
 }
 
-// HandleUpdatePod handles pod annotations for a updated pod.
-func (c *Controller) HandleUpdatePod(oldObj, newObj interface{}) error {
-	oldPod := oldObj.(*corev1.Pod)
-	newPod := newObj.(*corev1.Pod).DeepCopy()
+// HandleAddUpdatePod handles Pod Add, Update events and updates annotation is required
+func (c *Controller) HandleAddUpdatePod(key string, obj interface{}) error {
+	newPod := obj.(*corev1.Pod).DeepCopy()
+	klog.Infof("Got add/update event for pod: %s", key)
 
-	klog.Infof("Got update for pod: %s/%s", newPod.Namespace, newPod.Name)
 	podIP := newPod.Status.PodIP
-
 	if podIP == "" {
 		klog.Infof("IP address not found for pod: %s/%s", newPod.Namespace, newPod.Name)
 		return nil
 	}
+	c.PodToIP[key] = podIP
 
 	var err error
-	newPodPorts := make(map[string]struct{})
+	var updatePodAnnotation bool
+	newPodPorts := make(map[int]struct{})
 	newPodContainers := newPod.Spec.Containers
 	for _, container := range newPodContainers {
 		for _, cport := range container.Ports {
-			port := fmt.Sprint(cport.ContainerPort)
+			port := int(cport.ContainerPort)
 			newPodPorts[port] = struct{}{}
 			if !c.portTable.RuleExists(podIP, int(cport.ContainerPort)) {
 				err = c.addRuleForPod(newPod)
 				if err != nil {
 					return err
 				}
+				updatePodAnnotation = true
 			}
 		}
 	}
 
-	oldPodContainers := oldPod.Spec.Containers
-	oldPodIP := oldPod.Status.PodIP
-
-	if oldPodIP != "" {
-		for _, container := range oldPodContainers {
-			for _, cport := range container.Ports {
-				port := fmt.Sprint(cport.ContainerPort)
-
-				if _, ok := newPodPorts[port]; !ok {
-					// The port has been removed.
-					nodePort := getNodeportFromPodAnnotation(newPod, port)
-					if nodePort == "" && c.portTable.GetEntryByPodIPPort(oldPodIP, int(cport.ContainerPort)) == nil {
-						break
-					}
-					err := c.portTable.DeleteRule(podIP, int(cport.ContainerPort))
-					if err != nil {
-						return err
-					}
-					removeFromPodAnnotation(newPod, port)
+	var annotations []NPLAnnotation
+	podAnnotation := newPod.GetAnnotations()
+	entries := c.portTable.GetDataForPodIP(podIP)
+	if podAnnotation != nil {
+		if err := json.Unmarshal([]byte(podAnnotation[NPLAnnotationStr]), &annotations); err != nil {
+			klog.Warningf("Unable to unmarshal NPLEP annotation")
+			return nil
+		}
+		for _, data := range entries {
+			if _, exists := newPodPorts[data.PodPort]; !exists {
+				removeFromPodAnnotation(newPod, data.PodPort)
+				err := c.portTable.DeleteRule(podIP, int(data.PodPort))
+				if err != nil {
+					return err
 				}
+				updatePodAnnotation = true
 			}
 		}
 	}
-	if podAnnotationChanged(newPod, oldPod) {
+
+	if updatePodAnnotation {
 		return c.updatePodAnnotation(newPod)
 	}
 	return nil

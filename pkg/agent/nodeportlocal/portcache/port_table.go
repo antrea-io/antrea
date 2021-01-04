@@ -90,6 +90,18 @@ func (pt *PortTable) GetEntry(nodeport int) *NodePortData {
 	return &data
 }
 
+func (pt *PortTable) GetDataForPodIP(ip string) []NodePortData {
+	pt.tableLock.RLock()
+	defer pt.tableLock.RUnlock()
+	var allData []NodePortData
+	for _, data := range pt.Table {
+		if data.PodIP == ip {
+			allData = append(allData, data)
+		}
+	}
+	return allData
+}
+
 func (pt *PortTable) GetEntryByPodIPPort(ip string, port int) *NodePortData {
 	pt.tableLock.RLock()
 	defer pt.tableLock.RUnlock()

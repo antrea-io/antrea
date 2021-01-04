@@ -17,6 +17,7 @@
 package nodeportlocal
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"time"
@@ -28,6 +29,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/watch"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 )
@@ -52,12 +55,31 @@ func InitializeNPLAgent(kubeClient clientset.Interface, portRange, nodeName stri
 	if err != nil {
 		return nil, fmt.Errorf("NPL rules for pod ports could not be initialized, error: %v", err)
 	}
+	return InitController(kubeClient, portTable, nodeName)
+}
+
+// InitController creates an Informer which watches for events from Pods running on the same Node where Antea agent is running.
+// This function can be used independently while unit testing without using InitializeNPLAgent function.
+func InitController(kubeClient clientset.Interface, portTable *portcache.PortTable, nodeName string) (*k8s.Controller, error) {
 	c := k8s.NewNPLController(kubeClient, portTable)
 	c.RemoveNPLAnnotationFromPods()
 
 	// Watch only the Pods which belong to the Node where the agent is running
 	fieldSelector := fields.OneTermEqualSelector("spec.nodeName", nodeName)
-	lw := cache.NewListWatchFromClient(kubeClient.CoreV1().RESTClient(), "pods", metav1.NamespaceAll, fieldSelector)
+	optionsModifier := func(options *metav1.ListOptions) {
+		options.FieldSelector = fieldSelector.String()
+	}
+	lw := &cache.ListWatch{
+		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+			optionsModifier(&options)
+			return kubeClient.CoreV1().Pods(metav1.NamespaceAll).List(context.TODO(), options)
+		},
+		WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+			optionsModifier(&options)
+			return kubeClient.CoreV1().Pods(metav1.NamespaceAll).Watch(context.TODO(), options)
+		},
+	}
+
 	cacheStore, controller := cache.NewInformer(lw, &corev1.Pod{}, resyncPeriod,
 		cache.ResourceEventHandlerFuncs{
 			AddFunc:    c.EnqueueObjAdd,

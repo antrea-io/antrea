@@ -16,6 +16,7 @@
 
 package rules
 
+// PodPortRules is an interface to abstract operations on rules for Pods
 type PodPortRules interface {
 	Init() error
 	AddRule(port int, podip string) error
@@ -24,6 +25,7 @@ type PodPortRules interface {
 	DeleteAllRules() error
 }
 
+// InitRules initializes rules based on the underlying implementation
 func InitRules() PodPortRules {
 	// Currently we only support IPTABLES. Later this can be extended based on the system capability.
 	return NewIPTableRules()

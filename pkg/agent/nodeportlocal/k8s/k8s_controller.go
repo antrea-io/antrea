@@ -18,7 +18,6 @@ package k8s
 
 import (
 	"fmt"
-	"hash/fnv"
 	"time"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/nodeportlocal/portcache"
@@ -37,27 +36,20 @@ const (
 	numWorkers    = 4
 )
 
-func bkt(key string, numWorkers uint32) uint32 {
-	h := fnv.New32a()
-	h.Write([]byte(key))
-	bkt := h.Sum32() & (numWorkers - 1)
-	return bkt
-}
-
 type Controller struct {
-	portTable   *portcache.PortTable
-	kubeClient  clientset.Interface
-	queue       workqueue.RateLimitingInterface
-	Ctrl        cache.Controller
-	CacheStore  cache.Store
-	OldObjStore cache.Store
+	portTable  *portcache.PortTable
+	kubeClient clientset.Interface
+	queue      workqueue.RateLimitingInterface
+	Ctrl       cache.Controller
+	CacheStore cache.Store
+	PodToIP    map[string]string
 }
 
 func NewNPLController(kubeClient clientset.Interface, pt *portcache.PortTable) *Controller {
 	nplCtrl := Controller{
-		kubeClient:  kubeClient,
-		portTable:   pt,
-		OldObjStore: cache.NewStore(cache.MetaNamespaceKeyFunc),
+		kubeClient: kubeClient,
+		portTable:  pt,
+		PodToIP:    make(map[string]string),
 	}
 	nplCtrl.queue = workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "nodeportlocal")
 	return &nplCtrl
@@ -70,7 +62,7 @@ func NewNPLController(kubeClient clientset.Interface, pt *portcache.PortTable) *
 func (c *Controller) Run(stopCh <-chan struct{}) {
 	defer c.queue.ShutDown()
 	for i := 0; i < numWorkers; i++ {
-		go wait.Until(c.worker, time.Second, stopCh)
+		go wait.Until(c.Worker, time.Second, stopCh)
 	}
 	c.Ctrl.Run(stopCh)
 	cache.WaitForCacheSync(stopCh, c.Ctrl.HasSynced)
@@ -82,7 +74,7 @@ func (c *Controller) syncPod(key string) error {
 	if err != nil {
 		return err
 	} else if exists {
-		return c.HandleAddPod(key, obj)
+		return c.HandleAddUpdatePod(key, obj)
 	} else {
 		return c.HandleDeletePod(key)
 	}
@@ -117,8 +109,6 @@ func (c *Controller) EnqueueObjAdd(obj interface{}) {
 }
 
 func (c *Controller) EnqueueObjUpdate(oldObj, newObj interface{}) {
-	//Add the old object so that this can be compared with the new object later.
-	c.OldObjStore.Add(oldObj)
 	pod, isPod := newObj.(*corev1.Pod)
 	if !isPod {
 		var err error
@@ -134,8 +124,6 @@ func (c *Controller) EnqueueObjUpdate(oldObj, newObj interface{}) {
 }
 
 func (c *Controller) EnqueueObjDel(obj interface{}) {
-	//The old object data would be used to delete corresponding rules programmed in the system.
-	c.OldObjStore.Add(obj)
 	pod, isPod := obj.(*corev1.Pod)
 	if !isPod {
 		var err error
@@ -150,7 +138,7 @@ func (c *Controller) EnqueueObjDel(obj interface{}) {
 
 }
 
-func (c *Controller) worker() {
+func (c *Controller) Worker() {
 	for c.processNextWorkItem() {
 	}
 }
@@ -167,7 +155,7 @@ func (c *Controller) processNextWorkItem() bool {
 		klog.Errorf("Expected string in work queue but got %#v", obj)
 		return true
 	} else if err := c.syncPod(key); err == nil {
-		klog.V(2).Infof("Successfully proceed key: %s, in queue", key)
+		klog.V(2).Infof("Successfully processed key: %s, in queue", key)
 		c.queue.Forget(key)
 	} else {
 		c.queue.AddRateLimited(key)
