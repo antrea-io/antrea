@@ -162,10 +162,14 @@ func (b *AntreaNetworkPolicySpecBuilder) AddIngress(protoc v1.Protocol,
 			},
 		}
 	}
-	if port != nil {
+	if port != nil || endPort != nil {
+		var pVal *intstr.IntOrString
+		if port != nil {
+			pVal = &intstr.IntOrString{IntVal: int32(*port)}
+		}
 		ports = []secv1alpha1.NetworkPolicyPort{
 			{
-				Port:     &intstr.IntOrString{IntVal: int32(*port)},
+				Port:     pVal,
 				EndPort:  endPort,
 				Protocol: &protoc,
 			},

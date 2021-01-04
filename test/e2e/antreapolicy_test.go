@@ -37,13 +37,13 @@ import (
 
 // common for all tests.
 var (
-	allPods          []Pod
-	k8sUtils         *KubernetesUtils
-	allTestList      []*TestCase
-	pods, namespaces []string
-	podIPs           map[string]string
-	p80, p81, p8080  int
-	p8085            int32
+	allPods                []Pod
+	k8sUtils               *KubernetesUtils
+	allTestList            []*TestCase
+	pods, namespaces       []string
+	podIPs                 map[string]string
+	p80, p81, p8080, p8082 int
+	p8081, p8085           int32
 )
 
 const (
@@ -83,6 +83,8 @@ func initialize(t *testing.T, data *TestData) {
 	p80 = 80
 	p81 = 81
 	p8080 = 8080
+	p8081 = 8081
+	p8082 = 8082
 	p8085 = 8085
 	pods = []string{"a", "b", "c"}
 	namespaces = []string{"x", "y", "z"}
@@ -273,6 +275,40 @@ func testInvalidACNPTierDoesNotExist(t *testing.T) {
 	}
 }
 
+func testInvalidACNPPortRangePortUnset(t *testing.T) {
+	invalidNpErr := fmt.Errorf("invalid Antrea ClusterNetworkPolicy egress rule with endPort but no port accepted")
+	builder := &ClusterNetworkPolicySpecBuilder{}
+	builder = builder.SetName("acnp-egress-port-range-port-unset").
+		SetPriority(1.0).
+		SetAppliedToGroup(map[string]string{"pod": "b"}, nil, nil, nil)
+	builder.AddEgress(v1.ProtocolTCP, nil, nil, &p8085, nil, map[string]string{"pod": "c"}, map[string]string{"ns": "x"},
+		nil, nil, nil, secv1alpha1.RuleActionDrop, "acnp-port-range")
+
+	acnp := builder.Get()
+	log.Debugf("creating ACNP %v", acnp.Name)
+	if _, err := k8sUtils.CreateOrUpdateACNP(acnp); err == nil {
+		// Above creation of ACNP must fail as it is an invalid spec.
+		failOnError(invalidNpErr, t)
+	}
+}
+
+func testInvalidACNPPortRangeEndPortSmall(t *testing.T) {
+	invalidNpErr := fmt.Errorf("invalid Antrea ClusterNetworkPolicy egress rule with endPort smaller than port accepted")
+	builder := &ClusterNetworkPolicySpecBuilder{}
+	builder = builder.SetName("acnp-egress-port-range-endport-small").
+		SetPriority(1.0).
+		SetAppliedToGroup(map[string]string{"pod": "b"}, nil, nil, nil)
+	builder.AddEgress(v1.ProtocolTCP, &p8082, nil, &p8081, nil, map[string]string{"pod": "c"}, map[string]string{"ns": "x"},
+		nil, nil, nil, secv1alpha1.RuleActionDrop, "acnp-port-range")
+
+	acnp := builder.Get()
+	log.Debugf("creating ACNP %v", acnp.Name)
+	if _, err := k8sUtils.CreateOrUpdateACNP(acnp); err == nil {
+		// Above creation of ACNP must fail as it is an invalid spec.
+		failOnError(invalidNpErr, t)
+	}
+}
+
 func testInvalidANPNoPriority(t *testing.T) {
 	invalidNpErr := fmt.Errorf("invalid Antrea NetworkPolicy without a priority accepted")
 	builder := &AntreaNetworkPolicySpecBuilder{}
@@ -306,6 +342,40 @@ func testInvalidANPTierDoesNotExist(t *testing.T) {
 	builder := &AntreaNetworkPolicySpecBuilder{}
 	builder = builder.SetName("x", "anp-tier-not-exist").SetAppliedToGroup(map[string]string{"pod": "a"}, nil).
 		SetTier("i-dont-exist")
+	anp := builder.Get()
+	log.Debugf("creating ANP %v", anp.Name)
+	if _, err := k8sUtils.CreateOrUpdateANP(anp); err == nil {
+		// Above creation of ANP must fail as it is an invalid spec.
+		failOnError(invalidNpErr, t)
+	}
+}
+
+func testInvalidANPPortRangePortUnset(t *testing.T) {
+	invalidNpErr := fmt.Errorf("invalid Antrea NetworkPolicy egress rule with endPort but no port accepted")
+	builder := &AntreaNetworkPolicySpecBuilder{}
+	builder = builder.SetName("y", "anp-egress-port-range-port-unset").
+		SetPriority(1.0).
+		SetAppliedToGroup(map[string]string{"pod": "b"}, nil)
+	builder.AddEgress(v1.ProtocolTCP, nil, nil, &p8085, nil, map[string]string{"pod": "c"}, map[string]string{"ns": "x"},
+		nil, nil, nil, secv1alpha1.RuleActionDrop, "anp-port-range")
+
+	anp := builder.Get()
+	log.Debugf("creating ANP %v", anp.Name)
+	if _, err := k8sUtils.CreateOrUpdateANP(anp); err == nil {
+		// Above creation of ANP must fail as it is an invalid spec.
+		failOnError(invalidNpErr, t)
+	}
+}
+
+func testInvalidANPPortRangeEndPortSmall(t *testing.T) {
+	invalidNpErr := fmt.Errorf("invalid Antrea NetworkPolicy egress rule with endPort smaller than port accepted")
+	builder := &AntreaNetworkPolicySpecBuilder{}
+	builder = builder.SetName("y", "anp-egress-port-range-endport-small").
+		SetPriority(1.0).
+		SetAppliedToGroup(map[string]string{"pod": "b"}, nil)
+	builder.AddEgress(v1.ProtocolTCP, &p8082, nil, &p8081, nil, map[string]string{"pod": "c"}, map[string]string{"ns": "x"},
+		nil, nil, nil, secv1alpha1.RuleActionDrop, "anp-port-range")
+
 	anp := builder.Get()
 	log.Debugf("creating ANP %v", anp.Name)
 	if _, err := k8sUtils.CreateOrUpdateANP(anp); err == nil {
@@ -1234,9 +1304,13 @@ func TestAntreaPolicy(t *testing.T) {
 		t.Run("Case=ACNPNoPriority", func(t *testing.T) { testInvalidACNPNoPriority(t) })
 		t.Run("Case=ACNPRuleNameNotUniqueDenied", func(t *testing.T) { testInvalidACNPRuleNameNotUnique(t) })
 		t.Run("Case=ACNPTierDoesNotExistDenied", func(t *testing.T) { testInvalidACNPTierDoesNotExist(t) })
+		t.Run("Case=ACNPPortRangePortUnsetDenied", func(t *testing.T) { testInvalidACNPPortRangePortUnset(t) })
+		t.Run("Case=ACNPPortRangePortEndPortSmallDenied", func(t *testing.T) { testInvalidACNPPortRangeEndPortSmall(t) })
 		t.Run("Case=ANPNoPriority", func(t *testing.T) { testInvalidANPNoPriority(t) })
 		t.Run("Case=ANPRuleNameNotUniqueDenied", func(t *testing.T) { testInvalidANPRuleNameNotUnique(t) })
 		t.Run("Case=ANPTierDoesNotExistDenied", func(t *testing.T) { testInvalidANPTierDoesNotExist(t) })
+		t.Run("Case=ANPPortRangePortUnsetDenied", func(t *testing.T) { testInvalidANPPortRangePortUnset(t) })
+		t.Run("Case=ANPPortRangePortEndPortSmallDenied", func(t *testing.T) { testInvalidANPPortRangeEndPortSmall(t) })
 	})
 
 	t.Run("TestGroupValidateTiers", func(t *testing.T) {
