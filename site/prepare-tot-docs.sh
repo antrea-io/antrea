@@ -4,12 +4,12 @@ set -eo pipefail
 
 THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
-function reset_docs_master {
-  printf "Resetting master docs directory\n"
+function reset_docs_main {
+  printf "Resetting main docs directory\n"
   rm -rf *
 }
 
-function copy_root_markdowns_to_docs_master {
+function copy_root_markdowns_to_docs_main {
   # Copy README.md and other root markdown docs used in site documentation
   printf "Copying root markdown docs and fixing up relative links\n"
 
@@ -22,7 +22,7 @@ function copy_root_markdowns_to_docs_master {
   done
 }
 
-function copy_markdowns_to_docs_master {
+function copy_markdowns_to_docs_main {
   printf "Copying markdown docs\n"
 
   cp -rf ../../../docs/* .
@@ -74,13 +74,13 @@ function copy_markdowns_to_docs_master {
   done
 }
 
-pushd $THIS_DIR/docs/master
+pushd $THIS_DIR/docs/main
 
-reset_docs_master
-copy_markdowns_to_docs_master
-# This is done after copy_markdowns_to_docs_master, to overwrite changes made by
+reset_docs_main
+copy_markdowns_to_docs_main
+# This is done after copy_markdowns_to_docs_main, to overwrite changes made by
 # that function
-copy_root_markdowns_to_docs_master
+copy_root_markdowns_to_docs_main
 
 printf "Updating links to ci/README.md\n"
 for doc in $(find "$PWD" -type f -name "*.md"); do

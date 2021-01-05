@@ -19,14 +19,14 @@ function prereqs {
     exit 1
   fi
 
-  # Frozen docs are frozen from the master docs. Update them.
-  ./prepare-master-docs.sh
+  # Frozen docs are frozen from the ToT docs. Update them.
+  ./prepare-main-docs.sh
 }
 
-function copy_master_docs_to_versioned_docs {
-  printf "Copying master site/docs to docs/$VERSION (following symbolic links to freeze changes)"
+function copy_main_docs_to_versioned_docs {
+  printf "Copying main site/docs to docs/$VERSION (following symbolic links to freeze changes)"
   rm -rf docs/$VERSION
-  cp -RL docs/master docs/$VERSION
+  cp -RL docs/main docs/$VERSION
 }
 
 function add_toc_nav_mapping {
@@ -36,9 +36,9 @@ function add_toc_nav_mapping {
   VERSION_TOC_NAME="$( echo $VERSION | sed 's/^v\(.*\)/\1/' | tr . - )-toc"
 
   # .yml file extension used for toc yaml content
-  cp -f "${THIS_DIR}/_data/master-toc.yml" "${THIS_DIR}/_data/${VERSION_TOC_NAME}.yml"
+  cp -f "${THIS_DIR}/_data/main-toc.yml" "${THIS_DIR}/_data/${VERSION_TOC_NAME}.yml"
   
-  printf "Created ${THIS_DIR}/_data/${VERSION_TOC_NAME}.yml from ${THIS_DIR}/_data/master-toc.yml\n"
+  printf "Created ${THIS_DIR}/_data/${VERSION_TOC_NAME}.yml from ${THIS_DIR}/_data/main-toc.yml\n"
 
   printf "Adding TOC entry for $VERSION ${THIS_DIR}/_data/toc-mapping.yml\n"
   yq w -i "${THIS_DIR}/_data/toc-mapping.yml" \"$VERSION\" "$VERSION_TOC_NAME"
@@ -70,7 +70,7 @@ function extract_versions {
   # Get current array of versions
   VERSIONS=($(yq r _config.yml versions | cut -d' ' -f2))
 
-  # Remove master (should be first in list) so we can sort all versions
+  # Remove main (should be first in list) so we can sort all versions
   VERSIONS=( "${VERSIONS[@]:1}" )
 
   # Add new version
@@ -79,8 +79,8 @@ function extract_versions {
   # Sort versions using "version sort"
   IFS="|$IFS"; SORTED_VERSIONS=( $(sort -Vr <<<"${VERSIONS[*]}") ); IFS="${IFS:1}"
     
-  # Re-insert master at head of list.
-  SORTED_VERSIONS=( "master" "${VERSIONS[@]}" )
+  # Re-insert main at head of list.
+  SORTED_VERSIONS=( "main" "${VERSIONS[@]}" )
 }
 
 function add_version_to_site_versions_array {
@@ -100,12 +100,12 @@ function add_version_to_site_versions_array {
 function set_latest_version {
   # Set latest version to highest version number.
   LATEST_VERSION="${SORTED_VERSIONS[1]}"
-  printf "Setting default doc version to latest non-master version: $LATEST_VERSION\n"
+  printf "Setting default doc version to latest non-main version: $LATEST_VERSION\n"
   yq w -i $THIS_DIR/_config.yml "latest" "$LATEST_VERSION"
 }
 
 prereqs
-copy_master_docs_to_versioned_docs
+copy_main_docs_to_versioned_docs
 add_toc_nav_mapping
 add_defaults_scope_and_values_for_new_docs_version
 extract_versions

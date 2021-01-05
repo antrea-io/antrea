@@ -55,10 +55,10 @@ DATA SET:
     reverseOctetDeltaCount: 0
     sourcePodName: perftest-a
     sourcePodNamespace: antrea-test
-    sourceNodeName: k8s-node-master
+    sourceNodeName: k8s-node-control-plane
     destinationPodName: perftest-b
     destinationPodNamespace: antrea-test
-    destinationNodeName: k8s-node-master
+    destinationNodeName: k8s-node-control-plane
     destinationServicePort: 5201
     destinationServicePortName:
     ingressNetworkPolicyName: test-flow-aggregator-networkpolicy-ingress
@@ -204,7 +204,7 @@ func checkRecordsForFlows(t *testing.T, data *TestData, srcIP string, dstIP stri
 	// Polling to make sure all the data records corresponding to the iperf flow
 	// are received.
 	err = wait.Poll(250*time.Millisecond, collectorCheckTimeout, func() (bool, error) {
-		rc, collectorOutput, _, err := provider.RunCommandOnNode(masterNodeName(), fmt.Sprintf("kubectl logs --since=%v ipfix-collector -n antrea-test", time.Since(timeStart).String()))
+		rc, collectorOutput, _, err := provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl logs --since=%v ipfix-collector -n antrea-test", time.Since(timeStart).String()))
 		if err != nil || rc != 0 {
 			return false, err
 		}
@@ -212,7 +212,7 @@ func checkRecordsForFlows(t *testing.T, data *TestData, srcIP string, dstIP stri
 	})
 	require.NoError(t, err, "IPFIX collector did not receive expected number of data records and timed out.")
 
-	rc, collectorOutput, _, err := provider.RunCommandOnNode(masterNodeName(), fmt.Sprintf("kubectl logs --since=%v ipfix-collector -n antrea-test", time.Since(timeStart).String()))
+	rc, collectorOutput, _, err := provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl logs --since=%v ipfix-collector -n antrea-test", time.Since(timeStart).String()))
 	if err != nil || rc != 0 {
 		t.Errorf("Error when getting logs %v, rc: %v", err, rc)
 	}
@@ -228,9 +228,9 @@ func checkRecordsForFlows(t *testing.T, data *TestData, srcIP string, dstIP stri
 			if !strings.Contains(record, "octetDeltaCount: 0") {
 				// Check if record has both Pod name of source and destination pod.
 				if isIntraNode {
-					checkPodAndNodeData(t, record, "perftest-a", masterNodeName(), "perftest-b", masterNodeName())
+					checkPodAndNodeData(t, record, "perftest-a", controlPlaneNodeName(), "perftest-b", controlPlaneNodeName())
 				} else {
-					checkPodAndNodeData(t, record, "perftest-a", masterNodeName(), "perftest-c", workerNodeName(1))
+					checkPodAndNodeData(t, record, "perftest-a", controlPlaneNodeName(), "perftest-c", workerNodeName(1))
 				}
 
 				if checkService {
@@ -379,7 +379,7 @@ func deployNetworkPolicies(t *testing.T, data *TestData, srcPod, dstPod string) 
 }
 
 func createPerftestPods(data *TestData) (podAIP *PodIPs, podBIP *PodIPs, podCIP *PodIPs, svcB *corev1.Service, svcC *corev1.Service, err error) {
-	if err := data.createPodOnNode("perftest-a", masterNodeName(), perftoolImage, nil, nil, nil, nil, false, nil); err != nil {
+	if err := data.createPodOnNode("perftest-a", controlPlaneNodeName(), perftoolImage, nil, nil, nil, nil, false, nil); err != nil {
 		return nil, nil, nil, nil, nil, fmt.Errorf("Error when creating the perftest client Pod: %v", err)
 	}
 	podAIP, err = data.podWaitForIPs(defaultTimeout, "perftest-a", testNamespace)
@@ -392,7 +392,7 @@ func createPerftestPods(data *TestData) (podAIP *PodIPs, podBIP *PodIPs, podCIP 
 		return nil, nil, nil, nil, nil, fmt.Errorf("Error when creating perftest service: %v", err)
 	}
 
-	if err := data.createPodOnNode("perftest-b", masterNodeName(), perftoolImage, nil, nil, nil, []v1.ContainerPort{{Protocol: v1.ProtocolTCP, ContainerPort: iperfPort}}, false, nil); err != nil {
+	if err := data.createPodOnNode("perftest-b", controlPlaneNodeName(), perftoolImage, nil, nil, nil, []v1.ContainerPort{{Protocol: v1.ProtocolTCP, ContainerPort: iperfPort}}, false, nil); err != nil {
 		return nil, nil, nil, nil, nil, fmt.Errorf("Error when creating the perftest server Pod: %v", err)
 	}
 	podBIP, err = data.podWaitForIPs(defaultTimeout, "perftest-b", testNamespace)

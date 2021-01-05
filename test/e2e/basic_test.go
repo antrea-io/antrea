@@ -560,7 +560,7 @@ func getRoundNumber(data *TestData, podName string) (uint64, error) {
 // the previous "round" which are no longer needed (e.g. in case of changes to the cluster / to
 // Network Policies) are removed correctly.
 func TestDeletePreviousRoundFlowsOnStartup(t *testing.T) {
-	skipIfRunCoverage(t, "killAgent does not work with Coverage")
+	skipIfRunCoverage(t, "Stopping Agent does not work with Coverage")
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
@@ -634,8 +634,8 @@ func TestDeletePreviousRoundFlowsOnStartup(t *testing.T) {
 	t.Logf("Adding dummy flow")
 	addFlow()
 
-	// killAgent stops the docker container, which should be re-created immediately by kubectl
-	killAgent := func() {
+	// stopAgent stops the docker container, which should be re-created immediately by kubectl
+	stopAgent := func() {
 		cmd := []string{"kill", "1"}
 		// ignore potential error as it is possible for the container to exit with code 137
 		// if the container does not restart properly, we will know when we try to get the
@@ -643,7 +643,7 @@ func TestDeletePreviousRoundFlowsOnStartup(t *testing.T) {
 		data.runCommandFromPod(antreaNamespace, podName, agentContainerName, cmd)
 	}
 	t.Logf("Restarting antrea-agent container on Node %s", nodeName)
-	killAgent()
+	stopAgent()
 	defer func() {
 		// "cleanup": delete agent to ensure the restart count goes back to 0
 		// this will also take care of deleting the flow in case of test failure

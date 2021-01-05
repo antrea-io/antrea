@@ -3,6 +3,6 @@ Host CONTROLPLANENODE
     HashKnownHosts yes
     GSSAPIAuthentication yes
     GSSAPIDelegateCredentials no
-    HostName MASTERNODEIP
+    HostName CONTROLPLANENODEIP
     Port 22
     User capv

@@ -289,7 +289,7 @@ type UpdateServiceMapResult struct {
 	// The value(uint16) of HCServices map is the service health check node port.
 	HCServiceNodePorts map[types.NamespacedName]uint16
 	// UDPStaleClusterIP holds stale (no longer assigned to a Service) Service IPs that had UDP ports.
-	// Callers can use this to abort timeout-waits or clear connection-tracking information.
+	// Callers can use this to stop timeout-waits or clear connection-tracking information.
 	UDPStaleClusterIP sets.String
 }
 

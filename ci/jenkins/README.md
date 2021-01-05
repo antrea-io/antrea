@@ -91,7 +91,7 @@ should be deleted. This ensures that all tests are run on a clean testbed.
 
   |  K8s Version   |  Node Type          |  Node OS        |  Status  |
   | :------------: | :-----------------: | :-------------: | :------: |
-  |    1.16.13     |  Standard_DS2_v2    |  Ubuntu 16.04   |[![Build Status](http://jenkins.antrea-ci.rocks/buildStatus/icon?job=cloud-antrea-aks-conformance-net-policy)](http://jenkins.antrea-ci.rocks/view/cloud/job/cloud-antrea-aks-conformance-net-policy/)|
+  |    1.18.10     |  Standard_DS2_v2    |  Ubuntu 16.04   |[![Build Status](http://jenkins.antrea-ci.rocks/buildStatus/icon?job=cloud-antrea-aks-conformance-net-policy)](http://jenkins.antrea-ci.rocks/view/cloud/job/cloud-antrea-aks-conformance-net-policy/)|
 
 * [daily-elk-flow-collector-validate](https://jenkins.antrea-ci.rocks/job/antrea-daily-elk-flow-collector-validate-for-period/):
   [![Build Status](http://jenkins.antrea-ci.rocks/buildStatus/icon?job=antrea-daily-elk-flow-collector-validate-for-period)](http://jenkins.antrea-ci.rocks/view/cloud/job/antrea-daily-elk-flow-collector-validate-for-period/)

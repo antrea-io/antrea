@@ -527,7 +527,7 @@ default behavior for these Pods become "deny" (it becomes an [isolated Pod](
 https://kubernetes.io/docs/concepts/services-networking/network-policies/#isolated-and-non-isolated-pods)).
 This table is in charge of dropping traffic originating from Pods to which a Network
 Policy (with an egress rule) is applied, and which did not match any of the
-whitelist rules.
+allowlist rules.
 
 Accordingly, based on our Network Policy example, we would expect to see flows
 to drop traffic originating from our 2 Pods (10.10.1.2 and 10.10.1.3), which is
@@ -769,7 +769,7 @@ Pods become "deny" (it becomes an [isolated
 Pod](https://kubernetes.io/docs/concepts/services-networking/network-policies/#isolated-and-non-isolated-pods)). This
 table is in charge of dropping traffic destined to Pods to which a Network
 Policy (with an ingress rule) is applied, and which did not match any of the
-whitelist rules.
+allowlist rules.
 
 Accordingly, based on our Network Policy example, we would expect to see flows
 to drop traffic destined to our 2 Pods (3 and 4), which is confirmed by dumping

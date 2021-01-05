@@ -176,8 +176,7 @@ curl --insecure --header "Authorization: Bearer $TOKEN" https://<Node IP address
 ```
 
 However, in this case you will be limited to the endpoints that `antctl` is
-allowed to access, as defined
-[here](https://github.com/vmware-tanzu/antrea/blob/master/build/yamls/base/antctl.yml).
+allowed to access, as defined here (`/build/yamls/base/antctl.yml`).
 
 ## Troubleshooting Open vSwitch
 

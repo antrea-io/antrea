@@ -20,7 +20,7 @@ import (
 )
 
 var (
-	upgradeToYML   = flag.String("upgrade.toYML", "", "Path to new Antrea manifest (on master Node)")
+	upgradeToYML   = flag.String("upgrade.toYML", "", "Path to new Antrea manifest (on control-plane Node)")
 	pruneAll       = flag.Bool("upgrade.pruneAll", false, "Prune all Antrea resources when upgrading")
 	controllerOnly = flag.Bool("upgrade.controllerOnly", false, "Update antrea-controller only when upgrading")
 )

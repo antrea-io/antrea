@@ -281,11 +281,12 @@ func (p *proxier) installServices() {
 }
 
 // syncProxyRules applies current changes in change trackers and then updates
-// flows for services and endpoints. It will abort if either endpoints or services
-// resources is not synced. syncProxyRules is only called through the Run method
-// of the runner object, and all calls are serialized. Since this method is the
-// only one accessing internal state (e.g. serviceMap), no synchronization
-// mechanism, such as a mutex, is required.
+// flows for services and endpoints. It will return immediately if either
+// endpoints or services resources are not synced. syncProxyRules is only called
+// through the Run method of the runner object, and all calls are
+// serialized. Since this method is the only one accessing internal state
+// (e.g. serviceMap), no synchronization mechanism, such as a mutex, is
+// required.
 func (p *proxier) syncProxyRules() {
 	start := time.Now()
 	defer func() {

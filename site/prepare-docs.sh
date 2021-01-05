@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
-pushd $THIS_DIR/docs/master
+pushd $THIS_DIR/docs/main
 
 # Copy README.md and other root markdown docs used in site documentation
 printf "Copying root markdown docs and fixing up relative links..."

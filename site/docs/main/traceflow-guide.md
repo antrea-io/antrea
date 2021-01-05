@@ -11,7 +11,7 @@ result via CRD, antctl or UI graph.
 - [Prerequisites](#prerequisites)
 - [Start a New Trace](#start-a-new-trace)
   - [Using kubectl and YAML file](#using-kubectl-and-yaml-file)
-  - [Using-antctl-and-spec-config](#using-antctl-and-spec-config)
+  - [Using antctl and spec config](#using-antctl-and-spec-config)
   - [Using Octant with antrea-octant-plugin](#using-octant-with-antrea-octant-plugin)
 - [View Traceflow Result and Graph](#view-traceflow-result-and-graph)
 - [View Traceflow CRDs](#view-traceflow-crds)
@@ -82,9 +82,9 @@ spec:
 The CRD above starts a new trace from port 10000 of source Pod named `tcp-sts-0` to port 80
 of destination Pod named `tcp-sts-2` using TCP protocol.
 
-### Using-antctl-and-spec-config
+### Using antctl and spec config
 
-Please refer to the corresponding [antctl page](https://github.com/vmware-tanzu/antrea/blob/master/docs/antctl.md#traceflow).
+Please refer to the corresponding [antctl page](antctl.md#traceflow).
 
 ### Using Octant with antrea-octant-plugin
 
