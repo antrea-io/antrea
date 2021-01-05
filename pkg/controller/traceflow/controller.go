@@ -224,7 +224,7 @@ func (c *Controller) processTraceflowItem() bool {
 	} else {
 		err := c.syncTraceflow(key)
 		if err != nil {
-			klog.Errorf("Error syncing Traceflow %s, Aborting. Error: %v", key, err)
+			klog.Errorf("Error syncing Traceflow %s, exiting. Error: %v", key, err)
 			c.queue.AddRateLimited(key)
 		} else {
 			c.queue.Forget(key)

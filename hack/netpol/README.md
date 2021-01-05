@@ -27,7 +27,7 @@ only traffic from `b` pods in the 3 namespaces `x,y,z` can access the `a` pod, w
 This policy is then validated using the following three-liner:
 
 ```
-	matrix := TestPodLabelWhitelistingFromBToA(&k8s)
+	matrix := TestPodLabelAllowTrafficFromBToA(&k8s)
 	validate(&k8s, matrix)
 	summary, pass := matrix.Summary()
 	fmt.Println(summary, pass)

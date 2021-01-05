@@ -900,7 +900,7 @@
                values:
                 - true
             - axis:
-               type: slave
+               type: slave # TODO: use different term when Jenkins & Jenkins Job Builder are updated
                name: labels
                values:
                 - antrea-test-node

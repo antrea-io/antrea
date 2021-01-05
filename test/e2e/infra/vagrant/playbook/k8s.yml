@@ -1,8 +1,8 @@
 ---
-- hosts: master
+- hosts: controlplane
   become: true
   roles:
-    - master
+    - control-plane
 - hosts: workers
   become: true
   roles:

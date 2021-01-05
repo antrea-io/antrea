@@ -164,7 +164,7 @@ func setupTestWithIPFIXCollector(tb testing.TB) (*TestData, error, bool) {
 	faClusterIPAddr := ""
 	if testOptions.providerName == "kind" {
 		// In Kind cluster, there are issues with DNS name resolution on worker nodes.
-		// Please note that CoreDNS services are forced on to master node.
+		// Please note that CoreDNS services are forced on to control-plane Node.
 		faClusterIPAddr = fmt.Sprintf("%s:%s:tcp", faClusterIP, ipfixCollectorPort)
 	}
 	tb.Logf("Deploying flow exporter with collector address: %s", faClusterIPAddr)
@@ -213,12 +213,12 @@ func exportLogs(tb testing.TB, data *TestData, logsSubDir string, writeNodeLogs 
 		return f
 	}
 
-	// runKubectl runs the provided kubectl command on the master Node and returns the
+	// runKubectl runs the provided kubectl command on the control-plane Node and returns the
 	// output. It returns an empty string in case of error.
 	runKubectl := func(cmd string) string {
-		rc, stdout, _, err := RunCommandOnNode(masterNodeName(), cmd)
+		rc, stdout, _, err := RunCommandOnNode(controlPlaneNodeName(), cmd)
 		if err != nil || rc != 0 {
-			tb.Errorf("Error when running this kubectl command on master Node: %s", cmd)
+			tb.Errorf("Error when running this kubectl command on control-plane Node: %s", cmd)
 			return ""
 		}
 		return stdout

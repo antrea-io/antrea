@@ -61,7 +61,7 @@ and daemons are pre-installed on the Windows Nodes in the demo.
 
 #### Download & Configure Antrea for Linux
 
-Configure the Antrea for Linux on master Node following [Getting started](getting-started.md)
+Configure the Antrea for Linux on the control-plane Node following [Getting started](getting-started.md)
 document.
 
 ```bash
@@ -248,10 +248,10 @@ Register-ScheduledJob -Name PrepareAntreaAgent -Trigger $trigger  -ScriptBlock {
 #### 5. Run kubeadm to join the Node
 
 On Windows Node, run the `kubeadm join` command to join the cluster. The token
-is provided by the master Node.
+is provided by the control-plane Node.
 
 If you forgot the token, or the token has expired, you can run
-`kubeadm token create --print-join-command` (on the master Node) to
+`kubeadm token create --print-join-command` (on the control-plane Node) to
 generate a new token and join command.
 
 ```powershell
@@ -289,10 +289,10 @@ Nodes and Pods in your cluster by running:
 ```bash
 # Show nodes
 kubectl get nodes -o wide -n kube-system
-NAME                           STATUS   ROLES    AGE    VERSION   INTERNAL-IP     EXTERNAL-IP   OS-IMAGE                                  KERNEL-VERSION     CONTAINER-RUNTIME
-master                         Ready    master   1h   v1.18.3   10.176.27.168   <none>        Ubuntu 18.04.3 LTS                        4.15.0-66-generic   docker://19.3.9
-win-5akrf2tpq91                Ready    <none>   1h   v1.18.0   10.176.27.150   <none>        Windows Server 2019 Standard Evaluation   10.0.17763.1158    docker://19.3.5
-win-5akrf2tpq92                Ready    <none>   1h   v1.18.0   10.176.27.197   <none>        Windows Server 2019 Standard Evaluation   10.0.17763.1158     docker://19.3.5
+NAME                           STATUS   ROLES                  AGE   VERSION   INTERNAL-IP     EXTERNAL-IP   OS-IMAGE                                  KERNEL-VERSION     CONTAINER-RUNTIME
+control-plane                  Ready    control-plane,master   1h    v1.18.3   10.176.27.168   <none>        Ubuntu 18.04.3 LTS                        4.15.0-66-generic   docker://19.3.9
+win-5akrf2tpq91                Ready    <none>                 1h    v1.18.0   10.176.27.150   <none>        Windows Server 2019 Standard Evaluation   10.0.17763.1158    docker://19.3.5
+win-5akrf2tpq92                Ready    <none>                 1h    v1.18.0   10.176.27.197   <none>        Windows Server 2019 Standard Evaluation   10.0.17763.1158     docker://19.3.5
 
 # Show antrea-agent and kube-proxy pods
 kubectl get pods -o wide -n kube-system | grep windows

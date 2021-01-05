@@ -62,7 +62,7 @@ func testSupportBundle(name string, t *testing.T) {
 		podPort = fmt.Sprint(apis.AntreaControllerAPIPort)
 		tokenPath = controllerapiserver.TokenPath
 	} else {
-		podName, err = data.getAntreaPodOnNode(masterNodeName())
+		podName, err = data.getAntreaPodOnNode(controlPlaneNodeName())
 		require.NoError(t, err)
 		podPort = fmt.Sprint(apis.AntreaAgentAPIPort)
 		tokenPath = agentapiserver.TokenPath

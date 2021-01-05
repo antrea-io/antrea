@@ -433,7 +433,7 @@ func (k *KubernetesUtils) Validate(allPods []Pod, reachability *Reachability, po
 		}
 		reachability.Observe(r.podFrom, r.podTo, r.connected)
 		if !r.connected && reachability.Expected.Get(r.podFrom.String(), r.podTo.String()) {
-			log.Warnf("FAILED CONNECTION FOR WHITELISTED PODS %s -> %s !!!! ", r.podFrom, r.podTo)
+			log.Warnf("FAILED CONNECTION FOR ALLOWED PODS %s -> %s !!!! ", r.podFrom, r.podTo)
 		}
 	}
 }
