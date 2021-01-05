@@ -19,7 +19,7 @@ pushd $THIS_DIR
 markdownlint --fix -c .markdownlint.json ../docs/**/*.md
 markdownlint --fix -c .markdownlint.json ../*.md
 
-./prepare-master-docs.sh
+./prepare-main-docs.sh
 ./freeze-version-docs.sh
 
 popd

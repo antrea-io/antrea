@@ -45,9 +45,9 @@ defaults:
     values:
       layout: "default"
   - scope:
-      path: docs/master
+      path: docs/main
     values:
-      version: master
+      version: main
       gh: https://github.com/vmware-tanzu/antrea/tree/master
       layout: "docs"
   - scope:
@@ -110,7 +110,7 @@ collections:
 versioning: true
 latest: v0.12.0
 versions:
-  - master
+  - main
   - v0.12.0
   - v0.11.1
   - v0.11.0
