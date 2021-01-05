@@ -220,7 +220,7 @@ func (c *Controller) processTraceflowItem() bool {
 		c.queue.Forget(key)
 	} else {
 		// If error occurs we log error.
-		klog.Errorf("Error syncing Traceflow %s, Aborting. Error: %v", key, err)
+		klog.Errorf("Error syncing Traceflow %s, exiting. Error: %v", key, err)
 	}
 	return true
 }

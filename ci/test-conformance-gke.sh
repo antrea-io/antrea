@@ -43,7 +43,7 @@ and create the project to be used for cluster with \`gcloud projects create\`.
 
         --cluster-name        The cluster name to be used for the generated GKE cluster. Must be specified if not run in Jenkins environment.
         --kubeconfig          Path to save kubeconfig of generated GKE cluster.
-        --k8s-version         GKE K8s cluster version. Defaults to the latest supported master version documented at https://cloud.google.com/kubernetes-engine/docs/release-notes.
+        --k8s-version         GKE K8s cluster version. Defaults to the latest supported stable version documented at https://cloud.google.com/kubernetes-engine/docs/release-notes.
         --svc-account         Service acount name if logged in with service account. Use --user instead if logged in with gcloud auth login.
         --user                Email address if logged in with user account. Use --svc-account instead if logged in with service account.
         --gke-project         The GKE project to be used. Needs to be pre-created before running the script.
