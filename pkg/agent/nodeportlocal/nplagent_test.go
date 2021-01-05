@@ -25,6 +25,7 @@ import (
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/util/wait"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/nodeportlocal/k8s"
@@ -32,9 +33,11 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/signals"
 
 	npltest "github.com/vmware-tanzu/antrea/pkg/agent/nodeportlocal/rules/testing"
+
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
+	"k8s.io/client-go/tools/cache"
 )
 
 func NewPortTable(c *gomock.Controller) *portcache.PortTable {
@@ -97,6 +100,7 @@ func TestMain(t *testing.T) {
 	stopCh := signals.RegisterSignalHandlers()
 	go c.Worker()
 	go c.Ctrl.Run(stopCh)
+	cache.WaitForCacheSync(stopCh, c.Ctrl.HasSynced)
 }
 
 // Add a new Pod with fake k8s client and verify that npl annotation gets updated
@@ -110,32 +114,22 @@ func TestPodAdd(t *testing.T) {
 
 	testPod := getTestPod()
 	p, err := kubeClient.CoreV1().Pods(defaultNS).Create(context.TODO(), &testPod, metav1.CreateOptions{})
-	if err != nil {
-		t.Fatalf("Pod creation failed with err: %v", err)
-	}
+	require.Nil(t, err, "Pod creation failed")
 	t.Logf("successfully created Pod: %v", p)
 
 	err = wait.Poll(time.Second, 20*time.Second, func() (bool, error) {
 		updatedPod, err := kubeClient.CoreV1().Pods(defaultNS).Get(context.TODO(), defaultPodName, metav1.GetOptions{})
-		if err != nil {
-			t.Fatalf("Failed to update pod: %v", err)
-		}
+		require.Nil(t, err, "Failed to get Pod")
 		ann = updatedPod.GetAnnotations()
 		data, found = ann[k8s.NPLAnnotationStr]
 		return found, nil
 	})
-
-	if err != nil {
-		t.Fatalf("Poll for annotation check failed ith error: %v", err)
-	}
+	require.Nil(t, err, "Poll for annotation check failed")
 
 	var nplData []k8s.NPLAnnotation
 	json.Unmarshal([]byte(data), &nplData)
 
-	if len(nplData) != 1 {
-		t.Fatalf("Expected npl annotation of length: 1, got: %d", len(nplData))
-	}
-
+	a.Len(nplData, 1)
 	a.Equal(nplData[0].NodeIP, defaultHostIP)
 	portTable.RuleExists(defaultPodIP, defaultPort)
 	a.Equal(portTable.RuleExists(defaultPodIP, defaultPort), true)
@@ -153,16 +147,12 @@ func TestPodUpdate(t *testing.T) {
 	testPod.Spec.Containers[0].Ports[0].ContainerPort = 8080
 	testPod.ResourceVersion = "2"
 	p, err := kubeClient.CoreV1().Pods(defaultNS).Update(context.TODO(), &testPod, metav1.UpdateOptions{})
-	if err != nil {
-		t.Fatalf("Pod creation failed with err: %v", err)
-	}
+	require.Nil(t, err, "Pod creation failed")
 	t.Logf("successfully created Pod: %v", p)
 
 	err = wait.Poll(time.Second, 20*time.Second, func() (bool, error) {
 		updatedPod, err := kubeClient.CoreV1().Pods(defaultNS).Get(context.TODO(), defaultPodName, metav1.GetOptions{})
-		if err != nil {
-			t.Fatalf("Failed to update pod: %v", err)
-		}
+		require.Nil(t, err, "Failed to get Pod")
 		ann = updatedPod.GetAnnotations()
 		data, _ = ann[k8s.NPLAnnotationStr]
 		json.Unmarshal([]byte(data), &nplData)
@@ -175,10 +165,7 @@ func TestPodUpdate(t *testing.T) {
 		}
 		return false, nil
 	})
-
-	if err != nil {
-		t.Fatalf("Poll for annotation check failed with error: %v", err)
-	}
+	require.Nil(t, err, "Poll for annotation check failed")
 
 	a.Equal(portTable.RuleExists(defaultPodIP, defaultPort), false)
 	a.Equal(portTable.RuleExists(defaultPodIP, 8080), true)
@@ -187,17 +174,13 @@ func TestPodUpdate(t *testing.T) {
 // Make sure that when a pod gets deleted, corresponding entry gets deleted from local port cache also
 func TestPodDel(t *testing.T) {
 	err := kubeClient.CoreV1().Pods(defaultNS).Delete(context.TODO(), defaultPodName, metav1.DeleteOptions{})
-	if err != nil {
-		t.Fatalf("Pod deletion failed with err: %v", err)
-	}
+	require.Nil(t, err, "Pod deletion failed")
 	t.Logf("successfully deleted Pod: %s", defaultPodName)
 
 	err = wait.Poll(time.Second, 20*time.Second, func() (bool, error) {
 		return !portTable.RuleExists(defaultPodIP, 8080), nil
 	})
-	if err != nil {
-		t.Fatalf("Poll for rule check failed with error: %v", err)
-	}
+	require.Nil(t, err, "Poll for rule check failed")
 }
 
 // Create a Pod with multiple ports and verify that Pod annotation and local port cache are updated correctly
@@ -212,23 +195,17 @@ func TestPodAddMultiPort(t *testing.T) {
 	newPort := corev1.ContainerPort{ContainerPort: 90}
 	testPod.Spec.Containers[0].Ports = append(testPod.Spec.Containers[0].Ports, newPort)
 	p, err := kubeClient.CoreV1().Pods(defaultNS).Create(context.TODO(), &testPod, metav1.CreateOptions{})
-	if err != nil {
-		t.Fatalf("Pod creation failed with err: %v", err)
-	}
+	require.Nil(t, err, "Pod creation failed")
 	t.Logf("successfully created Pod: %v", p)
 
 	err = wait.Poll(time.Second, 20*time.Second, func() (bool, error) {
 		updatedPod, err := kubeClient.CoreV1().Pods(defaultNS).Get(context.TODO(), defaultPodName, metav1.GetOptions{})
-		if err != nil {
-			t.Fatalf("Failed to update pod: %v", err)
-		}
+		require.Nil(t, err, "Failed to get Pod")
 		ann = updatedPod.GetAnnotations()
 		data, found = ann[k8s.NPLAnnotationStr]
 		return found, nil
 	})
-	if err != nil {
-		t.Fatalf("Poll for annotation check failed with error: %v", err)
-	}
+	require.Nil(t, err, "Poll for annotation check failed")
 
 	var nplData []k8s.NPLAnnotation
 	err = wait.Poll(time.Second, 20*time.Second, func() (bool, error) {
@@ -238,9 +215,7 @@ func TestPodAddMultiPort(t *testing.T) {
 		}
 		return false, nil
 	})
-	if err != nil {
-		t.Fatalf("Poll for annotation length check failed with error: %v", err)
-	}
+	require.Nil(t, err, "Poll for annotation length check failed")
 
 	a.Equal(nplData[0].NodeIP, defaultHostIP)
 	a.Equal(nplData[0].PodPort, defaultPort)
@@ -251,7 +226,7 @@ func TestPodAddMultiPort(t *testing.T) {
 	a.Equal(portTable.RuleExists(defaultPodIP, 90), true)
 }
 
-// Create Multiple Pods and test that annotations for both te pods are updated correctly
+// Create Multiple Pods and test that annotations for both the Pods are updated correctly
 // and local port cache is updated accordingly
 func TestAddMultiplePods(t *testing.T) {
 	var ann map[string]string
@@ -264,62 +239,45 @@ func TestAddMultiplePods(t *testing.T) {
 	testPod1.Name = "pod1"
 	testPod1.Status.PodIP = "10.10.10.1"
 	p, err := kubeClient.CoreV1().Pods(defaultNS).Create(context.TODO(), &testPod1, metav1.CreateOptions{})
-	if err != nil {
-		t.Fatalf("Pod creation failed with err: %v", err)
-	}
+	require.Nil(t, err, "Pod creation failed")
 	t.Logf("successfully created Pod: %v", p)
 
 	testPod2 := getTestPod()
 	testPod2.Name = "pod2"
 	testPod2.Status.PodIP = "10.10.10.2"
 	p, err = kubeClient.CoreV1().Pods(defaultNS).Create(context.TODO(), &testPod2, metav1.CreateOptions{})
-	if err != nil {
-		t.Errorf("Pod creation failed with err: %v", err)
-	}
+	require.Nil(t, err, "Pod creation failed")
 	t.Logf("successfully created Pod: %v", p)
 
 	err = wait.Poll(time.Second, 20*time.Second, func() (bool, error) {
 		updatedPod, err := kubeClient.CoreV1().Pods(defaultNS).Get(context.TODO(), testPod1.Name, metav1.GetOptions{})
-		if err != nil {
-			t.Fatalf("Failed to update pod: %v", err)
-		}
+		require.Nil(t, err, "Failed to get Pod")
 		ann = updatedPod.GetAnnotations()
 		data, found = ann[k8s.NPLAnnotationStr]
 		return found, nil
 	})
-	if err != nil {
-		t.Fatalf("Poll for annotation check failed with error: %v", err)
-	}
+	require.Nil(t, err, "Poll for annotation check failed")
 
 	var nplData []k8s.NPLAnnotation
 	json.Unmarshal([]byte(data), &nplData)
 
-	if len(nplData) != 1 {
-		t.Fatalf("Expected npl annotation of length: 1, got: %d", len(nplData))
-	}
-
+	a.Len(nplData, 1)
 	a.Equal(nplData[0].NodeIP, defaultHostIP)
 	a.Equal(nplData[0].PodPort, defaultPort)
 	a.Equal(portTable.RuleExists(testPod1.Status.PodIP, defaultPort), true)
 
 	wait.Poll(time.Second, 20*time.Second, func() (bool, error) {
 		updatedPod, err := kubeClient.CoreV1().Pods(defaultNS).Get(context.TODO(), testPod2.Name, metav1.GetOptions{})
-		if err != nil {
-			t.Fatalf("Failed to update pod: %v", err)
-		}
+		require.Nil(t, err, "Failed to get Pod")
 		ann = updatedPod.GetAnnotations()
 		data, found = ann[k8s.NPLAnnotationStr]
 		return found, nil
 	})
-	if err != nil {
-		t.Fatalf("Poll for annotation check failed with error: %v", err)
-	}
+	require.Nil(t, err, "Poll for annotation check failed")
 
 	json.Unmarshal([]byte(data), &nplData)
-	if len(nplData) != 1 {
-		t.Fatalf("Expected npl annotation of length: 1, got: %d", len(nplData))
-	}
 
+	a.Len(nplData, 1)
 	a.Equal(nplData[0].NodeIP, defaultHostIP)
 	a.Equal(nplData[0].PodPort, defaultPort)
 	a.Equal(portTable.RuleExists(testPod2.Status.PodIP, defaultPort), true)

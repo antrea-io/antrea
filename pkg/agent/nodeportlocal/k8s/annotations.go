@@ -62,7 +62,7 @@ func assignPodAnnotation(pod *corev1.Pod, nodeIP string, containerPort, nodePort
 	var annotations []NPLAnnotation
 	if current[NPLAnnotationStr] != "" {
 		if err = json.Unmarshal([]byte(current[NPLAnnotationStr]), &annotations); err != nil {
-			klog.Warningf("Unable to unmarshal NPLEP annotation: %v", current[NPLAnnotationStr])
+			klog.Warningf("Unable to unmarshal NodePortLocal annotation: %v", current[NPLAnnotationStr])
 		}
 
 		if !isNodePortInAnnotation(annotations, nodePort) {
@@ -91,7 +91,7 @@ func removeFromPodAnnotation(pod *corev1.Pod, containerPort int) {
 	klog.V(2).Infof("Removing annotation from pod: %v\tport: %v", pod.Name, containerPort)
 	var annotations []NPLAnnotation
 	if err = json.Unmarshal([]byte(current[NPLAnnotationStr]), &annotations); err != nil {
-		klog.Warningf("Unable to unmarshal NPLEP annotation: %v", current[NPLAnnotationStr])
+		klog.Warningf("Unable to unmarshal NodePortLocal annotation: %v", current[NPLAnnotationStr])
 		return
 	}
 
@@ -110,7 +110,7 @@ func removeFromPodAnnotation(pod *corev1.Pod, containerPort int) {
 func (c *Controller) RemoveNPLAnnotationFromPods() {
 	nodeName, err := env.GetNodeName()
 	if err != nil {
-		klog.Warningf("Failed to get nodename, NPL annotation can not be removed for Pods")
+		klog.Warningf("Failed to get Node's name, NodePortLocal annotation cannot be removed for Pods scheduled to this Node")
 		return
 	}
 	podList, err := c.kubeClient.CoreV1().Pods("").List(context.TODO(), metav1.ListOptions{
@@ -129,11 +129,12 @@ func (c *Controller) RemoveNPLAnnotationFromPods() {
 		if _, exists := podAnnotation[NPLAnnotationStr]; !exists {
 			continue
 		}
-		klog.V(2).Infof("Removing all NPL annotation from Pod: %s, ns: %s", pod.Name, pod.Namespace)
+		klog.V(2).Infof("Removing all NodePortLocal annotation from Pod: %s, ns: %s", pod.Name, pod.Namespace)
 		delete(podAnnotation, NPLAnnotationStr)
 		pod.Annotations = podAnnotation
 		c.updatePodAnnotation(&podList.Items[i])
 	}
+	klog.Infof("Removed all NodePortLocal annotations from all Pods")
 }
 
 func (c *Controller) updatePodAnnotation(pod *corev1.Pod) error {
