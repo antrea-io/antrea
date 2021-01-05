@@ -240,10 +240,12 @@ or flows in a specified OVS flow table.
 antctl get ovsflows
 antctl get ovsflows -p POD -n NAMESPACE
 antctl get ovsflows --networkpolicy NETWORKPOLICY -n NAMESPACE
-antctl get ovsflows -T TABLE
+antctl get ovsflows -T TABLE_A,TABLE_B
+antctl get ovsflows -T TABLE_A,TABLE_B_NUM
+antctl get ovsflows -T TABLE_A_NUM,TABLE_B_NUM
 ```
 
-An OVS flow table can be specified using the table name or the table number.
+OVS flow tables can be specified using table names, or the table numbers.
 `antctl get ovsflow --help` lists all Antrea flow tables. For more information
 about Antrea OVS pipeline and flows, please refer to the [OVS pipeline doc](design/ovs-pipeline.md).
 
