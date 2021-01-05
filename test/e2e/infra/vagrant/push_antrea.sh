@@ -89,8 +89,8 @@ function pushImgToNodes() {
     docker save -o $SAVED_IMG $IMG_NAME
 
     echo "Copying $IMG_NAME image to every node..."
-    # Copy image to master
-    scp -F ssh-config $SAVED_IMG k8s-node-master:/tmp/antrea-ubuntu.tar &
+    # Copy image to control-plane node
+    scp -F ssh-config $SAVED_IMG k8s-node-control-plane:/tmp/antrea-ubuntu.tar &
     pids[0]=$!
     # Loop over all worker nodes and copy image to each one
     for ((i=1; i<=$NUM_WORKERS; i++)); do
@@ -103,7 +103,7 @@ function pushImgToNodes() {
     echo "Done!"
 
     echo "Loading $IMG_NAME image in every node..."
-    ssh -F ssh-config k8s-node-master docker load -i $SAVED_IMG &
+    ssh -F ssh-config k8s-node-control-plane docker load -i $SAVED_IMG &
     pids[0]=$!
     # Loop over all worker nodes and copy image to each one
     for ((i=1; i<=$NUM_WORKERS; i++)); do
@@ -119,7 +119,7 @@ function pushImgToNodes() {
 function copyManifestToNodes() {
     YAML=$1
     echo "Copying $YAML to every node..."
-    scp -F ssh-config $YAML k8s-node-master:~/ &
+    scp -F ssh-config $YAML k8s-node-control-plane:~/ &
     pids[0]=$!
     # Loop over all worker nodes and copy manifest to each one
     for ((i=1; i<=$NUM_WORKERS; i++)); do
@@ -148,8 +148,8 @@ if [[ $FLOW_COLLECTOR != "" ]]; then
     copyManifestToNodes "$FLOW_AGG_YML"
 
     echo "Restarting Flow Aggregator deployment"
-    ssh -F ssh-config k8s-node-master kubectl -n flow-aggregator delete pod --all
-    ssh -F ssh-config k8s-node-master kubectl apply -f flow-aggregator.yml
+    ssh -F ssh-config k8s-node-control-plane kubectl -n flow-aggregator delete pod --all
+    ssh -F ssh-config k8s-node-control-plane kubectl apply -f flow-aggregator.yml
 
     rm "${FLOW_AGG_YML}"
 fi
@@ -162,8 +162,8 @@ copyManifestToNodes "$ANTREA_IPSEC_YML"
 # To ensure that the most recent version of Antrea (that we just pushed) will be
 # used.
 echo "Restarting Antrea DaemonSet"
-ssh -F ssh-config k8s-node-master kubectl -n kube-system delete all -l app=antrea
-ssh -F ssh-config k8s-node-master kubectl apply -f antrea.yml
+ssh -F ssh-config k8s-node-control-plane kubectl -n kube-system delete all -l app=antrea
+ssh -F ssh-config k8s-node-control-plane kubectl apply -f antrea.yml
 
 rm "${ANTREA_YML}"
 

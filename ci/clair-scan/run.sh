@@ -38,7 +38,7 @@ docker run --rm -d --name clair-db arminc/clair-db:latest
 docker run --rm -p 6060:6060 --link clair-db:postgres -d --name clair arminc/clair-local-scan:v2.0.8_fe9b059d930314b54c78f75afe265955faf4fdc1
 
 function cleanup {
-  echo "Killing docker containers"
+  echo "Stoping docker containers"
   docker kill clair
   docker kill clair-db
 }

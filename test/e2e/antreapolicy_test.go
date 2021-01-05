@@ -1371,7 +1371,7 @@ func TestAntreaPolicyStatus(t *testing.T) {
 	defer teardownTest(t, data)
 	skipIfAntreaPolicyDisabled(t, data)
 
-	_, _, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "server-0", masterNodeName())
+	_, _, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "server-0", controlPlaneNodeName())
 	defer cleanupFunc()
 	_, _, cleanupFunc = createAndWaitForPod(t, data, data.createNginxPodOnNode, "server-1", workerNodeName(1))
 	defer cleanupFunc()

@@ -28,6 +28,7 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/mod/semver"
 	"gopkg.in/yaml.v2"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
@@ -96,19 +97,20 @@ const (
 )
 
 type ClusterNode struct {
-	idx  int // 0 for master Node
+	idx  int // 0 for control-plane Node
 	name string
 }
 
 type ClusterInfo struct {
-	numWorkerNodes   int
-	numNodes         int
-	podV4NetworkCIDR string
-	podV6NetworkCIDR string
-	svcV4NetworkCIDR string
-	svcV6NetworkCIDR string
-	masterNodeName   string
-	nodes            map[int]ClusterNode
+	numWorkerNodes       int
+	numNodes             int
+	podV4NetworkCIDR     string
+	podV6NetworkCIDR     string
+	svcV4NetworkCIDR     string
+	svcV6NetworkCIDR     string
+	controlPlaneNodeName string
+	nodes                map[int]ClusterNode
+	k8sServerVersion     string
 }
 
 var clusterInfo ClusterInfo
@@ -170,9 +172,9 @@ func (p *PodIPs) hasSameIP(p1 *PodIPs) bool {
 }
 
 // workerNodeName returns an empty string if there is no worker Node with the provided idx
-// (including if idx is 0, which is reserved for the master Node)
+// (including if idx is 0, which is reserved for the control-plane Node)
 func workerNodeName(idx int) string {
-	if idx == 0 { // master Node
+	if idx == 0 { // control-plane Node
 		return ""
 	}
 	if node, ok := clusterInfo.nodes[idx]; !ok {
@@ -182,18 +184,30 @@ func workerNodeName(idx int) string {
 	}
 }
 
-func masterNodeName() string {
-	return clusterInfo.masterNodeName
+func controlPlaneNodeName() string {
+	return clusterInfo.controlPlaneNodeName
 }
 
 // nodeName returns an empty string if there is no Node with the provided idx. If idx is 0, the name
-// of the master Node will be returned.
+// of the control-plane Node will be returned.
 func nodeName(idx int) string {
 	if node, ok := clusterInfo.nodes[idx]; !ok {
 		return ""
 	} else {
 		return node.name
 	}
+}
+
+func labelNodeRoleControlPlane() string {
+	// TODO: return labelNodeRoleControlPlane unconditionally when the min K8s version
+	// requirement to run Antrea becomes K8s v1.20
+	const labelNodeRoleControlPlane = "node-role.kubernetes.io/control-plane"
+	const labelNodeRoleOldControlPlane = "node-role.kubernetes.io/master"
+	// If clusterInfo.k8sServerVersion < "v1.20.0"
+	if semver.Compare(clusterInfo.k8sServerVersion, "v1.20.0") < 0 {
+		return labelNodeRoleOldControlPlane
+	}
+	return labelNodeRoleControlPlane
 }
 
 func initProvider() error {
@@ -228,16 +242,16 @@ func collectClusterInfo() error {
 	workerIdx := 1
 	clusterInfo.nodes = make(map[int]ClusterNode)
 	for _, node := range nodes.Items {
-		isMaster := func() bool {
-			_, ok := node.Labels["node-role.kubernetes.io/master"]
+		isControlPlaneNode := func() bool {
+			_, ok := node.Labels[labelNodeRoleControlPlane()]
 			return ok
 		}()
 
 		var nodeIdx int
-		// If multiple master Nodes (HA), we will select the last one in the list
-		if isMaster {
+		// If multiple control-plane Nodes (HA), we will select the last one in the list
+		if isControlPlaneNode {
 			nodeIdx = 0
-			clusterInfo.masterNodeName = node.Name
+			clusterInfo.controlPlaneNodeName = node.Name
 		} else {
 			nodeIdx = workerIdx
 			workerIdx++
@@ -248,17 +262,17 @@ func collectClusterInfo() error {
 			name: node.Name,
 		}
 	}
-	if clusterInfo.masterNodeName == "" {
-		return fmt.Errorf("error when listing cluster Nodes: master Node not found")
+	if clusterInfo.controlPlaneNodeName == "" {
+		return fmt.Errorf("error when listing cluster Nodes: control-plane Node not found")
 	}
 	clusterInfo.numNodes = workerIdx
 	clusterInfo.numWorkerNodes = clusterInfo.numNodes - 1
 
 	retrieveCIDRs := func(cmd string, reg string) ([]string, error) {
 		res := make([]string, 2)
-		rc, stdout, _, err := RunCommandOnNode(clusterInfo.masterNodeName, cmd)
+		rc, stdout, _, err := RunCommandOnNode(clusterInfo.controlPlaneNodeName, cmd)
 		if err != nil || rc != 0 {
-			return res, fmt.Errorf("error when running the following command `%s` on master Node: %v, %s", cmd, err, stdout)
+			return res, fmt.Errorf("error when running the following command `%s` on control-plane Node: %v, %s", cmd, err, stdout)
 		}
 		re := regexp.MustCompile(reg)
 		if matches := re.FindStringSubmatch(stdout); len(matches) == 0 {
@@ -309,6 +323,14 @@ func collectClusterInfo() error {
 	}
 	clusterInfo.svcV4NetworkCIDR = svcCIDRs[0]
 	clusterInfo.svcV6NetworkCIDR = svcCIDRs[1]
+
+	// retrieve K8s server version
+
+	serverVersion, err := testData.clientset.Discovery().ServerVersion()
+	if err != nil {
+		return err
+	}
+	clusterInfo.k8sServerVersion = serverVersion.String()
 
 	return nil
 }
@@ -375,19 +397,19 @@ func (data *TestData) deleteTestNamespace(timeout time.Duration) error {
 	return data.deleteNamespace(testNamespace, timeout)
 }
 
-// deployAntreaCommon deploys Antrea using kubectl on the master node.
+// deployAntreaCommon deploys Antrea using kubectl on the control-plane Node.
 func (data *TestData) deployAntreaCommon(yamlFile string, extraOptions string) error {
 	// TODO: use the K8s apiserver when server side apply is available?
 	// See https://kubernetes.io/docs/reference/using-api/api-concepts/#server-side-apply
-	rc, _, _, err := provider.RunCommandOnNode(masterNodeName(), fmt.Sprintf("kubectl apply %s -f %s", extraOptions, yamlFile))
+	rc, _, _, err := provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl apply %s -f %s", extraOptions, yamlFile))
 	if err != nil || rc != 0 {
-		return fmt.Errorf("error when deploying Antrea; is %s available on the master Node?", yamlFile)
+		return fmt.Errorf("error when deploying Antrea; is %s available on the control-plane Node?", yamlFile)
 	}
-	rc, _, _, err = provider.RunCommandOnNode(masterNodeName(), fmt.Sprintf("kubectl -n %s rollout status deploy/%s --timeout=%v", antreaNamespace, antreaDeployment, defaultTimeout))
+	rc, _, _, err = provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl -n %s rollout status deploy/%s --timeout=%v", antreaNamespace, antreaDeployment, defaultTimeout))
 	if err != nil || rc != 0 {
 		return fmt.Errorf("error when waiting for antrea-controller rollout to complete")
 	}
-	rc, _, _, err = provider.RunCommandOnNode(masterNodeName(), fmt.Sprintf("kubectl -n %s rollout status ds/%s --timeout=%v", antreaNamespace, antreaDaemonSet, defaultTimeout))
+	rc, _, _, err = provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl -n %s rollout status ds/%s --timeout=%v", antreaNamespace, antreaDaemonSet, defaultTimeout))
 	if err != nil || rc != 0 {
 		return fmt.Errorf("error when waiting for antrea-agent rollout to complete")
 	}
@@ -428,15 +450,15 @@ func (data *TestData) deployAntreaFlowExporter(ipfixCollector string) error {
 
 // deployFlowAggregator deploys flow aggregator with ipfix collector address.
 func (data *TestData) deployFlowAggregator(ipfixCollector string) (string, error) {
-	rc, _, _, err := provider.RunCommandOnNode(masterNodeName(), fmt.Sprintf("kubectl apply -f %s", flowaggregatorYML))
+	rc, _, _, err := provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl apply -f %s", flowaggregatorYML))
 	if err != nil || rc != 0 {
-		return "", fmt.Errorf("error when deploying flow aggregator; %s not available on the master Node", flowaggregatorYML)
+		return "", fmt.Errorf("error when deploying flow aggregator; %s not available on the control-plane Node", flowaggregatorYML)
 	}
 	if err = data.mutateFlowAggregatorConfigMap(ipfixCollector); err != nil {
 		return "", err
 	}
-	if rc, _, _, err = provider.RunCommandOnNode(masterNodeName(), fmt.Sprintf("kubectl -n %s rollout status deployment/%s --timeout=%v", flowAggregatorNamespace, flowAggregatorDeployment, 2*defaultTimeout)); err != nil || rc != 0 {
-		_, stdout, _, _ := provider.RunCommandOnNode(masterNodeName(), fmt.Sprintf("kubectl -n %s describe pod", flowAggregatorNamespace))
+	if rc, _, _, err = provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl -n %s rollout status deployment/%s --timeout=%v", flowAggregatorNamespace, flowAggregatorDeployment, 2*defaultTimeout)); err != nil || rc != 0 {
+		_, stdout, _, _ := provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl -n %s describe pod", flowAggregatorNamespace))
 		return stdout, fmt.Errorf("error when waiting for flow aggregator rollout to complete. kubectl describe output: %v", stdout)
 	}
 	svc, err := data.clientset.CoreV1().Services(flowAggregatorNamespace).Get(context.TODO(), flowAggregatorDeployment, metav1.GetOptions{})
@@ -713,10 +735,10 @@ func (data *TestData) createPodOnNode(name string, nodeName string, image string
 			"kubernetes.io/hostname": nodeName,
 		}
 	}
-	if nodeName == masterNodeName() {
-		// tolerate NoSchedule taint if we want Pod to run on master node
+	if nodeName == controlPlaneNodeName() {
+		// tolerate NoSchedule taint if we want Pod to run on control-plane Node
 		noScheduleToleration := corev1.Toleration{
-			Key:      "node-role.kubernetes.io/master",
+			Key:      labelNodeRoleControlPlane(),
 			Operator: corev1.TolerationOpExists,
 			Effect:   corev1.TaintEffectNoSchedule,
 		}
@@ -1542,8 +1564,8 @@ func (data *TestData) collectAntctlCovFiles(podName string, containerName string
 	return nil
 }
 
-// collectAntctlCovFilesFromMasterNode collects coverage files for the antctl binary from the master Node and saves them to the coverage directory
-func (data *TestData) collectAntctlCovFilesFromMasterNode(covDir string) error {
+// collectAntctlCovFilesFromControlPlaneNode collects coverage files for the antctl binary from the control-plane Node and saves them to the coverage directory
+func (data *TestData) collectAntctlCovFilesFromControlPlaneNode(covDir string) error {
 	// copy antctl coverage files from node to the coverage directory
 	var cmd string
 	if testOptions.providerName == "kind" {
@@ -1551,9 +1573,9 @@ func (data *TestData) collectAntctlCovFilesFromMasterNode(covDir string) error {
 	} else {
 		cmd = "find . -maxdepth 1 -name 'antctl*.out' -exec basename {} ';'"
 	}
-	rc, stdout, stderr, err := RunCommandOnNode(masterNodeName(), cmd)
+	rc, stdout, stderr, err := RunCommandOnNode(controlPlaneNodeName(), cmd)
 	if err != nil || rc != 0 {
-		return fmt.Errorf("error when running this find command '%s' on master Node '%s', stderr: <%v>, err: <%v>", cmd, masterNodeName(), stderr, err)
+		return fmt.Errorf("error when running this find command '%s' on control-plane Node '%s', stderr: <%v>, err: <%v>", cmd, controlPlaneNodeName(), stderr, err)
 
 	}
 	stdout = strings.TrimSpace(stdout)
@@ -1562,9 +1584,9 @@ func (data *TestData) collectAntctlCovFilesFromMasterNode(covDir string) error {
 		if len(file) == 0 {
 			continue
 		}
-		err := data.copyNodeFiles(masterNodeName(), file, covDir)
+		err := data.copyNodeFiles(controlPlaneNodeName(), file, covDir)
 		if err != nil {
-			return fmt.Errorf("error when copying coverage files for antctl from Node '%s' to coverage directory '%s': %v", masterNodeName(), covDir, err)
+			return fmt.Errorf("error when copying coverage files for antctl from Node '%s' to coverage directory '%s': %v", controlPlaneNodeName(), covDir, err)
 		}
 	}
 	return nil
@@ -1630,9 +1652,9 @@ func (data *TestData) copyNodeFiles(nodeName string, fileName string, covDir str
 	}
 	defer w.Close()
 	cmd := fmt.Sprintf("cat %s", fileName)
-	rc, stdout, stderr, err := RunCommandOnNode(masterNodeName(), cmd)
+	rc, stdout, stderr, err := RunCommandOnNode(controlPlaneNodeName(), cmd)
 	if err != nil || rc != 0 {
-		return fmt.Errorf("cannot retrieve content of file '%s' from Node '%s', stderr: <%v>, err: <%v>", fileName, masterNodeName(), stderr, err)
+		return fmt.Errorf("cannot retrieve content of file '%s' from Node '%s', stderr: <%v>, err: <%v>", fileName, controlPlaneNodeName(), stderr, err)
 	}
 	if stdout == "" {
 		return nil

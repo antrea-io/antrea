@@ -198,7 +198,7 @@ func (r *Reachability) Expect(pod1 Pod, pod2 Pod, isConnected bool) {
 func (r *Reachability) ExpectAllIngress(pod Pod, connected bool) {
 	r.Expected.SetAllTo(string(pod), connected)
 	if !connected {
-		log.Infof("Blacklisting all traffic *to* %s", pod)
+		log.Infof("Denying all traffic *to* %s", pod)
 	}
 }
 
@@ -206,7 +206,7 @@ func (r *Reachability) ExpectAllIngress(pod Pod, connected bool) {
 func (r *Reachability) ExpectAllEgress(pod Pod, connected bool) {
 	r.Expected.SetAllFrom(string(pod), connected)
 	if !connected {
-		log.Infof("Blacklisting all traffic *from* %s", pod)
+		log.Infof("Denying all traffic *from* %s", pod)
 	}
 }
 

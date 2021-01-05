@@ -48,9 +48,9 @@ var (
 	customizePolicyRules = flag.Int("perf.http.policy_rules", 0, "Number of CIDRs in the network policy")
 	httpConcurrency      = flag.Int("perf.http.concurrency", 1, "Number of multiple requests to make at a time")
 	realizeTimeout       = flag.Duration("perf.realize.timeout", 5*time.Minute, "Timeout of the realization of network policies")
-	// tolerate NoSchedule taint to let the Pod run on master Node
+	// tolerate NoSchedule taint to let the Pod run on control-plane Node
 	noScheduleToleration = corev1.Toleration{
-		Key:      "node-role.kubernetes.io/master",
+		Key:      labelNodeRoleControlPlane(),
 		Operator: corev1.TolerationOpExists,
 		Effect:   corev1.TaintEffectNoSchedule,
 	}
@@ -104,7 +104,7 @@ func randCidr(rndSrc rand.Source) string {
 }
 
 // createPerfTestPodDefinition creates the Pod specification for the perf test.
-// The Pod will be scheduled on the master Node.
+// The Pod will be scheduled on the control-plane Node.
 func createPerfTestPodDefinition(name, containerName, image string) *corev1.Pod {
 	podSpec := corev1.PodSpec{
 		Containers: []corev1.Container{
@@ -117,7 +117,7 @@ func createPerfTestPodDefinition(name, containerName, image string) *corev1.Pod 
 		RestartPolicy: corev1.RestartPolicyAlways,
 	}
 	podSpec.NodeSelector = map[string]string{
-		"kubernetes.io/hostname": masterNodeName(),
+		"kubernetes.io/hostname": controlPlaneNodeName(),
 	}
 
 	podSpec.Tolerations = []corev1.Toleration{noScheduleToleration}
@@ -206,7 +206,7 @@ func setupTestPods(data *TestData, b *testing.B) (nginxPodIP, perfPodIP *PodIPs)
 }
 
 // httpRequest runs a benchmark to measure intra-Node Pod-to-Pod HTTP request performance. It creates one perftool
-// Pod and one Nginx Pod, both on the master Node. The perftool will use apache-bench tool to issue perf.http.requests
+// Pod and one Nginx Pod, both on the control-plane Node. The perftool will use apache-bench tool to issue perf.http.requests
 // number of requests to the Nginx Pod. The number of concurrent requests will be determined by the value provided with
 // the http.perf.concurrency command-line flag (default is 1, for sequential requests). policyRules indicates how many CIDR
 // rules should be included in the network policy applied to the Pods.
@@ -286,13 +286,13 @@ func WaitNetworkPolicyRealize(policyRules int, data *TestData) error {
 }
 
 // checkRealize checks if all CIDR rules in the Network Policy have been realized as OVS flows. It counts the number of
-// flows installed in the ingressRuleTable of the OVS bridge of the master Node. This relies on the implementation
+// flows installed in the ingressRuleTable of the OVS bridge of the control-plane Node. This relies on the implementation
 // knowledge that given a single ingress policy, the Antrea agent will install exactly one flow per CIDR rule in table 90.
 // checkRealize returns true when the number of flows exceeds the number of CIDR, because each table has a default flow
 // entry which is used for default matching.
 // Since the check is done over SSH, the time measurement is not completely accurate.
 func checkRealize(policyRules int, data *TestData) (bool, error) {
-	antreaPodName, err := data.getAntreaPodOnNode(masterNodeName())
+	antreaPodName, err := data.getAntreaPodOnNode(controlPlaneNodeName())
 	if err != nil {
 		return false, err
 	}
