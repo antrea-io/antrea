@@ -314,7 +314,7 @@ var CommandList = &commandList{
 						},
 						{
 							name:      "table",
-							usage:     "Antrea OVS flow table name or number",
+							usage:     "Comma separated Antrea OVS flow table names or numbers",
 							shorthand: "T",
 						},
 					},
