@@ -321,7 +321,7 @@ function deliver_antrea {
     fi
     docker save -o flow-aggregator.tar projects.registry.vmware.com/antrea/flow-aggregator:${DOCKER_IMG_VERSION}
 
-    kubectl get nodes -o wide --no-headers=true | awk '$3 == "$CONTROL_PLANE_NODE_ROLE" {print $6}' | while read control_plane_ip; do
+    kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 == role {print $6}' | while read control_plane_ip; do
         scp -q -o StrictHostKeyChecking=no -i ${GIT_CHECKOUT_DIR}/jenkins/key/antrea-ci-key $GIT_CHECKOUT_DIR/build/yamls/*.yml capv@${control_plane_ip}:~
     done
 
