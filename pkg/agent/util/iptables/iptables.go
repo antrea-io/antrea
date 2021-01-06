@@ -89,7 +89,7 @@ func isRestoreWaitSupported(ipt *iptables.IPTables) bool {
 	return version.GE(restoreWaitSupportedMinVersion)
 }
 
-// ensureChain checks if target chain already exists, creates it if not.
+// EnsureChain checks if target chain already exists, creates it if not.
 func (c *Client) EnsureChain(table string, chain string) error {
 	for idx := range c.ipts {
 		ipt := c.ipts[idx]
@@ -108,7 +108,21 @@ func (c *Client) EnsureChain(table string, chain string) error {
 	return nil
 }
 
-// ensureRule checks if target rule already exists, appends it if not.
+// ChainExists checks if a chain already exists in a table
+func (c *Client) ChainExists(table string, chain string) (bool, error) {
+	for idx := range c.ipts {
+		allChains, err := c.ipts[idx].ListChains(table)
+		if err != nil {
+			return false, fmt.Errorf("error listing existing chains in table %s: %v", table, err)
+		}
+		if contains(allChains, chain) {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// EnsureRule checks if target rule already exists, appends it if not.
 func (c *Client) EnsureRule(table string, chain string, ruleSpec []string) error {
 	for idx := range c.ipts {
 		ipt := c.ipts[idx]

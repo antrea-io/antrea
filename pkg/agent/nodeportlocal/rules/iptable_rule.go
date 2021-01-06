@@ -72,16 +72,16 @@ func (ipt *IPTableRules) CreateChains() error {
 }
 
 // AddRule appends a DNAT rule in NodePortLocalChain chain of NAT table
-func (ipt *IPTableRules) AddRule(port int, podip string) error {
+func (ipt *IPTableRules) AddRule(port int, podIP string) error {
 	ruleSpec := []string{
 		"-p", "tcp", "-m", "tcp", "--dport",
-		fmt.Sprint(port), "-j", "DNAT", "--to-destination", podip,
+		fmt.Sprint(port), "-j", "DNAT", "--to-destination", podIP,
 	}
 	err := ipt.table.EnsureRule(iptables.NATTable, NodePortLocalChain, ruleSpec)
 	if err != nil {
 		return fmt.Errorf("IPTABLES rule creation failed for NPL with error: %v", err)
 	}
-	klog.Infof("successfully added rule for pod %s: %d", podip, port)
+	klog.Infof("successfully added rule for Pod %s: %d", podIP, port)
 	return nil
 }
 
@@ -130,13 +130,19 @@ func (ipt *IPTableRules) GetAllRules() (map[int]string, error) {
 
 // DeleteAllRules deletes all NPL rules programmed in the node
 func (ipt *IPTableRules) DeleteAllRules() error {
+	exists, err := ipt.table.ChainExists(iptables.NATTable, NodePortLocalChain)
+	if err != nil {
+		return fmt.Errorf("failed to check if NodePortLocal chain exists in NAT table: %v", err)
+	}
+	if !exists {
+		return nil
+	}
 	ruleSpec := []string{
 		"-p", "tcp", "-j", NodePortLocalChain,
 	}
-	err := ipt.table.DeleteRule(iptables.NATTable, iptables.PreRoutingChain, ruleSpec)
+	err = ipt.table.DeleteRule(iptables.NATTable, iptables.PreRoutingChain, ruleSpec)
 	if err != nil {
 		return fmt.Errorf("failed to delete rule from prerouting chain for NPL: %v", err)
-
 	}
 
 	err = ipt.table.DeleteChain(iptables.NATTable, NodePortLocalChain)

@@ -38,7 +38,7 @@ import (
 const resyncPeriod = 60 * time.Minute
 
 // InitializeNPLAgent initializes the NodePortLocal (NPL) agent.
-// It initializes the port table cache to keep rack of Node ports available for use by NPL,
+// It initializes the port table cache to keep track of Node ports available for use by NPL,
 // sets up event handlers to handle Pod add, update and delete events.
 // When a Pod gets created, a free Node port is obtained from the port table cache and a DNAT rule is added to NAT traffic to the Pod's ip:port.
 func InitializeNPLAgent(kubeClient clientset.Interface, portRange, nodeName string) (*k8s.Controller, error) {

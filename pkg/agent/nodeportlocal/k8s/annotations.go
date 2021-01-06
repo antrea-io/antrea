@@ -142,6 +142,6 @@ func (c *Controller) updatePodAnnotation(pod *corev1.Pod) error {
 		klog.Warningf("Unable to update Pod %s with annotation: %+v", pod.Name, err)
 		return err
 	}
-	klog.V(2).Infof("Successfully updated Pod %s/%s annotation", pod.Namespace, pod.Name)
+	klog.V(2).Infof("Successfully updated annotation for Pod %s/%s", pod.Namespace, pod.Name)
 	return nil
 }

@@ -56,6 +56,10 @@ func NewNPLController(kubeClient clientset.Interface, pt *portcache.PortTable) *
 	return &nplCtrl
 }
 
+func podKeyFunc(pod *corev1.Pod) string {
+	return pod.Namespace + "/" + pod.Name
+}
+
 // Run starts to watch and process Pod updates for the Node where Antrea Agent is running.
 // It starts a queue and a fixed number of workers to process the objects from the queue.
 func (c *Controller) Run(stopCh <-chan struct{}) {
@@ -102,7 +106,7 @@ func (c *Controller) EnqueueObjAdd(obj interface{}) {
 			return
 		}
 	}
-	podKey := pod.Namespace + "/" + pod.Name
+	podKey := podKeyFunc(pod)
 	c.queue.Add(podKey)
 
 }
@@ -117,7 +121,7 @@ func (c *Controller) EnqueueObjUpdate(oldObj, newObj interface{}) {
 			return
 		}
 	}
-	podKey := pod.Namespace + "/" + pod.Name
+	podKey := podKeyFunc(pod)
 	c.queue.Add(podKey)
 
 }
@@ -132,7 +136,7 @@ func (c *Controller) EnqueueObjDel(obj interface{}) {
 			return
 		}
 	}
-	podKey := pod.Namespace + "/" + pod.Name
+	podKey := podKeyFunc(pod)
 	c.queue.Add(podKey)
 
 }
@@ -186,7 +190,7 @@ func (c *Controller) addRuleForPod(pod *corev1.Pod) error {
 	return nil
 }
 
-// HandleDeletePod Removes rules from port table and
+// HandleDeletePod removes rules from port table and
 // rules programmed in the system based on implementation type (e.g. IPTABLES)
 func (c *Controller) HandleDeletePod(key string) error {
 	klog.Infof("Got delete event for Pod: %s", key)
@@ -228,7 +232,7 @@ func (c *Controller) HandleAddUpdatePod(key string, obj interface{}) error {
 			if !c.portTable.RuleExists(podIP, int(cport.ContainerPort)) {
 				err = c.addRuleForPod(newPod)
 				if err != nil {
-					return fmt.Errorf("Failed to add rule for Pod %s/%s: %s", newPod.Namespace, newPod.Name, err.Error())
+					return fmt.Errorf("failed to add rule for Pod %s/%s: %s", newPod.Namespace, newPod.Name, err.Error())
 				}
 				updatePodAnnotation = true
 			}
@@ -248,7 +252,7 @@ func (c *Controller) HandleAddUpdatePod(key string, obj interface{}) error {
 				removeFromPodAnnotation(newPod, data.PodPort)
 				err := c.portTable.DeleteRule(podIP, int(data.PodPort))
 				if err != nil {
-					return fmt.Errorf("Failed to delete rule for Pod IP %s, Pod Port %d: %s", podIP, data.PodPort, err.Error())
+					return fmt.Errorf("failed to delete rule for Pod IP %s, Pod Port %d: %s", podIP, data.PodPort, err.Error())
 				}
 				updatePodAnnotation = true
 			}
