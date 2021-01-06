@@ -485,14 +485,12 @@ func (c *client) InstallClusterServiceFlows() error {
 		c.l2ForwardOutputServiceHairpinFlow(),
 	}
 	if c.IsIPv4Enabled() {
-		flows = append(flows,
-			c.serviceHairpinResponseDNATFlow(binding.ProtocolIP),
-			c.serviceLBBypassFlow(binding.ProtocolIP))
+		flows = append(flows, c.serviceHairpinResponseDNATFlow(binding.ProtocolIP))
+		flows = append(flows, c.serviceLBBypassFlows(binding.ProtocolIP)...)
 	}
 	if c.IsIPv6Enabled() {
-		flows = append(flows,
-			c.serviceHairpinResponseDNATFlow(binding.ProtocolIPv6),
-			c.serviceLBBypassFlow(binding.ProtocolIPv6))
+		flows = append(flows, c.serviceHairpinResponseDNATFlow(binding.ProtocolIPv6))
+		flows = append(flows, c.serviceLBBypassFlows(binding.ProtocolIPv6)...)
 	}
 	if err := c.ofEntryOperations.AddAll(flows); err != nil {
 		return err
