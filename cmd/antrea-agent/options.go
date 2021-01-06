@@ -197,7 +197,7 @@ func (o *Options) setDefaults() {
 		}
 	}
 
-	if o.config.FeatureGates[string(features.NodePortLocal)] {
+	if features.DefaultFeatureGate.Enabled(features.NodePortLocal) {
 		if o.config.NPLPortRange == "" {
 			o.config.NPLPortRange = defaultNPLPortRange
 		}

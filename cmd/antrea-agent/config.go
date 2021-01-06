@@ -122,6 +122,6 @@ type AgentConfig struct {
 	FlowExportFrequency uint `yaml:"flowExportFrequency,omitempty"`
 	// Provide the port range used by NodePortLocal. When the NodePortLocal feature is enabled, a port from that range will be assigned
 	// whenever a Pod's container defines a specific port to be exposed (each container can define a list of ports as pod.spec.containers[].ports),
-	// and all Node traffic directed to that Pod will be forwarded to the Pod.
+	// and all Node traffic directed to that port will be forwarded to the Pod.
 	NPLPortRange string `yaml:"nplPortRange,omitempty"`
 }

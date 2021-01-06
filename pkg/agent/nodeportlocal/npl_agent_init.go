@@ -82,9 +82,9 @@ func InitController(kubeClient clientset.Interface, portTable *portcache.PortTab
 
 	cacheStore, controller := cache.NewInformer(lw, &corev1.Pod{}, resyncPeriod,
 		cache.ResourceEventHandlerFuncs{
-			AddFunc:    c.EnqueueObjAdd,
-			DeleteFunc: c.EnqueueObjDel,
-			UpdateFunc: c.EnqueueObjUpdate,
+			AddFunc:    c.EnqueueObj,
+			DeleteFunc: c.EnqueueObj,
+			UpdateFunc: func(old, cur interface{}) { c.EnqueueObj(cur) },
 		},
 	)
 	c.CacheStore = cacheStore

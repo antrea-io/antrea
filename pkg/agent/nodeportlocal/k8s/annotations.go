@@ -139,7 +139,7 @@ func (c *Controller) RemoveNPLAnnotationFromPods() {
 
 func (c *Controller) updatePodAnnotation(pod *corev1.Pod) error {
 	if _, err := c.kubeClient.CoreV1().Pods(pod.Namespace).Update(context.TODO(), pod, metav1.UpdateOptions{}); err != nil {
-		klog.Warningf("Unable to update Pod %s with annotation: %+v", pod.Name, err)
+		klog.Warningf("Unable to update annotation for Pod %s/%s, error: %v", pod.Namespace, pod.Name, err)
 		return err
 	}
 	klog.V(2).Infof("Successfully updated annotation for Pod %s/%s", pod.Namespace, pod.Name)

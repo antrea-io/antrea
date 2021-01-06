@@ -19,6 +19,7 @@ package k8s
 import (
 	"encoding/json"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/nodeportlocal/portcache"
@@ -44,6 +45,7 @@ type Controller struct {
 	Ctrl       cache.Controller
 	CacheStore cache.Store
 	PodToIP    map[string]string
+	podIPLock  sync.RWMutex
 }
 
 func NewNPLController(kubeClient clientset.Interface, pt *portcache.PortTable) *Controller {
@@ -77,9 +79,9 @@ func (c *Controller) syncPod(key string) error {
 	if err != nil {
 		return err
 	} else if exists {
-		return c.HandleAddUpdatePod(key, obj)
+		return c.handleAddUpdatePod(key, obj)
 	} else {
-		return c.HandleDeletePod(key)
+		return c.handleDeletePod(key)
 	}
 }
 
@@ -96,7 +98,7 @@ func (c *Controller) checkDeletedPod(obj interface{}) (*corev1.Pod, error) {
 	return pod, nil
 }
 
-func (c *Controller) EnqueueObjAdd(obj interface{}) {
+func (c *Controller) EnqueueObj(obj interface{}) {
 	pod, isPod := obj.(*corev1.Pod)
 	if !isPod {
 		var err error
@@ -108,37 +110,6 @@ func (c *Controller) EnqueueObjAdd(obj interface{}) {
 	}
 	podKey := podKeyFunc(pod)
 	c.queue.Add(podKey)
-
-}
-
-func (c *Controller) EnqueueObjUpdate(oldObj, newObj interface{}) {
-	pod, isPod := newObj.(*corev1.Pod)
-	if !isPod {
-		var err error
-		pod, err = c.checkDeletedPod(newObj)
-		if err != nil {
-			klog.Errorf("Got error while processing event update: %v", err)
-			return
-		}
-	}
-	podKey := podKeyFunc(pod)
-	c.queue.Add(podKey)
-
-}
-
-func (c *Controller) EnqueueObjDel(obj interface{}) {
-	pod, isPod := obj.(*corev1.Pod)
-	if !isPod {
-		var err error
-		pod, err = c.checkDeletedPod(obj)
-		if err != nil {
-			klog.Errorf("Got error while processing event update: %v", err)
-			return
-		}
-	}
-	podKey := podKeyFunc(pod)
-	c.queue.Add(podKey)
-
 }
 
 func (c *Controller) Worker() {
@@ -167,34 +138,24 @@ func (c *Controller) processNextWorkItem() bool {
 	return true
 }
 
-func (c *Controller) addRuleForPod(pod *corev1.Pod) error {
-	podIP, nodeIP := pod.Status.PodIP, pod.Status.HostIP
-	if podIP == "" || nodeIP == "" {
-		return nil
-	}
-	podContainers := pod.Spec.Containers
-
-	for _, container := range podContainers {
-		for _, cport := range container.Ports {
-			port := int(cport.ContainerPort)
-			if c.portTable.RuleExists(podIP, port) {
-				continue
-			}
-			nodePort, err := c.portTable.AddRule(podIP, port)
-			if err != nil {
-				return err
-			}
-			assignPodAnnotation(pod, nodeIP, port, nodePort)
-		}
-	}
-	return nil
+func (c *Controller) getPodIPFromCache(key string) (string, bool) {
+	c.podIPLock.RLock()
+	defer c.podIPLock.RUnlock()
+	podIP, found := c.PodToIP[key]
+	return podIP, found
 }
 
-// HandleDeletePod removes rules from port table and
+func (c *Controller) addPodIPToCache(key, podIP string) {
+	c.podIPLock.Lock()
+	defer c.podIPLock.Unlock()
+	c.PodToIP[key] = podIP
+}
+
+// handleDeletePod removes rules from port table and
 // rules programmed in the system based on implementation type (e.g. IPTABLES)
-func (c *Controller) HandleDeletePod(key string) error {
+func (c *Controller) handleDeletePod(key string) error {
 	klog.Infof("Got delete event for Pod: %s", key)
-	podIP, found := c.PodToIP[key]
+	podIP, found := c.getPodIPFromCache(key)
 	if !found {
 		klog.Infof("IP address not found for Pod: %s", key)
 		return nil
@@ -209,8 +170,8 @@ func (c *Controller) HandleDeletePod(key string) error {
 	return nil
 }
 
-// HandleAddUpdatePod handles Pod Add, Update events and updates annotation if required
-func (c *Controller) HandleAddUpdatePod(key string, obj interface{}) error {
+// handleAddUpdatePod handles Pod Add, Update events and updates annotation if required
+func (c *Controller) handleAddUpdatePod(key string, obj interface{}) error {
 	newPod := obj.(*corev1.Pod).DeepCopy()
 	klog.Infof("Got add/update event for pod: %s", key)
 
@@ -219,10 +180,11 @@ func (c *Controller) HandleAddUpdatePod(key string, obj interface{}) error {
 		klog.Infof("IP address not found for pod: %s/%s", newPod.Namespace, newPod.Name)
 		return nil
 	}
-	c.PodToIP[key] = podIP
+	c.addPodIPToCache(key, podIP)
 
 	var err error
 	var updatePodAnnotation bool
+	var nodePort int
 	newPodPorts := make(map[int]struct{})
 	newPodContainers := newPod.Spec.Containers
 	for _, container := range newPodContainers {
@@ -230,10 +192,11 @@ func (c *Controller) HandleAddUpdatePod(key string, obj interface{}) error {
 			port := int(cport.ContainerPort)
 			newPodPorts[port] = struct{}{}
 			if !c.portTable.RuleExists(podIP, int(cport.ContainerPort)) {
-				err = c.addRuleForPod(newPod)
+				nodePort, err = c.portTable.AddRule(podIP, port)
 				if err != nil {
 					return fmt.Errorf("failed to add rule for Pod %s/%s: %s", newPod.Namespace, newPod.Name, err.Error())
 				}
+				assignPodAnnotation(newPod, newPod.Status.HostIP, port, nodePort)
 				updatePodAnnotation = true
 			}
 		}
@@ -244,7 +207,7 @@ func (c *Controller) HandleAddUpdatePod(key string, obj interface{}) error {
 	entries := c.portTable.GetDataForPodIP(podIP)
 	if podAnnotation != nil {
 		if err := json.Unmarshal([]byte(podAnnotation[NPLAnnotationStr]), &annotations); err != nil {
-			klog.Warningf("Unable to unmarshal NodePorLocal annotation")
+			klog.Warningf("Unable to unmarshal NodePortLocal annotation")
 			return nil
 		}
 		for _, data := range entries {
