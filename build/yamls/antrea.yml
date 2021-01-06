@@ -1182,7 +1182,7 @@ rules:
   resourceNames:
   - crdmutator.antrea.tanzu.vmware.com
   - crdvalidator.antrea.tanzu.vmware.com
-  - labelsmutator.antrea.tanzu.vmware.com
+  - labelsmutator.antrea.io
   resources:
   - mutatingwebhookconfigurations
   - validatingwebhookconfigurations
@@ -1979,7 +1979,7 @@ kind: MutatingWebhookConfiguration
 metadata:
   labels:
     app: antrea
-  name: labelsmutator.antrea.tanzu.vmware.com
+  name: labelsmutator.antrea.io
 webhooks:
 - admissionReviewVersions:
   - v1
@@ -1988,8 +1988,8 @@ webhooks:
     service:
       name: antrea
       namespace: kube-system
-      path: /mutate/nslabels
-  name: nsmutator.antrea.tanzu.vmware.com
+      path: /mutate/addlabels
+  name: namelabelmutator.antrea.io
   rules:
   - apiGroups:
     - ""
@@ -2001,18 +2001,6 @@ webhooks:
     resources:
     - namespaces
     scope: Cluster
-  sideEffects: None
-  timeoutSeconds: 5
-- admissionReviewVersions:
-  - v1
-  - v1beta1
-  clientConfig:
-    service:
-      name: antrea
-      namespace: kube-system
-      path: /mutate/svclabels
-  name: svcmutator.antrea.tanzu.vmware.com
-  rules:
   - apiGroups:
     - ""
     apiVersions:

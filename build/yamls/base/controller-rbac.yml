@@ -103,7 +103,7 @@ rules:
     resourceNames:
       - crdmutator.antrea.tanzu.vmware.com
       - crdvalidator.antrea.tanzu.vmware.com
-      - labelsmutator.antrea.tanzu.vmware.com
+      - labelsmutator.antrea.io
     verbs:
       - get
       - update

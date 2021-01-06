@@ -21,7 +21,6 @@ import (
 	"net/http"
 
 	admv1 "k8s.io/api/admission/v1"
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog"
 )
@@ -43,7 +42,7 @@ type jsonPatch struct {
 	Op jsonPatchOperation `json:"op"`
 	// Path is a jsonPath to locate the value that need to be mutated
 	Path string `json:"path"`
-	// Value represent the value which is used in mutation
+	// Value represents the value which is used in mutation
 	Value interface{} `json:"value,omitempty"`
 }
 
@@ -104,52 +103,20 @@ func mutateResourceLabels(ar *admv1.AdmissionReview) *admv1.AdmissionResponse {
 	var patch []byte
 	var allowed bool
 	var msg string
+	var objMeta metav1.ObjectMeta
 	patchType := admv1.PatchTypeJSONPatch
 
 	op := ar.Request.Operation
 	curRaw := ar.Request.Object.Raw
-	oldRaw := ar.Request.OldObject.Raw
-
-	switch ar.Request.Kind.Kind {
-	case "Namespace":
-		klog.V(2).Info("Mutating Namespace labels")
-		var curNS, oldNS corev1.Namespace
-		if curRaw != nil {
-			if err := json.Unmarshal(curRaw, &curNS); err != nil {
-				klog.Errorf("Error de-serializing current Namespace")
-				return getAdmissionResponseForErr(err)
-			}
+	klog.V(2).Info("Mutating resource labels")
+	if curRaw != nil {
+		if err := json.Unmarshal(curRaw, &objMeta); err != nil {
+			klog.Errorf("Error de-serializing current resource")
+			return getAdmissionResponseForErr(err)
 		}
-		if oldRaw != nil {
-			if err := json.Unmarshal(oldRaw, &oldNS); err != nil {
-				klog.Errorf("Error de-serializing old Namespace")
-				return getAdmissionResponseForErr(err)
-			}
-		}
-		msg, allowed, patch = mutateLabels(op, curNS.Labels, curNS.Name)
-	case "Service":
-		klog.V(2).Info("Mutating Service labels")
-		var curSvc, oldSvc corev1.Service
-		if curRaw != nil {
-			if err := json.Unmarshal(curRaw, &curSvc); err != nil {
-				klog.Errorf("Error de-serializing current Service")
-				return getAdmissionResponseForErr(err)
-			}
-		}
-		if oldRaw != nil {
-			if err := json.Unmarshal(oldRaw, &oldSvc); err != nil {
-				klog.Errorf("Error de-serializing old Service")
-				return getAdmissionResponseForErr(err)
-			}
-		}
-		// labels must be mutated for all Service objects other than Antrea Service.
-		// Mutating labels of Antrea Service CREATE will error out as the mutation webhook
-		// itself is served by the Antrea Service, which would mean that creation of
-		// will error out as the webhook svc will be unreachable. Instead, antrea APIService
-		// yaml is updated to include the metadata.name label.
-		if !isAntreaService(curSvc.Namespace, curSvc.Name) || op != admv1.Create {
-			msg, allowed, patch = mutateLabels(op, curSvc.Labels, curSvc.Name)
-		}
+	}
+	if ar.Request.Kind.Kind != "Service" || !isAntreaService(objMeta.Namespace, objMeta.Name) || op != admv1.Create {
+		msg, allowed, patch = mutateLabels(op, objMeta.Labels, objMeta.Name)
 	}
 	if msg != "" {
 		result = &metav1.Status{
@@ -165,7 +132,7 @@ func mutateResourceLabels(ar *admv1.AdmissionReview) *admv1.AdmissionResponse {
 }
 
 // mutataLabels mutates the resource's labels and forcefully inserts the resource's name as a well
-// known label to ensure that the label is never modified or removed while CREATE and UPDATE events.
+// known label to ensure that the label is never modified or removed by CREATE and UPDATE events.
 func mutateLabels(op admv1.Operation, l map[string]string, name string) (string, bool, []byte) {
 	var patch []byte
 	switch op {
@@ -186,7 +153,7 @@ func mutateLabels(op admv1.Operation, l map[string]string, name string) (string,
 	return "", true, patch
 }
 
-// createLabelsReplacePatch use labels that need to be replace to generate a serialized patch
+// createLabelsReplacePatch generates a serialized patch from the new list of labels.
 func createLabelsReplacePatch(l map[string]string) ([]byte, error) {
 	var patch []jsonPatch
 	patch = append(patch, jsonPatch{
