@@ -16,6 +16,7 @@ package apiserver
 
 import (
 	"context"
+
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/networkpolicy/group"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"

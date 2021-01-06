@@ -12,21 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package group provides ClusterGroupController implementation to manage
-// and synchronize the GroupMembers and Namespaces affected by selectors in a
-// ClusterGroup.
-
 package networkpolicy
 
 import (
-	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog"
+
+	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
 
 	corev1a2 "github.com/vmware-tanzu/antrea/pkg/apis/core/v1alpha2"
 	antreatypes "github.com/vmware-tanzu/antrea/pkg/controller/types"
@@ -37,20 +33,11 @@ func (n *NetworkPolicyController) addCG(curObj interface{}) {
 	cg := curObj.(*corev1a2.ClusterGroup)
 	klog.V(2).Infof("Processing ADD event for ClusterGroup %s", cg.Name)
 	newGroup := n.processClusterGroup(cg)
-	// Get or create a Group for the generated UID.
-	// Ignoring returned error (here and elsewhere in this file) as with the
-	// current store implementation, no error is ever returned.
-	_, found, _ := n.groupStore.Get(newGroup.Name)
-	if found {
-		klog.V(4).Infof("Found existing internal group %s with same selectors while processing ADD event of ClusterGroup %s", newGroup.Name, cg.Name)
-		return
-	}
-	klog.V(2).Infof("Creating new internal Group %s with selector (%s)", newGroup.Name, newGroup.Selector.NormalizedName)
+	klog.V(2).Infof("Creating new internal Group %s with selector (%s)", newGroup.UID, newGroup.Selector.NormalizedName)
 	n.groupStore.Create(newGroup)
-	if newGroup.IPBlock != nil {
-		return
+	if newGroup.IPBlock == nil {
+		n.enqueueGroup(newGroup.UID)
 	}
-	n.enqueueGroup(newGroup.Name)
 }
 
 // updateCG is responsible to process the UPDATE event of a ClusterGroup resource.
@@ -60,23 +47,16 @@ func (n *NetworkPolicyController) updateCG(oldObj, curObj interface{}) {
 	klog.V(2).Infof("Processing UPDATE event for ClusterGroup %s", cg.Name)
 	newGroup := n.processClusterGroup(cg)
 	oldGroup := n.processClusterGroup(og)
-	if newGroup.Name == oldGroup.Name {
+	selUpdated := newGroup.Selector.NormalizedName != oldGroup.Selector.NormalizedName
+	ipBlockUpdated := newGroup.IPBlock != oldGroup.IPBlock
+	if !selUpdated && !ipBlockUpdated {
 		// No change in the selectors of the ClusterGroup. No need to enqueue for further sync.
 		return
 	}
-	// Get or create a Group for the generated UID of current ClusterGroup.
-	_, found, _ := n.groupStore.Get(newGroup.Name)
-	if !found {
-		// If internal Group is not found corresponding to changes in selectors, create a new Group and enqueue it to
-		// sync its members.
-		klog.V(2).Infof("Creating new internal Group %s with selector (%s)", newGroup.Name, newGroup.Selector.NormalizedName)
-		n.groupStore.Create(newGroup)
-		if newGroup.IPBlock == nil {
-			n.enqueueGroup(newGroup.Name)
-		}
+	n.groupStore.Update(newGroup)
+	if newGroup.IPBlock == nil {
+		n.enqueueGroup(newGroup.UID)
 	}
-	// Delete old internal Group if it is no longer referenced by any other ClusterGroups.
-	n.deleteDereferencedInternalGroup(oldGroup.Name)
 }
 
 // deleteCG is responsible to process the DELETE event of a ClusterGroup resource.
@@ -95,57 +75,30 @@ func (n *NetworkPolicyController) deleteCG(oldObj interface{}) {
 			return
 		}
 	}
-	gUID := getNormalizedUID(toGroupSelector("", og.Spec.PodSelector, og.Spec.NamespaceSelector, nil).NormalizedName)
-	oldInternalGroupObj, _, _ := n.groupStore.Get(gUID)
-	oldInternalGroup := oldInternalGroupObj.(*antreatypes.Group)
-	klog.Infof("Deleting internal Group %s for %s", oldInternalGroup.Name, oldInternalGroup.SourceRef.ToString())
-	n.deleteDereferencedInternalGroup(gUID)
+	gUID := string(og.UID)
+	klog.Infof("Deleting internal Group %s", gUID)
+	err := n.groupStore.Delete(gUID)
+	if err != nil {
+		klog.Errorf("Unable to delete internal Group %s from store: %v", gUID, err)
+	}
 }
 
 func (n *NetworkPolicyController) processClusterGroup(cg *corev1a2.ClusterGroup) *antreatypes.Group {
-	var gUID string
 	internalGroup := antreatypes.Group{
 		SourceRef: &antreatypes.GroupReference{
-			Type:      antreatypes.ClusterGroup,
 			Namespace: "",
 			Name:      cg.Name,
-			UID:       cg.UID,
 		},
+		UID: string(cg.UID),
 	}
 	if cg.Spec.IPBlock != nil {
 		ipb, _ := toAntreaIPBlockForCRD(cg.Spec.IPBlock)
-		internalGroup.Name = string(cg.UID)
-		internalGroup.UID = cg.UID
 		internalGroup.IPBlock = ipb
 		return &internalGroup
 	}
 	groupSelector := toGroupSelector("", cg.Spec.PodSelector, cg.Spec.NamespaceSelector, nil)
-	// Generate the UID based on the normalized name of the Group
-	gUID = getNormalizedUID(groupSelector.NormalizedName)
-	// Construct a new Group and populate fields.
-	internalGroup.UID = types.UID(gUID)
-	internalGroup.Name = gUID
 	internalGroup.Selector = *groupSelector
 	return &internalGroup
-}
-
-// deleteDereferencedInternalGroup checks whether an internal Group has a reference to an existing ClusterGroup before
-// deleting the internal Group from store.
-func (n *NetworkPolicyController) deleteDereferencedInternalGroup(key string) {
-	// Get all ClusterGroup objects that refers the internal Group.
-	cgs, err := n.cgInformer.Informer().GetIndexer().ByIndex("internalGroup", key)
-	if err != nil {
-		klog.Errorf("Unable to filter ClusterGroups for internal Group %s: %v", key, err)
-		return
-	}
-	if len(cgs) == 0 {
-		// No ClusterGroup refers to this internal Group. Safe to delete.
-		klog.V(2).Infof("Deleting unreferenced internal Group %s", key)
-		err := n.groupStore.Delete(key)
-		if err != nil {
-			klog.Errorf("Unable to delete internal Group %s from store: %v", key, err)
-		}
-	}
 }
 
 // filterGroupsForPod computes a list of Group keys which match the Pod's labels.
@@ -156,8 +109,8 @@ func (n *NetworkPolicyController) filterGroupsForPod(obj metav1.Object) sets.Str
 	for _, group := range clusterScopedGroups {
 		g := group.(*antreatypes.Group)
 		if n.labelsMatchGroupSelector(obj, ns, &g.Selector) {
-			matchingKeySet.Insert(g.Name)
-			klog.V(2).Infof("%s/%s matched Group %s", obj.GetNamespace(), obj.GetName(), g.Name)
+			matchingKeySet.Insert(g.UID)
+			klog.V(2).Infof("%s/%s matched Group %s", obj.GetNamespace(), obj.GetName(), g.UID)
 		}
 	}
 	return matchingKeySet
@@ -173,8 +126,8 @@ func (n *NetworkPolicyController) filterGroupsForNamespace(namespace *v1.Namespa
 		g := group.(*antreatypes.Group)
 		// Group created by CNP might not have NamespaceSelector.
 		if g.Selector.NamespaceSelector != nil && g.Selector.NamespaceSelector.Matches(labels.Set(namespace.Labels)) {
-			matchingKeys.Insert(g.Name)
-			klog.V(2).Infof("Namespace %s matched Group %s", namespace.Name, g.Name)
+			matchingKeys.Insert(g.UID)
+			klog.V(2).Infof("Namespace %s matched Group %s", namespace.Name, g.UID)
 		}
 	}
 	return matchingKeys
@@ -221,7 +174,7 @@ func (n *NetworkPolicyController) syncGroup(key string) error {
 	// Retrieve the internal Group corresponding to this key.
 	grpObj, found, _ := n.groupStore.Get(key)
 	if !found {
-		klog.V(2).Info("Group %s not found.", key)
+		klog.V(2).Infof("Group %s not found.", key)
 		return nil
 	}
 
@@ -239,7 +192,6 @@ func (n *NetworkPolicyController) syncGroup(key string) error {
 	}
 	// Update the Group object in the store with the Pods as GroupMembers.
 	updatedGrp := &antreatypes.Group{
-		Name:         grp.Name,
 		UID:          grp.UID,
 		SourceRef:    grp.SourceRef,
 		Selector:     grp.Selector,

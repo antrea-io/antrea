@@ -19,21 +19,22 @@ import (
 	"reflect"
 
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/tools/cache"
 
 	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage/ram"
-	"github.com/vmware-tanzu/antrea/pkg/controller/types"
+	antreatypes "github.com/vmware-tanzu/antrea/pkg/controller/types"
 )
 
 // groupEvent implements storage.InternalEvent.
 type groupEvent struct {
 	// The current version of the stored Group.
-	CurrGroup *types.Group
+	CurrGroup *antreatypes.Group
 	// The previous version of the stored Group.
-	PrevGroup *types.Group
+	PrevGroup *antreatypes.Group
 	// The current version of the transferred Group, which will be used in Added events.
 	CurrObject *controlplane.Group
 	// The previous version of the transferred Group, which will be used in Deleted events.
@@ -89,13 +90,13 @@ func genGroupEvent(key string, prevObj, currObj interface{}, rv uint64) (storage
 	event := &groupEvent{Key: key, ResourceVersion: rv}
 
 	if prevObj != nil {
-		event.PrevGroup = prevObj.(*types.Group)
+		event.PrevGroup = prevObj.(*antreatypes.Group)
 		event.PrevObject = new(controlplane.Group)
 		ToGroupMsg(event.PrevGroup, event.PrevObject, false)
 	}
 
 	if currObj != nil {
-		event.CurrGroup = currObj.(*types.Group)
+		event.CurrGroup = currObj.(*antreatypes.Group)
 		event.CurrObject = new(controlplane.Group)
 		ToGroupMsg(event.CurrGroup, event.CurrObject, true)
 	}
@@ -117,8 +118,7 @@ func genGroupEvent(key string, prevObj, currObj interface{}, rv uint64) (storage
 		// PatchObject will not be generated when only span changes.
 		if len(addedMembers)+len(removedMembers) > 0 {
 			event.PatchObject = new(controlplane.GroupPatch)
-			event.PatchObject.UID = event.CurrGroup.UID
-			event.PatchObject.Name = event.CurrGroup.Name
+			event.PatchObject.UID = types.UID(event.CurrGroup.UID)
 			event.PatchObject.AddedGroupMembers = addedMembers
 			event.PatchObject.RemovedGroupMembers = removedMembers
 		}
@@ -129,9 +129,8 @@ func genGroupEvent(key string, prevObj, currObj interface{}, rv uint64) (storage
 
 // ToGroupMsg converts the stored Group to its message form.
 // If includeBody is true, GroupMembers will be copied.
-func ToGroupMsg(in *types.Group, out *controlplane.Group, includeBody bool) {
-	out.Name = in.Name
-	out.UID = in.UID
+func ToGroupMsg(in *antreatypes.Group, out *controlplane.Group, includeBody bool) {
+	out.UID = types.UID(in.UID)
 	if !includeBody {
 		return
 	}
@@ -142,18 +141,18 @@ func ToGroupMsg(in *types.Group, out *controlplane.Group, includeBody bool) {
 
 // GroupKeyFunc knows how to get the key of an Group.
 func GroupKeyFunc(obj interface{}) (string, error) {
-	group, ok := obj.(*types.Group)
+	group, ok := obj.(*antreatypes.Group)
 	if !ok {
 		return "", fmt.Errorf("object is not *types.Group: %v", obj)
 	}
-	return group.Name, nil
+	return group.UID, nil
 }
 
 // NewGroupStore creates a store of Group.
 func NewGroupStore() storage.Interface {
 	indexers := cache.Indexers{
 		cache.NamespaceIndex: func(obj interface{}) ([]string, error) {
-			g, ok := obj.(*types.Group)
+			g, ok := obj.(*antreatypes.Group)
 			if !ok {
 				return []string{}, nil
 			}

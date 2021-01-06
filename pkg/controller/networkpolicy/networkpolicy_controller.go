@@ -77,8 +77,6 @@ const (
 	TierIndex = "tier"
 	// PriorityIndex is used to index Tiers by their priorities.
 	PriorityIndex = "priority"
-	// InternalGroupIndex is used to index ClusterGroups by their selectors normalized name.
-	InternalGroupIndex = "internalGroup"
 )
 
 var (
@@ -357,17 +355,6 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 				DeleteFunc: n.deleteCG,
 			},
 			resyncPeriod,
-		)
-		cgInformer.Informer().AddIndexers(
-			cache.Indexers{
-				InternalGroupIndex: func(obj interface{}) ([]string, error) {
-					cg, ok := obj.(*v1alpha2.ClusterGroup)
-					if !ok || cg.Spec.IPBlock != nil {
-						return []string{}, nil
-					}
-					return []string{getNormalizedUID(toGroupSelector("", cg.Spec.PodSelector, cg.Spec.NamespaceSelector, nil).NormalizedName)}, nil
-				},
-			},
 		)
 	}
 	return n

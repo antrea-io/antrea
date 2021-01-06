@@ -89,6 +89,7 @@ func newController(objects ...runtime.Object) (*fake.Clientset, *networkPolicyCo
 	appliedToGroupStore := store.NewAppliedToGroupStore()
 	addressGroupStore := store.NewAddressGroupStore()
 	internalNetworkPolicyStore := store.NewNetworkPolicyStore()
+	groupStore := store.NewGroupStore()
 	npController := NewNetworkPolicyController(client,
 		crdClient,
 		informerFactory.Core().V1().Pods(),
@@ -98,9 +99,11 @@ func newController(objects ...runtime.Object) (*fake.Clientset, *networkPolicyCo
 		crdInformerFactory.Security().V1alpha1().ClusterNetworkPolicies(),
 		crdInformerFactory.Security().V1alpha1().NetworkPolicies(),
 		crdInformerFactory.Security().V1alpha1().Tiers(),
+		crdInformerFactory.Core().V1alpha2().ClusterGroups(),
 		addressGroupStore,
 		appliedToGroupStore,
-		internalNetworkPolicyStore)
+		internalNetworkPolicyStore,
+		groupStore)
 	npController.podListerSynced = alwaysReady
 	npController.namespaceListerSynced = alwaysReady
 	npController.networkPolicyListerSynced = alwaysReady

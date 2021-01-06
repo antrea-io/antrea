@@ -15,27 +15,16 @@
 package types
 
 import (
-	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/apimachinery/pkg/types"
-)
 
-type GroupType string
-
-const (
-	ClusterGroup    GroupType = "ClusterGroup"
-	NamespacedGroup GroupType = "NamespacedGroup"
+	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
 )
 
 type GroupReference struct {
-	// Type of the Group.
-	Type GroupType
 	// Namespace of the Group. It's empty for ClusterGroup.
 	Namespace string
 	// Name of the Group.
 	Name string
-	// UID of the Group.
-	UID types.UID
 }
 
 // GroupSelector describes how to select GroupMembers.
@@ -63,10 +52,8 @@ type GroupSelector struct {
 // Group describes a set of GroupMembers which can be referenced in Antrea-native NetworkPolicies. These Groups can
 // then be converted to AppliedToGroup or AddressGroup.
 type Group struct {
-	// UID is generated from the hash value of GroupSelector.NormalizedName.
-	UID types.UID
-	// Name of this group, currently it's same as UID.
-	Name string
+	// UID is string representation of the Group/ClusterGroup CRD UID.
+	UID string
 	// Reference to the original Group or ClusterGroup.
 	SourceRef *GroupReference
 	// Selector describes how the group selects Pods to get their addresses.
