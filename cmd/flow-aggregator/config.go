@@ -20,7 +20,7 @@ type FlowAggregatorConfig struct {
 	// Provide the flow collector address as string with format <IP>:<port>[:<proto>], where proto is tcp or udp.
 	// If no L4 transport proto is given, we consider tcp as default.
 	// Defaults to "".
-	ExternalFlowCollectorProtocol string `yaml:"externalFlowCollectorAddr,omitempty"`
+	ExternalFlowCollectorAddr string `yaml:"externalFlowCollectorAddr,omitempty"`
 	// Provide flow export interval as a duration string. This determines how often the flow aggregator exports flow
 	// records to the flow collector.
 	// Flow export interval should be greater than or equal to 1s (one second).

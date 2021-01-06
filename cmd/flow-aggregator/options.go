@@ -19,18 +19,20 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net"
-	"strings"
 	"time"
 
 	"github.com/spf13/pflag"
 	"gopkg.in/yaml.v2"
 
 	"github.com/vmware-tanzu/antrea/pkg/flowaggregator"
+	"github.com/vmware-tanzu/antrea/pkg/util/flowexport"
 )
 
 const (
-	defaultFlowExportInterval          = 60 * time.Second
-	defaultAggregatorTransportProtocol = flowaggregator.AggregatorTransportProtocolTCP
+	defaultExternalFlowCollectorTransport = "tcp"
+	defaultExternalFlowCollectorPort      = "4739"
+	defaultFlowExportInterval             = 60 * time.Second
+	defaultAggregatorTransportProtocol    = flowaggregator.AggregatorTransportProtocolTCP
 )
 
 type Options struct {
@@ -39,7 +41,9 @@ type Options struct {
 	// The configuration object
 	config *FlowAggregatorConfig
 	// IPFIX flow collector address
-	externalFlowCollectorAddr net.Addr
+	externalFlowCollectorAddr string
+	// IPFIX flow collector transport protocol
+	externalFlowCollectorProto string
 	// Flow export interval of the flow aggregator
 	exportInterval time.Duration
 	// Transport protocol over which the aggregator collects IPFIX records from all Agents
@@ -74,61 +78,32 @@ func (o *Options) validate(args []string) error {
 	if len(args) != 0 {
 		return errors.New("no positional arguments are supported")
 	}
-	if o.config.ExternalFlowCollectorProtocol == "" {
+	if o.config.ExternalFlowCollectorAddr == "" {
 		return fmt.Errorf("IPFIX flow collector address should be provided")
-	} else {
-		// Check if it is TCP or UDP
-		strSlice := strings.Split(o.config.ExternalFlowCollectorProtocol, ":")
-		var proto string
-		if len(strSlice) == 2 {
-			// If no separator ":" and proto is given, then default to TCP.
-			proto = "tcp"
-		} else if len(strSlice) > 2 {
-			if (strSlice[2] != "udp") && (strSlice[2] != "tcp") {
-				return fmt.Errorf("IPFIX flow collector over %s proto is not supported", strSlice[2])
-			}
-			proto = strSlice[2]
-		} else {
-			return fmt.Errorf("IPFIX flow collector is given in invalid format")
-		}
-
-		// Convert the string input in net.Addr format
-		hostPortAddr := strSlice[0] + ":" + strSlice[1]
-		_, _, err := net.SplitHostPort(hostPortAddr)
-		if err != nil {
-			return fmt.Errorf("IPFIX flow collector is given in invalid format: %v", err)
-		}
-		if proto == "udp" {
-			o.externalFlowCollectorAddr, err = net.ResolveUDPAddr("udp", hostPortAddr)
-			if err != nil {
-				return fmt.Errorf("IPFIX flow collector over UDP proto cannot be resolved: %v", err)
-			}
-		} else {
-			o.externalFlowCollectorAddr, err = net.ResolveTCPAddr("tcp", hostPortAddr)
-			if err != nil {
-				return fmt.Errorf("IPFIX flow collector over TCP proto cannot be resolved: %v", err)
-			}
-		}
 	}
+	host, port, proto, err := flowexport.ParseFlowCollectorAddr(o.config.ExternalFlowCollectorAddr, defaultExternalFlowCollectorPort, defaultExternalFlowCollectorTransport)
+	if err != nil {
+		return err
+	}
+	o.externalFlowCollectorAddr = net.JoinHostPort(host, port)
+	o.externalFlowCollectorProto = proto
 	if o.config.FlowExportInterval == "" {
 		o.exportInterval = defaultFlowExportInterval
 	} else {
-		var err error
-		o.exportInterval, err = time.ParseDuration(o.config.FlowExportInterval)
+		flowExportInterval, err := flowexport.ParseFlowIntervalString(o.config.FlowExportInterval)
 		if err != nil {
-			return fmt.Errorf("FlowExportInterval is not provided in right format: %v", err)
+			return err
 		}
-		if o.exportInterval < time.Second {
-			return fmt.Errorf("FlowExportInterval should be greater than or equal to one second")
-		}
+		o.exportInterval = flowExportInterval
 	}
 	if o.config.AggregatorTransportProtocol == "" {
 		o.aggregatorTransportProtocol = defaultAggregatorTransportProtocol
 	} else {
-		if (o.config.AggregatorTransportProtocol != flowaggregator.AggregatorTransportProtocolUDP) && (o.config.AggregatorTransportProtocol != flowaggregator.AggregatorTransportProtocolTCP) {
-			return fmt.Errorf("collecting process over %s proto is not supported", o.config.AggregatorTransportProtocol)
+		transportProtocol, err := flowexport.ParseTransportProtocol(o.config.AggregatorTransportProtocol)
+		if err != nil {
+			return err
 		}
-		o.aggregatorTransportProtocol = o.config.AggregatorTransportProtocol
+		o.aggregatorTransportProtocol = transportProtocol
 	}
 	return nil
 }

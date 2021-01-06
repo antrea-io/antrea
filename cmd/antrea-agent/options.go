@@ -18,8 +18,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net"
-	"regexp"
-	"strings"
 	"time"
 
 	"github.com/spf13/pflag"
@@ -30,6 +28,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/cni"
 	"github.com/vmware-tanzu/antrea/pkg/features"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
+	"github.com/vmware-tanzu/antrea/pkg/util/flowexport"
 )
 
 const (
@@ -199,62 +198,21 @@ func (o *Options) setDefaults() {
 
 func (o *Options) validateFlowExporterConfig() error {
 	if features.DefaultFeatureGate.Enabled(features.FlowExporter) {
-		var host, port, proto string
-		strSlice, err := parseFlowCollectorAddr(o.config.FlowCollectorAddr)
+		host, port, proto, err := flowexport.ParseFlowCollectorAddr(o.config.FlowCollectorAddr, defaultFlowCollectorPort, defaultFlowCollectorTransport)
 		if err != nil {
 			return err
-		}
-		if len(strSlice) == 3 {
-			host = strSlice[0]
-			if strSlice[1] == "" {
-				port = defaultFlowCollectorPort
-			} else {
-				port = strSlice[1]
-			}
-			if (strSlice[2] != "udp") && (strSlice[2] != "tcp") {
-				return fmt.Errorf("connection over %s transport proto is not supported", strSlice[2])
-			}
-			proto = strSlice[2]
-		} else if len(strSlice) == 2 {
-			host = strSlice[0]
-			port = strSlice[1]
-			proto = defaultFlowCollectorTransport
-		} else if len(strSlice) == 1 {
-			host = strSlice[0]
-			port = defaultFlowCollectorPort
-			proto = defaultFlowCollectorTransport
-		} else {
-			return fmt.Errorf("flow collector address is given in invalid format")
 		}
 		o.flowCollectorAddr = net.JoinHostPort(host, port)
 		o.flowCollectorProto = proto
 
 		// Parse the given flowPollInterval config
 		if o.config.FlowPollInterval != "" {
-			o.pollInterval, err = time.ParseDuration(o.config.FlowPollInterval)
+			flowPollInterval, err := flowexport.ParseFlowIntervalString(o.config.FlowPollInterval)
 			if err != nil {
-				return fmt.Errorf("FlowPollInterval is not provided in right format")
+				return err
 			}
-			if o.pollInterval < time.Second {
-				return fmt.Errorf("FlowPollInterval should be greater than or equal to one second")
-			}
+			o.pollInterval = flowPollInterval
 		}
 	}
 	return nil
-}
-
-func parseFlowCollectorAddr(addr string) ([]string, error) {
-	var strSlice []string
-	match, err := regexp.MatchString("\\[.*\\]:.*", addr)
-	if err != nil {
-		return strSlice, fmt.Errorf("Failed to parse FlowCollectorAddr: %s", addr)
-	}
-	if match {
-		idx := strings.Index(addr, "]")
-		strSlice = append(strSlice, addr[:idx+1])
-		strSlice = append(strSlice, strings.Split(addr[idx+2:], ":")...)
-	} else {
-		strSlice = strings.Split(addr, ":")
-	}
-	return strSlice, nil
 }
