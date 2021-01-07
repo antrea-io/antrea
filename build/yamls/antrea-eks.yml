@@ -1986,6 +1986,7 @@ webhooks:
       name: antrea
       namespace: kube-system
       path: /mutate/addlabels
+  failurePolicy: Ignore
   name: namelabelmutator.antrea.io
   rules:
   - apiGroups:
