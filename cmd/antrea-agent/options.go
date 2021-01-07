@@ -78,8 +78,12 @@ func (o *Options) complete(args []string) error {
 			return err
 		}
 	}
+	err := features.DefaultMutableFeatureGate.SetFromMap(o.config.FeatureGates)
+	if err != nil {
+		return err
+	}
 	o.setDefaults()
-	return features.DefaultMutableFeatureGate.SetFromMap(o.config.FeatureGates)
+	return nil
 }
 
 // validate validates all the required options. It must be called after complete.
@@ -183,7 +187,7 @@ func (o *Options) setDefaults() {
 		o.config.APIPort = apis.AntreaAgentAPIPort
 	}
 
-	if o.config.FeatureGates[string(features.FlowExporter)] {
+	if features.DefaultFeatureGate.Enabled(features.FlowExporter) {
 		if o.config.FlowCollectorAddr == "" {
 			o.config.FlowCollectorAddr = defaultFlowCollectorAddress
 		}
