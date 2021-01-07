@@ -15,13 +15,14 @@
 package networkpolicy
 
 import (
-	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy/store"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog"
+
+	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy/store"
 
 	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
 
