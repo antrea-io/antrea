@@ -58,22 +58,6 @@ func (a *ofFlowAction) CT(commit bool, tableID TableIDType, zone int) CTAction {
 		ctTable: uint8(tableID),
 		ctZone:  uint16(zone),
 	}
-	var repr string
-	if commit {
-		repr += "commit"
-	}
-	if tableID != LastTableID {
-		if repr != "" {
-			repr += ","
-		}
-		repr += fmt.Sprintf("table=%d", tableID)
-	}
-	if zone > 0 {
-		if repr != "" {
-			repr += ","
-		}
-		repr += fmt.Sprintf("zone=%d", zone)
-	}
 	ct := &ofCTAction{
 		ctBase:  base,
 		builder: a.builder,

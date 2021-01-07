@@ -1448,7 +1448,7 @@ func parseDropFlow(flowMap map[string]string) (uint32, types.RuleMetric) {
 	bytes, _ := strconv.ParseUint(flowMap["n_bytes"], 10, 64)
 	m.Bytes = bytes
 	reg3 := flowMap["reg3"]
-	id, _ := strconv.ParseUint(reg3[:strings.Index(reg3, " ")], 0, 64)
+	id, _ := strconv.ParseUint(reg3[:strings.Index(reg3, " ")], 0, 32)
 	return uint32(id), m
 }
 
@@ -1466,7 +1466,7 @@ func parseAllowFlow(flowMap map[string]string) (uint32, types.RuleMetric) {
 	if len(idRaw) > 8 { // only 32 bits are valid.
 		idRaw = idRaw[:len(idRaw)-8]
 	}
-	id, _ := strconv.ParseUint(idRaw, 16, 64)
+	id, _ := strconv.ParseUint(idRaw, 16, 32)
 	return uint32(id), m
 }
 

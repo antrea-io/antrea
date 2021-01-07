@@ -17,12 +17,14 @@ package openflow
 import (
 	"encoding/binary"
 	"fmt"
+	"math"
 	"net"
 	"strings"
 	"sync"
 	"time"
 
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/agent/metrics"
@@ -306,6 +308,14 @@ type flowCache map[string]binding.Flow
 
 type flowCategoryCache struct {
 	sync.Map
+}
+
+func portToUint16(port int) uint16 {
+	if port > 0 && port <= math.MaxUint16 {
+		return uint16(port)
+	}
+	klog.Errorf("Port value %d out-of-bounds", port)
+	return 0
 }
 
 type client struct {
@@ -1342,11 +1352,6 @@ func (c *client) addFlowMatch(fb binding.FlowBuilder, matchKey *types.MatchKey, 
 		fb = fb.MatchProtocol(matchKey.GetOFProtocol()).MatchSrcIPNet(matchValue.(net.IPNet))
 	case MatchSrcIPNetv6:
 		fb = fb.MatchProtocol(matchKey.GetOFProtocol()).MatchSrcIPNet(matchValue.(net.IPNet))
-	case MatchDstOFPort:
-		// ofport number in NXM_NX_REG1 is used in ingress rule to match packets sent to local Pod.
-		fb = fb.MatchProtocol(matchKey.GetOFProtocol()).MatchReg(int(PortCacheReg), uint32(matchValue.(int32)))
-	case MatchSrcOFPort:
-		fb = fb.MatchProtocol(matchKey.GetOFProtocol()).MatchInPort(uint32(matchValue.(int32)))
 	case MatchTCPDstPort:
 		fallthrough
 	case MatchTCPv6DstPort:
@@ -1759,7 +1764,7 @@ func (c *client) serviceEndpointGroup(groupID binding.GroupIDType, withSessionAf
 	for _, endpoint := range endpoints {
 		endpointPort, _ := endpoint.Port()
 		endpointIP := net.ParseIP(endpoint.IP())
-		portVal := uint16(endpointPort)
+		portVal := portToUint16(endpointPort)
 		ipProtocol := getIPProtocol(endpointIP)
 		if ipProtocol == binding.ProtocolIP {
 			ipVal := binary.BigEndian.Uint32(endpointIP.To4())
