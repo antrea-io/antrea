@@ -143,9 +143,9 @@
           DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
           export JOB_NAME="matrix-${TEST_OS}-k8s-${K8S_VERSION//./-}-build-num"
           ./ci/jenkins/test-vmc.sh --cluster-name "${JOB_NAME}-${BUILD_NUMBER}" --setup-only
-          ./ci/jenkins/test-vmc.sh --cluster-name "${JOB_NAME}-${BUILD_NUMBER}" --testcase 'whole-conformance' --test-only || TEST_FAIL_CONFORMANCE=1 --registry ${DOCKER_REGISTRY}
-          ./ci/jenkins/test-vmc.sh --cluster-name "${JOB_NAME}-${BUILD_NUMBER}" --testcase 'networkpolicy' --test-only || TEST_FAIL_NP=1 --registry ${DOCKER_REGISTRY}
-          ./ci/jenkins/test-vmc.sh --cluster-name "${JOB_NAME}-${BUILD_NUMBER}" --testcase e2e --test-only || TEST_FAIL_E2E=1 --registry ${DOCKER_REGISTRY}
+          ./ci/jenkins/test-vmc.sh --cluster-name "${JOB_NAME}-${BUILD_NUMBER}" --testcase 'whole-conformance' --test-only --registry ${DOCKER_REGISTRY} || TEST_FAIL_CONFORMANCE=1
+          ./ci/jenkins/test-vmc.sh --cluster-name "${JOB_NAME}-${BUILD_NUMBER}" --testcase 'networkpolicy' --test-only --registry ${DOCKER_REGISTRY} || TEST_FAIL_NP=1
+          ./ci/jenkins/test-vmc.sh --cluster-name "${JOB_NAME}-${BUILD_NUMBER}" --testcase e2e --test-only --registry ${DOCKER_REGISTRY} || TEST_FAIL_E2E=1 
           ./ci/jenkins/test-vmc.sh --cluster-name "${JOB_NAME}-${BUILD_NUMBER}" --cleanup-only
           if [ "${TEST_FAIL_E2E}" -eq 1 ]; then
             echo "E2E Test failed!"
