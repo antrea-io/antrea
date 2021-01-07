@@ -137,14 +137,13 @@ func (r *supportBundleREST) Create(ctx context.Context, obj runtime.Object, _ re
 		Status:     systemv1beta1.SupportBundleStatusCollecting,
 	}
 	r.cancelFunc = cancelFunc
-	cacheCopy := r.cache.DeepCopy()
-	go func() {
+	go func(days uint32) {
 		var err error
 		var b *systemv1beta1.SupportBundle
 		if r.mode == modeAgent {
-			b, err = r.collectAgent(ctx, cacheCopy)
+			b, err = r.collectAgent(ctx, days)
 		} else if r.mode == modeController {
-			b, err = r.collectController(ctx, cacheCopy)
+			b, err = r.collectController(ctx, days)
 		}
 		func() {
 			r.statusLocker.Lock()
@@ -161,7 +160,7 @@ func (r *supportBundleREST) Create(ctx context.Context, obj runtime.Object, _ re
 			}
 		}()
 		r.clean(ctx, b.Filepath, bundleExpireDuration)
-	}()
+	}(r.cache.Days)
 
 	return r.cache, nil
 }
@@ -250,11 +249,11 @@ func (r *supportBundleREST) collect(ctx context.Context, dumpers ...func(string)
 	}, nil
 }
 
-func (r *supportBundleREST) collectAgent(ctx context.Context, supportBundle *systemv1beta1.SupportBundle) (*systemv1beta1.SupportBundle, error) {
+func (r *supportBundleREST) collectAgent(ctx context.Context, days uint32) (*systemv1beta1.SupportBundle, error) {
 	dumper := support.NewAgentDumper(defaultFS, defaultExecutor, r.ovsCtlClient, r.aq, r.npq)
 	return r.collect(
 		ctx,
-		func(basedir string) error { return dumper.DumpLog(basedir, supportBundle.Days) },
+		func(basedir string) error { return dumper.DumpLog(basedir, days) },
 		dumper.DumpHostNetworkInfo,
 		dumper.DumpFlows,
 		dumper.DumpNetworkPolicyResources,
@@ -264,11 +263,11 @@ func (r *supportBundleREST) collectAgent(ctx context.Context, supportBundle *sys
 	)
 }
 
-func (r *supportBundleREST) collectController(ctx context.Context, supportBundle *systemv1beta1.SupportBundle) (*systemv1beta1.SupportBundle, error) {
+func (r *supportBundleREST) collectController(ctx context.Context, days uint32) (*systemv1beta1.SupportBundle, error) {
 	dumper := support.NewControllerDumper(defaultFS, defaultExecutor)
 	return r.collect(
 		ctx,
-		func(basedir string) error { return dumper.DumpLog(basedir, supportBundle.Days) },
+		func(basedir string) error { return dumper.DumpLog(basedir, days) },
 		dumper.DumpNetworkPolicyResources,
 		dumper.DumpControllerInfo,
 		dumper.DumpHeapPprof,
