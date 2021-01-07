@@ -1,4 +1,4 @@
-// Copyright 2020 Antrea Authors
+// Copyright 2021 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
 package networkpolicy
 
 import (
+	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy/store"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -31,12 +32,13 @@ import (
 // addCG is responsible to process the ADD event of a ClusterGroup resource.
 func (n *NetworkPolicyController) addCG(curObj interface{}) {
 	cg := curObj.(*corev1a2.ClusterGroup)
+	key := groupKeyFunc(cg)
 	klog.V(2).Infof("Processing ADD event for ClusterGroup %s", cg.Name)
 	newGroup := n.processClusterGroup(cg)
 	klog.V(2).Infof("Creating new internal Group %s with selector (%s)", newGroup.UID, newGroup.Selector.NormalizedName)
 	n.groupStore.Create(newGroup)
 	if newGroup.IPBlock == nil {
-		n.enqueueGroup(newGroup.UID)
+		n.enqueueGroup(key)
 	}
 }
 
@@ -44,6 +46,7 @@ func (n *NetworkPolicyController) addCG(curObj interface{}) {
 func (n *NetworkPolicyController) updateCG(oldObj, curObj interface{}) {
 	cg := curObj.(*corev1a2.ClusterGroup)
 	og := oldObj.(*corev1a2.ClusterGroup)
+	key := groupKeyFunc(cg)
 	klog.V(2).Infof("Processing UPDATE event for ClusterGroup %s", cg.Name)
 	newGroup := n.processClusterGroup(cg)
 	oldGroup := n.processClusterGroup(og)
@@ -55,7 +58,7 @@ func (n *NetworkPolicyController) updateCG(oldObj, curObj interface{}) {
 	}
 	n.groupStore.Update(newGroup)
 	if newGroup.IPBlock == nil {
-		n.enqueueGroup(newGroup.UID)
+		n.enqueueGroup(key)
 	}
 }
 
@@ -75,11 +78,11 @@ func (n *NetworkPolicyController) deleteCG(oldObj interface{}) {
 			return
 		}
 	}
-	gUID := string(og.UID)
-	klog.Infof("Deleting internal Group %s", gUID)
-	err := n.groupStore.Delete(gUID)
+	key := groupKeyFunc(og)
+	klog.Infof("Deleting internal Group %s", key)
+	err := n.groupStore.Delete(key)
 	if err != nil {
-		klog.Errorf("Unable to delete internal Group %s from store: %v", gUID, err)
+		klog.Errorf("Unable to delete internal Group %s from store: %v", key, err)
 	}
 }
 
@@ -89,7 +92,7 @@ func (n *NetworkPolicyController) processClusterGroup(cg *corev1a2.ClusterGroup)
 			Namespace: "",
 			Name:      cg.Name,
 		},
-		UID: string(cg.UID),
+		UID: cg.UID,
 	}
 	if cg.Spec.IPBlock != nil {
 		ipb, _ := toAntreaIPBlockForCRD(cg.Spec.IPBlock)
@@ -107,10 +110,11 @@ func (n *NetworkPolicyController) filterGroupsForPod(obj metav1.Object) sets.Str
 	clusterScopedGroups, _ := n.groupStore.GetByIndex(cache.NamespaceIndex, "")
 	ns, _ := n.namespaceLister.Get(obj.GetNamespace())
 	for _, group := range clusterScopedGroups {
+		key, _ := store.GroupKeyFunc(group)
 		g := group.(*antreatypes.Group)
 		if n.labelsMatchGroupSelector(obj, ns, &g.Selector) {
-			matchingKeySet.Insert(g.UID)
-			klog.V(2).Infof("%s/%s matched Group %s", obj.GetNamespace(), obj.GetName(), g.UID)
+			matchingKeySet.Insert(key)
+			klog.V(2).Infof("%s/%s matched Group %s", obj.GetNamespace(), obj.GetName(), key)
 		}
 	}
 	return matchingKeySet
@@ -123,11 +127,12 @@ func (n *NetworkPolicyController) filterGroupsForNamespace(namespace *v1.Namespa
 	// Only cluster scoped groups or AddressGroups created by CNP can possibly select this Namespace.
 	groups, _ := n.groupStore.GetByIndex(cache.NamespaceIndex, "")
 	for _, group := range groups {
+		key, _ := store.GroupKeyFunc(group)
 		g := group.(*antreatypes.Group)
 		// Group created by CNP might not have NamespaceSelector.
 		if g.Selector.NamespaceSelector != nil && g.Selector.NamespaceSelector.Matches(labels.Set(namespace.Labels)) {
-			matchingKeys.Insert(g.UID)
-			klog.V(2).Infof("Namespace %s matched Group %s", namespace.Name, g.UID)
+			matchingKeys.Insert(key)
+			klog.V(2).Infof("Namespace %s matched Group %s", namespace.Name, key)
 		}
 	}
 	return matchingKeys

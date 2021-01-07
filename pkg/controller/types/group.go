@@ -16,6 +16,7 @@ package types
 
 import (
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
 )
@@ -53,7 +54,7 @@ type GroupSelector struct {
 // then be converted to AppliedToGroup or AddressGroup.
 type Group struct {
 	// UID is string representation of the Group/ClusterGroup CRD UID.
-	UID string
+	UID types.UID
 	// Reference to the original Group or ClusterGroup.
 	SourceRef *GroupReference
 	// Selector describes how the group selects Pods to get their addresses.

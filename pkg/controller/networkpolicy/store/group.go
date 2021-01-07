@@ -19,7 +19,6 @@ import (
 	"reflect"
 
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/tools/cache"
 
@@ -118,7 +117,7 @@ func genGroupEvent(key string, prevObj, currObj interface{}, rv uint64) (storage
 		// PatchObject will not be generated when only span changes.
 		if len(addedMembers)+len(removedMembers) > 0 {
 			event.PatchObject = new(controlplane.GroupPatch)
-			event.PatchObject.UID = types.UID(event.CurrGroup.UID)
+			event.PatchObject.UID = event.CurrGroup.UID
 			event.PatchObject.AddedGroupMembers = addedMembers
 			event.PatchObject.RemovedGroupMembers = removedMembers
 		}
@@ -130,7 +129,7 @@ func genGroupEvent(key string, prevObj, currObj interface{}, rv uint64) (storage
 // ToGroupMsg converts the stored Group to its message form.
 // If includeBody is true, GroupMembers will be copied.
 func ToGroupMsg(in *antreatypes.Group, out *controlplane.Group, includeBody bool) {
-	out.UID = types.UID(in.UID)
+	out.UID = in.UID
 	if !includeBody {
 		return
 	}
@@ -145,7 +144,7 @@ func GroupKeyFunc(obj interface{}) (string, error) {
 	if !ok {
 		return "", fmt.Errorf("object is not *types.Group: %v", obj)
 	}
-	return group.UID, nil
+	return string(group.UID), nil
 }
 
 // NewGroupStore creates a store of Group.
