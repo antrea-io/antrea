@@ -19,7 +19,6 @@ import (
 	"regexp"
 	"strconv"
 	"testing"
-	"time"
 
 	"k8s.io/apimachinery/pkg/util/wait"
 
@@ -126,7 +125,7 @@ func TestIPSecDeleteStaleTunnelPorts(t *testing.T) {
 	}
 
 	t.Logf("Checking that tunnel port has been created")
-	if err := wait.PollImmediate(1*time.Second, defaultTimeout, func() (found bool, err error) {
+	if err := wait.PollImmediate(defaultInterval, defaultTimeout, func() (found bool, err error) {
 		return doesOVSPortExist(), nil
 	}); err == wait.ErrWaitTimeout {
 		t.Fatalf("Timed out while waiting for OVS tunnel port to be created")
@@ -138,7 +137,7 @@ func TestIPSecDeleteStaleTunnelPorts(t *testing.T) {
 	data.redeployAntrea(t, false)
 
 	t.Logf("Checking that tunnel port has been deleted")
-	if err := wait.PollImmediate(1*time.Second, defaultTimeout, func() (found bool, err error) {
+	if err := wait.PollImmediate(defaultInterval, defaultTimeout, func() (found bool, err error) {
 		return !doesOVSPortExist(), nil
 	}); err == wait.ErrWaitTimeout {
 		t.Fatalf("Timed out while waiting for OVS tunnel port to be deleted")
