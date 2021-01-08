@@ -17,8 +17,6 @@ package apiserver
 import (
 	"context"
 
-	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/networkpolicy/group"
-
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -45,6 +43,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/controlplane/nodestatssummary"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/networkpolicy/addressgroup"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/networkpolicy/appliedtogroup"
+	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/networkpolicy/group"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/networkpolicy/networkpolicy"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/stats/antreaclusternetworkpolicystats"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/stats/antreanetworkpolicystats"
