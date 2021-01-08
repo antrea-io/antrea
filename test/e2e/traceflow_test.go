@@ -458,7 +458,7 @@ func TestTraceflowInterNode(t *testing.T) {
 	require.NoError(t, data.createNginxPod("nginx", node2))
 	nginxIP, err := data.podWaitForIPs(defaultTimeout, "nginx", testNamespace)
 	require.NoError(t, err)
-	svc, err := data.createNginxClusterIPService(false)
+	svc, err := data.createNginxClusterIPService(false, nil)
 	require.NoError(t, err)
 
 	// TODO: Extend the test cases to support IPv6 address after Traceflow IPv6 is supported. Currently we only use IPv4 address.
@@ -782,7 +782,7 @@ func (data *TestData) waitForTraceflow(t *testing.T, name string, phase v1alpha1
 	var tf *v1alpha1.Traceflow
 	var err error
 	timeout := 15 * time.Second
-	if err = wait.PollImmediate(1*time.Second, timeout, func() (bool, error) {
+	if err = wait.PollImmediate(defaultInterval, timeout, func() (bool, error) {
 		tf, err = data.crdClient.OpsV1alpha1().Traceflows().Get(context.TODO(), name, metav1.GetOptions{})
 		if err != nil || tf.Status.Phase != phase {
 			return false, nil
