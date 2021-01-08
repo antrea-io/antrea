@@ -29,7 +29,7 @@ LABEL description="A Docker image based on UBI8 which includes Open vSwitch buil
 
 # Change Repository from UBI8’s to CentOS because UBI8's repository does not contain
 # enough packages required by OVS installation.
-# Use the RHEL offical repository is the best choice but it's not for free.
+# Use the RHEL official repository is the best choice but it's not for free.
 COPY CentOS.repo /tmp/CentOS.repo
 RUN rm -f /etc/yum.repos.d/* && mv /tmp/CentOS.repo /etc/yum.repos.d/CentOS.repo && \
     curl https://www.centos.org/keys/RPM-GPG-KEY-CentOS-Official -o /etc/pki/rpm-gpg/RPM-GPG-KEY-centosofficial && \

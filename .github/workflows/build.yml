@@ -116,14 +116,13 @@ jobs:
 
   build-ubi:
     needs: check-changes
-    if: ${{ needs.check-changes.outputs.has_changes == 'yes' || github.event_name == 'push' }}
+    if: ${{ needs.check-changes.outputs.has_changes == 'yes' && github.ref == 'refs/heads/master' && github.event.pull_request.merged == true }}
     runs-on: [ubuntu-18.04]
     steps:
       - uses: actions/checkout@v2
       - name: Build Antrea UBI image
         run: make build-ubi
       - name: Push Antrea UBI image to registry
-        if: ${{ github.repository == 'vmware-tanzu/antrea' && github.event_name == 'push' && github.ref == 'refs/heads/master' }}
         env:
           DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
           DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
