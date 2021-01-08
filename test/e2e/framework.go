@@ -53,7 +53,8 @@ import (
 )
 
 const (
-	defaultTimeout = 90 * time.Second
+	defaultTimeout  = 90 * time.Second
+	defaultInterval = 1 * time.Second
 
 	// antreaNamespace is the K8s Namespace in which all Antrea resources are running.
 	antreaNamespace            string = "kube-system"
@@ -93,6 +94,8 @@ const (
 	perftoolImage       = "projects.registry.vmware.com/antrea/perftool"
 	ipfixCollectorImage = "projects.registry.vmware.com/antrea/ipfix-collector:v0.4.2"
 	ipfixCollectorPort  = "4739"
+
+	nginxLBService = "nginx-loadbalancer"
 )
 
 type ClusterNode struct {
@@ -353,7 +356,7 @@ func (data *TestData) deleteNamespace(namespace string, timeout time.Duration) e
 		}
 		return fmt.Errorf("error when deleting '%s' Namespace: %v", namespace, err)
 	}
-	err := wait.Poll(1*time.Second, timeout, func() (bool, error) {
+	err := wait.Poll(defaultInterval, timeout, func() (bool, error) {
 		if ns, err := data.clientset.CoreV1().Namespaces().Get(context.TODO(), namespace, metav1.GetOptions{}); err != nil {
 			if errors.IsNotFound(err) {
 				// Success
@@ -505,7 +508,7 @@ func (data *TestData) getAgentContainersRestartCount() (int, error) {
 // waitForAntreaDaemonSetPods waits for the K8s apiserver to report that all the Antrea Pods are
 // available, i.e. all the Nodes have one or more of the Antrea daemon Pod running and available.
 func (data *TestData) waitForAntreaDaemonSetPods(timeout time.Duration) error {
-	err := wait.Poll(1*time.Second, timeout, func() (bool, error) {
+	err := wait.Poll(defaultInterval, timeout, func() (bool, error) {
 		daemonSet, err := data.clientset.AppsV1().DaemonSets(antreaNamespace).Get(context.TODO(), antreaDaemonSet, metav1.GetOptions{})
 		if err != nil {
 			return false, fmt.Errorf("error when getting Antrea daemonset: %v", err)
@@ -553,7 +556,7 @@ func (data *TestData) waitForAntreaDaemonSetPods(timeout time.Duration) error {
 
 // waitForCoreDNSPods waits for the K8s apiserver to report that all the CoreDNS Pods are available.
 func (data *TestData) waitForCoreDNSPods(timeout time.Duration) error {
-	err := wait.PollImmediate(1*time.Second, timeout, func() (bool, error) {
+	err := wait.PollImmediate(defaultInterval, timeout, func() (bool, error) {
 		deployment, err := data.clientset.AppsV1().Deployments("kube-system").Get(context.TODO(), "coredns", metav1.GetOptions{})
 		if err != nil {
 			return false, fmt.Errorf("error when retrieving CoreDNS deployment: %v", err)
@@ -663,7 +666,7 @@ func (data *TestData) deleteAntrea(timeout time.Duration) error {
 		}
 		return fmt.Errorf("error when trying to delete Antrea DaemonSet: %v", err)
 	}
-	err := wait.Poll(1*time.Second, timeout, func() (bool, error) {
+	err := wait.Poll(defaultInterval, timeout, func() (bool, error) {
 		if _, err := data.clientset.AppsV1().DaemonSets(antreaNamespace).Get(context.TODO(), antreaDaemonSet, metav1.GetOptions{}); err != nil {
 			if errors.IsNotFound(err) {
 				// Antrea DaemonSet does not exist any more, success
@@ -804,7 +807,7 @@ func (data *TestData) deletePodAndWait(timeout time.Duration, name string) error
 		return err
 	}
 
-	if err := wait.Poll(1*time.Second, timeout, func() (bool, error) {
+	if err := wait.Poll(defaultInterval, timeout, func() (bool, error) {
 		if _, err := data.clientset.CoreV1().Pods(testNamespace).Get(context.TODO(), name, metav1.GetOptions{}); err != nil {
 			if errors.IsNotFound(err) {
 				return true, nil
@@ -825,7 +828,7 @@ type PodCondition func(*corev1.Pod) (bool, error)
 // podWaitFor polls the K8s apiserver until the specified Pod is found (in the test Namespace) and
 // the condition predicate is met (or until the provided timeout expires).
 func (data *TestData) podWaitFor(timeout time.Duration, name, namespace string, condition PodCondition) (*corev1.Pod, error) {
-	err := wait.Poll(1*time.Second, timeout, func() (bool, error) {
+	err := wait.Poll(defaultInterval, timeout, func() (bool, error) {
 		if pod, err := data.clientset.CoreV1().Pods(namespace).Get(context.TODO(), name, metav1.GetOptions{}); err != nil {
 			if errors.IsNotFound(err) {
 				return false, nil
@@ -949,7 +952,7 @@ func (data *TestData) deleteAntreaAgentOnNode(nodeName string, gracePeriodSecond
 		return 0, fmt.Errorf("error when deleting antrea-agent Pods on Node '%s': %v", nodeName, err)
 	}
 
-	if err := wait.Poll(1*time.Second, timeout, func() (bool, error) {
+	if err := wait.Poll(defaultInterval, timeout, func() (bool, error) {
 		for _, pod := range pods.Items {
 			if _, err := data.clientset.CoreV1().Pods(antreaNamespace).Get(context.TODO(), pod.Name, metav1.GetOptions{}); err != nil {
 				if errors.IsNotFound(err) {
@@ -968,7 +971,7 @@ func (data *TestData) deleteAntreaAgentOnNode(nodeName string, gracePeriodSecond
 	delay := time.Since(start)
 
 	// wait for new antrea-agent Pod
-	if err := wait.Poll(1*time.Second, timeout, func() (bool, error) {
+	if err := wait.Poll(defaultInterval, timeout, func() (bool, error) {
 		pods, err := data.clientset.CoreV1().Pods(antreaNamespace).List(context.TODO(), listOptions)
 		if err != nil {
 			return false, fmt.Errorf("failed to list antrea-agent Pods on Node '%s': %v", nodeName, err)
@@ -1040,7 +1043,7 @@ func (data *TestData) restartAntreaControllerPod(timeout time.Duration) (*corev1
 
 	var newPod *corev1.Pod
 	// wait for new antrea-controller Pod
-	if err := wait.Poll(1*time.Second, timeout, func() (bool, error) {
+	if err := wait.Poll(defaultInterval, timeout, func() (bool, error) {
 		pods, err := data.clientset.CoreV1().Pods(antreaNamespace).List(context.TODO(), listOptions)
 		if err != nil {
 			return false, fmt.Errorf("failed to list antrea-controller Pods: %v", err)
@@ -1102,7 +1105,7 @@ func validatePodIP(podNetworkCIDR string, ip net.IP) (bool, error) {
 
 // createService creates a service with port and targetPort.
 func (data *TestData) createService(serviceName string, port, targetPort int, selector map[string]string, affinity bool,
-	serviceType corev1.ServiceType) (*corev1.Service, error) {
+	serviceType corev1.ServiceType, ipFamily *corev1.IPFamily) (*corev1.Service, error) {
 	affinityType := corev1.ServiceAffinityNone
 	if affinity {
 		affinityType = corev1.ServiceAffinityClientIP
@@ -1124,18 +1127,19 @@ func (data *TestData) createService(serviceName string, port, targetPort int, se
 			}},
 			Type:     serviceType,
 			Selector: selector,
+			IPFamily: ipFamily,
 		},
 	}
 	return data.clientset.CoreV1().Services(testNamespace).Create(context.TODO(), &service, metav1.CreateOptions{})
 }
 
 // createNginxClusterIPService create a nginx service with the given name.
-func (data *TestData) createNginxClusterIPService(affinity bool) (*corev1.Service, error) {
-	return data.createService("nginx", 80, 80, map[string]string{"app": "nginx"}, affinity, corev1.ServiceTypeClusterIP)
+func (data *TestData) createNginxClusterIPService(affinity bool, ipFamily *corev1.IPFamily) (*corev1.Service, error) {
+	return data.createService("nginx", 80, 80, map[string]string{"app": "nginx"}, affinity, corev1.ServiceTypeClusterIP, ipFamily)
 }
 
-func (data *TestData) createNginxLoadBalancerService(affinity bool, ingressIPs []string) (*corev1.Service, error) {
-	svc, err := data.createService("nginx-loadbalancer", 80, 80, map[string]string{"app": "nginx"}, affinity, corev1.ServiceTypeLoadBalancer)
+func (data *TestData) createNginxLoadBalancerService(affinity bool, ingressIPs []string, ipFamily *corev1.IPFamily) (*corev1.Service, error) {
+	svc, err := data.createService(nginxLBService, 80, 80, map[string]string{"app": "nginx"}, affinity, corev1.ServiceTypeLoadBalancer, ipFamily)
 	if err != nil {
 		return svc, err
 	}
@@ -1158,6 +1162,29 @@ func (data *TestData) deleteService(name string) error {
 		return fmt.Errorf("unable to cleanup service %v: %v", name, err)
 	}
 	return nil
+}
+
+// Deletes a Service in the test namespace then waits us to timeout for the Service not to be visible to the
+// client any more.
+func (data *TestData) deleteServiceAndWait(timeout time.Duration, name string) error {
+	if err := data.deleteService(name); err != nil {
+		return err
+	}
+
+	if err := wait.Poll(defaultInterval, timeout, func() (bool, error) {
+		if _, err := data.clientset.CoreV1().Services(testNamespace).Get(context.TODO(), name, metav1.GetOptions{}); err != nil {
+			if errors.IsNotFound(err) {
+				return true, nil
+			}
+			return false, fmt.Errorf("error when getting Service: %v", err)
+		}
+		// Keep trying
+		return false, nil
+	}); err == wait.ErrWaitTimeout {
+		return fmt.Errorf("Service '%s' still visible to client after %v", name, timeout)
+	} else {
+		return err
+	}
 }
 
 // createNetworkPolicy creates a network policy with spec.
