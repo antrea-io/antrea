@@ -86,7 +86,7 @@ func (f *ofFlow) MatchString() string {
 	}
 
 	if len(f.matchers) > 0 {
-		repr += fmt.Sprintf(",%s", strings.Join(f.matchers, ","))
+		repr = fmt.Sprintf("%s,%s", repr, strings.Join(f.matchers, ","))
 	}
 	return repr
 }

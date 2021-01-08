@@ -265,6 +265,8 @@ type LearnAction interface {
 	MatchLearnedSCTPv6DstPort() LearnAction
 	MatchLearnedSrcIP() LearnAction
 	MatchLearnedDstIP() LearnAction
+	MatchLearnedSrcIPv6() LearnAction
+	MatchLearnedDstIPv6() LearnAction
 	MatchReg(regID int, data uint32, rng Range) LearnAction
 	LoadReg(regID int, data uint32, rng Range) LearnAction
 	LoadRegToReg(fromRegID, toRegID int, fromRng, toRng Range) LearnAction
