@@ -312,7 +312,7 @@ type flowCategoryCache struct {
 
 func portToUint16(port int) uint16 {
 	if port > 0 && port <= math.MaxUint16 {
-		return uint16(port)
+		return uint16(port) // lgtm[go/incorrect-integer-conversion]
 	}
 	klog.Errorf("Port value %d out-of-bounds", port)
 	return 0
