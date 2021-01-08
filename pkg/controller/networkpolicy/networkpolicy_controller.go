@@ -1601,9 +1601,8 @@ func internalNetworkPolicyKeyFunc(obj metav1.Object) string {
 	return string(obj.GetUID())
 }
 
-// groupKeyFunc knows how to generate the key for an internal Group based on the object metadata
-// of the corresponding original {Cluster}Group resource (also referred to as the "source").
-// Currently the UID of the original {Cluster}Group is used to ensure uniqueness.
-func groupKeyFunc(obj metav1.Object) string {
+// internalGroupKeyFunc knows how to generate the key for an internal Group based on the object metadata
+// of the corresponding ClusterGroup resource. Currently the UID of the ClusterGroup is used to ensure uniqueness.
+func internalGroupKeyFunc(obj metav1.Object) string {
 	return string(obj.GetUID())
 }

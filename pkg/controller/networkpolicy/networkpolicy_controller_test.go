@@ -2847,6 +2847,18 @@ func TestDeleteFinalStateUnknownNetworkPolicy(t *testing.T) {
 	assert.True(t, ok, "Missing event on channel")
 }
 
+func TestInternalGroupKeyFunc(t *testing.T) {
+	expValue := "uid-a"
+	cg := v1alpha2.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{Name: "cgA", UID: "uid-a"},
+		Spec: v1alpha2.GroupSpec{
+			NamespaceSelector: &selectorA,
+		},
+	}
+	actualValue := internalGroupKeyFunc(&cg)
+	assert.Equal(t, expValue, actualValue)
+}
+
 func getQueuedGroups(npc *networkPolicyController) (atGroups, addrGroups sets.String) {
 	atGroups, addrGroups = sets.NewString(), sets.NewString()
 	atLen, addrLen := npc.appliedToGroupQueue.Len(), npc.addressGroupQueue.Len()

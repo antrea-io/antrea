@@ -1,4 +1,4 @@
-// Copyright 2019 Antrea Authors
+// Copyright 2021 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,8 +31,10 @@ type GroupReference struct {
 // GroupSelector describes how to select GroupMembers.
 type GroupSelector struct {
 	// The normalized name is calculated from Namespace, PodSelector, ExternalEntitySelector and NamespaceSelector.
-	// If multiple policies have same selectors, they should share this group by comparing NormalizedName.
-	// It's also used to generate Name and UUID of group.
+	// If multiple policies have same standalone selectors, they should share this group by comparing NormalizedName.
+	// It's also used to generate Name and UUID of AddressGroup or AppliedToGroup.
+	// Internal Groups corresponding to the ClusterGroups use the NormalizedName to detect if there is a change in
+	// the selectors.
 	NormalizedName string
 	// If Namespace is set, NamespaceSelector can not be set. It means only GroupMembers in this Namespace will be matched.
 	Namespace string
@@ -51,15 +53,18 @@ type GroupSelector struct {
 }
 
 // Group describes a set of GroupMembers which can be referenced in Antrea-native NetworkPolicies. These Groups can
-// then be converted to AppliedToGroup or AddressGroup.
+// then be converted to AppliedToGroup or AddressGroup. Each internal Group corresponds to a single ClusterGroup,
+// i.e. unlike AppliedTo/AddressGroups created for standalone selectors, these internal Groups are not shared by
+// ClusterGroups created with same selectors.
 type Group struct {
-	// UID is string representation of the Group/ClusterGroup CRD UID.
+	// UID is a unique identifier of this internal Group. It is a string representation of the ClusterGroup
+	// resource UID.
 	UID types.UID
-	// Reference to the original Group or ClusterGroup.
+	// Reference to the ClusterGroup for which this internal Group is created.
 	SourceRef *GroupReference
-	// Selector describes how the group selects Pods to get their addresses.
+	// Selector describes how the internal group selects Pods to get their addresses.
 	Selector GroupSelector
-	// GroupMembers is a set of GroupMembers selected by this group.
+	// GroupMembers is a set of GroupMembers selected by this internal group.
 	// It will be converted to a slice of GroupMember for transferring according
 	// to client's selection.
 	GroupMembers controlplane.GroupMemberSet

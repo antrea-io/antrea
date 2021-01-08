@@ -31,7 +31,7 @@ import (
 // addClusterGroup is responsible for processing the ADD event of a ClusterGroup resource.
 func (n *NetworkPolicyController) addClusterGroup(curObj interface{}) {
 	cg := curObj.(*corev1a2.ClusterGroup)
-	key := groupKeyFunc(cg)
+	key := internalGroupKeyFunc(cg)
 	klog.V(2).Infof("Processing ADD event for ClusterGroup %s", cg.Name)
 	newGroup := n.processClusterGroup(cg)
 	klog.V(2).Infof("Creating new internal Group %s with selector (%s)", newGroup.UID, newGroup.Selector.NormalizedName)
@@ -45,7 +45,7 @@ func (n *NetworkPolicyController) addClusterGroup(curObj interface{}) {
 func (n *NetworkPolicyController) updateClusterGroup(oldObj, curObj interface{}) {
 	cg := curObj.(*corev1a2.ClusterGroup)
 	og := oldObj.(*corev1a2.ClusterGroup)
-	key := groupKeyFunc(cg)
+	key := internalGroupKeyFunc(cg)
 	klog.V(2).Infof("Processing UPDATE event for ClusterGroup %s", cg.Name)
 	newGroup := n.processClusterGroup(cg)
 	oldGroup := n.processClusterGroup(og)
@@ -77,7 +77,7 @@ func (n *NetworkPolicyController) deleteClusterGroup(oldObj interface{}) {
 			return
 		}
 	}
-	key := groupKeyFunc(og)
+	key := internalGroupKeyFunc(og)
 	klog.V(2).Infof("Deleting internal Group %s", key)
 	err := n.internalGroupStore.Delete(key)
 	if err != nil {
