@@ -1236,7 +1236,7 @@ func TestAddPod(t *testing.T) {
 	_, npc := newController()
 	npc.addNetworkPolicy(testNPObj)
 	groupKey := string(testCG.UID)
-	npc.addCG(testCG)
+	npc.addClusterGroup(testCG)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			npc.podStore.Add(tt.addedPod)
@@ -1246,7 +1246,7 @@ func TestAddPod(t *testing.T) {
 			npc.syncAppliedToGroup(appGroupID)
 			npc.syncAddressGroup(inGroupID)
 			npc.syncAddressGroup(outGroupID)
-			npc.syncGroup(groupKey)
+			npc.syncInternalGroup(groupKey)
 			appGroupObj, _, _ := npc.appliedToGroupStore.Get(appGroupID)
 			appGroup := appGroupObj.(*antreatypes.AppliedToGroup)
 			podsAdded := appGroup.GroupMemberByNode["nodeA"]
@@ -1254,7 +1254,7 @@ func TestAddPod(t *testing.T) {
 			updatedInAddrGroup := updatedInAddrGroupObj.(*antreatypes.AddressGroup)
 			updatedOutAddrGroupObj, _, _ := npc.addressGroupStore.Get(outGroupID)
 			updatedOutAddrGroup := updatedOutAddrGroupObj.(*antreatypes.AddressGroup)
-			groupObj, _, _ := npc.groupStore.Get(groupKey)
+			groupObj, _, _ := npc.internalGroupStore.Get(groupKey)
 			grp := groupObj.(*antreatypes.Group)
 			if tt.appGroupMatch {
 				assert.Len(t, podsAdded, 1, "expected Pod to match AppliedToGroup")
@@ -1327,7 +1327,7 @@ func TestDeletePod(t *testing.T) {
 	p2.Labels = ruleLabels
 	_, npc := newController()
 	npc.addNetworkPolicy(matchNPObj)
-	npc.addCG(testCG)
+	npc.addClusterGroup(testCG)
 	npc.podStore.Add(p1)
 	npc.podStore.Add(p2)
 	npc.syncAppliedToGroup(matchAppGID)
@@ -1348,12 +1348,12 @@ func TestDeletePod(t *testing.T) {
 	// Delete Pod P2 matching the NetworkPolicy Rule.
 	npc.podStore.Delete(p2)
 	npc.syncAddressGroup(addrGroup.Name)
-	npc.syncGroup(groupKey)
+	npc.syncInternalGroup(groupKey)
 	updatedAddrGroupObj, _, _ := npc.addressGroupStore.Get(addrGroup.Name)
 	updatedAddrGroup := updatedAddrGroupObj.(*antreatypes.AddressGroup)
 	// Ensure Pod2 IP is removed from AddressGroup.
 	memberPod2 := &controlplane.GroupMember{IPs: []controlplane.IPAddress{ipStrToIPAddress(p2IP)}}
-	groupObj, _, _ := npc.groupStore.Get(groupKey)
+	groupObj, _, _ := npc.internalGroupStore.Get(groupKey)
 	grp := groupObj.(*antreatypes.Group)
 	assert.False(t, updatedAddrGroup.GroupMembers.Has(memberPod2))
 	assert.False(t, grp.GroupMembers.Has(memberPod2))
@@ -1478,7 +1478,7 @@ func TestAddNamespace(t *testing.T) {
 	}
 	_, npc := newController()
 	npc.addNetworkPolicy(testNPObj)
-	npc.addCG(testCG)
+	npc.addClusterGroup(testCG)
 	groupKey := string(testCG.UID)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1491,12 +1491,12 @@ func TestAddNamespace(t *testing.T) {
 			outGroupID := getNormalizedUID(toGroupSelector("", nil, &selectorOut, nil).NormalizedName)
 			npc.syncAddressGroup(inGroupID)
 			npc.syncAddressGroup(outGroupID)
-			npc.syncGroup(groupKey)
+			npc.syncInternalGroup(groupKey)
 			updatedInAddrGroupObj, _, _ := npc.addressGroupStore.Get(inGroupID)
 			updatedInAddrGroup := updatedInAddrGroupObj.(*antreatypes.AddressGroup)
 			updatedOutAddrGroupObj, _, _ := npc.addressGroupStore.Get(outGroupID)
 			updatedOutAddrGroup := updatedOutAddrGroupObj.(*antreatypes.AddressGroup)
-			groupObj, _, _ := npc.groupStore.Get(groupKey)
+			groupObj, _, _ := npc.internalGroupStore.Get(groupKey)
 			grp := groupObj.(*antreatypes.Group)
 			memberPod1 := &controlplane.GroupMember{
 				Pod: &controlplane.PodReference{Name: "p1", Namespace: "nsA"},
@@ -1635,7 +1635,7 @@ func TestDeleteNamespace(t *testing.T) {
 	}
 	_, npc := newController()
 	npc.addNetworkPolicy(testNPObj)
-	npc.addCG(testCG)
+	npc.addClusterGroup(testCG)
 	groupKey := string(testCG.UID)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1649,18 +1649,18 @@ func TestDeleteNamespace(t *testing.T) {
 			outGroupID := getNormalizedUID(toGroupSelector("", nil, &selectorOut, nil).NormalizedName)
 			npc.syncAddressGroup(inGroupID)
 			npc.syncAddressGroup(outGroupID)
-			npc.syncGroup(groupKey)
+			npc.syncInternalGroup(groupKey)
 			npc.podStore.Delete(p1)
 			npc.podStore.Delete(p2)
 			npc.namespaceStore.Delete(tt.deletedNamespace)
 			npc.syncAddressGroup(inGroupID)
 			npc.syncAddressGroup(outGroupID)
-			npc.syncGroup(groupKey)
+			npc.syncInternalGroup(groupKey)
 			updatedInAddrGroupObj, _, _ := npc.addressGroupStore.Get(inGroupID)
 			updatedInAddrGroup := updatedInAddrGroupObj.(*antreatypes.AddressGroup)
 			updatedOutAddrGroupObj, _, _ := npc.addressGroupStore.Get(outGroupID)
 			updatedOutAddrGroup := updatedOutAddrGroupObj.(*antreatypes.AddressGroup)
-			groupObj, _, _ := npc.groupStore.Get(groupKey)
+			groupObj, _, _ := npc.internalGroupStore.Get(groupKey)
 			grp := groupObj.(*antreatypes.Group)
 			memberPod1 := &controlplane.GroupMember{IPs: []controlplane.IPAddress{ipStrToIPAddress("1.1.1.1")}}
 			memberPod2 := &controlplane.GroupMember{IPs: []controlplane.IPAddress{ipStrToIPAddress("1.1.1.2")}}

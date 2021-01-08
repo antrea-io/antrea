@@ -179,9 +179,9 @@ type NetworkPolicyController struct {
 	appliedToGroupStore storage.Interface
 	// internalNetworkPolicyStore is the storage where the populated internal Network Policy are stored.
 	internalNetworkPolicyStore storage.Interface
-	// groupStore is a simple store which maintains the internal Group types which can be later
+	// internalGroupStore is a simple store which maintains the internal Group types which can be later
 	// converted to AppliedToGroup or AddressGroup based on usage.
-	groupStore storage.Interface
+	internalGroupStore storage.Interface
 
 	// appliedToGroupQueue maintains the networkpolicy.AppliedToGroup objects that
 	// need to be synced.
@@ -192,9 +192,9 @@ type NetworkPolicyController struct {
 	// internalNetworkPolicyQueue maintains the networkpolicy.NetworkPolicy objects that
 	// need to be synced.
 	internalNetworkPolicyQueue workqueue.RateLimitingInterface
-	// groupQueue maintains the networkpolicy.Group objects that needs to be
+	// internalGroupQueue maintains the networkpolicy.Group objects that needs to be
 	// synced.
-	groupQueue workqueue.RateLimitingInterface
+	internalGroupQueue workqueue.RateLimitingInterface
 
 	// internalNetworkPolicyMutex protects the internalNetworkPolicyStore from
 	// concurrent access during updates to the internal NetworkPolicy object.
@@ -224,7 +224,7 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 	addressGroupStore storage.Interface,
 	appliedToGroupStore storage.Interface,
 	internalNetworkPolicyStore storage.Interface,
-	groupStore storage.Interface) *NetworkPolicyController {
+	internalGroupStore storage.Interface) *NetworkPolicyController {
 	n := &NetworkPolicyController{
 		kubeClient:                 kubeClient,
 		crdClient:                  crdClient,
@@ -243,11 +243,11 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 		addressGroupStore:          addressGroupStore,
 		appliedToGroupStore:        appliedToGroupStore,
 		internalNetworkPolicyStore: internalNetworkPolicyStore,
-		groupStore:                 groupStore,
+		internalGroupStore:         internalGroupStore,
 		appliedToGroupQueue:        workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "appliedToGroup"),
 		addressGroupQueue:          workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "addressGroup"),
 		internalNetworkPolicyQueue: workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "internalNetworkPolicy"),
-		groupQueue:                 workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "group"),
+		internalGroupQueue:         workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "internalGroup"),
 	}
 	// Add handlers for Pod events.
 	podInformer.Informer().AddEventHandlerWithResyncPeriod(
@@ -350,9 +350,9 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 		// Add event handlers for ClusterGroup notification.
 		cgInformer.Informer().AddEventHandlerWithResyncPeriod(
 			cache.ResourceEventHandlerFuncs{
-				AddFunc:    n.addCG,
-				UpdateFunc: n.updateCG,
-				DeleteFunc: n.deleteCG,
+				AddFunc:    n.addClusterGroup,
+				UpdateFunc: n.updateClusterGroup,
+				DeleteFunc: n.deleteClusterGroup,
 			},
 			resyncPeriod,
 		)
@@ -874,8 +874,8 @@ func (n *NetworkPolicyController) addPod(obj interface{}) {
 	appliedToGroupKeySet := n.filterAppliedToGroupsForPodOrExternalEntity(pod)
 	// Find all AddressGroup keys which match the Pod's labels.
 	addressGroupKeySet := n.filterAddressGroupsForPodOrExternalEntity(pod)
-	// Find all ClusterGroup keys which match the Pod's labels.
-	groupKeySet := n.filterGroupsForPod(pod)
+	// Find all internal Group keys which match the Pod's labels.
+	groupKeySet := n.filterInternalGroupsForPod(pod)
 	// Enqueue groups to their respective queues for group processing.
 	for group := range appliedToGroupKeySet {
 		n.enqueueAppliedToGroup(group)
@@ -884,7 +884,7 @@ func (n *NetworkPolicyController) addPod(obj interface{}) {
 		n.enqueueAddressGroup(group)
 	}
 	for group := range groupKeySet {
-		n.enqueueGroup(group)
+		n.enqueueInternalGroup(group)
 	}
 }
 
@@ -906,11 +906,11 @@ func (n *NetworkPolicyController) updatePod(oldObj, curObj interface{}) {
 	// Find groups matching the old Pod's labels.
 	oldAddressGroupKeySet := n.filterAddressGroupsForPodOrExternalEntity(oldPod)
 	oldAppliedToGroupKeySet := n.filterAppliedToGroupsForPodOrExternalEntity(oldPod)
-	oldGroupKeySet := n.filterGroupsForPod(oldPod)
+	oldGroupKeySet := n.filterInternalGroupsForPod(oldPod)
 	// Find groups matching the new Pod's labels.
 	curAppliedToGroupKeySet := n.filterAppliedToGroupsForPodOrExternalEntity(curPod)
 	curAddressGroupKeySet := n.filterAddressGroupsForPodOrExternalEntity(curPod)
-	curGroupKeySet := n.filterGroupsForPod(curPod)
+	curGroupKeySet := n.filterInternalGroupsForPod(curPod)
 	// Create set to hold the group keys to enqueue.
 	var appliedToGroupKeys sets.String
 	var addressGroupKeys sets.String
@@ -942,7 +942,7 @@ func (n *NetworkPolicyController) updatePod(oldObj, curObj interface{}) {
 		n.enqueueAddressGroup(group)
 	}
 	for group := range groupKeys {
-		n.enqueueGroup(group)
+		n.enqueueInternalGroup(group)
 	}
 }
 
@@ -969,8 +969,8 @@ func (n *NetworkPolicyController) deletePod(old interface{}) {
 	appliedToGroupKeys := n.filterAppliedToGroupsForPodOrExternalEntity(pod)
 	// Find all AddressGroup keys which match the Pod's labels.
 	addressGroupKeys := n.filterAddressGroupsForPodOrExternalEntity(pod)
-	// Find all Group keys which match the Pod's labels.
-	groupKeys := n.filterGroupsForPod(pod)
+	// Find all internal Group keys which match the Pod's labels.
+	groupKeys := n.filterInternalGroupsForPod(pod)
 	// Enqueue groups to their respective queues for group processing.
 	for group := range appliedToGroupKeys {
 		n.enqueueAppliedToGroup(group)
@@ -979,7 +979,7 @@ func (n *NetworkPolicyController) deletePod(old interface{}) {
 		n.enqueueAddressGroup(group)
 	}
 	for group := range groupKeys {
-		n.enqueueGroup(group)
+		n.enqueueInternalGroup(group)
 	}
 }
 
@@ -990,12 +990,12 @@ func (n *NetworkPolicyController) addNamespace(obj interface{}) {
 	namespace := obj.(*v1.Namespace)
 	klog.V(2).Infof("Processing Namespace %s ADD event, labels: %v", namespace.Name, namespace.Labels)
 	addressGroupKeys := n.filterAddressGroupsForNamespace(namespace)
-	groupKeys := n.filterGroupsForNamespace(namespace)
+	groupKeys := n.filterInternalGroupsForNamespace(namespace)
 	for group := range addressGroupKeys {
 		n.enqueueAddressGroup(group)
 	}
 	for group := range groupKeys {
-		n.enqueueGroup(group)
+		n.enqueueInternalGroup(group)
 	}
 }
 
@@ -1014,10 +1014,10 @@ func (n *NetworkPolicyController) updateNamespace(oldObj, curObj interface{}) {
 	}
 	// Find groups matching the new Namespace's labels.
 	curAddressGroupKeySet := n.filterAddressGroupsForNamespace(curNamespace)
-	curGroupKeySet := n.filterGroupsForNamespace(curNamespace)
+	curGroupKeySet := n.filterInternalGroupsForNamespace(curNamespace)
 	// Find groups matching the old Namespace's labels.
 	oldAddressGroupKeySet := n.filterAddressGroupsForNamespace(oldNamespace)
-	oldGroupKeySet := n.filterGroupsForNamespace(oldNamespace)
+	oldGroupKeySet := n.filterInternalGroupsForNamespace(oldNamespace)
 	// No need to enqueue common AddressGroups as they already have latest
 	// Namespace information.
 	addressGroupKeys := oldAddressGroupKeySet.Difference(curAddressGroupKeySet).Union(curAddressGroupKeySet.Difference(oldAddressGroupKeySet))
@@ -1026,7 +1026,7 @@ func (n *NetworkPolicyController) updateNamespace(oldObj, curObj interface{}) {
 	}
 	groupKeys := oldGroupKeySet.Difference(curGroupKeySet).Union(curGroupKeySet.Difference(oldGroupKeySet))
 	for group := range groupKeys {
-		n.enqueueGroup(group)
+		n.enqueueInternalGroup(group)
 	}
 }
 
@@ -1055,9 +1055,9 @@ func (n *NetworkPolicyController) deleteNamespace(old interface{}) {
 	for group := range addressGroupKeys {
 		n.enqueueAddressGroup(group)
 	}
-	groupKeys := n.filterGroupsForNamespace(namespace)
+	groupKeys := n.filterInternalGroupsForNamespace(namespace)
 	for group := range groupKeys {
-		n.enqueueGroup(group)
+		n.enqueueInternalGroup(group)
 	}
 }
 
@@ -1133,7 +1133,7 @@ func (n *NetworkPolicyController) Run(stopCh <-chan struct{}) {
 	defer n.appliedToGroupQueue.ShutDown()
 	defer n.addressGroupQueue.ShutDown()
 	defer n.internalNetworkPolicyQueue.ShutDown()
-	defer n.groupQueue.ShutDown()
+	defer n.internalGroupQueue.ShutDown()
 
 	klog.Infof("Starting %s", controllerName)
 	defer klog.Infof("Shutting down %s", controllerName)
@@ -1151,7 +1151,7 @@ func (n *NetworkPolicyController) Run(stopCh <-chan struct{}) {
 		go wait.Until(n.appliedToGroupWorker, time.Second, stopCh)
 		go wait.Until(n.addressGroupWorker, time.Second, stopCh)
 		go wait.Until(n.internalNetworkPolicyWorker, time.Second, stopCh)
-		go wait.Until(n.groupWorker, time.Second, stopCh)
+		go wait.Until(n.internalGroupWorker, time.Second, stopCh)
 	}
 	<-stopCh
 }

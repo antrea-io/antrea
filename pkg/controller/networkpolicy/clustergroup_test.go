@@ -17,9 +17,8 @@ package networkpolicy
 import (
 	"testing"
 
-	corev1 "k8s.io/api/core/v1"
-
 	"github.com/stretchr/testify/assert"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 
@@ -125,7 +124,7 @@ func TestProcessClusterGroup(t *testing.T) {
 	}
 }
 
-func TestAddCG(t *testing.T) {
+func TestAddClusterGroup(t *testing.T) {
 	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
 	selectorB := metav1.LabelSelector{MatchLabels: map[string]string{"foo2": "bar2"}}
 	selectorC := metav1.LabelSelector{MatchLabels: map[string]string{"foo3": "bar3"}}
@@ -215,16 +214,16 @@ func TestAddCG(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, npc := newController()
-			npc.addCG(tt.inputGroup)
+			npc.addClusterGroup(tt.inputGroup)
 			key := string(tt.inputGroup.UID)
-			actualGroupObj, _, _ := npc.groupStore.Get(key)
+			actualGroupObj, _, _ := npc.internalGroupStore.Get(key)
 			actualGroup := actualGroupObj.(*antreatypes.Group)
 			assert.Equal(t, tt.expectedGroup, actualGroup)
 		})
 	}
 }
 
-func TestUpdateCG(t *testing.T) {
+func TestUpdateClusterGroup(t *testing.T) {
 	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
 	selectorB := metav1.LabelSelector{MatchLabels: map[string]string{"foo2": "bar2"}}
 	selectorC := metav1.LabelSelector{MatchLabels: map[string]string{"foo3": "bar3"}}
@@ -318,12 +317,12 @@ func TestUpdateCG(t *testing.T) {
 		},
 	}
 	_, npc := newController()
-	npc.addCG(&testCG)
+	npc.addClusterGroup(&testCG)
 	key := string(testCG.UID)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			npc.updateCG(&testCG, tt.updatedGroup)
-			actualGroupObj, _, _ := npc.groupStore.Get(key)
+			npc.updateClusterGroup(&testCG, tt.updatedGroup)
+			actualGroupObj, _, _ := npc.internalGroupStore.Get(key)
 			actualGroup := actualGroupObj.(*antreatypes.Group)
 			assert.Equal(t, tt.expectedGroup, actualGroup)
 		})
@@ -340,13 +339,13 @@ func TestDeleteCG(t *testing.T) {
 	}
 	key := string(testCG.UID)
 	_, npc := newController()
-	npc.addCG(&testCG)
-	npc.deleteCG(&testCG)
-	_, found, _ := npc.groupStore.Get(key)
-	assert.False(t, found, "expected Group to be deleted")
+	npc.addClusterGroup(&testCG)
+	npc.deleteClusterGroup(&testCG)
+	_, found, _ := npc.internalGroupStore.Get(key)
+	assert.False(t, found, "expected internal Group to be deleted")
 }
 
-func TestFilterGroupsForPod(t *testing.T) {
+func TestFilterInternalGroupsForPod(t *testing.T) {
 	selectorSpec := metav1.LabelSelector{
 		MatchLabels: map[string]string{"purpose": "test-select"},
 	}
@@ -404,22 +403,22 @@ func TestFilterGroupsForPod(t *testing.T) {
 		},
 	}
 	_, npc := newController()
-	npc.groupStore.Create(grp1)
-	npc.groupStore.Create(grp2)
-	npc.groupStore.Create(grp3)
-	npc.groupStore.Create(grp4)
+	npc.internalGroupStore.Create(grp1)
+	npc.internalGroupStore.Create(grp2)
+	npc.internalGroupStore.Create(grp3)
+	npc.internalGroupStore.Create(grp4)
 	npc.namespaceStore.Add(ns1)
 	npc.namespaceStore.Add(ns2)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.expectedGroups, npc.filterGroupsForPod(tt.toMatch),
-				"Filtered Groups does not match expectation")
+			assert.Equal(t, tt.expectedGroups, npc.filterInternalGroupsForPod(tt.toMatch),
+				"Filtered internal Groups does not match expectation")
 		})
 	}
 }
 
-func TestFilterGroupsForNamespace(t *testing.T) {
+func TestFilterInternalGroupsForNamespace(t *testing.T) {
 	selectorSpec := metav1.LabelSelector{
 		MatchLabels: map[string]string{"purpose": "test-select"},
 	}
@@ -468,17 +467,17 @@ func TestFilterGroupsForNamespace(t *testing.T) {
 		},
 	}
 	_, npc := newController()
-	npc.groupStore.Create(grp1)
-	npc.groupStore.Create(grp2)
-	npc.groupStore.Create(grp3)
-	npc.groupStore.Create(grp4)
+	npc.internalGroupStore.Create(grp1)
+	npc.internalGroupStore.Create(grp2)
+	npc.internalGroupStore.Create(grp3)
+	npc.internalGroupStore.Create(grp4)
 	npc.namespaceStore.Add(ns1)
 	npc.namespaceStore.Add(ns2)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.expectedGroups, npc.filterGroupsForNamespace(tt.toMatch),
-				"Filtered Groups does not match expectation")
+			assert.Equal(t, tt.expectedGroups, npc.filterInternalGroupsForNamespace(tt.toMatch),
+				"Filtered internal Groups does not match expectation")
 		})
 	}
 }
