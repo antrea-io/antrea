@@ -385,7 +385,6 @@ func (k *KubernetesUtils) waitForPodInNamespace(ns string, pod string) (*string,
 
 func (k *KubernetesUtils) waitForHTTPServers(allPods []Pod) error {
 	const maxTries = 10
-	const sleepInterval = 1 * time.Second
 	log.Infof("waiting for HTTP servers (ports 80, 81 and 8080:8085) to become ready")
 	var wrong int
 	for i := 0; i < maxTries; i++ {
@@ -401,7 +400,7 @@ func (k *KubernetesUtils) waitForHTTPServers(allPods []Pod) error {
 			return nil
 		}
 		log.Debugf("%d HTTP servers not ready", wrong)
-		time.Sleep(sleepInterval)
+		time.Sleep(defaultInterval)
 	}
 	return errors.Errorf("after %d tries, %d HTTP servers are not ready", maxTries, wrong)
 }
