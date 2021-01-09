@@ -57,7 +57,6 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&NodeStatsSummary{},
 		&Group{},
 		&GroupList{},
-		&GroupPatch{},
 	)
 	return nil
 }

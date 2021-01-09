@@ -64,12 +64,10 @@ func TestWatchGroupEvent(t *testing.T) {
 					GroupMembers: []controlplane.GroupMember{
 						*newGroupMemberPod("1.1.1.1"), *newGroupMemberPod("2.2.2.2")},
 				}},
-				{Type: watch.Modified, Object: &controlplane.GroupPatch{
+				{Type: watch.Modified, Object: &controlplane.Group{
 					ObjectMeta: metav1.ObjectMeta{UID: "foo"},
-					AddedGroupMembers: []controlplane.GroupMember{
-						*newGroupMemberPod("3.3.3.3")},
-					RemovedGroupMembers: []controlplane.GroupMember{
-						*newGroupMemberPod("2.2.2.2")},
+					GroupMembers: []controlplane.GroupMember{
+						*newGroupMemberPod("1.1.1.1"), *newGroupMemberPod("3.3.3.3")},
 				}},
 			},
 		},
@@ -89,7 +87,7 @@ func TestWatchGroupEvent(t *testing.T) {
 					t.Fatalf("Expected event type %v, got %v", expectedEvent.Type, actualEvent.Type)
 				}
 				switch actualEvent.Type {
-				case watch.Added, watch.Deleted:
+				case watch.Added, watch.Deleted, watch.Modified:
 					actualObj := actualEvent.Object.(*controlplane.Group)
 					expectedObj := expectedEvent.Object.(*controlplane.Group)
 					if !assert.Equal(t, expectedObj.ObjectMeta, actualObj.ObjectMeta) {
@@ -97,18 +95,6 @@ func TestWatchGroupEvent(t *testing.T) {
 					}
 					if !assert.ElementsMatch(t, expectedObj.GroupMembers, actualObj.GroupMembers) {
 						t.Errorf("Expected IPAddresses %v, got %v", expectedObj.GroupMembers, actualObj.GroupMembers)
-					}
-				case watch.Modified:
-					actualObj := actualEvent.Object.(*controlplane.GroupPatch)
-					expectedObj := expectedEvent.Object.(*controlplane.GroupPatch)
-					if !assert.Equal(t, expectedObj.ObjectMeta, actualObj.ObjectMeta) {
-						t.Errorf("Expected ObjectMeta %v, got %v", expectedObj.ObjectMeta, actualObj.ObjectMeta)
-					}
-					if !assert.ElementsMatch(t, expectedObj.AddedGroupMembers, actualObj.AddedGroupMembers) {
-						t.Errorf("Expected AddedIPAddresses %v, got %v", expectedObj.AddedGroupMembers, actualObj.AddedGroupMembers)
-					}
-					if !assert.ElementsMatch(t, expectedObj.RemovedGroupMembers, actualObj.RemovedGroupMembers) {
-						t.Errorf("Expected RemovedIPAddresses %v, got %v", expectedObj.RemovedGroupMembers, actualObj.RemovedGroupMembers)
 					}
 				}
 			}

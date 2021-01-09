@@ -71,7 +71,6 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&NetworkPolicyStatus{},
 		&NodeStatsSummary{},
 		&Group{},
-		&GroupPatch{},
 		&GroupList{},
 	)
 

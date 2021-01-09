@@ -39,8 +39,6 @@ type groupEvent struct {
 	// The previous version of the transferred Group, which will be used in Deleted events.
 	// Note that only metadata will be set in Deleted events for efficiency.
 	PrevObject *controlplane.Group
-	// The patch object of the message for transferring, which will be used in Modified events.
-	PatchObject *controlplane.GroupPatch
 	// The key of this Group.
 	Key             string
 	ResourceVersion uint64
@@ -62,11 +60,8 @@ func (event *groupEvent) ToWatchEvent(selectors *storage.Selectors, isInitEvent 
 		// Watcher was not interested in that object but is now, an added event will be generated.
 		return &watch.Event{Type: watch.Added, Object: event.CurrObject}
 	case currObjSelected && prevObjSelected:
-		// Watcher was and is interested in that object, a modified event will be generated, unless there's no address change.
-		if event.PatchObject == nil {
-			return nil
-		}
-		return &watch.Event{Type: watch.Modified, Object: event.PatchObject}
+		// Watcher was and is interested in that object, a modified event will be generated, with current object.
+		return &watch.Event{Type: watch.Modified, Object: event.CurrObject}
 	case !currObjSelected && prevObjSelected:
 		// Watcher was interested in that object but is not interested now, a deleted event will be generated.
 		return &watch.Event{Type: watch.Deleted, Object: event.PrevObject}
@@ -98,29 +93,6 @@ func genGroupEvent(key string, prevObj, currObj interface{}, rv uint64) (storage
 		event.CurrGroup = currObj.(*antreatypes.Group)
 		event.CurrObject = new(controlplane.Group)
 		ToGroupMsg(event.CurrGroup, event.CurrObject, true)
-	}
-
-	// Calculate PatchObject in advance so that we don't need to do it for
-	// each watcher when generating *event.Event.
-	if event.PrevGroup != nil && event.CurrGroup != nil {
-		var addedMembers, removedMembers []controlplane.GroupMember
-		for memberHash, member := range event.CurrGroup.GroupMembers {
-			if _, exists := event.PrevGroup.GroupMembers[memberHash]; !exists {
-				addedMembers = append(addedMembers, *member)
-			}
-		}
-		for memberHash, member := range event.PrevGroup.GroupMembers {
-			if _, exists := event.CurrGroup.GroupMembers[memberHash]; !exists {
-				removedMembers = append(removedMembers, *member)
-			}
-		}
-		// PatchObject will not be generated when only span changes.
-		if len(addedMembers)+len(removedMembers) > 0 {
-			event.PatchObject = new(controlplane.GroupPatch)
-			event.PatchObject.UID = event.CurrGroup.UID
-			event.PatchObject.AddedGroupMembers = addedMembers
-			event.PatchObject.RemovedGroupMembers = removedMembers
-		}
 	}
 
 	return event, nil

@@ -1,4 +1,4 @@
-// Copyright 2020 Antrea Authors
+// Copyright 2021 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -129,16 +129,6 @@ message GroupMember {
 
   // Ports is the list NamedPort of the GroupMember.
   repeated NamedPort ports = 4;
-}
-
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-// GroupPatch describes the incremental update of an Group.
-message GroupPatch {
-  optional k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
-
-  repeated GroupMember addedGroupMembers = 2;
-
-  repeated GroupMember removedGroupMembers = 3;
 }
 
 // IPBlock describes a particular CIDR (Ex. "192.168.1.1/24"). The except entry describes CIDRs that should

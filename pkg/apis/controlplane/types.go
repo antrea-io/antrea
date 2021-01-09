@@ -301,15 +301,6 @@ type Group struct {
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-// GroupPatch describes the incremental update of a Group.
-type GroupPatch struct {
-	metav1.TypeMeta
-	metav1.ObjectMeta
-	AddedGroupMembers   []GroupMember
-	RemovedGroupMembers []GroupMember
-}
-
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // GroupList is a list of Group objects.
 type GroupList struct {
 	metav1.TypeMeta
