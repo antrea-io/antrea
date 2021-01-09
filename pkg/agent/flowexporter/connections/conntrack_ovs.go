@@ -139,7 +139,7 @@ func flowStringToAntreaConnection(flow string, zoneFilter uint16) (*flowexporter
 			}
 		case strings.Contains(fs, "sport"):
 			fields := strings.Split(fs, "=")
-			val, err := strconv.Atoi(fields[len(fields)-1])
+			val, err := strconv.ParseUint(fields[len(fields)-1], 10, 16)
 			if err != nil {
 				return nil, fmt.Errorf("conversion of sport %s to int failed", fields[len(fields)-1])
 			}
@@ -151,9 +151,8 @@ func flowStringToAntreaConnection(flow string, zoneFilter uint16) (*flowexporter
 		case strings.Contains(fs, "dport"):
 			// dport field could be the last tuple field in ovs-dpctl output format.
 			fs = strings.TrimSuffix(fs, ")")
-
 			fields := strings.Split(fs, "=")
-			val, err := strconv.Atoi(fields[len(fields)-1])
+			val, err := strconv.ParseUint(fields[len(fields)-1], 10, 16)
 			if err != nil {
 				return nil, fmt.Errorf("conversion of dport %s to int failed", fields[len(fields)-1])
 			}
@@ -164,7 +163,7 @@ func flowStringToAntreaConnection(flow string, zoneFilter uint16) (*flowexporter
 			}
 		case strings.Contains(fs, "packets"):
 			fields := strings.Split(fs, "=")
-			val, err := strconv.Atoi(fields[len(fields)-1])
+			val, err := strconv.ParseUint(fields[len(fields)-1], 10, 64)
 			if err != nil {
 				return nil, fmt.Errorf("conversion of packets %s to int failed", fields[len(fields)-1])
 			}
@@ -176,7 +175,7 @@ func flowStringToAntreaConnection(flow string, zoneFilter uint16) (*flowexporter
 		case strings.Contains(fs, "bytes"):
 			fs = strings.TrimSuffix(fs, ")")
 			fields := strings.Split(fs, "=")
-			val, err := strconv.Atoi(fields[len(fields)-1])
+			val, err := strconv.ParseUint(fields[len(fields)-1], 10, 64)
 			if err != nil {
 				return nil, fmt.Errorf("conversion of bytes %s to int failed", fields[len(fields)-1])
 			}
@@ -201,7 +200,7 @@ func flowStringToAntreaConnection(flow string, zoneFilter uint16) (*flowexporter
 			conn.StatusFlag = statusStringToStateflag(fields[len(fields)-1])
 		case strings.Contains(fs, "zone"):
 			fields := strings.Split(fs, "=")
-			val, err := strconv.Atoi(fields[len(fields)-1])
+			val, err := strconv.ParseUint(fields[len(fields)-1], 10, 16)
 			if err != nil {
 				return nil, fmt.Errorf("conversion of zone %s to int failed", fields[len(fields)-1])
 			}
@@ -213,21 +212,21 @@ func flowStringToAntreaConnection(flow string, zoneFilter uint16) (*flowexporter
 			}
 		case strings.Contains(fs, "mark"):
 			fields := strings.Split(fs, "=")
-			val, err := strconv.Atoi(fields[len(fields)-1])
+			val, err := strconv.ParseUint(fields[len(fields)-1], 10, 32)
 			if err != nil {
 				return nil, fmt.Errorf("conversion of mark '%s' to int failed", fields[len(fields)-1])
 			}
 			conn.Mark = uint32(val)
 		case strings.Contains(fs, "timeout"):
 			fields := strings.Split(fs, "=")
-			val, err := strconv.Atoi(fields[len(fields)-1])
+			val, err := strconv.ParseUint(fields[len(fields)-1], 10, 32)
 			if err != nil {
 				return nil, fmt.Errorf("conversion of timeout %s to int failed", fields[len(fields)-1])
 			}
 			conn.Timeout = uint32(val)
 		case strings.Contains(fs, "id"):
 			fields := strings.Split(fs, "=")
-			val, err := strconv.Atoi(fields[len(fields)-1])
+			val, err := strconv.ParseUint(fields[len(fields)-1], 10, 32)
 			if err != nil {
 				return nil, fmt.Errorf("conversion of id %s to int failed", fields[len(fields)-1])
 			}
