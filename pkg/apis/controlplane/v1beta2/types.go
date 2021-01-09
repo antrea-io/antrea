@@ -316,7 +316,7 @@ type Group struct {
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-// GroupPatch describes the incremental update of an Group.
+// GroupPatch describes the incremental update of a Group.
 type GroupPatch struct {
 	metav1.TypeMeta     `json:",inline"`
 	metav1.ObjectMeta   `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
