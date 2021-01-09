@@ -140,7 +140,8 @@ const (
 )
 
 type flowAggregator struct {
-	externalFlowCollectorAddr   net.Addr
+	externalFlowCollectorAddr   string
+	externalFlowCollectorProto  string
 	aggregatorTransportProtocol AggregatorTransportProtocol
 	collectingProcess           ipfix.IPFIXCollectingProcess
 	aggregationProcess          ipfix.IPFIXAggregationProcess
@@ -150,11 +151,12 @@ type flowAggregator struct {
 	registry                    ipfix.IPFIXRegistry
 }
 
-func NewFlowAggregator(externalFlowCollectorAddr net.Addr, exportInterval time.Duration, aggregatorTransportProtocol AggregatorTransportProtocol) *flowAggregator {
+func NewFlowAggregator(externalFlowCollectorAddr string, externalFlowCollectorProto string, exportInterval time.Duration, aggregatorTransportProtocol AggregatorTransportProtocol) *flowAggregator {
 	registry := ipfix.NewIPFIXRegistry()
 	registry.LoadRegistry()
 	fa := &flowAggregator{
 		externalFlowCollectorAddr,
+		externalFlowCollectorProto,
 		aggregatorTransportProtocol,
 		nil,
 		nil,
@@ -215,20 +217,30 @@ func (fa *flowAggregator) initExportingProcess() error {
 	if err != nil {
 		return fmt.Errorf("cannot generate observation ID for flow aggregator: %v", err)
 	}
+	// TODO: This code can be further simplified by changing the go-ipfix API to accept
+	// externalFlowCollectorAddr and externalFlowCollectorProto instead of net.Addr input.
 	var expInput exporter.ExporterInput
-	if fa.externalFlowCollectorAddr.Network() == "tcp" {
+	if fa.externalFlowCollectorProto == "tcp" {
+		collector, err := net.ResolveTCPAddr("tcp", fa.externalFlowCollectorAddr)
+		if err != nil {
+			return err
+		}
 		// TCP transport does not need any tempRefTimeout, so sending 0.
 		expInput = exporter.ExporterInput{
-			CollectorAddr:       fa.externalFlowCollectorAddr,
+			CollectorAddr:       collector,
 			ObservationDomainID: obsID,
 			TempRefTimeout:      0,
 			PathMTU:             0,
 			IsEncrypted:         false,
 		}
 	} else {
+		collector, err := net.ResolveUDPAddr("udp", fa.externalFlowCollectorAddr)
+		if err != nil {
+			return err
+		}
 		// For UDP transport, hardcoding tempRefTimeout value as 1800s. So we will send out template every 30 minutes.
 		expInput = exporter.ExporterInput{
-			CollectorAddr:       fa.externalFlowCollectorAddr,
+			CollectorAddr:       collector,
 			ObservationDomainID: obsID,
 			TempRefTimeout:      1800,
 			PathMTU:             0,
