@@ -44,7 +44,8 @@ func TestFlowAggregator_sendTemplateSet(t *testing.T) {
 	mockTempSet := ipfixtest.NewMockIPFIXSet(ctrl)
 
 	fa := &flowAggregator{
-		nil,
+		"",
+		"",
 		"tcp",
 		nil,
 		nil,
