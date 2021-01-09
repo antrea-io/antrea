@@ -29,7 +29,7 @@ func run(o *Options) error {
 	// cause the stopCh channel to be closed; if another signal is received before the program
 	// exits, we will force exit.
 	stopCh := signals.RegisterSignalHandlers()
-	flowAggregator := aggregator.NewFlowAggregator(o.externalFlowCollectorAddr, o.exportInterval, o.aggregatorTransportProtocol)
+	flowAggregator := aggregator.NewFlowAggregator(o.externalFlowCollectorAddr, o.externalFlowCollectorProto, o.exportInterval, o.aggregatorTransportProtocol)
 	err := flowAggregator.InitCollectingProcess()
 	if err != nil {
 		return fmt.Errorf("error when creating collecting process: %v", err)
