@@ -418,7 +418,7 @@ func (c *client) InstallEndpointFlows(protocol binding.Protocol, endpoints []pro
 		var flows []binding.Flow
 		endpointPort, _ := endpoint.Port()
 		endpointIP := parser(endpoint.IP())
-		portVal := uint16(endpointPort)
+		portVal := portToUint16(endpointPort)
 		cacheKey := fmt.Sprintf("Endpoints_%s_%d_%s", endpointIP, endpointPort, protocol)
 		flows = append(flows, c.endpointDNATFlow(endpointIP, portVal, protocol))
 		if endpoint.GetIsLocal() {

@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"regexp"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
@@ -279,13 +280,28 @@ func parseTracingPeer(str string) *tracingPeer {
 	return nil
 }
 
+const (
+	flowRegexElementPattern = `[a-zA-Z0-9\.\-_]+(=[a-zA-Z0-9\.\-_]+)?`
+)
+
+var (
+	flowRegexPattern = fmt.Sprintf(`^(%s,\s*)*%s$`, flowRegexElementPattern, flowRegexElementPattern)
+	flowRegex        = regexp.MustCompile(flowRegexPattern)
+)
+
 func validateRequest(r *http.Request) (*request, *handlers.HandlerError) {
 	port := r.URL.Query().Get("port")
 	src := r.URL.Query().Get("source")
 	dst := r.URL.Query().Get("destination")
 	addrFamily := r.URL.Query().Get("addressFamily")
+	flow := r.URL.Query().Get("flow")
 
-	request := request{flow: r.URL.Query().Get("flow")}
+	// sanitize user input since it is used to invoke exec.Command
+	if flow != "" && !flowRegex.MatchString(flow) {
+		return nil, handlers.NewHandlerError(errors.New("invalid flow format"), http.StatusBadRequest)
+	}
+
+	request := request{flow: flow}
 	if addrFamily == "6" {
 		request.addrFamily = util.FamilyIPv6
 	} else if addrFamily == "4" {
