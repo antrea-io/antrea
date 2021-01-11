@@ -28,6 +28,9 @@ type FlowAggregatorConfig struct {
 	// Defaults to "60s".
 	FlowExportInterval string `yaml:"flowExportInterval,omitempty"`
 	// Transport protocol over which the aggregator collects IPFIX records from all Agents.
-	// Defaults to "tcp"
+	// Defaults to "tls"
 	AggregatorTransportProtocol flowaggregator.AggregatorTransportProtocol `yaml:"aggregatorTransportProtocol,omitempty"`
+	// Provide DNS name or IP address of flow aggregator for generating TLS certificate.
+	// Defaults to "flow-aggregator.flow-aggregator.svc"
+	flowAggregatorAddress string `yaml:"flowAggregatorAddress,omitempty"`
 }

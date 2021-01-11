@@ -480,6 +480,11 @@ func (data *TestData) deployAntreaFlowExporter(ipfixCollector string) error {
 		}
 		antreaAgentConf = strings.Replace(antreaAgentConf, "#flowPollInterval: \"5s\"", "flowPollInterval: \"1s\"", 1)
 		antreaAgentConf = strings.Replace(antreaAgentConf, "#flowExportFrequency: 12", "flowExportFrequency: 2", 1)
+		if testOptions.providerName == "kind" {
+			// In Kind cluster, there are issues with DNS name resolution on worker nodes.
+			// We will skip TLS testing for Kind cluster because the server certificate is generated with Flow aggregator's DNS name
+			antreaAgentConf = strings.Replace(antreaAgentConf, "#enableTLSToFlowAggregator: true", "enableTLSToFlowAggregator: false", 1)
+		}
 		data["antrea-agent.conf"] = antreaAgentConf
 	}, false, true)
 }
@@ -512,6 +517,11 @@ func (data *TestData) mutateFlowAggregatorConfigMap(ipfixCollector string) error
 	flowAggregatorConf, _ := configMap.Data[flowAggregatorConfName]
 	flowAggregatorConf = strings.Replace(flowAggregatorConf, "#externalFlowCollectorAddr: \"\"", fmt.Sprintf("externalFlowCollectorAddr: \"%s\"", ipfixCollector), 1)
 	flowAggregatorConf = strings.Replace(flowAggregatorConf, "#flowExportInterval: 60s", "flowExportInterval: 5s", 1)
+	if testOptions.providerName == "kind" {
+		// In Kind cluster, there are issues with DNS name resolution on worker nodes.
+		// We will skip TLS testing for Kind cluster because the server certificate is generated with Flow aggregator's DNS name
+		flowAggregatorConf = strings.Replace(flowAggregatorConf, "#aggregatorTransportProtocol: \"tls\"", "aggregatorTransportProtocol: \"tcp\"", 1)
+	}
 	configMap.Data[flowAggregatorConfName] = flowAggregatorConf
 	if _, err := data.clientset.CoreV1().ConfigMaps(flowAggregatorNamespace).Update(context.TODO(), configMap, metav1.UpdateOptions{}); err != nil {
 		return fmt.Errorf("failed to update ConfigMap %s: %v", configMap.Name, err)

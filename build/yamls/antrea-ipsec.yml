@@ -1409,6 +1409,9 @@ data:
     # Flow export frequency should be greater than or equal to 1.
     #flowExportFrequency: 12
 
+    # Enable TLS communication from flow exporter to flow aggregator.
+    #enableTLSToFlowAggregator: true
+
     # Provide the port range used by NodePortLocal. When the NodePortLocal feature is enabled, a port from that range will be assigned
     # whenever a Pod's container defines a specific port to be exposed (each container can define a list of ports as pod.spec.containers[].ports),
     # and all Node traffic directed to that port will be forwarded to the Pod.
@@ -1491,7 +1494,7 @@ metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-tg88b52gfg
+  name: antrea-config-ftckkg2dc8
   namespace: kube-system
 ---
 apiVersion: v1
@@ -1620,7 +1623,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-tg88b52gfg
+          name: antrea-config-ftckkg2dc8
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -1919,7 +1922,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-tg88b52gfg
+          name: antrea-config-ftckkg2dc8
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d
