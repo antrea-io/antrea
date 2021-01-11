@@ -407,19 +407,19 @@ func TestRouteTablePolicyOnly(t *testing.T) {
 
 	cLink := &netlink.Dummy{}
 	cLink.Name = "containerLink"
-	assert.NoError(t, netlink.LinkAdd(cLink), "error when creating link")
-	assert.NoError(t, netlink.LinkSetUp(cLink), "error when setting-up link")
+	assert.NoError(t, netlink.LinkAdd(cLink), "creating linked failed")
+	assert.NoError(t, netlink.LinkSetUp(cLink), "setting-up link failed")
 
 	_, ipAddr, _ := net.ParseCIDR("10.10.1.1/32")
 	_, hostRt, _ := net.ParseCIDR("10.10.1.2/32")
-	assert.NoError(t, netlink.AddrAdd(cLink, &netlink.Addr{IPNet: ipAddr}), "error when configuring IP on link")
+	assert.NoError(t, netlink.AddrAdd(cLink, &netlink.Addr{IPNet: ipAddr}), "configuring IP on link failed")
 	rt := &netlink.Route{
 		LinkIndex: cLink.Index,
 		Scope:     netlink.SCOPE_LINK,
 		Dst:       hostRt,
 	}
 	if assert.NoError(t, netlink.RouteAdd(rt)) {
-		t.Logf("route %v indx %d, iindx %d added", rt, rt.LinkIndex, rt.ILinkIndex)
+		t.Logf("route added: %v - output interface index: %d - input interface index: %d", rt, rt.LinkIndex, rt.ILinkIndex)
 	}
 
 	// verify route is migrated.
