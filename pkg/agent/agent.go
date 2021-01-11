@@ -388,18 +388,66 @@ func (i *Initializer) initOpenFlowPipeline() error {
 }
 
 func (i *Initializer) FlowRestoreComplete() error {
-	// ovs-vswitchd is started with flow-restore-wait set to true for the following reasons:
-	// 1. It prevents packets from being mishandled by ovs-vswitchd in its default fashion,
-	//    which could affect existing connections' conntrack state and cause issues like #625.
-	// 2. It prevents ovs-vswitchd from flushing or expiring previously set datapath flows,
-	//    so existing connections can achieve 0 downtime during OVS restart.
-	// As a result, we remove the config here after restoring necessary flows.
-	klog.Info("Cleaning up flow-restore-wait config")
-	if err := i.ovsBridgeClient.DeleteOVSOtherConfig(map[string]interface{}{"flow-restore-wait": "true"}); err != nil {
-		return fmt.Errorf("error when cleaning up flow-restore-wait config: %v", err)
+	// Issue #1600: A rare case has been found that the "flow-restore-wait" config was still true even though the delete
+	// call below was considered success. At the moment we don't know if it's a race condition caused by "ovs-vsctl set
+	// --no-wait" or a problem with OVSDB golang lib or OVSDB itself. To work around it, we check if the config is true
+	// before deleting it and if it is false after deleting it, and we will log warnings and retry a few times if
+	// anything unexpected happens.
+	// If the issue can still happen, it must be that some other code sets the config back after it's deleted.
+	getFlowRestoreWait := func() (bool, error) {
+		otherConfig, err := i.ovsBridgeClient.GetOVSOtherConfig()
+		if err != nil {
+			return false, fmt.Errorf("error when getting OVS other config")
+		}
+		return otherConfig["flow-restore-wait"] == "true", nil
 	}
-	klog.Info("Cleaned up flow-restore-wait config")
-	return nil
+
+	// "flow-restore-wait" is supposed to be true here.
+	err := wait.PollImmediate(200*time.Millisecond, 2*time.Second, func() (done bool, err error) {
+		flowRestoreWait, err := getFlowRestoreWait()
+		if err != nil {
+			return false, err
+		}
+		if !flowRestoreWait {
+			// If the log is seen and the config becomes true later, we should look at why "ovs-vsctl set --no-wait"
+			// doesn't take effect on ovsdb immediately.
+			klog.Warning("flow-restore-wait was not true before the delete call was made, will retry")
+			return false, nil
+		}
+		return true, nil
+	})
+	if err != nil {
+		if err == wait.ErrWaitTimeout {
+			// This could happen if the method is triggered by OVS disconnection event, in which OVS doesn't restart.
+			klog.Info("flow-restore-wait was not true, skip cleaning up it")
+			return nil
+		}
+		return err
+	}
+	for retries := 0; retries < 3; retries++ {
+		// ovs-vswitchd is started with flow-restore-wait set to true for the following reasons:
+		// 1. It prevents packets from being mishandled by ovs-vswitchd in its default fashion,
+		//    which could affect existing connections' conntrack state and cause issues like #625.
+		// 2. It prevents ovs-vswitchd from flushing or expiring previously set datapath flows,
+		//    so existing connections can achieve 0 downtime during OVS restart.
+		// As a result, we remove the config here after restoring necessary flows.
+		klog.Info("Cleaning up flow-restore-wait config")
+		if err := i.ovsBridgeClient.DeleteOVSOtherConfig(map[string]interface{}{"flow-restore-wait": "true"}); err != nil {
+			return fmt.Errorf("error when cleaning up flow-restore-wait config: %v", err)
+		}
+		flowRestoreWait, err := getFlowRestoreWait()
+		if err != nil {
+			return err
+		}
+		if flowRestoreWait {
+			// If it is seen, we should look at OVSDB golang lib and OVS.
+			klog.Warningf("flow-restore-wait was still true even though the delete call was considered success")
+			continue
+		}
+		klog.Info("Cleaned up flow-restore-wait config")
+		return nil
+	}
+	return fmt.Errorf("error when cleaning up flow-restore-wait config: delete calls failed to take effect")
 }
 
 // setupGatewayInterface creates the host gateway interface which is an internal port on OVS. The ofport for host
