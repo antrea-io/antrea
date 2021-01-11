@@ -362,10 +362,22 @@ func (br *OVSBridge) DeletePort(portUUID string) Error {
 // port's external_ids.
 // If ofPortRequest is not zero, it will be passed to the OVS port creation.
 func (br *OVSBridge) CreateInternalPort(name string, ofPortRequest int32, externalIDs map[string]interface{}) (string, Error) {
+	return br.CreateInternalPortExt(name, name, ofPortRequest, externalIDs)
+}
+
+// CreateInternalPortExt creates an internal port with the specified port name and
+// interface name on the bridge.
+// If externalIDs is not empty, the map key/value pairs will be set to the
+// port's external_ids.
+// If ofPortRequest is not zero, it will be passed to the OVS port creation.
+func (br *OVSBridge) CreateInternalPortExt(portName, ifName string, ofPortRequest int32, externalIDs map[string]interface{}) (string, Error) {
 	if ofPortRequest < 0 || ofPortRequest > ofPortRequestMax {
 		return "", newInvalidArgumentsError(fmt.Sprint("invalid ofPortRequest value: ", ofPortRequest))
 	}
-	return br.createPort(name, name, "internal", ofPortRequest, externalIDs, nil)
+	if ifName == "" {
+		return "", newInvalidArgumentsError("interface name can not be empty")
+	}
+	return br.createPort(portName, ifName, "internal", ofPortRequest, externalIDs, nil)
 }
 
 // CreateTunnelPort creates a tunnel port with the specified name and type on

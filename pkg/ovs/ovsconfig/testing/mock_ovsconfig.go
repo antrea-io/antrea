@@ -1,4 +1,4 @@
-// Copyright 2020 Antrea Authors
+// Copyright 2021 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -89,6 +89,21 @@ func (m *MockOVSBridgeClient) CreateInternalPort(arg0 string, arg1 int32, arg2 m
 func (mr *MockOVSBridgeClientMockRecorder) CreateInternalPort(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateInternalPort", reflect.TypeOf((*MockOVSBridgeClient)(nil).CreateInternalPort), arg0, arg1, arg2)
+}
+
+// CreateInternalPortExt mocks base method
+func (m *MockOVSBridgeClient) CreateInternalPortExt(arg0, arg1 string, arg2 int32, arg3 map[string]interface{}) (string, ovsconfig.Error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateInternalPortExt", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(ovsconfig.Error)
+	return ret0, ret1
+}
+
+// CreateInternalPortExt indicates an expected call of CreateInternalPortExt
+func (mr *MockOVSBridgeClientMockRecorder) CreateInternalPortExt(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateInternalPortExt", reflect.TypeOf((*MockOVSBridgeClient)(nil).CreateInternalPortExt), arg0, arg1, arg2, arg3)
 }
 
 // CreatePort mocks base method

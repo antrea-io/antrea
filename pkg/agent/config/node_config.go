@@ -25,13 +25,15 @@ const (
 	// Invalid ofport_request number is in range 1 to 65,279. For ofport_request number not in the range, OVS
 	// ignore the it and automatically assign a port number.
 	// Here we use an invalid port number "0" to request for automatically port allocation.
-	AutoAssignedOFPort = 0
-	DefaultTunOFPort   = 1
-	HostGatewayOFPort  = 2
-	UplinkOFPort       = 3
-	// 0xfffffffe is a reserved port number in OpenFlow protocol, which is dedicated for the Bridge interface.
-	BridgeOFPort = 0xfffffffe
+	AutoAssignedOFPort         = 0
+	DefaultTunOFPort           = 1
+	HostGatewayOFPort          = 2
+	UplinkOFPort               = 3
+	HyperVDisabledBridgeOFPort = 4
 )
+
+// 0xfffffffe is a reserved port number in OpenFlow protocol, which is dedicated for the Bridge interface.
+var BridgeOFPort uint32 = 0xfffffffe
 
 const (
 	VXLANOverhead  = 50
@@ -93,6 +95,7 @@ type NodeConfig struct {
 	GatewayConfig *GatewayConfig
 	// The config of the OVS bridge uplink interface. Only for Windows Node.
 	UplinkNetConfig *AdapterNetConfig
+	HyperVInstalled bool
 }
 
 func (n *NodeConfig) String() string {

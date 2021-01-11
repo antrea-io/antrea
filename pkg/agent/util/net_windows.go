@@ -45,7 +45,7 @@ func GetNSPath(containerNetNS string) (string, error) {
 
 // EnableHostInterface sets the specified interface status as UP.
 func EnableHostInterface(ifaceName string) error {
-	cmd := fmt.Sprintf("Enable-NetAdapter -InterfaceAlias %s", ifaceName)
+	cmd := fmt.Sprintf("Enable-NetAdapter -IncludeHidden -InterfaceAlias %s", ifaceName)
 	return InvokePSCommand(cmd)
 }
 
@@ -256,14 +256,14 @@ func ConfigureLinkAddress(idx int, gwIPNet *net.IPNet) error {
 }
 
 // PrepareHNSNetwork creates HNS Network for containers.
-func PrepareHNSNetwork(subnetCIDR *net.IPNet, nodeIPNet *net.IPNet, uplinkAdapter *net.Interface) error {
+func PrepareHNSNetwork(subnetCIDR *net.IPNet, nodeIPNet *net.IPNet, uplinkAdapter *net.Interface, hyperVInstalled bool) error {
 	hnsNet, err := CreateHNSNetwork(LocalHNSNetwork, subnetCIDR, nodeIPNet, uplinkAdapter)
 	if err != nil {
 		return err
 	}
 
 	// Enable OVS Extension on the HNS Network. If an error occurs, delete the HNS Network and return the error.
-	if err = enableHNSOnOVS(hnsNet); err != nil {
+	if err = enableHNSOnOVS(hnsNet, hyperVInstalled); err != nil {
 		hnsNet.Delete()
 		return err
 	}
@@ -271,13 +271,9 @@ func PrepareHNSNetwork(subnetCIDR *net.IPNet, nodeIPNet *net.IPNet, uplinkAdapte
 	return nil
 }
 
-func enableHNSOnOVS(hnsNet *hcsshim.HNSNetwork) error {
+func enableHNSOnOVS(hnsNet *hcsshim.HNSNetwork, hyperVInstalled bool) error {
 	// Release OS management for HNS Network if Hyper-V is enabled.
-	hypervEnabled, err := WindowsHyperVInstalled()
-	if err != nil {
-		return err
-	}
-	if hypervEnabled {
+	if hyperVInstalled {
 		if err := RemoveManagementInterface(LocalHNSNetwork); err != nil {
 			klog.Errorf("Failed to remove the interface managed by OS for HNSNetwork %s", LocalHNSNetwork)
 			return err
@@ -288,7 +284,7 @@ func enableHNSOnOVS(hnsNet *hcsshim.HNSNetwork) error {
 	if err := EnableHNSNetworkExtension(hnsNet.Id, OVSExtensionID); err != nil {
 		return err
 	}
-	return err
+	return nil
 }
 
 // GetLocalBroadcastIP returns the last IP address in a subnet. This IP is always working as the broadcast address in
