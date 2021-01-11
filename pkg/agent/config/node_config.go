@@ -29,9 +29,12 @@ const (
 	DefaultTunOFPort   = 1
 	HostGatewayOFPort  = 2
 	UplinkOFPort       = 3
-	// 0xfffffffe is a reserved port number in OpenFlow protocol, which is dedicated for the Bridge interface.
-	BridgeOFPort = 0xfffffffe
+	//UplinkOFPort       = 3
+	HyperVDisabledBridgeOFPort = 4
 )
+
+// 0xfffffffe is a reserved port number in OpenFlow protocol, which is dedicated for the Bridge interface.
+var BridgeOFPort uint32 = 0xfffffffe
 
 const (
 	VXLANOverhead  = 50
@@ -93,6 +96,7 @@ type NodeConfig struct {
 	GatewayConfig *GatewayConfig
 	// The config of the OVS bridge uplink interface. Only for Windows Node.
 	UplinkNetConfig *AdapterNetConfig
+	HyperVInstalled bool
 }
 
 func (n *NodeConfig) String() string {

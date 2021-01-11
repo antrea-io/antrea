@@ -33,6 +33,11 @@ import (
 
 // prepareHostNetwork creates HNS Network for containers.
 func (i *Initializer) prepareHostNetwork() error {
+	hyperVInstalled, err := util.WindowsHyperVInstalled()
+	if err != nil {
+		return err
+	}
+	i.nodeConfig.HyperVInstalled = hyperVInstalled
 	// If the HNS Network already exists, return immediately.
 	hnsNetwork, err := hcsshim.GetHNSNetworkByName(util.LocalHNSNetwork)
 	if err == nil {
@@ -73,12 +78,15 @@ func (i *Initializer) prepareHostNetwork() error {
 	if subnetCIDR == nil {
 		return fmt.Errorf("Failed to find valid IPv4 PodCIDR")
 	}
-	return util.PrepareHNSNetwork(subnetCIDR, i.nodeConfig.NodeIPAddr, adapter)
+	return util.PrepareHNSNetwork(subnetCIDR, i.nodeConfig.NodeIPAddr, adapter, hyperVInstalled)
 }
 
 // prepareOVSBridge adds local port and uplink to ovs bridge.
 // This function will delete OVS bridge and HNS network created by antrea on failure.
 func (i *Initializer) prepareOVSBridge() error {
+	if i.nodeConfig.HyperVInstalled {
+		config.BridgeOFPort = config.HyperVDisabledBridgeOFPort
+	}
 	hnsNetwork, err := hcsshim.GetHNSNetworkByName(util.LocalHNSNetwork)
 	defer func() {
 		// prepareOVSBridge only works on windows platform. The operation has a chance to fail on the first time agent
@@ -114,19 +122,25 @@ func (i *Initializer) prepareOVSBridge() error {
 
 	// Create local port.
 	brName := i.ovsBridgeClient.GetBridgeName()
+	brIfaceName := brName
+	var brOfPortRequest int32 = config.AutoAssignedOFPort
+	uplinkNetConfig := i.nodeConfig.UplinkNetConfig
+	uplink := uplinkNetConfig.Name
 	if _, err = i.ovsBridgeClient.GetOFPort(brName); err == nil {
 		klog.Infof("OVS bridge local port %s already exists, skip the configuration", brName)
 	} else {
 		// OVS does not receive "ofport_request" param when creating local port, so here use config.AutoAssignedOFPort=0
 		// to ignore this param.
-		if _, err = i.ovsBridgeClient.CreateInternalPort(brName, config.AutoAssignedOFPort, nil); err != nil {
+		if i.nodeConfig.HyperVInstalled {
+			brIfaceName = fmt.Sprintf("vEthernet (%s)", uplink)
+			brOfPortRequest = config.HyperVDisabledBridgeOFPort
+		}
+		if _, err = i.ovsBridgeClient.CreateInternalPort(brName, brOfPortRequest, nil); err != nil {
 			return err
 		}
 	}
 
 	// If uplink is already exists, return.
-	uplinkNetConfig := i.nodeConfig.UplinkNetConfig
-	uplink := uplinkNetConfig.Name
 	if _, err := i.ovsBridgeClient.GetOFPort(uplink); err == nil {
 		klog.Infof("Uplink %s already exists, skip the configuration", uplink)
 		return err
@@ -142,30 +156,31 @@ func (i *Initializer) prepareOVSBridge() error {
 	i.ifaceStore.AddInterface(uplinkInterface)
 	ovsCtlClient := ovsctl.NewClient(i.ovsBridge)
 
-	// Move network configuration of uplink interface to OVS bridge local interface.
-	// - The net configuration of uplink will be restored by OS if the attached HNS network is deleted.
-	// - When ovs-switchd is down, antrea-agent will disable OVS Extension. The OVS bridge local interface will work
-	//   like a normal interface on host and is responsible for forwarding host traffic.
-	err = util.EnableHostInterface(brName)
-	if err = util.SetAdapterMACAddress(brName, &uplinkNetConfig.MAC); err != nil {
-		return err
-	}
-	// TODO: Configure IPv6 Address.
-	if err = util.ConfigureInterfaceAddressWithDefaultGateway(brName, uplinkNetConfig.IP, uplinkNetConfig.Gateway); err != nil {
-		if !strings.Contains(err.Error(), "Instance MSFT_NetIPAddress already exists") {
+	if i.nodeConfig.HyperVInstalled {
+		// Move network configuration of uplink interface to OVS bridge local interface.
+		// - The net configuration of uplink will be restored by OS if the attached HNS network is deleted.
+		// - When ovs-switchd is down, antrea-agent will disable OVS Extension. The OVS bridge local interface will work
+		//   like a normal interface on host and is responsible for forwarding host traffic.
+		err = util.EnableHostInterface(brIfaceName)
+		if err = util.SetAdapterMACAddress(brIfaceName, &uplinkNetConfig.MAC); err != nil {
 			return err
 		}
-		err = nil
-		klog.V(4).Infof("Address: %s already exists when configuring IP on interface %s", uplinkNetConfig.IP.String(), brName)
-	}
-	// Restore the host routes which are lost when moving the network configuration of the uplink interface to OVS bridge interface.
-	if err = i.restoreHostRoutes(); err != nil {
-		return err
-	}
-
-	if uplinkNetConfig.DNSServers != "" {
-		if err = util.SetAdapterDNSServers(brName, uplinkNetConfig.DNSServers); err != nil {
+		// TODO: Configure IPv6 Address.
+		if err = util.ConfigureInterfaceAddressWithDefaultGateway(brIfaceName, uplinkNetConfig.IP, uplinkNetConfig.Gateway); err != nil {
+			if !strings.Contains(err.Error(), "Instance MSFT_NetIPAddress already exists") {
+				return err
+			}
+			err = nil
+			klog.V(4).Infof("Address: %s already exists when configuring IP on interface %s", uplinkNetConfig.IP.String(), brName)
+		}
+		// Restore the host routes which are lost when moving the network configuration of the uplink interface to OVS bridge interface.
+		if err = i.restoreHostRoutes(); err != nil {
 			return err
+		}
+		if uplinkNetConfig.DNSServers != "" {
+			if err = util.SetAdapterDNSServers(brIfaceName, uplinkNetConfig.DNSServers); err != nil {
+				return err
+			}
 		}
 	}
 	// Set the uplink with "no-flood" config, so that the IP of local Pods and "antrea-gw0" will not be leaked to the
