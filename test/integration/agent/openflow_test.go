@@ -1280,7 +1280,7 @@ func prepareExternalFlows(nodeIP net.IP, localSubnet *net.IPNet, vMAC net.Hardwa
 			[]*ofTestUtils.ExpectFlow{
 				{
 					MatchStr: "priority=210,ct_state=-new+trk,ct_mark=0x40,ip,reg0=0x4/0xffff",
-					ActStr:   fmt.Sprintf("set_field:%s->eth_dst,load:0x1->NXM_NX_REG0[19],goto_table:42", vMAC.String()),
+					ActStr:   "load:0x1->NXM_NX_REG0[19],goto_table:42",
 				},
 				{
 					MatchStr: fmt.Sprintf("priority=200,ip,reg0=0x4/0xffff"),

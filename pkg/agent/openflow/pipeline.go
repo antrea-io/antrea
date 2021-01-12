@@ -799,15 +799,11 @@ func (c *client) l3FwdFlowToPod(localGatewayMAC net.HardwareAddr, podInterfaceIP
 	var flows []binding.Flow
 	for _, ip := range podInterfaceIPs {
 		ipProtocol := getIPProtocol(ip)
-		flowBuilder := l3FwdTable.BuildFlow(priorityNormal).MatchProtocol(ipProtocol)
-		if c.enableProxy {
-			flowBuilder = flowBuilder.MatchRegRange(int(marksReg), macRewriteMark, macRewriteMarkRange)
-		} else {
-			flowBuilder = flowBuilder.MatchDstMAC(globalVirtualMAC)
-		}
-		// Rewrite src MAC to local gateway MAC, and rewrite dst MAC to pod MAC
-		flows = append(flows, flowBuilder.MatchDstIP(ip).
+		flows = append(flows, l3FwdTable.BuildFlow(priorityNormal).MatchProtocol(ipProtocol).
+			MatchRegRange(int(marksReg), macRewriteMark, macRewriteMarkRange).
+			MatchDstIP(ip).
 			Action().SetSrcMAC(localGatewayMAC).
+			// Rewrite src MAC to local gateway MAC, and rewrite dst MAC to pod MAC
 			Action().SetDstMAC(podInterfaceMAC).
 			Action().GotoTable(l3DecTTLTable).
 			Cookie(c.cookieAllocator.Request(category).Raw()).
@@ -1462,7 +1458,6 @@ func (c *client) hostBridgeUplinkFlows(localSubnet net.IPNet, category cookie.Ca
 			MatchProtocol(binding.ProtocolIP).
 			MatchRegRange(int(marksReg), markTrafficFromBridge, binding.Range{0, 15}).
 			MatchDstIPNet(localSubnet).
-			Action().SetDstMAC(globalVirtualMAC).
 			Action().LoadRegRange(int(marksReg), macRewriteMark, macRewriteMarkRange).
 			Action().GotoTable(conntrackTable).
 			Cookie(c.cookieAllocator.Request(category).Raw()).
@@ -1498,14 +1493,13 @@ func (c *client) uplinkSNATFlows(category cookie.Category) []binding.Flow {
 			Action().GotoTable(conntrackTable).
 			Cookie(c.cookieAllocator.Request(category).Raw()).
 			Done(),
-		// Rewrite dMAC with the global vMAC if the packet is a reply to a
-		// Pod from an external address.
+		// Mark the packet to indicate its destination MAC should be rewritten to the real MAC in the L3Forwarding
+		// table, if the packet is a reply to a Pod from an external address.
 		c.pipeline[conntrackStateTable].BuildFlow(priorityHigh).
 			MatchProtocol(binding.ProtocolIP).
 			MatchCTStateNew(false).MatchCTStateTrk(true).
 			MatchCTMark(snatCTMark, nil).
 			MatchRegRange(int(marksReg), markTrafficFromUplink, binding.Range{0, 15}).
-			Action().SetDstMAC(globalVirtualMAC).
 			Action().LoadRegRange(int(marksReg), macRewriteMark, macRewriteMarkRange).
 			Action().GotoTable(ctStateNext).
 			Cookie(c.cookieAllocator.Request(category).Raw()).
