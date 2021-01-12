@@ -89,7 +89,7 @@ func isRestoreWaitSupported(ipt *iptables.IPTables) bool {
 	return version.GE(restoreWaitSupportedMinVersion)
 }
 
-// ensureChain checks if target chain already exists, creates it if not.
+// EnsureChain checks if target chain already exists, creates it if not.
 func (c *Client) EnsureChain(table string, chain string) error {
 	for idx := range c.ipts {
 		ipt := c.ipts[idx]
@@ -108,7 +108,21 @@ func (c *Client) EnsureChain(table string, chain string) error {
 	return nil
 }
 
-// ensureRule checks if target rule already exists, appends it if not.
+// ChainExists checks if a chain already exists in a table
+func (c *Client) ChainExists(table string, chain string) (bool, error) {
+	for idx := range c.ipts {
+		allChains, err := c.ipts[idx].ListChains(table)
+		if err != nil {
+			return false, fmt.Errorf("error listing existing chains in table %s: %v", table, err)
+		}
+		if contains(allChains, chain) {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// EnsureRule checks if target rule already exists, appends it if not.
 func (c *Client) EnsureRule(table string, chain string, ruleSpec []string) error {
 	for idx := range c.ipts {
 		ipt := c.ipts[idx]
@@ -127,7 +141,54 @@ func (c *Client) EnsureRule(table string, chain string, ruleSpec []string) error
 	return nil
 }
 
-// Restore calls iptables-restore to restore iptables with the provided content.
+// DeleteRule checks if target rule already exists, deletes the rule if found.
+func (c *Client) DeleteRule(table string, chain string, ruleSpec []string) error {
+	for idx := range c.ipts {
+		exist, err := c.ipts[idx].Exists(table, chain, ruleSpec...)
+		if err != nil {
+			return fmt.Errorf("error checking if rule %v exists in table %s chain %s: %v", ruleSpec, table, chain, err)
+		}
+		if !exist {
+			return nil
+		}
+		if err := c.ipts[idx].Delete(table, chain, ruleSpec...); err != nil {
+			return fmt.Errorf("error deleting rule %v from table %s chain %s: %v", ruleSpec, table, chain, err)
+		}
+		klog.V(2).Infof("Deleted rule %v from table %s chain %s", ruleSpec, table, chain)
+	}
+	return nil
+}
+
+// DeleteChain deletes all rules from a chain in a table and then delete the chain
+func (c *Client) DeleteChain(table string, chain string) error {
+	for idx := range c.ipts {
+		err := c.ipts[idx].ClearChain(table, chain)
+		if err != nil {
+			return fmt.Errorf("error clearing rules from table %s chain %s: %v", table, chain, err)
+		}
+		err = c.ipts[idx].DeleteChain(table, chain)
+		if err != nil {
+			return fmt.Errorf("error deleting chain %s from table %s: %v", chain, table, err)
+		}
+		klog.V(2).Infof("Deleted chain %s from table %s", chain, table)
+	}
+	return nil
+}
+
+// ListRules lists all rules from a chain in a table
+func (c *Client) ListRules(table string, chain string) ([]string, error) {
+	var allRules []string
+	for idx := range c.ipts {
+		rules, err := c.ipts[idx].List(table, chain)
+		if err != nil {
+			return rules, fmt.Errorf("error getting rules from table %s chain %s: %v", table, chain, err)
+		}
+		allRules = append(allRules, rules...)
+	}
+	return allRules, nil
+}
+
+// Restore calls iptable-restore to restore iptables with the provided content.
 // If flush is true, all previous contents of the respective tables will be flushed.
 // Otherwise only involved chains will be flushed. Restore supports "ip6tables-restore" for IPv6.
 func (c *Client) Restore(data []byte, flush bool, useIPv6 bool) error {

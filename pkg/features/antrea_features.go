@@ -52,6 +52,10 @@ const (
 	// alpha: v0.10
 	// Enable collecting and exposing NetworkPolicy statistics.
 	NetworkPolicyStats featuregate.Feature = "NetworkPolicyStats"
+
+	// alpha: v0.13
+	// Expose Pod ports through NodePort
+	NodePortLocal featuregate.Feature = "NodePortLocal"
 )
 
 var (
@@ -71,6 +75,7 @@ var (
 		Traceflow:          {Default: true, PreRelease: featuregate.Beta},
 		FlowExporter:       {Default: false, PreRelease: featuregate.Alpha},
 		NetworkPolicyStats: {Default: false, PreRelease: featuregate.Alpha},
+		NodePortLocal:      {Default: false, PreRelease: featuregate.Alpha},
 	}
 
 	// UnsupportedFeaturesOnWindows records the features not supported on
@@ -83,7 +88,9 @@ var (
 	// In future, if a feature is supported on both Linux and Windows, but
 	// can have different FeatureSpecs between Linux and Windows, we should
 	// still define a separate defaultAntreaFeatureGates map for Windows.
-	unsupportedFeaturesOnWindows = map[featuregate.Feature]struct{}{}
+	unsupportedFeaturesOnWindows = map[featuregate.Feature]struct{}{
+		NodePortLocal: {},
+	}
 )
 
 func init() {
