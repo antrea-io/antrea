@@ -49,10 +49,8 @@ func TestProcessClusterGroup(t *testing.T) {
 				},
 			},
 			expectedGroup: &antreatypes.Group{
-				UID: "uidA",
-				SourceRef: &antreatypes.GroupReference{
-					Name: "cgA",
-				},
+				UID:      "uidA",
+				Name:     "cgA",
 				Selector: *toGroupSelector("", nil, &selectorA, nil),
 			},
 		},
@@ -65,10 +63,8 @@ func TestProcessClusterGroup(t *testing.T) {
 				},
 			},
 			expectedGroup: &antreatypes.Group{
-				UID: "uidB",
-				SourceRef: &antreatypes.GroupReference{
-					Name: "cgB",
-				},
+				UID:      "uidB",
+				Name:     "cgB",
 				Selector: *toGroupSelector("", &selectorB, nil, nil),
 			},
 		},
@@ -82,10 +78,8 @@ func TestProcessClusterGroup(t *testing.T) {
 				},
 			},
 			expectedGroup: &antreatypes.Group{
-				UID: "uidC",
-				SourceRef: &antreatypes.GroupReference{
-					Name: "cgC",
-				},
+				UID:      "uidC",
+				Name:     "cgC",
 				Selector: *toGroupSelector("", &selectorC, &selectorD, nil),
 			},
 		},
@@ -100,10 +94,8 @@ func TestProcessClusterGroup(t *testing.T) {
 				},
 			},
 			expectedGroup: &antreatypes.Group{
-				UID: "uidD",
-				SourceRef: &antreatypes.GroupReference{
-					Name: "cgD",
-				},
+				UID:  "uidD",
+				Name: "cgD",
 				IPBlock: &controlplane.IPBlock{
 					CIDR:   *cidrIPNet,
 					Except: []controlplane.IPNet{},
@@ -141,10 +133,8 @@ func TestAddClusterGroup(t *testing.T) {
 				},
 			},
 			expectedGroup: &antreatypes.Group{
-				UID: "uidA",
-				SourceRef: &antreatypes.GroupReference{
-					Name: "cgA",
-				},
+				UID:      "uidA",
+				Name:     "cgA",
 				Selector: *toGroupSelector("", nil, &selectorA, nil),
 			},
 		},
@@ -157,10 +147,8 @@ func TestAddClusterGroup(t *testing.T) {
 				},
 			},
 			expectedGroup: &antreatypes.Group{
-				UID: "uidB",
-				SourceRef: &antreatypes.GroupReference{
-					Name: "cgB",
-				},
+				UID:      "uidB",
+				Name:     "cgB",
 				Selector: *toGroupSelector("", &selectorB, nil, nil),
 			},
 		},
@@ -174,10 +162,8 @@ func TestAddClusterGroup(t *testing.T) {
 				},
 			},
 			expectedGroup: &antreatypes.Group{
-				UID: "uidC",
-				SourceRef: &antreatypes.GroupReference{
-					Name: "cgC",
-				},
+				UID:      "uidC",
+				Name:     "cgC",
 				Selector: *toGroupSelector("", &selectorC, &selectorD, nil),
 			},
 		},
@@ -192,10 +178,8 @@ func TestAddClusterGroup(t *testing.T) {
 				},
 			},
 			expectedGroup: &antreatypes.Group{
-				UID: "uidD",
-				SourceRef: &antreatypes.GroupReference{
-					Name: "cgD",
-				},
+				UID:  "uidD",
+				Name: "cgD",
 				IPBlock: &controlplane.IPBlock{
 					CIDR:   *cidrIPNet,
 					Except: []controlplane.IPNet{},
@@ -242,10 +226,8 @@ func TestUpdateClusterGroup(t *testing.T) {
 				},
 			},
 			expectedGroup: &antreatypes.Group{
-				UID: "uidA",
-				SourceRef: &antreatypes.GroupReference{
-					Name: "cgA",
-				},
+				UID:      "uidA",
+				Name:     "cgA",
 				Selector: *toGroupSelector("", nil, &selectorB, nil),
 			},
 		},
@@ -258,10 +240,8 @@ func TestUpdateClusterGroup(t *testing.T) {
 				},
 			},
 			expectedGroup: &antreatypes.Group{
-				UID: "uidA",
-				SourceRef: &antreatypes.GroupReference{
-					Name: "cgA",
-				},
+				UID:      "uidA",
+				Name:     "cgA",
 				Selector: *toGroupSelector("", &selectorC, nil, nil),
 			},
 		},
@@ -275,10 +255,8 @@ func TestUpdateClusterGroup(t *testing.T) {
 				},
 			},
 			expectedGroup: &antreatypes.Group{
-				UID: "uidA",
-				SourceRef: &antreatypes.GroupReference{
-					Name: "cgA",
-				},
+				UID:      "uidA",
+				Name:     "cgA",
 				Selector: *toGroupSelector("", &selectorC, &selectorD, nil),
 			},
 		},
@@ -293,10 +271,8 @@ func TestUpdateClusterGroup(t *testing.T) {
 				},
 			},
 			expectedGroup: &antreatypes.Group{
-				UID: "uidA",
-				SourceRef: &antreatypes.GroupReference{
-					Name: "cgA",
-				},
+				UID:  "uidA",
+				Name: "cgA",
 				IPBlock: &controlplane.IPBlock{
 					CIDR:   *cidrIPNet,
 					Except: []controlplane.IPNet{},

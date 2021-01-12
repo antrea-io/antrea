@@ -21,12 +21,6 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
 )
 
-// GroupReference is the reference to the ClusterGroup for which an internal Group is created.
-type GroupReference struct {
-	// Name of the ClusterGroup.
-	Name string
-}
-
 // GroupSelector describes how to select GroupMembers.
 type GroupSelector struct {
 	// The normalized name is calculated from Namespace, PodSelector, ExternalEntitySelector and NamespaceSelector.
@@ -59,8 +53,8 @@ type Group struct {
 	// UID is a unique identifier of this internal Group. It is same as that of the ClusterGroup
 	// resource UID.
 	UID types.UID
-	// Reference to the ClusterGroup for which this internal Group is created.
-	SourceRef *GroupReference
+	// Name of the ClusterGroup for which this internal Group is created.
+	Name string
 	// Selector describes how the internal group selects Pods to get their addresses.
 	Selector GroupSelector
 	// GroupMembers is a set of GroupMembers selected by this internal group.

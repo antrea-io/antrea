@@ -87,10 +87,8 @@ func (n *NetworkPolicyController) deleteClusterGroup(oldObj interface{}) {
 
 func (n *NetworkPolicyController) processClusterGroup(cg *corev1a2.ClusterGroup) *antreatypes.Group {
 	internalGroup := antreatypes.Group{
-		SourceRef: &antreatypes.GroupReference{
-			Name: cg.Name,
-		},
-		UID: cg.UID,
+		Name: cg.Name,
+		UID:  cg.UID,
 	}
 	if cg.Spec.IPBlock != nil {
 		ipb, _ := toAntreaIPBlockForCRD(cg.Spec.IPBlock)
@@ -194,7 +192,7 @@ func (n *NetworkPolicyController) syncInternalGroup(key string) error {
 	// Update the internal Group object in the store with the Pods as GroupMembers.
 	updatedGrp := &antreatypes.Group{
 		UID:          grp.UID,
-		SourceRef:    grp.SourceRef,
+		Name:         grp.Name,
 		Selector:     grp.Selector,
 		GroupMembers: memberSet,
 	}
