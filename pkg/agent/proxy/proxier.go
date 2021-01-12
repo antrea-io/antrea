@@ -27,6 +27,7 @@ import (
 	utilnet "k8s.io/utils/net"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
+	"github.com/vmware-tanzu/antrea/pkg/agent/proxy/metrics"
 	"github.com/vmware-tanzu/antrea/pkg/agent/proxy/types"
 	"github.com/vmware-tanzu/antrea/pkg/agent/querier"
 	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
@@ -39,7 +40,6 @@ const (
 	componentName = "antrea-agent-proxy"
 )
 
-// TODO: Add metrics
 type proxier struct {
 	once            sync.Once
 	endpointsConfig *config.EndpointsConfig
@@ -290,6 +290,12 @@ func (p *proxier) installServices() {
 func (p *proxier) syncProxyRules() {
 	start := time.Now()
 	defer func() {
+		delta := time.Since(start)
+		if p.isIPv6 {
+			metrics.SyncProxyDuration.Observe(delta.Seconds())
+		} else {
+			metrics.SyncProxyDurationV6.Observe(delta.Seconds())
+		}
 		klog.V(4).Infof("syncProxyRules took %v", time.Since(start))
 	}()
 	if !p.isInitialized() {
@@ -303,6 +309,18 @@ func (p *proxier) syncProxyRules() {
 	p.removeStaleServices()
 	p.installServices()
 	p.removeStaleEndpoints(staleEndpoints)
+
+	counter := 0
+	for _, endpoints := range p.endpointsMap {
+		counter += len(endpoints)
+	}
+	if p.isIPv6 {
+		metrics.ServicesInstalledTotalV6.Set(float64(len(p.serviceMap)))
+		metrics.EndpointsInstalledTotalV6.Set(float64(counter))
+	} else {
+		metrics.ServicesInstalledTotal.Set(float64(len(p.serviceMap)))
+		metrics.EndpointsInstalledTotal.Set(float64(counter))
+	}
 }
 
 func (p *proxier) SyncLoop() {
@@ -314,6 +332,11 @@ func (p *proxier) OnEndpointsAdd(endpoints *corev1.Endpoints) {
 }
 
 func (p *proxier) OnEndpointsUpdate(oldEndpoints, endpoints *corev1.Endpoints) {
+	if p.isIPv6 {
+		metrics.EndpointsUpdatesTotalV6.Inc()
+	} else {
+		metrics.EndpointsUpdatesTotal.Inc()
+	}
 	if p.endpointsChanges.OnEndpointUpdate(oldEndpoints, endpoints) && p.isInitialized() {
 		p.runner.Run()
 	}
@@ -335,6 +358,11 @@ func (p *proxier) OnServiceAdd(service *corev1.Service) {
 }
 
 func (p *proxier) OnServiceUpdate(oldService, service *corev1.Service) {
+	if p.isIPv6 {
+		metrics.ServicesUpdatesTotalV6.Inc()
+	} else {
+		metrics.ServicesUpdatesTotal.Inc()
+	}
 	var isIPv6 bool
 	if oldService != nil {
 		isIPv6 = utilnet.IsIPv6String(oldService.Spec.ClusterIP)
@@ -399,7 +427,7 @@ func NewProxier(
 		runtime.NewScheme(),
 		corev1.EventSource{Component: componentName, Host: hostname},
 	)
-
+	metrics.Register()
 	klog.Infof("Creating proxier with IPv6 enabled=%t", isIPv6)
 	p := &proxier{
 		endpointsConfig:      config.NewEndpointsConfig(informerFactory.Core().V1().Endpoints(), resyncPeriod),

@@ -20,15 +20,18 @@ import (
 	"testing"
 
 	"github.com/golang/mock/gomock"
+	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	apimachinerytypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/component-base/metrics/testutil"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	ofmock "github.com/vmware-tanzu/antrea/pkg/agent/openflow/testing"
+	"github.com/vmware-tanzu/antrea/pkg/agent/proxy/metrics"
 	"github.com/vmware-tanzu/antrea/pkg/agent/proxy/types"
 	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
 	k8sproxy "github.com/vmware-tanzu/antrea/third_party/proxy"
@@ -209,6 +212,7 @@ func testClusterIPRemoval(t *testing.T, svcIP net.IP, epIP net.IP, isIPv6 bool) 
 	fp.syncProxyRules()
 
 	fp.serviceChanges.OnServiceUpdate(service, nil)
+	fp.endpointsChanges.OnEndpointUpdate(ep, nil)
 	fp.syncProxyRules()
 }
 
@@ -594,4 +598,58 @@ func TestPortChangeIPv4(t *testing.T) {
 
 func TestPortChangeIPv6(t *testing.T) {
 	testPortChange(t, net.ParseIP("10:20::41"), net.ParseIP("10:180::1"), true)
+}
+
+func TestMetrics(t *testing.T) {
+	metrics.Register()
+
+	for _, tc := range []struct {
+		name        string
+		svcIP, epIP string
+		isIPv6      bool
+	}{
+		{"IPv4", "10.20.30.41", "10.180.0.1", false},
+		{"IPv6", "fc01::1", "fe01::1", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			endpointsUpdateTotalMetric := metrics.EndpointsUpdatesTotal.CounterMetric
+			servicesUpdateTotalMetric := metrics.ServicesUpdatesTotal.CounterMetric
+			endpointsInstallMetric := metrics.EndpointsInstalledTotal.GaugeMetric
+			servicesInstallMetric := metrics.ServicesInstalledTotal.GaugeMetric
+			if tc.isIPv6 {
+				endpointsUpdateTotalMetric = metrics.EndpointsUpdatesTotalV6.CounterMetric
+				servicesUpdateTotalMetric = metrics.ServicesUpdatesTotalV6.CounterMetric
+				endpointsInstallMetric = metrics.EndpointsInstalledTotalV6.GaugeMetric
+				servicesInstallMetric = metrics.ServicesInstalledTotalV6.GaugeMetric
+			}
+			testClusterIP(t, net.ParseIP(tc.svcIP), net.ParseIP(tc.epIP), tc.isIPv6)
+			v, err := testutil.GetCounterMetricValue(endpointsUpdateTotalMetric)
+			assert.NoError(t, err)
+			assert.Equal(t, 0, int(v))
+			v, err = testutil.GetCounterMetricValue(servicesUpdateTotalMetric)
+			assert.Equal(t, 0, int(v))
+			assert.NoError(t, err)
+			v, err = testutil.GetGaugeMetricValue(servicesInstallMetric)
+			assert.Equal(t, 1, int(v))
+			assert.NoError(t, err)
+			v, err = testutil.GetGaugeMetricValue(endpointsInstallMetric)
+			assert.Equal(t, 1, int(v))
+			assert.NoError(t, err)
+
+			testClusterIPRemoval(t, net.ParseIP(tc.svcIP), net.ParseIP(tc.epIP), tc.isIPv6)
+
+			v, err = testutil.GetCounterMetricValue(endpointsUpdateTotalMetric)
+			assert.NoError(t, err)
+			assert.Equal(t, 0, int(v))
+			v, err = testutil.GetCounterMetricValue(servicesUpdateTotalMetric)
+			assert.Equal(t, 0, int(v))
+			assert.NoError(t, err)
+			v, err = testutil.GetGaugeMetricValue(servicesInstallMetric)
+			assert.Equal(t, 0, int(v))
+			assert.NoError(t, err)
+			v, err = testutil.GetGaugeMetricValue(endpointsInstallMetric)
+			assert.Equal(t, 0, int(v))
+			assert.NoError(t, err)
+		})
+	}
 }
