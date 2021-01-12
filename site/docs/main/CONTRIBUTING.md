@@ -12,6 +12,7 @@ to effectively get it merged upstream.
   - [Contribute](#contribute)
     - [GitHub Workflow](#github-workflow)
     - [Getting reviewers](#getting-reviewers)
+    - [Inclusive Naming](#inclusive-naming)
     - [Building and testing your change](#building-and-testing-your-change)
     - [CI testing](#ci-testing)
     - [Reverting a commit](#reverting-a-commit)
@@ -144,6 +145,18 @@ If your PR fixes a bug or implements a new feature, add the appropriate test
 cases to our [automated test suite](https://github.com/vmware-tanzu/antrea/blob/master/ci/README.md) to guarantee enough
 coverage. A PR that makes significant code changes without contributing new test
 cases will be flagged by reviewers and will not be accepted.
+
+### Inclusive Naming
+
+For symbol names and documentation, do not introduce new usage of harmful
+language such as 'master / slave' (or 'slave' independent of 'master') and
+'blacklist / whitelist'. For more information about what constitutes harmful
+language and for a reference word replacement list, please refer to the
+[Inclusive Naming Initiative](https://inclusivenaming.org/).
+
+We are committed to removing all harmful language from the project. If you
+detect existing usage of harmful language in code or documentation, please
+report the issue to us or open a Pull Request to address it directly. Thanks!
 
 ### Building and testing your change
 
