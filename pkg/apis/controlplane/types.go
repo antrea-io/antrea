@@ -293,10 +293,13 @@ type NetworkPolicyNodeStatus struct {
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // Group is the message format of antrea/pkg/controller/types.Group in an API response.
+// An internal Group is created corresponding to a ClusterGroup resource, i.e. it is a
+// 1:1 mapping. The UID of this Group is the same as that of it's corresponding ClusterGroup.
 type Group struct {
 	metav1.TypeMeta
 	metav1.ObjectMeta
-	// GroupMembers is a list of resources selected by this group.
+	// GroupMembers is a list of resources selected by this Group based on the selectors
+	// present in the corresponding ClusterGroup.
 	GroupMembers []GroupMember
 }
 

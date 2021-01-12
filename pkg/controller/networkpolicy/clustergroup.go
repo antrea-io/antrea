@@ -88,8 +88,7 @@ func (n *NetworkPolicyController) deleteClusterGroup(oldObj interface{}) {
 func (n *NetworkPolicyController) processClusterGroup(cg *corev1a2.ClusterGroup) *antreatypes.Group {
 	internalGroup := antreatypes.Group{
 		SourceRef: &antreatypes.GroupReference{
-			Namespace: "",
-			Name:      cg.Name,
+			Name: cg.Name,
 		},
 		UID: cg.UID,
 	}

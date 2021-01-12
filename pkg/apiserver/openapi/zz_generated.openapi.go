@@ -2179,7 +2179,7 @@ func schema_pkg_apis_controlplane_v1beta2_Group(ref common.ReferenceCallback) co
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "Group is the message format of antrea/pkg/controller/types.Group in an API response.",
+				Description: "Group is the message format of antrea/pkg/controller/types.Group in an API response. An internal Group is created corresponding to a ClusterGroup resource, i.e. it is a 1:1 mapping. The UID of this Group is the same as that of it's corresponding ClusterGroup.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"kind": {
@@ -2203,7 +2203,7 @@ func schema_pkg_apis_controlplane_v1beta2_Group(ref common.ReferenceCallback) co
 					},
 					"groupMembers": {
 						SchemaProps: spec.SchemaProps{
-							Description: "GroupMembers is list of resources selected by this group.",
+							Description: "\n GroupMembers is a list of resources selected by this Group based on the selectors\n\tpresent in the corresponding ClusterGroup.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
