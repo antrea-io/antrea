@@ -188,6 +188,17 @@ func TestPodFlows(t *testing.T) {
 			calledTrace:    true,
 			expectedStatus: http.StatusOK,
 		},
+		{
+			test:           "Invalid flow expression",
+			query:          "?flow=in_port=123%3Bpwd", // %3B is an escaped semi-colon
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			test:           "Flow expression",
+			query:          "?flow=in_port=3,tcp,nw_src=192.0.2.2,tcp_dst=22",
+			calledTrace:    true,
+			expectedStatus: http.StatusOK,
+		},
 	}
 	for i := range testcases {
 		tc := testcases[i]

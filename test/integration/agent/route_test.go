@@ -29,6 +29,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/vishvananda/netlink"
+	"golang.org/x/net/nettest"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/agent/route"
@@ -73,23 +74,23 @@ func createDummyGW(t *testing.T) netlink.Link {
 	// create dummy gw interface
 	gwLink := &netlink.Dummy{}
 	gwLink.Name = gwName
-	if err := netlink.LinkAdd(gwLink); err != nil {
-		t.Error(err)
-	}
+	assert.NoError(t, netlink.LinkAdd(gwLink))
 	link, _ := netlink.LinkByName(gwLink.Name)
-	if err := netlink.LinkSetUp(link); err != nil {
-		t.Error(err)
-	}
+	assert.NoError(t, netlink.LinkSetUp(link))
 	nodeConfig.GatewayConfig.LinkIndex = link.Attrs().Index
 	nodeConfig.GatewayConfig.Name = gwLink.Attrs().Name
 	return link
 }
 
-func TestInitialize(t *testing.T) {
+func skipIfNotInContainer(t *testing.T) {
 	if _, incontainer := os.LookupEnv("INCONTAINER"); !incontainer {
 		// test changes file system, routing table. Run in contain only
-		t.Skipf("Skip test runs only in container")
+		t.Skipf("Skipping test which is run only in container")
 	}
+}
+
+func TestInitialize(t *testing.T) {
+	skipIfNotInContainer(t)
 
 	link := createDummyGW(t)
 	defer netlink.LinkDel(link)
@@ -137,9 +138,7 @@ func TestInitialize(t *testing.T) {
 	for _, tc := range tcs {
 		t.Logf("Running Initialize test with mode %s node config %s", tc.networkConfig.TrafficEncapMode, nodeConfig)
 		routeClient, err := route.NewClient(serviceCIDR, tc.networkConfig, tc.noSNAT)
-		if err != nil {
-			t.Error(err)
-		}
+		assert.NoError(t, err)
 
 		var xtablesReleasedTime, initializedTime time.Time
 		if tc.xtablesHoldDuration > 0 {
@@ -152,12 +151,11 @@ func TestInitialize(t *testing.T) {
 			}()
 		}
 		inited1 := make(chan struct{})
-		if err := routeClient.Initialize(nodeConfig, func() {
+		err = routeClient.Initialize(nodeConfig, func() {
 			initializedTime = time.Now()
 			close(inited1)
-		}); err != nil {
-			t.Error(err)
-		}
+		})
+		assert.NoError(t, err)
 
 		select {
 		case <-time.After(tc.xtablesHoldDuration + 3*time.Second):
@@ -171,11 +169,10 @@ func TestInitialize(t *testing.T) {
 
 		inited2 := make(chan struct{})
 		// Call initialize twice and verify no duplicates
-		if err := routeClient.Initialize(nodeConfig, func() {
+		err = routeClient.Initialize(nodeConfig, func() {
 			close(inited2)
-		}); err != nil {
-			t.Error(err)
-		}
+		})
+		assert.NoError(t, err)
 
 		select {
 		case <-time.After(3 * time.Second):
@@ -238,10 +235,7 @@ func TestInitialize(t *testing.T) {
 }
 
 func TestAddAndDeleteRoutes(t *testing.T) {
-	if _, incontainer := os.LookupEnv("INCONTAINER"); !incontainer {
-		// test changes file system, routing table. Run in contain only
-		t.Skipf("Skip test runs only in container")
-	}
+	skipIfNotInContainer(t)
 
 	gwLink := createDummyGW(t)
 	defer netlink.LinkDel(gwLink)
@@ -264,18 +258,13 @@ func TestAddAndDeleteRoutes(t *testing.T) {
 	for _, tc := range tcs {
 		t.Logf("Running test with mode %s peer cidr %s peer ip %s node config %s", tc.mode, tc.peerCIDR, tc.peerIP, nodeConfig)
 		routeClient, err := route.NewClient(serviceCIDR, &config.NetworkConfig{TrafficEncapMode: tc.mode}, false)
-		if err != nil {
-			t.Error(err)
-		}
-		if err := routeClient.Initialize(nodeConfig, func() {}); err != nil {
-			t.Error(err)
-		}
+		assert.NoError(t, err)
+		err = routeClient.Initialize(nodeConfig, func() {})
+		assert.NoError(t, err)
 
 		_, peerCIDR, _ := net.ParseCIDR(tc.peerCIDR)
 		nhCIDRIP := ip.NextIP(peerCIDR.IP)
-		if err := routeClient.AddRoutes(peerCIDR, tc.peerIP, nhCIDRIP); err != nil {
-			t.Errorf("route add failed with err %v", err)
-		}
+		assert.NoError(t, routeClient.AddRoutes(peerCIDR, tc.peerIP, nhCIDRIP), "adding routes failed")
 
 		expRouteStr := ""
 		if tc.uplink != nil {
@@ -292,17 +281,13 @@ func TestAddAndDeleteRoutes(t *testing.T) {
 		if len(ipRoute) > len(expRouteStr) {
 			ipRoute = ipRoute[:len(expRouteStr)]
 		}
-		if !assert.Equal(t, expRouteStr, ipRoute) {
-			t.Errorf("mismatch route")
-		}
+		assert.Equal(t, expRouteStr, ipRoute, "route mismatch")
 
 		entries, err := ipset.ListEntries("ANTREA-POD-IP")
 		assert.NoError(t, err, "list ipset entries failed")
 		assert.Contains(t, entries, tc.peerCIDR, "entry should be in ipset")
 
-		if err := routeClient.DeleteRoutes(peerCIDR); err != nil {
-			t.Errorf("route delete failed with err %v", err)
-		}
+		assert.NoError(t, routeClient.DeleteRoutes(peerCIDR), "deleting routes failed")
 		output, err := ExecOutputTrim(fmt.Sprintf("ip route show table 0 exact %s", peerCIDR))
 		assert.NoError(t, err)
 		assert.Equal(t, "", output, "expected no routes to %s", peerCIDR)
@@ -314,10 +299,7 @@ func TestAddAndDeleteRoutes(t *testing.T) {
 }
 
 func TestReconcile(t *testing.T) {
-	if _, incontainer := os.LookupEnv("INCONTAINER"); !incontainer {
-		// test changes file system, routing table. Run in contain only
-		t.Skipf("Skip test runs only in container")
-	}
+	skipIfNotInContainer(t)
 
 	gwLink := createDummyGW(t)
 	defer netlink.LinkDel(gwLink)
@@ -372,24 +354,17 @@ func TestReconcile(t *testing.T) {
 	for _, tc := range tcs {
 		t.Logf("Running test with mode %s added routes %v desired routes %v", tc.mode, tc.addedRoutes, tc.desiredPeerCIDRs)
 		routeClient, err := route.NewClient(serviceCIDR, &config.NetworkConfig{TrafficEncapMode: tc.mode}, false)
-		if err != nil {
-			t.Error(err)
-		}
-		if err := routeClient.Initialize(nodeConfig, func() {}); err != nil {
-			t.Error(err)
-		}
+		assert.NoError(t, err)
+		err = routeClient.Initialize(nodeConfig, func() {})
+		assert.NoError(t, err)
 
 		for _, route := range tc.addedRoutes {
 			_, peerNet, _ := net.ParseCIDR(route.peerCIDR)
 			peerGwIP := ip.NextIP(peerNet.IP)
-			if err := routeClient.AddRoutes(peerNet, route.peerIP, peerGwIP); err != nil {
-				t.Errorf("route add failed with err %v", err)
-			}
+			assert.NoError(t, routeClient.AddRoutes(peerNet, route.peerIP, peerGwIP), "adding routes failed")
 		}
 
-		if err := routeClient.Reconcile(tc.desiredPeerCIDRs); err != nil {
-			t.Errorf("Reconcile failed with err %v", err)
-		}
+		assert.NoError(t, routeClient.Reconcile(tc.desiredPeerCIDRs), "reconcile failed")
 
 		for dst, uplink := range tc.expRoutes {
 			expNum := 0
@@ -411,27 +386,19 @@ func TestReconcile(t *testing.T) {
 }
 
 func TestRouteTablePolicyOnly(t *testing.T) {
-	if _, incontainer := os.LookupEnv("INCONTAINER"); !incontainer {
-		// test changes file system, routing table. Run in contain only
-		t.Skipf("Skip test runs only in container")
-	}
+	skipIfNotInContainer(t)
 
 	gwLink := createDummyGW(t)
 	defer netlink.LinkDel(gwLink)
 
 	routeClient, err := route.NewClient(serviceCIDR, &config.NetworkConfig{TrafficEncapMode: config.TrafficEncapModeNetworkPolicyOnly}, false)
-	if err != nil {
-		t.Error(err)
-	}
-	if err := routeClient.Initialize(nodeConfig, func() {}); err != nil {
-		t.Error(err)
-	}
+	assert.NoError(t, err)
+	err = routeClient.Initialize(nodeConfig, func() {})
+	assert.NoError(t, err)
 	// Verify gw IP
 	gwName := nodeConfig.GatewayConfig.Name
 	gwIPOut, err := ExecOutputTrim(fmt.Sprintf("ip addr show %s", gwName))
-	if err != nil {
-		t.Error(err)
-	}
+	assert.NoError(t, err)
 	gwIP := net.IPNet{
 		IP:   nodeConfig.NodeIPAddr.IP,
 		Mask: net.CIDRMask(32, 32),
@@ -440,33 +407,23 @@ func TestRouteTablePolicyOnly(t *testing.T) {
 
 	cLink := &netlink.Dummy{}
 	cLink.Name = "containerLink"
-	err = netlink.LinkAdd(cLink)
-	if err == nil {
-		err = netlink.LinkSetUp(cLink)
-	}
-	if err != nil {
-		t.Error(err)
-	}
+	assert.NoError(t, netlink.LinkAdd(cLink), "creating linked failed")
+	assert.NoError(t, netlink.LinkSetUp(cLink), "setting-up link failed")
 
 	_, ipAddr, _ := net.ParseCIDR("10.10.1.1/32")
 	_, hostRt, _ := net.ParseCIDR("10.10.1.2/32")
-	if err := netlink.AddrAdd(cLink, &netlink.Addr{IPNet: ipAddr}); err != nil {
-		t.Error(err)
-	}
+	assert.NoError(t, netlink.AddrAdd(cLink, &netlink.Addr{IPNet: ipAddr}), "configuring IP on link failed")
 	rt := &netlink.Route{
 		LinkIndex: cLink.Index,
 		Scope:     netlink.SCOPE_LINK,
 		Dst:       hostRt,
 	}
-	if err := netlink.RouteAdd(rt); err != nil {
-		t.Error(err)
+	if assert.NoError(t, netlink.RouteAdd(rt)) {
+		t.Logf("route added: %v - output interface index: %d - input interface index: %d", rt, rt.LinkIndex, rt.ILinkIndex)
 	}
-	t.Logf("route %v indx %d, iindx %d added", rt, rt.LinkIndex, rt.ILinkIndex)
 
 	// verify route is migrated.
-	if err := routeClient.MigrateRoutesToGw(cLink.Name); err != nil {
-		t.Error(err)
-	}
+	assert.NoError(t, routeClient.MigrateRoutesToGw(cLink.Name))
 	expRoute := strings.Join(strings.Fields(
 		fmt.Sprintf("%s dev %s scope link", hostRt.IP, gwName)), "")
 	output, _ := ExecOutputTrim(fmt.Sprintf("ip route show"))
@@ -475,9 +432,7 @@ func TestRouteTablePolicyOnly(t *testing.T) {
 	assert.Containsf(t, output, ipAddr.String(), output)
 
 	// verify route being removed after unmigrate
-	if err := routeClient.UnMigrateRoutesFromGw(hostRt, ""); err != nil {
-		t.Error(err)
-	}
+	assert.NoError(t, routeClient.UnMigrateRoutesFromGw(hostRt, ""))
 	output, _ = ExecOutputTrim(fmt.Sprintf("ip route show"))
 	assert.NotContainsf(t, output, expRoute, output)
 	// note unmigrate does not remove ip addresses given to antrea-gw0
@@ -487,9 +442,9 @@ func TestRouteTablePolicyOnly(t *testing.T) {
 }
 
 func TestIPv6RoutesAndNeighbors(t *testing.T) {
-	if _, incontainer := os.LookupEnv("INCONTAINER"); !incontainer {
-		// test changes file system, routing table. Run in contain only
-		t.Skipf("Skip test runs only in container")
+	skipIfNotInContainer(t)
+	if !nettest.SupportsIPv6() {
+		t.Skipf("Skipping test as IPv6 is not supported")
 	}
 
 	gwLink := createDummyGW(t)
@@ -523,9 +478,7 @@ func TestIPv6RoutesAndNeighbors(t *testing.T) {
 	for _, tc := range tcs {
 		_, peerCIDR, _ := net.ParseCIDR(tc.peerCIDR)
 		nhCIDRIP := ip.NextIP(peerCIDR.IP)
-		if err := routeClient.AddRoutes(peerCIDR, localPeerIP, nhCIDRIP); err != nil {
-			t.Errorf("route add failed with err %v", err)
-		}
+		assert.NoError(t, routeClient.AddRoutes(peerCIDR, localPeerIP, nhCIDRIP), "adding routes failed")
 
 		link := tc.uplink
 		nhIP := nhCIDRIP
@@ -544,21 +497,15 @@ func TestIPv6RoutesAndNeighbors(t *testing.T) {
 		if len(ipRoute) > len(expRouteStr) {
 			ipRoute = ipRoute[:len(expRouteStr)]
 		}
-		if !assert.Equal(t, expRouteStr, ipRoute) {
-			t.Errorf("mismatch route")
-		}
+		assert.Equal(t, expRouteStr, ipRoute, "route mismatch")
 		if expNeighStr != "" {
 			expNeighStr = strings.Join(strings.Fields(expNeighStr), "")
 			if len(ipNeigh) > len(expNeighStr) {
 				ipNeigh = ipNeigh[:len(expNeighStr)]
 			}
-			if !assert.Equal(t, expNeighStr, ipNeigh) {
-				t.Errorf("mismatch IPv6 Neighbor")
-			}
+			assert.Equal(t, expNeighStr, ipNeigh, "IPv6 Neighbor mismatch")
 		}
-		if err := routeClient.DeleteRoutes(peerCIDR); err != nil {
-			t.Errorf("route delete failed with err %v", err)
-		}
+		assert.NoError(t, routeClient.DeleteRoutes(peerCIDR), "deleting routes failed")
 		output, err := ExecOutputTrim(fmt.Sprintf("ip route show table 0 exact %s", peerCIDR))
 		assert.NoError(t, err)
 		assert.Equal(t, "", output, "expected no routes to %s", peerCIDR)

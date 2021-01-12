@@ -418,7 +418,7 @@ func (c *client) InstallEndpointFlows(protocol binding.Protocol, endpoints []pro
 		var flows []binding.Flow
 		endpointPort, _ := endpoint.Port()
 		endpointIP := parser(endpoint.IP())
-		portVal := uint16(endpointPort)
+		portVal := portToUint16(endpointPort)
 		cacheKey := fmt.Sprintf("Endpoints_%s_%d_%s", endpointIP, endpointPort, protocol)
 		flows = append(flows, c.endpointDNATFlow(endpointIP, portVal, protocol))
 		if endpoint.GetIsLocal() {
@@ -485,14 +485,12 @@ func (c *client) InstallClusterServiceFlows() error {
 		c.l2ForwardOutputServiceHairpinFlow(),
 	}
 	if c.IsIPv4Enabled() {
-		flows = append(flows,
-			c.serviceHairpinResponseDNATFlow(binding.ProtocolIP),
-			c.serviceLBBypassFlow(binding.ProtocolIP))
+		flows = append(flows, c.serviceHairpinResponseDNATFlow(binding.ProtocolIP))
+		flows = append(flows, c.serviceLBBypassFlows(binding.ProtocolIP)...)
 	}
 	if c.IsIPv6Enabled() {
-		flows = append(flows,
-			c.serviceHairpinResponseDNATFlow(binding.ProtocolIPv6),
-			c.serviceLBBypassFlow(binding.ProtocolIPv6))
+		flows = append(flows, c.serviceHairpinResponseDNATFlow(binding.ProtocolIPv6))
+		flows = append(flows, c.serviceLBBypassFlows(binding.ProtocolIPv6)...)
 	}
 	if err := c.ofEntryOperations.AddAll(flows); err != nil {
 		return err

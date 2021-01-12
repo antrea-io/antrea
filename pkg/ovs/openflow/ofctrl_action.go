@@ -58,22 +58,6 @@ func (a *ofFlowAction) CT(commit bool, tableID TableIDType, zone int) CTAction {
 		ctTable: uint8(tableID),
 		ctZone:  uint16(zone),
 	}
-	var repr string
-	if commit {
-		repr += "commit"
-	}
-	if tableID != LastTableID {
-		if repr != "" {
-			repr += ","
-		}
-		repr += fmt.Sprintf("table=%d", tableID)
-	}
-	if zone > 0 {
-		if repr != "" {
-			repr += ","
-		}
-		repr += fmt.Sprintf("zone=%d", zone)
-	}
 	ct := &ofCTAction{
 		ctBase:  base,
 		builder: a.builder,
@@ -404,7 +388,8 @@ func (a *ofLearnAction) MatchTransportDst(protocol Protocol) LearnAction {
 	a.nxLearn.AddMatch(&ofctrl.LearnField{Name: "NXM_OF_IP_PROTO"}, 1*8, nil, ipTypeVal)
 	// OXM_OF fields support TCP, UDP and SCTP, but NXM_OF fields only support TCP and UDP. So here using "OXM_OF_" to
 	// generate the field name.
-	fieldName := fmt.Sprintf("OXM_OF_%s_DST", strings.ToUpper(string(protocol)))
+	trimProtocol := strings.ReplaceAll(string(protocol), "v6", "")
+	fieldName := fmt.Sprintf("OXM_OF_%s_DST", strings.ToUpper(trimProtocol))
 	a.nxLearn.AddMatch(&ofctrl.LearnField{Name: fieldName}, 2*8, &ofctrl.LearnField{Name: fieldName}, nil)
 	return a
 }
@@ -457,6 +442,18 @@ func (a *ofLearnAction) MatchLearnedDstIP() LearnAction {
 	return a
 }
 
+// MatchLearnedSrcIPv6 makes the learned flow to match the ipv6_src of current IPv6 packet.
+func (a *ofLearnAction) MatchLearnedSrcIPv6() LearnAction {
+	a.nxLearn.AddMatch(&ofctrl.LearnField{Name: "NXM_NX_IPV6_SRC"}, 16*8, &ofctrl.LearnField{Name: "NXM_NX_IPV6_SRC"}, nil)
+	return a
+}
+
+// MatchLearnedDstIPv6 makes the learned flow to match the ipv6_dst of current IPv6 packet.
+func (a *ofLearnAction) MatchLearnedDstIPv6() LearnAction {
+	a.nxLearn.AddMatch(&ofctrl.LearnField{Name: "NXM_NX_IPV6_DST"}, 16*8, &ofctrl.LearnField{Name: "NXM_NX_IPV6_DST"}, nil)
+	return a
+}
+
 // MatchReg makes the learned flow to match the data in the reg of specific range.
 func (a *ofLearnAction) MatchReg(regID int, data uint32, rng Range) LearnAction {
 	toField := &ofctrl.LearnField{Name: fmt.Sprintf("NXM_NX_REG%d", regID), Start: uint16(rng[0])}
@@ -472,7 +469,7 @@ func (a *ofLearnAction) MatchReg(regID int, data uint32, rng Range) LearnAction 
 
 // MatchXXReg makes the learned flow to match the data in the xxreg of specific range.
 func (a *ofLearnAction) MatchXXReg(regID int, data []byte, rng Range) LearnAction {
-	s := fmt.Sprintf("NXM_NX_XXREG%d", regID)
+	s := fmt.Sprintf("%s%d", NxmFieldXXReg, regID)
 	toField := &ofctrl.LearnField{Name: s, Start: uint16(rng[0])}
 	offset := (rng.Length()-1)/8 + 1
 	if offset < 2 {
@@ -494,8 +491,8 @@ func (a *ofLearnAction) LoadRegToReg(fromRegID, toRegID int, fromRng, toRng Rang
 // LoadXXRegToXXReg makes the learned flow to load reg[fromXxRegID] to reg[toXxRegID]
 // with specific ranges.
 func (a *ofLearnAction) LoadXXRegToXXReg(fromXxRegID, toXxRegID int, fromRng, toRng Range) LearnAction {
-	fromField := &ofctrl.LearnField{Name: fmt.Sprintf("NXM_NX_XXREG%d", fromXxRegID), Start: uint16(fromRng[0])}
-	toField := &ofctrl.LearnField{Name: fmt.Sprintf("NXM_NX_XXREG%d", toXxRegID), Start: uint16(toRng[0])}
+	fromField := &ofctrl.LearnField{Name: fmt.Sprintf("%s%d", NxmFieldXXReg, fromXxRegID), Start: uint16(fromRng[0])}
+	toField := &ofctrl.LearnField{Name: fmt.Sprintf("%s%d", NxmFieldXXReg, toXxRegID), Start: uint16(toRng[0])}
 	a.nxLearn.AddLoadAction(toField, uint16(toRng.Length()), fromField, nil)
 	return a
 }
