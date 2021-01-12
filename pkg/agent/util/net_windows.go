@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"net"
 	"strings"
+	"time"
 
 	"github.com/Microsoft/go-winio"
 	"github.com/Microsoft/hcsshim"
@@ -32,36 +33,74 @@ import (
 )
 
 const (
-	ContainerVNICPrefix = "vEthernet"
-	HNSNetworkType      = "Transparent"
-	LocalHNSNetwork     = "antrea-hnsnetwork"
-	OVSExtensionID      = "583CC151-73EC-4A6A-8B47-578297AD7623"
-	namedPipePrefix     = `\\.\pipe\`
+	ContainerVNICPrefix  = "vEthernet"
+	HNSNetworkType       = "Transparent"
+	LocalHNSNetwork      = "antrea-hnsnetwork"
+	OVSExtensionID       = "583CC151-73EC-4A6A-8B47-578297AD7623"
+	namedPipePrefix      = `\\.\pipe\`
+	commandMaxRetry      = 5
+	commandRetryInternal = time.Second
 )
 
 func GetNSPath(containerNetNS string) (string, error) {
 	return containerNetNS, nil
 }
 
+func GetHostInterfaceStatus(ifaceName string) (string, error) {
+	cmd := fmt.Sprintf(`Get-NetAdapter -InterfaceAlias "%s" | Select-Object -Property Status | Format-Table -HideTableHeaders`, ifaceName)
+	out, err := CallPSCommand(cmd)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(out), nil
+}
+
 // EnableHostInterface sets the specified interface status as UP.
 func EnableHostInterface(ifaceName string) error {
-	cmd := fmt.Sprintf("Enable-NetAdapter -InterfaceAlias %s", ifaceName)
-	return InvokePSCommand(cmd)
+	var err error
+	var status string
+	cmd := fmt.Sprintf(`Enable-NetAdapter -InterfaceAlias "%s"`, ifaceName)
+	for i := 0; i < commandMaxRetry; i++ {
+		err = InvokePSCommand(cmd)
+		if err == nil {
+			status, err = GetHostInterfaceStatus(ifaceName)
+			if err == nil && status == "Up" {
+				return nil
+			}
+		}
+		time.Sleep(commandRetryInternal)
+	}
+	return err
 }
 
 // ConfigureInterfaceAddress adds IPAddress on the specified interface.
 func ConfigureInterfaceAddress(ifaceName string, ipConfig *net.IPNet) error {
 	ipStr := strings.Split(ipConfig.String(), "/")
-	cmd := fmt.Sprintf("New-NetIPAddress -InterfaceAlias %s -IPAddress %s -PrefixLength %s", ifaceName, ipStr[0], ipStr[1])
+	cmd := fmt.Sprintf(`New-NetIPAddress -InterfaceAlias "%s" -IPAddress %s -PrefixLength %s`, ifaceName, ipStr[0], ipStr[1])
+	for i := 0; i < commandMaxRetry; i++ {
+		err := InvokePSCommand(cmd)
+		if err == nil || strings.Contains(err.Error(), "already exists") {
+			return nil
+		}
+		time.Sleep(commandRetryInternal)
+	}
 	return InvokePSCommand(cmd)
 }
 
 // ConfigureInterfaceAddressWithDefaultGateway adds IPAddress on the specified interface and sets the default gateway
 // for the host.
 func ConfigureInterfaceAddressWithDefaultGateway(ifaceName string, ipConfig *net.IPNet, gateway string) error {
+	var err error
 	ipStr := strings.Split(ipConfig.String(), "/")
-	cmd := fmt.Sprintf("New-NetIPAddress -InterfaceAlias %s -IPAddress %s -PrefixLength %s -DefaultGateway %s", ifaceName, ipStr[0], ipStr[1], gateway)
-	return InvokePSCommand(cmd)
+	cmd := fmt.Sprintf(`New-NetIPAddress -InterfaceAlias "%s" -IPAddress %s -PrefixLength %s -DefaultGateway %s`, ifaceName, ipStr[0], ipStr[1], gateway)
+	for i := 0; i <= commandMaxRetry; i++ {
+		err = InvokePSCommand(cmd)
+		if err == nil || strings.Contains(err.Error(), "already exists") {
+			return nil
+		}
+		time.Sleep(commandRetryInternal)
+	}
+	return err
 }
 
 // EnableIPForwarding enables the IP interface to forward packets that arrive on this interface to other interfaces.

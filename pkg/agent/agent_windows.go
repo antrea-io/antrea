@@ -146,7 +146,9 @@ func (i *Initializer) prepareOVSBridge() error {
 	// - The net configuration of uplink will be restored by OS if the attached HNS network is deleted.
 	// - When ovs-switchd is down, antrea-agent will disable OVS Extension. The OVS bridge local interface will work
 	//   like a normal interface on host and is responsible for forwarding host traffic.
-	err = util.EnableHostInterface(brName)
+	if err = util.EnableHostInterface(brName); err != nil {
+		return err
+	}
 	if err = util.SetAdapterMACAddress(brName, &uplinkNetConfig.MAC); err != nil {
 		return err
 	}
