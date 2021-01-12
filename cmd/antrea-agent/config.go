@@ -124,4 +124,7 @@ type AgentConfig struct {
 	// whenever a Pod's container defines a specific port to be exposed (each container can define a list of ports as pod.spec.containers[].ports),
 	// and all Node traffic directed to that port will be forwarded to the Pod.
 	NPLPortRange string `yaml:"nplPortRange,omitempty"`
+	// Provide the address of Kubernetes apiserver, to override any value provided in kubeconfig or InClusterConfig.
+	// Defaults to "". It must be a host string, a host:port pair, or a URL to the base of the apiserver.
+	KubeAPIServerOverride string `yaml:"kubeAPIServerOverride,omitempty"`
 }
