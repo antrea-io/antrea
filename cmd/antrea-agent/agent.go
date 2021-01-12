@@ -51,6 +51,7 @@ import (
 	ofconfig "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
 	"github.com/vmware-tanzu/antrea/pkg/signals"
+	"github.com/vmware-tanzu/antrea/pkg/util/cipher"
 	"github.com/vmware-tanzu/antrea/pkg/version"
 	k8sproxy "github.com/vmware-tanzu/antrea/third_party/proxy"
 )
@@ -290,12 +291,18 @@ func run(o *Options) error {
 		go proxier.Run(stopCh)
 	}
 
+	cipherSuites, err := cipher.GenerateCipherSuitesList(o.config.TLSCipherSuites)
+	if err != nil {
+		return fmt.Errorf("error generating Cipher Suite list: %v", err)
+	}
 	apiServer, err := apiserver.New(
 		agentQuerier,
 		networkPolicyController,
 		o.config.APIPort,
 		o.config.EnablePrometheusMetrics,
-		o.config.ClientConnection.Kubeconfig)
+		o.config.ClientConnection.Kubeconfig,
+		cipherSuites,
+		cipher.TLSVersionMap[o.config.TLSMinVersion])
 	if err != nil {
 		return fmt.Errorf("error when creating agent API server: %v", err)
 	}

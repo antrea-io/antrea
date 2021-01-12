@@ -127,4 +127,8 @@ type AgentConfig struct {
 	// Provide the address of Kubernetes apiserver, to override any value provided in kubeconfig or InClusterConfig.
 	// Defaults to "". It must be a host string, a host:port pair, or a URL to the base of the apiserver.
 	KubeAPIServerOverride string `yaml:"kubeAPIServerOverride,omitempty"`
+	// Cipher suites to use.
+	TLSCipherSuites string `yaml:"tlsCipherSuites,omitempty"`
+	// TLS min version.
+	TLSMinVersion string `yaml:"tlsMinVersion,omitempty"`
 }

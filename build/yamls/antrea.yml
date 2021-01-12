@@ -1376,6 +1376,15 @@ data:
     # Provide the address of Kubernetes apiserver, to override any value provided in kubeconfig or InClusterConfig.
     # Defaults to "". It must be a host string, a host:port pair, or a URL to the base of the apiserver.
     #kubeAPIServerOverride: ""
+
+    # Comma-separated list of Cipher Suites. If omitted, the default Go Cipher Suites will be used.
+    # https://golang.org/pkg/crypto/tls/#pkg-constants
+    # Note that TLS1.3 Cipher Suites cannot be added to the list. But the apiserver will always
+    # prefer TLS1.3 Cipher Suites whenever possible.
+    #tlsCipherSuites:
+
+    # TLS min version from: VersionTLS10, VersionTLS11, VersionTLS12, VersionTLS13.
+    #tlsMinVersion:
   antrea-cni.conflist: |
     {
         "cniVersion":"0.3.0",
@@ -1427,12 +1436,21 @@ data:
     # And the Secret must be mounted to directory "/var/run/antrea/antrea-controller-tls" of the
     # antrea-controller container.
     #selfSignedCert: true
+
+    # Comma-separated list of Cipher Suites. If omitted, the default Go Cipher Suites will be used.
+    # https://golang.org/pkg/crypto/tls/#pkg-constants
+    # Note that TLS1.3 Cipher Suites cannot be added to the list. But the apiserver will always
+    # prefer TLS1.3 Cipher Suites whenever possible.
+    #tlsCipherSuites:
+
+    # TLS min version from: VersionTLS10, VersionTLS11, VersionTLS12, VersionTLS13.
+    #tlsMinVersion:
 kind: ConfigMap
 metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-2m4ktcghmf
+  name: antrea-config-6h4c4bttfd
   namespace: kube-system
 ---
 apiVersion: v1
@@ -1543,7 +1561,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-2m4ktcghmf
+          name: antrea-config-6h4c4bttfd
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -1807,7 +1825,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-2m4ktcghmf
+          name: antrea-config-6h4c4bttfd
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d
