@@ -37,6 +37,8 @@ SECRET_EXIST=false
 TEST_FAILURE=false
 CLUSTER_READY=false
 DOCKER_REGISTRY=""
+# TODO: change to "control-plane" when testbeds are updated to K8s v1.20
+CONTROL_PLANE_NODE_ROLE="master"
 
 _usage="Usage: $0 [--cluster-name <VMCClusterNameToUse>] [--kubeconfig <KubeconfigSavePath>] [--workdir <HomePath>]
                   [--log-mode <SonobuoyResultLogLevel>] [--testcase <e2e|conformance|all-features-conformance|whole-conformance|networkpolicy>]
@@ -162,7 +164,7 @@ function saveLogs() {
 function setup_cluster() {
     export KUBECONFIG=$KUBECONFIG_PATH
     if [ -z $K8S_VERSION ]; then
-      export K8S_VERSION=v1.18.2
+      export K8S_VERSION=v1.19.1
     fi
     if [ -z $TEST_OS ]; then
       export TEST_OS=ubuntu-1804
@@ -186,7 +188,8 @@ function setup_cluster() {
     sed -i "s/CLUSTERNAMESPACE/${CLUSTER}/g" ${GIT_CHECKOUT_DIR}/jenkins/out/namespace.yaml
 
     echo "=== network spec value substitution==="
-    cluster_defaults=${WORKDIR}/utils/CLUSTERDEFAULTS
+    index="$(($BUILD_NUMBER % 2))"
+    cluster_defaults="${WORKDIR}/utils/CLUSTERDEFAULTS-${index}"
     while IFS= read -r line; do
         IFS='=' read -ra kv <<< "$line"
         sed -i "s|${kv[0]}|${kv[1]}|g" ${GIT_CHECKOUT_DIR}/jenkins/out/cluster.yaml
@@ -243,6 +246,20 @@ function setup_cluster() {
     fi
 }
 
+function copy_image {
+  filename=$1
+  image=$2
+  IP=$3
+  version=$4
+  scp -o StrictHostKeyChecking=no -i ${GIT_CHECKOUT_DIR}/jenkins/key/antrea-ci-key $filename capv@${IP}:/home/capv
+  if [ $TEST_OS == 'centos-7' ]; then
+      ssh -q -o StrictHostKeyChecking=no -i ${GIT_CHECKOUT_DIR}/jenkins/key/antrea-ci-key -n capv@${IP} "sudo chmod 777 /run/containerd/containerd.sock"
+      ssh -q -o StrictHostKeyChecking=no -i ${GIT_CHECKOUT_DIR}/jenkins/key/antrea-ci-key -n capv@${IP} "sudo crictl images | grep $image | awk '{print \$3}' | xargs -r crictl rmi ; ctr -n=k8s.io images import /home/capv/$filename ; ctr -n=k8s.io images tag $image:$version $image:latest ; sudo crictl images | grep '<none>' | awk '{print \$3}' | xargs -r crictl rmi"
+  else
+      ssh -q -o StrictHostKeyChecking=no -i ${GIT_CHECKOUT_DIR}/jenkins/key/antrea-ci-key -n capv@${IP} "sudo crictl images | grep $image | awk '{print \$3}' | xargs -r crictl rmi ; sudo ctr -n=k8s.io images import /home/capv/$filename ; sudo ctr -n=k8s.io images tag $image:$version $image:latest ; sudo crictl images | grep '<none>' | awk '{print \$3}' | xargs -r crictl rmi"
+  fi
+}
+
 function deliver_antrea {
     echo "====== Building Antrea for the Following Commit ======"
     git show --numstat
@@ -273,10 +290,11 @@ function deliver_antrea {
             VERSION="$CLUSTER" DOCKER_REGISTRY="${DOCKER_REGISTRY}" make && break
         fi
     done
+    VERSION="$CLUSTER" DOCKER_REGISTRY="${DOCKER_REGISTRY}" make flow-aggregator-ubuntu
     cd ci/jenkins
 
     if [ "$?" -ne "0" ]; then
-        echo "=== Antrea Image build failed ==="
+        echo "=== Antrea Image or Flow Aggregator Image build failed ==="
         exit 1
     fi
 
@@ -299,26 +317,22 @@ function deliver_antrea {
     if [[ "$COVERAGE" == true ]]; then
         docker save -o antrea-ubuntu-coverage.tar antrea/antrea-ubuntu-coverage:${DOCKER_IMG_VERSION}
     else
-        docker save -o antrea-ubuntu.tar antrea/antrea-ubuntu:${DOCKER_IMG_VERSION}
+        docker save -o antrea-ubuntu.tar projects.registry.vmware.com/antrea/antrea-ubuntu:${DOCKER_IMG_VERSION}
     fi
+    docker save -o flow-aggregator.tar projects.registry.vmware.com/antrea/flow-aggregator:${DOCKER_IMG_VERSION}
 
-    kubectl get nodes -o wide --no-headers=true | awk '$3 == "master" {print $6}' | while read master_ip; do
-        scp -q -o StrictHostKeyChecking=no -i ${GIT_CHECKOUT_DIR}/jenkins/key/antrea-ci-key $GIT_CHECKOUT_DIR/build/yamls/*.yml capv@${master_ip}:~
+    kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 == role {print $6}' | while read control_plane_ip; do
+        scp -q -o StrictHostKeyChecking=no -i ${GIT_CHECKOUT_DIR}/jenkins/key/antrea-ci-key $GIT_CHECKOUT_DIR/build/yamls/*.yml capv@${control_plane_ip}:~
     done
 
     kubectl get nodes -o wide --no-headers=true | awk '{print $6}' | while read IP; do
-        antrea_image="antrea-ubuntu"
-        if [[ "$COVERAGE" == true ]]; then
-            antrea_image="antrea-ubuntu-coverage"
-        fi
         ssh-keygen -f "/var/lib/jenkins/.ssh/known_hosts" -R ${IP}
-        scp -o StrictHostKeyChecking=no -i ${GIT_CHECKOUT_DIR}/jenkins/key/antrea-ci-key $antrea_image.tar capv@${IP}:/home/capv
-        if [ $TEST_OS == 'centos-7' ]; then
-            ssh -q -o StrictHostKeyChecking=no -i ${GIT_CHECKOUT_DIR}/jenkins/key/antrea-ci-key -n capv@${IP} "sudo chmod 777 /run/containerd/containerd.sock"
-            ssh -q -o StrictHostKeyChecking=no -i ${GIT_CHECKOUT_DIR}/jenkins/key/antrea-ci-key -n capv@${IP} "sudo crictl images | grep $antrea_image | awk '{print \$3}' | xargs -r crictl rmi ; ctr -n=k8s.io images import /home/capv/$antrea_image.tar ; ctr -n=k8s.io images tag docker.io/antrea/$antrea_image:${DOCKER_IMG_VERSION} docker.io/antrea/$antrea_image:latest ; sudo crictl images | grep '<none>' | awk '{print \$3}' | xargs -r crictl rmi"
+        if [[ "$COVERAGE" == true ]]; then
+            copy_image antrea-ubuntu-coverage.tar docker.io/antrea/antrea-ubuntu-coverage $IP ${DOCKER_IMG_VERSION}
         else
-            ssh -q -o StrictHostKeyChecking=no -i ${GIT_CHECKOUT_DIR}/jenkins/key/antrea-ci-key -n capv@${IP} "sudo crictl images | grep $antrea_image | awk '{print \$3}' | xargs -r crictl rmi ; sudo ctr -n=k8s.io images import /home/capv/$antrea_image.tar ; sudo ctr -n=k8s.io images tag docker.io/antrea/$antrea_image:${DOCKER_IMG_VERSION} docker.io/antrea/$antrea_image:latest ; sudo crictl images | grep '<none>' | awk '{print \$3}' | xargs -r crictl rmi"
+            copy_image antrea-ubuntu.tar projects.registry.vmware.com/antrea/antrea-ubuntu $IP ${DOCKER_IMG_VERSION}
         fi
+        copy_image flow-aggregator.tar projects.registry.vmware.com/antrea/flow-aggregator $IP ${DOCKER_IMG_VERSION}
     done
 }
 
@@ -358,14 +372,14 @@ function run_e2e {
 
     echo "=== Generate ssh-config ==="
     cp -f $GIT_CHECKOUT_DIR/ci/jenkins/ssh-config $GIT_CHECKOUT_DIR/test/e2e/infra/vagrant/ssh-config
-    master_name="$(kubectl get nodes -o wide --no-headers=true | awk '$3 == "master" {print $1}')"
-    master_ip="""$(kubectl get nodes -o wide --no-headers=true | awk '$3 == "master" {print $6}')"
-    echo "=== Master node ip: ${master_ip} ==="
-    sed -i "s/MASTERNODEIP/${master_ip}/g" $GIT_CHECKOUT_DIR/test/e2e/infra/vagrant/ssh-config
-    echo "=== Move kubeconfig to master ==="
-    ssh -q -o StrictHostKeyChecking=no -i $GIT_CHECKOUT_DIR/jenkins/key/antrea-ci-key -n capv@${master_ip} "if [ ! -d ".kube" ]; then mkdir .kube; fi"
-    scp -q -o StrictHostKeyChecking=no -i $GIT_CHECKOUT_DIR/jenkins/key/antrea-ci-key $GIT_CHECKOUT_DIR/jenkins/out/kubeconfig capv@${master_ip}:~/.kube/config
-    sed -i "s/CONTROLPLANENODE/${master_name}/g" $GIT_CHECKOUT_DIR/test/e2e/infra/vagrant/ssh-config
+    control_plane_name="$(kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 == role {print $1}')"
+    control_plane_ip="$(kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 == role {print $6}')"
+    echo "=== Control-plane Node ip: ${control_plane_ip} ==="
+    sed -i "s/CONTROLPLANENODEIP/${control_plane_ip}/g" $GIT_CHECKOUT_DIR/test/e2e/infra/vagrant/ssh-config
+    echo "=== Move kubeconfig to control-plane Node ==="
+    ssh -q -o StrictHostKeyChecking=no -i $GIT_CHECKOUT_DIR/jenkins/key/antrea-ci-key -n capv@${control_plane_ip} "if [ ! -d ".kube" ]; then mkdir .kube; fi"
+    scp -q -o StrictHostKeyChecking=no -i $GIT_CHECKOUT_DIR/jenkins/key/antrea-ci-key $GIT_CHECKOUT_DIR/jenkins/out/kubeconfig capv@${control_plane_ip}:~/.kube/config
+    sed -i "s/CONTROLPLANENODE/${control_plane_name}/g" $GIT_CHECKOUT_DIR/test/e2e/infra/vagrant/ssh-config
     echo "    IdentityFile ${GIT_CHECKOUT_DIR}/jenkins/key/antrea-ci-key" >> $GIT_CHECKOUT_DIR/test/e2e/infra/vagrant/ssh-config
 
     set +e
@@ -426,17 +440,17 @@ function run_conformance {
     kubectl rollout status --timeout=5m deployment.apps/antrea-controller -n kube-system
     kubectl rollout status --timeout=5m daemonset/antrea-agent -n kube-system
 
-    master_ip="$(kubectl get nodes -o wide --no-headers=true | awk '$3 == "master" {print $6}')"
-    echo "=== Move kubeconfig to master ==="
-    ssh -q -o StrictHostKeyChecking=no -i $GIT_CHECKOUT_DIR/jenkins/key/antrea-ci-key -n capv@${master_ip} "if [ ! -d ".kube" ]; then mkdir .kube; fi"
-    scp -q -o StrictHostKeyChecking=no -i $GIT_CHECKOUT_DIR/jenkins/key/antrea-ci-key $GIT_CHECKOUT_DIR/jenkins/out/kubeconfig capv@${master_ip}:~/.kube/config
+    control_plane_ip="$(kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 == role {print $6}')"
+    echo "=== Move kubeconfig to control-plane Node ==="
+    ssh -q -o StrictHostKeyChecking=no -i $GIT_CHECKOUT_DIR/jenkins/key/antrea-ci-key -n capv@${control_plane_ip} "if [ ! -d ".kube" ]; then mkdir .kube; fi"
+    scp -q -o StrictHostKeyChecking=no -i $GIT_CHECKOUT_DIR/jenkins/key/antrea-ci-key $GIT_CHECKOUT_DIR/jenkins/out/kubeconfig capv@${control_plane_ip}:~/.kube/config
 
     if [[ "$TESTCASE" == "conformance" ]]; then
         ${GIT_CHECKOUT_DIR}/ci/run-k8s-e2e-tests.sh --e2e-conformance --log-mode ${MODE} --kubeconfig ${GIT_CHECKOUT_DIR}/jenkins/out/kubeconfig > ${GIT_CHECKOUT_DIR}/vmc-test.log
     elif [[ "$TESTCASE" == "all-features-conformance" ]]; then
         ${GIT_CHECKOUT_DIR}/ci/run-k8s-e2e-tests.sh --e2e-conformance --log-mode ${MODE} --kubeconfig ${GIT_CHECKOUT_DIR}/jenkins/out/kubeconfig > ${GIT_CHECKOUT_DIR}/vmc-test.log
     elif [[ "$TESTCASE" == "whole-conformance" ]]; then
-        ${GIT_CHECKOUT_DIR}/ci/run-k8s-e2e-tests.sh --kube-conformance-image-version v1.18.12 --e2e-whole-conformance --log-mode ${MODE} --kubeconfig ${GIT_CHECKOUT_DIR}/jenkins/out/kubeconfig > ${GIT_CHECKOUT_DIR}/vmc-test.log
+        ${GIT_CHECKOUT_DIR}/ci/run-k8s-e2e-tests.sh --e2e-whole-conformance --log-mode ${MODE} --kubeconfig ${GIT_CHECKOUT_DIR}/jenkins/out/kubeconfig > ${GIT_CHECKOUT_DIR}/vmc-test.log
     else
         ${GIT_CHECKOUT_DIR}/ci/run-k8s-e2e-tests.sh --e2e-network-policy --log-mode ${MODE} --kubeconfig ${GIT_CHECKOUT_DIR}/jenkins/out/kubeconfig > ${GIT_CHECKOUT_DIR}/vmc-test.log
     fi
@@ -495,14 +509,14 @@ function garbage_collection() {
         echo "=== Old namespace ${cluster} has been deleted !!! ==="
     done
 
-    kubectl get ns -l antrea-ci -o custom-columns=Name:.metadata.name,DATE:.metadata.creationTimestamp --no-headers=true | awk '{cmd="echo $(( $(date +%s) - $(date -d "$2" +%s) ))"; cmd | getline t ; print $1, t}' | awk '$1 ~ "whole-conformance" && $2 > 7200 {print $1}' | while read cluster; do
-        echo "=== Currently ${cluster} has been live for more than 2h ==="
+    kubectl get ns -l antrea-ci -o custom-columns=Name:.metadata.name,DATE:.metadata.creationTimestamp --no-headers=true | awk '{cmd="echo $(( $(date +%s) - $(date -d "$2" +%s) ))"; cmd | getline t ; print $1, t}' | awk '$1 ~ "whole-conformance" && $2 > 10800 {print $1}' | while read cluster; do
+        echo "=== Currently ${cluster} has been live for more than 3h ==="
         kubectl delete ns ${cluster}
         echo "=== Old namespace ${cluster} has been deleted !!! ==="
     done
 
-    kubectl get ns -l antrea-ci -o custom-columns=Name:.metadata.name,DATE:.metadata.creationTimestamp --no-headers=true | awk '{cmd="echo $(( $(date +%s) - $(date -d "$2" +%s) ))"; cmd | getline t ; print $1, t}' | awk '$1 !~ "matrix" && $1 !~ "whole-conformance" && $2 > 3600 {print $1}' | while read cluster; do
-        echo "=== Currently ${cluster} has been live for more than 1h ==="
+    kubectl get ns -l antrea-ci -o custom-columns=Name:.metadata.name,DATE:.metadata.creationTimestamp --no-headers=true | awk '{cmd="echo $(( $(date +%s) - $(date -d "$2" +%s) ))"; cmd | getline t ; print $1, t}' | awk '$1 !~ "matrix" && $1 !~ "whole-conformance" && $2 > 5400 {print $1}' | while read cluster; do
+        echo "=== Currently ${cluster} has been live for more than 1.5h ==="
         kubectl delete ns ${cluster}
         echo "=== Old namespace ${cluster} has been deleted !!! ==="
     done

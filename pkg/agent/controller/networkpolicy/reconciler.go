@@ -591,10 +591,10 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule, 
 		memberByServicesMap, servicesMap := groupMembersByServices(newRule.Services, newRule.ToAddresses)
 		// Same as the process in `add`, we must ensure the group for the original services is present
 		// in memberByServicesMap, so that this group won't be removed and its "From" will be updated.
-		svcKey := normalizeServices(newRule.Services)
-		if _, exists := memberByServicesMap[svcKey]; !exists {
-			memberByServicesMap[svcKey] = v1beta2.NewGroupMemberSet()
-			servicesMap[svcKey] = newRule.Services
+		originalSvcKey := normalizeServices(newRule.Services)
+		if _, exists := memberByServicesMap[originalSvcKey]; !exists {
+			memberByServicesMap[originalSvcKey] = v1beta2.NewGroupMemberSet()
+			servicesMap[originalSvcKey] = newRule.Services
 		}
 		prevMembersByServicesMap, _ := groupMembersByServices(lastRealized.Services, lastRealized.ToAddresses)
 		for svcKey, members := range memberByServicesMap {
@@ -611,6 +611,12 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule, 
 					TableID:       table,
 					PolicyRef:     newRule.SourceRef,
 					EnableLogging: newRule.EnableLogging,
+				}
+				// If the PolicyRule for the original services doesn't exist and IPBlocks is present, it means the
+				// reconciler hasn't installed flows for IPBlocks, then it must be added to the new PolicyRule.
+				if svcKey == originalSvcKey && len(newRule.To.IPBlocks) > 0 {
+					to := ipBlocksToOFAddresses(newRule.To.IPBlocks, r.ipv4Enabled, r.ipv6Enabled)
+					ofRule.To = append(ofRule.To, to...)
 				}
 				err := r.idAllocator.allocateForRule(ofRule)
 				if err != nil {

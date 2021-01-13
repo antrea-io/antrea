@@ -338,7 +338,7 @@ func (c *client) InstallPodFlows(interfaceName string, podInterfaceIPs []net.IP,
 	localGatewayMAC := c.nodeConfig.GatewayConfig.MAC
 	flows := []binding.Flow{
 		c.podClassifierFlow(ofPort, cookie.Pod),
-		c.l2ForwardCalcFlow(podInterfaceMAC, ofPort, cookie.Pod),
+		c.l2ForwardCalcFlow(podInterfaceMAC, ofPort, false, cookie.Pod),
 	}
 
 	// Add support for IPv4 ARP responder.
@@ -418,7 +418,7 @@ func (c *client) InstallEndpointFlows(protocol binding.Protocol, endpoints []pro
 		var flows []binding.Flow
 		endpointPort, _ := endpoint.Port()
 		endpointIP := parser(endpoint.IP())
-		portVal := uint16(endpointPort)
+		portVal := portToUint16(endpointPort)
 		cacheKey := fmt.Sprintf("Endpoints_%s_%d_%s", endpointIP, endpointPort, protocol)
 		flows = append(flows, c.endpointDNATFlow(endpointIP, portVal, protocol))
 		if endpoint.GetIsLocal() {
@@ -485,14 +485,12 @@ func (c *client) InstallClusterServiceFlows() error {
 		c.l2ForwardOutputServiceHairpinFlow(),
 	}
 	if c.IsIPv4Enabled() {
-		flows = append(flows,
-			c.serviceHairpinResponseDNATFlow(binding.ProtocolIP),
-			c.serviceLBBypassFlow(binding.ProtocolIP))
+		flows = append(flows, c.serviceHairpinResponseDNATFlow(binding.ProtocolIP))
+		flows = append(flows, c.serviceLBBypassFlows(binding.ProtocolIP)...)
 	}
 	if c.IsIPv6Enabled() {
-		flows = append(flows,
-			c.serviceHairpinResponseDNATFlow(binding.ProtocolIPv6),
-			c.serviceLBBypassFlow(binding.ProtocolIPv6))
+		flows = append(flows, c.serviceHairpinResponseDNATFlow(binding.ProtocolIPv6))
+		flows = append(flows, c.serviceLBBypassFlows(binding.ProtocolIPv6)...)
 	}
 	if err := c.ofEntryOperations.AddAll(flows); err != nil {
 		return err
@@ -516,7 +514,7 @@ func (c *client) InstallGatewayFlows() error {
 
 	flows := []binding.Flow{
 		c.gatewayClassifierFlow(cookie.Default),
-		c.l2ForwardCalcFlow(gatewayConfig.MAC, config.HostGatewayOFPort, cookie.Default),
+		c.l2ForwardCalcFlow(gatewayConfig.MAC, config.HostGatewayOFPort, true, cookie.Default),
 	}
 	flows = append(flows, c.gatewayIPSpoofGuardFlows(cookie.Default)...)
 
@@ -547,7 +545,7 @@ func (c *client) InstallGatewayFlows() error {
 func (c *client) InstallDefaultTunnelFlows() error {
 	flows := []binding.Flow{
 		c.tunnelClassifierFlow(config.DefaultTunOFPort, cookie.Default),
-		c.l2ForwardCalcFlow(globalVirtualMAC, config.DefaultTunOFPort, cookie.Default),
+		c.l2ForwardCalcFlow(globalVirtualMAC, config.DefaultTunOFPort, true, cookie.Default),
 	}
 	if err := c.ofEntryOperations.AddAll(flows); err != nil {
 		return err
@@ -777,7 +775,7 @@ func (c *client) SendTraceflowPacket(
 	case 6:
 		packetOutBuilder = packetOutBuilder.SetIPProtocol(binding.ProtocolTCP)
 		if TCPSrcPort == 0 {
-			// #nosec G404: random number generator not used for security purposes
+			// #nosec G404: random number generator not used for security purposes.
 			TCPSrcPort = uint16(rand.Uint32())
 		}
 		packetOutBuilder = packetOutBuilder.SetTCPSrcPort(TCPSrcPort)
@@ -810,7 +808,7 @@ func (c *client) InstallTraceflowFlows(dataplaneTag uint8) error {
 	}
 	c.conjMatchFlowLock.Lock()
 	defer c.conjMatchFlowLock.Unlock()
-	// Copy default drop rules
+	// Copy default drop rules.
 	for _, ctx := range c.globalConjMatchFlowCache {
 		if ctx.dropFlow != nil {
 			copyFlowBuilder := ctx.dropFlow.CopyToBuilder(priorityNormal+2, false)
@@ -824,16 +822,27 @@ func (c *client) InstallTraceflowFlows(dataplaneTag uint8) error {
 					Done())
 		}
 	}
-	// Copy Antrea NetworkPolicy drop rules
+	// Copy Antrea NetworkPolicy drop rules.
 	for _, conj := range c.policyCache.List() {
 		for _, flow := range conj.(*policyRuleConjunction).metricFlows {
 			if flow.IsDropFlow() {
+				copyFlowBuilder := flow.CopyToBuilder(priorityNormal+2, false)
+				// Generate both IPv4 and IPv6 flows if the original drop flow doesn't match IP/IPv6.
+				// DSCP field is in IP/IPv6 headers so IP/IPv6 match is required in a flow.
+				if flow.FlowProtocol() == "" {
+					copyFlowBuilderIPv6 := flow.CopyToBuilder(priorityNormal+2, false)
+					copyFlowBuilderIPv6 = copyFlowBuilderIPv6.MatchProtocol(binding.ProtocolIPv6)
+					flows = append(
+						flows, copyFlowBuilderIPv6.MatchIPDscp(dataplaneTag).
+							SetHardTimeout(300).
+							Action().SendToController(uint8(PacketInReasonTF)).
+							Done())
+					copyFlowBuilder = copyFlowBuilder.MatchProtocol(binding.ProtocolIP)
+				}
 				flows = append(
-					flows,
-					flow.CopyToBuilder(priorityNormal+2, false).
-						MatchIPDscp(dataplaneTag).
+					flows, copyFlowBuilder.MatchIPDscp(dataplaneTag).
 						SetHardTimeout(300).
-						Action().SendToController(1).
+						Action().SendToController(uint8(PacketInReasonTF)).
 						Done())
 			}
 		}

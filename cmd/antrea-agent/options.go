@@ -18,8 +18,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net"
-	"regexp"
-	"strings"
 	"time"
 
 	"github.com/spf13/pflag"
@@ -30,16 +28,21 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/cni"
 	"github.com/vmware-tanzu/antrea/pkg/features"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
+	"github.com/vmware-tanzu/antrea/pkg/util/flowexport"
 )
 
 const (
-	defaultOVSBridge           = "br-int"
-	defaultHostGateway         = "antrea-gw0"
-	defaultHostProcPathPrefix  = "/host"
-	defaultServiceCIDR         = "10.96.0.0/12"
-	defaultTunnelType          = ovsconfig.GeneveTunnel
-	defaultFlowPollInterval    = 5 * time.Second
-	defaultFlowExportFrequency = 12
+	defaultOVSBridge              = "br-int"
+	defaultHostGateway            = "antrea-gw0"
+	defaultHostProcPathPrefix     = "/host"
+	defaultServiceCIDR            = "10.96.0.0/12"
+	defaultTunnelType             = ovsconfig.GeneveTunnel
+	defaultFlowCollectorAddress   = "flow-aggregator.flow-aggregator.svc:4739:tcp"
+	defaultFlowCollectorTransport = "tcp"
+	defaultFlowCollectorPort      = "4739"
+	defaultFlowPollInterval       = 5 * time.Second
+	defaultFlowExportFrequency    = 12
+	defaultNPLPortRange           = "40000-41000"
 )
 
 type Options struct {
@@ -47,8 +50,10 @@ type Options struct {
 	configFile string
 	// The configuration object
 	config *AgentConfig
-	// IPFIX flow collector
-	flowCollector net.Addr
+	// IPFIX flow collector address
+	flowCollectorAddr string
+	// IPFIX flow collector L4 protocol
+	flowCollectorProto string
 	// Flow exporter poll interval
 	pollInterval time.Duration
 }
@@ -73,8 +78,12 @@ func (o *Options) complete(args []string) error {
 			return err
 		}
 	}
+	err := features.DefaultMutableFeatureGate.SetFromMap(o.config.FeatureGates)
+	if err != nil {
+		return err
+	}
 	o.setDefaults()
-	return features.DefaultMutableFeatureGate.SetFromMap(o.config.FeatureGates)
+	return nil
 }
 
 // validate validates all the required options. It must be called after complete.
@@ -178,7 +187,10 @@ func (o *Options) setDefaults() {
 		o.config.APIPort = apis.AntreaAgentAPIPort
 	}
 
-	if o.config.FeatureGates[string(features.FlowExporter)] {
+	if features.DefaultFeatureGate.Enabled(features.FlowExporter) {
+		if o.config.FlowCollectorAddr == "" {
+			o.config.FlowCollectorAddr = defaultFlowCollectorAddress
+		}
 		if o.config.FlowPollInterval == "" {
 			o.pollInterval = defaultFlowPollInterval
 		}
@@ -187,75 +199,31 @@ func (o *Options) setDefaults() {
 			o.config.FlowExportFrequency = defaultFlowExportFrequency
 		}
 	}
+
+	if features.DefaultFeatureGate.Enabled(features.NodePortLocal) {
+		if o.config.NPLPortRange == "" {
+			o.config.NPLPortRange = defaultNPLPortRange
+		}
+	}
 }
 
 func (o *Options) validateFlowExporterConfig() error {
 	if features.DefaultFeatureGate.Enabled(features.FlowExporter) {
-		if o.config.FlowCollectorAddr == "" {
-			return fmt.Errorf("IPFIX flow collector address should be provided")
-		} else {
-			// Check if it is TCP or UDP
-			strSlice, err := parseFlowCollectorAddr(o.config.FlowCollectorAddr)
+		host, port, proto, err := flowexport.ParseFlowCollectorAddr(o.config.FlowCollectorAddr, defaultFlowCollectorPort, defaultFlowCollectorTransport)
+		if err != nil {
+			return err
+		}
+		o.flowCollectorAddr = net.JoinHostPort(host, port)
+		o.flowCollectorProto = proto
+
+		// Parse the given flowPollInterval config
+		if o.config.FlowPollInterval != "" {
+			flowPollInterval, err := flowexport.ParseFlowIntervalString(o.config.FlowPollInterval)
 			if err != nil {
 				return err
 			}
-			var proto string
-			if len(strSlice) == 2 {
-				// If no separator ":" and proto is given, then default to TCP.
-				proto = "tcp"
-			} else if len(strSlice) > 2 {
-				if (strSlice[2] != "udp") && (strSlice[2] != "tcp") {
-					return fmt.Errorf("IPFIX flow collector over %s proto is not supported", strSlice[2])
-				}
-				proto = strSlice[2]
-			} else {
-				return fmt.Errorf("IPFIX flow collector is given in invalid format")
-			}
-
-			// Convert the string input in net.Addr format
-			hostPortAddr := strSlice[0] + ":" + strSlice[1]
-			_, _, err = net.SplitHostPort(hostPortAddr)
-			if err != nil {
-				return fmt.Errorf("IPFIX flow collector is given in invalid format: %v", err)
-			}
-			if proto == "udp" {
-				o.flowCollector, err = net.ResolveUDPAddr("udp", hostPortAddr)
-				if err != nil {
-					return fmt.Errorf("IPFIX flow collector over UDP proto cannot be resolved: %v", err)
-				}
-			} else {
-				o.flowCollector, err = net.ResolveTCPAddr("tcp", hostPortAddr)
-				if err != nil {
-					return fmt.Errorf("IPFIX flow collector over TCP proto cannot be resolved: %v", err)
-				}
-			}
-		}
-		if o.config.FlowPollInterval != "" {
-			var err error
-			o.pollInterval, err = time.ParseDuration(o.config.FlowPollInterval)
-			if err != nil {
-				return fmt.Errorf("FlowPollInterval is not provided in right format: %v", err)
-			}
-			if o.pollInterval < time.Second {
-				return fmt.Errorf("FlowPollInterval should be greater than or equal to one second")
-			}
+			o.pollInterval = flowPollInterval
 		}
 	}
 	return nil
-}
-
-func parseFlowCollectorAddr(addr string) ([]string, error) {
-	var strSlice []string
-	match, err := regexp.MatchString("\\[.*\\]:.*", addr)
-	if err != nil {
-		return strSlice, fmt.Errorf("Failed to parse FlowCollectorAddr: %s", addr)
-	}
-	if match {
-		idx := strings.Index(addr, "]")
-		strSlice = append(strSlice, addr[:idx+1])
-		strSlice = append(strSlice, strings.Split(addr[idx+2:], ":")...)
-	} else {
-		strSlice = strings.Split(addr, ":")
-	}
-	return strSlice, nil
 }

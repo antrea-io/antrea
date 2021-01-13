@@ -22,10 +22,13 @@ import (
 	admv1 "k8s.io/api/admission/v1"
 	authenticationv1 "k8s.io/api/authentication/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/apiserver/pkg/authentication/serviceaccount"
 	"k8s.io/klog"
 
 	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
+	"github.com/vmware-tanzu/antrea/pkg/util/env"
 )
 
 // validator interface introduces the set of functions that must be implemented
@@ -66,6 +69,8 @@ var (
 	// since they are created by Antrea.
 	reservedTierNames = sets.NewString("baseline", "application", "platform", "networkops", "securityops", "emergency")
 )
+
+const defaultControllerNamespace = "kube-system"
 
 // RegisterAntreaPolicyValidator registers an Antrea-native policy validator
 // to the resource registry. A new validator must be registered by calling
@@ -213,6 +218,36 @@ func (v *NetworkPolicyValidator) validateAntreaPolicy(curObj, oldObj interface{}
 	return reason, allowed
 }
 
+// validatePort validates if ports is valid
+func (a *antreaPolicyValidator) validatePort(ingress, egress []secv1alpha1.Rule) error {
+	isValid := func(rules []secv1alpha1.Rule) error {
+		for _, rule := range rules {
+			for _, port := range rule.Ports {
+				if port.EndPort == nil {
+					continue
+				}
+				if port.Port == nil {
+					return fmt.Errorf("if `endPort` is specified `port` must be specified")
+				}
+				if port.Port.Type == intstr.String {
+					return fmt.Errorf("if `port` is a string `endPort` cannot be specified")
+				}
+				if *port.EndPort < port.Port.IntVal {
+					return fmt.Errorf("`endPort` should be greater than or equal to `port`")
+				}
+			}
+		}
+		return nil
+	}
+	if err := isValid(ingress); err != nil {
+		return err
+	}
+	if err := isValid(egress); err != nil {
+		return err
+	}
+	return nil
+}
+
 // validateTier validates the admission of a Tier resource
 func (v *NetworkPolicyValidator) validateTier(curTier, oldTier *secv1alpha1.Tier, op admv1.Operation, userInfo authenticationv1.UserInfo) (string, bool) {
 	allowed := true
@@ -272,17 +307,20 @@ func GetAdmissionResponseForErr(err error) *admv1.AdmissionResponse {
 func (a *antreaPolicyValidator) createValidate(curObj interface{}, userInfo authenticationv1.UserInfo) (string, bool) {
 	var tier string
 	var ingress, egress []secv1alpha1.Rule
+	var specAppliedTo []secv1alpha1.NetworkPolicyPeer
 	switch curObj.(type) {
 	case *secv1alpha1.ClusterNetworkPolicy:
 		curCNP := curObj.(*secv1alpha1.ClusterNetworkPolicy)
 		tier = curCNP.Spec.Tier
 		ingress = curCNP.Spec.Ingress
 		egress = curCNP.Spec.Egress
+		specAppliedTo = curCNP.Spec.AppliedTo
 	case *secv1alpha1.NetworkPolicy:
 		curANP := curObj.(*secv1alpha1.NetworkPolicy)
 		tier = curANP.Spec.Tier
 		ingress = curANP.Spec.Ingress
 		egress = curANP.Spec.Egress
+		specAppliedTo = curANP.Spec.AppliedTo
 	}
 	reason, allowed := a.validateTierForPolicy(tier)
 	if !allowed {
@@ -290,6 +328,13 @@ func (a *antreaPolicyValidator) createValidate(curObj interface{}, userInfo auth
 	}
 	if ruleNameUnique := a.validateRuleName(ingress, egress); !ruleNameUnique {
 		return fmt.Sprint("rules names must be unique within the policy"), false
+	}
+	reason, allowed = a.validateAppliedTo(ingress, egress, specAppliedTo)
+	if !allowed {
+		return reason, allowed
+	}
+	if err := a.validatePort(ingress, egress); err != nil {
+		return err.Error(), false
 	}
 	return "", true
 }
@@ -309,6 +354,30 @@ func (v *antreaPolicyValidator) validateRuleName(ingress, egress []secv1alpha1.R
 	return isUnique(ingress) && isUnique(egress)
 }
 
+func (a *antreaPolicyValidator) validateAppliedTo(ingress, egress []secv1alpha1.Rule, specAppliedTo []secv1alpha1.NetworkPolicyPeer) (string, bool) {
+	appliedToInSpec := len(specAppliedTo) != 0
+	countAppliedToInRules := func(rules []secv1alpha1.Rule) int {
+		num := 0
+		for _, rule := range rules {
+			if len(rule.AppliedTo) != 0 {
+				num++
+			}
+		}
+		return num
+	}
+	numAppliedToInRules := countAppliedToInRules(ingress) + countAppliedToInRules(egress)
+	if appliedToInSpec && (numAppliedToInRules > 0) {
+		return "appliedTo should not be set in both spec and rules", false
+	}
+	if !appliedToInSpec && (numAppliedToInRules == 0) {
+		return "appliedTo needs to be set in either spec or rules", false
+	}
+	if numAppliedToInRules > 0 && (numAppliedToInRules != len(ingress)+len(egress)) {
+		return "appliedTo field should either be set in all rules or in none of them", false
+	}
+	return "", true
+}
+
 // validateTierForPolicy validates whether a referenced Tier exists.
 func (v *antreaPolicyValidator) validateTierForPolicy(tier string) (string, bool) {
 	// "tier" must exist before referencing
@@ -326,13 +395,31 @@ func (v *antreaPolicyValidator) validateTierForPolicy(tier string) (string, bool
 // updateValidate validates the UPDATE events of Antrea-native policies.
 func (a *antreaPolicyValidator) updateValidate(curObj, oldObj interface{}, userInfo authenticationv1.UserInfo) (string, bool) {
 	var tier string
+	var ingress, egress []secv1alpha1.Rule
+	var specAppliedTo []secv1alpha1.NetworkPolicyPeer
 	switch curObj.(type) {
 	case *secv1alpha1.ClusterNetworkPolicy:
 		curCNP := curObj.(*secv1alpha1.ClusterNetworkPolicy)
 		tier = curCNP.Spec.Tier
+		ingress = curCNP.Spec.Ingress
+		egress = curCNP.Spec.Egress
+		specAppliedTo = curCNP.Spec.AppliedTo
 	case *secv1alpha1.NetworkPolicy:
 		curANP := curObj.(*secv1alpha1.NetworkPolicy)
 		tier = curANP.Spec.Tier
+		ingress = curANP.Spec.Ingress
+		egress = curANP.Spec.Egress
+		specAppliedTo = curANP.Spec.AppliedTo
+	}
+	reason, allowed := a.validateAppliedTo(ingress, egress, specAppliedTo)
+	if !allowed {
+		return reason, allowed
+	}
+	if ruleNameUnique := a.validateRuleName(ingress, egress); !ruleNameUnique {
+		return fmt.Sprint("rules names must be unique within the policy"), false
+	}
+	if err := a.validatePort(ingress, egress); err != nil {
+		return err.Error(), false
 	}
 	return a.validateTierForPolicy(tier)
 }
@@ -366,6 +453,16 @@ func (t *tierValidator) updateValidate(curObj, oldObj interface{}, userInfo auth
 	reason := ""
 	curTier := curObj.(*secv1alpha1.Tier)
 	oldTier := oldObj.(*secv1alpha1.Tier)
+	// Retrieve antrea-controller's Namespace
+	namespace := env.GetPodNamespace()
+	if namespace == "" {
+		// antrea-controller by default is created in the kube-system Namespace
+		namespace = defaultControllerNamespace
+	}
+	// Allow exception of Tier Priority updates performed by the antrea-controller
+	if serviceaccount.MatchesUsername(namespace, env.GetAntreaControllerServiceAccount(), userInfo.Username) {
+		return "", true
+	}
 	if curTier.Spec.Priority != oldTier.Spec.Priority {
 		allowed = false
 		reason = "update to Tier priority is not allowed"

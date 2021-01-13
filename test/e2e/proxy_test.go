@@ -42,9 +42,6 @@ func skipIfProxyDisabled(t *testing.T, data *TestData) {
 }
 
 func TestProxyServiceSessionAffinity(t *testing.T) {
-	// TODO: add check for IPv6 address after Antrea Proxy supports IPv6
-	skipIfIPv6Cluster(t)
-	skipIfNotIPv4Cluster(t)
 	skipIfProviderIs(t, "kind", "#881 Does not work in Kind, needs to be investigated.")
 	data, err := setupTest(t)
 	if err != nil {
@@ -54,41 +51,63 @@ func TestProxyServiceSessionAffinity(t *testing.T) {
 
 	skipIfProxyDisabled(t, data)
 
+	if len(clusterInfo.podV4NetworkCIDR) != 0 {
+		ipFamily := corev1.IPv4Protocol
+		testProxyServiceSessionAffinity(&ipFamily, []string{"169.254.169.253", "169.254.169.254"}, data, t)
+	}
+	if len(clusterInfo.podV6NetworkCIDR) != 0 {
+		ipFamily := corev1.IPv6Protocol
+		testProxyServiceSessionAffinity(&ipFamily, []string{"fd75::aabb:ccdd:ef00", "fd75::aabb:ccdd:ef01"}, data, t)
+	}
+}
+
+func testProxyServiceSessionAffinity(ipFamily *corev1.IPFamily, ingressIPs []string, data *TestData, t *testing.T) {
 	nodeName := nodeName(1)
-	require.NoError(t, data.createNginxPod("nginx", nodeName))
-	nginxIP, err := data.podWaitForIPs(defaultTimeout, "nginx", testNamespace)
+	nginx := "nginx"
+	require.NoError(t, data.createNginxPod(nginx, nodeName))
+	nginxIP, err := data.podWaitForIPs(defaultTimeout, nginx, testNamespace)
+	defer data.deletePodAndWait(defaultTimeout, nginx)
 	require.NoError(t, err)
-	require.NoError(t, data.podWaitForRunning(defaultTimeout, "nginx", testNamespace))
-	svc, err := data.createNginxClusterIPService(true)
+	require.NoError(t, data.podWaitForRunning(defaultTimeout, nginx, testNamespace))
+	svc, err := data.createNginxClusterIPService(true, ipFamily)
+	defer data.deleteServiceAndWait(defaultTimeout, nginx)
 	require.NoError(t, err)
-	ingressIPs := []string{"169.254.169.253", "169.254.169.254"}
-	_, err = data.createNginxLoadBalancerService(true, ingressIPs)
+	_, err = data.createNginxLoadBalancerService(true, ingressIPs, ipFamily)
+	defer data.deleteServiceAndWait(defaultTimeout, nginxLBService)
 	require.NoError(t, err)
-	require.NoError(t, data.createBusyboxPodOnNode("busybox", nodeName))
-	require.NoError(t, data.podWaitForRunning(defaultTimeout, "busybox", testNamespace))
-	stdout, stderr, err := data.runCommandFromPod(testNamespace, "busybox", busyboxContainerName, []string{"wget", "-O", "-", svc.Spec.ClusterIP, "-T", "1"})
-	require.NoError(t, err, fmt.Sprintf("stdout: %s\n, stderr: %s", stdout, stderr))
+
+	busyboxPod := "busybox"
+	require.NoError(t, data.createBusyboxPodOnNode(busyboxPod, nodeName))
+	defer data.deletePodAndWait(defaultTimeout, busyboxPod)
+	require.NoError(t, data.podWaitForRunning(defaultTimeout, busyboxPod, testNamespace))
+	stdout, stderr, err := data.runCommandFromPod(testNamespace, busyboxPod, busyboxContainerName, []string{"wget", "-O", "-", svc.Spec.ClusterIP, "-T", "1"})
+	require.NoError(t, err, fmt.Sprintf("ipFamily: %v\nstdout: %s\nstderr: %s\n", *ipFamily, stdout, stderr))
 	for _, ingressIP := range ingressIPs {
-		stdout, stderr, err := data.runCommandFromPod(testNamespace, "busybox", busyboxContainerName, []string{"wget", "-O", "-", ingressIP, "-T", "1"})
-		require.NoError(t, err, fmt.Sprintf("stdout: %s\n, stderr: %s", stdout, stderr))
+		stdout, stderr, err := data.runCommandFromPod(testNamespace, busyboxPod, busyboxContainerName, []string{"wget", "-O", "-", ingressIP, "-T", "1"})
+		require.NoError(t, err, fmt.Sprintf("ipFamily: %v\nstdout: %s\nstderr: %s\n", *ipFamily, stdout, stderr))
 	}
 
 	agentName, err := data.getAntreaPodOnNode(nodeName)
 	require.NoError(t, err)
 	table40Output, _, err := data.runCommandFromPod(metav1.NamespaceSystem, agentName, "antrea-agent", []string{"ovs-ofctl", "dump-flows", defaultBridgeName, "table=40"})
 	require.NoError(t, err)
-	require.Contains(t, table40Output, fmt.Sprintf("nw_dst=%s,tp_dst=80", svc.Spec.ClusterIP))
-	// TODO: add check for IPv6 address after Antrea Proxy is supported with IPv6
-	require.Contains(t, table40Output, fmt.Sprintf("load:0x%s->NXM_NX_REG3[]", strings.TrimLeft(hex.EncodeToString(nginxIP.ipv4.To4()), "0")))
-	for _, ingressIP := range ingressIPs {
-		require.Contains(t, table40Output, fmt.Sprintf("nw_dst=%s,tp_dst=80", ingressIP))
+	if *ipFamily == corev1.IPv4Protocol {
+		require.Contains(t, table40Output, fmt.Sprintf("nw_dst=%s,tp_dst=80", svc.Spec.ClusterIP))
+		require.Contains(t, table40Output, fmt.Sprintf("load:0x%s->NXM_NX_REG3[]", strings.TrimLeft(hex.EncodeToString(nginxIP.ipv4.To4()), "0")))
+		for _, ingressIP := range ingressIPs {
+			require.Contains(t, table40Output, fmt.Sprintf("nw_dst=%s,tp_dst=80", ingressIP))
+		}
+	} else {
+		require.Contains(t, table40Output, fmt.Sprintf("ipv6_dst=%s,tp_dst=80", svc.Spec.ClusterIP))
+		require.Contains(t, table40Output, fmt.Sprintf("load:0x%s->NXM_NX_XXREG3[0..63]", strings.TrimLeft(hex.EncodeToString([]byte(*nginxIP.ipv6)[8:16]), "0")))
+		require.Contains(t, table40Output, fmt.Sprintf("load:0x%s->NXM_NX_XXREG3[64..127]", strings.TrimLeft(hex.EncodeToString([]byte(*nginxIP.ipv6)[0:8]), "0")))
+		for _, ingressIP := range ingressIPs {
+			require.Contains(t, table40Output, fmt.Sprintf("ipv6_dst=%s,tp_dst=80", ingressIP))
+		}
 	}
 }
 
 func TestProxyHairpin(t *testing.T) {
-	// TODO: add check for IPv6 address after Antrea Proxy supports IPv6
-	skipIfIPv6Cluster(t)
-	skipIfNotIPv4Cluster(t)
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
@@ -97,20 +116,31 @@ func TestProxyHairpin(t *testing.T) {
 
 	skipIfProxyDisabled(t, data)
 
+	if len(clusterInfo.podV4NetworkCIDR) != 0 {
+		ipFamily := corev1.IPv4Protocol
+		testProxyHairpin(&ipFamily, data, t)
+	}
+	if len(clusterInfo.podV6NetworkCIDR) != 0 {
+		ipFamily := corev1.IPv6Protocol
+		testProxyHairpin(&ipFamily, data, t)
+	}
+}
+
+func testProxyHairpin(ipFamily *corev1.IPFamily, data *TestData, t *testing.T) {
+	busybox := "busybox"
 	nodeName := nodeName(1)
-	err = data.createPodOnNode("busybox", nodeName, busyboxImage, []string{"nc", "-lk", "-p", "80"}, nil, nil, []corev1.ContainerPort{{ContainerPort: 80, Protocol: corev1.ProtocolTCP}}, false, nil)
+	err := data.createPodOnNode(busybox, nodeName, busyboxImage, []string{"nc", "-lk", "-p", "80"}, nil, nil, []corev1.ContainerPort{{ContainerPort: 80, Protocol: corev1.ProtocolTCP}}, false, nil)
+	defer data.deletePodAndWait(defaultTimeout, busybox)
 	require.NoError(t, err)
-	require.NoError(t, data.podWaitForRunning(defaultTimeout, "busybox", testNamespace))
-	svc, err := data.createService("busybox", 80, 80, map[string]string{"antrea-e2e": "busybox"}, false, corev1.ServiceTypeClusterIP)
+	require.NoError(t, data.podWaitForRunning(defaultTimeout, busybox, testNamespace))
+	svc, err := data.createService(busybox, 80, 80, map[string]string{"antrea-e2e": "busybox"}, false, corev1.ServiceTypeClusterIP, ipFamily)
+	defer data.deleteServiceAndWait(defaultTimeout, busybox)
 	require.NoError(t, err)
-	stdout, stderr, err := data.runCommandFromPod(testNamespace, "busybox", busyboxContainerName, []string{"nc", svc.Spec.ClusterIP, "80", "-w", "1", "-e", "ls", "/"})
-	require.NoError(t, err, fmt.Sprintf("stdout: %s\n, stderr: %s", stdout, stderr))
+	stdout, stderr, err := data.runCommandFromPod(testNamespace, busybox, busyboxContainerName, []string{"nc", svc.Spec.ClusterIP, "80", "-w", "1", "-e", "ls", "/"})
+	require.NoError(t, err, fmt.Sprintf("ipFamily: %v\nstdout: %s\nstderr: %s\n", *ipFamily, stdout, stderr))
 }
 
 func TestProxyEndpointLifeCycle(t *testing.T) {
-	// TODO: add check for IPv6 address after Antrea Proxy supports IPv6
-	skipIfIPv6Cluster(t)
-	skipIfNotIPv4Cluster(t)
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
@@ -119,19 +149,39 @@ func TestProxyEndpointLifeCycle(t *testing.T) {
 
 	skipIfProxyDisabled(t, data)
 
+	if len(clusterInfo.podV4NetworkCIDR) != 0 {
+		ipFamily := corev1.IPv4Protocol
+		testProxyEndpointLifeCycle(&ipFamily, data, t)
+	}
+	if len(clusterInfo.podV6NetworkCIDR) != 0 {
+		ipFamily := corev1.IPv6Protocol
+		testProxyEndpointLifeCycle(&ipFamily, data, t)
+	}
+}
+
+func testProxyEndpointLifeCycle(ipFamily *corev1.IPFamily, data *TestData, t *testing.T) {
 	nodeName := nodeName(1)
-	require.NoError(t, data.createNginxPod("nginx", nodeName))
-	nginxIPs, err := data.podWaitForIPs(defaultTimeout, "nginx", testNamespace)
+	nginx := "nginx"
+	require.NoError(t, data.createNginxPod(nginx, nodeName))
+	nginxIPs, err := data.podWaitForIPs(defaultTimeout, nginx, testNamespace)
 	require.NoError(t, err)
-	_, err = data.createNginxClusterIPService(false)
+	_, err = data.createNginxClusterIPService(false, ipFamily)
+	defer data.deleteServiceAndWait(defaultTimeout, nginx)
 	require.NoError(t, err)
 	agentName, err := data.getAntreaPodOnNode(nodeName)
 	require.NoError(t, err)
-	// TODO: Add support for IPv6 address after Antrea Proxy in IPv6 is supported
-	nginxIP := nginxIPs.ipv4.String()
+	var nginxIP string
+	if *ipFamily == corev1.IPv6Protocol {
+		nginxIP = nginxIPs.ipv6.String()
+	} else {
+		nginxIP = nginxIPs.ipv4.String()
+	}
 
-	keywords := map[int]string{
-		42: fmt.Sprintf("nat(dst=%s:80)", nginxIP), // endpointNATTable
+	keywords := make(map[int]string)
+	if *ipFamily == corev1.IPv6Protocol {
+		keywords[42] = fmt.Sprintf("nat(dst=[%s]:80)", nginxIP) // endpointNATTable
+	} else {
+		keywords[42] = fmt.Sprintf("nat(dst=%s:80)", nginxIP) // endpointNATTable
 	}
 
 	for tableID, keyword := range keywords {
@@ -140,7 +190,7 @@ func TestProxyEndpointLifeCycle(t *testing.T) {
 		require.Contains(t, tableOutput, keyword)
 	}
 
-	require.NoError(t, data.deletePodAndWait(defaultTimeout, "nginx"))
+	require.NoError(t, data.deletePodAndWait(defaultTimeout, nginx))
 
 	for tableID, keyword := range keywords {
 		tableOutput, _, err := data.runCommandFromPod(metav1.NamespaceSystem, agentName, "antrea-agent", []string{"ovs-ofctl", "dump-flows", defaultBridgeName, fmt.Sprintf("table=%d", tableID)})
@@ -150,9 +200,6 @@ func TestProxyEndpointLifeCycle(t *testing.T) {
 }
 
 func TestProxyServiceLifeCycle(t *testing.T) {
-	// TODO: add check for IPv6 address after Antrea Proxy supports IPv6
-	skipIfIPv6Cluster(t)
-	skipIfNotIPv4Cluster(t)
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
@@ -161,24 +208,54 @@ func TestProxyServiceLifeCycle(t *testing.T) {
 
 	skipIfProxyDisabled(t, data)
 
+	if len(clusterInfo.podV4NetworkCIDR) != 0 {
+		ipFamily := corev1.IPv4Protocol
+		testProxyServiceLifeCycle(&ipFamily, []string{"169.254.169.253", "169.254.169.254"}, data, t)
+	}
+	if len(clusterInfo.podV6NetworkCIDR) != 0 {
+		ipFamily := corev1.IPv6Protocol
+		testProxyServiceLifeCycle(&ipFamily, []string{"fd75::aabb:ccdd:ef00", "fd75::aabb:ccdd:ef01"}, data, t)
+	}
+}
+
+func testProxyServiceLifeCycle(ipFamily *corev1.IPFamily, ingressIPs []string, data *TestData, t *testing.T) {
 	nodeName := nodeName(1)
-	require.NoError(t, data.createNginxPod("nginx", nodeName))
-	nginxIPs, err := data.podWaitForIPs(defaultTimeout, "nginx", testNamespace)
+	nginx := "nginx"
+	require.NoError(t, data.createNginxPod(nginx, nodeName))
+	defer data.deletePodAndWait(defaultTimeout, nginx)
+	nginxIPs, err := data.podWaitForIPs(defaultTimeout, nginx, testNamespace)
 	require.NoError(t, err)
-	// TODO: Add support for IPv6 address after Antrea Proxy in IPv6 is supported
-	nginxIP := nginxIPs.ipv4.String()
-	svc, err := data.createNginxClusterIPService(false)
+	var nginxIP string
+	if *ipFamily == corev1.IPv6Protocol {
+		nginxIP = nginxIPs.ipv6.String()
+	} else {
+		nginxIP = nginxIPs.ipv4.String()
+	}
+	svc, err := data.createNginxClusterIPService(false, ipFamily)
+	defer data.deleteServiceAndWait(defaultTimeout, nginx)
 	require.NoError(t, err)
-	ingressIPs := []string{"169.254.169.253", "169.254.169.254"}
-	_, err = data.createNginxLoadBalancerService(false, ingressIPs)
+	_, err = data.createNginxLoadBalancerService(false, ingressIPs, ipFamily)
+	defer data.deleteServiceAndWait(defaultTimeout, nginxLBService)
 	require.NoError(t, err)
 	agentName, err := data.getAntreaPodOnNode(nodeName)
 	require.NoError(t, err)
 
 	svcLBflows := make([]string, len(ingressIPs)+1)
-	svcLBflows[0] = fmt.Sprintf("nw_dst=%s,tp_dst=80", svc.Spec.ClusterIP)
-	for idx, ingressIP := range ingressIPs {
-		svcLBflows[idx+1] = fmt.Sprintf("nw_dst=%s,tp_dst=80", ingressIP)
+	if *ipFamily == corev1.IPv6Protocol {
+		svcLBflows[0] = fmt.Sprintf("ipv6_dst=%s,tp_dst=80", svc.Spec.ClusterIP)
+		for idx, ingressIP := range ingressIPs {
+			svcLBflows[idx+1] = fmt.Sprintf("ipv6_dst=%s,tp_dst=80", ingressIP)
+		}
+	} else {
+		svcLBflows[0] = fmt.Sprintf("nw_dst=%s,tp_dst=80", svc.Spec.ClusterIP)
+		for idx, ingressIP := range ingressIPs {
+			svcLBflows[idx+1] = fmt.Sprintf("nw_dst=%s,tp_dst=80", ingressIP)
+		}
+	}
+
+	table42Format := "nat(dst=%s:80)"
+	if *ipFamily == corev1.IPv6Protocol {
+		table42Format = "nat(dst=[%s]:80)"
 	}
 	expectedFlows := []expectTableFlows{
 		{
@@ -187,12 +264,16 @@ func TestProxyServiceLifeCycle(t *testing.T) {
 		},
 		{
 			42,
-			[]string{fmt.Sprintf("nat(dst=%s:80)", nginxIP)}, // endpointNATTable
+			[]string{fmt.Sprintf(table42Format, nginxIP)}, // endpointNATTable
 		},
 	}
 
-	// TODO : add check for IPv6 address after Antrea Proxy is supported with IPv6
-	groupKeyword := fmt.Sprintf("load:0x%s->NXM_NX_REG3[],load:0x%x->NXM_NX_REG4[0..15],load:0x2->NXM_NX_REG4[16..18]", strings.TrimLeft(hex.EncodeToString(nginxIPs.ipv4.To4()), "0"), 80)
+	var groupKeyword string
+	if *ipFamily == corev1.IPv6Protocol {
+		groupKeyword = fmt.Sprintf("set_field:0x%s->xxreg3,load:0x%x->NXM_NX_REG4[0..15],load:0x2->NXM_NX_REG4[16..18]", strings.TrimLeft(hex.EncodeToString(nginxIPs.ipv6.To16()), "0"), 80)
+	} else {
+		groupKeyword = fmt.Sprintf("load:0x%s->NXM_NX_REG3[],load:0x%x->NXM_NX_REG4[0..15],load:0x2->NXM_NX_REG4[16..18]", strings.TrimLeft(hex.EncodeToString(nginxIPs.ipv4.To4()), "0"), 80)
+	}
 	groupOutput, _, err := data.runCommandFromPod(metav1.NamespaceSystem, agentName, "antrea-agent", []string{"ovs-ofctl", "dump-groups", defaultBridgeName})
 	require.NoError(t, err)
 	require.Contains(t, groupOutput, groupKeyword)
@@ -204,8 +285,8 @@ func TestProxyServiceLifeCycle(t *testing.T) {
 		}
 	}
 
-	require.NoError(t, data.deleteService("nginx"))
-	require.NoError(t, data.deleteService("nginx-loadbalancer"))
+	require.NoError(t, data.deleteService(nginx))
+	require.NoError(t, data.deleteService(nginxLBService))
 	time.Sleep(time.Second)
 
 	groupOutput, _, err = data.runCommandFromPod(metav1.NamespaceSystem, agentName, "antrea-agent", []string{"ovs-ofctl", "dump-groups", defaultBridgeName})

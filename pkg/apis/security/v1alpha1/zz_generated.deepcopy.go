@@ -249,6 +249,11 @@ func (in *NetworkPolicyPort) DeepCopyInto(out *NetworkPolicyPort) {
 		*out = new(intstr.IntOrString)
 		**out = **in
 	}
+	if in.EndPort != nil {
+		in, out := &in.EndPort, &out.EndPort
+		*out = new(int32)
+		**out = **in
+	}
 	return
 }
 
@@ -339,6 +344,13 @@ func (in *Rule) DeepCopyInto(out *Rule) {
 	}
 	if in.To != nil {
 		in, out := &in.To, &out.To
+		*out = make([]NetworkPolicyPeer, len(*in))
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
+		}
+	}
+	if in.AppliedTo != nil {
+		in, out := &in.AppliedTo, &out.AppliedTo
 		*out = make([]NetworkPolicyPeer, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])

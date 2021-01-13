@@ -36,7 +36,7 @@ to connect to the Antrea Agent. Simply exec into the antrea-agent container for
 the appropriate antrea-agent Pod and run `antctl`:
 
 ```bash
-kubectl exec -it <antrea-agent Pod name> -n kube-system -c antrea-agent bash
+kubectl exec -it ANTREA-AGENT_POD_NAME -n kube-system -c antrea-agent bash
 > antctl help
 ```
 
@@ -91,11 +91,11 @@ The following command prints the current log verbosity level:
 antctl log-level
 ```
 
-This command updates the log verbosity level (the `level` argument must be an
+This command updates the log verbosity level (the `LEVEL` argument must be an
 integer):
 
 ```bash
-antctl log-level <level>
+antctl log-level LEVEL
 ```
 
 ### Collecting support information
@@ -109,7 +109,7 @@ which you can upload and share when reporting issues on Github. Simply run the
 command as follows:
 
 ```bash
-antctl supportbundle [-d <TARGET_DIR>]
+antctl supportbundle [-d TARGET_DIR]
 ```
 
 If you omit to provide a directory, antctl will create one in the current
@@ -150,7 +150,10 @@ antctl get agentinfo
 
 ### NetworkPolicy commands
 
-Both Antrea Controller and Agent support querying NetworkPolicy objects.
+Both Antrea Controller and Agent support querying the NetworkPolicy objects in the Antrea
+control plane API. The source of a control plane NetworkPolicy is the original policy resource
+(K8s NetworkPolicy or Antrea-native Policy) from which the control plane NetworkPolicy was
+derived.
 
 - `antctl` `get networkpolicy` (or `get netpol`) command can print all
 NetworkPolicies, a specified NetworkPolicy, or NetworkPolicies in a specified
@@ -164,12 +167,13 @@ NetworkPolicy rules), or a specified AddressGroup.
 
 Using the `json` or `yaml` antctl output format can print more information of
 NetworkPolicy, AppliedToGroup, and AddressGroup, than using the default `table`
-output format.
+output format. The `NAME` of a control plane NetworkPolicy is the UID of its source
+NetworkPolicy.
 
 ```bash
-antctl get networkpolicy [name] [-n namespace] [-o yaml]
-antctl get appliedtogroup [name] [-o yaml]
-antctl get addressgroup [name] [-o yaml]
+antctl get networkpolicy [NAME] [-n NAMESPACE] [-o yaml]
+antctl get appliedtogroup [NAME] [-o yaml]
+antctl get addressgroup [NAME] [-o yaml]
 ```
 
 NetworkPolicy also supports `sort-by=effectivePriority` option, which can be used to
@@ -181,12 +185,25 @@ antrea-network-policy.md#antrea-native-policy-ordering-based-on-priorities).
 antctl get networkpolicy --sort-by=effectivePriority
 ```
 
-Antrea Agent additionally supports printing NetworkPolicies applied to a
-specified local Pod using this `antctl` command:
+Antrea Agent supports some extra `antctl` commands.
 
-```bash
-antctl get networkpolicy -p pod -n namespace
-```
+* Printing NetworkPolicies applied to a specific local Pod.
+
+  ```bash
+  antctl get networkpolicy -p POD -n NAMESPACE
+  ```
+
+* Printing NetworkPolicies with a specific source NetworkPolicy type.
+
+  ```bash
+  antctl get networkpolicy -T (K8sNP|ACNP|ANP)
+  ```
+  
+* Printing NetworkPolicies with a specific source NetworkPolicy name.
+
+  ```bash
+  antctl get networkpolicy -S SOURCE_NAME [-n NAMESPACE]
+  ```
 
 #### Mapping endpoints to NetworkPolicies
 
@@ -195,7 +212,7 @@ this Pod, either because they apply to the Pod directly or because one of their
 policy rules selects the Pod.
 
 ```bash
-antctl query endpoint -p pod [-n namespace]
+antctl query endpoint -p POD [-n NAMESPACE]
 ```
 
 If no Namespace is provided with `-n`, the command will default to the "default"
@@ -211,7 +228,7 @@ interface information of all local Pods, or a specified local Pod, or local Pods
 in the specified Namespace, or local Pods matching the specified Pod name.
 
 ```bash
-antctl get podinterface [name] [-n namespace]
+antctl get podinterface [NAME] [-n NAMESPACE]
 ```
 
 ### Dumping OVS flows
@@ -223,12 +240,14 @@ or flows in a specified OVS flow table.
 
 ```bash
 antctl get ovsflows
-antctl get ovsflows -p pod -n namespace
-antctl get ovsflows --networkpolicy networkpolicy -n namespace
-antctl get ovsflows -T table
+antctl get ovsflows -p POD -n NAMESPACE
+antctl get ovsflows --networkpolicy NETWORKPOLICY -n NAMESPACE
+antctl get ovsflows -T TABLE_A,TABLE_B
+antctl get ovsflows -T TABLE_A,TABLE_B_NUM
+antctl get ovsflows -T TABLE_A_NUM,TABLE_B_NUM
 ```
 
-An OVS flow table can be specified using the table name or the table number.
+OVS flow tables can be specified using table names, or the table numbers.
 `antctl get ovsflow --help` lists all Antrea flow tables. For more information
 about Antrea OVS pipeline and flows, please refer to the [OVS pipeline doc](design/ovs-pipeline.md).
 

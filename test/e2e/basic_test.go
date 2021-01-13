@@ -217,7 +217,7 @@ func TestAntreaGracefulExit(t *testing.T) {
 	} else if timeToDelete > maxDeleteTimeout {
 		t.Errorf("Antrea Pod took too long to delete: %v", timeToDelete)
 	}
-	// At the moment we only check that the Pod terminates in a reasonable amout of time (less
+	// At the moment we only check that the Pod terminates in a reasonable amount of time (less
 	// than the grace period), which means that all containers "honor" the SIGTERM signal.
 	// TODO: ideally we would be able to also check the exit code but it may not be possible.
 }
@@ -373,7 +373,7 @@ func testReconcileGatewayRoutesOnStartup(t *testing.T, data *TestData, isIPv6 bo
 
 	t.Logf("Retrieving gateway routes on Node '%s'", nodeName)
 	var routes []Route
-	if err := wait.PollImmediate(1*time.Second, defaultTimeout, func() (found bool, err error) {
+	if err := wait.PollImmediate(defaultInterval, defaultTimeout, func() (found bool, err error) {
 		routes, err = getGatewayRoutes()
 		if err != nil {
 			return false, err
@@ -467,7 +467,7 @@ func testReconcileGatewayRoutesOnStartup(t *testing.T, data *TestData, isIPv6 bo
 
 	// We expect the agent to delete the extra route we added and add back the route we deleted
 	t.Logf("Waiting for gateway routes to converge")
-	if err := wait.Poll(1*time.Second, defaultTimeout, func() (bool, error) {
+	if err := wait.Poll(defaultInterval, defaultTimeout, func() (bool, error) {
 		newRoutes, err := getGatewayRoutes()
 		if err != nil {
 			return false, err
@@ -560,7 +560,7 @@ func getRoundNumber(data *TestData, podName string) (uint64, error) {
 // the previous "round" which are no longer needed (e.g. in case of changes to the cluster / to
 // Network Policies) are removed correctly.
 func TestDeletePreviousRoundFlowsOnStartup(t *testing.T) {
-	skipIfRunCoverage(t, "killAgent does not work with Coverage")
+	skipIfRunCoverage(t, "Stopping Agent does not work with Coverage")
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
@@ -600,7 +600,7 @@ func TestDeletePreviousRoundFlowsOnStartup(t *testing.T) {
 
 	waitForNextRoundNum := func(roundNum uint64) uint64 {
 		var nextRoundNum uint64
-		if err := wait.Poll(1*time.Second, defaultTimeout, func() (bool, error) {
+		if err := wait.Poll(defaultInterval, defaultTimeout, func() (bool, error) {
 			nextRoundNum = roundNumber(podName)
 			if nextRoundNum != roundNum {
 				return true, nil
@@ -634,8 +634,8 @@ func TestDeletePreviousRoundFlowsOnStartup(t *testing.T) {
 	t.Logf("Adding dummy flow")
 	addFlow()
 
-	// killAgent stops the docker container, which should be re-created immediately by kubectl
-	killAgent := func() {
+	// stopAgent stops the docker container, which should be re-created immediately by kubectl
+	stopAgent := func() {
 		cmd := []string{"kill", "1"}
 		// ignore potential error as it is possible for the container to exit with code 137
 		// if the container does not restart properly, we will know when we try to get the
@@ -643,7 +643,7 @@ func TestDeletePreviousRoundFlowsOnStartup(t *testing.T) {
 		data.runCommandFromPod(antreaNamespace, podName, agentContainerName, cmd)
 	}
 	t.Logf("Restarting antrea-agent container on Node %s", nodeName)
-	killAgent()
+	stopAgent()
 	defer func() {
 		// "cleanup": delete agent to ensure the restart count goes back to 0
 		// this will also take care of deleting the flow in case of test failure
@@ -675,7 +675,7 @@ func TestDeletePreviousRoundFlowsOnStartup(t *testing.T) {
 	// In theory there should be no need to poll here because the agent only persists the new
 	// round number after stale flows have been deleted, but it is probably better not to make
 	// this assumption in an e2e test.
-	if err := wait.PollImmediate(1*time.Second, smallTimeout, func() (bool, error) {
+	if err := wait.PollImmediate(defaultInterval, smallTimeout, func() (bool, error) {
 		return !checkFlow(), nil
 
 	}); err != nil {

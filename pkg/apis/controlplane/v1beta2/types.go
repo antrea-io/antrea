@@ -158,9 +158,10 @@ type NetworkPolicy struct {
 	// Rules is a list of rules to be applied to the selected GroupMembers.
 	Rules []NetworkPolicyRule `json:"rules,omitempty" protobuf:"bytes,2,rep,name=rules"`
 	// AppliedToGroups is a list of names of AppliedToGroups to which this policy applies.
+	// Cannot be set in conjunction with any NetworkPolicyRule.AppliedToGroups in Rules.
 	AppliedToGroups []string `json:"appliedToGroups,omitempty" protobuf:"bytes,3,rep,name=appliedToGroups"`
 	// Priority represents the relative priority of this Network Policy as compared to
-	// other Network Policies. Priority will be unset (nil) for K8s Network Policy.
+	// other Network Policies. Priority will be unset (nil) for K8s NetworkPolicy.
 	Priority *float64 `json:"priority,omitempty" protobuf:"fixed64,4,opt,name=priority"`
 	// TierPriority represents the priority of the Tier associated with this Network
 	// Policy. The TierPriority will remain nil for K8s NetworkPolicy.
@@ -198,6 +199,10 @@ type NetworkPolicyRule struct {
 	Action *secv1alpha1.RuleAction `json:"action,omitempty" protobuf:"bytes,6,opt,name=action,casttype=github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1.RuleAction"`
 	// EnableLogging indicates whether or not to generate logs when rules are matched. Default to false.
 	EnableLogging bool `json:"enableLogging" protobuf:"varint,7,opt,name=enableLogging"`
+	// AppliedToGroups is a list of names of AppliedToGroups to which this rule applies.
+	// Cannot be set in conjunction with NetworkPolicy.AppliedToGroups of the NetworkPolicy
+	// that this Rule is referred to.
+	AppliedToGroups []string `json:"appliedToGroups,omitempty" protobuf:"bytes,8,opt,name=appliedToGroups"`
 }
 
 // Protocol defines network protocols supported for things like container ports.
@@ -221,6 +226,10 @@ type Service struct {
 	// The port name or number on the given protocol. If not specified, this matches all port numbers.
 	// +optional
 	Port *intstr.IntOrString `json:"port,omitempty" protobuf:"bytes,2,opt,name=port"`
+	// EndPort defines the end of the port range, being the end included within the range.
+	// It can only be specified when a numerical `port` is specified.
+	// +optional
+	EndPort *int32 `json:"endPort,omitempty" protobuf:"bytes,3,opt,name=endPort"`
 }
 
 // NetworkPolicyPeer describes a peer of NetworkPolicyRules.

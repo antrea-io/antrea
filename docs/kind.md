@@ -65,14 +65,14 @@ kind create cluster --config kind-config.yml
 
 ### Deploy Antrea to your Kind cluster
 
-These instructions assume that you have built the `antrea/antrea-ubuntu` Docker
-image locally (e.g. by running `make` from the root of the repository).
+These instructions assume that you have built the Antrea Docker image locally
+(e.g. by running `make` from the root of the repository).
 
 ```bash
 # "fix" the host's veth interfaces (for the different Kind Nodes)
 kind get nodes | xargs ./hack/kind-fix-networking.sh
 # load the Antrea Docker image in the Nodes
-kind load docker-image antrea/antrea-ubuntu:latest
+kind load docker-image projects.registry.vmware.com/antrea/antrea-ubuntu:latest
 # deploy Antrea
 ./hack/generate-manifest.sh --kind | kubectl apply -f -
 ```
@@ -93,7 +93,7 @@ antrea-controller-775f4d79f8-6tksp   1/1     Running   0          8m56s
 ## Run the Antrea e2e tests
 
 To run the Antrea e2e test suite on your Kind cluster, please refer to [this
-document](/test/e2e#running-the-e2e-tests-on-a-kind-cluster).
+document](../test/e2e/README.md#running-the-e2e-tests-on-a-kind-cluster).
 
 ## FAQ
 

@@ -18,7 +18,7 @@ THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 _BINDIR="$THIS_DIR/.bin"
 # Must be an exact match, as the generated YAMLs may not be consistent across
 # versions
-_KUSTOMIZE_VERSION="v3.8.2"
+_KUSTOMIZE_VERSION="v3.8.8"
 
 # Ensure the kustomize tool exists and is the correct version, or installs it
 verify_kustomize() {

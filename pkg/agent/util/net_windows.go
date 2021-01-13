@@ -300,30 +300,6 @@ func GetLocalBroadcastIP(ipNet *net.IPNet) net.IP {
 	return lastAddr
 }
 
-func RemoveIPv4AddrsFromAdapter(adapterName string) error {
-	cmd := fmt.Sprintf("Remove-NetIPAddress  -Confirm:$false -AddressFamily IPv4 -InterfaceAlias %s", adapterName)
-	return InvokePSCommand(cmd)
-}
-
-func GetAdapterIPv4Addr(adapterName string) (*net.IPNet, error) {
-	adapter, err := net.InterfaceByName(adapterName)
-	if err != nil {
-		return nil, err
-	}
-	addrs, err := adapter.Addrs()
-	if err != nil {
-		return nil, err
-	}
-	for _, ip := range addrs {
-		if ip, ok := ip.(*net.IPNet); ok {
-			if ip.IP.To4() != nil {
-				return ip, nil
-			}
-		}
-	}
-	return nil, fmt.Errorf("failed to find a valid IP on adapter %s", adapterName)
-}
-
 // GetDefaultGatewayByInterfaceIndex returns the default gateway configured on the speicified interface.
 func GetDefaultGatewayByInterfaceIndex(ifIndex int) (string, error) {
 	cmd := fmt.Sprintf("$(Get-NetRoute -InterfaceIndex %d -DestinationPrefix 0.0.0.0/0 ).NextHop", ifIndex)

@@ -283,12 +283,9 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 	klog.Infof("Starting %s", controllerName)
 	defer klog.Infof("Shutting down %s", controllerName)
 
-	klog.Infof("Waiting for caches to sync for %s", controllerName)
-	if !cache.WaitForCacheSync(stopCh, c.nodeListerSynced) {
-		klog.Errorf("Unable to sync caches for %s", controllerName)
+	if !cache.WaitForNamedCacheSync(controllerName, stopCh, c.nodeListerSynced) {
 		return
 	}
-	klog.Infof("Caches are synced for %s", controllerName)
 
 	if err := c.reconcile(); err != nil {
 		klog.Errorf("Error during %s reconciliation", controllerName)

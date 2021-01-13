@@ -358,7 +358,7 @@ func (b *OFBridge) AddFlowsInBundle(addflows []Flow, modFlows []Flow, delFlows [
 				return err
 			}
 			if err := tx.AddMessage(flowMod); err != nil {
-				// Close the bundle and abort it if there is error when adding the FlowMod message.
+				// Close the bundle and cancel it if there is error when adding the FlowMod message.
 				_, err := tx.Complete()
 				if err == nil {
 					tx.Abort()
@@ -389,7 +389,7 @@ func (b *OFBridge) AddFlowsInBundle(addflows []Flow, modFlows []Flow, delFlows [
 	} else if count != len(addflows)+len(modFlows)+len(delFlows) {
 		// This case should not be possible if all the calls to "tx.AddFlow" returned nil. This is just a sanity check.
 		tx.Abort()
-		return errors.New("failed to add all Openflow entries in one transaction, abort it")
+		return errors.New("failed to add all Openflow entries in one transaction, cancelling it")
 	}
 
 	// Commit the bundle to the OFSwitch. The "Commit" operation is sync, and the Openflow entries should be realized if
@@ -467,7 +467,7 @@ func (b *OFBridge) AddOFEntriesInBundle(addEntries []OFEntry, modEntries []OFEnt
 			// bundle by the switch. The number of entries successfully added to the bundle by the switch will be
 			// returned by function "Complete".
 			if err := tx.AddMessage(msg); err != nil {
-				// Close the bundle and abort it if there is error when adding the FlowMod message.
+				// Close the bundle and cancel it if there is error when adding the FlowMod message.
 				_, err := tx.Complete()
 				if err == nil {
 					tx.Abort()
@@ -496,7 +496,7 @@ func (b *OFBridge) AddOFEntriesInBundle(addEntries []OFEntry, modEntries []OFEnt
 	} else if count != len(addEntries)+len(modEntries)+len(delEntries) {
 		// This case should not be possible if all the calls to "tx.AddMessage" returned nil. This is just a sanity check.
 		tx.Abort()
-		return errors.New("failed to add all Openflow entries in one transaction, abort it")
+		return errors.New("failed to add all Openflow entries in one transaction, cancelling it")
 	}
 
 	// Commit the bundle to the OFSwitch. The "Commit" operation is sync, and the Openflow entries should be realized if

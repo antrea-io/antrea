@@ -45,8 +45,10 @@ type NetworkPolicySpec struct {
 	// Priority specfies the order of the NetworkPolicy relative to other
 	// NetworkPolicies.
 	Priority float64 `json:"priority"`
-	// Select workloads on which the rules will be applied to.
-	AppliedTo []NetworkPolicyPeer `json:"appliedTo"`
+	// Select workloads on which the rules will be applied to. Cannot be set in
+	// conjunction with AppliedTo in each rule.
+	// +optional
+	AppliedTo []NetworkPolicyPeer `json:"appliedTo,omitempty"`
 	// Set of ingress rules evaluated based on the order in which they are set.
 	// Currently Ingress rule supports setting the `From` field but not the `To`
 	// field within a Rule.
@@ -93,7 +95,7 @@ type Rule struct {
 	// Set of port and protocol allowed/denied by the rule. If this field is unset
 	// or empty, this rule matches all ports.
 	// +optional
-	Ports []NetworkPolicyPort `json:"ports"`
+	Ports []NetworkPolicyPort `json:"ports,omitempty"`
 	// Rule is matched if traffic originates from workloads selected by
 	// this field. If this field is empty, this rule matches all sources.
 	// +optional
@@ -110,6 +112,10 @@ type Rule struct {
 	// EnableLogging is used to indicate if agent should generate logs
 	// when rules are matched. Should be default to false.
 	EnableLogging bool `json:"enableLogging"`
+	// Select workloads on which this rule will be applied to. Cannot be set in
+	// conjunction with NetworkPolicySpec/ClusterNetworkPolicySpec.AppliedTo.
+	// +optional
+	AppliedTo []NetworkPolicyPeer `json:"appliedTo,omitempty"`
 }
 
 // NetworkPolicyPeer describes the grouping selector of workloads.
@@ -137,6 +143,7 @@ type NetworkPolicyPeer struct {
 	// ExternalEntities are matched from Namespaces matched by the
 	// NamespaceSelector.
 	// Cannot be set with any other selector except NamespaceSelector.
+	// +optional
 	ExternalEntitySelector *metav1.LabelSelector `json:"externalEntitySelector,omitempty"`
 }
 
@@ -153,13 +160,16 @@ type NetworkPolicyPort struct {
 	// The protocol (TCP, UDP, or SCTP) which traffic must match.
 	// If not specified, this field defaults to TCP.
 	// +optional
-	Protocol *v1.Protocol `json:"protocol"`
-	// The port on the given protocol. This can either be a numerical
+	Protocol *v1.Protocol `json:"protocol,omitempty"`
+	// The port on the given protocol. This can be either a numerical
 	// or named port on a Pod. If this field is not provided, this
 	// matches all port names and numbers.
-	// TODO: extend it to include Port Range.
 	// +optional
-	Port *intstr.IntOrString `json:"port"`
+	Port *intstr.IntOrString `json:"port,omitempty"`
+	// EndPort defines the end of the port range, being the end included within the range.
+	// It can only be specified when a numerical `port` is specified.
+	// +optional
+	EndPort *int32 `json:"endPort,omitempty"`
 }
 
 // RuleAction describes the action to be applied on traffic matching a rule.
@@ -208,8 +218,10 @@ type ClusterNetworkPolicySpec struct {
 	// Priority specfies the order of the ClusterNetworkPolicy relative to
 	// other AntreaClusterNetworkPolicies.
 	Priority float64 `json:"priority"`
-	// Select workloads on which the rules will be applied to.
-	AppliedTo []NetworkPolicyPeer `json:"appliedTo"`
+	// Select workloads on which the rules will be applied to. Cannot be set in
+	// conjunction with AppliedTo in each rule.
+	// +optional
+	AppliedTo []NetworkPolicyPeer `json:"appliedTo,omitempty"`
 	// Set of ingress rules evaluated based on the order in which they are set.
 	// Currently Ingress rule supports setting the `From` field but not the `To`
 	// field within a Rule.

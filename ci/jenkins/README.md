@@ -31,6 +31,18 @@ should be deleted. This ensures that all tests are run on a clean testbed.
 * [network policy [gated check-in]](https://jenkins.antrea-ci.rocks/job/antrea-networkpolicy-for-pull-request/):
   community tests using sonobuoy, focusing on "Feature:NetworkPolicy".
 
+* ipv6-ds-e2e: e2e tests in a dual-stack setup.
+
+* ipv6-ds-conformance: conformance tests in a dual-stack setup.
+
+* ipv6-ds-networkpolicy: NetworkPolicy tests in a dual-stack setup.
+
+* ipv6-only-e2e: e2e tests in an IPv6 only setup.
+
+* ipv6-only-conformance: conformance tests in an IPv6 only setup.
+
+* ipv6-only-networkpolicy: NetworkPolicy tests in an IPv6 only setup.
+
 * windows conformance: community tests on Windows cluster, focusing on "Conformance|sig-windows" and "sig-network",
   and skipping "LinuxOnly", "Slow", "Serial", "Disruptive", "Flaky", "Feature", "sig-cli", "sig-storage", "sig-auth",
   "sig-api-machinery", "sig-apps", "sig-node", "Privileged", "should be able to change the type from", "[sig-network]
@@ -79,7 +91,7 @@ should be deleted. This ensures that all tests are run on a clean testbed.
 
   |  K8s Version   |  Node Type          |  Node OS        |  Status  |
   | :------------: | :-----------------: | :-------------: | :------: |
-  |    1.16.13     |  Standard_DS2_v2    |  Ubuntu 16.04   |[![Build Status](http://jenkins.antrea-ci.rocks/buildStatus/icon?job=cloud-antrea-aks-conformance-net-policy)](http://jenkins.antrea-ci.rocks/view/cloud/job/cloud-antrea-aks-conformance-net-policy/)|
+  |    1.18.10     |  Standard_DS2_v2    |  Ubuntu 16.04   |[![Build Status](http://jenkins.antrea-ci.rocks/buildStatus/icon?job=cloud-antrea-aks-conformance-net-policy)](http://jenkins.antrea-ci.rocks/view/cloud/job/cloud-antrea-aks-conformance-net-policy/)|
 
 * [daily-elk-flow-collector-validate](https://jenkins.antrea-ci.rocks/job/antrea-daily-elk-flow-collector-validate-for-period/):
   [![Build Status](http://jenkins.antrea-ci.rocks/buildStatus/icon?job=antrea-daily-elk-flow-collector-validate-for-period)](http://jenkins.antrea-ci.rocks/view/cloud/job/antrea-daily-elk-flow-collector-validate-for-period/)

@@ -89,7 +89,8 @@ You can follow the steps listed below to install octant and antrea-octant-plugin
     rpm -i octant_0.16.1_Linux-64bit.rpm
     ```
 
-2. Export your kubeconfig path (file location depends on your setup) to environment variable $KUBECONFIG.
+2. Export your kubeconfig path (file location depends on your setup) to environment variable $KUBECONFIG,
+   otherwise `~/.kube/config` will be used.
 
     ```bash
     export KUBECONFIG=/etc/kubernetes/admin.conf

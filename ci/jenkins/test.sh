@@ -34,7 +34,11 @@ WINDOWS_CONFORMANCE_FOCUS="\[sig-network\].+\[Conformance\]|\[sig-windows\]"
 WINDOWS_CONFORMANCE_SKIP="\[LinuxOnly\]|\[Slow\]|\[Serial\]|\[Disruptive\]|\[Flaky\]|\[Feature:.+\]|\[sig-cli\]|\[sig-storage\]|\[sig-auth\]|\[sig-api-machinery\]|\[sig-apps\]|\[sig-node\]|\[Privileged\]|should be able to change the type from|\[sig-network\] Services should be able to create a functioning NodePort service \[Conformance\]|Service endpoints latency should not be very high"
 WINDOWS_NETWORKPOLICY_FOCUS="\[Feature:NetworkPolicy\]"
 WINDOWS_NETWORKPOLICY_SKIP="SKIP_NO_TESTCASE"
+CONFORMANCE_SKIP="\[Slow\]|\[Serial\]|\[Disruptive\]|\[Flaky\]|\[Feature:.+\]|\[sig-cli\]|\[sig-storage\]|\[sig-auth\]|\[sig-api-machinery\]|\[sig-apps\]|\[sig-node\]"
 NETWORKPOLICY_SKIP="should allow egress access to server in CIDR block|should enforce except clause while egress access to server in CIDR block"
+
+# TODO: change to "control-plane" when testbeds are updated to K8s v1.20
+CONTROL_PLANE_NODE_ROLE="master"
 
 _usage="Usage: $0 [--kubeconfig <KubeconfigSavePath>] [--workdir <HomePath>]
                   [--testcase <windows-install-ovs|windows-conformance|windows-networkpolicy|e2e|conformance|networkpolicy>]
@@ -127,7 +131,7 @@ function clean_antrea {
 
 function clean_for_windows_install_cni {
     # https://github.com/vmware-tanzu/antrea/issues/1577
-    kubectl get nodes -o wide --no-headers=true | awk '$3 != "master" && $1 ~ /win/ {print $6}' | while read IP; do
+    kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 != role && $1 ~ /win/ {print $6}' | while read IP; do
         CLEAN_LIST=("/cygdrive/c/opt/cni/bin/antrea.exe" "/cygdrive/c/opt/cni/bin/host-local.exe" "/cygdrive/c/k/antrea/etc/antrea-agent.conf" "/cygdrive/c/etc/cni/net.d/10-antrea.conflist" "/cygdrive/c/k/antrea/bin/antrea-agent.exe")
         for file in "${CLEAN_LIST[@]}"; do
             ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "rm ${file}" || true
@@ -144,7 +148,7 @@ function collect_windows_network_info_and_logs {
         kubectl exec "$AGENTNAME" -c antrea-agent -n kube-system -- ovs-vsctl show > "network_info/$AGENTNAME/db" || true
         kubectl exec "$AGENTNAME" -c antrea-agent -n kube-system -- ip a > "network_info/${AGENTNAME}/addrs" || true
     done
-    kubectl get nodes -o wide --no-headers=true | awk '$3 != "master" && $1 ~ /win/ {print $6}' | while read IP; do
+    kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 != role && $1 ~ /win/ {print $6}' | while read IP; do
         mkdir network_info/${IP}
         ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "powershell.exe get-NetAdapter" > "network_info/${IP}/adapters" || true
         ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "ipconfig.exe" > "network_info/${IP}/ipconfig" || true
@@ -196,10 +200,10 @@ function deliver_antrea_windows {
     export_govc_env_var
 
     cp -f build/yamls/*.yml $WORKDIR
-    docker save -o antrea-ubuntu.tar antrea/antrea-ubuntu:latest
+    docker save -o antrea-ubuntu.tar projects.registry.vmware.com/antrea/antrea-ubuntu:latest
 
     echo "===== Deliver Antrea to Linux nodes ====="
-    kubectl get nodes -o wide --no-headers=true | awk '$3 != "master" && $1 !~ /win/ {print $6}' | while read IP; do
+    kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 != role && $1 !~ /win/ {print $6}' | while read IP; do
         rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no" antrea-ubuntu.tar jenkins@${IP}:${WORKDIR}/antrea-ubuntu.tar
         ssh -o StrictHostKeyChecking=no -n jenkins@${IP} "docker images | grep 'antrea-ubuntu' | awk '{print \$3}' | xargs -r docker rmi ; docker load -i ${WORKDIR}/antrea-ubuntu.tar ; docker images | grep '<none>' | awk '{print \$3}' | xargs -r docker rmi" || true
     done
@@ -207,7 +211,7 @@ function deliver_antrea_windows {
     echo "===== Deliver Antrea Windows to Windows nodes ====="
     rm antrea-windows.tar.gz || true
     sed -i 's/if (!(Test-Path $AntreaAgentConfigPath))/if ($true)/' hack/windows/Helper.psm1
-    kubectl get nodes -o wide --no-headers=true | awk '$3 != "master" && $1 ~ /win/ {print $6}' | while read IP; do
+    kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 != role && $1 ~ /win/ {print $6}' | while read IP; do
         govc snapshot.revert -vm.ip ${IP} win-initial
         harbor_images=("sigwindowstools-kube-proxy:v1.18.0" "e2eteam-agnhost:2.13" "e2eteam-jessie-dnsutils:1.0" "e2eteam-pause:3.2")
         antrea_images=("sigwindowstools/kube-proxy:v1.18.0" "e2eteam/agnhost:2.13" "e2eteam/jessie-dnsutils:1.0" "e2eteam/pause:3.2")
@@ -238,8 +242,14 @@ function deliver_antrea_windows {
             scp -o StrictHostKeyChecking=no -T build/yamls/windows/base/conf/antrea-agent.conf Administrator@${IP}:/cygdrive/c/k/antrea/etc
         elif [ "$TESTCASE" == "windows-conformance" ]; then
             if ! (test -f antrea-windows.tar.gz); then
+                # Compress antrea repo and copy it to a Windows node
+                mkdir -p jenkins
+                tar --exclude='./jenkins' -czvf jenkins/antrea_repo.tar.gz -C "$(pwd)" .
+                for i in `seq 2`; do
+                    timeout 2m scp -o StrictHostKeyChecking=no -T jenkins/antrea_repo.tar.gz Administrator@${IP}: && break
+                done
                 ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "docker pull ${DOCKER_REGISTRY}/antrea/golang:1.15 && docker tag ${DOCKER_REGISTRY}/antrea/golang:1.15 golang:1.15"
-                ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "rm -rf antrea && git clone ${ghprbAuthorRepoGitUrl} antrea && cd antrea && git checkout $GIT_BRANCH && sed -i \"s|build/images/Dockerfile.build.windows .|build/images/Dockerfile.build.windows . --network host|g\" Makefile && DOCKER_REGISTRY=${DOCKER_REGISTRY} make build-windows && docker save -o antrea-windows.tar antrea/antrea-windows:latest && gzip -f antrea-windows.tar" || true
+                ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "rm -rf antrea && mkdir antrea && cd antrea && tar -xzvf ../antrea_repo.tar.gz && sed -i \"s|build/images/Dockerfile.build.windows .|build/images/Dockerfile.build.windows . --network host|g\" Makefile && DOCKER_REGISTRY=${DOCKER_REGISTRY} make build-windows && docker save -o antrea-windows.tar projects.registry.vmware.com/antrea/antrea-windows:latest && gzip -f antrea-windows.tar" || true
                 for i in `seq 2`; do
                     timeout 2m scp -o StrictHostKeyChecking=no -T Administrator@${IP}:antrea/antrea-windows.tar.gz . && break
                 done
@@ -275,6 +285,8 @@ function deliver_antrea {
     docker images | grep '<none>' | awk '{print $3}' | xargs -r docker rmi || true
     if [[ "${DOCKER_REGISTRY}" != "" ]]; then
         pull_antrea_ubuntu_image
+        docker pull "${DOCKER_REGISTRY}/antrea/sonobuoy-systemd-logs:v0.3"
+        docker tag "${DOCKER_REGISTRY}/antrea/sonobuoy-systemd-logs:v0.3" "sonobuoy/systemd-logs:v0.3"
     fi
     DOCKER_REGISTRY=${DOCKER_REGISTRY} make
 
@@ -294,11 +306,14 @@ function deliver_antrea {
     done
 
     cp -f build/yamls/*.yml $WORKDIR
-    docker save -o antrea-ubuntu.tar antrea/antrea-ubuntu:latest
+    docker save -o antrea-ubuntu.tar projects.registry.vmware.com/antrea/antrea-ubuntu:latest
 
-    kubectl get nodes -o wide --no-headers=true | awk '$3 != "master" {print $6}' | while read IP; do
+    kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 != role {print $6}' | while read IP; do
         rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no" antrea-ubuntu.tar jenkins@[${IP}]:${WORKDIR}/antrea-ubuntu.tar
         ssh -o StrictHostKeyChecking=no -n jenkins@${IP} "docker images | grep 'antrea-ubuntu' | awk '{print \$3}' | xargs -r docker rmi ; docker load -i ${WORKDIR}/antrea-ubuntu.tar ; docker images | grep '<none>' | awk '{print \$3}' | xargs -r docker rmi" || true
+        if [[ "${DOCKER_REGISTRY}" != "" ]]; then
+            ssh -o StrictHostKeyChecking=no -n jenkins@${IP} "docker pull ${DOCKER_REGISTRY}/antrea/sonobuoy-systemd-logs:v0.3 ; docker tag ${DOCKER_REGISTRY}/antrea/sonobuoy-systemd-logs:v0.3 sonobuoy/systemd-logs:v0.3"
+        fi
     done
 }
 
@@ -317,7 +332,7 @@ function run_e2e {
 
     set +e
     mkdir -p `pwd`/antrea-test-logs
-    go test -v github.com/vmware-tanzu/antrea/test/e2e --logs-export-dir `pwd`/antrea-test-logs -timeout=40m
+    go test -v github.com/vmware-tanzu/antrea/test/e2e --logs-export-dir `pwd`/antrea-test-logs -timeout=50m
     if [[ "$?" != "0" ]]; then
         TEST_FAILURE=true
     fi
@@ -342,9 +357,9 @@ function run_conformance {
     kubectl rollout status daemonset/antrea-agent -n kube-system
 
     if [[ "$TESTCASE" =~ "conformance" ]]; then
-        ${WORKSPACE}/ci/run-k8s-e2e-tests.sh --e2e-conformance --log-mode $MODE --image-pull-policy ${IMAGE_PULL_POLICY} > ${WORKSPACE}/test-result.log
+        ${WORKSPACE}/ci/run-k8s-e2e-tests.sh --e2e-conformance --e2e-skip "$CONFORMANCE_SKIP" --log-mode $MODE --image-pull-policy ${IMAGE_PULL_POLICY} --kube-conformance-image-version "auto" > ${WORKSPACE}/test-result.log
     else
-        ${WORKSPACE}/ci/run-k8s-e2e-tests.sh --e2e-network-policy --e2e-networkpolicy-skip $NETWORKPOLICY_SKIP --log-mode $MODE --image-pull-policy ${IMAGE_PULL_POLICY} > ${WORKSPACE}/test-result.log
+        ${WORKSPACE}/ci/run-k8s-e2e-tests.sh --e2e-network-policy --e2e-skip "$NETWORKPOLICY_SKIP" --log-mode $MODE --image-pull-policy ${IMAGE_PULL_POLICY} --kube-conformance-image-version "auto" > ${WORKSPACE}/test-result.log
     fi
 
     cat ${WORKSPACE}/test-result.log
@@ -376,7 +391,7 @@ function run_conformance_windows {
         kubectl rollout status daemonset/antrea-agent -n kube-system
         kubectl rollout status daemonset.apps/antrea-agent-windows -n kube-system
         kubectl rollout status daemonset/kube-proxy-windows -n kube-system
-        kubectl get nodes -o wide --no-headers=true | awk '$3 != "master" && $1 ~ /win/ {print $6}' | while read IP; do
+        kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 != role && $1 ~ /win/ {print $6}' | while read IP; do
             for i in `seq 5`; do
                 sleep 5
                 timeout 5s ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "powershell Get-NetAdapter -Name br-int -ErrorAction SilentlyContinue" && break
@@ -389,7 +404,7 @@ function run_conformance_windows {
         kubectl rollout status deployment/coredns -n kube-system
         kubectl rollout status deployment.apps/antrea-controller -n kube-system
         kubectl rollout status daemonset/antrea-agent -n kube-system
-        kubectl get nodes -o wide --no-headers=true | awk '$3 != "master" && $1 ~ /win/ {print $6}' | while read IP; do
+        kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 != role && $1 ~ /win/ {print $6}' | while read IP; do
             echo "===== Run script to startup antrea agent ====="
             ANTREA_VERSION=$(ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "/cygdrive/c/k/antrea/bin/antrea-agent.exe --version" | awk '{print $3}')
             ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "chmod +x /cygdrive/c/k/antrea/Start.ps1 && powershell 'c:\k\antrea\Start.ps1 -AntreaVersion ${ANTREA_VERSION}'"
@@ -404,9 +419,9 @@ function run_conformance_windows {
     echo "====== Run test with e2e.test ======"
     export KUBE_TEST_REPO_LIST=${WORKDIR}/repo_list
     if [ "$TESTCASE" == "windows-networkpolicy" ]; then
-        ginkgo -p -nodes 8 --seed=1592804472 --noColor $E2ETEST_PATH -- --provider=skeleton --ginkgo.focus=$WINDOWS_NETWORKPOLICY_FOCUS --ginkgo.skip=$WINDOWS_NETWORKPOLICY_SKIP > windows_conformance_result_no_color.txt || true
+        ginkgo -p -nodes 8 --seed=1592804472 --noColor $E2ETEST_PATH -- --provider=skeleton --ginkgo.focus="$WINDOWS_NETWORKPOLICY_FOCUS" --ginkgo.skip="$WINDOWS_NETWORKPOLICY_SKIP" > windows_conformance_result_no_color.txt || true
     else
-        ginkgo --noColor $E2ETEST_PATH -- --provider=skeleton --node-os-distro=windows --ginkgo.focus=$WINDOWS_CONFORMANCE_FOCUS --ginkgo.skip=$WINDOWS_CONFORMANCE_SKIP > windows_conformance_result_no_color.txt || true
+        ginkgo --noColor $E2ETEST_PATH -- --provider=skeleton --node-os-distro=windows --ginkgo.focus="$WINDOWS_CONFORMANCE_FOCUS" --ginkgo.skip="$WINDOWS_CONFORMANCE_SKIP" > windows_conformance_result_no_color.txt || true
     fi
 
     if grep -Fxq "Test Suite Failed" windows_conformance_result_no_color.txt; then

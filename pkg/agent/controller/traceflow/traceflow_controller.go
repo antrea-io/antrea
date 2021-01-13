@@ -152,18 +152,13 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 	klog.Infof("Starting %s", controllerName)
 	defer klog.Infof("Shutting down %s", controllerName)
 
-	klog.Infof("Waiting for caches to sync for %s", controllerName)
+	cacheSyncs := []cache.InformerSynced{c.traceflowListerSynced}
 	if features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
-		if !cache.WaitForCacheSync(stopCh, c.serviceListerSynced) {
-			klog.Errorf("Unable to sync service cache for %s", controllerName)
-			return
-		}
+		cacheSyncs = append(cacheSyncs, c.serviceListerSynced)
 	}
-	if !cache.WaitForCacheSync(stopCh, c.traceflowListerSynced) {
-		klog.Errorf("Unable to sync caches for %s", controllerName)
+	if !cache.WaitForNamedCacheSync(controllerName, stopCh, cacheSyncs...) {
 		return
 	}
-	klog.Infof("Caches are synced for %s", controllerName)
 
 	for i := 0; i < defaultWorkers; i++ {
 		go wait.Until(c.worker, time.Second, stopCh)
@@ -225,7 +220,7 @@ func (c *Controller) processTraceflowItem() bool {
 		c.queue.Forget(key)
 	} else {
 		// If error occurs we log error.
-		klog.Errorf("Error syncing Traceflow %s, Aborting. Error: %v", key, err)
+		klog.Errorf("Error syncing Traceflow %s, exiting. Error: %v", key, err)
 	}
 	return true
 }
@@ -368,7 +363,9 @@ func (c *Controller) injectPacket(tf *opsv1alpha1.Traceflow) error {
 	if tf.Spec.Packet.TransportHeader.TCP != nil {
 		srcTCPPort = uint16(tf.Spec.Packet.TransportHeader.TCP.SrcPort)
 		dstTCPPort = uint16(tf.Spec.Packet.TransportHeader.TCP.DstPort)
-		flagsTCP = uint8(tf.Spec.Packet.TransportHeader.TCP.Flags)
+		if tf.Spec.Packet.TransportHeader.TCP.Flags != 0 {
+			flagsTCP = uint8(tf.Spec.Packet.TransportHeader.TCP.Flags)
+		}
 	}
 	if tf.Spec.Packet.TransportHeader.UDP != nil {
 		srcUDPPort = uint16(tf.Spec.Packet.TransportHeader.UDP.SrcPort)

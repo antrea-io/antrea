@@ -35,13 +35,13 @@ func TestBenchmarkBandwidthIntraNode(t *testing.T) {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
 	defer teardownTest(t, data)
-	if err := data.createPodOnNode("perftest-a", masterNodeName(), perftoolImage, nil, nil, nil, nil, false, nil); err != nil {
+	if err := data.createPodOnNode("perftest-a", controlPlaneNodeName(), perftoolImage, nil, nil, nil, nil, false, nil); err != nil {
 		t.Fatalf("Error when creating the perftest client Pod: %v", err)
 	}
 	if err := data.podWaitForRunning(defaultTimeout, "perftest-a", testNamespace); err != nil {
 		t.Fatalf("Error when waiting for the perftest client Pod: %v", err)
 	}
-	if err := data.createPodOnNode("perftest-b", masterNodeName(), perftoolImage, nil, nil, nil, []v1.ContainerPort{{Protocol: v1.ProtocolTCP, ContainerPort: iperfPort}}, false, nil); err != nil {
+	if err := data.createPodOnNode("perftest-b", controlPlaneNodeName(), perftoolImage, nil, nil, nil, []v1.ContainerPort{{Protocol: v1.ProtocolTCP, ContainerPort: iperfPort}}, false, nil); err != nil {
 		t.Fatalf("Error when creating the perftest server Pod: %v", err)
 	}
 	podBIPs, err := data.podWaitForIPs(defaultTimeout, "perftest-b", testNamespace)
@@ -64,7 +64,7 @@ func benchmarkBandwidthService(t *testing.T, endpointNode, clientNode string) {
 	}
 	defer teardownTest(t, data)
 
-	svc, err := data.createService("perftest-b", iperfPort, iperfPort, map[string]string{"antrea-e2e": "perftest-b"}, false, v1.ServiceTypeClusterIP)
+	svc, err := data.createService("perftest-b", iperfPort, iperfPort, map[string]string{"antrea-e2e": "perftest-b"}, false, v1.ServiceTypeClusterIP, nil)
 	if err != nil {
 		t.Fatalf("Error when creating perftest service: %v", err)
 	}
@@ -92,7 +92,7 @@ func benchmarkBandwidthService(t *testing.T, endpointNode, clientNode string) {
 // traffic between a Pod and an Endpoint on same Node.
 func TestBenchmarkBandwidthServiceLocalAccess(t *testing.T) {
 	skipIfNotBenchmarkTest(t)
-	benchmarkBandwidthService(t, masterNodeName(), masterNodeName())
+	benchmarkBandwidthService(t, controlPlaneNodeName(), controlPlaneNodeName())
 }
 
 // TestBenchmarkBandwidthServiceRemoteAccess runs the bandwidth benchmark of service
@@ -100,7 +100,7 @@ func TestBenchmarkBandwidthServiceLocalAccess(t *testing.T) {
 func TestBenchmarkBandwidthServiceRemoteAccess(t *testing.T) {
 	skipIfNotBenchmarkTest(t)
 	skipIfNumNodesLessThan(t, 2)
-	benchmarkBandwidthService(t, masterNodeName(), workerNodeName(1))
+	benchmarkBandwidthService(t, controlPlaneNodeName(), workerNodeName(1))
 }
 
 func TestPodTrafficShaping(t *testing.T) {
@@ -109,7 +109,7 @@ func TestPodTrafficShaping(t *testing.T) {
 	// Test is flaky on dual-stack clusters: https://github.com/vmware-tanzu/antrea/issues/1543.
 	// So we disable it except for IPv4 single-stack clusters for now.
 	skipIfIPv6Cluster(t)
-	nodeName := masterNodeName()
+	nodeName := controlPlaneNodeName()
 	skipIfMissingKernelModule(t, nodeName, []string{"ifb", "sch_tbf", "sch_ingress"})
 	data, err := setupTest(t)
 	if err != nil {

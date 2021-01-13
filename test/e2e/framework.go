@@ -28,6 +28,7 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/mod/semver"
 	"gopkg.in/yaml.v2"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
@@ -53,24 +54,29 @@ import (
 )
 
 const (
-	defaultTimeout = 90 * time.Second
+	defaultTimeout  = 90 * time.Second
+	defaultInterval = 1 * time.Second
 
 	// antreaNamespace is the K8s Namespace in which all Antrea resources are running.
-	antreaNamespace      string = "kube-system"
-	antreaConfigVolume   string = "antrea-config"
-	antreaDaemonSet      string = "antrea-agent"
-	antreaDeployment     string = "antrea-controller"
-	antreaDefaultGW      string = "antrea-gw0"
-	testNamespace        string = "antrea-test"
-	busyboxContainerName string = "busybox"
-	ovsContainerName     string = "antrea-ovs"
-	agentContainerName   string = "antrea-agent"
-	antreaYML            string = "antrea.yml"
-	antreaIPSecYML       string = "antrea-ipsec.yml"
-	antreaCovYML         string = "antrea-coverage.yml"
-	antreaIPSecCovYML    string = "antrea-ipsec-coverage.yml"
-	defaultBridgeName    string = "br-int"
-	monitoringNamespace  string = "monitoring"
+	antreaNamespace            string = "kube-system"
+	flowAggregatorNamespace    string = "flow-aggregator"
+	antreaConfigVolume         string = "antrea-config"
+	flowAggregatorConfigVolume string = "flow-aggregator-config"
+	antreaDaemonSet            string = "antrea-agent"
+	antreaDeployment           string = "antrea-controller"
+	flowAggregatorDeployment   string = "flow-aggregator"
+	antreaDefaultGW            string = "antrea-gw0"
+	testNamespace              string = "antrea-test"
+	busyboxContainerName       string = "busybox"
+	ovsContainerName           string = "antrea-ovs"
+	agentContainerName         string = "antrea-agent"
+	antreaYML                  string = "antrea.yml"
+	antreaIPSecYML             string = "antrea-ipsec.yml"
+	antreaCovYML               string = "antrea-coverage.yml"
+	antreaIPSecCovYML          string = "antrea-ipsec-coverage.yml"
+	flowaggregatorYML          string = "flow-aggregator.yml"
+	defaultBridgeName          string = "br-int"
+	monitoringNamespace        string = "monitoring"
 
 	antreaControllerCovBinary string = "antrea-controller-coverage"
 	antreaAgentCovBinary      string = "antrea-agent-coverage"
@@ -79,6 +85,7 @@ const (
 
 	antreaAgentConfName      string = "antrea-agent.conf"
 	antreaControllerConfName string = "antrea-controller.conf"
+	flowAggregatorConfName   string = "flow-aggregator.conf"
 
 	nameSuffixLength int = 8
 
@@ -86,24 +93,27 @@ const (
 	busyboxImage        = "projects.registry.vmware.com/library/busybox"
 	nginxImage          = "projects.registry.vmware.com/antrea/nginx"
 	perftoolImage       = "projects.registry.vmware.com/antrea/perftool"
-	ipfixCollectorImage = "projects.registry.vmware.com/antrea/ipfix-collector:v0.3.1"
+	ipfixCollectorImage = "projects.registry.vmware.com/antrea/ipfix-collector:v0.4.2"
 	ipfixCollectorPort  = "4739"
+
+	nginxLBService = "nginx-loadbalancer"
 )
 
 type ClusterNode struct {
-	idx  int // 0 for master Node
+	idx  int // 0 for control-plane Node
 	name string
 }
 
 type ClusterInfo struct {
-	numWorkerNodes   int
-	numNodes         int
-	podV4NetworkCIDR string
-	podV6NetworkCIDR string
-	svcV4NetworkCIDR string
-	svcV6NetworkCIDR string
-	masterNodeName   string
-	nodes            map[int]ClusterNode
+	numWorkerNodes       int
+	numNodes             int
+	podV4NetworkCIDR     string
+	podV6NetworkCIDR     string
+	svcV4NetworkCIDR     string
+	svcV6NetworkCIDR     string
+	controlPlaneNodeName string
+	nodes                map[int]ClusterNode
+	k8sServerVersion     string
 }
 
 var clusterInfo ClusterInfo
@@ -165,9 +175,9 @@ func (p *PodIPs) hasSameIP(p1 *PodIPs) bool {
 }
 
 // workerNodeName returns an empty string if there is no worker Node with the provided idx
-// (including if idx is 0, which is reserved for the master Node)
+// (including if idx is 0, which is reserved for the control-plane Node)
 func workerNodeName(idx int) string {
-	if idx == 0 { // master Node
+	if idx == 0 { // control-plane Node
 		return ""
 	}
 	if node, ok := clusterInfo.nodes[idx]; !ok {
@@ -177,18 +187,30 @@ func workerNodeName(idx int) string {
 	}
 }
 
-func masterNodeName() string {
-	return clusterInfo.masterNodeName
+func controlPlaneNodeName() string {
+	return clusterInfo.controlPlaneNodeName
 }
 
 // nodeName returns an empty string if there is no Node with the provided idx. If idx is 0, the name
-// of the master Node will be returned.
+// of the control-plane Node will be returned.
 func nodeName(idx int) string {
 	if node, ok := clusterInfo.nodes[idx]; !ok {
 		return ""
 	} else {
 		return node.name
 	}
+}
+
+func labelNodeRoleControlPlane() string {
+	// TODO: return labelNodeRoleControlPlane unconditionally when the min K8s version
+	// requirement to run Antrea becomes K8s v1.20
+	const labelNodeRoleControlPlane = "node-role.kubernetes.io/control-plane"
+	const labelNodeRoleOldControlPlane = "node-role.kubernetes.io/master"
+	// If clusterInfo.k8sServerVersion < "v1.20.0"
+	if semver.Compare(clusterInfo.k8sServerVersion, "v1.20.0") < 0 {
+		return labelNodeRoleOldControlPlane
+	}
+	return labelNodeRoleControlPlane
 }
 
 func initProvider() error {
@@ -223,16 +245,16 @@ func collectClusterInfo() error {
 	workerIdx := 1
 	clusterInfo.nodes = make(map[int]ClusterNode)
 	for _, node := range nodes.Items {
-		isMaster := func() bool {
-			_, ok := node.Labels["node-role.kubernetes.io/master"]
+		isControlPlaneNode := func() bool {
+			_, ok := node.Labels[labelNodeRoleControlPlane()]
 			return ok
 		}()
 
 		var nodeIdx int
-		// If multiple master Nodes (HA), we will select the last one in the list
-		if isMaster {
+		// If multiple control-plane Nodes (HA), we will select the last one in the list
+		if isControlPlaneNode {
 			nodeIdx = 0
-			clusterInfo.masterNodeName = node.Name
+			clusterInfo.controlPlaneNodeName = node.Name
 		} else {
 			nodeIdx = workerIdx
 			workerIdx++
@@ -243,17 +265,17 @@ func collectClusterInfo() error {
 			name: node.Name,
 		}
 	}
-	if clusterInfo.masterNodeName == "" {
-		return fmt.Errorf("error when listing cluster Nodes: master Node not found")
+	if clusterInfo.controlPlaneNodeName == "" {
+		return fmt.Errorf("error when listing cluster Nodes: control-plane Node not found")
 	}
 	clusterInfo.numNodes = workerIdx
 	clusterInfo.numWorkerNodes = clusterInfo.numNodes - 1
 
 	retrieveCIDRs := func(cmd string, reg string) ([]string, error) {
 		res := make([]string, 2)
-		rc, stdout, _, err := RunCommandOnNode(clusterInfo.masterNodeName, cmd)
+		rc, stdout, _, err := RunCommandOnNode(clusterInfo.controlPlaneNodeName, cmd)
 		if err != nil || rc != 0 {
-			return res, fmt.Errorf("error when running the following command `%s` on master Node: %v, %s", cmd, err, stdout)
+			return res, fmt.Errorf("error when running the following command `%s` on control-plane Node: %v, %s", cmd, err, stdout)
 		}
 		re := regexp.MustCompile(reg)
 		if matches := re.FindStringSubmatch(stdout); len(matches) == 0 {
@@ -305,6 +327,14 @@ func collectClusterInfo() error {
 	clusterInfo.svcV4NetworkCIDR = svcCIDRs[0]
 	clusterInfo.svcV6NetworkCIDR = svcCIDRs[1]
 
+	// retrieve K8s server version
+
+	serverVersion, err := testData.clientset.Discovery().ServerVersion()
+	if err != nil {
+		return err
+	}
+	clusterInfo.k8sServerVersion = serverVersion.String()
+
 	return nil
 }
 
@@ -348,7 +378,7 @@ func (data *TestData) deleteNamespace(namespace string, timeout time.Duration) e
 		}
 		return fmt.Errorf("error when deleting '%s' Namespace: %v", namespace, err)
 	}
-	err := wait.Poll(1*time.Second, timeout, func() (bool, error) {
+	err := wait.Poll(defaultInterval, timeout, func() (bool, error) {
 		if ns, err := data.clientset.CoreV1().Namespaces().Get(context.TODO(), namespace, metav1.GetOptions{}); err != nil {
 			if errors.IsNotFound(err) {
 				// Success
@@ -370,19 +400,19 @@ func (data *TestData) deleteTestNamespace(timeout time.Duration) error {
 	return data.deleteNamespace(testNamespace, timeout)
 }
 
-// deployAntreaCommon deploys Antrea using kubectl on the master node.
+// deployAntreaCommon deploys Antrea using kubectl on the control-plane Node.
 func (data *TestData) deployAntreaCommon(yamlFile string, extraOptions string) error {
 	// TODO: use the K8s apiserver when server side apply is available?
 	// See https://kubernetes.io/docs/reference/using-api/api-concepts/#server-side-apply
-	rc, _, _, err := provider.RunCommandOnNode(masterNodeName(), fmt.Sprintf("kubectl apply %s -f %s", extraOptions, yamlFile))
+	rc, _, _, err := provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl apply %s -f %s", extraOptions, yamlFile))
 	if err != nil || rc != 0 {
-		return fmt.Errorf("error when deploying Antrea; is %s available on the master Node?", yamlFile)
+		return fmt.Errorf("error when deploying Antrea; is %s available on the control-plane Node?", yamlFile)
 	}
-	rc, _, _, err = provider.RunCommandOnNode(masterNodeName(), fmt.Sprintf("kubectl -n %s rollout status deploy/%s --timeout=%v", antreaNamespace, antreaDeployment, defaultTimeout))
+	rc, _, _, err = provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl -n %s rollout status deploy/%s --timeout=%v", antreaNamespace, antreaDeployment, defaultTimeout))
 	if err != nil || rc != 0 {
 		return fmt.Errorf("error when waiting for antrea-controller rollout to complete")
 	}
-	rc, _, _, err = provider.RunCommandOnNode(masterNodeName(), fmt.Sprintf("kubectl -n %s rollout status ds/%s --timeout=%v", antreaNamespace, antreaDaemonSet, defaultTimeout))
+	rc, _, _, err = provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl -n %s rollout status ds/%s --timeout=%v", antreaNamespace, antreaDaemonSet, defaultTimeout))
 	if err != nil || rc != 0 {
 		return fmt.Errorf("error when waiting for antrea-agent rollout to complete")
 	}
@@ -412,11 +442,70 @@ func (data *TestData) deployAntreaFlowExporter(ipfixCollector string) error {
 	return data.mutateAntreaConfigMap(func(data map[string]string) {
 		antreaAgentConf, _ := data["antrea-agent.conf"]
 		antreaAgentConf = strings.Replace(antreaAgentConf, "#  FlowExporter: false", "  FlowExporter: true", 1)
-		antreaAgentConf = strings.Replace(antreaAgentConf, "#flowCollectorAddr: \"\"", fmt.Sprintf("flowCollectorAddr: \"%s\"", ipfixCollector), 1)
+		if ipfixCollector != "" {
+			antreaAgentConf = strings.Replace(antreaAgentConf, "#flowCollectorAddr: \"flow-aggregator.flow-aggregator.svc:4739:tcp\"", fmt.Sprintf("flowCollectorAddr: \"%s\"", ipfixCollector), 1)
+		}
 		antreaAgentConf = strings.Replace(antreaAgentConf, "#flowPollInterval: \"5s\"", "flowPollInterval: \"1s\"", 1)
-		antreaAgentConf = strings.Replace(antreaAgentConf, "#flowExportFrequency: 12", "flowExportFrequency: 5", 1)
+		antreaAgentConf = strings.Replace(antreaAgentConf, "#flowExportFrequency: 12", "flowExportFrequency: 2", 1)
 		data["antrea-agent.conf"] = antreaAgentConf
 	}, false, true)
+}
+
+// deployFlowAggregator deploys flow aggregator with ipfix collector address.
+func (data *TestData) deployFlowAggregator(ipfixCollector string) (string, error) {
+	rc, _, _, err := provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl apply -f %s", flowaggregatorYML))
+	if err != nil || rc != 0 {
+		return "", fmt.Errorf("error when deploying flow aggregator; %s not available on the control-plane Node", flowaggregatorYML)
+	}
+	if err = data.mutateFlowAggregatorConfigMap(ipfixCollector); err != nil {
+		return "", err
+	}
+	if rc, _, _, err = provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl -n %s rollout status deployment/%s --timeout=%v", flowAggregatorNamespace, flowAggregatorDeployment, 2*defaultTimeout)); err != nil || rc != 0 {
+		_, stdout, _, _ := provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl -n %s describe pod", flowAggregatorNamespace))
+		return stdout, fmt.Errorf("error when waiting for flow aggregator rollout to complete. kubectl describe output: %v", stdout)
+	}
+	svc, err := data.clientset.CoreV1().Services(flowAggregatorNamespace).Get(context.TODO(), flowAggregatorDeployment, metav1.GetOptions{})
+	if err != nil {
+		return "", fmt.Errorf("unable to get service %v: %v", flowAggregatorDeployment, err)
+	}
+	return svc.Spec.ClusterIP, nil
+}
+
+func (data *TestData) mutateFlowAggregatorConfigMap(ipfixCollector string) error {
+	configMap, err := data.GetFlowAggregatorConfigMap()
+	if err != nil {
+		return err
+	}
+	flowAggregatorConf, _ := configMap.Data[flowAggregatorConfName]
+	flowAggregatorConf = strings.Replace(flowAggregatorConf, "#externalFlowCollectorAddr: \"\"", fmt.Sprintf("externalFlowCollectorAddr: \"%s\"", ipfixCollector), 1)
+	flowAggregatorConf = strings.Replace(flowAggregatorConf, "#flowExportInterval: 60s", "flowExportInterval: 5s", 1)
+	configMap.Data[flowAggregatorConfName] = flowAggregatorConf
+	if _, err := data.clientset.CoreV1().ConfigMaps(flowAggregatorNamespace).Update(context.TODO(), configMap, metav1.UpdateOptions{}); err != nil {
+		return fmt.Errorf("failed to update ConfigMap %s: %v", configMap.Name, err)
+	}
+	return nil
+}
+
+func (data *TestData) GetFlowAggregatorConfigMap() (*corev1.ConfigMap, error) {
+	deployment, err := data.clientset.AppsV1().Deployments(flowAggregatorNamespace).Get(context.TODO(), flowAggregatorDeployment, metav1.GetOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve Flow aggregator deployment: %v", err)
+	}
+	var configMapName string
+	for _, volume := range deployment.Spec.Template.Spec.Volumes {
+		if volume.ConfigMap != nil && volume.Name == flowAggregatorConfigVolume {
+			configMapName = volume.ConfigMap.Name
+			break
+		}
+	}
+	if len(configMapName) == 0 {
+		return nil, fmt.Errorf("failed to locate %s ConfigMap volume", flowAggregatorConfigVolume)
+	}
+	configMap, err := data.clientset.CoreV1().ConfigMaps(flowAggregatorNamespace).Get(context.TODO(), configMapName, metav1.GetOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get ConfigMap %s: %v", configMapName, err)
+	}
+	return configMap, nil
 }
 
 // getAgentContainersRestartCount reads the restart count for every container across all Antrea
@@ -441,7 +530,7 @@ func (data *TestData) getAgentContainersRestartCount() (int, error) {
 // waitForAntreaDaemonSetPods waits for the K8s apiserver to report that all the Antrea Pods are
 // available, i.e. all the Nodes have one or more of the Antrea daemon Pod running and available.
 func (data *TestData) waitForAntreaDaemonSetPods(timeout time.Duration) error {
-	err := wait.Poll(1*time.Second, timeout, func() (bool, error) {
+	err := wait.Poll(defaultInterval, timeout, func() (bool, error) {
 		daemonSet, err := data.clientset.AppsV1().DaemonSets(antreaNamespace).Get(context.TODO(), antreaDaemonSet, metav1.GetOptions{})
 		if err != nil {
 			return false, fmt.Errorf("error when getting Antrea daemonset: %v", err)
@@ -489,7 +578,7 @@ func (data *TestData) waitForAntreaDaemonSetPods(timeout time.Duration) error {
 
 // waitForCoreDNSPods waits for the K8s apiserver to report that all the CoreDNS Pods are available.
 func (data *TestData) waitForCoreDNSPods(timeout time.Duration) error {
-	err := wait.PollImmediate(1*time.Second, timeout, func() (bool, error) {
+	err := wait.PollImmediate(defaultInterval, timeout, func() (bool, error) {
 		deployment, err := data.clientset.AppsV1().Deployments("kube-system").Get(context.TODO(), "coredns", metav1.GetOptions{})
 		if err != nil {
 			return false, fmt.Errorf("error when retrieving CoreDNS deployment: %v", err)
@@ -599,7 +688,7 @@ func (data *TestData) deleteAntrea(timeout time.Duration) error {
 		}
 		return fmt.Errorf("error when trying to delete Antrea DaemonSet: %v", err)
 	}
-	err := wait.Poll(1*time.Second, timeout, func() (bool, error) {
+	err := wait.Poll(defaultInterval, timeout, func() (bool, error) {
 		if _, err := data.clientset.AppsV1().DaemonSets(antreaNamespace).Get(context.TODO(), antreaDaemonSet, metav1.GetOptions{}); err != nil {
 			if errors.IsNotFound(err) {
 				// Antrea DaemonSet does not exist any more, success
@@ -649,10 +738,10 @@ func (data *TestData) createPodOnNode(name string, nodeName string, image string
 			"kubernetes.io/hostname": nodeName,
 		}
 	}
-	if nodeName == masterNodeName() {
-		// tolerate NoSchedule taint if we want Pod to run on master node
+	if nodeName == controlPlaneNodeName() {
+		// tolerate NoSchedule taint if we want Pod to run on control-plane Node
 		noScheduleToleration := corev1.Toleration{
-			Key:      "node-role.kubernetes.io/master",
+			Key:      labelNodeRoleControlPlane(),
 			Operator: corev1.TolerationOpExists,
 			Effect:   corev1.TaintEffectNoSchedule,
 		}
@@ -740,7 +829,7 @@ func (data *TestData) deletePodAndWait(timeout time.Duration, name string) error
 		return err
 	}
 
-	if err := wait.Poll(1*time.Second, timeout, func() (bool, error) {
+	if err := wait.Poll(defaultInterval, timeout, func() (bool, error) {
 		if _, err := data.clientset.CoreV1().Pods(testNamespace).Get(context.TODO(), name, metav1.GetOptions{}); err != nil {
 			if errors.IsNotFound(err) {
 				return true, nil
@@ -761,7 +850,7 @@ type PodCondition func(*corev1.Pod) (bool, error)
 // podWaitFor polls the K8s apiserver until the specified Pod is found (in the test Namespace) and
 // the condition predicate is met (or until the provided timeout expires).
 func (data *TestData) podWaitFor(timeout time.Duration, name, namespace string, condition PodCondition) (*corev1.Pod, error) {
-	err := wait.Poll(1*time.Second, timeout, func() (bool, error) {
+	err := wait.Poll(defaultInterval, timeout, func() (bool, error) {
 		if pod, err := data.clientset.CoreV1().Pods(namespace).Get(context.TODO(), name, metav1.GetOptions{}); err != nil {
 			if errors.IsNotFound(err) {
 				return false, nil
@@ -885,7 +974,7 @@ func (data *TestData) deleteAntreaAgentOnNode(nodeName string, gracePeriodSecond
 		return 0, fmt.Errorf("error when deleting antrea-agent Pods on Node '%s': %v", nodeName, err)
 	}
 
-	if err := wait.Poll(1*time.Second, timeout, func() (bool, error) {
+	if err := wait.Poll(defaultInterval, timeout, func() (bool, error) {
 		for _, pod := range pods.Items {
 			if _, err := data.clientset.CoreV1().Pods(antreaNamespace).Get(context.TODO(), pod.Name, metav1.GetOptions{}); err != nil {
 				if errors.IsNotFound(err) {
@@ -904,7 +993,7 @@ func (data *TestData) deleteAntreaAgentOnNode(nodeName string, gracePeriodSecond
 	delay := time.Since(start)
 
 	// wait for new antrea-agent Pod
-	if err := wait.Poll(1*time.Second, timeout, func() (bool, error) {
+	if err := wait.Poll(defaultInterval, timeout, func() (bool, error) {
 		pods, err := data.clientset.CoreV1().Pods(antreaNamespace).List(context.TODO(), listOptions)
 		if err != nil {
 			return false, fmt.Errorf("failed to list antrea-agent Pods on Node '%s': %v", nodeName, err)
@@ -976,7 +1065,7 @@ func (data *TestData) restartAntreaControllerPod(timeout time.Duration) (*corev1
 
 	var newPod *corev1.Pod
 	// wait for new antrea-controller Pod
-	if err := wait.Poll(1*time.Second, timeout, func() (bool, error) {
+	if err := wait.Poll(defaultInterval, timeout, func() (bool, error) {
 		pods, err := data.clientset.CoreV1().Pods(antreaNamespace).List(context.TODO(), listOptions)
 		if err != nil {
 			return false, fmt.Errorf("failed to list antrea-controller Pods: %v", err)
@@ -1038,7 +1127,7 @@ func validatePodIP(podNetworkCIDR string, ip net.IP) (bool, error) {
 
 // createService creates a service with port and targetPort.
 func (data *TestData) createService(serviceName string, port, targetPort int, selector map[string]string, affinity bool,
-	serviceType corev1.ServiceType) (*corev1.Service, error) {
+	serviceType corev1.ServiceType, ipFamily *corev1.IPFamily) (*corev1.Service, error) {
 	affinityType := corev1.ServiceAffinityNone
 	if affinity {
 		affinityType = corev1.ServiceAffinityClientIP
@@ -1060,18 +1149,19 @@ func (data *TestData) createService(serviceName string, port, targetPort int, se
 			}},
 			Type:     serviceType,
 			Selector: selector,
+			IPFamily: ipFamily,
 		},
 	}
 	return data.clientset.CoreV1().Services(testNamespace).Create(context.TODO(), &service, metav1.CreateOptions{})
 }
 
 // createNginxClusterIPService create a nginx service with the given name.
-func (data *TestData) createNginxClusterIPService(affinity bool) (*corev1.Service, error) {
-	return data.createService("nginx", 80, 80, map[string]string{"app": "nginx"}, affinity, corev1.ServiceTypeClusterIP)
+func (data *TestData) createNginxClusterIPService(affinity bool, ipFamily *corev1.IPFamily) (*corev1.Service, error) {
+	return data.createService("nginx", 80, 80, map[string]string{"app": "nginx"}, affinity, corev1.ServiceTypeClusterIP, ipFamily)
 }
 
-func (data *TestData) createNginxLoadBalancerService(affinity bool, ingressIPs []string) (*corev1.Service, error) {
-	svc, err := data.createService("nginx-loadbalancer", 80, 80, map[string]string{"app": "nginx"}, affinity, corev1.ServiceTypeLoadBalancer)
+func (data *TestData) createNginxLoadBalancerService(affinity bool, ingressIPs []string, ipFamily *corev1.IPFamily) (*corev1.Service, error) {
+	svc, err := data.createService(nginxLBService, 80, 80, map[string]string{"app": "nginx"}, affinity, corev1.ServiceTypeLoadBalancer, ipFamily)
 	if err != nil {
 		return svc, err
 	}
@@ -1094,6 +1184,29 @@ func (data *TestData) deleteService(name string) error {
 		return fmt.Errorf("unable to cleanup service %v: %v", name, err)
 	}
 	return nil
+}
+
+// Deletes a Service in the test namespace then waits us to timeout for the Service not to be visible to the
+// client any more.
+func (data *TestData) deleteServiceAndWait(timeout time.Duration, name string) error {
+	if err := data.deleteService(name); err != nil {
+		return err
+	}
+
+	if err := wait.Poll(defaultInterval, timeout, func() (bool, error) {
+		if _, err := data.clientset.CoreV1().Services(testNamespace).Get(context.TODO(), name, metav1.GetOptions{}); err != nil {
+			if errors.IsNotFound(err) {
+				return true, nil
+			}
+			return false, fmt.Errorf("error when getting Service: %v", err)
+		}
+		// Keep trying
+		return false, nil
+	}); err == wait.ErrWaitTimeout {
+		return fmt.Errorf("Service '%s' still visible to client after %v", name, timeout)
+	} else {
+		return err
+	}
 }
 
 // createNetworkPolicy creates a network policy with spec.
@@ -1478,8 +1591,8 @@ func (data *TestData) collectAntctlCovFiles(podName string, containerName string
 	return nil
 }
 
-// collectAntctlCovFilesFromMasterNode collects coverage files for the antctl binary from the master Node and saves them to the coverage directory
-func (data *TestData) collectAntctlCovFilesFromMasterNode(covDir string) error {
+// collectAntctlCovFilesFromControlPlaneNode collects coverage files for the antctl binary from the control-plane Node and saves them to the coverage directory
+func (data *TestData) collectAntctlCovFilesFromControlPlaneNode(covDir string) error {
 	// copy antctl coverage files from node to the coverage directory
 	var cmd string
 	if testOptions.providerName == "kind" {
@@ -1487,9 +1600,9 @@ func (data *TestData) collectAntctlCovFilesFromMasterNode(covDir string) error {
 	} else {
 		cmd = "find . -maxdepth 1 -name 'antctl*.out' -exec basename {} ';'"
 	}
-	rc, stdout, stderr, err := RunCommandOnNode(masterNodeName(), cmd)
+	rc, stdout, stderr, err := RunCommandOnNode(controlPlaneNodeName(), cmd)
 	if err != nil || rc != 0 {
-		return fmt.Errorf("error when running this find command '%s' on master Node '%s', stderr: <%v>, err: <%v>", cmd, masterNodeName(), stderr, err)
+		return fmt.Errorf("error when running this find command '%s' on control-plane Node '%s', stderr: <%v>, err: <%v>", cmd, controlPlaneNodeName(), stderr, err)
 
 	}
 	stdout = strings.TrimSpace(stdout)
@@ -1498,9 +1611,9 @@ func (data *TestData) collectAntctlCovFilesFromMasterNode(covDir string) error {
 		if len(file) == 0 {
 			continue
 		}
-		err := data.copyNodeFiles(masterNodeName(), file, covDir)
+		err := data.copyNodeFiles(controlPlaneNodeName(), file, covDir)
 		if err != nil {
-			return fmt.Errorf("error when copying coverage files for antctl from Node '%s' to coverage directory '%s': %v", masterNodeName(), covDir, err)
+			return fmt.Errorf("error when copying coverage files for antctl from Node '%s' to coverage directory '%s': %v", controlPlaneNodeName(), covDir, err)
 		}
 	}
 	return nil
@@ -1566,9 +1679,9 @@ func (data *TestData) copyNodeFiles(nodeName string, fileName string, covDir str
 	}
 	defer w.Close()
 	cmd := fmt.Sprintf("cat %s", fileName)
-	rc, stdout, stderr, err := RunCommandOnNode(masterNodeName(), cmd)
+	rc, stdout, stderr, err := RunCommandOnNode(controlPlaneNodeName(), cmd)
 	if err != nil || rc != 0 {
-		return fmt.Errorf("cannot retrieve content of file '%s' from Node '%s', stderr: <%v>, err: <%v>", fileName, masterNodeName(), stderr, err)
+		return fmt.Errorf("cannot retrieve content of file '%s' from Node '%s', stderr: <%v>, err: <%v>", fileName, controlPlaneNodeName(), stderr, err)
 	}
 	if stdout == "" {
 		return nil

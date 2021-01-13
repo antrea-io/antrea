@@ -215,7 +215,7 @@ type Observation struct {
 	TTL int32 `json:"ttl,omitempty" yaml:"ttl,omitempty"`
 	// TranslatedSrcIP is the translated source IP.
 	TranslatedSrcIP string `json:"translatedSrcIP,omitempty" yaml:"translatedSrcIP,omitempty"`
-	// TranslatedSrcIP is the translated destination IP.
+	// TranslatedDstIP is the translated destination IP.
 	TranslatedDstIP string `json:"translatedDstIP,omitempty" yaml:"translatedDstIP,omitempty"`
 	// TunnelDstIP is the tunnel destination IP.
 	TunnelDstIP string `json:"tunnelDstIP,omitempty" yaml:"tunnelDstIP,omitempty"`

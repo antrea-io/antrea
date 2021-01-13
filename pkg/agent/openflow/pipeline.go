@@ -17,18 +17,21 @@ package openflow
 import (
 	"encoding/binary"
 	"fmt"
+	"math"
 	"net"
 	"strings"
 	"sync"
 	"time"
 
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/agent/metrics"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow/cookie"
 	"github.com/vmware-tanzu/antrea/pkg/agent/types"
 	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
+	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsctl"
 	"github.com/vmware-tanzu/antrea/third_party/proxy"
 )
 
@@ -288,7 +291,7 @@ var (
 
 	globalVirtualMAC, _ = net.ParseMAC("aa:bb:cc:dd:ee:ff")
 	hairpinIP           = net.ParseIP("169.254.169.252").To4()
-	hairpinIPv6         = net.ParseIP("FE80::aabb:ccdd:eeff").To16()
+	hairpinIPv6         = net.ParseIP("fc00::aabb:ccdd:eeff").To16()
 )
 
 type OFEntryOperations interface {
@@ -305,6 +308,14 @@ type flowCache map[string]binding.Flow
 
 type flowCategoryCache struct {
 	sync.Map
+}
+
+func portToUint16(port int) uint16 {
+	if port > 0 && port <= math.MaxUint16 {
+		return uint16(port) // lgtm[go/incorrect-integer-conversion]
+	}
+	klog.Errorf("Port value %d out-of-bounds", port)
+	return 0
 }
 
 type client struct {
@@ -341,6 +352,8 @@ type client struct {
 	packetInHandlers map[uint8]map[string]PacketInHandler
 	// Supported IP Protocols (IP or IPv6) on the current Node.
 	ipProtocols []binding.Protocol
+	// ovsctlClient is the interface for executing OVS "ovs-ofctl" and "ovs-appctl" commands.
+	ovsctlClient ovsctl.OVSCtlClient
 }
 
 func (c *client) GetTunnelVirtualMAC() net.HardwareAddr {
@@ -675,26 +688,37 @@ func (c *client) ctRewriteDstMACFlows(gatewayMAC net.HardwareAddr, category cook
 	return flows
 }
 
-// serviceLBBypassFlow makes packets that belong to a tracked connection bypass
+// serviceLBBypassFlows makes packets that belong to a tracked connection bypass
 // service LB tables and enter egressRuleTable directly.
-func (c *client) serviceLBBypassFlow(ipProtocol binding.Protocol) binding.Flow {
+func (c *client) serviceLBBypassFlows(ipProtocol binding.Protocol) []binding.Flow {
 	connectionTrackStateTable := c.pipeline[conntrackStateTable]
-	return connectionTrackStateTable.BuildFlow(priorityNormal).MatchProtocol(ipProtocol).
-		MatchCTMark(ServiceCTMark, nil).
-		MatchCTStateNew(false).MatchCTStateTrk(true).
-		Action().LoadRegRange(int(marksReg), macRewriteMark, macRewriteMarkRange).
-		Action().GotoTable(EgressRuleTable).
-		Cookie(c.cookieAllocator.Request(cookie.Service).Raw()).
-		Done()
+	return []binding.Flow{
+		// Tracked connections with the ServiceCTMark (load-balanced by AntreaProxy) receive
+		// the macRewriteMark and are sent to egressRuleTable.
+		connectionTrackStateTable.BuildFlow(priorityNormal).MatchProtocol(ipProtocol).
+			MatchCTMark(ServiceCTMark, nil).
+			MatchCTStateNew(false).MatchCTStateTrk(true).
+			Action().LoadRegRange(int(marksReg), macRewriteMark, macRewriteMarkRange).
+			Action().GotoTable(EgressRuleTable).
+			Cookie(c.cookieAllocator.Request(cookie.Service).Raw()).
+			Done(),
+		// Tracked connections without the ServiceCTMark are sent to egressRuleTable
+		// directly. This is meant to match connections which were load-balanced by
+		// kube-proxy before AntreaProxy got enabled.
+		connectionTrackStateTable.BuildFlow(priorityLow).MatchProtocol(ipProtocol).
+			MatchCTStateNew(false).MatchCTStateTrk(true).
+			Action().GotoTable(EgressRuleTable).
+			Cookie(c.cookieAllocator.Request(cookie.Service).Raw()).
+			Done(),
+	}
 }
 
 // l2ForwardCalcFlow generates the flow that matches dst MAC and loads ofPort to reg.
-func (c *client) l2ForwardCalcFlow(dstMAC net.HardwareAddr, ofPort uint32, category cookie.Category) binding.Flow {
+func (c *client) l2ForwardCalcFlow(dstMAC net.HardwareAddr, ofPort uint32, skipIngressRules bool, category cookie.Category) binding.Flow {
 	l2FwdCalcTable := c.pipeline[l2ForwardingCalcTable]
-	// Skip ingress NetworkPolicy enforcement for traffic to the tunnel or
-	// gateway interface.
 	nextTable := l2FwdCalcTable.GetNext()
-	if ofPort != config.DefaultTunOFPort && ofPort != config.HostGatewayOFPort {
+	if !skipIngressRules {
+		// Go to ingress NetworkPolicy tables for traffic to local Pods.
 		nextTable = c.ingressEntryTable
 	}
 	return l2FwdCalcTable.BuildFlow(priorityNormal).
@@ -785,15 +809,11 @@ func (c *client) l3FwdFlowToPod(localGatewayMAC net.HardwareAddr, podInterfaceIP
 	var flows []binding.Flow
 	for _, ip := range podInterfaceIPs {
 		ipProtocol := getIPProtocol(ip)
-		flowBuilder := l3FwdTable.BuildFlow(priorityNormal).MatchProtocol(ipProtocol)
-		if c.enableProxy {
-			flowBuilder = flowBuilder.MatchRegRange(int(marksReg), macRewriteMark, macRewriteMarkRange)
-		} else {
-			flowBuilder = flowBuilder.MatchDstMAC(globalVirtualMAC)
-		}
-		// Rewrite src MAC to local gateway MAC, and rewrite dst MAC to pod MAC
-		flows = append(flows, flowBuilder.MatchDstIP(ip).
+		flows = append(flows, l3FwdTable.BuildFlow(priorityNormal).MatchProtocol(ipProtocol).
+			MatchRegRange(int(marksReg), macRewriteMark, macRewriteMarkRange).
+			MatchDstIP(ip).
 			Action().SetSrcMAC(localGatewayMAC).
+			// Rewrite src MAC to local gateway MAC, and rewrite dst MAC to pod MAC
 			Action().SetDstMAC(podInterfaceMAC).
 			Action().GotoTable(l3DecTTLTable).
 			Cookie(c.cookieAllocator.Request(category).Raw()).
@@ -980,7 +1000,7 @@ func (c *client) serviceHairpinResponseDNATFlow(ipProtocol binding.Protocol) bin
 	if ipProtocol == binding.ProtocolIPv6 {
 		hpIP = hairpinIPv6
 		from = "NXM_NX_IPV6_SRC"
-		to = "NXM_NX_IPV6_SRC"
+		to = "NXM_NX_IPV6_DST"
 	}
 	return c.pipeline[serviceHairpinTable].BuildFlow(priorityNormal).MatchProtocol(ipProtocol).
 		MatchDstIP(hpIP).
@@ -1328,11 +1348,6 @@ func (c *client) addFlowMatch(fb binding.FlowBuilder, matchKey *types.MatchKey, 
 		fb = fb.MatchProtocol(matchKey.GetOFProtocol()).MatchSrcIPNet(matchValue.(net.IPNet))
 	case MatchSrcIPNetv6:
 		fb = fb.MatchProtocol(matchKey.GetOFProtocol()).MatchSrcIPNet(matchValue.(net.IPNet))
-	case MatchDstOFPort:
-		// ofport number in NXM_NX_REG1 is used in ingress rule to match packets sent to local Pod.
-		fb = fb.MatchProtocol(matchKey.GetOFProtocol()).MatchReg(int(PortCacheReg), uint32(matchValue.(int32)))
-	case MatchSrcOFPort:
-		fb = fb.MatchProtocol(matchKey.GetOFProtocol()).MatchInPort(uint32(matchValue.(int32)))
 	case MatchTCPDstPort:
 		fallthrough
 	case MatchTCPv6DstPort:
@@ -1345,9 +1360,9 @@ func (c *client) addFlowMatch(fb binding.FlowBuilder, matchKey *types.MatchKey, 
 		fallthrough
 	case MatchSCTPv6DstPort:
 		fb = fb.MatchProtocol(matchKey.GetOFProtocol())
-		portValue := matchValue.(uint16)
-		if portValue > 0 {
-			fb = fb.MatchDstPort(portValue, nil)
+		portValue := matchValue.(types.BitRange)
+		if portValue.Value > 0 {
+			fb = fb.MatchDstPort(portValue.Value, portValue.Mask)
 		}
 	}
 	return fb
@@ -1448,7 +1463,6 @@ func (c *client) hostBridgeUplinkFlows(localSubnet net.IPNet, category cookie.Ca
 			MatchProtocol(binding.ProtocolIP).
 			MatchRegRange(int(marksReg), markTrafficFromBridge, binding.Range{0, 15}).
 			MatchDstIPNet(localSubnet).
-			Action().SetDstMAC(globalVirtualMAC).
 			Action().LoadRegRange(int(marksReg), macRewriteMark, macRewriteMarkRange).
 			Action().GotoTable(conntrackTable).
 			Cookie(c.cookieAllocator.Request(category).Raw()).
@@ -1484,14 +1498,13 @@ func (c *client) uplinkSNATFlows(category cookie.Category) []binding.Flow {
 			Action().GotoTable(conntrackTable).
 			Cookie(c.cookieAllocator.Request(category).Raw()).
 			Done(),
-		// Rewrite dMAC with the global vMAC if the packet is a reply to a
-		// Pod from an external address.
+		// Mark the packet to indicate its destination MAC should be rewritten to the real MAC in the L3Forwarding
+		// table, if the packet is a reply to a Pod from an external address.
 		c.pipeline[conntrackStateTable].BuildFlow(priorityHigh).
 			MatchProtocol(binding.ProtocolIP).
 			MatchCTStateNew(false).MatchCTStateTrk(true).
 			MatchCTMark(snatCTMark, nil).
 			MatchRegRange(int(marksReg), markTrafficFromUplink, binding.Range{0, 15}).
-			Action().SetDstMAC(globalVirtualMAC).
 			Action().LoadRegRange(int(marksReg), macRewriteMark, macRewriteMarkRange).
 			Action().GotoTable(ctStateNext).
 			Cookie(c.cookieAllocator.Request(category).Raw()).
@@ -1646,8 +1659,8 @@ func (c *client) serviceLearnFlow(groupID binding.GroupIDType, svcIP net.IP, svc
 			Done()
 	} else if ipProtocol == binding.ProtocolIPv6 {
 		return learnFlowBuilderLearnAction.
-			MatchLearnedDstIP().
-			MatchLearnedSrcIP().
+			MatchLearnedDstIPv6().
+			MatchLearnedSrcIPv6().
 			LoadXXRegToXXReg(int(endpointIPv6XXReg), int(endpointIPv6XXReg), endpointIPv6XXRegRange, endpointIPv6XXRegRange).
 			LoadRegToReg(int(endpointPortReg), int(endpointPortReg), endpointPortRegRange, endpointPortRegRange).
 			LoadReg(int(serviceLearnReg), marksRegServiceSelected, serviceLearnRegRange).
@@ -1745,7 +1758,7 @@ func (c *client) serviceEndpointGroup(groupID binding.GroupIDType, withSessionAf
 	for _, endpoint := range endpoints {
 		endpointPort, _ := endpoint.Port()
 		endpointIP := net.ParseIP(endpoint.IP())
-		portVal := uint16(endpointPort)
+		portVal := portToUint16(endpointPort)
 		ipProtocol := getIPProtocol(endpointIP)
 		if ipProtocol == binding.ProtocolIP {
 			ipVal := binary.BigEndian.Uint32(endpointIP.To4())
@@ -1882,6 +1895,7 @@ func NewClient(bridgeName, mgmtAddr string, enableProxy, enableAntreaPolicy bool
 		groupCache:               sync.Map{},
 		globalConjMatchFlowCache: map[string]*conjMatchFlowContext{},
 		packetInHandlers:         map[uint8]map[string]PacketInHandler{},
+		ovsctlClient:             ovsctl.NewClient(bridgeName),
 	}
 	c.ofEntryOperations = c
 	if enableAntreaPolicy {

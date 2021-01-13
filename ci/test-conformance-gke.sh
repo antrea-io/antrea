@@ -43,7 +43,7 @@ and create the project to be used for cluster with \`gcloud projects create\`.
 
         --cluster-name        The cluster name to be used for the generated GKE cluster. Must be specified if not run in Jenkins environment.
         --kubeconfig          Path to save kubeconfig of generated GKE cluster.
-        --k8s-version         GKE K8s cluster version. Defaults to the latest supported master version documented at https://cloud.google.com/kubernetes-engine/docs/release-notes.
+        --k8s-version         GKE K8s cluster version. Defaults to the latest supported stable version documented at https://cloud.google.com/kubernetes-engine/docs/release-notes.
         --svc-account         Service acount name if logged in with service account. Use --user instead if logged in with gcloud auth login.
         --user                Email address if logged in with user account. Use --svc-account instead if logged in with service account.
         --gke-project         The GKE project to be used. Needs to be pre-created before running the script.
@@ -212,12 +212,13 @@ function deliver_antrea_to_gke() {
     echo "=== Loading the Antrea image to each Node ==="
     antrea_image="antrea-ubuntu"
     DOCKER_IMG_VERSION=${CLUSTER}
-    docker save -o ${antrea_image}.tar antrea/antrea-ubuntu:${DOCKER_IMG_VERSION}
+    DOCKER_IMG_NAME="projects.registry.vmware.com/antrea/antrea-ubuntu"
+    docker save -o ${antrea_image}.tar ${DOCKER_IMG_NAME}:${DOCKER_IMG_VERSION}
 
     node_names=$(kubectl get nodes -o wide --no-headers=true | awk '{print $1}')
     for node_name in ${node_names}; do
         ${GCLOUD_PATH} compute scp ${antrea_image}.tar ubuntu@${node_name}:~ --zone ${GKE_ZONE}
-        ${GCLOUD_PATH} compute ssh ubuntu@${node_name} --command="sudo docker load -i ~/${antrea_image}.tar ; sudo docker tag antrea/antrea-ubuntu:${DOCKER_IMG_VERSION} antrea/antrea-ubuntu:latest" --zone ${GKE_ZONE}
+        ${GCLOUD_PATH} compute ssh ubuntu@${node_name} --command="sudo docker load -i ~/${antrea_image}.tar ; sudo docker tag ${DOCKER_IMG_NAME}:${DOCKER_IMG_VERSION} ${DOCKER_IMG_NAME}:latest" --zone ${GKE_ZONE}
     done
     rm ${antrea_image}.tar
 

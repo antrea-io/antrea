@@ -649,6 +649,7 @@ func autoConvert_v1beta2_NetworkPolicyRule_To_controlplane_NetworkPolicyRule(in 
 	out.Priority = in.Priority
 	out.Action = (*v1alpha1.RuleAction)(unsafe.Pointer(in.Action))
 	out.EnableLogging = in.EnableLogging
+	out.AppliedToGroups = *(*[]string)(unsafe.Pointer(&in.AppliedToGroups))
 	return nil
 }
 
@@ -669,6 +670,7 @@ func autoConvert_controlplane_NetworkPolicyRule_To_v1beta2_NetworkPolicyRule(in 
 	out.Priority = in.Priority
 	out.Action = (*v1alpha1.RuleAction)(unsafe.Pointer(in.Action))
 	out.EnableLogging = in.EnableLogging
+	out.AppliedToGroups = *(*[]string)(unsafe.Pointer(&in.AppliedToGroups))
 	return nil
 }
 
@@ -776,6 +778,7 @@ func Convert_controlplane_PodReference_To_v1beta2_PodReference(in *controlplane.
 func autoConvert_v1beta2_Service_To_controlplane_Service(in *Service, out *controlplane.Service, s conversion.Scope) error {
 	out.Protocol = (*controlplane.Protocol)(unsafe.Pointer(in.Protocol))
 	out.Port = (*intstr.IntOrString)(unsafe.Pointer(in.Port))
+	out.EndPort = (*int32)(unsafe.Pointer(in.EndPort))
 	return nil
 }
 
@@ -787,6 +790,7 @@ func Convert_v1beta2_Service_To_controlplane_Service(in *Service, out *controlpl
 func autoConvert_controlplane_Service_To_v1beta2_Service(in *controlplane.Service, out *Service, s conversion.Scope) error {
 	out.Protocol = (*Protocol)(unsafe.Pointer(in.Protocol))
 	out.Port = (*intstr.IntOrString)(unsafe.Pointer(in.Port))
+	out.EndPort = (*int32)(unsafe.Pointer(in.EndPort))
 	return nil
 }
 

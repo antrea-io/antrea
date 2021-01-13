@@ -26,6 +26,7 @@ const (
 	nodeNameEnvKey     = "NODE_NAME"
 	podNameEnvKey      = "POD_NAME"
 	podNamespaceEnvKey = "POD_NAMESPACE"
+	svcAcctNameEnvKey  = "SERVICEACCOUNT_NAME"
 
 	antreaCloudEKSEnvKey = "ANTREA_CLOUD_EKS"
 )
@@ -64,6 +65,16 @@ func GetPodNamespace() string {
 		klog.Warningf("Environment variable %s not found", podNamespaceEnvKey)
 	}
 	return podNamespace
+}
+
+// GetAntreaControllerServiceAccountName returns the ServiceAccount name associated with antrea-controller.
+func GetAntreaControllerServiceAccount() string {
+	svcAcctName := os.Getenv(svcAcctNameEnvKey)
+	if svcAcctName == "" {
+		// default value set for antrea-controller
+		svcAcctName = "antrea-controller"
+	}
+	return svcAcctName
 }
 
 func getBoolEnvVar(name string, defaultValue bool) bool {

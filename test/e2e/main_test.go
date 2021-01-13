@@ -131,8 +131,8 @@ func gracefulExitAntrea(testData *TestData) {
 		if err := testData.gracefulExitAntreaAgent(testOptions.coverageDir, "all"); err != nil {
 			log.Fatalf("Error when gracefully exit antrea agent: %v", err)
 		}
-		if err := testData.collectAntctlCovFilesFromMasterNode(testOptions.coverageDir); err != nil {
-			log.Fatalf("Error when collecting antctl coverage files from master node: %v", err)
+		if err := testData.collectAntctlCovFilesFromControlPlaneNode(testOptions.coverageDir); err != nil {
+			log.Fatalf("Error when collecting antctl coverage files from control-plane Node: %v", err)
 		}
 
 	}

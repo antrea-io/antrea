@@ -109,6 +109,15 @@ spec:
                       - Allow
                       - Drop
                       type: string
+                    appliedTo:
+                      items:
+                        properties:
+                          namespaceSelector:
+                            x-kubernetes-preserve-unknown-fields: true
+                          podSelector:
+                            x-kubernetes-preserve-unknown-fields: true
+                        type: object
+                      type: array
                     enableLogging:
                       type: boolean
                     name:
@@ -116,6 +125,8 @@ spec:
                     ports:
                       items:
                         properties:
+                          endPort:
+                            type: integer
                           port:
                             x-kubernetes-int-or-string: true
                           protocol:
@@ -149,6 +160,15 @@ spec:
                       - Allow
                       - Drop
                       type: string
+                    appliedTo:
+                      items:
+                        properties:
+                          namespaceSelector:
+                            x-kubernetes-preserve-unknown-fields: true
+                          podSelector:
+                            x-kubernetes-preserve-unknown-fields: true
+                        type: object
+                      type: array
                     enableLogging:
                       type: boolean
                     from:
@@ -171,6 +191,8 @@ spec:
                     ports:
                       items:
                         properties:
+                          endPort:
+                            type: integer
                           port:
                             x-kubernetes-int-or-string: true
                           protocol:
@@ -189,7 +211,6 @@ spec:
               tier:
                 type: string
             required:
-            - appliedTo
             - priority
             type: object
           status:
@@ -327,6 +348,14 @@ spec:
                       - Allow
                       - Drop
                       type: string
+                    appliedTo:
+                      items:
+                        properties:
+                          podSelector:
+                            type: object
+                            x-kubernetes-preserve-unknown-fields: true
+                        type: object
+                      type: array
                     enableLogging:
                       type: boolean
                     name:
@@ -334,6 +363,8 @@ spec:
                     ports:
                       items:
                         properties:
+                          endPort:
+                            type: integer
                           port:
                             x-kubernetes-int-or-string: true
                           protocol:
@@ -369,6 +400,14 @@ spec:
                       - Allow
                       - Drop
                       type: string
+                    appliedTo:
+                      items:
+                        properties:
+                          podSelector:
+                            type: object
+                            x-kubernetes-preserve-unknown-fields: true
+                        type: object
+                      type: array
                     enableLogging:
                       type: boolean
                     from:
@@ -393,6 +432,8 @@ spec:
                     ports:
                       items:
                         properties:
+                          endPort:
+                            type: integer
                           port:
                             x-kubernetes-int-or-string: true
                           protocol:
@@ -411,7 +452,6 @@ spec:
               tier:
                 type: string
             required:
-            - appliedTo
             - priority
             type: object
           status:
@@ -829,6 +869,14 @@ rules:
   - ""
   resources:
   - pods
+  verbs:
+  - get
+  - watch
+  - list
+  - update
+- apiGroups:
+  - ""
+  resources:
   - endpoints
   - services
   verbs:
@@ -1035,6 +1083,7 @@ rules:
   - watch
   - list
   - create
+  - update
 - apiGroups:
   - ops.antrea.tanzu.vmware.com
   resources:
@@ -1124,6 +1173,9 @@ data:
     # Enable traceflow which provides packet tracing feature to diagnose network issue.
     #  Traceflow: true
 
+    # Enable NodePortLocal feature to make the pods reachable externally through NodePort
+    #  NodePortLocal: false
+
     # Enable Antrea ClusterNetworkPolicy feature to complement K8s NetworkPolicy for cluster admins
     # to define security policies which apply to the entire cluster, and Antrea NetworkPolicy
     # feature that supports priorities, rule actions and externalEntities in the future.
@@ -1205,11 +1257,15 @@ data:
     # Enable metrics exposure via Prometheus. Initializes Prometheus metrics listener.
     #enablePrometheusMetrics: true
 
-    # Provide flow collector address as string with format <IP>:<port>[:<proto>], where proto is tcp or udp.
-    # IP can be either IPv4 or IPv6. However, IPv6 address should be wrapped with [].
-    # This also enables the flow exporter that sends IPFIX flow records of conntrack flows on OVS bridge.
-    # If no L4 transport proto is given, we consider tcp as default.
-    #flowCollectorAddr: ""
+    # Provide the IPFIX collector address as a string with format <HOST>:[<PORT>][:<PROTO>].
+    # HOST can either be the DNS name or the IP of the Flow Collector. For example,
+    # "flow-aggregator.flow-aggregator.svc" can be provided as DNS name to connect
+    # to the Antrea Flow Aggregator service. If IP, it can be either IPv4 or IPv6.
+    # However, IPv6 address should be wrapped with [].
+    # If PORT is empty, we default to 4739, the standard IPFIX port.
+    # If no PROTO is given, we consider "tcp" as default. We support "tcp" and "udp"
+    # L4 transport protocols.
+    #flowCollectorAddr: "flow-aggregator.flow-aggregator.svc:4739:tcp"
 
     # Provide flow poll interval as a duration string. This determines how often the flow exporter dumps connections from the conntrack module.
     # Flow poll interval should be greater than or equal to 1s (one second).
@@ -1220,6 +1276,11 @@ data:
     # the flow collector.
     # Flow export frequency should be greater than or equal to 1.
     #flowExportFrequency: 12
+
+    # Provide the port range used by NodePortLocal. When the NodePortLocal feature is enabled, a port from that range will be assigned
+    # whenever a Pod's container defines a specific port to be exposed (each container can define a list of ports as pod.spec.containers[].ports),
+    # and all Node traffic directed to that port will be forwarded to the Pod.
+    #nplPortRange: 40000-41000
   antrea-cni.conflist: |
     {
         "cniVersion":"0.3.0",
@@ -1276,7 +1337,7 @@ metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-669cb7d7kt
+  name: antrea-config-9964gfgbb4
   namespace: kube-system
 ---
 apiVersion: v1
@@ -1342,7 +1403,11 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: spec.nodeName
-        image: antrea/antrea-ubuntu:latest
+        - name: SERVICEACCOUNT_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.serviceAccountName
+        image: projects.registry.vmware.com/antrea/antrea-ubuntu:latest
         imagePullPolicy: IfNotPresent
         name: antrea-controller
         ports:
@@ -1383,7 +1448,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-669cb7d7kt
+          name: antrea-config-9964gfgbb4
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -1514,7 +1579,7 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: spec.nodeName
-        image: antrea/antrea-ubuntu:latest
+        image: projects.registry.vmware.com/antrea/antrea-ubuntu:latest
         imagePullPolicy: IfNotPresent
         livenessProbe:
           exec:
@@ -1575,7 +1640,7 @@ spec:
         - --log_file_max_num=4
         command:
         - start_ovs
-        image: antrea/antrea-ubuntu:latest
+        image: projects.registry.vmware.com/antrea/antrea-ubuntu:latest
         imagePullPolicy: IfNotPresent
         livenessProbe:
           exec:
@@ -1605,11 +1670,12 @@ spec:
         - mountPath: /var/log/openvswitch
           name: host-var-log-antrea
           subPath: openvswitch
+      dnsPolicy: ClusterFirstWithHostNet
       hostNetwork: true
       initContainers:
       - command:
         - install_cni
-        image: antrea/antrea-ubuntu:latest
+        image: projects.registry.vmware.com/antrea/antrea-ubuntu:latest
         imagePullPolicy: IfNotPresent
         name: install-cni
         resources:
@@ -1647,7 +1713,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-669cb7d7kt
+          name: antrea-config-9964gfgbb4
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d

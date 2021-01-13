@@ -9,9 +9,9 @@ the instructions below.
 
 ### Creating the test Kubernetes cluster with Vagrant
 
-We use Vagrant to provision two Virtual Machines (one Kubernetes master node and
-one worker node). The required software is installed on each machine with
-[Ansible](https://www.ansible.com/). By default the Vagrantfile uses
+We use Vagrant to provision two Virtual Machines (one Kubernetes control-plane
+Node and one worker Node). The required software is installed on each machine
+with [Ansible](https://www.ansible.com/). By default the Vagrantfile uses
 [VirtualBox](https://www.virtualbox.org/) but you should be able to edit the
 file to use your favorite Vagrant provider.
 
@@ -42,14 +42,14 @@ messages.
 
 #### Managing the cluster
 
-Use the following Bash scripts to manage the Kubernetes nodes with Vagrant:
+Use the following Bash scripts to manage the Kubernetes Nodes with Vagrant:
 
 * `./infra/vagrant/provision.sh`: create the required VMs and provision them
-* `./infra/vagrant/push_antrea.sh`: load the antrea/antrea-ubuntu Docker image
-  to each node, along with the Antrea deployment YAML
-* `./infra/vagrant/suspend.sh`: suspend all node VMs
-* `./infra/vagrant/resume.sh`: resume all node VMs
-* `./infra/vagrant/destroy.sh`: destoy all node VMs, you will need to run
+* `./infra/vagrant/push_antrea.sh`: load Antrea Docker image to each Node, along
+  with the Antrea deployment YAML
+* `./infra/vagrant/suspend.sh`: suspend all Node VMs
+* `./infra/vagrant/resume.sh`: resume all Node VMs
+* `./infra/vagrant/destroy.sh`: destoy all Node VMs, you will need to run
   `provision.sh` again to create a new cluster
 
 Note that `./infra/vagrant/provision.sh` can take a while to complete but it
@@ -57,11 +57,11 @@ only needs to be run once.
 
 #### Debugging
 
-You can SSH into any of the node VMs using `vagrant ssh [node name]` (must be
-run from the `infra/vagrant` directory. The master node is named
-`k8s-node-master` and the worker nodes are named `k8s-node-worker-<N>` (for a
-single worker node, the name is `k8s-node-worker-1`. `kubectl` is installed on
-all the nodes.
+You can SSH into any of the Node VMs using `vagrant ssh [Node name]` (must be
+run from the `infra/vagrant` directory. The control-plane Node is named
+`k8s-node-control-plane` and the worker Nodes are named `k8s-node-worker-<N>`
+(for a single worker Node, the name is `k8s-node-worker-1`. `kubectl` is
+installed on all the Nodes.
 
 The
 [kubeconfig](https://kubernetes.io/docs/tasks/access-application-cluster/configure-access-multiple-clusters/)
@@ -81,7 +81,7 @@ kubectl cluster-info
 ## Running the tests
 
 Make sure that your cluster was provisioned and that the Antrea build artifacts
-were pushed to all the nodes. You can then run the tests from the top-level
+were pushed to all the Nodes. You can then run the tests from the top-level
 directory with `go test -v -timeout=30m github.com/vmware-tanzu/antrea/test/e2e`
 (the `-v` enables verbose output).
 
@@ -145,9 +145,9 @@ usage of this script and the options, run:
 
 You can also run the e2e tests with an existing Kind cluster. Refer to this
 [document](/docs/kind.md) for instructions on how to create a Kind cluster and
-use Antrea as the CNI. You need at least one control-plane (master) Node and one
-worker Node. Before running the Go e2e tests, you will also need to copy the Antrea
-manifest to the master Docker container:
+use Antrea as the CNI. You need at least one control-plane Node and one worker
+Node. Before running the Go e2e tests, you will also need to copy the Antrea
+manifest to the control-plane Docker container:
 
 ```bash
 ./hack/generate-manifest.sh --kind | docker exec -i kind-control-plane dd of=/root/antrea.yml
@@ -160,7 +160,7 @@ then make the code changes on the local repo and
 You can load the new image into the kind cluster using the command below:
 
 ```bash
-kind load docker-image antrea/antrea-ubuntu:latest --name <kind_cluster_name>
+kind load docker-image projects.registry.vmware.com/antrea/antrea-ubuntu:latest --name <kind_cluster_name>
 ```
 
 ## Running the performance test

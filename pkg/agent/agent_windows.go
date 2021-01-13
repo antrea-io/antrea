@@ -163,9 +163,14 @@ func (i *Initializer) prepareOVSBridge() error {
 	if err = util.RemoveIPv4AddrsFromAdapter(brName); err != nil {
 		return err
 	}
-	// TODO: Configure IPv6 Address.
+
+  // TODO: Configure IPv6 Address.
 	if err = util.ConfigureInterfaceAddressWithDefaultGateway(brName, uplinkNetConfig.IP, uplinkNetConfig.Gateway); err != nil {
-		return err
+		if !strings.Contains(err.Error(), "Instance MSFT_NetIPAddress already exists") {
+			return err
+		}
+		err = nil
+		klog.V(4).Infof("Address: %s already exists when configuring IP on interface %s", uplinkNetConfig.IP.String(), brName)
 	}
 	// Restore the host routes which are lost when moving the network configuration of the uplink interface to OVS bridge interface.
 	klog.Info("Restoring HostRoutes for moved network config (uplink interface -> OVS bridge interface) ...")

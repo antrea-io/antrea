@@ -38,6 +38,8 @@ import (
 )
 
 const (
+	controllerName = "TraceflowController"
+
 	// Set resyncPeriod to 0 to disable resyncing.
 	resyncPeriod time.Duration = 0
 
@@ -124,15 +126,12 @@ func (c *Controller) enqueueTraceflow(tf *opsv1alpha1.Traceflow) {
 func (c *Controller) Run(stopCh <-chan struct{}) {
 	defer c.queue.ShutDown()
 
-	klog.Info("Starting Traceflow controller")
-	defer klog.Info("Shutting down Traceflow controller")
+	klog.Infof("Starting %s", controllerName)
+	defer klog.Infof("Shutting down %s", controllerName)
 
-	klog.Info("Waiting for caches to sync for Traceflow controller")
-	if !cache.WaitForCacheSync(stopCh, c.traceflowListerSynced) {
-		klog.Error("Unable to sync caches for Traceflow controller")
+	if !cache.WaitForNamedCacheSync(controllerName, stopCh, c.traceflowListerSynced) {
 		return
 	}
-	klog.Info("Caches are synced for Traceflow controller")
 
 	// Load all data plane tags from CRD into controller's cache.
 	tfs, err := c.traceflowLister.List(labels.Everything())
@@ -225,7 +224,7 @@ func (c *Controller) processTraceflowItem() bool {
 	} else {
 		err := c.syncTraceflow(key)
 		if err != nil {
-			klog.Errorf("Error syncing Traceflow %s, Aborting. Error: %v", key, err)
+			klog.Errorf("Error syncing Traceflow %s, exiting. Error: %v", key, err)
 			c.queue.AddRateLimited(key)
 		} else {
 			c.queue.Forget(key)

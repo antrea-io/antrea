@@ -37,6 +37,7 @@ function print_usage {
 
 TESTBED_CMD=$(dirname $0)"/kind-setup.sh"
 YML_CMD=$(dirname $0)"/../../hack/generate-manifest.sh"
+FLOWAGGREGATOR_YML_CMD=$(dirname $0)"/../../hack/generate-manifest-flow-aggregator.sh"
 
 function quit {
   if [[ $? != 0 ]]; then
@@ -91,7 +92,7 @@ if $np; then
     manifest_args="$manifest_args --np --tun vxlan"
 fi
 
-COMMON_IMAGES_LIST=("gcr.io/kubernetes-e2e-test-images/agnhost:2.8" "projects.registry.vmware.com/library/busybox" "projects.registry.vmware.com/antrea/nginx" "projects.registry.vmware.com/antrea/perftool" "projects.registry.vmware.com/antrea/ipfix-collector:v0.3.1")
+COMMON_IMAGES_LIST=("gcr.io/kubernetes-e2e-test-images/agnhost:2.8" "projects.registry.vmware.com/library/busybox" "projects.registry.vmware.com/antrea/nginx" "projects.registry.vmware.com/antrea/perftool" "projects.registry.vmware.com/antrea/ipfix-collector:v0.4.2")
 for image in "${COMMON_IMAGES_LIST[@]}"; do
     docker pull $image
 done
@@ -99,8 +100,9 @@ if $coverage; then
     manifest_args="$manifest_args --coverage"
     COMMON_IMAGES_LIST+=("antrea/antrea-ubuntu-coverage:latest")
 else
-    COMMON_IMAGES_LIST+=("antrea/antrea-ubuntu:latest")
+    COMMON_IMAGES_LIST+=("projects.registry.vmware.com/antrea/antrea-ubuntu:latest")
 fi
+COMMON_IMAGES_LIST+=("projects.registry.vmware.com/antrea/flow-aggregator:latest")
 printf -v COMMON_IMAGES "%s " "${COMMON_IMAGES_LIST[@]}"
 
 function run_test {
@@ -115,6 +117,7 @@ function run_test {
   else
       $YML_CMD --kind --encap-mode $current_mode $manifest_args | docker exec -i kind-control-plane dd of=/root/antrea.yml
   fi
+  $FLOWAGGREGATOR_YML_CMD | docker exec -i kind-control-plane dd of=/root/flow-aggregator.yml
   sleep 1
   if $coverage; then
       go test -v -timeout=35m github.com/vmware-tanzu/antrea/test/e2e -provider=kind --logs-export-dir=$ANTREA_LOG_DIR --coverage --coverage-dir $ANTREA_COV_DIR

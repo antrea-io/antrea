@@ -16,11 +16,13 @@ package v1beta1
 
 import (
 	"fmt"
+	"unsafe"
 
 	"k8s.io/apimachinery/pkg/conversion"
 	"k8s.io/apimachinery/pkg/runtime"
 
 	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
+	"github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
 )
 
 func init() {
@@ -378,5 +380,60 @@ func Convert_controlplane_AppliedToGroupPatch_To_v1beta1_AppliedToGroupPatch(in 
 	out.RemovedPods = removedPods
 	out.AddedGroupMembers = addedMembers
 	out.RemovedGroupMembers = removedMembers
+	return nil
+}
+
+func Convert_controlplane_NetworkPolicy_To_v1beta1_NetworkPolicy(in *controlplane.NetworkPolicy, out *NetworkPolicy, s conversion.Scope) error {
+	v1beta1Rules := make([]NetworkPolicyRule, len(in.Rules))
+	for i := range in.Rules {
+		var v1beta1Rule NetworkPolicyRule
+		if err := Convert_controlplane_NetworkPolicyRule_To_v1beta1_NetworkPolicyRule(&in.Rules[i], &v1beta1Rule, nil); err != nil {
+			return err
+		}
+		v1beta1Rules[i] = v1beta1Rule
+	}
+	out.ObjectMeta = in.ObjectMeta
+	out.Rules = v1beta1Rules
+	out.AppliedToGroups = *(*[]string)(unsafe.Pointer(&in.AppliedToGroups))
+	out.Priority = (*float64)(unsafe.Pointer(in.Priority))
+	out.TierPriority = (*int32)(unsafe.Pointer(in.TierPriority))
+	out.SourceRef = (*NetworkPolicyReference)(unsafe.Pointer(in.SourceRef))
+	return nil
+}
+
+func Convert_controlplane_NetworkPolicyRule_To_v1beta1_NetworkPolicyRule(in *controlplane.NetworkPolicyRule, out *NetworkPolicyRule, s conversion.Scope) error {
+	out.Direction = Direction(in.Direction)
+	if err := Convert_controlplane_NetworkPolicyPeer_To_v1beta1_NetworkPolicyPeer(&in.From, &out.From, s); err != nil {
+		return err
+	}
+	if err := Convert_controlplane_NetworkPolicyPeer_To_v1beta1_NetworkPolicyPeer(&in.To, &out.To, s); err != nil {
+		return err
+	}
+	out.Services = *(*[]Service)(unsafe.Pointer(&in.Services))
+	out.Priority = in.Priority
+	out.Action = (*v1alpha1.RuleAction)(unsafe.Pointer(in.Action))
+	out.EnableLogging = in.EnableLogging
+	return nil
+}
+
+func Convert_v1beta1_Service_To_controlplane_Service(in *Service, out *controlplane.Service, s conversion.Scope) error {
+	if in.Protocol != nil {
+		outProtocol := controlplane.Protocol(*in.Protocol)
+		out.Protocol = &outProtocol
+	}
+	if in.Port != nil {
+		out.Port = in.Port
+	}
+	return nil
+}
+
+func Convert_controlplane_Service_To_v1beta1_Service(in *controlplane.Service, out *Service, s conversion.Scope) error {
+	if in.Protocol != nil {
+		outProtocol := Protocol(*in.Protocol)
+		out.Protocol = &outProtocol
+	}
+	if in.Port != nil {
+		out.Port = in.Port
+	}
 	return nil
 }

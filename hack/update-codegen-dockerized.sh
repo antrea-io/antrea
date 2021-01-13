@@ -107,7 +107,8 @@ MOCKGEN_TARGETS=(
   "pkg/controller/querier ControllerQuerier"
   "pkg/querier AgentNetworkPolicyInfoQuerier"
   "pkg/agent/flowexporter/connections ConnTrackDumper,NetFilterConnTrack"
-  "pkg/agent/flowexporter/ipfix IPFIXExportingProcess,IPFIXSet,IPFIXRegistry"
+  "pkg/ipfix IPFIXExportingProcess,IPFIXSet,IPFIXRegistry,IPFIXCollectingProcess,IPFIXAggregationProcess"
+  "pkg/agent/nodeportlocal/rules PodPortRules"
   "third_party/proxy Provider"
 )
 
@@ -129,17 +130,27 @@ git checkout HEAD -- hack/boilerplate/license_header.raw.txt
 # Download vendored modules to the vendor directory so it's easier to
 # specify the search path of required protobuf files.
 go mod vendor
+# In Go 1.14, vendoring changed (see release notes at
+# https://golang.org/doc/go1.14), and the presence of a go.mod file specifying
+# go 1.14 or higher causes the go command to default to -mod=vendor when a
+# top-level vendor directory is present in the module. This causes the
+# go-to-protobuf command below to complain about missing packages under vendor/,
+# which were not downloaded by "go mod vendor". We can workaround this easily by
+# renaming the vendor directory.
+mv vendor /tmp/includes
 $GOPATH/bin/go-to-protobuf \
-  --proto-import vendor \
+  --proto-import /tmp/includes \
   --packages "${ANTREA_PKG}/pkg/apis/stats/v1alpha1,${ANTREA_PKG}/pkg/apis/controlplane/v1beta1,${ANTREA_PKG}/pkg/apis/controlplane/v1beta2" \
   --go-header-file hack/boilerplate/license_header.go.txt
-# Clean up vendor directory.
-rm -rf vendor
+rm -rf /tmp/includes
 
 set +x
 
 echo "=== Start resetting changes introduced by YEAR ==="
-git diff  --numstat | awk '$1 == "1" && $2 == "1" {print $3}' | while read file; do
+# The call to 'tac' ensures that we cannot have concurrent git processes, by
+# waiting for the call to 'git diff  --numstat' to complete before iterating
+# over the files and calling 'git diff ${file}'.
+git diff  --numstat | awk '$1 == "1" && $2 == "1" {print $3}' | tac | while read file; do
   if [[ "$(git diff ${file})" == *"-// Copyright "*" Antrea Authors"* ]]; then
     git checkout HEAD -- "${file}"
     echo "=== ${file} is reset ==="

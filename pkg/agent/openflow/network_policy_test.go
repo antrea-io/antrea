@@ -35,6 +35,7 @@ import (
 	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
 	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
 	mocks "github.com/vmware-tanzu/antrea/pkg/ovs/openflow/testing"
+	ovsctltest "github.com/vmware-tanzu/antrea/pkg/ovs/ovsctl/testing"
 )
 
 var (
@@ -218,10 +219,11 @@ func TestInstallPolicyRuleFlows(t *testing.T) {
 
 	ruleID3 := uint32(103)
 	port1 := intstr.FromInt(8080)
-	port2 := intstr.FromInt(8081)
+	port2 := intstr.FromInt(1000)
+	port3 := int32(1007)
 	tcpProtocol := v1beta2.ProtocolTCP
 	npPort1 := v1beta2.Service{Protocol: &tcpProtocol, Port: &port1}
-	npPort2 := v1beta2.Service{Protocol: &tcpProtocol, Port: &port2}
+	npPort2 := v1beta2.Service{Protocol: &tcpProtocol, Port: &port2, EndPort: &port3}
 	rule3 := &types.PolicyRule{
 		Direction: v1beta2.DirectionOut,
 		From:      parseAddresses([]string{"192.168.1.40", "192.168.1.60"}),
@@ -664,7 +666,7 @@ func newMockRuleFlowBuilder(ctrl *gomock.Controller) *mocks.MockFlowBuilder {
 	ruleFlowBuilder.EXPECT().MatchSrcIP(gomock.Any()).Return(ruleFlowBuilder).AnyTimes()
 	ruleFlowBuilder.EXPECT().MatchInPort(gomock.Any()).Return(ruleFlowBuilder).AnyTimes()
 	ruleFlowBuilder.EXPECT().MatchRegRange(gomock.Any(), gomock.Any(), gomock.Any()).Return(ruleFlowBuilder).AnyTimes()
-	ruleFlowBuilder.EXPECT().MatchDstPort(gomock.Any(), gomock.Nil()).Return(ruleFlowBuilder).AnyTimes()
+	ruleFlowBuilder.EXPECT().MatchDstPort(gomock.Any(), gomock.Any()).Return(ruleFlowBuilder).AnyTimes()
 	ruleFlowBuilder.EXPECT().MatchConjID(gomock.Any()).Return(ruleFlowBuilder).AnyTimes()
 	ruleFlowBuilder.EXPECT().MatchPriority(gomock.Any()).Return(ruleFlowBuilder).AnyTimes()
 	ruleAction = mocks.NewMockAction(ctrl)
@@ -769,7 +771,7 @@ func TestParseMetricFlow(t *testing.T) {
 		metric types.RuleMetric
 	}{
 		"Drop flow": {
-			flow: "table=101, n_packets=9, n_bytes=666, priority=200,ip,reg0=0x100000/0x100000,reg3=0x5 actions=drop",
+			flow: "table=101, n_packets=9, n_bytes=666, priority=200,reg0=0x100000/0x100000,reg3=0x5 actions=drop",
 			rule: 5,
 			metric: types.RuleMetric{
 				Bytes:    666,
@@ -802,6 +804,98 @@ func TestParseMetricFlow(t *testing.T) {
 			require.Equal(t, tc.metric.Bytes, metric.Bytes)
 			require.Equal(t, tc.metric.Sessions, metric.Sessions)
 			require.Equal(t, tc.metric.Packets, metric.Packets)
+		})
+	}
+}
+
+func TestNetworkPolicyMetrics(t *testing.T) {
+	tests := []struct {
+		name         string
+		egressFlows  []string
+		ingressFlows []string
+		want         map[uint32]*types.RuleMetric
+	}{
+		{
+			name: "Normal flows",
+			egressFlows: []string{
+				"table=61, n_packets=1, n_bytes=74, priority=200,ct_state=+new,ct_label=0x200000000/0xffffffff00000000,ip actions=goto_table:70",
+				"table=61, n_packets=11, n_bytes=1661, priority=200,ct_state=-new,ct_label=0x200000000/0xffffffff00000000,ip actions=goto_table:70",
+				"table=61, n_packets=0, n_bytes=0, priority=200,ct_state=+new,ct_label=0x600000000/0xffffffff00000000,ip actions=goto_table:70",
+				"table=61, n_packets=0, n_bytes=0, priority=200,ct_state=-new,ct_label=0x600000000/0xffffffff00000000,ip actions=goto_table:70",
+				"table=61, n_packets=4, n_bytes=336, priority=200,reg0=0x100000/0x100000,reg3=0x4 actions=drop",
+				"table=61, n_packets=0, n_bytes=0, priority=200,reg0=0x100000/0x100000,reg3=0x8 actions=drop",
+				"table=61, n_packets=1502362, n_bytes=601635949, priority=0 actions=goto_table:70",
+			},
+			ingressFlows: []string{
+				"table=101, n_packets=1, n_bytes=74, priority=200,ct_state=+new,ct_label=0x1/0xffffffff,ip actions=resubmit(,105)",
+				"table=101, n_packets=11, n_bytes=1661, priority=200,ct_state=-new,ct_label=0x1/0xffffffff,ip actions=resubmit(,105)",
+				"table=101, n_packets=2, n_bytes=148, priority=200,ct_state=+new,ct_label=0x5/0xffffffff,ip actions=resubmit(,105)",
+				"table=101, n_packets=12, n_bytes=943, priority=200,ct_state=-new,ct_label=0x5/0xffffffff,ip actions=resubmit(,105)",
+				"table=101, n_packets=0, n_bytes=0, priority=200,reg0=0x100000/0x100000,reg3=0x3 actions=drop",
+				"table=101, n_packets=4, n_bytes=338, priority=200,reg0=0x100000/0x100000,reg3=0xb actions=drop",
+				"table=101, n_packets=1407190, n_bytes=509746586, priority=0 actions=resubmit(,105)",
+			},
+			want: map[uint32]*types.RuleMetric{
+				2:  {Bytes: 1735, Sessions: 1, Packets: 12},
+				6:  {Bytes: 0, Sessions: 0, Packets: 0},
+				4:  {Bytes: 336, Sessions: 4, Packets: 4},
+				8:  {Bytes: 0, Sessions: 0, Packets: 0},
+				1:  {Bytes: 1735, Sessions: 1, Packets: 12},
+				5:  {Bytes: 1091, Sessions: 2, Packets: 14},
+				3:  {Bytes: 0, Sessions: 0, Packets: 0},
+				11: {Bytes: 338, Sessions: 4, Packets: 4},
+			},
+		},
+		{
+			name: "Flows with traceflow flows",
+			egressFlows: []string{
+				"table=61, n_packets=0, n_bytes=0, hard_timeout=300, priority=202,ip,reg0=0x100000/0x100000,reg3=0x4,nw_tos=28 actions=controller(max_len=128,id=15768)",
+				"table=61, n_packets=0, n_bytes=0, hard_timeout=300, priority=202,ip,reg0=0x100000/0x100000,reg3=0x8,nw_tos=28 actions=controller(max_len=128,id=15768)",
+				"table=61, n_packets=1, n_bytes=74, priority=200,ct_state=+new,ct_label=0x200000000/0xffffffff00000000,ip actions=goto_table:70",
+				"table=61, n_packets=11, n_bytes=1661, priority=200,ct_state=-new,ct_label=0x200000000/0xffffffff00000000,ip actions=goto_table:70",
+				"table=61, n_packets=0, n_bytes=0, priority=200,ct_state=+new,ct_label=0x600000000/0xffffffff00000000,ip actions=goto_table:70",
+				"table=61, n_packets=0, n_bytes=0, priority=200,ct_state=-new,ct_label=0x600000000/0xffffffff00000000,ip actions=goto_table:70",
+				"table=61, n_packets=4, n_bytes=336, priority=200,reg0=0x100000/0x100000,reg3=0x4 actions=drop",
+				"table=61, n_packets=0, n_bytes=0, priority=200,reg0=0x100000/0x100000,reg3=0x8 actions=drop",
+				"table=61, n_packets=1502362, n_bytes=601635949, priority=0 actions=goto_table:70",
+			},
+			ingressFlows: []string{
+				"table=101, n_packets=0, n_bytes=0, hard_timeout=300, priority=202,ip,reg0=0x100000/0x100000,reg3=0x3,nw_tos=28 actions=controller(max_len=128,id=15768)",
+				"table=101, n_packets=0, n_bytes=0, hard_timeout=300, priority=202,ip,reg0=0x100000/0x100000,reg3=0xb,nw_tos=28 actions=controller(max_len=128,id=15768)",
+				"table=101, n_packets=1, n_bytes=74, priority=200,ct_state=+new,ct_label=0x1/0xffffffff,ip actions=resubmit(,105)",
+				"table=101, n_packets=11, n_bytes=1661, priority=200,ct_state=-new,ct_label=0x1/0xffffffff,ip actions=resubmit(,105)",
+				"table=101, n_packets=2, n_bytes=148, priority=200,ct_state=+new,ct_label=0x5/0xffffffff,ip actions=resubmit(,105)",
+				"table=101, n_packets=12, n_bytes=943, priority=200,ct_state=-new,ct_label=0x5/0xffffffff,ip actions=resubmit(,105)",
+				"table=101, n_packets=0, n_bytes=0, priority=200,reg0=0x100000/0x100000,reg3=0x3 actions=drop",
+				"table=101, n_packets=4, n_bytes=338, priority=200,reg0=0x100000/0x100000,reg3=0xb actions=drop",
+				"table=101, n_packets=1407190, n_bytes=509746586, priority=0 actions=resubmit(,105)",
+			},
+			want: map[uint32]*types.RuleMetric{
+				2:  {Bytes: 1735, Sessions: 1, Packets: 12},
+				6:  {Bytes: 0, Sessions: 0, Packets: 0},
+				4:  {Bytes: 336, Sessions: 4, Packets: 4},
+				8:  {Bytes: 0, Sessions: 0, Packets: 0},
+				1:  {Bytes: 1735, Sessions: 1, Packets: 12},
+				5:  {Bytes: 1091, Sessions: 2, Packets: 14},
+				3:  {Bytes: 0, Sessions: 0, Packets: 0},
+				11: {Bytes: 338, Sessions: 4, Packets: 4},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			c = prepareClient(ctrl)
+			mockOVSClient := ovsctltest.NewMockOVSCtlClient(ctrl)
+			c.ovsctlClient = mockOVSClient
+			gomock.InOrder(
+				mockOVSClient.EXPECT().DumpTableFlows(uint8(EgressMetricTable)).Return(tt.egressFlows, nil),
+				mockOVSClient.EXPECT().DumpTableFlows(uint8(IngressMetricTable)).Return(tt.ingressFlows, nil),
+			)
+			got := c.NetworkPolicyMetrics()
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }
