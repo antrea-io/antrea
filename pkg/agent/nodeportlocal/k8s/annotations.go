@@ -28,6 +28,7 @@ import (
 )
 
 const NPLAnnotationStr = "nodeportlocal.antrea.io"
+const NPLServiceAnnotation = "nodeportlocal.antrea.io/enabled"
 
 // NPLAnnotation is the structure used for setting NodePortLocal annotation on the Pods
 type NPLAnnotation struct {
@@ -81,6 +82,14 @@ func assignPodAnnotation(pod *corev1.Pod, nodeIP string, containerPort, nodePort
 	}
 
 	current[NPLAnnotationStr] = toJSON(annotations)
+	pod.Annotations = current
+}
+
+func removePodAnnotation(pod *corev1.Pod) {
+	current := pod.Annotations
+
+	klog.V(2).Infof("Removing annotation from pod: %v", pod.Name)
+	delete(current, NPLAnnotationStr)
 	pod.Annotations = current
 }
 

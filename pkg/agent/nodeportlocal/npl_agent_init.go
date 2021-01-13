@@ -58,7 +58,7 @@ func InitializeNPLAgent(kubeClient clientset.Interface, portRange, nodeName stri
 	return InitController(kubeClient, portTable, nodeName)
 }
 
-// InitController creates an Informer which watches for events from Pods running on the same Node where Antea agent is running.
+// InitController creates an Informer which watches for events from Pods running on the same Node where Antrea agent is running.
 // This function can be used independently while unit testing without using InitializeNPLAgent function.
 func InitController(kubeClient clientset.Interface, portTable *portcache.PortTable, nodeName string) (*k8s.Controller, error) {
 	c := k8s.NewNPLController(kubeClient, portTable)
@@ -69,7 +69,7 @@ func InitController(kubeClient clientset.Interface, portTable *portcache.PortTab
 	optionsModifier := func(options *metav1.ListOptions) {
 		options.FieldSelector = fieldSelector.String()
 	}
-	lw := &cache.ListWatch{
+	podlw := &cache.ListWatch{
 		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
 			optionsModifier(&options)
 			return kubeClient.CoreV1().Pods(metav1.NamespaceAll).List(context.TODO(), options)
@@ -80,14 +80,47 @@ func InitController(kubeClient clientset.Interface, portTable *portcache.PortTab
 		},
 	}
 
-	cacheStore, controller := cache.NewInformer(lw, &corev1.Pod{}, resyncPeriod,
+	podUpdated := func(old, cur interface{}) bool {
+		oldPod, oldok := old.(*corev1.Pod)
+		curPod, curok := cur.(*corev1.Pod)
+		if oldok && curok && oldPod.ResourceVersion != curPod.ResourceVersion {
+			return true
+		}
+		return false
+	}
+
+	podCacheStore, podController := cache.NewInformer(podlw, &corev1.Pod{}, resyncPeriod,
 		cache.ResourceEventHandlerFuncs{
-			AddFunc:    c.EnqueueObj,
-			DeleteFunc: c.EnqueueObj,
-			UpdateFunc: func(old, cur interface{}) { c.EnqueueObj(cur) },
+			AddFunc:    c.EnqueuePod,
+			DeleteFunc: c.EnqueuePod,
+			UpdateFunc: func(old, cur interface{}) {
+				if podUpdated(old, cur) {
+					c.EnqueuePod(cur)
+				}
+			},
 		},
 	)
-	c.CacheStore = cacheStore
-	c.Ctrl = controller
+	c.PodCacheStore = podCacheStore
+	c.PodController = podController
+
+	svclw := &cache.ListWatch{
+		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+			return kubeClient.CoreV1().Services(metav1.NamespaceAll).List(context.TODO(), metav1.ListOptions{})
+		},
+		WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+			return kubeClient.CoreV1().Services(metav1.NamespaceAll).Watch(context.TODO(), metav1.ListOptions{})
+		},
+	}
+	svcCacheStore, svcController := cache.NewInformer(svclw, &corev1.Service{}, resyncPeriod,
+		cache.ResourceEventHandlerFuncs{
+			AddFunc:    c.EnqueueSvc,
+			DeleteFunc: c.EnqueueSvc,
+			UpdateFunc: c.EnqueueSvcUpdate,
+		},
+	)
+	c.SvcCacheStore = svcCacheStore
+	c.SvcController = svcController
+
+	c.NodeName = nodeName
 	return c, nil
 }
