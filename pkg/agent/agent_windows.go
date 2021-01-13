@@ -133,7 +133,7 @@ func (i *Initializer) prepareOVSBridge() error {
 	uplinkNetConfig := i.nodeConfig.UplinkNetConfig
 	uplink := uplinkNetConfig.Name
 	if _, err := i.ovsBridgeClient.GetOFPort(uplink); err == nil {
-		klog.Errorf"Uplink %v already exists, cannot proceed", uplink)
+		klog.Errorf("Uplink %s already exists, cannot proceed", uplink)
 		return err
 	}
 	klog.Info("Uplink is valid")
