@@ -153,6 +153,9 @@ type ruleCache struct {
 
 	// podUpdates is a channel for receiving Pod updates from CNIServer.
 	podUpdates <-chan v1beta.PodReference
+
+	// appliedToExternalEntity indicates rules can be applied to ExternalEntity or not.
+	appliedToExternalEntity bool
 }
 
 func (c *ruleCache) getNetworkPolicies(npFilter *querier.NetworkPolicyQueryFilter) []v1beta.NetworkPolicy {
@@ -306,18 +309,19 @@ func policyIndexFunc(obj interface{}) ([]string, error) {
 }
 
 // newRuleCache returns a new *ruleCache.
-func newRuleCache(dirtyRuleHandler func(string), podUpdate <-chan v1beta.PodReference) *ruleCache {
+func newRuleCache(dirtyRuleHandler func(string), podUpdate <-chan v1beta.PodReference, appliedToExternalEntity bool) *ruleCache {
 	rules := cache.NewIndexer(
 		ruleKeyFunc,
 		cache.Indexers{addressGroupIndex: addressGroupIndexFunc, appliedToGroupIndex: appliedToGroupIndexFunc, policyIndex: policyIndexFunc},
 	)
 	cache := &ruleCache{
-		memberSetByGroup:  make(map[string]v1beta.GroupMemberSet),
-		addressSetByGroup: make(map[string]v1beta.GroupMemberSet),
-		policyMap:         make(map[string]*v1beta.NetworkPolicy),
-		rules:             rules,
-		dirtyRuleHandler:  dirtyRuleHandler,
-		podUpdates:        podUpdate,
+		memberSetByGroup:        make(map[string]v1beta.GroupMemberSet),
+		addressSetByGroup:       make(map[string]v1beta.GroupMemberSet),
+		policyMap:               make(map[string]*v1beta.NetworkPolicy),
+		rules:                   rules,
+		dirtyRuleHandler:        dirtyRuleHandler,
+		podUpdates:              podUpdate,
+		appliedToExternalEntity: appliedToExternalEntity,
 	}
 	go cache.processPodUpdates()
 	return cache
@@ -486,7 +490,16 @@ func (c *ruleCache) AddAppliedToGroup(group *v1beta.AppliedToGroup) error {
 func (c *ruleCache) addAppliedToGroupLocked(group *v1beta.AppliedToGroup) error {
 	memberSet := v1beta.GroupMemberSet{}
 	for i := range group.GroupMembers {
-		memberSet.Insert(&group.GroupMembers[i])
+		m := &group.GroupMembers[i]
+		if c.appliedToExternalEntity && m.Pod == nil && m.ExternalEntity != nil {
+			// Convert ExternalEntity to PodEntity so that rules applied to ExternalEntity.
+			m.Pod = &v1beta.PodReference{
+				Name:      m.ExternalEntity.Name,
+				Namespace: m.ExternalEntity.Namespace,
+			}
+			m.ExternalEntity = nil
+		}
+		memberSet.Insert(m)
 	}
 	oldPodSet, exists := c.memberSetByGroup[group.Name]
 	if exists && oldPodSet.Equal(memberSet) {
@@ -508,10 +521,28 @@ func (c *ruleCache) PatchAppliedToGroup(patch *v1beta.AppliedToGroupPatch) error
 		return fmt.Errorf("AppliedToGroup %v doesn't exist in cache, can't be patched", patch.Name)
 	}
 	for i := range patch.AddedGroupMembers {
-		podSet.Insert(&patch.AddedGroupMembers[i])
+		m := &patch.AddedGroupMembers[i]
+		if c.appliedToExternalEntity && m.Pod == nil && m.ExternalEntity != nil {
+			// Convert ExternalEntity to PodEntity so that rules applied to ExternalEntity.
+			m.Pod = &v1beta.PodReference{
+				Name:      m.ExternalEntity.Name,
+				Namespace: m.ExternalEntity.Namespace,
+			}
+			m.ExternalEntity = nil
+		}
+		podSet.Insert(m)
 	}
 	for i := range patch.RemovedGroupMembers {
-		podSet.Delete(&patch.RemovedGroupMembers[i])
+		m := &patch.RemovedGroupMembers[i]
+		if c.appliedToExternalEntity && m.Pod == nil && m.ExternalEntity != nil {
+			// Convert ExternalEntity to PodEntity so that rules applied to ExternalEntity.
+			m.Pod = &v1beta.PodReference{
+				Name:      m.ExternalEntity.Name,
+				Namespace: m.ExternalEntity.Namespace,
+			}
+			m.ExternalEntity = nil
+		}
+		podSet.Delete(m)
 	}
 	c.onAppliedToGroupUpdate(patch.Name)
 	return nil

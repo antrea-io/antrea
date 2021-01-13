@@ -159,13 +159,20 @@ func run(o *Options) error {
 	// the rule info for populating NetworkPolicy fields in the Flow Exporter even
 	// after rule deletion.
 	asyncRuleDeleteInterval := o.pollInterval
+	enableAntreaPolicy := features.DefaultFeatureGate.Enabled(features.AntreaPolicy)
+	enableStatusMgr := enableAntreaPolicy
+	enableLogging := enableAntreaPolicy
+	appliedToExternalEntity := false
 	networkPolicyController, err := networkpolicy.NewNetworkPolicyController(
 		antreaClientProvider,
 		ofClient,
 		ifaceStore,
 		nodeConfig.Name,
 		podUpdates,
-		features.DefaultFeatureGate.Enabled(features.AntreaPolicy),
+		enableAntreaPolicy,
+		enableStatusMgr,
+		enableLogging,
+		appliedToExternalEntity,
 		asyncRuleDeleteInterval)
 	if err != nil {
 		return fmt.Errorf("error creating new NetworkPolicy controller: %v", err)

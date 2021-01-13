@@ -52,7 +52,8 @@ func (g *antreaClientGetter) GetAntreaClient() (versioned.Interface, error) {
 func newTestController() (*Controller, *fake.Clientset, *mockReconciler) {
 	clientset := &fake.Clientset{}
 	ch := make(chan v1beta2.PodReference, 100)
-	controller, _ := NewNetworkPolicyController(&antreaClientGetter{clientset}, nil, nil, "node1", ch, true, testAsyncDeleteInterval)
+	controller, _ := NewNetworkPolicyController(&antreaClientGetter{clientset}, nil, nil, "node1", ch,
+		true, true, true, false, testAsyncDeleteInterval)
 	reconciler := newMockReconciler()
 	controller.reconciler = reconciler
 	return controller, clientset, reconciler
