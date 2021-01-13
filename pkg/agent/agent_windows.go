@@ -184,7 +184,6 @@ func (i *Initializer) prepareOVSBridge() error {
 	// Set the uplink with "no-flood" config, so that the IP of local Pods and "antrea-gw0" will not be leaked to the
 	// underlay network by the "normal" flow entry.
 	klog.Info("Setting uplink with no-flood config...")
-	// to ensure local no leaking of pod IPs, and no leaking of antrea-gw0 to the underlay via the normal flow entry...")
 	if err := ovsCtlClient.SetPortNoFlood(config.UplinkOFPort); err != nil {
 		klog.Errorf("Failed to set the uplink port with no-flood config: %v", err)
 		return err
