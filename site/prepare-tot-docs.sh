@@ -88,6 +88,12 @@ for doc in $(find "$PWD" -type f -name "*.md"); do
     rm -f ${doc}.bak
 done
 
+printf "Changing links to LICENSE file\n"
+for doc in $(find "$PWD" -type f -name "*.md"); do
+    sed -i.bak 's/\[\(.*\)\](LICENSE)/[\1](https:\/\/raw.githubusercontent.com\/vmware-tanzu\/antrea\/master\/LICENSE)/' ${doc}
+    rm -f ${doc}.bak
+done
+
 cp -f ../../api-reference.md .
 
 popd
