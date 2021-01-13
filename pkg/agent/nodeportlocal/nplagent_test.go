@@ -28,6 +28,7 @@ import (
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/wait"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/tools/cache"
@@ -51,22 +52,25 @@ func NewPortTable(c *gomock.Controller) *portcache.PortTable {
 }
 
 const (
-	defaultPodName  = "test-pod"
-	defaultNS       = "default"
-	defaultNodeName = "test-node"
-	defaultHostIP   = "10.10.10.10"
-	defaultPodIP    = "192.168.32.10"
-	defaultPort     = 80
+	defaultPodName     = "test-pod"
+	defaultSvcName     = "test-svc"
+	defaultNS          = "default"
+	defaultNodeName    = "test-node"
+	defaultHostIP      = "10.10.10.10"
+	defaultPodIP       = "192.168.32.10"
+	defaultPort        = 80
+	defaultAppSelector = "test-pod"
 )
 
 var kubeClient *k8sfake.Clientset
 var portTable *portcache.PortTable
 
 func getTestPod() corev1.Pod {
-	testPod := corev1.Pod{
+	return corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      defaultPodName,
 			Namespace: defaultNS,
+			Labels:    map[string]string{"app": defaultAppSelector},
 		},
 		Spec: corev1.PodSpec{
 			NodeName: defaultNodeName,
@@ -85,7 +89,27 @@ func getTestPod() corev1.Pod {
 			PodIP:  defaultPodIP,
 		},
 	}
-	return testPod
+}
+
+func getTestSvc() corev1.Service {
+	return corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      defaultSvcName,
+			Namespace: defaultNS,
+		},
+		Spec: corev1.ServiceSpec{
+			Type:     corev1.ServiceTypeClusterIP,
+			Selector: map[string]string{"app": defaultAppSelector},
+			Ports: []corev1.ServicePort{{
+				Port:     80,
+				Protocol: "TCP",
+				TargetPort: intstr.IntOrString{
+					Type:   intstr.Int,
+					IntVal: defaultPort,
+				},
+			}},
+		},
+	}
 }
 
 func TestMain(t *testing.T) {
@@ -97,32 +121,52 @@ func TestMain(t *testing.T) {
 	c, _ := InitController(kubeClient, portTable, defaultNodeName)
 	stopCh := signals.RegisterSignalHandlers()
 	go c.Worker()
-	go c.Ctrl.Run(stopCh)
-	cache.WaitForCacheSync(stopCh, c.Ctrl.HasSynced)
+	go c.PodController.Run(stopCh)
+	go c.SvcController.Run(stopCh)
+	cache.WaitForCacheSync(stopCh, c.PodController.HasSynced)
+	cache.WaitForCacheSync(stopCh, c.SvcController.HasSynced)
 }
 
-// Add a new Pod with fake k8s client and verify that npl annotation gets updated
-// and an entry gets added in the local port cache
-func TestPodAdd(t *testing.T) {
+func pollForPodAnnotation(r *require.Assertions, podName string) (string, error) {
+	var data string
+	var exists bool
+	err := wait.Poll(time.Second, 20*time.Second, func() (bool, error) {
+		updatedPod, err := kubeClient.CoreV1().Pods(defaultNS).Get(context.TODO(), podName, metav1.GetOptions{})
+		r.Nil(err, "Failed to get Pod")
+		ann := updatedPod.GetAnnotations()
+		data, exists = ann[k8s.NPLAnnotationStr]
+		return exists, nil
+	})
+
+	return data, err
+}
+
+// Add a service (proper annotation) and pod pair, update service with bad
+// annotation value and check for pod annotation and port cache entry removal
+func TestSvcUpdateAnnotation(t *testing.T) {
 	var ann map[string]string
 	var data string
-	var found bool
 
 	a := assert.New(t)
 	r := require.New(t)
 
+	servicePodName := "pod-svc"
+
+	testSvc := getTestSvc()
+	testSvc.Name = servicePodName
+	testSvc.Spec.Selector["app"] = servicePodName
+	testSvc.Annotations = map[string]string{k8s.NPLServiceAnnotation: "true"}
+	_, err := kubeClient.CoreV1().Services(defaultNS).Create(context.TODO(), &testSvc, metav1.CreateOptions{})
+	r.Nil(err, "Svc creation failed")
+
 	testPod := getTestPod()
+	testPod.Name = servicePodName
+	testPod.Labels["app"] = servicePodName
 	p, err := kubeClient.CoreV1().Pods(defaultNS).Create(context.TODO(), &testPod, metav1.CreateOptions{})
 	r.Nil(err, "Pod creation failed")
 	t.Logf("successfully created Pod: %v", p)
 
-	err = wait.Poll(time.Second, 20*time.Second, func() (bool, error) {
-		updatedPod, err := kubeClient.CoreV1().Pods(defaultNS).Get(context.TODO(), defaultPodName, metav1.GetOptions{})
-		r.Nil(err, "Failed to get Pod")
-		ann = updatedPod.GetAnnotations()
-		data, found = ann[k8s.NPLAnnotationStr]
-		return found, nil
-	})
+	data, err = pollForPodAnnotation(r, servicePodName)
 	r.Nil(err, "Poll for annotation check failed")
 
 	var nplData []k8s.NPLAnnotation
@@ -130,7 +174,131 @@ func TestPodAdd(t *testing.T) {
 
 	a.Len(nplData, 1)
 	a.Equal(nplData[0].NodeIP, defaultHostIP)
-	portTable.RuleExists(defaultPodIP, defaultPort)
+	a.Equal(portTable.RuleExists(defaultPodIP, defaultPort), true)
+
+	// update svc with bad annotation value
+	testSvc.Annotations = map[string]string{k8s.NPLServiceAnnotation: "false"}
+	testSvc.ResourceVersion = "2"
+	s, err := kubeClient.CoreV1().Services(defaultNS).Update(context.TODO(), &testSvc, metav1.UpdateOptions{})
+	r.Nil(err, "Svc update failed")
+	t.Logf("successfully updated Svc: %s", s.Name)
+
+	// check that annotation is removed and the rule is removed
+	err = wait.Poll(time.Second, 20*time.Second, func() (bool, error) {
+		updatedPod, err := kubeClient.CoreV1().Pods(defaultNS).Get(context.TODO(), servicePodName, metav1.GetOptions{})
+		r.Nil(err, "Failed to get Pod")
+		ann = updatedPod.GetAnnotations()
+		_, found := ann[k8s.NPLAnnotationStr]
+		return !found, nil
+	})
+	r.Nil(err, "Poll for annotation check failed")
+	a.Equal(portTable.RuleExists(defaultPodIP, defaultPort), false)
+}
+
+// Update existing service with proper annotation to get pod annotation and port
+// cache entry back, remove annotation from service
+func TestSvcRemoveAnnotation(t *testing.T) {
+	var ann map[string]string
+
+	a := assert.New(t)
+	r := require.New(t)
+
+	servicePodName := "pod-svc"
+
+	testSvc := getTestSvc()
+	testSvc.Name = servicePodName
+	testSvc.Annotations = map[string]string{k8s.NPLServiceAnnotation: "true"}
+	testSvc.Spec.Selector["app"] = servicePodName
+	testSvc.ResourceVersion = "3"
+	s, err := kubeClient.CoreV1().Services(defaultNS).Update(context.TODO(), &testSvc, metav1.UpdateOptions{})
+	r.Nil(err, "Svc update failed")
+	t.Logf("successfully updated Svc: %s", s.Name)
+
+	_, err = pollForPodAnnotation(r, servicePodName)
+	r.Nil(err, "Poll for annotation check failed")
+	a.Equal(portTable.RuleExists(defaultPodIP, defaultPort), true)
+
+	testSvc.Annotations = make(map[string]string)
+	testSvc.ResourceVersion = "2"
+	s, err = kubeClient.CoreV1().Services(defaultNS).Update(context.TODO(), &testSvc, metav1.UpdateOptions{})
+	r.Nil(err, "Svc update failed")
+	t.Logf("successfully updated Svc: %v", s)
+
+	err = wait.Poll(time.Second, 20*time.Second, func() (bool, error) {
+		updatedPod, err := kubeClient.CoreV1().Pods(defaultNS).Get(context.TODO(), servicePodName, metav1.GetOptions{})
+		r.Nil(err, "Failed to get Pod")
+		ann = updatedPod.GetAnnotations()
+		_, found := ann[k8s.NPLAnnotationStr]
+		return !found, nil
+	})
+	r.Nil(err, "Poll for annotation check failed")
+	a.Equal(portTable.RuleExists(defaultPodIP, defaultPort), false)
+}
+
+// Update existing service with proper annotation to get pod annotation and port
+// cache entry back, delete service
+func TestDeleteSvc(t *testing.T) {
+	var ann map[string]string
+
+	a := assert.New(t)
+	r := require.New(t)
+
+	servicePodName := "pod-svc"
+
+	testSvc := getTestSvc()
+	testSvc.Name = servicePodName
+	testSvc.Annotations = map[string]string{k8s.NPLServiceAnnotation: "true"}
+	testSvc.Spec.Selector["app"] = servicePodName
+	testSvc.ResourceVersion = "4"
+	s, err := kubeClient.CoreV1().Services(defaultNS).Update(context.TODO(), &testSvc, metav1.UpdateOptions{})
+	r.Nil(err, "Svc update failed")
+	t.Logf("successfully updated Svc: %s", s.Name)
+
+	_, err = pollForPodAnnotation(r, servicePodName)
+	r.Nil(err, "Poll for annotation check failed")
+	a.Equal(portTable.RuleExists(defaultPodIP, defaultPort), true)
+
+	err = kubeClient.CoreV1().Services(defaultNS).Delete(context.TODO(), servicePodName, metav1.DeleteOptions{})
+	r.Nil(err, "Svc deletion failed")
+	t.Logf("successfully deleted Svc: %s", servicePodName)
+
+	err = wait.Poll(time.Second, 20*time.Second, func() (bool, error) {
+		updatedPod, err := kubeClient.CoreV1().Pods(defaultNS).Get(context.TODO(), servicePodName, metav1.GetOptions{})
+		r.Nil(err, "Failed to get Pod")
+		ann = updatedPod.GetAnnotations()
+		_, found := ann[k8s.NPLAnnotationStr]
+		return !found, nil
+	})
+	r.Nil(err, "Poll for annotation check failed")
+	a.Equal(portTable.RuleExists(defaultPodIP, defaultPort), false)
+}
+
+// Add a new Pod with fake k8s client and verify that npl annotation gets updated
+// and an entry gets added in the local port cache
+func TestPodAdd(t *testing.T) {
+	var data string
+
+	a := assert.New(t)
+	r := require.New(t)
+
+	testSvc := getTestSvc()
+	testSvc.Annotations = map[string]string{k8s.NPLServiceAnnotation: "true"}
+	_, err := kubeClient.CoreV1().Services(defaultNS).Create(context.TODO(), &testSvc, metav1.CreateOptions{})
+	r.Nil(err, "Svc creation failed")
+
+	testPod := getTestPod()
+	p, err := kubeClient.CoreV1().Pods(defaultNS).Create(context.TODO(), &testPod, metav1.CreateOptions{})
+	r.Nil(err, "Pod creation failed")
+	t.Logf("successfully created Pod: %v", p)
+
+	data, err = pollForPodAnnotation(r, defaultPodName)
+	r.Nil(err, "Poll for annotation check failed")
+
+	var nplData []k8s.NPLAnnotation
+	json.Unmarshal([]byte(data), &nplData)
+
+	a.Len(nplData, 1)
+	a.Equal(nplData[0].NodeIP, defaultHostIP)
 	a.Equal(portTable.RuleExists(defaultPodIP, defaultPort), true)
 }
 
@@ -187,9 +355,7 @@ func TestPodDel(t *testing.T) {
 
 // Create a Pod with multiple ports and verify that Pod annotation and local port cache are updated correctly
 func TestPodAddMultiPort(t *testing.T) {
-	var ann map[string]string
 	var data string
-	var found bool
 
 	a := assert.New(t)
 	r := require.New(t)
@@ -201,13 +367,7 @@ func TestPodAddMultiPort(t *testing.T) {
 	r.Nil(err, "Pod creation failed")
 	t.Logf("successfully created Pod: %v", p)
 
-	err = wait.Poll(time.Second, 20*time.Second, func() (bool, error) {
-		updatedPod, err := kubeClient.CoreV1().Pods(defaultNS).Get(context.TODO(), defaultPodName, metav1.GetOptions{})
-		r.Nil(err, "Failed to get Pod")
-		ann = updatedPod.GetAnnotations()
-		data, found = ann[k8s.NPLAnnotationStr]
-		return found, nil
-	})
+	data, err = pollForPodAnnotation(r, defaultPodName)
 	r.Nil(err, "Poll for annotation check failed")
 
 	var nplData []k8s.NPLAnnotation
@@ -232,9 +392,7 @@ func TestPodAddMultiPort(t *testing.T) {
 // Create Multiple Pods and test that annotations for both the Pods are updated correctly
 // and local port cache is updated accordingly
 func TestAddMultiplePods(t *testing.T) {
-	var ann map[string]string
 	var data string
-	var found bool
 
 	a := assert.New(t)
 	r := require.New(t)
@@ -253,13 +411,7 @@ func TestAddMultiplePods(t *testing.T) {
 	r.Nil(err, "Pod creation failed")
 	t.Logf("successfully created Pod: %v", p)
 
-	err = wait.Poll(time.Second, 20*time.Second, func() (bool, error) {
-		updatedPod, err := kubeClient.CoreV1().Pods(defaultNS).Get(context.TODO(), testPod1.Name, metav1.GetOptions{})
-		r.Nil(err, "Failed to get Pod")
-		ann = updatedPod.GetAnnotations()
-		data, found = ann[k8s.NPLAnnotationStr]
-		return found, nil
-	})
+	data, err = pollForPodAnnotation(r, testPod1.Name)
 	r.Nil(err, "Poll for annotation check failed")
 
 	var nplData []k8s.NPLAnnotation
@@ -270,13 +422,7 @@ func TestAddMultiplePods(t *testing.T) {
 	a.Equal(nplData[0].PodPort, defaultPort)
 	a.Equal(portTable.RuleExists(testPod1.Status.PodIP, defaultPort), true)
 
-	wait.Poll(time.Second, 20*time.Second, func() (bool, error) {
-		updatedPod, err := kubeClient.CoreV1().Pods(defaultNS).Get(context.TODO(), testPod2.Name, metav1.GetOptions{})
-		r.Nil(err, "Failed to get Pod")
-		ann = updatedPod.GetAnnotations()
-		data, found = ann[k8s.NPLAnnotationStr]
-		return found, nil
-	})
+	data, err = pollForPodAnnotation(r, testPod2.Name)
 	r.Nil(err, "Poll for annotation check failed")
 
 	json.Unmarshal([]byte(data), &nplData)
