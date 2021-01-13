@@ -55,50 +55,59 @@ func GetHostInterfaceStatus(ifaceName string) (string, error) {
 	return strings.TrimSpace(out), nil
 }
 
-// EnableHostInterface sets the specified interface status as UP.
-func EnableHostInterface(ifaceName string) error {
+func retryOperator(operation string, exec func() error) error {
 	var err error
-	var status string
-	cmd := fmt.Sprintf(`Enable-NetAdapter -InterfaceAlias "%s"`, ifaceName)
 	for i := 0; i < commandMaxRetry; i++ {
-		err = InvokePSCommand(cmd)
+		err = exec()
 		if err == nil {
-			status, err = GetHostInterfaceStatus(ifaceName)
-			if err == nil && status == "Up" {
-				return nil
-			}
+			return nil
 		}
 		time.Sleep(commandRetryInternal)
 	}
-	return err
+	return fmt.Errorf("failed to %s after %d retries: %v", operation, commandMaxRetry, err)
+}
+
+// EnableHostInterface sets the specified interface status as UP.
+func EnableHostInterface(ifaceName string) error {
+	cmd := fmt.Sprintf(`Enable-NetAdapter -InterfaceAlias "%s"`, ifaceName)
+	// Enable-NetAdapter is not a block operation by our test. It returns immediately no matter if the interface
+	// has been enabled. So we need to check interface status to ensure the interface is up before return.
+	return retryOperator(cmd, func() error {
+		if err := InvokePSCommand(cmd); err != nil {
+			return err
+		}
+		status, err := GetHostInterfaceStatus(ifaceName)
+		if err != nil {
+			return err
+		}
+		if !strings.EqualFold(status, "Up") {
+			return fmt.Errorf("host interface %s is not up", ifaceName)
+		}
+		return err
+	})
 }
 
 // ConfigureInterfaceAddress adds IPAddress on the specified interface.
 func ConfigureInterfaceAddress(ifaceName string, ipConfig *net.IPNet) error {
 	ipStr := strings.Split(ipConfig.String(), "/")
 	cmd := fmt.Sprintf(`New-NetIPAddress -InterfaceAlias "%s" -IPAddress %s -PrefixLength %s`, ifaceName, ipStr[0], ipStr[1])
-	for i := 0; i < commandMaxRetry; i++ {
-		err := InvokePSCommand(cmd)
-		if err == nil || strings.Contains(err.Error(), "already exists") {
-			return nil
-		}
-		time.Sleep(commandRetryInternal)
+	err := InvokePSCommand(cmd)
+	// If the addrress already exists, ignore the error.
+	if err == nil || strings.Contains(err.Error(), "already exists") {
+		return nil
 	}
-	return InvokePSCommand(cmd)
+	return err
 }
 
 // ConfigureInterfaceAddressWithDefaultGateway adds IPAddress on the specified interface and sets the default gateway
 // for the host.
 func ConfigureInterfaceAddressWithDefaultGateway(ifaceName string, ipConfig *net.IPNet, gateway string) error {
-	var err error
 	ipStr := strings.Split(ipConfig.String(), "/")
 	cmd := fmt.Sprintf(`New-NetIPAddress -InterfaceAlias "%s" -IPAddress %s -PrefixLength %s -DefaultGateway %s`, ifaceName, ipStr[0], ipStr[1], gateway)
-	for i := 0; i <= commandMaxRetry; i++ {
-		err = InvokePSCommand(cmd)
-		if err == nil || strings.Contains(err.Error(), "already exists") {
-			return nil
-		}
-		time.Sleep(commandRetryInternal)
+	err := InvokePSCommand(cmd)
+	// If the addrress already exists, ignore the error.
+	if err == nil || strings.Contains(err.Error(), "already exists") {
+		return nil
 	}
 	return err
 }
