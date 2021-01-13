@@ -103,4 +103,4 @@ in!
 
 ## License
 
-Antrea is licensed under the [Apache License, version 2.0](LICENSE)
+Antrea is licensed under the [Apache License, version 2.0](https://raw.githubusercontent.com/vmware-tanzu/antrea/master/LICENSE)
