@@ -16,4 +16,6 @@
 
 package v1alpha2
 
+type ClusterGroupExpansion interface{}
+
 type ExternalEntityExpansion interface{}

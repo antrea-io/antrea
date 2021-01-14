@@ -16,6 +16,10 @@
 
 package v1alpha2
 
+// ClusterGroupListerExpansion allows custom methods to be added to
+// ClusterGroupLister.
+type ClusterGroupListerExpansion interface{}
+
 // ExternalEntityListerExpansion allows custom methods to be added to
 // ExternalEntityLister.
 type ExternalEntityListerExpansion interface{}

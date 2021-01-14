@@ -17,6 +17,8 @@ package v1alpha2
 import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	secv1a1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
 )
 
 // +genclient
@@ -73,4 +75,47 @@ type ExternalEntityList struct {
 	metav1.ListMeta `json:"metadata,omitempty"`
 
 	Items []ExternalEntity `json:"items,omitempty"`
+}
+
+// +genclient
+// +genclient:nonNamespaced
+// +genclient:noStatus
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+type ClusterGroup struct {
+	metav1.TypeMeta `json:",inline"`
+	// Standard metadata of the object.
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+	// Desired state of the group.
+	Spec GroupSpec `json:"spec,omitempty"`
+}
+
+type GroupSpec struct {
+	// Select Pods matching the labels set in the PodSelector in
+	// AppliedTo/To/From fields. If set with NamespaceSelector, Pods are
+	// matched from Namespaces matched by the NamespaceSelector.
+	// Cannot be set with any other selector except NamespaceSelector.
+	// +optional
+	PodSelector *metav1.LabelSelector `json:"podSelector,omitempty"`
+	// Select all Pods from Namespaces matched by this selector, as
+	// workloads in AppliedTo/To/From fields. If set with PodSelector,
+	// Pods are matched from Namespaces matched by the NamespaceSelector.
+	// Cannot be set with any other selector except PodSelector.
+	// +optional
+	NamespaceSelector *metav1.LabelSelector `json:"namespaceSelector,omitempty"`
+	// IPBlock describes the IPAddresses/IPBlocks that is matched in to/from.
+	// IPBlock cannot be set as part of the AppliedTo field.
+	// Cannot be set with any other selector.
+	// +optional
+	IPBlock *secv1a1.IPBlock `json:"ipBlock,omitempty"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+type ClusterGroupList struct {
+	metav1.TypeMeta `json:",inline"`
+	// +optional
+	metav1.ListMeta `json:"metadata,omitempty"`
+
+	Items []ClusterGroup `json:"items,omitempty"`
 }

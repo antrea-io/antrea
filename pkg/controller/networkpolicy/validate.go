@@ -27,6 +27,7 @@ import (
 	"k8s.io/apiserver/pkg/authentication/serviceaccount"
 	"k8s.io/klog"
 
+	corev1a2 "github.com/vmware-tanzu/antrea/pkg/apis/core/v1alpha2"
 	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
 	"github.com/vmware-tanzu/antrea/pkg/util/env"
 )
@@ -59,6 +60,9 @@ type antreaPolicyValidator resourceValidator
 // tierValidator implements the validator interface for Tier resources.
 type tierValidator resourceValidator
 
+// groupValidator implements the validator interface for the ClusterGroup resource.
+type groupValidator resourceValidator
+
 var (
 	// reservedTierPriorities stores the reserved priority range from 251, 252, 254 and 255.
 	// The priority 250 is reserved for default Tier but not part of this set in order to be
@@ -86,6 +90,13 @@ func (v *NetworkPolicyValidator) RegisterTierValidator(t validator) {
 	v.tierValidators = append(v.tierValidators, t)
 }
 
+// RegisterGroupValidator registers a Group validator to the resource registry.
+// A new validator must be registered by calling this function before the Run
+// phase of the APIServer.
+func (v *NetworkPolicyValidator) RegisterGroupValidator(g validator) {
+	v.groupValidators = append(v.groupValidators, g)
+}
+
 // NetworkPolicyValidator maintains list of validator objects which validate
 // the Antrea-native policy related resources.
 type NetworkPolicyValidator struct {
@@ -95,6 +106,9 @@ type NetworkPolicyValidator struct {
 	// tierValidators maintains a list of validator objects which
 	// implement the validator interface for Tier resources.
 	tierValidators []validator
+	// groupValidators maintains a list of validator objects which
+	// implement the validator interface for ClusterGroup resources.
+	groupValidators []validator
 }
 
 // NewNetworkPolicyValidator returns a new *NetworkPolicyValidator.
@@ -111,12 +125,18 @@ func NewNetworkPolicyValidator(networkPolicyController *NetworkPolicyController)
 	tv := tierValidator{
 		networkPolicyController: networkPolicyController,
 	}
+	// gv is an instance of groupValidator to validate ClusterGroup
+	// resource events.
+	gv := groupValidator{
+		networkPolicyController: networkPolicyController,
+	}
 	vr.RegisterAntreaPolicyValidator(&apv)
 	vr.RegisterTierValidator(&tv)
+	vr.RegisterGroupValidator(&gv)
 	return &vr
 }
 
-// Validate function validates a Tier or Antrea Policy object
+// Validate function validates a ClusterGroup, Tier or Antrea Policy object
 func (v *NetworkPolicyValidator) Validate(ar *admv1.AdmissionReview) *admv1.AdmissionResponse {
 	var result *metav1.Status
 	var msg string
@@ -142,6 +162,22 @@ func (v *NetworkPolicyValidator) Validate(ar *admv1.AdmissionReview) *admv1.Admi
 			}
 		}
 		msg, allowed = v.validateTier(&curTier, &oldTier, op, ui)
+	case "ClusterGroup":
+		klog.V(2).Info("Validating ClusterGroup CRD")
+		var curCG, oldCG corev1a2.ClusterGroup
+		if curRaw != nil {
+			if err := json.Unmarshal(curRaw, &curCG); err != nil {
+				klog.Errorf("Error de-serializing current ClusterGroup")
+				return GetAdmissionResponseForErr(err)
+			}
+		}
+		if oldRaw != nil {
+			if err := json.Unmarshal(oldRaw, &oldCG); err != nil {
+				klog.Errorf("Error de-serializing old ClusterGroup")
+				return GetAdmissionResponseForErr(err)
+			}
+		}
+		msg, allowed = v.validateAntreaGroup(&curCG, &oldCG, op, ui)
 	case "ClusterNetworkPolicy":
 		klog.V(2).Info("Validating Antrea ClusterNetworkPolicy CRD")
 		var curCNP, oldCNP secv1alpha1.ClusterNetworkPolicy
@@ -246,6 +282,39 @@ func (a *antreaPolicyValidator) validatePort(ingress, egress []secv1alpha1.Rule)
 		return err
 	}
 	return nil
+}
+
+// validateAntreaGroup validates the admission of a ClusterGroup resource
+func (v *NetworkPolicyValidator) validateAntreaGroup(curCG, oldCG *corev1a2.ClusterGroup, op admv1.Operation, userInfo authenticationv1.UserInfo) (string, bool) {
+	allowed := true
+	reason := ""
+	switch op {
+	case admv1.Create:
+		klog.V(2).Info("Validating CREATE request for ClusterGroup")
+		for _, val := range v.groupValidators {
+			reason, allowed = val.createValidate(curCG, userInfo)
+			if !allowed {
+				return reason, allowed
+			}
+		}
+	case admv1.Update:
+		klog.V(2).Info("Validating UPDATE request for ClusterGroup")
+		for _, val := range v.groupValidators {
+			reason, allowed = val.updateValidate(curCG, oldCG, userInfo)
+			if !allowed {
+				return reason, allowed
+			}
+		}
+	case admv1.Delete:
+		klog.V(2).Info("Validating DELETE request for ClusterGroup")
+		for _, val := range v.groupValidators {
+			reason, allowed = val.deleteValidate(oldCG, userInfo)
+			if !allowed {
+				return reason, allowed
+			}
+		}
+	}
+	return reason, allowed
 }
 
 // validateTier validates the admission of a Tier resource
@@ -485,5 +554,33 @@ func (t *tierValidator) deleteValidate(oldObj interface{}, userInfo authenticati
 	if err != nil || len(anps) > 0 {
 		return fmt.Sprintf("tier %s is referenced by %d Antrea NetworkPolicies", oldTier.Name, len(anps)), false
 	}
+	return "", true
+}
+
+// validateAntreaGroupSelectors ensures that an IPBlock is not set along with namespaceSelector and/or a
+// podSelector.
+func validateAntreaGroupSelectors(s corev1a2.GroupSpec) (string, bool) {
+	if s.IPBlock != nil {
+		if s.NamespaceSelector != nil && s.PodSelector != nil {
+			return fmt.Sprint("ClusterGroup IPBlock cannot be set with other selectors"), false
+		}
+	}
+	return "", true
+}
+
+// createValidate validates the CREATE events of ClusterGroup resources.
+func (g *groupValidator) createValidate(curObj interface{}, userInfo authenticationv1.UserInfo) (string, bool) {
+	curCG := curObj.(*corev1a2.ClusterGroup)
+	return validateAntreaGroupSelectors(curCG.Spec)
+}
+
+// updateValidate validates the UPDATE events of ClusterGroup resources.
+func (g *groupValidator) updateValidate(curObj, oldObj interface{}, userInfo authenticationv1.UserInfo) (string, bool) {
+	curCG := curObj.(*corev1a2.ClusterGroup)
+	return validateAntreaGroupSelectors(curCG.Spec)
+}
+
+// deleteValidate validates the DELETE events of ClusterGroup resources.
+func (g *groupValidator) deleteValidate(oldObj interface{}, userInfo authenticationv1.UserInfo) (string, bool) {
 	return "", true
 }

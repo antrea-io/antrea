@@ -75,6 +75,7 @@ var allowedPaths = []string{
 	"/validate/tier",
 	"/validate/acnp",
 	"/validate/anp",
+	"/validate/clustergroup",
 }
 
 // run starts Antrea Controller with the given options and waits for termination signal.
@@ -98,11 +99,13 @@ func run(o *Options) error {
 	anpInformer := crdInformerFactory.Security().V1alpha1().NetworkPolicies()
 	tierInformer := crdInformerFactory.Security().V1alpha1().Tiers()
 	traceflowInformer := crdInformerFactory.Ops().V1alpha1().Traceflows()
+	cgInformer := crdInformerFactory.Core().V1alpha2().ClusterGroups()
 
 	// Create Antrea object storage.
 	addressGroupStore := store.NewAddressGroupStore()
 	appliedToGroupStore := store.NewAppliedToGroupStore()
 	networkPolicyStore := store.NewNetworkPolicyStore()
+	groupStore := store.NewGroupStore()
 
 	networkPolicyController := networkpolicy.NewNetworkPolicyController(client,
 		crdClient,
@@ -113,9 +116,11 @@ func run(o *Options) error {
 		cnpInformer,
 		anpInformer,
 		tierInformer,
+		cgInformer,
 		addressGroupStore,
 		appliedToGroupStore,
-		networkPolicyStore)
+		networkPolicyStore,
+		groupStore)
 
 	var networkPolicyStatusController *networkpolicy.StatusController
 	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
@@ -148,6 +153,7 @@ func run(o *Options) error {
 		addressGroupStore,
 		appliedToGroupStore,
 		networkPolicyStore,
+		groupStore,
 		controllerQuerier,
 		endpointQuerier,
 		networkPolicyController,
@@ -212,6 +218,7 @@ func createAPIServerConfig(kubeconfig string,
 	addressGroupStore storage.Interface,
 	appliedToGroupStore storage.Interface,
 	networkPolicyStore storage.Interface,
+	groupStore storage.Interface,
 	controllerQuerier querier.ControllerQuerier,
 	endpointQuerier networkpolicy.EndpointQuerier,
 	npController *networkpolicy.NetworkPolicyController,
@@ -264,6 +271,7 @@ func createAPIServerConfig(kubeconfig string,
 		addressGroupStore,
 		appliedToGroupStore,
 		networkPolicyStore,
+		groupStore,
 		caCertController,
 		statsAggregator,
 		controllerQuerier,

@@ -51,6 +51,43 @@ kind: CustomResourceDefinition
 metadata:
   labels:
     app: antrea
+  name: clustergroups.core.antrea.tanzu.vmware.com
+spec:
+  group: core.antrea.tanzu.vmware.com
+  names:
+    kind: ClusterGroup
+    plural: clustergroups
+    shortNames:
+    - cg
+    singular: group
+  scope: Cluster
+  versions:
+  - name: v1alpha2
+    schema:
+      openAPIV3Schema:
+        properties:
+          spec:
+            properties:
+              ipBlock:
+                properties:
+                  cidr:
+                    format: cidr
+                    type: string
+                type: object
+              namespaceSelector:
+                x-kubernetes-preserve-unknown-fields: true
+              podSelector:
+                x-kubernetes-preserve-unknown-fields: true
+            type: object
+        type: object
+    served: true
+    storage: true
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  labels:
+    app: antrea
   name: clusternetworkpolicies.security.antrea.tanzu.vmware.com
 spec:
   group: security.antrea.tanzu.vmware.com
@@ -719,6 +756,45 @@ metadata:
     app: antrea
     rbac.authorization.k8s.io/aggregate-to-admin: "true"
     rbac.authorization.k8s.io/aggregate-to-edit: "true"
+  name: aggregate-antrea-clustergroups-edit
+rules:
+- apiGroups:
+  - core.antrea.tanzu.vmware.com
+  resources:
+  - clustergroups
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app: antrea
+    rbac.authorization.k8s.io/aggregate-to-view: "true"
+  name: aggregate-antrea-clustergroups-view
+rules:
+- apiGroups:
+  - core.antrea.tanzu.vmware.com
+  resources:
+  - clustergroups
+  verbs:
+  - get
+  - list
+  - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app: antrea
+    rbac.authorization.k8s.io/aggregate-to-admin: "true"
+    rbac.authorization.k8s.io/aggregate-to-edit: "true"
   name: aggregate-antrea-policies-edit
 rules:
 - apiGroups:
@@ -1101,6 +1177,7 @@ rules:
   - core.antrea.tanzu.vmware.com
   resources:
   - externalentities
+  - clustergroups
   verbs:
   - get
   - watch
@@ -1867,5 +1944,27 @@ webhooks:
     resources:
     - networkpolicies
     scope: Namespaced
+  sideEffects: None
+  timeoutSeconds: 5
+- admissionReviewVersions:
+  - v1
+  - v1beta1
+  clientConfig:
+    service:
+      name: antrea
+      namespace: kube-system
+      path: /validate/clustergroup
+  name: clustergroupvalidator.antrea.tanzu.vmware.com
+  rules:
+  - apiGroups:
+    - core.antrea.tanzu.vmware.com
+    apiVersions:
+    - v1alpha2
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - clustergroups
+    scope: Cluster
   sideEffects: None
   timeoutSeconds: 5
