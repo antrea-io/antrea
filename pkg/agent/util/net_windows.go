@@ -124,14 +124,16 @@ func SetAdapterMACAddress(adapterName string, macConfig *net.HardwareAddr) error
 	return InvokePSCommand(cmd)
 }
 
-// WindowsHyperVInstalled checks if the Hyper-V feature is enabled on the host.
-func WindowsHyperVInstalled() (bool, error) {
-	cmd := "$(Get-WindowsFeature Hyper-V).InstallState"
+// WindowsHyperVEnabled checks if the Hyper-V is enabled on the host.
+// Hyper-V feature contains multiple components/sub-features. According to the
+// test, OVS requires "Microsoft-Hyper-V" feature to be enabled.
+func WindowsHyperVEnabled() (bool, error) {
+	cmd := "$(Get-WindowsOptionalFeature -Online -FeatureName Microsoft-Hyper-V).State"
 	result, err := CallPSCommand(cmd)
 	if err != nil {
 		return true, err
 	}
-	return strings.HasPrefix(result, "Installed"), nil
+	return strings.HasPrefix(result, "Enabled"), nil
 }
 
 // CreateHNSNetwork creates a new HNS Network, whose type is "Transparent". The NetworkAdapter is using the host
@@ -273,7 +275,7 @@ func PrepareHNSNetwork(subnetCIDR *net.IPNet, nodeIPNet *net.IPNet, uplinkAdapte
 
 func enableHNSOnOVS(hnsNet *hcsshim.HNSNetwork) error {
 	// Release OS management for HNS Network if Hyper-V is enabled.
-	hypervEnabled, err := WindowsHyperVInstalled()
+	hypervEnabled, err := WindowsHyperVEnabled()
 	if err != nil {
 		return err
 	}
