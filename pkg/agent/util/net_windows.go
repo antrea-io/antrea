@@ -20,7 +20,6 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"k8s.io/apimachinery/pkg/util/wait"
 	"net"
 	"strings"
 	"time"
@@ -30,6 +29,7 @@ import (
 	ps "github.com/benmoss/go-powershell"
 	"github.com/benmoss/go-powershell/backend"
 	"github.com/containernetworking/plugins/pkg/ip"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog"
 )
 
@@ -59,9 +59,10 @@ func GetHostInterfaceStatus(ifaceName string) (string, error) {
 // EnableHostInterface sets the specified interface status as UP.
 func EnableHostInterface(ifaceName string) error {
 	cmd := fmt.Sprintf(`Enable-NetAdapter -InterfaceAlias "%s"`, ifaceName)
-	// Enable-NetAdapter is not a block operation by our test. It returns immediately no matter if the interface
-	// has been enabled. So we need to check interface status to ensure the interface is up before return.
-	return wait.PollImmediate(commandRetryInternal, commandMaxRetry, func() (done bool, err error) {
+	// Enable-NetAdapter is not a blocking operation based on our testing.
+	// It returns immediately no matter whether the interface has been enabled or not.
+	// So we need to check the interface status to ensure it is up before returning.
+	if err := wait.PollImmediate(commandRetryInternal, commandMaxRetry, func() (done bool, err error) {
 		if err := InvokePSCommand(cmd); err != nil {
 			klog.Errorf("Failed to run command %s: %v", cmd, err)
 			return false, nil
@@ -72,11 +73,14 @@ func EnableHostInterface(ifaceName string) error {
 			return false, nil
 		}
 		if !strings.EqualFold(status, "Up") {
-			klog.Errorf("Waiting for host interface %s to be up", ifaceName)
+			klog.Infof("Waiting for host interface %s to be up", ifaceName)
 			return false, nil
 		}
 		return true, nil
-	})
+	}); err != nil {
+		return fmt.Errorf("failed to enable interface %s: %v", ifaceName, err)
+	}
+	return nil
 }
 
 // ConfigureInterfaceAddress adds IPAddress on the specified interface.
@@ -101,7 +105,7 @@ func ConfigureInterfaceAddressWithDefaultGateway(ifaceName string, ipConfig *net
 	if err != nil && !strings.Contains(err.Error(), "already exists") {
 		return err
 	}
-	return err
+	return nil
 }
 
 // EnableIPForwarding enables the IP interface to forward packets that arrive on this interface to other interfaces.
