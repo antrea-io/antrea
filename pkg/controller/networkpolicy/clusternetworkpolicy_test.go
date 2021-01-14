@@ -557,6 +557,102 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 			expectedAppliedToGroups: 1,
 			expectedAddressGroups:   1,
 		},
+		{
+			name: "with-applied-to-cluster-group-ingress-egress",
+			inputPolicy: &secv1alpha1.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "cnpI", UID: "uidI"},
+				Spec: secv1alpha1.ClusterNetworkPolicySpec{
+					Priority: p10,
+					Ingress: []secv1alpha1.Rule{
+						{
+							Ports: []secv1alpha1.NetworkPolicyPort{
+								{
+									Port: &int80,
+								},
+							},
+							From: []secv1alpha1.NetworkPolicyPeer{
+								{
+									PodSelector: &selectorB,
+								},
+							},
+							AppliedTo: []secv1alpha1.NetworkPolicyPeer{
+								{
+									Group: cgA.Name,
+								},
+							},
+							Action: &allowAction,
+						},
+					},
+					Egress: []secv1alpha1.Rule{
+						{
+							Ports: []secv1alpha1.NetworkPolicyPort{
+								{
+									Port: &int81,
+								},
+							},
+							To: []secv1alpha1.NetworkPolicyPeer{
+								{
+									PodSelector: &selectorB,
+								},
+							},
+							AppliedTo: []secv1alpha1.NetworkPolicyPeer{
+								{
+									Group: cgA.Name,
+								},
+							},
+							Action: &allowAction,
+						},
+					},
+				},
+			},
+			expectedPolicy: &antreatypes.NetworkPolicy{
+				UID:  "uidI",
+				Name: "uidI",
+				SourceRef: &controlplane.NetworkPolicyReference{
+					Type: controlplane.AntreaClusterNetworkPolicy,
+					Name: "cnpI",
+					UID:  "uidI",
+				},
+				Priority:     &p10,
+				TierPriority: &DefaultTierPriority,
+				Rules: []controlplane.NetworkPolicyRule{
+					{
+						Direction:       controlplane.DirectionIn,
+						AppliedToGroups: []string{cgA.Name},
+						From: controlplane.NetworkPolicyPeer{
+							AddressGroups: []string{getNormalizedUID(toGroupSelector("", &selectorB, nil, nil).NormalizedName)},
+						},
+						Services: []controlplane.Service{
+							{
+								Protocol: &protocolTCP,
+								Port:     &int80,
+							},
+						},
+						Priority: 0,
+						Action:   &allowAction,
+					},
+					{
+						Direction:       controlplane.DirectionOut,
+						AppliedToGroups: []string{cgA.Name},
+						To: controlplane.NetworkPolicyPeer{
+							AddressGroups: []string{getNormalizedUID(toGroupSelector("", &selectorB, nil, nil).NormalizedName)},
+						},
+						Services: []controlplane.Service{
+							{
+								Protocol: &protocolTCP,
+								Port:     &int81,
+							},
+						},
+						Priority: 0,
+						Action:   &allowAction,
+					},
+				},
+				AppliedToGroups:  []string{cgA.Name},
+				AppliedToPerRule: true,
+			},
+			expectedAppliedToGroups: 1,
+			expectedAddressGroups:   1,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1219,6 +1315,71 @@ func TestProcessRefCG(t *testing.T) {
 			actualAG, actualIPB := npc.processRefCG(tt.inputCG)
 			assert.Equal(t, tt.expectedIPB, actualIPB, "IPBlock does not match")
 			assert.Equal(t, tt.expectedAG, actualAG, "addressGroup does not match")
+		})
+	}
+}
+
+func TestProcessAppliedToGroupsForCGs(t *testing.T) {
+	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
+	cidr := "10.0.0.0/24"
+	// cgA with selector present in cache
+	cgA := corev1a2.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{Name: "cgA", UID: "uidA"},
+		Spec: corev1a2.GroupSpec{
+			NamespaceSelector: &selectorA,
+		},
+	}
+	// cgB with IPBlock present in cache
+	cgB := corev1a2.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{Name: "cgB", UID: "uidB"},
+		Spec: corev1a2.GroupSpec{
+			IPBlock: &secv1alpha1.IPBlock{
+				CIDR: cidr,
+			},
+		},
+	}
+	// cgC not found in cache
+	cgC := corev1a2.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{Name: "cgC", UID: "uidC"},
+		Spec: corev1a2.GroupSpec{
+			NamespaceSelector: &selectorA,
+		},
+	}
+	_, npc := newController()
+	npc.addClusterGroup(&cgA)
+	npc.addClusterGroup(&cgB)
+	npc.cgStore.Add(&cgA)
+	npc.cgStore.Add(&cgB)
+	tests := []struct {
+		name       string
+		inputCG    string
+		expectedAG string
+	}{
+		{
+			name:       "empty-cgs-no-result",
+			inputCG:    "",
+			expectedAG: "",
+		},
+		{
+			name:       "ipblock-cgs-no-result",
+			inputCG:    cgB.Name,
+			expectedAG: "",
+		},
+		{
+			name:       "selector-cgs-missing-no-result",
+			inputCG:    cgC.Name,
+			expectedAG: "",
+		},
+		{
+			name:       "selector-cgs",
+			inputCG:    cgA.Name,
+			expectedAG: cgA.Name,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			actualAG := npc.processAppliedToGroupForCGs(tt.inputCG)
+			assert.Equal(t, tt.expectedAG, actualAG, "addressGroup list does not match")
 		})
 	}
 }

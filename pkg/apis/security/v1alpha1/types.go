@@ -116,6 +116,12 @@ type Rule struct {
 	// conjunction with NetworkPolicySpec/ClusterNetworkPolicySpec.AppliedTo.
 	// +optional
 	AppliedTo []NetworkPolicyPeer `json:"appliedTo,omitempty"`
+	// Set list of ClusterGroup names on which this rule will be applied to.
+	// Cannot be set in conjunction with NetworkPolicySpec.
+	// Cannot be set in conjunction with ClusterNetworkPolicySpec.AppliedToGroups
+	// and ClusterNetworkPolicySpec.AppliedTo.
+	// +optional
+	AppliedToGroups []string `json:"appliedToGroups,omitempty"`
 }
 
 // NetworkPolicyPeer describes the grouping selector of workloads.
@@ -237,6 +243,11 @@ type ClusterNetworkPolicySpec struct {
 	// field within a Rule.
 	// +optional
 	Egress []Rule `json:"egress"`
+	// Set list of ClusterGroup names on which this policy will be applied to.
+	// Cannot be set in conjunction with AppliedToGroups and AppliedTo in each
+	// rule.
+	// +optional
+	AppliedToGroups []string `json:"appliedToGroups,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

@@ -1479,10 +1479,8 @@ func (n *NetworkPolicyController) syncAppliedToGroup(key string) error {
 	}
 	memberSetByNode := make(map[string]controlplane.GroupMemberSet)
 	scheduledPodNum, scheduledExtEntityNum := 0, 0
-
 	appliedToGroup := appliedToGroupObj.(*antreatypes.AppliedToGroup)
-	groupSelector := appliedToGroup.Selector
-	pods, externalEntities := n.processSelector(groupSelector)
+	pods, externalEntities := n.getAppliedToWorkloads(appliedToGroup)
 	for _, pod := range pods {
 		if pod.Spec.NodeName == "" {
 			// No need to process Pod when it's not scheduled.
@@ -1519,8 +1517,6 @@ func (n *NetworkPolicyController) syncAppliedToGroup(key string) error {
 		GroupMemberByNode: memberSetByNode,
 		SpanMeta:          antreatypes.SpanMeta{NodeNames: appGroupNodeNames},
 	}
-	klog.V(2).Infof("Updating existing AppliedToGroup %s with %d Pods and %d External Entities on %d Nodes",
-		key, scheduledPodNum, scheduledExtEntityNum, appGroupNodeNames.Len())
 	n.appliedToGroupStore.Update(updatedAppliedToGroup)
 
 	// Get all internal NetworkPolicy objects that refers this AppliedToGroup.
@@ -1539,6 +1535,28 @@ func (n *NetworkPolicyController) syncAppliedToGroup(key string) error {
 		n.enqueueInternalNetworkPolicy(npKey)
 	}
 	return nil
+}
+
+// getAppliedToWorkloads returns a list of workloads like Pods and ExternalEntities matching an AppliedToGroup
+// for standalone selectors or corresponding to a ClusterGroup.
+func (n *NetworkPolicyController) getAppliedToWorkloads(g *antreatypes.AppliedToGroup) ([]*v1.Pod, []*v1alpha2.ExternalEntity) {
+	// Check if an internal Group object exists corresponding to this AppliedToGroup.
+	intGroup, found, _ := n.internalGroupStore.Get(string(g.UID))
+	if found {
+		var pods []*v1.Pod
+		ig := intGroup.(*antreatypes.Group)
+		// Generate the list of Pods based on the GroupMembers set in the internal Group.
+		for _, gm := range ig.GroupMembers {
+			pod, err := n.podLister.Pods(gm.Pod.Namespace).Get(gm.Pod.Name)
+			if err != nil {
+				// Pod no longer exists, continue processing.
+				continue
+			}
+			pods = append(pods, pod)
+		}
+		return pods, []*v1alpha2.ExternalEntity{}
+	}
+	return n.processSelector(g.Selector)
 }
 
 // syncInternalNetworkPolicy retrieves all the AppliedToGroups associated with

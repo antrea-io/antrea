@@ -385,6 +385,7 @@ func (a *antreaPolicyValidator) createValidate(curObj interface{}, userInfo auth
 	var tier string
 	var ingress, egress []secv1alpha1.Rule
 	var specAppliedTo []secv1alpha1.NetworkPolicyPeer
+	var specAppliedToGroups []string
 	switch curObj.(type) {
 	case *secv1alpha1.ClusterNetworkPolicy:
 		curCNP := curObj.(*secv1alpha1.ClusterNetworkPolicy)
@@ -392,6 +393,7 @@ func (a *antreaPolicyValidator) createValidate(curObj interface{}, userInfo auth
 		ingress = curCNP.Spec.Ingress
 		egress = curCNP.Spec.Egress
 		specAppliedTo = curCNP.Spec.AppliedTo
+		specAppliedToGroups = curCNP.Spec.AppliedToGroups
 	case *secv1alpha1.NetworkPolicy:
 		curANP := curObj.(*secv1alpha1.NetworkPolicy)
 		tier = curANP.Spec.Tier
@@ -406,7 +408,7 @@ func (a *antreaPolicyValidator) createValidate(curObj interface{}, userInfo auth
 	if ruleNameUnique := a.validateRuleName(ingress, egress); !ruleNameUnique {
 		return fmt.Sprint("rules names must be unique within the policy"), false
 	}
-	reason, allowed = a.validateAppliedTo(ingress, egress, specAppliedTo)
+	reason, allowed = a.validateAppliedTo(ingress, egress, specAppliedTo, specAppliedToGroups)
 	if !allowed {
 		return reason, allowed
 	}
@@ -435,8 +437,13 @@ func (v *antreaPolicyValidator) validateRuleName(ingress, egress []secv1alpha1.R
 	return isUnique(ingress) && isUnique(egress)
 }
 
-func (a *antreaPolicyValidator) validateAppliedTo(ingress, egress []secv1alpha1.Rule, specAppliedTo []secv1alpha1.NetworkPolicyPeer) (string, bool) {
+func (a *antreaPolicyValidator) validateAppliedTo(ingress, egress []secv1alpha1.Rule, specAppliedTo []secv1alpha1.NetworkPolicyPeer, specAppliedToGroups []string) (string, bool) {
 	appliedToInSpec := len(specAppliedTo) != 0
+	appliedToGroupInSpec := len(specAppliedToGroups) != 0
+	// Ensure that both AppliedToGroups and AppliedTo fields are not set in spec.
+	if appliedToGroupInSpec && appliedToInSpec {
+		return "appliedTo and appliedToGroups should not be set together in spec", false
+	}
 	countAppliedToInRules := func(rules []secv1alpha1.Rule) int {
 		num := 0
 		for _, rule := range rules {
@@ -446,15 +453,44 @@ func (a *antreaPolicyValidator) validateAppliedTo(ingress, egress []secv1alpha1.
 		}
 		return num
 	}
+	countAppliedToGroupsInSpec := func(rules []secv1alpha1.Rule) int {
+		num := 0
+		for _, rule := range rules {
+			if len(rule.AppliedToGroups) != 0 {
+				num++
+			}
+		}
+		return num
+	}
 	numAppliedToInRules := countAppliedToInRules(ingress) + countAppliedToInRules(egress)
+	numAppliedToGroupInRules := countAppliedToGroupsInSpec(ingress) + countAppliedToGroupsInSpec(egress)
+	// Ensure that AppliedTo is not set in both spec and rules.
 	if appliedToInSpec && (numAppliedToInRules > 0) {
 		return "appliedTo should not be set in both spec and rules", false
 	}
-	if !appliedToInSpec && (numAppliedToInRules == 0) {
-		return "appliedTo needs to be set in either spec or rules", false
+	// Ensure that AppliedToGroups is not set in both spec and rules.
+	if appliedToGroupInSpec && (numAppliedToGroupInRules > 0) {
+		return "appliedToGroups should not be set in both spec and rules", false
 	}
+	// Ensure that hybrid setting is not allowed.
+	if (appliedToInSpec && (numAppliedToGroupInRules > 0)) || (appliedToGroupInSpec && (numAppliedToInRules > 0)) {
+		return "appliedTo and appliedToGroups should not be set in spec and rules in hybrid mode", false
+	}
+	// Ensure that at least one of AppliedTo or AppliedToGroups is set in either spec or all rules.
+	if !appliedToInSpec && !appliedToGroupInSpec && (numAppliedToInRules == 0) && (numAppliedToGroupInRules == 0) {
+		return "appliedTo/appliedToGroups needs to be set in either spec or rules", false
+	}
+	// Ensure that both AppliedTo and AppliedToGroups are not set in rules.
+	if numAppliedToInRules > 0 && numAppliedToGroupInRules > 0 {
+		return "both appliedTo and appliedToGroups should not be set in rules", false
+	}
+	// Ensure that all rules have AppliedTo set.
 	if numAppliedToInRules > 0 && (numAppliedToInRules != len(ingress)+len(egress)) {
 		return "appliedTo field should either be set in all rules or in none of them", false
+	}
+	// Ensure that all rules have AppliedToGroups set.
+	if numAppliedToGroupInRules > 0 && (numAppliedToGroupInRules != len(ingress)+len(egress)) {
+		return "appliedToGroups field should either be set in all rules or in none of them", false
 	}
 	return "", true
 }
@@ -511,6 +547,7 @@ func (a *antreaPolicyValidator) updateValidate(curObj, oldObj interface{}, userI
 	var tier string
 	var ingress, egress []secv1alpha1.Rule
 	var specAppliedTo []secv1alpha1.NetworkPolicyPeer
+	var specAppliedToGroups []string
 	switch curObj.(type) {
 	case *secv1alpha1.ClusterNetworkPolicy:
 		curCNP := curObj.(*secv1alpha1.ClusterNetworkPolicy)
@@ -518,6 +555,7 @@ func (a *antreaPolicyValidator) updateValidate(curObj, oldObj interface{}, userI
 		ingress = curCNP.Spec.Ingress
 		egress = curCNP.Spec.Egress
 		specAppliedTo = curCNP.Spec.AppliedTo
+		specAppliedToGroups = curCNP.Spec.AppliedToGroups
 	case *secv1alpha1.NetworkPolicy:
 		curANP := curObj.(*secv1alpha1.NetworkPolicy)
 		tier = curANP.Spec.Tier
@@ -525,7 +563,7 @@ func (a *antreaPolicyValidator) updateValidate(curObj, oldObj interface{}, userI
 		egress = curANP.Spec.Egress
 		specAppliedTo = curANP.Spec.AppliedTo
 	}
-	reason, allowed := a.validateAppliedTo(ingress, egress, specAppliedTo)
+	reason, allowed := a.validateAppliedTo(ingress, egress, specAppliedTo, specAppliedToGroups)
 	if !allowed {
 		return reason, allowed
 	}

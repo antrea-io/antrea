@@ -134,6 +134,8 @@ func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *secv1alpha1.C
 		appliedToGroupNamesSet.Insert(n.createAppliedToGroup(
 			"", at.PodSelector, at.NamespaceSelector, at.ExternalEntitySelector))
 	}
+	// Create AppliedToGroup for each ClusterGroup referenced in the ClusterNetworkPolicy spec.
+	appliedToGroupNamesSet.Insert(n.processAppliedToGroupsForCGs(cnp.Spec.AppliedToGroups)...)
 	rules := make([]controlplane.NetworkPolicyRule, 0, len(cnp.Spec.Ingress)+len(cnp.Spec.Egress))
 	// Compute NetworkPolicyRule for Ingress Rule.
 	for idx, ingressRule := range cnp.Spec.Ingress {
@@ -146,6 +148,10 @@ func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *secv1alpha1.C
 			appliedToGroupNamesForRule = append(appliedToGroupNamesForRule, atGroup)
 			appliedToGroupNamesSet.Insert(atGroup)
 		}
+		// Create AppliedToGroup for AppliedToGroups set in ingress rule.
+		atgs := n.processAppliedToGroupsForCGs(ingressRule.AppliedToGroups)
+		appliedToGroupNamesForRule = append(appliedToGroupNamesForRule, atgs...)
+		appliedToGroupNamesSet.Insert(atgs...)
 		rules = append(rules, controlplane.NetworkPolicyRule{
 			Direction:       controlplane.DirectionIn,
 			From:            *n.toAntreaPeerForCRD(ingressRule.From, cnp, controlplane.DirectionIn, namedPortExists),
@@ -167,6 +173,10 @@ func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *secv1alpha1.C
 			appliedToGroupNamesForRule = append(appliedToGroupNamesForRule, atGroup)
 			appliedToGroupNamesSet.Insert(atGroup)
 		}
+		// Create AppliedToGroup for AppliedToGroups set in egress rule.
+		atgs := n.processAppliedToGroupsForCGs(egressRule.AppliedToGroups)
+		appliedToGroupNamesForRule = append(appliedToGroupNamesForRule, atgs...)
+		appliedToGroupNamesSet.Insert(atgs...)
 		rules = append(rules, controlplane.NetworkPolicyRule{
 			Direction:       controlplane.DirectionOut,
 			To:              *n.toAntreaPeerForCRD(egressRule.To, cnp, controlplane.DirectionOut, namedPortExists),
@@ -223,4 +233,26 @@ func (n *NetworkPolicyController) processRefCG(g string) (string, *controlplane.
 	agKey := n.createAddressGroupForClusterGroupCRD(intGrp)
 	// Return if addressGroup was created or found.
 	return agKey, nil
+}
+
+func (n *NetworkPolicyController) processAppliedToGroupsForCGs(cgs []string) []string {
+	var atg []string
+	for _, g := range cgs {
+		// Retrieve ClusterGroup for corresponding entry in the AppliedToGroup.
+		cg, err := n.cgInformer.Lister().Get(g)
+		if err != nil {
+			klog.V(2).Infof("ClusterGroup %s not found. %v", g, err)
+			continue
+		}
+		if cg.Spec.IPBlock != nil {
+			klog.V(2).Infof("ClusterGroup %s with IPBlock will not be processed as AppliedTo.", g)
+			continue
+		}
+		atgKey := n.createAppliedToGroupForClusterGroupCRD(cg)
+		// If appliedToGroup was created or found, append this to AppliedToGroup names.
+		if atgKey != "" {
+			atg = append(atg, atgKey)
+		}
+	}
+	return atg
 }

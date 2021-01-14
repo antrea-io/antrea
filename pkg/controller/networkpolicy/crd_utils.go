@@ -17,6 +17,8 @@ package networkpolicy
 import (
 	"strings"
 
+	"github.com/vmware-tanzu/antrea/pkg/apis/core/v1alpha2"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -115,6 +117,36 @@ func (n *NetworkPolicyController) toAntreaPeerForCRD(peers []secv1alpha1.Network
 		}
 	}
 	return &controlplane.NetworkPolicyPeer{AddressGroups: addressGroups, IPBlocks: ipBlocks}
+}
+
+// createAppliedToGroupForClusterGroupCRD creates an AppliedToGroup object corresponding to a
+// ClusterGroup spec. If the AppliedToGroup already exists, it returns the key
+// otherwise it copies the ClusterGroup CRD contents to an AppliedToGroup resource and returns
+// its key.
+func (n *NetworkPolicyController) createAppliedToGroupForClusterGroupCRD(cg *v1alpha2.ClusterGroup) string {
+	// Find the internal Group corresponding to this ClusterGroup
+	igKey := internalGroupKeyFunc(cg)
+	ig, found, _ := n.internalGroupStore.Get(igKey)
+	if !found {
+		klog.V(2).Infof("Internal group %s not found.", igKey)
+		return ""
+	}
+	intGrp := ig.(*antreatypes.Group)
+	// Check to see if the AppliedToGroup already exists
+	_, found, _ = n.appliedToGroupStore.Get(igKey)
+	if found {
+		return igKey
+	}
+	// Create an AppliedToGroup object for this internal Group.
+	appliedToGroup := &antreatypes.AppliedToGroup{
+		UID:      types.UID(igKey),
+		Name:     igKey,
+		Selector: intGrp.Selector,
+	}
+	klog.V(2).Infof("Creating new AppliedToGroup %s with selector (%s) corresponding to ClusterGroup CRD", appliedToGroup.Name, appliedToGroup.Selector.NormalizedName)
+	n.appliedToGroupStore.Create(appliedToGroup)
+	n.enqueueAppliedToGroup(igKey)
+	return igKey
 }
 
 // createAddressGroupForCRD creates an AddressGroup object corresponding to a
