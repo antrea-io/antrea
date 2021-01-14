@@ -45,7 +45,9 @@ and daemons are pre-installed on the Windows Nodes in the demo.
   updates.
 * Deploy a Linux-based Kubernetes cluster.
 * Install [Hyper-V](https://docs.microsoft.com/en-us/windows-server/virtualization/hyper-v/get-started/install-the-hyper-v-role-on-windows-server)
-  with management tools.
+  with management tools. If the virtualization capabilities on your testbed
+  cannot meet the requirments needed by Hyper-V. You could try the workaround
+  descried in [Known issues](#Known-issues) section.
 * Install [Docker](https://docs.microsoft.com/en-us/virtualization/windowscontainers/quick-start/set-up-environment?tabs=Windows-Server).
 * [Install OVS](http://docs.openvswitch.org/en/latest/intro/install/windows/)
   and configure the daemons as Windows service.
@@ -328,3 +330,47 @@ the HNS Network created by antrea-agent is removed, and the Open vSwitch
 Extension is disabled by default. In this case, the stale OVS bridge and ports
 should be removed. A help script [Clean-AntreaNetwork.ps1](https://raw.githubusercontent.com/vmware-tanzu/antrea/master/hack/windows/Clean-AntreaNetwork.ps1)
 can be used to clean the OVS bridge.
+
+2. Hyper-V feature cannot be installed on Windows node due to the processor does
+not have required virtualization capabilities.
+
+If the processor of the Windows node does not have required virtualization
+capabilities. The installation of Hyper-V feature will be failed with following
+error:
+
+```powershell
+PS C:\Users\Administrator> Install-WindowsFeature Hyper-V
+
+Success Restart Needed Exit Code      Feature Result
+------- -------------- ---------      --------------
+False   Maybe          Failed         {}
+Install-WindowsFeature : A prerequisite check for the Hyper-V feature failed.
+1. Hyper-V cannot be installed: The processor does not have required virtualization capabilities.
+At line:1 char:1
++ Install-WindowsFeature hyper-v
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : InvalidOperation: (Hyper-V:ServerComponentWrapper) [Install-WindowsFeature], Exception
+    + FullyQualifiedErrorId : Alteration_PrerequisiteCheck_Failed,Microsoft.Windows.ServerManager.Commands.AddWindowsF
+   eatureCommand
+```
+
+The capability is required by the Hyper-V `hypervisor` components to support
+[Hyper-V isolation](https://docs.microsoft.com/en-us/virtualization/windowscontainers/manage-containers/hyperv-container#hyper-v-isolation)
+. If you only need ues [Process Isolation](https://docs.microsoft.com/en-us/virtualization/windowscontainers/manage-containers/hyperv-container#process-isolation)
+on the testbed. You could apply following workaround to skip CPU check for
+Hyper-V feature installation.
+
+```powershell
+# 1. Install containers feature
+Install-WindowsFeature containers
+
+# 2. Install Hyper-V management powershell module
+Install-WindowsFeature Hyper-V-Powershell
+
+# 3. Install Hyper-V feature without CPU check and disable the "hypervisor"
+dism /online /enable-feature /featurename:Microsoft-Hyper-V /all /NoRestart
+dism /online /disable-feature /featurename:Microsoft-Hyper-V-Online /NoRestart
+
+# 4. Restart-Computer to take effect
+Restart-Computer
+```
