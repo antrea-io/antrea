@@ -22,6 +22,8 @@ import (
 
 // Interface provides access to all the informers in this group version.
 type Interface interface {
+	// ClusterGroups returns a ClusterGroupInformer.
+	ClusterGroups() ClusterGroupInformer
 	// ExternalEntities returns a ExternalEntityInformer.
 	ExternalEntities() ExternalEntityInformer
 }
@@ -35,6 +37,11 @@ type version struct {
 // New returns a new Interface.
 func New(f internalinterfaces.SharedInformerFactory, namespace string, tweakListOptions internalinterfaces.TweakListOptionsFunc) Interface {
 	return &version{factory: f, namespace: namespace, tweakListOptions: tweakListOptions}
+}
+
+// ClusterGroups returns a ClusterGroupInformer.
+func (v *version) ClusterGroups() ClusterGroupInformer {
+	return &clusterGroupInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
 }
 
 // ExternalEntities returns a ExternalEntityInformer.

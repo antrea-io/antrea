@@ -24,12 +24,17 @@ import (
 
 type CoreV1alpha2Interface interface {
 	RESTClient() rest.Interface
+	ClusterGroupsGetter
 	ExternalEntitiesGetter
 }
 
 // CoreV1alpha2Client is used to interact with features provided by the core.antrea.tanzu.vmware.com group.
 type CoreV1alpha2Client struct {
 	restClient rest.Interface
+}
+
+func (c *CoreV1alpha2Client) ClusterGroups() ClusterGroupInterface {
+	return newClusterGroups(c)
 }
 
 func (c *CoreV1alpha2Client) ExternalEntities(namespace string) ExternalEntityInterface {

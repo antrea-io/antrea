@@ -20,4 +20,6 @@ type AddressGroupExpansion interface{}
 
 type AppliedToGroupExpansion interface{}
 
+type GroupExpansion interface{}
+
 type NodeStatsSummaryExpansion interface{}
