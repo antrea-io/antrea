@@ -1794,11 +1794,13 @@ func (c *client) decTTLFlows(category cookie.Category) []binding.Flow {
 		flows = append(flows,
 			// Skip packets from the gateway interface.
 			decTTLTable.BuildFlow(priorityHigh).
+				Cookie(c.cookieAllocator.Request(category).Raw()).
 				MatchProtocol(proto).
 				MatchRegRange(int(marksReg), markTrafficFromGateway, binding.Range{0, 15}).
 				Action().GotoTable(decTTLTable.GetNext()).
 				Done(),
 			decTTLTable.BuildFlow(priorityNormal).
+				Cookie(c.cookieAllocator.Request(category).Raw()).
 				MatchProtocol(proto).
 				Action().DecTTL().
 				Action().GotoTable(decTTLTable.GetNext()).
