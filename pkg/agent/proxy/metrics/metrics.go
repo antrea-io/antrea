@@ -9,8 +9,8 @@ import (
 )
 
 const (
-	metricNSAntrea = "antrea"
-	subsystemProxy = "proxy"
+	metricNamespaceAntrea = "antrea"
+	metricSubsystemProxy  = "proxy"
 )
 
 var (
@@ -18,8 +18,8 @@ var (
 
 	SyncProxyDuration = kmetrics.NewHistogram(
 		&kmetrics.HistogramOpts{
-			Namespace:   metricNSAntrea,
-			Subsystem:   subsystemProxy,
+			Namespace:   metricNamespaceAntrea,
+			Subsystem:   metricSubsystemProxy,
 			ConstLabels: map[string]string{"ip_family": "v4"},
 			Name:        "sync_proxy_rules_duration_seconds",
 			Help:        "SyncProxyRules duration of AntreaProxy in seconds",
@@ -27,8 +27,8 @@ var (
 	)
 	ServicesInstalledTotal = kmetrics.NewGauge(
 		&kmetrics.GaugeOpts{
-			Namespace:   metricNSAntrea,
-			Subsystem:   subsystemProxy,
+			Namespace:   metricNamespaceAntrea,
+			Subsystem:   metricSubsystemProxy,
 			ConstLabels: map[string]string{"ip_family": "v4"},
 			Name:        "total_services_installed",
 			Help:        "The number of Services installed by AntreaProxy",
@@ -36,8 +36,8 @@ var (
 	)
 	EndpointsInstalledTotal = kmetrics.NewGauge(
 		&kmetrics.GaugeOpts{
-			Namespace:   metricNSAntrea,
-			Subsystem:   subsystemProxy,
+			Namespace:   metricNamespaceAntrea,
+			Subsystem:   metricSubsystemProxy,
 			ConstLabels: map[string]string{"ip_family": "v4"},
 			Name:        "total_endpoints_installed",
 			Help:        "The number of Endpoints installed by AntreaProxy",
@@ -45,8 +45,8 @@ var (
 	)
 	ServicesUpdatesTotal = kmetrics.NewCounter(
 		&kmetrics.CounterOpts{
-			Namespace:   metricNSAntrea,
-			Subsystem:   subsystemProxy,
+			Namespace:   metricNamespaceAntrea,
+			Subsystem:   metricSubsystemProxy,
 			ConstLabels: map[string]string{"ip_family": "v4"},
 			Name:        "total_services_updates",
 			Help:        "The cumulative number of Service updates received by AntreaProxy",
@@ -54,8 +54,8 @@ var (
 	)
 	EndpointsUpdatesTotal = kmetrics.NewCounter(
 		&kmetrics.CounterOpts{
-			Namespace:   metricNSAntrea,
-			Subsystem:   subsystemProxy,
+			Namespace:   metricNamespaceAntrea,
+			Subsystem:   metricSubsystemProxy,
 			ConstLabels: map[string]string{"ip_family": "v4"},
 			Name:        "total_endpoints_updates",
 			Help:        "The cumulative number of Endpoint updates received by AntreaProxy",
@@ -64,8 +64,8 @@ var (
 
 	SyncProxyDurationV6 = kmetrics.NewHistogram(
 		&kmetrics.HistogramOpts{
-			Namespace:   metricNSAntrea,
-			Subsystem:   subsystemProxy,
+			Namespace:   metricNamespaceAntrea,
+			Subsystem:   metricSubsystemProxy,
 			ConstLabels: map[string]string{"ip_family": "v6"},
 			Name:        "sync_proxy_rules_duration_seconds",
 			Help:        "SyncProxyRules duration of AntreaProxy in seconds",
@@ -73,8 +73,8 @@ var (
 	)
 	ServicesInstalledTotalV6 = kmetrics.NewGauge(
 		&kmetrics.GaugeOpts{
-			Namespace:   metricNSAntrea,
-			Subsystem:   subsystemProxy,
+			Namespace:   metricNamespaceAntrea,
+			Subsystem:   metricSubsystemProxy,
 			ConstLabels: map[string]string{"ip_family": "v6"},
 			Name:        "total_services_installed",
 			Help:        "The number of Services installed by AntreaProxy",
@@ -82,8 +82,8 @@ var (
 	)
 	EndpointsInstalledTotalV6 = kmetrics.NewGauge(
 		&kmetrics.GaugeOpts{
-			Namespace:   metricNSAntrea,
-			Subsystem:   subsystemProxy,
+			Namespace:   metricNamespaceAntrea,
+			Subsystem:   metricSubsystemProxy,
 			ConstLabels: map[string]string{"ip_family": "v6"},
 			Name:        "total_endpoints_installed",
 			Help:        "The number of Endpoints installed by AntreaProxy",
@@ -91,8 +91,8 @@ var (
 	)
 	ServicesUpdatesTotalV6 = kmetrics.NewCounter(
 		&kmetrics.CounterOpts{
-			Namespace:   metricNSAntrea,
-			Subsystem:   subsystemProxy,
+			Namespace:   metricNamespaceAntrea,
+			Subsystem:   metricSubsystemProxy,
 			ConstLabels: map[string]string{"ip_family": "v6"},
 			Name:        "total_services_updates",
 			Help:        "The cumulative number of Service updates received by AntreaProxy",
@@ -100,8 +100,8 @@ var (
 	)
 	EndpointsUpdatesTotalV6 = kmetrics.NewCounter(
 		&kmetrics.CounterOpts{
-			Namespace:   metricNSAntrea,
-			Subsystem:   subsystemProxy,
+			Namespace:   metricNamespaceAntrea,
+			Subsystem:   metricSubsystemProxy,
 			ConstLabels: map[string]string{"ip_family": "v6"},
 			Name:        "total_endpoints_updates",
 			Help:        "The cumulative number of Endpoint updates received by AntreaProxy",
