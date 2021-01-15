@@ -51,7 +51,6 @@ func NewPortTable(c *gomock.Controller) *portcache.PortTable {
 }
 
 const (
-	controllerName        = "AntreaAgentNPLController"
 	defaultPodName        = "test-pod"
 	defaultSvcName        = "test-svc"
 	defaultNS             = "default"
