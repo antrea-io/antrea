@@ -45,9 +45,9 @@ and daemons are pre-installed on the Windows Nodes in the demo.
   updates.
 * Deploy a Linux-based Kubernetes cluster.
 * Install [Hyper-V](https://docs.microsoft.com/en-us/windows-server/virtualization/hyper-v/get-started/install-the-hyper-v-role-on-windows-server)
-  with management tools. If the virtualization capabilities on your Nodes
-  cannot meet the requirements needed by Hyper-V. You could try the workaround
-  descried in [Known issues](#Known-issues) section.
+  with management tools. If your Nodes do not have the virtualization
+  capabilities required by Hyper-V, you could try the workaround
+  described in the [Known issues](#Known-issues) section.
 * Install [Docker](https://docs.microsoft.com/en-us/virtualization/windowscontainers/quick-start/set-up-environment?tabs=Windows-Server).
 * [Install OVS](http://docs.openvswitch.org/en/latest/intro/install/windows/)
   and configure the daemons as Windows service.
@@ -332,11 +332,11 @@ should be removed. A help script [Clean-AntreaNetwork.ps1](https://raw.githubuse
 can be used to clean the OVS bridge.
 
 2. Hyper-V feature cannot be installed on Windows node due to the processor not
-having required virtualization capabilities.
+having the required virtualization capabilities.
 
-    If the processor of the Windows node does not have required virtualization
-    capabilities. The installation of Hyper-V feature will fail with the
-    following error:
+    If the processor of the Windows node does not have the required
+    virtualization capabilities. The installation of Hyper-V feature will fail
+    with the following error:
 
     ```powershell
     PS C:\Users\Administrator> Install-WindowsFeature Hyper-V
@@ -356,8 +356,8 @@ having required virtualization capabilities.
 
     The capabilities are required by the Hyper-V `hypervisor` components to
     support [Hyper-V isolation](https://docs.microsoft.com/en-us/virtualization/windowscontainers/manage-containers/hyperv-container#hyper-v-isolation).
-    If you only need uses [Process Isolation](https://docs.microsoft.com/en-us/virtualization/windowscontainers/manage-containers/hyperv-container#process-isolation)
-    on the testbed. You could apply following workaround to skip CPU check for
+    If you only need [Process Isolation](https://docs.microsoft.com/en-us/virtualization/windowscontainers/manage-containers/hyperv-container#process-isolation)
+    on the Nodes. You could apply the following workaround to skip CPU check for
     Hyper-V feature installation.
 
     ```powershell
