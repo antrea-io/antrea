@@ -250,7 +250,11 @@ codegen:
 .PHONY: ubuntu
 ubuntu:
 	@echo "===> Building antrea/antrea-ubuntu Docker image <==="
+ifneq ($(DOCKER_REGISTRY),"")
+	docker build -t antrea/antrea-ubuntu:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.ubuntu .
+else
 	docker build --pull -t antrea/antrea-ubuntu:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.ubuntu .
+endif
 	docker tag antrea/antrea-ubuntu:$(DOCKER_IMG_VERSION) antrea/antrea-ubuntu
 
 # Build bins in a golang container, and build the antrea-ubuntu Docker image.
