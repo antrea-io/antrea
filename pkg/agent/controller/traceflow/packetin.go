@@ -107,29 +107,44 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*opsv1alpha1.Tracefl
 	}
 
 	// Collect Service DNAT.
-	if pktIn.Data.Ethertype == 0x800 {
+	ctNwDst := ""
+	ipDst := ""
+	switch pktIn.Data.Ethertype {
+	case protocol.IPv4_MSG:
 		ipPacket, ok := pktIn.Data.Data.(*protocol.IPv4)
 		if !ok {
 			return nil, nil, errors.New("invalid traceflow IPv4 packet")
 		}
-		ctNwDst, err := getInfoInCtNwDstField(matchers)
+		ctNwDst, err = getCTDstValue(matchers, false)
 		if err != nil {
 			return nil, nil, err
 		}
-		ipDst := ipPacket.NWDst.String()
-		if ctNwDst != "" && ipDst != ctNwDst {
-			ob := &opsv1alpha1.Observation{
-				Component:       opsv1alpha1.LB,
-				Action:          opsv1alpha1.Forwarded,
-				TranslatedDstIP: ipDst,
-			}
-			obs = append(obs, *ob)
+		ipDst = ipPacket.NWDst.String()
+	case protocol.IPv6_MSG:
+		ipPacket, ok := pktIn.Data.Data.(*protocol.IPv6)
+		if !ok {
+			return nil, nil, errors.New("invalid traceflow IPv6 packet")
 		}
+		ctNwDst, err = getCTDstValue(matchers, true)
+		if err != nil {
+			return nil, nil, err
+		}
+		ipDst = ipPacket.NWDst.String()
+	default:
+		return nil, nil, fmt.Errorf("unsupported traceflow packet ether type %d", pktIn.Data.Ethertype)
+	}
+	if ctNwDst != "" && ipDst != ctNwDst {
+		ob := &opsv1alpha1.Observation{
+			Component:       opsv1alpha1.LB,
+			Action:          opsv1alpha1.Forwarded,
+			TranslatedDstIP: ipDst,
+		}
+		obs = append(obs, *ob)
 	}
 
 	// Collect egress conjunctionID and get NetworkPolicy from cache.
 	if match = getMatchRegField(matchers, uint32(openflow.EgressReg)); match != nil {
-		egressInfo, err := getInfoInReg(match, nil)
+		egressInfo, err := getRegValue(match, nil)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -143,7 +158,7 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*opsv1alpha1.Tracefl
 
 	// Collect ingress conjunctionID and get NetworkPolicy from cache.
 	if match = getMatchRegField(matchers, uint32(openflow.IngressReg)); match != nil {
-		ingressInfo, err := getInfoInReg(match, nil)
+		ingressInfo, err := getRegValue(match, nil)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -159,7 +174,7 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*opsv1alpha1.Tracefl
 	if tableID == uint8(openflow.EgressMetricTable) || tableID == uint8(openflow.IngressMetricTable) {
 		ob := getNetworkPolicyObservation(tableID, tableID == uint8(openflow.IngressMetricTable))
 		if match = getMatchRegField(matchers, uint32(openflow.CNPDropConjunctionIDReg)); match != nil {
-			dropConjInfo, err := getInfoInReg(match, nil)
+			dropConjInfo, err := getRegValue(match, nil)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -178,15 +193,16 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*opsv1alpha1.Tracefl
 	if tableID == uint8(openflow.L2ForwardingOutTable) {
 		ob := new(opsv1alpha1.Observation)
 		tunnelDstIP := ""
-		if match = getMatchTunnelDstField(matchers); match != nil {
-			tunnelDstIP, err = getInfoInTunnelDst(match)
+		isIPv6 := c.nodeConfig.NodeIPAddr.IP.To4() == nil
+		if match = getMatchTunnelDstField(matchers, isIPv6); match != nil {
+			tunnelDstIP, err = getTunnelDstValue(match)
 			if err != nil {
 				return nil, nil, err
 			}
 		}
 		var outputPort uint32
 		if match = getMatchRegField(matchers, uint32(openflow.PortCacheReg)); match != nil {
-			outputPort, err = getInfoInReg(match, nil)
+			outputPort, err = getRegValue(match, nil)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -213,11 +229,14 @@ func getMatchRegField(matchers *ofctrl.Matchers, regNum uint32) *ofctrl.MatchFie
 	return matchers.GetMatchByName(fmt.Sprintf("NXM_NX_REG%d", regNum))
 }
 
-func getMatchTunnelDstField(matchers *ofctrl.Matchers) *ofctrl.MatchField {
+func getMatchTunnelDstField(matchers *ofctrl.Matchers, isIPv6 bool) *ofctrl.MatchField {
+	if isIPv6 {
+		return matchers.GetMatchByName(fmt.Sprintf("NXM_NX_TUN_IPV6_DST"))
+	}
 	return matchers.GetMatchByName(fmt.Sprintf("NXM_NX_TUN_IPV4_DST"))
 }
 
-func getInfoInReg(regMatch *ofctrl.MatchField, rng *openflow13.NXRange) (uint32, error) {
+func getRegValue(regMatch *ofctrl.MatchField, rng *openflow13.NXRange) (uint32, error) {
 	regValue, ok := regMatch.GetValue().(*ofctrl.NXRegister)
 	if !ok {
 		return 0, errors.New("register value cannot be got")
@@ -228,7 +247,7 @@ func getInfoInReg(regMatch *ofctrl.MatchField, rng *openflow13.NXRange) (uint32,
 	return regValue.Data, nil
 }
 
-func getInfoInTunnelDst(regMatch *ofctrl.MatchField) (string, error) {
+func getTunnelDstValue(regMatch *ofctrl.MatchField) (string, error) {
 	regValue, ok := regMatch.GetValue().(net.IP)
 	if !ok {
 		return "", errors.New("tunnel destination value cannot be got")
@@ -236,14 +255,19 @@ func getInfoInTunnelDst(regMatch *ofctrl.MatchField) (string, error) {
 	return regValue.String(), nil
 }
 
-func getInfoInCtNwDstField(matchers *ofctrl.Matchers) (string, error) {
-	match := matchers.GetMatchByName("NXM_NX_CT_NW_DST")
+func getCTDstValue(matchers *ofctrl.Matchers, isIPv6 bool) (string, error) {
+	var match *ofctrl.MatchField
+	if isIPv6 {
+		match = matchers.GetMatchByName("NXM_NX_CT_IPV6_DST")
+	} else {
+		match = matchers.GetMatchByName("NXM_NX_CT_NW_DST")
+	}
 	if match == nil {
 		return "", nil
 	}
 	regValue, ok := match.GetValue().(net.IP)
 	if !ok {
-		return "", errors.New("packet-in conntrack IP destination value cannot be retrieved from metadata")
+		return "", errors.New("packet-in conntrack destination value cannot be retrieved from metadata")
 	}
 	return regValue.String(), nil
 }

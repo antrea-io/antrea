@@ -119,11 +119,11 @@ type Destination struct {
 	Pod string `json:"pod,omitempty"`
 	// Service is the destination service, exclusive with destination pod.
 	Service string `json:"service,omitempty"`
-	// IP is the destination IP.
+	// IP is the destination IPv4 or IPv6 address.
 	IP string `json:"ip,omitempty"`
 }
 
-// IPHeader describes spec of an IPv4 header. IPv6 not supported yet.
+// IPHeader describes spec of an IPv4 header.
 type IPHeader struct {
 	// SrcIP is the source IP.
 	SrcIP string `json:"srcIP,omitempty"`
@@ -133,6 +133,16 @@ type IPHeader struct {
 	TTL int32 `json:"ttl,omitempty"`
 	// Flags is the flags for IP.
 	Flags int32 `json:"flags,omitempty"`
+}
+
+// IPv6Header describes spec of an IPv6 header.
+type IPv6Header struct {
+	// SrcIP is the source IPv6.
+	SrcIP string `json:"srcIP,omitempty"`
+	// NextHeader is the IPv6 protocol.
+	NextHeader *int32 `json:"nextHeader,omitempty"`
+	// HopLimit is the IPv6 Hop Limit.
+	HopLimit int32 `json:"hopLimit,omitempty"`
 }
 
 // TransportHeader describes spec of a TransportHeader.
@@ -171,6 +181,7 @@ type TCPHeader struct {
 // Packet includes header info.
 type Packet struct {
 	IPHeader        IPHeader        `json:"ipHeader,omitempty"`
+	IPv6Header      *IPv6Header     `json:"ipv6Header,omitempty"`
 	TransportHeader TransportHeader `json:"transportHeader,omitempty"`
 }
 

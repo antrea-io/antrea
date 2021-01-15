@@ -618,6 +618,10 @@ spec:
                     type: string
                 type: object
               packet:
+                not:
+                  required:
+                  - ipHeader
+                  - ipv6Header
                 properties:
                   ipHeader:
                     properties:
@@ -630,6 +634,16 @@ spec:
                         type: string
                       ttl:
                         type: integer
+                    type: object
+                  ipv6Header:
+                    properties:
+                      hopLimit:
+                        type: integer
+                      nextHeader:
+                        type: integer
+                      srcIP:
+                        format: ipv6
+                        type: string
                     type: object
                   transportHeader:
                     properties:

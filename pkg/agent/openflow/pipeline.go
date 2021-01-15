@@ -749,6 +749,16 @@ func (c *client) traceflowL2ForwardOutputFlows(dataplaneTag uint8, category cook
 			Action().SendToController(uint8(PacketInReasonTF)).
 			Cookie(c.cookieAllocator.Request(category).Raw()).
 			Done())
+		flows = append(flows, c.pipeline[L2ForwardingOutTable].BuildFlow(priorityNormal+3).
+			MatchReg(int(PortCacheReg), config.DefaultTunOFPort).
+			MatchIPDscp(dataplaneTag).
+			SetHardTimeout(300).
+			MatchProtocol(binding.ProtocolIPv6).
+			MatchRegRange(int(marksReg), portFoundMark, ofPortMarkRange).
+			Action().OutputRegRange(int(PortCacheReg), ofPortRegRange).
+			Action().SendToController(uint8(PacketInReasonTF)).
+			Cookie(c.cookieAllocator.Request(category).Raw()).
+			Done())
 	}
 	flows = append(flows, c.pipeline[L2ForwardingOutTable].BuildFlow(priorityNormal+3).
 		MatchReg(int(PortCacheReg), config.HostGatewayOFPort).
@@ -760,11 +770,29 @@ func (c *client) traceflowL2ForwardOutputFlows(dataplaneTag uint8, category cook
 		Action().SendToController(uint8(PacketInReasonTF)).
 		Cookie(c.cookieAllocator.Request(category).Raw()).
 		Done())
+	flows = append(flows, c.pipeline[L2ForwardingOutTable].BuildFlow(priorityNormal+3).
+		MatchReg(int(PortCacheReg), config.HostGatewayOFPort).
+		MatchIPDscp(dataplaneTag).
+		SetHardTimeout(300).
+		MatchProtocol(binding.ProtocolIPv6).
+		MatchRegRange(int(marksReg), portFoundMark, ofPortMarkRange).
+		Action().OutputRegRange(int(PortCacheReg), ofPortRegRange).
+		Action().SendToController(uint8(PacketInReasonTF)).
+		Cookie(c.cookieAllocator.Request(category).Raw()).
+		Done())
 	// Only SendToController if output port is Pod port.
 	flows = append(flows, c.pipeline[L2ForwardingOutTable].BuildFlow(priorityNormal+2).
 		MatchIPDscp(dataplaneTag).
 		SetHardTimeout(300).
 		MatchProtocol(binding.ProtocolIP).
+		MatchRegRange(int(marksReg), portFoundMark, ofPortMarkRange).
+		Action().SendToController(uint8(PacketInReasonTF)).
+		Cookie(c.cookieAllocator.Request(category).Raw()).
+		Done())
+	flows = append(flows, c.pipeline[L2ForwardingOutTable].BuildFlow(priorityNormal+2).
+		MatchIPDscp(dataplaneTag).
+		SetHardTimeout(300).
+		MatchProtocol(binding.ProtocolIPv6).
 		MatchRegRange(int(marksReg), portFoundMark, ofPortMarkRange).
 		Action().SendToController(uint8(PacketInReasonTF)).
 		Cookie(c.cookieAllocator.Request(category).Raw()).
