@@ -74,8 +74,6 @@ var (
 	reservedTierNames = sets.NewString("baseline", "application", "platform", "networkops", "securityops", "emergency")
 )
 
-const defaultControllerNamespace = "kube-system"
-
 // RegisterAntreaPolicyValidator registers an Antrea-native policy validator
 // to the resource registry. A new validator must be registered by calling
 // this function before the Run phase of the APIServer.
@@ -602,11 +600,7 @@ func (t *tierValidator) updateValidate(curObj, oldObj interface{}, userInfo auth
 	curTier := curObj.(*secv1alpha1.Tier)
 	oldTier := oldObj.(*secv1alpha1.Tier)
 	// Retrieve antrea-controller's Namespace
-	namespace := env.GetPodNamespace()
-	if namespace == "" {
-		// antrea-controller by default is created in the kube-system Namespace
-		namespace = defaultControllerNamespace
-	}
+	namespace := env.GetAntreaNamespace()
 	// Allow exception of Tier Priority updates performed by the antrea-controller
 	if serviceaccount.MatchesUsername(namespace, env.GetAntreaControllerServiceAccount(), userInfo.Username) {
 		return "", true

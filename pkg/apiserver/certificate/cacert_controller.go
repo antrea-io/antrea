@@ -75,13 +75,7 @@ type CACertController struct {
 var _ dynamiccertificates.Listener = &CACertController{}
 
 func GetCAConfigMapNamespace() string {
-	namespace := env.GetPodNamespace()
-	if namespace != "" {
-		return namespace
-	}
-
-	klog.Warningf("Failed to get Pod Namespace from environment. Using \"%s\" as the CA ConfigMap Namespace", defaultAntreaNamespace)
-	return defaultAntreaNamespace
+	return env.GetAntreaNamespace()
 }
 
 func newCACertController(caContentProvider dynamiccertificates.CAContentProvider,

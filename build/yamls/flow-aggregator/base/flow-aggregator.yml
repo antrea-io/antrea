@@ -95,6 +95,33 @@ spec:
     protocol: TCP
     targetPort: 4739
 ---
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: flow-aggregator-uuid-reader
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - configmaps
+    resourceNames:
+      - antrea-cluster-uuid
+    verbs:
+      - get
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: flow-aggregator-uuid-reader
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: flow-aggregator-uuid-reader
+subjects:
+  - kind: ServiceAccount
+    name: flow-aggregator
+    namespace: flow-aggregator
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:

@@ -1159,6 +1159,7 @@ rules:
   - ""
   resourceNames:
   - antrea-ca
+  - antrea-cluster-uuid
   resources:
   - configmaps
   verbs:
@@ -1295,6 +1296,14 @@ metadata:
   labels:
     app: antrea
   name: antrea-ca
+  namespace: kube-system
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  labels:
+    app: antrea
+  name: antrea-cluster-uuid
   namespace: kube-system
 ---
 apiVersion: v1
