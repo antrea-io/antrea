@@ -21,7 +21,7 @@ type PodPortRules interface {
 	Init() error
 	AddRule(port int, podip string) error
 	DeleteRule(port int, podip string) error
-	GetAllRules() (map[int]string, error)
+	GetAllRules() (map[int]DestinationPodIPPort, error)
 	DeleteAllRules() error
 }
 

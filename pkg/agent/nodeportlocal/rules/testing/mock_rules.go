@@ -1,4 +1,4 @@
-// Copyright 2020 Antrea Authors
+// Copyright 2021 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@ package testing
 
 import (
 	gomock "github.com/golang/mock/gomock"
+	rules "github.com/vmware-tanzu/antrea/pkg/agent/nodeportlocal/rules"
 	reflect "reflect"
 )
 
@@ -90,10 +91,10 @@ func (mr *MockPodPortRulesMockRecorder) DeleteRule(arg0, arg1 interface{}) *gomo
 }
 
 // GetAllRules mocks base method
-func (m *MockPodPortRules) GetAllRules() (map[int]string, error) {
+func (m *MockPodPortRules) GetAllRules() (map[int]rules.DestinationPodIPPort, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetAllRules")
-	ret0, _ := ret[0].(map[int]string)
+	ret0, _ := ret[0].(map[int]rules.DestinationPodIPPort)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

@@ -400,8 +400,7 @@ func (c *NPLController) handleAddUpdatePod(key string, obj interface{}) error {
 				if err != nil {
 					return fmt.Errorf("failed to add rule for Pod %s: %v", key, err)
 				}
-				assignPodAnnotation(newPod, newPod.Status.HostIP, port, nodePort)
-				updatePodAnnotation = true
+				updatePodAnnotation = AssignPodAnnotation(newPod, newPod.Status.HostIP, port, nodePort)
 			}
 		}
 	}

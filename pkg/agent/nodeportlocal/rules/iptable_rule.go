@@ -18,6 +18,7 @@ package rules
 
 import (
 	"fmt"
+	"net"
 	"strconv"
 	"strings"
 
@@ -28,6 +29,13 @@ import (
 
 // NodePortLocalChain is the name of the chain in IPTABLES for Node Port Local
 const NodePortLocalChain = "ANTREA-NODE-PORT-LOCAL"
+
+// DestinationPodIPPort stores the PodIP and Pod port parsed from the iptable rules
+// for NPL
+type DestinationPodIPPort struct {
+	PodIP   string
+	PodPort int
+}
 
 // IPTableRules provides a client to perform IPTABLES operations
 type IPTableRules struct {
@@ -47,10 +55,6 @@ func NewIPTableRules() *IPTableRules {
 
 // Init initializes IPTABLES rules for NPL. Currently it deletes existing rules to ensure that no stale entries are present.
 func (ipt *IPTableRules) Init() error {
-	err := ipt.DeleteAllRules()
-	if err != nil {
-		return err
-	}
 	return ipt.CreateChains()
 }
 
@@ -100,8 +104,8 @@ func (ipt *IPTableRules) DeleteRule(port int, podip string) error {
 }
 
 // GetAllRules obtains list of all NPL rules programmed in the node
-func (ipt *IPTableRules) GetAllRules() (map[int]string, error) {
-	m := make(map[int]string)
+func (ipt *IPTableRules) GetAllRules() (map[int]DestinationPodIPPort, error) {
+	m := make(map[int]DestinationPodIPPort)
 	rules, err := ipt.table.ListRules(iptables.NATTable, NodePortLocalChain)
 	if err != nil {
 		return m, fmt.Errorf("failed to list IPTABLES rules for NPL: %v", err)
@@ -115,15 +119,27 @@ func (ipt *IPTableRules) GetAllRules() (map[int]string, error) {
 		}
 		port, err := strconv.Atoi(splitRule[7])
 		if err != nil {
-			klog.Warningf("Failed to convert port string to int: %v", err)
+			klog.Warningf("failed to convert port string to int: %v", err)
 			continue
 		}
-		nodeipPort := strings.Split(splitRule[11], ":")
-		if len(nodeipPort) != 2 {
+		// splitRule[11] should be of the format "<ip>:<port>"
+		podIPPort := strings.Split(splitRule[11], ":")
+		if len(podIPPort) != 2 {
 			continue
 		}
-		//TODO: Need to check whether it's a proper ip:port combination
-		m[port] = splitRule[11]
+		if addr := net.ParseIP(podIPPort[0]); addr == nil {
+			klog.Warningf("failed to parse IP address from %s", podIPPort[1])
+			continue
+		}
+		p, err := strconv.Atoi(podIPPort[1])
+		if err != nil || p < 0 {
+			klog.Warningf("failed to parse port from %s: %s", podIPPort[2], err.Error())
+			continue
+		}
+		m[port] = DestinationPodIPPort{
+			PodIP:   podIPPort[0],
+			PodPort: p,
+		}
 	}
 	return m, nil
 }
