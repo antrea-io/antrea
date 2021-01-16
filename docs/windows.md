@@ -331,10 +331,10 @@ Extension is disabled by default. In this case, the stale OVS bridge and ports
 should be removed. A help script [Clean-AntreaNetwork.ps1](https://raw.githubusercontent.com/vmware-tanzu/antrea/master/hack/windows/Clean-AntreaNetwork.ps1)
 can be used to clean the OVS bridge.
 
-2. Hyper-V feature cannot be installed on Windows node due to the processor not
+2. Hyper-V feature cannot be installed on Windows Node due to the processor not
 having the required virtualization capabilities.
 
-    If the processor of the Windows node does not have the required
+    If the processor of the Windows Node does not have the required
     virtualization capabilities. The installation of Hyper-V feature will fail
     with the following error:
 
