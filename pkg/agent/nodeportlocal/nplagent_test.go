@@ -30,6 +30,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/informers"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/nodeportlocal/k8s"
@@ -118,7 +119,8 @@ func TestMain(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	portTable = NewPortTable(mockCtrl)
 
-	c, _ := InitController(kubeClient, portTable, defaultNodeName)
+	informerFactory := informers.NewSharedInformerFactory(kubeClient, resyncPeriod)
+	c, _ := InitController(kubeClient, informerFactory, portTable, defaultNodeName)
 	stopCh := signals.RegisterSignalHandlers()
 	go c.Run(stopCh)
 }

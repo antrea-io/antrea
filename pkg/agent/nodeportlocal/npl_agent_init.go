@@ -39,7 +39,7 @@ const resyncPeriod = 60 * time.Minute
 // It initializes the port table cache to keep track of Node ports available for use by NPL,
 // sets up event handlers to handle Pod add, update and delete events.
 // When a Pod gets created, a free Node port is obtained from the port table cache and a DNAT rule is added to NAT traffic to the Pod's ip:port.
-func InitializeNPLAgent(kubeClient clientset.Interface, portRange, nodeName string) (*k8s.NPLController, error) {
+func InitializeNPLAgent(kubeClient clientset.Interface, informerFactory informers.SharedInformerFactory, portRange, nodeName string) (*k8s.NPLController, error) {
 	start, end, err := util.ParsePortsRange(portRange)
 	if err != nil {
 		return nil, fmt.Errorf("something went wrong while fetching port range: %v", err)
@@ -53,12 +53,12 @@ func InitializeNPLAgent(kubeClient clientset.Interface, portRange, nodeName stri
 	if err != nil {
 		return nil, fmt.Errorf("NPL rules for pod ports could not be initialized, error: %v", err)
 	}
-	return InitController(kubeClient, portTable, nodeName)
+	return InitController(kubeClient, informerFactory, portTable, nodeName)
 }
 
 // InitController initializes the NPLController with appropriate Pod and Service Informers.
 // This function can be used independently while unit testing without using InitializeNPLAgent function.
-func InitController(kubeClient clientset.Interface, portTable *portcache.PortTable, nodeName string) (*k8s.NPLController, error) {
+func InitController(kubeClient clientset.Interface, informerFactory informers.SharedInformerFactory, portTable *portcache.PortTable, nodeName string) (*k8s.NPLController, error) {
 	// Watch only the Pods which belong to the Node where the agent is running
 	listOptions := func(options *metav1.ListOptions) {
 		options.FieldSelector = fields.OneTermEqualSelector("spec.nodeName", nodeName).String()
@@ -71,7 +71,6 @@ func InitController(kubeClient clientset.Interface, portTable *portcache.PortTab
 		listOptions,
 	)
 
-	informerFactory := informers.NewSharedInformerFactory(kubeClient, resyncPeriod)
 	svcInformer := informerFactory.Core().V1().Services()
 
 	c := k8s.NewNPLController(kubeClient,

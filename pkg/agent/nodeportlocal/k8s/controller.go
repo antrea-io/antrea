@@ -27,6 +27,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	clientset "k8s.io/client-go/kubernetes"
@@ -193,8 +194,9 @@ func (c *NPLController) enqueueSvcUpdate(oldObj, newObj interface{}) {
 		return
 	}
 
-	podKeys := append(c.getPodsFromService(oldSvc), c.getPodsFromService(newSvc)...)
-	for _, podKey := range podKeys {
+	// aggregating unique podKeys
+	podKeys := sets.NewString(c.getPodsFromService(oldSvc)...).Union(sets.NewString(c.getPodsFromService(newSvc)...))
+	for podKey := range podKeys {
 		c.queue.Add(podKey)
 	}
 }
@@ -256,6 +258,11 @@ func (c *NPLController) isNPLEnabledForServiceOfPod(obj interface{}) bool {
 // matchSvcSelectorPodLabels verifies that all key/value pairs present in Service's selector
 // are also present in Pod's labels
 func matchSvcSelectorPodLabels(svcSelector, podLabel map[string]string) bool {
+	if len(svcSelector) == 0 {
+		// handling Service without selectors
+		return false
+	}
+
 	for selectorKey, selectorVal := range svcSelector {
 		if labelVal, ok := podLabel[selectorKey]; !ok || selectorVal != labelVal {
 			return false
