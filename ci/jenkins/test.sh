@@ -228,8 +228,8 @@ function deliver_antrea_windows {
             ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "powershell stop-service kubelet"
             ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "powershell restart-service docker"
             ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "powershell start-service kubelet"
-            ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "powershell restart-service ovsdb-server"
-            ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "powershell restart-service ovs-vswitchd"
+            ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "powershell start-service ovsdb-server"
+            ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "powershell start-service ovs-vswitchd"
             echo "===== Use script to startup antrea agent ====="
             ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "rm -rf /cygdrive/c/k/antrea && mkdir -p /cygdrive/c/k/antrea/bin && mkdir -p /cygdrive/c/k/antrea/etc && rm -rf /cygdrive/c/opt/cni/bin && mkdir -p /cygdrive/c/opt/cni/bin && mkdir -p /cygdrive/c/etc/cni/net.d"
             scp -o StrictHostKeyChecking=no -T $KUBECONFIG Administrator@${IP}:/cygdrive/c/k/config
