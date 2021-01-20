@@ -1031,7 +1031,7 @@ func prepareGatewayFlows(gwIPs []net.IP, gwMAC net.HardwareAddr, vMAC net.Hardwa
 				uint8(70),
 				[]*ofTestUtils.ExpectFlow{
 					{
-						MatchStr: fmt.Sprintf("priority=200,%s,dl_dst=%s,%s=%s", ipProtoStr, vMAC.String(), nwDstStr, gwIP.String()),
+						MatchStr: fmt.Sprintf("priority=200,%s,reg0=0x80000/0x80000,%s=%s", ipProtoStr, nwDstStr, gwIP.String()),
 						ActStr:   fmt.Sprintf("set_field:%s->eth_dst,goto_table:80", gwMAC.String()),
 					},
 				},
