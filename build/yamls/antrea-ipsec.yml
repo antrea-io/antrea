@@ -145,6 +145,7 @@ spec:
                       enum:
                       - Allow
                       - Drop
+                      - Reject
                       type: string
                     appliedTo:
                       items:
@@ -196,6 +197,7 @@ spec:
                       enum:
                       - Allow
                       - Drop
+                      - Reject
                       type: string
                     appliedTo:
                       items:
@@ -384,6 +386,7 @@ spec:
                       enum:
                       - Allow
                       - Drop
+                      - Reject
                       type: string
                     appliedTo:
                       items:
@@ -436,6 +439,7 @@ spec:
                       enum:
                       - Allow
                       - Drop
+                      - Reject
                       type: string
                     appliedTo:
                       items:

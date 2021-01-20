@@ -180,6 +180,9 @@ const (
 	RuleActionAllow RuleAction = "Allow"
 	// RuleActionDrop describes that rule matching traffic must be dropped.
 	RuleActionDrop RuleAction = "Drop"
+	// RuleActionReject describes that rule matching traffic must be dropped and
+	// the requesting client will receive a rejection response.
+	RuleActionReject RuleAction = "Reject"
 )
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

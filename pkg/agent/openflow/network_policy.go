@@ -867,7 +867,7 @@ func (c *client) calculateActionFlowChangesForRule(rule *types.PolicyRule) *poli
 		// Install action flows.
 		var actionFlows []binding.Flow
 		var metricFlows []binding.Flow
-		if rule.IsAntreaNetworkPolicyRule() && *rule.Action == secv1alpha1.RuleActionDrop {
+		if rule.IsAntreaNetworkPolicyRule() && (*rule.Action == secv1alpha1.RuleActionDrop || *rule.Action == secv1alpha1.RuleActionReject) {
 			metricFlows = append(metricFlows, c.dropRuleMetricFlow(ruleOfID, isIngress))
 			actionFlows = append(actionFlows, c.conjunctionActionDropFlow(ruleOfID, ruleTable.GetID(), rule.Priority, rule.EnableLogging))
 		} else {
