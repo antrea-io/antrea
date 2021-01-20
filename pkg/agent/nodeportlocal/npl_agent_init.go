@@ -71,7 +71,7 @@ func InitController(kubeClient clientset.Interface, informerFactory informers.Sh
 		listOptions,
 	)
 
-	svcInformer := informerFactory.Core().V1().Services()
+	svcInformer := informerFactory.Core().V1().Services().Informer()
 
 	c := k8s.NewNPLController(kubeClient,
 		podInformer,

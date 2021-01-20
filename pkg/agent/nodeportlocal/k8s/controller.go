@@ -29,7 +29,6 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
-	coreinformers "k8s.io/client-go/informers/core/v1"
 	clientset "k8s.io/client-go/kubernetes"
 	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
@@ -50,14 +49,14 @@ type NPLController struct {
 	queue       workqueue.RateLimitingInterface
 	podInformer cache.SharedIndexInformer
 	podLister   corelisters.PodLister
-	svcInformer coreinformers.ServiceInformer
-	PodToIP     map[string]string
+	svcInformer cache.SharedIndexInformer
+	podToIP     map[string]string
 	podIPLock   sync.RWMutex
 }
 
 func NewNPLController(kubeClient clientset.Interface,
 	podInformer cache.SharedIndexInformer,
-	svcInformer coreinformers.ServiceInformer,
+	svcInformer cache.SharedIndexInformer,
 	resyncPeriod time.Duration,
 	pt *portcache.PortTable) *NPLController {
 	c := NPLController{
@@ -66,7 +65,7 @@ func NewNPLController(kubeClient clientset.Interface,
 		podInformer: podInformer,
 		podLister:   corelisters.NewPodLister(podInformer.GetIndexer()),
 		svcInformer: svcInformer,
-		PodToIP:     make(map[string]string),
+		podToIP:     make(map[string]string),
 	}
 
 	podInformer.AddEventHandlerWithResyncPeriod(
@@ -84,7 +83,7 @@ func NewNPLController(kubeClient clientset.Interface,
 		resyncPeriod,
 	)
 
-	svcInformer.Informer().AddEventHandlerWithResyncPeriod(
+	svcInformer.AddEventHandlerWithResyncPeriod(
 		cache.ResourceEventHandlerFuncs{
 			AddFunc:    c.enqueueSvc,
 			DeleteFunc: c.enqueueSvc,
@@ -92,7 +91,7 @@ func NewNPLController(kubeClient clientset.Interface,
 		},
 		resyncPeriod,
 	)
-	svcInformer.Informer().AddIndexers(
+	svcInformer.AddIndexers(
 		cache.Indexers{
 			NPLEnabledAnnotationIndex: func(obj interface{}) ([]string, error) {
 				svc, ok := obj.(*corev1.Service)
@@ -118,15 +117,21 @@ func podKeyFunc(pod *corev1.Pod) string {
 // Run starts to watch and process Pod updates for the Node where Antrea Agent is running.
 // It starts a queue and a fixed number of workers to process the objects from the queue.
 func (c *NPLController) Run(stopCh <-chan struct{}) {
-	defer c.queue.ShutDown()
+	defer func() {
+		klog.Infof("Shutting down %s", controllerName)
+		c.queue.ShutDown()
+	}()
+
+	klog.Infof("Starting %s", controllerName)
+	go c.podInformer.Run(stopCh)
+	if !cache.WaitForNamedCacheSync(controllerName, stopCh, c.podInformer.HasSynced, c.svcInformer.HasSynced) {
+		return
+	}
+
 	for i := 0; i < numWorkers; i++ {
 		go wait.Until(c.Worker, time.Second, stopCh)
 	}
 
-	go c.podInformer.Run(stopCh)
-	go c.svcInformer.Informer().Run(stopCh)
-	cache.WaitForNamedCacheSync(controllerName, stopCh, c.podInformer.HasSynced)
-	cache.WaitForNamedCacheSync(controllerName, stopCh, c.svcInformer.Informer().HasSynced)
 	<-stopCh
 }
 
@@ -194,8 +199,10 @@ func (c *NPLController) enqueueSvcUpdate(oldObj, newObj interface{}) {
 		return
 	}
 
-	// aggregating unique podKeys
-	podKeys := sets.NewString(c.getPodsFromService(oldSvc)...).Union(sets.NewString(c.getPodsFromService(newSvc)...))
+	// disjunctive union of Pods from both Service sets
+	oldPodSet := sets.NewString(c.getPodsFromService(oldSvc)...)
+	newPodSet := sets.NewString(c.getPodsFromService(newSvc)...)
+	podKeys := oldPodSet.Difference(newPodSet).Union(newPodSet.Difference(oldPodSet))
 	for podKey := range podKeys {
 		c.queue.Add(podKey)
 	}
@@ -224,6 +231,11 @@ func (c *NPLController) getPodsFromService(svc *corev1.Service) []string {
 		return pods
 	}
 
+	// handling Service without selectors
+	if len(svc.Spec.Selector) == 0 {
+		return pods
+	}
+
 	podList, err := c.podLister.List(labels.SelectorFromSet(labels.Set(svc.Spec.Selector)))
 	if err != nil {
 		klog.Errorf("Got error while listing Pods: %v", err)
@@ -237,7 +249,7 @@ func (c *NPLController) getPodsFromService(svc *corev1.Service) []string {
 
 func (c *NPLController) isNPLEnabledForServiceOfPod(obj interface{}) bool {
 	pod := obj.(*corev1.Pod)
-	services, err := c.svcInformer.Informer().GetIndexer().ByIndex(NPLEnabledAnnotationIndex, "true")
+	services, err := c.svcInformer.GetIndexer().ByIndex(NPLEnabledAnnotationIndex, "true")
 	if err != nil {
 		klog.Errorf("Got error while listing Services with annotation: %v", err)
 		return false
@@ -258,8 +270,8 @@ func (c *NPLController) isNPLEnabledForServiceOfPod(obj interface{}) bool {
 // matchSvcSelectorPodLabels verifies that all key/value pairs present in Service's selector
 // are also present in Pod's labels
 func matchSvcSelectorPodLabels(svcSelector, podLabel map[string]string) bool {
+	// handling Service without selectors
 	if len(svcSelector) == 0 {
-		// handling Service without selectors
 		return false
 	}
 
@@ -300,14 +312,14 @@ func (c *NPLController) processNextWorkItem() bool {
 func (c *NPLController) getPodIPFromCache(key string) (string, bool) {
 	c.podIPLock.RLock()
 	defer c.podIPLock.RUnlock()
-	podIP, found := c.PodToIP[key]
+	podIP, found := c.podToIP[key]
 	return podIP, found
 }
 
 func (c *NPLController) addPodIPToCache(key, podIP string) {
 	c.podIPLock.Lock()
 	defer c.podIPLock.Unlock()
-	c.PodToIP[key] = podIP
+	c.podToIP[key] = podIP
 }
 
 // handleRemovePod removes rules from port table and

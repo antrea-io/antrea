@@ -119,10 +119,14 @@ func TestMain(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	portTable = NewPortTable(mockCtrl)
 
+	// informerFactory is initialised and started from cmd/antrea-agent/agent.go
 	informerFactory := informers.NewSharedInformerFactory(kubeClient, resyncPeriod)
+
 	c, _ := InitController(kubeClient, informerFactory, portTable, defaultNodeName)
 	stopCh := signals.RegisterSignalHandlers()
+
 	go c.Run(stopCh)
+	informerFactory.Start(stopCh)
 }
 
 func pollForPodAnnotation(r *require.Assertions, podName string, found bool) (string, error) {
