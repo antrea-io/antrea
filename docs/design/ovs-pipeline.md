@@ -71,6 +71,13 @@ We use 2 32-bit OVS registers to carry information throughout the pipeline:
   - bit 16 is used to indicate whether the destination MAC address of a packet
     is "known", i.e. corresponds to an entry in [L2ForwardingCalcTable], which
     is essentially a "dmac" table.
+  - bit 19 is used to indicate whether the destination and source MACs of the
+    packet should be rewritten in the [l3ForwardingTable]. The bit is set for
+    packets received from the tunnel port in the [ClassifierTable]. The
+    destination MAC of such packets is the Global Virtual MAC and should be
+    rewritten to the destination port's MAC before output to the port. When such
+    a packet is destined to a Pod, its source MAC should be rewritten to the
+    local gateway port's MAC too.
 * reg1 (NXM_NX_REG1): it is used to store the egress OF port for the packet. It
   is set by [DNATTable] for traffic destined to services and by
   [L2ForwardingCalcTable] otherwise. It is consumed by [L2ForwardingOutTable] to
@@ -193,13 +200,15 @@ This table is used to determine which "category" of traffic (tunnel, local
 gateway or local Pod) the packet belongs to. This is done by matching on the
 ingress port for the packet. The appropriate value is then written to bits
 [0..15] of the NXM_NX_REG0 register: 0 for tunnel, 1 for local gateway and 2 for
-local Pod. This information is used by matches in subsequent tables.
+local Pod. This information is used by matches in subsequent tables. For a
+packet received from the tunnel port, bit 19 of the NXM_NX_REG0 is set to 1, to
+indicate MAC rewrite should be performed for the packet in the [L3ForwardingTable].
 
 If you dump the flows for this table, you may see the following:
 
 ```text
 1. table=0, priority=200,in_port=antrea-gw0 actions=load:0x1->NXM_NX_REG0[0..15],goto_table:10
-2. table=0, priority=200,in_port=antrea-tun0 actions=load:0->NXM_NX_REG0[0..15],goto_table:30
+2. table=0, priority=200,in_port=antrea-tun0 actions=load:0->NXM_NX_REG0[0..15],load:0x1->NXM_NX_REG0[19],goto_table:30
 3. table=0, priority=190,in_port="coredns5-8ec607" actions=load:0x2->NXM_NX_REG0[0..15],goto_table:10
 4. table=0, priority=190,in_port="coredns5-9d9530" actions=load:0x2->NXM_NX_REG0[0..15],goto_table:10
 5. table=0, priority=0 actions=drop
@@ -207,7 +216,7 @@ If you dump the flows for this table, you may see the following:
 
 Flow 1 is for traffic coming in on the local gateway. Flow 2 is for traffic
 coming in through an overlay tunnel (i.e. from another Node). The next two
-flows (3 and 4) are for local Pods (in this case Pods from the coredns
+flows (3 and 4) are for local Pods (in this case Pods from the CoreDNS
 deployment).
 
 Local traffic then goes to [SpoofGuardTable], while tunnel traffic from other
@@ -563,14 +572,13 @@ This is the L3 routing table. It implements the following functionality:
   directly forwarded to the Pod. This requires setting the source MAC to the MAC
   of the local gateway interface and setting the destination MAC to the Pod's
   MAC address. Then the packets will go to [L3DecTTLTable] for decrementing
-  the IP TTL value. Such traffic is identified by matching on the packet's
-  destination MAC address (should be set to the Global Virtual MAC for all
-  tunnelled traffic) and its destination IP address (should match the IP address
-  of a local Pod). We therefore install one flow for each Pod created locally on
-  the Node. For example:
+  the IP TTL value. Such packets can be identified by bit 19 of the NXM_NX_REG0
+  register (which was set to 1 in the [ClassifierTable]) and the destination IP
+  address (which should match the IP address of a local Pod). We therefore
+  install one flow for each Pod created locally on the Node. For example:
 
 ```text
-table=70, priority=200,ip,dl_dst=aa:bb:cc:dd:ee:ff,nw_dst=10.10.0.2 actions=mod_dl_src:e2:e5:a4:9b:1c:b1,mod_dl_dst:12:9e:a6:47:d0:70,goto_table:71
+table=70, priority=200,ip,reg0=0x80000/0x80000,nw_dst=10.10.0.2 actions=mod_dl_src:e2:e5:a4:9b:1c:b1,mod_dl_dst:12:9e:a6:47:d0:70,goto_table:71
 ```
 
 * All tunnelled traffic destined to the local gateway (i.e. for which the
@@ -579,7 +587,7 @@ table=70, priority=200,ip,dl_dst=aa:bb:cc:dd:ee:ff,nw_dst=10.10.0.2 actions=mod_
   local gateway's MAC).
 
 ```text
-table=70, priority=200,ip,dl_dst=aa:bb:cc:dd:ee:ff,nw_dst=10.10.0.1 actions=mod_dl_dst:e2:e5:a4:9b:1c:b1,goto_table:80
+table=70, priority=200,ip,reg0=0x80000/0x80000,nw_dst=10.10.0.1 actions=mod_dl_dst:e2:e5:a4:9b:1c:b1,goto_table:80
 ```
 
 * All traffic destined to a remote Pod is forwarded through the appropriate

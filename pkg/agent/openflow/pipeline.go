@@ -224,8 +224,7 @@ const (
 	snatRequiredMark = 0b1
 	hairpinMark      = 0b1
 	// macRewriteMark indicates the destination and source MACs of the
-	// packet should be rewritten in the l3ForwardingTable. It is used when
-	// AntreaProxy is enabled.
+	// packet should be rewritten in the l3ForwardingTable.
 	macRewriteMark = 0b1
 	cnpDropMark    = 0b1
 
@@ -858,7 +857,7 @@ func (c *client) l3FwdFlowToGateway(localGatewayIPs []net.IP, localGatewayMAC ne
 	for _, ip := range localGatewayIPs {
 		ipProtocol := getIPProtocol(ip)
 		flows = append(flows, l3FwdTable.BuildFlow(priorityNormal).MatchProtocol(ipProtocol).
-			MatchDstMAC(globalVirtualMAC).
+			MatchRegRange(int(marksReg), macRewriteMark, macRewriteMarkRange).
 			MatchDstIP(ip).
 			Action().SetDstMAC(localGatewayMAC).
 			Action().GotoTable(l3FwdTable.GetNext()).
