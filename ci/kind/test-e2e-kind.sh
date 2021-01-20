@@ -131,7 +131,7 @@ function run_test {
   if $coverage; then
       go test -v -timeout=40m github.com/vmware-tanzu/antrea/test/e2e -provider=kind --logs-export-dir=$ANTREA_LOG_DIR --coverage --coverage-dir $ANTREA_COV_DIR
   else
-      go test -v -timeout=30m github.com/vmware-tanzu/antrea/test/e2e -provider=kind --logs-export-dir=$ANTREA_LOG_DIR
+      go test -v -timeout=50m github.com/vmware-tanzu/antrea/test/e2e -provider=kind --logs-export-dir=$ANTREA_LOG_DIR
   fi
   $TESTBED_CMD destroy kind
 }

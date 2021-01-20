@@ -1255,6 +1255,13 @@ func validatePodIP(podNetworkCIDR string, ip net.IP) (bool, error) {
 // createService creates a service with port and targetPort.
 func (data *TestData) createService(serviceName string, port, targetPort int32, selector map[string]string, affinity bool,
 	serviceType corev1.ServiceType, ipFamily *corev1.IPFamily) (*corev1.Service, error) {
+	annotation := make(map[string]string)
+	return data.createServiceWithAnnotation(serviceName, port, targetPort, selector, affinity, serviceType, ipFamily, annotation)
+}
+
+// createService creates a service with Annotation
+func (data *TestData) createServiceWithAnnotation(serviceName string, port, targetPort int, selector map[string]string, affinity bool,
+	serviceType corev1.ServiceType, ipFamily *corev1.IPFamily, annotation map[string]string) (*corev1.Service, error) {
 	affinityType := corev1.ServiceAffinityNone
 	if affinity {
 		affinityType = corev1.ServiceAffinityClientIP
@@ -1267,6 +1274,7 @@ func (data *TestData) createService(serviceName string, port, targetPort int32, 
 				"antrea-e2e": serviceName,
 				"app":        serviceName,
 			},
+			Annotations: annotation,
 		},
 		Spec: corev1.ServiceSpec{
 			SessionAffinity: affinityType,
@@ -1280,6 +1288,11 @@ func (data *TestData) createService(serviceName string, port, targetPort int32, 
 		},
 	}
 	return data.clientset.CoreV1().Services(testNamespace).Create(context.TODO(), &service, metav1.CreateOptions{})
+}
+
+// createNginxClusterIPServiceWithAnnotation creates nginx service with Annotation
+func (data *TestData) createNginxClusterIPServiceWithAnnotation(affinity bool, ipFamily *corev1.IPFamily, annotation map[string]string) (*corev1.Service, error) {
+	return data.createServiceWithAnnotation("nginx", 80, 80, map[string]string{"app": "nginx"}, affinity, corev1.ServiceTypeClusterIP, ipFamily, annotation)
 }
 
 // createNginxClusterIPService create a nginx service with the given name.
