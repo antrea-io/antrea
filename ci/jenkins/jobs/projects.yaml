@@ -12,7 +12,7 @@
           builders:
             - builder-job-updater
           branches:
-          - '*/master'
+          - '*/main'
           included_regions:
           - ci/jenkins/jobs/.*
           cron: 'H/15 * * * *'
@@ -27,7 +27,7 @@
             - builder-conformance:
                 conformance_type: 'whole-conformance'
           branches:
-          - '*/master'
+          - '*/main'
           included_regions: []
           cron: 'H H * * *'
           ignore_post_commit_hooks: false
@@ -65,7 +65,7 @@
           builders:
             - builder-elk-flow-collector
           branches:
-          - '*/master'
+          - '*/main'
           included_regions: []
           cron: 'H H * * *'
           ignore_post_commit_hooks: false
@@ -81,7 +81,7 @@
             - builder-workload-cluster-garbage-collection
           timed: 'H * * * *'
           branches:
-          - '*/master'
+          - '*/main'
           included_regions: []
       - '{name}-{test_name}-for-pull-request':
           test_name: list-tests
@@ -913,7 +913,7 @@
           ignore_post_commit_hooks: false
           parameters:
           - string:
-              default: 'master'
+              default: 'main'
               description: |-
                   The branch name of the original repo. It must match one of the following patterns:
                   - <branchName>
@@ -922,7 +922,7 @@
                   - remotes/<remoteRepoName>/<branchName>
                   - refs/remotes/<remoteRepoName>/<branchName>
                   Tracks/checks out the specified branch.
-                  E.g. master, feature1, refs/heads/master, refs/heads/feature1/master, origin/master, remotes/origin/master, refs/remotes/origin/master, ...
+                  E.g. main, feature1, refs/heads/main, refs/heads/feature1/main, origin/main, remotes/origin/main, refs/remotes/origin/main, ...
                   - <commitId>
                   Checks out the specified commit.
                   E.g. 5062ac843f2b947733e6a3b105977056821bd352, 5062ac84, ...
@@ -935,7 +935,7 @@
                   The syntax is of the form: :regexp. Regular expression syntax in branches to build will only build those branches whose names match the regular expression.
                   Examples:
                       - :^(?!(origin/prefix)).*
-                      matches: origin or origin/master or origin/feature
+                      matches: origin or origin/main or origin/feature
                       does not match: origin/prefix or origin/prefix_123 or origin/prefix-abc
               name: GIT_BRANCH
               trim: 'true'
