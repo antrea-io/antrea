@@ -2,10 +2,12 @@ name: Go
 on:
   pull_request:
     branches:
+    - main
     - master
     - release-*
   push:
     branches:
+    - main
     - master
     - release-*
 jobs:
