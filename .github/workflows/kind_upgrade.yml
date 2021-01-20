@@ -17,7 +17,7 @@ env:
 jobs:
   check-changes:
     name: Check whether tests need to be run based on diff
-    runs-on: [ubuntu-18.04]
+    runs-on: [ubuntu-latest]
     steps:
     - uses: actions/checkout@v2
       with:
@@ -33,7 +33,7 @@ jobs:
     name: Build Antrea image to be used for Kind upgrade test
     needs: check-changes
     if: ${{ needs.check-changes.outputs.has_changes == 'yes' }}
-    runs-on: [ubuntu-18.04]
+    runs-on: [ubuntu-latest]
     steps:
     - uses: actions/checkout@v2
     - run: make
@@ -51,7 +51,7 @@ jobs:
   from-N-1:
     name: Upgrade from Antrea version N-1
     needs: build-antrea-image
-    runs-on: [ubuntu-18.04]
+    runs-on: [ubuntu-latest]
     steps:
     - name: Free disk space
       # https://github.com/actions/virtual-environments/issues/709
@@ -91,7 +91,7 @@ jobs:
   from-N-2:
     name: Upgrade from Antrea version N-2
     needs: build-antrea-image
-    runs-on: [ubuntu-18.04]
+    runs-on: [ubuntu-latest]
     steps:
     - name: Free disk space
       # https://github.com/actions/virtual-environments/issues/709
@@ -131,7 +131,7 @@ jobs:
   compatible-N-1:
     name: API compatible with client version N-1
     needs: build-antrea-image
-    runs-on: [ubuntu-18.04]
+    runs-on: [ubuntu-latest]
     steps:
       - name: Free disk space
         # https://github.com/actions/virtual-environments/issues/709
@@ -171,7 +171,7 @@ jobs:
   compatible-N-2:
     name: API compatible with client version N-2
     needs: build-antrea-image
-    runs-on: [ubuntu-18.04]
+    runs-on: [ubuntu-latest]
     steps:
       - name: Free disk space
         # https://github.com/actions/virtual-environments/issues/709
@@ -216,7 +216,7 @@ jobs:
     name: Delete uploaded images
     needs: [build-antrea-image, from-N-1, from-N-2, compatible-N-1, compatible-N-2]
     if: ${{ always() }}
-    runs-on: [ubuntu-18.04]
+    runs-on: [ubuntu-latest]
     steps:
     - name: Delete antrea-ubuntu
       if: ${{ needs.build-antrea-image.result == 'success' }}
