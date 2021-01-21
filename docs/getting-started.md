@@ -29,7 +29,7 @@ with the following flags:
 `kube-proxy` should be started with the `--cluster-cidr=<CIDR Range for Pods>`
 flag.
 
-As for OVS, when using the built-in kernel module, kernel version >= 4.4 is
+As for OVS, when using the built-in kernel module, kernel version >= 4.6 is
 required. On the other hand, when building it from OVS sources, OVS
 version >= 2.6.0 is required.
 
