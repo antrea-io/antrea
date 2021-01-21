@@ -70,7 +70,7 @@ func testProxyServiceSessionAffinity(ipFamily *corev1.IPFamily, ingressIPs []str
 	defer data.deletePodAndWait(defaultTimeout, nginx)
 	require.NoError(t, err)
 	require.NoError(t, data.podWaitForRunning(defaultTimeout, nginx, testNamespace))
-	svc, err := data.createNginxClusterIPService(true, ipFamily)
+	svc, err := data.createNginxClusterIPService("", true, ipFamily)
 	defer data.deleteServiceAndWait(defaultTimeout, nginx)
 	require.NoError(t, err)
 	_, err = data.createNginxLoadBalancerService(true, ingressIPs, ipFamily)
@@ -166,7 +166,7 @@ func testProxyEndpointLifeCycle(ipFamily *corev1.IPFamily, data *TestData, t *te
 	require.NoError(t, data.createNginxPod(nginx, nodeName))
 	nginxIPs, err := data.podWaitForIPs(defaultTimeout, nginx, testNamespace)
 	require.NoError(t, err)
-	_, err = data.createNginxClusterIPService(false, ipFamily)
+	_, err = data.createNginxClusterIPService("", false, ipFamily)
 	defer data.deleteServiceAndWait(defaultTimeout, nginx)
 	require.NoError(t, err)
 	agentName, err := data.getAntreaPodOnNode(nodeName)
@@ -228,7 +228,7 @@ func testProxyServiceLifeCycle(ipFamily *corev1.IPFamily, ingressIPs []string, d
 	} else {
 		nginxIP = nginxIPs.ipv4.String()
 	}
-	svc, err := data.createNginxClusterIPService(false, ipFamily)
+	svc, err := data.createNginxClusterIPService("", false, ipFamily)
 	defer data.deleteServiceAndWait(defaultTimeout, nginx)
 	require.NoError(t, err)
 	_, err = data.createNginxLoadBalancerService(false, ingressIPs, ipFamily)

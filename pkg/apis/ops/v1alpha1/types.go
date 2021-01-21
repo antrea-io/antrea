@@ -180,6 +180,7 @@ type TCPHeader struct {
 
 // Packet includes header info.
 type Packet struct {
+	// TODO: change type IPHeader to *IPHeader and correct all internal references
 	IPHeader        IPHeader        `json:"ipHeader,omitempty"`
 	IPv6Header      *IPv6Header     `json:"ipv6Header,omitempty"`
 	TransportHeader TransportHeader `json:"transportHeader,omitempty"`

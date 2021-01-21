@@ -1156,8 +1156,11 @@ func (data *TestData) createService(serviceName string, port, targetPort int, se
 }
 
 // createNginxClusterIPService create a nginx service with the given name.
-func (data *TestData) createNginxClusterIPService(affinity bool, ipFamily *corev1.IPFamily) (*corev1.Service, error) {
-	return data.createService("nginx", 80, 80, map[string]string{"app": "nginx"}, affinity, corev1.ServiceTypeClusterIP, ipFamily)
+func (data *TestData) createNginxClusterIPService(name string, affinity bool, ipFamily *corev1.IPFamily) (*corev1.Service, error) {
+	if name == "" {
+		name = "nginx"
+	}
+	return data.createService(name, 80, 80, map[string]string{"app": "nginx"}, affinity, corev1.ServiceTypeClusterIP, ipFamily)
 }
 
 func (data *TestData) createNginxLoadBalancerService(affinity bool, ingressIPs []string, ipFamily *corev1.IPFamily) (*corev1.Service, error) {
