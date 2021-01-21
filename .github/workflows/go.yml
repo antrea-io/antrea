@@ -17,7 +17,7 @@ jobs:
     name: Unit test
     strategy:
       matrix:
-        os: [ubuntu-18.04, windows-2019]
+        os: [ubuntu-latest, windows-2019]
     runs-on: ${{ matrix.os }}
     steps:
 
@@ -45,7 +45,7 @@ jobs:
     name: Golangci-lint
     strategy:
       matrix:
-        platform: [ubuntu-18.04, macos-latest]
+        platform: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.platform }}
     steps:
     - name: Set up Go 1.15
@@ -60,7 +60,7 @@ jobs:
 
   golangci-lint-netpol-tmp:
     name: Golangci-lint for netpol code
-    runs-on: [ubuntu-18.04]
+    runs-on: [ubuntu-latest]
     steps:
     - name: Set up Go 1.15
       uses: actions/setup-go@v1
@@ -75,7 +75,7 @@ jobs:
 
   bin:
     name: Build Antrea binaries
-    runs-on: [ubuntu-18.04]
+    runs-on: [ubuntu-latest]
     steps:
 
     - name: Set up Go 1.15
@@ -94,7 +94,7 @@ jobs:
 
   antctl:
     name: Build antctl for macOS, Linux and Windows
-    runs-on: [ubuntu-18.04]
+    runs-on: [ubuntu-latest]
     steps:
 
       - name: Set up Go 1.15
@@ -111,7 +111,7 @@ jobs:
 
   codegen:
     name: Check code generation
-    runs-on: [ubuntu-18.04]
+    runs-on: [ubuntu-latest]
     steps:
 
     - name: Set up Go 1.15
@@ -128,7 +128,7 @@ jobs:
 
   manifest:
     name: Check manifest
-    runs-on: [ubuntu-18.04]
+    runs-on: [ubuntu-latest]
     steps:
 
     - name: Set up Go 1.15
@@ -145,7 +145,7 @@ jobs:
 
   tidy:
     name: Check go.mod tidy
-    runs-on: [ubuntu-18.04]
+    runs-on: [ubuntu-latest]
     steps:
 
     - name: Set up Go 1.15
@@ -161,7 +161,7 @@ jobs:
 
   verify:
     name: Verify docs and spelling
-    runs-on: [ubuntu-18.04]
+    runs-on: [ubuntu-latest]
     steps:
 
     - name: Set up Go 1.15
