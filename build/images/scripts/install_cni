@@ -29,3 +29,6 @@ install -m 755 /opt/cni/bin/bandwidth /host/opt/cni/bin/bandwidth
 
 # Load the OVS kernel module
 modprobe openvswitch || (echo "Failed to load the OVS kernel module from the container, try running 'modprobe openvswitch' on your Nodes"; exit 1)
+
+# Change the default permissions of the run directory.
+chmod 0750 /var/run/antrea
