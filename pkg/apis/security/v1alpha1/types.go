@@ -116,12 +116,6 @@ type Rule struct {
 	// conjunction with NetworkPolicySpec/ClusterNetworkPolicySpec.AppliedTo.
 	// +optional
 	AppliedTo []NetworkPolicyPeer `json:"appliedTo,omitempty"`
-	// Set list of ClusterGroup names on which this rule will be applied to.
-	// Cannot be set in conjunction with NetworkPolicySpec.
-	// Cannot be set in conjunction with ClusterNetworkPolicySpec.AppliedToGroups
-	// and ClusterNetworkPolicySpec.AppliedTo.
-	// +optional
-	AppliedToGroups []string `json:"appliedToGroups,omitempty"`
 }
 
 // NetworkPolicyPeer describes the grouping selector of workloads.

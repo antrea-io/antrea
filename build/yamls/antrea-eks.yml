@@ -148,6 +148,8 @@ spec:
               appliedTo:
                 items:
                   properties:
+                    group:
+                      type: string
                     namespaceSelector:
                       x-kubernetes-preserve-unknown-fields: true
                     podSelector:
@@ -169,6 +171,8 @@ spec:
                     appliedTo:
                       items:
                         properties:
+                          group:
+                            type: string
                           namespaceSelector:
                             x-kubernetes-preserve-unknown-fields: true
                           podSelector:
@@ -226,6 +230,8 @@ spec:
                     appliedTo:
                       items:
                         properties:
+                          group:
+                            type: string
                           namespaceSelector:
                             x-kubernetes-preserve-unknown-fields: true
                           podSelector:

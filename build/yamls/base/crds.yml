@@ -322,6 +322,8 @@ spec:
                         x-kubernetes-preserve-unknown-fields: true
                       namespaceSelector:
                         x-kubernetes-preserve-unknown-fields: true
+                      group:
+                        type: string
                 appliedToGroups:
                   type: array
                   items:
@@ -347,6 +349,8 @@ spec:
                               x-kubernetes-preserve-unknown-fields: true
                             namespaceSelector:
                               x-kubernetes-preserve-unknown-fields: true
+                            group:
+                              type: string
                       # Ensure that Action field allows only ALLOW and DROP values
                       action:
                         type: string
@@ -404,6 +408,8 @@ spec:
                               x-kubernetes-preserve-unknown-fields: true
                             namespaceSelector:
                               x-kubernetes-preserve-unknown-fields: true
+                            group:
+                              type: string
                       # Ensure that Action field allows only ALLOW and DROP values
                       action:
                         type: string
