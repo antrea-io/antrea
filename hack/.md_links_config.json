@@ -11,6 +11,9 @@
         },
         {
             "pattern": "^/pkg/*"
+        },
+        {
+            "pattern": "^https://calendar.google.com/*"
         }
     ],
     "retryOn429": false,
