@@ -175,12 +175,6 @@ func (n *NetworkPolicyController) syncInternalGroup(key string) error {
 		return nil
 	}
 	grp := grpObj.(*antreatypes.Group)
-	// Retrieve the ClusterGroup corresponding to this key.
-	cg, err := n.cgLister.Get(grp.Name)
-	if err != nil {
-		klog.Infof("Didn't find the ClusterGroup %s, skip processing of internal group", grp.Name)
-		return nil
-	}
 	if grp.IPBlock == nil {
 		// Find all Pods matching its selectors and update store.
 		groupSelector := grp.Selector
@@ -203,6 +197,12 @@ func (n *NetworkPolicyController) syncInternalGroup(key string) error {
 		klog.V(2).Infof("Updating existing internal Group %s with %d GroupMembers", key, len(memberSet))
 		n.internalGroupStore.Update(updatedGrp)
 	}
+	// Retrieve the ClusterGroup corresponding to this key.
+	cg, err := n.cgLister.Get(grp.Name)
+	if err != nil {
+		klog.Infof("Didn't find the ClusterGroup %s, skip processing of internal group", grp.Name)
+		return nil
+	}
 	// Update the ClusterGroup status to Realized as Antrea has recognized the Group and
 	// processed its group members.
 	err = n.updateGroupStatus(cg, v1.ConditionTrue)
@@ -210,6 +210,9 @@ func (n *NetworkPolicyController) syncInternalGroup(key string) error {
 		klog.Errorf("Failed to update ClusterGroup %s GroupMembersComputed condition to %s: %v", cg.Name, v1.ConditionTrue, err)
 		return err
 	}
+	// If a ClusterGroup is added/updated, it might have a reference in ClusterNetworkPolicy.
+	// Trigger the sync for corresponding groups with the shared key.
+	n.enqueueAddressGroup(key)
 	return nil
 }
 

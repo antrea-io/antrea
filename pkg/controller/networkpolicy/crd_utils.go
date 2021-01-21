@@ -71,15 +71,11 @@ func toAntreaIPBlockForCRD(ipBlock *secv1alpha1.IPBlock) (*controlplane.IPBlock,
 }
 
 func (n *NetworkPolicyController) toAntreaPeerForCRD(peers []secv1alpha1.NetworkPolicyPeer,
-	np metav1.Object, dir controlplane.Direction, namedPortExists, cgExists bool) controlplane.NetworkPolicyPeer {
+	np metav1.Object, dir controlplane.Direction, namedPortExists bool) controlplane.NetworkPolicyPeer {
 	var addressGroups []string
 	// NetworkPolicyPeer is supposed to match all addresses when it is empty and no clusterGroup is present.
 	// It's treated as an IPBlock "0.0.0.0/0".
 	if len(peers) == 0 {
-		if cgExists {
-			// If empty and clusterGroup exists in the rule, the peer will be evaluated by the ClusterGroup.
-			return controlplane.NetworkPolicyPeer{}
-		}
 		// For an egress Peer that specifies any named ports, it creates or
 		// reuses the AddressGroup matching all Pods in all Namespaces and
 		// appends the AddressGroup UID to the returned Peer such that it can be
@@ -97,7 +93,8 @@ func (n *NetworkPolicyController) toAntreaPeerForCRD(peers []secv1alpha1.Network
 	var ipBlocks []controlplane.IPBlock
 	for _, peer := range peers {
 		// A secv1alpha1.NetworkPolicyPeer will either have an IPBlock or a
-		// podSelector and/or namespaceSelector set.
+		// podSelector and/or namespaceSelector set or a reference to the
+		// ClusterGroup.
 		if peer.IPBlock != nil {
 			ipBlock, err := toAntreaIPBlockForCRD(peer.IPBlock)
 			if err != nil {
@@ -105,6 +102,13 @@ func (n *NetworkPolicyController) toAntreaPeerForCRD(peers []secv1alpha1.Network
 				continue
 			}
 			ipBlocks = append(ipBlocks, *ipBlock)
+		} else if peer.Group != "" {
+			normalizedUID, ipBlock := n.processRefCG(peer.Group)
+			if normalizedUID != "" {
+				addressGroups = append(addressGroups, normalizedUID)
+			} else {
+				ipBlocks = append(ipBlocks, *ipBlock)
+			}
 		} else {
 			normalizedUID := n.createAddressGroupForCRD(peer, np)
 			addressGroups = append(addressGroups, normalizedUID)

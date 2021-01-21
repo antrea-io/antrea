@@ -487,8 +487,12 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 									Port: &int80,
 								},
 							},
-							SourceGroups: []string{cgA.Name},
-							Action:       &allowAction,
+							From: []secv1alpha1.NetworkPolicyPeer{
+								{
+									Group: cgA.Name,
+								},
+							},
+							Action: &allowAction,
 						},
 					},
 					Egress: []secv1alpha1.Rule{
@@ -498,8 +502,12 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 									Port: &int81,
 								},
 							},
-							DestinationGroups: []string{cgA.Name},
-							Action:            &allowAction,
+							To: []secv1alpha1.NetworkPolicyPeer{
+								{
+									Group: cgA.Name,
+								},
+							},
+							Action: &allowAction,
 						},
 					},
 				},
@@ -1140,9 +1148,7 @@ func TestGetTierPriority(t *testing.T) {
 	}
 }
 
-func TestProcessRefCGs(t *testing.T) {
-	var emptyIpb []controlplane.IPBlock
-	var emptyAg []string
+func TestProcessRefCG(t *testing.T) {
 	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
 	cidr := "10.0.0.0/24"
 	cidrIPNet, _ := cidrStrToIPNet(cidr)
@@ -1176,56 +1182,43 @@ func TestProcessRefCGs(t *testing.T) {
 	npc.cgStore.Add(&cgB)
 	tests := []struct {
 		name        string
-		inputCGs    []string
-		expectedAG  []string
-		expectedIPB []controlplane.IPBlock
+		inputCG     string
+		expectedAG  string
+		expectedIPB *controlplane.IPBlock
 	}{
 		{
-			name:        "empty-cgs-no-result",
-			inputCGs:    []string{},
-			expectedAG:  emptyAg,
-			expectedIPB: emptyIpb,
+			name:        "empty-cg-no-result",
+			inputCG:     "",
+			expectedAG:  "",
+			expectedIPB: nil,
 		},
 		{
 			name:        "cg-with-selector",
-			inputCGs:    []string{cgA.Name},
-			expectedAG:  []string{string(cgA.UID)},
-			expectedIPB: emptyIpb,
+			inputCG:     cgA.Name,
+			expectedAG:  string(cgA.UID),
+			expectedIPB: nil,
 		},
 		{
 			name:        "cg-with-selector-not-found",
-			inputCGs:    []string{cgC.Name},
-			expectedAG:  emptyAg,
-			expectedIPB: emptyIpb,
+			inputCG:     cgC.Name,
+			expectedAG:  "",
+			expectedIPB: nil,
 		},
 		{
 			name:       "cg-with-ipblock",
-			inputCGs:   []string{cgB.Name},
-			expectedAG: emptyAg,
-			expectedIPB: []controlplane.IPBlock{
-				{
-					CIDR:   *cidrIPNet,
-					Except: []controlplane.IPNet{},
-				},
-			},
-		},
-		{
-			name:       "cgs-with-selector-ipblock",
-			inputCGs:   []string{cgA.Name, cgB.Name},
-			expectedAG: []string{string(cgA.UID)},
-			expectedIPB: []controlplane.IPBlock{
-				{
-					CIDR:   *cidrIPNet,
-					Except: []controlplane.IPNet{},
-				},
+			inputCG:    cgB.Name,
+			expectedAG: "",
+			expectedIPB: &controlplane.IPBlock{
+				CIDR:   *cidrIPNet,
+				Except: []controlplane.IPNet{},
 			},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			actualAG, actualIPB := npc.processRefCGs(tt.inputCGs)
-			assert.Equal(t, tt.expectedIPB, actualIPB, "IPBlock list does not match")
-			assert.Equal(t, tt.expectedAG, actualAG, "addressGroup list does not match")
+			actualAG, actualIPB := npc.processRefCG(tt.inputCG)
+			assert.Equal(t, tt.expectedIPB, actualIPB, "IPBlock does not match")
+			assert.Equal(t, tt.expectedAG, actualAG, "addressGroup does not match")
 		})
 	}
 }

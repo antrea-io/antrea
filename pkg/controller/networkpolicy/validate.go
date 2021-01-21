@@ -402,6 +402,10 @@ func (a *antreaPolicyValidator) createValidate(curObj interface{}, userInfo auth
 	if !allowed {
 		return reason, allowed
 	}
+	reason, allowed = a.validatePeers(ingress, egress)
+	if !allowed {
+		return reason, allowed
+	}
 	if err := a.validatePort(ingress, egress); err != nil {
 		return err.Error(), false
 	}
@@ -443,6 +447,32 @@ func (a *antreaPolicyValidator) validateAppliedTo(ingress, egress []secv1alpha1.
 	}
 	if numAppliedToInRules > 0 && (numAppliedToInRules != len(ingress)+len(egress)) {
 		return "appliedTo field should either be set in all rules or in none of them", false
+	}
+	return "", true
+}
+
+// validatePeers ensures that the NetworkPolicyPeer object set in rules are valid, i.e.
+// currently it ensures that a Group cannot be set with other stand-alone selectors or IPBlock.
+func (a *antreaPolicyValidator) validatePeers(ingress, egress []secv1alpha1.Rule) (string, bool) {
+	checkPeers := func(peers []secv1alpha1.NetworkPolicyPeer) bool {
+		for _, peer := range peers {
+			if peer.Group != "" && (peer.PodSelector != nil || peer.IPBlock != nil || peer.NamespaceSelector != nil) {
+				return false
+			}
+		}
+		return true
+	}
+	for _, rule := range ingress {
+		isValid := checkPeers(rule.From)
+		if !isValid {
+			return "Group cannot be set with other peers in ingress rules", false
+		}
+	}
+	for _, rule := range egress {
+		isValid := checkPeers(rule.To)
+		if !isValid {
+			return "Group cannot be set with other peers in egress rules", false
+		}
 	}
 	return "", true
 }

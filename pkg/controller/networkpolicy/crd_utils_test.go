@@ -151,6 +151,13 @@ func TestToAntreaPeerForCRD(t *testing.T) {
 	selectorAll := metav1.LabelSelector{}
 	matchAllPodsPeer := matchAllPeer
 	matchAllPodsPeer.AddressGroups = []string{getNormalizedUID(toGroupSelector("", nil, &selectorAll, nil).NormalizedName)}
+	// cgA with selector present in cache
+	cgA := corev1a2.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{Name: "cgA", UID: "uidA"},
+		Spec: corev1a2.GroupSpec{
+			NamespaceSelector: &selectorA,
+		},
+	}
 	tests := []struct {
 		name            string
 		inPeers         []secv1alpha1.NetworkPolicyPeer
@@ -236,11 +243,16 @@ func TestToAntreaPeerForCRD(t *testing.T) {
 			direction: controlplane.DirectionIn,
 		},
 		{
-			name:      "empty-peer-ingress-with-cg-exists-true",
-			inPeers:   []secv1alpha1.NetworkPolicyPeer{},
-			outPeer:   controlplane.NetworkPolicyPeer{},
+			name: "peer-ingress-with-cg",
+			inPeers: []secv1alpha1.NetworkPolicyPeer{
+				{
+					Group: cgA.Name,
+				},
+			},
+			outPeer: controlplane.NetworkPolicyPeer{
+				AddressGroups: []string{string(cgA.UID)},
+			},
 			direction: controlplane.DirectionIn,
-			cgExists:  true,
 		},
 		{
 			name:            "empty-peer-egress-with-named-port",
@@ -256,17 +268,24 @@ func TestToAntreaPeerForCRD(t *testing.T) {
 			direction: controlplane.DirectionOut,
 		},
 		{
-			name:      "empty-peer-egress-with-cg-exists-true",
-			inPeers:   []secv1alpha1.NetworkPolicyPeer{},
-			outPeer:   controlplane.NetworkPolicyPeer{},
+			name: "peer-egress-with-cg",
+			inPeers: []secv1alpha1.NetworkPolicyPeer{
+				{
+					Group: cgA.Name,
+				},
+			},
+			outPeer: controlplane.NetworkPolicyPeer{
+				AddressGroups: []string{string(cgA.UID)},
+			},
 			direction: controlplane.DirectionOut,
-			cgExists:  true,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, npc := newController()
-			actualPeer := npc.toAntreaPeerForCRD(tt.inPeers, testCNPObj, tt.direction, tt.namedPortExists, tt.cgExists)
+			npc.addClusterGroup(&cgA)
+			npc.cgStore.Add(&cgA)
+			actualPeer := npc.toAntreaPeerForCRD(tt.inPeers, testCNPObj, tt.direction, tt.namedPortExists)
 			if !reflect.DeepEqual(tt.outPeer.AddressGroups, actualPeer.AddressGroups) {
 				t.Errorf("Unexpected AddressGroups in Antrea Peer conversion. Expected %v, got %v", tt.outPeer.AddressGroups, actualPeer.AddressGroups)
 			}

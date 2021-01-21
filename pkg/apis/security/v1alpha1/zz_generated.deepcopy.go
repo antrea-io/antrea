@@ -356,16 +356,6 @@ func (in *Rule) DeepCopyInto(out *Rule) {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
 	}
-	if in.SourceGroups != nil {
-		in, out := &in.SourceGroups, &out.SourceGroups
-		*out = make([]string, len(*in))
-		copy(*out, *in)
-	}
-	if in.DestinationGroups != nil {
-		in, out := &in.DestinationGroups, &out.DestinationGroups
-		*out = make([]string, len(*in))
-		copy(*out, *in)
-	}
 	return
 }
 
