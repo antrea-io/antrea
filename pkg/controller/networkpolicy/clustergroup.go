@@ -211,7 +211,27 @@ func (n *NetworkPolicyController) syncInternalGroup(key string) error {
 		return err
 	}
 	// If a ClusterGroup is added/updated, it might have a reference in ClusterNetworkPolicy.
-	// Trigger the sync for corresponding groups with the shared key.
+	// Trigger the sync for corresponding groups with the shared key and complete the
+	// corresponding group if not yet completed.
+	n.addressGroupMutex.Lock()
+	addrGroupObj, found, _ := n.addressGroupStore.Get(key)
+	if found {
+		// If AddressGroup was created corresponding to this ClusterGroup, complete the
+		// AddressGroup fields before syncing the AddressGroup.
+		addrGroup := addrGroupObj.(*antreatypes.AddressGroup)
+		if isGroupSelectorUnset(addrGroup.Selector) {
+			updatedAddrGroup := &antreatypes.AddressGroup{
+				UID:          addrGroup.UID,
+				Name:         addrGroup.Name,
+				Selector:     updatedGrp.Selector,
+				GroupMembers: updatedGrp.GroupMembers,
+			}
+			addrGroup.Selector = updatedGrp.Selector
+			addrGroup.GroupMembers = updatedGrp.GroupMembers
+			n.addressGroupStore.Update(updatedAddrGroup)
+		}
+	}
+	n.addressGroupMutex.Unlock()
 	n.enqueueAddressGroup(key)
 	return nil
 }

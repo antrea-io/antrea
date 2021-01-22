@@ -77,6 +77,8 @@ const (
 	TierIndex = "tier"
 	// PriorityIndex is used to index Tiers by their priorities.
 	PriorityIndex = "priority"
+	// ClusterGroupIndex is used to index ClusterNetworkPolicies by ClusterGroup names.
+	ClusterGroupIndex = "clustergroup"
 )
 
 var (
@@ -200,6 +202,10 @@ type NetworkPolicyController struct {
 	// concurrent access during updates to the internal NetworkPolicy object.
 	internalNetworkPolicyMutex sync.RWMutex
 
+	// addressGroupMutex protects the addressGroupStore from
+	// concurrent access during updates to the AddressGroup object.
+	addressGroupMutex sync.RWMutex
+
 	// heartbeatCh is an internal channel for testing. It's used to know whether all tasks have been
 	// processed, and to count executions of each function.
 	heartbeatCh chan heartbeat
@@ -309,6 +315,35 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 						return []string{}, nil
 					}
 					return []string{cnp.Spec.Tier}, nil
+				},
+				ClusterGroupIndex: func(obj interface{}) ([]string, error) {
+					cnp, ok := obj.(*secv1alpha1.ClusterNetworkPolicy)
+					var groupNames []string
+					if !ok {
+						return []string{}, nil
+					}
+					if len(cnp.Spec.Ingress) == 0 && len(cnp.Spec.Egress) == 0 {
+						return []string{}, nil
+					}
+					appendGroups := func(rule secv1alpha1.Rule) {
+						for _, peer := range rule.To {
+							if peer.Group != "" {
+								groupNames = append(groupNames, peer.Group)
+							}
+						}
+						for _, peer := range rule.From {
+							if peer.Group != "" {
+								groupNames = append(groupNames, peer.Group)
+							}
+						}
+					}
+					for _, rule := range cnp.Spec.Egress {
+						appendGroups(rule)
+					}
+					for _, rule := range cnp.Spec.Ingress {
+						appendGroups(rule)
+					}
+					return groupNames, nil
 				},
 			},
 		)
@@ -1284,10 +1319,14 @@ func (n *NetworkPolicyController) syncAddressGroup(key string) error {
 	addressGroupObj, found, _ := n.addressGroupStore.Get(key)
 	if !found {
 		// AddressGroup was already deleted. No need to process further.
-		klog.V(2).Infof("AddressGroup %s not found.", key)
+		klog.V(2).Infof("AddressGroup %s not found", key)
 		return nil
 	}
 	addressGroup := addressGroupObj.(*antreatypes.AddressGroup)
+	if isGroupSelectorUnset(addressGroup.Selector) {
+		klog.V(2).Infof("Internal Group corresponding to the AddressGroup %s is still pending", key)
+		return nil
+	}
 	// NodeNames set must be considered immutable once generated and updated
 	// in the store. If any change is needed, the set must be regenerated with
 	// the new NodeNames and the store must be updated.

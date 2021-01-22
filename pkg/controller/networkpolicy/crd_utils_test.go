@@ -326,8 +326,8 @@ func TestCreateAddressGroupForClusterGroupCRD(t *testing.T) {
 		{
 			name:                   "group-not-found",
 			inCG:                   &cgB,
-			expectedKey:            "",
-			expectedAddressGroups:  0,
+			expectedKey:            string(cgB.UID),
+			expectedAddressGroups:  1,
 			expectedInternalGroups: 1,
 		},
 		{

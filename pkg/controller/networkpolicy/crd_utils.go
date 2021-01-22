@@ -143,30 +143,32 @@ func (n *NetworkPolicyController) createAddressGroupForCRD(peer secv1alpha1.Netw
 // createAddressGroupForClusterGroupCRD creates an AddressGroup object corresponding to a
 // ClusterGroup spec. If the AddressGroup already exists, it returns the key
 // otherwise it copies the ClusterGroup CRD contents to an AddressGroup resource and returns
-// its key.
+// its key. If the corresponding internal Group is not found, create an empty AddressGroup
+// which will be re-enqueued once the internal Group is created.
 func (n *NetworkPolicyController) createAddressGroupForClusterGroupCRD(cg *v1alpha2.ClusterGroup) string {
 	key := internalGroupKeyFunc(cg)
 	// Check to see if the AddressGroup already exists
+	n.addressGroupMutex.Lock()
 	_, found, _ := n.addressGroupStore.Get(key)
 	if found {
+		n.addressGroupMutex.Unlock()
 		return key
+	}
+	// Create an AddressGroup object for this Cluster Group.
+	addressGroup := &antreatypes.AddressGroup{
+		UID:  types.UID(key),
+		Name: key,
 	}
 	// Find the internal Group corresponding to this ClusterGroup
 	ig, found, _ := n.internalGroupStore.Get(key)
-	if !found {
-		klog.V(2).Infof("Internal group %s not found", key)
-		return ""
+	if found {
+		intGrp := ig.(*antreatypes.Group)
+		addressGroup.Selector = intGrp.Selector
+		addressGroup.GroupMembers = intGrp.GroupMembers
 	}
-	intGrp := ig.(*antreatypes.Group)
-	// Create an AddressGroup object for this internal Group.
-	addressGroup := &antreatypes.AddressGroup{
-		UID:          types.UID(key),
-		Name:         key,
-		Selector:     intGrp.Selector,
-		GroupMembers: intGrp.GroupMembers,
-	}
-	klog.V(2).Infof("Creating new AddressGroup %s with selector (%s) corresponding to ClusterGroup CRD", addressGroup.Name, addressGroup.Selector.NormalizedName)
 	n.addressGroupStore.Create(addressGroup)
+	n.addressGroupMutex.Unlock()
+	klog.V(2).Infof("Created new AddressGroup %s corresponding to ClusterGroup CRD %s", addressGroup.Name, cg.Name)
 	return key
 }
 
@@ -193,4 +195,20 @@ func (n *NetworkPolicyController) getTierPriority(tier string) int32 {
 		return DefaultTierPriority
 	}
 	return t.Spec.Priority
+}
+
+// isGroupSelectorUnset determines whether an internal Group corresponding to
+// a ClusterGroup is still pending create. This may occur because a ClusterGroup
+// might be referenced before it is actually created. In such a scenario, the
+// corresponding AddressGroup/AppliedToGroup will be created with empty Selectors
+// until the actual ClusterGroup create triggers the population of the remaining
+// fields.
+func isGroupSelectorUnset(g antreatypes.GroupSelector) bool {
+	// An empty AppliedTo/AddressGroup will be created for a pending ClusterGroup.
+	// Thus the absence of NormalizedName of the Selector will indicate the Group
+	// was never set with the Selector.
+	if g.NormalizedName == "" {
+		return true
+	}
+	return false
 }
