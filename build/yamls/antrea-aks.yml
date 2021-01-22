@@ -1367,6 +1367,10 @@ data:
     # whenever a Pod's container defines a specific port to be exposed (each container can define a list of ports as pod.spec.containers[].ports),
     # and all Node traffic directed to that port will be forwarded to the Pod.
     #nplPortRange: 40000-41000
+
+    # Provide the address of Kubernetes apiserver, to override any value provided in kubeconfig or InClusterConfig.
+    # Defaults to "". It must be a host string, a host:port pair, or a URL to the base of the apiserver.
+    #kubeAPIServerOverride: ""
   antrea-cni.conflist: |
     {
         "cniVersion":"0.3.0",
@@ -1423,7 +1427,7 @@ metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-b8hh7hm486
+  name: antrea-config-7d66b472ff
   namespace: kube-system
 ---
 apiVersion: v1
@@ -1534,7 +1538,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-b8hh7hm486
+          name: antrea-config-7d66b472ff
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -1799,7 +1803,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-b8hh7hm486
+          name: antrea-config-7d66b472ff
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d

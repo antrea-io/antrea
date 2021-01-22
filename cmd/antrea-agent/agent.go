@@ -64,7 +64,7 @@ const informerDefaultResync = 12 * time.Hour
 func run(o *Options) error {
 	klog.Infof("Starting Antrea agent (version %s)", version.GetFullVersion())
 	// Create K8s Clientset, CRD Clientset and SharedInformerFactory for the given config.
-	k8sClient, _, crdClient, err := k8s.CreateClients(o.config.ClientConnection)
+	k8sClient, _, crdClient, err := k8s.CreateClients(o.config.ClientConnection, o.config.KubeAPIServerOverride)
 	if err != nil {
 		return fmt.Errorf("error creating K8s clients: %v", err)
 	}
