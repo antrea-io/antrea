@@ -20,10 +20,17 @@ import (
 	"k8s.io/klog"
 )
 
+const (
+	metricNamespaceAntrea = "antrea"
+	metricSubsystemAgent  = "agent"
+)
+
 var (
 	EgressNetworkPolicyRuleCount = metrics.NewGauge(
 		&metrics.GaugeOpts{
-			Name:           "antrea_agent_egress_networkpolicy_rule_count",
+			Namespace:      metricNamespaceAntrea,
+			Subsystem:      metricSubsystemAgent,
+			Name:           "egress_networkpolicy_rule_count",
 			Help:           "Number of egress networkpolicy rules on local node which are managed by the Antrea Agent.",
 			StabilityLevel: metrics.STABLE,
 		},
@@ -31,7 +38,9 @@ var (
 
 	IngressNetworkPolicyRuleCount = metrics.NewGauge(
 		&metrics.GaugeOpts{
-			Name:           "antrea_agent_ingress_networkpolicy_rule_count",
+			Namespace:      metricNamespaceAntrea,
+			Subsystem:      metricSubsystemAgent,
+			Name:           "ingress_networkpolicy_rule_count",
 			Help:           "Number of ingress networkpolicy rules on local node which are managed by the Antrea Agent.",
 			StabilityLevel: metrics.STABLE,
 		},
@@ -39,7 +48,9 @@ var (
 
 	PodCount = metrics.NewGauge(
 		&metrics.GaugeOpts{
-			Name:           "antrea_agent_local_pod_count",
+			Namespace:      metricNamespaceAntrea,
+			Subsystem:      metricSubsystemAgent,
+			Name:           "local_pod_count",
 			Help:           "Number of pods on local node which are managed by the Antrea Agent.",
 			StabilityLevel: metrics.STABLE,
 		},
@@ -47,28 +58,36 @@ var (
 
 	NetworkPolicyCount = metrics.NewGauge(
 		&metrics.GaugeOpts{
-			Name:           "antrea_agent_networkpolicy_count",
+			Namespace:      metricNamespaceAntrea,
+			Subsystem:      metricSubsystemAgent,
+			Name:           "networkpolicy_count",
 			Help:           "Number of networkpolicies on local node which are managed by the Antrea Agent.",
 			StabilityLevel: metrics.STABLE,
 		},
 	)
 
 	OVSTotalFlowCount = metrics.NewGauge(&metrics.GaugeOpts{
-		Name:           "antrea_agent_ovs_total_flow_count",
+		Namespace:      metricNamespaceAntrea,
+		Subsystem:      metricSubsystemAgent,
+		Name:           "ovs_total_flow_count",
 		Help:           "Total flow count of all OVS flow tables.",
 		StabilityLevel: metrics.STABLE,
 	},
 	)
 
 	OVSFlowCount = metrics.NewGaugeVec(&metrics.GaugeOpts{
-		Name:           "antrea_agent_ovs_flow_count",
+		Namespace:      metricNamespaceAntrea,
+		Subsystem:      metricSubsystemAgent,
+		Name:           "ovs_flow_count",
 		Help:           "Flow count for each OVS flow table. The TableID is used as a label.",
 		StabilityLevel: metrics.STABLE,
 	}, []string{"table_id"})
 
 	OVSFlowOpsCount = metrics.NewCounterVec(
 		&metrics.CounterOpts{
-			Name:           "antrea_agent_ovs_flow_ops_count",
+			Namespace:      metricNamespaceAntrea,
+			Subsystem:      metricSubsystemAgent,
+			Name:           "ovs_flow_ops_count",
 			Help:           "Number of OVS flow operations, partitioned by operation type (add, modify and delete).",
 			StabilityLevel: metrics.ALPHA,
 		},
@@ -77,7 +96,9 @@ var (
 
 	OVSFlowOpsErrorCount = metrics.NewCounterVec(
 		&metrics.CounterOpts{
-			Name:           "antrea_agent_ovs_flow_ops_error_count",
+			Namespace:      metricNamespaceAntrea,
+			Subsystem:      metricSubsystemAgent,
+			Name:           "ovs_flow_ops_error_count",
 			Help:           "Number of OVS flow operation errors, partitioned by operation type (add, modify and delete).",
 			StabilityLevel: metrics.ALPHA,
 		},
@@ -86,7 +107,9 @@ var (
 
 	OVSFlowOpsLatency = metrics.NewHistogramVec(
 		&metrics.HistogramOpts{
-			Name:           "antrea_agent_ovs_flow_ops_latency_milliseconds",
+			Namespace:      metricNamespaceAntrea,
+			Subsystem:      metricSubsystemAgent,
+			Name:           "ovs_flow_ops_latency_milliseconds",
 			Help:           "The latency of OVS flow operations, partitioned by operation type (add, modify and delete).",
 			StabilityLevel: metrics.ALPHA,
 		},
@@ -95,7 +118,9 @@ var (
 
 	TotalConnectionsInConnTrackTable = metrics.NewGauge(
 		&metrics.GaugeOpts{
-			Name:           "antrea_agent_conntrack_total_connection_count",
+			Namespace:      metricNamespaceAntrea,
+			Subsystem:      metricSubsystemAgent,
+			Name:           "conntrack_total_connection_count",
 			Help:           "Number of connections in the conntrack table. This metric gets updated at an interval specified by flowPollInterval, a configuration parameter for the Agent.",
 			StabilityLevel: metrics.ALPHA,
 		},
@@ -103,7 +128,9 @@ var (
 
 	TotalAntreaConnectionsInConnTrackTable = metrics.NewGauge(
 		&metrics.GaugeOpts{
-			Name:           "antrea_agent_conntrack_antrea_connection_count",
+			Namespace:      metricNamespaceAntrea,
+			Subsystem:      metricSubsystemAgent,
+			Name:           "conntrack_antrea_connection_count",
 			Help:           "Number of connections in the Antrea ZoneID of the conntrack table. This metric gets updated at an interval specified by flowPollInterval, a configuration parameter for the Agent.",
 			StabilityLevel: metrics.ALPHA,
 		},
@@ -111,7 +138,9 @@ var (
 
 	MaxConnectionsInConnTrackTable = metrics.NewGauge(
 		&metrics.GaugeOpts{
-			Name:           "antrea_agent_conntrack_max_connection_count",
+			Namespace:      metricNamespaceAntrea,
+			Subsystem:      metricSubsystemAgent,
+			Name:           "conntrack_max_connection_count",
 			Help:           "Size of the conntrack table. This metric gets updated at an interval specified by flowPollInterval, a configuration parameter for the Agent.",
 			StabilityLevel: metrics.ALPHA,
 		},
