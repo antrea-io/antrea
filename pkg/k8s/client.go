@@ -26,7 +26,7 @@ import (
 )
 
 // CreateClients creates kube clients from the given config.
-func CreateClients(config componentbaseconfig.ClientConnectionConfiguration) (clientset.Interface, aggregatorclientset.Interface, crdclientset.Interface, error) {
+func CreateClients(config componentbaseconfig.ClientConnectionConfiguration, kubeAPIServerOverride string) (clientset.Interface, aggregatorclientset.Interface, crdclientset.Interface, error) {
 	var kubeConfig *rest.Config
 	var err error
 
@@ -38,6 +38,11 @@ func CreateClients(config componentbaseconfig.ClientConnectionConfiguration) (cl
 			&clientcmd.ClientConfigLoadingRules{ExplicitPath: config.Kubeconfig},
 			&clientcmd.ConfigOverrides{}).ClientConfig()
 	}
+
+	if len(kubeAPIServerOverride) != 0 {
+		kubeConfig.Host = kubeAPIServerOverride
+	}
+
 	if err != nil {
 		return nil, nil, nil, err
 	}
