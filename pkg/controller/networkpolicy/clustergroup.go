@@ -15,6 +15,8 @@
 package networkpolicy
 
 import (
+	"context"
+
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -196,5 +198,35 @@ func (n *NetworkPolicyController) syncInternalGroup(key string) error {
 		klog.V(2).Infof("Updating existing internal Group %s with %d GroupMembers", key, len(memberSet))
 		n.internalGroupStore.Update(updatedGrp)
 	}
+	// Update the ClusterGroup status to Realized as Antrea has recognized the Group and
+	// processed its group members.
+	err := n.updateGroupStatus(grp.Name, corev1a2.GroupRealized)
+	if err != nil {
+		klog.Warningf("Failed to update ClusterGroup %s Status: %s: %v", grp.Name, corev1a2.GroupRealized, err)
+	}
 	return nil
+}
+
+// updateGroupStatus updates the Status subresource for a ClusterGroup under a lock such
+// that concurrent updates to the ClusterGroup Status are not permitted.
+func (n *NetworkPolicyController) updateGroupStatus(name string, phase corev1a2.GroupPhase) error {
+	n.groupStatusMutex.Lock()
+	defer n.groupStatusMutex.Unlock()
+	cg, err := n.cgLister.Get(name)
+	if err != nil {
+		klog.Infof("Didn't find the ClusterGroup %s, skip updating status", name)
+		return nil
+	}
+	status := corev1a2.GroupStatus{
+		Phase: phase,
+	}
+	// If the current status equals to the desired status, no need to update.
+	if cg.Status == status {
+		return nil
+	}
+	klog.V(4).Infof("Updating ClusterGroup %s status to %s", name, phase)
+	toUpdate := cg.DeepCopy()
+	toUpdate.Status = status
+	_, err = n.crdClient.CoreV1alpha2().ClusterGroups().UpdateStatus(context.TODO(), toUpdate, metav1.UpdateOptions{})
+	return err
 }

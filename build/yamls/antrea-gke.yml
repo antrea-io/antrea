@@ -62,7 +62,15 @@ spec:
     singular: group
   scope: Cluster
   versions:
-  - name: v1alpha2
+  - additionalPrinterColumns:
+    - description: The overall summary of realization status of the ClusterGroup.
+      jsonPath: .status.phase
+      name: Realization Status
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha2
     schema:
       openAPIV3Schema:
         properties:
@@ -79,9 +87,16 @@ spec:
               podSelector:
                 x-kubernetes-preserve-unknown-fields: true
             type: object
+          status:
+            properties:
+              phase:
+                type: string
+            type: object
         type: object
     served: true
     storage: true
+    subresources:
+      status: {}
 ---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
@@ -1196,6 +1211,12 @@ rules:
   - get
   - watch
   - list
+- apiGroups:
+  - core.antrea.tanzu.vmware.com
+  resources:
+  - clustergroups/status
+  verbs:
+  - update
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding

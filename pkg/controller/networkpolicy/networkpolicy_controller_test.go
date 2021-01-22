@@ -90,6 +90,7 @@ func newController(objects ...runtime.Object) (*fake.Clientset, *networkPolicyCo
 	addressGroupStore := store.NewAddressGroupStore()
 	internalNetworkPolicyStore := store.NewNetworkPolicyStore()
 	internalGroupStore := store.NewGroupStore()
+	cgInformer := crdInformerFactory.Core().V1alpha2().ClusterGroups()
 	npController := NewNetworkPolicyController(client,
 		crdClient,
 		informerFactory.Core().V1().Pods(),
@@ -99,7 +100,7 @@ func newController(objects ...runtime.Object) (*fake.Clientset, *networkPolicyCo
 		crdInformerFactory.Security().V1alpha1().ClusterNetworkPolicies(),
 		crdInformerFactory.Security().V1alpha1().NetworkPolicies(),
 		crdInformerFactory.Security().V1alpha1().Tiers(),
-		crdInformerFactory.Core().V1alpha2().ClusterGroups(),
+		cgInformer,
 		addressGroupStore,
 		appliedToGroupStore,
 		internalNetworkPolicyStore,
@@ -110,6 +111,8 @@ func newController(objects ...runtime.Object) (*fake.Clientset, *networkPolicyCo
 	npController.cnpListerSynced = alwaysReady
 	npController.tierLister = crdInformerFactory.Security().V1alpha1().Tiers().Lister()
 	npController.tierListerSynced = alwaysReady
+	npController.cgInformer = cgInformer
+	npController.cgLister = cgInformer.Lister()
 	return client, &networkPolicyController{
 		npController,
 		informerFactory.Core().V1().Pods().Informer().GetStore(),

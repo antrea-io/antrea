@@ -79,15 +79,17 @@ type ExternalEntityList struct {
 
 // +genclient
 // +genclient:nonNamespaced
-// +genclient:noStatus
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 type ClusterGroup struct {
 	metav1.TypeMeta `json:",inline"`
 	// Standard metadata of the object.
 	metav1.ObjectMeta `json:"metadata,omitempty"`
+
 	// Desired state of the group.
-	Spec GroupSpec `json:"spec,omitempty"`
+	Spec GroupSpec `json:"spec"`
+	// Most recently observed status of the group.
+	Status GroupStatus `json:"status"`
 }
 
 type GroupSpec struct {
@@ -108,6 +110,23 @@ type GroupSpec struct {
 	// Cannot be set with any other selector.
 	// +optional
 	IPBlock *secv1a1.IPBlock `json:"ipBlock,omitempty"`
+}
+
+// GroupPhase defines the phase in which a Group is.
+type GroupPhase string
+
+// These are the valid values for GroupPhase.
+const (
+	// GroupPending means the Group has been accepted by the system, but it has not been processed by Antrea.
+	GroupPending GroupPhase = "Pending"
+	// GroupRealized means the Group has realized all of its GroupMembers.
+	GroupRealized GroupPhase = "Realized"
+)
+
+// GroupStatus represents information about the status of a Group.
+type GroupStatus struct {
+	// The phase of a Group is a simple, high-level summary of the Group's status.
+	Phase GroupPhase `json:"phase"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
