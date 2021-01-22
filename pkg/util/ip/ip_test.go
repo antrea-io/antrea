@@ -19,6 +19,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
 )
 
 func newCIDR(cidrStr string) *net.IPNet {
@@ -107,4 +109,50 @@ func TestMergeCIDRs(t *testing.T) {
 
 	ipNetList4 = mergeCIDRs(ipNetList4)
 	assert.ElementsMatch(t, correctList4, ipNetList4)
+}
+
+func TestIPNetToNetIPNet(t *testing.T) {
+	tests := []struct {
+		name  string
+		ipNet *v1beta2.IPNet
+		want  *net.IPNet
+	}{
+		{
+			name: "valid IPv4 CIDR",
+			ipNet: &v1beta2.IPNet{
+				IP:           v1beta2.IPAddress(net.ParseIP("10.10.0.0")),
+				PrefixLength: 16,
+			},
+			want: newCIDR("10.10.0.0/16"),
+		},
+		{
+			name: "valid IPv6 CIDR",
+			ipNet: &v1beta2.IPNet{
+				IP:           v1beta2.IPAddress(net.ParseIP("2001:ab03:cd04:55ef::")),
+				PrefixLength: 64,
+			},
+			want: newCIDR("2001:ab03:cd04:55ef::/64"),
+		},
+		{
+			name: "non standard IPv4 CIDR",
+			ipNet: &v1beta2.IPNet{
+				IP:           v1beta2.IPAddress(net.ParseIP("10.10.10.10")),
+				PrefixLength: 16,
+			},
+			want: newCIDR("10.10.0.0/16"),
+		},
+		{
+			name: "non standard IPv6 CIDR",
+			ipNet: &v1beta2.IPNet{
+				IP:           v1beta2.IPAddress(net.ParseIP("fe80::7015:efff:fe9a:146b")),
+				PrefixLength: 64,
+			},
+			want: newCIDR("fe80::/64"),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, IPNetToNetIPNet(tt.ipNet))
+		})
+	}
 }
