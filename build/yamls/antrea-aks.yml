@@ -156,10 +156,6 @@ spec:
                       x-kubernetes-preserve-unknown-fields: true
                   type: object
                 type: array
-              appliedToGroups:
-                items:
-                  type: string
-                type: array
               egress:
                 items:
                   properties:
@@ -178,10 +174,6 @@ spec:
                           podSelector:
                             x-kubernetes-preserve-unknown-fields: true
                         type: object
-                      type: array
-                    appliedToGroups:
-                      items:
-                        type: string
                       type: array
                     enableLogging:
                       type: boolean
@@ -237,10 +229,6 @@ spec:
                           podSelector:
                             x-kubernetes-preserve-unknown-fields: true
                         type: object
-                      type: array
-                    appliedToGroups:
-                      items:
-                        type: string
                       type: array
                     enableLogging:
                       type: boolean

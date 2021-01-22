@@ -324,10 +324,6 @@ spec:
                         x-kubernetes-preserve-unknown-fields: true
                       group:
                         type: string
-                appliedToGroups:
-                  type: array
-                  items:
-                    type: string
                 ingress:
                   type: array
                   items:
@@ -335,10 +331,6 @@ spec:
                     required:
                       - action
                     properties:
-                      appliedToGroups:
-                        type: array
-                        items:
-                          type: string
                       appliedTo:
                         type: array
                         items:
@@ -394,10 +386,6 @@ spec:
                     required:
                       - action
                     properties:
-                      appliedToGroups:
-                        type: array
-                        items:
-                          type: string
                       appliedTo:
                         type: array
                         items:

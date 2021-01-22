@@ -237,11 +237,6 @@ type ClusterNetworkPolicySpec struct {
 	// field within a Rule.
 	// +optional
 	Egress []Rule `json:"egress"`
-	// Set list of ClusterGroup names on which this policy will be applied to.
-	// Cannot be set in conjunction with AppliedToGroups and AppliedTo in each
-	// rule.
-	// +optional
-	AppliedToGroups []string `json:"appliedToGroups,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

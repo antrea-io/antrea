@@ -213,6 +213,8 @@ func (n *NetworkPolicyController) syncInternalGroup(key string) error {
 		klog.Errorf("Failed to update ClusterGroup %s GroupMembersComputed condition to %s: %v", cg.Name, v1.ConditionTrue, err)
 		return err
 	}
+	// Trigger the sync for corresponding groups with the shared key.
+	n.enqueueAppliedToGroup(key)
 	return n.triggerCNPUpdates(cg)
 }
 

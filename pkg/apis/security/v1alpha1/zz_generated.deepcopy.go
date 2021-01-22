@@ -110,11 +110,6 @@ func (in *ClusterNetworkPolicySpec) DeepCopyInto(out *ClusterNetworkPolicySpec) 
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
 	}
-	if in.AppliedToGroups != nil {
-		in, out := &in.AppliedToGroups, &out.AppliedToGroups
-		*out = make([]string, len(*in))
-		copy(*out, *in)
-	}
 	return
 }
 
