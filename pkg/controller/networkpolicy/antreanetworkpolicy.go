@@ -148,7 +148,7 @@ func (n *NetworkPolicyController) processAntreaNetworkPolicy(np *secv1alpha1.Net
 		}
 		rules = append(rules, controlplane.NetworkPolicyRule{
 			Direction:       controlplane.DirectionIn,
-			From:            n.toAntreaPeerForCRD(ingressRule.From, np, controlplane.DirectionIn, namedPortExists),
+			From:            *n.toAntreaPeerForCRD(ingressRule.From, np, controlplane.DirectionIn, namedPortExists),
 			Services:        services,
 			Action:          ingressRule.Action,
 			Priority:        int32(idx),
@@ -169,7 +169,7 @@ func (n *NetworkPolicyController) processAntreaNetworkPolicy(np *secv1alpha1.Net
 		}
 		rules = append(rules, controlplane.NetworkPolicyRule{
 			Direction:       controlplane.DirectionOut,
-			To:              n.toAntreaPeerForCRD(egressRule.To, np, controlplane.DirectionOut, namedPortExists),
+			To:              *n.toAntreaPeerForCRD(egressRule.To, np, controlplane.DirectionOut, namedPortExists),
 			Services:        services,
 			Action:          egressRule.Action,
 			Priority:        int32(idx),

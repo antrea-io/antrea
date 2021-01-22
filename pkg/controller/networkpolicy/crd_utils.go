@@ -71,7 +71,7 @@ func toAntreaIPBlockForCRD(ipBlock *secv1alpha1.IPBlock) (*controlplane.IPBlock,
 }
 
 func (n *NetworkPolicyController) toAntreaPeerForCRD(peers []secv1alpha1.NetworkPolicyPeer,
-	np metav1.Object, dir controlplane.Direction, namedPortExists bool) controlplane.NetworkPolicyPeer {
+	np metav1.Object, dir controlplane.Direction, namedPortExists bool) *controlplane.NetworkPolicyPeer {
 	var addressGroups []string
 	// NetworkPolicyPeer is supposed to match all addresses when it is empty and no clusterGroup is present.
 	// It's treated as an IPBlock "0.0.0.0/0".
@@ -83,12 +83,12 @@ func (n *NetworkPolicyController) toAntreaPeerForCRD(peers []secv1alpha1.Network
 		// For other cases it uses the IPBlock "0.0.0.0/0" to avoid the overhead
 		// of handling member updates of the AddressGroup.
 		if dir == controlplane.DirectionIn || !namedPortExists {
-			return matchAllPeer
+			return &matchAllPeer
 		}
 		allPodsGroupUID := n.createAddressGroupForCRD(matchAllPodsPeerCrd, np)
 		podsPeer := matchAllPeer
 		podsPeer.AddressGroups = append(addressGroups, allPodsGroupUID)
-		return podsPeer
+		return &podsPeer
 	}
 	var ipBlocks []controlplane.IPBlock
 	for _, peer := range peers {
@@ -106,7 +106,7 @@ func (n *NetworkPolicyController) toAntreaPeerForCRD(peers []secv1alpha1.Network
 			normalizedUID, ipBlock := n.processRefCG(peer.Group)
 			if normalizedUID != "" {
 				addressGroups = append(addressGroups, normalizedUID)
-			} else {
+			} else if ipBlock != nil {
 				ipBlocks = append(ipBlocks, *ipBlock)
 			}
 		} else {
@@ -114,7 +114,7 @@ func (n *NetworkPolicyController) toAntreaPeerForCRD(peers []secv1alpha1.Network
 			addressGroups = append(addressGroups, normalizedUID)
 		}
 	}
-	return controlplane.NetworkPolicyPeer{AddressGroups: addressGroups, IPBlocks: ipBlocks}
+	return &controlplane.NetworkPolicyPeer{AddressGroups: addressGroups, IPBlocks: ipBlocks}
 }
 
 // createAddressGroupForCRD creates an AddressGroup object corresponding to a
@@ -145,29 +145,29 @@ func (n *NetworkPolicyController) createAddressGroupForCRD(peer secv1alpha1.Netw
 // otherwise it copies the ClusterGroup CRD contents to an AddressGroup resource and returns
 // its key.
 func (n *NetworkPolicyController) createAddressGroupForClusterGroupCRD(cg *v1alpha2.ClusterGroup) string {
+	key := internalGroupKeyFunc(cg)
+	// Check to see if the AddressGroup already exists
+	_, found, _ := n.addressGroupStore.Get(key)
+	if found {
+		return key
+	}
 	// Find the internal Group corresponding to this ClusterGroup
-	igKey := internalGroupKeyFunc(cg)
-	ig, found, _ := n.internalGroupStore.Get(igKey)
+	ig, found, _ := n.internalGroupStore.Get(key)
 	if !found {
-		klog.V(2).Infof("Internal group %s not found.", igKey)
+		klog.V(2).Infof("Internal group %s not found", key)
 		return ""
 	}
 	intGrp := ig.(*antreatypes.Group)
-	// Check to see if the AddressGroup already exists
-	_, found, _ = n.addressGroupStore.Get(igKey)
-	if found {
-		return igKey
-	}
 	// Create an AddressGroup object for this internal Group.
 	addressGroup := &antreatypes.AddressGroup{
-		UID:          types.UID(igKey),
-		Name:         igKey,
+		UID:          types.UID(key),
+		Name:         key,
 		Selector:     intGrp.Selector,
 		GroupMembers: intGrp.GroupMembers,
 	}
 	klog.V(2).Infof("Creating new AddressGroup %s with selector (%s) corresponding to ClusterGroup CRD", addressGroup.Name, addressGroup.Selector.NormalizedName)
 	n.addressGroupStore.Create(addressGroup)
-	return igKey
+	return key
 }
 
 // getTierPriority retrieves the priority associated with the input Tier name.

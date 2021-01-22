@@ -146,10 +146,9 @@ func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *secv1alpha1.C
 			appliedToGroupNamesForRule = append(appliedToGroupNamesForRule, atGroup)
 			appliedToGroupNamesSet.Insert(atGroup)
 		}
-		iFromPeers := n.toAntreaPeerForCRD(ingressRule.From, cnp, controlplane.DirectionIn, namedPortExists)
 		rules = append(rules, controlplane.NetworkPolicyRule{
 			Direction:       controlplane.DirectionIn,
-			From:            iFromPeers,
+			From:            *n.toAntreaPeerForCRD(ingressRule.From, cnp, controlplane.DirectionIn, namedPortExists),
 			Services:        services,
 			Action:          ingressRule.Action,
 			Priority:        int32(idx),
@@ -168,10 +167,9 @@ func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *secv1alpha1.C
 			appliedToGroupNamesForRule = append(appliedToGroupNamesForRule, atGroup)
 			appliedToGroupNamesSet.Insert(atGroup)
 		}
-		eToPeers := n.toAntreaPeerForCRD(egressRule.To, cnp, controlplane.DirectionOut, namedPortExists)
 		rules = append(rules, controlplane.NetworkPolicyRule{
 			Direction:       controlplane.DirectionOut,
-			To:              eToPeers,
+			To:              *n.toAntreaPeerForCRD(egressRule.To, cnp, controlplane.DirectionOut, namedPortExists),
 			Services:        services,
 			Action:          egressRule.Action,
 			Priority:        int32(idx),
