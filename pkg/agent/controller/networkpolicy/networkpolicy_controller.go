@@ -89,8 +89,10 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 	ofClient openflow.Client,
 	ifaceStore interfacestore.InterfaceStore,
 	nodeName string,
-	podUpdates <-chan v1beta2.PodReference,
+	entityUpdates <-chan v1beta2.EntityReference,
 	antreaPolicyEnabled bool,
+	statusManagerEnabled bool,
+	loggingEnabled bool,
 	asyncRuleDeleteInterval time.Duration) (*Controller, error) {
 	c := &Controller{
 		antreaClientProvider: antreaClientGetter,
@@ -99,8 +101,8 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 		ofClient:             ofClient,
 		antreaPolicyEnabled:  antreaPolicyEnabled,
 	}
-	c.ruleCache = newRuleCache(c.enqueueRule, podUpdates)
-	if antreaPolicyEnabled {
+	c.ruleCache = newRuleCache(c.enqueueRule, entityUpdates)
+	if statusManagerEnabled {
 		c.statusManager = newStatusController(antreaClientGetter, nodeName, c.ruleCache)
 	}
 
@@ -110,7 +112,7 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 	// Wait until appliedToGroupWatcher, addressGroupWatcher and networkPolicyWatcher to receive bookmark event.
 	c.fullSyncGroup.Add(3)
 
-	if c.ofClient != nil && antreaPolicyEnabled {
+	if c.ofClient != nil && loggingEnabled {
 		// Register packetInHandler
 		c.ofClient.RegisterPacketInHandler(uint8(openflow.PacketInReasonNP), "networkpolicy", c)
 		// Initiate logger for Antrea Policy audit logging
@@ -193,7 +195,7 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 				// For the former case, agent must resync the statuses as the controller lost the previous statuses.
 				// For the latter case, agent doesn't need to do anything. However, we are not able to differentiate the
 				// two cases. Anyway there's no harm to do a periodical resync.
-				if c.antreaPolicyEnabled && policies[i].SourceRef.Type != v1beta2.K8sNetworkPolicy {
+				if c.antreaPolicyEnabled && c.statusManager != nil && policies[i].SourceRef.Type != v1beta2.K8sNetworkPolicy {
 					c.statusManager.Resync(policies[i].UID)
 				}
 			}
@@ -395,7 +397,7 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 	klog.Infof("Starting IDAllocator worker to maintain the async rule cache")
 	go c.reconciler.RunIDAllocatorWorker(stopCh)
 
-	if c.antreaPolicyEnabled {
+	if c.antreaPolicyEnabled && c.statusManager != nil {
 		go c.statusManager.Run(stopCh)
 	}
 
@@ -460,7 +462,7 @@ func (c *Controller) syncRule(key string) error {
 		if err := c.reconciler.Forget(key); err != nil {
 			return err
 		}
-		if c.antreaPolicyEnabled {
+		if c.antreaPolicyEnabled && c.statusManager != nil {
 			// We don't know whether this is a rule owned by Antrea Policy, but
 			// harmless to delete it.
 			c.statusManager.DeleteRuleRealization(key)
@@ -476,7 +478,7 @@ func (c *Controller) syncRule(key string) error {
 	if err := c.reconciler.Reconcile(rule); err != nil {
 		return err
 	}
-	if c.antreaPolicyEnabled && rule.SourceRef.Type != v1beta2.K8sNetworkPolicy {
+	if c.antreaPolicyEnabled && c.statusManager != nil && rule.SourceRef.Type != v1beta2.K8sNetworkPolicy {
 		c.statusManager.SetRuleRealization(key, rule.PolicyUID)
 	}
 	return nil
@@ -503,7 +505,7 @@ func (c *Controller) syncRules(keys []string) error {
 	if err := c.reconciler.BatchReconcile(allRules); err != nil {
 		return err
 	}
-	if c.antreaPolicyEnabled {
+	if c.antreaPolicyEnabled && c.statusManager != nil {
 		for _, rule := range allRules {
 			if rule.SourceRef.Type != v1beta2.K8sNetworkPolicy {
 				c.statusManager.SetRuleRealization(rule.ID, rule.PolicyUID)

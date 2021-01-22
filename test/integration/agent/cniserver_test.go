@@ -570,7 +570,7 @@ func newTester() *cmdAddDelTester {
 		"",
 		testNodeConfig,
 		k8sFake.NewSimpleClientset(),
-		make(chan v1beta2.PodReference, 100),
+		make(chan v1beta2.EntityReference, 100),
 		false,
 		nil,
 		tester.networkReadyCh)
@@ -730,7 +730,7 @@ func setupChainTest(
 			"",
 			testNodeConfig,
 			k8sFake.NewSimpleClientset(),
-			make(chan v1beta2.PodReference, 100),
+			make(chan v1beta2.EntityReference, 100),
 			true,
 			routeMock,
 			networkReadyCh)

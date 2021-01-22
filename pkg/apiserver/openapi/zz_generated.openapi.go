@@ -65,6 +65,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.AppliedToGroup":                    schema_pkg_apis_controlplane_v1beta2_AppliedToGroup(ref),
 		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.AppliedToGroupList":                schema_pkg_apis_controlplane_v1beta2_AppliedToGroupList(ref),
 		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.AppliedToGroupPatch":               schema_pkg_apis_controlplane_v1beta2_AppliedToGroupPatch(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.EntityReference":                   schema_pkg_apis_controlplane_v1beta2_EntityReference(ref),
 		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.ExternalEntityReference":           schema_pkg_apis_controlplane_v1beta2_ExternalEntityReference(ref),
 		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.Group":                             schema_pkg_apis_controlplane_v1beta2_Group(ref),
 		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.GroupList":                         schema_pkg_apis_controlplane_v1beta2_GroupList(ref),
@@ -2145,6 +2146,33 @@ func schema_pkg_apis_controlplane_v1beta2_AppliedToGroupPatch(ref common.Referen
 		},
 		Dependencies: []string{
 			"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.GroupMember", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+	}
+}
+
+func schema_pkg_apis_controlplane_v1beta2_EntityReference(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "EntityReference represents a reference to either a Pod or an ExternalEntity.\n when controlplane version is bumped?",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"pod": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Pod maintains the reference to the Pod.",
+							Ref:         ref("github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.PodReference"),
+						},
+					},
+					"externalEntity": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ExternalEntity maintains the reference to the ExternalEntity.",
+							Ref:         ref("github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.ExternalEntityReference"),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.ExternalEntityReference", "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.PodReference"},
 	}
 }
 

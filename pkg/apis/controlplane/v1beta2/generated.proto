@@ -86,6 +86,17 @@ message AppliedToGroupPatch {
   repeated GroupMember removedGroupMembers = 3;
 }
 
+// EntityReference represents a reference to either a Pod or an ExternalEntity.
+// TODO: replace Pod and ExternalEntity in GroupMember to embed EntityReference
+//  when controlplane version is bumped?
+message EntityReference {
+  // Pod maintains the reference to the Pod.
+  optional PodReference pod = 1;
+
+  // ExternalEntity maintains the reference to the ExternalEntity.
+  optional ExternalEntityReference externalEntity = 2;
+}
+
 // ExternalEntityReference represents a ExternalEntity Reference.
 message ExternalEntityReference {
   // The name of this ExternalEntity.

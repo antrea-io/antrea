@@ -258,9 +258,9 @@ func TestRuleCacheAddAddressGroup(t *testing.T) {
 	}
 }
 
-func newFakeRuleCache() (*ruleCache, *dirtyRuleRecorder, chan v1beta2.PodReference) {
+func newFakeRuleCache() (*ruleCache, *dirtyRuleRecorder, chan v1beta2.EntityReference) {
 	recorder := newDirtyRuleRecorder()
-	ch := make(chan v1beta2.PodReference, 100)
+	ch := make(chan v1beta2.EntityReference, 100)
 	c := newRuleCache(recorder.Record, ch)
 	return c, recorder, ch
 }
@@ -336,14 +336,14 @@ func TestRuleCacheReplaceAppliedToGroups(t *testing.T) {
 			for _, rule := range tt.rules {
 				c.rules.Add(rule)
 			}
-			c.memberSetByGroup = tt.preExistingGroups
+			c.appliedToSetByGroup = tt.preExistingGroups
 			c.ReplaceAppliedToGroups(tt.args)
 
 			if !recorder.rules.Equal(tt.expectedDirtyRules) {
 				t.Errorf("Got dirty rules %v, expected %v", recorder.rules, tt.expectedDirtyRules)
 			}
-			if !reflect.DeepEqual(c.memberSetByGroup, tt.expectedGroups) {
-				t.Errorf("Got memberSetByGroup %#v, expected %#v", c.memberSetByGroup, tt.expectedGroups)
+			if !reflect.DeepEqual(c.appliedToSetByGroup, tt.expectedGroups) {
+				t.Errorf("Got appliedToSetByGroup %#v, expected %#v", c.appliedToSetByGroup, tt.expectedGroups)
 			}
 		})
 	}
@@ -575,7 +575,7 @@ func TestRuleCacheAddAppliedToGroup(t *testing.T) {
 			if !recorder.rules.Equal(tt.expectedDirtyRules) {
 				t.Errorf("Got dirty rules %v, expected %v", recorder.rules, tt.expectedDirtyRules)
 			}
-			actualPods, exists := c.memberSetByGroup[tt.args.Name]
+			actualPods, exists := c.appliedToSetByGroup[tt.args.Name]
 			if !exists {
 				t.Fatalf("AppliedToGroup %s not found", tt.args.Name)
 			}
@@ -821,8 +821,8 @@ func TestRuleCacheGetCompletedRule(t *testing.T) {
 			c, _, _ := newFakeRuleCache()
 			c.addressSetByGroup["addressGroup1"] = addressGroup1
 			c.addressSetByGroup["addressGroup2"] = addressGroup2
-			c.memberSetByGroup["appliedToGroup1"] = appliedToGroup1
-			c.memberSetByGroup["appliedToGroup2"] = appliedToGroup2
+			c.appliedToSetByGroup["appliedToGroup1"] = appliedToGroup1
+			c.appliedToSetByGroup["appliedToGroup2"] = appliedToGroup2
 			c.rules.Add(rule1)
 			c.rules.Add(rule2)
 			c.rules.Add(rule3)
@@ -901,7 +901,7 @@ func TestRuleCachePatchAppliedToGroup(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			c, recorder, _ := newFakeRuleCache()
-			c.memberSetByGroup = tt.podSetByGroup
+			c.appliedToSetByGroup = tt.podSetByGroup
 			for _, rule := range tt.rules {
 				c.rules.Add(rule)
 			}
@@ -912,7 +912,7 @@ func TestRuleCachePatchAppliedToGroup(t *testing.T) {
 			if !recorder.rules.Equal(tt.expectedDirtyRules) {
 				t.Errorf("Got dirty rules %v, expected %v", recorder.rules, tt.expectedDirtyRules)
 			}
-			actualPods, _ := c.memberSetByGroup[tt.args.Name]
+			actualPods, _ := c.appliedToSetByGroup[tt.args.Name]
 			assert.ElementsMatch(t, tt.expectedPods, actualPods.Items(), "stored Pods not equal")
 		})
 	}
@@ -1098,21 +1098,21 @@ func TestRuleCacheProcessPodUpdates(t *testing.T) {
 		name               string
 		rules              []*rule
 		podSetByGroup      map[string]v1beta2.GroupMemberSet
-		podUpdate          v1beta2.PodReference
+		podUpdate          v1beta2.EntityReference
 		expectedDirtyRules sets.String
 	}{
 		{
 			"non-matching-group",
 			nil,
 			nil,
-			v1beta2.PodReference{Name: "foo", Namespace: "bar"},
+			v1beta2.EntityReference{Pod: &v1beta2.PodReference{Name: "foo", Namespace: "bar"}},
 			sets.NewString(),
 		},
 		{
 			"matching-one-group-affecting-one-rule",
 			[]*rule{rule1, rule2},
 			map[string]v1beta2.GroupMemberSet{"group2": v1beta2.NewGroupMemberSet(newAppliedToGroupMember("pod1", "ns1"))},
-			v1beta2.PodReference{Name: "pod1", Namespace: "ns1"},
+			v1beta2.EntityReference{Pod: &v1beta2.PodReference{Name: "pod1", Namespace: "ns1"}},
 			sets.NewString("rule2"),
 		},
 		{
@@ -1122,14 +1122,14 @@ func TestRuleCacheProcessPodUpdates(t *testing.T) {
 				"group1": v1beta2.NewGroupMemberSet(newAppliedToGroupMember("pod1", "ns1")),
 				"group2": v1beta2.NewGroupMemberSet(newAppliedToGroupMember("pod1", "ns1")),
 			},
-			v1beta2.PodReference{Name: "pod1", Namespace: "ns1"},
+			v1beta2.EntityReference{Pod: &v1beta2.PodReference{Name: "pod1", Namespace: "ns1"}},
 			sets.NewString("rule1", "rule2"),
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			c, recorder, ch := newFakeRuleCache()
-			c.memberSetByGroup = tt.podSetByGroup
+			c.appliedToSetByGroup = tt.podSetByGroup
 			for _, rule := range tt.rules {
 				c.rules.Add(rule)
 			}

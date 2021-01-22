@@ -150,22 +150,29 @@ func run(o *Options) error {
 		networkConfig,
 		nodeConfig)
 
-	// podUpdates is a channel for receiving Pod updates from CNIServer and
+	// entityUpdates is a channel for receiving entity updates from CNIServer and
 	// notifying NetworkPolicyController to reconcile rules related to the
-	// updated Pods.
-	podUpdates := make(chan v1beta2.PodReference, 100)
+	// updated entities.
+	entityUpdates := make(chan v1beta2.EntityReference, 100)
 	// We set flow poll interval as the time interval for rule deletion in the async
 	// rule cache, which is implemented as part of the idAllocator. This is to preserve
 	// the rule info for populating NetworkPolicy fields in the Flow Exporter even
 	// after rule deletion.
 	asyncRuleDeleteInterval := o.pollInterval
+	antreaPolicyEnabled := features.DefaultFeatureGate.Enabled(features.AntreaPolicy)
+	// In Antrea agent, status manager and audit logging will automatically be enabled
+	// if AntreaPolicy feature is enabled.
+	statusManagerEnabled := antreaPolicyEnabled
+	loggingEnabled := antreaPolicyEnabled
 	networkPolicyController, err := networkpolicy.NewNetworkPolicyController(
 		antreaClientProvider,
 		ofClient,
 		ifaceStore,
 		nodeConfig.Name,
-		podUpdates,
-		features.DefaultFeatureGate.Enabled(features.AntreaPolicy),
+		entityUpdates,
+		antreaPolicyEnabled,
+		statusManagerEnabled,
+		loggingEnabled,
 		asyncRuleDeleteInterval)
 	if err != nil {
 		return fmt.Errorf("error creating new NetworkPolicy controller: %v", err)
@@ -203,7 +210,7 @@ func run(o *Options) error {
 		o.config.HostProcPathPrefix,
 		nodeConfig,
 		k8sClient,
-		podUpdates,
+		entityUpdates,
 		isChaining,
 		routeClient,
 		networkReadyCh)

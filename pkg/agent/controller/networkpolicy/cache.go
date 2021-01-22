@@ -130,10 +130,10 @@ func (r *CompletedRule) isAntreaNetworkPolicyRule() bool {
 // ruleCache caches Antrea AddressGroups, AppliedToGroups and NetworkPolicies,
 // can construct complete rules that can be used by reconciler to enforce.
 type ruleCache struct {
-	podSetLock sync.RWMutex
-	// memberSetByGroup stores the AppliedToGroup members.
-	// It is a mapping from group name to a set of Pod members.
-	memberSetByGroup map[string]v1beta.GroupMemberSet
+	appliedToSetLock sync.RWMutex
+	// appliedToSetByGroup stores the AppliedToGroup members.
+	// It is a mapping from group name to a set of GroupMembers.
+	appliedToSetByGroup map[string]v1beta.GroupMemberSet
 
 	addressSetLock sync.RWMutex
 	// addressSetByGroup stores the AddressGroup members.
@@ -151,8 +151,8 @@ type ruleCache struct {
 	// dirtyRuleHandler is a callback that is run upon finding a rule out-of-sync.
 	dirtyRuleHandler func(string)
 
-	// podUpdates is a channel for receiving Pod updates from CNIServer.
-	podUpdates <-chan v1beta.PodReference
+	// entityUpdates is a channel for receiving Pod updates from CNIServer.
+	entityUpdates <-chan v1beta.EntityReference
 }
 
 func (c *ruleCache) getNetworkPolicies(npFilter *querier.NetworkPolicyQueryFilter) []v1beta.NetworkPolicy {
@@ -190,13 +190,13 @@ func (c *ruleCache) getNetworkPolicy(uid string) *v1beta.NetworkPolicy {
 func (c *ruleCache) getAppliedNetworkPolicies(pod, namespace string, npFilter *querier.NetworkPolicyQueryFilter) []v1beta.NetworkPolicy {
 	var groups []string
 	memberPod := &v1beta.GroupMember{Pod: &v1beta.PodReference{Name: pod, Namespace: namespace}}
-	c.podSetLock.RLock()
-	for group, podSet := range c.memberSetByGroup {
-		if podSet.Has(memberPod) {
+	c.appliedToSetLock.RLock()
+	for group, memberSet := range c.appliedToSetByGroup {
+		if memberSet.Has(memberPod) {
 			groups = append(groups, group)
 		}
 	}
-	c.podSetLock.RUnlock()
+	c.appliedToSetLock.RUnlock()
 
 	var policies []v1beta.NetworkPolicy
 	policyKeys := sets.NewString()
@@ -260,16 +260,16 @@ func (c *ruleCache) GetAddressGroups() []v1beta.AddressGroup {
 
 func (c *ruleCache) GetAppliedToGroups() []v1beta.AppliedToGroup {
 	var ret []v1beta.AppliedToGroup
-	c.podSetLock.RLock()
-	defer c.podSetLock.RUnlock()
-	for k, v := range c.memberSetByGroup {
-		var pods []v1beta.GroupMember
-		for _, pod := range v.Items() {
-			pods = append(pods, *pod)
+	c.appliedToSetLock.RLock()
+	defer c.appliedToSetLock.RUnlock()
+	for k, v := range c.appliedToSetByGroup {
+		var groupMembers []v1beta.GroupMember
+		for _, member := range v.Items() {
+			groupMembers = append(groupMembers, *member)
 		}
 		ret = append(ret, v1beta.AppliedToGroup{
 			ObjectMeta:   metav1.ObjectMeta{Name: k},
-			GroupMembers: pods,
+			GroupMembers: groupMembers,
 		})
 	}
 	return ret
@@ -306,40 +306,43 @@ func policyIndexFunc(obj interface{}) ([]string, error) {
 }
 
 // newRuleCache returns a new *ruleCache.
-func newRuleCache(dirtyRuleHandler func(string), podUpdate <-chan v1beta.PodReference) *ruleCache {
+func newRuleCache(dirtyRuleHandler func(string), podUpdate <-chan v1beta.EntityReference) *ruleCache {
 	rules := cache.NewIndexer(
 		ruleKeyFunc,
 		cache.Indexers{addressGroupIndex: addressGroupIndexFunc, appliedToGroupIndex: appliedToGroupIndexFunc, policyIndex: policyIndexFunc},
 	)
 	cache := &ruleCache{
-		memberSetByGroup:  make(map[string]v1beta.GroupMemberSet),
-		addressSetByGroup: make(map[string]v1beta.GroupMemberSet),
-		policyMap:         make(map[string]*v1beta.NetworkPolicy),
-		rules:             rules,
-		dirtyRuleHandler:  dirtyRuleHandler,
-		podUpdates:        podUpdate,
+		appliedToSetByGroup: make(map[string]v1beta.GroupMemberSet),
+		addressSetByGroup:   make(map[string]v1beta.GroupMemberSet),
+		policyMap:           make(map[string]*v1beta.NetworkPolicy),
+		rules:               rules,
+		dirtyRuleHandler:    dirtyRuleHandler,
+		entityUpdates:       podUpdate,
 	}
-	go cache.processPodUpdates()
+	go cache.processEntityUpdates()
 	return cache
 }
 
-// processPodUpdates is an infinite loop that takes Pod update events from the
+// processEntityUpdates is an infinite loop that takes Pod update events from the
 // channel, finds out AppliedToGroups that contains this Pod and trigger
 // reconciling of related rules.
 // It can enforce NetworkPolicies to newly added Pods right after CNI ADD is
 // done if antrea-controller has computed the Pods' policies and propagated
 // them to this Node by their labels and NodeName, instead of waiting for their
 // IPs are reported to kube-apiserver and processed by antrea-controller.
-func (c *ruleCache) processPodUpdates() {
+func (c *ruleCache) processEntityUpdates() {
 	for {
 		select {
-		case pod := <-c.podUpdates:
+		case entity := <-c.entityUpdates:
 			func() {
-				memberPod := &v1beta.GroupMember{Pod: &pod}
-				c.podSetLock.RLock()
-				defer c.podSetLock.RUnlock()
-				for group, memberSet := range c.memberSetByGroup {
-					if memberSet.Has(memberPod) {
+				member := &v1beta.GroupMember{
+					Pod:            entity.Pod,
+					ExternalEntity: entity.ExternalEntity,
+				}
+				c.appliedToSetLock.RLock()
+				defer c.appliedToSetLock.RUnlock()
+				for group, memberSet := range c.appliedToSetByGroup {
+					if memberSet.Has(member) {
 						c.onAppliedToGroupUpdate(group)
 					}
 				}
@@ -443,21 +446,21 @@ func (c *ruleCache) DeleteAddressGroup(group *v1beta.AddressGroup) error {
 
 // GetAppliedToGroupNum gets the number of AppliedToGroup.
 func (c *ruleCache) GetAppliedToGroupNum() int {
-	c.podSetLock.RLock()
-	defer c.podSetLock.RUnlock()
+	c.appliedToSetLock.RLock()
+	defer c.appliedToSetLock.RUnlock()
 
-	return len(c.memberSetByGroup)
+	return len(c.appliedToSetByGroup)
 }
 
 // ReplaceAppliedToGroups atomically adds the given groups to the cache and deletes
 // the pre-existing groups that are not in the given groups from the cache.
 // It makes the cache in sync with the apiserver when restarting a watch.
 func (c *ruleCache) ReplaceAppliedToGroups(groups []*v1beta.AppliedToGroup) {
-	c.podSetLock.Lock()
-	defer c.podSetLock.Unlock()
+	c.appliedToSetLock.Lock()
+	defer c.appliedToSetLock.Unlock()
 
-	oldGroupKeys := make(sets.String, len(c.memberSetByGroup))
-	for key := range c.memberSetByGroup {
+	oldGroupKeys := make(sets.String, len(c.appliedToSetByGroup))
+	for key := range c.appliedToSetByGroup {
 		oldGroupKeys.Insert(key)
 	}
 
@@ -467,7 +470,7 @@ func (c *ruleCache) ReplaceAppliedToGroups(groups []*v1beta.AppliedToGroup) {
 	}
 
 	for key := range oldGroupKeys {
-		delete(c.memberSetByGroup, key)
+		delete(c.appliedToSetByGroup, key)
 	}
 	return
 }
@@ -477,8 +480,8 @@ func (c *ruleCache) ReplaceAppliedToGroups(groups []*v1beta.AppliedToGroup) {
 // It's safe to add an AppliedToGroup multiple times as it only overrides the
 // map, this could happen when the watcher reconnects to the Apiserver.
 func (c *ruleCache) AddAppliedToGroup(group *v1beta.AppliedToGroup) error {
-	c.podSetLock.Lock()
-	defer c.podSetLock.Unlock()
+	c.appliedToSetLock.Lock()
+	defer c.appliedToSetLock.Unlock()
 
 	return c.addAppliedToGroupLocked(group)
 }
@@ -488,11 +491,11 @@ func (c *ruleCache) addAppliedToGroupLocked(group *v1beta.AppliedToGroup) error 
 	for i := range group.GroupMembers {
 		memberSet.Insert(&group.GroupMembers[i])
 	}
-	oldPodSet, exists := c.memberSetByGroup[group.Name]
-	if exists && oldPodSet.Equal(memberSet) {
+	oldMemberSet, exists := c.appliedToSetByGroup[group.Name]
+	if exists && oldMemberSet.Equal(memberSet) {
 		return nil
 	}
-	c.memberSetByGroup[group.Name] = memberSet
+	c.appliedToSetByGroup[group.Name] = memberSet
 	c.onAppliedToGroupUpdate(group.Name)
 	return nil
 }
@@ -500,18 +503,18 @@ func (c *ruleCache) addAppliedToGroupLocked(group *v1beta.AppliedToGroup) error 
 // PatchAppliedToGroup updates a cached *v1beta.AppliedToGroupPatch.
 // The rules referencing it will be regarded as dirty.
 func (c *ruleCache) PatchAppliedToGroup(patch *v1beta.AppliedToGroupPatch) error {
-	c.podSetLock.Lock()
-	defer c.podSetLock.Unlock()
+	c.appliedToSetLock.Lock()
+	defer c.appliedToSetLock.Unlock()
 
-	podSet, exists := c.memberSetByGroup[patch.Name]
+	memberSet, exists := c.appliedToSetByGroup[patch.Name]
 	if !exists {
 		return fmt.Errorf("AppliedToGroup %v doesn't exist in cache, can't be patched", patch.Name)
 	}
 	for i := range patch.AddedGroupMembers {
-		podSet.Insert(&patch.AddedGroupMembers[i])
+		memberSet.Insert(&patch.AddedGroupMembers[i])
 	}
 	for i := range patch.RemovedGroupMembers {
-		podSet.Delete(&patch.RemovedGroupMembers[i])
+		memberSet.Delete(&patch.RemovedGroupMembers[i])
 	}
 	c.onAppliedToGroupUpdate(patch.Name)
 	return nil
@@ -521,10 +524,10 @@ func (c *ruleCache) PatchAppliedToGroup(patch *v1beta.AppliedToGroupPatch) error
 // It should only happen when a group is no longer referenced by any rule, so
 // no need to mark dirty rules.
 func (c *ruleCache) DeleteAppliedToGroup(group *v1beta.AppliedToGroup) error {
-	c.podSetLock.Lock()
-	defer c.podSetLock.Unlock()
+	c.appliedToSetLock.Lock()
+	defer c.appliedToSetLock.Unlock()
 
-	delete(c.memberSetByGroup, group.Name)
+	delete(c.appliedToSetByGroup, group.Name)
 	return nil
 }
 
@@ -767,12 +770,12 @@ func (c *ruleCache) unionAddressGroups(groupNames []string) (v1beta.GroupMemberS
 // If any group is not found, nil and false will be returned to indicate the
 // set is not complete yet.
 func (c *ruleCache) unionAppliedToGroups(groupNames []string) (v1beta.GroupMemberSet, bool) {
-	c.podSetLock.RLock()
-	defer c.podSetLock.RUnlock()
+	c.appliedToSetLock.RLock()
+	defer c.appliedToSetLock.RUnlock()
 
 	set := v1beta.NewGroupMemberSet()
 	for _, groupName := range groupNames {
-		curSet, exists := c.memberSetByGroup[groupName]
+		curSet, exists := c.appliedToSetByGroup[groupName]
 		if !exists {
 			klog.V(2).Infof("AppliedToGroup %v was not found", groupName)
 			return nil, false

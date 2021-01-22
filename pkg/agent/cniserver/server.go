@@ -106,10 +106,10 @@ type CNIServer struct {
 	kubeClient           clientset.Interface
 	containerAccess      *containerAccessArbitrator
 	podConfigurator      *podConfigurator
-	// podUpdates is a channel for notifying Pod updates to other components, i.e NetworkPolicyController.
-	podUpdates  chan<- v1beta2.PodReference
-	isChaining  bool
-	routeClient route.Interface
+	// entityUpdates is a channel for notifying Pod updates to other components, i.e NetworkPolicyController.
+	entityUpdates chan<- v1beta2.EntityReference
+	isChaining    bool
+	routeClient   route.Interface
 	// networkReadyCh notifies that the network is ready so new Pods can be created. Therefore, CmdAdd waits for it.
 	networkReadyCh <-chan struct{}
 }
@@ -454,7 +454,9 @@ func (s *CNIServer) CmdAdd(ctx context.Context, request *cnipb.CniCmdRequest) (*
 	}
 
 	// Notify the Pod update event to required components.
-	s.podUpdates <- v1beta2.PodReference{Name: podName, Namespace: podNamespace}
+	s.entityUpdates <- v1beta2.EntityReference{
+		Pod: &v1beta2.PodReference{Name: podName, Namespace: podNamespace},
+	}
 
 	var resultBytes bytes.Buffer
 	_ = result.PrintTo(&resultBytes)
@@ -533,7 +535,7 @@ func New(
 	cniSocket, hostProcPathPrefix string,
 	nodeConfig *config.NodeConfig,
 	kubeClient clientset.Interface,
-	podUpdates chan<- v1beta2.PodReference,
+	entityUpdates chan<- v1beta2.EntityReference,
 	isChaining bool,
 	routeClient route.Interface,
 	networkReadyCh <-chan struct{},
@@ -546,7 +548,7 @@ func New(
 		hostProcPathPrefix:   hostProcPathPrefix,
 		kubeClient:           kubeClient,
 		containerAccess:      newContainerAccessArbitrator(),
-		podUpdates:           podUpdates,
+		entityUpdates:        entityUpdates,
 		isChaining:           isChaining,
 		routeClient:          routeClient,
 		networkReadyCh:       networkReadyCh,
@@ -613,7 +615,9 @@ func (s *CNIServer) interceptAdd(cniConfig *CNIConfig) (*cnipb.CniCmdResponse, e
 		return &cnipb.CniCmdResponse{CniResult: result}, fmt.Errorf("failed to connect container %s to ovs: %w", cniConfig.ContainerId, err)
 	}
 	// Notify the Pod update event to required components.
-	s.podUpdates <- v1beta2.PodReference{Name: podName, Namespace: podNamespace}
+	s.entityUpdates <- v1beta2.EntityReference{
+		Pod: &v1beta2.PodReference{Name: podName, Namespace: podNamespace},
+	}
 
 	return &cnipb.CniCmdResponse{CniResult: cniConfig.NetworkConfiguration}, nil
 }
