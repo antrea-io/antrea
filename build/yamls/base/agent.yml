@@ -57,11 +57,6 @@ spec:
           - name: host-lib-modules
             mountPath: /lib/modules
             readOnly: true
-          # depmod is required by modprobe when the Node OS is different from
-          # that of the Antrea Docker image.
-          - name: host-depmod
-            mountPath: /sbin/depmod
-            readOnly: true
       containers:
         - name: antrea-agent
           image: antrea
@@ -208,9 +203,6 @@ spec:
         - name: host-lib-modules
           hostPath:
             path: /lib/modules
-        - name: host-depmod
-          hostPath:
-            path: /sbin/depmod
         - name: xtables-lock
           hostPath:
             path: /run/xtables.lock
