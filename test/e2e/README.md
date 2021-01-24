@@ -40,10 +40,16 @@ You can install all the dependencies with [brew](https://brew.sh/):
 If an action is required on your part, `brew` will let you know in its log
 messages.
 
+##### Fork and Clone Antrea
+* Fork https://github.com/vmware-tanzu/antrea on github
+* mkdir -p antrea/github.com/antrea; cd $_
+* git clone https://github.com/<your-name>/antrea
+
 #### Managing the cluster
 
 Use the following Bash scripts to manage the Kubernetes Nodes with Vagrant:
 
+* cd test/e2e
 * `./infra/vagrant/provision.sh`: create the required VMs and provision them
 * `./infra/vagrant/push_antrea.sh`: load Antrea Docker image to each Node, along
   with the Antrea deployment YAML
