@@ -1792,9 +1792,6 @@ spec:
         - mountPath: /lib/modules
           name: host-lib-modules
           readOnly: true
-        - mountPath: /sbin/depmod
-          name: host-depmod
-          readOnly: true
       nodeSelector:
         kubernetes.io/os: linux
       priorityClassName: system-node-critical
@@ -1833,9 +1830,6 @@ spec:
       - hostPath:
           path: /lib/modules
         name: host-lib-modules
-      - hostPath:
-          path: /sbin/depmod
-        name: host-depmod
       - hostPath:
           path: /run/xtables.lock
           type: FileOrCreate
