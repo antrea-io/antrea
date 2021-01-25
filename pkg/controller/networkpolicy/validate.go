@@ -464,11 +464,14 @@ func (a *antreaPolicyValidator) validateAppliedTo(ingress, egress []secv1alpha1.
 func (a *antreaPolicyValidator) validatePeers(ingress, egress []secv1alpha1.Rule) (string, bool) {
 	checkPeers := func(peers []secv1alpha1.NetworkPolicyPeer) (string, bool) {
 		for _, peer := range peers {
-			if peer.Group != "" && (peer.PodSelector != nil || peer.IPBlock != nil || peer.NamespaceSelector != nil) {
+			if peer.Group == "" {
+				continue
+			}
+			if peer.PodSelector != nil || peer.IPBlock != nil || peer.NamespaceSelector != nil {
 				return "Group cannot be set with other peers in rules", false
 			}
 			// Ensure that group exists
-			if peer.Group != "" && a.clusterGroupExists(peer.Group) {
+			if !a.clusterGroupExists(peer.Group) {
 				return fmt.Sprintf("ClusterGroup %s referenced in rules does not exist", peer.Group), false
 			}
 		}
@@ -528,6 +531,10 @@ func (a *antreaPolicyValidator) updateValidate(curObj, oldObj interface{}, userI
 	}
 	if ruleNameUnique := a.validateRuleName(ingress, egress); !ruleNameUnique {
 		return fmt.Sprint("rules names must be unique within the policy"), false
+	}
+	reason, allowed = a.validatePeers(ingress, egress)
+	if !allowed {
+		return reason, allowed
 	}
 	if err := a.validatePort(ingress, egress); err != nil {
 		return err.Error(), false

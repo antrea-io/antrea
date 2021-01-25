@@ -226,8 +226,6 @@ func (n *NetworkPolicyController) syncInternalGroup(key string) error {
 				Selector:     updatedGrp.Selector,
 				GroupMembers: updatedGrp.GroupMembers,
 			}
-			addrGroup.Selector = updatedGrp.Selector
-			addrGroup.GroupMembers = updatedGrp.GroupMembers
 			n.addressGroupStore.Update(updatedAddrGroup)
 		}
 	}
