@@ -25,12 +25,17 @@ import (
 	"time"
 
 	"github.com/Microsoft/hcsshim"
+	"github.com/Microsoft/hcsshim/hcn"
 	cnitypes "github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types/current"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog"
 
+	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	"github.com/vmware-tanzu/antrea/pkg/agent/util"
 	cnipb "github.com/vmware-tanzu/antrea/pkg/apis/cni/v1beta1"
+	"github.com/vmware-tanzu/antrea/pkg/k8s"
+	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
 )
 
 const (
@@ -40,6 +45,7 @@ const (
 type ifConfigurator struct {
 	hnsNetwork *hcsshim.HNSNetwork
 	epCache    *sync.Map
+	ifCache    *sync.Map
 }
 
 func newInterfaceConfigurator(ovsDataPathType string, isOvsHardwareOffloadEnabled bool) (*ifConfigurator, error) {
@@ -124,7 +130,7 @@ func (ic *ifConfigurator) configureContainerLink(
 			return fmt.Errorf("failed to find HNSEndpoint: %s", epName)
 		}
 		// Only create HNS Endpoint for infra container.
-		ep, err := ic.createContainerLink(epName, result)
+		ep, err := ic.createContainerLink(epName, result, containerID, podName, podNameSpace)
 		if err != nil {
 			return err
 		}
@@ -155,7 +161,7 @@ func (ic *ifConfigurator) configureContainerLink(
 }
 
 // createContainerLink creates HNSEndpoint using the IP configuration in the IPAM result.
-func (ic *ifConfigurator) createContainerLink(endpointName string, result *current.Result) (hostLink *hcsshim.HNSEndpoint, err error) {
+func (ic *ifConfigurator) createContainerLink(endpointName string, result *current.Result, containerID, podName, podNamespace string) (hostLink *hcsshim.HNSEndpoint, err error) {
 	// Create a new Endpoint if not found.
 	if err := ic.ensureHNSNetwork(); err != nil {
 		return nil, err
@@ -164,13 +170,31 @@ func (ic *ifConfigurator) createContainerLink(endpointName string, result *curre
 	if err != nil {
 		return nil, err
 	}
+	containerIPStr, err := parseContainerIPs(result.IPs)
+	if err != nil {
+		klog.Errorf("Failed to find container %s IP", containerID)
+	}
+	ifaceConfig := interfacestore.NewContainerInterface(
+		endpointName,
+		containerID,
+		podName,
+		podNamespace,
+		nil,
+		containerIPStr)
+	ovsAttachInfoData := BuildOVSPortExternalIDs(ifaceConfig)
+	ovsAttachInfo := make(map[string]string)
+	for k, v := range ovsAttachInfoData {
+		valueStr, _ := v.(string)
+		ovsAttachInfo[k] = valueStr
+	}
 	epRequest := &hcsshim.HNSEndpoint{
-		Name:           endpointName,
-		VirtualNetwork: ic.hnsNetwork.Id,
-		DNSServerList:  strings.Join(result.DNS.Nameservers, ","),
-		DNSSuffix:      strings.Join(result.DNS.Search, ","),
-		GatewayAddress: containerIP.Gateway.String(),
-		IPAddress:      containerIP.Address.IP,
+		Name:             endpointName,
+		VirtualNetwork:   ic.hnsNetwork.Id,
+		DNSServerList:    strings.Join(result.DNS.Nameservers, ","),
+		DNSSuffix:        strings.Join(result.DNS.Search, ","),
+		GatewayAddress:   containerIP.Gateway.String(),
+		IPAddress:        containerIP.Address.IP,
+		AdditionalParams: ovsAttachInfo,
 	}
 	hnsEP, err := epRequest.Create()
 	if err != nil {
@@ -181,26 +205,84 @@ func (ic *ifConfigurator) createContainerLink(endpointName string, result *curre
 	return hnsEP, nil
 }
 
+func (ic *ifConfigurator) getInterfacesConfigByPods(pods sets.String) map[string]*interfacestore.InterfaceConfig {
+	interfaces := make(map[string]*interfacestore.InterfaceConfig)
+	ic.epCache.Range(func(key, value interface{}) bool {
+		ep, _ := value.(*hcsshim.HNSEndpoint)
+		ifConfig := parseOVSPortInterfaceConfigFromHNSEndpoint(ep)
+		if ifConfig == nil {
+			return true
+		}
+		namespacedName := k8s.NamespacedName(ifConfig.PodNamespace, ifConfig.PodName)
+		if pods.Has(namespacedName) {
+			interfaces[namespacedName] = ifConfig
+		}
+		return true
+	})
+	return interfaces
+}
+
+func parseOVSPortInterfaceConfigFromHNSEndpoint(ep *hcsshim.HNSEndpoint) *interfacestore.InterfaceConfig {
+	portData := &ovsconfig.OVSPortData{
+		Name:        ep.Name,
+		ExternalIDs: ep.AdditionalParams,
+	}
+	ifaceConfig := ParseOVSPortInterfaceConfig(portData, nil)
+	if ifaceConfig != nil {
+		var err error
+		ifaceConfig.MAC, err = net.ParseMAC(ep.MacAddress)
+		if err != nil {
+			klog.Errorf("Failed to parse MAC address from OVS external config %s: %v", ep.MacAddress, err)
+			return nil
+		}
+	}
+	return ifaceConfig
+}
+
 // attachContainerLink takes the result of the IPAM plugin, and adds the appropriate IP
 // addresses and routes to the interface. It then sends a gratuitous ARP to the network.
 func attachContainerLink(ep *hcsshim.HNSEndpoint, containerID, sandbox, containerIFDev string) (*current.Interface, error) {
 	var attached bool
-	attached, err := ep.IsAttached(containerID)
-	if err != nil {
-		return nil, err
+	var err error
+	var hcnEp *hcn.HostComputeEndpoint
+	if sandbox == "none" || strings.Contains(sandbox, ":") {
+		attached, err = ep.IsAttached(containerID)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		if hcnEp, err = hcn.GetEndpointByID(ep.Id); err != nil {
+			return nil, err
+		}
+		attachedEpIds, err := hcn.GetNamespaceEndpointIds(sandbox)
+		if err != nil {
+			return nil, err
+		}
+		for _, existingEP := range attachedEpIds {
+			if existingEP == hcnEp.Id {
+				attached = true
+				break
+			}
+		}
 	}
 
 	if attached {
 		klog.V(2).Infof("HNS Endpoint %s already attached on container %s", ep.Id, containerID)
 	} else {
-		if err := hcsshim.HotAttachEndpoint(containerID, ep.Id); err != nil {
-			if isInfraContainer(sandbox) || hcsshim.ErrComputeSystemDoesNotExist != err {
+		if hcnEp == nil {
+			if err := hcsshim.HotAttachEndpoint(containerID, ep.Id); err != nil {
+				if isInfraContainer(sandbox) || hcsshim.ErrComputeSystemDoesNotExist != err {
+					return nil, err
+				}
+			}
+		} else {
+			if err := hcn.AddNamespaceEndpoint(sandbox, hcnEp.Id); err != nil {
 				return nil, err
 			}
 		}
 	}
 	containerIface := &current.Interface{
-		Name:    strings.Join([]string{ep.Name, containerIFDev}, "_"),
+		Name:    containerIFDev,
 		Mac:     ep.MacAddress,
 		Sandbox: sandbox,
 	}
@@ -229,6 +311,15 @@ func (ic *ifConfigurator) removeHNSEndpoint(endpoint *hcsshim.HNSEndpoint, conta
 	deleteCh := make(chan error)
 	// Remove HNSEndpoint.
 	go func() {
+		hcnEndpoint, _ := hcn.GetEndpointByID(endpoint.Id)
+		if hcnEndpoint != nil && hcnEndpoint.HostComputeNamespace != "" {
+			err := hcn.RemoveNamespaceEndpoint(hcnEndpoint.HostComputeNamespace, hcnEndpoint.Id)
+			if err != nil {
+				klog.Errorf("Failed to remove HostComputeEndpoint %s from HostComputeNameSpace %s: %v", hcnEndpoint.Name, hcnEndpoint.HostComputeNamespace, err)
+				deleteCh <- err
+				return
+			}
+		}
 		_, err := endpoint.Delete()
 		deleteCh <- err
 	}()

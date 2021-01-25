@@ -49,7 +49,7 @@ func (s *CNIServer) hostNetNsPath(netNS string) string {
 // isInfraContainer return if a container is infra container according to the network namespace path.
 // On Windows platform, the network namespace of infra container is "none".
 func isInfraContainer(netNS string) bool {
-	return netNS == infraContainerNetNS
+	return netNS == infraContainerNetNS || !strings.Contains(netNS, ":")
 }
 
 func getInfraContainer(containerID, netNS string) string {

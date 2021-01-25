@@ -397,3 +397,14 @@ func DialLocalSocket(address string) (net.Conn, error) {
 	}
 	return dialUnix(address)
 }
+
+func HostInterfaceExists(ifaceName string) bool {
+	if _, err := net.InterfaceByName(ifaceName); err == nil {
+		return true
+	}
+	cmd := fmt.Sprintf(`Get-NetAdapter -InterfaceAlias "%s"`, ifaceName)
+	if err := InvokePSCommand(cmd); err != nil {
+		return false
+	}
+	return true
+}
