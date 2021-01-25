@@ -91,6 +91,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/vmware-tanzu/antrea/pkg/apis/stats/v1alpha1.AntreaNetworkPolicyStatsList":            schema_pkg_apis_stats_v1alpha1_AntreaNetworkPolicyStatsList(ref),
 		"github.com/vmware-tanzu/antrea/pkg/apis/stats/v1alpha1.NetworkPolicyStats":                      schema_pkg_apis_stats_v1alpha1_NetworkPolicyStats(ref),
 		"github.com/vmware-tanzu/antrea/pkg/apis/stats/v1alpha1.NetworkPolicyStatsList":                  schema_pkg_apis_stats_v1alpha1_NetworkPolicyStatsList(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/stats/v1alpha1.RuleTrafficStats":                        schema_pkg_apis_stats_v1alpha1_RuleTrafficStats(ref),
 		"github.com/vmware-tanzu/antrea/pkg/apis/stats/v1alpha1.TrafficStats":                            schema_pkg_apis_stats_v1alpha1_TrafficStats(ref),
 		"github.com/vmware-tanzu/antrea/pkg/apis/system/v1beta1.SupportBundle":                           schema_pkg_apis_system_v1beta1_SupportBundle(ref),
 		"k8s.io/api/core/v1.AWSElasticBlockStoreVolumeSource":                                            schema_k8sio_api_core_v1_AWSElasticBlockStoreVolumeSource(ref),
@@ -1711,11 +1712,24 @@ func schema_pkg_apis_controlplane_v1beta1_NetworkPolicyStats(ref common.Referenc
 							Ref:         ref("github.com/vmware-tanzu/antrea/pkg/apis/stats/v1alpha1.TrafficStats"),
 						},
 					},
+					"ruleTrafficStats": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The stats of the NetworkPolicy rules. It's empty for K8s NetworkPolicies as they don't have rule name to identify a rule.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("github.com/vmware-tanzu/antrea/pkg/apis/stats/v1alpha1.RuleTrafficStats"),
+									},
+								},
+							},
+						},
+					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.NetworkPolicyReference", "github.com/vmware-tanzu/antrea/pkg/apis/stats/v1alpha1.TrafficStats"},
+			"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.NetworkPolicyReference", "github.com/vmware-tanzu/antrea/pkg/apis/stats/v1alpha1.RuleTrafficStats", "github.com/vmware-tanzu/antrea/pkg/apis/stats/v1alpha1.TrafficStats"},
 	}
 }
 
@@ -2764,6 +2778,13 @@ func schema_pkg_apis_controlplane_v1beta2_NetworkPolicyRule(ref common.Reference
 							},
 						},
 					},
+					"name": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Name describes the intention of this rule. Name should be unique within the policy.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 				},
 				Required: []string{"enableLogging"},
 			},
@@ -2792,11 +2813,24 @@ func schema_pkg_apis_controlplane_v1beta2_NetworkPolicyStats(ref common.Referenc
 							Ref:         ref("github.com/vmware-tanzu/antrea/pkg/apis/stats/v1alpha1.TrafficStats"),
 						},
 					},
+					"ruleTrafficStats": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The stats of the NetworkPolicy rules. It's empty for K8s NetworkPolicies as they don't have rule name to identify a rule.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("github.com/vmware-tanzu/antrea/pkg/apis/stats/v1alpha1.RuleTrafficStats"),
+									},
+								},
+							},
+						},
+					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyReference", "github.com/vmware-tanzu/antrea/pkg/apis/stats/v1alpha1.TrafficStats"},
+			"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyReference", "github.com/vmware-tanzu/antrea/pkg/apis/stats/v1alpha1.RuleTrafficStats", "github.com/vmware-tanzu/antrea/pkg/apis/stats/v1alpha1.TrafficStats"},
 	}
 }
 
@@ -3041,11 +3075,24 @@ func schema_pkg_apis_stats_v1alpha1_AntreaClusterNetworkPolicyStats(ref common.R
 							Ref:         ref("github.com/vmware-tanzu/antrea/pkg/apis/stats/v1alpha1.TrafficStats"),
 						},
 					},
+					"ruleTrafficStats": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The traffic stats of the Antrea ClusterNetworkPolicy, from rule perspective.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("github.com/vmware-tanzu/antrea/pkg/apis/stats/v1alpha1.RuleTrafficStats"),
+									},
+								},
+							},
+						},
+					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"github.com/vmware-tanzu/antrea/pkg/apis/stats/v1alpha1.TrafficStats", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			"github.com/vmware-tanzu/antrea/pkg/apis/stats/v1alpha1.RuleTrafficStats", "github.com/vmware-tanzu/antrea/pkg/apis/stats/v1alpha1.TrafficStats", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
 	}
 }
 
@@ -3129,11 +3176,24 @@ func schema_pkg_apis_stats_v1alpha1_AntreaNetworkPolicyStats(ref common.Referenc
 							Ref:         ref("github.com/vmware-tanzu/antrea/pkg/apis/stats/v1alpha1.TrafficStats"),
 						},
 					},
+					"ruleTrafficStats": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The traffic stats of the Antrea NetworkPolicy, from rule perspective.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("github.com/vmware-tanzu/antrea/pkg/apis/stats/v1alpha1.RuleTrafficStats"),
+									},
+								},
+							},
+						},
+					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"github.com/vmware-tanzu/antrea/pkg/apis/stats/v1alpha1.TrafficStats", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			"github.com/vmware-tanzu/antrea/pkg/apis/stats/v1alpha1.RuleTrafficStats", "github.com/vmware-tanzu/antrea/pkg/apis/stats/v1alpha1.TrafficStats", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
 	}
 }
 
@@ -3270,6 +3330,32 @@ func schema_pkg_apis_stats_v1alpha1_NetworkPolicyStatsList(ref common.ReferenceC
 		},
 		Dependencies: []string{
 			"github.com/vmware-tanzu/antrea/pkg/apis/stats/v1alpha1.NetworkPolicyStats", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+	}
+}
+
+func schema_pkg_apis_stats_v1alpha1_RuleTrafficStats(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "RuleTrafficStats contains TrafficStats of single rule inside a NetworkPolicy.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"name": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+					"trafficStats": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("github.com/vmware-tanzu/antrea/pkg/apis/stats/v1alpha1.TrafficStats"),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"github.com/vmware-tanzu/antrea/pkg/apis/stats/v1alpha1.TrafficStats"},
 	}
 }
 

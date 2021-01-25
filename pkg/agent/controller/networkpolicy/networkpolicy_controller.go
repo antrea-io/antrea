@@ -346,6 +346,14 @@ func (c *Controller) GetAppliedToGroups() []v1beta2.AppliedToGroup {
 }
 
 func (c *Controller) GetNetworkPolicyByRuleFlowID(ruleFlowID uint32) *v1beta2.NetworkPolicyReference {
+	rule := c.GetRuleByFlowID(ruleFlowID)
+	if rule == nil {
+		return nil
+	}
+	return rule.PolicyRef
+}
+
+func (c *Controller) GetRuleByFlowID(ruleFlowID uint32) *types.PolicyRule {
 	rule, exists, err := c.reconciler.GetRuleByFlowID(ruleFlowID)
 	if err != nil {
 		klog.Errorf("Error when getting network policy by rule flow ID: %v", err)
@@ -354,7 +362,7 @@ func (c *Controller) GetNetworkPolicyByRuleFlowID(ruleFlowID uint32) *v1beta2.Ne
 	if !exists {
 		return nil
 	}
-	return rule.PolicyRef
+	return rule
 }
 
 func (c *Controller) GetControllerConnectionStatus() bool {

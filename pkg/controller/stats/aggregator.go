@@ -347,17 +347,29 @@ func (a *Aggregator) doCollect(summary *controlplane.NodeStatsSummary) {
 			if len(objs) > 0 {
 				// The object returned by cache is supposed to be read only, create a new object and update it.
 				curStats := objs[0].(*statsv1alpha1.AntreaClusterNetworkPolicyStats).DeepCopy()
-				addUp(&curStats.TrafficStats, &stats.TrafficStats)
+				// antrea agents may not be updated and still use TrafficStats to collect overall networkpolicy
+				if stats.TrafficStats.Bytes > 0 {
+					addUp(&curStats.TrafficStats, &stats.TrafficStats)
+				} else {
+					addRulesUp(&curStats.RuleTrafficStats, &curStats.TrafficStats, stats.RuleTrafficStats)
+				}
 				a.antreaClusterNetworkPolicyStats.Update(curStats)
 			}
 		}
+
 		for _, stats := range summary.AntreaNetworkPolicies {
 			// The policy have might been removed, skip processing it if missing.
 			objs, _ := a.antreaNetworkPolicyStats.ByIndex(uidIndex, string(stats.NetworkPolicy.UID))
+
 			if len(objs) > 0 {
 				// The object returned by cache is supposed to be read only, create a new object and update it.
 				curStats := objs[0].(*statsv1alpha1.AntreaNetworkPolicyStats).DeepCopy()
-				addUp(&curStats.TrafficStats, &stats.TrafficStats)
+				// antrea agents may not be updated and still use TrafficStats to collect overall networkpolicy
+				if stats.TrafficStats.Bytes > 0 {
+					addUp(&curStats.TrafficStats, &stats.TrafficStats)
+				} else {
+					addRulesUp(&curStats.RuleTrafficStats, &curStats.TrafficStats, stats.RuleTrafficStats)
+				}
 				a.antreaNetworkPolicyStats.Update(curStats)
 			}
 		}
@@ -368,4 +380,35 @@ func addUp(stats *statsv1alpha1.TrafficStats, inc *statsv1alpha1.TrafficStats) {
 	stats.Sessions += inc.Sessions
 	stats.Packets += inc.Packets
 	stats.Bytes += inc.Bytes
+}
+
+func addRulesUp(ruleStats *[]statsv1alpha1.RuleTrafficStats, ruleSumStats *statsv1alpha1.TrafficStats, inc []statsv1alpha1.RuleTrafficStats) {
+	incMap := make(map[string]*statsv1alpha1.TrafficStats)
+	for i, v := range inc {
+		incMap[v.Name] = &inc[i].TrafficStats
+	}
+	// accumulate incMap traffics stats to the current traffic stats
+	for _, v := range incMap {
+		addUp(ruleSumStats, v)
+	}
+	// accumulate the rule traffic stats as the rule has already 'existed' in the ruleStats
+	for i, v := range *ruleStats {
+		stats, exist := incMap[v.Name]
+		if exist {
+			(*ruleStats)[i].TrafficStats = statsv1alpha1.TrafficStats{
+				Packets:  v.TrafficStats.Packets + stats.Packets,
+				Bytes:    v.TrafficStats.Bytes + stats.Bytes,
+				Sessions: v.TrafficStats.Sessions + stats.Sessions,
+			}
+		}
+		delete(incMap, v.Name)
+	}
+	// convert remaining incs to RuleTrafficStats and add it to current traffic stats
+	for k, v := range incMap {
+		rs := statsv1alpha1.RuleTrafficStats{
+			Name:         k,
+			TrafficStats: *v,
+		}
+		*ruleStats = append(*ruleStats, rs)
+	}
 }

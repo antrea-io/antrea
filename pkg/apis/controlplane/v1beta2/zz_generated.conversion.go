@@ -23,6 +23,7 @@ import (
 
 	controlplane "github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
 	v1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
+	statsv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/stats/v1alpha1"
 	conversion "k8s.io/apimachinery/pkg/conversion"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	types "k8s.io/apimachinery/pkg/types"
@@ -625,7 +626,17 @@ func Convert_controlplane_NamedPort_To_v1beta2_NamedPort(in *controlplane.NamedP
 
 func autoConvert_v1beta2_NetworkPolicy_To_controlplane_NetworkPolicy(in *NetworkPolicy, out *controlplane.NetworkPolicy, s conversion.Scope) error {
 	out.ObjectMeta = in.ObjectMeta
-	out.Rules = *(*[]controlplane.NetworkPolicyRule)(unsafe.Pointer(&in.Rules))
+	if in.Rules != nil {
+		in, out := &in.Rules, &out.Rules
+		*out = make([]controlplane.NetworkPolicyRule, len(*in))
+		for i := range *in {
+			if err := Convert_v1beta2_NetworkPolicyRule_To_controlplane_NetworkPolicyRule(&(*in)[i], &(*out)[i], s); err != nil {
+				return err
+			}
+		}
+	} else {
+		out.Rules = nil
+	}
 	out.AppliedToGroups = *(*[]string)(unsafe.Pointer(&in.AppliedToGroups))
 	out.Priority = (*float64)(unsafe.Pointer(in.Priority))
 	out.TierPriority = (*int32)(unsafe.Pointer(in.TierPriority))
@@ -640,7 +651,17 @@ func Convert_v1beta2_NetworkPolicy_To_controlplane_NetworkPolicy(in *NetworkPoli
 
 func autoConvert_controlplane_NetworkPolicy_To_v1beta2_NetworkPolicy(in *controlplane.NetworkPolicy, out *NetworkPolicy, s conversion.Scope) error {
 	out.ObjectMeta = in.ObjectMeta
-	out.Rules = *(*[]NetworkPolicyRule)(unsafe.Pointer(&in.Rules))
+	if in.Rules != nil {
+		in, out := &in.Rules, &out.Rules
+		*out = make([]NetworkPolicyRule, len(*in))
+		for i := range *in {
+			if err := Convert_controlplane_NetworkPolicyRule_To_v1beta2_NetworkPolicyRule(&(*in)[i], &(*out)[i], s); err != nil {
+				return err
+			}
+		}
+	} else {
+		out.Rules = nil
+	}
 	out.AppliedToGroups = *(*[]string)(unsafe.Pointer(&in.AppliedToGroups))
 	out.Priority = (*float64)(unsafe.Pointer(in.Priority))
 	out.TierPriority = (*int32)(unsafe.Pointer(in.TierPriority))
@@ -655,7 +676,17 @@ func Convert_controlplane_NetworkPolicy_To_v1beta2_NetworkPolicy(in *controlplan
 
 func autoConvert_v1beta2_NetworkPolicyList_To_controlplane_NetworkPolicyList(in *NetworkPolicyList, out *controlplane.NetworkPolicyList, s conversion.Scope) error {
 	out.ListMeta = in.ListMeta
-	out.Items = *(*[]controlplane.NetworkPolicy)(unsafe.Pointer(&in.Items))
+	if in.Items != nil {
+		in, out := &in.Items, &out.Items
+		*out = make([]controlplane.NetworkPolicy, len(*in))
+		for i := range *in {
+			if err := Convert_v1beta2_NetworkPolicy_To_controlplane_NetworkPolicy(&(*in)[i], &(*out)[i], s); err != nil {
+				return err
+			}
+		}
+	} else {
+		out.Items = nil
+	}
 	return nil
 }
 
@@ -666,7 +697,17 @@ func Convert_v1beta2_NetworkPolicyList_To_controlplane_NetworkPolicyList(in *Net
 
 func autoConvert_controlplane_NetworkPolicyList_To_v1beta2_NetworkPolicyList(in *controlplane.NetworkPolicyList, out *NetworkPolicyList, s conversion.Scope) error {
 	out.ListMeta = in.ListMeta
-	out.Items = *(*[]NetworkPolicy)(unsafe.Pointer(&in.Items))
+	if in.Items != nil {
+		in, out := &in.Items, &out.Items
+		*out = make([]NetworkPolicy, len(*in))
+		for i := range *in {
+			if err := Convert_controlplane_NetworkPolicy_To_v1beta2_NetworkPolicy(&(*in)[i], &(*out)[i], s); err != nil {
+				return err
+			}
+		}
+	} else {
+		out.Items = nil
+	}
 	return nil
 }
 
@@ -758,6 +799,7 @@ func autoConvert_v1beta2_NetworkPolicyRule_To_controlplane_NetworkPolicyRule(in 
 	out.Action = (*v1alpha1.RuleAction)(unsafe.Pointer(in.Action))
 	out.EnableLogging = in.EnableLogging
 	out.AppliedToGroups = *(*[]string)(unsafe.Pointer(&in.AppliedToGroups))
+	out.Name = in.Name
 	return nil
 }
 
@@ -775,6 +817,7 @@ func autoConvert_controlplane_NetworkPolicyRule_To_v1beta2_NetworkPolicyRule(in 
 		return err
 	}
 	out.Services = *(*[]Service)(unsafe.Pointer(&in.Services))
+	out.Name = in.Name
 	out.Priority = in.Priority
 	out.Action = (*v1alpha1.RuleAction)(unsafe.Pointer(in.Action))
 	out.EnableLogging = in.EnableLogging
@@ -792,6 +835,7 @@ func autoConvert_v1beta2_NetworkPolicyStats_To_controlplane_NetworkPolicyStats(i
 		return err
 	}
 	out.TrafficStats = in.TrafficStats
+	out.RuleTrafficStats = *(*[]statsv1alpha1.RuleTrafficStats)(unsafe.Pointer(&in.RuleTrafficStats))
 	return nil
 }
 
@@ -805,6 +849,7 @@ func autoConvert_controlplane_NetworkPolicyStats_To_v1beta2_NetworkPolicyStats(i
 		return err
 	}
 	out.TrafficStats = in.TrafficStats
+	out.RuleTrafficStats = *(*[]statsv1alpha1.RuleTrafficStats)(unsafe.Pointer(&in.RuleTrafficStats))
 	return nil
 }
 

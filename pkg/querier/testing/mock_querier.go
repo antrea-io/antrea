@@ -1,4 +1,4 @@
-// Copyright 2020 Antrea Authors
+// Copyright 2021 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@ package testing
 
 import (
 	gomock "github.com/golang/mock/gomock"
+	types "github.com/vmware-tanzu/antrea/pkg/agent/types"
 	v1beta2 "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
 	querier "github.com/vmware-tanzu/antrea/pkg/querier"
 	reflect "reflect"
@@ -173,4 +174,18 @@ func (m *MockAgentNetworkPolicyInfoQuerier) GetNetworkPolicyNum() int {
 func (mr *MockAgentNetworkPolicyInfoQuerierMockRecorder) GetNetworkPolicyNum() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNetworkPolicyNum", reflect.TypeOf((*MockAgentNetworkPolicyInfoQuerier)(nil).GetNetworkPolicyNum))
+}
+
+// GetRuleByFlowID mocks base method
+func (m *MockAgentNetworkPolicyInfoQuerier) GetRuleByFlowID(arg0 uint32) *types.PolicyRule {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetRuleByFlowID", arg0)
+	ret0, _ := ret[0].(*types.PolicyRule)
+	return ret0
+}
+
+// GetRuleByFlowID indicates an expected call of GetRuleByFlowID
+func (mr *MockAgentNetworkPolicyInfoQuerierMockRecorder) GetRuleByFlowID(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetRuleByFlowID", reflect.TypeOf((*MockAgentNetworkPolicyInfoQuerier)(nil).GetRuleByFlowID), arg0)
 }
