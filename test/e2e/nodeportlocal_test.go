@@ -153,13 +153,6 @@ func validatePortInRange(t *testing.T, nplAnnotations []k8s.NPLAnnotation, start
 	}
 }
 
-// TestNPLAddPod tests NodePortLocal functionalities after adding a pod.
-// - Enable NodePortLocal if not already enabled.
-// - Create an nginx Pod and a Service.
-// - Verify that the required NodePortLocal annoation is added in the Pod.
-// - Make sure IPTABLES rule are correctly added in the Node from Antrea Agent Pod.
-// - Create a client Pod and test traffic through netcat.
-// - Delete the nginx Pod and verify that the IPTABLES rules are deleted.
 func TestNPLAddPod(t *testing.T) {
 	skipIfNotIPv4Cluster(t)
 	data, err := setupTest(t)
@@ -168,47 +161,18 @@ func TestNPLAddPod(t *testing.T) {
 	}
 	defer teardownTest(t, data)
 	enableNPLInConfigmap(t, data)
-	r := require.New(t)
-	k8sUtils, err = NewKubernetesUtils(data)
-	r.Nil(err, "Failed to initialize Kubernetes Utils: %v", err)
-
-	node := nodeName(0)
-	testPodName := randName("test-pod-")
-	err = data.createNginxPod(testPodName, node)
-	r.Nil(err, "Error when creating test Pod: %v", err)
-
-	annotation := make(map[string]string)
-	annotation[nplSvcAnnotation] = "true"
-	ipFamily := corev1.IPv4Protocol
-	data.createNginxClusterIPServiceWithAnnotation(false, &ipFamily, annotation)
-
-	nplAnnotationString, testPodIP := getNPLAnnotation(t, data, r, testPodName)
-	var nplAnnotation []k8s.NPLAnnotation
-	json.Unmarshal([]byte(nplAnnotationString), &nplAnnotation)
-
-	clientName := randName("test-client-")
-	if err := data.createBusyboxPodOnNode(clientName, node); err != nil {
-		t.Fatalf("Error creating Pod %s: %v", clientName, err)
-	}
-
-	_, err = data.podWaitForIPs(defaultTimeout, clientName, testNamespace)
-	if err != nil {
-		t.Fatalf("Error waiting for IP for Pod %s: %v", clientName, err)
-	}
-
-	antreaPod, err := data.getAntreaPodOnNode(node)
-	r.Nil(err, "Error when getting Antrea Agent Pod on Node '%s'", node)
-
-	checkForNPLRuleInIPTABLES(t, data, r, nplAnnotation, antreaPod, testPodIP.ipv4.String(), true)
-	validatePortInRange(t, nplAnnotation, defaultStartPort, defaultEndPort)
-	checkTrafficForNPL(t, data, r, nplAnnotation, clientName)
-
-	data.deletePod(testPodName)
-	checkForNPLRuleInIPTABLES(t, data, r, nplAnnotation, antreaPod, testPodIP.ipv4.String(), false)
+	t.Run("NPLTestMultiplePods", NPLTestMultiplePods)
+	t.Run("NPLTestPodAddMultiPort", NPLTestPodAddMultiPort)
 }
 
-// TestNPLMultiplePods tests NodePortLocal functionalities after adding multiple Pods.
-func TestNPLMultiplePods(t *testing.T) {
+// NPLTestMultiplePods tests NodePortLocal functionalities after adding multiple Pods.
+// - Enable NodePortLocal if not already enabled.
+// - Create a Service nginx test Pods.
+// - Verify that the required NodePortLocal annoation is added in each test Pod.
+// - Make sure IPTABLES rules are correctly added in the Node from Antrea Agent Pod.
+// - Create a client Pod and test traffic through netcat.
+// - Delete the nginx test Pods and verify that the IPTABLES rules are deleted.
+func NPLTestMultiplePods(t *testing.T) {
 	skipIfNotIPv4Cluster(t)
 	data, err := setupTest(t)
 	if err != nil {
@@ -229,7 +193,7 @@ func TestNPLMultiplePods(t *testing.T) {
 	node := nodeName(0)
 	var testPods []string
 
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 4; i++ {
 		testPodName := randName("test-pod-")
 		testPods = append(testPods, testPodName)
 		err = data.createNginxPod(testPodName, node)
@@ -262,8 +226,8 @@ func TestNPLMultiplePods(t *testing.T) {
 	}
 }
 
-// TestNPLPodAddMultiPort tests NodePortLocal functionalities for a Pod with multiple ports.
-func TestNPLPodAddMultiPort(t *testing.T) {
+// NPLTestPodAddMultiPort tests NodePortLocal functionalities for a Pod with multiple ports.
+func NPLTestPodAddMultiPort(t *testing.T) {
 	skipIfNotIPv4Cluster(t)
 	data, err := setupTest(t)
 	if err != nil {
@@ -361,7 +325,7 @@ func TestNPLMultiplePodsAgentRestart(t *testing.T) {
 	node := nodeName(0)
 	var testPods []string
 
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 4; i++ {
 		testPodName := randName("test-pod-")
 		testPods = append(testPods, testPodName)
 		err = data.createNginxPod(testPodName, node)
@@ -425,7 +389,7 @@ func TestNPLChangePortRangeAgentRestart(t *testing.T) {
 	node := nodeName(0)
 	var testPods []string
 
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 4; i++ {
 		testPodName := randName("test-pod-")
 		testPods = append(testPods, testPodName)
 		err = data.createNginxPod(testPodName, node)
@@ -487,7 +451,7 @@ func TestNPLPodAddEnableNPL(t *testing.T) {
 	node := nodeName(0)
 	var testPods []string
 
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 4; i++ {
 		testPodName := randName("test-pod-")
 		testPods = append(testPods, testPodName)
 		err = data.createNginxPod(testPodName, node)
@@ -523,8 +487,8 @@ func TestNPLPodAddEnableNPL(t *testing.T) {
 // TestNPLPodDeleteEnableNPL tests Pod deletion functionalities for NodePortLocal after Enabling NPL.
 // - Create Multiple Nginx Pods.
 // - Get NodePortLocal annotations from the Pods.
-// - Delete the Pods.
 // - Disable NodePortLocal in Antrea.
+// - Delete the Pods.
 // - Enable NodePortLocal in Antrea.
 // - Verify that no IPTABLES rule exists for the deleted Pods.
 func TestNPLPodDeleteEnableNPL(t *testing.T) {
@@ -551,7 +515,7 @@ func TestNPLPodDeleteEnableNPL(t *testing.T) {
 	allNPLAnnotations := make(map[string]string)
 
 	// First create all test Pods with NPL enabled.
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 4; i++ {
 		testPodName := randName("test-pod-")
 		testPods = append(testPods, testPodName)
 		err = data.createNginxPod(testPodName, node)
