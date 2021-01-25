@@ -90,6 +90,7 @@ spec:
           status:
             properties:
               phase:
+                default: Pending
                 type: string
             type: object
         type: object

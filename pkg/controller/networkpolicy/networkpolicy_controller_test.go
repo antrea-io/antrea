@@ -73,6 +73,7 @@ type networkPolicyController struct {
 	networkPolicyStore         cache.Store
 	cnpStore                   cache.Store
 	tierStore                  cache.Store
+	cgStore                    cache.Store
 	appliedToGroupStore        storage.Interface
 	addressGroupStore          storage.Interface
 	internalNetworkPolicyStore storage.Interface
@@ -91,6 +92,7 @@ func newController(objects ...runtime.Object) (*fake.Clientset, *networkPolicyCo
 	internalNetworkPolicyStore := store.NewNetworkPolicyStore()
 	internalGroupStore := store.NewGroupStore()
 	cgInformer := crdInformerFactory.Core().V1alpha2().ClusterGroups()
+	cgStore := crdInformerFactory.Core().V1alpha2().ClusterGroups().Informer().GetStore()
 	npController := NewNetworkPolicyController(client,
 		crdClient,
 		informerFactory.Core().V1().Pods(),
@@ -121,6 +123,7 @@ func newController(objects ...runtime.Object) (*fake.Clientset, *networkPolicyCo
 		informerFactory.Networking().V1().NetworkPolicies().Informer().GetStore(),
 		crdInformerFactory.Security().V1alpha1().ClusterNetworkPolicies().Informer().GetStore(),
 		crdInformerFactory.Security().V1alpha1().Tiers().Informer().GetStore(),
+		cgStore,
 		appliedToGroupStore,
 		addressGroupStore,
 		internalNetworkPolicyStore,
@@ -1240,6 +1243,7 @@ func TestAddPod(t *testing.T) {
 	npc.addNetworkPolicy(testNPObj)
 	groupKey := testCG.Name
 	npc.addClusterGroup(testCG)
+	npc.cgStore.Add(testCG)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			npc.podStore.Add(tt.addedPod)
@@ -1482,6 +1486,7 @@ func TestAddNamespace(t *testing.T) {
 	_, npc := newController()
 	npc.addNetworkPolicy(testNPObj)
 	npc.addClusterGroup(testCG)
+	npc.cgStore.Add(testCG)
 	groupKey := testCG.Name
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

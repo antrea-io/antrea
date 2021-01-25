@@ -200,9 +200,6 @@ type NetworkPolicyController struct {
 	// concurrent access during updates to the internal NetworkPolicy object.
 	internalNetworkPolicyMutex sync.RWMutex
 
-	// groupStatusMutex protects the ClusterGroup Status updates.
-	groupStatusMutex sync.RWMutex
-
 	// heartbeatCh is an internal channel for testing. It's used to know whether all tasks have been
 	// processed, and to count executions of each function.
 	heartbeatCh chan heartbeat

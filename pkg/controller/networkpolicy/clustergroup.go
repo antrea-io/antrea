@@ -174,8 +174,13 @@ func (n *NetworkPolicyController) syncInternalGroup(key string) error {
 		klog.V(2).Infof("Internal group %s not found.", key)
 		return nil
 	}
-
 	grp := grpObj.(*antreatypes.Group)
+	// Retrieve the ClusterGroup corresponding to this key.
+	cg, err := n.cgLister.Get(grp.Name)
+	if err != nil {
+		klog.Infof("Didn't find the ClusterGroup %s, skip processing of internal group", grp.Name)
+		return nil
+	}
 	if grp.IPBlock == nil {
 		// Find all Pods matching its selectors and update store.
 		groupSelector := grp.Selector
@@ -200,23 +205,16 @@ func (n *NetworkPolicyController) syncInternalGroup(key string) error {
 	}
 	// Update the ClusterGroup status to Realized as Antrea has recognized the Group and
 	// processed its group members.
-	err := n.updateGroupStatus(grp.Name, corev1a2.GroupRealized)
+	err = n.updateGroupStatus(cg, corev1a2.GroupRealized)
 	if err != nil {
-		klog.Warningf("Failed to update ClusterGroup %s Status: %s: %v", grp.Name, corev1a2.GroupRealized, err)
+		klog.Warningf("Failed to update ClusterGroup %s Status to %s: %v", cg.Name, corev1a2.GroupRealized, err)
+		return err
 	}
 	return nil
 }
 
-// updateGroupStatus updates the Status subresource for a ClusterGroup under a lock such
-// that concurrent updates to the ClusterGroup Status are not permitted.
-func (n *NetworkPolicyController) updateGroupStatus(name string, phase corev1a2.GroupPhase) error {
-	n.groupStatusMutex.Lock()
-	defer n.groupStatusMutex.Unlock()
-	cg, err := n.cgLister.Get(name)
-	if err != nil {
-		klog.Infof("Didn't find the ClusterGroup %s, skip updating status", name)
-		return nil
-	}
+// updateGroupStatus updates the Status subresource for a ClusterGroup.
+func (n *NetworkPolicyController) updateGroupStatus(cg *corev1a2.ClusterGroup, phase corev1a2.GroupPhase) error {
 	status := corev1a2.GroupStatus{
 		Phase: phase,
 	}
@@ -224,9 +222,9 @@ func (n *NetworkPolicyController) updateGroupStatus(name string, phase corev1a2.
 	if cg.Status == status {
 		return nil
 	}
-	klog.V(4).Infof("Updating ClusterGroup %s status to %s", name, phase)
+	klog.V(4).Infof("Updating ClusterGroup %s status to %s", cg.Name, phase)
 	toUpdate := cg.DeepCopy()
 	toUpdate.Status = status
-	_, err = n.crdClient.CoreV1alpha2().ClusterGroups().UpdateStatus(context.TODO(), toUpdate, metav1.UpdateOptions{})
+	_, err := n.crdClient.CoreV1alpha2().ClusterGroups().UpdateStatus(context.TODO(), toUpdate, metav1.UpdateOptions{})
 	return err
 }

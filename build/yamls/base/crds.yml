@@ -730,6 +730,7 @@ spec:
               properties:
                 phase:
                   type: string
+                  default: "Pending"
       subresources:
         status: {}
   scope: Cluster
