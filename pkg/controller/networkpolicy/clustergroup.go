@@ -217,9 +217,10 @@ func (n *NetworkPolicyController) syncInternalGroup(key string) error {
 	addrGroupObj, found, _ := n.addressGroupStore.Get(key)
 	if found {
 		// If AddressGroup was created corresponding to this ClusterGroup, complete the
-		// AddressGroup fields before syncing the AddressGroup.
+		// AddressGroup fields before syncing the AddressGroup or ensure that the selector
+		// is updated.
 		addrGroup := addrGroupObj.(*antreatypes.AddressGroup)
-		if isGroupSelectorUnset(addrGroup.Selector) {
+		if isGroupSelectorUnset(addrGroup.Selector) || addrGroup.Selector != updatedGrp.Selector {
 			updatedAddrGroup := &antreatypes.AddressGroup{
 				UID:          addrGroup.UID,
 				Name:         addrGroup.Name,

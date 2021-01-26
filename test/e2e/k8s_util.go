@@ -288,7 +288,7 @@ func (k *KubernetesUtils) UpdateTier(tier *secv1alpha1.Tier) (*secv1alpha1.Tier,
 	return updatedTier, err
 }
 
-// CreateCG is a convenience function for creating an Antrea CLusterGroup by name and selector.
+// CreateCG is a convenience function for creating an Antrea ClusterGroup by name and selector.
 func (k *KubernetesUtils) CreateCG(name string, pSelector, nSelector *metav1.LabelSelector, ipBlock *secv1alpha1.IPBlock) (*corev1a1.ClusterGroup, error) {
 	log.Infof("creating clustergroup %s", name)
 	_, err := k.crdClient.CoreV1alpha2().ClusterGroups().Get(context.TODO(), name, metav1.GetOptions{})
