@@ -112,21 +112,19 @@ type GroupSpec struct {
 	IPBlock *secv1a1.IPBlock `json:"ipBlock,omitempty"`
 }
 
-// GroupPhase defines the phase in which a Group is.
-type GroupPhase string
+type GroupConditionType string
 
-// These are the valid values for GroupPhase.
-const (
-	// GroupPending means the Group has been accepted by the system, but it has not been processed by Antrea.
-	GroupPending GroupPhase = "Pending"
-	// GroupRealized means the Group has realized all of its GroupMembers.
-	GroupRealized GroupPhase = "Realized"
-)
+const GroupMembersComputed GroupConditionType = "GroupMembersComputed"
+
+type GroupCondition struct {
+	Type               GroupConditionType `json:"type"`
+	Status             v1.ConditionStatus `json:"status"`
+	LastTransitionTime metav1.Time        `json:"lastTransitionTime,omitempty"`
+}
 
 // GroupStatus represents information about the status of a Group.
 type GroupStatus struct {
-	// The phase of a Group is a simple, high-level summary of the Group's status.
-	Phase GroupPhase `json:"phase"`
+	Conditions []GroupCondition `json:"conditions,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

@@ -205,26 +205,44 @@ func (n *NetworkPolicyController) syncInternalGroup(key string) error {
 	}
 	// Update the ClusterGroup status to Realized as Antrea has recognized the Group and
 	// processed its group members.
-	err = n.updateGroupStatus(cg, corev1a2.GroupRealized)
+	err = n.updateGroupStatus(cg, v1.ConditionTrue)
 	if err != nil {
-		klog.Warningf("Failed to update ClusterGroup %s Status to %s: %v", cg.Name, corev1a2.GroupRealized, err)
+		klog.Errorf("Failed to update ClusterGroup %s GroupMembersComputed condition to %s: %v", cg.Name, v1.ConditionTrue, err)
 		return err
 	}
 	return nil
 }
 
 // updateGroupStatus updates the Status subresource for a ClusterGroup.
-func (n *NetworkPolicyController) updateGroupStatus(cg *corev1a2.ClusterGroup, phase corev1a2.GroupPhase) error {
-	status := corev1a2.GroupStatus{
-		Phase: phase,
+func (n *NetworkPolicyController) updateGroupStatus(cg *corev1a2.ClusterGroup, cStatus v1.ConditionStatus) error {
+	condStatus := corev1a2.GroupCondition{
+		Status: cStatus,
+		Type:   corev1a2.GroupMembersComputed,
 	}
-	// If the current status equals to the desired status, no need to update.
-	if cg.Status == status {
+	if groupMembersComputedConditionEqual(cg.Status.Conditions, condStatus) {
+		// There is no change in conditions.
 		return nil
 	}
-	klog.V(4).Infof("Updating ClusterGroup %s status to %s", cg.Name, phase)
+	condStatus.LastTransitionTime = metav1.Now()
+	status := corev1a2.GroupStatus{
+		Conditions: []corev1a2.GroupCondition{condStatus},
+	}
+	klog.V(4).Infof("Updating ClusterGroup %s status to %#v", cg.Name, condStatus)
 	toUpdate := cg.DeepCopy()
 	toUpdate.Status = status
 	_, err := n.crdClient.CoreV1alpha2().ClusterGroups().UpdateStatus(context.TODO(), toUpdate, metav1.UpdateOptions{})
 	return err
+}
+
+// groupMembersComputedConditionEqual checks whether the condition status for GroupMembersComputed condition
+// is same. Returns true if equal, otherwise returns false. It disregards the lastTransitionTime field.
+func groupMembersComputedConditionEqual(conds []corev1a2.GroupCondition, condition corev1a2.GroupCondition) bool {
+	for _, c := range conds {
+		if c.Type == corev1a2.GroupMembersComputed {
+			if c.Status == condition.Status {
+				return true
+			}
+		}
+	}
+	return false
 }

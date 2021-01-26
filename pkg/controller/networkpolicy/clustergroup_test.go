@@ -453,3 +453,55 @@ func TestFilterInternalGroupsForNamespace(t *testing.T) {
 		})
 	}
 }
+
+func TestGroupMembersComputedConditionEqual(t *testing.T) {
+	tests := []struct {
+		name          string
+		existingConds []corev1a2.GroupCondition
+		checkStatus   corev1.ConditionStatus
+		expValue      bool
+	}{
+		{
+			name: "groupmem-cond-exists-not-equal",
+			existingConds: []corev1a2.GroupCondition{
+				{
+					Type:   corev1a2.GroupMembersComputed,
+					Status: corev1.ConditionFalse,
+				},
+			},
+			checkStatus: corev1.ConditionTrue,
+			expValue:    false,
+		},
+		{
+			name: "groupmem-cond-exists-equal",
+			existingConds: []corev1a2.GroupCondition{
+				{
+					Type:   corev1a2.GroupMembersComputed,
+					Status: corev1.ConditionTrue,
+				},
+			},
+			checkStatus: corev1.ConditionTrue,
+			expValue:    true,
+		},
+		{
+			name: "groupmem-cond-not-exists-not-equal",
+			existingConds: []corev1a2.GroupCondition{
+				{
+					Status: corev1.ConditionFalse,
+				},
+			},
+			checkStatus: corev1.ConditionTrue,
+			expValue:    false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			inCond := corev1a2.GroupCondition{
+				Type:   corev1a2.GroupMembersComputed,
+				Status: tt.checkStatus,
+			}
+			actualValue := groupMembersComputedConditionEqual(tt.existingConds, inCond)
+			assert.Equal(t, tt.expValue, actualValue)
+		})
+	}
+}

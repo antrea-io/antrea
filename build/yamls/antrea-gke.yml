@@ -62,15 +62,7 @@ spec:
     singular: group
   scope: Cluster
   versions:
-  - additionalPrinterColumns:
-    - description: The overall summary of realization status of the ClusterGroup.
-      jsonPath: .status.phase
-      name: Realization Status
-      type: string
-    - jsonPath: .metadata.creationTimestamp
-      name: Age
-      type: date
-    name: v1alpha2
+  - name: v1alpha2
     schema:
       openAPIV3Schema:
         properties:
@@ -89,9 +81,17 @@ spec:
             type: object
           status:
             properties:
-              phase:
-                default: Pending
-                type: string
+              conditions:
+                items:
+                  properties:
+                    lastTransitionTime:
+                      type: string
+                    status:
+                      type: string
+                    type:
+                      type: string
+                  type: object
+                type: array
             type: object
         type: object
     served: true
