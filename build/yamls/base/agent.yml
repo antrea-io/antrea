@@ -57,6 +57,9 @@ spec:
           - name: host-lib-modules
             mountPath: /lib/modules
             readOnly: true
+          # For changing the default permissions of the run directory.
+          - name: host-var-run-antrea
+            mountPath: /var/run/antrea
       containers:
         - name: antrea-agent
           image: antrea

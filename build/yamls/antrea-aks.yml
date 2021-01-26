@@ -1787,6 +1787,8 @@ spec:
         - mountPath: /lib/modules
           name: host-lib-modules
           readOnly: true
+        - mountPath: /var/run/antrea
+          name: host-var-run-antrea
       nodeSelector:
         kubernetes.io/os: linux
       priorityClassName: system-node-critical

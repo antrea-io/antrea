@@ -168,10 +168,18 @@ func ListenLocalSocket(address string) (net.Listener, error) {
 	// remove before bind to avoid "address already in use" errors
 	_ = os.Remove(address)
 
-	if err := os.MkdirAll(filepath.Dir(address), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(address), 0750); err != nil {
 		klog.Fatalf("Failed to create directory %s: %v", filepath.Dir(address), err)
 	}
-	return listenUnix(address)
+	listener, err := listenUnix(address)
+	if err != nil {
+		return nil, err
+	}
+	err = os.Chmod(address, 0750)
+	if err != nil {
+		klog.Fatalf("Failed to change permissions for socket file %s: %v", address, err)
+	}
+	return listener, nil
 }
 
 // DialLocalSocket connects to a Unix domain socket.
