@@ -3,12 +3,10 @@ on:
   pull_request:
     branches:
     - main
-    - master
     - release-*
   push:
     branches:
     - main
-    - master
     - release-*
 
 env:
@@ -22,7 +20,7 @@ jobs:
     - uses: actions/checkout@v2
       with:
         fetch-depth: 0
-    - uses: vmware-tanzu/antrea/ci/gh-actions/has-changes@v0.12.0 # TODO: change to main after default branch renaming
+    - uses: vmware-tanzu/antrea/ci/gh-actions/has-changes@main
       id: check_diff
       with:
         args: docs/* ci/jenkins/* *.md

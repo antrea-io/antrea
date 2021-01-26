@@ -18,7 +18,7 @@ of paths.
 ## Example usage
 
 ```yaml
-uses: vmware-tanzu/antrea/ci/gh-actions/has-changes@master
+uses: vmware-tanzu/antrea/ci/gh-actions/has-changes@main
 with:
   args: docs *.md ci
 ```
