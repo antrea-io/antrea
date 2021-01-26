@@ -66,7 +66,7 @@ The following table shows what variables can be configured:
 |  SRIOV_INTERFACE<br />(auto_detect) | The Mellanox interface to use to create the VFs |
 |  NETWORK<br />(192.168.$N) | This is used to setup the MACVLAN network range, N is randomly generated |
 |  ANTREA_CNI_REPO<br />(<https://github.com/vmware-tanzu/antrea.git>)| Antrea project repository to use |
-|  ANTREA_CNI_BRANCH<br />(master) | Antrea project branch to use |
+|  ANTREA_CNI_BRANCH<br />(main) | Antrea project branch to use |
 |  ANTREA_CNI_PR<br />() | Antrea project pull request number to pull, adding this will ignore ANTREA_CNI_BRANCH |
 |  ANTREA_CNI_HARBOR_IMAGE<br />(${HARBOR_REGISTRY}/${HARBOR_PROJECT}/antrea) | The Antrea image to pull in case the project was not built |
 |  VFS_NUM<br />(4) | Number of SRIOV VFs to create |

@@ -2,7 +2,7 @@
 
 ![Antrea Logo](docs/assets/logo/antrea_logo.svg)
 
-![Build Status](https://github.com/vmware-tanzu/antrea/workflows/Go/badge.svg?branch=master)
+![Build Status](https://github.com/vmware-tanzu/antrea/workflows/Go/badge.svg?branch=main)
 [![Go Report Card](https://goreportcard.com/badge/github.com/vmware-tanzu/antrea)](https://goreportcard.com/report/github.com/vmware-tanzu/antrea)
 [![CII Best Practices](https://bestpractices.coreinfrastructure.org/projects/4173/badge)](https://bestpractices.coreinfrastructure.org/projects/4173)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)

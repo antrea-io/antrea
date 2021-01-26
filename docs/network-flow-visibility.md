@@ -212,11 +212,11 @@ given release `<TAG>` (e.g. `v0.12.0`), you can deploy Flow Aggregator as follow
 kubectl apply -f https://github.com/vmware-tanzu/antrea/releases/download/<TAG>/flow-aggregator.yml
 ```
 
-To deploy the latest version of Flow Aggregator Service (built from the master branch), use the
+To deploy the latest version of Flow Aggregator Service (built from the main branch), use the
 checked-in [deployment yaml](/build/yamls/flow-aggregator.yml):
 
 ```bash
-kubectl apply -f https://raw.githubusercontent.com/vmware-tanzu/antrea/master/build/yamls/flow-aggregator.yml
+kubectl apply -f https://raw.githubusercontent.com/vmware-tanzu/antrea/main/build/yamls/flow-aggregator.yml
 ```
 
 ### Configuration
@@ -359,11 +359,11 @@ or
 svn export https://github.com/vmware-tanzu/antrea/tags/<TAG>/build/yamls/elk-flow-collector/
 ```
 
-If the deployed version of Antrea is the latest version, i.e., built from the master
+If the deployed version of Antrea is the latest version, i.e., built from the main
 branch, then you can use the following command:
 
 ```shell
-git clone --depth 1 --branch master https://github.com/vmware-tanzu/antrea.git && cd antrea/build/yamls/
+git clone --depth 1 --branch main https://github.com/vmware-tanzu/antrea.git && cd antrea/build/yamls/
 or
 svn export https://github.com/vmware-tanzu/antrea/trunk/build/yamls/elk-flow-collector/
 ```

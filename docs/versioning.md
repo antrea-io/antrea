@@ -70,7 +70,7 @@ more structured way in [feature-gates.md](feature-gates.md).
 
 New Antrea minor releases are currently shipped every 6 to 8 weeks. This fast
 release cadence enables us to ship new features quickly and frequently. It may
-change in the future. Compared to deploying the top-of-tree of the Antrea master
+change in the future. Compared to deploying the top-of-tree of the Antrea main
 branch, using a released version should provide more stability
 guarantees:
 

@@ -167,7 +167,7 @@ Restart-Computer
 Then, install the OVS using the script.
 
 ```powershell
-curl.exe -LO https://raw.githubusercontent.com/vmware-tanzu/antrea/master/hack/windows/Install-OVS.ps1
+curl.exe -LO https://raw.githubusercontent.com/vmware-tanzu/antrea/main/hack/windows/Install-OVS.ps1
 .\Install-OVS.ps1
 ```
 
@@ -204,9 +204,9 @@ Run the following commands to prepare the Node environment needed by antrea-agen
 ```powershell
 mkdir c:\k\antrea
 cd c:\k\antrea
-curl.exe -LO https://raw.githubusercontent.com/vmware-tanzu/antrea/master/hack/windows/Clean-AntreaNetwork.ps1
-curl.exe -LO https://raw.githubusercontent.com/vmware-tanzu/antrea/master/hack/windows/Prepare-ServiceInterface.ps1
-curl.exe -LO https://raw.githubusercontent.com/vmware-tanzu/antrea/master/hack/windows/Prepare-AntreaAgent.ps1
+curl.exe -LO https://raw.githubusercontent.com/vmware-tanzu/antrea/main/hack/windows/Clean-AntreaNetwork.ps1
+curl.exe -LO https://raw.githubusercontent.com/vmware-tanzu/antrea/main/hack/windows/Prepare-ServiceInterface.ps1
+curl.exe -LO https://raw.githubusercontent.com/vmware-tanzu/antrea/main/hack/windows/Prepare-AntreaAgent.ps1
 .\Prepare-AntreaAgent.ps1
 ```
 
@@ -328,7 +328,7 @@ curl.exe -LO https://github.com/vmware-tanzu/antrea/releases/download/<TAG>/Star
 1. HNS Network is not persistent on Windows. So after the Windows Node reboots,
 the HNS Network created by antrea-agent is removed, and the Open vSwitch
 Extension is disabled by default. In this case, the stale OVS bridge and ports
-should be removed. A help script [Clean-AntreaNetwork.ps1](https://raw.githubusercontent.com/vmware-tanzu/antrea/master/hack/windows/Clean-AntreaNetwork.ps1)
+should be removed. A help script [Clean-AntreaNetwork.ps1](https://raw.githubusercontent.com/vmware-tanzu/antrea/main/hack/windows/Clean-AntreaNetwork.ps1)
 can be used to clean the OVS bridge.
 
 2. Hyper-V feature cannot be installed on Windows Node due to the processor not
