@@ -130,13 +130,12 @@ func (data *TestData) testDeletePod(t *testing.T, podName string, nodeName strin
 	}
 
 	doesIPAllocationExist := func(podIP string) bool {
-		cmd := fmt.Sprintf("test -f /var/run/antrea/cni/networks/antrea/%s", podIP)
-		if rc, _, _, err := RunCommandOnNode(nodeName, cmd); err != nil {
-			t.Fatalf("Error when running ip command on Node '%s': %v", nodeName, err)
-		} else {
-			return rc == 0
+		cmd := []string{"test", "-f", "/var/run/antrea/cni/networks/antrea/" + podIP}
+		_, _, err := data.runCommandFromPod(antreaNamespace, antreaPodName, agentContainerName, cmd)
+		if err != nil {
+			return false
 		}
-		return false
+		return true
 	}
 
 	t.Logf("Checking that the veth interface and the OVS port exist")
