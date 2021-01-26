@@ -606,14 +606,14 @@ The Monitoring [CRDs] feature is graduated from Alpha to Beta.
 [Octant]: https://github.com/vmware-tanzu/octant
 [EKS]: https://aws.amazon.com/eks/
 [GKE]: https://cloud.google.com/kubernetes-engine
-[Antrea Windows documentation]: https://github.com/vmware-tanzu/antrea/blob/master/docs/windows.md
-[OVS pipeline documentation]: https://github.com/vmware-tanzu/antrea/blob/master/docs/design/ovs-pipeline.md
-[OVS hardware offload]: https://github.com/vmware-tanzu/antrea/blob/master/docs/ovs-offload.md
+[Antrea Windows documentation]: https://github.com/vmware-tanzu/antrea/blob/main/docs/windows.md
+[OVS pipeline documentation]: https://github.com/vmware-tanzu/antrea/blob/main/docs/design/ovs-pipeline.md
+[OVS hardware offload]: https://github.com/vmware-tanzu/antrea/blob/main/docs/ovs-offload.md
 [AKS]: https://azure.microsoft.com/en-us/services/kubernetes-service/
-[Flow Exporter]: https://github.com/vmware-tanzu/antrea/blob/master/docs/network-flow-visibility.md
+[Flow Exporter]: https://github.com/vmware-tanzu/antrea/blob/main/docs/network-flow-visibility.md
 [Elastic Stack]: https://www.elastic.co/elastic-stack
 [strongSwan]: https://www.strongswan.org/
-[Antrea Policy CRDs documentation]: https://github.com/vmware-tanzu/antrea/blob/master/docs/antrea-network-policy.md
+[Antrea Policy CRDs documentation]: https://github.com/vmware-tanzu/antrea/blob/main/docs/antrea-network-policy.md
 [Default cluster roles]: https://kubernetes.io/docs/reference/access-authn-authz/rbac/#user-facing-roles
 [Aggregated ClusterRoles]: https://kubernetes.io/docs/reference/access-authn-authz/rbac/#aggregated-clusterroles
 [Admission webhooks]: https://kubernetes.io/docs/reference/access-authn-authz/extensible-admission-controllers/

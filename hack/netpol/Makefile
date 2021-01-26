@@ -10,7 +10,7 @@ build:
 	docker tag antrea/netpol:$(VERSION) antrea/netpol:latest
 
 # requires permission to the Docker repo
-# we push a new image every time the master branch is updated
+# we push a new image every time the main branch is updated
 .PHONY: push
 push: build
 	docker push antrea/netpol:latest
