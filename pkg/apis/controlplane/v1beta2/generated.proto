@@ -99,7 +99,7 @@ message ExternalEntityReference {
   // The name of this ExternalEntity.
   optional string name = 1;
 
-  // The namespace of this ExternalEntity.
+  // The Namespace of this ExternalEntity.
   optional string namespace = 2;
 }
 
@@ -306,10 +306,10 @@ message NodeStatsSummary {
 
 // PodReference represents a Pod Reference.
 message PodReference {
-  // The name of this pod.
+  // The name of this Pod.
   optional string name = 1;
 
-  // The namespace of this pod.
+  // The Namespace of this Pod.
   optional string namespace = 2;
 }
 
@@ -328,5 +328,14 @@ message Service {
   // It can only be specified when a numerical `port` is specified.
   // +optional
   optional int32 endPort = 3;
+}
+
+// ServiceReference represents reference to a v1.Service.
+message ServiceReference {
+  // The name of this Service.
+  optional string name = 1;
+
+  // The Namespace of this Service.
+  optional string namespace = 2;
 }
 

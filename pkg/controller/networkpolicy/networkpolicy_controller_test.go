@@ -70,6 +70,7 @@ type networkPolicyController struct {
 	podStore                   cache.Store
 	externalEntityStore        cache.Store
 	namespaceStore             cache.Store
+	serviceStore               cache.Store
 	networkPolicyStore         cache.Store
 	cnpStore                   cache.Store
 	tierStore                  cache.Store
@@ -97,6 +98,7 @@ func newController(objects ...runtime.Object) (*fake.Clientset, *networkPolicyCo
 		crdClient,
 		informerFactory.Core().V1().Pods(),
 		informerFactory.Core().V1().Namespaces(),
+		informerFactory.Core().V1().Services(),
 		crdInformerFactory.Core().V1alpha2().ExternalEntities(),
 		informerFactory.Networking().V1().NetworkPolicies(),
 		crdInformerFactory.Security().V1alpha1().ClusterNetworkPolicies(),
@@ -121,6 +123,7 @@ func newController(objects ...runtime.Object) (*fake.Clientset, *networkPolicyCo
 		informerFactory.Core().V1().Pods().Informer().GetStore(),
 		crdInformerFactory.Core().V1alpha2().ExternalEntities().Informer().GetStore(),
 		informerFactory.Core().V1().Namespaces().Informer().GetStore(),
+		informerFactory.Core().V1().Services().Informer().GetStore(),
 		informerFactory.Networking().V1().NetworkPolicies().Informer().GetStore(),
 		crdInformerFactory.Security().V1alpha1().ClusterNetworkPolicies().Informer().GetStore(),
 		crdInformerFactory.Security().V1alpha1().Tiers().Informer().GetStore(),

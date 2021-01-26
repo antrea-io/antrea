@@ -725,6 +725,13 @@ spec:
                     cidr:
                       type: string
                       format: cidr
+                serviceReference:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                    namespace:
+                      type: string
             status:
               type: object
               properties:

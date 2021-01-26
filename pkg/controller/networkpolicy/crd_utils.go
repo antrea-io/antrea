@@ -214,3 +214,12 @@ func (n *NetworkPolicyController) getTierPriority(tier string) int32 {
 	}
 	return t.Spec.Priority
 }
+
+// getNormalizedNameForSelector retrieves the normalized name for GroupSelector.
+// If the GroupSelector is nil, an empty string is returned.
+func getNormalizedNameForSelector(sel *antreatypes.GroupSelector) string {
+	if sel != nil {
+		return sel.NormalizedName
+	}
+	return ""
+}

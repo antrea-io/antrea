@@ -639,10 +639,18 @@ func (t *tierValidator) deleteValidate(oldObj interface{}, userInfo authenticati
 // validateAntreaGroupSelectors ensures that an IPBlock is not set along with namespaceSelector and/or a
 // podSelector.
 func validateAntreaGroupSelectors(s corev1a2.GroupSpec) (string, bool) {
+	podSelector, serviceRef, ipBlock := 0, 0, 0
+	if s.NamespaceSelector != nil || s.PodSelector != nil {
+		podSelector = 1
+	}
 	if s.IPBlock != nil {
-		if s.NamespaceSelector != nil || s.PodSelector != nil {
-			return fmt.Sprint("cluster group IPBlock cannot be set with other selectors"), false
-		}
+		ipBlock = 1
+	}
+	if s.ServiceReference != nil {
+		serviceRef = 1
+	}
+	if podSelector+serviceRef+ipBlock > 1 {
+		return fmt.Sprint("At most one of podSelector/namespaceSelector, serviceReference or ipBlock can be set for a ClusterGroup"), false
 	}
 	return "", true
 }
