@@ -187,10 +187,10 @@ func (c *NPLController) checkDeletedSvc(obj interface{}) (*corev1.Service, error
 
 func (c *NPLController) enqueueSvcUpdate(oldObj, newObj interface{}) {
 	// In case where the app selector in Service gets updated from one valid selector to another
-	// both sets of Pods (corresponding to old and new selector) need to be considered
+	// both sets of Pods (corresponding to old and new selector) need to be considered.
 
 	// Donot push to queue if 1) Service ResourceVersions don't change OR
-	// 2) Service spec selectors AND 3) NPLEnabledAnnotationKey values don't change
+	// 2) Service spec selectors AND 3) NPLEnabledAnnotationKey values don't change.
 	newSvc := newObj.(*corev1.Service)
 	oldSvc := oldObj.(*corev1.Service)
 	if oldSvc.ResourceVersion == newSvc.ResourceVersion ||
@@ -199,7 +199,7 @@ func (c *NPLController) enqueueSvcUpdate(oldObj, newObj interface{}) {
 		return
 	}
 
-	// disjunctive union of Pods from both Service sets
+	// Disjunctive union of Pods from both Service sets.
 	oldPodSet := sets.NewString(c.getPodsFromService(oldSvc)...)
 	newPodSet := sets.NewString(c.getPodsFromService(newSvc)...)
 	podKeys := oldPodSet.Difference(newPodSet).Union(newPodSet.Difference(oldPodSet))
@@ -231,7 +231,7 @@ func (c *NPLController) getPodsFromService(svc *corev1.Service) []string {
 		return pods
 	}
 
-	// handling Service without selectors
+	// Handling Service without selectors.
 	if len(svc.Spec.Selector) == 0 {
 		return pods
 	}
@@ -257,7 +257,7 @@ func (c *NPLController) isNPLEnabledForServiceOfPod(obj interface{}) bool {
 
 	for _, service := range services {
 		svc, isSvc := service.(*corev1.Service)
-		// selecting Services NOT of type NodePort, with Service selector matching Pod labels
+		// Selecting Services NOT of type NodePort, with Service selector matching Pod labels.
 		if isSvc && svc.Spec.Type != corev1.ServiceTypeNodePort {
 			if matchSvcSelectorPodLabels(svc.Spec.Selector, pod.GetLabels()) {
 				return true
@@ -268,9 +268,9 @@ func (c *NPLController) isNPLEnabledForServiceOfPod(obj interface{}) bool {
 }
 
 // matchSvcSelectorPodLabels verifies that all key/value pairs present in Service's selector
-// are also present in Pod's labels
+// are also present in Pod's labels.
 func matchSvcSelectorPodLabels(svcSelector, podLabel map[string]string) bool {
-	// handling Service without selectors
+	// Handling Service without selectors.
 	if len(svcSelector) == 0 {
 		return false
 	}
@@ -323,8 +323,8 @@ func (c *NPLController) addPodIPToCache(key, podIP string) {
 }
 
 // handleRemovePod removes rules from port table and
-// rules programmed in the system based on implementation type (e.g. IPTABLES)
-// this also removes pod annotation from pods that are not selected by service annotation
+// rules programmed in the system based on implementation type (e.g. IPTABLES).
+// This also removes pod annotation from pods that are not selected by service annotation.
 func (c *NPLController) handleRemovePod(key string, obj interface{}) error {
 	klog.Infof("Got delete event for Pod: %s", key)
 	podIP, found := c.getPodIPFromCache(key)
@@ -348,7 +348,7 @@ func (c *NPLController) handleRemovePod(key string, obj interface{}) error {
 	return nil
 }
 
-// handleAddUpdatePod handles Pod Add, Update events and updates annotation if required
+// handleAddUpdatePod handles Pod Add, Update events and updates annotation if required.
 func (c *NPLController) handleAddUpdatePod(key string, obj interface{}) error {
 	newPod := obj.(*corev1.Pod).DeepCopy()
 	klog.Infof("Got add/update event for pod: %s", key)

@@ -33,7 +33,7 @@ const (
 	NPLEnabledAnnotationIndex = "nplEnabledAnnotation"
 )
 
-// NPLAnnotation is the structure used for setting NodePortLocal annotation on the Pods
+// NPLAnnotation is the structure used for setting NodePortLocal annotation on the Pods.
 type NPLAnnotation struct {
 	PodPort  int    `json:"podPort"`
 	NodeIP   string `json:"nodeIP"`
@@ -122,7 +122,7 @@ func (c *NPLController) RemoveNPLAnnotationFromPods() {
 		klog.Warningf("Failed to get Node's name, NodePortLocal annotation cannot be removed for Pods scheduled to this Node")
 		return
 	}
-	podList, err := c.kubeClient.CoreV1().Pods("").List(context.TODO(), metav1.ListOptions{
+	podList, err := c.kubeClient.CoreV1().Pods(metav1.NamespaceAll).List(context.TODO(), metav1.ListOptions{
 		FieldSelector:   "spec.nodeName=" + nodeName,
 		ResourceVersion: "0",
 	})

@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/nodeportlocal/k8s"
+	nplk8s "github.com/vmware-tanzu/antrea/pkg/agent/nodeportlocal/k8s"
 	"github.com/vmware-tanzu/antrea/pkg/agent/nodeportlocal/portcache"
 	"github.com/vmware-tanzu/antrea/pkg/agent/nodeportlocal/util"
 
@@ -39,7 +39,7 @@ const resyncPeriod = 60 * time.Minute
 // It initializes the port table cache to keep track of Node ports available for use by NPL,
 // sets up event handlers to handle Pod add, update and delete events.
 // When a Pod gets created, a free Node port is obtained from the port table cache and a DNAT rule is added to NAT traffic to the Pod's ip:port.
-func InitializeNPLAgent(kubeClient clientset.Interface, informerFactory informers.SharedInformerFactory, portRange, nodeName string) (*k8s.NPLController, error) {
+func InitializeNPLAgent(kubeClient clientset.Interface, informerFactory informers.SharedInformerFactory, portRange, nodeName string) (*nplk8s.NPLController, error) {
 	start, end, err := util.ParsePortsRange(portRange)
 	if err != nil {
 		return nil, fmt.Errorf("something went wrong while fetching port range: %v", err)
@@ -58,8 +58,8 @@ func InitializeNPLAgent(kubeClient clientset.Interface, informerFactory informer
 
 // InitController initializes the NPLController with appropriate Pod and Service Informers.
 // This function can be used independently while unit testing without using InitializeNPLAgent function.
-func InitController(kubeClient clientset.Interface, informerFactory informers.SharedInformerFactory, portTable *portcache.PortTable, nodeName string) (*k8s.NPLController, error) {
-	// Watch only the Pods which belong to the Node where the agent is running
+func InitController(kubeClient clientset.Interface, informerFactory informers.SharedInformerFactory, portTable *portcache.PortTable, nodeName string) (*nplk8s.NPLController, error) {
+	// Watch only the Pods which belong to the Node where the agent is running.
 	listOptions := func(options *metav1.ListOptions) {
 		options.FieldSelector = fields.OneTermEqualSelector("spec.nodeName", nodeName).String()
 	}
@@ -73,7 +73,7 @@ func InitController(kubeClient clientset.Interface, informerFactory informers.Sh
 
 	svcInformer := informerFactory.Core().V1().Services().Informer()
 
-	c := k8s.NewNPLController(kubeClient,
+	c := nplk8s.NewNPLController(kubeClient,
 		podInformer,
 		svcInformer,
 		resyncPeriod,
