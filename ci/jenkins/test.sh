@@ -305,6 +305,10 @@ function deliver_antrea {
         fi
     done
 
+    echo  "=== Append antrea-prometheus.yml to antrea.yml ==="
+    echo "---" >> build/yamls/antrea.yml
+    cat build/yamls/antrea-prometheus.yml >> build/yamls/antrea.yml
+
     cp -f build/yamls/*.yml $WORKDIR
     docker save -o antrea-ubuntu.tar projects.registry.vmware.com/antrea/antrea-ubuntu:latest
 
@@ -332,7 +336,7 @@ function run_e2e {
 
     set +e
     mkdir -p `pwd`/antrea-test-logs
-    go test -v github.com/vmware-tanzu/antrea/test/e2e --logs-export-dir `pwd`/antrea-test-logs -timeout=50m
+    go test -v github.com/vmware-tanzu/antrea/test/e2e --logs-export-dir `pwd`/antrea-test-logs -timeout=50m --prometheus
     if [[ "$?" != "0" ]]; then
         TEST_FAILURE=true
     fi
