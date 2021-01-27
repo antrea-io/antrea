@@ -1235,7 +1235,7 @@ func TestAddPod(t *testing.T) {
 	}
 	_, npc := newController()
 	npc.addNetworkPolicy(testNPObj)
-	groupKey := string(testCG.UID)
+	groupKey := testCG.Name
 	npc.addClusterGroup(testCG)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1316,7 +1316,7 @@ func TestDeletePod(t *testing.T) {
 			PodSelector: &selectorGroup,
 		},
 	}
-	groupKey := string(testCG.UID)
+	groupKey := testCG.Name
 	p1IP := "1.1.1.1"
 	p2IP := "2.2.2.2"
 	p1 := getPod("p1", ns, "", p1IP, false)
@@ -1479,7 +1479,7 @@ func TestAddNamespace(t *testing.T) {
 	_, npc := newController()
 	npc.addNetworkPolicy(testNPObj)
 	npc.addClusterGroup(testCG)
-	groupKey := string(testCG.UID)
+	groupKey := testCG.Name
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			npc.namespaceStore.Add(tt.addedNamespace)
@@ -1636,7 +1636,7 @@ func TestDeleteNamespace(t *testing.T) {
 	_, npc := newController()
 	npc.addNetworkPolicy(testNPObj)
 	npc.addClusterGroup(testCG)
-	groupKey := string(testCG.UID)
+	groupKey := testCG.Name
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			p1 := getPod("p1", "nsA", "", "1.1.1.1", false)
@@ -2848,7 +2848,7 @@ func TestDeleteFinalStateUnknownNetworkPolicy(t *testing.T) {
 }
 
 func TestInternalGroupKeyFunc(t *testing.T) {
-	expValue := "uid-a"
+	expValue := "cgA"
 	cg := v1alpha2.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{Name: "cgA", UID: "uid-a"},
 		Spec: v1alpha2.GroupSpec{
