@@ -7,8 +7,17 @@ RUN apt-get update && \
 # Leading dot is required for the tar command below
 ENV CNI_PLUGINS="./host-local ./loopback ./portmap ./bandwidth"
 
-RUN mkdir -p /opt/cni/bin && \
-    wget -q -O - https://github.com/containernetworking/plugins/releases/download/v0.8.7/cni-plugins-linux-amd64-v0.8.7.tgz | tar xz -C /opt/cni/bin $CNI_PLUGINS
+# Download containernetworking plugin binaries for the correct architecture
+RUN set -eux; \
+    dpkgArch="$(dpkg --print-architecture)"; \
+    case "${dpkgArch##*-}" in \
+         amd64) pluginsArch='amd64' ;; \
+	 armhf) pluginsArch='arm' ;; \
+	 arm64) pluginsArch='arm64' ;; \
+         *) pluginsArch=''; echo >&2; echo >&2 "unsupported architecture '$dpkgArch'"; echo >&2 ; exit 1 ;; \
+    esac; \
+    mkdir -p /opt/cni/bin; \
+    wget -q -O - https://github.com/containernetworking/plugins/releases/download/v0.8.7/cni-plugins-linux-${pluginsArch}-v0.8.7.tgz | tar xz -C /opt/cni/bin $CNI_PLUGINS
 
 
 FROM antrea/openvswitch:${OVS_VERSION}
