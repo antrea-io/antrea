@@ -26,6 +26,7 @@ import (
 
 	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
 	corev1a2 "github.com/vmware-tanzu/antrea/pkg/apis/core/v1alpha2"
+	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
 	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy/store"
 	antreatypes "github.com/vmware-tanzu/antrea/pkg/controller/types"
 )
@@ -211,27 +212,33 @@ func (n *NetworkPolicyController) syncInternalGroup(key string) error {
 		return err
 	}
 	// If a ClusterGroup is added/updated, it might have a reference in ClusterNetworkPolicy.
-	// Trigger the sync for corresponding groups with the shared key and complete the
-	// corresponding group if not yet completed.
-	n.addressGroupMutex.Lock()
-	addrGroupObj, found, _ := n.addressGroupStore.Get(key)
-	if found {
-		// If AddressGroup was created corresponding to this ClusterGroup, complete the
-		// AddressGroup fields before syncing the AddressGroup or ensure that the selector
-		// is updated.
-		addrGroup := addrGroupObj.(*antreatypes.AddressGroup)
-		if isGroupSelectorUnset(addrGroup.Selector) || addrGroup.Selector != updatedGrp.Selector {
-			updatedAddrGroup := &antreatypes.AddressGroup{
-				UID:          addrGroup.UID,
-				Name:         addrGroup.Name,
-				Selector:     updatedGrp.Selector,
-				GroupMembers: updatedGrp.GroupMembers,
-			}
-			n.addressGroupStore.Update(updatedAddrGroup)
-		}
+	cnps, err := n.cnpInformer.Informer().GetIndexer().ByIndex(ClusterGroupIndex, cg.Name)
+	if err != nil {
+		klog.Errorf("Error retrieve ClusterNetworkPolicies corresponding to ClusterGroup %s", cg.Name)
+		return err
 	}
-	n.addressGroupMutex.Unlock()
-	n.enqueueAddressGroup(key)
+	for _, obj := range cnps {
+		cnp := obj.(*secv1alpha1.ClusterNetworkPolicy)
+		// Re-process ClusterNetworkPolicies which may be affected due to updates to CG.
+		curInternalNP := n.processClusterNetworkPolicy(cnp)
+		klog.V(2).Infof("Updating existing internal NetworkPolicy %s for %s", curInternalNP.Name, curInternalNP.SourceRef.ToString())
+		key := internalNetworkPolicyKeyFunc(cnp)
+		// Lock access to internal NetworkPolicy store such that concurrent access
+		// to an internal NetworkPolicy is not allowed. This will avoid the
+		// case in which an Update to an internal NetworkPolicy object may
+		// cause the SpanMeta member to be overridden with stale SpanMeta members
+		// from an older internal NetworkPolicy.
+		n.internalNetworkPolicyMutex.Lock()
+		oldInternalNPObj, _, _ := n.internalNetworkPolicyStore.Get(key)
+		oldInternalNP := oldInternalNPObj.(*antreatypes.NetworkPolicy)
+		// Must preserve old internal NetworkPolicy Span.
+		curInternalNP.SpanMeta = oldInternalNP.SpanMeta
+		n.internalNetworkPolicyStore.Update(curInternalNP)
+		// Unlock the internal NetworkPolicy store.
+		n.internalNetworkPolicyMutex.Unlock()
+		n.enqueueInternalNetworkPolicy(key)
+		n.deleteDereferencedAddressGroups(oldInternalNP)
+	}
 	return nil
 }
 

@@ -26,6 +26,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
 	corev1a2 "github.com/vmware-tanzu/antrea/pkg/apis/core/v1alpha2"
 	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
+	antreatypes "github.com/vmware-tanzu/antrea/pkg/controller/types"
 )
 
 func TestToAntreaServicesForCRD(t *testing.T) {
@@ -304,36 +305,34 @@ func TestToAntreaPeerForCRD(t *testing.T) {
 func TestCreateAddressGroupForClusterGroupCRD(t *testing.T) {
 	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
 	selectorB := metav1.LabelSelector{MatchLabels: map[string]string{"foo2": "bar2"}}
-	cgA := corev1a2.ClusterGroup{
-		ObjectMeta: metav1.ObjectMeta{Name: "cgA", UID: "uidA"},
-		Spec: corev1a2.GroupSpec{
-			NamespaceSelector: &selectorA,
-		},
+	igA := antreatypes.Group{
+		UID:      "uidA",
+		Name:     "cgA",
+		Selector: *toGroupSelector("", nil, &selectorA, nil),
 	}
-	cgB := corev1a2.ClusterGroup{
-		ObjectMeta: metav1.ObjectMeta{Name: "cgB", UID: "uidB"},
-		Spec: corev1a2.GroupSpec{
-			NamespaceSelector: &selectorB,
-		},
+	igB := antreatypes.Group{
+		UID:      "uidB",
+		Name:     "cgB",
+		Selector: *toGroupSelector("", nil, &selectorB, nil),
 	}
 	tests := []struct {
 		name                   string
-		inCG                   *corev1a2.ClusterGroup
+		inG                    *antreatypes.Group
 		expectedKey            string
 		expectedAddressGroups  int
 		expectedInternalGroups int
 	}{
 		{
 			name:                   "group-not-found",
-			inCG:                   &cgB,
-			expectedKey:            string(cgB.UID),
+			inG:                    &igB,
+			expectedKey:            string(igB.UID),
 			expectedAddressGroups:  1,
 			expectedInternalGroups: 1,
 		},
 		{
 			name:                   "cluster-group-with-selector",
-			inCG:                   &cgA,
-			expectedKey:            string(cgA.UID),
+			inG:                    &igA,
+			expectedKey:            string(igA.UID),
 			expectedAddressGroups:  1,
 			expectedInternalGroups: 1,
 		},
@@ -341,9 +340,8 @@ func TestCreateAddressGroupForClusterGroupCRD(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, c := newController()
-			c.addClusterGroup(&cgA)
-			c.cgStore.Add(&cgA)
-			actualKey := c.createAddressGroupForClusterGroupCRD(tt.inCG)
+			c.internalGroupStore.Create(tt.inG)
+			actualKey := c.createAddressGroupForClusterGroupCRD(tt.inG)
 			assert.Equal(t, tt.expectedKey, actualKey)
 			assert.Equal(t, tt.expectedInternalGroups, len(c.internalGroupStore.List()))
 			assert.Equal(t, tt.expectedAddressGroups, len(c.addressGroupStore.List()))

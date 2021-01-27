@@ -207,15 +207,20 @@ func (n *NetworkPolicyController) processRefCG(g string) (string, *controlplane.
 		klog.V(2).Infof("ClusterGroup %s not found. %v", g, err)
 		return "", nil
 	}
-	if cg.Spec.IPBlock != nil {
-		ipBlock, err := toAntreaIPBlockForCRD(cg.Spec.IPBlock)
-		if err != nil {
-			klog.Errorf("Failure processing ClusterGroup %s IPBlock %v: %v", cg.Name, cg.Spec.IPBlock, err)
-			return "", nil
-		}
-		return "", ipBlock
+	key := internalGroupKeyFunc(cg)
+	// Find the internal Group corresponding to this ClusterGroup
+	ig, found, _ := n.internalGroupStore.Get(key)
+	if !found {
+		// Internal Group was not found. Once the internal Group is created, the sync
+		// worker for internal group will re-enqueue the ClusterNetworkPolicy processing
+		// which will trigger the creation of AddressGroup.
+		return "", nil
 	}
-	agKey := n.createAddressGroupForClusterGroupCRD(cg)
+	intGrp := ig.(*antreatypes.Group)
+	if intGrp.IPBlock != nil {
+		return "", intGrp.IPBlock
+	}
+	agKey := n.createAddressGroupForClusterGroupCRD(intGrp)
 	// Return if addressGroup was created or found.
 	return agKey, nil
 }
