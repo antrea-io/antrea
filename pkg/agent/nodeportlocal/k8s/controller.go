@@ -75,6 +75,8 @@ func NewNPLController(kubeClient clientset.Interface,
 			UpdateFunc: func(old, cur interface{}) {
 				oldPod := old.(*corev1.Pod)
 				curPod := cur.(*corev1.Pod)
+				// Pod fields to watch for: ContainerPort, HostIP, PodIP,
+				// Labels, Annotations (NPLAnnotationKey).
 				if oldPod.ResourceVersion != curPod.ResourceVersion {
 					c.enqueuePod(cur)
 				}
@@ -188,21 +190,36 @@ func (c *NPLController) checkDeletedSvc(obj interface{}) (*corev1.Service, error
 func (c *NPLController) enqueueSvcUpdate(oldObj, newObj interface{}) {
 	// In case where the app selector in Service gets updated from one valid selector to another
 	// both sets of Pods (corresponding to old and new selector) need to be considered.
-
-	// Donot push to queue if 1) Service ResourceVersions don't change OR
-	// 2) Service spec selectors AND 3) NPLEnabledAnnotationKey values don't change.
 	newSvc := newObj.(*corev1.Service)
 	oldSvc := oldObj.(*corev1.Service)
-	if oldSvc.ResourceVersion == newSvc.ResourceVersion ||
-		reflect.DeepEqual(oldSvc.Spec.Selector, newSvc.Spec.Selector) &&
-			oldSvc.Annotations[NPLEnabledAnnotationKey] == newSvc.Annotations[NPLEnabledAnnotationKey] {
+
+	// Return if Service ResourceVersions don't change.
+	if oldSvc.ResourceVersion == newSvc.ResourceVersion {
 		return
 	}
 
-	// Disjunctive union of Pods from both Service sets.
-	oldPodSet := sets.NewString(c.getPodsFromService(oldSvc)...)
-	newPodSet := sets.NewString(c.getPodsFromService(newSvc)...)
-	podKeys := oldPodSet.Difference(newPodSet).Union(newPodSet.Difference(oldPodSet))
+	oldSvcAnnotation := oldSvc.Annotations[NPLEnabledAnnotationKey]
+	newSvcAnnotation := newSvc.Annotations[NPLEnabledAnnotationKey]
+	// Return if both Services donot have the NPL annotation.
+	if oldSvcAnnotation != "true" && newSvcAnnotation != "true" {
+		return
+	}
+
+	podKeys := sets.String{}
+	if oldSvcAnnotation != newSvcAnnotation {
+		// Process Pods corresponding to Service with valid NPL annotation.
+		if oldSvcAnnotation == "true" {
+			podKeys = sets.NewString(c.getPodsFromService(oldSvc)...)
+		} else if newSvcAnnotation == "true" {
+			podKeys = sets.NewString(c.getPodsFromService(newSvc)...)
+		}
+	} else if !reflect.DeepEqual(oldSvc.Spec.Selector, newSvc.Spec.Selector) {
+		// Disjunctive union of Pods from both Service sets.
+		oldPodSet := sets.NewString(c.getPodsFromService(oldSvc)...)
+		newPodSet := sets.NewString(c.getPodsFromService(newSvc)...)
+		podKeys = oldPodSet.Difference(newPodSet).Union(newPodSet.Difference(oldPodSet))
+	}
+
 	for podKey := range podKeys {
 		c.queue.Add(podKey)
 	}
@@ -219,17 +236,16 @@ func (c *NPLController) enqueueSvc(obj interface{}) {
 		}
 	}
 
-	for _, podKey := range c.getPodsFromService(svc) {
-		c.queue.Add(podKey)
+	// Process Pods corresponding to Service with valid NPL annotation.
+	if svc.Annotations[NPLEnabledAnnotationKey] == "true" {
+		for _, podKey := range c.getPodsFromService(svc) {
+			c.queue.Add(podKey)
+		}
 	}
 }
 
 func (c *NPLController) getPodsFromService(svc *corev1.Service) []string {
 	var pods []string
-	annotations := svc.GetAnnotations()
-	if val, ok := annotations[NPLEnabledAnnotationKey]; !ok || val != "true" {
-		return pods
-	}
 
 	// Handling Service without selectors.
 	if len(svc.Spec.Selector) == 0 {
