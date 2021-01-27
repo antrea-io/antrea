@@ -25,6 +25,10 @@ bin:
 	@mkdir -p $(BINDIR)
 	GOOS=linux $(GO) build -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' github.com/vmware-tanzu/antrea/cmd/...
 
+.PHONY: race-bin
+	@mkdir -p $(BINDIR)
+	GOOS=linux $(GO) build -race -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' github.com/vmware-tanzu/antrea/cmd/...
+
 .PHONY: antrea-agent
 antrea-agent:
 	@mkdir -p $(BINDIR)
@@ -38,7 +42,7 @@ antrea-agent-simulator:
 .PHONY: antrea-agent-instr-binary
 antrea-agent-instr-binary:
 	@mkdir -p $(BINDIR)
-	GOOS=linux $(GO) test -tags testbincover -covermode count -coverpkg=github.com/vmware-tanzu/antrea/pkg/... -c -o $(BINDIR)/antrea-agent-coverage $(GOFLAGS) -ldflags '$(LDFLAGS)' github.com/vmware-tanzu/antrea/cmd/antrea-agent
+	GOOS=linux $(GO) test -race -tags testbincover -covermode atomic -coverpkg=github.com/vmware-tanzu/antrea/pkg/... -c -o $(BINDIR)/antrea-agent-coverage $(GOFLAGS) -ldflags '$(LDFLAGS)' github.com/vmware-tanzu/antrea/cmd/antrea-agent
 
 .PHONY: antrea-controller
 antrea-controller:
@@ -52,7 +56,7 @@ antrea-controller:
 .PHONY: antrea-controller-instr-binary
 antrea-controller-instr-binary:
 	@mkdir -p $(BINDIR)
-	GOOS=linux $(GO) test -tags testbincover -covermode count -coverpkg=github.com/vmware-tanzu/antrea/pkg/... -c -o $(BINDIR)/antrea-controller-coverage $(GOFLAGS) -ldflags '$(LDFLAGS)' github.com/vmware-tanzu/antrea/cmd/antrea-controller
+	GOOS=linux $(GO) test -race -tags testbincover -covermode atomic -coverpkg=github.com/vmware-tanzu/antrea/pkg/... -c -o $(BINDIR)/antrea-controller-coverage $(GOFLAGS) -ldflags '$(LDFLAGS)' github.com/vmware-tanzu/antrea/cmd/antrea-controller
 
 .PHONY: antrea-cni
 antrea-cni:
@@ -67,7 +71,7 @@ antctl-ubuntu:
 .PHONY: antctl-instr-binary
 antctl-instr-binary:
 	@mkdir -p $(BINDIR)
-	GOOS=linux $(GO) test -tags testbincover -covermode count -coverpkg=github.com/vmware-tanzu/antrea/pkg/... -c -o $(BINDIR)/antctl-coverage $(GOFLAGS) -ldflags '$(LDFLAGS)' github.com/vmware-tanzu/antrea/cmd/antctl
+	GOOS=linux $(GO) test -race -tags testbincover -covermode atomic -coverpkg=github.com/vmware-tanzu/antrea/pkg/... -c -o $(BINDIR)/antctl-coverage $(GOFLAGS) -ldflags '$(LDFLAGS)' github.com/vmware-tanzu/antrea/cmd/antctl
 
 .PHONY: windows-bin
 windows-bin:
