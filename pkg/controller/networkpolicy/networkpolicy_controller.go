@@ -202,6 +202,10 @@ type NetworkPolicyController struct {
 	// concurrent access during updates to the internal NetworkPolicy object.
 	internalNetworkPolicyMutex sync.RWMutex
 
+	// appliedToGroupMutex protects the appliedToGroupStore from
+	// concurrent access during updates to the AppliedToGroup object.
+	appliedToGroupMutex sync.RWMutex
+
 	// heartbeatCh is an internal channel for testing. It's used to know whether all tasks have been
 	// processed, and to count executions of each function.
 	heartbeatCh chan heartbeat
@@ -318,8 +322,13 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 						return []string{}, nil
 					}
 					groupNames := sets.String{}
+					for _, appTo := range cnp.Spec.AppliedTo {
+						if appTo.Group != "" {
+							groupNames.Insert(appTo.Group)
+						}
+					}
 					if len(cnp.Spec.Ingress) == 0 && len(cnp.Spec.Egress) == 0 {
-						return []string{}, nil
+						return groupNames.List(), nil
 					}
 					appendGroups := func(rule secv1alpha1.Rule) {
 						for _, peer := range rule.To {
@@ -330,6 +339,11 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 						for _, peer := range rule.From {
 							if peer.Group != "" {
 								groupNames.Insert(peer.Group)
+							}
+						}
+						for _, appTo := range rule.AppliedTo {
+							if appTo.Group != "" {
+								groupNames.Insert(appTo.Group)
 							}
 						}
 					}
@@ -1471,14 +1485,16 @@ func (n *NetworkPolicyController) syncAppliedToGroup(key string) error {
 		klog.V(2).Infof("Finished syncing AppliedToGroup %s. (%v)", key, d)
 	}()
 	var pods []*v1.Pod
+	memberSetByNode := make(map[string]controlplane.GroupMemberSet)
+	scheduledPodNum, scheduledExtEntityNum := 0, 0
 	appGroupNodeNames := sets.String{}
+	n.appliedToGroupMutex.Lock()
 	appliedToGroupObj, found, _ := n.appliedToGroupStore.Get(key)
 	if !found {
 		klog.V(2).Infof("AppliedToGroup %s not found.", key)
+		n.appliedToGroupMutex.Unlock()
 		return nil
 	}
-	memberSetByNode := make(map[string]controlplane.GroupMemberSet)
-	scheduledPodNum, scheduledExtEntityNum := 0, 0
 	appliedToGroup := appliedToGroupObj.(*antreatypes.AppliedToGroup)
 	pods, externalEntities := n.getAppliedToWorkloads(appliedToGroup)
 	for _, pod := range pods {
@@ -1518,7 +1534,7 @@ func (n *NetworkPolicyController) syncAppliedToGroup(key string) error {
 		SpanMeta:          antreatypes.SpanMeta{NodeNames: appGroupNodeNames},
 	}
 	n.appliedToGroupStore.Update(updatedAppliedToGroup)
-
+	n.appliedToGroupMutex.Unlock()
 	// Get all internal NetworkPolicy objects that refers this AppliedToGroup.
 	// Note that this must be executed after storing the result, to ensure that
 	// both of the NetworkPolicies that referred it before storing it and the

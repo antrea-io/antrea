@@ -17,14 +17,13 @@ package networkpolicy
 import (
 	"strings"
 
-	"github.com/vmware-tanzu/antrea/pkg/apis/core/v1alpha2"
-
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
+	"github.com/vmware-tanzu/antrea/pkg/apis/core/v1alpha2"
 	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
 	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy/store"
 	antreatypes "github.com/vmware-tanzu/antrea/pkg/controller/types"
@@ -128,15 +127,31 @@ func (n *NetworkPolicyController) createAppliedToGroupForClusterGroupCRD(cg *v1a
 	igKey := internalGroupKeyFunc(cg)
 	ig, found, _ := n.internalGroupStore.Get(igKey)
 	if !found {
-		klog.V(2).Infof("Internal group %s not found.", igKey)
+		klog.V(2).Infof("Internal group %s not found", igKey)
 		return ""
 	}
 	intGrp := ig.(*antreatypes.Group)
+	n.appliedToGroupMutex.Lock()
 	// Check to see if the AppliedToGroup already exists
-	_, found, _ = n.appliedToGroupStore.Get(igKey)
+	atgObj, found, _ := n.appliedToGroupStore.Get(igKey)
 	if found {
+		atg := atgObj.(*antreatypes.AppliedToGroup)
+		if atg.Selector.NormalizedName != intGrp.Selector.NormalizedName {
+			// Update AppliedToGroup object for this Cluster Group.
+			appliedToGroup := &antreatypes.AppliedToGroup{
+				UID:               atg.UID,
+				Name:              atg.Name,
+				SpanMeta:          atg.SpanMeta,
+				GroupMemberByNode: atg.GroupMemberByNode,
+				Selector:          intGrp.Selector,
+			}
+			n.appliedToGroupStore.Update(appliedToGroup)
+			klog.V(2).Infof("Updated existing AppliedToGroup %v corresponding to ClusterGroup CRD %s", appliedToGroup.UID, intGrp.Name)
+		}
+		n.appliedToGroupMutex.Unlock()
 		return igKey
 	}
+	n.appliedToGroupMutex.Unlock()
 	// Create an AppliedToGroup object for this internal Group.
 	appliedToGroup := &antreatypes.AppliedToGroup{
 		UID:      types.UID(igKey),

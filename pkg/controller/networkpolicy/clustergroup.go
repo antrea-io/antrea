@@ -257,6 +257,9 @@ func (n *NetworkPolicyController) triggerCNPUpdates(cg *corev1a2.ClusterGroup) e
 		}
 		n.enqueueInternalNetworkPolicy(key)
 		n.deleteDereferencedAddressGroups(oldInternalNP)
+		for _, atg := range oldInternalNP.AppliedToGroups {
+			n.deleteDereferencedAppliedToGroup(atg)
+		}
 	}
 	return nil
 }

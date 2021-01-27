@@ -250,11 +250,11 @@ func (n *NetworkPolicyController) processAppliedToGroupForCG(g string) string {
 	// Retrieve ClusterGroup for corresponding entry in the AppliedToGroup.
 	cg, err := n.cgLister.Get(g)
 	if err != nil {
-		klog.V(2).Infof("ClusterGroup %s not found. %v", g, err)
+		klog.V(2).Infof("ClusterGroup %s not found: %v", g, err)
 		return ""
 	}
 	if cg.Spec.IPBlock != nil {
-		klog.V(2).Infof("ClusterGroup %s with IPBlock will not be processed as AppliedTo.", g)
+		klog.V(2).Infof("ClusterGroup %s with IPBlock will not be processed as AppliedTo", g)
 		return ""
 	}
 	return n.createAppliedToGroupForClusterGroupCRD(cg)
