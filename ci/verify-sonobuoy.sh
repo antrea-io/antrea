@@ -28,8 +28,18 @@ install_sonobuoy() {
         >&2 echo "Unsupported OS type $OSTYPE"
         return 1
     fi
+    local machinetype=$(uname -m)
+    local arch=""
+    if [[ "$machinetype" == "x86_64" ]]; then
+        arch="amd64"
+    elif [[ "$machinetype" == "aarch64" ]]; then
+        arch="arm64"
+    else
+        >&2 echo "Unsupported machine type $machinetype"
+        return 1
+    fi
     >&2 echo "Installing sonobuoy"
-    local sonobuoy_url="https://github.com/vmware-tanzu/sonobuoy/releases/download/${_MIN_SONOBUOY_VERSION}/sonobuoy_${_MIN_SONOBUOY_VERSION:1}_${ostype}_amd64.tar.gz"
+    local sonobuoy_url="https://github.com/vmware-tanzu/sonobuoy/releases/download/${_MIN_SONOBUOY_VERSION}/sonobuoy_${_MIN_SONOBUOY_VERSION:1}_${ostype}_${arch}.tar.gz"
     curl -sLo "$_SONOBUOY_TARBALL" "${sonobuoy_url}" || return 1
     mkdir -p "$_SONOBUOY_BINDIR" || return 1
     tar -xzf "$_SONOBUOY_TARBALL" -C "$_SONOBUOY_BINDIR" || return 1
