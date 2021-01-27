@@ -1349,7 +1349,7 @@ func (n *NetworkPolicyController) syncAddressGroup(key string) error {
 
 func (n *NetworkPolicyController) populateAddressGroupMemberSet(g *antreatypes.AddressGroup) controlplane.GroupMemberSet {
 	// Check if an internal Group object exists corresponding to this AddressGroup.
-	intGroup, found, _ := n.internalGroupStore.Get(string(g.UID))
+	intGroup, found, _ := n.internalGroupStore.Get(g.Name)
 	if found {
 		ig := intGroup.(*antreatypes.Group)
 		return ig.GroupMembers

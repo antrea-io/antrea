@@ -211,6 +211,11 @@ func (n *NetworkPolicyController) syncInternalGroup(key string) error {
 		klog.Errorf("Failed to update ClusterGroup %s GroupMembersComputed condition to %s: %v", cg.Name, v1.ConditionTrue, err)
 		return err
 	}
+	return n.triggerCNPUpdates(cg)
+}
+
+// triggerCNPUpdates triggers processing of ClusterNetworkPolicies associated with the input ClusterGroup.
+func (n *NetworkPolicyController) triggerCNPUpdates(cg *corev1a2.ClusterGroup) error {
 	// If a ClusterGroup is added/updated, it might have a reference in ClusterNetworkPolicy.
 	cnps, err := n.cnpInformer.Informer().GetIndexer().ByIndex(ClusterGroupIndex, cg.Name)
 	if err != nil {

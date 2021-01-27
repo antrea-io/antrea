@@ -251,7 +251,7 @@ func TestToAntreaPeerForCRD(t *testing.T) {
 				},
 			},
 			outPeer: controlplane.NetworkPolicyPeer{
-				AddressGroups: []string{string(cgA.UID)},
+				AddressGroups: []string{cgA.Name},
 			},
 			direction: controlplane.DirectionIn,
 		},
@@ -276,7 +276,7 @@ func TestToAntreaPeerForCRD(t *testing.T) {
 				},
 			},
 			outPeer: controlplane.NetworkPolicyPeer{
-				AddressGroups: []string{string(cgA.UID)},
+				AddressGroups: []string{cgA.Name},
 			},
 			direction: controlplane.DirectionOut,
 		},
@@ -325,14 +325,14 @@ func TestCreateAddressGroupForClusterGroupCRD(t *testing.T) {
 		{
 			name:                   "group-not-found",
 			inG:                    &igB,
-			expectedKey:            string(igB.UID),
+			expectedKey:            igB.Name,
 			expectedAddressGroups:  1,
 			expectedInternalGroups: 1,
 		},
 		{
 			name:                   "cluster-group-with-selector",
 			inG:                    &igA,
-			expectedKey:            string(igA.UID),
+			expectedKey:            igA.Name,
 			expectedAddressGroups:  1,
 			expectedInternalGroups: 1,
 		},

@@ -17,6 +17,8 @@ package networkpolicy
 import (
 	"strings"
 
+	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy/store"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -144,7 +146,10 @@ func (n *NetworkPolicyController) createAddressGroupForCRD(peer secv1alpha1.Netw
 // otherwise it copies the ClusterGroup CRD contents to an AddressGroup resource and returns
 // its key. If the corresponding internal Group is not found return empty.
 func (n *NetworkPolicyController) createAddressGroupForClusterGroupCRD(intGrp *antreatypes.Group) string {
-	key := string(intGrp.UID)
+	key, err := store.GroupKeyFunc(intGrp)
+	if err != nil {
+		return ""
+	}
 	// Check to see if the AddressGroup already exists
 	n.addressGroupMutex.Lock()
 	agObj, found, _ := n.addressGroupStore.Get(key)

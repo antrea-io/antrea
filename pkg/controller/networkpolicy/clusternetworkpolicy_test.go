@@ -526,7 +526,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 					{
 						Direction: controlplane.DirectionIn,
 						From: controlplane.NetworkPolicyPeer{
-							AddressGroups: []string{string(cgA.UID)},
+							AddressGroups: []string{cgA.Name},
 						},
 						Services: []controlplane.Service{
 							{
@@ -540,7 +540,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 					{
 						Direction: controlplane.DirectionOut,
 						To: controlplane.NetworkPolicyPeer{
-							AddressGroups: []string{string(cgA.UID)},
+							AddressGroups: []string{cgA.Name},
 						},
 						Services: []controlplane.Service{
 							{
@@ -1195,7 +1195,7 @@ func TestProcessRefCG(t *testing.T) {
 		{
 			name:        "cg-with-selector",
 			inputCG:     cgA.Name,
-			expectedAG:  string(cgA.UID),
+			expectedAG:  cgA.Name,
 			expectedIPB: nil,
 		},
 		{

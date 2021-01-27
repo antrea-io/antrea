@@ -317,7 +317,7 @@ func testInvalidACNPCGDoesNotExist(t *testing.T) {
 	builder := &ClusterNetworkPolicySpecBuilder{}
 	builder = builder.SetName("acnp-ingress-group-not-exist").
 		SetPriority(1.0).
-		SetAppliedToGroup(map[string]string{"pod": "b"}, nil, nil, nil).
+		SetAppliedToGroup([]ACNPAppliedToSpec{{PodSelector: map[string]string{"pod": "b"}}}).
 		AddIngress(v1.ProtocolTCP, &p80, nil, nil, nil, map[string]string{"pod": "b"}, nil,
 			nil, nil, nil, secv1alpha1.RuleActionAllow, "cgA", "")
 	acnp := builder.Get()
@@ -336,7 +336,7 @@ func testInvalidACNPIngressPeerCGSetWithPodSelector(t *testing.T) {
 	builder := &ClusterNetworkPolicySpecBuilder{}
 	builder = builder.SetName("acnp-ingress-group-podselector-set").
 		SetPriority(1.0).
-		SetAppliedToGroup([]ACNPAppliedToSpec{{PodSelector:map[string]string{"pod": "b"}}}).
+		SetAppliedToGroup([]ACNPAppliedToSpec{{PodSelector: map[string]string{"pod": "b"}}}).
 		AddIngress(v1.ProtocolTCP, &p80, nil, nil, nil, map[string]string{"pod": "b"}, nil,
 			nil, nil, nil, secv1alpha1.RuleActionAllow, cgA, "")
 	acnp := builder.Get()
@@ -356,7 +356,7 @@ func testInvalidACNPIngressPeerCGSetWithNSSelector(t *testing.T) {
 	builder := &ClusterNetworkPolicySpecBuilder{}
 	builder = builder.SetName("acnp-ingress-group-nsselector-set").
 		SetPriority(1.0).
-		SetAppliedToGroup([]ACNPAppliedToSpec{{PodSelector:map[string]string{"pod": "b"}}}).
+		SetAppliedToGroup([]ACNPAppliedToSpec{{PodSelector: map[string]string{"pod": "b"}}}).
 		AddIngress(v1.ProtocolTCP, &p80, nil, nil, nil, nil, map[string]string{"ns": "b"},
 			nil, nil, nil, secv1alpha1.RuleActionAllow, cgA, "")
 	acnp := builder.Get()
@@ -377,7 +377,7 @@ func testInvalidACNPIngressPeerCGSetWithIPBlock(t *testing.T) {
 	builder := &ClusterNetworkPolicySpecBuilder{}
 	builder = builder.SetName("acnp-ingress-group-ipblock-set").
 		SetPriority(1.0).
-		SetAppliedToGroup([]ACNPAppliedToSpec{{PodSelector:map[string]string{"pod": "b"}}}).
+		SetAppliedToGroup([]ACNPAppliedToSpec{{PodSelector: map[string]string{"pod": "b"}}}).
 		AddIngress(v1.ProtocolTCP, &p80, nil, nil, &cidr, nil, nil,
 			nil, nil, nil, secv1alpha1.RuleActionAllow, cgA, "")
 	acnp := builder.Get()
