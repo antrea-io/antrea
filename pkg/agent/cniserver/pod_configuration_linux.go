@@ -40,7 +40,7 @@ func (pc *podConfigurator) connectInterfaceToOVS(
 	return containerConfig, pc.connectInterfaceToOVSInternal(ovsPortName, containerConfig)
 }
 
-func (pc *podConfigurator) reconcileMissedPods(pods sets.String, containerAccess *containerAccessArbitrator) error {
+func (pc *podConfigurator) reconcileMissingPods(pods sets.String, containerAccess *containerAccessArbitrator) error {
 	for pod := range pods {
 		// This should not happen since OVSDB is persisted on the Node.
 		// TODO: is there anything else we should be doing? Assuming that the Pod's

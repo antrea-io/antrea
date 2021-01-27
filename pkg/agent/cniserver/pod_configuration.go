@@ -167,7 +167,7 @@ func ParseOVSPortInterfaceConfig(portData *ovsconfig.OVSPortData, portConfig *in
 
 	containerMAC, err := net.ParseMAC(portData.ExternalIDs[ovsExternalIDMAC])
 	if err != nil {
-		klog.Warningf("Failed to parse MAC address from OVS external config %s: %v",
+		klog.Errorf("Failed to parse MAC address from OVS external config %s: %v",
 			portData.ExternalIDs[ovsExternalIDMAC], err)
 	}
 	podName, _ := portData.ExternalIDs[ovsExternalIDPodName]
@@ -439,7 +439,7 @@ func (pc *podConfigurator) reconcile(pods []corev1.Pod, containerAccess *contain
 	}
 
 	missedPods := desiredPods.Difference(actualPods)
-	pc.reconcileMissedPods(missedPods, containerAccess)
+	pc.reconcileMissingPods(missedPods, containerAccess)
 	return nil
 }
 

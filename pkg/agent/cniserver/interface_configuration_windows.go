@@ -42,6 +42,8 @@ const (
 	notFoundHNSEndpoint = "The endpoint was not found"
 )
 
+var dummyMac, _ = net.ParseMAC("00:00:00:00:00:00")
+
 type ifConfigurator struct {
 	hnsNetwork *hcsshim.HNSNetwork
 	epCache    *sync.Map
@@ -174,12 +176,24 @@ func (ic *ifConfigurator) createContainerLink(endpointName string, result *curre
 	if err != nil {
 		klog.Errorf("Failed to find container %s IP", containerID)
 	}
+	// Save interface config to HNSEndpoint. It's mainly used for creating missing
+	// OVS ports during antrea-agent boot stage. The interface config will be rebuilt
+	// based on the params saved in AdditionalParams field of HNSEndpoint.
+	//   - endpointName: the name of host interface without Hyper-V prefix(vEthernet).
+	//     The name is same with OVS port name and HNSEndpoint name.
+	//   - containerID: Used as key for goroutine lock to avid concurrency issue.
+	//   - podName and PodNamespace: Used to identify the owner of the HNSEndpoint.
+	//   - dummyMac: the MAC address of the HNSEndpoint is unknown before we creating it.
+	//     Use a dummy MAC address here. The real MAC is retrieved from HNSEndopint when we
+	//     parse the config.
+	//   - Other params will be passed to OVS port
+
 	ifaceConfig := interfacestore.NewContainerInterface(
 		endpointName,
 		containerID,
 		podName,
 		podNamespace,
-		nil,
+		dummyMac,
 		containerIPStr)
 	ovsAttachInfoData := BuildOVSPortExternalIDs(ifaceConfig)
 	ovsAttachInfo := make(map[string]string)
@@ -205,7 +219,7 @@ func (ic *ifConfigurator) createContainerLink(endpointName string, result *curre
 	return hnsEP, nil
 }
 
-func (ic *ifConfigurator) getInterfacesConfigByPods(pods sets.String) map[string]*interfacestore.InterfaceConfig {
+func (ic *ifConfigurator) getInterfacesConfigForPods(pods sets.String) map[string]*interfacestore.InterfaceConfig {
 	interfaces := make(map[string]*interfacestore.InterfaceConfig)
 	ic.epCache.Range(func(key, value interface{}) bool {
 		ep, _ := value.(*hcsshim.HNSEndpoint)
@@ -240,7 +254,7 @@ func parseOVSPortInterfaceConfigFromHNSEndpoint(ep *hcsshim.HNSEndpoint) *interf
 }
 
 // attachContainerLink takes the result of the IPAM plugin, and adds the appropriate IP
-// addresses and routes to the interface. It then sends a gratuitous ARP to the network.
+// addresses and routes to the interface.
 func attachContainerLink(ep *hcsshim.HNSEndpoint, containerID, sandbox, containerIFDev string) (*current.Interface, error) {
 	var attached bool
 	var err error
