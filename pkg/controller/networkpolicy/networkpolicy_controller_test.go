@@ -2942,9 +2942,9 @@ func TestGetAppliedToWorkloads(t *testing.T) {
 	c.podStore.Add(podA)
 	c.podStore.Add(podB)
 	c.addClusterGroup(&cgA)
-	c.syncInternalGroup(string(cgA.UID))
+	c.syncInternalGroup(cgA.Name)
 	c.addClusterGroup(&cgB)
-	c.syncInternalGroup(string(cgB.UID))
+	c.syncInternalGroup(cgB.Name)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			actualPods, actualEEs := c.getAppliedToWorkloads(tt.inATG)

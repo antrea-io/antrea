@@ -465,26 +465,6 @@ func testInvalidACNPRuleAppliedToRuleAppliedToGroupsSet(t *testing.T) {
 	}
 }
 
-func testInvalidACNPAppliedToGroupsNotSetInAllRules(t *testing.T) {
-	invalidNpErr := fmt.Errorf("invalid Antrea ClusterNetworkPolicy with appliedToGroups not set in all rules")
-	ruleAppTo := ACNPAppliedToSpec{
-		PodSelector: map[string]string{"pod": "b"},
-		Group:       "cgA",
-	}
-	builder := &ClusterNetworkPolicySpecBuilder{}
-	builder = builder.SetName("acnp-appto-groups-not-set-in-all-rules").
-		SetPriority(1.0).
-		SetAppliedToGroup([]ACNPAppliedToSpec{{PodSelector: map[string]string{"pod": "b"}}})
-	builder = builder.AddIngress(v1.ProtocolTCP, &p80, nil, nil, nil, map[string]string{"pod": "b"}, map[string]string{"ns": "x"},
-		nil, nil, []ACNPAppliedToSpec{ruleAppTo}, secv1alpha1.RuleActionAllow, "", "")
-	acnp := builder.Get()
-	log.Debugf("creating ACNP %v", acnp.Name)
-	if _, err := k8sUtils.CreateOrUpdateACNP(acnp); err == nil {
-		// Above creation of ACNP must fail as it is an invalid spec.
-		failOnError(invalidNpErr, t)
-	}
-}
-
 func testInvalidANPNoPriority(t *testing.T) {
 	invalidNpErr := fmt.Errorf("invalid Antrea NetworkPolicy without a priority accepted")
 	builder := &AntreaNetworkPolicySpecBuilder{}

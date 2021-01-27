@@ -1557,7 +1557,7 @@ func (n *NetworkPolicyController) syncAppliedToGroup(key string) error {
 // for standalone selectors or corresponding to a ClusterGroup.
 func (n *NetworkPolicyController) getAppliedToWorkloads(g *antreatypes.AppliedToGroup) ([]*v1.Pod, []*v1alpha2.ExternalEntity) {
 	// Check if an internal Group object exists corresponding to this AppliedToGroup.
-	intGroup, found, _ := n.internalGroupStore.Get(string(g.UID))
+	intGroup, found, _ := n.internalGroupStore.Get(g.Name)
 	if found {
 		var pods []*v1.Pod
 		ig := intGroup.(*antreatypes.Group)
