@@ -153,14 +153,17 @@ func validatePortInRange(t *testing.T, nplAnnotations []k8s.NPLAnnotation, start
 	}
 }
 
+var nplTestData *TestData
+
 func TestNPLAddPod(t *testing.T) {
 	skipIfNotIPv4Cluster(t)
-	data, err := setupTest(t)
+	var err error
+	nplTestData, err = setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
-	defer teardownTest(t, data)
-	enableNPLInConfigmap(t, data)
+	defer teardownTest(t, nplTestData)
+	enableNPLInConfigmap(t, nplTestData)
 	t.Run("NPLTestMultiplePods", NPLTestMultiplePods)
 	t.Run("NPLTestPodAddMultiPort", NPLTestPodAddMultiPort)
 }
@@ -173,22 +176,12 @@ func TestNPLAddPod(t *testing.T) {
 // - Create a client Pod and test traffic through netcat.
 // - Delete the nginx test Pods and verify that the IPTABLES rules are deleted.
 func NPLTestMultiplePods(t *testing.T) {
-	skipIfNotIPv4Cluster(t)
-	data, err := setupTest(t)
-	if err != nil {
-		t.Fatalf("Error when setting up test: %v", err)
-	}
-	defer teardownTest(t, data)
-	enableNPLInConfigmap(t, data)
 	r := require.New(t)
-
-	k8sUtils, err = NewKubernetesUtils(data)
-	r.Nil(err, "Failed to initialize Kubernetes Utils: %v", err)
 
 	annotation := make(map[string]string)
 	annotation[nplSvcAnnotation] = "true"
 	ipFamily := corev1.IPv4Protocol
-	data.createNginxClusterIPServiceWithAnnotation(false, &ipFamily, annotation)
+	nplTestData.createNginxClusterIPServiceWithAnnotation(false, &ipFamily, annotation)
 
 	node := nodeName(0)
 	var testPods []string
@@ -196,48 +189,38 @@ func NPLTestMultiplePods(t *testing.T) {
 	for i := 0; i < 4; i++ {
 		testPodName := randName("test-pod-")
 		testPods = append(testPods, testPodName)
-		err = data.createNginxPod(testPodName, node)
+		err := nplTestData.createNginxPod(testPodName, node)
 		r.Nil(err, "Error creating test Pod: %v", err)
 	}
 
 	clientName := randName("test-client-")
-	if err := data.createBusyboxPodOnNode(clientName, node); err != nil {
+	if err := nplTestData.createBusyboxPodOnNode(clientName, node); err != nil {
 		t.Fatalf("Error creating Pod %s: %v", clientName, err)
 	}
-	r.Nil(err, "Error when creating Pod '%s'", clientName)
 
-	_, err = data.podWaitForIPs(defaultTimeout, clientName, testNamespace)
+	_, err := nplTestData.podWaitForIPs(defaultTimeout, clientName, testNamespace)
 	r.Nil(err, "Error when waiting for IP for Pod '%s'", clientName)
 
-	antreaPod, err := data.getAntreaPodOnNode(node)
+	antreaPod, err := nplTestData.getAntreaPodOnNode(node)
 	r.Nil(err, "Error when getting Antrea Agent Pod on Node '%s'", node)
 
 	for _, testPodName := range testPods {
-		nplAnnotationString, testPodIP := getNPLAnnotation(t, data, r, testPodName)
+		nplAnnotationString, testPodIP := getNPLAnnotation(t, nplTestData, r, testPodName)
 		var nplAnnotations []k8s.NPLAnnotation
 		json.Unmarshal([]byte(nplAnnotationString), &nplAnnotations)
 
-		checkForNPLRuleInIPTABLES(t, data, r, nplAnnotations, antreaPod, testPodIP.ipv4.String(), true)
+		checkForNPLRuleInIPTABLES(t, nplTestData, r, nplAnnotations, antreaPod, testPodIP.ipv4.String(), true)
 		validatePortInRange(t, nplAnnotations, defaultStartPort, defaultEndPort)
-		checkTrafficForNPL(t, data, r, nplAnnotations, clientName)
+		checkTrafficForNPL(t, nplTestData, r, nplAnnotations, clientName)
 
-		data.deletePod(testPodName)
-		checkForNPLRuleInIPTABLES(t, data, r, nplAnnotations, antreaPod, testPodIP.ipv4.String(), false)
+		nplTestData.deletePod(testPodName)
+		checkForNPLRuleInIPTABLES(t, nplTestData, r, nplAnnotations, antreaPod, testPodIP.ipv4.String(), false)
 	}
 }
 
 // NPLTestPodAddMultiPort tests NodePortLocal functionalities for a Pod with multiple ports.
 func NPLTestPodAddMultiPort(t *testing.T) {
-	skipIfNotIPv4Cluster(t)
-	data, err := setupTest(t)
-	if err != nil {
-		t.Fatalf("Error when setting up test: %v", err)
-	}
-	defer teardownTest(t, data)
-	enableNPLInConfigmap(t, data)
 	r := require.New(t)
-	k8sUtils, err = NewKubernetesUtils(data)
-	r.Nil(err, "Failed to initialize Kubernetes Utils: %v", err)
 
 	node := nodeName(0)
 	testPodName := randName("test-pod-")
@@ -247,12 +230,12 @@ func NPLTestPodAddMultiPort(t *testing.T) {
 	selector := make(map[string]string)
 	selector["app"] = "agnhost"
 	ipFamily := corev1.IPv4Protocol
-	data.createServiceWithAnnotation("agnhost", 80, 80, selector, false, corev1.ServiceTypeClusterIP, &ipFamily, annotation)
+	nplTestData.createServiceWithAnnotation("agnhost", 80, 80, selector, false, corev1.ServiceTypeClusterIP, &ipFamily, annotation)
 
 	podcmd := "porter"
 
 	// Creating a Pod using agnhost image to support multiple ports, instead of nginx.
-	err = data.createPodOnNode(testPodName, node, agnhostImage, nil, []string{podcmd}, []corev1.EnvVar{
+	err := nplTestData.createPodOnNode(testPodName, node, agnhostImage, nil, []string{podcmd}, []corev1.EnvVar{
 		{
 			Name: fmt.Sprintf("SERVE_PORT_%d", 80), Value: "foo",
 		},
@@ -274,30 +257,30 @@ func NPLTestPodAddMultiPort(t *testing.T) {
 
 	r.Nil(err, "Error Creating test Pod: %v", err)
 
-	nplAnnotationString, testPodIP := getNPLAnnotation(t, data, r, testPodName)
+	nplAnnotationString, testPodIP := getNPLAnnotation(t, nplTestData, r, testPodName)
 
 	var nplAnnotations []k8s.NPLAnnotation
 	json.Unmarshal([]byte(nplAnnotationString), &nplAnnotations)
 
 	clientName := randName("test-client-")
-	if err := data.createBusyboxPodOnNode(clientName, node); err != nil {
+	if err := nplTestData.createBusyboxPodOnNode(clientName, node); err != nil {
 		t.Fatalf("Error when creating Pod '%s': %v", clientName, err)
 	}
 
-	_, err = data.podWaitForIPs(defaultTimeout, clientName, testNamespace)
+	_, err = nplTestData.podWaitForIPs(defaultTimeout, clientName, testNamespace)
 	if err != nil {
 		t.Fatalf("Error when waiting for IP for Pod '%s': %v", clientName, err)
 	}
 
-	antreaPod, err := data.getAntreaPodOnNode(node)
+	antreaPod, err := nplTestData.getAntreaPodOnNode(node)
 	r.Nil(err, "Error when getting Antrea Agent Pod on Node '%s'", node)
 
-	checkForNPLRuleInIPTABLES(t, data, r, nplAnnotations, antreaPod, testPodIP.ipv4.String(), true)
+	checkForNPLRuleInIPTABLES(t, nplTestData, r, nplAnnotations, antreaPod, testPodIP.ipv4.String(), true)
 	validatePortInRange(t, nplAnnotations, defaultStartPort, defaultEndPort)
-	checkTrafficForNPL(t, data, r, nplAnnotations, clientName)
+	checkTrafficForNPL(t, nplTestData, r, nplAnnotations, clientName)
 
-	data.deletePod(testPodName)
-	checkForNPLRuleInIPTABLES(t, data, r, nplAnnotations, antreaPod, testPodIP.ipv4.String(), false)
+	nplTestData.deletePod(testPodName)
+	checkForNPLRuleInIPTABLES(t, nplTestData, r, nplAnnotations, antreaPod, testPodIP.ipv4.String(), false)
 }
 
 // TestNPLMultiplePodsAndAgentRestart tests NodePortLocal functionalities after Antrea Agent restart.
@@ -313,9 +296,6 @@ func TestNPLMultiplePodsAgentRestart(t *testing.T) {
 	defer teardownTest(t, data)
 	enableNPLInConfigmap(t, data)
 	r := require.New(t)
-
-	k8sUtils, err = NewKubernetesUtils(data)
-	r.Nil(err, "Failed to initialize Kubernetes Utils: %v", err)
 
 	annotation := make(map[string]string)
 	annotation[nplSvcAnnotation] = "true"
@@ -378,9 +358,6 @@ func TestNPLChangePortRangeAgentRestart(t *testing.T) {
 	enableNPLInConfigmap(t, data)
 	r := require.New(t)
 
-	k8sUtils, err = NewKubernetesUtils(data)
-	r.Nil(err, "Failed to initialize Kubernetes Utils: %v", err)
-
 	annotation := make(map[string]string)
 	annotation[nplSvcAnnotation] = "true"
 	ipFamily := corev1.IPv4Protocol
@@ -437,9 +414,6 @@ func TestNPLPodAddEnableNPL(t *testing.T) {
 	}
 	defer teardownTest(t, data)
 	r := require.New(t)
-
-	k8sUtils, err = NewKubernetesUtils(data)
-	r.Nil(err, "Failed to initialize Kubernetes Utils: %v", err)
 
 	annotation := make(map[string]string)
 	annotation[nplSvcAnnotation] = "true"
@@ -499,9 +473,6 @@ func TestNPLPodDeleteEnableNPL(t *testing.T) {
 	}
 	defer teardownTest(t, data)
 	r := require.New(t)
-
-	k8sUtils, err = NewKubernetesUtils(data)
-	r.Nil(err, "Failed to initialize Kubernetes Utils: %v", err)
 
 	annotation := make(map[string]string)
 	annotation[nplSvcAnnotation] = "true"
