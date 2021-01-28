@@ -7,8 +7,8 @@ require (
 	github.com/Microsoft/go-winio v0.4.15-0.20190919025122-fc70bd9a86b5
 	github.com/Microsoft/hcsshim v0.8.9
 	github.com/TomCodeLV/OVSDB-golang-lib v0.0.0-20200116135253-9bbdfadcd881
+	github.com/antoninbas/go-powershell v0.1.0
 	github.com/awalterschulze/gographviz v2.0.1+incompatible
-	github.com/benmoss/go-powershell v0.0.0-20190925205200-09527df358ca
 	github.com/blang/semver v3.5.0+incompatible
 	github.com/cenk/hub v1.0.1 // indirect
 	github.com/cenkalti/hub v1.0.1 // indirect
@@ -27,8 +27,9 @@ require (
 	github.com/golang/mock v1.4.4
 	github.com/golang/protobuf v1.3.2
 	github.com/google/uuid v1.1.1
-	github.com/juju/testing v0.0.0-20201030020617-7189b3728523 // indirect
 	github.com/kevinburke/ssh_config v0.0.0-20190725054713-01f96b0aa0cd
+	github.com/kr/text v0.2.0 // indirect
+	github.com/niemeyer/pretty v0.0.0-20200227124842-a10e7caefd8e // indirect
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/common v0.4.1
 	github.com/rakelkar/gonetsh v0.0.0-20190930180311-e5c5ffe4bdf0
@@ -50,6 +51,7 @@ require (
 	golang.org/x/sys v0.0.0-20200331124033-c3d80250170d
 	golang.org/x/time v0.0.0-20190308202827-9d24e82272b4
 	google.golang.org/grpc v1.26.0
+	gopkg.in/check.v1 v1.0.0-20200902074654-038fdea0a05b // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
 	gopkg.in/yaml.v2 v2.3.0
 	k8s.io/api v0.18.4
@@ -68,6 +70,8 @@ replace (
 	// antrea/plugins/octant/go.mod also has this replacement since replace statement in dependencies
 	// were ignored. We need to change antrea/plugins/octant/go.mod if there is any change here.
 	github.com/contiv/ofnet => github.com/wenyingd/ofnet v0.0.0-20201109024835-6fd225d8c8d1
+	// avoid dependency on juju packages, which are licensed under LGPL v3
+	github.com/rakelkar/gonetsh => github.com/antoninbas/gonetsh v0.1.2
 	// fake.NewSimpleClientset is quite slow when it's initialized with massive objects due to
 	// https://github.com/kubernetes/kubernetes/issues/89574. It takes more than tens of minutes to
 	// init a fake client with 200k objects, which makes it hard to run the NetworkPolicy scale test.
