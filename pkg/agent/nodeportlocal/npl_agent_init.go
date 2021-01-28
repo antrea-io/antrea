@@ -33,7 +33,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 )
 
-const resyncPeriod = 60 * time.Minute
+const resyncPeriod = 0 * time.Minute
 
 // InitializeNPLAgent initializes the NodePortLocal (NPL) agent.
 // It initializes the port table cache to keep track of Node ports available for use by NPL,

@@ -147,8 +147,8 @@ func pollForPodAnnotation(r *require.Assertions, podName string, found bool) (st
 	return data, err
 }
 
-// Add a service (proper annotation) and pod pair, update service with bad
-// annotation value and check for pod annotation and port cache entry removal
+// Add a Service (proper annotation) and Pod pair, update Service with bad
+// annotation value and check for Pod annotation and port cache entry removal.
 func TestSvcUpdateAnnotation(t *testing.T) {
 	var data string
 
@@ -162,7 +162,7 @@ func TestSvcUpdateAnnotation(t *testing.T) {
 	testSvc.Spec.Selector[defaultAppSelectorKey] = servicePodName
 	testSvc.Annotations = map[string]string{k8s.NPLEnabledAnnotationKey: "true"}
 	_, err := kubeClient.CoreV1().Services(defaultNS).Create(context.TODO(), &testSvc, metav1.CreateOptions{})
-	r.Nil(err, "Svc creation failed")
+	r.Nil(err, "Service creation failed")
 
 	testPod := getTestPod()
 	testPod.Name = servicePodName
@@ -181,21 +181,21 @@ func TestSvcUpdateAnnotation(t *testing.T) {
 	a.Equal(nplData[0].NodeIP, defaultHostIP)
 	a.Equal(portTable.RuleExists(defaultPodIP, defaultPort), true)
 
-	// update svc with bad annotation value
+	// Update Service with bad annotation value.
 	testSvc.Annotations = map[string]string{k8s.NPLEnabledAnnotationKey: "false"}
 	testSvc.ResourceVersion = "2"
 	s, err := kubeClient.CoreV1().Services(defaultNS).Update(context.TODO(), &testSvc, metav1.UpdateOptions{})
-	r.Nil(err, "Svc update failed")
-	t.Logf("successfully updated Svc: %s", s.Name)
+	r.Nil(err, "Service update failed")
+	t.Logf("successfully updated Service: %s", s.Name)
 
-	// check that annotation is removed and the rule is removed
+	// Check that annotation and the rule is removed.
 	_, err = pollForPodAnnotation(r, servicePodName, false)
 	r.Nil(err, "Poll for annotation check failed")
 	a.Equal(portTable.RuleExists(defaultPodIP, defaultPort), false)
 }
 
-// Update existing service with proper annotation to get pod annotation and port
-// cache entry back, remove annotation from service
+// Update existing Service with proper annotation to get Pod annotation and port
+// cache entry back, remove annotation from Service.
 func TestSvcRemoveAnnotation(t *testing.T) {
 	a := assert.New(t)
 	r := require.New(t)
@@ -208,8 +208,8 @@ func TestSvcRemoveAnnotation(t *testing.T) {
 	testSvc.Spec.Selector[defaultAppSelectorKey] = servicePodName
 	testSvc.ResourceVersion = "3"
 	s, err := kubeClient.CoreV1().Services(defaultNS).Update(context.TODO(), &testSvc, metav1.UpdateOptions{})
-	r.Nil(err, "Svc update failed")
-	t.Logf("successfully updated Svc: %s", s.Name)
+	r.Nil(err, "Service update failed")
+	t.Logf("successfully updated Service: %s", s.Name)
 
 	_, err = pollForPodAnnotation(r, servicePodName, true)
 	r.Nil(err, "Poll for annotation check failed")
@@ -218,8 +218,8 @@ func TestSvcRemoveAnnotation(t *testing.T) {
 	testSvc.Annotations = make(map[string]string)
 	testSvc.ResourceVersion = "4"
 	s, err = kubeClient.CoreV1().Services(defaultNS).Update(context.TODO(), &testSvc, metav1.UpdateOptions{})
-	r.Nil(err, "Svc update failed")
-	t.Logf("successfully updated Svc: %v", s)
+	r.Nil(err, "Service update failed")
+	t.Logf("successfully updated Service: %v", s)
 
 	_, err = pollForPodAnnotation(r, servicePodName, false)
 	r.Nil(err, "Poll for annotation check failed")
@@ -238,8 +238,8 @@ func TestSvcUpdateSelector(t *testing.T) {
 	testSvc.Spec.Selector[defaultAppSelectorKey] = servicePodName
 	testSvc.ResourceVersion = "5"
 	s, err := kubeClient.CoreV1().Services(defaultNS).Update(context.TODO(), &testSvc, metav1.UpdateOptions{})
-	r.Nil(err, "Svc update failed")
-	t.Logf("successfully updated Svc: %s", s.Name)
+	r.Nil(err, "Service update failed")
+	t.Logf("successfully updated Service: %s", s.Name)
 
 	_, err = pollForPodAnnotation(r, servicePodName, true)
 	r.Nil(err, "Poll for annotation check failed")
@@ -248,8 +248,8 @@ func TestSvcUpdateSelector(t *testing.T) {
 	testSvc.Spec.Selector = map[string]string{"foo": "invalid-selector"}
 	testSvc.ResourceVersion = "6"
 	s, err = kubeClient.CoreV1().Services(defaultNS).Update(context.TODO(), &testSvc, metav1.UpdateOptions{})
-	r.Nil(err, "Svc update failed")
-	t.Logf("successfully updated Svc: %v", s)
+	r.Nil(err, "Service update failed")
+	t.Logf("successfully updated Service: %v", s)
 
 	_, err = pollForPodAnnotation(r, servicePodName, false)
 	r.Nil(err, "Poll for annotation check failed")
@@ -268,8 +268,8 @@ func TestPodUpdateSelectorLabel(t *testing.T) {
 	testSvc.Spec.Selector[defaultAppSelectorKey] = servicePodName
 	testSvc.ResourceVersion = "7"
 	s, err := kubeClient.CoreV1().Services(defaultNS).Update(context.TODO(), &testSvc, metav1.UpdateOptions{})
-	r.Nil(err, "Svc update failed")
-	t.Logf("successfully updated Svc: %s", s.Name)
+	r.Nil(err, "Service update failed")
+	t.Logf("successfully updated Service: %s", s.Name)
 
 	_, err = pollForPodAnnotation(r, servicePodName, true)
 	r.Nil(err, "Poll for annotation check failed")
@@ -288,8 +288,8 @@ func TestPodUpdateSelectorLabel(t *testing.T) {
 	a.Equal(portTable.RuleExists(defaultPodIP, defaultPort), false)
 }
 
-// Update existing service with proper annotation to get pod annotation and port
-// cache entry back, delete service
+// Update existing Service with proper annotation to get Pod annotation and port
+// cache entry back, delete Service.
 func TestDeleteSvc(t *testing.T) {
 	a := assert.New(t)
 	r := require.New(t)
@@ -302,8 +302,8 @@ func TestDeleteSvc(t *testing.T) {
 	testSvc.Spec.Selector[defaultAppSelectorKey] = servicePodName
 	testSvc.ResourceVersion = "7"
 	s, err := kubeClient.CoreV1().Services(defaultNS).Update(context.TODO(), &testSvc, metav1.UpdateOptions{})
-	r.Nil(err, "Svc update failed")
-	t.Logf("successfully updated Svc: %s", s.Name)
+	r.Nil(err, "Service update failed")
+	t.Logf("successfully updated Service: %s", s.Name)
 
 	testPod := getTestPod()
 	testPod.Name = servicePodName
@@ -318,16 +318,16 @@ func TestDeleteSvc(t *testing.T) {
 	a.Equal(portTable.RuleExists(defaultPodIP, defaultPort), true)
 
 	err = kubeClient.CoreV1().Services(defaultNS).Delete(context.TODO(), servicePodName, metav1.DeleteOptions{})
-	r.Nil(err, "Svc deletion failed")
-	t.Logf("successfully deleted Svc: %s", servicePodName)
+	r.Nil(err, "Service deletion failed")
+	t.Logf("successfully deleted Service: %s", servicePodName)
 
 	_, err = pollForPodAnnotation(r, servicePodName, false)
 	r.Nil(err, "Poll for annotation check failed")
 	a.Equal(portTable.RuleExists(defaultPodIP, defaultPort), false)
 }
 
-// Add a new Pod with fake k8s client and verify that npl annotation gets updated
-// and an entry gets added in the local port cache
+// Add a new Pod with fake k8s client and verify that NPL annotation gets updated
+// and an entry gets added in the local port cache.
 func TestPodAdd(t *testing.T) {
 	var data string
 
@@ -337,7 +337,7 @@ func TestPodAdd(t *testing.T) {
 	testSvc := getTestSvc()
 	testSvc.Annotations = map[string]string{k8s.NPLEnabledAnnotationKey: "true"}
 	_, err := kubeClient.CoreV1().Services(defaultNS).Create(context.TODO(), &testSvc, metav1.CreateOptions{})
-	r.Nil(err, "Svc creation failed")
+	r.Nil(err, "Service creation failed")
 
 	testPod := getTestPod()
 	p, err := kubeClient.CoreV1().Pods(defaultNS).Create(context.TODO(), &testPod, metav1.CreateOptions{})
@@ -355,7 +355,7 @@ func TestPodAdd(t *testing.T) {
 	a.Equal(portTable.RuleExists(defaultPodIP, defaultPort), true)
 }
 
-// Test that any update in the Pod container port is reflected in Pod annotation and local port cache
+// Test that any update in the Pod container port is reflected in Pod annotation and local port cache.
 func TestPodUpdate(t *testing.T) {
 	var ann map[string]string
 	var nplData []k8s.NPLAnnotation
@@ -377,7 +377,7 @@ func TestPodUpdate(t *testing.T) {
 		ann = updatedPod.GetAnnotations()
 		data, _ = ann[k8s.NPLAnnotationKey]
 		json.Unmarshal([]byte(data), &nplData)
-		t.Logf("pod annotation: %v", nplData)
+		t.Logf("Pod annotation: %v", nplData)
 		if len(nplData) != 1 {
 			return false, nil
 		}
@@ -392,7 +392,7 @@ func TestPodUpdate(t *testing.T) {
 	a.Equal(portTable.RuleExists(defaultPodIP, 8080), true)
 }
 
-// Make sure that when a pod gets deleted, corresponding entry gets deleted from local port cache also
+// Make sure that when a Pod gets deleted, corresponding entry gets deleted from local port cache also
 func TestPodDel(t *testing.T) {
 	r := require.New(t)
 

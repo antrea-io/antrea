@@ -151,7 +151,7 @@ func (c *NPLController) syncPod(key string) error {
 func (c *NPLController) checkDeletedPod(obj interface{}) (*corev1.Pod, error) {
 	deletedState, ok := obj.(cache.DeletedFinalStateUnknown)
 	if !ok {
-		return nil, fmt.Errorf("Received unexpected object: %v", obj)
+		return nil, fmt.Errorf("received unexpected object: %v", obj)
 
 	}
 	pod, ok := deletedState.Obj.(*corev1.Pod)
@@ -178,7 +178,7 @@ func (c *NPLController) enqueuePod(obj interface{}) {
 func (c *NPLController) checkDeletedSvc(obj interface{}) (*corev1.Service, error) {
 	deletedState, ok := obj.(cache.DeletedFinalStateUnknown)
 	if !ok {
-		return nil, fmt.Errorf("Received unexpected object: %v", obj)
+		return nil, fmt.Errorf("received unexpected object: %v", obj)
 	}
 	svc, ok := deletedState.Obj.(*corev1.Service)
 	if !ok {
@@ -267,7 +267,7 @@ func (c *NPLController) isNPLEnabledForServiceOfPod(obj interface{}) bool {
 	pod := obj.(*corev1.Pod)
 	services, err := c.svcInformer.GetIndexer().ByIndex(NPLEnabledAnnotationIndex, "true")
 	if err != nil {
-		klog.Errorf("Got error while listing Services with annotation: %v", err)
+		klog.Errorf("Got error while listing Services with annotation %s: %v", NPLEnabledAnnotationKey, err)
 		return false
 	}
 
