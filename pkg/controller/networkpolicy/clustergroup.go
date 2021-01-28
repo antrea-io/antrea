@@ -16,11 +16,9 @@ package networkpolicy
 
 import (
 	"context"
-	"fmt"
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog"
@@ -30,7 +28,6 @@ import (
 	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
 	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy/store"
 	antreatypes "github.com/vmware-tanzu/antrea/pkg/controller/types"
-	"github.com/vmware-tanzu/antrea/pkg/k8s"
 )
 
 // addClusterGroup is responsible for processing the ADD event of a ClusterGroup resource.
@@ -84,6 +81,7 @@ func (n *NetworkPolicyController) deleteClusterGroup(oldObj interface{}) {
 	if err != nil {
 		klog.Errorf("Unable to delete internal Group %s from store: %v", key, err)
 	}
+	n.enqueueInternalGroup(key)
 }
 
 func (n *NetworkPolicyController) processClusterGroup(cg *corev1a2.ClusterGroup) *antreatypes.Group {
@@ -108,39 +106,6 @@ func (n *NetworkPolicyController) processClusterGroup(cg *corev1a2.ClusterGroup)
 		internalGroup.Selector = groupSelector
 	}
 	return &internalGroup
-}
-
-// filterInternalGroupsForPodOrExternalEntity computes a list of internal Group keys which match the
-// Pod/ExternalEntity's labels.
-func (n *NetworkPolicyController) filterInternalGroupsForPodOrExternalEntity(obj metav1.Object) sets.String {
-	matchingKeySet := sets.String{}
-	internalGroups := n.internalGroupStore.List()
-	ns, _ := n.namespaceLister.Get(obj.GetNamespace())
-	for _, group := range internalGroups {
-		key, _ := store.GroupKeyFunc(group)
-		g := group.(*antreatypes.Group)
-		if g.Selector != nil && n.labelsMatchGroupSelector(obj, ns, g.Selector) {
-			matchingKeySet.Insert(key)
-			klog.V(2).Infof("%s/%s matched internal Group %s", obj.GetNamespace(), obj.GetName(), key)
-		}
-	}
-	return matchingKeySet
-}
-
-// filterInternalGroupsForNamespace computes a list of internal Group keys which
-// match the Namespace's labels.
-func (n *NetworkPolicyController) filterInternalGroupsForNamespace(namespace *v1.Namespace) sets.String {
-	matchingKeys := sets.String{}
-	internalGroups := n.internalGroupStore.List()
-	for _, group := range internalGroups {
-		key, _ := store.GroupKeyFunc(group)
-		g := group.(*antreatypes.Group)
-		if g.Selector != nil && g.Selector.NamespaceSelector != nil && g.Selector.NamespaceSelector.Matches(labels.Set(namespace.Labels)) {
-			matchingKeys.Insert(key)
-			klog.V(2).Infof("Namespace %s matched internal Group %s", namespace.Name, key)
-		}
-	}
-	return matchingKeys
 }
 
 // filterInternalGroupsForService computes a list of internal Group keys which references the Service.
@@ -197,6 +162,7 @@ func (n *NetworkPolicyController) syncInternalGroup(key string) error {
 	grpObj, found, _ := n.internalGroupStore.Get(key)
 	if !found {
 		klog.V(2).Infof("Internal group %s not found.", key)
+		n.groupingInterface.DeleteGroup(clusterGroupType, key)
 		return nil
 	}
 	grp := grpObj.(*antreatypes.Group)
@@ -207,32 +173,21 @@ func (n *NetworkPolicyController) syncInternalGroup(key string) error {
 		return nil
 	}
 	selectorUpdated := n.processServiceReference(grp)
-	newMemberSet := controlplane.GroupMemberSet{}
 	if grp.Selector != nil {
-		// Find all Pods matching its selectors and update store.
-		pods, externalEntities := n.processSelector(*grp.Selector)
-		for _, pod := range pods {
-			if len(pod.Status.PodIPs) == 0 {
-				// No need to insert Pod IPAddress when it is unset.
-				continue
-			}
-			newMemberSet.Insert(podToGroupMember(pod, true))
-		}
-		for _, entity := range externalEntities {
-			newMemberSet.Insert(externalEntityToGroupMember(entity))
-		}
+		n.groupingInterface.AddGroup(clusterGroupType, grp.Name, grp.Selector)
+	} else {
+		n.groupingInterface.DeleteGroup(clusterGroupType, grp.Name)
 	}
 	// for ipBlock Groups, newMemberSet and grp.GroupMembers will both be empty.
-	if selectorUpdated || !newMemberSet.Equal(grp.GroupMembers) {
+	if selectorUpdated {
 		// Update the internal Group object in the store with the Pods as GroupMembers.
 		updatedGrp := &antreatypes.Group{
 			UID:              grp.UID,
 			Name:             grp.Name,
 			Selector:         grp.Selector,
 			ServiceReference: grp.ServiceReference,
-			GroupMembers:     newMemberSet,
 		}
-		klog.V(2).Infof("Updating existing internal Group %s with %d GroupMembers", key, len(newMemberSet))
+		klog.V(2).Infof("Updating existing internal Group %s", key)
 		n.internalGroupStore.Update(updatedGrp)
 	}
 	// Update the ClusterGroup status to Realized as Antrea has recognized the Group and
@@ -366,24 +321,37 @@ func (n *NetworkPolicyController) serviceToGroupSelector(service *v1.Service) *a
 // GetAssociatedGroups retrieves the internal Groups associated with the entity being
 // queried (Pod or ExternalEntity identified by name and namespace).
 func (n *NetworkPolicyController) GetAssociatedGroups(name, namespace string) ([]antreatypes.Group, error) {
-	memberKey := k8s.NamespacedName(namespace, name)
-	groups, err := n.internalGroupStore.GetByIndex(store.GroupMemberIndex, memberKey)
-	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve Group associated with key %s", memberKey)
+	// Try Pod first, then ExternalEntity.
+	groups, exists := n.groupingInterface.GetGroupsForPod(namespace, name)
+	if !exists {
+		groups, exists = n.groupingInterface.GetGroupsForExternalEntity(namespace, name)
+		if !exists {
+			return nil, nil
+		}
 	}
-	groupObjs := make([]antreatypes.Group, len(groups))
-	for i, g := range groups {
-		groupObjs[i] = *g.(*antreatypes.Group)
+	clusterGroups, exists := groups[clusterGroupType]
+	if !exists {
+		return nil, nil
+	}
+	groupObjs := make([]antreatypes.Group, 0, len(clusterGroups))
+	for _, g := range clusterGroups {
+		group, found, _ := n.internalGroupStore.Get(g)
+		if found {
+			groupObjs = append(groupObjs, *group.(*antreatypes.Group))
+		}
 	}
 	return groupObjs, nil
 }
 
 // GetGroupMembers returns the current members of a ClusterGroup.
 func (n *NetworkPolicyController) GetGroupMembers(cgName string) (controlplane.GroupMemberSet, error) {
-	g, found, err := n.internalGroupStore.Get(cgName)
-	if err != nil || !found {
-		return nil, fmt.Errorf("failed to get internal group associated with ClusterGroup %s", cgName)
+	pods, externalEntities := n.groupingInterface.GetEntities(clusterGroupType, cgName)
+	memberSet := controlplane.GroupMemberSet{}
+	for _, pod := range pods {
+		memberSet.Insert(podToGroupMember(pod, true))
 	}
-	internalGroup := g.(*antreatypes.Group)
-	return internalGroup.GroupMembers, nil
+	for _, entity := range externalEntities {
+		memberSet.Insert(externalEntityToGroupMember(entity))
+	}
+	return memberSet, nil
 }

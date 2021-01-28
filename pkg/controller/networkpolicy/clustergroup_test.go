@@ -349,184 +349,6 @@ func TestDeleteCG(t *testing.T) {
 	assert.False(t, found, "expected internal Group to be deleted")
 }
 
-func TestFilterInternalGroupsForPodOrExternalEntity(t *testing.T) {
-	selectorSpec := metav1.LabelSelector{
-		MatchLabels: map[string]string{"purpose": "test-select"},
-	}
-	eeSelectorSpec := metav1.LabelSelector{
-		MatchLabels: map[string]string{"platform": "aws"},
-	}
-	ns1 := &corev1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:   "ns1",
-			Labels: map[string]string{"purpose": "test-select"},
-		},
-	}
-	ns2 := &corev1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "ns2",
-		},
-	}
-	grp1 := &antreatypes.Group{
-		UID:      "uid1",
-		Name:     "cgA",
-		Selector: toGroupSelector("", &selectorSpec, nil, nil),
-	}
-	grp2 := &antreatypes.Group{
-		UID:      "uid2",
-		Name:     "cgB",
-		Selector: toGroupSelector("", nil, nil, nil),
-	}
-	grp3 := &antreatypes.Group{
-		UID:      "uid3",
-		Name:     "cgC",
-		Selector: toGroupSelector("", nil, &selectorSpec, nil),
-	}
-	grp4 := &antreatypes.Group{
-		UID:      "uid4",
-		Name:     "cgD",
-		Selector: toGroupSelector("", &selectorSpec, &selectorSpec, nil),
-	}
-	grp5 := &antreatypes.Group{
-		UID:      "uid5",
-		Name:     "cgE",
-		Selector: toGroupSelector("", nil, nil, &eeSelectorSpec),
-	}
-
-	pod1 := getPod("pod1", "ns1", "node1", "1.1.1.1", false)
-	pod1.Labels = map[string]string{"purpose": "test-select"}
-	pod2 := getPod("pod2", "ns1", "node1", "1.1.1.2", false)
-	pod3 := getPod("pod3", "ns2", "node1", "1.1.1.3", false)
-	ee1 := &corev1a2.ExternalEntity{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "ee1",
-			Namespace: "ns1",
-			Labels:    map[string]string{"platform": "aws"},
-		},
-	}
-	ee2 := &corev1a2.ExternalEntity{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "ee2",
-			Namespace: "ns1",
-			Labels:    map[string]string{"platform": "gke"},
-		},
-	}
-	tests := []struct {
-		name           string
-		toMatch        metav1.Object
-		expectedGroups sets.String
-	}{
-		{
-			"pod-match-selector-match-ns",
-			pod1,
-			sets.NewString("cgA", "cgC", "cgD"),
-		},
-		{
-			"pod-unmatch-selector-match-ns",
-			pod2,
-			sets.NewString("cgC"),
-		},
-		{
-			"pod-unmatch-selector-unmatch-ns",
-			pod3,
-			sets.String{},
-		},
-		{
-			"externalEntity-match-selector-match-ns",
-			ee1,
-			sets.NewString("cgC", "cgE"),
-		},
-		{
-			"externalEntity-unmatch-selector-match-ns",
-			ee2,
-			sets.NewString("cgC"),
-		},
-	}
-	_, npc := newController()
-	npc.internalGroupStore.Create(grp1)
-	npc.internalGroupStore.Create(grp2)
-	npc.internalGroupStore.Create(grp3)
-	npc.internalGroupStore.Create(grp4)
-	npc.internalGroupStore.Create(grp5)
-	npc.namespaceStore.Add(ns1)
-	npc.namespaceStore.Add(ns2)
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.expectedGroups, npc.filterInternalGroupsForPodOrExternalEntity(tt.toMatch),
-				"Filtered internal Groups does not match expectation")
-		})
-	}
-}
-
-func TestFilterInternalGroupsForNamespace(t *testing.T) {
-	selectorSpec := metav1.LabelSelector{
-		MatchLabels: map[string]string{"purpose": "test-select"},
-	}
-	ns1 := &corev1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:   "ns1",
-			Labels: map[string]string{"purpose": "test-select"},
-		},
-	}
-	ns2 := &corev1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "ns2",
-		},
-	}
-	grp1 := &antreatypes.Group{
-		UID:      "uid1",
-		Name:     "cgA",
-		Selector: toGroupSelector("", &selectorSpec, nil, nil),
-	}
-	grp2 := &antreatypes.Group{
-		UID:      "uid2",
-		Name:     "cgB",
-		Selector: toGroupSelector("", nil, nil, nil),
-	}
-	grp3 := &antreatypes.Group{
-		UID:      "uid3",
-		Name:     "cgC",
-		Selector: toGroupSelector("", nil, &selectorSpec, nil),
-	}
-	grp4 := &antreatypes.Group{
-		UID:      "uid4",
-		Name:     "cgD",
-		Selector: toGroupSelector("", &selectorSpec, &selectorSpec, nil),
-	}
-
-	tests := []struct {
-		name           string
-		toMatch        *corev1.Namespace
-		expectedGroups sets.String
-	}{
-		{
-			"ns-match-selector",
-			ns1,
-			sets.NewString("cgC", "cgD"),
-		},
-		{
-			"ns-unmatch-selector",
-			ns2,
-			sets.String{},
-		},
-	}
-	_, npc := newController()
-	npc.internalGroupStore.Create(grp1)
-	npc.internalGroupStore.Create(grp2)
-	npc.internalGroupStore.Create(grp3)
-	npc.internalGroupStore.Create(grp4)
-	npc.namespaceStore.Add(ns1)
-	npc.namespaceStore.Add(ns2)
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.expectedGroups, npc.filterInternalGroupsForNamespace(tt.toMatch),
-				"Filtered internal Groups does not match expectation")
-		})
-	}
-}
-
 func TestGroupMembersComputedConditionEqual(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -838,55 +660,19 @@ var externalEntities = []*corev1a2.ExternalEntity{
 
 var groups = []antreatypes.Group{
 	{
-		UID:  "groupUID1",
-		Name: "group1",
-		Selector: &antreatypes.GroupSelector{
-			Namespace: "test-ns",
-		},
-		GroupMembers: controlplane.GroupMemberSet{
-			"groupMemberkey1": &controlplane.GroupMember{
-				Pod: &controlplane.PodReference{
-					Name:      "pod1",
-					Namespace: "test-ns",
-				},
-			},
-		},
+		UID:      "groupUID1",
+		Name:     "group1",
+		Selector: antreatypes.NewGroupSelector("test-ns", &metav1.LabelSelector{MatchLabels: map[string]string{"app": "foo"}}, nil, nil),
 	},
 	{
-		UID:  "groupUID2",
-		Name: "group2",
-		Selector: &antreatypes.GroupSelector{
-			Namespace: "test-ns",
-		},
-		GroupMembers: controlplane.GroupMemberSet{
-			"groupMemberKey1": &controlplane.GroupMember{
-				Pod: &controlplane.PodReference{
-					Name:      "pod1",
-					Namespace: "test-ns",
-				},
-			},
-			"groupMemberKey2": &controlplane.GroupMember{
-				Pod: &controlplane.PodReference{
-					Name:      "pod2",
-					Namespace: "test-ns",
-				},
-			},
-		},
+		UID:      "groupUID2",
+		Name:     "group2",
+		Selector: antreatypes.NewGroupSelector("test-ns", nil, nil, nil),
 	},
 	{
-		UID:  "groupUID3",
-		Name: "group3",
-		Selector: &antreatypes.GroupSelector{
-			Namespace: "test-ns",
-		},
-		GroupMembers: controlplane.GroupMemberSet{
-			"groupMemberKey3": &controlplane.GroupMember{
-				ExternalEntity: &controlplane.ExternalEntityReference{
-					Name:      "ee1",
-					Namespace: "test-ns",
-				},
-			},
-		},
+		UID:      "groupUID3",
+		Name:     "group3",
+		Selector: antreatypes.NewGroupSelector("test-ns", &metav1.LabelSelector{MatchLabels: map[string]string{"app": "other"}}, nil, nil),
 	},
 }
 
@@ -922,15 +708,16 @@ func TestGetAssociatedGroups(t *testing.T) {
 	}
 	_, npc := newController()
 	for i := range testPods {
-		npc.podStore.Add(testPods[i])
+		npc.groupingInterface.AddPod(testPods[i])
 	}
 	for j := range externalEntities {
-		npc.externalEntityStore.Add(externalEntities[j])
+		npc.groupingInterface.AddExternalEntity(externalEntities[j])
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			for i := range tt.existingGroups {
+			for i, g := range tt.existingGroups {
 				npc.internalGroupStore.Create(&tt.existingGroups[i])
+				npc.groupingInterface.AddGroup(clusterGroupType, g.Name, g.Selector)
 			}
 			groups, err := npc.GetAssociatedGroups(tt.queryName, tt.queryNamespace)
 			assert.Equal(t, err, nil)
@@ -940,13 +727,60 @@ func TestGetAssociatedGroups(t *testing.T) {
 }
 
 func TestGetGroupMembers(t *testing.T) {
-	_, npc := newController()
-	for i := range groups {
-		npc.internalGroupStore.Create(&groups[i])
+	tests := []struct {
+		name            string
+		group           antreatypes.Group
+		expectedMembers controlplane.GroupMemberSet
+	}{
+		{
+			"multiple-members",
+			groups[1],
+			controlplane.GroupMemberSet{
+				"test-ns/pod1": &controlplane.GroupMember{
+					Pod: &controlplane.PodReference{
+						Name:      "pod1",
+						Namespace: "test-ns",
+					},
+				},
+				"test-ns/pod2": &controlplane.GroupMember{
+					Pod: &controlplane.PodReference{
+						Name:      "pod2",
+						Namespace: "test-ns",
+					},
+				},
+			},
+		},
+		{
+			"single-member",
+			groups[0],
+			controlplane.GroupMemberSet{
+				"test-ns/pod1": &controlplane.GroupMember{
+					Pod: &controlplane.PodReference{
+						Name:      "pod1",
+						Namespace: "test-ns",
+					},
+				},
+			},
+		},
+		{
+			"no-member",
+			groups[2],
+			controlplane.GroupMemberSet{},
+		},
 	}
-	for j := range groups {
-		members, err := npc.GetGroupMembers(groups[j].Name)
-		assert.Equal(t, err, nil)
-		assert.Equal(t, members, groups[j].GroupMembers)
+	_, npc := newController()
+	for i := range testPods {
+		npc.groupingInterface.AddPod(testPods[i])
+	}
+	for j := range externalEntities {
+		npc.groupingInterface.AddExternalEntity(externalEntities[j])
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			npc.groupingInterface.AddGroup(clusterGroupType, tt.group.Name, tt.group.Selector)
+			members, err := npc.GetGroupMembers(tt.group.Name)
+			assert.Equal(t, err, nil)
+			assert.Equal(t, members, tt.expectedMembers)
+		})
 	}
 }

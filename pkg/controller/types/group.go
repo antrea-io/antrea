@@ -15,6 +15,11 @@
 package types
 
 import (
+	"fmt"
+	"sort"
+	"strings"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 
@@ -45,6 +50,50 @@ type GroupSelector struct {
 	ExternalEntitySelector labels.Selector
 }
 
+func NewGroupSelector(namespace string, podSelector, nsSelector, extEntitySelector *metav1.LabelSelector) *GroupSelector {
+	groupSelector := GroupSelector{}
+	if podSelector != nil {
+		pSelector, _ := metav1.LabelSelectorAsSelector(podSelector)
+		groupSelector.PodSelector = pSelector
+	}
+	if extEntitySelector != nil {
+		eSelector, _ := metav1.LabelSelectorAsSelector(extEntitySelector)
+		groupSelector.ExternalEntitySelector = eSelector
+	}
+	if nsSelector == nil {
+		// No namespaceSelector indicates that the pods must be selected within
+		// the NetworkPolicy's Namespace.
+		groupSelector.Namespace = namespace
+	} else {
+		nSelector, _ := metav1.LabelSelectorAsSelector(nsSelector)
+		groupSelector.NamespaceSelector = nSelector
+	}
+	name := generateNormalizedName(groupSelector.Namespace, groupSelector.PodSelector, groupSelector.NamespaceSelector, groupSelector.ExternalEntitySelector)
+	groupSelector.NormalizedName = name
+	return &groupSelector
+}
+
+// generateNormalizedName generates a string, based on the selectors, in
+// the following format: "namespace=NamespaceName And podSelector=normalizedPodSelector".
+// Note: Namespace and nsSelector may or may not be set depending on the
+// selector. However, they cannot be set simultaneously.
+func generateNormalizedName(namespace string, podSelector, nsSelector, eeSelector labels.Selector) string {
+	normalizedName := []string{}
+	if nsSelector != nil {
+		normalizedName = append(normalizedName, fmt.Sprintf("namespaceSelector=%s", nsSelector.String()))
+	} else if namespace != "" {
+		normalizedName = append(normalizedName, fmt.Sprintf("namespace=%s", namespace))
+	}
+	if podSelector != nil {
+		normalizedName = append(normalizedName, fmt.Sprintf("podSelector=%s", podSelector.String()))
+	}
+	if eeSelector != nil {
+		normalizedName = append(normalizedName, fmt.Sprintf("eeSelector=%s", eeSelector.String()))
+	}
+	sort.Strings(normalizedName)
+	return strings.Join(normalizedName, " And ")
+}
+
 // Group describes a set of GroupMembers which can be referenced in Antrea-native NetworkPolicies. These Groups can
 // then be converted to AppliedToGroup or AddressGroup. Each internal Group corresponds to a single ClusterGroup,
 // i.e. unlike AppliedTo/AddressGroups created for standalone selectors, these internal Groups are not shared by
@@ -59,11 +108,7 @@ type Group struct {
 	// Selector is nil if Group is defined with ipBlock, or if it has ServiceReference
 	// and has not been processed by the controller yet / Service cannot be found.
 	Selector *GroupSelector
-	// GroupMembers is a set of GroupMembers selected by this internal group.
-	// It will be converted to a slice of GroupMember for transferring according
-	// to client's selection.
-	GroupMembers controlplane.GroupMemberSet
-	IPBlock      *controlplane.IPBlock
+	IPBlock  *controlplane.IPBlock
 	// ServiceReference is reference to a v1.Service, which this Group keeps in sync
 	// and updates Selector based on the Service's selector.
 	ServiceReference *controlplane.ServiceReference
