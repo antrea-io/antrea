@@ -191,7 +191,7 @@ func TestAddClusterGroup(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			_, npc := newController()
 			npc.addClusterGroup(tt.inputGroup)
-			key := string(tt.inputGroup.UID)
+			key := tt.inputGroup.Name
 			actualGroupObj, _, _ := npc.internalGroupStore.Get(key)
 			actualGroup := actualGroupObj.(*antreatypes.Group)
 			assert.Equal(t, tt.expectedGroup, actualGroup)
@@ -282,7 +282,7 @@ func TestUpdateClusterGroup(t *testing.T) {
 	}
 	_, npc := newController()
 	npc.addClusterGroup(&testCG)
-	key := string(testCG.UID)
+	key := testCG.Name
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			npc.updateClusterGroup(&testCG, tt.updatedGroup)
@@ -301,7 +301,7 @@ func TestDeleteCG(t *testing.T) {
 			NamespaceSelector: &selectorA,
 		},
 	}
-	key := string(testCG.UID)
+	key := testCG.Name
 	_, npc := newController()
 	npc.addClusterGroup(&testCG)
 	npc.deleteClusterGroup(&testCG)
@@ -326,18 +326,22 @@ func TestFilterInternalGroupsForPod(t *testing.T) {
 	}
 	grp1 := &antreatypes.Group{
 		UID:      "uid1",
+		Name:     "cgA",
 		Selector: *toGroupSelector("", &selectorSpec, nil, nil),
 	}
 	grp2 := &antreatypes.Group{
 		UID:      "uid2",
+		Name:     "cgB",
 		Selector: *toGroupSelector("", nil, nil, nil),
 	}
 	grp3 := &antreatypes.Group{
 		UID:      "uid3",
+		Name:     "cgC",
 		Selector: *toGroupSelector("", nil, &selectorSpec, nil),
 	}
 	grp4 := &antreatypes.Group{
 		UID:      "uid4",
+		Name:     "cgD",
 		Selector: *toGroupSelector("", &selectorSpec, &selectorSpec, nil),
 	}
 
@@ -353,12 +357,12 @@ func TestFilterInternalGroupsForPod(t *testing.T) {
 		{
 			"pod-match-selector-match-ns",
 			pod1,
-			sets.NewString("uid1", "uid3", "uid4"),
+			sets.NewString("cgA", "cgC", "cgD"),
 		},
 		{
 			"pod-unmatch-selector-match-ns",
 			pod2,
-			sets.NewString("uid3"),
+			sets.NewString("cgC"),
 		},
 		{
 			"pod-unmatch-selector-unmatch-ns",
@@ -399,18 +403,22 @@ func TestFilterInternalGroupsForNamespace(t *testing.T) {
 	}
 	grp1 := &antreatypes.Group{
 		UID:      "uid1",
+		Name:     "cgA",
 		Selector: *toGroupSelector("", &selectorSpec, nil, nil),
 	}
 	grp2 := &antreatypes.Group{
 		UID:      "uid2",
+		Name:     "cgB",
 		Selector: *toGroupSelector("", nil, nil, nil),
 	}
 	grp3 := &antreatypes.Group{
 		UID:      "uid3",
+		Name:     "cgC",
 		Selector: *toGroupSelector("", nil, &selectorSpec, nil),
 	}
 	grp4 := &antreatypes.Group{
 		UID:      "uid4",
+		Name:     "cgD",
 		Selector: *toGroupSelector("", &selectorSpec, &selectorSpec, nil),
 	}
 
@@ -422,7 +430,7 @@ func TestFilterInternalGroupsForNamespace(t *testing.T) {
 		{
 			"ns-match-selector",
 			ns1,
-			sets.NewString("uid3", "uid4"),
+			sets.NewString("cgC", "cgD"),
 		},
 		{
 			"ns-unmatch-selector",
