@@ -26,8 +26,8 @@ import (
 
 	"github.com/Microsoft/go-winio"
 	"github.com/Microsoft/hcsshim"
-	ps "github.com/benmoss/go-powershell"
-	"github.com/benmoss/go-powershell/backend"
+	ps "github.com/antoninbas/go-powershell"
+	"github.com/antoninbas/go-powershell/backend"
 	"github.com/containernetworking/plugins/pkg/ip"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog"
