@@ -1,4 +1,4 @@
-// Copyright 2020 Antrea Authors
+// Copyright 2021 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,7 +29,7 @@ type StatsV1alpha1Interface interface {
 	NetworkPolicyStatsGetter
 }
 
-// StatsV1alpha1Client is used to interact with features provided by the stats.antrea.tanzu.vmware.com group.
+// StatsV1alpha1Client is used to interact with features provided by the stats.antrea.io group.
 type StatsV1alpha1Client struct {
 	restClient rest.Interface
 }

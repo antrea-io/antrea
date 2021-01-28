@@ -1,4 +1,4 @@
-// Copyright 2020 Antrea Authors
+// Copyright 2021 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,12 +17,11 @@
 package fake
 
 import (
-	clusterinformationv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1"
 	controlplanev1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1"
 	controlplanev1beta2 "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
-	corev1alpha2 "github.com/vmware-tanzu/antrea/pkg/apis/core/v1alpha2"
-	opsv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/ops/v1alpha1"
-	securityv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
+	crdv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha1"
+	crdv1alpha2 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha2"
+	crdv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1beta1"
 	statsv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/stats/v1alpha1"
 	systemv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/system/v1beta1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -36,12 +35,11 @@ var scheme = runtime.NewScheme()
 var codecs = serializer.NewCodecFactory(scheme)
 var parameterCodec = runtime.NewParameterCodec(scheme)
 var localSchemeBuilder = runtime.SchemeBuilder{
-	clusterinformationv1beta1.AddToScheme,
 	controlplanev1beta1.AddToScheme,
 	controlplanev1beta2.AddToScheme,
-	corev1alpha2.AddToScheme,
-	opsv1alpha1.AddToScheme,
-	securityv1alpha1.AddToScheme,
+	crdv1alpha1.AddToScheme,
+	crdv1alpha2.AddToScheme,
+	crdv1beta1.AddToScheme,
 	statsv1alpha1.AddToScheme,
 	systemv1beta1.AddToScheme,
 }

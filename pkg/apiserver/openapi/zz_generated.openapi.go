@@ -29,72 +29,72 @@ import (
 
 func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenAPIDefinition {
 	return map[string]common.OpenAPIDefinition{
-		"github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1.AgentCondition":              schema_pkg_apis_clusterinformation_v1beta1_AgentCondition(ref),
-		"github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1.AntreaAgentInfo":             schema_pkg_apis_clusterinformation_v1beta1_AntreaAgentInfo(ref),
-		"github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1.AntreaAgentInfoList":         schema_pkg_apis_clusterinformation_v1beta1_AntreaAgentInfoList(ref),
-		"github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1.AntreaControllerInfo":        schema_pkg_apis_clusterinformation_v1beta1_AntreaControllerInfo(ref),
-		"github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1.AntreaControllerInfoList":    schema_pkg_apis_clusterinformation_v1beta1_AntreaControllerInfoList(ref),
-		"github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1.ControllerCondition":         schema_pkg_apis_clusterinformation_v1beta1_ControllerCondition(ref),
-		"github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1.NetworkPolicyControllerInfo": schema_pkg_apis_clusterinformation_v1beta1_NetworkPolicyControllerInfo(ref),
-		"github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1.OVSInfo":                     schema_pkg_apis_clusterinformation_v1beta1_OVSInfo(ref),
-		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.AddressGroup":                      schema_pkg_apis_controlplane_v1beta1_AddressGroup(ref),
-		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.AddressGroupList":                  schema_pkg_apis_controlplane_v1beta1_AddressGroupList(ref),
-		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.AddressGroupPatch":                 schema_pkg_apis_controlplane_v1beta1_AddressGroupPatch(ref),
-		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.AppliedToGroup":                    schema_pkg_apis_controlplane_v1beta1_AppliedToGroup(ref),
-		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.AppliedToGroupList":                schema_pkg_apis_controlplane_v1beta1_AppliedToGroupList(ref),
-		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.AppliedToGroupPatch":               schema_pkg_apis_controlplane_v1beta1_AppliedToGroupPatch(ref),
-		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.Endpoint":                          schema_pkg_apis_controlplane_v1beta1_Endpoint(ref),
-		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.ExternalEntityReference":           schema_pkg_apis_controlplane_v1beta1_ExternalEntityReference(ref),
-		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.GroupMember":                       schema_pkg_apis_controlplane_v1beta1_GroupMember(ref),
-		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.GroupMemberPod":                    schema_pkg_apis_controlplane_v1beta1_GroupMemberPod(ref),
-		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.IPBlock":                           schema_pkg_apis_controlplane_v1beta1_IPBlock(ref),
-		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.IPNet":                             schema_pkg_apis_controlplane_v1beta1_IPNet(ref),
-		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.NamedPort":                         schema_pkg_apis_controlplane_v1beta1_NamedPort(ref),
-		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.NetworkPolicy":                     schema_pkg_apis_controlplane_v1beta1_NetworkPolicy(ref),
-		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.NetworkPolicyList":                 schema_pkg_apis_controlplane_v1beta1_NetworkPolicyList(ref),
-		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.NetworkPolicyPeer":                 schema_pkg_apis_controlplane_v1beta1_NetworkPolicyPeer(ref),
-		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.NetworkPolicyReference":            schema_pkg_apis_controlplane_v1beta1_NetworkPolicyReference(ref),
-		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.NetworkPolicyRule":                 schema_pkg_apis_controlplane_v1beta1_NetworkPolicyRule(ref),
-		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.NetworkPolicyStats":                schema_pkg_apis_controlplane_v1beta1_NetworkPolicyStats(ref),
-		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.NodeStatsSummary":                  schema_pkg_apis_controlplane_v1beta1_NodeStatsSummary(ref),
-		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.PodReference":                      schema_pkg_apis_controlplane_v1beta1_PodReference(ref),
-		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.Service":                           schema_pkg_apis_controlplane_v1beta1_Service(ref),
-		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.AddressGroup":                      schema_pkg_apis_controlplane_v1beta2_AddressGroup(ref),
-		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.AddressGroupList":                  schema_pkg_apis_controlplane_v1beta2_AddressGroupList(ref),
-		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.AddressGroupPatch":                 schema_pkg_apis_controlplane_v1beta2_AddressGroupPatch(ref),
-		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.AppliedToGroup":                    schema_pkg_apis_controlplane_v1beta2_AppliedToGroup(ref),
-		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.AppliedToGroupList":                schema_pkg_apis_controlplane_v1beta2_AppliedToGroupList(ref),
-		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.AppliedToGroupPatch":               schema_pkg_apis_controlplane_v1beta2_AppliedToGroupPatch(ref),
-		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.ClusterGroupMembers":               schema_pkg_apis_controlplane_v1beta2_ClusterGroupMembers(ref),
-		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.ExternalEntityReference":           schema_pkg_apis_controlplane_v1beta2_ExternalEntityReference(ref),
-		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.GroupAssociation":                  schema_pkg_apis_controlplane_v1beta2_GroupAssociation(ref),
-		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.GroupMember":                       schema_pkg_apis_controlplane_v1beta2_GroupMember(ref),
-		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.GroupReference":                    schema_pkg_apis_controlplane_v1beta2_GroupReference(ref),
-		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.IPBlock":                           schema_pkg_apis_controlplane_v1beta2_IPBlock(ref),
-		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.IPNet":                             schema_pkg_apis_controlplane_v1beta2_IPNet(ref),
-		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.NamedPort":                         schema_pkg_apis_controlplane_v1beta2_NamedPort(ref),
-		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicy":                     schema_pkg_apis_controlplane_v1beta2_NetworkPolicy(ref),
-		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyList":                 schema_pkg_apis_controlplane_v1beta2_NetworkPolicyList(ref),
-		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyNodeStatus":           schema_pkg_apis_controlplane_v1beta2_NetworkPolicyNodeStatus(ref),
-		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyPeer":                 schema_pkg_apis_controlplane_v1beta2_NetworkPolicyPeer(ref),
-		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyReference":            schema_pkg_apis_controlplane_v1beta2_NetworkPolicyReference(ref),
-		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyRule":                 schema_pkg_apis_controlplane_v1beta2_NetworkPolicyRule(ref),
-		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyStats":                schema_pkg_apis_controlplane_v1beta2_NetworkPolicyStats(ref),
-		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyStatus":               schema_pkg_apis_controlplane_v1beta2_NetworkPolicyStatus(ref),
-		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.NodeStatsSummary":                  schema_pkg_apis_controlplane_v1beta2_NodeStatsSummary(ref),
-		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.PodReference":                      schema_pkg_apis_controlplane_v1beta2_PodReference(ref),
-		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.Service":                           schema_pkg_apis_controlplane_v1beta2_Service(ref),
-		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.ServiceReference":                  schema_pkg_apis_controlplane_v1beta2_ServiceReference(ref),
-		"github.com/vmware-tanzu/antrea/pkg/apis/stats/v1alpha1.AntreaClusterNetworkPolicyStats":         schema_pkg_apis_stats_v1alpha1_AntreaClusterNetworkPolicyStats(ref),
-		"github.com/vmware-tanzu/antrea/pkg/apis/stats/v1alpha1.AntreaClusterNetworkPolicyStatsList":     schema_pkg_apis_stats_v1alpha1_AntreaClusterNetworkPolicyStatsList(ref),
-		"github.com/vmware-tanzu/antrea/pkg/apis/stats/v1alpha1.AntreaNetworkPolicyStats":                schema_pkg_apis_stats_v1alpha1_AntreaNetworkPolicyStats(ref),
-		"github.com/vmware-tanzu/antrea/pkg/apis/stats/v1alpha1.AntreaNetworkPolicyStatsList":            schema_pkg_apis_stats_v1alpha1_AntreaNetworkPolicyStatsList(ref),
-		"github.com/vmware-tanzu/antrea/pkg/apis/stats/v1alpha1.NetworkPolicyStats":                      schema_pkg_apis_stats_v1alpha1_NetworkPolicyStats(ref),
-		"github.com/vmware-tanzu/antrea/pkg/apis/stats/v1alpha1.NetworkPolicyStatsList":                  schema_pkg_apis_stats_v1alpha1_NetworkPolicyStatsList(ref),
-		"github.com/vmware-tanzu/antrea/pkg/apis/stats/v1alpha1.RuleTrafficStats":                        schema_pkg_apis_stats_v1alpha1_RuleTrafficStats(ref),
-		"github.com/vmware-tanzu/antrea/pkg/apis/stats/v1alpha1.TrafficStats":                            schema_pkg_apis_stats_v1alpha1_TrafficStats(ref),
-		"github.com/vmware-tanzu/antrea/pkg/apis/system/v1beta1.SupportBundle":                           schema_pkg_apis_system_v1beta1_SupportBundle(ref),
-		"k8s.io/api/core/v1.AWSElasticBlockStoreVolumeSource":                                            schema_k8sio_api_core_v1_AWSElasticBlockStoreVolumeSource(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.AddressGroup":                  schema_pkg_apis_controlplane_v1beta1_AddressGroup(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.AddressGroupList":              schema_pkg_apis_controlplane_v1beta1_AddressGroupList(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.AddressGroupPatch":             schema_pkg_apis_controlplane_v1beta1_AddressGroupPatch(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.AppliedToGroup":                schema_pkg_apis_controlplane_v1beta1_AppliedToGroup(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.AppliedToGroupList":            schema_pkg_apis_controlplane_v1beta1_AppliedToGroupList(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.AppliedToGroupPatch":           schema_pkg_apis_controlplane_v1beta1_AppliedToGroupPatch(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.Endpoint":                      schema_pkg_apis_controlplane_v1beta1_Endpoint(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.ExternalEntityReference":       schema_pkg_apis_controlplane_v1beta1_ExternalEntityReference(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.GroupMember":                   schema_pkg_apis_controlplane_v1beta1_GroupMember(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.GroupMemberPod":                schema_pkg_apis_controlplane_v1beta1_GroupMemberPod(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.IPBlock":                       schema_pkg_apis_controlplane_v1beta1_IPBlock(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.IPNet":                         schema_pkg_apis_controlplane_v1beta1_IPNet(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.NamedPort":                     schema_pkg_apis_controlplane_v1beta1_NamedPort(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.NetworkPolicy":                 schema_pkg_apis_controlplane_v1beta1_NetworkPolicy(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.NetworkPolicyList":             schema_pkg_apis_controlplane_v1beta1_NetworkPolicyList(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.NetworkPolicyPeer":             schema_pkg_apis_controlplane_v1beta1_NetworkPolicyPeer(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.NetworkPolicyReference":        schema_pkg_apis_controlplane_v1beta1_NetworkPolicyReference(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.NetworkPolicyRule":             schema_pkg_apis_controlplane_v1beta1_NetworkPolicyRule(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.NetworkPolicyStats":            schema_pkg_apis_controlplane_v1beta1_NetworkPolicyStats(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.NodeStatsSummary":              schema_pkg_apis_controlplane_v1beta1_NodeStatsSummary(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.PodReference":                  schema_pkg_apis_controlplane_v1beta1_PodReference(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1.Service":                       schema_pkg_apis_controlplane_v1beta1_Service(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.AddressGroup":                  schema_pkg_apis_controlplane_v1beta2_AddressGroup(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.AddressGroupList":              schema_pkg_apis_controlplane_v1beta2_AddressGroupList(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.AddressGroupPatch":             schema_pkg_apis_controlplane_v1beta2_AddressGroupPatch(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.AppliedToGroup":                schema_pkg_apis_controlplane_v1beta2_AppliedToGroup(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.AppliedToGroupList":            schema_pkg_apis_controlplane_v1beta2_AppliedToGroupList(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.AppliedToGroupPatch":           schema_pkg_apis_controlplane_v1beta2_AppliedToGroupPatch(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.ClusterGroupMembers":           schema_pkg_apis_controlplane_v1beta2_ClusterGroupMembers(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.ExternalEntityReference":       schema_pkg_apis_controlplane_v1beta2_ExternalEntityReference(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.GroupAssociation":              schema_pkg_apis_controlplane_v1beta2_GroupAssociation(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.GroupMember":                   schema_pkg_apis_controlplane_v1beta2_GroupMember(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.GroupReference":                schema_pkg_apis_controlplane_v1beta2_GroupReference(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.IPBlock":                       schema_pkg_apis_controlplane_v1beta2_IPBlock(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.IPNet":                         schema_pkg_apis_controlplane_v1beta2_IPNet(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.NamedPort":                     schema_pkg_apis_controlplane_v1beta2_NamedPort(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicy":                 schema_pkg_apis_controlplane_v1beta2_NetworkPolicy(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyList":             schema_pkg_apis_controlplane_v1beta2_NetworkPolicyList(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyNodeStatus":       schema_pkg_apis_controlplane_v1beta2_NetworkPolicyNodeStatus(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyPeer":             schema_pkg_apis_controlplane_v1beta2_NetworkPolicyPeer(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyReference":        schema_pkg_apis_controlplane_v1beta2_NetworkPolicyReference(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyRule":             schema_pkg_apis_controlplane_v1beta2_NetworkPolicyRule(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyStats":            schema_pkg_apis_controlplane_v1beta2_NetworkPolicyStats(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyStatus":           schema_pkg_apis_controlplane_v1beta2_NetworkPolicyStatus(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.NodeStatsSummary":              schema_pkg_apis_controlplane_v1beta2_NodeStatsSummary(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.PodReference":                  schema_pkg_apis_controlplane_v1beta2_PodReference(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.Service":                       schema_pkg_apis_controlplane_v1beta2_Service(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.ServiceReference":              schema_pkg_apis_controlplane_v1beta2_ServiceReference(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/crd/v1beta1.AgentCondition":                         schema_pkg_apis_crd_v1beta1_AgentCondition(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/crd/v1beta1.AntreaAgentInfo":                        schema_pkg_apis_crd_v1beta1_AntreaAgentInfo(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/crd/v1beta1.AntreaAgentInfoList":                    schema_pkg_apis_crd_v1beta1_AntreaAgentInfoList(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/crd/v1beta1.AntreaControllerInfo":                   schema_pkg_apis_crd_v1beta1_AntreaControllerInfo(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/crd/v1beta1.AntreaControllerInfoList":               schema_pkg_apis_crd_v1beta1_AntreaControllerInfoList(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/crd/v1beta1.ControllerCondition":                    schema_pkg_apis_crd_v1beta1_ControllerCondition(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/crd/v1beta1.NetworkPolicyControllerInfo":            schema_pkg_apis_crd_v1beta1_NetworkPolicyControllerInfo(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/crd/v1beta1.OVSInfo":                                schema_pkg_apis_crd_v1beta1_OVSInfo(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/stats/v1alpha1.AntreaClusterNetworkPolicyStats":     schema_pkg_apis_stats_v1alpha1_AntreaClusterNetworkPolicyStats(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/stats/v1alpha1.AntreaClusterNetworkPolicyStatsList": schema_pkg_apis_stats_v1alpha1_AntreaClusterNetworkPolicyStatsList(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/stats/v1alpha1.AntreaNetworkPolicyStats":            schema_pkg_apis_stats_v1alpha1_AntreaNetworkPolicyStats(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/stats/v1alpha1.AntreaNetworkPolicyStatsList":        schema_pkg_apis_stats_v1alpha1_AntreaNetworkPolicyStatsList(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/stats/v1alpha1.NetworkPolicyStats":                  schema_pkg_apis_stats_v1alpha1_NetworkPolicyStats(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/stats/v1alpha1.NetworkPolicyStatsList":              schema_pkg_apis_stats_v1alpha1_NetworkPolicyStatsList(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/stats/v1alpha1.RuleTrafficStats":                    schema_pkg_apis_stats_v1alpha1_RuleTrafficStats(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/stats/v1alpha1.TrafficStats":                        schema_pkg_apis_stats_v1alpha1_TrafficStats(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/system/v1beta1.SupportBundle":                       schema_pkg_apis_system_v1beta1_SupportBundle(ref),
+		"k8s.io/api/core/v1.AWSElasticBlockStoreVolumeSource":                                        schema_k8sio_api_core_v1_AWSElasticBlockStoreVolumeSource(ref),
 		"k8s.io/api/core/v1.Affinity":                                    schema_k8sio_api_core_v1_Affinity(ref),
 		"k8s.io/api/core/v1.AttachedVolume":                              schema_k8sio_api_core_v1_AttachedVolume(ref),
 		"k8s.io/api/core/v1.AvoidPods":                                   schema_k8sio_api_core_v1_AvoidPods(ref),
@@ -348,456 +348,6 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"k8s.io/apimachinery/pkg/runtime.TypeMeta":                       schema_k8sio_apimachinery_pkg_runtime_TypeMeta(ref),
 		"k8s.io/apimachinery/pkg/runtime.Unknown":                        schema_k8sio_apimachinery_pkg_runtime_Unknown(ref),
 		"k8s.io/apimachinery/pkg/util/intstr.IntOrString":                schema_apimachinery_pkg_util_intstr_IntOrString(ref),
-	}
-}
-
-func schema_pkg_apis_clusterinformation_v1beta1_AgentCondition(ref common.ReferenceCallback) common.OpenAPIDefinition {
-	return common.OpenAPIDefinition{
-		Schema: spec.Schema{
-			SchemaProps: spec.SchemaProps{
-				Type: []string{"object"},
-				Properties: map[string]spec.Schema{
-					"type": {
-						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
-						},
-					},
-					"status": {
-						SchemaProps: spec.SchemaProps{
-							Description: "One of the AgentConditionType listed above",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-					"lastHeartbeatTime": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Mark certain type status, one of True, False, Unknown",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
-						},
-					},
-					"reason": {
-						SchemaProps: spec.SchemaProps{
-							Description: "The timestamp when AntreaAgentInfo is created/updated, ideally heartbeat interval is 60s",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-					"message": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Brief reason",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-				},
-				Required: []string{"type", "status", "lastHeartbeatTime"},
-			},
-		},
-		Dependencies: []string{
-			"k8s.io/apimachinery/pkg/apis/meta/v1.Time"},
-	}
-}
-
-func schema_pkg_apis_clusterinformation_v1beta1_AntreaAgentInfo(ref common.ReferenceCallback) common.OpenAPIDefinition {
-	return common.OpenAPIDefinition{
-		Schema: spec.Schema{
-			SchemaProps: spec.SchemaProps{
-				Type: []string{"object"},
-				Properties: map[string]spec.Schema{
-					"kind": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-					"apiVersion": {
-						SchemaProps: spec.SchemaProps{
-							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-					"metadata": {
-						SchemaProps: spec.SchemaProps{
-							Ref: ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
-						},
-					},
-					"version": {
-						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
-						},
-					},
-					"podRef": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Antrea binary version",
-							Ref:         ref("k8s.io/api/core/v1.ObjectReference"),
-						},
-					},
-					"nodeRef": {
-						SchemaProps: spec.SchemaProps{
-							Description: "The Pod that Antrea Agent is running in",
-							Ref:         ref("k8s.io/api/core/v1.ObjectReference"),
-						},
-					},
-					"nodeSubnets": {
-						SchemaProps: spec.SchemaProps{
-							Description: "The Node that Antrea Agent is running in",
-							Type:        []string{"array"},
-							Items: &spec.SchemaOrArray{
-								Schema: &spec.Schema{
-									SchemaProps: spec.SchemaProps{
-										Type:   []string{"string"},
-										Format: "",
-									},
-								},
-							},
-						},
-					},
-					"ovsInfo": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Node subnets",
-							Ref:         ref("github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1.OVSInfo"),
-						},
-					},
-					"networkPolicyControllerInfo": {
-						SchemaProps: spec.SchemaProps{
-							Description: "OVS Information",
-							Ref:         ref("github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1.NetworkPolicyControllerInfo"),
-						},
-					},
-					"localPodNum": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Antrea Agent NetworkPolicy information",
-							Type:        []string{"integer"},
-							Format:      "int32",
-						},
-					},
-					"agentConditions": {
-						SchemaProps: spec.SchemaProps{
-							Description: "The number of Pods which the agent is in charge of",
-							Type:        []string{"array"},
-							Items: &spec.SchemaOrArray{
-								Schema: &spec.Schema{
-									SchemaProps: spec.SchemaProps{
-										Ref: ref("github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1.AgentCondition"),
-									},
-								},
-							},
-						},
-					},
-					"apiPort": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Agent condition contains types like AgentHealthy",
-							Type:        []string{"integer"},
-							Format:      "int32",
-						},
-					},
-				},
-			},
-		},
-		Dependencies: []string{
-			"github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1.AgentCondition", "github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1.NetworkPolicyControllerInfo", "github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1.OVSInfo", "k8s.io/api/core/v1.ObjectReference", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
-	}
-}
-
-func schema_pkg_apis_clusterinformation_v1beta1_AntreaAgentInfoList(ref common.ReferenceCallback) common.OpenAPIDefinition {
-	return common.OpenAPIDefinition{
-		Schema: spec.Schema{
-			SchemaProps: spec.SchemaProps{
-				Type: []string{"object"},
-				Properties: map[string]spec.Schema{
-					"kind": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-					"apiVersion": {
-						SchemaProps: spec.SchemaProps{
-							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-					"metadata": {
-						SchemaProps: spec.SchemaProps{
-							Ref: ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
-						},
-					},
-					"items": {
-						SchemaProps: spec.SchemaProps{
-							Type: []string{"array"},
-							Items: &spec.SchemaOrArray{
-								Schema: &spec.Schema{
-									SchemaProps: spec.SchemaProps{
-										Ref: ref("github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1.AntreaAgentInfo"),
-									},
-								},
-							},
-						},
-					},
-				},
-				Required: []string{"items"},
-			},
-		},
-		Dependencies: []string{
-			"github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1.AntreaAgentInfo", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
-	}
-}
-
-func schema_pkg_apis_clusterinformation_v1beta1_AntreaControllerInfo(ref common.ReferenceCallback) common.OpenAPIDefinition {
-	return common.OpenAPIDefinition{
-		Schema: spec.Schema{
-			SchemaProps: spec.SchemaProps{
-				Type: []string{"object"},
-				Properties: map[string]spec.Schema{
-					"kind": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-					"apiVersion": {
-						SchemaProps: spec.SchemaProps{
-							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-					"metadata": {
-						SchemaProps: spec.SchemaProps{
-							Ref: ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
-						},
-					},
-					"version": {
-						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
-						},
-					},
-					"podRef": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Antrea binary version",
-							Ref:         ref("k8s.io/api/core/v1.ObjectReference"),
-						},
-					},
-					"nodeRef": {
-						SchemaProps: spec.SchemaProps{
-							Description: "The Pod that Antrea Controller is running in",
-							Ref:         ref("k8s.io/api/core/v1.ObjectReference"),
-						},
-					},
-					"serviceRef": {
-						SchemaProps: spec.SchemaProps{
-							Description: "The Node that Antrea Controller is running in",
-							Ref:         ref("k8s.io/api/core/v1.ObjectReference"),
-						},
-					},
-					"networkPolicyControllerInfo": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Antrea Controller Service",
-							Ref:         ref("github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1.NetworkPolicyControllerInfo"),
-						},
-					},
-					"connectedAgentNum": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Antrea Controller NetworkPolicy information",
-							Type:        []string{"integer"},
-							Format:      "int32",
-						},
-					},
-					"controllerConditions": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Number of agents which are connected to this controller",
-							Type:        []string{"array"},
-							Items: &spec.SchemaOrArray{
-								Schema: &spec.Schema{
-									SchemaProps: spec.SchemaProps{
-										Ref: ref("github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1.ControllerCondition"),
-									},
-								},
-							},
-						},
-					},
-					"apiPort": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Controller condition contains types like ControllerHealthy",
-							Type:        []string{"integer"},
-							Format:      "int32",
-						},
-					},
-				},
-			},
-		},
-		Dependencies: []string{
-			"github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1.ControllerCondition", "github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1.NetworkPolicyControllerInfo", "k8s.io/api/core/v1.ObjectReference", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
-	}
-}
-
-func schema_pkg_apis_clusterinformation_v1beta1_AntreaControllerInfoList(ref common.ReferenceCallback) common.OpenAPIDefinition {
-	return common.OpenAPIDefinition{
-		Schema: spec.Schema{
-			SchemaProps: spec.SchemaProps{
-				Type: []string{"object"},
-				Properties: map[string]spec.Schema{
-					"kind": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-					"apiVersion": {
-						SchemaProps: spec.SchemaProps{
-							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-					"metadata": {
-						SchemaProps: spec.SchemaProps{
-							Ref: ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
-						},
-					},
-					"items": {
-						SchemaProps: spec.SchemaProps{
-							Type: []string{"array"},
-							Items: &spec.SchemaOrArray{
-								Schema: &spec.Schema{
-									SchemaProps: spec.SchemaProps{
-										Ref: ref("github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1.AntreaControllerInfo"),
-									},
-								},
-							},
-						},
-					},
-				},
-				Required: []string{"items"},
-			},
-		},
-		Dependencies: []string{
-			"github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1.AntreaControllerInfo", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
-	}
-}
-
-func schema_pkg_apis_clusterinformation_v1beta1_ControllerCondition(ref common.ReferenceCallback) common.OpenAPIDefinition {
-	return common.OpenAPIDefinition{
-		Schema: spec.Schema{
-			SchemaProps: spec.SchemaProps{
-				Type: []string{"object"},
-				Properties: map[string]spec.Schema{
-					"type": {
-						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
-						},
-					},
-					"status": {
-						SchemaProps: spec.SchemaProps{
-							Description: "One of the ControllerConditionType listed above, controllerHealthy",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-					"lastHeartbeatTime": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Mark certain type status, one of True, False, Unknown",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
-						},
-					},
-					"reason": {
-						SchemaProps: spec.SchemaProps{
-							Description: "The timestamp when AntreaControllerInfo is created/updated, ideally heartbeat interval is 60s",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-					"message": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Brief reason",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-				},
-				Required: []string{"type", "status", "lastHeartbeatTime"},
-			},
-		},
-		Dependencies: []string{
-			"k8s.io/apimachinery/pkg/apis/meta/v1.Time"},
-	}
-}
-
-func schema_pkg_apis_clusterinformation_v1beta1_NetworkPolicyControllerInfo(ref common.ReferenceCallback) common.OpenAPIDefinition {
-	return common.OpenAPIDefinition{
-		Schema: spec.Schema{
-			SchemaProps: spec.SchemaProps{
-				Type: []string{"object"},
-				Properties: map[string]spec.Schema{
-					"networkPolicyNum": {
-						SchemaProps: spec.SchemaProps{
-							Type:   []string{"integer"},
-							Format: "int32",
-						},
-					},
-					"addressGroupNum": {
-						SchemaProps: spec.SchemaProps{
-							Type:   []string{"integer"},
-							Format: "int32",
-						},
-					},
-					"appliedToGroupNum": {
-						SchemaProps: spec.SchemaProps{
-							Type:   []string{"integer"},
-							Format: "int32",
-						},
-					},
-				},
-			},
-		},
-	}
-}
-
-func schema_pkg_apis_clusterinformation_v1beta1_OVSInfo(ref common.ReferenceCallback) common.OpenAPIDefinition {
-	return common.OpenAPIDefinition{
-		Schema: spec.Schema{
-			SchemaProps: spec.SchemaProps{
-				Type: []string{"object"},
-				Properties: map[string]spec.Schema{
-					"version": {
-						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
-						},
-					},
-					"bridgeName": {
-						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
-						},
-					},
-					"flowTable": {
-						SchemaProps: spec.SchemaProps{
-							Type: []string{"object"},
-							AdditionalProperties: &spec.SchemaOrBool{
-								Allows: true,
-								Schema: &spec.Schema{
-									SchemaProps: spec.SchemaProps{
-										Type:   []string{"integer"},
-										Format: "int32",
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-		},
 	}
 }
 
@@ -3035,6 +2585,456 @@ func schema_pkg_apis_controlplane_v1beta2_ServiceReference(ref common.ReferenceC
 							Description: "The Namespace of this Service.",
 							Type:        []string{"string"},
 							Format:      "",
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta1_AgentCondition(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"type": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+					"status": {
+						SchemaProps: spec.SchemaProps{
+							Description: "One of the AgentConditionType listed above",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"lastHeartbeatTime": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Mark certain type status, one of True, False, Unknown",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
+						},
+					},
+					"reason": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The timestamp when AntreaAgentInfo is created/updated, ideally heartbeat interval is 60s",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"message": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Brief reason",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+				Required: []string{"type", "status", "lastHeartbeatTime"},
+			},
+		},
+		Dependencies: []string{
+			"k8s.io/apimachinery/pkg/apis/meta/v1.Time"},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta1_AntreaAgentInfo(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+						},
+					},
+					"version": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+					"podRef": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Antrea binary version",
+							Ref:         ref("k8s.io/api/core/v1.ObjectReference"),
+						},
+					},
+					"nodeRef": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The Pod that Antrea Agent is running in",
+							Ref:         ref("k8s.io/api/core/v1.ObjectReference"),
+						},
+					},
+					"nodeSubnets": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The Node that Antrea Agent is running in",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Type:   []string{"string"},
+										Format: "",
+									},
+								},
+							},
+						},
+					},
+					"ovsInfo": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Node subnets",
+							Ref:         ref("github.com/vmware-tanzu/antrea/pkg/apis/crd/v1beta1.OVSInfo"),
+						},
+					},
+					"networkPolicyControllerInfo": {
+						SchemaProps: spec.SchemaProps{
+							Description: "OVS Information",
+							Ref:         ref("github.com/vmware-tanzu/antrea/pkg/apis/crd/v1beta1.NetworkPolicyControllerInfo"),
+						},
+					},
+					"localPodNum": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Antrea Agent NetworkPolicy information",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"agentConditions": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The number of Pods which the agent is in charge of",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("github.com/vmware-tanzu/antrea/pkg/apis/crd/v1beta1.AgentCondition"),
+									},
+								},
+							},
+						},
+					},
+					"apiPort": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Agent condition contains types like AgentHealthy",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"github.com/vmware-tanzu/antrea/pkg/apis/crd/v1beta1.AgentCondition", "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1beta1.NetworkPolicyControllerInfo", "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1beta1.OVSInfo", "k8s.io/api/core/v1.ObjectReference", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta1_AntreaAgentInfoList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+						},
+					},
+					"items": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("github.com/vmware-tanzu/antrea/pkg/apis/crd/v1beta1.AntreaAgentInfo"),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"items"},
+			},
+		},
+		Dependencies: []string{
+			"github.com/vmware-tanzu/antrea/pkg/apis/crd/v1beta1.AntreaAgentInfo", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta1_AntreaControllerInfo(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+						},
+					},
+					"version": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+					"podRef": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Antrea binary version",
+							Ref:         ref("k8s.io/api/core/v1.ObjectReference"),
+						},
+					},
+					"nodeRef": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The Pod that Antrea Controller is running in",
+							Ref:         ref("k8s.io/api/core/v1.ObjectReference"),
+						},
+					},
+					"serviceRef": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The Node that Antrea Controller is running in",
+							Ref:         ref("k8s.io/api/core/v1.ObjectReference"),
+						},
+					},
+					"networkPolicyControllerInfo": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Antrea Controller Service",
+							Ref:         ref("github.com/vmware-tanzu/antrea/pkg/apis/crd/v1beta1.NetworkPolicyControllerInfo"),
+						},
+					},
+					"connectedAgentNum": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Antrea Controller NetworkPolicy information",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"controllerConditions": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Number of agents which are connected to this controller",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("github.com/vmware-tanzu/antrea/pkg/apis/crd/v1beta1.ControllerCondition"),
+									},
+								},
+							},
+						},
+					},
+					"apiPort": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Controller condition contains types like ControllerHealthy",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"github.com/vmware-tanzu/antrea/pkg/apis/crd/v1beta1.ControllerCondition", "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1beta1.NetworkPolicyControllerInfo", "k8s.io/api/core/v1.ObjectReference", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta1_AntreaControllerInfoList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+						},
+					},
+					"items": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("github.com/vmware-tanzu/antrea/pkg/apis/crd/v1beta1.AntreaControllerInfo"),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"items"},
+			},
+		},
+		Dependencies: []string{
+			"github.com/vmware-tanzu/antrea/pkg/apis/crd/v1beta1.AntreaControllerInfo", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta1_ControllerCondition(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"type": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+					"status": {
+						SchemaProps: spec.SchemaProps{
+							Description: "One of the ControllerConditionType listed above, controllerHealthy",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"lastHeartbeatTime": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Mark certain type status, one of True, False, Unknown",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
+						},
+					},
+					"reason": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The timestamp when AntreaControllerInfo is created/updated, ideally heartbeat interval is 60s",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"message": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Brief reason",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+				Required: []string{"type", "status", "lastHeartbeatTime"},
+			},
+		},
+		Dependencies: []string{
+			"k8s.io/apimachinery/pkg/apis/meta/v1.Time"},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta1_NetworkPolicyControllerInfo(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"networkPolicyNum": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"integer"},
+							Format: "int32",
+						},
+					},
+					"addressGroupNum": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"integer"},
+							Format: "int32",
+						},
+					},
+					"appliedToGroupNum": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"integer"},
+							Format: "int32",
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta1_OVSInfo(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"version": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+					"bridgeName": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+					"flowTable": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"object"},
+							AdditionalProperties: &spec.SchemaOrBool{
+								Allows: true,
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Type:   []string{"integer"},
+										Format: "int32",
+									},
+								},
+							},
 						},
 					},
 				},

@@ -30,7 +30,7 @@ import (
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
-	opsv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/ops/v1alpha1"
+	opsv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha1"
 	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
 )
 
@@ -52,7 +52,7 @@ func (c *Controller) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
 		}
 		update := tf.DeepCopy()
 		update.Status.Results = append(update.Status.Results, *nodeResult)
-		_, err = c.traceflowClient.OpsV1alpha1().Traceflows().UpdateStatus(context.TODO(), update, v1.UpdateOptions{})
+		_, err = c.traceflowClient.CrdV1alpha1().Traceflows().UpdateStatus(context.TODO(), update, v1.UpdateOptions{})
 		if err != nil {
 			klog.Warningf("Update traceflow failed: %+v", err)
 			return err
@@ -288,7 +288,7 @@ func getCTDstValue(matchers *ofctrl.Matchers, isIPv6 bool) (string, error) {
 
 func getNetworkPolicyObservation(tableID uint8, ingress bool) *opsv1alpha1.Observation {
 	ob := new(opsv1alpha1.Observation)
-	ob.Component = opsv1alpha1.NetworkPolicy
+	ob.Component = opsv1alpha1.ComponentNetworkPolicy
 	if ingress {
 		switch tableID {
 		case uint8(openflow.IngressMetricTable), uint8(openflow.IngressDefaultTable):

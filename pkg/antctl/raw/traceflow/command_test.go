@@ -19,7 +19,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/vmware-tanzu/antrea/pkg/apis/ops/v1alpha1"
+	"github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha1"
 )
 
 var protocolTCP = int32(6)

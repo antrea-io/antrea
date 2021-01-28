@@ -26,7 +26,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog"
 
-	"github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1"
+	"github.com/vmware-tanzu/antrea/pkg/apis/crd/v1beta1"
 	clientset "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned"
 	controllerquerier "github.com/vmware-tanzu/antrea/pkg/controller/querier"
 )
@@ -110,7 +110,7 @@ func (monitor *controllerMonitor) syncControllerCRD() {
 // getControllerCRD is used to check the existence of controller monitoring CRD.
 // So when the Pod restarts, it will update this monitoring CRD instead of creating a new one.
 func (monitor *controllerMonitor) getControllerCRD(crdName string) (*v1beta1.AntreaControllerInfo, error) {
-	return monitor.client.ClusterinformationV1beta1().AntreaControllerInfos().Get(context.TODO(), crdName, metav1.GetOptions{})
+	return monitor.client.CrdV1beta1().AntreaControllerInfos().Get(context.TODO(), crdName, metav1.GetOptions{})
 }
 
 func (monitor *controllerMonitor) createControllerCRD(crdName string) (*v1beta1.AntreaControllerInfo, error) {
@@ -118,18 +118,18 @@ func (monitor *controllerMonitor) createControllerCRD(crdName string) (*v1beta1.
 	controllerCRD.Name = crdName
 	monitor.querier.GetControllerInfo(controllerCRD, false)
 	klog.V(2).Infof("Creating controller monitoring CRD %+v", controllerCRD)
-	return monitor.client.ClusterinformationV1beta1().AntreaControllerInfos().Create(context.TODO(), controllerCRD, metav1.CreateOptions{})
+	return monitor.client.CrdV1beta1().AntreaControllerInfos().Create(context.TODO(), controllerCRD, metav1.CreateOptions{})
 }
 
 // updateControllerCRD updates the monitoring CRD.
 func (monitor *controllerMonitor) updateControllerCRD(partial bool) (*v1beta1.AntreaControllerInfo, error) {
 	monitor.querier.GetControllerInfo(monitor.controllerCRD, partial)
 	klog.V(2).Infof("Updating controller monitoring CRD %+v, partial: %t", monitor.controllerCRD, partial)
-	return monitor.client.ClusterinformationV1beta1().AntreaControllerInfos().Update(context.TODO(), monitor.controllerCRD, metav1.UpdateOptions{})
+	return monitor.client.CrdV1beta1().AntreaControllerInfos().Update(context.TODO(), monitor.controllerCRD, metav1.UpdateOptions{})
 }
 
 func (monitor *controllerMonitor) deleteStaleAgentCRDs() {
-	crds, err := monitor.client.ClusterinformationV1beta1().AntreaAgentInfos().List(context.TODO(), metav1.ListOptions{
+	crds, err := monitor.client.CrdV1beta1().AntreaAgentInfos().List(context.TODO(), metav1.ListOptions{
 		ResourceVersion: "0",
 	})
 	if err != nil {
@@ -165,7 +165,7 @@ func (monitor *controllerMonitor) deleteStaleAgentCRD(old interface{}) {
 
 func (monitor *controllerMonitor) deleteAgentCRD(name string) {
 	klog.Infof("Deleting agent monitoring CRD %s", name)
-	err := monitor.client.ClusterinformationV1beta1().AntreaAgentInfos().Delete(context.TODO(), name, metav1.DeleteOptions{})
+	err := monitor.client.CrdV1beta1().AntreaAgentInfos().Delete(context.TODO(), name, metav1.DeleteOptions{})
 	if err != nil {
 		klog.Errorf("Failed to delete agent monitoring CRD %s: %v", name, err)
 	}

@@ -24,7 +24,7 @@ import (
 	"k8s.io/klog"
 
 	agentquerier "github.com/vmware-tanzu/antrea/pkg/agent/querier"
-	"github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1"
+	"github.com/vmware-tanzu/antrea/pkg/apis/crd/v1beta1"
 	clientset "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned"
 )
 
@@ -88,7 +88,7 @@ func (monitor *agentMonitor) syncAgentCRD() {
 func (monitor *agentMonitor) getAgentCRD() (*v1beta1.AntreaAgentInfo, error) {
 	crdName := monitor.querier.GetNodeConfig().Name
 	klog.V(2).Infof("Getting agent monitoring CRD %+v", crdName)
-	return monitor.client.ClusterinformationV1beta1().AntreaAgentInfos().Get(context.TODO(), crdName, metav1.GetOptions{})
+	return monitor.client.CrdV1beta1().AntreaAgentInfos().Get(context.TODO(), crdName, metav1.GetOptions{})
 }
 
 // createAgentCRD creates a new agent CRD.
@@ -96,12 +96,12 @@ func (monitor *agentMonitor) createAgentCRD() (*v1beta1.AntreaAgentInfo, error) 
 	agentCRD := new(v1beta1.AntreaAgentInfo)
 	monitor.querier.GetAgentInfo(agentCRD, false)
 	klog.V(2).Infof("Creating agent monitoring CRD %+v", agentCRD)
-	return monitor.client.ClusterinformationV1beta1().AntreaAgentInfos().Create(context.TODO(), agentCRD, metav1.CreateOptions{})
+	return monitor.client.CrdV1beta1().AntreaAgentInfos().Create(context.TODO(), agentCRD, metav1.CreateOptions{})
 }
 
 // updateAgentCRD updates the monitoring CRD.
 func (monitor *agentMonitor) updateAgentCRD(partial bool) (*v1beta1.AntreaAgentInfo, error) {
 	monitor.querier.GetAgentInfo(monitor.agentCRD, partial)
 	klog.V(2).Infof("Updating agent monitoring CRD %+v, partial: %t", monitor.agentCRD, partial)
-	return monitor.client.ClusterinformationV1beta1().AntreaAgentInfos().Update(context.TODO(), monitor.agentCRD, metav1.UpdateOptions{})
+	return monitor.client.CrdV1beta1().AntreaAgentInfos().Update(context.TODO(), monitor.agentCRD, metav1.UpdateOptions{})
 }

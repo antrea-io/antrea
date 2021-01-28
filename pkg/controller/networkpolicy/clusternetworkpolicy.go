@@ -20,7 +20,7 @@ import (
 	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
-	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
+	crdv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha1"
 	antreatypes "github.com/vmware-tanzu/antrea/pkg/controller/types"
 )
 
@@ -28,7 +28,7 @@ import (
 // which can be consumed by agents to configure corresponding rules on the Nodes.
 func (n *NetworkPolicyController) addCNP(obj interface{}) {
 	defer n.heartbeat("addCNP")
-	cnp := obj.(*secv1alpha1.ClusterNetworkPolicy)
+	cnp := obj.(*crdv1alpha1.ClusterNetworkPolicy)
 	klog.Infof("Processing ClusterNetworkPolicy %s ADD event", cnp.Name)
 	// Create an internal NetworkPolicy object corresponding to this
 	// ClusterNetworkPolicy and enqueue task to internal NetworkPolicy Workqueue.
@@ -43,14 +43,14 @@ func (n *NetworkPolicyController) addCNP(obj interface{}) {
 // which can be consumed by agents to configure corresponding rules on the Nodes.
 func (n *NetworkPolicyController) updateCNP(old, cur interface{}) {
 	defer n.heartbeat("updateCNP")
-	curCNP := cur.(*secv1alpha1.ClusterNetworkPolicy)
+	curCNP := cur.(*crdv1alpha1.ClusterNetworkPolicy)
 	klog.Infof("Processing ClusterNetworkPolicy %s UPDATE event", curCNP.Name)
 	// Update an internal NetworkPolicy, corresponding to this NetworkPolicy and
 	// enqueue task to internal NetworkPolicy Workqueue.
 	curInternalNP := n.processClusterNetworkPolicy(curCNP)
 	klog.V(2).Infof("Updating existing internal NetworkPolicy %s for %s", curInternalNP.Name, curInternalNP.SourceRef.ToString())
-	// Retrieve old secv1alpha1.NetworkPolicy object.
-	oldCNP := old.(*secv1alpha1.ClusterNetworkPolicy)
+	// Retrieve old crdv1alpha1.NetworkPolicy object.
+	oldCNP := old.(*crdv1alpha1.ClusterNetworkPolicy)
 	// Old and current NetworkPolicy share the same key.
 	key := internalNetworkPolicyKeyFunc(oldCNP)
 	// Lock access to internal NetworkPolicy store such that concurrent access
@@ -87,14 +87,14 @@ func (n *NetworkPolicyController) updateCNP(old, cur interface{}) {
 // deleteCNP receives ClusterNetworkPolicy DELETED events and deletes resources
 // which can be consumed by agents to delete corresponding rules on the Nodes.
 func (n *NetworkPolicyController) deleteCNP(old interface{}) {
-	cnp, ok := old.(*secv1alpha1.ClusterNetworkPolicy)
+	cnp, ok := old.(*crdv1alpha1.ClusterNetworkPolicy)
 	if !ok {
 		tombstone, ok := old.(cache.DeletedFinalStateUnknown)
 		if !ok {
 			klog.Errorf("Error decoding object when deleting ClusterNetworkPolicy, invalid type: %v", old)
 			return
 		}
-		cnp, ok = tombstone.Obj.(*secv1alpha1.ClusterNetworkPolicy)
+		cnp, ok = tombstone.Obj.(*crdv1alpha1.ClusterNetworkPolicy)
 		if !ok {
 			klog.Errorf("Error decoding object tombstone when deleting ClusterNetworkPolicy, invalid type: %v", tombstone.Obj)
 			return
@@ -118,12 +118,12 @@ func (n *NetworkPolicyController) deleteCNP(old interface{}) {
 }
 
 // processClusterNetworkPolicy creates an internal NetworkPolicy instance
-// corresponding to the secv1alpha1.ClusterNetworkPolicy object. This method
+// corresponding to the crdv1alpha1.ClusterNetworkPolicy object. This method
 // does not commit the internal NetworkPolicy in store, instead returns an
 // instance to the caller wherein, it will be either stored as a new Object
 // in case of ADD event or modified and store the updated instance, in case
 // of an UPDATE event.
-func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *secv1alpha1.ClusterNetworkPolicy) *antreatypes.NetworkPolicy {
+func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *crdv1alpha1.ClusterNetworkPolicy) *antreatypes.NetworkPolicy {
 	appliedToPerRule := len(cnp.Spec.AppliedTo) == 0
 	// appliedToGroupNames tracks all distinct appliedToGroups referred to by the ClusterNetworkPolicy,
 	// either in the spec section or in ingress/egress rules.

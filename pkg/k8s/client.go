@@ -23,6 +23,7 @@ import (
 	aggregatorclientset "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 
 	crdclientset "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned"
+	legacycrdclientset "github.com/vmware-tanzu/antrea/pkg/legacyclient/clientset/versioned"
 )
 
 // CreateClients creates kube clients from the given config.
@@ -67,4 +68,38 @@ func CreateClients(config componentbaseconfig.ClientConnectionConfiguration, kub
 		return nil, nil, nil, err
 	}
 	return client, aggregatorClient, crdClient, nil
+}
+
+// CreateLegacyCRD creates legacyCRD client from the given config.
+func CreateLegacyCRDClient(config componentbaseconfig.ClientConnectionConfiguration, kubeAPIServerOverride string) (legacycrdclientset.Interface, error) {
+	var kubeConfig *rest.Config
+	var err error
+
+	if len(config.Kubeconfig) == 0 {
+		klog.Info("No kubeconfig file was specified. Falling back to in-cluster config")
+		kubeConfig, err = rest.InClusterConfig()
+	} else {
+		kubeConfig, err = clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
+			&clientcmd.ClientConfigLoadingRules{ExplicitPath: config.Kubeconfig},
+			&clientcmd.ConfigOverrides{}).ClientConfig()
+	}
+
+	if len(kubeAPIServerOverride) != 0 {
+		kubeConfig.Host = kubeAPIServerOverride
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	kubeConfig.AcceptContentTypes = config.AcceptContentTypes
+	kubeConfig.ContentType = config.ContentType
+	kubeConfig.QPS = config.QPS
+	kubeConfig.Burst = int(config.Burst)
+
+	legacyCrdClient, err := legacycrdclientset.NewForConfig(kubeConfig)
+	if err != nil {
+		return nil, err
+	}
+	return legacyCrdClient, nil
 }

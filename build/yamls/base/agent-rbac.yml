@@ -46,6 +46,7 @@ rules:
       - list
   - apiGroups:
       - clusterinformation.antrea.tanzu.vmware.com
+      - crd.antrea.io
     resources:
       - antreaagentinfos
     verbs:
@@ -56,6 +57,7 @@ rules:
   - apiGroups:
       - controlplane.antrea.tanzu.vmware.com
       - networking.antrea.tanzu.vmware.com
+      - controlplane.antrea.io
     resources:
       - networkpolicies
       - appliedtogroups
@@ -66,12 +68,14 @@ rules:
       - list
   - apiGroups:
       - controlplane.antrea.tanzu.vmware.com
+      - controlplane.antrea.io
     resources:
       - nodestatssummaries
     verbs:
       - create
   - apiGroups:
       - controlplane.antrea.tanzu.vmware.com
+      - controlplane.antrea.io
     resources:
       - networkpolicies/status
     verbs:
@@ -117,6 +121,7 @@ rules:
       - list
   - apiGroups:
       - ops.antrea.tanzu.vmware.com
+      - crd.antrea.io
     resources:
       - traceflows
       - traceflows/status

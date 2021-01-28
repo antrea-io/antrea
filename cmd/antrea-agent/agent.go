@@ -69,7 +69,7 @@ func run(o *Options) error {
 	}
 	informerFactory := informers.NewSharedInformerFactory(k8sClient, informerDefaultResync)
 	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, informerDefaultResync)
-	traceflowInformer := crdInformerFactory.Ops().V1alpha1().Traceflows()
+	traceflowInformer := crdInformerFactory.Crd().V1alpha1().Traceflows()
 
 	// Create Antrea Clientset for the given config.
 	antreaClientProvider := agent.NewAntreaClientProvider(o.config.AntreaClientConnection, k8sClient)

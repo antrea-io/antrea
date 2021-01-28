@@ -31,7 +31,7 @@ import (
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/controller/noderoute"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/runtime"
-	clusterinformationv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1"
+	clusterinformationv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1beta1"
 	antrea "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned"
 )
 
@@ -169,7 +169,7 @@ func createAgentClientCfg(k8sClientset kubernetes.Interface, antreaClientset ant
 		return nil, fmt.Errorf("error when looking up Node %s: %w", nodeName, err)
 	}
 	// TODO: filter by Node name, but that would require API support
-	agentInfoList, err := antreaClientset.ClusterinformationV1beta1().AntreaAgentInfos().List(context.TODO(), metav1.ListOptions{ResourceVersion: "0"})
+	agentInfoList, err := antreaClientset.CrdV1beta1().AntreaAgentInfos().List(context.TODO(), metav1.ListOptions{ResourceVersion: "0"})
 	if err != nil {
 		return nil, err
 	}
@@ -194,7 +194,7 @@ func createAgentClientCfg(k8sClientset kubernetes.Interface, antreaClientset ant
 }
 
 func createControllerClientCfg(k8sClientset kubernetes.Interface, antreaClientset antrea.Interface, cfgTmpl *rest.Config) (*rest.Config, error) {
-	controllerInfo, err := antreaClientset.ClusterinformationV1beta1().AntreaControllerInfos().Get(context.TODO(), "antrea-controller", metav1.GetOptions{})
+	controllerInfo, err := antreaClientset.CrdV1beta1().AntreaControllerInfos().Get(context.TODO(), "antrea-controller", metav1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}

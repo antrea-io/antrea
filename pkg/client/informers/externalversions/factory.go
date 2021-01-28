@@ -1,4 +1,4 @@
-// Copyright 2020 Antrea Authors
+// Copyright 2021 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,11 +22,8 @@ import (
 	time "time"
 
 	versioned "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned"
-	clusterinformation "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions/clusterinformation"
-	core "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions/core"
+	crd "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions/crd"
 	internalinterfaces "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions/internalinterfaces"
-	ops "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions/ops"
-	security "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions/security"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
@@ -173,24 +170,9 @@ type SharedInformerFactory interface {
 	ForResource(resource schema.GroupVersionResource) (GenericInformer, error)
 	WaitForCacheSync(stopCh <-chan struct{}) map[reflect.Type]bool
 
-	Clusterinformation() clusterinformation.Interface
-	Core() core.Interface
-	Ops() ops.Interface
-	Security() security.Interface
+	Crd() crd.Interface
 }
 
-func (f *sharedInformerFactory) Clusterinformation() clusterinformation.Interface {
-	return clusterinformation.New(f, f.namespace, f.tweakListOptions)
-}
-
-func (f *sharedInformerFactory) Core() core.Interface {
-	return core.New(f, f.namespace, f.tweakListOptions)
-}
-
-func (f *sharedInformerFactory) Ops() ops.Interface {
-	return ops.New(f, f.namespace, f.tweakListOptions)
-}
-
-func (f *sharedInformerFactory) Security() security.Interface {
-	return security.New(f, f.namespace, f.tweakListOptions)
+func (f *sharedInformerFactory) Crd() crd.Interface {
+	return crd.New(f, f.namespace, f.tweakListOptions)
 }

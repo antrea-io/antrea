@@ -26,7 +26,7 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 	featuregatetesting "k8s.io/component-base/featuregate/testing"
 
-	"github.com/vmware-tanzu/antrea/pkg/apis/core/v1alpha2"
+	"github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha2"
 	fakeversioned "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/fake"
 	crdinformers "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions"
 	"github.com/vmware-tanzu/antrea/pkg/features"
@@ -77,7 +77,7 @@ func TestGroupEntityControllerRun(t *testing.T) {
 			crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, informerDefaultResync)
 			stopCh := make(chan struct{})
 
-			c := NewGroupEntityController(index, informerFactory.Core().V1().Pods(), informerFactory.Core().V1().Namespaces(), crdInformerFactory.Core().V1alpha2().ExternalEntities())
+			c := NewGroupEntityController(index, informerFactory.Core().V1().Pods(), informerFactory.Core().V1().Namespaces(), crdInformerFactory.Crd().V1alpha2().ExternalEntities())
 			assert.False(t, index.HasSynced(), "GroupEntityIndex has been synced before starting InformerFactories")
 
 			informerFactory.Start(stopCh)

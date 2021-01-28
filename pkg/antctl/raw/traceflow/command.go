@@ -35,7 +35,7 @@ import (
 	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/antctl/runtime"
-	"github.com/vmware-tanzu/antrea/pkg/apis/ops/v1alpha1"
+	"github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha1"
 	clientset "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned"
 )
 
@@ -123,12 +123,12 @@ func runE(cmd *cobra.Command, _ []string) error {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if _, err = client.OpsV1alpha1().Traceflows().Create(ctx, tf, metav1.CreateOptions{}); err != nil {
+	if _, err = client.CrdV1alpha1().Traceflows().Create(ctx, tf, metav1.CreateOptions{}); err != nil {
 		return fmt.Errorf("error when creating Traceflow, is Traceflow feature gate enabled? %w", err)
 	}
 	defer func() {
 		if option.waiting {
-			if err = client.OpsV1alpha1().Traceflows().Delete(context.TODO(), tf.Name, metav1.DeleteOptions{}); err != nil {
+			if err = client.CrdV1alpha1().Traceflows().Delete(context.TODO(), tf.Name, metav1.DeleteOptions{}); err != nil {
 				klog.Errorf("error when deleting Traceflow: %+v", err)
 			}
 		}
@@ -140,7 +140,7 @@ func runE(cmd *cobra.Command, _ []string) error {
 
 	var res *v1alpha1.Traceflow
 	err = wait.Poll(1*time.Second, 15*time.Second, func() (bool, error) {
-		res, err = client.OpsV1alpha1().Traceflows().Get(context.TODO(), tf.Name, metav1.GetOptions{})
+		res, err = client.CrdV1alpha1().Traceflows().Get(context.TODO(), tf.Name, metav1.GetOptions{})
 		if err != nil {
 			return false, err
 		}

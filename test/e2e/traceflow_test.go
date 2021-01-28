@@ -29,8 +29,8 @@ import (
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
-	"github.com/vmware-tanzu/antrea/pkg/apis/ops/v1alpha1"
-	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
+	"github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha1"
+	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha1"
 	"github.com/vmware-tanzu/antrea/pkg/features"
 )
 
@@ -134,7 +134,7 @@ func TestTraceflowIntraNodeANP(t *testing.T) {
 							Action:    v1alpha1.Forwarded,
 						},
 						{
-							Component:     v1alpha1.NetworkPolicy,
+							Component:     v1alpha1.ComponentNetworkPolicy,
 							ComponentInfo: "IngressMetric",
 							Action:        v1alpha1.Dropped,
 						},
@@ -181,7 +181,7 @@ func TestTraceflowIntraNodeANP(t *testing.T) {
 							Action:    v1alpha1.Forwarded,
 						},
 						{
-							Component:     v1alpha1.NetworkPolicy,
+							Component:     v1alpha1.ComponentNetworkPolicy,
 							ComponentInfo: "IngressMetric",
 							Action:        v1alpha1.Dropped,
 						},
@@ -296,12 +296,12 @@ func TestTraceflowIntraNode(t *testing.T) {
 							Action:    v1alpha1.Forwarded,
 						},
 						{
-							Component:     v1alpha1.NetworkPolicy,
+							Component:     v1alpha1.ComponentNetworkPolicy,
 							ComponentInfo: "EgressRule",
 							Action:        v1alpha1.Forwarded,
 						},
 						{
-							Component:     v1alpha1.NetworkPolicy,
+							Component:     v1alpha1.ComponentNetworkPolicy,
 							ComponentInfo: "IngressDefaultRule",
 							Action:        v1alpha1.Dropped,
 						},
@@ -347,7 +347,7 @@ func TestTraceflowIntraNode(t *testing.T) {
 							Action:    v1alpha1.Forwarded,
 						},
 						{
-							Component:     v1alpha1.NetworkPolicy,
+							Component:     v1alpha1.ComponentNetworkPolicy,
 							ComponentInfo: "EgressRule",
 							Action:        v1alpha1.Forwarded,
 						},
@@ -397,7 +397,7 @@ func TestTraceflowIntraNode(t *testing.T) {
 							Action:    v1alpha1.Forwarded,
 						},
 						{
-							Component:     v1alpha1.NetworkPolicy,
+							Component:     v1alpha1.ComponentNetworkPolicy,
 							ComponentInfo: "EgressRule",
 							Action:        v1alpha1.Forwarded,
 						},
@@ -442,7 +442,7 @@ func TestTraceflowIntraNode(t *testing.T) {
 							Action:    v1alpha1.Forwarded,
 						},
 						{
-							Component:     v1alpha1.NetworkPolicy,
+							Component:     v1alpha1.ComponentNetworkPolicy,
 							ComponentInfo: "EgressRule",
 							Action:        v1alpha1.Forwarded,
 						},
@@ -514,12 +514,12 @@ func TestTraceflowIntraNode(t *testing.T) {
 							Action:    v1alpha1.Forwarded,
 						},
 						{
-							Component:     v1alpha1.NetworkPolicy,
+							Component:     v1alpha1.ComponentNetworkPolicy,
 							ComponentInfo: "EgressRule",
 							Action:        v1alpha1.Forwarded,
 						},
 						{
-							Component:     v1alpha1.NetworkPolicy,
+							Component:     v1alpha1.ComponentNetworkPolicy,
 							ComponentInfo: "IngressDefaultRule",
 							Action:        v1alpha1.Dropped,
 						},
@@ -565,7 +565,7 @@ func TestTraceflowIntraNode(t *testing.T) {
 							Action:    v1alpha1.Forwarded,
 						},
 						{
-							Component:     v1alpha1.NetworkPolicy,
+							Component:     v1alpha1.ComponentNetworkPolicy,
 							ComponentInfo: "EgressRule",
 							Action:        v1alpha1.Forwarded,
 						},
@@ -615,7 +615,7 @@ func TestTraceflowIntraNode(t *testing.T) {
 							Action:    v1alpha1.Forwarded,
 						},
 						{
-							Component:     v1alpha1.NetworkPolicy,
+							Component:     v1alpha1.ComponentNetworkPolicy,
 							ComponentInfo: "EgressRule",
 							Action:        v1alpha1.Forwarded,
 						},
@@ -660,7 +660,7 @@ func TestTraceflowIntraNode(t *testing.T) {
 							Action:    v1alpha1.Forwarded,
 						},
 						{
-							Component:     v1alpha1.NetworkPolicy,
+							Component:     v1alpha1.ComponentNetworkPolicy,
 							ComponentInfo: "EgressRule",
 							Action:        v1alpha1.Forwarded,
 						},
@@ -733,7 +733,7 @@ func TestTraceflowIntraNode(t *testing.T) {
 							Action:    v1alpha1.Forwarded,
 						},
 						{
-							Component:     v1alpha1.NetworkPolicy,
+							Component:     v1alpha1.ComponentNetworkPolicy,
 							ComponentInfo: "EgressRule",
 							Action:        v1alpha1.Forwarded,
 						},
@@ -781,7 +781,7 @@ func TestTraceflowIntraNode(t *testing.T) {
 							Action:    v1alpha1.Forwarded,
 						},
 						{
-							Component:     v1alpha1.NetworkPolicy,
+							Component:     v1alpha1.ComponentNetworkPolicy,
 							ComponentInfo: "EgressRule",
 							Action:        v1alpha1.Forwarded,
 						},
@@ -935,7 +935,7 @@ func TestTraceflowInterNode(t *testing.T) {
 							Action:    v1alpha1.Forwarded,
 						},
 						{
-							Component:     v1alpha1.NetworkPolicy,
+							Component:     v1alpha1.ComponentNetworkPolicy,
 							ComponentInfo: "EgressRule",
 							Action:        v1alpha1.Forwarded,
 						},
@@ -1000,7 +1000,7 @@ func TestTraceflowInterNode(t *testing.T) {
 							Action:    v1alpha1.Forwarded,
 						},
 						{
-							Component:     v1alpha1.NetworkPolicy,
+							Component:     v1alpha1.ComponentNetworkPolicy,
 							ComponentInfo: "EgressRule",
 							Action:        v1alpha1.Forwarded,
 						},
@@ -1060,7 +1060,7 @@ func TestTraceflowInterNode(t *testing.T) {
 							Action:    v1alpha1.Forwarded,
 						},
 						{
-							Component:     v1alpha1.NetworkPolicy,
+							Component:     v1alpha1.ComponentNetworkPolicy,
 							ComponentInfo: "EgressRule",
 							Action:        v1alpha1.Forwarded,
 						},
@@ -1133,7 +1133,7 @@ func TestTraceflowInterNode(t *testing.T) {
 							Action:          v1alpha1.Forwarded,
 						},
 						{
-							Component:     v1alpha1.NetworkPolicy,
+							Component:     v1alpha1.ComponentNetworkPolicy,
 							ComponentInfo: "EgressRule",
 							Action:        v1alpha1.Forwarded,
 						},
@@ -1200,7 +1200,7 @@ func TestTraceflowInterNode(t *testing.T) {
 							Action:    v1alpha1.Forwarded,
 						},
 						{
-							Component:     v1alpha1.NetworkPolicy,
+							Component:     v1alpha1.ComponentNetworkPolicy,
 							ComponentInfo: "EgressRule",
 							Action:        v1alpha1.Forwarded,
 						},
@@ -1265,7 +1265,7 @@ func TestTraceflowInterNode(t *testing.T) {
 							Action:    v1alpha1.Forwarded,
 						},
 						{
-							Component:     v1alpha1.NetworkPolicy,
+							Component:     v1alpha1.ComponentNetworkPolicy,
 							ComponentInfo: "EgressRule",
 							Action:        v1alpha1.Forwarded,
 						},
@@ -1325,7 +1325,7 @@ func TestTraceflowInterNode(t *testing.T) {
 							Action:    v1alpha1.Forwarded,
 						},
 						{
-							Component:     v1alpha1.NetworkPolicy,
+							Component:     v1alpha1.ComponentNetworkPolicy,
 							ComponentInfo: "EgressRule",
 							Action:        v1alpha1.Forwarded,
 						},
@@ -1398,7 +1398,7 @@ func TestTraceflowInterNode(t *testing.T) {
 							Action:          v1alpha1.Forwarded,
 						},
 						{
-							Component:     v1alpha1.NetworkPolicy,
+							Component:     v1alpha1.ComponentNetworkPolicy,
 							ComponentInfo: "EgressRule",
 							Action:        v1alpha1.Forwarded,
 						},
@@ -1502,7 +1502,7 @@ func (data *TestData) waitForTraceflow(t *testing.T, name string, phase v1alpha1
 	var err error
 	timeout := 15 * time.Second
 	if err = wait.PollImmediate(defaultInterval, timeout, func() (bool, error) {
-		tf, err = data.crdClient.OpsV1alpha1().Traceflows().Get(context.TODO(), name, metav1.GetOptions{})
+		tf, err = data.crdClient.CrdV1alpha1().Traceflows().Get(context.TODO(), name, metav1.GetOptions{})
 		if err != nil || tf.Status.Phase != phase {
 			return false, nil
 		}
@@ -1571,7 +1571,7 @@ func (data *TestData) createANPDenyIngress(key string, value string, name string
 			Egress: []secv1alpha1.Rule{},
 		},
 	}
-	anpCreated, err := k8sUtils.securityClient.NetworkPolicies(testNamespace).Create(context.TODO(), &anp, metav1.CreateOptions{})
+	anpCreated, err := k8sUtils.crdClient.CrdV1alpha1().NetworkPolicies(testNamespace).Create(context.TODO(), &anp, metav1.CreateOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -1580,7 +1580,7 @@ func (data *TestData) createANPDenyIngress(key string, value string, name string
 
 // deleteAntreaNetworkpolicy deletes an Antrea NetworkPolicy.
 func (data *TestData) deleteAntreaNetworkpolicy(policy *secv1alpha1.NetworkPolicy) error {
-	if err := k8sUtils.securityClient.NetworkPolicies(testNamespace).Delete(context.TODO(), policy.Name, metav1.DeleteOptions{}); err != nil {
+	if err := k8sUtils.crdClient.CrdV1alpha1().NetworkPolicies(testNamespace).Delete(context.TODO(), policy.Name, metav1.DeleteOptions{}); err != nil {
 		return fmt.Errorf("unable to cleanup policy %v: %v", policy.Name, err)
 	}
 	return nil
@@ -1639,11 +1639,11 @@ func runTestTraceflow(t *testing.T, data *TestData, tc testcase) {
 	case 6:
 		skipIfNotIPv6Cluster(t)
 	}
-	if _, err := data.crdClient.OpsV1alpha1().Traceflows().Create(context.TODO(), tc.tf, metav1.CreateOptions{}); err != nil {
+	if _, err := data.crdClient.CrdV1alpha1().Traceflows().Create(context.TODO(), tc.tf, metav1.CreateOptions{}); err != nil {
 		t.Fatalf("Error when creating traceflow: %v", err)
 	}
 	defer func() {
-		if err := data.crdClient.OpsV1alpha1().Traceflows().Delete(context.TODO(), tc.tf.Name, metav1.DeleteOptions{}); err != nil {
+		if err := data.crdClient.CrdV1alpha1().Traceflows().Delete(context.TODO(), tc.tf.Name, metav1.DeleteOptions{}); err != nil {
 			t.Errorf("Error when deleting traceflow: %v", err)
 		}
 	}()
