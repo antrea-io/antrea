@@ -26,6 +26,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage/ram"
 	antreatypes "github.com/vmware-tanzu/antrea/pkg/controller/types"
+	"github.com/vmware-tanzu/antrea/pkg/k8s"
 )
 
 // groupEvent implements storage.InternalEvent.
@@ -101,6 +102,7 @@ func genGroupEvent(key string, prevObj, currObj interface{}, rv uint64) (storage
 // If includeBody is true, GroupMembers will be copied.
 func ToGroupMsg(in *antreatypes.Group, out *controlplane.Group, includeBody bool) {
 	out.UID = in.UID
+	out.Name = in.Name
 	if !includeBody {
 		return
 	}
@@ -115,7 +117,8 @@ func GroupKeyFunc(obj interface{}) (string, error) {
 	if !ok {
 		return "", fmt.Errorf("object is not *types.Group: %v", obj)
 	}
-	return string(group.UID), nil
+	// Replace empty Namespace with Group.Namespace once Namespaced Groups are introduced.
+	return k8s.NamespacedName("", group.Name), nil
 }
 
 // NewGroupStore creates a store of Group.

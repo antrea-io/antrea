@@ -36,9 +36,7 @@ func (n *NetworkPolicyController) addClusterGroup(curObj interface{}) {
 	newGroup := n.processClusterGroup(cg)
 	klog.V(2).Infof("Creating new internal Group %s with selector (%s)", newGroup.UID, newGroup.Selector.NormalizedName)
 	n.internalGroupStore.Create(newGroup)
-	if newGroup.IPBlock == nil {
-		n.enqueueInternalGroup(key)
-	}
+	n.enqueueInternalGroup(key)
 }
 
 // updateClusterGroup is responsible for processing the UPDATE event of a ClusterGroup resource.
@@ -56,9 +54,7 @@ func (n *NetworkPolicyController) updateClusterGroup(oldObj, curObj interface{})
 		return
 	}
 	n.internalGroupStore.Update(newGroup)
-	if newGroup.IPBlock == nil {
-		n.enqueueInternalGroup(key)
-	}
+	n.enqueueInternalGroup(key)
 }
 
 // deleteClusterGroup is responsible for processing the DELETE event of a ClusterGroup resource.
@@ -178,25 +174,27 @@ func (n *NetworkPolicyController) syncInternalGroup(key string) error {
 	}
 
 	grp := grpObj.(*antreatypes.Group)
-	// Find all Pods matching its selectors and update store.
-	groupSelector := grp.Selector
-	pods, _ := n.processSelector(groupSelector)
-	memberSet := controlplane.GroupMemberSet{}
-	for _, pod := range pods {
-		if pod.Status.PodIP == "" {
-			// No need to insert Pod IPAddress when it is unset.
-			continue
+	if grp.IPBlock == nil {
+		// Find all Pods matching its selectors and update store.
+		groupSelector := grp.Selector
+		pods, _ := n.processSelector(groupSelector)
+		memberSet := controlplane.GroupMemberSet{}
+		for _, pod := range pods {
+			if pod.Status.PodIP == "" {
+				// No need to insert Pod IPAddress when it is unset.
+				continue
+			}
+			memberSet.Insert(podToGroupMember(pod, true))
 		}
-		memberSet.Insert(podToGroupMember(pod, true))
+		// Update the internal Group object in the store with the Pods as GroupMembers.
+		updatedGrp := &antreatypes.Group{
+			UID:          grp.UID,
+			Name:         grp.Name,
+			Selector:     grp.Selector,
+			GroupMembers: memberSet,
+		}
+		klog.V(2).Infof("Updating existing internal Group %s with %d GroupMembers", key, len(memberSet))
+		n.internalGroupStore.Update(updatedGrp)
 	}
-	// Update the internal Group object in the store with the Pods as GroupMembers.
-	updatedGrp := &antreatypes.Group{
-		UID:          grp.UID,
-		Name:         grp.Name,
-		Selector:     grp.Selector,
-		GroupMembers: memberSet,
-	}
-	klog.V(2).Infof("Updating existing internal Group %s with %d GroupMembers", key, len(memberSet))
-	n.internalGroupStore.Update(updatedGrp)
 	return nil
 }
