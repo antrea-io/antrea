@@ -58,7 +58,7 @@ func (pc *podConfigurator) connectInterfaceToOVSAsync(ifConfig *interfacestore.I
 				klog.Infof("Waiting for interface %s to be created", hostIfAlias)
 				return false, nil
 			}
-			if err := pc.connectInterfaceToOVSInternal(ovsPortName, ifConfig); err != nil {
+			if err := pc.connectInterfaceToOVSCommon(ovsPortName, ifConfig); err != nil {
 				return true, fmt.Errorf("failed to connect to ovs for container %s: %v", containerID, err)
 			}
 			return true, nil
@@ -84,10 +84,15 @@ func (pc *podConfigurator) connectInterfaceToOVS(
 	ovsPortName := hostIface.Name
 	containerConfig := buildContainerConfig(ovsPortName, containerID, podName, podNameSpace, containerIface, ips)
 	hostIfAlias := fmt.Sprintf("%s (%s)", util.ContainerVNICPrefix, ovsPortName)
-	// For ContainerD runtime, the container is interface created after CNI replying the network setup result.
-	// So for such case we need to use asynchronous way to wait for interface to be created.
+	// - For ContainerD runtime, the container interface is created after CNI replying the network setup result.
+	//   So for such case we need to use asynchronous way to wait for interface to be created.
+	// - For Docker runtime, antrea-agent still creates OVS port synchronously.
+	// - Here antrea-agent determines the way of OVS port creation by checking if container interface is yet created.
+	//   If one day ContainerD runtime changes the behavior and container interface can be created when attaching
+	//   HNSEndpoint/HostComputeEndpoint. The current implementation sill works. It will choose the synchronized
+	//   way to create OVS port.
 	if util.HostInterfaceExists(hostIfAlias) {
-		return containerConfig, pc.connectInterfaceToOVSInternal(ovsPortName, containerConfig)
+		return containerConfig, pc.connectInterfaceToOVSCommon(ovsPortName, containerConfig)
 	} else {
 		return containerConfig, pc.connectInterfaceToOVSAsync(containerConfig, containerAccess)
 	}

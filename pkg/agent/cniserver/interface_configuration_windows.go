@@ -176,9 +176,14 @@ func (ic *ifConfigurator) createContainerLink(endpointName string, result *curre
 	if err != nil {
 		klog.Errorf("Failed to find container %s IP", containerID)
 	}
-	// Save interface config to HNSEndpoint. It's mainly used for creating missing
-	// OVS ports during antrea-agent boot stage. The interface config will be rebuilt
-	// based on the params saved in AdditionalParams field of HNSEndpoint.
+	// Save interface config to HNSEndpoint. It's used for creating missing OVS
+	// ports during antrea-agent boot stage. The change is introduced mainly for
+	// ContainerD support. When working with ContainerD runtime, antrea-agent creates
+	// OVS ports in asynchronously way. So the OVS ports are will be lost if antrea-agent
+	// get stopped/restarted before port creation complete.
+	//
+	// The interface config will be rebuilt based on the params saved in the "AdditionalParams"
+	// field of HNSEndpoint.
 	//   - endpointName: the name of host interface without Hyper-V prefix(vEthernet).
 	//     The name is same with OVS port name and HNSEndpoint name.
 	//   - containerID: Used as key for goroutine lock to avid concurrency issue.
@@ -186,8 +191,7 @@ func (ic *ifConfigurator) createContainerLink(endpointName string, result *curre
 	//   - dummyMac: the MAC address of the HNSEndpoint is unknown before we creating it.
 	//     Use a dummy MAC address here. The real MAC is retrieved from HNSEndopint when we
 	//     parse the config.
-	//   - Other params will be passed to OVS port
-
+	//   - Other params will be passed to OVS port.
 	ifaceConfig := interfacestore.NewContainerInterface(
 		endpointName,
 		containerID,

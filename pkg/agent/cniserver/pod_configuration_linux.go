@@ -37,7 +37,7 @@ func (pc *podConfigurator) connectInterfaceToOVS(
 	// Use the outer veth interface name as the OVS port name.
 	ovsPortName := hostIface.Name
 	containerConfig := buildContainerConfig(ovsPortName, containerID, podName, podNameSpace, containerIface, ips)
-	return containerConfig, pc.connectInterfaceToOVSInternal(ovsPortName, containerConfig)
+	return containerConfig, pc.connectInterfaceToOVSCommon(ovsPortName, containerConfig)
 }
 
 func (pc *podConfigurator) reconcileMissingPods(pods sets.String, containerAccess *containerAccessArbitrator) error {

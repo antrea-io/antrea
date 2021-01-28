@@ -443,7 +443,7 @@ func (pc *podConfigurator) reconcile(pods []corev1.Pod, containerAccess *contain
 	return nil
 }
 
-func (pc *podConfigurator) connectInterfaceToOVSInternal(ovsPortName string, containerConfig *interfacestore.InterfaceConfig) error {
+func (pc *podConfigurator) connectInterfaceToOVSCommon(ovsPortName string, containerConfig *interfacestore.InterfaceConfig) error {
 	// create OVS Port and add attach container configuration into external_ids
 	containerID := containerConfig.ContainerID
 	klog.V(2).Infof("Adding OVS port %s for container %s", ovsPortName, containerID)
