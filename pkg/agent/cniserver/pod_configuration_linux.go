@@ -40,7 +40,7 @@ func (pc *podConfigurator) connectInterfaceToOVS(
 	return containerConfig, pc.connectInterfaceToOVSCommon(ovsPortName, containerConfig)
 }
 
-func (pc *podConfigurator) reconcileMissingPods(pods sets.String, containerAccess *containerAccessArbitrator) error {
+func (pc *podConfigurator) reconcileMissingPods(pods sets.String, containerAccess *containerAccessArbitrator) {
 	for pod := range pods {
 		// This should not happen since OVSDB is persisted on the Node.
 		// TODO: is there anything else we should be doing? Assuming that the Pod's
@@ -53,5 +53,4 @@ func (pc *podConfigurator) reconcileMissingPods(pods sets.String, containerAcces
 		// do since we do not have the original CNI parameters.
 		klog.Warningf("Interface for Pod %s not found in the interface store", pod)
 	}
-	return nil
 }

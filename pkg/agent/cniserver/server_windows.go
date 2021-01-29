@@ -55,6 +55,14 @@ func isInfraContainer(netNS string) bool {
 	return netNS == infraContainerNetNS || !strings.Contains(netNS, ":")
 }
 
+// isDockerContainer return if a container is created by Docker with the provided network namespace.
+// The network namespace format of Docker container is:
+//   - Infra container: "none"
+//   - Workload container: "container:$infra_container_id"
+func isDockerContainer(netNS string) bool {
+	return netNS == "none" || strings.Contains(netNS, ":")
+}
+
 func getInfraContainer(containerID, netNS string) string {
 	if isInfraContainer(netNS) {
 		return containerID

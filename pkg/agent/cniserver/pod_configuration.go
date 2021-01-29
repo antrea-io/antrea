@@ -438,8 +438,8 @@ func (pc *podConfigurator) reconcile(pods []corev1.Pod, containerAccess *contain
 		}
 	}
 
-	missedPods := desiredPods.Difference(actualPods)
-	pc.reconcileMissingPods(missedPods, containerAccess)
+	missingPods := desiredPods.Difference(actualPods)
+	pc.reconcileMissingPods(missingPods, containerAccess)
 	return nil
 }
 

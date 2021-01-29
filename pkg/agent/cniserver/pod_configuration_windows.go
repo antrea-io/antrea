@@ -29,7 +29,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/util"
 )
 
-// connectInterfaceToOVSAsync waits an interface to be created and connects it to OVS br-int asynchronously
+// connectInterfaceToOVSAsync waits for an interface to be created and connects it to OVS br-int asynchronously
 // in another goroutine. The function is for ContainerD runtime. The host interface is created after
 // CNI call completes.
 func (pc *podConfigurator) connectInterfaceToOVSAsync(ifConfig *interfacestore.InterfaceConfig, containerAccess *containerAccessArbitrator) error {
@@ -51,7 +51,7 @@ func (pc *podConfigurator) connectInterfaceToOVSAsync(ifConfig *interfacestore.I
 				return true, fmt.Errorf("failed to find HNSEndpoint %s", ovsPortName)
 			}
 			if curEp.Id != expectedEp.Id {
-				klog.Warningf("detected HNEEndpoint change for port %s, exit current thread", ovsPortName)
+				klog.Warningf("Detected HNSEndpoint change for port %s, exiting current goroutine", ovsPortName)
 				return true, nil
 			}
 			if !util.HostInterfaceExists(hostIfAlias) {
@@ -59,18 +59,18 @@ func (pc *podConfigurator) connectInterfaceToOVSAsync(ifConfig *interfacestore.I
 				return false, nil
 			}
 			if err := pc.connectInterfaceToOVSCommon(ovsPortName, ifConfig); err != nil {
-				return true, fmt.Errorf("failed to connect to ovs for container %s: %v", containerID, err)
+				return true, fmt.Errorf("failed to connect to OVS for container %s: %v", containerID, err)
 			}
 			return true, nil
 		})
 		if err != nil {
-			klog.Errorf("failed to create OVS port for container %s: %v", containerID, err)
+			klog.Errorf("Failed to create OVS port for container %s: %v", containerID, err)
 		}
 	}()
 	return nil
 }
 
-// connectInterfaceToOVS connects an existing interface to ovs br-int.
+// connectInterfaceToOVS connects an existing interface to OVS br-int.
 func (pc *podConfigurator) connectInterfaceToOVS(
 	podName string,
 	podNameSpace string,
@@ -98,8 +98,8 @@ func (pc *podConfigurator) connectInterfaceToOVS(
 	}
 }
 
-func (pc *podConfigurator) reconcileMissingPods(pods sets.String, containerAccess *containerAccessArbitrator) error {
-	interfacesConfig := pc.ifConfigurator.getInterfacesConfigForPods(pods)
+func (pc *podConfigurator) reconcileMissingPods(pods sets.String, containerAccess *containerAccessArbitrator) {
+	interfacesConfig := pc.ifConfigurator.getInterfaceConfigForPods(pods)
 	for pod := range pods {
 		ifaceConfig, ok := interfacesConfig[pod]
 		if !ok {
@@ -110,5 +110,4 @@ func (pc *podConfigurator) reconcileMissingPods(pods sets.String, containerAcces
 			klog.Errorf("Failed to reconcile Pod %s: %v", pod, err)
 		}
 	}
-	return nil
 }
