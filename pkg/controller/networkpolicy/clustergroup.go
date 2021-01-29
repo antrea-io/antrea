@@ -15,6 +15,8 @@
 package networkpolicy
 
 import (
+	"context"
+
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -172,8 +174,13 @@ func (n *NetworkPolicyController) syncInternalGroup(key string) error {
 		klog.V(2).Infof("Internal group %s not found.", key)
 		return nil
 	}
-
 	grp := grpObj.(*antreatypes.Group)
+	// Retrieve the ClusterGroup corresponding to this key.
+	cg, err := n.cgLister.Get(grp.Name)
+	if err != nil {
+		klog.Infof("Didn't find the ClusterGroup %s, skip processing of internal group", grp.Name)
+		return nil
+	}
 	if grp.IPBlock == nil {
 		// Find all Pods matching its selectors and update store.
 		groupSelector := grp.Selector
@@ -196,5 +203,46 @@ func (n *NetworkPolicyController) syncInternalGroup(key string) error {
 		klog.V(2).Infof("Updating existing internal Group %s with %d GroupMembers", key, len(memberSet))
 		n.internalGroupStore.Update(updatedGrp)
 	}
+	// Update the ClusterGroup status to Realized as Antrea has recognized the Group and
+	// processed its group members.
+	err = n.updateGroupStatus(cg, v1.ConditionTrue)
+	if err != nil {
+		klog.Errorf("Failed to update ClusterGroup %s GroupMembersComputed condition to %s: %v", cg.Name, v1.ConditionTrue, err)
+		return err
+	}
 	return nil
+}
+
+// updateGroupStatus updates the Status subresource for a ClusterGroup.
+func (n *NetworkPolicyController) updateGroupStatus(cg *corev1a2.ClusterGroup, cStatus v1.ConditionStatus) error {
+	condStatus := corev1a2.GroupCondition{
+		Status: cStatus,
+		Type:   corev1a2.GroupMembersComputed,
+	}
+	if groupMembersComputedConditionEqual(cg.Status.Conditions, condStatus) {
+		// There is no change in conditions.
+		return nil
+	}
+	condStatus.LastTransitionTime = metav1.Now()
+	status := corev1a2.GroupStatus{
+		Conditions: []corev1a2.GroupCondition{condStatus},
+	}
+	klog.V(4).Infof("Updating ClusterGroup %s status to %#v", cg.Name, condStatus)
+	toUpdate := cg.DeepCopy()
+	toUpdate.Status = status
+	_, err := n.crdClient.CoreV1alpha2().ClusterGroups().UpdateStatus(context.TODO(), toUpdate, metav1.UpdateOptions{})
+	return err
+}
+
+// groupMembersComputedConditionEqual checks whether the condition status for GroupMembersComputed condition
+// is same. Returns true if equal, otherwise returns false. It disregards the lastTransitionTime field.
+func groupMembersComputedConditionEqual(conds []corev1a2.GroupCondition, condition corev1a2.GroupCondition) bool {
+	for _, c := range conds {
+		if c.Type == corev1a2.GroupMembersComputed {
+			if c.Status == condition.Status {
+				return true
+			}
+		}
+	}
+	return false
 }

@@ -717,6 +717,22 @@ spec:
                     cidr:
                       type: string
                       format: cidr
+            status:
+              type: object
+              properties:
+                conditions:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      type:
+                        type: string
+                      status:
+                        type: string
+                      lastTransitionTime:
+                         type: string
+      subresources:
+        status: {}
   scope: Cluster
   names:
     plural: clustergroups
