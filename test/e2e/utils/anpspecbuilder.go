@@ -28,9 +28,9 @@ type AntreaNetworkPolicySpecBuilder struct {
 	Namespace string
 }
 
-type ANPRuleAppliedToSpec struct {
+type ANPAppliedToSpec struct {
 	PodSelector         map[string]string
-	PodSelectorMatchExp *[]metav1.LabelSelectorRequirement
+	PodSelectorMatchExp []metav1.LabelSelectorRequirement
 }
 
 func (b *AntreaNetworkPolicySpecBuilder) Get() *secv1alpha1.NetworkPolicy {
@@ -65,20 +65,28 @@ func (b *AntreaNetworkPolicySpecBuilder) SetTier(tier string) *AntreaNetworkPoli
 	return b
 }
 
+func (b *AntreaNetworkPolicySpecBuilder) SetAppliedToGroup(specs []ANPAppliedToSpec) *AntreaNetworkPolicySpecBuilder {
+	for _, spec := range specs {
+		appliedToPeer := b.GetAppliedToPeer(spec.PodSelector, spec.PodSelectorMatchExp)
+		b.Spec.AppliedTo = append(b.Spec.AppliedTo, appliedToPeer)
+	}
+	return b
+}
+
 func (b *AntreaNetworkPolicySpecBuilder) GetAppliedToPeer(podSelector map[string]string,
-	podSelectorMatchExp *[]metav1.LabelSelectorRequirement) secv1alpha1.NetworkPolicyPeer {
+	podSelectorMatchExp []metav1.LabelSelectorRequirement) secv1alpha1.NetworkPolicyPeer {
 	var ps *metav1.LabelSelector
 	if podSelector != nil {
 		ps = &metav1.LabelSelector{
 			MatchLabels: podSelector,
 		}
 		if podSelectorMatchExp != nil {
-			ps.MatchExpressions = *podSelectorMatchExp
+			ps.MatchExpressions = podSelectorMatchExp
 		}
 	}
 	if podSelectorMatchExp != nil {
 		ps = &metav1.LabelSelector{
-			MatchExpressions: *podSelectorMatchExp,
+			MatchExpressions: podSelectorMatchExp,
 		}
 	}
 	return secv1alpha1.NetworkPolicyPeer{
@@ -86,21 +94,13 @@ func (b *AntreaNetworkPolicySpecBuilder) GetAppliedToPeer(podSelector map[string
 	}
 }
 
-func (b *AntreaNetworkPolicySpecBuilder) SetAppliedToGroup(podSelector map[string]string,
-	podSelectorMatchExp *[]metav1.LabelSelectorRequirement) *AntreaNetworkPolicySpecBuilder {
-	appliedToPeer := b.GetAppliedToPeer(podSelector, podSelectorMatchExp)
-	b.Spec.AppliedTo = append(b.Spec.AppliedTo, appliedToPeer)
-	return b
-}
-
 func (b *AntreaNetworkPolicySpecBuilder) AddIngress(protoc v1.Protocol,
 	port *int, portName *string, endPort *int32, cidr *string,
 	podSelector map[string]string, nsSelector map[string]string,
-	podSelectorMatchExp *[]metav1.LabelSelectorRequirement, nsSelectorMatchExp *[]metav1.LabelSelectorRequirement,
-	ruleAppliedToSpecs []ANPRuleAppliedToSpec, action secv1alpha1.RuleAction, name string) *AntreaNetworkPolicySpecBuilder {
+	podSelectorMatchExp []metav1.LabelSelectorRequirement, nsSelectorMatchExp []metav1.LabelSelectorRequirement,
+	ruleAppliedToSpecs []ANPAppliedToSpec, action secv1alpha1.RuleAction, name string) *AntreaNetworkPolicySpecBuilder {
 
-	var ps *metav1.LabelSelector
-	var ns *metav1.LabelSelector
+	var ps, ns *metav1.LabelSelector
 	var appliedTos []secv1alpha1.NetworkPolicyPeer
 	if b.Spec.Ingress == nil {
 		b.Spec.Ingress = []secv1alpha1.Rule{}
@@ -111,12 +111,12 @@ func (b *AntreaNetworkPolicySpecBuilder) AddIngress(protoc v1.Protocol,
 			MatchLabels: podSelector,
 		}
 		if podSelectorMatchExp != nil {
-			ps.MatchExpressions = *podSelectorMatchExp
+			ps.MatchExpressions = podSelectorMatchExp
 		}
 	}
 	if podSelectorMatchExp != nil {
 		ps = &metav1.LabelSelector{
-			MatchExpressions: *podSelectorMatchExp,
+			MatchExpressions: podSelectorMatchExp,
 		}
 	}
 	if nsSelector != nil {
@@ -124,12 +124,12 @@ func (b *AntreaNetworkPolicySpecBuilder) AddIngress(protoc v1.Protocol,
 			MatchLabels: nsSelector,
 		}
 		if nsSelectorMatchExp != nil {
-			ns.MatchExpressions = *nsSelectorMatchExp
+			ns.MatchExpressions = nsSelectorMatchExp
 		}
 	}
 	if nsSelectorMatchExp != nil {
 		ns = &metav1.LabelSelector{
-			MatchExpressions: *nsSelectorMatchExp,
+			MatchExpressions: nsSelectorMatchExp,
 		}
 	}
 	var ipBlock *secv1alpha1.IPBlock
@@ -186,8 +186,8 @@ func (b *AntreaNetworkPolicySpecBuilder) AddIngress(protoc v1.Protocol,
 func (b *AntreaNetworkPolicySpecBuilder) AddEgress(protoc v1.Protocol,
 	port *int, portName *string, endPort *int32, cidr *string,
 	podSelector map[string]string, nsSelector map[string]string,
-	podSelectorMatchExp *[]metav1.LabelSelectorRequirement, nsSelectorMatchExp *[]metav1.LabelSelectorRequirement,
-	ruleAppliedToSpecs []ANPRuleAppliedToSpec, action secv1alpha1.RuleAction, name string) *AntreaNetworkPolicySpecBuilder {
+	podSelectorMatchExp []metav1.LabelSelectorRequirement, nsSelectorMatchExp []metav1.LabelSelectorRequirement,
+	ruleAppliedToSpecs []ANPAppliedToSpec, action secv1alpha1.RuleAction, name string) *AntreaNetworkPolicySpecBuilder {
 
 	// For simplicity, we just reuse the Ingress code here.  The underlying data model for ingress/egress is identical
 	// With the exception of calling the rule `To` vs. `From`.
