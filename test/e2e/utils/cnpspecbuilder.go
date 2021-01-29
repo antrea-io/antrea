@@ -27,11 +27,11 @@ type ClusterNetworkPolicySpecBuilder struct {
 	Name string
 }
 
-type ACNPRuleAppliedToSpec struct {
+type ACNPAppliedToSpec struct {
 	PodSelector         map[string]string
 	NSSelector          map[string]string
-	PodSelectorMatchExp *[]metav1.LabelSelectorRequirement
-	NSSelectorMatchExp  *[]metav1.LabelSelectorRequirement
+	PodSelectorMatchExp []metav1.LabelSelectorRequirement
+	NSSelectorMatchExp  []metav1.LabelSelectorRequirement
 }
 
 func (b *ClusterNetworkPolicySpecBuilder) Get() *secv1alpha1.ClusterNetworkPolicy {
@@ -64,10 +64,18 @@ func (b *ClusterNetworkPolicySpecBuilder) SetTier(tier string) *ClusterNetworkPo
 	return b
 }
 
+func (b *ClusterNetworkPolicySpecBuilder) SetAppliedToGroup(specs []ACNPAppliedToSpec) *ClusterNetworkPolicySpecBuilder {
+	for _, spec := range specs {
+		appliedToPeer := b.GetAppliedToPeer(spec.PodSelector, spec.NSSelector, spec.PodSelectorMatchExp, spec.NSSelectorMatchExp)
+		b.Spec.AppliedTo = append(b.Spec.AppliedTo, appliedToPeer)
+	}
+	return b
+}
+
 func (b *ClusterNetworkPolicySpecBuilder) GetAppliedToPeer(podSelector map[string]string,
 	nsSelector map[string]string,
-	podSelectorMatchExp *[]metav1.LabelSelectorRequirement,
-	nsSelectorMatchExp *[]metav1.LabelSelectorRequirement) secv1alpha1.NetworkPolicyPeer {
+	podSelectorMatchExp []metav1.LabelSelectorRequirement,
+	nsSelectorMatchExp []metav1.LabelSelectorRequirement) secv1alpha1.NetworkPolicyPeer {
 
 	var ps *metav1.LabelSelector
 	var ns *metav1.LabelSelector
@@ -77,12 +85,12 @@ func (b *ClusterNetworkPolicySpecBuilder) GetAppliedToPeer(podSelector map[strin
 			MatchLabels: podSelector,
 		}
 		if podSelectorMatchExp != nil {
-			ps.MatchExpressions = *podSelectorMatchExp
+			ps.MatchExpressions = podSelectorMatchExp
 		}
 	}
 	if podSelectorMatchExp != nil {
 		ps = &metav1.LabelSelector{
-			MatchExpressions: *podSelectorMatchExp,
+			MatchExpressions: podSelectorMatchExp,
 		}
 	}
 	if nsSelector != nil {
@@ -90,12 +98,12 @@ func (b *ClusterNetworkPolicySpecBuilder) GetAppliedToPeer(podSelector map[strin
 			MatchLabels: nsSelector,
 		}
 		if nsSelectorMatchExp != nil {
-			ns.MatchExpressions = *nsSelectorMatchExp
+			ns.MatchExpressions = nsSelectorMatchExp
 		}
 	}
 	if nsSelectorMatchExp != nil {
 		ns = &metav1.LabelSelector{
-			MatchExpressions: *nsSelectorMatchExp,
+			MatchExpressions: nsSelectorMatchExp,
 		}
 	}
 	return secv1alpha1.NetworkPolicyPeer{
@@ -104,21 +112,11 @@ func (b *ClusterNetworkPolicySpecBuilder) GetAppliedToPeer(podSelector map[strin
 	}
 }
 
-func (b *ClusterNetworkPolicySpecBuilder) SetAppliedToGroup(podSelector map[string]string,
-	nsSelector map[string]string,
-	podSelectorMatchExp *[]metav1.LabelSelectorRequirement,
-	nsSelectorMatchExp *[]metav1.LabelSelectorRequirement) *ClusterNetworkPolicySpecBuilder {
-
-	appliedToPeer := b.GetAppliedToPeer(podSelector, nsSelector, podSelectorMatchExp, nsSelectorMatchExp)
-	b.Spec.AppliedTo = append(b.Spec.AppliedTo, appliedToPeer)
-	return b
-}
-
 func (b *ClusterNetworkPolicySpecBuilder) AddIngress(protoc v1.Protocol,
 	port *int, portName *string, endPort *int32, cidr *string,
 	podSelector map[string]string, nsSelector map[string]string,
 	podSelectorMatchExp *[]metav1.LabelSelectorRequirement, nsSelectorMatchExp *[]metav1.LabelSelectorRequirement,
-	ruleAppliedToSpecs []ACNPRuleAppliedToSpec, action secv1alpha1.RuleAction, name string) *ClusterNetworkPolicySpecBuilder {
+	ruleAppliedToSpecs []ACNPAppliedToSpec, action secv1alpha1.RuleAction, name string) *ClusterNetworkPolicySpecBuilder {
 
 	var ps *metav1.LabelSelector
 	var ns *metav1.LabelSelector
@@ -208,7 +206,7 @@ func (b *ClusterNetworkPolicySpecBuilder) AddEgress(protoc v1.Protocol,
 	port *int, portName *string, endPort *int32, cidr *string,
 	podSelector map[string]string, nsSelector map[string]string,
 	podSelectorMatchExp *[]metav1.LabelSelectorRequirement, nsSelectorMatchExp *[]metav1.LabelSelectorRequirement,
-	ruleAppliedToSpecs []ACNPRuleAppliedToSpec, action secv1alpha1.RuleAction, name string) *ClusterNetworkPolicySpecBuilder {
+	ruleAppliedToSpecs []ACNPAppliedToSpec, action secv1alpha1.RuleAction, name string) *ClusterNetworkPolicySpecBuilder {
 
 	// For simplicity, we just reuse the Ingress code here.  The underlying data model for ingress/egress is identical
 	// With the exception of calling the rule `To` vs. `From`.
