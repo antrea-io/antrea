@@ -58,16 +58,6 @@ type ExternalEntityReference struct {
 	Namespace string
 }
 
-// EntityReference represents a reference to either a Pod or an ExternalEntity.
-// TODO: replace Pod and ExternalEntity in GroupMember to embed EntityReference
-//  when controlplane version is bumped?
-type EntityReference struct {
-	// Pod maintains the reference to the Pod.
-	Pod *PodReference
-	// ExternalEntity maintains the reference to the ExternalEntity.
-	ExternalEntity *ExternalEntityReference
-}
-
 // GroupMember represents an resource member to be populated in Groups.
 type GroupMember struct {
 	// Pod maintains the reference to the Pod.

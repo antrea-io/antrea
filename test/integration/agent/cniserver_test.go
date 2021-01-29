@@ -52,9 +52,9 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/metrics"
 	openflowtest "github.com/vmware-tanzu/antrea/pkg/agent/openflow/testing"
 	routetest "github.com/vmware-tanzu/antrea/pkg/agent/route/testing"
+	antreatypes "github.com/vmware-tanzu/antrea/pkg/agent/types"
 	"github.com/vmware-tanzu/antrea/pkg/agent/util"
 	cnimsg "github.com/vmware-tanzu/antrea/pkg/apis/cni/v1beta1"
-	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
 	ovsconfigtest "github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig/testing"
 )
@@ -570,7 +570,7 @@ func newTester() *cmdAddDelTester {
 		"",
 		testNodeConfig,
 		k8sFake.NewSimpleClientset(),
-		make(chan v1beta2.EntityReference, 100),
+		make(chan antreatypes.EntityReference, 100),
 		false,
 		nil,
 		tester.networkReadyCh)
@@ -730,7 +730,7 @@ func setupChainTest(
 			"",
 			testNodeConfig,
 			k8sFake.NewSimpleClientset(),
-			make(chan v1beta2.EntityReference, 100),
+			make(chan antreatypes.EntityReference, 100),
 			true,
 			routeMock,
 			networkReadyCh)

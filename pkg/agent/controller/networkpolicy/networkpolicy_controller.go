@@ -31,6 +31,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent"
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
+	"github.com/vmware-tanzu/antrea/pkg/agent/types"
 	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
 	"github.com/vmware-tanzu/antrea/pkg/querier"
 )
@@ -58,6 +59,10 @@ type Controller struct {
 	// antreaPolicyEnabled indicates whether Antrea NetworkPolicy and
 	// ClusterNetworkPolicy are enabled.
 	antreaPolicyEnabled bool
+	// statusManagerEnabled indicates whether a statusManager is configured.
+	statusManagerEnabled bool
+	// loggingEnabled indicates where Antrea policy audit logging is enabled.
+	loggingEnabled bool
 	// antreaClientProvider provides interfaces to get antreaClient, which can be
 	// used to watch Antrea AddressGroups, AppliedToGroups, and NetworkPolicies.
 	// We need to get antreaClient dynamically because the apiserver cert can be
@@ -89,7 +94,7 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 	ofClient openflow.Client,
 	ifaceStore interfacestore.InterfaceStore,
 	nodeName string,
-	entityUpdates <-chan v1beta2.EntityReference,
+	entityUpdates <-chan types.EntityReference,
 	antreaPolicyEnabled bool,
 	statusManagerEnabled bool,
 	loggingEnabled bool,
@@ -100,6 +105,8 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 		reconciler:           newReconciler(ofClient, ifaceStore, asyncRuleDeleteInterval),
 		ofClient:             ofClient,
 		antreaPolicyEnabled:  antreaPolicyEnabled,
+		statusManagerEnabled: statusManagerEnabled,
+		loggingEnabled:       loggingEnabled,
 	}
 	c.ruleCache = newRuleCache(c.enqueueRule, entityUpdates)
 	if statusManagerEnabled {
@@ -195,7 +202,7 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 				// For the former case, agent must resync the statuses as the controller lost the previous statuses.
 				// For the latter case, agent doesn't need to do anything. However, we are not able to differentiate the
 				// two cases. Anyway there's no harm to do a periodical resync.
-				if c.antreaPolicyEnabled && c.statusManager != nil && policies[i].SourceRef.Type != v1beta2.K8sNetworkPolicy {
+				if c.statusManagerEnabled && policies[i].SourceRef.Type != v1beta2.K8sNetworkPolicy {
 					c.statusManager.Resync(policies[i].UID)
 				}
 			}
@@ -397,7 +404,7 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 	klog.Infof("Starting IDAllocator worker to maintain the async rule cache")
 	go c.reconciler.RunIDAllocatorWorker(stopCh)
 
-	if c.antreaPolicyEnabled && c.statusManager != nil {
+	if c.statusManagerEnabled {
 		go c.statusManager.Run(stopCh)
 	}
 
@@ -462,7 +469,7 @@ func (c *Controller) syncRule(key string) error {
 		if err := c.reconciler.Forget(key); err != nil {
 			return err
 		}
-		if c.antreaPolicyEnabled && c.statusManager != nil {
+		if c.statusManagerEnabled {
 			// We don't know whether this is a rule owned by Antrea Policy, but
 			// harmless to delete it.
 			c.statusManager.DeleteRuleRealization(key)
@@ -478,7 +485,7 @@ func (c *Controller) syncRule(key string) error {
 	if err := c.reconciler.Reconcile(rule); err != nil {
 		return err
 	}
-	if c.antreaPolicyEnabled && c.statusManager != nil && rule.SourceRef.Type != v1beta2.K8sNetworkPolicy {
+	if c.statusManagerEnabled && rule.SourceRef.Type != v1beta2.K8sNetworkPolicy {
 		c.statusManager.SetRuleRealization(key, rule.PolicyUID)
 	}
 	return nil
@@ -505,7 +512,7 @@ func (c *Controller) syncRules(keys []string) error {
 	if err := c.reconciler.BatchReconcile(allRules); err != nil {
 		return err
 	}
-	if c.antreaPolicyEnabled && c.statusManager != nil {
+	if c.statusManagerEnabled {
 		for _, rule := range allRules {
 			if rule.SourceRef.Type != v1beta2.K8sNetworkPolicy {
 				c.statusManager.SetRuleRealization(rule.ID, rule.PolicyUID)

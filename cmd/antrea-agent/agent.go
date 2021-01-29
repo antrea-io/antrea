@@ -42,7 +42,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/querier"
 	"github.com/vmware-tanzu/antrea/pkg/agent/route"
 	"github.com/vmware-tanzu/antrea/pkg/agent/stats"
-	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
+	"github.com/vmware-tanzu/antrea/pkg/agent/types"
 	crdinformers "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions"
 	"github.com/vmware-tanzu/antrea/pkg/features"
 	"github.com/vmware-tanzu/antrea/pkg/k8s"
@@ -153,7 +153,7 @@ func run(o *Options) error {
 	// entityUpdates is a channel for receiving entity updates from CNIServer and
 	// notifying NetworkPolicyController to reconcile rules related to the
 	// updated entities.
-	entityUpdates := make(chan v1beta2.EntityReference, 100)
+	entityUpdates := make(chan types.EntityReference, 100)
 	// We set flow poll interval as the time interval for rule deletion in the async
 	// rule cache, which is implemented as part of the idAllocator. This is to preserve
 	// the rule info for populating NetworkPolicy fields in the Flow Exporter even

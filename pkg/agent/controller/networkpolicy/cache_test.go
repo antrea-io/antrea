@@ -24,6 +24,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 
+	"github.com/vmware-tanzu/antrea/pkg/agent/types"
 	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
 )
 
@@ -258,9 +259,9 @@ func TestRuleCacheAddAddressGroup(t *testing.T) {
 	}
 }
 
-func newFakeRuleCache() (*ruleCache, *dirtyRuleRecorder, chan v1beta2.EntityReference) {
+func newFakeRuleCache() (*ruleCache, *dirtyRuleRecorder, chan types.EntityReference) {
 	recorder := newDirtyRuleRecorder()
-	ch := make(chan v1beta2.EntityReference, 100)
+	ch := make(chan types.EntityReference, 100)
 	c := newRuleCache(recorder.Record, ch)
 	return c, recorder, ch
 }
@@ -1098,21 +1099,21 @@ func TestRuleCacheProcessPodUpdates(t *testing.T) {
 		name               string
 		rules              []*rule
 		podSetByGroup      map[string]v1beta2.GroupMemberSet
-		podUpdate          v1beta2.EntityReference
+		podUpdate          types.EntityReference
 		expectedDirtyRules sets.String
 	}{
 		{
 			"non-matching-group",
 			nil,
 			nil,
-			v1beta2.EntityReference{Pod: &v1beta2.PodReference{Name: "foo", Namespace: "bar"}},
+			types.EntityReference{Pod: &v1beta2.PodReference{Name: "foo", Namespace: "bar"}},
 			sets.NewString(),
 		},
 		{
 			"matching-one-group-affecting-one-rule",
 			[]*rule{rule1, rule2},
 			map[string]v1beta2.GroupMemberSet{"group2": v1beta2.NewGroupMemberSet(newAppliedToGroupMember("pod1", "ns1"))},
-			v1beta2.EntityReference{Pod: &v1beta2.PodReference{Name: "pod1", Namespace: "ns1"}},
+			types.EntityReference{Pod: &v1beta2.PodReference{Name: "pod1", Namespace: "ns1"}},
 			sets.NewString("rule2"),
 		},
 		{
@@ -1122,7 +1123,7 @@ func TestRuleCacheProcessPodUpdates(t *testing.T) {
 				"group1": v1beta2.NewGroupMemberSet(newAppliedToGroupMember("pod1", "ns1")),
 				"group2": v1beta2.NewGroupMemberSet(newAppliedToGroupMember("pod1", "ns1")),
 			},
-			v1beta2.EntityReference{Pod: &v1beta2.PodReference{Name: "pod1", Namespace: "ns1"}},
+			types.EntityReference{Pod: &v1beta2.PodReference{Name: "pod1", Namespace: "ns1"}},
 			sets.NewString("rule1", "rule2"),
 		},
 	}

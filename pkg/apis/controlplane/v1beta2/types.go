@@ -61,16 +61,6 @@ type ExternalEntityReference struct {
 	Namespace string `json:"namespace,omitempty" protobuf:"bytes,2,opt,name=namespace"`
 }
 
-// EntityReference represents a reference to either a Pod or an ExternalEntity.
-// TODO: replace Pod and ExternalEntity in GroupMember to embed EntityReference
-//  when controlplane version is bumped?
-type EntityReference struct {
-	// Pod maintains the reference to the Pod.
-	Pod *PodReference `json:"pod,omitempty" protobuf:"bytes,1,opt,name=pod"`
-	// ExternalEntity maintains the reference to the ExternalEntity.
-	ExternalEntity *ExternalEntityReference `json:"externalEntity,omitempty" protobuf:"bytes,2,opt,name=externalEntity"`
-}
-
 // GroupMember represents resource member to be populated in Groups.
 // This supersedes GroupMemberPod, and will eventually replace it.
 type GroupMember struct {

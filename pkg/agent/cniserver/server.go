@@ -38,6 +38,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/agent/route"
+	"github.com/vmware-tanzu/antrea/pkg/agent/types"
 	"github.com/vmware-tanzu/antrea/pkg/agent/util"
 	cnipb "github.com/vmware-tanzu/antrea/pkg/apis/cni/v1beta1"
 	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
@@ -106,8 +107,9 @@ type CNIServer struct {
 	kubeClient           clientset.Interface
 	containerAccess      *containerAccessArbitrator
 	podConfigurator      *podConfigurator
-	// entityUpdates is a channel for notifying Pod updates to other components, i.e NetworkPolicyController.
-	entityUpdates chan<- v1beta2.EntityReference
+	// entityUpdates is a channel for notifying updates of local endpoints / entities (most notably Pod)
+	// to other components which may benefit from this information, i.e NetworkPolicyController.
+	entityUpdates chan<- types.EntityReference
 	isChaining    bool
 	routeClient   route.Interface
 	// networkReadyCh notifies that the network is ready so new Pods can be created. Therefore, CmdAdd waits for it.
@@ -454,7 +456,7 @@ func (s *CNIServer) CmdAdd(ctx context.Context, request *cnipb.CniCmdRequest) (*
 	}
 
 	// Notify the Pod update event to required components.
-	s.entityUpdates <- v1beta2.EntityReference{
+	s.entityUpdates <- types.EntityReference{
 		Pod: &v1beta2.PodReference{Name: podName, Namespace: podNamespace},
 	}
 
@@ -535,7 +537,7 @@ func New(
 	cniSocket, hostProcPathPrefix string,
 	nodeConfig *config.NodeConfig,
 	kubeClient clientset.Interface,
-	entityUpdates chan<- v1beta2.EntityReference,
+	entityUpdates chan<- types.EntityReference,
 	isChaining bool,
 	routeClient route.Interface,
 	networkReadyCh <-chan struct{},
@@ -615,7 +617,7 @@ func (s *CNIServer) interceptAdd(cniConfig *CNIConfig) (*cnipb.CniCmdResponse, e
 		return &cnipb.CniCmdResponse{CniResult: result}, fmt.Errorf("failed to connect container %s to ovs: %w", cniConfig.ContainerId, err)
 	}
 	// Notify the Pod update event to required components.
-	s.entityUpdates <- v1beta2.EntityReference{
+	s.entityUpdates <- types.EntityReference{
 		Pod: &v1beta2.PodReference{Name: podName, Namespace: podNamespace},
 	}
 

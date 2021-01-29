@@ -24,6 +24,7 @@ import (
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 
+	"github.com/vmware-tanzu/antrea/pkg/agent/types"
 	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
 )
 
@@ -50,7 +51,7 @@ func (c *fakeNetworkPolicyControl) getNetworkPolicyStatus() *v1beta2.NetworkPoli
 }
 
 func newTestStatusController() (*StatusController, *ruleCache, *fakeNetworkPolicyControl) {
-	ruleCache := newRuleCache(func(s string) {}, make(<-chan v1beta2.EntityReference))
+	ruleCache := newRuleCache(func(s string) {}, make(<-chan types.EntityReference))
 	statusControl := &fakeNetworkPolicyControl{}
 	statusController := newStatusController(nil, testNode1, ruleCache)
 	statusController.statusControlInterface = statusControl

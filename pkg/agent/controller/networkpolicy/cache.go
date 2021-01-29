@@ -28,6 +28,7 @@ import (
 	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/metrics"
+	antreatypes "github.com/vmware-tanzu/antrea/pkg/agent/types"
 	v1beta "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
 	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
 	"github.com/vmware-tanzu/antrea/pkg/querier"
@@ -151,8 +152,8 @@ type ruleCache struct {
 	// dirtyRuleHandler is a callback that is run upon finding a rule out-of-sync.
 	dirtyRuleHandler func(string)
 
-	// entityUpdates is a channel for receiving Pod updates from CNIServer.
-	entityUpdates <-chan v1beta.EntityReference
+	// entityUpdates is a channel for receiving entity (e.g. Pod) updates from CNIServer.
+	entityUpdates <-chan antreatypes.EntityReference
 }
 
 func (c *ruleCache) getNetworkPolicies(npFilter *querier.NetworkPolicyQueryFilter) []v1beta.NetworkPolicy {
@@ -306,7 +307,7 @@ func policyIndexFunc(obj interface{}) ([]string, error) {
 }
 
 // newRuleCache returns a new *ruleCache.
-func newRuleCache(dirtyRuleHandler func(string), podUpdate <-chan v1beta.EntityReference) *ruleCache {
+func newRuleCache(dirtyRuleHandler func(string), podUpdate <-chan antreatypes.EntityReference) *ruleCache {
 	rules := cache.NewIndexer(
 		ruleKeyFunc,
 		cache.Indexers{addressGroupIndex: addressGroupIndexFunc, appliedToGroupIndex: appliedToGroupIndexFunc, policyIndex: policyIndexFunc},
@@ -323,9 +324,9 @@ func newRuleCache(dirtyRuleHandler func(string), podUpdate <-chan v1beta.EntityR
 	return cache
 }
 
-// processEntityUpdates is an infinite loop that takes Pod update events from the
-// channel, finds out AppliedToGroups that contains this Pod and trigger
-// reconciling of related rules.
+// processEntityUpdates is an infinite loop that takes entity (e.g. Pod)
+// update events from the channel, finds out AppliedToGroups that contains
+// this Pod and trigger reconciling of related rules.
 // It can enforce NetworkPolicies to newly added Pods right after CNI ADD is
 // done if antrea-controller has computed the Pods' policies and propagated
 // them to this Node by their labels and NodeName, instead of waiting for their
