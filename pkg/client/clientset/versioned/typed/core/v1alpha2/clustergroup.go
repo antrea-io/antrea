@@ -1,4 +1,4 @@
-// Copyright 2020 Antrea Authors
+// Copyright 2021 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -38,6 +38,7 @@ type ClusterGroupsGetter interface {
 type ClusterGroupInterface interface {
 	Create(ctx context.Context, clusterGroup *v1alpha2.ClusterGroup, opts v1.CreateOptions) (*v1alpha2.ClusterGroup, error)
 	Update(ctx context.Context, clusterGroup *v1alpha2.ClusterGroup, opts v1.UpdateOptions) (*v1alpha2.ClusterGroup, error)
+	UpdateStatus(ctx context.Context, clusterGroup *v1alpha2.ClusterGroup, opts v1.UpdateOptions) (*v1alpha2.ClusterGroup, error)
 	Delete(ctx context.Context, name string, opts v1.DeleteOptions) error
 	DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error
 	Get(ctx context.Context, name string, opts v1.GetOptions) (*v1alpha2.ClusterGroup, error)
@@ -119,6 +120,21 @@ func (c *clusterGroups) Update(ctx context.Context, clusterGroup *v1alpha2.Clust
 	err = c.client.Put().
 		Resource("clustergroups").
 		Name(clusterGroup.Name).
+		VersionedParams(&opts, scheme.ParameterCodec).
+		Body(clusterGroup).
+		Do(ctx).
+		Into(result)
+	return
+}
+
+// UpdateStatus was generated because the type contains a Status member.
+// Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
+func (c *clusterGroups) UpdateStatus(ctx context.Context, clusterGroup *v1alpha2.ClusterGroup, opts v1.UpdateOptions) (result *v1alpha2.ClusterGroup, err error) {
+	result = &v1alpha2.ClusterGroup{}
+	err = c.client.Put().
+		Resource("clustergroups").
+		Name(clusterGroup.Name).
+		SubResource("status").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Body(clusterGroup).
 		Do(ctx).

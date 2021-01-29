@@ -79,15 +79,17 @@ type ExternalEntityList struct {
 
 // +genclient
 // +genclient:nonNamespaced
-// +genclient:noStatus
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 type ClusterGroup struct {
 	metav1.TypeMeta `json:",inline"`
 	// Standard metadata of the object.
 	metav1.ObjectMeta `json:"metadata,omitempty"`
+
 	// Desired state of the group.
-	Spec GroupSpec `json:"spec,omitempty"`
+	Spec GroupSpec `json:"spec"`
+	// Most recently observed status of the group.
+	Status GroupStatus `json:"status"`
 }
 
 type GroupSpec struct {
@@ -108,6 +110,21 @@ type GroupSpec struct {
 	// Cannot be set with any other selector.
 	// +optional
 	IPBlock *secv1a1.IPBlock `json:"ipBlock,omitempty"`
+}
+
+type GroupConditionType string
+
+const GroupMembersComputed GroupConditionType = "GroupMembersComputed"
+
+type GroupCondition struct {
+	Type               GroupConditionType `json:"type"`
+	Status             v1.ConditionStatus `json:"status"`
+	LastTransitionTime metav1.Time        `json:"lastTransitionTime,omitempty"`
+}
+
+// GroupStatus represents information about the status of a Group.
+type GroupStatus struct {
+	Conditions []GroupCondition `json:"conditions,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

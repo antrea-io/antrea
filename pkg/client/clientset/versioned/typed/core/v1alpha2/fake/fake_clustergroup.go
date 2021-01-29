@@ -1,4 +1,4 @@
-// Copyright 2020 Antrea Authors
+// Copyright 2021 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -88,6 +88,17 @@ func (c *FakeClusterGroups) Create(ctx context.Context, clusterGroup *v1alpha2.C
 func (c *FakeClusterGroups) Update(ctx context.Context, clusterGroup *v1alpha2.ClusterGroup, opts v1.UpdateOptions) (result *v1alpha2.ClusterGroup, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewRootUpdateAction(clustergroupsResource, clusterGroup), &v1alpha2.ClusterGroup{})
+	if obj == nil {
+		return nil, err
+	}
+	return obj.(*v1alpha2.ClusterGroup), err
+}
+
+// UpdateStatus was generated because the type contains a Status member.
+// Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
+func (c *FakeClusterGroups) UpdateStatus(ctx context.Context, clusterGroup *v1alpha2.ClusterGroup, opts v1.UpdateOptions) (*v1alpha2.ClusterGroup, error) {
+	obj, err := c.Fake.
+		Invokes(testing.NewRootUpdateSubresourceAction(clustergroupsResource, "status", clusterGroup), &v1alpha2.ClusterGroup{})
 	if obj == nil {
 		return nil, err
 	}
