@@ -48,6 +48,20 @@ func (m *MockPodPortRules) EXPECT() *MockPodPortRulesMockRecorder {
 	return m.recorder
 }
 
+// AddAllRules mocks base method
+func (m *MockPodPortRules) AddAllRules(arg0 []rules.PodNodePort) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddAllRules", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AddAllRules indicates an expected call of AddAllRules
+func (mr *MockPodPortRulesMockRecorder) AddAllRules(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddAllRules", reflect.TypeOf((*MockPodPortRules)(nil).AddAllRules), arg0)
+}
+
 // AddRule mocks base method
 func (m *MockPodPortRules) AddRule(arg0 int, arg1 string) error {
 	m.ctrl.T.Helper()
@@ -88,21 +102,6 @@ func (m *MockPodPortRules) DeleteRule(arg0 int, arg1 string) error {
 func (mr *MockPodPortRulesMockRecorder) DeleteRule(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteRule", reflect.TypeOf((*MockPodPortRules)(nil).DeleteRule), arg0, arg1)
-}
-
-// GetAllRules mocks base method
-func (m *MockPodPortRules) GetAllRules() (map[int]rules.DestinationPodIPPort, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetAllRules")
-	ret0, _ := ret[0].(map[int]rules.DestinationPodIPPort)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetAllRules indicates an expected call of GetAllRules
-func (mr *MockPodPortRulesMockRecorder) GetAllRules() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAllRules", reflect.TypeOf((*MockPodPortRules)(nil).GetAllRules))
 }
 
 // Init mocks base method

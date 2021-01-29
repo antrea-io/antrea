@@ -17,10 +17,8 @@
 package rules
 
 import (
+	"bytes"
 	"fmt"
-	"net"
-	"strconv"
-	"strings"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/util/iptables"
 
@@ -30,11 +28,11 @@ import (
 // NodePortLocalChain is the name of the chain in IPTABLES for Node Port Local
 const NodePortLocalChain = "ANTREA-NODE-PORT-LOCAL"
 
-// DestinationPodIPPort stores the PodIP and Pod port parsed from the iptable rules
-// for NPL
-type DestinationPodIPPort struct {
-	PodIP   string
-	PodPort int
+// PodNodePort contains the Node Port, Pod Port and the Pod IP.
+type PodNodePort struct {
+	NodePort int
+	PodPort  int
+	PodIP    string
 }
 
 // IPTableRules provides a client to perform IPTABLES operations
@@ -89,6 +87,30 @@ func (ipt *IPTableRules) AddRule(port int, podIP string) error {
 	return nil
 }
 
+// AddAllRules constructs a list of iptables rules for the NPL chain and performs a
+// iptables-restore on this chain. It uses --no-flush to keep the previous rules intact.
+func (ipt *IPTableRules) AddAllRules(nplList []PodNodePort) error {
+	iptablesData := bytes.NewBuffer(nil)
+	writeLine(iptablesData, "*nat")
+	writeLine(iptablesData, iptables.MakeChainLine(NodePortLocalChain))
+	for _, nplData := range nplList {
+		destination := nplData.PodIP + ":" + fmt.Sprint(nplData.PodPort)
+		writeLine(iptablesData, []string{
+			"-A", NodePortLocalChain,
+			"-p", "tcp",
+			"-m", "tcp",
+			"--dport", fmt.Sprint(nplData.NodePort),
+			"-j", "DNAT",
+			"--to-destination", destination,
+		}...)
+	}
+	writeLine(iptablesData, "COMMIT")
+	if err := ipt.table.Restore(iptablesData.Bytes(), false, false); err != nil {
+		return err
+	}
+	return nil
+}
+
 // DeleteRule deletes a specific NPL rule from NodePortLocalChain chain
 func (ipt *IPTableRules) DeleteRule(port int, podip string) error {
 	klog.Infof("Deleting rule with port %v and podip %v", port, podip)
@@ -101,47 +123,6 @@ func (ipt *IPTableRules) DeleteRule(port int, podip string) error {
 		return fmt.Errorf("failed to delete IPTABLES rule for NPL: %v", err)
 	}
 	return nil
-}
-
-// GetAllRules obtains list of all NPL rules programmed in the node
-func (ipt *IPTableRules) GetAllRules() (map[int]DestinationPodIPPort, error) {
-	m := make(map[int]DestinationPodIPPort)
-	rules, err := ipt.table.ListRules(iptables.NATTable, NodePortLocalChain)
-	if err != nil {
-		return m, fmt.Errorf("failed to list IPTABLES rules for NPL: %v", err)
-	}
-	for i := range rules {
-		splitRule := strings.Fields(rules[i])
-		// A rule has details about the node port, port ip and port number.
-		// e.g.:  -A NODE-PORT-LOCAL -p tcp -m tcp --dport 45000 -j DNAT --to-destination 10.244.0.43:8080
-		if len(splitRule) != 12 {
-			continue
-		}
-		port, err := strconv.Atoi(splitRule[7])
-		if err != nil {
-			klog.Warningf("failed to convert port string to int: %v", err)
-			continue
-		}
-		// splitRule[11] should be of the format "<ip>:<port>"
-		podIPPort := strings.Split(splitRule[11], ":")
-		if len(podIPPort) != 2 {
-			continue
-		}
-		if addr := net.ParseIP(podIPPort[0]); addr == nil {
-			klog.Warningf("failed to parse IP address from %s", podIPPort[1])
-			continue
-		}
-		p, err := strconv.Atoi(podIPPort[1])
-		if err != nil || p < 0 {
-			klog.Warningf("failed to parse port from %s: %s", podIPPort[2], err.Error())
-			continue
-		}
-		m[port] = DestinationPodIPPort{
-			PodIP:   podIPPort[0],
-			PodPort: p,
-		}
-	}
-	return m, nil
 }
 
 // DeleteAllRules deletes all NPL rules programmed in the node
@@ -166,4 +147,17 @@ func (ipt *IPTableRules) DeleteAllRules() error {
 		return fmt.Errorf("failed to delete NodePortLocal Chain from NAT table: %v", err)
 	}
 	return nil
+}
+
+// Join all words with spaces, terminate with newline and write to buf.
+func writeLine(buf *bytes.Buffer, words ...string) {
+	// We avoid strings.Join for performance reasons.
+	for i := range words {
+		buf.WriteString(words[i])
+		if i < len(words)-1 {
+			buf.WriteByte(' ')
+		} else {
+			buf.WriteByte('\n')
+		}
+	}
 }

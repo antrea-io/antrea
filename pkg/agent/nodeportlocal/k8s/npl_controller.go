@@ -406,10 +406,10 @@ func (c *NPLController) handleAddUpdatePod(key string, obj interface{}) error {
 	}
 
 	var annotations []NPLAnnotation
-	podAnnotation := newPod.GetAnnotations()
+	podAnnotation, exists := newPod.GetAnnotations()[NPLAnnotationKey]
 	entries := c.portTable.GetDataForPodIP(podIP)
-	if podAnnotation != nil {
-		if err := json.Unmarshal([]byte(podAnnotation[NPLAnnotationKey]), &annotations); err != nil {
+	if exists {
+		if err := json.Unmarshal([]byte(podAnnotation), &annotations); err != nil {
 			klog.Warningf("Unable to unmarshal NodePortLocal annotation")
 			return nil
 		}

@@ -25,8 +25,10 @@ import (
 
 	nplk8s "github.com/vmware-tanzu/antrea/pkg/agent/nodeportlocal/k8s"
 	"github.com/vmware-tanzu/antrea/pkg/agent/nodeportlocal/portcache"
+	"github.com/vmware-tanzu/antrea/pkg/agent/nodeportlocal/rules"
 	"github.com/vmware-tanzu/antrea/pkg/agent/nodeportlocal/util"
 
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/client-go/informers"
@@ -40,176 +42,89 @@ import (
 // UpdateFunc event handler will be called only when the object is actually updated.
 const resyncPeriod = 0 * time.Minute
 
-func updatePodNodePortCache(cache map[string][]nplk8s.PodNodePort, podIP string, nodePort, podPort int) {
-	v := nplk8s.PodNodePort{
-		NodePort: nodePort,
-		PodPort:  podPort,
+func cleanupNPLAnnotationForPod(kubClient clientset.Interface, pod *corev1.Pod) error {
+	_, ok := pod.Annotations[nplk8s.NPLAnnotationKey]
+	if !ok {
+		return nil
 	}
-	_, exists := cache[podIP]
-	if !exists {
-		cache[podIP] = []nplk8s.PodNodePort{v}
-		return
+	delete(pod.Annotations, nplk8s.NPLAnnotationKey)
+	if _, err := kubClient.CoreV1().Pods(pod.Namespace).Update(context.TODO(), pod, metav1.UpdateOptions{}); err != nil {
+		klog.Warningf("Unable to update Annotation for Pod %s/%s, error: %s", pod.Namespace, pod.Name, err.Error())
+		return err
 	}
-	cache[podIP] = append(cache[podIP], v)
+	return nil
 }
 
-// rulesToPodPortMap is responsible for going through the NPL rules and figures out if some of these
-// rules are still needed. To check if a rule is needed, it first checks if the relevant Pod exists,
-// if not, it deletes the rule. This function adds the port rules to the portTable and responds with
-// a list of visited Pods.
-func rulesToPodPortMap(portTable *portcache.PortTable, kubeClient clientset.Interface) (map[string][]nplk8s.PodNodePort, error) {
-	podPortRules, err := portTable.PodPortRules.GetAllRules()
-	if err != nil {
-		klog.Errorf("error in fetching the Pod port rules: %s", err.Error())
-		return nil, errors.New("error in fetching the Pod port rules: " + err.Error())
+func addRulesForNPLPorts(portTable *portcache.PortTable, allNPLPorts []rules.PodNodePort) error {
+	for _, nplPort := range allNPLPorts {
+		portTable.AddUpdateEntry(nplPort.NodePort, nplPort.PodPort, nplPort.PodIP)
 	}
 
-	podNodePortCache := make(map[string][]nplk8s.PodNodePort)
-
-	for k, v := range podPortRules {
-		// k: NodePort
-		// v: {PodIP,Pod port}
-		if k > portTable.EndPort || k < portTable.StartPort {
-			// delete this rule, as the Node port falls in an invalid range
-			err := portTable.PodPortRules.DeleteRule(k, v.PodIP)
-			if err != nil {
-				klog.Errorf("error in deleting the rule for port %d and Pod IP %s", k, v.PodIP)
-				continue
-			}
-		}
-		podList, err := kubeClient.CoreV1().Pods(metav1.NamespaceAll).List(context.TODO(), metav1.ListOptions{
-			FieldSelector: "status.podIP=" + v.PodIP,
-		})
-		if err != nil {
-			klog.Infof("error in fetching Pod with IP address %s: %s", v.PodIP, err.Error())
-			continue
-		}
-		if len(podList.Items) == 0 {
-			klog.Infof("couldn't find a Pod for IP address %s, will delete it's entry", v.PodIP)
-			// delete this port's entry from the rules
-			err := portTable.PodPortRules.DeleteRule(k, v.PodIP)
-			if err != nil {
-				// TODO: need to handle this case properly, currently, it would mean that Antrea thinks
-				// this port is free to allocate, however the rule for this port forwards the packets
-				// to a non-existent Pod
-				klog.Errorf("error in deleting the rule for port %d and Pod IP %s: %s", k, v.PodIP, err.Error())
-			}
-			continue
-		}
-		// Pod exists, add it to podPortTable
-		// error is already checked
-		klog.V(2).Infof("adding an entry for Node port %d, Pod %s and Pod port: %d", k, v.PodIP, v.PodPort)
-		portTable.AddUpdateEntry(k, v.PodPort, v.PodIP)
-
-		updatePodNodePortCache(podNodePortCache, v.PodIP, k, v.PodPort)
+	if err := portTable.PodPortRules.AddAllRules(allNPLPorts); err != nil {
+		return nil
 	}
-
-	return podNodePortCache, err
+	return nil
 }
 
-// podsToPortMap goes through all the Pods for this node and figures out if there's a need for NPL
-// for each node. If yes, it assigns a port for this Pod and adds that as a rule.
-func podsToPodPortMap(podCache map[string][]nplk8s.PodNodePort, kubeClient clientset.Interface, portTable *portcache.PortTable,
+// getPodsAndGenRules fetches all the Pods on this Node and looks for valid NPL Annotations, if they
+// exist with a valid Node Port, it adds the Node port to the port table and rules. If the Node port
+// is invalid or the NPL Annotation is invalid, the NPL Annotation is removed. The Pod event handlers
+// take care of allocating a new Node port if required.
+func getPodsAndGenRules(kubeClient clientset.Interface, portTable *portcache.PortTable,
 	nodeName string) error {
 	podList, err := kubeClient.CoreV1().Pods(metav1.NamespaceAll).List(context.TODO(), metav1.ListOptions{
 		FieldSelector: "spec.nodeName=" + nodeName,
 	})
 	if err != nil {
-		klog.Errorf("error in fetching the Pods for Node %s: %s", nodeName, err.Error())
-		return errors.New("error in fetching Pods for the Node" + nodeName)
+		klog.Errorf("Error in fetching the Pods for Node %s: %s", nodeName, err.Error())
+		return errors.New("error in fetching Pods for the Node " + nodeName)
 	}
+
+	allNPLPorts := []rules.PodNodePort{}
 	for _, pod := range podList.Items {
 		// for each Pod:
-		// check if its already part of the podCache, which indicates that the Pod is already
-		// part of a rule
-		// if this Pod doesn't have any rule, compute a rule from the Pod ports, allocate a port
-		// and add it to port table
-		podIP := pod.Status.PodIP
-		if podIP == "" {
-			klog.Infof("IP address not found for Pod %s/%s", pod.Namespace, pod.Name)
+		// check if a valid NPL Annotation exists for this Pod:
+		//   if yes, verifiy validity of the Node port, update the port table and add a rule to the
+		//   rules buffer
+		podCopy := pod.DeepCopy()
+		annotations := pod.GetAnnotations()
+		nplAnnotation, ok := annotations[nplk8s.NPLAnnotationKey]
+		if !ok {
+			continue
+		}
+		nplData := []nplk8s.NPLAnnotation{}
+		err := json.Unmarshal([]byte(nplAnnotation), &nplData)
+		if err != nil {
+			// if there's an error in this NPL Annotation, clean it up
+			err := cleanupNPLAnnotationForPod(kubeClient, podCopy)
+			if err != nil {
+				return err
+			}
 			continue
 		}
 
-		newPod := pod.DeepCopy()
-		// clear out the annotations
-		newPod.SetAnnotations(make(map[string]string))
-		nplAnnotations := []nplk8s.NPLAnnotation{}
-		updatePodAnnotation := false
-		podExists := false
-		var nodePort int
-
-		if _, ok := podCache[podIP]; ok {
-			podExists = true
-			// the rule for this Pod already exists, ensure annotations are right
-			for _, v := range podCache[podIP] {
-				nplAnnotations = append(nplAnnotations, nplk8s.NPLAnnotation{
-					PodPort:  v.PodPort,
-					NodeIP:   pod.Status.HostIP,
-					NodePort: v.NodePort,
-				})
-			}
-		}
-
-		if !podExists {
-			for _, c := range pod.Spec.Containers {
-				for _, cport := range c.Ports {
-					port := int(cport.ContainerPort)
-					if !portTable.RuleExists(podIP, port) {
-						nodePort, err = portTable.AddRule(podIP, port)
-						if err != nil {
-							klog.Errorf("failed to add rule for Pod %s/%s: %s", pod.Namespace, pod.Name, err.Error())
-							continue
-						}
-					}
-					nplAnnotations = append(nplAnnotations, nplk8s.NPLAnnotation{
-						PodPort:  port,
-						NodeIP:   pod.Status.HostIP,
-						NodePort: nodePort,
-					})
+		for _, npl := range nplData {
+			if npl.NodePort > portTable.EndPort || npl.NodePort < portTable.StartPort {
+				// invalid port, cleanup the NPL Annotation
+				if err := cleanupNPLAnnotationForPod(kubeClient, podCopy); err != nil {
+					return err
 				}
-			}
-		}
-
-		if len(nplAnnotations) > 0 {
-			jsonMarshalled, _ := json.Marshal(nplAnnotations)
-			oldNPLAnnotations, err := nplk8s.ParsePodNPLAnnotations(pod)
-			if err != nil {
-				klog.Warningf("couldn't fetch the NPL annotations %s, will update the annotations", err.Error())
-				newPod.SetAnnotations(map[string]string{
-					nplk8s.NPLAnnotationKey: string(jsonMarshalled),
+			} else {
+				allNPLPorts = append(allNPLPorts, rules.PodNodePort{
+					NodePort: npl.NodePort,
+					PodPort:  npl.PodPort,
+					PodIP:    pod.Status.PodIP,
 				})
-				updatePodAnnotation = true
-			}
-			// check if the annotations differ
-			if nplk8s.IsAnnotationDifferent(oldNPLAnnotations, nplAnnotations) {
-				newPod.SetAnnotations(map[string]string{
-					nplk8s.NPLAnnotationKey: string(jsonMarshalled),
-				})
-				updatePodAnnotation = true
 			}
 		}
+	}
 
-		if updatePodAnnotation {
-			if _, err := kubeClient.CoreV1().Pods(pod.Namespace).Update(context.TODO(), newPod, metav1.UpdateOptions{}); err != nil {
-				klog.Warningf("unable to update annotation for Pod %s/%s, error: %s", newPod.Namespace, newPod.Name, err.Error())
-				return err
-			}
+	if len(allNPLPorts) > 0 {
+		if err := addRulesForNPLPorts(portTable, allNPLPorts); err != nil {
+			return err
 		}
-		klog.V(2).Infof("successfully updated annotation for Pod %s/%s", pod.Namespace, pod.Name)
-	}
-	return nil
-}
-
-func genPodPortMap(portTable *portcache.PortTable, kubeClient clientset.Interface, nodeName string) error {
-	podNodePortCache, err := rulesToPodPortMap(portTable, kubeClient)
-	if err != nil {
-		return err
 	}
 
-	err = podsToPodPortMap(podNodePortCache, kubeClient, portTable, nodeName)
-	if err != nil {
-		return err
-	}
 	return nil
 }
 
@@ -233,8 +148,8 @@ func InitializeNPLAgent(kubeClient clientset.Interface, informerFactory informer
 		return nil, err
 	}
 
-	err = genPodPortMap(portTable, kubeClient, nodeName)
-	if err != nil {
+	klog.Info("Will fetch Pods and generate NPL rules for these Pods")
+	if err := getPodsAndGenRules(kubeClient, portTable, nodeName); err != nil {
 		return nil, err
 	}
 

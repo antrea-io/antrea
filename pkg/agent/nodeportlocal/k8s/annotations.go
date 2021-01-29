@@ -19,7 +19,6 @@ package k8s
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 
 	"github.com/vmware-tanzu/antrea/pkg/util/env"
 
@@ -41,51 +40,6 @@ type NPLAnnotation struct {
 	NodePort int    `json:"nodePort"`
 }
 
-// ParsePodNPLAnnotations parses a Pod's annotation belonging to NPL and returns
-// a list of NPLAnnotation. Returns an error if no NPL annotation is found for a Pod
-func ParsePodNPLAnnotations(pod corev1.Pod) ([]NPLAnnotation, error) {
-	var result []NPLAnnotation
-	annotations := pod.GetAnnotations()
-	nplAnnotation, ok := annotations[NPLAnnotationKey]
-	if !ok {
-		return result, fmt.Errorf("Pod %s/%s doesn't contain NPL annotation", pod.Namespace, pod.Name)
-	}
-	if err := json.Unmarshal([]byte(nplAnnotation), &result); err != nil {
-		return result, fmt.Errorf("NPL annotations for Pod %s/%s couldn't be parsed with error %s",
-			pod.Namespace, pod.Name, err.Error())
-	}
-	return result, nil
-}
-
-// IsAnnotationDifferent compares two sets of NPL Annotations. If there's any difference, we
-// return true, else false
-func IsAnnotationDifferent(old, new []NPLAnnotation) bool {
-	type NodeIPPort struct {
-		NodeIP   string
-		NodePort int
-	}
-	if len(old) != len(new) {
-		return true
-	}
-	visitedPorts := make(map[int]NodeIPPort)
-	for _, ann := range old {
-		visitedPorts[ann.PodPort] = NodeIPPort{
-			NodeIP:   ann.NodeIP,
-			NodePort: ann.NodePort,
-		}
-	}
-	for _, ann := range new {
-		if np, ok := visitedPorts[ann.PodPort]; ok {
-			if np.NodeIP != ann.NodeIP || np.NodePort != ann.NodePort {
-				return true
-			}
-			continue
-		}
-		return true
-	}
-	return false
-}
-
 func toJSON(serialize interface{}) string {
 	jsonMarshalled, _ := json.Marshal(serialize)
 	return string(jsonMarshalled)
@@ -100,12 +54,6 @@ func isNodePortInAnnotation(s []NPLAnnotation, nodeport, cport int) bool {
 		}
 	}
 	return false
-}
-
-// PodNodePort is a mapping of NodePort assigned for a PodPort.
-type PodNodePort struct {
-	NodePort int
-	PodPort  int
 }
 
 // AssignPodAnnotation creates an annotation for a Pod with the assigned nodePort, and
