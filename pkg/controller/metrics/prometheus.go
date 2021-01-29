@@ -89,6 +89,20 @@ var (
 		Help:           "The length of InternalNetworkPolicyQueue",
 		StabilityLevel: metrics.STABLE,
 	})
+	AntreaNetworkPolicyStatusUpdates = metrics.NewCounter(&metrics.CounterOpts{
+		Namespace:      metricNamespaceAntrea,
+		Subsystem:      metricSubsystemController,
+		Name:           "anp_status_updates",
+		Help:           "The total number of actual status updates performed for Antrea NetworkPolicy Custom Resources",
+		StabilityLevel: metrics.ALPHA,
+	})
+	AntreaClusterNetworkPolicyStatusUpdates = metrics.NewCounter(&metrics.CounterOpts{
+		Namespace:      metricNamespaceAntrea,
+		Subsystem:      metricSubsystemController,
+		Name:           "acnp_status_updates",
+		Help:           "The total number of actual status updates performed for Antrea ClusterNetworkPolicy Custom Resources",
+		StabilityLevel: metrics.ALPHA,
+	})
 )
 
 // Initialize Prometheus metrics collection.
@@ -121,5 +135,11 @@ func InitializePrometheusMetrics() {
 	}
 	if err := legacyregistry.Register(LengthInternalNetworkPolicyQueue); err != nil {
 		klog.Errorf("Failed to register antrea_controller_length_network_policy_queue with Prometheus: %s", err.Error())
+	}
+	if err := legacyregistry.Register(AntreaNetworkPolicyStatusUpdates); err != nil {
+		klog.Errorf("Failed to register antrea_controller_anp_status_updates with Prometheus: %s", err.Error())
+	}
+	if err := legacyregistry.Register(AntreaClusterNetworkPolicyStatusUpdates); err != nil {
+		klog.Errorf("Failed to register antrea_controller_acnp_status_updates with Prometheus: %s", err.Error())
 	}
 }
