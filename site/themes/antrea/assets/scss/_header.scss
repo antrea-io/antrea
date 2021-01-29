@@ -11,8 +11,6 @@ header {
         justify-content: space-between;
     }
     .desktop-links {
-        //float: right;
-        //margin: 15px 0px 0px 0px;
         padding-left: 0px;
     }
     a {
@@ -31,7 +29,10 @@ header {
     }
     @include breakpoint(medium) {
         .desktop-links li {
-            padding-right: 10px;
+            padding-right: 7px;
+            a {
+                font-size: 14px;
+            }
         }
     }
     @include breakpoint(small) {

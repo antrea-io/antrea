@@ -625,3 +625,23 @@
         }
     }
 }
+
+.customers {
+    margin-top: -90px;
+    background-color: #fff;
+    padding-bottom: 50px;
+    .col {
+        padding: 40px 20px;
+        border: 1px solid #F2F2F2;
+        .icon {
+            height: 80px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            img {
+                max-height: 100%;
+                width: 100%;
+            }
+        }
+    }
+}
