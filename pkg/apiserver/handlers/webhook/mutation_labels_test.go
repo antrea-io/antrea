@@ -25,46 +25,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func TestIsAntreaService(t *testing.T) {
-	tests := []struct {
-		name            string
-		namespace       string
-		svc             string
-		isAntreaService bool
-	}{
-		{
-			name:            "is-antrea-svc-true",
-			namespace:       antreaDefaultSvcNamespace,
-			svc:             antreaSvc,
-			isAntreaService: true,
-		},
-		{
-			name:            "is-antrea-svc-wrong-namespace-false",
-			namespace:       "i-am-false",
-			svc:             antreaSvc,
-			isAntreaService: false,
-		},
-		{
-			name:            "is-antrea-svc-wrong-svc-name-false",
-			namespace:       antreaDefaultSvcNamespace,
-			svc:             "i-am-false",
-			isAntreaService: false,
-		},
-		{
-			name:            "is-antrea-svc-wrong-svc-name-wrong-namespace-false",
-			namespace:       "i-am-false",
-			svc:             "i-am-false-too",
-			isAntreaService: false,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			actualValue := isAntreaService(tt.namespace, tt.svc)
-			assert.Equal(t, tt.isAntreaService, actualValue)
-		})
-	}
-}
-
 func TestGetAdmissionResponseForErr(t *testing.T) {
 	tests := []struct {
 		name    string

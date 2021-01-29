@@ -40,6 +40,7 @@ Generate a YAML manifest for Antrea using Kustomize and print it to stdout.
                                       This option will work only for Kind clusters (when using '--kind').
         --coverage                    Generates a manifest which supports measuring code coverage of Antrea binaries.
         --simulator                   Generates a manifest with antrea-agent simulator included
+        --custom-adm-controller       Generates a manifest with custom Antrea admission controller to validate/mutate resources.
         --help, -h                    Print this message and exit
 
 In 'release' mode, environment variables IMG_NAME and IMG_TAG must be set.
@@ -74,6 +75,7 @@ ON_DELETE=false
 COVERAGE=false
 K8S_115=false
 SIMULATOR=false
+CUSTOM_ADM_CONTROLLER=false
 
 while [[ $# -gt 0 ]]
 do
@@ -143,6 +145,10 @@ case $key in
     ;;
     --simulator)
     SIMULATOR=true
+    shift
+    ;;
+    --custom-adm-controller)
+    CUSTOM_ADM_CONTROLLER=true
     shift
     ;;
     -h|--help)
@@ -385,6 +391,16 @@ if $KIND; then
     fi
 
     BASE=../kind
+    cd ..
+fi
+
+if $CUSTOM_ADM_CONTROLLER; then
+    mkdir admissioncontroller && cd admissioncontroller
+    cp ../../patches/admissioncontroller/*.yml .
+    touch kustomization.yml
+    $KUSTOMIZE edit add base $BASE
+    $KUSTOMIZE edit add resource webhook.yml
+    BASE=../admissioncontroller
     cd ..
 fi
 

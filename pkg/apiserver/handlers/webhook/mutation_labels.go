@@ -20,8 +20,6 @@ import (
 	"io/ioutil"
 	"net/http"
 
-	"github.com/vmware-tanzu/antrea/pkg/util/env"
-
 	admv1 "k8s.io/api/admission/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog"
@@ -33,9 +31,7 @@ const (
 	jsonPatchReplaceOp jsonPatchOperation = "replace"
 	// LabelMetadataName is a well known reserved label key used by Antrea to store the resource's name
 	// as a label value.
-	LabelMetadataName         = "antrea.io/metadata.name"
-	antreaSvc                 = "antrea"
-	antreaDefaultSvcNamespace = "kube-system"
+	LabelMetadataName = "antrea.io/metadata.name"
 )
 
 // jsonPatch contains necessary info that MutatingWebhook required
@@ -117,9 +113,7 @@ func mutateResourceLabels(ar *admv1.AdmissionReview) *admv1.AdmissionResponse {
 			return getAdmissionResponseForErr(err)
 		}
 	}
-	if ar.Request.Kind.Kind != "Service" || !isAntreaService(objMeta.Namespace, objMeta.Name) || op != admv1.Create {
-		msg, allowed, patch = mutateLabels(op, objMeta.Labels, objMeta.Name)
-	}
+	msg, allowed, patch = mutateLabels(op, objMeta.Labels, objMeta.Name)
 	if msg != "" {
 		result = &metav1.Status{
 			Message: msg,
@@ -176,20 +170,4 @@ func getAdmissionResponseForErr(err error) *admv1.AdmissionResponse {
 			Message: err.Error(),
 		},
 	}
-}
-
-// isAntreaService returns true if the Service corresponds to the antrea-controller.
-func isAntreaService(namespace, name string) bool {
-	if name != antreaSvc {
-		// Quick return if the Service name is not that of Antrea Service.
-		return false
-	}
-	antreaSvcNamespace := env.GetPodNamespace()
-	if antreaSvcNamespace == "" {
-		antreaSvcNamespace = antreaDefaultSvcNamespace
-	}
-	if namespace == antreaSvcNamespace {
-		return true
-	}
-	return false
 }

@@ -3,8 +3,6 @@ apiVersion: v1
 kind: Service
 metadata:
   name: antrea
-  labels:
-    antrea.io/metadata.name: antrea
 spec:
   ports:
     - port: 443
@@ -102,32 +100,6 @@ webhooks:
         apiGroups: ["security.antrea.tanzu.vmware.com"]
         apiVersions: ["v1alpha1"]
         resources: ["networkpolicies"]
-        scope: "Namespaced"
-    admissionReviewVersions: ["v1", "v1beta1"]
-    sideEffects: None
-    timeoutSeconds: 5
----
-apiVersion: admissionregistration.k8s.io/v1
-kind: MutatingWebhookConfiguration
-metadata:
-  name: "labelsmutator.antrea.io"
-webhooks:
-  - name: "namelabelmutator.antrea.io"
-    clientConfig:
-      service:
-        name: "antrea"
-        namespace: "kube-system"
-        path: "/mutate/addlabels"
-    rules:
-      - operations: ["CREATE", "UPDATE"]
-        apiGroups: [""]
-        apiVersions: ["v1"]
-        resources: ["namespaces"]
-        scope: "Cluster"
-      - operations: [ "CREATE", "UPDATE" ]
-        apiGroups: [ "" ]
-        apiVersions: [ "v1" ]
-        resources: [ "services" ]
         scope: "Namespaced"
     admissionReviewVersions: ["v1", "v1beta1"]
     sideEffects: None

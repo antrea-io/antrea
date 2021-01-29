@@ -88,6 +88,7 @@ type ExtraConfig struct {
 	caCertController              *certificate.CACertController
 	statsAggregator               *stats.Aggregator
 	networkPolicyStatusController *controllernetworkpolicy.StatusController
+	enableCustomAdmCtrl           bool
 }
 
 // Config defines the config for Antrea apiserver.
@@ -125,7 +126,8 @@ func NewConfig(
 	controllerQuerier querier.ControllerQuerier,
 	networkPolicyStatusController *controllernetworkpolicy.StatusController,
 	endpointQuerier controllernetworkpolicy.EndpointQuerier,
-	npController *controllernetworkpolicy.NetworkPolicyController) *Config {
+	npController *controllernetworkpolicy.NetworkPolicyController,
+	enableCustomAdmnCtrl bool) *Config {
 	return &Config{
 		genericConfig: genericConfig,
 		extraConfig: ExtraConfig{
@@ -138,6 +140,7 @@ func NewConfig(
 			endpointQuerier:               endpointQuerier,
 			networkPolicyController:       npController,
 			networkPolicyStatusController: networkPolicyStatusController,
+			enableCustomAdmCtrl:           enableCustomAdmnCtrl,
 		},
 	}
 }
@@ -247,9 +250,10 @@ func installHandlers(c *ExtraConfig, s *genericapiserver.GenericAPIServer) {
 	s.Handler.NonGoRestfulMux.HandleFunc("/loglevel", loglevel.HandleFunc())
 	s.Handler.NonGoRestfulMux.HandleFunc("/endpoint", endpoint.HandleFunc(c.endpointQuerier))
 	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
-		// Webhook to mutate Namespace/Service labels and add its metadata.name as a label
-		s.Handler.NonGoRestfulMux.HandleFunc("/mutate/addlabels", webhook.HandleMutationLabels())
-
+		if c.enableCustomAdmCtrl {
+			// Webhook to mutate Namespace/Service labels and add its metadata.name as a label
+			s.Handler.NonGoRestfulMux.HandleFunc("/mutate/addlabels", webhook.HandleMutationLabels())
+		}
 		// Get new NetworkPolicyMutator
 		m := controllernetworkpolicy.NewNetworkPolicyMutator(c.networkPolicyController)
 		// Install handlers for NetworkPolicy related mutation

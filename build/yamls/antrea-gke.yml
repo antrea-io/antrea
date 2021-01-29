@@ -1456,7 +1456,7 @@ data:
             }
         ]
     }
-  antrea-controller.conf: |
+  antrea-controller.conf: |-
     # FeatureGates is a map of feature names to bools that enable or disable experimental features.
     featureGates:
     # Enable traceflow which provides packet tracing feature to diagnose network issue.
@@ -1495,19 +1495,23 @@ data:
 
     # TLS min version from: VersionTLS10, VersionTLS11, VersionTLS12, VersionTLS13.
     #tlsMinVersion:
+
+    # Enable custom admission controller webhooks to mutate/validate resources. For example, it
+    # enables the labels mutator which labels all Namespaces with the reserved
+    # "antrea.io/metadata.name = <namespaceName>" label.
+    #enableCustomAdmissionControllers: false
 kind: ConfigMap
 metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-bkc6dfdhgt
+  name: antrea-config-7chtgf5gf4
   namespace: kube-system
 ---
 apiVersion: v1
 kind: Service
 metadata:
   labels:
-    antrea.io/metadata.name: antrea
     app: antrea
   name: antrea
   namespace: kube-system
@@ -1621,7 +1625,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-bkc6dfdhgt
+          name: antrea-config-7chtgf5gf4
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -1888,7 +1892,7 @@ spec:
           path: /home/kubernetes/bin
         name: host-cni-bin
       - configMap:
-          name: antrea-config-bkc6dfdhgt
+          name: antrea-config-7chtgf5gf4
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d
@@ -1965,46 +1969,6 @@ webhooks:
     - UPDATE
     resources:
     - networkpolicies
-    scope: Namespaced
-  sideEffects: None
-  timeoutSeconds: 5
----
-apiVersion: admissionregistration.k8s.io/v1
-kind: MutatingWebhookConfiguration
-metadata:
-  labels:
-    app: antrea
-  name: labelsmutator.antrea.io
-webhooks:
-- admissionReviewVersions:
-  - v1
-  - v1beta1
-  clientConfig:
-    service:
-      name: antrea
-      namespace: kube-system
-      path: /mutate/addlabels
-  name: namelabelmutator.antrea.io
-  rules:
-  - apiGroups:
-    - ""
-    apiVersions:
-    - v1
-    operations:
-    - CREATE
-    - UPDATE
-    resources:
-    - namespaces
-    scope: Cluster
-  - apiGroups:
-    - ""
-    apiVersions:
-    - v1
-    operations:
-    - CREATE
-    - UPDATE
-    resources:
-    - services
     scope: Namespaced
   sideEffects: None
   timeoutSeconds: 5
