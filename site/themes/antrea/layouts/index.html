@@ -1,0 +1,20 @@
+{{ define "main" }}
+	<main>
+		{{ partial "hero.html" . }}
+		{{ partial "homepage-grid.html" . }}
+		<div class="bg-grey introduction">
+			<div class="wrapper grid two">
+				<div class="col">
+					<p class="strong"><a href="https://github.com/vmware-tanzu/antrea/releases">View Latest Release</a></p>
+					<p>Antrea v0.11.1 is now available.</p>
+				</div>
+				<div class="col">
+					<p class="strong"><a href="https://www.cncf.io/webinars/securing-and-accelerating-the-kubernetes-cni-data-plane-with-project-antrea-and-nvidia-mellanox-connectx-smartnics/">CNCF Webinar</a></p>
+					<p>We recently presented a deep-dive on Antrea and demonstrated hardware offload with NVIDIA Mellanox ConnectX SmartNICs.</p>
+				</div>
+			</div>
+		</div>
+		{{ partial "features.html" . }}
+		{{ partial "blog-highlights.html" . }}
+	</main>
+{{ end }}
