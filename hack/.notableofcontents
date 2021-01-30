@@ -23,6 +23,7 @@ docs/kind.md
 docs/maintainers/build-kubemark.md
 docs/maintainers/getting-started-gif.md
 docs/maintainers/release.md
+docs/noencap-hybrid-modes.md
 docs/octant-plugin-installation.md
 docs/os-issues.md
 docs/ovs-offload.md
