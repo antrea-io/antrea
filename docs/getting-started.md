@@ -135,8 +135,7 @@ provide your own certificates, please refer to [Securing Control Plane](securing
 
 ### Antctl: Installation and Usage
 
-To use antctl, the Antrea command-line tool, please refer to this
-[guide](antctl.md).
+To use antctl, the Antrea command-line tool, please refer to [this guide](antctl.md).
 
 ## Features
 
@@ -158,6 +157,17 @@ Antrea supports exporting network flow information using IPFIX, and provides a
 reference cookbook on how to visualize the exported network flows using Elastic
 Stack and Kibana dashboards. For more information, refer to the [network flow
 visibility document](network-flow-visibility.md).
+
+### NoEncap and Hybrid Traffic Modes
+
+Besides the default `Encap` mode, in which Pod traffic across Nodes will be
+encapsulated and sent over tunnels, Antrea also supports `NoEncap` and `Hybrid`
+traffic modes. In `NoEncap` mode, Antrea does not encapsulate Pod traffic, but
+relies on the Node network to route the traffic across Nodes. In `Hybrid` mode,
+Antrea encapsulates Pod traffic when the source Node and the destination Node
+are in different subnets, but does not encapsulate when the source and the
+destination Nodes are in the same subnet. Refer to [this guide](noencap-hybrid-modes.md)
+to learn how to configure Antrea with `NoEncap` or `Hybrid` mode.
 
 ### Octant UI
 
