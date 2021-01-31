@@ -199,10 +199,10 @@ func (data *TestData) setupDifferentNamedPorts(t *testing.T) (checkFn func(), cl
 		// Both clients can connect to both servers.
 		for _, clientName := range []string{client0Name, client1Name} {
 			if err := data.runNetcatCommandFromTestPod(clientName, server0IP, server0Port); err != nil {
-				t.Fatalf("Pod %s should be able to connect %s:%d, but was not able to connect", clientName, server0IP, server0Port)
+				t.Fatalf("Pod %s should be able to connect %s, but was not able to connect", clientName, net.JoinHostPort(server0IP, fmt.Sprint(server0Port)))
 			}
 			if err := data.runNetcatCommandFromTestPod(clientName, server1IP, server1Port); err != nil {
-				t.Fatalf("Pod %s should be able to connect %s:%d, but was not able to connect", clientName, server1IP, server1Port)
+				t.Fatalf("Pod %s should be able to connect %s, but was not able to connect", clientName, net.JoinHostPort(server1IP, fmt.Sprint(server1Port)))
 			}
 		}
 	}
@@ -258,19 +258,21 @@ func (data *TestData) setupDifferentNamedPorts(t *testing.T) (checkFn func(), cl
 	})
 
 	npCheck := func(server0IP, server1IP string) {
+		server0Address := net.JoinHostPort(server0IP, fmt.Sprint(server0Port))
+		server1Address := net.JoinHostPort(server1IP, fmt.Sprint(server1Port))
 		// client0 can connect to both servers.
 		if err = data.runNetcatCommandFromTestPod(client0Name, server0IP, server0Port); err != nil {
-			t.Fatalf("Pod %s should be able to connect %s:%d, but was not able to connect", client0Name, server0IP, server0Port)
+			t.Fatalf("Pod %s should be able to connect %s, but was not able to connect", client0Name, server0Address)
 		}
 		if err = data.runNetcatCommandFromTestPod(client0Name, server1IP, server1Port); err != nil {
-			t.Fatalf("Pod %s should be able to connect %s:%d, but was not able to connect", client0Name, server1IP, server1Port)
+			t.Fatalf("Pod %s should be able to connect %s, but was not able to connect", client0Name, server1Address)
 		}
 		// client1 cannot connect to both servers.
 		if err = data.runNetcatCommandFromTestPod(client1Name, server0IP, server0Port); err == nil {
-			t.Fatalf("Pod %s should not be able to connect %s:%d, but was able to connect", client1Name, server0IP, server0Port)
+			t.Fatalf("Pod %s should not be able to connect %s, but was able to connect", client1Name, server0Address)
 		}
 		if err = data.runNetcatCommandFromTestPod(client1Name, server1IP, server1Port); err == nil {
-			t.Fatalf("Pod %s should not be able to connect %s:%d, but was able to connect", client1Name, server1IP, server1Port)
+			t.Fatalf("Pod %s should not be able to connect %s, but was able to connect", client1Name, server1Address)
 		}
 	}
 
@@ -304,7 +306,7 @@ func TestDefaultDenyEgressPolicy(t *testing.T) {
 
 	preCheckFunc := func(serverIP string) {
 		if err = data.runNetcatCommandFromTestPod(clientName, serverIP, serverPort); err != nil {
-			t.Fatalf("Pod %s should be able to connect %s:%d, but was not able to connect", clientName, serverIP, serverPort)
+			t.Fatalf("Pod %s should be able to connect %s, but was not able to connect", clientName, net.JoinHostPort(serverIP, fmt.Sprint(serverPort)))
 		}
 	}
 	if clusterInfo.podV4NetworkCIDR != "" {
@@ -331,7 +333,7 @@ func TestDefaultDenyEgressPolicy(t *testing.T) {
 
 	npCheck := func(serverIP string) {
 		if err = data.runNetcatCommandFromTestPod(clientName, serverIP, serverPort); err == nil {
-			t.Fatalf("Pod %s should not be able to connect %s:%d, but was able to connect", clientName, serverIP, serverPort)
+			t.Fatalf("Pod %s should not be able to connect %s, but was able to connect", clientName, net.JoinHostPort(serverIP, fmt.Sprint(serverPort)))
 		}
 	}
 
@@ -629,7 +631,7 @@ func TestIngressPolicyWithoutPortNumber(t *testing.T) {
 		// Both clients can connect to server.
 		for _, clientName := range []string{client0Name, client1Name} {
 			if err = data.runNetcatCommandFromTestPod(clientName, serverIP, serverPort); err != nil {
-				t.Fatalf("Pod %s should be able to connect %s:%d, but was not able to connect", clientName, serverIP, serverPort)
+				t.Fatalf("Pod %s should be able to connect %s, but was not able to connect", clientName, net.JoinHostPort(serverIP, fmt.Sprint(serverPort)))
 			}
 		}
 	}
@@ -673,13 +675,14 @@ func TestIngressPolicyWithoutPortNumber(t *testing.T) {
 	}()
 
 	npCheck := func(serverIP string) {
+		serverAddress := net.JoinHostPort(serverIP, fmt.Sprint(serverPort))
 		// Client0 can access server.
 		if err = data.runNetcatCommandFromTestPod(client0Name, serverIP, serverPort); err != nil {
-			t.Fatalf("Pod %s should be able to connect %s:%d, but was not able to connect", client0Name, serverIP, serverPort)
+			t.Fatalf("Pod %s should be able to connect %s, but was not able to connect", client0Name, serverAddress)
 		}
 		// Client1 can't access server.
 		if err = data.runNetcatCommandFromTestPod(client1Name, serverIP, serverPort); err == nil {
-			t.Fatalf("Pod %s should not be able to connect %s:%d, but was able to connect", client1Name, serverIP, serverPort)
+			t.Fatalf("Pod %s should not be able to connect %s, but was able to connect", client1Name, serverAddress)
 		}
 	}
 

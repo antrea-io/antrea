@@ -32,10 +32,9 @@ type cmdAndReturnCode struct {
 	expectedReturnCode int
 }
 
-// antctlOutput is a helper function for logging antctl outputs.
-func antctlOutput(stdout, stderr string, tb testing.TB) {
-	tb.Logf("antctl stdout:\n%s", stdout)
-	tb.Logf("antctl stderr:\n%s", stderr)
+// antctlOutput is a helper function for generating antctl outputs.
+func antctlOutput(stdout, stderr string) string {
+	return fmt.Sprintf("antctl stdout:\n%s\nantctl stderr:\n%s", stdout, stderr)
 }
 
 // runAntctl runs antctl commands on antrea Pods, the controller, or agents.
@@ -87,9 +86,8 @@ func TestAntctlAgentLocalAccess(t *testing.T) {
 		cmd := strings.Join(args, " ")
 		t.Run(cmd, func(t *testing.T) {
 			stdout, stderr, err := runAntctl(podName, args, data)
-			antctlOutput(stdout, stderr, t)
 			if err != nil {
-				t.Fatalf("Error when running `antctl %s` from %s: %v", c, podName, err)
+				t.Fatalf("Error when running `antctl %s` from %s: %v\n%s", c, podName, err, antctlOutput(stdout, stderr))
 			}
 		})
 	}
@@ -175,11 +173,10 @@ func TestAntctlControllerRemoteAccess(t *testing.T) {
 		cmd := strings.Join(tc.args, " ")
 		t.Run(cmd, func(t *testing.T) {
 			rc, stdout, stderr, err := RunCommandOnNode(controlPlaneNodeName(), cmd)
-			antctlOutput(stdout, stderr, t)
-			assert.Equal(t, tc.expectedReturnCode, rc)
 			if err != nil {
-				t.Fatalf("Error when running `%s` from %s: %v", cmd, controlPlaneNodeName(), err)
+				t.Fatalf("Error when running `%s` from %s: %v\n%s", cmd, controlPlaneNodeName(), err, antctlOutput(stdout, stderr))
 			}
+			assert.Equal(t, tc.expectedReturnCode, rc, "Return code is incorrect: %d\n%s", rc, antctlOutput(stdout, stderr))
 		})
 	}
 }
@@ -207,12 +204,11 @@ func TestAntctlVerboseMode(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Logf("Running commnand `%s` on pod %s", tc.commands, podName)
 			stdout, stderr, err := runAntctl(podName, tc.commands, data)
-			antctlOutput(stdout, stderr, t)
-			assert.Nil(t, err)
+			assert.Nil(t, err, antctlOutput(stdout, stderr))
 			if !tc.hasStderr {
-				assert.Empty(t, stderr)
+				assert.Empty(t, stderr, antctlOutput(stdout, stderr))
 			} else {
-				assert.NotEmpty(t, stderr)
+				assert.NotEmpty(t, stderr, antctlOutput(stdout, stderr))
 			}
 		})
 	}
@@ -229,6 +225,7 @@ func runAntctProxy(nodeName string, antctlName string, nodeAntctlPath string, pr
 		} else {
 			proxyCmd = append(proxyCmd, "--agent-node", agentNodeName)
 		}
+		proxyCmd = append(proxyCmd, "--port", fmt.Sprint(proxyPort))
 		cmd := strings.Join(proxyCmd, " ")
 		RunCommandOnNode(nodeName, cmd)
 		waitCh <- struct{}{}

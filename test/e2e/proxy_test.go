@@ -17,6 +17,7 @@ package e2e
 import (
 	"encoding/hex"
 	"fmt"
+	"net"
 	"strings"
 	"testing"
 	"time"
@@ -178,11 +179,7 @@ func testProxyEndpointLifeCycle(ipFamily *corev1.IPFamily, data *TestData, t *te
 	}
 
 	keywords := make(map[int]string)
-	if *ipFamily == corev1.IPv6Protocol {
-		keywords[42] = fmt.Sprintf("nat(dst=[%s]:80)", nginxIP) // endpointNATTable
-	} else {
-		keywords[42] = fmt.Sprintf("nat(dst=%s:80)", nginxIP) // endpointNATTable
-	}
+	keywords[42] = fmt.Sprintf("nat(dst=%s)", net.JoinHostPort(nginxIP, "80")) // endpointNATTable
 
 	for tableID, keyword := range keywords {
 		tableOutput, _, err := data.runCommandFromPod(metav1.NamespaceSystem, agentName, "antrea-agent", []string{"ovs-ofctl", "dump-flows", defaultBridgeName, fmt.Sprintf("table=%d", tableID)})

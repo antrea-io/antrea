@@ -16,6 +16,7 @@ package e2e
 
 import (
 	"fmt"
+	"net"
 	"strings"
 	"testing"
 	"time"
@@ -119,7 +120,7 @@ func (data *TestData) testHostPortPodConnectivity(t *testing.T) {
 	}
 
 	if err = data.runNetcatCommandFromTestPod(clientName, hpPodHostIP, hpPodPort); err != nil {
-		t.Fatalf("Pod %s should be able to connect %s:%d, but was not able to connect", clientName, hpPodHostIP, hpPodPort)
+		t.Fatalf("Pod %s should be able to connect %s, but was not able to connect", clientName, net.JoinHostPort(hpPodHostIP, fmt.Sprint(hpPodPort)))
 	}
 }
 
