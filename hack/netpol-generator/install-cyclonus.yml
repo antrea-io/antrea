@@ -11,11 +11,10 @@ spec:
       - command:
         - ./cyclonus
         - generate
-        - --mode
-        - simple-fragments
+        - --mode=upstream
         - --noisy=true
-        - --perturbation-wait-seconds
-        - "15"
+        - --perturbation-wait-seconds=15
+        - --cleanup-namespaces=true
         name: cyclonus
         imagePullPolicy: Always
         image: mfenwick100/cyclonus:latest
