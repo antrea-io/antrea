@@ -179,18 +179,19 @@ func (ic *ifConfigurator) createContainerLink(endpointName string, result *curre
 	// Save interface config to HNSEndpoint. It's used for creating missing OVS
 	// ports during antrea-agent boot stage. The change is introduced mainly for
 	// ContainerD support. When working with ContainerD runtime, antrea-agent creates
-	// OVS ports in asynchronously way. So the OVS ports will be lost if antrea-agent
-	// get stopped/restarted before port creation completes.
+	// OVS ports in an asynchronous way. So the OVS ports can be lost if antrea-agent
+	// gets stopped/restarted before port creation completes.
 	//
 	// The interface config will be rebuilt based on the params saved in the "AdditionalParams"
 	// field of HNSEndpoint.
 	//   - endpointName: the name of the host interface without Hyper-V prefix(vEthernet).
 	//     The name is same as the OVS port name and HNSEndpoint name.
-	//   - containerID: Used as key for goroutine lock to avoid concurrency issue.
+	//   - containerID: used as the goroutine lock to avoid concurrency issue.
 	//   - podName and PodNamespace: Used to identify the owner of the HNSEndpoint.
 	//   - dummyMac: the MAC address of the HNSEndpoint is unknown before we create it.
 	//     Use a dummy MAC address here. The real MAC is retrieved from HNSEndpoint when we
-	//     parse the config.
+	//     parse the config. Here we set a dummyMac to avoid printing error when parsing the
+	//     config.
 	//   - Other params will be passed to OVS port.
 	ifaceConfig := interfacestore.NewContainerInterface(
 		endpointName,
@@ -259,7 +260,7 @@ func parseOVSPortInterfaceConfigFromHNSEndpoint(ep *hcsshim.HNSEndpoint) *interf
 
 // attachContainerLink takes the result of the IPAM plugin, and adds the appropriate IP
 // addresses and routes to the interface.
-// For different CRI runtime we need to use corresponding Windows container API:
+// For different CRI runtimes we need to use the appropriate Windows container API:
 //   - Docker runtime: HNS API
 //   - ContainerD runtime: HCS API
 func attachContainerLink(ep *hcsshim.HNSEndpoint, containerID, sandbox, containerIFDev string) (*current.Interface, error) {
@@ -267,11 +268,13 @@ func attachContainerLink(ep *hcsshim.HNSEndpoint, containerID, sandbox, containe
 	var err error
 	var hcnEp *hcn.HostComputeEndpoint
 	if isDockerContainer(sandbox) {
+		// Docker runtime
 		attached, err = ep.IsAttached(containerID)
 		if err != nil {
 			return nil, err
 		}
 	} else {
+		// ContainerD runtime
 		if hcnEp, err = hcn.GetEndpointByID(ep.Id); err != nil {
 			return nil, err
 		}
@@ -291,12 +294,14 @@ func attachContainerLink(ep *hcsshim.HNSEndpoint, containerID, sandbox, containe
 		klog.V(2).Infof("HNS Endpoint %s already attached on container %s", ep.Id, containerID)
 	} else {
 		if hcnEp == nil {
+			// Docker runtime
 			if err := hcsshim.HotAttachEndpoint(containerID, ep.Id); err != nil {
 				if isInfraContainer(sandbox) || hcsshim.ErrComputeSystemDoesNotExist != err {
 					return nil, err
 				}
 			}
 		} else {
+			// ContainerD runtime
 			if err := hcnEp.NamespaceAttach(sandbox); err != nil {
 				return nil, err
 			}
@@ -342,6 +347,12 @@ func (ic *ifConfigurator) removeHNSEndpoint(endpoint *hcsshim.HNSEndpoint, conta
 			}
 		}
 		_, err := endpoint.Delete()
+		if err != nil && strings.Contains(err.Error(), notFoundHNSEndpoint) {
+			err = nil
+		}
+		if err != nil {
+			klog.Errorf("Failed to delete container interface %s: %v", containerID, err)
+		}
 		deleteCh <- err
 	}()
 

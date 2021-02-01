@@ -89,7 +89,7 @@ func (pc *podConfigurator) connectInterfaceToOVS(
 	// - For Docker runtime, antrea-agent still creates OVS port synchronously.
 	// - Here antrea-agent determines the way of OVS port creation by checking if container interface is yet created.
 	//   If one day ContainerD runtime changes the behavior and container interface can be created when attaching
-	//   HNSEndpoint/HostComputeEndpoint. The current implementation sill works. It will choose the synchronized
+	//   HNSEndpoint/HostComputeEndpoint, the current implementation will still work. It will choose the synchronized
 	//   way to create OVS port.
 	if util.HostInterfaceExists(hostIfAlias) {
 		return containerConfig, pc.connectInterfaceToOVSCommon(ovsPortName, containerConfig)

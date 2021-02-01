@@ -23,7 +23,7 @@ import (
 	"k8s.io/klog"
 )
 
-const infraContainerNetNS = "none"
+const dockerInfraContainerNetNS = "none"
 
 // updateResultDNSConfig update the DNS config from CNIConfig.
 // For windows platform, if runtime dns values are there use that else use cni conf supplied dns.
@@ -46,21 +46,21 @@ func (s *CNIServer) hostNetNsPath(netNS string) string {
 	return netNS
 }
 
-// isInfraContainer return if a container is infra container according to the network namespace path.
+// isInfraContainer returns true if a container is infra container according to the network namespace path.
 // On Windows platform:
-//   - If use Docker as CRI runtime, the network namespace of infra container is "none".
-//   - If use ContainerD as CRI runtime, the network namespace of infra container is
+//   - When using Docker as CRI runtime, the network namespace of infra container is "none".
+//   - When using ContainerD as CRI runtime, the network namespace of infra container is
 //     a string which does not contains ":".
 func isInfraContainer(netNS string) bool {
-	return netNS == infraContainerNetNS || !strings.Contains(netNS, ":")
+	return netNS == dockerInfraContainerNetNS || !strings.Contains(netNS, ":")
 }
 
-// isDockerContainer return if a container is created by Docker with the provided network namespace.
+// isDockerContainer returns true if a container is created by Docker with the provided network namespace.
 // The network namespace format of Docker container is:
 //   - Infra container: "none"
 //   - Workload container: "container:$infra_container_id"
 func isDockerContainer(netNS string) bool {
-	return netNS == "none" || strings.Contains(netNS, ":")
+	return netNS == dockerInfraContainerNetNS || strings.Contains(netNS, ":")
 }
 
 func getInfraContainer(containerID, netNS string) string {
