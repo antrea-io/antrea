@@ -292,9 +292,9 @@ func (p *proxier) syncProxyRules() {
 	defer func() {
 		delta := time.Since(start)
 		if p.isIPv6 {
-			metrics.SyncProxyDuration.Observe(delta.Seconds())
-		} else {
 			metrics.SyncProxyDurationV6.Observe(delta.Seconds())
+		} else {
+			metrics.SyncProxyDuration.Observe(delta.Seconds())
 		}
 		klog.V(4).Infof("syncProxyRules took %v", time.Since(start))
 	}()
