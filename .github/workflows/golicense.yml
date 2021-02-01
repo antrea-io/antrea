@@ -54,8 +54,6 @@ jobs:
       run: BINDIR=./antrea-bins make bin
     - name: Run lichen
       if: steps.cache.outputs.cache-hit != 'true'
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         mkdir license-reports
         ./ci/golicense/run.sh ./antrea-bins ./license-reports
