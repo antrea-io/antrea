@@ -15,7 +15,7 @@ spec:
         - simple-fragments
         - --noisy=true
         - --perturbation-wait-seconds
-        - 15
+        - "15"
         name: cyclonus
         imagePullPolicy: Always
         image: mfenwick100/cyclonus:latest

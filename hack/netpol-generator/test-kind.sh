@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 set -eo pipefail
-ser -xv
+set -xv
 
 THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 ROOT_DIR=$THIS_DIR/../..
@@ -28,7 +28,7 @@ $ROOT_DIR/hack/generate-manifest.sh --kind --tun "vxlan" | kubectl apply -f -
 
 kubectl create clusterrolebinding cyclonus --clusterrole=cluster-admin --serviceaccount=kube-system:cyclonus
 kubectl create sa cyclonus -n kube-system
-kubectl create -f $THIS_DIR/install-latest.yml
+kubectl create -f $THIS_DIR/install-cyclonus.yml
 
 
 time kubectl wait --for=condition=complete --timeout=$WAIT_TIMEOUT -n kube-system $JOB_NAME
