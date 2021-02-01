@@ -42,8 +42,6 @@ const (
 	notFoundHNSEndpoint = "The endpoint was not found"
 )
 
-var dummyMac, _ = net.ParseMAC("00:00:00:00:00:00")
-
 type ifConfigurator struct {
 	hnsNetwork *hcsshim.HNSNetwork
 	epCache    *sync.Map
@@ -188,17 +186,13 @@ func (ic *ifConfigurator) createContainerLink(endpointName string, result *curre
 	//     The name is same as the OVS port name and HNSEndpoint name.
 	//   - containerID: used as the goroutine lock to avoid concurrency issue.
 	//   - podName and PodNamespace: Used to identify the owner of the HNSEndpoint.
-	//   - dummyMac: the MAC address of the HNSEndpoint is unknown before we create it.
-	//     Use a dummy MAC address here. The real MAC is retrieved from HNSEndpoint when we
-	//     parse the config. Here we set a dummyMac to avoid printing error when parsing the
-	//     config.
 	//   - Other params will be passed to OVS port.
 	ifaceConfig := interfacestore.NewContainerInterface(
 		endpointName,
 		containerID,
 		podName,
 		podNamespace,
-		dummyMac,
+		nil,
 		containerIPStr)
 	ovsAttachInfoData := BuildOVSPortExternalIDs(ifaceConfig)
 	ovsAttachInfo := make(map[string]string)
@@ -246,7 +240,7 @@ func parseOVSPortInterfaceConfigFromHNSEndpoint(ep *hcsshim.HNSEndpoint) *interf
 		Name:        ep.Name,
 		ExternalIDs: ep.AdditionalParams,
 	}
-	ifaceConfig := ParseOVSPortInterfaceConfig(portData, nil)
+	ifaceConfig := ParseOVSPortInterfaceConfig(portData, nil, false)
 	if ifaceConfig != nil {
 		var err error
 		ifaceConfig.MAC, err = net.ParseMAC(ep.MacAddress)

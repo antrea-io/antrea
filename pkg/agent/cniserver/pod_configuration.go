@@ -148,7 +148,9 @@ func getContainerIPsString(ips []net.IP) string {
 // external_ids, initializes and returns an InterfaceConfig struct.
 // nill will be returned, if the OVS port does not have external IDs or it is
 // not created for a Pod interface.
-func ParseOVSPortInterfaceConfig(portData *ovsconfig.OVSPortData, portConfig *interfacestore.OVSPortConfig) *interfacestore.InterfaceConfig {
+// If "checkMac" param is set as true the ovsExternalIDMAC of portData should be
+// a valid MAC string, otherwise it will print error.
+func ParseOVSPortInterfaceConfig(portData *ovsconfig.OVSPortData, portConfig *interfacestore.OVSPortConfig, checkMac bool) *interfacestore.InterfaceConfig {
 	if portData.ExternalIDs == nil {
 		klog.V(2).Infof("OVS port %s has no external_ids", portData.Name)
 		return nil
@@ -166,7 +168,7 @@ func ParseOVSPortInterfaceConfig(portData *ovsconfig.OVSPortData, portConfig *in
 	}
 
 	containerMAC, err := net.ParseMAC(portData.ExternalIDs[ovsExternalIDMAC])
-	if err != nil {
+	if err != nil && checkMac {
 		klog.Errorf("Failed to parse MAC address from OVS external config %s: %v",
 			portData.ExternalIDs[ovsExternalIDMAC], err)
 	}
