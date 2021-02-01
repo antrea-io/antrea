@@ -1,0 +1,26 @@
+<div class="col">
+    <div class="icon">
+        {{ if (.Params.Embed )}}
+            <div class="embed-responsive embed-responsive-16by9">
+                <iframe class="embed-responsive-item" src="{{ .Params.Embed }}" frameborder="0" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+            </div>
+        {{ else }}
+            <img src="{{ .Params.Image }}" alt="{{ .Title }}" />
+        {{ end }}
+    </div>
+    <div class="content">
+        <h3>
+            {{ if (.Params.External) }}
+                <a href="{{ .Params.External }}">{{ .Title }}</a>
+            {{ else }}
+                <a href="{{ .RelPermalink }}">{{ .Title }}</a>
+            {{ end }}
+        </h3>
+        <p>{{ .Params.Excerpt }}</p>
+        {{ if .Params.Slides }}
+            <div class="presentation-slides">
+                <a href="{{ .Params.Slides }}" target="_blank">[Slides]</a>
+            </div>
+        {{ end }}
+    </div>
+</div>

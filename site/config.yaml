@@ -1,0 +1,32 @@
+baseURL: "https://antrea.io/"
+languageCode: "en-us"
+title: "Antrea"
+theme: "antrea"
+pygmentsCodefences: true
+pygmentsStyle: "pygments"
+markup:
+  highlight:
+    anchorLineNos: false
+    codeFences: true
+    guessSyntax: false
+    hl_Lines: ""
+    lineAnchors: ""
+    lineNoStart: 1
+    lineNos: false
+    lineNumbersInTable: true
+    noClasses: true
+    style: native
+    tabWidth: 4
+params:
+  twitter_url: "https://twitter.com/projectantrea"
+  github_url: "https://github.com/vmware-tanzu/antrea"
+  slack_url: "https://kubernetes.slack.com/archives/CR2J23M0X"
+  use_advanced_docs: true
+  docs_search: false
+  docs_search_index_name: index_name
+  docs_search_api_key: api_key
+  docs_versioning: true
+  docs_latest: v0.11.1
+  docs_versions:
+    - v0.30.0
+    - v0.11.1
