@@ -8,7 +8,7 @@ ROOT_DIR=$THIS_DIR/../..
 
 KIND_CONFIG=$ROOT_DIR/ci/kind/config-3nodes.yml
 
-WAIT_TIMEOUT=15m
+WAIT_TIMEOUT=45m
 JOB_NAME=job.batch/cyclonus
 
 
