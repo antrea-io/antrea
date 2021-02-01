@@ -12,13 +12,13 @@ exhaustive network policies and network-policy-related cluster scenarios for CNI
 
 Download a [Cyclonus release](https://github.com/mattfenwick/cyclonus/releases), and invoke with:
 
-```
-cyclonus generate --mode=simple-fragments --noisy=true --cleanup-namespaces=true
+```bash
+$ cyclonus generate --mode=simple-fragments --noisy=true --cleanup-namespaces=true
 ```
 
 ## More options
 
-```
+```bash
 $ cyclonus_0.1.1 generate -h
 generate network policies, create and probe against kubernetes, and compare to expected results
 
