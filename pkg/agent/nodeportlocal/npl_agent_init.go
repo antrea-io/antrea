@@ -49,8 +49,8 @@ func cleanupNPLAnnotationForPod(kubClient clientset.Interface, pod *corev1.Pod) 
 	}
 	delete(pod.Annotations, nplk8s.NPLAnnotationKey)
 	if _, err := kubClient.CoreV1().Pods(pod.Namespace).Update(context.TODO(), pod, metav1.UpdateOptions{}); err != nil {
-		klog.Warningf("Unable to update Annotation for Pod %s/%s, error: %s", pod.Namespace, pod.Name, err.Error())
-		return err
+		return fmt.Errorf("unable to update Annotation for Pod %s/%s, %s", pod.Namespace,
+			pod.Name, err.Error())
 	}
 	return nil
 }
@@ -76,8 +76,7 @@ func getPodsAndGenRules(kubeClient clientset.Interface, portTable *portcache.Por
 		FieldSelector: "spec.nodeName=" + nodeName,
 	})
 	if err != nil {
-		klog.Errorf("Error in fetching the Pods for Node %s: %s", nodeName, err.Error())
-		return errors.New("error in fetching Pods for the Node " + nodeName)
+		return fmt.Errorf("error in fetching the Pods for Node %s: %s", nodeName, err.Error())
 	}
 
 	allNPLPorts := []rules.PodNodePort{}
@@ -135,12 +134,12 @@ func getPodsAndGenRules(kubeClient clientset.Interface, portTable *portcache.Por
 func InitializeNPLAgent(kubeClient clientset.Interface, informerFactory informers.SharedInformerFactory, portRange, nodeName string) (*nplk8s.NPLController, error) {
 	start, end, err := util.ParsePortsRange(portRange)
 	if err != nil {
-		return nil, fmt.Errorf("something went wrong while fetching port range: %v", err)
+		return nil, fmt.Errorf("error while fetching port range: %v", err)
 	}
 	var ok bool
 	portTable, ok := portcache.NewPortTable(start, end)
 	if !ok {
-		return nil, errors.New("NPL port table could not be initialized")
+		return nil, errors.New("error in initializing NPL port table")
 	}
 
 	err = portTable.PodPortRules.Init()
