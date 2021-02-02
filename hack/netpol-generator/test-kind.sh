@@ -41,6 +41,6 @@ cat "$LOG_FILE"
 
 rc=0
 cat "$LOG_FILE" | grep "failure" > /dev/null 2>&1 || rc=$?
-if [ $rc -ne 0 ]; then
+if [ $rc -eq 0 ]; then
     exit 1
 fi
