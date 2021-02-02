@@ -395,32 +395,6 @@ jobs:
         path: antrea-ubuntu.tar
         retention-days: 1 # minimum value, in case artifact deletion by 'artifact-cleanup' job fails
 
-  test-netpol-cyclonus:
-    name: Run Cyclonus network policy generator tests on Kind cluster
-    needs: build-antrea-image
-    runs-on: [ubuntu-18.04]
-    steps:
-      - name: Free disk space
-        # https://github.com/actions/virtual-environments/issues/709
-        run: |
-          sudo apt-get clean
-          df -h
-      - uses: actions/checkout@v2
-      - name: Download Antrea image from previous job
-        uses: actions/download-artifact@v1
-        with:
-          name: antrea-ubuntu
-      - name: Load Antrea image
-        run:  docker load -i antrea-ubuntu/antrea-ubuntu.tar
-      - name: Install Kind
-        run: |
-          curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-$(uname)-amd64
-          chmod +x ./kind
-          sudo mv kind /usr/local/bin
-      - name: Run cyclonus tests
-        working-directory: hack/netpol-generator
-        run: ./test-kind.sh
-
   test-netpol-tmp:
     name: Run experimental network policy tests (netpol) on Kind cluster
     needs: build-antrea-image
