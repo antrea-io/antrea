@@ -42,13 +42,13 @@ import (
 // UpdateFunc event handler will be called only when the object is actually updated.
 const resyncPeriod = 0 * time.Minute
 
-func cleanupNPLAnnotationForPod(kubClient clientset.Interface, pod *corev1.Pod) error {
+func cleanupNPLAnnotationForPod(kubeClient clientset.Interface, pod *corev1.Pod) error {
 	_, ok := pod.Annotations[nplk8s.NPLAnnotationKey]
 	if !ok {
 		return nil
 	}
 	delete(pod.Annotations, nplk8s.NPLAnnotationKey)
-	if _, err := kubClient.CoreV1().Pods(pod.Namespace).Update(context.TODO(), pod, metav1.UpdateOptions{}); err != nil {
+	if _, err := kubeClient.CoreV1().Pods(pod.Namespace).Update(context.TODO(), pod, metav1.UpdateOptions{}); err != nil {
 		return fmt.Errorf("unable to update Annotation for Pod %s/%s, %s", pod.Namespace,
 			pod.Name, err.Error())
 	}
@@ -81,10 +81,10 @@ func getPodsAndGenRules(kubeClient clientset.Interface, portTable *portcache.Por
 
 	allNPLPorts := []rules.PodNodePort{}
 	for _, pod := range podList.Items {
-		// for each Pod:
+		// For each Pod:
 		// check if a valid NPL Annotation exists for this Pod:
 		//   if yes, verifiy validity of the Node port, update the port table and add a rule to the
-		//   rules buffer
+		//   rules buffer.
 		podCopy := pod.DeepCopy()
 		annotations := pod.GetAnnotations()
 		nplAnnotation, ok := annotations[nplk8s.NPLAnnotationKey]

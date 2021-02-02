@@ -47,17 +47,15 @@ func toJSON(serialize interface{}) string {
 
 func isNodePortInAnnotation(s []NPLAnnotation, nodeport, cport int) bool {
 	for _, i := range s {
-		if i.NodePort == nodeport {
-			if i.PodPort == cport {
-				return true
-			}
+		if i.NodePort == nodeport && i.PodPort == cport {
+			return true
 		}
 	}
 	return false
 }
 
 // AssignPodAnnotation creates an annotation for a Pod with the assigned nodePort, and
-// updates it into the Pod, it returns true if an update to the Pod is required
+// updates it into the Pod. It returns true if an update to the Pod is required.
 func AssignPodAnnotation(pod *corev1.Pod, nodeIP string, containerPort, nodePort int) bool {
 	var err error
 	current := pod.Annotations
