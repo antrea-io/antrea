@@ -150,31 +150,14 @@ func (n *NetworkPolicyController) createAddressGroupForClusterGroupCRD(intGrp *a
 		return ""
 	}
 	// Check to see if the AddressGroup already exists
-	n.addressGroupMutex.Lock()
-	agObj, found, _ := n.addressGroupStore.Get(key)
+	_, found, _ := n.addressGroupStore.Get(key)
 	if found {
-		ag := agObj.(*antreatypes.AddressGroup)
-		if ag.Selector.NormalizedName != intGrp.Selector.NormalizedName {
-			// Update AddressGroup object for this Cluster Group.
-			addressGroup := &antreatypes.AddressGroup{
-				UID:          ag.UID,
-				Name:         ag.Name,
-				SpanMeta:     ag.SpanMeta,
-				Selector:     intGrp.Selector,
-				GroupMembers: intGrp.GroupMembers,
-			}
-			n.addressGroupStore.Update(addressGroup)
-			klog.V(2).Infof("Updated existing AddressGroup %v corresponding to ClusterGroup CRD %s", addressGroup.UID, intGrp.Name)
-		}
-		n.addressGroupMutex.Unlock()
 		return key
 	}
-	n.addressGroupMutex.Unlock()
 	// Create an AddressGroup object for this Cluster Group.
 	addressGroup := &antreatypes.AddressGroup{
 		UID:          types.UID(key),
 		Name:         key,
-		Selector:     intGrp.Selector,
 		GroupMembers: intGrp.GroupMembers,
 	}
 	n.addressGroupStore.Create(addressGroup)

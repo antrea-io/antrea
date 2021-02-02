@@ -1324,12 +1324,10 @@ func (n *NetworkPolicyController) syncAddressGroup(key string) error {
 		internalNP := internalNPObj.(*antreatypes.NetworkPolicy)
 		addrGroupNodeNames = addrGroupNodeNames.Union(internalNP.SpanMeta.NodeNames)
 	}
-	n.addressGroupMutex.Lock()
 	addressGroupObj, found, _ := n.addressGroupStore.Get(key)
 	if !found {
 		// AddressGroup was already deleted. No need to process further.
 		klog.V(2).Infof("AddressGroup %s not found", key)
-		n.addressGroupMutex.Unlock()
 		return nil
 	}
 	addressGroup := addressGroupObj.(*antreatypes.AddressGroup)
@@ -1343,7 +1341,6 @@ func (n *NetworkPolicyController) syncAddressGroup(key string) error {
 	}
 	klog.V(2).Infof("Updating existing AddressGroup %s with %d Pods/ExternalEntities and %d Nodes", key, len(memberSet), addrGroupNodeNames.Len())
 	n.addressGroupStore.Update(updatedAddressGroup)
-	n.addressGroupMutex.Unlock()
 	return nil
 }
 
