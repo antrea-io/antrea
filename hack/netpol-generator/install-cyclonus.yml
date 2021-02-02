@@ -11,7 +11,7 @@ spec:
       - command:
         - ./cyclonus
         - generate
-        - --mode=simple-fragments
+        - --mode=upstream
         - --noisy=true
         - --perturbation-wait-seconds=15
         - --cleanup-namespaces=true
