@@ -204,7 +204,7 @@ func (n *NetworkPolicyController) processRefCG(g string) (string, *controlplane.
 	if err != nil {
 		// This error should not occur as we validate that a CG must exist before
 		// referencing it in an ACNP.
-		klog.V(2).Infof("ClusterGroup %s not found. %v", g, err)
+		klog.Errorf("ClusterGroup %s not found: %v", g, err)
 		return "", nil
 	}
 	key := internalGroupKeyFunc(cg)

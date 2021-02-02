@@ -468,11 +468,11 @@ func (a *antreaPolicyValidator) validatePeers(ingress, egress []secv1alpha1.Rule
 				continue
 			}
 			if peer.PodSelector != nil || peer.IPBlock != nil || peer.NamespaceSelector != nil {
-				return "Group cannot be set with other peers in rules", false
+				return "group cannot be set with other peers in rules", false
 			}
 			// Ensure that group exists
 			if !a.clusterGroupExists(peer.Group) {
-				return fmt.Sprintf("ClusterGroup %s referenced in rules does not exist", peer.Group), false
+				return fmt.Sprintf("cluster group %s referenced in rules does not exist", peer.Group), false
 			}
 		}
 		return "", true
@@ -611,7 +611,7 @@ func (t *tierValidator) deleteValidate(oldObj interface{}, userInfo authenticati
 func validateAntreaGroupSelectors(s corev1a2.GroupSpec) (string, bool) {
 	if s.IPBlock != nil {
 		if s.NamespaceSelector != nil && s.PodSelector != nil {
-			return fmt.Sprint("ClusterGroup IPBlock cannot be set with other selectors"), false
+			return fmt.Sprint("cluster group IPBlock cannot be set with other selectors"), false
 		}
 	}
 	return "", true

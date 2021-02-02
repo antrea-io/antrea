@@ -219,7 +219,7 @@ func (n *NetworkPolicyController) triggerCNPUpdates(cg *corev1a2.ClusterGroup) e
 	// If a ClusterGroup is added/updated, it might have a reference in ClusterNetworkPolicy.
 	cnps, err := n.cnpInformer.Informer().GetIndexer().ByIndex(ClusterGroupIndex, cg.Name)
 	if err != nil {
-		klog.Errorf("Error retrieve ClusterNetworkPolicies corresponding to ClusterGroup %s", cg.Name)
+		klog.Errorf("Error retrieving ClusterNetworkPolicies corresponding to ClusterGroup %s", cg.Name)
 		return err
 	}
 	for _, obj := range cnps {
