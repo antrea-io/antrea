@@ -505,3 +505,193 @@ func TestGroupMembersComputedConditionEqual(t *testing.T) {
 		})
 	}
 }
+
+// Pods for testing proper query results
+var testPods = []*corev1.Pod{
+	{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "pod1",
+			Namespace: "test-ns",
+			UID:       "uid1",
+			Labels:    map[string]string{"app": "foo"},
+		},
+		Status: corev1.PodStatus{
+			Conditions: []corev1.PodCondition{
+				{
+					Type:   corev1.PodReady,
+					Status: corev1.ConditionTrue,
+				},
+			},
+			PodIP: "10.10.1.1",
+		},
+	},
+	{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "pod2",
+			Namespace: "test-ns",
+			UID:       "uid2",
+			Labels:    map[string]string{"app": "bar"},
+		},
+		Status: corev1.PodStatus{
+			Conditions: []corev1.PodCondition{
+				{
+					Type:   corev1.PodReady,
+					Status: corev1.ConditionTrue,
+				},
+			},
+			PodIP: "10.10.1.2",
+		},
+	},
+}
+
+var externalEntities = []*corev1a2.ExternalEntity{
+	{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "ee1",
+			Namespace: "test-ns",
+			UID:       "uid3",
+			Labels:    map[string]string{"app": "meh"},
+		},
+		Spec: corev1a2.ExternalEntitySpec{
+			Endpoints: []corev1a2.Endpoint{
+				{
+					IP:   "60.10.0.1",
+					Name: "vm1",
+				},
+			},
+			ExternalNode: "nodeA",
+		},
+	},
+	{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "ee2",
+			Namespace: "test-ns",
+			UID:       "uid4",
+			Labels:    map[string]string{"app": "bruh"},
+		},
+		Spec: corev1a2.ExternalEntitySpec{
+			Endpoints: []corev1a2.Endpoint{
+				{
+					IP:   "60.10.0.2",
+					Name: "vm2",
+				},
+			},
+			ExternalNode: "nodeA",
+		},
+	},
+}
+
+var groups = []antreatypes.Group{
+	{
+		UID:  "groupUID1",
+		Name: "group1",
+		Selector: antreatypes.GroupSelector{
+			Namespace: "test-ns",
+		},
+		GroupMembers: controlplane.GroupMemberSet{
+			"groupMemberkey1": &controlplane.GroupMember{
+				Pod: &controlplane.PodReference{
+					Name:      "pod1",
+					Namespace: "test-ns",
+				},
+			},
+		},
+	},
+	{
+		UID:  "groupUID2",
+		Name: "group2",
+		Selector: antreatypes.GroupSelector{
+			Namespace: "test-ns",
+		},
+		GroupMembers: controlplane.GroupMemberSet{
+			"groupMemberKey1": &controlplane.GroupMember{
+				Pod: &controlplane.PodReference{
+					Name:      "pod1",
+					Namespace: "test-ns",
+				},
+			},
+			"groupMemberKey2": &controlplane.GroupMember{
+				Pod: &controlplane.PodReference{
+					Name:      "pod2",
+					Namespace: "test-ns",
+				},
+			},
+		},
+	},
+	{
+		UID:  "groupUID3",
+		Name: "group3",
+		Selector: antreatypes.GroupSelector{
+			Namespace: "test-ns",
+		},
+		GroupMembers: controlplane.GroupMemberSet{
+			"groupMemberKey3": &controlplane.GroupMember{
+				ExternalEntity: &controlplane.ExternalEntityReference{
+					Name:      "ee1",
+					Namespace: "test-ns",
+				},
+			},
+		},
+	},
+}
+
+func TestGetAssociatedGroups(t *testing.T) {
+	tests := []struct {
+		name           string
+		existingGroups []antreatypes.Group
+		queryName      string
+		queryNamespace string
+		expectedGroups []antreatypes.Group
+	}{
+		{
+			"multiple-group-association",
+			groups,
+			"pod1",
+			"test-ns",
+			[]antreatypes.Group{groups[0], groups[1]},
+		},
+		{
+			"single-group-association",
+			groups,
+			"pod2",
+			"test-ns",
+			[]antreatypes.Group{groups[1]},
+		},
+		{
+			"no-group-association",
+			groups,
+			"ee2",
+			"test-ns",
+			[]antreatypes.Group{},
+		},
+	}
+	_, npc := newController()
+	for i := range testPods {
+		npc.podStore.Add(testPods[i])
+	}
+	for j := range externalEntities {
+		npc.externalEntityStore.Add(externalEntities[j])
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			for i := range tt.existingGroups {
+				npc.internalGroupStore.Create(&tt.existingGroups[i])
+			}
+			groups, err := npc.GetAssociatedGroups(tt.queryName, tt.queryNamespace)
+			assert.Equal(t, err, nil)
+			assert.ElementsMatch(t, tt.expectedGroups, groups)
+		})
+	}
+}
+
+func TestGetGroupMembers(t *testing.T) {
+	_, npc := newController()
+	for i := range groups {
+		npc.internalGroupStore.Create(&groups[i])
+	}
+	for j := range groups {
+		members, err := npc.GetGroupMembers(groups[j].Name)
+		assert.Equal(t, err, nil)
+		assert.Equal(t, members, groups[j].GroupMembers)
+	}
+}

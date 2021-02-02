@@ -16,6 +16,7 @@ package networkpolicy
 
 import (
 	"context"
+	"fmt"
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -28,6 +29,7 @@ import (
 	corev1a2 "github.com/vmware-tanzu/antrea/pkg/apis/core/v1alpha2"
 	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy/store"
 	antreatypes "github.com/vmware-tanzu/antrea/pkg/controller/types"
+	"github.com/vmware-tanzu/antrea/pkg/k8s"
 )
 
 // addClusterGroup is responsible for processing the ADD event of a ClusterGroup resource.
@@ -245,4 +247,29 @@ func groupMembersComputedConditionEqual(conds []corev1a2.GroupCondition, conditi
 		}
 	}
 	return false
+}
+
+// GetAssociatedGroups retrieves the internal Groups associated with the entity being
+// queried (Pod or ExternalEntity identified by name and namespace).
+func (n *NetworkPolicyController) GetAssociatedGroups(name, namespace string) ([]antreatypes.Group, error) {
+	memberKey := k8s.NamespacedName(namespace, name)
+	groups, err := n.internalGroupStore.GetByIndex(store.GroupMemberIndex, memberKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve Group associated with key %s", memberKey)
+	}
+	groupObjs := make([]antreatypes.Group, len(groups))
+	for i, g := range groups {
+		groupObjs[i] = *g.(*antreatypes.Group)
+	}
+	return groupObjs, nil
+}
+
+// GetGroupMembers returns the current members of a ClusterGroup.
+func (n *NetworkPolicyController) GetGroupMembers(cgName string) (controlplane.GroupMemberSet, error) {
+	g, found, err := n.internalGroupStore.Get(cgName)
+	if err != nil || !found {
+		return nil, fmt.Errorf("failed to get internal group associated with ClusterGroup %s", cgName)
+	}
+	internalGroup := g.(*antreatypes.Group)
+	return internalGroup.GroupMembers, nil
 }

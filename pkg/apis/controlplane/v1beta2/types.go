@@ -62,7 +62,6 @@ type ExternalEntityReference struct {
 }
 
 // GroupMember represents resource member to be populated in Groups.
-// This supersedes GroupMemberPod, and will eventually replace it.
 type GroupMember struct {
 	// Pod maintains the reference to the Pod.
 	Pod *PodReference `json:"pod,omitempty" protobuf:"bytes,1,opt,name=pod"`
@@ -72,6 +71,14 @@ type GroupMember struct {
 	IPs []IPAddress `json:"ips,omitempty" protobuf:"bytes,3,rep,name=ips"`
 	// Ports is the list NamedPort of the GroupMember.
 	Ports []NamedPort `json:"ports,omitempty" protobuf:"bytes,4,rep,name=ports"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// ClusterGroupMembers is a list of GroupMember objects that are currently selected by a ClusterGroup.
+type ClusterGroupMembers struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
+	EffectiveMembers  []GroupMember `json:"effectiveMembers" protobuf:"bytes,2,rep,name=effectiveMembers"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -324,4 +331,23 @@ type GroupList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
 	Items           []Group `json:"items" protobuf:"bytes,2,rep,name=items"`
+}
+
+type GroupReference struct {
+	// Namespace of the Group. Empty for ClusterGroup.
+	Namespace string `json:"namespace,omitempty" protobuf:"bytes,1,opt,name=namespace"`
+	// Name of the Group.
+	Name string `json:"name,omitempty" protobuf:"bytes,2,opt,name=name"`
+	// UID of the Group.
+	UID types.UID `json:"uid,omitempty" protobuf:"bytes,3,opt,name=uid,casttype=k8s.io/apimachinery/pkg/types.UID"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// GroupAssociation is the message format in an API response for groupassociation queries.
+type GroupAssociation struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
+	// AssociatedGroups is a list of GroupReferences that is associated with the
+	// Pod/ExternalEntity being queried.
+	AssociatedGroups []GroupReference `json:"associatedGroups" protobuf:"bytes,2,rep,name=associatedGroups"`
 }
