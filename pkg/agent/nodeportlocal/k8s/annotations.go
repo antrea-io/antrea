@@ -89,7 +89,7 @@ func assignPodAnnotation(pod *corev1.Pod, nodeIP string, containerPort, nodePort
 }
 
 func removePodAnnotation(pod *corev1.Pod) {
-	klog.V(2).Infof("Removing annotation from Pod: %v", pod.Name)
+	klog.V(2).Infof("Removing all NodePortLocal annotation from Pod: %s/%s", pod.Namespace, pod.Name)
 	delete(pod.Annotations, NPLAnnotationKey)
 }
 
@@ -131,16 +131,10 @@ func (c *NPLController) RemoveNPLAnnotationFromPods() {
 		return
 	}
 	for i, pod := range podList.Items {
-		podAnnotation := pod.GetAnnotations()
-		if podAnnotation == nil {
+		if _, exists := pod.Annotations[NPLAnnotationKey]; !exists {
 			continue
 		}
-		if _, exists := podAnnotation[NPLAnnotationKey]; !exists {
-			continue
-		}
-		klog.V(2).Infof("Removing all NodePortLocal annotation from Pod: %s, ns: %s", pod.Name, pod.Namespace)
-		delete(podAnnotation, NPLAnnotationKey)
-		pod.Annotations = podAnnotation
+		removePodAnnotation(&pod)
 		c.updatePodAnnotation(&podList.Items[i])
 	}
 	klog.Infof("Removed all NodePortLocal annotations from all Pods")

@@ -72,15 +72,7 @@ func NewNPLController(kubeClient clientset.Interface,
 		cache.ResourceEventHandlerFuncs{
 			AddFunc:    c.enqueuePod,
 			DeleteFunc: c.enqueuePod,
-			UpdateFunc: func(old, cur interface{}) {
-				oldPod := old.(*corev1.Pod)
-				curPod := cur.(*corev1.Pod)
-				// Pod fields to watch for: ContainerPort, HostIP, PodIP,
-				// Labels, Annotations (NPLAnnotationKey).
-				if oldPod.ResourceVersion != curPod.ResourceVersion {
-					c.enqueuePod(cur)
-				}
-			},
+			UpdateFunc: func(old, cur interface{}) { c.enqueuePod(cur) },
 		},
 		resyncPeriod,
 	)
@@ -192,11 +184,6 @@ func (c *NPLController) enqueueSvcUpdate(oldObj, newObj interface{}) {
 	// both sets of Pods (corresponding to old and new selector) need to be considered.
 	newSvc := newObj.(*corev1.Service)
 	oldSvc := oldObj.(*corev1.Service)
-
-	// Return if Service ResourceVersions don't change.
-	if oldSvc.ResourceVersion == newSvc.ResourceVersion {
-		return
-	}
 
 	oldSvcAnnotation := oldSvc.Annotations[NPLEnabledAnnotationKey]
 	newSvcAnnotation := newSvc.Annotations[NPLEnabledAnnotationKey]
@@ -358,8 +345,10 @@ func (c *NPLController) handleRemovePod(key string, obj interface{}) error {
 
 	if obj != nil {
 		newPod := obj.(*corev1.Pod).DeepCopy()
-		removePodAnnotation(newPod)
-		return c.updatePodAnnotation(newPod)
+		if _, exists := newPod.Annotations[NPLAnnotationKey]; exists {
+			removePodAnnotation(newPod)
+			return c.updatePodAnnotation(newPod)
+		}
 	}
 	return nil
 }

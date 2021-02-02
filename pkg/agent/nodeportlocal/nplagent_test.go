@@ -161,8 +161,9 @@ func TestSvcUpdateAnnotation(t *testing.T) {
 	testSvc.Name = servicePodName
 	testSvc.Spec.Selector[defaultAppSelectorKey] = servicePodName
 	testSvc.Annotations = map[string]string{k8s.NPLEnabledAnnotationKey: "true"}
-	_, err := kubeClient.CoreV1().Services(defaultNS).Create(context.TODO(), &testSvc, metav1.CreateOptions{})
+	s, err := kubeClient.CoreV1().Services(defaultNS).Create(context.TODO(), &testSvc, metav1.CreateOptions{})
 	r.Nil(err, "Service creation failed")
+	t.Logf("successfully created Service: %v", s)
 
 	testPod := getTestPod()
 	testPod.Name = servicePodName
@@ -184,7 +185,7 @@ func TestSvcUpdateAnnotation(t *testing.T) {
 	// Update Service with bad annotation value.
 	testSvc.Annotations = map[string]string{k8s.NPLEnabledAnnotationKey: "false"}
 	testSvc.ResourceVersion = "2"
-	s, err := kubeClient.CoreV1().Services(defaultNS).Update(context.TODO(), &testSvc, metav1.UpdateOptions{})
+	s, err = kubeClient.CoreV1().Services(defaultNS).Update(context.TODO(), &testSvc, metav1.UpdateOptions{})
 	r.Nil(err, "Service update failed")
 	t.Logf("successfully updated Service: %s", s.Name)
 
