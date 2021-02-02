@@ -8,7 +8,6 @@ Cyclonus already supports tests for a variety of network policy features, but is
 Its long-term goal is to provide a comprehensive test suite for network policy implementations, by generating
 exhaustive network policies and network-policy-related cluster scenarios for CNI testing.
 
-
 ## Using Cyclonus to test network policies in a real cluster
 
 Cyclonus can be run as a kubernetes job, with the appropriate permissions.
