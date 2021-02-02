@@ -17,8 +17,8 @@ kind get nodes | xargs "$ROOT_DIR"/hack/kind-fix-networking.sh
 kind load docker-image projects.registry.vmware.com/antrea/antrea-ubuntu:latest
 
 # pre-load cyclonus image
-docker pull mfenwick100/cyclonus:latest
-kind load docker-image mfenwick100/cyclonus:latest
+docker pull mfenwick100/cyclonus:v0.1.4
+kind load docker-image mfenwick100/cyclonus:v0.1.4
 # pre-load agnhost image
 docker pull k8s.gcr.io/e2e-test-images/agnhost:2.21
 kind load docker-image k8s.gcr.io/e2e-test-images/agnhost:2.21
