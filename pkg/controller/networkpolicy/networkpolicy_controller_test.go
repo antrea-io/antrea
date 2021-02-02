@@ -115,6 +115,7 @@ func newController(objects ...runtime.Object) (*fake.Clientset, *networkPolicyCo
 	npController.tierListerSynced = alwaysReady
 	npController.cgInformer = cgInformer
 	npController.cgLister = cgInformer.Lister()
+	npController.cgListerSynced = alwaysReady
 	return client, &networkPolicyController{
 		npController,
 		informerFactory.Core().V1().Pods().Informer().GetStore(),

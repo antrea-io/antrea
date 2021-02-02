@@ -65,10 +65,13 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.AppliedToGroup":                    schema_pkg_apis_controlplane_v1beta2_AppliedToGroup(ref),
 		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.AppliedToGroupList":                schema_pkg_apis_controlplane_v1beta2_AppliedToGroupList(ref),
 		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.AppliedToGroupPatch":               schema_pkg_apis_controlplane_v1beta2_AppliedToGroupPatch(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.ClusterGroupMembers":               schema_pkg_apis_controlplane_v1beta2_ClusterGroupMembers(ref),
 		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.ExternalEntityReference":           schema_pkg_apis_controlplane_v1beta2_ExternalEntityReference(ref),
 		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.Group":                             schema_pkg_apis_controlplane_v1beta2_Group(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.GroupAssociation":                  schema_pkg_apis_controlplane_v1beta2_GroupAssociation(ref),
 		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.GroupList":                         schema_pkg_apis_controlplane_v1beta2_GroupList(ref),
 		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.GroupMember":                       schema_pkg_apis_controlplane_v1beta2_GroupMember(ref),
+		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.GroupReference":                    schema_pkg_apis_controlplane_v1beta2_GroupReference(ref),
 		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.IPBlock":                           schema_pkg_apis_controlplane_v1beta2_IPBlock(ref),
 		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.IPNet":                             schema_pkg_apis_controlplane_v1beta2_IPNet(ref),
 		"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.NamedPort":                         schema_pkg_apis_controlplane_v1beta2_NamedPort(ref),
@@ -2148,6 +2151,53 @@ func schema_pkg_apis_controlplane_v1beta2_AppliedToGroupPatch(ref common.Referen
 	}
 }
 
+func schema_pkg_apis_controlplane_v1beta2_ClusterGroupMembers(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "ClusterGroupMembers is a list of GroupMember objects that are currently selected by a ClusterGroup.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+						},
+					},
+					"effectiveMembers": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.GroupMember"),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"effectiveMembers"},
+			},
+		},
+		Dependencies: []string{
+			"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.GroupMember", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+	}
+}
+
 func schema_pkg_apis_controlplane_v1beta2_ExternalEntityReference(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -2222,6 +2272,54 @@ func schema_pkg_apis_controlplane_v1beta2_Group(ref common.ReferenceCallback) co
 	}
 }
 
+func schema_pkg_apis_controlplane_v1beta2_GroupAssociation(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "GroupAssociation is the message format in an API response for groupassociation queries.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+						},
+					},
+					"associatedGroups": {
+						SchemaProps: spec.SchemaProps{
+							Description: "AssociatedGroups is a list of GroupReferences that is associated with the Pod/ExternalEntity being queried.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.GroupReference"),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"associatedGroups"},
+			},
+		},
+		Dependencies: []string{
+			"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.GroupReference", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+	}
+}
+
 func schema_pkg_apis_controlplane_v1beta2_GroupList(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -2273,7 +2371,7 @@ func schema_pkg_apis_controlplane_v1beta2_GroupMember(ref common.ReferenceCallba
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "GroupMember represents resource member to be populated in Groups. This supersedes GroupMemberPod, and will eventually replace it.",
+				Description: "GroupMember represents resource member to be populated in Groups.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"pod": {
@@ -2320,6 +2418,39 @@ func schema_pkg_apis_controlplane_v1beta2_GroupMember(ref common.ReferenceCallba
 		},
 		Dependencies: []string{
 			"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.ExternalEntityReference", "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.NamedPort", "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.PodReference"},
+	}
+}
+
+func schema_pkg_apis_controlplane_v1beta2_GroupReference(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"namespace": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Namespace of the Group. Empty for ClusterGroup.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"name": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Name of the Group.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"uid": {
+						SchemaProps: spec.SchemaProps{
+							Description: "UID of the Group.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+			},
+		},
 	}
 }
 
