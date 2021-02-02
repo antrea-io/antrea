@@ -184,7 +184,6 @@ func TestSvcUpdateAnnotation(t *testing.T) {
 
 	// Update Service with bad annotation value.
 	testSvc.Annotations = map[string]string{k8s.NPLEnabledAnnotationKey: "false"}
-	testSvc.ResourceVersion = "2"
 	s, err = kubeClient.CoreV1().Services(defaultNS).Update(context.TODO(), &testSvc, metav1.UpdateOptions{})
 	r.Nil(err, "Service update failed")
 	t.Logf("successfully updated Service: %s", s.Name)
@@ -207,7 +206,6 @@ func TestSvcRemoveAnnotation(t *testing.T) {
 	testSvc.Name = servicePodName
 	testSvc.Annotations = map[string]string{k8s.NPLEnabledAnnotationKey: "true"}
 	testSvc.Spec.Selector[defaultAppSelectorKey] = servicePodName
-	testSvc.ResourceVersion = "3"
 	s, err := kubeClient.CoreV1().Services(defaultNS).Update(context.TODO(), &testSvc, metav1.UpdateOptions{})
 	r.Nil(err, "Service update failed")
 	t.Logf("successfully updated Service: %s", s.Name)
@@ -217,7 +215,6 @@ func TestSvcRemoveAnnotation(t *testing.T) {
 	a.Equal(portTable.RuleExists(defaultPodIP, defaultPort), true)
 
 	testSvc.Annotations = make(map[string]string)
-	testSvc.ResourceVersion = "4"
 	s, err = kubeClient.CoreV1().Services(defaultNS).Update(context.TODO(), &testSvc, metav1.UpdateOptions{})
 	r.Nil(err, "Service update failed")
 	t.Logf("successfully updated Service: %v", s)
@@ -237,7 +234,6 @@ func TestSvcUpdateSelector(t *testing.T) {
 	testSvc.Name = servicePodName
 	testSvc.Annotations = map[string]string{k8s.NPLEnabledAnnotationKey: "true"}
 	testSvc.Spec.Selector[defaultAppSelectorKey] = servicePodName
-	testSvc.ResourceVersion = "5"
 	s, err := kubeClient.CoreV1().Services(defaultNS).Update(context.TODO(), &testSvc, metav1.UpdateOptions{})
 	r.Nil(err, "Service update failed")
 	t.Logf("successfully updated Service: %s", s.Name)
@@ -247,7 +243,6 @@ func TestSvcUpdateSelector(t *testing.T) {
 	a.Equal(portTable.RuleExists(defaultPodIP, defaultPort), true)
 
 	testSvc.Spec.Selector = map[string]string{"foo": "invalid-selector"}
-	testSvc.ResourceVersion = "6"
 	s, err = kubeClient.CoreV1().Services(defaultNS).Update(context.TODO(), &testSvc, metav1.UpdateOptions{})
 	r.Nil(err, "Service update failed")
 	t.Logf("successfully updated Service: %v", s)
@@ -267,7 +262,6 @@ func TestPodUpdateSelectorLabel(t *testing.T) {
 	testSvc.Name = servicePodName
 	testSvc.Annotations = map[string]string{k8s.NPLEnabledAnnotationKey: "true"}
 	testSvc.Spec.Selector[defaultAppSelectorKey] = servicePodName
-	testSvc.ResourceVersion = "7"
 	s, err := kubeClient.CoreV1().Services(defaultNS).Update(context.TODO(), &testSvc, metav1.UpdateOptions{})
 	r.Nil(err, "Service update failed")
 	t.Logf("successfully updated Service: %s", s.Name)
@@ -279,7 +273,6 @@ func TestPodUpdateSelectorLabel(t *testing.T) {
 	testPod := getTestPod()
 	testPod.Name = servicePodName
 	testPod.Labels["invalid-label-key"] = servicePodName
-	testPod.ResourceVersion = "2"
 	p, err := kubeClient.CoreV1().Pods(defaultNS).Update(context.TODO(), &testPod, metav1.UpdateOptions{})
 	r.Nil(err, "Pod update failed")
 	t.Logf("successfully updated Pod: %v", p)
@@ -301,7 +294,6 @@ func TestDeleteSvc(t *testing.T) {
 	testSvc.Name = servicePodName
 	testSvc.Annotations = map[string]string{k8s.NPLEnabledAnnotationKey: "true"}
 	testSvc.Spec.Selector[defaultAppSelectorKey] = servicePodName
-	testSvc.ResourceVersion = "7"
 	s, err := kubeClient.CoreV1().Services(defaultNS).Update(context.TODO(), &testSvc, metav1.UpdateOptions{})
 	r.Nil(err, "Service update failed")
 	t.Logf("successfully updated Service: %s", s.Name)
@@ -309,7 +301,6 @@ func TestDeleteSvc(t *testing.T) {
 	testPod := getTestPod()
 	testPod.Name = servicePodName
 	testPod.Labels[defaultAppSelectorKey] = servicePodName
-	testPod.ResourceVersion = "3"
 	p, err := kubeClient.CoreV1().Pods(defaultNS).Update(context.TODO(), &testPod, metav1.UpdateOptions{})
 	r.Nil(err, "Pod update failed")
 	t.Logf("successfully updated Pod: %v", p)
@@ -367,7 +358,6 @@ func TestPodUpdate(t *testing.T) {
 
 	testPod := getTestPod()
 	testPod.Spec.Containers[0].Ports[0].ContainerPort = 8080
-	testPod.ResourceVersion = "2"
 	p, err := kubeClient.CoreV1().Pods(defaultNS).Update(context.TODO(), &testPod, metav1.UpdateOptions{})
 	r.Nil(err, "Pod creation failed")
 	t.Logf("successfully created Pod: %v", p)
