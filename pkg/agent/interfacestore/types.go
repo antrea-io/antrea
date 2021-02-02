@@ -84,6 +84,7 @@ type InterfaceStore interface {
 	GetInterface(interfaceKey string) (*InterfaceConfig, bool)
 	GetInterfaceByName(interfaceName string) (*InterfaceConfig, bool)
 	GetContainerInterface(containerID string) (*InterfaceConfig, bool)
+	GetInterfacesByEntity(name string, namespace string) []*InterfaceConfig
 	GetContainerInterfacesByPod(podName string, podNamespace string) []*InterfaceConfig
 	GetInterfaceByIP(interfaceIP string) (*InterfaceConfig, bool)
 	GetNodeTunnelInterface(nodeName string) (*InterfaceConfig, bool)

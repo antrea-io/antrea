@@ -1,4 +1,4 @@
-// Copyright 2020 Antrea Authors
+// Copyright 2021 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -172,6 +172,20 @@ func (m *MockInterfaceStore) GetInterfaceKeysByType(arg0 interfacestore.Interfac
 func (mr *MockInterfaceStoreMockRecorder) GetInterfaceKeysByType(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetInterfaceKeysByType", reflect.TypeOf((*MockInterfaceStore)(nil).GetInterfaceKeysByType), arg0)
+}
+
+// GetInterfacesByEntity mocks base method
+func (m *MockInterfaceStore) GetInterfacesByEntity(arg0, arg1 string) []*interfacestore.InterfaceConfig {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetInterfacesByEntity", arg0, arg1)
+	ret0, _ := ret[0].([]*interfacestore.InterfaceConfig)
+	return ret0
+}
+
+// GetInterfacesByEntity indicates an expected call of GetInterfacesByEntity
+func (mr *MockInterfaceStoreMockRecorder) GetInterfacesByEntity(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetInterfacesByEntity", reflect.TypeOf((*MockInterfaceStore)(nil).GetInterfacesByEntity), arg0, arg1)
 }
 
 // GetInterfacesByType mocks base method
