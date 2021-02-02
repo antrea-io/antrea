@@ -541,8 +541,8 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule, 
 	if newRule.Direction == v1beta2.DirectionIn {
 		from1 := groupMembersToOFAddresses(newRule.FromAddresses)
 		from2 := ipBlocksToOFAddresses(newRule.From.IPBlocks, r.ipv4Enabled, r.ipv6Enabled)
-		addedFrom := groupMembersToOFAddresses(newRule.FromAddresses.Difference(lastRealized.FromAddresses))
-		deletedFrom := groupMembersToOFAddresses(lastRealized.FromAddresses.Difference(newRule.FromAddresses))
+		addedFrom := ipsToOFAddresses(newRule.FromAddresses.IPDifference(lastRealized.FromAddresses))
+		deletedFrom := ipsToOFAddresses(lastRealized.FromAddresses.IPDifference(newRule.FromAddresses))
 
 		membersByServicesMap, servicesMap := groupMembersByServices(newRule.Services, newRule.TargetMembers)
 		for svcKey, members := range membersByServicesMap {

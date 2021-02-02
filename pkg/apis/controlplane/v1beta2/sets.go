@@ -15,7 +15,10 @@
 package v1beta2
 
 import (
+	"net"
 	"strings"
+
+	"k8s.io/apimachinery/pkg/util/sets"
 )
 
 // groupMemberKey is used to uniquely identify GroupMember.
@@ -85,6 +88,22 @@ func (s GroupMemberSet) Difference(o GroupMemberSet) GroupMemberSet {
 		}
 	}
 	return result
+}
+
+// IPDifference returns a String set of GroupMember IPs that are not in o.
+func (s GroupMemberSet) IPDifference(o GroupMemberSet) sets.String {
+	sIPs, oIPs := sets.NewString(), sets.NewString()
+	for _, m := range s {
+		for _, ip := range m.IPs {
+			sIPs.Insert(net.IP(ip).String())
+		}
+	}
+	for _, m := range o {
+		for _, ip := range m.IPs {
+			oIPs.Insert(net.IP(ip).String())
+		}
+	}
+	return sIPs.Difference(oIPs)
 }
 
 // Union returns a new set which includes items in either m or o.
