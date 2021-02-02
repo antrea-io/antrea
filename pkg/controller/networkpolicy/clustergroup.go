@@ -189,7 +189,7 @@ func (n *NetworkPolicyController) syncInternalGroup(key string) error {
 		pods, _ := n.processSelector(groupSelector)
 		memberSet := controlplane.GroupMemberSet{}
 		for _, pod := range pods {
-			if pod.Status.PodIP == "" {
+			if len(pod.Status.PodIPs) == 0 {
 				// No need to insert Pod IPAddress when it is unset.
 				continue
 			}

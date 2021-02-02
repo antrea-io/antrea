@@ -309,8 +309,8 @@ func TestProcessAntreaNetworkPolicy(t *testing.T) {
 					},
 				},
 				AppliedToGroups: []string{
-					getNormalizedUID(toGroupSelector("ns3", &selectorA, nil, nil).NormalizedName),
 					getNormalizedUID(toGroupSelector("ns3", &selectorB, nil, nil).NormalizedName),
+					getNormalizedUID(toGroupSelector("ns3", &selectorA, nil, nil).NormalizedName),
 				},
 				AppliedToPerRule: true,
 			},
