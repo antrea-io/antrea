@@ -134,7 +134,7 @@ func (c *NPLController) RemoveNPLAnnotationFromPods() {
 		if _, exists := pod.Annotations[NPLAnnotationKey]; !exists {
 			continue
 		}
-		removePodAnnotation(&pod)
+		removePodAnnotation(&podList.Items[i])
 		c.updatePodAnnotation(&podList.Items[i])
 	}
 	klog.Infof("Removed all NodePortLocal annotations from all Pods")
