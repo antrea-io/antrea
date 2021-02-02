@@ -33,6 +33,8 @@ import (
 	"k8s.io/client-go/tools/cache"
 )
 
+// Set resyncPeriod to 0 to disable resyncing.
+// UpdateFunc event handler will be called only when the object is actually updated.
 const resyncPeriod = 0 * time.Minute
 
 // InitializeNPLAgent initializes the NodePortLocal (NPL) agent.
