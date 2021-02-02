@@ -1488,11 +1488,9 @@ func (n *NetworkPolicyController) syncAppliedToGroup(key string) error {
 	memberSetByNode := make(map[string]controlplane.GroupMemberSet)
 	scheduledPodNum, scheduledExtEntityNum := 0, 0
 	appGroupNodeNames := sets.String{}
-	n.appliedToGroupMutex.Lock()
 	appliedToGroupObj, found, _ := n.appliedToGroupStore.Get(key)
 	if !found {
 		klog.V(2).Infof("AppliedToGroup %s not found.", key)
-		n.appliedToGroupMutex.Unlock()
 		return nil
 	}
 	appliedToGroup := appliedToGroupObj.(*antreatypes.AppliedToGroup)
@@ -1534,7 +1532,6 @@ func (n *NetworkPolicyController) syncAppliedToGroup(key string) error {
 		SpanMeta:          antreatypes.SpanMeta{NodeNames: appGroupNodeNames},
 	}
 	n.appliedToGroupStore.Update(updatedAppliedToGroup)
-	n.appliedToGroupMutex.Unlock()
 	// Get all internal NetworkPolicy objects that refers this AppliedToGroup.
 	// Note that this must be executed after storing the result, to ensure that
 	// both of the NetworkPolicies that referred it before storing it and the

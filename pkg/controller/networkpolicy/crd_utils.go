@@ -125,38 +125,20 @@ func (n *NetworkPolicyController) toAntreaPeerForCRD(peers []secv1alpha1.Network
 func (n *NetworkPolicyController) createAppliedToGroupForClusterGroupCRD(cg *v1alpha2.ClusterGroup) string {
 	// Find the internal Group corresponding to this ClusterGroup
 	igKey := internalGroupKeyFunc(cg)
-	ig, found, _ := n.internalGroupStore.Get(igKey)
+	_, found, _ := n.internalGroupStore.Get(igKey)
 	if !found {
 		klog.V(2).Infof("Internal group %s not found", igKey)
 		return ""
 	}
-	intGrp := ig.(*antreatypes.Group)
-	n.appliedToGroupMutex.Lock()
 	// Check to see if the AppliedToGroup already exists
-	atgObj, found, _ := n.appliedToGroupStore.Get(igKey)
+	_, found, _ = n.appliedToGroupStore.Get(igKey)
 	if found {
-		atg := atgObj.(*antreatypes.AppliedToGroup)
-		if atg.Selector.NormalizedName != intGrp.Selector.NormalizedName {
-			// Update AppliedToGroup object for this Cluster Group.
-			appliedToGroup := &antreatypes.AppliedToGroup{
-				UID:               atg.UID,
-				Name:              atg.Name,
-				SpanMeta:          atg.SpanMeta,
-				GroupMemberByNode: atg.GroupMemberByNode,
-				Selector:          intGrp.Selector,
-			}
-			n.appliedToGroupStore.Update(appliedToGroup)
-			klog.V(2).Infof("Updated existing AppliedToGroup %v corresponding to ClusterGroup CRD %s", appliedToGroup.UID, intGrp.Name)
-		}
-		n.appliedToGroupMutex.Unlock()
 		return igKey
 	}
-	n.appliedToGroupMutex.Unlock()
 	// Create an AppliedToGroup object for this internal Group.
 	appliedToGroup := &antreatypes.AppliedToGroup{
-		UID:      types.UID(igKey),
-		Name:     igKey,
-		Selector: intGrp.Selector,
+		UID:  types.UID(igKey),
+		Name: igKey,
 	}
 	klog.V(2).Infof("Creating new AppliedToGroup %s with selector (%s) corresponding to ClusterGroup CRD", appliedToGroup.Name, appliedToGroup.Selector.NormalizedName)
 	n.appliedToGroupStore.Create(appliedToGroup)
