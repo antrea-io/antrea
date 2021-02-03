@@ -202,10 +202,6 @@ type NetworkPolicyController struct {
 	// concurrent access during updates to the internal NetworkPolicy object.
 	internalNetworkPolicyMutex sync.RWMutex
 
-	// appliedToGroupMutex protects the appliedToGroupStore from
-	// concurrent access during updates to the AppliedToGroup object.
-	appliedToGroupMutex sync.RWMutex
-
 	// heartbeatCh is an internal channel for testing. It's used to know whether all tasks have been
 	// processed, and to count executions of each function.
 	heartbeatCh chan heartbeat
@@ -1560,6 +1556,9 @@ func (n *NetworkPolicyController) getAppliedToWorkloads(g *antreatypes.AppliedTo
 		ig := intGroup.(*antreatypes.Group)
 		// Generate the list of Pods based on the GroupMembers set in the internal Group.
 		for _, gm := range ig.GroupMembers {
+			// TODO: These reads can be avoided if we structure internal Group to include
+			// PodRef including NodeName, IPs and Ports and then add filter funcs to remove
+			// IPs for AppliedToGroups and NodeNames for AddressGroups.
 			pod, err := n.podLister.Pods(gm.Pod.Namespace).Get(gm.Pod.Name)
 			if err != nil {
 				// Pod no longer exists, continue processing.
