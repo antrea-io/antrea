@@ -172,10 +172,14 @@ tables.
 
 #### Antrea Controller Metrics
 
+- **antrea_controller_acnp_status_updates:** The total number of actual
+status updates performed for Antrea ClusterNetworkPolicy Custom Resources
 - **antrea_controller_address_group_processed:** The total number of
 address-group processed
 - **antrea_controller_address_group_sync_duration_milliseconds:** The duration
 of syncing address-group
+- **antrea_controller_anp_status_updates:** The total number of actual status
+updates performed for Antrea NetworkPolicy Custom Resources
 - **antrea_controller_applied_to_group_processed:** The total number of
 applied-to-group processed
 - **antrea_controller_applied_to_group_sync_duration_milliseconds:** The
