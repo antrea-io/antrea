@@ -31,6 +31,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/informers"
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	clientset "k8s.io/client-go/kubernetes"
@@ -42,13 +43,29 @@ import (
 // UpdateFunc event handler will be called only when the object is actually updated.
 const resyncPeriod = 0 * time.Minute
 
-func cleanupNPLAnnotationForPod(kubeClient clientset.Interface, pod *corev1.Pod) error {
+func cleanupNPLAnnotationForPod(kubeClient clientset.Interface, pod corev1.Pod) error {
+	type patchStringValue struct {
+		Op    string            `json:"op"`
+		Path  string            `json:"path"`
+		Value map[string]string `json:"value"`
+	}
+
 	_, ok := pod.Annotations[nplk8s.NPLAnnotationKey]
 	if !ok {
 		return nil
 	}
-	delete(pod.Annotations, nplk8s.NPLAnnotationKey)
-	if _, err := kubeClient.CoreV1().Pods(pod.Namespace).Update(context.TODO(), pod, metav1.UpdateOptions{}); err != nil {
+	annotations := pod.Annotations
+	delete(annotations, nplk8s.NPLAnnotationKey)
+	payload := []patchStringValue{
+		{
+			Op:    "replace",
+			Path:  "/metadata/annotations",
+			Value: annotations,
+		},
+	}
+	payloadBytes, _ := json.Marshal(payload)
+	if _, err := kubeClient.CoreV1().Pods(pod.Namespace).Patch(context.TODO(), pod.Name, types.JSONPatchType,
+		payloadBytes, metav1.PatchOptions{}); err != nil {
 		return fmt.Errorf("unable to update Annotation for Pod %s/%s, %s", pod.Namespace,
 			pod.Name, err.Error())
 	}
@@ -91,11 +108,10 @@ func getPodsAndGenRules(kubeClient clientset.Interface, portTable *portcache.Por
 			continue
 		}
 		nplData := []nplk8s.NPLAnnotation{}
-		podCopy := pod.DeepCopy()
 		err := json.Unmarshal([]byte(nplAnnotation), &nplData)
 		if err != nil {
 			// if there's an error in this NPL Annotation, clean it up
-			err := cleanupNPLAnnotationForPod(kubeClient, podCopy)
+			err := cleanupNPLAnnotationForPod(kubeClient, pod)
 			if err != nil {
 				return err
 			}
@@ -105,7 +121,7 @@ func getPodsAndGenRules(kubeClient clientset.Interface, portTable *portcache.Por
 		for _, npl := range nplData {
 			if npl.NodePort > portTable.EndPort || npl.NodePort < portTable.StartPort {
 				// invalid port, cleanup the NPL Annotation
-				if err := cleanupNPLAnnotationForPod(kubeClient, podCopy); err != nil {
+				if err := cleanupNPLAnnotationForPod(kubeClient, pod); err != nil {
 					return err
 				}
 			} else {
