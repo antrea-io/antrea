@@ -89,7 +89,7 @@ func assignPodAnnotation(pod *corev1.Pod, nodeIP string, containerPort, nodePort
 }
 
 func removePodAnnotation(pod *corev1.Pod) {
-	klog.V(2).Infof("Removing all NodePortLocal annotation from Pod: %s/%s", pod.Namespace, pod.Name)
+	klog.V(2).Infof("Removing entire NodePortLocal annotation from Pod: %s/%s", pod.Namespace, pod.Name)
 	delete(pod.Annotations, NPLAnnotationKey)
 }
 
@@ -97,7 +97,7 @@ func removeFromPodAnnotation(pod *corev1.Pod, containerPort int) {
 	var err error
 	current := pod.Annotations
 
-	klog.V(2).Infof("Removing annotation from Pod: %v\tport: %v", pod.Name, containerPort)
+	klog.V(2).Infof("Removing NodePortLocal annotation from Pod: %s/%s\tport: %v", pod.Namespace, pod.Name, containerPort)
 	var annotations []NPLAnnotation
 	if err = json.Unmarshal([]byte(current[NPLAnnotationKey]), &annotations); err != nil {
 		klog.Warningf("Unable to unmarshal NodePortLocal annotation: %v", current[NPLAnnotationKey])

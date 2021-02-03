@@ -344,8 +344,9 @@ func (c *NPLController) handleRemovePod(key string, obj interface{}) error {
 	}
 
 	if obj != nil {
-		newPod := obj.(*corev1.Pod).DeepCopy()
-		if _, exists := newPod.Annotations[NPLAnnotationKey]; exists {
+		pod := obj.(*corev1.Pod)
+		if _, exists := pod.Annotations[NPLAnnotationKey]; exists {
+			newPod := pod.DeepCopy()
 			removePodAnnotation(newPod)
 			return c.updatePodAnnotation(newPod)
 		}
