@@ -289,6 +289,7 @@ function deliver_antrea {
         docker tag "${DOCKER_REGISTRY}/antrea/sonobuoy-systemd-logs:v0.3" "sonobuoy/systemd-logs:v0.3"
     fi
     DOCKER_REGISTRY=${DOCKER_REGISTRY} make
+    DOCKER_REGISTRY=${DOCKER_REGISTRY} make flow-aggregator-ubuntu
 
     echo "====== Delivering Antrea to all the Nodes ======"
     echo "=== Fill serviceCIDRv6 and serviceCIDR ==="
@@ -311,10 +312,13 @@ function deliver_antrea {
 
     cp -f build/yamls/*.yml $WORKDIR
     docker save -o antrea-ubuntu.tar projects.registry.vmware.com/antrea/antrea-ubuntu:latest
+    docker save -o flow-aggregator.tar projects.registry.vmware.com/antrea/flow-aggregator:latest
 
     kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 != role {print $6}' | while read IP; do
         rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no" antrea-ubuntu.tar jenkins@[${IP}]:${WORKDIR}/antrea-ubuntu.tar
+        rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no" flow-aggregator.tar jenkins@[${IP}]:${WORKDIR}/flow-aggregator.tar
         ssh -o StrictHostKeyChecking=no -n jenkins@${IP} "docker images | grep 'antrea-ubuntu' | awk '{print \$3}' | xargs -r docker rmi ; docker load -i ${WORKDIR}/antrea-ubuntu.tar ; docker images | grep '<none>' | awk '{print \$3}' | xargs -r docker rmi" || true
+        ssh -o StrictHostKeyChecking=no -n jenkins@${IP} "docker images | grep 'flow-aggregator' | awk '{print \$3}' | xargs -r docker rmi ; docker load -i ${WORKDIR}/flow-aggregator.tar ; docker images | grep '<none>' | awk '{print \$3}' | xargs -r docker rmi" || true
         if [[ "${DOCKER_REGISTRY}" != "" ]]; then
             ssh -o StrictHostKeyChecking=no -n jenkins@${IP} "docker pull ${DOCKER_REGISTRY}/antrea/sonobuoy-systemd-logs:v0.3 ; docker tag ${DOCKER_REGISTRY}/antrea/sonobuoy-systemd-logs:v0.3 sonobuoy/systemd-logs:v0.3"
         fi

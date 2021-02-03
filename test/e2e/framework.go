@@ -570,7 +570,8 @@ func (data *TestData) deployFlowAggregator(ipfixCollector string) (string, error
 	}
 	if rc, _, _, err = provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl -n %s rollout status deployment/%s --timeout=%v", flowAggregatorNamespace, flowAggregatorDeployment, 2*defaultTimeout)); err != nil || rc != 0 {
 		_, stdout, _, _ := provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl -n %s describe pod", flowAggregatorNamespace))
-		return stdout, fmt.Errorf("error when waiting for flow aggregator rollout to complete. kubectl describe output: %v", stdout)
+		_, logStdout, _, _ := provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl -n %s logs -l app=flow-aggregator", flowAggregatorNamespace))
+		return stdout, fmt.Errorf("error when waiting for flow aggregator rollout to complete. kubectl describe output: %s, logs: %s", stdout, logStdout)
 	}
 	svc, err := data.clientset.CoreV1().Services(flowAggregatorNamespace).Get(context.TODO(), flowAggregatorDeployment, metav1.GetOptions{})
 	if err != nil {

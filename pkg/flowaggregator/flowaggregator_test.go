@@ -28,7 +28,8 @@ import (
 )
 
 const (
-	testTemplateID          = uint16(256)
+	testTemplateIDv4        = uint16(256)
+	testTemplateIDv6        = uint16(257)
 	testExportInterval      = 60 * time.Second
 	testObservationDomainID = 0xabcd
 )
@@ -52,7 +53,8 @@ func TestFlowAggregator_sendTemplateSet(t *testing.T) {
 		nil,
 		testExportInterval,
 		mockIPFIXExpProc,
-		testTemplateID,
+		testTemplateIDv4,
+		testTemplateIDv6,
 		mockIPFIXRegistry,
 		ipfixtest.NewMockIPFIXSet(ctrl),
 		"",
@@ -60,39 +62,50 @@ func TestFlowAggregator_sendTemplateSet(t *testing.T) {
 		testObservationDomainID,
 	}
 
-	// Following consists of all elements that are in ianaInfoElements and antreaInfoElements (globals)
-	// Only the element name is needed, other arguments have dummy values.
-	elemList := make([]*ipfixentities.InfoElementWithValue, 0)
-	for i, ie := range ianaInfoElements {
-		elemList = append(elemList, ipfixentities.NewInfoElementWithValue(ipfixentities.NewInfoElement(ie, 0, 0, ipfixregistry.IANAEnterpriseID, 0), nil))
-		mockIPFIXRegistry.EXPECT().GetInfoElement(ie, ipfixregistry.IANAEnterpriseID).Return(elemList[i].Element, nil)
-	}
-	for i, ie := range ianaReverseInfoElements {
-		elemList = append(elemList, ipfixentities.NewInfoElementWithValue(ipfixentities.NewInfoElement(ie, 0, 0, ipfixregistry.IANAReversedEnterpriseID, 0), nil))
-		mockIPFIXRegistry.EXPECT().GetInfoElement(ie, ipfixregistry.IANAReversedEnterpriseID).Return(elemList[i+len(ianaInfoElements)].Element, nil)
-	}
-	for i, ie := range antreaInfoElements {
-		elemList = append(elemList, ipfixentities.NewInfoElementWithValue(ipfixentities.NewInfoElement(ie, 0, 0, ipfixregistry.AntreaEnterpriseID, 0), nil))
-		mockIPFIXRegistry.EXPECT().GetInfoElement(ie, ipfixregistry.AntreaEnterpriseID).Return(elemList[i+len(ianaInfoElements)+len(ianaReverseInfoElements)].Element, nil)
-	}
-	for i, ie := range aggregatorElements {
-		elemList = append(elemList, ipfixentities.NewInfoElementWithValue(ipfixentities.NewInfoElement(ie, 0, 0, ipfixregistry.IANAEnterpriseID, 0), nil))
-		mockIPFIXRegistry.EXPECT().GetInfoElement(ie, ipfixregistry.IANAEnterpriseID).Return(elemList[i+len(ianaInfoElements)+len(ianaReverseInfoElements)+len(antreaInfoElements)].Element, nil)
-	}
-	for i, ie := range antreaSourceStatsElementList {
-		elemList = append(elemList, ipfixentities.NewInfoElementWithValue(ipfixentities.NewInfoElement(ie, 0, 0, ipfixregistry.AntreaEnterpriseID, 0), nil))
-		mockIPFIXRegistry.EXPECT().GetInfoElement(ie, ipfixregistry.AntreaEnterpriseID).Return(elemList[i+len(ianaInfoElements)+len(ianaReverseInfoElements)+len(antreaInfoElements)+len(aggregatorElements)].Element, nil)
-	}
+	for _, isIPv6 := range []bool{false, true} {
+		ianaInfoElements := ianaInfoElementsIPv4
+		antreaInfoElements := antreaInfoElementsIPv4
+		aggregatorElements := aggregatorElementsIPv4
+		testTemplateID := fa.templateIDv4
+		if isIPv6 {
+			ianaInfoElements = ianaInfoElementsIPv6
+			antreaInfoElements = antreaInfoElementsIPv6
+			aggregatorElements = aggregatorElementsIPv6
+			testTemplateID = fa.templateIDv6
+		}
+		// Following consists of all elements that are in ianaInfoElements and antreaInfoElements (globals)
+		// Only the element name is needed, other arguments have dummy values.
+		elemList := make([]*ipfixentities.InfoElementWithValue, 0)
+		for i, ie := range ianaInfoElements {
+			elemList = append(elemList, ipfixentities.NewInfoElementWithValue(ipfixentities.NewInfoElement(ie, 0, 0, ipfixregistry.IANAEnterpriseID, 0), nil))
+			mockIPFIXRegistry.EXPECT().GetInfoElement(ie, ipfixregistry.IANAEnterpriseID).Return(elemList[i].Element, nil)
+		}
+		for i, ie := range ianaReverseInfoElements {
+			elemList = append(elemList, ipfixentities.NewInfoElementWithValue(ipfixentities.NewInfoElement(ie, 0, 0, ipfixregistry.IANAReversedEnterpriseID, 0), nil))
+			mockIPFIXRegistry.EXPECT().GetInfoElement(ie, ipfixregistry.IANAReversedEnterpriseID).Return(elemList[i+len(ianaInfoElements)].Element, nil)
+		}
+		for i, ie := range antreaInfoElements {
+			elemList = append(elemList, ipfixentities.NewInfoElementWithValue(ipfixentities.NewInfoElement(ie, 0, 0, ipfixregistry.AntreaEnterpriseID, 0), nil))
+			mockIPFIXRegistry.EXPECT().GetInfoElement(ie, ipfixregistry.AntreaEnterpriseID).Return(elemList[i+len(ianaInfoElements)+len(ianaReverseInfoElements)].Element, nil)
+		}
+		for i, ie := range aggregatorElements {
+			elemList = append(elemList, ipfixentities.NewInfoElementWithValue(ipfixentities.NewInfoElement(ie, 0, 0, ipfixregistry.IANAEnterpriseID, 0), nil))
+			mockIPFIXRegistry.EXPECT().GetInfoElement(ie, ipfixregistry.IANAEnterpriseID).Return(elemList[i+len(ianaInfoElements)+len(ianaReverseInfoElements)+len(antreaInfoElements)].Element, nil)
+		}
+		for i, ie := range antreaSourceStatsElementList {
+			elemList = append(elemList, ipfixentities.NewInfoElementWithValue(ipfixentities.NewInfoElement(ie, 0, 0, ipfixregistry.AntreaEnterpriseID, 0), nil))
+			mockIPFIXRegistry.EXPECT().GetInfoElement(ie, ipfixregistry.AntreaEnterpriseID).Return(elemList[i+len(ianaInfoElements)+len(ianaReverseInfoElements)+len(antreaInfoElements)+len(aggregatorElements)].Element, nil)
+		}
+		for i, ie := range antreaDestinationStatsElementList {
+			elemList = append(elemList, ipfixentities.NewInfoElementWithValue(ipfixentities.NewInfoElement(ie, 0, 0, ipfixregistry.AntreaEnterpriseID, 0), nil))
+			mockIPFIXRegistry.EXPECT().GetInfoElement(ie, ipfixregistry.AntreaEnterpriseID).Return(elemList[i+len(ianaInfoElements)+len(ianaReverseInfoElements)+len(antreaInfoElements)+len(aggregatorElements)+len(antreaSourceStatsElementList)].Element, nil)
+		}
+		mockTempSet.EXPECT().AddRecord(elemList, testTemplateID).Return(nil)
+		// Passing 0 for sentBytes as it is not used anywhere in the test. If this not a call to mock, the actual sentBytes
+		// above elements: ianaInfoElements, ianaReverseInfoElements and antreaInfoElements.
+		mockIPFIXExpProc.EXPECT().SendSet(mockTempSet).Return(0, nil)
 
-	for i, ie := range antreaDestinationStatsElementList {
-		elemList = append(elemList, ipfixentities.NewInfoElementWithValue(ipfixentities.NewInfoElement(ie, 0, 0, ipfixregistry.AntreaEnterpriseID, 0), nil))
-		mockIPFIXRegistry.EXPECT().GetInfoElement(ie, ipfixregistry.AntreaEnterpriseID).Return(elemList[i+len(ianaInfoElements)+len(ianaReverseInfoElements)+len(antreaInfoElements)+len(aggregatorElements)+len(antreaSourceStatsElementList)].Element, nil)
+		_, err := fa.sendTemplateSet(mockTempSet, isIPv6)
+		assert.NoErrorf(t, err, "Error in sending template record: %v, isIPv6: %v", err, isIPv6)
 	}
-	mockTempSet.EXPECT().AddRecord(elemList, testTemplateID).Return(nil)
-	// Passing 0 for sentBytes as it is not used anywhere in the test. If this not a call to mock, the actual sentBytes
-	// above elements: ianaInfoElements, ianaReverseInfoElements and antreaInfoElements.
-	mockIPFIXExpProc.EXPECT().SendSet(mockTempSet).Return(0, nil)
-
-	_, err := fa.sendTemplateSet(mockTempSet)
-	assert.NoErrorf(t, err, "Error in sending template record: %v", err)
 }
