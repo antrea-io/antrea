@@ -83,9 +83,9 @@ var (
 	// uuidNamespace is a uuid.UUID type generated from a string to be
 	// used to generate uuid.UUID for internal Antrea objects like
 	// AppliedToGroup, AddressGroup etc.
-	// 5a5e7dd9-e3fb-49bb-b263-9bab25c95841 was generated using
+	// e4f24a48-ca1f-4d5b-819c-ea7632b22115 was generated using
 	// uuid.NewV4() function.
-	uuidNamespace = uuid.FromStringOrNil("5a5e7dd9-e3fb-49bb-b263-9bab25c95841")
+	uuidNamespace = uuid.FromStringOrNil("e4f24a48-ca1f-4d5b-819c-ea7632b22115")
 
 	// matchAllPeer is a NetworkPolicyPeer matching all source/destination IP addresses. Both IPv4 Any (0.0.0.0/0) and
 	// IPv6 Any (::/0) are added into the IPBlocks, and Antrea Agent should decide if both two are used according the
@@ -1237,7 +1237,7 @@ func (n *NetworkPolicyController) syncAddressGroup(key string) error {
 	pods, externalEntities := n.processSelector(groupSelector)
 	memberSet := controlplane.GroupMemberSet{}
 	for _, pod := range pods {
-		if pod.Status.PodIP == "" {
+		if len(pod.Status.PodIPs) == 0 {
 			// No need to insert Pod IPAddress when it is unset.
 			continue
 		}
