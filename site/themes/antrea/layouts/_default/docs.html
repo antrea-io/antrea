@@ -1,6 +1,6 @@
 {{ define "main" }}
 	<main>
-		<div class="hero subpage">
+		<div class="hero subpage-hero">
 			<div class="wrapper">
 				<h1>Documentation</h1>
 			</div>
@@ -10,6 +10,7 @@
 			<div class="docs-content">
 				{{ .Content }}
 			</div>
+			{{ partial "docs-right-bar.html" . }}
 		</div>
 	</main>
 {{ end }}

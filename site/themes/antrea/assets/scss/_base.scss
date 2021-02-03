@@ -43,13 +43,14 @@ h1, h2, h3, h4, h5, h6 {
     font-weight: 300;
 }
 h1 {
-    font-size: 36px;
-}
-h2 {
     font-size: 28px;
 }
-h3 {
+h2 {
     font-size: 22px;
+    color: #333;
+}
+h3 {
+    font-size: 20px;
 }
 h4 {
     font-size: 18px;
@@ -68,6 +69,9 @@ p {
     font-weight: 300;
     font-size: 14px;
     color: $grey;
+    &.intro {
+        font-size: 18px;
+    }
 }
 a {
     font-size: 16px;
@@ -115,7 +119,7 @@ button {
 
 .grid.three {
     display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     row-gap: 20px;
     column-gap: 20px;
     @include breakpoint(small) {
