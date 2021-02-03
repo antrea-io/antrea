@@ -185,7 +185,7 @@ function deliver_antrea_windows {
 
     git show --numstat
     make clean
-    docker images | grep 'antrea-ubuntu' | awk '{print $3}' | xargs -r docker rmi || true
+    docker images | grep 'antrea-ubuntu' | awk '{print $3}' | xargs -r docker rmi -f || true
     docker images | grep '<none>' | awk '{print $3}' | xargs -r docker rmi || true
     if [[ "$DOCKER_REGISTRY" != "" ]]; then
         pull_antrea_ubuntu_image
@@ -281,7 +281,7 @@ function deliver_antrea {
 
     git show --numstat
     make clean
-    docker images | grep 'antrea-ubuntu' | awk '{print $3}' | xargs -r docker rmi || true
+    docker images | grep 'antrea-ubuntu' | awk '{print $3}' | xargs -r docker rmi -f || true
     docker images | grep '<none>' | awk '{print $3}' | xargs -r docker rmi || true
     if [[ "${DOCKER_REGISTRY}" != "" ]]; then
         pull_antrea_ubuntu_image
