@@ -159,8 +159,8 @@ None
 
 `NodePortLocal` is a feature that runs as part of the Antrea Agent, through which
 each port of a Pod can be reached from external network using a port in the Node
-in which the Pod is running. In addition, to enabling NodePortLocal in features gates,
-the value of `nplPortRange` must be set in Antrea Agent configuration through Configmap.
+on which the Pod is running. In addition to enabling NodePortLocal feature gate,
+the value of `nplPortRange` must be set in Antrea Agent configuration through ConfigMap.
 Ports from a Node would only be allocated from the range of ports specified in `nplPortRange`.
 
 Pods can be selected for `NodePortLocal` by tagging a Service with Annotation:
