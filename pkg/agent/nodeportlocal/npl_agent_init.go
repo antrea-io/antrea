@@ -85,13 +85,13 @@ func getPodsAndGenRules(kubeClient clientset.Interface, portTable *portcache.Por
 		// check if a valid NPL Annotation exists for this Pod:
 		//   if yes, verifiy validity of the Node port, update the port table and add a rule to the
 		//   rules buffer.
-		podCopy := pod.DeepCopy()
 		annotations := pod.GetAnnotations()
 		nplAnnotation, ok := annotations[nplk8s.NPLAnnotationKey]
 		if !ok {
 			continue
 		}
 		nplData := []nplk8s.NPLAnnotation{}
+		podCopy := pod.DeepCopy()
 		err := json.Unmarshal([]byte(nplAnnotation), &nplData)
 		if err != nil {
 			// if there's an error in this NPL Annotation, clean it up
