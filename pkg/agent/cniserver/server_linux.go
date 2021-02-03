@@ -31,7 +31,7 @@ func (s *CNIServer) hostNetNsPath(netNS string) string {
 	return s.hostProcPathPrefix + netNS
 }
 
-// isInfraContainer return if a container is infra container according to the network namespace path.
+// isInfraContainer returns true if a container is infra container according to the network namespace path.
 // Always return true on Linux platform, because kubelet only call CNI request for infra container.
 func isInfraContainer(netNS string) bool {
 	return true

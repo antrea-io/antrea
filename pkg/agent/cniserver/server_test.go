@@ -526,7 +526,7 @@ func TestBuildOVSPortExternalIDs(t *testing.T) {
 		PortUUID: "12345678",
 		OFPort:   int32(1),
 	}
-	ifaceConfig := ParseOVSPortInterfaceConfig(mockPort, portConfig)
+	ifaceConfig := ParseOVSPortInterfaceConfig(mockPort, portConfig, true)
 	assert.Equal(t, len(containerIPs), len(ifaceConfig.IPs))
 	for _, ip1 := range containerIPs {
 		existed := false

@@ -450,6 +450,7 @@ func (s *CNIServer) CmdAdd(ctx context.Context, request *cnipb.CniCmdRequest) (*
 		cniConfig.DeviceID,
 		result,
 		isInfraContainer,
+		s.containerAccess,
 	); err != nil {
 		klog.Errorf("Failed to configure interfaces for container %s: %v", cniConfig.ContainerId, err)
 		return s.configInterfaceFailureResponse(err), nil
@@ -613,7 +614,8 @@ func (s *CNIServer) interceptAdd(cniConfig *CNIConfig) (*cnipb.CniCmdResponse, e
 		cniConfig.ContainerId,
 		s.hostNetNsPath(cniConfig.Netns),
 		cniConfig.Ifname,
-		prevResult.IPs); err != nil {
+		prevResult.IPs,
+		s.containerAccess); err != nil {
 		return &cnipb.CniCmdResponse{CniResult: result}, fmt.Errorf("failed to connect container %s to ovs: %w", cniConfig.ContainerId, err)
 	}
 	// Notify the Pod update event to required components.
@@ -653,7 +655,7 @@ func (s *CNIServer) reconcile() error {
 		return fmt.Errorf("failed to list Pods running on Node %s: %v", s.nodeConfig.Name, err)
 	}
 
-	return s.podConfigurator.reconcile(pods.Items)
+	return s.podConfigurator.reconcile(pods.Items, s.containerAccess)
 }
 
 func init() {
