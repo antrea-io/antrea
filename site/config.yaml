@@ -2,6 +2,9 @@ baseURL: "https://antrea.io/"
 languageCode: "en-us"
 title: "Antrea"
 theme: "antrea"
+outputs:
+  home: [ "HTML", "REDIRECTS" ]
+  posts: [ "HTML", "RSS" ]
 pygmentsCodefences: true
 pygmentsStyle: "pygments"
 markup:
@@ -21,6 +24,8 @@ params:
   twitter_url: "https://twitter.com/projectantrea"
   github_url: "https://github.com/vmware-tanzu/antrea"
   slack_url: "https://kubernetes.slack.com/archives/CR2J23M0X"
+  github_base_url: "https://github.com/vmware-tanzu/antrea/site"
+  rss_url: "/blog/feed.xml"
   use_advanced_docs: true
   docs_right_sidebar: true
   docs_search: false
@@ -31,3 +36,13 @@ params:
   docs_versions:
     - v0.30.0
     - v0.11.1
+mediaTypes:
+  "text/netlify":
+    delimiter: ""
+outputFormats:
+  REDIRECTS:
+    mediaType: "text/netlify"
+    baseName: "_redirects"
+  RSS:
+    mediatype: "application/rss"
+    baseName: "feed"
