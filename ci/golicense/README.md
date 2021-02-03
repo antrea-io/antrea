@@ -1,16 +1,19 @@
 # OSS License Scanner for Antrea Binaries
 
 The code in this folder integrates with
-[golicense](https://github.com/mitchellh/golicense), a command-line tool that
-scans compiled Go binaries and outputs all their dependencies with their
-respective licenses.
+[lichen](https://github.com/uw-labs/lichen), a command-line tool that scans
+compiled Go binaries and outputs all their dependencies with their respective
+licenses. Lichen is heavily inspired from
+[golicense](https://github.com/mitchellh/golicense). Antrea originally used
+golicense, but the project is no longer actively maintained and does not support
+Windows binaries. Unlike golicense, lichen does not query the Github API;
+therefore not requiring an API token and avoiding API rate-limiting issues.
 
 The [run.sh](run.sh) script is meant to be run as a CI job, but can also be run
-locally, provided you provide a valid `GITHUB_TOKEN` that will be used by
-golicense to make Github API calls:
+locally:
 
 ```bash
-GITHUB_TOKEN=<your token here> ./ci/golicense/run.sh <path to Antrea binaries directory> <output directory for generated reports>
+./ci/golicense/run.sh <path to Antrea binaries directory> <output directory for generated reports>
 ```
 
 ## Supported OSS Licenses
@@ -28,10 +31,9 @@ which are business-friendly are usually accepted, while [copyleft
 licenses](https://en.wikipedia.org/wiki/Copyleft) are not. This is to ensure
 that Antrea can easily be used in commercial derivative works.
 
-## Golicense: Binary-based Analysis vs Source-based Analysis
+## Lichen: Binary-based Analysis vs Source-based Analysis
 
-We chose golicense, which uses binary-based dependency analysis, for two
-reasons:
+We chose lichen, which uses binary-based dependency analysis, for two reasons:
 
 * It works very well, and there is no source-based analysis alternative which is
   as popular and as easy to use. If we find one, we would consider running it as
