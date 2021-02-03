@@ -44,4 +44,7 @@ type Interface interface {
 	// UnMigrateRoutesFromGw should move routes back from local gateway to original device linkName
 	// if linkName is nil, it should remove the routes.
 	UnMigrateRoutesFromGw(route *net.IPNet, linkName string) error
+
+	// Run starts the sync loop.
+	Run(stopCh <-chan struct{})
 }

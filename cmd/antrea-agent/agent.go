@@ -260,6 +260,8 @@ func run(o *Options) error {
 
 	log.StartLogFileNumberMonitor(stopCh)
 
+	go routeClient.Run(stopCh)
+
 	go cniServer.Run(stopCh)
 
 	informerFactory.Start(stopCh)
