@@ -943,6 +943,9 @@ func TestAddPod(t *testing.T) {
 						},
 					},
 					PodIP: "1.2.3.4",
+					PodIPs: []corev1.PodIP{
+						{IP: "1.2.3.4"},
+					},
 				},
 			},
 			appGroupMatch:        false,
@@ -971,6 +974,9 @@ func TestAddPod(t *testing.T) {
 						},
 					},
 					PodIP: "1.2.3.4",
+					PodIPs: []corev1.PodIP{
+						{IP: "1.2.3.4"},
+					},
 				},
 			},
 			appGroupMatch:        false,
@@ -1002,6 +1008,9 @@ func TestAddPod(t *testing.T) {
 						},
 					},
 					PodIP: "1.2.3.4",
+					PodIPs: []corev1.PodIP{
+						{IP: "1.2.3.4"},
+					},
 				},
 			},
 			appGroupMatch:        true,
@@ -1030,6 +1039,9 @@ func TestAddPod(t *testing.T) {
 						},
 					},
 					PodIP: "1.2.3.4",
+					PodIPs: []corev1.PodIP{
+						{IP: "1.2.3.4"},
+					},
 				},
 			},
 			appGroupMatch:        false,
@@ -1058,6 +1070,9 @@ func TestAddPod(t *testing.T) {
 						},
 					},
 					PodIP: "1.2.3.4",
+					PodIPs: []corev1.PodIP{
+						{IP: "1.2.3.4"},
+					},
 				},
 			},
 			appGroupMatch:        false,
@@ -1091,6 +1106,9 @@ func TestAddPod(t *testing.T) {
 						},
 					},
 					PodIP: "1.2.3.4",
+					PodIPs: []corev1.PodIP{
+						{IP: "1.2.3.4"},
+					},
 				},
 			},
 			appGroupMatch:        true,
@@ -1173,6 +1191,9 @@ func TestAddPod(t *testing.T) {
 						},
 					},
 					PodIP: "1.2.3.4",
+					PodIPs: []corev1.PodIP{
+						{IP: "1.2.3.4"},
+					},
 				},
 			},
 			appGroupMatch:        false,
@@ -2536,22 +2557,22 @@ func TestPodToGroupMember(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			actualMemberPod := podToGroupMember(tt.inputPod, tt.includeIP)
 			if !reflect.DeepEqual(*(*actualMemberPod).Pod, *(tt.expMemberPod).Pod) {
-				t.Errorf("podToMemberPod() got unexpected PodReference %v, want %v", *(*actualMemberPod).Pod, *(tt.expMemberPod).Pod)
+				t.Errorf("podToGroupMember() got unexpected PodReference %v, want %v", *(*actualMemberPod).Pod, *(tt.expMemberPod).Pod)
 			}
 			// Case where the IPAddress must not be populated.
 			if !tt.includeIP {
 				if len(actualMemberPod.IPs) > 0 {
-					t.Errorf("podToMemberPod() got unexpected IP %v, want nil", actualMemberPod.IPs)
+					t.Errorf("podToGroupMember() got unexpected IP %v, want nil", actualMemberPod.IPs)
 				}
 			} else if !comparePodIPs(actualMemberPod.IPs, tt.expMemberPod.IPs) {
-				t.Errorf("podToMemberPod() got unexpected IP %v, want %v", actualMemberPod.IPs, tt.expMemberPod.IPs)
+				t.Errorf("podToGroupMember() got unexpected IP %v, want %v", actualMemberPod.IPs, tt.expMemberPod.IPs)
 			}
 			if !tt.namedPort {
 				if len(actualMemberPod.Ports) > 0 {
-					t.Errorf("podToMemberPod() got unexpected Ports %v, want []", actualMemberPod.Ports)
+					t.Errorf("podToGroupMember() got unexpected Ports %v, want []", actualMemberPod.Ports)
 				}
 			} else if !reflect.DeepEqual(actualMemberPod.Ports, tt.expMemberPod.Ports) {
-				t.Errorf("podToMemberPod() got unexpected Ports %v, want %v", actualMemberPod.Ports, tt.expMemberPod.Ports)
+				t.Errorf("podToGroupMember() got unexpected Ports %v, want %v", actualMemberPod.Ports, tt.expMemberPod.Ports)
 			}
 		})
 	}
