@@ -41,6 +41,7 @@ example, to enable `AntreaProxy` on Linux, edit the Agent configuration in the
 | `Traceflow`             | Agent + Controller | `false` | Alpha | v0.8          | v0.11        | N/A        | Yes                |       |
 | `FlowExporter`          | Agent              | `false` | Alpha | v0.9          | N/A          | N/A        | Yes                |       |
 | `NetworkPolicyStats`    | Agent + Controller | `false` | Alpha | v0.10         | N/A          | N/A        | No                 |       |
+| `NodePortLocal`         | Agent              | `false` | Alpha | v0.13         | N/A          | N/A        | Yes                |       |
 
 ## Description and Requirements of Features
 
@@ -153,3 +154,28 @@ foo           bar                   1          12        1221    2020-09-07T13:2
 #### Requirements for this Feature
 
 None
+
+### NodePortLocal
+
+`NodePortLocal` is a feature that runs as part of the Antrea Agent, through which
+each port of a Pod can be reached from external network using a port in the Node
+in which the Pod is running. In addition, to enabling NodePortLocal in features gates,
+the value of `nplPortRange` must be set in Antrea Agent configuration through Configmap.
+Ports from a Node would only be allocated from the range of ports specified in `nplPortRange`.
+
+Pods can be selected for `NodePortLocal` by tagging a Service with Annotation:
+`nodeportlocal.antrea.io/enabled: "true"`. Consequently, `NodePortLocal` is enabled
+for all the Pods which are selected by the Service through a selector, and the ports of these
+Pods would be reachable through Node port.
+
+The selected Pods would be annotated with the details about allocated Node port(s) for the Pod.
+For example:
+
+    nodeportlocal.antrea.io: '[{"podPort":8080,"nodeIP":"10.10.10.10","nodePort":40002}]'
+
+This annotation denotes that the port 8080 of the Pod can be reached through port 40002 of the
+Node with IP Address 10.10.10.10.
+
+#### Requirements for this Feature
+
+This feature is currently only supported for Nodes running Linux with IPv4 addresses.
