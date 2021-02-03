@@ -166,9 +166,8 @@ func TestInitialize(t *testing.T) {
 		if tc.xtablesHoldDuration > 0 {
 			assert.True(t, initializedTime.After(xtablesReleasedTime), "Initialize shouldn't finish before xtables lock was released")
 		}
-
 		inited2 := make(chan struct{})
-		// Call initialize twice and verify no duplicates
+		t.Log("Calling Initialize twice and verify no duplicates")
 		err = routeClient.Initialize(nodeConfig, func() {
 			close(inited2)
 		})
@@ -232,6 +231,51 @@ func TestInitialize(t *testing.T) {
 			assert.Equal(t, expectedData, string(actualData), "mismatch iptables data in table %s", table)
 		}
 	}
+}
+
+func TestIpTablesSync(t *testing.T) {
+	skipIfNotInContainer(t)
+	gwLink := createDummyGW(t)
+	defer netlink.LinkDel(gwLink)
+
+	routeClient, err := route.NewClient(serviceCIDR, &config.NetworkConfig{TrafficEncapMode: config.TrafficEncapModeEncap}, false)
+	assert.Nil(t, err)
+
+	inited := make(chan struct{})
+	err = routeClient.Initialize(nodeConfig, func() {
+		close(inited)
+	})
+	assert.NoError(t, err)
+	select {
+	case <-inited: // Node network initialized
+	}
+	tcs := []struct {
+		RuleSpec, Cmd, Table, Chain string
+	}{
+		{Table: "raw", Cmd: "-A", Chain: "OUTPUT", RuleSpec: "-m comment --comment \"Antrea: jump to Antrea output rules\" -j ANTREA-OUTPUT"},
+		{Table: "filter", Cmd: "-A", Chain: "ANTREA-FORWARD", RuleSpec: "-i antrea-gw0 -m comment --comment \"Antrea: accept packets from local pods\" -j ACCEPT"},
+	}
+	// we delete some rules, start the sync goroutine, wait for sync operation to restore them.
+	for _, tc := range tcs {
+		delCmd := fmt.Sprintf("iptables -t %s -D %s  %s", tc.Table, tc.Chain, tc.RuleSpec)
+		// #nosec G204: ignore in test code
+		actualData, err := exec.Command("bash", "-c", delCmd).Output()
+		assert.NoError(t, err, "error executing iptables cmd: %s", delCmd)
+		assert.Equal(t, "", string(actualData), "failed to remove iptables rule for %v", tc)
+	}
+	stopCh := make(chan struct{})
+	route.IPTablesSyncInterval = 2 * time.Second
+	go routeClient.Run(stopCh)
+	time.Sleep(route.IPTablesSyncInterval) // wait for one iteration of sync operation.
+	for _, tc := range tcs {
+		saveCmd := fmt.Sprintf("iptables-save -t %s | grep -e '%s %s'", tc.Table, tc.Cmd, tc.Chain)
+		// #nosec G204: ignore in test code
+		actualData, err := exec.Command("bash", "-c", saveCmd).Output()
+		assert.NoError(t, err, "error executing iptables-save cmd")
+		contains := fmt.Sprintf("%s %s %s", tc.Cmd, tc.Chain, tc.RuleSpec)
+		assert.Contains(t, string(actualData), contains, "%s command's output did not contain rule: %s", saveCmd, contains)
+	}
+	close(stopCh)
 }
 
 func TestAddAndDeleteRoutes(t *testing.T) {
