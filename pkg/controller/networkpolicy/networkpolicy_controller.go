@@ -202,10 +202,6 @@ type NetworkPolicyController struct {
 	// concurrent access during updates to the internal NetworkPolicy object.
 	internalNetworkPolicyMutex sync.RWMutex
 
-	// addressGroupMutex protects the addressGroupStore from
-	// concurrent access during updates to the AddressGroup object.
-	addressGroupMutex sync.RWMutex
-
 	// heartbeatCh is an internal channel for testing. It's used to know whether all tasks have been
 	// processed, and to count executions of each function.
 	heartbeatCh chan heartbeat
