@@ -23,7 +23,7 @@ jobs:
     - uses: vmware-tanzu/antrea/ci/gh-actions/has-changes@main
       id: check_diff
       with:
-        args: docs/* ci/jenkins/* *.md
+        args: docs/* ci/jenkins/* *.md hack/.notableofcontents
     outputs:
       has_changes: ${{ steps.check_diff.outputs.has_changes }}
 
