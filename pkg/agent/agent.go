@@ -189,7 +189,7 @@ func (i *Initializer) initInterfaceStore() error {
 			}
 		default:
 			// The port should be for a container interface.
-			intf = cniserver.ParseOVSPortInterfaceConfig(port, ovsPort)
+			intf = cniserver.ParseOVSPortInterfaceConfig(port, ovsPort, true)
 		}
 		if intf != nil {
 			ifaceList = append(ifaceList, intf)
