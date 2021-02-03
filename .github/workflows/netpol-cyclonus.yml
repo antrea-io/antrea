@@ -1,6 +1,7 @@
 name: Kind
 on:
   schedule:
+    # run once a day at midnight
     - cron: '0 0 * * *'
 
 env:
@@ -8,40 +9,8 @@ env:
 
 jobs:
 
-  check-changes:
-    name: Check whether tests need to be run based on diff
-    runs-on: [ubuntu-18.04]
-    steps:
-      - uses: actions/checkout@v2
-        with:
-          fetch-depth: 0
-      - uses: vmware-tanzu/antrea/ci/gh-actions/has-changes@master
-        id: check_diff
-        with:
-          args: docs/* ci/jenkins/* *.md
-    outputs:
-      has_changes: ${{ steps.check_diff.outputs.has_changes }}
-
-  build-antrea-image:
-    name: Build Antrea image to be used for Kind netpol tests
-    needs: check-changes
-    if: ${{ needs.check-changes.outputs.has_changes == 'yes' }}
-    runs-on: [ubuntu-18.04]
-    steps:
-      - uses: actions/checkout@v2
-      - run: make
-      - name: Save Antrea image to tarball
-        run:  docker save -o antrea-ubuntu.tar projects.registry.vmware.com/antrea/antrea-ubuntu:latest
-      - name: Upload Antrea image for subsequent jobs
-        uses: actions/upload-artifact@v2
-        with:
-          name: antrea-ubuntu
-          path: antrea-ubuntu.tar
-          retention-days: 1 # minimum value, in case artifact deletion by 'artifact-cleanup' job fails
-
   test-netpol-cyclonus:
     name: Run Cyclonus network policy generator tests on Kind cluster
-    needs: build-antrea-image
     runs-on: [ubuntu-18.04]
     steps:
       - name: Free disk space
@@ -50,12 +19,12 @@ jobs:
           sudo apt-get clean
           df -h
       - uses: actions/checkout@v2
-      - name: Download Antrea image from previous job
-        uses: actions/download-artifact@v1
-        with:
-          name: antrea-ubuntu
-      - name: Load Antrea image
-        run:  docker load -i antrea-ubuntu/antrea-ubuntu.tar
+      - run: make
+# TODO confirm these steps are unnecessary and delete
+#      - name: Save Antrea image to tarball
+#        run:  docker save -o antrea-ubuntu.tar projects.registry.vmware.com/antrea/antrea-ubuntu:latest
+#      - name: Load Antrea image
+#        run:  docker load -i antrea-ubuntu/antrea-ubuntu.tar
       - name: Install Kind
         run: |
           curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-$(uname)-amd64
@@ -64,20 +33,3 @@ jobs:
       - name: Run cyclonus tests
         working-directory: hack/netpol-generator
         run: ./test-kind.sh
-
-  # Runs after all other jobs in the workflow and deletes Antrea Docker images uploaded as temporary
-  # artifacts. It uses a third-party, MIT-licensed action (geekyeggo/delete-artifact). While Github
-  # exposes an API for deleting artifacts, they do not support an official delete-artifact action
-  # yet.
-  artifact-cleanup:
-    name: Delete uploaded images
-    needs: [build-antrea-image, test-netpol-cyclonus]
-    if: ${{ always() }}
-    runs-on: [ubuntu-18.04]
-    steps:
-      - name: Delete antrea-ubuntu
-        if: ${{ needs.build-antrea-image.result == 'success' }}
-        uses: geekyeggo/delete-artifact@v1
-        with:
-          name: antrea-ubuntu
-          failOnError: false

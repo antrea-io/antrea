@@ -16,6 +16,6 @@ spec:
         - --perturbation-wait-seconds=15
         - --cleanup-namespaces=true
         name: cyclonus
-        imagePullPolicy: Always
+        imagePullPolicy: IfNotPresent
         image: mfenwick100/cyclonus:v0.1.4
       serviceAccount: cyclonus
