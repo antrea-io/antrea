@@ -1,7 +1,5 @@
 name: Kind
 on:
-  # TODO remove the pull_request bit before merging
-  pull_request:
   schedule:
     # run once a day at midnight
     - cron: '0 0 * * *'
