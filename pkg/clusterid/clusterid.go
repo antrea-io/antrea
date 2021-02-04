@@ -20,7 +20,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	clientset "k8s.io/client-go/kubernetes"
@@ -70,11 +69,15 @@ func NewClusterIDAllocator(
 	}, nil
 }
 
-// Run will ensure that the antrea-cluster-id ConfigMap is up-to-date. It is meant to be called
-// asynchronously in its own goroutine, and will keep retrying in case of error, using an
-// exponential backoff mechanism.
-func (a *ClusterIDAllocator) Run(stopCh <-chan struct{}) {
-	inspectUUID := func(configMap *corev1.ConfigMap) (uuid.UUID, bool, error) {
+func (a *ClusterIDAllocator) updateConfigMapIfNeeded() error {
+	configMap, err := a.k8sClient.CoreV1().ConfigMaps(a.clusterIDConfigMapNamespace).Get(context.TODO(), a.clusterIDConfigMapName, metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("error when getting '%s/%s' ConfigMap: %v", a.clusterIDConfigMapNamespace, a.clusterIDConfigMapName, err)
+	}
+
+	// returns a triplet consisting of the cluster UUID, a boolean indicating if the UUID needs
+	// to be written to the ConfigMap, and an error if applicable
+	inspectUUID := func() (uuid.UUID, bool, error) {
 		clusterUUIDStr, ok := configMap.Data[uuidConfigMapKey]
 		if ok && clusterUUIDStr != "" {
 			clusterUUID, err := uuid.Parse(clusterUUIDStr)
@@ -97,7 +100,9 @@ func (a *ClusterIDAllocator) Run(stopCh <-chan struct{}) {
 		return clusterUUID, true, nil
 	}
 
-	inspectName := func(configMap *corev1.ConfigMap, clusterUUID uuid.UUID) (string, bool, error) {
+	// returns a triplet consisting of the cluster name, a boolean indicating if the name needs
+	// to be written to the ConfigMap, and an error if applicable
+	inspectName := func(clusterUUID uuid.UUID) (string, bool, error) {
 		clusterName, ok := configMap.Data[nameConfigMapKey]
 		if ok && clusterName != "" {
 			if a.userProvidedName != "" && a.userProvidedName != clusterName {
@@ -116,46 +121,45 @@ func (a *ClusterIDAllocator) Run(stopCh <-chan struct{}) {
 		return clusterName, true, nil
 	}
 
-	updateConfigMapIfNeeded := func() error {
-		configMap, err := a.k8sClient.CoreV1().ConfigMaps(a.clusterIDConfigMapNamespace).Get(context.TODO(), a.clusterIDConfigMapName, metav1.GetOptions{})
-		if err != nil {
-			return fmt.Errorf("error when getting '%s/%s' ConfigMap: %v", a.clusterIDConfigMapNamespace, a.clusterIDConfigMapName, err)
-		}
-		clusterUUID, clusterUUIDNeedsUpdate, err := inspectUUID(configMap)
-		if err != nil {
-			return err
-		}
-		if !clusterUUIDNeedsUpdate {
-			klog.Infof("Existing cluster UUID: %v", clusterUUID)
-		}
-		clusterName, clusterNameNeedsUpdate, err := inspectName(configMap, clusterUUID)
-		if err != nil {
-			return err
-		}
-		if !clusterNameNeedsUpdate {
-			klog.Infof("Existing cluster name: %s", clusterName)
-		}
-
-		// update ConfigMap if needed
-		if !clusterUUIDNeedsUpdate && !clusterNameNeedsUpdate {
-			return nil
-		}
-		configMap.Data = map[string]string{
-			uuidConfigMapKey: clusterUUID.String(),
-			nameConfigMapKey: clusterName,
-		}
-		if _, err := a.k8sClient.CoreV1().ConfigMaps(a.clusterIDConfigMapNamespace).Update(context.TODO(), configMap, metav1.UpdateOptions{}); err != nil {
-			return fmt.Errorf("error when updating '%s/%s' ConfigMap with new cluster identity: %v", a.clusterIDConfigMapNamespace, a.clusterIDConfigMapName, err)
-		}
-		if clusterUUIDNeedsUpdate {
-			klog.Infof("New cluster UUID: %v", clusterUUID)
-		}
-		if clusterNameNeedsUpdate {
-			klog.Infof("New cluster name: %s", clusterName)
-		}
-		return nil
+	clusterUUID, clusterUUIDNeedsUpdate, err := inspectUUID()
+	if err != nil {
+		return err
+	}
+	if !clusterUUIDNeedsUpdate {
+		klog.Infof("Existing cluster UUID: %v", clusterUUID)
+	}
+	clusterName, clusterNameNeedsUpdate, err := inspectName(clusterUUID)
+	if err != nil {
+		return err
+	}
+	if !clusterNameNeedsUpdate {
+		klog.Infof("Existing cluster name: %s", clusterName)
 	}
 
+	// update ConfigMap if needed
+	if !clusterUUIDNeedsUpdate && !clusterNameNeedsUpdate {
+		return nil
+	}
+	configMap.Data = map[string]string{
+		uuidConfigMapKey: clusterUUID.String(),
+		nameConfigMapKey: clusterName,
+	}
+	if _, err := a.k8sClient.CoreV1().ConfigMaps(a.clusterIDConfigMapNamespace).Update(context.TODO(), configMap, metav1.UpdateOptions{}); err != nil {
+		return fmt.Errorf("error when updating '%s/%s' ConfigMap with new cluster identity: %v", a.clusterIDConfigMapNamespace, a.clusterIDConfigMapName, err)
+	}
+	if clusterUUIDNeedsUpdate {
+		klog.Infof("New cluster UUID: %v", clusterUUID)
+	}
+	if clusterNameNeedsUpdate {
+		klog.Infof("New cluster name: %s", clusterName)
+	}
+	return nil
+}
+
+// Run will ensure that the antrea-cluster-id ConfigMap is up-to-date. It is meant to be called
+// asynchronously in its own goroutine, and will keep retrying in case of error, using an
+// exponential backoff mechanism.
+func (a *ClusterIDAllocator) Run(stopCh <-chan struct{}) {
 	// exponential backoff, starting at 100ms with a factor of 2. A "steps" value of 10 means we
 	// will increase the backoff duration at most 10 times, so the max duration is (100ms * //
 	// 2^8), which is about 25s.
@@ -167,7 +171,7 @@ func (a *ClusterIDAllocator) Run(stopCh <-chan struct{}) {
 	}
 
 	for {
-		err := updateConfigMapIfNeeded()
+		err := a.updateConfigMapIfNeeded()
 		if err == nil {
 			return
 		}

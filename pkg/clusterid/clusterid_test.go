@@ -56,6 +56,49 @@ var (
 	}
 )
 
+func TestClusterIDAllocatorNew(t *testing.T) {
+	client := fake.NewSimpleClientset(uuidConfigMapEmpty)
+	allocator, err := NewClusterIDAllocator(antreaNamespace, DefaultClusterIDConfigMapName, client, "", "")
+	require.NoError(t, err)
+	require.NoError(t, allocator.updateConfigMapIfNeeded())
+
+	provider := NewClusterIDProvider(antreaNamespace, DefaultClusterIDConfigMapName, client)
+	actualUUID, actualName, err := provider.Get()
+	require.NoError(t, err, "Error when retrieving cluster identity")
+	assert.NotEqual(t, uuid.Nil, actualUUID)
+	assert.Equal(t, actualUUID.String(), actualName, "Cluster name should match cluster UUID")
+}
+
+func TestClusterIDAllocatorExisting(t *testing.T) {
+	client := fake.NewSimpleClientset(uuidConfigMap)
+	allocator, err := NewClusterIDAllocator(antreaNamespace, DefaultClusterIDConfigMapName, client, "", "")
+	require.NoError(t, err)
+	require.NoError(t, allocator.updateConfigMapIfNeeded())
+
+	provider := NewClusterIDProvider(antreaNamespace, DefaultClusterIDConfigMapName, client)
+	actualUUID, actualName, err := provider.Get()
+	require.NoError(t, err, "Error when retrieving cluster identity")
+	assert.Equal(t, clusterUUID, actualUUID)
+	assert.Equal(t, clusterName, actualName)
+}
+
+// TestClusterIDAllocatorMismatch tests the case where the user provides a cluster UUID which does
+// not match the current one stored in the ConfigMap.
+func TestClusterIDAllocatorMismatch(t *testing.T) {
+	client := fake.NewSimpleClientset(uuidConfigMap)
+	userProvidedUUID := uuid.New().String()
+	allocator, err := NewClusterIDAllocator(antreaNamespace, DefaultClusterIDConfigMapName, client, "", userProvidedUUID)
+	require.NoError(t, err)
+	assert.Error(t, allocator.updateConfigMapIfNeeded())
+}
+
+func TestClusterIDProviderMissingConfigMap(t *testing.T) {
+	client := fake.NewSimpleClientset()
+	provider := NewClusterIDProvider(antreaNamespace, DefaultClusterIDConfigMapName, client)
+	_, _, err := provider.Get()
+	assert.Error(t, err, "Cluster identity should not be available")
+}
+
 func runWrapper(ctx context.Context, allocator *ClusterIDAllocator) error {
 	stopCh := make(chan struct{})
 	doneCh := make(chan struct{})
@@ -72,7 +115,7 @@ func runWrapper(ctx context.Context, allocator *ClusterIDAllocator) error {
 	}
 }
 
-func TestClusterUUIDNew(t *testing.T) {
+func TestClusterIDAllocatorRun(t *testing.T) {
 	client := fake.NewSimpleClientset(uuidConfigMapEmpty)
 	allocator, err := NewClusterIDAllocator(antreaNamespace, DefaultClusterIDConfigMapName, client, "", "")
 	require.NoError(t, err)
@@ -85,26 +128,4 @@ func TestClusterUUIDNew(t *testing.T) {
 	require.NoError(t, err, "Error when retrieving cluster identity")
 	assert.NotEqual(t, uuid.Nil, actualUUID)
 	assert.Equal(t, actualUUID.String(), actualName, "Cluster name should match cluster UUID")
-}
-
-func TestClusterUUIDExisting(t *testing.T) {
-	client := fake.NewSimpleClientset(uuidConfigMap)
-	allocator, err := NewClusterIDAllocator(antreaNamespace, DefaultClusterIDConfigMapName, client, "", "")
-	require.NoError(t, err)
-	ctx, cancel := context.WithTimeout(context.Background(), runTimeout)
-	defer cancel()
-	require.NoError(t, runWrapper(ctx, allocator), "Cluster identity could not be updated")
-
-	provider := NewClusterIDProvider(antreaNamespace, DefaultClusterIDConfigMapName, client)
-	actualUUID, actualName, err := provider.Get()
-	require.NoError(t, err, "Error when retrieving cluster identity")
-	assert.Equal(t, clusterUUID, actualUUID)
-	assert.Equal(t, clusterName, actualName)
-}
-
-func TestClusterUUIDProviderMissingConfigMap(t *testing.T) {
-	client := fake.NewSimpleClientset()
-	provider := NewClusterIDProvider(antreaNamespace, DefaultClusterIDConfigMapName, client)
-	_, _, err := provider.Get()
-	assert.Error(t, err, "Cluster identity should not be available")
 }
