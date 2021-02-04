@@ -1312,6 +1312,13 @@ func (n *NetworkPolicyController) syncAddressGroup(key string) error {
 	if err != nil {
 		return fmt.Errorf("unable to filter internal NetworkPolicies for AddressGroup %s: %v", key, err)
 	}
+	addressGroupObj, found, _ := n.addressGroupStore.Get(key)
+	if !found {
+		// AddressGroup was already deleted. No need to process further.
+		klog.V(2).Infof("AddressGroup %s not found", key)
+		return nil
+	}
+	addressGroup := addressGroupObj.(*antreatypes.AddressGroup)
 	// NodeNames set must be considered immutable once generated and updated
 	// in the store. If any change is needed, the set must be regenerated with
 	// the new NodeNames and the store must be updated.
@@ -1320,13 +1327,6 @@ func (n *NetworkPolicyController) syncAddressGroup(key string) error {
 		internalNP := internalNPObj.(*antreatypes.NetworkPolicy)
 		addrGroupNodeNames = addrGroupNodeNames.Union(internalNP.SpanMeta.NodeNames)
 	}
-	addressGroupObj, found, _ := n.addressGroupStore.Get(key)
-	if !found {
-		// AddressGroup was already deleted. No need to process further.
-		klog.V(2).Infof("AddressGroup %s not found", key)
-		return nil
-	}
-	addressGroup := addressGroupObj.(*antreatypes.AddressGroup)
 	memberSet := n.populateAddressGroupMemberSet(addressGroup)
 	updatedAddressGroup := &antreatypes.AddressGroup{
 		Name:         addressGroup.Name,

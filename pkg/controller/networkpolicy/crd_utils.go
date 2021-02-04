@@ -156,7 +156,7 @@ func (n *NetworkPolicyController) createAddressGroupForClusterGroupCRD(intGrp *a
 	}
 	// Create an AddressGroup object for this Cluster Group.
 	addressGroup := &antreatypes.AddressGroup{
-		UID:          types.UID(key),
+		UID:          intGrp.UID,
 		Name:         key,
 		GroupMembers: intGrp.GroupMembers,
 	}
