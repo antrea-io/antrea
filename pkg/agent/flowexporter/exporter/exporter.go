@@ -190,32 +190,24 @@ func (exp *flowExporter) initFlowExporter(collectorAddr string, collectorProto s
 		}
 	}
 
-	// TODO: This code can be further simplified by changing the go-ipfix API to accept
-	// collectorAddr and collectorProto instead of net.Addr input.
 	var expInput exporter.ExporterInput
 	if collectorProto == "tcp" {
-		collector, err := net.ResolveTCPAddr("tcp", collectorAddr)
-		if err != nil {
-			return err
-		}
 		// TCP transport does not need any tempRefTimeout, so sending 0.
 		// tempRefTimeout is the template refresh timeout, which specifies how often
 		// the exporting process should send the template again.
 		expInput = exporter.ExporterInput{
-			CollectorAddr:       collector,
+			CollectorAddress:    collectorAddr,
+			CollectorProtocol:   collectorProto,
 			ObservationDomainID: obsID,
 			TempRefTimeout:      0,
 			PathMTU:             0,
 			IsEncrypted:         false,
 		}
 	} else {
-		collector, err := net.ResolveUDPAddr("udp", collectorAddr)
-		if err != nil {
-			return err
-		}
 		// For UDP transport, hardcoding tempRefTimeout value as 1800s.
 		expInput = exporter.ExporterInput{
-			CollectorAddr:       collector,
+			CollectorAddress:    collectorAddr,
+			CollectorProtocol:   collectorProto,
 			ObservationDomainID: obsID,
 			TempRefTimeout:      1800,
 			PathMTU:             0,
@@ -452,7 +444,11 @@ func (exp *flowExporter) addRecordToSet(dataSet ipfix.IPFIXSet, record flowexpor
 				ie.Value = net.ParseIP("::")
 			}
 		case "destinationServicePort":
-			ie.Value = record.Conn.TupleOrig.DestinationPort
+			if record.Conn.DestinationServicePortName != "" {
+				ie.Value = record.Conn.TupleOrig.DestinationPort
+			} else {
+				ie.Value = uint16(0)
+			}
 		case "destinationServicePortName":
 			if record.Conn.DestinationServicePortName != "" {
 				ie.Value = record.Conn.DestinationServicePortName
