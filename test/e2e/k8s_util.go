@@ -214,6 +214,76 @@ func (k *KubernetesUtils) CreateOrUpdateDeployment(ns, deploymentName string, re
 	return d, err
 }
 
+// CreateOrUpdatePod is a convenience function for idempotent setup of pods
+func (k *KubernetesUtils) CreateOrUpdatePod(ns, name string, labels map[string]string) (*v1.Pod, error) {
+	log.Infof("creating/updating pod %s in ns %s", name, ns)
+	zero := int64(0)
+	makeContainerSpec := func(port int32) v1.Container {
+		return v1.Container{
+			Name:            fmt.Sprintf("c%d", port),
+			ImagePullPolicy: v1.PullIfNotPresent,
+			Image:           "antrea/netpol-test:latest",
+			// "-k" for persistent server
+			Command:         []string{"ncat", "-lk", "-p", fmt.Sprintf("%d", port)},
+			SecurityContext: &v1.SecurityContext{},
+			Ports: []v1.ContainerPort{
+				{
+					ContainerPort: port,
+					Name:          fmt.Sprintf("serve-%d", port),
+				},
+			},
+		}
+	}
+	pod := &v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Labels:    labels,
+			Namespace: ns,
+		},
+		Spec: v1.PodSpec{
+			TerminationGracePeriodSeconds: &zero,
+			Containers: []v1.Container{
+				makeContainerSpec(80),
+				makeContainerSpec(81),
+				makeContainerSpec(8080),
+				makeContainerSpec(8081),
+				makeContainerSpec(8082),
+				makeContainerSpec(8083),
+				makeContainerSpec(8084),
+				makeContainerSpec(8085),
+			},
+		},
+	}
+	p, err := k.clientset.CoreV1().Pods(ns).Get(context.TODO(), name, metav1.GetOptions{})
+	if err != nil {
+		log.Debugf("creating Pod %s/%s", ns, name)
+		p, err = k.clientset.CoreV1().Pods(ns).Create(context.TODO(), pod, metav1.CreateOptions{})
+		if err != nil {
+			log.Debugf("unable to create Pod: %s", err)
+		}
+		return p, err
+	} else if p.Name != "" {
+		log.Debugf("Pod with name %s already exists, updating", p.Name)
+		p.Labels = labels
+		p, err = k.clientset.CoreV1().Pods(ns).Update(context.TODO(), p, metav1.UpdateOptions{})
+		return p, err
+	}
+	return nil, fmt.Errorf("error occurred in creating/updating Pod %s/%s", ns, name)
+}
+
+// DeletePod is a convenience function for deleting Pod with specific ns/name.
+func (k *KubernetesUtils) DeletePod(ns, name string) error {
+	_, err := k.clientset.CoreV1().Pods(ns).Get(context.TODO(), name, metav1.GetOptions{})
+	if err != nil {
+		return errors.Wrapf(err, "unable to get Pod %s/%s", ns, name)
+	}
+	log.Infof("deleting Pod %s/%s", ns, name)
+	if err = k.clientset.CoreV1().Pods(ns).Delete(context.TODO(), name, metav1.DeleteOptions{}); err != nil {
+		return errors.Wrapf(err, "unable to delete Pod %s", name)
+	}
+	return nil
+}
+
 // CleanNetworkPolicies is a convenience function for deleting network policies before startup of any new test.
 func (k *KubernetesUtils) CleanNetworkPolicies(namespaces []string) error {
 	for _, ns := range namespaces {
@@ -286,6 +356,48 @@ func (k *KubernetesUtils) UpdateTier(tier *secv1alpha1.Tier) (*secv1alpha1.Tier,
 	log.Infof("updating tier %s", tier.Name)
 	updatedTier, err := k.securityClient.Tiers().Update(context.TODO(), tier, metav1.UpdateOptions{})
 	return updatedTier, err
+}
+
+// CreateOrUpdateCG is a convenience function for idempotent setup of ClusterGroups
+func (k *KubernetesUtils) CreateOrUpdateCG(name string, pSelector, nSelector *metav1.LabelSelector, ipBlock *secv1alpha1.IPBlock) (*corev1a1.ClusterGroup, error) {
+	log.Infof("creating/updating ClusterGroup %s", name)
+	cgReturned, err := k.crdClient.CoreV1alpha2().ClusterGroups().Get(context.TODO(), name, metav1.GetOptions{})
+	if err != nil {
+		log.Debugf("creating ClusterGroup %s", name)
+		cg := &corev1a1.ClusterGroup{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: name,
+			},
+		}
+		if pSelector != nil {
+			cg.Spec.PodSelector = pSelector
+		}
+		if nSelector != nil {
+			cg.Spec.NamespaceSelector = nSelector
+		}
+		if ipBlock != nil {
+			cg.Spec.IPBlock = ipBlock
+		}
+		cgr, err := k.crdClient.CoreV1alpha2().ClusterGroups().Create(context.TODO(), cg, metav1.CreateOptions{})
+		if err != nil {
+			log.Infof("unable to create cluster group %s: %v", name, err)
+		}
+		return cgr, nil
+	} else if cgReturned.Name != "" {
+		log.Debugf("ClusterGroup with name %s already exists, updating", name)
+		if pSelector != nil {
+			cgReturned.Spec.PodSelector = pSelector
+		}
+		if nSelector != nil {
+			cgReturned.Spec.NamespaceSelector = nSelector
+		}
+		if ipBlock != nil {
+			cgReturned.Spec.IPBlock = ipBlock
+		}
+		cgr, err := k.crdClient.CoreV1alpha2().ClusterGroups().Update(context.TODO(), cgReturned, metav1.UpdateOptions{})
+		return cgr, err
+	}
+	return nil, fmt.Errorf("error occurred in creating/updating ClusterGroup %s", name)
 }
 
 // CreateCG is a convenience function for creating an Antrea ClusterGroup by name and selector.
@@ -361,7 +473,8 @@ func (k *KubernetesUtils) CreateOrUpdateACNP(cnp *secv1alpha1.ClusterNetworkPoli
 		return cnp, err
 	} else if cnpReturned.Name != "" {
 		log.Debugf("ClusterNetworkPolicy with name %s already exists, updating", cnp.Name)
-		cnp, err = k.securityClient.ClusterNetworkPolicies().Update(context.TODO(), cnp, metav1.UpdateOptions{})
+		cnpReturned.Spec = cnp.Spec
+		cnp, err = k.securityClient.ClusterNetworkPolicies().Update(context.TODO(), cnpReturned, metav1.UpdateOptions{})
 		return cnp, err
 	}
 	return nil, fmt.Errorf("error occurred in creating/updating ClusterNetworkPolicy %s", cnp.Name)

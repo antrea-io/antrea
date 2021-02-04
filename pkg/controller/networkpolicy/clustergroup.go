@@ -241,6 +241,15 @@ func (n *NetworkPolicyController) triggerCNPUpdates(cg *corev1a2.ClusterGroup) e
 		n.internalNetworkPolicyStore.Update(curInternalNP)
 		// Unlock the internal NetworkPolicy store.
 		n.internalNetworkPolicyMutex.Unlock()
+		// Enqueue addressGroup keys to update their group members.
+		for _, rule := range curInternalNP.Rules {
+			for _, addrGroupName := range rule.From.AddressGroups {
+				n.enqueueAddressGroup(addrGroupName)
+			}
+			for _, addrGroupName := range rule.To.AddressGroups {
+				n.enqueueAddressGroup(addrGroupName)
+			}
+		}
 		n.enqueueInternalNetworkPolicy(key)
 		n.deleteDereferencedAddressGroups(oldInternalNP)
 	}
