@@ -85,9 +85,9 @@ func (o *proxyOptions) validateAndComplete() error {
 	if o.staticDir != "" {
 		fileInfo, err := os.Stat(o.staticDir)
 		if err != nil {
-			klog.Warning("Failed to stat static file directory "+o.staticDir+": ", err)
+			klog.Warningf("Failed to stat static file directory %s: %v", o.staticDir, err)
 		} else if !fileInfo.IsDir() {
-			klog.Warning("Static file directory " + o.staticDir + " is not a directory")
+			klog.Warningf("Static file directory %s is not a directory", o.staticDir)
 		}
 	}
 
@@ -182,14 +182,14 @@ func createAgentClientCfg(k8sClientset kubernetes.Interface, antreaClientset ant
 		}
 	}
 	if agentInfo == nil {
-		return nil, fmt.Errorf("No Antrea Agent found for Node name %s", nodeName)
+		return nil, fmt.Errorf("no Antrea Agent found for Node name %s", nodeName)
 	}
 	nodeIP, err := noderoute.GetNodeAddr(node)
 	if err != nil {
 		return nil, fmt.Errorf("error when parsing IP of Node %s", nodeName)
 	}
 	cfg := rest.CopyConfig(cfgTmpl)
-	cfg.Host = fmt.Sprintf("https://%s:%d", nodeIP.String(), agentInfo.APIPort)
+	cfg.Host = fmt.Sprintf("https://%s", net.JoinHostPort(nodeIP.String(), fmt.Sprint(agentInfo.APIPort)))
 	return cfg, nil
 }
 
@@ -206,15 +206,15 @@ func createControllerClientCfg(k8sClientset kubernetes.Interface, antreaClientse
 	var controllerNodeIP net.IP
 	controllerNodeIP, err = noderoute.GetNodeAddr(controllerNode)
 	if err != nil {
-		return nil, fmt.Errorf("error when parsing controllre IP: %w", err)
+		return nil, fmt.Errorf("error when parsing controller IP: %w", err)
 	}
 
 	cfg := rest.CopyConfig(cfgTmpl)
-	cfg.Host = fmt.Sprintf("https://%s:%d", controllerNodeIP.String(), controllerInfo.APIPort)
+	cfg.Host = fmt.Sprintf("https://%s", net.JoinHostPort(controllerNodeIP.String(), fmt.Sprint(controllerInfo.APIPort)))
 	return cfg, nil
 }
 
-func runE(cmd *cobra.Command, args []string) error {
+func runE(cmd *cobra.Command, _ []string) error {
 	if runtime.Mode != runtime.ModeController || runtime.InPod {
 		return fmt.Errorf("only remote mode is supported for this command")
 	}
@@ -269,7 +269,11 @@ func runE(cmd *cobra.Command, args []string) error {
 	// (eg: port == 0).
 	var l net.Listener
 	if options.unixSocket == "" {
-		l, err = server.Listen(options.address, options.port)
+		addr := options.address
+		if net.ParseIP(addr).To4() == nil {
+			addr = fmt.Sprintf("[%s]", addr)
+		}
+		l, err = server.Listen(addr, options.port)
 	} else {
 		l, err = server.ListenUnix(options.unixSocket)
 	}

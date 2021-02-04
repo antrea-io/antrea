@@ -16,6 +16,7 @@ package e2e
 
 import (
 	"fmt"
+	"net"
 	"strings"
 	"testing"
 	"time"
@@ -94,20 +95,20 @@ func TestAntctlAgentLocalAccess(t *testing.T) {
 }
 
 func copyAntctlToNode(data *TestData, nodeName string, antctlName string, nodeAntctlPath string) error {
-	podName, err := data.getAntreaPodOnNode(controlPlaneNodeName())
+	pod, err := data.getAntreaController()
 	if err != nil {
-		return fmt.Errorf("error when retrieving Antrea Controller Pod name: %v", err)
+		return fmt.Errorf("error when retrieving Antrea Controller Pod: %v", err)
 	}
 	// Just try our best to clean up.
 	RunCommandOnNode(nodeName, fmt.Sprintf("rm -f %s", nodeAntctlPath))
 	// Copy antctl from the controller Pod to the Node.
-	cmd := fmt.Sprintf("kubectl cp %s/%s:/usr/local/bin/%s %s", antreaNamespace, podName, antctlName, nodeAntctlPath)
+	cmd := fmt.Sprintf("kubectl cp %s/%s:/usr/local/bin/%s %s", antreaNamespace, pod.Name, antctlName, nodeAntctlPath)
 	rc, stdout, stderr, err := RunCommandOnNode(nodeName, cmd)
 	if err != nil {
 		return fmt.Errorf("error when running command '%s' on Node: %v", cmd, err)
 	}
 	if rc != 0 {
-		return fmt.Errorf("error when copying %s from %s, stdout: <%v>, stderr: <%v>", antctlName, podName, stdout, stderr)
+		return fmt.Errorf("error when copying %s from %s, stdout: <%v>, stderr: <%v>", antctlName, pod.Name, stdout, stderr)
 	}
 	// Make sure the antctl binary is executable on the Node.
 	cmd = fmt.Sprintf("chmod +x %s", nodeAntctlPath)
@@ -216,20 +217,19 @@ func TestAntctlVerboseMode(t *testing.T) {
 
 // runAntctProxy runs the antctl reverse proxy on the provided Node; to stop the
 // proxy call the returned function.
-func runAntctProxy(nodeName string, antctlName string, nodeAntctlPath string, proxyPort int, agentNodeName string) (func() error, error) {
+func runAntctProxy(nodeName string, antctlName string, nodeAntctlPath string, proxyPort int, agentNodeName string, address string) (func() error, error) {
 	waitCh := make(chan struct{})
+	proxyCmd := []string{nodeAntctlPath, "proxy", "--port", fmt.Sprint(proxyPort), "--address", address}
+	if agentNodeName == "" {
+		proxyCmd = append(proxyCmd, "--controller")
+	} else {
+		proxyCmd = append(proxyCmd, "--agent-node", agentNodeName)
+	}
 	go func() {
-		proxyCmd := []string{nodeAntctlPath, "proxy"}
-		if agentNodeName == "" {
-			proxyCmd = append(proxyCmd, "--controller")
-		} else {
-			proxyCmd = append(proxyCmd, "--agent-node", agentNodeName)
-		}
-		proxyCmd = append(proxyCmd, "--port", fmt.Sprint(proxyPort))
-		cmd := strings.Join(proxyCmd, " ")
-		RunCommandOnNode(nodeName, cmd)
+		RunCommandOnNode(nodeName, strings.Join(proxyCmd, " "))
 		waitCh <- struct{}{}
 	}()
+
 	// wait for 1 second to make sure the proxy is running and to detect if
 	// it errors on start.
 	time.Sleep(time.Second)
@@ -239,7 +239,8 @@ func runAntctProxy(nodeName string, antctlName string, nodeAntctlPath string, pr
 		return nil, fmt.Errorf("error when running command '%s' on Node: %v", cmd, err)
 	}
 	if rc != 0 {
-		return nil, fmt.Errorf("error when retrieving 'antctl proxy' PID, stdout: <%v>, stderr: <%v>", stdout, stderr)
+		return nil, fmt.Errorf("error when retrieving 'antctl proxy' PID, proxy command: '%s'\n stdout: <%v>, stderr: <%v>",
+			strings.Join(proxyCmd, " "), stdout, stderr)
 	}
 	pid := strings.TrimSpace(stdout)
 	return func() error {
@@ -259,7 +260,6 @@ func runAntctProxy(nodeName string, antctlName string, nodeAntctlPath string, pr
 // TestAntctlProxy validates "antctl proxy" for both the Antrea Controller and
 // Agent API.
 func TestAntctlProxy(t *testing.T) {
-	skipIfIPv6Cluster(t)
 	const proxyPort = 8001
 
 	data, err := setupTest(t)
@@ -277,9 +277,9 @@ func TestAntctlProxy(t *testing.T) {
 		t.Fatalf("Cannot copy %s on control-plane Node: %v", antctlName, err)
 	}
 
-	checkAPIAccess := func() error {
+	checkAPIAccess := func(url string) error {
 		t.Logf("Checking for API access through antctl proxy")
-		cmd := fmt.Sprintf("curl 127.0.0.1:%d/apis", proxyPort)
+		cmd := fmt.Sprintf("curl %s/apis", net.JoinHostPort(url, fmt.Sprint(proxyPort)))
 		rc, stdout, stderr, err := RunCommandOnNode(controlPlaneNodeName(), cmd)
 		if err != nil {
 			return fmt.Errorf("error when running command '%s' on Node: %v", cmd, err)
@@ -290,22 +290,29 @@ func TestAntctlProxy(t *testing.T) {
 		return nil
 	}
 
+	addressV4 := "127.0.0.1"
+	addressV6 := "::1"
 	testcases := []struct {
 		name          string
 		agentNodeName string
+		ipFamily      int
+		address       string
 	}{
-		{"ControllerProxy", ""},
-		{"AgentProxy", controlPlaneNodeName()},
+		{"ControllerIPv4", "", 4, addressV4},
+		{"AgentIPv4", controlPlaneNodeName(), 4, addressV4},
+		{"ControllerIPv6", "", 6, addressV6},
+		{"AgentIPv6", controlPlaneNodeName(), 6, addressV6},
 	}
 
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			t.Logf("Starting antctl proxy")
-			stopProxyFn, err := runAntctProxy(controlPlaneNodeName(), antctlName, nodeAntctlPath, proxyPort, "")
-			if err != nil {
-				t.Fatalf("Could not start antctl proxy: %v", err)
+			if clusterInfo.podV4NetworkCIDR == "" && tc.ipFamily == 4 || clusterInfo.podV6NetworkCIDR == "" && tc.ipFamily == 6 {
+				t.Skipf("Skipping this testcase since cluster network family doesn't fit")
 			}
-			if err := checkAPIAccess(); err != nil {
+			t.Logf("Starting antctl proxy")
+			stopProxyFn, err := runAntctProxy(controlPlaneNodeName(), antctlName, nodeAntctlPath, proxyPort, tc.agentNodeName, tc.address)
+			assert.NoError(t, err, "Could not start antctl proxy: %v", err)
+			if err := checkAPIAccess(tc.address); err != nil {
 				t.Errorf("API check failed: %v", err)
 			}
 			t.Logf("Stopping antctl proxy")
