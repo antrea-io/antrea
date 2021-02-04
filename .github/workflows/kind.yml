@@ -374,7 +374,7 @@ jobs:
       uses: actions/upload-artifact@v2
       if: ${{ failure() }}
       with:
-        name: e2e-kind-hybrid.tar.gz
+        name: e2e-kind-encap-np.tar.gz
         path: log.tar.gz
         retention-days: 30
 

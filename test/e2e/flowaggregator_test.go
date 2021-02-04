@@ -114,8 +114,6 @@ func TestFlowAggregator(t *testing.T) {
 
 	podAIP, podBIP, podCIP, svcB, svcC, err := createPerftestPods(data)
 	if err != nil {
-		teardownFlowAggregator(t, data)
-		teardownTest(t, data)
 		t.Fatalf("Error when creating perftest pods and services: %v", err)
 	}
 

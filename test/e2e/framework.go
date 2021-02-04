@@ -214,6 +214,15 @@ func labelNodeRoleControlPlane() string {
 	return labelNodeRoleControlPlane
 }
 
+func controlPlaneNoScheduleToleration() corev1.Toleration {
+	// the Node taint still uses "master" in K8s v1.20
+	return corev1.Toleration{
+		Key:      "node-role.kubernetes.io/master",
+		Operator: corev1.TolerationOpExists,
+		Effect:   corev1.TaintEffectNoSchedule,
+	}
+}
+
 func initProvider() error {
 	providerFactory := map[string]func(string) (providers.ProviderInterface, error){
 		"vagrant": providers.NewVagrantProvider,
@@ -741,11 +750,7 @@ func (data *TestData) createPodOnNode(name string, nodeName string, image string
 	}
 	if nodeName == controlPlaneNodeName() {
 		// tolerate NoSchedule taint if we want Pod to run on control-plane Node
-		noScheduleToleration := corev1.Toleration{
-			Key:      labelNodeRoleControlPlane(),
-			Operator: corev1.TolerationOpExists,
-			Effect:   corev1.TaintEffectNoSchedule,
-		}
+		noScheduleToleration := controlPlaneNoScheduleToleration()
 		podSpec.Tolerations = []corev1.Toleration{noScheduleToleration}
 	}
 	pod := &corev1.Pod{
