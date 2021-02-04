@@ -1,4 +1,4 @@
-// Copyright 2020 Antrea Authors
+// Copyright 2021 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,7 +26,6 @@ type ControlplaneV1beta2Interface interface {
 	RESTClient() rest.Interface
 	AddressGroupsGetter
 	AppliedToGroupsGetter
-	GroupsGetter
 	NetworkPoliciesGetter
 	NodeStatsSummariesGetter
 }
@@ -42,10 +41,6 @@ func (c *ControlplaneV1beta2Client) AddressGroups() AddressGroupInterface {
 
 func (c *ControlplaneV1beta2Client) AppliedToGroups() AppliedToGroupInterface {
 	return newAppliedToGroups(c)
-}
-
-func (c *ControlplaneV1beta2Client) Groups() GroupInterface {
-	return newGroups(c)
 }
 
 func (c *ControlplaneV1beta2Client) NetworkPolicies() NetworkPolicyInterface {
