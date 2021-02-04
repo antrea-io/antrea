@@ -118,6 +118,8 @@ func newController(objects ...runtime.Object) (*fake.Clientset, *networkPolicyCo
 	npController.cgInformer = cgInformer
 	npController.cgLister = cgInformer.Lister()
 	npController.cgListerSynced = alwaysReady
+	npController.serviceLister = informerFactory.Core().V1().Services().Lister()
+	npController.serviceListerSynced = alwaysReady
 	return client, &networkPolicyController{
 		npController,
 		informerFactory.Core().V1().Pods().Informer().GetStore(),
@@ -1714,6 +1716,146 @@ func TestDeleteNamespace(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestAddAndUpdateService(t *testing.T) {
+	testPod1 := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-pod-1",
+			Namespace: "test-ns",
+			Labels:    map[string]string{"app": "test-1"},
+		},
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{{
+				Name: "container-1",
+			}},
+			NodeName: "nodeA",
+		},
+		Status: corev1.PodStatus{
+			Conditions: []corev1.PodCondition{
+				{
+					Type:   corev1.PodReady,
+					Status: corev1.ConditionTrue,
+				},
+			},
+			PodIP: "1.2.3.4",
+			PodIPs: []corev1.PodIP{
+				{IP: "1.2.3.4"},
+			},
+		},
+	}
+	testPod2 := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-pod-2",
+			Namespace: "test-ns",
+			Labels:    map[string]string{"app": "test-2"},
+		},
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{{
+				Name: "container-2",
+			}},
+			NodeName: "nodeA",
+		},
+		Status: corev1.PodStatus{
+			Conditions: []corev1.PodCondition{
+				{
+					Type:   corev1.PodReady,
+					Status: corev1.ConditionTrue,
+				},
+			},
+			PodIP: "4.3.2.1",
+			PodIPs: []corev1.PodIP{
+				{IP: "4.3.2.1"},
+			},
+		},
+	}
+	testCG1 := &v1alpha2.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "cg-1",
+		},
+		Spec: v1alpha2.GroupSpec{
+			ServiceReference: &v1alpha2.ServiceReference{
+				Name:      "test-svc-1",
+				Namespace: "test-ns",
+			},
+		},
+	}
+	testCG2 := &v1alpha2.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "cg-2",
+		},
+		Spec: v1alpha2.GroupSpec{
+			ServiceReference: &v1alpha2.ServiceReference{
+				Name:      "test-svc-2",
+				Namespace: "test-ns",
+			},
+		},
+	}
+	testSvc1 := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-svc-1",
+			Namespace: "test-ns",
+		},
+		Spec: corev1.ServiceSpec{
+			Selector: map[string]string{"app": "test-1"},
+		},
+	}
+	testSvc2 := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-svc-2",
+			Namespace: "test-ns",
+		},
+		Spec: corev1.ServiceSpec{},
+	}
+	testSvc1Updated := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-svc-1",
+			Namespace: "test-ns",
+		},
+		Spec: corev1.ServiceSpec{
+			Selector: map[string]string{"app": "test-2"},
+		},
+	}
+	_, npc := newController()
+	npc.cgStore.Add(testCG1)
+	npc.cgStore.Add(testCG2)
+	npc.addClusterGroup(testCG1)
+	npc.addClusterGroup(testCG2)
+	npc.podStore.Add(testPod1)
+	npc.podStore.Add(testPod2)
+	npc.serviceStore.Add(testSvc1)
+	npc.serviceStore.Add(testSvc2)
+	npc.syncInternalGroup(testCG1.Name)
+	npc.syncInternalGroup(testCG2.Name)
+	memberPod1 := &controlplane.GroupMember{
+		Pod: &controlplane.PodReference{
+			Name:      "test-pod-1",
+			Namespace: "test-ns",
+		},
+		IPs: []controlplane.IPAddress{ipStrToIPAddress("1.2.3.4")},
+	}
+	memberPod2 := &controlplane.GroupMember{
+		Pod: &controlplane.PodReference{
+			Name:      "test-pod-2",
+			Namespace: "test-ns",
+		},
+		IPs: []controlplane.IPAddress{ipStrToIPAddress("4.3.2.1")},
+	}
+	groupObj1, _, _ := npc.internalGroupStore.Get(testCG1.Name)
+	grp1 := groupObj1.(*antreatypes.Group)
+	assert.True(t, grp1.GroupMembers.Has(memberPod1))
+	assert.False(t, grp1.GroupMembers.Has(memberPod2))
+	groupObj2, _, _ := npc.internalGroupStore.Get(testCG2.Name)
+	grp2 := groupObj2.(*antreatypes.Group)
+	assert.False(t, grp2.GroupMembers.Has(memberPod1))
+	assert.False(t, grp2.GroupMembers.Has(memberPod2))
+	// Update svc-1 to select app test-2 instead
+	npc.serviceStore.Update(testSvc1Updated)
+	npc.syncInternalGroup(testCG1.Name)
+	groupObj1Updated, _, _ := npc.internalGroupStore.Get(testCG1.Name)
+	grp1Updated := groupObj1Updated.(*antreatypes.Group)
+	assert.False(t, grp1Updated.GroupMembers.Has(memberPod1))
+	assert.True(t, grp1Updated.GroupMembers.Has(memberPod2))
 }
 
 func TestFilterAddressGroupsForPodOrExternalEntity(t *testing.T) {

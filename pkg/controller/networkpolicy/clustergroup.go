@@ -146,7 +146,7 @@ func (n *NetworkPolicyController) filterInternalGroupsForNamespace(namespace *v1
 	return matchingKeys
 }
 
-// filterInternalGroupsForPod computes a list of internal Group keys which references the Service.
+// filterInternalGroupsForService computes a list of internal Group keys which references the Service.
 func (n *NetworkPolicyController) filterInternalGroupsForService(obj metav1.Object) sets.String {
 	matchingKeySet := sets.String{}
 	indexKey, _ := cache.MetaNamespaceKeyFunc(obj)
@@ -334,7 +334,7 @@ func (n *NetworkPolicyController) processServiceReference(group *antreatypes.Gro
 	}
 	svc, err := n.serviceLister.Services(svcRef.Namespace).Get(svcRef.Name)
 	if err != nil {
-		klog.V(2).Infof("Error getting Service object %s/%s, setting empty selectors to Group %s", svcRef.Namespace, svcRef.Name, group.Name)
+		klog.V(2).Infof("Error getting Service object %s/%s, setting empty selector for Group %s", svcRef.Namespace, svcRef.Name, group.Name)
 		group.Selector = nil
 		return
 	}
