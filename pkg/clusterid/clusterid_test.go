@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package clusteruuid
+package clusterid
 
 import (
 	"context"
@@ -34,27 +34,29 @@ const (
 
 var (
 	clusterUUID = uuid.New()
+	clusterName = "my-favorite-cluster"
 
 	uuidConfigMap = &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: antreaNamespace,
-			Name:      DefaultUUIDConfigMapName,
+			Name:      DefaultClusterIDConfigMapName,
 		},
 		Data: map[string]string{
 			uuidConfigMapKey: clusterUUID.String(),
+			nameConfigMapKey: clusterName,
 		},
 	}
 
 	uuidConfigMapEmpty = &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: antreaNamespace,
-			Name:      DefaultUUIDConfigMapName,
+			Name:      DefaultClusterIDConfigMapName,
 		},
 		Data: map[string]string{},
 	}
 )
 
-func runWrapper(ctx context.Context, allocator ClusterUUIDAllocator) error {
+func runWrapper(ctx context.Context, allocator *ClusterIDAllocator) error {
 	stopCh := make(chan struct{})
 	doneCh := make(chan struct{})
 	defer close(stopCh)
@@ -72,34 +74,37 @@ func runWrapper(ctx context.Context, allocator ClusterUUIDAllocator) error {
 
 func TestClusterUUIDNew(t *testing.T) {
 	client := fake.NewSimpleClientset(uuidConfigMapEmpty)
-	allocator := NewClusterUUIDAllocator(antreaNamespace, DefaultUUIDConfigMapName, client)
+	allocator, err := NewClusterIDAllocator(antreaNamespace, DefaultClusterIDConfigMapName, client, "", "")
+	require.NoError(t, err)
 	ctx, cancel := context.WithTimeout(context.Background(), runTimeout)
 	defer cancel()
-	require.NoError(t, runWrapper(ctx, allocator), "Cluster UUID could not be allocated")
+	require.NoError(t, runWrapper(ctx, allocator), "Cluster identity could not be updated")
 
-	provider := NewClusterUUIDProvider(antreaNamespace, DefaultUUIDConfigMapName, client)
-	_, err := provider.Get()
-	assert.NoError(t, err, "Error when retrieving cluster UUID")
+	provider := NewClusterIDProvider(antreaNamespace, DefaultClusterIDConfigMapName, client)
+	actualUUID, actualName, err := provider.Get()
+	require.NoError(t, err, "Error when retrieving cluster identity")
+	assert.NotEqual(t, uuid.Nil, actualUUID)
+	assert.Equal(t, actualUUID.String(), actualName, "Cluster name should match cluster UUID")
 }
 
 func TestClusterUUIDExisting(t *testing.T) {
 	client := fake.NewSimpleClientset(uuidConfigMap)
-	allocator := NewClusterUUIDAllocator(antreaNamespace, DefaultUUIDConfigMapName, client)
+	allocator, err := NewClusterIDAllocator(antreaNamespace, DefaultClusterIDConfigMapName, client, "", "")
+	require.NoError(t, err)
 	ctx, cancel := context.WithTimeout(context.Background(), runTimeout)
 	defer cancel()
-	require.NoError(t, runWrapper(ctx, allocator), "Cluster UUID could not be allocated")
+	require.NoError(t, runWrapper(ctx, allocator), "Cluster identity could not be updated")
 
-	provider := NewClusterUUIDProvider(antreaNamespace, DefaultUUIDConfigMapName, client)
-	uuid, err := provider.Get()
-	require.NoError(t, err, "Error when retrieving cluster UUID")
-	require.NotNil(t, uuid)
-	assert.Equal(t, clusterUUID, *uuid)
+	provider := NewClusterIDProvider(antreaNamespace, DefaultClusterIDConfigMapName, client)
+	actualUUID, actualName, err := provider.Get()
+	require.NoError(t, err, "Error when retrieving cluster identity")
+	assert.Equal(t, clusterUUID, actualUUID)
+	assert.Equal(t, clusterName, actualName)
 }
 
 func TestClusterUUIDProviderMissingConfigMap(t *testing.T) {
 	client := fake.NewSimpleClientset()
-	provider := NewClusterUUIDProvider(antreaNamespace, DefaultUUIDConfigMapName, client)
-	uuid, err := provider.Get()
-	assert.Error(t, err, "Cluster UUID should not be available")
-	assert.Nil(t, uuid)
+	provider := NewClusterIDProvider(antreaNamespace, DefaultClusterIDConfigMapName, client)
+	_, _, err := provider.Get()
+	assert.Error(t, err, "Cluster identity should not be available")
 }

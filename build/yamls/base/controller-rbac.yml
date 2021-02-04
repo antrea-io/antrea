@@ -79,7 +79,7 @@ rules:
       - configmaps
     resourceNames:
       - antrea-ca
-      - antrea-cluster-uuid
+      - antrea-cluster-id
     verbs:
       - get
       - update

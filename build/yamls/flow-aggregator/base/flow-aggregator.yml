@@ -105,7 +105,7 @@ rules:
     resources:
       - configmaps
     resourceNames:
-      - antrea-cluster-uuid
+      - antrea-cluster-id
     verbs:
       - get
 ---

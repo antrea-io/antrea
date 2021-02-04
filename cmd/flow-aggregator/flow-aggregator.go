@@ -25,7 +25,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/klog"
 
-	"github.com/vmware-tanzu/antrea/pkg/clusteruuid"
+	"github.com/vmware-tanzu/antrea/pkg/clusterid"
 	aggregator "github.com/vmware-tanzu/antrea/pkg/flowaggregator"
 	"github.com/vmware-tanzu/antrea/pkg/signals"
 )
@@ -41,24 +41,24 @@ func genObservationDomainID(k8sClient kubernetes.Interface) uint32 {
 	const timeout = 10 * time.Second
 	const defaultAntreaNamespace = "kube-system"
 
-	uuidProvider := clusteruuid.NewClusterUUIDProvider(
+	clusterIDProvider := clusterid.NewClusterIDProvider(
 		defaultAntreaNamespace,
-		clusteruuid.DefaultUUIDConfigMapName,
+		clusterid.DefaultClusterIDConfigMapName,
 		k8sClient,
 	)
 	var clusterUUID uuid.UUID
 	err := wait.PollImmediate(retryInterval, timeout, func() (bool, error) {
-		if uuid, err := uuidProvider.Get(); err != nil {
+		var err error
+		if clusterUUID, _, err = clusterIDProvider.Get(); err != nil {
 			return false, nil
 		} else {
-			clusterUUID = *uuid
 			return true, nil
 		}
 	})
 	if err != nil {
 		klog.Warningf(
 			"Unable to retrieve cluster UUID after %v (does ConfigMap '%s/%s' exist?); will generate a random observation domain ID",
-			timeout, defaultAntreaNamespace, clusteruuid.DefaultUUIDConfigMapName,
+			timeout, defaultAntreaNamespace, clusterid.DefaultClusterIDConfigMapName,
 		)
 		clusterUUID = uuid.New()
 	}

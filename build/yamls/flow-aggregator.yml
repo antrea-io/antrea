@@ -81,7 +81,7 @@ rules:
 - apiGroups:
   - ""
   resourceNames:
-  - antrea-cluster-uuid
+  - antrea-cluster-id
   resources:
   - configmaps
   verbs:
