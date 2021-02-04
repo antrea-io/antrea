@@ -410,8 +410,8 @@ github.com/vishvananda/netns v0.0.0-20191106174202-0a2b9b5464df h1:OviZH7qLw/7Zo
 github.com/vishvananda/netns v0.0.0-20191106174202-0a2b9b5464df/go.mod h1:JP3t17pCcGlemwknint6hfoeCVQrEMVwxRLRjXpq+BU=
 github.com/vmware/go-ipfix v0.4.2 h1:KfIYSxC2D4Rdez9KojXYKYyPnU2dkCawtjfbXaTdbpk=
 github.com/vmware/go-ipfix v0.4.2/go.mod h1:lQz3f4r2pZWo0q8s8BtZ0xo5fPSOYsYteqJgBASP69o=
-github.com/wenyingd/ofnet v0.0.0-20201109024835-6fd225d8c8d1 h1:jBQJP2829C09r07Rc5EWS0+LefZhY51BJG0v3pLlGGA=
-github.com/wenyingd/ofnet v0.0.0-20201109024835-6fd225d8c8d1/go.mod h1:8mMMWAYBNUeTGXYKizOLETfN3WIbu3P5DgvS2jiXKdI=
+github.com/wenyingd/ofnet v0.0.0-20210205051801-5a4f247248d4 h1:HwolNov6r/aM4zwA3MiSzxJKUTi3MypPOR6PRCTg1sA=
+github.com/wenyingd/ofnet v0.0.0-20210205051801-5a4f247248d4/go.mod h1:8mMMWAYBNUeTGXYKizOLETfN3WIbu3P5DgvS2jiXKdI=
 github.com/xiang90/probing v0.0.0-20190116061207-43a291ad63a2 h1:eY9dn8+vbi4tKz5Qo6v2eYzo7kUS51QINcR5jNpbZS8=
 github.com/xiang90/probing v0.0.0-20190116061207-43a291ad63a2/go.mod h1:UETIi67q53MR2AWcXfiuqkDkRtnGDLqkBTpCHuJHxtU=
 github.com/xlab/handysort v0.0.0-20150421192137-fb3537ed64a1/go.mod h1:QcJo0QPSfTONNIgpN5RA8prR7fF8nkF6cTWTcNerRO8=

@@ -103,6 +103,7 @@ const (
 type ClusterNode struct {
 	idx  int // 0 for control-plane Node
 	name string
+	ip   string
 }
 
 type ClusterInfo struct {
@@ -188,6 +189,19 @@ func workerNodeName(idx int) string {
 	}
 }
 
+// workerNodeIP returns an empty string if there is no worker Node with the provided idx
+// (including if idx is 0, which is reserved for the control-plane Node)
+func workerNodeIP(idx int) string {
+	if idx == 0 { // control-plane Node
+		return ""
+	}
+	if node, ok := clusterInfo.nodes[idx]; !ok {
+		return ""
+	} else {
+		return node.ip
+	}
+}
+
 func controlPlaneNodeName() string {
 	return clusterInfo.controlPlaneNodeName
 }
@@ -270,9 +284,18 @@ func collectClusterInfo() error {
 			workerIdx++
 		}
 
+		var nodeIP string
+		for _, address := range node.Status.Addresses {
+			if address.Type == corev1.NodeInternalIP {
+				nodeIP = address.Address
+				break
+			}
+		}
+
 		clusterInfo.nodes[nodeIdx] = ClusterNode{
 			idx:  nodeIdx,
 			name: node.Name,
+			ip:   nodeIP,
 		}
 	}
 	if clusterInfo.controlPlaneNodeName == "" {
@@ -784,6 +807,15 @@ func (data *TestData) createPodOnNodeInNamespace(name, ns string, nodeName, ctrN
 func (data *TestData) createBusyboxPodOnNode(name string, nodeName string) error {
 	sleepDuration := 3600 // seconds
 	return data.createPodOnNode(name, nodeName, busyboxImage, []string{"sleep", strconv.Itoa(sleepDuration)}, nil, nil, nil, false, nil)
+}
+
+// createHostNetworkBusyboxPodOnNode creates a host network Pod in the test namespace with a single busybox container.
+// The Pod will be scheduled on the specified Node (if nodeName is not empty).
+func (data *TestData) createHostNetworkBusyboxPodOnNode(name string, nodeName string) error {
+	sleepDuration := 3600 // seconds
+	return data.createPodOnNode(name, nodeName, busyboxImage, []string{"sleep", strconv.Itoa(sleepDuration)}, nil, nil, nil, false, func(pod *corev1.Pod) {
+		pod.Spec.HostNetwork = true
+	})
 }
 
 // createBusyboxPod creates a Pod in the test namespace with a single busybox container.

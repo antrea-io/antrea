@@ -240,6 +240,15 @@ func (b *ofFlowBuilder) MatchCTMarkMask(mask uint32) FlowBuilder {
 	return b
 }
 
+// MatchPktMark adds match condition for matching pkt_mark. If mask is nil, the mask should be not set in the OpenFlow
+// message which is sent to OVS, and OVS should match the value exactly.
+func (b *ofFlowBuilder) MatchPktMark(value uint32, mask *uint32) FlowBuilder {
+	b.matchers = append(b.matchers, fmt.Sprintf("pkt_mark=%d", value))
+	b.ofFlow.Match.PktMark = value
+	b.ofFlow.Match.PktMarkMask = mask
+	return b
+}
+
 func ctLabelRange(high, low uint64, rng Range, match *ofctrl.FlowMatch) {
 	// [127..64] [63..0]
 	//   high     low

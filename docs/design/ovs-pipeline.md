@@ -734,7 +734,7 @@ If you dump the flows for this table, you should see something like this:
 
 ```text
 1. table=90, priority=210,ct_state=-new+est,ip actions=goto_table:101
-2. table=90, priority=210,ip,nw_src=10.10.1.1 actions=goto_table:105
+2. table=90, priority=210,pkt_mark=0x1/0x1 actions=goto_table:105
 3. table=90, priority=200,ip,nw_src=10.10.1.2 actions=conjunction(3,1/3)
 4. table=90, priority=200,ip,nw_src=10.10.1.3 actions=conjunction(3,1/3)
 5. table=90, priority=200,ip,reg1=0x3 actions=conjunction(3,2/3)
@@ -749,10 +749,18 @@ connections - as a reminder all connections are committed in
 [ConntrackCommitTable] - packets go straight to IngressMetricsTable,
 then [L2ForwardingOutTable], with no other match required.
 
-Flow 2 ensures that traffic from the local gateway cannot be dropped because of
-Network Policies. This ensures that K8s [liveness
+Flow 2 ensures that the traffic initiated from the host network namespace cannot
+be dropped because of Network Policies. This ensures that K8s [liveness
 probes](https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/)
-can go through.
+can go through. An iptables rule in the mangle table of the host network
+namespace is responsible for marking the locally-generated packets with the
+`0x1/0x1` mark. Note that the flow will be different for Windows worker Node or
+when OVS userspace (netdev) datapath is used. This is because either there is no
+way to add mark for particular traffic (i.e. Windows) or matching the mark in
+OVS is not properly supported (i.e. netdev datapath). As a result, the flow will
+match source IP instead, however, NodePort Service access by external clients
+will be masqueraded as a local gateway IP to bypass Network Policies. This may
+be fixed after AntreaProxy can serve NodePort traffic.
 
 The rest of the flows read as follows: if the source IP address is in set
 {10.10.1.2, 10.10.1.3}, and the destination OF port is in the set {3, 4} (which

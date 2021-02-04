@@ -72,7 +72,7 @@ replace (
 	github.com/Microsoft/hcsshim v0.8.9 => github.com/ruicao93/hcsshim v0.8.10-0.20210114035434-63fe00c1b9aa
 	// antrea/plugins/octant/go.mod also has this replacement since replace statement in dependencies
 	// were ignored. We need to change antrea/plugins/octant/go.mod if there is any change here.
-	github.com/contiv/ofnet => github.com/wenyingd/ofnet v0.0.0-20201109024835-6fd225d8c8d1
+	github.com/contiv/ofnet => github.com/wenyingd/ofnet v0.0.0-20210205051801-5a4f247248d4
 	// avoid dependency on juju packages, which are licensed under LGPL v3
 	github.com/rakelkar/gonetsh => github.com/antoninbas/gonetsh v0.1.2
 	// fake.NewSimpleClientset is quite slow when it's initialized with massive objects due to

@@ -31,6 +31,7 @@ import (
 	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
+	"github.com/vmware-tanzu/antrea/pkg/agent/types"
 	"github.com/vmware-tanzu/antrea/pkg/agent/util"
 	"github.com/vmware-tanzu/antrea/pkg/agent/util/ipset"
 	"github.com/vmware-tanzu/antrea/pkg/agent/util/iptables"
@@ -225,7 +226,8 @@ func (c *Client) syncIPTables() error {
 		{iptables.RawTable, iptables.OutputChain, antreaOutputChain, "Antrea: jump to Antrea output rules"},
 		{iptables.FilterTable, iptables.ForwardChain, antreaForwardChain, "Antrea: jump to Antrea forwarding rules"},
 		{iptables.NATTable, iptables.PostRoutingChain, antreaPostRoutingChain, "Antrea: jump to Antrea postrouting rules"},
-		{iptables.MangleTable, iptables.PreRoutingChain, antreaMangleChain, "Antrea: jump to Antrea mangle rules"},
+		{iptables.MangleTable, iptables.PreRoutingChain, antreaMangleChain, "Antrea: jump to Antrea mangle rules"}, // TODO: unify the chain naming style
+		{iptables.MangleTable, iptables.OutputChain, antreaOutputChain, "Antrea: jump to Antrea output rules"},
 	}
 	for _, rule := range jumpRules {
 		if err := c.ipt.EnsureChain(rule.table, rule.dstChain); err != nil {
@@ -299,12 +301,25 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet, podIPSet string) *bytes
 	// Write head lines anyway so the undesired rules can be deleted when noEncap -> encap.
 	writeLine(iptablesData, "*mangle")
 	writeLine(iptablesData, iptables.MakeChainLine(antreaMangleChain))
+	writeLine(iptablesData, iptables.MakeChainLine(antreaOutputChain))
 	hostGateway := c.nodeConfig.GatewayConfig.Name
 	// When Antrea is used to enforce NetworkPolicies in EKS, an additional iptables
 	// mangle rule is required. See https://github.com/vmware-tanzu/antrea/issues/678.
 	if env.IsCloudEKS() {
 		c.writeEKSMangleRule(iptablesData)
 	}
+
+	// To make liveness/readiness probe traffic bypass ingress rules of Network Policies, mark locally generated packets
+	// that will be sent to OVS so we can identify them later in the OVS pipeline.
+	// It must match source address because kube-proxy ipvs mode will redirect ingress packets to output chain, and they
+	// will have non local source addresses.
+	writeLine(iptablesData, []string{
+		"-A", antreaOutputChain,
+		"-m", "comment", "--comment", `"Antrea: mark local output packets"`,
+		"-m", "addrtype", "--src-type", "LOCAL",
+		"-o", c.nodeConfig.GatewayConfig.Name,
+		"-j", iptables.MarkTarget, "--or-mark", fmt.Sprintf("%#08x", types.HostLocalSourceMark),
+	}...)
 	writeLine(iptablesData, "COMMIT")
 
 	writeLine(iptablesData, "*filter")
