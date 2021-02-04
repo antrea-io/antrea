@@ -39,7 +39,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/signals"
 )
 
-func NewPortTable(c *gomock.Controller) *portcache.PortTable {
+func newPortTable(c *gomock.Controller) *portcache.PortTable {
 	ptable := portcache.PortTable{StartPort: 40000, EndPort: 45000}
 	ptable.Table = make(map[int]portcache.NodePortData)
 
@@ -117,7 +117,7 @@ func TestMain(t *testing.T) {
 	os.Setenv("NODE_NAME", defaultNodeName)
 	kubeClient = k8sfake.NewSimpleClientset()
 	mockCtrl := gomock.NewController(t)
-	portTable = NewPortTable(mockCtrl)
+	portTable = newPortTable(mockCtrl)
 
 	// informerFactory is initialised and started from cmd/antrea-agent/agent.go
 	informerFactory := informers.NewSharedInformerFactory(kubeClient, resyncPeriod)
@@ -127,6 +127,11 @@ func TestMain(t *testing.T) {
 
 	go c.Run(stopCh)
 	informerFactory.Start(stopCh)
+
+	// Must wait for cache sync, otherwise resource creation events will be missing if the resources are created
+	// in-between list and watch call of an informer. This is because fake clientset doesn't support watching with
+	// resourceVersion. A watcher of fake clientset only gets events that happen after the watcher is created.
+	informerFactory.WaitForCacheSync(stopCh)
 }
 
 func pollForPodAnnotation(r *require.Assertions, podName string, found bool) (string, error) {
