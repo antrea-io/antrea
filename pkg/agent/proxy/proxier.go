@@ -15,6 +15,7 @@
 package proxy
 
 import (
+	"fmt"
 	"net"
 	"sync"
 	"time"
@@ -58,7 +59,10 @@ type proxier struct {
 	endpointsMap types.EndpointsMap
 	// endpointInstalledMap stores endpoints we actually installed.
 	endpointInstalledMap map[k8sproxy.ServicePortName]map[string]struct{}
-	groupCounter         types.GroupCounter
+	// endpointReferenceCounter stores times of an Endpoint referenced by a Service.
+	endpointReferenceCounter map[string]uint
+	// groupCounter is used for allocate groupID.
+	groupCounter types.GroupCounter
 	// serviceStringMap provides map from serviceString(ClusterIP:Port/Proto) to ServicePortName.
 	serviceStringMap map[string]k8sproxy.ServicePortName
 	// serviceStringMapMutex protects serviceStringMap object.
@@ -71,6 +75,10 @@ type proxier struct {
 	isIPv6       bool
 }
 
+func endpointKey(endpoint k8sproxy.Endpoint, protocol binding.Protocol) string {
+	return fmt.Sprintf("%s/%s", endpoint.String(), protocol)
+}
+
 func (p *proxier) isInitialized() bool {
 	return p.endpointsChanges.Synced() && p.serviceChanges.Synced()
 }
@@ -81,6 +89,7 @@ func (p *proxier) removeStaleServices() {
 			continue
 		}
 		svcInfo := svcPort.(*types.ServiceInfo)
+		klog.Infof("Removing stale Service: %s %s", svcPortName.Name, svcInfo.String())
 		if err := p.ofClient.UninstallServiceFlows(svcInfo.ClusterIP(), uint16(svcInfo.Port()), svcInfo.OFProtocol); err != nil {
 			klog.Errorf("Failed to remove flows of Service %v: %v", svcPortName, err)
 			continue
@@ -97,12 +106,6 @@ func (p *proxier) removeStaleServices() {
 		if err := p.ofClient.UninstallServiceGroup(groupID); err != nil {
 			klog.Errorf("Failed to remove flows of Service %v: %v", svcPortName, err)
 			continue
-		}
-		for _, endpoint := range p.endpointsMap[svcPortName] {
-			if err := p.ofClient.UninstallEndpointFlows(svcInfo.OFProtocol, endpoint); err != nil {
-				klog.Errorf("Failed to remove flows of Service Endpoints %v: %v", svcPortName, err)
-				continue
-			}
 		}
 		delete(p.serviceInstalledMap, svcPortName)
 		p.deleteServiceByIP(svcInfo.String())
@@ -130,19 +133,44 @@ func getBindingProtoForIPProto(endpointIP string, protocol corev1.Protocol) bind
 	return bindingProtocol
 }
 
+// removeEndpoint removes flows of an Endpoint from data path. Callers should guarantee the Endpoint is
+// expired or need to be removed. If the Endpoint is still be referenced by any other Services, there
+// is no operation on data path. The error only reflects failure of operation on data path. If the Endpoint
+// is removed from data path, this function return true. otherwise, return false.
+func (p *proxier) removeEndpoint(endpoint k8sproxy.Endpoint, protocol binding.Protocol) (bool, error) {
+	key := endpointKey(endpoint, protocol)
+	count := p.endpointReferenceCounter[key]
+	if count == 1 {
+		if err := p.ofClient.UninstallEndpointFlows(protocol, endpoint); err != nil {
+			return false, err
+		}
+		delete(p.endpointReferenceCounter, key)
+	} else if count > 1 {
+		p.endpointReferenceCounter[key] = p.endpointReferenceCounter[key] - 1
+		return false, nil
+	}
+	return true, nil
+}
+
 func (p *proxier) removeStaleEndpoints(staleEndpoints map[k8sproxy.ServicePortName]map[string]k8sproxy.Endpoint) {
+	klog.Infof("Stale Endpoints %s", staleEndpoints)
 	for svcPortName, endpoints := range staleEndpoints {
 		for _, endpoint := range endpoints {
-			bindingProtocol := getBindingProtoForIPProto(endpoint.IP(), svcPortName.Protocol)
-			if err := p.ofClient.UninstallEndpointFlows(bindingProtocol, endpoint); err != nil {
+			klog.Infof("Removing stale Endpoint %s of Service %s", endpoint.String(), svcPortName.String())
+			removed, err := p.removeEndpoint(endpoint, getBindingProtoForIPProto(endpoint.IP(), svcPortName.Protocol))
+			if err != nil {
 				klog.Errorf("Error when removing Endpoint %v for %v", endpoint, svcPortName)
 				continue
 			}
-			if m, ok := p.endpointInstalledMap[svcPortName]; ok {
+			if removed {
+				m := p.endpointInstalledMap[svcPortName]
 				delete(m, endpoint.String())
 				if len(m) == 0 {
 					delete(p.endpointInstalledMap, svcPortName)
 				}
+				klog.Infof("Endpoint %s/%s removed", endpoint.String(), svcPortName.Protocol)
+			} else {
+				klog.Infof("Stale Endpoint %s/%s of Service %s is still referenced by other Services, removing 1 reference", endpoint.String(), svcPortName.Protocol, svcPortName)
 			}
 		}
 	}
@@ -179,34 +207,37 @@ func (p *proxier) installServices() {
 	for svcPortName, svcPort := range p.serviceMap {
 		svcInfo := svcPort.(*types.ServiceInfo)
 		groupID, _ := p.groupCounter.Get(svcPortName)
-		endpoints, ok := p.endpointsMap[svcPortName]
-		if !ok || len(endpoints) == 0 {
-			continue
-		}
-
-		endpointInstalled, ok := p.endpointInstalledMap[svcPortName]
+		endpointsInstalled, ok := p.endpointInstalledMap[svcPortName]
 		if !ok {
 			p.endpointInstalledMap[svcPortName] = map[string]struct{}{}
-			endpointInstalled = p.endpointInstalledMap[svcPortName]
+			endpointsInstalled = p.endpointInstalledMap[svcPortName]
+		}
+		endpoints := p.endpointsMap[svcPortName]
+		// If both expected Endpoints number and installed Endpoints number are 0, we don't need to take care of this service.
+		if len(endpoints) == 0 && len(endpointsInstalled) == 0 {
+			continue
 		}
 
 		installedSvcPort, ok := p.serviceInstalledMap[svcPortName]
 		var pSvcInfo *types.ServiceInfo
-		needRemoval := false
-		needUpdate := true
+		var needRemoval, needUpdate, needUpdateEndpoints bool
 		if ok {
 			pSvcInfo = installedSvcPort.(*types.ServiceInfo)
 			needRemoval = serviceIdentityChanged(svcInfo, pSvcInfo) || (svcInfo.SessionAffinityType() != pSvcInfo.SessionAffinityType())
 			needUpdate = needRemoval || (svcInfo.StickyMaxAgeSeconds() != pSvcInfo.StickyMaxAgeSeconds())
+			needUpdateEndpoints = pSvcInfo.SessionAffinityType() != svcInfo.SessionAffinityType()
 		}
 
 		var endpointUpdateList []k8sproxy.Endpoint
-		for _, endpoint := range endpoints {
-			if _, ok := endpointInstalled[endpoint.String()]; !ok {
-				needUpdate = true
-				endpointInstalled[endpoint.String()] = struct{}{}
+		for _, endpoint := range endpoints { // Check if there is any installed Endpoint which is not expected anymore.
+			if _, ok := endpointsInstalled[endpoint.String()]; !ok { // There is an expected Endpoint which is not installed.
+				needUpdateEndpoints = true
 			}
 			endpointUpdateList = append(endpointUpdateList, endpoint)
+		}
+		if len(endpoints) < len(endpointsInstalled) { // There are Endpoints which expired.
+			klog.Infof("Some Endpoints of Service %s removed, updating Endpoints", svcInfo.String())
+			needUpdateEndpoints = true
 		}
 
 		var deletedLoadBalancerIPs, addedLoadBalancerIPs []string
@@ -221,19 +252,38 @@ func (p *proxier) installServices() {
 			needUpdate = true
 		}
 
-		if !needUpdate {
+		if !needUpdate && !needUpdateEndpoints {
 			continue
 		}
 
-		if err := p.ofClient.InstallEndpointFlows(svcInfo.OFProtocol, endpointUpdateList, p.isIPv6); err != nil {
-			klog.Errorf("Error when installing Endpoints flows: %v", err)
-			continue
+		op := "Installing"
+		if pSvcInfo != nil {
+			op = "Updating"
 		}
-		err := p.ofClient.InstallServiceGroup(groupID, svcInfo.StickyMaxAgeSeconds() != 0, endpointUpdateList)
-		if err != nil {
-			klog.Errorf("Error when installing Endpoints groups: %v", err)
-			p.endpointInstalledMap[svcPortName] = nil
-			continue
+		klog.Infof("%s Service %s %s", op, svcPortName.Name, svcInfo.String())
+
+		if needUpdateEndpoints {
+			err := p.ofClient.InstallEndpointFlows(svcInfo.OFProtocol, endpointUpdateList, p.isIPv6)
+			if err != nil {
+				klog.Errorf("Error when installing Endpoints flows: %v", err)
+				continue
+			}
+			err = p.ofClient.InstallServiceGroup(groupID, svcInfo.StickyMaxAgeSeconds() != 0, endpointUpdateList)
+			if err != nil {
+				klog.Errorf("Error when installing Endpoints groups: %v", err)
+				p.endpointInstalledMap[svcPortName] = nil
+				continue
+			}
+			newEndpointsInstalled := map[string]struct{}{}
+			for _, e := range endpointUpdateList {
+				// If the Endpoint is newly installed, add a reference.
+				if _, ok := endpointsInstalled[e.String()]; !ok {
+					key := endpointKey(e, svcInfo.OFProtocol)
+					p.endpointReferenceCounter[key] = p.endpointReferenceCounter[key] + 1
+				}
+				newEndpointsInstalled[e.String()] = struct{}{}
+			}
+			p.endpointInstalledMap[svcPortName] = newEndpointsInstalled
 		}
 		// Delete previous flow.
 		if needRemoval {
@@ -430,18 +480,19 @@ func NewProxier(
 	metrics.Register()
 	klog.Infof("Creating proxier with IPv6 enabled=%t", isIPv6)
 	p := &proxier{
-		endpointsConfig:      config.NewEndpointsConfig(informerFactory.Core().V1().Endpoints(), resyncPeriod),
-		serviceConfig:        config.NewServiceConfig(informerFactory.Core().V1().Services(), resyncPeriod),
-		endpointsChanges:     newEndpointsChangesTracker(hostname),
-		serviceChanges:       newServiceChangesTracker(recorder, isIPv6),
-		serviceMap:           k8sproxy.ServiceMap{},
-		serviceInstalledMap:  k8sproxy.ServiceMap{},
-		endpointInstalledMap: map[k8sproxy.ServicePortName]map[string]struct{}{},
-		endpointsMap:         types.EndpointsMap{},
-		serviceStringMap:     map[string]k8sproxy.ServicePortName{},
-		groupCounter:         types.NewGroupCounter(),
-		ofClient:             ofClient,
-		isIPv6:               isIPv6,
+		endpointsConfig:          config.NewEndpointsConfig(informerFactory.Core().V1().Endpoints(), resyncPeriod),
+		serviceConfig:            config.NewServiceConfig(informerFactory.Core().V1().Services(), resyncPeriod),
+		endpointsChanges:         newEndpointsChangesTracker(hostname),
+		serviceChanges:           newServiceChangesTracker(recorder, isIPv6),
+		serviceMap:               k8sproxy.ServiceMap{},
+		serviceInstalledMap:      k8sproxy.ServiceMap{},
+		endpointInstalledMap:     map[k8sproxy.ServicePortName]map[string]struct{}{},
+		endpointsMap:             types.EndpointsMap{},
+		endpointReferenceCounter: map[string]uint{},
+		serviceStringMap:         map[string]k8sproxy.ServicePortName{},
+		groupCounter:             types.NewGroupCounter(),
+		ofClient:                 ofClient,
+		isIPv6:                   isIPv6,
 	}
 	p.serviceConfig.RegisterEventHandler(p)
 	p.endpointsConfig.RegisterEventHandler(p)
