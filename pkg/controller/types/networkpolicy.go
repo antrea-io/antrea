@@ -41,6 +41,8 @@ func (meta *SpanMeta) Has(nodeName string) bool {
 type AppliedToGroup struct {
 	SpanMeta
 	// UID is generated from the hash value of GroupSelector.NormalizedName.
+	// In case the AppliedToGroup is created for a ClusterGroup, the UID is
+	// that of the corresponding ClusterGroup.
 	UID types.UID
 	// Name of this group, currently it's same as UID.
 	Name string

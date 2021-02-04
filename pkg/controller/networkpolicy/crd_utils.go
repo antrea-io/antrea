@@ -137,7 +137,7 @@ func (n *NetworkPolicyController) createAppliedToGroupForClusterGroupCRD(cg *v1a
 	}
 	// Create an AppliedToGroup object for this internal Group.
 	appliedToGroup := &antreatypes.AppliedToGroup{
-		UID:  types.UID(igKey),
+		UID:  cg.UID,
 		Name: igKey,
 	}
 	klog.V(2).Infof("Creating new AppliedToGroup %s with selector (%s) corresponding to ClusterGroup CRD", appliedToGroup.Name, appliedToGroup.Selector.NormalizedName)

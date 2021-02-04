@@ -446,25 +446,6 @@ func testInvalidACNPIngressPeerCGSetWithIPBlock(t *testing.T) {
 	}
 }
 
-func testInvalidACNPRuleAppliedToRuleAppliedToGroupsSet(t *testing.T) {
-	invalidNpErr := fmt.Errorf("invalid Antrea ClusterNetworkPolicy with rules appliedTo and rules appliedToGroups set")
-	ruleAppTo := ACNPAppliedToSpec{
-		PodSelector: map[string]string{"pod": "b"},
-		Group:       "cgA",
-	}
-	builder := &ClusterNetworkPolicySpecBuilder{}
-	builder = builder.SetName("acnp-rules-appto-and-rules-appto-groups").
-		SetPriority(1.0)
-	builder = builder.AddIngress(v1.ProtocolTCP, &p80, nil, nil, nil, map[string]string{"pod": "b"}, map[string]string{"ns": "x"},
-		nil, nil, []ACNPAppliedToSpec{ruleAppTo}, secv1alpha1.RuleActionAllow, "", "")
-	acnp := builder.Get()
-	log.Debugf("creating ACNP %v", acnp.Name)
-	if _, err := k8sUtils.CreateOrUpdateACNP(acnp); err == nil {
-		// Above creation of ACNP must fail as it is an invalid spec.
-		failOnError(invalidNpErr, t)
-	}
-}
-
 func testInvalidANPNoPriority(t *testing.T) {
 	invalidNpErr := fmt.Errorf("invalid Antrea NetworkPolicy without a priority accepted")
 	builder := &AntreaNetworkPolicySpecBuilder{}
@@ -722,7 +703,7 @@ func testACNPPriorityOverrideDefaultDeny(t *testing.T) {
 		SetPriority(1).
 		SetAppliedToGroup([]ACNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}, NSSelector: map[string]string{"ns": "x"}}})
 	builder2.AddIngress(v1.ProtocolTCP, &p80, nil, nil, nil, nil, map[string]string{"ns": "z"},
-		nil, nil, nil, secv1alpha1.RuleActionDrop,"",  "")
+		nil, nil, nil, secv1alpha1.RuleActionDrop, "", "")
 
 	// Ingress from ns:z to x/a will be dropped since acnp-priority1 has higher precedence.
 	reachabilityBothACNP := NewReachability(allPods, false)
@@ -1149,7 +1130,7 @@ func testACNPTierOverride(t *testing.T) {
 	cidr := podZBIP + "/32"
 	// Highest priority tier. Drops traffic from z/b to x/a.
 	builder1.AddIngress(v1.ProtocolTCP, &p80, nil, nil, &cidr, nil, nil,
-		nil, nil, nil, secv1alpha1.RuleActionDrop,"",  "")
+		nil, nil, nil, secv1alpha1.RuleActionDrop, "", "")
 
 	builder2 := &ClusterNetworkPolicySpecBuilder{}
 	builder2 = builder2.SetName("acnp-tier-securityops").
@@ -1240,7 +1221,7 @@ func testACNPCustomTiers(t *testing.T) {
 		SetAppliedToGroup([]ACNPAppliedToSpec{{NSSelector: map[string]string{"ns": "x"}}})
 	// Lowest priority tier. Drops traffic from z to x.
 	builder2.AddIngress(v1.ProtocolTCP, &p80, nil, nil, nil, nil, map[string]string{"ns": "z"},
-		nil, nil, nil, secv1alpha1.RuleActionDrop,"",  "")
+		nil, nil, nil, secv1alpha1.RuleActionDrop, "", "")
 
 	reachabilityTwoACNPs := NewReachability(allPods, true)
 	reachabilityTwoACNPs.Expect(Pod("z/a"), Pod("x/b"), false)
