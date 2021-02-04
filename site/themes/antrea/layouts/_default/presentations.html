@@ -1,11 +1,11 @@
 {{ define "main" }}
 	<main>
-		<div class="hero subpage">
+		<div class="hero subpage-hero">
 			<div class="wrapper">
 				<h1>Presentations</h1>
 			</div>
 		</div>
-		<div class="wrapper presentation landing">
+		<div class="wrapper subpage presentation landing">
 			<div class="grid two">
 				{{ range (.Paginator 8).Pages.ByDate.Reverse }}
 					{{ partial "presentation-card.html" . }}

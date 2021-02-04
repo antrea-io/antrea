@@ -20,6 +20,10 @@ header {
             font-family: $metropolis-medium;
         }
     }
+    .image {
+        height: 45px;
+        width: auto;
+    }
     li img {
         vertical-align: bottom;
         margin-right: 10px;
@@ -29,10 +33,7 @@ header {
     }
     @include breakpoint(medium) {
         .desktop-links li {
-            padding-right: 7px;
-            a {
-                font-size: 14px;
-            }
+            padding-right: 10px;
         }
     }
     @include breakpoint(small) {
@@ -96,6 +97,7 @@ header {
                 a {
                     font-size: 14px;
                     padding-right: 35px;
+                    margin-bottom: 20px;
                     &:last-of-type {
                         padding-right: 0px;
                     }

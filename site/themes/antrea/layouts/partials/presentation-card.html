@@ -1,8 +1,8 @@
 <div class="col">
     <div class="icon">
         {{ if (.Params.Embed )}}
-            <div class="embed-responsive embed-responsive-16by9">
-                <iframe class="embed-responsive-item" src="{{ .Params.Embed }}" frameborder="0" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+            <div class="embed-responsive">
+                <iframe class="embed-responsive-item" src="{{ .Params.Embed }}"></iframe>
             </div>
         {{ else }}
             <img src="{{ .Params.Image }}" alt="{{ .Title }}" />

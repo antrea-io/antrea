@@ -1,0 +1,17 @@
+{{ define "main" }}
+	<main>
+		<div class="hero subpage-hero">
+			<div class="wrapper">
+				<h1>Who's using Antrea</h1>
+			</div>
+		</div>
+		<div class="wrapper users">
+			<p>Here are just a few of the organizations we know are using Antrea. If you want to edit this page, <a href="{{ $.Site.Params.github_url }}/edit/main/site/content/users">please send a pull request!</a></p>
+			<div class="grid three">
+				{{ range .Pages }}
+					{{ partial "customer-logo.html" . }}
+				{{ end }}
+			</div>
+		</div>
+	</main>
+{{ end }}
