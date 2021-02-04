@@ -1,5 +1,7 @@
 name: Kind
 on:
+  # TODO remove the pull_request bit before merging
+  pull_request:
   schedule:
     # run once a day at midnight
     - cron: '0 0 * * *'
@@ -20,11 +22,6 @@ jobs:
           df -h
       - uses: actions/checkout@v2
       - run: make
-# TODO confirm these steps are unnecessary and delete
-#      - name: Save Antrea image to tarball
-#        run:  docker save -o antrea-ubuntu.tar projects.registry.vmware.com/antrea/antrea-ubuntu:latest
-#      - name: Load Antrea image
-#        run:  docker load -i antrea-ubuntu/antrea-ubuntu.tar
       - name: Install Kind
         run: |
           curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-$(uname)-amd64
