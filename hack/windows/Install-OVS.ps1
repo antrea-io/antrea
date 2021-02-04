@@ -1,14 +1,34 @@
+<#
+  .SYNOPSIS
+  Installs Windows OpenvSwitch from a web location or local file.
+
+  .PARAMETER DownloadURL
+  The URL of the OpenvSwitch package to be downloaded.
+
+  .PARAMETER DownloadDir
+  The path of the directory to be used to download OpenvSwitch package.
+
+  .PARAMETER OVSInstallDir
+  The target installtion directory. The default path is "C:\openvswitch".
+
+  .PARAMETER CheckFileHash
+  Skips check file hash. The default value is true.
+
+  .PARAMETER LocalFile
+  Specifes the path of a local OpenvSwitch package to be used for installation.
+  When the param is used, "DownloadURL" and "DownloadDir" params will be ignored.
+#>
 Param(
     [parameter(Mandatory = $false)] [string] $DownloadDir,
     [parameter(Mandatory = $false)] [string] $DownloadURL,
     [parameter(Mandatory = $false)] [string] $OVSInstallDir = "C:\openvswitch",
-    [parameter(Mandatory = $false)] [bool] $CheckFile = $true,
+    [parameter(Mandatory = $false)] [bool] $CheckFileHash = $true,
     [parameter(Mandatory = $false)] [string] $LocalFile
 )
 
 $ErrorActionPreference = "Stop"
 $OVSDownloadURL = "https://downloads.antrea.io/ovs/ovs-2.14.0-antrea.1-win64.zip"
-# Use a SHA256 hash to ensure that the downloaded archive iscorrect.
+# Use a SHA256 hash to ensure that the downloaded archive is correct.
 $OVSPublishedHash = 'E81800A6B8E157C948BAE548E5AFB425B2AD98CE18BC8C6148AB5B7F81E76B7D'
 $WorkDir = [System.IO.Path]::GetDirectoryName($myInvocation.MyCommand.Definition)
 $OVSDownloadDir = $WorkDir
@@ -74,21 +94,21 @@ function CheckIfOVSInstalled() {
 
 function DownloadOVS() {
     if ($LocalFile -ne "") {
-        Log "Use local file: $LocalFile"
+        Log "Skipping OVS download, using local file: $LocalFile"
         return
-    } else {
-        If (!(Test-Path $OVSDownloadDir)) {
-            mkdir -p $OVSDownloadDir
-        }
-        Log "Downloading OVS package from $OVSDownloadURL to $OVSZip"
-        curl.exe -sLo $OVSZip $OVSDownloadURL
-        If (!$?) {
-            Log "Download OVS failed, URL: $OVSDownloadURL"
-            exit 1
-        }
     }
 
-    if ($CheckFile) {
+    If (!(Test-Path $OVSDownloadDir)) {
+        mkdir -p $OVSDownloadDir
+    }
+    Log "Downloading OVS package from $OVSDownloadURL to $OVSZip"
+    curl.exe -sLo $OVSZip $OVSDownloadURL
+    If (!$?) {
+        Log "Download OVS failed, URL: $OVSDownloadURL"
+        exit 1
+    }
+
+    if ($CheckFileHash) {
         $FileHash = Get-FileHash $OVSZip
         If ($OVSPublishedHash -ne "" -And $FileHash.Hash -ne $OVSPublishedHash) {
             Log "SHA256 mismatch for OVS download"
