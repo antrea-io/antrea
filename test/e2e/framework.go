@@ -68,6 +68,7 @@ const (
 	antreaDefaultGW            string = "antrea-gw0"
 	testNamespace              string = "antrea-test"
 	busyboxContainerName       string = "busybox"
+	controllerContainerName    string = "antrea-controller"
 	ovsContainerName           string = "antrea-ovs"
 	agentContainerName         string = "antrea-agent"
 	antreaYML                  string = "antrea.yml"
