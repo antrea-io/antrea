@@ -49,12 +49,8 @@ var (
 	httpConcurrency      = flag.Int("perf.http.concurrency", 1, "Number of multiple requests to make at a time")
 	realizeTimeout       = flag.Duration("perf.realize.timeout", 5*time.Minute, "Timeout of the realization of network policies")
 	// tolerate NoSchedule taint to let the Pod run on control-plane Node
-	noScheduleToleration = corev1.Toleration{
-		Key:      labelNodeRoleControlPlane(),
-		Operator: corev1.TolerationOpExists,
-		Effect:   corev1.TaintEffectNoSchedule,
-	}
-	labelSelector = &metav1.LabelSelector{
+	noScheduleToleration = controlPlaneNoScheduleToleration()
+	labelSelector        = &metav1.LabelSelector{
 		MatchLabels: map[string]string{"app": perfTestAppLabel},
 	}
 )
