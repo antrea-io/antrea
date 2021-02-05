@@ -28,7 +28,7 @@ done
 echo "Merging all files as $REPORTS_DIR/ALL.deps.txt"
 echo "****************"
 # The 'grep -v' is to remove the dependency of the Antrea Octant plugin to Antrea
-cat "$REPORTS_DIR"/*.deps.txt | grep -v "\.\./\.\." | uniq | tee "$REPORTS_DIR/ALL.deps.txt"
+cat "$REPORTS_DIR"/*.deps.txt | grep -v "\.\./\.\." | sort | uniq | tee "$REPORTS_DIR/ALL.deps.txt"
 echo "****************"
 
 if [ -z "$failed_binaries" ]; then
