@@ -193,7 +193,7 @@ ConfigMap as follows:
 
 ### The Antrea ClusterNetworkPolicy resource
 
-An example ClusterNetworkPolicy might look like this:
+Example ClusterNetworkPolicies might look like this:
 
 ```yaml
 apiVersion: security.antrea.tanzu.vmware.com/v1alpha1
@@ -249,11 +249,11 @@ spec:
   priority: 8
   tier: securityops
   appliedTo:
-    - group: "test-cg-with-db-selector"
+    - group: "test-cg-with-db-selector"  # defined separately with a ClusterGroup resource
   ingress:
     - action: Allow
       from:
-        - group: "test-cg-with-frontend-selector"
+        - group: "test-cg-with-frontend-selector"  # defined separately with a ClusterGroup resource
       ports:
         - protocol: TCP
           port: 8080
@@ -265,7 +265,7 @@ spec:
   egress:
     - action: Drop
       to:
-        - group: "test-cg-with-ip-block"
+        - group: "test-cg-with-ip-block"  # defined separately with a ClusterGroup resource
       ports:
         - protocol: TCP
           port: 5978
@@ -292,6 +292,8 @@ rule is used.
 In the first example, the policy applies to Pods, which either match the labels
 "role=db" in all the Namespaces, or are from Namespaces which match the
 labels "env=prod".
+The second example policy applies to all network endpoints selected by the
+"test-cg-with-db-selector" ClusterGroup.
 
 **priority**: The `priority` field determines the relative priority of the
 policy among all ClusterNetworkPolicies in the given cluster. This field is
@@ -325,6 +327,9 @@ The first example policy contains a single rule, which allows matched traffic on
 single port, from one of two sources: the first specified by a `podSelector`
 and the second specified by a combination of a `podSelector` and a
 `namespaceSelector`.
+The second example policy contains a single rule, which allows matched traffic on
+multiple TCP ports (8000 through 9000 included, plus 6379) from all network endpoints
+selected by the "test-cg-with-frontend-selector" ClusterGroup.
 **Note**: The order in which the ingress rules are set matter, i.e. rules will
 be enforced in the order in which they are written.
 
@@ -341,6 +346,9 @@ A ClusterGroup name can be set in the `group` field of a egress `to` section in 
 of stand-alone selectors to allow traffic to workloads/ipBlocks set in the ClusterGroup.
 The first example policy contains a single rule, which drops matched traffic on a
 single port, to the 10.0.10.0/24 subnet specified by the `ipBlock` field.
+The second example policy contains a single rule, which drops matched traffic on
+TCP port 5978 to all network endpoints selected by the "test-cg-with-ip-block"
+ClusterGroup.
 **Note**: The order in which the egress rules are set matter, i.e. rules will
 be enforced in the order in which they are written.
 
@@ -592,7 +600,7 @@ order in which they are enforced.
 
 A ClusterGroup (CG) CRD is a specification of how workloads are grouped together.
 It allows admins to group Pods using traditional label selectors, which can then
-be referenced in ACNP in place of stand alone `podSelector` and/or `namespaceSelector`.
+be referenced in ACNP in place of stand-alone `podSelector` and/or `namespaceSelector`.
 ClusterGroups allow admins to separate the concern of grouping of workloads from
 the security aspect of Antrea-native policies.
 It adds another level of indirection allowing users to update group membership
@@ -656,7 +664,8 @@ If set with a `podSelector`, all matching Pods from Namespaces selected by the
 
 **ipBlock**: This selects a particular IP CIDR range to allow as `ingress`
 "sources" or `egress` "destinations".
-A ClusterGroup with `ipBlock` set may not be used in an ACNP's `appliedTo` field.
+A ClusterGroup with `ipBlock` referenced in an ACNP's `appliedTo` field will be
+ignored, and the policy will have no effect.
 
 **status**: The ClusterGroup `status` field determines the overall realization
 status of the group.
