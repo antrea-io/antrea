@@ -1,4 +1,4 @@
-// Copyright 2020 Antrea Authors
+// Copyright 2021 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -1383,6 +1383,20 @@ func (mr *MockFlowBuilderMockRecorder) MatchCTSrcPort(arg0 interface{}) *gomock.
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchCTSrcPort", reflect.TypeOf((*MockFlowBuilder)(nil).MatchCTSrcPort), arg0)
 }
 
+// MatchCTStateDnat mocks base method
+func (m *MockFlowBuilder) MatchCTStateDnat(arg0 bool) openflow.FlowBuilder {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MatchCTStateDnat", arg0)
+	ret0, _ := ret[0].(openflow.FlowBuilder)
+	return ret0
+}
+
+// MatchCTStateDnat indicates an expected call of MatchCTStateDnat
+func (mr *MockFlowBuilderMockRecorder) MatchCTStateDnat(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchCTStateDnat", reflect.TypeOf((*MockFlowBuilder)(nil).MatchCTStateDnat), arg0)
+}
+
 // MatchCTStateEst mocks base method
 func (m *MockFlowBuilder) MatchCTStateEst(arg0 bool) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
@@ -1451,6 +1465,20 @@ func (m *MockFlowBuilder) MatchCTStateRpl(arg0 bool) openflow.FlowBuilder {
 func (mr *MockFlowBuilderMockRecorder) MatchCTStateRpl(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchCTStateRpl", reflect.TypeOf((*MockFlowBuilder)(nil).MatchCTStateRpl), arg0)
+}
+
+// MatchCTStateSnat mocks base method
+func (m *MockFlowBuilder) MatchCTStateSnat(arg0 bool) openflow.FlowBuilder {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MatchCTStateSnat", arg0)
+	ret0, _ := ret[0].(openflow.FlowBuilder)
+	return ret0
+}
+
+// MatchCTStateSnat indicates an expected call of MatchCTStateSnat
+func (mr *MockFlowBuilderMockRecorder) MatchCTStateSnat(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchCTStateSnat", reflect.TypeOf((*MockFlowBuilder)(nil).MatchCTStateSnat), arg0)
 }
 
 // MatchCTStateTrk mocks base method
