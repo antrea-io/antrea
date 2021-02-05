@@ -364,10 +364,10 @@ func (c *NPLController) handleRemovePod(key string) error {
 
 // handleAddUpdatePod handles Pod Add, Update events and updates annotation if required.
 func (c *NPLController) handleAddUpdatePod(key string, obj interface{}) error {
-	newPod := obj.(*corev1.Pod).DeepCopy()
+	pod := obj.(*corev1.Pod)
 	klog.V(2).Infof("Got add/update event for Pod: %s", key)
 
-	podIP := newPod.Status.PodIP
+	podIP := pod.Status.PodIP
 	if podIP == "" {
 		klog.Infof("IP address not set for Pod: %s", key)
 		return nil
@@ -378,9 +378,8 @@ func (c *NPLController) handleAddUpdatePod(key string, obj interface{}) error {
 		if err := c.deleteAllPortRulesIfAny(podIP); err != nil {
 			return err
 		}
-		if _, exists := newPod.Annotations[NPLAnnotationKey]; exists {
-			removePodAnnotation(newPod)
-			return c.updatePodAnnotation(newPod)
+		if _, exists := pod.Annotations[NPLAnnotationKey]; exists {
+			return CleanupNPLAnnotationForPod(c.kubeClient, *pod)
 		}
 		return nil
 	}
@@ -389,33 +388,45 @@ func (c *NPLController) handleAddUpdatePod(key string, obj interface{}) error {
 	var err error
 	var updatePodAnnotation bool
 	var nodePort int
-	newPodPorts := make(map[int]struct{})
-	newPodContainers := newPod.Spec.Containers
-	for _, container := range newPodContainers {
+	podPorts := make(map[int]struct{})
+	podContainers := pod.Spec.Containers
+	nplAnnotations := []NPLAnnotation{}
+
+	podAnnotation, nplExists := pod.GetAnnotations()[NPLAnnotationKey]
+	if nplExists {
+		if err := json.Unmarshal([]byte(podAnnotation), &nplAnnotations); err != nil {
+			klog.Warningf("Unable to unmarshal NodePortLocal annotation for Pod %s/%s",
+				pod.Namespace, pod.Name)
+			return nil
+		}
+	}
+
+	for _, container := range podContainers {
 		for _, cport := range container.Ports {
 			port := int(cport.ContainerPort)
-			newPodPorts[port] = struct{}{}
+			podPorts[port] = struct{}{}
 			if !c.portTable.RuleExists(podIP, int(cport.ContainerPort)) {
 				nodePort, err = c.portTable.AddRule(podIP, port)
 				if err != nil {
 					return fmt.Errorf("failed to add rule for Pod %s: %v", key, err)
 				}
-				updatePodAnnotation = AssignPodAnnotation(newPod, newPod.Status.HostIP, port, nodePort)
+				updatePodAnnotation = IsNPLAnnotationRequired(pod.Annotations, pod.Status.HostIP, port, nodePort)
+				if updatePodAnnotation {
+					nplAnnotations = append(nplAnnotations, NPLAnnotation{
+						PodPort:  port,
+						NodeIP:   pod.Status.HostIP,
+						NodePort: nodePort,
+					})
+				}
 			}
 		}
 	}
 
-	var annotations []NPLAnnotation
-	podAnnotation, exists := newPod.GetAnnotations()[NPLAnnotationKey]
 	entries := c.portTable.GetDataForPodIP(podIP)
-	if exists {
-		if err := json.Unmarshal([]byte(podAnnotation), &annotations); err != nil {
-			klog.Warningf("Unable to unmarshal NodePortLocal annotation")
-			return nil
-		}
+	if nplExists {
 		for _, data := range entries {
-			if _, exists := newPodPorts[data.PodPort]; !exists {
-				removeFromPodAnnotation(newPod, data.PodPort)
+			if _, exists := podPorts[data.PodPort]; !exists {
+				nplAnnotations = removeFromNPLAnnotation(nplAnnotations, data.PodPort)
 				err := c.portTable.DeleteRule(podIP, int(data.PodPort))
 				if err != nil {
 					return fmt.Errorf("failed to delete rule for Pod IP %s, Pod Port %d: %s", podIP, data.PodPort, err.Error())
@@ -424,9 +435,8 @@ func (c *NPLController) handleAddUpdatePod(key string, obj interface{}) error {
 			}
 		}
 	}
-
 	if updatePodAnnotation {
-		return c.updatePodAnnotation(newPod)
+		return c.updatePodNPLAnnotation(pod, nplAnnotations)
 	}
 	return nil
 }
