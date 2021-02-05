@@ -46,6 +46,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/log"
 	"github.com/vmware-tanzu/antrea/pkg/monitor"
 	"github.com/vmware-tanzu/antrea/pkg/signals"
+	"github.com/vmware-tanzu/antrea/pkg/util/cipher"
 	"github.com/vmware-tanzu/antrea/pkg/version"
 )
 
@@ -145,6 +146,11 @@ func run(o *Options) error {
 		statsAggregator = stats.NewAggregator(networkPolicyInformer, cnpInformer, anpInformer)
 	}
 
+	cipherSuites, err := cipher.GenerateCipherSuitesList(o.config.TLSCipherSuites)
+	if err != nil {
+		return fmt.Errorf("error generating Cipher Suite list: %v", err)
+	}
+
 	apiServerConfig, err := createAPIServerConfig(o.config.ClientConnection.Kubeconfig,
 		client,
 		aggregatorClient,
@@ -159,7 +165,9 @@ func run(o *Options) error {
 		networkPolicyController,
 		networkPolicyStatusController,
 		statsAggregator,
-		o.config.EnablePrometheusMetrics)
+		o.config.EnablePrometheusMetrics,
+		cipherSuites,
+		cipher.TLSVersionMap[o.config.TLSMinVersion])
 	if err != nil {
 		return fmt.Errorf("error creating API server config: %v", err)
 	}
@@ -224,7 +232,9 @@ func createAPIServerConfig(kubeconfig string,
 	npController *networkpolicy.NetworkPolicyController,
 	networkPolicyStatusController *networkpolicy.StatusController,
 	statsAggregator *stats.Aggregator,
-	enableMetrics bool) (*apiserver.Config, error) {
+	enableMetrics bool,
+	cipherSuites []uint16,
+	tlsMinVersion uint16) (*apiserver.Config, error) {
 	secureServing := genericoptions.NewSecureServingOptions().WithLoopback()
 	authentication := genericoptions.NewDelegatingAuthenticationOptions()
 	authorization := genericoptions.NewDelegatingAuthorizationOptions().WithAlwaysAllowPaths(allowedPaths...)
@@ -265,6 +275,8 @@ func createAPIServerConfig(kubeconfig string,
 	serverConfig.OpenAPIConfig.Info.Title = "Antrea"
 	serverConfig.EnableMetrics = enableMetrics
 	serverConfig.MinRequestTimeout = int(serverMinWatchTimeout.Seconds())
+	serverConfig.SecureServing.CipherSuites = cipherSuites
+	serverConfig.SecureServing.MinTLSVersion = tlsMinVersion
 
 	return apiserver.NewConfig(
 		serverConfig,
