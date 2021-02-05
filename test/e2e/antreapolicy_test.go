@@ -756,8 +756,8 @@ func testACNPDropEgress(t *testing.T) {
 	executeTests(t, testCase)
 }
 
-// testACNPIngressRuleAllowCGWithXBtoYA tests traffic from ClusterGroup with X/B to Y/A on named port 81 is dropped.
-func testACNPIngressRuleAllowCGWithXBtoYA(t *testing.T) {
+// testACNPIngressRuleDenyCGWithXBtoYA tests traffic from ClusterGroup with X/B to Y/A on named port 81 is dropped.
+func testACNPIngressRuleDenyCGWithXBtoYA(t *testing.T) {
 	cgName := "cg-pods-xb"
 	cgBuilder := &ClusterGroupSpecBuilder{}
 	cgBuilder = cgBuilder.SetName(cgName)
@@ -765,7 +765,7 @@ func testACNPIngressRuleAllowCGWithXBtoYA(t *testing.T) {
 	cgBuilder = cgBuilder.SetPodSelector(map[string]string{"pod": "b"}, nil)
 	port81Name := "serve-81"
 	builder := &ClusterNetworkPolicySpecBuilder{}
-	builder = builder.SetName("acnp-allow-cg-with-xb-to-ya").
+	builder = builder.SetName("acnp-deny-cg-with-xb-to-ya").
 		SetPriority(2.0).
 		SetAppliedToGroup([]ACNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}, NSSelector: map[string]string{"ns": "y"}}})
 	builder.AddIngress(v1.ProtocolTCP, nil, &port81Name, nil, nil, nil, nil,
@@ -1709,6 +1709,8 @@ func TestAntreaPolicy(t *testing.T) {
 
 	t.Run("TestGroupNoK8sNP", func(t *testing.T) {
 		// testcases below do not depend on underlying k8s NetworkPolicies
+		// TODO: Investigate why Test: ACNPClusterGroupIngressRuleDenyCGWithXBtoYA fails if executed towards then end.
+		t.Run("Case=ACNPClusterGroupIngressRuleDenyCGWithXBtoYA", func(t *testing.T) { testACNPIngressRuleDenyCGWithXBtoYA(t) })
 		t.Run("Case=ACNPAllowNoDefaultIsolation", func(t *testing.T) { testACNPAllowNoDefaultIsolation(t) })
 		t.Run("Case=ACNPDropEgress", func(t *testing.T) { testACNPDropEgress(t) })
 		t.Run("Case=ACNPPortRange", func(t *testing.T) { testACNPPortRange(t) })
@@ -1722,7 +1724,6 @@ func TestAntreaPolicy(t *testing.T) {
 		t.Run("Case=ANPBasic", func(t *testing.T) { testANPBasic(t) })
 		t.Run("Case=AppliedToPerRule", func(t *testing.T) { testAppliedToPerRule(t) })
 		t.Run("Case=ACNPClusterGroupEgressRulePodsAToCGWithNsZ", func(t *testing.T) { testACNPEgressRulePodsAToCGWithNsZ(t) })
-		t.Run("Case=ACNPClusterGroupIngressRuleAllowCGWithXBtoYA", func(t *testing.T) { testACNPIngressRuleAllowCGWithXBtoYA(t) })
 		t.Run("Case=ACNPClusterGroupUpdate", func(t *testing.T) { testACNPClusterGroupUpdate(t) })
 		t.Run("Case=ACNPClusterGroupRefRulePodAdd", func(t *testing.T) { testACNPClusterGroupRefRulePodAdd(t, data) })
 		failOnError(k8sUtils.CleanACNPs(), t)
