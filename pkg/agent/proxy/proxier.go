@@ -92,7 +92,7 @@ func (p *proxier) removeStaleServices() {
 			continue
 		}
 		svcInfo := svcPort.(*types.ServiceInfo)
-		klog.Infof("Removing stale Service: %s %s", svcPortName.Name, svcInfo.String())
+		klog.V(2).Infof("Removing stale Service: %s %s", svcPortName.Name, svcInfo.String())
 		if err := p.ofClient.UninstallServiceFlows(svcInfo.ClusterIP(), uint16(svcInfo.Port()), svcInfo.OFProtocol); err != nil {
 			klog.Errorf("Failed to remove flows of Service %v: %v", svcPortName, err)
 			continue
@@ -162,7 +162,7 @@ func (p *proxier) removeEndpoint(endpoint k8sproxy.Endpoint, protocol binding.Pr
 func (p *proxier) removeStaleEndpoints(staleEndpoints map[k8sproxy.ServicePortName]map[string]k8sproxy.Endpoint) {
 	for svcPortName, endpoints := range staleEndpoints {
 		for _, endpoint := range endpoints {
-			klog.Infof("Removing stale Endpoint %s of Service %s", endpoint.String(), svcPortName.String())
+			klog.V(2).Infof("Removing stale Endpoint %s of Service %s", endpoint.String(), svcPortName.String())
 			removed, err := p.removeEndpoint(endpoint, getBindingProtoForIPProto(endpoint.IP(), svcPortName.Protocol))
 			if err != nil {
 				klog.Errorf("Error when removing Endpoint %v for %v", endpoint, svcPortName)
@@ -174,9 +174,9 @@ func (p *proxier) removeStaleEndpoints(staleEndpoints map[k8sproxy.ServicePortNa
 				if len(m) == 0 {
 					delete(p.endpointInstalledMap, svcPortName)
 				}
-				klog.Infof("Endpoint %s/%s removed", endpoint.String(), svcPortName.Protocol)
+				klog.V(2).Infof("Endpoint %s/%s removed", endpoint.String(), svcPortName.Protocol)
 			} else {
-				klog.Infof("Stale Endpoint %s/%s of Service %s is still referenced by other Services, removing 1 reference", endpoint.String(), svcPortName.Protocol, svcPortName)
+				klog.V(2).Infof("Stale Endpoint %s/%s of Service %s is still referenced by other Services, removing 1 reference", endpoint.String(), svcPortName.Protocol, svcPortName)
 			}
 		}
 	}
@@ -244,7 +244,7 @@ func (p *proxier) installServices() {
 			endpointUpdateList = append(endpointUpdateList, endpoint)
 		}
 		if len(endpoints) < len(endpointsInstalled) { // There are Endpoints which expired.
-			klog.Infof("Some Endpoints of Service %s removed, updating Endpoints", svcInfo.String())
+			klog.V(2).Infof("Some Endpoints of Service %s removed, updating Endpoints", svcInfo.String())
 			needUpdateEndpoints = true
 		}
 
@@ -269,7 +269,7 @@ func (p *proxier) installServices() {
 		if pSvcInfo != nil {
 			op = "Updating"
 		}
-		klog.Infof("%s Service %s %s", op, svcPortName.Name, svcInfo.String())
+		klog.V(2).Infof("%s Service %s %s", op, svcPortName.Name, svcInfo.String())
 
 		if needUpdateEndpoints {
 			err := p.ofClient.InstallEndpointFlows(svcInfo.OFProtocol, endpointUpdateList, p.isIPv6)
@@ -490,7 +490,7 @@ func NewProxier(
 		corev1.EventSource{Component: componentName, Host: hostname},
 	)
 	metrics.Register()
-	klog.Infof("Creating proxier with IPv6 enabled=%t", isIPv6)
+	klog.V(2).Infof("Creating proxier with IPv6 enabled=%t", isIPv6)
 	p := &proxier{
 		endpointsConfig:          config.NewEndpointsConfig(informerFactory.Core().V1().Endpoints(), resyncPeriod),
 		serviceConfig:            config.NewServiceConfig(informerFactory.Core().V1().Services(), resyncPeriod),
