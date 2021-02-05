@@ -718,10 +718,17 @@ func (data *TestData) createPodOnNode(name string, nodeName string, image string
 	// image could be a fully qualified URI which can't be used as container name and label value,
 	// extract the image name from it.
 	imageName := getImageName(image)
+	return data.createPodOnNodeInNamespace(name, testNamespace, nodeName, imageName, image, command, args, env, ports, hostNetwork, mutateFunc)
+}
+
+// createPodOnNodeInNamespace creates a pod in the provided namespace with a container whose type is decided by imageName.
+// Pod will be scheduled on the specified Node (if nodeName is not empty).
+// mutateFunc can be used to customize the Pod if the other parameters don't meet the requirements.
+func (data *TestData) createPodOnNodeInNamespace(name, ns string, nodeName, ctrName string, image string, command []string, args []string, env []corev1.EnvVar, ports []corev1.ContainerPort, hostNetwork bool, mutateFunc func(*corev1.Pod)) error {
 	podSpec := corev1.PodSpec{
 		Containers: []corev1.Container{
 			{
-				Name:            imageName,
+				Name:            ctrName,
 				Image:           image,
 				ImagePullPolicy: corev1.PullIfNotPresent,
 				Command:         command,
@@ -752,7 +759,7 @@ func (data *TestData) createPodOnNode(name string, nodeName string, image string
 			Name: name,
 			Labels: map[string]string{
 				"antrea-e2e": name,
-				"app":        imageName,
+				"app":        ctrName,
 			},
 		},
 		Spec: podSpec,
@@ -760,7 +767,7 @@ func (data *TestData) createPodOnNode(name string, nodeName string, image string
 	if mutateFunc != nil {
 		mutateFunc(pod)
 	}
-	if _, err := data.clientset.CoreV1().Pods(testNamespace).Create(context.TODO(), pod, metav1.CreateOptions{}); err != nil {
+	if _, err := data.clientset.CoreV1().Pods(ns).Create(context.TODO(), pod, metav1.CreateOptions{}); err != nil {
 		return err
 	}
 	return nil
@@ -806,6 +813,21 @@ func (data *TestData) createServerPod(name string, portName string, portNum int,
 		port.HostPort = int32(portNum)
 	}
 	return data.createPodOnNode(name, "", agnhostImage, nil, []string{cmd}, []corev1.EnvVar{env}, []corev1.ContainerPort{port}, false, nil)
+}
+
+// createCustomPod creates a Pod in given Namespace with custom labels.
+func (data *TestData) createServerPodWithLabels(name, ns string, portNum int, labels map[string]string) error {
+	cmd := []string{"ncat", "-lk", "-p", fmt.Sprintf("%d", portNum)}
+	image := "antrea/netpol-test:latest"
+	env := corev1.EnvVar{Name: fmt.Sprintf("SERVE_PORT_%d", portNum), Value: "foo"}
+	port := corev1.ContainerPort{ContainerPort: int32(portNum)}
+	containerName := fmt.Sprintf("c%v", portNum)
+	mutateLabels := func(pod *corev1.Pod) {
+		for k, v := range labels {
+			pod.Labels[k] = v
+		}
+	}
+	return data.createPodOnNodeInNamespace(name, ns, "", containerName, image, cmd, nil, []corev1.EnvVar{env}, []corev1.ContainerPort{port}, false, mutateLabels)
 }
 
 // deletePod deletes a Pod in the test namespace.

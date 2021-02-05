@@ -79,7 +79,7 @@ type TestStep struct {
 	Groups       []metav1.Object
 	Port         []int
 	Duration     time.Duration
-	CustomProbes []CustomProbe
+	CustomProbes []*CustomProbe
 }
 
 // CustomProbe will spin up (or update) SourcePod and DestPod such that Add event of Pods
@@ -893,7 +893,7 @@ func testACNPClusterGroupUpdate(t *testing.T) {
 	executeTests(t, testCase)
 }
 
-func testACNPClusterGroupRefRulePodAdd(t *testing.T) {
+func testACNPClusterGroupRefRulePodAdd(t *testing.T, data *TestData) {
 	cgName := "cg-pod-custom-pod-zk"
 	cgBuilder := &ClusterGroupSpecBuilder{}
 	cgBuilder = cgBuilder.SetName(cgName)
@@ -906,7 +906,7 @@ func testACNPClusterGroupRefRulePodAdd(t *testing.T) {
 			NSSelector: map[string]string{"ns": "x"}}})
 	builder.AddEgress(v1.ProtocolTCP, &p80, nil, nil, nil, nil, nil,
 		nil, nil, nil, secv1alpha1.RuleActionDrop, cgName, "")
-	cp := []CustomProbe{
+	cp := []*CustomProbe{
 		{
 			SourcePod: CustomPod{
 				Pod:    NewPod("x", "k"),
@@ -934,7 +934,7 @@ func testACNPClusterGroupRefRulePodAdd(t *testing.T) {
 	testCase := []*TestCase{
 		{"ACNP Drop Egress From All Pod:a to ClusterGroup with NS:z updated to ClusterGroup with NS:y", testStep},
 	}
-	executeTests(t, testCase)
+	executeTestsWithData(t, testCase, data)
 }
 
 // testBaselineNamespaceIsolation tests that a ACNP in the baseline Tier is able to enforce default namespace isolation,
@@ -1531,6 +1531,10 @@ func testAppliedToPerRule(t *testing.T) {
 
 // executeTests runs all the tests in testList and prints results
 func executeTests(t *testing.T, testList []*TestCase) {
+	executeTestsWithData(t, testList, nil)
+}
+
+func executeTestsWithData(t *testing.T, testList []*TestCase, data *TestData) {
 	for _, testCase := range testList {
 		log.Infof("running test case %s", testCase.Name)
 		log.Debugf("cleaning-up previous policies and sleeping for %v", networkPolicyDelay)
@@ -1556,38 +1560,32 @@ func executeTests(t *testing.T, testList []*TestCase) {
 					t.Errorf("failure -- %d wrong results", wrong)
 				}
 			}
+			if len(step.CustomProbes) > 0 && data == nil {
+				t.Errorf("test case %s with custom probe must set test data", testCase.Name)
+				continue
+			}
 			for _, p := range step.CustomProbes {
-				// Bootstrap Pods
-				srcPod, err := k8sUtils.CreateOrUpdatePod(p.SourcePod.Pod.Namespace(), p.SourcePod.Pod.PodName(), p.SourcePod.Labels)
-				if err != nil {
-					t.Errorf("failure -- creating source Pod: %v", err)
-					continue
-				}
-				destPod, err := k8sUtils.CreateOrUpdatePod(p.DestPod.Pod.Namespace(), p.DestPod.Pod.PodName(), p.DestPod.Labels)
-				if err != nil {
-					t.Errorf("failure -- creating destination Pod: %v", err)
-					continue
-				}
-				log.Tracef("Probing: %s -> %s", srcPod.Name, destPod.Name)
-				connected, err := k8sUtils.Probe(srcPod.Namespace, srcPod.Name, destPod.Namespace, destPod.Name, p.Port)
-				if err != nil {
-					t.Errorf("failure -- could not complete probe: %v", err)
-				}
-				if connected != p.ExpectConnected {
-					t.Errorf("failure -- wrong results for custom probe: Source %s/%s --> Dest %s/%s connected: %v, expected: %v", srcPod.Namespace, srcPod.Name, destPod.Namespace, destPod.Name, connected, p.ExpectConnected)
-				}
-				err = k8sUtils.DeletePod(srcPod.Namespace, srcPod.Name)
-				if err != nil {
-					t.Errorf("failure -- deleting source Pod: %v", err)
-				}
-				err = k8sUtils.DeletePod(destPod.Namespace, destPod.Name)
-				if err != nil {
-					t.Errorf("failure -- deleting destination Pod: %v", err)
-				}
+				doProbe(t, data, p)
 			}
 		}
 	}
 	allTestList = append(allTestList, testList...)
+}
+
+func doProbe(t *testing.T, data *TestData, p *CustomProbe) {
+	// Bootstrap Pods
+	_, _, cleanupFunc := createAndWaitForPodWithLabels(t, data, data.createServerPodWithLabels, p.SourcePod.Pod.PodName(), p.SourcePod.Pod.Namespace(), p.Port, p.SourcePod.Labels)
+	defer cleanupFunc()
+	_, _, cleanupFunc = createAndWaitForPodWithLabels(t, data, data.createServerPodWithLabels, p.DestPod.Pod.PodName(), p.DestPod.Pod.Namespace(), p.Port, p.DestPod.Labels)
+	defer cleanupFunc()
+	log.Tracef("Probing: %s -> %s", p.SourcePod.Pod.PodName(), p.DestPod.Pod.PodName())
+	connected, err := k8sUtils.Probe(p.SourcePod.Pod.Namespace(), p.SourcePod.Pod.PodName(), p.DestPod.Pod.Namespace(), p.DestPod.Pod.PodName(), p.Port)
+	if err != nil {
+		t.Errorf("failure -- could not complete probe: %v", err)
+	}
+	if connected != p.ExpectConnected {
+		t.Errorf("failure -- wrong results for custom probe: Source %s/%s --> Dest %s/%s connected: %v, expected: %v", p.SourcePod.Pod.Namespace(), p.SourcePod.Pod.PodName(), p.DestPod.Pod.Namespace(), p.DestPod.Pod.PodName(), connected, p.ExpectConnected)
+	}
 }
 
 func applyPolicies(t *testing.T, step *TestStep) {
@@ -1726,8 +1724,9 @@ func TestAntreaPolicy(t *testing.T) {
 		t.Run("Case=ACNPClusterGroupEgressRulePodsAToCGWithNsZ", func(t *testing.T) { testACNPEgressRulePodsAToCGWithNsZ(t) })
 		t.Run("Case=ACNPClusterGroupIngressRuleAllowCGWithXBtoYA", func(t *testing.T) { testACNPIngressRuleAllowCGWithXBtoYA(t) })
 		t.Run("Case=ACNPClusterGroupUpdate", func(t *testing.T) { testACNPClusterGroupUpdate(t) })
-		t.Run("Case=ACNPClusterGroupRefRulePodAdd", func(t *testing.T) { testACNPClusterGroupRefRulePodAdd(t) })
-		k8sUtils.CleanCGs()
+		t.Run("Case=ACNPClusterGroupRefRulePodAdd", func(t *testing.T) { testACNPClusterGroupRefRulePodAdd(t, data) })
+		failOnError(k8sUtils.CleanACNPs(), t)
+		failOnError(k8sUtils.CleanCGs(), t)
 	})
 	// print results for reachability tests
 	printResults()
