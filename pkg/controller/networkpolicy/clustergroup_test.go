@@ -721,7 +721,7 @@ func TestServiceToGroupSelector(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			sel := npc.serviceToGroupSelector(tt.toProcess, tt.group)
+			sel := npc.serviceToGroupSelector(tt.toProcess)
 			assert.Equal(t, getNormalizedNameForSelector(tt.expectedGroupSelector), getNormalizedNameForSelector(sel),
 				"Processed group selector does not match expectation")
 		})

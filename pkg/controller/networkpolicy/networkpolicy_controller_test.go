@@ -1725,12 +1725,6 @@ func TestAddAndUpdateService(t *testing.T) {
 			Namespace: "test-ns",
 			Labels:    map[string]string{"app": "test-1"},
 		},
-		Spec: corev1.PodSpec{
-			Containers: []corev1.Container{{
-				Name: "container-1",
-			}},
-			NodeName: "nodeA",
-		},
 		Status: corev1.PodStatus{
 			Conditions: []corev1.PodCondition{
 				{
@@ -1749,12 +1743,6 @@ func TestAddAndUpdateService(t *testing.T) {
 			Name:      "test-pod-2",
 			Namespace: "test-ns",
 			Labels:    map[string]string{"app": "test-2"},
-		},
-		Spec: corev1.PodSpec{
-			Containers: []corev1.Container{{
-				Name: "container-2",
-			}},
-			NodeName: "nodeA",
 		},
 		Status: corev1.PodStatus{
 			Conditions: []corev1.PodCondition{
@@ -1856,6 +1844,70 @@ func TestAddAndUpdateService(t *testing.T) {
 	grp1Updated := groupObj1Updated.(*antreatypes.Group)
 	assert.False(t, grp1Updated.GroupMembers.Has(memberPod1))
 	assert.True(t, grp1Updated.GroupMembers.Has(memberPod2))
+}
+
+func TestDeleteService(t *testing.T) {
+	testPod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-pod",
+			Namespace: "test-ns",
+			Labels:    map[string]string{"app": "test"},
+		},
+		Status: corev1.PodStatus{
+			Conditions: []corev1.PodCondition{
+				{
+					Type:   corev1.PodReady,
+					Status: corev1.ConditionTrue,
+				},
+			},
+			PodIP: "1.2.3.4",
+			PodIPs: []corev1.PodIP{
+				{IP: "1.2.3.4"},
+			},
+		},
+	}
+	testCG := &v1alpha2.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "test-cg",
+		},
+		Spec: v1alpha2.GroupSpec{
+			ServiceReference: &v1alpha2.ServiceReference{
+				Name:      "test-svc",
+				Namespace: "test-ns",
+			},
+		},
+	}
+	testSvc := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-svc",
+			Namespace: "test-ns",
+		},
+		Spec: corev1.ServiceSpec{
+			Selector: map[string]string{"app": "test"},
+		},
+	}
+	_, npc := newController()
+	npc.cgStore.Add(testCG)
+	npc.addClusterGroup(testCG)
+	npc.podStore.Add(testPod)
+	npc.serviceStore.Add(testSvc)
+	npc.syncInternalGroup(testCG.Name)
+	memberPod := &controlplane.GroupMember{
+		Pod: &controlplane.PodReference{
+			Name:      "test-pod",
+			Namespace: "test-ns",
+		},
+		IPs: []controlplane.IPAddress{ipStrToIPAddress("1.2.3.4")},
+	}
+	groupObj, _, _ := npc.internalGroupStore.Get(testCG.Name)
+	grp := groupObj.(*antreatypes.Group)
+	assert.True(t, grp.GroupMembers.Has(memberPod))
+	// Make sure that after Service deletion, the Pod member is removed from Group.
+	npc.serviceStore.Delete(testSvc)
+	npc.syncInternalGroup(testCG.Name)
+	groupObjUpdated, _, _ := npc.internalGroupStore.Get(testCG.Name)
+	grpUpdated := groupObjUpdated.(*antreatypes.Group)
+	assert.False(t, grpUpdated.GroupMembers.Has(memberPod))
 }
 
 func TestFilterAddressGroupsForPodOrExternalEntity(t *testing.T) {

@@ -39,11 +39,7 @@ func (n *NetworkPolicyController) addClusterGroup(curObj interface{}) {
 	key := internalGroupKeyFunc(cg)
 	klog.V(2).Infof("Processing ADD event for ClusterGroup %s", cg.Name)
 	newGroup := n.processClusterGroup(cg)
-	if newGroup.ServiceReference != nil {
-		klog.V(2).Infof("Creating new internal Group %s for Service %s/%s", newGroup.UID, newGroup.ServiceReference.Namespace, newGroup.ServiceReference.Name)
-	} else if newGroup.Selector != nil {
-		klog.V(2).Infof("Creating new internal Group %s with selector (%s)", newGroup.UID, newGroup.Selector.NormalizedName)
-	}
+	klog.V(2).Infof("Creating new internal Group %s", newGroup.UID)
 	n.internalGroupStore.Create(newGroup)
 	n.enqueueInternalGroup(key)
 }
@@ -209,27 +205,30 @@ func (n *NetworkPolicyController) syncInternalGroup(key string) error {
 		klog.Infof("Didn't find the ClusterGroup %s, skip processing of internal group", grp.Name)
 		return nil
 	}
-	n.processServiceReference(grp)
+	selectorUpdated := n.processServiceReference(grp)
+	newMemberSet := controlplane.GroupMemberSet{}
 	if grp.Selector != nil {
 		// Find all Pods matching its selectors and update store.
 		pods, _ := n.processSelector(*grp.Selector)
-		memberSet := controlplane.GroupMemberSet{}
 		for _, pod := range pods {
 			if len(pod.Status.PodIPs) == 0 {
 				// No need to insert Pod IPAddress when it is unset.
 				continue
 			}
-			memberSet.Insert(podToGroupMember(pod, true))
+			newMemberSet.Insert(podToGroupMember(pod, true))
 		}
+	}
+	// for ipBlock Groups, newMemberSet and grp.GroupMembers will both be empty.
+	if selectorUpdated || !newMemberSet.Equal(grp.GroupMembers) {
 		// Update the internal Group object in the store with the Pods as GroupMembers.
 		updatedGrp := &antreatypes.Group{
 			UID:              grp.UID,
 			Name:             grp.Name,
 			Selector:         grp.Selector,
 			ServiceReference: grp.ServiceReference,
-			GroupMembers:     memberSet,
+			GroupMembers:     newMemberSet,
 		}
-		klog.V(2).Infof("Updating existing internal Group %s with %d GroupMembers", key, len(memberSet))
+		klog.V(2).Infof("Updating existing internal Group %s with %d GroupMembers", key, len(newMemberSet))
 		n.internalGroupStore.Update(updatedGrp)
 	}
 	// Update the ClusterGroup status to Realized as Antrea has recognized the Group and
@@ -325,32 +324,36 @@ func groupMembersComputedConditionEqual(conds []corev1a2.GroupCondition, conditi
 	return false
 }
 
-// processServiceReference processes the serviceReference in the group, and sets the group
-// selector based on the Service referenced.
-func (n *NetworkPolicyController) processServiceReference(group *antreatypes.Group) {
+// processServiceReference knows how to process the serviceReference in the group, and set the group
+// selector based on the Service referenced. It returns true if the group's selector needs to be
+// updated after serviceReference processing, and false otherwise.
+func (n *NetworkPolicyController) processServiceReference(group *antreatypes.Group) bool {
 	svcRef := group.ServiceReference
 	if svcRef == nil {
-		return
+		return false
 	}
+	originalSelectorName := getNormalizedNameForSelector(group.Selector)
 	svc, err := n.serviceLister.Services(svcRef.Namespace).Get(svcRef.Name)
 	if err != nil {
-		klog.V(2).Infof("Error getting Service object %s/%s, setting empty selector for Group %s", svcRef.Namespace, svcRef.Name, group.Name)
+		klog.V(2).Infof("Error getting Service object %s/%s: %v, setting empty selector for Group %s", svcRef.Namespace, svcRef.Name, err, group.Name)
 		group.Selector = nil
-		return
+		return originalSelectorName == getNormalizedNameForSelector(nil)
 	}
-	group.Selector = n.serviceToGroupSelector(svc, group)
+	newSelector := n.serviceToGroupSelector(svc)
+	group.Selector = newSelector
+	return originalSelectorName == getNormalizedNameForSelector(newSelector)
 }
 
 // serviceToGroupSelector knows how to generate GroupSelector for a Service.
-func (n *NetworkPolicyController) serviceToGroupSelector(service *v1.Service, group *antreatypes.Group) *antreatypes.GroupSelector {
+func (n *NetworkPolicyController) serviceToGroupSelector(service *v1.Service) *antreatypes.GroupSelector {
 	if len(service.Spec.Selector) == 0 {
-		klog.Infof("Service %s/%s is without selectors and not supported by serviceReference in ClusterGroup %s", service.Namespace, service.Name, group.Name)
+		klog.Infof("Service %s/%s is without selectors and not supported by serviceReference in ClusterGroup", service.Namespace, service.Name)
 		return nil
 	}
 	svcPodSelector := metav1.LabelSelector{
 		MatchLabels: service.Spec.Selector,
 	}
-	// Convert Service.spec.selector to GroupSelector by setting the namespace to the Service's namespace
+	// Convert Service.spec.selector to GroupSelector by setting the Namespace to the Service's Namespace
 	// and podSelector to Service's selector.
 	groupSelector := toGroupSelector(service.Namespace, &svcPodSelector, nil, nil)
 	return groupSelector
