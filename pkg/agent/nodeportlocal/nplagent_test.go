@@ -36,6 +36,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/nodeportlocal/k8s"
 	"github.com/vmware-tanzu/antrea/pkg/agent/nodeportlocal/portcache"
 	npltest "github.com/vmware-tanzu/antrea/pkg/agent/nodeportlocal/rules/testing"
+	"github.com/vmware-tanzu/antrea/pkg/signals"
 )
 
 func newPortTable(c *gomock.Controller) *portcache.PortTable {
@@ -64,7 +65,6 @@ const (
 
 var kubeClient *k8sfake.Clientset
 var portTable *portcache.PortTable
-var stopCh chan struct{}
 
 func getTestPod() corev1.Pod {
 	return corev1.Pod{
@@ -113,8 +113,9 @@ func getTestSvc() corev1.Service {
 	}
 }
 
-// SetupTest initializes and runs the NPLController.
-func SetupTest(t *testing.T) {
+func TestMain(t *testing.T) {
+	os.Setenv("NODE_NAME", defaultNodeName)
+	kubeClient = k8sfake.NewSimpleClientset()
 	mockCtrl := gomock.NewController(t)
 	portTable = newPortTable(mockCtrl)
 
@@ -122,7 +123,7 @@ func SetupTest(t *testing.T) {
 	informerFactory := informers.NewSharedInformerFactory(kubeClient, resyncPeriod)
 
 	c, _ := InitController(kubeClient, informerFactory, portTable, defaultNodeName)
-	stopCh = make(chan struct{})
+	stopCh := signals.RegisterSignalHandlers()
 
 	go c.Run(stopCh)
 	informerFactory.Start(stopCh)
@@ -131,17 +132,6 @@ func SetupTest(t *testing.T) {
 	// in-between list and watch call of an informer. This is because fake clientset doesn't support watching with
 	// resourceVersion. A watcher of fake clientset only gets events that happen after the watcher is created.
 	informerFactory.WaitForCacheSync(stopCh)
-}
-
-// Teardown closes the channel to stop NPLController.
-func TeardownTest() {
-	close(stopCh)
-}
-
-func TestMain(m *testing.M) {
-	os.Setenv("NODE_NAME", defaultNodeName)
-	kubeClient = k8sfake.NewSimpleClientset()
-	os.Exit(m.Run())
 }
 
 func pollForPodAnnotation(r *require.Assertions, podName string, found bool) (string, error) {
@@ -165,8 +155,6 @@ func pollForPodAnnotation(r *require.Assertions, podName string, found bool) (st
 // Add a Service (proper annotation) and Pod pair, update Service with bad
 // annotation value and check for Pod annotation and port cache entry removal.
 func TestSvcUpdateAnnotation(t *testing.T) {
-	SetupTest(t)
-	defer TeardownTest()
 	var data string
 
 	a := assert.New(t)
@@ -214,8 +202,6 @@ func TestSvcUpdateAnnotation(t *testing.T) {
 // Update existing Service with proper annotation to get Pod annotation and port
 // cache entry back, remove annotation from Service.
 func TestSvcRemoveAnnotation(t *testing.T) {
-	SetupTest(t)
-	defer TeardownTest()
 	a := assert.New(t)
 	r := require.New(t)
 
@@ -244,8 +230,6 @@ func TestSvcRemoveAnnotation(t *testing.T) {
 }
 
 func TestSvcUpdateSelector(t *testing.T) {
-	SetupTest(t)
-	defer TeardownTest()
 	a := assert.New(t)
 	r := require.New(t)
 
@@ -274,8 +258,6 @@ func TestSvcUpdateSelector(t *testing.T) {
 }
 
 func TestPodUpdateSelectorLabel(t *testing.T) {
-	SetupTest(t)
-	defer TeardownTest()
 	a := assert.New(t)
 	r := require.New(t)
 
@@ -308,8 +290,6 @@ func TestPodUpdateSelectorLabel(t *testing.T) {
 // Update existing Service with proper annotation to get Pod annotation and port
 // cache entry back, delete Service.
 func TestDeleteSvc(t *testing.T) {
-	SetupTest(t)
-	defer TeardownTest()
 	a := assert.New(t)
 	r := require.New(t)
 
@@ -346,8 +326,6 @@ func TestDeleteSvc(t *testing.T) {
 // Add a new Pod with fake k8s client and verify that NPL annotation gets updated
 // and an entry gets added in the local port cache.
 func TestPodAdd(t *testing.T) {
-	SetupTest(t)
-	defer TeardownTest()
 	var data string
 
 	a := assert.New(t)
@@ -376,8 +354,6 @@ func TestPodAdd(t *testing.T) {
 
 // Test that any update in the Pod container port is reflected in Pod annotation and local port cache.
 func TestPodUpdate(t *testing.T) {
-	SetupTest(t)
-	defer TeardownTest()
 	var ann map[string]string
 	var nplData []k8s.NPLAnnotation
 	var data string
@@ -414,8 +390,6 @@ func TestPodUpdate(t *testing.T) {
 
 // Make sure that when a Pod gets deleted, corresponding entry gets deleted from local port cache also
 func TestPodDel(t *testing.T) {
-	SetupTest(t)
-	defer TeardownTest()
 	r := require.New(t)
 
 	err := kubeClient.CoreV1().Pods(defaultNS).Delete(context.TODO(), defaultPodName, metav1.DeleteOptions{})
@@ -430,8 +404,6 @@ func TestPodDel(t *testing.T) {
 
 // Create a Pod with multiple ports and verify that Pod annotation and local port cache are updated correctly
 func TestPodAddMultiPort(t *testing.T) {
-	SetupTest(t)
-	defer TeardownTest()
 	var data string
 
 	a := assert.New(t)
@@ -469,8 +441,6 @@ func TestPodAddMultiPort(t *testing.T) {
 // Create Multiple Pods and test that annotations for both the Pods are updated correctly
 // and local port cache is updated accordingly
 func TestAddMultiplePods(t *testing.T) {
-	SetupTest(t)
-	defer TeardownTest()
 	var data string
 
 	a := assert.New(t)
