@@ -31,7 +31,7 @@ section for details.
 ### Antrea Windows demo
 
 Watch this [demo video](https://www.youtube.com/watch?v=NjeVPGgaNFU) of running
-Antrea in a Kubernetes cluster with both Linux and Windows nodes. The demo also
+Antrea in a Kubernetes cluster with both Linux and Windows Nodes. The demo also
 shows the Antrea OVS bridge configuration on a Windows Node, NetworkPolicy
 enforcement for Windows Pods, and Antrea Traceflow from Octant. Note, OVS driver
 and daemons are pre-installed on the Windows Nodes in the demo.
@@ -55,7 +55,7 @@ and daemons are pre-installed on the Windows Nodes in the demo.
   - If OVS driver is not signed, please refer to the Windows doc about how to
     [install a test-signed driver package on the test computer](https://docs.microsoft.com/en-us/windows-hardware/drivers/install/installing-a-test-signed-driver-package-on-the-test-computer).
   - If you don't have a self-signed OVS package and just want to try the
-    Antrea on windows, Antrea provides a test-signed OVS package for you.
+    Antrea on Windows, Antrea provides a test-signed OVS package for you.
     See details in [Join Windows worker Nodes](#Join-Windows-worker-nodes)
     section.
 
@@ -153,7 +153,7 @@ kubectl apply -f https://github.com/vmware-tanzu/antrea/releases/download/<TAG>/
 
 Antrea provides a pre-built OVS package which contains test-signed OVS kernel
 driver. If you don't have a self-signed OVS package and just want to try the
-Antrea on windows, this package can be used for testing. We also provide a help
+Antrea on Windows, this package can be used for testing. We also provide a help
 script to install the OVS driver and register userspace binaries as services.
 
 Firstly, please make sure to [enable test-signed](https://docs.microsoft.com/en-us/windows-hardware/drivers/install/the-testsigning-boot-configuration-option)
@@ -289,14 +289,14 @@ take over the host network. After that you should be able to view the Windows
 Nodes and Pods in your cluster by running:
 
 ```bash
-# Show nodes
+# Show Nodes
 kubectl get nodes -o wide -n kube-system
 NAME                           STATUS   ROLES                  AGE   VERSION   INTERNAL-IP     EXTERNAL-IP   OS-IMAGE                                  KERNEL-VERSION     CONTAINER-RUNTIME
 control-plane                  Ready    control-plane,master   1h    v1.18.3   10.176.27.168   <none>        Ubuntu 18.04.3 LTS                        4.15.0-66-generic   docker://19.3.9
 win-5akrf2tpq91                Ready    <none>                 1h    v1.18.0   10.176.27.150   <none>        Windows Server 2019 Standard Evaluation   10.0.17763.1158    docker://19.3.5
 win-5akrf2tpq92                Ready    <none>                 1h    v1.18.0   10.176.27.197   <none>        Windows Server 2019 Standard Evaluation   10.0.17763.1158     docker://19.3.5
 
-# Show antrea-agent and kube-proxy pods
+# Show antrea-agent and kube-proxy Pods
 kubectl get pods -o wide -n kube-system | grep windows
 antrea-agent-windows-6hvkw                             1/1     Running     0          100s
 kube-proxy-windows-2d45w                               1/1     Running     0          102s

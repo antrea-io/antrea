@@ -507,7 +507,7 @@ func (tester *cmdAddDelTester) cmdCheckTest(tc testCase, conf *Net, dataDir stri
 	// If validateMetrics flag is set, check pod count metrics.
 	if tc.validateMetrics {
 		expectedStr := `
-		# HELP antrea_agent_local_pod_count [STABLE] Number of pods on local node which are managed by the Antrea Agent.
+		# HELP antrea_agent_local_pod_count [STABLE] Number of Pods on local Node which are managed by the Antrea Agent.
 		# TYPE antrea_agent_local_pod_count gauge
 		antrea_agent_local_pod_count 1
 		`
@@ -553,7 +553,7 @@ func (tester *cmdAddDelTester) cmdDelTest(tc testCase, dataDir string) {
 	// If validateMetrics flag is set, check Pod count metrics.
 	if tc.validateMetrics {
 		expectedStr := `
-		# HELP antrea_agent_local_pod_count [STABLE] Number of pods on local node which are managed by the Antrea Agent.
+		# HELP antrea_agent_local_pod_count [STABLE] Number of Pods on local Node which are managed by the Antrea Agent.
 		# TYPE antrea_agent_local_pod_count gauge
 		antrea_agent_local_pod_count 0
 		`
@@ -707,7 +707,7 @@ func TestAntreaServerFunc(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			if strings.Contains(tc.name, "Prometheus") {
-				// Initialize pod metrics
+				// Initialize Pod metrics
 				metrics.InitializePodMetrics()
 			}
 			setup()

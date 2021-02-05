@@ -31,7 +31,7 @@ var (
 			Namespace:      metricNamespaceAntrea,
 			Subsystem:      metricSubsystemAgent,
 			Name:           "egress_networkpolicy_rule_count",
-			Help:           "Number of egress networkpolicy rules on local node which are managed by the Antrea Agent.",
+			Help:           "Number of egress NetworkPolicy rules on local Node which are managed by the Antrea Agent.",
 			StabilityLevel: metrics.STABLE,
 		},
 	)
@@ -41,7 +41,7 @@ var (
 			Namespace:      metricNamespaceAntrea,
 			Subsystem:      metricSubsystemAgent,
 			Name:           "ingress_networkpolicy_rule_count",
-			Help:           "Number of ingress networkpolicy rules on local node which are managed by the Antrea Agent.",
+			Help:           "Number of ingress NetworkPolicy rules on local Node which are managed by the Antrea Agent.",
 			StabilityLevel: metrics.STABLE,
 		},
 	)
@@ -51,7 +51,7 @@ var (
 			Namespace:      metricNamespaceAntrea,
 			Subsystem:      metricSubsystemAgent,
 			Name:           "local_pod_count",
-			Help:           "Number of pods on local node which are managed by the Antrea Agent.",
+			Help:           "Number of Pods on local Node which are managed by the Antrea Agent.",
 			StabilityLevel: metrics.STABLE,
 		},
 	)
@@ -61,7 +61,7 @@ var (
 			Namespace:      metricNamespaceAntrea,
 			Subsystem:      metricSubsystemAgent,
 			Name:           "networkpolicy_count",
-			Help:           "Number of networkpolicies on local node which are managed by the Antrea Agent.",
+			Help:           "Number of NetworkPolicies on local Node which are managed by the Antrea Agent.",
 			StabilityLevel: metrics.STABLE,
 		},
 	)
