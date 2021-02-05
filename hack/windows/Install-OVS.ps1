@@ -6,16 +6,16 @@
   The URL of the OpenvSwitch package to be downloaded.
 
   .PARAMETER DownloadDir
-  The path of the directory to be used to download OpenvSwitch package.
+  The path of the directory to be used to download OpenvSwitch package. The default path is the working directory.
 
   .PARAMETER OVSInstallDir
-  The target installtion directory. The default path is "C:\openvswitch".
+  The target installation directory. The default path is "C:\openvswitch".
 
   .PARAMETER CheckFileHash
-  Skips check file hash. The default value is true.
+  Skips checking file hash. The default value is true.
 
   .PARAMETER LocalFile
-  Specifes the path of a local OpenvSwitch package to be used for installation.
+  Specifies the path of a local OpenvSwitch package to be used for installation.
   When the param is used, "DownloadURL" and "DownloadDir" params will be ignored.
 #>
 Param(
