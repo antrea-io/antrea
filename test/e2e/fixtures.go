@@ -130,17 +130,8 @@ func setupTest(tb testing.TB) (*TestData, error) {
 
 func setupTestWithIPFIXCollector(tb testing.TB) (*TestData, error, bool) {
 	// TODO: remove hardcoding to IPv4 after flow aggregator supports IPv6
-	// Also use setupTest.
 	isIPv6 := false
-	if err := testData.setupLogDirectoryForTest(tb.Name()); err != nil {
-		tb.Errorf("Error creating logs directory '%s': %v", testData.logsDirForTestCase, err)
-		return nil, err, isIPv6
-	}
-	tb.Logf("Creating '%s' K8s Namespace", testNamespace)
-	if err := ensureAntreaRunning(tb, testData); err != nil {
-		return nil, err, isIPv6
-	}
-	if err := testData.createTestNamespace(); err != nil {
+	if _, err := setupTest(tb); err != nil {
 		return nil, err, isIPv6
 	}
 
@@ -243,6 +234,9 @@ func exportLogs(tb testing.TB, data *TestData, logsSubDir string, writeNodeLogs 
 
 	// dump the logs for monitoring Pods to disk.
 	data.forAllMatchingPodsInNamespace("", monitoringNamespace, writePodLogs)
+
+	// dump the logs for flow-aggregator Pods to disk.
+	data.forAllMatchingPodsInNamespace("", flowAggregatorNamespace, writePodLogs)
 
 	// dump the output of "kubectl describe" for Antrea pods to disk.
 	data.forAllMatchingPodsInNamespace("app=antrea", antreaNamespace, func(nodeName, podName, nsName string) error {
