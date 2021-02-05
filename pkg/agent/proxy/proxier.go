@@ -59,7 +59,7 @@ type proxier struct {
 	endpointsMap types.EndpointsMap
 	// endpointInstalledMap stores endpoints we actually installed.
 	endpointInstalledMap map[k8sproxy.ServicePortName]map[string]struct{}
-	// endpointReferenceCounter stores times of an Endpoint referenced by a Service.
+	// endpointReferenceCounter stores the number of times an Endpoint is referenced by Services.
 	endpointReferenceCounter map[string]uint
 	// groupCounter is used for allocate groupID.
 	groupCounter types.GroupCounter
