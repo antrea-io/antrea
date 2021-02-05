@@ -61,7 +61,7 @@ type proxier struct {
 	endpointInstalledMap map[k8sproxy.ServicePortName]map[string]struct{}
 	// endpointReferenceCounter stores the number of times an Endpoint is referenced by Services.
 	endpointReferenceCounter map[string]uint
-	// groupCounter is used for allocate groupID.
+	// groupCounter is used to allocate groupID.
 	groupCounter types.GroupCounter
 	// serviceStringMap provides map from serviceString(ClusterIP:Port/Proto) to ServicePortName.
 	serviceStringMap map[string]k8sproxy.ServicePortName
@@ -83,6 +83,9 @@ func (p *proxier) isInitialized() bool {
 	return p.endpointsChanges.Synced() && p.serviceChanges.Synced()
 }
 
+// removeStaleServices removes all expired Services. Once a Service was deleted, all
+// its Endpoints will be expired, and removeStaleEndpoints take response for cleaning up,
+// thus we don't need to do removeEndpoint in this function.
 func (p *proxier) removeStaleServices() {
 	for svcPortName, svcPort := range p.serviceInstalledMap {
 		if _, ok := p.serviceMap[svcPortName]; ok {
@@ -107,6 +110,7 @@ func (p *proxier) removeStaleServices() {
 			klog.Errorf("Failed to remove flows of Service %v: %v", svcPortName, err)
 			continue
 		}
+		// We don't need to uninstall Endpoint flows,
 		delete(p.serviceInstalledMap, svcPortName)
 		p.deleteServiceByIP(svcInfo.String())
 		p.groupCounter.Recycle(svcPortName)
@@ -133,10 +137,13 @@ func getBindingProtoForIPProto(endpointIP string, protocol corev1.Protocol) bind
 	return bindingProtocol
 }
 
-// removeEndpoint removes flows of an Endpoint from data path. Callers should guarantee the Endpoint is
-// expired or need to be removed. If the Endpoint is still be referenced by any other Services, there
-// is no operation on data path. The error only reflects failure of operation on data path. If the Endpoint
-// is removed from data path, this function return true. otherwise, return false.
+// removeEndpoint removes flows for the given Endpoint from the data path if these flows are no longer
+// needed by any Service. Endpoints from different Services can have the same characteristics and thus
+// can share the same flows. removeEndpoint must be called whenever an Endpoint is no longer used by a
+// given Service. If the Endpoint is still be referenced by any other Services, there will be no
+// operation on the data path. The method only returns an error if a data path operation fails. If the
+// flows are successfully removed from the data path, the method return true. Otherwise, if the flows
+// are still needed for other Services, it returns false.
 func (p *proxier) removeEndpoint(endpoint k8sproxy.Endpoint, protocol binding.Protocol) (bool, error) {
 	key := endpointKey(endpoint, protocol)
 	count := p.endpointReferenceCounter[key]
@@ -153,7 +160,6 @@ func (p *proxier) removeEndpoint(endpoint k8sproxy.Endpoint, protocol binding.Pr
 }
 
 func (p *proxier) removeStaleEndpoints(staleEndpoints map[k8sproxy.ServicePortName]map[string]k8sproxy.Endpoint) {
-	klog.Infof("Stale Endpoints %s", staleEndpoints)
 	for svcPortName, endpoints := range staleEndpoints {
 		for _, endpoint := range endpoints {
 			klog.Infof("Removing stale Endpoint %s of Service %s", endpoint.String(), svcPortName.String())
@@ -213,19 +219,21 @@ func (p *proxier) installServices() {
 			endpointsInstalled = p.endpointInstalledMap[svcPortName]
 		}
 		endpoints := p.endpointsMap[svcPortName]
-		// If both expected Endpoints number and installed Endpoints number are 0, we don't need to take care of this service.
+		// If both expected Endpoints number and installed Endpoints number are 0, we don't need to take care of this Service.
 		if len(endpoints) == 0 && len(endpointsInstalled) == 0 {
 			continue
 		}
 
 		installedSvcPort, ok := p.serviceInstalledMap[svcPortName]
 		var pSvcInfo *types.ServiceInfo
-		var needRemoval, needUpdate, needUpdateEndpoints bool
-		if ok {
+		var needRemoval, needUpdateService, needUpdateEndpoints bool
+		if ok { // Need to update.
 			pSvcInfo = installedSvcPort.(*types.ServiceInfo)
 			needRemoval = serviceIdentityChanged(svcInfo, pSvcInfo) || (svcInfo.SessionAffinityType() != pSvcInfo.SessionAffinityType())
-			needUpdate = needRemoval || (svcInfo.StickyMaxAgeSeconds() != pSvcInfo.StickyMaxAgeSeconds())
+			needUpdateService = needRemoval || (svcInfo.StickyMaxAgeSeconds() != pSvcInfo.StickyMaxAgeSeconds())
 			needUpdateEndpoints = pSvcInfo.SessionAffinityType() != svcInfo.SessionAffinityType()
+		} else { // Need to install.
+			needUpdateService = true
 		}
 
 		var endpointUpdateList []k8sproxy.Endpoint
@@ -249,10 +257,11 @@ func (p *proxier) installServices() {
 			addedLoadBalancerIPs = svcInfo.LoadBalancerIPStrings()
 		}
 		if len(deletedLoadBalancerIPs) > 0 || len(addedLoadBalancerIPs) > 0 {
-			needUpdate = true
+			needUpdateService = true
 		}
 
-		if !needUpdate && !needUpdateEndpoints {
+		// If neither the Service nor Endpoints of the Service need to be updated, we skip.
+		if !needUpdateService && !needUpdateEndpoints {
 			continue
 		}
 
@@ -285,42 +294,45 @@ func (p *proxier) installServices() {
 			}
 			p.endpointInstalledMap[svcPortName] = newEndpointsInstalled
 		}
-		// Delete previous flow.
-		if needRemoval {
-			if err := p.ofClient.UninstallServiceFlows(pSvcInfo.ClusterIP(), uint16(pSvcInfo.Port()), pSvcInfo.OFProtocol); err != nil {
-				klog.Errorf("Failed to remove flows of Service %v: %v", svcPortName, err)
-			}
-		}
-		if err := p.ofClient.InstallServiceFlows(groupID, svcInfo.ClusterIP(), uint16(svcInfo.Port()), svcInfo.OFProtocol, uint16(svcInfo.StickyMaxAgeSeconds())); err != nil {
-			klog.Errorf("Error when installing Service flows: %v", err)
-			continue
-		}
-		// Install OpenFlow entries for the ingress IPs of LoadBalancer Service.
-		// The LoadBalancer Service should be accessible from Pod, Node and
-		// external host.
-		var toDelete, toAdd []string
-		if needRemoval {
-			toDelete = pSvcInfo.LoadBalancerIPStrings()
-			toAdd = svcInfo.LoadBalancerIPStrings()
-		} else {
-			toDelete = deletedLoadBalancerIPs
-			toAdd = addedLoadBalancerIPs
-		}
-		for _, ingress := range toDelete {
-			if ingress != "" {
-				// It is safe to access pSvcInfo here. If this is a new Service,
-				// then toDelete will be an empty slice.
-				if err := p.uninstallLoadBalancerServiceFlows(net.ParseIP(ingress), uint16(pSvcInfo.Port()), pSvcInfo.OFProtocol); err != nil {
-					klog.Errorf("Error when removing LoadBalancer Service flows: %v", err)
-					continue
+
+		if needUpdateService {
+			// Delete previous flow.
+			if needRemoval {
+				if err := p.ofClient.UninstallServiceFlows(pSvcInfo.ClusterIP(), uint16(pSvcInfo.Port()), pSvcInfo.OFProtocol); err != nil {
+					klog.Errorf("Failed to remove flows of Service %v: %v", svcPortName, err)
 				}
 			}
-		}
-		for _, ingress := range toAdd {
-			if ingress != "" {
-				if err := p.installLoadBalancerServiceFlows(groupID, net.ParseIP(ingress), uint16(svcInfo.Port()), svcInfo.OFProtocol, uint16(svcInfo.StickyMaxAgeSeconds())); err != nil {
-					klog.Errorf("Error when installing LoadBalancer Service flows: %v", err)
-					continue
+			if err := p.ofClient.InstallServiceFlows(groupID, svcInfo.ClusterIP(), uint16(svcInfo.Port()), svcInfo.OFProtocol, uint16(svcInfo.StickyMaxAgeSeconds())); err != nil {
+				klog.Errorf("Error when installing Service flows: %v", err)
+				continue
+			}
+			// Install OpenFlow entries for the ingress IPs of LoadBalancer Service.
+			// The LoadBalancer Service should be accessible from Pod, Node and
+			// external host.
+			var toDelete, toAdd []string
+			if needRemoval {
+				toDelete = pSvcInfo.LoadBalancerIPStrings()
+				toAdd = svcInfo.LoadBalancerIPStrings()
+			} else {
+				toDelete = deletedLoadBalancerIPs
+				toAdd = addedLoadBalancerIPs
+			}
+			for _, ingress := range toDelete {
+				if ingress != "" {
+					// It is safe to access pSvcInfo here. If this is a new Service,
+					// then toDelete will be an empty slice.
+					if err := p.uninstallLoadBalancerServiceFlows(net.ParseIP(ingress), uint16(pSvcInfo.Port()), pSvcInfo.OFProtocol); err != nil {
+						klog.Errorf("Error when removing LoadBalancer Service flows: %v", err)
+						continue
+					}
+				}
+			}
+			for _, ingress := range toAdd {
+				if ingress != "" {
+					if err := p.installLoadBalancerServiceFlows(groupID, net.ParseIP(ingress), uint16(svcInfo.Port()), svcInfo.OFProtocol, uint16(svcInfo.StickyMaxAgeSeconds())); err != nil {
+						klog.Errorf("Error when installing LoadBalancer Service flows: %v", err)
+						continue
+					}
 				}
 			}
 		}
