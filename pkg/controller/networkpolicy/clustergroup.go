@@ -27,6 +27,7 @@ import (
 
 	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
 	corev1a2 "github.com/vmware-tanzu/antrea/pkg/apis/core/v1alpha2"
+	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
 	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy/store"
 	antreatypes "github.com/vmware-tanzu/antrea/pkg/controller/types"
 	"github.com/vmware-tanzu/antrea/pkg/k8s"
@@ -177,12 +178,6 @@ func (n *NetworkPolicyController) syncInternalGroup(key string) error {
 		return nil
 	}
 	grp := grpObj.(*antreatypes.Group)
-	// Retrieve the ClusterGroup corresponding to this key.
-	cg, err := n.cgLister.Get(grp.Name)
-	if err != nil {
-		klog.Infof("Didn't find the ClusterGroup %s, skip processing of internal group", grp.Name)
-		return nil
-	}
 	if grp.IPBlock == nil {
 		// Find all Pods matching its selectors and update store.
 		groupSelector := grp.Selector
@@ -205,12 +200,61 @@ func (n *NetworkPolicyController) syncInternalGroup(key string) error {
 		klog.V(2).Infof("Updating existing internal Group %s with %d GroupMembers", key, len(memberSet))
 		n.internalGroupStore.Update(updatedGrp)
 	}
+	// Retrieve the ClusterGroup corresponding to this key.
+	cg, err := n.cgLister.Get(grp.Name)
+	if err != nil {
+		klog.Infof("Didn't find the ClusterGroup %s, skip processing of internal group", grp.Name)
+		return nil
+	}
 	// Update the ClusterGroup status to Realized as Antrea has recognized the Group and
 	// processed its group members.
 	err = n.updateGroupStatus(cg, v1.ConditionTrue)
 	if err != nil {
 		klog.Errorf("Failed to update ClusterGroup %s GroupMembersComputed condition to %s: %v", cg.Name, v1.ConditionTrue, err)
 		return err
+	}
+	return n.triggerCNPUpdates(cg)
+}
+
+// triggerCNPUpdates triggers processing of ClusterNetworkPolicies associated with the input ClusterGroup.
+func (n *NetworkPolicyController) triggerCNPUpdates(cg *corev1a2.ClusterGroup) error {
+	// If a ClusterGroup is added/updated, it might have a reference in ClusterNetworkPolicy.
+	cnps, err := n.cnpInformer.Informer().GetIndexer().ByIndex(ClusterGroupIndex, cg.Name)
+	if err != nil {
+		klog.Errorf("Error retrieving ClusterNetworkPolicies corresponding to ClusterGroup %s", cg.Name)
+		return err
+	}
+	for _, obj := range cnps {
+		cnp := obj.(*secv1alpha1.ClusterNetworkPolicy)
+		// Re-process ClusterNetworkPolicies which may be affected due to updates to CG.
+		curInternalNP := n.processClusterNetworkPolicy(cnp)
+		klog.V(2).Infof("Updating existing internal NetworkPolicy %s for %s", curInternalNP.Name, curInternalNP.SourceRef.ToString())
+		key := internalNetworkPolicyKeyFunc(cnp)
+		// Lock access to internal NetworkPolicy store such that concurrent access
+		// to an internal NetworkPolicy is not allowed. This will avoid the
+		// case in which an Update to an internal NetworkPolicy object may
+		// cause the SpanMeta member to be overridden with stale SpanMeta members
+		// from an older internal NetworkPolicy.
+		n.internalNetworkPolicyMutex.Lock()
+		oldInternalNPObj, _, _ := n.internalNetworkPolicyStore.Get(key)
+		oldInternalNP := oldInternalNPObj.(*antreatypes.NetworkPolicy)
+		// Must preserve old internal NetworkPolicy Span.
+		curInternalNP.SpanMeta = oldInternalNP.SpanMeta
+		n.internalNetworkPolicyStore.Update(curInternalNP)
+		// Unlock the internal NetworkPolicy store.
+		n.internalNetworkPolicyMutex.Unlock()
+		// Enqueue addressGroup keys to update their group members.
+		// TODO: optimize this to avoid enqueueing address groups when not updated.
+		for _, rule := range curInternalNP.Rules {
+			for _, addrGroupName := range rule.From.AddressGroups {
+				n.enqueueAddressGroup(addrGroupName)
+			}
+			for _, addrGroupName := range rule.To.AddressGroups {
+				n.enqueueAddressGroup(addrGroupName)
+			}
+		}
+		n.enqueueInternalNetworkPolicy(key)
+		n.deleteDereferencedAddressGroups(oldInternalNP)
 	}
 	return nil
 }

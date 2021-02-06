@@ -57,6 +57,8 @@ type AppliedToGroup struct {
 type AddressGroup struct {
 	SpanMeta
 	// UID is generated from the hash value of GroupSelector.NormalizedName.
+	// In case the AddressGroup is created for a ClusterGroup, the UID is
+	// that of the corresponding ClusterGroup.
 	UID types.UID
 	// Name of this group, currently it's same as UID.
 	Name string

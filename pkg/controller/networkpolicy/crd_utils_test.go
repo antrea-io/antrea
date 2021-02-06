@@ -24,7 +24,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
+	corev1a2 "github.com/vmware-tanzu/antrea/pkg/apis/core/v1alpha2"
 	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
+	antreatypes "github.com/vmware-tanzu/antrea/pkg/controller/types"
 )
 
 func TestToAntreaServicesForCRD(t *testing.T) {
@@ -150,12 +152,20 @@ func TestToAntreaPeerForCRD(t *testing.T) {
 	selectorAll := metav1.LabelSelector{}
 	matchAllPodsPeer := matchAllPeer
 	matchAllPodsPeer.AddressGroups = []string{getNormalizedUID(toGroupSelector("", nil, &selectorAll, nil).NormalizedName)}
+	// cgA with selector present in cache
+	cgA := corev1a2.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{Name: "cgA", UID: "uidA"},
+		Spec: corev1a2.GroupSpec{
+			NamespaceSelector: &selectorA,
+		},
+	}
 	tests := []struct {
 		name            string
 		inPeers         []secv1alpha1.NetworkPolicyPeer
 		outPeer         controlplane.NetworkPolicyPeer
 		direction       controlplane.Direction
 		namedPortExists bool
+		cgExists        bool
 	}{
 		{
 			name: "pod-ns-selector-peer-ingress",
@@ -234,6 +244,18 @@ func TestToAntreaPeerForCRD(t *testing.T) {
 			direction: controlplane.DirectionIn,
 		},
 		{
+			name: "peer-ingress-with-cg",
+			inPeers: []secv1alpha1.NetworkPolicyPeer{
+				{
+					Group: cgA.Name,
+				},
+			},
+			outPeer: controlplane.NetworkPolicyPeer{
+				AddressGroups: []string{cgA.Name},
+			},
+			direction: controlplane.DirectionIn,
+		},
+		{
 			name:            "empty-peer-egress-with-named-port",
 			inPeers:         []secv1alpha1.NetworkPolicyPeer{},
 			outPeer:         matchAllPodsPeer,
@@ -246,22 +268,83 @@ func TestToAntreaPeerForCRD(t *testing.T) {
 			outPeer:   matchAllPeer,
 			direction: controlplane.DirectionOut,
 		},
+		{
+			name: "peer-egress-with-cg",
+			inPeers: []secv1alpha1.NetworkPolicyPeer{
+				{
+					Group: cgA.Name,
+				},
+			},
+			outPeer: controlplane.NetworkPolicyPeer{
+				AddressGroups: []string{cgA.Name},
+			},
+			direction: controlplane.DirectionOut,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, npc := newController()
+			npc.addClusterGroup(&cgA)
+			npc.cgStore.Add(&cgA)
 			actualPeer := npc.toAntreaPeerForCRD(tt.inPeers, testCNPObj, tt.direction, tt.namedPortExists)
-			if !reflect.DeepEqual(tt.outPeer.AddressGroups, (*actualPeer).AddressGroups) {
-				t.Errorf("Unexpected AddressGroups in Antrea Peer conversion. Expected %v, got %v", tt.outPeer.AddressGroups, (*actualPeer).AddressGroups)
+			if !reflect.DeepEqual(tt.outPeer.AddressGroups, actualPeer.AddressGroups) {
+				t.Errorf("Unexpected AddressGroups in Antrea Peer conversion. Expected %v, got %v", tt.outPeer.AddressGroups, actualPeer.AddressGroups)
 			}
-			if len(tt.outPeer.IPBlocks) != len((*actualPeer).IPBlocks) {
-				t.Errorf("Unexpected number of IPBlocks in Antrea Peer conversion. Expected %v, got %v", len(tt.outPeer.IPBlocks), len((*actualPeer).IPBlocks))
+			if len(tt.outPeer.IPBlocks) != len(actualPeer.IPBlocks) {
+				t.Errorf("Unexpected number of IPBlocks in Antrea Peer conversion. Expected %v, got %v", len(tt.outPeer.IPBlocks), len(actualPeer.IPBlocks))
 			}
 			for i := 0; i < len(tt.outPeer.IPBlocks); i++ {
-				if !compareIPBlocks(&(tt.outPeer.IPBlocks[i]), &((*actualPeer).IPBlocks[i])) {
-					t.Errorf("Unexpected IPBlocks in Antrea Peer conversion. Expected %v, got %v", tt.outPeer.IPBlocks[i], (*actualPeer).IPBlocks[i])
+				if !compareIPBlocks(&(tt.outPeer.IPBlocks[i]), &(actualPeer.IPBlocks[i])) {
+					t.Errorf("Unexpected IPBlocks in Antrea Peer conversion. Expected %v, got %v", tt.outPeer.IPBlocks[i], actualPeer.IPBlocks[i])
 				}
 			}
+		})
+	}
+}
+
+func TestCreateAddressGroupForClusterGroupCRD(t *testing.T) {
+	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
+	selectorB := metav1.LabelSelector{MatchLabels: map[string]string{"foo2": "bar2"}}
+	igA := antreatypes.Group{
+		UID:      "uidA",
+		Name:     "cgA",
+		Selector: *toGroupSelector("", nil, &selectorA, nil),
+	}
+	igB := antreatypes.Group{
+		UID:      "uidB",
+		Name:     "cgB",
+		Selector: *toGroupSelector("", nil, &selectorB, nil),
+	}
+	tests := []struct {
+		name                   string
+		inG                    *antreatypes.Group
+		expectedKey            string
+		expectedAddressGroups  int
+		expectedInternalGroups int
+	}{
+		{
+			name:                   "group-not-found",
+			inG:                    &igB,
+			expectedKey:            igB.Name,
+			expectedAddressGroups:  1,
+			expectedInternalGroups: 1,
+		},
+		{
+			name:                   "cluster-group-with-selector",
+			inG:                    &igA,
+			expectedKey:            igA.Name,
+			expectedAddressGroups:  1,
+			expectedInternalGroups: 1,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, c := newController()
+			c.internalGroupStore.Create(tt.inG)
+			actualKey := c.createAddressGroupForClusterGroupCRD(tt.inG)
+			assert.Equal(t, tt.expectedKey, actualKey)
+			assert.Equal(t, tt.expectedInternalGroups, len(c.internalGroupStore.List()))
+			assert.Equal(t, tt.expectedAddressGroups, len(c.addressGroupStore.List()))
 		})
 	}
 }
