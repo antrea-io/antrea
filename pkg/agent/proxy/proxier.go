@@ -83,9 +83,9 @@ func (p *proxier) isInitialized() bool {
 	return p.endpointsChanges.Synced() && p.serviceChanges.Synced()
 }
 
-// removeStaleServices removes all expired Services. Once a Service was deleted, all
-// its Endpoints will be expired, and removeStaleEndpoints take response for cleaning up,
-// thus we don't need to do removeEndpoint in this function.
+// removeStaleServices removes all expired Services. Once a Service is deleted, all
+// its Endpoints will be expired, and removeStaleEndpoints takes response for cleaning up,
+// thus we don't need to call removeEndpoint in this function.
 func (p *proxier) removeStaleServices() {
 	for svcPortName, svcPort := range p.serviceInstalledMap {
 		if _, ok := p.serviceMap[svcPortName]; ok {
@@ -110,7 +110,6 @@ func (p *proxier) removeStaleServices() {
 			klog.Errorf("Failed to remove flows of Service %v: %v", svcPortName, err)
 			continue
 		}
-		// We don't need to uninstall Endpoint flows,
 		delete(p.serviceInstalledMap, svcPortName)
 		p.deleteServiceByIP(svcInfo.String())
 		p.groupCounter.Recycle(svcPortName)
@@ -265,11 +264,11 @@ func (p *proxier) installServices() {
 			continue
 		}
 
-		op := "Installing"
 		if pSvcInfo != nil {
-			op = "Updating"
+			klog.V(2).Infof("Updating Service %s %s", svcPortName.Name, svcInfo.String())
+		} else {
+			klog.V(2).Infof("Installing Service %s %s", svcPortName.Name, svcInfo.String())
 		}
-		klog.V(2).Infof("%s Service %s %s", op, svcPortName.Name, svcInfo.String())
 
 		if needUpdateEndpoints {
 			err := p.ofClient.InstallEndpointFlows(svcInfo.OFProtocol, endpointUpdateList, p.isIPv6)

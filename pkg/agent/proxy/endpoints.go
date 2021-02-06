@@ -175,13 +175,13 @@ func (t *endpointsChangesTracker) Update(em types.EndpointsMap) map[k8sproxy.Ser
 		for spn, endpoints := range change.current {
 			em[spn] = endpoints
 		}
-		detectStaleConnections(change.previous, change.current, staleEndpoints)
+		detectStale(change.previous, change.current, staleEndpoints)
 	}
 	return staleEndpoints
 }
 
-// detectStaleConnections updates staleEndpoints with detected stale connections.
-func detectStaleConnections(oldEndpointsMap, newEndpointsMap types.EndpointsMap, staleEndpoints map[k8sproxy.ServicePortName]map[string]k8sproxy.Endpoint) {
+// detectStale updates staleEndpoints with detected stale endpoints.
+func detectStale(oldEndpointsMap, newEndpointsMap types.EndpointsMap, staleEndpoints map[k8sproxy.ServicePortName]map[string]k8sproxy.Endpoint) {
 	for svcPortName, epList := range oldEndpointsMap {
 		for _, ep := range epList {
 			stale := true
