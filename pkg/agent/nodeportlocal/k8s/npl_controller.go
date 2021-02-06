@@ -133,10 +133,10 @@ func (c *NPLController) syncPod(key string) error {
 	obj, exists, err := c.podInformer.GetIndexer().GetByKey(key)
 	if err != nil {
 		return err
-	} else if exists && c.isNPLEnabledForServiceOfPod(obj) {
+	} else if exists {
 		return c.handleAddUpdatePod(key, obj)
 	} else {
-		return c.handleRemovePod(key, obj)
+		return c.handleRemovePod(key)
 	}
 }
 
@@ -187,7 +187,7 @@ func (c *NPLController) enqueueSvcUpdate(oldObj, newObj interface{}) {
 
 	oldSvcAnnotation := oldSvc.Annotations[NPLEnabledAnnotationKey]
 	newSvcAnnotation := newSvc.Annotations[NPLEnabledAnnotationKey]
-	// Return if both Services donot have the NPL annotation.
+	// Return if both Services do not have the NPL annotation.
 	if oldSvcAnnotation != "true" && newSvcAnnotation != "true" {
 		return
 	}
@@ -325,16 +325,13 @@ func (c *NPLController) addPodIPToCache(key, podIP string) {
 	c.podToIP[key] = podIP
 }
 
-// handleRemovePod removes rules from port table and
-// rules programmed in the system based on implementation type (e.g. IPTABLES).
-// This also removes pod annotation from pods that are not selected by service annotation.
-func (c *NPLController) handleRemovePod(key string, obj interface{}) error {
-	klog.Infof("Got delete event for Pod: %s", key)
-	podIP, found := c.getPodIPFromCache(key)
-	if !found {
-		klog.Infof("IP address not found for Pod: %s", key)
-		return nil
-	}
+func (c *NPLController) deletePodIPFromCache(key string) {
+	c.podIPLock.Lock()
+	defer c.podIPLock.Unlock()
+	delete(c.podToIP, key)
+}
+
+func (c *NPLController) deleteAllPortRulesIfAny(podIP string) error {
 	data := c.portTable.GetDataForPodIP(podIP)
 	for _, d := range data {
 		err := c.portTable.DeleteRule(d.PodIP, int(d.PodPort))
@@ -342,29 +339,52 @@ func (c *NPLController) handleRemovePod(key string, obj interface{}) error {
 			return err
 		}
 	}
+	return nil
+}
 
-	if obj != nil {
-		pod := obj.(*corev1.Pod)
-		if _, exists := pod.Annotations[NPLAnnotationKey]; exists {
-			newPod := pod.DeepCopy()
-			removePodAnnotation(newPod)
-			return c.updatePodAnnotation(newPod)
-		}
+// handleRemovePod removes rules from port table and
+// rules programmed in the system based on implementation type (e.g. IPTABLES).
+// This also removes pod annotation from pods that are not selected by service annotation.
+func (c *NPLController) handleRemovePod(key string) error {
+	klog.V(2).Infof("Got delete event for Pod: %s", key)
+	podIP, found := c.getPodIPFromCache(key)
+	if !found {
+		klog.Infof("IP address not found for Pod: %s", key)
+		return nil
 	}
+
+	if err := c.deleteAllPortRulesIfAny(podIP); err != nil {
+		return err
+	}
+
+	c.deletePodIPFromCache(key)
+
 	return nil
 }
 
 // handleAddUpdatePod handles Pod Add, Update events and updates annotation if required.
 func (c *NPLController) handleAddUpdatePod(key string, obj interface{}) error {
 	newPod := obj.(*corev1.Pod).DeepCopy()
-	klog.Infof("Got add/update event for pod: %s", key)
+	klog.V(2).Infof("Got add/update event for Pod: %s", key)
 
 	podIP := newPod.Status.PodIP
 	if podIP == "" {
-		klog.Infof("IP address not found for pod: %s/%s", newPod.Namespace, newPod.Name)
+		klog.Infof("IP address not set for Pod: %s/%s", newPod.Namespace, newPod.Name)
 		return nil
 	}
 	c.addPodIPToCache(key, podIP)
+
+	if !c.isNPLEnabledForServiceOfPod(obj) {
+		if err := c.deleteAllPortRulesIfAny(podIP); err != nil {
+			return err
+		}
+		if _, exists := newPod.Annotations[NPLAnnotationKey]; exists {
+			removePodAnnotation(newPod)
+			return c.updatePodAnnotation(newPod)
+		}
+		return nil
+	}
+	klog.V(2).Infof("Pod %s/%s is selected by a Service for which NodePortLocal is enabled", newPod.Namespace, newPod.Name)
 
 	var err error
 	var updatePodAnnotation bool
