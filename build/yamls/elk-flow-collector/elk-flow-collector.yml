@@ -224,6 +224,8 @@ spec:
             items:
               - key: logstash.yml
                 path: logstash.yml
+              - key: filter.rb
+                path: filter.rb
         - name: logstash-pipeline-volume
           configMap:
             name: logstash-configmap
