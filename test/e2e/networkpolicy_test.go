@@ -710,6 +710,21 @@ func createAndWaitForPod(t *testing.T, data *TestData, createFunc func(name stri
 	return name, podIP, cleanupFunc
 }
 
+func createAndWaitForPodWithLabels(t *testing.T, data *TestData, createFunc func(name, ns string, portNum int, labels map[string]string) error, name, ns string, portNum int, labels map[string]string) (string, *PodIPs, func()) {
+	if err := createFunc(name, ns, portNum, labels); err != nil {
+		t.Fatalf("Error when creating busybox test Pod: %v", err)
+	}
+	cleanupFunc := func() {
+		deletePodWrapper(t, data, name)
+	}
+	podIP, err := data.podWaitForIPs(defaultTimeout, name, ns)
+	if err != nil {
+		cleanupFunc()
+		t.Fatalf("Error when waiting for IP for Pod '%s': %v", name, err)
+	}
+	return name, podIP, cleanupFunc
+}
+
 func waitForAgentCondition(t *testing.T, data *TestData, podName string, conditionType v1beta1.AgentConditionType, expectedStatus corev1.ConditionStatus) {
 	if err := wait.Poll(defaultInterval, defaultTimeout, func() (bool, error) {
 		cmds := []string{"antctl", "get", "agentinfo", "-o", "json"}

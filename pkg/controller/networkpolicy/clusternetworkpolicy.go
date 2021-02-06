@@ -195,3 +195,32 @@ func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *secv1alpha1.C
 	}
 	return internalNetworkPolicy
 }
+
+// processRefCG processes the ClusterGroup reference present in the rule and returns the
+// NetworkPolicyPeer with the corresponding AddressGroup or IPBlock.
+func (n *NetworkPolicyController) processRefCG(g string) (string, *controlplane.IPBlock) {
+	// Retrieve ClusterGroup for corresponding entry in the rule.
+	cg, err := n.cgLister.Get(g)
+	if err != nil {
+		// This error should not occur as we validate that a CG must exist before
+		// referencing it in an ACNP.
+		klog.Errorf("ClusterGroup %s not found: %v", g, err)
+		return "", nil
+	}
+	key := internalGroupKeyFunc(cg)
+	// Find the internal Group corresponding to this ClusterGroup
+	ig, found, _ := n.internalGroupStore.Get(key)
+	if !found {
+		// Internal Group was not found. Once the internal Group is created, the sync
+		// worker for internal group will re-enqueue the ClusterNetworkPolicy processing
+		// which will trigger the creation of AddressGroup.
+		return "", nil
+	}
+	intGrp := ig.(*antreatypes.Group)
+	if intGrp.IPBlock != nil {
+		return "", intGrp.IPBlock
+	}
+	agKey := n.createAddressGroupForClusterGroupCRD(intGrp)
+	// Return if addressGroup was created or found.
+	return agKey, nil
+}

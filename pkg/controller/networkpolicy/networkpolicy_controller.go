@@ -77,6 +77,8 @@ const (
 	TierIndex = "tier"
 	// PriorityIndex is used to index Tiers by their priorities.
 	PriorityIndex = "priority"
+	// ClusterGroupIndex is used to index ClusterNetworkPolicies by ClusterGroup names.
+	ClusterGroupIndex = "clustergroup"
 )
 
 var (
@@ -309,6 +311,35 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 						return []string{}, nil
 					}
 					return []string{cnp.Spec.Tier}, nil
+				},
+				ClusterGroupIndex: func(obj interface{}) ([]string, error) {
+					cnp, ok := obj.(*secv1alpha1.ClusterNetworkPolicy)
+					if !ok {
+						return []string{}, nil
+					}
+					groupNames := sets.String{}
+					if len(cnp.Spec.Ingress) == 0 && len(cnp.Spec.Egress) == 0 {
+						return []string{}, nil
+					}
+					appendGroups := func(rule secv1alpha1.Rule) {
+						for _, peer := range rule.To {
+							if peer.Group != "" {
+								groupNames.Insert(peer.Group)
+							}
+						}
+						for _, peer := range rule.From {
+							if peer.Group != "" {
+								groupNames.Insert(peer.Group)
+							}
+						}
+					}
+					for _, rule := range cnp.Spec.Egress {
+						appendGroups(rule)
+					}
+					for _, rule := range cnp.Spec.Ingress {
+						appendGroups(rule)
+					}
+					return groupNames.List(), nil
 				},
 			},
 		)
@@ -1284,7 +1315,7 @@ func (n *NetworkPolicyController) syncAddressGroup(key string) error {
 	addressGroupObj, found, _ := n.addressGroupStore.Get(key)
 	if !found {
 		// AddressGroup was already deleted. No need to process further.
-		klog.V(2).Infof("AddressGroup %s not found.", key)
+		klog.V(2).Infof("AddressGroup %s not found", key)
 		return nil
 	}
 	addressGroup := addressGroupObj.(*antreatypes.AddressGroup)
@@ -1296,8 +1327,28 @@ func (n *NetworkPolicyController) syncAddressGroup(key string) error {
 		internalNP := internalNPObj.(*antreatypes.NetworkPolicy)
 		addrGroupNodeNames = addrGroupNodeNames.Union(internalNP.SpanMeta.NodeNames)
 	}
+	memberSet := n.populateAddressGroupMemberSet(addressGroup)
+	updatedAddressGroup := &antreatypes.AddressGroup{
+		Name:         addressGroup.Name,
+		UID:          addressGroup.UID,
+		Selector:     addressGroup.Selector,
+		GroupMembers: memberSet,
+		SpanMeta:     antreatypes.SpanMeta{NodeNames: addrGroupNodeNames},
+	}
+	klog.V(2).Infof("Updating existing AddressGroup %s with %d Pods/ExternalEntities and %d Nodes", key, len(memberSet), addrGroupNodeNames.Len())
+	n.addressGroupStore.Update(updatedAddressGroup)
+	return nil
+}
+
+func (n *NetworkPolicyController) populateAddressGroupMemberSet(g *antreatypes.AddressGroup) controlplane.GroupMemberSet {
+	// Check if an internal Group object exists corresponding to this AddressGroup.
+	intGroup, found, _ := n.internalGroupStore.Get(g.Name)
+	if found {
+		ig := intGroup.(*antreatypes.Group)
+		return ig.GroupMembers
+	}
 	// Find all Pods and ExternalEntities matching its selectors and update store.
-	groupSelector := addressGroup.Selector
+	groupSelector := g.Selector
 	pods, externalEntities := n.processSelector(groupSelector)
 	memberSet := controlplane.GroupMemberSet{}
 	for _, pod := range pods {
@@ -1310,16 +1361,7 @@ func (n *NetworkPolicyController) syncAddressGroup(key string) error {
 	for _, entity := range externalEntities {
 		memberSet.Insert(externalEntityToGroupMember(entity))
 	}
-	updatedAddressGroup := &antreatypes.AddressGroup{
-		Name:         addressGroup.Name,
-		UID:          addressGroup.UID,
-		Selector:     addressGroup.Selector,
-		GroupMembers: memberSet,
-		SpanMeta:     antreatypes.SpanMeta{NodeNames: addrGroupNodeNames},
-	}
-	klog.V(2).Infof("Updating existing AddressGroup %s with %d Pods/ExternalEntities and %d Nodes", key, len(memberSet), addrGroupNodeNames.Len())
-	n.addressGroupStore.Update(updatedAddressGroup)
-	return nil
+	return memberSet
 }
 
 // podToGroupMember is util function to convert a Pod to a GroupMember type.

@@ -162,7 +162,7 @@ webhooks:
       namespace: "kube-system"
       path: "/validate/clustergroup"
   rules:
-    - operations: ["CREATE", "UPDATE"]
+    - operations: ["CREATE", "UPDATE", "DELETE"]
       apiGroups: ["core.antrea.tanzu.vmware.com"]
       apiVersions: ["v1alpha2"]
       resources: ["clustergroups"]

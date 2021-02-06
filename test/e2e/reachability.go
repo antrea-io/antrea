@@ -24,6 +24,11 @@ import (
 
 type Pod string
 
+type CustomPod struct {
+	Pod    Pod
+	Labels map[string]string
+}
+
 func NewPod(namespace string, podName string) Pod {
 	return Pod(fmt.Sprintf("%s/%s", namespace, podName))
 }
