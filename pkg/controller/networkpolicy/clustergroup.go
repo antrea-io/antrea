@@ -104,14 +104,15 @@ func (n *NetworkPolicyController) processClusterGroup(cg *corev1a2.ClusterGroup)
 			Name:      svcSelector.Name,
 		}
 	} else {
-		groupSelector := toGroupSelector("", cg.Spec.PodSelector, cg.Spec.NamespaceSelector, nil)
+		groupSelector := toGroupSelector("", cg.Spec.PodSelector, cg.Spec.NamespaceSelector, cg.Spec.ExternalEntitySelector)
 		internalGroup.Selector = groupSelector
 	}
 	return &internalGroup
 }
 
-// filterInternalGroupsForPod computes a list of internal Group keys which match the Pod's labels.
-func (n *NetworkPolicyController) filterInternalGroupsForPod(obj metav1.Object) sets.String {
+// filterInternalGroupsForPodOrExternalEntity computes a list of internal Group keys which match the
+// Pod/ExternalEntity's labels.
+func (n *NetworkPolicyController) filterInternalGroupsForPodOrExternalEntity(obj metav1.Object) sets.String {
 	matchingKeySet := sets.String{}
 	internalGroups := n.internalGroupStore.List()
 	ns, _ := n.namespaceLister.Get(obj.GetNamespace())
@@ -209,13 +210,16 @@ func (n *NetworkPolicyController) syncInternalGroup(key string) error {
 	newMemberSet := controlplane.GroupMemberSet{}
 	if grp.Selector != nil {
 		// Find all Pods matching its selectors and update store.
-		pods, _ := n.processSelector(*grp.Selector)
+		pods, externalEntities := n.processSelector(*grp.Selector)
 		for _, pod := range pods {
 			if len(pod.Status.PodIPs) == 0 {
 				// No need to insert Pod IPAddress when it is unset.
 				continue
 			}
 			newMemberSet.Insert(podToGroupMember(pod, true))
+		}
+		for _, entity := range externalEntities {
+			newMemberSet.Insert(externalEntityToGroupMember(entity))
 		}
 	}
 	// for ipBlock Groups, newMemberSet and grp.GroupMembers will both be empty.

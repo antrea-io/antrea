@@ -637,7 +637,7 @@ func (t *tierValidator) deleteValidate(oldObj interface{}, userInfo authenticati
 }
 
 // validateAntreaGroupSelectors ensures that an IPBlock is not set along with namespaceSelector and/or a
-// podSelector.
+// podSelector. Similarly, ExternalEntitySelector cannot be set with PodSelector.
 func validateAntreaGroupSelectors(s corev1a2.GroupSpec) (string, bool) {
 	podSelector, serviceRef, ipBlock := 0, 0, 0
 	if s.NamespaceSelector != nil || s.PodSelector != nil {
