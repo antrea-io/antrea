@@ -211,11 +211,10 @@ func run(o *Options) error {
 		o.config.HostProcPathPrefix,
 		nodeConfig,
 		k8sClient,
-		entityUpdates,
 		isChaining,
 		routeClient,
 		networkReadyCh)
-	err = cniServer.Initialize(ovsBridgeClient, ofClient, ifaceStore, o.config.OVSDatapathType)
+	err = cniServer.Initialize(ovsBridgeClient, ofClient, ifaceStore, o.config.OVSDatapathType, entityUpdates)
 	if err != nil {
 		return fmt.Errorf("error initializing CNI server: %v", err)
 	}

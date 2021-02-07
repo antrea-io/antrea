@@ -30,7 +30,9 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/agent/route"
+	"github.com/vmware-tanzu/antrea/pkg/agent/types"
 	"github.com/vmware-tanzu/antrea/pkg/agent/util"
+	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
 	"github.com/vmware-tanzu/antrea/pkg/k8s"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
 )
@@ -68,6 +70,9 @@ type podConfigurator struct {
 	ifaceStore      interfacestore.InterfaceStore
 	gatewayMAC      net.HardwareAddr
 	ifConfigurator  *ifConfigurator
+	// entityUpdates is a channel for notifying updates of local endpoints / entities (most notably Pod)
+	// to other components which may benefit from this information, i.e NetworkPolicyController.
+	entityUpdates chan<- types.EntityReference
 }
 
 func newPodConfigurator(
@@ -78,6 +83,7 @@ func newPodConfigurator(
 	gatewayMAC net.HardwareAddr,
 	ovsDatapathType string,
 	isOvsHardwareOffloadEnabled bool,
+	entityUpdates chan<- types.EntityReference,
 ) (*podConfigurator, error) {
 	ifConfigurator, err := newInterfaceConfigurator(ovsDatapathType, isOvsHardwareOffloadEnabled)
 	if err != nil {
@@ -90,6 +96,7 @@ func newPodConfigurator(
 		ifaceStore:      ifaceStore,
 		gatewayMAC:      gatewayMAC,
 		ifConfigurator:  ifConfigurator,
+		entityUpdates:   entityUpdates,
 	}, nil
 }
 
@@ -475,6 +482,10 @@ func (pc *podConfigurator) connectInterfaceToOVSCommon(ovsPortName string, conta
 	containerConfig.OVSPortConfig = &interfacestore.OVSPortConfig{PortUUID: portUUID, OFPort: ofPort}
 	// Add containerConfig into local cache
 	pc.ifaceStore.AddInterface(containerConfig)
+	// Notify the Pod update event to required components.
+	pc.entityUpdates <- types.EntityReference{
+		Pod: &v1beta2.PodReference{Name: containerConfig.PodName, Namespace: containerConfig.PodNamespace},
+	}
 	return nil
 }
 
