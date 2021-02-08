@@ -48,7 +48,7 @@ type ifConfigurator struct {
 	ifCache    *sync.Map
 }
 
-func newInterfaceConfigurator(ovsDataPathType string, isOvsHardwareOffloadEnabled bool) (*ifConfigurator, error) {
+func newInterfaceConfigurator(ovsDatapathType ovsconfig.OVSDatapathType, isOvsHardwareOffloadEnabled bool) (*ifConfigurator, error) {
 	eps, err := hcsshim.HNSListEndpointRequest()
 	if err != nil {
 		return nil, err
