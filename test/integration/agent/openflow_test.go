@@ -39,7 +39,7 @@ import (
 	ofconfig "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsctl"
-	"github.com/vmware-tanzu/antrea/pkg/util/env"
+	antrearuntime "github.com/vmware-tanzu/antrea/pkg/util/runtime"
 	ofTestUtils "github.com/vmware-tanzu/antrea/test/integration/ovs"
 	k8sproxy "github.com/vmware-tanzu/antrea/third_party/proxy"
 )
@@ -104,8 +104,8 @@ func TestConnectivityFlows(t *testing.T) {
 
 	// Hack the OS type if we run the test not on Windows Node.
 	// Because we test some Windows only functions.
-	if !env.IsWindowsPlatform() {
-		env.WindowsOS = runtime.GOOS
+	if !antrearuntime.IsWindowsPlatform() {
+		antrearuntime.WindowsOS = runtime.GOOS
 	}
 
 	c = ofClient.NewClient(br, bridgeMgmtAddr, true, false)

@@ -16,7 +16,6 @@ package env
 
 import (
 	"os"
-	"runtime"
 	"strconv"
 
 	"k8s.io/klog"
@@ -31,9 +30,6 @@ const (
 
 	antreaCloudEKSEnvKey = "ANTREA_CLOUD_EKS"
 )
-
-// Not defined as a constant because we need to hack the value in integration test.
-var WindowsOS = "windows"
 
 // GetNodeName returns the node's name used in Kubernetes, based on the priority:
 // - Environment variable NODE_NAME, which should be set by Downward API
@@ -96,8 +92,4 @@ func getBoolEnvVar(name string, defaultValue bool) bool {
 // Returns true if Antrea is used to enforce NetworkPolicies in an EKS cluster.
 func IsCloudEKS() bool {
 	return getBoolEnvVar(antreaCloudEKSEnvKey, false)
-}
-
-func IsWindowsPlatform() bool {
-	return runtime.GOOS == WindowsOS
 }

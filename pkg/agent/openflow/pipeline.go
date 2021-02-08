@@ -32,7 +32,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/types"
 	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsctl"
-	"github.com/vmware-tanzu/antrea/pkg/util/env"
+	"github.com/vmware-tanzu/antrea/pkg/util/runtime"
 	"github.com/vmware-tanzu/antrea/third_party/proxy"
 )
 
@@ -1885,7 +1885,7 @@ func (c *client) generatePipeline() {
 		c.pipeline[dnatTable] = bridge.CreateTable(dnatTable, c.egressEntryTable, binding.TableMissActionNext)
 		c.pipeline[conntrackCommitTable] = bridge.CreateTable(conntrackCommitTable, L2ForwardingOutTable, binding.TableMissActionNext)
 	}
-	if env.IsWindowsPlatform() {
+	if runtime.IsWindowsPlatform() {
 		c.pipeline[uplinkTable] = bridge.CreateTable(uplinkTable, spoofGuardTable, binding.TableMissActionNone)
 	}
 	if c.enableAntreaPolicy {
