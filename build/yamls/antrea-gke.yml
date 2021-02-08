@@ -1543,6 +1543,15 @@ spec:
               fieldPath: spec.serviceAccountName
         image: projects.registry.vmware.com/antrea/antrea-ubuntu:latest
         imagePullPolicy: IfNotPresent
+        livenessProbe:
+          failureThreshold: 5
+          httpGet:
+            host: 127.0.0.1
+            path: /livez
+            port: api
+            scheme: HTTPS
+          periodSeconds: 10
+          timeoutSeconds: 5
         name: antrea-controller
         ports:
         - containerPort: 10349
@@ -1552,7 +1561,7 @@ spec:
           failureThreshold: 5
           httpGet:
             host: 127.0.0.1
-            path: /healthz
+            path: /readyz
             port: api
             scheme: HTTPS
           initialDelaySeconds: 5
@@ -1734,7 +1743,7 @@ spec:
           failureThreshold: 5
           httpGet:
             host: 127.0.0.1
-            path: /healthz
+            path: /readyz
             port: api
             scheme: HTTPS
           initialDelaySeconds: 5

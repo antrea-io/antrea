@@ -108,7 +108,7 @@ func (monitor *controllerMonitor) syncControllerCRD() {
 }
 
 // getControllerCRD is used to check the existence of controller monitoring CRD.
-// So when the pod restarts, it will update this monitoring CRD instead of creating a new one.
+// So when the Pod restarts, it will update this monitoring CRD instead of creating a new one.
 func (monitor *controllerMonitor) getControllerCRD(crdName string) (*v1beta1.AntreaControllerInfo, error) {
 	return monitor.client.ClusterinformationV1beta1().AntreaControllerInfos().Get(context.TODO(), crdName, metav1.GetOptions{})
 }
