@@ -57,8 +57,8 @@ type proxier struct {
 	serviceInstalledMap k8sproxy.ServiceMap
 	// endpointsMap stores endpoints we expect to be installed.
 	endpointsMap types.EndpointsMap
-	// endpointInstalledMap stores endpoints we actually installed.
-	endpointInstalledMap map[k8sproxy.ServicePortName]map[string]struct{}
+	// endpointsInstalledMap stores endpoints we actually installed.
+	endpointsInstalledMap types.EndpointsMap
 	// endpointReferenceCounter stores the number of times an Endpoint is referenced by Services.
 	endpointReferenceCounter map[string]uint
 	// groupCounter is used to allocate groupID.
@@ -84,7 +84,7 @@ func (p *proxier) isInitialized() bool {
 }
 
 // removeStaleServices removes all expired Services. Once a Service is deleted, all
-// its Endpoints will be expired, and removeStaleEndpoints takes response for cleaning up,
+// its Endpoints will be expired, and removeStaleEndpoints method takes response for cleaning up,
 // thus we don't need to call removeEndpoint in this function.
 func (p *proxier) removeStaleServices() {
 	for svcPortName, svcPort := range p.serviceInstalledMap {
@@ -151,32 +151,30 @@ func (p *proxier) removeEndpoint(endpoint k8sproxy.Endpoint, protocol binding.Pr
 			return false, err
 		}
 		delete(p.endpointReferenceCounter, key)
+		klog.V(2).Infof("Endpoint %s/%s removed", endpoint.String(), protocol)
 	} else if count > 1 {
 		p.endpointReferenceCounter[key] = count - 1
+		klog.V(2).Infof("Stale Endpoint %s/%s is still referenced by other Services, removing 1 reference", endpoint.String(), protocol)
 		return false, nil
 	}
 	return true, nil
 }
 
-func (p *proxier) removeStaleEndpoints(staleEndpoints map[k8sproxy.ServicePortName]map[string]k8sproxy.Endpoint) {
-	for svcPortName, endpoints := range staleEndpoints {
-		for _, endpoint := range endpoints {
-			klog.V(2).Infof("Removing stale Endpoint %s of Service %s", endpoint.String(), svcPortName.String())
-			removed, err := p.removeEndpoint(endpoint, getBindingProtoForIPProto(endpoint.IP(), svcPortName.Protocol))
-			if err != nil {
-				klog.Errorf("Error when removing Endpoint %v for %v", endpoint, svcPortName)
-				continue
-			}
-			if removed {
-				m := p.endpointInstalledMap[svcPortName]
-				delete(m, endpoint.String())
-				if len(m) == 0 {
-					delete(p.endpointInstalledMap, svcPortName)
+// removeStaleEndpoints compares Endpoints we installed with Endpoints we expected, all installed but unexpected Endpoints
+// will be deleted by using removeEndpoint.
+func (p *proxier) removeStaleEndpoints() {
+	for svcPortName, installedEps := range p.endpointsInstalledMap {
+		for installedEpName, installedEp := range installedEps {
+			if _, ok := p.endpointsMap[svcPortName][installedEpName]; !ok {
+				if _, err := p.removeEndpoint(installedEp, getBindingProtoForIPProto(installedEp.IP(), svcPortName.Protocol)); err != nil {
+					klog.Errorf("Error when removing Endpoint %v for %v", installedEp, svcPortName)
+					continue
 				}
-				klog.V(2).Infof("Endpoint %s/%s removed", endpoint.String(), svcPortName.Protocol)
-			} else {
-				klog.V(2).Infof("Stale Endpoint %s/%s of Service %s is still referenced by other Services, removing 1 reference", endpoint.String(), svcPortName.Protocol, svcPortName)
+				delete(installedEps, installedEpName)
 			}
+		}
+		if len(installedEps) == 0 {
+			delete(p.endpointsInstalledMap, svcPortName)
 		}
 	}
 }
@@ -212,10 +210,10 @@ func (p *proxier) installServices() {
 	for svcPortName, svcPort := range p.serviceMap {
 		svcInfo := svcPort.(*types.ServiceInfo)
 		groupID, _ := p.groupCounter.Get(svcPortName)
-		endpointsInstalled, ok := p.endpointInstalledMap[svcPortName]
+		endpointsInstalled, ok := p.endpointsInstalledMap[svcPortName]
 		if !ok {
-			p.endpointInstalledMap[svcPortName] = map[string]struct{}{}
-			endpointsInstalled = p.endpointInstalledMap[svcPortName]
+			p.endpointsInstalledMap[svcPortName] = map[string]k8sproxy.Endpoint{}
+			endpointsInstalled = p.endpointsInstalledMap[svcPortName]
 		}
 		endpoints := p.endpointsMap[svcPortName]
 		// If both expected Endpoints number and installed Endpoints number are 0, we don't need to take care of this Service.
@@ -274,24 +272,23 @@ func (p *proxier) installServices() {
 			err := p.ofClient.InstallEndpointFlows(svcInfo.OFProtocol, endpointUpdateList, p.isIPv6)
 			if err != nil {
 				klog.Errorf("Error when installing Endpoints flows: %v", err)
+				p.endpointsInstalledMap[svcPortName] = nil
 				continue
 			}
 			err = p.ofClient.InstallServiceGroup(groupID, svcInfo.StickyMaxAgeSeconds() != 0, endpointUpdateList)
 			if err != nil {
 				klog.Errorf("Error when installing Endpoints groups: %v", err)
-				p.endpointInstalledMap[svcPortName] = nil
+				p.endpointsInstalledMap[svcPortName] = nil
 				continue
 			}
-			newEndpointsInstalled := map[string]struct{}{}
 			for _, e := range endpointUpdateList {
 				// If the Endpoint is newly installed, add a reference.
 				if _, ok := endpointsInstalled[e.String()]; !ok {
 					key := endpointKey(e, svcInfo.OFProtocol)
 					p.endpointReferenceCounter[key] = p.endpointReferenceCounter[key] + 1
+					endpointsInstalled[e.String()] = e
 				}
-				newEndpointsInstalled[e.String()] = struct{}{}
 			}
-			p.endpointInstalledMap[svcPortName] = newEndpointsInstalled
 		}
 
 		if needUpdateService {
@@ -364,12 +361,12 @@ func (p *proxier) syncProxyRules() {
 		return
 	}
 
-	staleEndpoints := p.endpointsChanges.Update(p.endpointsMap)
+	p.endpointsChanges.Update(p.endpointsMap)
 	p.serviceChanges.Update(p.serviceMap)
 
 	p.removeStaleServices()
 	p.installServices()
-	p.removeStaleEndpoints(staleEndpoints)
+	p.removeStaleEndpoints()
 
 	counter := 0
 	for _, endpoints := range p.endpointsMap {
@@ -497,7 +494,7 @@ func NewProxier(
 		serviceChanges:           newServiceChangesTracker(recorder, isIPv6),
 		serviceMap:               k8sproxy.ServiceMap{},
 		serviceInstalledMap:      k8sproxy.ServiceMap{},
-		endpointInstalledMap:     map[k8sproxy.ServicePortName]map[string]struct{}{},
+		endpointsInstalledMap:    types.EndpointsMap{},
 		endpointsMap:             types.EndpointsMap{},
 		endpointReferenceCounter: map[string]uint{},
 		serviceStringMap:         map[string]k8sproxy.ServicePortName{},

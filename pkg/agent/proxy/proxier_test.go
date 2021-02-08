@@ -92,7 +92,7 @@ func NewFakeProxier(ofClient openflow.Client, isIPv6 bool) *proxier {
 		serviceChanges:           newServiceChangesTracker(recorder, isIPv6),
 		serviceMap:               k8sproxy.ServiceMap{},
 		serviceInstalledMap:      k8sproxy.ServiceMap{},
-		endpointInstalledMap:     map[k8sproxy.ServicePortName]map[string]struct{}{},
+		endpointsInstalledMap:    types.EndpointsMap{},
 		endpointReferenceCounter: map[string]uint{},
 		endpointsMap:             types.EndpointsMap{},
 		groupCounter:             types.NewGroupCounter(),
