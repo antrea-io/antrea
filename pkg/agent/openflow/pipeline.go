@@ -30,6 +30,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/types"
 	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsctl"
+	"github.com/vmware-tanzu/antrea/pkg/util/runtime"
 	"github.com/vmware-tanzu/antrea/third_party/proxy"
 )
 
@@ -1820,7 +1821,6 @@ func (c *client) generatePipeline() {
 	if c.enableProxy {
 		c.pipeline = map[binding.TableIDType]binding.Table{
 			ClassifierTable:       bridge.CreateTable(ClassifierTable, spoofGuardTable, binding.TableMissActionDrop),
-			uplinkTable:           bridge.CreateTable(uplinkTable, spoofGuardTable, binding.TableMissActionNone),
 			spoofGuardTable:       bridge.CreateTable(spoofGuardTable, serviceHairpinTable, binding.TableMissActionDrop),
 			arpResponderTable:     bridge.CreateTable(arpResponderTable, binding.LastTableID, binding.TableMissActionDrop),
 			ipv6Table:             bridge.CreateTable(ipv6Table, serviceHairpinTable, binding.TableMissActionNext),
@@ -1864,6 +1864,9 @@ func (c *client) generatePipeline() {
 			conntrackCommitTable:  bridge.CreateTable(conntrackCommitTable, L2ForwardingOutTable, binding.TableMissActionNext),
 			L2ForwardingOutTable:  bridge.CreateTable(L2ForwardingOutTable, binding.LastTableID, binding.TableMissActionDrop),
 		}
+	}
+	if runtime.IsWindowsPlatform() {
+		c.pipeline[uplinkTable] = bridge.CreateTable(uplinkTable, spoofGuardTable, binding.TableMissActionNone)
 	}
 	if c.enableAntreaPolicy {
 		c.pipeline[AntreaPolicyEgressRuleTable] = bridge.CreateTable(AntreaPolicyEgressRuleTable, EgressRuleTable, binding.TableMissActionNext)
