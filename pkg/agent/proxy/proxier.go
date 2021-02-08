@@ -139,10 +139,10 @@ func getBindingProtoForIPProto(endpointIP string, protocol corev1.Protocol) bind
 // removeEndpoint removes flows for the given Endpoint from the data path if these flows are no longer
 // needed by any Service. Endpoints from different Services can have the same characteristics and thus
 // can share the same flows. removeEndpoint must be called whenever an Endpoint is no longer used by a
-// given Service. If the Endpoint is still be referenced by any other Services, there will be no
-// operation on the data path. The method only returns an error if a data path operation fails. If the
-// flows are successfully removed from the data path, the method return true. Otherwise, if the flows
-// are still needed for other Services, it returns false.
+// given Service. If the Endpoint is still referenced by any other Services, no flow will be removed.
+// The method only returns an error if a data path operation fails. If the flows are successfully
+// removed from the data path, the method returns true. Otherwise, if the flows are still needed for
+// other Services, it returns false.
 func (p *proxier) removeEndpoint(endpoint k8sproxy.Endpoint, protocol binding.Protocol) (bool, error) {
 	key := endpointKey(endpoint, protocol)
 	count := p.endpointReferenceCounter[key]
@@ -152,7 +152,7 @@ func (p *proxier) removeEndpoint(endpoint k8sproxy.Endpoint, protocol binding.Pr
 		}
 		delete(p.endpointReferenceCounter, key)
 	} else if count > 1 {
-		p.endpointReferenceCounter[key] = p.endpointReferenceCounter[key] - 1
+		p.endpointReferenceCounter[key] = count - 1
 		return false, nil
 	}
 	return true, nil
