@@ -162,7 +162,7 @@ func TestReassignBoundaryPriorities(t *testing.T) {
 			}
 			priorityUpdates := map[types.Priority]*PriorityUpdate{}
 			err := pa.reassignBoundaryPriorities(tt.lowerBound, tt.upperBound, prioritiesToRegister, priorityUpdates)
-			assert.Equalf(t, nil, err, "Error occurred in reassignment")
+			assert.NoError(t, err, "Error occurred in reassignment")
 			assert.Equalf(t, tt.expectedPriorityMap, pa.priorityMap, "priorityMap unexpected after reassignment")
 			assert.Equalf(t, tt.expectedUpdates, priorityUpdates, "priority updates unexpected after reassignment")
 		})
@@ -265,7 +265,7 @@ func TestInsertConsecutivePriorities(t *testing.T) {
 			}
 			priorityUpdates := map[types.Priority]*PriorityUpdate{}
 			err := pa.insertConsecutivePriorities(prioritiesToRegister, priorityUpdates)
-			assert.Equalf(t, nil, err, "Error occurred in priority insertion")
+			assert.NoError(t, err, "Error occurred in priority insertion")
 			assert.Equalf(t, tt.expectedOFPriorityMap, pa.ofPriorityMap, "priorityMap unexpected after insertion")
 		})
 	}
@@ -287,7 +287,7 @@ func TestRegisterPrioritiesAndRevert(t *testing.T) {
 		insertionPoint191: p191, insertionPoint191 + 1: p190,
 	}
 	_, revertFunc, err := pa.RegisterPriorities(prioritiesToRegister)
-	assert.Equalf(t, nil, err, "Error occurred in priority registration")
+	assert.NoError(t, err, "Error occurred in priority registration")
 	assert.Equalf(t, expectedOFMapAfterRegister, pa.ofPriorityMap, "priorityMap unexpected after registration")
 
 	expectedOFMapAfterRevert := map[uint16]types.Priority{
@@ -295,6 +295,24 @@ func TestRegisterPrioritiesAndRevert(t *testing.T) {
 	}
 	revertFunc()
 	assert.Equalf(t, expectedOFMapAfterRevert, pa.ofPriorityMap, "priorityMap unexpected after revert")
+}
+
+func TestRegisterDuplicatePriorities(t *testing.T) {
+	pa1 := newPriorityAssigner(false)
+	pa2 := newPriorityAssigner(false)
+	prioritiesToRegister := []types.Priority{p1131, p1130}
+	prioritiesToRegisterDuplicate := []types.Priority{p1130, p1131, p1130, p1130, p1130, p1131, p1130}
+
+	_, _, err := pa1.RegisterPriorities(prioritiesToRegister)
+	assert.NoError(t, err, "Error occurred in priority registration")
+	_, _, err2 := pa2.RegisterPriorities(prioritiesToRegisterDuplicate)
+	assert.NoError(t, err2, "Error occurred in priority registration")
+	ofPriority1130, _ := pa1.GetOFPriority(p1130)
+	ofPriority1130Dup, _ := pa2.GetOFPriority(p1130)
+	assert.Equal(t, ofPriority1130, ofPriority1130Dup)
+	ofPriority1131, _ := pa1.GetOFPriority(p1131)
+	ofPriority1131Dup, _ := pa2.GetOFPriority(p1131)
+	assert.Equal(t, ofPriority1131, ofPriority1131Dup)
 }
 
 func generatePriorities(tierPriority, start, end int32, policyPriority float64) []types.Priority {
@@ -309,7 +327,7 @@ func TestRegisterAllOFPriorities(t *testing.T) {
 	pa := newPriorityAssigner(true)
 	maxPriorities := generatePriorities(253, int32(BaselinePolicyBottomPriority), int32(BaselinePolicyTopPriority), 5)
 	_, _, err := pa.RegisterPriorities(maxPriorities)
-	assert.Equalf(t, nil, err, "Error occurred in registering max number of allowed priorities in baseline tier")
+	assert.NoError(t, err, "Error occurred in registering max number of allowed priorities in baseline tier")
 
 	extraPriority := types.Priority{
 		TierPriority:   253,
@@ -323,10 +341,10 @@ func TestRegisterAllOFPriorities(t *testing.T) {
 	consecPriorities1 := generatePriorities(5, int32(PolicyBottomPriority), 10000, 5)
 	_, _, err = pa.RegisterPriorities(consecPriorities1)
 
-	assert.Equalf(t, nil, err, "Error occurred before registering max number of allowed priorities")
+	assert.NoError(t, err, "Error occurred before registering max number of allowed priorities")
 	consecPriorities2 := generatePriorities(10, 10001, int32(PolicyTopPriority), 5)
 	_, _, err = pa.RegisterPriorities(consecPriorities2)
-	assert.Equalf(t, nil, err, "Error occurred in registering max number of allowed priorities")
+	assert.NoError(t, err, "Error occurred in registering max number of allowed priorities")
 
 	_, _, err = pa.RegisterPriorities([]types.Priority{extraPriority})
 	assert.Errorf(t, err, "Error should be raised after max number of priorities are registered")
