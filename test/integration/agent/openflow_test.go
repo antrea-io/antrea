@@ -18,6 +18,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -38,6 +39,7 @@ import (
 	ofconfig "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsctl"
+	"github.com/vmware-tanzu/antrea/pkg/util/env"
 	ofTestUtils "github.com/vmware-tanzu/antrea/test/integration/ovs"
 	k8sproxy "github.com/vmware-tanzu/antrea/third_party/proxy"
 )
@@ -99,6 +101,12 @@ var (
 func TestConnectivityFlows(t *testing.T) {
 	// Initialize ovs metrics (Prometheus) to test them
 	metrics.InitializeOVSMetrics()
+
+	// Hack the OS type if we run the test not on Windows Node.
+	// Because we test some Windows only functions.
+	if !env.IsWindowsPlatform() {
+		env.WindowsOS = runtime.GOOS
+	}
 
 	c = ofClient.NewClient(br, bridgeMgmtAddr, true, false)
 	err := ofTestUtils.PrepareOVSBridge(br)
@@ -208,6 +216,7 @@ func TestReplayFlowsNetworkPolicyFlows(t *testing.T) {
 func testExternalFlows(t *testing.T, config *testConfig) {
 	nodeIP := config.nodeConfig.NodeIPAddr.IP
 	localSubnet := config.nodeConfig.PodIPv4CIDR
+
 	if err := c.InstallExternalFlows(); err != nil {
 		t.Errorf("Failed to install OpenFlow entries to allow Pod to communicate to the external addresses: %v", err)
 	}
