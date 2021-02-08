@@ -91,13 +91,6 @@ func (c *NPLController) updatePodNPLAnnotation(pod *corev1.Pod, annotations []NP
 }
 
 func patchPod(value []NPLAnnotation, pod corev1.Pod, kubeClient clientset.Interface) error {
-	type Metadata struct {
-		Annotations map[string]*string `json:"annotations"`
-	}
-	type PatchData struct {
-		Meta Metadata `json:"metadata"`
-	}
-
 	payloadValue := make(map[string]*string)
 	if len(value) > 0 {
 		valueStr := string(toJSON(value))
@@ -105,12 +98,14 @@ func patchPod(value []NPLAnnotation, pod corev1.Pod, kubeClient clientset.Interf
 	} else {
 		payloadValue[NPLAnnotationKey] = nil
 	}
-	payload := PatchData{
-		Meta: Metadata{
-			Annotations: payloadValue,
+
+	newPayload := map[string]interface{}{
+		"metadata": map[string]map[string]*string{
+			"annotations": payloadValue,
 		},
 	}
-	payloadBytes, _ := json.Marshal(payload)
+
+	payloadBytes, _ := json.Marshal(newPayload)
 	if _, err := kubeClient.CoreV1().Pods(pod.Namespace).Patch(context.TODO(), pod.Name, types.MergePatchType,
 		payloadBytes, metav1.PatchOptions{}); err != nil {
 		return fmt.Errorf("unable to update Annotation for Pod %s/%s, %s", pod.Namespace,
