@@ -47,7 +47,7 @@ func addRulesForNPLPorts(portTable *portcache.PortTable, allNPLPorts []rules.Pod
 	}
 
 	if err := portTable.PodPortRules.AddAllRules(allNPLPorts); err != nil {
-		return nil
+		return err
 	}
 	return nil
 }
@@ -80,7 +80,7 @@ func getPodsAndGenRules(kubeClient clientset.Interface, portTable *portcache.Por
 		err := json.Unmarshal([]byte(nplAnnotation), &nplData)
 		if err != nil {
 			// if there's an error in this NPL Annotation, clean it up
-			err := nplk8s.CleanupNPLAnnotationForPod(kubeClient, pod)
+			err := nplk8s.CleanupNPLAnnotationForPod(kubeClient, &pod)
 			if err != nil {
 				return err
 			}
@@ -90,7 +90,7 @@ func getPodsAndGenRules(kubeClient clientset.Interface, portTable *portcache.Por
 		for _, npl := range nplData {
 			if npl.NodePort > portTable.EndPort || npl.NodePort < portTable.StartPort {
 				// invalid port, cleanup the NPL Annotation
-				if err := nplk8s.CleanupNPLAnnotationForPod(kubeClient, pod); err != nil {
+				if err := nplk8s.CleanupNPLAnnotationForPod(kubeClient, &pod); err != nil {
 					return err
 				}
 				break

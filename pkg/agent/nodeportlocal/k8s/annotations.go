@@ -83,14 +83,14 @@ func removeFromNPLAnnotation(annotations []NPLAnnotation, containerPort int) []N
 }
 
 func (c *NPLController) updatePodNPLAnnotation(pod *corev1.Pod, annotations []NPLAnnotation) error {
-	if err := patchPod(annotations, *pod, c.kubeClient); err != nil {
+	if err := patchPod(annotations, pod, c.kubeClient); err != nil {
 		klog.Warningf("Unable to patch NPL annotations for Pod %s/%s: %s", pod.Namespace, pod.Name, err.Error())
 	}
 	klog.V(2).Infof("Successfully updated annotation for Pod %s/%s", pod.Namespace, pod.Name)
 	return nil
 }
 
-func patchPod(value []NPLAnnotation, pod corev1.Pod, kubeClient clientset.Interface) error {
+func patchPod(value []NPLAnnotation, pod *corev1.Pod, kubeClient clientset.Interface) error {
 	payloadValue := make(map[string]*string)
 	if len(value) > 0 {
 		valueStr := string(toJSON(value))
@@ -108,14 +108,14 @@ func patchPod(value []NPLAnnotation, pod corev1.Pod, kubeClient clientset.Interf
 	payloadBytes, _ := json.Marshal(newPayload)
 	if _, err := kubeClient.CoreV1().Pods(pod.Namespace).Patch(context.TODO(), pod.Name, types.MergePatchType,
 		payloadBytes, metav1.PatchOptions{}); err != nil {
-		return fmt.Errorf("unable to update Annotation for Pod %s/%s, %s", pod.Namespace,
+		return fmt.Errorf("unable to update Annotation for Pod %s/%s: %s", pod.Namespace,
 			pod.Name, err.Error())
 	}
 	return nil
 }
 
 // CleanupNPLAnnotationForPod removes the NPL Annotation from the Pod's Annotations map entirely.
-func CleanupNPLAnnotationForPod(kubeClient clientset.Interface, pod corev1.Pod) error {
+func CleanupNPLAnnotationForPod(kubeClient clientset.Interface, pod *corev1.Pod) error {
 	_, ok := pod.Annotations[NPLAnnotationKey]
 	if !ok {
 		return nil

@@ -379,7 +379,7 @@ func (c *NPLController) handleAddUpdatePod(key string, obj interface{}) error {
 			return err
 		}
 		if _, exists := pod.Annotations[NPLAnnotationKey]; exists {
-			return CleanupNPLAnnotationForPod(c.kubeClient, *pod)
+			return CleanupNPLAnnotationForPod(c.kubeClient, pod)
 		}
 		return nil
 	}
