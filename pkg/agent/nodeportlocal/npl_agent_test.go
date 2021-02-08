@@ -310,41 +310,6 @@ func TestSvcDelete(t *testing.T) {
 	assert.False(t, testData.portTable.RuleExists(defaultPodIP, defaultPort))
 }
 
-// TestPodUpdate verifies that any update in the Pod container port is reflected in Pod annotation
-// and local port table.
-func TestPodUpdate(t *testing.T) {
-	testData, _, testPod := setUpWithTestServiceAndPod(t)
-	defer testData.tearDown()
-
-	newPort := 8080
-	testPod.Spec.Containers[0].Ports[0].ContainerPort = int32(newPort)
-	testData.updatePodOrFail(testPod)
-
-	err := wait.Poll(time.Second, 20*time.Second, func() (bool, error) {
-		updatedPod, err := testData.k8sClient.CoreV1().Pods(defaultNS).Get(context.TODO(), testPod.Name, metav1.GetOptions{})
-		require.NoError(t, err, "Failed to get Pod")
-
-		ann := updatedPod.GetAnnotations()
-		var nplData []nplk8s.NPLAnnotation
-		value, exists := ann[nplk8s.NPLAnnotationKey]
-		if !exists {
-			return false, nil
-		}
-		err = json.Unmarshal([]byte(value), &nplData)
-		require.NoError(t, err, "Error when unmarshalling NPL annotation")
-		t.Logf("Pod annotation: %v", nplData)
-
-		if len(nplData) != 1 || nplData[0].PodPort != 8080 {
-			return false, nil
-		}
-		return true, nil
-	})
-	assert.NoError(t, err, "Error when polling for annotation update")
-
-	assert.False(t, testData.portTable.RuleExists(defaultPodIP, defaultPort))
-	assert.True(t, testData.portTable.RuleExists(defaultPodIP, newPort), true)
-}
-
 // TestPodDelete verifies that when a Pod gets deleted, the corresponding entry gets deleted from
 // local port table as well.
 func TestPodDelete(t *testing.T) {
