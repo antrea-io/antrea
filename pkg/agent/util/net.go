@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"runtime"
 )
 
 const (
@@ -31,8 +30,6 @@ const (
 
 	FamilyIPv4 uint8 = 4
 	FamilyIPv6 uint8 = 6
-
-	windowsPlatform = "windows"
 )
 
 func generateInterfaceName(key string, name string, useHead bool) string {
@@ -151,8 +148,4 @@ func GetIPWithFamily(ips []net.IP, addrFamily uint8) (net.IP, error) {
 		}
 		return nil, errors.New("no IP found with IPv4 AddressFamily")
 	}
-}
-
-func IsWindowsPlatform() bool {
-	return runtime.GOOS == windowsPlatform
 }

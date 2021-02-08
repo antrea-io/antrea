@@ -1383,18 +1383,18 @@ func (mr *MockFlowBuilderMockRecorder) MatchCTSrcPort(arg0 interface{}) *gomock.
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchCTSrcPort", reflect.TypeOf((*MockFlowBuilder)(nil).MatchCTSrcPort), arg0)
 }
 
-// MatchCTStateDnat mocks base method
-func (m *MockFlowBuilder) MatchCTStateDnat(arg0 bool) openflow.FlowBuilder {
+// MatchCTStateDNAT mocks base method
+func (m *MockFlowBuilder) MatchCTStateDNAT(arg0 bool) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MatchCTStateDnat", arg0)
+	ret := m.ctrl.Call(m, "MatchCTStateDNAT", arg0)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
-// MatchCTStateDnat indicates an expected call of MatchCTStateDnat
-func (mr *MockFlowBuilderMockRecorder) MatchCTStateDnat(arg0 interface{}) *gomock.Call {
+// MatchCTStateDNAT indicates an expected call of MatchCTStateDNAT
+func (mr *MockFlowBuilderMockRecorder) MatchCTStateDNAT(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchCTStateDnat", reflect.TypeOf((*MockFlowBuilder)(nil).MatchCTStateDnat), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchCTStateDNAT", reflect.TypeOf((*MockFlowBuilder)(nil).MatchCTStateDNAT), arg0)
 }
 
 // MatchCTStateEst mocks base method
@@ -1467,18 +1467,18 @@ func (mr *MockFlowBuilderMockRecorder) MatchCTStateRpl(arg0 interface{}) *gomock
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchCTStateRpl", reflect.TypeOf((*MockFlowBuilder)(nil).MatchCTStateRpl), arg0)
 }
 
-// MatchCTStateSnat mocks base method
-func (m *MockFlowBuilder) MatchCTStateSnat(arg0 bool) openflow.FlowBuilder {
+// MatchCTStateSNAT mocks base method
+func (m *MockFlowBuilder) MatchCTStateSNAT(arg0 bool) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MatchCTStateSnat", arg0)
+	ret := m.ctrl.Call(m, "MatchCTStateSNAT", arg0)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
-// MatchCTStateSnat indicates an expected call of MatchCTStateSnat
-func (mr *MockFlowBuilderMockRecorder) MatchCTStateSnat(arg0 interface{}) *gomock.Call {
+// MatchCTStateSNAT indicates an expected call of MatchCTStateSNAT
+func (mr *MockFlowBuilderMockRecorder) MatchCTStateSNAT(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchCTStateSnat", reflect.TypeOf((*MockFlowBuilder)(nil).MatchCTStateSnat), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchCTStateSNAT", reflect.TypeOf((*MockFlowBuilder)(nil).MatchCTStateSNAT), arg0)
 }
 
 // MatchCTStateTrk mocks base method

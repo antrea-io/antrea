@@ -189,7 +189,7 @@ func (b *ofFlowBuilder) MatchCTStateInv(set bool) FlowBuilder {
 	return b
 }
 
-func (b *ofFlowBuilder) MatchCTStateDnat(set bool) FlowBuilder {
+func (b *ofFlowBuilder) MatchCTStateDNAT(set bool) FlowBuilder {
 	if b.ctStates == nil {
 		b.ctStates = openflow13.NewCTStates()
 	}
@@ -203,7 +203,7 @@ func (b *ofFlowBuilder) MatchCTStateDnat(set bool) FlowBuilder {
 	return b
 }
 
-func (b *ofFlowBuilder) MatchCTStateSnat(set bool) FlowBuilder {
+func (b *ofFlowBuilder) MatchCTStateSNAT(set bool) FlowBuilder {
 	if b.ctStates == nil {
 		b.ctStates = openflow13.NewCTStates()
 	}

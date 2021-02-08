@@ -30,7 +30,6 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/metrics"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow/cookie"
 	"github.com/vmware-tanzu/antrea/pkg/agent/types"
-	"github.com/vmware-tanzu/antrea/pkg/agent/util"
 	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsctl"
 	"github.com/vmware-tanzu/antrea/pkg/util/runtime"
@@ -223,16 +222,19 @@ const (
 
 	CtZone   = 0xfff0
 	CtZoneV6 = 0xffe6
-	// CtZoneSnat is only used on Windows and only when AntreaProxy is enabled.
-	// When a Pod access cluster service, and the selected endpoint uses node IP(hostnetwork mode).
-	// The request packets need to be SNATed after have been DNATed. We use a different
-	// ct_zone to track SNATed connection. It's because OVS dose not support both do
-	// DNAT and SNAT at same zone.
+	// CtZoneSNAT is only used on Windows and only when AntreaProxy is enabled.
+	// When a Pod access a ClusterIP Service, and the IP of the selected endpoint
+	// is not in "cluster-cidr". The request packets need to be SNAT'd(set src IP to local Node IP)
+	// after have been DNAT'd(set dst IP to endpoint IP).
+	// For example, the endpoint Pod may run in hostNetwork mode and the IP of the endpoint
+	// will is the current Node IP.
+	// We need to use a different ct_zone to track the SNAT'd connection because OVS
+	// dose not support doing both DNAT and SNAT in the same ct_zone.
 	//
-	// A example of the connection is a Pod access kubernetes API service:
-	// Pod --> DNAT(CtZone) --> SNAT(CtZoneSnat) --> Endpoint(API server NodeIP)
-	// Pod <-- unDNAT(CtZone) <-- unSNAT(CtZoneSnat) <-- Endpoint(API server NodeIP)
-	CtZoneSnat = 0xffdc
+	// An example of the connection is a Pod accesses kubernetes API service:
+	// Pod --> DNAT(CtZone) --> SNAT(CtZoneSNAT) --> Endpoint(API server NodeIP)
+	// Pod <-- unDNAT(CtZone) <-- unSNAT(CtZoneSNAT) <-- Endpoint(API server NodeIP)
+	CtZoneSNAT = 0xffdc
 
 	portFoundMark    = 0b1
 	snatRequiredMark = 0b1
@@ -723,14 +725,14 @@ func (c *client) serviceLBBypassFlows(ipProtocol binding.Protocol) []binding.Flo
 			Done(),
 	}
 
-	if util.IsWindowsPlatform() && ipProtocol == binding.ProtocolIP {
+	if runtime.IsWindowsPlatform() && ipProtocol == binding.ProtocolIP {
 		// Handle the reply packets of the connection which are applied both DNAT and SNAT.
-		// The packets has following characteristics:
+		// The packets have following characteristics:
 		//   - Received from uplink
 		//   - ct_state is "-new+trk"
-		//   - ct_mark is set to 0x21
-		// This flow resubmit the packets to the following table to avoid being forwarded
-		// to br-int which is default.
+		//   - ct_mark is set to 0x21(ServiceCTMark)
+		// This flow resubmits the packets to the following table to avoid being forwarded
+		// to the bridge port by default.
 		flows = append(flows, c.pipeline[conntrackStateTable].BuildFlow(priorityHigh).
 			MatchProtocol(ipProtocol).
 			MatchCTStateNew(false).MatchCTStateTrk(true).
@@ -1571,14 +1573,14 @@ func (c *client) uplinkSNATFlows(category cookie.Category) []binding.Flow {
 	// Pod subnet to the external network. Non-SNAT packets will be
 	// output to the bridge port in conntrackStateTable.
 	if c.enableProxy {
-		// Put the packets into CtZoneSnat first for the connection which is both
-		// applied DNAT and SNAT:
-		// Pod --> DNAT(CtZone) --> SNAT(CtZoneSnat) --> ExternalServer
-		// Pod <-- unDNAT(CtZone) <-- unSNAT(CtZoneSnat) <-- ExternalServer
+		// For the connection which is both applied DNAT and SNAT, the reply packtets
+		// are received from uplink and need to enter CTZoneSNAt first to do unSNAT.
+		//   Pod --> DNAT(CtZone) --> SNAT(CtZoneSNAT) --> ExternalServer
+		//   Pod <-- unDNAT(CtZone) <-- unSNAT(CtZoneSNAT) <-- ExternalServer
 		flows = append(flows, c.pipeline[uplinkTable].BuildFlow(priorityNormal).
 			MatchProtocol(binding.ProtocolIP).
 			MatchRegRange(int(marksReg), markTrafficFromUplink, binding.Range{0, 15}).
-			Action().CT(false, conntrackTable, CtZoneSnat).NAT().CTDone().
+			Action().CT(false, conntrackTable, CtZoneSNAT).NAT().CTDone().
 			Cookie(c.cookieAllocator.Request(category).Raw()).
 			Done())
 	} else {
@@ -1655,7 +1657,7 @@ func (c *client) snatFlows(nodeIP net.IP, localSubnet net.IPNet, category cookie
 		// source IP in NAT action, 4) ct_mark is set to 0x40 in the conn_track context.
 		c.pipeline[conntrackCommitTable].BuildFlow(priorityNormal).
 			MatchProtocol(binding.ProtocolIP).
-			MatchCTStateNew(true).MatchCTStateTrk(true).MatchCTStateDnat(false).
+			MatchCTStateNew(true).MatchCTStateTrk(true).MatchCTStateDNAT(false).
 			MatchRegRange(int(marksReg), snatRequiredMark, snatMarkRange).
 			Action().CT(true, L2ForwardingOutTable, CtZone).
 			SNAT(snatIPRange, nil).
@@ -1667,32 +1669,32 @@ func (c *client) snatFlows(nodeIP net.IP, localSubnet net.IPNet, category cookie
 	// If AntreaProxy is disabled, no DNAT happens in OVS pipeline.
 	if c.enableProxy {
 		// If the SNAT is needed after DNAT, mark the snatRequiredMark even the connection is now new.
-		// Because this kind of packets need to enter CtZoneSnat make sure the SNAT can be applied before
+		// Because this kind of packets need to enter CtZoneSNAT make sure the SNAT can be applied before
 		// leaving the pipeline.
 		flows = append(flows, l3FwdTable.BuildFlow(priorityLow).
 			MatchProtocol(binding.ProtocolIP).
-			MatchCTStateNew(false).MatchCTStateTrk(true).MatchCTStateDnat(true).
+			MatchCTStateNew(false).MatchCTStateTrk(true).MatchCTStateDNAT(true).
 			Action().LoadRegRange(int(marksReg), snatRequiredMark, snatMarkRange).
 			Action().GotoTable(nextTable).
 			Cookie(c.cookieAllocator.Request(category).Raw()).
 			Done())
 		// If SNAT is needed after DNAT:
-		//   - For new connection: commit to CtZoneSnat
-		//   - For existing connection: enter CtZoneSnat to apply SNAT
+		//   - For new connection: commit to CtZoneSNAT
+		//   - For existing connection: enter CtZoneSNAT to apply SNAT
 		flows = append(flows, c.pipeline[conntrackCommitTable].BuildFlow(priorityNormal).
 			MatchProtocol(binding.ProtocolIP).
-			MatchCTStateNew(true).MatchCTStateTrk(true).MatchCTStateDnat(true).
+			MatchCTStateNew(true).MatchCTStateTrk(true).MatchCTStateDNAT(true).
 			MatchRegRange(int(marksReg), snatRequiredMark, snatMarkRange).
-			Action().CT(true, L2ForwardingOutTable, CtZoneSnat).
+			Action().CT(true, L2ForwardingOutTable, CtZoneSNAT).
 			SNAT(snatIPRange, nil).
 			LoadToMark(snatCTMark).CTDone().
 			Cookie(c.cookieAllocator.Request(category).Raw()).
 			Done())
 		flows = append(flows, c.pipeline[conntrackCommitTable].BuildFlow(priorityNormal).
 			MatchProtocol(binding.ProtocolIP).
-			MatchCTStateNew(false).MatchCTStateTrk(true).MatchCTStateDnat(true).
+			MatchCTStateNew(false).MatchCTStateTrk(true).MatchCTStateDNAT(true).
 			MatchRegRange(int(marksReg), snatRequiredMark, snatMarkRange).
-			Action().CT(false, L2ForwardingOutTable, CtZoneSnat).NAT().CTDone().
+			Action().CT(false, L2ForwardingOutTable, CtZoneSNAT).NAT().CTDone().
 			Cookie(c.cookieAllocator.Request(category).Raw()).
 			Done())
 	}
