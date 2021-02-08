@@ -570,11 +570,10 @@ func newTester() *cmdAddDelTester {
 		"",
 		testNodeConfig,
 		k8sFake.NewSimpleClientset(),
-		make(chan antreatypes.EntityReference, 100),
 		false,
 		nil,
 		tester.networkReadyCh)
-	tester.server.Initialize(ovsServiceMock, ofServiceMock, ifaceStore, "")
+	tester.server.Initialize(ovsServiceMock, ofServiceMock, ifaceStore, "", make(chan antreatypes.EntityReference, 100))
 	ctx := context.Background()
 	tester.ctx = ctx
 	return tester
@@ -730,7 +729,6 @@ func setupChainTest(
 			"",
 			testNodeConfig,
 			k8sFake.NewSimpleClientset(),
-			make(chan antreatypes.EntityReference, 100),
 			true,
 			routeMock,
 			networkReadyCh)
@@ -792,7 +790,7 @@ func TestCNIServerChaining(t *testing.T) {
 			ofServiceMock = openflowtest.NewMockClient(controller)
 			ifaceStore := interfacestore.NewInterfaceStore()
 			ovsServiceMock.EXPECT().IsHardwareOffloadEnabled().Return(false).AnyTimes()
-			err = server.Initialize(ovsServiceMock, ofServiceMock, ifaceStore, "")
+			err = server.Initialize(ovsServiceMock, ofServiceMock, ifaceStore, "", make(chan antreatypes.EntityReference, 100))
 			testRequire.Nil(err)
 		}
 
