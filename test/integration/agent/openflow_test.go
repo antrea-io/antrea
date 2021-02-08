@@ -1272,7 +1272,7 @@ func prepareExternalFlows(nodeIP net.IP, localSubnet *net.IPNet, vMAC net.Hardwa
 			[]*ofTestUtils.ExpectFlow{
 				{
 					MatchStr: fmt.Sprintf("priority=200,ip,reg0=0x4/0xffff"),
-					ActStr:   "goto_table:30",
+					ActStr:   "ct(table=30,zone=65500,nat)",
 				},
 			},
 		},
@@ -1321,8 +1321,16 @@ func prepareExternalFlows(nodeIP net.IP, localSubnet *net.IPNet, vMAC net.Hardwa
 			uint8(105),
 			[]*ofTestUtils.ExpectFlow{
 				{
-					MatchStr: "priority=200,ct_state=+new+trk,ip,reg0=0x20000/0x20000",
+					MatchStr: "priority=200,ct_state=+new+trk-dnat,ip,reg0=0x20000/0x20000",
 					ActStr:   fmt.Sprintf("ct(commit,table=110,zone=65520,nat(src=%s),exec(load:0x40->NXM_NX_CT_MARK[]))", nodeIP.String()),
+				},
+				{
+					MatchStr: "priority=200,ct_state=+new+trk+dnat,ip,reg0=0x20000/0x20000",
+					ActStr:   fmt.Sprintf("ct(commit,table=110,zone=65500,nat(src=%s),exec(load:0x40->NXM_NX_CT_MARK[]))", nodeIP.String()),
+				},
+				{
+					MatchStr: "priority=200,ct_state=-new+trk+dnat,ip,reg0=0x20000/0x20000",
+					ActStr:   "ct(table=110,zone=65500,nat)",
 				},
 			},
 		},

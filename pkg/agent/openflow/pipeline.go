@@ -229,7 +229,7 @@ const (
 	// For example, the endpoint Pod may run in hostNetwork mode and the IP of the endpoint
 	// will is the current Node IP.
 	// We need to use a different ct_zone to track the SNAT'd connection because OVS
-	// dose not support doing both DNAT and SNAT in the same ct_zone.
+	// does not support doing both DNAT and SNAT in the same ct_zone.
 	//
 	// An example of the connection is a Pod accesses kubernetes API service:
 	// Pod --> DNAT(CtZone) --> SNAT(CtZoneSNAT) --> Endpoint(API server NodeIP)
@@ -1574,7 +1574,7 @@ func (c *client) uplinkSNATFlows(category cookie.Category) []binding.Flow {
 	// output to the bridge port in conntrackStateTable.
 	if c.enableProxy {
 		// For the connection which is both applied DNAT and SNAT, the reply packtets
-		// are received from uplink and need to enter CTZoneSNAt first to do unSNAT.
+		// are received from uplink and need to enter CTZoneSNAT first to do unSNAT.
 		//   Pod --> DNAT(CtZone) --> SNAT(CtZoneSNAT) --> ExternalServer
 		//   Pod <-- unDNAT(CtZone) <-- unSNAT(CtZoneSNAT) <-- ExternalServer
 		flows = append(flows, c.pipeline[uplinkTable].BuildFlow(priorityNormal).
@@ -1668,12 +1668,13 @@ func (c *client) snatFlows(nodeIP net.IP, localSubnet net.IPNet, category cookie
 	// The following flows are for both apply DNAT + SNAT for packets.
 	// If AntreaProxy is disabled, no DNAT happens in OVS pipeline.
 	if c.enableProxy {
-		// If the SNAT is needed after DNAT, mark the snatRequiredMark even the connection is now new.
-		// Because this kind of packets need to enter CtZoneSNAT make sure the SNAT can be applied before
-		// leaving the pipeline.
+		// If the SNAT is needed after DNAT, mark the snatRequiredMark even the connection is not new.
+		// Because this kind of packets need to enter CtZoneSNAT to make sure the SNAT can be applied
+		// before leaving the pipeline.
 		flows = append(flows, l3FwdTable.BuildFlow(priorityLow).
 			MatchProtocol(binding.ProtocolIP).
 			MatchCTStateNew(false).MatchCTStateTrk(true).MatchCTStateDNAT(true).
+			MatchRegRange(int(marksReg), markTrafficFromLocal, binding.Range{0, 15}).
 			Action().LoadRegRange(int(marksReg), snatRequiredMark, snatMarkRange).
 			Action().GotoTable(nextTable).
 			Cookie(c.cookieAllocator.Request(category).Raw()).
