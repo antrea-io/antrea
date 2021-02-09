@@ -46,6 +46,8 @@ func (pc *podConfigurator) connectInterfaceToOVSAsync(ifConfig *interfacestore.I
 	go func() {
 		klog.Infof("Waiting for interface %s to be created", hostIfAlias)
 		err := wait.PollImmediate(time.Second, 60*time.Second, func() (bool, error) {
+			containerAccess.lockContainer(containerID)
+			defer containerAccess.unlockContainer(containerID)
 			curEp, ok := pc.ifConfigurator.getEndpoint(ovsPortName)
 			if !ok {
 				return true, fmt.Errorf("failed to find HNSEndpoint %s", ovsPortName)
