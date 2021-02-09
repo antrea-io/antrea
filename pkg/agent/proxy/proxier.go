@@ -88,7 +88,6 @@ func (p *proxier) isInitialized() bool {
 // responsibility for cleaning up, thus we don't need to call removeEndpoint in this
 // function.
 func (p *proxier) removeStaleServices() {
-	hasFailure := false
 	for svcPortName, svcPort := range p.serviceInstalledMap {
 		if _, ok := p.serviceMap[svcPortName]; ok {
 			continue
@@ -97,14 +96,12 @@ func (p *proxier) removeStaleServices() {
 		klog.V(2).Infof("Removing stale Service: %s %s", svcPortName.Name, svcInfo.String())
 		if err := p.ofClient.UninstallServiceFlows(svcInfo.ClusterIP(), uint16(svcInfo.Port()), svcInfo.OFProtocol); err != nil {
 			klog.Errorf("Failed to remove flows of Service %v: %v", svcPortName, err)
-			hasFailure = true
 			continue
 		}
 		for _, ingress := range svcInfo.LoadBalancerIPStrings() {
 			if ingress != "" {
 				if err := p.uninstallLoadBalancerServiceFlows(net.ParseIP(ingress), uint16(svcInfo.Port()), svcInfo.OFProtocol); err != nil {
 					klog.Errorf("Error when removing Service flows: %v", err)
-					hasFailure = true
 					continue
 				}
 			}
@@ -112,15 +109,11 @@ func (p *proxier) removeStaleServices() {
 		groupID, _ := p.groupCounter.Get(svcPortName)
 		if err := p.ofClient.UninstallServiceGroup(groupID); err != nil {
 			klog.Errorf("Failed to remove flows of Service %v: %v", svcPortName, err)
-			hasFailure = true
 			continue
 		}
 		delete(p.serviceInstalledMap, svcPortName)
 		p.deleteServiceByIP(svcInfo.String())
 		p.groupCounter.Recycle(svcPortName)
-	}
-	if hasFailure {
-		p.runner.Run()
 	}
 }
 
@@ -171,13 +164,11 @@ func (p *proxier) removeEndpoint(endpoint k8sproxy.Endpoint, protocol binding.Pr
 // removeStaleEndpoints compares Endpoints we installed with Endpoints we expected. All installed but unexpected Endpoints
 // will be deleted by using removeEndpoint.
 func (p *proxier) removeStaleEndpoints() {
-	hasFailure := false
 	for svcPortName, installedEps := range p.endpointsInstalledMap {
 		for installedEpName, installedEp := range installedEps {
 			if _, ok := p.endpointsMap[svcPortName][installedEpName]; !ok {
 				if _, err := p.removeEndpoint(installedEp, getBindingProtoForIPProto(installedEp.IP(), svcPortName.Protocol)); err != nil {
 					klog.Errorf("Error when removing Endpoint %v for %v", installedEp, svcPortName)
-					hasFailure = true
 					continue
 				}
 				delete(installedEps, installedEpName)
@@ -186,9 +177,6 @@ func (p *proxier) removeStaleEndpoints() {
 		if len(installedEps) == 0 {
 			delete(p.endpointsInstalledMap, svcPortName)
 		}
-	}
-	if hasFailure {
-		p.runner.Run()
 	}
 }
 
@@ -220,7 +208,6 @@ func smallSliceDifference(s1, s2 []string) []string {
 }
 
 func (p *proxier) installServices() {
-	hasFailure := false
 	for svcPortName, svcPort := range p.serviceMap {
 		svcInfo := svcPort.(*types.ServiceInfo)
 		groupID, _ := p.groupCounter.Get(svcPortName)
@@ -286,13 +273,11 @@ func (p *proxier) installServices() {
 			err := p.ofClient.InstallEndpointFlows(svcInfo.OFProtocol, endpointUpdateList, p.isIPv6)
 			if err != nil {
 				klog.Errorf("Error when installing Endpoints flows: %v", err)
-				hasFailure = true
 				continue
 			}
 			err = p.ofClient.InstallServiceGroup(groupID, svcInfo.StickyMaxAgeSeconds() != 0, endpointUpdateList)
 			if err != nil {
 				klog.Errorf("Error when installing Endpoints groups: %v", err)
-				hasFailure = true
 				continue
 			}
 			for _, e := range endpointUpdateList {
@@ -310,13 +295,11 @@ func (p *proxier) installServices() {
 			if needRemoval {
 				if err := p.ofClient.UninstallServiceFlows(pSvcInfo.ClusterIP(), uint16(pSvcInfo.Port()), pSvcInfo.OFProtocol); err != nil {
 					klog.Errorf("Failed to remove flows of Service %v: %v", svcPortName, err)
-					hasFailure = true
 					continue
 				}
 			}
 			if err := p.ofClient.InstallServiceFlows(groupID, svcInfo.ClusterIP(), uint16(svcInfo.Port()), svcInfo.OFProtocol, uint16(svcInfo.StickyMaxAgeSeconds())); err != nil {
 				klog.Errorf("Error when installing Service flows: %v", err)
-				hasFailure = true
 				continue
 			}
 			// Install OpenFlow entries for the ingress IPs of LoadBalancer Service.
@@ -336,7 +319,6 @@ func (p *proxier) installServices() {
 					// then toDelete will be an empty slice.
 					if err := p.uninstallLoadBalancerServiceFlows(net.ParseIP(ingress), uint16(pSvcInfo.Port()), pSvcInfo.OFProtocol); err != nil {
 						klog.Errorf("Error when removing LoadBalancer Service flows: %v", err)
-						hasFailure = true
 						continue
 					}
 				}
@@ -345,7 +327,6 @@ func (p *proxier) installServices() {
 				if ingress != "" {
 					if err := p.installLoadBalancerServiceFlows(groupID, net.ParseIP(ingress), uint16(svcInfo.Port()), svcInfo.OFProtocol, uint16(svcInfo.StickyMaxAgeSeconds())); err != nil {
 						klog.Errorf("Error when installing LoadBalancer Service flows: %v", err)
-						hasFailure = true
 						continue
 					}
 				}
@@ -354,11 +335,6 @@ func (p *proxier) installServices() {
 
 		p.serviceInstalledMap[svcPortName] = svcPort
 		p.addServiceByIP(svcInfo.String(), svcPortName)
-	}
-	// If there is a failure, we notify the runner to run as soon as possible.
-	// The runner guarantees the sync won't be too frequently according to its minInterval.
-	if hasFailure {
-		p.runner.Run()
 	}
 }
 
