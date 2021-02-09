@@ -44,7 +44,7 @@ jobs:
         cache-name: cache-lichen-deps-licensing-info
       with:
         path: license-reports
-        key: ${{ runner.os }}-${{ env.cache-name }}-${{ hashFiles('**/go.sum') }}
+        key: ${{ runner.os }}-${{ env.cache-name }}-${{ hashFiles('**/go.sum', 'ci/golicense/**') }}
     - run: mkdir antrea-bins
     - name: Build assets
       run: |
