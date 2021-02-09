@@ -90,7 +90,8 @@ func run(o *Options) error {
 	}
 	defer ovsdbConnection.Close()
 
-	ovsBridgeClient := ovsconfig.NewOVSBridge(o.config.OVSBridge, o.config.OVSDatapathType, ovsdbConnection)
+	ovsDatapathType := ovsconfig.OVSDatapathType(o.config.OVSDatapathType)
+	ovsBridgeClient := ovsconfig.NewOVSBridge(o.config.OVSBridge, ovsDatapathType, ovsdbConnection)
 	ovsBridgeMgmtAddr := ofconfig.GetMgmtAddress(o.config.OVSRunDir, o.config.OVSBridge)
 	ofClient := openflow.NewClient(o.config.OVSBridge, ovsBridgeMgmtAddr,
 		features.DefaultFeatureGate.Enabled(features.AntreaProxy),
@@ -214,7 +215,7 @@ func run(o *Options) error {
 		isChaining,
 		routeClient,
 		networkReadyCh)
-	err = cniServer.Initialize(ovsBridgeClient, ofClient, ifaceStore, o.config.OVSDatapathType, entityUpdates)
+	err = cniServer.Initialize(ovsBridgeClient, ofClient, ifaceStore, entityUpdates)
 	if err != nil {
 		return fmt.Errorf("error initializing CNI server: %v", err)
 	}
@@ -338,7 +339,7 @@ func run(o *Options) error {
 		v6Enabled := config.IsIPv6Enabled(nodeConfig, networkConfig.TrafficEncapMode)
 
 		connStore := connections.NewConnectionStore(
-			connections.InitializeConnTrackDumper(nodeConfig, serviceCIDRNet, serviceCIDRNetv6, o.config.OVSDatapathType, features.DefaultFeatureGate.Enabled(features.AntreaProxy)),
+			connections.InitializeConnTrackDumper(nodeConfig, serviceCIDRNet, serviceCIDRNetv6, ovsDatapathType, features.DefaultFeatureGate.Enabled(features.AntreaProxy)),
 			ifaceStore,
 			v4Enabled,
 			v6Enabled,
