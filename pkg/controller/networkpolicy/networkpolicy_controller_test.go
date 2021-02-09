@@ -2893,7 +2893,7 @@ func TestInternalGroupKeyFunc(t *testing.T) {
 }
 
 func TestGetAppliedToWorkloads(t *testing.T) {
-	emptyEEs := []*v1alpha2.ExternalEntity{}
+	var emptyEEs []*v1alpha2.ExternalEntity
 	var emptyPods []*corev1.Pod
 	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
 	cgA := v1alpha2.ClusterGroup{
