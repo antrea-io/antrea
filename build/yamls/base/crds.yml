@@ -165,8 +165,6 @@ spec:
                               type: integer
                             flags:
                               type: integer
-                  not:
-                    required: ["ipHeader", "ipv6Header"]
             status:
               type: object
               properties:

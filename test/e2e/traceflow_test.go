@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -38,6 +39,8 @@ type testcase struct {
 	tf              *v1alpha1.Traceflow
 	expectedPhase   v1alpha1.TraceflowPhase
 	expectedResults []v1alpha1.NodeResult
+	// required IP version, skip if not match, default is 0 (no restrict)
+	ipVersion int
 }
 
 func skipIfTraceflowDisabled(t *testing.T, data *TestData) {
@@ -53,9 +56,15 @@ func skipIfTraceflowDisabled(t *testing.T, data *TestData) {
 	}
 }
 
+var (
+	protocolICMP   = int32(1)
+	protocolTCP    = int32(6)
+	protocolUDP    = int32(17)
+	protocolICMPv6 = int32(58)
+)
+
 // TestTraceflowIntraNodeANP verifies if traceflow can trace intra node traffic with some Antrea NetworkPolicy sets.
 func TestTraceflowIntraNodeANP(t *testing.T) {
-	skipIfNotIPv4Cluster(t)
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
@@ -87,7 +96,8 @@ func TestTraceflowIntraNodeANP(t *testing.T) {
 
 	testcases := []testcase{
 		{
-			name: "ANPDenyIngress",
+			name:      "ANPDenyIngressIPv4",
+			ipVersion: 4,
 			tf: &v1alpha1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: randName(fmt.Sprintf("%s-%s-to-%s-%s-", testNamespace, node1Pods[0], testNamespace, node1Pods[1])),
@@ -103,7 +113,54 @@ func TestTraceflowIntraNodeANP(t *testing.T) {
 					},
 					Packet: v1alpha1.Packet{
 						IPHeader: v1alpha1.IPHeader{
-							Protocol: 6,
+							Protocol: protocolTCP,
+						},
+						TransportHeader: v1alpha1.TransportHeader{
+							TCP: &v1alpha1.TCPHeader{
+								DstPort: 80,
+								Flags:   2,
+							},
+						},
+					},
+				},
+			},
+			expectedPhase: v1alpha1.Succeeded,
+			expectedResults: []v1alpha1.NodeResult{
+				{
+					Node: node1,
+					Observations: []v1alpha1.Observation{
+						{
+							Component: v1alpha1.SpoofGuard,
+							Action:    v1alpha1.Forwarded,
+						},
+						{
+							Component:     v1alpha1.NetworkPolicy,
+							ComponentInfo: "IngressMetric",
+							Action:        v1alpha1.Dropped,
+						},
+					},
+				},
+			},
+		},
+		{
+			name:      "ANPDenyIngressIPv6",
+			ipVersion: 6,
+			tf: &v1alpha1.Traceflow{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: randName(fmt.Sprintf("%s-%s-to-%s-%s-", testNamespace, node1Pods[0], testNamespace, node1Pods[1])),
+				},
+				Spec: v1alpha1.TraceflowSpec{
+					Source: v1alpha1.Source{
+						Namespace: testNamespace,
+						Pod:       node1Pods[0],
+					},
+					Destination: v1alpha1.Destination{
+						Namespace: testNamespace,
+						Pod:       node1Pods[1],
+					},
+					Packet: v1alpha1.Packet{
+						IPv6Header: &v1alpha1.IPv6Header{
+							NextHeader: &protocolTCP,
 						},
 						TransportHeader: v1alpha1.TransportHeader{
 							TCP: &v1alpha1.TCPHeader{
@@ -145,7 +202,6 @@ func TestTraceflowIntraNodeANP(t *testing.T) {
 
 // TestTraceflowIntraNode verifies if traceflow can trace intra node traffic with some NetworkPolicies set.
 func TestTraceflowIntraNode(t *testing.T) {
-	skipIfNotIPv4Cluster(t)
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
@@ -158,6 +214,13 @@ func TestTraceflowIntraNode(t *testing.T) {
 
 	node1Pods, node1IPs, node1CleanupFn := createTestBusyboxPods(t, data, 3, node1)
 	defer node1CleanupFn()
+	var dstPodIPv4Str, dstPodIPv6Str string
+	if node1IPs[2].ipv4 != nil {
+		dstPodIPv4Str = node1IPs[2].ipv4.String()
+	}
+	if node1IPs[2].ipv6 != nil {
+		dstPodIPv6Str = node1IPs[2].ipv6.String()
+	}
 
 	// Setup 2 NetworkPolicies:
 	// 1. Allow all egress traffic.
@@ -194,7 +257,8 @@ func TestTraceflowIntraNode(t *testing.T) {
 
 	testcases := []testcase{
 		{
-			name: "intraNodeTraceflow",
+			name:      "intraNodeTraceflowIPv4",
+			ipVersion: 4,
 			tf: &v1alpha1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: randName(fmt.Sprintf("%s-%s-to-%s-%s-", testNamespace, node1Pods[0], testNamespace, node1Pods[1])),
@@ -210,7 +274,7 @@ func TestTraceflowIntraNode(t *testing.T) {
 					},
 					Packet: v1alpha1.Packet{
 						IPHeader: v1alpha1.IPHeader{
-							Protocol: 6,
+							Protocol: protocolTCP,
 						},
 						TransportHeader: v1alpha1.TransportHeader{
 							TCP: &v1alpha1.TCPHeader{
@@ -245,7 +309,8 @@ func TestTraceflowIntraNode(t *testing.T) {
 			},
 		},
 		{
-			name: "intraNodeUDPDstPodTraceflow",
+			name:      "intraNodeUDPDstPodTraceflowIPv4",
+			ipVersion: 4,
 			tf: &v1alpha1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: randName(fmt.Sprintf("%s-%s-to-%s-", testNamespace, node1Pods[0], node1Pods[2])),
@@ -261,7 +326,7 @@ func TestTraceflowIntraNode(t *testing.T) {
 					},
 					Packet: v1alpha1.Packet{
 						IPHeader: v1alpha1.IPHeader{
-							Protocol: 17,
+							Protocol: protocolUDP,
 						},
 						TransportHeader: v1alpha1.TransportHeader{
 							UDP: &v1alpha1.UDPHeader{
@@ -295,10 +360,11 @@ func TestTraceflowIntraNode(t *testing.T) {
 			},
 		},
 		{
-			name: "intraNodeUDPDstIPTraceflow",
+			name:      "intraNodeUDPDstIPTraceflowIPv4",
+			ipVersion: 4,
 			tf: &v1alpha1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: randName(fmt.Sprintf("%s-%s-to-%s-", testNamespace, node1Pods[0], node1IPs[2].ipv4.String())),
+					Name: randName(fmt.Sprintf("%s-%s-to-%s-", testNamespace, node1Pods[0], dstPodIPv4Str)),
 				},
 				Spec: v1alpha1.TraceflowSpec{
 					Source: v1alpha1.Source{
@@ -306,11 +372,11 @@ func TestTraceflowIntraNode(t *testing.T) {
 						Pod:       node1Pods[0],
 					},
 					Destination: v1alpha1.Destination{
-						IP: node1IPs[2].ipv4.String(),
+						IP: dstPodIPv4Str,
 					},
 					Packet: v1alpha1.Packet{
 						IPHeader: v1alpha1.IPHeader{
-							Protocol: 17,
+							Protocol: protocolUDP,
 						},
 						TransportHeader: v1alpha1.TransportHeader{
 							UDP: &v1alpha1.UDPHeader{
@@ -344,10 +410,11 @@ func TestTraceflowIntraNode(t *testing.T) {
 			},
 		},
 		{
-			name: "intraNodeICMPDstIPTraceflow",
+			name:      "intraNodeICMPDstIPTraceflowIPv4",
+			ipVersion: 4,
 			tf: &v1alpha1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: randName(fmt.Sprintf("%s-%s-to-%s-", testNamespace, node1Pods[0], node1IPs[2].ipv4.String())),
+					Name: randName(fmt.Sprintf("%s-%s-to-%s-", testNamespace, node1Pods[0], dstPodIPv4Str)),
 				},
 				Spec: v1alpha1.TraceflowSpec{
 					Source: v1alpha1.Source{
@@ -355,11 +422,11 @@ func TestTraceflowIntraNode(t *testing.T) {
 						Pod:       node1Pods[0],
 					},
 					Destination: v1alpha1.Destination{
-						IP: node1IPs[2].ipv4.String(),
+						IP: dstPodIPv4Str,
 					},
 					Packet: v1alpha1.Packet{
 						IPHeader: v1alpha1.IPHeader{
-							Protocol: 1,
+							Protocol: protocolICMP,
 						},
 					},
 				},
@@ -388,7 +455,8 @@ func TestTraceflowIntraNode(t *testing.T) {
 			},
 		},
 		{
-			name: "nonExistingDstPod",
+			name:      "nonExistingDstPodIPv4",
+			ipVersion: 4,
 			tf: &v1alpha1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: randName(fmt.Sprintf("%s-%s-to-%s-%s-", testNamespace, node1Pods[0], testNamespace, "non-existing-pod")),
@@ -401,6 +469,229 @@ func TestTraceflowIntraNode(t *testing.T) {
 					Destination: v1alpha1.Destination{
 						Namespace: testNamespace,
 						Pod:       "non-existing-pod",
+					},
+				},
+			},
+			expectedPhase: v1alpha1.Failed,
+		},
+		{
+			name:      "intraNodeTraceflowIPv6",
+			ipVersion: 6,
+			tf: &v1alpha1.Traceflow{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: randName(fmt.Sprintf("%s-%s-to-%s-%s-", testNamespace, node1Pods[0], testNamespace, node1Pods[1])),
+				},
+				Spec: v1alpha1.TraceflowSpec{
+					Source: v1alpha1.Source{
+						Namespace: testNamespace,
+						Pod:       node1Pods[0],
+					},
+					Destination: v1alpha1.Destination{
+						Namespace: testNamespace,
+						Pod:       node1Pods[1],
+					},
+					Packet: v1alpha1.Packet{
+						IPv6Header: &v1alpha1.IPv6Header{
+							NextHeader: &protocolTCP,
+						},
+						TransportHeader: v1alpha1.TransportHeader{
+							TCP: &v1alpha1.TCPHeader{
+								DstPort: 80,
+								Flags:   2,
+							},
+						},
+					},
+				},
+			},
+			expectedPhase: v1alpha1.Succeeded,
+			expectedResults: []v1alpha1.NodeResult{
+				{
+					Node: node1,
+					Observations: []v1alpha1.Observation{
+						{
+							Component: v1alpha1.SpoofGuard,
+							Action:    v1alpha1.Forwarded,
+						},
+						{
+							Component:     v1alpha1.NetworkPolicy,
+							ComponentInfo: "EgressRule",
+							Action:        v1alpha1.Forwarded,
+						},
+						{
+							Component:     v1alpha1.NetworkPolicy,
+							ComponentInfo: "IngressDefaultRule",
+							Action:        v1alpha1.Dropped,
+						},
+					},
+				},
+			},
+		},
+		{
+			name:      "intraNodeUDPDstPodTraceflowIPv6",
+			ipVersion: 6,
+			tf: &v1alpha1.Traceflow{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: randName(fmt.Sprintf("%s-%s-to-%s-", testNamespace, node1Pods[0], node1Pods[2])),
+				},
+				Spec: v1alpha1.TraceflowSpec{
+					Source: v1alpha1.Source{
+						Namespace: testNamespace,
+						Pod:       node1Pods[0],
+					},
+					Destination: v1alpha1.Destination{
+						Namespace: testNamespace,
+						Pod:       node1Pods[2],
+					},
+					Packet: v1alpha1.Packet{
+						IPv6Header: &v1alpha1.IPv6Header{
+							NextHeader: &protocolUDP,
+						},
+						TransportHeader: v1alpha1.TransportHeader{
+							UDP: &v1alpha1.UDPHeader{
+								DstPort: 321,
+							},
+						},
+					},
+				},
+			},
+			expectedPhase: v1alpha1.Succeeded,
+			expectedResults: []v1alpha1.NodeResult{
+				{
+					Node: node1,
+					Observations: []v1alpha1.Observation{
+						{
+							Component: v1alpha1.SpoofGuard,
+							Action:    v1alpha1.Forwarded,
+						},
+						{
+							Component:     v1alpha1.NetworkPolicy,
+							ComponentInfo: "EgressRule",
+							Action:        v1alpha1.Forwarded,
+						},
+						{
+							Component:     v1alpha1.Forwarding,
+							ComponentInfo: "Output",
+							Action:        v1alpha1.Delivered,
+						},
+					},
+				},
+			},
+		},
+		{
+			name:      "intraNodeUDPDstIPTraceflowIPv6",
+			ipVersion: 6,
+			tf: &v1alpha1.Traceflow{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: randName(fmt.Sprintf("%s-%s-to-%s-", testNamespace, node1Pods[0], strings.ReplaceAll(dstPodIPv6Str, ":", "--"))),
+				},
+				Spec: v1alpha1.TraceflowSpec{
+					Source: v1alpha1.Source{
+						Namespace: testNamespace,
+						Pod:       node1Pods[0],
+					},
+					Destination: v1alpha1.Destination{
+						IP: dstPodIPv6Str,
+					},
+					Packet: v1alpha1.Packet{
+						IPv6Header: &v1alpha1.IPv6Header{
+							NextHeader: &protocolUDP,
+						},
+						TransportHeader: v1alpha1.TransportHeader{
+							UDP: &v1alpha1.UDPHeader{
+								DstPort: 321,
+							},
+						},
+					},
+				},
+			},
+			expectedPhase: v1alpha1.Succeeded,
+			expectedResults: []v1alpha1.NodeResult{
+				{
+					Node: node1,
+					Observations: []v1alpha1.Observation{
+						{
+							Component: v1alpha1.SpoofGuard,
+							Action:    v1alpha1.Forwarded,
+						},
+						{
+							Component:     v1alpha1.NetworkPolicy,
+							ComponentInfo: "EgressRule",
+							Action:        v1alpha1.Forwarded,
+						},
+						{
+							Component:     v1alpha1.Forwarding,
+							ComponentInfo: "Output",
+							Action:        v1alpha1.Delivered,
+						},
+					},
+				},
+			},
+		},
+		{
+			name:      "intraNodeICMPDstIPTraceflowIPv6",
+			ipVersion: 6,
+			tf: &v1alpha1.Traceflow{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: randName(fmt.Sprintf("%s-%s-to-%s-", testNamespace, node1Pods[0], strings.ReplaceAll(dstPodIPv6Str, ":", "--"))),
+				},
+				Spec: v1alpha1.TraceflowSpec{
+					Source: v1alpha1.Source{
+						Namespace: testNamespace,
+						Pod:       node1Pods[0],
+					},
+					Destination: v1alpha1.Destination{
+						IP: dstPodIPv6Str,
+					},
+					Packet: v1alpha1.Packet{
+						IPv6Header: &v1alpha1.IPv6Header{
+							NextHeader: &protocolICMPv6,
+						},
+					},
+				},
+			},
+			expectedPhase: v1alpha1.Succeeded,
+			expectedResults: []v1alpha1.NodeResult{
+				{
+					Node: node1,
+					Observations: []v1alpha1.Observation{
+						{
+							Component: v1alpha1.SpoofGuard,
+							Action:    v1alpha1.Forwarded,
+						},
+						{
+							Component:     v1alpha1.NetworkPolicy,
+							ComponentInfo: "EgressRule",
+							Action:        v1alpha1.Forwarded,
+						},
+						{
+							Component:     v1alpha1.Forwarding,
+							ComponentInfo: "Output",
+							Action:        v1alpha1.Delivered,
+						},
+					},
+				},
+			},
+		},
+		{
+			name:      "nonExistingDstPodIPv6",
+			ipVersion: 6,
+			tf: &v1alpha1.Traceflow{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: randName(fmt.Sprintf("%s-%s-to-%s-%s-", testNamespace, node1Pods[0], testNamespace, "non-existing-pod")),
+				},
+				Spec: v1alpha1.TraceflowSpec{
+					Source: v1alpha1.Source{
+						Namespace: testNamespace,
+						Pod:       node1Pods[0],
+					},
+					Destination: v1alpha1.Destination{
+						Namespace: testNamespace,
+						Pod:       "non-existing-pod",
+					},
+					Packet: v1alpha1.Packet{
+						IPv6Header: &v1alpha1.IPv6Header{
+							NextHeader: &protocolICMPv6,
+						},
 					},
 				},
 			},
@@ -422,7 +713,6 @@ func TestTraceflowIntraNode(t *testing.T) {
 // TestTraceflowInterNode verifies if traceflow can trace inter nodes traffic with some NetworkPolicies set.
 func TestTraceflowInterNode(t *testing.T) {
 	skipIfNumNodesLessThan(t, 2)
-	skipIfNotIPv4Cluster(t)
 
 	data, err := setupTest(t)
 	if err != nil {
@@ -447,15 +737,33 @@ func TestTraceflowInterNode(t *testing.T) {
 	node2Pods, node2IPs, node2CleanupFn := createTestBusyboxPods(t, data, 2, node2)
 	defer node1CleanupFn()
 	defer node2CleanupFn()
+	var dstPodIPv4Str, dstPodIPv6Str string
+	if node2IPs[0].ipv4 != nil {
+		dstPodIPv4Str = node2IPs[0].ipv4.String()
+	}
+	if node2IPs[0].ipv6 != nil {
+		dstPodIPv6Str = node2IPs[0].ipv6.String()
+	}
 
 	require.NoError(t, data.createNginxPod("nginx", node2))
 	nginxIP, err := data.podWaitForIPs(defaultTimeout, "nginx", testNamespace)
 	require.NoError(t, err)
-	svc, err := data.createNginxClusterIPService(false, nil)
-	require.NoError(t, err)
 
-	// TODO: Extend the test cases to support IPv6 address after Traceflow IPv6 is supported. Currently we only use IPv4 address.
-	nginxIPStr := nginxIP.ipv4.String()
+	var nginxIPv4Str, nginxIPv6Str, svcIPv4Name, svcIPv6Name string
+	if nginxIP.ipv4 != nil {
+		nginxIPv4Str = nginxIP.ipv4.String()
+		ipv4Protocol := corev1.IPv4Protocol
+		svcIPv4, err := data.createNginxClusterIPService("nginx-ipv4", false, &ipv4Protocol)
+		require.NoError(t, err)
+		svcIPv4Name = svcIPv4.Name
+	}
+	if nginxIP.ipv6 != nil {
+		nginxIPv6Str = nginxIP.ipv6.String()
+		ipv6Protocol := corev1.IPv6Protocol
+		svcIPv6, err := data.createNginxClusterIPService("nginx-ipv6", false, &ipv6Protocol)
+		require.NoError(t, err)
+		svcIPv6Name = svcIPv6.Name
+	}
 
 	// Setup 2 NetworkPolicies:
 	// 1. Allow all egress traffic.
@@ -492,7 +800,8 @@ func TestTraceflowInterNode(t *testing.T) {
 
 	testcases := []testcase{
 		{
-			name: "interNodeTraceflow",
+			name:      "interNodeTraceflowIPv4",
+			ipVersion: 4,
 			tf: &v1alpha1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: randName(fmt.Sprintf("%s-%s-to-%s-%s-", testNamespace, node1Pods[0], testNamespace, node2Pods[0])),
@@ -508,7 +817,7 @@ func TestTraceflowInterNode(t *testing.T) {
 					},
 					Packet: v1alpha1.Packet{
 						IPHeader: v1alpha1.IPHeader{
-							Protocol: 6,
+							Protocol: protocolTCP,
 						},
 						TransportHeader: v1alpha1.TransportHeader{
 							TCP: &v1alpha1.TCPHeader{
@@ -558,10 +867,11 @@ func TestTraceflowInterNode(t *testing.T) {
 			},
 		},
 		{
-			name: "interNodeUDPDstIPTraceflow",
+			name:      "interNodeUDPDstIPTraceflowIPv4",
+			ipVersion: 4,
 			tf: &v1alpha1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: randName(fmt.Sprintf("%s-%s-to-%s-", testNamespace, node1Pods[0], node2IPs[0].ipv4.String())),
+					Name: randName(fmt.Sprintf("%s-%s-to-%s-", testNamespace, node1Pods[0], dstPodIPv4Str)),
 				},
 				Spec: v1alpha1.TraceflowSpec{
 					Source: v1alpha1.Source{
@@ -569,11 +879,11 @@ func TestTraceflowInterNode(t *testing.T) {
 						Pod:       node1Pods[0],
 					},
 					Destination: v1alpha1.Destination{
-						IP: node2IPs[0].ipv4.String(),
+						IP: dstPodIPv4Str,
 					},
 					Packet: v1alpha1.Packet{
 						IPHeader: v1alpha1.IPHeader{
-							Protocol: 17,
+							Protocol: protocolUDP,
 						},
 						TransportHeader: v1alpha1.TransportHeader{
 							UDP: &v1alpha1.UDPHeader{
@@ -622,10 +932,11 @@ func TestTraceflowInterNode(t *testing.T) {
 			},
 		},
 		{
-			name: "interNodeICMPDstIPTraceflow",
+			name:      "interNodeICMPDstIPTraceflowIPv4",
+			ipVersion: 4,
 			tf: &v1alpha1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: randName(fmt.Sprintf("%s-%s-to-%s-", testNamespace, node1Pods[0], node2IPs[0].ipv4.String())),
+					Name: randName(fmt.Sprintf("%s-%s-to-%s-", testNamespace, node1Pods[0], dstPodIPv4Str)),
 				},
 				Spec: v1alpha1.TraceflowSpec{
 					Source: v1alpha1.Source{
@@ -633,11 +944,11 @@ func TestTraceflowInterNode(t *testing.T) {
 						Pod:       node1Pods[0],
 					},
 					Destination: v1alpha1.Destination{
-						IP: node2IPs[0].ipv4.String(),
+						IP: dstPodIPv4Str,
 					},
 					Packet: v1alpha1.Packet{
 						IPHeader: v1alpha1.IPHeader{
-							Protocol: 1,
+							Protocol: protocolICMP,
 						},
 					},
 				},
@@ -681,10 +992,11 @@ func TestTraceflowInterNode(t *testing.T) {
 			},
 		},
 		{
-			name: "serviceTraceflow",
+			name:      "serviceTraceflowIPv4",
+			ipVersion: 4,
 			tf: &v1alpha1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: randName(fmt.Sprintf("%s-%s-to-svc-%s-", testNamespace, node1Pods[0], svc.Name)),
+					Name: randName(fmt.Sprintf("%s-%s-to-svc-%s-", testNamespace, node1Pods[0], svcIPv4Name)),
 				},
 				Spec: v1alpha1.TraceflowSpec{
 					Source: v1alpha1.Source{
@@ -693,11 +1005,11 @@ func TestTraceflowInterNode(t *testing.T) {
 					},
 					Destination: v1alpha1.Destination{
 						Namespace: testNamespace,
-						Service:   svc.Name,
+						Service:   svcIPv4Name,
 					},
 					Packet: v1alpha1.Packet{
 						IPHeader: v1alpha1.IPHeader{
-							Protocol: 6,
+							Protocol: protocolTCP,
 						},
 						TransportHeader: v1alpha1.TransportHeader{
 							TCP: &v1alpha1.TCPHeader{
@@ -720,7 +1032,272 @@ func TestTraceflowInterNode(t *testing.T) {
 						{
 							Component:       v1alpha1.LB,
 							Pod:             fmt.Sprintf("%s/%s", testNamespace, "nginx"),
-							TranslatedDstIP: nginxIPStr,
+							TranslatedDstIP: nginxIPv4Str,
+							Action:          v1alpha1.Forwarded,
+						},
+						{
+							Component:     v1alpha1.NetworkPolicy,
+							ComponentInfo: "EgressRule",
+							Action:        v1alpha1.Forwarded,
+						},
+						{
+							Component:     v1alpha1.Forwarding,
+							ComponentInfo: "Output",
+							Action:        v1alpha1.Forwarded,
+						},
+					},
+				},
+				{
+					Node: node2,
+					Observations: []v1alpha1.Observation{
+						{
+							Component:     v1alpha1.Forwarding,
+							ComponentInfo: "Classification",
+							Action:        v1alpha1.Received,
+						},
+						{
+							Component:     v1alpha1.Forwarding,
+							ComponentInfo: "Output",
+							Action:        v1alpha1.Delivered,
+						},
+					},
+				},
+			},
+		},
+		{
+			name:      "interNodeTraceflowIPv6",
+			ipVersion: 6,
+			tf: &v1alpha1.Traceflow{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: randName(fmt.Sprintf("%s-%s-to-%s-%s-", testNamespace, node1Pods[0], testNamespace, node2Pods[0])),
+				},
+				Spec: v1alpha1.TraceflowSpec{
+					Source: v1alpha1.Source{
+						Namespace: testNamespace,
+						Pod:       node1Pods[0],
+					},
+					Destination: v1alpha1.Destination{
+						Namespace: testNamespace,
+						Pod:       node2Pods[0],
+					},
+					Packet: v1alpha1.Packet{
+						IPv6Header: &v1alpha1.IPv6Header{
+							NextHeader: &protocolTCP,
+						},
+						TransportHeader: v1alpha1.TransportHeader{
+							TCP: &v1alpha1.TCPHeader{
+								DstPort: 80,
+								Flags:   2,
+							},
+						},
+					},
+				},
+			},
+			expectedPhase: v1alpha1.Succeeded,
+			expectedResults: []v1alpha1.NodeResult{
+				{
+					Node: node1,
+					Observations: []v1alpha1.Observation{
+						{
+							Component: v1alpha1.SpoofGuard,
+							Action:    v1alpha1.Forwarded,
+						},
+						{
+							Component:     v1alpha1.NetworkPolicy,
+							ComponentInfo: "EgressRule",
+							Action:        v1alpha1.Forwarded,
+						},
+						{
+							Component:     v1alpha1.Forwarding,
+							ComponentInfo: "Output",
+							Action:        v1alpha1.Forwarded,
+						},
+					},
+				},
+				{
+					Node: node2,
+					Observations: []v1alpha1.Observation{
+						{
+							Component:     v1alpha1.Forwarding,
+							ComponentInfo: "Classification",
+							Action:        v1alpha1.Received,
+						},
+						{
+							Component:     v1alpha1.Forwarding,
+							ComponentInfo: "Output",
+							Action:        v1alpha1.Delivered,
+						},
+					},
+				},
+			},
+		},
+		{
+			name:      "interNodeUDPDstIPTraceflowIPv6",
+			ipVersion: 6,
+			tf: &v1alpha1.Traceflow{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: randName(fmt.Sprintf("%s-%s-to-%s-", testNamespace, node1Pods[0], strings.ReplaceAll(dstPodIPv6Str, ":", "--"))),
+				},
+				Spec: v1alpha1.TraceflowSpec{
+					Source: v1alpha1.Source{
+						Namespace: testNamespace,
+						Pod:       node1Pods[0],
+					},
+					Destination: v1alpha1.Destination{
+						IP: dstPodIPv6Str,
+					},
+					Packet: v1alpha1.Packet{
+						IPv6Header: &v1alpha1.IPv6Header{
+							NextHeader: &protocolUDP,
+						},
+						TransportHeader: v1alpha1.TransportHeader{
+							UDP: &v1alpha1.UDPHeader{
+								DstPort: 321,
+							},
+						},
+					},
+				},
+			},
+			expectedPhase: v1alpha1.Succeeded,
+			expectedResults: []v1alpha1.NodeResult{
+				{
+					Node: node1,
+					Observations: []v1alpha1.Observation{
+						{
+							Component: v1alpha1.SpoofGuard,
+							Action:    v1alpha1.Forwarded,
+						},
+						{
+							Component:     v1alpha1.NetworkPolicy,
+							ComponentInfo: "EgressRule",
+							Action:        v1alpha1.Forwarded,
+						},
+						{
+							Component:     v1alpha1.Forwarding,
+							ComponentInfo: "Output",
+							Action:        v1alpha1.Forwarded,
+						},
+					},
+				},
+				{
+					Node: node2,
+					Observations: []v1alpha1.Observation{
+						{
+							Component:     v1alpha1.Forwarding,
+							ComponentInfo: "Classification",
+							Action:        v1alpha1.Received,
+						},
+						{
+							Component:     v1alpha1.Forwarding,
+							ComponentInfo: "Output",
+							Action:        v1alpha1.Delivered,
+						},
+					},
+				},
+			},
+		},
+		{
+			name:      "interNodeICMPDstIPTraceflowIPv6",
+			ipVersion: 6,
+			tf: &v1alpha1.Traceflow{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: randName(fmt.Sprintf("%s-%s-to-%s-", testNamespace, node1Pods[0], strings.ReplaceAll(dstPodIPv6Str, ":", "--"))),
+				},
+				Spec: v1alpha1.TraceflowSpec{
+					Source: v1alpha1.Source{
+						Namespace: testNamespace,
+						Pod:       node1Pods[0],
+					},
+					Destination: v1alpha1.Destination{
+						IP: dstPodIPv6Str,
+					},
+					Packet: v1alpha1.Packet{
+						IPv6Header: &v1alpha1.IPv6Header{
+							NextHeader: &protocolICMPv6,
+						},
+					},
+				},
+			},
+			expectedPhase: v1alpha1.Succeeded,
+			expectedResults: []v1alpha1.NodeResult{
+				{
+					Node: node1,
+					Observations: []v1alpha1.Observation{
+						{
+							Component: v1alpha1.SpoofGuard,
+							Action:    v1alpha1.Forwarded,
+						},
+						{
+							Component:     v1alpha1.NetworkPolicy,
+							ComponentInfo: "EgressRule",
+							Action:        v1alpha1.Forwarded,
+						},
+						{
+							Component:     v1alpha1.Forwarding,
+							ComponentInfo: "Output",
+							Action:        v1alpha1.Forwarded,
+						},
+					},
+				},
+				{
+					Node: node2,
+					Observations: []v1alpha1.Observation{
+						{
+							Component:     v1alpha1.Forwarding,
+							ComponentInfo: "Classification",
+							Action:        v1alpha1.Received,
+						},
+						{
+							Component:     v1alpha1.Forwarding,
+							ComponentInfo: "Output",
+							Action:        v1alpha1.Delivered,
+						},
+					},
+				},
+			},
+		},
+		{
+			name:      "serviceTraceflowIPv6",
+			ipVersion: 6,
+			tf: &v1alpha1.Traceflow{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: randName(fmt.Sprintf("%s-%s-to-svc-%s-", testNamespace, node1Pods[0], svcIPv6Name)),
+				},
+				Spec: v1alpha1.TraceflowSpec{
+					Source: v1alpha1.Source{
+						Namespace: testNamespace,
+						Pod:       node1Pods[0],
+					},
+					Destination: v1alpha1.Destination{
+						Namespace: testNamespace,
+						Service:   svcIPv6Name,
+					},
+					Packet: v1alpha1.Packet{
+						IPv6Header: &v1alpha1.IPv6Header{
+							NextHeader: &protocolTCP,
+						},
+						TransportHeader: v1alpha1.TransportHeader{
+							TCP: &v1alpha1.TCPHeader{
+								DstPort: 80,
+								Flags:   2,
+							},
+						},
+					},
+				},
+			},
+			expectedPhase: v1alpha1.Succeeded,
+			expectedResults: []v1alpha1.NodeResult{
+				{
+					Node: node1,
+					Observations: []v1alpha1.Observation{
+						{
+							Component: v1alpha1.SpoofGuard,
+							Action:    v1alpha1.Forwarded,
+						},
+						{
+							Component:       v1alpha1.LB,
+							Pod:             fmt.Sprintf("%s/%s", testNamespace, "nginx"),
+							TranslatedDstIP: nginxIPv6Str,
 							Action:          v1alpha1.Forwarded,
 						},
 						{
@@ -900,6 +1477,12 @@ func (data *TestData) waitForNetworkpolicyRealized(pod string, networkpolicy str
 }
 
 func runTestTraceflow(t *testing.T, data *TestData, tc testcase) {
+	switch tc.ipVersion {
+	case 4:
+		skipIfNotIPv4Cluster(t)
+	case 6:
+		skipIfNotIPv6Cluster(t)
+	}
 	if _, err := data.crdClient.OpsV1alpha1().Traceflows().Create(context.TODO(), tc.tf, metav1.CreateOptions{}); err != nil {
 		t.Fatalf("Error when creating traceflow: %v", err)
 	}

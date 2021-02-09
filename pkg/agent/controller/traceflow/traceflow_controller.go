@@ -63,8 +63,9 @@ const (
 	// synchronized, which requires a delay before inject packet.
 	injectPacketDelay = 5
 	// ICMP Echo Request type and code.
-	icmpEchoRequestType icmpType = 8
-	icmpEchoRequestCode icmpCode = 0
+	icmpEchoRequestType   icmpType = 8
+	icmpv6EchoRequestType icmpType = 128
+	icmpEchoRequestCode   icmpCode = 0
 )
 
 // Controller is responsible for setting up Openflow entries and injecting traceflow packet into
@@ -421,6 +422,14 @@ func (c *Controller) injectPacket(tf *opsv1alpha1.Traceflow) error {
 		idICMP = uint16(tf.Spec.Packet.TransportHeader.ICMP.ID)
 		sequenceICMP = uint16(tf.Spec.Packet.TransportHeader.ICMP.Sequence)
 	}
+
+	var packetOutIcmpEchoRequestType icmpType
+	if isIPv6 {
+		packetOutIcmpEchoRequestType = icmpv6EchoRequestType
+	} else {
+		packetOutIcmpEchoRequestType = icmpEchoRequestType
+	}
+
 	return c.ofClient.SendTraceflowPacket(
 		tf.Status.DataplaneTag,
 		podInterfaces[0].MAC.String(),
@@ -435,7 +444,7 @@ func (c *Controller) injectPacket(tf *opsv1alpha1.Traceflow) error {
 		flagsTCP,
 		srcUDPPort,
 		dstUDPPort,
-		uint8(icmpEchoRequestType),
+		uint8(packetOutIcmpEchoRequestType),
 		uint8(icmpEchoRequestCode),
 		idICMP,
 		sequenceICMP,

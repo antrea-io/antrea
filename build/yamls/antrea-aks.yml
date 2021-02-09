@@ -638,10 +638,6 @@ spec:
                     type: string
                 type: object
               packet:
-                not:
-                  required:
-                  - ipHeader
-                  - ipv6Header
                 properties:
                   ipHeader:
                     properties:
