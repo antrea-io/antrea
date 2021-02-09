@@ -175,7 +175,7 @@ func testCert(t *testing.T, data *TestData, expectedCABundle string, restartPod 
 		trans, _ := restclient.TransportFor(&clientConfig)
 		hc := &http.Client{Transport: trans, Timeout: 5 * time.Second}
 		var reqURL string
-		reqURL = fmt.Sprintf("https://%s/healthz", net.JoinHostPort(antreaController.Status.PodIP, fmt.Sprint(apis.AntreaControllerAPIPort)))
+		reqURL = fmt.Sprintf("https://%s/readyz", net.JoinHostPort(antreaController.Status.PodIP, fmt.Sprint(apis.AntreaControllerAPIPort)))
 		req, err := http.NewRequest("GET", reqURL, nil)
 		if err != nil {
 			return false, err

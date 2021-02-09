@@ -249,10 +249,19 @@ spec:
           readinessProbe:
             httpGet:
               host: 127.0.0.1
-              path: /healthz
+              path: /readyz
               port: api
               scheme: HTTPS
             initialDelaySeconds: 5
+            timeoutSeconds: 5
+            periodSeconds: 10
+            failureThreshold: 5
+          livenessProbe:
+            httpGet:
+              host: 127.0.0.1
+              path: /livez
+              port: api
+              scheme: HTTPS
             timeoutSeconds: 5
             periodSeconds: 10
             failureThreshold: 5

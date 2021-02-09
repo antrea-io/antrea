@@ -29,7 +29,7 @@ const (
 var _ ControllerQuerier = new(controllerQuerier)
 
 type ControllerQuerier interface {
-	GetControllerInfo(controllInfo *v1beta1.AntreaControllerInfo, partial bool)
+	GetControllerInfo(controllerInfo *v1beta1.AntreaControllerInfo, partial bool)
 }
 
 type controllerQuerier struct {
@@ -72,16 +72,16 @@ func (cq controllerQuerier) getControllerConditions() []v1beta1.ControllerCondit
 }
 
 // GetControllerInfo gets current info of controller.
-func (cq controllerQuerier) GetControllerInfo(controllInfo *v1beta1.AntreaControllerInfo, partial bool) {
-	controllInfo.NetworkPolicyControllerInfo = cq.getNetworkPolicyControllerInfo()
-	controllInfo.ConnectedAgentNum = int32(cq.getNetworkPolicyInfoQuerier().GetConnectedAgentNum())
-	controllInfo.ControllerConditions = cq.getControllerConditions()
+func (cq controllerQuerier) GetControllerInfo(controllerInfo *v1beta1.AntreaControllerInfo, partial bool) {
+	controllerInfo.NetworkPolicyControllerInfo = cq.getNetworkPolicyControllerInfo()
+	controllerInfo.ConnectedAgentNum = int32(cq.getNetworkPolicyInfoQuerier().GetConnectedAgentNum())
+	controllerInfo.ControllerConditions = cq.getControllerConditions()
 
 	if !partial {
-		controllInfo.Version = querier.GetVersion()
-		controllInfo.PodRef = querier.GetSelfPod()
-		controllInfo.NodeRef = querier.GetSelfNode(false, "")
-		controllInfo.ServiceRef = cq.getService()
-		controllInfo.APIPort = cq.apiPort
+		controllerInfo.Version = querier.GetVersion()
+		controllerInfo.PodRef = querier.GetSelfPod()
+		controllerInfo.NodeRef = querier.GetSelfNode(false, "")
+		controllerInfo.ServiceRef = cq.getService()
+		controllerInfo.APIPort = cq.apiPort
 	}
 }
