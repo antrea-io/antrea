@@ -51,7 +51,7 @@ func TestCheckUnsupportedFeatures(t *testing.T) {
 		},
 		{
 			"netdev datapath",
-			AgentConfig{OVSDatapathType: ovsconfig.OVSDatapathNetdev},
+			AgentConfig{OVSDatapathType: string(ovsconfig.OVSDatapathNetdev)},
 			false,
 		},
 		{

@@ -574,7 +574,7 @@ func newTester() *cmdAddDelTester {
 		false,
 		nil,
 		tester.networkReadyCh)
-	tester.server.Initialize(ovsServiceMock, ofServiceMock, ifaceStore, "")
+	tester.server.Initialize(ovsServiceMock, ofServiceMock, ifaceStore)
 	ctx := context.Background()
 	tester.ctx = ctx
 	return tester
@@ -671,6 +671,7 @@ func TestAntreaServerFunc(t *testing.T) {
 
 		ovsServiceMock.EXPECT().GetPortList().Return([]ovsconfig.OVSPortData{}, nil).AnyTimes()
 		ovsServiceMock.EXPECT().IsHardwareOffloadEnabled().Return(false).AnyTimes()
+		ovsServiceMock.EXPECT().GetOVSDatapathType().Return(ovsconfig.OVSDatapathSystem).AnyTimes()
 	}
 
 	teardown := func() {
@@ -792,7 +793,8 @@ func TestCNIServerChaining(t *testing.T) {
 			ofServiceMock = openflowtest.NewMockClient(controller)
 			ifaceStore := interfacestore.NewInterfaceStore()
 			ovsServiceMock.EXPECT().IsHardwareOffloadEnabled().Return(false).AnyTimes()
-			err = server.Initialize(ovsServiceMock, ofServiceMock, ifaceStore, "")
+			ovsServiceMock.EXPECT().GetOVSDatapathType().Return(ovsconfig.OVSDatapathSystem).AnyTimes()
+			err = server.Initialize(ovsServiceMock, ofServiceMock, ifaceStore)
 			testRequire.Nil(err)
 		}
 
