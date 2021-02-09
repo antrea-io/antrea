@@ -103,21 +103,6 @@ message ExternalEntityReference {
   optional string namespace = 2;
 }
 
-// +genclient
-// +genclient:nonNamespaced
-// +genclient:onlyVerbs=list,get,watch
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-// Group is the message format of antrea/pkg/controller/types.Group in an API response.
-// An internal Group is created corresponding to a ClusterGroup resource, i.e. it is a
-// 1:1 mapping. The UID of this Group is the same as that of it's corresponding ClusterGroup.
-message Group {
-  optional k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
-
-  //  GroupMembers is a list of resources selected by this Group based on the selectors
-  // 	present in the corresponding ClusterGroup.
-  repeated GroupMember groupMembers = 2;
-}
-
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // GroupAssociation is the message format in an API response for groupassociation queries.
 message GroupAssociation {
@@ -126,14 +111,6 @@ message GroupAssociation {
   // AssociatedGroups is a list of GroupReferences that is associated with the
   // Pod/ExternalEntity being queried.
   repeated GroupReference associatedGroups = 2;
-}
-
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-// GroupList is a list of Group objects.
-message GroupList {
-  optional k8s.io.apimachinery.pkg.apis.meta.v1.ListMeta metadata = 1;
-
-  repeated Group items = 2;
 }
 
 // GroupMember represents resource member to be populated in Groups.
