@@ -31,7 +31,7 @@ const defaultOVSDBFile = "db.sock"
 type OVSBridge struct {
 	ovsdb                    *ovsdb.OVSDB
 	name                     string
-	datapathType             string
+	datapathType             OVSDatapathType
 	uuid                     string
 	isHardwareOffloadEnabled bool
 }
@@ -94,7 +94,7 @@ func NewOVSDBConnectionUDS(address string) (*ovsdb.OVSDB, Error) {
 }
 
 // NewOVSBridge creates and returns a new OVSBridge struct.
-func NewOVSBridge(bridgeName string, ovsDatapathType string, ovsdb *ovsdb.OVSDB) *OVSBridge {
+func NewOVSBridge(bridgeName string, ovsDatapathType OVSDatapathType, ovsdb *ovsdb.OVSDB) *OVSBridge {
 	return &OVSBridge{ovsdb, bridgeName, ovsDatapathType, "", false}
 }
 
@@ -172,7 +172,7 @@ func (br *OVSBridge) create() Error {
 		// Use Openflow protocol version 1.0 and 1.3.
 		Protocols: makeOVSDBSetFromList([]string{openflowProtoVersion10,
 			openflowProtoVersion13}),
-		DatapathType: br.datapathType,
+		DatapathType: string(br.datapathType),
 	}
 	namedUUID := tx.Insert(dbtransaction.Insert{
 		Table: "Bridge",
@@ -895,4 +895,8 @@ func (br *OVSBridge) getHardwareOffload() (bool, Error) {
 		}
 	}
 	return false, nil
+}
+
+func (br *OVSBridge) GetOVSDatapathType() OVSDatapathType {
+	return br.datapathType
 }

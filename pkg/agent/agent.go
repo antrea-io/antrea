@@ -366,6 +366,11 @@ func (i *Initializer) initOpenFlowPipeline() error {
 			i.ofClient.ReplayFlows()
 			klog.Info("Flow replay completed")
 
+			if i.ovsBridgeClient.GetOVSDatapathType() == ovsconfig.OVSDatapathNetdev {
+				// we don't set flow-restore-wait when using the OVS netdev datapath
+				return
+			}
+
 			// ofClient and ovsBridgeClient have their own mechanisms to restore connections with OVS, and it could
 			// happen that ovsBridgeClient's connection is not ready when ofClient completes flow replay. We retry it
 			// with a timeout that is longer time than ovsBridgeClient's maximum connecting retry interval (8 seconds)
