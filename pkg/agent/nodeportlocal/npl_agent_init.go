@@ -66,12 +66,12 @@ func getPodsAndGenRules(kubeClient clientset.Interface, portTable *portcache.Por
 	}
 
 	allNPLPorts := []rules.PodNodePort{}
-	for _, pod := range podList.Items {
+	for i := range podList.Items {
 		// For each Pod:
 		// check if a valid NPL Annotation exists for this Pod:
 		//   if yes, verifiy validity of the Node port, update the port table and add a rule to the
 		//   rules buffer.
-		annotations := pod.GetAnnotations()
+		annotations := podList.Items[i].GetAnnotations()
 		nplAnnotation, ok := annotations[nplk8s.NPLAnnotationKey]
 		if !ok {
 			continue
@@ -80,7 +80,7 @@ func getPodsAndGenRules(kubeClient clientset.Interface, portTable *portcache.Por
 		err := json.Unmarshal([]byte(nplAnnotation), &nplData)
 		if err != nil {
 			// if there's an error in this NPL Annotation, clean it up
-			err := nplk8s.CleanupNPLAnnotationForPod(kubeClient, &pod)
+			err := nplk8s.CleanupNPLAnnotationForPod(kubeClient, &podList.Items[i])
 			if err != nil {
 				return err
 			}
@@ -90,7 +90,7 @@ func getPodsAndGenRules(kubeClient clientset.Interface, portTable *portcache.Por
 		for _, npl := range nplData {
 			if npl.NodePort > portTable.EndPort || npl.NodePort < portTable.StartPort {
 				// invalid port, cleanup the NPL Annotation
-				if err := nplk8s.CleanupNPLAnnotationForPod(kubeClient, &pod); err != nil {
+				if err := nplk8s.CleanupNPLAnnotationForPod(kubeClient, &podList.Items[i]); err != nil {
 					return err
 				}
 				break
@@ -98,7 +98,7 @@ func getPodsAndGenRules(kubeClient clientset.Interface, portTable *portcache.Por
 				allNPLPorts = append(allNPLPorts, rules.PodNodePort{
 					NodePort: npl.NodePort,
 					PodPort:  npl.PodPort,
-					PodIP:    pod.Status.PodIP,
+					PodIP:    podList.Items[i].Status.PodIP,
 				})
 			}
 		}
