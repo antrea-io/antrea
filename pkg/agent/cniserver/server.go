@@ -557,10 +557,12 @@ func (s *CNIServer) Initialize(
 	ovsBridgeClient ovsconfig.OVSBridgeClient,
 	ofClient openflow.Client,
 	ifaceStore interfacestore.InterfaceStore,
-	ovsDatapathType string,
 ) error {
 	var err error
-	s.podConfigurator, err = newPodConfigurator(ovsBridgeClient, ofClient, s.routeClient, ifaceStore, s.nodeConfig.GatewayConfig.MAC, ovsDatapathType, ovsBridgeClient.IsHardwareOffloadEnabled())
+	s.podConfigurator, err = newPodConfigurator(
+		ovsBridgeClient, ofClient, s.routeClient, ifaceStore, s.nodeConfig.GatewayConfig.MAC,
+		ovsBridgeClient.GetOVSDatapathType(), ovsBridgeClient.IsHardwareOffloadEnabled(),
+	)
 	if err != nil {
 		return fmt.Errorf("error during initialize podConfigurator: %v", err)
 	}

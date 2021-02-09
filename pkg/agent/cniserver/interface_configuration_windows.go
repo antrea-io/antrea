@@ -31,6 +31,7 @@ import (
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/util"
 	cnipb "github.com/vmware-tanzu/antrea/pkg/apis/cni/v1beta1"
+	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
 )
 
 const (
@@ -42,7 +43,7 @@ type ifConfigurator struct {
 	epCache    *sync.Map
 }
 
-func newInterfaceConfigurator(ovsDataPathType string, isOvsHardwareOffloadEnabled bool) (*ifConfigurator, error) {
+func newInterfaceConfigurator(ovsDatapathType ovsconfig.OVSDatapathType, isOvsHardwareOffloadEnabled bool) (*ifConfigurator, error) {
 	eps, err := hcsshim.HNSListEndpointRequest()
 	if err != nil {
 		return nil, err

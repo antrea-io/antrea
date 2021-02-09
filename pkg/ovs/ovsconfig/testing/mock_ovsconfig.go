@@ -1,4 +1,4 @@
-// Copyright 2020 Antrea Authors
+// Copyright 2021 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -264,6 +264,20 @@ func (m *MockOVSBridgeClient) GetOFPort(arg0 string) (int32, ovsconfig.Error) {
 func (mr *MockOVSBridgeClientMockRecorder) GetOFPort(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetOFPort", reflect.TypeOf((*MockOVSBridgeClient)(nil).GetOFPort), arg0)
+}
+
+// GetOVSDatapathType mocks base method
+func (m *MockOVSBridgeClient) GetOVSDatapathType() ovsconfig.OVSDatapathType {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetOVSDatapathType")
+	ret0, _ := ret[0].(ovsconfig.OVSDatapathType)
+	return ret0
+}
+
+// GetOVSDatapathType indicates an expected call of GetOVSDatapathType
+func (mr *MockOVSBridgeClientMockRecorder) GetOVSDatapathType() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetOVSDatapathType", reflect.TypeOf((*MockOVSBridgeClient)(nil).GetOVSDatapathType))
 }
 
 // GetOVSOtherConfig mocks base method
