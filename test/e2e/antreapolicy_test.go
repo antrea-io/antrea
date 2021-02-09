@@ -1422,6 +1422,7 @@ func testANPBasic(t *testing.T) {
 		{"With K8s NetworkPolicy of the same name", testStep2},
 	}
 	executeTests(t, testCase)
+	failOnError(k8sUtils.CleanNetworkPolicies([]string{"y"}), t)
 }
 
 // testAuditLoggingBasic tests that a audit log is generated when egress drop applied
@@ -1699,7 +1700,7 @@ func TestAntreaPolicy(t *testing.T) {
 	})
 
 	t.Run("TestGroupDefaultDENY", func(t *testing.T) {
-		// testcases below require default deny k8s NetworkPolicies to work
+		// testcases below require default-deny k8s NetworkPolicies to work
 		applyDefaultDenyToAllNamespaces(k8sUtils, namespaces)
 		t.Run("Case=ACNPAllowXBtoA", func(t *testing.T) { testACNPAllowXBtoA(t) })
 		t.Run("Case=ACNPAllowXBtoYA", func(t *testing.T) { testACNPAllowXBtoYA(t) })
@@ -1708,9 +1709,9 @@ func TestAntreaPolicy(t *testing.T) {
 	})
 
 	t.Run("TestGroupNoK8sNP", func(t *testing.T) {
-		// testcases below do not depend on underlying k8s NetworkPolicies
-		// TODO: Investigate why Test: ACNPClusterGroupIngressRuleDenyCGWithXBtoYA fails if executed towards then end.
-		t.Run("Case=ACNPClusterGroupIngressRuleDenyCGWithXBtoYA", func(t *testing.T) { testACNPIngressRuleDenyCGWithXBtoYA(t) })
+		// testcases below do not depend on underlying default-deny K8s NetworkPolicies.
+		// Note that if a K8s NetworkPolicy is created for a testcase in this group, it needs to be manually
+		// deleted after that particular testcase is executed.
 		t.Run("Case=ACNPAllowNoDefaultIsolation", func(t *testing.T) { testACNPAllowNoDefaultIsolation(t) })
 		t.Run("Case=ACNPDropEgress", func(t *testing.T) { testACNPDropEgress(t) })
 		t.Run("Case=ACNPPortRange", func(t *testing.T) { testACNPPortRange(t) })
@@ -1726,7 +1727,10 @@ func TestAntreaPolicy(t *testing.T) {
 		t.Run("Case=ACNPClusterGroupEgressRulePodsAToCGWithNsZ", func(t *testing.T) { testACNPEgressRulePodsAToCGWithNsZ(t) })
 		t.Run("Case=ACNPClusterGroupUpdate", func(t *testing.T) { testACNPClusterGroupUpdate(t) })
 		t.Run("Case=ACNPClusterGroupRefRulePodAdd", func(t *testing.T) { testACNPClusterGroupRefRulePodAdd(t, data) })
+		t.Run("Case=ACNPClusterGroupIngressRuleDenyCGWithXBtoYA", func(t *testing.T) { testACNPIngressRuleDenyCGWithXBtoYA(t) })
 		failOnError(k8sUtils.CleanACNPs(), t)
+		failOnError(k8sUtils.CleanANPs(namespaces), t)
+		failOnError(k8sUtils.CleanNetworkPolicies(namespaces), t)
 		failOnError(k8sUtils.CleanCGs(), t)
 	})
 	// print results for reachability tests
