@@ -1,4 +1,4 @@
-name: Kind
+name: Kind Netpol Cyclonus
 on:
   schedule:
     # run once a day at midnight
