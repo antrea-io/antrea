@@ -79,6 +79,12 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*opsv1alpha1.Tracefl
 			return nil, nil, errors.New("invalid traceflow IPv4 packet")
 		}
 		tag = ipPacket.DSCP
+	} else if pktIn.Data.Ethertype == protocol.IPv6_MSG {
+		ipv6Packet, ok := pktIn.Data.Data.(*protocol.IPv6)
+		if !ok {
+			return nil, nil, errors.New("invalid traceflow IPv6 packet")
+		}
+		tag = ipv6Packet.TrafficClass >> 2
 	} else {
 		return nil, nil, fmt.Errorf("unsupported traceflow packet Ethertype: %d", pktIn.Data.Ethertype)
 	}
@@ -133,7 +139,7 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*opsv1alpha1.Tracefl
 	default:
 		return nil, nil, fmt.Errorf("unsupported traceflow packet ether type %d", pktIn.Data.Ethertype)
 	}
-	if ctNwDst != "" && ipDst != ctNwDst {
+	if isValidCtNw(ctNwDst) && ipDst != ctNwDst {
 		ob := &opsv1alpha1.Observation{
 			Component:       opsv1alpha1.LB,
 			Action:          opsv1alpha1.Forwarded,
@@ -297,4 +303,17 @@ func getNetworkPolicyObservation(tableID uint8, ingress bool) *opsv1alpha1.Obser
 		}
 	}
 	return ob
+}
+
+func isValidCtNw(ipStr string) bool {
+	ip := net.ParseIP(ipStr)
+	if ip == nil {
+		return false
+	}
+	// Reserved by IETF [RFC3513][RFC4291]
+	_, cidr, _ := net.ParseCIDR("0000::/8")
+	if cidr.Contains(ip) {
+		return false
+	}
+	return true
 }
