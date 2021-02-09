@@ -369,7 +369,7 @@ func (c *NPLController) handleAddUpdatePod(key string, obj interface{}) error {
 
 	podIP := newPod.Status.PodIP
 	if podIP == "" {
-		klog.Infof("IP address not set for Pod: %s/%s", newPod.Namespace, newPod.Name)
+		klog.Infof("IP address not set for Pod: %s", key)
 		return nil
 	}
 	c.addPodIPToCache(key, podIP)
@@ -384,7 +384,7 @@ func (c *NPLController) handleAddUpdatePod(key string, obj interface{}) error {
 		}
 		return nil
 	}
-	klog.V(2).Infof("Pod %s/%s is selected by a Service for which NodePortLocal is enabled", newPod.Namespace, newPod.Name)
+	klog.V(2).Infof("Pod %s is selected by a Service for which NodePortLocal is enabled", key)
 
 	var err error
 	var updatePodAnnotation bool
@@ -398,7 +398,7 @@ func (c *NPLController) handleAddUpdatePod(key string, obj interface{}) error {
 			if !c.portTable.RuleExists(podIP, int(cport.ContainerPort)) {
 				nodePort, err = c.portTable.AddRule(podIP, port)
 				if err != nil {
-					return fmt.Errorf("failed to add rule for Pod %s/%s: %s", newPod.Namespace, newPod.Name, err.Error())
+					return fmt.Errorf("failed to add rule for Pod %s: %v", key, err)
 				}
 				assignPodAnnotation(newPod, newPod.Status.HostIP, port, nodePort)
 				updatePodAnnotation = true
