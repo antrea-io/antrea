@@ -173,7 +173,7 @@ func run(o *Options) error {
 		o.config.EnablePrometheusMetrics,
 		cipherSuites,
 		cipher.TLSVersionMap[o.config.TLSMinVersion],
-		o.config.EnableCustomAdmissionControllers)
+		o.config.EnableNamespaceLabelMutator)
 	if err != nil {
 		return fmt.Errorf("error creating API server config: %v", err)
 	}

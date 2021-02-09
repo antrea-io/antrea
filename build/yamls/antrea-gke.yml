@@ -1456,7 +1456,7 @@ data:
             }
         ]
     }
-  antrea-controller.conf: |-
+  antrea-controller.conf: |
     # FeatureGates is a map of feature names to bools that enable or disable experimental features.
     featureGates:
     # Enable traceflow which provides packet tracing feature to diagnose network issue.
@@ -1496,16 +1496,16 @@ data:
     # TLS min version from: VersionTLS10, VersionTLS11, VersionTLS12, VersionTLS13.
     #tlsMinVersion:
 
-    # Enable custom admission controller webhooks to mutate/validate resources. For example, it
+    # Enable namespace label mutator webhook to mutate/validate resources. For example, it
     # enables the labels mutator which labels all Namespaces with the reserved
     # "antrea.io/metadata.name = <namespaceName>" label.
-    #enableCustomAdmissionControllers: false
+    #enableNamespaceLabelMutator: false
 kind: ConfigMap
 metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-7chtgf5gf4
+  name: antrea-config-67gf87c4mm
   namespace: kube-system
 ---
 apiVersion: v1
@@ -1625,7 +1625,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-7chtgf5gf4
+          name: antrea-config-67gf87c4mm
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -1892,7 +1892,7 @@ spec:
           path: /home/kubernetes/bin
         name: host-cni-bin
       - configMap:
-          name: antrea-config-7chtgf5gf4
+          name: antrea-config-67gf87c4mm
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d
