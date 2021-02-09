@@ -245,7 +245,7 @@ func (r *reconciler) Reconcile(rule *CompletedRule) error {
 		priorityAssigner.mutex.Lock()
 		defer priorityAssigner.mutex.Unlock()
 	}
-	ofPriority, err = r.getOFPriority(rule, ruleTable, priorityAssigner)
+	ofPriority, registeredBefore, err := r.getOFPriority(rule, ruleTable, priorityAssigner)
 	if err != nil {
 		return err
 	}
@@ -255,7 +255,7 @@ func (r *reconciler) Reconcile(rule *CompletedRule) error {
 	} else {
 		ofRuleInstallErr = r.update(value.(*lastRealized), rule, ofPriority, ruleTable)
 	}
-	if ofRuleInstallErr != nil && ofPriority != nil {
+	if ofRuleInstallErr != nil && ofPriority != nil && !registeredBefore {
 		priorityAssigner.assigner.Release(*ofPriority)
 	}
 	return ofRuleInstallErr
@@ -286,10 +286,10 @@ func (r *reconciler) getOFRuleTable(rule *CompletedRule) binding.TableIDType {
 
 // getOFPriority retrieves the OFPriority for the input CompletedRule to be installed,
 // and re-arranges installed priorities on OVS if necessary.
-func (r *reconciler) getOFPriority(rule *CompletedRule, table binding.TableIDType, pa *tablePriorityAssigner) (*uint16, error) {
+func (r *reconciler) getOFPriority(rule *CompletedRule, table binding.TableIDType, pa *tablePriorityAssigner) (*uint16, bool, error) {
 	if !rule.isAntreaNetworkPolicyRule() {
 		klog.V(2).Infof("Assigning default priority for k8s NetworkPolicy.")
-		return nil, nil
+		return nil, true, nil
 	}
 	p := types.Priority{
 		TierPriority:   *rule.TierPriority,
@@ -308,20 +308,20 @@ func (r *reconciler) getOFPriority(rule *CompletedRule, table binding.TableIDTyp
 		}
 		priorityUpdates, revertFunc, err := pa.assigner.RegisterPriorities(allPrioritiesInPolicy)
 		if err != nil {
-			return nil, err
+			return nil, registered, err
 		}
 		// Re-assign installed priorities on OVS
 		if len(priorityUpdates) > 0 {
 			err := r.ofClient.ReassignFlowPriorities(priorityUpdates, table)
 			if err != nil {
 				revertFunc()
-				return nil, err
+				return nil, registered, err
 			}
 		}
 		ofPriority, _ = pa.assigner.GetOFPriority(p)
 	}
 	klog.V(2).Infof("Assigning OFPriority %v for rule %v", ofPriority, rule.ID)
-	return &ofPriority, nil
+	return &ofPriority, registered, nil
 }
 
 // BatchReconcile reconciles the desired state of the provided CompletedRules
@@ -345,7 +345,7 @@ func (r *reconciler) BatchReconcile(rules []*CompletedRule) error {
 		ruleTable := r.getOFRuleTable(rule)
 		priorityAssigner := r.priorityAssigners[ruleTable]
 		klog.V(2).Infof("Adding rule %s of NetworkPolicy %s to be reconciled in batch", rule.ID, rule.SourceRef.ToString())
-		ofPriority, _ := r.getOFPriority(rule, ruleTable, priorityAssigner)
+		ofPriority, _, _ := r.getOFPriority(rule, ruleTable, priorityAssigner)
 		priorities = append(priorities, ofPriority)
 		if ofPriority != nil {
 			prioritiesByTable[ruleTable] = append(prioritiesByTable[ruleTable], ofPriority)
@@ -353,6 +353,8 @@ func (r *reconciler) BatchReconcile(rules []*CompletedRule) error {
 	}
 	ofRuleInstallErr := r.batchAdd(rulesToInstall, priorities)
 	if ofRuleInstallErr != nil {
+		// If batch reconcile fails, all priorities should be released and the
+		// priorityAssigners should return to the initial state.
 		for tableID, ofPriorities := range prioritiesByTable {
 			pa := r.priorityAssigners[tableID]
 			for _, ofPriority := range ofPriorities {
