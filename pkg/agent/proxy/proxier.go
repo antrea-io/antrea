@@ -60,7 +60,7 @@ type proxier struct {
 	// endpointsInstalledMap stores endpoints we actually installed.
 	endpointsInstalledMap types.EndpointsMap
 	// endpointReferenceCounter stores the number of times an Endpoint is referenced by Services.
-	endpointReferenceCounter map[string]uint
+	endpointReferenceCounter map[string]int
 	// groupCounter is used to allocate groupID.
 	groupCounter types.GroupCounter
 	// serviceStringMap provides map from serviceString(ClusterIP:Port/Proto) to ServicePortName.
@@ -84,8 +84,9 @@ func (p *proxier) isInitialized() bool {
 }
 
 // removeStaleServices removes all expired Services. Once a Service is deleted, all
-// its Endpoints will be expired, and removeStaleEndpoints method takes response for cleaning up,
-// thus we don't need to call removeEndpoint in this function.
+// its Endpoints will be expired, and the removeStaleEndpoints method takes
+// responsibility for cleaning up, thus we don't need to call removeEndpoint in this
+// function.
 func (p *proxier) removeStaleServices() {
 	for svcPortName, svcPort := range p.serviceInstalledMap {
 		if _, ok := p.serviceMap[svcPortName]; ok {
@@ -154,13 +155,13 @@ func (p *proxier) removeEndpoint(endpoint k8sproxy.Endpoint, protocol binding.Pr
 		klog.V(2).Infof("Endpoint %s/%s removed", endpoint.String(), protocol)
 	} else if count > 1 {
 		p.endpointReferenceCounter[key] = count - 1
-		klog.V(2).Infof("Stale Endpoint %s/%s is still referenced by other Services, removing 1 reference", endpoint.String(), protocol)
+		klog.V(2).Infof("Stale Endpoint %s/%s is still referenced by other Services, decrementing reference count by 1", endpoint.String(), protocol)
 		return false, nil
 	}
 	return true, nil
 }
 
-// removeStaleEndpoints compares Endpoints we installed with Endpoints we expected, all installed but unexpected Endpoints
+// removeStaleEndpoints compares Endpoints we installed with Endpoints we expected. All installed but unexpected Endpoints
 // will be deleted by using removeEndpoint.
 func (p *proxier) removeStaleEndpoints() {
 	for svcPortName, installedEps := range p.endpointsInstalledMap {
@@ -496,7 +497,7 @@ func NewProxier(
 		serviceInstalledMap:      k8sproxy.ServiceMap{},
 		endpointsInstalledMap:    types.EndpointsMap{},
 		endpointsMap:             types.EndpointsMap{},
-		endpointReferenceCounter: map[string]uint{},
+		endpointReferenceCounter: map[string]int{},
 		serviceStringMap:         map[string]k8sproxy.ServicePortName{},
 		groupCounter:             types.NewGroupCounter(),
 		ofClient:                 ofClient,
@@ -504,7 +505,7 @@ func NewProxier(
 	}
 	p.serviceConfig.RegisterEventHandler(p)
 	p.endpointsConfig.RegisterEventHandler(p)
-	p.runner = k8sproxy.NewBoundedFrequencyRunner(componentName, p.syncProxyRules, 0, 30*time.Second, -1)
+	p.runner = k8sproxy.NewBoundedFrequencyRunner(componentName, p.syncProxyRules, time.Second, 30*time.Second, 2)
 	return p
 }
 

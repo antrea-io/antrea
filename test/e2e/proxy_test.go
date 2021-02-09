@@ -88,6 +88,9 @@ func testProxyServiceSessionAffinity(ipFamily *corev1.IPFamily, ingressIPs []str
 		require.NoError(t, err, fmt.Sprintf("ipFamily: %v\nstdout: %s\nstderr: %s\n", *ipFamily, stdout, stderr))
 	}
 
+	// Hold on to make sure that the Service is realized.
+	time.Sleep(3 * time.Second)
+
 	agentName, err := data.getAntreaPodOnNode(nodeName)
 	require.NoError(t, err)
 	table40Output, _, err := data.runCommandFromPod(metav1.NamespaceSystem, agentName, "antrea-agent", []string{"ovs-ofctl", "dump-flows", defaultBridgeName, "table=40"})
@@ -137,6 +140,10 @@ func testProxyHairpin(ipFamily *corev1.IPFamily, data *TestData, t *testing.T) {
 	svc, err := data.createService(busybox, 80, 80, map[string]string{"antrea-e2e": "busybox"}, false, corev1.ServiceTypeClusterIP, ipFamily)
 	defer data.deleteServiceAndWait(defaultTimeout, busybox)
 	require.NoError(t, err)
+
+	// Hold on to make sure that the Service is realized.
+	time.Sleep(3 * time.Second)
+
 	stdout, stderr, err := data.runCommandFromPod(testNamespace, busybox, busyboxContainerName, []string{"nc", svc.Spec.ClusterIP, "80", "-w", "1", "-e", "ls", "/"})
 	require.NoError(t, err, fmt.Sprintf("ipFamily: %v\nstdout: %s\nstderr: %s\n", *ipFamily, stdout, stderr))
 }
@@ -169,6 +176,10 @@ func testProxyEndpointLifeCycle(ipFamily *corev1.IPFamily, data *TestData, t *te
 	_, err = data.createNginxClusterIPService(false, ipFamily)
 	defer data.deleteServiceAndWait(defaultTimeout, nginx)
 	require.NoError(t, err)
+
+	// Hold on to make sure that the Service is realized.
+	time.Sleep(3 * time.Second)
+
 	agentName, err := data.getAntreaPodOnNode(nodeName)
 	require.NoError(t, err)
 	var nginxIP string
@@ -237,6 +248,9 @@ func testProxyServiceLifeCycle(ipFamily *corev1.IPFamily, ingressIPs []string, d
 	agentName, err := data.getAntreaPodOnNode(nodeName)
 	require.NoError(t, err)
 
+	// Hold on to make sure that the Service is realized.
+	time.Sleep(3 * time.Second)
+
 	svcLBflows := make([]string, len(ingressIPs)+1)
 	if *ipFamily == corev1.IPv6Protocol {
 		svcLBflows[0] = fmt.Sprintf("ipv6_dst=%s,tp_dst=80", svc.Spec.ClusterIP)
@@ -284,7 +298,9 @@ func testProxyServiceLifeCycle(ipFamily *corev1.IPFamily, ingressIPs []string, d
 
 	require.NoError(t, data.deleteService(nginx))
 	require.NoError(t, data.deleteService(nginxLBService))
-	time.Sleep(time.Second)
+
+	// Hold on to make sure that the Service is realized.
+	time.Sleep(3 * time.Second)
 
 	groupOutput, _, err = data.runCommandFromPod(metav1.NamespaceSystem, agentName, "antrea-agent", []string{"ovs-ofctl", "dump-groups", defaultBridgeName})
 	require.NoError(t, err)
