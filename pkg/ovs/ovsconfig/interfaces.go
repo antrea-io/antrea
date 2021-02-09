@@ -16,14 +16,16 @@ package ovsconfig
 
 type TunnelType string
 
+type OVSDatapathType string
+
 const (
 	GeneveTunnel = "geneve"
 	VXLANTunnel  = "vxlan"
 	GRETunnel    = "gre"
 	STTTunnel    = "stt"
 
-	OVSDatapathSystem = "system"
-	OVSDatapathNetdev = "netdev"
+	OVSDatapathSystem OVSDatapathType = "system"
+	OVSDatapathNetdev OVSDatapathType = "netdev"
 )
 
 type OVSBridgeClient interface {
@@ -51,4 +53,5 @@ type OVSBridgeClient interface {
 	DeleteOVSOtherConfig(configs map[string]interface{}) Error
 	GetBridgeName() string
 	IsHardwareOffloadEnabled() bool
+	GetOVSDatapathType() OVSDatapathType
 }
