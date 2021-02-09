@@ -45,11 +45,11 @@ const (
 )
 
 type ifConfigurator struct {
-	ovsDatapathType             string
+	ovsDatapathType             ovsconfig.OVSDatapathType
 	isOvsHardwareOffloadEnabled bool
 }
 
-func newInterfaceConfigurator(ovsDatapathType string, isOvsHardwareOffloadEnabled bool) (*ifConfigurator, error) {
+func newInterfaceConfigurator(ovsDatapathType ovsconfig.OVSDatapathType, isOvsHardwareOffloadEnabled bool) (*ifConfigurator, error) {
 	return &ifConfigurator{ovsDatapathType: ovsDatapathType, isOvsHardwareOffloadEnabled: isOvsHardwareOffloadEnabled}, nil
 }
 

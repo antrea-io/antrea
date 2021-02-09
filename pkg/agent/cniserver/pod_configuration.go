@@ -87,7 +87,7 @@ func newPodConfigurator(
 	routeClient route.Interface,
 	ifaceStore interfacestore.InterfaceStore,
 	gatewayMAC net.HardwareAddr,
-	ovsDatapathType string,
+	ovsDatapathType ovsconfig.OVSDatapathType,
 	isOvsHardwareOffloadEnabled bool,
 ) (*podConfigurator, error) {
 	ifConfigurator, err := newInterfaceConfigurator(ovsDatapathType, isOvsHardwareOffloadEnabled)
