@@ -1481,14 +1481,14 @@ func (n *NetworkPolicyController) syncAppliedToGroup(key string) error {
 		klog.V(2).Infof("Finished syncing AppliedToGroup %s. (%v)", key, d)
 	}()
 	var pods []*v1.Pod
-	memberSetByNode := make(map[string]controlplane.GroupMemberSet)
-	scheduledPodNum, scheduledExtEntityNum := 0, 0
 	appGroupNodeNames := sets.String{}
 	appliedToGroupObj, found, _ := n.appliedToGroupStore.Get(key)
 	if !found {
 		klog.V(2).Infof("AppliedToGroup %s not found.", key)
 		return nil
 	}
+	memberSetByNode := make(map[string]controlplane.GroupMemberSet)
+	scheduledPodNum, scheduledExtEntityNum := 0, 0
 	appliedToGroup := appliedToGroupObj.(*antreatypes.AppliedToGroup)
 	pods, externalEntities := n.getAppliedToWorkloads(appliedToGroup)
 	for _, pod := range pods {
@@ -1527,6 +1527,8 @@ func (n *NetworkPolicyController) syncAppliedToGroup(key string) error {
 		GroupMemberByNode: memberSetByNode,
 		SpanMeta:          antreatypes.SpanMeta{NodeNames: appGroupNodeNames},
 	}
+	klog.V(2).Infof("Updating existing AppliedToGroup %s with %d Pods and %d External Entities on %d Nodes",
+		key, scheduledPodNum, scheduledExtEntityNum, appGroupNodeNames.Len())
 	n.appliedToGroupStore.Update(updatedAppliedToGroup)
 	// Get all internal NetworkPolicy objects that refers this AppliedToGroup.
 	// Note that this must be executed after storing the result, to ensure that
@@ -1553,20 +1555,30 @@ func (n *NetworkPolicyController) getAppliedToWorkloads(g *antreatypes.AppliedTo
 	intGroup, found, _ := n.internalGroupStore.Get(g.Name)
 	if found {
 		var pods []*v1.Pod
+		var ees []*v1alpha2.ExternalEntity
 		ig := intGroup.(*antreatypes.Group)
 		// Generate the list of Pods based on the GroupMembers set in the internal Group.
 		for _, gm := range ig.GroupMembers {
 			// TODO: These reads can be avoided if we structure internal Group to include
 			// PodRef including NodeName, IPs and Ports and then add filter funcs to remove
 			// IPs for AppliedToGroups and NodeNames for AddressGroups.
-			pod, err := n.podLister.Pods(gm.Pod.Namespace).Get(gm.Pod.Name)
-			if err != nil {
-				// Pod no longer exists, continue processing.
-				continue
+			if gm.Pod != nil {
+				pod, err := n.podLister.Pods(gm.Pod.Namespace).Get(gm.Pod.Name)
+				if err != nil {
+					// Pod no longer exists, continue processing.
+					continue
+				}
+				pods = append(pods, pod)
+			} else if gm.ExternalEntity != nil {
+				ee, err := n.externalEntityLister.ExternalEntities(gm.ExternalEntity.Namespace).Get(gm.ExternalEntity.Name)
+				if err != nil {
+					// EE no longer exists, continue processing.
+					continue
+				}
+				ees = append(ees, ee)
 			}
-			pods = append(pods, pod)
 		}
-		return pods, []*v1alpha2.ExternalEntity{}
+		return pods, ees
 	}
 	return n.processSelector(g.Selector)
 }

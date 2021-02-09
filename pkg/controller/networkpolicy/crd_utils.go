@@ -23,7 +23,6 @@ import (
 	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
-	"github.com/vmware-tanzu/antrea/pkg/apis/core/v1alpha2"
 	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
 	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy/store"
 	antreatypes "github.com/vmware-tanzu/antrea/pkg/controller/types"
@@ -119,31 +118,28 @@ func (n *NetworkPolicyController) toAntreaPeerForCRD(peers []secv1alpha1.Network
 }
 
 // createAppliedToGroupForClusterGroupCRD creates an AppliedToGroup object corresponding to a
-// ClusterGroup spec. If the AppliedToGroup already exists, it returns the key
-// otherwise it copies the ClusterGroup CRD contents to an AppliedToGroup resource and returns
+// internal Group. If the AppliedToGroup already exists, it returns the key
+// otherwise it copies the internal Group contents to an AppliedToGroup resource and returns
 // its key.
-func (n *NetworkPolicyController) createAppliedToGroupForClusterGroupCRD(cg *v1alpha2.ClusterGroup) string {
-	// Find the internal Group corresponding to this ClusterGroup
-	igKey := internalGroupKeyFunc(cg)
-	_, found, _ := n.internalGroupStore.Get(igKey)
-	if !found {
-		klog.V(2).Infof("Internal group %s not found", igKey)
+func (n *NetworkPolicyController) createAppliedToGroupForClusterGroupCRD(intGrp *antreatypes.Group) string {
+	key, err := store.GroupKeyFunc(intGrp)
+	if err != nil {
 		return ""
 	}
 	// Check to see if the AppliedToGroup already exists
-	_, found, _ = n.appliedToGroupStore.Get(igKey)
+	_, found, _ := n.appliedToGroupStore.Get(key)
 	if found {
-		return igKey
+		return key
 	}
 	// Create an AppliedToGroup object for this internal Group.
 	appliedToGroup := &antreatypes.AppliedToGroup{
-		UID:  cg.UID,
-		Name: igKey,
+		UID:  intGrp.UID,
+		Name: key,
 	}
-	klog.V(2).Infof("Creating new AppliedToGroup %s with selector (%s) corresponding to ClusterGroup CRD", appliedToGroup.Name, appliedToGroup.Selector.NormalizedName)
+	klog.V(2).Infof("Creating new AppliedToGroup %v corresponding to ClusterGroup CRD %s", appliedToGroup.UID, intGrp.Name)
 	n.appliedToGroupStore.Create(appliedToGroup)
-	n.enqueueAppliedToGroup(igKey)
-	return igKey
+	n.enqueueAppliedToGroup(key)
+	return key
 }
 
 // createAddressGroupForCRD creates an AddressGroup object corresponding to a

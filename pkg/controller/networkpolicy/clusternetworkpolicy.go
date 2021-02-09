@@ -250,12 +250,24 @@ func (n *NetworkPolicyController) processAppliedToGroupForCG(g string) string {
 	// Retrieve ClusterGroup for corresponding entry in the AppliedToGroup.
 	cg, err := n.cgLister.Get(g)
 	if err != nil {
-		klog.V(2).Infof("ClusterGroup %s not found: %v", g, err)
+		// This error should not occur as we validate that a CG must exist before
+		// referencing it in an ACNP.
+		klog.Errorf("ClusterGroup %s not found: %v", g, err)
 		return ""
 	}
-	if cg.Spec.IPBlock != nil {
+	key := internalGroupKeyFunc(cg)
+	// Find the internal Group corresponding to this ClusterGroup
+	ig, found, _ := n.internalGroupStore.Get(key)
+	if !found {
+		// Internal Group was not found. Once the internal Group is created, the sync
+		// worker for internal group will re-enqueue the ClusterNetworkPolicy processing
+		// which will trigger the creation of AddressGroup.
+		return ""
+	}
+	intGrp := ig.(*antreatypes.Group)
+	if intGrp.IPBlock != nil {
 		klog.V(2).Infof("ClusterGroup %s with IPBlock will not be processed as AppliedTo", g)
 		return ""
 	}
-	return n.createAppliedToGroupForClusterGroupCRD(cg)
+	return n.createAppliedToGroupForClusterGroupCRD(intGrp)
 }

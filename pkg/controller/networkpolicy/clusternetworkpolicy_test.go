@@ -1379,7 +1379,7 @@ func TestProcessAppliedToGroupsForCGs(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			actualAG := npc.processAppliedToGroupForCG(tt.inputCG)
-			assert.Equal(t, tt.expectedAG, actualAG, "addressGroup list does not match")
+			assert.Equal(t, tt.expectedAG, actualAG, "appliedToGroup list does not match")
 		})
 	}
 }

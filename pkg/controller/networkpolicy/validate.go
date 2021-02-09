@@ -451,9 +451,40 @@ func (a *antreaPolicyValidator) validateAppliedTo(ingress, egress []secv1alpha1.
 	if appliedToInSpec && (numAppliedToInRules > 0) {
 		return "appliedTo should not be set in both spec and rules", false
 	}
+	if !appliedToInSpec && (numAppliedToInRules == 0) {
+		return "appliedTo needs to be set in either spec or rules", false
+	}
 	// Ensure that all rules have AppliedTo set.
 	if numAppliedToInRules > 0 && (numAppliedToInRules != len(ingress)+len(egress)) {
 		return "appliedTo field should either be set in all rules or in none of them", false
+	}
+	// Ensure CG exists
+	checkAppTo := func(appTos []secv1alpha1.NetworkPolicyPeer) bool {
+		for _, appTo := range specAppliedTo {
+			if appTo.Group != "" {
+				// Ensure that group exists
+				if !a.clusterGroupExists(appTo.Group) {
+					return false
+				}
+			}
+		}
+		return true
+	}
+	if appliedToInSpec {
+		if !checkAppTo(specAppliedTo) {
+			return fmt.Sprintf("cluster group referenced in appliedTo does not exist"), false
+		}
+	} else {
+		for _, rule := range ingress {
+			if !checkAppTo(rule.AppliedTo) {
+				return fmt.Sprintf("cluster group referenced in appliedTo does not exist"), false
+			}
+		}
+		for _, rule := range egress {
+			if !checkAppTo(rule.AppliedTo) {
+				return fmt.Sprintf("cluster group referenced in appliedTo does not exist"), false
+			}
+		}
 	}
 	return "", true
 }

@@ -213,8 +213,6 @@ func (n *NetworkPolicyController) syncInternalGroup(key string) error {
 		klog.Errorf("Failed to update ClusterGroup %s GroupMembersComputed condition to %s: %v", cg.Name, v1.ConditionTrue, err)
 		return err
 	}
-	// Trigger the sync for corresponding groups with the shared key.
-	n.enqueueAppliedToGroup(key)
 	return n.triggerCNPUpdates(cg)
 }
 
@@ -247,6 +245,9 @@ func (n *NetworkPolicyController) triggerCNPUpdates(cg *corev1a2.ClusterGroup) e
 		n.internalNetworkPolicyMutex.Unlock()
 		// Enqueue addressGroup keys to update their group members.
 		// TODO: optimize this to avoid enqueueing address groups when not updated.
+		for _, atg := range curInternalNP.AppliedToGroups {
+			n.enqueueAppliedToGroup(atg)
+		}
 		for _, rule := range curInternalNP.Rules {
 			for _, addrGroupName := range rule.From.AddressGroups {
 				n.enqueueAddressGroup(addrGroupName)
