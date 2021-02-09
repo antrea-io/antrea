@@ -508,17 +508,17 @@ func TestNetworkPolicyMetrics(t *testing.T) {
 	// Define a function to check networkpolicy metrics
 	checkNetworkPolicyMetrics := func() {
 		expectedEgressNetworkPolicyRuleCount := `
-		# HELP antrea_agent_egress_networkpolicy_rule_count [STABLE] Number of egress networkpolicy rules on local node which are managed by the Antrea Agent.
+		# HELP antrea_agent_egress_networkpolicy_rule_count [STABLE] Number of egress NetworkPolicy rules on local Node which are managed by the Antrea Agent.
 		# TYPE antrea_agent_egress_networkpolicy_rule_count gauge
 		`
 
 		expectedIngressNetworkPolicyRuleCount := `
-		# HELP antrea_agent_ingress_networkpolicy_rule_count [STABLE] Number of ingress networkpolicy rules on local node which are managed by the Antrea Agent.
+		# HELP antrea_agent_ingress_networkpolicy_rule_count [STABLE] Number of ingress NetworkPolicy rules on local Node which are managed by the Antrea Agent.
 		# TYPE antrea_agent_ingress_networkpolicy_rule_count gauge
 		`
 
 		expectedNetworkPolicyCount := `
-		# HELP antrea_agent_networkpolicy_count [STABLE] Number of networkpolicies on local node which are managed by the Antrea Agent.
+		# HELP antrea_agent_networkpolicy_count [STABLE] Number of NetworkPolicies on local Node which are managed by the Antrea Agent.
 		# TYPE antrea_agent_networkpolicy_count gauge
 		`
 

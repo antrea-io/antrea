@@ -152,13 +152,13 @@ a configuration parameter for the Agent.
 in the conntrack table. This metric gets updated at an interval specified
 by flowPollInterval, a configuration parameter for the Agent.
 - **antrea_agent_egress_networkpolicy_rule_count:** Number of egress
-networkpolicy rules on local node which are managed by the Antrea Agent.
+NetworkPolicy rules on local Node which are managed by the Antrea Agent.
 - **antrea_agent_ingress_networkpolicy_rule_count:** Number of ingress
-networkpolicy rules on local node which are managed by the Antrea Agent.
-- **antrea_agent_local_pod_count:** Number of pods on local node which are
+NetworkPolicy rules on local Node which are managed by the Antrea Agent.
+- **antrea_agent_local_pod_count:** Number of Pods on local Node which are
 managed by the Antrea Agent.
-- **antrea_agent_networkpolicy_count:** Number of networkpolicies on local
-node which are managed by the Antrea Agent.
+- **antrea_agent_networkpolicy_count:** Number of NetworkPolicies on local
+Node which are managed by the Antrea Agent.
 - **antrea_agent_ovs_flow_count:** Flow count for each OVS flow table. The
 TableID is used as a label.
 - **antrea_agent_ovs_flow_ops_count:** Number of OVS flow operations,
