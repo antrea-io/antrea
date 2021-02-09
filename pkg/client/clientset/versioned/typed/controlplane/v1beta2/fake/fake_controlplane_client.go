@@ -1,4 +1,4 @@
-// Copyright 2020 Antrea Authors
+// Copyright 2021 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,10 +32,6 @@ func (c *FakeControlplaneV1beta2) AddressGroups() v1beta2.AddressGroupInterface 
 
 func (c *FakeControlplaneV1beta2) AppliedToGroups() v1beta2.AppliedToGroupInterface {
 	return &FakeAppliedToGroups{c}
-}
-
-func (c *FakeControlplaneV1beta2) Groups() v1beta2.GroupInterface {
-	return &FakeGroups{c}
 }
 
 func (c *FakeControlplaneV1beta2) NetworkPolicies() v1beta2.NetworkPolicyInterface {
