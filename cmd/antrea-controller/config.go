@@ -43,7 +43,7 @@ type ControllerConfig struct {
 	TLSCipherSuites string `yaml:"tlsCipherSuites,omitempty"`
 	// TLS min version.
 	TLSMinVersion string `yaml:"tlsMinVersion,omitempty"`
-	// EnableNamespaceLabelMutator enables admission controller webhooks to mutate/validate
+	// EnableNamespaceLabelMutator enables admission controller webhooks to mutate
 	// all Namespaces with the reserved "antrea.io/metadata.name = <namespaceName>" label.
 	// Defaults to false.
 	EnableNamespaceLabelMutator bool `yaml:"enableNamespaceLabelMutator,omitempty"`

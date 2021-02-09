@@ -241,7 +241,7 @@ func createAPIServerConfig(kubeconfig string,
 	enableMetrics bool,
 	cipherSuites []uint16,
 	tlsMinVersion uint16,
-	enableCustomAdmContollers bool) (*apiserver.Config, error) {
+	enableCustomAdmControllers bool) (*apiserver.Config, error) {
 	secureServing := genericoptions.NewSecureServingOptions().WithLoopback()
 	authentication := genericoptions.NewDelegatingAuthenticationOptions()
 	authorization := genericoptions.NewDelegatingAuthorizationOptions().WithAlwaysAllowPaths(allowedPaths...)
@@ -297,5 +297,5 @@ func createAPIServerConfig(kubeconfig string,
 		networkPolicyStatusController,
 		endpointQuerier,
 		npController,
-		enableCustomAdmContollers), nil
+		enableCustomAdmControllers), nil
 }

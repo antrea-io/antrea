@@ -249,11 +249,11 @@ func CleanupDeprecatedAPIServices(aggregatorClient clientset.Interface) error {
 func installHandlers(c *ExtraConfig, s *genericapiserver.GenericAPIServer) {
 	s.Handler.NonGoRestfulMux.HandleFunc("/loglevel", loglevel.HandleFunc())
 	s.Handler.NonGoRestfulMux.HandleFunc("/endpoint", endpoint.HandleFunc(c.endpointQuerier))
+	if c.enableCustomAdmCtrl {
+		// Webhook to mutate Namespace labels and add its metadata.name as a label
+		s.Handler.NonGoRestfulMux.HandleFunc("/mutate/addlabels", webhook.HandleMutationLabels())
+	}
 	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
-		if c.enableCustomAdmCtrl {
-			// Webhook to mutate Namespace/Service labels and add its metadata.name as a label
-			s.Handler.NonGoRestfulMux.HandleFunc("/mutate/addlabels", webhook.HandleMutationLabels())
-		}
 		// Get new NetworkPolicyMutator
 		m := controllernetworkpolicy.NewNetworkPolicyMutator(c.networkPolicyController)
 		// Install handlers for NetworkPolicy related mutation

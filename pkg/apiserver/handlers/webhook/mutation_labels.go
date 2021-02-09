@@ -127,7 +127,7 @@ func mutateResourceLabels(ar *admv1.AdmissionReview) *admv1.AdmissionResponse {
 	}
 }
 
-// mutataLabels mutates the resource's labels and forcefully inserts the resource's name as a well
+// mutateLabels mutates the resource's labels and forcefully inserts the resource's name as a well
 // known label to ensure that the label is never modified or removed by CREATE and UPDATE events.
 func mutateLabels(op admv1.Operation, l map[string]string, name string) (string, bool, []byte) {
 	var patch []byte
