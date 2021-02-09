@@ -100,7 +100,7 @@ spec:
           readinessProbe:
             httpGet:
               host: 127.0.0.1
-              path: /healthz
+              path: /readyz
               port: api
               scheme: HTTPS
             initialDelaySeconds: 5
