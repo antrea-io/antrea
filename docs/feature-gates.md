@@ -25,7 +25,7 @@ example, to enable `AntreaProxy` on Linux, edit the Agent configuration in the
   antrea-agent.conf: |
     # FeatureGates is a map of feature names to bools that enable or disable experimental features.
     featureGates:
-    # Enable antrea proxy which provides ServiceLB for in-cluster services in antrea agent.
+    # Enable antrea proxy which provides ServiceLB for in-cluster Services in antrea agent.
     # It should be enabled on Windows, otherwise NetworkPolicy will not take effect on
     # Service traffic.
       AntreaProxy: true
