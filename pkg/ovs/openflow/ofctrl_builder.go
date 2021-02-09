@@ -189,6 +189,34 @@ func (b *ofFlowBuilder) MatchCTStateInv(set bool) FlowBuilder {
 	return b
 }
 
+func (b *ofFlowBuilder) MatchCTStateDNAT(set bool) FlowBuilder {
+	if b.ctStates == nil {
+		b.ctStates = openflow13.NewCTStates()
+	}
+	if set {
+		b.ctStates.SetDNAT()
+		b.addCTStateString("+dnat")
+	} else {
+		b.ctStates.UnsetDNAT()
+		b.addCTStateString("-dnat")
+	}
+	return b
+}
+
+func (b *ofFlowBuilder) MatchCTStateSNAT(set bool) FlowBuilder {
+	if b.ctStates == nil {
+		b.ctStates = openflow13.NewCTStates()
+	}
+	if set {
+		b.ctStates.SetSNAT()
+		b.addCTStateString("+snat")
+	} else {
+		b.ctStates.UnsetSNAT()
+		b.addCTStateString("-snat")
+	}
+	return b
+}
+
 // MatchCTMark adds match condition for matching ct_mark. If mask is nil, the mask should be not set in the OpenFlow
 // message which is sent to OVS, and OVS should match the value exactly.
 func (b *ofFlowBuilder) MatchCTMark(value uint32, mask *uint32) FlowBuilder {
