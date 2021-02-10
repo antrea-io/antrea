@@ -1574,7 +1574,7 @@ spec:
         livenessProbe:
           failureThreshold: 5
           httpGet:
-            host: 127.0.0.1
+            host: localhost
             path: /livez
             port: api
             scheme: HTTPS
@@ -1588,7 +1588,7 @@ spec:
         readinessProbe:
           failureThreshold: 5
           httpGet:
-            host: 127.0.0.1
+            host: localhost
             path: /readyz
             port: api
             scheme: HTTPS
@@ -1772,7 +1772,7 @@ spec:
         readinessProbe:
           failureThreshold: 5
           httpGet:
-            host: 127.0.0.1
+            host: localhost
             path: /readyz
             port: api
             scheme: HTTPS
