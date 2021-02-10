@@ -177,13 +177,13 @@ func (data *TestData) setupDifferentNamedPorts(t *testing.T) (checkFn func(), cl
 		}
 	}()
 
-	server0Port := 80
+	server0Port := int32(80)
 	server0Name, server0IPs, cleanupFunc := createAndWaitForPod(t, data, func(name string, nodeName string) error {
 		return data.createServerPod(name, "http", server0Port, false)
 	}, "test-server-", "")
 	cleanupFuncs = append(cleanupFuncs, cleanupFunc)
 
-	server1Port := 8080
+	server1Port := int32(8080)
 	server1Name, server1IPs, cleanupFunc := createAndWaitForPod(t, data, func(name string, nodeName string) error {
 		return data.createServerPod(name, "http", server1Port, false)
 	}, "test-server-", "")
@@ -371,7 +371,7 @@ func TestDefaultDenyEgressPolicy(t *testing.T) {
 	}
 	defer teardownTest(t, data)
 
-	serverPort := 80
+	serverPort := int32(80)
 	_, serverIPs, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "test-server-", "")
 	defer cleanupFunc()
 
@@ -691,7 +691,7 @@ func TestIngressPolicyWithoutPortNumber(t *testing.T) {
 	}
 	defer teardownTest(t, data)
 
-	serverPort := 80
+	serverPort := int32(80)
 	_, serverIPs, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "test-server-", "")
 	defer cleanupFunc()
 
@@ -784,7 +784,7 @@ func createAndWaitForPod(t *testing.T, data *TestData, createFunc func(name stri
 	return name, podIP, cleanupFunc
 }
 
-func createAndWaitForPodWithLabels(t *testing.T, data *TestData, createFunc func(name, ns string, portNum int, labels map[string]string) error, name, ns string, portNum int, labels map[string]string) (string, *PodIPs, func()) {
+func createAndWaitForPodWithLabels(t *testing.T, data *TestData, createFunc func(name, ns string, portNum int32, labels map[string]string) error, name, ns string, portNum int32, labels map[string]string) (string, *PodIPs, func()) {
 	if err := createFunc(name, ns, portNum, labels); err != nil {
 		t.Fatalf("Error when creating busybox test Pod: %v", err)
 	}

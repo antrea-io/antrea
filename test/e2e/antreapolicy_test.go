@@ -38,13 +38,12 @@ import (
 
 // common for all tests.
 var (
-	allPods                []Pod
-	k8sUtils               *KubernetesUtils
-	allTestList            []*TestCase
-	pods, namespaces       []string
-	podIPs                 map[string]string
-	p80, p81, p8080, p8082 int
-	p8081, p8085           int32
+	allPods                              []Pod
+	k8sUtils                             *KubernetesUtils
+	allTestList                          []*TestCase
+	pods, namespaces                     []string
+	podIPs                               map[string]string
+	p80, p81, p8080, p8081, p8082, p8085 int32
 )
 
 const (
@@ -77,7 +76,7 @@ type TestStep struct {
 	Reachability *Reachability
 	Policies     []metav1.Object
 	Groups       []metav1.Object
-	Port         []int
+	Port         []int32
 	Duration     time.Duration
 	CustomProbes []*CustomProbe
 }
@@ -90,7 +89,7 @@ type CustomProbe struct {
 	// Create or update a destination Pod.
 	DestPod CustomPod
 	// Port on which the probe will be made.
-	Port int
+	Port int32
 	// Set the expected connectivity.
 	ExpectConnected bool
 }
@@ -659,7 +658,7 @@ func testACNPAllowXBtoA(t *testing.T) {
 			reachability,
 			[]metav1.Object{builder.Get()},
 			nil,
-			[]int{80},
+			[]int32{80},
 			0,
 			nil,
 		},
@@ -691,7 +690,7 @@ func testACNPAllowXBtoYA(t *testing.T) {
 			reachability,
 			[]metav1.Object{builder.Get()},
 			nil,
-			[]int{81},
+			[]int32{81},
 			0,
 			nil,
 		},
@@ -736,7 +735,7 @@ func testACNPPriorityOverrideDefaultDeny(t *testing.T) {
 			reachabilityBothACNP,
 			[]metav1.Object{builder1.Get(), builder2.Get()},
 			nil,
-			[]int{80},
+			[]int32{80},
 			0,
 			nil,
 		},
@@ -765,7 +764,7 @@ func testACNPAllowNoDefaultIsolation(t *testing.T) {
 			reachability,
 			[]metav1.Object{builder.Get()},
 			nil,
-			[]int{81},
+			[]int32{81},
 			0,
 			nil,
 		},
@@ -801,7 +800,7 @@ func testACNPDropEgress(t *testing.T) {
 			reachability,
 			[]metav1.Object{builder.Get()},
 			nil,
-			[]int{80},
+			[]int32{80},
 			0,
 			nil,
 		},
@@ -873,7 +872,7 @@ func testACNPIngressRuleDenyCGWithXBtoYA(t *testing.T) {
 			reachability,
 			[]metav1.Object{builder.Get()},
 			[]metav1.Object{cgBuilder.Get()},
-			[]int{81},
+			[]int32{81},
 			0,
 			nil,
 		},
@@ -952,7 +951,7 @@ func testACNPEgressRulePodsAToCGWithNsZ(t *testing.T) {
 			reachability,
 			[]metav1.Object{builder.Get()},
 			[]metav1.Object{cgBuilder.Get()},
-			[]int{80},
+			[]int32{80},
 			0,
 			nil,
 		},
@@ -1065,7 +1064,7 @@ func testACNPClusterGroupUpdate(t *testing.T) {
 			reachability,
 			[]metav1.Object{builder.Get()},
 			[]metav1.Object{cgBuilder.Get()},
-			[]int{80},
+			[]int32{80},
 			0,
 			nil,
 		},
@@ -1074,7 +1073,7 @@ func testACNPClusterGroupUpdate(t *testing.T) {
 			updatedReachability,
 			[]metav1.Object{builder.Get()},
 			[]metav1.Object{updatedCgBuilder.Get()},
-			[]int{80},
+			[]int32{80},
 			0,
 			nil,
 		},
@@ -1161,7 +1160,7 @@ func testACNPClusterGroupRefRulePodAdd(t *testing.T, data *TestData) {
 			nil,
 			[]metav1.Object{builder.Get()},
 			[]metav1.Object{cgBuilder.Get()},
-			[]int{80},
+			[]int32{80},
 			0,
 			cp,
 		},
@@ -1222,7 +1221,7 @@ func testBaselineNamespaceIsolation(t *testing.T) {
 			reachability,
 			[]metav1.Object{builder.Get(), k8sNPBuilder.Get()},
 			nil,
-			[]int{80},
+			[]int32{80},
 			0,
 			nil,
 		},
@@ -1288,7 +1287,7 @@ func testACNPPriorityOverride(t *testing.T) {
 			reachabilityTwoACNPs,
 			[]metav1.Object{builder3.Get(), builder2.Get()},
 			nil,
-			[]int{80},
+			[]int32{80},
 			0,
 			nil,
 		},
@@ -1300,7 +1299,7 @@ func testACNPPriorityOverride(t *testing.T) {
 			reachabilityAllACNPs,
 			[]metav1.Object{builder3.Get(), builder1.Get(), builder2.Get()},
 			nil,
-			[]int{80},
+			[]int32{80},
 			0,
 			nil,
 		},
@@ -1367,7 +1366,7 @@ func testACNPTierOverride(t *testing.T) {
 			reachabilityTwoACNPs,
 			[]metav1.Object{builder3.Get(), builder2.Get()},
 			nil,
-			[]int{80},
+			[]int32{80},
 			0,
 			nil,
 		},
@@ -1378,7 +1377,7 @@ func testACNPTierOverride(t *testing.T) {
 			reachabilityAllACNPs,
 			[]metav1.Object{builder3.Get(), builder1.Get(), builder2.Get()},
 			nil,
-			[]int{80},
+			[]int32{80},
 			0,
 			nil,
 		},
@@ -1430,7 +1429,7 @@ func testACNPCustomTiers(t *testing.T) {
 			reachabilityTwoACNPs,
 			[]metav1.Object{builder2.Get(), builder1.Get()},
 			nil,
-			[]int{80},
+			[]int32{80},
 			0,
 			nil,
 		},
@@ -1482,7 +1481,7 @@ func testACNPPriorityConflictingRule(t *testing.T) {
 			reachabilityBothACNP,
 			[]metav1.Object{builder1.Get(), builder2.Get()},
 			nil,
-			[]int{80},
+			[]int32{80},
 			0,
 			nil,
 		},
@@ -1536,7 +1535,7 @@ func testACNPRulePrioirty(t *testing.T) {
 			reachabilityBothACNP,
 			[]metav1.Object{builder2.Get(), builder1.Get()},
 			nil,
-			[]int{80},
+			[]int32{80},
 			0,
 			nil,
 		},
@@ -1572,7 +1571,7 @@ func testACNPPortRange(t *testing.T) {
 		reachability,
 		[]metav1.Object{builder.Get()},
 		nil,
-		[]int{8080, 8081, 8082, 8083, 8084, 8085},
+		[]int32{8080, 8081, 8082, 8083, 8084, 8085},
 		0,
 		nil,
 	})
@@ -1601,7 +1600,7 @@ func testANPPortRange(t *testing.T) {
 		reachability,
 		[]metav1.Object{builder.Get()},
 		nil,
-		[]int{8080, 8081, 8082, 8083, 8084, 8085},
+		[]int32{8080, 8081, 8082, 8083, 8084, 8085},
 		0,
 		nil,
 	})
@@ -1630,7 +1629,7 @@ func testANPBasic(t *testing.T) {
 			reachability,
 			[]metav1.Object{builder.Get()},
 			nil,
-			[]int{80},
+			[]int32{80},
 			0,
 			nil,
 		},
@@ -1647,7 +1646,7 @@ func testANPBasic(t *testing.T) {
 			reachability,
 			[]metav1.Object{builder.Get(), k8sNPBuilder.Get()},
 			nil,
-			[]int{80},
+			[]int32{80},
 			0,
 			nil,
 		},
@@ -1724,7 +1723,7 @@ func testAppliedToPerRule(t *testing.T) {
 			reachability,
 			[]metav1.Object{builder.Get()},
 			nil,
-			[]int{80},
+			[]int32{80},
 			0,
 			nil,
 		},
@@ -1752,7 +1751,7 @@ func testAppliedToPerRule(t *testing.T) {
 			reachability2,
 			[]metav1.Object{builder2.Get()},
 			nil,
-			[]int{80},
+			[]int32{80},
 			0,
 			nil,
 		},

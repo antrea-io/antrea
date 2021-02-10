@@ -851,11 +851,11 @@ func (data *TestData) createNginxPod(name, nodeName string) error {
 }
 
 // createServerPod creates a Pod that can listen to specified port and have named port set.
-func (data *TestData) createServerPod(name string, portName string, portNum int, setHostPort bool) error {
+func (data *TestData) createServerPod(name string, portName string, portNum int32, setHostPort bool) error {
 	// See https://github.com/kubernetes/kubernetes/blob/master/test/images/agnhost/porter/porter.go#L17 for the image's detail.
 	cmd := "porter"
 	env := corev1.EnvVar{Name: fmt.Sprintf("SERVE_PORT_%d", portNum), Value: "foo"}
-	port := corev1.ContainerPort{Name: portName, ContainerPort: int32(portNum)}
+	port := corev1.ContainerPort{Name: portName, ContainerPort: portNum}
 	if setHostPort {
 		// If hostPort is to be set, it must match the container port number.
 		port.HostPort = int32(portNum)
@@ -864,11 +864,11 @@ func (data *TestData) createServerPod(name string, portName string, portNum int,
 }
 
 // createCustomPod creates a Pod in given Namespace with custom labels.
-func (data *TestData) createServerPodWithLabels(name, ns string, portNum int, labels map[string]string) error {
+func (data *TestData) createServerPodWithLabels(name, ns string, portNum int32, labels map[string]string) error {
 	cmd := []string{"ncat", "-lk", "-p", fmt.Sprintf("%d", portNum)}
 	image := "antrea/netpol-test:latest"
 	env := corev1.EnvVar{Name: fmt.Sprintf("SERVE_PORT_%d", portNum), Value: "foo"}
-	port := corev1.ContainerPort{ContainerPort: int32(portNum)}
+	port := corev1.ContainerPort{ContainerPort: portNum}
 	containerName := fmt.Sprintf("c%v", portNum)
 	mutateLabels := func(pod *corev1.Pod) {
 		for k, v := range labels {
@@ -1424,7 +1424,7 @@ func (data *TestData) runPingCommandFromTestPod(podName string, targetPodIPs *Po
 	return nil
 }
 
-func (data *TestData) runNetcatCommandFromTestPod(podName string, server string, port int) error {
+func (data *TestData) runNetcatCommandFromTestPod(podName string, server string, port int32) error {
 	// Retrying several times to avoid flakes as the test may involve DNS (coredns) and Service/Endpoints (kube-proxy).
 	cmd := []string{
 		"/bin/sh",
