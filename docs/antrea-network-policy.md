@@ -721,11 +721,11 @@ The following kubectl commands can be used to retrieve CG resources:
 Kubernetes NetworkPolicies and Antrea-native policies allow selecting
 workloads from Namespaces with the use of a label selector (i.e. `namespaceSelector`).
 However, it is often desirable to be able to select Namespaces directly by their `name`
-as opposed to using the `labels` associated with the Namespace. In order to select
+as opposed to using the `labels` associated with the Namespaces. In order to select
 Namespaces by name, Antrea labels Namespaces with a reserved label `antrea.io/metadata.name`,
 whose value is set to the Namespace's name. Users can then use this label in the
 `namespaceSelector` field, in both K8s NetworkPolicies and Antrea-native policies to
-select Namespaces by name. By default, Namespaces are not labeled with reserved name label.
+select Namespaces by name. By default, Namespaces are not labeled with the reserved name label.
 In order for the Antrea controller to label the Namespaces, the `labelsmutator.antrea.io`
 `MutatingWebhookConfiguration` must be enabled. This can be done by applying the following
 webhook configuration YAML:
