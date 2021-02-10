@@ -718,21 +718,39 @@ The following kubectl commands can be used to retrieve CG resources:
 
 ## Select Namespace by Name
 
-Kubernetes NetworkPolicies and Antrea-native NetworkPolicies allow selecting
+Kubernetes NetworkPolicies and Antrea-native policies allow selecting
 workloads from Namespaces with the use of a label selector (i.e. `namespaceSelector`).
-However, it is often desired that the Namespaces be selected directly by its `name`
+However, it is often desirable to be able to select Namespaces directly by their `name`
 as opposed to using the `labels` associated with the Namespace. In order to select
 Namespaces by name, Antrea labels Namespaces with a reserved label `antrea.io/metadata.name`,
-which sets it's value to the name of the Namespace. Users can then use this label in the
-`namespaceSelector` field, in both, K8s NetworkPolicies and Antrea-native policies to
+whose value is set to the Namespace's name. Users can then use this label in the
+`namespaceSelector` field, in both K8s NetworkPolicies and Antrea-native policies to
 select Namespaces by name. By default, Namespaces are not labeled with reserved name label.
-In order for Antrea controller to label the Namespaces, the `labelsMutator`
-`MutatingWebhookConfiguration` must be enabled. This can be done by generating and applying
-the `antrea.yaml` deployment manifest in the following way:
+In order for the Antrea controller to label the Namespaces, the `labelsmutator.antrea.io`
+`MutatingWebhookConfiguration` must be enabled. This can be done by applying the following
+webhook configuration YAML:
 
-```bash
-    # From "hack" directory
-    ./generate-manifest.sh --custom-adm-controller
+```yaml
+apiVersion: admissionregistration.k8s.io/v1
+ kind: MutatingWebhookConfiguration
+ metadata:
+   name: "labelsmutator.antrea.io"
+ webhooks:
+   - name: "namelabelmutator.antrea.io"
+     clientConfig:
+       service:
+         name: "antrea"
+         namespace: "kube-system"
+         path: "/mutate/addlabels"
+     rules:
+       - operations: ["CREATE", "UPDATE"]
+         apiGroups: [""]
+         apiVersions: ["v1"]
+         resources: ["namespaces"]
+         scope: "Cluster"
+     admissionReviewVersions: ["v1", "v1beta1"]
+     sideEffects: None
+     timeoutSeconds: 5
 ```
 
 Once the webhook is configured, Antrea will start labeling all new and updated
@@ -768,8 +786,12 @@ spec:
 The above example allows all Pods from Namespace "default" to connect to all "core-dns"
 Pods from Namespace "kube-system" on TCP port 53.
 
-**Note**: Similar [effort](https://github.com/kubernetes/enhancements/tree/master/keps/sig-api-machinery/2161-apiserver-default-labels) is currently underway in Kubernetes to label all Namespaces
-with `kubernetes.io/metadata.name: <namespaceName>` label.
+**Note**: A similar [effort](https://github.com/kubernetes/enhancements/tree/master/keps/sig-api-machinery/2161-apiserver-default-labels) is currently underway in Kubernetes to label all Namespaces
+with `kubernetes.io/metadata.name: <namespaceName>` label. By introducing the
+`antrea.io/metadata.name` label, we give our users early access to this feature.
+When `kubernetes.io/metadata.name` is introduced upstream, we recommend updating
+your policies to use the new label, but we will also keep providing our custom
+admission controller for backwards-compatibility.
 
 ## RBAC
 

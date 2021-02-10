@@ -15,7 +15,6 @@
 package webhook
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"testing"
@@ -92,9 +91,7 @@ func TestCreateLabelsReplacePatch(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			actualValue, _ := createLabelsReplacePatch(tt.labels)
 			expValue, _ := json.Marshal(tt.expResp)
-			if bytes.Compare(expValue, actualValue) != 0 {
-				t.Errorf("Expected %v, got %v", expValue, actualValue)
-			}
+			assert.Equal(t, expValue, actualValue)
 		})
 	}
 }
@@ -247,9 +244,7 @@ func TestMutateLabels(t *testing.T) {
 			if tt.op != admv1.Delete {
 				expValue, _ = json.Marshal(tt.expResp)
 			}
-			if bytes.Compare(expValue, actualResp) != 0 {
-				t.Errorf("Expected %v, got %v", expValue, actualResp)
-			}
+			assert.Equal(t, expValue, actualResp)
 			assert.Equal(t, tt.isAllowed, actualAllowed)
 			assert.Equal(t, tt.msg, actualMsg)
 		})
