@@ -214,24 +214,6 @@ func (k *KubernetesUtils) CreateOrUpdateDeployment(ns, deploymentName string, re
 	return d, err
 }
 
-// CleanNetworkPolicies is a convenience function for deleting network policies before startup of any new test.
-func (k *KubernetesUtils) CleanNetworkPolicies(namespaces []string) error {
-	for _, ns := range namespaces {
-		l, err := k.clientset.NetworkingV1().NetworkPolicies(ns).List(context.TODO(), metav1.ListOptions{})
-		if err != nil {
-			return errors.Wrapf(err, "unable to list network policies in ns %s", ns)
-		}
-		for _, np := range l.Items {
-			log.Infof("deleting network policy %s in ns %s", np.Name, ns)
-			err = k.clientset.NetworkingV1().NetworkPolicies(np.Namespace).Delete(context.TODO(), np.Name, metav1.DeleteOptions{})
-			if err != nil {
-				return errors.Wrapf(err, "unable to delete network policy %s", np.Name)
-			}
-		}
-	}
-	return nil
-}
-
 // CreateOrUpdateNetworkPolicy is a convenience function for updating/creating netpols. Updating is important since
 // some tests update a network policy to confirm that mutation works with a CNI.
 func (k *KubernetesUtils) CreateOrUpdateNetworkPolicy(ns string, netpol *v1net.NetworkPolicy) (*v1net.NetworkPolicy, error) {
@@ -248,6 +230,32 @@ func (k *KubernetesUtils) CreateOrUpdateNetworkPolicy(ns string, netpol *v1net.N
 		log.Debugf("unable to create network policy: %s", err)
 	}
 	return np, err
+}
+
+// DeleteNetworkPolicy is a convenience function for deleting NetworkPolicy by name and namespace.
+func (k *KubernetesUtils) DeleteNetworkPolicy(ns, name string) error {
+	log.Infof("deleting NetworkPolicy %s in ns %s", name, ns)
+	err := k.clientset.NetworkingV1().NetworkPolicies(ns).Delete(context.TODO(), name, metav1.DeleteOptions{})
+	if err != nil {
+		return errors.Wrapf(err, "unable to delete NetworkPolicy %s", name)
+	}
+	return nil
+}
+
+// CleanNetworkPolicies is a convenience function for deleting NetworkPolicies in the provided namespaces.
+func (k *KubernetesUtils) CleanNetworkPolicies(namespaces []string) error {
+	for _, ns := range namespaces {
+		l, err := k.clientset.NetworkingV1().NetworkPolicies(ns).List(context.TODO(), metav1.ListOptions{})
+		if err != nil {
+			return errors.Wrapf(err, "unable to list NetworkPolicy in ns %s", ns)
+		}
+		for _, np := range l.Items {
+			if err = k.DeleteNetworkPolicy(np.Namespace, np.Name); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // DeleteTier is a convenience function for deleting an Antrea Policy Tier with specific name.
@@ -359,33 +367,25 @@ func (k *KubernetesUtils) CreateCG(name string, pSelector, nSelector *metav1.Lab
 	return nil, fmt.Errorf("clustergroup with name %s already exists", name)
 }
 
-// CleanCGs is a convenience function for deleting ClusterGroups before startup of any new test.
+// DeleteCG is a convenience function for deleting ClusterGroup by name.
+func (k *KubernetesUtils) DeleteCG(name string) error {
+	log.Infof("deleting ClusterGroup %s", name)
+	err := k.crdClient.CoreV1alpha2().ClusterGroups().Delete(context.TODO(), name, metav1.DeleteOptions{})
+	if err != nil {
+		return errors.Wrapf(err, "unable to delete ClusterGroup %s", name)
+	}
+	return nil
+}
+
+// CleanCGs is a convenience function for deleting all ClusterGroups in the cluster.
 func (k *KubernetesUtils) CleanCGs() error {
 	l, err := k.crdClient.CoreV1alpha2().ClusterGroups().List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		return errors.Wrapf(err, "unable to list ClusterGroups")
 	}
 	for _, cg := range l.Items {
-		log.Infof("deleting ClusterGroup %s", cg.Name)
-		err = k.crdClient.CoreV1alpha2().ClusterGroups().Delete(context.TODO(), cg.Name, metav1.DeleteOptions{})
-		if err != nil {
-			return errors.Wrapf(err, "unable to delete ClusterGroup %s", cg.Name)
-		}
-	}
-	return nil
-}
-
-// CleanACNPs is a convenience function for deleting AntreaClusterNetworkPolicies before startup of any new test.
-func (k *KubernetesUtils) CleanACNPs() error {
-	l, err := k.securityClient.ClusterNetworkPolicies().List(context.TODO(), metav1.ListOptions{})
-	if err != nil {
-		return errors.Wrapf(err, "unable to list AntreaClusterNetworkPolicies")
-	}
-	for _, cnp := range l.Items {
-		log.Infof("deleting AntreaClusterNetworkPolicies %s", cnp.Name)
-		err = k.securityClient.ClusterNetworkPolicies().Delete(context.TODO(), cnp.Name, metav1.DeleteOptions{})
-		if err != nil {
-			return errors.Wrapf(err, "unable to delete ClusterNetworkPolicy %s", cnp.Name)
+		if err := k.DeleteCG(cg.Name); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -411,20 +411,26 @@ func (k *KubernetesUtils) CreateOrUpdateACNP(cnp *secv1alpha1.ClusterNetworkPoli
 	return nil, fmt.Errorf("error occurred in creating/updating ClusterNetworkPolicy %s", cnp.Name)
 }
 
-// CleanANPs is a convenience function for deleting Antrea NetworkPolicies before startup of any new test.
-func (k *KubernetesUtils) CleanANPs(namespaces []string) error {
-	for _, ns := range namespaces {
-		l, err := k.securityClient.NetworkPolicies(ns).List(context.TODO(), metav1.ListOptions{})
-		if err != nil {
-			return errors.Wrapf(err, "unable to list Antrea NetworkPolicies in ns %s", ns)
+// CleanACNPs is a convenience function for deleting all Antrea ClusterNetworkPolicies in the cluster.
+func (k *KubernetesUtils) CleanACNPs() error {
+	l, err := k.securityClient.ClusterNetworkPolicies().List(context.TODO(), metav1.ListOptions{})
+	if err != nil {
+		return errors.Wrapf(err, "unable to list AntreaClusterNetworkPolicies")
+	}
+	for _, cnp := range l.Items {
+		if err = k.DeleteACNP(cnp.Name); err != nil {
+			return err
 		}
-		for _, anp := range l.Items {
-			log.Infof("deleting Antrea NetworkPolicies %s in ns %s", anp.Name, ns)
-			err = k.securityClient.NetworkPolicies(anp.Namespace).Delete(context.TODO(), anp.Name, metav1.DeleteOptions{})
-			if err != nil {
-				return errors.Wrapf(err, "unable to delete Antrea NetworkPolicy %s", anp.Name)
-			}
-		}
+	}
+	return nil
+}
+
+// DeleteACNP is a convenience function for deleting ACNP by name.
+func (k *KubernetesUtils) DeleteACNP(name string) error {
+	log.Infof("deleting AntreaClusterNetworkPolicies %s", name)
+	err := k.securityClient.ClusterNetworkPolicies().Delete(context.TODO(), name, metav1.DeleteOptions{})
+	if err != nil {
+		return errors.Wrapf(err, "unable to delete ClusterNetworkPolicy %s", name)
 	}
 	return nil
 }
@@ -446,6 +452,32 @@ func (k *KubernetesUtils) CreateOrUpdateANP(anp *secv1alpha1.NetworkPolicy) (*se
 		return anp, err
 	}
 	return nil, fmt.Errorf("error occurred in creating/updating Antrea NetworkPolicy %s", anp.Name)
+}
+
+// DeleteANP is a convenience function for deleting ANP by name and namespace.
+func (k *KubernetesUtils) DeleteANP(ns, name string) error {
+	log.Infof("deleting Antrea NetworkPolicies %s in ns %s", name, ns)
+	err := k.securityClient.NetworkPolicies(ns).Delete(context.TODO(), name, metav1.DeleteOptions{})
+	if err != nil {
+		return errors.Wrapf(err, "unable to delete Antrea NetworkPolicy %s", name)
+	}
+	return nil
+}
+
+// CleanANPs is a convenience function for deleting all Antrea NetworkPolicies in provided namespaces.
+func (k *KubernetesUtils) CleanANPs(namespaces []string) error {
+	for _, ns := range namespaces {
+		l, err := k.securityClient.NetworkPolicies(ns).List(context.TODO(), metav1.ListOptions{})
+		if err != nil {
+			return errors.Wrapf(err, "unable to list Antrea NetworkPolicies in ns %s", ns)
+		}
+		for _, anp := range l.Items {
+			if err = k.DeleteANP(anp.Namespace, anp.Name); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func (k *KubernetesUtils) waitForPodInNamespace(ns string, pod string) (*string, error) {
