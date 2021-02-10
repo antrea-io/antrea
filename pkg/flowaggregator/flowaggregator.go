@@ -17,7 +17,6 @@ package flowaggregator
 import (
 	"fmt"
 	"hash/fnv"
-	"net"
 	"time"
 
 	"github.com/vmware/go-ipfix/pkg/collector"
@@ -129,6 +128,9 @@ var (
 
 const (
 	aggregationWorkerNum = 2
+	udpTransport         = "udp"
+	tcpTransport         = "tcp"
+	collectorAddress     = "0.0.0.0:4739"
 )
 
 type AggregatorTransportProtocol string
@@ -176,21 +178,20 @@ func genObservationID() (uint32, error) {
 }
 
 func (fa *flowAggregator) InitCollectingProcess() error {
-	var collectAddr net.Addr
 	var err error
 	var cpInput collector.CollectorInput
 	if fa.aggregatorTransportProtocol == AggregatorTransportProtocolTCP {
-		collectAddr, _ = net.ResolveTCPAddr("tcp", "0.0.0.0:4739")
 		cpInput = collector.CollectorInput{
-			Address:       collectAddr,
+			Address:       collectorAddress,
+			Protocol:      tcpTransport,
 			MaxBufferSize: 65535,
 			TemplateTTL:   0,
 			IsEncrypted:   false,
 		}
 	} else {
-		collectAddr, _ = net.ResolveUDPAddr("udp", "0.0.0.0:4739")
 		cpInput = collector.CollectorInput{
-			Address:       collectAddr,
+			Address:       collectorAddress,
+			Protocol:      udpTransport,
 			MaxBufferSize: 1024,
 			TemplateTTL:   0,
 			IsEncrypted:   false,
@@ -221,26 +222,20 @@ func (fa *flowAggregator) initExportingProcess() error {
 	// externalFlowCollectorAddr and externalFlowCollectorProto instead of net.Addr input.
 	var expInput exporter.ExporterInput
 	if fa.externalFlowCollectorProto == "tcp" {
-		collector, err := net.ResolveTCPAddr("tcp", fa.externalFlowCollectorAddr)
-		if err != nil {
-			return err
-		}
 		// TCP transport does not need any tempRefTimeout, so sending 0.
 		expInput = exporter.ExporterInput{
-			CollectorAddr:       collector,
+			CollectorAddress:    fa.externalFlowCollectorAddr,
+			CollectorProtocol:   fa.externalFlowCollectorProto,
 			ObservationDomainID: obsID,
 			TempRefTimeout:      0,
 			PathMTU:             0,
 			IsEncrypted:         false,
 		}
 	} else {
-		collector, err := net.ResolveUDPAddr("udp", fa.externalFlowCollectorAddr)
-		if err != nil {
-			return err
-		}
 		// For UDP transport, hardcoding tempRefTimeout value as 1800s. So we will send out template every 30 minutes.
 		expInput = exporter.ExporterInput{
-			CollectorAddr:       collector,
+			CollectorAddress:    fa.externalFlowCollectorAddr,
+			CollectorProtocol:   fa.externalFlowCollectorProto,
 			ObservationDomainID: obsID,
 			TempRefTimeout:      1800,
 			PathMTU:             0,
