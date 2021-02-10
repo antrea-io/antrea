@@ -88,16 +88,17 @@ func NewFakeProxier(ofClient openflow.Client, isIPv6 bool) *proxier {
 		corev1.EventSource{Component: componentName, Host: hostname},
 	)
 	p := &proxier{
-		endpointsChanges:     newEndpointsChangesTracker(hostname),
-		serviceChanges:       newServiceChangesTracker(recorder, isIPv6),
-		serviceMap:           k8sproxy.ServiceMap{},
-		serviceInstalledMap:  k8sproxy.ServiceMap{},
-		endpointInstalledMap: map[k8sproxy.ServicePortName]map[string]struct{}{},
-		endpointsMap:         types.EndpointsMap{},
-		groupCounter:         types.NewGroupCounter(),
-		ofClient:             ofClient,
-		serviceStringMap:     map[string]k8sproxy.ServicePortName{},
-		isIPv6:               isIPv6,
+		endpointsChanges:         newEndpointsChangesTracker(hostname),
+		serviceChanges:           newServiceChangesTracker(recorder, isIPv6),
+		serviceMap:               k8sproxy.ServiceMap{},
+		serviceInstalledMap:      k8sproxy.ServiceMap{},
+		endpointsInstalledMap:    types.EndpointsMap{},
+		endpointReferenceCounter: map[string]int{},
+		endpointsMap:             types.EndpointsMap{},
+		groupCounter:             types.NewGroupCounter(),
+		ofClient:                 ofClient,
+		serviceStringMap:         map[string]k8sproxy.ServicePortName{},
+		isIPv6:                   isIPv6,
 	}
 	return p
 }
@@ -333,9 +334,9 @@ func testClusterIPRemoveSamePortEndpoint(t *testing.T, svcIP net.IP, epIP net.IP
 	groupID, _ := fp.groupCounter.Get(svcPortName)
 	groupIDUDP, _ := fp.groupCounter.Get(svcPortNameUDP)
 	mockOFClient.EXPECT().InstallServiceGroup(groupID, false, gomock.Any()).Times(1)
-	mockOFClient.EXPECT().InstallServiceGroup(groupIDUDP, false, gomock.Any()).Times(1)
+	mockOFClient.EXPECT().InstallServiceGroup(groupIDUDP, false, gomock.Any()).Times(2)
 	mockOFClient.EXPECT().InstallEndpointFlows(protocolTCP, gomock.Any(), isIPv6).Times(1)
-	mockOFClient.EXPECT().InstallEndpointFlows(protocolUDP, gomock.Any(), isIPv6).Times(1)
+	mockOFClient.EXPECT().InstallEndpointFlows(protocolUDP, gomock.Any(), isIPv6).Times(2)
 	mockOFClient.EXPECT().InstallServiceFlows(groupID, svcIP, uint16(svcPort), protocolTCP, uint16(0)).Times(1)
 	mockOFClient.EXPECT().InstallServiceFlows(groupIDUDP, svcIP, uint16(svcPort), protocolUDP, uint16(0)).Times(1)
 	mockOFClient.EXPECT().UninstallEndpointFlows(protocolUDP, gomock.Any()).Times(1)
@@ -394,8 +395,8 @@ func testClusterIPRemoveEndpoints(t *testing.T, svcIP net.IP, epIP net.IP, isIPv
 	}
 	makeEndpointsMap(fp, ep)
 	groupID, _ := fp.groupCounter.Get(svcPortName)
-	mockOFClient.EXPECT().InstallServiceGroup(groupID, false, gomock.Any()).Times(1)
-	mockOFClient.EXPECT().InstallEndpointFlows(bindingProtocol, gomock.Any(), isIPv6).Times(1)
+	mockOFClient.EXPECT().InstallServiceGroup(groupID, false, gomock.Any()).Times(2)
+	mockOFClient.EXPECT().InstallEndpointFlows(bindingProtocol, gomock.Any(), isIPv6).Times(2)
 	mockOFClient.EXPECT().InstallServiceFlows(groupID, svcIP, uint16(svcPort), bindingProtocol, uint16(0)).Times(1)
 	mockOFClient.EXPECT().UninstallEndpointFlows(bindingProtocol, gomock.Any()).Times(1)
 	fp.syncProxyRules()
@@ -537,7 +538,7 @@ func testPortChange(t *testing.T, svcIP net.IP, epIP net.IP, isIPv6 bool) {
 	svcPort2 := 8080
 	svcPortName := k8sproxy.ServicePortName{
 		NamespacedName: makeNamespaceName("ns1", "svc1"),
-		Port:           "http",
+		Port:           "80",
 		Protocol:       corev1.ProtocolTCP,
 	}
 	service := makeTestService(svcPortName.Namespace, svcPortName.Name, func(svc *corev1.Service) {
@@ -571,8 +572,8 @@ func testPortChange(t *testing.T, svcIP net.IP, epIP net.IP, isIPv6 bool) {
 	ep := makeTestEndpoints(svcPortName.Namespace, svcPortName.Name, epFunc)
 	makeEndpointsMap(fp, ep)
 	groupID, _ := fp.groupCounter.Get(svcPortName)
-	mockOFClient.EXPECT().InstallServiceGroup(groupID, false, gomock.Any()).Times(2)
-	mockOFClient.EXPECT().InstallEndpointFlows(bindingProtocol, gomock.Any(), isIPv6).Times(2)
+	mockOFClient.EXPECT().InstallServiceGroup(groupID, false, gomock.Any()).Times(1)
+	mockOFClient.EXPECT().InstallEndpointFlows(bindingProtocol, gomock.Any(), isIPv6).Times(1)
 	mockOFClient.EXPECT().InstallServiceFlows(groupID, svcIP, uint16(svcPort1), bindingProtocol, uint16(0))
 	mockOFClient.EXPECT().UninstallServiceFlows(svcIP, uint16(svcPort1), bindingProtocol)
 	mockOFClient.EXPECT().InstallServiceFlows(groupID, svcIP, uint16(svcPort2), bindingProtocol, uint16(0))
@@ -598,6 +599,87 @@ func TestPortChangeIPv4(t *testing.T) {
 
 func TestPortChangeIPv6(t *testing.T) {
 	testPortChange(t, net.ParseIP("10:20::41"), net.ParseIP("10:180::1"), true)
+}
+
+func TestServicesWithSameEndpoints(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockOFClient := ofmock.NewMockClient(ctrl)
+	fp := NewFakeProxier(mockOFClient, false)
+	epIP := net.ParseIP("10.50.60.71")
+	svcIP1 := net.ParseIP("10.180.30.41")
+	svcIP2 := net.ParseIP("10.180.30.42")
+	svcPort := 80
+	svcPortName1 := k8sproxy.ServicePortName{
+		NamespacedName: makeNamespaceName("ns1", "svc1"),
+		Port:           "80",
+		Protocol:       corev1.ProtocolTCP,
+	}
+	svcPortName2 := k8sproxy.ServicePortName{
+		NamespacedName: makeNamespaceName("ns1", "svc2"),
+		Port:           "80",
+		Protocol:       corev1.ProtocolTCP,
+	}
+	svcMapFactory := func(svcPortName k8sproxy.ServicePortName, svcIP string) *corev1.Service {
+		svc := makeTestService(svcPortName.Namespace, svcPortName.Name, func(svc *corev1.Service) {
+			svc.Spec.ClusterIP = svcIP
+			svc.Spec.Ports = []corev1.ServicePort{{
+				Name:     svcPortName.Port,
+				Port:     int32(svcPort),
+				Protocol: corev1.ProtocolTCP,
+			}}
+		})
+		makeServiceMap(fp, svc)
+		return svc
+	}
+
+	svc1 := svcMapFactory(svcPortName1, svcIP1.String())
+	svc2 := svcMapFactory(svcPortName2, svcIP2.String())
+
+	epMapFactory := func(svcPortName k8sproxy.ServicePortName, epIP string) *corev1.Endpoints {
+		ep := makeTestEndpoints(svcPortName.Namespace, svcPortName.Name, func(ept *corev1.Endpoints) {
+			ept.Subsets = []corev1.EndpointSubset{{
+				Addresses: []corev1.EndpointAddress{{
+					IP: epIP,
+				}},
+				Ports: []corev1.EndpointPort{{
+					Name:     svcPortName.Port,
+					Port:     int32(svcPort),
+					Protocol: corev1.ProtocolTCP,
+				}},
+			}}
+		})
+		makeEndpointsMap(fp, ep)
+		return ep
+	}
+
+	ep1 := epMapFactory(svcPortName1, epIP.String())
+	ep2 := epMapFactory(svcPortName2, epIP.String())
+
+	groupID1, _ := fp.groupCounter.Get(svcPortName1)
+	groupID2, _ := fp.groupCounter.Get(svcPortName2)
+	mockOFClient.EXPECT().InstallServiceGroup(groupID1, false, gomock.Any()).Times(1)
+	mockOFClient.EXPECT().InstallServiceGroup(groupID2, false, gomock.Any()).Times(1)
+	bindingProtocol := binding.ProtocolTCP
+	mockOFClient.EXPECT().InstallEndpointFlows(bindingProtocol, gomock.Any(), false).Times(2)
+	mockOFClient.EXPECT().InstallServiceFlows(groupID1, svcIP1, uint16(svcPort), bindingProtocol, uint16(0)).Times(1)
+	mockOFClient.EXPECT().InstallServiceFlows(groupID2, svcIP2, uint16(svcPort), bindingProtocol, uint16(0)).Times(1)
+	mockOFClient.EXPECT().UninstallServiceFlows(svcIP1, uint16(svcPort), bindingProtocol).Times(1)
+	mockOFClient.EXPECT().UninstallServiceFlows(svcIP2, uint16(svcPort), bindingProtocol).Times(1)
+	mockOFClient.EXPECT().UninstallServiceGroup(groupID1).Times(1)
+	mockOFClient.EXPECT().UninstallServiceGroup(groupID2).Times(1)
+	// Since these two Services reference to the same Endpoint, there should only be one operation.
+	mockOFClient.EXPECT().UninstallEndpointFlows(bindingProtocol, gomock.Any()).Times(1)
+
+	fp.syncProxyRules()
+
+	fp.serviceChanges.OnServiceUpdate(svc1, nil)
+	fp.endpointsChanges.OnEndpointUpdate(ep1, nil)
+	fp.syncProxyRules()
+
+	fp.serviceChanges.OnServiceUpdate(svc2, nil)
+	fp.endpointsChanges.OnEndpointUpdate(ep2, nil)
+	fp.syncProxyRules()
 }
 
 func TestMetrics(t *testing.T) {
