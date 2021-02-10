@@ -17,15 +17,12 @@
 package nodeportlocal
 
 import (
-	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
 
 	nplk8s "github.com/vmware-tanzu/antrea/pkg/agent/nodeportlocal/k8s"
 	"github.com/vmware-tanzu/antrea/pkg/agent/nodeportlocal/portcache"
-	"github.com/vmware-tanzu/antrea/pkg/agent/nodeportlocal/rules"
 	"github.com/vmware-tanzu/antrea/pkg/agent/nodeportlocal/util"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -34,88 +31,14 @@ import (
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
-	"k8s.io/klog"
 )
 
 // Set resyncPeriod to 0 to disable resyncing.
 // UpdateFunc event handler will be called only when the object is actually updated.
 const resyncPeriod = 0 * time.Minute
 
-func addRulesForNPLPorts(portTable *portcache.PortTable, allNPLPorts []rules.PodNodePort) error {
-	for _, nplPort := range allNPLPorts {
-		portTable.AddUpdateEntry(nplPort.NodePort, nplPort.PodPort, nplPort.PodIP)
-	}
-
-	if err := portTable.PodPortRules.AddAllRules(allNPLPorts); err != nil {
-		return err
-	}
-	return nil
-}
-
-// getPodsAndGenRules fetches all the Pods on this Node and looks for valid NPL Annotations, if they
-// exist with a valid Node Port, it adds the Node port to the port table and rules. If the Node port
-// is invalid or the NPL Annotation is invalid, the NPL Annotation is removed. The Pod event handlers
-// take care of allocating a new Node port if required.
-func getPodsAndGenRules(kubeClient clientset.Interface, portTable *portcache.PortTable,
-	nodeName string) error {
-	podList, err := kubeClient.CoreV1().Pods(metav1.NamespaceAll).List(context.TODO(), metav1.ListOptions{
-		FieldSelector: "spec.nodeName=" + nodeName,
-	})
-	if err != nil {
-		return fmt.Errorf("error in fetching the Pods for Node %s: %s", nodeName, err.Error())
-	}
-
-	allNPLPorts := []rules.PodNodePort{}
-	for i := range podList.Items {
-		// For each Pod:
-		// check if a valid NPL Annotation exists for this Pod:
-		//   if yes, verifiy validity of the Node port, update the port table and add a rule to the
-		//   rules buffer.
-		annotations := podList.Items[i].GetAnnotations()
-		nplAnnotation, ok := annotations[nplk8s.NPLAnnotationKey]
-		if !ok {
-			continue
-		}
-		nplData := []nplk8s.NPLAnnotation{}
-		err := json.Unmarshal([]byte(nplAnnotation), &nplData)
-		if err != nil {
-			// if there's an error in this NPL Annotation, clean it up
-			err := nplk8s.CleanupNPLAnnotationForPod(kubeClient, &podList.Items[i])
-			if err != nil {
-				return err
-			}
-			continue
-		}
-
-		for _, npl := range nplData {
-			if npl.NodePort > portTable.EndPort || npl.NodePort < portTable.StartPort {
-				// invalid port, cleanup the NPL Annotation
-				if err := nplk8s.CleanupNPLAnnotationForPod(kubeClient, &podList.Items[i]); err != nil {
-					return err
-				}
-				break
-			} else {
-				allNPLPorts = append(allNPLPorts, rules.PodNodePort{
-					NodePort: npl.NodePort,
-					PodPort:  npl.PodPort,
-					PodIP:    podList.Items[i].Status.PodIP,
-				})
-			}
-		}
-	}
-
-	if len(allNPLPorts) > 0 {
-		if err := addRulesForNPLPorts(portTable, allNPLPorts); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-// InitializeNPLAgent initializes the NodePortLocal (NPL) agent.
-// It initializes the port table cache to keep track of Node ports available for use by NPL,
-// sets up event handlers to handle Pod add, update and delete events.
+// InitializeNPLAgent initializes the NodePortLocal agent.
+// It sets up event handlers to handle Pod add, update and delete events.
 // When a Pod gets created, a free Node port is obtained from the port table cache and a DNAT rule is added to NAT traffic to the Pod's ip:port.
 func InitializeNPLAgent(kubeClient clientset.Interface, informerFactory informers.SharedInformerFactory, portRange, nodeName string) (*nplk8s.NPLController, error) {
 	start, end, err := util.ParsePortsRange(portRange)
@@ -125,16 +48,11 @@ func InitializeNPLAgent(kubeClient clientset.Interface, informerFactory informer
 	var ok bool
 	portTable, ok := portcache.NewPortTable(start, end)
 	if !ok {
-		return nil, errors.New("error in initializing NPL port table")
+		return nil, errors.New("error in initializing NodePortLocal port table")
 	}
 
 	err = portTable.PodPortRules.Init()
 	if err != nil {
-		return nil, err
-	}
-
-	klog.Info("Will fetch Pods and generate NPL rules for these Pods")
-	if err := getPodsAndGenRules(kubeClient, portTable, nodeName); err != nil {
 		return nil, err
 	}
 
@@ -162,7 +80,8 @@ func InitController(kubeClient clientset.Interface, informerFactory informers.Sh
 		podInformer,
 		svcInformer,
 		resyncPeriod,
-		portTable)
+		portTable,
+		nodeName)
 
 	return c, nil
 }

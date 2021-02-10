@@ -55,9 +55,9 @@ func isNodePortInAnnotation(s []NPLAnnotation, nodeport, cport int) bool {
 	return false
 }
 
-// IsNPLAnnotationRequired returns true if a new NPL Annotation value is required. It checks
-// for the Container Port, Node Port and the Pod IP in the existing list of the NPL Annotations
-// of the Pod.
+// IsNPLAnnotationRequired returns true if a new NodePortLocal annotation value is required. It
+// checks for the Container Port, Node Port and the Pod IP in the existing list of the
+// NodePortLocal annotation of the Pod.
 func IsNPLAnnotationRequired(annotations map[string]string, nodeIP string, containerPort, nodePort int) bool {
 	var nplAnnotations []NPLAnnotation
 	if annotations[NPLAnnotationKey] != "" {
@@ -84,9 +84,9 @@ func removeFromNPLAnnotation(annotations []NPLAnnotation, containerPort int) []N
 
 func (c *NPLController) updatePodNPLAnnotation(pod *corev1.Pod, annotations []NPLAnnotation) error {
 	if err := patchPod(annotations, pod, c.kubeClient); err != nil {
-		klog.Warningf("Unable to patch NPL annotations for Pod %s/%s: %s", pod.Namespace, pod.Name, err.Error())
+		klog.Warningf("Unable to patch NodePortLocal annotation for Pod %s/%s: %s", pod.Namespace, pod.Name, err.Error())
 	}
-	klog.V(2).Infof("Successfully updated annotation for Pod %s/%s", pod.Namespace, pod.Name)
+	klog.V(2).Infof("Successfully updated NodePortLocal annotation for Pod %s/%s", pod.Namespace, pod.Name)
 	return nil
 }
 
@@ -108,13 +108,13 @@ func patchPod(value []NPLAnnotation, pod *corev1.Pod, kubeClient clientset.Inter
 	payloadBytes, _ := json.Marshal(newPayload)
 	if _, err := kubeClient.CoreV1().Pods(pod.Namespace).Patch(context.TODO(), pod.Name, types.MergePatchType,
 		payloadBytes, metav1.PatchOptions{}); err != nil {
-		return fmt.Errorf("unable to update Annotation for Pod %s/%s: %s", pod.Namespace,
+		return fmt.Errorf("unable to update NodePortLocal annotation for Pod %s/%s: %s", pod.Namespace,
 			pod.Name, err.Error())
 	}
 	return nil
 }
 
-// CleanupNPLAnnotationForPod removes the NPL Annotation from the Pod's Annotations map entirely.
+// CleanupNPLAnnotationForPod removes the NodePortLocal annotation from the Pod's annotations map entirely.
 func CleanupNPLAnnotationForPod(kubeClient clientset.Interface, pod *corev1.Pod) error {
 	_, ok := pod.Annotations[NPLAnnotationKey]
 	if !ok {
