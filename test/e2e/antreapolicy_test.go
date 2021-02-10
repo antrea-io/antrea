@@ -1705,6 +1705,11 @@ func TestAntreaPolicy(t *testing.T) {
 		t.Run("Case=ACNPAllowXBtoA", func(t *testing.T) { testACNPAllowXBtoA(t) })
 		t.Run("Case=ACNPAllowXBtoYA", func(t *testing.T) { testACNPAllowXBtoYA(t) })
 		t.Run("Case=ACNPPriorityOverrideDefaultDeny", func(t *testing.T) { testACNPPriorityOverrideDefaultDeny(t) })
+		// The test group cleans up ACNP/ANPs before executing a test case. However, cleanupDefaultDenyNPs() validates
+		// that all Pod to Pod traffic is allowed without cleaning up Antrea-native policies, which fails if there is
+		// a lingering policy from a previous test run. Clean up all Antrea-native policies before exiting the group.
+		failOnError(k8sUtils.CleanACNPs(), t)
+		failOnError(k8sUtils.CleanANPs(namespaces), t)
 		cleanupDefaultDenyNPs(k8sUtils, namespaces)
 	})
 
