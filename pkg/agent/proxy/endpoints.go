@@ -149,7 +149,7 @@ func (t *endpointsChangesTracker) endpointsToEndpointsMap(endpoints *corev1.Endp
 			for i := range ss.Addresses {
 				addr := &ss.Addresses[i]
 				if addr.IP == "" {
-					klog.Warningf("ignoring invalid endpoint port %s with empty host", port.Name)
+					klog.Warningf("Ignoring invalid endpoint port %s with empty host", port.Name)
 					continue
 				}
 				isLocal := addr.NodeName != nil && *addr.NodeName == t.hostname
@@ -164,39 +164,14 @@ func (t *endpointsChangesTracker) endpointsToEndpointsMap(endpoints *corev1.Endp
 	return endpointsMap
 }
 
-// Update updates an EndpointsMap based on current changes and returns stale
-// Endpoints of each Service.
-func (t *endpointsChangesTracker) Update(em types.EndpointsMap) map[k8sproxy.ServicePortName]map[string]k8sproxy.Endpoint {
-	staleEndpoints := map[k8sproxy.ServicePortName]map[string]k8sproxy.Endpoint{}
+// Update updates an EndpointsMap based on current changes.
+func (t *endpointsChangesTracker) Update(em types.EndpointsMap) {
 	for _, change := range t.checkoutChanges() {
 		for spn := range change.previous {
 			delete(em, spn)
 		}
 		for spn, endpoints := range change.current {
 			em[spn] = endpoints
-		}
-		detectStaleConnections(change.previous, change.current, staleEndpoints)
-	}
-	return staleEndpoints
-}
-
-// detectStaleConnections updates staleEndpoints with detected stale connections.
-func detectStaleConnections(oldEndpointsMap, newEndpointsMap types.EndpointsMap, staleEndpoints map[k8sproxy.ServicePortName]map[string]k8sproxy.Endpoint) {
-	for svcPortName, epList := range oldEndpointsMap {
-		for _, ep := range epList {
-			stale := true
-			for i := range newEndpointsMap[svcPortName] {
-				if newEndpointsMap[svcPortName][i].Equal(ep) {
-					stale = false
-					break
-				}
-			}
-			if stale {
-				if _, ok := staleEndpoints[svcPortName]; !ok {
-					staleEndpoints[svcPortName] = map[string]k8sproxy.Endpoint{}
-				}
-				staleEndpoints[svcPortName][ep.String()] = ep
-			}
 		}
 	}
 }
