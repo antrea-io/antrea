@@ -172,8 +172,7 @@ func run(o *Options) error {
 		statsAggregator,
 		o.config.EnablePrometheusMetrics,
 		cipherSuites,
-		cipher.TLSVersionMap[o.config.TLSMinVersion],
-		o.config.EnableNamespaceLabelMutator)
+		cipher.TLSVersionMap[o.config.TLSMinVersion])
 	if err != nil {
 		return fmt.Errorf("error creating API server config: %v", err)
 	}
@@ -240,8 +239,7 @@ func createAPIServerConfig(kubeconfig string,
 	statsAggregator *stats.Aggregator,
 	enableMetrics bool,
 	cipherSuites []uint16,
-	tlsMinVersion uint16,
-	enableCustomAdmControllers bool) (*apiserver.Config, error) {
+	tlsMinVersion uint16) (*apiserver.Config, error) {
 	secureServing := genericoptions.NewSecureServingOptions().WithLoopback()
 	authentication := genericoptions.NewDelegatingAuthenticationOptions()
 	authorization := genericoptions.NewDelegatingAuthorizationOptions().WithAlwaysAllowPaths(allowedPaths...)
@@ -296,6 +294,5 @@ func createAPIServerConfig(kubeconfig string,
 		controllerQuerier,
 		networkPolicyStatusController,
 		endpointQuerier,
-		npController,
-		enableCustomAdmControllers), nil
+		npController), nil
 }

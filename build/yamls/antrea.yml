@@ -1500,16 +1500,12 @@ data:
 
     # TLS min version from: VersionTLS10, VersionTLS11, VersionTLS12, VersionTLS13.
     #tlsMinVersion:
-
-    # Enable Namespace label mutator webhook to mutate all Namespaces with the reserved
-    # "antrea.io/metadata.name = <namespaceName>" label.
-    #enableNamespaceLabelMutator: false
 kind: ConfigMap
 metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-g2575k2t76
+  name: antrea-config-md64tc85t9
   namespace: kube-system
 ---
 apiVersion: v1
@@ -1629,7 +1625,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-g2575k2t76
+          name: antrea-config-md64tc85t9
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -1893,7 +1889,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-g2575k2t76
+          name: antrea-config-md64tc85t9
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d
