@@ -11,6 +11,25 @@ Some experimental features can be enabled / disabled using [Feature Gates](docs/
 
 ## Unreleased
 
+## 0.12.1 - 2021-02-10
+
+### Changed
+
+- More uniform mechanism in the OVS pipeline to determine whether a MAC address rewrite is needed. ([#1597](https://github.com/vmware-tanzu/antrea/pull/1597) [#1754](https://github.com/vmware-tanzu/antrea/pull/1754), [@wenyingd] [@jianjuns])
+
+### Fixed
+
+- Send necessary updates to Antrea Agents when a Pod's IP address is updated, as otherwise NetworkPolicies are not enforced correctly. ([#1808](https://github.com/vmware-tanzu/antrea/pull/1808), [@Dyanngg] [@tnqn])
+- On Antrea Agent restart, ensure that OpenFlow priorities are assigned correctly for NetworkPolicy rules, and that rules with the same tier and priority are assigned the same OpenFlow priority. ([#1841](https://github.com/vmware-tanzu/antrea/pull/1841), [@Dyanngg])
+- Do not release the OpenFlow priority assigned to a NetworkPolicy rule in case of a transient error when installing the corresponding flows, if other rules are using the same OpenFlow priority. ([#1844](https://github.com/vmware-tanzu/antrea/pull/1844), [@Dyanngg])
+- Do not delete Endpoint flows when an Endpoint is no longer used for a specific Service (or if a Service is deleted) if these flows are still required by another Service. ([#1815](https://github.com/vmware-tanzu/antrea/pull/1815), [@weiqiangt])
+- Fix AntreaProxy implementation on Windows for ClusterIP Services with endpoints outside of the cluster's Pod CIDR, by ensuring that SNAT is performed correctly. ([#1824](https://github.com/vmware-tanzu/antrea/pull/1824), [@ruicao93]) [Windows]
+- More robust error handling for network adapter operations on Windows; in particular add a retry mechanism if enabling the network adapter fails. ([#1736](https://github.com/vmware-tanzu/antrea/pull/1736), [@ruicao93]) [Windows]
+- When the Antrea Agent process is run using the provided PowerShell script, ensure that the Kubeconfigs used by the Agent to connect to the K8s and Antrea Controller apiservers are updated on every restart. ([#1847](https://github.com/vmware-tanzu/antrea/pull/1847), [@ruicao93]) [Windows]
+- Fix bugs in IPv6 AntreaProxy implementation, notably for flow "hairpinning" and ServiceAffinity support. ([#1713](https://github.com/vmware-tanzu/antrea/pull/1713), [@lzhecheng])
+- Support non-standardized CIDRs (CIDRs for which some address bits may not have been masked off as per the prefix length) in NetworkPolicies. ([#1767](https://github.com/vmware-tanzu/antrea/pull/1767), [@tnqn])
+- Fix minimum required Linux Kernel version (4.6) in documentation. ([#1757](https://github.com/vmware-tanzu/antrea/pull/1757), [@hongliangl])
+
 ## 0.12.0 - 2020-12-22
 
 Includes all the changes from [0.11.1].
@@ -641,6 +660,7 @@ The Monitoring [CRDs] feature is graduated from Alpha to Beta.
 [@gran-vmv]: https://github.com/gran-vmv
 [@GraysonWu]: https://github.com/GraysonWu
 [@guesslin]: https://github.com/guesslin
+[@hongliangl]: https://github.com/hongliangl
 [@jakesokol1]: https://github.com/jakesokol1
 [@jayunit100]: https://github.com/jayunit100
 [@jianjuns]: https://github.com/jianjuns
