@@ -55,7 +55,7 @@ func getNPLAnnotation(t *testing.T, data *TestData, r *require.Assertions, testP
 		r.Nil(err, "Failed to get Pod")
 		ann := updatedPod.GetAnnotations()
 		t.Logf("Got annotation %v for pod IP %v", ann, testPodIP.ipv4.String())
-		nplAnn, found = ann[k8s.NPLAnnotationStr]
+		nplAnn, found = ann[k8s.NPLAnnotationKey]
 		return found, nil
 	})
 	r.Nil(err, "Poll for Pod Annotation check failed: %v", err)
