@@ -60,14 +60,15 @@ NetworkPolicy implementation for Pod-to-Service traffic.
 
 `EndpointSlice` enables Service EndpointSlice support in AntreaProxy. The
 EndpointSlice API was introduced in Kubernetes 1.16 (alpha) and it is enabled
-by default in Kubernetes 1.17 (beta). This flag will take no effect if AntreaProxy
-is not enabled. The endpoint conditions of `Serving` and `Terminating` are not
-supported currently. ServiceTopology is not supported either. Refer to this [link](https://kubernetes.io/docs/tasks/administer-cluster/enabling-endpointslices/)
-for more information. EndpointSlice API version that AntreaProxy supports is v1beta1
+by default in Kubernetes 1.17 (beta). The EndpointSlice feature gate will take no
+effect if AntreaProxy is not enabled. The endpoint conditions of `Serving` and
+`Terminating` are not supported currently. ServiceTopology is not supported either.
+Refer to this [link](https://kubernetes.io/docs/tasks/administer-cluster/enabling-endpointslices/)
+for more information. The EndpointSlice API version that AntreaProxy supports is v1beta1
 currently, and other EndpointSlice API versions are not supported. If EndpointSlice is
 enabled in AntreaProxy, but EndpointSlice API is disabled in Kubernetes or EndpointSlice
-API version v1beta1 is not supported in Kubernetes, error messages will be logged by
-Antrea Agents and AntreaProxy will not implement Cluster IP functionality as expected.
+API version v1beta1 is not supported in Kubernetes, Antrea Agent will log an error message
+and will not implement Cluster IP functionality as expected.
 
 #### Requirements for this Feature
 

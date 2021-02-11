@@ -28,7 +28,7 @@ limitations under the License.
 // limitations under the License.
 //
 // Original file https://raw.githubusercontent.com/kubernetes/kubernetes/0c0d4fea8dd6bdcd16b9e1d35da3f7d209341a6f/pkg/proxy/endpointslicecache.go
-// If this file is located in third_party, there will be an import cycle issue when build Antrea as this file import
+// If this file is located in third_party, there will be an import cycle issue when building Antrea as this file imports
 // "github.com/vmware-tanzu/antrea/pkg/agent/proxy/types".
 // Remove makeEndpointInfo and recorder in fields.
 // Remove unused standardEndpointInfo.

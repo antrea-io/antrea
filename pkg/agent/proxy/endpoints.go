@@ -114,17 +114,17 @@ func (t *endpointsChangesTracker) OnEndpointUpdate(previous, current *corev1.End
 func (t *endpointsChangesTracker) OnEndpointSliceUpdate(endpointSlice *discovery.EndpointSlice, removeSlice bool) bool {
 	// This should never happen.
 	if endpointSlice == nil {
-		klog.Error("Nil endpointSlice passed to EndpointSliceUpdate")
+		klog.Error("Nil EndpointSlice passed to EndpointSliceUpdate")
 		return false
 	}
 
 	if _, has := supportedEndpointSliceAddressTypes[endpointSlice.AddressType]; !has {
-		klog.V(4).Infof("EndpointSlice address type not supported: %s", endpointSlice.AddressType)
+		klog.V(4).Infof("EndpointSlice address type is not supported: %s", endpointSlice.AddressType)
 		return false
 	}
 
 	if _, _, err := endpointSliceCacheKeys(endpointSlice); err != nil {
-		klog.Warningf("Error getting endpoint slice cache keys: %v", err)
+		klog.Warningf("Got EndpointSlice cache keys with error: %v", err)
 		return false
 	}
 
