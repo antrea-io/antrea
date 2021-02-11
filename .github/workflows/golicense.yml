@@ -58,6 +58,7 @@ jobs:
         mkdir license-reports
         ./ci/golicense/run.sh ./antrea-bins ./license-reports
     - name: Upload licensing information
+      if: ${{ always() }}
       uses: actions/upload-artifact@v2
       with:
         name: licenses.deps
