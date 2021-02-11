@@ -17,7 +17,6 @@
 package k8s
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"reflect"
@@ -28,7 +27,6 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/nodeportlocal/rules"
 
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -391,7 +389,7 @@ func (c *NPLController) handleAddUpdatePod(key string, obj interface{}) error {
 			return err
 		}
 		if _, exists := pod.Annotations[NPLAnnotationKey]; exists {
-			return CleanupNPLAnnotationForPod(c.kubeClient, pod)
+			return c.cleanupNPLAnnotationForPod(pod)
 		}
 		return nil
 	}
@@ -407,8 +405,7 @@ func (c *NPLController) handleAddUpdatePod(key string, obj interface{}) error {
 	podAnnotation, nplExists := pod.GetAnnotations()[NPLAnnotationKey]
 	if nplExists {
 		if err := json.Unmarshal([]byte(podAnnotation), &nplAnnotations); err != nil {
-			klog.Warningf("Unable to unmarshal NodePortLocal annotation for Pod %s/%s",
-				pod.Namespace, pod.Name)
+			klog.Warningf("Unable to unmarshal NodePortLocal annotation for Pod %s", key)
 			return nil
 		}
 	}
@@ -458,20 +455,18 @@ func (c *NPLController) handleAddUpdatePod(key string, obj interface{}) error {
 // is invalid or the NodePortLocal annotation is invalid, the NodePortLocal annotation is removed. The Pod
 // event handlers take care of allocating a new Node port if required.
 func (c *NPLController) GetPodsAndGenRules() error {
-	podList, err := c.kubeClient.CoreV1().Pods(metav1.NamespaceAll).List(context.TODO(), metav1.ListOptions{
-		FieldSelector: "spec.nodeName=" + c.nodeName,
-	})
+	podList, err := c.podLister.List(labels.Everything())
 	if err != nil {
 		return fmt.Errorf("error in fetching the Pods for Node %s: %s", c.nodeName, err.Error())
 	}
 
 	allNPLPorts := []rules.PodNodePort{}
-	for i := range podList.Items {
+	for i := range podList {
 		// For each Pod:
 		// check if a valid NodePortLocal annotation exists for this Pod:
 		//   if yes, verifiy validity of the Node port, update the port table and add a rule to the
 		//   rules buffer.
-		annotations := podList.Items[i].GetAnnotations()
+		annotations := podList[i].GetAnnotations()
 		nplAnnotation, ok := annotations[NPLAnnotationKey]
 		if !ok {
 			continue
@@ -480,7 +475,7 @@ func (c *NPLController) GetPodsAndGenRules() error {
 		err := json.Unmarshal([]byte(nplAnnotation), &nplData)
 		if err != nil {
 			// if there's an error in this NodePortLocal annotation, clean it up
-			err := CleanupNPLAnnotationForPod(c.kubeClient, &podList.Items[i])
+			err := c.cleanupNPLAnnotationForPod(podList[i])
 			if err != nil {
 				return err
 			}
@@ -490,7 +485,7 @@ func (c *NPLController) GetPodsAndGenRules() error {
 		for _, npl := range nplData {
 			if npl.NodePort > c.portTable.EndPort || npl.NodePort < c.portTable.StartPort {
 				// invalid port, cleanup the NodePortLocal annotation
-				if err := CleanupNPLAnnotationForPod(c.kubeClient, &podList.Items[i]); err != nil {
+				if err := c.cleanupNPLAnnotationForPod(podList[i]); err != nil {
 					return err
 				}
 				break
@@ -498,7 +493,7 @@ func (c *NPLController) GetPodsAndGenRules() error {
 				allNPLPorts = append(allNPLPorts, rules.PodNodePort{
 					NodePort: npl.NodePort,
 					PodPort:  npl.PodPort,
-					PodIP:    podList.Items[i].Status.PodIP,
+					PodIP:    podList[i].Status.PodIP,
 				})
 			}
 		}
@@ -522,4 +517,13 @@ func (c *NPLController) addRulesForNPLPorts(allNPLPorts []rules.PodNodePort) err
 		return err
 	}
 	return nil
+}
+
+// cleanupNPLAnnotationForPod removes the NodePortLocal annotation from the Pod's annotations map entirely.
+func (c *NPLController) cleanupNPLAnnotationForPod(pod *corev1.Pod) error {
+	_, ok := pod.Annotations[NPLAnnotationKey]
+	if !ok {
+		return nil
+	}
+	return patchPod(nil, pod, c.kubeClient)
 }

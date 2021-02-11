@@ -113,12 +113,3 @@ func patchPod(value []NPLAnnotation, pod *corev1.Pod, kubeClient clientset.Inter
 	}
 	return nil
 }
-
-// CleanupNPLAnnotationForPod removes the NodePortLocal annotation from the Pod's annotations map entirely.
-func CleanupNPLAnnotationForPod(kubeClient clientset.Interface, pod *corev1.Pod) error {
-	_, ok := pod.Annotations[NPLAnnotationKey]
-	if !ok {
-		return nil
-	}
-	return patchPod(nil, pod, kubeClient)
-}
