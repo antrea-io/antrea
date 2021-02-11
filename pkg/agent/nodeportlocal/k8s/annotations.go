@@ -46,42 +46,6 @@ func toJSON(serialize interface{}) string {
 	return string(jsonMarshalled)
 }
 
-func isNodePortInAnnotation(s []NPLAnnotation, nodeport, cport int) bool {
-	for _, i := range s {
-		if i.NodePort == nodeport && i.PodPort == cport {
-			return true
-		}
-	}
-	return false
-}
-
-// IsNPLAnnotationRequired returns true if a new NodePortLocal annotation value is required. It
-// checks for the Container Port, Node Port and the Pod IP in the existing list of the
-// NodePortLocal annotation of the Pod.
-func IsNPLAnnotationRequired(annotations map[string]string, nodeIP string, containerPort, nodePort int) bool {
-	var nplAnnotations []NPLAnnotation
-	if annotations[NPLAnnotationKey] != "" {
-		if err := json.Unmarshal([]byte(annotations[NPLAnnotationKey]), &nplAnnotations); err != nil {
-			klog.Warningf("Unable to unmarshal NodePortLocal annotation: %v", annotations[NPLAnnotationKey])
-		}
-	}
-	if isNodePortInAnnotation(nplAnnotations, nodePort, containerPort) {
-		// no updates required to the Pod
-		return false
-	}
-	return true
-}
-
-func removeFromNPLAnnotation(annotations []NPLAnnotation, containerPort int) []NPLAnnotation {
-	for i, ann := range annotations {
-		if ann.PodPort == containerPort {
-			annotations = append(annotations[:i], annotations[i+1:]...)
-			break
-		}
-	}
-	return annotations
-}
-
 func (c *NPLController) updatePodNPLAnnotation(pod *corev1.Pod, annotations []NPLAnnotation) error {
 	if err := patchPod(annotations, pod, c.kubeClient); err != nil {
 		klog.Warningf("Unable to patch NodePortLocal annotation for Pod %s/%s: %v", pod.Namespace, pod.Name, err)
