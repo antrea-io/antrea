@@ -29,6 +29,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow/cookie"
 	"github.com/vmware-tanzu/antrea/pkg/agent/types"
 	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
+	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsctl"
 	"github.com/vmware-tanzu/antrea/pkg/util/runtime"
 	"github.com/vmware-tanzu/antrea/third_party/proxy"
@@ -350,6 +351,8 @@ type client struct {
 	nodeConfig    *config.NodeConfig
 	encapMode     config.TrafficEncapModeType
 	gatewayOFPort uint32
+	// ovsDatapathType is the type of the datapath used by the bridge.
+	ovsDatapathType ovsconfig.OVSDatapathType
 	// packetInHandlers stores handler to process PacketIn event. Each packetin reason can have multiple handlers registered.
 	// When a packetin arrives, openflow send packet to registered handlers in this map.
 	packetInHandlers map[uint8]map[string]PacketInHandler
@@ -1436,14 +1439,31 @@ func (c *client) defaultDropFlow(tableID binding.TableIDType, matchKey *types.Ma
 		Done()
 }
 
-// localProbeFlow generates the flow to forward packets to conntrackCommitTable. The packets are sent from Node to probe the liveness/readiness of local Pods.
+// localProbeFlow generates the flow to forward locally generated packets to conntrackCommitTable, bypassing ingress
+// rules of Network Policies. The packets are sent by kubelet to probe the liveness/readiness of local Pods.
+// On Linux and when OVS kernel datapath is used, it identifies locally generated packets by matching the
+// HostLocalSourceMark, otherwise it matches the source IP. The difference is because:
+// 1. On Windows, kube-proxy userspace mode is used, and currently there is no way to distinguish kubelet generated
+//    traffic from kube-proxy proxied traffic.
+// 2. pkt_mark field is not properly supported for OVS userspace (netdev) datapath.
+// Note that there is a defect in the latter way that NodePort Service access by external clients will be masqueraded as
+// a local gateway IP to bypass Network Policies. See https://github.com/vmware-tanzu/antrea/issues/280.
+// TODO: Fix it after replacing kube-proxy with AntreaProxy.
 func (c *client) localProbeFlow(localGatewayIPs []net.IP, category cookie.Category) []binding.Flow {
 	var flows []binding.Flow
-	for _, ip := range localGatewayIPs {
-		ipProtocol := getIPProtocol(ip)
+	if runtime.IsWindowsPlatform() || c.ovsDatapathType == ovsconfig.OVSDatapathNetdev {
+		for _, ip := range localGatewayIPs {
+			ipProtocol := getIPProtocol(ip)
+			flows = append(flows, c.pipeline[IngressRuleTable].BuildFlow(priorityHigh).
+				MatchProtocol(ipProtocol).
+				MatchSrcIP(ip).
+				Action().GotoTable(conntrackCommitTable).
+				Cookie(c.cookieAllocator.Request(category).Raw()).
+				Done())
+		}
+	} else {
 		flows = append(flows, c.pipeline[IngressRuleTable].BuildFlow(priorityHigh).
-			MatchProtocol(ipProtocol).
-			MatchSrcIP(ip).
+			MatchPktMark(types.HostLocalSourceMark, &types.HostLocalSourceMark).
 			Action().GotoTable(conntrackCommitTable).
 			Cookie(c.cookieAllocator.Request(category).Raw()).
 			Done())
@@ -1954,7 +1974,7 @@ func (c *client) generatePipeline() {
 }
 
 // NewClient is the constructor of the Client interface.
-func NewClient(bridgeName, mgmtAddr string, enableProxy, enableAntreaPolicy bool) Client {
+func NewClient(bridgeName, mgmtAddr string, ovsDatapathType ovsconfig.OVSDatapathType, enableProxy, enableAntreaPolicy bool) Client {
 	bridge := binding.NewOFBridge(bridgeName, mgmtAddr)
 	policyCache := cache.NewIndexer(
 		policyConjKeyFunc,
@@ -1972,6 +1992,7 @@ func NewClient(bridgeName, mgmtAddr string, enableProxy, enableAntreaPolicy bool
 		globalConjMatchFlowCache: map[string]*conjMatchFlowContext{},
 		packetInHandlers:         map[uint8]map[string]PacketInHandler{},
 		ovsctlClient:             ovsctl.NewClient(bridgeName),
+		ovsDatapathType:          ovsDatapathType,
 	}
 	c.ofEntryOperations = c
 	if enableAntreaPolicy {
