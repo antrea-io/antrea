@@ -32,7 +32,8 @@ const (
 	defaultExternalFlowCollectorTransport = "tcp"
 	defaultExternalFlowCollectorPort      = "4739"
 	defaultFlowExportInterval             = 60 * time.Second
-	defaultAggregatorTransportProtocol    = flowaggregator.AggregatorTransportProtocolTCP
+	defaultAggregatorTransportProtocol    = flowaggregator.AggregatorTransportProtocolTLS
+	defaultFlowAggregatorAddress          = "flow-aggregator.flow-aggregator.svc"
 )
 
 type Options struct {
@@ -48,6 +49,8 @@ type Options struct {
 	exportInterval time.Duration
 	// Transport protocol over which the aggregator collects IPFIX records from all Agents
 	aggregatorTransportProtocol flowaggregator.AggregatorTransportProtocol
+	// DNS name or IP address of flow aggregator for generating TLS certificate
+	flowAggregatorAddress string
 }
 
 func newOptions() *Options {
@@ -104,6 +107,11 @@ func (o *Options) validate(args []string) error {
 			return err
 		}
 		o.aggregatorTransportProtocol = transportProtocol
+	}
+	if o.config.flowAggregatorAddress == "" {
+		o.flowAggregatorAddress = defaultFlowAggregatorAddress
+	} else {
+		o.flowAggregatorAddress = o.config.flowAggregatorAddress
 	}
 	return nil
 }
