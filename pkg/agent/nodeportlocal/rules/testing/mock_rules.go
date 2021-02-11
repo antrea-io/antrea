@@ -1,4 +1,4 @@
-// Copyright 2020 Antrea Authors
+// Copyright 2021 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@ package testing
 
 import (
 	gomock "github.com/golang/mock/gomock"
+	rules "github.com/vmware-tanzu/antrea/pkg/agent/nodeportlocal/rules"
 	reflect "reflect"
 )
 
@@ -45,6 +46,20 @@ func NewMockPodPortRules(ctrl *gomock.Controller) *MockPodPortRules {
 // EXPECT returns an object that allows the caller to indicate expected use
 func (m *MockPodPortRules) EXPECT() *MockPodPortRulesMockRecorder {
 	return m.recorder
+}
+
+// AddAllRules mocks base method
+func (m *MockPodPortRules) AddAllRules(arg0 []rules.PodNodePort) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddAllRules", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AddAllRules indicates an expected call of AddAllRules
+func (mr *MockPodPortRulesMockRecorder) AddAllRules(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddAllRules", reflect.TypeOf((*MockPodPortRules)(nil).AddAllRules), arg0)
 }
 
 // AddRule mocks base method
@@ -87,21 +102,6 @@ func (m *MockPodPortRules) DeleteRule(arg0 int, arg1 string) error {
 func (mr *MockPodPortRulesMockRecorder) DeleteRule(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteRule", reflect.TypeOf((*MockPodPortRules)(nil).DeleteRule), arg0, arg1)
-}
-
-// GetAllRules mocks base method
-func (m *MockPodPortRules) GetAllRules() (map[int]string, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetAllRules")
-	ret0, _ := ret[0].(map[int]string)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetAllRules indicates an expected call of GetAllRules
-func (mr *MockPodPortRulesMockRecorder) GetAllRules() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAllRules", reflect.TypeOf((*MockPodPortRules)(nil).GetAllRules))
 }
 
 // Init mocks base method

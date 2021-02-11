@@ -17,9 +17,8 @@
 package rules
 
 import (
+	"bytes"
 	"fmt"
-	"strconv"
-	"strings"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/util/iptables"
 
@@ -30,15 +29,15 @@ import (
 const NodePortLocalChain = "ANTREA-NODE-PORT-LOCAL"
 
 // IPTableRules provides a client to perform IPTABLES operations
-type IPTableRules struct {
+type iptablesRules struct {
 	name  string
 	table *iptables.Client
 }
 
 // NewIPTableRules retruns a new instance of IPTableRules
-func NewIPTableRules() *IPTableRules {
+func NewIPTableRules() *iptablesRules {
 	iptInstance, _ := iptables.New(true, false)
-	iptRule := IPTableRules{
+	iptRule := iptablesRules{
 		name:  "NPL",
 		table: iptInstance,
 	}
@@ -46,17 +45,13 @@ func NewIPTableRules() *IPTableRules {
 }
 
 // Init initializes IPTABLES rules for NPL. Currently it deletes existing rules to ensure that no stale entries are present.
-func (ipt *IPTableRules) Init() error {
-	err := ipt.DeleteAllRules()
-	if err != nil {
-		return err
-	}
+func (ipt *iptablesRules) Init() error {
 	return ipt.CreateChains()
 }
 
 // CreateChains creates the chain NodePortLocalChain in NAT table.
 // All DNAT rules for NPL would be added in this chain.
-func (ipt *IPTableRules) CreateChains() error {
+func (ipt *iptablesRules) CreateChains() error {
 	err := ipt.table.EnsureChain(iptables.NATTable, NodePortLocalChain)
 	if err != nil {
 		return fmt.Errorf("IPTABLES chain creation in NAT table failed for NPL with error: %v", err)
@@ -72,7 +67,7 @@ func (ipt *IPTableRules) CreateChains() error {
 }
 
 // AddRule appends a DNAT rule in NodePortLocalChain chain of NAT table
-func (ipt *IPTableRules) AddRule(port int, podIP string) error {
+func (ipt *iptablesRules) AddRule(port int, podIP string) error {
 	ruleSpec := []string{
 		"-p", "tcp", "-m", "tcp", "--dport",
 		fmt.Sprint(port), "-j", "DNAT", "--to-destination", podIP,
@@ -85,8 +80,32 @@ func (ipt *IPTableRules) AddRule(port int, podIP string) error {
 	return nil
 }
 
+// AddAllRules constructs a list of iptables rules for the NPL chain and performs a
+// iptables-restore on this chain. It uses --no-flush to keep the previous rules intact.
+func (ipt *iptablesRules) AddAllRules(nplList []PodNodePort) error {
+	iptablesData := bytes.NewBuffer(nil)
+	writeLine(iptablesData, "*nat")
+	writeLine(iptablesData, iptables.MakeChainLine(NodePortLocalChain))
+	for _, nplData := range nplList {
+		destination := nplData.PodIP + ":" + fmt.Sprint(nplData.PodPort)
+		writeLine(iptablesData, []string{
+			"-A", NodePortLocalChain,
+			"-p", "tcp",
+			"-m", "tcp",
+			"--dport", fmt.Sprint(nplData.NodePort),
+			"-j", "DNAT",
+			"--to-destination", destination,
+		}...)
+	}
+	writeLine(iptablesData, "COMMIT")
+	if err := ipt.table.Restore(iptablesData.Bytes(), false, false); err != nil {
+		return err
+	}
+	return nil
+}
+
 // DeleteRule deletes a specific NPL rule from NodePortLocalChain chain
-func (ipt *IPTableRules) DeleteRule(port int, podip string) error {
+func (ipt *iptablesRules) DeleteRule(port int, podip string) error {
 	klog.Infof("Deleting rule with port %v and podip %v", port, podip)
 	ruleSpec := []string{
 		"-p", "tcp", "-m", "tcp", "--dport",
@@ -99,37 +118,8 @@ func (ipt *IPTableRules) DeleteRule(port int, podip string) error {
 	return nil
 }
 
-// GetAllRules obtains list of all NPL rules programmed in the node
-func (ipt *IPTableRules) GetAllRules() (map[int]string, error) {
-	m := make(map[int]string)
-	rules, err := ipt.table.ListRules(iptables.NATTable, NodePortLocalChain)
-	if err != nil {
-		return m, fmt.Errorf("failed to list IPTABLES rules for NPL: %v", err)
-	}
-	for i := range rules {
-		splitRule := strings.Fields(rules[i])
-		// A rule has details about the node port, port ip and port number.
-		// e.g.:  -A NODE-PORT-LOCAL -p tcp -m tcp --dport 45000 -j DNAT --to-destination 10.244.0.43:8080
-		if len(splitRule) != 12 {
-			continue
-		}
-		port, err := strconv.Atoi(splitRule[7])
-		if err != nil {
-			klog.Warningf("Failed to convert port string to int: %v", err)
-			continue
-		}
-		nodeipPort := strings.Split(splitRule[11], ":")
-		if len(nodeipPort) != 2 {
-			continue
-		}
-		//TODO: Need to check whether it's a proper ip:port combination
-		m[port] = splitRule[11]
-	}
-	return m, nil
-}
-
 // DeleteAllRules deletes all NPL rules programmed in the node
-func (ipt *IPTableRules) DeleteAllRules() error {
+func (ipt *iptablesRules) DeleteAllRules() error {
 	exists, err := ipt.table.ChainExists(iptables.NATTable, NodePortLocalChain)
 	if err != nil {
 		return fmt.Errorf("failed to check if NodePortLocal chain exists in NAT table: %v", err)
@@ -150,4 +140,17 @@ func (ipt *IPTableRules) DeleteAllRules() error {
 		return fmt.Errorf("failed to delete NodePortLocal Chain from NAT table: %v", err)
 	}
 	return nil
+}
+
+// Join all words with spaces, terminate with newline and write to buf.
+func writeLine(buf *bytes.Buffer, words ...string) {
+	// We avoid strings.Join for performance reasons.
+	for i := range words {
+		buf.WriteString(words[i])
+		if i < len(words)-1 {
+			buf.WriteByte(' ')
+		} else {
+			buf.WriteByte('\n')
+		}
+	}
 }

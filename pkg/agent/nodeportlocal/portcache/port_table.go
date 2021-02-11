@@ -50,6 +50,12 @@ func NewPortTable(start, end int) (*PortTable, bool) {
 	return &ptable, ok
 }
 
+func (pt *PortTable) CleanupAllEntries() {
+	pt.tableLock.Lock()
+	defer pt.tableLock.Unlock()
+	pt.Table = make(map[int]NodePortData)
+}
+
 func (pt *PortTable) AddUpdateEntry(nodeport, podport int, podip string) {
 	pt.tableLock.Lock()
 	defer pt.tableLock.Unlock()

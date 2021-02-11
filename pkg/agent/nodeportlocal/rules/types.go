@@ -1,6 +1,4 @@
-// +build !windows
-
-// Copyright 2020 Antrea Authors
+// Copyright 2021 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,17 +14,9 @@
 
 package rules
 
-// PodPortRules is an interface to abstract operations on rules for Pods
-type PodPortRules interface {
-	Init() error
-	AddRule(port int, podip string) error
-	DeleteRule(port int, podip string) error
-	DeleteAllRules() error
-	AddAllRules(nplList []PodNodePort) error
-}
-
-// InitRules initializes rules based on the underlying implementation
-func InitRules() PodPortRules {
-	// Currently we only support IPTABLES. Later this can be extended based on the system capability.
-	return NewIPTableRules()
+// PodNodePort contains the Node Port, Pod Port and the Pod IP for NodePortLocal.
+type PodNodePort struct {
+	NodePort int
+	PodPort  int
+	PodIP    string
 }

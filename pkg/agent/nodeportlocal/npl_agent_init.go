@@ -37,24 +37,25 @@ import (
 // UpdateFunc event handler will be called only when the object is actually updated.
 const resyncPeriod = 0 * time.Minute
 
-// InitializeNPLAgent initializes the NodePortLocal (NPL) agent.
-// It initializes the port table cache to keep track of Node ports available for use by NPL,
-// sets up event handlers to handle Pod add, update and delete events.
+// InitializeNPLAgent initializes the NodePortLocal agent.
+// It sets up event handlers to handle Pod add, update and delete events.
 // When a Pod gets created, a free Node port is obtained from the port table cache and a DNAT rule is added to NAT traffic to the Pod's ip:port.
 func InitializeNPLAgent(kubeClient clientset.Interface, informerFactory informers.SharedInformerFactory, portRange, nodeName string) (*nplk8s.NPLController, error) {
 	start, end, err := util.ParsePortsRange(portRange)
 	if err != nil {
-		return nil, fmt.Errorf("something went wrong while fetching port range: %v", err)
+		return nil, fmt.Errorf("error while fetching port range: %v", err)
 	}
 	var ok bool
 	portTable, ok := portcache.NewPortTable(start, end)
 	if !ok {
-		return nil, errors.New("NPL port table could not be initialized")
+		return nil, errors.New("error when initializing NodePortLocal port table")
 	}
+
 	err = portTable.PodPortRules.Init()
 	if err != nil {
 		return nil, fmt.Errorf("NPL rules for pod ports could not be initialized, error: %v", err)
 	}
+
 	return InitController(kubeClient, informerFactory, portTable, nodeName)
 }
 
@@ -79,8 +80,8 @@ func InitController(kubeClient clientset.Interface, informerFactory informers.Sh
 		podInformer,
 		svcInformer,
 		resyncPeriod,
-		portTable)
-	c.RemoveNPLAnnotationFromPods()
+		portTable,
+		nodeName)
 
 	return c, nil
 }
