@@ -390,7 +390,7 @@ func TestFilterInternalGroupsForPodOrExternalEntity(t *testing.T) {
 	grp5 := &antreatypes.Group{
 		UID:      "uid5",
 		Name:     "cgE",
-		Selector: *toGroupSelector("", nil, nil, &eeSelectorSpec),
+		Selector: toGroupSelector("", nil, nil, &eeSelectorSpec),
 	}
 
 	pod1 := getPod("pod1", "ns1", "node1", "1.1.1.1", false)
