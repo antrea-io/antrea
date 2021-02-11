@@ -210,6 +210,7 @@ func testClusterIPRemoval(t *testing.T, svcIP net.IP, epIP net.IP, isIPv6 bool) 
 	fp.syncProxyRules()
 
 	fp.serviceChanges.OnServiceUpdate(service, nil)
+	fp.endpointsChanges.OnEndpointUpdate(ep, nil)
 	fp.syncProxyRules()
 }
 
