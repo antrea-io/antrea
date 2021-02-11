@@ -348,3 +348,34 @@ func TestCreateAddressGroupForClusterGroupCRD(t *testing.T) {
 		})
 	}
 }
+
+func TestCreateAppliedToGroupForClusterGroupCRD(t *testing.T) {
+	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
+	igA := antreatypes.Group{
+		UID:      "uidA",
+		Name:     "cgA",
+		Selector: *toGroupSelector("", nil, &selectorA, nil),
+	}
+	tests := []struct {
+		name                    string
+		inG                     *antreatypes.Group
+		expectedKey             string
+		expectedAppliedToGroups int
+	}{
+		{
+			name:                    "cluster-group-with-selector",
+			inG:                     &igA,
+			expectedKey:             igA.Name,
+			expectedAppliedToGroups: 1,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, c := newController()
+			c.internalGroupStore.Create(tt.inG)
+			actualKey := c.createAppliedToGroupForClusterGroupCRD(tt.inG)
+			assert.Equal(t, tt.expectedKey, actualKey)
+			assert.Equal(t, tt.expectedAppliedToGroups, len(c.appliedToGroupStore.List()))
+		})
+	}
+}
