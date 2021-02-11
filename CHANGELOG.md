@@ -11,6 +11,23 @@ Some experimental features can be enabled / disabled using [Feature Gates](docs/
 
 ## Unreleased
 
+## 0.11.2 - 2021-02-11
+
+### Fixed
+
+- Send necessary updates to Antrea Agents when a Pod's IP address is updated, as otherwise NetworkPolicies are not enforced correctly. ([#1808](https://github.com/vmware-tanzu/antrea/pull/1808), [@Dyanngg] [@tnqn])
+- On Antrea Agent restart, ensure that OpenFlow priorities are assigned correctly for NetworkPolicy rules, and that rules with the same tier and priority are assigned the same OpenFlow priority. ([#1841](https://github.com/vmware-tanzu/antrea/pull/1841), [@Dyanngg])
+- Do not release the OpenFlow priority assigned to a NetworkPolicy rule in case of a transient error when installing the corresponding flows, if other rules are using the same OpenFlow priority. ([#1844](https://github.com/vmware-tanzu/antrea/pull/1844), [@Dyanngg])
+- Do not delete Endpoint flows when an Endpoint is no longer used for a specific Service (or if a Service is deleted) if these flows are still required by another Service. ([#1815](https://github.com/vmware-tanzu/antrea/pull/1815), [@weiqiangt])
+- Fix bugs in IPv6 AntreaProxy implementation, notably for flow "hairpinning" and ServiceAffinity support. ([#1713](https://github.com/vmware-tanzu/antrea/pull/1713), [@lzhecheng])
+- Support non-standardized CIDRs (CIDRs for which some address bits may not have been masked off as per the prefix length) in NetworkPolicies. ([#1767](https://github.com/vmware-tanzu/antrea/pull/1767), [@tnqn])
+- Fix minimum required Linux Kernel version (4.6) in documentation. ([#1757](https://github.com/vmware-tanzu/antrea/pull/1757), [@hongliangl])
+- Fix Agent crash when creating an Antrea-native policy with a "drop" action, while the NetworkPolicyStats feature is enabled. ([#1606](https://github.com/vmware-tanzu/antrea/pull/1606), [@ceclinux])
+- Fix Traceflow when Antrea-native policies are created with a "drop" action. ([#1602](https://github.com/vmware-tanzu/antrea/pull/1602), [@gran-vmv] [@lzhecheng])
+- Fix Agent crash when enabling NetworkPolicyStats and Traceflow feature together and creating an Antrea-native policy with a "drop" action. ([#1615](https://github.com/vmware-tanzu/antrea/pull/1615), [@tnqn])
+- When the destination is a Service in a Traceflow request, do not overwrite the default TCP SYN flag (needed for the packet to be processed by AntreaProxy correctly) unless the user explicitly provided a non-zero value. ([#1602](https://github.com/vmware-tanzu/antrea/pull/1602), [@gran-vmv] [@lzhecheng])
+- Improve handling of transient OVS errors when installing flows for policy rules in the Agent, by ensuring that retries are executed correctly. ([#1667](https://github.com/vmware-tanzu/antrea/pull/1667), [@tnqn])
+
 ## 0.11.1 - 2020-11-20
 
 ### Fixed
@@ -584,10 +601,12 @@ The Monitoring [CRDs] feature is graduated from Alpha to Beta.
 [@alex-vmw]: https://github.com/alex-vmw
 [@andrewsykim]: https://github.com/andrewsykim
 [@antoninbas]: https://github.com/antoninbas
+[@ceclinux]: https://github.com/ceclinux
 [@dreamtalen]: https://github.com/dreamtalen
 [@Dyanngg]: https://github.com/Dyanngg
 [@gran-vmv]: https://github.com/gran-vmv
 [@GraysonWu]: https://github.com/GraysonWu
+[@hongliangl]: https://github.com/hongliangl
 [@jakesokol1]: https://github.com/jakesokol1
 [@jayunit100]: https://github.com/jayunit100
 [@jianjuns]: https://github.com/jianjuns
