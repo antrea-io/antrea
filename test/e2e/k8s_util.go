@@ -311,6 +311,7 @@ func (k *KubernetesUtils) CreateOrUpdateCG(name string, pSelector, nSelector *me
 		cgr, err := k.crdClient.CoreV1alpha2().ClusterGroups().Create(context.TODO(), cg, metav1.CreateOptions{})
 		if err != nil {
 			log.Infof("unable to create cluster group %s: %v", name, err)
+			return nil, err
 		}
 		return cgr, nil
 	} else if cgReturned.Name != "" {

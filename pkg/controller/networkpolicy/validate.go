@@ -640,7 +640,7 @@ func (t *tierValidator) deleteValidate(oldObj interface{}, userInfo authenticati
 // podSelector.
 func validateAntreaGroupSelectors(s corev1a2.GroupSpec) (string, bool) {
 	if s.IPBlock != nil {
-		if s.NamespaceSelector != nil && s.PodSelector != nil {
+		if s.NamespaceSelector != nil || s.PodSelector != nil {
 			return fmt.Sprint("cluster group IPBlock cannot be set with other selectors"), false
 		}
 	}
