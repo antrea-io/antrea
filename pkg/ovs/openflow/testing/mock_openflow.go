@@ -1593,6 +1593,20 @@ func (mr *MockFlowBuilderMockRecorder) MatchInPort(arg0 interface{}) *gomock.Cal
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchInPort", reflect.TypeOf((*MockFlowBuilder)(nil).MatchInPort), arg0)
 }
 
+// MatchPktMark mocks base method
+func (m *MockFlowBuilder) MatchPktMark(arg0 uint32, arg1 *uint32) openflow.FlowBuilder {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MatchPktMark", arg0, arg1)
+	ret0, _ := ret[0].(openflow.FlowBuilder)
+	return ret0
+}
+
+// MatchPktMark indicates an expected call of MatchPktMark
+func (mr *MockFlowBuilderMockRecorder) MatchPktMark(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchPktMark", reflect.TypeOf((*MockFlowBuilder)(nil).MatchPktMark), arg0, arg1)
+}
+
 // MatchPriority mocks base method
 func (m *MockFlowBuilder) MatchPriority(arg0 uint16) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
