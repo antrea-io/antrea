@@ -21,6 +21,7 @@ package networkpolicy
 import (
 	"fmt"
 	"net"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -132,6 +133,13 @@ type NetworkPolicyController struct {
 	// namespaceListerSynced is a function which returns true if the Namespace shared informer has been synced at least once.
 	namespaceListerSynced cache.InformerSynced
 
+	serviceInformer coreinformers.ServiceInformer
+	// serviceLister is able to list/get Services and is populated by the shared informer passed to
+	// NewNetworkPolicyController.
+	serviceLister corelisters.ServiceLister
+	// serviceListerSynced is a function which returns true if the Service shared informer has been synced at least once.
+	serviceListerSynced cache.InformerSynced
+
 	externalEntityInformer corev1a2informers.ExternalEntityInformer
 	// externalEntityLister is able to list/get ExternalEntities and is populated by the shared informer passed to
 	// NewNetworkPolicyController.
@@ -217,6 +225,7 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 	crdClient versioned.Interface,
 	podInformer coreinformers.PodInformer,
 	namespaceInformer coreinformers.NamespaceInformer,
+	serviceInformer coreinformers.ServiceInformer,
 	externalEntityInformer corev1a2informers.ExternalEntityInformer,
 	networkPolicyInformer networkinginformers.NetworkPolicyInformer,
 	cnpInformer secinformers.ClusterNetworkPolicyInformer,
@@ -280,6 +289,9 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 	)
 	// Register Informer and add handlers for AntreaPolicy events only if the feature is enabled.
 	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
+		n.serviceInformer = serviceInformer
+		n.serviceLister = serviceInformer.Lister()
+		n.serviceListerSynced = serviceInformer.Informer().HasSynced
 		n.cnpInformer = cnpInformer
 		n.cnpLister = cnpInformer.Lister()
 		n.cnpListerSynced = cnpInformer.Informer().HasSynced
@@ -292,6 +304,14 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 		n.cgInformer = cgInformer
 		n.cgLister = cgInformer.Lister()
 		n.cgListerSynced = cgInformer.Informer().HasSynced
+		n.serviceInformer.Informer().AddEventHandlerWithResyncPeriod(
+			cache.ResourceEventHandlerFuncs{
+				AddFunc:    n.addService,
+				UpdateFunc: n.updateService,
+				DeleteFunc: n.deleteService,
+			},
+			resyncPeriod,
+		)
 		tierInformer.Informer().AddIndexers(
 			cache.Indexers{
 				PriorityIndex: func(obj interface{}) ([]string, error) {
@@ -1098,6 +1118,67 @@ func (n *NetworkPolicyController) deleteNamespace(old interface{}) {
 	}
 	groupKeys := n.filterInternalGroupsForNamespace(namespace)
 	for group := range groupKeys {
+		n.enqueueInternalGroup(group)
+	}
+}
+
+// addService retrieves all internal Groups which refers to this Service
+// and enqueues the group keys for further processing.
+func (n *NetworkPolicyController) addService(obj interface{}) {
+	defer n.heartbeat("addService")
+	service := obj.(*v1.Service)
+	klog.V(2).Infof("Processing Service %s/%s ADD event", service.Namespace, service.Name)
+	// Find all internal Group keys which refers to this Service.
+	groupKeySet := n.filterInternalGroupsForService(service)
+	// Enqueue internal groups to its queue for group processing.
+	for group := range groupKeySet {
+		n.enqueueInternalGroup(group)
+	}
+}
+
+// updatePod retrieves all internal Groups which refers to this Service
+// and enqueues the group keys for further processing.
+func (n *NetworkPolicyController) updateService(oldObj, curObj interface{}) {
+	defer n.heartbeat("updateService")
+	oldService := oldObj.(*v1.Service)
+	curService := curObj.(*v1.Service)
+	klog.V(2).Infof("Processing Service %s/%s UPDATE event, selectors: %v", curService.Namespace, curService.Name, curService.Spec.Selector)
+	// No need to trigger processing of groups if there is no change in the Service selectors.
+	if reflect.DeepEqual(oldService.Spec.Selector, curService.Spec.Selector) {
+		klog.V(4).Infof("No change in Service %s/%s. Skipping group evaluation.", curService.Namespace, curService.Name)
+		return
+	}
+	// Find all internal Group keys which refers to this Service.
+	groupKeySet := n.filterInternalGroupsForService(curService)
+	// Enqueue internal groups to its queue for group processing.
+	for group := range groupKeySet {
+		n.enqueueInternalGroup(group)
+	}
+}
+
+// deleteService retrieves all internal Groups which refers to this Service
+// and enqueues the group keys for further processing.
+func (n *NetworkPolicyController) deleteService(old interface{}) {
+	service, ok := old.(*v1.Service)
+	if !ok {
+		tombstone, ok := old.(cache.DeletedFinalStateUnknown)
+		if !ok {
+			klog.Errorf("Error decoding object when deleting Service, invalid type: %v", old)
+			return
+		}
+		service, ok = tombstone.Obj.(*v1.Service)
+		if !ok {
+			klog.Errorf("Error decoding object tombstone when deleting Service, invalid type: %v", tombstone.Obj)
+			return
+		}
+	}
+	defer n.heartbeat("deleteService")
+
+	klog.V(2).Infof("Processing Service %s/%s DELETE event", service.Namespace, service.Name)
+	// Find all internal Group keys which refers to this Service.
+	groupKeySet := n.filterInternalGroupsForService(service)
+	// Enqueue internal groups to its queue for group processing.
+	for group := range groupKeySet {
 		n.enqueueInternalGroup(group)
 	}
 }

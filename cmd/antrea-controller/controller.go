@@ -95,6 +95,7 @@ func run(o *Options) error {
 	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, informerDefaultResync)
 	podInformer := informerFactory.Core().V1().Pods()
 	namespaceInformer := informerFactory.Core().V1().Namespaces()
+	serviceInformer := informerFactory.Core().V1().Services()
 	networkPolicyInformer := informerFactory.Networking().V1().NetworkPolicies()
 	nodeInformer := informerFactory.Core().V1().Nodes()
 	cnpInformer := crdInformerFactory.Security().V1alpha1().ClusterNetworkPolicies()
@@ -114,6 +115,7 @@ func run(o *Options) error {
 		crdClient,
 		podInformer,
 		namespaceInformer,
+		serviceInformer,
 		externalEntityInformer,
 		networkPolicyInformer,
 		cnpInformer,
