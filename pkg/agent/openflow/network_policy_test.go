@@ -35,6 +35,7 @@ import (
 	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
 	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
 	mocks "github.com/vmware-tanzu/antrea/pkg/ovs/openflow/testing"
+	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
 	ovsctltest "github.com/vmware-tanzu/antrea/pkg/ovs/ovsctl/testing"
 )
 
@@ -754,6 +755,7 @@ func prepareClient(ctrl *gomock.Controller) *client {
 		policyCache:              policyCache,
 		globalConjMatchFlowCache: map[string]*conjMatchFlowContext{},
 		bridge:                   bridge,
+		ovsDatapathType:          ovsconfig.OVSDatapathNetdev,
 	}
 	c.cookieAllocator = cookie.NewAllocator(0)
 	m := oftest.NewMockOFEntryOperations(ctrl)
