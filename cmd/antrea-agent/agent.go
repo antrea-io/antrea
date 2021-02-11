@@ -353,8 +353,10 @@ func run(o *Options) error {
 		flowExporter := exporter.NewFlowExporter(
 			flowrecords.NewFlowRecords(connStore),
 			o.config.FlowExportFrequency,
+			o.config.EnableTLSToFlowAggregator,
 			v4Enabled,
-			v6Enabled)
+			v6Enabled,
+			k8sClient)
 		go wait.Until(func() { flowExporter.Export(o.flowCollectorAddr, o.flowCollectorProto, stopCh, pollDone) }, 0, stopCh)
 	}
 

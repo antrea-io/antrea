@@ -61,7 +61,8 @@ type Options struct {
 func newOptions() *Options {
 	return &Options{
 		config: &AgentConfig{
-			EnablePrometheusMetrics: true,
+			EnablePrometheusMetrics:   true,
+			EnableTLSToFlowAggregator: true,
 		},
 	}
 }
