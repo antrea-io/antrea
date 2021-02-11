@@ -56,10 +56,15 @@ type Group struct {
 	// Name of the ClusterGroup for which this internal Group is created.
 	Name string
 	// Selector describes how the internal group selects Pods to get their addresses.
-	Selector GroupSelector
+	// Selector is nil if Group is defined with ipBlock, or if it has ServiceReference
+	// and has not been processed by the controller yet / Service cannot be found.
+	Selector *GroupSelector
 	// GroupMembers is a set of GroupMembers selected by this internal group.
 	// It will be converted to a slice of GroupMember for transferring according
 	// to client's selection.
 	GroupMembers controlplane.GroupMemberSet
 	IPBlock      *controlplane.IPBlock
+	// ServiceReference is reference to a v1.Service, which this Group keeps in sync
+	// and updates Selector based on the Service's selector.
+	ServiceReference *controlplane.ServiceReference
 }

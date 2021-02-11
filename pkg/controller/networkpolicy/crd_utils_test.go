@@ -308,12 +308,12 @@ func TestCreateAddressGroupForClusterGroupCRD(t *testing.T) {
 	igA := antreatypes.Group{
 		UID:      "uidA",
 		Name:     "cgA",
-		Selector: *toGroupSelector("", nil, &selectorA, nil),
+		Selector: toGroupSelector("", nil, &selectorA, nil),
 	}
 	igB := antreatypes.Group{
 		UID:      "uidB",
 		Name:     "cgB",
-		Selector: *toGroupSelector("", nil, &selectorB, nil),
+		Selector: toGroupSelector("", nil, &selectorB, nil),
 	}
 	tests := []struct {
 		name                   string
@@ -354,7 +354,7 @@ func TestCreateAppliedToGroupForClusterGroupCRD(t *testing.T) {
 	igA := antreatypes.Group{
 		UID:      "uidA",
 		Name:     "cgA",
-		Selector: *toGroupSelector("", nil, &selectorA, nil),
+		Selector: toGroupSelector("", nil, &selectorA, nil),
 	}
 	tests := []struct {
 		name                    string

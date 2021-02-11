@@ -601,6 +601,9 @@ order in which they are enforced.
 A ClusterGroup (CG) CRD is a specification of how workloads are grouped together.
 It allows admins to group Pods using traditional label selectors, which can then
 be referenced in ACNP in place of stand-alone `podSelector` and/or `namespaceSelector`.
+In addition, ClusterGroup also supports Pod grouping by `serviceReference`. ClusterGroup
+specified by `serviceReference` will contain the same Pod members that are currently
+selected by the Service's selector.
 ClusterGroups allow admins to separate the concern of grouping of workloads from
 the security aspect of Antrea-native policies.
 It adds another level of indirection allowing users to update group membership
@@ -639,7 +642,7 @@ kind: ClusterGroup
 metadata:
   name: test-cg-ip-block
 spec:
-  # IPBlock cannot be set along with PodSelector, NamespaceSelector.
+  # IPBlock cannot be set along with PodSelector, NamespaceSelector or serviceReference.
   ipBlock:
     cidr: 10.0.10.0/24
 status:
@@ -648,6 +651,20 @@ status:
       status: "True"
       lastTransitionTime: "2021-01-29T19:59:39Z"
 ---
+apiVersion: core.antrea.tanzu.vmware.com/v1alpha2
+kind: ClusterGroup
+metadata:
+  name: test-cg-svc-ref
+spec:
+  # ServiceReference cannot be set along with PodSelector, NamespaceSelector or ipBlock.
+  serviceReference:
+    name: test-service
+    namespace: default
+status:
+  conditions:
+    - type: "GroupMembersComputed"
+      status: "True"
+      lastTransitionTime: "2021-01-29T20:21:46Z"
 ```
 
 **spec**: The ClusterGroup `spec` has all the information needed to define a
@@ -666,6 +683,15 @@ If set with a `podSelector`, all matching Pods from Namespaces selected by the
 "sources" or `egress` "destinations".
 A ClusterGroup with `ipBlock` referenced in an ACNP's `appliedTo` field will be
 ignored, and the policy will have no effect.
+
+**serviceReference**: Pods that serve as the backend for the specified Service
+will be grouped. Services without selectors are currently not supported, and will
+be ignored if referred by `serviceReference` in a ClusterGroup.
+When ClusterGroups with `serviceReference` are used in ACNPs as `appliedTo` or
+`to`/`from` peers, no Service port information will be automatically assumed for
+traffic enforcement. `ServiceReference` is merely a mechanism to group Pods and
+ensure that a ClusterGroup stays in sync with the set of Pods selected by a given
+Service.
 
 **status**: The ClusterGroup `status` field determines the overall realization
 status of the group.

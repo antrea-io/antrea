@@ -37,9 +37,17 @@ type AppliedToGroup struct {
 
 // PodReference represents a Pod Reference.
 type PodReference struct {
-	// The name of this pod.
+	// The name of this Pod.
 	Name string `json:"name,omitempty" protobuf:"bytes,1,opt,name=name"`
-	// The namespace of this pod.
+	// The Namespace of this Pod.
+	Namespace string `json:"namespace,omitempty" protobuf:"bytes,2,opt,name=namespace"`
+}
+
+// ServiceReference represents reference to a v1.Service.
+type ServiceReference struct {
+	// The name of this Service.
+	Name string `json:"name,omitempty" protobuf:"bytes,1,opt,name=name"`
+	// The Namespace of this Service.
 	Namespace string `json:"namespace,omitempty" protobuf:"bytes,2,opt,name=namespace"`
 }
 
@@ -57,7 +65,7 @@ type NamedPort struct {
 type ExternalEntityReference struct {
 	// The name of this ExternalEntity.
 	Name string `json:"name,omitempty" protobuf:"bytes,1,opt,name=name"`
-	// The namespace of this ExternalEntity.
+	// The Namespace of this ExternalEntity.
 	Namespace string `json:"namespace,omitempty" protobuf:"bytes,2,opt,name=namespace"`
 }
 

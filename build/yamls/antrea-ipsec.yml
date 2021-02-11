@@ -78,6 +78,13 @@ spec:
                 x-kubernetes-preserve-unknown-fields: true
               podSelector:
                 x-kubernetes-preserve-unknown-fields: true
+              serviceReference:
+                properties:
+                  name:
+                    type: string
+                  namespace:
+                    type: string
+                type: object
             type: object
           status:
             properties:
@@ -1095,6 +1102,7 @@ rules:
   - nodes
   - pods
   - namespaces
+  - services
   verbs:
   - get
   - watch

@@ -77,6 +77,14 @@ type ExternalEntityList struct {
 	Items []ExternalEntity `json:"items,omitempty"`
 }
 
+// ServiceReference represent reference to a v1.Service.
+type ServiceReference struct {
+	// Name of the Service
+	Name string `json:"name,omitempty"`
+	// Namespace of the Service
+	Namespace string `json:"namespace,omitempty"`
+}
+
 // +genclient
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -107,9 +115,13 @@ type GroupSpec struct {
 	NamespaceSelector *metav1.LabelSelector `json:"namespaceSelector,omitempty"`
 	// IPBlock describes the IPAddresses/IPBlocks that is matched in to/from.
 	// IPBlock cannot be set as part of the AppliedTo field.
-	// Cannot be set with any other selector.
+	// Cannot be set with any other selector or ServiceReference.
 	// +optional
 	IPBlock *secv1a1.IPBlock `json:"ipBlock,omitempty"`
+	// Select backend Pods of the referred Service.
+	// Cannot be set with any other selector or ipBlock.
+	// +optional
+	ServiceReference *ServiceReference `json:"serviceReference,omitempty"`
 }
 
 type GroupConditionType string

@@ -34,9 +34,17 @@ type AppliedToGroup struct {
 
 // PodReference represents a Pod Reference.
 type PodReference struct {
-	// The name of this pod.
+	// The name of this Pod.
 	Name string
-	// The namespace of this pod.
+	// The Namespace of this Pod.
+	Namespace string
+}
+
+// ServiceReference represents reference to a v1.Service.
+type ServiceReference struct {
+	// The name of this Service.
+	Name string
+	// The Namespace of this Service.
 	Namespace string
 }
 
@@ -54,7 +62,7 @@ type NamedPort struct {
 type ExternalEntityReference struct {
 	// The name of this ExternalEntity.
 	Name string
-	// The namespace of this ExternalEntity.
+	// The Namespace of this ExternalEntity.
 	Namespace string
 }
 
