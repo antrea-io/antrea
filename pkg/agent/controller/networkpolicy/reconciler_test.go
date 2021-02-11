@@ -20,6 +20,7 @@ import (
 	"net"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
@@ -33,6 +34,8 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/util"
 	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
 )
+
+const testAsyncDeleteInterval = 50 * time.Millisecond
 
 var (
 	addressGroup1     = v1beta2.NewGroupMemberSet(newAddressGroupMember("1.1.1.1"))
