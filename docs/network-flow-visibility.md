@@ -93,6 +93,9 @@ parameters have to be set in the Antrea Agent ConfigMap:
     # the flow collector.
     # Flow export frequency should be greater than or equal to 1.
     #flowExportFrequency: 12
+
+    # Enable TLS communication from flow exporter to flow aggregator.
+    #enableTLSToFlowAggregator: true
 ```
 
 Please note that the default value for `flowCollectorAddr` is `"flow-aggregator.flow-aggregator.svc:4739:tcp"`,
@@ -101,6 +104,7 @@ with the Name and Namespace set to `flow-aggregator`. If you deploy the Flow Agg
 Service with a different Name and Namespace, then either use the appropriate DNS
 name or the Cluster IP of the Service. Please note that the default values for
 `flowPollInterval` and `flowExportFrequency` parameters are set to 5s and 12, respectively.
+TLS communication between the Flow Exporter and the Flow Aggregator is enabled by default. 
 Please modify them as per your requirements.
 
 ### IPFIX Information Elements (IEs) in a Flow Record
@@ -236,13 +240,21 @@ flow-aggregator.conf: |
   # Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
   #flowExportInterval: 60s
   
-  # Provide the transport protocol for the flow aggregator collecting process, which is tcp or udp.
-  #aggregatorTransportProtocol: "tcp"
+  # Provide the transport protocol for the flow aggregator collecting process, which is tls, tcp or udp.
+  #aggregatorTransportProtocol: "tls"
+  
+  # Provide DNS name or IP address of flow aggregator for generating TLS certificate. It must match
+  # the flowCollectorAddr parameter in the antrea-agent config.    
+  #flowAggregatorAddress: "flow-aggregator.flow-aggregator.svc"
 ```
 
-Please note that the default values for `flowExportInterval` and `aggregatorTransportProtocol`
-parameters are set to `60s` and `tcp`, respectively. Please modify them as per your
-requirements.
+Please note that the default values for `flowExportInterval`, `aggregatorTransportProtocol`, 
+and `flowAggregatorAddress` parameters are set to `60s`, `tls` and `flow-aggregator.flow-aggregator.svc`, 
+respectively. Please make sure that `aggregatorTransportProtocol` is set to `tls` and 
+`enableTLSToFlowAggregator` in `agent-agent.conf` is set to true to guarantee secure communication
+works properly. `enableTLSToFlowAggregator` and `aggregatorTransportProtocol` must always match, 
+so TLS must either be enabled for both sides or disabled for both sides. Please modify the parameters 
+as per your requirements. 
 
 ### IPFIX Information Elements (IEs) in an Aggregated Flow Record
 
