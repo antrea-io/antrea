@@ -732,26 +732,29 @@ webhook configuration YAML:
 
 ```yaml
 apiVersion: admissionregistration.k8s.io/v1
- kind: MutatingWebhookConfiguration
- metadata:
-   name: "labelsmutator.antrea.io"
- webhooks:
-   - name: "namelabelmutator.antrea.io"
-     clientConfig:
-       service:
-         name: "antrea"
-         namespace: "kube-system"
-         path: "/mutate/addlabels"
-     rules:
-       - operations: ["CREATE", "UPDATE"]
-         apiGroups: [""]
-         apiVersions: ["v1"]
-         resources: ["namespaces"]
-         scope: "Cluster"
-     admissionReviewVersions: ["v1", "v1beta1"]
-     sideEffects: None
-     timeoutSeconds: 5
+kind: MutatingWebhookConfiguration
+metadata:
+  # Do not edit this name.
+  name: "labelsmutator.antrea.io"
+webhooks:
+  - name: "namelabelmutator.antrea.io"
+    clientConfig:
+      service:
+        name: "antrea"
+        namespace: "kube-system"
+        path: "/mutate/addlabels"
+    rules:
+      - operations: ["CREATE", "UPDATE"]
+        apiGroups: [""]
+        apiVersions: ["v1"]
+        resources: ["namespaces"]
+        scope: "Cluster"
+    admissionReviewVersions: ["v1", "v1beta1"]
+    sideEffects: None
+    timeoutSeconds: 5
 ```
+
+**Note**: `antrea-controller` Pod must be restarted after applying this YAML.
 
 Once the webhook is configured, Antrea will start labeling all new and updated
 Namespaces with the `antrea.io/metadata.name: <namespaceName>` label. Users may now

@@ -21,6 +21,7 @@ import (
 	"net/http"
 
 	admv1 "k8s.io/api/admission/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog"
 )
@@ -101,19 +102,20 @@ func mutateResourceLabels(ar *admv1.AdmissionReview) *admv1.AdmissionResponse {
 	var patch []byte
 	var allowed bool
 	var msg string
-	var objMeta metav1.ObjectMeta
+	// At the moment we only mutate Namespace labels.
+	var nsObj v1.Namespace
 	patchType := admv1.PatchTypeJSONPatch
 
 	op := ar.Request.Operation
 	curRaw := ar.Request.Object.Raw
 	klog.V(2).Info("Mutating resource labels")
 	if curRaw != nil {
-		if err := json.Unmarshal(curRaw, &objMeta); err != nil {
+		if err := json.Unmarshal(curRaw, &nsObj); err != nil {
 			klog.Errorf("Error de-serializing current resource")
 			return getAdmissionResponseForErr(err)
 		}
 	}
-	msg, allowed, patch = mutateLabels(op, objMeta.Labels, objMeta.Name)
+	msg, allowed, patch = mutateLabels(op, nsObj.Labels, nsObj.Name)
 	if msg != "" {
 		result = &metav1.Status{
 			Message: msg,
