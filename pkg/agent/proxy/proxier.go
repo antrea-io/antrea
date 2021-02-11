@@ -21,6 +21,7 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/api/discovery/v1beta1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/tools/record"
@@ -31,6 +32,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/proxy/metrics"
 	"github.com/vmware-tanzu/antrea/pkg/agent/proxy/types"
 	"github.com/vmware-tanzu/antrea/pkg/agent/querier"
+	"github.com/vmware-tanzu/antrea/pkg/features"
 	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
 	k8sproxy "github.com/vmware-tanzu/antrea/third_party/proxy"
 	"github.com/vmware-tanzu/antrea/third_party/proxy/config"
@@ -42,9 +44,10 @@ const (
 )
 
 type proxier struct {
-	once            sync.Once
-	endpointsConfig *config.EndpointsConfig
-	serviceConfig   *config.ServiceConfig
+	once                sync.Once
+	endpointSliceConfig *config.EndpointSliceConfig
+	endpointsConfig     *config.EndpointsConfig
+	serviceConfig       *config.ServiceConfig
 	// endpointsChanges and serviceChanges contains all changes to endpoints and
 	// services that happened since last syncProxyRules call. For a single object,
 	// changes are accumulated. Once both endpointsChanges and serviceChanges
@@ -68,11 +71,12 @@ type proxier struct {
 	// serviceStringMapMutex protects serviceStringMap object.
 	serviceStringMapMutex sync.Mutex
 
-	runner       *k8sproxy.BoundedFrequencyRunner
-	stopChan     <-chan struct{}
-	agentQuerier querier.AgentQuerier
-	ofClient     openflow.Client
-	isIPv6       bool
+	runner              *k8sproxy.BoundedFrequencyRunner
+	stopChan            <-chan struct{}
+	agentQuerier        querier.AgentQuerier
+	ofClient            openflow.Client
+	isIPv6              bool
+	enableEndpointSlice bool
 }
 
 func endpointKey(endpoint k8sproxy.Endpoint, protocol binding.Protocol) string {
@@ -411,6 +415,31 @@ func (p *proxier) OnEndpointsSynced() {
 	}
 }
 
+func (p *proxier) OnEndpointSliceAdd(endpointSlice *v1beta1.EndpointSlice) {
+	if p.endpointsChanges.OnEndpointSliceUpdate(endpointSlice, false) && p.isInitialized() {
+		p.runner.Run()
+	}
+}
+
+func (p *proxier) OnEndpointSliceUpdate(oldEndpointSlice, newEndpointSlice *v1beta1.EndpointSlice) {
+	if p.endpointsChanges.OnEndpointSliceUpdate(newEndpointSlice, false) && p.isInitialized() {
+		p.runner.Run()
+	}
+}
+
+func (p *proxier) OnEndpointSliceDelete(endpointSlice *v1beta1.EndpointSlice) {
+	if p.endpointsChanges.OnEndpointSliceUpdate(endpointSlice, true) && p.isInitialized() {
+		p.runner.Run()
+	}
+}
+
+func (p *proxier) OnEndpointSlicesSynced() {
+	p.endpointsChanges.OnEndpointsSynced()
+	if p.isInitialized() {
+		p.runner.Run()
+	}
+}
+
 func (p *proxier) OnServiceAdd(service *corev1.Service) {
 	p.OnServiceUpdate(nil, service)
 }
@@ -470,7 +499,11 @@ func (p *proxier) deleteServiceByIP(serviceStr string) {
 func (p *proxier) Run(stopCh <-chan struct{}) {
 	p.once.Do(func() {
 		go p.serviceConfig.Run(stopCh)
-		go p.endpointsConfig.Run(stopCh)
+		if p.enableEndpointSlice {
+			go p.endpointSliceConfig.Run(stopCh)
+		} else {
+			go p.endpointsConfig.Run(stopCh)
+		}
 		p.stopChan = stopCh
 		p.SyncLoop()
 	})
@@ -487,10 +520,14 @@ func NewProxier(
 	)
 	metrics.Register()
 	klog.V(2).Infof("Creating proxier with IPv6 enabled=%t", isIPv6)
+
+	enableEndpointSlice := features.DefaultFeatureGate.Enabled(features.EndpointSlice)
+
 	p := &proxier{
+		enableEndpointSlice:      enableEndpointSlice,
 		endpointsConfig:          config.NewEndpointsConfig(informerFactory.Core().V1().Endpoints(), resyncPeriod),
 		serviceConfig:            config.NewServiceConfig(informerFactory.Core().V1().Services(), resyncPeriod),
-		endpointsChanges:         newEndpointsChangesTracker(hostname),
+		endpointsChanges:         newEndpointsChangesTracker(hostname, enableEndpointSlice, isIPv6),
 		serviceChanges:           newServiceChangesTracker(recorder, isIPv6),
 		serviceMap:               k8sproxy.ServiceMap{},
 		serviceInstalledMap:      k8sproxy.ServiceMap{},
@@ -505,6 +542,14 @@ func NewProxier(
 	p.serviceConfig.RegisterEventHandler(p)
 	p.endpointsConfig.RegisterEventHandler(p)
 	p.runner = k8sproxy.NewBoundedFrequencyRunner(componentName, p.syncProxyRules, time.Second, 30*time.Second, 2)
+	if enableEndpointSlice {
+		p.endpointSliceConfig = config.NewEndpointSliceConfig(informerFactory.Discovery().V1beta1().EndpointSlices(), resyncPeriod)
+		p.endpointSliceConfig.RegisterEventHandler(p)
+	} else {
+		p.endpointsConfig = config.NewEndpointsConfig(informerFactory.Core().V1().Endpoints(), resyncPeriod)
+		p.endpointsConfig.RegisterEventHandler(p)
+	}
+	p.runner = k8sproxy.NewBoundedFrequencyRunner(componentName, p.syncProxyRules, 0, 30*time.Second, -1)
 	return p
 }
 

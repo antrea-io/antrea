@@ -36,6 +36,7 @@ example, to enable `AntreaProxy` on Linux, edit the Agent configuration in the
 | Feature Name            | Component          | Default | Stage | Alpha Release | Beta Release | GA Release | Extra Requirements | Notes |
 | ----------------------- | ------------------ | ------- | ----- | ------------- | ------------ | ---------- | ------------------ | ----- |
 | `AntreaProxy`           | Agent              | `false` | Alpha | v0.8          | v0.11        | N/A        | Yes                | Must be enabled for Windows. |
+| `EndpointSlice`         | Agent              | `false` | Alpha | v0.13.0       | N/A          | N/A        | Yes                |       |
 | `AntreaPolicy`          | Agent + Controller | `false` | Alpha | v0.8          | N/A          | N/A        | No                 | Agent side config required from v0.9.0+. |
 | `Traceflow`             | Agent + Controller | `false` | Alpha | v0.8          | v0.11        | N/A        | Yes                |       |
 | `FlowExporter`          | Agent              | `false` | Alpha | v0.9          | N/A          | N/A        | Yes                |       |
@@ -54,6 +55,20 @@ Note that this feature must be enabled for Windows. The Antrea Windows YAML
 manifest provided as part of releases enables this feature by default. If you
 edit the manifest, make sure you do not disable it, as it is needed for correct
 NetworkPolicy implementation for Pod-to-Service traffic.
+
+### EndpointSlice
+
+`EndpointSlice` enables Service EndpointSlice support in AntreaProxy. The
+EndpointSlice API was introduced in Kubernetes 1.16 (alpha) and it is enabled
+by default in Kubernetes 1.17 (beta). The EndpointSlice feature gate will take no
+effect if AntreaProxy is not enabled. The endpoint conditions of `Serving` and
+`Terminating` are not supported currently. ServiceTopology is not supported either.
+Refer to this [link](https://kubernetes.io/docs/tasks/administer-cluster/enabling-endpointslices/)
+for more information. The EndpointSlice API version that AntreaProxy supports is v1beta1
+currently, and other EndpointSlice API versions are not supported. If EndpointSlice is
+enabled in AntreaProxy, but EndpointSlice API is disabled in Kubernetes or EndpointSlice
+API version v1beta1 is not supported in Kubernetes, Antrea Agent will log an error message
+and will not implement Cluster IP functionality as expected.
 
 #### Requirements for this Feature
 

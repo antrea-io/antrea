@@ -25,6 +25,7 @@ function echoerr {
 _usage="Usage: $0 [--encap-mode <mode>] [--no-proxy] [--np] [--coverage] [--help|-h]
         --encap-mode                  Traffic encapsulation mode. (default is 'encap')
         --no-proxy                    Disables Antrea proxy.
+        --endpointslice               Enables Antrea proxy and EndpointSlice support
         --np                          Enables Namespaced Antrea NetworkPolicy CRDs and ClusterNetworkPolicy related CRDs.
         --coverage                    Enables measure Antrea code coverage when run e2e tests on kind.
         --help, -h                    Print this message and exit
@@ -49,6 +50,7 @@ trap "quit" INT EXIT
 
 mode=""
 proxy=true
+endpointslice=false
 np=false
 coverage=false
 while [[ $# -gt 0 ]]
@@ -58,6 +60,10 @@ key="$1"
 case $key in
     --no-proxy)
     proxy=false
+    shift
+    ;;
+    --endpointslice)
+    endpointslice=true
     shift
     ;;
     --np)
@@ -86,6 +92,9 @@ done
 manifest_args=""
 if ! $proxy; then
     manifest_args="$manifest_args --no-proxy"
+fi
+if $endpointslice; then
+    manifest_args="$manifest_args --endpointslice"
 fi
 if $np; then
     # See https://github.com/vmware-tanzu/antrea/issues/897
