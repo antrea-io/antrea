@@ -47,6 +47,7 @@ func newPortTable(c *gomock.Controller) *portcache.PortTable {
 	mockTable := npltest.NewMockPodPortRules(c)
 	mockTable.EXPECT().AddRule(gomock.Any(), gomock.Any()).AnyTimes()
 	mockTable.EXPECT().DeleteRule(gomock.Any(), gomock.Any()).AnyTimes()
+	mockTable.EXPECT().AddAllRules(gomock.Any()).AnyTimes()
 
 	ptable.PodPortRules = mockTable
 	return &ptable
@@ -371,4 +372,24 @@ func TestMultiplePods(t *testing.T) {
 	assert.True(t, testData.portTable.RuleExists(testPod2.Status.PodIP, defaultPort))
 
 	assert.NotEqual(t, nplData1[0].NodePort, nplData2[0].NodePort)
+}
+
+// TestInitInvalidPod simulates an agent reboot case. A Pod with an invalid NPL annotation is
+// added, this invalid annotation should get cleaned up. And a proper NPL annotation should get
+// added.
+func TestInitInvalidPod(t *testing.T) {
+	testSvc := getTestSvc()
+	testPod := getTestPod()
+	// assign an invalid annotation
+	annotations := map[string]string{
+		nplk8s.NPLAnnotationKey: "[{\"podPort\":53,\"nodeIP\":\"10.10.10.10\", \"nodePort\": 30000}]",
+	}
+	testPod.SetAnnotations(annotations)
+	testData := setUp(t, testSvc, testPod)
+	defer testData.tearDown()
+
+	value, err := testData.pollForPodAnnotation(testPod.Name, true)
+	require.NoError(t, err, "Poll for annotation check failed")
+	testData.checkAnnotationValue(value, defaultPort)
+	assert.True(t, testData.portTable.RuleExists(testPod.Status.PodIP, defaultPort))
 }
