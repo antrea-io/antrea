@@ -20,6 +20,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"reflect"
+	"sort"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -44,42 +46,6 @@ type NPLAnnotation struct {
 func toJSON(serialize interface{}) string {
 	jsonMarshalled, _ := json.Marshal(serialize)
 	return string(jsonMarshalled)
-}
-
-func isNodePortInAnnotation(s []NPLAnnotation, nodeport, cport int) bool {
-	for _, i := range s {
-		if i.NodePort == nodeport && i.PodPort == cport {
-			return true
-		}
-	}
-	return false
-}
-
-// IsNPLAnnotationRequired returns true if a new NodePortLocal annotation value is required. It
-// checks for the Container Port, Node Port and the Pod IP in the existing list of the
-// NodePortLocal annotation of the Pod.
-func IsNPLAnnotationRequired(annotations map[string]string, nodeIP string, containerPort, nodePort int) bool {
-	var nplAnnotations []NPLAnnotation
-	if annotations[NPLAnnotationKey] != "" {
-		if err := json.Unmarshal([]byte(annotations[NPLAnnotationKey]), &nplAnnotations); err != nil {
-			klog.Warningf("Unable to unmarshal NodePortLocal annotation: %v", annotations[NPLAnnotationKey])
-		}
-	}
-	if isNodePortInAnnotation(nplAnnotations, nodePort, containerPort) {
-		// no updates required to the Pod
-		return false
-	}
-	return true
-}
-
-func removeFromNPLAnnotation(annotations []NPLAnnotation, containerPort int) []NPLAnnotation {
-	for i, ann := range annotations {
-		if ann.PodPort == containerPort {
-			annotations = append(annotations[:i], annotations[i+1:]...)
-			break
-		}
-	}
-	return annotations
 }
 
 func (c *NPLController) updatePodNPLAnnotation(pod *corev1.Pod, annotations []NPLAnnotation) error {
@@ -112,4 +78,23 @@ func patchPod(value []NPLAnnotation, pod *corev1.Pod, kubeClient clientset.Inter
 			pod.Name, err)
 	}
 	return nil
+}
+
+// compareNPLAnnotationLists returns true if and only if the two lists contain the same set of
+// annotations, irrespective of the order.
+func compareNPLAnnotationLists(annotations1, annotations2 []NPLAnnotation) bool {
+	if len(annotations1) != len(annotations2) {
+		return false
+	}
+	nplAnnotationLess := func(a1, a2 *NPLAnnotation) bool {
+		return a1.NodePort < a2.NodePort
+
+	}
+	sort.Slice(annotations1, func(i, j int) bool {
+		return nplAnnotationLess(&annotations1[i], &annotations1[j])
+	})
+	sort.Slice(annotations2, func(i, j int) bool {
+		return nplAnnotationLess(&annotations2[i], &annotations2[j])
+	})
+	return reflect.DeepEqual(annotations1, annotations2)
 }
