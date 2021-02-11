@@ -40,6 +40,9 @@ Modifies:
 package proxy
 
 import (
+	"net"
+	"strconv"
+
 	utilproxy "github.com/vmware-tanzu/antrea/third_party/proxy/util"
 )
 
@@ -84,4 +87,12 @@ func (info *BaseEndpointInfo) Port() (int, error) {
 // Equal is part of proxy.Endpoint interface.
 func (info *BaseEndpointInfo) Equal(other Endpoint) bool {
 	return info.String() == other.String() && info.GetIsLocal() == other.GetIsLocal()
+}
+
+func NewBaseEndpointInfo(IP string, port int, isLocal bool, topology map[string]string) *BaseEndpointInfo {
+	return &BaseEndpointInfo{
+		Endpoint: net.JoinHostPort(IP, strconv.Itoa(port)),
+		IsLocal:  isLocal,
+		Topology: topology,
+	}
 }

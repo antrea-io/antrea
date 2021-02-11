@@ -152,6 +152,7 @@ endif
 		-v $(CURDIR)/.coverage:/usr/src/github.com/vmware-tanzu/antrea/.coverage \
 		-v $(CURDIR):/usr/src/github.com/vmware-tanzu/antrea:ro \
 		-v /lib/modules:/lib/modules \
+		--sysctl net.ipv6.conf.all.disable_ipv6=0 \
 		antrea/test test-integration $(USERID) $(GRPID)
 
 .PHONY: docker-tidy
