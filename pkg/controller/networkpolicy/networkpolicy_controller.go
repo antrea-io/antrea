@@ -318,8 +318,13 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 						return []string{}, nil
 					}
 					groupNames := sets.String{}
+					for _, appTo := range cnp.Spec.AppliedTo {
+						if appTo.Group != "" {
+							groupNames.Insert(appTo.Group)
+						}
+					}
 					if len(cnp.Spec.Ingress) == 0 && len(cnp.Spec.Egress) == 0 {
-						return []string{}, nil
+						return groupNames.List(), nil
 					}
 					appendGroups := func(rule secv1alpha1.Rule) {
 						for _, peer := range rule.To {
@@ -330,6 +335,11 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 						for _, peer := range rule.From {
 							if peer.Group != "" {
 								groupNames.Insert(peer.Group)
+							}
+						}
+						for _, appTo := range rule.AppliedTo {
+							if appTo.Group != "" {
+								groupNames.Insert(appTo.Group)
 							}
 						}
 					}
@@ -1479,10 +1489,8 @@ func (n *NetworkPolicyController) syncAppliedToGroup(key string) error {
 	}
 	memberSetByNode := make(map[string]controlplane.GroupMemberSet)
 	scheduledPodNum, scheduledExtEntityNum := 0, 0
-
 	appliedToGroup := appliedToGroupObj.(*antreatypes.AppliedToGroup)
-	groupSelector := appliedToGroup.Selector
-	pods, externalEntities := n.processSelector(groupSelector)
+	pods, externalEntities := n.getAppliedToWorkloads(appliedToGroup)
 	for _, pod := range pods {
 		if pod.Spec.NodeName == "" {
 			// No need to process Pod when it's not scheduled.
@@ -1522,7 +1530,6 @@ func (n *NetworkPolicyController) syncAppliedToGroup(key string) error {
 	klog.V(2).Infof("Updating existing AppliedToGroup %s with %d Pods and %d External Entities on %d Nodes",
 		key, scheduledPodNum, scheduledExtEntityNum, appGroupNodeNames.Len())
 	n.appliedToGroupStore.Update(updatedAppliedToGroup)
-
 	// Get all internal NetworkPolicy objects that refers this AppliedToGroup.
 	// Note that this must be executed after storing the result, to ensure that
 	// both of the NetworkPolicies that referred it before storing it and the
@@ -1539,6 +1546,41 @@ func (n *NetworkPolicyController) syncAppliedToGroup(key string) error {
 		n.enqueueInternalNetworkPolicy(npKey)
 	}
 	return nil
+}
+
+// getAppliedToWorkloads returns a list of workloads like Pods and ExternalEntities matching an AppliedToGroup
+// for standalone selectors or corresponding to a ClusterGroup.
+func (n *NetworkPolicyController) getAppliedToWorkloads(g *antreatypes.AppliedToGroup) ([]*v1.Pod, []*v1alpha2.ExternalEntity) {
+	// Check if an internal Group object exists corresponding to this AppliedToGroup.
+	intGroup, found, _ := n.internalGroupStore.Get(g.Name)
+	if found {
+		var pods []*v1.Pod
+		var ees []*v1alpha2.ExternalEntity
+		ig := intGroup.(*antreatypes.Group)
+		// Generate the list of Pods based on the GroupMembers set in the internal Group.
+		for _, gm := range ig.GroupMembers {
+			// TODO: These reads can be avoided if we structure internal Group to include
+			// PodRef including NodeName, IPs and Ports and then add filter funcs to remove
+			// IPs for AppliedToGroups and NodeNames for AddressGroups.
+			if gm.Pod != nil {
+				pod, err := n.podLister.Pods(gm.Pod.Namespace).Get(gm.Pod.Name)
+				if err != nil {
+					// Pod no longer exists, continue processing.
+					continue
+				}
+				pods = append(pods, pod)
+			} else if gm.ExternalEntity != nil {
+				ee, err := n.externalEntityLister.ExternalEntities(gm.ExternalEntity.Namespace).Get(gm.ExternalEntity.Name)
+				if err != nil {
+					// EE no longer exists, continue processing.
+					continue
+				}
+				ees = append(ees, ee)
+			}
+		}
+		return pods, ees
+	}
+	return n.processSelector(g.Selector)
 }
 
 // syncInternalNetworkPolicy retrieves all the AppliedToGroups associated with

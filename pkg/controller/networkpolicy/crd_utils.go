@@ -117,6 +117,31 @@ func (n *NetworkPolicyController) toAntreaPeerForCRD(peers []secv1alpha1.Network
 	return &controlplane.NetworkPolicyPeer{AddressGroups: addressGroups, IPBlocks: ipBlocks}
 }
 
+// createAppliedToGroupForClusterGroupCRD creates an AppliedToGroup object corresponding to a
+// internal Group. If the AppliedToGroup already exists, it returns the key
+// otherwise it copies the internal Group contents to an AppliedToGroup resource and returns
+// its key.
+func (n *NetworkPolicyController) createAppliedToGroupForClusterGroupCRD(intGrp *antreatypes.Group) string {
+	key, err := store.GroupKeyFunc(intGrp)
+	if err != nil {
+		return ""
+	}
+	// Check to see if the AppliedToGroup already exists
+	_, found, _ := n.appliedToGroupStore.Get(key)
+	if found {
+		return key
+	}
+	// Create an AppliedToGroup object for this internal Group.
+	appliedToGroup := &antreatypes.AppliedToGroup{
+		UID:  intGrp.UID,
+		Name: key,
+	}
+	klog.V(2).Infof("Creating new AppliedToGroup %v corresponding to ClusterGroup CRD %s", appliedToGroup.UID, intGrp.Name)
+	n.appliedToGroupStore.Create(appliedToGroup)
+	n.enqueueAppliedToGroup(key)
+	return key
+}
+
 // createAddressGroupForCRD creates an AddressGroup object corresponding to a
 // secv1alpha1.NetworkPolicyPeer object in Antrea NetworkPolicyRule. This
 // function simply creates the object without actually populating the

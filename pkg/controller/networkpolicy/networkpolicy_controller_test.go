@@ -2892,6 +2892,68 @@ func TestInternalGroupKeyFunc(t *testing.T) {
 	assert.Equal(t, expValue, actualValue)
 }
 
+func TestGetAppliedToWorkloads(t *testing.T) {
+	var emptyEEs []*v1alpha2.ExternalEntity
+	var emptyPods []*corev1.Pod
+	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
+	cgA := v1alpha2.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{Name: "cgA", UID: "uidA"},
+		Spec: v1alpha2.GroupSpec{
+			PodSelector: &selectorA,
+		},
+	}
+	selectorB := metav1.LabelSelector{MatchLabels: map[string]string{"foo2": "bar2"}}
+	cgB := v1alpha2.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{Name: "cgB", UID: "uidB"},
+		Spec: v1alpha2.GroupSpec{
+			PodSelector: &selectorB,
+		},
+	}
+	podA := getPod("podA", "nsA", "nodeA", "10.0.0.1", false)
+	podA.Labels = map[string]string{"foo1": "bar1"}
+	podB := getPod("podB", "nsA", "nodeB", "10.0.0.2", false)
+	podB.Labels = map[string]string{"foo3": "bar3"}
+	tests := []struct {
+		name    string
+		inATG   *antreatypes.AppliedToGroup
+		expPods []*corev1.Pod
+		expEEs  []*v1alpha2.ExternalEntity
+	}{
+		{
+			name: "atg-for-cg",
+			inATG: &antreatypes.AppliedToGroup{
+				Name: cgA.Name,
+				UID:  cgA.UID,
+			},
+			expPods: []*corev1.Pod{podA},
+			expEEs:  emptyEEs,
+		},
+		{
+			name: "atg-for-cg-no-pod-match",
+			inATG: &antreatypes.AppliedToGroup{
+				Name: cgB.Name,
+				UID:  cgB.UID,
+			},
+			expPods: emptyPods,
+			expEEs:  emptyEEs,
+		},
+	}
+	_, c := newController()
+	c.podStore.Add(podA)
+	c.podStore.Add(podB)
+	c.addClusterGroup(&cgA)
+	c.syncInternalGroup(cgA.Name)
+	c.addClusterGroup(&cgB)
+	c.syncInternalGroup(cgB.Name)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			actualPods, actualEEs := c.getAppliedToWorkloads(tt.inATG)
+			assert.Equal(t, tt.expEEs, actualEEs)
+			assert.Equal(t, tt.expPods, actualPods)
+		})
+	}
+}
+
 func getQueuedGroups(npc *networkPolicyController) (atGroups, addrGroups sets.String) {
 	atGroups, addrGroups = sets.NewString(), sets.NewString()
 	atLen, addrLen := npc.appliedToGroupQueue.Len(), npc.addressGroupQueue.Len()
