@@ -3138,6 +3138,8 @@ func TestGetAppliedToWorkloads(t *testing.T) {
 	_, c := newController()
 	c.podStore.Add(podA)
 	c.podStore.Add(podB)
+	c.cgStore.Add(&cgA)
+	c.cgStore.Add(&cgB)
 	c.addClusterGroup(&cgA)
 	c.syncInternalGroup(cgA.Name)
 	c.addClusterGroup(&cgB)
