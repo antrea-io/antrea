@@ -20,6 +20,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"reflect"
+	"sort"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -76,4 +78,23 @@ func patchPod(value []NPLAnnotation, pod *corev1.Pod, kubeClient clientset.Inter
 			pod.Name, err)
 	}
 	return nil
+}
+
+// compareNPLAnnotationLists returns true if and only if the two lists contain the same set of
+// annotations, irrespective of the order.
+func compareNPLAnnotationLists(annotations1, annotations2 []NPLAnnotation) bool {
+	if len(annotations1) != len(annotations2) {
+		return false
+	}
+	nplAnnotationLess := func(a1, a2 *NPLAnnotation) bool {
+		return a1.NodePort < a2.NodePort
+
+	}
+	sort.Slice(annotations1, func(i, j int) bool {
+		return nplAnnotationLess(&annotations1[i], &annotations1[j])
+	})
+	sort.Slice(annotations2, func(i, j int) bool {
+		return nplAnnotationLess(&annotations2[i], &annotations2[j])
+	})
+	return reflect.DeepEqual(annotations1, annotations2)
 }

@@ -20,7 +20,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
-	"sort"
 	"sync"
 	"time"
 
@@ -452,28 +451,19 @@ func (c *NPLController) handleAddUpdatePod(key string, obj interface{}) error {
 
 	// finally, we can check if the current annotation matches the expected one (which we built
 	// in the first step). If not, the Pod needed to be patched.
-	nplAnnotationLess := func(a1, a2 *NPLAnnotation) bool {
-		return a1.NodePort < a2.NodePort
-
-	}
-	sort.Slice(nplAnnotations, func(i, j int) bool {
-		return nplAnnotationLess(&nplAnnotations[i], &nplAnnotations[j])
-	})
-	sort.Slice(nplAnnotationsRequired, func(i, j int) bool {
-		return nplAnnotationLess(&nplAnnotationsRequired[i], &nplAnnotationsRequired[j])
-	})
-	updatePodAnnotation := !reflect.DeepEqual(nplAnnotations, nplAnnotationsRequired)
-
+	updatePodAnnotation := !compareNPLAnnotationLists(nplAnnotations, nplAnnotationsRequired)
 	if updatePodAnnotation {
 		return c.updatePodNPLAnnotation(pod, nplAnnotationsRequired)
 	}
 	return nil
 }
 
-// GetPodsAndGenRules fetches all the Pods on this Node and looks for valid NodePortLocal annotation,
-// if they exist with a valid Node Port, it adds the Node port to the port table and rules. If the Node port
-// is invalid or the NodePortLocal annotation is invalid, the NodePortLocal annotation is removed. The Pod
-// event handlers take care of allocating a new Node port if required.
+// GetPodsAndGenRules fetches all the Pods on this Node and looks for valid NodePortLocal
+// annotations. If they exist, with a valid Node port, it adds the Node port to the port table and
+// rules. If the NodePortLocal annotation is invalid (cannot be unmarshalled), the annotation is
+// cleared. If the Node port is invalid (maybe the port range was changed and the Agent was
+// restarted), the annotation is ignored and will be removed by the Pod event handlers. The Pod
+// event handlers will also take care of allocating a new Node port if required.
 func (c *NPLController) GetPodsAndGenRules() error {
 	podList, err := c.podLister.List(labels.Everything())
 	if err != nil {
