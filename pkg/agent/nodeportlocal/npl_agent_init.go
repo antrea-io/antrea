@@ -53,7 +53,7 @@ func InitializeNPLAgent(kubeClient clientset.Interface, informerFactory informer
 
 	err = portTable.PodPortRules.Init()
 	if err != nil {
-		return nil, fmt.Errorf("NPL rules for pod ports could not be initialized, error: %s", err.Error())
+		return nil, fmt.Errorf("NPL rules for pod ports could not be initialized, error: %v", err)
 	}
 
 	return InitController(kubeClient, informerFactory, portTable, nodeName)

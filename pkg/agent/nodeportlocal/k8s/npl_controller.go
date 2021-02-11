@@ -128,7 +128,7 @@ func (c *NPLController) Run(stopCh <-chan struct{}) {
 	klog.Info("Will fetch Pods and generate NodePortLocal rules for these Pods")
 
 	if err := c.GetPodsAndGenRules(); err != nil {
-		klog.Errorf("Error in getting Pods and generating rules: %s", err.Error())
+		klog.Errorf("Error in getting Pods and generating rules: %v", err)
 		return
 	}
 
@@ -438,7 +438,7 @@ func (c *NPLController) handleAddUpdatePod(key string, obj interface{}) error {
 				nplAnnotations = removeFromNPLAnnotation(nplAnnotations, data.PodPort)
 				err := c.portTable.DeleteRule(podIP, int(data.PodPort))
 				if err != nil {
-					return fmt.Errorf("failed to delete rule for Pod IP %s, Pod Port %d: %s", podIP, data.PodPort, err.Error())
+					return fmt.Errorf("failed to delete rule for Pod IP %s, Pod Port %d: %v", podIP, data.PodPort, err)
 				}
 				updatePodAnnotation = true
 			}
@@ -457,7 +457,7 @@ func (c *NPLController) handleAddUpdatePod(key string, obj interface{}) error {
 func (c *NPLController) GetPodsAndGenRules() error {
 	podList, err := c.podLister.List(labels.Everything())
 	if err != nil {
-		return fmt.Errorf("error in fetching the Pods for Node %s: %s", c.nodeName, err.Error())
+		return fmt.Errorf("error in fetching the Pods for Node %s: %v", c.nodeName, err)
 	}
 
 	allNPLPorts := []rules.PodNodePort{}

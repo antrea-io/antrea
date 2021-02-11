@@ -84,7 +84,7 @@ func removeFromNPLAnnotation(annotations []NPLAnnotation, containerPort int) []N
 
 func (c *NPLController) updatePodNPLAnnotation(pod *corev1.Pod, annotations []NPLAnnotation) error {
 	if err := patchPod(annotations, pod, c.kubeClient); err != nil {
-		klog.Warningf("Unable to patch NodePortLocal annotation for Pod %s/%s: %s", pod.Namespace, pod.Name, err.Error())
+		klog.Warningf("Unable to patch NodePortLocal annotation for Pod %s/%s: %v", pod.Namespace, pod.Name, err)
 	}
 	klog.V(2).Infof("Successfully updated NodePortLocal annotation for Pod %s/%s", pod.Namespace, pod.Name)
 	return nil
@@ -108,8 +108,8 @@ func patchPod(value []NPLAnnotation, pod *corev1.Pod, kubeClient clientset.Inter
 	payloadBytes, _ := json.Marshal(newPayload)
 	if _, err := kubeClient.CoreV1().Pods(pod.Namespace).Patch(context.TODO(), pod.Name, types.MergePatchType,
 		payloadBytes, metav1.PatchOptions{}); err != nil {
-		return fmt.Errorf("unable to update NodePortLocal annotation for Pod %s/%s: %s", pod.Namespace,
-			pod.Name, err.Error())
+		return fmt.Errorf("unable to update NodePortLocal annotation for Pod %s/%s: %v", pod.Namespace,
+			pod.Name, err)
 	}
 	return nil
 }

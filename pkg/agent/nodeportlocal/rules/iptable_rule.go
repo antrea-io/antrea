@@ -28,13 +28,6 @@ import (
 // NodePortLocalChain is the name of the chain in IPTABLES for Node Port Local
 const NodePortLocalChain = "ANTREA-NODE-PORT-LOCAL"
 
-// PodNodePort contains the Node Port, Pod Port and the Pod IP.
-type PodNodePort struct {
-	NodePort int
-	PodPort  int
-	PodIP    string
-}
-
 // IPTableRules provides a client to perform IPTABLES operations
 type iptablesRules struct {
 	name  string
