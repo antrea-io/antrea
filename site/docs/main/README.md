@@ -2,7 +2,7 @@
 
 ![Antrea Logo](assets/logo/antrea_logo.svg)
 
-![Build Status](https://github.com/vmware-tanzu/antrea/workflows/Go/badge.svg?branch=master)
+![Build Status](https://github.com/vmware-tanzu/antrea/workflows/Go/badge.svg?branch=main)
 [![Go Report Card](https://goreportcard.com/badge/github.com/vmware-tanzu/antrea)](https://goreportcard.com/report/github.com/vmware-tanzu/antrea)
 [![CII Best Practices](https://bestpractices.coreinfrastructure.org/projects/4173/badge)](https://bestpractices.coreinfrastructure.org/projects/4173)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
@@ -51,10 +51,14 @@ Your feedback is more than welcome!
 * Check out [Open Issues](https://github.com/vmware-tanzu/antrea/issues).
 * Join the [Kubernetes Slack](http://slack.k8s.io/) and look for our
 [#antrea](https://kubernetes.slack.com/messages/CR2J23M0X) channel.
-* Attend the [project weekly meeting](https://VMware.zoom.us/j/823654111?pwd=MEV6blNtUUtqallVSkVFSGZtQ1kwUT09),
+* Check the [Antrea Team Calendar](https://calendar.google.com/calendar/embed?src=uuillgmcb1cu3rmv7r7jrhcrco%40group.calendar.google.com)
+  and join the developer and user communities!
+  + The [Antrea community meeting](https://VMware.zoom.us/j/823654111?pwd=MEV6blNtUUtqallVSkVFSGZtQ1kwUT09),
 every two weeks on Tuesday at 5AM UTC (9PM PDT, 6AM CET, 10.30AM IST, 1PM China).
-  + [Meeting minutes](https://github.com/vmware-tanzu/antrea/wiki/Community-Meetings)
-  + [Meeting recordings](https://www.youtube.com/playlist?list=PLH5zTfQ3otSA6EOYDNb-MvcQRXACdCbQw)
+    - [Meeting minutes](https://github.com/vmware-tanzu/antrea/wiki/Community-Meetings)
+    - [Meeting recordings](https://www.youtube.com/playlist?list=PLH5zTfQ3otSA6EOYDNb-MvcQRXACdCbQw)
+  + [Antrea office hours](https://VMware.zoom.us/j/94245798791?pwd=RzRNVXYxdDJnNjZnNjBiUVFHZGlXdz09),
+every two weeks on Tuesday at 10PM UTC (2PM PDT, 5PM EDT, 11PM CET, 6AM China)
 * Join our mailing lists to always stay up-to-date with Antrea development:
   + [projectantrea-announce](https://groups.google.com/forum/#!forum/projectantrea-announce)
 for important project announcements.

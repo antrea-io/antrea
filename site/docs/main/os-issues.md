@@ -9,15 +9,13 @@ reported by Antrea users. When possible we try to provide a workaround.
 | ------ |
 | [#626](https://github.com/vmware-tanzu/antrea/issues/626) |
 
-**CoreOS Container Linux will reach its
-  [end-of-life](https://coreos.com/os/eol/) on May 26, 2020 and will no longer
-  receive updates. It is recommended to migrate to another Operating System as
-  soon as possible.**
+**CoreOS Container Linux has reached its
+  [end-of-life](https://www.openshift.com/learn/topics/coreos) on May 26, 2020
+  and no longer receives updates. It is recommended to migrate to another
+  Operating System as soon as possible.**
 
-CoreOS uses
-[networkd](https://coreos.com/os/docs/latest/network-config-with-networkd.html)
-for network configuration. By default, all interfaces are managed by networkd
-because of the [configuration
+CoreOS uses networkd for network configuration. By default, all interfaces are
+managed by networkd because of the [configuration
 files](https://github.com/coreos/init/tree/master/systemd/network) that ship
 with CoreOS. Unfortunately, that includes the gateway interface created by
 Antrea (`antrea-gw0` by default). Most of the time, this is not an issue, but if
@@ -57,8 +55,7 @@ Unmanaged=yes
 ```
 
 Note that this fix requires a version of CoreOS `>= 1262.0.0` (Dec 2016), as the
-networkd `Unmanaged` option was not supported before that. See CoreOS [release
-notes](https://coreos.com/releases/).
+networkd `Unmanaged` option was not supported before that.
 
 ## Photon OS 3.0
 

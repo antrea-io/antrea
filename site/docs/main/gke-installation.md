@@ -75,7 +75,7 @@ assign this permission.
     Deploy ``antrea-node-init`` DaemonSet to enable ``kubelet`` to operate in CNI mode.
 
     ```bash
-    kubectl apply -f https://raw.githubusercontent.com/vmware-tanzu/antrea/master/build/yamls/antrea-gke-node-init.yml
+    kubectl apply -f https://raw.githubusercontent.com/vmware-tanzu/antrea/main/build/yamls/antrea-gke-node-init.yml
     ```
 
 2. Deploy Antrea
@@ -90,11 +90,11 @@ you can deploy Antrea as follows:
     kubectl apply -f https://github.com/vmware-tanzu/antrea/releases/download/<TAG>/antrea-gke.yml
     ```
 
-    To deploy the latest version of Antrea (built from the master branch), use the
+    To deploy the latest version of Antrea (built from the main branch), use the
 checked-in deployment yaml (`/build/yamls/antrea-gke.yml`):
 
     ```bash
-    kubectl apply -f https://raw.githubusercontent.com/vmware-tanzu/antrea/master/build/yamls/antrea-gke.yml
+    kubectl apply -f https://raw.githubusercontent.com/vmware-tanzu/antrea/main/build/yamls/antrea-gke.yml
     ```
 
     The command will deploy a single replica of Antrea controller to the GKE

@@ -29,9 +29,8 @@
   - [Deployment Steps](#deployment-steps)
   - [Pre-built Dashboards](#pre-built-dashboards)
     - [Overview](#overview-1)
-    - [Flows](#flows)
-      - [Pod-to-Pod Traffic](#pod-to-pod-traffic)
-      - [Pod-to-Service Traffic](#pod-to-service-traffic)
+    - [Pod-to-Pod Flows](#pod-to-pod-flows)
+    - [Pod-to-Service Flows](#pod-to-service-flows)
     - [Flow Records](#flow-records)
     - [Node Throughput](#node-throughput)
     - [Network Policy](#network-policy)
@@ -92,6 +91,9 @@ parameters have to be set in the Antrea Agent ConfigMap:
     # the flow collector.
     # Flow export frequency should be greater than or equal to 1.
     #flowExportFrequency: 12
+
+    # Enable TLS communication from flow exporter to flow aggregator.
+    #enableTLSToFlowAggregator: true
 ```
 
 Please note that the default value for `flowCollectorAddr` is `"flow-aggregator.flow-aggregator.svc:4739:tcp"`,
@@ -100,6 +102,7 @@ with the Name and Namespace set to `flow-aggregator`. If you deploy the Flow Agg
 Service with a different Name and Namespace, then either use the appropriate DNS
 name or the Cluster IP of the Service. Please note that the default values for
 `flowPollInterval` and `flowExportFrequency` parameters are set to 5s and 12, respectively.
+TLS communication between the Flow Exporter and the Flow Aggregator is enabled by default.
 Please modify them as per your requirements.
 
 ### IPFIX Information Elements (IEs) in a Flow Record
@@ -210,11 +213,11 @@ given release `<TAG>` (e.g. `v0.12.0`), you can deploy Flow Aggregator as follow
 kubectl apply -f https://github.com/vmware-tanzu/antrea/releases/download/<TAG>/flow-aggregator.yml
 ```
 
-To deploy the latest version of Flow Aggregator Service (built from the master branch), use the
+To deploy the latest version of Flow Aggregator Service (built from the main branch), use the
 checked-in deployment yaml (`/build/yamls/flow-aggregator.yml`):
 
 ```bash
-kubectl apply -f https://raw.githubusercontent.com/vmware-tanzu/antrea/master/build/yamls/flow-aggregator.yml
+kubectl apply -f https://raw.githubusercontent.com/vmware-tanzu/antrea/main/build/yamls/flow-aggregator.yml
 ```
 
 ### Configuration
@@ -235,13 +238,21 @@ flow-aggregator.conf: |
   # Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
   #flowExportInterval: 60s
   
-  # Provide the transport protocol for the flow aggregator collecting process, which is tcp or udp.
-  #aggregatorTransportProtocol: "tcp"
+  # Provide the transport protocol for the flow aggregator collecting process, which is tls, tcp or udp.
+  #aggregatorTransportProtocol: "tls"
+  
+  # Provide DNS name or IP address of flow aggregator for generating TLS certificate. It must match
+  # the flowCollectorAddr parameter in the antrea-agent config.    
+  #flowAggregatorAddress: "flow-aggregator.flow-aggregator.svc"
 ```
 
-Please note that the default values for `flowExportInterval` and `aggregatorTransportProtocol`
-parameters are set to `60s` and `tcp`, respectively. Please modify them as per your
-requirements.
+Please note that the default values for `flowExportInterval`, `aggregatorTransportProtocol`,
+and `flowAggregatorAddress` parameters are set to `60s`, `tls` and `flow-aggregator.flow-aggregator.svc`,
+respectively. Please make sure that `aggregatorTransportProtocol` is set to `tls` and
+`enableTLSToFlowAggregator` in `agent-agent.conf` is set to true to guarantee secure communication
+works properly. `enableTLSToFlowAggregator` and `aggregatorTransportProtocol` must always match,
+so TLS must either be enabled for both sides or disabled for both sides. Please modify the parameters
+as per your requirements.
 
 ### IPFIX Information Elements (IEs) in an Aggregated Flow Record
 
@@ -357,13 +368,20 @@ or
 svn export https://github.com/vmware-tanzu/antrea/tags/<TAG>/build/yamls/elk-flow-collector/
 ```
 
-If the deployed version of Antrea is the latest version, i.e., built from the master
+If the deployed version of Antrea is the latest version, i.e., built from the main
 branch, then you can use the following command:
 
 ```shell
-git clone --depth 1 --branch master https://github.com/vmware-tanzu/antrea.git && cd antrea/build/yamls/
+git clone --depth 1 --branch main https://github.com/vmware-tanzu/antrea.git && cd antrea/build/yamls/
 or
 svn export https://github.com/vmware-tanzu/antrea/trunk/build/yamls/elk-flow-collector/
+```
+
+To configure the export interval as `flowExportInterval` in [Configuration](#configuration),
+modify the `interval` value (in seconds) in `elk-flow-collector/logstash/logstash.conf`
+
+```conf
+script_params => { "interval" => 60 }
 ```
 
 To create the required K8s resources in the `elk-flow-collector` folder and get
@@ -392,39 +410,44 @@ visualization.
 
 An overview of Pod-based flow records information is provided.
 
-<img src="https://downloads.antrea.io/static/flow-visualization-overview.png" width="900" alt="Flow
+<img src="https://downloads.antrea.io/static/02052021/flow-visualization-overview.png" width="900" alt="Flow
 Visualization Overview Dashboard">
 
-#### Flows
-
-##### Pod-to-Pod Traffic
+#### Pod-to-Pod Flows
 
 Pod-to-Pod Tx and Rx traffic is shown in sankey diagrams. Corresponding
-source or destination Pod throughput is visualized using stacked line graph.
+source or destination Pod throughput is visualized using line graph.
 
-<img src="https://downloads.antrea.io/static/flow-visualization-flow-1.png" width="900" alt="Flow
-Visualization Flows Dashboard">
+<img src="https://downloads.antrea.io/static/02052021/flow-visualization-pod-to-pod-1.png" width="900" alt="Flow
+Visualization Pod-to-Pod Dashboard">
 
-<img src="https://downloads.antrea.io/static/flow-visualization-flow-2.png" width="900" alt="Flow
-Visualization Flow Dashboard">
+<img src="https://downloads.antrea.io/static/02052021/flow-visualization-pod-to-pod-2.png" width="900" alt="Flow
+Visualization Pod-to-Pod Dashboard">
 
-##### Pod-to-Service Traffic
+<img src="https://downloads.antrea.io/static/02052021/flow-visualization-pod-to-pod-3.png" width="900" alt="Flow
+Visualization Pod-to-Pod Dashboard">
+
+#### Pod-to-Service Flows
 
 Pod-to-Service traffic is presented similar to Pod-to-Pod traffic.
-Corresponding source or destination IP addresses are shown in tooltips.
+Corresponding source or destination IP addresses is shown in tooltips.
 
-<img src="https://downloads.antrea.io/static/flow-visualization-flow-3.png" width="900" alt="Flow
-Visualization Flows Dashboard">
+<img src="https://downloads.antrea.io/static/02052021/flow-visualization-pod-to-service-1.png" width="900" alt="Flow
+Visualization Pod-to-Service Dashboard">
 
-<img src="https://downloads.antrea.io/static/flow-visualization-flow-4.png" width="900" alt="Flow
-Visualization Flow Dashboard">
+Aggregated Tx and Rx traffic based on destination Service is shown in line graph.
+<img src="https://downloads.antrea.io/static/02052021/flow-visualization-pod-to-service-2.png" width="900" alt="Flow
+Visualization Pod-to-Service Dashboard">
+
+<img src="https://downloads.antrea.io/static/02052021/flow-visualization-pod-to-service-3.png" width="900" alt="Flow
+Visualization Pod-to-Service Dashboard">
 
 #### Flow Records
 
 Flow Records dashboard shows the raw flow records over time with support
 for filters.
 
-<img src="https://downloads.antrea.io/static/flow-visualization-flow-record.png" width="900" alt="Flow
+<img src="https://downloads.antrea.io/static/02052021/flow-visualization-flow-record.png" width="900" alt="Flow
 Visualization Flow Record Dashboard">
 
 #### Node Throughput
@@ -432,10 +455,13 @@ Visualization Flow Record Dashboard">
 Node Throughput dashboard shows the visualization of inter-Node and
 intra-Node traffic by aggregating all the Pod traffic per Node.
 
-<img src="https://downloads.antrea.io/static/flow-visualization-node-1.png" width="900" alt="Flow
+<img src="https://downloads.antrea.io/static/02052021/flow-visualization-node-1.png" width="900" alt="Flow
 Visualization Node Throughput Dashboard">
 
-<img src="https://downloads.antrea.io/static/flow-visualization-node-2.png" width="900" alt="Flow
+We also present aggregated Tx and Rx Mbps by Node in heatmap to give
+a better overview of Node bandwidth consumption.
+
+<img src="https://downloads.antrea.io/static/02052021/flow-visualization-node-2.png" width="900" alt="Flow
 Visualization Node Throughput Dashboard">
 
 #### Network Policy

@@ -7,6 +7,8 @@ toc:
         url: /getting-started
       - page: Deploying on kind
         url: /kind
+      - page: Deploying on ARM
+        url: /arm-support
       - page: Configuration
         url: /configuration
   - title: Cloud Deployment
@@ -43,6 +45,8 @@ toc:
         url: /network-flow-visibility
       - page: Traceflow Guide
         url: /traceflow-guide
+      - page: NoEncap and Hybrid Traffic Modes
+        url: /noencap-hybrid-modes
       - page: Versioning
         url: /versioning
       - page: Antrea API Groups

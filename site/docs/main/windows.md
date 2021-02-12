@@ -31,7 +31,7 @@ section for details.
 ### Antrea Windows demo
 
 Watch this [demo video](https://www.youtube.com/watch?v=NjeVPGgaNFU) of running
-Antrea in a Kubernetes cluster with both Linux and Windows nodes. The demo also
+Antrea in a Kubernetes cluster with both Linux and Windows Nodes. The demo also
 shows the Antrea OVS bridge configuration on a Windows Node, NetworkPolicy
 enforcement for Windows Pods, and Antrea Traceflow from Octant. Note, OVS driver
 and daemons are pre-installed on the Windows Nodes in the demo.
@@ -45,7 +45,9 @@ and daemons are pre-installed on the Windows Nodes in the demo.
   updates.
 * Deploy a Linux-based Kubernetes cluster.
 * Install [Hyper-V](https://docs.microsoft.com/en-us/windows-server/virtualization/hyper-v/get-started/install-the-hyper-v-role-on-windows-server)
-  with management tools.
+  with management tools. If your Nodes do not have the virtualization
+  capabilities required by Hyper-V, you could try the workaround
+  described in the [Known issues](#Known-issues) section.
 * Install [Docker](https://docs.microsoft.com/en-us/virtualization/windowscontainers/quick-start/set-up-environment?tabs=Windows-Server).
 * [Install OVS](http://docs.openvswitch.org/en/latest/intro/install/windows/)
   and configure the daemons as Windows service.
@@ -53,7 +55,7 @@ and daemons are pre-installed on the Windows Nodes in the demo.
   - If OVS driver is not signed, please refer to the Windows doc about how to
     [install a test-signed driver package on the test computer](https://docs.microsoft.com/en-us/windows-hardware/drivers/install/installing-a-test-signed-driver-package-on-the-test-computer).
   - If you don't have a self-signed OVS package and just want to try the
-    Antrea on windows, Antrea provides a test-signed OVS package for you.
+    Antrea on Windows, Antrea provides a test-signed OVS package for you.
     See details in [Join Windows worker Nodes](#Join-Windows-worker-nodes)
     section.
 
@@ -151,7 +153,7 @@ kubectl apply -f https://github.com/vmware-tanzu/antrea/releases/download/<TAG>/
 
 Antrea provides a pre-built OVS package which contains test-signed OVS kernel
 driver. If you don't have a self-signed OVS package and just want to try the
-Antrea on windows, this package can be used for testing. We also provide a help
+Antrea on Windows, this package can be used for testing. We also provide a help
 script to install the OVS driver and register userspace binaries as services.
 
 Firstly, please make sure to [enable test-signed](https://docs.microsoft.com/en-us/windows-hardware/drivers/install/the-testsigning-boot-configuration-option)
@@ -165,7 +167,7 @@ Restart-Computer
 Then, install the OVS using the script.
 
 ```powershell
-curl.exe -LO https://raw.githubusercontent.com/vmware-tanzu/antrea/master/hack/windows/Install-OVS.ps1
+curl.exe -LO https://raw.githubusercontent.com/vmware-tanzu/antrea/main/hack/windows/Install-OVS.ps1
 .\Install-OVS.ps1
 ```
 
@@ -202,9 +204,9 @@ Run the following commands to prepare the Node environment needed by antrea-agen
 ```powershell
 mkdir c:\k\antrea
 cd c:\k\antrea
-curl.exe -LO https://raw.githubusercontent.com/vmware-tanzu/antrea/master/hack/windows/Clean-AntreaNetwork.ps1
-curl.exe -LO https://raw.githubusercontent.com/vmware-tanzu/antrea/master/hack/windows/Prepare-ServiceInterface.ps1
-curl.exe -LO https://raw.githubusercontent.com/vmware-tanzu/antrea/master/hack/windows/Prepare-AntreaAgent.ps1
+curl.exe -LO https://raw.githubusercontent.com/vmware-tanzu/antrea/main/hack/windows/Clean-AntreaNetwork.ps1
+curl.exe -LO https://raw.githubusercontent.com/vmware-tanzu/antrea/main/hack/windows/Prepare-ServiceInterface.ps1
+curl.exe -LO https://raw.githubusercontent.com/vmware-tanzu/antrea/main/hack/windows/Prepare-AntreaAgent.ps1
 .\Prepare-AntreaAgent.ps1
 ```
 
@@ -287,14 +289,14 @@ take over the host network. After that you should be able to view the Windows
 Nodes and Pods in your cluster by running:
 
 ```bash
-# Show nodes
+# Show Nodes
 kubectl get nodes -o wide -n kube-system
 NAME                           STATUS   ROLES                  AGE   VERSION   INTERNAL-IP     EXTERNAL-IP   OS-IMAGE                                  KERNEL-VERSION     CONTAINER-RUNTIME
 control-plane                  Ready    control-plane,master   1h    v1.18.3   10.176.27.168   <none>        Ubuntu 18.04.3 LTS                        4.15.0-66-generic   docker://19.3.9
 win-5akrf2tpq91                Ready    <none>                 1h    v1.18.0   10.176.27.150   <none>        Windows Server 2019 Standard Evaluation   10.0.17763.1158    docker://19.3.5
 win-5akrf2tpq92                Ready    <none>                 1h    v1.18.0   10.176.27.197   <none>        Windows Server 2019 Standard Evaluation   10.0.17763.1158     docker://19.3.5
 
-# Show antrea-agent and kube-proxy pods
+# Show antrea-agent and kube-proxy Pods
 kubectl get pods -o wide -n kube-system | grep windows
 antrea-agent-windows-6hvkw                             1/1     Running     0          100s
 kube-proxy-windows-2d45w                               1/1     Running     0          102s
@@ -326,5 +328,49 @@ curl.exe -LO https://github.com/vmware-tanzu/antrea/releases/download/<TAG>/Star
 1. HNS Network is not persistent on Windows. So after the Windows Node reboots,
 the HNS Network created by antrea-agent is removed, and the Open vSwitch
 Extension is disabled by default. In this case, the stale OVS bridge and ports
-should be removed. A help script [Clean-AntreaNetwork.ps1](https://raw.githubusercontent.com/vmware-tanzu/antrea/master/hack/windows/Clean-AntreaNetwork.ps1)
+should be removed. A help script [Clean-AntreaNetwork.ps1](https://raw.githubusercontent.com/vmware-tanzu/antrea/main/hack/windows/Clean-AntreaNetwork.ps1)
 can be used to clean the OVS bridge.
+
+2. Hyper-V feature cannot be installed on Windows Node due to the processor not
+having the required virtualization capabilities.
+
+    If the processor of the Windows Node does not have the required
+    virtualization capabilities. The installation of Hyper-V feature will fail
+    with the following error:
+
+    ```powershell
+    PS C:\Users\Administrator> Install-WindowsFeature Hyper-V
+
+    Success Restart Needed Exit Code      Feature Result
+    ------- -------------- ---------      --------------
+    False   Maybe          Failed         {}
+    Install-WindowsFeature : A prerequisite check for the Hyper-V feature failed.
+    1. Hyper-V cannot be installed: The processor does not have required virtualization capabilities.
+    At line:1 char:1
+    + Install-WindowsFeature hyper-v
+    + ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        + CategoryInfo          : InvalidOperation: (Hyper-V:ServerComponentWrapper) [Install-WindowsFeature], Exception
+        + FullyQualifiedErrorId : Alteration_PrerequisiteCheck_Failed,Microsoft.Windows.ServerManager.Commands.AddWindowsF
+       eatureCommand
+    ```
+
+    The capabilities are required by the Hyper-V `hypervisor` components to
+    support [Hyper-V isolation](https://docs.microsoft.com/en-us/virtualization/windowscontainers/manage-containers/hyperv-container#hyper-v-isolation).
+    If you only need [Process Isolation](https://docs.microsoft.com/en-us/virtualization/windowscontainers/manage-containers/hyperv-container#process-isolation)
+    on the Nodes. You could apply the following workaround to skip CPU check for
+    Hyper-V feature installation.
+
+    ```powershell
+    # 1. Install containers feature
+    Install-WindowsFeature containers
+
+    # 2. Install Hyper-V management powershell module
+    Install-WindowsFeature Hyper-V-Powershell
+
+    # 3. Install Hyper-V feature without CPU check and disable the "hypervisor"
+    dism /online /enable-feature /featurename:Microsoft-Hyper-V /all /NoRestart
+    dism /online /disable-feature /featurename:Microsoft-Hyper-V-Online /NoRestart
+
+    # 4. Restart-Computer to take effect
+    Restart-Computer
+    ```
