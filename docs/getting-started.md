@@ -66,12 +66,19 @@ checked-in [deployment yaml](/build/yamls/antrea.yml):
 kubectl apply -f https://raw.githubusercontent.com/vmware-tanzu/antrea/main/build/yamls/antrea.yml
 ```
 
-If you want to add Windows Nodes to your cluster, please refer to the
-installation instructions in [windows.md](windows.md).
-
 Antrea supports some experimental features that can be enabled or disabled,
 please refer to the [Feature Gates documentation](feature-gates.md) for more
 information.
+
+### Windows support
+
+If you want to add Windows Nodes to your cluster, please refer to these
+[installation instructions](windows.md).
+
+### ARM support
+
+Starting with v0.13, Antrea supports arm64 and arm/v7 Nodes. Please refer to
+these [installation instructions](arm-support.md).
 
 ### Deploying Antrea on a Cluster with Existing CNI
 
