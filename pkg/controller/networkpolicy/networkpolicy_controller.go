@@ -936,7 +936,7 @@ func (n *NetworkPolicyController) addPod(obj interface{}) {
 	// Find all AddressGroup keys which match the Pod's labels.
 	addressGroupKeySet := n.filterAddressGroupsForPodOrExternalEntity(pod)
 	// Find all internal Group keys which match the Pod's labels.
-	groupKeySet := n.filterInternalGroupsForPod(pod)
+	groupKeySet := n.filterInternalGroupsForPodOrExternalEntity(pod)
 	// Enqueue groups to their respective queues for group processing.
 	for group := range appliedToGroupKeySet {
 		n.enqueueAppliedToGroup(group)
@@ -967,11 +967,11 @@ func (n *NetworkPolicyController) updatePod(oldObj, curObj interface{}) {
 	// Find groups matching the old Pod's labels.
 	oldAddressGroupKeySet := n.filterAddressGroupsForPodOrExternalEntity(oldPod)
 	oldAppliedToGroupKeySet := n.filterAppliedToGroupsForPodOrExternalEntity(oldPod)
-	oldGroupKeySet := n.filterInternalGroupsForPod(oldPod)
+	oldGroupKeySet := n.filterInternalGroupsForPodOrExternalEntity(oldPod)
 	// Find groups matching the new Pod's labels.
 	curAppliedToGroupKeySet := n.filterAppliedToGroupsForPodOrExternalEntity(curPod)
 	curAddressGroupKeySet := n.filterAddressGroupsForPodOrExternalEntity(curPod)
-	curGroupKeySet := n.filterInternalGroupsForPod(curPod)
+	curGroupKeySet := n.filterInternalGroupsForPodOrExternalEntity(curPod)
 	// Create set to hold the group keys to enqueue.
 	var appliedToGroupKeys sets.String
 	var addressGroupKeys sets.String
@@ -1031,7 +1031,7 @@ func (n *NetworkPolicyController) deletePod(old interface{}) {
 	// Find all AddressGroup keys which match the Pod's labels.
 	addressGroupKeys := n.filterAddressGroupsForPodOrExternalEntity(pod)
 	// Find all internal Group keys which match the Pod's labels.
-	groupKeys := n.filterInternalGroupsForPod(pod)
+	groupKeys := n.filterInternalGroupsForPodOrExternalEntity(pod)
 	// Enqueue groups to their respective queues for group processing.
 	for group := range appliedToGroupKeys {
 		n.enqueueAppliedToGroup(group)

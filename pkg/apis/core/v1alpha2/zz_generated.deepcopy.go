@@ -227,6 +227,11 @@ func (in *GroupSpec) DeepCopyInto(out *GroupSpec) {
 		*out = new(ServiceReference)
 		**out = **in
 	}
+	if in.ExternalEntitySelector != nil {
+		in, out := &in.ExternalEntitySelector, &out.ExternalEntitySelector
+		*out = new(v1.LabelSelector)
+		(*in).DeepCopyInto(*out)
+	}
 	return
 }
 

@@ -719,6 +719,8 @@ spec:
                   x-kubernetes-preserve-unknown-fields: true
                 namespaceSelector:
                   x-kubernetes-preserve-unknown-fields: true
+                externalEntitySelector:
+                  x-kubernetes-preserve-unknown-fields: true
                 ipBlock:
                   type: object
                   properties:
