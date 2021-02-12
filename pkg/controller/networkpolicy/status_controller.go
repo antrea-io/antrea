@@ -34,6 +34,7 @@ import (
 	antreaclientset "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned"
 	secinformers "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions/security/v1alpha1"
 	seclisters "github.com/vmware-tanzu/antrea/pkg/client/listers/security/v1alpha1"
+	"github.com/vmware-tanzu/antrea/pkg/controller/metrics"
 	antreatypes "github.com/vmware-tanzu/antrea/pkg/controller/types"
 )
 
@@ -328,6 +329,7 @@ func (c *networkPolicyControl) UpdateAntreaNetworkPolicyStatus(namespace, name s
 	if anp.Status == *status {
 		return nil
 	}
+	metrics.AntreaNetworkPolicyStatusUpdates.Inc()
 	toUpdate := anp.DeepCopy()
 	toUpdate.Status = *status
 	_, err = c.antreaClient.SecurityV1alpha1().NetworkPolicies(namespace).UpdateStatus(context.TODO(), toUpdate, v1.UpdateOptions{})
@@ -344,6 +346,7 @@ func (c *networkPolicyControl) UpdateAntreaClusterNetworkPolicyStatus(name strin
 	if cnp.Status == *status {
 		return nil
 	}
+	metrics.AntreaClusterNetworkPolicyStatusUpdates.Inc()
 	toUpdate := cnp.DeepCopy()
 	toUpdate.Status = *status
 	_, err = c.antreaClient.SecurityV1alpha1().ClusterNetworkPolicies().UpdateStatus(context.TODO(), toUpdate, v1.UpdateOptions{})

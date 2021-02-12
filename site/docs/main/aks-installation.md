@@ -49,7 +49,7 @@ You can use any method to create an AKS cluster. The example given here is using
     Deploy ``antrea-node-init`` DaemonSet to enable ``azure cni`` to operate in transparent mode.
 
     ```bash
-    kubectl apply -f https://raw.githubusercontent.com/vmware-tanzu/antrea/master/build/yamls/antrea-aks-node-init.yml
+    kubectl apply -f https://raw.githubusercontent.com/vmware-tanzu/antrea/main/build/yamls/antrea-aks-node-init.yml
     ```
 
 2. Deploy Antrea
@@ -64,11 +64,11 @@ you can deploy Antrea as follows:
     kubectl apply -f https://github.com/vmware-tanzu/antrea/releases/download/<TAG>/antrea-aks.yml
     ```
 
-    To deploy the latest version of Antrea (built from the master branch), use the
+    To deploy the latest version of Antrea (built from the main branch), use the
 checked-in deployment yaml (`/build/yamls/antrea-aks.yml`):
 
     ```bash
-    kubectl apply -f https://raw.githubusercontent.com/vmware-tanzu/antrea/master/build/yamls/antrea-aks.yml
+    kubectl apply -f https://raw.githubusercontent.com/vmware-tanzu/antrea/main/build/yamls/antrea-aks.yml
     ```
 
     The command will deploy a single replica of Antrea controller to the AKS

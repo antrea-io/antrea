@@ -21,8 +21,8 @@ type PodPortRules interface {
 	Init() error
 	AddRule(port int, podip string) error
 	DeleteRule(port int, podip string) error
-	GetAllRules() (map[int]string, error)
 	DeleteAllRules() error
+	AddAllRules(nplList []PodNodePort) error
 }
 
 // InitRules initializes rules based on the underlying implementation

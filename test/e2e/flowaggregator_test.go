@@ -114,10 +114,10 @@ func TestFlowAggregator(t *testing.T) {
 
 	podAIP, podBIP, podCIP, svcB, svcC, err := createPerftestPods(data)
 	if err != nil {
-		teardownFlowAggregator(t, data)
-		teardownTest(t, data)
 		t.Fatalf("Error when creating perftest pods and services: %v", err)
 	}
+	// Wait for the Service to be realized.
+	time.Sleep(3 * time.Second)
 
 	// IntraNodeFlows tests the case, where Pods are deployed on same Node and their flow information is exported as IPFIX flow records.
 	t.Run("IntraNodeFlows", func(t *testing.T) {

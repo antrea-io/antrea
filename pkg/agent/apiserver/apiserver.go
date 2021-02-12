@@ -92,7 +92,7 @@ func installAPIGroup(s *genericapiserver.GenericAPIServer, aq agentquerier.Agent
 
 // New creates an APIServer for running in antrea agent.
 func New(aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolicyInfoQuerier, bindPort int,
-	enableMetrics bool, kubeconfig string) (*agentAPIServer, error) {
+	enableMetrics bool, kubeconfig string, cipherSuites []uint16, tlsMinVersion uint16) (*agentAPIServer, error) {
 	cfg, err := newConfig(bindPort, enableMetrics, kubeconfig)
 	if err != nil {
 		return nil, err
@@ -101,6 +101,8 @@ func New(aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolicyInfoQuerier
 	if err != nil {
 		return nil, err
 	}
+	s.SecureServingInfo.CipherSuites = cipherSuites
+	s.SecureServingInfo.MinTLSVersion = tlsMinVersion
 	if err := installAPIGroup(s, aq, npq); err != nil {
 		return nil, err
 	}
@@ -111,7 +113,7 @@ func New(aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolicyInfoQuerier
 func newConfig(bindPort int, enableMetrics bool, kubeconfig string) (*genericapiserver.CompletedConfig, error) {
 	secureServing := genericoptions.NewSecureServingOptions().WithLoopback()
 	authentication := genericoptions.NewDelegatingAuthenticationOptions()
-	authorization := genericoptions.NewDelegatingAuthorizationOptions().WithAlwaysAllowPaths("/healthz")
+	authorization := genericoptions.NewDelegatingAuthorizationOptions().WithAlwaysAllowPaths("/healthz", "/livez", "/readyz")
 
 	// kubeconfig file is useful when antrea-agent isn't not running as a pod
 	if len(kubeconfig) > 0 {

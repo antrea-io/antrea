@@ -170,7 +170,7 @@
          name: ANTREA_REPO
          trim: 'true'
      - string:
-         default: master
+         default: main
          description: The branch or SHA commit ID to checkout and build Antrea for this test.
          name: ANTREA_GIT_REVISION
          trim: 'true'
@@ -211,7 +211,7 @@
          name: ANTREA_REPO
          trim: 'true'
      - string:
-         default: master
+         default: main
          description: The branch or SHA commit ID to checkout and build Antrea for this test.
          name: ANTREA_GIT_REVISION
          trim: 'true'

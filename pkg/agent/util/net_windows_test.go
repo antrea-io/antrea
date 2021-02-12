@@ -30,7 +30,7 @@ import (
 var hypervInstalled = false
 
 func TestWindowsHyperVInstalled(t *testing.T) {
-	installed, err := WindowsHyperVInstalled()
+	installed, err := WindowsHyperVEnabled()
 	require.Nil(t, err)
 	t.Logf("HyperV installed: %v", installed)
 	hypervInstalled = installed

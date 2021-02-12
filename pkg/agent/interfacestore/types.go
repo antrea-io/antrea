@@ -84,6 +84,7 @@ type InterfaceStore interface {
 	GetInterface(interfaceKey string) (*InterfaceConfig, bool)
 	GetInterfaceByName(interfaceName string) (*InterfaceConfig, bool)
 	GetContainerInterface(containerID string) (*InterfaceConfig, bool)
+	GetInterfacesByEntity(name string, namespace string) []*InterfaceConfig
 	GetContainerInterfacesByPod(podName string, podNamespace string) []*InterfaceConfig
 	GetInterfaceByIP(interfaceIP string) (*InterfaceConfig, bool)
 	GetNodeTunnelInterface(nodeName string) (*InterfaceConfig, bool)
@@ -142,4 +143,9 @@ func NewUplinkInterface(uplinkName string) *InterfaceConfig {
 // TODO: remove this method after IPv4/IPv6 dual-stack is supported completely.
 func (c *InterfaceConfig) GetIPv4Addr() net.IP {
 	return util.GetIPv4Addr(c.IPs)
+}
+
+func (c *InterfaceConfig) GetIPv6Addr() net.IP {
+	ipv6, _ := util.GetIPWithFamily(c.IPs, util.FamilyIPv6)
+	return ipv6
 }

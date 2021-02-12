@@ -152,13 +152,13 @@ a configuration parameter for the Agent.
 in the conntrack table. This metric gets updated at an interval specified
 by flowPollInterval, a configuration parameter for the Agent.
 - **antrea_agent_egress_networkpolicy_rule_count:** Number of egress
-networkpolicy rules on local node which are managed by the Antrea Agent.
+NetworkPolicy rules on local Node which are managed by the Antrea Agent.
 - **antrea_agent_ingress_networkpolicy_rule_count:** Number of ingress
-networkpolicy rules on local node which are managed by the Antrea Agent.
-- **antrea_agent_local_pod_count:** Number of pods on local node which are
+NetworkPolicy rules on local Node which are managed by the Antrea Agent.
+- **antrea_agent_local_pod_count:** Number of Pods on local Node which are
 managed by the Antrea Agent.
-- **antrea_agent_networkpolicy_count:** Number of networkpolicies on local
-node which are managed by the Antrea Agent.
+- **antrea_agent_networkpolicy_count:** Number of NetworkPolicies on local
+Node which are managed by the Antrea Agent.
 - **antrea_agent_ovs_flow_count:** Flow count for each OVS flow table. The
 TableID is used as a label.
 - **antrea_agent_ovs_flow_ops_count:** Number of OVS flow operations,
@@ -172,10 +172,14 @@ tables.
 
 #### Antrea Controller Metrics
 
+- **antrea_controller_acnp_status_updates:** The total number of actual
+status updates performed for Antrea ClusterNetworkPolicy Custom Resources
 - **antrea_controller_address_group_processed:** The total number of
 address-group processed
 - **antrea_controller_address_group_sync_duration_milliseconds:** The duration
 of syncing address-group
+- **antrea_controller_anp_status_updates:** The total number of actual status
+updates performed for Antrea NetworkPolicy Custom Resources
 - **antrea_controller_applied_to_group_processed:** The total number of
 applied-to-group processed
 - **antrea_controller_applied_to_group_sync_duration_milliseconds:** The

@@ -20,7 +20,7 @@ function prereqs {
   fi
 
   # Frozen docs are frozen from the ToT docs. Update them.
-  ./prepare-main-docs.sh
+  ./prepare-tot-docs.sh
 }
 
 function copy_main_docs_to_versioned_docs {

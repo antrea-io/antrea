@@ -18,12 +18,12 @@ import (
 	"fmt"
 	"hash/fnv"
 	"net"
-	"strings"
 	"time"
 
 	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
 	"github.com/vmware/go-ipfix/pkg/exporter"
 	ipfixregistry "github.com/vmware/go-ipfix/pkg/registry"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter"
@@ -71,27 +71,21 @@ var (
 	AntreaInfoElementsIPv6 = append(antreaInfoElementsCommon, []string{"destinationClusterIPv6"}...)
 )
 
-const (
-	// flowAggregatorDNSName is a static DNS name for the deployed Flow Aggregator
-	// Service in the K8s cluster. By default, both the Name and Namespace of the
-	// Service are set to "flow-aggregator".
-	flowAggregatorDNSName = "flow-aggregator.flow-aggregator.svc"
-	defaultIPFIXPort      = "4739"
-)
-
 type flowExporter struct {
-	flowRecords     *flowrecords.FlowRecords
-	process         ipfix.IPFIXExportingProcess
-	elementsListv4  []*ipfixentities.InfoElementWithValue
-	elementsListv6  []*ipfixentities.InfoElementWithValue
-	exportFrequency uint
-	pollCycle       uint
-	templateIDv4    uint16
-	templateIDv6    uint16
-	registry        ipfix.IPFIXRegistry
-	v4Enabled       bool
-	v6Enabled       bool
-	collectorAddr   net.Addr
+	flowRecords               *flowrecords.FlowRecords
+	process                   ipfix.IPFIXExportingProcess
+	elementsListv4            []*ipfixentities.InfoElementWithValue
+	elementsListv6            []*ipfixentities.InfoElementWithValue
+	exportFrequency           uint
+	pollCycle                 uint
+	templateIDv4              uint16
+	templateIDv6              uint16
+	registry                  ipfix.IPFIXRegistry
+	v4Enabled                 bool
+	v6Enabled                 bool
+	collectorAddr             net.Addr
+	enableTLSToFlowAggregator bool
+	k8sClient                 kubernetes.Interface
 }
 
 func genObservationID() (uint32, error) {
@@ -104,7 +98,7 @@ func genObservationID() (uint32, error) {
 	return h.Sum32(), nil
 }
 
-func NewFlowExporter(records *flowrecords.FlowRecords, exportFrequency uint, v4Enabled bool, v6Enabled bool) *flowExporter {
+func NewFlowExporter(records *flowrecords.FlowRecords, exportFrequency uint, enableTLSToFlowAggregator bool, v4Enabled bool, v6Enabled bool, k8sClient kubernetes.Interface) *flowExporter {
 	registry := ipfix.NewIPFIXRegistry()
 	registry.LoadRegistry()
 	return &flowExporter{
@@ -120,6 +114,8 @@ func NewFlowExporter(records *flowrecords.FlowRecords, exportFrequency uint, v4E
 		v4Enabled,
 		v6Enabled,
 		nil,
+		enableTLSToFlowAggregator,
+		k8sClient,
 	}
 }
 
@@ -175,47 +171,47 @@ func (exp *flowExporter) initFlowExporter(collectorAddr string, collectorProto s
 		return fmt.Errorf("cannot generate obsID for IPFIX ipfixexport: %v", err)
 	}
 
-	if strings.Contains(collectorAddr, flowAggregatorDNSName) {
-		hostIPs, err := net.LookupIP(flowAggregatorDNSName)
-		if err != nil {
-			return err
-		}
-		// Currently, supporting only IPv4 for Flow Aggregator.
-		ip := hostIPs[0].To4()
-		if ip != nil {
-			// Update the collector address with resolved IP of flow aggregator
-			collectorAddr = net.JoinHostPort(ip.String(), defaultIPFIXPort)
-		} else {
-			return fmt.Errorf("resolved Flow Aggregator address %v is not supported", hostIPs[0])
-		}
-	}
-
-	// TODO: This code can be further simplified by changing the go-ipfix API to accept
-	// collectorAddr and collectorProto instead of net.Addr input.
 	var expInput exporter.ExporterInput
-	if collectorProto == "tcp" {
-		collector, err := net.ResolveTCPAddr("tcp", collectorAddr)
+	if exp.enableTLSToFlowAggregator {
+		// if CA certificate, client certificate and key do not exist during initialization,
+		// it will retry to obtain the credentials in next export cycle
+		caCert, err := getCACert(exp.k8sClient)
 		if err != nil {
-			return err
+			return fmt.Errorf("cannot retrieve CA cert: %v", err)
 		}
+		clientCert, clientKey, err := getClientCertKey(exp.k8sClient)
+		if err != nil {
+			return fmt.Errorf("cannot retrieve client cert and key: %v", err)
+		}
+		// TLS transport does not need any tempRefTimeout, so sending 0.
+		expInput = exporter.ExporterInput{
+			CollectorAddress:    collectorAddr,
+			CollectorProtocol:   collectorProto,
+			ObservationDomainID: obsID,
+			TempRefTimeout:      0,
+			PathMTU:             0,
+			IsEncrypted:         true,
+			CACert:              caCert,
+			ClientCert:          clientCert,
+			ClientKey:           clientKey,
+		}
+	} else if collectorProto == "tcp" {
 		// TCP transport does not need any tempRefTimeout, so sending 0.
 		// tempRefTimeout is the template refresh timeout, which specifies how often
 		// the exporting process should send the template again.
 		expInput = exporter.ExporterInput{
-			CollectorAddr:       collector,
+			CollectorAddress:    collectorAddr,
+			CollectorProtocol:   collectorProto,
 			ObservationDomainID: obsID,
 			TempRefTimeout:      0,
 			PathMTU:             0,
 			IsEncrypted:         false,
 		}
 	} else {
-		collector, err := net.ResolveUDPAddr("udp", collectorAddr)
-		if err != nil {
-			return err
-		}
 		// For UDP transport, hardcoding tempRefTimeout value as 1800s.
 		expInput = exporter.ExporterInput{
-			CollectorAddr:       collector,
+			CollectorAddress:    collectorAddr,
+			CollectorProtocol:   collectorProto,
 			ObservationDomainID: obsID,
 			TempRefTimeout:      1800,
 			PathMTU:             0,
@@ -452,7 +448,11 @@ func (exp *flowExporter) addRecordToSet(dataSet ipfix.IPFIXSet, record flowexpor
 				ie.Value = net.ParseIP("::")
 			}
 		case "destinationServicePort":
-			ie.Value = record.Conn.TupleOrig.DestinationPort
+			if record.Conn.DestinationServicePortName != "" {
+				ie.Value = record.Conn.TupleOrig.DestinationPort
+			} else {
+				ie.Value = uint16(0)
+			}
 		case "destinationServicePortName":
 			if record.Conn.DestinationServicePortName != "" {
 				ie.Value = record.Conn.DestinationServicePortName

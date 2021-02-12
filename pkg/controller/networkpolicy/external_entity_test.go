@@ -19,6 +19,7 @@
 package networkpolicy
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -29,6 +30,69 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/apis/core/v1alpha2"
 	antreatypes "github.com/vmware-tanzu/antrea/pkg/controller/types"
 )
+
+func TestExternalEntityToGroupMember(t *testing.T) {
+	testEntity := &v1alpha2.ExternalEntity{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "eeA",
+			Namespace: "nsA",
+			Labels: map[string]string{
+				"app": "test",
+			},
+		},
+		Spec: v1alpha2.ExternalEntitySpec{
+			Endpoints: []v1alpha2.Endpoint{
+				{
+					IP:   "22.33.44.55",
+					Name: "vm1",
+				},
+			},
+			Ports: []v1alpha2.NamedPort{
+				{
+					Port:     80,
+					Name:     "http",
+					Protocol: "tcp",
+				},
+			},
+			ExternalNode: "cloud-node-1",
+		},
+	}
+	tests := []struct {
+		name        string
+		inputEE     *v1alpha2.ExternalEntity
+		expMemberEE controlplane.GroupMember
+	}{
+		{
+			name:    "ee-with-ip",
+			inputEE: testEntity,
+			expMemberEE: controlplane.GroupMember{
+				ExternalEntity: &controlplane.ExternalEntityReference{
+					Name:      testEntity.Name,
+					Namespace: testEntity.Namespace,
+				},
+				IPs: []controlplane.IPAddress{ipStrToIPAddress(testEntity.Spec.Endpoints[0].IP)},
+				Ports: []controlplane.NamedPort{
+					{
+						Port:     80,
+						Name:     "http",
+						Protocol: "tcp",
+					},
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			actualMemberEE := externalEntityToGroupMember(tt.inputEE)
+			if !reflect.DeepEqual(*(*actualMemberEE).ExternalEntity, *(tt.expMemberEE).ExternalEntity) {
+				t.Errorf("externalEntityToGroupMember() got unexpected EEReference %v, want %v", *(*actualMemberEE).ExternalEntity, *(tt.expMemberEE).ExternalEntity)
+			}
+			if !comparePodIPs(actualMemberEE.IPs, tt.expMemberEE.IPs) {
+				t.Errorf("externalEntityToGroupMember() got unexpected IP %v, want %v", actualMemberEE.IPs, tt.expMemberEE.IPs)
+			}
+		})
+	}
+}
 
 func TestAddExternalEntity(t *testing.T) {
 	selectorSpec := metav1.LabelSelector{

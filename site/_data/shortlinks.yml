@@ -4,6 +4,9 @@
 - title: Kind
   key: kind
   destination: kind
+- title: ARM Support
+  key: arm-support
+  destination: arm-support
 - title: manual
   key: manual
   destination: manual-installation
@@ -55,6 +58,9 @@
 - title: Traceflow Guide
   key: traceflow
   destination: traceflow-guide
+- title: NoEncap and Hybrid Traffic Modes
+  key: noencap-hybrid-modes
+  destination: noencap-hybrid-modes
 - title: Windows
   key: windows
   destination: windows

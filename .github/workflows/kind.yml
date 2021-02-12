@@ -2,11 +2,11 @@ name: Kind
 on:
   pull_request:
     branches:
-    - master
+    - main
     - release-*
   push:
     branches:
-    - master
+    - main
     - release-*
 
 env:
@@ -15,15 +15,15 @@ env:
 jobs:
   check-changes:
     name: Check whether tests need to be run based on diff
-    runs-on: [ubuntu-18.04]
+    runs-on: [ubuntu-latest]
     steps:
     - uses: actions/checkout@v2
       with:
         fetch-depth: 0
-    - uses: vmware-tanzu/antrea/ci/gh-actions/has-changes@master
+    - uses: vmware-tanzu/antrea/ci/gh-actions/has-changes@main
       id: check_diff
       with:
-        args: docs/* ci/jenkins/* *.md
+        args: docs/* ci/jenkins/* *.md hack/.notableofcontents
     outputs:
       has_changes: ${{ steps.check_diff.outputs.has_changes }}
 
@@ -31,7 +31,7 @@ jobs:
     name: Build Antrea image to be used for Kind e2e tests
     needs: check-changes
     if: ${{ needs.check-changes.outputs.has_changes == 'yes' }}
-    runs-on: [ubuntu-18.04]
+    runs-on: [ubuntu-latest]
     steps:
     - uses: actions/checkout@v2
     - run: make build-ubuntu-coverage
@@ -48,7 +48,7 @@ jobs:
     name: Build Flow Aggregator image to be used for Kind e2e tests
     needs: check-changes
     if: ${{ needs.check-changes.outputs.has_changes == 'yes' }}
-    runs-on: [ ubuntu-18.04 ]
+    runs-on: [ ubuntu-latest ]
     steps:
     - uses: actions/checkout@v2
     - run: make flow-aggregator-ubuntu
@@ -64,7 +64,7 @@ jobs:
   test-e2e-encap:
     name: E2e tests on a Kind cluster on Linux
     needs: [build-antrea-coverage-image, build-flow-aggregator-image]
-    runs-on: [ubuntu-18.04]
+    runs-on: [ubuntu-latest]
     steps:
     - name: Free disk space
       # https://github.com/actions/virtual-environments/issues/709
@@ -129,7 +129,7 @@ jobs:
   test-e2e-encap-no-proxy:
     name: E2e tests on a Kind cluster on Linux with AntreaProxy disabled
     needs: [build-antrea-coverage-image, build-flow-aggregator-image]
-    runs-on: [ubuntu-18.04]
+    runs-on: [ubuntu-latest]
     steps:
     - name: Free disk space
       # https://github.com/actions/virtual-environments/issues/709
@@ -192,7 +192,7 @@ jobs:
   test-e2e-noencap:
     name: E2e tests on a Kind cluster on Linux (noEncap)
     needs: [build-antrea-coverage-image, build-flow-aggregator-image]
-    runs-on: [ubuntu-18.04]
+    runs-on: [ubuntu-latest]
     steps:
     - name: Free disk space
       # https://github.com/actions/virtual-environments/issues/709
@@ -255,7 +255,7 @@ jobs:
   test-e2e-hybrid:
     name: E2e tests on a Kind cluster on Linux (hybrid)
     needs: [build-antrea-coverage-image, build-flow-aggregator-image]
-    runs-on: [ubuntu-18.04]
+    runs-on: [ubuntu-latest]
     steps:
     - name: Free disk space
       # https://github.com/actions/virtual-environments/issues/709
@@ -318,7 +318,7 @@ jobs:
   test-e2e-encap-np:
     name: E2e tests on a Kind cluster on Linux with Antrea NetworkPolicies enabled
     needs: [build-antrea-coverage-image, build-flow-aggregator-image]
-    runs-on: [ubuntu-18.04]
+    runs-on: [ubuntu-latest]
     steps:
     - name: Free disk space
       # https://github.com/actions/virtual-environments/issues/709
@@ -374,7 +374,7 @@ jobs:
       uses: actions/upload-artifact@v2
       if: ${{ failure() }}
       with:
-        name: e2e-kind-hybrid.tar.gz
+        name: e2e-kind-encap-np.tar.gz
         path: log.tar.gz
         retention-days: 30
 
@@ -382,7 +382,7 @@ jobs:
     name: Build Antrea image to be used for Kind netpol tests
     needs: check-changes
     if: ${{ needs.check-changes.outputs.has_changes == 'yes' }}
-    runs-on: [ubuntu-18.04]
+    runs-on: [ubuntu-latest]
     steps:
     - uses: actions/checkout@v2
     - run: make
@@ -398,7 +398,7 @@ jobs:
   test-netpol-tmp:
     name: Run experimental network policy tests (netpol) on Kind cluster
     needs: build-antrea-image
-    runs-on: [ubuntu-18.04]
+    runs-on: [ubuntu-latest]
     steps:
     - name: Free disk space
       # https://github.com/actions/virtual-environments/issues/709
@@ -430,7 +430,7 @@ jobs:
   validate-prometheus-metrics-doc:
     name: Validate metrics in Prometheus document match running deployment's
     needs: build-antrea-image
-    runs-on: [ubuntu-18.04]
+    runs-on: [ubuntu-latest]
     steps:
       - name: Free disk space
         # https://github.com/actions/virtual-environments/issues/709
@@ -464,7 +464,7 @@ jobs:
     name: Delete uploaded images
     needs: [build-antrea-coverage-image, build-flow-aggregator-image, build-antrea-image, test-e2e-encap, test-e2e-encap-no-proxy, test-e2e-noencap, test-e2e-hybrid, test-e2e-encap-np, test-netpol-tmp, validate-prometheus-metrics-doc]
     if: ${{ always() }}
-    runs-on: [ubuntu-18.04]
+    runs-on: [ubuntu-latest]
     steps:
     - name: Delete antrea-ubuntu-cov
       if: ${{ needs.build-antrea-coverage-image.result == 'success' }}

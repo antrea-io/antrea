@@ -19,17 +19,24 @@ package k8s
 import (
 	"context"
 	"encoding/json"
-
-	"github.com/vmware-tanzu/antrea/pkg/util/env"
+	"fmt"
+	"reflect"
+	"sort"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/klog"
 )
 
-const NPLAnnotationStr = "nodeportlocal.antrea.io"
+const (
+	NPLAnnotationKey          = "nodeportlocal.antrea.io"
+	NPLEnabledAnnotationKey   = "nodeportlocal.antrea.io/enabled"
+	NPLEnabledAnnotationIndex = "nplEnabledAnnotation"
+)
 
-// NPLAnnotation is the structure used for setting NodePortLocal annotation on the Pods
+// NPLAnnotation is the structure used for setting NodePortLocal annotation on the Pods.
 type NPLAnnotation struct {
 	PodPort  int    `json:"podPort"`
 	NodeIP   string `json:"nodeIP"`
@@ -41,107 +48,53 @@ func toJSON(serialize interface{}) string {
 	return string(jsonMarshalled)
 }
 
-func isNodePortInAnnotation(s []NPLAnnotation, nodeport int) bool {
-	for _, i := range s {
-		if i.NodePort == nodeport {
-			return true
-		}
+func (c *NPLController) updatePodNPLAnnotation(pod *corev1.Pod, annotations []NPLAnnotation) error {
+	if err := patchPod(annotations, pod, c.kubeClient); err != nil {
+		klog.Warningf("Unable to patch NodePortLocal annotation for Pod %s/%s: %v", pod.Namespace, pod.Name, err)
 	}
-	return false
-}
-
-func assignPodAnnotation(pod *corev1.Pod, nodeIP string, containerPort, nodePort int) {
-	var err error
-	current := pod.Annotations
-	if current == nil {
-		current = make(map[string]string)
-	}
-
-	klog.V(2).Infof("Building annotation for Pod: %s\tport: %v --> %v:%v", pod.Name, containerPort, nodeIP, nodePort)
-
-	var annotations []NPLAnnotation
-	if current[NPLAnnotationStr] != "" {
-		if err = json.Unmarshal([]byte(current[NPLAnnotationStr]), &annotations); err != nil {
-			klog.Warningf("Unable to unmarshal NodePortLocal annotation: %v", current[NPLAnnotationStr])
-		}
-
-		if !isNodePortInAnnotation(annotations, nodePort) {
-			annotations = append(annotations, NPLAnnotation{
-				PodPort:  containerPort,
-				NodeIP:   nodeIP,
-				NodePort: nodePort,
-			})
-		}
-	} else {
-		annotations = []NPLAnnotation{{
-			PodPort:  containerPort,
-			NodeIP:   nodeIP,
-			NodePort: nodePort,
-		}}
-	}
-
-	current[NPLAnnotationStr] = toJSON(annotations)
-	pod.Annotations = current
-}
-
-func removeFromPodAnnotation(pod *corev1.Pod, containerPort int) {
-	var err error
-	current := pod.Annotations
-
-	klog.V(2).Infof("Removing annotation from pod: %v\tport: %v", pod.Name, containerPort)
-	var annotations []NPLAnnotation
-	if err = json.Unmarshal([]byte(current[NPLAnnotationStr]), &annotations); err != nil {
-		klog.Warningf("Unable to unmarshal NodePortLocal annotation: %v", current[NPLAnnotationStr])
-		return
-	}
-
-	for i, ann := range annotations {
-		if ann.PodPort == containerPort {
-			annotations = append(annotations[:i], annotations[i+1:]...)
-			break
-		}
-	}
-
-	current[NPLAnnotationStr] = toJSON(annotations)
-	pod.Annotations = current
-}
-
-// RemoveNPLAnnotationFromPods removes npl annotations from all Pods.
-func (c *Controller) RemoveNPLAnnotationFromPods() {
-	nodeName, err := env.GetNodeName()
-	if err != nil {
-		klog.Warningf("Failed to get Node's name, NodePortLocal annotation cannot be removed for Pods scheduled to this Node")
-		return
-	}
-	podList, err := c.kubeClient.CoreV1().Pods("").List(context.TODO(), metav1.ListOptions{
-		FieldSelector:   "spec.nodeName=" + nodeName,
-		ResourceVersion: "0",
-	})
-	if err != nil {
-		klog.Warningf("Unable to list Pods, err: %v", err)
-		return
-	}
-	for i, pod := range podList.Items {
-		podAnnotation := pod.GetAnnotations()
-		if podAnnotation == nil {
-			continue
-		}
-		if _, exists := podAnnotation[NPLAnnotationStr]; !exists {
-			continue
-		}
-		klog.V(2).Infof("Removing all NodePortLocal annotation from Pod: %s, ns: %s", pod.Name, pod.Namespace)
-		delete(podAnnotation, NPLAnnotationStr)
-		pod.Annotations = podAnnotation
-		c.updatePodAnnotation(&podList.Items[i])
-	}
-	klog.Infof("Removed all NodePortLocal annotations from all Pods")
-}
-
-func (c *Controller) updatePodAnnotation(pod *corev1.Pod) error {
-	if _, err := c.kubeClient.CoreV1().Pods(pod.Namespace).Update(context.TODO(), pod, metav1.UpdateOptions{}); err != nil {
-		klog.Warningf("Unable to update annotation for Pod %s/%s, error: %v", pod.Namespace, pod.Name, err)
-		return err
-	}
-	klog.V(2).Infof("Successfully updated annotation for Pod %s/%s", pod.Namespace, pod.Name)
+	klog.V(2).Infof("Successfully updated NodePortLocal annotation for Pod %s/%s", pod.Namespace, pod.Name)
 	return nil
+}
+
+func patchPod(value []NPLAnnotation, pod *corev1.Pod, kubeClient clientset.Interface) error {
+	payloadValue := make(map[string]*string)
+	if len(value) > 0 {
+		valueStr := string(toJSON(value))
+		payloadValue[NPLAnnotationKey] = &valueStr
+	} else {
+		payloadValue[NPLAnnotationKey] = nil
+	}
+
+	newPayload := map[string]interface{}{
+		"metadata": map[string]map[string]*string{
+			"annotations": payloadValue,
+		},
+	}
+
+	payloadBytes, _ := json.Marshal(newPayload)
+	if _, err := kubeClient.CoreV1().Pods(pod.Namespace).Patch(context.TODO(), pod.Name, types.MergePatchType,
+		payloadBytes, metav1.PatchOptions{}); err != nil {
+		return fmt.Errorf("unable to update NodePortLocal annotation for Pod %s/%s: %v", pod.Namespace,
+			pod.Name, err)
+	}
+	return nil
+}
+
+// compareNPLAnnotationLists returns true if and only if the two lists contain the same set of
+// annotations, irrespective of the order.
+func compareNPLAnnotationLists(annotations1, annotations2 []NPLAnnotation) bool {
+	if len(annotations1) != len(annotations2) {
+		return false
+	}
+	nplAnnotationLess := func(a1, a2 *NPLAnnotation) bool {
+		return a1.NodePort < a2.NodePort
+
+	}
+	sort.Slice(annotations1, func(i, j int) bool {
+		return nplAnnotationLess(&annotations1[i], &annotations1[j])
+	})
+	sort.Slice(annotations2, func(i, j int) bool {
+		return nplAnnotationLess(&annotations2[i], &annotations2[j])
+	})
+	return reflect.DeepEqual(annotations1, annotations2)
 }

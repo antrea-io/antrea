@@ -25,6 +25,7 @@ function echoerr {
 _usage="Usage: $0 [--encap-mode <mode>] [--no-proxy] [--np] [--coverage] [--help|-h]
         --encap-mode                  Traffic encapsulation mode. (default is 'encap')
         --no-proxy                    Disables Antrea proxy.
+        --endpointslice               Enables Antrea proxy and EndpointSlice support
         --np                          Enables Namespaced Antrea NetworkPolicy CRDs and ClusterNetworkPolicy related CRDs.
         --coverage                    Enables measure Antrea code coverage when run e2e tests on kind.
         --help, -h                    Print this message and exit
@@ -49,6 +50,7 @@ trap "quit" INT EXIT
 
 mode=""
 proxy=true
+endpointslice=false
 np=false
 coverage=false
 while [[ $# -gt 0 ]]
@@ -58,6 +60,10 @@ key="$1"
 case $key in
     --no-proxy)
     proxy=false
+    shift
+    ;;
+    --endpointslice)
+    endpointslice=true
     shift
     ;;
     --np)
@@ -87,12 +93,15 @@ manifest_args=""
 if ! $proxy; then
     manifest_args="$manifest_args --no-proxy"
 fi
+if $endpointslice; then
+    manifest_args="$manifest_args --endpointslice"
+fi
 if $np; then
     # See https://github.com/vmware-tanzu/antrea/issues/897
     manifest_args="$manifest_args --np --tun vxlan"
 fi
 
-COMMON_IMAGES_LIST=("gcr.io/kubernetes-e2e-test-images/agnhost:2.8" "projects.registry.vmware.com/library/busybox" "projects.registry.vmware.com/antrea/nginx" "projects.registry.vmware.com/antrea/perftool" "projects.registry.vmware.com/antrea/ipfix-collector:v0.4.2")
+COMMON_IMAGES_LIST=("gcr.io/kubernetes-e2e-test-images/agnhost:2.8" "projects.registry.vmware.com/library/busybox" "projects.registry.vmware.com/antrea/nginx" "projects.registry.vmware.com/antrea/perftool" "projects.registry.vmware.com/antrea/ipfix-collector:v0.4.3")
 for image in "${COMMON_IMAGES_LIST[@]}"; do
     docker pull $image
 done
@@ -120,7 +129,7 @@ function run_test {
   $FLOWAGGREGATOR_YML_CMD | docker exec -i kind-control-plane dd of=/root/flow-aggregator.yml
   sleep 1
   if $coverage; then
-      go test -v -timeout=35m github.com/vmware-tanzu/antrea/test/e2e -provider=kind --logs-export-dir=$ANTREA_LOG_DIR --coverage --coverage-dir $ANTREA_COV_DIR
+      go test -v -timeout=40m github.com/vmware-tanzu/antrea/test/e2e -provider=kind --logs-export-dir=$ANTREA_LOG_DIR --coverage --coverage-dir $ANTREA_COV_DIR
   else
       go test -v -timeout=30m github.com/vmware-tanzu/antrea/test/e2e -provider=kind --logs-export-dir=$ANTREA_LOG_DIR
   fi

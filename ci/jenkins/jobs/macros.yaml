@@ -136,7 +136,7 @@
     builders:
       - shell: |-
           #!/bin/bash
-          set -ex
+          set -e
           TEST_FAIL_E2E=0
           TEST_FAIL_NP=0
           TEST_FAIL_CONFORMANCE=0

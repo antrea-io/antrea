@@ -152,6 +152,7 @@ endif
 		-v $(CURDIR)/.coverage:/usr/src/github.com/vmware-tanzu/antrea/.coverage \
 		-v $(CURDIR):/usr/src/github.com/vmware-tanzu/antrea:ro \
 		-v /lib/modules:/lib/modules \
+		--sysctl net.ipv6.conf.all.disable_ipv6=0 \
 		antrea/test test-integration $(USERID) $(GRPID)
 
 .PHONY: docker-tidy
@@ -260,7 +261,11 @@ codegen:
 .PHONY: ubuntu
 ubuntu:
 	@echo "===> Building antrea/antrea-ubuntu Docker image <==="
+ifneq ($(DOCKER_REGISTRY),"")
+	docker build -t antrea/antrea-ubuntu:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.ubuntu .
+else
 	docker build --pull -t antrea/antrea-ubuntu:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.ubuntu .
+endif
 	docker tag antrea/antrea-ubuntu:$(DOCKER_IMG_VERSION) antrea/antrea-ubuntu
 	docker tag antrea/antrea-ubuntu:$(DOCKER_IMG_VERSION) projects.registry.vmware.com/antrea/antrea-ubuntu
 	docker tag antrea/antrea-ubuntu:$(DOCKER_IMG_VERSION) projects.registry.vmware.com/antrea/antrea-ubuntu:$(DOCKER_IMG_VERSION)

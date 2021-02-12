@@ -17,6 +17,8 @@ package main
 import (
 	"fmt"
 
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"k8s.io/klog"
 
 	aggregator "github.com/vmware-tanzu/antrea/pkg/flowaggregator"
@@ -29,8 +31,13 @@ func run(o *Options) error {
 	// cause the stopCh channel to be closed; if another signal is received before the program
 	// exits, we will force exit.
 	stopCh := signals.RegisterSignalHandlers()
-	flowAggregator := aggregator.NewFlowAggregator(o.externalFlowCollectorAddr, o.externalFlowCollectorProto, o.exportInterval, o.aggregatorTransportProtocol)
-	err := flowAggregator.InitCollectingProcess()
+
+	k8sClient, err := createK8sClient()
+	if err != nil {
+		return fmt.Errorf("error when creating K8s client: %v", err)
+	}
+	flowAggregator := aggregator.NewFlowAggregator(o.externalFlowCollectorAddr, o.externalFlowCollectorProto, o.exportInterval, o.aggregatorTransportProtocol, o.flowAggregatorAddress, k8sClient)
+	err = flowAggregator.InitCollectingProcess()
 	if err != nil {
 		return fmt.Errorf("error when creating collecting process: %v", err)
 	}
@@ -42,4 +49,16 @@ func run(o *Options) error {
 	<-stopCh
 	klog.Infof("Stopping flow aggregator")
 	return nil
+}
+
+func createK8sClient() (kubernetes.Interface, error) {
+	config, err := rest.InClusterConfig()
+	if err != nil {
+		return nil, err
+	}
+	k8sClient, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return nil, err
+	}
+	return k8sClient, nil
 }

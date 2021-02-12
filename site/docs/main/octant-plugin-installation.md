@@ -21,7 +21,7 @@ create these CRDs first.
 ### Deploy Octant and antrea-octant-plugin as a Pod
 
 You can follow the sample below to run Octant and antrea-octant-plugin in Pod.
-In this example, we expose UI as a NodePort service for accessing externally.
+In this example, we expose UI as a NodePort Service for accessing externally.
 You can update antrea-octant.yaml (`/build/yamls/antrea-octant.yml`) according to
 your environment and preference.
 
@@ -32,13 +32,14 @@ your environment and preference.
     kubectl create secret generic octant-kubeconfig --from-file=admin.conf=<path to kubeconfig file> -n kube-system
     ```
 
-2. You can change the sample yamlbuild/yamls/antrea-octant.yml (`/build/yamls/antrea-octant.yml`) according to your requirements and environment, then apply the yaml to create both deployment and NodePort service.
+2. You can change the sample yamlbuild/yamls/antrea-octant.yml (`/build/yamls/antrea-octant.yml`)
+according to your requirements and environment, then apply the yaml to create both Deployment and NodePort Service.
 
     ```bash
     kubectl apply -f build/yamls/antrea-octant.yml
     ```
 
-3. You can get the NodePort of antrea-octant service via kubectl.
+3. You can get the NodePort of antrea-octant Service via kubectl.
 
     ```bash
     # See field NodePort

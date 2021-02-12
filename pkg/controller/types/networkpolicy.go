@@ -15,7 +15,6 @@
 package types
 
 import (
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 
@@ -38,32 +37,12 @@ func (meta *SpanMeta) Has(nodeName string) bool {
 	return meta.NodeNames.Has(nodeName)
 }
 
-// GroupSelector describes how to select GroupMembers.
-type GroupSelector struct {
-	// The normalized name is calculated from Namespace, PodSelector, ExternalEntitySelector and NamespaceSelector.
-	// If multiple policies have same selectors, they should share this group by comparing NormalizedName.
-	// It's also used to generate Name and UUID of group.
-	NormalizedName string
-	// If Namespace is set, NamespaceSelector can not be set. It means only GroupMembers in this Namespace will be matched.
-	Namespace string
-	// This is a label selector which selects GroupMembers. If Namespace is also set, it selects the GroupMembers in the Namespace.
-	// If NamespaceSelector is set instead, it selects the GroupMembers in the Namespaces selected by NamespaceSelector.
-	// If Namespace and NamespaceSelector both are unset, it selects the GroupMembers in all the Namespaces.
-	PodSelector labels.Selector
-	// This is a label selector which selects Namespaces. It this field is set, Namespace can not be set.
-	NamespaceSelector labels.Selector
-	// This is a label selector which selects ExternalEntities. Within a group, ExternalEntitySelector cannot be
-	// set concurrently with PodSelector. If Namespace is also set, it selects the ExternalEntities in the Namespace.
-	// If NamespaceSelector is set instead, it selects ExternalEntities in the Namespaces selected by NamespaceSelector.
-	// If Namespace and NamespaceSelector both are unset, it selects the ExternalEntities in all the Namespaces.
-	// TODO: Add validation in API to not allow externalEntitySelector and podSelector in the same group.
-	ExternalEntitySelector labels.Selector
-}
-
 // AppliedToGroup describes a set of GroupMembers to apply Network Policies to.
 type AppliedToGroup struct {
 	SpanMeta
 	// UID is generated from the hash value of GroupSelector.NormalizedName.
+	// In case the AppliedToGroup is created for a ClusterGroup, the UID is
+	// that of the corresponding ClusterGroup.
 	UID types.UID
 	// Name of this group, currently it's same as UID.
 	Name string
@@ -80,6 +59,8 @@ type AppliedToGroup struct {
 type AddressGroup struct {
 	SpanMeta
 	// UID is generated from the hash value of GroupSelector.NormalizedName.
+	// In case the AddressGroup is created for a ClusterGroup, the UID is
+	// that of the corresponding ClusterGroup.
 	UID types.UID
 	// Name of this group, currently it's same as UID.
 	Name string

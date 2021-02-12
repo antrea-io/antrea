@@ -16,7 +16,6 @@ package ip
 
 import (
 	"bytes"
-	"fmt"
 	"net"
 	"sort"
 
@@ -129,23 +128,17 @@ func mergeCIDRs(cidrBlocks []*net.IPNet) []*net.IPNet {
 	return cidrBlocks
 }
 
-// Function to transform Antrea IPNet to net.IPNet
+// IPNetToNetIPNet converts Antrea IPNet to *net.IPNet.
+// Note that K8s allows non-standard CIDRs to be specified (e.g. 10.0.1.1/16, fe80::7015:efff:fe9a:146b/64). However,
+// OVS will report OFPBMC_BAD_WILDCARDS error if using them in the OpenFlow messages. The function will normalize the
+// CIDR if it's non-standard.
 func IPNetToNetIPNet(ipNet *v1beta2.IPNet) *net.IPNet {
 	ip := net.IP(ipNet.IP)
-	var bits int
-	if ip.To4() != nil {
-		bits = v4BitLen
-		return &net.IPNet{IP: ip, Mask: net.CIDRMask(int(ipNet.PrefixLength), bits)}
-	} else {
-		// Since OVS will report error when using an IPv6 CIDR in the OpenFlow messages if the bit is not zero in the
-		// address but it is zero in the mask. Here using the function in "net" library to ensure the result is valid.
-		_, ipNet, _ := net.ParseCIDR(fmt.Sprintf("%s/%d", ip.String(), ipNet.PrefixLength))
-		return ipNet
+	ipLen := net.IPv4len
+	if ip.To4() == nil {
+		ipLen = net.IPv6len
 	}
-}
-
-// NetIPNetToIPNet transforms net.IPNet to Antrea IPNet
-func NetIPNetToIPNet(ipNet *net.IPNet) *v1beta2.IPNet {
-	prefix, _ := ipNet.Mask.Size()
-	return &v1beta2.IPNet{IP: v1beta2.IPAddress(ipNet.IP), PrefixLength: int32(prefix)}
+	mask := net.CIDRMask(int(ipNet.PrefixLength), 8*ipLen)
+	maskedIP := ip.Mask(mask)
+	return &net.IPNet{IP: maskedIP, Mask: mask}
 }

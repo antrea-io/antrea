@@ -17,7 +17,6 @@ package flowaggregator
 import (
 	"fmt"
 	"hash/fnv"
-	"net"
 	"time"
 
 	"github.com/vmware/go-ipfix/pkg/collector"
@@ -25,6 +24,7 @@ import (
 	"github.com/vmware/go-ipfix/pkg/exporter"
 	ipfixintermediate "github.com/vmware/go-ipfix/pkg/intermediate"
 	ipfixregistry "github.com/vmware/go-ipfix/pkg/registry"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/ipfix"
@@ -129,14 +129,17 @@ var (
 
 const (
 	aggregationWorkerNum = 2
+	udpTransport         = "udp"
+	tcpTransport         = "tcp"
+	collectorAddress     = "0.0.0.0:4739"
 )
 
 type AggregatorTransportProtocol string
 
 const (
 	AggregatorTransportProtocolTCP AggregatorTransportProtocol = "TCP"
+	AggregatorTransportProtocolTLS AggregatorTransportProtocol = "TLS"
 	AggregatorTransportProtocolUDP AggregatorTransportProtocol = "UDP"
-	flowAggregatorDNSName          string                      = "flow-aggregator.flow-aggregator.svc"
 )
 
 type flowAggregator struct {
@@ -149,9 +152,11 @@ type flowAggregator struct {
 	exportingProcess            ipfix.IPFIXExportingProcess
 	templateID                  uint16
 	registry                    ipfix.IPFIXRegistry
+	flowAggregatorAddress       string
+	k8sClient                   kubernetes.Interface
 }
 
-func NewFlowAggregator(externalFlowCollectorAddr string, externalFlowCollectorProto string, exportInterval time.Duration, aggregatorTransportProtocol AggregatorTransportProtocol) *flowAggregator {
+func NewFlowAggregator(externalFlowCollectorAddr string, externalFlowCollectorProto string, exportInterval time.Duration, aggregatorTransportProtocol AggregatorTransportProtocol, flowAggregatorAddress string, k8sClient kubernetes.Interface) *flowAggregator {
 	registry := ipfix.NewIPFIXRegistry()
 	registry.LoadRegistry()
 	fa := &flowAggregator{
@@ -164,33 +169,62 @@ func NewFlowAggregator(externalFlowCollectorAddr string, externalFlowCollectorPr
 		nil,
 		0,
 		registry,
+		flowAggregatorAddress,
+		k8sClient,
 	}
 	return fa
 }
 
-func genObservationID() (uint32, error) {
+func (fa *flowAggregator) genObservationID() (uint32, error) {
 	// TODO: Change to use cluster UUID to generate observation ID once it's available
 	h := fnv.New32()
-	h.Write([]byte(flowAggregatorDNSName))
+	h.Write([]byte(fa.flowAggregatorAddress))
 	return h.Sum32(), nil
 }
 
 func (fa *flowAggregator) InitCollectingProcess() error {
-	var collectAddr net.Addr
 	var err error
 	var cpInput collector.CollectorInput
-	if fa.aggregatorTransportProtocol == AggregatorTransportProtocolTCP {
-		collectAddr, _ = net.ResolveTCPAddr("tcp", "0.0.0.0:4739")
+	if fa.aggregatorTransportProtocol == AggregatorTransportProtocolTLS {
+		parentCert, privateKey, caCert, err := generateCACertKey()
+		if err != nil {
+			return fmt.Errorf("error when generating CA certificate: %v", err)
+		}
+		serverCert, serverKey, err := generateCertKey(parentCert, privateKey, true, fa.flowAggregatorAddress)
+		if err != nil {
+			return fmt.Errorf("error when creating server certificate: %v", err)
+		}
+
+		clientCert, clientKey, err := generateCertKey(parentCert, privateKey, false, "")
+		if err != nil {
+			return fmt.Errorf("error when creating client certificate: %v", err)
+		}
+		err = syncCAAndClientCert(caCert, clientCert, clientKey, fa.k8sClient)
+		if err != nil {
+			return fmt.Errorf("error when synchronizing client certificate: %v", err)
+		}
 		cpInput = collector.CollectorInput{
-			Address:       collectAddr,
+			Address:       collectorAddress,
+			Protocol:      tcpTransport,
+			MaxBufferSize: 65535,
+			TemplateTTL:   0,
+			IsEncrypted:   true,
+			CACert:        caCert,
+			ServerKey:     serverKey,
+			ServerCert:    serverCert,
+		}
+	} else if fa.aggregatorTransportProtocol == AggregatorTransportProtocolTCP {
+		cpInput = collector.CollectorInput{
+			Address:       collectorAddress,
+			Protocol:      tcpTransport,
 			MaxBufferSize: 65535,
 			TemplateTTL:   0,
 			IsEncrypted:   false,
 		}
 	} else {
-		collectAddr, _ = net.ResolveUDPAddr("udp", "0.0.0.0:4739")
 		cpInput = collector.CollectorInput{
-			Address:       collectAddr,
+			Address:       collectorAddress,
+			Protocol:      udpTransport,
 			MaxBufferSize: 1024,
 			TemplateTTL:   0,
 			IsEncrypted:   false,
@@ -213,7 +247,7 @@ func (fa *flowAggregator) InitAggregationProcess() error {
 }
 
 func (fa *flowAggregator) initExportingProcess() error {
-	obsID, err := genObservationID()
+	obsID, err := fa.genObservationID()
 	if err != nil {
 		return fmt.Errorf("cannot generate observation ID for flow aggregator: %v", err)
 	}
@@ -221,13 +255,10 @@ func (fa *flowAggregator) initExportingProcess() error {
 	// externalFlowCollectorAddr and externalFlowCollectorProto instead of net.Addr input.
 	var expInput exporter.ExporterInput
 	if fa.externalFlowCollectorProto == "tcp" {
-		collector, err := net.ResolveTCPAddr("tcp", fa.externalFlowCollectorAddr)
-		if err != nil {
-			return err
-		}
 		// TCP transport does not need any tempRefTimeout, so sending 0.
 		expInput = exporter.ExporterInput{
-			CollectorAddr:       collector,
+			CollectorAddress:    fa.externalFlowCollectorAddr,
+			CollectorProtocol:   fa.externalFlowCollectorProto,
 			ObservationDomainID: obsID,
 			TempRefTimeout:      0,
 			PathMTU:             0,
@@ -240,7 +271,8 @@ func (fa *flowAggregator) initExportingProcess() error {
 		}
 		// For UDP transport, hardcoding tempRefTimeout value as 1800s. So we will send out template every 30 minutes.
 		expInput = exporter.ExporterInput{
-			CollectorAddr:       collector,
+			CollectorAddress:    fa.externalFlowCollectorAddr,
+			CollectorProtocol:   fa.externalFlowCollectorProto,
 			ObservationDomainID: obsID,
 			TempRefTimeout:      1800,
 			PathMTU:             0,

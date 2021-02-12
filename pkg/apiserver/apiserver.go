@@ -43,6 +43,8 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/controlplane/nodestatssummary"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/networkpolicy/addressgroup"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/networkpolicy/appliedtogroup"
+	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/networkpolicy/clustergroupmember"
+	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/networkpolicy/groupassociation"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/networkpolicy/networkpolicy"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/stats/antreaclusternetworkpolicystats"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/stats/antreanetworkpolicystats"
@@ -117,7 +119,7 @@ type completedConfig struct {
 
 func NewConfig(
 	genericConfig *genericapiserver.Config,
-	addressGroupStore, appliedToGroupStore, networkPolicyStore storage.Interface,
+	addressGroupStore, appliedToGroupStore, networkPolicyStore, groupStore storage.Interface,
 	caCertController *certificate.CACertController,
 	statsAggregator *stats.Aggregator,
 	controllerQuerier querier.ControllerQuerier,
@@ -149,6 +151,8 @@ func installAPIGroup(s *APIServer, c completedConfig) error {
 	appliedToGroupStorage := appliedtogroup.NewREST(c.extraConfig.appliedToGroupStore)
 	networkPolicyStorage := networkpolicy.NewREST(c.extraConfig.networkPolicyStore)
 	networkPolicyStatusStorage := networkpolicy.NewStatusREST(c.extraConfig.networkPolicyStatusController)
+	clusterGroupMembershipStorage := clustergroupmember.NewREST(c.extraConfig.networkPolicyController)
+	groupAssociationStorage := groupassociation.NewREST(c.extraConfig.networkPolicyController)
 	nodeStatsSummaryStorage := nodestatssummary.NewREST(c.extraConfig.statsAggregator)
 	cpGroup := genericapiserver.NewDefaultAPIGroupInfo(controlplane.GroupName, Scheme, metav1.ParameterCodec, Codecs)
 	cpv1beta1Storage := map[string]rest.Storage{}
@@ -163,6 +167,8 @@ func installAPIGroup(s *APIServer, c completedConfig) error {
 	cpv1beta2Storage["networkpolicies"] = networkPolicyStorage
 	cpv1beta2Storage["networkpolicies/status"] = networkPolicyStatusStorage
 	cpv1beta2Storage["nodestatssummaries"] = nodeStatsSummaryStorage
+	cpv1beta2Storage["groupassociations"] = groupAssociationStorage
+	cpv1beta2Storage["clustergroupmembers"] = clusterGroupMembershipStorage
 	cpGroup.VersionedResourcesStorageMap["v1beta2"] = cpv1beta2Storage
 
 	// TODO: networkingGroup is the legacy group of controlplane NetworkPolicy APIs. To allow live upgrades from up to
@@ -253,6 +259,7 @@ func installHandlers(c *ExtraConfig, s *genericapiserver.GenericAPIServer) {
 		s.Handler.NonGoRestfulMux.HandleFunc("/validate/tier", webhook.HandleValidationNetworkPolicy(v))
 		s.Handler.NonGoRestfulMux.HandleFunc("/validate/acnp", webhook.HandleValidationNetworkPolicy(v))
 		s.Handler.NonGoRestfulMux.HandleFunc("/validate/anp", webhook.HandleValidationNetworkPolicy(v))
+		s.Handler.NonGoRestfulMux.HandleFunc("/validate/clustergroup", webhook.HandleValidationNetworkPolicy(v))
 		// Install a post start hook to initialize Tiers on start-up
 		s.AddPostStartHook("initialize-tiers", func(context genericapiserver.PostStartHookContext) error {
 			go c.networkPolicyController.InitializeTiers()

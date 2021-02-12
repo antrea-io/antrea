@@ -17,6 +17,8 @@ package v1alpha2
 import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	secv1a1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
 )
 
 // +genclient
@@ -73,4 +75,83 @@ type ExternalEntityList struct {
 	metav1.ListMeta `json:"metadata,omitempty"`
 
 	Items []ExternalEntity `json:"items,omitempty"`
+}
+
+// ServiceReference represent reference to a v1.Service.
+type ServiceReference struct {
+	// Name of the Service
+	Name string `json:"name,omitempty"`
+	// Namespace of the Service
+	Namespace string `json:"namespace,omitempty"`
+}
+
+// +genclient
+// +genclient:nonNamespaced
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+type ClusterGroup struct {
+	metav1.TypeMeta `json:",inline"`
+	// Standard metadata of the object.
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	// Desired state of the group.
+	Spec GroupSpec `json:"spec"`
+	// Most recently observed status of the group.
+	Status GroupStatus `json:"status"`
+}
+
+type GroupSpec struct {
+	// Select Pods matching the labels set in the PodSelector in
+	// AppliedTo/To/From fields. If set with NamespaceSelector, Pods are
+	// matched from Namespaces matched by the NamespaceSelector.
+	// Cannot be set with any other selector except NamespaceSelector.
+	// +optional
+	PodSelector *metav1.LabelSelector `json:"podSelector,omitempty"`
+	// Select all Pods from Namespaces matched by this selector, as
+	// workloads in AppliedTo/To/From fields. If set with PodSelector,
+	// Pods are matched from Namespaces matched by the NamespaceSelector.
+	// Cannot be set with any other selector except PodSelector.
+	// +optional
+	NamespaceSelector *metav1.LabelSelector `json:"namespaceSelector,omitempty"`
+	// IPBlock describes the IPAddresses/IPBlocks that is matched in to/from.
+	// IPBlock cannot be set as part of the AppliedTo field.
+	// Cannot be set with any other selector or ServiceReference.
+	// +optional
+	IPBlock *secv1a1.IPBlock `json:"ipBlock,omitempty"`
+	// Select backend Pods of the referred Service.
+	// Cannot be set with any other selector or ipBlock.
+	// +optional
+	ServiceReference *ServiceReference `json:"serviceReference,omitempty"`
+	// Select ExternalEntities from all Namespaces as workloads
+	// in AppliedTo/To/From fields. If set with NamespaceSelector,
+	// ExternalEntities are matched from Namespaces matched by the
+	// NamespaceSelector.
+	// Cannot be set with any other selector except NamespaceSelector.
+	// +optional
+	ExternalEntitySelector *metav1.LabelSelector `json:"externalEntitySelector,omitempty"`
+}
+
+type GroupConditionType string
+
+const GroupMembersComputed GroupConditionType = "GroupMembersComputed"
+
+type GroupCondition struct {
+	Type               GroupConditionType `json:"type"`
+	Status             v1.ConditionStatus `json:"status"`
+	LastTransitionTime metav1.Time        `json:"lastTransitionTime,omitempty"`
+}
+
+// GroupStatus represents information about the status of a Group.
+type GroupStatus struct {
+	Conditions []GroupCondition `json:"conditions,omitempty"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+type ClusterGroupList struct {
+	metav1.TypeMeta `json:",inline"`
+	// +optional
+	metav1.ListMeta `json:"metadata,omitempty"`
+
+	Items []ClusterGroup `json:"items,omitempty"`
 }

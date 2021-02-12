@@ -29,7 +29,7 @@ with the following flags:
 `kube-proxy` should be started with the `--cluster-cidr=<CIDR Range for Pods>`
 flag.
 
-As for OVS, when using the built-in kernel module, kernel version >= 4.4 is
+As for OVS, when using the built-in kernel module, kernel version >= 4.6 is
 required. On the other hand, when building it from OVS sources, OVS
 version >= 2.6.0 is required.
 
@@ -59,19 +59,26 @@ given release `<TAG>` (e.g. `v0.1.0`), you can deploy Antrea as follows:
 kubectl apply -f https://github.com/vmware-tanzu/antrea/releases/download/<TAG>/antrea.yml
 ```
 
-To deploy the latest version of Antrea (built from the master branch), use the
+To deploy the latest version of Antrea (built from the main branch), use the
 checked-in deployment yaml (`/build/yamls/antrea.yml`):
 
 ```bash
-kubectl apply -f https://raw.githubusercontent.com/vmware-tanzu/antrea/master/build/yamls/antrea.yml
+kubectl apply -f https://raw.githubusercontent.com/vmware-tanzu/antrea/main/build/yamls/antrea.yml
 ```
-
-If you want to add Windows Nodes to your cluster, please refer to the
-installation instructions in [windows.md](windows.md).
 
 Antrea supports some experimental features that can be enabled or disabled,
 please refer to the [Feature Gates documentation](feature-gates.md) for more
 information.
+
+### Windows support
+
+If you want to add Windows Nodes to your cluster, please refer to these
+[installation instructions](windows.md).
+
+### ARM support
+
+Starting with v0.13, Antrea supports arm64 and arm/v7 Nodes. Please refer to
+these [installation instructions](arm-support.md).
 
 ### Deploying Antrea on a Cluster with Existing CNI
 
@@ -135,8 +142,7 @@ provide your own certificates, please refer to [Securing Control Plane](securing
 
 ### Antctl: Installation and Usage
 
-To use antctl, the Antrea command-line tool, please refer to this
-[guide](antctl.md).
+To use antctl, the Antrea command-line tool, please refer to [this guide](antctl.md).
 
 ## Features
 
@@ -158,6 +164,17 @@ Antrea supports exporting network flow information using IPFIX, and provides a
 reference cookbook on how to visualize the exported network flows using Elastic
 Stack and Kibana dashboards. For more information, refer to the [network flow
 visibility document](network-flow-visibility.md).
+
+### NoEncap and Hybrid Traffic Modes
+
+Besides the default `Encap` mode, in which Pod traffic across Nodes will be
+encapsulated and sent over tunnels, Antrea also supports `NoEncap` and `Hybrid`
+traffic modes. In `NoEncap` mode, Antrea does not encapsulate Pod traffic, but
+relies on the Node network to route the traffic across Nodes. In `Hybrid` mode,
+Antrea encapsulates Pod traffic when the source Node and the destination Node
+are in different subnets, but does not encapsulate when the source and the
+destination Nodes are in the same subnet. Refer to [this guide](noencap-hybrid-modes.md)
+to learn how to configure Antrea with `NoEncap` or `Hybrid` mode.
 
 ### Octant UI
 

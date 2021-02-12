@@ -85,7 +85,7 @@ project's repository.
     git remote add upstream https://github.com/vmware-tanzu/antrea
     ```
 
-    Never push to upstream master
+    Never push to upstream remote
 
     ```bash
     git remote set-url --push upstream no_push
@@ -112,7 +112,7 @@ project's repository.
     ```bash
     git checkout branchName
     git fetch upstream
-    git rebase upstream/master
+    git rebase upstream/main
     ```
 
 7. Push local branch to your forked repository.
@@ -199,7 +199,7 @@ For more information about the tests we run as part of CI, please refer to
 
     ```bash
     git fetch upstream
-    git rebase upstream/master
+    git rebase upstream/main
     ```
 
 3. Create a revert based on the SHA of the commit.

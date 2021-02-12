@@ -42,7 +42,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/querier"
 	"github.com/vmware-tanzu/antrea/pkg/agent/route"
 	"github.com/vmware-tanzu/antrea/pkg/agent/stats"
-	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
+	"github.com/vmware-tanzu/antrea/pkg/agent/types"
 	crdinformers "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions"
 	"github.com/vmware-tanzu/antrea/pkg/features"
 	"github.com/vmware-tanzu/antrea/pkg/k8s"
@@ -51,6 +51,7 @@ import (
 	ofconfig "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
 	"github.com/vmware-tanzu/antrea/pkg/signals"
+	"github.com/vmware-tanzu/antrea/pkg/util/cipher"
 	"github.com/vmware-tanzu/antrea/pkg/version"
 	k8sproxy "github.com/vmware-tanzu/antrea/third_party/proxy"
 )
@@ -64,7 +65,7 @@ const informerDefaultResync = 12 * time.Hour
 func run(o *Options) error {
 	klog.Infof("Starting Antrea agent (version %s)", version.GetFullVersion())
 	// Create K8s Clientset, CRD Clientset and SharedInformerFactory for the given config.
-	k8sClient, _, crdClient, err := k8s.CreateClients(o.config.ClientConnection)
+	k8sClient, _, crdClient, err := k8s.CreateClients(o.config.ClientConnection, o.config.KubeAPIServerOverride)
 	if err != nil {
 		return fmt.Errorf("error creating K8s clients: %v", err)
 	}
@@ -89,9 +90,10 @@ func run(o *Options) error {
 	}
 	defer ovsdbConnection.Close()
 
-	ovsBridgeClient := ovsconfig.NewOVSBridge(o.config.OVSBridge, o.config.OVSDatapathType, ovsdbConnection)
+	ovsDatapathType := ovsconfig.OVSDatapathType(o.config.OVSDatapathType)
+	ovsBridgeClient := ovsconfig.NewOVSBridge(o.config.OVSBridge, ovsDatapathType, ovsdbConnection)
 	ovsBridgeMgmtAddr := ofconfig.GetMgmtAddress(o.config.OVSRunDir, o.config.OVSBridge)
-	ofClient := openflow.NewClient(o.config.OVSBridge, ovsBridgeMgmtAddr,
+	ofClient := openflow.NewClient(o.config.OVSBridge, ovsBridgeMgmtAddr, ovsDatapathType,
 		features.DefaultFeatureGate.Enabled(features.AntreaProxy),
 		features.DefaultFeatureGate.Enabled(features.AntreaPolicy))
 
@@ -150,22 +152,29 @@ func run(o *Options) error {
 		networkConfig,
 		nodeConfig)
 
-	// podUpdates is a channel for receiving Pod updates from CNIServer and
+	// entityUpdates is a channel for receiving entity updates from CNIServer and
 	// notifying NetworkPolicyController to reconcile rules related to the
-	// updated Pods.
-	podUpdates := make(chan v1beta2.PodReference, 100)
+	// updated entities.
+	entityUpdates := make(chan types.EntityReference, 100)
 	// We set flow poll interval as the time interval for rule deletion in the async
 	// rule cache, which is implemented as part of the idAllocator. This is to preserve
 	// the rule info for populating NetworkPolicy fields in the Flow Exporter even
 	// after rule deletion.
 	asyncRuleDeleteInterval := o.pollInterval
+	antreaPolicyEnabled := features.DefaultFeatureGate.Enabled(features.AntreaPolicy)
+	// In Antrea agent, status manager and audit logging will automatically be enabled
+	// if AntreaPolicy feature is enabled.
+	statusManagerEnabled := antreaPolicyEnabled
+	loggingEnabled := antreaPolicyEnabled
 	networkPolicyController, err := networkpolicy.NewNetworkPolicyController(
 		antreaClientProvider,
 		ofClient,
 		ifaceStore,
 		nodeConfig.Name,
-		podUpdates,
-		features.DefaultFeatureGate.Enabled(features.AntreaPolicy),
+		entityUpdates,
+		antreaPolicyEnabled,
+		statusManagerEnabled,
+		loggingEnabled,
 		asyncRuleDeleteInterval)
 	if err != nil {
 		return fmt.Errorf("error creating new NetworkPolicy controller: %v", err)
@@ -179,6 +188,7 @@ func run(o *Options) error {
 	}
 
 	var proxier k8sproxy.Provider
+
 	if features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
 		v4Enabled := config.IsIPv4Enabled(nodeConfig, networkConfig.TrafficEncapMode)
 		v6Enabled := config.IsIPv6Enabled(nodeConfig, networkConfig.TrafficEncapMode)
@@ -203,11 +213,10 @@ func run(o *Options) error {
 		o.config.HostProcPathPrefix,
 		nodeConfig,
 		k8sClient,
-		podUpdates,
 		isChaining,
 		routeClient,
 		networkReadyCh)
-	err = cniServer.Initialize(ovsBridgeClient, ofClient, ifaceStore, o.config.OVSDatapathType)
+	err = cniServer.Initialize(ovsBridgeClient, ofClient, ifaceStore, entityUpdates)
 	if err != nil {
 		return fmt.Errorf("error initializing CNI server: %v", err)
 	}
@@ -244,7 +253,11 @@ func run(o *Options) error {
 
 	// Start the NPL agent.
 	if features.DefaultFeatureGate.Enabled(features.NodePortLocal) {
-		nplController, err := npl.InitializeNPLAgent(k8sClient, o.config.NPLPortRange, nodeConfig.Name)
+		nplController, err := npl.InitializeNPLAgent(
+			k8sClient,
+			informerFactory,
+			o.config.NPLPortRange,
+			nodeConfig.Name)
 		if err != nil {
 			return fmt.Errorf("failed to start NPL agent: %v", err)
 		}
@@ -252,6 +265,8 @@ func run(o *Options) error {
 	}
 
 	log.StartLogFileNumberMonitor(stopCh)
+
+	go routeClient.Run(stopCh)
 
 	go cniServer.Run(stopCh)
 
@@ -290,12 +305,18 @@ func run(o *Options) error {
 		go proxier.Run(stopCh)
 	}
 
+	cipherSuites, err := cipher.GenerateCipherSuitesList(o.config.TLSCipherSuites)
+	if err != nil {
+		return fmt.Errorf("error generating Cipher Suite list: %v", err)
+	}
 	apiServer, err := apiserver.New(
 		agentQuerier,
 		networkPolicyController,
 		o.config.APIPort,
 		o.config.EnablePrometheusMetrics,
-		o.config.ClientConnection.Kubeconfig)
+		o.config.ClientConnection.Kubeconfig,
+		cipherSuites,
+		cipher.TLSVersionMap[o.config.TLSMinVersion])
 	if err != nil {
 		return fmt.Errorf("error when creating agent API server: %v", err)
 	}
@@ -319,7 +340,7 @@ func run(o *Options) error {
 		v6Enabled := config.IsIPv6Enabled(nodeConfig, networkConfig.TrafficEncapMode)
 
 		connStore := connections.NewConnectionStore(
-			connections.InitializeConnTrackDumper(nodeConfig, serviceCIDRNet, serviceCIDRNetv6, o.config.OVSDatapathType, features.DefaultFeatureGate.Enabled(features.AntreaProxy)),
+			connections.InitializeConnTrackDumper(nodeConfig, serviceCIDRNet, serviceCIDRNetv6, ovsDatapathType, features.DefaultFeatureGate.Enabled(features.AntreaProxy)),
 			ifaceStore,
 			v4Enabled,
 			v6Enabled,
@@ -332,8 +353,10 @@ func run(o *Options) error {
 		flowExporter := exporter.NewFlowExporter(
 			flowrecords.NewFlowRecords(connStore),
 			o.config.FlowExportFrequency,
+			o.config.EnableTLSToFlowAggregator,
 			v4Enabled,
-			v6Enabled)
+			v6Enabled,
+			k8sClient)
 		go wait.Until(func() { flowExporter.Export(o.flowCollectorAddr, o.flowCollectorProto, stopCh, pollDone) }, 0, stopCh)
 	}
 

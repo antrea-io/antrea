@@ -27,6 +27,7 @@ import (
 	v1net "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	corev1a1 "github.com/vmware-tanzu/antrea/pkg/apis/core/v1alpha2"
 	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
 )
 
@@ -287,6 +288,93 @@ func (k *KubernetesUtils) UpdateTier(tier *secv1alpha1.Tier) (*secv1alpha1.Tier,
 	return updatedTier, err
 }
 
+// CreateOrUpdateCG is a convenience function for idempotent setup of ClusterGroups
+func (k *KubernetesUtils) CreateOrUpdateCG(name string, pSelector, nSelector *metav1.LabelSelector, ipBlock *secv1alpha1.IPBlock) (*corev1a1.ClusterGroup, error) {
+	log.Infof("creating/updating ClusterGroup %s", name)
+	cgReturned, err := k.crdClient.CoreV1alpha2().ClusterGroups().Get(context.TODO(), name, metav1.GetOptions{})
+	if err != nil {
+		log.Debugf("creating ClusterGroup %s", name)
+		cg := &corev1a1.ClusterGroup{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: name,
+			},
+		}
+		if pSelector != nil {
+			cg.Spec.PodSelector = pSelector
+		}
+		if nSelector != nil {
+			cg.Spec.NamespaceSelector = nSelector
+		}
+		if ipBlock != nil {
+			cg.Spec.IPBlock = ipBlock
+		}
+		cgr, err := k.crdClient.CoreV1alpha2().ClusterGroups().Create(context.TODO(), cg, metav1.CreateOptions{})
+		if err != nil {
+			log.Infof("unable to create cluster group %s: %v", name, err)
+			return nil, err
+		}
+		return cgr, nil
+	} else if cgReturned.Name != "" {
+		log.Debugf("ClusterGroup with name %s already exists, updating", name)
+		if pSelector != nil {
+			cgReturned.Spec.PodSelector = pSelector
+		}
+		if nSelector != nil {
+			cgReturned.Spec.NamespaceSelector = nSelector
+		}
+		if ipBlock != nil {
+			cgReturned.Spec.IPBlock = ipBlock
+		}
+		cgr, err := k.crdClient.CoreV1alpha2().ClusterGroups().Update(context.TODO(), cgReturned, metav1.UpdateOptions{})
+		return cgr, err
+	}
+	return nil, fmt.Errorf("error occurred in creating/updating ClusterGroup %s", name)
+}
+
+// CreateCG is a convenience function for creating an Antrea ClusterGroup by name and selector.
+func (k *KubernetesUtils) CreateCG(name string, pSelector, nSelector *metav1.LabelSelector, ipBlock *secv1alpha1.IPBlock) (*corev1a1.ClusterGroup, error) {
+	log.Infof("creating clustergroup %s", name)
+	_, err := k.crdClient.CoreV1alpha2().ClusterGroups().Get(context.TODO(), name, metav1.GetOptions{})
+	if err != nil {
+		cg := &corev1a1.ClusterGroup{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: name,
+			},
+		}
+		if pSelector != nil {
+			cg.Spec.PodSelector = pSelector
+		}
+		if nSelector != nil {
+			cg.Spec.NamespaceSelector = nSelector
+		}
+		if ipBlock != nil {
+			cg.Spec.IPBlock = ipBlock
+		}
+		cg, err = k.crdClient.CoreV1alpha2().ClusterGroups().Create(context.TODO(), cg, metav1.CreateOptions{})
+		if err != nil {
+			log.Debugf("unable to create clustergroup %s: %s", name, err)
+		}
+		return cg, err
+	}
+	return nil, fmt.Errorf("clustergroup with name %s already exists", name)
+}
+
+// CleanCGs is a convenience function for deleting ClusterGroups before startup of any new test.
+func (k *KubernetesUtils) CleanCGs() error {
+	l, err := k.crdClient.CoreV1alpha2().ClusterGroups().List(context.TODO(), metav1.ListOptions{})
+	if err != nil {
+		return errors.Wrapf(err, "unable to list ClusterGroups")
+	}
+	for _, cg := range l.Items {
+		log.Infof("deleting ClusterGroup %s", cg.Name)
+		err = k.crdClient.CoreV1alpha2().ClusterGroups().Delete(context.TODO(), cg.Name, metav1.DeleteOptions{})
+		if err != nil {
+			return errors.Wrapf(err, "unable to delete ClusterGroup %s", cg.Name)
+		}
+	}
+	return nil
+}
+
 // CleanACNPs is a convenience function for deleting AntreaClusterNetworkPolicies before startup of any new test.
 func (k *KubernetesUtils) CleanACNPs() error {
 	l, err := k.securityClient.ClusterNetworkPolicies().List(context.TODO(), metav1.ListOptions{})
@@ -316,7 +404,8 @@ func (k *KubernetesUtils) CreateOrUpdateACNP(cnp *secv1alpha1.ClusterNetworkPoli
 		return cnp, err
 	} else if cnpReturned.Name != "" {
 		log.Debugf("ClusterNetworkPolicy with name %s already exists, updating", cnp.Name)
-		cnp, err = k.securityClient.ClusterNetworkPolicies().Update(context.TODO(), cnp, metav1.UpdateOptions{})
+		cnpReturned.Spec = cnp.Spec
+		cnp, err = k.securityClient.ClusterNetworkPolicies().Update(context.TODO(), cnpReturned, metav1.UpdateOptions{})
 		return cnp, err
 	}
 	return nil, fmt.Errorf("error occurred in creating/updating ClusterNetworkPolicy %s", cnp.Name)

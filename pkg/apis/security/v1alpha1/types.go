@@ -145,6 +145,11 @@ type NetworkPolicyPeer struct {
 	// Cannot be set with any other selector except NamespaceSelector.
 	// +optional
 	ExternalEntitySelector *metav1.LabelSelector `json:"externalEntitySelector,omitempty"`
+	// Group is the name of the ClusterGroup which can be set as an
+	// AppliedTo or within an Ingress or Egress rule in place of
+	// a stand-alone selector. A Group cannot be set with any other
+	// selector.
+	Group string `json:"group,omitempty"`
 }
 
 // IPBlock describes a particular CIDR (Ex. "192.168.1.1/24") that is allowed

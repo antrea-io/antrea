@@ -253,21 +253,25 @@ func (pa *priorityAssigner) GetOFPriority(p types.Priority) (uint16, bool) {
 	return of, registered
 }
 
-// RegisterPriorities registers a list of Priorities with the priorityAssigner. It allocates ofPriorities for
-// input Priorities that are not yet registered. It also returns the ofPriority updates if there are reassignments,
+// RegisterPriorities registers a list of types.Priority with the priorityAssigner. It allocates ofPriorities for
+// input priorities that are not yet registered. It also returns the ofPriority updates if there are reassignments,
 // as well as a revert function that can undo the registration if any error occurred in data plane.
 // Note that this function modifies the priorities slice in the parameter, as it only keeps the Priorities which
-// this priorityAssigner has not yet registered.
+// this priorityAssigner has not yet registered. Input priorities are not assumed to be unique or consecutive.
 func (pa *priorityAssigner) RegisterPriorities(priorities []types.Priority) (map[uint16]uint16, func(), error) {
 	// create a zero-length slice with the same underlying array to save memory usage.
 	prioritiesToRegister := priorities[:0]
+	priorityDedup := map[types.Priority]struct{}{}
 	for _, p := range priorities {
-		if _, exists := pa.priorityMap[p]; !exists {
-			prioritiesToRegister = append(prioritiesToRegister, p)
+		if _, dup := priorityDedup[p]; !dup {
+			priorityDedup[p] = struct{}{}
+			if _, exists := pa.priorityMap[p]; !exists {
+				prioritiesToRegister = append(prioritiesToRegister, p)
+			}
 		}
 	}
 	numPriorityToRegister := len(prioritiesToRegister)
-	klog.V(2).Infof("%v new Priorities need to be registered", numPriorityToRegister)
+	klog.V(2).Infof("%v new priorities need to be registered", numPriorityToRegister)
 	if numPriorityToRegister == 0 {
 		return nil, nil, nil
 	} else if uint16(numPriorityToRegister+len(pa.sortedPriorities)) > pa.policyTopPriority-pa.policyBottomPriority+1 {
@@ -275,7 +279,7 @@ func (pa *priorityAssigner) RegisterPriorities(priorities []types.Priority) (map
 	}
 	sort.Sort(types.ByPriority(prioritiesToRegister))
 	var consecutivePriorities [][]types.Priority
-	// break the Priorities into lists of consecutive Priorities.
+	// break the list of Priority into lists of consecutive Priority.
 	for i, j := 0, 1; j <= numPriorityToRegister; j++ {
 		if j == numPriorityToRegister || !prioritiesToRegister[j].IsConsecutive(prioritiesToRegister[j-1]) {
 			consecutivePriorities = append(consecutivePriorities, prioritiesToRegister[i:j])

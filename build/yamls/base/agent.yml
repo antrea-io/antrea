@@ -57,11 +57,9 @@ spec:
           - name: host-lib-modules
             mountPath: /lib/modules
             readOnly: true
-          # depmod is required by modprobe when the Node OS is different from
-          # that of the Antrea Docker image.
-          - name: host-depmod
-            mountPath: /sbin/depmod
-            readOnly: true
+          # For changing the default permissions of the run directory.
+          - name: host-var-run-antrea
+            mountPath: /var/run/antrea
       containers:
         - name: antrea-agent
           image: antrea
@@ -102,7 +100,7 @@ spec:
           readinessProbe:
             httpGet:
               host: 127.0.0.1
-              path: /healthz
+              path: /readyz
               port: api
               scheme: HTTPS
             initialDelaySeconds: 5
@@ -208,9 +206,6 @@ spec:
         - name: host-lib-modules
           hostPath:
             path: /lib/modules
-        - name: host-depmod
-          hostPath:
-            path: /sbin/depmod
         - name: xtables-lock
           hostPath:
             path: /run/xtables.lock

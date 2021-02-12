@@ -27,9 +27,11 @@ import (
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
+	"github.com/vmware-tanzu/antrea/pkg/agent/types"
 	"github.com/vmware-tanzu/antrea/pkg/agent/util"
 	"github.com/vmware-tanzu/antrea/pkg/agent/util/ipset"
 	"github.com/vmware-tanzu/antrea/pkg/agent/util/iptables"
@@ -62,6 +64,9 @@ var (
 	// globalVMAC is used in the IPv6 neighbor configuration to advertise ND solicitation for the IPv6 address of the
 	// host gateway interface on other Nodes.
 	globalVMAC, _ = net.ParseMAC("aa:bb:cc:dd:ee:ff")
+	// IPTablesSyncInterval is exported so that sync interval can be configured for running integration test with
+	// smaller values. It is meant to be used internally by Run.
+	IPTablesSyncInterval = 60 * time.Second
 )
 
 // Client takes care of routing container packets in host network, coordinating ip route, ip rule, iptables and ipset.
@@ -75,6 +80,8 @@ type Client struct {
 	nodeRoutes sync.Map
 	// nodeNeighbors caches IPv6 Neighbors to remote host gateway
 	nodeNeighbors sync.Map
+	// iptablesInitialized is used to notify when iptables initialization is done.
+	iptablesInitialized chan struct{}
 }
 
 // NewClient returns a route client.
@@ -92,15 +99,29 @@ func NewClient(serviceCIDR *net.IPNet, networkConfig *config.NetworkConfig, noSN
 // It is idempotent and can be safely called on every startup.
 func (c *Client) Initialize(nodeConfig *config.NodeConfig, done func()) error {
 	c.nodeConfig = nodeConfig
+	c.iptablesInitialized = make(chan struct{})
 
 	// Sets up the ipset that will be used in iptables.
-	if err := c.initIPSet(); err != nil {
+	if err := c.syncIPSet(); err != nil {
 		return fmt.Errorf("failed to initialize ipset: %v", err)
 	}
 
 	// Sets up the iptables infrastructure required to route packets in host network.
 	// It's called in a goroutine because xtables lock may not be acquired immediately.
-	go c.initIPTablesOnce(done)
+	go func() {
+		defer done()
+		defer close(c.iptablesInitialized)
+		var backoffTime = 2 * time.Second
+		for {
+			if err := c.syncIPTables(); err != nil {
+				klog.Errorf("Failed to initialize iptables: %v - will retry in %v", err, backoffTime)
+				time.Sleep(backoffTime)
+				continue
+			}
+			break
+		}
+		klog.Info("Initialized iptables")
+	}()
 
 	// Sets up the IP routes and IP rule required to route packets in host network.
 	if err := c.initIPRoutes(); err != nil {
@@ -110,24 +131,30 @@ func (c *Client) Initialize(nodeConfig *config.NodeConfig, done func()) error {
 	return nil
 }
 
-// initIPTablesOnce starts a loop that initializes the iptables infrastructure.
-// It returns after one successful execution.
-func (c *Client) initIPTablesOnce(done func()) {
-	defer done()
-	backoffTime := 2 * time.Second
-	for {
-		if err := c.initIPTables(); err != nil {
-			klog.Errorf("Failed to initialize iptables: %v - will retry in %v", err, backoffTime)
-			time.Sleep(backoffTime)
-			continue
-		}
-		klog.Info("Initialized iptables")
-		return
-	}
+// Run waits for iptables initialization, then periodically syncs iptables rules.
+// It will not return until stopCh is closed.
+func (c *Client) Run(stopCh <-chan struct{}) {
+	<-c.iptablesInitialized
+	klog.Infof("Starting iptables sync, with sync interval %v", IPTablesSyncInterval)
+	wait.Until(c.syncIPInfra, IPTablesSyncInterval, stopCh)
 }
 
-// initIPSet ensures that the required ipset exists and it has the initial members.
-func (c *Client) initIPSet() error {
+// syncIPInfra is idempotent and can be safely called on every sync operation.
+func (c *Client) syncIPInfra() {
+	// Sync ipset before syncing iptables rules
+	if err := c.syncIPSet(); err != nil {
+		klog.Errorf("Failed to sync ipset: %v", err)
+		return
+	}
+	if err := c.syncIPTables(); err != nil {
+		klog.Errorf("Failed to sync iptables: %v", err)
+		return
+	}
+	klog.V(3).Infof("Successfully synced node iptables")
+}
+
+// syncIPSet ensures that the required ipset exists and it has the initial members.
+func (c *Client) syncIPSet() error {
 	// In policy-only mode, Node Pod CIDR is undefined.
 	if c.networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {
 		return nil
@@ -181,9 +208,9 @@ func (c *Client) writeEKSMangleRule(iptablesData *bytes.Buffer) {
 	}...)
 }
 
-// initIPTables ensure that the iptables infrastructure we use is set up.
+// syncIPTables ensure that the iptables infrastructure we use is set up.
 // It's idempotent and can safely be called on every startup.
-func (c *Client) initIPTables() error {
+func (c *Client) syncIPTables() error {
 	var err error
 	v4Enabled := config.IsIPv4Enabled(c.nodeConfig, c.networkConfig.TrafficEncapMode)
 	v6Enabled := config.IsIPv6Enabled(c.nodeConfig, c.networkConfig.TrafficEncapMode)
@@ -199,7 +226,8 @@ func (c *Client) initIPTables() error {
 		{iptables.RawTable, iptables.OutputChain, antreaOutputChain, "Antrea: jump to Antrea output rules"},
 		{iptables.FilterTable, iptables.ForwardChain, antreaForwardChain, "Antrea: jump to Antrea forwarding rules"},
 		{iptables.NATTable, iptables.PostRoutingChain, antreaPostRoutingChain, "Antrea: jump to Antrea postrouting rules"},
-		{iptables.MangleTable, iptables.PreRoutingChain, antreaMangleChain, "Antrea: jump to Antrea mangle rules"},
+		{iptables.MangleTable, iptables.PreRoutingChain, antreaMangleChain, "Antrea: jump to Antrea mangle rules"}, // TODO: unify the chain naming style
+		{iptables.MangleTable, iptables.OutputChain, antreaOutputChain, "Antrea: jump to Antrea output rules"},
 	}
 	for _, rule := range jumpRules {
 		if err := c.ipt.EnsureChain(rule.table, rule.dstChain); err != nil {
@@ -273,12 +301,25 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet, podIPSet string) *bytes
 	// Write head lines anyway so the undesired rules can be deleted when noEncap -> encap.
 	writeLine(iptablesData, "*mangle")
 	writeLine(iptablesData, iptables.MakeChainLine(antreaMangleChain))
+	writeLine(iptablesData, iptables.MakeChainLine(antreaOutputChain))
 	hostGateway := c.nodeConfig.GatewayConfig.Name
 	// When Antrea is used to enforce NetworkPolicies in EKS, an additional iptables
 	// mangle rule is required. See https://github.com/vmware-tanzu/antrea/issues/678.
 	if env.IsCloudEKS() {
 		c.writeEKSMangleRule(iptablesData)
 	}
+
+	// To make liveness/readiness probe traffic bypass ingress rules of Network Policies, mark locally generated packets
+	// that will be sent to OVS so we can identify them later in the OVS pipeline.
+	// It must match source address because kube-proxy ipvs mode will redirect ingress packets to output chain, and they
+	// will have non local source addresses.
+	writeLine(iptablesData, []string{
+		"-A", antreaOutputChain,
+		"-m", "comment", "--comment", `"Antrea: mark local output packets"`,
+		"-m", "addrtype", "--src-type", "LOCAL",
+		"-o", c.nodeConfig.GatewayConfig.Name,
+		"-j", iptables.MarkTarget, "--or-mark", fmt.Sprintf("%#08x", types.HostLocalSourceMark),
+	}...)
 	writeLine(iptablesData, "COMMIT")
 
 	writeLine(iptablesData, "*filter")

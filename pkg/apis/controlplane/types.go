@@ -34,9 +34,17 @@ type AppliedToGroup struct {
 
 // PodReference represents a Pod Reference.
 type PodReference struct {
-	// The name of this pod.
+	// The name of this Pod.
 	Name string
-	// The namespace of this pod.
+	// The Namespace of this Pod.
+	Namespace string
+}
+
+// ServiceReference represents reference to a v1.Service.
+type ServiceReference struct {
+	// The name of this Service.
+	Name string
+	// The Namespace of this Service.
 	Namespace string
 }
 
@@ -54,7 +62,7 @@ type NamedPort struct {
 type ExternalEntityReference struct {
 	// The name of this ExternalEntity.
 	Name string
-	// The namespace of this ExternalEntity.
+	// The Namespace of this ExternalEntity.
 	Namespace string
 }
 
@@ -68,6 +76,14 @@ type GroupMember struct {
 	IPs []IPAddress
 	// Ports is the list NamedPort of the GroupMember.
 	Ports []NamedPort
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// ClusterGroupMembers is a list of GroupMember objects that are currently selected by a ClusterGroup.
+type ClusterGroupMembers struct {
+	metav1.TypeMeta
+	metav1.ObjectMeta
+	EffectiveMembers []GroupMember
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -289,4 +305,23 @@ type NetworkPolicyNodeStatus struct {
 	NodeName string
 	// The generation realized by the Node.
 	Generation int64
+}
+
+type GroupReference struct {
+	// Namespace of the Group. Empty for ClusterGroup.
+	Namespace string
+	// Name of the Group.
+	Name string
+	// UID of the Group.
+	UID types.UID
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// GroupAssociation is a list of GroupReferences for responses to groupassociation queries.
+type GroupAssociation struct {
+	metav1.TypeMeta
+	metav1.ObjectMeta
+	// AssociatedGroups is a list of GroupReferences that is associated with the
+	// Pod/ExternalEntity being queried.
+	AssociatedGroups []GroupReference
 }

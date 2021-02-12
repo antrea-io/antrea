@@ -152,6 +152,11 @@ func (c *Client) UnMigrateRoutesFromGw(route *net.IPNet, linkName string) error 
 	return errors.New("UnMigrateRoutesFromGw is unsupported on Windows")
 }
 
+// Run is not supported on Windows and returns immediately.
+func (c *Client) Run(stopCh <-chan struct{}) {
+	return
+}
+
 func (c *Client) listRoutes() (map[string]*netroute.Route, error) {
 	routes, err := c.nr.GetNetRoutesAll()
 	if err != nil {

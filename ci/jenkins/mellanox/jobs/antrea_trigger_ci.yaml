@@ -1,0 +1,289 @@
+- job:
+    name: 'ANTREA_HW_OFFLOAD_CI_EXECUTER'
+    node: {excutor-node}
+    parameters:
+      - string:
+          name: PR_ID
+          default: ''
+      - string:
+          name: UPSTREAM_BUILD_ID
+          default: ''
+      - string:
+          name: UPSTREAM_JOB_NAME
+          default: ''
+      - string:
+          name: ANTREA_REPO
+          default: ''
+    builders:
+    - inject:
+        properties-content: |
+            LOGDIR=$WORKSPACE/ci-artifacts/logs
+            PATH=$PATH:/usr/sbin:/usr/local/go/bin:/home_stack/kubernetes/third_party/etcd:/home_stack/kubernetes/cluster/
+            EXT_SERVER=13.74.249.42
+            LOGSERVER=cloudx@$EXT_SERVER
+            GOROOT=/usr/local/go
+            GOPATH=/usr/local/go/go
+            CNI_BIN_DIR=/opt/cni/bin/
+            CNI_CONF_DIR=/etc/cni/net.d/
+            ALLOW_PRIVILEGED=true
+            NET_PLUGIN="cni"
+            KUBE_ENABLE_CLUSTER_DNS=false
+            TIMEOUT=300
+            # ConnectX-5 for macvlan
+            HCA1=MT27800
+            # ConnectX-4Lx for sriov
+            HCA2=MT27710
+            ANTREA_CNI_REPO=${ANTREA_REPO}
+            ANTREA_CNI_PR=${PR_ID}
+            PROJECT=sriov_antrea
+            UPSTREAM_BUILD_ID=${UPSTREAM_BUILD_ID}
+            UPSTREAM_JOB_NAME=${UPSTREAM_JOB_NAME}
+    - post-in-progress-page
+    - get-ci-scripts
+    - run-ci
+    concurrent: false
+    description: <!-- Managed by Jenkins Job Builder -->
+    disabled: false
+    project-type: freestyle
+    properties:
+    - build-discarder:
+        artifact-days-to-keep: 60
+        artifact-num-to-keep: 100
+        days-to-keep: 60
+        num-to-keep: 100
+    - github:
+        url: {antrea-github}
+    publishers:
+    - build-publisher:
+        publish-unstable-builds: true
+        publish-failed-builds: true
+        days-to-keep: -1
+        num-to-keep: 50
+    - email-ext:
+        recipients: {mailing-list}
+        subject: Failed ANTREA_HW_OFFLOAD_CI_EXECUTER
+        failure: true
+        content-type: html
+        body: Failed ANTREA_HW_OFFLOAD_CI_EXECUTER
+    wrappers:
+      - timeout:
+          timeout: 120
+          fail: true
+      - timestamps
+
+- job:
+    name: 'ANTREA_HW_OFFLOAD_CI_TRIGGER'
+    node: trigger-node
+    builders:
+    - inject:
+        properties-content: |
+            EXT_SERVER=13.74.249.42
+            LOGSERVER=cloudx@$EXT_SERVER
+            DOWNSTREAM_MACHINE={downstream-server}
+            PR_ID=${ghprbPullId}
+    - copy-scm-to-downstream
+    - post-pending-page
+    - trigger-builds:
+        - project: ANTREA_HW_OFFLOAD_CI_EXECUTER
+          predefined-parameters: |
+              PR_ID=${ghprbPullId}
+              UPSTREAM_BUILD_ID=${BUILD_ID}
+              UPSTREAM_JOB_NAME=${JOB_NAME}
+              ANTREA_REPO=${GIT_URL}
+          git-revision: false
+          block: true
+    concurrent: true
+    description: <!-- Managed by Jenkins Job Builder -->
+    disabled: false
+    project-type: freestyle
+    properties:
+    - build-discarder:
+        artifact-days-to-keep: 60
+        artifact-num-to-keep: 100
+        days-to-keep: 60
+        num-to-keep: 100
+    - github:
+        url: {antrea-github}
+    publishers:
+    - build-publisher:
+        publish-unstable-builds: true
+        publish-failed-builds: true
+        days-to-keep: -1
+        num-to-keep: 50
+    - email-ext:
+        recipients: {mailing-list}
+        subject: Failed CI for vmware-tanzu/antrea project
+        failure: true
+        content-type: html
+        body: '${FILE,path="/tmp/failling_email_body.html"}'
+    - postbuildscript:
+        mark-unstable-if-failed: false
+        builders:
+            - role: BOTH
+              build-on:
+                  - SUCCESS
+                  - UNSTABLE
+                  - FAILURE
+              build-steps:
+                  - construct-downstream-fail-email
+                  - post-full-console
+    scm:
+    - git:
+        branches: ["${sha1}"]
+        credentials-id: {credentials-id}
+        name: ANTREA_HW_OFFLOAD_CI_TRIGGER
+        refspec: +refs/pull/*:refs/remotes/origin/pr/*
+        url: {antrea-github}
+        wipe-workspace: true
+    triggers:
+    - github-pull-request:
+        admin-list: []
+        allow-whitelist-orgs-as-admins: true
+        auth-id: {auth-id}
+        auto-close-on-fail: false
+        build-desc-template: null
+        cron: H/5 * * * *
+        github-hooks: false
+        only-trigger-phrase: true
+        permit-all: true
+        cancel-builds-on-update: true
+        status-url: http://13.74.249.42/$JOB_NAME/$BUILD_ID/consoleFull
+        success-status: "Build Passed"
+        failure-status: "Failed. Add comment /test-hw-offload to re-trigger."
+        error-status:   "Failed. Add comment /test-hw-offload to re-trigger."
+        status-context: "jenkins-hw-offload"
+        triggered_status: null
+        started_status: null
+        trigger-phrase: ^(?!Thanks for your PR).*/test-(hw-offload|all).*
+        white-list:
+        - '*'
+        white-list-target-branches: []
+    - github
+
+- job:
+    name: 'ANTREA_HW_OFFLOAD_CI_SKIP'
+    node: {skip-node}
+    builders:
+    - construct-fail-email
+    concurrent: false
+    description: <!-- Managed by Jenkins Job Builder -->
+    disabled: false
+    project-type: freestyle
+    properties:
+    - build-discarder:
+        artifact-days-to-keep: 60
+        artifact-num-to-keep: 100
+        days-to-keep: 60
+        num-to-keep: 100
+    - github:
+        url: {antrea-github}
+    publishers:
+    - build-publisher:
+        publish-unstable-builds: true
+        publish-failed-builds: true
+        days-to-keep: -1
+        num-to-keep: 50
+    - email-ext:
+        recipients: {mailing-list}
+        subject: Failed CI for ANTREA_HW_OFFLOAD_CI_SKIP project
+        failure: true
+        content-type: html
+        body: '${FILE,path="/tmp/failling_email_body.html"}'
+    scm:
+    - git:
+        branches: ["${sha1}"]
+        credentials-id: {credentials-id}
+        name: SRIOV_ANTREA_CI
+        refspec: +refs/pull/*:refs/remotes/origin/pr/*
+        url: {antrea-github}
+        wipe-workspace: true
+    triggers:
+    - github-pull-request:
+        admin-list: []
+        allow-whitelist-orgs-as-admins: true
+        auth-id: {auth-id}
+        auto-close-on-fail: false
+        build-desc-template: null
+        cron: H/5 * * * *
+        github-hooks: false
+        only-trigger-phrase: true
+        permit-all: true
+        cancel-builds-on-update: true
+        status-url: --none--
+        success-status: "Skipped test. Mark as succeeded."
+        failure-status: "Skipped test failed."
+        error-status:   "Skipped test failed."
+        status-context: "jenkins-hw-offload"
+        triggered_status: null
+        started_status: null
+        trigger-phrase: ^(?!Thanks for your PR).*/skip-(hw-offload|all).*
+        white-list:
+        - '*'
+        white-list-target-branches: []
+    - github
+    wrappers:
+      - timeout:
+          timeout: 300
+          fail: true
+      - timestamps
+
+- job:
+    name: 'ANTREA_HW_OFFLOAD_CI_PENDING'
+    node: {pending-node}
+    builders: 
+    - builder-pending-label
+    concurrent: false
+    description: <!-- Managed by Jenkins Job Builder -->
+    disabled: false
+    project-type: freestyle
+    properties:
+    - build-discarder:
+        artifact-days-to-keep: 60
+        artifact-num-to-keep: 100
+        days-to-keep: 60
+        num-to-keep: 100
+    - github:
+        url: {antrea-github}
+    publishers:
+    - build-publisher:
+        publish-unstable-builds: true
+        publish-failed-builds: true
+        days-to-keep: -1
+        num-to-keep: 50
+    scm:
+    - git:
+        branches: ["${sha1}"]
+        credentials-id: {credentials-id}
+        name: ANTREA_HW_OFFLOAD_CI_PENDING
+        refspec: +refs/pull/*:refs/remotes/origin/pr/*
+        url: {antrea-github}
+        wipe-workspace: true
+    triggers:
+    - github-pull-request:
+        admin-list: []
+        allow-whitelist-orgs-as-admins: true
+        auth-id: {auth-id}
+        auto-close-on-fail: false
+        build-desc-template: null
+        cron: H/5 * * * *
+        github-hooks: false
+        only-trigger-phrase: false
+        permit-all: true
+        cancel-builds-on-update: true
+        status-url: --none--
+        success-status: "Pending test. Mark as failure. Add comment /test-hw-offload to trigger."
+        failure-status: "Pending test. Mark as failure. Add comment /test-hw-offload to trigger."
+        error-status: "Pending test. Mark as failure. Add comment /test-hw-offload to trigger."
+        status-context: "jenkins-hw-offload"
+        triggered_status: null
+        started_status: null
+        trigger-phrase: ^(?!Thanks for your PR).*/pend-(hw-offload|all).*
+        white-list:
+        - '*'
+        white-list-target-branches: []
+    - github
+    wrappers:
+      - timeout:
+          timeout: 300
+          fail: true
+      - timestamps

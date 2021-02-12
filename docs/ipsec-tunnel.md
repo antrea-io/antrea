@@ -24,11 +24,11 @@ get the Antrea IPsec deployment yaml at:
 https://github.com/vmware-tanzu/antrea/releases/download/<TAG>/antrea-ipsec.yml
 ```
 
-To deploy the latest version of Antrea (built from the master branch), get the
+To deploy the latest version of Antrea (built from the main branch), get the
 IPsec deployment yaml at:
 
 ```text
-https://raw.githubusercontent.com/vmware-tanzu/antrea/master/build/yamls/antrea-ipsec.yml
+https://raw.githubusercontent.com/vmware-tanzu/antrea/main/build/yamls/antrea-ipsec.yml
 ```
 
 Antrea leverages strongSwan as the IKE daemon, and supports using pre-shared key
