@@ -122,6 +122,13 @@ type GroupSpec struct {
 	// Cannot be set with any other selector or ipBlock.
 	// +optional
 	ServiceReference *ServiceReference `json:"serviceReference,omitempty"`
+	// Select ExternalEntities from all Namespaces as workloads
+	// in AppliedTo/To/From fields. If set with NamespaceSelector,
+	// ExternalEntities are matched from Namespaces matched by the
+	// NamespaceSelector.
+	// Cannot be set with any other selector except NamespaceSelector.
+	// +optional
+	ExternalEntitySelector *metav1.LabelSelector `json:"externalEntitySelector,omitempty"`
 }
 
 type GroupConditionType string

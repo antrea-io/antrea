@@ -349,9 +349,12 @@ func TestDeleteCG(t *testing.T) {
 	assert.False(t, found, "expected internal Group to be deleted")
 }
 
-func TestFilterInternalGroupsForPod(t *testing.T) {
+func TestFilterInternalGroupsForPodOrExternalEntity(t *testing.T) {
 	selectorSpec := metav1.LabelSelector{
 		MatchLabels: map[string]string{"purpose": "test-select"},
+	}
+	eeSelectorSpec := metav1.LabelSelector{
+		MatchLabels: map[string]string{"platform": "aws"},
 	}
 	ns1 := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
@@ -384,11 +387,30 @@ func TestFilterInternalGroupsForPod(t *testing.T) {
 		Name:     "cgD",
 		Selector: toGroupSelector("", &selectorSpec, &selectorSpec, nil),
 	}
+	grp5 := &antreatypes.Group{
+		UID:      "uid5",
+		Name:     "cgE",
+		Selector: toGroupSelector("", nil, nil, &eeSelectorSpec),
+	}
 
 	pod1 := getPod("pod1", "ns1", "node1", "1.1.1.1", false)
 	pod1.Labels = map[string]string{"purpose": "test-select"}
 	pod2 := getPod("pod2", "ns1", "node1", "1.1.1.2", false)
 	pod3 := getPod("pod3", "ns2", "node1", "1.1.1.3", false)
+	ee1 := &corev1a2.ExternalEntity{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "ee1",
+			Namespace: "ns1",
+			Labels:    map[string]string{"platform": "aws"},
+		},
+	}
+	ee2 := &corev1a2.ExternalEntity{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "ee2",
+			Namespace: "ns1",
+			Labels:    map[string]string{"platform": "gke"},
+		},
+	}
 	tests := []struct {
 		name           string
 		toMatch        metav1.Object
@@ -409,18 +431,29 @@ func TestFilterInternalGroupsForPod(t *testing.T) {
 			pod3,
 			sets.String{},
 		},
+		{
+			"externalEntity-match-selector-match-ns",
+			ee1,
+			sets.NewString("cgC", "cgE"),
+		},
+		{
+			"externalEntity-unmatch-selector-match-ns",
+			ee2,
+			sets.NewString("cgC"),
+		},
 	}
 	_, npc := newController()
 	npc.internalGroupStore.Create(grp1)
 	npc.internalGroupStore.Create(grp2)
 	npc.internalGroupStore.Create(grp3)
 	npc.internalGroupStore.Create(grp4)
+	npc.internalGroupStore.Create(grp5)
 	npc.namespaceStore.Add(ns1)
 	npc.namespaceStore.Add(ns2)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.expectedGroups, npc.filterInternalGroupsForPod(tt.toMatch),
+			assert.Equal(t, tt.expectedGroups, npc.filterInternalGroupsForPodOrExternalEntity(tt.toMatch),
 				"Filtered internal Groups does not match expectation")
 		})
 	}

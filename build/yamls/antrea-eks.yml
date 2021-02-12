@@ -68,6 +68,8 @@ spec:
         properties:
           spec:
             properties:
+              externalEntitySelector:
+                x-kubernetes-preserve-unknown-fields: true
               ipBlock:
                 properties:
                   cidr:
