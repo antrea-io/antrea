@@ -128,11 +128,10 @@ var (
 )
 
 const (
-	aggregationWorkerNum  = 2
-	udpTransport          = "udp"
-	tcpTransport          = "tcp"
-	collectorAddress      = "0.0.0.0:4739"
-	flowAggregatorDNSName = "flow-aggregator.flow-aggregator.svc"
+	aggregationWorkerNum = 2
+	udpTransport         = "udp"
+	tcpTransport         = "tcp"
+	collectorAddress     = "0.0.0.0:4739"
 )
 
 type AggregatorTransportProtocol string
@@ -157,7 +156,7 @@ type flowAggregator struct {
 	k8sClient                   kubernetes.Interface
 }
 
-func NewFlowAggregator(externalFlowCollectorAddr string, externalFlowCollectorProto string, exportInterval time.Duration, aggregatorTransportProtocol AggregatorTransportProtocol, flowAggregatorDNSName string, k8sClient kubernetes.Interface) *flowAggregator {
+func NewFlowAggregator(externalFlowCollectorAddr string, externalFlowCollectorProto string, exportInterval time.Duration, aggregatorTransportProtocol AggregatorTransportProtocol, flowAggregatorAddress string, k8sClient kubernetes.Interface) *flowAggregator {
 	registry := ipfix.NewIPFIXRegistry()
 	registry.LoadRegistry()
 	fa := &flowAggregator{
@@ -170,7 +169,7 @@ func NewFlowAggregator(externalFlowCollectorAddr string, externalFlowCollectorPr
 		nil,
 		0,
 		registry,
-		flowAggregatorDNSName,
+		flowAggregatorAddress,
 		k8sClient,
 	}
 	return fa
@@ -179,7 +178,7 @@ func NewFlowAggregator(externalFlowCollectorAddr string, externalFlowCollectorPr
 func (fa *flowAggregator) genObservationID() (uint32, error) {
 	// TODO: Change to use cluster UUID to generate observation ID once it's available
 	h := fnv.New32()
-	h.Write([]byte(flowAggregatorDNSName))
+	h.Write([]byte(fa.flowAggregatorAddress))
 	return h.Sum32(), nil
 }
 
