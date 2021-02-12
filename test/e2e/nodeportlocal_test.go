@@ -69,7 +69,8 @@ func checkForNPLRuleInIPTABLES(t *testing.T, data *TestData, r *require.Assertio
 		stdout, _, err := data.runCommandFromPod("kube-system", antreaPod, "antrea-agent", cmd)
 		if err != nil {
 			t.Logf("Error while checking rules in IPTABLES: %v", err)
-			return false, err
+			// In case of error, retry
+			return false, nil
 		}
 		for i := range nplAnnotation {
 			ruleSpec := []string{
