@@ -104,7 +104,7 @@ with the Name and Namespace set to `flow-aggregator`. If you deploy the Flow Agg
 Service with a different Name and Namespace, then either use the appropriate DNS
 name or the Cluster IP of the Service. Please note that the default values for
 `flowPollInterval` and `flowExportFrequency` parameters are set to 5s and 12, respectively.
-TLS communication between the Flow Exporter and the Flow Aggregator is enabled by default. 
+TLS communication between the Flow Exporter and the Flow Aggregator is enabled by default.
 Please modify them as per your requirements.
 
 ### IPFIX Information Elements (IEs) in a Flow Record
@@ -248,13 +248,13 @@ flow-aggregator.conf: |
   #flowAggregatorAddress: "flow-aggregator.flow-aggregator.svc"
 ```
 
-Please note that the default values for `flowExportInterval`, `aggregatorTransportProtocol`, 
-and `flowAggregatorAddress` parameters are set to `60s`, `tls` and `flow-aggregator.flow-aggregator.svc`, 
-respectively. Please make sure that `aggregatorTransportProtocol` is set to `tls` and 
+Please note that the default values for `flowExportInterval`, `aggregatorTransportProtocol`,
+and `flowAggregatorAddress` parameters are set to `60s`, `tls` and `flow-aggregator.flow-aggregator.svc`,
+respectively. Please make sure that `aggregatorTransportProtocol` is set to `tls` and
 `enableTLSToFlowAggregator` in `agent-agent.conf` is set to true to guarantee secure communication
-works properly. `enableTLSToFlowAggregator` and `aggregatorTransportProtocol` must always match, 
-so TLS must either be enabled for both sides or disabled for both sides. Please modify the parameters 
-as per your requirements. 
+works properly. `enableTLSToFlowAggregator` and `aggregatorTransportProtocol` must always match,
+so TLS must either be enabled for both sides or disabled for both sides. Please modify the parameters
+as per your requirements.
 
 ### IPFIX Information Elements (IEs) in an Aggregated Flow Record
 
