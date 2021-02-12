@@ -1,6 +1,9 @@
 <p>Packages:</p>
 <ul>
 <li>
+<a href="#controlplane.antrea.tanzu.vmware.com%2fv1beta2">controlplane.antrea.tanzu.vmware.com/v1beta2</a>
+</li>
+<li>
 <a href="#core.antrea.tanzu.vmware.com%2fv1alpha2">core.antrea.tanzu.vmware.com/v1alpha2</a>
 </li>
 <li>
@@ -21,15 +24,1487 @@
 <li>
 <a href="#controlplane.antrea.tanzu.vmware.com%2fv1beta1">controlplane.antrea.tanzu.vmware.com/v1beta1</a>
 </li>
-<li>
-<a href="#controlplane.antrea.tanzu.vmware.com%2fv1beta2">controlplane.antrea.tanzu.vmware.com/v1beta2</a>
-</li>
 </ul>
+<h2 id="controlplane.antrea.tanzu.vmware.com/v1beta2">controlplane.antrea.tanzu.vmware.com/v1beta2</h2>
+<p>
+<p>Package v1beta2 is the v1beta2 version of the Antrea NetworkPolicy API messages.</p>
+</p>
+Resource Types:
+<ul><li>
+<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.NodeStatsSummary">NodeStatsSummary</a>
+</li></ul>
+<h3 id="controlplane.antrea.tanzu.vmware.com/v1beta2.NodeStatsSummary">NodeStatsSummary
+</h3>
+<p>
+<p>NodeStatsSummary contains stats produced on a Node. It&rsquo;s used by the antrea-agents to report stats to the antrea-controller.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>apiVersion</code></br>
+string</td>
+<td>
+<code>
+controlplane.antrea.tanzu.vmware.com/v1beta2
+</code>
+</td>
+</tr>
+<tr>
+<td>
+<code>kind</code></br>
+string
+</td>
+<td><code>NodeStatsSummary</code></td>
+</tr>
+<tr>
+<td>
+<code>metadata</code></br>
+<em>
+<a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#objectmeta-v1-meta">
+Kubernetes meta/v1.ObjectMeta
+</a>
+</em>
+</td>
+<td>
+Refer to the Kubernetes API documentation for the fields of the
+<code>metadata</code> field.
+</td>
+</tr>
+<tr>
+<td>
+<code>networkPolicies</code></br>
+<em>
+<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.NetworkPolicyStats">
+[]NetworkPolicyStats
+</a>
+</em>
+</td>
+<td>
+<p>The TrafficStats of K8s NetworkPolicies collected from the Node.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>antreaClusterNetworkPolicies</code></br>
+<em>
+<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.NetworkPolicyStats">
+[]NetworkPolicyStats
+</a>
+</em>
+</td>
+<td>
+<p>The TrafficStats of Antrea ClusterNetworkPolicies collected from the Node.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>antreaNetworkPolicies</code></br>
+<em>
+<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.NetworkPolicyStats">
+[]NetworkPolicyStats
+</a>
+</em>
+</td>
+<td>
+<p>The TrafficStats of Antrea NetworkPolicies collected from the Node.</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="controlplane.antrea.tanzu.vmware.com/v1beta2.AddressGroup">AddressGroup
+</h3>
+<p>
+<p>AddressGroup is the message format of antrea/pkg/controller/types.AddressGroup in an API response.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>metadata</code></br>
+<em>
+<a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#objectmeta-v1-meta">
+Kubernetes meta/v1.ObjectMeta
+</a>
+</em>
+</td>
+<td>
+Refer to the Kubernetes API documentation for the fields of the
+<code>metadata</code> field.
+</td>
+</tr>
+<tr>
+<td>
+<code>groupMembers</code></br>
+<em>
+<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.GroupMember">
+[]GroupMember
+</a>
+</em>
+</td>
+<td>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="controlplane.antrea.tanzu.vmware.com/v1beta2.AddressGroupPatch">AddressGroupPatch
+</h3>
+<p>
+<p>AddressGroupPatch describes the incremental update of an AddressGroup.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>metadata</code></br>
+<em>
+<a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#objectmeta-v1-meta">
+Kubernetes meta/v1.ObjectMeta
+</a>
+</em>
+</td>
+<td>
+Refer to the Kubernetes API documentation for the fields of the
+<code>metadata</code> field.
+</td>
+</tr>
+<tr>
+<td>
+<code>addedGroupMembers</code></br>
+<em>
+<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.GroupMember">
+[]GroupMember
+</a>
+</em>
+</td>
+<td>
+</td>
+</tr>
+<tr>
+<td>
+<code>removedGroupMembers</code></br>
+<em>
+<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.GroupMember">
+[]GroupMember
+</a>
+</em>
+</td>
+<td>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="controlplane.antrea.tanzu.vmware.com/v1beta2.AppliedToGroup">AppliedToGroup
+</h3>
+<p>
+<p>AppliedToGroup is the message format of antrea/pkg/controller/types.AppliedToGroup in an API response.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>metadata</code></br>
+<em>
+<a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#objectmeta-v1-meta">
+Kubernetes meta/v1.ObjectMeta
+</a>
+</em>
+</td>
+<td>
+Refer to the Kubernetes API documentation for the fields of the
+<code>metadata</code> field.
+</td>
+</tr>
+<tr>
+<td>
+<code>groupMembers</code></br>
+<em>
+<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.GroupMember">
+[]GroupMember
+</a>
+</em>
+</td>
+<td>
+<p>GroupMembers is list of resources selected by this group.</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="controlplane.antrea.tanzu.vmware.com/v1beta2.AppliedToGroupPatch">AppliedToGroupPatch
+</h3>
+<p>
+<p>AppliedToGroupPatch describes the incremental update of an AppliedToGroup.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>metadata</code></br>
+<em>
+<a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#objectmeta-v1-meta">
+Kubernetes meta/v1.ObjectMeta
+</a>
+</em>
+</td>
+<td>
+Refer to the Kubernetes API documentation for the fields of the
+<code>metadata</code> field.
+</td>
+</tr>
+<tr>
+<td>
+<code>addedGroupMembers</code></br>
+<em>
+<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.GroupMember">
+[]GroupMember
+</a>
+</em>
+</td>
+<td>
+</td>
+</tr>
+<tr>
+<td>
+<code>removedGroupMembers</code></br>
+<em>
+<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.GroupMember">
+[]GroupMember
+</a>
+</em>
+</td>
+<td>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="controlplane.antrea.tanzu.vmware.com/v1beta2.ClusterGroupMembers">ClusterGroupMembers
+</h3>
+<p>
+<p>ClusterGroupMembers is a list of GroupMember objects that are currently selected by a ClusterGroup.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>metadata</code></br>
+<em>
+<a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#objectmeta-v1-meta">
+Kubernetes meta/v1.ObjectMeta
+</a>
+</em>
+</td>
+<td>
+Refer to the Kubernetes API documentation for the fields of the
+<code>metadata</code> field.
+</td>
+</tr>
+<tr>
+<td>
+<code>effectiveMembers</code></br>
+<em>
+<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.GroupMember">
+[]GroupMember
+</a>
+</em>
+</td>
+<td>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="controlplane.antrea.tanzu.vmware.com/v1beta2.Direction">Direction
+(<code>string</code> alias)</p></h3>
+<p>
+(<em>Appears on:</em>
+<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.NetworkPolicyRule">NetworkPolicyRule</a>)
+</p>
+<p>
+<p>Direction defines traffic direction of NetworkPolicyRule.</p>
+</p>
+<h3 id="controlplane.antrea.tanzu.vmware.com/v1beta2.ExternalEntityReference">ExternalEntityReference
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.GroupMember">GroupMember</a>)
+</p>
+<p>
+<p>ExternalEntityReference represents a ExternalEntity Reference.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>name</code></br>
+<em>
+string
+</em>
+</td>
+<td>
+<p>The name of this ExternalEntity.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>namespace</code></br>
+<em>
+string
+</em>
+</td>
+<td>
+<p>The Namespace of this ExternalEntity.</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="controlplane.antrea.tanzu.vmware.com/v1beta2.GroupAssociation">GroupAssociation
+</h3>
+<p>
+<p>GroupAssociation is the message format in an API response for groupassociation queries.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>metadata</code></br>
+<em>
+<a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#objectmeta-v1-meta">
+Kubernetes meta/v1.ObjectMeta
+</a>
+</em>
+</td>
+<td>
+Refer to the Kubernetes API documentation for the fields of the
+<code>metadata</code> field.
+</td>
+</tr>
+<tr>
+<td>
+<code>associatedGroups</code></br>
+<em>
+<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.GroupReference">
+[]GroupReference
+</a>
+</em>
+</td>
+<td>
+<p>AssociatedGroups is a list of GroupReferences that is associated with the
+Pod/ExternalEntity being queried.</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="controlplane.antrea.tanzu.vmware.com/v1beta2.GroupMember">GroupMember
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.AddressGroup">AddressGroup</a>, 
+<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.AddressGroupPatch">AddressGroupPatch</a>, 
+<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.AppliedToGroup">AppliedToGroup</a>, 
+<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.AppliedToGroupPatch">AppliedToGroupPatch</a>, 
+<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.ClusterGroupMembers">ClusterGroupMembers</a>)
+</p>
+<p>
+<p>GroupMember represents resource member to be populated in Groups.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>pod</code></br>
+<em>
+<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.PodReference">
+PodReference
+</a>
+</em>
+</td>
+<td>
+<p>Pod maintains the reference to the Pod.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>externalEntity</code></br>
+<em>
+<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.ExternalEntityReference">
+ExternalEntityReference
+</a>
+</em>
+</td>
+<td>
+<p>ExternalEntity maintains the reference to the ExternalEntity.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>ips</code></br>
+<em>
+<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.IPAddress">
+[]IPAddress
+</a>
+</em>
+</td>
+<td>
+<p>IP is the IP address of the Endpoints associated with the GroupMember.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>ports</code></br>
+<em>
+<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.NamedPort">
+[]NamedPort
+</a>
+</em>
+</td>
+<td>
+<p>Ports is the list NamedPort of the GroupMember.</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="controlplane.antrea.tanzu.vmware.com/v1beta2.GroupMemberSet">GroupMemberSet
+(<code>map[github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.groupMemberKey]*github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.GroupMember</code> alias)</p></h3>
+<p>
+<p>GroupMemberSet is a set of GroupMembers.</p>
+</p>
+<h3 id="controlplane.antrea.tanzu.vmware.com/v1beta2.GroupReference">GroupReference
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.GroupAssociation">GroupAssociation</a>)
+</p>
+<p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>namespace</code></br>
+<em>
+string
+</em>
+</td>
+<td>
+<p>Namespace of the Group. Empty for ClusterGroup.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>name</code></br>
+<em>
+string
+</em>
+</td>
+<td>
+<p>Name of the Group.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>uid</code></br>
+<em>
+<a href="https://godoc.org/k8s.io/apimachinery/pkg/types#UID">
+k8s.io/apimachinery/pkg/types.UID
+</a>
+</em>
+</td>
+<td>
+<p>UID of the Group.</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="controlplane.antrea.tanzu.vmware.com/v1beta2.IPAddress">IPAddress
+(<code>[]byte</code> alias)</p></h3>
+<p>
+(<em>Appears on:</em>
+<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.GroupMember">GroupMember</a>, 
+<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.IPNet">IPNet</a>)
+</p>
+<p>
+<p>IPAddress describes a single IP address. Either an IPv4 or IPv6 address must be set.</p>
+</p>
+<h3 id="controlplane.antrea.tanzu.vmware.com/v1beta2.IPBlock">IPBlock
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.NetworkPolicyPeer">NetworkPolicyPeer</a>)
+</p>
+<p>
+<p>IPBlock describes a particular CIDR (Ex. &ldquo;192.168.1.<sup>1</sup>&frasl;<sub>24</sub>&rdquo;). The except entry describes CIDRs that should
+not be included within this rule.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>cidr</code></br>
+<em>
+<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.IPNet">
+IPNet
+</a>
+</em>
+</td>
+<td>
+<p>CIDR is an IPNet represents the IP Block.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>except</code></br>
+<em>
+<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.IPNet">
+[]IPNet
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Except is a slice of IPNets that should not be included within an IP Block.
+Except values will be rejected if they are outside the CIDR range.</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="controlplane.antrea.tanzu.vmware.com/v1beta2.IPNet">IPNet
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.IPBlock">IPBlock</a>)
+</p>
+<p>
+<p>IPNet describes an IP network.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>ip</code></br>
+<em>
+<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.IPAddress">
+IPAddress
+</a>
+</em>
+</td>
+<td>
+</td>
+</tr>
+<tr>
+<td>
+<code>prefixLength</code></br>
+<em>
+int32
+</em>
+</td>
+<td>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="controlplane.antrea.tanzu.vmware.com/v1beta2.NamedPort">NamedPort
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.GroupMember">GroupMember</a>)
+</p>
+<p>
+<p>NamedPort represents a Port with a name on Pod.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>port</code></br>
+<em>
+int32
+</em>
+</td>
+<td>
+<p>Port represents the Port number.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>name</code></br>
+<em>
+string
+</em>
+</td>
+<td>
+<p>Name represents the associated name with this Port number.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>protocol</code></br>
+<em>
+<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.Protocol">
+Protocol
+</a>
+</em>
+</td>
+<td>
+<p>Protocol for port. Must be UDP, TCP, or SCTP.</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="controlplane.antrea.tanzu.vmware.com/v1beta2.NetworkPolicy">NetworkPolicy
+</h3>
+<p>
+<p>NetworkPolicy is the message format of antrea/pkg/controller/types.NetworkPolicy in an API response.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>metadata</code></br>
+<em>
+<a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#objectmeta-v1-meta">
+Kubernetes meta/v1.ObjectMeta
+</a>
+</em>
+</td>
+<td>
+Refer to the Kubernetes API documentation for the fields of the
+<code>metadata</code> field.
+</td>
+</tr>
+<tr>
+<td>
+<code>rules</code></br>
+<em>
+<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.NetworkPolicyRule">
+[]NetworkPolicyRule
+</a>
+</em>
+</td>
+<td>
+<p>Rules is a list of rules to be applied to the selected GroupMembers.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>appliedToGroups</code></br>
+<em>
+[]string
+</em>
+</td>
+<td>
+<p>AppliedToGroups is a list of names of AppliedToGroups to which this policy applies.
+Cannot be set in conjunction with any NetworkPolicyRule.AppliedToGroups in Rules.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>priority</code></br>
+<em>
+float64
+</em>
+</td>
+<td>
+<p>Priority represents the relative priority of this Network Policy as compared to
+other Network Policies. Priority will be unset (nil) for K8s NetworkPolicy.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>tierPriority</code></br>
+<em>
+int32
+</em>
+</td>
+<td>
+<p>TierPriority represents the priority of the Tier associated with this Network
+Policy. The TierPriority will remain nil for K8s NetworkPolicy.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>sourceRef</code></br>
+<em>
+<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.NetworkPolicyReference">
+NetworkPolicyReference
+</a>
+</em>
+</td>
+<td>
+<p>Reference to the original NetworkPolicy that the internal NetworkPolicy is created for.</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="controlplane.antrea.tanzu.vmware.com/v1beta2.NetworkPolicyNodeStatus">NetworkPolicyNodeStatus
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.NetworkPolicyStatus">NetworkPolicyStatus</a>)
+</p>
+<p>
+<p>NetworkPolicyNodeStatus is the status of a NetworkPolicy on a Node.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>nodeName</code></br>
+<em>
+string
+</em>
+</td>
+<td>
+<p>The name of the Node that produces the status.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>generation</code></br>
+<em>
+int64
+</em>
+</td>
+<td>
+<p>The generation realized by the Node.</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="controlplane.antrea.tanzu.vmware.com/v1beta2.NetworkPolicyPeer">NetworkPolicyPeer
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.NetworkPolicyRule">NetworkPolicyRule</a>)
+</p>
+<p>
+<p>NetworkPolicyPeer describes a peer of NetworkPolicyRules.
+It could be a list of names of AddressGroups and/or a list of IPBlock.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>addressGroups</code></br>
+<em>
+[]string
+</em>
+</td>
+<td>
+<p>A list of names of AddressGroups.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>ipBlocks</code></br>
+<em>
+<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.IPBlock">
+[]IPBlock
+</a>
+</em>
+</td>
+<td>
+<p>A list of IPBlock.</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="controlplane.antrea.tanzu.vmware.com/v1beta2.NetworkPolicyReference">NetworkPolicyReference
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.NetworkPolicy">NetworkPolicy</a>, 
+<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.NetworkPolicyStats">NetworkPolicyStats</a>)
+</p>
+<p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>type</code></br>
+<em>
+<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.NetworkPolicyType">
+NetworkPolicyType
+</a>
+</em>
+</td>
+<td>
+<p>Type of the NetworkPolicy.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>namespace</code></br>
+<em>
+string
+</em>
+</td>
+<td>
+<p>Namespace of the NetworkPolicy. It&rsquo;s empty for Antrea ClusterNetworkPolicy.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>name</code></br>
+<em>
+string
+</em>
+</td>
+<td>
+<p>Name of the NetworkPolicy.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>uid</code></br>
+<em>
+<a href="https://godoc.org/k8s.io/apimachinery/pkg/types#UID">
+k8s.io/apimachinery/pkg/types.UID
+</a>
+</em>
+</td>
+<td>
+<p>UID of the NetworkPolicy.</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="controlplane.antrea.tanzu.vmware.com/v1beta2.NetworkPolicyRule">NetworkPolicyRule
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.NetworkPolicy">NetworkPolicy</a>)
+</p>
+<p>
+<p>NetworkPolicyRule describes a particular set of traffic that is allowed.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>direction</code></br>
+<em>
+<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.Direction">
+Direction
+</a>
+</em>
+</td>
+<td>
+<p>The direction of this rule.
+If it&rsquo;s set to In, From must be set and To must not be set.
+If it&rsquo;s set to Out, To must be set and From must not be set.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>from</code></br>
+<em>
+<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.NetworkPolicyPeer">
+NetworkPolicyPeer
+</a>
+</em>
+</td>
+<td>
+<p>From represents sources which should be able to access the GroupMembers selected by the policy.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>to</code></br>
+<em>
+<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.NetworkPolicyPeer">
+NetworkPolicyPeer
+</a>
+</em>
+</td>
+<td>
+<p>To represents destinations which should be able to be accessed by the GroupMembers selected by the policy.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>services</code></br>
+<em>
+<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.Service">
+[]Service
+</a>
+</em>
+</td>
+<td>
+<p>Services is a list of services which should be matched.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>priority</code></br>
+<em>
+int32
+</em>
+</td>
+<td>
+<p>Priority defines the priority of the Rule as compared to other rules in the
+NetworkPolicy.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>action</code></br>
+<em>
+<a href="#security.antrea.tanzu.vmware.com/v1alpha1.RuleAction">
+RuleAction
+</a>
+</em>
+</td>
+<td>
+<p>Action specifies the action to be applied on the rule. i.e. Allow/Drop. An empty
+action “nil” defaults to Allow action, which would be the case for rules created for
+K8s Network Policy.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>enableLogging</code></br>
+<em>
+bool
+</em>
+</td>
+<td>
+<p>EnableLogging indicates whether or not to generate logs when rules are matched. Default to false.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>appliedToGroups</code></br>
+<em>
+[]string
+</em>
+</td>
+<td>
+<p>AppliedToGroups is a list of names of AppliedToGroups to which this rule applies.
+Cannot be set in conjunction with NetworkPolicy.AppliedToGroups of the NetworkPolicy
+that this Rule is referred to.</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="controlplane.antrea.tanzu.vmware.com/v1beta2.NetworkPolicyStats">NetworkPolicyStats
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.NodeStatsSummary">NodeStatsSummary</a>)
+</p>
+<p>
+<p>NetworkPolicyStats contains the information and traffic stats of a NetworkPolicy.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>networkPolicy</code></br>
+<em>
+<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.NetworkPolicyReference">
+NetworkPolicyReference
+</a>
+</em>
+</td>
+<td>
+<p>The reference of the NetworkPolicy.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>trafficStats</code></br>
+<em>
+<a href="#stats.antrea.tanzu.vmware.com/v1alpha1.TrafficStats">
+TrafficStats
+</a>
+</em>
+</td>
+<td>
+<p>The stats of the NetworkPolicy.</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="controlplane.antrea.tanzu.vmware.com/v1beta2.NetworkPolicyStatus">NetworkPolicyStatus
+</h3>
+<p>
+<p>NetworkPolicyStatus is the status of a NetworkPolicy.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>metadata</code></br>
+<em>
+<a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#objectmeta-v1-meta">
+Kubernetes meta/v1.ObjectMeta
+</a>
+</em>
+</td>
+<td>
+Refer to the Kubernetes API documentation for the fields of the
+<code>metadata</code> field.
+</td>
+</tr>
+<tr>
+<td>
+<code>nodes</code></br>
+<em>
+<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.NetworkPolicyNodeStatus">
+[]NetworkPolicyNodeStatus
+</a>
+</em>
+</td>
+<td>
+<p>Nodes contains statuses produced on a list of Nodes.</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="controlplane.antrea.tanzu.vmware.com/v1beta2.NetworkPolicyType">NetworkPolicyType
+(<code>string</code> alias)</p></h3>
+<p>
+(<em>Appears on:</em>
+<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.NetworkPolicyReference">NetworkPolicyReference</a>)
+</p>
+<p>
+</p>
+<h3 id="controlplane.antrea.tanzu.vmware.com/v1beta2.PodReference">PodReference
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.GroupMember">GroupMember</a>)
+</p>
+<p>
+<p>PodReference represents a Pod Reference.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>name</code></br>
+<em>
+string
+</em>
+</td>
+<td>
+<p>The name of this Pod.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>namespace</code></br>
+<em>
+string
+</em>
+</td>
+<td>
+<p>The Namespace of this Pod.</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="controlplane.antrea.tanzu.vmware.com/v1beta2.Protocol">Protocol
+(<code>string</code> alias)</p></h3>
+<p>
+(<em>Appears on:</em>
+<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.NamedPort">NamedPort</a>, 
+<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.Service">Service</a>)
+</p>
+<p>
+<p>Protocol defines network protocols supported for things like container ports.</p>
+</p>
+<h3 id="controlplane.antrea.tanzu.vmware.com/v1beta2.Service">Service
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.NetworkPolicyRule">NetworkPolicyRule</a>)
+</p>
+<p>
+<p>Service describes a port to allow traffic on.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>protocol</code></br>
+<em>
+<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.Protocol">
+Protocol
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>The protocol (TCP, UDP, or SCTP) which traffic must match. If not specified, this
+field defaults to TCP.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>port</code></br>
+<em>
+<a href="https://godoc.org/k8s.io/apimachinery/pkg/util/intstr#IntOrString">
+k8s.io/apimachinery/pkg/util/intstr.IntOrString
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>The port name or number on the given protocol. If not specified, this matches all port numbers.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>endPort</code></br>
+<em>
+int32
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>EndPort defines the end of the port range, being the end included within the range.
+It can only be specified when a numerical <code>port</code> is specified.</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="controlplane.antrea.tanzu.vmware.com/v1beta2.ServiceReference">ServiceReference
+</h3>
+<p>
+<p>ServiceReference represents reference to a v1.Service.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>name</code></br>
+<em>
+string
+</em>
+</td>
+<td>
+<p>The name of this Service.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>namespace</code></br>
+<em>
+string
+</em>
+</td>
+<td>
+<p>The Namespace of this Service.</p>
+</td>
+</tr>
+</tbody>
+</table>
+<hr/>
 <h2 id="core.antrea.tanzu.vmware.com/v1alpha2">core.antrea.tanzu.vmware.com/v1alpha2</h2>
 Resource Types:
 <ul><li>
+<a href="#core.antrea.tanzu.vmware.com/v1alpha2.ClusterGroup">ClusterGroup</a>
+</li><li>
 <a href="#core.antrea.tanzu.vmware.com/v1alpha2.ExternalEntity">ExternalEntity</a>
 </li></ul>
+<h3 id="core.antrea.tanzu.vmware.com/v1alpha2.ClusterGroup">ClusterGroup
+</h3>
+<p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>apiVersion</code></br>
+string</td>
+<td>
+<code>
+core.antrea.tanzu.vmware.com/v1alpha2
+</code>
+</td>
+</tr>
+<tr>
+<td>
+<code>kind</code></br>
+string
+</td>
+<td><code>ClusterGroup</code></td>
+</tr>
+<tr>
+<td>
+<code>metadata</code></br>
+<em>
+<a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#objectmeta-v1-meta">
+Kubernetes meta/v1.ObjectMeta
+</a>
+</em>
+</td>
+<td>
+<p>Standard metadata of the object.</p>
+Refer to the Kubernetes API documentation for the fields of the
+<code>metadata</code> field.
+</td>
+</tr>
+<tr>
+<td>
+<code>spec</code></br>
+<em>
+<a href="#core.antrea.tanzu.vmware.com/v1alpha2.GroupSpec">
+GroupSpec
+</a>
+</em>
+</td>
+<td>
+<p>Desired state of the group.</p>
+<br/>
+<br/>
+<table>
+<tr>
+<td>
+<code>podSelector</code></br>
+<em>
+<a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#labelselector-v1-meta">
+Kubernetes meta/v1.LabelSelector
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Select Pods matching the labels set in the PodSelector in
+AppliedTo/To/From fields. If set with NamespaceSelector, Pods are
+matched from Namespaces matched by the NamespaceSelector.
+Cannot be set with any other selector except NamespaceSelector.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>namespaceSelector</code></br>
+<em>
+<a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#labelselector-v1-meta">
+Kubernetes meta/v1.LabelSelector
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Select all Pods from Namespaces matched by this selector, as
+workloads in AppliedTo/To/From fields. If set with PodSelector,
+Pods are matched from Namespaces matched by the NamespaceSelector.
+Cannot be set with any other selector except PodSelector.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>ipBlock</code></br>
+<em>
+<a href="#security.antrea.tanzu.vmware.com/v1alpha1.IPBlock">
+IPBlock
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>IPBlock describes the IPAddresses/IPBlocks that is matched in to/from.
+IPBlock cannot be set as part of the AppliedTo field.
+Cannot be set with any other selector or ServiceReference.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>serviceReference</code></br>
+<em>
+<a href="#core.antrea.tanzu.vmware.com/v1alpha2.ServiceReference">
+ServiceReference
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Select backend Pods of the referred Service.
+Cannot be set with any other selector or ipBlock.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>externalEntitySelector</code></br>
+<em>
+<a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#labelselector-v1-meta">
+Kubernetes meta/v1.LabelSelector
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Select ExternalEntities from all Namespaces as workloads
+in AppliedTo/To/From fields. If set with NamespaceSelector,
+ExternalEntities are matched from Namespaces matched by the
+NamespaceSelector.
+Cannot be set with any other selector except NamespaceSelector.</p>
+</td>
+</tr>
+</table>
+</td>
+</tr>
+<tr>
+<td>
+<code>status</code></br>
+<em>
+<a href="#core.antrea.tanzu.vmware.com/v1alpha2.GroupStatus">
+GroupStatus
+</a>
+</em>
+</td>
+<td>
+<p>Most recently observed status of the group.</p>
+</td>
+</tr>
+</tbody>
+</table>
 <h3 id="core.antrea.tanzu.vmware.com/v1alpha2.ExternalEntity">ExternalEntity
 </h3>
 <p>
@@ -230,6 +1705,200 @@ for additional processing or handling of this external entity.</p>
 </tr>
 </tbody>
 </table>
+<h3 id="core.antrea.tanzu.vmware.com/v1alpha2.GroupCondition">GroupCondition
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#core.antrea.tanzu.vmware.com/v1alpha2.GroupStatus">GroupStatus</a>)
+</p>
+<p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>type</code></br>
+<em>
+<a href="#core.antrea.tanzu.vmware.com/v1alpha2.GroupConditionType">
+GroupConditionType
+</a>
+</em>
+</td>
+<td>
+</td>
+</tr>
+<tr>
+<td>
+<code>status</code></br>
+<em>
+<a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#conditionstatus-v1-core">
+Kubernetes core/v1.ConditionStatus
+</a>
+</em>
+</td>
+<td>
+</td>
+</tr>
+<tr>
+<td>
+<code>lastTransitionTime</code></br>
+<em>
+<a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#time-v1-meta">
+Kubernetes meta/v1.Time
+</a>
+</em>
+</td>
+<td>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="core.antrea.tanzu.vmware.com/v1alpha2.GroupConditionType">GroupConditionType
+(<code>string</code> alias)</p></h3>
+<p>
+(<em>Appears on:</em>
+<a href="#core.antrea.tanzu.vmware.com/v1alpha2.GroupCondition">GroupCondition</a>)
+</p>
+<p>
+</p>
+<h3 id="core.antrea.tanzu.vmware.com/v1alpha2.GroupSpec">GroupSpec
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#core.antrea.tanzu.vmware.com/v1alpha2.ClusterGroup">ClusterGroup</a>)
+</p>
+<p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>podSelector</code></br>
+<em>
+<a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#labelselector-v1-meta">
+Kubernetes meta/v1.LabelSelector
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Select Pods matching the labels set in the PodSelector in
+AppliedTo/To/From fields. If set with NamespaceSelector, Pods are
+matched from Namespaces matched by the NamespaceSelector.
+Cannot be set with any other selector except NamespaceSelector.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>namespaceSelector</code></br>
+<em>
+<a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#labelselector-v1-meta">
+Kubernetes meta/v1.LabelSelector
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Select all Pods from Namespaces matched by this selector, as
+workloads in AppliedTo/To/From fields. If set with PodSelector,
+Pods are matched from Namespaces matched by the NamespaceSelector.
+Cannot be set with any other selector except PodSelector.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>ipBlock</code></br>
+<em>
+<a href="#security.antrea.tanzu.vmware.com/v1alpha1.IPBlock">
+IPBlock
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>IPBlock describes the IPAddresses/IPBlocks that is matched in to/from.
+IPBlock cannot be set as part of the AppliedTo field.
+Cannot be set with any other selector or ServiceReference.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>serviceReference</code></br>
+<em>
+<a href="#core.antrea.tanzu.vmware.com/v1alpha2.ServiceReference">
+ServiceReference
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Select backend Pods of the referred Service.
+Cannot be set with any other selector or ipBlock.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>externalEntitySelector</code></br>
+<em>
+<a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#labelselector-v1-meta">
+Kubernetes meta/v1.LabelSelector
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Select ExternalEntities from all Namespaces as workloads
+in AppliedTo/To/From fields. If set with NamespaceSelector,
+ExternalEntities are matched from Namespaces matched by the
+NamespaceSelector.
+Cannot be set with any other selector except NamespaceSelector.</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="core.antrea.tanzu.vmware.com/v1alpha2.GroupStatus">GroupStatus
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#core.antrea.tanzu.vmware.com/v1alpha2.ClusterGroup">ClusterGroup</a>)
+</p>
+<p>
+<p>GroupStatus represents information about the status of a Group.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>conditions</code></br>
+<em>
+<a href="#core.antrea.tanzu.vmware.com/v1alpha2.GroupCondition">
+[]GroupCondition
+</a>
+</em>
+</td>
+<td>
+</td>
+</tr>
+</tbody>
+</table>
 <h3 id="core.antrea.tanzu.vmware.com/v1alpha2.NamedPort">NamedPort
 </h3>
 <p>
@@ -284,6 +1953,47 @@ string
 <td>
 <em>(Optional)</em>
 <p>Name associated with the Port.</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="core.antrea.tanzu.vmware.com/v1alpha2.ServiceReference">ServiceReference
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#core.antrea.tanzu.vmware.com/v1alpha2.GroupSpec">GroupSpec</a>)
+</p>
+<p>
+<p>ServiceReference represent reference to a v1.Service.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>name</code></br>
+<em>
+string
+</em>
+</td>
+<td>
+<p>Name of the Service</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>namespace</code></br>
+<em>
+string
+</em>
+</td>
+<td>
+<p>Namespace of the Service</p>
 </td>
 </tr>
 </tbody>
@@ -355,7 +2065,7 @@ string
 </em>
 </td>
 <td>
-<p>IP is the destination IP.</p>
+<p>IP is the destination IPv4 or IPv6 address.</p>
 </td>
 </tr>
 </tbody>
@@ -408,7 +2118,7 @@ int32
 <a href="#ops.antrea.tanzu.vmware.com/v1alpha1.Packet">Packet</a>)
 </p>
 <p>
-<p>IPHeader describes spec of an IPv4 header. IPv6 not supported yet.</p>
+<p>IPHeader describes spec of an IPv4 header.</p>
 </p>
 <table>
 <thead>
@@ -460,6 +2170,58 @@ int32
 </td>
 <td>
 <p>Flags is the flags for IP.</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="ops.antrea.tanzu.vmware.com/v1alpha1.IPv6Header">IPv6Header
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#ops.antrea.tanzu.vmware.com/v1alpha1.Packet">Packet</a>)
+</p>
+<p>
+<p>IPv6Header describes spec of an IPv6 header.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>srcIP</code></br>
+<em>
+string
+</em>
+</td>
+<td>
+<p>SrcIP is the source IPv6.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>nextHeader</code></br>
+<em>
+int32
+</em>
+</td>
+<td>
+<p>NextHeader is the IPv6 protocol.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>hopLimit</code></br>
+<em>
+int32
+</em>
+</td>
+<td>
+<p>HopLimit is the IPv6 Hop Limit.</p>
 </td>
 </tr>
 </tbody>
@@ -684,6 +2446,19 @@ string
 <em>
 <a href="#ops.antrea.tanzu.vmware.com/v1alpha1.IPHeader">
 IPHeader
+</a>
+</em>
+</td>
+<td>
+<p>TODO: change type IPHeader to *IPHeader and correct all internal references</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>ipv6Header</code></br>
+<em>
+<a href="#ops.antrea.tanzu.vmware.com/v1alpha1.IPv6Header">
+IPv6Header
 </a>
 </em>
 </td>
@@ -1624,6 +3399,7 @@ field within a Rule.</p>
 </h3>
 <p>
 (<em>Appears on:</em>
+<a href="#core.antrea.tanzu.vmware.com/v1alpha2.GroupSpec">GroupSpec</a>, 
 <a href="#security.antrea.tanzu.vmware.com/v1alpha1.NetworkPolicyPeer">NetworkPolicyPeer</a>)
 </p>
 <p>
@@ -1738,6 +3514,20 @@ in AppliedTo/To/From fields. If set with NamespaceSelector,
 ExternalEntities are matched from Namespaces matched by the
 NamespaceSelector.
 Cannot be set with any other selector except NamespaceSelector.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>group</code></br>
+<em>
+string
+</em>
+</td>
+<td>
+<p>Group is the name of the ClusterGroup which can be set as an
+AppliedTo or within an Ingress or Egress rule in place of
+a stand-alone selector. A Group cannot be set with any other
+selector.</p>
 </td>
 </tr>
 </tbody>
@@ -2344,8 +4134,8 @@ TrafficStats
 <a href="#stats.antrea.tanzu.vmware.com/v1alpha1.AntreaClusterNetworkPolicyStats">AntreaClusterNetworkPolicyStats</a>, 
 <a href="#stats.antrea.tanzu.vmware.com/v1alpha1.AntreaNetworkPolicyStats">AntreaNetworkPolicyStats</a>, 
 <a href="#stats.antrea.tanzu.vmware.com/v1alpha1.NetworkPolicyStats">NetworkPolicyStats</a>, 
-<a href="#controlplane.antrea.tanzu.vmware.com/v1beta1.NetworkPolicyStats">NetworkPolicyStats</a>, 
-<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.NetworkPolicyStats">NetworkPolicyStats</a>)
+<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.NetworkPolicyStats">NetworkPolicyStats</a>, 
+<a href="#controlplane.antrea.tanzu.vmware.com/v1beta1.NetworkPolicyStats">NetworkPolicyStats</a>)
 </p>
 <p>
 <p>TrafficStats contains the traffic stats of a NetworkPolicy.</p>
@@ -4218,1147 +6008,7 @@ k8s.io/apimachinery/pkg/util/intstr.IntOrString
 </tbody>
 </table>
 <hr/>
-<h2 id="controlplane.antrea.tanzu.vmware.com/v1beta2">controlplane.antrea.tanzu.vmware.com/v1beta2</h2>
-<p>
-<p>Package v1beta2 is the v1beta2 version of the Antrea NetworkPolicy API messages.</p>
-</p>
-Resource Types:
-<ul><li>
-<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.NodeStatsSummary">NodeStatsSummary</a>
-</li></ul>
-<h3 id="controlplane.antrea.tanzu.vmware.com/v1beta2.NodeStatsSummary">NodeStatsSummary
-</h3>
-<p>
-<p>NodeStatsSummary contains stats produced on a Node. It&rsquo;s used by the antrea-agents to report stats to the antrea-controller.</p>
-</p>
-<table>
-<thead>
-<tr>
-<th>Field</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>
-<code>apiVersion</code></br>
-string</td>
-<td>
-<code>
-controlplane.antrea.tanzu.vmware.com/v1beta2
-</code>
-</td>
-</tr>
-<tr>
-<td>
-<code>kind</code></br>
-string
-</td>
-<td><code>NodeStatsSummary</code></td>
-</tr>
-<tr>
-<td>
-<code>metadata</code></br>
-<em>
-<a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#objectmeta-v1-meta">
-Kubernetes meta/v1.ObjectMeta
-</a>
-</em>
-</td>
-<td>
-Refer to the Kubernetes API documentation for the fields of the
-<code>metadata</code> field.
-</td>
-</tr>
-<tr>
-<td>
-<code>networkPolicies</code></br>
-<em>
-<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.NetworkPolicyStats">
-[]NetworkPolicyStats
-</a>
-</em>
-</td>
-<td>
-<p>The TrafficStats of K8s NetworkPolicies collected from the Node.</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>antreaClusterNetworkPolicies</code></br>
-<em>
-<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.NetworkPolicyStats">
-[]NetworkPolicyStats
-</a>
-</em>
-</td>
-<td>
-<p>The TrafficStats of Antrea ClusterNetworkPolicies collected from the Node.</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>antreaNetworkPolicies</code></br>
-<em>
-<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.NetworkPolicyStats">
-[]NetworkPolicyStats
-</a>
-</em>
-</td>
-<td>
-<p>The TrafficStats of Antrea NetworkPolicies collected from the Node.</p>
-</td>
-</tr>
-</tbody>
-</table>
-<h3 id="controlplane.antrea.tanzu.vmware.com/v1beta2.AddressGroup">AddressGroup
-</h3>
-<p>
-<p>AddressGroup is the message format of antrea/pkg/controller/types.AddressGroup in an API response.</p>
-</p>
-<table>
-<thead>
-<tr>
-<th>Field</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>
-<code>metadata</code></br>
-<em>
-<a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#objectmeta-v1-meta">
-Kubernetes meta/v1.ObjectMeta
-</a>
-</em>
-</td>
-<td>
-Refer to the Kubernetes API documentation for the fields of the
-<code>metadata</code> field.
-</td>
-</tr>
-<tr>
-<td>
-<code>groupMembers</code></br>
-<em>
-<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.GroupMember">
-[]GroupMember
-</a>
-</em>
-</td>
-<td>
-</td>
-</tr>
-</tbody>
-</table>
-<h3 id="controlplane.antrea.tanzu.vmware.com/v1beta2.AddressGroupPatch">AddressGroupPatch
-</h3>
-<p>
-<p>AddressGroupPatch describes the incremental update of an AddressGroup.</p>
-</p>
-<table>
-<thead>
-<tr>
-<th>Field</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>
-<code>metadata</code></br>
-<em>
-<a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#objectmeta-v1-meta">
-Kubernetes meta/v1.ObjectMeta
-</a>
-</em>
-</td>
-<td>
-Refer to the Kubernetes API documentation for the fields of the
-<code>metadata</code> field.
-</td>
-</tr>
-<tr>
-<td>
-<code>addedGroupMembers</code></br>
-<em>
-<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.GroupMember">
-[]GroupMember
-</a>
-</em>
-</td>
-<td>
-</td>
-</tr>
-<tr>
-<td>
-<code>removedGroupMembers</code></br>
-<em>
-<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.GroupMember">
-[]GroupMember
-</a>
-</em>
-</td>
-<td>
-</td>
-</tr>
-</tbody>
-</table>
-<h3 id="controlplane.antrea.tanzu.vmware.com/v1beta2.AppliedToGroup">AppliedToGroup
-</h3>
-<p>
-<p>AppliedToGroup is the message format of antrea/pkg/controller/types.AppliedToGroup in an API response.</p>
-</p>
-<table>
-<thead>
-<tr>
-<th>Field</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>
-<code>metadata</code></br>
-<em>
-<a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#objectmeta-v1-meta">
-Kubernetes meta/v1.ObjectMeta
-</a>
-</em>
-</td>
-<td>
-Refer to the Kubernetes API documentation for the fields of the
-<code>metadata</code> field.
-</td>
-</tr>
-<tr>
-<td>
-<code>groupMembers</code></br>
-<em>
-<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.GroupMember">
-[]GroupMember
-</a>
-</em>
-</td>
-<td>
-<p>GroupMembers is list of resources selected by this group.</p>
-</td>
-</tr>
-</tbody>
-</table>
-<h3 id="controlplane.antrea.tanzu.vmware.com/v1beta2.AppliedToGroupPatch">AppliedToGroupPatch
-</h3>
-<p>
-<p>AppliedToGroupPatch describes the incremental update of an AppliedToGroup.</p>
-</p>
-<table>
-<thead>
-<tr>
-<th>Field</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>
-<code>metadata</code></br>
-<em>
-<a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#objectmeta-v1-meta">
-Kubernetes meta/v1.ObjectMeta
-</a>
-</em>
-</td>
-<td>
-Refer to the Kubernetes API documentation for the fields of the
-<code>metadata</code> field.
-</td>
-</tr>
-<tr>
-<td>
-<code>addedGroupMembers</code></br>
-<em>
-<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.GroupMember">
-[]GroupMember
-</a>
-</em>
-</td>
-<td>
-</td>
-</tr>
-<tr>
-<td>
-<code>removedGroupMembers</code></br>
-<em>
-<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.GroupMember">
-[]GroupMember
-</a>
-</em>
-</td>
-<td>
-</td>
-</tr>
-</tbody>
-</table>
-<h3 id="controlplane.antrea.tanzu.vmware.com/v1beta2.Direction">Direction
-(<code>string</code> alias)</p></h3>
-<p>
-(<em>Appears on:</em>
-<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.NetworkPolicyRule">NetworkPolicyRule</a>)
-</p>
-<p>
-<p>Direction defines traffic direction of NetworkPolicyRule.</p>
-</p>
-<h3 id="controlplane.antrea.tanzu.vmware.com/v1beta2.ExternalEntityReference">ExternalEntityReference
-</h3>
-<p>
-(<em>Appears on:</em>
-<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.GroupMember">GroupMember</a>)
-</p>
-<p>
-<p>ExternalEntityReference represents a ExternalEntity Reference.</p>
-</p>
-<table>
-<thead>
-<tr>
-<th>Field</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>
-<code>name</code></br>
-<em>
-string
-</em>
-</td>
-<td>
-<p>The name of this ExternalEntity.</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>namespace</code></br>
-<em>
-string
-</em>
-</td>
-<td>
-<p>The namespace of this ExternalEntity.</p>
-</td>
-</tr>
-</tbody>
-</table>
-<h3 id="controlplane.antrea.tanzu.vmware.com/v1beta2.GroupMember">GroupMember
-</h3>
-<p>
-(<em>Appears on:</em>
-<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.AddressGroup">AddressGroup</a>, 
-<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.AddressGroupPatch">AddressGroupPatch</a>, 
-<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.AppliedToGroup">AppliedToGroup</a>, 
-<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.AppliedToGroupPatch">AppliedToGroupPatch</a>)
-</p>
-<p>
-<p>GroupMember represents resource member to be populated in Groups.
-This supersedes GroupMemberPod, and will eventually replace it.</p>
-</p>
-<table>
-<thead>
-<tr>
-<th>Field</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>
-<code>pod</code></br>
-<em>
-<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.PodReference">
-PodReference
-</a>
-</em>
-</td>
-<td>
-<p>Pod maintains the reference to the Pod.</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>externalEntity</code></br>
-<em>
-<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.ExternalEntityReference">
-ExternalEntityReference
-</a>
-</em>
-</td>
-<td>
-<p>ExternalEntity maintains the reference to the ExternalEntity.</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>ips</code></br>
-<em>
-<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.IPAddress">
-[]IPAddress
-</a>
-</em>
-</td>
-<td>
-<p>IP is the IP address of the Endpoints associated with the GroupMember.</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>ports</code></br>
-<em>
-<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.NamedPort">
-[]NamedPort
-</a>
-</em>
-</td>
-<td>
-<p>Ports is the list NamedPort of the GroupMember.</p>
-</td>
-</tr>
-</tbody>
-</table>
-<h3 id="controlplane.antrea.tanzu.vmware.com/v1beta2.GroupMemberSet">GroupMemberSet
-(<code>map[github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.groupMemberKey]*github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2.GroupMember</code> alias)</p></h3>
-<p>
-<p>GroupMemberSet is a set of GroupMembers.</p>
-</p>
-<h3 id="controlplane.antrea.tanzu.vmware.com/v1beta2.IPAddress">IPAddress
-(<code>[]byte</code> alias)</p></h3>
-<p>
-(<em>Appears on:</em>
-<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.GroupMember">GroupMember</a>, 
-<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.IPNet">IPNet</a>)
-</p>
-<p>
-<p>IPAddress describes a single IP address. Either an IPv4 or IPv6 address must be set.</p>
-</p>
-<h3 id="controlplane.antrea.tanzu.vmware.com/v1beta2.IPBlock">IPBlock
-</h3>
-<p>
-(<em>Appears on:</em>
-<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.NetworkPolicyPeer">NetworkPolicyPeer</a>)
-</p>
-<p>
-<p>IPBlock describes a particular CIDR (Ex. &ldquo;192.168.1.<sup>1</sup>&frasl;<sub>24</sub>&rdquo;). The except entry describes CIDRs that should
-not be included within this rule.</p>
-</p>
-<table>
-<thead>
-<tr>
-<th>Field</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>
-<code>cidr</code></br>
-<em>
-<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.IPNet">
-IPNet
-</a>
-</em>
-</td>
-<td>
-<p>CIDR is an IPNet represents the IP Block.</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>except</code></br>
-<em>
-<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.IPNet">
-[]IPNet
-</a>
-</em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>Except is a slice of IPNets that should not be included within an IP Block.
-Except values will be rejected if they are outside the CIDR range.</p>
-</td>
-</tr>
-</tbody>
-</table>
-<h3 id="controlplane.antrea.tanzu.vmware.com/v1beta2.IPNet">IPNet
-</h3>
-<p>
-(<em>Appears on:</em>
-<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.IPBlock">IPBlock</a>)
-</p>
-<p>
-<p>IPNet describes an IP network.</p>
-</p>
-<table>
-<thead>
-<tr>
-<th>Field</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>
-<code>ip</code></br>
-<em>
-<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.IPAddress">
-IPAddress
-</a>
-</em>
-</td>
-<td>
-</td>
-</tr>
-<tr>
-<td>
-<code>prefixLength</code></br>
-<em>
-int32
-</em>
-</td>
-<td>
-</td>
-</tr>
-</tbody>
-</table>
-<h3 id="controlplane.antrea.tanzu.vmware.com/v1beta2.NamedPort">NamedPort
-</h3>
-<p>
-(<em>Appears on:</em>
-<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.GroupMember">GroupMember</a>)
-</p>
-<p>
-<p>NamedPort represents a Port with a name on Pod.</p>
-</p>
-<table>
-<thead>
-<tr>
-<th>Field</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>
-<code>port</code></br>
-<em>
-int32
-</em>
-</td>
-<td>
-<p>Port represents the Port number.</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>name</code></br>
-<em>
-string
-</em>
-</td>
-<td>
-<p>Name represents the associated name with this Port number.</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>protocol</code></br>
-<em>
-<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.Protocol">
-Protocol
-</a>
-</em>
-</td>
-<td>
-<p>Protocol for port. Must be UDP, TCP, or SCTP.</p>
-</td>
-</tr>
-</tbody>
-</table>
-<h3 id="controlplane.antrea.tanzu.vmware.com/v1beta2.NetworkPolicy">NetworkPolicy
-</h3>
-<p>
-<p>NetworkPolicy is the message format of antrea/pkg/controller/types.NetworkPolicy in an API response.</p>
-</p>
-<table>
-<thead>
-<tr>
-<th>Field</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>
-<code>metadata</code></br>
-<em>
-<a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#objectmeta-v1-meta">
-Kubernetes meta/v1.ObjectMeta
-</a>
-</em>
-</td>
-<td>
-Refer to the Kubernetes API documentation for the fields of the
-<code>metadata</code> field.
-</td>
-</tr>
-<tr>
-<td>
-<code>rules</code></br>
-<em>
-<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.NetworkPolicyRule">
-[]NetworkPolicyRule
-</a>
-</em>
-</td>
-<td>
-<p>Rules is a list of rules to be applied to the selected GroupMembers.</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>appliedToGroups</code></br>
-<em>
-[]string
-</em>
-</td>
-<td>
-<p>AppliedToGroups is a list of names of AppliedToGroups to which this policy applies.
-Cannot be set in conjunction with any NetworkPolicyRule.AppliedToGroups in Rules.</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>priority</code></br>
-<em>
-float64
-</em>
-</td>
-<td>
-<p>Priority represents the relative priority of this Network Policy as compared to
-other Network Policies. Priority will be unset (nil) for K8s NetworkPolicy.</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>tierPriority</code></br>
-<em>
-int32
-</em>
-</td>
-<td>
-<p>TierPriority represents the priority of the Tier associated with this Network
-Policy. The TierPriority will remain nil for K8s NetworkPolicy.</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>sourceRef</code></br>
-<em>
-<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.NetworkPolicyReference">
-NetworkPolicyReference
-</a>
-</em>
-</td>
-<td>
-<p>Reference to the original NetworkPolicy that the internal NetworkPolicy is created for.</p>
-</td>
-</tr>
-</tbody>
-</table>
-<h3 id="controlplane.antrea.tanzu.vmware.com/v1beta2.NetworkPolicyNodeStatus">NetworkPolicyNodeStatus
-</h3>
-<p>
-(<em>Appears on:</em>
-<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.NetworkPolicyStatus">NetworkPolicyStatus</a>)
-</p>
-<p>
-<p>NetworkPolicyNodeStatus is the status of a NetworkPolicy on a Node.</p>
-</p>
-<table>
-<thead>
-<tr>
-<th>Field</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>
-<code>nodeName</code></br>
-<em>
-string
-</em>
-</td>
-<td>
-<p>The name of the Node that produces the status.</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>generation</code></br>
-<em>
-int64
-</em>
-</td>
-<td>
-<p>The generation realized by the Node.</p>
-</td>
-</tr>
-</tbody>
-</table>
-<h3 id="controlplane.antrea.tanzu.vmware.com/v1beta2.NetworkPolicyPeer">NetworkPolicyPeer
-</h3>
-<p>
-(<em>Appears on:</em>
-<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.NetworkPolicyRule">NetworkPolicyRule</a>)
-</p>
-<p>
-<p>NetworkPolicyPeer describes a peer of NetworkPolicyRules.
-It could be a list of names of AddressGroups and/or a list of IPBlock.</p>
-</p>
-<table>
-<thead>
-<tr>
-<th>Field</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>
-<code>addressGroups</code></br>
-<em>
-[]string
-</em>
-</td>
-<td>
-<p>A list of names of AddressGroups.</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>ipBlocks</code></br>
-<em>
-<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.IPBlock">
-[]IPBlock
-</a>
-</em>
-</td>
-<td>
-<p>A list of IPBlock.</p>
-</td>
-</tr>
-</tbody>
-</table>
-<h3 id="controlplane.antrea.tanzu.vmware.com/v1beta2.NetworkPolicyReference">NetworkPolicyReference
-</h3>
-<p>
-(<em>Appears on:</em>
-<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.NetworkPolicy">NetworkPolicy</a>, 
-<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.NetworkPolicyStats">NetworkPolicyStats</a>)
-</p>
-<p>
-</p>
-<table>
-<thead>
-<tr>
-<th>Field</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>
-<code>type</code></br>
-<em>
-<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.NetworkPolicyType">
-NetworkPolicyType
-</a>
-</em>
-</td>
-<td>
-<p>Type of the NetworkPolicy.</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>namespace</code></br>
-<em>
-string
-</em>
-</td>
-<td>
-<p>Namespace of the NetworkPolicy. It&rsquo;s empty for Antrea ClusterNetworkPolicy.</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>name</code></br>
-<em>
-string
-</em>
-</td>
-<td>
-<p>Name of the NetworkPolicy.</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>uid</code></br>
-<em>
-<a href="https://godoc.org/k8s.io/apimachinery/pkg/types#UID">
-k8s.io/apimachinery/pkg/types.UID
-</a>
-</em>
-</td>
-<td>
-<p>UID of the NetworkPolicy.</p>
-</td>
-</tr>
-</tbody>
-</table>
-<h3 id="controlplane.antrea.tanzu.vmware.com/v1beta2.NetworkPolicyRule">NetworkPolicyRule
-</h3>
-<p>
-(<em>Appears on:</em>
-<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.NetworkPolicy">NetworkPolicy</a>)
-</p>
-<p>
-<p>NetworkPolicyRule describes a particular set of traffic that is allowed.</p>
-</p>
-<table>
-<thead>
-<tr>
-<th>Field</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>
-<code>direction</code></br>
-<em>
-<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.Direction">
-Direction
-</a>
-</em>
-</td>
-<td>
-<p>The direction of this rule.
-If it&rsquo;s set to In, From must be set and To must not be set.
-If it&rsquo;s set to Out, To must be set and From must not be set.</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>from</code></br>
-<em>
-<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.NetworkPolicyPeer">
-NetworkPolicyPeer
-</a>
-</em>
-</td>
-<td>
-<p>From represents sources which should be able to access the GroupMembers selected by the policy.</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>to</code></br>
-<em>
-<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.NetworkPolicyPeer">
-NetworkPolicyPeer
-</a>
-</em>
-</td>
-<td>
-<p>To represents destinations which should be able to be accessed by the GroupMembers selected by the policy.</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>services</code></br>
-<em>
-<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.Service">
-[]Service
-</a>
-</em>
-</td>
-<td>
-<p>Services is a list of services which should be matched.</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>priority</code></br>
-<em>
-int32
-</em>
-</td>
-<td>
-<p>Priority defines the priority of the Rule as compared to other rules in the
-NetworkPolicy.</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>action</code></br>
-<em>
-<a href="#security.antrea.tanzu.vmware.com/v1alpha1.RuleAction">
-RuleAction
-</a>
-</em>
-</td>
-<td>
-<p>Action specifies the action to be applied on the rule. i.e. Allow/Drop. An empty
-action “nil” defaults to Allow action, which would be the case for rules created for
-K8s Network Policy.</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>enableLogging</code></br>
-<em>
-bool
-</em>
-</td>
-<td>
-<p>EnableLogging indicates whether or not to generate logs when rules are matched. Default to false.</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>appliedToGroups</code></br>
-<em>
-[]string
-</em>
-</td>
-<td>
-<p>AppliedToGroups is a list of names of AppliedToGroups to which this rule applies.
-Cannot be set in conjunction with NetworkPolicy.AppliedToGroups of the NetworkPolicy
-that this Rule is referred to.</p>
-</td>
-</tr>
-</tbody>
-</table>
-<h3 id="controlplane.antrea.tanzu.vmware.com/v1beta2.NetworkPolicyStats">NetworkPolicyStats
-</h3>
-<p>
-(<em>Appears on:</em>
-<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.NodeStatsSummary">NodeStatsSummary</a>)
-</p>
-<p>
-<p>NetworkPolicyStats contains the information and traffic stats of a NetworkPolicy.</p>
-</p>
-<table>
-<thead>
-<tr>
-<th>Field</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>
-<code>networkPolicy</code></br>
-<em>
-<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.NetworkPolicyReference">
-NetworkPolicyReference
-</a>
-</em>
-</td>
-<td>
-<p>The reference of the NetworkPolicy.</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>trafficStats</code></br>
-<em>
-<a href="#stats.antrea.tanzu.vmware.com/v1alpha1.TrafficStats">
-TrafficStats
-</a>
-</em>
-</td>
-<td>
-<p>The stats of the NetworkPolicy.</p>
-</td>
-</tr>
-</tbody>
-</table>
-<h3 id="controlplane.antrea.tanzu.vmware.com/v1beta2.NetworkPolicyStatus">NetworkPolicyStatus
-</h3>
-<p>
-<p>NetworkPolicyStatus is the status of a NetworkPolicy.</p>
-</p>
-<table>
-<thead>
-<tr>
-<th>Field</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>
-<code>metadata</code></br>
-<em>
-<a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#objectmeta-v1-meta">
-Kubernetes meta/v1.ObjectMeta
-</a>
-</em>
-</td>
-<td>
-Refer to the Kubernetes API documentation for the fields of the
-<code>metadata</code> field.
-</td>
-</tr>
-<tr>
-<td>
-<code>nodes</code></br>
-<em>
-<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.NetworkPolicyNodeStatus">
-[]NetworkPolicyNodeStatus
-</a>
-</em>
-</td>
-<td>
-<p>Nodes contains statuses produced on a list of Nodes.</p>
-</td>
-</tr>
-</tbody>
-</table>
-<h3 id="controlplane.antrea.tanzu.vmware.com/v1beta2.NetworkPolicyType">NetworkPolicyType
-(<code>string</code> alias)</p></h3>
-<p>
-(<em>Appears on:</em>
-<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.NetworkPolicyReference">NetworkPolicyReference</a>)
-</p>
-<p>
-</p>
-<h3 id="controlplane.antrea.tanzu.vmware.com/v1beta2.PodReference">PodReference
-</h3>
-<p>
-(<em>Appears on:</em>
-<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.GroupMember">GroupMember</a>)
-</p>
-<p>
-<p>PodReference represents a Pod Reference.</p>
-</p>
-<table>
-<thead>
-<tr>
-<th>Field</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>
-<code>name</code></br>
-<em>
-string
-</em>
-</td>
-<td>
-<p>The name of this pod.</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>namespace</code></br>
-<em>
-string
-</em>
-</td>
-<td>
-<p>The namespace of this pod.</p>
-</td>
-</tr>
-</tbody>
-</table>
-<h3 id="controlplane.antrea.tanzu.vmware.com/v1beta2.Protocol">Protocol
-(<code>string</code> alias)</p></h3>
-<p>
-(<em>Appears on:</em>
-<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.NamedPort">NamedPort</a>, 
-<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.Service">Service</a>)
-</p>
-<p>
-<p>Protocol defines network protocols supported for things like container ports.</p>
-</p>
-<h3 id="controlplane.antrea.tanzu.vmware.com/v1beta2.Service">Service
-</h3>
-<p>
-(<em>Appears on:</em>
-<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.NetworkPolicyRule">NetworkPolicyRule</a>)
-</p>
-<p>
-<p>Service describes a port to allow traffic on.</p>
-</p>
-<table>
-<thead>
-<tr>
-<th>Field</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>
-<code>protocol</code></br>
-<em>
-<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.Protocol">
-Protocol
-</a>
-</em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>The protocol (TCP, UDP, or SCTP) which traffic must match. If not specified, this
-field defaults to TCP.</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>port</code></br>
-<em>
-<a href="https://godoc.org/k8s.io/apimachinery/pkg/util/intstr#IntOrString">
-k8s.io/apimachinery/pkg/util/intstr.IntOrString
-</a>
-</em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>The port name or number on the given protocol. If not specified, this matches all port numbers.</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>endPort</code></br>
-<em>
-int32
-</em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>EndPort defines the end of the port range, being the end included within the range.
-It can only be specified when a numerical <code>port</code> is specified.</p>
-</td>
-</tr>
-</tbody>
-</table>
-<hr/>
 <p><em>
 Generated with <code>gen-crd-api-reference-docs</code>
-on git commit <code>307b8c75</code>.
+on git commit <code>0c6e616a</code>.
 </em></p>
