@@ -15,10 +15,12 @@
 package openflow
 
 import (
+	"errors"
 	"fmt"
 	"math/rand"
 	"net"
 
+	"github.com/contiv/libOpenflow/protocol"
 	"github.com/contiv/ofnet/ofctrl"
 	"k8s.io/klog"
 
@@ -747,33 +749,71 @@ func (c *client) SendTraceflowPacket(
 	outPort int32) error {
 
 	packetOutBuilder := c.bridge.BuildPacketOut()
-	parsedSrcMAC, _ := net.ParseMAC(srcMAC)
-	parsedDstMAC, _ := net.ParseMAC(dstMAC)
+	parsedSrcMAC, err := net.ParseMAC(srcMAC)
+	if err != nil {
+		return err
+	}
+	var parsedDstMAC net.HardwareAddr
 	if dstMAC == "" {
 		parsedDstMAC = c.nodeConfig.GatewayConfig.MAC
+	} else {
+		parsedDstMAC, err = net.ParseMAC(dstMAC)
+		if err != nil {
+			return err
+		}
 	}
 
+	parsedSrcIP := net.ParseIP(srcIP)
+	parsedDstIP := net.ParseIP(dstIP)
+	if parsedSrcIP == nil || parsedDstIP == nil {
+		return errors.New("invalid IP")
+	}
+	isIPv6 := parsedSrcIP.To4() == nil
+	if isIPv6 != (parsedDstIP.To4() == nil) {
+		return errors.New("IP version mismatch")
+	}
+
+	// Set ethernet header
 	packetOutBuilder = packetOutBuilder.SetSrcMAC(parsedSrcMAC)
 	packetOutBuilder = packetOutBuilder.SetDstMAC(parsedDstMAC)
-	packetOutBuilder = packetOutBuilder.SetSrcIP(net.ParseIP(srcIP))
-	packetOutBuilder = packetOutBuilder.SetDstIP(net.ParseIP(dstIP))
-
+	// Set IP header
+	packetOutBuilder = packetOutBuilder.SetSrcIP(parsedSrcIP)
+	packetOutBuilder = packetOutBuilder.SetDstIP(parsedDstIP)
 	if ttl == 0 {
 		packetOutBuilder = packetOutBuilder.SetTTL(128)
 	} else {
 		packetOutBuilder = packetOutBuilder.SetTTL(ttl)
 	}
-	packetOutBuilder = packetOutBuilder.SetIPFlags(IPFlags)
+	if !isIPv6 {
+		packetOutBuilder = packetOutBuilder.SetIPFlags(IPFlags)
+	}
 
+	// Set transport header
 	switch IPProtocol {
-	case 1:
+	case protocol.Type_ICMP:
+		if isIPv6 {
+			return errors.New("cannot set protocol ICMP in IPv6 packet")
+		}
 		packetOutBuilder = packetOutBuilder.SetIPProtocol(binding.ProtocolICMP)
 		packetOutBuilder = packetOutBuilder.SetICMPType(ICMPType)
 		packetOutBuilder = packetOutBuilder.SetICMPCode(ICMPCode)
 		packetOutBuilder = packetOutBuilder.SetICMPID(ICMPID)
 		packetOutBuilder = packetOutBuilder.SetICMPSequence(ICMPSequence)
-	case 6:
-		packetOutBuilder = packetOutBuilder.SetIPProtocol(binding.ProtocolTCP)
+	case protocol.Type_IPv6ICMP:
+		if !isIPv6 {
+			return errors.New("cannot set protocol ICMPv6 in IPv4 packet")
+		}
+		packetOutBuilder = packetOutBuilder.SetIPProtocol(binding.ProtocolICMPv6)
+		packetOutBuilder = packetOutBuilder.SetICMPType(ICMPType)
+		packetOutBuilder = packetOutBuilder.SetICMPCode(ICMPCode)
+		packetOutBuilder = packetOutBuilder.SetICMPID(ICMPID)
+		packetOutBuilder = packetOutBuilder.SetICMPSequence(ICMPSequence)
+	case protocol.Type_TCP:
+		if isIPv6 {
+			packetOutBuilder = packetOutBuilder.SetIPProtocol(binding.ProtocolTCPv6)
+		} else {
+			packetOutBuilder = packetOutBuilder.SetIPProtocol(binding.ProtocolTCP)
+		}
 		if TCPSrcPort == 0 {
 			// #nosec G404: random number generator not used for security purposes.
 			TCPSrcPort = uint16(rand.Uint32())
@@ -781,8 +821,12 @@ func (c *client) SendTraceflowPacket(
 		packetOutBuilder = packetOutBuilder.SetTCPSrcPort(TCPSrcPort)
 		packetOutBuilder = packetOutBuilder.SetTCPDstPort(TCPDstPort)
 		packetOutBuilder = packetOutBuilder.SetTCPFlags(TCPFlags)
-	case 17:
-		packetOutBuilder = packetOutBuilder.SetIPProtocol(binding.ProtocolUDP)
+	case protocol.Type_UDP:
+		if isIPv6 {
+			packetOutBuilder = packetOutBuilder.SetIPProtocol(binding.ProtocolUDPv6)
+		} else {
+			packetOutBuilder = packetOutBuilder.SetIPProtocol(binding.ProtocolUDP)
+		}
 		packetOutBuilder = packetOutBuilder.SetUDPSrcPort(UDPSrcPort)
 		packetOutBuilder = packetOutBuilder.SetUDPDstPort(UDPDstPort)
 	}
@@ -806,6 +850,7 @@ func (c *client) InstallTraceflowFlows(dataplaneTag uint8) error {
 	if err := c.Add(flow); err != nil {
 		return err
 	}
+	flows = []binding.Flow{}
 	c.conjMatchFlowLock.Lock()
 	defer c.conjMatchFlowLock.Unlock()
 	// Copy default drop rules.
@@ -813,6 +858,13 @@ func (c *client) InstallTraceflowFlows(dataplaneTag uint8) error {
 		if ctx.dropFlow != nil {
 			copyFlowBuilder := ctx.dropFlow.CopyToBuilder(priorityNormal+2, false)
 			if ctx.dropFlow.FlowProtocol() == "" {
+				copyFlowBuilderIPv6 := ctx.dropFlow.CopyToBuilder(priorityNormal+2, false)
+				copyFlowBuilderIPv6 = copyFlowBuilderIPv6.MatchProtocol(binding.ProtocolIPv6)
+				flows = append(
+					flows, copyFlowBuilderIPv6.MatchIPDscp(dataplaneTag).
+						SetHardTimeout(300).
+						Action().SendToController(uint8(PacketInReasonTF)).
+						Done())
 				copyFlowBuilder = copyFlowBuilder.MatchProtocol(binding.ProtocolIP)
 			}
 			flows = append(

@@ -7,7 +7,7 @@ on:
 
 jobs:
   build:
-    runs-on: [ubuntu-18.04]
+    runs-on: [ubuntu-latest]
     steps:
     - uses: actions/checkout@v2
     - name: Build Antrea Docker image and push to registry
@@ -37,7 +37,7 @@ jobs:
       shell: bash
 
   build-octant-antrea-ubuntu:
-    runs-on: [ubuntu-18.04]
+    runs-on: [ubuntu-latest]
     steps:
       - uses: actions/checkout@v2
       - name: Build octant-antrea-ubuntu Docker image and push to registry
@@ -51,7 +51,7 @@ jobs:
           docker push antrea/octant-antrea-ubuntu:"${TAG:10}"
 
   build-flow-aggregator:
-    runs-on: [ubuntu-18.04]
+    runs-on: [ubuntu-latest]
     steps:
     - uses: actions/checkout@v2
     - name: Build flow-aggregator Docker image and push to registry

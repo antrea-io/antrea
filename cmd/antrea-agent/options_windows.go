@@ -38,7 +38,7 @@ func (o *Options) checkUnsupportedFeatures() error {
 		}
 	}
 
-	if o.config.OVSDatapathType != ovsconfig.OVSDatapathSystem {
+	if o.config.OVSDatapathType != string(ovsconfig.OVSDatapathSystem) {
 		unsupported = append(unsupported, "OVSDatapathType: "+o.config.OVSDatapathType)
 	}
 	_, encapMode := config.GetTrafficEncapModeFromStr(o.config.TrafficEncapMode)

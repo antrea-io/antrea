@@ -61,7 +61,8 @@ type Options struct {
 func newOptions() *Options {
 	return &Options{
 		config: &AgentConfig{
-			EnablePrometheusMetrics: true,
+			EnablePrometheusMetrics:   true,
+			EnableTLSToFlowAggregator: true,
 		},
 	}
 }
@@ -110,7 +111,7 @@ func (o *Options) validate(args []string) error {
 	if o.config.EnableIPSecTunnel && o.config.TunnelType != ovsconfig.GRETunnel {
 		return fmt.Errorf("IPSec encyption is supported only for GRE tunnel")
 	}
-	if o.config.OVSDatapathType != ovsconfig.OVSDatapathSystem && o.config.OVSDatapathType != ovsconfig.OVSDatapathNetdev {
+	if o.config.OVSDatapathType != string(ovsconfig.OVSDatapathSystem) && o.config.OVSDatapathType != string(ovsconfig.OVSDatapathNetdev) {
 		return fmt.Errorf("OVS datapath type %s is not supported", o.config.OVSDatapathType)
 	}
 	ok, encapMode := config.GetTrafficEncapModeFromStr(o.config.TrafficEncapMode)
@@ -163,7 +164,7 @@ func (o *Options) setDefaults() {
 		o.config.OVSBridge = defaultOVSBridge
 	}
 	if o.config.OVSDatapathType == "" {
-		o.config.OVSDatapathType = ovsconfig.OVSDatapathSystem
+		o.config.OVSDatapathType = string(ovsconfig.OVSDatapathSystem)
 	}
 	if o.config.OVSRunDir == "" {
 		o.config.OVSRunDir = ovsconfig.DefaultOVSRunDir

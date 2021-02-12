@@ -6,6 +6,112 @@ metadata:
   name: flow-aggregator
 ---
 apiVersion: v1
+kind: ServiceAccount
+metadata:
+  labels:
+    app: flow-aggregator
+  name: flow-aggregator
+  namespace: flow-aggregator
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  labels:
+    app: flow-aggregator
+  name: flow-aggregator-role
+  namespace: flow-aggregator
+rules:
+- apiGroups:
+  - ""
+  resourceNames:
+  - flow-aggregator-ca
+  resources:
+  - configmaps
+  verbs:
+  - get
+  - update
+- apiGroups:
+  - ""
+  resourceNames:
+  - flow-aggregator-client-tls
+  resources:
+  - secrets
+  verbs:
+  - get
+  - update
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - create
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  labels:
+    app: flow-aggregator
+  name: flow-exporter-role
+  namespace: flow-aggregator
+rules:
+- apiGroups:
+  - ""
+  resourceNames:
+  - flow-aggregator-ca
+  resources:
+  - configmaps
+  verbs:
+  - get
+- apiGroups:
+  - ""
+  resourceNames:
+  - flow-aggregator-client-tls
+  resources:
+  - secrets
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  labels:
+    app: flow-aggregator
+  name: flow-aggregator-role-binding
+  namespace: flow-aggregator
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: flow-aggregator-role
+subjects:
+- kind: ServiceAccount
+  name: flow-aggregator
+  namespace: flow-aggregator
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  labels:
+    app: flow-aggregator
+  name: flow-exporter-role-binding
+  namespace: flow-aggregator
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: flow-exporter-role
+subjects:
+- kind: ServiceAccount
+  name: antrea-agent
+  namespace: kube-system
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  labels:
+    app: flow-aggregator
+  name: flow-aggregator-ca
+  namespace: flow-aggregator
+---
+apiVersion: v1
 data:
   flow-aggregator.conf: |
     # Provide the flow collector address as string with format <IP>:<port>[:<proto>], where proto is tcp or udp.
@@ -18,14 +124,17 @@ data:
     # Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
     #flowExportInterval: 60s
 
-    # Provide the transport protocol for the flow aggregator collecting process, which is tcp or udp.
-    #aggregatorTransportProtocol: "tcp"
+    # Provide the transport protocol for the flow aggregator collecting process, which is tls, tcp or udp.
+    #aggregatorTransportProtocol: "tls"
+
+    # Provide DNS name or IP address of flow aggregator for generating TLS certificate. It must match the flowCollectorAddr parameter in the antrea-agent config.
+    #flowAggregatorAddress: "flow-aggregator.flow-aggregator.svc"
 kind: ConfigMap
 metadata:
   annotations: {}
   labels:
     app: flow-aggregator
-  name: flow-aggregator-configmap-kggb5829gb
+  name: flow-aggregator-configmap-ccfdtmg954
   namespace: flow-aggregator
 ---
 apiVersion: v1
@@ -87,7 +196,8 @@ spec:
           name: flow-aggregator-config
           readOnly: true
           subPath: flow-aggregator.conf
+      serviceAccountName: flow-aggregator
       volumes:
       - configMap:
-          name: flow-aggregator-configmap-kggb5829gb
+          name: flow-aggregator-configmap-ccfdtmg954
         name: flow-aggregator-config

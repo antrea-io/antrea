@@ -22,46 +22,90 @@ import (
 	"fmt"
 	"net"
 	"strings"
+	"time"
 
 	"github.com/Microsoft/go-winio"
 	"github.com/Microsoft/hcsshim"
-	ps "github.com/benmoss/go-powershell"
-	"github.com/benmoss/go-powershell/backend"
+	ps "github.com/antoninbas/go-powershell"
+	"github.com/antoninbas/go-powershell/backend"
 	"github.com/containernetworking/plugins/pkg/ip"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog"
 )
 
 const (
-	ContainerVNICPrefix = "vEthernet"
-	HNSNetworkType      = "Transparent"
-	LocalHNSNetwork     = "antrea-hnsnetwork"
-	OVSExtensionID      = "583CC151-73EC-4A6A-8B47-578297AD7623"
-	namedPipePrefix     = `\\.\pipe\`
+	ContainerVNICPrefix  = "vEthernet"
+	HNSNetworkType       = "Transparent"
+	LocalHNSNetwork      = "antrea-hnsnetwork"
+	OVSExtensionID       = "583CC151-73EC-4A6A-8B47-578297AD7623"
+	namedPipePrefix      = `\\.\pipe\`
+	commandMaxRetry      = 5
+	commandRetryInternal = time.Second
 )
 
 func GetNSPath(containerNetNS string) (string, error) {
 	return containerNetNS, nil
 }
 
+func GetHostInterfaceStatus(ifaceName string) (string, error) {
+	cmd := fmt.Sprintf(`Get-NetAdapter -InterfaceAlias "%s" | Select-Object -Property Status | Format-Table -HideTableHeaders`, ifaceName)
+	out, err := CallPSCommand(cmd)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(out), nil
+}
+
 // EnableHostInterface sets the specified interface status as UP.
 func EnableHostInterface(ifaceName string) error {
-	cmd := fmt.Sprintf("Enable-NetAdapter -InterfaceAlias %s", ifaceName)
-	return InvokePSCommand(cmd)
+	cmd := fmt.Sprintf(`Enable-NetAdapter -InterfaceAlias "%s"`, ifaceName)
+	// Enable-NetAdapter is not a blocking operation based on our testing.
+	// It returns immediately no matter whether the interface has been enabled or not.
+	// So we need to check the interface status to ensure it is up before returning.
+	if err := wait.PollImmediate(commandRetryInternal, commandMaxRetry, func() (done bool, err error) {
+		if err := InvokePSCommand(cmd); err != nil {
+			klog.Errorf("Failed to run command %s: %v", cmd, err)
+			return false, nil
+		}
+		status, err := GetHostInterfaceStatus(ifaceName)
+		if err != nil {
+			klog.Errorf("Failed to run command %s: %v", cmd, err)
+			return false, nil
+		}
+		if !strings.EqualFold(status, "Up") {
+			klog.Infof("Waiting for host interface %s to be up", ifaceName)
+			return false, nil
+		}
+		return true, nil
+	}); err != nil {
+		return fmt.Errorf("failed to enable interface %s: %v", ifaceName, err)
+	}
+	return nil
 }
 
 // ConfigureInterfaceAddress adds IPAddress on the specified interface.
 func ConfigureInterfaceAddress(ifaceName string, ipConfig *net.IPNet) error {
 	ipStr := strings.Split(ipConfig.String(), "/")
-	cmd := fmt.Sprintf("New-NetIPAddress -InterfaceAlias %s -IPAddress %s -PrefixLength %s", ifaceName, ipStr[0], ipStr[1])
-	return InvokePSCommand(cmd)
+	cmd := fmt.Sprintf(`New-NetIPAddress -InterfaceAlias "%s" -IPAddress %s -PrefixLength %s`, ifaceName, ipStr[0], ipStr[1])
+	err := InvokePSCommand(cmd)
+	// If the address already exists, ignore the error.
+	if err != nil && !strings.Contains(err.Error(), "already exists") {
+		return err
+	}
+	return nil
 }
 
 // ConfigureInterfaceAddressWithDefaultGateway adds IPAddress on the specified interface and sets the default gateway
 // for the host.
 func ConfigureInterfaceAddressWithDefaultGateway(ifaceName string, ipConfig *net.IPNet, gateway string) error {
 	ipStr := strings.Split(ipConfig.String(), "/")
-	cmd := fmt.Sprintf("New-NetIPAddress -InterfaceAlias %s -IPAddress %s -PrefixLength %s -DefaultGateway %s", ifaceName, ipStr[0], ipStr[1], gateway)
-	return InvokePSCommand(cmd)
+	cmd := fmt.Sprintf(`New-NetIPAddress -InterfaceAlias "%s" -IPAddress %s -PrefixLength %s -DefaultGateway %s`, ifaceName, ipStr[0], ipStr[1], gateway)
+	err := InvokePSCommand(cmd)
+	// If the address already exists, ignore the error.
+	if err != nil && !strings.Contains(err.Error(), "already exists") {
+		return err
+	}
+	return nil
 }
 
 // EnableIPForwarding enables the IP interface to forward packets that arrive on this interface to other interfaces.
@@ -124,14 +168,16 @@ func SetAdapterMACAddress(adapterName string, macConfig *net.HardwareAddr) error
 	return InvokePSCommand(cmd)
 }
 
-// WindowsHyperVInstalled checks if the Hyper-V feature is enabled on the host.
-func WindowsHyperVInstalled() (bool, error) {
-	cmd := "$(Get-WindowsFeature Hyper-V).InstallState"
+// WindowsHyperVEnabled checks if the Hyper-V is enabled on the host.
+// Hyper-V feature contains multiple components/sub-features. According to the
+// test, OVS requires "Microsoft-Hyper-V" feature to be enabled.
+func WindowsHyperVEnabled() (bool, error) {
+	cmd := "$(Get-WindowsOptionalFeature -Online -FeatureName Microsoft-Hyper-V).State"
 	result, err := CallPSCommand(cmd)
 	if err != nil {
 		return true, err
 	}
-	return strings.HasPrefix(result, "Installed"), nil
+	return strings.HasPrefix(result, "Enabled"), nil
 }
 
 // CreateHNSNetwork creates a new HNS Network, whose type is "Transparent". The NetworkAdapter is using the host
@@ -273,7 +319,7 @@ func PrepareHNSNetwork(subnetCIDR *net.IPNet, nodeIPNet *net.IPNet, uplinkAdapte
 
 func enableHNSOnOVS(hnsNet *hcsshim.HNSNetwork) error {
 	// Release OS management for HNS Network if Hyper-V is enabled.
-	hypervEnabled, err := WindowsHyperVInstalled()
+	hypervEnabled, err := WindowsHyperVEnabled()
 	if err != nil {
 		return err
 	}
@@ -350,4 +396,19 @@ func DialLocalSocket(address string) (net.Conn, error) {
 		return winio.DialPipe(address, nil)
 	}
 	return dialUnix(address)
+}
+
+func HostInterfaceExists(ifaceName string) bool {
+	if _, err := net.InterfaceByName(ifaceName); err == nil {
+		return true
+	}
+	// Some kinds of interfaces cannot be retrieved by "net.InterfaceByName" such as
+	// container vnic.
+	// So if a interface cannot be found by above function, use powershell command
+	// "Get-NetAdapter" to check if it exists.
+	cmd := fmt.Sprintf(`Get-NetAdapter -InterfaceAlias "%s"`, ifaceName)
+	if err := InvokePSCommand(cmd); err != nil {
+		return false
+	}
+	return true
 }

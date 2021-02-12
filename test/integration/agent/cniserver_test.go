@@ -52,9 +52,9 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/metrics"
 	openflowtest "github.com/vmware-tanzu/antrea/pkg/agent/openflow/testing"
 	routetest "github.com/vmware-tanzu/antrea/pkg/agent/route/testing"
+	antreatypes "github.com/vmware-tanzu/antrea/pkg/agent/types"
 	"github.com/vmware-tanzu/antrea/pkg/agent/util"
 	cnimsg "github.com/vmware-tanzu/antrea/pkg/apis/cni/v1beta1"
-	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
 	ovsconfigtest "github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig/testing"
 )
@@ -507,7 +507,7 @@ func (tester *cmdAddDelTester) cmdCheckTest(tc testCase, conf *Net, dataDir stri
 	// If validateMetrics flag is set, check pod count metrics.
 	if tc.validateMetrics {
 		expectedStr := `
-		# HELP antrea_agent_local_pod_count [STABLE] Number of pods on local node which are managed by the Antrea Agent.
+		# HELP antrea_agent_local_pod_count [STABLE] Number of Pods on local Node which are managed by the Antrea Agent.
 		# TYPE antrea_agent_local_pod_count gauge
 		antrea_agent_local_pod_count 1
 		`
@@ -553,7 +553,7 @@ func (tester *cmdAddDelTester) cmdDelTest(tc testCase, dataDir string) {
 	// If validateMetrics flag is set, check Pod count metrics.
 	if tc.validateMetrics {
 		expectedStr := `
-		# HELP antrea_agent_local_pod_count [STABLE] Number of pods on local node which are managed by the Antrea Agent.
+		# HELP antrea_agent_local_pod_count [STABLE] Number of Pods on local Node which are managed by the Antrea Agent.
 		# TYPE antrea_agent_local_pod_count gauge
 		antrea_agent_local_pod_count 0
 		`
@@ -570,11 +570,10 @@ func newTester() *cmdAddDelTester {
 		"",
 		testNodeConfig,
 		k8sFake.NewSimpleClientset(),
-		make(chan v1beta2.PodReference, 100),
 		false,
 		nil,
 		tester.networkReadyCh)
-	tester.server.Initialize(ovsServiceMock, ofServiceMock, ifaceStore, "")
+	tester.server.Initialize(ovsServiceMock, ofServiceMock, ifaceStore, make(chan antreatypes.EntityReference, 100))
 	ctx := context.Background()
 	tester.ctx = ctx
 	return tester
@@ -671,6 +670,7 @@ func TestAntreaServerFunc(t *testing.T) {
 
 		ovsServiceMock.EXPECT().GetPortList().Return([]ovsconfig.OVSPortData{}, nil).AnyTimes()
 		ovsServiceMock.EXPECT().IsHardwareOffloadEnabled().Return(false).AnyTimes()
+		ovsServiceMock.EXPECT().GetOVSDatapathType().Return(ovsconfig.OVSDatapathSystem).AnyTimes()
 	}
 
 	teardown := func() {
@@ -707,7 +707,7 @@ func TestAntreaServerFunc(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			if strings.Contains(tc.name, "Prometheus") {
-				// Initialize pod metrics
+				// Initialize Pod metrics
 				metrics.InitializePodMetrics()
 			}
 			setup()
@@ -730,7 +730,6 @@ func setupChainTest(
 			"",
 			testNodeConfig,
 			k8sFake.NewSimpleClientset(),
-			make(chan v1beta2.PodReference, 100),
 			true,
 			routeMock,
 			networkReadyCh)
@@ -792,7 +791,8 @@ func TestCNIServerChaining(t *testing.T) {
 			ofServiceMock = openflowtest.NewMockClient(controller)
 			ifaceStore := interfacestore.NewInterfaceStore()
 			ovsServiceMock.EXPECT().IsHardwareOffloadEnabled().Return(false).AnyTimes()
-			err = server.Initialize(ovsServiceMock, ofServiceMock, ifaceStore, "")
+			ovsServiceMock.EXPECT().GetOVSDatapathType().Return(ovsconfig.OVSDatapathSystem).AnyTimes()
+			err = server.Initialize(ovsServiceMock, ofServiceMock, ifaceStore, make(chan antreatypes.EntityReference, 100))
 			testRequire.Nil(err)
 		}
 

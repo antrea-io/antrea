@@ -70,9 +70,11 @@ type networkPolicyController struct {
 	podStore                   cache.Store
 	externalEntityStore        cache.Store
 	namespaceStore             cache.Store
+	serviceStore               cache.Store
 	networkPolicyStore         cache.Store
 	cnpStore                   cache.Store
 	tierStore                  cache.Store
+	cgStore                    cache.Store
 	appliedToGroupStore        storage.Interface
 	addressGroupStore          storage.Interface
 	internalNetworkPolicyStore storage.Interface
@@ -89,32 +91,45 @@ func newController(objects ...runtime.Object) (*fake.Clientset, *networkPolicyCo
 	appliedToGroupStore := store.NewAppliedToGroupStore()
 	addressGroupStore := store.NewAddressGroupStore()
 	internalNetworkPolicyStore := store.NewNetworkPolicyStore()
+	internalGroupStore := store.NewGroupStore()
+	cgInformer := crdInformerFactory.Core().V1alpha2().ClusterGroups()
+	cgStore := crdInformerFactory.Core().V1alpha2().ClusterGroups().Informer().GetStore()
 	npController := NewNetworkPolicyController(client,
 		crdClient,
 		informerFactory.Core().V1().Pods(),
 		informerFactory.Core().V1().Namespaces(),
+		informerFactory.Core().V1().Services(),
 		crdInformerFactory.Core().V1alpha2().ExternalEntities(),
 		informerFactory.Networking().V1().NetworkPolicies(),
 		crdInformerFactory.Security().V1alpha1().ClusterNetworkPolicies(),
 		crdInformerFactory.Security().V1alpha1().NetworkPolicies(),
 		crdInformerFactory.Security().V1alpha1().Tiers(),
+		cgInformer,
 		addressGroupStore,
 		appliedToGroupStore,
-		internalNetworkPolicyStore)
+		internalNetworkPolicyStore,
+		internalGroupStore)
 	npController.podListerSynced = alwaysReady
 	npController.namespaceListerSynced = alwaysReady
 	npController.networkPolicyListerSynced = alwaysReady
 	npController.cnpListerSynced = alwaysReady
 	npController.tierLister = crdInformerFactory.Security().V1alpha1().Tiers().Lister()
 	npController.tierListerSynced = alwaysReady
+	npController.cgInformer = cgInformer
+	npController.cgLister = cgInformer.Lister()
+	npController.cgListerSynced = alwaysReady
+	npController.serviceLister = informerFactory.Core().V1().Services().Lister()
+	npController.serviceListerSynced = alwaysReady
 	return client, &networkPolicyController{
 		npController,
 		informerFactory.Core().V1().Pods().Informer().GetStore(),
 		crdInformerFactory.Core().V1alpha2().ExternalEntities().Informer().GetStore(),
 		informerFactory.Core().V1().Namespaces().Informer().GetStore(),
+		informerFactory.Core().V1().Services().Informer().GetStore(),
 		informerFactory.Networking().V1().NetworkPolicies().Informer().GetStore(),
 		crdInformerFactory.Security().V1alpha1().ClusterNetworkPolicies().Informer().GetStore(),
 		crdInformerFactory.Security().V1alpha1().Tiers().Informer().GetStore(),
+		cgStore,
 		appliedToGroupStore,
 		addressGroupStore,
 		internalNetworkPolicyStore,
@@ -887,6 +902,17 @@ func TestAddPod(t *testing.T) {
 	selectorOut := metav1.LabelSelector{
 		MatchLabels: map[string]string{"outGroup": "outAddress"},
 	}
+	selectorGroup := metav1.LabelSelector{
+		MatchLabels: map[string]string{"clustergroup": "yes"},
+	}
+	testCG := &v1alpha2.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "cgA",
+		},
+		Spec: v1alpha2.GroupSpec{
+			PodSelector: &selectorGroup,
+		},
+	}
 	testNPObj := &networkingv1.NetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "npA",
@@ -920,6 +946,7 @@ func TestAddPod(t *testing.T) {
 		appGroupMatch        bool
 		inAddressGroupMatch  bool
 		outAddressGroupMatch bool
+		groupMatch           bool
 	}{
 		{
 			name: "not-match-spec-podselector-match-labels",
@@ -943,11 +970,15 @@ func TestAddPod(t *testing.T) {
 						},
 					},
 					PodIP: "1.2.3.4",
+					PodIPs: []corev1.PodIP{
+						{IP: "1.2.3.4"},
+					},
 				},
 			},
 			appGroupMatch:        false,
 			inAddressGroupMatch:  false,
 			outAddressGroupMatch: false,
+			groupMatch:           false,
 		},
 		{
 			name: "not-match-spec-podselector-match-exprs",
@@ -971,11 +1002,15 @@ func TestAddPod(t *testing.T) {
 						},
 					},
 					PodIP: "1.2.3.4",
+					PodIPs: []corev1.PodIP{
+						{IP: "1.2.3.4"},
+					},
 				},
 			},
 			appGroupMatch:        false,
 			inAddressGroupMatch:  false,
 			outAddressGroupMatch: false,
+			groupMatch:           false,
 		},
 		{
 			name: "match-spec-podselector",
@@ -1002,11 +1037,15 @@ func TestAddPod(t *testing.T) {
 						},
 					},
 					PodIP: "1.2.3.4",
+					PodIPs: []corev1.PodIP{
+						{IP: "1.2.3.4"},
+					},
 				},
 			},
 			appGroupMatch:        true,
 			inAddressGroupMatch:  false,
 			outAddressGroupMatch: false,
+			groupMatch:           false,
 		},
 		{
 			name: "match-ingress-podselector",
@@ -1030,11 +1069,15 @@ func TestAddPod(t *testing.T) {
 						},
 					},
 					PodIP: "1.2.3.4",
+					PodIPs: []corev1.PodIP{
+						{IP: "1.2.3.4"},
+					},
 				},
 			},
 			appGroupMatch:        false,
 			inAddressGroupMatch:  true,
 			outAddressGroupMatch: false,
+			groupMatch:           false,
 		},
 		{
 			name: "match-egress-podselector",
@@ -1058,11 +1101,15 @@ func TestAddPod(t *testing.T) {
 						},
 					},
 					PodIP: "1.2.3.4",
+					PodIPs: []corev1.PodIP{
+						{IP: "1.2.3.4"},
+					},
 				},
 			},
 			appGroupMatch:        false,
 			inAddressGroupMatch:  false,
 			outAddressGroupMatch: true,
+			groupMatch:           false,
 		},
 		{
 			name: "match-all-selectors",
@@ -1091,11 +1138,15 @@ func TestAddPod(t *testing.T) {
 						},
 					},
 					PodIP: "1.2.3.4",
+					PodIPs: []corev1.PodIP{
+						{IP: "1.2.3.4"},
+					},
 				},
 			},
 			appGroupMatch:        true,
 			inAddressGroupMatch:  true,
 			outAddressGroupMatch: true,
+			groupMatch:           false,
 		},
 		{
 			name: "match-spec-podselector-no-podip",
@@ -1123,6 +1174,7 @@ func TestAddPod(t *testing.T) {
 			appGroupMatch:        false,
 			inAddressGroupMatch:  false,
 			outAddressGroupMatch: false,
+			groupMatch:           false,
 		},
 		{
 			name: "match-rule-podselector-no-ip",
@@ -1150,6 +1202,7 @@ func TestAddPod(t *testing.T) {
 			appGroupMatch:        false,
 			inAddressGroupMatch:  false,
 			outAddressGroupMatch: false,
+			groupMatch:           false,
 		},
 		{
 			name: "no-match-spec-podselector",
@@ -1173,17 +1226,56 @@ func TestAddPod(t *testing.T) {
 						},
 					},
 					PodIP: "1.2.3.4",
+					PodIPs: []corev1.PodIP{
+						{IP: "1.2.3.4"},
+					},
 				},
 			},
 			appGroupMatch:        false,
 			inAddressGroupMatch:  false,
 			outAddressGroupMatch: false,
+			groupMatch:           false,
+		},
+		{
+			name: "match-cg-only",
+			addedPod: &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "podA",
+					Namespace: "nsA",
+					Labels:    map[string]string{"clustergroup": "yes"},
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{{
+						Name: "container-1",
+					}},
+					NodeName: "nodeA",
+				},
+				Status: corev1.PodStatus{
+					Conditions: []corev1.PodCondition{
+						{
+							Type:   corev1.PodReady,
+							Status: corev1.ConditionTrue,
+						},
+					},
+					PodIP: "1.2.3.4",
+					PodIPs: []corev1.PodIP{
+						{IP: "1.2.3.4"},
+					},
+				},
+			},
+			appGroupMatch:        false,
+			inAddressGroupMatch:  false,
+			outAddressGroupMatch: false,
+			groupMatch:           true,
 		},
 	}
+	_, npc := newController()
+	npc.addNetworkPolicy(testNPObj)
+	groupKey := testCG.Name
+	npc.addClusterGroup(testCG)
+	npc.cgStore.Add(testCG)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, npc := newController()
-			npc.addNetworkPolicy(testNPObj)
 			npc.podStore.Add(tt.addedPod)
 			appGroupID := getNormalizedUID(toGroupSelector("nsA", &selectorSpec, nil, nil).NormalizedName)
 			inGroupID := getNormalizedUID(toGroupSelector("nsA", &selectorIn, nil, nil).NormalizedName)
@@ -1191,6 +1283,7 @@ func TestAddPod(t *testing.T) {
 			npc.syncAppliedToGroup(appGroupID)
 			npc.syncAddressGroup(inGroupID)
 			npc.syncAddressGroup(outGroupID)
+			npc.syncInternalGroup(groupKey)
 			appGroupObj, _, _ := npc.appliedToGroupStore.Get(appGroupID)
 			appGroup := appGroupObj.(*antreatypes.AppliedToGroup)
 			podsAdded := appGroup.GroupMemberByNode["nodeA"]
@@ -1198,6 +1291,8 @@ func TestAddPod(t *testing.T) {
 			updatedInAddrGroup := updatedInAddrGroupObj.(*antreatypes.AddressGroup)
 			updatedOutAddrGroupObj, _, _ := npc.addressGroupStore.Get(outGroupID)
 			updatedOutAddrGroup := updatedOutAddrGroupObj.(*antreatypes.AddressGroup)
+			groupObj, _, _ := npc.internalGroupStore.Get(groupKey)
+			grp := groupObj.(*antreatypes.Group)
 			if tt.appGroupMatch {
 				assert.Len(t, podsAdded, 1, "expected Pod to match AppliedToGroup")
 			} else {
@@ -1209,6 +1304,7 @@ func TestAddPod(t *testing.T) {
 			}
 			assert.Equal(t, tt.inAddressGroupMatch, updatedInAddrGroup.GroupMembers.Has(memberPod))
 			assert.Equal(t, tt.outAddressGroupMatch, updatedOutAddrGroup.GroupMembers.Has(memberPod))
+			assert.Equal(t, tt.groupMatch, grp.GroupMembers.Has(memberPod))
 		})
 	}
 }
@@ -1246,6 +1342,18 @@ func TestDeletePod(t *testing.T) {
 			Ingress:     ingressRules,
 		},
 	}
+	selectorGroup := metav1.LabelSelector{
+		MatchLabels: ruleLabels,
+	}
+	testCG := &v1alpha2.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "cgA",
+		},
+		Spec: v1alpha2.GroupSpec{
+			PodSelector: &selectorGroup,
+		},
+	}
+	groupKey := testCG.Name
 	p1IP := "1.1.1.1"
 	p2IP := "2.2.2.2"
 	p1 := getPod("p1", ns, "", p1IP, false)
@@ -1256,6 +1364,7 @@ func TestDeletePod(t *testing.T) {
 	p2.Labels = ruleLabels
 	_, npc := newController()
 	npc.addNetworkPolicy(matchNPObj)
+	npc.addClusterGroup(testCG)
 	npc.podStore.Add(p1)
 	npc.podStore.Add(p2)
 	npc.syncAppliedToGroup(matchAppGID)
@@ -1276,11 +1385,15 @@ func TestDeletePod(t *testing.T) {
 	// Delete Pod P2 matching the NetworkPolicy Rule.
 	npc.podStore.Delete(p2)
 	npc.syncAddressGroup(addrGroup.Name)
+	npc.syncInternalGroup(groupKey)
 	updatedAddrGroupObj, _, _ := npc.addressGroupStore.Get(addrGroup.Name)
 	updatedAddrGroup := updatedAddrGroupObj.(*antreatypes.AddressGroup)
 	// Ensure Pod2 IP is removed from AddressGroup.
 	memberPod2 := &controlplane.GroupMember{IPs: []controlplane.IPAddress{ipStrToIPAddress(p2IP)}}
+	groupObj, _, _ := npc.internalGroupStore.Get(groupKey)
+	grp := groupObj.(*antreatypes.Group)
 	assert.False(t, updatedAddrGroup.GroupMembers.Has(memberPod2))
+	assert.False(t, grp.GroupMembers.Has(memberPod2))
 }
 
 func TestAddNamespace(t *testing.T) {
@@ -1290,6 +1403,17 @@ func TestAddNamespace(t *testing.T) {
 	}
 	selectorOut := metav1.LabelSelector{
 		MatchLabels: map[string]string{"outGroup": "outAddress"},
+	}
+	selectorGroup := metav1.LabelSelector{
+		MatchLabels: map[string]string{"clustergroup": "yes"},
+	}
+	testCG := &v1alpha2.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "cgA",
+		},
+		Spec: v1alpha2.GroupSpec{
+			NamespaceSelector: &selectorGroup,
+		},
 	}
 	testNPObj := &networkingv1.NetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{
@@ -1323,6 +1447,7 @@ func TestAddNamespace(t *testing.T) {
 		addedNamespace       *corev1.Namespace
 		inAddressGroupMatch  bool
 		outAddressGroupMatch bool
+		groupMatch           bool
 	}{
 		{
 			name: "match-namespace-ingress-rule",
@@ -1334,6 +1459,7 @@ func TestAddNamespace(t *testing.T) {
 			},
 			inAddressGroupMatch:  true,
 			outAddressGroupMatch: false,
+			groupMatch:           false,
 		},
 		{
 			name: "match-namespace-egress-rule",
@@ -1345,6 +1471,7 @@ func TestAddNamespace(t *testing.T) {
 			},
 			inAddressGroupMatch:  false,
 			outAddressGroupMatch: true,
+			groupMatch:           false,
 		},
 		{
 			name: "match-namespace-all",
@@ -1359,6 +1486,7 @@ func TestAddNamespace(t *testing.T) {
 			},
 			inAddressGroupMatch:  true,
 			outAddressGroupMatch: true,
+			groupMatch:           false,
 		},
 		{
 			name: "match-namespace-none",
@@ -1370,12 +1498,28 @@ func TestAddNamespace(t *testing.T) {
 			},
 			inAddressGroupMatch:  false,
 			outAddressGroupMatch: false,
+			groupMatch:           false,
+		},
+		{
+			name: "match-namespace-cg",
+			addedNamespace: &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "nsA",
+					Labels: map[string]string{"clustergroup": "yes"},
+				},
+			},
+			inAddressGroupMatch:  false,
+			outAddressGroupMatch: false,
+			groupMatch:           true,
 		},
 	}
+	_, npc := newController()
+	npc.addNetworkPolicy(testNPObj)
+	npc.addClusterGroup(testCG)
+	npc.cgStore.Add(testCG)
+	groupKey := testCG.Name
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, npc := newController()
-			npc.addNetworkPolicy(testNPObj)
 			npc.namespaceStore.Add(tt.addedNamespace)
 			p1 := getPod("p1", "nsA", "nodeA", "1.2.3.4", false)
 			p2 := getPod("p2", "nsA", "nodeA", "2.2.3.4", false)
@@ -1385,10 +1529,13 @@ func TestAddNamespace(t *testing.T) {
 			outGroupID := getNormalizedUID(toGroupSelector("", nil, &selectorOut, nil).NormalizedName)
 			npc.syncAddressGroup(inGroupID)
 			npc.syncAddressGroup(outGroupID)
+			npc.syncInternalGroup(groupKey)
 			updatedInAddrGroupObj, _, _ := npc.addressGroupStore.Get(inGroupID)
 			updatedInAddrGroup := updatedInAddrGroupObj.(*antreatypes.AddressGroup)
 			updatedOutAddrGroupObj, _, _ := npc.addressGroupStore.Get(outGroupID)
 			updatedOutAddrGroup := updatedOutAddrGroupObj.(*antreatypes.AddressGroup)
+			groupObj, _, _ := npc.internalGroupStore.Get(groupKey)
+			grp := groupObj.(*antreatypes.Group)
 			memberPod1 := &controlplane.GroupMember{
 				Pod: &controlplane.PodReference{Name: "p1", Namespace: "nsA"},
 				IPs: []controlplane.IPAddress{ipStrToIPAddress("1.2.3.4")},
@@ -1401,6 +1548,8 @@ func TestAddNamespace(t *testing.T) {
 			assert.Equal(t, tt.inAddressGroupMatch, updatedInAddrGroup.GroupMembers.Has(memberPod2))
 			assert.Equal(t, tt.outAddressGroupMatch, updatedOutAddrGroup.GroupMembers.Has(memberPod1))
 			assert.Equal(t, tt.outAddressGroupMatch, updatedOutAddrGroup.GroupMembers.Has(memberPod2))
+			assert.Equal(t, tt.groupMatch, grp.GroupMembers.Has(memberPod1))
+			assert.Equal(t, tt.groupMatch, grp.GroupMembers.Has(memberPod2))
 		})
 	}
 }
@@ -1412,6 +1561,17 @@ func TestDeleteNamespace(t *testing.T) {
 	}
 	selectorOut := metav1.LabelSelector{
 		MatchLabels: map[string]string{"outGroup": "outAddress"},
+	}
+	selectorGroup := metav1.LabelSelector{
+		MatchLabels: map[string]string{"clustergroup": "yes"},
+	}
+	testCG := &v1alpha2.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "cgA",
+		},
+		Spec: v1alpha2.GroupSpec{
+			NamespaceSelector: &selectorGroup,
+		},
 	}
 	testNPObj := &networkingv1.NetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{
@@ -1445,6 +1605,7 @@ func TestDeleteNamespace(t *testing.T) {
 		deletedNamespace     *corev1.Namespace
 		inAddressGroupMatch  bool
 		outAddressGroupMatch bool
+		groupMatch           bool
 	}{
 		{
 			name: "match-namespace-ingress-rule",
@@ -1456,6 +1617,7 @@ func TestDeleteNamespace(t *testing.T) {
 			},
 			inAddressGroupMatch:  true,
 			outAddressGroupMatch: false,
+			groupMatch:           false,
 		},
 		{
 			name: "match-namespace-egress-rule",
@@ -1467,6 +1629,7 @@ func TestDeleteNamespace(t *testing.T) {
 			},
 			inAddressGroupMatch:  false,
 			outAddressGroupMatch: true,
+			groupMatch:           false,
 		},
 		{
 			name: "match-namespace-all",
@@ -1481,6 +1644,7 @@ func TestDeleteNamespace(t *testing.T) {
 			},
 			inAddressGroupMatch:  true,
 			outAddressGroupMatch: true,
+			groupMatch:           false,
 		},
 		{
 			name: "match-namespace-none",
@@ -1492,12 +1656,27 @@ func TestDeleteNamespace(t *testing.T) {
 			},
 			inAddressGroupMatch:  false,
 			outAddressGroupMatch: false,
+			groupMatch:           false,
+		},
+		{
+			name: "match-namespace-cg",
+			deletedNamespace: &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "nsA",
+					Labels: map[string]string{"clustergroup": "yes"},
+				},
+			},
+			inAddressGroupMatch:  false,
+			outAddressGroupMatch: false,
+			groupMatch:           true,
 		},
 	}
+	_, npc := newController()
+	npc.addNetworkPolicy(testNPObj)
+	npc.addClusterGroup(testCG)
+	groupKey := testCG.Name
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, npc := newController()
-			npc.addNetworkPolicy(testNPObj)
 			p1 := getPod("p1", "nsA", "", "1.1.1.1", false)
 			p2 := getPod("p2", "nsA", "", "1.1.1.2", false)
 			npc.namespaceStore.Add(tt.deletedNamespace)
@@ -1508,15 +1687,19 @@ func TestDeleteNamespace(t *testing.T) {
 			outGroupID := getNormalizedUID(toGroupSelector("", nil, &selectorOut, nil).NormalizedName)
 			npc.syncAddressGroup(inGroupID)
 			npc.syncAddressGroup(outGroupID)
+			npc.syncInternalGroup(groupKey)
 			npc.podStore.Delete(p1)
 			npc.podStore.Delete(p2)
 			npc.namespaceStore.Delete(tt.deletedNamespace)
 			npc.syncAddressGroup(inGroupID)
 			npc.syncAddressGroup(outGroupID)
+			npc.syncInternalGroup(groupKey)
 			updatedInAddrGroupObj, _, _ := npc.addressGroupStore.Get(inGroupID)
 			updatedInAddrGroup := updatedInAddrGroupObj.(*antreatypes.AddressGroup)
 			updatedOutAddrGroupObj, _, _ := npc.addressGroupStore.Get(outGroupID)
 			updatedOutAddrGroup := updatedOutAddrGroupObj.(*antreatypes.AddressGroup)
+			groupObj, _, _ := npc.internalGroupStore.Get(groupKey)
+			grp := groupObj.(*antreatypes.Group)
 			memberPod1 := &controlplane.GroupMember{IPs: []controlplane.IPAddress{ipStrToIPAddress("1.1.1.1")}}
 			memberPod2 := &controlplane.GroupMember{IPs: []controlplane.IPAddress{ipStrToIPAddress("1.1.1.2")}}
 			if tt.inAddressGroupMatch {
@@ -1527,8 +1710,204 @@ func TestDeleteNamespace(t *testing.T) {
 				assert.False(t, updatedOutAddrGroup.GroupMembers.Has(memberPod1))
 				assert.False(t, updatedOutAddrGroup.GroupMembers.Has(memberPod2))
 			}
+			if tt.groupMatch {
+				assert.False(t, grp.GroupMembers.Has(memberPod1))
+				assert.False(t, grp.GroupMembers.Has(memberPod2))
+			}
 		})
 	}
+}
+
+func TestAddAndUpdateService(t *testing.T) {
+	testPod1 := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-pod-1",
+			Namespace: "test-ns",
+			Labels:    map[string]string{"app": "test-1"},
+		},
+		Status: corev1.PodStatus{
+			Conditions: []corev1.PodCondition{
+				{
+					Type:   corev1.PodReady,
+					Status: corev1.ConditionTrue,
+				},
+			},
+			PodIP: "1.2.3.4",
+			PodIPs: []corev1.PodIP{
+				{IP: "1.2.3.4"},
+			},
+		},
+	}
+	testPod2 := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-pod-2",
+			Namespace: "test-ns",
+			Labels:    map[string]string{"app": "test-2"},
+		},
+		Status: corev1.PodStatus{
+			Conditions: []corev1.PodCondition{
+				{
+					Type:   corev1.PodReady,
+					Status: corev1.ConditionTrue,
+				},
+			},
+			PodIP: "4.3.2.1",
+			PodIPs: []corev1.PodIP{
+				{IP: "4.3.2.1"},
+			},
+		},
+	}
+	testCG1 := &v1alpha2.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "cg-1",
+		},
+		Spec: v1alpha2.GroupSpec{
+			ServiceReference: &v1alpha2.ServiceReference{
+				Name:      "test-svc-1",
+				Namespace: "test-ns",
+			},
+		},
+	}
+	testCG2 := &v1alpha2.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "cg-2",
+		},
+		Spec: v1alpha2.GroupSpec{
+			ServiceReference: &v1alpha2.ServiceReference{
+				Name:      "test-svc-2",
+				Namespace: "test-ns",
+			},
+		},
+	}
+	testSvc1 := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-svc-1",
+			Namespace: "test-ns",
+		},
+		Spec: corev1.ServiceSpec{
+			Selector: map[string]string{"app": "test-1"},
+		},
+	}
+	testSvc2 := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-svc-2",
+			Namespace: "test-ns",
+		},
+		Spec: corev1.ServiceSpec{},
+	}
+	testSvc1Updated := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-svc-1",
+			Namespace: "test-ns",
+		},
+		Spec: corev1.ServiceSpec{
+			Selector: map[string]string{"app": "test-2"},
+		},
+	}
+	_, npc := newController()
+	npc.cgStore.Add(testCG1)
+	npc.cgStore.Add(testCG2)
+	npc.addClusterGroup(testCG1)
+	npc.addClusterGroup(testCG2)
+	npc.podStore.Add(testPod1)
+	npc.podStore.Add(testPod2)
+	npc.serviceStore.Add(testSvc1)
+	npc.serviceStore.Add(testSvc2)
+	npc.syncInternalGroup(testCG1.Name)
+	npc.syncInternalGroup(testCG2.Name)
+	memberPod1 := &controlplane.GroupMember{
+		Pod: &controlplane.PodReference{
+			Name:      "test-pod-1",
+			Namespace: "test-ns",
+		},
+		IPs: []controlplane.IPAddress{ipStrToIPAddress("1.2.3.4")},
+	}
+	memberPod2 := &controlplane.GroupMember{
+		Pod: &controlplane.PodReference{
+			Name:      "test-pod-2",
+			Namespace: "test-ns",
+		},
+		IPs: []controlplane.IPAddress{ipStrToIPAddress("4.3.2.1")},
+	}
+	groupObj1, _, _ := npc.internalGroupStore.Get(testCG1.Name)
+	grp1 := groupObj1.(*antreatypes.Group)
+	assert.True(t, grp1.GroupMembers.Has(memberPod1))
+	assert.False(t, grp1.GroupMembers.Has(memberPod2))
+	groupObj2, _, _ := npc.internalGroupStore.Get(testCG2.Name)
+	grp2 := groupObj2.(*antreatypes.Group)
+	assert.False(t, grp2.GroupMembers.Has(memberPod1))
+	assert.False(t, grp2.GroupMembers.Has(memberPod2))
+	// Update svc-1 to select app test-2 instead
+	npc.serviceStore.Update(testSvc1Updated)
+	npc.syncInternalGroup(testCG1.Name)
+	groupObj1Updated, _, _ := npc.internalGroupStore.Get(testCG1.Name)
+	grp1Updated := groupObj1Updated.(*antreatypes.Group)
+	assert.False(t, grp1Updated.GroupMembers.Has(memberPod1))
+	assert.True(t, grp1Updated.GroupMembers.Has(memberPod2))
+}
+
+func TestDeleteService(t *testing.T) {
+	testPod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-pod",
+			Namespace: "test-ns",
+			Labels:    map[string]string{"app": "test"},
+		},
+		Status: corev1.PodStatus{
+			Conditions: []corev1.PodCondition{
+				{
+					Type:   corev1.PodReady,
+					Status: corev1.ConditionTrue,
+				},
+			},
+			PodIP: "1.2.3.4",
+			PodIPs: []corev1.PodIP{
+				{IP: "1.2.3.4"},
+			},
+		},
+	}
+	testCG := &v1alpha2.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "test-cg",
+		},
+		Spec: v1alpha2.GroupSpec{
+			ServiceReference: &v1alpha2.ServiceReference{
+				Name:      "test-svc",
+				Namespace: "test-ns",
+			},
+		},
+	}
+	testSvc := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-svc",
+			Namespace: "test-ns",
+		},
+		Spec: corev1.ServiceSpec{
+			Selector: map[string]string{"app": "test"},
+		},
+	}
+	_, npc := newController()
+	npc.cgStore.Add(testCG)
+	npc.addClusterGroup(testCG)
+	npc.podStore.Add(testPod)
+	npc.serviceStore.Add(testSvc)
+	npc.syncInternalGroup(testCG.Name)
+	memberPod := &controlplane.GroupMember{
+		Pod: &controlplane.PodReference{
+			Name:      "test-pod",
+			Namespace: "test-ns",
+		},
+		IPs: []controlplane.IPAddress{ipStrToIPAddress("1.2.3.4")},
+	}
+	groupObj, _, _ := npc.internalGroupStore.Get(testCG.Name)
+	grp := groupObj.(*antreatypes.Group)
+	assert.True(t, grp.GroupMembers.Has(memberPod))
+	// Make sure that after Service deletion, the Pod member is removed from Group.
+	npc.serviceStore.Delete(testSvc)
+	npc.syncInternalGroup(testCG.Name)
+	groupObjUpdated, _, _ := npc.internalGroupStore.Get(testCG.Name)
+	grpUpdated := groupObjUpdated.(*antreatypes.Group)
+	assert.False(t, grpUpdated.GroupMembers.Has(memberPod))
 }
 
 func TestFilterAddressGroupsForPodOrExternalEntity(t *testing.T) {
@@ -2536,22 +2915,22 @@ func TestPodToGroupMember(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			actualMemberPod := podToGroupMember(tt.inputPod, tt.includeIP)
 			if !reflect.DeepEqual(*(*actualMemberPod).Pod, *(tt.expMemberPod).Pod) {
-				t.Errorf("podToMemberPod() got unexpected PodReference %v, want %v", *(*actualMemberPod).Pod, *(tt.expMemberPod).Pod)
+				t.Errorf("podToGroupMember() got unexpected PodReference %v, want %v", *(*actualMemberPod).Pod, *(tt.expMemberPod).Pod)
 			}
 			// Case where the IPAddress must not be populated.
 			if !tt.includeIP {
 				if len(actualMemberPod.IPs) > 0 {
-					t.Errorf("podToMemberPod() got unexpected IP %v, want nil", actualMemberPod.IPs)
+					t.Errorf("podToGroupMember() got unexpected IP %v, want nil", actualMemberPod.IPs)
 				}
 			} else if !comparePodIPs(actualMemberPod.IPs, tt.expMemberPod.IPs) {
-				t.Errorf("podToMemberPod() got unexpected IP %v, want %v", actualMemberPod.IPs, tt.expMemberPod.IPs)
+				t.Errorf("podToGroupMember() got unexpected IP %v, want %v", actualMemberPod.IPs, tt.expMemberPod.IPs)
 			}
 			if !tt.namedPort {
 				if len(actualMemberPod.Ports) > 0 {
-					t.Errorf("podToMemberPod() got unexpected Ports %v, want []", actualMemberPod.Ports)
+					t.Errorf("podToGroupMember() got unexpected Ports %v, want []", actualMemberPod.Ports)
 				}
 			} else if !reflect.DeepEqual(actualMemberPod.Ports, tt.expMemberPod.Ports) {
-				t.Errorf("podToMemberPod() got unexpected Ports %v, want %v", actualMemberPod.Ports, tt.expMemberPod.Ports)
+				t.Errorf("podToGroupMember() got unexpected Ports %v, want %v", actualMemberPod.Ports, tt.expMemberPod.Ports)
 			}
 		})
 	}
@@ -2696,6 +3075,82 @@ func TestDeleteFinalStateUnknownNetworkPolicy(t *testing.T) {
 	assert.True(t, ok, "Missing event on channel")
 	_, ok = <-c.heartbeatCh
 	assert.True(t, ok, "Missing event on channel")
+}
+
+func TestInternalGroupKeyFunc(t *testing.T) {
+	expValue := "cgA"
+	cg := v1alpha2.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{Name: "cgA", UID: "uid-a"},
+		Spec: v1alpha2.GroupSpec{
+			NamespaceSelector: &selectorA,
+		},
+	}
+	actualValue := internalGroupKeyFunc(&cg)
+	assert.Equal(t, expValue, actualValue)
+}
+
+func TestGetAppliedToWorkloads(t *testing.T) {
+	var emptyEEs []*v1alpha2.ExternalEntity
+	var emptyPods []*corev1.Pod
+	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
+	cgA := v1alpha2.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{Name: "cgA", UID: "uidA"},
+		Spec: v1alpha2.GroupSpec{
+			PodSelector: &selectorA,
+		},
+	}
+	selectorB := metav1.LabelSelector{MatchLabels: map[string]string{"foo2": "bar2"}}
+	cgB := v1alpha2.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{Name: "cgB", UID: "uidB"},
+		Spec: v1alpha2.GroupSpec{
+			PodSelector: &selectorB,
+		},
+	}
+	podA := getPod("podA", "nsA", "nodeA", "10.0.0.1", false)
+	podA.Labels = map[string]string{"foo1": "bar1"}
+	podB := getPod("podB", "nsA", "nodeB", "10.0.0.2", false)
+	podB.Labels = map[string]string{"foo3": "bar3"}
+	tests := []struct {
+		name    string
+		inATG   *antreatypes.AppliedToGroup
+		expPods []*corev1.Pod
+		expEEs  []*v1alpha2.ExternalEntity
+	}{
+		{
+			name: "atg-for-cg",
+			inATG: &antreatypes.AppliedToGroup{
+				Name: cgA.Name,
+				UID:  cgA.UID,
+			},
+			expPods: []*corev1.Pod{podA},
+			expEEs:  emptyEEs,
+		},
+		{
+			name: "atg-for-cg-no-pod-match",
+			inATG: &antreatypes.AppliedToGroup{
+				Name: cgB.Name,
+				UID:  cgB.UID,
+			},
+			expPods: emptyPods,
+			expEEs:  emptyEEs,
+		},
+	}
+	_, c := newController()
+	c.podStore.Add(podA)
+	c.podStore.Add(podB)
+	c.cgStore.Add(&cgA)
+	c.cgStore.Add(&cgB)
+	c.addClusterGroup(&cgA)
+	c.syncInternalGroup(cgA.Name)
+	c.addClusterGroup(&cgB)
+	c.syncInternalGroup(cgB.Name)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			actualPods, actualEEs := c.getAppliedToWorkloads(tt.inATG)
+			assert.Equal(t, tt.expEEs, actualEEs)
+			assert.Equal(t, tt.expPods, actualPods)
+		})
+	}
 }
 
 func getQueuedGroups(npc *networkPolicyController) (atGroups, addrGroups sets.String) {

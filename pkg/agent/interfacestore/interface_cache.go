@@ -190,6 +190,10 @@ func (c *interfaceCache) GetContainerInterface(containerID string) (*InterfaceCo
 	return objs[0].(*InterfaceConfig), true
 }
 
+func (c *interfaceCache) GetInterfacesByEntity(name, namespace string) []*InterfaceConfig {
+	return c.GetContainerInterfacesByPod(name, namespace)
+}
+
 // GetContainerInterfacesByPod retrieves InterfaceConfigs for the Pod.
 // It's possible that more than one container interface (with different containerIDs) has the same Pod namespace and
 // name temporarily when the previous Pod is being deleted and the new Pod is being created almost simultaneously.

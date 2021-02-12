@@ -185,7 +185,7 @@ function deliver_antrea_windows {
 
     git show --numstat
     make clean
-    docker images | grep 'antrea-ubuntu' | awk '{print $3}' | xargs -r docker rmi || true
+    docker images | grep 'antrea-ubuntu' | awk '{print $3}' | xargs -r docker rmi -f || true
     docker images | grep '<none>' | awk '{print $3}' | xargs -r docker rmi || true
     if [[ "$DOCKER_REGISTRY" != "" ]]; then
         pull_antrea_ubuntu_image
@@ -228,8 +228,8 @@ function deliver_antrea_windows {
             ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "powershell stop-service kubelet"
             ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "powershell restart-service docker"
             ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "powershell start-service kubelet"
-            ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "powershell restart-service ovsdb-server"
-            ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "powershell restart-service ovs-vswitchd"
+            ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "powershell start-service ovsdb-server"
+            ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "powershell start-service ovs-vswitchd"
             echo "===== Use script to startup antrea agent ====="
             ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "rm -rf /cygdrive/c/k/antrea && mkdir -p /cygdrive/c/k/antrea/bin && mkdir -p /cygdrive/c/k/antrea/etc && rm -rf /cygdrive/c/opt/cni/bin && mkdir -p /cygdrive/c/opt/cni/bin && mkdir -p /cygdrive/c/etc/cni/net.d"
             scp -o StrictHostKeyChecking=no -T $KUBECONFIG Administrator@${IP}:/cygdrive/c/k/config
@@ -281,7 +281,7 @@ function deliver_antrea {
 
     git show --numstat
     make clean
-    docker images | grep 'antrea-ubuntu' | awk '{print $3}' | xargs -r docker rmi || true
+    docker images | grep 'antrea-ubuntu' | awk '{print $3}' | xargs -r docker rmi -f || true
     docker images | grep '<none>' | awk '{print $3}' | xargs -r docker rmi || true
     if [[ "${DOCKER_REGISTRY}" != "" ]]; then
         pull_antrea_ubuntu_image
@@ -304,6 +304,10 @@ function deliver_antrea {
             sed -i "s|#serviceCIDR: 10.96.0.0/12|serviceCIDR: ${cidr}|g" build/yamls/antrea.yml
         fi
     done
+
+    echo  "=== Append antrea-prometheus.yml to antrea.yml ==="
+    echo "---" >> build/yamls/antrea.yml
+    cat build/yamls/antrea-prometheus.yml >> build/yamls/antrea.yml
 
     cp -f build/yamls/*.yml $WORKDIR
     docker save -o antrea-ubuntu.tar projects.registry.vmware.com/antrea/antrea-ubuntu:latest
@@ -332,7 +336,7 @@ function run_e2e {
 
     set +e
     mkdir -p `pwd`/antrea-test-logs
-    go test -v github.com/vmware-tanzu/antrea/test/e2e --logs-export-dir `pwd`/antrea-test-logs -timeout=50m
+    go test -v github.com/vmware-tanzu/antrea/test/e2e --logs-export-dir `pwd`/antrea-test-logs -timeout=50m --prometheus
     if [[ "$?" != "0" ]]; then
         TEST_FAILURE=true
     fi

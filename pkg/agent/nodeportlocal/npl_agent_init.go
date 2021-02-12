@@ -17,77 +17,71 @@
 package nodeportlocal
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"time"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/nodeportlocal/k8s"
+	nplk8s "github.com/vmware-tanzu/antrea/pkg/agent/nodeportlocal/k8s"
 	"github.com/vmware-tanzu/antrea/pkg/agent/nodeportlocal/portcache"
 	"github.com/vmware-tanzu/antrea/pkg/agent/nodeportlocal/util"
 
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
-	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/watch"
+	"k8s.io/client-go/informers"
+	coreinformers "k8s.io/client-go/informers/core/v1"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 )
 
-const resyncPeriod = 60 * time.Minute
+// Set resyncPeriod to 0 to disable resyncing.
+// UpdateFunc event handler will be called only when the object is actually updated.
+const resyncPeriod = 0 * time.Minute
 
-// InitializeNPLAgent initializes the NodePortLocal (NPL) agent.
-// It initializes the port table cache to keep track of Node ports available for use by NPL,
-// sets up event handlers to handle Pod add, update and delete events.
+// InitializeNPLAgent initializes the NodePortLocal agent.
+// It sets up event handlers to handle Pod add, update and delete events.
 // When a Pod gets created, a free Node port is obtained from the port table cache and a DNAT rule is added to NAT traffic to the Pod's ip:port.
-func InitializeNPLAgent(kubeClient clientset.Interface, portRange, nodeName string) (*k8s.Controller, error) {
+func InitializeNPLAgent(kubeClient clientset.Interface, informerFactory informers.SharedInformerFactory, portRange, nodeName string) (*nplk8s.NPLController, error) {
 	start, end, err := util.ParsePortsRange(portRange)
 	if err != nil {
-		return nil, fmt.Errorf("something went wrong while fetching port range: %v", err)
+		return nil, fmt.Errorf("error while fetching port range: %v", err)
 	}
 	var ok bool
 	portTable, ok := portcache.NewPortTable(start, end)
 	if !ok {
-		return nil, errors.New("NPL port table could not be initialized")
+		return nil, errors.New("error when initializing NodePortLocal port table")
 	}
+
 	err = portTable.PodPortRules.Init()
 	if err != nil {
 		return nil, fmt.Errorf("NPL rules for pod ports could not be initialized, error: %v", err)
 	}
-	return InitController(kubeClient, portTable, nodeName)
+
+	return InitController(kubeClient, informerFactory, portTable, nodeName)
 }
 
-// InitController creates an Informer which watches for events from Pods running on the same Node where Antea agent is running.
+// InitController initializes the NPLController with appropriate Pod and Service Informers.
 // This function can be used independently while unit testing without using InitializeNPLAgent function.
-func InitController(kubeClient clientset.Interface, portTable *portcache.PortTable, nodeName string) (*k8s.Controller, error) {
-	c := k8s.NewNPLController(kubeClient, portTable)
-	c.RemoveNPLAnnotationFromPods()
-
-	// Watch only the Pods which belong to the Node where the agent is running
-	fieldSelector := fields.OneTermEqualSelector("spec.nodeName", nodeName)
-	optionsModifier := func(options *metav1.ListOptions) {
-		options.FieldSelector = fieldSelector.String()
+func InitController(kubeClient clientset.Interface, informerFactory informers.SharedInformerFactory, portTable *portcache.PortTable, nodeName string) (*nplk8s.NPLController, error) {
+	// Watch only the Pods which belong to the Node where the agent is running.
+	listOptions := func(options *metav1.ListOptions) {
+		options.FieldSelector = fields.OneTermEqualSelector("spec.nodeName", nodeName).String()
 	}
-	lw := &cache.ListWatch{
-		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
-			optionsModifier(&options)
-			return kubeClient.CoreV1().Pods(metav1.NamespaceAll).List(context.TODO(), options)
-		},
-		WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
-			optionsModifier(&options)
-			return kubeClient.CoreV1().Pods(metav1.NamespaceAll).Watch(context.TODO(), options)
-		},
-	}
-
-	cacheStore, controller := cache.NewInformer(lw, &corev1.Pod{}, resyncPeriod,
-		cache.ResourceEventHandlerFuncs{
-			AddFunc:    c.EnqueueObj,
-			DeleteFunc: c.EnqueueObj,
-			UpdateFunc: func(old, cur interface{}) { c.EnqueueObj(cur) },
-		},
+	podInformer := coreinformers.NewFilteredPodInformer(
+		kubeClient,
+		metav1.NamespaceAll,
+		resyncPeriod,
+		cache.Indexers{},
+		listOptions,
 	)
-	c.CacheStore = cacheStore
-	c.Ctrl = controller
+
+	svcInformer := informerFactory.Core().V1().Services().Informer()
+
+	c := nplk8s.NewNPLController(kubeClient,
+		podInformer,
+		svcInformer,
+		resyncPeriod,
+		portTable,
+		nodeName)
+
 	return c, nil
 }

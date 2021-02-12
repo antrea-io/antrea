@@ -18,6 +18,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -38,6 +39,7 @@ import (
 	ofconfig "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsctl"
+	antrearuntime "github.com/vmware-tanzu/antrea/pkg/util/runtime"
 	ofTestUtils "github.com/vmware-tanzu/antrea/test/integration/ovs"
 	k8sproxy "github.com/vmware-tanzu/antrea/third_party/proxy"
 )
@@ -100,7 +102,13 @@ func TestConnectivityFlows(t *testing.T) {
 	// Initialize ovs metrics (Prometheus) to test them
 	metrics.InitializeOVSMetrics()
 
-	c = ofClient.NewClient(br, bridgeMgmtAddr, true, false)
+	// Hack the OS type if we run the test not on Windows Node.
+	// Because we test some Windows only functions.
+	if !antrearuntime.IsWindowsPlatform() {
+		antrearuntime.WindowsOS = runtime.GOOS
+	}
+
+	c = ofClient.NewClient(br, bridgeMgmtAddr, ovsconfig.OVSDatapathNetdev, true, false)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge: %v", err))
 	defer func() {
@@ -127,7 +135,7 @@ func TestConnectivityFlows(t *testing.T) {
 }
 
 func TestReplayFlowsConnectivityFlows(t *testing.T) {
-	c = ofClient.NewClient(br, bridgeMgmtAddr, true, false)
+	c = ofClient.NewClient(br, bridgeMgmtAddr, ovsconfig.OVSDatapathNetdev, true, false)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge: %v", err))
 
@@ -154,7 +162,7 @@ func TestReplayFlowsConnectivityFlows(t *testing.T) {
 }
 
 func TestReplayFlowsNetworkPolicyFlows(t *testing.T) {
-	c = ofClient.NewClient(br, bridgeMgmtAddr, true, false)
+	c = ofClient.NewClient(br, bridgeMgmtAddr, ovsconfig.OVSDatapathNetdev, true, false)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge: %v", err))
 
@@ -208,6 +216,7 @@ func TestReplayFlowsNetworkPolicyFlows(t *testing.T) {
 func testExternalFlows(t *testing.T, config *testConfig) {
 	nodeIP := config.nodeConfig.NodeIPAddr.IP
 	localSubnet := config.nodeConfig.PodIPv4CIDR
+
 	if err := c.InstallExternalFlows(); err != nil {
 		t.Errorf("Failed to install OpenFlow entries to allow Pod to communicate to the external addresses: %v", err)
 	}
@@ -326,7 +335,7 @@ func TestNetworkPolicyFlows(t *testing.T) {
 	// Initialize ovs metrics (Prometheus) to test them
 	metrics.InitializeOVSMetrics()
 
-	c = ofClient.NewClient(br, bridgeMgmtAddr, true, false)
+	c = ofClient.NewClient(br, bridgeMgmtAddr, ovsconfig.OVSDatapathNetdev, true, false)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge %s", br))
 
@@ -436,7 +445,7 @@ func TestIPv6ConnectivityFlows(t *testing.T) {
 	// Initialize ovs metrics (Prometheus) to test them
 	metrics.InitializeOVSMetrics()
 
-	c = ofClient.NewClient(br, bridgeMgmtAddr, true, false)
+	c = ofClient.NewClient(br, bridgeMgmtAddr, ovsconfig.OVSDatapathNetdev, true, false)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge: %v", err))
 
@@ -467,7 +476,7 @@ type svcConfig struct {
 }
 
 func TestProxyServiceFlows(t *testing.T) {
-	c = ofClient.NewClient(br, bridgeMgmtAddr, true, false)
+	c = ofClient.NewClient(br, bridgeMgmtAddr, ovsconfig.OVSDatapathNetdev, true, false)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge %s", br))
 
@@ -1031,7 +1040,7 @@ func prepareGatewayFlows(gwIPs []net.IP, gwMAC net.HardwareAddr, vMAC net.Hardwa
 				uint8(70),
 				[]*ofTestUtils.ExpectFlow{
 					{
-						MatchStr: fmt.Sprintf("priority=200,%s,dl_dst=%s,%s=%s", ipProtoStr, vMAC.String(), nwDstStr, gwIP.String()),
+						MatchStr: fmt.Sprintf("priority=200,%s,reg0=0x80000/0x80000,%s=%s", ipProtoStr, nwDstStr, gwIP.String()),
 						ActStr:   fmt.Sprintf("set_field:%s->eth_dst,goto_table:80", gwMAC.String()),
 					},
 				},
@@ -1263,7 +1272,7 @@ func prepareExternalFlows(nodeIP net.IP, localSubnet *net.IPNet, vMAC net.Hardwa
 			[]*ofTestUtils.ExpectFlow{
 				{
 					MatchStr: fmt.Sprintf("priority=200,ip,reg0=0x4/0xffff"),
-					ActStr:   "goto_table:30",
+					ActStr:   "ct(table=30,zone=65500,nat)",
 				},
 			},
 		},
@@ -1312,8 +1321,16 @@ func prepareExternalFlows(nodeIP net.IP, localSubnet *net.IPNet, vMAC net.Hardwa
 			uint8(105),
 			[]*ofTestUtils.ExpectFlow{
 				{
-					MatchStr: "priority=200,ct_state=+new+trk,ip,reg0=0x20000/0x20000",
+					MatchStr: "priority=200,ct_state=+new+trk-dnat,ip,reg0=0x20000/0x20000",
 					ActStr:   fmt.Sprintf("ct(commit,table=110,zone=65520,nat(src=%s),exec(load:0x40->NXM_NX_CT_MARK[]))", nodeIP.String()),
+				},
+				{
+					MatchStr: "priority=200,ct_state=+new+trk+dnat,ip,reg0=0x20000/0x20000",
+					ActStr:   fmt.Sprintf("ct(commit,table=110,zone=65500,nat(src=%s),exec(load:0x40->NXM_NX_CT_MARK[]))", nodeIP.String()),
+				},
+				{
+					MatchStr: "priority=200,ct_state=-new+trk+dnat,ip,reg0=0x20000/0x20000",
+					ActStr:   "ct(table=110,zone=65500,nat)",
 				},
 			},
 		},

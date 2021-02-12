@@ -199,10 +199,10 @@ func (data *TestData) setupDifferentNamedPorts(t *testing.T) (checkFn func(), cl
 		// Both clients can connect to both servers.
 		for _, clientName := range []string{client0Name, client1Name} {
 			if err := data.runNetcatCommandFromTestPod(clientName, server0IP, server0Port); err != nil {
-				t.Fatalf("Pod %s should be able to connect %s:%d, but was not able to connect", clientName, server0IP, server0Port)
+				t.Fatalf("Pod %s should be able to connect %s, but was not able to connect", clientName, net.JoinHostPort(server0IP, fmt.Sprint(server0Port)))
 			}
 			if err := data.runNetcatCommandFromTestPod(clientName, server1IP, server1Port); err != nil {
-				t.Fatalf("Pod %s should be able to connect %s:%d, but was not able to connect", clientName, server1IP, server1Port)
+				t.Fatalf("Pod %s should be able to connect %s, but was not able to connect", clientName, net.JoinHostPort(server1IP, fmt.Sprint(server1Port)))
 			}
 		}
 	}
@@ -258,19 +258,21 @@ func (data *TestData) setupDifferentNamedPorts(t *testing.T) (checkFn func(), cl
 	})
 
 	npCheck := func(server0IP, server1IP string) {
+		server0Address := net.JoinHostPort(server0IP, fmt.Sprint(server0Port))
+		server1Address := net.JoinHostPort(server1IP, fmt.Sprint(server1Port))
 		// client0 can connect to both servers.
 		if err = data.runNetcatCommandFromTestPod(client0Name, server0IP, server0Port); err != nil {
-			t.Fatalf("Pod %s should be able to connect %s:%d, but was not able to connect", client0Name, server0IP, server0Port)
+			t.Fatalf("Pod %s should be able to connect %s, but was not able to connect", client0Name, server0Address)
 		}
 		if err = data.runNetcatCommandFromTestPod(client0Name, server1IP, server1Port); err != nil {
-			t.Fatalf("Pod %s should be able to connect %s:%d, but was not able to connect", client0Name, server1IP, server1Port)
+			t.Fatalf("Pod %s should be able to connect %s, but was not able to connect", client0Name, server1Address)
 		}
 		// client1 cannot connect to both servers.
 		if err = data.runNetcatCommandFromTestPod(client1Name, server0IP, server0Port); err == nil {
-			t.Fatalf("Pod %s should not be able to connect %s:%d, but was able to connect", client1Name, server0IP, server0Port)
+			t.Fatalf("Pod %s should not be able to connect %s, but was able to connect", client1Name, server0Address)
 		}
 		if err = data.runNetcatCommandFromTestPod(client1Name, server1IP, server1Port); err == nil {
-			t.Fatalf("Pod %s should not be able to connect %s:%d, but was able to connect", client1Name, server1IP, server1Port)
+			t.Fatalf("Pod %s should not be able to connect %s, but was able to connect", client1Name, server1Address)
 		}
 	}
 
@@ -286,6 +288,80 @@ func (data *TestData) setupDifferentNamedPorts(t *testing.T) (checkFn func(), cl
 	}
 	success = true
 	return
+}
+
+// TestDefaultDenyIngressPolicy performs additional validation to the upstream test for deny-all policy:
+// 1. The traffic initiated from the host network namespace cannot be dropped.
+// 2. The traffic initiated externally that access the Pod via NodePort service can be dropped (skipped if provider is kind).
+func TestDefaultDenyIngressPolicy(t *testing.T) {
+	data, err := setupTest(t)
+	if err != nil {
+		t.Fatalf("Error when setting up test: %v", err)
+	}
+	defer teardownTest(t, data)
+
+	serverNode := workerNodeName(1)
+	serverNodeIP := workerNodeIP(1)
+	serverPort := 80
+	_, serverIPs, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "test-server-", serverNode)
+	defer cleanupFunc()
+
+	service, err := data.createService("nginx", serverPort, serverPort, map[string]string{"app": "nginx"}, false, corev1.ServiceTypeNodePort, nil)
+	if err != nil {
+		t.Fatalf("Error when creating nginx NodePort service: %v", err)
+	}
+	defer data.deleteService(service.Name)
+
+	// client1 is a host network Pod and is on the same node as the server Pod, simulating kubelet probe traffic.
+	client1Name, _, cleanupFunc := createAndWaitForPod(t, data, data.createHostNetworkBusyboxPodOnNode, "test-hostnetwork-client-", serverNode)
+	defer cleanupFunc()
+
+	// client2 is a host network Pod and is on a different node from the server Pod, accessing the server Pod via the NodePort service.
+	client2Name, _, cleanupFunc := createAndWaitForPod(t, data, data.createHostNetworkBusyboxPodOnNode, "test-hostnetwork-client-", controlPlaneNodeName())
+	defer cleanupFunc()
+
+	spec := &networkingv1.NetworkPolicySpec{
+		PodSelector: metav1.LabelSelector{},
+		PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
+		Ingress:     []networkingv1.NetworkPolicyIngressRule{},
+	}
+	np, err := data.createNetworkPolicy("test-networkpolicy-deny-all-ingress", spec)
+	if err != nil {
+		t.Fatalf("Error when creating network policy: %v", err)
+	}
+	defer func() {
+		if err = data.deleteNetworkpolicy(np); err != nil {
+			t.Fatalf("Error when deleting network policy: %v", err)
+		}
+	}()
+
+	npCheck := func(clientName, serverIP string, serverPort int, wantErr bool) {
+		if err = data.runNetcatCommandFromTestPod(clientName, serverIP, serverPort); wantErr && err == nil {
+			t.Fatalf("Pod %s should not be able to connect %s, but was able to connect", clientName, net.JoinHostPort(serverIP, fmt.Sprint(serverPort)))
+		} else if !wantErr && err != nil {
+			t.Fatalf("Pod %s should be able to connect %s, but was not able to connect", clientName, net.JoinHostPort(serverIP, fmt.Sprint(serverPort)))
+		}
+	}
+
+	// Locally generated traffic can always access the Pods regardless of NetworkPolicy configuration.
+	if clusterInfo.podV4NetworkCIDR != "" {
+		npCheck(client1Name, serverIPs.ipv4.String(), serverPort, false)
+	}
+	if clusterInfo.podV6NetworkCIDR != "" {
+		npCheck(client1Name, serverIPs.ipv6.String(), serverPort, false)
+	}
+
+	if testOptions.providerName == "kind" {
+		t.Logf("Skipped testing NodePort traffic for TestDefaultDenyIngressPolicy because pkt_mark is not properly supported on OVS netdev datapath")
+	} else {
+		if clusterInfo.podV4NetworkCIDR != "" {
+			npCheck(client2Name, serverIPs.ipv4.String(), serverPort, true)
+		}
+		if clusterInfo.podV6NetworkCIDR != "" {
+			npCheck(client2Name, serverIPs.ipv6.String(), serverPort, true)
+		}
+		npCheck(client2Name, serverNodeIP, int(service.Spec.Ports[0].NodePort), true)
+	}
 }
 
 func TestDefaultDenyEgressPolicy(t *testing.T) {
@@ -304,7 +380,7 @@ func TestDefaultDenyEgressPolicy(t *testing.T) {
 
 	preCheckFunc := func(serverIP string) {
 		if err = data.runNetcatCommandFromTestPod(clientName, serverIP, serverPort); err != nil {
-			t.Fatalf("Pod %s should be able to connect %s:%d, but was not able to connect", clientName, serverIP, serverPort)
+			t.Fatalf("Pod %s should be able to connect %s, but was not able to connect", clientName, net.JoinHostPort(serverIP, fmt.Sprint(serverPort)))
 		}
 	}
 	if clusterInfo.podV4NetworkCIDR != "" {
@@ -331,7 +407,7 @@ func TestDefaultDenyEgressPolicy(t *testing.T) {
 
 	npCheck := func(serverIP string) {
 		if err = data.runNetcatCommandFromTestPod(clientName, serverIP, serverPort); err == nil {
-			t.Fatalf("Pod %s should not be able to connect %s:%d, but was able to connect", clientName, serverIP, serverPort)
+			t.Fatalf("Pod %s should not be able to connect %s, but was able to connect", clientName, net.JoinHostPort(serverIP, fmt.Sprint(serverPort)))
 		}
 	}
 
@@ -629,7 +705,7 @@ func TestIngressPolicyWithoutPortNumber(t *testing.T) {
 		// Both clients can connect to server.
 		for _, clientName := range []string{client0Name, client1Name} {
 			if err = data.runNetcatCommandFromTestPod(clientName, serverIP, serverPort); err != nil {
-				t.Fatalf("Pod %s should be able to connect %s:%d, but was not able to connect", clientName, serverIP, serverPort)
+				t.Fatalf("Pod %s should be able to connect %s, but was not able to connect", clientName, net.JoinHostPort(serverIP, fmt.Sprint(serverPort)))
 			}
 		}
 	}
@@ -673,13 +749,14 @@ func TestIngressPolicyWithoutPortNumber(t *testing.T) {
 	}()
 
 	npCheck := func(serverIP string) {
+		serverAddress := net.JoinHostPort(serverIP, fmt.Sprint(serverPort))
 		// Client0 can access server.
 		if err = data.runNetcatCommandFromTestPod(client0Name, serverIP, serverPort); err != nil {
-			t.Fatalf("Pod %s should be able to connect %s:%d, but was not able to connect", client0Name, serverIP, serverPort)
+			t.Fatalf("Pod %s should be able to connect %s, but was not able to connect", client0Name, serverAddress)
 		}
 		// Client1 can't access server.
 		if err = data.runNetcatCommandFromTestPod(client1Name, serverIP, serverPort); err == nil {
-			t.Fatalf("Pod %s should not be able to connect %s:%d, but was able to connect", client1Name, serverIP, serverPort)
+			t.Fatalf("Pod %s should not be able to connect %s, but was able to connect", client1Name, serverAddress)
 		}
 	}
 
@@ -700,6 +777,21 @@ func createAndWaitForPod(t *testing.T, data *TestData, createFunc func(name stri
 		deletePodWrapper(t, data, name)
 	}
 	podIP, err := data.podWaitForIPs(defaultTimeout, name, testNamespace)
+	if err != nil {
+		cleanupFunc()
+		t.Fatalf("Error when waiting for IP for Pod '%s': %v", name, err)
+	}
+	return name, podIP, cleanupFunc
+}
+
+func createAndWaitForPodWithLabels(t *testing.T, data *TestData, createFunc func(name, ns string, portNum int, labels map[string]string) error, name, ns string, portNum int, labels map[string]string) (string, *PodIPs, func()) {
+	if err := createFunc(name, ns, portNum, labels); err != nil {
+		t.Fatalf("Error when creating busybox test Pod: %v", err)
+	}
+	cleanupFunc := func() {
+		deletePodWrapper(t, data, name)
+	}
+	podIP, err := data.podWaitForIPs(defaultTimeout, name, ns)
 	if err != nil {
 		cleanupFunc()
 		t.Fatalf("Error when waiting for IP for Pod '%s': %v", name, err)

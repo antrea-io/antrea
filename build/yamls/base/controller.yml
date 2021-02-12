@@ -155,6 +155,21 @@ webhooks:
   admissionReviewVersions: ["v1", "v1beta1"]
   sideEffects: None
   timeoutSeconds: 5
+- name: "clustergroupvalidator.antrea.tanzu.vmware.com"
+  clientConfig:
+    service:
+      name: "antrea"
+      namespace: "kube-system"
+      path: "/validate/clustergroup"
+  rules:
+    - operations: ["CREATE", "UPDATE", "DELETE"]
+      apiGroups: ["core.antrea.tanzu.vmware.com"]
+      apiVersions: ["v1alpha2"]
+      resources: ["clustergroups"]
+      scope: "Cluster"
+  admissionReviewVersions: ["v1", "v1beta1"]
+  sideEffects: None
+  timeoutSeconds: 5
 ---
 apiVersion: apiregistration.k8s.io/v1
 kind: APIService
@@ -234,10 +249,19 @@ spec:
           readinessProbe:
             httpGet:
               host: 127.0.0.1
-              path: /healthz
+              path: /readyz
               port: api
               scheme: HTTPS
             initialDelaySeconds: 5
+            timeoutSeconds: 5
+            periodSeconds: 10
+            failureThreshold: 5
+          livenessProbe:
+            httpGet:
+              host: 127.0.0.1
+              path: /livez
+              port: api
+              scheme: HTTPS
             timeoutSeconds: 5
             periodSeconds: 10
             failureThreshold: 5

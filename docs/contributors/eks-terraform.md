@@ -10,7 +10,7 @@ describes the steps to create an EKS cluster with Antrea using terraform.
    <https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-configure.html>
 2. Install aws-iam-authenticator, see
    <https://docs.aws.amazon.com/eks/latest/userguide/install-aws-iam-authenticator.html>
-3. Install terraform, see <https://learn.hashicorp.com/terraform/getting-started/install.html>
+3. Install terraform, see <https://learn.hashicorp.com/tutorials/terraform/install-cli>
 4. You must already have ssh key-pair created. This key pair will be used to access worker Node via ssh.
 
 ```bash

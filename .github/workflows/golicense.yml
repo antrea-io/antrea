@@ -2,11 +2,11 @@ name: Golicense
 on:
   pull_request:
     branches:
-    - master
+    - main
     - release-*
   push:
     branches:
-    - master
+    - main
     - release-*
   release:
     types:
@@ -15,15 +15,15 @@ on:
 jobs:
   check-changes:
     name: Check whether tests need to be run based on diff
-    runs-on: [ubuntu-18.04]
+    runs-on: [ubuntu-latest]
     steps:
     - uses: actions/checkout@v2
       with:
         fetch-depth: 0
-    - uses: vmware-tanzu/antrea/ci/gh-actions/has-changes@master
+    - uses: vmware-tanzu/antrea/ci/gh-actions/has-changes@main
       id: check_diff
       with:
-        args: docs/* ci/jenkins/* *.md
+        args: docs/* ci/jenkins/* *.md hack/.notableofcontents
     outputs:
       has_changes: ${{ steps.check_diff.outputs.has_changes }}
 
@@ -41,10 +41,10 @@ jobs:
       uses: actions/cache@v2
       id: cache
       env:
-        cache-name: cache-deps-licensing-info
+        cache-name: cache-lichen-deps-licensing-info
       with:
         path: license-reports
-        key: ${{ runner.os }}-${{ env.cache-name }}-${{ hashFiles('**/go.sum') }}
+        key: ${{ runner.os }}-${{ env.cache-name }}-${{ hashFiles('**/go.sum', 'ci/golicense/**') }}
     - run: mkdir antrea-bins
     - name: Build assets
       run: |
@@ -52,10 +52,8 @@ jobs:
         ./hack/release/prepare-assets.sh ./antrea-bins
     - name: Build Linux binaries
       run: BINDIR=./antrea-bins make bin
-    - name: Run golicense
+    - name: Run lichen
       if: steps.cache.outputs.cache-hit != 'true'
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         mkdir license-reports
         ./ci/golicense/run.sh ./antrea-bins ./license-reports

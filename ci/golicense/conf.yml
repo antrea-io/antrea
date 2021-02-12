@@ -1,0 +1,23 @@
+allow:
+- "MIT"
+- "Apache-2.0"
+- "BSD-2-Clause"
+- "BSD-3-Clause"
+- "MPL-2.0"
+- "ISC"
+- "EPL-1.0"
+
+override:
+- path: "github.com/gogo/protobuf"
+  licenses: ["BSD-3-Clause"]
+- path: "sigs.k8s.io/yaml"
+  licenses: ["MIT"]
+- path: "../../"
+  licenses: ["Apache-2.0"]
+- path: "github.com/docker/spdystream"
+  licenses: ["Apache-2.0"]
+
+exceptions:
+  unresolvableLicense:
+  - path: "github.com/TomCodeLV/OVSDB-golang-lib"
+    licenses: ["Apache-2.0"]

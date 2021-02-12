@@ -16,6 +16,7 @@ rules:
       - nodes
       - pods
       - namespaces
+      - services
     verbs:
       - get
       - watch
@@ -148,10 +149,17 @@ rules:
     - core.antrea.tanzu.vmware.com
     resources:
       - externalentities
+      - clustergroups
     verbs:
       - get
       - watch
       - list
+  - apiGroups:
+    - core.antrea.tanzu.vmware.com
+    resources:
+      - clustergroups/status
+    verbs:
+      - update
 ---
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1

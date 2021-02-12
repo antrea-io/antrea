@@ -1,4 +1,4 @@
-// Copyright 2020 Antrea Authors
+// Copyright 2021 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -117,6 +117,18 @@ func (m *MockInterface) Reconcile(arg0 []string) error {
 func (mr *MockInterfaceMockRecorder) Reconcile(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Reconcile", reflect.TypeOf((*MockInterface)(nil).Reconcile), arg0)
+}
+
+// Run mocks base method
+func (m *MockInterface) Run(arg0 <-chan struct{}) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "Run", arg0)
+}
+
+// Run indicates an expected call of Run
+func (mr *MockInterfaceMockRecorder) Run(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Run", reflect.TypeOf((*MockInterface)(nil).Run), arg0)
 }
 
 // UnMigrateRoutesFromGw mocks base method

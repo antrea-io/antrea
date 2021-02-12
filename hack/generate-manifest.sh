@@ -29,6 +29,7 @@ Generate a YAML manifest for Antrea using Kustomize and print it to stdout.
         --ipsec                       Generate a manifest with IPSec encryption of tunnel traffic enabled
         --all-features                Generate a manifest with all alpha features enabled
         --no-proxy                    Generate a manifest with Antrea proxy disabled
+        --endpointslice               Generate a manifest with EndpointSlice support enabled
         --np                          Generate a manifest with ClusterNetworkPolicy and Antrea NetworkPolicy features enabled
         --k8s-1.15                    Generates a manifest which supports Kubernetes 1.15.
         --keep                        Debug flag which will preserve the generated kustomization.yml
@@ -62,6 +63,7 @@ KIND=false
 IPSEC=false
 ALLFEATURES=false
 PROXY=true
+ENDPOINTSLICE=false
 NP=false
 KEEP=false
 ENCAP_MODE=""
@@ -106,6 +108,11 @@ case $key in
     PROXY=false
     shift
     ;;
+    --endpointslice)
+    PROXY=true
+    ENDPOINTSLICE=true
+    shift
+    ;;
     --np)
     NP=true
     shift
@@ -148,6 +155,12 @@ case $key in
     ;;
 esac
 done
+
+if [ "$PROXY" == false ] && [ "$ENDPOINTSLICE" == true ]; then
+    echoerr "--endpointslice requires AntreaProxy and therefore cannot be used with --no-proxy"
+    print_help
+    exit 1
+fi
 
 if [ "$MODE" != "dev" ] && [ "$MODE" != "release" ]; then
     echoerr "--mode must be one of 'dev' or 'release'"
@@ -230,10 +243,15 @@ if $ALLFEATURES; then
     sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*AntreaPolicy[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  AntreaPolicy: true/" antrea-agent.conf
     sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*FlowExporter[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  FlowExporter: true/" antrea-agent.conf
     sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*NetworkPolicyStats[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  NetworkPolicyStats: true/" antrea-agent.conf
+    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*EndpointSlice[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  EndpointSlice: true/" antrea-agent.conf
 fi
 
 if ! $PROXY; then
     sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*AntreaProxy[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  AntreaProxy: false/" antrea-agent.conf
+fi
+
+if $ENDPOINTSLICE; then
+    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*EndpointSlice[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  EndpointSlice: true/" antrea-agent.conf
 fi
 
 if $NP; then

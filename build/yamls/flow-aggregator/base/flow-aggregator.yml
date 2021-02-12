@@ -5,6 +5,79 @@ metadata:
   name: flow-aggregator
 ---
 apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: flow-aggregator-ca
+  namespace: flow-aggregator
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: flow-aggregator
+  namespace: flow-aggregator
+---
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: flow-aggregator-role
+  namespace: flow-aggregator
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    resourceNames: ["flow-aggregator-ca"]
+    verbs: ["get", "update"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: ["flow-aggregator-client-tls"]
+    verbs: ["get", "update"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["create"]
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: flow-aggregator-role-binding
+  namespace: flow-aggregator
+subjects:
+  - kind: ServiceAccount
+    name: flow-aggregator
+    namespace: flow-aggregator
+roleRef:
+  kind: Role
+  name: flow-aggregator-role
+  apiGroup: rbac.authorization.k8s.io
+---
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: flow-exporter-role
+  namespace: flow-aggregator
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    resourceNames: ["flow-aggregator-ca"]
+    verbs: ["get"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: ["flow-aggregator-client-tls"]
+    verbs: ["get"]
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: flow-exporter-role-binding
+  namespace: flow-aggregator
+subjects:
+- kind: ServiceAccount
+  name: antrea-agent
+  namespace: kube-system
+roleRef:
+  kind: Role
+  name: flow-exporter-role
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: v1
 kind: Service
 metadata:
   name: flow-aggregator
@@ -55,6 +128,7 @@ spec:
           name: flow-aggregator-config
           readOnly: true
           subPath: flow-aggregator.conf
+      serviceAccountName: flow-aggregator
       volumes:
       - name: flow-aggregator-config
         configMap:

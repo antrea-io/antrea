@@ -4070,3 +4070,51 @@
   113:
     - :string
     - :egressNetworkPolicyNamespace
+  120:
+    - :uint64
+    - :packetTotalCountFromSourceNode
+  121:
+    - :uint64
+    - :octetTotalCountFromSourceNode
+  122:
+    - :uint64
+    - :packetDeltaCountFromSourceNode
+  123:
+    - :uint64
+    - :octetDeltaCountFromSourceNode
+  124:
+    - :uint64
+    - :reversePacketTotalCountFromSourceNode
+  125:
+    - :uint64
+    - :reverseOctetTotalCountFromSourceNode
+  126:
+    - :uint64
+    - :reversePacketDeltaCountFromSourceNode
+  127:
+    - :uint64
+    - :reverseOctetDeltaCountFromSourceNode
+  128:
+    - :uint64
+    - :packetTotalCountFromDestinationNode
+  129:
+    - :uint64
+    - :octetTotalCountFromDestinationNode
+  130:
+    - :uint64
+    - :packetDeltaCountFromDestinationNode
+  131:
+    - :uint64
+    - :octetDeltaCountFromDestinationNode
+  132:
+    - :uint64
+    - :reversePacketTotalCountFromDestinationNode
+  133:
+    - :uint64
+    - :reverseOctetTotalCountFromDestinationNode
+  134:
+    - :uint64
+    - :reversePacketDeltaCountFromDestinationNode
+  135:
+    - :uint64
+    - :reverseOctetDeltaCountFromDestinationNode

@@ -66,6 +66,8 @@ func testFlowExporter_sendTemplateSet(t *testing.T, v4Enabled bool, v6Enabled bo
 		v4Enabled,
 		v6Enabled,
 		nil,
+		false,
+		nil,
 	}
 
 	if v4Enabled {
@@ -170,6 +172,8 @@ func testFlowExporter_sendDataSet(t *testing.T, v4Enabled bool, v6Enabled bool) 
 		mockIPFIXRegistry,
 		v4Enabled,
 		v6Enabled,
+		nil,
+		false,
 		nil,
 	}
 

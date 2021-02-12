@@ -38,9 +38,9 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/agent/route"
+	"github.com/vmware-tanzu/antrea/pkg/agent/types"
 	"github.com/vmware-tanzu/antrea/pkg/agent/util"
 	cnipb "github.com/vmware-tanzu/antrea/pkg/apis/cni/v1beta1"
-	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
 	"github.com/vmware-tanzu/antrea/pkg/cni"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
 )
@@ -106,10 +106,8 @@ type CNIServer struct {
 	kubeClient           clientset.Interface
 	containerAccess      *containerAccessArbitrator
 	podConfigurator      *podConfigurator
-	// podUpdates is a channel for notifying Pod updates to other components, i.e NetworkPolicyController.
-	podUpdates  chan<- v1beta2.PodReference
-	isChaining  bool
-	routeClient route.Interface
+	isChaining           bool
+	routeClient          route.Interface
 	// networkReadyCh notifies that the network is ready so new Pods can be created. Therefore, CmdAdd waits for it.
 	networkReadyCh <-chan struct{}
 }
@@ -448,13 +446,11 @@ func (s *CNIServer) CmdAdd(ctx context.Context, request *cnipb.CniCmdRequest) (*
 		cniConfig.DeviceID,
 		result,
 		isInfraContainer,
+		s.containerAccess,
 	); err != nil {
 		klog.Errorf("Failed to configure interfaces for container %s: %v", cniConfig.ContainerId, err)
 		return s.configInterfaceFailureResponse(err), nil
 	}
-
-	// Notify the Pod update event to required components.
-	s.podUpdates <- v1beta2.PodReference{Name: podName, Namespace: podNamespace}
 
 	var resultBytes bytes.Buffer
 	_ = result.PrintTo(&resultBytes)
@@ -533,7 +529,6 @@ func New(
 	cniSocket, hostProcPathPrefix string,
 	nodeConfig *config.NodeConfig,
 	kubeClient clientset.Interface,
-	podUpdates chan<- v1beta2.PodReference,
 	isChaining bool,
 	routeClient route.Interface,
 	networkReadyCh <-chan struct{},
@@ -546,7 +541,6 @@ func New(
 		hostProcPathPrefix:   hostProcPathPrefix,
 		kubeClient:           kubeClient,
 		containerAccess:      newContainerAccessArbitrator(),
-		podUpdates:           podUpdates,
 		isChaining:           isChaining,
 		routeClient:          routeClient,
 		networkReadyCh:       networkReadyCh,
@@ -557,10 +551,13 @@ func (s *CNIServer) Initialize(
 	ovsBridgeClient ovsconfig.OVSBridgeClient,
 	ofClient openflow.Client,
 	ifaceStore interfacestore.InterfaceStore,
-	ovsDatapathType string,
+	entityUpdates chan<- types.EntityReference,
 ) error {
 	var err error
-	s.podConfigurator, err = newPodConfigurator(ovsBridgeClient, ofClient, s.routeClient, ifaceStore, s.nodeConfig.GatewayConfig.MAC, ovsDatapathType, ovsBridgeClient.IsHardwareOffloadEnabled())
+	s.podConfigurator, err = newPodConfigurator(
+		ovsBridgeClient, ofClient, s.routeClient, ifaceStore, s.nodeConfig.GatewayConfig.MAC,
+		ovsBridgeClient.GetOVSDatapathType(), ovsBridgeClient.IsHardwareOffloadEnabled(), entityUpdates,
+	)
 	if err != nil {
 		return fmt.Errorf("error during initialize podConfigurator: %v", err)
 	}
@@ -609,11 +606,10 @@ func (s *CNIServer) interceptAdd(cniConfig *CNIConfig) (*cnipb.CniCmdResponse, e
 		cniConfig.ContainerId,
 		s.hostNetNsPath(cniConfig.Netns),
 		cniConfig.Ifname,
-		prevResult.IPs); err != nil {
+		prevResult.IPs,
+		s.containerAccess); err != nil {
 		return &cnipb.CniCmdResponse{CniResult: result}, fmt.Errorf("failed to connect container %s to ovs: %w", cniConfig.ContainerId, err)
 	}
-	// Notify the Pod update event to required components.
-	s.podUpdates <- v1beta2.PodReference{Name: podName, Namespace: podNamespace}
 
 	return &cnipb.CniCmdResponse{CniResult: cniConfig.NetworkConfiguration}, nil
 }
@@ -647,7 +643,7 @@ func (s *CNIServer) reconcile() error {
 		return fmt.Errorf("failed to list Pods running on Node %s: %v", s.nodeConfig.Name, err)
 	}
 
-	return s.podConfigurator.reconcile(pods.Items)
+	return s.podConfigurator.reconcile(pods.Items, s.containerAccess)
 }
 
 func init() {

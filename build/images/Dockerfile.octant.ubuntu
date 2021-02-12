@@ -7,7 +7,7 @@ WORKDIR /antrea/plugins/octant
 RUN make octant-plugins
 
 
-FROM ubuntu:18.04
+FROM ubuntu:20.04
 
 LABEL maintainer="Antrea <projectantrea-dev@googlegroups.com>"
 LABEL description="A docker image to deploy octant and antrea related octant plugins."

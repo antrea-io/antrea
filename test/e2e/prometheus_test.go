@@ -21,6 +21,7 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -45,6 +46,11 @@ var antreaAgentMetrics = []string{
 	"antrea_agent_conntrack_total_connection_count",
 	"antrea_agent_conntrack_antrea_connection_count",
 	"antrea_agent_conntrack_max_connection_count",
+	"antrea_proxy_sync_proxy_rules_duration_seconds",
+	"antrea_proxy_total_endpoints_installed",
+	"antrea_proxy_total_endpoints_updates",
+	"antrea_proxy_total_services_installed",
+	"antrea_proxy_total_services_updates",
 }
 
 // Controller metrics to validate
@@ -151,6 +157,7 @@ func testPrometheusMetricsOnPods(t *testing.T, data *TestData, component string,
 
 	var hostIP = ""
 	var hostPort int32 = 0
+	var address = ""
 	var parser expfmt.TextParser
 
 	// Find Pods' API endpoints, check for metrics existence on each of them
@@ -161,8 +168,9 @@ func testPrometheusMetricsOnPods(t *testing.T, data *TestData, component string,
 		for _, container := range pod.Spec.Containers {
 			for _, port := range container.Ports {
 				hostPort = port.HostPort
-				t.Logf("Found %s %d", hostIP, hostPort)
-				respBody := getMetricsFromApiServer(t, fmt.Sprintf("https://%s:%d/metrics", hostIP, hostPort), token)
+				address := net.JoinHostPort(hostIP, fmt.Sprint(hostPort))
+				t.Logf("Found %s", address)
+				respBody := getMetricsFromApiServer(t, fmt.Sprintf("https://%s/metrics", address), token)
 
 				parsed, err := parser.TextToMetricFamilies(strings.NewReader(respBody))
 				if err != nil {
@@ -179,13 +187,13 @@ func testPrometheusMetricsOnPods(t *testing.T, data *TestData, component string,
 				for _, metric := range metrics {
 					if !testMap[metric] {
 						metricsFound = false
-						t.Errorf("Metric %s not found on %s:%d", metric, hostIP, hostPort)
+						t.Errorf("Metric %s not found on %s", metric, address)
 					}
 				}
 			}
 		}
 		if !metricsFound {
-			t.Fatalf("Some metrics do not exist in pods on %s:%d", hostIP, hostPort)
+			t.Fatalf("Some metrics do not exist in pods on %s", address)
 		}
 	}
 }
@@ -259,7 +267,8 @@ func testMetricsFromPrometheusServer(t *testing.T, data *TestData, prometheusJob
 	// Target metadata API(/api/v1/targets/metadata) has been available since Prometheus v2.4.0.
 	// This API is still experimental in Prometheus v2.19.3.
 	path := url.PathEscape("match_target={job=\"" + prometheusJob + "\"}")
-	queryUrl := fmt.Sprintf("http://%s:%d/api/v1/targets/metadata?%s", hostIP, nodePort, path)
+	address := net.JoinHostPort(hostIP, fmt.Sprint(nodePort))
+	queryUrl := fmt.Sprintf("http://%s/api/v1/targets/metadata?%s", address, path)
 
 	client := &http.Client{}
 	resp, err := client.Get(queryUrl)
@@ -299,7 +308,7 @@ func testMetricsFromPrometheusServer(t *testing.T, data *TestData, prometheusJob
 	}
 }
 
-func TestControllerMetricsOnPrometheusServer(t *testing.T) {
+func TestPrometheusServerControllerMetrics(t *testing.T) {
 	skipIfPrometheusDisabled(t)
 
 	data, err := setupTest(t)
@@ -311,7 +320,7 @@ func TestControllerMetricsOnPrometheusServer(t *testing.T) {
 	testMetricsFromPrometheusServer(t, data, "antrea-controllers", antreaControllerMetrics)
 }
 
-func TestAgentMetricsOnPrometheusServer(t *testing.T) {
+func TestPrometheusServerAgentMetrics(t *testing.T) {
 	skipIfPrometheusDisabled(t)
 
 	data, err := setupTest(t)

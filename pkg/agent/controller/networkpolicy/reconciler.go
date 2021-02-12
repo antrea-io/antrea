@@ -245,7 +245,7 @@ func (r *reconciler) Reconcile(rule *CompletedRule) error {
 		priorityAssigner.mutex.Lock()
 		defer priorityAssigner.mutex.Unlock()
 	}
-	ofPriority, err = r.getOFPriority(rule, ruleTable, priorityAssigner)
+	ofPriority, registeredBefore, err := r.getOFPriority(rule, ruleTable, priorityAssigner)
 	if err != nil {
 		return err
 	}
@@ -255,7 +255,7 @@ func (r *reconciler) Reconcile(rule *CompletedRule) error {
 	} else {
 		ofRuleInstallErr = r.update(value.(*lastRealized), rule, ofPriority, ruleTable)
 	}
-	if ofRuleInstallErr != nil && ofPriority != nil {
+	if ofRuleInstallErr != nil && ofPriority != nil && !registeredBefore {
 		priorityAssigner.assigner.Release(*ofPriority)
 	}
 	return ofRuleInstallErr
@@ -286,10 +286,10 @@ func (r *reconciler) getOFRuleTable(rule *CompletedRule) binding.TableIDType {
 
 // getOFPriority retrieves the OFPriority for the input CompletedRule to be installed,
 // and re-arranges installed priorities on OVS if necessary.
-func (r *reconciler) getOFPriority(rule *CompletedRule, table binding.TableIDType, pa *tablePriorityAssigner) (*uint16, error) {
+func (r *reconciler) getOFPriority(rule *CompletedRule, table binding.TableIDType, pa *tablePriorityAssigner) (*uint16, bool, error) {
 	if !rule.isAntreaNetworkPolicyRule() {
 		klog.V(2).Infof("Assigning default priority for k8s NetworkPolicy.")
-		return nil, nil
+		return nil, true, nil
 	}
 	p := types.Priority{
 		TierPriority:   *rule.TierPriority,
@@ -308,20 +308,20 @@ func (r *reconciler) getOFPriority(rule *CompletedRule, table binding.TableIDTyp
 		}
 		priorityUpdates, revertFunc, err := pa.assigner.RegisterPriorities(allPrioritiesInPolicy)
 		if err != nil {
-			return nil, err
+			return nil, registered, err
 		}
 		// Re-assign installed priorities on OVS
 		if len(priorityUpdates) > 0 {
 			err := r.ofClient.ReassignFlowPriorities(priorityUpdates, table)
 			if err != nil {
 				revertFunc()
-				return nil, err
+				return nil, registered, err
 			}
 		}
 		ofPriority, _ = pa.assigner.GetOFPriority(p)
 	}
 	klog.V(2).Infof("Assigning OFPriority %v for rule %v", ofPriority, rule.ID)
-	return &ofPriority, nil
+	return &ofPriority, registered, nil
 }
 
 // BatchReconcile reconciles the desired state of the provided CompletedRules
@@ -345,7 +345,7 @@ func (r *reconciler) BatchReconcile(rules []*CompletedRule) error {
 		ruleTable := r.getOFRuleTable(rule)
 		priorityAssigner := r.priorityAssigners[ruleTable]
 		klog.V(2).Infof("Adding rule %s of NetworkPolicy %s to be reconciled in batch", rule.ID, rule.SourceRef.ToString())
-		ofPriority, _ := r.getOFPriority(rule, ruleTable, priorityAssigner)
+		ofPriority, _, _ := r.getOFPriority(rule, ruleTable, priorityAssigner)
 		priorities = append(priorities, ofPriority)
 		if ofPriority != nil {
 			prioritiesByTable[ruleTable] = append(prioritiesByTable[ruleTable], ofPriority)
@@ -353,6 +353,8 @@ func (r *reconciler) BatchReconcile(rules []*CompletedRule) error {
 	}
 	ofRuleInstallErr := r.batchAdd(rulesToInstall, priorities)
 	if ofRuleInstallErr != nil {
+		// If batch reconcile fails, all priorities should be released and the
+		// priorityAssigners should return to the initial state.
 		for tableID, ofPriorities := range prioritiesByTable {
 			pa := r.priorityAssigners[tableID]
 			for _, ofPriority := range ofPriorities {
@@ -419,10 +421,9 @@ func (r *reconciler) computeOFRulesForAdd(rule *CompletedRule, ofPriority *uint1
 		// Get addresses that in From IPBlock but not in Except IPBlocks.
 		from2 := ipBlocksToOFAddresses(rule.From.IPBlocks, r.ipv4Enabled, r.ipv6Enabled)
 
-		podsByServicesMap, servicesMap := groupMembersByServices(rule.Services, rule.TargetMembers)
-
-		for svcKey, pods := range podsByServicesMap {
-			ofPorts := r.getPodOFPorts(pods)
+		membersByServicesMap, servicesMap := groupMembersByServices(rule.Services, rule.TargetMembers)
+		for svcKey, members := range membersByServicesMap {
+			ofPorts := r.getOFPorts(members)
 			lastRealized.podOFPorts[svcKey] = ofPorts
 			ofRuleByServicesMap[svcKey] = &types.PolicyRule{
 				Direction:     v1beta2.DirectionIn,
@@ -437,7 +438,7 @@ func (r *reconciler) computeOFRulesForAdd(rule *CompletedRule, ofPriority *uint1
 			}
 		}
 	} else {
-		ips := r.getPodIPs(rule.TargetMembers)
+		ips := r.getIPs(rule.TargetMembers)
 		lastRealized.podIPs = ips
 		from := ipsToOFAddresses(ips)
 		memberByServicesMap, servicesMap := groupMembersByServices(rule.Services, rule.ToAddresses)
@@ -542,12 +543,12 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule, 
 	if newRule.Direction == v1beta2.DirectionIn {
 		from1 := groupMembersToOFAddresses(newRule.FromAddresses)
 		from2 := ipBlocksToOFAddresses(newRule.From.IPBlocks, r.ipv4Enabled, r.ipv6Enabled)
-		addedFrom := groupMembersToOFAddresses(newRule.FromAddresses.Difference(lastRealized.FromAddresses))
-		deletedFrom := groupMembersToOFAddresses(lastRealized.FromAddresses.Difference(newRule.FromAddresses))
+		addedFrom := ipsToOFAddresses(newRule.FromAddresses.IPDifference(lastRealized.FromAddresses))
+		deletedFrom := ipsToOFAddresses(lastRealized.FromAddresses.IPDifference(newRule.FromAddresses))
 
-		podsByServicesMap, servicesMap := groupMembersByServices(newRule.Services, newRule.TargetMembers)
-		for svcKey, pods := range podsByServicesMap {
-			newOFPorts := r.getPodOFPorts(pods)
+		membersByServicesMap, servicesMap := groupMembersByServices(newRule.Services, newRule.TargetMembers)
+		for svcKey, members := range membersByServicesMap {
+			newOFPorts := r.getOFPorts(members)
 			ofID, exists := lastRealized.ofIDs[svcKey]
 			// Install a new Openflow rule if this group doesn't exist, otherwise do incremental update.
 			if !exists {
@@ -583,7 +584,7 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule, 
 			lastRealized.podOFPorts[svcKey] = newOFPorts
 		}
 	} else {
-		newIPs := r.getPodIPs(newRule.TargetMembers)
+		newIPs := r.getIPs(newRule.TargetMembers)
 		from := ipsToOFAddresses(newIPs)
 		addedFrom := ipsToOFAddresses(newIPs.Difference(lastRealized.podIPs))
 		deletedFrom := ipsToOFAddresses(lastRealized.podIPs.Difference(newIPs))
@@ -744,42 +745,48 @@ func (r *reconciler) GetRuleByFlowID(ruleFlowID uint32) (*types.PolicyRule, bool
 	return r.idAllocator.getRuleFromAsyncCache(ruleFlowID)
 }
 
-func (r *reconciler) getPodOFPorts(members v1beta2.GroupMemberSet) sets.Int32 {
+func (r *reconciler) getOFPorts(members v1beta2.GroupMemberSet) sets.Int32 {
 	ofPorts := sets.NewInt32()
 	for _, m := range members {
-		if m.Pod == nil {
-			continue
+		var entityName, ns string
+		if m.Pod != nil {
+			entityName, ns = m.Pod.Name, m.Pod.Namespace
+		} else if m.ExternalEntity != nil {
+			entityName, ns = m.ExternalEntity.Name, m.ExternalEntity.Namespace
 		}
-		ifaces := r.ifaceStore.GetContainerInterfacesByPod(m.Pod.Name, m.Pod.Namespace)
+		ifaces := r.ifaceStore.GetInterfacesByEntity(entityName, ns)
 		if len(ifaces) == 0 {
 			// This might be because the container has been deleted during realization or hasn't been set up yet.
-			klog.Infof("Can't find interface for Pod %s/%s, skipping", m.Pod.Namespace, m.Pod.Name)
+			klog.Infof("Can't find interface for %s/%s, skipping", ns, entityName)
 			continue
 		}
 		for _, iface := range ifaces {
-			klog.V(2).Infof("Got OFPort %v for Pod %s/%s", iface.OFPort, m.Pod.Namespace, m.Pod.Name)
+			klog.V(2).Infof("Got OFPort %v for %s/%s", iface.OFPort, ns, entityName)
 			ofPorts.Insert(iface.OFPort)
 		}
 	}
 	return ofPorts
 }
 
-func (r *reconciler) getPodIPs(members v1beta2.GroupMemberSet) sets.String {
+func (r *reconciler) getIPs(members v1beta2.GroupMemberSet) sets.String {
 	ips := sets.NewString()
 	for _, m := range members {
-		if m.Pod == nil {
-			continue
+		var entityName, ns string
+		if m.Pod != nil {
+			entityName, ns = m.Pod.Name, m.Pod.Namespace
+		} else if m.ExternalEntity != nil {
+			entityName, ns = m.ExternalEntity.Name, m.ExternalEntity.Namespace
 		}
-		ifaces := r.ifaceStore.GetContainerInterfacesByPod(m.Pod.Name, m.Pod.Namespace)
+		ifaces := r.ifaceStore.GetInterfacesByEntity(entityName, ns)
 		if len(ifaces) == 0 {
 			// This might be because the container has been deleted during realization or hasn't been set up yet.
-			klog.Infof("Can't find interface for Pod %s/%s, skipping", m.Pod.Namespace, m.Pod.Name)
+			klog.Infof("Can't find interface for %s/%s, skipping", ns, entityName)
 			continue
 		}
 		for _, iface := range ifaces {
 			for _, ipAddr := range iface.IPs {
 				if ipAddr != nil {
-					klog.V(2).Infof("Got IP %v for Pod %s/%s", iface.IPs, m.Pod.Namespace, m.Pod.Name)
+					klog.V(2).Infof("Got IP %v for %s/%s", iface.IPs, ns, entityName)
 					ips.Insert(ipAddr.String())
 				}
 			}

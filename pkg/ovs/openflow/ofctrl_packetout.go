@@ -21,6 +21,7 @@ import (
 
 	"github.com/contiv/libOpenflow/protocol"
 	"github.com/contiv/ofnet/ofctrl"
+	"k8s.io/klog"
 )
 
 type ofPacketOutBuilder struct {
@@ -43,28 +44,57 @@ func (b *ofPacketOutBuilder) SetDstMAC(mac net.HardwareAddr) PacketOutBuilder {
 
 // SetSrcIP sets the packet's source IP with the provided value.
 func (b *ofPacketOutBuilder) SetSrcIP(ip net.IP) PacketOutBuilder {
-	if b.pktOut.IPHeader == nil {
-		b.pktOut.IPHeader = new(protocol.IPv4)
+	if ip.To4() != nil {
+		if b.pktOut.IPHeader == nil {
+			b.pktOut.IPHeader = new(protocol.IPv4)
+		}
+		b.pktOut.IPHeader.NWSrc = ip
+	} else {
+		if b.pktOut.IPv6Header == nil {
+			b.pktOut.IPv6Header = new(protocol.IPv6)
+		}
+		b.pktOut.IPv6Header.NWSrc = ip
 	}
-	b.pktOut.IPHeader.NWSrc = ip
 	return b
 }
 
 // SetDstIP sets the packet's destination IP with the provided value.
 func (b *ofPacketOutBuilder) SetDstIP(ip net.IP) PacketOutBuilder {
-	if b.pktOut.IPHeader == nil {
-		b.pktOut.IPHeader = new(protocol.IPv4)
+	if ip.To4() != nil {
+		if b.pktOut.IPHeader == nil {
+			b.pktOut.IPHeader = new(protocol.IPv4)
+		}
+		b.pktOut.IPHeader.NWDst = ip
+	} else {
+		if b.pktOut.IPv6Header == nil {
+			b.pktOut.IPv6Header = new(protocol.IPv6)
+		}
+		b.pktOut.IPv6Header.NWDst = ip
 	}
-	b.pktOut.IPHeader.NWDst = ip
 	return b
 }
 
 // SetIPProtocol sets IP protocol in the packet's IP header.
 func (b *ofPacketOutBuilder) SetIPProtocol(proto Protocol) PacketOutBuilder {
-	if b.pktOut.IPHeader == nil {
-		b.pktOut.IPHeader = new(protocol.IPv4)
+	switch proto {
+	case ProtocolTCPv6, ProtocolUDPv6, ProtocolSCTPv6, ProtocolICMPv6:
+		if b.pktOut.IPv6Header == nil {
+			b.pktOut.IPv6Header = new(protocol.IPv6)
+		}
+	default:
+		if b.pktOut.IPHeader == nil {
+			b.pktOut.IPHeader = new(protocol.IPv4)
+		}
 	}
 	switch proto {
+	case ProtocolTCPv6:
+		b.pktOut.IPv6Header.NextHeader = protocol.Type_TCP
+	case ProtocolUDPv6:
+		b.pktOut.IPv6Header.NextHeader = protocol.Type_UDP
+	case ProtocolSCTPv6:
+		b.pktOut.IPv6Header.NextHeader = 0x84
+	case ProtocolICMPv6:
+		b.pktOut.IPv6Header.NextHeader = protocol.Type_IPv6ICMP
 	case ProtocolTCP:
 		b.pktOut.IPHeader.Protocol = protocol.Type_TCP
 	case ProtocolUDP:
@@ -81,19 +111,25 @@ func (b *ofPacketOutBuilder) SetIPProtocol(proto Protocol) PacketOutBuilder {
 
 // SetTTL sets TTL in the packet's IP header.
 func (b *ofPacketOutBuilder) SetTTL(ttl uint8) PacketOutBuilder {
-	if b.pktOut.IPHeader == nil {
-		b.pktOut.IPHeader = new(protocol.IPv4)
+	if b.pktOut.IPv6Header == nil {
+		if b.pktOut.IPHeader == nil {
+			b.pktOut.IPHeader = new(protocol.IPv4)
+		}
+		b.pktOut.IPHeader.TTL = ttl
+	} else {
+		b.pktOut.IPv6Header.HopLimit = ttl
 	}
-	b.pktOut.IPHeader.TTL = ttl
 	return b
 }
 
-// SetIPFlags sets flags in the packet's IP header.
+// SetIPFlags sets flags in the packet's IP header. IPv4 only.
 func (b *ofPacketOutBuilder) SetIPFlags(flags uint16) PacketOutBuilder {
-	if b.pktOut.IPHeader == nil {
-		b.pktOut.IPHeader = new(protocol.IPv4)
+	if b.pktOut.IPv6Header == nil {
+		if b.pktOut.IPHeader == nil {
+			b.pktOut.IPHeader = new(protocol.IPv4)
+		}
+		b.pktOut.IPHeader.Flags = flags
 	}
-	b.pktOut.IPHeader.Flags = flags
 	return b
 }
 
@@ -199,32 +235,54 @@ func (b *ofPacketOutBuilder) AddLoadAction(name string, data uint64, rng Range) 
 }
 
 func (b *ofPacketOutBuilder) Done() *ofctrl.PacketOut {
-	if b.pktOut.ICMPHeader != nil {
-		b.setICMPData()
-		b.pktOut.ICMPHeader.Checksum = b.icmpHeaderChecksum()
-		b.pktOut.IPHeader.Length = 20 + b.pktOut.ICMPHeader.Len()
-	} else if b.pktOut.TCPHeader != nil {
-		b.pktOut.TCPHeader.HdrLen = 5
-		// #nosec G404: random number generator not used for security purposes
-		b.pktOut.TCPHeader.SeqNum = rand.Uint32()
-		// #nosec G404: random number generator not used for security purposes
-		b.pktOut.TCPHeader.AckNum = rand.Uint32()
-		b.pktOut.TCPHeader.Checksum = b.tcpHeaderChecksum()
-		b.pktOut.IPHeader.Length = 20 + b.pktOut.TCPHeader.Len()
-	} else if b.pktOut.UDPHeader != nil {
-		b.pktOut.UDPHeader.Length = b.pktOut.UDPHeader.Len()
-		b.pktOut.UDPHeader.Checksum = b.udpHeaderChecksum()
-		b.pktOut.IPHeader.Length = 20 + b.pktOut.UDPHeader.Len()
+	if b.pktOut.IPHeader != nil && b.pktOut.IPv6Header != nil {
+		klog.Errorf("Invalid PacketOutBuilder: IP header and IPv6 header are not allowed to exist at the same time")
+		return nil
 	}
-	// #nosec G404: random number generator not used for security purposes
-	b.pktOut.IPHeader.Id = uint16(rand.Uint32())
-	// Set IP version in the IP Header.
-	if b.pktOut.IPHeader.NWSrc.To4() != nil {
+	if b.pktOut.IPv6Header == nil {
+		if b.pktOut.ICMPHeader != nil {
+			b.setICMPData()
+			b.pktOut.ICMPHeader.Checksum = b.icmpHeaderChecksum()
+			b.pktOut.IPHeader.Length = 20 + b.pktOut.ICMPHeader.Len()
+		} else if b.pktOut.TCPHeader != nil {
+			b.pktOut.TCPHeader.HdrLen = 5
+			// #nosec G404: random number generator not used for security purposes
+			b.pktOut.TCPHeader.SeqNum = rand.Uint32()
+			// #nosec G404: random number generator not used for security purposes
+			b.pktOut.TCPHeader.AckNum = rand.Uint32()
+			b.pktOut.TCPHeader.Checksum = b.tcpHeaderChecksum()
+			b.pktOut.IPHeader.Length = 20 + b.pktOut.TCPHeader.Len()
+		} else if b.pktOut.UDPHeader != nil {
+			b.pktOut.UDPHeader.Length = b.pktOut.UDPHeader.Len()
+			b.pktOut.UDPHeader.Checksum = b.udpHeaderChecksum()
+			b.pktOut.IPHeader.Length = 20 + b.pktOut.UDPHeader.Len()
+		}
+		// #nosec G404: random number generator not used for security purposes
+		b.pktOut.IPHeader.Id = uint16(rand.Uint32())
+		// Set IP version in the IP Header.
 		b.pktOut.IPHeader.Version = 0x4
+		b.pktOut.IPHeader.Checksum = b.ipHeaderChecksum()
 	} else {
-		b.pktOut.IPHeader.Version = 0x6
+		if b.pktOut.ICMPHeader != nil {
+			b.setICMPData()
+			b.pktOut.ICMPHeader.Checksum = b.icmpHeaderChecksum()
+			b.pktOut.IPv6Header.Length = b.pktOut.ICMPHeader.Len()
+		} else if b.pktOut.TCPHeader != nil {
+			b.pktOut.TCPHeader.HdrLen = 5
+			// #nosec G404: random number generator not used for security purposes
+			b.pktOut.TCPHeader.SeqNum = rand.Uint32()
+			// #nosec G404: random number generator not used for security purposes
+			b.pktOut.TCPHeader.AckNum = rand.Uint32()
+			b.pktOut.TCPHeader.Checksum = b.tcpHeaderChecksum()
+			b.pktOut.IPv6Header.Length = b.pktOut.TCPHeader.Len()
+		} else if b.pktOut.UDPHeader != nil {
+			b.pktOut.UDPHeader.Length = b.pktOut.UDPHeader.Len()
+			b.pktOut.UDPHeader.Checksum = b.udpHeaderChecksum()
+			b.pktOut.IPv6Header.Length = b.pktOut.UDPHeader.Len()
+		}
+		// Set IPv6 version in the IP Header.
+		b.pktOut.IPv6Header.Version = 0x6
 	}
-	b.pktOut.IPHeader.Checksum = b.ipHeaderChecksum()
 	return b.pktOut
 }
 
@@ -251,7 +309,11 @@ func (b *ofPacketOutBuilder) icmpHeaderChecksum() uint16 {
 	icmpHeader := *b.pktOut.ICMPHeader
 	icmpHeader.Checksum = 0
 	data, _ := icmpHeader.MarshalBinary()
-	return checksum(data)
+	checksumData := data
+	if b.pktOut.IPv6Header != nil {
+		checksumData = append(b.generatePseudoHeader(uint16(len(data))), data...)
+	}
+	return checksum(checksumData)
 }
 
 func (b *ofPacketOutBuilder) tcpHeaderChecksum() uint16 {
@@ -271,12 +333,24 @@ func (b *ofPacketOutBuilder) udpHeaderChecksum() uint16 {
 }
 
 func (b *ofPacketOutBuilder) generatePseudoHeader(length uint16) []byte {
-	pseudoHeader := make([]byte, 12)
-	copy(pseudoHeader[0:4], b.pktOut.IPHeader.NWSrc.To4())
-	copy(pseudoHeader[4:8], b.pktOut.IPHeader.NWDst.To4())
-	pseudoHeader[8] = 0x0
-	pseudoHeader[9] = b.pktOut.IPHeader.Protocol
-	binary.BigEndian.PutUint16(pseudoHeader[10:12], length)
+	var pseudoHeader []byte
+	if b.pktOut.IPv6Header == nil {
+		pseudoHeader = make([]byte, 12)
+		copy(pseudoHeader[0:4], b.pktOut.IPHeader.NWSrc.To4())
+		copy(pseudoHeader[4:8], b.pktOut.IPHeader.NWDst.To4())
+		pseudoHeader[8] = 0x0
+		pseudoHeader[9] = b.pktOut.IPHeader.Protocol
+		binary.BigEndian.PutUint16(pseudoHeader[10:12], length)
+	} else {
+		pseudoHeader = make([]byte, 40)
+		copy(pseudoHeader[0:16], b.pktOut.IPv6Header.NWSrc.To16())
+		copy(pseudoHeader[16:32], b.pktOut.IPv6Header.NWDst.To16())
+		binary.BigEndian.PutUint32(pseudoHeader[32:36], uint32(length))
+		pseudoHeader[36] = 0x0
+		pseudoHeader[37] = 0x0
+		pseudoHeader[38] = 0x0
+		pseudoHeader[39] = b.pktOut.IPv6Header.NextHeader
+	}
 	return pseudoHeader
 }
 

@@ -8,7 +8,7 @@ on:
 jobs:
   build:
     if: github.repository == 'vmware-tanzu/antrea'
-    runs-on: [ubuntu-18.04]
+    runs-on: [ubuntu-latest]
     steps:
     - uses: actions/checkout@v2
     - name: Build antrea/openvswitch Docker image and push to registry
@@ -21,12 +21,12 @@ jobs:
         docker pull antrea/openvswitch-debs:$OVS_VERSION || true
         docker pull antrea/openvswitch:$OVS_VERSION || true
         echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
-        ./build_and_push.sh
+        ./build.sh --pull --push
         cd ../base/
-        ./build_and_push.sh
+        ./build.sh --pull --push
   skip:
     if: github.repository != 'vmware-tanzu/antrea'
-    runs-on: [ubuntu-18.04]
+    runs-on: [ubuntu-latest]
     steps:
       - name: Skip
         run: |

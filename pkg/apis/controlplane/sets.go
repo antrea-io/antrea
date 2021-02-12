@@ -14,7 +14,12 @@
 
 package controlplane
 
-import "strings"
+import (
+	"net"
+	"strings"
+
+	"k8s.io/apimachinery/pkg/util/sets"
+)
 
 // groupMemberKey is used to uniquely identify GroupMember.
 type groupMemberKey string
@@ -25,7 +30,9 @@ type groupMemberKey string
 type GroupMemberSet map[groupMemberKey]*GroupMember
 
 // normalizeGroupMember calculates the groupMemberKey of the provided
-// GroupMember based on the Pod's namespaced name or IP.
+// GroupMember based on the Pod/ExternalEntity's namespaced name and IPs.
+// For GroupMembers in appliedToGroups, the IPs are not set, so the
+// generated key does not contain IP information.
 func normalizeGroupMember(member *GroupMember) groupMemberKey {
 	// "/" is illegal in Namespace and name so is safe as the delimiter.
 	const delimiter = "/"
@@ -38,10 +45,9 @@ func normalizeGroupMember(member *GroupMember) groupMemberKey {
 		b.WriteString(member.ExternalEntity.Namespace)
 		b.WriteString(delimiter)
 		b.WriteString(member.ExternalEntity.Name)
-	} else if len(member.IPs) != 0 {
-		for _, ip := range member.IPs {
-			b.Write(ip)
-		}
+	}
+	for _, ip := range member.IPs {
+		b.Write(ip)
 	}
 	return groupMemberKey(b.String())
 }
@@ -82,6 +88,22 @@ func (s GroupMemberSet) Difference(o GroupMemberSet) GroupMemberSet {
 		}
 	}
 	return result
+}
+
+// IPDifference returns a String set of GroupMember IPs that are not in o.
+func (s GroupMemberSet) IPDifference(o GroupMemberSet) sets.String {
+	sIPs, oIPs := sets.NewString(), sets.NewString()
+	for _, m := range s {
+		for _, ip := range m.IPs {
+			sIPs.Insert(net.IP(ip).String())
+		}
+	}
+	for _, m := range o {
+		for _, ip := range m.IPs {
+			oIPs.Insert(net.IP(ip).String())
+		}
+	}
+	return sIPs.Difference(oIPs)
 }
 
 // Union returns a new set which includes items in either m or o.

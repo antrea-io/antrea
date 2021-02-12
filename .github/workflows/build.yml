@@ -3,38 +3,38 @@ name: Build and push latest image if needed
 on:
   pull_request:
     branches:
-      - master
+      - main
       - release-*
   push:
     branches:
-      - master
+      - main
       - release-*
 
 jobs:
   check-changes:
     name: Check whether tests need to be run based on diff
-    runs-on: [ubuntu-18.04]
+    runs-on: [ubuntu-latest]
     steps:
     - uses: actions/checkout@v2
       with:
         fetch-depth: 0
-    - uses: vmware-tanzu/antrea/ci/gh-actions/has-changes@master
+    - uses: vmware-tanzu/antrea/ci/gh-actions/has-changes@main
       id: check_diff
       with:
-        args: docs/* ci/jenkins/* *.md
+        args: docs/* ci/jenkins/* *.md hack/.notableofcontents
     outputs:
       has_changes: ${{ steps.check_diff.outputs.has_changes }}
 
   build:
     needs: check-changes
     if: ${{ needs.check-changes.outputs.has_changes == 'yes' || github.event_name == 'push' }}
-    runs-on: [ubuntu-18.04]
+    runs-on: [ubuntu-latest]
     steps:
     - uses: actions/checkout@v2
     - name: Build Antrea Docker image
       run: make
     - name: Push Antrea Docker image to registry
-      if: ${{ github.repository == 'vmware-tanzu/antrea' && github.event_name == 'push' && github.ref == 'refs/heads/master' }}
+      if: ${{ github.repository == 'vmware-tanzu/antrea' && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
       env:
         DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
         DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
@@ -45,13 +45,13 @@ jobs:
   build-scale:
     needs: check-changes
     if: ${{ needs.check-changes.outputs.has_changes == 'yes' || github.event_name == 'push' }}
-    runs-on: [ubuntu-18.04]
+    runs-on: [ubuntu-latest]
     steps:
     - uses: actions/checkout@v2
     - name: Build Antrea Agent Simulator Docker image
       run: make build-scale-simulator
     - name: Push Antrea Agent Simulator Docker image to registry
-      if: ${{ github.repository == 'vmware-tanzu/antrea' && github.event_name == 'push' && github.ref == 'refs/heads/master' }}
+      if: ${{ github.repository == 'vmware-tanzu/antrea' && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
       env:
         DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
         DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
@@ -68,7 +68,7 @@ jobs:
     - name: Build Antrea Windows Docker image
       run: make build-windows
     - name: Push Antrea Windows Docker image to registry
-      if: ${{ github.repository == 'vmware-tanzu/antrea' && github.event_name == 'push' && github.ref == 'refs/heads/master' }}
+      if: ${{ github.repository == 'vmware-tanzu/antrea' && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
       env:
         DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
         DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
@@ -80,13 +80,13 @@ jobs:
   build-octant-antrea-ubuntu:
     needs: check-changes
     if: ${{ needs.check-changes.outputs.has_changes == 'yes' || github.event_name == 'push' }}
-    runs-on: [ubuntu-18.04]
+    runs-on: [ubuntu-latest]
     steps:
     - uses: actions/checkout@v2
     - name: Build octant-antrea-ubuntu Docker image
       run: make octant-antrea-ubuntu
     - name: Push octant-antrea-ubuntu Docker image to registry
-      if: ${{ github.repository == 'vmware-tanzu/antrea' && github.event_name == 'push' && github.ref == 'refs/heads/master' }}
+      if: ${{ github.repository == 'vmware-tanzu/antrea' && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
       env:
         DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
         DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
@@ -97,14 +97,14 @@ jobs:
   build-netpol-tmp:
     needs: check-changes
     if: ${{ needs.check-changes.outputs.has_changes == 'yes' || github.event_name == 'push' }}
-    runs-on: [ubuntu-18.04]
+    runs-on: [ubuntu-latest]
     steps:
     - uses: actions/checkout@v2
     - name: Build netpol Docker image
       working-directory: hack/netpol
       run: make build
     - name: Push netpol Docker image to registry
-      if: ${{ github.repository == 'vmware-tanzu/antrea' && github.event_name == 'push' && github.ref == 'refs/heads/master' }}
+      if: ${{ github.repository == 'vmware-tanzu/antrea' && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
       env:
         DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
         DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
@@ -117,13 +117,13 @@ jobs:
   build-flow-aggregator:
     needs: check-changes
     if: ${{ needs.check-changes.outputs.has_changes == 'yes' || github.event_name == 'push' }}
-    runs-on: [ubuntu-18.04]
+    runs-on: [ubuntu-latest]
     steps:
     - uses: actions/checkout@v2
     - name: Build flow-aggregator Docker image
       run: make flow-aggregator-ubuntu
     - name: Push flow-aggregator Docker image to registry
-      if: ${{ github.repository == 'vmware-tanzu/antrea' && github.event_name == 'push' && github.ref == 'refs/heads/master' }}
+      if: ${{ github.repository == 'vmware-tanzu/antrea' && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
       env:
         DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
         DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}

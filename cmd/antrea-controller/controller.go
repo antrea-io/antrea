@@ -46,6 +46,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/log"
 	"github.com/vmware-tanzu/antrea/pkg/monitor"
 	"github.com/vmware-tanzu/antrea/pkg/signals"
+	"github.com/vmware-tanzu/antrea/pkg/util/cipher"
 	"github.com/vmware-tanzu/antrea/pkg/version"
 )
 
@@ -70,11 +71,14 @@ const (
 
 var allowedPaths = []string{
 	"/healthz",
+	"/livez",
+	"/readyz",
 	"/mutate/acnp",
 	"/mutate/anp",
 	"/validate/tier",
 	"/validate/acnp",
 	"/validate/anp",
+	"/validate/clustergroup",
 }
 
 // run starts Antrea Controller with the given options and waits for termination signal.
@@ -83,7 +87,7 @@ func run(o *Options) error {
 	// Create K8s Clientset, Aggregator Clientset, CRD Clientset and SharedInformerFactory for the given config.
 	// Aggregator Clientset is used to update the CABundle of the APIServices backed by antrea-controller so that
 	// the aggregator can verify its serving certificate.
-	client, aggregatorClient, crdClient, err := k8s.CreateClients(o.config.ClientConnection)
+	client, aggregatorClient, crdClient, err := k8s.CreateClients(o.config.ClientConnection, "")
 	if err != nil {
 		return fmt.Errorf("error creating K8s clients: %v", err)
 	}
@@ -91,6 +95,7 @@ func run(o *Options) error {
 	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, informerDefaultResync)
 	podInformer := informerFactory.Core().V1().Pods()
 	namespaceInformer := informerFactory.Core().V1().Namespaces()
+	serviceInformer := informerFactory.Core().V1().Services()
 	networkPolicyInformer := informerFactory.Networking().V1().NetworkPolicies()
 	nodeInformer := informerFactory.Core().V1().Nodes()
 	cnpInformer := crdInformerFactory.Security().V1alpha1().ClusterNetworkPolicies()
@@ -98,24 +103,29 @@ func run(o *Options) error {
 	anpInformer := crdInformerFactory.Security().V1alpha1().NetworkPolicies()
 	tierInformer := crdInformerFactory.Security().V1alpha1().Tiers()
 	traceflowInformer := crdInformerFactory.Ops().V1alpha1().Traceflows()
+	cgInformer := crdInformerFactory.Core().V1alpha2().ClusterGroups()
 
 	// Create Antrea object storage.
 	addressGroupStore := store.NewAddressGroupStore()
 	appliedToGroupStore := store.NewAppliedToGroupStore()
 	networkPolicyStore := store.NewNetworkPolicyStore()
+	groupStore := store.NewGroupStore()
 
 	networkPolicyController := networkpolicy.NewNetworkPolicyController(client,
 		crdClient,
 		podInformer,
 		namespaceInformer,
+		serviceInformer,
 		externalEntityInformer,
 		networkPolicyInformer,
 		cnpInformer,
 		anpInformer,
 		tierInformer,
+		cgInformer,
 		addressGroupStore,
 		appliedToGroupStore,
-		networkPolicyStore)
+		networkPolicyStore,
+		groupStore)
 
 	var networkPolicyStatusController *networkpolicy.StatusController
 	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
@@ -140,6 +150,11 @@ func run(o *Options) error {
 		statsAggregator = stats.NewAggregator(networkPolicyInformer, cnpInformer, anpInformer)
 	}
 
+	cipherSuites, err := cipher.GenerateCipherSuitesList(o.config.TLSCipherSuites)
+	if err != nil {
+		return fmt.Errorf("error generating Cipher Suite list: %v", err)
+	}
+
 	apiServerConfig, err := createAPIServerConfig(o.config.ClientConnection.Kubeconfig,
 		client,
 		aggregatorClient,
@@ -148,12 +163,15 @@ func run(o *Options) error {
 		addressGroupStore,
 		appliedToGroupStore,
 		networkPolicyStore,
+		groupStore,
 		controllerQuerier,
 		endpointQuerier,
 		networkPolicyController,
 		networkPolicyStatusController,
 		statsAggregator,
-		o.config.EnablePrometheusMetrics)
+		o.config.EnablePrometheusMetrics,
+		cipherSuites,
+		cipher.TLSVersionMap[o.config.TLSMinVersion])
 	if err != nil {
 		return fmt.Errorf("error creating API server config: %v", err)
 	}
@@ -212,12 +230,15 @@ func createAPIServerConfig(kubeconfig string,
 	addressGroupStore storage.Interface,
 	appliedToGroupStore storage.Interface,
 	networkPolicyStore storage.Interface,
+	groupStore storage.Interface,
 	controllerQuerier querier.ControllerQuerier,
 	endpointQuerier networkpolicy.EndpointQuerier,
 	npController *networkpolicy.NetworkPolicyController,
 	networkPolicyStatusController *networkpolicy.StatusController,
 	statsAggregator *stats.Aggregator,
-	enableMetrics bool) (*apiserver.Config, error) {
+	enableMetrics bool,
+	cipherSuites []uint16,
+	tlsMinVersion uint16) (*apiserver.Config, error) {
 	secureServing := genericoptions.NewSecureServingOptions().WithLoopback()
 	authentication := genericoptions.NewDelegatingAuthenticationOptions()
 	authorization := genericoptions.NewDelegatingAuthorizationOptions().WithAlwaysAllowPaths(allowedPaths...)
@@ -258,12 +279,15 @@ func createAPIServerConfig(kubeconfig string,
 	serverConfig.OpenAPIConfig.Info.Title = "Antrea"
 	serverConfig.EnableMetrics = enableMetrics
 	serverConfig.MinRequestTimeout = int(serverMinWatchTimeout.Seconds())
+	serverConfig.SecureServing.CipherSuites = cipherSuites
+	serverConfig.SecureServing.MinTLSVersion = tlsMinVersion
 
 	return apiserver.NewConfig(
 		serverConfig,
 		addressGroupStore,
 		appliedToGroupStore,
 		networkPolicyStore,
+		groupStore,
 		caCertController,
 		statsAggregator,
 		controllerQuerier,

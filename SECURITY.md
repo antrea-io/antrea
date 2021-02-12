@@ -38,8 +38,8 @@ For these lower-risk issues the fix process will proceed with the usual github w
 
 ### Reference taxonomy for issue risk
 
-1. Vulnerability must be fixed in master and any other supported branch.
-2. Vulnerability must be fixed in master only for next release.
+1. Vulnerability must be fixed in main and any other supported branch.
+2. Vulnerability must be fixed in main only for next release.
 3. Vulnerability in experimental features or troubleshooting code.
 4. Vulnerability without practical attack vector (e.g.: needs GUID guessing).
 5. Not a vulnerability per se, but an opportunity to strengthen security (in code, architecture, protocols, and/or processes).
@@ -53,7 +53,7 @@ The reporter and Antrea maintainers, plus anyone they deem necessary to develop 
 
 **Please refrain from creating a PR for the fix!**
 
-A fix is proposed as a patch to the current master branch, formatted with:
+A fix is proposed as a patch to the current main branch, formatted with:
 
 ```bash
 git format-patch --stdout HEAD~1 > path/to/local/file.patch
@@ -70,7 +70,7 @@ Pre-approval will ensure patches can be fast-tracked through public code review 
 
 In preparation for this, at least a maintainer must be available to help pushing the fix at disclosure time.
 
-At the disclosure time, one of the maintainers (or the reporter) will open an issue on github and create a PR with the patch for the master branch and any other applicable branch.
+At the disclosure time, one of the maintainers (or the reporter) will open an issue on github and create a PR with the patch for the main branch and any other applicable branch.
 Available maintainers will fast-track approvals and merge the patch.
 
 Regardless of the owner of the issue and the corresponding PR, the original reporter and the submitter of the fix will be properly credited.

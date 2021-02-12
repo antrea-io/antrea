@@ -24,6 +24,7 @@ import (
 
 	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
 	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
+	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy/store"
 	antreatypes "github.com/vmware-tanzu/antrea/pkg/controller/types"
 )
 
@@ -72,7 +73,7 @@ func toAntreaIPBlockForCRD(ipBlock *secv1alpha1.IPBlock) (*controlplane.IPBlock,
 func (n *NetworkPolicyController) toAntreaPeerForCRD(peers []secv1alpha1.NetworkPolicyPeer,
 	np metav1.Object, dir controlplane.Direction, namedPortExists bool) *controlplane.NetworkPolicyPeer {
 	var addressGroups []string
-	// Empty NetworkPolicyPeer is supposed to match all addresses.
+	// NetworkPolicyPeer is supposed to match all addresses when it is empty and no clusterGroup is present.
 	// It's treated as an IPBlock "0.0.0.0/0".
 	if len(peers) == 0 {
 		// For an egress Peer that specifies any named ports, it creates or
@@ -92,7 +93,8 @@ func (n *NetworkPolicyController) toAntreaPeerForCRD(peers []secv1alpha1.Network
 	var ipBlocks []controlplane.IPBlock
 	for _, peer := range peers {
 		// A secv1alpha1.NetworkPolicyPeer will either have an IPBlock or a
-		// podSelector and/or namespaceSelector set.
+		// podSelector and/or namespaceSelector set or a reference to the
+		// ClusterGroup.
 		if peer.IPBlock != nil {
 			ipBlock, err := toAntreaIPBlockForCRD(peer.IPBlock)
 			if err != nil {
@@ -100,12 +102,44 @@ func (n *NetworkPolicyController) toAntreaPeerForCRD(peers []secv1alpha1.Network
 				continue
 			}
 			ipBlocks = append(ipBlocks, *ipBlock)
+		} else if peer.Group != "" {
+			normalizedUID, ipBlock := n.processRefCG(peer.Group)
+			if normalizedUID != "" {
+				addressGroups = append(addressGroups, normalizedUID)
+			} else if ipBlock != nil {
+				ipBlocks = append(ipBlocks, *ipBlock)
+			}
 		} else {
 			normalizedUID := n.createAddressGroupForCRD(peer, np)
 			addressGroups = append(addressGroups, normalizedUID)
 		}
 	}
 	return &controlplane.NetworkPolicyPeer{AddressGroups: addressGroups, IPBlocks: ipBlocks}
+}
+
+// createAppliedToGroupForClusterGroupCRD creates an AppliedToGroup object corresponding to a
+// internal Group. If the AppliedToGroup already exists, it returns the key
+// otherwise it copies the internal Group contents to an AppliedToGroup resource and returns
+// its key.
+func (n *NetworkPolicyController) createAppliedToGroupForClusterGroupCRD(intGrp *antreatypes.Group) string {
+	key, err := store.GroupKeyFunc(intGrp)
+	if err != nil {
+		return ""
+	}
+	// Check to see if the AppliedToGroup already exists
+	_, found, _ := n.appliedToGroupStore.Get(key)
+	if found {
+		return key
+	}
+	// Create an AppliedToGroup object for this internal Group.
+	appliedToGroup := &antreatypes.AppliedToGroup{
+		UID:  intGrp.UID,
+		Name: key,
+	}
+	klog.V(2).Infof("Creating new AppliedToGroup %v corresponding to ClusterGroup CRD %s", appliedToGroup.UID, intGrp.Name)
+	n.appliedToGroupStore.Create(appliedToGroup)
+	n.enqueueAppliedToGroup(key)
+	return key
 }
 
 // createAddressGroupForCRD creates an AddressGroup object corresponding to a
@@ -131,6 +165,31 @@ func (n *NetworkPolicyController) createAddressGroupForCRD(peer secv1alpha1.Netw
 	return normalizedUID
 }
 
+// createAddressGroupForClusterGroupCRD creates an AddressGroup object corresponding to a
+// ClusterGroup spec. If the AddressGroup already exists, it returns the key
+// otherwise it copies the ClusterGroup CRD contents to an AddressGroup resource and returns
+// its key. If the corresponding internal Group is not found return empty.
+func (n *NetworkPolicyController) createAddressGroupForClusterGroupCRD(intGrp *antreatypes.Group) string {
+	key, err := store.GroupKeyFunc(intGrp)
+	if err != nil {
+		return ""
+	}
+	// Check to see if the AddressGroup already exists
+	_, found, _ := n.addressGroupStore.Get(key)
+	if found {
+		return key
+	}
+	// Create an AddressGroup object for this Cluster Group.
+	addressGroup := &antreatypes.AddressGroup{
+		UID:          intGrp.UID,
+		Name:         key,
+		GroupMembers: intGrp.GroupMembers,
+	}
+	n.addressGroupStore.Create(addressGroup)
+	klog.V(2).Infof("Created new AddressGroup %v corresponding to ClusterGroup CRD %s", addressGroup.UID, intGrp.Name)
+	return key
+}
+
 // getTierPriority retrieves the priority associated with the input Tier name.
 // If the Tier name is empty, by default, the lowest priority Application Tier
 // is returned.
@@ -154,4 +213,13 @@ func (n *NetworkPolicyController) getTierPriority(tier string) int32 {
 		return DefaultTierPriority
 	}
 	return t.Spec.Priority
+}
+
+// getNormalizedNameForSelector retrieves the normalized name for GroupSelector.
+// If the GroupSelector is nil, an empty string is returned.
+func getNormalizedNameForSelector(sel *antreatypes.GroupSelector) string {
+	if sel != nil {
+		return sel.NormalizedName
+	}
+	return ""
 }

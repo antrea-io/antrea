@@ -26,6 +26,10 @@ type FakeCoreV1alpha2 struct {
 	*testing.Fake
 }
 
+func (c *FakeCoreV1alpha2) ClusterGroups() v1alpha2.ClusterGroupInterface {
+	return &FakeClusterGroups{c}
+}
+
 func (c *FakeCoreV1alpha2) ExternalEntities(namespace string) v1alpha2.ExternalEntityInterface {
 	return &FakeExternalEntities{c, namespace}
 }

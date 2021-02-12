@@ -71,8 +71,15 @@ We use 2 32-bit OVS registers to carry information throughout the pipeline:
   - bit 16 is used to indicate whether the destination MAC address of a packet
     is "known", i.e. corresponds to an entry in [L2ForwardingCalcTable], which
     is essentially a "dmac" table.
+  - bit 19 is used to indicate whether the destination and source MACs of the
+    packet should be rewritten in the [l3ForwardingTable]. The bit is set for
+    packets received from the tunnel port in the [ClassifierTable]. The
+    destination MAC of such packets is the Global Virtual MAC and should be
+    rewritten to the destination port's MAC before output to the port. When such
+    a packet is destined to a Pod, its source MAC should be rewritten to the
+    local gateway port's MAC too.
 * reg1 (NXM_NX_REG1): it is used to store the egress OF port for the packet. It
-  is set by [DNATTable] for traffic destined to services and by
+  is set by [DNATTable] for traffic destined to Services and by
   [L2ForwardingCalcTable] otherwise. It is consumed by [L2ForwardingOutTable] to
   output each packet to the correct port.
 
@@ -122,7 +129,7 @@ spec:
 ```
 
 This Network Policy is applied to all Pods with the `nginx` app label in the
-`default` namespace. For these Pods, it only allows TCP traffic on port 80 from
+`default` Namespace. For these Pods, it only allows TCP traffic on port 80 from
 and to Pods which also have the `nginx` app label. Because Antrea will only
 install OVS flows for this Network Policy on Nodes for which some of the Pods
 are the target of the policy, we have scheduled 2 `nginx` Pods on the same
@@ -193,13 +200,15 @@ This table is used to determine which "category" of traffic (tunnel, local
 gateway or local Pod) the packet belongs to. This is done by matching on the
 ingress port for the packet. The appropriate value is then written to bits
 [0..15] of the NXM_NX_REG0 register: 0 for tunnel, 1 for local gateway and 2 for
-local Pod. This information is used by matches in subsequent tables.
+local Pod. This information is used by matches in subsequent tables. For a
+packet received from the tunnel port, bit 19 of the NXM_NX_REG0 is set to 1, to
+indicate MAC rewrite should be performed for the packet in the [L3ForwardingTable].
 
 If you dump the flows for this table, you may see the following:
 
 ```text
 1. table=0, priority=200,in_port=antrea-gw0 actions=load:0x1->NXM_NX_REG0[0..15],goto_table:10
-2. table=0, priority=200,in_port=antrea-tun0 actions=load:0->NXM_NX_REG0[0..15],goto_table:30
+2. table=0, priority=200,in_port=antrea-tun0 actions=load:0->NXM_NX_REG0[0..15],load:0x1->NXM_NX_REG0[19],goto_table:30
 3. table=0, priority=190,in_port="coredns5-8ec607" actions=load:0x2->NXM_NX_REG0[0..15],goto_table:10
 4. table=0, priority=190,in_port="coredns5-9d9530" actions=load:0x2->NXM_NX_REG0[0..15],goto_table:10
 5. table=0, priority=0 actions=drop
@@ -207,7 +216,7 @@ If you dump the flows for this table, you may see the following:
 
 Flow 1 is for traffic coming in on the local gateway. Flow 2 is for traffic
 coming in through an overlay tunnel (i.e. from another Node). The next two
-flows (3 and 4) are for local Pods (in this case Pods from the coredns
+flows (3 and 4) are for local Pods (in this case Pods from the CoreDNS
 deployment).
 
 Local traffic then goes to [SpoofGuardTable], while tunnel traffic from other
@@ -227,9 +236,9 @@ each Pod (as identified by the ingress port), we ensure that:
   Pod.
 
 Because Antrea currently relies on kube-proxy to load-balance traffic destined
-to services, implementing that kind of IP spoofing check for traffic coming-in
+to Services, implementing that kind of IP spoofing check for traffic coming-in
 on the local gateway port is not as trivial. Traffic from local Pods destined to
-services will first go through the gateway, get load-balanced by the kube-proxy
+Services will first go through the gateway, get load-balanced by the kube-proxy
 datapath (DNAT) then sent back through the gateway. This means that legitimate
 traffic can be received on the gateway port with a source IP belonging to a
 local Pod. We may add some fine-grained rules in the future to accommodate for
@@ -258,7 +267,7 @@ any of the rules described above will be dropped by the table-miss flow entry.
 The main purpose of this table is to reply to ARP requests from the local
 gateway asking for the MAC address of a remote peer gateway (another Node's
 gateway). This ensures that the local Node can reach any remote Pod, which in
-particular is required for service traffic which has been load-balanced to a
+particular is required for Service traffic which has been load-balanced to a
 remote Pod backend by kube-proxy. Note that the table is programmed to reply to
 such ARP requests with a "Global Virtual MAC" ("Global" because it is used by
 all Antrea OVS bridges), and not with the actual MAC address of the remote
@@ -343,7 +352,7 @@ purposes:
     to the originating Pod without going first through the gateway and
     kube-proxy.  This means that the reply traffic will arrive at the
     originating Pod with the incorrect source IP (it will be set to the
-    backend's IP instead of the service IP).
+    backend's IP instead of the Service IP).
   - when hair-pinning is involved, i.e. for connections between 2 local Pods and
     for which NAT is performed. One example is a Pod accessing a NodePort
     Service for which `externalTrafficPolicy` is set to `Local` using the local
@@ -372,10 +381,10 @@ Flow 2 drops invalid traffic. All non-dropped traffic finally goes to the
 
 ### DNATTable (40)
 
-At the moment this table's only job is to send traffic destined to services
+At the moment this table's only job is to send traffic destined to Services
 through the local gateway, without any modifications. kube-proxy will then take
 care of load-balancing the connections across the different backends for each
-service.
+Service.
 
 If you dump the flows for this table, you should see something like this:
 
@@ -384,28 +393,28 @@ If you dump the flows for this table, you should see something like this:
 2. table=40, priority=0 actions=goto_table:45
 ```
 
-In the example above, 10.96.0.0/12 is the service CIDR (this is the default
+In the example above, 10.96.0.0/12 is the Service CIDR (this is the default
 value used by `kubeadm init`). This flow is not actually required for
-forwarding, but to bypass [EgressRuleTable] and [EgressDefaultTable] for service
+forwarding, but to bypass [EgressRuleTable] and [EgressDefaultTable] for Service
 traffic on its way to kube-proxy through the gateway. If we omitted this flow,
 such traffic would be unconditionally dropped if a Network Policy is applied on
 the originating Pod. For such traffic, we instead enforce Network Policy egress
 rules when packets come back through the gateway and the destination IP has been
-rewritten by kube-proxy (DNAT to a backend for the service). We cannot output
-the service traffic to the gateway port directly as we haven't committed the
+rewritten by kube-proxy (DNAT to a backend for the Service). We cannot output
+the Service traffic to the gateway port directly as we haven't committed the
 connection yet; instead we store the port in NXM_NX_REG1 - similarly to how we
-process non-service traffic in [L2ForwardingCalcTable] - and forward it to
+process non-Service traffic in [L2ForwardingCalcTable] - and forward it to
 [ConntrackCommitTable]. By committing the connection we ensure that reply
-traffic (traffic from the service backend which has already gone through
+traffic (traffic from the Service backend which has already gone through
 kube-proxy for source IP rewrite) will not be dropped because of Network
 Policies.
 
-The table-miss flow entry (flow 2) for this table forwards all non-service
+The table-miss flow entry (flow 2) for this table forwards all non-Service
 traffic to the next table, [EgressRuleTable].
 
 In the future this table may support an additional mode of operations, in which
 it will implement kube-proxy functionality and take care of performing
-load-balancing / DNAT on traffic destined to services.
+load-balancing / DNAT on traffic destined to Services.
 
 ### AntreaPolicyEgressRuleTable (45)
 
@@ -512,7 +521,7 @@ particular, this ensures that reply traffic is never dropped because of a
 Network Policy rule. However, this also means that ongoing connections are not
 affected if the K8s Network Policies are updated.
 
-One thing to keep in mind is that for service traffic, these rules are applied
+One thing to keep in mind is that for Service traffic, these rules are applied
 after the packets have gone through the local gateway and through kube-proxy. At
 this point the ingress port is no longer the Pod port, but the local gateway
 port. Therefore we cannot use the port as the match condition to identify if the
@@ -543,7 +552,7 @@ This table is also used to implement Antrea-native policy egress rules that are
 created in the Baseline Tier. Since the Baseline Tier is meant to be enforced
 after K8s NetworkPolicies, the corresponding flows will be created at a lower
 priority than K8s default drop flows. For example, a baseline rule to drop
-egress traffic to 10.0.10.0/24 will for a namespace will look like the following:
+egress traffic to 10.0.10.0/24 for a Namespace will look like the following:
 
 ```text
 1. table=60, priority=80,ip,nw_src=10.10.1.11 actions=conjunction(5,1/2)
@@ -563,14 +572,13 @@ This is the L3 routing table. It implements the following functionality:
   directly forwarded to the Pod. This requires setting the source MAC to the MAC
   of the local gateway interface and setting the destination MAC to the Pod's
   MAC address. Then the packets will go to [L3DecTTLTable] for decrementing
-  the IP TTL value. Such traffic is identified by matching on the packet's
-  destination MAC address (should be set to the Global Virtual MAC for all
-  tunnelled traffic) and its destination IP address (should match the IP address
-  of a local Pod). We therefore install one flow for each Pod created locally on
-  the Node. For example:
+  the IP TTL value. Such packets can be identified by bit 19 of the NXM_NX_REG0
+  register (which was set to 1 in the [ClassifierTable]) and the destination IP
+  address (which should match the IP address of a local Pod). We therefore
+  install one flow for each Pod created locally on the Node. For example:
 
 ```text
-table=70, priority=200,ip,dl_dst=aa:bb:cc:dd:ee:ff,nw_dst=10.10.0.2 actions=mod_dl_src:e2:e5:a4:9b:1c:b1,mod_dl_dst:12:9e:a6:47:d0:70,goto_table:71
+table=70, priority=200,ip,reg0=0x80000/0x80000,nw_dst=10.10.0.2 actions=mod_dl_src:e2:e5:a4:9b:1c:b1,mod_dl_dst:12:9e:a6:47:d0:70,goto_table:71
 ```
 
 * All tunnelled traffic destined to the local gateway (i.e. for which the
@@ -579,7 +587,7 @@ table=70, priority=200,ip,dl_dst=aa:bb:cc:dd:ee:ff,nw_dst=10.10.0.2 actions=mod_
   local gateway's MAC).
 
 ```text
-table=70, priority=200,ip,dl_dst=aa:bb:cc:dd:ee:ff,nw_dst=10.10.0.1 actions=mod_dl_dst:e2:e5:a4:9b:1c:b1,goto_table:80
+table=70, priority=200,ip,reg0=0x80000/0x80000,nw_dst=10.10.0.1 actions=mod_dl_dst:e2:e5:a4:9b:1c:b1,goto_table:80
 ```
 
 * All traffic destined to a remote Pod is forwarded through the appropriate
@@ -726,7 +734,7 @@ If you dump the flows for this table, you should see something like this:
 
 ```text
 1. table=90, priority=210,ct_state=-new+est,ip actions=goto_table:101
-2. table=90, priority=210,ip,nw_src=10.10.1.1 actions=goto_table:105
+2. table=90, priority=210,pkt_mark=0x1/0x1 actions=goto_table:105
 3. table=90, priority=200,ip,nw_src=10.10.1.2 actions=conjunction(3,1/3)
 4. table=90, priority=200,ip,nw_src=10.10.1.3 actions=conjunction(3,1/3)
 5. table=90, priority=200,ip,reg1=0x3 actions=conjunction(3,2/3)
@@ -741,10 +749,18 @@ connections - as a reminder all connections are committed in
 [ConntrackCommitTable] - packets go straight to IngressMetricsTable,
 then [L2ForwardingOutTable], with no other match required.
 
-Flow 2 ensures that traffic from the local gateway cannot be dropped because of
-Network Policies. This ensures that K8s [liveness
+Flow 2 ensures that the traffic initiated from the host network namespace cannot
+be dropped because of Network Policies. This ensures that K8s [liveness
 probes](https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/)
-can go through.
+can go through. An iptables rule in the mangle table of the host network
+namespace is responsible for marking the locally-generated packets with the
+`0x1/0x1` mark. Note that the flow will be different for Windows worker Node or
+when OVS userspace (netdev) datapath is used. This is because either there is no
+way to add mark for particular traffic (i.e. Windows) or matching the mark in
+OVS is not properly supported (i.e. netdev datapath). As a result, the flow will
+match source IP instead, however, NodePort Service access by external clients
+will be masqueraded as a local gateway IP to bypass Network Policies. This may
+be fixed after AntreaProxy can serve NodePort traffic.
 
 The rest of the flows read as follows: if the source IP address is in set
 {10.10.1.2, 10.10.1.3}, and the destination OF port is in the set {3, 4} (which
@@ -785,7 +801,7 @@ Similar to the [EgressDefaultTable], this table is also used to implement
 Antrea-native policy ingress rules that are created in the Baseline Tier.
 Since the Baseline Tier is meant to be enforced after K8s NetworkPolicies, the
 corresponding flows will be created at a lower priority than K8s default drop flows.
-For example, a baseline rule to isolate ingress traffic for a namespace will look
+For example, a baseline rule to isolate ingress traffic for a Namespace will look
 like the following:
 
 ```text

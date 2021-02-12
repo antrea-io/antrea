@@ -14,12 +14,12 @@ reason, you can follow the instructions below.
 ## Manually building the image and pushing it to Dockerhub
 
 Choose the version of OVS you want to build by setting the `OVS_VERSION`
-environment variable. Then run the `build_and_push.sh` script included in this
+environment variable. Then run the `build.sh` script included in this
 directory. For example:
 
 ```bash
 cd build/images/ovs
-OVS_VERSION=2.14.0 ./build_and_push.sh
+OVS_VERSION=2.14.0 ./build.sh --pull --push
 ```
 
 The image will be pushed to Dockerhub as `antrea/openvswitch:$OVS_VERSION`.

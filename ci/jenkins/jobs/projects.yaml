@@ -12,7 +12,7 @@
           builders:
             - builder-job-updater
           branches:
-          - '*/master'
+          - '*/main'
           included_regions:
           - ci/jenkins/jobs/.*
           cron: 'H/15 * * * *'
@@ -27,7 +27,7 @@
             - builder-conformance:
                 conformance_type: 'whole-conformance'
           branches:
-          - '*/master'
+          - '*/main'
           included_regions: []
           cron: 'H H * * *'
           ignore_post_commit_hooks: false
@@ -65,7 +65,7 @@
           builders:
             - builder-elk-flow-collector
           branches:
-          - '*/master'
+          - '*/main'
           included_regions: []
           cron: 'H H * * *'
           ignore_post_commit_hooks: false
@@ -81,7 +81,7 @@
             - builder-workload-cluster-garbage-collection
           timed: 'H * * * *'
           branches:
-          - '*/master'
+          - '*/main'
           included_regions: []
       - '{name}-{test_name}-for-pull-request':
           test_name: list-tests
@@ -913,7 +913,7 @@
           ignore_post_commit_hooks: false
           parameters:
           - string:
-              default: 'master'
+              default: 'main'
               description: |-
                   The branch name of the original repo. It must match one of the following patterns:
                   - <branchName>
@@ -922,7 +922,7 @@
                   - remotes/<remoteRepoName>/<branchName>
                   - refs/remotes/<remoteRepoName>/<branchName>
                   Tracks/checks out the specified branch.
-                  E.g. master, feature1, refs/heads/master, refs/heads/feature1/master, origin/master, remotes/origin/master, refs/remotes/origin/master, ...
+                  E.g. main, feature1, refs/heads/main, refs/heads/feature1/main, origin/main, remotes/origin/main, refs/remotes/origin/main, ...
                   - <commitId>
                   Checks out the specified commit.
                   E.g. 5062ac843f2b947733e6a3b105977056821bd352, 5062ac84, ...
@@ -935,7 +935,92 @@
                   The syntax is of the form: :regexp. Regular expression syntax in branches to build will only build those branches whose names match the regular expression.
                   Examples:
                       - :^(?!(origin/prefix)).*
-                      matches: origin or origin/master or origin/feature
+                      matches: origin or origin/main or origin/feature
+                      does not match: origin/prefix or origin/prefix_123 or origin/prefix-abc
+              name: GIT_BRANCH
+              trim: 'true'
+          publishers:
+          - archive:
+              allow-empty: true
+              artifacts: 'IS_MATRIX_TEST/*/K8S_VERSION/*/TEST_OS/*/labels/antrea-test-node/antrea-test-logs.tar.gz, IS_MATRIX_TEST/*/K8S_VERSION/*/TEST_OS/*/labels/antrea-test-node/ci/jenkins/*sonobuoy*.tar.gz'
+              case-sensitive: true
+              default-excludes: true
+              fingerprint: false
+              only-if-success: false
+          - email:
+              recipients: projectantrea-dev@googlegroups.com
+          wrappers:
+             - workspace-cleanup
+             - timeout:
+                 timeout: 600
+                 type: absolute
+      - '{name}-{test_name}-matrix-compatibility-test':
+          test_name: upgrade
+          node: 'antrea-test-node'
+          description: 'This is the upgrade matrix compatibility test for Antrea. In this test, more than half of all Antrea agents are old-versioned.'
+          axes:
+            - axis:
+               type: user-defined
+               name: TEST_OS
+               values:
+                - ubuntu-1804
+                - centos-7
+                - photon-3
+            - axis:
+               type: user-defined
+               name: K8S_VERSION
+               values:
+                - v1.17.5
+                - v1.18.2
+            - axis:
+               type: user-defined
+               name: IS_MATRIX_TEST
+               values:
+                - true
+            - axis:
+               type: slave
+               name: labels
+               values:
+                - antrea-test-node
+          builders:
+            - builder-matrix
+          branches:
+          - '${{GIT_BRANCH}}'
+          included_regions: []
+          cron: 'H 15 * * 6'
+          ignore_post_commit_hooks: false
+          parameters:
+          - string:
+              name: OLD_ANTREA_VERSION
+              trim: 'true'
+              default: 'LATEST'
+              description:  |-
+                  The old Antrea version tag. Example: v0.1.0.
+                  If it's 'LATEST', we use the latest release tag by default.
+          - string:
+              default: 'main'
+              description: |-
+                  The branch name of the latest Antrea repo. It must match one of the following patterns:
+                  - <branchName>
+                  - refs/heads/<branchName>
+                  - <remoteRepoName>/<branchName>
+                  - remotes/<remoteRepoName>/<branchName>
+                  - refs/remotes/<remoteRepoName>/<branchName>
+                  Tracks/checks out the specified branch.
+                  E.g. main, feature1, refs/heads/main, refs/heads/feature1/main, origin/main, remotes/origin/main, refs/remotes/origin/main, ...
+                  - <commitId>
+                  Checks out the specified commit.
+                  E.g. 5062ac843f2b947733e6a3b105977056821bd352, 5062ac84, ...
+                  - refs/tags/<tagName>
+                  Tracks/checks out the specified tag.
+                  E.g. refs/tags/git-2.3.0
+                  - <Wildcards>
+                  The syntax is of the form: REPOSITORYNAME/BRANCH. In addition, BRANCH is recognized as a shorthand of */BRANCH, '*' is recognized as a wildcard, and '**' is recognized as wildcard that includes the separator '/'. Therefore, origin/branches* would match origin/branches-foo but not origin/branches/foo, while origin/branches** would match both origin/branches-foo and origin/branches/foo.
+                  - :<regular expression>
+                  The syntax is of the form: :regexp. Regular expression syntax in branches to build will only build those branches whose names match the regular expression.
+                  Examples:
+                      - :^(?!(origin/prefix)).*
+                      matches: origin or origin/main or origin/feature
                       does not match: origin/prefix or origin/prefix_123 or origin/prefix-abc
               name: GIT_BRANCH
               trim: 'true'

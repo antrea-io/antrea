@@ -131,8 +131,15 @@ func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *secv1alpha1.C
 	appliedToGroupNamesSet := sets.String{}
 	// Create AppliedToGroup for each AppliedTo present in ClusterNetworkPolicy spec.
 	for _, at := range cnp.Spec.AppliedTo {
-		appliedToGroupNamesSet.Insert(n.createAppliedToGroup(
-			"", at.PodSelector, at.NamespaceSelector, at.ExternalEntitySelector))
+		var atg string
+		if at.Group != "" {
+			atg = n.processAppliedToGroupForCG(at.Group)
+		} else {
+			atg = n.createAppliedToGroup("", at.PodSelector, at.NamespaceSelector, at.ExternalEntitySelector)
+		}
+		if atg != "" {
+			appliedToGroupNamesSet.Insert(atg)
+		}
 	}
 	rules := make([]controlplane.NetworkPolicyRule, 0, len(cnp.Spec.Ingress)+len(cnp.Spec.Egress))
 	// Compute NetworkPolicyRule for Ingress Rule.
@@ -142,9 +149,16 @@ func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *secv1alpha1.C
 		var appliedToGroupNamesForRule []string
 		// Create AppliedToGroup for each AppliedTo present in the ingress rule.
 		for _, at := range ingressRule.AppliedTo {
-			atGroup := n.createAppliedToGroup("", at.PodSelector, at.NamespaceSelector, at.ExternalEntitySelector)
-			appliedToGroupNamesForRule = append(appliedToGroupNamesForRule, atGroup)
-			appliedToGroupNamesSet.Insert(atGroup)
+			var atGroup string
+			if at.Group != "" {
+				atGroup = n.processAppliedToGroupForCG(at.Group)
+			} else {
+				atGroup = n.createAppliedToGroup("", at.PodSelector, at.NamespaceSelector, at.ExternalEntitySelector)
+			}
+			if atGroup != "" {
+				appliedToGroupNamesForRule = append(appliedToGroupNamesForRule, atGroup)
+				appliedToGroupNamesSet.Insert(atGroup)
+			}
 		}
 		rules = append(rules, controlplane.NetworkPolicyRule{
 			Direction:       controlplane.DirectionIn,
@@ -163,9 +177,16 @@ func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *secv1alpha1.C
 		var appliedToGroupNamesForRule []string
 		// Create AppliedToGroup for each AppliedTo present in the ingress rule.
 		for _, at := range egressRule.AppliedTo {
-			atGroup := n.createAppliedToGroup("", at.PodSelector, at.NamespaceSelector, at.ExternalEntitySelector)
-			appliedToGroupNamesForRule = append(appliedToGroupNamesForRule, atGroup)
-			appliedToGroupNamesSet.Insert(atGroup)
+			var atGroup string
+			if at.Group != "" {
+				atGroup = n.processAppliedToGroupForCG(at.Group)
+			} else {
+				atGroup = n.createAppliedToGroup("", at.PodSelector, at.NamespaceSelector, at.ExternalEntitySelector)
+			}
+			if atGroup != "" {
+				appliedToGroupNamesForRule = append(appliedToGroupNamesForRule, atGroup)
+				appliedToGroupNamesSet.Insert(atGroup)
+			}
 		}
 		rules = append(rules, controlplane.NetworkPolicyRule{
 			Direction:       controlplane.DirectionOut,
@@ -194,4 +215,59 @@ func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *secv1alpha1.C
 		AppliedToPerRule: appliedToPerRule,
 	}
 	return internalNetworkPolicy
+}
+
+// processRefCG processes the ClusterGroup reference present in the rule and returns the
+// NetworkPolicyPeer with the corresponding AddressGroup or IPBlock.
+func (n *NetworkPolicyController) processRefCG(g string) (string, *controlplane.IPBlock) {
+	// Retrieve ClusterGroup for corresponding entry in the rule.
+	cg, err := n.cgLister.Get(g)
+	if err != nil {
+		// This error should not occur as we validate that a CG must exist before
+		// referencing it in an ACNP.
+		klog.Errorf("ClusterGroup %s not found: %v", g, err)
+		return "", nil
+	}
+	key := internalGroupKeyFunc(cg)
+	// Find the internal Group corresponding to this ClusterGroup
+	ig, found, _ := n.internalGroupStore.Get(key)
+	if !found {
+		// Internal Group was not found. Once the internal Group is created, the sync
+		// worker for internal group will re-enqueue the ClusterNetworkPolicy processing
+		// which will trigger the creation of AddressGroup.
+		return "", nil
+	}
+	intGrp := ig.(*antreatypes.Group)
+	if intGrp.IPBlock != nil {
+		return "", intGrp.IPBlock
+	}
+	agKey := n.createAddressGroupForClusterGroupCRD(intGrp)
+	// Return if addressGroup was created or found.
+	return agKey, nil
+}
+
+func (n *NetworkPolicyController) processAppliedToGroupForCG(g string) string {
+	// Retrieve ClusterGroup for corresponding entry in the AppliedToGroup.
+	cg, err := n.cgLister.Get(g)
+	if err != nil {
+		// This error should not occur as we validate that a CG must exist before
+		// referencing it in an ACNP.
+		klog.Errorf("ClusterGroup %s not found: %v", g, err)
+		return ""
+	}
+	key := internalGroupKeyFunc(cg)
+	// Find the internal Group corresponding to this ClusterGroup
+	ig, found, _ := n.internalGroupStore.Get(key)
+	if !found {
+		// Internal Group was not found. Once the internal Group is created, the sync
+		// worker for internal group will re-enqueue the ClusterNetworkPolicy processing
+		// which will trigger the creation of AddressGroup.
+		return ""
+	}
+	intGrp := ig.(*antreatypes.Group)
+	if intGrp.IPBlock != nil {
+		klog.V(2).Infof("ClusterGroup %s with IPBlock will not be processed as AppliedTo", g)
+		return ""
+	}
+	return n.createAppliedToGroupForClusterGroupCRD(intGrp)
 }

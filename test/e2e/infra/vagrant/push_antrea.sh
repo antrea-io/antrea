@@ -1,17 +1,20 @@
 #!/usr/bin/env bash
 
 function usage() {
-    echo "Usage: push_antrea.sh [--prometheus] [-fc|--flow-collector] [-h|--help]
+    echo "Usage: push_antrea.sh [--prometheus] [-fc|--flow-collector <Address>] [-fa|--flow-aggregator] [-h|--help]
     Push the latest Antrea image to all vagrant nodes and restart the Antrea daemons
-          --prometheus           Deploy Prometheus service to scrape metrics from Antrea Agents and Controllers
-          --flow-collector       Provide the IPFIX flow collector address to collect the flows from the Flow Aggregator service
-                                 It should be given in the format IP:port:proto. Example: 192.168.1.100:4739:udp
-                                 Please note that with this option we deploy the Flow Aggregator Service along with Antrea."
+          --prometheus                Deploy Prometheus service to scrape metrics from Antrea Agents and Controllers
+          --flow-collector <Address>  Provide the IPFIX flow collector address to collect the flows from the Flow Aggregator service
+                                      It should be given in the format IP:port:proto. Example: 192.168.1.100:4739:udp
+                                      Please note that with this option we deploy the Flow Aggregator Service along with Antrea.
+          --flow-aggregator           Deploy Flow Aggregator along with Antrea.
+                                      It is automatically deployed if --flow-collector is used."
 }
 
 # Process execution flags
 RUN_PROMETHEUS=false
 FLOW_COLLECTOR=""
+FLOW_AGGREGATOR=false
 
 while [[ $# -gt 0 ]]
 do
@@ -24,7 +27,12 @@ case $key in
     ;;
     -fc|--flow-collector)
     FLOW_COLLECTOR="$2"
+    FLOW_AGGREGATOR=true
     shift 2
+    ;;
+    -fa|--flow-aggregator)
+    FLOW_AGGREGATOR=true
+    shift 1
     ;;
     -h|--help)
     usage
@@ -90,12 +98,12 @@ function pushImgToNodes() {
 
     echo "Copying $IMG_NAME image to every node..."
     # Copy image to control-plane node
-    scp -F ssh-config $SAVED_IMG k8s-node-control-plane:/tmp/antrea-ubuntu.tar &
+    scp -F ssh-config $SAVED_IMG k8s-node-control-plane:/tmp/image.tar &
     pids[0]=$!
     # Loop over all worker nodes and copy image to each one
     for ((i=1; i<=$NUM_WORKERS; i++)); do
         name="k8s-node-worker-$i"
-        scp -F ssh-config $SAVED_IMG $name:/tmp/antrea-ubuntu.tar &
+        scp -F ssh-config $SAVED_IMG $name:/tmp/image.tar &
         pids[$i]=$!
     done
     # Wait for all child processes to complete
@@ -103,16 +111,17 @@ function pushImgToNodes() {
     echo "Done!"
 
     echo "Loading $IMG_NAME image in every node..."
-    ssh -F ssh-config k8s-node-control-plane docker load -i $SAVED_IMG &
+    ssh -F ssh-config k8s-node-control-plane "docker load -i /tmp/image.tar; rm -f /tmp/image.tar" &
     pids[0]=$!
     # Loop over all worker nodes and copy image to each one
     for ((i=1; i<=$NUM_WORKERS; i++)); do
         name="k8s-node-worker-$i"
-        ssh -F ssh-config $name docker load -i $SAVED_IMG &
+        ssh -F ssh-config $name "docker load -i /tmp/image.tar; rm -f /tmp/image.tar" &
         pids[$i]=$!
     done
     # Wait for all child processes to complete
     waitForNodes "${pids[@]}"
+    rm -f $SAVED_IMG
     echo "Done!"
 }
 
@@ -132,19 +141,24 @@ function copyManifestToNodes() {
     echo "Done!"
 }
 
-if [[ $FLOW_COLLECTOR != "" ]]; then
-    echo "Generating manifest with all features enabled along with FlowExporter feature"
-    $THIS_DIR/../../../../hack/generate-manifest.sh --mode dev --all-features > "${ANTREA_YML}"
-
-    SAVED_FLOW_AGG_IMG=/tmp/flow-aggregator.tar
-    FLOW_AGG_IMG_NAME=projects.registry.vmware.com/antrea/flow-aggregator:latest
-
-    FLOW_AGG_BASE_YML=$THIS_DIR/../../../../build/yamls/flow-aggregator.yml
-    FLOW_AGG_YML="/tmp/flow-aggregator.yml"
-
-    $THIS_DIR/../../../../hack/generate-manifest-flow-aggregator.sh --mode dev -fc $FLOW_COLLECTOR > "${FLOW_AGG_YML}"
-
+FLOW_AGG_YML="/tmp/flow-aggregator.yml"
+SAVED_FLOW_AGG_IMG=/tmp/flow-aggregator.tar
+FLOW_AGG_IMG_NAME=projects.registry.vmware.com/antrea/flow-aggregator:latest
+if [ "$FLOW_AGGREGATOR" == "true" ]; then
     pushImgToNodes "$FLOW_AGG_IMG_NAME" "$SAVED_FLOW_AGG_IMG"
+
+    # If a flow collector address is also provided, we update the Antrea
+    # manifest (to enable all features) and Aggregator manifests (to set the
+    # collector address) accordingly.
+    if [[ $FLOW_COLLECTOR != "" ]]; then
+        echo "Generating manifest with all features enabled along with FlowExporter feature"
+        $THIS_DIR/../../../../hack/generate-manifest.sh --mode dev --all-features > "${ANTREA_YML}"
+
+        $THIS_DIR/../../../../hack/generate-manifest-flow-aggregator.sh --mode dev -fc $FLOW_COLLECTOR > "${FLOW_AGG_YML}"
+    else
+        $THIS_DIR/../../../../hack/generate-manifest-flow-aggregator.sh --mode dev > "${FLOW_AGG_YML}"
+    fi
+
     copyManifestToNodes "$FLOW_AGG_YML"
 
     echo "Restarting Flow Aggregator deployment"

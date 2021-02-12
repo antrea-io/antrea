@@ -19,7 +19,9 @@ particular during an upgrade. All these files are located under
 `/var/run/antrea/openvswitch/conf.db`, which stores the Open vSwitch
 database. Prior to Antrea v0.10, any user had read access to the file on the
 host (permissions were set to `0644`). Starting with v0.10, this is no longer
-the case (permissions are now set to `0640`).
+the case (permissions are now set to `0640`). Starting with v0.13, we further
+remove access to the `/var/run/antrea/` directory for non-root users
+(permissions are set to `0750`).
 
 If a malicious Pod can gain read access to this file, or, prior to Antrea v0.10,
 if an attacker can gain access to the host, they can potentially access

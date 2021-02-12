@@ -25,7 +25,7 @@ example, to enable `AntreaProxy` on Linux, edit the Agent configuration in the
   antrea-agent.conf: |
     # FeatureGates is a map of feature names to bools that enable or disable experimental features.
     featureGates:
-    # Enable antrea proxy which provides ServiceLB for in-cluster services in antrea agent.
+    # Enable antrea proxy which provides ServiceLB for in-cluster Services in antrea agent.
     # It should be enabled on Windows, otherwise NetworkPolicy will not take effect on
     # Service traffic.
       AntreaProxy: true
@@ -36,10 +36,12 @@ example, to enable `AntreaProxy` on Linux, edit the Agent configuration in the
 | Feature Name            | Component          | Default | Stage | Alpha Release | Beta Release | GA Release | Extra Requirements | Notes |
 | ----------------------- | ------------------ | ------- | ----- | ------------- | ------------ | ---------- | ------------------ | ----- |
 | `AntreaProxy`           | Agent              | `false` | Alpha | v0.8          | v0.11        | N/A        | Yes                | Must be enabled for Windows. |
+| `EndpointSlice`         | Agent              | `false` | Alpha | v0.13.0       | N/A          | N/A        | Yes                |       |
 | `AntreaPolicy`          | Agent + Controller | `false` | Alpha | v0.8          | N/A          | N/A        | No                 | Agent side config required from v0.9.0+. |
 | `Traceflow`             | Agent + Controller | `false` | Alpha | v0.8          | v0.11        | N/A        | Yes                |       |
 | `FlowExporter`          | Agent              | `false` | Alpha | v0.9          | N/A          | N/A        | Yes                |       |
 | `NetworkPolicyStats`    | Agent + Controller | `false` | Alpha | v0.10         | N/A          | N/A        | No                 |       |
+| `NodePortLocal`         | Agent              | `false` | Alpha | v0.13         | N/A          | N/A        | Yes                |       |
 
 ## Description and Requirements of Features
 
@@ -54,6 +56,20 @@ Note that this feature must be enabled for Windows. The Antrea Windows YAML
 manifest provided as part of releases enables this feature by default. If you
 edit the manifest, make sure you do not disable it, as it is needed for correct
 NetworkPolicy implementation for Pod-to-Service traffic.
+
+### EndpointSlice
+
+`EndpointSlice` enables Service EndpointSlice support in AntreaProxy. The
+EndpointSlice API was introduced in Kubernetes 1.16 (alpha) and it is enabled
+by default in Kubernetes 1.17 (beta). The EndpointSlice feature gate will take no
+effect if AntreaProxy is not enabled. The endpoint conditions of `Serving` and
+`Terminating` are not supported currently. ServiceTopology is not supported either.
+Refer to this [link](https://kubernetes.io/docs/tasks/administer-cluster/enabling-endpointslices/)
+for more information. The EndpointSlice API version that AntreaProxy supports is v1beta1
+currently, and other EndpointSlice API versions are not supported. If EndpointSlice is
+enabled in AntreaProxy, but EndpointSlice API is disabled in Kubernetes or EndpointSlice
+API version v1beta1 is not supported in Kubernetes, Antrea Agent will log an error message
+and will not implement Cluster IP functionality as expected.
 
 #### Requirements for this Feature
 
@@ -138,3 +154,37 @@ foo           bar                   1          12        1221    2020-09-07T13:2
 #### Requirements for this Feature
 
 None
+
+### NodePortLocal
+
+`NodePortLocal` is a feature that runs as part of the Antrea Agent, through which
+each port of a Pod can be reached from external network using a port in the Node
+on which the Pod is running. In addition to enabling NodePortLocal feature gate,
+the value of `nplPortRange` can be set in Antrea Agent configuration through ConfigMap.
+Ports from a Node will be allocated from the range of ports specified in `nplPortRange`.
+If the value of `nplPortRange` is not specified, the range `40000-41000` will be used as
+default.
+
+Pods can be selected for `NodePortLocal` by tagging a Service with Annotation:
+`nodeportlocal.antrea.io/enabled: "true"`. Consequently, `NodePortLocal` is enabled
+for all the Pods which are selected by the Service through a selector, and the ports of these
+Pods will be reachable through Node ports allocated from the `nplPortRange`.
+
+The selected Pods will be annotated with the details about allocated Node port(s) for the Pod.
+For example:
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  annotations:
+    nodeportlocal.antrea.io: '[{"podPort":8080,"nodeIP":"10.10.10.10","nodePort":40002}]'
+
+```
+
+This annotation denotes that the port 8080 of the Pod can be reached through port 40002 of the
+Node with IP Address 10.10.10.10.
+
+#### Requirements for this Feature
+
+This feature is currently only supported for Nodes running Linux with IPv4 addresses.

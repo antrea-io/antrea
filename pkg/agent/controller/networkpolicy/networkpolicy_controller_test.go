@@ -51,8 +51,9 @@ func (g *antreaClientGetter) GetAntreaClient() (versioned.Interface, error) {
 
 func newTestController() (*Controller, *fake.Clientset, *mockReconciler) {
 	clientset := &fake.Clientset{}
-	ch := make(chan v1beta2.PodReference, 100)
-	controller, _ := NewNetworkPolicyController(&antreaClientGetter{clientset}, nil, nil, "node1", ch, true, testAsyncDeleteInterval)
+	ch := make(chan agenttypes.EntityReference, 100)
+	controller, _ := NewNetworkPolicyController(&antreaClientGetter{clientset}, nil, nil, "node1", ch,
+		true, true, true, testAsyncDeleteInterval)
 	reconciler := newMockReconciler()
 	controller.reconciler = reconciler
 	return controller, clientset, reconciler
@@ -507,17 +508,17 @@ func TestNetworkPolicyMetrics(t *testing.T) {
 	// Define a function to check networkpolicy metrics
 	checkNetworkPolicyMetrics := func() {
 		expectedEgressNetworkPolicyRuleCount := `
-		# HELP antrea_agent_egress_networkpolicy_rule_count [STABLE] Number of egress networkpolicy rules on local node which are managed by the Antrea Agent.
+		# HELP antrea_agent_egress_networkpolicy_rule_count [STABLE] Number of egress NetworkPolicy rules on local Node which are managed by the Antrea Agent.
 		# TYPE antrea_agent_egress_networkpolicy_rule_count gauge
 		`
 
 		expectedIngressNetworkPolicyRuleCount := `
-		# HELP antrea_agent_ingress_networkpolicy_rule_count [STABLE] Number of ingress networkpolicy rules on local node which are managed by the Antrea Agent.
+		# HELP antrea_agent_ingress_networkpolicy_rule_count [STABLE] Number of ingress NetworkPolicy rules on local Node which are managed by the Antrea Agent.
 		# TYPE antrea_agent_ingress_networkpolicy_rule_count gauge
 		`
 
 		expectedNetworkPolicyCount := `
-		# HELP antrea_agent_networkpolicy_count [STABLE] Number of networkpolicies on local node which are managed by the Antrea Agent.
+		# HELP antrea_agent_networkpolicy_count [STABLE] Number of NetworkPolicies on local Node which are managed by the Antrea Agent.
 		# TYPE antrea_agent_networkpolicy_count gauge
 		`
 

@@ -28,4 +28,4 @@ install -m 755 /usr/local/bin/antrea-cni /host/opt/cni/bin/antrea
 
 id
 # Load the OVS kernel module
-modprobe openvswitch
+modprobe openvswitch || (echo "Failed to load the OVS kernel module from the container, try running 'modprobe openvswitch' on your Nodes"; exit 1)

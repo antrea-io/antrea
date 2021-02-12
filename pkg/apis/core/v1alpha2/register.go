@@ -46,6 +46,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 	scheme.AddKnownTypes(SchemeGroupVersion,
 		&ExternalEntity{},
 		&ExternalEntityList{},
+		&ClusterGroup{},
+		&ClusterGroupList{},
 	)
 
 	metav1.AddToGroupVersion(scheme, SchemeGroupVersion)

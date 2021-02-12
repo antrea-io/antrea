@@ -39,6 +39,11 @@ var (
 		Group:    SchemeGroupVersion.Group,
 		Version:  SchemeGroupVersion.Version,
 		Resource: "networkpolicies"}
+	GroupVersionResource = schema.GroupVersionResource{
+		Group:    SchemeGroupVersion.Group,
+		Version:  SchemeGroupVersion.Version,
+		Resource: "groups",
+	}
 )
 
 // Resource takes an unqualified resource and returns a Group qualified GroupResource.
@@ -65,6 +70,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&NetworkPolicyList{},
 		&NetworkPolicyStatus{},
 		&NodeStatsSummary{},
+		&ClusterGroupMembers{},
+		&GroupAssociation{},
 	)
 
 	metav1.AddToGroupVersion(scheme, SchemeGroupVersion)
