@@ -1,0 +1,85 @@
+toc:
+  - title: Introduction
+    subfolderitems:
+      - page: Overview
+        url: /index.html
+      - page: Getting Started
+        url: /getting-started
+      - page: Deploying on kind
+        url: /kind
+      - page: Configuration
+        url: /configuration
+  - title: Cloud Deployment
+    subfolderitems:
+      - page: EKS Installation
+        url: /eks-installation
+      - page: AKS Installation
+        url: /aks-installation
+      - page: GKE Installation (Alpha)
+        url: /gke-installation
+      - page: Running Antrea In Policy Only Mode
+        url: /design/policy-only
+  - title: Reference
+    subfolderitems:
+      - page: Antrea Network Policy
+        url: /antrea-network-policy
+      - page: antctl
+        url: /antctl
+      - page: Architecture
+        url: /design/architecture
+      - page: IPsec Configuration
+        url: /ipsec-tunnel
+      - page: Securing Control Plane
+        url: /securing-control-plane
+      - page: Troubleshooting
+        url: /troubleshooting
+      - page: OS-specific Known Issues
+        url: /os-issues
+      - page: OVS Pipeline
+        url: /design/ovs-pipeline
+      - page: Feature Gates
+        url: /feature-gates
+      - page: Network Flow Visibility
+        url: /network-flow-visibility
+      - page: Traceflow Guide
+        url: /traceflow-guide
+      - page: Versioning
+        url: /versioning
+      - page: Antrea API Groups
+        url: /api
+      - page: Antrea API Reference
+        url: /api-reference
+  - title: Windows
+    subfolderitems:
+      - page: Windows Deployment
+        url: /windows
+      - page: Windows Design
+        url: /design/windows-design
+  - title: Integrations
+    subfolderitems:
+      - page: Octant Plugin Installation
+        url: /octant-plugin-installation
+      - page: Prometheus Integration
+        url: /prometheus-integration
+  - title: Developer Guide
+    subfolderitems:
+      - page: Code Generation
+        url: /contributors/code-generation
+      - page: Release Instructions
+        url: /maintainers/release
+      - page: Issue Management
+        url: /contributors/issue-management
+      - page: GitHub Labels
+        url: /contributors/github-labels
+      - page: Manual Installation
+        url: /contributors/manual-installation
+  - title: Project Information
+    subfolderitems: 
+    - page: Contributing to Antrea
+      url: /contributing
+    - page: Roadmap
+      url: /roadmap
+    - page: Change Log
+      url: /changelog
+    - page: Code of Conduct
+      url: /code_of_conduct
