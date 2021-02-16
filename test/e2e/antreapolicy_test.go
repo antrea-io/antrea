@@ -1585,6 +1585,42 @@ func testACNPPortRange(t *testing.T) {
 	executeTests(t, testCase)
 }
 
+// testACNPRejectIngress tests that a ACNP is able to reject ingress traffic from namespace Z to pods labelled A.
+func testACNPRejectIngress(t *testing.T) {
+	builder := &ClusterNetworkPolicySpecBuilder{}
+	builder = builder.SetName("acnp-deny-a-from-z-ingress").
+		SetPriority(1.0).
+		SetAppliedToGroup([]ACNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}}})
+	builder.AddEgress(v1.ProtocolTCP, &p80, nil, nil, nil, nil, map[string]string{"ns": "z"},
+		nil, nil, nil, secv1alpha1.RuleActionReject, "", "")
+
+	reachability := NewReachability(allPods, true)
+	reachability.Expect(Pod("x/a"), Pod("z/a"), false)
+	reachability.Expect(Pod("x/a"), Pod("z/b"), false)
+	reachability.Expect(Pod("x/a"), Pod("z/c"), false)
+	reachability.Expect(Pod("y/a"), Pod("z/a"), false)
+	reachability.Expect(Pod("y/a"), Pod("z/b"), false)
+	reachability.Expect(Pod("y/a"), Pod("z/c"), false)
+	reachability.Expect(Pod("z/a"), Pod("z/b"), false)
+	reachability.Expect(Pod("z/a"), Pod("z/c"), false)
+
+	testStep := []*TestStep{
+		{
+			"Port 80",
+			reachability,
+			[]metav1.Object{builder.Get()},
+			nil,
+			[]int32{80},
+			0,
+			nil,
+		},
+	}
+	testCase := []*TestCase{
+		{"ACNP Reject Ingress From NS:z to All Pod:a", testStep},
+	}
+	executeTests(t, testCase)
+}
+
 // testANPPortRange tests the port range in a ANP can work.
 func testANPPortRange(t *testing.T) {
 	builder := &AntreaNetworkPolicySpecBuilder{}
@@ -2087,6 +2123,7 @@ func TestAntreaPolicy(t *testing.T) {
 		t.Run("Case=ACNPAllowNoDefaultIsolation", func(t *testing.T) { testACNPAllowNoDefaultIsolation(t) })
 		t.Run("Case=ACNPDropEgress", func(t *testing.T) { testACNPDropEgress(t) })
 		t.Run("Case=ACNPPortRange", func(t *testing.T) { testACNPPortRange(t) })
+		t.Run("Case=ACNPACNPRejectIngress", func(t *testing.T) { testACNPRejectIngress(t) })
 		t.Run("Case=ACNPBaselinePolicy", func(t *testing.T) { testBaselineNamespaceIsolation(t) })
 		t.Run("Case=ACNPPrioirtyOverride", func(t *testing.T) { testACNPPriorityOverride(t) })
 		t.Run("Case=ACNPTierOverride", func(t *testing.T) { testACNPTierOverride(t) })

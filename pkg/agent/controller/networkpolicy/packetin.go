@@ -15,6 +15,7 @@
 package networkpolicy
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"log"
@@ -22,6 +23,7 @@ import (
 
 	"github.com/contiv/libOpenflow/openflow13"
 	"github.com/contiv/libOpenflow/protocol"
+	"github.com/contiv/libOpenflow/util"
 	"github.com/contiv/ofnet/ofctrl"
 	"gopkg.in/natefinch/lumberjack.v2"
 	"k8s.io/klog"
@@ -34,6 +36,13 @@ import (
 const (
 	logDir      string = "/var/log/antrea/networkpolicy/"
 	logfileName string = "np.log"
+
+	EthHdrLen  uint16 = 14
+	IPv4HdrLen uint16 = 20
+	IPv6HdrLen uint16 = 40
+	TCPHdrLen  uint16 = 20
+
+	ICMPUnusedHdrLen uint16 = 4
 )
 
 var (
@@ -78,13 +87,40 @@ func initLogger() error {
 	return nil
 }
 
-// HandlePacketIn is the packetin handler registered to openflow by Antrea network policy agent controller.
-// Retrieves information from openflow reg, controller cache, packetin packet to log.
+// HandlePacketIn is the packetin handler registered to openflow by Antrea network
+// policy agent controller. It performs the appropriate operations based on which
+// bits are set in the "custom reasons" field of the packet received from OVS.
 func (c *Controller) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
 	if pktIn == nil {
 		return errors.New("empty packetin for Antrea Policy")
 	}
 
+	matchers := pktIn.GetMatches()
+	// Get custom reasons in this packet-in.
+	match := getMatchRegField(matchers, uint32(openflow.CustomReasonMarkReg))
+	customReasons, err := getInfoInReg(match, openflow.CustomReasonMarkRange.ToNXRange())
+	if err != nil {
+		return fmt.Errorf("received error while unloading customReason from reg: %v", err)
+	}
+
+	// Use reasons to choose operations.
+	if customReasons&openflow.CustomReasonLogging == openflow.CustomReasonLogging {
+		if err := c.logPacket(pktIn); err != nil {
+			return err
+		}
+	}
+	if customReasons&openflow.CustomReasonReject == openflow.CustomReasonReject {
+		if err := c.rejectRequest(pktIn); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// logPacket retrieves information from openflow reg, controller cache, packet-in
+// packet to log.
+func (c *Controller) logPacket(pktIn *ofctrl.PacketIn) error {
 	ob := new(logInfo)
 
 	// Get Network Policy log info
@@ -112,9 +148,9 @@ func getMatchRegField(matchers *ofctrl.Matchers, regNum uint32) *ofctrl.MatchFie
 // getMatch receives ofctrl matchers and table id, match field.
 // Modifies match field to Ingress/Egress register based on tableID.
 func getMatch(matchers *ofctrl.Matchers, tableID binding.TableIDType, disposition uint32) *ofctrl.MatchField {
-	// Get match from CNPDropConjunctionIDReg if disposition is drop
-	if disposition == openflow.DispositionDrop {
-		return getMatchRegField(matchers, uint32(openflow.CNPDropConjunctionIDReg))
+	// Get match from CNPNotAllowConjIDReg if disposition is not allow.
+	if disposition != openflow.DispositionAllow {
+		return getMatchRegField(matchers, uint32(openflow.CNPNotAllowConjIDReg))
 	}
 	// Get match from ingress/egress reg if disposition is allow
 	for _, table := range append(openflow.GetAntreaPolicyEgressTables(), openflow.EgressRuleTable) {
@@ -186,4 +222,98 @@ func getPacketInfo(pktIn *ofctrl.PacketIn, ob *logInfo) error {
 		ob.protocolStr = opsv1alpha1.ProtocolsToString[int32(ipPacket.Protocol)]
 	}
 	return nil
+}
+
+// rejectRequest sends reject response to the requesting client, based on the
+// packet-in message.
+func (c *Controller) rejectRequest(pktIn *ofctrl.PacketIn) error {
+	// Get ethernet data.
+	srcMAC := pktIn.Data.HWDst
+	dstMAC := pktIn.Data.HWSrc
+
+	var (
+		srcIP    string
+		dstIP    string
+		prot     uint8
+		ipHdrLen uint16
+	)
+	switch pktIn.Data.Ethertype {
+	case protocol.IPv4_MSG:
+		// Get IP data.
+		ipv4In := pktIn.Data.Data.(*protocol.IPv4)
+		srcIP = ipv4In.NWDst.String()
+		dstIP = ipv4In.NWSrc.String()
+		prot = ipv4In.Protocol
+		ipHdrLen = IPv4HdrLen
+	case protocol.IPv6_MSG:
+		// Get IP data.
+		ipv6In := pktIn.Data.Data.(*protocol.IPv6)
+		srcIP = ipv6In.NWDst.String()
+		dstIP = ipv6In.NWSrc.String()
+		prot = ipv6In.NextHeader
+		ipHdrLen = IPv6HdrLen
+	}
+
+	pktOutBuilder, err := c.getBasePacketOutBuilder(srcMAC.String(), dstMAC.String(), srcIP, dstIP)
+	if err != nil {
+		return err
+	}
+
+	switch prot {
+	case protocol.Type_TCP:
+		// Get TCP data.
+		TCPSrcPort, TCPDstPort, TCPSeqNum, TCPAckNum, err := getTCPHeaderData(pktIn.Data.Data)
+		if err != nil {
+			return err
+		}
+		return c.ofClient.SendTCPReject(pktOutBuilder, TCPSrcPort, TCPDstPort, TCPSeqNum, TCPAckNum, false)
+	default: // Use ICMP host administratively prohibited for ICMP, UDP, SCTP reject.
+		ipHdr, _ := pktIn.Data.Data.MarshalBinary()
+		ICMPData := make([]byte, int(ICMPUnusedHdrLen+ipHdrLen+8))
+		// Put ICMP unused header in Data prop and set it to zero.
+		binary.BigEndian.PutUint32(ICMPData[:ICMPUnusedHdrLen], 0)
+		copy(ICMPData[ICMPUnusedHdrLen:], ipHdr[:ipHdrLen+8])
+		return c.ofClient.SendICMPReject(pktOutBuilder, ICMPData, false)
+	}
+}
+
+// getTCPHeaderData gets TCP header data used in the reject packet.
+func getTCPHeaderData(ipPkt util.Message) (TCPSrcPort uint16, TCPDstPort uint16, TCPSeqNum uint32, TCPAckNum uint32, err error) {
+	var tcpBytes []byte
+
+	// Transfer Buffer to TCP
+	switch ipPkt.(type) {
+	case *protocol.IPv4:
+		tcpBytes, err = ipPkt.(*protocol.IPv4).Data.(*util.Buffer).MarshalBinary()
+	case *protocol.IPv6:
+		tcpBytes, err = ipPkt.(*protocol.IPv6).Data.(*util.Buffer).MarshalBinary()
+	}
+	if err != nil {
+		return 0, 0, 0, 0, err
+	}
+	tcpIn := new(protocol.TCP)
+	err = tcpIn.UnmarshalBinary(tcpBytes)
+	if err != nil {
+		return 0, 0, 0, 0, err
+	}
+
+	return tcpIn.PortDst, tcpIn.PortSrc, 0, tcpIn.SeqNum + 1, nil
+}
+
+// getBasePacketOutBuilder gets a base IP packetOutBuilder with src&dst MAC, IP and OFPort settled.
+func (c *Controller) getBasePacketOutBuilder(srcMAC string, dstMAC string, srcIP string, dstIP string) (binding.PacketOutBuilder, error) {
+
+	// Get the OpenFlow ports of src Pod and dst Pod.
+	sIface, srcFound := c.ifaceStore.GetInterfaceByIP(srcIP)
+	dIface, dstFound := c.ifaceStore.GetInterfaceByIP(dstIP)
+	if !srcFound || !dstFound {
+		return nil, fmt.Errorf("couldn't find Pod config by IP")
+	}
+
+	packetOutBuilder, err := c.ofClient.GenBasePacketOutBuilder(srcMAC, dstMAC, srcIP, dstIP, uint32(sIface.OFPort), uint32(dIface.OFPort))
+	if err != nil {
+		return nil, err
+	}
+
+	return packetOutBuilder, nil
 }

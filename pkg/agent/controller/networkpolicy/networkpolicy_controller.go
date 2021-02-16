@@ -87,6 +87,7 @@ type Controller struct {
 	appliedToGroupWatcher *watcher
 	addressGroupWatcher   *watcher
 	fullSyncGroup         sync.WaitGroup
+	ifaceStore            interfacestore.InterfaceStore
 }
 
 // NewNetworkPolicyController returns a new *Controller.
@@ -310,6 +311,7 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 		fullSyncWaitGroup: &c.fullSyncGroup,
 		fullSynced:        false,
 	}
+	c.ifaceStore = ifaceStore
 	return c, nil
 }
 

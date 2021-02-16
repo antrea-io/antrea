@@ -241,6 +241,12 @@ type Client interface {
 	IsIPv4Enabled() bool
 	// Returns if IPv6 is supported on this Node or not.
 	IsIPv6Enabled() bool
+	// GenBasePacketOutBuilder generates a base IP packetOutBuilder, which can have more packet data added.
+	GenBasePacketOutBuilder(srcMAC string, dstMAC string, srcIP string, dstIP string, inPort uint32, outPort uint32) (binding.PacketOutBuilder, error)
+	// SendTCPReject sends TCP reject packet as a packet-out to OVS.
+	SendTCPReject(packetOutBuilder binding.PacketOutBuilder, TCPSrcPort uint16, TCPDstPort uint16, TCPSeqNum uint32, TCPAckNum uint32, isIPv6 bool) error
+	// SendICMPReject sends ICMP reject packet as a packet-out to OVS.
+	SendICMPReject(packetOutBuilder binding.PacketOutBuilder, ICMPData []byte, isIPv6 bool) error
 }
 
 // GetFlowTableStatus returns an array of flow table status.
@@ -867,4 +873,76 @@ func (c *client) IsIPv4Enabled() bool {
 
 func (c *client) IsIPv6Enabled() bool {
 	return config.IsIPv6Enabled(c.nodeConfig, c.encapMode)
+}
+
+// GenBasePacketOutBuilder generates a base IP packetOutBuilder, which can have more packet data added.
+func (c *client) GenBasePacketOutBuilder(srcMAC string, dstMAC string, srcIP string, dstIP string, inPort uint32, outPort uint32) (binding.PacketOutBuilder, error) {
+	packetOutBuilder := c.bridge.BuildPacketOut()
+
+	// Set ethernet header.
+	parsedSrcMAC, err := net.ParseMAC(srcMAC)
+	if err != nil {
+		return nil, err
+	}
+	parsedDstMAC, err := net.ParseMAC(dstMAC)
+	if err != nil {
+		return nil, err
+	}
+	packetOutBuilder = packetOutBuilder.SetSrcMAC(parsedSrcMAC)
+	packetOutBuilder = packetOutBuilder.SetDstMAC(parsedDstMAC)
+
+	// Set IP header.
+	parsedSrcIP := net.ParseIP(srcIP)
+	parsedDstIP := net.ParseIP(dstIP)
+	if parsedSrcIP == nil || parsedDstIP == nil {
+		return nil, errors.New("invalid IP")
+	}
+	isIPv6 := parsedSrcIP.To4() == nil
+	if isIPv6 != (parsedDstIP.To4() == nil) {
+		return nil, errors.New("IP version mismatch")
+	}
+	packetOutBuilder = packetOutBuilder.SetSrcIP(parsedSrcIP)
+	packetOutBuilder = packetOutBuilder.SetDstIP(parsedDstIP)
+
+	packetOutBuilder = packetOutBuilder.SetTTL(128)
+
+	packetOutBuilder = packetOutBuilder.SetInport(inPort)
+	packetOutBuilder = packetOutBuilder.SetOutport(outPort)
+
+	return packetOutBuilder, nil
+}
+
+// SendTCPReject generates TCP reject packet(TCP Reset) as a packet-out and send it to OVS.
+func (c *client) SendTCPReject(packetOutBuilder binding.PacketOutBuilder, TCPSrcPort uint16, TCPDstPort uint16, TCPSeqNum uint32, TCPAckNum uint32, isIPv6 bool) error {
+	if isIPv6 {
+		packetOutBuilder = packetOutBuilder.SetIPProtocol(binding.ProtocolTCPv6)
+	} else {
+		packetOutBuilder = packetOutBuilder.SetIPProtocol(binding.ProtocolTCP)
+	}
+	packetOutBuilder = packetOutBuilder.SetTCPSrcPort(TCPSrcPort)
+	packetOutBuilder = packetOutBuilder.SetTCPDstPort(TCPDstPort)
+	packetOutBuilder = packetOutBuilder.SetTCPSeqNum(TCPSeqNum)
+	packetOutBuilder = packetOutBuilder.SetTCPAckNum(TCPAckNum)
+	packetOutBuilder = packetOutBuilder.SetTCPFlags(util.TCPAck + util.TCPRst)
+
+	packetOutObj := packetOutBuilder.Done()
+	return c.bridge.SendPacketOut(packetOutObj)
+}
+
+// SendICMPReject generates ICMP reject packet(Admin Prohibited) as a packet-out and send it to OVS.
+func (c *client) SendICMPReject(packetOutBuilder binding.PacketOutBuilder, ICMPData []byte, isIPv6 bool) error {
+
+	if isIPv6 {
+		packetOutBuilder = packetOutBuilder.SetIPProtocol(binding.ProtocolICMPv6)
+		packetOutBuilder = packetOutBuilder.SetICMPType(util.ICMPv6DstUnreachableType)
+		packetOutBuilder = packetOutBuilder.SetICMPCode(util.ICMPv6DstAdminProhibitedCode)
+	} else {
+		packetOutBuilder = packetOutBuilder.SetIPProtocol(binding.ProtocolICMP)
+		packetOutBuilder = packetOutBuilder.SetICMPType(util.ICMPDstUnreachableType)
+		packetOutBuilder = packetOutBuilder.SetICMPCode(util.ICMPDstHostAdminProhibitedCode)
+	}
+	packetOutBuilder = packetOutBuilder.SetICMPData(ICMPData)
+
+	packetOutObj := packetOutBuilder.Done()
+	return c.bridge.SendPacketOut(packetOutObj)
 }

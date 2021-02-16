@@ -30,6 +30,19 @@ const (
 
 	FamilyIPv4 uint8 = 4
 	FamilyIPv6 uint8 = 6
+
+	TCPUrg uint8 = 0b100000
+	TCPAck uint8 = 0b010000
+	TCPPsh uint8 = 0b001000
+	TCPRst uint8 = 0b000100
+	TCPSyn uint8 = 0b000010
+	TCPFin uint8 = 0b000001
+
+	ICMPDstUnreachableType         uint8 = 3
+	ICMPDstHostAdminProhibitedCode uint8 = 10
+
+	ICMPv6DstUnreachableType     uint8 = 1
+	ICMPv6DstAdminProhibitedCode uint8 = 1
 )
 
 func generateInterfaceName(key string, name string, useHead bool) string {

@@ -868,8 +868,11 @@ func (c *client) calculateActionFlowChangesForRule(rule *types.PolicyRule) *poli
 		var actionFlows []binding.Flow
 		var metricFlows []binding.Flow
 		if rule.IsAntreaNetworkPolicyRule() && *rule.Action == secv1alpha1.RuleActionDrop {
-			metricFlows = append(metricFlows, c.dropRuleMetricFlow(ruleOfID, isIngress))
+			metricFlows = append(metricFlows, c.notAllowRuleMetricFlow(ruleOfID, isIngress))
 			actionFlows = append(actionFlows, c.conjunctionActionDropFlow(ruleOfID, ruleTable.GetID(), rule.Priority, rule.EnableLogging))
+		} else if rule.IsAntreaNetworkPolicyRule() && *rule.Action == secv1alpha1.RuleActionReject {
+			metricFlows = append(metricFlows, c.notAllowRuleMetricFlow(ruleOfID, isIngress))
+			actionFlows = append(actionFlows, c.conjunctionActionRejectFlow(ruleOfID, ruleTable.GetID(), rule.Priority, rule.EnableLogging))
 		} else {
 			metricFlows = append(metricFlows, c.allowRulesMetricFlows(ruleOfID, isIngress)...)
 			actionFlows = append(actionFlows, c.conjunctionActionFlow(ruleOfID, ruleTable.GetID(), dropTable.GetNext(), rule.Priority, rule.EnableLogging)...)
