@@ -23,6 +23,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/apiserver/handlers/ovstracing"
 	"github.com/vmware-tanzu/antrea/pkg/agent/apiserver/handlers/podinterface"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
+	fallbackversion "github.com/vmware-tanzu/antrea/pkg/antctl/fallback/version"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/raw/proxy"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/raw/supportbundle"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/raw/traceflow"
@@ -53,12 +54,16 @@ var CommandList = &commandList{
 					groupVersionResource: &systemv1beta1.ControllerInfoVersionResource,
 				},
 				addonTransform: version.ControllerTransform,
+				// print the antctl client version even if request to Controller fails
+				requestErrorFallback: fallbackversion.RequestErrorFallback,
 			},
 			agentEndpoint: &endpoint{
 				nonResourceEndpoint: &nonResourceEndpoint{
 					path: "/version",
 				},
 				addonTransform: version.AgentTransform,
+				// print the antctl client version even if request to Agent fails
+				requestErrorFallback: fallbackversion.RequestErrorFallback,
 			},
 
 			transformedResponse: reflect.TypeOf(version.Response{}),

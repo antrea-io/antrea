@@ -95,21 +95,22 @@ $GOPATH/bin/openapi-gen  \
 
 # Generate mocks for testing with mockgen.
 MOCKGEN_TARGETS=(
-  "pkg/agent/cniserver/ipam IPAMDriver"
-  "pkg/agent/interfacestore InterfaceStore"
-  "pkg/agent/openflow Client,OFEntryOperations"
-  "pkg/agent/route Interface"
-  "pkg/ovs/openflow Bridge,Table,Flow,Action,CTAction,FlowBuilder"
-  "pkg/ovs/ovsconfig OVSBridgeClient"
-  "pkg/ovs/ovsctl OVSCtlClient"
-  "pkg/agent/querier AgentQuerier"
-  "pkg/controller/networkpolicy EndpointQuerier"
-  "pkg/controller/querier ControllerQuerier"
-  "pkg/querier AgentNetworkPolicyInfoQuerier"
-  "pkg/agent/flowexporter/connections ConnTrackDumper,NetFilterConnTrack"
-  "pkg/ipfix IPFIXExportingProcess,IPFIXSet,IPFIXRegistry,IPFIXCollectingProcess,IPFIXAggregationProcess"
-  "pkg/agent/nodeportlocal/rules PodPortRules"
-  "third_party/proxy Provider"
+  "pkg/agent/cniserver/ipam IPAMDriver testing"
+  "pkg/agent/interfacestore InterfaceStore testing"
+  "pkg/agent/openflow Client,OFEntryOperations testing"
+  "pkg/agent/route Interface testing"
+  "pkg/antctl AntctlClient ."
+  "pkg/ovs/openflow Bridge,Table,Flow,Action,CTAction,FlowBuilder testing"
+  "pkg/ovs/ovsconfig OVSBridgeClient testing"
+  "pkg/ovs/ovsctl OVSCtlClient testing"
+  "pkg/agent/querier AgentQuerier testing"
+  "pkg/controller/networkpolicy EndpointQuerier testing"
+  "pkg/controller/querier ControllerQuerier testing"
+  "pkg/querier AgentNetworkPolicyInfoQuerier testing"
+  "pkg/agent/flowexporter/connections ConnTrackDumper,NetFilterConnTrack testing"
+  "pkg/ipfix IPFIXExportingProcess,IPFIXSet,IPFIXRegistry,IPFIXCollectingProcess,IPFIXAggregationProcess testing"
+  "pkg/agent/nodeportlocal/rules PodPortRules testing"
+  "third_party/proxy Provider testing"
 )
 
 # Command mockgen does not automatically replace variable YEAR with current year
@@ -117,13 +118,21 @@ MOCKGEN_TARGETS=(
 current_year=$(date +"%Y")
 sed -i "s/YEAR/${current_year}/g" hack/boilerplate/license_header.raw.txt
 for target in "${MOCKGEN_TARGETS[@]}"; do
-  read -r package interfaces <<<"${target}"
+  read -r package interfaces mock_package <<<"${target}"
   package_name=$(basename "${package}")
-  $GOPATH/bin/mockgen \
-    -copyright_file hack/boilerplate/license_header.raw.txt \
-    -destination "${package}/testing/mock_${package_name}.go" \
-    -package=testing \
-    "${ANTREA_PKG}/${package}" "${interfaces}"
+  if [[ "${mock_package}" == "." ]]; then # generate mocks in same package as src
+      $GOPATH/bin/mockgen \
+          -copyright_file hack/boilerplate/license_header.raw.txt \
+          -destination "${package}/mock_${package_name}_test.go" \
+          -package="${package_name}" \
+          "${ANTREA_PKG}/${package}" "${interfaces}"
+  else # generate mocks in subpackage
+      $GOPATH/bin/mockgen \
+          -copyright_file hack/boilerplate/license_header.raw.txt \
+          -destination "${package}/${mock_package}/mock_${package_name}.go" \
+          -package="${mock_package}" \
+          "${ANTREA_PKG}/${package}" "${interfaces}"
+  fi
 done
 git checkout HEAD -- hack/boilerplate/license_header.raw.txt
 
