@@ -16,7 +16,6 @@ package flowaggregator
 
 import (
 	"fmt"
-	"net"
 	"time"
 
 	"github.com/vmware/go-ipfix/pkg/collector"

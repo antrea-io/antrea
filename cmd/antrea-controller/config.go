@@ -52,7 +52,7 @@ type ControllerConfig struct {
 	// UUID used to identify the cluster. It should be globally unique. The UUID will be written
 	// to the antrea-cluster-id ConfigMap. If no UUID is provided in this configuration, the
 	// Antrea Controller will auto-generate a random one (version 4 UUID, as per RFC 4122). The
-	// auto-generated name will be persistent across Antrea Controller restarts and
+	// auto-generated UUID will be persistent across Antrea Controller restarts and
 	// upgrades. Most users should not provide their own UUID and this parameter should not be
 	// updated during the lifetime of the cluster. If the parameter is updated during the
 	// lifetime of the cluster, the Antrea Controller will log an error until the "uuid" key of
