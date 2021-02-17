@@ -302,7 +302,7 @@ func TestDefaultDenyIngressPolicy(t *testing.T) {
 
 	serverNode := workerNodeName(1)
 	serverNodeIP := workerNodeIP(1)
-	serverPort := 80
+	serverPort := int32(80)
 	_, serverIPs, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "test-server-", serverNode)
 	defer cleanupFunc()
 
@@ -335,7 +335,7 @@ func TestDefaultDenyIngressPolicy(t *testing.T) {
 		}
 	}()
 
-	npCheck := func(clientName, serverIP string, serverPort int, wantErr bool) {
+	npCheck := func(clientName, serverIP string, serverPort int32, wantErr bool) {
 		if err = data.runNetcatCommandFromTestPod(clientName, serverIP, serverPort); wantErr && err == nil {
 			t.Fatalf("Pod %s should not be able to connect %s, but was able to connect", clientName, net.JoinHostPort(serverIP, fmt.Sprint(serverPort)))
 		} else if !wantErr && err != nil {
@@ -360,7 +360,7 @@ func TestDefaultDenyIngressPolicy(t *testing.T) {
 		if clusterInfo.podV6NetworkCIDR != "" {
 			npCheck(client2Name, serverIPs.ipv6.String(), serverPort, true)
 		}
-		npCheck(client2Name, serverNodeIP, int(service.Spec.Ports[0].NodePort), true)
+		npCheck(client2Name, serverNodeIP, service.Spec.Ports[0].NodePort, true)
 	}
 }
 

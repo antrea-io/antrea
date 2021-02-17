@@ -1196,7 +1196,7 @@ func validatePodIP(podNetworkCIDR string, ip net.IP) (bool, error) {
 }
 
 // createService creates a service with port and targetPort.
-func (data *TestData) createService(serviceName string, port, targetPort int, selector map[string]string, affinity bool,
+func (data *TestData) createService(serviceName string, port, targetPort int32, selector map[string]string, affinity bool,
 	serviceType corev1.ServiceType, ipFamily *corev1.IPFamily) (*corev1.Service, error) {
 	affinityType := corev1.ServiceAffinityNone
 	if affinity {
@@ -1214,8 +1214,8 @@ func (data *TestData) createService(serviceName string, port, targetPort int, se
 		Spec: corev1.ServiceSpec{
 			SessionAffinity: affinityType,
 			Ports: []corev1.ServicePort{{
-				Port:       int32(port),
-				TargetPort: intstr.FromInt(targetPort),
+				Port:       port,
+				TargetPort: intstr.FromInt(int(targetPort)),
 			}},
 			Type:     serviceType,
 			Selector: selector,
