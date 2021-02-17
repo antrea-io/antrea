@@ -141,7 +141,7 @@ func applyDefaultDenyToAllNamespaces(k8s *KubernetesUtils, namespaces []string) 
 		builder := &NetworkPolicySpecBuilder{}
 		builder = builder.SetName(ns, "default-deny-namespace")
 		builder.SetTypeIngress()
-		if _, err := k8s.CreateOrUpdateNetworkPolicy(ns, builder.Get()); err != nil {
+		if _, err := k8s.CreateOrUpdateNetworkPolicy(builder.Get()); err != nil {
 			return err
 		}
 	}
@@ -1085,7 +1085,7 @@ func testACNPClusterGroupUpdate(t *testing.T) {
 		},
 	}
 	testCase := []*TestCase{
-		{"ACNP Drop Egress From All Pod:a to ClusterGroup with NS:z updated to ClusterGroup with NS:y", testStep, true},
+		{"ACNP Drop Egress From All Pod:a to ClusterGroup with NS:z updated to ClusterGroup with NS:y", testStep, false},
 	}
 	executeTests(t, testCase)
 }
@@ -1803,13 +1803,13 @@ func executeTestsWithData(t *testing.T, testList []*TestCase, data *TestData) {
 				doProbe(t, data, p)
 			}
 			if testCase.CleanupPerStep {
-				log.Debugf("cleaning-up policies and groups created by this test step and sleeping for %v", networkPolicyDelay)
+				log.Debugf("Cleaning-up policies and groups created by this test step and sleeping for %v", networkPolicyDelay)
 				cleanupTestStepPolicies(t, step)
 				cleanupTestStepClusterGroups(t, step)
 			}
 		}
 		if !testCase.CleanupPerStep {
-			log.Debugf("cleaning-up policies and groups created by this testcase and sleeping for %v", networkPolicyDelay)
+			log.Debugf("Cleaning-up policies and groups created by this testcase and sleeping for %v", networkPolicyDelay)
 			failOnError(k8sUtils.CleanACNPs(), t)
 			failOnError(k8sUtils.CleanANPs(namespaces), t)
 			failOnError(k8sUtils.CleanNetworkPolicies(namespaces), t)
@@ -1837,18 +1837,16 @@ func doProbe(t *testing.T, data *TestData, p *CustomProbe) {
 }
 
 func applyTestStepPolicies(t *testing.T, step *TestStep) {
-	for _, np := range step.Policies {
-		if acnp, ok := np.(*secv1alpha1.ClusterNetworkPolicy); ok {
-			_, err := k8sUtils.CreateOrUpdateACNP(acnp)
+	for _, policy := range step.Policies {
+		switch p := policy.(type) {
+		case *secv1alpha1.ClusterNetworkPolicy:
+			_, err := k8sUtils.CreateOrUpdateACNP(p)
 			failOnError(err, t)
-		} else if anp, ok := np.(*secv1alpha1.NetworkPolicy); ok {
-			log.Debugf("creating ANP %v in namespace %v", anp.Name, anp.Namespace)
-			_, err := k8sUtils.CreateOrUpdateANP(anp)
+		case *secv1alpha1.NetworkPolicy:
+			_, err := k8sUtils.CreateOrUpdateANP(p)
 			failOnError(err, t)
-		} else {
-			k8sNP, _ := np.(*v1net.NetworkPolicy)
-			log.Debugf("creating K8s NetworkPolicy %v in namespace %v", k8sNP.Name, k8sNP.Namespace)
-			_, err := k8sUtils.CreateOrUpdateNetworkPolicy(k8sNP.Namespace, k8sNP)
+		case *v1net.NetworkPolicy:
+			_, err := k8sUtils.CreateOrUpdateNetworkPolicy(p)
 			failOnError(err, t)
 		}
 	}
@@ -1859,14 +1857,14 @@ func applyTestStepPolicies(t *testing.T, step *TestStep) {
 }
 
 func cleanupTestStepPolicies(t *testing.T, step *TestStep) {
-	for _, np := range step.Policies {
-		if acnp, ok := np.(*secv1alpha1.ClusterNetworkPolicy); ok {
-			failOnError(k8sUtils.DeleteACNP(acnp.Name), t)
-		} else if anp, ok := np.(*secv1alpha1.NetworkPolicy); ok {
-			failOnError(k8sUtils.DeleteANP(anp.Namespace, anp.Name), t)
-		} else {
-			k8sNP, _ := np.(*v1net.NetworkPolicy)
-			failOnError(k8sUtils.DeleteNetworkPolicy(k8sNP.Namespace, k8sNP.Name), t)
+	for _, policy := range step.Policies {
+		switch p := policy.(type) {
+		case *secv1alpha1.ClusterNetworkPolicy:
+			failOnError(k8sUtils.DeleteACNP(p.Name), t)
+		case *secv1alpha1.NetworkPolicy:
+			failOnError(k8sUtils.DeleteANP(p.Namespace, p.Name), t)
+		case *v1net.NetworkPolicy:
+			failOnError(k8sUtils.DeleteNetworkPolicy(p.Namespace, p.Name), t)
 		}
 	}
 	if len(step.Policies) > 0 {
