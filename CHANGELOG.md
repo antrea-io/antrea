@@ -17,7 +17,7 @@ Includes all the changes from [0.12.1].
 
 ### Added
 
-- Add [NodePortLocal] feature to improve integration with external load-balancers. ([#1459](https://github.com/vmware-tanzu/antrea/pull/1459) [#1743](https://github.com/vmware-tanzu/antrea/pull/1743) [#1758](https://github.com/vmware-tanzu/antrea/pull/1758), [@monotosh-avi] [@shubhamavi] [@hemantavi]) [Alpha - Feature Gate: `NodePortLocal`]
+- Add [NodePortLocal] feature to improve integration with external load-balancers. ([#1459](https://github.com/vmware-tanzu/antrea/pull/1459) [#1743](https://github.com/vmware-tanzu/antrea/pull/1743) [#1758](https://github.com/vmware-tanzu/antrea/pull/1758), [@monotosh-avi] [@chauhanshubham] [@hemantavi]) [Alpha - Feature Gate: `NodePortLocal`]
   * Services can be annotated with "nodeportlocal.antrea.io/enabled" to indicate that NodePortLocal should be enabled for this Service's Pod Endpoints
   * For each container port exposed by such a Pod, the Antrea Agent will allocate a local Node port value and traffic sent to this Node port will be forwarded to the container port using DNAT
   * The mapping from allocated Node ports to container ports is stored in a new Pod annotation, "nodeportlocal.antrea.io", e.g. to be consumed by external load-balancers
@@ -731,6 +731,7 @@ The Monitoring [CRDs] feature is graduated from Alpha to Beta.
 [@anfernee]: https://github.com/anfernee
 [@antoninbas]: https://github.com/antoninbas
 [@ceclinux]: https://github.com/ceclinux
+[@chauhanshubham]: https://github.com/chauhanshubham
 [@dreamtalen]: https://github.com/dreamtalen
 [@dumlutimuralp]: https://github.com/dumlutimuralp
 [@Dyanngg]: https://github.com/Dyanngg
@@ -754,7 +755,6 @@ The Monitoring [CRDs] feature is graduated from Alpha to Beta.
 [@qiyueyao]: https://github.com/qiyueyao
 [@reachjainrahul]: https://github.com/reachjainrahul
 [@ruicao93]: https://github.com/ruicao93
-[@shubhamavi]: https://github.com/shubhamavi
 [@siddhant94]: https://github.com/siddhant94
 [@srikartati]: https://github.com/srikartati
 [@suwang48404]: https://github.com/suwang48404
