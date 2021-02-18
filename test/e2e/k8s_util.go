@@ -81,7 +81,7 @@ func (k *KubernetesUtils) GetPods(ns string, key string, val string) ([]v1.Pod, 
 
 // Probe execs into a Pod and checks its connectivity to another Pod.  Of course it assumes
 // that the target Pod is serving on the input port, and also that ncat is installed.
-func (k *KubernetesUtils) Probe(ns1, pod1, ns2, pod2 string, port int) (bool, error) {
+func (k *KubernetesUtils) Probe(ns1, pod1, ns2, pod2 string, port int32) (bool, error) {
 	fromPods, err := k.GetPods(ns1, "pod", pod1)
 	if err != nil {
 		return false, errors.WithMessagef(err, "unable to get pods from ns %s", ns1)
@@ -481,7 +481,7 @@ func (k *KubernetesUtils) waitForHTTPServers(allPods []Pod) error {
 		k.Validate(allPods, reachability, 80)
 		k.Validate(allPods, reachability, 81)
 		for j := 8080; j < 8086; j++ {
-			k.Validate(allPods, reachability, j)
+			k.Validate(allPods, reachability, int32(j))
 		}
 		_, wrong, _ = reachability.Summary()
 		if wrong == 0 {
@@ -494,7 +494,7 @@ func (k *KubernetesUtils) waitForHTTPServers(allPods []Pod) error {
 	return errors.Errorf("after %d tries, %d HTTP servers are not ready", maxTries, wrong)
 }
 
-func (k *KubernetesUtils) Validate(allPods []Pod, reachability *Reachability, port int) {
+func (k *KubernetesUtils) Validate(allPods []Pod, reachability *Reachability, port int32) {
 	type probeResult struct {
 		podFrom   Pod
 		podTo     Pod
