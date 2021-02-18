@@ -20,28 +20,108 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	corev1a1 "github.com/vmware-tanzu/antrea/pkg/apis/core/v1alpha2"
 	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
 )
 
 func testInvalidCGIPBlockWithPodSelector(t *testing.T) {
-	invalidErr := fmt.Errorf("clustergroup created with ipblock and pod selector")
+	invalidErr := fmt.Errorf("clustergroup created with ipblock and podSelector")
 	cgName := "ipb-pod"
 	pSel := &metav1.LabelSelector{MatchLabels: map[string]string{"pod": "x"}}
 	cidr := "10.0.0.10/32"
 	ipb := &secv1alpha1.IPBlock{CIDR: cidr}
-	if _, err := k8sUtils.CreateOrUpdateCG(cgName, pSel, nil, ipb); err == nil {
+	cg := &corev1a1.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: cgName,
+		},
+		Spec: corev1a1.GroupSpec{
+			PodSelector: pSel,
+			IPBlock:     ipb,
+		},
+	}
+	if _, err := k8sUtils.CreateOrUpdateCG(cg); err == nil {
 		// Above creation of CG must fail as it is an invalid spec.
 		failOnError(invalidErr, t)
 	}
 }
 
 func testInvalidCGIPBlockWithNSSelector(t *testing.T) {
-	invalidErr := fmt.Errorf("clustergroup created with ipblock and namespace selector")
+	invalidErr := fmt.Errorf("clustergroup created with ipblock and namespaceSelector")
 	cgName := "ipb-ns"
-	nSel := &metav1.LabelSelector{MatchLabels: map[string]string{"pod": "x"}}
+	nSel := &metav1.LabelSelector{MatchLabels: map[string]string{"ns": "y"}}
 	cidr := "10.0.0.10/32"
 	ipb := &secv1alpha1.IPBlock{CIDR: cidr}
-	if _, err := k8sUtils.CreateOrUpdateCG(cgName, nil, nSel, ipb); err == nil {
+	cg := &corev1a1.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: cgName,
+		},
+		Spec: corev1a1.GroupSpec{
+			NamespaceSelector: nSel,
+			IPBlock:           ipb,
+		},
+	}
+	if _, err := k8sUtils.CreateOrUpdateCG(cg); err == nil {
+		// Above creation of CG must fail as it is an invalid spec.
+		failOnError(invalidErr, t)
+	}
+}
+
+func testInvalidCGServiceRefWithPodNSSelector(t *testing.T) {
+	invalidErr := fmt.Errorf("clustergroup created with serviceReference and podSelector/namespaceSelector")
+	cgName := "svcref-pod"
+	pSel := &metav1.LabelSelector{MatchLabels: map[string]string{"pod": "x"}}
+	nSel := &metav1.LabelSelector{MatchLabels: map[string]string{"ns": "y"}}
+	svcRef := &corev1a1.ServiceReference{
+		Namespace: "y",
+		Name:      "test-svc",
+	}
+	cg := &corev1a1.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: cgName,
+		},
+		Spec: corev1a1.GroupSpec{
+			PodSelector:      pSel,
+			ServiceReference: svcRef,
+		},
+	}
+	cg2 := &corev1a1.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: cgName,
+		},
+		Spec: corev1a1.GroupSpec{
+			NamespaceSelector: nSel,
+			ServiceReference:  svcRef,
+		},
+	}
+	if _, err := k8sUtils.CreateOrUpdateCG(cg); err == nil {
+		// Above creation of CG must fail as it is an invalid spec.
+		failOnError(invalidErr, t)
+	}
+	if _, err := k8sUtils.CreateOrUpdateCG(cg2); err == nil {
+		// Above creation of CG must fail as it is an invalid spec.
+		failOnError(invalidErr, t)
+	}
+}
+
+func testInvalidCGServiceRefWithIPBlock(t *testing.T) {
+	invalidErr := fmt.Errorf("clustergroup created with ipblock and namespaceSelector")
+	cgName := "ipb-svcref"
+	cidr := "10.0.0.10/32"
+	ipb := &secv1alpha1.IPBlock{CIDR: cidr}
+	svcRef := &corev1a1.ServiceReference{
+		Namespace: "y",
+		Name:      "test-svc",
+	}
+	cg := &corev1a1.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: cgName,
+		},
+		Spec: corev1a1.GroupSpec{
+			ServiceReference: svcRef,
+			IPBlock:          ipb,
+		},
+	}
+	if _, err := k8sUtils.CreateOrUpdateCG(cg); err == nil {
 		// Above creation of CG must fail as it is an invalid spec.
 		failOnError(invalidErr, t)
 	}
@@ -59,6 +139,8 @@ func TestClusterGroup(t *testing.T) {
 	t.Run("TestGroupClusterGroupValidate", func(t *testing.T) {
 		t.Run("Case=IPBlockWithPodSelectorDenied", func(t *testing.T) { testInvalidCGIPBlockWithPodSelector(t) })
 		t.Run("Case=IPBlockWithNamespaceSelectorDenied", func(t *testing.T) { testInvalidCGIPBlockWithNSSelector(t) })
+		t.Run("Case=ServiceRefWithPodOrNamespaceSelectorDenied", func(t *testing.T) { testInvalidCGServiceRefWithPodNSSelector(t) })
+		t.Run("Case=ServiceRefWithIPBlockDenied", func(t *testing.T) { testInvalidCGServiceRefWithIPBlock(t) })
 	})
 	failOnError(k8sUtils.CleanCGs(), t)
 }

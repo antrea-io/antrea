@@ -26,6 +26,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	v1net "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 
 	corev1a1 "github.com/vmware-tanzu/antrea/pkg/apis/core/v1alpha2"
 	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
@@ -43,11 +44,11 @@ func NewKubernetesUtils(data *TestData) (*KubernetesUtils, error) {
 	}, nil
 }
 
-// GetPod returns a Pod with the matching Namespace and name
-func (k *KubernetesUtils) GetPod(ns string, name string) (*v1.Pod, error) {
+// GetPodByLabel returns a Pod with the matching Namespace and "pod" label.
+func (k *KubernetesUtils) GetPodByLabel(ns string, name string) (*v1.Pod, error) {
 	pods, err := k.getPodsUncached(ns, "pod", name)
 	if err != nil {
-		return nil, errors.WithMessagef(err, "unable to get pod %s/%s", ns, name)
+		return nil, errors.WithMessagef(err, "unable to get Pod is ns %s with label pod=%s", ns, name)
 	}
 	if len(pods) == 0 {
 		return nil, nil
@@ -81,25 +82,40 @@ func (k *KubernetesUtils) GetPods(ns string, key string, val string) ([]v1.Pod, 
 
 // Probe execs into a Pod and checks its connectivity to another Pod.  Of course it assumes
 // that the target Pod is serving on the input port, and also that ncat is installed.
-func (k *KubernetesUtils) Probe(ns1, pod1, ns2, pod2 string, port int32) (bool, error) {
-	fromPods, err := k.GetPods(ns1, "pod", pod1)
-	if err != nil {
-		return false, errors.WithMessagef(err, "unable to get pods from ns %s", ns1)
-	}
-	if len(fromPods) == 0 {
-		return false, errors.New(fmt.Sprintf("no pod of name %s in namespace %s found", pod1, ns1))
-	}
-	fromPod := fromPods[0]
+func (k *KubernetesUtils) Probe(ns1, pod1, ns2, pod2 string, port int32, usePodName bool) (bool, error) {
+	var fromPod v1.Pod
+	var toPod v1.Pod
 
-	toPods, err := k.GetPods(ns2, "pod", pod2)
-	if err != nil {
-		return false, errors.WithMessagef(err, "unable to get pods from ns %s", ns2)
-	}
-	if len(toPods) == 0 {
-		return false, errors.New(fmt.Sprintf("no pod of name %s in namespace %s found", pod2, ns2))
-	}
-	toPod := toPods[0]
+	if usePodName {
+		pod1Returned, err := k.clientset.CoreV1().Pods(ns1).Get(context.TODO(), pod1, metav1.GetOptions{})
+		if err != nil || pod1Returned == nil {
+			return false, errors.WithMessagef(err, "unable to get Pod %s/%s", ns1, pod1)
+		}
+		fromPod = *pod1Returned
+		pod2Returned, err := k.clientset.CoreV1().Pods(ns2).Get(context.TODO(), pod2, metav1.GetOptions{})
+		if err != nil || pod2Returned == nil {
+			return false, errors.WithMessagef(err, "unable to get Pod %s/%s", ns2, pod2)
+		}
+		toPod = *pod2Returned
+	} else {
+		fromPods, err := k.GetPods(ns1, "pod", pod1)
+		if err != nil {
+			return false, errors.WithMessagef(err, "unable to get pods from ns %s", ns1)
+		}
+		if len(fromPods) == 0 {
+			return false, errors.New(fmt.Sprintf("no Pod of label pod=%s in namespace %s found", pod1, ns1))
+		}
+		fromPod = fromPods[0]
 
+		toPods, err := k.GetPods(ns2, "pod", pod2)
+		if err != nil {
+			return false, errors.WithMessagef(err, "unable to get pods from ns %s", ns2)
+		}
+		if len(toPods) == 0 {
+			return false, errors.New(fmt.Sprintf("no Pod of label pod=%s in namespace %s found", pod2, ns2))
+		}
+		toPod = toPods[0]
+	}
 	toIP := toPod.Status.PodIP
 
 	// There seems to be an issue when running Antrea in Kind where tunnel traffic is dropped at
@@ -214,11 +230,80 @@ func (k *KubernetesUtils) CreateOrUpdateDeployment(ns, deploymentName string, re
 	return d, err
 }
 
+// BuildService is a convenience function for building a corev1.Service spec.
+func (k *KubernetesUtils) BuildService(svcName, svcNS string, port, targetPort int, selector map[string]string, serviceType *v1.ServiceType) *v1.Service {
+	service := &v1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      svcName,
+			Namespace: svcNS,
+		},
+		Spec: v1.ServiceSpec{
+			Ports: []v1.ServicePort{{
+				Port:       int32(port),
+				TargetPort: intstr.FromInt(targetPort),
+			}},
+			Selector: selector,
+		},
+	}
+	if serviceType != nil {
+		service.Spec.Type = *serviceType
+	}
+	return service
+}
+
+// CreateOrUpdateService is a convenience function for updating/creating Services.
+func (k *KubernetesUtils) CreateOrUpdateService(svc *v1.Service) (*v1.Service, error) {
+	log.Infof("creating/updating Service %s in ns %s", svc.Name, svc.Namespace)
+	svcReturned, err := k.clientset.CoreV1().Services(svc.Namespace).Get(context.TODO(), svc.Name, metav1.GetOptions{})
+
+	if err != nil {
+		service, err := k.clientset.CoreV1().Services(svc.Namespace).Create(context.TODO(), svc, metav1.CreateOptions{})
+		if err != nil {
+			log.Infof("Unable to create Service %s/%s: %s", svc.Namespace, svc.Name, err)
+			return nil, err
+		}
+		return service, nil
+	} else if svcReturned.Name != "" {
+		log.Debugf("Service %s/%s already exists, updating", svc.Namespace, svc.Name)
+		clusterIP := svcReturned.Spec.ClusterIP
+		svcReturned.Spec = svc.Spec
+		svcReturned.Spec.ClusterIP = clusterIP
+		service, err := k.clientset.CoreV1().Services(svc.Namespace).Update(context.TODO(), svcReturned, metav1.UpdateOptions{})
+		return service, err
+	}
+	return nil, fmt.Errorf("error occurred in creating/updating Service %s", svc.Name)
+}
+
+// DeleteService is a convenience function for deleting a Service by namespace and name.
+func (k *KubernetesUtils) DeleteService(ns, name string) error {
+	log.Infof("deleting Service %s in ns %s", name, ns)
+	err := k.clientset.CoreV1().Services(ns).Delete(context.TODO(), name, metav1.DeleteOptions{})
+	if err != nil {
+		return errors.Wrapf(err, "unable to delete Service %s", name)
+	}
+	return nil
+}
+
+// CleanServices is a convenience function for deleting Services in the cluster.
+func (k *KubernetesUtils) CleanServices(namespaces []string) error {
+	for _, ns := range namespaces {
+		l, err := k.clientset.CoreV1().Services(ns).List(context.TODO(), metav1.ListOptions{})
+		if err != nil {
+			return errors.Wrapf(err, "unable to list Services in ns %s", ns)
+		}
+		for _, svc := range l.Items {
+			if err := k.DeleteService(svc.Namespace, svc.Name); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 // CreateOrUpdateNetworkPolicy is a convenience function for updating/creating netpols. Updating is important since
 // some tests update a network policy to confirm that mutation works with a CNI.
 func (k *KubernetesUtils) CreateOrUpdateNetworkPolicy(netpol *v1net.NetworkPolicy) (*v1net.NetworkPolicy, error) {
 	log.Infof("Creating/updating network policy %s in ns %s", netpol.Name, netpol.Namespace)
-	netpol.ObjectMeta.Namespace = netpol.Namespace
 	np, err := k.clientset.NetworkingV1().NetworkPolicies(netpol.Namespace).Update(context.TODO(), netpol, metav1.UpdateOptions{})
 	if err == nil {
 		return np, err
@@ -297,46 +382,23 @@ func (k *KubernetesUtils) UpdateTier(tier *secv1alpha1.Tier) (*secv1alpha1.Tier,
 }
 
 // CreateOrUpdateCG is a convenience function for idempotent setup of ClusterGroups
-func (k *KubernetesUtils) CreateOrUpdateCG(name string, pSelector, nSelector *metav1.LabelSelector, ipBlock *secv1alpha1.IPBlock) (*corev1a1.ClusterGroup, error) {
-	log.Infof("Creating/updating ClusterGroup %s", name)
-	cgReturned, err := k.crdClient.CoreV1alpha2().ClusterGroups().Get(context.TODO(), name, metav1.GetOptions{})
+func (k *KubernetesUtils) CreateOrUpdateCG(cg *corev1a1.ClusterGroup) (*corev1a1.ClusterGroup, error) {
+	log.Infof("Creating/updating ClusterGroup %s", cg.Name)
+	cgReturned, err := k.crdClient.CoreV1alpha2().ClusterGroups().Get(context.TODO(), cg.Name, metav1.GetOptions{})
 	if err != nil {
-		log.Debugf("Creating ClusterGroup %s", name)
-		cg := &corev1a1.ClusterGroup{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: name,
-			},
-		}
-		if pSelector != nil {
-			cg.Spec.PodSelector = pSelector
-		}
-		if nSelector != nil {
-			cg.Spec.NamespaceSelector = nSelector
-		}
-		if ipBlock != nil {
-			cg.Spec.IPBlock = ipBlock
-		}
 		cgr, err := k.crdClient.CoreV1alpha2().ClusterGroups().Create(context.TODO(), cg, metav1.CreateOptions{})
 		if err != nil {
-			log.Infof("Unable to create cluster group %s: %v", name, err)
+			log.Infof("Unable to create cluster group %s: %v", cg.Name, err)
 			return nil, err
 		}
 		return cgr, nil
 	} else if cgReturned.Name != "" {
-		log.Debugf("ClusterGroup with name %s already exists, updating", name)
-		if pSelector != nil {
-			cgReturned.Spec.PodSelector = pSelector
-		}
-		if nSelector != nil {
-			cgReturned.Spec.NamespaceSelector = nSelector
-		}
-		if ipBlock != nil {
-			cgReturned.Spec.IPBlock = ipBlock
-		}
+		log.Debugf("ClusterGroup with name %s already exists, updating", cg.Name)
+		cgReturned.Spec = cg.Spec
 		cgr, err := k.crdClient.CoreV1alpha2().ClusterGroups().Update(context.TODO(), cgReturned, metav1.UpdateOptions{})
 		return cgr, err
 	}
-	return nil, fmt.Errorf("error occurred in creating/updating ClusterGroup %s", name)
+	return nil, fmt.Errorf("error occurred in creating/updating ClusterGroup %s", cg.Name)
 }
 
 // CreateCG is a convenience function for creating an Antrea ClusterGroup by name and selector.
@@ -483,7 +545,7 @@ func (k *KubernetesUtils) CleanANPs(namespaces []string) error {
 func (k *KubernetesUtils) waitForPodInNamespace(ns string, pod string) (*string, error) {
 	log.Infof("Waiting for pod %s/%s", ns, pod)
 	for {
-		k8sPod, err := k.GetPod(ns, pod)
+		k8sPod, err := k.GetPodByLabel(ns, pod)
 		if err != nil {
 			return nil, errors.WithMessagef(err, "unable to get pod %s/%s", ns, pod)
 		}
@@ -538,7 +600,7 @@ func (k *KubernetesUtils) Validate(allPods []Pod, reachability *Reachability, po
 	// TODO: find better metrics, this is only for POC.
 	oneProbe := func(podFrom, podTo Pod) {
 		log.Tracef("Probing: %s -> %s", podFrom, podTo)
-		connected, err := k.Probe(podFrom.Namespace(), podFrom.PodName(), podTo.Namespace(), podTo.PodName(), port)
+		connected, err := k.Probe(podFrom.Namespace(), podFrom.PodName(), podTo.Namespace(), podTo.PodName(), port, false)
 		resultsCh <- &probeResult{podFrom, podTo, connected, err}
 	}
 	for _, pod1 := range allPods {
