@@ -62,6 +62,9 @@ require (
 )
 
 replace (
+	// temporary replacement to avoid Antrea Agent panics for some Traceflow requests
+	// see https://github.com/vmware-tanzu/antrea/issues/1878
+	github.com/contiv/libOpenflow => github.com/antoninbas/libOpenflow v0.0.0-20210218001059-32f2e57d0435
 	// antrea/plugins/octant/go.mod also has this replacement since replace statement in dependencies
 	// were ignored. We need to change antrea/plugins/octant/go.mod if there is any change here.
 	github.com/contiv/ofnet => github.com/wenyingd/ofnet v0.0.0-20210205051801-5a4f247248d4
