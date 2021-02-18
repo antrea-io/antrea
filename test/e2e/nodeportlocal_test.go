@@ -25,6 +25,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/nodeportlocal/k8s"
@@ -38,44 +39,77 @@ const (
 	nplSvcAnnotation = "nodeportlocal.antrea.io/enabled"
 )
 
-func getNPLAnnotation(t *testing.T, data *TestData, r *require.Assertions, testPodName string) (string, *PodIPs) {
+type nplRuleData struct {
+	nodePort int
+	podPort  int
+	podIP    string
+}
+
+func getNPLAnnotation(t *testing.T, data *TestData, r *require.Assertions, testPodName string) (string, string) {
 	var nplAnn string
 	var testPodIP *PodIPs
 	var found bool
 	var err error
-	err = wait.Poll(time.Second, defaultTimeout, func() (bool, error) {
-		updatedPod, _ := data.podWaitFor(defaultTimeout, testPodName, testNamespace, func(pod *corev1.Pod) (bool, error) {
-			return pod.Status.Phase == corev1.PodRunning, nil
-		})
-		testPodIP, err = data.podWaitForIPs(defaultTimeout, testPodName, testNamespace)
-		if err != nil {
-			t.Logf("Error when waiting for IP for Pod '%s': %v", testPodName, err)
+
+	data.podWaitFor(defaultTimeout, testPodName, testNamespace, func(pod *corev1.Pod) (bool, error) {
+		if pod.Status.Phase != corev1.PodRunning {
 			return false, nil
 		}
-		r.Nil(err, "Failed to get Pod")
-		ann := updatedPod.GetAnnotations()
-		t.Logf("Got annotation %v for pod IP %v", ann, testPodIP.ipv4.String())
+
+		if pod.Status.PodIP == "" {
+			return false, nil
+		}
+
+		podIPStrings := sets.NewString(pod.Status.PodIP)
+		for _, podIP := range pod.Status.PodIPs {
+			ipStr := strings.TrimSpace(podIP.IP)
+			if ipStr != "" {
+				podIPStrings.Insert(ipStr)
+			}
+		}
+
+		testPodIP, err = parsePodIPs(podIPStrings)
+		if err != nil || testPodIP.ipv4 == nil {
+			return false, nil
+		}
+
+		ann := pod.GetAnnotations()
+		t.Logf("Got annotations %v for Pod with IP %v", ann, testPodIP.ipv4.String())
 		nplAnn, found = ann[k8s.NPLAnnotationKey]
 		return found, nil
 	})
+
 	r.Nil(err, "Poll for Pod Annotation check failed: %v", err)
-	return nplAnn, testPodIP
+	return nplAnn, testPodIP.ipv4.String()
 }
 
-func checkForNPLRuleInIPTABLES(t *testing.T, data *TestData, r *require.Assertions, nplAnnotation []k8s.NPLAnnotation, antreaPod, podIP string, present bool) {
+func checkNPLRuleForPod(t *testing.T, data *TestData, r *require.Assertions, nplAnnotations []k8s.NPLAnnotation, antreaPod, podIP string, present bool) {
+	var rules []nplRuleData
+	for _, ann := range nplAnnotations {
+		rule := nplRuleData{
+			nodePort: ann.NodePort,
+			podIP:    podIP,
+			podPort:  ann.PodPort,
+		}
+		rules = append(rules, rule)
+	}
+	checkForNPLRuleInIPTABLES(t, data, r, antreaPod, rules, present)
+}
+
+func checkForNPLRuleInIPTABLES(t *testing.T, data *TestData, r *require.Assertions, antreaPod string, rules []nplRuleData, present bool) {
 	cmd := []string{"iptables", "-t", "nat", "-S"}
-	t.Logf("Verifying %d annotations for Pod IP: %s", len(nplAnnotation), podIP)
+	t.Logf("Verifying iptables rules %v", rules)
 	err := wait.Poll(time.Second, defaultTimeout, func() (bool, error) {
-		stdout, _, err := data.runCommandFromPod("kube-system", antreaPod, "antrea-agent", cmd)
+		stdout, _, err := data.runCommandFromPod(antreaNamespace, antreaPod, agentContainerName, cmd)
 		if err != nil {
 			t.Logf("Error while checking rules in IPTABLES: %v", err)
 			// In case of error, retry
 			return false, nil
 		}
-		for i := range nplAnnotation {
+		for _, rule := range rules {
 			ruleSpec := []string{
 				"-p", "tcp", "-m", "tcp", "--dport",
-				fmt.Sprint(nplAnnotation[i].NodePort), "-j", "DNAT", "--to-destination", fmt.Sprintf("%s:%d", podIP, nplAnnotation[i].PodPort),
+				fmt.Sprint(rule.nodePort), "-j", "DNAT", "--to-destination", fmt.Sprintf("%s:%d", rule.podIP, rule.podPort),
 			}
 			rs := strings.Join(append([]string{"-A", "ANTREA-NODE-PORT-LOCAL"}, ruleSpec...), " ")
 			t.Logf("Searching for IPTABLES rule: %v", rs)
@@ -93,18 +127,13 @@ func checkForNPLRuleInIPTABLES(t *testing.T, data *TestData, r *require.Assertio
 	r.Nil(err, "Poll for IPTABLES rules check failed")
 }
 
-func checkTrafficForNPL(t *testing.T, data *TestData, r *require.Assertions, nplAnnotation []k8s.NPLAnnotation, clientName string) {
-	err := wait.Poll(time.Second, defaultTimeout, func() (bool, error) {
-		for i := range nplAnnotation {
-			err := data.runNetcatCommandFromTestPod(clientName, nplAnnotation[i].NodeIP, nplAnnotation[i].NodePort)
-			if err != nil {
-				t.Logf("Traffic test failed with error: %v", err)
-				return false, nil
-			}
+func checkTrafficForNPL(t *testing.T, data *TestData, r *require.Assertions, nplAnnotations []k8s.NPLAnnotation, clientName string) {
+	for i := range nplAnnotations {
+		err := data.runNetcatCommandFromTestPod(clientName, nplAnnotations[i].NodeIP, int32(nplAnnotations[i].NodePort))
+		if err != nil {
+			r.Nil("Traffic test failed for NodeIP: %s, NodePort: %d", nplAnnotations[i].NodeIP, nplAnnotations[i].NodePort)
 		}
-		return true, nil
-	})
-	r.Nil(err, "Poll for traffic check failed: %v", err)
+	}
 }
 
 func enableNPLInConfigmap(t *testing.T, data *TestData) {
@@ -157,7 +186,7 @@ func TestNPLAddPod(t *testing.T) {
 
 // NPLTestMultiplePods tests NodePortLocal functionalities after adding multiple Pods.
 // - Enable NodePortLocal if not already enabled.
-// - Create a Service nginx test Pods.
+// - Create a Service with nginx Pods.
 // - Verify that the required NodePortLocal annoation is added in each test Pod.
 // - Make sure IPTABLES rules are correctly added in the Node from Antrea Agent Pod.
 // - Create a client Pod and test traffic through netcat.
@@ -168,7 +197,7 @@ func NPLTestMultiplePods(t *testing.T) {
 	annotation := make(map[string]string)
 	annotation[nplSvcAnnotation] = "true"
 	ipFamily := corev1.IPv4Protocol
-	nplTestData.createNginxClusterIPServiceWithAnnotation(false, &ipFamily, annotation)
+	nplTestData.createNginxClusterIPServiceWithAnnotations(false, &ipFamily, annotation)
 
 	node := nodeName(0)
 	var testPods []string
@@ -196,12 +225,12 @@ func NPLTestMultiplePods(t *testing.T) {
 		var nplAnnotations []k8s.NPLAnnotation
 		json.Unmarshal([]byte(nplAnnotationString), &nplAnnotations)
 
-		checkForNPLRuleInIPTABLES(t, nplTestData, r, nplAnnotations, antreaPod, testPodIP.ipv4.String(), true)
+		checkNPLRuleForPod(t, nplTestData, r, nplAnnotations, antreaPod, testPodIP, true)
 		validatePortInRange(t, nplAnnotations, defaultStartPort, defaultEndPort)
 		checkTrafficForNPL(t, nplTestData, r, nplAnnotations, clientName)
 
 		nplTestData.deletePod(testPodName)
-		checkForNPLRuleInIPTABLES(t, nplTestData, r, nplAnnotations, antreaPod, testPodIP.ipv4.String(), false)
+		checkNPLRuleForPod(t, nplTestData, r, nplAnnotations, antreaPod, testPodIP, false)
 	}
 }
 
@@ -217,7 +246,7 @@ func NPLTestPodAddMultiPort(t *testing.T) {
 	selector := make(map[string]string)
 	selector["app"] = "agnhost"
 	ipFamily := corev1.IPv4Protocol
-	nplTestData.createServiceWithAnnotation("agnhost", 80, 80, selector, false, corev1.ServiceTypeClusterIP, &ipFamily, annotation)
+	nplTestData.createServiceWithAnnotations("agnhost", 80, 80, selector, false, corev1.ServiceTypeClusterIP, &ipFamily, annotation)
 
 	podcmd := "porter"
 
@@ -242,7 +271,7 @@ func NPLTestPodAddMultiPort(t *testing.T) {
 		},
 	}, false, nil)
 
-	r.Nil(err, "Error Creating test Pod: %v", err)
+	r.Nil(err, "Error creating test Pod: %v", err)
 
 	nplAnnotationString, testPodIP := getNPLAnnotation(t, nplTestData, r, testPodName)
 
@@ -262,15 +291,15 @@ func NPLTestPodAddMultiPort(t *testing.T) {
 	antreaPod, err := nplTestData.getAntreaPodOnNode(node)
 	r.Nil(err, "Error when getting Antrea Agent Pod on Node '%s'", node)
 
-	checkForNPLRuleInIPTABLES(t, nplTestData, r, nplAnnotations, antreaPod, testPodIP.ipv4.String(), true)
+	checkNPLRuleForPod(t, nplTestData, r, nplAnnotations, antreaPod, testPodIP, true)
 	validatePortInRange(t, nplAnnotations, defaultStartPort, defaultEndPort)
 	checkTrafficForNPL(t, nplTestData, r, nplAnnotations, clientName)
 
 	nplTestData.deletePod(testPodName)
-	checkForNPLRuleInIPTABLES(t, nplTestData, r, nplAnnotations, antreaPod, testPodIP.ipv4.String(), false)
+	checkNPLRuleForPod(t, nplTestData, r, nplAnnotations, antreaPod, testPodIP, false)
 }
 
-// TestNPLMultiplePodsAndAgentRestart tests NodePortLocal functionalities after Antrea Agent restart.
+// TestNPLMultiplePodsAndAgentRestart tests NodePortLocal functionalities after Antrea Agent restarts.
 // - Create Multiple Nginx Pods.
 // - Restart Antrea Agent Pods.
 // - Verify Pod Annotation, IPTABLES rules and traffic to test Pod.
@@ -287,7 +316,7 @@ func TestNPLMultiplePodsAgentRestart(t *testing.T) {
 	annotation := make(map[string]string)
 	annotation[nplSvcAnnotation] = "true"
 	ipFamily := corev1.IPv4Protocol
-	data.createNginxClusterIPServiceWithAnnotation(false, &ipFamily, annotation)
+	data.createNginxClusterIPServiceWithAnnotations(false, &ipFamily, annotation)
 
 	node := nodeName(0)
 	var testPods []string
@@ -296,7 +325,7 @@ func TestNPLMultiplePodsAgentRestart(t *testing.T) {
 		testPodName := randName("test-pod-")
 		testPods = append(testPods, testPodName)
 		err = data.createNginxPod(testPodName, node)
-		r.Nil(err, "Error Creating test Pod: %v", err)
+		r.Nil(err, "Error creating test Pod: %v", err)
 	}
 
 	clientName := randName("test-client-")
@@ -320,12 +349,11 @@ func TestNPLMultiplePodsAgentRestart(t *testing.T) {
 		var nplAnnotations []k8s.NPLAnnotation
 		json.Unmarshal([]byte(nplAnnotationString), &nplAnnotations)
 
-		checkForNPLRuleInIPTABLES(t, data, r, nplAnnotations, antreaPod, testPodIP.ipv4.String(), true)
+		checkNPLRuleForPod(t, data, r, nplAnnotations, antreaPod, testPodIP, true)
 		validatePortInRange(t, nplAnnotations, defaultStartPort, defaultEndPort)
 		checkTrafficForNPL(t, data, r, nplAnnotations, clientName)
 
 		data.deletePod(testPodName)
-		checkForNPLRuleInIPTABLES(t, data, r, nplAnnotations, antreaPod, testPodIP.ipv4.String(), false)
 	}
 
 }
@@ -348,7 +376,7 @@ func TestNPLChangePortRangeAgentRestart(t *testing.T) {
 	annotation := make(map[string]string)
 	annotation[nplSvcAnnotation] = "true"
 	ipFamily := corev1.IPv4Protocol
-	data.createNginxClusterIPServiceWithAnnotation(false, &ipFamily, annotation)
+	data.createNginxClusterIPServiceWithAnnotations(false, &ipFamily, annotation)
 
 	node := nodeName(0)
 	var testPods []string
@@ -369,8 +397,22 @@ func TestNPLChangePortRangeAgentRestart(t *testing.T) {
 		t.Fatalf("Error when waiting for IP for Pod '%s': %v", clientName, err)
 	}
 
+	var rules []nplRuleData
+	for _, testPodName := range testPods {
+		nplAnnotationString, testPodIP := getNPLAnnotation(t, data, r, testPodName)
+		var nplAnnotations []k8s.NPLAnnotation
+		json.Unmarshal([]byte(nplAnnotationString), &nplAnnotations)
+		for i := range nplAnnotations {
+			rule := nplRuleData{
+				nodePort: nplAnnotations[i].NodePort,
+				podIP:    testPodIP,
+				podPort:  nplAnnotations[i].PodPort,
+			}
+			rules = append(rules, rule)
+		}
+	}
+
 	updateNPLPortRangeInConfigmap(t, data, defaultStartPort, defaultEndPort, updatedStartPort, updatedEndPort)
-	defer updateNPLPortRangeInConfigmap(t, data, updatedStartPort, updatedEndPort, defaultStartPort, defaultEndPort)
 
 	antreaPod, _ := data.getAntreaPodOnNode(node)
 
@@ -379,11 +421,10 @@ func TestNPLChangePortRangeAgentRestart(t *testing.T) {
 		var nplAnnotations []k8s.NPLAnnotation
 		json.Unmarshal([]byte(nplAnnotationString), &nplAnnotations)
 
-		checkForNPLRuleInIPTABLES(t, data, r, nplAnnotations, antreaPod, testPodIP.ipv4.String(), true)
+		checkNPLRuleForPod(t, data, r, nplAnnotations, antreaPod, testPodIP, true)
 		validatePortInRange(t, nplAnnotations, updatedStartPort, updatedEndPort)
 		checkTrafficForNPL(t, data, r, nplAnnotations, clientName)
-
-		data.deletePod(testPodName)
-		checkForNPLRuleInIPTABLES(t, data, r, nplAnnotations, antreaPod, testPodIP.ipv4.String(), false)
 	}
+
+	checkForNPLRuleInIPTABLES(t, data, r, antreaPod, rules, false)
 }
