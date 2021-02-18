@@ -288,7 +288,7 @@ func (c *Controller) checkTraceflowStatus(tf *opsv1alpha1.Traceflow) error {
 			if ob.Component == opsv1alpha1.SpoofGuard {
 				sender = true
 			}
-			if ob.Action == opsv1alpha1.Delivered || ob.Action == opsv1alpha1.Dropped {
+			if ob.Action == opsv1alpha1.Delivered || ob.Action == opsv1alpha1.Dropped || ob.Action == opsv1alpha1.ForwardedOutOfOverlay {
 				receiver = true
 			}
 			if ob.TranslatedDstIP != "" {

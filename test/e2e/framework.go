@@ -28,6 +28,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/containernetworking/plugins/pkg/ip"
 	"golang.org/x/mod/semver"
 	"gopkg.in/yaml.v2"
 	corev1 "k8s.io/api/core/v1"
@@ -101,9 +102,13 @@ const (
 )
 
 type ClusterNode struct {
-	idx  int // 0 for control-plane Node
-	name string
-	ip   string
+	idx              int // 0 for control-plane Node
+	name             string
+	ip               string
+	podV4NetworkCIDR string
+	podV6NetworkCIDR string
+	gwV4Addr         string
+	gwV6Addr         string
 }
 
 type ClusterInfo struct {
@@ -202,6 +207,16 @@ func workerNodeIP(idx int) string {
 	}
 }
 
+// nodeGatewayIPs returns the Antrea gateway's IPv4 address and IPv6 address for the provided Node
+// (if applicable), in that order.
+func nodeGatewayIPs(idx int) (string, string) {
+	if node, ok := clusterInfo.nodes[idx]; !ok {
+		return "", ""
+	} else {
+		return node.gwV4Addr, node.gwV6Addr
+	}
+}
+
 func controlPlaneNodeName() string {
 	return clusterInfo.controlPlaneNodeName
 }
@@ -213,6 +228,16 @@ func nodeName(idx int) string {
 		return ""
 	} else {
 		return node.name
+	}
+}
+
+// nodeName returns an empty string if there is no Node with the provided idx. If idx is 0, the IP
+// of the control-plane Node will be returned.
+func nodeIP(idx int) string {
+	if node, ok := clusterInfo.nodes[idx]; !ok {
+		return ""
+	} else {
+		return node.ip
 	}
 }
 
@@ -292,10 +317,42 @@ func collectClusterInfo() error {
 			}
 		}
 
+		var podV4NetworkCIDR, podV6NetworkCIDR string
+		var gwV4Addr, gwV6Addr string
+		processPodCIDR := func(podCIDR string) error {
+			_, cidr, err := net.ParseCIDR(podCIDR)
+			if err != nil {
+				return err
+			}
+			if cidr.IP.To4() != nil {
+				podV4NetworkCIDR = podCIDR
+				gwV4Addr = ip.NextIP(cidr.IP).String()
+			} else {
+				podV6NetworkCIDR = podCIDR
+				gwV6Addr = ip.NextIP(cidr.IP).String()
+			}
+			return nil
+		}
+		if len(node.Spec.PodCIDRs) == 0 {
+			if err := processPodCIDR(node.Spec.PodCIDR); err != nil {
+				return fmt.Errorf("error when processing PodCIDR field for Node %s: %v", node.Name, err)
+			}
+		} else {
+			for _, podCIDR := range node.Spec.PodCIDRs {
+				if err := processPodCIDR(podCIDR); err != nil {
+					return fmt.Errorf("error when processing PodCIDRs field for Node %s: %v", node.Name, err)
+				}
+			}
+		}
+
 		clusterInfo.nodes[nodeIdx] = ClusterNode{
-			idx:  nodeIdx,
-			name: node.Name,
-			ip:   nodeIP,
+			idx:              nodeIdx,
+			name:             node.Name,
+			ip:               nodeIP,
+			podV4NetworkCIDR: podV4NetworkCIDR,
+			podV6NetworkCIDR: podV6NetworkCIDR,
+			gwV4Addr:         gwV4Addr,
+			gwV6Addr:         gwV6Addr,
 		}
 	}
 	if clusterInfo.controlPlaneNodeName == "" {

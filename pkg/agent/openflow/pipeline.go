@@ -653,12 +653,17 @@ func (c *client) kubeProxyFlows(category cookie.Category) []binding.Flow {
 	return flows
 }
 
-// TODO: Use DuplicateToBuilder or integrate this function into original one to avoid unexpected difference.
-// traceflowConnectionTrackFlows generate Traceflow specific flows that bypass the drop flow in connectionTrackFlows to
-// avoid unexpected packet drop in Traceflow.
-func (c *client) traceflowConnectionTrackFlows(dataplaneTag uint8, category cookie.Category) binding.Flow {
+// TODO: Use DuplicateToBuilder or integrate this function into original one to avoid unexpected
+// difference.
+// traceflowConnectionTrackFlows generates Traceflow specific flows that bypass the drop flow in
+// connectionTrackFlows to avoid unexpected packet drop in Traceflow. It also ensures that if any
+// Traceflow packet has ct_state +rpl, it is dropped. This may happen when the Traceflow request
+// destination is the Node's IP.
+func (c *client) traceflowConnectionTrackFlows(dataplaneTag uint8, category cookie.Category) []binding.Flow {
 	connectionTrackStateTable := c.pipeline[conntrackStateTable]
-	flowBuilder := connectionTrackStateTable.BuildFlow(priorityLow + 2).
+	var flows []binding.Flow
+
+	flowBuilder := connectionTrackStateTable.BuildFlow(priorityLow + 1).
 		MatchProtocol(binding.ProtocolIP).
 		MatchIPDscp(dataplaneTag).
 		SetHardTimeout(300).
@@ -671,7 +676,71 @@ func (c *client) traceflowConnectionTrackFlows(dataplaneTag uint8, category cook
 		flowBuilder = flowBuilder.
 			Action().ResubmitToTable(connectionTrackStateTable.GetNext())
 	}
-	return flowBuilder.Done()
+	flows = append(flows, flowBuilder.Done())
+
+	flows = append(flows, connectionTrackStateTable.BuildFlow(priorityLow+2).
+		MatchProtocol(binding.ProtocolIP).
+		MatchIPDscp(dataplaneTag).
+		MatchCTStateTrk(true).MatchCTStateRpl(true).
+		SetHardTimeout(300).
+		Cookie(c.cookieAllocator.Request(category).Raw()).
+		Action().Drop().
+		Done())
+
+	return flows
+}
+
+func (c *client) traceflowNetworkPolicyFlows(dataplaneTag uint8, category cookie.Category) []binding.Flow {
+	flows := []binding.Flow{}
+	c.conjMatchFlowLock.Lock()
+	defer c.conjMatchFlowLock.Unlock()
+	// Copy default drop rules.
+	for _, ctx := range c.globalConjMatchFlowCache {
+		if ctx.dropFlow != nil {
+			copyFlowBuilder := ctx.dropFlow.CopyToBuilder(priorityNormal+2, false)
+			if ctx.dropFlow.FlowProtocol() == "" {
+				copyFlowBuilderIPv6 := ctx.dropFlow.CopyToBuilder(priorityNormal+2, false)
+				copyFlowBuilderIPv6 = copyFlowBuilderIPv6.MatchProtocol(binding.ProtocolIPv6)
+				flows = append(flows, copyFlowBuilderIPv6.MatchIPDscp(dataplaneTag).
+					SetHardTimeout(300).
+					Cookie(c.cookieAllocator.Request(category).Raw()).
+					Action().SendToController(uint8(PacketInReasonTF)).
+					Done())
+				copyFlowBuilder = copyFlowBuilder.MatchProtocol(binding.ProtocolIP)
+			}
+			flows = append(flows, copyFlowBuilder.MatchIPDscp(dataplaneTag).
+				SetHardTimeout(300).
+				Cookie(c.cookieAllocator.Request(category).Raw()).
+				Action().SendToController(uint8(PacketInReasonTF)).
+				Done())
+		}
+	}
+	// Copy Antrea NetworkPolicy drop rules.
+	for _, conj := range c.policyCache.List() {
+		for _, flow := range conj.(*policyRuleConjunction).metricFlows {
+			if flow.IsDropFlow() {
+				copyFlowBuilder := flow.CopyToBuilder(priorityNormal+2, false)
+				// Generate both IPv4 and IPv6 flows if the original drop flow doesn't match IP/IPv6.
+				// DSCP field is in IP/IPv6 headers so IP/IPv6 match is required in a flow.
+				if flow.FlowProtocol() == "" {
+					copyFlowBuilderIPv6 := flow.CopyToBuilder(priorityNormal+2, false)
+					copyFlowBuilderIPv6 = copyFlowBuilderIPv6.MatchProtocol(binding.ProtocolIPv6)
+					flows = append(flows, copyFlowBuilderIPv6.MatchIPDscp(dataplaneTag).
+						SetHardTimeout(300).
+						Cookie(c.cookieAllocator.Request(category).Raw()).
+						Action().SendToController(uint8(PacketInReasonTF)).
+						Done())
+					copyFlowBuilder = copyFlowBuilder.MatchProtocol(binding.ProtocolIP)
+				}
+				flows = append(flows, copyFlowBuilder.MatchIPDscp(dataplaneTag).
+					SetHardTimeout(300).
+					Cookie(c.cookieAllocator.Request(category).Raw()).
+					Action().SendToController(uint8(PacketInReasonTF)).
+					Done())
+			}
+		}
+	}
+	return flows
 }
 
 // ctRewriteDstMACFlow rewrites the destination MAC address with the local host gateway MAC if the
@@ -768,71 +837,73 @@ func (c *client) l2ForwardCalcFlow(dstMAC net.HardwareAddr, ofPort uint32, skipI
 	// the default flow of L2ForwardingOutTable.
 }
 
-// traceflowL2ForwardOutputFlows generates Traceflow specific flows that outputs traceflow packets to OVS port and Antrea
-// Agent after L2forwarding calculation.
+// traceflowL2ForwardOutputFlows generates Traceflow specific flows that outputs traceflow packets
+// to OVS port and Antrea Agent after L2forwarding calculation.
 func (c *client) traceflowL2ForwardOutputFlows(dataplaneTag uint8, category cookie.Category) []binding.Flow {
 	flows := []binding.Flow{}
-	// Output and SendToController if output port is tunnel or gateway port.
-	// The gw0 IP as Traceflow destination is not supported.
-	if c.encapMode.SupportsEncap() {
-		flows = append(flows, c.pipeline[L2ForwardingOutTable].BuildFlow(priorityNormal+3).
-			MatchReg(int(PortCacheReg), config.DefaultTunOFPort).
+	for _, ipProtocol := range []binding.Protocol{binding.ProtocolIP, binding.ProtocolIPv6} {
+		if c.encapMode.SupportsEncap() {
+			// SendToController and Output if output port is tunnel port.
+			flows = append(flows, c.pipeline[L2ForwardingOutTable].BuildFlow(priorityNormal+3).
+				MatchReg(int(PortCacheReg), config.DefaultTunOFPort).
+				MatchIPDscp(dataplaneTag).
+				SetHardTimeout(300).
+				MatchProtocol(ipProtocol).
+				MatchRegRange(int(marksReg), portFoundMark, ofPortMarkRange).
+				Action().OutputRegRange(int(PortCacheReg), ofPortRegRange).
+				Action().SendToController(uint8(PacketInReasonTF)).
+				Cookie(c.cookieAllocator.Request(category).Raw()).
+				Done())
+			// Only SendToController if output port is local gateway.
+			flows = append(flows, c.pipeline[L2ForwardingOutTable].BuildFlow(priorityNormal+2).
+				MatchReg(int(PortCacheReg), config.HostGatewayOFPort).
+				MatchIPDscp(dataplaneTag).
+				SetHardTimeout(300).
+				MatchProtocol(ipProtocol).
+				MatchRegRange(int(marksReg), portFoundMark, ofPortMarkRange).
+				Action().SendToController(uint8(PacketInReasonTF)).
+				Cookie(c.cookieAllocator.Request(category).Raw()).
+				Done())
+		} else {
+			// SendToController and Output if output port is local gateway.
+			flows = append(flows, c.pipeline[L2ForwardingOutTable].BuildFlow(priorityNormal+2).
+				MatchReg(int(PortCacheReg), config.HostGatewayOFPort).
+				MatchIPDscp(dataplaneTag).
+				SetHardTimeout(300).
+				MatchProtocol(ipProtocol).
+				MatchRegRange(int(marksReg), portFoundMark, ofPortMarkRange).
+				Action().OutputRegRange(int(PortCacheReg), ofPortRegRange).
+				Action().SendToController(uint8(PacketInReasonTF)).
+				Cookie(c.cookieAllocator.Request(category).Raw()).
+				Done())
+		}
+		// Only SendToController if output port is local gateway and destination IP is gateway.
+		gatewayIP := c.nodeConfig.GatewayConfig.IPv4
+		if ipProtocol == binding.ProtocolIPv6 {
+			gatewayIP = c.nodeConfig.GatewayConfig.IPv6
+		}
+		if gatewayIP != nil {
+			flows = append(flows, c.pipeline[L2ForwardingOutTable].BuildFlow(priorityNormal+3).
+				MatchReg(int(PortCacheReg), config.HostGatewayOFPort).
+				MatchDstIP(gatewayIP).
+				MatchIPDscp(dataplaneTag).
+				SetHardTimeout(300).
+				MatchProtocol(ipProtocol).
+				MatchRegRange(int(marksReg), portFoundMark, ofPortMarkRange).
+				Action().SendToController(uint8(PacketInReasonTF)).
+				Cookie(c.cookieAllocator.Request(category).Raw()).
+				Done())
+		}
+		// Only SendToController if output port is Pod port.
+		flows = append(flows, c.pipeline[L2ForwardingOutTable].BuildFlow(priorityNormal+2).
 			MatchIPDscp(dataplaneTag).
 			SetHardTimeout(300).
-			MatchProtocol(binding.ProtocolIP).
+			MatchProtocol(ipProtocol).
 			MatchRegRange(int(marksReg), portFoundMark, ofPortMarkRange).
-			Action().OutputRegRange(int(PortCacheReg), ofPortRegRange).
-			Action().SendToController(uint8(PacketInReasonTF)).
-			Cookie(c.cookieAllocator.Request(category).Raw()).
-			Done())
-		flows = append(flows, c.pipeline[L2ForwardingOutTable].BuildFlow(priorityNormal+3).
-			MatchReg(int(PortCacheReg), config.DefaultTunOFPort).
-			MatchIPDscp(dataplaneTag).
-			SetHardTimeout(300).
-			MatchProtocol(binding.ProtocolIPv6).
-			MatchRegRange(int(marksReg), portFoundMark, ofPortMarkRange).
-			Action().OutputRegRange(int(PortCacheReg), ofPortRegRange).
 			Action().SendToController(uint8(PacketInReasonTF)).
 			Cookie(c.cookieAllocator.Request(category).Raw()).
 			Done())
 	}
-	flows = append(flows, c.pipeline[L2ForwardingOutTable].BuildFlow(priorityNormal+3).
-		MatchReg(int(PortCacheReg), config.HostGatewayOFPort).
-		MatchIPDscp(dataplaneTag).
-		SetHardTimeout(300).
-		MatchProtocol(binding.ProtocolIP).
-		MatchRegRange(int(marksReg), portFoundMark, ofPortMarkRange).
-		Action().OutputRegRange(int(PortCacheReg), ofPortRegRange).
-		Action().SendToController(uint8(PacketInReasonTF)).
-		Cookie(c.cookieAllocator.Request(category).Raw()).
-		Done())
-	flows = append(flows, c.pipeline[L2ForwardingOutTable].BuildFlow(priorityNormal+3).
-		MatchReg(int(PortCacheReg), config.HostGatewayOFPort).
-		MatchIPDscp(dataplaneTag).
-		SetHardTimeout(300).
-		MatchProtocol(binding.ProtocolIPv6).
-		MatchRegRange(int(marksReg), portFoundMark, ofPortMarkRange).
-		Action().OutputRegRange(int(PortCacheReg), ofPortRegRange).
-		Action().SendToController(uint8(PacketInReasonTF)).
-		Cookie(c.cookieAllocator.Request(category).Raw()).
-		Done())
-	// Only SendToController if output port is Pod port.
-	flows = append(flows, c.pipeline[L2ForwardingOutTable].BuildFlow(priorityNormal+2).
-		MatchIPDscp(dataplaneTag).
-		SetHardTimeout(300).
-		MatchProtocol(binding.ProtocolIP).
-		MatchRegRange(int(marksReg), portFoundMark, ofPortMarkRange).
-		Action().SendToController(uint8(PacketInReasonTF)).
-		Cookie(c.cookieAllocator.Request(category).Raw()).
-		Done())
-	flows = append(flows, c.pipeline[L2ForwardingOutTable].BuildFlow(priorityNormal+2).
-		MatchIPDscp(dataplaneTag).
-		SetHardTimeout(300).
-		MatchProtocol(binding.ProtocolIPv6).
-		MatchRegRange(int(marksReg), portFoundMark, ofPortMarkRange).
-		Action().SendToController(uint8(PacketInReasonTF)).
-		Cookie(c.cookieAllocator.Request(category).Raw()).
-		Done())
 	return flows
 }
 
