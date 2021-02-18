@@ -70,6 +70,9 @@ replace (
 	// hcshim repo is modifed to add "AdditionalParams" field to HNSEndpoint struct.
 	// We will use this replace before pushing the change to hcshim upstream repo.
 	github.com/Microsoft/hcsshim v0.8.9 => github.com/ruicao93/hcsshim v0.8.10-0.20210114035434-63fe00c1b9aa
+	// temporary replacement to avoid Antrea Agent panics for some Traceflow requests
+	// see https://github.com/vmware-tanzu/antrea/issues/1878
+	github.com/contiv/libOpenflow => github.com/antoninbas/libOpenflow v0.0.0-20210218001059-32f2e57d0435
 	// antrea/plugins/octant/go.mod also has this replacement since replace statement in dependencies
 	// were ignored. We need to change antrea/plugins/octant/go.mod if there is any change here.
 	github.com/contiv/ofnet => github.com/wenyingd/ofnet v0.0.0-20210205051801-5a4f247248d4
