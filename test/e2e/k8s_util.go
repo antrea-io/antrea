@@ -597,7 +597,11 @@ func (k *KubernetesUtils) Bootstrap(namespaces, pods []string) (*map[string]stri
 }
 
 func (k *KubernetesUtils) Cleanup(namespaces []string) error {
+	// Cleanup any cluster-scoped resources.
 	if err := k.CleanACNPs(); err != nil {
+		return err
+	}
+	if err := k.CleanCGs(); err != nil {
 		return err
 	}
 	for _, ns := range namespaces {
