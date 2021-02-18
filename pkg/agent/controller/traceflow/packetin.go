@@ -224,6 +224,8 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*opsv1alpha1.Tracefl
 			ob.Action = opsv1alpha1.Delivered
 		} else if c.networkConfig.TrafficEncapMode.SupportsEncap() && outputPort == config.HostGatewayOFPort {
 			ob.Action = opsv1alpha1.ForwardedOutOfOverlay
+		} else if outputPort == config.HostGatewayOFPort { // noEncap
+			ob.Action = opsv1alpha1.Forwarded
 		} else {
 			// Output port is Pod port, packet is delivered.
 			ob.Action = opsv1alpha1.Delivered
