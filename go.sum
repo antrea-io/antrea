@@ -39,6 +39,8 @@ github.com/antoninbas/go-powershell v0.1.0 h1:LKwuZJt3loyr++Y2Qc+FZoUt8TwbrTWB3H
 github.com/antoninbas/go-powershell v0.1.0/go.mod h1:01pgKhz1CJxGnCWqXVDgvmp/QmHgWgEdxdYP+1azopE=
 github.com/antoninbas/gonetsh v0.1.2 h1:twRwmATT+Xnj/0JD0UBY4tWeW0D4vcEWITlj8nItJbI=
 github.com/antoninbas/gonetsh v0.1.2/go.mod h1:CMmmf/2dAGQRmgWUDXf4Om/MBof1Emt1V0UH/sgw85c=
+github.com/antoninbas/libOpenflow v0.0.0-20210218001059-32f2e57d0435 h1:vVl9f3eDJm14Cyu9ye0ENw6j1Q++XYLEshV4KYBc9ac=
+github.com/antoninbas/libOpenflow v0.0.0-20210218001059-32f2e57d0435/go.mod h1:KqprRw1Mp8VGnGj0NzPeZQojUvT5X26DV7suLSM1iqM=
 github.com/armon/consul-api v0.0.0-20180202201655-eb2c6b5be1b6/go.mod h1:grANhF5doyWs3UAsr3K4I6qtAmlQcZDesFNEHPZAzj8=
 github.com/awalterschulze/gographviz v2.0.1+incompatible h1:XIECBRq9VPEQqkQL5pw2OtjCAdrtIgFKoJU8eT98AS8=
 github.com/awalterschulze/gographviz v2.0.1+incompatible/go.mod h1:GEV5wmg4YquNw7v1kkyoX9etIk8yVmXj+AkDHuuETHs=
@@ -80,9 +82,6 @@ github.com/containernetworking/cni v0.8.0 h1:BT9lpgGoH4jw3lFC7Odz2prU5ruiYKcgAjM
 github.com/containernetworking/cni v0.8.0/go.mod h1:LGwApLUm2FpoOfxTDEeq8T9ipbpZ61X79hmU3w8FmsY=
 github.com/containernetworking/plugins v0.8.7 h1:bU7QieuAp+sACI2vCzESJ3FoT860urYP+lThyZkb/2M=
 github.com/containernetworking/plugins v0.8.7/go.mod h1:R7lXeZaBzpfqapcAbHRW8/CYwm0dHzbz0XEjofx0uB0=
-github.com/contiv/libOpenflow v0.0.0-20201014051314-c1702744526c/go.mod h1:DtsPlJOByJZ+MO9YITEGUlbJ/jfh/ef0qeNyBYaeNR4=
-github.com/contiv/libOpenflow v0.0.0-20201116154255-01db743640b1 h1:Dx2zj9vXbBivPzmikhvHA5b7Kl3k/SKApMYw9aUF3oE=
-github.com/contiv/libOpenflow v0.0.0-20201116154255-01db743640b1/go.mod h1:DtsPlJOByJZ+MO9YITEGUlbJ/jfh/ef0qeNyBYaeNR4=
 github.com/contiv/libovsdb v0.0.0-20170227191248-d0061a53e358 h1:AiA9SKyNXulsU7aAnyka3UFHYOIH00A9HvdIRnDXlg0=
 github.com/contiv/libovsdb v0.0.0-20170227191248-d0061a53e358/go.mod h1:+qKEHaNVPj+wrn5st7TEFH9wcUWCJq5ZBvVKPQwzAeg=
 github.com/coreos/etcd v3.3.10+incompatible/go.mod h1:uF7uidLiAD3TWHmW31ZFd/JWoc32PjwdhPthX9715RE=

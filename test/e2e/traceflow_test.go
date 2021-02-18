@@ -221,6 +221,7 @@ func TestTraceflowIntraNode(t *testing.T) {
 	if node1IPs[2].ipv6 != nil {
 		dstPodIPv6Str = node1IPs[2].ipv6.String()
 	}
+	gwIPv4Str, gwIPv6Str := nodeGatewayIPs(0)
 
 	// Setup 2 NetworkPolicies:
 	// 1. Allow all egress traffic.
@@ -697,6 +698,102 @@ func TestTraceflowIntraNode(t *testing.T) {
 			},
 			expectedPhase: v1alpha1.Failed,
 		},
+	}
+
+	if gwIPv4Str != "" {
+		testcases = append(testcases, testcase{
+			name:      "localGatewayDestinationIPv4",
+			ipVersion: 4,
+			tf: &v1alpha1.Traceflow{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: randName(fmt.Sprintf("%s-%s-to-%s-", testNamespace, node1Pods[0], strings.ReplaceAll(gwIPv4Str, ":", "--"))),
+				},
+				Spec: v1alpha1.TraceflowSpec{
+					Source: v1alpha1.Source{
+						Namespace: testNamespace,
+						Pod:       node1Pods[0],
+					},
+					Destination: v1alpha1.Destination{
+						IP: gwIPv4Str,
+					},
+					Packet: v1alpha1.Packet{
+						IPHeader: v1alpha1.IPHeader{
+							Protocol: protocolICMP,
+						},
+					},
+				},
+			},
+			expectedPhase: v1alpha1.Succeeded,
+			expectedResults: []v1alpha1.NodeResult{
+				{
+					Node: node1,
+					Observations: []v1alpha1.Observation{
+						{
+							Component: v1alpha1.SpoofGuard,
+							Action:    v1alpha1.Forwarded,
+						},
+						{
+							Component:     v1alpha1.NetworkPolicy,
+							ComponentInfo: "EgressRule",
+							Action:        v1alpha1.Forwarded,
+						},
+						{
+							Component:     v1alpha1.Forwarding,
+							ComponentInfo: "Output",
+							Action:        v1alpha1.Delivered,
+						},
+					},
+				},
+			},
+		})
+	}
+
+	if gwIPv6Str != "" {
+		testcases = append(testcases, testcase{
+			name:      "localGatewayDestinationIPv6",
+			ipVersion: 6,
+			tf: &v1alpha1.Traceflow{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: randName(fmt.Sprintf("%s-%s-to-%s-", testNamespace, node1Pods[0], strings.ReplaceAll(gwIPv6Str, ":", "--"))),
+				},
+				Spec: v1alpha1.TraceflowSpec{
+					Source: v1alpha1.Source{
+						Namespace: testNamespace,
+						Pod:       node1Pods[0],
+					},
+					Destination: v1alpha1.Destination{
+						IP: gwIPv6Str,
+					},
+					Packet: v1alpha1.Packet{
+						IPv6Header: &v1alpha1.IPv6Header{
+							NextHeader: &protocolICMPv6,
+						},
+					},
+				},
+			},
+			expectedPhase: v1alpha1.Succeeded,
+			expectedResults: []v1alpha1.NodeResult{
+				{
+					Node: node1,
+					Observations: []v1alpha1.Observation{
+						{
+							Component: v1alpha1.SpoofGuard,
+							Action:    v1alpha1.Forwarded,
+						},
+						{
+							Component:     v1alpha1.NetworkPolicy,
+							ComponentInfo: "EgressRule",
+							Action:        v1alpha1.Forwarded,
+						},
+						{
+							Component:     v1alpha1.Forwarding,
+							ComponentInfo: "Output",
+							Action:        v1alpha1.Delivered,
+						},
+					},
+				},
+			},
+		})
 	}
 
 	t.Run("traceflowGroupTest", func(t *testing.T) {
@@ -1339,6 +1436,65 @@ func TestTraceflowInterNode(t *testing.T) {
 			})
 		}
 	})
+}
+
+func TestTraceflowExternalIP(t *testing.T) {
+	data, err := setupTest(t)
+	if err != nil {
+		t.Fatalf("Error when setting up test: %v", err)
+	}
+	defer teardownTest(t, data)
+
+	skipIfTraceflowDisabled(t, data)
+	skipIfEncapModeIsNot(t, data, config.TrafficEncapModeEncap)
+
+	node := nodeName(0)
+	nodeIP := nodeIP(0)
+	podNames, _, cleanupFn := createTestBusyboxPods(t, data, 1, node)
+	defer cleanupFn()
+
+	testcase := testcase{
+		name:      "nodeIPDestination",
+		ipVersion: 4,
+		tf: &v1alpha1.Traceflow{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: randName(fmt.Sprintf("%s-%s-to-%s-%s-", testNamespace, podNames[0], testNamespace, strings.ReplaceAll(nodeIP, ":", "--"))),
+			},
+			Spec: v1alpha1.TraceflowSpec{
+				Source: v1alpha1.Source{
+					Namespace: testNamespace,
+					Pod:       podNames[0],
+				},
+				Destination: v1alpha1.Destination{
+					IP: nodeIP,
+				},
+				Packet: v1alpha1.Packet{
+					IPHeader: v1alpha1.IPHeader{
+						Protocol: protocolICMP,
+					},
+				},
+			},
+		},
+		expectedPhase: v1alpha1.Succeeded,
+		expectedResults: []v1alpha1.NodeResult{
+			{
+				Node: node,
+				Observations: []v1alpha1.Observation{
+					{
+						Component: v1alpha1.SpoofGuard,
+						Action:    v1alpha1.Forwarded,
+					},
+					{
+						Component:     v1alpha1.Forwarding,
+						ComponentInfo: "Output",
+						Action:        v1alpha1.ForwardedOutOfOverlay,
+					},
+				},
+			},
+		},
+	}
+
+	runTestTraceflow(t, data, testcase)
 }
 
 func (data *TestData) waitForTraceflow(t *testing.T, name string, phase v1alpha1.TraceflowPhase) (*v1alpha1.Traceflow, error) {
