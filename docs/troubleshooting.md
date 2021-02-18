@@ -16,6 +16,7 @@
 - [Troubleshooting Open vSwitch](#troubleshooting-open-vswitch)
 - [Troubleshooting with antctl](#troubleshooting-with-antctl)
 - [Profiling Antrea components](#profiling-antrea-components)
+- [Ask your questions to the Antrea community](#ask-your-questions-to-the-antrea-community)
 <!-- /toc -->
 
 ## Looking at the Antrea logs
@@ -257,3 +258,10 @@ antctl proxy --controller&
 # Look at a 30-second CPU profile
 go tool pprof http://127.0.0.1:8001/debug/pprof/profile?seconds=30
 ```
+
+## Ask your questions to the Antrea community
+
+If you are running into issues when running Antrea and you need help, ask your
+questions on [Github](https://github.com/vmware-tanzu/antrea/issues/new/choose)
+or [reach out to us on Slack or during the Antrea office
+hours](../README.md/#community).
