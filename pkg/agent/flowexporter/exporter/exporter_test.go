@@ -62,6 +62,7 @@ func testFlowExporter_sendTemplateSet(t *testing.T, v4Enabled bool, v6Enabled bo
 		0,
 		testTemplateIDv4,
 		testTemplateIDv6,
+		ipfixtest.NewMockIPFIXSet(ctrl),
 		mockIPFIXRegistry,
 		v4Enabled,
 		v6Enabled,
@@ -169,6 +170,7 @@ func testFlowExporter_sendDataSet(t *testing.T, v4Enabled bool, v6Enabled bool) 
 		0,
 		testTemplateIDv4,
 		testTemplateIDv6,
+		mockDataSet,
 		mockIPFIXRegistry,
 		v4Enabled,
 		v6Enabled,
@@ -190,7 +192,7 @@ func testFlowExporter_sendDataSet(t *testing.T, v4Enabled bool, v6Enabled bool) 
 		)
 		mockDataSet.EXPECT().GetSet().Return(dataSet)
 		mockIPFIXExpProc.EXPECT().SendSet(dataSet).Return(0, nil)
-		err := flowExp.addRecordToSet(mockDataSet, record)
+		err := flowExp.addRecordToSet(record)
 		assert.NoError(t, err, "Error when adding record to data set")
 		_, err = flowExp.sendDataSet(mockDataSet)
 		assert.NoError(t, err, "Error in sending data set")

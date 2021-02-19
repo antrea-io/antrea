@@ -141,6 +141,32 @@ func (mr *MockIPFIXSetMockRecorder) GetSet() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSet", reflect.TypeOf((*MockIPFIXSet)(nil).GetSet))
 }
 
+// PrepareSet mocks base method
+func (m *MockIPFIXSet) PrepareSet(arg0 entities.ContentType, arg1 uint16) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PrepareSet", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// PrepareSet indicates an expected call of PrepareSet
+func (mr *MockIPFIXSetMockRecorder) PrepareSet(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PrepareSet", reflect.TypeOf((*MockIPFIXSet)(nil).PrepareSet), arg0, arg1)
+}
+
+// ResetSet mocks base method
+func (m *MockIPFIXSet) ResetSet() {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "ResetSet")
+}
+
+// ResetSet indicates an expected call of ResetSet
+func (mr *MockIPFIXSetMockRecorder) ResetSet() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResetSet", reflect.TypeOf((*MockIPFIXSet)(nil).ResetSet))
+}
+
 // MockIPFIXRegistry is a mock of IPFIXRegistry interface
 type MockIPFIXRegistry struct {
 	ctrl     *gomock.Controller
