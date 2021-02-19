@@ -135,14 +135,14 @@ func (k *KubernetesUtils) CreateOrUpdateNamespace(n string, labels map[string]st
 	}
 	nsr, err := k.clientset.CoreV1().Namespaces().Create(context.TODO(), ns, metav1.CreateOptions{})
 	if err == nil {
-		log.Infof("created namespace %s", n)
+		log.Infof("Created namespace %s", n)
 		return nsr, nil
 	}
 
-	log.Debugf("unable to create namespace %s, let's try updating it instead (error: %s)", ns.Name, err)
+	log.Debugf("Unable to create namespace %s, let's try updating it instead (error: %s)", ns.Name, err)
 	nsr, err = k.clientset.CoreV1().Namespaces().Update(context.TODO(), ns, metav1.UpdateOptions{})
 	if err != nil {
-		log.Debugf("unable to update namespace %s: %s", ns, err)
+		log.Debugf("Unable to update namespace %s: %s", ns, err)
 	}
 
 	return nsr, err
@@ -151,7 +151,7 @@ func (k *KubernetesUtils) CreateOrUpdateNamespace(n string, labels map[string]st
 // CreateOrUpdateDeployment is a convenience function for idempotent setup of deployments
 func (k *KubernetesUtils) CreateOrUpdateDeployment(ns, deploymentName string, replicas int32, labels map[string]string) (*appsv1.Deployment, error) {
 	zero := int64(0)
-	log.Infof("creating/updating deployment %s in ns %s", deploymentName, ns)
+	log.Infof("Creating/updating deployment %s in ns %s", deploymentName, ns)
 	makeContainerSpec := func(port int32) v1.Container {
 		return v1.Container{
 			Name:            fmt.Sprintf("c%d", port),
@@ -202,52 +202,60 @@ func (k *KubernetesUtils) CreateOrUpdateDeployment(ns, deploymentName string, re
 
 	d, err := k.clientset.AppsV1().Deployments(ns).Create(context.TODO(), deployment, metav1.CreateOptions{})
 	if err == nil {
-		log.Infof("created deployment %s in namespace %s", d.Name, ns)
+		log.Infof("Created deployment %s in namespace %s", d.Name, ns)
 		return d, nil
 	}
 
-	log.Debugf("unable to create deployment %s in ns %s, let's try update instead", deployment.Name, ns)
+	log.Debugf("Unable to create deployment %s in ns %s, let's try update instead", deployment.Name, ns)
 	d, err = k.clientset.AppsV1().Deployments(ns).Update(context.TODO(), d, metav1.UpdateOptions{})
 	if err != nil {
-		log.Debugf("unable to update deployment %s in ns %s: %s", deployment.Name, ns, err)
+		log.Debugf("Unable to update deployment %s in ns %s: %s", deployment.Name, ns, err)
 	}
 	return d, err
 }
 
-// CleanNetworkPolicies is a convenience function for deleting network policies before startup of any new test.
-func (k *KubernetesUtils) CleanNetworkPolicies(namespaces []string) error {
-	for _, ns := range namespaces {
-		l, err := k.clientset.NetworkingV1().NetworkPolicies(ns).List(context.TODO(), metav1.ListOptions{})
-		if err != nil {
-			return errors.Wrapf(err, "unable to list network policies in ns %s", ns)
-		}
-		for _, np := range l.Items {
-			log.Infof("deleting network policy %s in ns %s", np.Name, ns)
-			err = k.clientset.NetworkingV1().NetworkPolicies(np.Namespace).Delete(context.TODO(), np.Name, metav1.DeleteOptions{})
-			if err != nil {
-				return errors.Wrapf(err, "unable to delete network policy %s", np.Name)
-			}
-		}
-	}
-	return nil
-}
-
 // CreateOrUpdateNetworkPolicy is a convenience function for updating/creating netpols. Updating is important since
 // some tests update a network policy to confirm that mutation works with a CNI.
-func (k *KubernetesUtils) CreateOrUpdateNetworkPolicy(ns string, netpol *v1net.NetworkPolicy) (*v1net.NetworkPolicy, error) {
-	log.Infof("creating/updating network policy %s in ns %s", netpol.Name, ns)
-	netpol.ObjectMeta.Namespace = ns
-	np, err := k.clientset.NetworkingV1().NetworkPolicies(ns).Update(context.TODO(), netpol, metav1.UpdateOptions{})
+func (k *KubernetesUtils) CreateOrUpdateNetworkPolicy(netpol *v1net.NetworkPolicy) (*v1net.NetworkPolicy, error) {
+	log.Infof("Creating/updating network policy %s in ns %s", netpol.Name, netpol.Namespace)
+	netpol.ObjectMeta.Namespace = netpol.Namespace
+	np, err := k.clientset.NetworkingV1().NetworkPolicies(netpol.Namespace).Update(context.TODO(), netpol, metav1.UpdateOptions{})
 	if err == nil {
 		return np, err
 	}
 
-	log.Debugf("unable to update network policy %s in ns %s, let's try creating it instead (error: %s)", netpol.Name, ns, err)
-	np, err = k.clientset.NetworkingV1().NetworkPolicies(ns).Create(context.TODO(), netpol, metav1.CreateOptions{})
+	log.Debugf("Unable to update network policy %s in ns %s, let's try creating it instead (error: %s)", netpol.Name, netpol.Namespace, err)
+	np, err = k.clientset.NetworkingV1().NetworkPolicies(netpol.Namespace).Create(context.TODO(), netpol, metav1.CreateOptions{})
 	if err != nil {
-		log.Debugf("unable to create network policy: %s", err)
+		log.Debugf("Unable to create network policy: %s", err)
 	}
 	return np, err
+}
+
+// DeleteNetworkPolicy is a convenience function for deleting NetworkPolicy by name and namespace.
+func (k *KubernetesUtils) DeleteNetworkPolicy(ns, name string) error {
+	log.Infof("Deleting NetworkPolicy %s in ns %s", name, ns)
+	err := k.clientset.NetworkingV1().NetworkPolicies(ns).Delete(context.TODO(), name, metav1.DeleteOptions{})
+	if err != nil {
+		return errors.Wrapf(err, "unable to delete NetworkPolicy %s", name)
+	}
+	return nil
+}
+
+// CleanNetworkPolicies is a convenience function for deleting NetworkPolicies in the provided namespaces.
+func (k *KubernetesUtils) CleanNetworkPolicies(namespaces []string) error {
+	for _, ns := range namespaces {
+		l, err := k.clientset.NetworkingV1().NetworkPolicies(ns).List(context.TODO(), metav1.ListOptions{})
+		if err != nil {
+			return errors.Wrapf(err, "unable to list NetworkPolicy in ns %s", ns)
+		}
+		for _, np := range l.Items {
+			if err = k.DeleteNetworkPolicy(np.Namespace, np.Name); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // DeleteTier is a convenience function for deleting an Antrea Policy Tier with specific name.
@@ -256,7 +264,7 @@ func (k *KubernetesUtils) DeleteTier(name string) error {
 	if err != nil {
 		return errors.Wrapf(err, "unable to get tier %s", name)
 	}
-	log.Infof("deleting tier %s", name)
+	log.Infof("Deleting tier %s", name)
 	if err = k.securityClient.Tiers().Delete(context.TODO(), name, metav1.DeleteOptions{}); err != nil {
 		return errors.Wrapf(err, "unable to delete tier %s", name)
 	}
@@ -265,7 +273,7 @@ func (k *KubernetesUtils) DeleteTier(name string) error {
 
 // CreateTier is a convenience function for creating an Antrea Policy Tier by name and priority.
 func (k *KubernetesUtils) CreateNewTier(name string, tierPriority int32) (*secv1alpha1.Tier, error) {
-	log.Infof("creating tier %s", name)
+	log.Infof("Creating tier %s", name)
 	_, err := k.securityClient.Tiers().Get(context.TODO(), name, metav1.GetOptions{})
 	if err != nil {
 		tr := &secv1alpha1.Tier{
@@ -274,7 +282,7 @@ func (k *KubernetesUtils) CreateNewTier(name string, tierPriority int32) (*secv1
 		}
 		tr, err = k.securityClient.Tiers().Create(context.TODO(), tr, metav1.CreateOptions{})
 		if err != nil {
-			log.Debugf("unable to create tier %s: %s", name, err)
+			log.Debugf("Unable to create tier %s: %s", name, err)
 		}
 		return tr, err
 	}
@@ -283,17 +291,17 @@ func (k *KubernetesUtils) CreateNewTier(name string, tierPriority int32) (*secv1
 
 // UpdateTier is a convenience function for updating an Antrea Policy Tier.
 func (k *KubernetesUtils) UpdateTier(tier *secv1alpha1.Tier) (*secv1alpha1.Tier, error) {
-	log.Infof("updating tier %s", tier.Name)
+	log.Infof("Updating tier %s", tier.Name)
 	updatedTier, err := k.securityClient.Tiers().Update(context.TODO(), tier, metav1.UpdateOptions{})
 	return updatedTier, err
 }
 
 // CreateOrUpdateCG is a convenience function for idempotent setup of ClusterGroups
 func (k *KubernetesUtils) CreateOrUpdateCG(name string, pSelector, nSelector *metav1.LabelSelector, ipBlock *secv1alpha1.IPBlock) (*corev1a1.ClusterGroup, error) {
-	log.Infof("creating/updating ClusterGroup %s", name)
+	log.Infof("Creating/updating ClusterGroup %s", name)
 	cgReturned, err := k.crdClient.CoreV1alpha2().ClusterGroups().Get(context.TODO(), name, metav1.GetOptions{})
 	if err != nil {
-		log.Debugf("creating ClusterGroup %s", name)
+		log.Debugf("Creating ClusterGroup %s", name)
 		cg := &corev1a1.ClusterGroup{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: name,
@@ -310,7 +318,7 @@ func (k *KubernetesUtils) CreateOrUpdateCG(name string, pSelector, nSelector *me
 		}
 		cgr, err := k.crdClient.CoreV1alpha2().ClusterGroups().Create(context.TODO(), cg, metav1.CreateOptions{})
 		if err != nil {
-			log.Infof("unable to create cluster group %s: %v", name, err)
+			log.Infof("Unable to create cluster group %s: %v", name, err)
 			return nil, err
 		}
 		return cgr, nil
@@ -333,7 +341,7 @@ func (k *KubernetesUtils) CreateOrUpdateCG(name string, pSelector, nSelector *me
 
 // CreateCG is a convenience function for creating an Antrea ClusterGroup by name and selector.
 func (k *KubernetesUtils) CreateCG(name string, pSelector, nSelector *metav1.LabelSelector, ipBlock *secv1alpha1.IPBlock) (*corev1a1.ClusterGroup, error) {
-	log.Infof("creating clustergroup %s", name)
+	log.Infof("Creating clustergroup %s", name)
 	_, err := k.crdClient.CoreV1alpha2().ClusterGroups().Get(context.TODO(), name, metav1.GetOptions{})
 	if err != nil {
 		cg := &corev1a1.ClusterGroup{
@@ -352,40 +360,32 @@ func (k *KubernetesUtils) CreateCG(name string, pSelector, nSelector *metav1.Lab
 		}
 		cg, err = k.crdClient.CoreV1alpha2().ClusterGroups().Create(context.TODO(), cg, metav1.CreateOptions{})
 		if err != nil {
-			log.Debugf("unable to create clustergroup %s: %s", name, err)
+			log.Debugf("Unable to create clustergroup %s: %s", name, err)
 		}
 		return cg, err
 	}
 	return nil, fmt.Errorf("clustergroup with name %s already exists", name)
 }
 
-// CleanCGs is a convenience function for deleting ClusterGroups before startup of any new test.
+// DeleteCG is a convenience function for deleting ClusterGroup by name.
+func (k *KubernetesUtils) DeleteCG(name string) error {
+	log.Infof("deleting ClusterGroup %s", name)
+	err := k.crdClient.CoreV1alpha2().ClusterGroups().Delete(context.TODO(), name, metav1.DeleteOptions{})
+	if err != nil {
+		return errors.Wrapf(err, "unable to delete ClusterGroup %s", name)
+	}
+	return nil
+}
+
+// CleanCGs is a convenience function for deleting all ClusterGroups in the cluster.
 func (k *KubernetesUtils) CleanCGs() error {
 	l, err := k.crdClient.CoreV1alpha2().ClusterGroups().List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		return errors.Wrapf(err, "unable to list ClusterGroups")
 	}
 	for _, cg := range l.Items {
-		log.Infof("deleting ClusterGroup %s", cg.Name)
-		err = k.crdClient.CoreV1alpha2().ClusterGroups().Delete(context.TODO(), cg.Name, metav1.DeleteOptions{})
-		if err != nil {
-			return errors.Wrapf(err, "unable to delete ClusterGroup %s", cg.Name)
-		}
-	}
-	return nil
-}
-
-// CleanACNPs is a convenience function for deleting AntreaClusterNetworkPolicies before startup of any new test.
-func (k *KubernetesUtils) CleanACNPs() error {
-	l, err := k.securityClient.ClusterNetworkPolicies().List(context.TODO(), metav1.ListOptions{})
-	if err != nil {
-		return errors.Wrapf(err, "unable to list AntreaClusterNetworkPolicies")
-	}
-	for _, cnp := range l.Items {
-		log.Infof("deleting AntreaClusterNetworkPolicies %s", cnp.Name)
-		err = k.securityClient.ClusterNetworkPolicies().Delete(context.TODO(), cnp.Name, metav1.DeleteOptions{})
-		if err != nil {
-			return errors.Wrapf(err, "unable to delete ClusterNetworkPolicy %s", cnp.Name)
+		if err := k.DeleteCG(cg.Name); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -393,13 +393,13 @@ func (k *KubernetesUtils) CleanACNPs() error {
 
 // CreateOrUpdateACNP is a convenience function for updating/creating AntreaClusterNetworkPolicies.
 func (k *KubernetesUtils) CreateOrUpdateACNP(cnp *secv1alpha1.ClusterNetworkPolicy) (*secv1alpha1.ClusterNetworkPolicy, error) {
-	log.Infof("creating/updating ClusterNetworkPolicy %s", cnp.Name)
+	log.Infof("Creating/updating ClusterNetworkPolicy %s", cnp.Name)
 	cnpReturned, err := k.securityClient.ClusterNetworkPolicies().Get(context.TODO(), cnp.Name, metav1.GetOptions{})
 	if err != nil {
-		log.Debugf("creating ClusterNetworkPolicy %s", cnp.Name)
+		log.Debugf("Creating ClusterNetworkPolicy %s", cnp.Name)
 		cnp, err = k.securityClient.ClusterNetworkPolicies().Create(context.TODO(), cnp, metav1.CreateOptions{})
 		if err != nil {
-			log.Debugf("unable to create ClusterNetworkPolicy: %s", err)
+			log.Debugf("Unable to create ClusterNetworkPolicy: %s", err)
 		}
 		return cnp, err
 	} else if cnpReturned.Name != "" {
@@ -411,33 +411,39 @@ func (k *KubernetesUtils) CreateOrUpdateACNP(cnp *secv1alpha1.ClusterNetworkPoli
 	return nil, fmt.Errorf("error occurred in creating/updating ClusterNetworkPolicy %s", cnp.Name)
 }
 
-// CleanANPs is a convenience function for deleting Antrea NetworkPolicies before startup of any new test.
-func (k *KubernetesUtils) CleanANPs(namespaces []string) error {
-	for _, ns := range namespaces {
-		l, err := k.securityClient.NetworkPolicies(ns).List(context.TODO(), metav1.ListOptions{})
-		if err != nil {
-			return errors.Wrapf(err, "unable to list Antrea NetworkPolicies in ns %s", ns)
+// CleanACNPs is a convenience function for deleting all Antrea ClusterNetworkPolicies in the cluster.
+func (k *KubernetesUtils) CleanACNPs() error {
+	l, err := k.securityClient.ClusterNetworkPolicies().List(context.TODO(), metav1.ListOptions{})
+	if err != nil {
+		return errors.Wrapf(err, "unable to list AntreaClusterNetworkPolicies")
+	}
+	for _, cnp := range l.Items {
+		if err = k.DeleteACNP(cnp.Name); err != nil {
+			return err
 		}
-		for _, anp := range l.Items {
-			log.Infof("deleting Antrea NetworkPolicies %s in ns %s", anp.Name, ns)
-			err = k.securityClient.NetworkPolicies(anp.Namespace).Delete(context.TODO(), anp.Name, metav1.DeleteOptions{})
-			if err != nil {
-				return errors.Wrapf(err, "unable to delete Antrea NetworkPolicy %s", anp.Name)
-			}
-		}
+	}
+	return nil
+}
+
+// DeleteACNP is a convenience function for deleting ACNP by name.
+func (k *KubernetesUtils) DeleteACNP(name string) error {
+	log.Infof("Deleting AntreaClusterNetworkPolicies %s", name)
+	err := k.securityClient.ClusterNetworkPolicies().Delete(context.TODO(), name, metav1.DeleteOptions{})
+	if err != nil {
+		return errors.Wrapf(err, "unable to delete ClusterNetworkPolicy %s", name)
 	}
 	return nil
 }
 
 // CreateOrUpdateANP is a convenience function for updating/creating Antrea NetworkPolicies.
 func (k *KubernetesUtils) CreateOrUpdateANP(anp *secv1alpha1.NetworkPolicy) (*secv1alpha1.NetworkPolicy, error) {
-	log.Infof("creating/updating Antrea NetworkPolicy %s", anp.Name)
+	log.Infof("Creating/updating Antrea NetworkPolicy %s/%s", anp.Namespace, anp.Name)
 	cnpReturned, err := k.securityClient.NetworkPolicies(anp.Namespace).Get(context.TODO(), anp.Name, metav1.GetOptions{})
 	if err != nil {
-		log.Debugf("creating Antrea NetworkPolicy %s", anp.Name)
+		log.Debugf("Creating Antrea NetworkPolicy %s", anp.Name)
 		anp, err = k.securityClient.NetworkPolicies(anp.Namespace).Create(context.TODO(), anp, metav1.CreateOptions{})
 		if err != nil {
-			log.Debugf("unable to create Antrea NetworkPolicy: %s", err)
+			log.Debugf("Unable to create Antrea NetworkPolicy: %s", err)
 		}
 		return anp, err
 	} else if cnpReturned.Name != "" {
@@ -448,8 +454,34 @@ func (k *KubernetesUtils) CreateOrUpdateANP(anp *secv1alpha1.NetworkPolicy) (*se
 	return nil, fmt.Errorf("error occurred in creating/updating Antrea NetworkPolicy %s", anp.Name)
 }
 
+// DeleteANP is a convenience function for deleting ANP by name and namespace.
+func (k *KubernetesUtils) DeleteANP(ns, name string) error {
+	log.Infof("deleting Antrea NetworkPolicies %s in ns %s", name, ns)
+	err := k.securityClient.NetworkPolicies(ns).Delete(context.TODO(), name, metav1.DeleteOptions{})
+	if err != nil {
+		return errors.Wrapf(err, "unable to delete Antrea NetworkPolicy %s", name)
+	}
+	return nil
+}
+
+// CleanANPs is a convenience function for deleting all Antrea NetworkPolicies in provided namespaces.
+func (k *KubernetesUtils) CleanANPs(namespaces []string) error {
+	for _, ns := range namespaces {
+		l, err := k.securityClient.NetworkPolicies(ns).List(context.TODO(), metav1.ListOptions{})
+		if err != nil {
+			return errors.Wrapf(err, "unable to list Antrea NetworkPolicies in ns %s", ns)
+		}
+		for _, anp := range l.Items {
+			if err = k.DeleteANP(anp.Namespace, anp.Name); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 func (k *KubernetesUtils) waitForPodInNamespace(ns string, pod string) (*string, error) {
-	log.Infof("waiting for pod %s/%s", ns, pod)
+	log.Infof("Waiting for pod %s/%s", ns, pod)
 	for {
 		k8sPod, err := k.GetPod(ns, pod)
 		if err != nil {
@@ -463,11 +495,11 @@ func (k *KubernetesUtils) waitForPodInNamespace(ns string, pod string) (*string,
 				log.Debugf("IP of pod %s/%s is: %s", ns, pod, k8sPod.Status.PodIP)
 			}
 
-			log.Debugf("pod running: %s/%s", ns, pod)
+			log.Debugf("Pod running: %s/%s", ns, pod)
 			podIP := k8sPod.Status.PodIP
 			return &podIP, nil
 		}
-		log.Infof("pod %s/%s not ready, waiting ...", ns, pod)
+		log.Infof("Pod %s/%s not ready, waiting ...", ns, pod)
 		time.Sleep(2 * time.Second)
 	}
 }
@@ -533,7 +565,7 @@ func (k *KubernetesUtils) Bootstrap(namespaces, pods []string) (*map[string]stri
 			return nil, errors.WithMessagef(err, "unable to create/update ns %s", ns)
 		}
 		for _, pod := range pods {
-			log.Infof("creating/updating pod %s/%s", ns, pod)
+			log.Infof("Creating/updating pod %s/%s", ns, pod)
 			_, err := k.CreateOrUpdateDeployment(ns, ns+pod, 1, map[string]string{"pod": pod})
 			if err != nil {
 				return nil, errors.WithMessagef(err, "unable to create/update deployment %s/%s", ns, pod)
@@ -565,7 +597,11 @@ func (k *KubernetesUtils) Bootstrap(namespaces, pods []string) (*map[string]stri
 }
 
 func (k *KubernetesUtils) Cleanup(namespaces []string) error {
+	// Cleanup any cluster-scoped resources.
 	if err := k.CleanACNPs(); err != nil {
+		return err
+	}
+	if err := k.CleanCGs(); err != nil {
 		return err
 	}
 	for _, ns := range namespaces {
