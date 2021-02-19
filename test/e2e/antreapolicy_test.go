@@ -28,6 +28,7 @@ import (
 	v1net "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 
 	corev1a2 "github.com/vmware-tanzu/antrea/pkg/apis/core/v1alpha2"
@@ -49,6 +50,8 @@ var (
 const (
 	// provide enough time for policies to be enforced & deleted by the CNI plugin.
 	networkPolicyDelay = 2 * time.Second
+	// provide enough time for groups to have members computed.
+	groupDelay = time.Second
 	// audit log directory on Antrea Agent
 	logDir          = "/var/log/antrea/networkpolicy/"
 	logfileName     = "np.log"
@@ -69,7 +72,7 @@ type TestCase struct {
 	Steps []*TestStep
 }
 
-// TestStep is a single unit of testing spec. It includes the ACNP specs that need to be
+// TestStep is a single unit of testing spec. It includes the policy specs that need to be
 // applied for this test, the port to test traffic on and the expected Reachability matrix.
 type TestStep struct {
 	Name         string
@@ -135,7 +138,7 @@ func applyDefaultDenyToAllNamespaces(k8s *KubernetesUtils, namespaces []string) 
 		builder := &NetworkPolicySpecBuilder{}
 		builder = builder.SetName(ns, "default-deny-namespace")
 		builder.SetTypeIngress()
-		if _, err := k8s.CreateOrUpdateNetworkPolicy(ns, builder.Get()); err != nil {
+		if _, err := k8s.CreateOrUpdateNetworkPolicy(builder.Get()); err != nil {
 			return err
 		}
 	}
@@ -1606,7 +1609,7 @@ func testANPPortRange(t *testing.T) {
 	})
 
 	testCase := []*TestCase{
-		{"ANP Drop Egreee y/b to x/c with a portRange", testSteps},
+		{"ANP Drop Egress y/b to x/c with a portRange", testSteps},
 	}
 	executeTests(t, testCase)
 }
@@ -1656,7 +1659,6 @@ func testANPBasic(t *testing.T) {
 		{"With K8s NetworkPolicy of the same name", testStep2},
 	}
 	executeTests(t, testCase)
-	failOnError(k8sUtils.CleanNetworkPolicies([]string{"y"}), t)
 }
 
 // testAuditLoggingBasic tests that a audit log is generated when egress drop applied
@@ -1772,15 +1774,10 @@ func executeTests(t *testing.T, testList []*TestCase) {
 func executeTestsWithData(t *testing.T, testList []*TestCase, data *TestData) {
 	for _, testCase := range testList {
 		log.Infof("running test case %s", testCase.Name)
-		log.Debugf("cleaning-up previous policies and sleeping for %v", networkPolicyDelay)
-		failOnError(k8sUtils.CleanACNPs(), t)
-		failOnError(k8sUtils.CleanANPs(namespaces), t)
-		failOnError(k8sUtils.CleanCGs(), t)
-		time.Sleep(networkPolicyDelay)
 		for _, step := range testCase.Steps {
 			log.Infof("running step %s of test case %s", step.Name, testCase.Name)
-			applyClusterGroups(t, step)
-			applyPolicies(t, step)
+			applyTestStepClusterGroups(t, step)
+			applyTestStepPolicies(t, step)
 			reachability := step.Reachability
 			if reachability != nil {
 				start := time.Now()
@@ -1803,6 +1800,9 @@ func executeTestsWithData(t *testing.T, testList []*TestCase, data *TestData) {
 				doProbe(t, data, p)
 			}
 		}
+		log.Debugf("Cleaning-up all policies and groups created by this Testcase and sleeping for %v", networkPolicyDelay)
+		cleanupTestCasePolicies(t, testCase)
+		cleanupTestCaseClusterGroups(t, testCase)
 	}
 	allTestList = append(allTestList, testList...)
 }
@@ -1823,20 +1823,17 @@ func doProbe(t *testing.T, data *TestData, p *CustomProbe) {
 	}
 }
 
-func applyPolicies(t *testing.T, step *TestStep) {
-	for _, np := range step.Policies {
-		if acnp, ok := np.(*secv1alpha1.ClusterNetworkPolicy); ok {
-			log.Debugf("creating ACNP %v", acnp.Name)
-			_, err := k8sUtils.CreateOrUpdateACNP(acnp)
+func applyTestStepPolicies(t *testing.T, step *TestStep) {
+	for _, policy := range step.Policies {
+		switch p := policy.(type) {
+		case *secv1alpha1.ClusterNetworkPolicy:
+			_, err := k8sUtils.CreateOrUpdateACNP(p)
 			failOnError(err, t)
-		} else if anp, ok := np.(*secv1alpha1.NetworkPolicy); ok {
-			log.Debugf("creating ANP %v in namespace %v", anp.Name, anp.Namespace)
-			_, err := k8sUtils.CreateOrUpdateANP(anp)
+		case *secv1alpha1.NetworkPolicy:
+			_, err := k8sUtils.CreateOrUpdateANP(p)
 			failOnError(err, t)
-		} else {
-			k8sNP, _ := np.(*v1net.NetworkPolicy)
-			log.Debugf("creating K8s NetworkPolicy %v in namespace %v", k8sNP.Name, k8sNP.Namespace)
-			_, err := k8sUtils.CreateOrUpdateNetworkPolicy(k8sNP.Namespace, k8sNP)
+		case *v1net.NetworkPolicy:
+			_, err := k8sUtils.CreateOrUpdateNetworkPolicy(p)
 			failOnError(err, t)
 		}
 	}
@@ -1846,7 +1843,38 @@ func applyPolicies(t *testing.T, step *TestStep) {
 	}
 }
 
-func applyClusterGroups(t *testing.T, step *TestStep) {
+func cleanupTestCasePolicies(t *testing.T, c *TestCase) {
+	// TestSteps in a TestCase may first create and then update the same policy.
+	// Use sets to avoid duplicates.
+	acnpsToDelete, anpsToDelete, npsToDelete := sets.String{}, sets.String{}, sets.String{}
+	for _, step := range c.Steps {
+		for _, policy := range step.Policies {
+			switch p := policy.(type) {
+			case *secv1alpha1.ClusterNetworkPolicy:
+				acnpsToDelete.Insert(p.Name)
+			case *secv1alpha1.NetworkPolicy:
+				anpsToDelete.Insert(p.Namespace + "/" + p.Name)
+			case *v1net.NetworkPolicy:
+				npsToDelete.Insert(p.Namespace + "/" + p.Name)
+			}
+		}
+	}
+	for _, acnp := range acnpsToDelete.List() {
+		failOnError(k8sUtils.DeleteACNP(acnp), t)
+	}
+	for _, anp := range anpsToDelete.List() {
+		failOnError(k8sUtils.DeleteANP(strings.Split(anp, "/")[0], strings.Split(anp, "/")[1]), t)
+	}
+	for _, np := range npsToDelete.List() {
+		failOnError(k8sUtils.DeleteNetworkPolicy(strings.Split(np, "/")[0], strings.Split(np, "/")[1]), t)
+	}
+	if acnpsToDelete.Len()+anpsToDelete.Len()+npsToDelete.Len() > 0 {
+		log.Debugf("Sleeping for %v for all policy deletions to take effect", networkPolicyDelay)
+		time.Sleep(networkPolicyDelay)
+	}
+}
+
+func applyTestStepClusterGroups(t *testing.T, step *TestStep) {
 	for _, g := range step.Groups {
 		if cg, ok := g.(*corev1a2.ClusterGroup); ok {
 			log.Debugf("creating CG %v", cg.Name)
@@ -1855,8 +1883,24 @@ func applyClusterGroups(t *testing.T, step *TestStep) {
 		}
 	}
 	if len(step.Groups) > 0 {
-		log.Debugf("Sleeping for %v for all groups to take effect", networkPolicyDelay)
-		time.Sleep(networkPolicyDelay)
+		log.Debugf("Sleeping for %v for all groups to have members computed", groupDelay)
+		time.Sleep(groupDelay)
+	}
+}
+
+func cleanupTestCaseClusterGroups(t *testing.T, c *TestCase) {
+	// TestSteps in a TestCase may first create and then update the same group.
+	// Use sets to avoid duplicates.
+	groupsToDelete := sets.String{}
+	for _, step := range c.Steps {
+		for _, g := range step.Groups {
+			if cg, ok := g.(*corev1a2.ClusterGroup); ok {
+				groupsToDelete.Insert(cg.Name)
+			}
+		}
+	}
+	for _, cg := range groupsToDelete.List() {
+		failOnError(k8sUtils.DeleteCG(cg), t)
 	}
 }
 
@@ -1947,12 +1991,6 @@ func TestAntreaPolicy(t *testing.T) {
 
 	t.Run("TestGroupNoK8sNP", func(t *testing.T) {
 		// testcases below do not depend on underlying default-deny K8s NetworkPolicies.
-		// Note that if a K8s NetworkPolicy is created for a testcase in this group, it needs to be manually
-		// deleted after that particular testcase is executed.
-		t.Run("Case=ACNPClusterGroupAppliedToDenyXBToCGWithYA", func(t *testing.T) { testACNPAppliedToDenyXBtoCGWithYA(t) })
-		t.Run("Case=ACNPClusterGroupAppliedToRuleCGWithPodsAToNsZ", func(t *testing.T) { testACNPAppliedToRuleCGWithPodsAToNsZ(t) })
-		t.Run("Case=ACNPClusterGroupUpdateAppliedTo", func(t *testing.T) { testACNPClusterGroupUpdateAppliedTo(t) })
-		t.Run("Case=ACNPClusterGroupAppliedToPodAdd", func(t *testing.T) { testACNPClusterGroupAppliedToPodAdd(t, data) })
 		t.Run("Case=ACNPAllowNoDefaultIsolation", func(t *testing.T) { testACNPAllowNoDefaultIsolation(t) })
 		t.Run("Case=ACNPDropEgress", func(t *testing.T) { testACNPDropEgress(t) })
 		t.Run("Case=ACNPPortRange", func(t *testing.T) { testACNPPortRange(t) })
@@ -1967,12 +2005,12 @@ func TestAntreaPolicy(t *testing.T) {
 		t.Run("Case=AppliedToPerRule", func(t *testing.T) { testAppliedToPerRule(t) })
 		t.Run("Case=ACNPClusterGroupEgressRulePodsAToCGWithNsZ", func(t *testing.T) { testACNPEgressRulePodsAToCGWithNsZ(t) })
 		t.Run("Case=ACNPClusterGroupUpdate", func(t *testing.T) { testACNPClusterGroupUpdate(t) })
+		t.Run("Case=ACNPClusterGroupAppliedToDenyXBToCGWithYA", func(t *testing.T) { testACNPAppliedToDenyXBtoCGWithYA(t) })
+		t.Run("Case=ACNPClusterGroupAppliedToRuleCGWithPodsAToNsZ", func(t *testing.T) { testACNPAppliedToRuleCGWithPodsAToNsZ(t) })
+		t.Run("Case=ACNPClusterGroupUpdateAppliedTo", func(t *testing.T) { testACNPClusterGroupUpdateAppliedTo(t) })
+		t.Run("Case=ACNPClusterGroupAppliedToPodAdd", func(t *testing.T) { testACNPClusterGroupAppliedToPodAdd(t, data) })
 		t.Run("Case=ACNPClusterGroupRefRulePodAdd", func(t *testing.T) { testACNPClusterGroupRefRulePodAdd(t, data) })
 		t.Run("Case=ACNPClusterGroupIngressRuleDenyCGWithXBtoYA", func(t *testing.T) { testACNPIngressRuleDenyCGWithXBtoYA(t) })
-		failOnError(k8sUtils.CleanACNPs(), t)
-		failOnError(k8sUtils.CleanANPs(namespaces), t)
-		failOnError(k8sUtils.CleanNetworkPolicies(namespaces), t)
-		failOnError(k8sUtils.CleanCGs(), t)
 	})
 	// print results for reachability tests
 	printResults()
