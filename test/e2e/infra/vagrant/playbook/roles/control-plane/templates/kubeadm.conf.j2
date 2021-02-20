@@ -1,14 +1,15 @@
-apiVersion: kubeadm.k8s.io/v1beta1
+apiVersion: kubeadm.k8s.io/v1beta2
 kind: InitConfiguration
 nodeRegistration:
   name: "{{ node_name }}"
 localAPIEndpoint:
   advertiseAddress: "{{ k8s_api_server_ip }}"
 ---
-apiVersion: kubeadm.k8s.io/v1beta1
+apiVersion: kubeadm.k8s.io/v1beta2
 kind: ClusterConfiguration
 networking:
   podSubnet: "{{ k8s_pod_network_cidr }}"
+  serviceSubnet: "{{ k8s_service_network_cidr }}"
 apiServer:
   certSANs:
   - "{{ k8s_api_server_ip }}"

@@ -1,0 +1,8 @@
+[Unit]
+Description=Socat DNS proxy UDP
+
+[Service]
+ExecStart=/usr/bin/socat UDP6-RECVFROM:5353,fork UDP4-SENDTO:127.0.0.53:53 
+
+[Install]
+WantedBy=multi-user.target

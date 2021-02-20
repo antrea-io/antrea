@@ -13,4 +13,7 @@
 # Kubelet will not start if the system has swap enabled
 - import_tasks: disable-swap.yml
 
+# Kubeadm may fail pre-flight checks without this
+- import_tasks: enable-forwarding.yml
+
 - import_tasks: kube.yml

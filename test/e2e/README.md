@@ -55,6 +55,23 @@ Use the following Bash scripts to manage the Kubernetes Nodes with Vagrant:
 Note that `./infra/vagrant/provision.sh` can take a while to complete but it
 only needs to be run once.
 
+##### IPv6 cluster
+
+To test Antrea IPv6 support, an IPv6-only cluster can be created, by
+provisioning a private IPv6 network to connect Kubernetes Nodes, instead of a
+private IPv4 network. You simply need to invoke `./infra/vagrant/provision.sh`
+with `--ip-family v6`. This option can be used even if the host machine does not
+support IPv6 itself. Note however that the Nodes do not have public IPv6
+connectivity; they can still connect to the Internet using IPv4, which means
+that Docker images can be pulled without issue. Similarly, Pods (which only
+support IPv6) cannot connect to the Internet. To avoid issues when running
+Kubernetes conformance tests, we configure a proxy on the control-plane Node for
+all DNS traffic. While CoreDNS will reply to cluster local DNS queries directly,
+all other queries will be forwarded to the proxy over IPv6, and the proxy will
+then forward them to the default resolver for the Node (this time over
+IPv4). This means that all DNS queries from the Pods should succeed, even though
+the returned public IP addresses (IPv4 and / or IPv6) are no accessible.
+
 #### Debugging
 
 You can SSH into any of the Node VMs using `vagrant ssh [Node name]` (must be

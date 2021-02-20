@@ -1,0 +1,31 @@
+- name: Configure IPv4 forwarding (net.ipv4.conf.default.forwarding)
+  sysctl:
+    name: net.ipv4.conf.default.forwarding
+    value: '1'
+    sysctl_set: yes
+    state: present
+    reload: yes
+
+- name: Configure IPv4 forwarding (net.ipv4.conf.all.forwarding)
+  sysctl:
+    name: net.ipv4.conf.all.forwarding
+    value: '1'
+    sysctl_set: yes
+    state: present
+    reload: yes
+
+- name: Configure IPv6 forwarding (net.ipv6.conf.default.forwarding)
+  sysctl:
+    name: net.ipv6.conf.default.forwarding
+    value: '1'
+    sysctl_set: yes
+    state: present
+    reload: yes
+
+- name: Configure IPv6 forwarding (net.ipv6.conf.all.forwarding)
+  sysctl:
+    name: net.ipv6.conf.all.forwarding
+    value: '1'
+    sysctl_set: yes
+    state: present
+    reload: yes
