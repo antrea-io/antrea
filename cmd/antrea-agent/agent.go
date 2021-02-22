@@ -17,6 +17,7 @@ package main
 import (
 	"fmt"
 	"net"
+	"runtime"
 	"time"
 
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -53,7 +54,6 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/signals"
 	"github.com/vmware-tanzu/antrea/pkg/util/cipher"
 	"github.com/vmware-tanzu/antrea/pkg/version"
-	k8sproxy "github.com/vmware-tanzu/antrea/third_party/proxy"
 )
 
 // informerDefaultResync is the default resync period if a handler doesn't specify one.
@@ -64,17 +64,18 @@ const informerDefaultResync = 12 * time.Hour
 // run starts Antrea agent with the given options and waits for termination signal.
 func run(o *Options) error {
 	klog.Infof("Starting Antrea agent (version %s)", version.GetFullVersion())
+
+	// Set up signal capture: the first SIGTERM / SIGINT signal is handled gracefully and will
+	// cause the stopCh channel to be closed; if another signal is received before the program
+	// exits, we will force exit.
+	stopCh := signals.RegisterSignalHandlers()
+
 	// Create K8s Clientset, CRD Clientset and SharedInformerFactory for the given config.
 	k8sClient, _, crdClient, err := k8s.CreateClients(o.config.ClientConnection, o.config.KubeAPIServerOverride)
 	if err != nil {
 		return fmt.Errorf("error creating K8s clients: %v", err)
 	}
 	informerFactory := informers.NewSharedInformerFactory(k8sClient, informerDefaultResync)
-	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, informerDefaultResync)
-	traceflowInformer := crdInformerFactory.Ops().V1alpha1().Traceflows()
-
-	// Create Antrea Clientset for the given config.
-	antreaClientProvider := agent.NewAntreaClientProvider(o.config.AntreaClientConnection, k8sClient)
 
 	// Register Antrea Agent metrics if EnablePrometheusMetrics is set
 	if o.config.EnablePrometheusMetrics {
@@ -166,6 +167,43 @@ func run(o *Options) error {
 	// if AntreaPolicy feature is enabled.
 	statusManagerEnabled := antreaPolicyEnabled
 	loggingEnabled := antreaPolicyEnabled
+
+	var proxier proxy.Proxier
+	if features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
+		v4Enabled := config.IsIPv4Enabled(nodeConfig, networkConfig.TrafficEncapMode)
+		v6Enabled := config.IsIPv6Enabled(nodeConfig, networkConfig.TrafficEncapMode)
+		switch {
+		case v4Enabled && v6Enabled:
+			proxier = proxy.NewDualStackProxier(nodeConfig.Name, informerFactory, ofClient)
+		case v4Enabled:
+			proxier = proxy.NewProxier(nodeConfig.Name, informerFactory, ofClient, false)
+		case v6Enabled:
+			proxier = proxy.NewProxier(nodeConfig.Name, informerFactory, ofClient, true)
+		default:
+			return fmt.Errorf("at least one of IPv4 or IPv6 should be enabled")
+		}
+	}
+
+	log.StartLogFileNumberMonitor(stopCh)
+
+	go routeClient.Run(stopCh)
+
+	informerFactory.Start(stopCh)
+
+	go nodeRouteController.Run(stopCh)
+
+	if features.DefaultFeatureGate.Enabled(features.AntreaProxy) && proxier != nil {
+		go proxier.GetProxyProvider().Run(stopCh)
+		klog.Infoln("Waiting for Antrea Proxy to be ready")
+		for !proxier.IsInitialized() {
+			runtime.Gosched()
+		}
+		klog.Infoln("Antrea Proxy is ready")
+	}
+
+	// Create Antrea Clientset for the given config.
+	antreaClientProvider := agent.NewAntreaClientProvider(o.config.AntreaClientConnection, k8sClient)
+
 	networkPolicyController, err := networkpolicy.NewNetworkPolicyController(
 		antreaClientProvider,
 		ofClient,
@@ -187,22 +225,6 @@ func run(o *Options) error {
 		statsCollector = stats.NewCollector(antreaClientProvider, ofClient, networkPolicyController)
 	}
 
-	var proxier proxy.Proxier
-	if features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
-		v4Enabled := config.IsIPv4Enabled(nodeConfig, networkConfig.TrafficEncapMode)
-		v6Enabled := config.IsIPv6Enabled(nodeConfig, networkConfig.TrafficEncapMode)
-		switch {
-		case v4Enabled && v6Enabled:
-			proxier = proxy.NewDualStackProxier(nodeConfig.Name, informerFactory, ofClient)
-		case v4Enabled:
-			proxier = proxy.NewProxier(nodeConfig.Name, informerFactory, ofClient, false)
-		case v6Enabled:
-			proxier = proxy.NewProxier(nodeConfig.Name, informerFactory, ofClient, true)
-		default:
-			return fmt.Errorf("at least one of IPv4 or IPv6 should be enabled")
-		}
-	}
-
 	isChaining := false
 	if networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {
 		isChaining = true
@@ -219,6 +241,9 @@ func run(o *Options) error {
 	if err != nil {
 		return fmt.Errorf("error initializing CNI server: %v", err)
 	}
+
+	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, informerDefaultResync)
+	traceflowInformer := crdInformerFactory.Ops().V1alpha1().Traceflows()
 
 	var traceflowController *traceflow.Controller
 	if features.DefaultFeatureGate.Enabled(features.Traceflow) {
@@ -245,10 +270,6 @@ func run(o *Options) error {
 	if err := antreaClientProvider.RunOnce(); err != nil {
 		return err
 	}
-	// set up signal capture: the first SIGTERM / SIGINT signal is handled gracefully and will
-	// cause the stopCh channel to be closed; if another signal is received before the program
-	// exits, we will force exit.
-	stopCh := signals.RegisterSignalHandlers()
 
 	// Start the NPL agent.
 	if features.DefaultFeatureGate.Enabled(features.NodePortLocal) {
@@ -262,19 +283,11 @@ func run(o *Options) error {
 		}
 		go nplController.Run(stopCh)
 	}
-
-	log.StartLogFileNumberMonitor(stopCh)
-
-	go routeClient.Run(stopCh)
+	crdInformerFactory.Start(stopCh)
 
 	go cniServer.Run(stopCh)
 
-	informerFactory.Start(stopCh)
-	crdInformerFactory.Start(stopCh)
-
 	go antreaClientProvider.Run(stopCh)
-
-	go nodeRouteController.Run(stopCh)
 
 	go networkPolicyController.Run(stopCh)
 
@@ -284,10 +297,6 @@ func run(o *Options) error {
 
 	if features.DefaultFeatureGate.Enabled(features.Traceflow) {
 		go traceflowController.Run(stopCh)
-	}
-
-	if features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
-		go proxier.GetProxyProvider().Run(stopCh)
 	}
 
 	agentQuerier := querier.NewAgentQuerier(
@@ -339,16 +348,12 @@ func run(o *Options) error {
 		v4Enabled := config.IsIPv4Enabled(nodeConfig, networkConfig.TrafficEncapMode)
 		v6Enabled := config.IsIPv6Enabled(nodeConfig, networkConfig.TrafficEncapMode)
 
-		var proxyProvider k8sproxy.Provider
-		if proxier != nil {
-			proxyProvider = proxier.GetProxyProvider()
-		}
 		connStore := connections.NewConnectionStore(
 			connections.InitializeConnTrackDumper(nodeConfig, serviceCIDRNet, serviceCIDRNetv6, ovsDatapathType, features.DefaultFeatureGate.Enabled(features.AntreaProxy)),
 			ifaceStore,
 			v4Enabled,
 			v6Enabled,
-			proxyProvider,
+			proxier.GetProxyProvider(),
 			networkPolicyController,
 			o.pollInterval)
 		pollDone := make(chan struct{})

@@ -53,6 +53,8 @@ type Proxier interface {
 	// flows and the OVS group IDs for a Service. False is returned if the
 	// Service is not found.
 	GetServiceFlowKeys(serviceName, namespace string) ([]string, []binding.GroupIDType, bool)
+	// IsInitialized tells whether both Endpoints and Services has been synced.
+	IsInitialized() bool
 }
 
 type proxier struct {
@@ -98,7 +100,7 @@ func endpointKey(endpoint k8sproxy.Endpoint, protocol binding.Protocol) string {
 	return fmt.Sprintf("%s/%s", endpoint.String(), protocol)
 }
 
-func (p *proxier) isInitialized() bool {
+func (p *proxier) IsInitialized() bool {
 	return p.endpointsChanges.Synced() && p.serviceChanges.Synced()
 }
 
@@ -366,7 +368,7 @@ func (p *proxier) installServices() {
 // also reads service and endpoints maps, so serviceEndpointsMapsMutex is used
 // to protect these two maps.
 func (p *proxier) syncProxyRules() {
-	if !p.isInitialized() {
+	if !p.IsInitialized() {
 		klog.V(4).Info("Not syncing rules until both Services and Endpoints have been synced")
 		return
 	}
@@ -420,7 +422,7 @@ func (p *proxier) OnEndpointsUpdate(oldEndpoints, endpoints *corev1.Endpoints) {
 	} else {
 		metrics.EndpointsUpdatesTotal.Inc()
 	}
-	if p.endpointsChanges.OnEndpointUpdate(oldEndpoints, endpoints) && p.isInitialized() {
+	if p.endpointsChanges.OnEndpointUpdate(oldEndpoints, endpoints) && p.IsInitialized() {
 		p.runner.Run()
 	}
 }
@@ -431,32 +433,32 @@ func (p *proxier) OnEndpointsDelete(endpoints *corev1.Endpoints) {
 
 func (p *proxier) OnEndpointsSynced() {
 	p.endpointsChanges.OnEndpointsSynced()
-	if p.isInitialized() {
+	if p.IsInitialized() {
 		p.runner.Run()
 	}
 }
 
 func (p *proxier) OnEndpointSliceAdd(endpointSlice *v1beta1.EndpointSlice) {
-	if p.endpointsChanges.OnEndpointSliceUpdate(endpointSlice, false) && p.isInitialized() {
+	if p.endpointsChanges.OnEndpointSliceUpdate(endpointSlice, false) && p.IsInitialized() {
 		p.runner.Run()
 	}
 }
 
 func (p *proxier) OnEndpointSliceUpdate(oldEndpointSlice, newEndpointSlice *v1beta1.EndpointSlice) {
-	if p.endpointsChanges.OnEndpointSliceUpdate(newEndpointSlice, false) && p.isInitialized() {
+	if p.endpointsChanges.OnEndpointSliceUpdate(newEndpointSlice, false) && p.IsInitialized() {
 		p.runner.Run()
 	}
 }
 
 func (p *proxier) OnEndpointSliceDelete(endpointSlice *v1beta1.EndpointSlice) {
-	if p.endpointsChanges.OnEndpointSliceUpdate(endpointSlice, true) && p.isInitialized() {
+	if p.endpointsChanges.OnEndpointSliceUpdate(endpointSlice, true) && p.IsInitialized() {
 		p.runner.Run()
 	}
 }
 
 func (p *proxier) OnEndpointSlicesSynced() {
 	p.endpointsChanges.OnEndpointsSynced()
-	if p.isInitialized() {
+	if p.IsInitialized() {
 		p.runner.Run()
 	}
 }
@@ -478,7 +480,7 @@ func (p *proxier) OnServiceUpdate(oldService, service *corev1.Service) {
 		isIPv6 = utilnet.IsIPv6String(service.Spec.ClusterIP)
 	}
 	if isIPv6 == p.isIPv6 {
-		if p.serviceChanges.OnServiceUpdate(oldService, service) && p.isInitialized() {
+		if p.serviceChanges.OnServiceUpdate(oldService, service) && p.IsInitialized() {
 			p.runner.Run()
 		}
 	}
@@ -490,7 +492,7 @@ func (p *proxier) OnServiceDelete(service *corev1.Service) {
 
 func (p *proxier) OnServiceSynced() {
 	p.serviceChanges.OnServiceSynced()
-	if p.isInitialized() {
+	if p.IsInitialized() {
 		p.runner.Run()
 	}
 }
@@ -637,6 +639,10 @@ func (p *metaProxierWrapper) GetServiceFlowKeys(serviceName, namespace string) (
 
 	// Return the unions of IPv4 and IPv6 flows and groups.
 	return append(v4Flows, v6Flows...), append(v4Groups, v6Groups...), v4Found || v6Found
+}
+
+func (p *metaProxierWrapper) IsInitialized() bool {
+	return (p.ipv6Proxier == nil || p.ipv6Proxier.IsInitialized()) && (p.ipv4Proxier == nil || p.ipv4Proxier.IsInitialized())
 }
 
 func NewDualStackProxier(

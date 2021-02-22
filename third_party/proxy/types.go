@@ -32,7 +32,7 @@ Modifies:
 - Replace import "k8s.io/kubernetes/pkg/proxy/config" with "github.com/vmware-tanzu/antrea/third_party/proxy/config"
 - Remove config.EndpointSliceHandler, config.NodeHandler from Provider interface type
 - Remove NodeHandler, EndpointSliceHandler, Sync() from Provider interface
-- Add Run(), GetServiceByIP() to Provider interface
+- Add Run(), GetServiceByIP(), IsInitialized() to Provider interface
 */
 
 package proxy

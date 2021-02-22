@@ -78,3 +78,17 @@ func (mr *MockProxierMockRecorder) GetServiceFlowKeys(arg0, arg1 interface{}) *g
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetServiceFlowKeys", reflect.TypeOf((*MockProxier)(nil).GetServiceFlowKeys), arg0, arg1)
 }
+
+// IsInitialized mocks base method
+func (m *MockProxier) IsInitialized() bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IsInitialized")
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// IsInitialized indicates an expected call of IsInitialized
+func (mr *MockProxierMockRecorder) IsInitialized() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsInitialized", reflect.TypeOf((*MockProxier)(nil).IsInitialized))
+}
