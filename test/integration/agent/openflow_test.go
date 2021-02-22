@@ -110,7 +110,7 @@ func TestConnectivityFlows(t *testing.T) {
 		antrearuntime.WindowsOS = runtime.GOOS
 	}
 
-	c = ofClient.NewClient(br, bridgeMgmtAddr, ovsconfig.OVSDatapathNetdev, true, false)
+	c = ofClient.NewClient(br, bridgeMgmtAddr, ovsconfig.OVSDatapathNetdev, true, false, true)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge: %v", err))
 	defer func() {
@@ -137,7 +137,7 @@ func TestConnectivityFlows(t *testing.T) {
 }
 
 func TestReplayFlowsConnectivityFlows(t *testing.T) {
-	c = ofClient.NewClient(br, bridgeMgmtAddr, ovsconfig.OVSDatapathNetdev, true, false)
+	c = ofClient.NewClient(br, bridgeMgmtAddr, ovsconfig.OVSDatapathNetdev, true, false, false)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge: %v", err))
 
@@ -164,7 +164,7 @@ func TestReplayFlowsConnectivityFlows(t *testing.T) {
 }
 
 func TestReplayFlowsNetworkPolicyFlows(t *testing.T) {
-	c = ofClient.NewClient(br, bridgeMgmtAddr, ovsconfig.OVSDatapathNetdev, true, false)
+	c = ofClient.NewClient(br, bridgeMgmtAddr, ovsconfig.OVSDatapathNetdev, true, false, false)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge: %v", err))
 
@@ -217,12 +217,18 @@ func TestReplayFlowsNetworkPolicyFlows(t *testing.T) {
 
 func testExternalFlows(t *testing.T, config *testConfig) {
 	nodeIP := config.nodeConfig.NodeIPAddr.IP
-	localSubnet := config.nodeConfig.PodIPv4CIDR
+	var localSubnet *net.IPNet
+	if config.nodeConfig.PodIPv4CIDR != nil {
+		localSubnet = config.nodeConfig.PodIPv4CIDR
+	} else {
+		localSubnet = config.nodeConfig.PodIPv6CIDR
+	}
+	gwMAC := config.nodeConfig.GatewayConfig.MAC
 
 	if err := c.InstallExternalFlows(); err != nil {
 		t.Errorf("Failed to install OpenFlow entries to allow Pod to communicate to the external addresses: %v", err)
 	}
-	for _, tableFlow := range prepareExternalFlows(nodeIP, localSubnet, config.globalMAC) {
+	for _, tableFlow := range prepareExternalFlows(nodeIP, localSubnet, gwMAC) {
 		ofTestUtils.CheckFlowExists(t, ovsCtlClient, tableFlow.tableID, true, tableFlow.flows)
 	}
 }
@@ -337,7 +343,7 @@ func TestNetworkPolicyFlows(t *testing.T) {
 	// Initialize ovs metrics (Prometheus) to test them
 	metrics.InitializeOVSMetrics()
 
-	c = ofClient.NewClient(br, bridgeMgmtAddr, ovsconfig.OVSDatapathNetdev, true, false)
+	c = ofClient.NewClient(br, bridgeMgmtAddr, ovsconfig.OVSDatapathNetdev, true, false, false)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge %s", br))
 
@@ -447,7 +453,7 @@ func TestIPv6ConnectivityFlows(t *testing.T) {
 	// Initialize ovs metrics (Prometheus) to test them
 	metrics.InitializeOVSMetrics()
 
-	c = ofClient.NewClient(br, bridgeMgmtAddr, ovsconfig.OVSDatapathNetdev, true, false)
+	c = ofClient.NewClient(br, bridgeMgmtAddr, ovsconfig.OVSDatapathNetdev, true, false, true)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge: %v", err))
 
@@ -465,6 +471,7 @@ func TestIPv6ConnectivityFlows(t *testing.T) {
 		testInstallGatewayFlows,
 		testUninstallPodFlows,
 		testUninstallNodeFlows,
+		testExternalFlows,
 	} {
 		f(t, config)
 	}
@@ -478,7 +485,7 @@ type svcConfig struct {
 }
 
 func TestProxyServiceFlows(t *testing.T) {
-	c = ofClient.NewClient(br, bridgeMgmtAddr, ovsconfig.OVSDatapathNetdev, true, false)
+	c = ofClient.NewClient(br, bridgeMgmtAddr, ovsconfig.OVSDatapathNetdev, true, false, false)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge %s", br))
 
@@ -879,6 +886,8 @@ func prepareConfiguration() *testConfig {
 
 func prepareIPv6Configuration() *testConfig {
 	podMAC, _ := net.ParseMAC("aa:aa:aa:aa:aa:13")
+	nodeIP, nodeSubnet, _ := net.ParseCIDR("a963:ca9b:172:10::11/64")
+	nodeSubnet.IP = nodeIP
 	gwMAC, _ := net.ParseMAC("aa:aa:aa:aa:aa:11")
 
 	gatewayConfig := &config1.GatewayConfig{
@@ -886,6 +895,7 @@ func prepareIPv6Configuration() *testConfig {
 		MAC:  gwMAC,
 	}
 	nodeConfig := &config1.NodeConfig{
+		NodeIPAddr:    nodeSubnet,
 		GatewayConfig: gatewayConfig,
 		PodIPv6CIDR:   podIPv6CIDR,
 	}
@@ -980,7 +990,7 @@ func preparePodFlows(podIPs []net.IP, podMAC net.HardwareAddr, podOFPort uint32,
 				[]*ofTestUtils.ExpectFlow{
 					{
 						MatchStr: fmt.Sprintf("priority=200,%s,reg0=0x80000/0x80000,%s=%s", ipProto, nwDstField, podIP.String()),
-						ActStr:   fmt.Sprintf("set_field:%s->eth_src,set_field:%s->eth_dst,goto_table:71", gwMAC.String(), podMAC.String()),
+						ActStr:   fmt.Sprintf("set_field:%s->eth_src,set_field:%s->eth_dst,goto_table:72", gwMAC.String(), podMAC.String()),
 					},
 				},
 			},
@@ -1118,7 +1128,7 @@ func prepareNodeFlows(peerSubnet net.IPNet, peerGwIP, peerNodeIP net.IP, vMAC, l
 		[]*ofTestUtils.ExpectFlow{
 			{
 				MatchStr: fmt.Sprintf("priority=200,%s,%s=%s", ipProtoStr, nwDstFieldName, peerSubnet.String()),
-				ActStr:   fmt.Sprintf("set_field:%s->eth_src,set_field:%s->eth_dst,set_field:%s->tun_dst,goto_table:71", localGwMAC.String(), vMAC.String(), peerNodeIP.String()),
+				ActStr:   fmt.Sprintf("set_field:%s->eth_src,set_field:%s->eth_dst,set_field:%s->tun_dst,goto_table:72", localGwMAC.String(), vMAC.String(), peerNodeIP.String()),
 			},
 		},
 	})
@@ -1149,8 +1159,8 @@ func prepareDefaultFlows(config *testConfig) []expectTableFlows {
 		tableID: 105,
 		flows:   []*ofTestUtils.ExpectFlow{{MatchStr: "priority=0", ActStr: "goto_table:106"}},
 	}
-	table71Flows := expectTableFlows{
-		tableID: 71,
+	table72Flows := expectTableFlows{
+		tableID: 72,
 		flows:   []*ofTestUtils.ExpectFlow{{MatchStr: "priority=0", ActStr: "goto_table:80"}},
 	}
 	if config.enableIPv4 {
@@ -1162,7 +1172,7 @@ func prepareDefaultFlows(config *testConfig) []expectTableFlows {
 			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ct_state=+new+trk,ip,reg0=0x1/0xffff", ActStr: "ct(commit,table=106,zone=65520,exec(load:0x20->NXM_NX_CT_MARK[])"},
 			&ofTestUtils.ExpectFlow{MatchStr: "priority=190,ct_state=+new+trk,ip", ActStr: "ct(commit,table=106,zone=65520)"},
 		)
-		table71Flows.flows = append(table71Flows.flows,
+		table72Flows.flows = append(table72Flows.flows,
 			&ofTestUtils.ExpectFlow{MatchStr: "priority=210,ip,reg0=0x1/0xffff", ActStr: "goto_table:80"},
 			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ip", ActStr: "dec_ttl,goto_table:80"},
 		)
@@ -1176,13 +1186,13 @@ func prepareDefaultFlows(config *testConfig) []expectTableFlows {
 			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ct_state=+new+trk,ipv6,reg0=0x1/0xffff", ActStr: "ct(commit,table=106,zone=65510,exec(load:0x20->NXM_NX_CT_MARK[])"},
 			&ofTestUtils.ExpectFlow{MatchStr: "priority=190,ct_state=+new+trk,ipv6", ActStr: "ct(commit,table=106,zone=65510)"},
 		)
-		table71Flows.flows = append(table71Flows.flows,
+		table72Flows.flows = append(table72Flows.flows,
 			&ofTestUtils.ExpectFlow{MatchStr: "priority=210,ipv6,reg0=0x1/0xffff", ActStr: "goto_table:80"},
 			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ipv6", ActStr: "dec_ttl,goto_table:80"},
 		)
 	}
 	return []expectTableFlows{
-		table31Flows, table105Flows, table71Flows,
+		table31Flows, table105Flows, table72Flows,
 		{
 			uint8(0),
 			[]*ofTestUtils.ExpectFlow{{MatchStr: "priority=0", ActStr: "drop"}},
@@ -1267,72 +1277,52 @@ func prepareIPNetAddresses(addresses []string) []types.Address {
 	return ipAddresses
 }
 
-func prepareExternalFlows(nodeIP net.IP, localSubnet *net.IPNet, vMAC net.HardwareAddr) []expectTableFlows {
+func prepareExternalFlows(nodeIP net.IP, localSubnet *net.IPNet, gwMAC net.HardwareAddr) []expectTableFlows {
+	var ipProtoStr, nwDstFieldName string
+	if localSubnet.IP.To4() != nil {
+		ipProtoStr = "ip"
+		nwDstFieldName = "nw_dst"
+	} else {
+		ipProtoStr = "ipv6"
+		nwDstFieldName = "ipv6_dst"
+	}
 	return []expectTableFlows{
 		{
-			uint8(5),
-			[]*ofTestUtils.ExpectFlow{
-				{
-					MatchStr: fmt.Sprintf("priority=200,ip,reg0=0x4/0xffff"),
-					ActStr:   "ct(table=30,zone=65500,nat)",
-				},
-			},
-		},
-		{
-			uint8(30),
-			[]*ofTestUtils.ExpectFlow{
-				{
-					MatchStr: "priority=200,ip", ActStr: "ct(table=31,zone=65520,nat)",
-				},
-			},
-		},
-		{
-			uint8(31),
-			[]*ofTestUtils.ExpectFlow{
-				{
-					MatchStr: "priority=210,ct_state=-new+trk,ct_mark=0x40,ip,reg0=0x4/0xffff",
-					ActStr:   "load:0x1->NXM_NX_REG0[19],goto_table:42",
-				},
-				{
-					MatchStr: fmt.Sprintf("priority=200,ip,reg0=0x4/0xffff"),
-					ActStr:   "LOCAL",
-				},
-			},
-		},
-		{
+			// snatCommonFlows()
 			uint8(70),
 			[]*ofTestUtils.ExpectFlow{
 				{
-					MatchStr: fmt.Sprintf("priority=200,ip,reg0=0x2/0xffff,nw_dst=%s", localSubnet.String()),
+					MatchStr: fmt.Sprintf("priority=200,%s,reg0=0x2/0xffff,%s=%s", ipProtoStr, nwDstFieldName, localSubnet.String()),
 					ActStr:   "goto_table:80",
 				},
 				{
-					MatchStr: fmt.Sprintf("priority=200,ip,reg0=0x2/0xffff,nw_dst=%s", nodeIP.String()),
+					MatchStr: fmt.Sprintf("priority=200,%s,reg0=0x2/0xffff,%s=%s", ipProtoStr, nwDstFieldName, nodeIP.String()),
 					ActStr:   "goto_table:80",
 				},
 				{
-					MatchStr: "priority=200,ct_mark=0x20,ip,reg0=0x2/0xffff", ActStr: "goto_table:80",
+					MatchStr: fmt.Sprintf("priority=200,ct_mark=0x20,%s,reg0=0x2/0xffff", ipProtoStr),
+					ActStr:   "goto_table:80",
 				},
 				{
-					MatchStr: "priority=190,ct_state=+new+trk,ip,reg0=0x2/0xffff",
-					ActStr:   "load:0x1->NXM_NX_REG0[17],goto_table:80",
+					MatchStr: fmt.Sprintf("priority=190,%s,reg0=0x2/0xffff", ipProtoStr),
+					ActStr:   "goto_table:71",
+				},
+				{
+					MatchStr: fmt.Sprintf("priority=190,%s,reg0=0/0xffff", ipProtoStr),
+					ActStr:   fmt.Sprintf("set_field:%s->eth_dst,goto_table:71", gwMAC.String()),
 				},
 			},
 		},
 		{
-			uint8(105),
+			uint8(71),
 			[]*ofTestUtils.ExpectFlow{
 				{
-					MatchStr: "priority=200,ct_state=+new+trk-dnat,ip,reg0=0x20000/0x20000",
-					ActStr:   fmt.Sprintf("ct(commit,table=110,zone=65520,nat(src=%s),exec(load:0x40->NXM_NX_CT_MARK[]))", nodeIP.String()),
+					MatchStr: fmt.Sprintf("priority=190,ct_state=+new+trk,%s,reg0=0/0xffff", ipProtoStr),
+					ActStr:   "drop",
 				},
 				{
-					MatchStr: "priority=200,ct_state=+new+trk+dnat,ip,reg0=0x20000/0x20000",
-					ActStr:   fmt.Sprintf("ct(commit,table=110,zone=65500,nat(src=%s),exec(load:0x40->NXM_NX_CT_MARK[]))", nodeIP.String()),
-				},
-				{
-					MatchStr: "priority=200,ct_state=-new+trk+dnat,ip,reg0=0x20000/0x20000",
-					ActStr:   "ct(table=110,zone=65500,nat)",
+					MatchStr: "priority=0",
+					ActStr:   "goto_table:80",
 				},
 			},
 		},
