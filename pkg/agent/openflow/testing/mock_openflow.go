@@ -1,4 +1,4 @@
-// Copyright 2020 Antrea Authors
+// Copyright 2021 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -180,6 +180,20 @@ func (mr *MockClientMockRecorder) GetPolicyInfoFromConjunction(arg0 interface{})
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPolicyInfoFromConjunction", reflect.TypeOf((*MockClient)(nil).GetPolicyInfoFromConjunction), arg0)
 }
 
+// GetServiceFlowKeys mocks base method
+func (m *MockClient) GetServiceFlowKeys(arg0 net.IP, arg1 uint16, arg2 openflow.Protocol, arg3 []proxy.Endpoint) []string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetServiceFlowKeys", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].([]string)
+	return ret0
+}
+
+// GetServiceFlowKeys indicates an expected call of GetServiceFlowKeys
+func (mr *MockClientMockRecorder) GetServiceFlowKeys(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetServiceFlowKeys", reflect.TypeOf((*MockClient)(nil).GetServiceFlowKeys), arg0, arg1, arg2, arg3)
+}
+
 // GetTunnelVirtualMAC mocks base method
 func (m *MockClient) GetTunnelVirtualMAC() net.HardwareAddr {
 	m.ctrl.T.Helper()
@@ -280,17 +294,17 @@ func (mr *MockClientMockRecorder) InstallDefaultTunnelFlows() *gomock.Call {
 }
 
 // InstallEndpointFlows mocks base method
-func (m *MockClient) InstallEndpointFlows(arg0 openflow.Protocol, arg1 []proxy.Endpoint, arg2 bool) error {
+func (m *MockClient) InstallEndpointFlows(arg0 openflow.Protocol, arg1 []proxy.Endpoint) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "InstallEndpointFlows", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "InstallEndpointFlows", arg0, arg1)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // InstallEndpointFlows indicates an expected call of InstallEndpointFlows
-func (mr *MockClientMockRecorder) InstallEndpointFlows(arg0, arg1, arg2 interface{}) *gomock.Call {
+func (mr *MockClientMockRecorder) InstallEndpointFlows(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallEndpointFlows", reflect.TypeOf((*MockClient)(nil).InstallEndpointFlows), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallEndpointFlows", reflect.TypeOf((*MockClient)(nil).InstallEndpointFlows), arg0, arg1)
 }
 
 // InstallExternalFlows mocks base method

@@ -26,18 +26,23 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	interfacestoretest "github.com/vmware-tanzu/antrea/pkg/agent/interfacestore/testing"
 	oftest "github.com/vmware-tanzu/antrea/pkg/agent/openflow/testing"
+	proxytest "github.com/vmware-tanzu/antrea/pkg/agent/proxy/testing"
 	agentquerier "github.com/vmware-tanzu/antrea/pkg/agent/querier"
 	aqtest "github.com/vmware-tanzu/antrea/pkg/agent/querier/testing"
 	cpv1beta "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
+	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
 	ovsctltest "github.com/vmware-tanzu/antrea/pkg/ovs/ovsctl/testing"
 	"github.com/vmware-tanzu/antrea/pkg/querier"
 	queriertest "github.com/vmware-tanzu/antrea/pkg/querier/testing"
 )
 
 var (
-	testFlowKeys    = []string{"flowKey1", "flowKey2"}
-	testDumpResults = []string{"flow1", "flow2"}
-	testResponses   = []Response{{"flow1"}, {"flow2"}}
+	testFlowKeys       = []string{"flowKey1", "flowKey2"}
+	testDumpFlows      = []string{"flow1", "flow2"}
+	testGroupIDs       = []binding.GroupIDType{1, 2}
+	testDumpGroups     = []string{"group1", "group2"}
+	testResponses      = []Response{{"flow1"}, {"flow2"}}
+	testGroupResponses = []Response{{"group1"}, {"group2"}}
 )
 
 type testCase struct {
@@ -46,11 +51,13 @@ type testCase struct {
 	namespace      string
 	query          string
 	expectedStatus int
+	dumpGroups     bool
 }
 
 func TestBadRequests(t *testing.T) {
 	badRequests := map[string]string{
 		"Pod only":                  "?pod=pod1",
+		"Service only":              "?service=svc1",
 		"NetworkPolicy only":        "?networkpolicy=np1",
 		"Namespace only":            "?namespace=ns1",
 		"Pod and NetworkPolicy":     "?pod=pod1&&networkpolicy=np1",
@@ -77,7 +84,6 @@ func TestPodFlows(t *testing.T) {
 	defer ctrl.Finish()
 
 	testInterface := &interfacestore.InterfaceConfig{InterfaceName: "interface0"}
-
 	testcases := []testCase{
 		{
 			test:           "Existing Pod",
@@ -108,10 +114,55 @@ func TestPodFlows(t *testing.T) {
 			q.EXPECT().GetOpenflowClient().Return(ofc).Times(1)
 			q.EXPECT().GetOVSCtlClient().Return(ovsctl).Times(len(testFlowKeys))
 			for i := range testFlowKeys {
-				ovsctl.EXPECT().DumpMatchedFlow(testFlowKeys[i]).Return(testDumpResults[i], nil).Times(1)
+				ovsctl.EXPECT().DumpMatchedFlow(testFlowKeys[i]).Return(testDumpFlows[i], nil).Times(1)
 			}
 		} else {
 			i.EXPECT().GetContainerInterfacesByPod(tc.name, tc.namespace).Return(nil).Times(1)
+		}
+
+		runHTTPTest(t, &tc, q)
+	}
+}
+
+func TestServiceFlows(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	testcases := []testCase{
+		{
+			test:           "Existing Service",
+			name:           "svc1",
+			namespace:      "ns1",
+			query:          "?service=svc1&&namespace=ns1",
+			expectedStatus: http.StatusOK,
+			dumpGroups:     true,
+		},
+		{
+			test:           "Non-existing Service",
+			name:           "svc2",
+			namespace:      "ns2",
+			query:          "?service=svc2&&namespace=ns2",
+			expectedStatus: http.StatusNotFound,
+		},
+	}
+	for i := range testcases {
+		tc := testcases[i]
+		p := proxytest.NewMockProxier(ctrl)
+		q := aqtest.NewMockAgentQuerier(ctrl)
+		q.EXPECT().GetProxier().Return(p).Times(1)
+
+		if tc.expectedStatus != http.StatusNotFound {
+			ovsctl := ovsctltest.NewMockOVSCtlClient(ctrl)
+			p.EXPECT().GetServiceFlowKeys(tc.name, tc.namespace).Return(testFlowKeys, testGroupIDs, true).Times(1)
+			q.EXPECT().GetOVSCtlClient().Return(ovsctl).Times(len(testFlowKeys) + len(testGroupIDs))
+			for i, f := range testFlowKeys {
+				ovsctl.EXPECT().DumpMatchedFlow(f).Return(testDumpFlows[i], nil).Times(1)
+			}
+			for i, g := range testGroupIDs {
+				ovsctl.EXPECT().DumpGroup(int(g)).Return(testDumpGroups[i], nil).Times(1)
+			}
+		} else {
+			p.EXPECT().GetServiceFlowKeys(tc.name, tc.namespace).Return(nil, nil, false).Times(1)
 		}
 
 		runHTTPTest(t, &tc, q)
@@ -123,7 +174,6 @@ func TestNetworkPolicyFlows(t *testing.T) {
 	defer ctrl.Finish()
 
 	testNetworkPolicy := &cpv1beta.NetworkPolicy{}
-
 	testcases := []testCase{
 		{
 			test:           "Existing NetworkPolicy",
@@ -154,7 +204,7 @@ func TestNetworkPolicyFlows(t *testing.T) {
 			q.EXPECT().GetOpenflowClient().Return(ofc).Times(1)
 			q.EXPECT().GetOVSCtlClient().Return(ovsctl).Times(len(testFlowKeys))
 			for i := range testFlowKeys {
-				ovsctl.EXPECT().DumpMatchedFlow(testFlowKeys[i]).Return(testDumpResults[i], nil).Times(1)
+				ovsctl.EXPECT().DumpMatchedFlow(testFlowKeys[i]).Return(testDumpFlows[i], nil).Times(1)
 			}
 		} else {
 			npq.EXPECT().GetNetworkPolicies(&querier.NetworkPolicyQueryFilter{SourceName: tc.name, Namespace: tc.namespace}).Return(nil).Times(1)
@@ -186,7 +236,7 @@ func TestTableFlows(t *testing.T) {
 		ovsctl := ovsctltest.NewMockOVSCtlClient(ctrl)
 		q := aqtest.NewMockAgentQuerier(ctrl)
 		q.EXPECT().GetOVSCtlClient().Return(ovsctl).Times(1)
-		ovsctl.EXPECT().DumpTableFlows(gomock.Any()).Return(testDumpResults, nil).Times(1)
+		ovsctl.EXPECT().DumpTableFlows(gomock.Any()).Return(testDumpFlows, nil).Times(1)
 
 		runHTTPTest(t, &tc, q)
 	}
@@ -206,6 +256,10 @@ func runHTTPTest(t *testing.T, tc *testCase, aq agentquerier.AgentQuerier) {
 		var received []Response
 		err = json.Unmarshal(recorder.Body.Bytes(), &received)
 		assert.Nil(t, err)
-		assert.Equal(t, testResponses, received)
+		if tc.dumpGroups {
+			assert.Equal(t, append(testResponses, testGroupResponses...), received)
+		} else {
+			assert.Equal(t, testResponses, received)
+		}
 	}
 }

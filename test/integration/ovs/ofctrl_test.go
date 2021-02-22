@@ -289,7 +289,7 @@ func TestOFctrlGroup(t *testing.T) {
 			}
 			// Check if the group could be added.
 			require.Nil(t, group.Add())
-			groups, err := ovsCtlClient.DumpGroups(brName)
+			groups, err := ovsCtlClient.DumpGroups()
 			require.Nil(t, err)
 			require.Len(t, groups, 1)
 			dumpedGroup := groups[0]
@@ -311,7 +311,7 @@ func TestOFctrlGroup(t *testing.T) {
 			}
 			// Check if the group could be deleted.
 			require.Nil(t, group.Delete())
-			groups, err = ovsCtlClient.DumpGroups(brName)
+			groups, err = ovsCtlClient.DumpGroups()
 			require.Nil(t, err)
 			require.Len(t, groups, 0)
 		})
