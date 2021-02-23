@@ -76,14 +76,17 @@ const (
 	antreaIPSecYML             string = "antrea-ipsec.yml"
 	antreaCovYML               string = "antrea-coverage.yml"
 	antreaIPSecCovYML          string = "antrea-ipsec-coverage.yml"
-	flowaggregatorYML          string = "flow-aggregator.yml"
+	flowAggregatorYML          string = "flow-aggregator.yml"
+	flowAggregatorCovYML       string = "flow-aggregator-coverage.yml"
 	defaultBridgeName          string = "br-int"
 	monitoringNamespace        string = "monitoring"
 
 	antreaControllerCovBinary string = "antrea-controller-coverage"
 	antreaAgentCovBinary      string = "antrea-agent-coverage"
+	flowAggregatorCovBinary   string = "flow-aggregator-coverage"
 	antreaControllerCovFile   string = "antrea-controller.cov.out"
 	antreaAgentCovFile        string = "antrea-agent.cov.out"
+	flowAggregatorCovFile     string = "flow-aggregator.cov.out"
 
 	antreaAgentConfName      string = "antrea-agent.conf"
 	antreaControllerConfName string = "antrea-controller.conf"
@@ -548,9 +551,13 @@ func (data *TestData) deployAntreaFlowExporter(ipfixCollector string) error {
 
 // deployFlowAggregator deploys flow aggregator with ipfix collector address.
 func (data *TestData) deployFlowAggregator(ipfixCollector string) (string, error) {
-	rc, _, _, err := provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl apply -f %s", flowaggregatorYML))
+	flowAggYaml := flowAggregatorYML
+	if testOptions.enableCoverage {
+		flowAggYaml = flowAggregatorCovYML
+	}
+	rc, _, _, err := provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl apply -f %s", flowAggYaml))
 	if err != nil || rc != 0 {
-		return "", fmt.Errorf("error when deploying flow aggregator; %s not available on the control-plane Node", flowaggregatorYML)
+		return "", fmt.Errorf("error when deploying flow aggregator; %s not available on the control-plane Node", flowAggYaml)
 	}
 	if err = data.mutateFlowAggregatorConfigMap(ipfixCollector); err != nil {
 		return "", err
@@ -1709,6 +1716,37 @@ func (data *TestData) gracefulExitAntreaAgent(covDir string, nodeName string) er
 			return fmt.Errorf("error when graceful exit Antrea agent - copy antrea-agent coverage files out: %v", err)
 		}
 	}
+	return nil
+}
+
+// gracefulExitFlowAggregator copies the Flow Aggregator binary coverage data file out before terminating the Pod.
+func (data *TestData) gracefulExitFlowAggregator(covDir string) error {
+	listOptions := metav1.ListOptions{
+		LabelSelector: "app=flow-aggregator",
+	}
+	pods, err := data.clientset.CoreV1().Pods(flowAggregatorNamespace).List(context.TODO(), listOptions)
+	if err != nil {
+		return fmt.Errorf("failed to list Flow Aggregator Pod: %v", err)
+	}
+	if len(pods.Items) != 1 {
+		return fmt.Errorf("expected *exactly* one Pod")
+	}
+	flowAggPod := &pods.Items[0]
+	podName := flowAggPod.Name
+	cmds := []string{"pgrep", "-f", flowAggregatorCovBinary, "-P", "1"}
+	stdout, stderr, err := data.runCommandFromPod(flowAggregatorNamespace, podName, "flow-aggregator", cmds)
+	if err != nil {
+		_, describeStdout, _, _ := provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl -n %s describe pod", flowAggregatorNamespace))
+		return fmt.Errorf("error when getting pid of '%s', stdout: <%v>, stderr: <%v>, err: <%v>, describe stdout: <%v>", flowAggregatorCovBinary, stdout, stderr, err, describeStdout)
+	}
+	cmds = []string{"kill", "-SIGINT", strings.TrimSpace(stdout)}
+	if _, stderr, err = data.runCommandFromPod(flowAggregatorNamespace, podName, "flow-aggregator", cmds); err != nil {
+		return fmt.Errorf("error when sending SIGINT signal to '%s', stderr: <%v>, err: <%v>", flowAggregatorCovBinary, stderr, err)
+	}
+	if err = data.copyPodFiles(podName, "flow-aggregator", flowAggregatorNamespace, flowAggregatorCovFile, covDir); err != nil {
+		return fmt.Errorf("error when gracefully exiting Flow Aggregator - copy flow-aggregator coverage files out: %v", err)
+	}
+
 	return nil
 }
 

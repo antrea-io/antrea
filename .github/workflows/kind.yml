@@ -44,26 +44,26 @@ jobs:
         path: antrea-ubuntu.tar
         retention-days: 1 # minimum value, in case artifact deletion by 'artifact-cleanup' job fails
 
-  build-flow-aggregator-image:
+  build-flow-aggregator-coverage-image:
     name: Build Flow Aggregator image to be used for Kind e2e tests
     needs: check-changes
     if: ${{ needs.check-changes.outputs.has_changes == 'yes' }}
     runs-on: [ ubuntu-latest ]
     steps:
     - uses: actions/checkout@v2
-    - run: make flow-aggregator-ubuntu
+    - run: make flow-aggregator-ubuntu-coverage
     - name: Save Flow Aggregator image to tarball
-      run: docker save -o flow-aggregator.tar projects.registry.vmware.com/antrea/flow-aggregator:latest
+      run: docker save -o flow-aggregator.tar antrea/flow-aggregator-coverage:latest
     - name: Upload Flow Aggregator image for subsequent jobs
       uses: actions/upload-artifact@v2
       with:
-        name: flow-aggregator
+        name: flow-aggregator-cov
         path: flow-aggregator.tar
         retention-days: 1 # minimum value, in case artifact deletion by 'artifact-cleanup' job fails
 
   test-e2e-encap:
     name: E2e tests on a Kind cluster on Linux
-    needs: [build-antrea-coverage-image, build-flow-aggregator-image]
+    needs: [build-antrea-coverage-image, build-flow-aggregator-coverage-image]
     runs-on: [ubuntu-latest]
     steps:
     - name: Free disk space
@@ -84,11 +84,11 @@ jobs:
     - name: Download Flow Aggregator image from previous job
       uses: actions/download-artifact@v1
       with:
-        name: flow-aggregator
+        name: flow-aggregator-cov
     - name: Load Antrea image
       run:  |
         docker load -i antrea-ubuntu-cov/antrea-ubuntu.tar
-        docker load -i flow-aggregator/flow-aggregator.tar
+        docker load -i flow-aggregator-cov/flow-aggregator.tar
     - name: Install Kind
       run: |
         curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-$(uname)-amd64
@@ -111,7 +111,7 @@ jobs:
       uses: codecov/codecov-action@v1
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
-        file: '*antrea*'
+        file: '*.cov.out*'
         flags: kind-e2e-tests
         name: codecov-test-e2e-encap
         directory: test-e2e-encap-coverage
@@ -128,7 +128,7 @@ jobs:
 
   test-e2e-encap-no-proxy:
     name: E2e tests on a Kind cluster on Linux with AntreaProxy disabled
-    needs: [build-antrea-coverage-image, build-flow-aggregator-image]
+    needs: [build-antrea-coverage-image, build-flow-aggregator-coverage-image]
     runs-on: [ubuntu-latest]
     steps:
     - name: Free disk space
@@ -147,11 +147,11 @@ jobs:
     - name: Download Flow Aggregator image from previous job
       uses: actions/download-artifact@v1
       with:
-        name: flow-aggregator
+        name: flow-aggregator-cov
     - name: Load Antrea image
       run: |
         docker load -i antrea-ubuntu-cov/antrea-ubuntu.tar
-        docker load -i flow-aggregator/flow-aggregator.tar
+        docker load -i flow-aggregator-cov/flow-aggregator.tar
     - name: Install Kind
       run: |
         curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-$(uname)-amd64
@@ -174,7 +174,7 @@ jobs:
       uses: codecov/codecov-action@v1
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
-        file: '*antrea*'
+        file: '*.cov.out*'
         flags: kind-e2e-tests
         name: codecov-test-e2e-encap-no-proxy
         directory: test-e2e-encap-no-proxy-coverage
@@ -191,7 +191,7 @@ jobs:
 
   test-e2e-noencap:
     name: E2e tests on a Kind cluster on Linux (noEncap)
-    needs: [build-antrea-coverage-image, build-flow-aggregator-image]
+    needs: [build-antrea-coverage-image, build-flow-aggregator-coverage-image]
     runs-on: [ubuntu-latest]
     steps:
     - name: Free disk space
@@ -210,11 +210,11 @@ jobs:
     - name: Download Flow Aggregator image from previous job
       uses: actions/download-artifact@v1
       with:
-        name: flow-aggregator
+        name: flow-aggregator-cov
     - name: Load Antrea image
       run: |
         docker load -i antrea-ubuntu-cov/antrea-ubuntu.tar
-        docker load -i flow-aggregator/flow-aggregator.tar
+        docker load -i flow-aggregator-cov/flow-aggregator.tar
     - name: Install Kind
       run: |
         curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-$(uname)-amd64
@@ -237,7 +237,7 @@ jobs:
       uses: codecov/codecov-action@v1
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
-        file: '*antrea*'
+        file: '*.cov.out*'
         flags: kind-e2e-tests
         name: codecov-test-e2e-noencap
         directory: test-e2e-noencap-coverage
@@ -254,7 +254,7 @@ jobs:
 
   test-e2e-hybrid:
     name: E2e tests on a Kind cluster on Linux (hybrid)
-    needs: [build-antrea-coverage-image, build-flow-aggregator-image]
+    needs: [build-antrea-coverage-image, build-flow-aggregator-coverage-image]
     runs-on: [ubuntu-latest]
     steps:
     - name: Free disk space
@@ -273,11 +273,11 @@ jobs:
     - name: Download Flow Aggregator image from previous job
       uses: actions/download-artifact@v1
       with:
-        name: flow-aggregator
+        name: flow-aggregator-cov
     - name: Load Antrea image
       run: |
         docker load -i antrea-ubuntu-cov/antrea-ubuntu.tar
-        docker load -i flow-aggregator/flow-aggregator.tar
+        docker load -i flow-aggregator-cov/flow-aggregator.tar
     - name: Install Kind
       run: |
         curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-$(uname)-amd64
@@ -300,7 +300,7 @@ jobs:
       uses: codecov/codecov-action@v1
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
-        file: '*antrea*'
+        file: '*.cov.out*'
         flags: kind-e2e-tests
         name: codecov-test-e2e-hybrid
         directory: test-e2e-hybrid-coverage
@@ -317,7 +317,7 @@ jobs:
 
   test-e2e-encap-np:
     name: E2e tests on a Kind cluster on Linux with Antrea NetworkPolicies enabled
-    needs: [build-antrea-coverage-image, build-flow-aggregator-image]
+    needs: [build-antrea-coverage-image, build-flow-aggregator-coverage-image]
     runs-on: [ubuntu-latest]
     steps:
     - name: Free disk space
@@ -336,11 +336,11 @@ jobs:
     - name: Download Flow Aggregator image from previous job
       uses: actions/download-artifact@v1
       with:
-        name: flow-aggregator
+        name: flow-aggregator-cov
     - name: Load Antrea image
       run: |
         docker load -i antrea-ubuntu-cov/antrea-ubuntu.tar
-        docker load -i flow-aggregator/flow-aggregator.tar
+        docker load -i flow-aggregator-cov/flow-aggregator.tar
     - name: Install Kind
       run: |
         curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-$(uname)-amd64
@@ -363,7 +363,7 @@ jobs:
       uses: codecov/codecov-action@v1
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
-        file: '*antrea*'
+        file: '*.cov.out*'
         flags: kind-e2e-tests
         name: codecov-test-e2e-np-encap
         directory: test-e2e-encap-np-coverage
@@ -462,7 +462,7 @@ jobs:
   # yet.
   artifact-cleanup:
     name: Delete uploaded images
-    needs: [build-antrea-coverage-image, build-flow-aggregator-image, build-antrea-image, test-e2e-encap, test-e2e-encap-no-proxy, test-e2e-noencap, test-e2e-hybrid, test-e2e-encap-np, test-netpol-tmp, validate-prometheus-metrics-doc]
+    needs: [build-antrea-coverage-image, build-flow-aggregator-coverage-image, build-antrea-image, test-e2e-encap, test-e2e-encap-no-proxy, test-e2e-noencap, test-e2e-hybrid, test-e2e-encap-np, test-netpol-tmp, validate-prometheus-metrics-doc]
     if: ${{ always() }}
     runs-on: [ubuntu-latest]
     steps:
@@ -472,10 +472,10 @@ jobs:
       with:
         name: antrea-ubuntu-cov
     - name: Delete flow-aggregator
-      if: ${{ needs.build-flow-aggregator-image.result == 'success' }}
+      if: ${{ needs.build-flow-aggregator-coverage-image.result == 'success' }}
       uses: geekyeggo/delete-artifact@v1
       with:
-        name: flow-aggregator
+        name: flow-aggregator-cov
     - name: Delete antrea-ubuntu
       if: ${{ needs.build-antrea-image.result == 'success' }}
       uses: geekyeggo/delete-artifact@v1
