@@ -53,6 +53,7 @@ func TestFlowAggregator_sendTemplateSet(t *testing.T) {
 		mockIPFIXExpProc,
 		testTemplateID,
 		mockIPFIXRegistry,
+		ipfixtest.NewMockIPFIXSet(ctrl),
 		"",
 		nil,
 	}

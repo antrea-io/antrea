@@ -22,6 +22,8 @@ var _ IPFIXSet = new(ipfixSet)
 
 // IPFIXSet interface is added to facilitate unit testing without involving the code from go-ipfix library.
 type IPFIXSet interface {
+	PrepareSet(setType ipfixentities.ContentType, templateID uint16) error
+	ResetSet()
 	AddRecord(elements []*ipfixentities.InfoElementWithValue, templateID uint16) error
 	GetSet() ipfixentities.Set
 }
@@ -30,9 +32,16 @@ type ipfixSet struct {
 	set ipfixentities.Set
 }
 
-func NewSet(setType ipfixentities.ContentType, templateID uint16, isDecoding bool) *ipfixSet {
-	s := ipfixentities.NewSet(setType, templateID, isDecoding)
-	return &ipfixSet{set: s}
+func NewSet(isDecoding bool) *ipfixSet {
+	return &ipfixSet{set: ipfixentities.NewSet(isDecoding)}
+}
+
+func (s *ipfixSet) PrepareSet(setType ipfixentities.ContentType, templateID uint16) error {
+	return s.set.PrepareSet(setType, templateID)
+}
+
+func (s *ipfixSet) ResetSet() {
+	s.set.ResetSet()
 }
 
 func (s *ipfixSet) AddRecord(elements []*ipfixentities.InfoElementWithValue, templateID uint16) error {
