@@ -152,6 +152,7 @@ type flowAggregator struct {
 	exportingProcess            ipfix.IPFIXExportingProcess
 	templateID                  uint16
 	registry                    ipfix.IPFIXRegistry
+	set                         ipfix.IPFIXSet
 	flowAggregatorAddress       string
 	k8sClient                   kubernetes.Interface
 }
@@ -169,6 +170,7 @@ func NewFlowAggregator(externalFlowCollectorAddr string, externalFlowCollectorPr
 		nil,
 		0,
 		registry,
+		ipfix.NewSet(false),
 		flowAggregatorAddress,
 		k8sClient,
 	}
@@ -281,13 +283,16 @@ func (fa *flowAggregator) initExportingProcess() error {
 	}
 	fa.exportingProcess = ep
 	fa.templateID = fa.exportingProcess.NewTemplateID()
-	templateSet := ipfix.NewSet(ipfixentities.Template, fa.templateID, false)
+	if err := fa.set.PrepareSet(ipfixentities.Template, fa.templateID); err != nil {
+		return fmt.Errorf("error when preparing set: %v", err)
+	}
 
-	bytesSent, err := fa.sendTemplateSet(templateSet)
+	bytesSent, err := fa.sendTemplateSet(fa.set)
 	if err != nil {
 		fa.exportingProcess.CloseConnToCollector()
 		fa.exportingProcess = nil
 		fa.templateID = 0
+		fa.set.ResetSet()
 		return fmt.Errorf("sending template set failed, err: %v", err)
 	}
 	klog.V(2).Infof("Initialized exporting process and sent %d bytes size of template set", bytesSent)
@@ -336,12 +341,15 @@ func (fa *flowAggregator) sendFlowKeyRecord(key ipfixintermediate.FlowKey, recor
 		return nil
 	}
 	// TODO: more records per data set will be supported when go-ipfix supports size check when adding records
-	dataSet := ipfix.NewSet(ipfixentities.Data, fa.templateID, false)
-	err := dataSet.AddRecord(record.Record.GetOrderedElementList(), fa.templateID)
+	fa.set.ResetSet()
+	if err := fa.set.PrepareSet(ipfixentities.Data, fa.templateID); err != nil {
+		return fmt.Errorf("error when preparing set: %v", err)
+	}
+	err := fa.set.AddRecord(record.Record.GetOrderedElementList(), fa.templateID)
 	if err != nil {
 		return fmt.Errorf("error when adding the record to the set: %v", err)
 	}
-	_, err = fa.sendDataSet(dataSet)
+	_, err = fa.sendDataSet(fa.set)
 	if err != nil {
 		return err
 	}
