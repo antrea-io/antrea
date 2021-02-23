@@ -192,13 +192,14 @@ func run(o *Options) error {
 	if features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
 		v4Enabled := config.IsIPv4Enabled(nodeConfig, networkConfig.TrafficEncapMode)
 		v6Enabled := config.IsIPv6Enabled(nodeConfig, networkConfig.TrafficEncapMode)
+		endpointSliceEnabled := features.DefaultFeatureGate.Enabled(features.EndpointSlice)
 		switch {
 		case v4Enabled && v6Enabled:
-			proxier = proxy.NewDualStackProxier(nodeConfig.Name, informerFactory, ofClient)
+			proxier = proxy.NewDualStackProxier(nodeConfig.Name, informerFactory, ofClient, endpointSliceEnabled)
 		case v4Enabled:
-			proxier = proxy.NewProxier(nodeConfig.Name, informerFactory, ofClient, false)
+			proxier = proxy.NewProxier(nodeConfig.Name, informerFactory, ofClient, endpointSliceEnabled, false)
 		case v6Enabled:
-			proxier = proxy.NewProxier(nodeConfig.Name, informerFactory, ofClient, true)
+			proxier = proxy.NewProxier(nodeConfig.Name, informerFactory, ofClient, endpointSliceEnabled, true)
 		default:
 			return fmt.Errorf("at least one of IPv4 or IPv6 should be enabled")
 		}

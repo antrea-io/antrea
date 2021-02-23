@@ -98,6 +98,7 @@ MOCKGEN_TARGETS=(
   "pkg/agent/cniserver/ipam IPAMDriver testing"
   "pkg/agent/interfacestore InterfaceStore testing"
   "pkg/agent/openflow Client,OFEntryOperations testing"
+  "pkg/agent/proxy/types ServiceClient testing"
   "pkg/agent/route Interface testing"
   "pkg/antctl AntctlClient ."
   "pkg/ovs/openflow Bridge,Table,Flow,Action,CTAction,FlowBuilder testing"

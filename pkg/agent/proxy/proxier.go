@@ -28,11 +28,9 @@ import (
 	"k8s.io/klog"
 	utilnet "k8s.io/utils/net"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/agent/proxy/metrics"
 	"github.com/vmware-tanzu/antrea/pkg/agent/proxy/types"
 	"github.com/vmware-tanzu/antrea/pkg/agent/querier"
-	"github.com/vmware-tanzu/antrea/pkg/features"
 	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
 	k8sproxy "github.com/vmware-tanzu/antrea/third_party/proxy"
 	"github.com/vmware-tanzu/antrea/third_party/proxy/config"
@@ -71,12 +69,12 @@ type proxier struct {
 	// serviceStringMapMutex protects serviceStringMap object.
 	serviceStringMapMutex sync.Mutex
 
-	runner              *k8sproxy.BoundedFrequencyRunner
-	stopChan            <-chan struct{}
-	agentQuerier        querier.AgentQuerier
-	ofClient            openflow.Client
-	isIPv6              bool
-	enableEndpointSlice bool
+	runner               *k8sproxy.BoundedFrequencyRunner
+	stopChan             <-chan struct{}
+	agentQuerier         querier.AgentQuerier
+	ofClient             types.ServiceClient
+	isIPv6               bool
+	endpointSliceEnabled bool
 }
 
 func endpointKey(endpoint k8sproxy.Endpoint, protocol binding.Protocol) string {
@@ -499,7 +497,7 @@ func (p *proxier) deleteServiceByIP(serviceStr string) {
 func (p *proxier) Run(stopCh <-chan struct{}) {
 	p.once.Do(func() {
 		go p.serviceConfig.Run(stopCh)
-		if p.enableEndpointSlice {
+		if p.endpointSliceEnabled {
 			go p.endpointSliceConfig.Run(stopCh)
 		} else {
 			go p.endpointsConfig.Run(stopCh)
@@ -512,7 +510,8 @@ func (p *proxier) Run(stopCh <-chan struct{}) {
 func NewProxier(
 	hostname string,
 	informerFactory informers.SharedInformerFactory,
-	ofClient openflow.Client,
+	ofClient types.ServiceClient,
+	endpointSliceEnabled bool,
 	isIPv6 bool) *proxier {
 	recorder := record.NewBroadcaster().NewRecorder(
 		runtime.NewScheme(),
@@ -521,13 +520,11 @@ func NewProxier(
 	metrics.Register()
 	klog.V(2).Infof("Creating proxier with IPv6 enabled=%t", isIPv6)
 
-	enableEndpointSlice := features.DefaultFeatureGate.Enabled(features.EndpointSlice)
-
 	p := &proxier{
-		enableEndpointSlice:      enableEndpointSlice,
+		endpointSliceEnabled:     endpointSliceEnabled,
 		endpointsConfig:          config.NewEndpointsConfig(informerFactory.Core().V1().Endpoints(), resyncPeriod),
 		serviceConfig:            config.NewServiceConfig(informerFactory.Core().V1().Services(), resyncPeriod),
-		endpointsChanges:         newEndpointsChangesTracker(hostname, enableEndpointSlice, isIPv6),
+		endpointsChanges:         newEndpointsChangesTracker(hostname, endpointSliceEnabled, isIPv6),
 		serviceChanges:           newServiceChangesTracker(recorder, isIPv6),
 		serviceMap:               k8sproxy.ServiceMap{},
 		serviceInstalledMap:      k8sproxy.ServiceMap{},
@@ -542,7 +539,7 @@ func NewProxier(
 	p.serviceConfig.RegisterEventHandler(p)
 	p.endpointsConfig.RegisterEventHandler(p)
 	p.runner = k8sproxy.NewBoundedFrequencyRunner(componentName, p.syncProxyRules, time.Second, 30*time.Second, 2)
-	if enableEndpointSlice {
+	if endpointSliceEnabled {
 		p.endpointSliceConfig = config.NewEndpointSliceConfig(informerFactory.Discovery().V1beta1().EndpointSlices(), resyncPeriod)
 		p.endpointSliceConfig.RegisterEventHandler(p)
 	} else {
@@ -554,13 +551,16 @@ func NewProxier(
 }
 
 func NewDualStackProxier(
-	hostname string, informerFactory informers.SharedInformerFactory, ofClient openflow.Client) k8sproxy.Provider {
+	hostname string,
+	informerFactory informers.SharedInformerFactory,
+	ofClient types.ServiceClient,
+	endpointSliceEnabled bool) k8sproxy.Provider {
 
 	// Create an ipv4 instance of the single-stack proxier
-	ipv4Proxier := NewProxier(hostname, informerFactory, ofClient, false)
+	ipv4Proxier := NewProxier(hostname, informerFactory, ofClient, endpointSliceEnabled, false)
 
 	// Create an ipv6 instance of the single-stack proxier
-	ipv6Proxier := NewProxier(hostname, informerFactory, ofClient, true)
+	ipv6Proxier := NewProxier(hostname, informerFactory, ofClient, endpointSliceEnabled, true)
 
 	// Return a meta-proxier that dispatch calls between the two
 	// single-stack proxier instances

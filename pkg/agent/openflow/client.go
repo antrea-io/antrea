@@ -26,6 +26,7 @@ import (
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow/cookie"
+	proxytypes "github.com/vmware-tanzu/antrea/pkg/agent/proxy/types"
 	"github.com/vmware-tanzu/antrea/pkg/agent/types"
 	"github.com/vmware-tanzu/antrea/pkg/agent/util"
 	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
@@ -36,6 +37,8 @@ const maxRetryForOFSwitch = 5
 
 // Client is the interface to program OVS flows for entity connectivity of Antrea.
 type Client interface {
+	proxytypes.ServiceClient
+
 	// Initialize sets up all basic flows on the specific OVS bridge. It returns a channel which
 	// is used to notify the caller in case of a reconnection, in which case ReplayFlows should
 	// be called to ensure that the set of OVS flows is correct. All flows programmed in the
@@ -87,38 +90,6 @@ type Client interface {
 	// UninstallPodFlows removes the connection to the local Pod specified with the
 	// interfaceName. UninstallPodFlows will do nothing if no connection to the Pod was established.
 	UninstallPodFlows(interfaceName string) error
-
-	// InstallServiceGroup installs a group for Service LB. Each endpoint
-	// is a bucket of the group. For now, each bucket has the same weight.
-	InstallServiceGroup(groupID binding.GroupIDType, withSessionAffinity bool, endpoints []proxy.Endpoint) error
-	// UninstallServiceGroup removes the group and its buckets that are
-	// installed by InstallServiceGroup.
-	UninstallServiceGroup(groupID binding.GroupIDType) error
-
-	// InstallEndpointFlows installs flows for accessing Endpoints.
-	// If an Endpoint is on the current Node, then flows for hairpin and endpoint
-	// L2 forwarding should also be installed.
-	InstallEndpointFlows(protocol binding.Protocol, endpoints []proxy.Endpoint, isIPv6 bool) error
-	// UninstallEndpointFlows removes flows of the Endpoint installed by
-	// InstallEndpointFlows.
-	UninstallEndpointFlows(protocol binding.Protocol, endpoint proxy.Endpoint) error
-
-	// InstallServiceFlows installs flows for accessing Service with clusterIP.
-	// It installs the flow that uses the group/bucket to do service LB. If the
-	// affinityTimeout is not zero, it also installs the flow which has a learn
-	// action to maintain the LB decision.
-	// The group with the groupID must be installed before, otherwise the
-	// installation will fail.
-	InstallServiceFlows(groupID binding.GroupIDType, svcIP net.IP, svcPort uint16, protocol binding.Protocol, affinityTimeout uint16) error
-	// UninstallServiceFlows removes flows installed by InstallServiceFlows.
-	UninstallServiceFlows(svcIP net.IP, svcPort uint16, protocol binding.Protocol) error
-	// InstallLoadBalancerServiceFromOutsideFlows installs flows for LoadBalancer Service traffic from outside node.
-	// The traffic is received from uplink port and will be forwarded to gateway by the installed flows. And then
-	// kube-proxy will handle the traffic.
-	// This function is only used for Windows platform.
-	InstallLoadBalancerServiceFromOutsideFlows(svcIP net.IP, svcPort uint16, protocol binding.Protocol) error
-	// UninstallLoadBalancerServiceFromOutsideFlows removes flows installed by InstallLoadBalancerServiceFromOutsideFlows.
-	UninstallLoadBalancerServiceFromOutsideFlows(svcIP net.IP, svcPort uint16, protocol binding.Protocol) error
 
 	// GetFlowTableStatus should return an array of flow table status, all existing flow tables should be included in the list.
 	GetFlowTableStatus() []binding.TableStatus

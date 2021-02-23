@@ -29,10 +29,9 @@ import (
 	"k8s.io/client-go/tools/record"
 	"k8s.io/component-base/metrics/testutil"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
-	ofmock "github.com/vmware-tanzu/antrea/pkg/agent/openflow/testing"
 	"github.com/vmware-tanzu/antrea/pkg/agent/proxy/metrics"
 	"github.com/vmware-tanzu/antrea/pkg/agent/proxy/types"
+	mock "github.com/vmware-tanzu/antrea/pkg/agent/proxy/types/testing"
 	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
 	k8sproxy "github.com/vmware-tanzu/antrea/third_party/proxy"
 )
@@ -80,7 +79,7 @@ func makeTestEndpoints(namespace, name string, eptFunc func(*corev1.Endpoints)) 
 	return ept
 }
 
-func NewFakeProxier(ofClient openflow.Client, isIPv6 bool) *proxier {
+func NewFakeProxier(ofClient types.ServiceClient, isIPv6 bool) *proxier {
 	hostname := "localhost"
 	eventBroadcaster := record.NewBroadcaster()
 	recorder := eventBroadcaster.NewRecorder(
@@ -106,7 +105,7 @@ func NewFakeProxier(ofClient openflow.Client, isIPv6 bool) *proxier {
 func testClusterIP(t *testing.T, svcIP net.IP, epIP net.IP, isIPv6 bool) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	mockOFClient := ofmock.NewMockClient(ctrl)
+	mockOFClient := mock.NewMockServiceClient(ctrl)
 	fp := NewFakeProxier(mockOFClient, isIPv6)
 
 	svcPort := 80
@@ -156,7 +155,7 @@ func testClusterIP(t *testing.T, svcIP net.IP, epIP net.IP, isIPv6 bool) {
 func TestLoadbalancer(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	mockOFClient := ofmock.NewMockClient(ctrl)
+	mockOFClient := mock.NewMockServiceClient(ctrl)
 	fp := NewFakeProxier(mockOFClient, false)
 
 	svcIPv4 := net.ParseIP("10.20.30.41")
@@ -219,7 +218,7 @@ func TestClusterIPv6(t *testing.T) {
 func testClusterIPRemoval(t *testing.T, svcIP net.IP, epIP net.IP, isIPv6 bool) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	mockOFClient := ofmock.NewMockClient(ctrl)
+	mockOFClient := mock.NewMockServiceClient(ctrl)
 	fp := NewFakeProxier(mockOFClient, isIPv6)
 
 	svcPort := 80
@@ -283,7 +282,7 @@ func TestClusterIPRemovalIPv6(t *testing.T) {
 func testClusterIPNoEndpoint(t *testing.T, svcIP net.IP, isIPv6 bool) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	mockOFClient := ofmock.NewMockClient(ctrl)
+	mockOFClient := mock.NewMockServiceClient(ctrl)
 	fp := NewFakeProxier(mockOFClient, isIPv6)
 
 	svcPort := 80
@@ -320,7 +319,7 @@ func TestClusterIPNoEndpointIPv6(t *testing.T) {
 func testClusterIPRemoveSamePortEndpoint(t *testing.T, svcIP net.IP, epIP net.IP, isIPv6 bool) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	mockOFClient := ofmock.NewMockClient(ctrl)
+	mockOFClient := mock.NewMockServiceClient(ctrl)
 	fp := NewFakeProxier(mockOFClient, isIPv6)
 
 	svcPort := 80
@@ -411,7 +410,7 @@ func TestClusterIPRemoveSamePortEndpointIPv6(t *testing.T) {
 func testClusterIPRemoveEndpoints(t *testing.T, svcIP net.IP, epIP net.IP, isIPv6 bool) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	mockOFClient := ofmock.NewMockClient(ctrl)
+	mockOFClient := mock.NewMockServiceClient(ctrl)
 	fp := NewFakeProxier(mockOFClient, isIPv6)
 
 	svcPort := 80
@@ -470,7 +469,7 @@ func TestClusterIPRemoveEndpointsIPv6(t *testing.T) {
 func testSessionAffinityNoEndpoint(t *testing.T, svcExternalIPs net.IP, svcIP net.IP, epIP net.IP, isIPv6 bool) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	mockOFClient := ofmock.NewMockClient(ctrl)
+	mockOFClient := mock.NewMockServiceClient(ctrl)
 	fp := NewFakeProxier(mockOFClient, isIPv6)
 
 	svcPort := 80
@@ -538,7 +537,7 @@ func TestSessionAffinityNoEndpointIPv6(t *testing.T) {
 func testSessionAffinity(t *testing.T, svcExternalIPs net.IP, svcIP net.IP, isIPv6 bool) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	mockOFClient := ofmock.NewMockClient(ctrl)
+	mockOFClient := mock.NewMockServiceClient(ctrl)
 	fp := NewFakeProxier(mockOFClient, isIPv6)
 
 	svcPort := 80
@@ -585,7 +584,7 @@ func TestSessionAffinityIPv6(t *testing.T) {
 func testPortChange(t *testing.T, svcIP net.IP, epIP net.IP, isIPv6 bool) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	mockOFClient := ofmock.NewMockClient(ctrl)
+	mockOFClient := mock.NewMockServiceClient(ctrl)
 	fp := NewFakeProxier(mockOFClient, isIPv6)
 
 	svcPort1 := 80
@@ -658,7 +657,7 @@ func TestPortChangeIPv6(t *testing.T) {
 func TestServicesWithSameEndpoints(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	mockOFClient := ofmock.NewMockClient(ctrl)
+	mockOFClient := mock.NewMockServiceClient(ctrl)
 	fp := NewFakeProxier(mockOFClient, false)
 	epIP := net.ParseIP("10.50.60.71")
 	svcIP1 := net.ParseIP("10.180.30.41")
