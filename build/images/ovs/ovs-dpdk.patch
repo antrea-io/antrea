@@ -1,0 +1,19 @@
+diff -u debian/rules debian.patched/rules
+--- debian/rules             2020-08-17 11:15:38.316524451 +0000
++++ debian.patched/rules     2021-02-05 08:19:24.231971073 +0000
+@@ -30,7 +30,7 @@
+ 	dh_autoreconf $(DH_AS_NEEDED)
+
+ override_dh_auto_configure:
+-	dh_auto_configure -- --enable-ssl --enable-shared $(DATAPATH_CONFIGURE_OPTS)
++	dh_auto_configure -- --enable-ssl --enable-shared $(DATAPATH_CONFIGURE_OPTS) --with-dpdk=/usr/src/dpdk-stable-19.11.2/x86_64-native-linuxapp-gcc CFLAGS="-Ofast -msse4.2 -mpopcnt -fPIC"
+
+ override_dh_auto_test:
+ ifeq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
+@@ -92,3 +92,6 @@
+
+ override_dh_installman:
+ 	dh_installman --language=C
++
++override_dh_shlibdeps:
++	dh_shlibdeps --dpkg-shlibdeps-params=--ignore-missing-info
