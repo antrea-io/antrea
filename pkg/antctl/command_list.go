@@ -17,7 +17,9 @@ package antctl
 import (
 	"flag"
 	"fmt"
+	"io"
 	"math"
+	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -42,10 +44,8 @@ func (cl *commandList) applyPersistentFlagsToRoot(root *cobra.Command) {
 	root.PersistentFlags().StringP("server", "s", "", "address and port of the API server, taking precedence over the default endpoint and the one set in kubeconfig")
 }
 
-// ApplyToRootCommand applies the commandList to the root cobra command, it applies
-// each commandDefinition of it to the root command as a sub-command.
-func (cl *commandList) ApplyToRootCommand(root *cobra.Command) {
-	client := &client{codec: cl.codec}
+// applyToRootCommand is the "internal" version of ApplyToRootCommand, used for testing
+func (cl *commandList) applyToRootCommand(root *cobra.Command, client AntctlClient, out io.Writer) {
 	for _, groupCommand := range groupCommands {
 		root.AddCommand(groupCommand)
 	}
@@ -55,7 +55,7 @@ func (cl *commandList) ApplyToRootCommand(root *cobra.Command) {
 			(runtime.Mode == runtime.ModeController && def.controllerEndpoint == nil) {
 			continue
 		}
-		def.applySubCommandToRoot(root, client)
+		def.applySubCommandToRoot(root, client, out)
 		klog.Infof("Added command %s", def.use)
 	}
 	cl.applyPersistentFlagsToRoot(root)
@@ -86,6 +86,13 @@ func (cl *commandList) ApplyToRootCommand(root *cobra.Command) {
 		return nil
 	}
 	renderDescription(root)
+}
+
+// ApplyToRootCommand applies the commandList to the root cobra command, it applies
+// each commandDefinition of it to the root command as a sub-command.
+func (cl *commandList) ApplyToRootCommand(root *cobra.Command) {
+	client := newClient(cl.codec)
+	cl.applyToRootCommand(root, client, os.Stdout)
 }
 
 // validate checks the validation of the commandList.
