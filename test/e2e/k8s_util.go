@@ -66,8 +66,8 @@ func (k *KubernetesUtils) getPodsUncached(ns string, key, val string) ([]v1.Pod,
 	return v1PodList.Items, nil
 }
 
-// GetPods returns an array of all Pods in the given Namespace having a k/v label pair.
-func (k *KubernetesUtils) GetPods(ns string, key string, val string) ([]v1.Pod, error) {
+// GetPodsByLabel returns an array of all Pods in the given Namespace having a k/v label pair.
+func (k *KubernetesUtils) GetPodsByLabel(ns string, key string, val string) ([]v1.Pod, error) {
 	if p, ok := k.podCache[fmt.Sprintf("%v_%v_%v", ns, key, val)]; ok {
 		return p, nil
 	}
@@ -83,39 +83,23 @@ func (k *KubernetesUtils) GetPods(ns string, key string, val string) ([]v1.Pod, 
 // Probe execs into a Pod and checks its connectivity to another Pod.  Of course it assumes
 // that the target Pod is serving on the input port, and also that ncat is installed.
 func (k *KubernetesUtils) Probe(ns1, pod1, ns2, pod2 string, port int32, usePodName bool) (bool, error) {
-	var fromPod v1.Pod
-	var toPod v1.Pod
-
-	if usePodName {
-		pod1Returned, err := k.clientset.CoreV1().Pods(ns1).Get(context.TODO(), pod1, metav1.GetOptions{})
-		if err != nil || pod1Returned == nil {
-			return false, errors.WithMessagef(err, "unable to get Pod %s/%s", ns1, pod1)
-		}
-		fromPod = *pod1Returned
-		pod2Returned, err := k.clientset.CoreV1().Pods(ns2).Get(context.TODO(), pod2, metav1.GetOptions{})
-		if err != nil || pod2Returned == nil {
-			return false, errors.WithMessagef(err, "unable to get Pod %s/%s", ns2, pod2)
-		}
-		toPod = *pod2Returned
-	} else {
-		fromPods, err := k.GetPods(ns1, "pod", pod1)
-		if err != nil {
-			return false, errors.WithMessagef(err, "unable to get pods from ns %s", ns1)
-		}
-		if len(fromPods) == 0 {
-			return false, errors.New(fmt.Sprintf("no Pod of label pod=%s in namespace %s found", pod1, ns1))
-		}
-		fromPod = fromPods[0]
-
-		toPods, err := k.GetPods(ns2, "pod", pod2)
-		if err != nil {
-			return false, errors.WithMessagef(err, "unable to get pods from ns %s", ns2)
-		}
-		if len(toPods) == 0 {
-			return false, errors.New(fmt.Sprintf("no Pod of label pod=%s in namespace %s found", pod2, ns2))
-		}
-		toPod = toPods[0]
+	fromPods, err := k.GetPodsByLabel(ns1, "pod", pod1)
+	if err != nil {
+		return false, fmt.Errorf("unable to get pods from ns %s: %v", ns1, err)
 	}
+	if len(fromPods) == 0 {
+		return false, fmt.Errorf("no Pod of label pod=%s in namespace %s found", pod1, ns1)
+	}
+	fromPod := fromPods[0]
+
+	toPods, err := k.GetPodsByLabel(ns2, "pod", pod2)
+	if err != nil {
+		return false, fmt.Errorf("unable to get pods from ns %s: %v", ns2, err)
+	}
+	if len(toPods) == 0 {
+		return false, fmt.Errorf("no Pod of label pod=%s in namespace %s found", pod2, ns2)
+	}
+	toPod := toPods[0]
 	toIP := toPod.Status.PodIP
 
 	// There seems to be an issue when running Antrea in Kind where tunnel traffic is dropped at
@@ -628,7 +612,7 @@ func (k *KubernetesUtils) Bootstrap(namespaces, pods []string) (*map[string]stri
 		}
 		for _, pod := range pods {
 			log.Infof("Creating/updating pod %s/%s", ns, pod)
-			_, err := k.CreateOrUpdateDeployment(ns, ns+pod, 1, map[string]string{"pod": pod})
+			_, err := k.CreateOrUpdateDeployment(ns, ns+pod, 1, map[string]string{"pod": pod, "app": pod})
 			if err != nil {
 				return nil, errors.WithMessagef(err, "unable to create/update deployment %s/%s", ns, pod)
 			}

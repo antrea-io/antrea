@@ -1767,20 +1767,17 @@ func testAppliedToPerRule(t *testing.T) {
 }
 
 func testACNPClusterGroupServiceRefCreateAndUpdate(t *testing.T, data *TestData) {
-	svc1 := k8sUtils.BuildService("svc1", "x", 80, 80, map[string]string{"pod": "a"}, nil)
-	svc2 := k8sUtils.BuildService("svc2", "y", 80, 80, map[string]string{"pod": "b"}, nil)
+	svc1 := k8sUtils.BuildService("svc1", "x", 80, 80, map[string]string{"app": "a"}, nil)
+	svc2 := k8sUtils.BuildService("svc2", "y", 80, 80, map[string]string{"app": "b"}, nil)
 
 	cg1Name, cg2Name := "cg-svc1", "cg-svc2"
 	cgBuilder1 := &ClusterGroupSpecBuilder{}
-	cgBuilder1 = cgBuilder1.SetName(cg1Name)
-	cgBuilder1 = cgBuilder1.SetServiceReference("x", "svc1")
+	cgBuilder1 = cgBuilder1.SetName(cg1Name).SetServiceReference("x", "svc1")
 	cgBuilder2 := &ClusterGroupSpecBuilder{}
-	cgBuilder2 = cgBuilder2.SetName(cg2Name)
-	cgBuilder2 = cgBuilder2.SetServiceReference("y", "svc2")
+	cgBuilder2 = cgBuilder2.SetName(cg2Name).SetServiceReference("y", "svc2")
 
 	builder := &ClusterNetworkPolicySpecBuilder{}
-	builder = builder.SetName("cnp-cg-svc-ref").SetPriority(1.0)
-	builder.SetAppliedToGroup([]ACNPAppliedToSpec{{Group: cg1Name}})
+	builder = builder.SetName("cnp-cg-svc-ref").SetPriority(1.0).SetAppliedToGroup([]ACNPAppliedToSpec{{Group: cg1Name}})
 	builder.AddIngress(v1.ProtocolTCP, &p80, nil, nil, nil, nil, nil, nil, nil,
 		nil, secv1alpha1.RuleActionDrop, cg2Name, "")
 
@@ -1798,18 +1795,18 @@ func testACNPClusterGroupServiceRefCreateAndUpdate(t *testing.T, data *TestData)
 	}
 
 	// Test update selector of Service referred in cg-svc1, and update serviceReference of cg-svc2.
-	svc1Updated := k8sUtils.BuildService("svc1", "x", 80, 80, map[string]string{"pod": "b"}, nil)
-	svc3 := k8sUtils.BuildService("svc3", "y", 80, 80, map[string]string{"pod": "a"}, nil)
+	svc1Updated := k8sUtils.BuildService("svc1", "x", 80, 80, map[string]string{"app": "b"}, nil)
+	svc3 := k8sUtils.BuildService("svc3", "y", 80, 80, map[string]string{"app": "a"}, nil)
 	cgBuilder2Updated := cgBuilder2.SetServiceReference("y", "svc3")
 	cp := []*CustomProbe{
 		{
 			SourcePod: CustomPod{
 				Pod:    NewPod("y", "test-add-pod-svc3"),
-				Labels: map[string]string{"pod": "a"},
+				Labels: map[string]string{"pod": "test-add-pod-svc3", "app": "a"},
 			},
 			DestPod: CustomPod{
 				Pod:    NewPod("x", "test-add-pod-svc1"),
-				Labels: map[string]string{"pod": "b"},
+				Labels: map[string]string{"pod": "test-add-pod-svc1", "app": "b"},
 			},
 			ExpectConnected: false,
 			Port:            p80,
