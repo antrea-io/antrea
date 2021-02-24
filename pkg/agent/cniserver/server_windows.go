@@ -49,7 +49,7 @@ func (s *CNIServer) hostNetNsPath(netNS string) string {
 // isInfraContainer returns true if a container is infra container according to the network namespace path.
 // On Windows platform:
 //   - When using Docker as CRI runtime, the network namespace of infra container is "none".
-//   - When using ContainerD as CRI runtime, the network namespace of infra container is
+//   - When using Containerd as CRI runtime, the network namespace of infra container is
 //     a string which does not contains ":".
 func isInfraContainer(netNS string) bool {
 	return netNS == dockerInfraContainerNetNS || !strings.Contains(netNS, ":")

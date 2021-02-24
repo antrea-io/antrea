@@ -30,7 +30,7 @@ import (
 )
 
 // connectInterfaceToOVSAsync waits for an interface to be created and connects it to OVS br-int asynchronously
-// in another goroutine. The function is for ContainerD runtime. The host interface is created after
+// in another goroutine. The function is for Containerd runtime. The host interface is created after
 // CNI call completes.
 func (pc *podConfigurator) connectInterfaceToOVSAsync(ifConfig *interfacestore.InterfaceConfig, containerAccess *containerAccessArbitrator) error {
 	if containerAccess == nil {
@@ -86,11 +86,11 @@ func (pc *podConfigurator) connectInterfaceToOVS(
 	ovsPortName := hostIface.Name
 	containerConfig := buildContainerConfig(ovsPortName, containerID, podName, podNameSpace, containerIface, ips)
 	hostIfAlias := fmt.Sprintf("%s (%s)", util.ContainerVNICPrefix, ovsPortName)
-	// - For ContainerD runtime, the container interface is created after CNI replying the network setup result.
+	// - For Containerd runtime, the container interface is created after CNI replying the network setup result.
 	//   So for such case we need to use asynchronous way to wait for interface to be created.
 	// - For Docker runtime, antrea-agent still creates OVS port synchronously.
 	// - Here antrea-agent determines the way of OVS port creation by checking if container interface is yet created.
-	//   If one day ContainerD runtime changes the behavior and container interface can be created when attaching
+	//   If one day Containerd runtime changes the behavior and container interface can be created when attaching
 	//   HNSEndpoint/HostComputeEndpoint, the current implementation will still work. It will choose the synchronized
 	//   way to create OVS port.
 	if util.HostInterfaceExists(hostIfAlias) {

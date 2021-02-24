@@ -176,7 +176,7 @@ func (ic *ifConfigurator) createContainerLink(endpointName string, result *curre
 	}
 	// Save interface config to HNSEndpoint. It's used for creating missing OVS
 	// ports during antrea-agent boot stage. The change is introduced mainly for
-	// ContainerD support. When working with ContainerD runtime, antrea-agent creates
+	// Containerd support. When working with Containerd runtime, antrea-agent creates
 	// OVS ports in an asynchronous way. So the OVS ports can be lost if antrea-agent
 	// gets stopped/restarted before port creation completes.
 	//
@@ -256,7 +256,7 @@ func parseOVSPortInterfaceConfigFromHNSEndpoint(ep *hcsshim.HNSEndpoint) *interf
 // addresses and routes to the interface.
 // For different CRI runtimes we need to use the appropriate Windows container API:
 //   - Docker runtime: HNS API
-//   - ContainerD runtime: HCS API
+//   - Containerd runtime: HCS API
 func attachContainerLink(ep *hcsshim.HNSEndpoint, containerID, sandbox, containerIFDev string) (*current.Interface, error) {
 	var attached bool
 	var err error
@@ -268,7 +268,7 @@ func attachContainerLink(ep *hcsshim.HNSEndpoint, containerID, sandbox, containe
 			return nil, err
 		}
 	} else {
-		// ContainerD runtime
+		// Containerd runtime
 		if hcnEp, err = hcn.GetEndpointByID(ep.Id); err != nil {
 			return nil, err
 		}
@@ -295,7 +295,7 @@ func attachContainerLink(ep *hcsshim.HNSEndpoint, containerID, sandbox, containe
 				}
 			}
 		} else {
-			// ContainerD runtime
+			// Containerd runtime
 			if err := hcnEp.NamespaceAttach(sandbox); err != nil {
 				return nil, err
 			}
