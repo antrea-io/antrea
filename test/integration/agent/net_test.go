@@ -37,6 +37,15 @@ func addrEqual(addr1, addr2 *net.IPNet) bool {
 	return addr1.IP.Equal(addr2.IP) && size1 == size2
 }
 
+func isAddressPresent(addrs []*net.IPNet, addr *net.IPNet) bool {
+	for _, a := range addrs {
+		if addrEqual(a, addr) {
+			return true
+		}
+	}
+	return false
+}
+
 func TestConfigureLinkAddresses(t *testing.T) {
 	// #nosec G404: random number generator not used for security purposes
 	suffix := rand.Uint32()
@@ -55,28 +64,14 @@ func TestConfigureLinkAddresses(t *testing.T) {
 	_, dummyAddr, _ := net.ParseCIDR("192.0.2.0/24")
 
 	addTestInterfaceAddress(t, ifaceName, dummyAddr)
-	addrs2 := getTestInterfaceAddresses(t, ifaceName)
-	nAddrs2 := len(addrs2)
-	assert.Equal(t, nAddrs+1, nAddrs2)
+	addrs = getTestInterfaceAddresses(t, ifaceName)
+	assert.True(t, isAddressPresent(addrs, dummyAddr), "Dummy IP address was not assigned to test interface")
 
 	_, ipAddr, _ := net.ParseCIDR("192.0.3.0/24")
 	err := util.ConfigureLinkAddresses(ifaceIdx, []*net.IPNet{ipAddr})
 	require.NoError(t, err)
 
-	addrs3 := getTestInterfaceAddresses(t, ifaceName)
-	nAddrs3 := len(addrs3)
-	assert.Equal(t, nAddrs+1, nAddrs3)
-
-	foundDummy := false
-	foundActual := false
-	for _, addr := range addrs3 {
-		switch {
-		case addrEqual(addr, dummyAddr):
-			foundDummy = true
-		case addrEqual(addr, ipAddr):
-			foundActual = true
-		}
-	}
-	assert.True(t, foundActual, "IP address was not assigned to test interface")
-	assert.False(t, foundDummy, "Dummy IP address should have been removed from test interface")
+	addrs = getTestInterfaceAddresses(t, ifaceName)
+	assert.True(t, isAddressPresent(addrs, ipAddr), "IP address was not assigned to test interface")
+	assert.False(t, isAddressPresent(addrs, dummyAddr), "Dummy IP address should have been removed from test interface")
 }
