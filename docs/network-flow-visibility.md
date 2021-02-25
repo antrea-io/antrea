@@ -120,6 +120,7 @@ the flow. All the IEs used by the Antrea Flow Exporter are listed below:
 |--------------------------|---------------|----------|----------------|
 | flowStartSeconds         | 0             | 150      | dateTimeSeconds|
 | flowEndSeconds           | 0             | 151      | dateTimeSeconds|
+| flowEndReason            | 0             | 136      | unsigned8      |
 | sourceIPv4Address        | 0             | 8        | ipv4Address    |
 | destinationIPv4Address   | 0             | 12       | ipv4Address    |
 | sourceIPv6Address        | 0             | 27       | ipv6Address    |
@@ -159,6 +160,8 @@ the flow. All the IEs used by the Antrea Flow Exporter are listed below:
 | ingressNetworkPolicyNamespace| 56506         | 111      | string      |
 | egressNetworkPolicyName      | 56506         | 112      | string      |
 | egressNetworkPolicyNamespace | 56506         | 113      | string      |
+| tcpState                     | 56506         | 136      | string      |
+| flowType                     | 56506         | 137      | unsigned8   |
 
 ### Supported capabilities
 

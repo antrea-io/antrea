@@ -176,6 +176,7 @@ func TestConnTrackOvsAppCtl_DumpFlows(t *testing.T) {
 		SourcePodName:           "",
 		DestinationPodNamespace: "",
 		DestinationPodName:      "",
+		TCPState:                "ESTABLISHED",
 	}
 	mockOVSCtlClient.EXPECT().RunAppctlCmd("dpctl/dump-conntrack", false, "-m", "-s").Return(ovsctlCmdOutput, nil)
 
@@ -244,6 +245,7 @@ func TestNetLinkFlowToAntreaConnection(t *testing.T) {
 		SourcePodName:           "",
 		DestinationPodNamespace: "",
 		DestinationPodName:      "",
+		TCPState:                "",
 	}
 
 	antreaFlow := NetlinkFlowToAntreaConnection(netlinkFlow)
@@ -279,6 +281,7 @@ func TestNetLinkFlowToAntreaConnection(t *testing.T) {
 		SourcePodName:           "",
 		DestinationPodNamespace: "",
 		DestinationPodName:      "",
+		TCPState:                "",
 	}
 
 	antreaFlow = NetlinkFlowToAntreaConnection(netlinkFlow)
