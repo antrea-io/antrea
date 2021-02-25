@@ -130,36 +130,71 @@ func SetLinkUp(name string) (net.HardwareAddr, int, error) {
 	return mac, index, nil
 }
 
-func ConfigureLinkAddress(idx int, gwIPNet *net.IPNet) error {
-	// No need to check the error here, since the link is found in previous steps.
-	link, _ := netlink.LinkByIndex(idx)
-	gwAddr := &netlink.Addr{IPNet: gwIPNet, Label: ""}
+func addrSliceDifference(s1, s2 []netlink.Addr) []*netlink.Addr {
+	var diff []*netlink.Addr
 
-	var addrFamily int
-	if gwIPNet.IP.To4() != nil {
-		addrFamily = netlink.FAMILY_V4
-	} else {
-		addrFamily = netlink.FAMILY_V6
-	}
-
-	if addrs, err := netlink.AddrList(link, addrFamily); err != nil {
-		klog.Errorf("Failed to query address list for interface %s: %v", link.Attrs().Name, err)
-		return err
-	} else if addrs != nil {
-		for _, addr := range addrs {
-			klog.V(4).Infof("Found address %s for interface %s", addr.IP.String(), link.Attrs().Name)
-			if addr.IP.Equal(gwAddr.IPNet.IP) {
-				klog.V(2).Infof("Address %s already assigned to interface %s", addr.IP.String(), link.Attrs().Name)
-				return nil
+	for i, e1 := range s1 {
+		found := false
+		for _, e2 := range s2 {
+			if e1.Equal(e2) {
+				found = true
+				break
 			}
+		}
+		if !found {
+			diff = append(diff, &s1[i])
 		}
 	}
 
-	klog.V(2).Infof("Adding address %v to gateway interface %s", gwAddr, link.Attrs().Name)
-	if err := netlink.AddrAdd(link, gwAddr); err != nil {
-		klog.Errorf("Failed to set gateway interface %s with address %v: %v", link.Attrs().Name, gwAddr, err)
-		return err
+	return diff
+}
+
+// ConfigureLinkAddresses adds the provided addresses to the interface identified by index idx, if
+// they are missing from the interface. Any other existing address already configured for the
+// interface will be removed, unless it is a link-local address.
+func ConfigureLinkAddresses(idx int, ipNets []*net.IPNet) error {
+	// No need to check the error here, since the link is found in previous steps.
+	link, _ := netlink.LinkByIndex(idx)
+	ifaceName := link.Attrs().Name
+	var newAddrs []netlink.Addr
+	for _, ipNet := range ipNets {
+		newAddrs = append(newAddrs, netlink.Addr{IPNet: ipNet, Label: ""})
 	}
+
+	allAddrs, err := netlink.AddrList(link, netlink.FAMILY_ALL)
+	if err != nil {
+		return fmt.Errorf("failed to query address list for interface %s: %v", ifaceName, err)
+	}
+	// Remove link-local address from list
+	addrs := make([]netlink.Addr, 0, len(allAddrs))
+	for _, addr := range allAddrs {
+		if !addr.IP.IsLinkLocalUnicast() {
+			addrs = append(addrs, addr)
+		}
+	}
+
+	addrsToAdd := addrSliceDifference(newAddrs, addrs)
+	addrsToRemove := addrSliceDifference(addrs, newAddrs)
+
+	if len(addrsToAdd) == 0 && len(addrsToRemove) == 0 {
+		klog.V(2).Infof("IP configuration for interface %s does not need to change", ifaceName)
+		return nil
+	}
+
+	for _, addr := range addrsToRemove {
+		klog.V(2).Infof("Removing address %v from interface %s", addr, ifaceName)
+		if err := netlink.AddrDel(link, addr); err != nil {
+			return fmt.Errorf("failed to remove address %v from interface %s: %v", addr, ifaceName, err)
+		}
+	}
+
+	for _, addr := range addrsToAdd {
+		klog.V(2).Infof("Adding address %v to interface %s", addr, ifaceName)
+		if err := netlink.AddrAdd(link, addr); err != nil {
+			return fmt.Errorf("failed to add address %v to interface %s: %v", addr, ifaceName, err)
+		}
+	}
+
 	return nil
 }
 
