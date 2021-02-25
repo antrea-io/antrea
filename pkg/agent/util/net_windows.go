@@ -56,6 +56,17 @@ func ConfigureInterfaceAddress(ifaceName string, ipConfig *net.IPNet) error {
 	return InvokePSCommand(cmd)
 }
 
+// RemoveInterfaceAddress removes IPAddress from the specified interface.
+func RemoveInterfaceAddress(ifaceName string, ipAddr net.IP) error {
+	cmd := fmt.Sprintf(`Remove-NetIPAddress -InterfaceAlias "%s" -IPAddress %s -Confirm:$false`, ifaceName, ipAddr.String())
+	err := InvokePSCommand(cmd)
+	// If the address does not exist, ignore the error.
+	if err != nil && !strings.Contains(err.Error(), "No matching") {
+		return err
+	}
+	return nil
+}
+
 // ConfigureInterfaceAddressWithDefaultGateway adds IPAddress on the specified interface and sets the default gateway
 // for the host.
 func ConfigureInterfaceAddressWithDefaultGateway(ifaceName string, ipConfig *net.IPNet, gateway string) error {
@@ -224,34 +235,77 @@ func SetLinkUp(name string) (net.HardwareAddr, int, error) {
 	return mac, index, nil
 }
 
-func ConfigureLinkAddress(idx int, gwIPNet *net.IPNet) error {
-	if gwIPNet.IP.To4() == nil {
-		klog.Warningf("Windows only supports IPv4 addresses. Skip this address %s", gwIPNet.String())
-		return nil
+func addrEqual(addr1, addr2 *net.IPNet) bool {
+	size1, _ := addr1.Mask.Size()
+	size2, _ := addr2.Mask.Size()
+	return addr1.IP.Equal(addr2.IP) && size1 == size2
+}
+
+func addrSliceDifference(s1, s2 []*net.IPNet) []*net.IPNet {
+	var diff []*net.IPNet
+
+	for _, e1 := range s1 {
+		found := false
+		for _, e2 := range s2 {
+			if addrEqual(e1, e2) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			diff = append(diff, e1)
+		}
 	}
 
+	return diff
+}
+
+// ConfigureLinkAddresses adds the provided addresses to the interface identified by index idx, if
+// they are missing from the interface. Any other existing address already configured for the
+// interface will be removed, unless it is a link-local address. At the moment, this function only
+// supports IPv4 addresses and will ignore any address in ipNets that is not IPv4.
+func ConfigureLinkAddresses(idx int, ipNets []*net.IPNet) error {
 	iface, _ := net.InterfaceByIndex(idx)
-	gwIP := gwIPNet.IP
-	name := iface.Name
-	if addrs, err := iface.Addrs(); err != nil {
-		klog.Errorf("Failed to query IPv4 address list for interface %s: %v", name, err)
-		return err
-	} else if addrs != nil {
-		for _, addr := range addrs {
-			// Check with IPv4 address.
+	ifaceName := iface.Name
+	var addrs []*net.IPNet
+	if ifaceAddrs, err := iface.Addrs(); err != nil {
+		return fmt.Errorf("failed to query IPv4 address list for interface %s: %v", ifaceName, err)
+	} else {
+		for _, addr := range ifaceAddrs {
 			if ipNet, ok := addr.(*net.IPNet); ok {
-				if ipNet.IP.To4() != nil && ipNet.IP.Equal(gwIPNet.IP) {
-					return nil
+				if ipNet.IP.To4() != nil && !ipNet.IP.IsLinkLocalUnicast() {
+					addrs = append(addrs, ipNet)
 				}
 			}
 		}
 	}
 
-	klog.V(2).Infof("Adding address %v to gateway interface %s", gwIP, name)
-	if err := ConfigureInterfaceAddress(iface.Name, gwIPNet); err != nil {
-		klog.Errorf("Failed to set gateway interface %v with address %v: %v", iface, gwIP, err)
-		return err
+	addrsToAdd := addrSliceDifference(ipNets, addrs)
+	addrsToRemove := addrSliceDifference(addrs, ipNets)
+
+	if len(addrsToAdd) == 0 && len(addrsToRemove) == 0 {
+		klog.V(2).Infof("IP configuration for interface %s does not need to change", ifaceName)
+		return nil
 	}
+
+	for _, addr := range addrsToRemove {
+		klog.V(2).Infof("Removing address %v from interface %s", addr, ifaceName)
+		if err := RemoveInterfaceAddress(ifaceName, addr.IP); err != nil {
+			return fmt.Errorf("failed to remove address %v from interface %s: %v", addr, ifaceName, err)
+		}
+	}
+
+	for _, addr := range addrsToAdd {
+		klog.V(2).Infof("Adding address %v to interface %s", addr, ifaceName)
+		if addr.IP.To4() == nil {
+			klog.Warningf("Windows only supports IPv4 addresses, skipping this address %v", addr)
+			return nil
+		}
+		if err := ConfigureInterfaceAddress(ifaceName, addr); err != nil {
+			return fmt.Errorf("failed to add address %v to interface %s: %v", addr, ifaceName, err)
+		}
+	}
+
 	return nil
 }
 
