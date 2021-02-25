@@ -728,6 +728,14 @@ func (cd *commandDefinition) output(resp io.Reader, writer io.Writer, ft formatt
 		}
 		klog.Infof("After transforming %v", obj)
 	}
+
+	if str, ok := obj.([]byte); ok {
+		// If the transformed response is of type []byte, just output
+		// the raw bytes.
+		_, err = writer.Write(str)
+		return err
+	}
+
 	// Output structure data in format
 	switch ft {
 	case jsonFormatter:
