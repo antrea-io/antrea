@@ -854,7 +854,9 @@ func (c *client) traceflowL2ForwardOutputFlows(dataplaneTag uint8, category cook
 				Action().SendToController(uint8(PacketInReasonTF)).
 				Cookie(c.cookieAllocator.Request(category).Raw()).
 				Done())
-			// Only SendToController if output port is local gateway.
+			// Only SendToController if output port is local gateway. In encapMode, a
+			// Traceflow packet going out of the gateway port (i.e. exiting the overlay)
+			// essentially means that the Traceflow request is complete.
 			flows = append(flows, c.pipeline[L2ForwardingOutTable].BuildFlow(priorityNormal+2).
 				MatchReg(int(PortCacheReg), config.HostGatewayOFPort).
 				MatchIPDscp(dataplaneTag).
@@ -865,7 +867,9 @@ func (c *client) traceflowL2ForwardOutputFlows(dataplaneTag uint8, category cook
 				Cookie(c.cookieAllocator.Request(category).Raw()).
 				Done())
 		} else {
-			// SendToController and Output if output port is local gateway.
+			// SendToController and Output if output port is local gateway. Unlike in
+			// encapMode, inter-Node Pod-to-Pod traffic is expected to go out of the
+			// gateway port on the way to its destination.
 			flows = append(flows, c.pipeline[L2ForwardingOutTable].BuildFlow(priorityNormal+2).
 				MatchReg(int(PortCacheReg), config.HostGatewayOFPort).
 				MatchIPDscp(dataplaneTag).
