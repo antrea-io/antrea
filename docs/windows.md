@@ -59,39 +59,57 @@ and daemons are pre-installed on the Windows Nodes in the demo.
     See details in [Join Windows worker Nodes](#Join-Windows-worker-nodes)
     section.
 
-### Installation as a Service (containerd based runtimes)
+### Installation as a Service (Containerd based runtimes)
 
-First install antrea (0.13+ is required for containerd).
+First install Antrea (v0.13.0+ is required for Containerd).
 
 ```bash
 # Example:
 kubectl apply -f https://github.com/vmware-tanzu/antrea/releases/download/v0.13.0/antrea.yml
 ```
 
-Then, you can run the following commands.  This will setup antrea as a windows service.
-```
-choco install yq
-curl.exe -LO https://raw.githubusercontent.com/vmware-tanzu/antrea/master/hack/windows/Helper.psm1 
-curl.exe -LO https://github.com/vmware-tanzu/antrea/releases/download/v0.13.0/antrea-agent-windows-x86_64.exe
+Then, you can run the following commands. [nssm](https://nssm.cc/) will install Antrea as a Windows service. Please ensure
+`nssm` is on your machine, which is a handy tool to manage services on Windows. NOTE: `<KubernetesVersion>`, `<KubeconfigPath>`
+`<KubeProxyKubeconfigPath>` and `<KubeletKubeconfigPath>` should be set by you. E.g.
 
-mv antrea-agent-windows-x86_64.exe c:/k/antrea/bin/antrea-agent.exe
-Import-Module ./helper.psm1
-Get-
-Install-AntreaAgent -KubernetesVersion "v1.20.2" -KubernetesHome "c:/k" -KubeConfig "C:/etc/kubernetes/kubelet.conf" -AntreaVersion "v0.13.0" -AntreaHome "c:/k/antrea"
+```powershell
+$KubernetesVersion="v1.20.4"
+$KubeConfig="C:/Users/Administrator/.kube/config" # admin kubeconfig
+$KubeletKubeconfigPath="C:/etc/kubernetes/kubelet.conf"
+$KubeProxyKubeconfigPath="C:/Users/Administrator/kubeproxy.conf"
+```
+
+```powershell
+$TAG="v0.13.0"
+$KubernetesVersion="<KubernetesVersion>"
+$KubeConfig="<KubeconfigPath>"
+$KubeletKubeconfigPath="<KubeletKubeconfigPath>"
+$KubeProxyKubeconfigPath="<KubeProxyKubeconfigPath>"
+$KubernetesHome="c:/k"
+$AntreaHome="c:/k/antrea"
+
+curl.exe -LO "https://raw.githubusercontent.com/vmware-tanzu/antrea/${TAG}/hack/windows/Helper.psm1"
+
+Import-Module ./Helper.psm1
+Install-AntreaAgent -KubernetesVersion "$KubernetesVersion" -KubernetesHome "$KubernetesHome" -KubeConfig "$KubeConfig" -AntreaVersion "$TAG" -AntreaHome "$AntreaHome"
 New-KubeProxyServiceInterface
 
-nssm install kube-proxy "c:/k/kube-proxy.exe" "--proxy-mode=userspace --kubeconfig=C:/etc/kubernetes/kubelet.conf --log-dir=c:/var/log/kube-proxy --logtostderr=false --alsologtostderr"
-nssm install antrea-agent "c:/k/antrea/bin/antrea-agent.exe" "--config=c:/k/antrea/etc/antrea-agent.conf --logtostderr=false --log_dir=c:/k/antrea/logs --alsologtostderr --log_file_max_size=100 --log_file_max_num=4" 
+mkdir "${AntreaHome}/logs"
+nssm install kube-proxy "${KubernetesHome}/kube-proxy.exe" "--proxy-mode=userspace --kubeconfig=$KubeProxyKubeconfigPath --log-dir=c:/var/log/kube-proxy --logtostderr=false --alsologtostderr"
+nssm install antrea-agent "${KubernetesHome}/antrea/bin/antrea-agent.exe" "--config=${KubernetesHome}/antrea/etc/antrea-agent.conf --logtostderr=false --log_dir=${KubernetesHome}/antrea/logs --alsologtostderr --log_file_max_size=100 --log_file_max_num=4"
 
-nssm set antrea-agent DependOnService kube-proxy ovs-vswitchd 
+nssm set antrea-agent DependOnService kube-proxy ovs-vswitchd
 nssm set antrea-agent Start SERVICE_DELAYED_AUTO_START
 
-start-service kube-proxy                                                                                                                                                                                                           start-service antrea-agent   
+Start-Service kube-proxy
+Start-Service antrea-agent
 ```
 
-### Installation via wins (docker based runtimes)
+### Installation via wins (Docker based runtimes)
 
-Installing antrea as a wins service gives you alot of flexibility to manage it as a pod, but currently this only works with docker due to a bug in the way containerd attaches host networks for windows pods.  In any case, if you are using docker on windows, this is how you can run antrea in a pod.
+Installing Antrea using [wins](https://github.com/rancher/wins) gives you a lot of flexibility to manage it as a Pod, but
+currently this only works with Docker due to a bug in the way Containerd handles host networking for Windows Pods ([Issue](https://github.com/containerd/containerd/issues/4856)).
+In any case, if you are using Docker on Windows, this is how you can run Antrea in a Pod.
 
 #### Download & Configure Antrea for Linux
 
