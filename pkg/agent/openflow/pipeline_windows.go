@@ -281,5 +281,17 @@ func (c *client) hostBridgeUplinkFlows(localSubnet net.IPNet, category cookie.Ca
 			Cookie(c.cookieAllocator.Request(category).Raw()).
 			Done(),
 	}
+	// The packages received from uplink are forwarded to LOCAL interface by default.
+	// If NoEncap is enabled, the reply packets from remote Pod can be forwarded to local Pod directly.
+	// by explicitly resubmitting them to EgressRuleTable and marking "macRewriteMark" at same time.
+	if c.encapMode.SupportsNoEncap() {
+		flows = append(flows, c.pipeline[conntrackStateTable].BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
+			MatchRegRange(int(marksReg), markTrafficFromUplink, binding.Range{0, 15}).
+			MatchDstIPNet(localSubnet).
+			Action().LoadRegRange(int(marksReg), macRewriteMark, macRewriteMarkRange).
+			Action().ResubmitToTable(EgressRuleTable).
+			Cookie(c.cookieAllocator.Request(category).Raw()).
+			Done())
+	}
 	return flows
 }

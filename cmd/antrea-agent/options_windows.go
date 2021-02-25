@@ -23,7 +23,6 @@ import (
 	"k8s.io/component-base/featuregate"
 	"k8s.io/klog"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/features"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
 )
@@ -40,10 +39,6 @@ func (o *Options) checkUnsupportedFeatures() error {
 
 	if o.config.OVSDatapathType != string(ovsconfig.OVSDatapathSystem) {
 		unsupported = append(unsupported, "OVSDatapathType: "+o.config.OVSDatapathType)
-	}
-	_, encapMode := config.GetTrafficEncapModeFromStr(o.config.TrafficEncapMode)
-	if encapMode != config.TrafficEncapModeEncap {
-		unsupported = append(unsupported, "TrafficEncapMode: "+encapMode.String())
 	}
 	if o.config.TunnelType == ovsconfig.GRETunnel {
 		unsupported = append(unsupported, "TunnelType: "+o.config.TunnelType)
