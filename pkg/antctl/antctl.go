@@ -20,7 +20,6 @@ import (
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/apiserver/handlers/agentinfo"
 	"github.com/vmware-tanzu/antrea/pkg/agent/apiserver/handlers/ovsflows"
-	"github.com/vmware-tanzu/antrea/pkg/agent/apiserver/handlers/ovstracing"
 	"github.com/vmware-tanzu/antrea/pkg/agent/apiserver/handlers/podinterface"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/raw/proxy"
@@ -30,6 +29,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/appliedtogroup"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/controllerinfo"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/networkpolicy"
+	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/ovstracing"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/version"
 	cpv1beta "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
 	systemv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/system/v1beta1"
@@ -374,9 +374,10 @@ var CommandList = &commandList{
 					},
 					outputType: single,
 				},
+				addonTransform: ovstracing.Transform,
 			},
 			commandGroup:        flat,
-			transformedResponse: reflect.TypeOf(ovstracing.Response{}),
+			transformedResponse: reflect.TypeOf(""),
 		},
 		{ // TODO: implement as a "rawCommand" (see supportbundle) so that the command can be run out-of-cluster
 			use:     "endpoint",
