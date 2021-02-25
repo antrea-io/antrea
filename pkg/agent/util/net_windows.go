@@ -281,6 +281,35 @@ func SetLinkUp(name string) (net.HardwareAddr, int, error) {
 	return mac, index, nil
 }
 
+func addrEqual(addr1, addr2 *net.IPNet) bool {
+	size1, _ := addr1.Mask.Size()
+	size2, _ := addr2.Mask.Size()
+	return addr1.IP.Equal(addr2.IP) && size1 == size2
+}
+
+func addrSliceDifference(s1, s2 []*net.IPNet) []*net.IPNet {
+	var diff []*net.IPNet
+
+	for _, e1 := range s1 {
+		found := false
+		for _, e2 := range s2 {
+			if addrEqual(e1, e2) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			diff = append(diff, e1)
+		}
+	}
+
+	return diff
+}
+
+// ConfigureLinkAddresses adds the provided addresses to the interface identified by index idx, if
+// they are missing from the interface. Any other existing address already configured for the
+// interface will be removed, unless it is a link-local address. At the moment, this function only
+// supports IPv4 addresses and will ignore any address in ipNets that is not IPv4.
 func ConfigureLinkAddresses(idx int, ipNets []*net.IPNet) error {
 	iface, _ := net.InterfaceByIndex(idx)
 	ifaceName := iface.Name
@@ -295,31 +324,6 @@ func ConfigureLinkAddresses(idx int, ipNets []*net.IPNet) error {
 				}
 			}
 		}
-	}
-
-	addrEqual := func(addr1, addr2 *net.IPNet) bool {
-		size1, _ := addr1.Mask.Size()
-		size2, _ := addr2.Mask.Size()
-		return addr1.IP.Equal(addr2.IP) && size1 == size2
-	}
-
-	addrSliceDifference := func(s1, s2 []*net.IPNet) []*net.IPNet {
-		var diff []*net.IPNet
-
-		for _, e1 := range s1 {
-			found := false
-			for _, e2 := range s2 {
-				if addrEqual(e1, e2) {
-					found = true
-					break
-				}
-			}
-			if !found {
-				diff = append(diff, e1)
-			}
-		}
-
-		return diff
 	}
 
 	addrsToAdd := addrSliceDifference(ipNets, addrs)

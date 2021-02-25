@@ -130,6 +130,28 @@ func SetLinkUp(name string) (net.HardwareAddr, int, error) {
 	return mac, index, nil
 }
 
+func addrSliceDifference(s1, s2 []netlink.Addr) []*netlink.Addr {
+	var diff []*netlink.Addr
+
+	for i, e1 := range s1 {
+		found := false
+		for _, e2 := range s2 {
+			if e1.Equal(e2) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			diff = append(diff, &s1[i])
+		}
+	}
+
+	return diff
+}
+
+// ConfigureLinkAddresses adds the provided addresses to the interface identified by index idx, if
+// they are missing from the interface. Any other existing address already configured for the
+// interface will be removed, unless it is a link-local address.
 func ConfigureLinkAddresses(idx int, ipNets []*net.IPNet) error {
 	// No need to check the error here, since the link is found in previous steps.
 	link, _ := netlink.LinkByIndex(idx)
@@ -149,25 +171,6 @@ func ConfigureLinkAddresses(idx int, ipNets []*net.IPNet) error {
 		if !addr.IP.IsLinkLocalUnicast() {
 			addrs = append(addrs, addr)
 		}
-	}
-
-	addrSliceDifference := func(s1, s2 []netlink.Addr) []*netlink.Addr {
-		var diff []*netlink.Addr
-
-		for i, e1 := range s1 {
-			found := false
-			for _, e2 := range s2 {
-				if e1.Equal(e2) {
-					found = true
-					break
-				}
-			}
-			if !found {
-				diff = append(diff, &s1[i])
-			}
-		}
-
-		return diff
 	}
 
 	addrsToAdd := addrSliceDifference(newAddrs, addrs)
