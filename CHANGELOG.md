@@ -11,6 +11,18 @@ Some experimental features can be enabled / disabled using [Feature Gates](docs/
 
 ## Unreleased
 
+## 0.11.3 - 2021-02-25
+
+### Fixed
+
+- Ensure that NodePort traffic does not bypass NetworkPolicies. ([#1816](https://github.com/vmware-tanzu/antrea/pull/1816), [@tnqn])
+  * NodePort traffic for which ExternalTrafficPolicy is set to Cluster goes through SNAT before NetworkPolicies are enforced; after SNAT the source IP is the IP of the local gateway interface (antrea-gw0)
+  * Users will need to define the appropriate NetworkPolicies to allow ingress access to isolated Pods for NodePort traffic
+  * This new behavior only applies to Linux Nodes using the OVS system datapath (default)
+- Clean up stale IP addresses on Antrea host gateway interface. ([#1900](https://github.com/vmware-tanzu/antrea/pull/1900), [@antoninbas])
+  * If a Node leaves and later rejoins a cluster, a new Pod CIDR may be allocated to the Node for each supported IP family and the gateway receives a new IP address (first address in the CIDR)
+  * If the previous addresses are not removed from the gateway, we observe connectivity issues across Nodes
+
 ## 0.11.2 - 2021-02-11
 
 ### Fixed
