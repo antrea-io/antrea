@@ -231,7 +231,7 @@ func nodeName(idx int) string {
 	}
 }
 
-// nodeName returns an empty string if there is no Node with the provided idx. If idx is 0, the IP
+// nodeIP returns an empty string if there is no Node with the provided idx. If idx is 0, the IP
 // of the control-plane Node will be returned.
 func nodeIP(idx int) string {
 	if node, ok := clusterInfo.nodes[idx]; !ok {
