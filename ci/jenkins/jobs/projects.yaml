@@ -190,7 +190,7 @@
           - ${{sha1}}
           builders:
           - builder-integration
-          trigger_phrase: ^(?!Thanks for your PR).*/test-integration).*
+          trigger_phrase: ^(?!Thanks for your PR).*/test-integration.*
           white_list_target_branches: []
           allow_whitelist_orgs_as_admins: true
           admin_list: '{antrea_admin_list}'
