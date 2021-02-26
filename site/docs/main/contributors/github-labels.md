@@ -46,6 +46,8 @@ The labels in this list originated within Kubernetes at
 | area/network-policy/scope          | Issues or PRs related to network policy scope (namespace, global, etc.) | Any |
 | area/network-policy/staging        | Issues or PRs related to staging network policies | Any |
 | area/octant                        | Issues or PRs related to Octant | Any |
+| area/ops                           | Issues or PRs related to features which support network operations and troubleshooting | Any |
+| area/ops/traceflow                 | Issues or PRs related to the Traceflow feature | Any |
 | area/ovs/openflow                  | Issues or PRs related to Open vSwitch Open Flow | Any |
 | area/ovs/ovsdb                     | Issues or PRs related to Open vSwitch database | Any |
 | area/OS/linux                      | Issues or PRs related to the Linux operating system | Any |
