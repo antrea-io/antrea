@@ -1374,7 +1374,7 @@ data:
     # Default MTU to use for the host gateway interface and the network interface of each Pod.
     # If omitted, antrea-agent will discover the MTU of the Node's primary interface and
     # also adjust MTU to accommodate for tunnel encapsulation overhead (if applicable).
-    #defaultMTU: 1450
+    #defaultMTU: 0
 
     # Whether or not to enable IPsec encryption of tunnel traffic. IPsec encryption is only supported
     # for the GRE tunnel type.
@@ -1499,7 +1499,7 @@ metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-mc9bkf47f4
+  name: antrea-config-m6cb2mk6f8
   namespace: kube-system
 ---
 apiVersion: v1
@@ -1619,7 +1619,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-mc9bkf47f4
+          name: antrea-config-m6cb2mk6f8
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -1885,7 +1885,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-mc9bkf47f4
+          name: antrea-config-m6cb2mk6f8
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d

@@ -119,7 +119,7 @@ func (b *ClusterNetworkPolicySpecBuilder) GetAppliedToPeer(podSelector map[strin
 }
 
 func (b *ClusterNetworkPolicySpecBuilder) AddIngress(protoc v1.Protocol,
-	port *int, portName *string, endPort *int32, cidr *string,
+	port *int32, portName *string, endPort *int32, cidr *string,
 	podSelector map[string]string, nsSelector map[string]string,
 	podSelectorMatchExp *[]metav1.LabelSelectorRequirement, nsSelectorMatchExp *[]metav1.LabelSelectorRequirement,
 	ruleAppliedToSpecs []ACNPAppliedToSpec, action secv1alpha1.RuleAction, ruleClusterGroup, name string) *ClusterNetworkPolicySpecBuilder {
@@ -191,7 +191,7 @@ func (b *ClusterNetworkPolicySpecBuilder) AddIngress(protoc v1.Protocol,
 	if port != nil || endPort != nil {
 		var pVal *intstr.IntOrString
 		if port != nil {
-			pVal = &intstr.IntOrString{IntVal: int32(*port)}
+			pVal = &intstr.IntOrString{IntVal: *port}
 		}
 		ports = []secv1alpha1.NetworkPolicyPort{
 			{
@@ -214,7 +214,7 @@ func (b *ClusterNetworkPolicySpecBuilder) AddIngress(protoc v1.Protocol,
 }
 
 func (b *ClusterNetworkPolicySpecBuilder) AddEgress(protoc v1.Protocol,
-	port *int, portName *string, endPort *int32, cidr *string,
+	port *int32, portName *string, endPort *int32, cidr *string,
 	podSelector map[string]string, nsSelector map[string]string,
 	podSelectorMatchExp *[]metav1.LabelSelectorRequirement, nsSelectorMatchExp *[]metav1.LabelSelectorRequirement,
 	ruleAppliedToSpecs []ACNPAppliedToSpec, action secv1alpha1.RuleAction, ruleClusterGroup, name string) *ClusterNetworkPolicySpecBuilder {

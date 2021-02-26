@@ -528,12 +528,11 @@ func (i *Initializer) configureGatewayInterface(gatewayIface *interfacestore.Int
 	}
 
 	i.nodeConfig.GatewayConfig.LinkIndex = gwLinkIdx
-	// Allocate the gateway IP address from the Pod CIDRs if it exists. The gateway IP should be the first address
-	// in the Subnet and configure on the host gateway.
-	for _, podCIDR := range []*net.IPNet{i.nodeConfig.PodIPv4CIDR, i.nodeConfig.PodIPv6CIDR} {
-		if err := i.allocateGatewayAddress(podCIDR, gatewayIface); err != nil {
-			return err
-		}
+	// Allocate the gateway IP address for each Pod CIDR allocated to the Node. For each CIDR,
+	// the first address in the subnet is assigned to the host gateway interface.
+	podCIDRs := []*net.IPNet{i.nodeConfig.PodIPv4CIDR, i.nodeConfig.PodIPv6CIDR}
+	if err := i.allocateGatewayAddresses(podCIDRs, gatewayIface); err != nil {
+		return err
 	}
 
 	return nil
@@ -824,27 +823,38 @@ func (i *Initializer) getNodeMTU(localIntf *net.Interface) (int, error) {
 	return mtu, nil
 }
 
-func (i *Initializer) allocateGatewayAddress(localSubnet *net.IPNet, gatewayIface *interfacestore.InterfaceConfig) error {
-	if localSubnet == nil {
+func (i *Initializer) allocateGatewayAddresses(localSubnets []*net.IPNet, gatewayIface *interfacestore.InterfaceConfig) error {
+	var gwIPs []*net.IPNet
+	for _, localSubnet := range localSubnets {
+		if localSubnet == nil {
+			continue
+		}
+		subnetID := localSubnet.IP.Mask(localSubnet.Mask)
+		gwIP := &net.IPNet{IP: ip.NextIP(subnetID), Mask: localSubnet.Mask}
+		gwIPs = append(gwIPs, gwIP)
+	}
+	if len(gwIPs) == 0 {
 		return nil
 	}
-	subnetID := localSubnet.IP.Mask(localSubnet.Mask)
-	gwIP := &net.IPNet{IP: ip.NextIP(subnetID), Mask: localSubnet.Mask}
 
-	// Check IP address configuration on existing interface first, return if the interface has the desired address.
+	// Check IP address configuration on existing interface first, return if the interface has the desired addresses.
 	// We perform this check unconditionally, even if the OVS port does not exist when this function is called
 	// (i.e. portExists is false). Indeed, it may be possible for the interface to exist even if the OVS bridge does
 	// not exist.
-	// Configure the IP address on the interface if it does not exist.
-	if err := util.ConfigureLinkAddress(i.nodeConfig.GatewayConfig.LinkIndex, gwIP); err != nil {
+	// Configure any missing IP address on the interface. Remove any extra IP address that may exist.
+	if err := util.ConfigureLinkAddresses(i.nodeConfig.GatewayConfig.LinkIndex, gwIPs); err != nil {
 		return err
 	}
-	if gwIP.IP.To4() != nil {
-		i.nodeConfig.GatewayConfig.IPv4 = gwIP.IP
-	} else {
-		i.nodeConfig.GatewayConfig.IPv6 = gwIP.IP
+
+	for _, gwIP := range gwIPs {
+		if gwIP.IP.To4() != nil {
+			i.nodeConfig.GatewayConfig.IPv4 = gwIP.IP
+		} else {
+			i.nodeConfig.GatewayConfig.IPv6 = gwIP.IP
+		}
+
+		gatewayIface.IPs = append(gatewayIface.IPs, gwIP.IP)
 	}
 
-	gatewayIface.IPs = append(gatewayIface.IPs, gwIP.IP)
 	return nil
 }

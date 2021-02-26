@@ -509,10 +509,8 @@ func (c *NPLController) GetPodsAndGenRules() error {
 		}
 	}
 
-	if len(allNPLPorts) > 0 {
-		if err := c.addRulesForNPLPorts(allNPLPorts); err != nil {
-			return err
-		}
+	if err := c.addRulesForNPLPorts(allNPLPorts); err != nil {
+		return err
 	}
 
 	return nil

@@ -213,10 +213,18 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*opsv1alpha1.Tracefl
 				return nil, nil, err
 			}
 		}
-		if (c.networkConfig.TrafficEncapMode.SupportsEncap() && outputPort == config.DefaultTunOFPort) || outputPort == config.HostGatewayOFPort {
-			// Output port is Tunnel/Gateway port, packet is forwarded.
-			// tunnelDstIP is valid IP in encapMode, and empty string in other modes.
+		gatewayIP := c.nodeConfig.GatewayConfig.IPv4
+		if pktIn.Data.Ethertype == protocol.IPv6_MSG {
+			gatewayIP = c.nodeConfig.GatewayConfig.IPv6
+		}
+		if c.networkConfig.TrafficEncapMode.SupportsEncap() && outputPort == config.DefaultTunOFPort {
 			ob.TunnelDstIP = tunnelDstIP
+			ob.Action = opsv1alpha1.Forwarded
+		} else if ipDst == gatewayIP.String() && outputPort == config.HostGatewayOFPort {
+			ob.Action = opsv1alpha1.Delivered
+		} else if c.networkConfig.TrafficEncapMode.SupportsEncap() && outputPort == config.HostGatewayOFPort {
+			ob.Action = opsv1alpha1.ForwardedOutOfOverlay
+		} else if outputPort == config.HostGatewayOFPort { // noEncap
 			ob.Action = opsv1alpha1.Forwarded
 		} else {
 			// Output port is Pod port, packet is delivered.

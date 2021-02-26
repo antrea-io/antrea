@@ -19,7 +19,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"os"
 	"reflect"
 	"sort"
 	"strconv"
@@ -161,6 +160,11 @@ type endpoint struct {
 	// from the handler, it must returns an interface which has same type as
 	// TransformedResponse.
 	addonTransform func(reader io.Reader, single bool, opts map[string]string) (interface{}, error)
+	// requestErrorFallback is called when a client request fails, in which
+	// case transforms are called on the io.Reader object returned by this
+	// function. This is useful if a command still needs to output useful
+	// information in case of error.
+	requestErrorFallback func() (io.Reader, error)
 }
 
 // flagInfo represents a command-line flag that can be provided when invoking an antctl command.
@@ -238,10 +242,23 @@ func (cd *commandDefinition) getEndpoint() endpointResponder {
 	return nil
 }
 
+func (cd *commandDefinition) getRequestErrorFallback() func() (io.Reader, error) {
+	if runtime.Mode == runtime.ModeAgent {
+		if cd.agentEndpoint != nil {
+			return cd.agentEndpoint.requestErrorFallback
+		}
+	} else if runtime.Mode == runtime.ModeController {
+		if cd.controllerEndpoint != nil {
+			return cd.controllerEndpoint.requestErrorFallback
+		}
+	}
+	return nil
+}
+
 // applySubCommandToRoot applies the commandDefinition to a cobra.Command with
 // the client. It populates basic fields of a cobra.Command and creates the
 // appropriate RunE function for it according to the commandDefinition.
-func (cd *commandDefinition) applySubCommandToRoot(root *cobra.Command, client *client) {
+func (cd *commandDefinition) applySubCommandToRoot(root *cobra.Command, client AntctlClient, out io.Writer) {
 	cmd := &cobra.Command{
 		Use:     cd.use,
 		Aliases: cd.aliases,
@@ -258,7 +275,7 @@ func (cd *commandDefinition) applySubCommandToRoot(root *cobra.Command, client *
 	}
 	cd.applyExampleToCommand(cmd)
 
-	cmd.RunE = cd.newCommandRunE(client)
+	cmd.RunE = cd.newCommandRunE(client, out)
 }
 
 // validate checks if the commandDefinition is valid.
@@ -711,6 +728,14 @@ func (cd *commandDefinition) output(resp io.Reader, writer io.Writer, ft formatt
 		}
 		klog.Infof("After transforming %v", obj)
 	}
+
+	if str, ok := obj.([]byte); ok {
+		// If the transformed response is of type []byte, just output
+		// the raw bytes.
+		_, err = writer.Write(str)
+		return err
+	}
+
 	// Output structure data in format
 	switch ft {
 	case jsonFormatter:
@@ -770,7 +795,7 @@ func (cd *commandDefinition) validateFlagValue(val string, supportedValues []str
 
 // newCommandRunE creates the RunE function for the command. The RunE function
 // checks the args according to argOption and flags.
-func (cd *commandDefinition) newCommandRunE(c *client) func(*cobra.Command, []string) error {
+func (cd *commandDefinition) newCommandRunE(c AntctlClient, out io.Writer) func(*cobra.Command, []string) error {
 	return func(cmd *cobra.Command, args []string) error {
 		argMap, err := cd.collectFlags(cmd, args)
 		if err != nil {
@@ -787,22 +812,33 @@ func (cd *commandDefinition) newCommandRunE(c *client) func(*cobra.Command, []st
 		kubeconfigPath, _ := cmd.Flags().GetString("kubeconfig")
 		timeout, _ := cmd.Flags().GetDuration("timeout")
 		server, _ := cmd.Flags().GetString("server")
-		resp, err := c.request(&requestOption{
+		outputFormat, err := cmd.Flags().GetString("output")
+		if err != nil {
+			return err
+		}
+
+		resp, requestErr := c.request(&requestOption{
 			commandDefinition: cd,
 			kubeconfig:        kubeconfigPath,
 			args:              argMap,
 			timeout:           timeout,
 			server:            server,
 		})
-		if err != nil {
-			return err
-		}
-		outputFormat, err := cmd.Flags().GetString("output")
-		if err != nil {
-			return err
+		if requestErr != nil {
+			fallback := cd.getRequestErrorFallback()
+			if fallback == nil {
+				return requestErr
+			}
+			resp, err = fallback()
+			if err != nil {
+				return err
+			}
 		}
 		isSingle := cd.getEndpoint().OutputType() != multiple && (cd.getEndpoint().OutputType() == single || argGet)
-		return cd.output(resp, os.Stdout, formatterType(outputFormat), isSingle, argMap)
+		if err := cd.output(resp, out, formatterType(outputFormat), isSingle, argMap); err != nil {
+			return err
+		}
+		return requestErr
 	}
 }
 

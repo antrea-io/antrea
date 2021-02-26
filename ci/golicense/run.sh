@@ -31,10 +31,14 @@ echo "****************"
 cat "$REPORTS_DIR"/*.deps.txt | grep -v "\.\./\.\." | sort | uniq | tee "$REPORTS_DIR/ALL.deps.txt"
 echo "****************"
 
+rc=
 if [ -z "$failed_binaries" ]; then
   echo "#### SUCCESS ####"
+  rc=0
 else
   echo "#### FAILURE ####"
   echo "Scan failed for the following binaries: $failed_binaries"
   echo "Check $REPORTS_DIR/ALL.deps.txt for more info"
+  rc=1
 fi
+exit $rc
