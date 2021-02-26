@@ -32,7 +32,7 @@ require (
 	github.com/niemeyer/pretty v0.0.0-20200227124842-a10e7caefd8e // indirect
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/common v0.4.1
-	github.com/rakelkar/gonetsh v0.0.0-20190930180311-e5c5ffe4bdf0
+	github.com/rakelkar/gonetsh v0.0.0-20210226024844-dfffed138500
 	github.com/satori/go.uuid v1.2.0
 	github.com/sirupsen/logrus v1.4.2
 	github.com/spf13/afero v1.4.1
@@ -76,8 +76,6 @@ replace (
 	// antrea/plugins/octant/go.mod also has this replacement since replace statement in dependencies
 	// were ignored. We need to change antrea/plugins/octant/go.mod if there is any change here.
 	github.com/contiv/ofnet => github.com/wenyingd/ofnet v0.0.0-20210205051801-5a4f247248d4
-	// avoid dependency on juju packages, which are licensed under LGPL v3
-	github.com/rakelkar/gonetsh => github.com/antoninbas/gonetsh v0.1.2
 	// fake.NewSimpleClientset is quite slow when it's initialized with massive objects due to
 	// https://github.com/kubernetes/kubernetes/issues/89574. It takes more than tens of minutes to
 	// init a fake client with 200k objects, which makes it hard to run the NetworkPolicy scale test.
