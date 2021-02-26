@@ -15,6 +15,7 @@
 # limitations under the License.
 
 set -eo pipefail
+set -x
 
 function echoerr {
     >&2 echo "$@"
@@ -102,6 +103,7 @@ fi
 E2ETEST_PATH=${WORKDIR}/kubernetes/_output/dockerized/bin/linux/amd64/e2e.test
 
 function pull_antrea_ubuntu_image {
+    echo "=== Pulling base-ubuntu and golang image from Harbor ==="
     harbor_images=("base-ubuntu:2.14.0" "golang:1.15")
     antrea_images=("antrea/base-ubuntu:2.14.0" "golang:1.15")
     for i in {0..4}; do
@@ -110,6 +112,7 @@ function pull_antrea_ubuntu_image {
 }
 
 function export_govc_env_var {
+    echo "=== Exporting GOVC environment variables ==="
     export GOVC_URL=$GOVC_URL
     export GOVC_USERNAME=$GOVC_USERNAME
     export GOVC_PASSWORD=$GOVC_PASSWORD
@@ -130,6 +133,7 @@ function clean_antrea {
 }
 
 function clean_for_windows_install_cni {
+    echo "=== Cleaning up Windows Install CNI ==="
     # https://github.com/vmware-tanzu/antrea/issues/1577
     kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 != role && $1 ~ /win/ {print $6}' | while read IP; do
         CLEAN_LIST=("/cygdrive/c/opt/cni/bin/antrea.exe" "/cygdrive/c/opt/cni/bin/host-local.exe" "/cygdrive/c/k/antrea/etc/antrea-agent.conf" "/cygdrive/c/etc/cni/net.d/10-antrea.conflist" "/cygdrive/c/k/antrea/bin/antrea-agent.exe")
@@ -438,7 +442,7 @@ function run_conformance_windows {
 }
 
 function run_install_windows_ovs {
-    echo "===== Verify Install-OVS ====="
+    echo "===== Verify Windows Install-OVS ====="
     export_govc_env_var
     OVS_VM_NAME="antrea-microsoft-ovs"
 
@@ -459,6 +463,10 @@ function run_install_windows_ovs {
         scp -o StrictHostKeyChecking=no -i ${WORKDIR}/.ssh/id_rsa -T Administrator@${IP}:openvswitch.tar.gz .
     fi
 }
+
+if [[ "${DOCKER_REGISTRY}" != "" ]]; then
+    echo ""
+fi
 
 if [[ ${TESTCASE} == "windows-install-ovs" ]]; then
     run_install_windows_ovs
