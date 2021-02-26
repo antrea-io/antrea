@@ -38,11 +38,21 @@ import (
 
 const bridgeName = "dummy-br"
 
-var bridgeMgmtAddr = ofconfig.GetMgmtAddress(ovsconfig.DefaultOVSRunDir, bridgeName)
+var (
+	bridgeMgmtAddr = ofconfig.GetMgmtAddress(ovsconfig.DefaultOVSRunDir, bridgeName)
+	gwMAC, _       = net.ParseMAC("AA:BB:CC:DD:EE:EE")
+	gwIP, ipNet, _ = net.ParseCIDR("10.0.1.1/24")
+	gwIPv6, _, _   = net.ParseCIDR("f00d::b00:0:0:0/80")
+	gatewayConfig  = &config.GatewayConfig{
+		IPv4: gwIP,
+		IPv6: gwIPv6,
+		MAC:  gwMAC,
+	}
+	nodeConfig = &config.NodeConfig{GatewayConfig: gatewayConfig}
+)
 
 func installNodeFlows(ofClient Client, cacheKey string) (int, error) {
 	hostName := cacheKey
-	gwIP, ipNet, _ := net.ParseCIDR("10.0.1.1/24")
 	peerNodeIP := net.ParseIP("192.168.1.1")
 	peerConfig := map[*net.IPNet]net.IP{
 		ipNet: gwIP,
@@ -95,10 +105,7 @@ func TestIdempotentFlowInstallation(t *testing.T) {
 			client := ofClient.(*client)
 			client.cookieAllocator = cookie.NewAllocator(0)
 			client.ofEntryOperations = m
-
-			gwMAC, _ := net.ParseMAC("AA:BB:CC:DD:EE:EE")
-			gatewayConfig := &config.GatewayConfig{MAC: gwMAC}
-			client.nodeConfig = &config.NodeConfig{GatewayConfig: gatewayConfig}
+			client.nodeConfig = nodeConfig
 
 			m.EXPECT().AddAll(gomock.Any()).Return(nil).Times(1)
 			// Installing the flows should succeed, and all the flows should be added into the cache.
@@ -126,10 +133,7 @@ func TestIdempotentFlowInstallation(t *testing.T) {
 			client := ofClient.(*client)
 			client.cookieAllocator = cookie.NewAllocator(0)
 			client.ofEntryOperations = m
-
-			gwMAC, _ := net.ParseMAC("AA:BB:CC:DD:EE:EE")
-			gatewayConfig := &config.GatewayConfig{MAC: gwMAC}
-			client.nodeConfig = &config.NodeConfig{GatewayConfig: gatewayConfig}
+			client.nodeConfig = nodeConfig
 
 			errorCall := m.EXPECT().AddAll(gomock.Any()).Return(errors.New("Bundle error")).Times(1)
 			m.EXPECT().AddAll(gomock.Any()).Return(nil).After(errorCall)
@@ -170,10 +174,7 @@ func TestFlowInstallationFailed(t *testing.T) {
 			client := ofClient.(*client)
 			client.cookieAllocator = cookie.NewAllocator(0)
 			client.ofEntryOperations = m
-
-			gwMAC, _ := net.ParseMAC("AA:BB:CC:DD:EE:EE")
-			gatewayConfig := &config.GatewayConfig{MAC: gwMAC}
-			client.nodeConfig = &config.NodeConfig{GatewayConfig: gatewayConfig}
+			client.nodeConfig = nodeConfig
 
 			// We generate an error for AddAll call.
 			m.EXPECT().AddAll(gomock.Any()).Return(errors.New("Bundle error"))
@@ -207,10 +208,7 @@ func TestConcurrentFlowInstallation(t *testing.T) {
 			client := ofClient.(*client)
 			client.cookieAllocator = cookie.NewAllocator(0)
 			client.ofEntryOperations = m
-
-			gwMAC, _ := net.ParseMAC("AA:BB:CC:DD:EE:EE")
-			gatewayConfig := &config.GatewayConfig{MAC: gwMAC}
-			client.nodeConfig = &config.NodeConfig{GatewayConfig: gatewayConfig}
+			client.nodeConfig = nodeConfig
 
 			var concurrentCalls atomic.Value // set to true if we observe concurrent calls
 			timeoutCh := make(chan struct{})
@@ -472,9 +470,9 @@ func prepareTraceflowFlow(ctrl *gomock.Controller) *client {
 	ofClient := NewClient(bridgeName, bridgeMgmtAddr, ovsconfig.OVSDatapathSystem, true, true)
 	c := ofClient.(*client)
 	c.cookieAllocator = cookie.NewAllocator(0)
-	c.nodeConfig = &config.NodeConfig{}
+	c.nodeConfig = nodeConfig
 	m := ovsoftest.NewMockBridge(ctrl)
-	m.EXPECT().AddFlowsInBundle(gomock.Any(), nil, nil).Return(nil).Times(3)
+	m.EXPECT().AddFlowsInBundle(gomock.Any(), nil, nil).Return(nil).Times(1)
 	c.bridge = m
 
 	mFlow := ovsoftest.NewMockFlow(ctrl)
@@ -489,8 +487,7 @@ func prepareTraceflowFlow(ctrl *gomock.Controller) *client {
 func prepareSendTraceflowPacket(ctrl *gomock.Controller, success bool) *client {
 	ofClient := NewClient(bridgeName, bridgeMgmtAddr, ovsconfig.OVSDatapathSystem, true, true)
 	c := ofClient.(*client)
-	mac, _ := net.ParseMAC("aa:bb:cc:dd:ee:ff")
-	c.nodeConfig = &config.NodeConfig{GatewayConfig: &config.GatewayConfig{MAC: mac}}
+	c.nodeConfig = nodeConfig
 	m := ovsoftest.NewMockBridge(ctrl)
 	c.bridge = m
 	bridge := ofconfig.OFBridge{}
