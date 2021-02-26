@@ -44,6 +44,9 @@ const (
 	Received  TraceflowAction = "Received"
 	Forwarded TraceflowAction = "Forwarded"
 	Dropped   TraceflowAction = "Dropped"
+	// ForwardedOutOfOverlay indicates that the packet has been forwarded out of the network
+	// managed by Antrea. This indicates that the Traceflow request can be considered complete.
+	ForwardedOutOfOverlay TraceflowAction = "ForwardedOutOfOverlay"
 )
 
 // List the supported protocols and their codes in traceflow.

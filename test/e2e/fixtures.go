@@ -21,6 +21,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 )
 
 func skipIfNotBenchmarkTest(tb testing.TB) {
@@ -78,6 +80,16 @@ func skipIfMissingKernelModule(tb testing.TB, nodeName string, requiredModules [
 		}
 	}
 	tb.Logf("The following modules have been found on Node '%s': %v", nodeName, requiredModules)
+}
+
+func skipIfEncapModeIsNot(tb testing.TB, data *TestData, encapMode config.TrafficEncapModeType) {
+	currentEncapMode, err := data.GetEncapMode()
+	if err != nil {
+		tb.Fatalf("Failed to get encap mode: %v", err)
+	}
+	if currentEncapMode != encapMode {
+		tb.Skipf("Skipping test for encap mode '%s', test requires '%s'", currentEncapMode.String(), encapMode.String())
+	}
 }
 
 func ensureAntreaRunning(tb testing.TB, data *TestData) error {
