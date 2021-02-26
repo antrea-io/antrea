@@ -158,7 +158,7 @@ func (c *CACertController) syncMutatingWebhooks(caCert []byte) error {
 		if err != nil {
 			return fmt.Errorf("error getting MutatingWebhookConfiguration %s: %v", name, err)
 		}
-		err = c.patchWebhookWithCaCert(mWebhook, caCert)
+		err = c.patchWebhookWithCACert(mWebhook, caCert)
 		if err != nil {
 			return fmt.Errorf("error updating antrea CA cert of MutatingWebhookConfiguration %s: %v", name, err)
 		}
@@ -172,7 +172,7 @@ func (c *CACertController) syncMutatingWebhooks(caCert []byte) error {
 			}
 			return fmt.Errorf("error getting MutatingWebhookConfiguration %s: %v", name, err)
 		}
-		err = c.patchWebhookWithCaCert(mWebhook, caCert)
+		err = c.patchWebhookWithCACert(mWebhook, caCert)
 		if err != nil {
 			return fmt.Errorf("error updating antrea CA cert of MutatingWebhookConfiguration %s: %v", name, err)
 		}
@@ -180,7 +180,7 @@ func (c *CACertController) syncMutatingWebhooks(caCert []byte) error {
 	return nil
 }
 
-func (c *CACertController) patchWebhookWithCaCert(webhookCfg *v1.MutatingWebhookConfiguration, caCert []byte) error {
+func (c *CACertController) patchWebhookWithCACert(webhookCfg *v1.MutatingWebhookConfiguration, caCert []byte) error {
 	updated := false
 	for idx, webhook := range webhookCfg.Webhooks {
 		if bytes.Equal(webhook.ClientConfig.CABundle, caCert) {

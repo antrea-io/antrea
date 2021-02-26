@@ -75,7 +75,7 @@ var allowedPaths = []string{
 	"/readyz",
 	"/mutate/acnp",
 	"/mutate/anp",
-	"/mutate/addlabels",
+	"/mutate/namespace",
 	"/validate/tier",
 	"/validate/acnp",
 	"/validate/anp",

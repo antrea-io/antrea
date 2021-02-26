@@ -742,7 +742,7 @@ webhooks:
       service:
         name: "antrea"
         namespace: "kube-system"
-        path: "/mutate/addlabels"
+        path: "/mutate/namespace"
     rules:
       - operations: ["CREATE", "UPDATE"]
         apiGroups: [""]

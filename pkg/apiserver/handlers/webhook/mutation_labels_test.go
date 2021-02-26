@@ -55,7 +55,6 @@ func TestGetAdmissionResponseForErr(t *testing.T) {
 
 func TestCreateLabelsReplacePatch(t *testing.T) {
 	labelsPath := "/metadata/labels"
-	emptyLabels := map[string]string{}
 	nameLabel := map[string]string{
 		LabelMetadataName: "my-ns",
 	}
@@ -66,12 +65,12 @@ func TestCreateLabelsReplacePatch(t *testing.T) {
 	}{
 		{
 			name:   "labels-empty",
-			labels: emptyLabels,
+			labels: map[string]string{},
 			expResp: []jsonPatch{
 				{
 					Op:    jsonPatchReplaceOp,
 					Path:  labelsPath,
-					Value: emptyLabels,
+					Value: map[string]string{},
 				},
 			},
 		},
@@ -98,7 +97,6 @@ func TestCreateLabelsReplacePatch(t *testing.T) {
 
 func TestMutateLabels(t *testing.T) {
 	labelsPath := "/metadata/labels"
-	emptyLabels := map[string]string{}
 	nameLabel := map[string]string{
 		LabelMetadataName: "my-ns",
 	}
@@ -122,7 +120,7 @@ func TestMutateLabels(t *testing.T) {
 			name:      "mutate-labels-empty-create",
 			op:        admv1.Create,
 			resName:   "my-ns",
-			labels:    emptyLabels,
+			labels:    map[string]string{},
 			isAllowed: true,
 			msg:       "",
 			expResp: []jsonPatch{
@@ -137,7 +135,7 @@ func TestMutateLabels(t *testing.T) {
 			name:      "mutate-labels-empty-update",
 			op:        admv1.Update,
 			resName:   "my-ns",
-			labels:    emptyLabels,
+			labels:    map[string]string{},
 			isAllowed: true,
 			msg:       "",
 			expResp: []jsonPatch{
@@ -152,7 +150,7 @@ func TestMutateLabels(t *testing.T) {
 			name:      "mutate-labels-empty-delete",
 			op:        admv1.Delete,
 			resName:   "my-ns",
-			labels:    emptyLabels,
+			labels:    map[string]string{},
 			isAllowed: true,
 			msg:       "",
 			expResp:   []jsonPatch{},
@@ -203,13 +201,7 @@ func TestMutateLabels(t *testing.T) {
 			labels:    nameLabel,
 			isAllowed: true,
 			msg:       "",
-			expResp: []jsonPatch{
-				{
-					Op:    jsonPatchReplaceOp,
-					Path:  labelsPath,
-					Value: nameLabel,
-				},
-			},
+			expResp:   []jsonPatch{},
 		},
 		{
 			name:      "mutate-labels-existing-name-label-update",
@@ -218,13 +210,7 @@ func TestMutateLabels(t *testing.T) {
 			labels:    nameLabel,
 			isAllowed: true,
 			msg:       "",
-			expResp: []jsonPatch{
-				{
-					Op:    jsonPatchReplaceOp,
-					Path:  labelsPath,
-					Value: nameLabel,
-				},
-			},
+			expResp:   []jsonPatch{},
 		},
 		{
 			name:      "mutate-labels-existing-name-label-delete",
@@ -239,9 +225,12 @@ func TestMutateLabels(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var expValue []byte
-			actualMsg, actualAllowed, actualResp := mutateLabels(tt.op, tt.labels, tt.resName)
-			// We dont expect Delete operations to return any patch response.
-			if tt.op != admv1.Delete {
+			labelsToMutate := map[string]string{}
+			for k, v := range tt.labels {
+				labelsToMutate[k] = v
+			}
+			actualMsg, actualAllowed, actualResp := mutateLabels(tt.op, labelsToMutate, tt.resName)
+			if len(tt.expResp) > 0 {
 				expValue, _ = json.Marshal(tt.expResp)
 			}
 			assert.Equal(t, expValue, actualResp)

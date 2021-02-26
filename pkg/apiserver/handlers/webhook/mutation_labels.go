@@ -121,34 +121,39 @@ func mutateResourceLabels(ar *admv1.AdmissionReview) *admv1.AdmissionResponse {
 			Message: msg,
 		}
 	}
-	return &admv1.AdmissionResponse{
-		Allowed:   allowed,
-		Result:    result,
-		PatchType: &patchType,
-		Patch:     patch,
+	rsp := &admv1.AdmissionResponse{
+		Allowed: allowed,
+		Result:  result,
 	}
+	if patch != nil {
+		rsp.PatchType = &patchType
+		rsp.Patch = patch
+	}
+	return rsp
 }
 
 // mutateLabels mutates the resource's labels and forcefully inserts the resource's name as a well
 // known label to ensure that the label is never modified or removed by CREATE and UPDATE events.
 func mutateLabels(op admv1.Operation, l map[string]string, name string) (string, bool, []byte) {
-	var patch []byte
 	switch op {
 	case admv1.Create, admv1.Update:
 		if l == nil {
 			l = map[string]string{}
+		} else {
+			metaNameLabelVal, exists := l[LabelMetadataName]
+			if exists && metaNameLabelVal == name {
+				return "", true, nil
+			}
 		}
 		// Forcefully stomp the resource's metadata.name value as a label.
 		l[LabelMetadataName] = name
-		genPatch, err := createLabelsReplacePatch(l)
+		patch, err := createLabelsReplacePatch(l)
 		if err != nil {
 			return fmt.Sprintf("unable to generate mutating patch: %v", err), false, patch
 		}
-		patch = genPatch
-	case admv1.Delete:
-		// Delete of resources have no mutation for labels
+		return "", true, patch
 	}
-	return "", true, patch
+	return "", true, nil
 }
 
 // createLabelsReplacePatch generates a serialized patch from the new list of labels.
@@ -159,7 +164,6 @@ func createLabelsReplacePatch(l map[string]string) ([]byte, error) {
 		Path:  fmt.Sprintf("/metadata/labels"),
 		Value: l,
 	})
-
 	return json.Marshal(patch)
 }
 
