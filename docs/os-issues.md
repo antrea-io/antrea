@@ -91,10 +91,10 @@ achieve this by running `tdnf upgrade linux-esx` on all your Nodes.
 After this fix, all the Antrea Agents should be running correctly. If you still
 experience connectivity issues, it may be because of Photon's default firewall
 rules, which are quite strict by
-[default](https://vmware.github.io/photon/assets/files/html/3.0/photon_admin/default-firewall-settings.html). The
+[default](https://vmware.github.io/photon/docs/administration-guide/security-policy/default-firewall-settings/). The
 easiest workaround is to accept all traffic on the gateway interface created by
-Antrea (`antrea-gw0` by default), which enables traffic to flow between the Node and
-the Pod network:
+Antrea (`antrea-gw0` by default), which enables traffic to flow between the Node
+and the Pod network:
 
 ```bash
 iptables -A INPUT -i antrea-gw0 -j ACCEPT
