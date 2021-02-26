@@ -80,6 +80,7 @@ type flowExporter struct {
 	pollCycle                 uint
 	templateIDv4              uint16
 	templateIDv6              uint16
+	set                       ipfix.IPFIXSet
 	registry                  ipfix.IPFIXRegistry
 	v4Enabled                 bool
 	v6Enabled                 bool
@@ -110,6 +111,7 @@ func NewFlowExporter(records *flowrecords.FlowRecords, exportFrequency uint, ena
 		0,
 		0,
 		0,
+		ipfix.NewSet(false),
 		registry,
 		v4Enabled,
 		v6Enabled,
@@ -227,8 +229,11 @@ func (exp *flowExporter) initFlowExporter(collectorAddr string, collectorProto s
 	if exp.v4Enabled {
 		templateID := expProcess.NewTemplateID()
 		exp.templateIDv4 = templateID
-		templateSet := ipfix.NewSet(ipfixentities.Template, exp.templateIDv4, false)
-		sentBytes, err := exp.sendTemplateSet(templateSet, false)
+		if err := exp.set.PrepareSet(ipfixentities.Template, exp.templateIDv4); err != nil {
+			return fmt.Errorf("error when preparing set: %v", err)
+		}
+		sentBytes, err := exp.sendTemplateSet(exp.set, false)
+		exp.set.ResetSet()
 		if err != nil {
 			return err
 		}
@@ -237,8 +242,11 @@ func (exp *flowExporter) initFlowExporter(collectorAddr string, collectorProto s
 	if exp.v6Enabled {
 		templateID := expProcess.NewTemplateID()
 		exp.templateIDv6 = templateID
-		templateSet := ipfix.NewSet(ipfixentities.Template, exp.templateIDv6, false)
-		sentBytes, err := exp.sendTemplateSet(templateSet, true)
+		if err := exp.set.PrepareSet(ipfixentities.Template, exp.templateIDv6); err != nil {
+			return fmt.Errorf("error when preparing set: %v", err)
+		}
+		sentBytes, err := exp.sendTemplateSet(exp.set, true)
+		exp.set.ResetSet()
 		if err != nil {
 			return err
 		}
@@ -250,22 +258,27 @@ func (exp *flowExporter) initFlowExporter(collectorAddr string, collectorProto s
 
 func (exp *flowExporter) sendFlowRecords() error {
 	addAndSendFlowRecord := func(key flowexporter.ConnectionKey, record flowexporter.FlowRecord) error {
+		exp.set.ResetSet()
 		if record.IsIPv6 {
-			dataSetIPv6 := ipfix.NewSet(ipfixentities.Data, exp.templateIDv6, false)
+			if err := exp.set.PrepareSet(ipfixentities.Data, exp.templateIDv6); err != nil {
+				return fmt.Errorf("error when preparing set: %v", err)
+			}
 			// TODO: more records per data set will be supported when go-ipfix supports size check when adding records
-			if err := exp.addRecordToSet(dataSetIPv6, record); err != nil {
+			if err := exp.addRecordToSet(record); err != nil {
 				return err
 			}
-			if _, err := exp.sendDataSet(dataSetIPv6); err != nil {
+			if _, err := exp.sendDataSet(exp.set); err != nil {
 				return err
 			}
 		} else {
-			dataSetIPv4 := ipfix.NewSet(ipfixentities.Data, exp.templateIDv4, false)
+			if err := exp.set.PrepareSet(ipfixentities.Data, exp.templateIDv4); err != nil {
+				return fmt.Errorf("error when preparing set: %v", err)
+			}
 			// TODO: more records per data set will be supported when go-ipfix supports size check when adding records
-			if err := exp.addRecordToSet(dataSetIPv4, record); err != nil {
+			if err := exp.addRecordToSet(record); err != nil {
 				return err
 			}
-			if _, err := exp.sendDataSet(dataSetIPv4); err != nil {
+			if _, err := exp.sendDataSet(exp.set); err != nil {
 				return err
 			}
 		}
@@ -337,7 +350,7 @@ func (exp *flowExporter) sendTemplateSet(templateSet ipfix.IPFIXSet, isIPv6 bool
 	return sentBytes, nil
 }
 
-func (exp *flowExporter) addRecordToSet(dataSet ipfix.IPFIXSet, record flowexporter.FlowRecord) error {
+func (exp *flowExporter) addRecordToSet(record flowexporter.FlowRecord) error {
 	nodeName, _ := env.GetNodeName()
 
 	// Iterate over all infoElements in the list
@@ -474,7 +487,7 @@ func (exp *flowExporter) addRecordToSet(dataSet ipfix.IPFIXSet, record flowexpor
 	if record.IsIPv6 {
 		templateID = exp.templateIDv6
 	}
-	err := dataSet.AddRecord(eL, templateID)
+	err := exp.set.AddRecord(eL, templateID)
 	if err != nil {
 		return fmt.Errorf("error in adding record to data set: %v", err)
 	}

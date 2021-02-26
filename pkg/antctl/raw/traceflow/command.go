@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"strconv"
@@ -26,7 +27,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v2"
-	"k8s.io/apimachinery/pkg/api/errors"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -137,23 +138,31 @@ func runE(cmd *cobra.Command, _ []string) error {
 		return nil
 	}
 
-	if err := wait.Poll(1*time.Second, 15*time.Second, func() (bool, error) {
-		tf, err := client.OpsV1alpha1().Traceflows().Get(context.TODO(), tf.Name, metav1.GetOptions{})
+	var res *v1alpha1.Traceflow
+	err = wait.Poll(1*time.Second, 15*time.Second, func() (bool, error) {
+		res, err = client.OpsV1alpha1().Traceflows().Get(context.TODO(), tf.Name, metav1.GetOptions{})
 		if err != nil {
 			return false, err
 		}
-		if tf.Status.Phase != v1alpha1.Succeeded {
+		if res.Status.Phase != v1alpha1.Succeeded && res.Status.Phase != v1alpha1.Failed {
 			return false, nil
 		}
-		if err := output(tf); err != nil {
-			return false, fmt.Errorf("error when outputing result: %w", err)
-		}
 		return true, nil
-	}); err != nil {
+	})
+	if err == wait.ErrWaitTimeout {
+		err = errors.New("timeout waiting for Traceflow done")
+		// Still output the Traceflow results if any.
+		if res == nil {
+			return err
+		}
+	} else if err != nil {
 		return fmt.Errorf("error when retrieving Traceflow: %w", err)
 	}
 
-	return nil
+	if err := output(res); err != nil {
+		return fmt.Errorf("error when outputting result: %w", err)
+	}
+	return err
 }
 
 func newTraceflow(client kubernetes.Interface) (*v1alpha1.Traceflow, error) {
@@ -224,7 +233,7 @@ func dstIsPod(client kubernetes.Interface, ns string, name string) (bool, error)
 	defer cancel()
 	_, err := client.CoreV1().Pods(ns).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
-		if errors.IsNotFound(err) {
+		if k8serrors.IsNotFound(err) {
 			return false, nil
 		}
 		return false, fmt.Errorf("failed to get Pod from Kubernetes API: %w", err)

@@ -3,7 +3,7 @@ module github.com/vmware-tanzu/antrea
 go 1.15
 
 require (
-	github.com/Mellanox/sriovnet v1.0.1
+	github.com/Mellanox/sriovnet v1.0.2
 	github.com/Microsoft/go-winio v0.4.16-0.20201130162521-d1ffc52c7331
 	github.com/Microsoft/hcsshim v0.8.9
 	github.com/TomCodeLV/OVSDB-golang-lib v0.0.0-20200116135253-9bbdfadcd881
@@ -35,14 +35,14 @@ require (
 	github.com/rakelkar/gonetsh v0.0.0-20190930180311-e5c5ffe4bdf0
 	github.com/satori/go.uuid v1.2.0
 	github.com/sirupsen/logrus v1.4.2
-	github.com/spf13/afero v1.3.4
+	github.com/spf13/afero v1.4.1
 	github.com/spf13/cobra v0.0.5
 	github.com/spf13/pflag v1.0.5
 	github.com/streamrail/concurrent-map v0.0.0-20160823150647-8bf1e9bacbf6 // indirect
 	github.com/stretchr/testify v1.6.1
 	github.com/ti-mo/conntrack v0.3.0
 	github.com/vishvananda/netlink v1.1.0
-	github.com/vmware/go-ipfix v0.4.4
+	github.com/vmware/go-ipfix v0.4.5
 	golang.org/x/crypto v0.0.0-20200820211705-5c72a883971a
 	golang.org/x/exp v0.0.0-20190312203227-4b39c73a6495
 	golang.org/x/mod v0.4.0
@@ -70,6 +70,9 @@ replace (
 	// hcshim repo is modifed to add "AdditionalParams" field to HNSEndpoint struct.
 	// We will use this replace before pushing the change to hcshim upstream repo.
 	github.com/Microsoft/hcsshim v0.8.9 => github.com/ruicao93/hcsshim v0.8.10-0.20210114035434-63fe00c1b9aa
+	// temporary replacement to avoid Antrea Agent panics for some Traceflow requests
+	// see https://github.com/vmware-tanzu/antrea/issues/1878
+	github.com/contiv/libOpenflow => github.com/antoninbas/libOpenflow v0.0.0-20210218001059-32f2e57d0435
 	// antrea/plugins/octant/go.mod also has this replacement since replace statement in dependencies
 	// were ignored. We need to change antrea/plugins/octant/go.mod if there is any change here.
 	github.com/contiv/ofnet => github.com/wenyingd/ofnet v0.0.0-20210205051801-5a4f247248d4

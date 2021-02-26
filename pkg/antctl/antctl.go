@@ -20,9 +20,9 @@ import (
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/apiserver/handlers/agentinfo"
 	"github.com/vmware-tanzu/antrea/pkg/agent/apiserver/handlers/ovsflows"
-	"github.com/vmware-tanzu/antrea/pkg/agent/apiserver/handlers/ovstracing"
 	"github.com/vmware-tanzu/antrea/pkg/agent/apiserver/handlers/podinterface"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
+	fallbackversion "github.com/vmware-tanzu/antrea/pkg/antctl/fallback/version"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/raw/proxy"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/raw/supportbundle"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/raw/traceflow"
@@ -30,6 +30,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/appliedtogroup"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/controllerinfo"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/networkpolicy"
+	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/ovstracing"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/version"
 	cpv1beta "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
 	systemv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/system/v1beta1"
@@ -53,12 +54,16 @@ var CommandList = &commandList{
 					groupVersionResource: &systemv1beta1.ControllerInfoVersionResource,
 				},
 				addonTransform: version.ControllerTransform,
+				// print the antctl client version even if request to Controller fails
+				requestErrorFallback: fallbackversion.RequestErrorFallback,
 			},
 			agentEndpoint: &endpoint{
 				nonResourceEndpoint: &nonResourceEndpoint{
 					path: "/version",
 				},
 				addonTransform: version.AgentTransform,
+				// print the antctl client version even if request to Agent fails
+				requestErrorFallback: fallbackversion.RequestErrorFallback,
 			},
 
 			transformedResponse: reflect.TypeOf(version.Response{}),
@@ -374,9 +379,10 @@ var CommandList = &commandList{
 					},
 					outputType: single,
 				},
+				addonTransform: ovstracing.Transform,
 			},
 			commandGroup:        flat,
-			transformedResponse: reflect.TypeOf(ovstracing.Response{}),
+			transformedResponse: reflect.TypeOf(""),
 		},
 		{ // TODO: implement as a "rawCommand" (see supportbundle) so that the command can be run out-of-cluster
 			use:     "endpoint",

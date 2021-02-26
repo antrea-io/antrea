@@ -96,7 +96,7 @@ func TestPodConnectivitySameNode(t *testing.T) {
 func (data *TestData) testHostPortPodConnectivity(t *testing.T) {
 	// Create a server Pod with hostPort set to 80.
 	hpPodName := randName("test-host-port-pod-")
-	hpPodPort := 80
+	hpPodPort := int32(80)
 	if err := data.createServerPod(hpPodName, "", hpPodPort, true); err != nil {
 		t.Fatalf("Error when creating HostPort server Pod: %v", err)
 	}

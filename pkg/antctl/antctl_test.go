@@ -15,13 +15,48 @@
 package antctl
 
 import (
+	"bytes"
+	"fmt"
 	"testing"
 
+	"github.com/golang/mock/gomock"
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
+
+	antreaversion "github.com/vmware-tanzu/antrea/pkg/version"
+)
+
+var (
+	serverError = fmt.Errorf("cannot reach server")
 )
 
 // TestCommandListValidation ensures the command list is valid.
 func TestCommandListValidation(t *testing.T) {
 	errs := CommandList.validate()
 	assert.Len(t, errs, 0)
+}
+
+// TestCommandVersionRequestError verifies that even when the request to the
+// server fails, the version of the antctl client is still output (along with
+// the error message).
+func TestCommandVersionRequestError(t *testing.T) {
+	// This setup code can be moved to a separate function if more tests
+	// like this one are written.
+	rootCmd := &cobra.Command{
+		Use: "antctl",
+	}
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	client := NewMockAntctlClient(ctrl)
+	var bufOut bytes.Buffer
+	CommandList.applyToRootCommand(rootCmd, client, &bufOut)
+
+	client.EXPECT().request(gomock.Any()).Return(nil, serverError)
+
+	rootCmd.SetOut(&bufOut)
+	rootCmd.SetArgs([]string{"version"})
+	rootCmd.Execute()
+	expected := fmt.Sprintf("antctlVersion: %s", antreaversion.GetFullVersion())
+	assert.Contains(t, bufOut.String(), expected)
+	assert.Contains(t, bufOut.String(), serverError.Error())
 }

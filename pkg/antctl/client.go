@@ -52,10 +52,18 @@ type requestOption struct {
 	server string
 }
 
+type AntctlClient interface {
+	request(opt *requestOption) (io.Reader, error)
+}
+
 // client issues requests to endpoints.
 type client struct {
 	// codec is the CodecFactory for this command, it is needed for remote accessing.
 	codec serializer.CodecFactory
+}
+
+func newClient(codec serializer.CodecFactory) AntctlClient {
+	return &client{codec: codec}
 }
 
 // resolveKubeconfig tries to load the kubeconfig specified in the requestOption.

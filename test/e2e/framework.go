@@ -28,6 +28,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/containernetworking/plugins/pkg/ip"
 	"golang.org/x/mod/semver"
 	"gopkg.in/yaml.v2"
 	corev1 "k8s.io/api/core/v1"
@@ -101,9 +102,13 @@ const (
 )
 
 type ClusterNode struct {
-	idx  int // 0 for control-plane Node
-	name string
-	ip   string
+	idx              int // 0 for control-plane Node
+	name             string
+	ip               string
+	podV4NetworkCIDR string
+	podV6NetworkCIDR string
+	gwV4Addr         string
+	gwV6Addr         string
 }
 
 type ClusterInfo struct {
@@ -202,6 +207,16 @@ func workerNodeIP(idx int) string {
 	}
 }
 
+// nodeGatewayIPs returns the Antrea gateway's IPv4 address and IPv6 address for the provided Node
+// (if applicable), in that order.
+func nodeGatewayIPs(idx int) (string, string) {
+	if node, ok := clusterInfo.nodes[idx]; !ok {
+		return "", ""
+	} else {
+		return node.gwV4Addr, node.gwV6Addr
+	}
+}
+
 func controlPlaneNodeName() string {
 	return clusterInfo.controlPlaneNodeName
 }
@@ -213,6 +228,16 @@ func nodeName(idx int) string {
 		return ""
 	} else {
 		return node.name
+	}
+}
+
+// nodeIP returns an empty string if there is no Node with the provided idx. If idx is 0, the IP
+// of the control-plane Node will be returned.
+func nodeIP(idx int) string {
+	if node, ok := clusterInfo.nodes[idx]; !ok {
+		return ""
+	} else {
+		return node.ip
 	}
 }
 
@@ -292,10 +317,42 @@ func collectClusterInfo() error {
 			}
 		}
 
+		var podV4NetworkCIDR, podV6NetworkCIDR string
+		var gwV4Addr, gwV6Addr string
+		processPodCIDR := func(podCIDR string) error {
+			_, cidr, err := net.ParseCIDR(podCIDR)
+			if err != nil {
+				return err
+			}
+			if cidr.IP.To4() != nil {
+				podV4NetworkCIDR = podCIDR
+				gwV4Addr = ip.NextIP(cidr.IP).String()
+			} else {
+				podV6NetworkCIDR = podCIDR
+				gwV6Addr = ip.NextIP(cidr.IP).String()
+			}
+			return nil
+		}
+		if len(node.Spec.PodCIDRs) == 0 {
+			if err := processPodCIDR(node.Spec.PodCIDR); err != nil {
+				return fmt.Errorf("error when processing PodCIDR field for Node %s: %v", node.Name, err)
+			}
+		} else {
+			for _, podCIDR := range node.Spec.PodCIDRs {
+				if err := processPodCIDR(podCIDR); err != nil {
+					return fmt.Errorf("error when processing PodCIDRs field for Node %s: %v", node.Name, err)
+				}
+			}
+		}
+
 		clusterInfo.nodes[nodeIdx] = ClusterNode{
-			idx:  nodeIdx,
-			name: node.Name,
-			ip:   nodeIP,
+			idx:              nodeIdx,
+			name:             node.Name,
+			ip:               nodeIP,
+			podV4NetworkCIDR: podV4NetworkCIDR,
+			podV6NetworkCIDR: podV6NetworkCIDR,
+			gwV4Addr:         gwV4Addr,
+			gwV6Addr:         gwV6Addr,
 		}
 	}
 	if clusterInfo.controlPlaneNodeName == "" {
@@ -851,11 +908,11 @@ func (data *TestData) createNginxPod(name, nodeName string) error {
 }
 
 // createServerPod creates a Pod that can listen to specified port and have named port set.
-func (data *TestData) createServerPod(name string, portName string, portNum int, setHostPort bool) error {
+func (data *TestData) createServerPod(name string, portName string, portNum int32, setHostPort bool) error {
 	// See https://github.com/kubernetes/kubernetes/blob/master/test/images/agnhost/porter/porter.go#L17 for the image's detail.
 	cmd := "porter"
 	env := corev1.EnvVar{Name: fmt.Sprintf("SERVE_PORT_%d", portNum), Value: "foo"}
-	port := corev1.ContainerPort{Name: portName, ContainerPort: int32(portNum)}
+	port := corev1.ContainerPort{Name: portName, ContainerPort: portNum}
 	if setHostPort {
 		// If hostPort is to be set, it must match the container port number.
 		port.HostPort = int32(portNum)
@@ -864,11 +921,11 @@ func (data *TestData) createServerPod(name string, portName string, portNum int,
 }
 
 // createCustomPod creates a Pod in given Namespace with custom labels.
-func (data *TestData) createServerPodWithLabels(name, ns string, portNum int, labels map[string]string) error {
+func (data *TestData) createServerPodWithLabels(name, ns string, portNum int32, labels map[string]string) error {
 	cmd := []string{"ncat", "-lk", "-p", fmt.Sprintf("%d", portNum)}
 	image := "antrea/netpol-test:latest"
 	env := corev1.EnvVar{Name: fmt.Sprintf("SERVE_PORT_%d", portNum), Value: "foo"}
-	port := corev1.ContainerPort{ContainerPort: int32(portNum)}
+	port := corev1.ContainerPort{ContainerPort: portNum}
 	containerName := fmt.Sprintf("c%v", portNum)
 	mutateLabels := func(pod *corev1.Pod) {
 		for k, v := range labels {
@@ -1196,7 +1253,7 @@ func validatePodIP(podNetworkCIDR string, ip net.IP) (bool, error) {
 }
 
 // createService creates a service with port and targetPort.
-func (data *TestData) createService(serviceName string, port, targetPort int, selector map[string]string, affinity bool,
+func (data *TestData) createService(serviceName string, port, targetPort int32, selector map[string]string, affinity bool,
 	serviceType corev1.ServiceType, ipFamily *corev1.IPFamily) (*corev1.Service, error) {
 	affinityType := corev1.ServiceAffinityNone
 	if affinity {
@@ -1214,8 +1271,8 @@ func (data *TestData) createService(serviceName string, port, targetPort int, se
 		Spec: corev1.ServiceSpec{
 			SessionAffinity: affinityType,
 			Ports: []corev1.ServicePort{{
-				Port:       int32(port),
-				TargetPort: intstr.FromInt(targetPort),
+				Port:       port,
+				TargetPort: intstr.FromInt(int(targetPort)),
 			}},
 			Type:     serviceType,
 			Selector: selector,
@@ -1424,7 +1481,7 @@ func (data *TestData) runPingCommandFromTestPod(podName string, targetPodIPs *Po
 	return nil
 }
 
-func (data *TestData) runNetcatCommandFromTestPod(podName string, server string, port int) error {
+func (data *TestData) runNetcatCommandFromTestPod(podName string, server string, port int32) error {
 	// Retrying several times to avoid flakes as the test may involve DNS (coredns) and Service/Endpoints (kube-proxy).
 	cmd := []string{
 		"/bin/sh",
