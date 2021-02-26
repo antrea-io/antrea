@@ -85,6 +85,9 @@ type ServiceReference struct {
 	Namespace string `json:"namespace,omitempty"`
 }
 
+// ClusterGroupReference represent reference to a ClusterGroup.
+type ClusterGroupReference string
+
 // +genclient
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -129,6 +132,11 @@ type GroupSpec struct {
 	// Cannot be set with any other selector except NamespaceSelector.
 	// +optional
 	ExternalEntitySelector *metav1.LabelSelector `json:"externalEntitySelector,omitempty"`
+	// Select other ClusterGroups by name. The ClusterGroups must already
+	// exist and must not contain ChildGroups themselves.
+	// Cannot be set with any selector/IPBlock/ServiceReference.
+	// +optional
+	ChildGroups []ClusterGroupReference `json:"childGroups,omitempty"`
 }
 
 type GroupConditionType string

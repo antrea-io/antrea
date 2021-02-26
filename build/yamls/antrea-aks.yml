@@ -68,6 +68,8 @@ spec:
         properties:
           spec:
             properties:
+              childGroups:
+                x-kubernetes-preserve-unknown-fields: true
               externalEntitySelector:
                 x-kubernetes-preserve-unknown-fields: true
               ipBlock:

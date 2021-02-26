@@ -951,12 +951,12 @@ func (data *TestData) createServerPodWithLabels(name, ns string, portNum int32, 
 }
 
 // deletePod deletes a Pod in the test namespace.
-func (data *TestData) deletePod(name string) error {
+func (data *TestData) deletePod(namespace, name string) error {
 	var gracePeriodSeconds int64 = 5
 	deleteOptions := metav1.DeleteOptions{
 		GracePeriodSeconds: &gracePeriodSeconds,
 	}
-	if err := data.clientset.CoreV1().Pods(testNamespace).Delete(context.TODO(), name, deleteOptions); err != nil {
+	if err := data.clientset.CoreV1().Pods(namespace).Delete(context.TODO(), name, deleteOptions); err != nil {
 		if !errors.IsNotFound(err) {
 			return err
 		}
@@ -967,7 +967,7 @@ func (data *TestData) deletePod(name string) error {
 // Deletes a Pod in the test namespace then waits us to timeout for the Pod not to be visible to the
 // client any more.
 func (data *TestData) deletePodAndWait(timeout time.Duration, name string) error {
-	if err := data.deletePod(name); err != nil {
+	if err := data.deletePod(testNamespace, name); err != nil {
 		return err
 	}
 

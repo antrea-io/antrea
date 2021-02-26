@@ -1995,6 +1995,85 @@ func testACNPClusterGroupServiceRefCreateAndUpdate(t *testing.T, data *TestData)
 	executeTestsWithData(t, testCase, data)
 }
 
+func testACNPNestedClusterGroupCreateAndUpdate(t *testing.T, data *TestData) {
+	svc1 := k8sUtils.BuildService("svc1", "x", 80, 80, map[string]string{"app": "a"}, nil)
+	cg1Name, cg2Name := "cg-svc-x-a", "cg-select-y-b"
+	cgBuilder1 := &ClusterGroupSpecBuilder{}
+	cgBuilder1 = cgBuilder1.SetName(cg1Name).SetServiceReference("x", "svc1")
+	cgBuilder2 := &ClusterGroupSpecBuilder{}
+	cgBuilder2 = cgBuilder2.SetName(cg2Name).
+		SetNamespaceSelector(map[string]string{"ns": "y"}, nil).
+		SetPodSelector(map[string]string{"pod": "b"}, nil)
+	cgNestedName := "cg-nested"
+	cgBuilderNested := &ClusterGroupSpecBuilder{}
+	cgBuilderNested = cgBuilderNested.SetName(cgNestedName).SetChildGroups([]string{cg1Name})
+
+	builder := &ClusterNetworkPolicySpecBuilder{}
+	builder = builder.SetName("cnp-nested-cg").SetPriority(1.0).
+		SetAppliedToGroup([]ACNPAppliedToSpec{{NSSelector: map[string]string{"ns": "z"}}}).
+		AddIngress(v1.ProtocolTCP, &p80, nil, nil, nil, nil, nil, nil, nil,
+			nil, secv1alpha1.RuleActionDrop, cgNestedName, "")
+
+	// Pods in Namespace z should not allow ingress from Pods backing svc1 (label pod=a) in Namespace x.
+	reachability := NewReachability(allPods, Connected)
+	reachability.Expect(Pod("x/a"), Pod("z/a"), Dropped)
+	reachability.Expect(Pod("x/a"), Pod("z/b"), Dropped)
+	reachability.Expect(Pod("x/a"), Pod("z/c"), Dropped)
+
+	testStep1 := &TestStep{
+		"Port 80",
+		reachability,
+		[]metav1.Object{builder.Get()},
+		[]metav1.Object{svc1, cgBuilder1.Get(), cgBuilderNested.Get()},
+		[]int32{80},
+		v1.ProtocolTCP,
+		0,
+		nil,
+	}
+
+	// Test update "cg-nested" to include "cg-select-y-b" as well.
+	cgBuilderNested = cgBuilderNested.SetChildGroups([]string{cg1Name, cg2Name})
+	// In addition to x/a, all traffic from y/b to Namespace z should also be denied.
+	reachability2 := NewReachability(allPods, Connected)
+	reachability2.Expect(Pod("x/a"), Pod("z/a"), Dropped)
+	reachability2.Expect(Pod("x/a"), Pod("z/b"), Dropped)
+	reachability2.Expect(Pod("x/a"), Pod("z/c"), Dropped)
+	reachability2.Expect(Pod("y/b"), Pod("z/a"), Dropped)
+	reachability2.Expect(Pod("y/b"), Pod("z/b"), Dropped)
+	reachability2.Expect(Pod("y/b"), Pod("z/c"), Dropped)
+	// New member in cg-svc-x-a should be reflected in cg-nested as well.
+	cp := []*CustomProbe{
+		{
+			SourcePod: CustomPod{
+				Pod:    NewPod("x", "test-add-pod-svc1"),
+				Labels: map[string]string{"pod": "test-add-pod-svc1", "app": "a"},
+			},
+			DestPod: CustomPod{
+				Pod:    NewPod("z", "test-add-pod-ns-z"),
+				Labels: map[string]string{"pod": "test-add-pod-ns-z"},
+			},
+			ExpectConnectivity: Dropped,
+			Port:               p80,
+		},
+	}
+	testStep2 := &TestStep{
+		"Port 80 updated",
+		reachability2,
+		nil,
+		[]metav1.Object{cgBuilder2.Get(), cgBuilderNested.Get()},
+		[]int32{80},
+		v1.ProtocolTCP,
+		0,
+		cp,
+	}
+
+	testSteps := []*TestStep{testStep1, testStep2}
+	testCase := []*TestCase{
+		{"ACNP nested ClusterGroup create and update", testSteps},
+	}
+	executeTestsWithData(t, testCase, data)
+}
+
 // executeTests runs all the tests in testList and prints results
 func executeTests(t *testing.T, testList []*TestCase) {
 	executeTestsWithData(t, testList, nil)
@@ -2038,10 +2117,10 @@ func executeTestsWithData(t *testing.T, testList []*TestCase, data *TestData) {
 
 func doProbe(t *testing.T, data *TestData, p *CustomProbe, protocol v1.Protocol) {
 	// Bootstrap Pods
-	_, _, cleanupFunc := createAndWaitForPodWithLabels(t, data, data.createServerPodWithLabels, p.SourcePod.Pod.PodName(), p.SourcePod.Pod.Namespace(), p.Port, p.SourcePod.Labels)
-	defer cleanupFunc()
-	_, _, cleanupFunc = createAndWaitForPodWithLabels(t, data, data.createServerPodWithLabels, p.DestPod.Pod.PodName(), p.DestPod.Pod.Namespace(), p.Port, p.DestPod.Labels)
-	defer cleanupFunc()
+	_, _, srcPodCleanupFunc := createAndWaitForPodWithLabels(t, data, data.createServerPodWithLabels, p.SourcePod.Pod.PodName(), p.SourcePod.Pod.Namespace(), p.Port, p.SourcePod.Labels)
+	defer srcPodCleanupFunc()
+	_, _, dstPodCleanupFunc := createAndWaitForPodWithLabels(t, data, data.createServerPodWithLabels, p.DestPod.Pod.PodName(), p.DestPod.Pod.Namespace(), p.Port, p.DestPod.Labels)
+	defer dstPodCleanupFunc()
 	log.Tracef("Probing: %s -> %s", p.SourcePod.Pod.PodName(), p.DestPod.Pod.PodName())
 	connectivity, err := k8sUtils.Probe(p.SourcePod.Pod.Namespace(), p.SourcePod.Pod.PodName(), p.DestPod.Pod.Namespace(), p.DestPod.Pod.PodName(), p.Port, protocol)
 	if err != nil {
@@ -2122,20 +2201,29 @@ func applyTestStepServicesAndGroups(t *testing.T, step *TestStep) {
 
 func cleanupTestCaseServicesAndGroups(t *testing.T, c *TestCase) {
 	// TestSteps in a TestCase may first create and then update the same Group/Service.
-	// Use sets to avoid duplicates.
+	// Use sets to avoid duplicates. Furthermore, since childGroups in ClusterGroup must
+	// be created before referred and can only be deleted after the parentGroup is deleted,
+	// CG deletion must be performed in the reverse order of creation. An orderedGroups
+	// list is used to maintain the order of group creation.
 	svcsToDelete, groupsToDelete := sets.String{}, sets.String{}
+	var orderedGroups []string
 	for _, step := range c.Steps {
 		for _, obj := range step.ServicesAndGroups {
 			switch o := obj.(type) {
 			case *corev1a2.ClusterGroup:
 				groupsToDelete.Insert(o.Name)
+				orderedGroups = append(orderedGroups, o.Name)
 			case *v1.Service:
 				svcsToDelete.Insert(o.Namespace + "/" + o.Name)
 			}
 		}
 	}
-	for _, cg := range groupsToDelete.List() {
-		failOnError(k8sUtils.DeleteCG(cg), t)
+	for i := len(orderedGroups) - 1; i >= 0; i-- {
+		cg := orderedGroups[i]
+		if groupsToDelete.Has(cg) {
+			failOnError(k8sUtils.DeleteCG(cg), t)
+			groupsToDelete.Delete(cg)
+		}
 	}
 	for _, svc := range svcsToDelete.List() {
 		failOnError(k8sUtils.DeleteService(strings.Split(svc, "/")[0], strings.Split(svc, "/")[1]), t)
@@ -2253,6 +2341,7 @@ func TestAntreaPolicy(t *testing.T) {
 		t.Run("Case=ACNPClusterGroupRefRulePodAdd", func(t *testing.T) { testACNPClusterGroupRefRulePodAdd(t, data) })
 		t.Run("Case=ACNPClusterGroupIngressRuleDenyCGWithXBtoYA", func(t *testing.T) { testACNPIngressRuleDenyCGWithXBtoYA(t) })
 		t.Run("Case=ACNPClusterGroupServiceRef", func(t *testing.T) { testACNPClusterGroupServiceRefCreateAndUpdate(t, data) })
+		t.Run("Case=ACNPNestedClusterGroup", func(t *testing.T) { testACNPNestedClusterGroupCreateAndUpdate(t, data) })
 	})
 	// print results for reachability tests
 	printResults()

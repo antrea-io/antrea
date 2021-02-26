@@ -794,12 +794,15 @@ func createAndWaitForPod(t *testing.T, data *TestData, createFunc func(name stri
 	return name, podIP, cleanupFunc
 }
 
-func createAndWaitForPodWithLabels(t *testing.T, data *TestData, createFunc func(name, ns string, portNum int32, labels map[string]string) error, name, ns string, portNum int32, labels map[string]string) (string, *PodIPs, func()) {
+func createAndWaitForPodWithLabels(t *testing.T, data *TestData, createFunc func(name, ns string, portNum int32, labels map[string]string) error, name, ns string, portNum int32, labels map[string]string) (string, *PodIPs, func() error) {
 	if err := createFunc(name, ns, portNum, labels); err != nil {
 		t.Fatalf("Error when creating busybox test Pod: %v", err)
 	}
-	cleanupFunc := func() {
-		deletePodWrapper(t, data, name)
+	cleanupFunc := func() error {
+		if err := data.deletePod(ns, name); err != nil {
+			return fmt.Errorf("error when deleting Pod: %v", err)
+		}
+		return nil
 	}
 	podIP, err := data.podWaitForIPs(defaultTimeout, name, ns)
 	if err != nil {
