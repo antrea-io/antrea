@@ -18,6 +18,7 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -61,6 +62,27 @@ func (c *ovsCtlClient) DumpMatchedFlow(matchStr string) (string, error) {
 
 func (c *ovsCtlClient) DumpTableFlows(table uint8) ([]string, error) {
 	return c.DumpFlows(fmt.Sprintf("table=%d", table))
+}
+
+func (c *ovsCtlClient) DumpGroup(groupID int) (string, error) {
+	// There seems a bug in ovs-ofctl that dump-groups always returns all
+	// the groups when using Openflow13, even when the group ID is provided.
+	// As a workaround, we do not specify Openflow13 to run the command.
+	groupDump, err := c.runOfctlCmd(false, "dump-groups", strconv.Itoa(groupID))
+	if err != nil {
+		return "", err
+	}
+
+	scanner := bufio.NewScanner(strings.NewReader(string(groupDump)))
+	scanner.Split(bufio.ScanLines)
+	// Skip the first line.
+	scanner.Scan()
+	if !scanner.Scan() {
+		// No group found.
+		return "", nil
+	}
+	// Should have at most one line (group) returned.
+	return strings.TrimSpace(scanner.Text()), nil
 }
 
 func (c *ovsCtlClient) DumpGroups(args ...string) ([][]string, error) {
@@ -132,14 +154,22 @@ func (c *ovsCtlClient) SetPortNoFlood(ofport int) error {
 	return nil
 }
 
-func (c *ovsCtlClient) RunOfctlCmd(cmd string, args ...string) ([]byte, error) {
-	cmdStr := fmt.Sprintf("ovs-ofctl -O Openflow13 %s %s", cmd, c.bridge)
+func (c *ovsCtlClient) runOfctlCmd(openflow13 bool, cmd string, args ...string) ([]byte, error) {
+	cmdStr := fmt.Sprintf("ovs-ofctl %s %s", cmd, c.bridge)
 	cmdStr = cmdStr + " " + strings.Join(args, " ")
+	if openflow13 {
+		cmdStr += " -O Openflow13"
+	}
 	out, err := getOVSCommand(cmdStr).Output()
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
+}
+
+func (c *ovsCtlClient) RunOfctlCmd(cmd string, args ...string) ([]byte, error) {
+	// Default to use Openflow13.
+	return c.runOfctlCmd(true, cmd, args...)
 }
 
 // trimFlowStr removes undesirable fields from the flow string.
@@ -156,9 +186,8 @@ func flowExactMatch(matchStr, flowStr string) bool {
 		if i == 0 {
 			continue
 		}
-		if strings.HasPrefix(m, "in_port=") {
-			// in_port can be formatted as port name.
-			m = "in_port="
+		if i := strings.Index(m, "="); i != -1 {
+			m = m[:i]
 		}
 		if !strings.Contains(matchStr, m) {
 			// The match condition is not included in matchStr.

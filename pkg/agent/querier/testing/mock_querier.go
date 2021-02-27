@@ -1,4 +1,4 @@
-// Copyright 2020 Antrea Authors
+// Copyright 2021 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@ import (
 	config "github.com/vmware-tanzu/antrea/pkg/agent/config"
 	interfacestore "github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	openflow "github.com/vmware-tanzu/antrea/pkg/agent/openflow"
+	proxy "github.com/vmware-tanzu/antrea/pkg/agent/proxy"
 	v1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1"
 	ovsctl "github.com/vmware-tanzu/antrea/pkg/ovs/ovsctl"
 	querier "github.com/vmware-tanzu/antrea/pkg/querier"
@@ -162,4 +163,18 @@ func (m *MockAgentQuerier) GetOpenflowClient() openflow.Client {
 func (mr *MockAgentQuerierMockRecorder) GetOpenflowClient() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetOpenflowClient", reflect.TypeOf((*MockAgentQuerier)(nil).GetOpenflowClient))
+}
+
+// GetProxier mocks base method
+func (m *MockAgentQuerier) GetProxier() proxy.Proxier {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetProxier")
+	ret0, _ := ret[0].(proxy.Proxier)
+	return ret0
+}
+
+// GetProxier indicates an expected call of GetProxier
+func (mr *MockAgentQuerierMockRecorder) GetProxier() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetProxier", reflect.TypeOf((*MockAgentQuerier)(nil).GetProxier))
 }

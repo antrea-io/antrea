@@ -187,8 +187,7 @@ func run(o *Options) error {
 		statsCollector = stats.NewCollector(antreaClientProvider, ofClient, networkPolicyController)
 	}
 
-	var proxier k8sproxy.Provider
-
+	var proxier proxy.Proxier
 	if features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
 		v4Enabled := config.IsIPv4Enabled(nodeConfig, networkConfig.TrafficEncapMode)
 		v6Enabled := config.IsIPv6Enabled(nodeConfig, networkConfig.TrafficEncapMode)
@@ -287,6 +286,10 @@ func run(o *Options) error {
 		go traceflowController.Run(stopCh)
 	}
 
+	if features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
+		go proxier.GetProxyProvider().Run(stopCh)
+	}
+
 	agentQuerier := querier.NewAgentQuerier(
 		nodeConfig,
 		networkConfig,
@@ -294,16 +297,13 @@ func run(o *Options) error {
 		k8sClient,
 		ofClient,
 		ovsBridgeClient,
+		proxier,
 		networkPolicyController,
 		o.config.APIPort)
 
 	agentMonitor := monitor.NewAgentMonitor(crdClient, agentQuerier)
 
 	go agentMonitor.Run(stopCh)
-
-	if features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
-		go proxier.Run(stopCh)
-	}
 
 	cipherSuites, err := cipher.GenerateCipherSuitesList(o.config.TLSCipherSuites)
 	if err != nil {
@@ -339,12 +339,16 @@ func run(o *Options) error {
 		v4Enabled := config.IsIPv4Enabled(nodeConfig, networkConfig.TrafficEncapMode)
 		v6Enabled := config.IsIPv6Enabled(nodeConfig, networkConfig.TrafficEncapMode)
 
+		var proxyProvider k8sproxy.Provider
+		if proxier != nil {
+			proxyProvider = proxier.GetProxyProvider()
+		}
 		connStore := connections.NewConnectionStore(
 			connections.InitializeConnTrackDumper(nodeConfig, serviceCIDRNet, serviceCIDRNetv6, ovsDatapathType, features.DefaultFeatureGate.Enabled(features.AntreaProxy)),
 			ifaceStore,
 			v4Enabled,
 			v6Enabled,
-			proxier,
+			proxyProvider,
 			networkPolicyController,
 			o.pollInterval)
 		pollDone := make(chan struct{})

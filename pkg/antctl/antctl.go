@@ -293,8 +293,10 @@ var CommandList = &commandList{
   $ antctl get ovsflows
   Dump OVS flows of a local Pod
   $ antctl get ovsflows -p pod1 -n ns1
+  Dump OVS flows of a Service
+  $ antctl get ovsflows -S svc1 -n ns1
   Dump OVS flows of a NetworkPolicy
-  $ antctl get ovsflows --networkpolicy np1 -n ns1
+  $ antctl get ovsflows -N np1 -n ns1
   Dump OVS flows of a flow Table
   $ antctl get ovsflows -T IngressRule
 
@@ -314,8 +316,14 @@ var CommandList = &commandList{
 							shorthand: "p",
 						},
 						{
-							name:  "networkpolicy",
-							usage: "NetworkPolicy name. If present, Namespace must be provided.",
+							name:      "service",
+							usage:     "Name of a Service. If present, Namespace must be provided.",
+							shorthand: "S",
+						},
+						{
+							name:      "networkpolicy",
+							usage:     "NetworkPolicy name. If present, Namespace must be provided.",
+							shorthand: "N",
 						},
 						{
 							name:      "table",
@@ -336,7 +344,7 @@ var CommandList = &commandList{
 			example: `  Trace an IP packet between two Pods
   $ antctl trace-packet -S ns1/pod1 -D ns2/pod2
   Trace a TCP packet from a local Pod to a Service
-  $ antctl trace-packet -S ns1/pod1 -D ns2/srv2 -f tcp,tcp_dst=80
+  $ antctl trace-packet -S ns1/pod1 -D ns2/svc2 -f tcp,tcp_dst=80
   Trace a UDP packet from a Pod to an IP address
   $ antctl trace-packet -S ns1/pod1 -D 10.1.2.3 -f udp,udp_dst=1234
   Trace an IP packet from a Pod to gateway port

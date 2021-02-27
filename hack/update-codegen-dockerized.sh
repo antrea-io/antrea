@@ -96,20 +96,21 @@ $GOPATH/bin/openapi-gen  \
 # Generate mocks for testing with mockgen.
 MOCKGEN_TARGETS=(
   "pkg/agent/cniserver/ipam IPAMDriver testing"
+  "pkg/agent/flowexporter/connections ConnTrackDumper,NetFilterConnTrack testing"
   "pkg/agent/interfacestore InterfaceStore testing"
+  "pkg/agent/nodeportlocal/rules PodPortRules testing"
   "pkg/agent/openflow Client,OFEntryOperations testing"
+  "pkg/agent/proxy Proxier testing"
+  "pkg/agent/querier AgentQuerier testing"
   "pkg/agent/route Interface testing"
   "pkg/antctl AntctlClient ."
+  "pkg/controller/networkpolicy EndpointQuerier testing"
+  "pkg/controller/querier ControllerQuerier testing"
+  "pkg/ipfix IPFIXExportingProcess,IPFIXSet,IPFIXRegistry,IPFIXCollectingProcess,IPFIXAggregationProcess testing"
   "pkg/ovs/openflow Bridge,Table,Flow,Action,CTAction,FlowBuilder testing"
   "pkg/ovs/ovsconfig OVSBridgeClient testing"
   "pkg/ovs/ovsctl OVSCtlClient testing"
-  "pkg/agent/querier AgentQuerier testing"
-  "pkg/controller/networkpolicy EndpointQuerier testing"
-  "pkg/controller/querier ControllerQuerier testing"
   "pkg/querier AgentNetworkPolicyInfoQuerier testing"
-  "pkg/agent/flowexporter/connections ConnTrackDumper,NetFilterConnTrack testing"
-  "pkg/ipfix IPFIXExportingProcess,IPFIXSet,IPFIXRegistry,IPFIXCollectingProcess,IPFIXAggregationProcess testing"
-  "pkg/agent/nodeportlocal/rules PodPortRules testing"
   "third_party/proxy Provider testing"
 )
 

@@ -25,6 +25,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	agentquerier "github.com/vmware-tanzu/antrea/pkg/agent/querier"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/common"
+	"github.com/vmware-tanzu/antrea/pkg/features"
 	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/querier"
 )
@@ -63,6 +64,21 @@ func dumpFlows(aq agentquerier.AgentQuerier, table binding.TableIDType) ([]Respo
 	}
 	for _, s := range flowStrs {
 		resps = append(resps, Response{s})
+	}
+	return resps, nil
+}
+
+func dumpMatchedGroups(aq agentquerier.AgentQuerier, groupIDs []binding.GroupIDType) ([]Response, error) {
+	resps := []Response{}
+	for _, g := range groupIDs {
+		groupStr, err := aq.GetOVSCtlClient().DumpGroup(int(g))
+		if err != nil {
+			klog.Errorf("Failed to dump group %d: %v", g, err)
+			return nil, err
+		}
+		if groupStr != "" {
+			resps = append(resps, Response{groupStr})
+		}
 	}
 	return resps, nil
 }
@@ -107,6 +123,22 @@ func getPodFlows(aq agentquerier.AgentQuerier, podName, namespace string) ([]Res
 
 }
 
+func getServiceFlows(aq agentquerier.AgentQuerier, serviceName, namespace string) ([]Response, error) {
+	flowKeys, groupIDs, found := aq.GetProxier().GetServiceFlowKeys(serviceName, namespace)
+	if !found {
+		return nil, nil
+	}
+	resps, err := dumpMatchedFlows(aq, flowKeys)
+	if err != nil {
+		return nil, err
+	}
+	groupResps, err := dumpMatchedGroups(aq, groupIDs)
+	if err != nil {
+		return nil, err
+	}
+	return append(resps, groupResps...), nil
+}
+
 func getNetworkPolicyFlows(aq agentquerier.AgentQuerier, npName, namespace string) ([]Response, error) {
 	if len(aq.GetNetworkPolicyInfoQuerier().GetNetworkPolicies(&querier.NetworkPolicyQueryFilter{SourceName: npName, Namespace: namespace})) == 0 {
 		// NetworkPolicy not found.
@@ -123,20 +155,27 @@ func HandleFunc(aq agentquerier.AgentQuerier) http.HandlerFunc {
 		var err error
 		var resps []Response
 		pod := r.URL.Query().Get("pod")
+		service := r.URL.Query().Get("service")
 		networkPolicy := r.URL.Query().Get("networkpolicy")
 		namespace := r.URL.Query().Get("namespace")
 		table := r.URL.Query().Get("table")
 
-		if (pod != "" || networkPolicy != "") && namespace == "" {
+		if (pod != "" || service != "" || networkPolicy != "") && namespace == "" {
 			http.Error(w, "namespace must be provided", http.StatusBadRequest)
 			return
 		}
 
-		if pod == "" && networkPolicy == "" && namespace == "" && table == "" {
+		if pod == "" && service == "" && networkPolicy == "" && namespace == "" && table == "" {
 			resps, err = dumpFlows(aq, binding.TableIDAll)
 		} else if pod != "" {
 			// Pod Namespace must be provided to dump flows of a Pod.
 			resps, err = getPodFlows(aq, pod, namespace)
+		} else if service != "" {
+			if !features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
+				http.Error(w, "AntreaProxy is not enabled", http.StatusServiceUnavailable)
+				return
+			}
+			resps, err = getServiceFlows(aq, service, namespace)
 		} else if networkPolicy != "" {
 			resps, err = getNetworkPolicyFlows(aq, networkPolicy, namespace)
 		} else if table != "" {
