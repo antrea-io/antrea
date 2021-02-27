@@ -417,11 +417,11 @@ func (c *client) UninstallServiceGroup(groupID binding.GroupIDType) error {
 }
 
 func generateEndpointFlowCacheKey(endpointIP string, endpointPort int, protocol binding.Protocol) string {
-	return fmt.Sprintf("Endpoints_%s_%d_%s", endpointIP, endpointPort, protocol)
+	return fmt.Sprintf("E%s%s%x", endpointIP, protocol, endpointPort)
 }
 
 func generateServicePortFlowCacheKey(svcIP net.IP, svcPort uint16, protocol binding.Protocol) string {
-	return fmt.Sprintf("Service_%s_%d_%s", svcIP, svcPort, protocol)
+	return fmt.Sprintf("S%s%s%x", svcIP, protocol, svcPort)
 }
 
 func (c *client) InstallEndpointFlows(protocol binding.Protocol, endpoints []proxy.Endpoint) error {
