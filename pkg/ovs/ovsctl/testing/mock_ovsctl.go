@@ -1,4 +1,4 @@
-// Copyright 2020 Antrea Authors
+// Copyright 2021 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -65,6 +65,21 @@ func (m *MockOVSCtlClient) DumpFlows(arg0 ...string) ([]string, error) {
 func (mr *MockOVSCtlClientMockRecorder) DumpFlows(arg0 ...interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DumpFlows", reflect.TypeOf((*MockOVSCtlClient)(nil).DumpFlows), arg0...)
+}
+
+// DumpGroup mocks base method
+func (m *MockOVSCtlClient) DumpGroup(arg0 int) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DumpGroup", arg0)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// DumpGroup indicates an expected call of DumpGroup
+func (mr *MockOVSCtlClientMockRecorder) DumpGroup(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DumpGroup", reflect.TypeOf((*MockOVSCtlClient)(nil).DumpGroup), arg0)
 }
 
 // DumpGroups mocks base method

@@ -39,6 +39,8 @@ type OVSCtlClient interface {
 	DumpMatchedFlow(matchStr string) (string, error)
 	// DumpTableFlows returns all flows in the table.
 	DumpTableFlows(table uint8) ([]string, error)
+	// DumpGroup returns the OpenFlow group if it exists on the bridge.
+	DumpGroup(groupID int) (string, error)
 	// DumpGroups returns OpenFlow groups of the bridge.
 	DumpGroups(args ...string) ([][]string, error)
 	// DumpPortsDesc returns OpenFlow ports descriptions of the bridge.

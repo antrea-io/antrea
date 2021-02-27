@@ -98,7 +98,7 @@ type Client interface {
 	// InstallEndpointFlows installs flows for accessing Endpoints.
 	// If an Endpoint is on the current Node, then flows for hairpin and endpoint
 	// L2 forwarding should also be installed.
-	InstallEndpointFlows(protocol binding.Protocol, endpoints []proxy.Endpoint, isIPv6 bool) error
+	InstallEndpointFlows(protocol binding.Protocol, endpoints []proxy.Endpoint) error
 	// UninstallEndpointFlows removes flows of the Endpoint installed by
 	// InstallEndpointFlows.
 	UninstallEndpointFlows(protocol binding.Protocol, endpoint proxy.Endpoint) error
@@ -179,6 +179,10 @@ type Client interface {
 	// GetPodFlowKeys returns the keys (match strings) of the cached flows for a
 	// Pod.
 	GetPodFlowKeys(interfaceName string) []string
+
+	// GetServiceFlowKeys returns the keys (match strings) of the cached
+	// flows for a Service (port) and its endpoints.
+	GetServiceFlowKeys(svcIP net.IP, svcPort uint16, protocol binding.Protocol, endpoints []proxy.Endpoint) []string
 
 	// GetNetworkPolicyFlowKeys returns the keys (match strings) of the cached
 	// flows for a NetworkPolicy. Flows are grouped by policy rules, and duplicated
@@ -368,14 +372,14 @@ func (c *client) UninstallPodFlows(interfaceName string) error {
 	return c.deleteFlows(c.podFlowCache, interfaceName)
 }
 
-func (c *client) GetPodFlowKeys(interfaceName string) []string {
-	fCacheI, ok := c.podFlowCache.Load(interfaceName)
+func (c *client) getFlowKeysFromCache(cache *flowCategoryCache, cacheKey string) []string {
+	fCacheI, ok := cache.Load(cacheKey)
 	if !ok {
 		return nil
 	}
-
 	fCache := fCacheI.(flowCache)
 	flowKeys := make([]string, 0, len(fCache))
+
 	// ReplayFlows() could change Flow internal state. Although its current
 	// implementation does not impact Flow match string generation, we still
 	// acquire read lock of replayMutex here for logic cleanliness.
@@ -385,6 +389,10 @@ func (c *client) GetPodFlowKeys(interfaceName string) []string {
 		flowKeys = append(flowKeys, flow.MatchString())
 	}
 	return flowKeys
+}
+
+func (c *client) GetPodFlowKeys(interfaceName string) []string {
+	return c.getFlowKeysFromCache(c.podFlowCache, interfaceName)
 }
 
 func (c *client) InstallServiceGroup(groupID binding.GroupIDType, withSessionAffinity bool, endpoints []proxy.Endpoint) error {
@@ -408,20 +416,24 @@ func (c *client) UninstallServiceGroup(groupID binding.GroupIDType) error {
 	return nil
 }
 
-func (c *client) InstallEndpointFlows(protocol binding.Protocol, endpoints []proxy.Endpoint, isIPv6 bool) error {
+func generateEndpointFlowCacheKey(endpointIP string, endpointPort int, protocol binding.Protocol) string {
+	return fmt.Sprintf("Endpoints_%s_%d_%s", endpointIP, endpointPort, protocol)
+}
+
+func generateServicePortFlowCacheKey(svcIP net.IP, svcPort uint16, protocol binding.Protocol) string {
+	return fmt.Sprintf("Service_%s_%d_%s", svcIP, svcPort, protocol)
+}
+
+func (c *client) InstallEndpointFlows(protocol binding.Protocol, endpoints []proxy.Endpoint) error {
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
 
-	parser := func(ipStr string) net.IP { return net.ParseIP(ipStr).To4() }
-	if isIPv6 {
-		parser = func(ipStr string) net.IP { return net.ParseIP(ipStr).To16() }
-	}
 	for _, endpoint := range endpoints {
 		var flows []binding.Flow
 		endpointPort, _ := endpoint.Port()
-		endpointIP := parser(endpoint.IP())
+		endpointIP := net.ParseIP(endpoint.IP())
 		portVal := portToUint16(endpointPort)
-		cacheKey := fmt.Sprintf("Endpoints_%s_%d_%s", endpointIP, endpointPort, protocol)
+		cacheKey := generateEndpointFlowCacheKey(endpoint.IP(), endpointPort, protocol)
 		flows = append(flows, c.endpointDNATFlow(endpointIP, portVal, protocol))
 		if endpoint.GetIsLocal() {
 			flows = append(flows, c.hairpinSNATFlow(endpointIP))
@@ -441,7 +453,7 @@ func (c *client) UninstallEndpointFlows(protocol binding.Protocol, endpoint prox
 	if err != nil {
 		return fmt.Errorf("error when getting port: %w", err)
 	}
-	cacheKey := fmt.Sprintf("Endpoints_%s_%d_%s", endpoint.IP(), port, protocol)
+	cacheKey := generateEndpointFlowCacheKey(endpoint.IP(), port, protocol)
 	return c.deleteFlows(c.serviceFlowCache, cacheKey)
 }
 
@@ -453,14 +465,14 @@ func (c *client) InstallServiceFlows(groupID binding.GroupIDType, svcIP net.IP, 
 	if affinityTimeout != 0 {
 		flows = append(flows, c.serviceLearnFlow(groupID, svcIP, svcPort, protocol, affinityTimeout))
 	}
-	cacheKey := fmt.Sprintf("Service_%s_%d_%s", svcIP, svcPort, protocol)
+	cacheKey := generateServicePortFlowCacheKey(svcIP, svcPort, protocol)
 	return c.addFlows(c.serviceFlowCache, cacheKey, flows)
 }
 
 func (c *client) UninstallServiceFlows(svcIP net.IP, svcPort uint16, protocol binding.Protocol) error {
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
-	cacheKey := fmt.Sprintf("Service_%s_%d_%s", svcIP, svcPort, protocol)
+	cacheKey := generateServicePortFlowCacheKey(svcIP, svcPort, protocol)
 	return c.deleteFlows(c.serviceFlowCache, cacheKey)
 }
 
@@ -478,6 +490,17 @@ func (c *client) UninstallLoadBalancerServiceFromOutsideFlows(svcIP net.IP, svcP
 	defer c.replayMutex.RUnlock()
 	cacheKey := fmt.Sprintf("LoadBalancerService_%s_%d_%s", svcIP, svcPort, protocol)
 	return c.deleteFlows(c.serviceFlowCache, cacheKey)
+}
+
+func (c *client) GetServiceFlowKeys(svcIP net.IP, svcPort uint16, protocol binding.Protocol, endpoints []proxy.Endpoint) []string {
+	cacheKey := generateServicePortFlowCacheKey(svcIP, svcPort, protocol)
+	flowKeys := c.getFlowKeysFromCache(c.serviceFlowCache, cacheKey)
+	for _, ep := range endpoints {
+		epPort, _ := ep.Port()
+		cacheKey = generateEndpointFlowCacheKey(ep.IP(), epPort, protocol)
+		flowKeys = append(flowKeys, c.getFlowKeysFromCache(c.serviceFlowCache, cacheKey)...)
+	}
+	return flowKeys
 }
 
 func (c *client) InstallClusterServiceFlows() error {
