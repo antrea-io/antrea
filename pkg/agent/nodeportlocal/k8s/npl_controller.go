@@ -249,7 +249,7 @@ func (c *NPLController) getPodsFromService(svc *corev1.Service) []string {
 		return pods
 	}
 
-	podList, err := c.podLister.List(labels.SelectorFromSet(labels.Set(svc.Spec.Selector)))
+	podList, err := c.podLister.Pods(svc.Namespace).List(labels.SelectorFromSet(labels.Set(svc.Spec.Selector)))
 	if err != nil {
 		klog.Errorf("Got error while listing Pods: %v", err)
 		return pods
@@ -272,7 +272,8 @@ func (c *NPLController) isNPLEnabledForServiceOfPod(obj interface{}) bool {
 		svc, isSvc := service.(*corev1.Service)
 		// Selecting Services NOT of type NodePort, with Service selector matching Pod labels.
 		if isSvc && svc.Spec.Type != corev1.ServiceTypeNodePort {
-			if matchSvcSelectorPodLabels(svc.Spec.Selector, pod.GetLabels()) {
+			if matchSvcSelectorPodLabels(svc.Spec.Selector, pod.GetLabels()) &&
+				pod.GetNamespace() == svc.GetNamespace() {
 				return true
 			}
 		}
