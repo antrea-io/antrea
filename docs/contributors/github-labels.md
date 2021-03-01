@@ -56,7 +56,10 @@ The labels in this list originated within Kubernetes at
 | area/provider/azure                | Issues or PRs related to azure provider | Any |
 | area/provider/gcp                  | Issues or PRs related to gcp provider | Any |
 | area/provider/vmware               | Issues or PRs related to vmware provider | Any |
-| area/routing                       | Issues or PRs related to routing and forwarding | Any |
+| area/proxy                         | Issues or PRs related to proxy functions in Antrea | Any |
+| area/proxy/clusterip               | Issues or PRs related to the implementation of ClusterIP Services | Any |
+| area/proxy/nodeport                | Issues or PRs related to the implementation of NodePort Services | Any |
+| area/proxy/nodeportlocal           | Issues or PRs related to the NodePortLocal feature | Any |
 | area/security/access-control       | Issues or PRs related to access control | Any |
 | area/security/controlplane         | Issues or PRs related to controlplane security | Any |
 | area/security/dataplane            | Issues or PRs related to dataplane security | Any |
@@ -64,11 +67,11 @@ The labels in this list originated within Kubernetes at
 | area/test/community                | Issues or PRs related to community testing | Any |
 | area/test/e2e                      | Issues or PRs related to Antrea specific end-to-end testing. | Any |
 | area/test/infra                    | Issues or PRs related to test infrastructure (Jenkins configuration, Ansible playbook, Kind wrappers, ...) | Any |
-| area/transit/ip                    | Issues or PRs related to internet protocol version (IP) | Any |
 | area/transit/encapsulation         | Issues or PRs related to encapsulation | Any |
 | area/transit/addressing            | Issues or PRs related to IP addressing category (unicast, multicast, broadcast, anycast) | Any |
 | area/transit/encryption            | Issues or PRs related to transit encryption (IPSec, SSL) | Any |
 | area/transit/qos                   | Issues or PRs related to transit qos or policing | Any |
+| area/transit/routing               | Issues or PRs related to routing and forwarding | Any |
 | kind/api-change                    | Categorizes issue or PR as related to adding, removing, or otherwise changing an API. | Any |
 | kind/bug                           | Categorizes issue or PR as related to a bug.              | Any                |
 | kind/cleanup                       | Categorizes issue or PR as related to cleaning up code, process, or technical debt | Any |
