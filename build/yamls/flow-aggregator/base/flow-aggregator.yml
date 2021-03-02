@@ -84,7 +84,7 @@ metadata:
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: antrea-cluster-id-reader
+  name: antrea-cluster-identity-reader
 subjects:
   - kind: ServiceAccount
     name: flow-aggregator

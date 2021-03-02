@@ -1096,12 +1096,12 @@ kind: ClusterRole
 metadata:
   labels:
     app: antrea
-  name: antrea-cluster-id-reader
+  name: antrea-cluster-identity-reader
 rules:
 - apiGroups:
   - ""
   resourceNames:
-  - antrea-cluster-id
+  - antrea-cluster-identity
   resources:
   - configmaps
   verbs:
@@ -1175,7 +1175,7 @@ rules:
   - ""
   resourceNames:
   - antrea-ca
-  - antrea-cluster-id
+  - antrea-cluster-identity
   resources:
   - configmaps
   verbs:
@@ -1319,7 +1319,7 @@ kind: ConfigMap
 metadata:
   labels:
     app: antrea
-  name: antrea-cluster-id
+  name: antrea-cluster-identity
   namespace: kube-system
 ---
 apiVersion: v1
@@ -1519,27 +1519,12 @@ data:
 
     # TLS min version from: VersionTLS10, VersionTLS11, VersionTLS12, VersionTLS13.
     #tlsMinVersion:
-
-    # A name used to identify the cluster. The name will be written to the antrea-cluster-id ConfigMap.
-    # If no name is provided in this configuration, the Antrea Controller will auto-generate one. The
-    # auto-generated name will be persistent across Antrea Controller restarts and upgrades. It is
-    # recommended not to update this parameter during the lifetime of the cluster.
-    #clusterName: ""
-
-    # UUID used to identify the cluster. It should be globally unique. The UUID will be written to the
-    # antrea-cluster-id ConfigMap. If no UUID is provided in this configuration, the Antrea Controller
-    # will auto-generate a random one (version 4 UUID, as per RFC 4122). The auto-generated UUID will be
-    # persistent across Antrea Controller restarts and upgrades. Most users should not provide their own
-    # UUID and this parameter should not be updated during the lifetime of the cluster. If the parameter
-    # is updated during the lifetime of the cluster, the Antrea Controller will log an error until the
-    # "uuid" key of the antrea-cluster-id ConfigMap is manually deleted.
-    #clusterUUID: ""
 kind: ConfigMap
 metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-btkfhfc9kk
+  name: antrea-config-m6cb2mk6f8
   namespace: kube-system
 ---
 apiVersion: v1
@@ -1659,7 +1644,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-btkfhfc9kk
+          name: antrea-config-m6cb2mk6f8
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -1925,7 +1910,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-btkfhfc9kk
+          name: antrea-config-m6cb2mk6f8
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d
