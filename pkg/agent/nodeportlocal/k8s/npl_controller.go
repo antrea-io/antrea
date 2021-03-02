@@ -272,8 +272,8 @@ func (c *NPLController) isNPLEnabledForServiceOfPod(obj interface{}) bool {
 		svc, isSvc := service.(*corev1.Service)
 		// Selecting Services NOT of type NodePort, with Service selector matching Pod labels.
 		if isSvc && svc.Spec.Type != corev1.ServiceTypeNodePort {
-			if matchSvcSelectorPodLabels(svc.Spec.Selector, pod.GetLabels()) &&
-				pod.GetNamespace() == svc.GetNamespace() {
+			if pod.GetNamespace() == svc.GetNamespace() &&
+				matchSvcSelectorPodLabels(svc.Spec.Selector, pod.GetLabels()) {
 				return true
 			}
 		}
