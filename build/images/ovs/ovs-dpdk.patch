@@ -6,7 +6,7 @@ diff -u debian/rules debian.patched/rules
 
  override_dh_auto_configure:
 -	dh_auto_configure -- --enable-ssl --enable-shared $(DATAPATH_CONFIGURE_OPTS)
-+	dh_auto_configure -- --enable-ssl --enable-shared $(DATAPATH_CONFIGURE_OPTS) --with-dpdk=/usr/src/dpdk-stable-19.11.2/x86_64-native-linuxapp-gcc CFLAGS="-Ofast -msse4.2 -mpopcnt -fPIC"
++	dh_auto_configure -- --enable-ssl --enable-shared $(DATAPATH_CONFIGURE_OPTS) --with-dpdk=/usr/src/dpdk-stable-19.11.2/x86_64-native-linuxapp-gcc
 
  override_dh_auto_test:
  ifeq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
