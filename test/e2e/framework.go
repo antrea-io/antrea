@@ -149,6 +149,12 @@ type TestData struct {
 	logsDirForTestCase string
 }
 
+type configChange struct {
+	field         string
+	value         string
+	isFeatureGate bool
+}
+
 var testData *TestData
 
 type PodIPs struct {
@@ -529,22 +535,21 @@ func (data *TestData) deployAntreaIPSec() error {
 // deployAntreaFlowExporter deploys Antrea with flow exporter config params enabled.
 func (data *TestData) deployAntreaFlowExporter(ipfixCollector string) error {
 	// Enable flow exporter feature and add related config params to antrea agent configmap.
-	return data.mutateAntreaConfigMap(func(data map[string]string) {
-		antreaAgentConf, _ := data["antrea-agent.conf"]
-		antreaAgentConf = strings.Replace(antreaAgentConf, "#  FlowExporter: false", "  FlowExporter: true", 1)
-		if ipfixCollector != "" {
-			antreaAgentConf = strings.Replace(antreaAgentConf, "#flowCollectorAddr: \"flow-aggregator.flow-aggregator.svc:4739:tcp\"", fmt.Sprintf("flowCollectorAddr: \"%s\"", ipfixCollector), 1)
-		}
-		antreaAgentConf = strings.Replace(antreaAgentConf, "#flowPollInterval: \"5s\"", "flowPollInterval: \"1s\"", 1)
-		antreaAgentConf = strings.Replace(antreaAgentConf, "#activeFlowExportTimeout: \"60s\"", "activeFlowExportTimeout: \"2s\"", 1)
-		antreaAgentConf = strings.Replace(antreaAgentConf, "#inactiveFlowExportTimeout: \"15s\"", "inactiveFlowExportTimeout: \"1s\"", 1)
-		if testOptions.providerName == "kind" {
-			// In Kind cluster, there are issues with DNS name resolution on worker nodes.
-			// We will skip TLS testing for Kind cluster because the server certificate is generated with Flow aggregator's DNS name
-			antreaAgentConf = strings.Replace(antreaAgentConf, "#enableTLSToFlowAggregator: true", "enableTLSToFlowAggregator: false", 1)
-		}
-		data["antrea-agent.conf"] = antreaAgentConf
-	}, false, true)
+	ac := []configChange{
+		{"FlowExporter", "true", true},
+		{"flowPollInterval", "\"1s\"", false},
+		{"activeFlowExportTimeout", "\"2s\"", false},
+		{"inactiveFlowExportTimeout", "\"1s\"", false},
+	}
+	if ipfixCollector != "" {
+		ac = append(ac, configChange{"flowCollectorAddr", fmt.Sprintf("\"%s\"", ipfixCollector), false})
+	}
+	if testOptions.providerName == "kind" {
+		// In Kind cluster, there are issues with DNS name resolution on worker nodes.
+		// We will skip TLS testing for Kind cluster because the server certificate is generated with Flow aggregator's DNS name
+		ac = append(ac, configChange{"enableTLSToFlowAggregator", "false", false})
+	}
+	return data.mutateAntreaConfigMap(nil, ac, false, true)
 }
 
 // deployFlowAggregator deploys flow aggregator with ipfix collector address.
@@ -1614,12 +1619,23 @@ func (data *TestData) GetGatewayInterfaceName(antreaNamespace string) (string, e
 	return antreaDefaultGW, nil
 }
 
-func (data *TestData) mutateAntreaConfigMap(mutatingFunc func(data map[string]string), restartController, restartAgent bool) error {
+func (data *TestData) mutateAntreaConfigMap(controllerChanges []configChange, agentChanges []configChange, restartController, restartAgent bool) error {
 	configMap, err := data.GetAntreaConfigMap(antreaNamespace)
 	if err != nil {
 		return err
 	}
-	mutatingFunc(configMap.Data)
+
+	controllerConf, _ := configMap.Data["antrea-controller.conf"]
+	for _, c := range controllerChanges {
+		controllerConf = replaceFieldValue(controllerConf, c)
+	}
+	configMap.Data["antrea-controller.conf"] = controllerConf
+	agentConf, _ := configMap.Data["antrea-agent.conf"]
+	for _, c := range agentChanges {
+		agentConf = replaceFieldValue(agentConf, c)
+	}
+	configMap.Data["antrea-agent.conf"] = agentConf
+
 	if _, err := data.clientset.CoreV1().ConfigMaps(antreaNamespace).Update(context.TODO(), configMap, metav1.UpdateOptions{}); err != nil {
 		return fmt.Errorf("failed to update ConfigMap %s: %v", configMap.Name, err)
 	}
@@ -1637,6 +1653,18 @@ func (data *TestData) mutateAntreaConfigMap(mutatingFunc func(data map[string]st
 		}
 	}
 	return nil
+}
+
+func replaceFieldValue(content string, c configChange) string {
+	var res string
+	if c.isFeatureGate {
+		r := regexp.MustCompile(fmt.Sprintf(`(?m)#?  %s:.*$`, c.field))
+		res = r.ReplaceAllString(content, fmt.Sprintf("  %s: %s", c.field, c.value))
+	} else {
+		r := regexp.MustCompile(fmt.Sprintf(`(?m)#?.*%s:.*$`, c.field))
+		res = r.ReplaceAllString(content, fmt.Sprintf("%s: %s", c.field, c.value))
+	}
+	return res
 }
 
 // gracefulExitAntreaController copies the Antrea controller binary coverage data file out before terminating the Pod
