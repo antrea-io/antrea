@@ -223,12 +223,17 @@ func (ic *ifConfigurator) configureContainerLinkVeth(
 	return nil
 }
 
-// advertiseContainerAddr sends 3 GARP packets in another goroutine with 50ms interval. It's because Openflow entries are
-// installed async, and the gratuitous ARP could be sent out after the Openflow entries are installed. Using another
-// goroutine to ensure the processing of CNI ADD request is not blocked.
+// advertiseContainerAddr sends 3 GARP packets in another goroutine with 50ms interval, if the
+// container interface is assigned an IPv4 address. It's because Openflow entries are installed
+// asynchronously, and the gratuitous ARP could be sent out after the Openflow entries are
+// installed. Using another goroutine to ensure the processing of CNI ADD request is not blocked.
 func (ic *ifConfigurator) advertiseContainerAddr(containerNetNS string, containerIfaceName string, result *current.Result) error {
 	if err := ns.IsNSorErr(containerNetNS); err != nil {
 		return fmt.Errorf("%s is not a valid network namespace: %v", containerNetNS, err)
+	}
+	if len(result.IPs) == 0 {
+		klog.Warningf("Expected at least one IP address in CNI result, skip sending Gratuitous ARP")
+		return nil
 	}
 	// Sending Gratuitous ARP is a best-effort action and is unlikely to fail as we have ensured the netns is valid.
 	go ns.WithNetNSPath(containerNetNS, func(_ ns.NetNS) error {
@@ -244,7 +249,7 @@ func (ic *ifConfigurator) advertiseContainerAddr(containerNetNS string, containe
 			}
 		}
 		if targetIP == nil {
-			klog.Warning("Failed to find an IPv4 address, skipped sending Gratuitous ARP")
+			klog.V(2).Infof("No IPv4 address found for container interface %s in ns %s, skip sending Gratuitous ARP", containerIfaceName, containerNetNS)
 			return nil
 		}
 		ticker := time.NewTicker(50 * time.Millisecond)
