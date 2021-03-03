@@ -82,22 +82,22 @@ func (k *KubernetesUtils) GetPodsByLabel(ns string, key string, val string) ([]v
 
 // Probe execs into a Pod and checks its connectivity to another Pod.  Of course it assumes
 // that the target Pod is serving on the input port, and also that ncat is installed.
-func (k *KubernetesUtils) Probe(ns1, pod1, ns2, pod2 string, port int32, usePodName bool) (bool, error) {
+func (k *KubernetesUtils) Probe(ns1, pod1, ns2, pod2 string, port int32) (bool, error) {
 	fromPods, err := k.GetPodsByLabel(ns1, "pod", pod1)
 	if err != nil {
-		return false, fmt.Errorf("unable to get pods from ns %s: %v", ns1, err)
+		return false, fmt.Errorf("unable to get Pods from Namespace %s: %v", ns1, err)
 	}
 	if len(fromPods) == 0 {
-		return false, fmt.Errorf("no Pod of label pod=%s in namespace %s found", pod1, ns1)
+		return false, fmt.Errorf("no Pod of label pod=%s in Namespace %s found", pod1, ns1)
 	}
 	fromPod := fromPods[0]
 
 	toPods, err := k.GetPodsByLabel(ns2, "pod", pod2)
 	if err != nil {
-		return false, fmt.Errorf("unable to get pods from ns %s: %v", ns2, err)
+		return false, fmt.Errorf("unable to get Pods from Namespace %s: %v", ns2, err)
 	}
 	if len(toPods) == 0 {
-		return false, fmt.Errorf("no Pod of label pod=%s in namespace %s found", pod2, ns2)
+		return false, fmt.Errorf("no Pod of label pod=%s in Namespace %s found", pod2, ns2)
 	}
 	toPod := toPods[0]
 	toIP := toPod.Status.PodIP
@@ -584,7 +584,7 @@ func (k *KubernetesUtils) Validate(allPods []Pod, reachability *Reachability, po
 	// TODO: find better metrics, this is only for POC.
 	oneProbe := func(podFrom, podTo Pod) {
 		log.Tracef("Probing: %s -> %s", podFrom, podTo)
-		connected, err := k.Probe(podFrom.Namespace(), podFrom.PodName(), podTo.Namespace(), podTo.PodName(), port, false)
+		connected, err := k.Probe(podFrom.Namespace(), podFrom.PodName(), podTo.Namespace(), podTo.PodName(), port)
 		resultsCh <- &probeResult{podFrom, podTo, connected, err}
 	}
 	for _, pod1 := range allPods {

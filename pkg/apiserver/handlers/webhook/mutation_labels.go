@@ -37,7 +37,7 @@ const (
 
 // jsonPatch contains necessary info that MutatingWebhook required
 type jsonPatch struct {
-	// Op represent the operation of this mutation
+	// Op represents the operation of this mutation
 	Op jsonPatchOperation `json:"op"`
 	// Path is a jsonPath to locate the value that need to be mutated
 	Path string `json:"path"`

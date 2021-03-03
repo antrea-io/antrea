@@ -1676,9 +1676,9 @@ func testAuditLoggingBasic(t *testing.T, data *TestData) {
 	time.Sleep(networkPolicyDelay)
 
 	// generate some traffic that will be dropped by test-log-acnp-deny
-	k8sUtils.Probe("x", "a", "z", "a", p80, false)
-	k8sUtils.Probe("x", "a", "z", "b", p80, false)
-	k8sUtils.Probe("x", "a", "z", "c", p80, false)
+	k8sUtils.Probe("x", "a", "z", "a", p80)
+	k8sUtils.Probe("x", "a", "z", "b", p80)
+	k8sUtils.Probe("x", "a", "z", "c", p80)
 	time.Sleep(networkPolicyDelay)
 
 	podXA, _ := k8sUtils.GetPodByLabel("x", "a")
@@ -1781,7 +1781,7 @@ func testACNPClusterGroupServiceRefCreateAndUpdate(t *testing.T, data *TestData)
 	builder.AddIngress(v1.ProtocolTCP, &p80, nil, nil, nil, nil, nil, nil, nil,
 		nil, secv1alpha1.RuleActionDrop, cg2Name, "")
 
-	// Pods backing svc1 (label pod=a) in namespace x should not allow ingress from Pods backing svc2 (label pod=b) in namespace y.
+	// Pods backing svc1 (label pod=a) in Namespace x should not allow ingress from Pods backing svc2 (label pod=b) in Namespace y.
 	reachability := NewReachability(allPods, true)
 	reachability.Expect(Pod("y/b"), Pod("x/a"), false)
 	testStep1 := &TestStep{
@@ -1898,7 +1898,7 @@ func doProbe(t *testing.T, data *TestData, p *CustomProbe) {
 	_, _, cleanupFunc = createAndWaitForPodWithLabels(t, data, data.createServerPodWithLabels, p.DestPod.Pod.PodName(), p.DestPod.Pod.Namespace(), p.Port, p.DestPod.Labels)
 	defer cleanupFunc()
 	log.Tracef("Probing: %s -> %s", p.SourcePod.Pod.PodName(), p.DestPod.Pod.PodName())
-	connected, err := k8sUtils.Probe(p.SourcePod.Pod.Namespace(), p.SourcePod.Pod.PodName(), p.DestPod.Pod.Namespace(), p.DestPod.Pod.PodName(), p.Port, true)
+	connected, err := k8sUtils.Probe(p.SourcePod.Pod.Namespace(), p.SourcePod.Pod.PodName(), p.DestPod.Pod.Namespace(), p.DestPod.Pod.PodName(), p.Port)
 	if err != nil {
 		t.Errorf("failure -- could not complete probe: %v", err)
 	}
