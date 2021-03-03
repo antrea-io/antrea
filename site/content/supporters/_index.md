@@ -1,7 +1,7 @@
 ---
 title: "Supporters"
-id: users
-url: /users
+id: supporters
+url: /supporters
 outputs: ["HTML", "RSS"]
 layout: listß
 ---
