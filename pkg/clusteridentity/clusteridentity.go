@@ -99,8 +99,8 @@ func (a *ClusterIdentityAllocator) updateConfigMapIfNeeded() error {
 // called asynchronously in its own goroutine, and will keep retrying in case of error, using an
 // exponential backoff mechanism.
 func (a *ClusterIdentityAllocator) Run(stopCh <-chan struct{}) {
-	// exponential backoff, starting at 100ms with a factor of 2. A "steps" value of 10 means we
-	// will increase the backoff duration at most 10 times, so the max duration is (100ms * //
+	// Exponential backoff, starting at 100ms with a factor of 2. A "steps" value of 8 means we
+	// will increase the backoff duration at most 8 times, so the max duration is (100ms * //
 	// 2^8), which is about 25s.
 	retry := wait.Backoff{
 		Steps:    8,
