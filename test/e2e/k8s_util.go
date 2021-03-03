@@ -207,7 +207,7 @@ func (k *KubernetesUtils) CreateOrUpdateDeployment(ns, deploymentName string, re
 	}
 
 	log.Debugf("Unable to create deployment %s in ns %s, let's try update instead", deployment.Name, ns)
-	d, err = k.clientset.AppsV1().Deployments(ns).Update(context.TODO(), d, metav1.UpdateOptions{})
+	d, err = k.clientset.AppsV1().Deployments(ns).Update(context.TODO(), deployment, metav1.UpdateOptions{})
 	if err != nil {
 		log.Debugf("Unable to update deployment %s in ns %s: %s", deployment.Name, ns, err)
 	}
