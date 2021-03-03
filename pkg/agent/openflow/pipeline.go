@@ -230,8 +230,9 @@ const (
 	hairpinMark   = 0b1
 	// macRewriteMark indicates the destination and source MACs of the
 	// packet should be rewritten in the l3ForwardingTable.
-	macRewriteMark  = 0b1
-	cnpNotAllowMark = 0b1
+	macRewriteMark = 0b1
+	// cnpDenyMark indicates the packet is denied(Drop/Reject).
+	cnpDenyMark = 0b1
 
 	// gatewayCTMark is used to to mark connections initiated through the host gateway interface
 	// (i.e. for which the first packet of the connection was received through the gateway).
@@ -274,8 +275,10 @@ var (
 	hairpinMarkRange = binding.Range{18, 18}
 	// macRewriteMarkRange takes the 19th bit of register marksReg to indicate
 	// if the packet's MAC addresses need to be rewritten. Its value is 0x1 if yes.
-	macRewriteMarkRange  = binding.Range{19, 19}
-	cnpNotAllowMarkRange = binding.Range{20, 20}
+	macRewriteMarkRange = binding.Range{19, 19}
+	// cnpDenyMarkRange takes the 20th bit of register marksReg to indicate
+	// if the packet is denied(Drop/Reject). Its value is 0x1 if yes.
+	cnpDenyMarkRange = binding.Range{20, 20}
 	// APDispositionMarkRange takes the 21 to 22 bits of register marksReg to indicate
 	// disposition of Antrea Policy. It could have more bits to support more disposition
 	// that Antrea policy support in the future.
@@ -1278,13 +1281,13 @@ func (c *client) allowRulesMetricFlows(conjunctionID uint32, ingress bool) []bin
 	return flows
 }
 
-func (c *client) notAllowRuleMetricFlow(conjunctionID uint32, ingress bool) binding.Flow {
+func (c *client) denyRuleMetricFlow(conjunctionID uint32, ingress bool) binding.Flow {
 	metricTableID := IngressMetricTable
 	if !ingress {
 		metricTableID = EgressMetricTable
 	}
 	return c.pipeline[metricTableID].BuildFlow(priorityNormal).
-		MatchRegRange(int(marksReg), cnpNotAllowMark, cnpNotAllowMarkRange).
+		MatchRegRange(int(marksReg), cnpDenyMark, cnpDenyMarkRange).
 		MatchReg(int(CNPNotAllowConjIDReg), conjunctionID).
 		Action().Drop().
 		Cookie(c.cookieAllocator.Request(cookie.Policy).Raw()).
@@ -1393,7 +1396,7 @@ func (c *client) conjunctionActionRejectFlow(conjunctionID uint32, tableID bindi
 		return c.pipeline[tableID].BuildFlow(ofPriority).
 			MatchConjID(conjunctionID).
 			Action().LoadRegRange(int(CNPNotAllowConjIDReg), conjunctionID, binding.Range{0, 31}).
-			Action().LoadRegRange(int(marksReg), cnpNotAllowMark, cnpNotAllowMarkRange).
+			Action().LoadRegRange(int(marksReg), cnpDenyMark, cnpDenyMarkRange).
 			Action().LoadRegRange(int(marksReg), DispositionRej, APDispositionMarkRange).
 			Action().LoadRegRange(int(marksReg), CustomReasonLogging+CustomReasonReject, CustomReasonMarkRange). // Do the rejection and enable Logging.
 			Action().SendToController(uint8(PacketInReasonNP)).
@@ -1404,7 +1407,7 @@ func (c *client) conjunctionActionRejectFlow(conjunctionID uint32, tableID bindi
 		return c.pipeline[tableID].BuildFlow(ofPriority).
 			MatchConjID(conjunctionID).
 			Action().LoadRegRange(int(CNPNotAllowConjIDReg), conjunctionID, binding.Range{0, 31}).
-			Action().LoadRegRange(int(marksReg), cnpNotAllowMark, cnpNotAllowMarkRange).
+			Action().LoadRegRange(int(marksReg), cnpDenyMark, cnpDenyMarkRange).
 			Action().LoadRegRange(int(marksReg), CustomReasonReject, CustomReasonMarkRange). // Do the rejection.
 			Action().SendToController(uint8(PacketInReasonNP)).
 			Action().GotoTable(metricTableID).
@@ -1426,7 +1429,7 @@ func (c *client) conjunctionActionDropFlow(conjunctionID uint32, tableID binding
 		return c.pipeline[tableID].BuildFlow(ofPriority).
 			MatchConjID(conjunctionID).
 			Action().LoadRegRange(int(CNPNotAllowConjIDReg), conjunctionID, binding.Range{0, 31}).
-			Action().LoadRegRange(int(marksReg), cnpNotAllowMark, cnpNotAllowMarkRange).
+			Action().LoadRegRange(int(marksReg), cnpDenyMark, cnpDenyMarkRange).
 			Action().LoadRegRange(int(marksReg), DispositionDrop, APDispositionMarkRange).    // Info for logging
 			Action().LoadRegRange(int(marksReg), CustomReasonLogging, CustomReasonMarkRange). // Enable logging
 			Action().SendToController(uint8(PacketInReasonNP)).
@@ -1437,7 +1440,7 @@ func (c *client) conjunctionActionDropFlow(conjunctionID uint32, tableID binding
 		return c.pipeline[tableID].BuildFlow(ofPriority).
 			MatchConjID(conjunctionID).
 			Action().LoadRegRange(int(CNPNotAllowConjIDReg), conjunctionID, binding.Range{0, 31}).
-			Action().LoadRegRange(int(marksReg), cnpNotAllowMark, cnpNotAllowMarkRange).
+			Action().LoadRegRange(int(marksReg), cnpDenyMark, cnpDenyMarkRange).
 			Action().GotoTable(metricTableID).
 			Cookie(c.cookieAllocator.Request(cookie.Policy).Raw()).
 			Done()

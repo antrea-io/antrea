@@ -300,7 +300,7 @@ func getTCPHeaderData(ipPkt util.Message) (TCPSrcPort uint16, TCPDstPort uint16,
 	return tcpIn.PortDst, tcpIn.PortSrc, 0, tcpIn.SeqNum + 1, nil
 }
 
-// getBasePacketOutBuilder gets a base IP packetOutBuilder with src&dst MAC, IP and OFPort settled.
+// getBasePacketOutBuilder gets a base IP packetOutBuilder with src&dst MAC, IP and OFPort set.
 func (c *Controller) getBasePacketOutBuilder(srcMAC string, dstMAC string, srcIP string, dstIP string) (binding.PacketOutBuilder, error) {
 
 	// Get the OpenFlow ports of src Pod and dst Pod.

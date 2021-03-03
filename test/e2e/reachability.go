@@ -55,10 +55,28 @@ func (pod Pod) PodName() string {
 	return podName
 }
 
+type PodConnectivityMark uint8
+
+const (
+	Connected     PodConnectivityMark = 0
+	UnknownStatus PodConnectivityMark = 1
+	Dropped       PodConnectivityMark = 2
+	Rejected      PodConnectivityMark = 3
+
+	RejectProbeReturn string = "Connection refused."
+	DropProbeReturn   string = "Operation timed out."
+)
+
 type Connectivity struct {
-	From        Pod
-	To          Pod
-	IsConnected bool
+	From         Pod
+	To           Pod
+	Connectivity PodConnectivityMark
+}
+
+type ConnectivityTable struct {
+	Items   []string
+	itemSet map[string]bool
+	Values  map[string]map[string]PodConnectivityMark
 }
 
 type TruthTable struct {
@@ -67,19 +85,19 @@ type TruthTable struct {
 	Values  map[string]map[string]bool
 }
 
-func NewTruthTable(items []string, defaultValue *bool) *TruthTable {
+func NewConnectivityTable(items []string, defaultValue *PodConnectivityMark) *ConnectivityTable {
 	itemSet := map[string]bool{}
-	values := map[string]map[string]bool{}
+	values := map[string]map[string]PodConnectivityMark{}
 	for _, from := range items {
 		itemSet[from] = true
-		values[from] = map[string]bool{}
+		values[from] = map[string]PodConnectivityMark{}
 		if defaultValue != nil {
 			for _, to := range items {
 				values[from][to] = *defaultValue
 			}
 		}
 	}
-	return &TruthTable{
+	return &ConnectivityTable{
 		Items:   items,
 		itemSet: itemSet,
 		Values:  values,
@@ -98,38 +116,38 @@ func (tt *TruthTable) IsComplete() bool {
 	return true
 }
 
-func (tt *TruthTable) Set(from string, to string, value bool) {
-	dict, ok := tt.Values[from]
+func (ct *ConnectivityTable) Set(from string, to string, value PodConnectivityMark) {
+	dict, ok := ct.Values[from]
 	if !ok {
 		panic(errors.New(fmt.Sprintf("key %s not found in map", from)))
 	}
-	if _, ok := tt.itemSet[to]; !ok {
+	if _, ok := ct.itemSet[to]; !ok {
 		panic(errors.New(fmt.Sprintf("key %s not allowed", to)))
 	}
 	dict[to] = value
 }
 
-func (tt *TruthTable) SetAllFrom(from string, value bool) {
-	dict, ok := tt.Values[from]
+func (ct *ConnectivityTable) SetAllFrom(from string, value PodConnectivityMark) {
+	dict, ok := ct.Values[from]
 	if !ok {
 		panic(errors.New(fmt.Sprintf("key %s not found in map", from)))
 	}
-	for _, to := range tt.Items {
+	for _, to := range ct.Items {
 		dict[to] = value
 	}
 }
 
-func (tt *TruthTable) SetAllTo(to string, value bool) {
-	if _, ok := tt.itemSet[to]; !ok {
+func (ct *ConnectivityTable) SetAllTo(to string, value PodConnectivityMark) {
+	if _, ok := ct.itemSet[to]; !ok {
 		panic(errors.New(fmt.Sprintf("key %s not found", to)))
 	}
-	for _, from := range tt.Items {
-		tt.Values[from][to] = value
+	for _, from := range ct.Items {
+		ct.Values[from][to] = value
 	}
 }
 
-func (tt *TruthTable) Get(from string, to string) bool {
-	dict, ok := tt.Values[from]
+func (ct *ConnectivityTable) Get(from string, to string) PodConnectivityMark {
+	dict, ok := ct.Values[from]
 	if !ok {
 		panic(errors.New(fmt.Sprintf("key %s not found in map", from)))
 	}
@@ -140,13 +158,13 @@ func (tt *TruthTable) Get(from string, to string) bool {
 	return val
 }
 
-func (tt *TruthTable) Compare(other *TruthTable) *TruthTable {
+func (ct *ConnectivityTable) Compare(other *ConnectivityTable) *TruthTable {
 	// TODO set equality
-	//if tt.itemSet != other.itemSet {
+	// if tt.itemSet != other.itemSet {
 	//	panic()
-	//}
+	// }
 	values := map[string]map[string]bool{}
-	for from, dict := range tt.Values {
+	for from, dict := range ct.Values {
 		values[from] = map[string]bool{}
 		for to, val := range dict {
 			values[from][to] = val == other.Values[from][to] // TODO other.Get(from, to) ?
@@ -154,10 +172,24 @@ func (tt *TruthTable) Compare(other *TruthTable) *TruthTable {
 	}
 	// TODO check for equality from both sides
 	return &TruthTable{
-		Items:   tt.Items,
-		itemSet: tt.itemSet,
+		Items:   ct.Items,
+		itemSet: ct.itemSet,
 		Values:  values,
 	}
+}
+
+func (ct *ConnectivityTable) PrettyPrint(indent string) string {
+	header := indent + strings.Join(append([]string{"-"}, ct.Items...), "\t")
+	lines := []string{header}
+	for _, from := range ct.Items {
+		line := []string{from}
+		for _, to := range ct.Items {
+			val := fmt.Sprintf("%d", ct.Values[from][to])
+			line = append(line, val)
+		}
+		lines = append(lines, indent+strings.Join(line, "\t"))
+	}
+	return strings.Join(lines, "\n")
 }
 
 func (tt *TruthTable) PrettyPrint(indent string) string {
@@ -178,19 +210,19 @@ func (tt *TruthTable) PrettyPrint(indent string) string {
 }
 
 type Reachability struct {
-	Expected *TruthTable
-	Observed *TruthTable
+	Expected *ConnectivityTable
+	Observed *ConnectivityTable
 	Pods     []Pod
 }
 
-func NewReachability(pods []Pod, defaultExpectation bool) *Reachability {
+func NewReachability(pods []Pod, defaultExpectation PodConnectivityMark) *Reachability {
 	items := []string{}
 	for _, pod := range pods {
 		items = append(items, string(pod))
 	}
 	r := &Reachability{
-		Expected: NewTruthTable(items, &defaultExpectation),
-		Observed: NewTruthTable(items, nil),
+		Expected: NewConnectivityTable(items, &defaultExpectation),
+		Observed: NewConnectivityTable(items, nil),
 		Pods:     pods,
 	}
 	return r
@@ -202,42 +234,42 @@ func (r *Reachability) ExpectConn(spec *Connectivity) {
 		panic("at most one of From and To may be empty, but both are empty")
 	}
 	if spec.From == "" {
-		r.ExpectAllIngress(spec.To, spec.IsConnected)
+		r.ExpectAllIngress(spec.To, spec.Connectivity)
 	} else if spec.To == "" {
-		r.ExpectAllEgress(spec.From, spec.IsConnected)
+		r.ExpectAllEgress(spec.From, spec.Connectivity)
 	} else {
-		r.Expect(spec.From, spec.To, spec.IsConnected)
+		r.Expect(spec.From, spec.To, spec.Connectivity)
 	}
 }
 
-func (r *Reachability) Expect(pod1 Pod, pod2 Pod, isConnected bool) {
-	r.Expected.Set(string(pod1), string(pod2), isConnected)
+func (r *Reachability) Expect(pod1 Pod, pod2 Pod, connectivity PodConnectivityMark) {
+	r.Expected.Set(string(pod1), string(pod2), connectivity)
 }
 
-func (r *Reachability) ExpectSelf(allPods []Pod, isConnected bool) {
+func (r *Reachability) ExpectSelf(allPods []Pod, connectivity PodConnectivityMark) {
 	for _, p := range allPods {
-		r.Expected.Set(string(p), string(p), isConnected)
+		r.Expected.Set(string(p), string(p), connectivity)
 	}
 }
 
-// ExpectAllIngress defines that any traffic going into the pod will be allowed/denied (true/false)
-func (r *Reachability) ExpectAllIngress(pod Pod, connected bool) {
-	r.Expected.SetAllTo(string(pod), connected)
-	if !connected {
+// ExpectAllIngress defines that any traffic going into the pod will be allowed/dropped/rejected (0/1/2)
+func (r *Reachability) ExpectAllIngress(pod Pod, connectivity PodConnectivityMark) {
+	r.Expected.SetAllTo(string(pod), connectivity)
+	if connectivity != Connected {
 		log.Infof("Denying all traffic *to* %s", pod)
 	}
 }
 
-// ExpectAllEgress defines that any traffic going out of the pod will be allowed/denied (true/false)
-func (r *Reachability) ExpectAllEgress(pod Pod, connected bool) {
-	r.Expected.SetAllFrom(string(pod), connected)
-	if !connected {
+// ExpectAllEgress defines that any traffic going out of the pod will be allowed/dropped/rejected (0/1/2)
+func (r *Reachability) ExpectAllEgress(pod Pod, connectivity PodConnectivityMark) {
+	r.Expected.SetAllFrom(string(pod), connectivity)
+	if connectivity != Connected {
 		log.Infof("Denying all traffic *from* %s", pod)
 	}
 }
 
-func (r *Reachability) Observe(pod1 Pod, pod2 Pod, isConnected bool) {
-	r.Observed.Set(string(pod1), string(pod2), isConnected)
+func (r *Reachability) Observe(pod1 Pod, pod2 Pod, connectivity PodConnectivityMark) {
+	r.Observed.Set(string(pod1), string(pod2), connectivity)
 }
 
 func (r *Reachability) Summary() (trueObs int, falseObs int, comparison *TruthTable) {

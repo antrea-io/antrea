@@ -94,7 +94,7 @@ type CustomProbe struct {
 	// Port on which the probe will be made.
 	Port int32
 	// Set the expected connectivity.
-	ExpectConnected bool
+	ExpectConnectivity PodConnectivityMark
 }
 
 func initialize(t *testing.T, data *TestData) {
@@ -143,7 +143,7 @@ func applyDefaultDenyToAllNamespaces(k8s *KubernetesUtils, namespaces []string) 
 		}
 	}
 	time.Sleep(networkPolicyDelay)
-	r := NewReachability(allPods, false)
+	r := NewReachability(allPods, Dropped)
 	k8s.Validate(allPods, r, p80)
 	_, wrong, _ := r.Summary()
 	if wrong != 0 {
@@ -157,7 +157,7 @@ func cleanupDefaultDenyNPs(k8s *KubernetesUtils, namespaces []string) error {
 		return err
 	}
 	time.Sleep(networkPolicyDelay * 2)
-	r := NewReachability(allPods, true)
+	r := NewReachability(allPods, Connected)
 	k8s.Validate(allPods, r, p80)
 	_, wrong, _ := r.Summary()
 	if wrong != 0 {
@@ -649,11 +649,11 @@ func testACNPAllowXBtoA(t *testing.T) {
 	builder.AddIngress(v1.ProtocolTCP, &p80, nil, nil, nil, map[string]string{"pod": "b"}, map[string]string{"ns": "x"},
 		nil, nil, nil, secv1alpha1.RuleActionAllow, "", "")
 
-	reachability := NewReachability(allPods, false)
-	reachability.Expect(Pod("x/b"), Pod("x/a"), true)
-	reachability.Expect(Pod("x/b"), Pod("y/a"), true)
-	reachability.Expect(Pod("x/b"), Pod("z/a"), true)
-	reachability.ExpectSelf(allPods, true)
+	reachability := NewReachability(allPods, Dropped)
+	reachability.Expect(Pod("x/b"), Pod("x/a"), Connected)
+	reachability.Expect(Pod("x/b"), Pod("y/a"), Connected)
+	reachability.Expect(Pod("x/b"), Pod("z/a"), Connected)
+	reachability.ExpectSelf(allPods, Connected)
 
 	testStep := []*TestStep{
 		{
@@ -683,9 +683,9 @@ func testACNPAllowXBtoYA(t *testing.T) {
 	builder.AddIngress(v1.ProtocolTCP, nil, &port81Name, nil, nil, map[string]string{"pod": "b"}, map[string]string{"ns": "x"},
 		nil, nil, nil, secv1alpha1.RuleActionAllow, "", "")
 
-	reachability := NewReachability(allPods, false)
-	reachability.Expect(Pod("x/b"), Pod("y/a"), true)
-	reachability.ExpectSelf(allPods, true)
+	reachability := NewReachability(allPods, Dropped)
+	reachability.Expect(Pod("x/b"), Pod("y/a"), Connected)
+	reachability.ExpectSelf(allPods, Connected)
 
 	testStep := []*TestStep{
 		{
@@ -723,14 +723,14 @@ func testACNPPriorityOverrideDefaultDeny(t *testing.T) {
 		nil, nil, nil, secv1alpha1.RuleActionDrop, "", "")
 
 	// Ingress from ns:z to x/a will be dropped since acnp-priority1 has higher precedence.
-	reachabilityBothACNP := NewReachability(allPods, false)
-	reachabilityBothACNP.Expect(Pod("z/a"), Pod("x/b"), true)
-	reachabilityBothACNP.Expect(Pod("z/a"), Pod("x/c"), true)
-	reachabilityBothACNP.Expect(Pod("z/b"), Pod("x/b"), true)
-	reachabilityBothACNP.Expect(Pod("z/b"), Pod("x/c"), true)
-	reachabilityBothACNP.Expect(Pod("z/c"), Pod("x/b"), true)
-	reachabilityBothACNP.Expect(Pod("z/c"), Pod("x/c"), true)
-	reachabilityBothACNP.ExpectSelf(allPods, true)
+	reachabilityBothACNP := NewReachability(allPods, Dropped)
+	reachabilityBothACNP.Expect(Pod("z/a"), Pod("x/b"), Connected)
+	reachabilityBothACNP.Expect(Pod("z/a"), Pod("x/c"), Connected)
+	reachabilityBothACNP.Expect(Pod("z/b"), Pod("x/b"), Connected)
+	reachabilityBothACNP.Expect(Pod("z/b"), Pod("x/c"), Connected)
+	reachabilityBothACNP.Expect(Pod("z/c"), Pod("x/b"), Connected)
+	reachabilityBothACNP.Expect(Pod("z/c"), Pod("x/c"), Connected)
+	reachabilityBothACNP.ExpectSelf(allPods, Connected)
 
 	testStep := []*TestStep{
 		{
@@ -760,7 +760,7 @@ func testACNPAllowNoDefaultIsolation(t *testing.T) {
 	builder.AddEgress(v1.ProtocolTCP, &p81, nil, nil, nil, nil, map[string]string{"ns": "z"},
 		nil, nil, nil, secv1alpha1.RuleActionAllow, "", "")
 
-	reachability := NewReachability(allPods, true)
+	reachability := NewReachability(allPods, Connected)
 	testStep := []*TestStep{
 		{
 			"Port 81",
@@ -787,15 +787,15 @@ func testACNPDropEgress(t *testing.T) {
 	builder.AddEgress(v1.ProtocolTCP, &p80, nil, nil, nil, nil, map[string]string{"ns": "z"},
 		nil, nil, nil, secv1alpha1.RuleActionDrop, "", "")
 
-	reachability := NewReachability(allPods, true)
-	reachability.Expect(Pod("x/a"), Pod("z/a"), false)
-	reachability.Expect(Pod("x/a"), Pod("z/b"), false)
-	reachability.Expect(Pod("x/a"), Pod("z/c"), false)
-	reachability.Expect(Pod("y/a"), Pod("z/a"), false)
-	reachability.Expect(Pod("y/a"), Pod("z/b"), false)
-	reachability.Expect(Pod("y/a"), Pod("z/c"), false)
-	reachability.Expect(Pod("z/a"), Pod("z/b"), false)
-	reachability.Expect(Pod("z/a"), Pod("z/c"), false)
+	reachability := NewReachability(allPods, Connected)
+	reachability.Expect(Pod("x/a"), Pod("z/a"), Dropped)
+	reachability.Expect(Pod("x/a"), Pod("z/b"), Dropped)
+	reachability.Expect(Pod("x/a"), Pod("z/c"), Dropped)
+	reachability.Expect(Pod("y/a"), Pod("z/a"), Dropped)
+	reachability.Expect(Pod("y/a"), Pod("z/b"), Dropped)
+	reachability.Expect(Pod("y/a"), Pod("z/c"), Dropped)
+	reachability.Expect(Pod("z/a"), Pod("z/b"), Dropped)
+	reachability.Expect(Pod("z/a"), Pod("z/c"), Dropped)
 
 	testStep := []*TestStep{
 		{
@@ -829,9 +829,9 @@ func testACNPAppliedToDenyXBtoCGWithYA(t *testing.T) {
 	builder.AddIngress(v1.ProtocolTCP, nil, &port81Name, nil, nil, map[string]string{"pod": "b"}, map[string]string{"ns": "x"},
 		nil, nil, nil, secv1alpha1.RuleActionDrop, "", "")
 
-	reachability := NewReachability(allPods, true)
-	reachability.Expect(Pod("x/b"), Pod("y/a"), false)
-	reachability.ExpectSelf(allPods, true)
+	reachability := NewReachability(allPods, Connected)
+	reachability.Expect(Pod("x/b"), Pod("y/a"), Dropped)
+	reachability.ExpectSelf(allPods, Connected)
 
 	testStep := []*TestStep{
 		{
@@ -865,9 +865,9 @@ func testACNPIngressRuleDenyCGWithXBtoYA(t *testing.T) {
 	builder.AddIngress(v1.ProtocolTCP, nil, &port81Name, nil, nil, nil, nil,
 		nil, nil, nil, secv1alpha1.RuleActionDrop, cgName, "")
 
-	reachability := NewReachability(allPods, true)
-	reachability.Expect(Pod("x/b"), Pod("y/a"), false)
-	reachability.ExpectSelf(allPods, true)
+	reachability := NewReachability(allPods, Connected)
+	reachability.Expect(Pod("x/b"), Pod("y/a"), Dropped)
+	reachability.ExpectSelf(allPods, Connected)
 
 	testStep := []*TestStep{
 		{
@@ -898,15 +898,15 @@ func testACNPAppliedToRuleCGWithPodsAToNsZ(t *testing.T) {
 	builder.AddEgress(v1.ProtocolTCP, &p80, nil, nil, nil, nil, map[string]string{"ns": "z"},
 		nil, nil, []ACNPAppliedToSpec{{Group: cgName}}, secv1alpha1.RuleActionDrop, "", "")
 
-	reachability := NewReachability(allPods, true)
-	reachability.Expect(Pod("x/a"), Pod("z/a"), false)
-	reachability.Expect(Pod("x/a"), Pod("z/b"), false)
-	reachability.Expect(Pod("x/a"), Pod("z/c"), false)
-	reachability.Expect(Pod("y/a"), Pod("z/a"), false)
-	reachability.Expect(Pod("y/a"), Pod("z/b"), false)
-	reachability.Expect(Pod("y/a"), Pod("z/c"), false)
-	reachability.Expect(Pod("z/a"), Pod("z/b"), false)
-	reachability.Expect(Pod("z/a"), Pod("z/c"), false)
+	reachability := NewReachability(allPods, Connected)
+	reachability.Expect(Pod("x/a"), Pod("z/a"), Dropped)
+	reachability.Expect(Pod("x/a"), Pod("z/b"), Dropped)
+	reachability.Expect(Pod("x/a"), Pod("z/c"), Dropped)
+	reachability.Expect(Pod("y/a"), Pod("z/a"), Dropped)
+	reachability.Expect(Pod("y/a"), Pod("z/b"), Dropped)
+	reachability.Expect(Pod("y/a"), Pod("z/c"), Dropped)
+	reachability.Expect(Pod("z/a"), Pod("z/b"), Dropped)
+	reachability.Expect(Pod("z/a"), Pod("z/c"), Dropped)
 
 	testStep := []*TestStep{
 		{
@@ -938,15 +938,15 @@ func testACNPEgressRulePodsAToCGWithNsZ(t *testing.T) {
 	builder.AddEgress(v1.ProtocolTCP, &p80, nil, nil, nil, nil, nil,
 		nil, nil, nil, secv1alpha1.RuleActionDrop, cgName, "")
 
-	reachability := NewReachability(allPods, true)
-	reachability.Expect(Pod("x/a"), Pod("z/a"), false)
-	reachability.Expect(Pod("x/a"), Pod("z/b"), false)
-	reachability.Expect(Pod("x/a"), Pod("z/c"), false)
-	reachability.Expect(Pod("y/a"), Pod("z/a"), false)
-	reachability.Expect(Pod("y/a"), Pod("z/b"), false)
-	reachability.Expect(Pod("y/a"), Pod("z/c"), false)
-	reachability.Expect(Pod("z/a"), Pod("z/b"), false)
-	reachability.Expect(Pod("z/a"), Pod("z/c"), false)
+	reachability := NewReachability(allPods, Connected)
+	reachability.Expect(Pod("x/a"), Pod("z/a"), Dropped)
+	reachability.Expect(Pod("x/a"), Pod("z/b"), Dropped)
+	reachability.Expect(Pod("x/a"), Pod("z/c"), Dropped)
+	reachability.Expect(Pod("y/a"), Pod("z/a"), Dropped)
+	reachability.Expect(Pod("y/a"), Pod("z/b"), Dropped)
+	reachability.Expect(Pod("y/a"), Pod("z/c"), Dropped)
+	reachability.Expect(Pod("z/a"), Pod("z/b"), Dropped)
+	reachability.Expect(Pod("z/a"), Pod("z/c"), Dropped)
 
 	testStep := []*TestStep{
 		{
@@ -981,25 +981,25 @@ func testACNPClusterGroupUpdateAppliedTo(t *testing.T) {
 	builder.AddEgress(v1.ProtocolTCP, &p80, nil, nil, nil, nil, map[string]string{"ns": "z"},
 		nil, nil, nil, secv1alpha1.RuleActionDrop, "", "")
 
-	reachability := NewReachability(allPods, true)
-	reachability.Expect(Pod("x/a"), Pod("z/a"), false)
-	reachability.Expect(Pod("x/a"), Pod("z/b"), false)
-	reachability.Expect(Pod("x/a"), Pod("z/c"), false)
-	reachability.Expect(Pod("y/a"), Pod("z/a"), false)
-	reachability.Expect(Pod("y/a"), Pod("z/b"), false)
-	reachability.Expect(Pod("y/a"), Pod("z/c"), false)
-	reachability.Expect(Pod("z/a"), Pod("z/b"), false)
-	reachability.Expect(Pod("z/a"), Pod("z/c"), false)
+	reachability := NewReachability(allPods, Connected)
+	reachability.Expect(Pod("x/a"), Pod("z/a"), Dropped)
+	reachability.Expect(Pod("x/a"), Pod("z/b"), Dropped)
+	reachability.Expect(Pod("x/a"), Pod("z/c"), Dropped)
+	reachability.Expect(Pod("y/a"), Pod("z/a"), Dropped)
+	reachability.Expect(Pod("y/a"), Pod("z/b"), Dropped)
+	reachability.Expect(Pod("y/a"), Pod("z/c"), Dropped)
+	reachability.Expect(Pod("z/a"), Pod("z/b"), Dropped)
+	reachability.Expect(Pod("z/a"), Pod("z/c"), Dropped)
 
-	updatedReachability := NewReachability(allPods, true)
-	updatedReachability.Expect(Pod("x/c"), Pod("z/a"), false)
-	updatedReachability.Expect(Pod("x/c"), Pod("z/b"), false)
-	updatedReachability.Expect(Pod("x/c"), Pod("z/c"), false)
-	updatedReachability.Expect(Pod("y/c"), Pod("z/a"), false)
-	updatedReachability.Expect(Pod("y/c"), Pod("z/b"), false)
-	updatedReachability.Expect(Pod("y/c"), Pod("z/c"), false)
-	updatedReachability.Expect(Pod("z/c"), Pod("z/a"), false)
-	updatedReachability.Expect(Pod("z/c"), Pod("z/b"), false)
+	updatedReachability := NewReachability(allPods, Connected)
+	updatedReachability.Expect(Pod("x/c"), Pod("z/a"), Dropped)
+	updatedReachability.Expect(Pod("x/c"), Pod("z/b"), Dropped)
+	updatedReachability.Expect(Pod("x/c"), Pod("z/c"), Dropped)
+	updatedReachability.Expect(Pod("y/c"), Pod("z/a"), Dropped)
+	updatedReachability.Expect(Pod("y/c"), Pod("z/b"), Dropped)
+	updatedReachability.Expect(Pod("y/c"), Pod("z/c"), Dropped)
+	updatedReachability.Expect(Pod("z/c"), Pod("z/a"), Dropped)
+	updatedReachability.Expect(Pod("z/c"), Pod("z/b"), Dropped)
 	testStep := []*TestStep{
 		{
 			"CG Pods A",
@@ -1042,25 +1042,25 @@ func testACNPClusterGroupUpdate(t *testing.T) {
 	builder.AddEgress(v1.ProtocolTCP, &p80, nil, nil, nil, nil, nil,
 		nil, nil, nil, secv1alpha1.RuleActionDrop, cgName, "")
 
-	reachability := NewReachability(allPods, true)
-	reachability.Expect(Pod("x/a"), Pod("z/a"), false)
-	reachability.Expect(Pod("x/a"), Pod("z/b"), false)
-	reachability.Expect(Pod("x/a"), Pod("z/c"), false)
-	reachability.Expect(Pod("y/a"), Pod("z/a"), false)
-	reachability.Expect(Pod("y/a"), Pod("z/b"), false)
-	reachability.Expect(Pod("y/a"), Pod("z/c"), false)
-	reachability.Expect(Pod("z/a"), Pod("z/b"), false)
-	reachability.Expect(Pod("z/a"), Pod("z/c"), false)
+	reachability := NewReachability(allPods, Connected)
+	reachability.Expect(Pod("x/a"), Pod("z/a"), Dropped)
+	reachability.Expect(Pod("x/a"), Pod("z/b"), Dropped)
+	reachability.Expect(Pod("x/a"), Pod("z/c"), Dropped)
+	reachability.Expect(Pod("y/a"), Pod("z/a"), Dropped)
+	reachability.Expect(Pod("y/a"), Pod("z/b"), Dropped)
+	reachability.Expect(Pod("y/a"), Pod("z/c"), Dropped)
+	reachability.Expect(Pod("z/a"), Pod("z/b"), Dropped)
+	reachability.Expect(Pod("z/a"), Pod("z/c"), Dropped)
 
-	updatedReachability := NewReachability(allPods, true)
-	updatedReachability.Expect(Pod("x/a"), Pod("y/a"), false)
-	updatedReachability.Expect(Pod("x/a"), Pod("y/b"), false)
-	updatedReachability.Expect(Pod("x/a"), Pod("y/c"), false)
-	updatedReachability.Expect(Pod("y/a"), Pod("y/b"), false)
-	updatedReachability.Expect(Pod("y/a"), Pod("y/c"), false)
-	updatedReachability.Expect(Pod("z/a"), Pod("y/a"), false)
-	updatedReachability.Expect(Pod("z/a"), Pod("y/b"), false)
-	updatedReachability.Expect(Pod("z/a"), Pod("y/c"), false)
+	updatedReachability := NewReachability(allPods, Connected)
+	updatedReachability.Expect(Pod("x/a"), Pod("y/a"), Dropped)
+	updatedReachability.Expect(Pod("x/a"), Pod("y/b"), Dropped)
+	updatedReachability.Expect(Pod("x/a"), Pod("y/c"), Dropped)
+	updatedReachability.Expect(Pod("y/a"), Pod("y/b"), Dropped)
+	updatedReachability.Expect(Pod("y/a"), Pod("y/c"), Dropped)
+	updatedReachability.Expect(Pod("z/a"), Pod("y/a"), Dropped)
+	updatedReachability.Expect(Pod("z/a"), Pod("y/b"), Dropped)
+	updatedReachability.Expect(Pod("z/a"), Pod("y/c"), Dropped)
 	testStep := []*TestStep{
 		{
 			"Port 80",
@@ -1109,8 +1109,8 @@ func testACNPClusterGroupAppliedToPodAdd(t *testing.T, data *TestData) {
 				Pod:    NewPod("x", "j"),
 				Labels: map[string]string{"pod": "j"},
 			},
-			ExpectConnected: false,
-			Port:            p80,
+			ExpectConnectivity: Dropped,
+			Port:               p80,
 		},
 	}
 	testStep := []*TestStep{
@@ -1153,8 +1153,8 @@ func testACNPClusterGroupRefRulePodAdd(t *testing.T, data *TestData) {
 				Pod:    NewPod("z", "k"),
 				Labels: map[string]string{"pod": "k"},
 			},
-			ExpectConnected: false,
-			Port:            p80,
+			ExpectConnectivity: Dropped,
+			Port:               p80,
 		},
 	}
 	testStep := []*TestStep{
@@ -1201,22 +1201,22 @@ func testBaselineNamespaceIsolation(t *testing.T) {
 		AddIngress(v1.ProtocolTCP, &p80, nil, nil, nil,
 			map[string]string{"pod": "a"}, map[string]string{"ns": "y"}, nil, nil)
 
-	reachability := NewReachability(allPods, true)
-	reachability.Expect(Pod("y/b"), Pod("x/a"), false)
-	reachability.Expect(Pod("y/c"), Pod("x/a"), false)
-	reachability.Expect(Pod("z/a"), Pod("x/a"), false)
-	reachability.Expect(Pod("z/b"), Pod("x/a"), false)
-	reachability.Expect(Pod("z/c"), Pod("x/a"), false)
-	reachability.Expect(Pod("y/b"), Pod("x/b"), false)
-	reachability.Expect(Pod("y/c"), Pod("x/b"), false)
-	reachability.Expect(Pod("z/a"), Pod("x/b"), false)
-	reachability.Expect(Pod("z/b"), Pod("x/b"), false)
-	reachability.Expect(Pod("z/c"), Pod("x/b"), false)
-	reachability.Expect(Pod("y/b"), Pod("x/c"), false)
-	reachability.Expect(Pod("y/c"), Pod("x/c"), false)
-	reachability.Expect(Pod("z/a"), Pod("x/c"), false)
-	reachability.Expect(Pod("z/b"), Pod("x/c"), false)
-	reachability.Expect(Pod("z/c"), Pod("x/c"), false)
+	reachability := NewReachability(allPods, Connected)
+	reachability.Expect(Pod("y/b"), Pod("x/a"), Dropped)
+	reachability.Expect(Pod("y/c"), Pod("x/a"), Dropped)
+	reachability.Expect(Pod("z/a"), Pod("x/a"), Dropped)
+	reachability.Expect(Pod("z/b"), Pod("x/a"), Dropped)
+	reachability.Expect(Pod("z/c"), Pod("x/a"), Dropped)
+	reachability.Expect(Pod("y/b"), Pod("x/b"), Dropped)
+	reachability.Expect(Pod("y/c"), Pod("x/b"), Dropped)
+	reachability.Expect(Pod("z/a"), Pod("x/b"), Dropped)
+	reachability.Expect(Pod("z/b"), Pod("x/b"), Dropped)
+	reachability.Expect(Pod("z/c"), Pod("x/b"), Dropped)
+	reachability.Expect(Pod("y/b"), Pod("x/c"), Dropped)
+	reachability.Expect(Pod("y/c"), Pod("x/c"), Dropped)
+	reachability.Expect(Pod("z/a"), Pod("x/c"), Dropped)
+	reachability.Expect(Pod("z/b"), Pod("x/c"), Dropped)
+	reachability.Expect(Pod("z/c"), Pod("x/c"), Dropped)
 
 	testStep := []*TestStep{
 		{
@@ -1267,22 +1267,22 @@ func testACNPPriorityOverride(t *testing.T) {
 	builder3.AddIngress(v1.ProtocolTCP, &p80, nil, nil, nil, nil, map[string]string{"ns": "z"},
 		nil, nil, nil, secv1alpha1.RuleActionDrop, "", "")
 
-	reachabilityTwoACNPs := NewReachability(allPods, true)
-	reachabilityTwoACNPs.Expect(Pod("z/a"), Pod("x/b"), false)
-	reachabilityTwoACNPs.Expect(Pod("z/a"), Pod("x/c"), false)
-	reachabilityTwoACNPs.Expect(Pod("z/b"), Pod("x/b"), false)
-	reachabilityTwoACNPs.Expect(Pod("z/b"), Pod("x/c"), false)
-	reachabilityTwoACNPs.Expect(Pod("z/c"), Pod("x/b"), false)
-	reachabilityTwoACNPs.Expect(Pod("z/c"), Pod("x/c"), false)
+	reachabilityTwoACNPs := NewReachability(allPods, Connected)
+	reachabilityTwoACNPs.Expect(Pod("z/a"), Pod("x/b"), Dropped)
+	reachabilityTwoACNPs.Expect(Pod("z/a"), Pod("x/c"), Dropped)
+	reachabilityTwoACNPs.Expect(Pod("z/b"), Pod("x/b"), Dropped)
+	reachabilityTwoACNPs.Expect(Pod("z/b"), Pod("x/c"), Dropped)
+	reachabilityTwoACNPs.Expect(Pod("z/c"), Pod("x/b"), Dropped)
+	reachabilityTwoACNPs.Expect(Pod("z/c"), Pod("x/c"), Dropped)
 
-	reachabilityAllACNPs := NewReachability(allPods, true)
-	reachabilityAllACNPs.Expect(Pod("z/a"), Pod("x/b"), false)
-	reachabilityAllACNPs.Expect(Pod("z/a"), Pod("x/c"), false)
-	reachabilityAllACNPs.Expect(Pod("z/b"), Pod("x/a"), false)
-	reachabilityAllACNPs.Expect(Pod("z/b"), Pod("x/b"), false)
-	reachabilityAllACNPs.Expect(Pod("z/b"), Pod("x/c"), false)
-	reachabilityAllACNPs.Expect(Pod("z/c"), Pod("x/b"), false)
-	reachabilityAllACNPs.Expect(Pod("z/c"), Pod("x/c"), false)
+	reachabilityAllACNPs := NewReachability(allPods, Connected)
+	reachabilityAllACNPs.Expect(Pod("z/a"), Pod("x/b"), Dropped)
+	reachabilityAllACNPs.Expect(Pod("z/a"), Pod("x/c"), Dropped)
+	reachabilityAllACNPs.Expect(Pod("z/b"), Pod("x/a"), Dropped)
+	reachabilityAllACNPs.Expect(Pod("z/b"), Pod("x/b"), Dropped)
+	reachabilityAllACNPs.Expect(Pod("z/b"), Pod("x/c"), Dropped)
+	reachabilityAllACNPs.Expect(Pod("z/c"), Pod("x/b"), Dropped)
+	reachabilityAllACNPs.Expect(Pod("z/c"), Pod("x/c"), Dropped)
 
 	testStepTwoACNP := []*TestStep{
 		{
@@ -1346,22 +1346,22 @@ func testACNPTierOverride(t *testing.T) {
 	builder3.AddIngress(v1.ProtocolTCP, &p80, nil, nil, nil, nil, map[string]string{"ns": "z"},
 		nil, nil, nil, secv1alpha1.RuleActionDrop, "", "")
 
-	reachabilityTwoACNPs := NewReachability(allPods, true)
-	reachabilityTwoACNPs.Expect(Pod("z/a"), Pod("x/b"), false)
-	reachabilityTwoACNPs.Expect(Pod("z/a"), Pod("x/c"), false)
-	reachabilityTwoACNPs.Expect(Pod("z/b"), Pod("x/b"), false)
-	reachabilityTwoACNPs.Expect(Pod("z/b"), Pod("x/c"), false)
-	reachabilityTwoACNPs.Expect(Pod("z/c"), Pod("x/b"), false)
-	reachabilityTwoACNPs.Expect(Pod("z/c"), Pod("x/c"), false)
+	reachabilityTwoACNPs := NewReachability(allPods, Connected)
+	reachabilityTwoACNPs.Expect(Pod("z/a"), Pod("x/b"), Dropped)
+	reachabilityTwoACNPs.Expect(Pod("z/a"), Pod("x/c"), Dropped)
+	reachabilityTwoACNPs.Expect(Pod("z/b"), Pod("x/b"), Dropped)
+	reachabilityTwoACNPs.Expect(Pod("z/b"), Pod("x/c"), Dropped)
+	reachabilityTwoACNPs.Expect(Pod("z/c"), Pod("x/b"), Dropped)
+	reachabilityTwoACNPs.Expect(Pod("z/c"), Pod("x/c"), Dropped)
 
-	reachabilityAllACNPs := NewReachability(allPods, true)
-	reachabilityAllACNPs.Expect(Pod("z/a"), Pod("x/b"), false)
-	reachabilityAllACNPs.Expect(Pod("z/a"), Pod("x/c"), false)
-	reachabilityAllACNPs.Expect(Pod("z/b"), Pod("x/a"), false)
-	reachabilityAllACNPs.Expect(Pod("z/b"), Pod("x/b"), false)
-	reachabilityAllACNPs.Expect(Pod("z/b"), Pod("x/c"), false)
-	reachabilityAllACNPs.Expect(Pod("z/c"), Pod("x/b"), false)
-	reachabilityAllACNPs.Expect(Pod("z/c"), Pod("x/c"), false)
+	reachabilityAllACNPs := NewReachability(allPods, Connected)
+	reachabilityAllACNPs.Expect(Pod("z/a"), Pod("x/b"), Dropped)
+	reachabilityAllACNPs.Expect(Pod("z/a"), Pod("x/c"), Dropped)
+	reachabilityAllACNPs.Expect(Pod("z/b"), Pod("x/a"), Dropped)
+	reachabilityAllACNPs.Expect(Pod("z/b"), Pod("x/b"), Dropped)
+	reachabilityAllACNPs.Expect(Pod("z/b"), Pod("x/c"), Dropped)
+	reachabilityAllACNPs.Expect(Pod("z/c"), Pod("x/b"), Dropped)
+	reachabilityAllACNPs.Expect(Pod("z/c"), Pod("x/c"), Dropped)
 
 	testStepTwoACNP := []*TestStep{
 		{
@@ -1419,13 +1419,13 @@ func testACNPCustomTiers(t *testing.T) {
 	builder2.AddIngress(v1.ProtocolTCP, &p80, nil, nil, nil, nil, map[string]string{"ns": "z"},
 		nil, nil, nil, secv1alpha1.RuleActionDrop, "", "")
 
-	reachabilityTwoACNPs := NewReachability(allPods, true)
-	reachabilityTwoACNPs.Expect(Pod("z/a"), Pod("x/b"), false)
-	reachabilityTwoACNPs.Expect(Pod("z/a"), Pod("x/c"), false)
-	reachabilityTwoACNPs.Expect(Pod("z/b"), Pod("x/b"), false)
-	reachabilityTwoACNPs.Expect(Pod("z/b"), Pod("x/c"), false)
-	reachabilityTwoACNPs.Expect(Pod("z/c"), Pod("x/b"), false)
-	reachabilityTwoACNPs.Expect(Pod("z/c"), Pod("x/c"), false)
+	reachabilityTwoACNPs := NewReachability(allPods, Connected)
+	reachabilityTwoACNPs.Expect(Pod("z/a"), Pod("x/b"), Dropped)
+	reachabilityTwoACNPs.Expect(Pod("z/a"), Pod("x/c"), Dropped)
+	reachabilityTwoACNPs.Expect(Pod("z/b"), Pod("x/b"), Dropped)
+	reachabilityTwoACNPs.Expect(Pod("z/b"), Pod("x/c"), Dropped)
+	reachabilityTwoACNPs.Expect(Pod("z/c"), Pod("x/b"), Dropped)
+	reachabilityTwoACNPs.Expect(Pod("z/c"), Pod("x/c"), Dropped)
 	testStepTwoACNP := []*TestStep{
 		{
 			"Two Policies in different tiers",
@@ -1467,16 +1467,16 @@ func testACNPPriorityConflictingRule(t *testing.T) {
 	builder2.AddIngress(v1.ProtocolTCP, &p80, nil, nil, nil, nil, map[string]string{"ns": "z"},
 		nil, nil, nil, secv1alpha1.RuleActionAllow, "", "")
 
-	reachabilityBothACNP := NewReachability(allPods, true)
-	reachabilityBothACNP.Expect(Pod("z/a"), Pod("x/a"), false)
-	reachabilityBothACNP.Expect(Pod("z/a"), Pod("x/b"), false)
-	reachabilityBothACNP.Expect(Pod("z/a"), Pod("x/c"), false)
-	reachabilityBothACNP.Expect(Pod("z/b"), Pod("x/a"), false)
-	reachabilityBothACNP.Expect(Pod("z/b"), Pod("x/b"), false)
-	reachabilityBothACNP.Expect(Pod("z/b"), Pod("x/c"), false)
-	reachabilityBothACNP.Expect(Pod("z/c"), Pod("x/a"), false)
-	reachabilityBothACNP.Expect(Pod("z/c"), Pod("x/b"), false)
-	reachabilityBothACNP.Expect(Pod("z/c"), Pod("x/c"), false)
+	reachabilityBothACNP := NewReachability(allPods, Connected)
+	reachabilityBothACNP.Expect(Pod("z/a"), Pod("x/a"), Dropped)
+	reachabilityBothACNP.Expect(Pod("z/a"), Pod("x/b"), Dropped)
+	reachabilityBothACNP.Expect(Pod("z/a"), Pod("x/c"), Dropped)
+	reachabilityBothACNP.Expect(Pod("z/b"), Pod("x/a"), Dropped)
+	reachabilityBothACNP.Expect(Pod("z/b"), Pod("x/b"), Dropped)
+	reachabilityBothACNP.Expect(Pod("z/b"), Pod("x/c"), Dropped)
+	reachabilityBothACNP.Expect(Pod("z/c"), Pod("x/a"), Dropped)
+	reachabilityBothACNP.Expect(Pod("z/c"), Pod("x/b"), Dropped)
+	reachabilityBothACNP.Expect(Pod("z/c"), Pod("x/c"), Dropped)
 
 	testStep := []*TestStep{
 		{
@@ -1521,16 +1521,16 @@ func testACNPRulePrioirty(t *testing.T) {
 		nil, nil, nil, secv1alpha1.RuleActionAllow, "", "")
 
 	// Only egress from pods in namespace x to namespace y should be denied
-	reachabilityBothACNP := NewReachability(allPods, true)
-	reachabilityBothACNP.Expect(Pod("x/a"), Pod("y/a"), false)
-	reachabilityBothACNP.Expect(Pod("x/b"), Pod("y/a"), false)
-	reachabilityBothACNP.Expect(Pod("x/c"), Pod("y/a"), false)
-	reachabilityBothACNP.Expect(Pod("x/a"), Pod("y/b"), false)
-	reachabilityBothACNP.Expect(Pod("x/b"), Pod("y/b"), false)
-	reachabilityBothACNP.Expect(Pod("x/c"), Pod("y/b"), false)
-	reachabilityBothACNP.Expect(Pod("x/a"), Pod("y/c"), false)
-	reachabilityBothACNP.Expect(Pod("x/b"), Pod("y/c"), false)
-	reachabilityBothACNP.Expect(Pod("x/c"), Pod("y/c"), false)
+	reachabilityBothACNP := NewReachability(allPods, Connected)
+	reachabilityBothACNP.Expect(Pod("x/a"), Pod("y/a"), Dropped)
+	reachabilityBothACNP.Expect(Pod("x/b"), Pod("y/a"), Dropped)
+	reachabilityBothACNP.Expect(Pod("x/c"), Pod("y/a"), Dropped)
+	reachabilityBothACNP.Expect(Pod("x/a"), Pod("y/b"), Dropped)
+	reachabilityBothACNP.Expect(Pod("x/b"), Pod("y/b"), Dropped)
+	reachabilityBothACNP.Expect(Pod("x/c"), Pod("y/b"), Dropped)
+	reachabilityBothACNP.Expect(Pod("x/a"), Pod("y/c"), Dropped)
+	reachabilityBothACNP.Expect(Pod("x/b"), Pod("y/c"), Dropped)
+	reachabilityBothACNP.Expect(Pod("x/c"), Pod("y/c"), Dropped)
 
 	testStep := []*TestStep{
 		{
@@ -1558,15 +1558,15 @@ func testACNPPortRange(t *testing.T) {
 	builder.AddEgress(v1.ProtocolTCP, &p8080, nil, &p8085, nil, nil, map[string]string{"ns": "z"},
 		nil, nil, nil, secv1alpha1.RuleActionDrop, "", "acnp-port-range")
 
-	reachability := NewReachability(allPods, true)
-	reachability.Expect(Pod("x/a"), Pod("z/a"), false)
-	reachability.Expect(Pod("x/a"), Pod("z/b"), false)
-	reachability.Expect(Pod("x/a"), Pod("z/c"), false)
-	reachability.Expect(Pod("y/a"), Pod("z/a"), false)
-	reachability.Expect(Pod("y/a"), Pod("z/b"), false)
-	reachability.Expect(Pod("y/a"), Pod("z/c"), false)
-	reachability.Expect(Pod("z/a"), Pod("z/b"), false)
-	reachability.Expect(Pod("z/a"), Pod("z/c"), false)
+	reachability := NewReachability(allPods, Connected)
+	reachability.Expect(Pod("x/a"), Pod("z/a"), Dropped)
+	reachability.Expect(Pod("x/a"), Pod("z/b"), Dropped)
+	reachability.Expect(Pod("x/a"), Pod("z/c"), Dropped)
+	reachability.Expect(Pod("y/a"), Pod("z/a"), Dropped)
+	reachability.Expect(Pod("y/a"), Pod("z/b"), Dropped)
+	reachability.Expect(Pod("y/a"), Pod("z/c"), Dropped)
+	reachability.Expect(Pod("z/a"), Pod("z/b"), Dropped)
+	reachability.Expect(Pod("z/a"), Pod("z/c"), Dropped)
 
 	var testSteps []*TestStep
 	testSteps = append(testSteps, &TestStep{
@@ -1585,24 +1585,24 @@ func testACNPPortRange(t *testing.T) {
 	executeTests(t, testCase)
 }
 
-// testACNPRejectIngress tests that a ACNP is able to reject ingress traffic from namespace Z to pods labelled A.
-func testACNPRejectIngress(t *testing.T) {
+// testACNPRejectEgress tests that a ACNP is able to reject egress traffic from pods labelled A to namespace Z.
+func testACNPRejectEgress(t *testing.T) {
 	builder := &ClusterNetworkPolicySpecBuilder{}
-	builder = builder.SetName("acnp-deny-a-from-z-ingress").
+	builder = builder.SetName("acnp-reject-a-to-z-egress").
 		SetPriority(1.0).
 		SetAppliedToGroup([]ACNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}}})
 	builder.AddEgress(v1.ProtocolTCP, &p80, nil, nil, nil, nil, map[string]string{"ns": "z"},
 		nil, nil, nil, secv1alpha1.RuleActionReject, "", "")
 
-	reachability := NewReachability(allPods, true)
-	reachability.Expect(Pod("x/a"), Pod("z/a"), false)
-	reachability.Expect(Pod("x/a"), Pod("z/b"), false)
-	reachability.Expect(Pod("x/a"), Pod("z/c"), false)
-	reachability.Expect(Pod("y/a"), Pod("z/a"), false)
-	reachability.Expect(Pod("y/a"), Pod("z/b"), false)
-	reachability.Expect(Pod("y/a"), Pod("z/c"), false)
-	reachability.Expect(Pod("z/a"), Pod("z/b"), false)
-	reachability.Expect(Pod("z/a"), Pod("z/c"), false)
+	reachability := NewReachability(allPods, Connected)
+	reachability.Expect(Pod("x/a"), Pod("z/a"), Rejected)
+	reachability.Expect(Pod("x/a"), Pod("z/b"), Rejected)
+	reachability.Expect(Pod("x/a"), Pod("z/c"), Rejected)
+	reachability.Expect(Pod("y/a"), Pod("z/a"), Rejected)
+	reachability.Expect(Pod("y/a"), Pod("z/b"), Rejected)
+	reachability.Expect(Pod("y/a"), Pod("z/c"), Rejected)
+	reachability.Expect(Pod("z/a"), Pod("z/b"), Rejected)
+	reachability.Expect(Pod("z/a"), Pod("z/c"), Rejected)
 
 	testStep := []*TestStep{
 		{
@@ -1616,7 +1616,7 @@ func testACNPRejectIngress(t *testing.T) {
 		},
 	}
 	testCase := []*TestCase{
-		{"ACNP Reject Ingress From NS:z to All Pod:a", testStep},
+		{"ACNP Reject egress From All Pod:a to NS:z", testStep},
 	}
 	executeTests(t, testCase)
 }
@@ -1630,8 +1630,8 @@ func testANPPortRange(t *testing.T) {
 	builder.AddEgress(v1.ProtocolTCP, &p8080, nil, &p8085, nil, map[string]string{"pod": "c"}, map[string]string{"ns": "x"},
 		nil, nil, nil, secv1alpha1.RuleActionDrop, "anp-port-range")
 
-	reachability := NewReachability(allPods, true)
-	reachability.Expect(Pod("y/b"), Pod("x/c"), false)
+	reachability := NewReachability(allPods, Connected)
+	reachability.Expect(Pod("y/b"), Pod("x/c"), Dropped)
 
 	var testSteps []*TestStep
 	testSteps = append(testSteps, &TestStep{
@@ -1660,8 +1660,8 @@ func testANPBasic(t *testing.T) {
 	builder.AddIngress(v1.ProtocolTCP, &p80, nil, nil, nil, map[string]string{"pod": "b"}, map[string]string{"ns": "x"},
 		nil, nil, nil, secv1alpha1.RuleActionDrop, "")
 
-	reachability := NewReachability(allPods, true)
-	reachability.Expect(Pod("x/b"), Pod("y/a"), false)
+	reachability := NewReachability(allPods, Connected)
+	reachability.Expect(Pod("x/b"), Pod("y/a"), Dropped)
 	testStep := []*TestStep{
 		{
 			"Port 80",
@@ -1752,9 +1752,9 @@ func testAppliedToPerRule(t *testing.T) {
 	builder.AddIngress(v1.ProtocolTCP, &p80, nil, nil, nil, map[string]string{"pod": "b"}, map[string]string{"ns": "z"},
 		nil, nil, []ANPAppliedToSpec{anpATGrp2}, secv1alpha1.RuleActionDrop, "")
 
-	reachability := NewReachability(allPods, true)
-	reachability.Expect(Pod("x/b"), Pod("y/a"), false)
-	reachability.Expect(Pod("z/b"), Pod("y/b"), false)
+	reachability := NewReachability(allPods, Connected)
+	reachability.Expect(Pod("x/b"), Pod("y/a"), Dropped)
+	reachability.Expect(Pod("z/b"), Pod("y/b"), Dropped)
 	testStep := []*TestStep{
 		{
 			"Port 80",
@@ -1778,11 +1778,11 @@ func testAppliedToPerRule(t *testing.T) {
 	builder2.AddIngress(v1.ProtocolTCP, &p80, nil, nil, nil, map[string]string{"pod": "b"}, map[string]string{"ns": "z"},
 		nil, nil, []ACNPAppliedToSpec{cnpATGrp2}, secv1alpha1.RuleActionDrop, "", "")
 
-	reachability2 := NewReachability(allPods, true)
-	reachability2.Expect(Pod("x/b"), Pod("x/a"), false)
-	reachability2.Expect(Pod("x/b"), Pod("y/a"), false)
-	reachability2.Expect(Pod("x/b"), Pod("z/a"), false)
-	reachability2.Expect(Pod("z/b"), Pod("y/b"), false)
+	reachability2 := NewReachability(allPods, Connected)
+	reachability2.Expect(Pod("x/b"), Pod("x/a"), Dropped)
+	reachability2.Expect(Pod("x/b"), Pod("y/a"), Dropped)
+	reachability2.Expect(Pod("x/b"), Pod("z/a"), Dropped)
+	reachability2.Expect(Pod("z/b"), Pod("y/b"), Dropped)
 	testStep2 := []*TestStep{
 		{
 			"Port 80",
@@ -1934,12 +1934,12 @@ func doProbe(t *testing.T, data *TestData, p *CustomProbe) {
 	_, _, cleanupFunc = createAndWaitForPodWithLabels(t, data, data.createServerPodWithLabels, p.DestPod.Pod.PodName(), p.DestPod.Pod.Namespace(), p.Port, p.DestPod.Labels)
 	defer cleanupFunc()
 	log.Tracef("Probing: %s -> %s", p.SourcePod.Pod.PodName(), p.DestPod.Pod.PodName())
-	connected, err := k8sUtils.Probe(p.SourcePod.Pod.Namespace(), p.SourcePod.Pod.PodName(), p.DestPod.Pod.Namespace(), p.DestPod.Pod.PodName(), p.Port)
+	connectivity, err := k8sUtils.Probe(p.SourcePod.Pod.Namespace(), p.SourcePod.Pod.PodName(), p.DestPod.Pod.Namespace(), p.DestPod.Pod.PodName(), p.Port)
 	if err != nil {
 		t.Errorf("failure -- could not complete probe: %v", err)
 	}
-	if connected != p.ExpectConnected {
-		t.Errorf("failure -- wrong results for custom probe: Source %s/%s --> Dest %s/%s connected: %v, expected: %v", p.SourcePod.Pod.Namespace(), p.SourcePod.Pod.PodName(), p.DestPod.Pod.Namespace(), p.DestPod.Pod.PodName(), connected, p.ExpectConnected)
+	if connectivity != p.ExpectConnectivity {
+		t.Errorf("failure -- wrong results for custom probe: Source %s/%s --> Dest %s/%s connectivity: %v, expected: %v", p.SourcePod.Pod.Namespace(), p.SourcePod.Pod.PodName(), p.DestPod.Pod.Namespace(), p.DestPod.Pod.PodName(), connectivity, p.ExpectConnectivity)
 	}
 }
 
@@ -2123,7 +2123,7 @@ func TestAntreaPolicy(t *testing.T) {
 		t.Run("Case=ACNPAllowNoDefaultIsolation", func(t *testing.T) { testACNPAllowNoDefaultIsolation(t) })
 		t.Run("Case=ACNPDropEgress", func(t *testing.T) { testACNPDropEgress(t) })
 		t.Run("Case=ACNPPortRange", func(t *testing.T) { testACNPPortRange(t) })
-		t.Run("Case=ACNPACNPRejectIngress", func(t *testing.T) { testACNPRejectIngress(t) })
+		t.Run("Case=ACNPACNPRejectEgress", func(t *testing.T) { testACNPRejectEgress(t) })
 		t.Run("Case=ACNPBaselinePolicy", func(t *testing.T) { testBaselineNamespaceIsolation(t) })
 		t.Run("Case=ACNPPrioirtyOverride", func(t *testing.T) { testACNPPriorityOverride(t) })
 		t.Run("Case=ACNPTierOverride", func(t *testing.T) { testACNPTierOverride(t) })

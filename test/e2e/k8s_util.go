@@ -82,22 +82,22 @@ func (k *KubernetesUtils) GetPodsByLabel(ns string, key string, val string) ([]v
 
 // Probe execs into a Pod and checks its connectivity to another Pod.  Of course it assumes
 // that the target Pod is serving on the input port, and also that ncat is installed.
-func (k *KubernetesUtils) Probe(ns1, pod1, ns2, pod2 string, port int32) (bool, error) {
+func (k *KubernetesUtils) Probe(ns1, pod1, ns2, pod2 string, port int32) (PodConnectivityMark, error) {
 	fromPods, err := k.GetPodsByLabel(ns1, "pod", pod1)
 	if err != nil {
-		return false, fmt.Errorf("unable to get Pods from Namespace %s: %v", ns1, err)
+		return UnknownStatus, fmt.Errorf("unable to get Pods from Namespace %s: %v", ns1, err)
 	}
 	if len(fromPods) == 0 {
-		return false, fmt.Errorf("no Pod of label pod=%s in Namespace %s found", pod1, ns1)
+		return UnknownStatus, fmt.Errorf("no Pod of label pod=%s in Namespace %s found", pod1, ns1)
 	}
 	fromPod := fromPods[0]
 
 	toPods, err := k.GetPodsByLabel(ns2, "pod", pod2)
 	if err != nil {
-		return false, fmt.Errorf("unable to get Pods from Namespace %s: %v", ns2, err)
+		return UnknownStatus, fmt.Errorf("unable to get Pods from Namespace %s: %v", ns2, err)
 	}
 	if len(toPods) == 0 {
-		return false, fmt.Errorf("no Pod of label pod=%s in Namespace %s found", pod2, ns2)
+		return UnknownStatus, fmt.Errorf("no Pod of label pod=%s in Namespace %s found", pod2, ns2)
 	}
 	toPod := toPods[0]
 	toIP := toPod.Status.PodIP
@@ -110,7 +110,7 @@ func (k *KubernetesUtils) Probe(ns1, pod1, ns2, pod2 string, port int32) (bool, 
 		"/bin/sh",
 		"-c",
 		// 3 tries, timeout is 1 second
-		fmt.Sprintf("for i in $(seq 1 3); do ncat -vz -w 1 %s %d && exit 0 || true; done; exit 1", toIP, port),
+		fmt.Sprintf("for i in $(seq 1 3); do ncat -vz -w 3 %s %d && exit 0 || true; done; exit 1", toIP, port),
 	}
 	// HACK: inferring container name as c80, c81, etc, for simplicity.
 	containerName := fmt.Sprintf("c%v", port)
@@ -120,9 +120,14 @@ func (k *KubernetesUtils) Probe(ns1, pod1, ns2, pod2 string, port int32) (bool, 
 		// log this error as trace since may be an expected failure
 		log.Tracef("%s/%s -> %s/%s: error when running command: err - %v /// stdout - %s /// stderr - %s", ns1, pod1, ns2, pod2, err, stdout, stderr)
 		// do not return an error
-		return false, nil
+		if strings.Contains(stderr, RejectProbeReturn) {
+			return Rejected, nil
+		} else if strings.Contains(stderr, DropProbeReturn) {
+			return Dropped, nil
+		}
+		return UnknownStatus, nil
 	}
-	return true, nil
+	return Connected, nil
 }
 
 // CreateOrUpdateNamespace is a convenience function for idempotent setup of Namespaces
@@ -555,7 +560,7 @@ func (k *KubernetesUtils) waitForHTTPServers(allPods []Pod) error {
 	log.Infof("waiting for HTTP servers (ports 80, 81 and 8080:8085) to become ready")
 	var wrong int
 	for i := 0; i < maxTries; i++ {
-		reachability := NewReachability(allPods, true)
+		reachability := NewReachability(allPods, Connected)
 		k.Validate(allPods, reachability, 80)
 		k.Validate(allPods, reachability, 81)
 		for j := 8080; j < 8086; j++ {
@@ -574,18 +579,18 @@ func (k *KubernetesUtils) waitForHTTPServers(allPods []Pod) error {
 
 func (k *KubernetesUtils) Validate(allPods []Pod, reachability *Reachability, port int32) {
 	type probeResult struct {
-		podFrom   Pod
-		podTo     Pod
-		connected bool
-		err       error
+		podFrom      Pod
+		podTo        Pod
+		connectivity PodConnectivityMark
+		err          error
 	}
 	numProbes := len(allPods) * len(allPods)
 	resultsCh := make(chan *probeResult, numProbes)
 	// TODO: find better metrics, this is only for POC.
 	oneProbe := func(podFrom, podTo Pod) {
 		log.Tracef("Probing: %s -> %s", podFrom, podTo)
-		connected, err := k.Probe(podFrom.Namespace(), podFrom.PodName(), podTo.Namespace(), podTo.PodName(), port)
-		resultsCh <- &probeResult{podFrom, podTo, connected, err}
+		connectivity, err := k.Probe(podFrom.Namespace(), podFrom.PodName(), podTo.Namespace(), podTo.PodName(), port)
+		resultsCh <- &probeResult{podFrom, podTo, connectivity, err}
 	}
 	for _, pod1 := range allPods {
 		for _, pod2 := range allPods {
@@ -597,8 +602,8 @@ func (k *KubernetesUtils) Validate(allPods []Pod, reachability *Reachability, po
 		if r.err != nil {
 			log.Errorf("unable to perform probe %s -> %s: %v", r.podFrom, r.podTo, r.err)
 		}
-		reachability.Observe(r.podFrom, r.podTo, r.connected)
-		if !r.connected && reachability.Expected.Get(r.podFrom.String(), r.podTo.String()) {
+		reachability.Observe(r.podFrom, r.podTo, r.connectivity)
+		if r.connectivity != Connected && reachability.Expected.Get(r.podFrom.String(), r.podTo.String()) == Connected {
 			log.Warnf("FAILED CONNECTION FOR ALLOWED PODS %s -> %s !!!! ", r.podFrom, r.podTo)
 		}
 	}
