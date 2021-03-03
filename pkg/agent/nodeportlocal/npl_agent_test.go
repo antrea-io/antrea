@@ -259,6 +259,24 @@ func TestSvcNamespaceUpdate(t *testing.T) {
 	assert.False(t, testData.portTable.RuleExists(defaultPodIP, defaultPort))
 }
 
+// TestSvcTypeUpdate updates Service type from ClusterIP to NodePort
+// and checks whether Pod annotations are removed.
+func TestSvcTypeUpdate(t *testing.T) {
+	testData, testSvc, testPod := setUpWithTestServiceAndPod(t)
+	defer testData.tearDown()
+
+	// Update Service type to NodePort.
+	testSvc.Spec.Type = "NodePort"
+	_, err := testData.k8sClient.CoreV1().Services(defaultNS).Update(context.TODO(), testSvc, metav1.UpdateOptions{})
+	require.NoError(t, err, "Service update failed")
+	t.Logf("successfully updated Service: %v", testSvc)
+
+	// Check that annotation and the rule are removed.
+	_, err = testData.pollForPodAnnotation(testPod.Name, false)
+	require.NoError(t, err, "Poll for annotation check failed")
+	assert.False(t, testData.portTable.RuleExists(defaultPodIP, defaultPort))
+}
+
 // TestSvcUpdateAnnotation updates the Service spec to disabled NPL. It then verifies that the Pod's
 // NPL annotation is removed and that the port table is updated.
 func TestSvcUpdateAnnotation(t *testing.T) {
