@@ -130,7 +130,7 @@ func generateSelfSignedCertificate(secureServing *options.SecureServingOptionsWi
 	secureServing.ServerCert.CertDirectory = selfSignedCertDir
 	secureServing.ServerCert.PairName = "antrea-controller"
 
-	if err := secureServing.MaybeDefaultWithSelfSignedCerts("antrea", GetAntreaServerNames(), []net.IP{net.ParseIP("127.0.0.1")}); err != nil {
+	if err := secureServing.MaybeDefaultWithSelfSignedCerts("antrea", GetAntreaServerNames(), []net.IP{net.ParseIP("127.0.0.1"), net.IPv6loopback}); err != nil {
 		return nil, fmt.Errorf("error creating self-signed certificates: %v", err)
 	}
 
@@ -192,7 +192,7 @@ func rotateSelfSignedCertificates(c *CACertController, secureServing *options.Se
 }
 
 func generateNewServingCertificate(secureServing *options.SecureServingOptionsWithLoopback) error {
-	cert, key, err := certutil.GenerateSelfSignedCertKeyWithFixtures("antrea", []net.IP{net.ParseIP("127.0.0.1")}, GetAntreaServerNames(), secureServing.ServerCert.FixtureDirectory)
+	cert, key, err := certutil.GenerateSelfSignedCertKeyWithFixtures("antrea", []net.IP{net.ParseIP("127.0.0.1"), net.IPv6loopback}, GetAntreaServerNames(), secureServing.ServerCert.FixtureDirectory)
 	if err != nil {
 		return fmt.Errorf("unable to generate self signed cert: %v", err)
 	}
