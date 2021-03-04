@@ -88,7 +88,7 @@ func newTestStatusController(initialObjects ...runtime.Object) (*StatusControlle
 	return statusController, antreaClientset, antreaInformerFactory, networkPolicyStore, networkPolicyControl
 }
 
-func newNetworkPolicy(name string, generation int64, nodes []string, ref *controlplane.NetworkPolicyReference) *types.NetworkPolicy {
+func newInternalNetworkPolicy(name string, generation int64, nodes []string, ref *controlplane.NetworkPolicyReference) *types.NetworkPolicy {
 	return &types.NetworkPolicy{
 		SpanMeta:   types.SpanMeta{NodeNames: sets.NewString(nodes...)},
 		Generation: generation,
@@ -156,8 +156,8 @@ func TestCreateAntreaNetworkPolicy(t *testing.T) {
 		{
 			name: "no realization status",
 			networkPolicy: []*types.NetworkPolicy{
-				newNetworkPolicy("anp1", 1, []string{"node1", "node2"}, newAntreaNetworkPolicyReference("ns1", "anp1")),
-				newNetworkPolicy("cnp1", 1, []string{"node1", "node2"}, newAntreaClusterNetworkPolicyReference("cnp1")),
+				newInternalNetworkPolicy("anp1", 1, []string{"node1", "node2"}, newAntreaNetworkPolicyReference("ns1", "anp1")),
+				newInternalNetworkPolicy("cnp1", 1, []string{"node1", "node2"}, newAntreaClusterNetworkPolicyReference("cnp1")),
 			},
 			expectedANPStatus: &secv1alpha1.NetworkPolicyStatus{
 				Phase:                secv1alpha1.NetworkPolicyRealizing,
@@ -175,8 +175,8 @@ func TestCreateAntreaNetworkPolicy(t *testing.T) {
 		{
 			name: "partially realized",
 			networkPolicy: []*types.NetworkPolicy{
-				newNetworkPolicy("anp1", 2, []string{"node1", "node2"}, newAntreaNetworkPolicyReference("ns1", "anp1")),
-				newNetworkPolicy("cnp1", 3, []string{"node1", "node2"}, newAntreaClusterNetworkPolicyReference("cnp1")),
+				newInternalNetworkPolicy("anp1", 2, []string{"node1", "node2"}, newAntreaNetworkPolicyReference("ns1", "anp1")),
+				newInternalNetworkPolicy("cnp1", 3, []string{"node1", "node2"}, newAntreaClusterNetworkPolicyReference("cnp1")),
 			},
 			collectedNetworkPolicyStatus: []*controlplane.NetworkPolicyStatus{
 				newNetworkPolicyStatus("anp1", "node1", 1),
@@ -200,8 +200,8 @@ func TestCreateAntreaNetworkPolicy(t *testing.T) {
 		{
 			name: "entirely realized",
 			networkPolicy: []*types.NetworkPolicy{
-				newNetworkPolicy("anp1", 3, []string{"node1", "node2"}, newAntreaNetworkPolicyReference("ns1", "anp1")),
-				newNetworkPolicy("cnp1", 4, []string{"node1", "node2"}, newAntreaClusterNetworkPolicyReference("cnp1")),
+				newInternalNetworkPolicy("anp1", 3, []string{"node1", "node2"}, newAntreaNetworkPolicyReference("ns1", "anp1")),
+				newInternalNetworkPolicy("cnp1", 4, []string{"node1", "node2"}, newAntreaClusterNetworkPolicyReference("cnp1")),
 			},
 			collectedNetworkPolicyStatus: []*controlplane.NetworkPolicyStatus{
 				newNetworkPolicyStatus("anp1", "node1", 3),
@@ -251,8 +251,8 @@ func TestCreateAntreaNetworkPolicy(t *testing.T) {
 }
 
 func TestUpdateAntreaNetworkPolicy(t *testing.T) {
-	anp1 := newNetworkPolicy("anp1", 1, []string{"node1", "node2"}, newAntreaNetworkPolicyReference("ns1", "anp1"))
-	cnp1 := newNetworkPolicy("cnp1", 2, []string{"node3", "node4", "node5"}, newAntreaClusterNetworkPolicyReference("cnp1"))
+	anp1 := newInternalNetworkPolicy("anp1", 1, []string{"node1", "node2"}, newAntreaNetworkPolicyReference("ns1", "anp1"))
+	cnp1 := newInternalNetworkPolicy("cnp1", 2, []string{"node3", "node4", "node5"}, newAntreaClusterNetworkPolicyReference("cnp1"))
 	statusController, _, antreaInformerFactory, networkPolicyStore, networkPolicyControl := newTestStatusController(toAntreaNetworkPolicy(anp1), toAntreaNetworkPolicy(cnp1))
 	stopCh := make(chan struct{})
 	defer close(stopCh)
@@ -281,8 +281,8 @@ func TestUpdateAntreaNetworkPolicy(t *testing.T) {
 		DesiredNodesRealized: 3,
 	}, networkPolicyControl.getAntreaClusterNetworkPolicyStatus())
 
-	anp1Updated := newNetworkPolicy("anp1", 2, []string{"node1", "node2", "node3"}, newAntreaNetworkPolicyReference("ns1", "anp1"))
-	cnp1Updated := newNetworkPolicy("cnp1", 3, []string{"node4", "node5"}, newAntreaClusterNetworkPolicyReference("cnp1"))
+	anp1Updated := newInternalNetworkPolicy("anp1", 2, []string{"node1", "node2", "node3"}, newAntreaNetworkPolicyReference("ns1", "anp1"))
+	cnp1Updated := newInternalNetworkPolicy("cnp1", 3, []string{"node4", "node5"}, newAntreaClusterNetworkPolicyReference("cnp1"))
 	networkPolicyStore.Update(anp1Updated)
 	networkPolicyStore.Update(cnp1Updated)
 	// TODO: Use a determinate mechanism.
@@ -302,7 +302,7 @@ func TestUpdateAntreaNetworkPolicy(t *testing.T) {
 }
 
 func TestDeleteAntreaNetworkPolicy(t *testing.T) {
-	initialNetworkPolicy := newNetworkPolicy("anp1", 1, []string{"node1", "node2"}, newAntreaNetworkPolicyReference("ns1", "anp1"))
+	initialNetworkPolicy := newInternalNetworkPolicy("anp1", 1, []string{"node1", "node2"}, newAntreaNetworkPolicyReference("ns1", "anp1"))
 	initialANP := toAntreaNetworkPolicy(initialNetworkPolicy)
 	statusController, _, antreaInformerFactory, networkPolicyStore, _ := newTestStatusController(initialANP)
 	stopCh := make(chan struct{})
@@ -334,7 +334,7 @@ func BenchmarkSyncHandler(b *testing.B) {
 	for i := 0; i < nodeNum; i++ {
 		nodes = append(nodes, fmt.Sprintf("node%d", i))
 	}
-	networkPolicy := newNetworkPolicy("anp1", 1, nodes, newAntreaNetworkPolicyReference("ns1", "anp1"))
+	networkPolicy := newInternalNetworkPolicy("anp1", 1, nodes, newAntreaNetworkPolicyReference("ns1", "anp1"))
 	statusController, _, _, networkPolicyStore, _ := newTestStatusController()
 
 	networkPolicyStore.Create(networkPolicy)

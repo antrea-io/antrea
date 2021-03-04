@@ -59,6 +59,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy/store"
 	antreatypes "github.com/vmware-tanzu/antrea/pkg/controller/types"
 	"github.com/vmware-tanzu/antrea/pkg/features"
+	utilsets "github.com/vmware-tanzu/antrea/pkg/util/sets"
 )
 
 const (
@@ -1416,7 +1417,7 @@ func (n *NetworkPolicyController) syncAddressGroup(key string) error {
 	addrGroupNodeNames := sets.String{}
 	for _, internalNPObj := range nps {
 		internalNP := internalNPObj.(*antreatypes.NetworkPolicy)
-		addrGroupNodeNames = addrGroupNodeNames.Union(internalNP.SpanMeta.NodeNames)
+		utilsets.Merge(addrGroupNodeNames, internalNP.SpanMeta.NodeNames)
 	}
 	memberSet := n.populateAddressGroupMemberSet(addressGroup)
 	updatedAddressGroup := &antreatypes.AddressGroup{
@@ -1697,7 +1698,7 @@ func (n *NetworkPolicyController) syncInternalNetworkPolicy(key string) error {
 			continue
 		}
 		appGroup := appGroupObj.(*antreatypes.AppliedToGroup)
-		nodeNames = nodeNames.Union(appGroup.SpanMeta.NodeNames)
+		utilsets.Merge(nodeNames, appGroup.SpanMeta.NodeNames)
 	}
 	updatedNetworkPolicy := &antreatypes.NetworkPolicy{
 		UID:             internalNP.UID,
