@@ -6,60 +6,85 @@ on:
       - v*
 
 jobs:
+  get-version:
+    runs-on: [ubuntu-latest]
+    outputs:
+      version: ${{ steps.get-version.outputs.version }}
+    steps:
+    - name: Extract version from Github ref
+      id: get-version
+      env:
+        TAG: ${{ github.ref }}
+      run: |
+        version=${TAG:10}
+        echo "::set-output name=version::$version"
+
   build:
     runs-on: [ubuntu-latest]
+    needs: get-version
     steps:
     - uses: actions/checkout@v2
-    - name: Build Antrea Docker image and push to registry
+    - name: Build Antrea amd64 Docker image and push to registry
       env:
         DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
         DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
-        TAG: ${{ github.ref }}
+        VERSION: ${{ needs.get-version.outputs.version }}
       run: |
-        VERSION="${TAG:10}" make
+        make
         echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
-        docker push antrea/antrea-ubuntu:"${TAG:10}"
+        docker tag antrea/antrea-ubuntu:"${VERSION}" antrea/antrea-ubuntu-amd64:"${VERSION}"
+        docker push antrea/antrea-ubuntu-amd64:"${VERSION}"
+    - name: Trigger Antrea arm builds and multi-arch manifest update
+      uses: benc-uk/workflow-dispatch@v1
+      with:
+        repo: vmware-tanzu/antrea-build-infra
+        ref: refs/heads/main
+        workflow: Build Antrea ARM images and push manifest
+        token: ${{ secrets.WORKFLOW_DISPATCH_PAT }}
+        inputs: ${{ format('{{ "antrea-repository":"vmware-tanzu/antrea", "antrea-ref":"{0}", "docker-tag":"{1}" }}', github.ref, steps.get-version.outputs.version) }}
 
   build-windows:
     runs-on: [windows-2019]
+    needs: get-version
     steps:
     - uses: actions/checkout@v2
     - name: Build Antrea Windows Docker image and push to registry
       env:
         DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
         DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
-        TAG: ${{ github.ref }}
+        VERSION: ${{ needs.get-version.outputs.version }}
       run: |
-        export VERSION="${TAG:10}"
         make build-windows
         echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
-        docker push antrea/antrea-windows:"${TAG:10}"
+        docker push antrea/antrea-windows:"${VERSION}"
       shell: bash
 
   build-octant-antrea-ubuntu:
     runs-on: [ubuntu-latest]
+    needs: get-version
     steps:
-      - uses: actions/checkout@v2
-      - name: Build octant-antrea-ubuntu Docker image and push to registry
-        env:
-          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
-          TAG: ${{ github.ref }}
-        run: |
-          VERSION="${TAG:10}" make octant-antrea-ubuntu
-          echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
-          docker push antrea/octant-antrea-ubuntu:"${TAG:10}"
+    - uses: actions/checkout@v2
+    - name: Build octant-antrea-ubuntu Docker image and push to registry
+      env:
+        DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+        DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+        VERSION: ${{ needs.get-version.outputs.version }}
+      run: |
+        make octant-antrea-ubuntu
+        echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+        docker push antrea/octant-antrea-ubuntu:"${VERSION}"
 
   build-flow-aggregator:
     runs-on: [ubuntu-latest]
+    needs: get-version
     steps:
     - uses: actions/checkout@v2
     - name: Build flow-aggregator Docker image and push to registry
       env:
         DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
         DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
-        TAG: ${{ github.ref }}
+        VERSION: ${{ needs.get-version.outputs.version }}
       run: |
-        VERSION="${TAG:10}" make flow-aggregator-ubuntu
+        make flow-aggregator-ubuntu
         echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
-        docker push antrea/flow-aggregator:"${TAG:10}"
+        docker push antrea/flow-aggregator:"${VERSION}"
