@@ -48,10 +48,10 @@ func skipIfMissingAdapter(t *testing.T, adapterName string) {
 }
 
 func skipIfOVSExtensionNotInstalled(t *testing.T) {
-	t.Logf("Checking if OVS vSwitch extension is installed")
+	t.Logf("Checking if the Open vSwitch Extension is installed")
 	cmd := `Get-VMSystemSwitchExtension -Name "Open vSwitch Extension"`
 	if err := util.InvokePSCommand(cmd); err != nil {
-		t.Skipf("Skipping test because we cannot verify that the OVS vSwitch extension is installed")
+		t.Skipf("Skipping test because we cannot verify that the Open vSwitch Extension is installed")
 	}
 }
 
@@ -143,7 +143,7 @@ func TestCreateHNSNetwork(t *testing.T) {
 	assert.Equal(t, hnsNet.Subnets[0].GatewayAddress, addr.String())
 	assert.Equal(t, hnsNet.ManagementIP, nodeIP.String())
 
-	t.Logf("Enabling OVS vSwitch extension for HNSNetwork '%s'", testNet)
+	t.Logf("Enabling the Open vSwitch Extension for HNSNetwork '%s'", testNet)
 	err = util.EnableHNSNetworkExtension(hnsNet.Id, util.OVSExtensionID)
-	require.Nil(t, err, "No error expected when enabling HNSNetwork OVS extension")
+	require.Nil(t, err, "No error expected when enabling the Open vSwitch Extension for the HNSNetwork")
 }
