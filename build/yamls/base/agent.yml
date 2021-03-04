@@ -99,7 +99,7 @@ spec:
             failureThreshold: 5
           readinessProbe:
             httpGet:
-              host: 127.0.0.1
+              host: localhost
               path: /readyz
               port: api
               scheme: HTTPS
