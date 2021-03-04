@@ -128,6 +128,14 @@ button {
     }
 }
 
+hr {
+    background-color: $lightgrey;
+    border: none;
+    display: block;
+    height: 1px;
+    margin: 30px 0;
+}
+
 .grid.two {
     display: grid;
     grid-template-columns: 1fr 1fr;
