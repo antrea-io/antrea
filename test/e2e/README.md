@@ -70,7 +70,15 @@ all DNS traffic. While CoreDNS will reply to cluster local DNS queries directly,
 all other queries will be forwarded to the proxy over IPv6, and the proxy will
 then forward them to the default resolver for the Node (this time over
 IPv4). This means that all DNS queries from the Pods should succeed, even though
-the returned public IP addresses (IPv4 and / or IPv6) are no accessible.
+the returned public IP addresses (IPv4 and / or IPv6) are not accessible.
+
+You may need more recent versions of the dependencies (virtualbox, vagrant,
+ansible) than the ones listed above when creating an IPv6 cluster. The following
+versions were tested successfully:
+
+* `vagrant 2.2.14`
+* `ansible 2.9.18`
+* `virtualbox 5.2`
 
 #### Debugging
 
