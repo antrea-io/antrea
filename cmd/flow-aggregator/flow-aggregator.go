@@ -16,14 +16,56 @@ package main
 
 import (
 	"fmt"
+	"hash/fnv"
+	"time"
 
+	"github.com/google/uuid"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog"
 
+	"github.com/vmware-tanzu/antrea/pkg/clusteridentity"
 	aggregator "github.com/vmware-tanzu/antrea/pkg/flowaggregator"
 	"github.com/vmware-tanzu/antrea/pkg/signals"
 )
+
+// genObservationDomainID generates an IPFIX Observation Domain ID when one is not provided by the
+// user through the flow aggregator configuration. It will first try to generate one
+// deterministically based on the cluster UUID (if available, with a timeout of 10s). Otherwise, it
+// will generate a random one. The cluster UUID should be available if Antrea is deployed to the
+// cluster ahead of the flow aggregator, which is the expectation since when deploying flow
+// aggregator as a Pod, networking needs to be configured by the CNI plugin.
+func genObservationDomainID(k8sClient kubernetes.Interface) uint32 {
+	const retryInterval = time.Second
+	const timeout = 10 * time.Second
+	const defaultAntreaNamespace = "kube-system"
+
+	clusterIdentityProvider := clusteridentity.NewClusterIdentityProvider(
+		defaultAntreaNamespace,
+		clusteridentity.DefaultClusterIdentityConfigMapName,
+		k8sClient,
+	)
+	var clusterUUID uuid.UUID
+	if err := wait.PollImmediate(retryInterval, timeout, func() (bool, error) {
+		var err error
+		if clusterUUID, err = clusterIdentityProvider.Get(); err != nil {
+			return false, nil
+		} else {
+			return true, nil
+		}
+	}); err != nil {
+		klog.Warningf(
+			"Unable to retrieve cluster UUID after %v (does ConfigMap '%s/%s' exist?); will generate a random observation domain ID",
+			timeout, defaultAntreaNamespace, clusteridentity.DefaultClusterIdentityConfigMapName,
+		)
+		clusterUUID = uuid.New()
+	}
+	h := fnv.New32()
+	h.Write(clusterUUID[:])
+	observationDomainID := h.Sum32()
+	return observationDomainID
+}
 
 func run(o *Options) error {
 	klog.Infof("Flow aggregator starting...")
@@ -36,7 +78,24 @@ func run(o *Options) error {
 	if err != nil {
 		return fmt.Errorf("error when creating K8s client: %v", err)
 	}
-	flowAggregator := aggregator.NewFlowAggregator(o.externalFlowCollectorAddr, o.externalFlowCollectorProto, o.exportInterval, o.aggregatorTransportProtocol, o.flowAggregatorAddress, k8sClient)
+
+	var observationDomainID uint32
+	if o.config.ObservationDomainID != nil {
+		observationDomainID = *o.config.ObservationDomainID
+	} else {
+		observationDomainID = genObservationDomainID(k8sClient)
+	}
+	klog.Infof("Flow aggregator Observation Domain ID: %d", observationDomainID)
+
+	flowAggregator := aggregator.NewFlowAggregator(
+		o.externalFlowCollectorAddr,
+		o.externalFlowCollectorProto,
+		o.exportInterval,
+		o.aggregatorTransportProtocol,
+		o.flowAggregatorAddress,
+		k8sClient,
+		observationDomainID,
+	)
 	err = flowAggregator.InitCollectingProcess()
 	if err != nil {
 		return fmt.Errorf("error when creating collecting process: %v", err)

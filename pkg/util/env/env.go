@@ -29,6 +29,8 @@ const (
 	svcAcctNameEnvKey  = "SERVICEACCOUNT_NAME"
 
 	antreaCloudEKSEnvKey = "ANTREA_CLOUD_EKS"
+
+	defaultAntreaNamespace = "kube-system"
 )
 
 // GetNodeName returns the node's name used in Kubernetes, based on the priority:
@@ -89,7 +91,19 @@ func getBoolEnvVar(name string, defaultValue bool) bool {
 	return defaultValue
 }
 
-// Returns true if Antrea is used to enforce NetworkPolicies in an EKS cluster.
+// IsCloudEKS returns true if Antrea is used to enforce NetworkPolicies in an EKS cluster.
 func IsCloudEKS() bool {
 	return getBoolEnvVar(antreaCloudEKSEnvKey, false)
+}
+
+// GetAntreaNamespace tries to determine the Namespace in which Antrea is running by looking at the
+// POD_NAMESPACE environment variable. If this environment variable is not set (e.g. because the
+// Antrea component is not run as a Pod), "kube-system" is returned.
+func GetAntreaNamespace() string {
+	namespace := GetPodNamespace()
+	if namespace == "" {
+		klog.Warningf("Failed to get Pod Namespace from environment. Using \"%s\" as the Antrea Service Namespace", defaultAntreaNamespace)
+		namespace = defaultAntreaNamespace
+	}
+	return namespace
 }
