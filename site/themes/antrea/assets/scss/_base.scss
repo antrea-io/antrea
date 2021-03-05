@@ -59,16 +59,17 @@ li {
     list-style-type: none;
     display: inline;
     padding-right: 25px;
-    font-size: 12px;
+    font-size: 14px;
+    line-height: 1.7em;
     &:last-of-type {
         padding-right: 0px;
     }
 }
 p {
-    line-height: 1.5em;
+    line-height: 1.7em;
     font-weight: 300;
     font-size: 16px;
-    color: $grey;
+    color: $darkgrey;
     &.intro {
         font-size: 18px;
     }
@@ -125,6 +126,14 @@ button {
     @include breakpoint(small) {
         grid-template-columns: 1fr;
     }
+}
+
+hr {
+    background-color: $lightgrey;
+    border: none;
+    display: block;
+    height: 1px;
+    margin: 30px 0;
 }
 
 .grid.two {
