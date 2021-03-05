@@ -31,6 +31,12 @@ func init() {
 	rand.Seed(time.Now().UTC().UnixNano())
 }
 
+func randName() string {
+	// #nosec G404: random number generator not used for security purposes
+	suffix := rand.Uint32()
+	return fmt.Sprintf("test%x", suffix)
+}
+
 func addrEqual(addr1, addr2 *net.IPNet) bool {
 	size1, _ := addr1.Mask.Size()
 	size2, _ := addr2.Mask.Size()
@@ -47,9 +53,7 @@ func isAddressPresent(addrs []*net.IPNet, addr *net.IPNet) bool {
 }
 
 func TestConfigureLinkAddresses(t *testing.T) {
-	// #nosec G404: random number generator not used for security purposes
-	suffix := rand.Uint32()
-	ifaceName := fmt.Sprintf("test%x", suffix)
+	ifaceName := randName()
 	createTestInterface(t, ifaceName)
 	defer deleteTestInterface(t, ifaceName)
 	ifaceIdx := setTestInterfaceUp(t, ifaceName)
