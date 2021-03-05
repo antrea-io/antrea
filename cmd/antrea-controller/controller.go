@@ -35,6 +35,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/openapi"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
 	crdinformers "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions"
+	"github.com/vmware-tanzu/antrea/pkg/clusteridentity"
 	"github.com/vmware-tanzu/antrea/pkg/controller/metrics"
 	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy"
 	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy/store"
@@ -47,6 +48,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/monitor"
 	"github.com/vmware-tanzu/antrea/pkg/signals"
 	"github.com/vmware-tanzu/antrea/pkg/util/cipher"
+	"github.com/vmware-tanzu/antrea/pkg/util/env"
 	"github.com/vmware-tanzu/antrea/pkg/version"
 )
 
@@ -105,6 +107,12 @@ func run(o *Options) error {
 	tierInformer := crdInformerFactory.Security().V1alpha1().Tiers()
 	traceflowInformer := crdInformerFactory.Ops().V1alpha1().Traceflows()
 	cgInformer := crdInformerFactory.Core().V1alpha2().ClusterGroups()
+
+	clusterIdentityAllocator := clusteridentity.NewClusterIdentityAllocator(
+		env.GetAntreaNamespace(),
+		clusteridentity.DefaultClusterIdentityConfigMapName,
+		client,
+	)
 
 	// Create Antrea object storage.
 	addressGroupStore := store.NewAddressGroupStore()
@@ -195,6 +203,8 @@ func run(o *Options) error {
 
 	informerFactory.Start(stopCh)
 	crdInformerFactory.Start(stopCh)
+
+	go clusterIdentityAllocator.Run(stopCh)
 
 	go controllerMonitor.Run(stopCh)
 

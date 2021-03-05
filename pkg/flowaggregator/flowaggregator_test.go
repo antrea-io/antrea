@@ -28,8 +28,9 @@ import (
 )
 
 const (
-	testTemplateID     = uint16(256)
-	testExportInterval = 60 * time.Second
+	testTemplateID          = uint16(256)
+	testExportInterval      = 60 * time.Second
+	testObservationDomainID = 0xabcd
 )
 
 // TODO: We will add another test for sendDataRecord when we support adding multiple records to single set.
@@ -56,6 +57,7 @@ func TestFlowAggregator_sendTemplateSet(t *testing.T) {
 		ipfixtest.NewMockIPFIXSet(ctrl),
 		"",
 		nil,
+		testObservationDomainID,
 	}
 
 	// Following consists of all elements that are in ianaInfoElements and antreaInfoElements (globals)

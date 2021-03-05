@@ -54,18 +54,11 @@ const (
 	CACertFile  = "ca.crt"
 	TLSCertFile = "tls.crt"
 	TLSKeyFile  = "tls.key"
-
-	defaultAntreaNamespace = "kube-system"
 )
 
 // GetAntreaServerNames returns the DNS names that the TLS certificate will be signed with.
 func GetAntreaServerNames() []string {
-	namespace := env.GetPodNamespace()
-	if namespace == "" {
-		klog.Warningf("Failed to get Pod Namespace from environment. Using \"%s\" as the Antrea Service Namespace", defaultAntreaNamespace)
-		namespace = defaultAntreaNamespace
-	}
-
+	namespace := env.GetAntreaNamespace()
 	antreaServerName := "antrea." + namespace + ".svc"
 	// TODO: Although antrea-agent and kube-aggregator only verify the server name "antrea.<Namespace>.svc",
 	// We should add the whole FQDN "antrea.<Namespace>.svc.<Cluster Domain>" as an alternate DNS name when
