@@ -211,10 +211,10 @@ const (
 	EgressReg       regType = 5
 	IngressReg      regType = 6
 	TraceflowReg    regType = 9 // Use reg9[28..31] to store traceflow dataplaneTag.
-	// CNPNotAllowConjIDReg reuses reg3 which will also be used for storing endpoint IP to store the rule ID. Since
+	// CNPDenyConjIDReg reuses reg3 which will also be used for storing endpoint IP to store the rule ID. Since
 	// the service selection will finish when a packet hitting NetworkPolicy related rules, there is no conflict.
-	CNPNotAllowConjIDReg regType = 3
-	endpointIPv6XXReg    regType = 3 // xxReg3 will occupy reg12-reg15
+	CNPDenyConjIDReg  regType = 3
+	endpointIPv6XXReg regType = 3 // xxReg3 will occupy reg12-reg15
 	// marksRegServiceNeedLB indicates a packet need to do service selection.
 	marksRegServiceNeedLB uint32 = 0b001
 	// marksRegServiceSelected indicates a packet has done service selection.
@@ -247,13 +247,21 @@ const (
 	DispositionRej   = 0b10
 
 	// custom reason is loaded in marksReg [24-25]
+	// The custom reason mark is used to indicate the reason(s) for sending the packet
+	// to the controller. Reasons can be or-ed to indicate that the packets was sent
+	// for multiple reasons.
+	// For example, a value of 0b11 (CustomReasonLogging | CustomReasonReject) means
+	// that the packet is sent to the controller both for NetworkPolicy logging and
+	// because of a Reject action.
 	CustomReasonMarkReg regType = 0
-	// custom reason marks the reason of sending packet to the controller, which could
-	// be added up to implement a multi-reason combination.
-	// e.g. 0b11 (CustomReasonLogging + CustomReasonReject) means both Logging and
-	// Reject are reasons of sending packet to the controller
+	// CustomReasonLogging is used when send packet-in to controller indicating this
+	// packet need logging.
 	CustomReasonLogging = 0b01
-	CustomReasonReject  = 0b10
+	// CustomReasonReject is not only used when send packet-in to controller indicating
+	// that this packet should be rejected, but also used in the case that when
+	// controller send reject packet as packet-out, we want reject response to bypass
+	// the connTrack to avoid unexpected drop.
+	CustomReasonReject = 0b10
 )
 
 var DispositionToString = map[uint32]string{
@@ -547,6 +555,7 @@ func (c *client) podClassifierFlow(podOFPort uint32, category cookie.Category) b
 //    The sessionAffinityTable is a side-effect table which means traffic will not
 //    be resubmitted to any table. serviceLB does Endpoint selection for traffic
 //    to a Service.
+// 6) Add a flow to bypass reject response packet sent by the controller.
 func (c *client) connectionTrackFlows(category cookie.Category) []binding.Flow {
 	connectionTrackTable := c.pipeline[conntrackTable]
 	connectionTrackStateTable := c.pipeline[conntrackStateTable]
@@ -617,7 +626,23 @@ func (c *client) connectionTrackFlows(category cookie.Category) []binding.Flow {
 				Done(),
 		)
 	}
+
+	// Add reject response packet bypass flow.
+	flows = append(flows, c.conntrackBypassRejectFlow())
+
 	return flows
+}
+
+// conntrackBypassRejectFlow generates a flow which is used to bypass the reject
+// response packet sent by the controller to avoid unexpected packet drop.
+func (c *client) conntrackBypassRejectFlow() binding.Flow {
+	connectionTrackStateTable := c.pipeline[conntrackStateTable]
+	return connectionTrackStateTable.BuildFlow(priorityHigh).
+		MatchProtocol(binding.ProtocolIP).
+		MatchRegRange(int(marksReg), CustomReasonReject, CustomReasonMarkRange).
+		Cookie(c.cookieAllocator.Request(cookie.Default).Raw()).
+		Action().ResubmitToTable(connectionTrackStateTable.GetNext()).
+		Done()
 }
 
 func (c *client) conntrackBasicFlows(category cookie.Category) []binding.Flow {
@@ -1288,7 +1313,7 @@ func (c *client) denyRuleMetricFlow(conjunctionID uint32, ingress bool) binding.
 	}
 	return c.pipeline[metricTableID].BuildFlow(priorityNormal).
 		MatchRegRange(int(marksReg), cnpDenyMark, cnpDenyMarkRange).
-		MatchReg(int(CNPNotAllowConjIDReg), conjunctionID).
+		MatchReg(int(CNPDenyConjIDReg), conjunctionID).
 		Action().Drop().
 		Cookie(c.cookieAllocator.Request(cookie.Policy).Raw()).
 		Done()
@@ -1383,68 +1408,40 @@ func (c *client) conjunctionActionFlow(conjunctionID uint32, tableID binding.Tab
 	return flows
 }
 
-// conjunctionActionRejectFlow generates the flow to mark the packet to be rejected if policyRuleConjunction ID is matched.
+// conjunctionActionDenyFlow generates the flow to mark the packet to be denied
+// (dropped or rejected) if policyRuleConjunction ID is matched.
 // Any matched flow will be dropped in corresponding metric tables.
-func (c *client) conjunctionActionRejectFlow(conjunctionID uint32, tableID binding.TableIDType, priority *uint16, enableLogging bool) binding.Flow {
+func (c *client) conjunctionActionDenyFlow(conjunctionID uint32, tableID binding.TableIDType, priority *uint16, disposition uint32, enableLogging bool) binding.Flow {
 	ofPriority := *priority
 	metricTableID := IngressMetricTable
 	if _, ok := egressTables[tableID]; ok {
 		metricTableID = EgressMetricTable
 	}
-	// We do not drop the packet immediately but send the packet to the metric table to update the rule metrics.
-	if enableLogging {
-		return c.pipeline[tableID].BuildFlow(ofPriority).
-			MatchConjID(conjunctionID).
-			Action().LoadRegRange(int(CNPNotAllowConjIDReg), conjunctionID, binding.Range{0, 31}).
-			Action().LoadRegRange(int(marksReg), cnpDenyMark, cnpDenyMarkRange).
-			Action().LoadRegRange(int(marksReg), DispositionRej, APDispositionMarkRange).
-			Action().LoadRegRange(int(marksReg), CustomReasonLogging+CustomReasonReject, CustomReasonMarkRange). // Do the rejection and enable Logging.
-			Action().SendToController(uint8(PacketInReasonNP)).
-			Action().GotoTable(metricTableID).
-			Cookie(c.cookieAllocator.Request(cookie.Policy).Raw()).
-			Done()
-	} else {
-		return c.pipeline[tableID].BuildFlow(ofPriority).
-			MatchConjID(conjunctionID).
-			Action().LoadRegRange(int(CNPNotAllowConjIDReg), conjunctionID, binding.Range{0, 31}).
-			Action().LoadRegRange(int(marksReg), cnpDenyMark, cnpDenyMarkRange).
-			Action().LoadRegRange(int(marksReg), CustomReasonReject, CustomReasonMarkRange). // Do the rejection.
-			Action().SendToController(uint8(PacketInReasonNP)).
-			Action().GotoTable(metricTableID).
-			Cookie(c.cookieAllocator.Request(cookie.Policy).Raw()).
-			Done()
-	}
-}
 
-// conjunctionActionDropFlow generates the flow to mark the packet to be dropped if policyRuleConjunction ID is matched.
-// Any matched flow will be dropped in corresponding metric tables.
-func (c *client) conjunctionActionDropFlow(conjunctionID uint32, tableID binding.TableIDType, priority *uint16, enableLogging bool) binding.Flow {
-	ofPriority := *priority
-	metricTableID := IngressMetricTable
-	if _, ok := egressTables[tableID]; ok {
-		metricTableID = EgressMetricTable
-	}
-	// We do not drop the packet immediately but send the packet to the metric table to update the rule metrics.
+	flowBuilder := c.pipeline[tableID].BuildFlow(ofPriority).
+		MatchConjID(conjunctionID).
+		Action().LoadRegRange(int(CNPDenyConjIDReg), conjunctionID, binding.Range{0, 31}).
+		Action().LoadRegRange(int(marksReg), cnpDenyMark, cnpDenyMarkRange)
+
 	if enableLogging {
-		return c.pipeline[tableID].BuildFlow(ofPriority).
-			MatchConjID(conjunctionID).
-			Action().LoadRegRange(int(CNPNotAllowConjIDReg), conjunctionID, binding.Range{0, 31}).
-			Action().LoadRegRange(int(marksReg), cnpDenyMark, cnpDenyMarkRange).
-			Action().LoadRegRange(int(marksReg), DispositionDrop, APDispositionMarkRange).    // Info for logging
-			Action().LoadRegRange(int(marksReg), CustomReasonLogging, CustomReasonMarkRange). // Enable logging
-			Action().SendToController(uint8(PacketInReasonNP)).
-			Action().GotoTable(metricTableID).
-			Cookie(c.cookieAllocator.Request(cookie.Policy).Raw()).
-			Done()
-	} else {
-		return c.pipeline[tableID].BuildFlow(ofPriority).
-			MatchConjID(conjunctionID).
-			Action().LoadRegRange(int(CNPNotAllowConjIDReg), conjunctionID, binding.Range{0, 31}).
-			Action().LoadRegRange(int(marksReg), cnpDenyMark, cnpDenyMarkRange).
-			Action().GotoTable(metricTableID).
-			Cookie(c.cookieAllocator.Request(cookie.Policy).Raw()).
-			Done()
+		customReason := CustomReasonLogging
+		if disposition == DispositionRej {
+			customReason += CustomReasonReject
+		}
+		flowBuilder = flowBuilder.
+			Action().LoadRegRange(int(marksReg), disposition, APDispositionMarkRange).
+			Action().LoadRegRange(int(marksReg), uint32(customReason), CustomReasonMarkRange).
+			Action().SendToController(uint8(PacketInReasonNP))
+	} else if disposition == DispositionRej {
+		flowBuilder = flowBuilder.
+			Action().LoadRegRange(int(marksReg), CustomReasonReject, CustomReasonMarkRange). // Do the rejection.
+			Action().SendToController(uint8(PacketInReasonNP))
 	}
+
+	// We do not drop the packet immediately but send the packet to the metric table to update the rule metrics.
+	return flowBuilder.Action().GotoTable(metricTableID).
+		Cookie(c.cookieAllocator.Request(cookie.Policy).Raw()).
+		Done()
 }
 
 func (c *client) Disconnect() error {

@@ -86,10 +86,10 @@ func TestGetTCPHeaderData(t *testing.T) {
 					SeqNum:  0,
 					AckNum:  0,
 				},
-				expectTCPSrcPort: 80,
-				expectTCPDstPort: 1080,
+				expectTCPSrcPort: 1080,
+				expectTCPDstPort: 80,
 				expectTCPSeqNum:  0,
-				expectTCPAckNum:  1,
+				expectTCPAckNum:  0,
 			},
 			wantErr: false,
 		},
@@ -103,15 +103,15 @@ func TestGetTCPHeaderData(t *testing.T) {
 			bf.UnmarshalBinary(bytes)
 			pktIn.Data = bf
 
-			TCPSrcPort, TCPDstPort, TCPSeqNum, TCPAckNum, err := getTCPHeaderData(pktIn)
+			tcpSrcPort, tcpDstPort, tcpSeqNum, tcpAckNum, err := getTCPHeaderData(pktIn)
 
 			if (err != nil) != tt.wantErr {
 				t.Errorf("getPacketInfo() error = %v, wantErr %v", err, tt.wantErr)
 			}
-			assert.Equal(t, tt.args.expectTCPSrcPort, TCPSrcPort, "Expect to retrieve exact TCP src port while differed")
-			assert.Equal(t, tt.args.expectTCPDstPort, TCPDstPort, "Expect to retrieve exact TCP dst port while differed")
-			assert.Equal(t, tt.args.expectTCPSeqNum, TCPSeqNum, "Expect to retrieve exact TCP seq num while differed")
-			assert.Equal(t, tt.args.expectTCPAckNum, TCPAckNum, "Expect to retrieve exact TCP ack num while differed")
+			assert.Equal(t, tt.args.expectTCPSrcPort, tcpSrcPort, "Expect to retrieve exact TCP src port while differed")
+			assert.Equal(t, tt.args.expectTCPDstPort, tcpDstPort, "Expect to retrieve exact TCP dst port while differed")
+			assert.Equal(t, tt.args.expectTCPSeqNum, tcpSeqNum, "Expect to retrieve exact TCP seq num while differed")
+			assert.Equal(t, tt.args.expectTCPAckNum, tcpAckNum, "Expect to retrieve exact TCP ack num while differed")
 		})
 	}
 }

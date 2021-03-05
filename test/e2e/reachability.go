@@ -55,16 +55,17 @@ func (pod Pod) PodName() string {
 	return podName
 }
 
-type PodConnectivityMark uint8
+type PodConnectivityMark string
 
 const (
-	Connected     PodConnectivityMark = 0
-	UnknownStatus PodConnectivityMark = 1
-	Dropped       PodConnectivityMark = 2
-	Rejected      PodConnectivityMark = 3
+	Connected PodConnectivityMark = "Con"
+	Error     PodConnectivityMark = "Err"
+	Dropped   PodConnectivityMark = "Drp"
+	Rejected  PodConnectivityMark = "Rej"
 
-	RejectProbeReturn string = "Connection refused."
-	DropProbeReturn   string = "Operation timed out."
+	TCPRejectProbeReturn string = "Connection refused."
+	UDPRejectProbeReturn string = "Host is unreachable."
+	DropProbeReturn      string = "Operation timed out."
 )
 
 type Connectivity struct {
@@ -184,7 +185,7 @@ func (ct *ConnectivityTable) PrettyPrint(indent string) string {
 	for _, from := range ct.Items {
 		line := []string{from}
 		for _, to := range ct.Items {
-			val := fmt.Sprintf("%d", ct.Values[from][to])
+			val := fmt.Sprintf("%s", ct.Values[from][to])
 			line = append(line, val)
 		}
 		lines = append(lines, indent+strings.Join(line, "\t"))
@@ -252,7 +253,7 @@ func (r *Reachability) ExpectSelf(allPods []Pod, connectivity PodConnectivityMar
 	}
 }
 
-// ExpectAllIngress defines that any traffic going into the pod will be allowed/dropped/rejected (0/1/2)
+// ExpectAllIngress defines that any traffic going into the pod will be allowed/dropped/rejected
 func (r *Reachability) ExpectAllIngress(pod Pod, connectivity PodConnectivityMark) {
 	r.Expected.SetAllTo(string(pod), connectivity)
 	if connectivity != Connected {
@@ -260,7 +261,7 @@ func (r *Reachability) ExpectAllIngress(pod Pod, connectivity PodConnectivityMar
 	}
 }
 
-// ExpectAllEgress defines that any traffic going out of the pod will be allowed/dropped/rejected (0/1/2)
+// ExpectAllEgress defines that any traffic going out of the pod will be allowed/dropped/rejected
 func (r *Reachability) ExpectAllEgress(pod Pod, connectivity PodConnectivityMark) {
 	r.Expected.SetAllFrom(string(pod), connectivity)
 	if connectivity != Connected {

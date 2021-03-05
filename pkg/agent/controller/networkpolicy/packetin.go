@@ -28,6 +28,7 @@ import (
 	"gopkg.in/natefinch/lumberjack.v2"
 	"k8s.io/klog"
 
+	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	opsv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/ops/v1alpha1"
 	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
@@ -37,12 +38,19 @@ const (
 	logDir      string = "/var/log/antrea/networkpolicy/"
 	logfileName string = "np.log"
 
-	EthHdrLen  uint16 = 14
 	IPv4HdrLen uint16 = 20
 	IPv6HdrLen uint16 = 40
-	TCPHdrLen  uint16 = 20
 
 	ICMPUnusedHdrLen uint16 = 4
+
+	TCPAck uint8 = 0b010000
+	TCPRst uint8 = 0b000100
+
+	ICMPDstUnreachableType         uint8 = 3
+	ICMPDstHostAdminProhibitedCode uint8 = 10
+
+	ICMPv6DstUnreachableType     uint8 = 1
+	ICMPv6DstAdminProhibitedCode uint8 = 1
 )
 
 var (
@@ -95,9 +103,9 @@ func (c *Controller) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
 		return errors.New("empty packetin for Antrea Policy")
 	}
 
-	matchers := pktIn.GetMatches()
+	matches := pktIn.GetMatches()
 	// Get custom reasons in this packet-in.
-	match := getMatchRegField(matchers, uint32(openflow.CustomReasonMarkReg))
+	match := getMatchRegField(matches, uint32(openflow.CustomReasonMarkReg))
 	customReasons, err := getInfoInReg(match, openflow.CustomReasonMarkRange.ToNXRange())
 	if err != nil {
 		return fmt.Errorf("received error while unloading customReason from reg: %v", err)
@@ -148,9 +156,9 @@ func getMatchRegField(matchers *ofctrl.Matchers, regNum uint32) *ofctrl.MatchFie
 // getMatch receives ofctrl matchers and table id, match field.
 // Modifies match field to Ingress/Egress register based on tableID.
 func getMatch(matchers *ofctrl.Matchers, tableID binding.TableIDType, disposition uint32) *ofctrl.MatchField {
-	// Get match from CNPNotAllowConjIDReg if disposition is not allow.
+	// Get match from CNPDenyConjIDReg if disposition is not allow.
 	if disposition != openflow.DispositionAllow {
-		return getMatchRegField(matchers, uint32(openflow.CNPNotAllowConjIDReg))
+		return getMatchRegField(matchers, uint32(openflow.CNPDenyConjIDReg))
 	}
 	// Get match from ingress/egress reg if disposition is allow
 	for _, table := range append(openflow.GetAntreaPolicyEgressTables(), openflow.EgressRuleTable) {
@@ -232,61 +240,101 @@ func (c *Controller) rejectRequest(pktIn *ofctrl.PacketIn) error {
 	dstMAC := pktIn.Data.HWSrc
 
 	var (
-		srcIP    string
-		dstIP    string
-		prot     uint8
-		ipHdrLen uint16
+		srcIP  string
+		dstIP  string
+		prot   uint8
+		isIPv6 bool
 	)
-	switch pktIn.Data.Ethertype {
-	case protocol.IPv4_MSG:
+	switch ipPkt := pktIn.Data.Data.(type) {
+	case *protocol.IPv4:
 		// Get IP data.
-		ipv4In := pktIn.Data.Data.(*protocol.IPv4)
-		srcIP = ipv4In.NWDst.String()
-		dstIP = ipv4In.NWSrc.String()
-		prot = ipv4In.Protocol
-		ipHdrLen = IPv4HdrLen
-	case protocol.IPv6_MSG:
+		srcIP = ipPkt.NWDst.String()
+		dstIP = ipPkt.NWSrc.String()
+		prot = ipPkt.Protocol
+		isIPv6 = false
+	case *protocol.IPv6:
 		// Get IP data.
-		ipv6In := pktIn.Data.Data.(*protocol.IPv6)
-		srcIP = ipv6In.NWDst.String()
-		dstIP = ipv6In.NWSrc.String()
-		prot = ipv6In.NextHeader
-		ipHdrLen = IPv6HdrLen
+		srcIP = ipPkt.NWDst.String()
+		dstIP = ipPkt.NWSrc.String()
+		prot = ipPkt.NextHeader
+		isIPv6 = true
 	}
 
-	pktOutBuilder, err := c.getBasePacketOutBuilder(srcMAC.String(), dstMAC.String(), srcIP, dstIP)
-	if err != nil {
-		return err
+	// Get the OpenFlow ports.
+	// 1. If we found the Interface of the src, it means the server is on this node.
+	// 	  We set `in_port` to the OF port of the Interface we found to simulate the reject
+	// 	  response from the server.
+	// 2. If we didn't find the Interface of the src, it means the server is outside
+	//    this node. We set `in_port` to the OF port of `antrea-gw0` to simulate the reject
+	//    response from external.
+	// 3. We don't need to set the output port. The pipeline will take care of it.
+	sIface, srcFound := c.ifaceStore.GetInterfaceByIP(srcIP)
+	inPort := uint32(config.HostGatewayOFPort)
+	if srcFound {
+		inPort = uint32(sIface.OFPort)
 	}
 
-	switch prot {
-	case protocol.Type_TCP:
+	if prot == protocol.Type_TCP {
 		// Get TCP data.
-		TCPSrcPort, TCPDstPort, TCPSeqNum, TCPAckNum, err := getTCPHeaderData(pktIn.Data.Data)
+		oriTCPSrcPort, oriTCPDstPort, oriTCPSeqNum, _, err := getTCPHeaderData(pktIn.Data.Data)
 		if err != nil {
 			return err
 		}
-		return c.ofClient.SendTCPReject(pktOutBuilder, TCPSrcPort, TCPDstPort, TCPSeqNum, TCPAckNum, false)
-	default: // Use ICMP host administratively prohibited for ICMP, UDP, SCTP reject.
+		// While sending TCP reject packet-out, switch original src/dst port,
+		// set the ackNum as original seqNum+1 and set the flag as ack+rst.
+		return c.ofClient.SendTCPPacketOut(
+			srcMAC.String(),
+			dstMAC.String(),
+			srcIP,
+			dstIP,
+			inPort,
+			-1,
+			isIPv6,
+			oriTCPDstPort,
+			oriTCPSrcPort,
+			oriTCPSeqNum+1,
+			TCPAck|TCPRst,
+			true)
+	} else {
+		// Use ICMP host administratively prohibited for ICMP, UDP, SCTP reject.
+		icmpType := ICMPDstUnreachableType
+		icmpCode := ICMPDstHostAdminProhibitedCode
+		ipHdrLen := IPv4HdrLen
+		if isIPv6 {
+			icmpType = ICMPv6DstUnreachableType
+			icmpCode = ICMPv6DstAdminProhibitedCode
+			ipHdrLen = IPv6HdrLen
+		}
 		ipHdr, _ := pktIn.Data.Data.MarshalBinary()
-		ICMPData := make([]byte, int(ICMPUnusedHdrLen+ipHdrLen+8))
+		icmpData := make([]byte, int(ICMPUnusedHdrLen+ipHdrLen+8))
 		// Put ICMP unused header in Data prop and set it to zero.
-		binary.BigEndian.PutUint32(ICMPData[:ICMPUnusedHdrLen], 0)
-		copy(ICMPData[ICMPUnusedHdrLen:], ipHdr[:ipHdrLen+8])
-		return c.ofClient.SendICMPReject(pktOutBuilder, ICMPData, false)
+		binary.BigEndian.PutUint32(icmpData[:ICMPUnusedHdrLen], 0)
+		copy(icmpData[ICMPUnusedHdrLen:], ipHdr[:ipHdrLen+8])
+		return c.ofClient.SendICMPPacketOut(
+			srcMAC.String(),
+			dstMAC.String(),
+			srcIP,
+			dstIP,
+			inPort,
+			-1,
+			isIPv6,
+			icmpType,
+			icmpCode,
+			icmpData,
+			true)
 	}
 }
 
-// getTCPHeaderData gets TCP header data used in the reject packet.
-func getTCPHeaderData(ipPkt util.Message) (TCPSrcPort uint16, TCPDstPort uint16, TCPSeqNum uint32, TCPAckNum uint32, err error) {
+// getTCPHeaderData gets TCP header data from IP packet.
+func getTCPHeaderData(ipPkt util.Message) (tcpSrcPort uint16, tcpDstPort uint16, tcpSeqNum uint32, tcpAckNum uint32, err error) {
 	var tcpBytes []byte
 
 	// Transfer Buffer to TCP
-	switch ipPkt.(type) {
+	switch typedIPPkt := ipPkt.(type) {
 	case *protocol.IPv4:
-		tcpBytes, err = ipPkt.(*protocol.IPv4).Data.(*util.Buffer).MarshalBinary()
+		tcpBytes, err = typedIPPkt.Data.(*util.Buffer).MarshalBinary()
 	case *protocol.IPv6:
-		tcpBytes, err = ipPkt.(*protocol.IPv6).Data.(*util.Buffer).MarshalBinary()
+		tcpBytes, err = typedIPPkt.Data.(*util.Buffer).MarshalBinary()
 	}
 	if err != nil {
 		return 0, 0, 0, 0, err
@@ -297,23 +345,5 @@ func getTCPHeaderData(ipPkt util.Message) (TCPSrcPort uint16, TCPDstPort uint16,
 		return 0, 0, 0, 0, err
 	}
 
-	return tcpIn.PortDst, tcpIn.PortSrc, 0, tcpIn.SeqNum + 1, nil
-}
-
-// getBasePacketOutBuilder gets a base IP packetOutBuilder with src&dst MAC, IP and OFPort set.
-func (c *Controller) getBasePacketOutBuilder(srcMAC string, dstMAC string, srcIP string, dstIP string) (binding.PacketOutBuilder, error) {
-
-	// Get the OpenFlow ports of src Pod and dst Pod.
-	sIface, srcFound := c.ifaceStore.GetInterfaceByIP(srcIP)
-	dIface, dstFound := c.ifaceStore.GetInterfaceByIP(dstIP)
-	if !srcFound || !dstFound {
-		return nil, fmt.Errorf("couldn't find Pod config by IP")
-	}
-
-	packetOutBuilder, err := c.ofClient.GenBasePacketOutBuilder(srcMAC, dstMAC, srcIP, dstIP, uint32(sIface.OFPort), uint32(dIface.OFPort))
-	if err != nil {
-		return nil, err
-	}
-
-	return packetOutBuilder, nil
+	return tcpIn.PortSrc, tcpIn.PortDst, tcpIn.SeqNum, tcpIn.AckNum, nil
 }

@@ -498,14 +498,14 @@ func prepareSendTraceflowPacket(ctrl *gomock.Controller, success bool) *client {
 	return c
 }
 
-func Test_client_GenBasePacketOutBuilder(t *testing.T) {
+func Test_client_setBasePacketOutBuilder(t *testing.T) {
 	type args struct {
 		srcMAC  string
 		dstMAC  string
 		srcIP   string
 		dstIP   string
 		inPort  uint32
-		outPort uint32
+		outPort int32
 	}
 	tests := []struct {
 		name    string
@@ -563,17 +563,17 @@ func Test_client_GenBasePacketOutBuilder(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
-			c := prepareSendRejectPacket(ctrl, !tt.wantErr)
-			_, err := c.GenBasePacketOutBuilder(tt.args.srcMAC, tt.args.dstMAC, tt.args.srcIP, tt.args.dstIP, tt.args.inPort, tt.args.outPort)
+			c := prepareSetBasePacketOutBuilder(ctrl, !tt.wantErr)
+			_, err := setBasePacketOutBuilder(c.bridge.BuildPacketOut(), tt.args.srcMAC, tt.args.dstMAC, tt.args.srcIP, tt.args.dstIP, tt.args.inPort, tt.args.outPort)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("SendRejectPacket() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("setBasePacketOutBuilder() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}
 }
 
-func prepareSendRejectPacket(ctrl *gomock.Controller, success bool) *client {
-	ofClient := NewClient(bridgeName, bridgeMgmtAddr, ovsconfig.OVSDatapathSystem, true, true)
+func prepareSetBasePacketOutBuilder(ctrl *gomock.Controller, success bool) *client {
+	ofClient := NewClient(bridgeName, bridgeMgmtAddr, ovsconfig.OVSDatapathSystem, true, true, false)
 	c := ofClient.(*client)
 	m := ovsoftest.NewMockBridge(ctrl)
 	c.bridge = m

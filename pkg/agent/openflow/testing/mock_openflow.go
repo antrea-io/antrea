@@ -123,21 +123,6 @@ func (mr *MockClientMockRecorder) Disconnect() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Disconnect", reflect.TypeOf((*MockClient)(nil).Disconnect))
 }
 
-// GenBasePacketOutBuilder mocks base method
-func (m *MockClient) GenBasePacketOutBuilder(arg0, arg1, arg2, arg3 string, arg4, arg5 uint32) (openflow.PacketOutBuilder, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GenBasePacketOutBuilder", arg0, arg1, arg2, arg3, arg4, arg5)
-	ret0, _ := ret[0].(openflow.PacketOutBuilder)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GenBasePacketOutBuilder indicates an expected call of GenBasePacketOutBuilder
-func (mr *MockClientMockRecorder) GenBasePacketOutBuilder(arg0, arg1, arg2, arg3, arg4, arg5 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GenBasePacketOutBuilder", reflect.TypeOf((*MockClient)(nil).GenBasePacketOutBuilder), arg0, arg1, arg2, arg3, arg4, arg5)
-}
-
 // GetFlowTableStatus mocks base method
 func (m *MockClient) GetFlowTableStatus() []openflow.TableStatus {
 	m.ctrl.T.Helper()
@@ -542,32 +527,32 @@ func (mr *MockClientMockRecorder) ReplayFlows() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReplayFlows", reflect.TypeOf((*MockClient)(nil).ReplayFlows))
 }
 
-// SendICMPReject mocks base method
-func (m *MockClient) SendICMPReject(arg0 openflow.PacketOutBuilder, arg1 []byte, arg2 bool) error {
+// SendICMPPacketOut mocks base method
+func (m *MockClient) SendICMPPacketOut(arg0, arg1, arg2, arg3 string, arg4 uint32, arg5 int32, arg6 bool, arg7, arg8 byte, arg9 []byte, arg10 bool) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SendICMPReject", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "SendICMPPacketOut", arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// SendICMPReject indicates an expected call of SendICMPReject
-func (mr *MockClientMockRecorder) SendICMPReject(arg0, arg1, arg2 interface{}) *gomock.Call {
+// SendICMPPacketOut indicates an expected call of SendICMPPacketOut
+func (mr *MockClientMockRecorder) SendICMPPacketOut(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendICMPReject", reflect.TypeOf((*MockClient)(nil).SendICMPReject), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendICMPPacketOut", reflect.TypeOf((*MockClient)(nil).SendICMPPacketOut), arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10)
 }
 
-// SendTCPReject mocks base method
-func (m *MockClient) SendTCPReject(arg0 openflow.PacketOutBuilder, arg1, arg2 uint16, arg3, arg4 uint32, arg5 bool) error {
+// SendTCPPacketOut mocks base method
+func (m *MockClient) SendTCPPacketOut(arg0, arg1, arg2, arg3 string, arg4 uint32, arg5 int32, arg6 bool, arg7, arg8 uint16, arg9 uint32, arg10 byte, arg11 bool) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SendTCPReject", arg0, arg1, arg2, arg3, arg4, arg5)
+	ret := m.ctrl.Call(m, "SendTCPPacketOut", arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// SendTCPReject indicates an expected call of SendTCPReject
-func (mr *MockClientMockRecorder) SendTCPReject(arg0, arg1, arg2, arg3, arg4, arg5 interface{}) *gomock.Call {
+// SendTCPPacketOut indicates an expected call of SendTCPPacketOut
+func (mr *MockClientMockRecorder) SendTCPPacketOut(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendTCPReject", reflect.TypeOf((*MockClient)(nil).SendTCPReject), arg0, arg1, arg2, arg3, arg4, arg5)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendTCPPacketOut", reflect.TypeOf((*MockClient)(nil).SendTCPPacketOut), arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11)
 }
 
 // SendTraceflowPacket mocks base method
