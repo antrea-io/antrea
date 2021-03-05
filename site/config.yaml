@@ -1,4 +1,4 @@
-baseURL: "https://antrea.io/"
+#baseURL: "https://antrea.io/"
 languageCode: "en-us"
 title: "Antrea"
 theme: "antrea"
