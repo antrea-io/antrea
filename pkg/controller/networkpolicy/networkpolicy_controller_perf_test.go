@@ -49,77 +49,17 @@ The metrics are not accurate under the race detector, and will be skipped when t
 func TestInitXLargeScaleWithSmallNamespaces(t *testing.T) {
 	getObjects := func() ([]*corev1.Namespace, []*networkingv1.NetworkPolicy, []*corev1.Pod) {
 		namespace := rand.String(8)
-		namespaces := []*corev1.Namespace{
-			{
-				ObjectMeta: metav1.ObjectMeta{Name: namespace, Labels: map[string]string{"app": namespace}},
-			},
-		}
+		namespaces := []*corev1.Namespace{newNamespace(namespace, map[string]string{"app": namespace})}
 		networkPolicies := []*networkingv1.NetworkPolicy{
-			{
-				ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: "default-deny-all", UID: types.UID(uuid.New().String())},
-				Spec: networkingv1.NetworkPolicySpec{
-					PodSelector: metav1.LabelSelector{},
-					PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress, networkingv1.PolicyTypeEgress},
-				},
-			},
-			{
-				ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: "np-1", UID: types.UID(uuid.New().String())},
-				Spec: networkingv1.NetworkPolicySpec{
-					PodSelector: metav1.LabelSelector{MatchLabels: map[string]string{"app-1": "scale-1"}},
-					PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress, networkingv1.PolicyTypeEgress},
-					Ingress: []networkingv1.NetworkPolicyIngressRule{
-						{
-							From: []networkingv1.NetworkPolicyPeer{
-								{
-									PodSelector: &metav1.LabelSelector{
-										MatchLabels: map[string]string{"app-1": "scale-1"},
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-			{
-				ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: "np-2", UID: types.UID(uuid.New().String())},
-				Spec: networkingv1.NetworkPolicySpec{
-					PodSelector: metav1.LabelSelector{MatchLabels: map[string]string{"app-2": "scale-2"}},
-					PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress, networkingv1.PolicyTypeEgress},
-					Ingress: []networkingv1.NetworkPolicyIngressRule{
-						{
-							From: []networkingv1.NetworkPolicyPeer{
-								{
-									PodSelector: &metav1.LabelSelector{
-										MatchLabels: map[string]string{"app-2": "scale-2"},
-									},
-								},
-							},
-						},
-					},
-				},
-			},
+			newNetworkPolicy(namespace, "default-deny-all", nil, nil, nil),
+			newNetworkPolicy(namespace, "np-1", map[string]string{"app-1": "scale-1"}, map[string]string{"app-1": "scale-1"}, nil),
+			newNetworkPolicy(namespace, "np-2", map[string]string{"app-2": "scale-2"}, map[string]string{"app-2": "scale-2"}, nil),
 		}
 		pods := []*corev1.Pod{
-			{
-				ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: "pod1", UID: types.UID(uuid.New().String()), Labels: map[string]string{"app-1": "scale-1"}},
-				Spec:       corev1.PodSpec{NodeName: getRandomNodeName()},
-				Status:     corev1.PodStatus{PodIP: getRandomIP()},
-			},
-			{
-				ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: "pod2", UID: types.UID(uuid.New().String()), Labels: map[string]string{"app-1": "scale-1"}},
-				Spec:       corev1.PodSpec{NodeName: getRandomNodeName()},
-				Status:     corev1.PodStatus{PodIP: getRandomIP()},
-			},
-			{
-				ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: "pod3", UID: types.UID(uuid.New().String()), Labels: map[string]string{"app-2": "scale-2"}},
-				Spec:       corev1.PodSpec{NodeName: getRandomNodeName()},
-				Status:     corev1.PodStatus{PodIP: getRandomIP()},
-			},
-			{
-				ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: "pod4", UID: types.UID(uuid.New().String()), Labels: map[string]string{"app-2": "scale-2"}},
-				Spec:       corev1.PodSpec{NodeName: getRandomNodeName()},
-				Status:     corev1.PodStatus{PodIP: getRandomIP()},
-			},
+			newPod(namespace, "pod1", map[string]string{"app-1": "scale-1"}),
+			newPod(namespace, "pod2", map[string]string{"app-1": "scale-1"}),
+			newPod(namespace, "pod3", map[string]string{"app-2": "scale-2"}),
+			newPod(namespace, "pod4", map[string]string{"app-2": "scale-2"}),
 		}
 		return namespaces, networkPolicies, pods
 	}
@@ -139,39 +79,9 @@ The metrics are not accurate under the race detector, and will be skipped when t
 func TestInitXLargeScaleWithOneNamespace(t *testing.T) {
 	namespace := rand.String(8)
 	getObjects := func() ([]*corev1.Namespace, []*networkingv1.NetworkPolicy, []*corev1.Pod) {
-		namespaces := []*corev1.Namespace{
-			{
-				ObjectMeta: metav1.ObjectMeta{Name: namespace, Labels: map[string]string{"app": namespace}},
-			},
-		}
-		uid := rand.String(8)
-		networkPolicies := []*networkingv1.NetworkPolicy{
-			{
-				ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: "np-1" + uid, UID: types.UID(uuid.New().String())},
-				Spec: networkingv1.NetworkPolicySpec{
-					PodSelector: metav1.LabelSelector{MatchLabels: map[string]string{"app-1": "scale-1"}},
-					PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress, networkingv1.PolicyTypeEgress},
-					Ingress: []networkingv1.NetworkPolicyIngressRule{
-						{
-							From: []networkingv1.NetworkPolicyPeer{
-								{
-									PodSelector: &metav1.LabelSelector{
-										MatchLabels: map[string]string{"app-1": "scale-1"},
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-		}
-		pods := []*corev1.Pod{
-			{
-				ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: "pod1" + uid, UID: types.UID(uuid.New().String()), Labels: map[string]string{"app-1": "scale-1"}},
-				Spec:       corev1.PodSpec{NodeName: getRandomNodeName()},
-				Status:     corev1.PodStatus{PodIP: getRandomIP()},
-			},
-		}
+		namespaces := []*corev1.Namespace{newNamespace(namespace, map[string]string{"app": namespace})}
+		networkPolicies := []*networkingv1.NetworkPolicy{newNetworkPolicy(namespace, "", map[string]string{"app-1": "scale-1"}, map[string]string{"app-1": "scale-1"}, nil)}
+		pods := []*corev1.Pod{newPod(namespace, "", map[string]string{"app-1": "scale-1"})}
 		return namespaces, networkPolicies, pods
 	}
 	namespaces, networkPolicies, pods := getXObjects(10000, getObjects)
@@ -330,4 +240,96 @@ func toRunTimeObjects(namespaces []*corev1.Namespace, networkPolicies []*network
 		objs = append(objs, pods[i])
 	}
 	return objs
+}
+
+func newNamespace(name string, labels map[string]string) *corev1.Namespace {
+	return &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{Name: name, Labels: labels},
+	}
+}
+
+func newPod(namespace, name string, labels map[string]string) *corev1.Pod {
+	if name == "" {
+		name = "pod-" + rand.String(8)
+	}
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: name, UID: types.UID(uuid.New().String()), Labels: labels},
+		Spec:       corev1.PodSpec{NodeName: getRandomNodeName()},
+		Status:     corev1.PodStatus{PodIP: getRandomIP()},
+	}
+	return pod
+}
+
+func newNetworkPolicy(namespace, name string, podSelector, ingressPodSelector, egressPodSelector map[string]string) *networkingv1.NetworkPolicy {
+	if name == "" {
+		name = "np-" + rand.String(8)
+	}
+	policy := &networkingv1.NetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: name, UID: types.UID(uuid.New().String())},
+		Spec: networkingv1.NetworkPolicySpec{
+			PodSelector: metav1.LabelSelector{MatchLabels: podSelector},
+			PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress, networkingv1.PolicyTypeEgress},
+		},
+	}
+	if ingressPodSelector != nil {
+		policy.Spec.Ingress = []networkingv1.NetworkPolicyIngressRule{
+			{
+				From: []networkingv1.NetworkPolicyPeer{
+					{
+						PodSelector: &metav1.LabelSelector{
+							MatchLabels: ingressPodSelector,
+						},
+					},
+				},
+			},
+		}
+	}
+	if egressPodSelector != nil {
+		policy.Spec.Egress = []networkingv1.NetworkPolicyEgressRule{
+			{
+				To: []networkingv1.NetworkPolicyPeer{
+					{
+						PodSelector: &metav1.LabelSelector{
+							MatchLabels: egressPodSelector,
+						},
+					},
+				},
+			},
+		}
+	}
+	return policy
+}
+
+func BenchmarkSyncAddressGroup(b *testing.B) {
+	namespace := "default"
+	labels := map[string]string{"app-1": "scale-1"}
+	getObjects := func() ([]*corev1.Namespace, []*networkingv1.NetworkPolicy, []*corev1.Pod) {
+		namespaces := []*corev1.Namespace{newNamespace(namespace, nil)}
+		networkPolicies := []*networkingv1.NetworkPolicy{newNetworkPolicy(namespace, "", labels, labels, nil)}
+		pods := []*corev1.Pod{newPod(namespace, "", labels)}
+		return namespaces, networkPolicies, pods
+	}
+	namespaces, networkPolicies, pods := getXObjects(1000, getObjects)
+	objs := toRunTimeObjects(namespaces[0:1], networkPolicies, pods)
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+	_, c := newController(objs...)
+	c.informerFactory.Start(stopCh)
+
+	for c.appliedToGroupQueue.Len() > 0 {
+		key, _ := c.appliedToGroupQueue.Get()
+		c.syncAppliedToGroup(key.(string))
+		c.appliedToGroupQueue.Done(key)
+	}
+	for c.internalNetworkPolicyQueue.Len() > 0 {
+		key, _ := c.internalNetworkPolicyQueue.Get()
+		c.syncInternalNetworkPolicy(key.(string))
+		c.internalNetworkPolicyQueue.Done(key)
+	}
+	key, _ := c.addressGroupQueue.Get()
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		c.syncAddressGroup(key.(string))
+	}
 }
