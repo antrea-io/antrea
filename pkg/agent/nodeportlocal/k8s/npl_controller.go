@@ -204,26 +204,32 @@ func (c *NPLController) enqueueSvcUpdate(oldObj, newObj interface{}) {
 	}
 
 	podKeys := sets.String{}
+	var oldPodSet, newPodSet sets.String
 	if oldSvcAnnotation != newSvcAnnotation {
 		// Process Pods corresponding to Service with valid NPL annotation.
 		if oldSvcAnnotation == "true" {
-			podKeys = sets.NewString(c.getPodsFromService(oldSvc)...)
+			oldPodSet = sets.NewString(c.getPodsFromService(oldSvc)...)
 		} else if newSvcAnnotation == "true" {
-			podKeys = sets.NewString(c.getPodsFromService(newSvc)...)
+			newPodSet = sets.NewString(c.getPodsFromService(newSvc)...)
 		}
 	}
 
-	var oldPodSet, newPodSet sets.String
 	if oldSvc.Spec.Type != newSvc.Spec.Type {
-		newPodSet = sets.NewString(c.getPodsFromService(newSvc)...)
+		if newPodSet != nil {
+			newPodSet = sets.NewString(c.getPodsFromService(newSvc)...)
+		}
 		podKeys = podKeys.Union(newPodSet)
 	}
 
 	if !reflect.DeepEqual(oldSvc.Spec.Selector, newSvc.Spec.Selector) {
 		// Disjunctive union of Pods from both Service sets.
-		oldPodSet = sets.NewString(c.getPodsFromService(oldSvc)...)
-		newPodSet = sets.NewString(c.getPodsFromService(newSvc)...)
-		podKeys = utilsets.SymmetricDifference(oldPodSet, newPodSet)
+		if oldPodSet != nil {
+			oldPodSet = sets.NewString(c.getPodsFromService(oldSvc)...)
+		}
+		if newPodSet != nil {
+			newPodSet = sets.NewString(c.getPodsFromService(newSvc)...)
+		}
+		podKeys = podKeys.Union(utilsets.SymmetricDifference(oldPodSet, newPodSet))
 	}
 
 	for podKey := range podKeys {
