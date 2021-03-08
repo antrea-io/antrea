@@ -111,15 +111,24 @@ type AgentConfig struct {
 	// "udp" L4 transport protocols.
 	// Defaults to "flow-aggregator.flow-aggregator.svc:4739:tcp".
 	FlowCollectorAddr string `yaml:"flowCollectorAddr,omitempty"`
-	// Provide flow poll interval in format "0s". This determines how often flow exporter dumps connections in conntrack module.
-	// Flow poll interval should be greater than or equal to 1s(one second).
-	// Defaults to "5s". Follow the time units of duration.
+	// Provide flow poll interval in format "0s". This determines how often flow
+	// exporter dumps connections in conntrack module. Flow poll interval should
+	// be greater than or equal to 1s(one second).
+	// Defaults to "5s". Follow the time units of duration type.
 	FlowPollInterval string `yaml:"flowPollInterval,omitempty"`
-	// Provide flow export frequency, which is the number of poll cycles elapsed before flow exporter exports flow records to
-	// the flow collector.
-	// Flow export frequency should be greater than or equal to 1.
-	// Defaults to "12".
-	FlowExportFrequency uint `yaml:"flowExportFrequency,omitempty"`
+	// Provide the active flow export timeout, which is the timeout after which
+	// a flow record is sent to the collector for active flows. Thus, for flows
+	// with a continuous stream of packets, a flow record will be exported to the
+	// collector once the elapsed time since the last export event is equal to the
+	// value of this timeout.
+	// Defaults to "60s". Follow the time units of duration type.
+	ActiveFlowExportTimeout string `yaml:"activeFlowExportTimeout,omitempty"`
+	// Provide the idle flow export timeout, which is the timeout after which a
+	// flow record is sent to the collector for idle flows. A flow is considered
+	// idle if no packet matching this flow has been observed since the last export
+	// event.
+	// Defaults to "15s". Follow the time units of duration type.
+	IdleFlowExportTimeout string `yaml:"idleFlowExportTimeout,omitempty"`
 	// Enable TLS communication from flow exporter to flow aggregator.
 	// Defaults to true.
 	EnableTLSToFlowAggregator bool `yaml:"enableTLSToFlowAggregator,omitempty"`

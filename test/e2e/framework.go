@@ -536,7 +536,8 @@ func (data *TestData) deployAntreaFlowExporter(ipfixCollector string) error {
 			antreaAgentConf = strings.Replace(antreaAgentConf, "#flowCollectorAddr: \"flow-aggregator.flow-aggregator.svc:4739:tcp\"", fmt.Sprintf("flowCollectorAddr: \"%s\"", ipfixCollector), 1)
 		}
 		antreaAgentConf = strings.Replace(antreaAgentConf, "#flowPollInterval: \"5s\"", "flowPollInterval: \"1s\"", 1)
-		antreaAgentConf = strings.Replace(antreaAgentConf, "#flowExportFrequency: 12", "flowExportFrequency: 2", 1)
+		antreaAgentConf = strings.Replace(antreaAgentConf, "#activeFlowExportTimeout: \"60s\"", "activeFlowExportTimeout: \"2s\"", 1)
+		antreaAgentConf = strings.Replace(antreaAgentConf, "#inactiveFlowExportTimeout: \"15s\"", "inactiveFlowExportTimeout: \"1s\"", 1)
 		if testOptions.providerName == "kind" {
 			// In Kind cluster, there are issues with DNS name resolution on worker nodes.
 			// We will skip TLS testing for Kind cluster because the server certificate is generated with Flow aggregator's DNS name

@@ -1,4 +1,4 @@
-// Copyright 2020 Antrea Authors
+// Copyright 2021 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@ package testing
 
 import (
 	gomock "github.com/golang/mock/gomock"
+	ipfix "github.com/vmware-tanzu/antrea/pkg/ipfix"
 	entities "github.com/vmware/go-ipfix/pkg/entities"
 	intermediate "github.com/vmware/go-ipfix/pkg/intermediate"
 	reflect "reflect"
@@ -76,7 +77,7 @@ func (mr *MockIPFIXExportingProcessMockRecorder) NewTemplateID() *gomock.Call {
 }
 
 // SendSet mocks base method
-func (m *MockIPFIXExportingProcess) SendSet(arg0 entities.Set) (int, error) {
+func (m *MockIPFIXExportingProcess) SendSet(arg0 ipfix.IPFIXSet) (int, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "SendSet", arg0)
 	ret0, _ := ret[0].(int)
