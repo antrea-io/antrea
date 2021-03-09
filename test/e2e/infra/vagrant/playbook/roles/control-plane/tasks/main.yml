@@ -68,6 +68,50 @@
         flat: yes
   when: kubeadm_init.changed
 
+- name: Create CoreDNS ConfigMap file from template (IPv6)
+  template:
+    src: templates/coreDNS-cm.yml.j2
+    dest: /tmp/coreDNS-cm.yml
+  when: k8s_ip_family == "v6"
+
+- name: Edit CoreDNS ConfigMap (IPv6)
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  command: kubectl apply -f /tmp/coreDNS-cm.yml
+  when: (k8s_ip_family == "v6") and kubeadm_init.changed
+
+- name: Restart CoreDNS Pods (IPv6)
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  command: kubectl delete pods --namespace=kube-system -l k8s-app=kube-dns
+  when: (k8s_ip_family == "v6") and kubeadm_init.changed
+
+- name: Install socat DNS proxy UDP as service (IPv6)
+  template:
+    src: templates/socat-dns-proxy-udp.service.j2
+    dest: /etc/systemd/system/socat-dns-proxy-udp.service
+  when: k8s_ip_family == "v6"
+
+- name: Start socat DNS proxy UDP service (IPv6)
+  systemd:
+    name: socat-dns-proxy-udp
+    state: started
+    daemon_reload: yes
+  when: k8s_ip_family == "v6"
+
+- name: Install socat DNS proxy TCP as service (IPv6)
+  template:
+    src: templates/socat-dns-proxy-tcp.service.j2
+    dest: /etc/systemd/system/socat-dns-proxy-tcp.service
+  when: k8s_ip_family == "v6"
+
+- name: Start socat DNS proxy TCP service (IPv6)
+  systemd:
+    name: socat-dns-proxy-tcp
+    state: started
+    daemon_reload: yes
+  when: k8s_ip_family == "v6"
+
 # We copy the config file last, as we use it to determine whether the cluster
 # was setup correctly and with the appropriate configguration in future runs.
 - name: Copy kubeadm configuration to test user's home
