@@ -126,6 +126,13 @@ type NetworkPolicyController struct {
 	// crdClient is the clientset for CRD API group.
 	crdClient versioned.Interface
 
+	namespaceInformer coreinformers.NamespaceInformer
+	// namespaceLister is able to list/get Namespaces and is populated by the shared informer passed to
+	// NewNetworkPolicyController.
+	namespaceLister corelisters.NamespaceLister
+	// namespaceListerSynced is a function which returns true if the Namespace shared informer has been synced at least once.
+	namespaceListerSynced cache.InformerSynced
+
 	serviceInformer coreinformers.ServiceInformer
 	// serviceLister is able to list/get Services and is populated by the shared informer passed to
 	// NewNetworkPolicyController.
@@ -213,6 +220,7 @@ type heartbeat struct {
 func NewNetworkPolicyController(kubeClient clientset.Interface,
 	crdClient versioned.Interface,
 	groupingInterface grouping.Interface,
+	namespaceInformer coreinformers.NamespaceInformer,
 	serviceInformer coreinformers.ServiceInformer,
 	networkPolicyInformer networkinginformers.NetworkPolicyInformer,
 	cnpInformer secinformers.ClusterNetworkPolicyInformer,
@@ -254,6 +262,9 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 	)
 	// Register Informer and add handlers for AntreaPolicy events only if the feature is enabled.
 	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
+		n.namespaceInformer = namespaceInformer
+		n.namespaceLister = namespaceInformer.Lister()
+		n.namespaceListerSynced = namespaceInformer.Informer().HasSynced
 		n.serviceInformer = serviceInformer
 		n.serviceLister = serviceInformer.Lister()
 		n.serviceListerSynced = serviceInformer.Informer().HasSynced
@@ -269,6 +280,15 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 		n.cgInformer = cgInformer
 		n.cgLister = cgInformer.Lister()
 		n.cgListerSynced = cgInformer.Informer().HasSynced
+		// Add handlers for Namespace events.
+		n.namespaceInformer.Informer().AddEventHandlerWithResyncPeriod(
+			cache.ResourceEventHandlerFuncs{
+				AddFunc:    n.addNamespace,
+				UpdateFunc: n.updateNamespace,
+				DeleteFunc: n.deleteNamespace,
+			},
+			resyncPeriod,
+		)
 		n.serviceInformer.Informer().AddEventHandlerWithResyncPeriod(
 			cache.ResourceEventHandlerFuncs{
 				AddFunc:    n.addService,
@@ -1346,15 +1366,17 @@ func (n *NetworkPolicyController) syncInternalNetworkPolicy(key string) error {
 		utilsets.Merge(nodeNames, appGroup.SpanMeta.NodeNames)
 	}
 	updatedNetworkPolicy := &antreatypes.NetworkPolicy{
-		UID:             internalNP.UID,
-		Name:            internalNP.Name,
-		SourceRef:       internalNP.SourceRef,
-		Rules:           internalNP.Rules,
-		AppliedToGroups: internalNP.AppliedToGroups,
-		Priority:        internalNP.Priority,
-		TierPriority:    internalNP.TierPriority,
-		SpanMeta:        antreatypes.SpanMeta{NodeNames: nodeNames},
-		Generation:      internalNP.Generation,
+		UID:                   internalNP.UID,
+		Name:                  internalNP.Name,
+		SourceRef:             internalNP.SourceRef,
+		Rules:                 internalNP.Rules,
+		AppliedToGroups:       internalNP.AppliedToGroups,
+		Priority:              internalNP.Priority,
+		TierPriority:          internalNP.TierPriority,
+		AppliedToPerRule:      internalNP.AppliedToPerRule,
+		PerNamespaceSelectors: internalNP.PerNamespaceSelectors,
+		SpanMeta:              antreatypes.SpanMeta{NodeNames: nodeNames},
+		Generation:            internalNP.Generation,
 	}
 	klog.V(4).Infof("Updating internal NetworkPolicy %s with %d Nodes", key, nodeNames.Len())
 	n.internalNetworkPolicyStore.Update(updatedNetworkPolicy)

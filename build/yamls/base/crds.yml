@@ -2009,6 +2009,11 @@ spec:
                                           type: string
                                 matchLabels:
                                   x-kubernetes-preserve-unknown-fields: true
+                            namespaces:
+                              type: object
+                              properties:
+                                match:
+                                  type: string
                             ipBlock:
                               type: object
                               properties:
@@ -2148,6 +2153,11 @@ spec:
                                           type: string
                                 matchLabels:
                                   x-kubernetes-preserve-unknown-fields: true
+                            namespaces:
+                              type: object
+                              properties:
+                                match:
+                                  type: string
                             ipBlock:
                               type: object
                               properties:
