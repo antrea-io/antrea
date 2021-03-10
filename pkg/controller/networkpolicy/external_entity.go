@@ -28,6 +28,7 @@ import (
 	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/apis/core/v1alpha2"
+	utilsets "github.com/vmware-tanzu/antrea/pkg/util/sets"
 )
 
 // addExternalEntity retrieves all AddressGroups and AppliedToGroups which match the ExternalEnitty's
@@ -96,7 +97,7 @@ func (n *NetworkPolicyController) updateExternalEntity(oldObj, curObj interface{
 	} else if !labelsEqual {
 		// No need to enqueue common AppliedToGroups as they already have latest ExternalEntity
 		// information.
-		appliedToGroupKeys = oldAppliedToGroupKeySet.Difference(curAppliedToGroupKeySet).Union(curAppliedToGroupKeySet.Difference(oldAppliedToGroupKeySet))
+		appliedToGroupKeys = utilsets.SymmetricDifference(oldAppliedToGroupKeySet, curAppliedToGroupKeySet)
 	}
 	// AddressGroup keys must be enqueued only if the ExternalEntity's spec has changed or
 	// if ExternalEntity's label change causes it to match new Groups.
@@ -106,8 +107,8 @@ func (n *NetworkPolicyController) updateExternalEntity(oldObj, curObj interface{
 	} else if !labelsEqual {
 		// No need to enqueue common AddressGroups as they already have latest ExternalEntity
 		// information.
-		addressGroupKeys = oldAddressGroupKeySet.Difference(curAddressGroupKeySet).Union(curAddressGroupKeySet.Difference(oldAddressGroupKeySet))
-		groupKeys = oldGroupKeySet.Difference(curGroupKeySet).Union(curGroupKeySet.Difference(oldGroupKeySet))
+		addressGroupKeys = utilsets.SymmetricDifference(oldAddressGroupKeySet, curAddressGroupKeySet)
+		groupKeys = utilsets.SymmetricDifference(oldGroupKeySet, curGroupKeySet)
 	}
 	for group := range appliedToGroupKeys {
 		n.enqueueAppliedToGroup(group)
