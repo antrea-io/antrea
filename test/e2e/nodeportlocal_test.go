@@ -121,7 +121,7 @@ func checkForNPLRuleInIPTables(t *testing.T, data *TestData, r *require.Assertio
 	r.NoError(err, "Poll for iptables rules check failed")
 }
 
-func checkTrafficForNPL(t *testing.T, data *TestData, r *require.Assertions, nplAnnotations []k8s.NPLAnnotation, clientName string) {
+func checkTrafficForNPL(data *TestData, r *require.Assertions, nplAnnotations []k8s.NPLAnnotation, clientName string) {
 	for i := range nplAnnotations {
 		err := data.runNetcatCommandFromTestPod(clientName, nplAnnotations[i].NodeIP, int32(nplAnnotations[i].NodePort))
 		r.NoError(err, "Traffic test failed for NodeIP: %s, NodePort: %d", nplAnnotations[i].NodeIP, nplAnnotations[i].NodePort)
@@ -129,24 +129,20 @@ func checkTrafficForNPL(t *testing.T, data *TestData, r *require.Assertions, npl
 }
 
 func enableNPLInConfigmap(t *testing.T, data *TestData) {
-	if err := data.mutateAntreaConfigMap(func(data map[string]string) {
-		antreaAgentConf, _ := data["antrea-agent.conf"]
-		antreaAgentConf = strings.Replace(antreaAgentConf, "#  NodePortLocal: false", "  NodePortLocal: true", 1)
-		antreaAgentConf = strings.Replace(antreaAgentConf, "#nplPortRange: 40000-41000", "nplPortRange: 40000-41000", 1)
-		data["antrea-agent.conf"] = antreaAgentConf
-	}, false, true); err != nil {
+	ac := []configChange{
+		{"NodePortLocal", "true", true},
+		{"nplPortRange", "40000-41000", false},
+	}
+	if err := data.mutateAntreaConfigMap(nil, ac, false, true); err != nil {
 		t.Fatalf("Failed to enable NodePortLocal feature: %v", err)
 	}
 }
 
-func updateNPLPortRangeInConfigmap(t *testing.T, data *TestData, oldStartPort, oldEndPort, newStartPort, newEndPort int) {
-	if err := data.mutateAntreaConfigMap(func(data map[string]string) {
-		antreaAgentConf, _ := data["antrea-agent.conf"]
-		oldPortRange := fmt.Sprintf("nplPortRange: %d-%d", oldStartPort, oldEndPort)
-		newPortRange := fmt.Sprintf("nplPortRange: %d-%d", newStartPort, newEndPort)
-		antreaAgentConf = strings.Replace(antreaAgentConf, oldPortRange, newPortRange, 1)
-		data["antrea-agent.conf"] = antreaAgentConf
-	}, false, true); err != nil {
+func updateNPLPortRangeInConfigmap(t *testing.T, data *TestData, newStartPort, newEndPort int) {
+	ac := []configChange{
+		{"nplPortRange", fmt.Sprintf("%d-%d", newStartPort, newEndPort), false},
+	}
+	if err := data.mutateAntreaConfigMap(nil, ac, false, true); err != nil {
 		t.Fatalf("Failed to update NodePortLocal port range: %v", err)
 	}
 }
@@ -214,7 +210,7 @@ func NPLTestMultiplePods(t *testing.T) {
 
 		checkNPLRulesForPod(t, testData, r, nplAnnotations, antreaPod, testPodIP, true)
 		validatePortInRange(t, nplAnnotations, defaultStartPort, defaultEndPort)
-		checkTrafficForNPL(t, testData, r, nplAnnotations, clientName)
+		checkTrafficForNPL(testData, r, nplAnnotations, clientName)
 
 		testData.deletePod(testPodName)
 		checkNPLRulesForPod(t, testData, r, nplAnnotations, antreaPod, testPodIP, false)
@@ -277,7 +273,7 @@ func NPLTestPodAddMultiPort(t *testing.T) {
 
 	checkNPLRulesForPod(t, testData, r, nplAnnotations, antreaPod, testPodIP, true)
 	validatePortInRange(t, nplAnnotations, defaultStartPort, defaultEndPort)
-	checkTrafficForNPL(t, testData, r, nplAnnotations, clientName)
+	checkTrafficForNPL(testData, r, nplAnnotations, clientName)
 
 	testData.deletePod(testPodName)
 	checkNPLRulesForPod(t, testData, r, nplAnnotations, antreaPod, testPodIP, false)
@@ -332,7 +328,7 @@ func TestNPLMultiplePodsAgentRestart(t *testing.T) {
 
 		checkNPLRulesForPod(t, data, r, nplAnnotations, antreaPod, testPodIP, true)
 		validatePortInRange(t, nplAnnotations, defaultStartPort, defaultEndPort)
-		checkTrafficForNPL(t, data, r, nplAnnotations, clientName)
+		checkTrafficForNPL(data, r, nplAnnotations, clientName)
 	}
 
 }
@@ -389,7 +385,7 @@ func TestNPLChangePortRangeAgentRestart(t *testing.T) {
 		}
 	}
 
-	updateNPLPortRangeInConfigmap(t, data, defaultStartPort, defaultEndPort, updatedStartPort, updatedEndPort)
+	updateNPLPortRangeInConfigmap(t, data, updatedStartPort, updatedEndPort)
 
 	antreaPod, _ := data.getAntreaPodOnNode(node)
 
@@ -400,7 +396,7 @@ func TestNPLChangePortRangeAgentRestart(t *testing.T) {
 
 		checkNPLRulesForPod(t, data, r, nplAnnotations, antreaPod, testPodIP, true)
 		validatePortInRange(t, nplAnnotations, updatedStartPort, updatedEndPort)
-		checkTrafficForNPL(t, data, r, nplAnnotations, clientName)
+		checkTrafficForNPL(data, r, nplAnnotations, clientName)
 	}
 
 	checkForNPLRuleInIPTables(t, data, r, antreaPod, rules, false)

@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"strings"
 	"testing"
 	"time"
 
@@ -54,11 +53,10 @@ func TestUserProvidedCert(t *testing.T) {
 
 	// Re-configure antrea-controller to use user-provided cert.
 	// Note antrea-controller must be restarted to take effect.
-	if err := data.mutateAntreaConfigMap(func(data map[string]string) {
-		antreaControllerConf, _ := data["antrea-controller.conf"]
-		antreaControllerConf = strings.Replace(antreaControllerConf, "#selfSignedCert: true", "selfSignedCert: false", 1)
-		data["antrea-controller.conf"] = antreaControllerConf
-	}, false, false); err != nil {
+	cc := []configChange{
+		{"selfSignedCert", "false", false},
+	}
+	if err := data.mutateAntreaConfigMap(cc, nil, false, false); err != nil {
 		t.Fatalf("Failed to update ConfigMap: %v", err)
 	}
 
