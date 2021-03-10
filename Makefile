@@ -80,6 +80,11 @@ flow-aggregator:
 	@mkdir -p $(BINDIR)
 	GOOS=linux $(GO) build -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' github.com/vmware-tanzu/antrea/cmd/flow-aggregator
 
+.PHONY: flow-aggregator-instr-binary
+flow-aggregator-instr-binary:
+	@mkdir -p $(BINDIR)
+	GOOS=linux $(GO) test -tags testbincover -covermode count -coverpkg=github.com/vmware-tanzu/antrea/pkg/... -c -o $(BINDIR)/flow-aggregator-coverage $(GOFLAGS) -ldflags '$(LDFLAGS)' github.com/vmware-tanzu/antrea/cmd/flow-aggregator
+
 .PHONY: test-unit test-integration
 ifeq ($(UNAME_S),Linux)
 test-unit: .linux-test-unit
@@ -332,6 +337,7 @@ manifest-scale:
 manifest-coverage:
 	$(CURDIR)/hack/generate-manifest.sh --mode dev --coverage > build/yamls/antrea-coverage.yml
 	$(CURDIR)/hack/generate-manifest.sh --mode dev --ipsec --coverage > build/yamls/antrea-ipsec-coverage.yml
+	$(CURDIR)/hack/generate-manifest-flow-aggregator.sh --mode dev --coverage > build/yamls/flow-aggregator-coverage.yml
 
 .PHONY: octant-antrea-ubuntu
 octant-antrea-ubuntu:
@@ -352,6 +358,16 @@ endif
 	docker tag antrea/flow-aggregator:$(DOCKER_IMG_VERSION) antrea/flow-aggregator
 	docker tag antrea/flow-aggregator:$(DOCKER_IMG_VERSION) projects.registry.vmware.com/antrea/flow-aggregator
 	docker tag antrea/flow-aggregator:$(DOCKER_IMG_VERSION) projects.registry.vmware.com/antrea/flow-aggregator:$(DOCKER_IMG_VERSION)
+
+.PHONY: flow-aggregator-ubuntu-coverage
+flow-aggregator-ubuntu-coverage:
+	@echo "===> Building antrea/flow-aggregator-coverage Docker image <==="
+ifneq ($(DOCKER_REGISTRY),"")
+	docker build -t antrea/flow-aggregator-coverage:$(DOCKER_IMG_VERSION) -f build/images/flow-aggregator/Dockerfile.coverage .
+else
+	docker build --pull -t antrea/flow-aggregator-coverage:$(DOCKER_IMG_VERSION) -f build/images/flow-aggregator/Dockerfile.coverage .
+endif
+	docker tag antrea/flow-aggregator-coverage:$(DOCKER_IMG_VERSION) antrea/flow-aggregator-coverage
 
 .PHONY: verify
 verify:

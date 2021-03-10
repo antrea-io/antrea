@@ -304,6 +304,9 @@ func exportLogs(tb testing.TB, data *TestData, logsSubDir string, writeNodeLogs 
 }
 
 func teardownFlowAggregator(tb testing.TB, data *TestData) {
+	if err := testData.gracefulExitFlowAggregator(testOptions.coverageDir); err != nil {
+		tb.Fatalf("Error when gracefully exiting Flow Aggregator: %v", err)
+	}
 	tb.Logf("Deleting '%s' K8s Namespace", flowAggregatorNamespace)
 	if err := data.deleteNamespace(flowAggregatorNamespace, defaultTimeout); err != nil {
 		tb.Logf("Error when tearing down flow aggregator: %v", err)

@@ -37,7 +37,7 @@ func getCACert(k8sClient kubernetes.Interface) ([]byte, error) {
 		return nil, fmt.Errorf("error getting ConfigMap %s: %v", CAConfigMapName, err)
 	}
 	if caConfigMap.Data == nil || caConfigMap.Data[CAConfigMapKey] == "" {
-		return nil, fmt.Errorf("error getting data from ConfigMap %s: %v", CAConfigMapName, err)
+		return nil, fmt.Errorf("no data in %s ConfigMap", CAConfigMapName)
 	}
 	return []byte(caConfigMap.Data[CAConfigMapKey]), nil
 }
