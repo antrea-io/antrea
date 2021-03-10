@@ -25,6 +25,7 @@ import (
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/nodeportlocal/portcache"
 	"github.com/vmware-tanzu/antrea/pkg/agent/nodeportlocal/rules"
+	utilsets "github.com/vmware-tanzu/antrea/pkg/util/sets"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -214,7 +215,7 @@ func (c *NPLController) enqueueSvcUpdate(oldObj, newObj interface{}) {
 		// Disjunctive union of Pods from both Service sets.
 		oldPodSet := sets.NewString(c.getPodsFromService(oldSvc)...)
 		newPodSet := sets.NewString(c.getPodsFromService(newSvc)...)
-		podKeys = oldPodSet.Difference(newPodSet).Union(newPodSet.Difference(oldPodSet))
+		podKeys = utilsets.SymmetricDifference(oldPodSet, newPodSet)
 	}
 
 	for podKey := range podKeys {

@@ -31,3 +31,26 @@ func Merge(dst, src sets.String) sets.String {
 	}
 	return dst
 }
+
+// SymmetricDifference returns the symmetric difference of two sets.
+// For example:
+// s1 = {a1, a2, a3}
+// s2 = {a1, a2, a4, a5}
+// SymmetricDifference(s1, s2) = {a3, a4, a5}
+//
+// It supersedes s1.Difference(s2).Union(s2.Difference(s1)) which is a little complicated and always builds several
+// unnecessary intermediate sets.
+func SymmetricDifference(s1, s2 sets.String) sets.String {
+	result := sets.NewString()
+	for key := range s1 {
+		if !s2.Has(key) {
+			result.Insert(key)
+		}
+	}
+	for key := range s2 {
+		if !s1.Has(key) {
+			result.Insert(key)
+		}
+	}
+	return result
+}
