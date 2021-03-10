@@ -35,10 +35,15 @@ const (
 var (
 	clusterUUID = uuid.New()
 
+	// First release of Antrea (v0.1.0) at KubeCon NA 2019 (San Diego) :)
+	sanDiegoLocation, _        = time.LoadLocation("America/Los_Angeles")
+	configMapCreationTimestamp = metav1.Date(2019, time.November, 18, 11, 26, 2, 0, sanDiegoLocation)
+
 	idConfigMap = &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace: antreaNamespace,
-			Name:      DefaultClusterIdentityConfigMapName,
+			Namespace:         antreaNamespace,
+			Name:              DefaultClusterIdentityConfigMapName,
+			CreationTimestamp: configMapCreationTimestamp,
 		},
 		Data: map[string]string{
 			uuidConfigMapKey: clusterUUID.String(),
@@ -47,8 +52,9 @@ var (
 
 	idConfigMapEmpty = &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace: antreaNamespace,
-			Name:      DefaultClusterIdentityConfigMapName,
+			Namespace:         antreaNamespace,
+			Name:              DefaultClusterIdentityConfigMapName,
+			CreationTimestamp: configMapCreationTimestamp,
 		},
 		Data: map[string]string{},
 	}
@@ -60,9 +66,12 @@ func TestClusterIdentityAllocatorNew(t *testing.T) {
 	require.NoError(t, allocator.updateConfigMapIfNeeded())
 
 	provider := NewClusterIdentityProvider(antreaNamespace, DefaultClusterIdentityConfigMapName, client)
-	actualUUID, err := provider.Get()
+	identity, creationTime, err := provider.Get()
 	require.NoError(t, err, "Error when retrieving cluster identity")
-	assert.NotEqual(t, uuid.Nil, actualUUID)
+	assert.NotEqual(t, uuid.Nil, identity.UUID)
+	// comparing timestamps directly does not work because of different location pointers
+
+	assert.True(t, creationTime.Equal(configMapCreationTimestamp.Time))
 }
 
 func TestClusterIdentityAllocatorExisting(t *testing.T) {
@@ -71,15 +80,17 @@ func TestClusterIdentityAllocatorExisting(t *testing.T) {
 	require.NoError(t, allocator.updateConfigMapIfNeeded())
 
 	provider := NewClusterIdentityProvider(antreaNamespace, DefaultClusterIdentityConfigMapName, client)
-	actualUUID, err := provider.Get()
+	identity, creationTime, err := provider.Get()
 	require.NoError(t, err, "Error when retrieving cluster identity")
-	assert.Equal(t, clusterUUID, actualUUID)
+	assert.Equal(t, clusterUUID, identity.UUID)
+
+	assert.True(t, creationTime.Equal(configMapCreationTimestamp.Time))
 }
 
 func TestClusterIdentityProviderMissingConfigMap(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	provider := NewClusterIdentityProvider(antreaNamespace, DefaultClusterIdentityConfigMapName, client)
-	_, err := provider.Get()
+	_, _, err := provider.Get()
 	assert.Error(t, err, "Cluster identity should not be available")
 }
 
@@ -107,7 +118,9 @@ func TestClusterIdentityAllocatorRun(t *testing.T) {
 	require.NoError(t, runWrapper(ctx, allocator), "Cluster identity could not be updated")
 
 	provider := NewClusterIdentityProvider(antreaNamespace, DefaultClusterIdentityConfigMapName, client)
-	actualUUID, err := provider.Get()
+	identity, creationTime, err := provider.Get()
 	require.NoError(t, err, "Error when retrieving cluster identity")
-	assert.NotEqual(t, uuid.Nil, actualUUID)
+	assert.NotEqual(t, uuid.Nil, identity.UUID)
+
+	assert.True(t, creationTime.Equal(configMapCreationTimestamp.Time))
 }

@@ -48,10 +48,10 @@ func genObservationDomainID(k8sClient kubernetes.Interface) uint32 {
 	)
 	var clusterUUID uuid.UUID
 	if err := wait.PollImmediate(retryInterval, timeout, func() (bool, error) {
-		var err error
-		if clusterUUID, err = clusterIdentityProvider.Get(); err != nil {
+		if clusterIdentity, _, err := clusterIdentityProvider.Get(); err != nil {
 			return false, nil
 		} else {
+			clusterUUID = clusterIdentity.UUID
 			return true, nil
 		}
 	}); err != nil {
