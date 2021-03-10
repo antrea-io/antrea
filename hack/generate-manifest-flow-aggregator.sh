@@ -26,6 +26,7 @@ Generate a YAML manifest for flow aggregator, using Kustomize, and print it to s
         --flow-collector      Flow collector is the externalFlowCollectorAddr configMap parameter
                               It should be given in format IP:port:proto. Example: 192.168.1.100:4739:udp
         --keep                Debug flag which will preserve the generated kustomization.yml
+        --coverage            Generates a manifest which supports measuring code coverage of Flow Aggregator binaries.
         --help, -h            Print this message and exit
 
 In 'release' mode, environment variables IMG_NAME and IMG_TAG must be set.
@@ -46,6 +47,8 @@ function print_help {
 MODE="dev"
 KEEP=false
 FLOW_COLLECTOR=""
+COVERAGE=false
+
 while [[ $# -gt 0 ]]
 do
 key="$1"
@@ -61,6 +64,10 @@ case $key in
     ;;
     --keep)
     KEEP=true
+    shift
+    ;;
+    --coverage)
+    COVERAGE=true
     shift
     ;;
     -h|--help)
@@ -128,6 +135,17 @@ $KUSTOMIZE edit add base $BASE
 BASE=../configMap
 cd ..
 
+if $COVERAGE; then
+    mkdir coverage && cd coverage
+    cp $KUSTOMIZATION_DIR/patches/coverage/*.yml .
+    touch kustomization.yml
+    $KUSTOMIZE edit add base $BASE
+    # this runs flow-aggregator via the instrumented binary.
+    $KUSTOMIZE edit add patch --path startFlowAggCov.yml
+    BASE=../coverage
+    cd ..
+fi
+
 mkdir $MODE && cd $MODE
 touch kustomization.yml
 $KUSTOMIZE edit add base $BASE
@@ -135,7 +153,12 @@ $KUSTOMIZE edit add base $BASE
 find ../../patches/$MODE -name \*.yml -exec cp {} . \;
 
 if [ "$MODE" == "dev" ]; then
-    $KUSTOMIZE edit set image flow-aggregator=projects.registry.vmware.com/antrea/flow-aggregator:latest
+    if $COVERAGE; then
+        $KUSTOMIZE edit set image flow-aggregator=antrea/flow-aggregator-coverage:latest
+    else
+        $KUSTOMIZE edit set image flow-aggregator=projects.registry.vmware.com/antrea/flow-aggregator:latest
+    fi
+
     $KUSTOMIZE edit add patch --path imagePullPolicy.yml
 fi
 
