@@ -76,14 +76,17 @@ const (
 	antreaIPSecYML             string = "antrea-ipsec.yml"
 	antreaCovYML               string = "antrea-coverage.yml"
 	antreaIPSecCovYML          string = "antrea-ipsec-coverage.yml"
-	flowaggregatorYML          string = "flow-aggregator.yml"
+	flowAggregatorYML          string = "flow-aggregator.yml"
+	flowAggregatorCovYML       string = "flow-aggregator-coverage.yml"
 	defaultBridgeName          string = "br-int"
 	monitoringNamespace        string = "monitoring"
 
 	antreaControllerCovBinary string = "antrea-controller-coverage"
 	antreaAgentCovBinary      string = "antrea-agent-coverage"
+	flowAggregatorCovBinary   string = "flow-aggregator-coverage"
 	antreaControllerCovFile   string = "antrea-controller.cov.out"
 	antreaAgentCovFile        string = "antrea-agent.cov.out"
+	flowAggregatorCovFile     string = "flow-aggregator.cov.out"
 
 	antreaAgentConfName      string = "antrea-agent.conf"
 	antreaControllerConfName string = "antrea-controller.conf"
@@ -147,6 +150,12 @@ type TestData struct {
 	securityClient     secv1alpha1.SecurityV1alpha1Interface
 	crdClient          crdclientset.Interface
 	logsDirForTestCase string
+}
+
+type configChange struct {
+	field         string
+	value         string
+	isFeatureGate bool
 }
 
 var testData *TestData
@@ -529,28 +538,32 @@ func (data *TestData) deployAntreaIPSec() error {
 // deployAntreaFlowExporter deploys Antrea with flow exporter config params enabled.
 func (data *TestData) deployAntreaFlowExporter(ipfixCollector string) error {
 	// Enable flow exporter feature and add related config params to antrea agent configmap.
-	return data.mutateAntreaConfigMap(func(data map[string]string) {
-		antreaAgentConf, _ := data["antrea-agent.conf"]
-		antreaAgentConf = strings.Replace(antreaAgentConf, "#  FlowExporter: false", "  FlowExporter: true", 1)
-		if ipfixCollector != "" {
-			antreaAgentConf = strings.Replace(antreaAgentConf, "#flowCollectorAddr: \"flow-aggregator.flow-aggregator.svc:4739:tcp\"", fmt.Sprintf("flowCollectorAddr: \"%s\"", ipfixCollector), 1)
-		}
-		antreaAgentConf = strings.Replace(antreaAgentConf, "#flowPollInterval: \"5s\"", "flowPollInterval: \"1s\"", 1)
-		antreaAgentConf = strings.Replace(antreaAgentConf, "#flowExportFrequency: 12", "flowExportFrequency: 2", 1)
-		if testOptions.providerName == "kind" {
-			// In Kind cluster, there are issues with DNS name resolution on worker nodes.
-			// We will skip TLS testing for Kind cluster because the server certificate is generated with Flow aggregator's DNS name
-			antreaAgentConf = strings.Replace(antreaAgentConf, "#enableTLSToFlowAggregator: true", "enableTLSToFlowAggregator: false", 1)
-		}
-		data["antrea-agent.conf"] = antreaAgentConf
-	}, false, true)
+	ac := []configChange{
+		{"FlowExporter", "true", true},
+		{"flowPollInterval", "\"1s\"", false},
+		{"activeFlowExportTimeout", "\"2s\"", false},
+		{"inactiveFlowExportTimeout", "\"1s\"", false},
+	}
+	if ipfixCollector != "" {
+		ac = append(ac, configChange{"flowCollectorAddr", fmt.Sprintf("\"%s\"", ipfixCollector), false})
+	}
+	if testOptions.providerName == "kind" {
+		// In Kind cluster, there are issues with DNS name resolution on worker nodes.
+		// We will skip TLS testing for Kind cluster because the server certificate is generated with Flow aggregator's DNS name
+		ac = append(ac, configChange{"enableTLSToFlowAggregator", "false", false})
+	}
+	return data.mutateAntreaConfigMap(nil, ac, false, true)
 }
 
 // deployFlowAggregator deploys flow aggregator with ipfix collector address.
 func (data *TestData) deployFlowAggregator(ipfixCollector string) (string, error) {
-	rc, _, _, err := provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl apply -f %s", flowaggregatorYML))
+	flowAggYaml := flowAggregatorYML
+	if testOptions.enableCoverage {
+		flowAggYaml = flowAggregatorCovYML
+	}
+	rc, _, _, err := provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl apply -f %s", flowAggYaml))
 	if err != nil || rc != 0 {
-		return "", fmt.Errorf("error when deploying flow aggregator; %s not available on the control-plane Node", flowaggregatorYML)
+		return "", fmt.Errorf("error when deploying flow aggregator; %s not available on the control-plane Node", flowAggYaml)
 	}
 	if err = data.mutateFlowAggregatorConfigMap(ipfixCollector); err != nil {
 		return "", err
@@ -1255,6 +1268,13 @@ func validatePodIP(podNetworkCIDR string, ip net.IP) (bool, error) {
 // createService creates a service with port and targetPort.
 func (data *TestData) createService(serviceName string, port, targetPort int32, selector map[string]string, affinity bool,
 	serviceType corev1.ServiceType, ipFamily *corev1.IPFamily) (*corev1.Service, error) {
+	annotation := make(map[string]string)
+	return data.createServiceWithAnnotations(serviceName, port, targetPort, selector, affinity, serviceType, ipFamily, annotation)
+}
+
+// createService creates a service with Annotation
+func (data *TestData) createServiceWithAnnotations(serviceName string, port, targetPort int32, selector map[string]string, affinity bool,
+	serviceType corev1.ServiceType, ipFamily *corev1.IPFamily, annotations map[string]string) (*corev1.Service, error) {
 	affinityType := corev1.ServiceAffinityNone
 	if affinity {
 		affinityType = corev1.ServiceAffinityClientIP
@@ -1267,6 +1287,7 @@ func (data *TestData) createService(serviceName string, port, targetPort int32, 
 				"antrea-e2e": serviceName,
 				"app":        serviceName,
 			},
+			Annotations: annotations,
 		},
 		Spec: corev1.ServiceSpec{
 			SessionAffinity: affinityType,
@@ -1280,6 +1301,11 @@ func (data *TestData) createService(serviceName string, port, targetPort int32, 
 		},
 	}
 	return data.clientset.CoreV1().Services(testNamespace).Create(context.TODO(), &service, metav1.CreateOptions{})
+}
+
+// createNginxClusterIPServiceWithAnnotations creates nginx service with Annotation
+func (data *TestData) createNginxClusterIPServiceWithAnnotations(affinity bool, ipFamily *corev1.IPFamily, annotation map[string]string) (*corev1.Service, error) {
+	return data.createServiceWithAnnotations("nginx", 80, 80, map[string]string{"app": "nginx"}, affinity, corev1.ServiceTypeClusterIP, ipFamily, annotation)
 }
 
 // createNginxClusterIPService create a nginx service with the given name.
@@ -1600,12 +1626,23 @@ func (data *TestData) GetGatewayInterfaceName(antreaNamespace string) (string, e
 	return antreaDefaultGW, nil
 }
 
-func (data *TestData) mutateAntreaConfigMap(mutatingFunc func(data map[string]string), restartController, restartAgent bool) error {
+func (data *TestData) mutateAntreaConfigMap(controllerChanges []configChange, agentChanges []configChange, restartController, restartAgent bool) error {
 	configMap, err := data.GetAntreaConfigMap(antreaNamespace)
 	if err != nil {
 		return err
 	}
-	mutatingFunc(configMap.Data)
+
+	controllerConf, _ := configMap.Data["antrea-controller.conf"]
+	for _, c := range controllerChanges {
+		controllerConf = replaceFieldValue(controllerConf, c)
+	}
+	configMap.Data["antrea-controller.conf"] = controllerConf
+	agentConf, _ := configMap.Data["antrea-agent.conf"]
+	for _, c := range agentChanges {
+		agentConf = replaceFieldValue(agentConf, c)
+	}
+	configMap.Data["antrea-agent.conf"] = agentConf
+
 	if _, err := data.clientset.CoreV1().ConfigMaps(antreaNamespace).Update(context.TODO(), configMap, metav1.UpdateOptions{}); err != nil {
 		return fmt.Errorf("failed to update ConfigMap %s: %v", configMap.Name, err)
 	}
@@ -1623,6 +1660,18 @@ func (data *TestData) mutateAntreaConfigMap(mutatingFunc func(data map[string]st
 		}
 	}
 	return nil
+}
+
+func replaceFieldValue(content string, c configChange) string {
+	var res string
+	if c.isFeatureGate {
+		r := regexp.MustCompile(fmt.Sprintf(`(?m)#?  %s:.*$`, c.field))
+		res = r.ReplaceAllString(content, fmt.Sprintf("  %s: %s", c.field, c.value))
+	} else {
+		r := regexp.MustCompile(fmt.Sprintf(`(?m)#?.*%s:.*$`, c.field))
+		res = r.ReplaceAllString(content, fmt.Sprintf("%s: %s", c.field, c.value))
+	}
+	return res
 }
 
 // gracefulExitAntreaController copies the Antrea controller binary coverage data file out before terminating the Pod
@@ -1696,6 +1745,37 @@ func (data *TestData) gracefulExitAntreaAgent(covDir string, nodeName string) er
 			return fmt.Errorf("error when graceful exit Antrea agent - copy antrea-agent coverage files out: %v", err)
 		}
 	}
+	return nil
+}
+
+// gracefulExitFlowAggregator copies the Flow Aggregator binary coverage data file out before terminating the Pod.
+func (data *TestData) gracefulExitFlowAggregator(covDir string) error {
+	listOptions := metav1.ListOptions{
+		LabelSelector: "app=flow-aggregator",
+	}
+	pods, err := data.clientset.CoreV1().Pods(flowAggregatorNamespace).List(context.TODO(), listOptions)
+	if err != nil {
+		return fmt.Errorf("failed to list Flow Aggregator Pod: %v", err)
+	}
+	if len(pods.Items) != 1 {
+		return fmt.Errorf("expected *exactly* one Pod")
+	}
+	flowAggPod := &pods.Items[0]
+	podName := flowAggPod.Name
+	cmds := []string{"pgrep", "-f", flowAggregatorCovBinary, "-P", "1"}
+	stdout, stderr, err := data.runCommandFromPod(flowAggregatorNamespace, podName, "flow-aggregator", cmds)
+	if err != nil {
+		_, describeStdout, _, _ := provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl -n %s describe pod", flowAggregatorNamespace))
+		return fmt.Errorf("error when getting pid of '%s', stdout: <%v>, stderr: <%v>, err: <%v>, describe stdout: <%v>", flowAggregatorCovBinary, stdout, stderr, err, describeStdout)
+	}
+	cmds = []string{"kill", "-SIGINT", strings.TrimSpace(stdout)}
+	if _, stderr, err = data.runCommandFromPod(flowAggregatorNamespace, podName, "flow-aggregator", cmds); err != nil {
+		return fmt.Errorf("error when sending SIGINT signal to '%s', stderr: <%v>, err: <%v>", flowAggregatorCovBinary, stderr, err)
+	}
+	if err = data.copyPodFiles(podName, "flow-aggregator", flowAggregatorNamespace, flowAggregatorCovFile, covDir); err != nil {
+		return fmt.Errorf("error when gracefully exiting Flow Aggregator - copy flow-aggregator coverage files out: %v", err)
+	}
+
 	return nil
 }
 

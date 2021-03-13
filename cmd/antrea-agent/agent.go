@@ -19,7 +19,6 @@ import (
 	"net"
 	"time"
 
-	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/informers"
 	"k8s.io/klog"
 
@@ -187,8 +186,7 @@ func run(o *Options) error {
 		statsCollector = stats.NewCollector(antreaClientProvider, ofClient, networkPolicyController)
 	}
 
-	var proxier k8sproxy.Provider
-
+	var proxier proxy.Proxier
 	if features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
 		v4Enabled := config.IsIPv4Enabled(nodeConfig, networkConfig.TrafficEncapMode)
 		v6Enabled := config.IsIPv6Enabled(nodeConfig, networkConfig.TrafficEncapMode)
@@ -287,6 +285,10 @@ func run(o *Options) error {
 		go traceflowController.Run(stopCh)
 	}
 
+	if features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
+		go proxier.GetProxyProvider().Run(stopCh)
+	}
+
 	agentQuerier := querier.NewAgentQuerier(
 		nodeConfig,
 		networkConfig,
@@ -294,16 +296,13 @@ func run(o *Options) error {
 		k8sClient,
 		ofClient,
 		ovsBridgeClient,
+		proxier,
 		networkPolicyController,
 		o.config.APIPort)
 
 	agentMonitor := monitor.NewAgentMonitor(crdClient, agentQuerier)
 
 	go agentMonitor.Run(stopCh)
-
-	if features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
-		go proxier.Run(stopCh)
-	}
 
 	cipherSuites, err := cipher.GenerateCipherSuitesList(o.config.TLSCipherSuites)
 	if err != nil {
@@ -339,25 +338,37 @@ func run(o *Options) error {
 		v4Enabled := config.IsIPv4Enabled(nodeConfig, networkConfig.TrafficEncapMode)
 		v6Enabled := config.IsIPv6Enabled(nodeConfig, networkConfig.TrafficEncapMode)
 
+		var proxyProvider k8sproxy.Provider
+		if proxier != nil {
+			proxyProvider = proxier.GetProxyProvider()
+		}
+		flowRecords := flowrecords.NewFlowRecords()
 		connStore := connections.NewConnectionStore(
 			connections.InitializeConnTrackDumper(nodeConfig, serviceCIDRNet, serviceCIDRNetv6, ovsDatapathType, features.DefaultFeatureGate.Enabled(features.AntreaProxy)),
+			flowRecords,
 			ifaceStore,
 			v4Enabled,
 			v6Enabled,
-			proxier,
+			proxyProvider,
 			networkPolicyController,
 			o.pollInterval)
-		pollDone := make(chan struct{})
-		go connStore.Run(stopCh, pollDone)
+		go connStore.Run(stopCh)
 
-		flowExporter := exporter.NewFlowExporter(
-			flowrecords.NewFlowRecords(connStore),
-			o.config.FlowExportFrequency,
+		flowExporter, err := exporter.NewFlowExporter(
+			connStore,
+			flowRecords,
+			o.flowCollectorAddr,
+			o.flowCollectorProto,
+			o.activeFlowTimeout,
+			o.idleFlowTimeout,
 			o.config.EnableTLSToFlowAggregator,
 			v4Enabled,
 			v6Enabled,
 			k8sClient)
-		go wait.Until(func() { flowExporter.Export(o.flowCollectorAddr, o.flowCollectorProto, stopCh, pollDone) }, 0, stopCh)
+		if err != nil {
+			return fmt.Errorf("error when creating IPFIX flow exporter: %v", err)
+		}
+		go flowExporter.Run(stopCh)
 	}
 
 	<-stopCh

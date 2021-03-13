@@ -6,6 +6,7 @@ resources:
 - controller.yml
 - agent-rbac.yml
 - agent.yml
+- cluster-identity-reader.yml
 configMapGenerator:
 - files:
   - conf/antrea-controller.conf

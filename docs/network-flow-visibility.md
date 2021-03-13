@@ -420,7 +420,7 @@ Visualization Overview Dashboard">
 Pod-to-Pod Tx and Rx traffic is shown in sankey diagrams. Corresponding
 source or destination Pod throughput is visualized using line graph.
 
-<img src="https://downloads.antrea.io/static/02052021/flow-visualization-pod-to-pod-1.png" width="900" alt="Flow
+<img src="https://downloads.antrea.io/static/03022021/flow-visualization-pod-to-pod-1.png" width="900" alt="Flow
 Visualization Pod-to-Pod Dashboard">
 
 <img src="https://downloads.antrea.io/static/02052021/flow-visualization-pod-to-pod-2.png" width="900" alt="Flow
@@ -434,7 +434,7 @@ Visualization Pod-to-Pod Dashboard">
 Pod-to-Service traffic is presented similar to Pod-to-Pod traffic.
 Corresponding source or destination IP addresses is shown in tooltips.
 
-<img src="https://downloads.antrea.io/static/02052021/flow-visualization-pod-to-service-1.png" width="900" alt="Flow
+<img src="https://downloads.antrea.io/static/03022021/flow-visualization-pod-to-service-1.png" width="900" alt="Flow
 Visualization Pod-to-Service Dashboard">
 
 Aggregated Tx and Rx traffic based on destination Service is shown in line graph.
@@ -457,24 +457,27 @@ Visualization Flow Record Dashboard">
 Node Throughput dashboard shows the visualization of inter-Node and
 intra-Node traffic by aggregating all the Pod traffic per Node.
 
-<img src="https://downloads.antrea.io/static/02052021/flow-visualization-node-1.png" width="900" alt="Flow
+<img src="https://downloads.antrea.io/static/03022021/flow-visualization-node-1.png" width="900" alt="Flow
 Visualization Node Throughput Dashboard">
 
 We also present aggregated Tx and Rx Mbps by Node in heatmap to give
 a better overview of Node bandwidth consumption.
 
-<img src="https://downloads.antrea.io/static/02052021/flow-visualization-node-2.png" width="900" alt="Flow
+<img src="https://downloads.antrea.io/static/03022021/flow-visualization-node-2.png" width="900" alt="Flow
 Visualization Node Throughput Dashboard">
 
 #### Network Policy
 
 Network Policy dashboard provides filters over ingress network policy name and namespace, egress
-network policy name and namespace to view corresponding flow throughput under network policy.
+network policy name and namespace to view corresponding flow throughput under network policy. Flows
+are grouped by egress network policies (source) and ingress network policies (destination) in the
+sankey diagram. When hovering over the flow, it will show corresponding Pod-to-Pod traffic details
+and network policies.
 
-<img src="https://downloads.antrea.io/static/flow-visualization-np-1.png" width="900" alt="Flow
+<img src="https://downloads.antrea.io/static/03022021/flow-visualization-np-1.png" width="900" alt="Flow
 Visualization Network Policy Dashboard">
 
 With filters applied:
 
-<img src="https://downloads.antrea.io/static/flow-visualization-np-2.png" width="900" alt="Flow
+<img src="https://downloads.antrea.io/static/03022021/flow-visualization-np-2.png" width="900" alt="Flow
 Visualization Network Policy Dashboard">

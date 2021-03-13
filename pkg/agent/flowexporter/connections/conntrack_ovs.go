@@ -30,13 +30,35 @@ import (
 )
 
 // Following map is for converting protocol name (string) to protocol identifier
-var protocols = map[string]uint8{
-	"icmp":      1,
-	"igmp":      2,
-	"tcp":       6,
-	"udp":       17,
-	"ipv6-icmp": 58,
-}
+var (
+	protocols = map[string]uint8{
+		"icmp":      1,
+		"igmp":      2,
+		"tcp":       6,
+		"udp":       17,
+		"ipv6-icmp": 58,
+	}
+	// Mapping is defined at https://github.com/torvalds/linux/blob/v5.9/include/uapi/linux/netfilter/nf_conntrack_common.h#L42
+	stateMap = map[string]uint32{
+		"EXPECTED":      uint32(1),
+		"SEEN_REPLY":    uint32(1 << 1),
+		"ASSURED":       uint32(1 << 2),
+		"CONFIRMED":     uint32(1 << 3),
+		"SRC_NAT":       uint32(1 << 4),
+		"DST_NAT":       uint32(1 << 5),
+		"NAT_MASK":      uint32(1<<5 | 1<<4),
+		"SEQ_ADJUST":    uint32(1 << 6),
+		"SRC_NAT_DONE":  uint32(1 << 7),
+		"DST_NAT_DONE":  uint32(1 << 8),
+		"NAT_DONE_MASK": uint32(1<<8 | 1<<7),
+		"DYING":         uint32(1 << 9),
+		"FIXED_TIMEOUT": uint32(1 << 10),
+		"TEMPLATE":      uint32(1 << 11),
+		"UNTRACKED":     uint32(1 << 12),
+		"HELPER":        uint32(1 << 13),
+		"OFFLOAD":       uint32(1 << 14),
+	}
+)
 
 // connTrackOvsCtl implements ConnTrackDumper. This supports OVS userspace datapath scenarios.
 var _ ConnTrackDumper = new(connTrackOvsCtl)
@@ -197,7 +219,7 @@ func flowStringToAntreaConnection(flow string, zoneFilter uint16) (*flowexporter
 		// TODO: We didn't find stoptime related field in flow string right now, need to investigate how stoptime is recorded and dumped.
 		case strings.Contains(fs, "status"):
 			fields := strings.Split(fs, "=")
-			conn.StatusFlag = statusStringToStateflag(fields[len(fields)-1])
+			conn.StatusFlag = statusStringToStateFlag(fields[len(fields)-1])
 		case strings.Contains(fs, "zone"):
 			fields := strings.Split(fs, "=")
 			val, err := strconv.ParseUint(fields[len(fields)-1], 10, 16)
@@ -236,8 +258,9 @@ func flowStringToAntreaConnection(flow string, zoneFilter uint16) (*flowexporter
 	if !inZone {
 		return nil, nil
 	}
-	conn.IsActive = true
-	conn.DoExport = true
+	// Add current time as stop time.
+	conn.StopTime = time.Now()
+	conn.IsPresent = true
 
 	klog.V(5).Infof("Converted flow string: %v into connection: %+v", flow, conn)
 
@@ -276,31 +299,15 @@ func (ct *connTrackOvsCtl) GetMaxConnections() (int, error) {
 	return maxConns, nil
 }
 
-func statusStringToStateflag(status string) uint32 {
-	// Mapping is defined at https://github.com/torvalds/linux/blob/v5.9/include/uapi/linux/netfilter/nf_conntrack_common.h#L42
-	stateMap := map[string]uint32{
-		"EXPECTED":      uint32(1),
-		"SEEN_REPLY":    uint32(1 << 1),
-		"ASSURED":       uint32(1 << 2),
-		"CONFIRMED":     uint32(1 << 3),
-		"SRC_NAT":       uint32(1 << 4),
-		"DST_NAT":       uint32(1 << 5),
-		"NAT_MASK":      uint32(1<<5 | 1<<4),
-		"SEQ_ADJUST":    uint32(1 << 6),
-		"SRC_NAT_DONE":  uint32(1 << 7),
-		"DST_NAT_DONE":  uint32(1 << 8),
-		"NAT_DONE_MASK": uint32(1<<8 | 1<<7),
-		"DYING":         uint32(1 << 9),
-		"FIXED_TIMEOUT": uint32(1 << 10),
-		"TEMPLATE":      uint32(1 << 11),
-		"UNTRACKED":     uint32(1 << 12),
-		"HELPER":        uint32(1 << 13),
-		"OFFLOAD":       uint32(1 << 14),
-	}
-	var stateflag uint32
+func statusStringToStateFlag(status string) uint32 {
+	statusFlag := uint32(0)
 	statusSlice := strings.Split(status, "|")
 	for _, subStatus := range statusSlice {
-		stateflag = stateflag | stateMap[subStatus]
+		statusFlag = statusFlag | stateMap[subStatus]
 	}
-	return stateflag
+	return statusFlag
 }
+
+/*func isStatusSet(statusFlag uint32, status string) bool {
+	return statusFlag&stateMap[status] != 0
+}*/

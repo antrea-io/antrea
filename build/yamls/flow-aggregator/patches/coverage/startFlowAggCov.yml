@@ -1,0 +1,13 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: flow-aggregator
+  namespace: flow-aggregator
+spec:
+  template:
+    spec:
+      containers:
+      - name: flow-aggregator
+        image: antrea/flow-aggregator-coverage:latest
+        command: [ "/bin/sh" ]
+        args: [ "-c", "flow-aggregator-coverage -test.run=TestBincoverRunMain -test.coverprofile=flow-aggregator.cov.out -args-file=/flow-aggregator-arg-file; while true; do sleep 5 & wait $!; done" ]

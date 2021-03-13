@@ -19,6 +19,7 @@ package connections
 import (
 	"fmt"
 	"net"
+	"time"
 
 	"github.com/ti-mo/conntrack"
 	"k8s.io/klog"
@@ -108,7 +109,7 @@ func (nfct *netFilterConnTrack) DumpFlowsInCtZone(zoneFilter uint16) ([]*flowexp
 	antreaConns := make([]*flowexporter.Connection, len(conns))
 	for i := range conns {
 		conn := conns[i]
-		antreaConns[i] = netlinkFlowToAntreaConnection(&conn)
+		antreaConns[i] = NetlinkFlowToAntreaConnection(&conn)
 	}
 
 	klog.V(2).Infof("Finished dumping -- total no. of flows in conntrack: %d", len(antreaConns))
@@ -117,7 +118,7 @@ func (nfct *netFilterConnTrack) DumpFlowsInCtZone(zoneFilter uint16) ([]*flowexp
 	return antreaConns, nil
 }
 
-func netlinkFlowToAntreaConnection(conn *conntrack.Flow) *flowexporter.Connection {
+func NetlinkFlowToAntreaConnection(conn *conntrack.Flow) *flowexporter.Connection {
 	tupleOrig := flowexporter.Tuple{
 		SourceAddress:      conn.TupleOrig.IP.SourceAddress,
 		DestinationAddress: conn.TupleOrig.IP.DestinationAddress,
@@ -138,9 +139,7 @@ func netlinkFlowToAntreaConnection(conn *conntrack.Flow) *flowexporter.Connectio
 		ID:                      conn.ID,
 		Timeout:                 conn.Timeout,
 		StartTime:               conn.Timestamp.Start,
-		StopTime:                conn.Timestamp.Stop,
-		IsActive:                true,
-		DoExport:                true,
+		IsPresent:               true,
 		Zone:                    conn.Zone,
 		Mark:                    conn.Mark,
 		Labels:                  conn.Labels,
@@ -156,6 +155,13 @@ func netlinkFlowToAntreaConnection(conn *conntrack.Flow) *flowexporter.Connectio
 		SourcePodName:           "",
 		DestinationPodNamespace: "",
 		DestinationPodName:      "",
+	}
+
+	// Get the stop time from dumped connection if the connection is terminated(dying state).
+	if conn.Status.Dying() {
+		newConn.StopTime = conn.Timestamp.Stop
+	} else {
+		newConn.StopTime = time.Now()
 	}
 
 	return &newConn

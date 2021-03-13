@@ -40,10 +40,8 @@ type Connection struct {
 	// For invalid and closed connections: StopTime is the time when connection was updated last.
 	// For established connections: StopTime is latest time when it was polled.
 	StopTime time.Time
-	// IsActive flag helps in cleaning up connections when they are not in conntrack any module more.
-	IsActive bool
-	// DoExport flag helps in tagging connections that can be exported by Flow Exporter
-	DoExport           bool
+	// IsPresent flag helps in cleaning up connections when they are not in conntrack table anymore.
+	IsPresent          bool
 	Zone               uint16
 	Mark               uint32
 	StatusFlag         uint32
@@ -65,10 +63,12 @@ type Connection struct {
 }
 
 type FlowRecord struct {
-	Conn               *Connection
+	Conn               Connection
 	PrevPackets        uint64
 	PrevBytes          uint64
 	PrevReversePackets uint64
 	PrevReverseBytes   uint64
 	IsIPv6             bool
+	LastExportTime     time.Time
+	IsActive           bool
 }

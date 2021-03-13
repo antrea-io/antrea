@@ -21,6 +21,8 @@ import (
 	"sync"
 	"time"
 
+	v1 "k8s.io/api/admissionregistration/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apiserver/pkg/server/dynamiccertificates"
@@ -56,6 +58,9 @@ var (
 	mutationWebhooks = []string{
 		"crdmutator.antrea.tanzu.vmware.com",
 	}
+	optionalMutationWebhooks = []string{
+		"labelsmutator.antrea.io",
+	}
 )
 
 // CACertController is responsible for taking the CA certificate from the
@@ -75,13 +80,7 @@ type CACertController struct {
 var _ dynamiccertificates.Listener = &CACertController{}
 
 func GetCAConfigMapNamespace() string {
-	namespace := env.GetPodNamespace()
-	if namespace != "" {
-		return namespace
-	}
-
-	klog.Warningf("Failed to get Pod Namespace from environment. Using \"%s\" as the CA ConfigMap Namespace", defaultAntreaNamespace)
-	return defaultAntreaNamespace
+	return env.GetAntreaNamespace()
 }
 
 func newCACertController(caContentProvider dynamiccertificates.CAContentProvider,
@@ -149,24 +148,46 @@ func (c *CACertController) syncCACert() error {
 func (c *CACertController) syncMutatingWebhooks(caCert []byte) error {
 	klog.Info("Syncing CA certificate with MutatingWebhookConfigurations")
 	for _, name := range mutationWebhooks {
-		updated := false
 		mWebhook, err := c.client.AdmissionregistrationV1().MutatingWebhookConfigurations().Get(context.TODO(), name, metav1.GetOptions{})
 		if err != nil {
 			return fmt.Errorf("error getting MutatingWebhookConfiguration %s: %v", name, err)
 		}
-		for idx, webhook := range mWebhook.Webhooks {
-			if bytes.Equal(webhook.ClientConfig.CABundle, caCert) {
-				continue
-			} else {
-				updated = true
-				webhook.ClientConfig.CABundle = caCert
-				mWebhook.Webhooks[idx] = webhook
-			}
+		err = c.patchWebhookWithCACert(mWebhook, caCert)
+		if err != nil {
+			return fmt.Errorf("error updating antrea CA cert of MutatingWebhookConfiguration %s: %v", name, err)
 		}
-		if updated {
-			if _, err := c.client.AdmissionregistrationV1().MutatingWebhookConfigurations().Update(context.TODO(), mWebhook, metav1.UpdateOptions{}); err != nil {
-				return fmt.Errorf("error updating antrea CA cert of MutatingWebhookConfiguration %s: %v", name, err)
+	}
+	for _, name := range optionalMutationWebhooks {
+		mWebhook, err := c.client.AdmissionregistrationV1().MutatingWebhookConfigurations().Get(context.TODO(), name, metav1.GetOptions{})
+		if err != nil {
+			if errors.IsNotFound(err) {
+				klog.V(2).Infof("Optional mutation webhook %s not found, skipping its update", name)
+				continue
 			}
+			return fmt.Errorf("error getting MutatingWebhookConfiguration %s: %v", name, err)
+		}
+		err = c.patchWebhookWithCACert(mWebhook, caCert)
+		if err != nil {
+			return fmt.Errorf("error updating antrea CA cert of MutatingWebhookConfiguration %s: %v", name, err)
+		}
+	}
+	return nil
+}
+
+func (c *CACertController) patchWebhookWithCACert(webhookCfg *v1.MutatingWebhookConfiguration, caCert []byte) error {
+	updated := false
+	for idx, webhook := range webhookCfg.Webhooks {
+		if bytes.Equal(webhook.ClientConfig.CABundle, caCert) {
+			continue
+		} else {
+			updated = true
+			webhook.ClientConfig.CABundle = caCert
+			webhookCfg.Webhooks[idx] = webhook
+		}
+	}
+	if updated {
+		if _, err := c.client.AdmissionregistrationV1().MutatingWebhookConfigurations().Update(context.TODO(), webhookCfg, metav1.UpdateOptions{}); err != nil {
+			return err
 		}
 	}
 	return nil

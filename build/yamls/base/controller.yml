@@ -16,6 +16,11 @@ kind: ConfigMap
 metadata:
   name: antrea-ca
 ---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: antrea-cluster-identity
+---
 apiVersion: apiregistration.k8s.io/v1
 kind: APIService
 metadata:
@@ -248,7 +253,7 @@ spec:
               protocol: TCP
           readinessProbe:
             httpGet:
-              host: 127.0.0.1
+              host: localhost
               path: /readyz
               port: api
               scheme: HTTPS
@@ -258,7 +263,7 @@ spec:
             failureThreshold: 5
           livenessProbe:
             httpGet:
-              host: 127.0.0.1
+              host: localhost
               path: /livez
               port: api
               scheme: HTTPS

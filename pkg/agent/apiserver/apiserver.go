@@ -124,10 +124,10 @@ func newConfig(bindPort int, enableMetrics bool, kubeconfig string) (*genericapi
 	// Set the PairName but leave certificate directory blank to generate in-memory by default.
 	secureServing.ServerCert.CertDirectory = ""
 	secureServing.ServerCert.PairName = Name
-	secureServing.BindAddress = net.ParseIP("0.0.0.0")
+	secureServing.BindAddress = net.IPv4zero
 	secureServing.BindPort = bindPort
 
-	if err := secureServing.MaybeDefaultWithSelfSignedCerts("localhost", nil, []net.IP{net.ParseIP("127.0.0.1")}); err != nil {
+	if err := secureServing.MaybeDefaultWithSelfSignedCerts("localhost", nil, []net.IP{net.ParseIP("127.0.0.1"), net.IPv6loopback}); err != nil {
 		return nil, fmt.Errorf("error creating self-signed certificates: %v", err)
 	}
 	serverConfig := genericapiserver.NewConfig(codecs)

@@ -28,8 +28,9 @@ import (
 )
 
 const (
-	testTemplateID     = uint16(256)
-	testExportInterval = 60 * time.Second
+	testTemplateID          = uint16(256)
+	testExportInterval      = 60 * time.Second
+	testObservationDomainID = 0xabcd
 )
 
 // TODO: We will add another test for sendDataRecord when we support adding multiple records to single set.
@@ -56,6 +57,7 @@ func TestFlowAggregator_sendTemplateSet(t *testing.T) {
 		ipfixtest.NewMockIPFIXSet(ctrl),
 		"",
 		nil,
+		testObservationDomainID,
 	}
 
 	// Following consists of all elements that are in ianaInfoElements and antreaInfoElements (globals)
@@ -86,13 +88,10 @@ func TestFlowAggregator_sendTemplateSet(t *testing.T) {
 		elemList = append(elemList, ipfixentities.NewInfoElementWithValue(ipfixentities.NewInfoElement(ie, 0, 0, ipfixregistry.AntreaEnterpriseID, 0), nil))
 		mockIPFIXRegistry.EXPECT().GetInfoElement(ie, ipfixregistry.AntreaEnterpriseID).Return(elemList[i+len(ianaInfoElements)+len(ianaReverseInfoElements)+len(antreaInfoElements)+len(aggregatorElements)+len(antreaSourceStatsElementList)].Element, nil)
 	}
-	var tempSet ipfixentities.Set
 	mockTempSet.EXPECT().AddRecord(elemList, testTemplateID).Return(nil)
-	mockTempSet.EXPECT().GetSet().Return(tempSet)
-
 	// Passing 0 for sentBytes as it is not used anywhere in the test. If this not a call to mock, the actual sentBytes
 	// above elements: ianaInfoElements, ianaReverseInfoElements and antreaInfoElements.
-	mockIPFIXExpProc.EXPECT().SendSet(tempSet).Return(0, nil)
+	mockIPFIXExpProc.EXPECT().SendSet(mockTempSet).Return(0, nil)
 
 	_, err := fa.sendTemplateSet(mockTempSet)
 	assert.NoErrorf(t, err, "Error in sending template record: %v", err)

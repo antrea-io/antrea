@@ -26,6 +26,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	v1net "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 
 	corev1a1 "github.com/vmware-tanzu/antrea/pkg/apis/core/v1alpha2"
 	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
@@ -43,11 +44,11 @@ func NewKubernetesUtils(data *TestData) (*KubernetesUtils, error) {
 	}, nil
 }
 
-// GetPod returns a Pod with the matching Namespace and name
-func (k *KubernetesUtils) GetPod(ns string, name string) (*v1.Pod, error) {
+// GetPodByLabel returns a Pod with the matching Namespace and "pod" label.
+func (k *KubernetesUtils) GetPodByLabel(ns string, name string) (*v1.Pod, error) {
 	pods, err := k.getPodsUncached(ns, "pod", name)
 	if err != nil {
-		return nil, errors.WithMessagef(err, "unable to get pod %s/%s", ns, name)
+		return nil, errors.WithMessagef(err, "unable to get Pod in Namespace %s with label pod=%s", ns, name)
 	}
 	if len(pods) == 0 {
 		return nil, nil
@@ -65,8 +66,8 @@ func (k *KubernetesUtils) getPodsUncached(ns string, key, val string) ([]v1.Pod,
 	return v1PodList.Items, nil
 }
 
-// GetPods returns an array of all Pods in the given Namespace having a k/v label pair.
-func (k *KubernetesUtils) GetPods(ns string, key string, val string) ([]v1.Pod, error) {
+// GetPodsByLabel returns an array of all Pods in the given Namespace having a k/v label pair.
+func (k *KubernetesUtils) GetPodsByLabel(ns string, key string, val string) ([]v1.Pod, error) {
 	if p, ok := k.podCache[fmt.Sprintf("%v_%v_%v", ns, key, val)]; ok {
 		return p, nil
 	}
@@ -82,24 +83,23 @@ func (k *KubernetesUtils) GetPods(ns string, key string, val string) ([]v1.Pod, 
 // Probe execs into a Pod and checks its connectivity to another Pod.  Of course it assumes
 // that the target Pod is serving on the input port, and also that ncat is installed.
 func (k *KubernetesUtils) Probe(ns1, pod1, ns2, pod2 string, port int32) (bool, error) {
-	fromPods, err := k.GetPods(ns1, "pod", pod1)
+	fromPods, err := k.GetPodsByLabel(ns1, "pod", pod1)
 	if err != nil {
-		return false, errors.WithMessagef(err, "unable to get pods from ns %s", ns1)
+		return false, fmt.Errorf("unable to get Pods from Namespace %s: %v", ns1, err)
 	}
 	if len(fromPods) == 0 {
-		return false, errors.New(fmt.Sprintf("no pod of name %s in namespace %s found", pod1, ns1))
+		return false, fmt.Errorf("no Pod of label pod=%s in Namespace %s found", pod1, ns1)
 	}
 	fromPod := fromPods[0]
 
-	toPods, err := k.GetPods(ns2, "pod", pod2)
+	toPods, err := k.GetPodsByLabel(ns2, "pod", pod2)
 	if err != nil {
-		return false, errors.WithMessagef(err, "unable to get pods from ns %s", ns2)
+		return false, fmt.Errorf("unable to get Pods from Namespace %s: %v", ns2, err)
 	}
 	if len(toPods) == 0 {
-		return false, errors.New(fmt.Sprintf("no pod of name %s in namespace %s found", pod2, ns2))
+		return false, fmt.Errorf("no Pod of label pod=%s in Namespace %s found", pod2, ns2)
 	}
 	toPod := toPods[0]
-
 	toIP := toPod.Status.PodIP
 
 	// There seems to be an issue when running Antrea in Kind where tunnel traffic is dropped at
@@ -135,14 +135,14 @@ func (k *KubernetesUtils) CreateOrUpdateNamespace(n string, labels map[string]st
 	}
 	nsr, err := k.clientset.CoreV1().Namespaces().Create(context.TODO(), ns, metav1.CreateOptions{})
 	if err == nil {
-		log.Infof("Created namespace %s", n)
+		log.Infof("Created Namespace %s", n)
 		return nsr, nil
 	}
 
-	log.Debugf("Unable to create namespace %s, let's try updating it instead (error: %s)", ns.Name, err)
+	log.Debugf("Unable to create Namespace %s, let's try updating it instead (error: %s)", ns.Name, err)
 	nsr, err = k.clientset.CoreV1().Namespaces().Update(context.TODO(), ns, metav1.UpdateOptions{})
 	if err != nil {
-		log.Debugf("Unable to update namespace %s: %s", ns, err)
+		log.Debugf("Unable to update Namespace %s: %s", ns, err)
 	}
 
 	return nsr, err
@@ -151,7 +151,7 @@ func (k *KubernetesUtils) CreateOrUpdateNamespace(n string, labels map[string]st
 // CreateOrUpdateDeployment is a convenience function for idempotent setup of deployments
 func (k *KubernetesUtils) CreateOrUpdateDeployment(ns, deploymentName string, replicas int32, labels map[string]string) (*appsv1.Deployment, error) {
 	zero := int64(0)
-	log.Infof("Creating/updating deployment %s in ns %s", deploymentName, ns)
+	log.Infof("Creating/updating Deployment '%s/%s'", ns, deploymentName)
 	makeContainerSpec := func(port int32) v1.Container {
 		return v1.Container{
 			Name:            fmt.Sprintf("c%d", port),
@@ -202,29 +202,98 @@ func (k *KubernetesUtils) CreateOrUpdateDeployment(ns, deploymentName string, re
 
 	d, err := k.clientset.AppsV1().Deployments(ns).Create(context.TODO(), deployment, metav1.CreateOptions{})
 	if err == nil {
-		log.Infof("Created deployment %s in namespace %s", d.Name, ns)
+		log.Infof("Created deployment '%s/%s'", ns, d.Name)
 		return d, nil
 	}
 
-	log.Debugf("Unable to create deployment %s in ns %s, let's try update instead", deployment.Name, ns)
-	d, err = k.clientset.AppsV1().Deployments(ns).Update(context.TODO(), d, metav1.UpdateOptions{})
+	log.Debugf("Unable to create deployment %s in Namespace %s, let's try update instead", deployment.Name, ns)
+	d, err = k.clientset.AppsV1().Deployments(ns).Update(context.TODO(), deployment, metav1.UpdateOptions{})
 	if err != nil {
-		log.Debugf("Unable to update deployment %s in ns %s: %s", deployment.Name, ns, err)
+		log.Debugf("Unable to update deployment '%s/%s': %s", ns, deployment.Name, err)
 	}
 	return d, err
+}
+
+// BuildService is a convenience function for building a corev1.Service spec.
+func (k *KubernetesUtils) BuildService(svcName, svcNS string, port, targetPort int, selector map[string]string, serviceType *v1.ServiceType) *v1.Service {
+	service := &v1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      svcName,
+			Namespace: svcNS,
+		},
+		Spec: v1.ServiceSpec{
+			Ports: []v1.ServicePort{{
+				Port:       int32(port),
+				TargetPort: intstr.FromInt(targetPort),
+			}},
+			Selector: selector,
+		},
+	}
+	if serviceType != nil {
+		service.Spec.Type = *serviceType
+	}
+	return service
+}
+
+// CreateOrUpdateService is a convenience function for updating/creating Services.
+func (k *KubernetesUtils) CreateOrUpdateService(svc *v1.Service) (*v1.Service, error) {
+	log.Infof("creating/updating Service %s in ns %s", svc.Name, svc.Namespace)
+	svcReturned, err := k.clientset.CoreV1().Services(svc.Namespace).Get(context.TODO(), svc.Name, metav1.GetOptions{})
+
+	if err != nil {
+		service, err := k.clientset.CoreV1().Services(svc.Namespace).Create(context.TODO(), svc, metav1.CreateOptions{})
+		if err != nil {
+			log.Infof("Unable to create Service %s/%s: %s", svc.Namespace, svc.Name, err)
+			return nil, err
+		}
+		return service, nil
+	} else if svcReturned.Name != "" {
+		log.Debugf("Service %s/%s already exists, updating", svc.Namespace, svc.Name)
+		clusterIP := svcReturned.Spec.ClusterIP
+		svcReturned.Spec = svc.Spec
+		svcReturned.Spec.ClusterIP = clusterIP
+		service, err := k.clientset.CoreV1().Services(svc.Namespace).Update(context.TODO(), svcReturned, metav1.UpdateOptions{})
+		return service, err
+	}
+	return nil, fmt.Errorf("error occurred in creating/updating Service %s", svc.Name)
+}
+
+// DeleteService is a convenience function for deleting a Service by Namespace and name.
+func (k *KubernetesUtils) DeleteService(ns, name string) error {
+	log.Infof("deleting Service %s in ns %s", name, ns)
+	err := k.clientset.CoreV1().Services(ns).Delete(context.TODO(), name, metav1.DeleteOptions{})
+	if err != nil {
+		return errors.Wrapf(err, "unable to delete Service %s", name)
+	}
+	return nil
+}
+
+// CleanServices is a convenience function for deleting Services in the cluster.
+func (k *KubernetesUtils) CleanServices(namespaces []string) error {
+	for _, ns := range namespaces {
+		l, err := k.clientset.CoreV1().Services(ns).List(context.TODO(), metav1.ListOptions{})
+		if err != nil {
+			return errors.Wrapf(err, "unable to list Services in ns %s", ns)
+		}
+		for _, svc := range l.Items {
+			if err := k.DeleteService(svc.Namespace, svc.Name); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // CreateOrUpdateNetworkPolicy is a convenience function for updating/creating netpols. Updating is important since
 // some tests update a network policy to confirm that mutation works with a CNI.
 func (k *KubernetesUtils) CreateOrUpdateNetworkPolicy(netpol *v1net.NetworkPolicy) (*v1net.NetworkPolicy, error) {
-	log.Infof("Creating/updating network policy %s in ns %s", netpol.Name, netpol.Namespace)
-	netpol.ObjectMeta.Namespace = netpol.Namespace
+	log.Infof("Creating/updating NetworkPolicy '%s/%s'", netpol.Namespace, netpol.Name)
 	np, err := k.clientset.NetworkingV1().NetworkPolicies(netpol.Namespace).Update(context.TODO(), netpol, metav1.UpdateOptions{})
 	if err == nil {
 		return np, err
 	}
 
-	log.Debugf("Unable to update network policy %s in ns %s, let's try creating it instead (error: %s)", netpol.Name, netpol.Namespace, err)
+	log.Debugf("Unable to update NetworkPolicy '%s/%s', let's try creating it instead (error: %s)", netpol.Namespace, netpol.Name, err)
 	np, err = k.clientset.NetworkingV1().NetworkPolicies(netpol.Namespace).Create(context.TODO(), netpol, metav1.CreateOptions{})
 	if err != nil {
 		log.Debugf("Unable to create network policy: %s", err)
@@ -232,12 +301,12 @@ func (k *KubernetesUtils) CreateOrUpdateNetworkPolicy(netpol *v1net.NetworkPolic
 	return np, err
 }
 
-// DeleteNetworkPolicy is a convenience function for deleting NetworkPolicy by name and namespace.
+// DeleteNetworkPolicy is a convenience function for deleting NetworkPolicy by name and Namespace.
 func (k *KubernetesUtils) DeleteNetworkPolicy(ns, name string) error {
-	log.Infof("Deleting NetworkPolicy %s in ns %s", name, ns)
+	log.Infof("Deleting NetworkPolicy '%s/%s'", ns, name)
 	err := k.clientset.NetworkingV1().NetworkPolicies(ns).Delete(context.TODO(), name, metav1.DeleteOptions{})
 	if err != nil {
-		return errors.Wrapf(err, "unable to delete NetworkPolicy %s", name)
+		return errors.Wrapf(err, "unable to delete NetworkPolicy '%s'", name)
 	}
 	return nil
 }
@@ -247,7 +316,7 @@ func (k *KubernetesUtils) CleanNetworkPolicies(namespaces []string) error {
 	for _, ns := range namespaces {
 		l, err := k.clientset.NetworkingV1().NetworkPolicies(ns).List(context.TODO(), metav1.ListOptions{})
 		if err != nil {
-			return errors.Wrapf(err, "unable to list NetworkPolicy in ns %s", ns)
+			return errors.Wrapf(err, "unable to list NetworkPolicy in Namespace '%s'", ns)
 		}
 		for _, np := range l.Items {
 			if err = k.DeleteNetworkPolicy(np.Namespace, np.Name); err != nil {
@@ -297,46 +366,23 @@ func (k *KubernetesUtils) UpdateTier(tier *secv1alpha1.Tier) (*secv1alpha1.Tier,
 }
 
 // CreateOrUpdateCG is a convenience function for idempotent setup of ClusterGroups
-func (k *KubernetesUtils) CreateOrUpdateCG(name string, pSelector, nSelector *metav1.LabelSelector, ipBlock *secv1alpha1.IPBlock) (*corev1a1.ClusterGroup, error) {
-	log.Infof("Creating/updating ClusterGroup %s", name)
-	cgReturned, err := k.crdClient.CoreV1alpha2().ClusterGroups().Get(context.TODO(), name, metav1.GetOptions{})
+func (k *KubernetesUtils) CreateOrUpdateCG(cg *corev1a1.ClusterGroup) (*corev1a1.ClusterGroup, error) {
+	log.Infof("Creating/updating ClusterGroup %s", cg.Name)
+	cgReturned, err := k.crdClient.CoreV1alpha2().ClusterGroups().Get(context.TODO(), cg.Name, metav1.GetOptions{})
 	if err != nil {
-		log.Debugf("Creating ClusterGroup %s", name)
-		cg := &corev1a1.ClusterGroup{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: name,
-			},
-		}
-		if pSelector != nil {
-			cg.Spec.PodSelector = pSelector
-		}
-		if nSelector != nil {
-			cg.Spec.NamespaceSelector = nSelector
-		}
-		if ipBlock != nil {
-			cg.Spec.IPBlock = ipBlock
-		}
 		cgr, err := k.crdClient.CoreV1alpha2().ClusterGroups().Create(context.TODO(), cg, metav1.CreateOptions{})
 		if err != nil {
-			log.Infof("Unable to create cluster group %s: %v", name, err)
+			log.Infof("Unable to create cluster group %s: %v", cg.Name, err)
 			return nil, err
 		}
 		return cgr, nil
 	} else if cgReturned.Name != "" {
-		log.Debugf("ClusterGroup with name %s already exists, updating", name)
-		if pSelector != nil {
-			cgReturned.Spec.PodSelector = pSelector
-		}
-		if nSelector != nil {
-			cgReturned.Spec.NamespaceSelector = nSelector
-		}
-		if ipBlock != nil {
-			cgReturned.Spec.IPBlock = ipBlock
-		}
+		log.Debugf("ClusterGroup with name %s already exists, updating", cg.Name)
+		cgReturned.Spec = cg.Spec
 		cgr, err := k.crdClient.CoreV1alpha2().ClusterGroups().Update(context.TODO(), cgReturned, metav1.UpdateOptions{})
 		return cgr, err
 	}
-	return nil, fmt.Errorf("error occurred in creating/updating ClusterGroup %s", name)
+	return nil, fmt.Errorf("error occurred in creating/updating ClusterGroup %s", cg.Name)
 }
 
 // CreateCG is a convenience function for creating an Antrea ClusterGroup by name and selector.
@@ -454,9 +500,9 @@ func (k *KubernetesUtils) CreateOrUpdateANP(anp *secv1alpha1.NetworkPolicy) (*se
 	return nil, fmt.Errorf("error occurred in creating/updating Antrea NetworkPolicy %s", anp.Name)
 }
 
-// DeleteANP is a convenience function for deleting ANP by name and namespace.
+// DeleteANP is a convenience function for deleting ANP by name and Namespace.
 func (k *KubernetesUtils) DeleteANP(ns, name string) error {
-	log.Infof("deleting Antrea NetworkPolicies %s in ns %s", name, ns)
+	log.Infof("deleting Antrea NetworkPolicy '%s/%s'", ns, name)
 	err := k.securityClient.NetworkPolicies(ns).Delete(context.TODO(), name, metav1.DeleteOptions{})
 	if err != nil {
 		return errors.Wrapf(err, "unable to delete Antrea NetworkPolicy %s", name)
@@ -481,25 +527,25 @@ func (k *KubernetesUtils) CleanANPs(namespaces []string) error {
 }
 
 func (k *KubernetesUtils) waitForPodInNamespace(ns string, pod string) (*string, error) {
-	log.Infof("Waiting for pod %s/%s", ns, pod)
+	log.Infof("Waiting for Pod '%s/%s'", ns, pod)
 	for {
-		k8sPod, err := k.GetPod(ns, pod)
+		k8sPod, err := k.GetPodByLabel(ns, pod)
 		if err != nil {
-			return nil, errors.WithMessagef(err, "unable to get pod %s/%s", ns, pod)
+			return nil, errors.WithMessagef(err, "unable to get Pod '%s/%s'", ns, pod)
 		}
 
 		if k8sPod != nil && k8sPod.Status.Phase == v1.PodRunning {
 			if k8sPod.Status.PodIP == "" {
-				return nil, errors.WithMessagef(err, "unable to get IP of pod %s/%s", ns, pod)
+				return nil, errors.WithMessagef(err, "unable to get IP of Pod '%s/%s'", ns, pod)
 			} else {
-				log.Debugf("IP of pod %s/%s is: %s", ns, pod, k8sPod.Status.PodIP)
+				log.Debugf("IP of Pod '%s/%s' is: %s", ns, pod, k8sPod.Status.PodIP)
 			}
 
 			log.Debugf("Pod running: %s/%s", ns, pod)
 			podIP := k8sPod.Status.PodIP
 			return &podIP, nil
 		}
-		log.Infof("Pod %s/%s not ready, waiting ...", ns, pod)
+		log.Infof("Pod '%s/%s' not ready, waiting ...", ns, pod)
 		time.Sleep(2 * time.Second)
 	}
 }
@@ -565,10 +611,11 @@ func (k *KubernetesUtils) Bootstrap(namespaces, pods []string) (*map[string]stri
 			return nil, errors.WithMessagef(err, "unable to create/update ns %s", ns)
 		}
 		for _, pod := range pods {
-			log.Infof("Creating/updating pod %s/%s", ns, pod)
-			_, err := k.CreateOrUpdateDeployment(ns, ns+pod, 1, map[string]string{"pod": pod})
+			log.Infof("Creating/updating Pod '%s/%s'", ns, pod)
+			deployment := ns + pod
+			_, err := k.CreateOrUpdateDeployment(ns, deployment, 1, map[string]string{"pod": pod, "app": pod})
 			if err != nil {
-				return nil, errors.WithMessagef(err, "unable to create/update deployment %s/%s", ns, pod)
+				return nil, errors.WithMessagef(err, "unable to create/update Deployment '%s/%s'", ns, pod)
 			}
 		}
 	}
@@ -582,7 +629,7 @@ func (k *KubernetesUtils) Bootstrap(namespaces, pods []string) (*map[string]stri
 	for _, pod := range allPods {
 		ip, err := k.waitForPodInNamespace(pod.Namespace(), pod.PodName())
 		if ip == nil || err != nil {
-			return nil, errors.WithMessagef(err, "unable to wait for pod %s/%s", pod.Namespace(), pod.PodName())
+			return nil, errors.WithMessagef(err, "unable to wait for Pod '%s/%s'", pod.Namespace(), pod.PodName())
 		}
 		podIPs[pod.String()] = *ip
 	}
@@ -605,7 +652,7 @@ func (k *KubernetesUtils) Cleanup(namespaces []string) error {
 		return err
 	}
 	for _, ns := range namespaces {
-		log.Infof("Deleting test namespace %s", ns)
+		log.Infof("Deleting test Namespace %s", ns)
 		if err := k.clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{}); err != nil {
 			return err
 		}

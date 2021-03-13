@@ -26,13 +26,6 @@ type ClusterGroupSpecBuilder struct {
 	Name string
 }
 
-type CGSpec struct {
-	PodSelector         map[string]string
-	NSSelector          map[string]string
-	PodSelectorMatchExp []metav1.LabelSelectorRequirement
-	NSSelectorMatchExp  []metav1.LabelSelectorRequirement
-}
-
 func (b *ClusterGroupSpecBuilder) Get() *corev1a2.ClusterGroup {
 	return &corev1a2.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{
@@ -77,5 +70,14 @@ func (b *ClusterGroupSpecBuilder) SetNamespaceSelector(nsSelector map[string]str
 
 func (b *ClusterGroupSpecBuilder) SetIPBlock(ipb *secv1alpha1.IPBlock) *ClusterGroupSpecBuilder {
 	b.Spec.IPBlock = ipb
+	return b
+}
+
+func (b *ClusterGroupSpecBuilder) SetServiceReference(svcNS, svcName string) *ClusterGroupSpecBuilder {
+	svcRef := &corev1a2.ServiceReference{
+		Namespace: svcNS,
+		Name:      svcName,
+	}
+	b.Spec.ServiceReference = svcRef
 	return b
 }

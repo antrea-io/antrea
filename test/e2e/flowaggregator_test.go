@@ -210,7 +210,7 @@ func checkRecordsForFlows(t *testing.T, data *TestData, srcIP string, dstIP stri
 		}
 		return strings.Contains(collectorOutput, srcIP) && strings.Contains(collectorOutput, dstIP), nil
 	})
-	require.NoError(t, err, "IPFIX collector did not receive expected number of data records and timed out.")
+	require.NoErrorf(t, err, "IPFIX collector did not receive the expected records and timed out with error: %v", err)
 
 	rc, collectorOutput, _, err := provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl logs --since=%v ipfix-collector -n antrea-test", time.Since(timeStart).String()))
 	if err != nil || rc != 0 {

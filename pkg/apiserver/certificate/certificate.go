@@ -54,18 +54,11 @@ const (
 	CACertFile  = "ca.crt"
 	TLSCertFile = "tls.crt"
 	TLSKeyFile  = "tls.key"
-
-	defaultAntreaNamespace = "kube-system"
 )
 
 // GetAntreaServerNames returns the DNS names that the TLS certificate will be signed with.
 func GetAntreaServerNames() []string {
-	namespace := env.GetPodNamespace()
-	if namespace == "" {
-		klog.Warningf("Failed to get Pod Namespace from environment. Using \"%s\" as the Antrea Service Namespace", defaultAntreaNamespace)
-		namespace = defaultAntreaNamespace
-	}
-
+	namespace := env.GetAntreaNamespace()
 	antreaServerName := "antrea." + namespace + ".svc"
 	// TODO: Although antrea-agent and kube-aggregator only verify the server name "antrea.<Namespace>.svc",
 	// We should add the whole FQDN "antrea.<Namespace>.svc.<Cluster Domain>" as an alternate DNS name when
@@ -130,7 +123,7 @@ func generateSelfSignedCertificate(secureServing *options.SecureServingOptionsWi
 	secureServing.ServerCert.CertDirectory = selfSignedCertDir
 	secureServing.ServerCert.PairName = "antrea-controller"
 
-	if err := secureServing.MaybeDefaultWithSelfSignedCerts("antrea", GetAntreaServerNames(), []net.IP{net.ParseIP("127.0.0.1")}); err != nil {
+	if err := secureServing.MaybeDefaultWithSelfSignedCerts("antrea", GetAntreaServerNames(), []net.IP{net.ParseIP("127.0.0.1"), net.IPv6loopback}); err != nil {
 		return nil, fmt.Errorf("error creating self-signed certificates: %v", err)
 	}
 
@@ -192,7 +185,7 @@ func rotateSelfSignedCertificates(c *CACertController, secureServing *options.Se
 }
 
 func generateNewServingCertificate(secureServing *options.SecureServingOptionsWithLoopback) error {
-	cert, key, err := certutil.GenerateSelfSignedCertKeyWithFixtures("antrea", []net.IP{net.ParseIP("127.0.0.1")}, GetAntreaServerNames(), secureServing.ServerCert.FixtureDirectory)
+	cert, key, err := certutil.GenerateSelfSignedCertKeyWithFixtures("antrea", []net.IP{net.ParseIP("127.0.0.1"), net.IPv6loopback}, GetAntreaServerNames(), secureServing.ServerCert.FixtureDirectory)
 	if err != nil {
 		return fmt.Errorf("unable to generate self signed cert: %v", err)
 	}

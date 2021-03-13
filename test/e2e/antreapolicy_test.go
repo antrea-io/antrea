@@ -75,13 +75,13 @@ type TestCase struct {
 // TestStep is a single unit of testing spec. It includes the policy specs that need to be
 // applied for this test, the port to test traffic on and the expected Reachability matrix.
 type TestStep struct {
-	Name         string
-	Reachability *Reachability
-	Policies     []metav1.Object
-	Groups       []metav1.Object
-	Port         []int32
-	Duration     time.Duration
-	CustomProbes []*CustomProbe
+	Name              string
+	Reachability      *Reachability
+	Policies          []metav1.Object
+	ServicesAndGroups []metav1.Object
+	Port              []int32
+	Duration          time.Duration
+	CustomProbes      []*CustomProbe
 }
 
 // CustomProbe will spin up (or update) SourcePod and DestPod such that Add event of Pods
@@ -1681,7 +1681,7 @@ func testAuditLoggingBasic(t *testing.T, data *TestData) {
 	k8sUtils.Probe("x", "a", "z", "c", p80)
 	time.Sleep(networkPolicyDelay)
 
-	podXA, _ := k8sUtils.GetPod("x", "a")
+	podXA, _ := k8sUtils.GetPodByLabel("x", "a")
 	// nodeName is guaranteed to be set at this stage, since the framework waits for all Pods to be in Running phase
 	nodeName := podXA.Spec.NodeName
 	antreaPodName, err := data.getAntreaPodOnNode(nodeName)
@@ -1766,6 +1766,90 @@ func testAppliedToPerRule(t *testing.T) {
 	executeTests(t, testCase)
 }
 
+func testACNPClusterGroupServiceRefCreateAndUpdate(t *testing.T, data *TestData) {
+	svc1 := k8sUtils.BuildService("svc1", "x", 80, 80, map[string]string{"app": "a"}, nil)
+	svc2 := k8sUtils.BuildService("svc2", "y", 80, 80, map[string]string{"app": "b"}, nil)
+
+	cg1Name, cg2Name := "cg-svc1", "cg-svc2"
+	cgBuilder1 := &ClusterGroupSpecBuilder{}
+	cgBuilder1 = cgBuilder1.SetName(cg1Name).SetServiceReference("x", "svc1")
+	cgBuilder2 := &ClusterGroupSpecBuilder{}
+	cgBuilder2 = cgBuilder2.SetName(cg2Name).SetServiceReference("y", "svc2")
+
+	builder := &ClusterNetworkPolicySpecBuilder{}
+	builder = builder.SetName("cnp-cg-svc-ref").SetPriority(1.0).SetAppliedToGroup([]ACNPAppliedToSpec{{Group: cg1Name}})
+	builder.AddIngress(v1.ProtocolTCP, &p80, nil, nil, nil, nil, nil, nil, nil,
+		nil, secv1alpha1.RuleActionDrop, cg2Name, "")
+
+	// Pods backing svc1 (label pod=a) in Namespace x should not allow ingress from Pods backing svc2 (label pod=b) in Namespace y.
+	reachability := NewReachability(allPods, true)
+	reachability.Expect(Pod("y/b"), Pod("x/a"), false)
+	testStep1 := &TestStep{
+		"Port 80",
+		reachability,
+		[]metav1.Object{builder.Get()},
+		[]metav1.Object{svc1, svc2, cgBuilder1.Get(), cgBuilder2.Get()},
+		[]int32{80},
+		0,
+		nil,
+	}
+
+	// Test update selector of Service referred in cg-svc1, and update serviceReference of cg-svc2.
+	svc1Updated := k8sUtils.BuildService("svc1", "x", 80, 80, map[string]string{"app": "b"}, nil)
+	svc3 := k8sUtils.BuildService("svc3", "y", 80, 80, map[string]string{"app": "a"}, nil)
+	cgBuilder2Updated := cgBuilder2.SetServiceReference("y", "svc3")
+	cp := []*CustomProbe{
+		{
+			SourcePod: CustomPod{
+				Pod:    NewPod("y", "test-add-pod-svc3"),
+				Labels: map[string]string{"pod": "test-add-pod-svc3", "app": "a"},
+			},
+			DestPod: CustomPod{
+				Pod:    NewPod("x", "test-add-pod-svc1"),
+				Labels: map[string]string{"pod": "test-add-pod-svc1", "app": "b"},
+			},
+			ExpectConnected: false,
+			Port:            p80,
+		},
+	}
+
+	// Pods backing svc1 (label pod=b) in namespace x should not allow ingress from Pods backing svc3 (label pod=a) in namespace y.
+	reachability2 := NewReachability(allPods, true)
+	reachability2.Expect(Pod("y/a"), Pod("x/b"), false)
+	testStep2 := &TestStep{
+		"Port 80 updated",
+		reachability2,
+		[]metav1.Object{builder.Get()},
+		[]metav1.Object{svc1Updated, svc3, cgBuilder1.Get(), cgBuilder2Updated.Get()},
+		[]int32{80},
+		0,
+		cp,
+	}
+
+	builderUpdated := &ClusterNetworkPolicySpecBuilder{}
+	builderUpdated = builderUpdated.SetName("cnp-cg-svc-ref").SetPriority(1.0)
+	builderUpdated.SetAppliedToGroup([]ACNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}, NSSelector: map[string]string{"ns": "x"}}})
+	builderUpdated.AddIngress(v1.ProtocolTCP, &p80, nil, nil, nil, map[string]string{"pod": "b"}, map[string]string{"ns": "y"},
+		nil, nil, nil, secv1alpha1.RuleActionDrop, "", "")
+
+	// Pod x/a should not allow ingress from y/b per the updated ACNP spec.
+	testStep3 := &TestStep{
+		"Port 80 ACNP spec updated to selector",
+		reachability,
+		[]metav1.Object{builderUpdated.Get()},
+		[]metav1.Object{},
+		[]int32{80},
+		0,
+		nil,
+	}
+
+	testSteps := []*TestStep{testStep1, testStep2, testStep3}
+	testCase := []*TestCase{
+		{"ACNP ClusterGroup Service Reference create and update", testSteps},
+	}
+	executeTestsWithData(t, testCase, data)
+}
+
 // executeTests runs all the tests in testList and prints results
 func executeTests(t *testing.T, testList []*TestCase) {
 	executeTestsWithData(t, testList, nil)
@@ -1776,7 +1860,7 @@ func executeTestsWithData(t *testing.T, testList []*TestCase, data *TestData) {
 		log.Infof("running test case %s", testCase.Name)
 		for _, step := range testCase.Steps {
 			log.Infof("running step %s of test case %s", step.Name, testCase.Name)
-			applyTestStepClusterGroups(t, step)
+			applyTestStepServicesAndGroups(t, step)
 			applyTestStepPolicies(t, step)
 			reachability := step.Reachability
 			if reachability != nil {
@@ -1802,7 +1886,7 @@ func executeTestsWithData(t *testing.T, testList []*TestCase, data *TestData) {
 		}
 		log.Debugf("Cleaning-up all policies and groups created by this Testcase and sleeping for %v", networkPolicyDelay)
 		cleanupTestCasePolicies(t, testCase)
-		cleanupTestCaseClusterGroups(t, testCase)
+		cleanupTestCaseServicesAndGroups(t, testCase)
 	}
 	allTestList = append(allTestList, testList...)
 }
@@ -1874,33 +1958,42 @@ func cleanupTestCasePolicies(t *testing.T, c *TestCase) {
 	}
 }
 
-func applyTestStepClusterGroups(t *testing.T, step *TestStep) {
-	for _, g := range step.Groups {
-		if cg, ok := g.(*corev1a2.ClusterGroup); ok {
-			log.Debugf("creating CG %v", cg.Name)
-			_, err := k8sUtils.CreateOrUpdateCG(cg.Name, cg.Spec.PodSelector, cg.Spec.NamespaceSelector, cg.Spec.IPBlock)
+func applyTestStepServicesAndGroups(t *testing.T, step *TestStep) {
+	for _, obj := range step.ServicesAndGroups {
+		switch o := obj.(type) {
+		case *corev1a2.ClusterGroup:
+			_, err := k8sUtils.CreateOrUpdateCG(o)
+			failOnError(err, t)
+		case *v1.Service:
+			_, err := k8sUtils.CreateOrUpdateService(o)
 			failOnError(err, t)
 		}
 	}
-	if len(step.Groups) > 0 {
+	if len(step.ServicesAndGroups) > 0 {
 		log.Debugf("Sleeping for %v for all groups to have members computed", groupDelay)
 		time.Sleep(groupDelay)
 	}
 }
 
-func cleanupTestCaseClusterGroups(t *testing.T, c *TestCase) {
-	// TestSteps in a TestCase may first create and then update the same group.
+func cleanupTestCaseServicesAndGroups(t *testing.T, c *TestCase) {
+	// TestSteps in a TestCase may first create and then update the same Group/Service.
 	// Use sets to avoid duplicates.
-	groupsToDelete := sets.String{}
+	svcsToDelete, groupsToDelete := sets.String{}, sets.String{}
 	for _, step := range c.Steps {
-		for _, g := range step.Groups {
-			if cg, ok := g.(*corev1a2.ClusterGroup); ok {
-				groupsToDelete.Insert(cg.Name)
+		for _, obj := range step.ServicesAndGroups {
+			switch o := obj.(type) {
+			case *corev1a2.ClusterGroup:
+				groupsToDelete.Insert(o.Name)
+			case *v1.Service:
+				svcsToDelete.Insert(o.Namespace + "/" + o.Name)
 			}
 		}
 	}
 	for _, cg := range groupsToDelete.List() {
 		failOnError(k8sUtils.DeleteCG(cg), t)
+	}
+	for _, svc := range svcsToDelete.List() {
+		failOnError(k8sUtils.DeleteService(strings.Split(svc, "/")[0], strings.Split(svc, "/")[1]), t)
 	}
 }
 
@@ -2011,6 +2104,7 @@ func TestAntreaPolicy(t *testing.T) {
 		t.Run("Case=ACNPClusterGroupAppliedToPodAdd", func(t *testing.T) { testACNPClusterGroupAppliedToPodAdd(t, data) })
 		t.Run("Case=ACNPClusterGroupRefRulePodAdd", func(t *testing.T) { testACNPClusterGroupRefRulePodAdd(t, data) })
 		t.Run("Case=ACNPClusterGroupIngressRuleDenyCGWithXBtoYA", func(t *testing.T) { testACNPIngressRuleDenyCGWithXBtoYA(t) })
+		t.Run("Case=ACNPClusterGroupServiceRef", func(t *testing.T) { testACNPClusterGroupServiceRefCreateAndUpdate(t, data) })
 	})
 	// print results for reachability tests
 	printResults()
@@ -2092,14 +2186,13 @@ func TestANPNetworkPolicyStatsWithDropAction(t *testing.T) {
 	defer teardownTest(t, data)
 	skipIfAntreaPolicyDisabled(t, data)
 
-	if err := testData.mutateAntreaConfigMap(func(data map[string]string) {
-		antreaControllerConf, _ := data["antrea-controller.conf"]
-		antreaControllerConf = strings.Replace(antreaControllerConf, "#  NetworkPolicyStats: false", "  NetworkPolicyStats: true", 1)
-		data["antrea-controller.conf"] = antreaControllerConf
-		antreaAgentConf, _ := data["antrea-agent.conf"]
-		antreaAgentConf = strings.Replace(antreaAgentConf, "#  NetworkPolicyStats: false", "  NetworkPolicyStats: true", 1)
-		data["antrea-agent.conf"] = antreaAgentConf
-	}, true, true); err != nil {
+	cc := []configChange{
+		{"NetworkPolicyStats", "true", true},
+	}
+	ac := []configChange{
+		{"NetworkPolicyStats", "true", true},
+	}
+	if err := testData.mutateAntreaConfigMap(cc, ac, true, true); err != nil {
 		t.Fatalf("Failed to enable NetworkPolicyStats feature: %v", err)
 	}
 
