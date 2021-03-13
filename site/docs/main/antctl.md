@@ -233,13 +233,15 @@ antctl get podinterface [NAME] [-n NAMESPACE]
 
 Starting from version 0.6.0, Antrea Agent supports dumping Antrea OVS flows. The
 `antctl` `get ovsflows` (or `get of`) command can dump all OVS flows, flows
-added for a specified Pod, or flows added to realize a specified NetworkPolicy,
-or flows in a specified OVS flow table.
+added for a specified Pod, or flows added for Service load-balancing of a
+specified Service, or flows added to realize a specified NetworkPolicy, or flows
+in a specified OVS flow table.
 
 ```bash
 antctl get ovsflows
 antctl get ovsflows -p POD -n NAMESPACE
-antctl get ovsflows --networkpolicy NETWORKPOLICY -n NAMESPACE
+antctl get ovsflows -S SERVICE -n NAMESPACE
+antctl get ovsflows -N NETWORKPOLICY -n NAMESPACE
 antctl get ovsflows -T TABLE_A,TABLE_B
 antctl get ovsflows -T TABLE_A,TABLE_B_NUM
 antctl get ovsflows -T TABLE_A_NUM,TABLE_B_NUM
@@ -267,7 +269,7 @@ NAMESPACE   NAME     APPLIED-TO                           RULES
 kube-system kube-dns 160ea6d7-0234-5d1d-8ea0-b703d0aa3b46 1
 
 # Dump OVS flows of NetworkPolicy "kube-dns"
-$ antctl get of --networkpolicy kube-dns -n kube-system
+$ antctl get of -N kube-dns -n kube-system
 FLOW
 table=90, n_packets=0, n_bytes=0, priority=190,conj_id=1,ip actions=resubmit(,105)
 table=90, n_packets=0, n_bytes=0, priority=200,ip actions=conjunction(1,1/3)
@@ -291,7 +293,7 @@ few trace-packet command examples.
 # Trace an IP packet between two Pods
 antctl trace-packet -S ns1/pod1 -D ns2/pod2
 # Trace a Service request from a local Pod
-antctl trace-packet -S ns1/pod1 -D ns2/srv2 -f "tcp,tcp_dst=80"
+antctl trace-packet -S ns1/pod1 -D ns2/svc2 -f "tcp,tcp_dst=80"
 # Trace the Service reply packet (assuming "ns2/pod2" is the Service backend Pod)
 antctl trace-packet -D ns1/pod1 -S ns2/pod2 -f "tcp,tcp_src=80"
 # Trace an IP packet from a Pod to gateway port
