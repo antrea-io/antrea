@@ -11,6 +11,17 @@ Some experimental features can be enabled / disabled using [Feature Gates](featu
 
 ## Unreleased
 
+## 0.13.1 - 2021-03-12
+
+### Fixed
+
+- Clean up stale IP addresses on Antrea host gateway interface. ([#1900](https://github.com/vmware-tanzu/antrea/pull/1900), [@antoninbas])
+  * If a Node leaves and later rejoins a cluster, a new Pod CIDR may be allocated to the Node for each supported IP family and the gateway receives a new IP address (first address in the CIDR)
+  * If the previous addresses are not removed from the gateway, we observe connectivity issues across Nodes
+- Update libOpenflow to avoid crash in Antrea Agent for certain Traceflow requests. ([#1833](https://github.com/vmware-tanzu/antrea/pull/1883), [@antoninbas])
+- Fix the deletion of stale port forwarding iptables rules installed for NodePortLocal, occurring when the Antrea Agent restarts. ([#1887](https://github.com/vmware-tanzu/antrea/pull/1887), [@monotosh-avi])
+- Fix output formatting for the "antctl trace-packet" command: the result was displayed as a Go struct variable and newline characters were not rendered, making it hard to read. ([#1897](https://github.com/vmware-tanzu/antrea/pull/1897), [@jianjuns])
+
 ## 0.13.0 - 2021-02-11
 
 Includes all the changes from [0.12.1].
