@@ -87,14 +87,23 @@ pushd $THIS_DIR > /dev/null
 if $PULL; then
     docker pull $PLATFORM_ARG ubuntu:20.04
     docker pull $PLATFORM_ARG antrea/openvswitch:$OVS_VERSION
+    docker pull $PLATFORM_ARG antrea/cni-binaries || true
+    docker pull $PLATFORM_ARG antrea/base-ubuntu:$OVS_VERSION || true
 fi
 
+docker build $PLATFORM_ARG --target cni-binaries \
+       --cache-from antrea/cni-binaries \
+       -t antrea/cni-binaries \
+       --build-arg OVS_VERSION=$OVS_VERSION .
+
 docker build $PLATFORM_ARG \
+       --cache-from antrea/cni-binaries \
+       --cache-from antrea/base-ubuntu:$OVS_VERSION \
        -t antrea/base-ubuntu:$OVS_VERSION \
-       -f Dockerfile \
        --build-arg OVS_VERSION=$OVS_VERSION .
 
 if $PUSH; then
+    docker push antrea/cni-binaries:$OVS_VERSION
     docker push antrea/base-ubuntu:$OVS_VERSION
 fi
 
