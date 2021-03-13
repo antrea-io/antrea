@@ -59,6 +59,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy/store"
 	antreatypes "github.com/vmware-tanzu/antrea/pkg/controller/types"
 	"github.com/vmware-tanzu/antrea/pkg/features"
+	utilsets "github.com/vmware-tanzu/antrea/pkg/util/sets"
 )
 
 const (
@@ -983,7 +984,7 @@ func (n *NetworkPolicyController) updatePod(oldObj, curObj interface{}) {
 	} else if !labelsEqual {
 		// No need to enqueue common AppliedToGroups as they already have latest Pod
 		// information.
-		appliedToGroupKeys = oldAppliedToGroupKeySet.Difference(curAppliedToGroupKeySet).Union(curAppliedToGroupKeySet.Difference(oldAppliedToGroupKeySet))
+		appliedToGroupKeys = utilsets.SymmetricDifference(oldAppliedToGroupKeySet, curAppliedToGroupKeySet)
 	}
 	// AddressGroup keys must be enqueued only if the Pod's IP has changed or
 	// if Pod's label change causes it to match new Groups. Same applies for ClusterGroups.
@@ -993,8 +994,8 @@ func (n *NetworkPolicyController) updatePod(oldObj, curObj interface{}) {
 	} else if !labelsEqual {
 		// No need to enqueue common AddressGroups as they already have latest Pod
 		// information.
-		addressGroupKeys = oldAddressGroupKeySet.Difference(curAddressGroupKeySet).Union(curAddressGroupKeySet.Difference(oldAddressGroupKeySet))
-		groupKeys = oldGroupKeySet.Difference(curGroupKeySet).Union(curGroupKeySet.Difference(oldGroupKeySet))
+		addressGroupKeys = utilsets.SymmetricDifference(oldAddressGroupKeySet, curAddressGroupKeySet)
+		groupKeys = utilsets.SymmetricDifference(oldGroupKeySet, curGroupKeySet)
 	}
 	for group := range appliedToGroupKeys {
 		n.enqueueAppliedToGroup(group)
@@ -1081,11 +1082,11 @@ func (n *NetworkPolicyController) updateNamespace(oldObj, curObj interface{}) {
 	oldGroupKeySet := n.filterInternalGroupsForNamespace(oldNamespace)
 	// No need to enqueue common AddressGroups as they already have latest
 	// Namespace information.
-	addressGroupKeys := oldAddressGroupKeySet.Difference(curAddressGroupKeySet).Union(curAddressGroupKeySet.Difference(oldAddressGroupKeySet))
+	addressGroupKeys := utilsets.SymmetricDifference(oldAddressGroupKeySet, curAddressGroupKeySet)
 	for group := range addressGroupKeys {
 		n.enqueueAddressGroup(group)
 	}
-	groupKeys := oldGroupKeySet.Difference(curGroupKeySet).Union(curGroupKeySet.Difference(oldGroupKeySet))
+	groupKeys := utilsets.SymmetricDifference(oldGroupKeySet, curGroupKeySet)
 	for group := range groupKeys {
 		n.enqueueInternalGroup(group)
 	}
@@ -1416,7 +1417,7 @@ func (n *NetworkPolicyController) syncAddressGroup(key string) error {
 	addrGroupNodeNames := sets.String{}
 	for _, internalNPObj := range nps {
 		internalNP := internalNPObj.(*antreatypes.NetworkPolicy)
-		addrGroupNodeNames = addrGroupNodeNames.Union(internalNP.SpanMeta.NodeNames)
+		utilsets.Merge(addrGroupNodeNames, internalNP.SpanMeta.NodeNames)
 	}
 	memberSet := n.populateAddressGroupMemberSet(addressGroup)
 	updatedAddressGroup := &antreatypes.AddressGroup{
@@ -1697,7 +1698,7 @@ func (n *NetworkPolicyController) syncInternalNetworkPolicy(key string) error {
 			continue
 		}
 		appGroup := appGroupObj.(*antreatypes.AppliedToGroup)
-		nodeNames = nodeNames.Union(appGroup.SpanMeta.NodeNames)
+		utilsets.Merge(nodeNames, appGroup.SpanMeta.NodeNames)
 	}
 	updatedNetworkPolicy := &antreatypes.NetworkPolicy{
 		UID:             internalNP.UID,

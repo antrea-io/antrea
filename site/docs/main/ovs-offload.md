@@ -110,25 +110,25 @@ data:
     }
 ```
 
-Deploy SR-IOV network device plugin as DaemonSet. See <https://github.com/intel/sriov-network-device-plugin>.
+Deploy SR-IOV network device plugin as DaemonSet. See <https://github.com/k8snetworkplumbingwg/sriov-network-device-plugin>.
 
 Deploy multus CNI as DaemonSet. See <https://github.com/intel/multus-cni>.
 
 Create NetworkAttachementDefinition CRD with Antrea CNI config.
 
 ```yaml
-Kubernetes Network CRD Spec:
 apiVersion: "k8s.cni.cncf.io/v1"
 kind: NetworkAttachmentDefinition
 metadata:
   name: default
+  namespace: kube-system
   annotations:
     k8s.v1.cni.cncf.io/resourceName: mellanox.com/cx5_sriov_switchdev
 spec:
   config: '{
     "cniVersion": "0.3.1",
     "name": "antrea",
-    "plugins": [ { "type": "antrea", "ipam": { "type": "host-local" } }, { "type": "portmap", "capabilities": {"portMappings": true}, { "type": "bandwidth", "capabilities": {"bandwidth": true} }]
+    "plugins": [ { "type": "antrea", "ipam": { "type": "host-local" } }, { "type": "portmap", "capabilities": {"portMappings": true} }, { "type": "bandwidth", "capabilities": {"bandwidth": true} }]
 }'
 
 ```
@@ -156,8 +156,13 @@ metadata:
     v1.multus-cni.io/default-network: default
 spec:
   containers:
-  - name: networkstatic/iperf3
-    image: centos/tools
+  - name: ovs-offload-app
+    image: networkstatic/iperf3
+    command:
+    - sh
+    - -c
+    - |
+      sleep 1000000
     resources:
       requests:
         mellanox.com/cx5_sriov_switchdev: '1'

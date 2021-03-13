@@ -23,6 +23,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/api/discovery/v1beta1"
 	"k8s.io/apimachinery/pkg/runtime"
+	k8sapitypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/klog"
@@ -31,7 +32,6 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/agent/proxy/metrics"
 	"github.com/vmware-tanzu/antrea/pkg/agent/proxy/types"
-	"github.com/vmware-tanzu/antrea/pkg/agent/querier"
 	"github.com/vmware-tanzu/antrea/pkg/features"
 	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
 	k8sproxy "github.com/vmware-tanzu/antrea/third_party/proxy"
@@ -42,6 +42,18 @@ const (
 	resyncPeriod  = time.Minute
 	componentName = "antrea-agent-proxy"
 )
+
+// Proxier wraps proxy.Provider and adds extra methods. It is introduced for
+// extending the proxy.Provider implementations with extra methods, without
+// modifying the proxy.Provider interface.
+type Proxier interface {
+	// GetProxyProvider returns the real proxy Provider.
+	GetProxyProvider() k8sproxy.Provider
+	// GetServiceFlowKeys returns the keys (match strings) of the cached OVS
+	// flows and the OVS group IDs for a Service. False is returned if the
+	// Service is not found.
+	GetServiceFlowKeys(serviceName, namespace string) ([]string, []binding.GroupIDType, bool)
+}
 
 type proxier struct {
 	once                sync.Once
@@ -62,6 +74,10 @@ type proxier struct {
 	endpointsMap types.EndpointsMap
 	// endpointsInstalledMap stores endpoints we actually installed.
 	endpointsInstalledMap types.EndpointsMap
+	// serviceEndpointsMapsMutex protects serviceMap, serviceInstalledMap,
+	// endpointsMap, and endpointsInstalledMap, which can be read by
+	// GetServiceFlowKeys() called by the "/ovsflows" API handler.
+	serviceEndpointsMapsMutex sync.Mutex
 	// endpointReferenceCounter stores the number of times an Endpoint is referenced by Services.
 	endpointReferenceCounter map[string]int
 	// groupCounter is used to allocate groupID.
@@ -73,7 +89,6 @@ type proxier struct {
 
 	runner              *k8sproxy.BoundedFrequencyRunner
 	stopChan            <-chan struct{}
-	agentQuerier        querier.AgentQuerier
 	ofClient            openflow.Client
 	isIPv6              bool
 	enableEndpointSlice bool
@@ -217,8 +232,8 @@ func (p *proxier) installServices() {
 		groupID, _ := p.groupCounter.Get(svcPortName)
 		endpointsInstalled, ok := p.endpointsInstalledMap[svcPortName]
 		if !ok {
-			p.endpointsInstalledMap[svcPortName] = map[string]k8sproxy.Endpoint{}
-			endpointsInstalled = p.endpointsInstalledMap[svcPortName]
+			endpointsInstalled = map[string]k8sproxy.Endpoint{}
+			p.endpointsInstalledMap[svcPortName] = endpointsInstalled
 		}
 		endpoints := p.endpointsMap[svcPortName]
 		// If both expected Endpoints number and installed Endpoints number are 0, we don't need to take care of this Service.
@@ -274,7 +289,7 @@ func (p *proxier) installServices() {
 		}
 
 		if needUpdateEndpoints {
-			err := p.ofClient.InstallEndpointFlows(svcInfo.OFProtocol, endpointUpdateList, p.isIPv6)
+			err := p.ofClient.InstallEndpointFlows(svcInfo.OFProtocol, endpointUpdateList)
 			if err != nil {
 				klog.Errorf("Error when installing Endpoints flows: %v", err)
 				continue
@@ -345,11 +360,17 @@ func (p *proxier) installServices() {
 // syncProxyRules applies current changes in change trackers and then updates
 // flows for services and endpoints. It will return immediately if either
 // endpoints or services resources are not synced. syncProxyRules is only called
-// through the Run method of the runner object, and all calls are
-// serialized. Since this method is the only one accessing internal state
-// (e.g. serviceMap), no synchronization mechanism, such as a mutex, is
-// required.
+// through the Run method of the runner object, and all calls are serialized.
+// This method is the only one that changes internal state, but
+// GetServiceFlowKeys(), which is called by the the "/ovsflows" API handler,
+// also reads service and endpoints maps, so serviceEndpointsMapsMutex is used
+// to protect these two maps.
 func (p *proxier) syncProxyRules() {
+	if !p.isInitialized() {
+		klog.V(4).Info("Not syncing rules until both Services and Endpoints have been synced")
+		return
+	}
+
 	start := time.Now()
 	defer func() {
 		delta := time.Since(start)
@@ -360,11 +381,11 @@ func (p *proxier) syncProxyRules() {
 		}
 		klog.V(4).Infof("syncProxyRules took %v", time.Since(start))
 	}()
-	if !p.isInitialized() {
-		klog.V(4).Info("Not syncing rules until both Services and Endpoints have been synced")
-		return
-	}
 
+	// Protect Service and endpoints maps, which can be read by
+	// GetServiceFlowKeys().
+	p.serviceEndpointsMapsMutex.Lock()
+	defer p.serviceEndpointsMapsMutex.Unlock()
 	p.endpointsChanges.Update(p.endpointsMap)
 	p.serviceChanges.Update(p.serviceMap)
 
@@ -509,6 +530,51 @@ func (p *proxier) Run(stopCh <-chan struct{}) {
 	})
 }
 
+func (p *proxier) GetProxyProvider() k8sproxy.Provider {
+	// Return myself.
+	return p
+}
+
+func (p *proxier) GetServiceFlowKeys(serviceName, namespace string) ([]string, []binding.GroupIDType, bool) {
+	namespacedName := k8sapitypes.NamespacedName{Namespace: namespace, Name: serviceName}
+	p.serviceEndpointsMapsMutex.Lock()
+	defer p.serviceEndpointsMapsMutex.Unlock()
+
+	var flows []string
+	var groups []binding.GroupIDType
+	found := false
+	for svcPortName := range p.serviceMap {
+		if namespacedName != svcPortName.NamespacedName {
+			continue
+		}
+		found = true
+
+		installedSvcPort, ok := p.serviceInstalledMap[svcPortName]
+		if !ok {
+			// Service flows not installed.
+			continue
+		}
+		svcInfo := installedSvcPort.(*types.ServiceInfo)
+
+		var epList []k8sproxy.Endpoint
+		endpoints, ok := p.endpointsMap[svcPortName]
+		if ok && len(endpoints) > 0 {
+			epList = make([]k8sproxy.Endpoint, 0, len(endpoints))
+			for _, ep := range endpoints {
+				epList = append(epList, ep)
+			}
+		}
+
+		svcFlows := p.ofClient.GetServiceFlowKeys(svcInfo.ClusterIP(), uint16(svcInfo.Port()), svcInfo.OFProtocol, epList)
+		flows = append(flows, svcFlows...)
+
+		groupID, _ := p.groupCounter.Get(svcPortName)
+		groups = append(groups, groupID)
+	}
+
+	return flows, groups, found
+}
+
 func NewProxier(
 	hostname string,
 	informerFactory informers.SharedInformerFactory,
@@ -553,8 +619,28 @@ func NewProxier(
 	return p
 }
 
+// metaProxierWrapper wraps metaProxier, and implements the extra methods added
+// in interface Proxier.
+type metaProxierWrapper struct {
+	ipv4Proxier *proxier
+	ipv6Proxier *proxier
+	metaProxier k8sproxy.Provider
+}
+
+func (p *metaProxierWrapper) GetProxyProvider() k8sproxy.Provider {
+	return p.metaProxier
+}
+
+func (p *metaProxierWrapper) GetServiceFlowKeys(serviceName, namespace string) ([]string, []binding.GroupIDType, bool) {
+	v4Flows, v4Groups, v4Found := p.ipv4Proxier.GetServiceFlowKeys(serviceName, namespace)
+	v6Flows, v6Groups, v6Found := p.ipv6Proxier.GetServiceFlowKeys(serviceName, namespace)
+
+	// Return the unions of IPv4 and IPv6 flows and groups.
+	return append(v4Flows, v6Flows...), append(v4Groups, v6Groups...), v4Found || v6Found
+}
+
 func NewDualStackProxier(
-	hostname string, informerFactory informers.SharedInformerFactory, ofClient openflow.Client) k8sproxy.Provider {
+	hostname string, informerFactory informers.SharedInformerFactory, ofClient openflow.Client) *metaProxierWrapper {
 
 	// Create an ipv4 instance of the single-stack proxier
 	ipv4Proxier := NewProxier(hostname, informerFactory, ofClient, false)
@@ -562,8 +648,9 @@ func NewDualStackProxier(
 	// Create an ipv6 instance of the single-stack proxier
 	ipv6Proxier := NewProxier(hostname, informerFactory, ofClient, true)
 
-	// Return a meta-proxier that dispatch calls between the two
-	// single-stack proxier instances
+	// Create a meta-proxier that dispatch calls between the two
+	// single-stack proxier instances.
 	metaProxier := k8sproxy.NewMetaProxier(ipv4Proxier, ipv6Proxier)
-	return metaProxier
+
+	return &metaProxierWrapper{ipv4Proxier, ipv6Proxier, metaProxier}
 }

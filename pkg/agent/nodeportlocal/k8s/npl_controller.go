@@ -25,6 +25,7 @@ import (
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/nodeportlocal/portcache"
 	"github.com/vmware-tanzu/antrea/pkg/agent/nodeportlocal/rules"
+	utilsets "github.com/vmware-tanzu/antrea/pkg/util/sets"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -214,7 +215,7 @@ func (c *NPLController) enqueueSvcUpdate(oldObj, newObj interface{}) {
 		// Disjunctive union of Pods from both Service sets.
 		oldPodSet := sets.NewString(c.getPodsFromService(oldSvc)...)
 		newPodSet := sets.NewString(c.getPodsFromService(newSvc)...)
-		podKeys = oldPodSet.Difference(newPodSet).Union(newPodSet.Difference(oldPodSet))
+		podKeys = utilsets.SymmetricDifference(oldPodSet, newPodSet)
 	}
 
 	for podKey := range podKeys {
@@ -249,7 +250,7 @@ func (c *NPLController) getPodsFromService(svc *corev1.Service) []string {
 		return pods
 	}
 
-	podList, err := c.podLister.List(labels.SelectorFromSet(labels.Set(svc.Spec.Selector)))
+	podList, err := c.podLister.Pods(svc.Namespace).List(labels.SelectorFromSet(labels.Set(svc.Spec.Selector)))
 	if err != nil {
 		klog.Errorf("Got error while listing Pods: %v", err)
 		return pods
@@ -272,7 +273,8 @@ func (c *NPLController) isNPLEnabledForServiceOfPod(obj interface{}) bool {
 		svc, isSvc := service.(*corev1.Service)
 		// Selecting Services NOT of type NodePort, with Service selector matching Pod labels.
 		if isSvc && svc.Spec.Type != corev1.ServiceTypeNodePort {
-			if matchSvcSelectorPodLabels(svc.Spec.Selector, pod.GetLabels()) {
+			if pod.Namespace == svc.Namespace &&
+				matchSvcSelectorPodLabels(svc.Spec.Selector, pod.GetLabels()) {
 				return true
 			}
 		}

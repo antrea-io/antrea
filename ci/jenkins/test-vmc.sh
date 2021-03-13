@@ -298,7 +298,11 @@ function deliver_antrea {
             VERSION="$CLUSTER" DOCKER_REGISTRY="${DOCKER_REGISTRY}" make && break
         fi
     done
-    VERSION="$CLUSTER" DOCKER_REGISTRY="${DOCKER_REGISTRY}" make flow-aggregator-ubuntu
+    if [[ "$COVERAGE" == true ]]; then
+      VERSION="$CLUSTER" DOCKER_REGISTRY="${DOCKER_REGISTRY}" make flow-aggregator-ubuntu-coverage
+    else
+      VERSION="$CLUSTER" DOCKER_REGISTRY="${DOCKER_REGISTRY}" make flow-aggregator-ubuntu
+    fi
     cd ci/jenkins
 
     if [ "$?" -ne "0" ]; then
@@ -332,10 +336,12 @@ function deliver_antrea {
 
     if [[ "$COVERAGE" == true ]]; then
         docker save -o antrea-ubuntu-coverage.tar antrea/antrea-ubuntu-coverage:${DOCKER_IMG_VERSION}
+        docker save -o flow-aggregator-coverage.tar antrea/flow-aggregator-coverage:${DOCKER_IMG_VERSION}
     else
         docker save -o antrea-ubuntu.tar projects.registry.vmware.com/antrea/antrea-ubuntu:${DOCKER_IMG_VERSION}
+        docker save -o flow-aggregator.tar projects.registry.vmware.com/antrea/flow-aggregator:${DOCKER_IMG_VERSION}
     fi
-    docker save -o flow-aggregator.tar projects.registry.vmware.com/antrea/flow-aggregator:${DOCKER_IMG_VERSION}
+
 
     kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 == role {print $6}' | while read control_plane_ip; do
         scp -q -o StrictHostKeyChecking=no -i ${GIT_CHECKOUT_DIR}/jenkins/key/antrea-ci-key $GIT_CHECKOUT_DIR/build/yamls/*.yml capv@${control_plane_ip}:~
@@ -347,10 +353,11 @@ function deliver_antrea {
         ssh-keygen -f "/var/lib/jenkins/.ssh/known_hosts" -R ${IPs[$i]}
         if [[ "$COVERAGE" == true ]]; then
             copy_image antrea-ubuntu-coverage.tar docker.io/antrea/antrea-ubuntu-coverage ${IPs[$i]} ${DOCKER_IMG_VERSION} true
+            copy_image flow-aggregator-coverage.tar docker.io/antrea/flow-aggregator-coverage ${IPs[$i]} ${DOCKER_IMG_VERSION} true
         else
             copy_image antrea-ubuntu.tar projects.registry.vmware.com/antrea/antrea-ubuntu ${IPs[$i]} ${DOCKER_IMG_VERSION} true
+            copy_image flow-aggregator.tar projects.registry.vmware.com/antrea/flow-aggregator ${IPs[$i]} ${DOCKER_IMG_VERSION} true
         fi
-        copy_image flow-aggregator.tar projects.registry.vmware.com/antrea/flow-aggregator ${IPs[$i]} ${DOCKER_IMG_VERSION} true
     done
 
     if [[ -z $OLD_ANTREA_VERSION ]]; then
@@ -430,9 +437,9 @@ function run_e2e {
     if [[ "$COVERAGE" == true ]]; then
         rm -rf ${GIT_CHECKOUT_DIR}/e2e-coverage
         mkdir -p ${GIT_CHECKOUT_DIR}/e2e-coverage
-        go test -v -timeout=50m github.com/vmware-tanzu/antrea/test/e2e --logs-export-dir ${GIT_CHECKOUT_DIR}/antrea-test-logs --prometheus --coverage --coverage-dir ${GIT_CHECKOUT_DIR}/e2e-coverage
+        go test -v -timeout=65m github.com/vmware-tanzu/antrea/test/e2e --logs-export-dir ${GIT_CHECKOUT_DIR}/antrea-test-logs --prometheus --coverage --coverage-dir ${GIT_CHECKOUT_DIR}/e2e-coverage
     else
-        go test -v -timeout=50m github.com/vmware-tanzu/antrea/test/e2e --logs-export-dir ${GIT_CHECKOUT_DIR}/antrea-test-logs --prometheus
+        go test -v -timeout=65m github.com/vmware-tanzu/antrea/test/e2e --logs-export-dir ${GIT_CHECKOUT_DIR}/antrea-test-logs --prometheus
     fi
 
     test_rc=$?
@@ -448,7 +455,7 @@ function run_e2e {
     tar -zcf ${GIT_CHECKOUT_DIR}/antrea-test-logs.tar.gz ${GIT_CHECKOUT_DIR}/antrea-test-logs
     if [[ "$COVERAGE" == true ]]; then
         tar -zcf ${GIT_CHECKOUT_DIR}/e2e-coverage.tar.gz ${GIT_CHECKOUT_DIR}/e2e-coverage
-        curl -s https://codecov.io/bash | bash -s -- -c -t ${CODECOV_TOKEN} -F e2e-tests -f '*antrea*' -s ${GIT_CHECKOUT_DIR}/e2e-coverage
+        curl -s https://codecov.io/bash | bash -s -- -c -t ${CODECOV_TOKEN} -F e2e-tests -f '*.cov.out*' -s ${GIT_CHECKOUT_DIR}/e2e-coverage
     fi
 }
 

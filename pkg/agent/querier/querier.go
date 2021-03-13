@@ -25,6 +25,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
+	"github.com/vmware-tanzu/antrea/pkg/agent/proxy"
 	"github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsctl"
@@ -41,6 +42,7 @@ type AgentQuerier interface {
 	GetAgentInfo(agentInfo *v1beta1.AntreaAgentInfo, partial bool)
 	GetOpenflowClient() openflow.Client
 	GetOVSCtlClient() ovsctl.OVSCtlClient
+	GetProxier() proxy.Proxier
 	GetNetworkPolicyInfoQuerier() querier.AgentNetworkPolicyInfoQuerier
 }
 
@@ -51,6 +53,7 @@ type agentQuerier struct {
 	k8sClient                clientset.Interface
 	ofClient                 openflow.Client
 	ovsBridgeClient          ovsconfig.OVSBridgeClient
+	proxier                  proxy.Proxier
 	networkPolicyInfoQuerier querier.AgentNetworkPolicyInfoQuerier
 	apiPort                  int
 }
@@ -62,6 +65,7 @@ func NewAgentQuerier(
 	k8sClient clientset.Interface,
 	ofClient openflow.Client,
 	ovsBridgeClient ovsconfig.OVSBridgeClient,
+	proxier proxy.Proxier,
 	networkPolicyInfoQuerier querier.AgentNetworkPolicyInfoQuerier,
 	apiPort int,
 ) *agentQuerier {
@@ -72,6 +76,7 @@ func NewAgentQuerier(
 		k8sClient:                k8sClient,
 		ofClient:                 ofClient,
 		ovsBridgeClient:          ovsBridgeClient,
+		proxier:                  proxier,
 		networkPolicyInfoQuerier: networkPolicyInfoQuerier,
 		apiPort:                  apiPort}
 }
@@ -104,6 +109,11 @@ func (aq *agentQuerier) GetOpenflowClient() openflow.Client {
 // GetOVSCtlClient returns a new OVSCtlClient.
 func (aq *agentQuerier) GetOVSCtlClient() ovsctl.OVSCtlClient {
 	return ovsctl.NewClient(aq.nodeConfig.OVSBridge)
+}
+
+// GetProxier returns proxy.Proxier.
+func (aq *agentQuerier) GetProxier() proxy.Proxier {
+	return aq.proxier
 }
 
 // GetNetworkPolicyInfoQuerier returns AgentNetworkPolicyInfoQuerier.

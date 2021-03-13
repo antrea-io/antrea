@@ -15,92 +15,104 @@
 package flowrecords
 
 import (
+	"fmt"
 	"net"
+	"sync"
+	"time"
 
 	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter"
-	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter/connections"
 )
 
 type FlowRecords struct {
-	// Add lock when this map is consumed by more than one entity concurrently.
 	recordsMap map[flowexporter.ConnectionKey]flowexporter.FlowRecord
-	connStore  *connections.ConnectionStore
+	mutex      sync.Mutex
 }
 
-func NewFlowRecords(connStore *connections.ConnectionStore) *FlowRecords {
+func NewFlowRecords() *FlowRecords {
 	return &FlowRecords{
-		make(map[flowexporter.ConnectionKey]flowexporter.FlowRecord),
-		connStore,
+		recordsMap: make(map[flowexporter.ConnectionKey]flowexporter.FlowRecord),
 	}
 }
 
-// BuildFlowRecords builds the flow record map from connection map in connection store
-func (fr *FlowRecords) BuildFlowRecords() error {
-	addOrUpdateFlowRecord := func(key flowexporter.ConnectionKey, conn flowexporter.Connection) error {
-		// If DoExport flag is not set return immediately.
-		if !conn.DoExport {
-			return nil
-		}
-		record, exists := fr.recordsMap[key]
+// AddOrUpdateFlowRecord adds or updates the flow record in the record map given the connection.
+func (fr *FlowRecords) AddOrUpdateFlowRecord(key flowexporter.ConnectionKey, conn flowexporter.Connection) error {
+	fr.mutex.Lock()
+	defer fr.mutex.Unlock()
 
+	record, exists := fr.recordsMap[key]
+	if !exists {
 		isIPv6 := false
 		if net.ParseIP(key[0]).To4() == nil {
 			isIPv6 = true
 		}
-		if !exists {
-			record = flowexporter.FlowRecord{
-				Conn:               &conn,
-				PrevPackets:        0,
-				PrevBytes:          0,
-				PrevReversePackets: 0,
-				PrevReverseBytes:   0,
-				IsIPv6:             isIPv6,
-			}
-		} else {
-			record.Conn = &conn
-		}
-		fr.recordsMap[key] = record
-		return nil
-	}
-
-	// addOrUpdateFlowRecord method does not return any error, hence no error handling required.
-	fr.connStore.ForAllConnectionsDo(addOrUpdateFlowRecord)
-	klog.V(2).Infof("No. of flow records built: %d", len(fr.recordsMap))
-	return nil
-}
-
-// GetFlowRecordByConnKey gets the record from the flow record map given the connection key
-func (fr *FlowRecords) GetFlowRecordByConnKey(connKey flowexporter.ConnectionKey) (*flowexporter.FlowRecord, bool) {
-	record, found := fr.recordsMap[connKey]
-	return &record, found
-}
-
-// ValidateAndUpdateStats validates and updates the flow record given the connection key
-func (fr *FlowRecords) ValidateAndUpdateStats(connKey flowexporter.ConnectionKey, record flowexporter.FlowRecord) error {
-	// Delete the flow record if the corresponding connection is not active, i.e., not present in conntrack table.
-	// Delete the corresponding connection in connectionMap as well.
-	if !record.Conn.IsActive {
-		klog.V(2).Infof("Deleting the inactive connection with key: %v", connKey)
-		delete(fr.recordsMap, connKey)
-		if err := fr.connStore.DeleteConnectionByKey(connKey); err != nil {
-			return err
+		record = flowexporter.FlowRecord{
+			Conn:               conn,
+			PrevPackets:        0,
+			PrevBytes:          0,
+			PrevReversePackets: 0,
+			PrevReverseBytes:   0,
+			IsIPv6:             isIPv6,
+			LastExportTime:     conn.StartTime,
+			IsActive:           true,
 		}
 	} else {
-		// Update the stats in flow record after it is sent successfully
-		record.PrevPackets = record.Conn.OriginalPackets
-		record.PrevBytes = record.Conn.OriginalBytes
-		record.PrevReversePackets = record.Conn.ReversePackets
-		record.PrevReverseBytes = record.Conn.ReverseBytes
-		fr.recordsMap[connKey] = record
+		record.Conn = conn
+		if (conn.OriginalPackets > record.PrevPackets) || (conn.ReversePackets > record.PrevReversePackets) {
+			record.IsActive = true
+		}
 	}
-
+	fr.recordsMap[key] = record
 	return nil
+}
+
+// AddFlowRecordToMap adds the flow record from record map given connection key.
+// This is used only for unit tests.
+func (fr *FlowRecords) AddFlowRecordToMap(connKey *flowexporter.ConnectionKey, record *flowexporter.FlowRecord) {
+	fr.mutex.Lock()
+	defer fr.mutex.Unlock()
+	fr.recordsMap[*connKey] = *record
+}
+
+// GetFlowRecordFromMap gets the flow record from record map given connection key.
+// This is used only for unit tests.
+func (fr *FlowRecords) GetFlowRecordFromMap(connKey *flowexporter.ConnectionKey) (*flowexporter.FlowRecord, bool) {
+	fr.mutex.Lock()
+	defer fr.mutex.Unlock()
+	record, exists := fr.recordsMap[*connKey]
+	return &record, exists
+}
+
+// DeleteFlowRecordWithoutLock deletes the record from the record map given
+// the connection key without grabbing the lock. Caller is expected to grab lock.
+func (fr *FlowRecords) DeleteFlowRecordWithoutLock(connKey flowexporter.ConnectionKey) error {
+	_, exists := fr.recordsMap[connKey]
+	if !exists {
+		return fmt.Errorf("flow record with key %v doesn't exist in map", connKey)
+	}
+	delete(fr.recordsMap, connKey)
+	return nil
+}
+
+// ValidateAndUpdateStats validates and updates the flow record given the connection
+// key. Caller is expected to grab lock.
+func (fr *FlowRecords) ValidateAndUpdateStats(connKey flowexporter.ConnectionKey, record flowexporter.FlowRecord) {
+	// Update the stats in flow record after it is sent successfully
+	record.PrevPackets = record.Conn.OriginalPackets
+	record.PrevBytes = record.Conn.OriginalBytes
+	record.PrevReversePackets = record.Conn.ReversePackets
+	record.PrevReverseBytes = record.Conn.ReverseBytes
+	record.LastExportTime = time.Now()
+
+	fr.recordsMap[connKey] = record
+
 }
 
 // ForAllFlowRecordsDo executes the callback for all records in the flow record map
 func (fr *FlowRecords) ForAllFlowRecordsDo(callback flowexporter.FlowRecordCallBack) error {
+	fr.mutex.Lock()
+	defer fr.mutex.Unlock()
 	for k, v := range fr.recordsMap {
 		err := callback(k, v)
 		if err != nil {
@@ -108,6 +120,5 @@ func (fr *FlowRecords) ForAllFlowRecordsDo(callback flowexporter.FlowRecordCallB
 			return err
 		}
 	}
-
 	return nil
 }

@@ -24,6 +24,7 @@ import (
 	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter"
+	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter/flowrecords"
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	"github.com/vmware-tanzu/antrea/pkg/agent/metrics"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
@@ -37,8 +38,22 @@ var serviceProtocolMap = map[uint8]corev1.Protocol{
 	132: corev1.ProtocolSCTP,
 }
 
-type ConnectionStore struct {
+type ConnectionStore interface {
+	// Run enables the periodical polling of conntrack connections at a given flowPollInterval.
+	Run(stopCh <-chan struct{})
+	// GetConnByKey gets the connection in connection map given the connection key.
+	GetConnByKey(flowTuple flowexporter.ConnectionKey) (*flowexporter.Connection, bool)
+	// ForAllConnectionsDo execute the callback for each connection in connection map.
+	ForAllConnectionsDo(callback flowexporter.ConnectionMapCallBack) error
+	// DeleteConnectionByKey deletes the connection in connection map given the
+	// connection key. This function is called from Flow Exporter once the connection
+	// is deleted from conntrack module.
+	DeleteConnectionByKey(connKey flowexporter.ConnectionKey) error
+}
+
+type connectionStore struct {
 	connections          map[flowexporter.ConnectionKey]flowexporter.Connection
+	flowRecords          *flowrecords.FlowRecords
 	connDumper           ConnTrackDumper
 	ifaceStore           interfacestore.InterfaceStore
 	v4Enabled            bool
@@ -51,15 +66,17 @@ type ConnectionStore struct {
 
 func NewConnectionStore(
 	connTrackDumper ConnTrackDumper,
+	flowRecords *flowrecords.FlowRecords,
 	ifaceStore interfacestore.InterfaceStore,
 	v4Enabled bool,
 	v6Enabled bool,
 	proxier proxy.Provider,
 	npQuerier querier.AgentNetworkPolicyInfoQuerier,
 	pollInterval time.Duration,
-) *ConnectionStore {
-	return &ConnectionStore{
+) *connectionStore {
+	return &connectionStore{
 		connections:          make(map[flowexporter.ConnectionKey]flowexporter.Connection),
+		flowRecords:          flowRecords,
 		connDumper:           connTrackDumper,
 		ifaceStore:           ifaceStore,
 		v4Enabled:            v4Enabled,
@@ -70,8 +87,8 @@ func NewConnectionStore(
 	}
 }
 
-// Run enables the periodical polling of conntrack connections, at the given flowPollInterval
-func (cs *ConnectionStore) Run(stopCh <-chan struct{}, pollDone chan struct{}) {
+// Run enables the periodical polling of conntrack connections at a given flowPollInterval.
+func (cs *connectionStore) Run(stopCh <-chan struct{}) {
 	klog.Infof("Starting conntrack polling")
 
 	pollTicker := time.NewTicker(cs.pollInterval)
@@ -88,17 +105,16 @@ func (cs *ConnectionStore) Run(stopCh <-chan struct{}, pollDone chan struct{}) {
 				// TODO: Come up with a backoff/retry mechanism by increasing poll interval and adding retry timeout
 				klog.Errorf("Error during conntrack poll cycle: %v", err)
 			}
-			// We need synchronization between ConnectionStore.Run and FlowExporter.Run go routines.
-			// ConnectionStore.Run (connection poll) should be done to start FlowExporter.Run (connection export); pollDone signal helps enabling this.
-			// FlowExporter.Run should be done to start ConnectionStore.Run; mutex on connection map object makes sure of this synchronization guarantee.
-			pollDone <- struct{}{}
+			// AddOrUpdateFlowRecord method does not return any error, hence no error handling required.
+			cs.ForAllConnectionsDo(cs.flowRecords.AddOrUpdateFlowRecord)
+			klog.V(2).Infof("Flow records are successfully updated")
 		}
 	}
 }
 
 // addOrUpdateConn updates the connection if it is already present, i.e., update timestamp, counters etc.,
 // or adds a new Connection by 5-tuple of the flow along with local Pod and PodNameSpace.
-func (cs *ConnectionStore) addOrUpdateConn(conn *flowexporter.Connection) {
+func (cs *connectionStore) addOrUpdateConn(conn *flowexporter.Connection) {
 	connKey := flowexporter.NewConnectionKey(conn)
 
 	existingConn, exists := cs.GetConnByKey(connKey)
@@ -113,13 +129,12 @@ func (cs *ConnectionStore) addOrUpdateConn(conn *flowexporter.Connection) {
 		existingConn.OriginalPackets = conn.OriginalPackets
 		existingConn.ReverseBytes = conn.ReverseBytes
 		existingConn.ReversePackets = conn.ReversePackets
-		existingConn.IsActive = true
+		existingConn.IsPresent = true
 		// Reassign the flow to update the map
 		cs.connections[connKey] = *existingConn
 		klog.V(4).Infof("Antrea flow updated: %v", existingConn)
 	} else {
 		// sourceIP/destinationIP are mapped only to local pods and not remote pods.
-		var srcFound, dstFound bool
 		sIface, srcFound := cs.ifaceStore.GetInterfaceByIP(conn.TupleOrig.SourceAddress.String())
 		dIface, dstFound := cs.ifaceStore.GetInterfaceByIP(conn.TupleReply.SourceAddress.String())
 		if !srcFound && !dstFound {
@@ -190,16 +205,16 @@ func (cs *ConnectionStore) addOrUpdateConn(conn *flowexporter.Connection) {
 	}
 }
 
-// GetConnByKey gets the connection in connection map given the connection key
-func (cs *ConnectionStore) GetConnByKey(flowTuple flowexporter.ConnectionKey) (*flowexporter.Connection, bool) {
+// GetConnByKey gets the connection in connection map given the connection key.
+func (cs *connectionStore) GetConnByKey(flowTuple flowexporter.ConnectionKey) (*flowexporter.Connection, bool) {
 	cs.mutex.Lock()
 	defer cs.mutex.Unlock()
 	conn, found := cs.connections[flowTuple]
 	return &conn, found
 }
 
-// ForAllConnectionsDo execute the callback for each connection in connection map
-func (cs *ConnectionStore) ForAllConnectionsDo(callback flowexporter.ConnectionMapCallBack) error {
+// ForAllConnectionsDo execute the callback for each connection in connection map.
+func (cs *connectionStore) ForAllConnectionsDo(callback flowexporter.ConnectionMapCallBack) error {
 	cs.mutex.Lock()
 	defer cs.mutex.Unlock()
 	for k, v := range cs.connections {
@@ -216,13 +231,12 @@ func (cs *ConnectionStore) ForAllConnectionsDo(callback flowexporter.ConnectionM
 // address family, as a slice. In dual-stack clusters, the slice will contain 2 values (number of IPv4 connections first,
 // then number of IPv6 connections).
 // TODO: As optimization, only poll invalid/closed connections during every poll, and poll the established connections right before the export.
-func (cs *ConnectionStore) Poll() ([]int, error) {
+func (cs *connectionStore) Poll() ([]int, error) {
 	klog.V(2).Infof("Polling conntrack")
-
 	// Reset isActive flag for all connections in connection map before dumping flows in conntrack module.
 	// This is to specify that the connection and the flow record can be deleted after the next export.
 	resetConn := func(key flowexporter.ConnectionKey, conn flowexporter.Connection) error {
-		conn.IsActive = false
+		conn.IsPresent = false
 		cs.connections[key] = conn
 		return nil
 	}
@@ -261,8 +275,8 @@ func (cs *ConnectionStore) Poll() ([]int, error) {
 	return connsLens, nil
 }
 
-// DeleteConnectionByKey deletes the connection in connection map given the connection key
-func (cs *ConnectionStore) DeleteConnectionByKey(connKey flowexporter.ConnectionKey) error {
+// DeleteConnectionByKey deletes the connection in connection map given the connection key.
+func (cs *connectionStore) DeleteConnectionByKey(connKey flowexporter.ConnectionKey) error {
 	_, exists := cs.GetConnByKey(connKey)
 	if !exists {
 		return fmt.Errorf("connection with key %v doesn't exist in map", connKey)

@@ -28,7 +28,6 @@ import (
 	fakeclientset "k8s.io/client-go/kubernetes/fake"
 	certutil "k8s.io/client-go/util/cert"
 	"k8s.io/client-go/util/keyutil"
-
 	fakeaggregatorclientset "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset/fake"
 )
 

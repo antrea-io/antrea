@@ -3888,8 +3888,8 @@ conjunction with NetworkPolicySpec/ClusterNetworkPolicySpec.AppliedTo.</p>
 (<code>string</code> alias)</p></h3>
 <p>
 (<em>Appears on:</em>
-<a href="#controlplane.antrea.tanzu.vmware.com/v1beta1.NetworkPolicyRule">NetworkPolicyRule</a>, 
 <a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.NetworkPolicyRule">NetworkPolicyRule</a>, 
+<a href="#controlplane.antrea.tanzu.vmware.com/v1beta1.NetworkPolicyRule">NetworkPolicyRule</a>, 
 <a href="#security.antrea.tanzu.vmware.com/v1alpha1.Rule">Rule</a>)
 </p>
 <p>
@@ -4134,8 +4134,8 @@ TrafficStats
 <a href="#stats.antrea.tanzu.vmware.com/v1alpha1.AntreaClusterNetworkPolicyStats">AntreaClusterNetworkPolicyStats</a>, 
 <a href="#stats.antrea.tanzu.vmware.com/v1alpha1.AntreaNetworkPolicyStats">AntreaNetworkPolicyStats</a>, 
 <a href="#stats.antrea.tanzu.vmware.com/v1alpha1.NetworkPolicyStats">NetworkPolicyStats</a>, 
-<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.NetworkPolicyStats">NetworkPolicyStats</a>, 
-<a href="#controlplane.antrea.tanzu.vmware.com/v1beta1.NetworkPolicyStats">NetworkPolicyStats</a>)
+<a href="#controlplane.antrea.tanzu.vmware.com/v1beta1.NetworkPolicyStats">NetworkPolicyStats</a>, 
+<a href="#controlplane.antrea.tanzu.vmware.com/v1beta2.NetworkPolicyStats">NetworkPolicyStats</a>)
 </p>
 <p>
 <p>TrafficStats contains the traffic stats of a NetworkPolicy.</p>
@@ -6010,5 +6010,5 @@ k8s.io/apimachinery/pkg/util/intstr.IntOrString
 <hr/>
 <p><em>
 Generated with <code>gen-crd-api-reference-docs</code>
-on git commit <code>0c6e616a</code>.
+on git commit <code>53cf71a5</code>.
 </em></p>

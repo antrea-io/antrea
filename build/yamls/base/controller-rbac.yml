@@ -79,6 +79,7 @@ rules:
       - configmaps
     resourceNames:
       - antrea-ca
+      - antrea-cluster-identity
     verbs:
       - get
       - update
@@ -103,6 +104,7 @@ rules:
     resourceNames:
       - crdmutator.antrea.tanzu.vmware.com
       - crdvalidator.antrea.tanzu.vmware.com
+      - labelsmutator.antrea.io
     verbs:
       - get
       - update

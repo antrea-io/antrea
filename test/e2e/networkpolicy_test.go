@@ -19,7 +19,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -42,14 +41,13 @@ func TestNetworkPolicyStats(t *testing.T) {
 	}
 	defer teardownTest(t, data)
 
-	if err := data.mutateAntreaConfigMap(func(data map[string]string) {
-		antreaControllerConf, _ := data["antrea-controller.conf"]
-		antreaControllerConf = strings.Replace(antreaControllerConf, "#  NetworkPolicyStats: false", "  NetworkPolicyStats: true", 1)
-		data["antrea-controller.conf"] = antreaControllerConf
-		antreaAgentConf, _ := data["antrea-agent.conf"]
-		antreaAgentConf = strings.Replace(antreaAgentConf, "#  NetworkPolicyStats: false", "  NetworkPolicyStats: true", 1)
-		data["antrea-agent.conf"] = antreaAgentConf
-	}, true, true); err != nil {
+	cc := []configChange{
+		{"NetworkPolicyStats", "true", true},
+	}
+	ac := []configChange{
+		{"NetworkPolicyStats", "true", true},
+	}
+	if err := data.mutateAntreaConfigMap(cc, ac, true, true); err != nil {
 		t.Fatalf("Failed to enable NetworkPolicyStats feature: %v", err)
 	}
 

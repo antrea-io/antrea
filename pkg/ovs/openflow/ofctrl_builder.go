@@ -85,6 +85,8 @@ func (b *ofFlowBuilder) MatchXXReg(regID int, data []byte) FlowBuilder {
 
 // MatchRegRange adds match condition for matching data in the target register at specified range.
 func (b *ofFlowBuilder) MatchRegRange(regID int, data uint32, rng Range) FlowBuilder {
+	s := fmt.Sprintf("reg%d[%d..%d]=0x%x", regID, rng[0], rng[1], data)
+	b.matchers = append(b.matchers, s)
 	if rng[0] > 0 {
 		data <<= rng[0]
 	}

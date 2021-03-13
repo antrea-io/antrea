@@ -237,6 +237,28 @@ func (t *testData) updatePodOrFail(testPod *corev1.Pod) {
 	t.Logf("Successfully updated Pod: %s", testPod.Name)
 }
 
+// TestSvcNamespaceUpdate creates two Services in different Namespaces default and blue.
+// It verifies the NPL annotation in the Pod in the default Namespace. It then deletes the
+// Service in default Namespace, and verifies that the NPL annotation is also removed.
+func TestSvcNamespaceUpdate(t *testing.T) {
+	testSvcDefaultNS := getTestSvc()
+	testPodDefaultNS := getTestPod()
+	testSvcBlue := getTestSvc()
+	testSvcBlue.Namespace = "blue"
+	testData := setUp(t, testSvcDefaultNS, testPodDefaultNS, testSvcBlue)
+	defer testData.tearDown()
+
+	// Remove Service testSvcDefaultNS.
+	err := testData.k8sClient.CoreV1().Services(defaultNS).Delete(context.TODO(), testSvcDefaultNS.Name, metav1.DeleteOptions{})
+	require.NoError(t, err, "Service deletion failed")
+	t.Logf("successfully deleted Service: %s", testSvcDefaultNS.Name)
+
+	// Check that annotation and the rule are removed.
+	_, err = testData.pollForPodAnnotation(testPodDefaultNS.Name, false)
+	require.NoError(t, err, "Poll for annotation check failed")
+	assert.False(t, testData.portTable.RuleExists(defaultPodIP, defaultPort))
+}
+
 // TestSvcUpdateAnnotation updates the Service spec to disabled NPL. It then verifies that the Pod's
 // NPL annotation is removed and that the port table is updated.
 func TestSvcUpdateAnnotation(t *testing.T) {

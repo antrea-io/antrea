@@ -24,11 +24,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
 	"k8s.io/apimachinery/pkg/util/wait"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/apiserver/handlers/podinterface"
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow/cookie"
+	"github.com/vmware-tanzu/antrea/pkg/clusteridentity"
 )
 
 // TestDeploy is a "no-op" test that simply performs setup and teardown.
@@ -732,4 +735,36 @@ func TestGratuitousARP(t *testing.T) {
 		t.Errorf("Expected at least 3 ARP packets, got %d", arpPackets)
 	}
 	t.Logf("Got %d ARP packets after Pod was up", arpPackets)
+}
+
+// TestClusterIdentity verifies that the antrea-cluster-identity ConfigMap is
+// populated correctly by the Antrea Controller.
+func TestClusterIdentity(t *testing.T) {
+	data, err := setupTest(t)
+	if err != nil {
+		t.Fatalf("Error when setting up test: %v", err)
+	}
+	defer teardownTest(t, data)
+
+	clusterIdentityProvider := clusteridentity.NewClusterIdentityProvider(
+		antreaNamespace,
+		clusteridentity.DefaultClusterIdentityConfigMapName,
+		data.clientset,
+	)
+
+	const retryInterval = time.Second
+	const timeout = 10 * time.Second
+	var clusterUUID uuid.UUID
+	err = wait.PollImmediate(retryInterval, timeout, func() (bool, error) {
+		if clusterIdentity, _, err := clusterIdentityProvider.Get(); err != nil {
+			return false, nil
+		} else {
+			clusterUUID = clusterIdentity.UUID
+			t.Logf("Cluster UUID: %v", clusterUUID)
+			return true, nil
+		}
+	})
+
+	assert.NoError(t, err, "Failed to retrieve cluster identity information within %v", timeout)
+	assert.NotEqual(t, uuid.Nil, clusterUUID)
 }
