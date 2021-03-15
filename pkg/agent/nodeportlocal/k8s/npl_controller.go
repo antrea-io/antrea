@@ -203,34 +203,26 @@ func (c *NPLController) enqueueSvcUpdate(oldObj, newObj interface{}) {
 		return
 	}
 
-	podKeys := sets.String{}
-	var oldPodSet, newPodSet sets.String
-	if oldSvcAnnotation != newSvcAnnotation {
-		// Process Pods corresponding to Service with valid NPL annotation.
-		if oldSvcAnnotation == "true" {
-			oldPodSet = sets.NewString(c.getPodsFromService(oldSvc)...)
-			podKeys = oldPodSet
-		} else if newSvcAnnotation == "true" {
-			newPodSet = sets.NewString(c.getPodsFromService(newSvc)...)
-			podKeys = newPodSet
-		}
+	var podKeys sets.String
+	// Check for Annotation changes in the Service. Pod sets don't change
+	// in case of annotation and service type.
+	if oldSvcAnnotation != newSvcAnnotation &&
+		(oldSvcAnnotation == "true" || newSvcAnnotation == "true") {
+		podKeys = sets.NewString(c.getPodsFromService(newSvc)...)
 	}
 
-	if oldSvc.Spec.Type != newSvc.Spec.Type {
-		if newPodSet == nil {
-			newPodSet = sets.NewString(c.getPodsFromService(newSvc)...)
+	// Check for Service type changes, NodePort to non-NodePort and vice versa.
+	if oldSvc.Spec.Type != newSvc.Spec.Type &&
+		(oldSvc.Spec.Type == corev1.ServiceTypeNodePort || newSvc.Spec.Type == corev1.ServiceTypeNodePort) {
+		if podKeys == nil {
+			podKeys = sets.NewString(c.getPodsFromService(newSvc)...)
 		}
-		podKeys = podKeys.Union(newPodSet)
 	}
 
 	if !reflect.DeepEqual(oldSvc.Spec.Selector, newSvc.Spec.Selector) {
 		// Disjunctive union of Pods from both Service sets.
-		if oldPodSet == nil {
-			oldPodSet = sets.NewString(c.getPodsFromService(oldSvc)...)
-		}
-		if newPodSet == nil {
-			newPodSet = sets.NewString(c.getPodsFromService(newSvc)...)
-		}
+		oldPodSet := sets.NewString(c.getPodsFromService(oldSvc)...)
+		newPodSet := sets.NewString(c.getPodsFromService(newSvc)...)
 		podKeys = podKeys.Union(utilsets.SymmetricDifference(oldPodSet, newPodSet))
 	}
 
