@@ -1,4 +1,4 @@
-// Copyright 2020 Antrea Authors
+// Copyright 2021 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -266,6 +266,9 @@ message NetworkPolicyStats {
 
   // The stats of the NetworkPolicy.
   optional github.com.vmware_tanzu.antrea.pkg.apis.stats.v1alpha1.TrafficStats trafficStats = 2;
+
+  // The stats of the NetworkPolicy rules. It's empty for K8s NetworkPolicies as they don't have rule name to identify a rule.
+  repeated github.com.vmware_tanzu.antrea.pkg.apis.stats.v1alpha1.RuleTrafficStats ruleTrafficStats = 3;
 }
 
 // NodeStatsSummary contains stats produced on a Node. It's used by the antrea-agents to report stats to the antrea-controller.

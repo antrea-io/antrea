@@ -2205,11 +2205,24 @@ func TestANPNetworkPolicyStatsWithDropAction(t *testing.T) {
 	failOnError(err, t)
 	p10 := float64(10)
 	intstr80 := intstr.FromInt(80)
+	intstr443 := intstr.FromInt(443)
 	dropAction := secv1alpha1.RuleActionDrop
+	allowAction := secv1alpha1.RuleActionAllow
 	selectorB := metav1.LabelSelector{MatchLabels: map[string]string{"antrea-e2e": clientName}}
 	selectorC := metav1.LabelSelector{MatchLabels: map[string]string{"antrea-e2e": serverName}}
 	protocol := v1.ProtocolUDP
 
+	// When using the userspace OVS datapath and tunneling,
+	// the first IP packet sent on a tunnel is always dropped because of a missing ARP entry.
+	// So we need to  "warm-up" the tunnel.
+	if clusterInfo.podV4NetworkCIDR != "" {
+		cmd := []string{"/bin/sh", "-c", fmt.Sprintf("nc -vz -w 4 %s 80", serverIPs.ipv4.String())}
+		data.runCommandFromPod(testNamespace, clientName, busyboxContainerName, cmd)
+	}
+	if clusterInfo.podV6NetworkCIDR != "" {
+		cmd := []string{"/bin/sh", "-c", fmt.Sprintf("nc -vz -w 4 %s 80", serverIPs.ipv6.String())}
+		data.runCommandFromPod(testNamespace, clientName, busyboxContainerName, cmd)
+	}
 	var anp = &secv1alpha1.NetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: "np1", Labels: map[string]string{"antrea-e2e": "np1"}},
 		Spec: secv1alpha1.NetworkPolicySpec{
@@ -2232,6 +2245,20 @@ func TestANPNetworkPolicyStatsWithDropAction(t *testing.T) {
 					},
 					Action: &dropAction,
 				},
+				{
+					Ports: []secv1alpha1.NetworkPolicyPort{
+						{
+							Port:     &intstr443,
+							Protocol: &protocol,
+						},
+					},
+					From: []secv1alpha1.NetworkPolicyPeer{
+						{
+							PodSelector: &selectorB,
+						},
+					},
+					Action: &allowAction,
+				},
 			},
 			Egress: []secv1alpha1.Rule{},
 		},
@@ -2251,23 +2278,27 @@ func TestANPNetworkPolicyStatsWithDropAction(t *testing.T) {
 		go func() {
 			if clusterInfo.podV4NetworkCIDR != "" {
 				cmd := []string{"/bin/sh", "-c", fmt.Sprintf("echo test | nc -w 4 -u %s 80", serverIPs.ipv4.String())}
+				cmd2 := []string{"/bin/sh", "-c", fmt.Sprintf("echo test | nc -w 4 -u %s 443", serverIPs.ipv4.String())}
 				data.runCommandFromPod(testNamespace, clientName, busyboxContainerName, cmd)
+				data.runCommandFromPod(testNamespace, clientName, busyboxContainerName, cmd2)
 			}
 			if clusterInfo.podV6NetworkCIDR != "" {
 				cmd := []string{"/bin/sh", "-c", fmt.Sprintf("echo test | nc -w 4 -u %s 80", serverIPs.ipv6.String())}
+				cmd2 := []string{"/bin/sh", "-c", fmt.Sprintf("echo test | nc -w 4 -u %s 443", serverIPs.ipv4.String())}
 				data.runCommandFromPod(testNamespace, clientName, busyboxContainerName, cmd)
+				data.runCommandFromPod(testNamespace, clientName, busyboxContainerName, cmd2)
 			}
 			wg.Done()
 		}()
 	}
 	wg.Wait()
 
-	totalSessions := 0
+	totalSessionsPerRule := 0
 	if clusterInfo.podV4NetworkCIDR != "" {
-		totalSessions += sessionsPerAddressFamily
+		totalSessionsPerRule += sessionsPerAddressFamily
 	}
 	if clusterInfo.podV6NetworkCIDR != "" {
-		totalSessions += sessionsPerAddressFamily
+		totalSessionsPerRule += sessionsPerAddressFamily
 	}
 
 	if err := wait.Poll(5*time.Second, defaultTimeout, func() (bool, error) {
@@ -2276,8 +2307,167 @@ func TestANPNetworkPolicyStatsWithDropAction(t *testing.T) {
 			return false, err
 		}
 		t.Logf("Got AntreaNetworkPolicy stats: %v", stats)
-		if stats.TrafficStats.Sessions != int64(totalSessions) {
+		if len(stats.RuleTrafficStats) != 2 {
 			return false, nil
+		}
+		if stats.RuleTrafficStats[0].TrafficStats.Sessions != int64(totalSessionsPerRule) {
+			return false, nil
+		}
+		if stats.RuleTrafficStats[1].TrafficStats.Sessions != int64(totalSessionsPerRule) {
+			return false, nil
+		}
+		if stats.TrafficStats.Sessions != stats.RuleTrafficStats[1].TrafficStats.Sessions+stats.RuleTrafficStats[0].TrafficStats.Sessions {
+			return false, fmt.Errorf("the rules stats under one policy should sum up to its total policy")
+		}
+		if stats.TrafficStats.Packets < stats.TrafficStats.Sessions || stats.TrafficStats.Bytes < stats.TrafficStats.Sessions {
+			return false, fmt.Errorf("neither 'Packets' nor 'Bytes' should be smaller than 'Sessions'")
+		}
+		return true, nil
+	}); err != nil {
+		failOnError(err, t)
+	}
+	k8sUtils.Cleanup(namespaces)
+}
+
+func TestAntreaClusterNetworkPolicyStats(t *testing.T) {
+	data, err := setupTest(t)
+	if err != nil {
+		t.Fatalf("Error when setting up test: %v", err)
+	}
+	defer teardownTest(t, data)
+	skipIfAntreaPolicyDisabled(t, data)
+
+	cc := []configChange{
+		{"NetworkPolicyStats", "true", true},
+	}
+	ac := []configChange{
+		{"NetworkPolicyStats", "true", true},
+	}
+	if err := testData.mutateAntreaConfigMap(cc, ac, true, true); err != nil {
+		t.Fatalf("Failed to enable NetworkPolicyStats feature: %v", err)
+	}
+	serverName, serverIPs, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "test-server-", "")
+	defer cleanupFunc()
+
+	clientName, _, cleanupFunc := createAndWaitForPod(t, data, data.createBusyboxPodOnNode, "test-client-", "")
+	defer cleanupFunc()
+	k8sUtils, err = NewKubernetesUtils(data)
+	failOnError(err, t)
+	p10 := float64(10)
+	intstr800 := intstr.FromInt(800)
+	intstr4430 := intstr.FromInt(4430)
+	dropAction := secv1alpha1.RuleActionDrop
+	allowAction := secv1alpha1.RuleActionAllow
+	selectorB := metav1.LabelSelector{MatchLabels: map[string]string{"antrea-e2e": clientName}}
+	selectorC := metav1.LabelSelector{MatchLabels: map[string]string{"antrea-e2e": serverName}}
+	protocol := v1.ProtocolUDP
+
+	// When using the userspace OVS datapath and tunneling,
+	// the first IP packet sent on a tunnel is always dropped because of a missing ARP entry.
+	// So we need to  "warm-up" the tunnel.
+	if clusterInfo.podV4NetworkCIDR != "" {
+		cmd := []string{"/bin/sh", "-c", fmt.Sprintf("nc -vz -w 4 %s 80", serverIPs.ipv4.String())}
+		data.runCommandFromPod(testNamespace, clientName, busyboxContainerName, cmd)
+	}
+	if clusterInfo.podV6NetworkCIDR != "" {
+		cmd := []string{"/bin/sh", "-c", fmt.Sprintf("nc -vz -w 4 %s 80", serverIPs.ipv6.String())}
+		data.runCommandFromPod(testNamespace, clientName, busyboxContainerName, cmd)
+	}
+	var acnp = &secv1alpha1.ClusterNetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: "cnp1", Labels: map[string]string{"antrea-e2e": "cnp1"}},
+		Spec: secv1alpha1.ClusterNetworkPolicySpec{
+			AppliedTo: []secv1alpha1.NetworkPolicyPeer{
+				{PodSelector: &selectorC},
+			},
+			Priority: p10,
+			Ingress: []secv1alpha1.Rule{
+				{
+					Ports: []secv1alpha1.NetworkPolicyPort{
+						{
+							Port:     &intstr800,
+							Protocol: &protocol,
+						},
+					},
+					From: []secv1alpha1.NetworkPolicyPeer{
+						{
+							PodSelector: &selectorB,
+						},
+					},
+					Action: &allowAction,
+				},
+				{
+					Ports: []secv1alpha1.NetworkPolicyPort{
+						{
+							Port:     &intstr4430,
+							Protocol: &protocol,
+						},
+					},
+					From: []secv1alpha1.NetworkPolicyPeer{
+						{
+							PodSelector: &selectorB,
+						},
+					},
+					Action: &dropAction,
+				},
+			},
+			Egress: []secv1alpha1.Rule{},
+		},
+	}
+
+	if _, err = k8sUtils.CreateOrUpdateACNP(acnp); err != nil {
+		failOnError(fmt.Errorf("create ACNP failed for ACNP %s: %v", acnp.Name, err), t)
+	}
+
+	// Wait for a few seconds in case that connections are established before policies are enforced.
+	time.Sleep(networkPolicyDelay)
+
+	sessionsPerAddressFamily := 10
+	var wg sync.WaitGroup
+	for i := 0; i < sessionsPerAddressFamily; i++ {
+		wg.Add(1)
+		go func() {
+			if clusterInfo.podV4NetworkCIDR != "" {
+				cmd := []string{"/bin/sh", "-c", fmt.Sprintf("echo test | nc -w 4 -u %s 800", serverIPs.ipv4.String())}
+				cmd2 := []string{"/bin/sh", "-c", fmt.Sprintf("echo test | nc -w 4 -u %s 4430", serverIPs.ipv4.String())}
+				data.runCommandFromPod(testNamespace, clientName, busyboxContainerName, cmd)
+				data.runCommandFromPod(testNamespace, clientName, busyboxContainerName, cmd2)
+			}
+			if clusterInfo.podV6NetworkCIDR != "" {
+				cmd := []string{"/bin/sh", "-c", fmt.Sprintf("echo test | nc -w 4 -u %s 800", serverIPs.ipv6.String())}
+				cmd2 := []string{"/bin/sh", "-c", fmt.Sprintf("echo test | nc -w 4 -u %s 4430", serverIPs.ipv4.String())}
+				data.runCommandFromPod(testNamespace, clientName, busyboxContainerName, cmd)
+				data.runCommandFromPod(testNamespace, clientName, busyboxContainerName, cmd2)
+			}
+			wg.Done()
+		}()
+	}
+	wg.Wait()
+
+	totalSessionsPerRule := 0
+	if clusterInfo.podV4NetworkCIDR != "" {
+		totalSessionsPerRule += sessionsPerAddressFamily
+	}
+	if clusterInfo.podV6NetworkCIDR != "" {
+		totalSessionsPerRule += sessionsPerAddressFamily
+	}
+
+	if err := wait.Poll(5*time.Second, defaultTimeout, func() (bool, error) {
+		stats, err := data.crdClient.StatsV1alpha1().AntreaClusterNetworkPolicyStats().Get(context.TODO(), "cnp1", metav1.GetOptions{})
+		if err != nil {
+			return false, err
+		}
+		t.Logf("Got AntreaNetworkPolicy stats: %v", stats)
+		if len(stats.RuleTrafficStats) != 2 {
+			return false, nil
+		}
+		if stats.RuleTrafficStats[0].TrafficStats.Sessions != int64(totalSessionsPerRule) {
+			return false, nil
+		}
+		if stats.RuleTrafficStats[1].TrafficStats.Sessions != int64(totalSessionsPerRule) {
+			return false, nil
+		}
+		if stats.TrafficStats.Sessions != stats.RuleTrafficStats[1].TrafficStats.Sessions+stats.RuleTrafficStats[0].TrafficStats.Sessions {
+			return false, fmt.Errorf("the rules stats under one policy should sum up to its total policy")
 		}
 		if stats.TrafficStats.Packets < stats.TrafficStats.Sessions || stats.TrafficStats.Bytes < stats.TrafficStats.Sessions {
 			return false, fmt.Errorf("neither 'Packets' nor 'Bytes' should be smaller than 'Sessions'")

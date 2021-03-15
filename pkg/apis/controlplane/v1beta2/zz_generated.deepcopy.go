@@ -20,6 +20,7 @@ package v1beta2
 
 import (
 	v1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
+	statsv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/stats/v1alpha1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	intstr "k8s.io/apimachinery/pkg/util/intstr"
 )
@@ -641,6 +642,11 @@ func (in *NetworkPolicyStats) DeepCopyInto(out *NetworkPolicyStats) {
 	*out = *in
 	out.NetworkPolicy = in.NetworkPolicy
 	out.TrafficStats = in.TrafficStats
+	if in.RuleTrafficStats != nil {
+		in, out := &in.RuleTrafficStats, &out.RuleTrafficStats
+		*out = make([]statsv1alpha1.RuleTrafficStats, len(*in))
+		copy(*out, *in)
+	}
 	return
 }
 
@@ -693,17 +699,23 @@ func (in *NodeStatsSummary) DeepCopyInto(out *NodeStatsSummary) {
 	if in.NetworkPolicies != nil {
 		in, out := &in.NetworkPolicies, &out.NetworkPolicies
 		*out = make([]NetworkPolicyStats, len(*in))
-		copy(*out, *in)
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
+		}
 	}
 	if in.AntreaClusterNetworkPolicies != nil {
 		in, out := &in.AntreaClusterNetworkPolicies, &out.AntreaClusterNetworkPolicies
 		*out = make([]NetworkPolicyStats, len(*in))
-		copy(*out, *in)
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
+		}
 	}
 	if in.AntreaNetworkPolicies != nil {
 		in, out := &in.AntreaNetworkPolicies, &out.AntreaNetworkPolicies
 		*out = make([]NetworkPolicyStats, len(*in))
-		copy(*out, *in)
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
+		}
 	}
 	return
 }

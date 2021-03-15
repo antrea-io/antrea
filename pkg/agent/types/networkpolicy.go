@@ -77,6 +77,7 @@ type PolicyRule struct {
 	Service       []v1beta2.Service
 	Action        *secv1alpha1.RuleAction
 	Priority      *uint16
+	Name          string
 	FlowID        uint32
 	TableID       binding.TableIDType
 	PolicyRef     *v1beta2.NetworkPolicyReference

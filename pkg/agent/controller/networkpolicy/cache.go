@@ -61,6 +61,8 @@ type rule struct {
 	To v1beta.NetworkPolicyPeer
 	// Protocols and Ports of this rule.
 	Services []v1beta.Service
+	// Name of this rule. Empty for k8s NetworkPolicy.
+	Name string
 	// Action of this rule. nil for k8s NetworkPolicy.
 	Action *secv1alpha1.RuleAction
 	// Priority of this rule within the NetworkPolicy. Defaults to -1 for K8s NetworkPolicy.
@@ -548,6 +550,7 @@ func toRule(r *v1beta.NetworkPolicyRule, policy *v1beta.NetworkPolicy, maxPriori
 		PolicyPriority:  policy.Priority,
 		TierPriority:    policy.TierPriority,
 		AppliedToGroups: appliedToGroups,
+		Name:            r.Name,
 		PolicyUID:       policy.UID,
 		SourceRef:       policy.SourceRef,
 		EnableLogging:   r.EnableLogging,

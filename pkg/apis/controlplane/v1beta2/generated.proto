@@ -270,6 +270,10 @@ message NetworkPolicyRule {
   // Cannot be set in conjunction with NetworkPolicy.AppliedToGroups of the NetworkPolicy
   // that this Rule is referred to.
   repeated string appliedToGroups = 8;
+
+  // Name describes the intention of this rule.
+  // Name should be unique within the policy.
+  optional string name = 9;
 }
 
 // NetworkPolicyStats contains the information and traffic stats of a NetworkPolicy.
@@ -279,6 +283,9 @@ message NetworkPolicyStats {
 
   // The stats of the NetworkPolicy.
   optional github.com.vmware_tanzu.antrea.pkg.apis.stats.v1alpha1.TrafficStats trafficStats = 2;
+
+  // The stats of the NetworkPolicy rules. It's empty for K8s NetworkPolicies as they don't have rule name to identify a rule.
+  repeated github.com.vmware_tanzu.antrea.pkg.apis.stats.v1alpha1.RuleTrafficStats ruleTrafficStats = 3;
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
