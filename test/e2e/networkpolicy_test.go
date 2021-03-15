@@ -57,6 +57,18 @@ func TestNetworkPolicyStats(t *testing.T) {
 	clientName, _, cleanupFunc := createAndWaitForPod(t, data, data.createBusyboxPodOnNode, "test-client-", "")
 	defer cleanupFunc()
 
+	// When using the userspace OVS datapath and tunneling,
+	// the first IP packet sent on a tunnel is always dropped because of a missing ARP entry.
+	// So we need to  "warm-up" the tunnel.
+	if clusterInfo.podV4NetworkCIDR != "" {
+		cmd := []string{"/bin/sh", "-c", fmt.Sprintf("nc -vz -w 4 %s 80", serverIPs.ipv4.String())}
+		data.runCommandFromPod(testNamespace, clientName, busyboxContainerName, cmd)
+	}
+	if clusterInfo.podV6NetworkCIDR != "" {
+		cmd := []string{"/bin/sh", "-c", fmt.Sprintf("nc -vz -w 4 %s 80", serverIPs.ipv6.String())}
+		data.runCommandFromPod(testNamespace, clientName, busyboxContainerName, cmd)
+	}
+
 	np1, err := data.createNetworkPolicy("test-networkpolicy-ingress", &networkingv1.NetworkPolicySpec{
 		PodSelector: metav1.LabelSelector{},
 		PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},

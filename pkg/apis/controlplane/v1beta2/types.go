@@ -218,6 +218,9 @@ type NetworkPolicyRule struct {
 	// Cannot be set in conjunction with NetworkPolicy.AppliedToGroups of the NetworkPolicy
 	// that this Rule is referred to.
 	AppliedToGroups []string `json:"appliedToGroups,omitempty" protobuf:"bytes,8,opt,name=appliedToGroups"`
+	// Name describes the intention of this rule.
+	// Name should be unique within the policy.
+	Name string `json:"name,omitempty" protobuf:"bytes,9,opt,name=name"`
 }
 
 // Protocol defines network protocols supported for things like container ports.
@@ -299,6 +302,8 @@ type NetworkPolicyStats struct {
 	NetworkPolicy NetworkPolicyReference `json:"networkPolicy,omitempty" protobuf:"bytes,1,opt,name=networkPolicy"`
 	// The stats of the NetworkPolicy.
 	TrafficStats statsv1alpha1.TrafficStats `json:"trafficStats,omitempty" protobuf:"bytes,2,opt,name=trafficStats"`
+	// The stats of the NetworkPolicy rules. It's empty for K8s NetworkPolicies as they don't have rule name to identify a rule.
+	RuleTrafficStats []statsv1alpha1.RuleTrafficStats `json:"ruleTrafficStats,omitempty" protobuf:"bytes,3,rep,name=ruleTrafficStats"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

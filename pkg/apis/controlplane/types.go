@@ -197,6 +197,9 @@ type NetworkPolicyRule struct {
 	To NetworkPolicyPeer
 	// Services is a list of services which should be matched.
 	Services []Service
+	// Name describes the intention of this rule.
+	// Name should be unique within the policy.
+	Name string
 	// Priority defines the priority of the Rule as compared to other rules in the
 	// NetworkPolicy.
 	Priority int32
@@ -288,6 +291,8 @@ type NetworkPolicyStats struct {
 	NetworkPolicy NetworkPolicyReference
 	// The stats of the NetworkPolicy.
 	TrafficStats statsv1alpha1.TrafficStats
+	// The stats of the NetworkPolicy rules. It's empty for K8s NetworkPolicies as they don't have rule name to identify a rule.
+	RuleTrafficStats []statsv1alpha1.RuleTrafficStats
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
