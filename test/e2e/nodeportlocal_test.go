@@ -157,8 +157,7 @@ func validatePortInRange(t *testing.T, nplAnnotations []k8s.NPLAnnotation, start
 
 func TestNPLAddPod(t *testing.T) {
 	skipIfNotIPv4Cluster(t)
-	var err error
-	testData, err = setupTest(t)
+	testData, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
