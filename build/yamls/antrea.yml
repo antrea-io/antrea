@@ -311,6 +311,30 @@ kind: CustomResourceDefinition
 metadata:
   labels:
     app: antrea
+  name: egresses.egress.antrea.tanzu.vmware.com
+spec:
+  group: egress.antrea.tanzu.vmware.com
+  names:
+    kind: Egress
+    plural: egresses
+    shortNames:
+    - eg
+    singular: egress
+  scope: Cluster
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        type: object
+        x-kubernetes-preserve-unknown-fields: true
+    served: true
+    storage: true
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  labels:
+    app: antrea
   name: externalentities.core.antrea.tanzu.vmware.com
 spec:
   group: core.antrea.tanzu.vmware.com
@@ -1262,6 +1286,14 @@ rules:
   resources:
   - externalentities
   - clustergroups
+  verbs:
+  - get
+  - watch
+  - list
+- apiGroups:
+  - egress.antrea.tanzu.vmware.com
+  resources:
+  - egresses
   verbs:
   - get
   - watch

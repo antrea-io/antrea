@@ -40,6 +40,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/handlers/endpoint"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/handlers/loglevel"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/handlers/webhook"
+	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/controlplane/egressgroup"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/controlplane/nodestatssummary"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/networkpolicy/addressgroup"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/networkpolicy/appliedtogroup"
@@ -82,6 +83,7 @@ type ExtraConfig struct {
 	addressGroupStore             storage.Interface
 	appliedToGroupStore           storage.Interface
 	networkPolicyStore            storage.Interface
+	egressGroupStore              storage.Interface
 	controllerQuerier             querier.ControllerQuerier
 	endpointQuerier               controllernetworkpolicy.EndpointQuerier
 	networkPolicyController       *controllernetworkpolicy.NetworkPolicyController
@@ -119,7 +121,7 @@ type completedConfig struct {
 
 func NewConfig(
 	genericConfig *genericapiserver.Config,
-	addressGroupStore, appliedToGroupStore, networkPolicyStore, groupStore storage.Interface,
+	addressGroupStore, appliedToGroupStore, networkPolicyStore, groupStore, egressGroupStore storage.Interface,
 	caCertController *certificate.CACertController,
 	statsAggregator *stats.Aggregator,
 	controllerQuerier querier.ControllerQuerier,
@@ -132,6 +134,7 @@ func NewConfig(
 			addressGroupStore:             addressGroupStore,
 			appliedToGroupStore:           appliedToGroupStore,
 			networkPolicyStore:            networkPolicyStore,
+			egressGroupStore:              egressGroupStore,
 			caCertController:              caCertController,
 			statsAggregator:               statsAggregator,
 			controllerQuerier:             controllerQuerier,
@@ -154,12 +157,14 @@ func installAPIGroup(s *APIServer, c completedConfig) error {
 	clusterGroupMembershipStorage := clustergroupmember.NewREST(c.extraConfig.networkPolicyController)
 	groupAssociationStorage := groupassociation.NewREST(c.extraConfig.networkPolicyController)
 	nodeStatsSummaryStorage := nodestatssummary.NewREST(c.extraConfig.statsAggregator)
+	egressGroupStorage := egressgroup.NewREST(c.extraConfig.egressGroupStore)
 	cpGroup := genericapiserver.NewDefaultAPIGroupInfo(controlplane.GroupName, Scheme, metav1.ParameterCodec, Codecs)
 	cpv1beta1Storage := map[string]rest.Storage{}
 	cpv1beta1Storage["addressgroups"] = addressGroupStorage
 	cpv1beta1Storage["appliedtogroups"] = appliedToGroupStorage
 	cpv1beta1Storage["networkpolicies"] = networkPolicyStorage
 	cpv1beta1Storage["nodestatssummaries"] = nodeStatsSummaryStorage
+	cpv1beta1Storage["egressgroups"] = egressGroupStorage
 	cpGroup.VersionedResourcesStorageMap["v1beta1"] = cpv1beta1Storage
 	cpv1beta2Storage := map[string]rest.Storage{}
 	cpv1beta2Storage["addressgroups"] = addressGroupStorage

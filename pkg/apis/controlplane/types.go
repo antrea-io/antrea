@@ -330,3 +330,28 @@ type GroupAssociation struct {
 	// Pod/ExternalEntity being queried.
 	AssociatedGroups []GroupReference
 }
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+type EgressGroup struct {
+	metav1.TypeMeta
+	metav1.ObjectMeta
+	// GroupMembers is a list of GroupMember selected by this group.
+	GroupMembers []GroupMember
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// EgressGroupPatch describes the incremental update of an EgressGroup.
+type EgressGroupPatch struct {
+	metav1.TypeMeta
+	metav1.ObjectMeta
+	AddedGroupMembers   []GroupMember
+	RemovedGroupMembers []GroupMember
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// EgressGroupList is a list of EgressGroup objects.
+type EgressGroupList struct {
+	metav1.TypeMeta
+	metav1.ListMeta
+	Items []EgressGroup
+}

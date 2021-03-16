@@ -36,6 +36,8 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
 	crdinformers "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions"
 	"github.com/vmware-tanzu/antrea/pkg/clusteridentity"
+	"github.com/vmware-tanzu/antrea/pkg/controller/egress"
+	egressstore "github.com/vmware-tanzu/antrea/pkg/controller/egress/store"
 	"github.com/vmware-tanzu/antrea/pkg/controller/grouping"
 	"github.com/vmware-tanzu/antrea/pkg/controller/metrics"
 	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy"
@@ -108,6 +110,7 @@ func run(o *Options) error {
 	tierInformer := crdInformerFactory.Security().V1alpha1().Tiers()
 	traceflowInformer := crdInformerFactory.Ops().V1alpha1().Traceflows()
 	cgInformer := crdInformerFactory.Core().V1alpha2().ClusterGroups()
+	egressInformer := crdInformerFactory.Egress().V1alpha1().Egresses()
 
 	clusterIdentityAllocator := clusteridentity.NewClusterIdentityAllocator(
 		env.GetAntreaNamespace(),
@@ -119,6 +122,7 @@ func run(o *Options) error {
 	addressGroupStore := store.NewAddressGroupStore()
 	appliedToGroupStore := store.NewAppliedToGroupStore()
 	networkPolicyStore := store.NewNetworkPolicyStore()
+	egressGroupStore := egressstore.NewEgressGroupStore()
 	groupStore := store.NewGroupStore()
 	groupEntityIndex := grouping.NewGroupEntityIndex()
 	groupEntityController := grouping.NewGroupEntityController(groupEntityIndex, podInformer, namespaceInformer, externalEntityInformer)
@@ -148,6 +152,8 @@ func run(o *Options) error {
 
 	controllerMonitor := monitor.NewControllerMonitor(crdClient, nodeInformer, controllerQuerier)
 
+	egressController := egress.NewEgressGroupController(groupEntityIndex, egressInformer, egressGroupStore)
+
 	var traceflowController *traceflow.Controller
 	if features.DefaultFeatureGate.Enabled(features.Traceflow) {
 		traceflowController = traceflow.NewTraceflowController(crdClient, podInformer, traceflowInformer)
@@ -174,6 +180,7 @@ func run(o *Options) error {
 		appliedToGroupStore,
 		networkPolicyStore,
 		groupStore,
+		egressGroupStore,
 		controllerQuerier,
 		endpointQuerier,
 		networkPolicyController,
@@ -213,6 +220,8 @@ func run(o *Options) error {
 
 	go networkPolicyController.Run(stopCh)
 
+	go egressController.Run(stopCh)
+
 	go apiServer.Run(stopCh)
 
 	if features.DefaultFeatureGate.Enabled(features.NetworkPolicyStats) {
@@ -245,6 +254,7 @@ func createAPIServerConfig(kubeconfig string,
 	appliedToGroupStore storage.Interface,
 	networkPolicyStore storage.Interface,
 	groupStore storage.Interface,
+	egressGroupStore storage.Interface,
 	controllerQuerier querier.ControllerQuerier,
 	endpointQuerier networkpolicy.EndpointQuerier,
 	npController *networkpolicy.NetworkPolicyController,
@@ -302,6 +312,7 @@ func createAPIServerConfig(kubeconfig string,
 		appliedToGroupStore,
 		networkPolicyStore,
 		groupStore,
+		egressGroupStore,
 		caCertController,
 		statsAggregator,
 		controllerQuerier,

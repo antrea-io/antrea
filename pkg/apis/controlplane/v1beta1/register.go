@@ -51,6 +51,9 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&NetworkPolicy{},
 		&NetworkPolicyList{},
 		&NodeStatsSummary{},
+		&EgressGroup{},
+		&EgressGroupPatch{},
+		&EgressGroupList{},
 	)
 
 	metav1.AddToGroupVersion(scheme, SchemeGroupVersion)
