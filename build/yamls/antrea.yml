@@ -1892,6 +1892,14 @@ rules:
   - watch
   - list
 - apiGroups:
+  - controlplane.antrea.io
+  resources:
+  - egressgroups
+  verbs:
+  - get
+  - watch
+  - list
+- apiGroups:
   - controlplane.antrea.tanzu.vmware.com
   - controlplane.antrea.io
   resources:
@@ -1952,6 +1960,14 @@ rules:
   - patch
   - create
   - delete
+- apiGroups:
+  - crd.antrea.io
+  resources:
+  - egresses
+  verbs:
+  - get
+  - watch
+  - list
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -2144,6 +2160,14 @@ rules:
   verbs:
   - update
 - apiGroups:
+  - crd.antrea.io
+  resources:
+  - egresses
+  verbs:
+  - get
+  - watch
+  - list
+- apiGroups:
   - clusterinformation.antrea.tanzu.vmware.com
   resources:
   - antreacontrollerinfos
@@ -2303,6 +2327,9 @@ data:
     # Enable collecting and exposing NetworkPolicy statistics.
     #  NetworkPolicyStats: false
 
+    # Enable controlling SNAT IPs of Pod egress traffic.
+    #  Egress: false
+
     # Name of the OpenVSwitch bridge antrea-agent will create and use.
     # Make sure it doesn't conflict with your existing OpenVSwitch bridges.
     #ovsBridge: br-int
@@ -2456,6 +2483,9 @@ data:
     # Enable collecting and exposing NetworkPolicy statistics.
     #  NetworkPolicyStats: false
 
+    # Enable controlling SNAT IPs of Pod egress traffic.
+    #  Egress: false
+
     # The port for the antrea-controller APIServer to serve on.
     # Note that if it's set to another value, the `containerPort` of the `api` port of the
     # `antrea-controller` container must be set to the same value.
@@ -2500,7 +2530,7 @@ metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-dhd2kgc9db
+  name: antrea-config-f27tdcgm22
   namespace: kube-system
 ---
 apiVersion: v1
@@ -2620,7 +2650,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-dhd2kgc9db
+          name: antrea-config-f27tdcgm22
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -2929,7 +2959,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-dhd2kgc9db
+          name: antrea-config-f27tdcgm22
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d

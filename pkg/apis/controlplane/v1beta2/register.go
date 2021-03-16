@@ -72,6 +72,9 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&NodeStatsSummary{},
 		&ClusterGroupMembers{},
 		&GroupAssociation{},
+		&EgressGroup{},
+		&EgressGroupPatch{},
+		&EgressGroupList{},
 	)
 
 	metav1.AddToGroupVersion(scheme, SchemeGroupVersion)

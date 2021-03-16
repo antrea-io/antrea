@@ -341,3 +341,31 @@ type GroupAssociation struct {
 	// Pod/ExternalEntity being queried.
 	AssociatedGroups []GroupReference `json:"associatedGroups" protobuf:"bytes,2,rep,name=associatedGroups"`
 }
+
+// +genclient
+// +genclient:nonNamespaced
+// +genclient:onlyVerbs=list,get,watch
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+type EgressGroup struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
+	// GroupMembers is list of resources selected by this group.
+	GroupMembers []GroupMember `json:"groupMembers,omitempty" protobuf:"bytes,2,rep,name=groupMembers"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// EgressGroupPatch describes the incremental update of an EgressGroup.
+type EgressGroupPatch struct {
+	metav1.TypeMeta
+	metav1.ObjectMeta   `protobuf:"bytes,1,opt,name=objectMeta"`
+	AddedGroupMembers   []GroupMember `protobuf:"bytes,2,rep,name=addedGroupMembers"`
+	RemovedGroupMembers []GroupMember `protobuf:"bytes,3,rep,name=removedGroupMembers"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// EgressGroupList is a list of EgressGroup objects.
+type EgressGroupList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
+	Items           []EgressGroup `json:"items" protobuf:"bytes,2,rep,name=items"`
+}

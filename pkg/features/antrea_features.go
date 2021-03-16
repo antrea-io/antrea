@@ -61,6 +61,10 @@ const (
 	// alpha: v0.13
 	// Expose Pod ports through NodePort
 	NodePortLocal featuregate.Feature = "NodePortLocal"
+
+	// alpha: v1.0
+	// Enable controlling SNAT IPs of Pod egress traffic.
+	Egress featuregate.Feature = "Egress"
 )
 
 var (
@@ -77,6 +81,7 @@ var (
 	defaultAntreaFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
 		AntreaPolicy:       {Default: false, PreRelease: featuregate.Alpha},
 		AntreaProxy:        {Default: true, PreRelease: featuregate.Beta},
+		Egress:             {Default: false, PreRelease: featuregate.Alpha},
 		EndpointSlice:      {Default: false, PreRelease: featuregate.Alpha},
 		Traceflow:          {Default: true, PreRelease: featuregate.Beta},
 		FlowExporter:       {Default: false, PreRelease: featuregate.Alpha},

@@ -183,6 +183,14 @@ rules:
       - clustergroups/status
     verbs:
       - update
+  - apiGroups:
+      - crd.antrea.io
+    resources:
+      - egresses
+    verbs:
+      - get
+      - watch
+      - list
   # Deprecated in v1.0.0.
   - apiGroups:
     - clusterinformation.antrea.tanzu.vmware.com
