@@ -143,42 +143,43 @@ func setupTest(tb testing.TB) (*TestData, error) {
 func setupTestWithIPFIXCollector(tb testing.TB) (*TestData, error, bool) {
 	// TODO: remove hardcoding to IPv4 after flow aggregator supports IPv6
 	isIPv6 := false
-	if _, err := setupTest(tb); err != nil {
+	data, err := setupTest(tb)
+	if err != nil {
 		return nil, err, isIPv6
 	}
 	// Create pod using ipfix collector image
-	if err := testData.createPodOnNode("ipfix-collector", "", ipfixCollectorImage, nil, nil, nil, nil, true, nil); err != nil {
+	if err = data.createPodOnNode("ipfix-collector", "", ipfixCollectorImage, nil, nil, nil, nil, true, nil); err != nil {
 		tb.Errorf("Error when creating the ipfix collector Pod: %v", err)
 	}
-	ipfixCollectorIP, err := testData.podWaitForIPs(defaultTimeout, "ipfix-collector", testNamespace)
+	ipfixCollectorIP, err := data.podWaitForIPs(defaultTimeout, "ipfix-collector", testNamespace)
 	if err != nil || len(ipfixCollectorIP.ipStrings) == 0 {
 		tb.Errorf("Error when waiting to get ipfix collector Pod IP: %v", err)
 		return nil, err, isIPv6
 	}
 	ipStr := ipfixCollectorIP.ipv4.String()
 	ipfixCollectorAddr := fmt.Sprintf("%s:%s:tcp", ipStr, ipfixCollectorPort)
+
+	faClusterIPAddr := ""
 	tb.Logf("Applying flow aggregator YAML with ipfix collector address: %s", ipfixCollectorAddr)
-	faClusterIP, err := testData.deployFlowAggregator(ipfixCollectorAddr)
+	faClusterIP, err := data.deployFlowAggregator(ipfixCollectorAddr)
 	if err != nil {
 		return testData, err, isIPv6
 	}
-
-	faClusterIPAddr := ""
 	if testOptions.providerName == "kind" {
 		// In Kind cluster, there are issues with DNS name resolution on worker nodes.
 		// Please note that CoreDNS services are forced on to control-plane Node.
 		faClusterIPAddr = fmt.Sprintf("%s:%s:tcp", faClusterIP, ipfixCollectorPort)
 	}
 	tb.Logf("Deploying flow exporter with collector address: %s", faClusterIPAddr)
-	if err = testData.deployAntreaFlowExporter(faClusterIPAddr); err != nil {
-		return testData, err, isIPv6
+	if err = data.deployAntreaFlowExporter(faClusterIPAddr); err != nil {
+		return data, err, isIPv6
 	}
 
 	tb.Logf("Checking CoreDNS deployment")
-	if err = testData.checkCoreDNSPods(defaultTimeout); err != nil {
-		return testData, err, isIPv6
+	if err = data.checkCoreDNSPods(defaultTimeout); err != nil {
+		return data, err, isIPv6
 	}
-	return testData, nil, isIPv6
+	return data, nil, isIPv6
 }
 
 func exportLogs(tb testing.TB, data *TestData, logsSubDir string, writeNodeLogs bool) {
@@ -304,7 +305,7 @@ func exportLogs(tb testing.TB, data *TestData, logsSubDir string, writeNodeLogs 
 }
 
 func teardownFlowAggregator(tb testing.TB, data *TestData) {
-	if err := testData.gracefulExitFlowAggregator(testOptions.coverageDir); err != nil {
+	if err := data.gracefulExitFlowAggregator(testOptions.coverageDir); err != nil {
 		tb.Fatalf("Error when gracefully exiting Flow Aggregator: %v", err)
 	}
 	tb.Logf("Deleting '%s' K8s Namespace", flowAggregatorNamespace)

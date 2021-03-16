@@ -681,7 +681,8 @@ func (data *TestData) waitForAntreaDaemonSetPods(timeout time.Duration) error {
 		return true, nil
 	})
 	if err == wait.ErrWaitTimeout {
-		return fmt.Errorf("antrea-agent DaemonSet not ready within %v", defaultTimeout)
+		_, stdout, _, _ := provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl -n %s describe pod", antreaNamespace))
+		return fmt.Errorf("antrea-agent DaemonSet not ready within %v; kubectl describe pod output: %v", defaultTimeout, stdout)
 	} else if err != nil {
 		return err
 	}
