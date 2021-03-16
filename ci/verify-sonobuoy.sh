@@ -16,7 +16,7 @@
 
 _SONOBUOY_BINDIR="/tmp/antrea"
 _SONOBUOY_TARBALL="/tmp/sonobuoy.tar.gz"
-_MIN_SONOBUOY_VERSION="v0.19.0"
+_MIN_SONOBUOY_VERSION="v0.20.0"
 
 install_sonobuoy() {
     local ostype=""

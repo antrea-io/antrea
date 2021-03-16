@@ -894,6 +894,8 @@
                values:
                 - v1.17.5
                 - v1.18.2
+                - v1.19.1
+                - v1.20.1
             - axis:
                type: user-defined
                name: IS_MATRIX_TEST
@@ -972,6 +974,8 @@
                values:
                 - v1.17.5
                 - v1.18.2
+                - v1.19.1
+                - v1.20.1
             - axis:
                type: user-defined
                name: IS_MATRIX_TEST

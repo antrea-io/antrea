@@ -37,8 +37,7 @@ SECRET_EXIST=false
 TEST_FAILURE=false
 CLUSTER_READY=false
 DOCKER_REGISTRY=""
-# TODO: change to "control-plane" when testbeds are updated to K8s v1.20
-CONTROL_PLANE_NODE_ROLE="master"
+CONTROL_PLANE_NODE_ROLE="control-plane"
 
 _usage="Usage: $0 [--cluster-name <VMCClusterNameToUse>] [--kubeconfig <KubeconfigSavePath>] [--workdir <HomePath>]
                   [--log-mode <SonobuoyResultLogLevel>] [--testcase <e2e|conformance|all-features-conformance|whole-conformance|networkpolicy>]
@@ -164,7 +163,7 @@ function saveLogs() {
 function setup_cluster() {
     export KUBECONFIG=$KUBECONFIG_PATH
     if [ -z $K8S_VERSION ]; then
-      export K8S_VERSION=v1.19.1
+      export K8S_VERSION=v1.20.1
     fi
     if [ -z $TEST_OS ]; then
       export TEST_OS=ubuntu-1804
@@ -178,6 +177,8 @@ function setup_cluster() {
     publickey="$(cat ${GIT_CHECKOUT_DIR}/jenkins/key/antrea-ci-key.pub)"
 
     echo "=== namespace value substitution ==="
+    echo "=== Using Kubernetes Version ${K8S_VERSION} ==="
+    echo "=== Using OVS template ${OVA_TEMPLATE_NAME} ==="
     mkdir -p ${GIT_CHECKOUT_DIR}/jenkins/out
     cp ${GIT_CHECKOUT_DIR}/ci/cluster-api/vsphere/templates/* ${GIT_CHECKOUT_DIR}/jenkins/out
     sed -i "s/CLUSTERNAMESPACE/${CLUSTER}/g" ${GIT_CHECKOUT_DIR}/jenkins/out/cluster.yaml
@@ -343,7 +344,7 @@ function deliver_antrea {
     fi
 
 
-    kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 == role {print $6}' | while read control_plane_ip; do
+    kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 ~ role {print $6}' | while read control_plane_ip; do
         scp -q -o StrictHostKeyChecking=no -i ${GIT_CHECKOUT_DIR}/jenkins/key/antrea-ci-key $GIT_CHECKOUT_DIR/build/yamls/*.yml capv@${control_plane_ip}:~
     done
 
@@ -422,8 +423,8 @@ function run_e2e {
 
     echo "=== Generate ssh-config ==="
     cp -f $GIT_CHECKOUT_DIR/ci/jenkins/ssh-config $GIT_CHECKOUT_DIR/test/e2e/infra/vagrant/ssh-config
-    control_plane_name="$(kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 == role {print $1}')"
-    control_plane_ip="$(kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 == role {print $6}')"
+    control_plane_name="$(kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 ~ role {print $1}')"
+    control_plane_ip="$(kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 ~ role {print $6}')"
     echo "=== Control-plane Node ip: ${control_plane_ip} ==="
     sed -i "s/CONTROLPLANENODEIP/${control_plane_ip}/g" $GIT_CHECKOUT_DIR/test/e2e/infra/vagrant/ssh-config
     echo "=== Move kubeconfig to control-plane Node ==="
@@ -490,7 +491,7 @@ function run_conformance {
     kubectl rollout status --timeout=5m deployment.apps/antrea-controller -n kube-system
     kubectl rollout status --timeout=5m daemonset/antrea-agent -n kube-system
 
-    control_plane_ip="$(kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 == role {print $6}')"
+    control_plane_ip="$(kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 ~ role {print $6}')"
     echo "=== Move kubeconfig to control-plane Node ==="
     ssh -q -o StrictHostKeyChecking=no -i $GIT_CHECKOUT_DIR/jenkins/key/antrea-ci-key -n capv@${control_plane_ip} "if [ ! -d ".kube" ]; then mkdir .kube; fi"
     scp -q -o StrictHostKeyChecking=no -i $GIT_CHECKOUT_DIR/jenkins/key/antrea-ci-key $GIT_CHECKOUT_DIR/jenkins/out/kubeconfig capv@${control_plane_ip}:~/.kube/config
