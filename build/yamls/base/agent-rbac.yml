@@ -67,6 +67,14 @@ rules:
   - apiGroups:
       - controlplane.antrea.tanzu.vmware.com
     resources:
+      - egressgroups
+    verbs:
+      - get
+      - watch
+      - list
+  - apiGroups:
+      - controlplane.antrea.tanzu.vmware.com
+    resources:
       - nodestatssummaries
     verbs:
       - create

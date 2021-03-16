@@ -152,7 +152,10 @@ func run(o *Options) error {
 
 	controllerMonitor := monitor.NewControllerMonitor(crdClient, nodeInformer, controllerQuerier)
 
-	egressController := egress.NewEgressGroupController(groupEntityIndex, egressInformer, egressGroupStore)
+	var egressController *egress.EgressController
+	if features.DefaultFeatureGate.Enabled(features.Egress) {
+		egressController = egress.NewEgressController(groupEntityIndex, egressInformer, egressGroupStore)
+	}
 
 	var traceflowController *traceflow.Controller
 	if features.DefaultFeatureGate.Enabled(features.Traceflow) {
@@ -220,8 +223,6 @@ func run(o *Options) error {
 
 	go networkPolicyController.Run(stopCh)
 
-	go egressController.Run(stopCh)
-
 	go apiServer.Run(stopCh)
 
 	if features.DefaultFeatureGate.Enabled(features.NetworkPolicyStats) {
@@ -238,6 +239,10 @@ func run(o *Options) error {
 
 	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
 		go networkPolicyStatusController.Run(stopCh)
+	}
+
+	if features.DefaultFeatureGate.Enabled(features.Egress) {
+		go egressController.Run(stopCh)
 	}
 
 	<-stopCh

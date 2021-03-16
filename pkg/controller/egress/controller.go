@@ -1,3 +1,17 @@
+// Copyright 2021 Antrea Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package egress
 
 import (
@@ -19,48 +33,45 @@ import (
 )
 
 const (
-	controllerName = "EgressGroupController"
-	// NetworkPolicyController is the only writer of the antrea network policy
-	// storages and will keep re-enqueuing failed items until they succeed.
+	controllerName = "EgressController"
 	// Set resyncPeriod to 0 to disable resyncing.
 	resyncPeriod time.Duration = 0
-	// How long to wait before retrying the processing of a NetworkPolicy change.
+	// How long to wait before retrying the processing of an Egress change.
 	minRetryDelay = 5 * time.Second
 	maxRetryDelay = 300 * time.Second
-	// Default number of workers processing a NetworkPolicy change.
+	// Default number of workers processing an Egress change.
 	defaultWorkers = 4
 
 	egressGroupType grouping.GroupType = "egressGroup"
 )
 
-// EgressGroupController is responsible for synchronizing the Namespaces and Pods
-// affected by a Network Policy.
-type EgressGroupController struct {
+// EgressController is responsible for synchronizing the EgressGroups selected by Egresses.
+type EgressController struct {
 	egressInformer egressinformers.EgressInformer
 	// egressListerSynced is a function which returns true if the Egresses shared informer has been synced at least once.
 	egressListerSynced cache.InformerSynced
 
-	// egressGroupStore is the storage where the populated Address Groups are stored.
+	// egressGroupStore is the storage where the EgressGroups are stored.
 	egressGroupStore storage.Interface
 
 	// queue maintains the EgressGroup objects that need to be synced.
 	queue workqueue.RateLimitingInterface
 
+	// groupingInterface knows Pods that a given group selects.
 	groupingInterface grouping.Interface
 	// Added as a member to the struct to allow injection for testing.
 	groupingInterfaceSynced func() bool
 }
 
-// NewEgressGroupController returns a new *EgressGroupController.
-func NewEgressGroupController(
-	groupingInterface grouping.Interface,
+// NewEgressController returns a new *EgressController.
+func NewEgressController(groupingInterface grouping.Interface,
 	egressInformer egressinformers.EgressInformer,
-	egressGroupStore storage.Interface) *EgressGroupController {
-	c := &EgressGroupController{
+	egressGroupStore storage.Interface) *EgressController {
+	c := &EgressController{
 		egressInformer:          egressInformer,
 		egressListerSynced:      egressInformer.Informer().HasSynced,
 		egressGroupStore:        egressGroupStore,
-		queue:                   workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "egressGroup"),
+		queue:                   workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "egress"),
 		groupingInterface:       groupingInterface,
 		groupingInterfaceSynced: groupingInterface.HasSynced,
 	}
@@ -77,8 +88,8 @@ func NewEgressGroupController(
 	return c
 }
 
-// Run begins watching and syncing of a NetworkPolicyController.
-func (c *EgressGroupController) Run(stopCh <-chan struct{}) {
+// Run begins watching and syncing of an EgressController.
+func (c *EgressController) Run(stopCh <-chan struct{}) {
 	defer c.queue.ShutDown()
 
 	klog.Infof("Starting %s", controllerName)
@@ -95,12 +106,12 @@ func (c *EgressGroupController) Run(stopCh <-chan struct{}) {
 	<-stopCh
 }
 
-func (c *EgressGroupController) egressGroupWorker() {
+func (c *EgressController) egressGroupWorker() {
 	for c.processNextEgressGroupWorkItem() {
 	}
 }
 
-func (c *EgressGroupController) processNextEgressGroupWorkItem() bool {
+func (c *EgressController) processNextEgressGroupWorkItem() bool {
 	key, quit := c.queue.Get()
 	if quit {
 		return false
@@ -120,7 +131,7 @@ func (c *EgressGroupController) processNextEgressGroupWorkItem() bool {
 	return true
 }
 
-func (c *EgressGroupController) syncEgressGroup(key string) error {
+func (c *EgressController) syncEgressGroup(key string) error {
 	startTime := time.Now()
 	defer func() {
 		d := time.Since(startTime)
@@ -139,8 +150,13 @@ func (c *EgressGroupController) syncEgressGroup(key string) error {
 	egressGroup := egressGroupObj.(*antreatypes.EgressGroup)
 	pods, _ := c.groupingInterface.GetEntities(egressGroupType, key)
 	for _, pod := range pods {
-		if pod.Spec.NodeName == "" {
-			// No need to process Pod when it's not scheduled.
+		// Ignore Pod if it's not scheduled or not running.
+		// TODO: If a Pod is scheduled but not running, it can be included in the EgressGroup so that the agent can
+		// install its SNAT rule right after the Pod's CNI request is processed, which requires a notification from
+		// CNIServer to the agent's EgressController. However the current notification mechanism (the entityUpdate
+		// channel) allows only single consumer. Once it allows multiple consumers, we can change the condition to
+		// include scheduled Pods that have no IPs.
+		if pod.Spec.NodeName == "" || len(pod.Status.PodIPs) == 0 {
 			continue
 		}
 		podNum++
@@ -170,26 +186,26 @@ func (c *EgressGroupController) syncEgressGroup(key string) error {
 	return nil
 }
 
-func (c *EgressGroupController) enqueueEgressGroup(key string) {
+func (c *EgressController) enqueueEgressGroup(key string) {
 	klog.V(4).Infof("Adding new key %s to EgressGroup queue", key)
 	c.queue.Add(key)
 }
 
 // createEgressGroup creates an EgressGroup object in store if it is not created already.
-func (c *EgressGroupController) registerEgressGroup(egress *egressv1alpha1.Egress) {
+func (c *EgressController) registerEgressGroup(egress *egressv1alpha1.Egress) {
 	groupSelector := antreatypes.NewGroupSelector("", egress.Spec.AppliedTo.PodSelector, egress.Spec.AppliedTo.NamespaceSelector, nil)
 	klog.V(2).Infof("Registering EgressGroup %s with selector (%s)", egress.Name, groupSelector.NormalizedName)
 	c.groupingInterface.AddGroup(egressGroupType, egress.Name, groupSelector)
 }
 
 // createEgressGroup creates an EgressGroup object in store if it is not created already.
-func (c *EgressGroupController) unregisterEgressGroup(egress *egressv1alpha1.Egress) {
+func (c *EgressController) unregisterEgressGroup(egress *egressv1alpha1.Egress) {
 	klog.V(2).Infof("Unregistering EgressGroup %s", egress.Name)
 	c.groupingInterface.DeleteGroup(egressGroupType, egress.Name)
 }
 
 // addEgress receives Egress ADD events and creates corresponding EgressGroup.
-func (c *EgressGroupController) addEgress(obj interface{}) {
+func (c *EgressController) addEgress(obj interface{}) {
 	egress := obj.(*egressv1alpha1.Egress)
 	klog.Infof("Processing Egress %s ADD event", egress.Name)
 	// Create an EgressGroup object corresponding to this Egress and enqueue task to the workqueue.
@@ -198,13 +214,12 @@ func (c *EgressGroupController) addEgress(obj interface{}) {
 		UID:  egress.UID,
 	}
 	c.egressGroupStore.Create(egressGroup)
-
 	c.registerEgressGroup(egress)
 	c.queue.Add(egress.Name)
 }
 
 // updateEgress receives Egress UPDATE events and updates corresponding EgressGroup.
-func (c *EgressGroupController) updateEgress(old, cur interface{}) {
+func (c *EgressController) updateEgress(old, cur interface{}) {
 	oldEgress := old.(*egressv1alpha1.Egress)
 	curEgress := cur.(*egressv1alpha1.Egress)
 	klog.Infof("Processing Egress %s UPDATE event", curEgress.Name)
@@ -218,7 +233,7 @@ func (c *EgressGroupController) updateEgress(old, cur interface{}) {
 }
 
 // deleteEgress receives Egress DELETED events and deletes corresponding EgressGroup.
-func (c *EgressGroupController) deleteEgress(obj interface{}) {
+func (c *EgressController) deleteEgress(obj interface{}) {
 	egress := obj.(*egressv1alpha1.Egress)
 	klog.Infof("Processing Egress %s DELETE event", egress.Name)
 	c.egressGroupStore.Delete(egress.Name)

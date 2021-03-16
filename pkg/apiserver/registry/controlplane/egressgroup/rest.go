@@ -32,7 +32,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/controller/types"
 )
 
-// REST implements rest.Storage for AppliedToGroups.
+// REST implements rest.Storage for EgressGroups.
 type REST struct {
 	egressGroupStore storage.Interface
 }

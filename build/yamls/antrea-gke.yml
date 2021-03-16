@@ -1065,6 +1065,14 @@ rules:
 - apiGroups:
   - controlplane.antrea.tanzu.vmware.com
   resources:
+  - egressgroups
+  verbs:
+  - get
+  - watch
+  - list
+- apiGroups:
+  - controlplane.antrea.tanzu.vmware.com
+  resources:
   - nodestatssummaries
   verbs:
   - create
@@ -1120,6 +1128,14 @@ rules:
   - patch
   - create
   - delete
+- apiGroups:
+  - egress.antrea.tanzu.vmware.com
+  resources:
+  - egresses
+  verbs:
+  - get
+  - watch
+  - list
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -1384,6 +1400,9 @@ data:
     # Enable collecting and exposing NetworkPolicy statistics.
     #  NetworkPolicyStats: false
 
+    # Enable controlling SNAT IPs of Pod egress traffic.
+    #  Egress: false
+
     # Name of the OpenVSwitch bridge antrea-agent will create and use.
     # Make sure it doesn't conflict with your existing OpenVSwitch bridges.
     #ovsBridge: br-int
@@ -1532,6 +1551,9 @@ data:
     # Enable collecting and exposing NetworkPolicy statistics.
     #  NetworkPolicyStats: false
 
+    # Enable controlling SNAT IPs of Pod egress traffic.
+    #  Egress: false
+
     # The port for the antrea-controller APIServer to serve on.
     # Note that if it's set to another value, the `containerPort` of the `api` port of the
     # `antrea-controller` container must be set to the same value.
@@ -1562,7 +1584,7 @@ metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-ck9cm44gbk
+  name: antrea-config-g45k8dcmg8
   namespace: kube-system
 ---
 apiVersion: v1
@@ -1682,7 +1704,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-ck9cm44gbk
+          name: antrea-config-g45k8dcmg8
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -1949,7 +1971,7 @@ spec:
           path: /home/kubernetes/bin
         name: host-cni-bin
       - configMap:
-          name: antrea-config-ck9cm44gbk
+          name: antrea-config-g45k8dcmg8
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d
