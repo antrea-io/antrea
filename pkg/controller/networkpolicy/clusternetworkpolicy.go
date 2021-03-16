@@ -286,18 +286,15 @@ func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *crdv1alpha1.C
 				if len(cnpRule.AppliedTo) > 0 {
 					ruleAppliedTos = cnpRule.AppliedTo
 				}
-				affectedNS, selectors := n.getAffectedNamespacesForAppliedTo(ruleAppliedTos)
-				affectedNamespaceSelectors = append(affectedNamespaceSelectors, selectors...)
-				// Create a per-namespace rule for each affected Namespace.
-				for _, ns := range affectedNS {
-					var ruleATGNames []string
-					for _, at := range ruleAppliedTos {
+				for _, at := range ruleAppliedTos {
+					affectedNS, selectors := n.getAffectedNamespacesForAppliedTo(at)
+					affectedNamespaceSelectors = append(affectedNamespaceSelectors, selectors...)
+					for _, ns := range affectedNS {
 						atg := n.createAppliedToGroup(ns, at.PodSelector, nil, at.ExternalEntitySelector)
 						atgNamesSet.Insert(atg)
-						ruleATGNames = append(ruleATGNames, atg)
+						klog.V(4).Infof("Adding a new per-namespace rule with appliedTo %v for %s", atg, cnp.Name)
+						addRule(n.toNamespacedPeerForCRD(perNSPeers, ns), direction, []string{atg})
 					}
-					klog.V(4).Infof("Adding a new per-namespace rule with appliedTos %v for %s", ruleATGNames, cnp.Name)
-					addRule(n.toNamespacedPeerForCRD(perNSPeers, ns), direction, ruleATGNames)
 				}
 			}
 		}
@@ -390,21 +387,34 @@ func splitPeersByScope(rule crdv1alpha1.Rule, dir controlplane.Direction) ([]crd
 // getAffectedNamespacesForAppliedTo computes the Namespaces currently affected by the appliedTo
 // Namespace selectors. It also returns the list of Namespace selectors used to compute affected
 // Namespaces.
-func (n *NetworkPolicyController) getAffectedNamespacesForAppliedTo(appliedTos []crdv1alpha1.NetworkPolicyPeer) ([]string, []labels.Selector) {
-	affectedNS := sets.String{}
+func (n *NetworkPolicyController) getAffectedNamespacesForAppliedTo(appliedTo crdv1alpha1.NetworkPolicyPeer) ([]string, []labels.Selector) {
+	var affectedNS []string
 	var affectedNamespaceSelectors []labels.Selector
-	for _, at := range appliedTos {
-		nsSel, _ := metav1.LabelSelectorAsSelector(at.NamespaceSelector)
-		if at.NamespaceSelector == nil {
-			nsSel = labels.Everything()
+
+	nsLabelSelector := appliedTo.NamespaceSelector
+	if appliedTo.Group != "" {
+		cg, err := n.cgLister.Get(appliedTo.Group)
+		if err != nil {
+			// This error should not occur as we validate that a CG must exist before
+			// referencing it in an ACNP.
+			klog.Errorf("ClusterGroup %s not found: %v", appliedTo.Group, err)
+			return affectedNS, affectedNamespaceSelectors
 		}
-		affectedNamespaceSelectors = append(affectedNamespaceSelectors, nsSel)
-		namespaces, _ := n.namespaceLister.List(nsSel)
-		for _, ns := range namespaces {
-			affectedNS.Insert(ns.Name)
+		if cg.Spec.NamespaceSelector != nil || cg.Spec.PodSelector != nil {
+			nsLabelSelector = cg.Spec.NamespaceSelector
 		}
 	}
-	return affectedNS.List(), affectedNamespaceSelectors
+	nsSel, _ := metav1.LabelSelectorAsSelector(nsLabelSelector)
+	// An empty nsLabelSelector means select from all Namespaces
+	if nsLabelSelector == nil {
+		nsSel = labels.Everything()
+	}
+	affectedNamespaceSelectors = append(affectedNamespaceSelectors, nsSel)
+	namespaces, _ := n.namespaceLister.List(nsSel)
+	for _, ns := range namespaces {
+		affectedNS = append(affectedNS, ns.Name)
+	}
+	return affectedNS, affectedNamespaceSelectors
 }
 
 // getUniqueNSSelectors dedups the Namespace selectors, which are used as index to re-process

@@ -208,20 +208,25 @@ func (tt *TruthTable) PrettyPrint(indent string) string {
 }
 
 type Reachability struct {
-	Expected *ConnectivityTable
-	Observed *ConnectivityTable
-	Pods     []Pod
+	Expected        *ConnectivityTable
+	Observed        *ConnectivityTable
+	Pods            []Pod
+	PodsByNamespace map[string][]Pod
 }
 
 func NewReachability(pods []Pod, defaultExpectation PodConnectivityMark) *Reachability {
-	items := []string{}
+	var items []string
+	podsByNamespace := make(map[string][]Pod)
 	for _, pod := range pods {
 		items = append(items, string(pod))
+		podNS := pod.Namespace()
+		podsByNamespace[podNS] = append(podsByNamespace[podNS], pod)
 	}
 	r := &Reachability{
-		Expected: NewConnectivityTable(items, &defaultExpectation),
-		Observed: NewConnectivityTable(items, nil),
-		Pods:     pods,
+		Expected:        NewConnectivityTable(items, &defaultExpectation),
+		Observed:        NewConnectivityTable(items, nil),
+		Pods:            pods,
+		PodsByNamespace: podsByNamespace,
 	}
 	return r
 }
@@ -263,6 +268,48 @@ func (r *Reachability) ExpectAllEgress(pod Pod, connectivity PodConnectivityMark
 	r.Expected.SetAllFrom(string(pod), connectivity)
 	if connectivity != Connected {
 		log.Infof("Denying all traffic *from* %s", pod)
+	}
+}
+
+func (r *Reachability) ExpectAllSelfNamespace(connectivity PodConnectivityMark) {
+	for _, pods := range r.PodsByNamespace {
+		for i := range pods {
+			for j := range pods {
+				r.Expected.Set(string(pods[i]), string(pods[j]), connectivity)
+			}
+		}
+	}
+}
+
+func (r *Reachability) ExpectSelfNamespace(namespace string, connectivity PodConnectivityMark) {
+	pods, ok := r.PodsByNamespace[namespace]
+	if !ok {
+		panic(fmt.Errorf("namespace %s is not found", namespace))
+	}
+	for i := range pods {
+		for j := range pods {
+			r.Expected.Set(string(pods[i]), string(pods[j]), connectivity)
+		}
+	}
+}
+
+func (r *Reachability) ExpectIngressFromNamespace(pod Pod, namespace string, connectivity PodConnectivityMark) {
+	pods, ok := r.PodsByNamespace[namespace]
+	if !ok {
+		panic(fmt.Errorf("namespace %s is not found", namespace))
+	}
+	for i := range pods {
+		r.Expected.Set(string(pods[i]), string(pod), connectivity)
+	}
+}
+
+func (r *Reachability) ExpectEgressToNamespace(pod Pod, namespace string, connectivity PodConnectivityMark) {
+	pods, ok := r.PodsByNamespace[namespace]
+	if !ok {
+		panic(fmt.Errorf("namespace %s is not found", namespace))
+	}
+	for i := range pods {
+		r.Expected.Set(string(pod), string(pods[i]), connectivity)
 	}
 }
 

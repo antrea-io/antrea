@@ -399,7 +399,7 @@ type NetworkPolicyPeer struct {
 	// is created for ClusterNetworkPolicy ingress/egress rules.
 	// Cannot be set with NamespaceSelector.
 	// +optional
-	Namespaces *Namespaces `json:"namespaces,omitempty"`
+	Namespaces *PeerNamespaces `json:"namespaces,omitempty"`
 	// Select ExternalEntities from NetworkPolicy's Namespace as workloads
 	// in AppliedTo/To/From fields. If set with NamespaceSelector,
 	// ExternalEntities are matched from Namespaces matched by the
@@ -414,10 +414,8 @@ type NetworkPolicyPeer struct {
 	Group string `json:"group,omitempty"`
 }
 
-// Namespaces complements the NamespaceSelector to enable Namespace selection
-// by specific criterias.
-type Namespaces struct {
-	Match NamespaceMatchType
+type PeerNamespaces struct {
+	Match NamespaceMatchType `json:"match,omitempty"`
 }
 
 // NamespaceMatchType describes Namespace matching strategy.
