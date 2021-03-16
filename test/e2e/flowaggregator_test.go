@@ -102,18 +102,33 @@ const (
 )
 
 func TestFlowAggregator(t *testing.T) {
-	skipIfDualStackCluster(t)
-	data, isIPv6, err := setupTestWithIPFIXCollector(t)
+	data, v4Enabled, v6Enabled, err := setupTestWithIPFIXCollector(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
 	defer teardownTest(t, data)
 	defer teardownFlowAggregator(t, data)
 
-	podAIP, podBIP, podCIP, svcB, svcC, err := createPerftestPods(data, isIPv6)
+	podAIPs, podBIPs, podCIPs, err := createPerftestPods(data)
 	if err != nil {
-		t.Fatalf("Error when creating perftest pods and services: %v", err)
+		t.Fatalf("Error when creating perftest Pods: %v", err)
 	}
+
+	if v4Enabled {
+		t.Run("IPv4", func(t *testing.T) { testHelper(t, data, podAIPs, podBIPs, podCIPs, false) })
+	}
+
+	if v6Enabled {
+		t.Run("IPv6", func(t *testing.T) { testHelper(t, data, podAIPs, podBIPs, podCIPs, true) })
+	}
+}
+
+func testHelper(t *testing.T, data *TestData, podAIPs *PodIPs, podBIPs *PodIPs, podCIPs *PodIPs, isIPv6 bool) {
+	svcB, svcC, err := createPerftestServices(data, isIPv6)
+	if err != nil {
+		t.Fatalf("Error when creating perftest Services: %v", err)
+	}
+	defer deletePerftestServices(t, data)
 	// Wait for the Service to be realized.
 	time.Sleep(3 * time.Second)
 
@@ -134,9 +149,9 @@ func TestFlowAggregator(t *testing.T) {
 		}()
 		// TODO: Skipping bandwidth check for Intra-Node flows as it is flaky.
 		if !isIPv6 {
-			checkRecordsForFlows(t, data, podAIP.ipv4.String(), podBIP.ipv4.String(), isIPv6, true, false, true, false)
+			checkRecordsForFlows(t, data, podAIPs.ipv4.String(), podBIPs.ipv4.String(), isIPv6, true, false, true, false)
 		} else {
-			checkRecordsForFlows(t, data, podAIP.ipv6.String(), podBIP.ipv6.String(), isIPv6, true, false, true, false)
+			checkRecordsForFlows(t, data, podAIPs.ipv6.String(), podBIPs.ipv6.String(), isIPv6, true, false, true, false)
 		}
 	})
 
@@ -157,9 +172,9 @@ func TestFlowAggregator(t *testing.T) {
 			}
 		}()
 		if !isIPv6 {
-			checkRecordsForFlows(t, data, podAIP.ipv4.String(), podCIP.ipv4.String(), isIPv6, false, false, true, true)
+			checkRecordsForFlows(t, data, podAIPs.ipv4.String(), podCIPs.ipv4.String(), isIPv6, false, false, true, true)
 		} else {
-			checkRecordsForFlows(t, data, podAIP.ipv6.String(), podCIP.ipv6.String(), isIPv6, false, false, true, true)
+			checkRecordsForFlows(t, data, podAIPs.ipv6.String(), podCIPs.ipv6.String(), isIPv6, false, false, true, true)
 		}
 	})
 
@@ -168,9 +183,9 @@ func TestFlowAggregator(t *testing.T) {
 		skipIfProxyDisabled(t, data)
 		// TODO: Skipping bandwidth check for LocalServiceAccess flows as it is flaky.
 		if !isIPv6 {
-			checkRecordsForFlows(t, data, podAIP.ipv4.String(), svcB.Spec.ClusterIP, isIPv6, true, true, false, false)
+			checkRecordsForFlows(t, data, podAIPs.ipv4.String(), svcB.Spec.ClusterIP, isIPv6, true, true, false, false)
 		} else {
-			checkRecordsForFlows(t, data, podAIP.ipv6.String(), svcB.Spec.ClusterIP, isIPv6, true, true, false, false)
+			checkRecordsForFlows(t, data, podAIPs.ipv6.String(), svcB.Spec.ClusterIP, isIPv6, true, true, false, false)
 		}
 	})
 
@@ -178,9 +193,9 @@ func TestFlowAggregator(t *testing.T) {
 	t.Run("RemoteServiceAccess", func(t *testing.T) {
 		skipIfProxyDisabled(t, data)
 		if !isIPv6 {
-			checkRecordsForFlows(t, data, podAIP.ipv4.String(), svcC.Spec.ClusterIP, isIPv6, false, true, false, true)
+			checkRecordsForFlows(t, data, podAIPs.ipv4.String(), svcC.Spec.ClusterIP, isIPv6, false, true, false, true)
 		} else {
-			checkRecordsForFlows(t, data, podAIP.ipv6.String(), svcC.Spec.ClusterIP, isIPv6, false, true, false, true)
+			checkRecordsForFlows(t, data, podAIPs.ipv6.String(), svcC.Spec.ClusterIP, isIPv6, false, true, false, true)
 		}
 	})
 }
@@ -376,15 +391,34 @@ func deployNetworkPolicies(t *testing.T, data *TestData, srcPod, dstPod string) 
 	return np1, np2
 }
 
-func createPerftestPods(data *TestData, isIPv6 bool) (podAIP *PodIPs, podBIP *PodIPs, podCIP *PodIPs, svcB *corev1.Service, svcC *corev1.Service, err error) {
+func createPerftestPods(data *TestData) (podAIPs *PodIPs, podBIPs *PodIPs, podCIPs *PodIPs, err error) {
 	if err := data.createPodOnNode("perftest-a", controlPlaneNodeName(), perftoolImage, nil, nil, nil, nil, false, nil); err != nil {
-		return nil, nil, nil, nil, nil, fmt.Errorf("Error when creating the perftest client Pod: %v", err)
+		return nil, nil, nil, fmt.Errorf("Error when creating the perftest client Pod: %v", err)
 	}
-	podAIP, err = data.podWaitForIPs(defaultTimeout, "perftest-a", testNamespace)
+	podAIPs, err = data.podWaitForIPs(defaultTimeout, "perftest-a", testNamespace)
 	if err != nil {
-		return nil, nil, nil, nil, nil, fmt.Errorf("Error when waiting for the perftest client Pod: %v", err)
+		return nil, nil, nil, fmt.Errorf("Error when waiting for the perftest client Pod: %v", err)
 	}
 
+	if err := data.createPodOnNode("perftest-b", controlPlaneNodeName(), perftoolImage, nil, nil, nil, []v1.ContainerPort{{Protocol: v1.ProtocolTCP, ContainerPort: iperfPort}}, false, nil); err != nil {
+		return nil, nil, nil, fmt.Errorf("Error when creating the perftest server Pod: %v", err)
+	}
+	podBIPs, err = data.podWaitForIPs(defaultTimeout, "perftest-b", testNamespace)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("Error when getting the perftest server Pod's IPs: %v", err)
+	}
+
+	if err := data.createPodOnNode("perftest-c", workerNodeName(1), perftoolImage, nil, nil, nil, []v1.ContainerPort{{Protocol: v1.ProtocolTCP, ContainerPort: iperfPort}}, false, nil); err != nil {
+		return nil, nil, nil, fmt.Errorf("Error when creating the perftest server Pod: %v", err)
+	}
+	podCIPs, err = data.podWaitForIPs(defaultTimeout, "perftest-c", testNamespace)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("Error when getting the perftest server Pod's IPs: %v", err)
+	}
+	return podAIPs, podBIPs, podCIPs, nil
+}
+
+func createPerftestServices(data *TestData, isIPv6 bool) (svcB *corev1.Service, svcC *corev1.Service, err error) {
 	svcIPFamily := corev1.IPv4Protocol
 	if isIPv6 {
 		svcIPFamily = corev1.IPv6Protocol
@@ -392,29 +426,22 @@ func createPerftestPods(data *TestData, isIPv6 bool) (podAIP *PodIPs, podBIP *Po
 
 	svcB, err = data.createService("perftest-b", iperfPort, iperfPort, map[string]string{"antrea-e2e": "perftest-b"}, false, v1.ServiceTypeClusterIP, &svcIPFamily)
 	if err != nil {
-		return nil, nil, nil, nil, nil, fmt.Errorf("Error when creating perftest service: %v", err)
+		return nil, nil, fmt.Errorf("Error when creating perftest-b Service: %v", err)
 	}
 
-	if err := data.createPodOnNode("perftest-b", controlPlaneNodeName(), perftoolImage, nil, nil, nil, []v1.ContainerPort{{Protocol: v1.ProtocolTCP, ContainerPort: iperfPort}}, false, nil); err != nil {
-		return nil, nil, nil, nil, nil, fmt.Errorf("Error when creating the perftest server Pod: %v", err)
-	}
-	podBIP, err = data.podWaitForIPs(defaultTimeout, "perftest-b", testNamespace)
-	if err != nil {
-		return nil, nil, nil, nil, nil, fmt.Errorf("Error when getting the perftest server Pod's IP: %v", err)
-	}
-
-	// svcC will be needed when adding RemoteServiceAccess testcase
 	svcC, err = data.createService("perftest-c", iperfPort, iperfPort, map[string]string{"antrea-e2e": "perftest-c"}, false, v1.ServiceTypeClusterIP, &svcIPFamily)
 	if err != nil {
-		return nil, nil, nil, nil, nil, fmt.Errorf("Error when creating perftest service: %v", err)
+		return nil, nil, fmt.Errorf("Error when creating perftest-c Service: %v", err)
 	}
 
-	if err := data.createPodOnNode("perftest-c", workerNodeName(1), perftoolImage, nil, nil, nil, []v1.ContainerPort{{Protocol: v1.ProtocolTCP, ContainerPort: iperfPort}}, false, nil); err != nil {
-		return nil, nil, nil, nil, nil, fmt.Errorf("Error when creating the perftest server Pod: %v", err)
+	return svcB, svcC, nil
+}
+
+func deletePerftestServices(t *testing.T, data *TestData) {
+	for _, serviceName := range []string{"perftest-b", "perftest-c"} {
+		err := data.deleteService(serviceName)
+		if err != nil {
+			t.Logf("Error when deleting %s Service: %v", serviceName, err)
+		}
 	}
-	podCIP, err = data.podWaitForIPs(defaultTimeout, "perftest-c", testNamespace)
-	if err != nil {
-		return nil, nil, nil, nil, nil, fmt.Errorf("Error when getting the perftest server Pod's IP: %v", err)
-	}
-	return podAIP, podBIP, podCIP, svcB, svcC, nil
 }

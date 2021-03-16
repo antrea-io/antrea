@@ -68,12 +68,6 @@ func skipIfNotIPv6Cluster(tb testing.TB) {
 	}
 }
 
-func skipIfDualStackCluster(tb testing.TB) {
-	if clusterInfo.podV6NetworkCIDR != "" && clusterInfo.podV4NetworkCIDR != "" {
-		tb.Skipf("Skipping test as it is not supported in dual stack cluster")
-	}
-}
-
 func skipIfMissingKernelModule(tb testing.TB, nodeName string, requiredModules []string) {
 	for _, module := range requiredModules {
 		// modprobe with "--dry-run" does not require root privileges
@@ -147,14 +141,12 @@ func setupTest(tb testing.TB) (*TestData, error) {
 	return testData, nil
 }
 
-func setupTestWithIPFIXCollector(tb testing.TB) (*TestData, bool, error) {
-	isIPv6 := false
-	if clusterInfo.podV6NetworkCIDR != "" {
-		isIPv6 = true
-	}
+func setupTestWithIPFIXCollector(tb testing.TB) (*TestData, bool, bool, error) {
+	v4Enabled := clusterInfo.podV4NetworkCIDR != ""
+	v6Enabled := clusterInfo.podV6NetworkCIDR != ""
 	testData, err := setupTest(tb)
 	if err != nil {
-		return testData, isIPv6, err
+		return testData, v4Enabled, v6Enabled, err
 	}
 	// Create pod using ipfix collector image
 	if err = testData.createPodOnNode("ipfix-collector", "", ipfixCollectorImage, nil, nil, nil, nil, true, nil); err != nil {
@@ -163,10 +155,10 @@ func setupTestWithIPFIXCollector(tb testing.TB) (*TestData, bool, error) {
 	ipfixCollectorIP, err := testData.podWaitForIPs(defaultTimeout, "ipfix-collector", testNamespace)
 	if err != nil || len(ipfixCollectorIP.ipStrings) == 0 {
 		tb.Errorf("Error when waiting to get ipfix collector Pod IP: %v", err)
-		return nil, isIPv6, err
+		return nil, v4Enabled, v6Enabled, err
 	}
 	var ipStr string
-	if isIPv6 && ipfixCollectorIP.ipv6 != nil {
+	if v6Enabled && ipfixCollectorIP.ipv6 != nil {
 		ipStr = ipfixCollectorIP.ipv6.String()
 	} else {
 		ipStr = ipfixCollectorIP.ipv4.String()
@@ -177,7 +169,7 @@ func setupTestWithIPFIXCollector(tb testing.TB) (*TestData, bool, error) {
 	tb.Logf("Applying flow aggregator YAML with ipfix collector address: %s", ipfixCollectorAddr)
 	faClusterIP, err := testData.deployFlowAggregator(ipfixCollectorAddr)
 	if err != nil {
-		return testData, isIPv6, err
+		return testData, v4Enabled, v6Enabled, err
 	}
 	if testOptions.providerName == "kind" {
 		// In Kind cluster, there are issues with DNS name resolution on worker nodes.
@@ -186,14 +178,14 @@ func setupTestWithIPFIXCollector(tb testing.TB) (*TestData, bool, error) {
 	}
 	tb.Logf("Deploying flow exporter with collector address: %s", faClusterIPAddr)
 	if err = testData.deployAntreaFlowExporter(faClusterIPAddr); err != nil {
-		return testData, isIPv6, err
+		return testData, v4Enabled, v6Enabled, err
 	}
 
 	tb.Logf("Checking CoreDNS deployment")
 	if err = testData.checkCoreDNSPods(defaultTimeout); err != nil {
-		return testData, isIPv6, err
+		return testData, v4Enabled, v6Enabled, err
 	}
-	return testData, isIPv6, nil
+	return testData, v4Enabled, v6Enabled, nil
 }
 
 func exportLogs(tb testing.TB, data *TestData, logsSubDir string, writeNodeLogs bool) {

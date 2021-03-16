@@ -17,6 +17,7 @@ package proxy
 import (
 	"fmt"
 	"net"
+	"strings"
 	"sync"
 	"time"
 
@@ -53,6 +54,9 @@ type Proxier interface {
 	// flows and the OVS group IDs for a Service. False is returned if the
 	// Service is not found.
 	GetServiceFlowKeys(serviceName, namespace string) ([]string, []binding.GroupIDType, bool)
+	// GetServiceByIP returns the ServicePortName struct for the given serviceString(ClusterIP:Port/Proto).
+	// False is returned if the serviceString is not found in serviceStringMap.
+	GetServiceByIP(serviceStr string) (k8sproxy.ServicePortName, bool)
 }
 
 type proxier struct {
@@ -637,6 +641,16 @@ func (p *metaProxierWrapper) GetServiceFlowKeys(serviceName, namespace string) (
 
 	// Return the unions of IPv4 and IPv6 flows and groups.
 	return append(v4Flows, v6Flows...), append(v4Groups, v6Groups...), v4Found || v6Found
+}
+
+func (p *metaProxierWrapper) GetServiceByIP(serviceStr string) (k8sproxy.ServicePortName, bool) {
+	// Format of serviceStr is <clusterIP>:<svcPort>/<protocol>.
+	lastColonIndex := strings.LastIndex(serviceStr, ":")
+	if utilnet.IsIPv6String(serviceStr[:lastColonIndex]) {
+		return p.ipv6Proxier.GetServiceByIP(serviceStr)
+	} else {
+		return p.ipv4Proxier.GetServiceByIP(serviceStr)
+	}
 }
 
 func NewDualStackProxier(
