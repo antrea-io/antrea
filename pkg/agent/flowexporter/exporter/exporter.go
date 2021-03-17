@@ -80,21 +80,23 @@ const (
 )
 
 type flowExporter struct {
-	connStore         connections.ConnectionStore
-	flowRecords       *flowrecords.FlowRecords
-	process           ipfix.IPFIXExportingProcess
-	elementsListv4    []*ipfixentities.InfoElementWithValue
-	elementsListv6    []*ipfixentities.InfoElementWithValue
-	ipfixSet          ipfix.IPFIXSet
-	numDataSetsSent   uint64 // used for unit tests.
-	templateIDv4      uint16
-	templateIDv6      uint16
-	registry          ipfix.IPFIXRegistry
-	v4Enabled         bool
-	v6Enabled         bool
-	exporterInput     exporter.ExporterInput
-	activeFlowTimeout time.Duration
-	idleFlowTimeout   time.Duration
+	connStore                 connections.ConnectionStore
+	flowRecords               *flowrecords.FlowRecords
+	process                   ipfix.IPFIXExportingProcess
+	elementsListv4            []*ipfixentities.InfoElementWithValue
+	elementsListv6            []*ipfixentities.InfoElementWithValue
+	ipfixSet                  ipfix.IPFIXSet
+	numDataSetsSent           uint64 // used for unit tests.
+	templateIDv4              uint16
+	templateIDv6              uint16
+	registry                  ipfix.IPFIXRegistry
+	v4Enabled                 bool
+	v6Enabled                 bool
+	exporterInput             exporter.ExporterInput
+	activeFlowTimeout         time.Duration
+	idleFlowTimeout           time.Duration
+	enableTLSToFlowAggregator bool
+	k8sClient                 kubernetes.Interface
 }
 
 func genObservationID() (uint32, error) {
@@ -107,40 +109,13 @@ func genObservationID() (uint32, error) {
 	return h.Sum32(), nil
 }
 
-func prepareExporterInputArgs(collectorAddr, collectorProto string, enableTLSToFlowAggregator bool, k8sClient kubernetes.Interface) (exporter.ExporterInput, error) {
+func prepareExporterInputArgs(collectorAddr, collectorProto string) (exporter.ExporterInput, error) {
 	expInput := exporter.ExporterInput{}
 	var err error
 	// Exporting process requires domain observation ID.
 	expInput.ObservationDomainID, err = genObservationID()
 	if err != nil {
 		return expInput, err
-	}
-
-	if enableTLSToFlowAggregator {
-		// if CA certificate, client certificate and key do not exist during initialization,
-		// it will retry to obtain the credentials in next export cycle
-		expInput.CACert, err = getCACert(k8sClient)
-		if err != nil {
-			return expInput, fmt.Errorf("cannot retrieve CA cert: %v", err)
-		}
-		expInput.ClientCert, expInput.ClientKey, err = getClientCertKey(k8sClient)
-		if err != nil {
-			return expInput, fmt.Errorf("cannot retrieve client cert and key: %v", err)
-		}
-		// TLS transport does not need any tempRefTimeout as it is applicable only
-		// for TCP transport, so sending 0.
-		expInput.TempRefTimeout = 0
-		expInput.IsEncrypted = true
-	} else if collectorProto == "tcp" {
-		// TCP transport does not need any tempRefTimeout, so sending 0.
-		// tempRefTimeout is the template refresh timeout, which specifies how often
-		// the exporting process should send the template again.
-		expInput.TempRefTimeout = 0
-		expInput.IsEncrypted = false
-	} else {
-		// For UDP transport, hardcoding tempRefTimeout value as 1800s.
-		expInput.TempRefTimeout = 1800
-		expInput.IsEncrypted = false
 	}
 	expInput.CollectorAddress = collectorAddr
 	expInput.CollectorProtocol = collectorProto
@@ -157,20 +132,22 @@ func NewFlowExporter(connStore connections.ConnectionStore, records *flowrecords
 	registry.LoadRegistry()
 
 	// Prepare input args for IPFIX exporting process.
-	expInput, err := prepareExporterInputArgs(collectorAddr, collectorProto, enableTLSToFlowAggregator, k8sClient)
+	expInput, err := prepareExporterInputArgs(collectorAddr, collectorProto)
 	if err != nil {
 		return nil, err
 	}
 	return &flowExporter{
-		connStore:         connStore,
-		flowRecords:       records,
-		registry:          registry,
-		v4Enabled:         v4Enabled,
-		v6Enabled:         v6Enabled,
-		exporterInput:     expInput,
-		activeFlowTimeout: activeFlowTimeout,
-		idleFlowTimeout:   idleFlowTimeout,
-		ipfixSet:          ipfix.NewSet(false),
+		connStore:                 connStore,
+		flowRecords:               records,
+		registry:                  registry,
+		v4Enabled:                 v4Enabled,
+		v6Enabled:                 v6Enabled,
+		exporterInput:             expInput,
+		activeFlowTimeout:         activeFlowTimeout,
+		idleFlowTimeout:           idleFlowTimeout,
+		ipfixSet:                  ipfix.NewSet(false),
+		enableTLSToFlowAggregator: enableTLSToFlowAggregator,
+		k8sClient:                 k8sClient,
 	}, nil
 }
 
@@ -212,10 +189,36 @@ func (exp *flowExporter) Export() {
 
 func (exp *flowExporter) initFlowExporter() error {
 	var err error
-	exp.process, err = ipfix.NewIPFIXExportingProcess(exp.exporterInput)
+	if exp.enableTLSToFlowAggregator {
+		// if CA certificate, client certificate and key do not exist during initialization,
+		// it will retry to obtain the credentials in next export cycle
+		exp.exporterInput.CACert, err = getCACert(exp.k8sClient)
+		if err != nil {
+			return fmt.Errorf("cannot retrieve CA cert: %v", err)
+		}
+		exp.exporterInput.ClientCert, exp.exporterInput.ClientKey, err = getClientCertKey(exp.k8sClient)
+		if err != nil {
+			return fmt.Errorf("cannot retrieve client cert and key: %v", err)
+		}
+		// TLS transport does not need any tempRefTimeout, so sending 0.
+		exp.exporterInput.TempRefTimeout = 0
+		exp.exporterInput.IsEncrypted = true
+	} else if exp.exporterInput.CollectorProtocol == "tcp" {
+		// TCP transport does not need any tempRefTimeout, so sending 0.
+		// tempRefTimeout is the template refresh timeout, which specifies how often
+		// the exporting process should send the template again.
+		exp.exporterInput.TempRefTimeout = 0
+		exp.exporterInput.IsEncrypted = false
+	} else {
+		// For UDP transport, hardcoding tempRefTimeout value as 1800s.
+		exp.exporterInput.TempRefTimeout = 1800
+		exp.exporterInput.IsEncrypted = false
+	}
+	expProcess, err := ipfix.NewIPFIXExportingProcess(exp.exporterInput)
 	if err != nil {
 		return fmt.Errorf("error when starting exporter: %v", err)
 	}
+	exp.process = expProcess
 	if exp.v4Enabled {
 		templateID := exp.process.NewTemplateID()
 		exp.templateIDv4 = templateID
