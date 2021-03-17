@@ -57,7 +57,8 @@ const (
 	EgressDefaultTable           binding.TableIDType = 60
 	EgressMetricTable            binding.TableIDType = 61
 	l3ForwardingTable            binding.TableIDType = 70
-	l3DecTTLTable                binding.TableIDType = 71
+	snatTable                    binding.TableIDType = 71
+	l3DecTTLTable                binding.TableIDType = 72
 	l2ForwardingCalcTable        binding.TableIDType = 80
 	AntreaPolicyIngressRuleTable binding.TableIDType = 85
 	DefaultTierIngressRuleTable  binding.TableIDType = 89
@@ -83,7 +84,6 @@ const (
 	markTrafficFromGateway = 1
 	markTrafficFromLocal   = 2
 	markTrafficFromUplink  = 4
-	markTrafficFromBridge  = 5
 
 	// IPv6 multicast prefix
 	ipv6MulticastAddr = "FF00::/8"
@@ -120,7 +120,9 @@ var (
 		{EgressRuleTable, "EgressRule"},
 		{EgressDefaultTable, "EgressDefaultRule"},
 		{EgressMetricTable, "EgressMetric"},
-		{l3ForwardingTable, "l3Forwarding"},
+		{l3ForwardingTable, "L3Forwarding"},
+		{snatTable, "SNAT"},
+		{l3DecTTLTable, "IPTTLDec"},
 		{l2ForwardingCalcTable, "L2Forwarding"},
 		{AntreaPolicyIngressRuleTable, "AntreaPolicyIngressRule"},
 		{IngressRuleTable, "IngressRule"},
@@ -223,23 +225,9 @@ const (
 
 	CtZone   = 0xfff0
 	CtZoneV6 = 0xffe6
-	// CtZoneSNAT is only used on Windows and only when AntreaProxy is enabled.
-	// When a Pod access a ClusterIP Service, and the IP of the selected endpoint
-	// is not in "cluster-cidr". The request packets need to be SNAT'd(set src IP to local Node IP)
-	// after have been DNAT'd(set dst IP to endpoint IP).
-	// For example, the endpoint Pod may run in hostNetwork mode and the IP of the endpoint
-	// will is the current Node IP.
-	// We need to use a different ct_zone to track the SNAT'd connection because OVS
-	// does not support doing both DNAT and SNAT in the same ct_zone.
-	//
-	// An example of the connection is a Pod accesses kubernetes API service:
-	// Pod --> DNAT(CtZone) --> SNAT(CtZoneSNAT) --> Endpoint(API server NodeIP)
-	// Pod <-- unDNAT(CtZone) <-- unSNAT(CtZoneSNAT) <-- Endpoint(API server NodeIP)
-	CtZoneSNAT = 0xffdc
 
-	portFoundMark    = 0b1
-	snatRequiredMark = 0b1
-	hairpinMark      = 0b1
+	portFoundMark = 0b1
+	hairpinMark   = 0b1
 	// macRewriteMark indicates the destination and source MACs of the
 	// packet should be rewritten in the l3ForwardingTable.
 	macRewriteMark = 0b1
@@ -248,7 +236,6 @@ const (
 	// gatewayCTMark is used to to mark connections initiated through the host gateway interface
 	// (i.e. for which the first packet of the connection was received through the gateway).
 	gatewayCTMark = 0x20
-	snatCTMark    = 0x40
 	ServiceCTMark = 0x21
 
 	// disposition is loaded in marksReg [21]
@@ -271,9 +258,6 @@ var (
 	ofPortMarkRange = binding.Range{16, 16}
 	// ofPortRegRange takes a 32-bit range of register PortCacheReg to cache the ofPort number of the interface.
 	ofPortRegRange = binding.Range{0, 31}
-	// snatMarkRange takes the 17th bit of register marksReg to indicate if the packet needs to be SNATed with Node's IP
-	// or not. Its value is 0x1 if yes.
-	snatMarkRange = binding.Range{17, 17}
 	// hairpinMarkRange takes the 18th bit of register marksReg to indicate
 	// if the packet needs DNAT to virtual IP or not. Its value is 0x1 if yes.
 	hairpinMarkRange = binding.Range{18, 18}
@@ -335,6 +319,7 @@ func portToUint16(port int) uint16 {
 type client struct {
 	enableProxy                                   bool
 	enableAntreaPolicy                            bool
+	enableEgress                                  bool
 	roundInfo                                     types.RoundInfo
 	cookieAllocator                               cookie.Allocator
 	bridge                                        binding.Bridge
@@ -419,6 +404,9 @@ func (c *client) Delete(flow binding.Flow) error {
 }
 
 func (c *client) AddAll(flows []binding.Flow) error {
+	if len(flows) == 0 {
+		return nil
+	}
 	startTime := time.Now()
 	defer func() {
 		d := time.Since(startTime)
@@ -1579,128 +1567,18 @@ func (c *client) localProbeFlow(localGatewayIPs []net.IP, category cookie.Catego
 	return flows
 }
 
-// hostBridgeUplinkFlows generates the flows that forward traffic between the
-// bridge local port and the uplink port to support the host traffic with
-// outside. These flows are needed only on Windows Nodes.
-func (c *client) hostBridgeUplinkFlows(localSubnet net.IPNet, category cookie.Category) (flows []binding.Flow) {
-	bridgeOFPort := uint32(config.BridgeOFPort)
-	flows = []binding.Flow{
-		c.pipeline[ClassifierTable].BuildFlow(priorityNormal).
-			MatchInPort(config.UplinkOFPort).
-			Action().LoadRegRange(int(marksReg), markTrafficFromUplink, binding.Range{0, 15}).
-			Action().GotoTable(uplinkTable).
-			Cookie(c.cookieAllocator.Request(category).Raw()).
-			Done(),
-		c.pipeline[ClassifierTable].BuildFlow(priorityNormal).
-			MatchInPort(config.BridgeOFPort).
-			Action().LoadRegRange(int(marksReg), markTrafficFromBridge, binding.Range{0, 15}).
-			Action().GotoTable(uplinkTable).
-			Cookie(c.cookieAllocator.Request(category).Raw()).
-			Done(),
-		// Output non-IP packets to the bridge port directly. IP packets
-		// are redirected to conntrackTable in uplinkSNATFlows() (in
-		// case they need unSNAT).
-		c.pipeline[uplinkTable].BuildFlow(priorityLow).
-			MatchRegRange(int(marksReg), markTrafficFromUplink, binding.Range{0, 15}).
-			Action().Output(int(bridgeOFPort)).
-			Cookie(c.cookieAllocator.Request(category).Raw()).
-			Done(),
-		// Forward the packet to conntrackTable if it enters the OVS
-		// pipeline from the bridge interface and is sent to the local
-		// Pod subnet. Mark the packet to indicate its destination MAC
-		// should be rewritten to the real MAC in the L3Frowarding
-		// table. This is for the case a Pod accesses a NodePort Service
-		// using the local Node's IP, and then the return traffic after
-		// the kube-proxy processing will enter the bridge from the
-		// bridge interface (but not the gateway interface. This is
-		// probably because we do not enable IP forwarding on the bridge
-		// interface).
-		c.pipeline[uplinkTable].BuildFlow(priorityHigh).
-			MatchProtocol(binding.ProtocolIP).
-			MatchRegRange(int(marksReg), markTrafficFromBridge, binding.Range{0, 15}).
-			MatchDstIPNet(localSubnet).
-			Action().LoadRegRange(int(marksReg), macRewriteMark, macRewriteMarkRange).
-			Action().GotoTable(conntrackTable).
-			Cookie(c.cookieAllocator.Request(category).Raw()).
-			Done(),
-		// Output other packets from the bridge port to the uplink port
-		// directly.
-		c.pipeline[uplinkTable].BuildFlow(priorityLow).
-			MatchRegRange(int(marksReg), markTrafficFromBridge, binding.Range{0, 15}).
-			Action().Output(config.UplinkOFPort).
-			Cookie(c.cookieAllocator.Request(category).Raw()).
-			Done(),
-	}
-	return flows
-}
-
-// uplinkSNATFlows installs flows for traffic from the uplink port that help
-// the SNAT implementation of the external traffic. It is for the Windows Nodes
-// only.
-func (c *client) uplinkSNATFlows(category cookie.Category) []binding.Flow {
-	ctStateNext := dnatTable
-	if c.enableProxy {
-		ctStateNext = endpointDNATTable
-	}
-	bridgeOFPort := uint32(config.BridgeOFPort)
-	flows := []binding.Flow{
-		// Mark the packet to indicate its destination MAC should be rewritten to the real MAC in the L3Forwarding
-		// table, if the packet is a reply to a Pod from an external address.
-		c.pipeline[conntrackStateTable].BuildFlow(priorityHigh).
-			MatchProtocol(binding.ProtocolIP).
-			MatchCTStateNew(false).MatchCTStateTrk(true).
-			MatchCTMark(snatCTMark, nil).
-			MatchRegRange(int(marksReg), markTrafficFromUplink, binding.Range{0, 15}).
-			Action().LoadRegRange(int(marksReg), macRewriteMark, macRewriteMarkRange).
-			Action().GotoTable(ctStateNext).
-			Cookie(c.cookieAllocator.Request(category).Raw()).
-			Done(),
-		// Output the non-SNAT packet to the bridge interface directly if it is received from the uplink interface.
-		c.pipeline[conntrackStateTable].BuildFlow(priorityNormal).
-			MatchProtocol(binding.ProtocolIP).
-			MatchRegRange(int(marksReg), markTrafficFromUplink, binding.Range{0, 15}).
-			Action().Output(int(bridgeOFPort)).
-			Cookie(c.cookieAllocator.Request(category).Raw()).
-			Done(),
-	}
-	// Forward the IP packets from the uplink interface to
-	// conntrackTable. This is for unSNAT the traffic from the local
-	// Pod subnet to the external network. Non-SNAT packets will be
-	// output to the bridge port in conntrackStateTable.
-	if c.enableProxy {
-		// For the connection which is both applied DNAT and SNAT, the reply packtets
-		// are received from uplink and need to enter CTZoneSNAT first to do unSNAT.
-		//   Pod --> DNAT(CtZone) --> SNAT(CtZoneSNAT) --> ExternalServer
-		//   Pod <-- unDNAT(CtZone) <-- unSNAT(CtZoneSNAT) <-- ExternalServer
-		flows = append(flows, c.pipeline[uplinkTable].BuildFlow(priorityNormal).
-			MatchProtocol(binding.ProtocolIP).
-			MatchRegRange(int(marksReg), markTrafficFromUplink, binding.Range{0, 15}).
-			Action().CT(false, conntrackTable, CtZoneSNAT).NAT().CTDone().
-			Cookie(c.cookieAllocator.Request(category).Raw()).
-			Done())
-	} else {
-		flows = append(flows, c.pipeline[uplinkTable].BuildFlow(priorityNormal).
-			MatchProtocol(binding.ProtocolIP).
-			MatchRegRange(int(marksReg), markTrafficFromUplink, binding.Range{0, 15}).
-			Action().GotoTable(conntrackTable).
-			Cookie(c.cookieAllocator.Request(category).Raw()).
-			Done())
-	}
-	return flows
-}
-
-// snatFlows installs flows to perform SNAT for traffic to the external network.
-// It is used on Windows Nodes only.
-func (c *client) snatFlows(nodeIP net.IP, localSubnet net.IPNet, category cookie.Category) []binding.Flow {
-	snatIPRange := &binding.IPRange{StartIP: nodeIP, EndIP: nodeIP}
+// snatCommonFlows installs the default flows for performing SNAT for traffic to
+// the external network. The flows identify the packets to external, and send
+// them to snatTable, where SNAT IPs are looked up for the packets.
+func (c *client) snatCommonFlows(nodeIP net.IP, localSubnet net.IPNet, localGatewayMAC net.HardwareAddr, category cookie.Category) []binding.Flow {
 	l3FwdTable := c.pipeline[l3ForwardingTable]
 	nextTable := l3FwdTable.GetNext()
+	ipProto := getIPProtocol(localSubnet.IP)
 	flows := []binding.Flow{
 		// First install flows for traffic that should bypass SNAT.
-
 		// This flow is for traffic to the local Pod subnet.
 		l3FwdTable.BuildFlow(priorityNormal).
-			MatchProtocol(binding.ProtocolIP).
+			MatchProtocol(ipProto).
 			MatchRegRange(int(marksReg), markTrafficFromLocal, binding.Range{0, 15}).
 			MatchDstIPNet(localSubnet).
 			Action().GotoTable(nextTable).
@@ -1708,7 +1586,7 @@ func (c *client) snatFlows(nodeIP net.IP, localSubnet net.IPNet, category cookie
 			Done(),
 		// This flow is for the traffic to the local Node IP.
 		l3FwdTable.BuildFlow(priorityNormal).
-			MatchProtocol(binding.ProtocolIP).
+			MatchProtocol(ipProto).
 			MatchRegRange(int(marksReg), markTrafficFromLocal, binding.Range{0, 15}).
 			MatchDstIP(nodeIP).
 			Action().GotoTable(nextTable).
@@ -1724,75 +1602,38 @@ func (c *client) snatFlows(nodeIP net.IP, localSubnet net.IPNet, category cookie
 		// covered by other flows (the flows matching the local and
 		// remote Pod subnets) anyway.
 		l3FwdTable.BuildFlow(priorityNormal).
-			MatchProtocol(binding.ProtocolIP).
+			MatchProtocol(ipProto).
 			MatchRegRange(int(marksReg), markTrafficFromLocal, binding.Range{0, 15}).
 			MatchCTMark(gatewayCTMark, nil).
 			Action().GotoTable(nextTable).
 			Cookie(c.cookieAllocator.Request(category).Raw()).
 			Done(),
 
-		// Add the SNAT mark on the packet that is not filtered by other
-		// flow entries in the L3Forwarding table.
+		// Send the traffic to external to snatTable.
 		l3FwdTable.BuildFlow(priorityLow).
-			MatchProtocol(binding.ProtocolIP).
+			MatchProtocol(ipProto).
+			MatchRegRange(int(marksReg), markTrafficFromLocal, binding.Range{0, 15}).
+			Action().GotoTable(snatTable).
+			Cookie(c.cookieAllocator.Request(category).Raw()).
+			Done(),
+		// For the traffic tunneled from remote Nodes, rewrite the
+		// destination MAC to the gateway interface MAC.
+		l3FwdTable.BuildFlow(priorityLow).
+			MatchProtocol(ipProto).
+			MatchRegRange(int(marksReg), markTrafficFromTunnel, binding.Range{0, 15}).
+			Action().SetDstMAC(localGatewayMAC).
+			Action().GotoTable(snatTable).
+			Cookie(c.cookieAllocator.Request(category).Raw()).
+			Done(),
+
+		// Drop the traffic from remote Nodes if no matched SNAT policy.
+		c.pipeline[snatTable].BuildFlow(priorityLow).
+			MatchProtocol(ipProto).
 			MatchCTStateNew(true).MatchCTStateTrk(true).
-			MatchRegRange(int(marksReg), markTrafficFromLocal, binding.Range{0, 15}).
-			Action().LoadRegRange(int(marksReg), snatRequiredMark, snatMarkRange).
-			Action().GotoTable(nextTable).
+			MatchRegRange(int(marksReg), markTrafficFromTunnel, binding.Range{0, 15}).
+			Action().Drop().
 			Cookie(c.cookieAllocator.Request(category).Raw()).
 			Done(),
-		// Force IP packet into the conntrack zone with SNAT. If the connection is SNATed, the reply packet should use
-		// Pod IP as the destination, and then is forwarded to conntrackStateTable.
-		c.pipeline[conntrackTable].BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
-			Action().CT(false, conntrackStateTable, CtZone).NAT().CTDone().
-			Cookie(c.cookieAllocator.Request(category).Raw()).
-			Done(),
-		// Redirect the packet into L2ForwardingOutput table after the packet is SNAT'd. A "SNAT" packet has these
-		// characteristics: 1) the ct_state is "+new+trk", 2) reg0[17] is set to 1; 3) Node IP is used as the target
-		// source IP in NAT action, 4) ct_mark is set to 0x40 in the conn_track context.
-		c.pipeline[conntrackCommitTable].BuildFlow(priorityNormal).
-			MatchProtocol(binding.ProtocolIP).
-			MatchCTStateNew(true).MatchCTStateTrk(true).MatchCTStateDNAT(false).
-			MatchRegRange(int(marksReg), snatRequiredMark, snatMarkRange).
-			Action().CT(true, L2ForwardingOutTable, CtZone).
-			SNAT(snatIPRange, nil).
-			LoadToMark(snatCTMark).CTDone().
-			Cookie(c.cookieAllocator.Request(category).Raw()).
-			Done(),
-	}
-	// The following flows are for both apply DNAT + SNAT for packets.
-	// If AntreaProxy is disabled, no DNAT happens in OVS pipeline.
-	if c.enableProxy {
-		// If the SNAT is needed after DNAT, mark the snatRequiredMark even the connection is not new.
-		// Because this kind of packets need to enter CtZoneSNAT to make sure the SNAT can be applied
-		// before leaving the pipeline.
-		flows = append(flows, l3FwdTable.BuildFlow(priorityLow).
-			MatchProtocol(binding.ProtocolIP).
-			MatchCTStateNew(false).MatchCTStateTrk(true).MatchCTStateDNAT(true).
-			MatchRegRange(int(marksReg), markTrafficFromLocal, binding.Range{0, 15}).
-			Action().LoadRegRange(int(marksReg), snatRequiredMark, snatMarkRange).
-			Action().GotoTable(nextTable).
-			Cookie(c.cookieAllocator.Request(category).Raw()).
-			Done())
-		// If SNAT is needed after DNAT:
-		//   - For new connection: commit to CtZoneSNAT
-		//   - For existing connection: enter CtZoneSNAT to apply SNAT
-		flows = append(flows, c.pipeline[conntrackCommitTable].BuildFlow(priorityNormal).
-			MatchProtocol(binding.ProtocolIP).
-			MatchCTStateNew(true).MatchCTStateTrk(true).MatchCTStateDNAT(true).
-			MatchRegRange(int(marksReg), snatRequiredMark, snatMarkRange).
-			Action().CT(true, L2ForwardingOutTable, CtZoneSNAT).
-			SNAT(snatIPRange, nil).
-			LoadToMark(snatCTMark).CTDone().
-			Cookie(c.cookieAllocator.Request(category).Raw()).
-			Done())
-		flows = append(flows, c.pipeline[conntrackCommitTable].BuildFlow(priorityNormal).
-			MatchProtocol(binding.ProtocolIP).
-			MatchCTStateNew(false).MatchCTStateTrk(true).MatchCTStateDNAT(true).
-			MatchRegRange(int(marksReg), snatRequiredMark, snatMarkRange).
-			Action().CT(false, L2ForwardingOutTable, CtZoneSNAT).NAT().CTDone().
-			Cookie(c.cookieAllocator.Request(category).Raw()).
-			Done())
 	}
 	return flows
 }
@@ -2059,6 +1900,10 @@ func (c *client) generatePipeline() {
 		c.pipeline[dnatTable] = bridge.CreateTable(dnatTable, c.egressEntryTable, binding.TableMissActionNext)
 		c.pipeline[conntrackCommitTable] = bridge.CreateTable(conntrackCommitTable, L2ForwardingOutTable, binding.TableMissActionNext)
 	}
+	// The default SNAT is implemented with OVS on Windows.
+	if c.enableEgress || runtime.IsWindowsPlatform() {
+		c.pipeline[snatTable] = bridge.CreateTable(snatTable, l2ForwardingCalcTable, binding.TableMissActionNext)
+	}
 	if runtime.IsWindowsPlatform() {
 		c.pipeline[uplinkTable] = bridge.CreateTable(uplinkTable, spoofGuardTable, binding.TableMissActionNone)
 	}
@@ -2069,7 +1914,7 @@ func (c *client) generatePipeline() {
 }
 
 // NewClient is the constructor of the Client interface.
-func NewClient(bridgeName, mgmtAddr string, ovsDatapathType ovsconfig.OVSDatapathType, enableProxy, enableAntreaPolicy bool) Client {
+func NewClient(bridgeName, mgmtAddr string, ovsDatapathType ovsconfig.OVSDatapathType, enableProxy, enableAntreaPolicy, enableEgress bool) Client {
 	bridge := binding.NewOFBridge(bridgeName, mgmtAddr)
 	policyCache := cache.NewIndexer(
 		policyConjKeyFunc,
@@ -2079,6 +1924,7 @@ func NewClient(bridgeName, mgmtAddr string, ovsDatapathType ovsconfig.OVSDatapat
 		bridge:                   bridge,
 		enableProxy:              enableProxy,
 		enableAntreaPolicy:       enableAntreaPolicy,
+		enableEgress:             enableEgress,
 		nodeFlowCache:            newFlowCategoryCache(),
 		podFlowCache:             newFlowCategoryCache(),
 		serviceFlowCache:         newFlowCategoryCache(),

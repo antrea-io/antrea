@@ -294,9 +294,9 @@ func (i *Initializer) initOpenFlowPipeline() error {
 		return err
 	}
 
-	// On Windows platform, extra flows are needed to perform SNAT for the
-	// traffic to external network.
-	if err := i.initExternalConnectivityFlows(); err != nil {
+	// Install OpenFlow entries to enable Pod traffic to external IP
+	// addresses.
+	if err := i.ofClient.InstallExternalFlows(); err != nil {
 		klog.Errorf("Failed to install openflow entries for external connectivity: %v", err)
 		return err
 	}

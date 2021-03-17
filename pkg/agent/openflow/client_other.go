@@ -1,6 +1,7 @@
-// +build linux
+// +build !windows
+// package openflow is needed by antctl which is compiled for macOS too.
 
-// Copyright 2020 Antrea Authors
+// Copyright 2021 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,29 +15,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package agent
+package openflow
 
 import (
 	"net"
+
+	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
 )
 
-// prepareHostNetwork returns immediately on Linux.
-func (i *Initializer) prepareHostNetwork() error {
+func (c *client) InstallBridgeUplinkFlows() error {
 	return nil
 }
 
-// prepareOVSBridge returns immediately on Linux.
-func (i *Initializer) prepareOVSBridge() error {
+func (c *client) InstallLoadBalancerServiceFromOutsideFlows(svcIP net.IP, svcPort uint16, protocol binding.Protocol) error {
 	return nil
 }
 
-// initHostNetworkFlows returns immediately on Linux.
-func (i *Initializer) initHostNetworkFlows() error {
-	return nil
-}
-
-// getTunnelLocalIP returns local_ip of tunnel port.
-// On linux platform, local_ip option is not needed.
-func (i *Initializer) getTunnelPortLocalIP() net.IP {
+func (c *client) UninstallLoadBalancerServiceFromOutsideFlows(svcIP net.IP, svcPort uint16, protocol binding.Protocol) error {
 	return nil
 }
