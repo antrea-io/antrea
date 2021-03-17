@@ -94,7 +94,8 @@ func run(o *Options) error {
 	ovsBridgeMgmtAddr := ofconfig.GetMgmtAddress(o.config.OVSRunDir, o.config.OVSBridge)
 	ofClient := openflow.NewClient(o.config.OVSBridge, ovsBridgeMgmtAddr, ovsDatapathType,
 		features.DefaultFeatureGate.Enabled(features.AntreaProxy),
-		features.DefaultFeatureGate.Enabled(features.AntreaPolicy))
+		features.DefaultFeatureGate.Enabled(features.AntreaPolicy),
+		false)
 
 	_, serviceCIDRNet, _ := net.ParseCIDR(o.config.ServiceCIDR)
 	var serviceCIDRNetv6 *net.IPNet
