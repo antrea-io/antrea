@@ -11,7 +11,7 @@ jobs:
 
   test-netpol-cyclonus:
     name: Run Cyclonus network policy generator tests on Kind cluster
-    runs-on: [ubuntu-18.04]
+    runs-on: [ubuntu-latest]
     steps:
       - name: Free disk space
         # https://github.com/actions/virtual-environments/issues/709
