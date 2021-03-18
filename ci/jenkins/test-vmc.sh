@@ -252,20 +252,20 @@ function copy_image {
   IP=$3
   version=$4
   need_cleanup=$5
-  scp -o StrictHostKeyChecking=no -i ${GIT_CHECKOUT_DIR}/jenkins/key/antrea-ci-key $filename capv@${IP}:/home/capv
+  ${SCP_WITH_ANTREA_CI_KEY} $filename capv@${IP}:/home/capv
   if [ $TEST_OS == 'centos-7' ]; then
-      ssh -q -o StrictHostKeyChecking=no -i ${GIT_CHECKOUT_DIR}/jenkins/key/antrea-ci-key -n capv@${IP} "sudo chmod 777 /run/containerd/containerd.sock"
+      ${SSH_WITH_ANTREA_CI_KEY} -n capv@${IP} "sudo chmod 777 /run/containerd/containerd.sock"
       if [[ $need_cleanup == 'true' ]]; then
-          ssh -q -o StrictHostKeyChecking=no -i ${GIT_CHECKOUT_DIR}/jenkins/key/antrea-ci-key -n capv@${IP} "sudo crictl images | grep $image | awk '{print \$3}' | uniq | xargs -r crictl rmi"
+          ${SSH_WITH_ANTREA_CI_KEY} -n capv@${IP} "sudo crictl images | grep $image | awk '{print \$3}' | uniq | xargs -r crictl rmi"
       fi
-      ssh -q -o StrictHostKeyChecking=no -i ${GIT_CHECKOUT_DIR}/jenkins/key/antrea-ci-key -n capv@${IP} "ctr -n=k8s.io images import /home/capv/$filename ; ctr -n=k8s.io images tag $image:$version $image:latest --force"
+      ${SSH_WITH_ANTREA_CI_KEY} -n capv@${IP} "ctr -n=k8s.io images import /home/capv/$filename ; ctr -n=k8s.io images tag $image:$version $image:latest --force"
   else
       if [[ $need_cleanup == 'true' ]]; then
-          ssh -q -o StrictHostKeyChecking=no -i ${GIT_CHECKOUT_DIR}/jenkins/key/antrea-ci-key -n capv@${IP} "sudo crictl images | grep $image | awk '{print \$3}' | uniq | xargs -r crictl rmi"
+          ${SSH_WITH_ANTREA_CI_KEY} -n capv@${IP} "sudo crictl images | grep $image | awk '{print \$3}' | uniq | xargs -r crictl rmi"
       fi
-      ssh -q -o StrictHostKeyChecking=no -i ${GIT_CHECKOUT_DIR}/jenkins/key/antrea-ci-key -n capv@${IP} "sudo ctr -n=k8s.io images import /home/capv/$filename ; sudo ctr -n=k8s.io images tag $image:$version $image:latest --force"
+      ${SSH_WITH_ANTREA_CI_KEY} -n capv@${IP} "sudo ctr -n=k8s.io images import /home/capv/$filename ; sudo ctr -n=k8s.io images tag $image:$version $image:latest --force"
   fi
-  ssh -q -o StrictHostKeyChecking=no -i ${GIT_CHECKOUT_DIR}/jenkins/key/antrea-ci-key -n capv@${IP} "sudo crictl images | grep '<none>' | awk '{print \$3}' | xargs -r crictl rmi"
+  ${SSH_WITH_ANTREA_CI_KEY} -n capv@${IP} "sudo crictl images | grep '<none>' | awk '{print \$3}' | xargs -r crictl rmi"
 }
 
 function deliver_antrea {
@@ -344,7 +344,7 @@ function deliver_antrea {
 
 
     kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 == role {print $6}' | while read control_plane_ip; do
-        scp -q -o StrictHostKeyChecking=no -i ${GIT_CHECKOUT_DIR}/jenkins/key/antrea-ci-key $GIT_CHECKOUT_DIR/build/yamls/*.yml capv@${control_plane_ip}:~
+        ${SCP_WITH_ANTREA_CI_KEY} $GIT_CHECKOUT_DIR/build/yamls/*.yml capv@${control_plane_ip}:~
     done
 
     IPs=($(kubectl get nodes -o wide --no-headers=true | awk '{print $6}' | xargs))
@@ -401,9 +401,9 @@ function run_integration {
         docker pull ${DOCKER_REGISTRY}/antrea/openvswitch:2.14.0
         docker tag ${DOCKER_REGISTRY}/antrea/openvswitch:2.14.0 antrea/openvswitch:2.14.0
     fi
-    ssh -q -o StrictHostKeyChecking=no -i "${WORKDIR}/utils/key" -n jenkins@${VM_IP} "git clone ${ghprbAuthorRepoGitUrl} antrea && cd antrea && git checkout ${GIT_BRANCH} && DOCKER_REGISTRY=${DOCKER_REGISTRY} make docker-test-integration"
+    ${SSH_WITH_UTILS_KEY} -n jenkins@${VM_IP} "git clone ${ghprbAuthorRepoGitUrl} antrea && cd antrea && git checkout ${GIT_BRANCH} && DOCKER_REGISTRY=${DOCKER_REGISTRY} make docker-test-integration"
     if [[ "$COVERAGE" == true ]]; then
-        ssh -q -o StrictHostKeyChecking=no -i "${WORKDIR}/utils/key" -n jenkins@${VM_IP} "curl -s https://codecov.io/bash | bash -s -- -c -t ${CODECOV_TOKEN} -F integration-tests -f '.coverage/coverage-integration.txt'"
+        ${SSH_WITH_UTILS_KEY} -n jenkins@${VM_IP} "curl -s https://codecov.io/bash | bash -s -- -c -t ${CODECOV_TOKEN} -F integration-tests -f '.coverage/coverage-integration.txt'"
     fi
 }
 
@@ -427,8 +427,8 @@ function run_e2e {
     echo "=== Control-plane Node ip: ${control_plane_ip} ==="
     sed -i "s/CONTROLPLANENODEIP/${control_plane_ip}/g" $GIT_CHECKOUT_DIR/test/e2e/infra/vagrant/ssh-config
     echo "=== Move kubeconfig to control-plane Node ==="
-    ssh -q -o StrictHostKeyChecking=no -i $GIT_CHECKOUT_DIR/jenkins/key/antrea-ci-key -n capv@${control_plane_ip} "if [ ! -d ".kube" ]; then mkdir .kube; fi"
-    scp -q -o StrictHostKeyChecking=no -i $GIT_CHECKOUT_DIR/jenkins/key/antrea-ci-key $GIT_CHECKOUT_DIR/jenkins/out/kubeconfig capv@${control_plane_ip}:~/.kube/config
+    ${SSH_WITH_ANTREA_CI_KEY} -n capv@${control_plane_ip} "if [ ! -d ".kube" ]; then mkdir .kube; fi"
+    ${SCP_WITH_ANTREA_CI_KEY} $GIT_CHECKOUT_DIR/jenkins/out/kubeconfig capv@${control_plane_ip}:~/.kube/config
     sed -i "s/CONTROLPLANENODE/${control_plane_name}/g" $GIT_CHECKOUT_DIR/test/e2e/infra/vagrant/ssh-config
     echo "    IdentityFile ${GIT_CHECKOUT_DIR}/jenkins/key/antrea-ci-key" >> $GIT_CHECKOUT_DIR/test/e2e/infra/vagrant/ssh-config
 
@@ -492,8 +492,8 @@ function run_conformance {
 
     control_plane_ip="$(kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 == role {print $6}')"
     echo "=== Move kubeconfig to control-plane Node ==="
-    ssh -q -o StrictHostKeyChecking=no -i $GIT_CHECKOUT_DIR/jenkins/key/antrea-ci-key -n capv@${control_plane_ip} "if [ ! -d ".kube" ]; then mkdir .kube; fi"
-    scp -q -o StrictHostKeyChecking=no -i $GIT_CHECKOUT_DIR/jenkins/key/antrea-ci-key $GIT_CHECKOUT_DIR/jenkins/out/kubeconfig capv@${control_plane_ip}:~/.kube/config
+    ${SSH_WITH_ANTREA_CI_KEY} -n capv@${control_plane_ip} "if [ ! -d ".kube" ]; then mkdir .kube; fi"
+    ${SCP_WITH_ANTREA_CI_KEY} $GIT_CHECKOUT_DIR/jenkins/out/kubeconfig capv@${control_plane_ip}:~/.kube/config
 
     if [[ "$TESTCASE" == "conformance" ]]; then
         ${GIT_CHECKOUT_DIR}/ci/run-k8s-e2e-tests.sh --e2e-conformance --log-mode ${MODE} --kubeconfig ${GIT_CHECKOUT_DIR}/jenkins/out/kubeconfig > ${GIT_CHECKOUT_DIR}/vmc-test.log
@@ -579,6 +579,10 @@ function garbage_collection() {
 THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 GIT_CHECKOUT_DIR=${THIS_DIR}/../..
 pushd "$THIS_DIR" > /dev/null
+
+SCP_WITH_ANTREA_CI_KEY="scp -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i ${GIT_CHECKOUT_DIR}/jenkins/key/antrea-ci-key"
+SSH_WITH_ANTREA_CI_KEY="ssh -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i ${GIT_CHECKOUT_DIR}/jenkins/key/antrea-ci-key"
+SSH_WITH_UTILS_KEY="ssh -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i ${WORKDIR}/utils/key"
 
 if [[ "$RUN_GARBAGE_COLLECTION" == true ]]; then
     garbage_collection
