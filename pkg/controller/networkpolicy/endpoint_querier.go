@@ -81,9 +81,8 @@ func NewEndpointQuerier(networkPolicyController *NetworkPolicyController) *endpo
 // in Endpoint type) are policies which reference the endpoint in an ingress/egress rule
 // respectively.
 func (eq *endpointQuerier) QueryNetworkPolicies(namespace string, podName string) (*EndpointQueryResponse, error) {
-	// check if namespace and podName select an existing pod
-	pod, err := eq.networkPolicyController.podInformer.Lister().Pods(namespace).Get(podName)
-	if err != nil {
+	groups, exists := eq.networkPolicyController.groupingInterface.GetGroupsForPod(namespace, podName)
+	if !exists {
 		return nil, nil
 	}
 	type ruleTemp struct {
@@ -95,17 +94,14 @@ func (eq *endpointQuerier) QueryNetworkPolicies(namespace string, podName string
 	ingress := make([]*ruleTemp, 0)
 	egress := make([]*ruleTemp, 0)
 	// get all appliedToGroups using filter, then get applied policies using appliedToGroup
-	appliedToGroupKeys := eq.networkPolicyController.filterAppliedToGroupsForPodOrExternalEntity(pod)
-	if err != nil {
-		return nil, err
-	}
+	appliedToGroupKeys := groups[appliedToGroupType]
 	// We iterate over all AppliedToGroups (same for AddressGroups below). This is acceptable
 	// since this implementation only supports user queries (in particular through antctl) and
 	// should resturn within a reasonable amount of time. We experimented with adding Pod
 	// Indexers to the AppliedToGroup and AddressGroup stores, but we felt that this use case
 	// did not justify the memory overhead. If we can find another use for the Indexers as part
 	// of the NetworkPolicy Controller implementation, we may consider adding them back.
-	for appliedToGroupKey := range appliedToGroupKeys {
+	for _, appliedToGroupKey := range appliedToGroupKeys {
 		policies, err := eq.networkPolicyController.internalNetworkPolicyStore.GetByIndex(
 			store.AppliedToGroupIndex,
 			appliedToGroupKey,
@@ -118,11 +114,8 @@ func (eq *endpointQuerier) QueryNetworkPolicies(namespace string, podName string
 		}
 	}
 	// get all addressGroups using filter, then get ingress and egress policies using addressGroup
-	addressGroupKeys := eq.networkPolicyController.filterAddressGroupsForPodOrExternalEntity(pod)
-	if err != nil {
-		return nil, err
-	}
-	for addressGroupKey := range addressGroupKeys {
+	addressGroupKeys := groups[addressGroupType]
+	for _, addressGroupKey := range addressGroupKeys {
 		addressGroup, found, _ := eq.networkPolicyController.addressGroupStore.Get(addressGroupKey)
 		if !found {
 			continue
