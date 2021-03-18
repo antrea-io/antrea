@@ -62,10 +62,6 @@ const (
 	Error     PodConnectivityMark = "Err"
 	Dropped   PodConnectivityMark = "Drp"
 	Rejected  PodConnectivityMark = "Rej"
-
-	TCPRejectProbeReturn string = "Connection refused."
-	UDPRejectProbeReturn string = "Host is unreachable."
-	DropProbeReturn      string = "Operation timed out."
 )
 
 type Connectivity struct {
