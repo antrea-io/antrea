@@ -17,6 +17,7 @@ package networkpolicy
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"sync"
 	"time"
 
@@ -43,6 +44,8 @@ const (
 	// Default number of workers processing a rule change.
 	defaultWorkers = 4
 )
+
+var emptyWatch = watch.NewEmptyWatch()
 
 // Controller is responsible for watching Antrea AddressGroups, AppliedToGroups,
 // and NetworkPolicies, feeding them to ruleCache, getting dirty rules from
@@ -582,6 +585,12 @@ func (w *watcher) watch() {
 	watcher, err := w.watchFunc()
 	if err != nil {
 		klog.Warningf("Failed to start watch for %s: %v", w.objectType, err)
+		return
+	}
+	// Watch method doesn't return error but "emptyWatch" in case of some partial data errors,
+	// e.g. timeout error. Make sure that watcher is not empty and log warning otherwise.
+	if reflect.TypeOf(watcher) == reflect.TypeOf(emptyWatch) {
+		klog.Warningf("Failed to start watch for %s, please ensure antrea service is reachable for the agent", w.objectType)
 		return
 	}
 
