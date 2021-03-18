@@ -21,7 +21,7 @@ import (
 
 	"github.com/contiv/libOpenflow/protocol"
 	"github.com/contiv/ofnet/ofctrl"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 )
 
 type ofPacketOutBuilder struct {

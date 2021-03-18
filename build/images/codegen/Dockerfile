@@ -17,9 +17,9 @@ LABEL description="A Docker image based on golang 1.15 which includes codegen to
 
 ENV GO111MODULE=on
 
-ARG K8S_VERSION=1.18.4
+ARG K8S_VERSION=1.21.0
 # The k8s.io/kube-openapi repo does not have tag, using a workable commit hash.
-ARG KUBEOPENAPI_VERSION=v0.0.0-20200410145947-61e04a5be9a6
+ARG KUBEOPENAPI_VERSION=v0.0.0-20210305164622-f622666832c1
 
 RUN go get k8s.io/code-generator/cmd/client-gen@kubernetes-$K8S_VERSION && \
     go get k8s.io/code-generator/cmd/deepcopy-gen@kubernetes-$K8S_VERSION && \
