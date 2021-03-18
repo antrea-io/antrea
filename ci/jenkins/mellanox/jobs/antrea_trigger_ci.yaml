@@ -65,6 +65,13 @@
         failure: true
         content-type: html
         body: Failed ANTREA_HW_OFFLOAD_CI_EXECUTER
+    - trigger-parameterized-builds:
+      - project:
+          - Console-fetcher
+        predefined-parameters: |
+            TARGET_BUILD_NAME=$JOB_NAME
+            TARGET_BUILD_NUMBER=$BUILD_ID
+        condition: "ALWAYS"
     wrappers:
       - timeout:
           timeout: 120
@@ -127,6 +134,13 @@
               build-steps:
                   - construct-downstream-fail-email
                   - post-full-console
+    - trigger-parameterized-builds:
+      - project:
+          - Console-fetcher
+        predefined-parameters: |
+            TARGET_BUILD_NAME=$JOB_NAME
+            TARGET_BUILD_NUMBER=$BUILD_ID
+        condition: "ALWAYS"
     scm:
     - git:
         branches: ["${sha1}"]
