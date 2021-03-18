@@ -23,7 +23,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	discovery "k8s.io/api/discovery/v1beta1"
 	apimachinerytypes "k8s.io/apimachinery/pkg/types"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/proxy/types"
 	k8sproxy "github.com/vmware-tanzu/antrea/third_party/proxy"

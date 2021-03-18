@@ -1,4 +1,4 @@
-// Copyright 2020 Antrea Authors
+// Copyright 2021 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,10 +24,13 @@ import (
 )
 
 // TraceflowLister helps list Traceflows.
+// All objects returned here must be treated as read-only.
 type TraceflowLister interface {
 	// List lists all Traceflows in the indexer.
+	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1alpha1.Traceflow, err error)
 	// Get retrieves the Traceflow from the index for a given name.
+	// Objects returned here must be treated as read-only.
 	Get(name string) (*v1alpha1.Traceflow, error)
 	TraceflowListerExpansion
 }

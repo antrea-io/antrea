@@ -20,7 +20,7 @@ import (
 	"io/ioutil"
 
 	k8sversion "k8s.io/apimachinery/pkg/version"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 
 	clusterinfov1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1"
 	antreaversion "github.com/vmware-tanzu/antrea/pkg/version"

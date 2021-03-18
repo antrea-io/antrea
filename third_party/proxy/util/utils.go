@@ -48,7 +48,7 @@ import (
 	"k8s.io/client-go/tools/record"
 	utilnet "k8s.io/utils/net"
 
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 )
 
 // Resolver is an interface for net.Resolver

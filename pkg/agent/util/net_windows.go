@@ -30,7 +30,7 @@ import (
 	"github.com/antoninbas/go-powershell/backend"
 	"github.com/containernetworking/plugins/pkg/ip"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 )
 
 const (

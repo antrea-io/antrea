@@ -1,4 +1,4 @@
-// Copyright 2020 Antrea Authors
+// Copyright 2021 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,8 +24,10 @@ import (
 )
 
 // ExternalEntityLister helps list ExternalEntities.
+// All objects returned here must be treated as read-only.
 type ExternalEntityLister interface {
 	// List lists all ExternalEntities in the indexer.
+	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1alpha2.ExternalEntity, err error)
 	// ExternalEntities returns an object that can list and get ExternalEntities.
 	ExternalEntities(namespace string) ExternalEntityNamespaceLister
@@ -56,10 +58,13 @@ func (s *externalEntityLister) ExternalEntities(namespace string) ExternalEntity
 }
 
 // ExternalEntityNamespaceLister helps list and get ExternalEntities.
+// All objects returned here must be treated as read-only.
 type ExternalEntityNamespaceLister interface {
 	// List lists all ExternalEntities in the indexer for a given namespace.
+	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1alpha2.ExternalEntity, err error)
 	// Get retrieves the ExternalEntity from the indexer for a given namespace and name.
+	// Objects returned here must be treated as read-only.
 	Get(name string) (*v1alpha2.ExternalEntity, error)
 	ExternalEntityNamespaceListerExpansion
 }

@@ -1,4 +1,4 @@
-// Copyright 2020 Antrea Authors
+// Copyright 2021 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,8 +24,10 @@ import (
 )
 
 // NetworkPolicyLister helps list NetworkPolicies.
+// All objects returned here must be treated as read-only.
 type NetworkPolicyLister interface {
 	// List lists all NetworkPolicies in the indexer.
+	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1alpha1.NetworkPolicy, err error)
 	// NetworkPolicies returns an object that can list and get NetworkPolicies.
 	NetworkPolicies(namespace string) NetworkPolicyNamespaceLister
@@ -56,10 +58,13 @@ func (s *networkPolicyLister) NetworkPolicies(namespace string) NetworkPolicyNam
 }
 
 // NetworkPolicyNamespaceLister helps list and get NetworkPolicies.
+// All objects returned here must be treated as read-only.
 type NetworkPolicyNamespaceLister interface {
 	// List lists all NetworkPolicies in the indexer for a given namespace.
+	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1alpha1.NetworkPolicy, err error)
 	// Get retrieves the NetworkPolicy from the indexer for a given namespace and name.
+	// Objects returned here must be treated as read-only.
 	Get(name string) (*v1alpha1.NetworkPolicy, error)
 	NetworkPolicyNamespaceListerExpansion
 }

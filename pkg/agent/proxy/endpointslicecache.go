@@ -47,7 +47,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	discovery "k8s.io/api/discovery/v1beta1"
 	apimachinerytypes "k8s.io/apimachinery/pkg/types"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 	utilnet "k8s.io/utils/net"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/proxy/types"

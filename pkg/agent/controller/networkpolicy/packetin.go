@@ -26,7 +26,7 @@ import (
 	"github.com/contiv/libOpenflow/util"
 	"github.com/contiv/ofnet/ofctrl"
 	"gopkg.in/natefinch/lumberjack.v2"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
