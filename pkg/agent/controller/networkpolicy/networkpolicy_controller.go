@@ -590,7 +590,7 @@ func (w *watcher) watch() {
 	// Watch method doesn't return error but "emptyWatch" in case of some partial data errors,
 	// e.g. timeout error. Make sure that watcher is not empty and log warning otherwise.
 	if reflect.TypeOf(watcher) == reflect.TypeOf(emptyWatch) {
-		klog.Warningf("Failed to start watch for %s. Please ensure antrea service is reachable for the agent", w.objectType)
+		klog.Warningf("Failed to start watch for %s, please ensure antrea service is reachable for the agent", w.objectType)
 		return
 	}
 
