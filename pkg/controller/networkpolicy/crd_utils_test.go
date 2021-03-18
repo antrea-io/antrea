@@ -26,7 +26,6 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
 	corev1a2 "github.com/vmware-tanzu/antrea/pkg/apis/core/v1alpha2"
 	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
-	antreatypes "github.com/vmware-tanzu/antrea/pkg/controller/types"
 )
 
 func TestToAntreaServicesForCRD(t *testing.T) {
@@ -298,84 +297,6 @@ func TestToAntreaPeerForCRD(t *testing.T) {
 					t.Errorf("Unexpected IPBlocks in Antrea Peer conversion. Expected %v, got %v", tt.outPeer.IPBlocks[i], actualPeer.IPBlocks[i])
 				}
 			}
-		})
-	}
-}
-
-func TestCreateAddressGroupForClusterGroupCRD(t *testing.T) {
-	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
-	selectorB := metav1.LabelSelector{MatchLabels: map[string]string{"foo2": "bar2"}}
-	igA := antreatypes.Group{
-		UID:      "uidA",
-		Name:     "cgA",
-		Selector: toGroupSelector("", nil, &selectorA, nil),
-	}
-	igB := antreatypes.Group{
-		UID:      "uidB",
-		Name:     "cgB",
-		Selector: toGroupSelector("", nil, &selectorB, nil),
-	}
-	tests := []struct {
-		name                   string
-		inG                    *antreatypes.Group
-		expectedKey            string
-		expectedAddressGroups  int
-		expectedInternalGroups int
-	}{
-		{
-			name:                   "group-not-found",
-			inG:                    &igB,
-			expectedKey:            igB.Name,
-			expectedAddressGroups:  1,
-			expectedInternalGroups: 1,
-		},
-		{
-			name:                   "cluster-group-with-selector",
-			inG:                    &igA,
-			expectedKey:            igA.Name,
-			expectedAddressGroups:  1,
-			expectedInternalGroups: 1,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, c := newController()
-			c.internalGroupStore.Create(tt.inG)
-			actualKey := c.createAddressGroupForClusterGroupCRD(tt.inG)
-			assert.Equal(t, tt.expectedKey, actualKey)
-			assert.Equal(t, tt.expectedInternalGroups, len(c.internalGroupStore.List()))
-			assert.Equal(t, tt.expectedAddressGroups, len(c.addressGroupStore.List()))
-		})
-	}
-}
-
-func TestCreateAppliedToGroupForClusterGroupCRD(t *testing.T) {
-	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
-	igA := antreatypes.Group{
-		UID:      "uidA",
-		Name:     "cgA",
-		Selector: toGroupSelector("", nil, &selectorA, nil),
-	}
-	tests := []struct {
-		name                    string
-		inG                     *antreatypes.Group
-		expectedKey             string
-		expectedAppliedToGroups int
-	}{
-		{
-			name:                    "cluster-group-with-selector",
-			inG:                     &igA,
-			expectedKey:             igA.Name,
-			expectedAppliedToGroups: 1,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, c := newController()
-			c.internalGroupStore.Create(tt.inG)
-			actualKey := c.createAppliedToGroupForClusterGroupCRD(tt.inG)
-			assert.Equal(t, tt.expectedKey, actualKey)
-			assert.Equal(t, tt.expectedAppliedToGroups, len(c.appliedToGroupStore.List()))
 		})
 	}
 }

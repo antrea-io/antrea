@@ -36,6 +36,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
 	crdinformers "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions"
 	"github.com/vmware-tanzu/antrea/pkg/clusteridentity"
+	"github.com/vmware-tanzu/antrea/pkg/controller/grouping"
 	"github.com/vmware-tanzu/antrea/pkg/controller/metrics"
 	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy"
 	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy/store"
@@ -119,13 +120,13 @@ func run(o *Options) error {
 	appliedToGroupStore := store.NewAppliedToGroupStore()
 	networkPolicyStore := store.NewNetworkPolicyStore()
 	groupStore := store.NewGroupStore()
+	groupEntityIndex := grouping.NewGroupEntityIndex()
+	groupEntityController := grouping.NewGroupEntityController(groupEntityIndex, podInformer, namespaceInformer, externalEntityInformer)
 
 	networkPolicyController := networkpolicy.NewNetworkPolicyController(client,
 		crdClient,
-		podInformer,
-		namespaceInformer,
+		groupEntityIndex,
 		serviceInformer,
-		externalEntityInformer,
 		networkPolicyInformer,
 		cnpInformer,
 		anpInformer,
@@ -207,6 +208,8 @@ func run(o *Options) error {
 	go clusterIdentityAllocator.Run(stopCh)
 
 	go controllerMonitor.Run(stopCh)
+
+	go groupEntityController.Run(stopCh)
 
 	go networkPolicyController.Run(stopCh)
 
