@@ -480,7 +480,7 @@ func prepareTraceflowFlow(ctrl *gomock.Controller) *client {
 	mFlow.EXPECT().FlowProtocol().Return(ofconfig.Protocol("ip"))
 	mFlow.EXPECT().CopyToBuilder(priorityNormal+2, false).Return(c.pipeline[EgressDefaultTable].BuildFlow(priorityNormal + 2)).Times(1)
 	c.globalConjMatchFlowCache["mockContext"] = ctx
-	c.policyCache.Add(&policyRuleConjunction{metricFlows: []ofconfig.Flow{c.dropRuleMetricFlow(123, false)}})
+	c.policyCache.Add(&policyRuleConjunction{metricFlows: []ofconfig.Flow{c.denyRuleMetricFlow(123, false)}})
 	return c
 }
 
@@ -488,6 +488,93 @@ func prepareSendTraceflowPacket(ctrl *gomock.Controller, success bool) *client {
 	ofClient := NewClient(bridgeName, bridgeMgmtAddr, ovsconfig.OVSDatapathSystem, true, true, false)
 	c := ofClient.(*client)
 	c.nodeConfig = nodeConfig
+	m := ovsoftest.NewMockBridge(ctrl)
+	c.bridge = m
+	bridge := ofconfig.OFBridge{}
+	m.EXPECT().BuildPacketOut().Return(bridge.BuildPacketOut()).Times(1)
+	if success {
+		m.EXPECT().SendPacketOut(gomock.Any()).Times(1)
+	}
+	return c
+}
+
+func Test_client_setBasePacketOutBuilder(t *testing.T) {
+	type args struct {
+		srcMAC  string
+		dstMAC  string
+		srcIP   string
+		dstIP   string
+		inPort  uint32
+		outPort int32
+	}
+	tests := []struct {
+		name    string
+		args    args
+		wantErr bool
+	}{
+		{
+			name: "err invalidSrcMAC",
+			args: args{
+				srcMAC: "invalidMAC",
+				dstMAC: "11:22:33:44:55:66",
+			},
+			wantErr: true,
+		},
+		{
+			name: "err invalidDstMAC",
+			args: args{
+				srcMAC: "11:22:33:44:55:66",
+				dstMAC: "invalidMAC",
+			},
+			wantErr: true,
+		},
+		{
+			name: "err invalidSrcIP",
+			args: args{
+				srcMAC: "11:22:33:44:55:66",
+				dstMAC: "11:22:33:44:55:77",
+				srcIP:  "invalidIP",
+				dstIP:  "1.2.3.4",
+			},
+			wantErr: true,
+		},
+		{
+			name: "err invalidDstIP",
+			args: args{
+				srcMAC: "11:22:33:44:55:66",
+				dstMAC: "11:22:33:44:55:77",
+				srcIP:  "1.2.3.4",
+				dstIP:  "invalidIP",
+			},
+			wantErr: true,
+		},
+		{
+			name: "err IPVersionMismatch",
+			args: args{
+				srcMAC: "11:22:33:44:55:66",
+				dstMAC: "11:22:33:44:55:77",
+				srcIP:  "1.2.3.4",
+				dstIP:  "1111::5555",
+			},
+			wantErr: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			c := prepareSetBasePacketOutBuilder(ctrl, !tt.wantErr)
+			_, err := setBasePacketOutBuilder(c.bridge.BuildPacketOut(), tt.args.srcMAC, tt.args.dstMAC, tt.args.srcIP, tt.args.dstIP, tt.args.inPort, tt.args.outPort)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("setBasePacketOutBuilder() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func prepareSetBasePacketOutBuilder(ctrl *gomock.Controller, success bool) *client {
+	ofClient := NewClient(bridgeName, bridgeMgmtAddr, ovsconfig.OVSDatapathSystem, true, true, false)
+	c := ofClient.(*client)
 	m := ovsoftest.NewMockBridge(ctrl)
 	c.bridge = m
 	bridge := ofconfig.OFBridge{}

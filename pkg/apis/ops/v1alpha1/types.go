@@ -55,6 +55,7 @@ const (
 	ICMPProtocol int32 = 1
 	TCPProtocol  int32 = 6
 	UDPProtocol  int32 = 17
+	SCTPProtocol int32 = 132
 )
 
 var SupportedProtocols = map[string]int32{
@@ -67,6 +68,7 @@ var ProtocolsToString = map[int32]string{
 	TCPProtocol:  "TCP",
 	UDPProtocol:  "UDP",
 	ICMPProtocol: "ICMP",
+	SCTPProtocol: "SCTP",
 }
 
 // List the supported destination types in traceflow.
