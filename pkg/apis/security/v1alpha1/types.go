@@ -181,10 +181,13 @@ type NetworkPolicyPort struct {
 type RuleAction string
 
 const (
-	// RuleActionAllow describes that rule matching traffic must be allowed.
+	// RuleActionAllow describes that the traffic matching the rule must be allowed.
 	RuleActionAllow RuleAction = "Allow"
-	// RuleActionDrop describes that rule matching traffic must be dropped.
+	// RuleActionDrop describes that the traffic matching the rule must be dropped.
 	RuleActionDrop RuleAction = "Drop"
+	// RuleActionReject indicates that the traffic matching the rule must be rejected and the
+	// client will receive a response.
+	RuleActionReject RuleAction = "Reject"
 )
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

@@ -322,12 +322,15 @@ type PacketOutBuilder interface {
 	SetTCPSrcPort(port uint16) PacketOutBuilder
 	SetTCPDstPort(port uint16) PacketOutBuilder
 	SetTCPFlags(flags uint8) PacketOutBuilder
+	SetTCPSeqNum(seqNum uint32) PacketOutBuilder
+	SetTCPAckNum(ackNum uint32) PacketOutBuilder
 	SetUDPSrcPort(port uint16) PacketOutBuilder
 	SetUDPDstPort(port uint16) PacketOutBuilder
 	SetICMPType(icmpType uint8) PacketOutBuilder
 	SetICMPCode(icmpCode uint8) PacketOutBuilder
 	SetICMPID(id uint16) PacketOutBuilder
 	SetICMPSequence(seq uint16) PacketOutBuilder
+	SetICMPData(data []byte) PacketOutBuilder
 	SetInport(inPort uint32) PacketOutBuilder
 	SetOutport(outport uint32) PacketOutBuilder
 	AddLoadAction(name string, data uint64, rng Range) PacketOutBuilder

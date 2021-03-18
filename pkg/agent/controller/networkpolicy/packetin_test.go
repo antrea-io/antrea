@@ -63,3 +63,55 @@ func TestGetPacketInfo(t *testing.T) {
 		})
 	}
 }
+
+func TestGetTCPHeaderData(t *testing.T) {
+	type args struct {
+		tcp              protocol.TCP
+		expectTCPSrcPort uint16
+		expectTCPDstPort uint16
+		expectTCPSeqNum  uint32
+		expectTCPAckNum  uint32
+	}
+	tests := []struct {
+		name    string
+		args    args
+		wantErr bool
+	}{
+		{
+			name: "ipv4",
+			args: args{
+				tcp: protocol.TCP{
+					PortSrc: 1080,
+					PortDst: 80,
+					SeqNum:  0,
+					AckNum:  0,
+				},
+				expectTCPSrcPort: 1080,
+				expectTCPDstPort: 80,
+				expectTCPSeqNum:  0,
+				expectTCPAckNum:  0,
+			},
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tcp := tt.args.tcp
+			pktIn := new(protocol.IPv4)
+			bytes, _ := tcp.MarshalBinary()
+			bf := new(util.Buffer)
+			bf.UnmarshalBinary(bytes)
+			pktIn.Data = bf
+
+			tcpSrcPort, tcpDstPort, tcpSeqNum, tcpAckNum, err := getTCPHeaderData(pktIn)
+
+			if (err != nil) != tt.wantErr {
+				t.Errorf("getPacketInfo() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			assert.Equal(t, tt.args.expectTCPSrcPort, tcpSrcPort, "Expect to retrieve exact TCP src port while differed")
+			assert.Equal(t, tt.args.expectTCPDstPort, tcpDstPort, "Expect to retrieve exact TCP dst port while differed")
+			assert.Equal(t, tt.args.expectTCPSeqNum, tcpSeqNum, "Expect to retrieve exact TCP seq num while differed")
+			assert.Equal(t, tt.args.expectTCPAckNum, tcpAckNum, "Expect to retrieve exact TCP ack num while differed")
+		})
+	}
+}

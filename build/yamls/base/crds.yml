@@ -343,10 +343,10 @@ spec:
                               x-kubernetes-preserve-unknown-fields: true
                             group:
                               type: string
-                      # Ensure that Action field allows only ALLOW and DROP values
+                      # Ensure that Action field allows only ALLOW, DROP and REJECT values
                       action:
                         type: string
-                        enum: ['Allow', 'Drop']
+                        enum: ['Allow', 'Drop', 'Reject']
                       ports:
                         type: array
                         items:
@@ -398,10 +398,10 @@ spec:
                               x-kubernetes-preserve-unknown-fields: true
                             group:
                               type: string
-                      # Ensure that Action field allows only ALLOW and DROP values
+                      # Ensure that Action field allows only ALLOW, DROP and REJECT values
                       action:
                         type: string
-                        enum: ['Allow', 'Drop']
+                        enum: ['Allow', 'Drop', 'Reject']
                       ports:
                         type: array
                         items:
@@ -533,10 +533,10 @@ spec:
                             podSelector:
                               type: object
                               x-kubernetes-preserve-unknown-fields: true
-                      # Ensure that Action field allows only ALLOW and DROP values
+                      # Ensure that Action field allows only ALLOW, DROP and REJECT values
                       action:
                         type: string
-                        enum: ['Allow', 'Drop']
+                        enum: ['Allow', 'Drop', 'Reject']
                       ports:
                         type: array
                         items:
@@ -585,10 +585,10 @@ spec:
                             podSelector:
                               type: object
                               x-kubernetes-preserve-unknown-fields: true
-                      # Ensure that Action field allows only ALLOW and DROP values
+                      # Ensure that Action field allows only ALLOW, DROP and REJECT values
                       action:
                         type: string
-                        enum: ['Allow', 'Drop']
+                        enum: ['Allow', 'Drop', 'Reject']
                       ports:
                         type: array
                         items:

@@ -201,7 +201,7 @@ func (rt regType) reg() string {
 
 const (
 	// marksReg stores traffic-source mark and pod-found mark.
-	// traffic-source resides in [0..15], pod-found resides in [16], Antrea Policy disposition Allow or Drop in [21]
+	// traffic-source resides in [0..15], pod-found resides in [16], Antrea Policy disposition in [21-22], Custom Reasons in [24-25]
 	marksReg        regType = 0
 	PortCacheReg    regType = 1
 	swapReg         regType = 2
@@ -211,10 +211,10 @@ const (
 	EgressReg       regType = 5
 	IngressReg      regType = 6
 	TraceflowReg    regType = 9 // Use reg9[28..31] to store traceflow dataplaneTag.
-	// CNPDropConjunctionIDReg reuses reg3 which will also be used for storing endpoint IP to store the rule ID. Since
+	// CNPDenyConjIDReg reuses reg3 which will also be used for storing endpoint IP to store the rule ID. Since
 	// the service selection will finish when a packet hitting NetworkPolicy related rules, there is no conflict.
-	CNPDropConjunctionIDReg regType = 3
-	endpointIPv6XXReg       regType = 3 // xxReg3 will occupy reg12-reg15
+	CNPDenyConjIDReg  regType = 3
+	endpointIPv6XXReg regType = 3 // xxReg3 will occupy reg12-reg15
 	// marksRegServiceNeedLB indicates a packet need to do service selection.
 	marksRegServiceNeedLB uint32 = 0b001
 	// marksRegServiceSelected indicates a packet has done service selection.
@@ -231,32 +231,52 @@ const (
 	// macRewriteMark indicates the destination and source MACs of the
 	// packet should be rewritten in the l3ForwardingTable.
 	macRewriteMark = 0b1
-	cnpDropMark    = 0b1
+	// cnpDenyMark indicates the packet is denied(Drop/Reject).
+	cnpDenyMark = 0b1
 
 	// gatewayCTMark is used to to mark connections initiated through the host gateway interface
 	// (i.e. for which the first packet of the connection was received through the gateway).
 	gatewayCTMark = 0x20
 	ServiceCTMark = 0x21
 
-	// disposition is loaded in marksReg [21]
+	// disposition is loaded in marksReg [21-22]
 	DispositionMarkReg regType = 0
-	// disposition marks the flow action as either Allow or Drop
-	DispositionAllow = 0b0
-	DispositionDrop  = 0b1
+	// disposition marks the flow action
+	DispositionAllow = 0b00
+	DispositionDrop  = 0b01
+	DispositionRej   = 0b10
+
+	// custom reason is loaded in marksReg [24-25]
+	// The custom reason mark is used to indicate the reason(s) for sending the packet
+	// to the controller. Reasons can be or-ed to indicate that the packets was sent
+	// for multiple reasons.
+	// For example, a value of 0b11 (CustomReasonLogging | CustomReasonReject) means
+	// that the packet is sent to the controller both for NetworkPolicy logging and
+	// because of a Reject action.
+	CustomReasonMarkReg regType = 0
+	// CustomReasonLogging is used when send packet-in to controller indicating this
+	// packet need logging.
+	CustomReasonLogging = 0b01
+	// CustomReasonReject is not only used when send packet-in to controller indicating
+	// that this packet should be rejected, but also used in the case that when
+	// controller send reject packet as packet-out, we want reject response to bypass
+	// the connTrack to avoid unexpected drop.
+	CustomReasonReject = 0b10
 )
 
 var DispositionToString = map[uint32]string{
 	DispositionAllow: "Allow",
 	DispositionDrop:  "Drop",
+	DispositionRej:   "Reject",
 }
 
 var (
-	// APDispositionMarkRange takes the 21 to 21 bits of register marksReg to indicate disposition of Antrea Policy.
-	APDispositionMarkRange = binding.Range{21, 21}
-	// ofPortMarkRange takes the 16th bit of register marksReg to indicate if the ofPort number of an interface
+	// ofPortMarkRange takes the 16th bit of register marksReg to indicate if the ofPort
+	// number of an interface.
 	// is found or not. Its value is 0x1 if yes.
 	ofPortMarkRange = binding.Range{16, 16}
-	// ofPortRegRange takes a 32-bit range of register PortCacheReg to cache the ofPort number of the interface.
+	// ofPortRegRange takes a 32-bit range of register PortCacheReg to cache the ofPort
+	// number of the interface.
 	ofPortRegRange = binding.Range{0, 31}
 	// hairpinMarkRange takes the 18th bit of register marksReg to indicate
 	// if the packet needs DNAT to virtual IP or not. Its value is 0x1 if yes.
@@ -264,7 +284,17 @@ var (
 	// macRewriteMarkRange takes the 19th bit of register marksReg to indicate
 	// if the packet's MAC addresses need to be rewritten. Its value is 0x1 if yes.
 	macRewriteMarkRange = binding.Range{19, 19}
-	cnpDropMarkRange    = binding.Range{20, 20}
+	// cnpDenyMarkRange takes the 20th bit of register marksReg to indicate
+	// if the packet is denied(Drop/Reject). Its value is 0x1 if yes.
+	cnpDenyMarkRange = binding.Range{20, 20}
+	// APDispositionMarkRange takes the 21 to 22 bits of register marksReg to indicate
+	// disposition of Antrea Policy. It could have more bits to support more disposition
+	// that Antrea policy support in the future.
+	APDispositionMarkRange = binding.Range{21, 22}
+	// CustomReasonMarkRange takes the 24 to 25 bits of register marksReg to indicate
+	// the reason of sending packet to the controller. It could have more bits to
+	// support more customReason in the future.
+	CustomReasonMarkRange = binding.Range{24, 25}
 	// endpointIPRegRange takes a 32-bit range of register endpointIPReg to store
 	// the selected Service Endpoint IP.
 	endpointIPRegRange = binding.Range{0, 31}
@@ -525,6 +555,7 @@ func (c *client) podClassifierFlow(podOFPort uint32, category cookie.Category) b
 //    The sessionAffinityTable is a side-effect table which means traffic will not
 //    be resubmitted to any table. serviceLB does Endpoint selection for traffic
 //    to a Service.
+// 6) Add a flow to bypass reject response packet sent by the controller.
 func (c *client) connectionTrackFlows(category cookie.Category) []binding.Flow {
 	connectionTrackTable := c.pipeline[conntrackTable]
 	connectionTrackStateTable := c.pipeline[conntrackStateTable]
@@ -595,7 +626,23 @@ func (c *client) connectionTrackFlows(category cookie.Category) []binding.Flow {
 				Done(),
 		)
 	}
+
+	// Add reject response packet bypass flow.
+	flows = append(flows, c.conntrackBypassRejectFlow())
+
 	return flows
+}
+
+// conntrackBypassRejectFlow generates a flow which is used to bypass the reject
+// response packet sent by the controller to avoid unexpected packet drop.
+func (c *client) conntrackBypassRejectFlow() binding.Flow {
+	connectionTrackStateTable := c.pipeline[conntrackStateTable]
+	return connectionTrackStateTable.BuildFlow(priorityHigh).
+		MatchProtocol(binding.ProtocolIP).
+		MatchRegRange(int(marksReg), CustomReasonReject, CustomReasonMarkRange).
+		Cookie(c.cookieAllocator.Request(cookie.Default).Raw()).
+		Action().ResubmitToTable(connectionTrackStateTable.GetNext()).
+		Done()
 }
 
 func (c *client) conntrackBasicFlows(category cookie.Category) []binding.Flow {
@@ -1259,14 +1306,14 @@ func (c *client) allowRulesMetricFlows(conjunctionID uint32, ingress bool) []bin
 	return flows
 }
 
-func (c *client) dropRuleMetricFlow(conjunctionID uint32, ingress bool) binding.Flow {
+func (c *client) denyRuleMetricFlow(conjunctionID uint32, ingress bool) binding.Flow {
 	metricTableID := IngressMetricTable
 	if !ingress {
 		metricTableID = EgressMetricTable
 	}
 	return c.pipeline[metricTableID].BuildFlow(priorityNormal).
-		MatchRegRange(int(marksReg), cnpDropMark, cnpDropMarkRange).
-		MatchReg(int(CNPDropConjunctionIDReg), conjunctionID).
+		MatchRegRange(int(marksReg), cnpDenyMark, cnpDenyMarkRange).
+		MatchReg(int(CNPDenyConjIDReg), conjunctionID).
 		Action().Drop().
 		Cookie(c.cookieAllocator.Request(cookie.Policy).Raw()).
 		Done()
@@ -1334,8 +1381,9 @@ func (c *client) conjunctionActionFlow(conjunctionID uint32, tableID binding.Tab
 		if enableLogging {
 			return c.pipeline[tableID].BuildFlow(ofPriority).MatchProtocol(proto).
 				MatchConjID(conjunctionID).
-				Action().LoadRegRange(int(conjReg), conjunctionID, binding.Range{0, 31}).       // Traceflow.
-				Action().LoadRegRange(int(marksReg), DispositionAllow, APDispositionMarkRange). // AntreaPolicy
+				Action().LoadRegRange(int(conjReg), conjunctionID, binding.Range{0, 31}).         // Traceflow.
+				Action().LoadRegRange(int(marksReg), DispositionAllow, APDispositionMarkRange).   // AntreaPolicy.
+				Action().LoadRegRange(int(marksReg), CustomReasonLogging, CustomReasonMarkRange). // Enable logging.
 				Action().SendToController(uint8(PacketInReasonNP)).
 				Action().CT(true, nextTable, ctZone). // CT action requires commit flag if actions other than NAT without arguments are specified.
 				LoadToLabelRange(uint64(conjunctionID), &labelRange).
@@ -1360,34 +1408,40 @@ func (c *client) conjunctionActionFlow(conjunctionID uint32, tableID binding.Tab
 	return flows
 }
 
-// conjunctionActionDropFlow generates the flow to mark the packet to be dropped if policyRuleConjunction ID is matched.
+// conjunctionActionDenyFlow generates the flow to mark the packet to be denied
+// (dropped or rejected) if policyRuleConjunction ID is matched.
 // Any matched flow will be dropped in corresponding metric tables.
-func (c *client) conjunctionActionDropFlow(conjunctionID uint32, tableID binding.TableIDType, priority *uint16, enableLogging bool) binding.Flow {
+func (c *client) conjunctionActionDenyFlow(conjunctionID uint32, tableID binding.TableIDType, priority *uint16, disposition uint32, enableLogging bool) binding.Flow {
 	ofPriority := *priority
 	metricTableID := IngressMetricTable
 	if _, ok := egressTables[tableID]; ok {
 		metricTableID = EgressMetricTable
 	}
-	// We do not drop the packet immediately but send the packet to the metric table to update the rule metrics.
+
+	flowBuilder := c.pipeline[tableID].BuildFlow(ofPriority).
+		MatchConjID(conjunctionID).
+		Action().LoadRegRange(int(CNPDenyConjIDReg), conjunctionID, binding.Range{0, 31}).
+		Action().LoadRegRange(int(marksReg), cnpDenyMark, cnpDenyMarkRange)
+
 	if enableLogging {
-		return c.pipeline[tableID].BuildFlow(ofPriority).
-			MatchConjID(conjunctionID).
-			Action().LoadRegRange(int(CNPDropConjunctionIDReg), conjunctionID, binding.Range{0, 31}).
-			Action().LoadRegRange(int(marksReg), cnpDropMark, cnpDropMarkRange).
-			Action().LoadRegRange(int(marksReg), DispositionDrop, APDispositionMarkRange). //Logging
-			Action().SendToController(uint8(PacketInReasonNP)).
-			Action().GotoTable(metricTableID).
-			Cookie(c.cookieAllocator.Request(cookie.Policy).Raw()).
-			Done()
-	} else {
-		return c.pipeline[tableID].BuildFlow(ofPriority).
-			MatchConjID(conjunctionID).
-			Action().LoadRegRange(int(CNPDropConjunctionIDReg), conjunctionID, binding.Range{0, 31}).
-			Action().LoadRegRange(int(marksReg), cnpDropMark, cnpDropMarkRange).
-			Action().GotoTable(metricTableID).
-			Cookie(c.cookieAllocator.Request(cookie.Policy).Raw()).
-			Done()
+		customReason := CustomReasonLogging
+		if disposition == DispositionRej {
+			customReason += CustomReasonReject
+		}
+		flowBuilder = flowBuilder.
+			Action().LoadRegRange(int(marksReg), disposition, APDispositionMarkRange).
+			Action().LoadRegRange(int(marksReg), uint32(customReason), CustomReasonMarkRange).
+			Action().SendToController(uint8(PacketInReasonNP))
+	} else if disposition == DispositionRej {
+		flowBuilder = flowBuilder.
+			Action().LoadRegRange(int(marksReg), CustomReasonReject, CustomReasonMarkRange). // Do the rejection.
+			Action().SendToController(uint8(PacketInReasonNP))
 	}
+
+	// We do not drop the packet immediately but send the packet to the metric table to update the rule metrics.
+	return flowBuilder.Action().GotoTable(metricTableID).
+		Cookie(c.cookieAllocator.Request(cookie.Policy).Raw()).
+		Done()
 }
 
 func (c *client) Disconnect() error {

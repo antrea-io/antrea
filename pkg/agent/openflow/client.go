@@ -206,18 +206,18 @@ type Client interface {
 		dstMAC string,
 		srcIP string,
 		dstIP string,
-		IPProtocol uint8,
+		ipProtocol uint8,
 		ttl uint8,
-		IPFlags uint16,
-		TCPSrcPort uint16,
-		TCPDstPort uint16,
-		TCPFlags uint8,
-		UDPSrcPort uint16,
-		UDPDstPort uint16,
-		ICMPType uint8,
-		ICMPCode uint8,
-		ICMPID uint16,
-		ICMPSequence uint16,
+		ipFlags uint16,
+		tcpSrcPort uint16,
+		tcpDstPort uint16,
+		tcpFlags uint8,
+		udpSrcPort uint16,
+		udpDstPort uint16,
+		icmpType uint8,
+		icmpCode uint8,
+		icmpID uint16,
+		icmpSequence uint16,
 		inPort uint32,
 		outPort int32) error
 
@@ -241,6 +241,33 @@ type Client interface {
 	IsIPv4Enabled() bool
 	// Returns if IPv6 is supported on this Node or not.
 	IsIPv6Enabled() bool
+	// SendTCPPacketOut sends TCP packet as a packet-out to OVS.
+	SendTCPPacketOut(
+		srcMAC string,
+		dstMAC string,
+		srcIP string,
+		dstIP string,
+		inPort uint32,
+		outPort int32,
+		isIPv6 bool,
+		tcpSrcPort uint16,
+		tcpDstPort uint16,
+		tcpAckNum uint32,
+		tcpFlag uint8,
+		isReject bool) error
+	// SendICMPPacketOut sends ICMP packet as a packet-out to OVS.
+	SendICMPPacketOut(
+		srcMAC string,
+		dstMAC string,
+		srcIP string,
+		dstIP string,
+		inPort uint32,
+		outPort int32,
+		isIPv6 bool,
+		icmpType uint8,
+		icmpCode uint8,
+		icmpData []byte,
+		isReject bool) error
 }
 
 // GetFlowTableStatus returns an array of flow table status.
@@ -740,16 +767,16 @@ func (c *client) SendTraceflowPacket(
 	dstIP string,
 	IPProtocol uint8,
 	ttl uint8,
-	IPFlags uint16,
-	TCPSrcPort uint16,
-	TCPDstPort uint16,
-	TCPFlags uint8,
-	UDPSrcPort uint16,
-	UDPDstPort uint16,
-	ICMPType uint8,
-	ICMPCode uint8,
-	ICMPID uint16,
-	ICMPSequence uint16,
+	ipFlags uint16,
+	tcpSrcPort uint16,
+	tcpDstPort uint16,
+	tcpFlags uint8,
+	udpSrcPort uint16,
+	udpDstPort uint16,
+	icmpType uint8,
+	icmpCode uint8,
+	icmpID uint16,
+	icmpSequence uint16,
 	inPort uint32,
 	outPort int32) error {
 
@@ -790,7 +817,7 @@ func (c *client) SendTraceflowPacket(
 		packetOutBuilder = packetOutBuilder.SetTTL(ttl)
 	}
 	if !isIPv6 {
-		packetOutBuilder = packetOutBuilder.SetIPFlags(IPFlags)
+		packetOutBuilder = packetOutBuilder.SetIPFlags(ipFlags)
 	}
 
 	// Set transport header
@@ -800,40 +827,40 @@ func (c *client) SendTraceflowPacket(
 			return errors.New("cannot set protocol ICMP in IPv6 packet")
 		}
 		packetOutBuilder = packetOutBuilder.SetIPProtocol(binding.ProtocolICMP)
-		packetOutBuilder = packetOutBuilder.SetICMPType(ICMPType)
-		packetOutBuilder = packetOutBuilder.SetICMPCode(ICMPCode)
-		packetOutBuilder = packetOutBuilder.SetICMPID(ICMPID)
-		packetOutBuilder = packetOutBuilder.SetICMPSequence(ICMPSequence)
+		packetOutBuilder = packetOutBuilder.SetICMPType(icmpType)
+		packetOutBuilder = packetOutBuilder.SetICMPCode(icmpCode)
+		packetOutBuilder = packetOutBuilder.SetICMPID(icmpID)
+		packetOutBuilder = packetOutBuilder.SetICMPSequence(icmpSequence)
 	case protocol.Type_IPv6ICMP:
 		if !isIPv6 {
 			return errors.New("cannot set protocol ICMPv6 in IPv4 packet")
 		}
 		packetOutBuilder = packetOutBuilder.SetIPProtocol(binding.ProtocolICMPv6)
-		packetOutBuilder = packetOutBuilder.SetICMPType(ICMPType)
-		packetOutBuilder = packetOutBuilder.SetICMPCode(ICMPCode)
-		packetOutBuilder = packetOutBuilder.SetICMPID(ICMPID)
-		packetOutBuilder = packetOutBuilder.SetICMPSequence(ICMPSequence)
+		packetOutBuilder = packetOutBuilder.SetICMPType(icmpType)
+		packetOutBuilder = packetOutBuilder.SetICMPCode(icmpCode)
+		packetOutBuilder = packetOutBuilder.SetICMPID(icmpID)
+		packetOutBuilder = packetOutBuilder.SetICMPSequence(icmpSequence)
 	case protocol.Type_TCP:
 		if isIPv6 {
 			packetOutBuilder = packetOutBuilder.SetIPProtocol(binding.ProtocolTCPv6)
 		} else {
 			packetOutBuilder = packetOutBuilder.SetIPProtocol(binding.ProtocolTCP)
 		}
-		if TCPSrcPort == 0 {
+		if tcpSrcPort == 0 {
 			// #nosec G404: random number generator not used for security purposes.
-			TCPSrcPort = uint16(rand.Uint32())
+			tcpSrcPort = uint16(rand.Uint32())
 		}
-		packetOutBuilder = packetOutBuilder.SetTCPSrcPort(TCPSrcPort)
-		packetOutBuilder = packetOutBuilder.SetTCPDstPort(TCPDstPort)
-		packetOutBuilder = packetOutBuilder.SetTCPFlags(TCPFlags)
+		packetOutBuilder = packetOutBuilder.SetTCPSrcPort(tcpSrcPort)
+		packetOutBuilder = packetOutBuilder.SetTCPDstPort(tcpDstPort)
+		packetOutBuilder = packetOutBuilder.SetTCPFlags(tcpFlags)
 	case protocol.Type_UDP:
 		if isIPv6 {
 			packetOutBuilder = packetOutBuilder.SetIPProtocol(binding.ProtocolUDPv6)
 		} else {
 			packetOutBuilder = packetOutBuilder.SetIPProtocol(binding.ProtocolUDP)
 		}
-		packetOutBuilder = packetOutBuilder.SetUDPSrcPort(UDPSrcPort)
-		packetOutBuilder = packetOutBuilder.SetUDPDstPort(UDPDstPort)
+		packetOutBuilder = packetOutBuilder.SetUDPSrcPort(udpSrcPort)
+		packetOutBuilder = packetOutBuilder.SetUDPDstPort(udpDstPort)
 	}
 
 	packetOutBuilder = packetOutBuilder.SetInport(inPort)
@@ -867,4 +894,121 @@ func (c *client) IsIPv4Enabled() bool {
 
 func (c *client) IsIPv6Enabled() bool {
 	return config.IsIPv6Enabled(c.nodeConfig, c.encapMode)
+}
+
+// setBasePacketOutBuilder sets base IP properties of a packetOutBuilder which can have more packet data added.
+func setBasePacketOutBuilder(packetOutBuilder binding.PacketOutBuilder, srcMAC string, dstMAC string, srcIP string, dstIP string, inPort uint32, outPort int32) (binding.PacketOutBuilder, error) {
+	// Set ethernet header.
+	parsedSrcMAC, err := net.ParseMAC(srcMAC)
+	if err != nil {
+		return nil, err
+	}
+	parsedDstMAC, err := net.ParseMAC(dstMAC)
+	if err != nil {
+		return nil, err
+	}
+	packetOutBuilder = packetOutBuilder.SetSrcMAC(parsedSrcMAC)
+	packetOutBuilder = packetOutBuilder.SetDstMAC(parsedDstMAC)
+
+	// Set IP header.
+	parsedSrcIP := net.ParseIP(srcIP)
+	parsedDstIP := net.ParseIP(dstIP)
+	if parsedSrcIP == nil || parsedDstIP == nil {
+		return nil, fmt.Errorf("invalid IP")
+	}
+	isIPv6 := parsedSrcIP.To4() == nil
+	if isIPv6 != (parsedDstIP.To4() == nil) {
+		return nil, fmt.Errorf("IP version mismatch")
+	}
+	packetOutBuilder = packetOutBuilder.SetSrcIP(parsedSrcIP)
+	packetOutBuilder = packetOutBuilder.SetDstIP(parsedDstIP)
+
+	packetOutBuilder = packetOutBuilder.SetTTL(128)
+
+	packetOutBuilder = packetOutBuilder.SetInport(inPort)
+	if outPort != -1 {
+		packetOutBuilder = packetOutBuilder.SetOutport(uint32(outPort))
+	}
+
+	return packetOutBuilder, nil
+}
+
+// SendTCPReject generates TCP packet as a packet-out and sends it to OVS.
+func (c *client) SendTCPPacketOut(
+	srcMAC string,
+	dstMAC string,
+	srcIP string,
+	dstIP string,
+	inPort uint32,
+	outPort int32,
+	isIPv6 bool,
+	tcpSrcPort uint16,
+	tcpDstPort uint16,
+	tcpAckNum uint32,
+	tcpFlag uint8,
+	isReject bool) error {
+	// Generate a base IP PacketOutBuilder.
+	packetOutBuilder, err := setBasePacketOutBuilder(c.bridge.BuildPacketOut(), srcMAC, dstMAC, srcIP, dstIP, inPort, outPort)
+	if err != nil {
+		return err
+	}
+	// Set protocol.
+	if isIPv6 {
+		packetOutBuilder = packetOutBuilder.SetIPProtocol(binding.ProtocolTCPv6)
+	} else {
+		packetOutBuilder = packetOutBuilder.SetIPProtocol(binding.ProtocolTCP)
+	}
+	// Set TCP header data.
+	packetOutBuilder = packetOutBuilder.SetTCPSrcPort(tcpSrcPort)
+	packetOutBuilder = packetOutBuilder.SetTCPDstPort(tcpDstPort)
+	packetOutBuilder = packetOutBuilder.SetTCPAckNum(tcpAckNum)
+	packetOutBuilder = packetOutBuilder.SetTCPFlags(tcpFlag)
+
+	// Reject response packet should bypass ConnTrack
+	if isReject {
+		name := fmt.Sprintf("%s%d", binding.NxmFieldReg, marksReg)
+		packetOutBuilder = packetOutBuilder.AddLoadAction(name, uint64(CustomReasonReject), CustomReasonMarkRange)
+	}
+
+	packetOutObj := packetOutBuilder.Done()
+	return c.bridge.SendPacketOut(packetOutObj)
+}
+
+// SendICMPReject generates ICMP packet as a packet-out and send it to OVS.
+func (c *client) SendICMPPacketOut(
+	srcMAC string,
+	dstMAC string,
+	srcIP string,
+	dstIP string,
+	inPort uint32,
+	outPort int32,
+	isIPv6 bool,
+	icmpType uint8,
+	icmpCode uint8,
+	icmpData []byte,
+	isReject bool) error {
+	// Generate a base IP PacketOutBuilder.
+	packetOutBuilder, err := setBasePacketOutBuilder(c.bridge.BuildPacketOut(), srcMAC, dstMAC, srcIP, dstIP, inPort, outPort)
+	if err != nil {
+		return err
+	}
+	// Set protocol.
+	if isIPv6 {
+		packetOutBuilder = packetOutBuilder.SetIPProtocol(binding.ProtocolICMPv6)
+	} else {
+		packetOutBuilder = packetOutBuilder.SetIPProtocol(binding.ProtocolICMP)
+	}
+	// Set ICMP header data.
+	packetOutBuilder = packetOutBuilder.SetICMPType(icmpType)
+	packetOutBuilder = packetOutBuilder.SetICMPCode(icmpCode)
+	packetOutBuilder = packetOutBuilder.SetICMPData(icmpData)
+
+	// Reject response packet should bypass ConnTrack
+	if isReject {
+		name := fmt.Sprintf("%s%d", binding.NxmFieldReg, marksReg)
+		packetOutBuilder = packetOutBuilder.AddLoadAction(name, uint64(CustomReasonReject), CustomReasonMarkRange)
+	}
+
+	packetOutObj := packetOutBuilder.Done()
+	return c.bridge.SendPacketOut(packetOutObj)
 }
