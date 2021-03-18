@@ -59,7 +59,7 @@ C:/Temp/antrea.ps1
           cd c:\k\antrea
           curl.exe -LO https://raw.githubusercontent.com/vmware-tanzu/antrea/master/hack/windows/Start.ps1
           curl.exe -LO https://raw.githubusercontent.com/vmware-tanzu/antrea/master/hack/windows/Helper.psm1
-          curl.exe -LO http://w3-dbc302.eng.vmware.com/rcao/image/containerd/antrea-agent.exe
+          curl.exe -LO https://github.com/vmware-tanzu/antrea/releases/download/v0.13.1/antrea-agent-windows-x86_64.exe
           mv antrea-agent.exe c:\k\antrea\bin
           Import-Module ./helper.psm1
           & Install-AntreaAgent -KubernetesVersion "v1.19.1" -KubernetesHome "c:/k" -KubeConfig "C:/etc/kubernetes/kubelet.conf" -AntreaVersion "v0.12.0" -AntreaHome "c:/k/antrea"
