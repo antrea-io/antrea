@@ -287,6 +287,10 @@ var (
 	// IPv4/v6 DSCP (bits 2-7) field supports exact match only.
 	traceflowTagToSRange = binding.Range{2, 7}
 
+	// snatPktMarkRange takes an 8-bit range of pkt_mark to store the ID of
+	// a SNAT IP. The bit range must match SNATIPMarkMask.
+	snatPktMarkRange = binding.Range{0, 7}
+
 	globalVirtualMAC, _ = net.ParseMAC("aa:bb:cc:dd:ee:ff")
 	hairpinIP           = net.ParseIP("169.254.169.252").To4()
 	hairpinIPv6         = net.ParseIP("fc00::aabb:ccdd:eeff").To16()
@@ -317,16 +321,17 @@ func portToUint16(port int) uint16 {
 }
 
 type client struct {
-	enableProxy                                   bool
-	enableAntreaPolicy                            bool
-	enableEgress                                  bool
-	roundInfo                                     types.RoundInfo
-	cookieAllocator                               cookie.Allocator
-	bridge                                        binding.Bridge
-	egressEntryTable                              binding.TableIDType
-	ingressEntryTable                             binding.TableIDType
-	pipeline                                      map[binding.TableIDType]binding.Table
-	nodeFlowCache, podFlowCache, serviceFlowCache *flowCategoryCache // cache for corresponding deletions
+	enableProxy        bool
+	enableAntreaPolicy bool
+	enableEgress       bool
+	roundInfo          types.RoundInfo
+	cookieAllocator    cookie.Allocator
+	bridge             binding.Bridge
+	egressEntryTable   binding.TableIDType
+	ingressEntryTable  binding.TableIDType
+	pipeline           map[binding.TableIDType]binding.Table
+	// Flow caches for corresponding deletions.
+	nodeFlowCache, podFlowCache, serviceFlowCache, snatFlowCache *flowCategoryCache
 	// "fixed" flows installed by the agent after initialization and which do not change during
 	// the lifetime of the client.
 	gatewayFlows, defaultServiceFlows, defaultTunnelFlows, hostNetworkingFlows []binding.Flow
@@ -1638,6 +1643,52 @@ func (c *client) snatCommonFlows(nodeIP net.IP, localSubnet net.IPNet, localGate
 	return flows
 }
 
+// snatIPFromTunnelFlow generates a flow that marks SNAT packets tunnelled from
+// remote Nodes. The SNAT IP matches the packet's tunnel destination IP.
+func (c *client) snatIPFromTunnelFlow(snatIP net.IP, mark uint32) binding.Flow {
+	ipProto := getIPProtocol(snatIP)
+	return c.pipeline[snatTable].BuildFlow(priorityNormal).
+		MatchProtocol(ipProto).
+		MatchCTStateNew(true).MatchCTStateTrk(true).
+		MatchTunnelDst(snatIP).
+		Action().LoadPktMarkRange(mark, snatPktMarkRange).
+		Action().GotoTable(l3DecTTLTable).
+		Cookie(c.cookieAllocator.Request(cookie.SNAT).Raw()).
+		Done()
+}
+
+// snatRuleFlow generates a flow that applies the SNAT rule for a local Pod. If
+// the SNAT IP exists on the lcoal Node, it sets the packet mark with the ID of
+// the SNAT IP, for the traffic from the ofPort to external; if the SNAT IP is
+// on a remote Node, it tunnels the packets to the SNAT IP.
+func (c *client) snatRuleFlow(ofPort uint32, snatIP net.IP, snatMark uint32, localGatewayMAC net.HardwareAddr) binding.Flow {
+	ipProto := getIPProtocol(snatIP)
+	snatTable := c.pipeline[snatTable]
+	if snatMark != 0 {
+		// Local SNAT IP.
+		return snatTable.BuildFlow(priorityNormal).
+			MatchProtocol(ipProto).
+			MatchCTStateNew(true).MatchCTStateTrk(true).
+			MatchInPort(ofPort).
+			Action().LoadPktMarkRange(snatMark, snatPktMarkRange).
+			Action().GotoTable(snatTable.GetNext()).
+			Cookie(c.cookieAllocator.Request(cookie.SNAT).Raw()).
+			Done()
+	} else {
+		// SNAT IP should be on a remote Node.
+		return snatTable.BuildFlow(priorityNormal).
+			MatchProtocol(ipProto).
+			MatchInPort(ofPort).
+			Action().SetSrcMAC(localGatewayMAC).
+			Action().SetDstMAC(globalVirtualMAC).
+			// Set tunnel destination to the SNAT IP.
+			Action().SetTunnelDst(snatIP).
+			Action().GotoTable(l3DecTTLTable).
+			Cookie(c.cookieAllocator.Request(cookie.SNAT).Raw()).
+			Done()
+	}
+}
+
 // loadBalancerServiceFromOutsideFlow generates the flow to forward LoadBalancer service traffic from outside node
 // to gateway. kube-proxy will then handle the traffic.
 // This flow is for Windows Node only.
@@ -1940,6 +1991,9 @@ func NewClient(bridgeName, mgmtAddr string, ovsDatapathType ovsconfig.OVSDatapat
 		c.egressEntryTable, c.ingressEntryTable = AntreaPolicyEgressRuleTable, AntreaPolicyIngressRuleTable
 	} else {
 		c.egressEntryTable, c.ingressEntryTable = EgressRuleTable, IngressRuleTable
+	}
+	if enableEgress {
+		c.snatFlowCache = newFlowCategoryCache()
 	}
 	c.generatePipeline()
 	return c
