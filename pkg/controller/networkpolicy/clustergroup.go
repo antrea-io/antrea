@@ -50,18 +50,21 @@ func (n *NetworkPolicyController) updateClusterGroup(oldObj, curObj interface{})
 	klog.V(2).Infof("Processing UPDATE event for ClusterGroup %s", cg.Name)
 	newGroup := n.processClusterGroup(cg)
 	oldGroup := n.processClusterGroup(og)
+
 	selectorUpdated := getNormalizedNameForSelector(newGroup.Selector) != getNormalizedNameForSelector(oldGroup.Selector)
 	ipBlockUpdated := newGroup.IPBlock != oldGroup.IPBlock
 	svcRefUpdated := newGroup.ServiceReference != oldGroup.ServiceReference
-	oldChildGroups, newChildGroups := sets.String{}, sets.String{}
-	for _, c := range oldGroup.ChildGroups {
-		oldChildGroups.Insert(c)
+	childGroupsUpdated := func(oldGroup, newGroup *antreatypes.Group) bool {
+		oldChildGroups, newChildGroups := sets.String{}, sets.String{}
+		for _, c := range oldGroup.ChildGroups {
+			oldChildGroups.Insert(c)
+		}
+		for _, c := range newGroup.ChildGroups {
+			newChildGroups.Insert(c)
+		}
+		return !oldChildGroups.Equal(newChildGroups)
 	}
-	for _, c := range newGroup.ChildGroups {
-		newChildGroups.Insert(c)
-	}
-	childGroupsUpdated := !oldChildGroups.Equal(newChildGroups)
-	if !selectorUpdated && !ipBlockUpdated && !svcRefUpdated && !childGroupsUpdated {
+	if !selectorUpdated && !ipBlockUpdated && !svcRefUpdated && !childGroupsUpdated(oldGroup, newGroup) {
 		// No change in the contents of the ClusterGroup. No need to enqueue for further sync.
 		return
 	}
@@ -191,7 +194,7 @@ func (n *NetworkPolicyController) syncInternalGroup(key string) error {
 	selectorUpdated := n.processServiceReference(grp)
 	if grp.Selector != nil {
 		n.groupingInterface.AddGroup(clusterGroupType, grp.Name, grp.Selector)
-	} else if len(grp.ChildGroups) == 0 {
+	} else {
 		n.groupingInterface.DeleteGroup(clusterGroupType, grp.Name)
 	}
 	if selectorUpdated {
@@ -218,8 +221,8 @@ func (n *NetworkPolicyController) syncInternalGroup(key string) error {
 }
 
 func (n *NetworkPolicyController) triggerParentGroupSync(grp *antreatypes.Group) {
-	// TODO: if the group nest level increases, this will no longer be a valid condition
-	//  to check whether a group can possibly have parents.
+	// TODO: if the max supported group nesting level increases, a Group having children
+	//  will no longer be a valid indication that it cannot have parents.
 	if len(grp.ChildGroups) == 0 {
 		parentGroupObjs, err := n.internalGroupStore.GetByIndex(store.ChildGroupIndex, grp.Name)
 		if err != nil {
@@ -386,17 +389,18 @@ func (n *NetworkPolicyController) GetAssociatedGroups(name, namespace string) ([
 func (n *NetworkPolicyController) getAssociatedGroupsByName(grpName string) []antreatypes.Group {
 	var groups []antreatypes.Group
 	groupObj, found, _ := n.internalGroupStore.Get(grpName)
-	if found {
-		grp := groupObj.(*antreatypes.Group)
-		groups = append(groups, *grp)
-		parentGroupObjs, err := n.internalGroupStore.GetByIndex(store.ChildGroupIndex, grp.Name)
-		if err != nil {
-			klog.Errorf("Error retrieving parents of ClusterGroup %s: %v", grp.Name, err)
-		}
-		for _, p := range parentGroupObjs {
-			parentGrp := p.(*antreatypes.Group)
-			groups = append(groups, n.getAssociatedGroupsByName(parentGrp.Name)...)
-		}
+	if !found {
+		return groups
+	}
+	grp := groupObj.(*antreatypes.Group)
+	groups = append(groups, *grp)
+	parentGroupObjs, err := n.internalGroupStore.GetByIndex(store.ChildGroupIndex, grp.Name)
+	if err != nil {
+		klog.Errorf("Error retrieving parents of ClusterGroup %s: %v", grp.Name, err)
+	}
+	for _, p := range parentGroupObjs {
+		parentGrp := p.(*antreatypes.Group)
+		groups = append(groups, n.getAssociatedGroupsByName(parentGrp.Name)...)
 	}
 	return groups
 }
