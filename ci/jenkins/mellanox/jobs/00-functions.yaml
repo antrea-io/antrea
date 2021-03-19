@@ -75,11 +75,11 @@
           <html>
           <head>
              <meta http-equiv="refresh"
-             content="0; url=http://13.74.249.42:8080/job/${target_job_name}/${target_job_id}/consoleFull">
+             content="0; url=http://13.74.249.42/${target_job_name}/${target_job_id}">
           </head>
           <body>
              <p>The page has moved to:
-             <a href="http://13.74.249.42:8080/job/${target_job_name}/${target_job_id}/consoleFull">this page</a></p>
+             <a href="http://13.74.249.42/${target_job_name}/${target_job_id}">this page</a></p>
           </body>
           </html>
           EOF
