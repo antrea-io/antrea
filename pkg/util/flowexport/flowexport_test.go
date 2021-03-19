@@ -55,7 +55,7 @@ func TestParseFlowCollectorAddr(t *testing.T) {
 		},
 		{
 			addr:          "[fe80:ffff:ffff:ffff:ffff:ffff:ffff:ffff]:80:tcp",
-			expectedHost:  "[fe80:ffff:ffff:ffff:ffff:ffff:ffff:ffff]",
+			expectedHost:  "fe80:ffff:ffff:ffff:ffff:ffff:ffff:ffff",
 			expectedPort:  "80",
 			expectedProto: "tcp",
 			expectedError: nil,

@@ -16,6 +16,7 @@ package e2e
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"sync"
@@ -64,6 +65,12 @@ func skipIfIPv6Cluster(tb testing.TB) {
 func skipIfNotIPv6Cluster(tb testing.TB) {
 	if clusterInfo.podV6NetworkCIDR == "" {
 		tb.Skipf("Skipping test as it is not needed in IPv4 cluster")
+	}
+}
+
+func skipIfDualStackCluster(tb testing.TB) {
+	if clusterInfo.podV6NetworkCIDR != "" && clusterInfo.podV4NetworkCIDR != "" {
+		tb.Skipf("Skipping test as it is not supported in dual stack cluster")
 	}
 }
 
@@ -140,30 +147,37 @@ func setupTest(tb testing.TB) (*TestData, error) {
 	return testData, nil
 }
 
-func setupTestWithIPFIXCollector(tb testing.TB) (*TestData, error, bool) {
-	// TODO: remove hardcoding to IPv4 after flow aggregator supports IPv6
+func setupTestWithIPFIXCollector(tb testing.TB) (*TestData, bool, error) {
 	isIPv6 := false
-	data, err := setupTest(tb)
+	if clusterInfo.podV6NetworkCIDR != "" {
+		isIPv6 = true
+	}
+	testData, err := setupTest(tb)
 	if err != nil {
-		return nil, err, isIPv6
+		return testData, isIPv6, err
 	}
 	// Create pod using ipfix collector image
-	if err = data.createPodOnNode("ipfix-collector", "", ipfixCollectorImage, nil, nil, nil, nil, true, nil); err != nil {
+	if err = testData.createPodOnNode("ipfix-collector", "", ipfixCollectorImage, nil, nil, nil, nil, true, nil); err != nil {
 		tb.Errorf("Error when creating the ipfix collector Pod: %v", err)
 	}
-	ipfixCollectorIP, err := data.podWaitForIPs(defaultTimeout, "ipfix-collector", testNamespace)
+	ipfixCollectorIP, err := testData.podWaitForIPs(defaultTimeout, "ipfix-collector", testNamespace)
 	if err != nil || len(ipfixCollectorIP.ipStrings) == 0 {
 		tb.Errorf("Error when waiting to get ipfix collector Pod IP: %v", err)
-		return nil, err, isIPv6
+		return nil, isIPv6, err
 	}
-	ipStr := ipfixCollectorIP.ipv4.String()
-	ipfixCollectorAddr := fmt.Sprintf("%s:%s:tcp", ipStr, ipfixCollectorPort)
+	var ipStr string
+	if isIPv6 && ipfixCollectorIP.ipv6 != nil {
+		ipStr = ipfixCollectorIP.ipv6.String()
+	} else {
+		ipStr = ipfixCollectorIP.ipv4.String()
+	}
+	ipfixCollectorAddr := fmt.Sprintf("%s:tcp", net.JoinHostPort(ipStr, ipfixCollectorPort))
 
 	faClusterIPAddr := ""
 	tb.Logf("Applying flow aggregator YAML with ipfix collector address: %s", ipfixCollectorAddr)
-	faClusterIP, err := data.deployFlowAggregator(ipfixCollectorAddr)
+	faClusterIP, err := testData.deployFlowAggregator(ipfixCollectorAddr)
 	if err != nil {
-		return testData, err, isIPv6
+		return testData, isIPv6, err
 	}
 	if testOptions.providerName == "kind" {
 		// In Kind cluster, there are issues with DNS name resolution on worker nodes.
@@ -171,15 +185,15 @@ func setupTestWithIPFIXCollector(tb testing.TB) (*TestData, error, bool) {
 		faClusterIPAddr = fmt.Sprintf("%s:%s:tcp", faClusterIP, ipfixCollectorPort)
 	}
 	tb.Logf("Deploying flow exporter with collector address: %s", faClusterIPAddr)
-	if err = data.deployAntreaFlowExporter(faClusterIPAddr); err != nil {
-		return data, err, isIPv6
+	if err = testData.deployAntreaFlowExporter(faClusterIPAddr); err != nil {
+		return testData, isIPv6, err
 	}
 
 	tb.Logf("Checking CoreDNS deployment")
-	if err = data.checkCoreDNSPods(defaultTimeout); err != nil {
-		return data, err, isIPv6
+	if err = testData.checkCoreDNSPods(defaultTimeout); err != nil {
+		return testData, isIPv6, err
 	}
-	return data, nil, isIPv6
+	return testData, isIPv6, nil
 }
 
 func exportLogs(tb testing.TB, data *TestData, logsSubDir string, writeNodeLogs bool) {
@@ -305,8 +319,10 @@ func exportLogs(tb testing.TB, data *TestData, logsSubDir string, writeNodeLogs 
 }
 
 func teardownFlowAggregator(tb testing.TB, data *TestData) {
-	if err := data.gracefulExitFlowAggregator(testOptions.coverageDir); err != nil {
-		tb.Fatalf("Error when gracefully exiting Flow Aggregator: %v", err)
+	if testOptions.enableCoverage {
+		if err := testData.gracefulExitFlowAggregator(testOptions.coverageDir); err != nil {
+			tb.Fatalf("Error when gracefully exiting Flow Aggregator: %v", err)
+		}
 	}
 	tb.Logf("Deleting '%s' K8s Namespace", flowAggregatorNamespace)
 	if err := data.deleteNamespace(flowAggregatorNamespace, defaultTimeout); err != nil {

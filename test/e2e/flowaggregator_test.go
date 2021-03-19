@@ -102,17 +102,15 @@ const (
 )
 
 func TestFlowAggregator(t *testing.T) {
-	// TODO: remove this limitation after flow aggregator supports IPv6
-	skipIfIPv6Cluster(t)
-	skipIfNotIPv4Cluster(t)
-	data, err, isIPv6 := setupTestWithIPFIXCollector(t)
+	skipIfDualStackCluster(t)
+	data, isIPv6, err := setupTestWithIPFIXCollector(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
 	defer teardownTest(t, data)
 	defer teardownFlowAggregator(t, data)
 
-	podAIP, podBIP, podCIP, svcB, svcC, err := createPerftestPods(data)
+	podAIP, podBIP, podCIP, svcB, svcC, err := createPerftestPods(data, isIPv6)
 	if err != nil {
 		t.Fatalf("Error when creating perftest pods and services: %v", err)
 	}
@@ -378,7 +376,7 @@ func deployNetworkPolicies(t *testing.T, data *TestData, srcPod, dstPod string) 
 	return np1, np2
 }
 
-func createPerftestPods(data *TestData) (podAIP *PodIPs, podBIP *PodIPs, podCIP *PodIPs, svcB *corev1.Service, svcC *corev1.Service, err error) {
+func createPerftestPods(data *TestData, isIPv6 bool) (podAIP *PodIPs, podBIP *PodIPs, podCIP *PodIPs, svcB *corev1.Service, svcC *corev1.Service, err error) {
 	if err := data.createPodOnNode("perftest-a", controlPlaneNodeName(), perftoolImage, nil, nil, nil, nil, false, nil); err != nil {
 		return nil, nil, nil, nil, nil, fmt.Errorf("Error when creating the perftest client Pod: %v", err)
 	}
@@ -387,7 +385,12 @@ func createPerftestPods(data *TestData) (podAIP *PodIPs, podBIP *PodIPs, podCIP 
 		return nil, nil, nil, nil, nil, fmt.Errorf("Error when waiting for the perftest client Pod: %v", err)
 	}
 
-	svcB, err = data.createService("perftest-b", iperfPort, iperfPort, map[string]string{"antrea-e2e": "perftest-b"}, false, v1.ServiceTypeClusterIP, nil)
+	svcIPFamily := corev1.IPv4Protocol
+	if isIPv6 {
+		svcIPFamily = corev1.IPv6Protocol
+	}
+
+	svcB, err = data.createService("perftest-b", iperfPort, iperfPort, map[string]string{"antrea-e2e": "perftest-b"}, false, v1.ServiceTypeClusterIP, &svcIPFamily)
 	if err != nil {
 		return nil, nil, nil, nil, nil, fmt.Errorf("Error when creating perftest service: %v", err)
 	}
@@ -401,7 +404,7 @@ func createPerftestPods(data *TestData) (podAIP *PodIPs, podBIP *PodIPs, podCIP 
 	}
 
 	// svcC will be needed when adding RemoteServiceAccess testcase
-	svcC, err = data.createService("perftest-c", iperfPort, iperfPort, map[string]string{"antrea-e2e": "perftest-c"}, false, v1.ServiceTypeClusterIP, nil)
+	svcC, err = data.createService("perftest-c", iperfPort, iperfPort, map[string]string{"antrea-e2e": "perftest-c"}, false, v1.ServiceTypeClusterIP, &svcIPFamily)
 	if err != nil {
 		return nil, nil, nil, nil, nil, fmt.Errorf("Error when creating perftest service: %v", err)
 	}
