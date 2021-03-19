@@ -16,6 +16,7 @@ package flowaggregator
 
 import (
 	"fmt"
+	"net"
 	"time"
 
 	"github.com/vmware/go-ipfix/pkg/collector"
@@ -30,7 +31,7 @@ import (
 )
 
 var (
-	ianaInfoElements = []string{
+	ianaInfoElementsCommon = []string{
 		"flowStartSeconds",
 		"flowEndSeconds",
 		"flowEndReason",
@@ -41,16 +42,16 @@ var (
 		"octetTotalCount",
 		"packetDeltaCount",
 		"octetDeltaCount",
-		"sourceIPv4Address",
-		"destinationIPv4Address",
 	}
+	ianaInfoElementsIPv4    = append(ianaInfoElementsCommon, []string{"sourceIPv4Address", "destinationIPv4Address"}...)
+	ianaInfoElementsIPv6    = append(ianaInfoElementsCommon, []string{"sourceIPv6Address", "destinationIPv6Address"}...)
 	ianaReverseInfoElements = []string{
 		"reversePacketTotalCount",
 		"reverseOctetTotalCount",
 		"reversePacketDeltaCount",
 		"reverseOctetDeltaCount",
 	}
-	antreaInfoElements = []string{
+	antreaInfoElementsCommon = []string{
 		"sourcePodName",
 		"sourcePodNamespace",
 		"sourceNodeName",
@@ -63,12 +64,14 @@ var (
 		"ingressNetworkPolicyNamespace",
 		"egressNetworkPolicyName",
 		"egressNetworkPolicyNamespace",
-		"destinationClusterIPv4",
 	}
-	aggregatorElements = []string{
-		"originalExporterIPv4Address",
+	antreaInfoElementsIPv4   = append(antreaInfoElementsCommon, []string{"destinationClusterIPv4"}...)
+	antreaInfoElementsIPv6   = append(antreaInfoElementsCommon, []string{"destinationClusterIPv6"}...)
+	aggregatorElementsCommon = []string{
 		"originalObservationDomainId",
 	}
+	aggregatorElementsIPv4 = append([]string{"originalExporterIPv4Address"}, aggregatorElementsCommon...)
+	aggregatorElementsIPv6 = append([]string{"originalExporterIPv6Address"}, aggregatorElementsCommon...)
 
 	nonStatsElementList = []string{
 		"flowEndSeconds",
@@ -118,6 +121,7 @@ var (
 		"destinationPodNamespace",
 		"destinationNodeName",
 		"destinationClusterIPv4",
+		"destinationClusterIPv6",
 		"destinationServicePort",
 		"destinationServicePortName",
 		"ingressNetworkPolicyName",
@@ -150,7 +154,8 @@ type flowAggregator struct {
 	aggregationProcess          ipfix.IPFIXAggregationProcess
 	exportInterval              time.Duration
 	exportingProcess            ipfix.IPFIXExportingProcess
-	templateID                  uint16
+	templateIDv4                uint16
+	templateIDv6                uint16
 	registry                    ipfix.IPFIXRegistry
 	set                         ipfix.IPFIXSet
 	flowAggregatorAddress       string
@@ -177,6 +182,7 @@ func NewFlowAggregator(
 		nil,
 		exportInterval,
 		nil,
+		0,
 		0,
 		registry,
 		ipfix.NewSet(false),
@@ -281,20 +287,36 @@ func (fa *flowAggregator) initExportingProcess() error {
 		return fmt.Errorf("got error when initializing IPFIX exporting process: %v", err)
 	}
 	fa.exportingProcess = ep
-	fa.templateID = fa.exportingProcess.NewTemplateID()
-	if err := fa.set.PrepareSet(ipfixentities.Template, fa.templateID); err != nil {
-		return fmt.Errorf("error when preparing set: %v", err)
+	// Currently, we send two templates for IPv4 and IPv6 regardless of the IP families supported by cluster
+	fa.templateIDv4 = fa.exportingProcess.NewTemplateID()
+	if err := fa.set.PrepareSet(ipfixentities.Template, fa.templateIDv4); err != nil {
+		return fmt.Errorf("error when preparing IPv4 template set: %v", err)
 	}
-
-	bytesSent, err := fa.sendTemplateSet(fa.set)
+	bytesSent, err := fa.sendTemplateSet(fa.set, false)
 	if err != nil {
 		fa.exportingProcess.CloseConnToCollector()
 		fa.exportingProcess = nil
-		fa.templateID = 0
+		fa.templateIDv4 = 0
 		fa.set.ResetSet()
-		return fmt.Errorf("sending template set failed, err: %v", err)
+		return fmt.Errorf("sending IPv4 template set failed, err: %v", err)
 	}
-	klog.V(2).Infof("Initialized exporting process and sent %d bytes size of template set", bytesSent)
+	klog.V(2).Infof("Initialized exporting process and sent %d bytes size of IPv4 template set", bytesSent)
+
+	fa.set.ResetSet()
+	fa.templateIDv6 = fa.exportingProcess.NewTemplateID()
+	if err := fa.set.PrepareSet(ipfixentities.Template, fa.templateIDv6); err != nil {
+		return fmt.Errorf("error when preparing IPv6 template set: %v", err)
+	}
+	bytesSent, err = fa.sendTemplateSet(fa.set, true)
+	if err != nil {
+		fa.exportingProcess.CloseConnToCollector()
+		fa.exportingProcess = nil
+		fa.templateIDv6 = 0
+		fa.set.ResetSet()
+		return fmt.Errorf("sending IPv6 template set failed, err: %v", err)
+	}
+	klog.V(2).Infof("Initialized exporting process and sent %d bytes size of IPv6 template set", bytesSent)
+
 	return nil
 }
 
@@ -339,12 +361,16 @@ func (fa *flowAggregator) sendFlowKeyRecord(key ipfixintermediate.FlowKey, recor
 		klog.V(4).Info("Skip sending record that is not correlated.")
 		return nil
 	}
+	templateID := fa.templateIDv4
+	if net.ParseIP(key.SourceAddress).To4() == nil || net.ParseIP(key.DestinationAddress).To4() == nil {
+		templateID = fa.templateIDv6
+	}
 	// TODO: more records per data set will be supported when go-ipfix supports size check when adding records
 	fa.set.ResetSet()
-	if err := fa.set.PrepareSet(ipfixentities.Data, fa.templateID); err != nil {
+	if err := fa.set.PrepareSet(ipfixentities.Data, templateID); err != nil {
 		return fmt.Errorf("error when preparing set: %v", err)
 	}
-	err := fa.set.AddRecord(record.Record.GetOrderedElementList(), fa.templateID)
+	err := fa.set.AddRecord(record.Record.GetOrderedElementList(), templateID)
 	if err != nil {
 		return fmt.Errorf("error when adding the record to the set: %v", err)
 	}
@@ -356,8 +382,18 @@ func (fa *flowAggregator) sendFlowKeyRecord(key ipfixintermediate.FlowKey, recor
 	return nil
 }
 
-func (fa *flowAggregator) sendTemplateSet(templateSet ipfix.IPFIXSet) (int, error) {
+func (fa *flowAggregator) sendTemplateSet(templateSet ipfix.IPFIXSet, isIPv6 bool) (int, error) {
 	elements := make([]*ipfixentities.InfoElementWithValue, 0)
+	ianaInfoElements := ianaInfoElementsIPv4
+	antreaInfoElements := antreaInfoElementsIPv4
+	aggregatorElements := aggregatorElementsIPv4
+	templateID := fa.templateIDv4
+	if isIPv6 {
+		ianaInfoElements = ianaInfoElementsIPv6
+		antreaInfoElements = antreaInfoElementsIPv6
+		aggregatorElements = aggregatorElementsIPv6
+		templateID = fa.templateIDv6
+	}
 	for _, ie := range ianaInfoElements {
 		element, err := fa.registry.GetInfoElement(ie, ipfixregistry.IANAEnterpriseID)
 		if err != nil {
@@ -406,7 +442,7 @@ func (fa *flowAggregator) sendTemplateSet(templateSet ipfix.IPFIXSet) (int, erro
 		ie := ipfixentities.NewInfoElementWithValue(element, nil)
 		elements = append(elements, ie)
 	}
-	err := templateSet.AddRecord(elements, fa.templateID)
+	err := templateSet.AddRecord(elements, templateID)
 	if err != nil {
 		return 0, fmt.Errorf("error when adding record to set, error: %v", err)
 	}
