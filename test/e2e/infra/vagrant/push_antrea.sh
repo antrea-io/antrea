@@ -44,7 +44,6 @@ case $key in
 esac
 done
 
-: "${NUM_WORKERS:=1}"
 SAVED_ANTREA_IMG=/tmp/antrea-ubuntu.tar
 ANTREA_IMG_NAME=projects.registry.vmware.com/antrea/antrea-ubuntu:latest
 
@@ -72,6 +71,15 @@ if [ ! -f ssh-config ]; then
     exit 1
 fi
 
+# Read all hosts in ssh-config file
+HOST_PATTERN="Host (k8s-node-.*)"
+ALL_HOSTS=()
+while IFS= read -r line; do
+    if [[ $line =~ $HOST_PATTERN ]]; then
+        ALL_HOSTS+=( "${BASH_REMATCH[1]}" )
+    fi
+done < ssh-config
+
 function waitForNodes {
     pids=("$@")
     for pid in "${pids[@]}"; do
@@ -97,27 +105,20 @@ function pushImgToNodes() {
     docker save -o $SAVED_IMG $IMG_NAME
 
     echo "Copying $IMG_NAME image to every node..."
-    # Copy image to control-plane node
-    scp -F ssh-config $SAVED_IMG k8s-node-control-plane:/tmp/image.tar &
-    pids[0]=$!
-    # Loop over all worker nodes and copy image to each one
-    for ((i=1; i<=$NUM_WORKERS; i++)); do
-        name="k8s-node-worker-$i"
+    pids=()
+    for name in "${ALL_HOSTS[@]}"; do
         scp -F ssh-config $SAVED_IMG $name:/tmp/image.tar &
-        pids[$i]=$!
+        pids+=($!)
     done
     # Wait for all child processes to complete
     waitForNodes "${pids[@]}"
     echo "Done!"
 
     echo "Loading $IMG_NAME image in every node..."
-    ssh -F ssh-config k8s-node-control-plane "docker load -i /tmp/image.tar; rm -f /tmp/image.tar" &
-    pids[0]=$!
-    # Loop over all worker nodes and copy image to each one
-    for ((i=1; i<=$NUM_WORKERS; i++)); do
-        name="k8s-node-worker-$i"
+    pids=()
+    for name in "${ALL_HOSTS[@]}"; do
         ssh -F ssh-config $name "docker load -i /tmp/image.tar; rm -f /tmp/image.tar" &
-        pids[$i]=$!
+        pids+=($!)
     done
     # Wait for all child processes to complete
     waitForNodes "${pids[@]}"
@@ -128,13 +129,10 @@ function pushImgToNodes() {
 function copyManifestToNodes() {
     YAML=$1
     echo "Copying $YAML to every node..."
-    scp -F ssh-config $YAML k8s-node-control-plane:~/ &
-    pids[0]=$!
-    # Loop over all worker nodes and copy manifest to each one
-    for ((i=1; i<=$NUM_WORKERS; i++)); do
-        name="k8s-node-worker-$i"
+    pids=()
+    for name in "${ALL_HOSTS[@]}"; do
         scp -F ssh-config $YAML $name:~/ &
-        pids[$i]=$!
+        pids+=($!)
     done
     # Wait for all child processes to complete
     waitForNodes "${pids[@]}"
