@@ -131,11 +131,20 @@ data:
     # If no L4 transport proto is given, we consider tcp as default.
     #externalFlowCollectorAddr: ""
 
-    # Provide flow export interval as a duration string. This determines how often the flow aggregator exports flow
-    # records to the flow collector.
-    # Flow export interval should be greater than or equal to 1s (one second).
+    # Provide the active flow record timeout as a duration string. This determines
+    # how often the flow aggregator exports the active flow records to the flow
+    # collector. Thus, for flows with a continuous stream of packets, a flow record
+    # will be exported to the collector once the elapsed time since the last export
+    # event in the flow aggregator is equal to the value of this timeout.
     # Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
-    #flowExportInterval: 60s
+    #activeFlowRecordTimeout: 60s
+
+    # Provide the inactive flow record timeout as a duration string. This determines
+    # how often the flow aggregator exports the inactive flow records to the flow
+    # collector. A flow record is considered to be inactive if no matching record
+    # has been received by the flow aggregator in the specified interval.
+    # Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
+    #inactiveFlowRecordTimeout: 90s
 
     # Provide the transport protocol for the flow aggregator collecting process, which is tls, tcp or udp.
     #aggregatorTransportProtocol: "tls"
@@ -155,7 +164,7 @@ metadata:
   annotations: {}
   labels:
     app: flow-aggregator
-  name: flow-aggregator-configmap-hf78268hm6
+  name: flow-aggregator-configmap-k85k525hc5
   namespace: flow-aggregator
 ---
 apiVersion: v1
@@ -223,7 +232,7 @@ spec:
       serviceAccountName: flow-aggregator
       volumes:
       - configMap:
-          name: flow-aggregator-configmap-hf78268hm6
+          name: flow-aggregator-configmap-k85k525hc5
         name: flow-aggregator-config
       - hostPath:
           path: /var/log/antrea/flow-aggregator

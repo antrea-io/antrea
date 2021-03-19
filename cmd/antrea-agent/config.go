@@ -114,20 +114,23 @@ type AgentConfig struct {
 	// Provide flow poll interval in format "0s". This determines how often flow
 	// exporter dumps connections in conntrack module. Flow poll interval should
 	// be greater than or equal to 1s(one second).
-	// Defaults to "5s". Follow the time units of duration type.
+	// Defaults to "5s". Valid time units are "ns", "us" (or "µs"), "ms", "s",
+	// "m", "h".
 	FlowPollInterval string `yaml:"flowPollInterval,omitempty"`
 	// Provide the active flow export timeout, which is the timeout after which
 	// a flow record is sent to the collector for active flows. Thus, for flows
 	// with a continuous stream of packets, a flow record will be exported to the
 	// collector once the elapsed time since the last export event is equal to the
 	// value of this timeout.
-	// Defaults to "60s". Follow the time units of duration type.
+	// Defaults to "30s". Valid time units are "ns", "us" (or "µs"), "ms", "s",
+	// "m", "h".
 	ActiveFlowExportTimeout string `yaml:"activeFlowExportTimeout,omitempty"`
 	// Provide the idle flow export timeout, which is the timeout after which a
 	// flow record is sent to the collector for idle flows. A flow is considered
 	// idle if no packet matching this flow has been observed since the last export
 	// event.
-	// Defaults to "15s". Follow the time units of duration type.
+	// Defaults to "15s". Valid time units are "ns", "us" (or "µs"), "ms", "s",
+	// "m", "h".
 	IdleFlowExportTimeout string `yaml:"idleFlowExportTimeout,omitempty"`
 	// Enable TLS communication from flow exporter to flow aggregator.
 	// Defaults to true.

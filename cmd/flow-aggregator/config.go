@@ -21,12 +21,21 @@ type FlowAggregatorConfig struct {
 	// If no L4 transport proto is given, we consider tcp as default.
 	// Defaults to "".
 	ExternalFlowCollectorAddr string `yaml:"externalFlowCollectorAddr,omitempty"`
-	// Provide flow export interval as a duration string. This determines how often the flow aggregator exports flow
-	// records to the flow collector.
-	// Flow export interval should be greater than or equal to 1s (one second).
-	// Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
-	// Defaults to "60s".
-	FlowExportInterval string `yaml:"flowExportInterval,omitempty"`
+	// Provide the active flow record timeout as a duration string. This determines
+	// how often the flow aggregator exports the active flow records to the flow
+	// collector. Thus, for flows with a continuous stream of packets, a flow record
+	// will be exported to the collector once the elapsed time since the last export
+	// event in the flow aggregator is equal to the value of this timeout.
+	// Defaults to "60s". Valid time units are "ns", "us" (or "µs"), "ms", "s",
+	// "m", "h".
+	ActiveFlowRecordTimeout string `yaml:"activeFlowRecordTimeout,omitempty"`
+	// Provide the inactive flow record timeout as a duration string. This determines
+	// how often the flow aggregator exports the inactive flow records to the flow
+	// collector. A flow record is considered to be inactive if no matching record
+	// has been received by the flow aggregator in the specified interval.
+	// Defaults to "90s". Valid time units are "ns", "us" (or "µs"), "ms", "s",
+	// "m", "h".
+	InactiveFlowRecordTimeout string `yaml:"inactiveFlowRecordTimeout,omitempty"`
 	// Transport protocol over which the aggregator collects IPFIX records from all Agents.
 	// Defaults to "tls"
 	AggregatorTransportProtocol flowaggregator.AggregatorTransportProtocol `yaml:"aggregatorTransportProtocol,omitempty"`

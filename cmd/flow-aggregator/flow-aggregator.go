@@ -90,7 +90,8 @@ func run(o *Options) error {
 	flowAggregator := aggregator.NewFlowAggregator(
 		o.externalFlowCollectorAddr,
 		o.externalFlowCollectorProto,
-		o.exportInterval,
+		o.activeFlowRecordTimeout,
+		o.inactiveFlowRecordTimeout,
 		o.aggregatorTransportProtocol,
 		o.flowAggregatorAddress,
 		k8sClient,
