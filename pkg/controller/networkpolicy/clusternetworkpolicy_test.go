@@ -52,10 +52,13 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 	}
 
 	allowAction := crdv1alpha1.RuleActionAllow
+	dropAction := crdv1alpha1.RuleActionDrop
 	protocolTCP := controlplane.ProtocolTCP
 	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
 	selectorB := metav1.LabelSelector{MatchLabels: map[string]string{"foo2": "bar2"}}
 	selectorC := metav1.LabelSelector{MatchLabels: map[string]string{"foo3": "bar3"}}
+	labelSelectorA, _ := metav1.LabelSelectorAsSelector(&selectorA)
+	labelSelectorB, _ := metav1.LabelSelectorAsSelector(&selectorB)
 	cgA := crdv1alpha3.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{Name: "cgA", UID: "uidA"},
 		Spec: crdv1alpha3.GroupSpec{
@@ -669,38 +672,38 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 		},
 		{
 			name: "with-per-namespace-rule",
-			inputPolicy: &secv1alpha1.ClusterNetworkPolicy{
+			inputPolicy: &crdv1alpha1.ClusterNetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{Name: "cnpI", UID: "uidI"},
-				Spec: secv1alpha1.ClusterNetworkPolicySpec{
-					AppliedTo: []secv1alpha1.NetworkPolicyPeer{
+				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
+					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
 						{
 							NamespaceSelector: &metav1.LabelSelector{},
 						},
 					},
 					Priority: p10,
-					Ingress: []secv1alpha1.Rule{
+					Ingress: []crdv1alpha1.Rule{
 						{
-							Ports: []secv1alpha1.NetworkPolicyPort{
+							Ports: []crdv1alpha1.NetworkPolicyPort{
 								{
 									Port: &int80,
 								},
 							},
-							From: []secv1alpha1.NetworkPolicyPeer{
+							From: []crdv1alpha1.NetworkPolicyPeer{
 								{
-									Namespaces: &secv1alpha1.PeerNamespaces{
-										Self: true,
+									Namespaces: &crdv1alpha1.PeerNamespaces{
+										Match: crdv1alpha1.NamespaceMatchSelf,
 									},
 								},
 							},
 							Action: &allowAction,
 						},
 						{
-							Ports: []secv1alpha1.NetworkPolicyPort{
+							Ports: []crdv1alpha1.NetworkPolicyPort{
 								{
 									Port: &int81,
 								},
 							},
-							From: []secv1alpha1.NetworkPolicyPeer{
+							From: []crdv1alpha1.NetworkPolicyPeer{
 								{
 									NamespaceSelector: &selectorA,
 								},
@@ -769,14 +772,118 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 				},
 				AppliedToGroups: []string{
 					getNormalizedUID(toGroupSelector("nsA", nil, nil, nil).NormalizedName),
-					getNormalizedUID(toGroupSelector("", nil, &metav1.LabelSelector{}, nil).NormalizedName),
 					getNormalizedUID(toGroupSelector("nsB", nil, nil, nil).NormalizedName),
+					getNormalizedUID(toGroupSelector("", nil, &metav1.LabelSelector{}, nil).NormalizedName),
 				},
 				AppliedToPerRule:      true,
 				PerNamespaceSelectors: []labels.Selector{labels.Everything()},
 			},
 			expectedAppliedToGroups: 3,
 			expectedAddressGroups:   3,
+		},
+		{
+			name: "with-per-namespace-rule-applied-to-per-rule",
+			inputPolicy: &crdv1alpha1.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "cnpJ", UID: "uidJ"},
+				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
+					Priority: p10,
+					Ingress: []crdv1alpha1.Rule{
+						{
+							AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+								{
+									NamespaceSelector: &selectorA,
+									PodSelector:       &selectorA,
+								},
+							},
+							Ports: []crdv1alpha1.NetworkPolicyPort{
+								{
+									Port: &int80,
+								},
+							},
+							From: []crdv1alpha1.NetworkPolicyPeer{
+								{
+									Namespaces: &crdv1alpha1.PeerNamespaces{
+										Match: crdv1alpha1.NamespaceMatchSelf,
+									},
+									PodSelector: &selectorA,
+								},
+							},
+							Action: &dropAction,
+						},
+						{
+							AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+								{
+									NamespaceSelector: &selectorB,
+								},
+							},
+							Ports: []crdv1alpha1.NetworkPolicyPort{
+								{
+									Port: &int81,
+								},
+							},
+							From: []crdv1alpha1.NetworkPolicyPeer{
+								{
+									Namespaces: &crdv1alpha1.PeerNamespaces{
+										Match: crdv1alpha1.NamespaceMatchSelf,
+									},
+								},
+							},
+							Action: &dropAction,
+						},
+					},
+				},
+			},
+			expectedPolicy: &antreatypes.NetworkPolicy{
+				UID:  "uidJ",
+				Name: "uidJ",
+				SourceRef: &controlplane.NetworkPolicyReference{
+					Type: controlplane.AntreaClusterNetworkPolicy,
+					Name: "cnpJ",
+					UID:  "uidJ",
+				},
+				Priority:     &p10,
+				TierPriority: &DefaultTierPriority,
+				Rules: []controlplane.NetworkPolicyRule{
+					{
+						Direction:       controlplane.DirectionIn,
+						AppliedToGroups: []string{getNormalizedUID(toGroupSelector("nsA", &selectorA, nil, nil).NormalizedName)},
+						From: controlplane.NetworkPolicyPeer{
+							AddressGroups: []string{getNormalizedUID(toGroupSelector("nsA", &selectorA, nil, nil).NormalizedName)},
+						},
+						Services: []controlplane.Service{
+							{
+								Protocol: &protocolTCP,
+								Port:     &int80,
+							},
+						},
+						Priority: 0,
+						Action:   &dropAction,
+					},
+					{
+						Direction:       controlplane.DirectionIn,
+						AppliedToGroups: []string{getNormalizedUID(toGroupSelector("nsB", nil, nil, nil).NormalizedName)},
+						From: controlplane.NetworkPolicyPeer{
+							AddressGroups: []string{getNormalizedUID(toGroupSelector("nsB", nil, nil, nil).NormalizedName)},
+						},
+						Services: []controlplane.Service{
+							{
+								Protocol: &protocolTCP,
+								Port:     &int81,
+							},
+						},
+						Priority: 1,
+						Action:   &dropAction,
+					},
+				},
+				AppliedToGroups: []string{
+					getNormalizedUID(toGroupSelector("nsA", &selectorA, nil, nil).NormalizedName),
+					getNormalizedUID(toGroupSelector("nsB", nil, nil, nil).NormalizedName),
+				},
+				AppliedToPerRule:      true,
+				PerNamespaceSelectors: []labels.Selector{labelSelectorA, labelSelectorB},
+			},
+			expectedAppliedToGroups: 2,
+			expectedAddressGroups:   2,
 		},
 	}
 	for _, tt := range tests {
@@ -794,10 +901,10 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 			assert.Equal(t, tt.expectedPolicy.Name, actualPolicy.Name)
 			assert.Equal(t, tt.expectedPolicy.SourceRef, actualPolicy.SourceRef)
 			assert.Equal(t, tt.expectedPolicy.Priority, actualPolicy.Priority)
-			assert.Equal(t, tt.expectedPolicy.Rules, actualPolicy.Rules)
 			assert.Equal(t, tt.expectedPolicy.TierPriority, actualPolicy.TierPriority)
 			assert.Equal(t, tt.expectedPolicy.AppliedToPerRule, actualPolicy.AppliedToPerRule)
-			assert.Equal(t, tt.expectedPolicy.PerNamespaceSelectors, actualPolicy.PerNamespaceSelectors)
+			assert.ElementsMatch(t, tt.expectedPolicy.Rules, actualPolicy.Rules)
+			assert.ElementsMatch(t, tt.expectedPolicy.PerNamespaceSelectors, actualPolicy.PerNamespaceSelectors)
 			assert.ElementsMatch(t, tt.expectedPolicy.AppliedToGroups, actualPolicy.AppliedToGroups)
 			assert.Equal(t, tt.expectedAppliedToGroups, len(c.appliedToGroupStore.List()))
 		})

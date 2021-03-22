@@ -123,7 +123,7 @@ func (b *ClusterNetworkPolicySpecBuilder) GetAppliedToPeer(podSelector map[strin
 func (b *ClusterNetworkPolicySpecBuilder) AddIngress(protoc v1.Protocol,
 	port *int32, portName *string, endPort *int32, cidr *string,
 	podSelector map[string]string, nsSelector map[string]string,
-	podSelectorMatchExp *[]metav1.LabelSelectorRequirement, nsSelectorMatchExp *[]metav1.LabelSelectorRequirement, selfNS bool,
+	podSelectorMatchExp []metav1.LabelSelectorRequirement, nsSelectorMatchExp []metav1.LabelSelectorRequirement, selfNS bool,
 	ruleAppliedToSpecs []ACNPAppliedToSpec, action crdv1alpha1.RuleAction, ruleClusterGroup, name string) *ClusterNetworkPolicySpecBuilder {
 
 	var pSel *metav1.LabelSelector
@@ -142,13 +142,10 @@ func (b *ClusterNetworkPolicySpecBuilder) AddIngress(protoc v1.Protocol,
 			MatchExpressions: podSelectorMatchExp,
 		}
 	}
-	if nsSelector != nil || nsSelectorMatchExp != nil || selfNS == true {
-		nSel = &secv1alpha1.PeerNamespaces{
-			Self: selfNS,
-			Selector: &metav1.LabelSelector{
-				MatchLabels:      nsSelector,
-				MatchExpressions: nsSelectorMatchExp,
-			},
+	if nsSelector != nil || nsSelectorMatchExp != nil {
+		nSel = &metav1.LabelSelector{
+			MatchLabels:      nsSelector,
+			MatchExpressions: nsSelectorMatchExp,
 		}
 	}
 	if selfNS == true {
@@ -166,7 +163,7 @@ func (b *ClusterNetworkPolicySpecBuilder) AddIngress(protoc v1.Protocol,
 		appliedTos = append(appliedTos, b.GetAppliedToPeer(at.PodSelector, at.NSSelector, at.PodSelectorMatchExp, at.NSSelectorMatchExp, at.Group))
 	}
 	var policyPeer []crdv1alpha1.NetworkPolicyPeer
-	if pSel != nil || nSel != nil || ipBlock != nil || ruleClusterGroup != "" {
+	if pSel != nil || nSel != nil || ns != nil || ipBlock != nil || ruleClusterGroup != "" {
 		policyPeer = []crdv1alpha1.NetworkPolicyPeer{{
 			PodSelector:       pSel,
 			NamespaceSelector: nSel,
@@ -201,7 +198,6 @@ func (b *ClusterNetworkPolicySpecBuilder) AddIngress(protoc v1.Protocol,
 			},
 		}
 	}
-
 	newRule := crdv1alpha1.Rule{
 		From:      policyPeer,
 		Ports:     ports,
@@ -216,7 +212,7 @@ func (b *ClusterNetworkPolicySpecBuilder) AddIngress(protoc v1.Protocol,
 func (b *ClusterNetworkPolicySpecBuilder) AddEgress(protoc v1.Protocol,
 	port *int32, portName *string, endPort *int32, cidr *string,
 	podSelector map[string]string, nsSelector map[string]string,
-	podSelectorMatchExp *[]metav1.LabelSelectorRequirement, nsSelectorMatchExp *[]metav1.LabelSelectorRequirement, selfNS bool,
+	podSelectorMatchExp []metav1.LabelSelectorRequirement, nsSelectorMatchExp []metav1.LabelSelectorRequirement, selfNS bool,
 	ruleAppliedToSpecs []ACNPAppliedToSpec, action crdv1alpha1.RuleAction, ruleClusterGroup, name string) *ClusterNetworkPolicySpecBuilder {
 
 	// For simplicity, we just reuse the Ingress code here.  The underlying data model for ingress/egress is identical

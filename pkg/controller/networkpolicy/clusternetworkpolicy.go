@@ -26,6 +26,7 @@ import (
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	"antrea.io/antrea/pkg/controller/networkpolicy/store"
 	antreatypes "antrea.io/antrea/pkg/controller/types"
+	utilsets "antrea.io/antrea/pkg/util/sets"
 )
 
 // addCNP receives ClusterNetworkPolicy ADD events and creates resources
@@ -135,9 +136,7 @@ func (n *NetworkPolicyController) filterPerNamespaceRuleACNPsByNSLabels(nsLabels
 	}
 	for _, np := range nps {
 		internalNP := np.(*antreatypes.NetworkPolicy)
-		//klog.Infof("NP %v has perNSSel", internalNP.SourceRef.Name)
 		for _, sel := range internalNP.PerNamespaceSelectors {
-			//klog.Infof("Evaluating selector %v", sel)
 			if sel.Matches(nsLabels) {
 				affectedPolicies.Insert(internalNP.SourceRef.Name)
 				break
@@ -171,21 +170,10 @@ func (n *NetworkPolicyController) updateNamespace(oldObj, curObj interface{}) {
 	oldNamespace, curNamespace := oldObj.(*v1.Namespace), curObj.(*v1.Namespace)
 	klog.V(2).Infof("Processing Namespace %s UPDATE event, labels: %v", curNamespace.Name, curNamespace.Labels)
 	oldLabelSet, curLabelSet := labels.Set(oldNamespace.Labels), labels.Set(curNamespace.Labels)
-	addedLabels, removedLabels := labels.Set{}, labels.Set{}
-	for k, v := range oldLabelSet {
-		if !curLabelSet.Has(k) || curLabelSet.Get(k) != v {
-			removedLabels[k] = v
-		}
-	}
-	for k, v := range curLabelSet {
-		if !oldLabelSet.Has(k) || oldLabelSet.Get(k) != v {
-			addedLabels[k] = v
-		}
-	}
-	affectedACNPsByLabelRemoval := n.filterPerNamespaceRuleACNPsByNSLabels(removedLabels)
-	affectedACNPsByLabelAdd := n.filterPerNamespaceRuleACNPsByNSLabels(addedLabels)
-	policiesToSync := affectedACNPsByLabelAdd.Union(affectedACNPsByLabelRemoval)
-	for _, cnpName := range policiesToSync.List() {
+	affectedACNPsByOldLabels := n.filterPerNamespaceRuleACNPsByNSLabels(oldLabelSet)
+	affectedACNPsByCurLabels := n.filterPerNamespaceRuleACNPsByNSLabels(curLabelSet)
+	affectedACNPs := utilsets.SymmetricDifference(affectedACNPsByOldLabels, affectedACNPsByCurLabels)
+	for _, cnpName := range affectedACNPs.List() {
 		cnp, err := n.cnpLister.Get(cnpName)
 		if err != nil {
 			klog.Errorf("Error getting Antrea ClusterNetworkPolicy %s", cnpName)
@@ -248,6 +236,22 @@ func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *crdv1alpha1.C
 	// to re-calculate affected Namespaces.
 	var affectedNamespaceSelectors []labels.Selector
 
+	// If appliedTo is set at spec level and the ACNP has per-namespace rules, then each appliedTo needs
+	// to be split into appliedToGroups for each of its affected Namespace.
+	var clusterAppliedToAffectedNS []string
+	var atgForNamespace []string
+	if hasPerNamespaceRule && len(cnp.Spec.AppliedTo) > 0 {
+		for _, at := range cnp.Spec.AppliedTo {
+			affectedNS, selectors := n.getAffectedNamespacesForAppliedTo(at)
+			affectedNamespaceSelectors = append(affectedNamespaceSelectors, selectors...)
+			for _, ns := range affectedNS {
+				atg := n.createAppliedToGroup(ns, at.PodSelector, nil, at.ExternalEntitySelector)
+				atgNamesSet.Insert(atg)
+				clusterAppliedToAffectedNS = append(clusterAppliedToAffectedNS, ns)
+				atgForNamespace = append(atgForNamespace, atg)
+			}
+		}
+	}
 	var rules []controlplane.NetworkPolicyRule
 	processRules := func(cnpRules []crdv1alpha1.Rule, direction controlplane.Direction) {
 		for idx, cnpRule := range cnpRules {
@@ -282,18 +286,23 @@ func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *crdv1alpha1.C
 				addRule(n.toAntreaPeerForCRD(clusterPeers, cnp, direction, namedPortExists), direction, ruleATGNames)
 			}
 			if len(perNSPeers) > 0 {
-				ruleAppliedTos := cnp.Spec.AppliedTo
-				if len(cnpRule.AppliedTo) > 0 {
-					ruleAppliedTos = cnpRule.AppliedTo
-				}
-				for _, at := range ruleAppliedTos {
-					affectedNS, selectors := n.getAffectedNamespacesForAppliedTo(at)
-					affectedNamespaceSelectors = append(affectedNamespaceSelectors, selectors...)
-					for _, ns := range affectedNS {
-						atg := n.createAppliedToGroup(ns, at.PodSelector, nil, at.ExternalEntitySelector)
-						atgNamesSet.Insert(atg)
-						klog.V(4).Infof("Adding a new per-namespace rule with appliedTo %v for %s", atg, cnp.Name)
-						addRule(n.toNamespacedPeerForCRD(perNSPeers, ns), direction, []string{atg})
+				if len(cnp.Spec.AppliedTo) > 0 {
+					// Create a rule for each affected Namespace of appliedTo at spec level
+					for i := range clusterAppliedToAffectedNS {
+						klog.V(4).Infof("Adding a new per-namespace rule with appliedTo %v for rule %d of %s", clusterAppliedToAffectedNS[i], idx, cnp.Name)
+						addRule(n.toNamespacedPeerForCRD(perNSPeers, clusterAppliedToAffectedNS[i]), direction, []string{atgForNamespace[i]})
+					}
+				} else {
+					// Create a rule for each affected Namespace of appliedTo at rule level
+					for _, at := range cnpRule.AppliedTo {
+						affectedNS, selectors := n.getAffectedNamespacesForAppliedTo(at)
+						affectedNamespaceSelectors = append(affectedNamespaceSelectors, selectors...)
+						for _, ns := range affectedNS {
+							atg := n.createAppliedToGroup(ns, at.PodSelector, nil, at.ExternalEntitySelector)
+							atgNamesSet.Insert(atg)
+							klog.V(4).Infof("Adding a new per-namespace rule with appliedTo %v for rule %d of %s", atg, idx, cnp.Name)
+							addRule(n.toNamespacedPeerForCRD(perNSPeers, ns), direction, []string{atg})
+						}
 					}
 				}
 			}
@@ -308,7 +317,6 @@ func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *crdv1alpha1.C
 		n.processClusterAppliedTo(cnp.Spec.AppliedTo, atgNamesSet)
 	}
 	tierPriority := n.getTierPriority(cnp.Spec.Tier)
-	klog.Infof("Before uniqueness compute, selectors are %v", affectedNamespaceSelectors)
 	internalNetworkPolicy := &antreatypes.NetworkPolicy{
 		Name:       internalNetworkPolicyKeyFunc(cnp),
 		Generation: cnp.Generation,

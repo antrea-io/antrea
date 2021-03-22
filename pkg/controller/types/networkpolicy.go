@@ -99,8 +99,8 @@ type NetworkPolicy struct {
 	AppliedToPerRule bool
 	// PerNamespaceSelectors maintains a list of unique Namespace selectors of appliedTo groups
 	// of the NetworkPolicy, for which a per-namespace rule is created.
-	// It is used as an index so that namespace updates can trigger corresponding rules
-	// to re-calculate affected namespaces.
-	// This can be non-empty only for NetworkPolicy created for Antrea ClusterNetworkPolicy.
+	// It is used as an index so that Namespace updates can trigger corresponding rules
+	// to re-calculate affected Namespaces.
+	// It is set only for AntreaClusterNetworkPolicies with per-namespace rules.
 	PerNamespaceSelectors []labels.Selector
 }
