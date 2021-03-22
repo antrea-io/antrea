@@ -93,6 +93,8 @@ pushd $THIS_DIR > /dev/null
 
 if $PULL; then
     docker pull $PLATFORM_ARG ubuntu:20.04
+    docker pull antrea/openvswitch-debs:$OVS_VERSION || true
+    docker pull antrea/openvswitch:$OVS_VERSION || true
 fi
 
 docker build $PLATFORM_ARG --target ovs-debs \

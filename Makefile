@@ -20,6 +20,12 @@ UNAME_S := $(shell uname -s)
 USERID  := $(shell id -u)
 GRPID   := $(shell id -g)
 
+# If NO_PULL is set, base Docker images will not be pulled.
+# If DOCKER_REGISTRY is set, we always set NO_PULL.
+ifneq ($(DOCKER_REGISTRY),)
+	NO_PULL := 1
+endif
+
 .PHONY: bin
 bin:
 	@mkdir -p $(BINDIR)
@@ -142,7 +148,7 @@ docker-test-unit: $(DOCKER_CACHE)
 .PHONY: docker-test-integration
 docker-test-integration: .coverage
 	@echo "===> Building Antrea Integration Test Docker image <==="
-ifneq ($(DOCKER_REGISTRY),"")
+ifneq ($(NO_PULL),)
 	docker build -t antrea/test -f build/images/test/Dockerfile .
 else
 	docker build --pull -t antrea/test -f build/images/test/Dockerfile .
@@ -266,7 +272,7 @@ codegen:
 .PHONY: ubuntu
 ubuntu:
 	@echo "===> Building antrea/antrea-ubuntu Docker image <==="
-ifneq ($(DOCKER_REGISTRY),"")
+ifneq ($(NO_PULL),)
 	docker build -t antrea/antrea-ubuntu:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.ubuntu .
 else
 	docker build --pull -t antrea/antrea-ubuntu:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.ubuntu .
@@ -279,7 +285,7 @@ endif
 .PHONY: build-ubuntu
 build-ubuntu:
 	@echo "===> Building Antrea bins and antrea/antrea-ubuntu Docker image <==="
-ifneq ($(DOCKER_REGISTRY),"")
+ifneq ($(NO_PULL),)
 	docker build -t antrea/antrea-ubuntu:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.build.ubuntu .
 else
 	docker build --pull -t antrea/antrea-ubuntu:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.build.ubuntu .
@@ -291,7 +297,7 @@ endif
 .PHONY: build-windows
 build-windows:
 	@echo "===> Building Antrea bins and antrea/antrea-windows Docker image <==="
-ifneq ($(DOCKER_REGISTRY),"")
+ifneq ($(NO_PULL),)
 	docker build -t antrea/antrea-windows:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.build.windows .
 else
 	docker build --pull -t antrea/antrea-windows:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.build.windows .
@@ -303,7 +309,7 @@ endif
 .PHONY: build-ubuntu-coverage
 build-ubuntu-coverage:
 	@echo "===> Building Antrea bins and antrea/antrea-ubuntu-coverage Docker image <==="
-ifneq ($(DOCKER_REGISTRY),"")
+ifneq ($(NO_PULL),)
 	docker build -t antrea/antrea-ubuntu-coverage:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.build.coverage .
 else
 	docker build --pull -t antrea/antrea-ubuntu-coverage:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.build.coverage .
@@ -350,7 +356,7 @@ octant-antrea-ubuntu:
 .PHONY: flow-aggregator-ubuntu
 flow-aggregator-ubuntu:
 	@echo "===> Building antrea/flow-aggregator Docker image <==="
-ifneq ($(DOCKER_REGISTRY),"")
+ifneq ($(NO_PULL),)
 	docker build -t antrea/flow-aggregator:$(DOCKER_IMG_VERSION) -f build/images/flow-aggregator/Dockerfile .
 else
 	docker build --pull -t antrea/flow-aggregator:$(DOCKER_IMG_VERSION) -f build/images/flow-aggregator/Dockerfile .
@@ -362,7 +368,7 @@ endif
 .PHONY: flow-aggregator-ubuntu-coverage
 flow-aggregator-ubuntu-coverage:
 	@echo "===> Building antrea/flow-aggregator-coverage Docker image <==="
-ifneq ($(DOCKER_REGISTRY),"")
+ifneq ($(NO_PULL),)
 	docker build -t antrea/flow-aggregator-coverage:$(DOCKER_IMG_VERSION) -f build/images/flow-aggregator/Dockerfile.coverage .
 else
 	docker build --pull -t antrea/flow-aggregator-coverage:$(DOCKER_IMG_VERSION) -f build/images/flow-aggregator/Dockerfile.coverage .
