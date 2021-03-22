@@ -24,13 +24,13 @@ jobs:
     needs: get-version
     steps:
     - uses: actions/checkout@v2
-    - name: Build Antrea amd64 Docker image and push to registry
+    - name: Build and push Antrea amd64 Docker image to registry
       env:
         DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
         DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
         VERSION: ${{ needs.get-version.outputs.version }}
       run: |
-        make
+        ./hack/build-antrea-ubuntu-all.sh --pull
         echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
         docker tag antrea/antrea-ubuntu:"${VERSION}" antrea/antrea-ubuntu-amd64:"${VERSION}"
         docker push antrea/antrea-ubuntu-amd64:"${VERSION}"

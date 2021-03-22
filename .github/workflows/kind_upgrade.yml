@@ -34,7 +34,9 @@ jobs:
     runs-on: [ubuntu-latest]
     steps:
     - uses: actions/checkout@v2
-    - run: make
+    - name: Build Antrea Docker image
+      run: |
+        ./hack/build-antrea-ubuntu-all.sh --pull
     - name: Save Antrea image to tarball
       run:  docker save -o antrea-ubuntu.tar projects.registry.vmware.com/antrea/antrea-ubuntu:latest
     - name: Upload Antrea image for subsequent jobs
