@@ -32,7 +32,7 @@ type Interface interface {
 
 	// AddRoutes should add routes to the provided podCIDR.
 	// It should override the routes if they already exist, without error.
-	AddRoutes(podCIDR *net.IPNet, peerNodeIP, peerGwIP net.IP) error
+	AddRoutes(podCIDR *net.IPNet, peerNodeName string, peerNodeIP, peerGwIP net.IP) error
 
 	// DeleteRoutes should delete routes to the provided podCIDR.
 	// It should do nothing if the routes don't exist, without error.

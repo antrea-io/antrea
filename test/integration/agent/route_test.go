@@ -290,16 +290,17 @@ func TestAddAndDeleteRoutes(t *testing.T) {
 	tcs := []struct {
 		// variations
 		mode     config.TrafficEncapModeType
+		nodeName string
 		peerCIDR string
 		peerIP   net.IP
 		// expectations
 		uplink netlink.Link // indicates outbound of the route.
 	}{
-		{mode: config.TrafficEncapModeEncap, peerCIDR: "10.10.20.0/24", peerIP: localPeerIP, uplink: gwLink},
-		{mode: config.TrafficEncapModeNoEncap, peerCIDR: "10.10.30.0/24", peerIP: localPeerIP, uplink: nodeLink},
-		{mode: config.TrafficEncapModeNoEncap, peerCIDR: "10.10.40.0/24", peerIP: remotePeerIP, uplink: nil},
-		{mode: config.TrafficEncapModeHybrid, peerCIDR: "10.10.50.0/24", peerIP: localPeerIP, uplink: nodeLink},
-		{mode: config.TrafficEncapModeHybrid, peerCIDR: "10.10.60.0/24", peerIP: remotePeerIP, uplink: gwLink},
+		{mode: config.TrafficEncapModeEncap, nodeName: "node0", peerCIDR: "10.10.20.0/24", peerIP: localPeerIP, uplink: gwLink},
+		{mode: config.TrafficEncapModeNoEncap, nodeName: "node1", peerCIDR: "10.10.30.0/24", peerIP: localPeerIP, uplink: nodeLink},
+		{mode: config.TrafficEncapModeNoEncap, nodeName: "node2", peerCIDR: "10.10.40.0/24", peerIP: remotePeerIP, uplink: nil},
+		{mode: config.TrafficEncapModeHybrid, nodeName: "node3", peerCIDR: "10.10.50.0/24", peerIP: localPeerIP, uplink: nodeLink},
+		{mode: config.TrafficEncapModeHybrid, nodeName: "node4", peerCIDR: "10.10.60.0/24", peerIP: remotePeerIP, uplink: gwLink},
 	}
 
 	for _, tc := range tcs {
@@ -311,7 +312,7 @@ func TestAddAndDeleteRoutes(t *testing.T) {
 
 		_, peerCIDR, _ := net.ParseCIDR(tc.peerCIDR)
 		nhCIDRIP := ip.NextIP(peerCIDR.IP)
-		assert.NoError(t, routeClient.AddRoutes(peerCIDR, tc.peerIP, nhCIDRIP), "adding routes failed")
+		assert.NoError(t, routeClient.AddRoutes(peerCIDR, tc.nodeName, tc.peerIP, nhCIDRIP), "adding routes failed")
 
 		expRouteStr := ""
 		if tc.uplink != nil {
@@ -358,6 +359,7 @@ func TestReconcile(t *testing.T) {
 	tcs := []struct {
 		// variations
 		mode             config.TrafficEncapModeType
+		nodeName         string
 		addedRoutes      []peer
 		desiredPeerCIDRs []string
 		desiredNodeIPs   []string
@@ -365,7 +367,8 @@ func TestReconcile(t *testing.T) {
 		expRoutes map[string]netlink.Link
 	}{
 		{
-			mode: config.TrafficEncapModeEncap,
+			mode:     config.TrafficEncapModeEncap,
+			nodeName: "nodeEncap",
 			addedRoutes: []peer{
 				{peerCIDR: "10.10.20.0/24", peerIP: remotePeerIP},
 				{peerCIDR: "10.10.30.0/24", peerIP: ip.NextIP((remotePeerIP))},
@@ -375,7 +378,8 @@ func TestReconcile(t *testing.T) {
 			expRoutes:        map[string]netlink.Link{"10.10.20.0/24": gwLink, "10.10.30.0/24": nil},
 		},
 		{
-			mode: config.TrafficEncapModeNoEncap,
+			mode:     config.TrafficEncapModeNoEncap,
+			nodeName: "nodeNoEncap",
 			addedRoutes: []peer{
 				{peerCIDR: "10.10.20.0/24", peerIP: localPeerIP},
 				{peerCIDR: "10.10.30.0/24", peerIP: ip.NextIP((localPeerIP))},
@@ -385,7 +389,8 @@ func TestReconcile(t *testing.T) {
 			expRoutes:        map[string]netlink.Link{"10.10.20.0/24": nodeLink, "10.10.30.0/24": nil},
 		},
 		{
-			mode: config.TrafficEncapModeHybrid,
+			mode:     config.TrafficEncapModeHybrid,
+			nodeName: "nodeHybrid",
 			addedRoutes: []peer{
 				{peerCIDR: "10.10.20.0/24", peerIP: localPeerIP},
 				{peerCIDR: "10.10.30.0/24", peerIP: ip.NextIP((localPeerIP))},
@@ -408,7 +413,7 @@ func TestReconcile(t *testing.T) {
 		for _, route := range tc.addedRoutes {
 			_, peerNet, _ := net.ParseCIDR(route.peerCIDR)
 			peerGwIP := ip.NextIP(peerNet.IP)
-			assert.NoError(t, routeClient.AddRoutes(peerNet, route.peerIP, peerGwIP), "adding routes failed")
+			assert.NoError(t, routeClient.AddRoutes(peerNet, tc.nodeName, route.peerIP, peerGwIP), "adding routes failed")
 		}
 
 		assert.NoError(t, routeClient.Reconcile(tc.desiredPeerCIDRs), "reconcile failed")
@@ -514,18 +519,19 @@ func TestIPv6RoutesAndNeighbors(t *testing.T) {
 
 	tcs := []struct {
 		// variations
+		nodeName string
 		peerCIDR string
 		// expectations
 		uplink netlink.Link
 	}{
-		{peerCIDR: "10.10.20.0/24", uplink: gwLink},
-		{peerCIDR: "fd74:ca9b:172:18::/64", uplink: gwLink},
+		{peerCIDR: "10.10.20.0/24", nodeName: "node0", uplink: gwLink},
+		{peerCIDR: "fd74:ca9b:172:18::/64", nodeName: "node1", uplink: gwLink},
 	}
 
 	for _, tc := range tcs {
 		_, peerCIDR, _ := net.ParseCIDR(tc.peerCIDR)
 		nhCIDRIP := ip.NextIP(peerCIDR.IP)
-		assert.NoError(t, routeClient.AddRoutes(peerCIDR, localPeerIP, nhCIDRIP), "adding routes failed")
+		assert.NoError(t, routeClient.AddRoutes(peerCIDR, tc.nodeName, localPeerIP, nhCIDRIP), "adding routes failed")
 
 		link := tc.uplink
 		nhIP := nhCIDRIP

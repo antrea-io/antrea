@@ -98,17 +98,17 @@ func (c *Client) Reconcile(podCIDRs []string) error {
 
 // AddRoutes adds routes to the provided podCIDR.
 // It overrides the routes if they already exist, without error.
-func (c *Client) AddRoutes(podCIDR *net.IPNet, peerNodeIP, peerGwIP net.IP) error {
+func (c *Client) AddRoutes(podCIDR *net.IPNet, nodeName string, peerNodeIP, peerGwIP net.IP) error {
 	obj, found := c.hostRoutes.Load(podCIDR.String())
 	if found {
 		rt := obj.(*netroute.Route)
 		if rt.GatewayAddress.Equal(peerGwIP) {
-			klog.V(4).Infof("Route with destination %s already exists", podCIDR.String())
+			klog.V(4).Infof("Route with destination %s already exists on %s (%s)", podCIDR.String(), nodeName, peerNodeIP)
 			return nil
 		}
 		// Remove the existing route entry if the gateway address is not as expected.
 		if err := c.nr.RemoveNetRoute(rt.LinkIndex, rt.DestinationSubnet, rt.GatewayAddress); err != nil {
-			klog.Errorf("Failed to delete existing route entry with destination %s gateway %s", podCIDR.String(), peerGwIP.String())
+			klog.Errorf("Failed to delete existing route entry with destination %s gateway %s on %s (%s)", podCIDR.String(), peerGwIP.String(), nodeName, peerNodeIP)
 			return err
 		}
 	}
@@ -120,7 +120,7 @@ func (c *Client) AddRoutes(podCIDR *net.IPNet, peerNodeIP, peerGwIP net.IP) erro
 		DestinationSubnet: podCIDR,
 		GatewayAddress:    peerGwIP,
 	})
-	klog.V(2).Infof("Added route with destination %s via %s on host gateway", podCIDR.String(), peerGwIP.String())
+	klog.V(2).Infof("Added route with destination %s via %s on host gateway on %s (%s)", podCIDR.String(), peerGwIP.String(), nodeName, peerNodeIP)
 	return nil
 }
 
