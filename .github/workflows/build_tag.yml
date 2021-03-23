@@ -40,7 +40,7 @@ jobs:
         repo: vmware-tanzu/antrea-build-infra
         ref: refs/heads/main
         workflow: Build Antrea ARM images and push manifest
-        token: ${{ secrets.WORKFLOW_DISPATCH_PAT }}
+        token: ${{ secrets.ANTREA_BUILD_INFRA_WORKFLOW_DISPATCH_PAT }}
         inputs: ${{ format('{{ "antrea-repository":"vmware-tanzu/antrea", "antrea-ref":"{0}", "docker-tag":"{1}" }}', github.ref, steps.get-version.outputs.version) }}
 
   build-windows:
