@@ -28,6 +28,7 @@ import (
 	"time"
 
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog"
@@ -138,18 +139,37 @@ func generateCertKey(caCert *x509.Certificate, caKey *rsa.PrivateKey, isServer b
 func syncCAAndClientCert(caCert, clientCert, clientKey []byte, k8sClient kubernetes.Interface) error {
 	klog.Info("Syncing CA certificate, client certificate and client key with ConfigMap")
 	caConfigMap, err := k8sClient.CoreV1().ConfigMaps(CAConfigMapNamespace).Get(context.TODO(), CAConfigMapName, metav1.GetOptions{})
+	exists := true
 	if err != nil {
-		return fmt.Errorf("error getting ConfigMap %s: %v", CAConfigMapName, err)
+		if !errors.IsNotFound(err) {
+			return fmt.Errorf("error getting ConfigMap %s: %v", CAConfigMapName, err)
+		}
+		exists = false
+		caConfigMap = &v1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      CAConfigMapName,
+				Namespace: CAConfigMapNamespace,
+				Labels: map[string]string{
+					"app": "flow-aggregator",
+				},
+			},
+		}
 	}
 	caConfigMap.Data = map[string]string{
 		CAConfigMapKey: string(caCert),
 	}
-	if _, err := k8sClient.CoreV1().ConfigMaps(CAConfigMapNamespace).Update(context.TODO(), caConfigMap, metav1.UpdateOptions{}); err != nil {
-		return fmt.Errorf("error updating ConfigMap %s: %v", CAConfigMapName, err)
+	if exists {
+		if _, err := k8sClient.CoreV1().ConfigMaps(CAConfigMapNamespace).Update(context.TODO(), caConfigMap, metav1.UpdateOptions{}); err != nil {
+			return fmt.Errorf("error updating ConfigMap %s: %v", CAConfigMapName, err)
+		}
+	} else {
+		if _, err := k8sClient.CoreV1().ConfigMaps(CAConfigMapNamespace).Create(context.TODO(), caConfigMap, metav1.CreateOptions{}); err != nil {
+			return fmt.Errorf("error creating ConfigMap %s: %v", CAConfigMapName, err)
+		}
 	}
 
 	secret, err := k8sClient.CoreV1().Secrets(ClientSecretNamespace).Get(context.TODO(), ClientSecretName, metav1.GetOptions{})
-	exists := true
+	exists = true
 	if err != nil {
 		exists = false
 		secret = &v1.Secret{

@@ -11,16 +11,6 @@ spec:
   selector:
     component: antrea-controller
 ---
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: antrea-ca
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: antrea-cluster-identity
----
 apiVersion: apiregistration.k8s.io/v1
 kind: APIService
 metadata:

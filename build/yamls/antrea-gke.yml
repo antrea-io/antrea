@@ -1186,6 +1186,12 @@ rules:
   - get
   - update
 - apiGroups:
+  - ""
+  resources:
+  - configmaps
+  verbs:
+  - create
+- apiGroups:
   - apiregistration.k8s.io
   resourceNames:
   - v1alpha1.stats.antrea.tanzu.vmware.com
@@ -1309,22 +1315,6 @@ roleRef:
 subjects:
 - kind: ServiceAccount
   name: antrea-controller
-  namespace: kube-system
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  labels:
-    app: antrea
-  name: antrea-ca
-  namespace: kube-system
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  labels:
-    app: antrea
-  name: antrea-cluster-identity
   namespace: kube-system
 ---
 apiVersion: v1

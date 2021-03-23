@@ -32,6 +32,12 @@ rules:
   - update
 - apiGroups:
   - ""
+  resources:
+  - configmaps
+  verbs:
+  - create
+- apiGroups:
+  - ""
   resourceNames:
   - flow-aggregator-client-tls
   resources:
@@ -116,14 +122,6 @@ roleRef:
 subjects:
 - kind: ServiceAccount
   name: flow-aggregator
-  namespace: flow-aggregator
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  labels:
-    app: flow-aggregator
-  name: flow-aggregator-ca
   namespace: flow-aggregator
 ---
 apiVersion: v1
