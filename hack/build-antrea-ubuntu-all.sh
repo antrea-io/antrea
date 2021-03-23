@@ -16,10 +16,6 @@
 
 set -eo pipefail
 
-# Change this when updating the OVS version!
-: "${OVS_VERSION:=2.14.0}"
-export OVS_VERSION
-
 function echoerr {
     >&2 echo "$@"
 }
@@ -79,14 +75,29 @@ THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 pushd "$THIS_DIR/.." > /dev/null
 
 ARGS=""
+PLATFORM_ARG=""
 if $PUSH; then
    ARGS="$ARGS --push"
 fi
-if $PULL; then
-   ARGS="$ARGS --pull"
-fi
 if [ "$PLATFORM" != "" ]; then
     ARGS="$ARGS --platform $PLATFORM"
+    PLATFORM_ARG="--platform $PLATFORM"
+fi
+
+OVS_VERSION=$(head -n 1 build/images/deps/ovs-version)
+CNI_BINARIES_VERSION=$(head -n 1 build/images/deps/cni-binaries-version)
+
+# We pull all images ahead of time, instead of calling the independent build.sh
+# scripts with "--pull". We do not want to overwrite the antrea/openvswitch
+# image we just built when calling build.sh to build the antrea/base-ubuntu
+# image! This is a bit more inconvenient to maintain, but we rarely introduce
+# new base images in the build chain.
+if $PULL; then
+    docker pull $PLATFORM_ARG ubuntu:20.04
+    docker pull $PLATFORM_ARG antrea/openvswitch-debs:$OVS_VERSION || true
+    docker pull $PLATFORM_ARG antrea/openvswitch:$OVS_VERSION || true
+    docker pull $PLATFORM_ARG antrea/cni-binaries:$CNI_BINARIES_VERSION || true
+    docker pull $PLATFORM_ARG antrea/base-ubuntu:$OVS_VERSION || true
 fi
 
 cd build/images/ovs

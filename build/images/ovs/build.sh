@@ -23,7 +23,7 @@ function echoerr {
     >&2 echo "$@"
 }
 
-_usage="Usage: OVS_VERSION=<VERSION> $0 [--pull] [--push] [--platform <PLATFORM>]
+_usage="Usage: $0 [--pull] [--push] [--platform <PLATFORM>]
 Build the antrea/ovs:<VERSION> image.
         --pull                  Always attempt to pull a newer version of the base images
         --push                  Push the built image to the registry
@@ -65,11 +65,6 @@ case $key in
 esac
 done
 
-if [ -z "$OVS_VERSION" ]; then
-    echoerr "The OVS_VERSION env variable must be set to a valid value (e.g. 2.14.0)"
-    exit 1
-fi
-
 if [ "$PLATFORM" != "" ] && $PUSH; then
     echoerr "Cannot use --platform with --push"
     exit 1
@@ -84,6 +79,8 @@ THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
 pushd $THIS_DIR > /dev/null
 
+OVS_VERSION=$(head -n 1 ../deps/ovs-version)
+
 # This is a bit complicated but we make sure that we only build OVS if
 # necessary, and at the moment --cache-from does not play nicely with multistage
 # builds: we need to push the intermediate image to the registry. Note that the
@@ -93,8 +90,8 @@ pushd $THIS_DIR > /dev/null
 
 if $PULL; then
     docker pull $PLATFORM_ARG ubuntu:20.04
-    docker pull antrea/openvswitch-debs:$OVS_VERSION || true
-    docker pull antrea/openvswitch:$OVS_VERSION || true
+    docker pull $PLATFORM_ARG antrea/openvswitch-debs:$OVS_VERSION || true
+    docker pull $PLATFORM_ARG antrea/openvswitch:$OVS_VERSION || true
 fi
 
 docker build $PLATFORM_ARG --target ovs-debs \
