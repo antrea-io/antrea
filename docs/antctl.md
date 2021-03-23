@@ -237,7 +237,7 @@ Starting from version 0.6.0, Antrea Agent supports dumping Antrea OVS flows. The
 `antctl` `get ovsflows` (or `get of`) command can dump all OVS flows, flows
 added for a specified Pod, or flows added for Service load-balancing of a
 specified Service, or flows added to realize a specified NetworkPolicy, or flows
-in a specified OVS flow table.
+in the specified OVS flow tables, or all or the specified OVS groups.
 
 ```bash
 antctl get ovsflows
@@ -246,7 +246,8 @@ antctl get ovsflows -S SERVICE -n NAMESPACE
 antctl get ovsflows -N NETWORKPOLICY -n NAMESPACE
 antctl get ovsflows -T TABLE_A,TABLE_B
 antctl get ovsflows -T TABLE_A,TABLE_B_NUM
-antctl get ovsflows -T TABLE_A_NUM,TABLE_B_NUM
+antctl get ovsflows -G all
+antctl get ovsflows -G GROUP_ID1,GROUP_ID2
 ```
 
 OVS flow tables can be specified using table names, or the table numbers.
