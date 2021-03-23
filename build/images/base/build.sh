@@ -80,6 +80,8 @@ if [ "$PLATFORM" != "" ]; then
     PLATFORM_ARG="--platform $PLATFORM"
 fi
 
+CNI_BINARIES_VERSION=v0.8.7
+
 THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
 pushd $THIS_DIR > /dev/null
@@ -92,18 +94,20 @@ if $PULL; then
 fi
 
 docker build $PLATFORM_ARG --target cni-binaries \
-       --cache-from antrea/cni-binaries \
-       -t antrea/cni-binaries \
+       --cache-from antrea/cni-binaries:$CNI_BINARIES_VERSION \
+       -t antrea/cni-binaries:$CNI_BINARIES_VERSION \
+       --build-arg CNI_BINARIES_VERSION=$CNI_BINARIES_VERSION \
        --build-arg OVS_VERSION=$OVS_VERSION .
 
 docker build $PLATFORM_ARG \
-       --cache-from antrea/cni-binaries \
+       --cache-from antrea/cni-binaries:$CNI_BINARIES_VERSION \
        --cache-from antrea/base-ubuntu:$OVS_VERSION \
        -t antrea/base-ubuntu:$OVS_VERSION \
+       --build-arg CNI_BINARIES_VERSION=$CNI_BINARIES_VERSION \
        --build-arg OVS_VERSION=$OVS_VERSION .
 
 if $PUSH; then
-    docker push antrea/cni-binaries:$OVS_VERSION
+    docker push antrea/cni-binaries:$CNI_BINARIES_VERSION
     docker push antrea/base-ubuntu:$OVS_VERSION
 fi
 
