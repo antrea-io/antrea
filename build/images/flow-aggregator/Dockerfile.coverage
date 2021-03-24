@@ -1,3 +1,4 @@
+ARG OVS_VERSION
 FROM golang:1.15 as flow-aggregator-build
 
 WORKDIR /antrea
@@ -6,7 +7,7 @@ COPY . /antrea
 
 RUN make flow-aggregator flow-aggregator-instr-binary
 
-FROM antrea/base-ubuntu:2.14.0
+FROM antrea/base-ubuntu:${OVS_VERSION}
 
 LABEL maintainer="Antrea <projectantrea-dev@googlegroups.com>"
 LABEL description="The docker image for the flow aggregator with code coverage measurement enabled for testing purposes."
