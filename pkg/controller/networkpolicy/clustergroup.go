@@ -385,7 +385,7 @@ func (n *NetworkPolicyController) GetAssociatedGroups(name, namespace string) ([
 }
 
 // getAssociatedGroupsByName retrieves the internal Group and all it's parent Group objects
-// (if any) by Group name. This function assumes that there's no loop in Group reference.
+// (if any) by Group name.
 func (n *NetworkPolicyController) getAssociatedGroupsByName(grpName string) []antreatypes.Group {
 	var groups []antreatypes.Group
 	groupObj, found, _ := n.internalGroupStore.Get(grpName)
@@ -400,7 +400,7 @@ func (n *NetworkPolicyController) getAssociatedGroupsByName(grpName string) []an
 	}
 	for _, p := range parentGroupObjs {
 		parentGrp := p.(*antreatypes.Group)
-		groups = append(groups, n.getAssociatedGroupsByName(parentGrp.Name)...)
+		groups = append(groups, *parentGrp)
 	}
 	return groups
 }

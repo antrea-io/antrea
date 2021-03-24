@@ -1100,7 +1100,6 @@ func (n *NetworkPolicyController) getAddressGroupMemberSet(g *antreatypes.Addres
 // getClusterGroupMemberSet knows how to construct a GroupMemberSet that contains
 // all the entities selected by a ClusterGroup. For ClusterGroup that has childGroups,
 // the members are computed as the union of all its childGroup's members.
-// This function assumes that there's no loop in Group reference.
 func (n *NetworkPolicyController) getClusterGroupMemberSet(group *antreatypes.Group) controlplane.GroupMemberSet {
 	if len(group.ChildGroups) == 0 {
 		return n.getMemberSetForGroupType(clusterGroupType, group.Name)
@@ -1110,7 +1109,7 @@ func (n *NetworkPolicyController) getClusterGroupMemberSet(group *antreatypes.Gr
 		childGroup, found, _ := n.internalGroupStore.Get(childName)
 		if found {
 			child := childGroup.(*antreatypes.Group)
-			groupMemberSet = groupMemberSet.Union(n.getClusterGroupMemberSet(child))
+			groupMemberSet = groupMemberSet.Union(n.getMemberSetForGroupType(clusterGroupType, child.Name))
 		}
 	}
 	return groupMemberSet
@@ -1283,7 +1282,6 @@ func (n *NetworkPolicyController) getAppliedToWorkloads(g *antreatypes.AppliedTo
 
 // getClusterGroupWorkloads returns a list of workloads (Pods and ExternalEntities) selected by a ClusterGroup.
 // For ClusterGroup that has childGroups, the workloads are computed as the union of all its childGroup's workloads.
-// This function assumes that there's no loop in Group reference.
 func (n *NetworkPolicyController) getClusterGroupWorkloads(group *antreatypes.Group) ([]*v1.Pod, []*v1alpha2.ExternalEntity) {
 	if len(group.ChildGroups) == 0 {
 		return n.groupingInterface.GetEntities(clusterGroupType, group.Name)
@@ -1292,23 +1290,19 @@ func (n *NetworkPolicyController) getClusterGroupWorkloads(group *antreatypes.Gr
 	var pods []*v1.Pod
 	var ees []*v1alpha2.ExternalEntity
 	for _, childName := range group.ChildGroups {
-		childGroup, found, _ := n.internalGroupStore.Get(childName)
-		if found {
-			child := childGroup.(*antreatypes.Group)
-			childPods, childEEs := n.getClusterGroupWorkloads(child)
-			for _, pod := range childPods {
-				podString := k8s.NamespacedName(pod.Namespace, pod.Name)
-				if !podNameSet.Has(podString) {
-					podNameSet.Insert(podString)
-					pods = append(pods, pod)
-				}
+		childPods, childEEs := n.groupingInterface.GetEntities(clusterGroupType, childName)
+		for _, pod := range childPods {
+			podString := k8s.NamespacedName(pod.Namespace, pod.Name)
+			if !podNameSet.Has(podString) {
+				podNameSet.Insert(podString)
+				pods = append(pods, pod)
 			}
-			for _, ee := range childEEs {
-				eeString := k8s.NamespacedName(ee.Namespace, ee.Name)
-				if !eeNameSet.Has(eeString) {
-					eeNameSet.Insert(eeString)
-					ees = append(ees, ee)
-				}
+		}
+		for _, ee := range childEEs {
+			eeString := k8s.NamespacedName(ee.Namespace, ee.Name)
+			if !eeNameSet.Has(eeString) {
+				eeNameSet.Insert(eeString)
+				ees = append(ees, ee)
 			}
 		}
 	}
