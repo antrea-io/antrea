@@ -221,7 +221,7 @@ func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *crdv1alpha1.C
 
 // processRefCG processes the ClusterGroup reference present in the rule and returns the
 // NetworkPolicyPeer with the corresponding AddressGroup or IPBlock.
-func (n *NetworkPolicyController) processRefCG(g string) (string, *controlplane.IPBlock) {
+func (n *NetworkPolicyController) processRefCG(g string) (string, []controlplane.IPBlock) {
 	// Retrieve ClusterGroup for corresponding entry in the rule.
 	cg, err := n.cgLister.Get(g)
 	if err != nil {
@@ -240,8 +240,8 @@ func (n *NetworkPolicyController) processRefCG(g string) (string, *controlplane.
 		return "", nil
 	}
 	intGrp := ig.(*antreatypes.Group)
-	if intGrp.IPBlock != nil {
-		return "", intGrp.IPBlock
+	if len(intGrp.IPBlocks) > 0 {
+		return "", intGrp.IPBlocks
 	}
 	agKey := n.createAddressGroupForClusterGroupCRD(intGrp)
 	// Return if addressGroup was created or found.
@@ -267,8 +267,8 @@ func (n *NetworkPolicyController) processAppliedToGroupForCG(g string) string {
 		return ""
 	}
 	intGrp := ig.(*antreatypes.Group)
-	if intGrp.IPBlock != nil {
-		klog.V(2).Infof("ClusterGroup %s with IPBlock will not be processed as AppliedTo", g)
+	if len(intGrp.IPBlocks) > 0 {
+		klog.V(2).Infof("ClusterGroup %s with IPBlocks will not be processed as AppliedTo", g)
 		return ""
 	}
 	return n.createAppliedToGroupForClusterGroupCRD(intGrp)

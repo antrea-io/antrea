@@ -63,15 +63,15 @@ func (n *NetworkPolicyController) updateClusterGroup(oldObj, curObj interface{})
 		}
 		return true
 	}
-	ipBlockUpdated := func() bool {
-		oldIPB, newIPB := oldGroup.IPBlock, newGroup.IPBlock
-		// ClusterGroup ipBlock does not support Except
-		if oldIPB != nil && newIPB != nil && ipNetToCIDRStr(oldIPB.CIDR) == ipNetToCIDRStr(newIPB.CIDR) {
-			return false
-		} else if oldIPB == nil && newIPB == nil {
-			return false
+	ipBlocksUpdated := func() bool {
+		oldIPBs, newIPBs := sets.String{}, sets.String{}
+		for _, ipb := range oldGroup.IPBlocks {
+			oldIPBs.Insert(ipNetToCIDRStr(ipb.CIDR))
 		}
-		return true
+		for _, ipb := range newGroup.IPBlocks {
+			newIPBs.Insert(ipNetToCIDRStr(ipb.CIDR))
+		}
+		return oldIPBs.Equal(newIPBs)
 	}
 	childGroupsUpdated := func() bool {
 		oldChildGroups, newChildGroups := sets.String{}, sets.String{}
@@ -83,7 +83,7 @@ func (n *NetworkPolicyController) updateClusterGroup(oldObj, curObj interface{})
 		}
 		return !oldChildGroups.Equal(newChildGroups)
 	}
-	if !ipBlockUpdated() && !svcRefUpdated() && !selectorUpdated() && !childGroupsUpdated() {
+	if !ipBlocksUpdated() && !svcRefUpdated() && !selectorUpdated() && !childGroupsUpdated() {
 		// No change in the contents of the ClusterGroup. No need to enqueue for further sync.
 		return
 	}
@@ -129,7 +129,13 @@ func (n *NetworkPolicyController) processClusterGroup(cg *crdv1alpha2.ClusterGro
 	}
 	if cg.Spec.IPBlock != nil {
 		ipb, _ := toAntreaIPBlockForCRD(cg.Spec.IPBlock)
-		internalGroup.IPBlock = ipb
+		internalGroup.IPBlocks = append(internalGroup.IPBlocks, *ipb)
+		return &internalGroup
+	} else if len(cg.Spec.IPBlocks) > 0 {
+		for i := range cg.Spec.IPBlocks {
+			ipb, _ := toAntreaIPBlockForCRD(&cg.Spec.IPBlocks[i])
+			internalGroup.IPBlocks = append(internalGroup.IPBlocks, *ipb)
+		}
 		return &internalGroup
 	}
 	svcSelector := cg.Spec.ServiceReference

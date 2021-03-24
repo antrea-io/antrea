@@ -635,15 +635,19 @@ func (t *tierValidator) deleteValidate(oldObj interface{}, userInfo authenticati
 // validateAntreaGroupSpec ensures that an IPBlock is not set along with namespaceSelector and/or a
 // podSelector. Similarly, ExternalEntitySelector cannot be set with PodSelector.
 func validateAntreaGroupSpec(s crdv1alpha2.GroupSpec) (string, bool) {
-	selector, serviceRef, ipBlock, childGroups := 0, 0, 0, 0
+	errMsg := "At most one of podSelector, externalEntitySelector, serviceReference, ipBlock, ipBlocks or childGroups can be set for a ClusterGroup"
+	if s.PodSelector != nil && s.ExternalEntitySelector != nil {
+		return errMsg, false
+	}
+	selector, serviceRef, ipBlock, ipBlocks, childGroups := 0, 0, 0, 0, 0
 	if s.NamespaceSelector != nil || s.ExternalEntitySelector != nil || s.PodSelector != nil {
 		selector = 1
 	}
-	if s.PodSelector != nil && s.ExternalEntitySelector != nil {
-		selector = 2
-	}
 	if s.IPBlock != nil {
 		ipBlock = 1
+	}
+	if len(s.IPBlocks) > 0 {
+		ipBlocks = 1
 	}
 	if s.ServiceReference != nil {
 		serviceRef = 1
@@ -651,8 +655,8 @@ func validateAntreaGroupSpec(s crdv1alpha2.GroupSpec) (string, bool) {
 	if len(s.ChildGroups) > 0 {
 		childGroups = 1
 	}
-	if selector+serviceRef+ipBlock+childGroups > 1 {
-		return fmt.Sprint("At most one of podSelector/namespaceSelector, externalEntitySelector/namespaceSelector, serviceReference, ipBlock or childGroups can be set for a ClusterGroup"), false
+	if selector+serviceRef+ipBlock+ipBlocks+childGroups > 1 {
+		return errMsg, false
 	}
 	return "", true
 }

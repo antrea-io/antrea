@@ -78,8 +78,8 @@ func (b *ClusterGroupSpecBuilder) SetNamespaceSelector(nsSelector map[string]str
 	return b
 }
 
-func (b *ClusterGroupSpecBuilder) SetIPBlock(ipb *crdv1alpha1.IPBlock) *ClusterGroupSpecBuilder {
-	b.Spec.IPBlock = ipb
+func (b *ClusterGroupSpecBuilder) SetIPBlocks(ipBlocks []crdv1alpha1.IPBlock) *ClusterGroupSpecBuilder {
+	b.Spec.IPBlocks = ipBlocks
 	return b
 }
 

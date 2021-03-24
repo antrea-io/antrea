@@ -96,9 +96,11 @@ func TestProcessClusterGroup(t *testing.T) {
 			expectedGroup: &antreatypes.Group{
 				UID:  "uidD",
 				Name: "cgD",
-				IPBlock: &controlplane.IPBlock{
-					CIDR:   *cidrIPNet,
-					Except: []controlplane.IPNet{},
+				IPBlocks: []controlplane.IPBlock{
+					{
+						CIDR:   *cidrIPNet,
+						Except: []controlplane.IPNet{},
+					},
 				},
 			},
 		},
@@ -214,9 +216,11 @@ func TestAddClusterGroup(t *testing.T) {
 			expectedGroup: &antreatypes.Group{
 				UID:  "uidD",
 				Name: "cgD",
-				IPBlock: &controlplane.IPBlock{
-					CIDR:   *cidrIPNet,
-					Except: []controlplane.IPNet{},
+				IPBlocks: []controlplane.IPBlock{
+					{
+						CIDR:   *cidrIPNet,
+						Except: []controlplane.IPNet{},
+					},
 				},
 			},
 		},
@@ -307,9 +311,11 @@ func TestUpdateClusterGroup(t *testing.T) {
 			expectedGroup: &antreatypes.Group{
 				UID:  "uidA",
 				Name: "cgA",
-				IPBlock: &controlplane.IPBlock{
-					CIDR:   *cidrIPNet,
-					Except: []controlplane.IPNet{},
+				IPBlocks: []controlplane.IPBlock{
+					{
+						CIDR:   *cidrIPNet,
+						Except: []controlplane.IPNet{},
+					},
 				},
 			},
 		},

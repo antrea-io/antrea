@@ -108,7 +108,7 @@ type Group struct {
 	// Selector is nil if Group is defined with ipBlock, or if it has ServiceReference
 	// and has not been processed by the controller yet / Service cannot be found.
 	Selector *GroupSelector
-	IPBlock  *controlplane.IPBlock
+	IPBlocks []controlplane.IPBlock
 	// ServiceReference is reference to a v1.Service, which this Group keeps in sync
 	// and updates Selector based on the Service's selector.
 	ServiceReference *controlplane.ServiceReference

@@ -66,6 +66,28 @@ func testInvalidCGIPBlockWithNSSelector(t *testing.T) {
 	}
 }
 
+func testInvalidCGIPBlockWithIPBlocks(t *testing.T) {
+	invalidErr := fmt.Errorf("clustergroup created with ipBlock and ipBlocks")
+	cgName := "ipb-ipbs"
+	cidr := "10.0.0.10/32"
+	cidr2 := "10.0.0.20/32"
+	ipb := &crdv1alpha1.IPBlock{CIDR: cidr}
+	ipbs := []crdv1alpha1.IPBlock{{CIDR: cidr2}}
+	cg := &crdv1alpha2.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: cgName,
+		},
+		Spec: crdv1alpha2.GroupSpec{
+			IPBlocks: ipbs,
+			IPBlock:  ipb,
+		},
+	}
+	if _, err := k8sUtils.CreateOrUpdateCG(cg); err == nil {
+		// Above creation of CG must fail as it is an invalid spec.
+		failOnError(invalidErr, t)
+	}
+}
+
 func testInvalidCGServiceRefWithPodSelector(t *testing.T) {
 	invalidErr := fmt.Errorf("clustergroup created with serviceReference and podSelector")
 	cgName := "svcref-pod-selector"
@@ -257,6 +279,7 @@ func TestClusterGroup(t *testing.T) {
 	t.Run("TestGroupClusterGroupValidate", func(t *testing.T) {
 		t.Run("Case=IPBlockWithPodSelectorDenied", func(t *testing.T) { testInvalidCGIPBlockWithPodSelector(t) })
 		t.Run("Case=IPBlockWithNamespaceSelectorDenied", func(t *testing.T) { testInvalidCGIPBlockWithNSSelector(t) })
+		t.Run("Case=IPBlockWithIPBlocksDenied", func(t *testing.T) { testInvalidCGIPBlockWithIPBlocks(t) })
 		t.Run("Case=ServiceRefWithPodSelectorDenied", func(t *testing.T) { testInvalidCGServiceRefWithPodSelector(t) })
 		t.Run("Case=ServiceRefWithNamespaceSelectorDenied", func(t *testing.T) { testInvalidCGServiceRefWithNSSelector(t) })
 		t.Run("Case=ServiceRefWithIPBlockDenied", func(t *testing.T) { testInvalidCGServiceRefWithIPBlock(t) })
