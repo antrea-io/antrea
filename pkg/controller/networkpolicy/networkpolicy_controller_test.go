@@ -2819,6 +2819,32 @@ func TestCIDRStrToIPNet(t *testing.T) {
 	}
 }
 
+func TestIPNetToCIDRStr(t *testing.T) {
+	ipNetV4, _ := cidrStrToIPNet("10.9.8.7/6")
+	ipNetV6, _ := cidrStrToIPNet("2002::1234:abcd:ffff:c0a8:101/64")
+	tests := []struct {
+		name string
+		inC  controlplane.IPNet
+		expC string
+	}{
+		{
+			name: "ipv4-address",
+			inC:  *ipNetV4,
+			expC: "10.9.8.7/6",
+		},
+		{
+			name: "ipv6-address",
+			inC:  *ipNetV6,
+			expC: "2002::1234:abcd:ffff:c0a8:101/64",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expC, ipNetToCIDRStr(tt.inC))
+		})
+	}
+}
+
 func TestIPStrToIPAddress(t *testing.T) {
 	ip1 := "10.0.1.10"
 	expIP1 := net.ParseIP(ip1)

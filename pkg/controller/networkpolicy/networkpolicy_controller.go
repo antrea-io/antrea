@@ -1403,6 +1403,11 @@ func cidrStrToIPNet(cidr string) (*controlplane.IPNet, error) {
 	return ipNet, nil
 }
 
+// ipNetToCIDRStr returns the CIDR notation of a controlplane.IPNet.
+func ipNetToCIDRStr(ipNet controlplane.IPNet) string {
+	return net.IP(ipNet.IP).String() + "/" + strconv.Itoa(int(ipNet.PrefixLength))
+}
+
 // internalNetworkPolicyKeyFunc knows how to generate the key for an internal NetworkPolicy based on the object metadata
 // of the corresponding original NetworkPolicy resource (also referred to as the "source").
 // The key must be unique across K8s NetworkPolicies, Antrea NetworkPolicies, and Antrea ClusterNetworkPolicies.

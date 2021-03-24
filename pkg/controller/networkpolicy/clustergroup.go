@@ -51,10 +51,29 @@ func (n *NetworkPolicyController) updateClusterGroup(oldObj, curObj interface{})
 	newGroup := n.processClusterGroup(cg)
 	oldGroup := n.processClusterGroup(og)
 
-	selectorUpdated := getNormalizedNameForSelector(newGroup.Selector) != getNormalizedNameForSelector(oldGroup.Selector)
-	ipBlockUpdated := newGroup.IPBlock != oldGroup.IPBlock
-	svcRefUpdated := newGroup.ServiceReference != oldGroup.ServiceReference
-	childGroupsUpdated := func(oldGroup, newGroup *antreatypes.Group) bool {
+	selectorUpdated := func() bool {
+		return getNormalizedNameForSelector(newGroup.Selector) != getNormalizedNameForSelector(oldGroup.Selector)
+	}
+	svcRefUpdated := func() bool {
+		oldSvc, newSvc := oldGroup.ServiceReference, newGroup.ServiceReference
+		if oldSvc != nil && newSvc != nil && oldSvc.Name == newSvc.Name && oldSvc.Namespace == newSvc.Namespace {
+			return false
+		} else if oldSvc == nil && newSvc == nil {
+			return false
+		}
+		return true
+	}
+	ipBlockUpdated := func() bool {
+		oldIPB, newIPB := oldGroup.IPBlock, newGroup.IPBlock
+		// ClusterGroup ipBlock does not support Except
+		if oldIPB != nil && newIPB != nil && ipNetToCIDRStr(oldIPB.CIDR) == ipNetToCIDRStr(newIPB.CIDR) {
+			return false
+		} else if oldIPB == nil && newIPB == nil {
+			return false
+		}
+		return true
+	}
+	childGroupsUpdated := func() bool {
 		oldChildGroups, newChildGroups := sets.String{}, sets.String{}
 		for _, c := range oldGroup.ChildGroups {
 			oldChildGroups.Insert(c)
@@ -64,7 +83,7 @@ func (n *NetworkPolicyController) updateClusterGroup(oldObj, curObj interface{})
 		}
 		return !oldChildGroups.Equal(newChildGroups)
 	}
-	if !selectorUpdated && !ipBlockUpdated && !svcRefUpdated && !childGroupsUpdated(oldGroup, newGroup) {
+	if !ipBlockUpdated() && !svcRefUpdated() && !selectorUpdated() && !childGroupsUpdated() {
 		// No change in the contents of the ClusterGroup. No need to enqueue for further sync.
 		return
 	}
