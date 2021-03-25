@@ -101,6 +101,7 @@ var (
 	// still define a separate defaultAntreaFeatureGates map for Windows.
 	unsupportedFeaturesOnWindows = map[featuregate.Feature]struct{}{
 		NodePortLocal: {},
+		Egress:        {},
 	}
 )
 
