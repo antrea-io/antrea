@@ -149,15 +149,21 @@ kubectl apply -f https://github.com/vmware-tanzu/antrea/releases/download/<TAG>/
 
 #### Join Windows worker Nodes
 
-#### 1. (Optional, Test-Only) Install OVS provided by Antrea
+#### 1. (Optional) Install OVS (provided by Antrea or your own)
 
 Antrea provides a pre-built OVS package which contains test-signed OVS kernel
 driver. If you don't have a self-signed OVS package and just want to try the
-Antrea on Windows, this package can be used for testing. We also provide a help
-script to install the OVS driver and register userspace binaries as services.
+Antrea on Windows, this package can be used for testing. We also provide a helper
+script `Install-OVS.ps1` to install the OVS driver and register userspace binaries
+as services. If you want to use your own signed OVS package for production, you can
+run `Install-OVS.ps1` like this:
 
-Firstly, please make sure to [enable test-signed](https://docs.microsoft.com/en-us/windows-hardware/drivers/install/the-testsigning-boot-configuration-option)
-code on Windows Nodes.
+```powershell
+Install-OVS.ps1 -ImportCertificate $false -Local -LocalFile <PathToOVSPackage>
+```
+
+**[Test-only]** First, if you are using test-signed driver (such as the one provided with Antrea),
+please make sure to [enable test-signed](https://docs.microsoft.com/en-us/windows-hardware/drivers/install/the-testsigning-boot-configuration-option)
 
 ```powershell
 Bcdedit.exe -set TESTSIGNING ON
@@ -168,7 +174,8 @@ Then, install the OVS using the script.
 
 ```powershell
 curl.exe -LO https://raw.githubusercontent.com/vmware-tanzu/antrea/main/hack/windows/Install-OVS.ps1
-.\Install-OVS.ps1
+.\Install-OVS.ps1 # Test-only
+.\Install-OVS.ps1 -ImportCertificate $false -Local -LocalFile <PathToOVSPackage> # Production
 ```
 
 Verify the OVS services are installed.
