@@ -78,11 +78,11 @@ EOF
         cp -rf "$antrea_scm_dir" $WORKSPACE/antrea-cni
         pushd $WORKSPACE/antrea-cni
         
-        sudo docker build -t antrea/antrea-ubuntu:latest -f build/images/Dockerfile.build.ubuntu .
+        sudo docker build -t antrea/antrea-ubuntu:latest -f build/images/Dockerfile.build.ubuntu --build-arg OVS_VERSION=$(head -n 1 build/images/deps/ovs-version) .
         let status=status+$?
         popd
     else
-        build_github_project "antrea-cni" "sudo docker build -t antrea/antrea-ubuntu:latest -f build/images/Dockerfile.build.ubuntu ."
+        build_github_project "antrea-cni" "sudo docker build -t antrea/antrea-ubuntu:latest -f build/images/Dockerfile.build.ubuntu --build-arg OVS_VERSION=$(head -n 1 build/images/deps/ovs-version) ."
         let status=status+$?
     fi
 
