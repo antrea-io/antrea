@@ -89,7 +89,7 @@ func init() {
 	Command.Flags().StringVarP(&option.destination, "destination", "D", "", "destination of the Traceflow: Namespace/Pod, Pod, Namespace/Service, Service or IP")
 	Command.Flags().StringVarP(&option.outputType, "output", "o", "yaml", "output type: yaml (default), json")
 	Command.Flags().BoolVarP(&option.waiting, "wait", "", true, "if false, command returns without retrieving results")
-	Command.Flags().StringVarP(&option.flow, "flow", "f", "", "specify the flow (packet headers) of the Traceflow packet, including tcp_src, tcp_dst, tcp_flags, udp_src, udp_dst")
+	Command.Flags().StringVarP(&option.flow, "flow", "f", "", "specify the flow (packet headers) of the Traceflow packet, including tcp_src, tcp_dst, tcp_flags, udp_src, udp_dst, ipv6")
 }
 
 func runE(cmd *cobra.Command, _ []string) error {
@@ -249,9 +249,18 @@ func parseFlow() (*v1alpha1.Packet, error) {
 	}
 
 	pkt := new(v1alpha1.Packet)
+	_, isIPv6 := fields["ipv6"]
+	if isIPv6 {
+		pkt.IPv6Header = new(v1alpha1.IPv6Header)
+	}
+
 	for k, v := range protocols {
 		if _, ok := fields[k]; ok {
-			pkt.IPHeader.Protocol = v
+			if isIPv6 {
+				pkt.IPv6Header.NextHeader = &v
+			} else {
+				pkt.IPHeader.Protocol = v
+			}
 			break
 		}
 	}
