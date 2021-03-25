@@ -198,7 +198,7 @@ func getNetworkPolicyInfo(pktIn *ofctrl.PacketIn, c *Controller, ob *logInfo) er
 	match = getMatchRegField(matchers, uint32(openflow.DispositionMarkReg))
 	info, err := getInfoInReg(match, openflow.APDispositionMarkRange.ToNXRange())
 	if err != nil {
-		return errors.New(fmt.Sprintf("received error while unloading disposition from reg: %v", err))
+		return fmt.Errorf("received error while unloading disposition from reg: %v", err)
 	}
 	ob.disposition = openflow.DispositionToString[info]
 
@@ -208,7 +208,7 @@ func getNetworkPolicyInfo(pktIn *ofctrl.PacketIn, c *Controller, ob *logInfo) er
 	// Get Network Policy full name and OF priority of the conjunction
 	info, err = getInfoInReg(match, nil)
 	if err != nil {
-		return errors.New(fmt.Sprintf("received error while unloading conjunction id from reg: %v", err))
+		return fmt.Errorf("received error while unloading conjunction id from reg: %v", err)
 	}
 	ob.npRef, ob.ofPriority = c.ofClient.GetPolicyInfoFromConjunction(info)
 
@@ -217,18 +217,22 @@ func getNetworkPolicyInfo(pktIn *ofctrl.PacketIn, c *Controller, ob *logInfo) er
 
 // getPacketInfo fills in srcIP, destIP, pktLength, protocol of logInfo ob.
 func getPacketInfo(pktIn *ofctrl.PacketIn, ob *logInfo) error {
-	// TODO: supprt IPv6 packet
-	if pktIn.Data.Ethertype == opsv1alpha1.EtherTypeIPv4 {
-		ipPacket, ok := pktIn.Data.Data.(*protocol.IPv4)
-		if !ok {
-			return errors.New("invalid IPv4 packet")
-		}
-		// Get source destination IP and protocol
-		ob.srcIP = ipPacket.NWSrc.String()
-		ob.destIP = ipPacket.NWDst.String()
-		ob.pktLength = ipPacket.Length
-		ob.protocolStr = opsv1alpha1.ProtocolsToString[int32(ipPacket.Protocol)]
+	var prot uint8
+	switch ipPkt := pktIn.Data.Data.(type) {
+	case *protocol.IPv4:
+		ob.srcIP = ipPkt.NWSrc.String()
+		ob.destIP = ipPkt.NWDst.String()
+		ob.pktLength = ipPkt.Length
+		prot = ipPkt.Protocol
+	case *protocol.IPv6:
+		ob.srcIP = ipPkt.NWSrc.String()
+		ob.destIP = ipPkt.NWDst.String()
+		ob.pktLength = ipPkt.Length
+		prot = ipPkt.NextHeader
+	default:
+		return errors.New("unsupported packet-in: should be a valid IPv4 or IPv6 packet")
 	}
+	ob.protocolStr = opsv1alpha1.ProtocolsToString[int32(prot)]
 	return nil
 }
 
