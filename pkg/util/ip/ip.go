@@ -142,3 +142,30 @@ func IPNetToNetIPNet(ipNet *v1beta2.IPNet) *net.IPNet {
 	maskedIP := ip.Mask(mask)
 	return &net.IPNet{IP: maskedIP, Mask: mask}
 }
+
+const (
+	ICMPProtocol   = 1
+	TCPProtocol    = 6
+	UDPProtocol    = 17
+	ICMPv6Protocol = 58
+	SCTPProtocol   = 132
+)
+
+// IPProtocolNumberToString returns the string name of the IP protocol with number protocolNum. If
+// the number does not match a "known" protocol, we return the defaultValue string.
+func IPProtocolNumberToString(protocolNum uint8, defaultValue string) string {
+	switch protocolNum {
+	case ICMPProtocol:
+		return "ICMP"
+	case TCPProtocol:
+		return "TCP"
+	case UDPProtocol:
+		return "UDP"
+	case ICMPv6Protocol:
+		return "IPv6-ICMP"
+	case SCTPProtocol:
+		return "SCTP"
+	default:
+		return defaultValue
+	}
+}

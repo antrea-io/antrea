@@ -30,8 +30,8 @@ import (
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
-	opsv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/ops/v1alpha1"
 	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
+	"github.com/vmware-tanzu/antrea/pkg/util/ip"
 )
 
 const (
@@ -232,7 +232,9 @@ func getPacketInfo(pktIn *ofctrl.PacketIn, ob *logInfo) error {
 	default:
 		return errors.New("unsupported packet-in: should be a valid IPv4 or IPv6 packet")
 	}
-	ob.protocolStr = opsv1alpha1.ProtocolsToString[int32(prot)]
+
+	ob.protocolStr = ip.IPProtocolNumberToString(prot, "UnknownProtocol")
+
 	return nil
 }
 
