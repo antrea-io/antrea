@@ -317,8 +317,11 @@ jobs:
         path: log.tar.gz
         retention-days: 30
 
-  test-e2e-encap-np:
-    name: E2e tests on a Kind cluster on Linux with Antrea NetworkPolicies enabled
+  # TODO: remove when https://github.com/vmware-tanzu/antrea/issues/897 is fixed.
+  # In the mean time, we keep this test around to ensure that at least one Kind
+  # test uses a Geneve overlay.
+  test-e2e-encap-no-np:
+    name: E2e tests on a Kind cluster on Linux with Antrea-native policies disabled
     needs: [build-antrea-coverage-image, build-flow-aggregator-coverage-image]
     runs-on: [ubuntu-latest]
     steps:
@@ -351,15 +354,15 @@ jobs:
     - name: Run e2e tests
       run: |
         mkdir log
-        mkdir test-e2e-encap-np-coverage
-        ANTREA_LOG_DIR=$PWD/log ANTREA_COV_DIR=$PWD/test-e2e-encap-np-coverage ./ci/kind/test-e2e-kind.sh --encap-mode encap --np --coverage
+        mkdir test-e2e-encap-no-np-coverage
+        ANTREA_LOG_DIR=$PWD/log ANTREA_COV_DIR=$PWD/test-e2e-encap-no-np-coverage ./ci/kind/test-e2e-kind.sh --encap-mode encap --no-np --coverage
     - name: Tar coverage files
-      run: tar -czf test-e2e-encap-np-coverage.tar.gz test-e2e-encap-np-coverage
-    - name: Upload coverage for test-e2e-encap-np-coverage
+      run: tar -czf test-e2e-encap-no-np-coverage.tar.gz test-e2e-encap-no-np-coverage
+    - name: Upload coverage for test-e2e-encap-no-np-coverage
       uses: actions/upload-artifact@v2
       with:
-        name: test-e2e-encap-np-coverage
-        path: test-e2e-encap-np-coverage.tar.gz
+        name: test-e2e-encap-no-np-coverage
+        path: test-e2e-encap-no-np-coverage.tar.gz
         retention-days: 30
     - name: Codecov
       uses: codecov/codecov-action@v1
@@ -367,8 +370,8 @@ jobs:
         token: ${{ secrets.CODECOV_TOKEN }}
         file: '*.cov.out*'
         flags: kind-e2e-tests
-        name: codecov-test-e2e-np-encap
-        directory: test-e2e-encap-np-coverage
+        name: codecov-test-e2e-no-np-encap
+        directory: test-e2e-encap-no-np-coverage
     - name: Tar log files
       if: ${{ failure() }}
       run: tar -czf log.tar.gz log
@@ -376,7 +379,7 @@ jobs:
       uses: actions/upload-artifact@v2
       if: ${{ failure() }}
       with:
-        name: e2e-kind-encap-np.tar.gz
+        name: e2e-kind-encap-no-np.tar.gz
         path: log.tar.gz
         retention-days: 30
 
@@ -466,7 +469,7 @@ jobs:
   # yet.
   artifact-cleanup:
     name: Delete uploaded images
-    needs: [build-antrea-coverage-image, build-flow-aggregator-coverage-image, build-antrea-image, test-e2e-encap, test-e2e-encap-no-proxy, test-e2e-noencap, test-e2e-hybrid, test-e2e-encap-np, test-netpol-tmp, validate-prometheus-metrics-doc]
+    needs: [build-antrea-coverage-image, build-flow-aggregator-coverage-image, build-antrea-image, test-e2e-encap, test-e2e-encap-no-proxy, test-e2e-noencap, test-e2e-hybrid, test-e2e-encap-no-np, test-netpol-tmp, validate-prometheus-metrics-doc]
     if: ${{ always() }}
     runs-on: [ubuntu-latest]
     steps:

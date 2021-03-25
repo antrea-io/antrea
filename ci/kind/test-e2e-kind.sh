@@ -26,7 +26,7 @@ _usage="Usage: $0 [--encap-mode <mode>] [--no-proxy] [--np] [--coverage] [--help
         --encap-mode                  Traffic encapsulation mode. (default is 'encap').
         --no-proxy                    Disables Antrea proxy.
         --endpointslice               Enables Antrea proxy and EndpointSlice support.
-        --np                          Enables Namespaced Antrea NetworkPolicy CRDs and ClusterNetworkPolicy related CRDs.
+        --no-np                       Disables Antrea-native policies.
         --coverage                    Enables measure Antrea code coverage when run e2e tests on kind.
         --help, -h                    Print this message and exit.
 "
@@ -51,7 +51,7 @@ trap "quit" INT EXIT
 mode=""
 proxy=true
 endpointslice=false
-np=false
+np=true
 coverage=false
 while [[ $# -gt 0 ]]
 do
@@ -66,8 +66,8 @@ case $key in
     endpointslice=true
     shift
     ;;
-    --np)
-    np=true
+    --no-np)
+    np=false
     shift
     ;;
     --encap-mode)
@@ -98,7 +98,9 @@ if $endpointslice; then
 fi
 if $np; then
     # See https://github.com/vmware-tanzu/antrea/issues/897
-    manifest_args="$manifest_args --np --tun vxlan"
+    manifest_args="$manifest_args --tun vxlan"
+else
+    manifest_args="$manifest_args --no-np"
 fi
 
 COMMON_IMAGES_LIST=("gcr.io/kubernetes-e2e-test-images/agnhost:2.8" "projects.registry.vmware.com/library/busybox" "projects.registry.vmware.com/antrea/nginx" "projects.registry.vmware.com/antrea/perftool" "projects.registry.vmware.com/antrea/ipfix-collector:v0.4.7")

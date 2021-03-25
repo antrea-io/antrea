@@ -2433,7 +2433,7 @@ data:
     # Enable Antrea ClusterNetworkPolicy feature to complement K8s NetworkPolicy for cluster admins
     # to define security policies which apply to the entire cluster, and Antrea NetworkPolicy
     # feature that supports priorities, rule actions and externalEntities in the future.
-    #  AntreaPolicy: false
+    #  AntreaPolicy: true
 
     # Enable flowexporter which exports polled conntrack connections as IPFIX flow records from each
     # agent to a configured collector.
@@ -2588,7 +2588,7 @@ data:
     # Enable Antrea ClusterNetworkPolicy feature to complement K8s NetworkPolicy for cluster admins
     # to define security policies which apply to the entire cluster, and Antrea NetworkPolicy
     # feature that supports priorities, rule actions and externalEntities in the future.
-    #  AntreaPolicy: false
+    #  AntreaPolicy: true
 
     # Enable collecting and exposing NetworkPolicy statistics.
     #  NetworkPolicyStats: false
@@ -2640,7 +2640,7 @@ metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-5c954cd56b
+  name: antrea-config-6bb22hc7fg
   namespace: kube-system
 ---
 apiVersion: v1
@@ -2760,7 +2760,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-5c954cd56b
+          name: antrea-config-6bb22hc7fg
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -3072,7 +3072,7 @@ spec:
           path: /home/kubernetes/bin
         name: host-cni-bin
       - configMap:
-          name: antrea-config-5c954cd56b
+          name: antrea-config-6bb22hc7fg
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d

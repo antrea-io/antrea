@@ -39,6 +39,10 @@ few new CRDs supported by Antrea to provide the administrator with more control
 over security within the cluster, and which are meant to co-exist with and
 complement the K8s NetworkPolicy.
 
+Starting with Antrea v1.0, Antrea-native policies are enabled by default, which
+means that no additional configuration is required in order to use the
+Antrea-native Policy CRDs.
+
 ## Tier
 
 Antrea supports grouping Antrea-native Policy CRDs together in a tiered fashion
@@ -169,28 +173,6 @@ cluster, unlike K8s NetworkPolicy, which is aimed towards developers to secure
 their apps and affects Pods within the Namespace in which the K8s NetworkPolicy
 is created. Rules belonging to ClusterNetworkPolicies are enforced before any
 rule belonging to a K8s NetworkPolicy.
-
-**Note**: ClusterNetworkPolicy is currently in "Alpha" stage. In order to
-enable them, edit the Controller and Agent configuration in the `antrea`
-ConfigMap as follows:
-
-```yaml
-   antrea-controller.conf: |
-     featureGates:
-       # Enable AntreaPolicy feature to complement K8s NetworkPolicy
-       # for cluster admins to define security policies which apply to the
-       # entire cluster.
-       AntreaPolicy: true
-```
-
-```yaml
-   antrea-agent.conf: |
-     featureGates:
-       # Enable AntreaPolicy feature to complement K8s NetworkPolicy
-       # for cluster admins to define security policies which apply to the
-       # entire cluster.
-       AntreaPolicy: true
-```
 
 ### The Antrea ClusterNetworkPolicy resource
 
@@ -446,10 +428,6 @@ The purpose of introducing this CRD is to allow admins to take advantage of
 advanced NetworkPolicy features and apply them within a Namespace to
 complement the K8s NetworkPolicies. Similar to the ClusterNetworkPolicy
 resource, Antrea NetworkPolicy can also be associated with Tiers.
-
-**Note**: Antrea NetworkPolicy is currently in "Alpha" stage and is enabled
-along with Tiers and ClusterNetworkPolicy as part of the `AntreaPolicy`
-feature gate.
 
 ### The Antrea NetworkPolicy resource
 
