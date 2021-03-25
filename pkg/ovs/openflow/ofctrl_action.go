@@ -418,13 +418,13 @@ func (a *ofLearnAction) MatchLearnedUDPv6DstPort() LearnAction {
 	return a.MatchTransportDst(ProtocolUDPv6)
 }
 
-// MatchLearnedSTCPDstPort specifies that the sctp_dst field in the learned flow
+// MatchLearnedSCTPDstPort specifies that the sctp_dst field in the learned flow
 // must match the sctp_dst of the packet currently being processed.
 func (a *ofLearnAction) MatchLearnedSCTPDstPort() LearnAction {
 	return a.MatchTransportDst(ProtocolSCTP)
 }
 
-// MatchLearnedSTCPv6DstPort specifies that the sctp_dst field in the learned flow
+// MatchLearnedSCTPv6DstPort specifies that the sctp_dst field in the learned flow
 // must match the sctp_dst of the packet currently being processed.
 func (a *ofLearnAction) MatchLearnedSCTPv6DstPort() LearnAction {
 	return a.MatchTransportDst(ProtocolSCTPv6)

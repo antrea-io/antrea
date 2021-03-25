@@ -156,3 +156,9 @@ func TestIPNetToNetIPNet(t *testing.T) {
 		})
 	}
 }
+
+func TestIPProtocolNumberToString(t *testing.T) {
+	const defaultValue = "UnknownProtocol"
+	assert.Equal(t, "IPv6-ICMP", IPProtocolNumberToString(ICMPv6Protocol, defaultValue))
+	assert.Equal(t, defaultValue, IPProtocolNumberToString(44, defaultValue))
+}
