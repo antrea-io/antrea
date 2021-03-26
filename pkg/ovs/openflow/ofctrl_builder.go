@@ -251,6 +251,17 @@ func (b *ofFlowBuilder) MatchPktMark(value uint32, mask *uint32) FlowBuilder {
 	return b
 }
 
+// MatchTunnelDst adds match condition for matching tun_dst or tun_ipv6_dst.
+func (b *ofFlowBuilder) MatchTunnelDst(dstIP net.IP) FlowBuilder {
+	if dstIP.To4() != nil {
+		b.matchers = append(b.matchers, fmt.Sprintf("tun_dst=%s", dstIP.String()))
+	} else {
+		b.matchers = append(b.matchers, fmt.Sprintf("tun_ipv6_dst=%s", dstIP.String()))
+	}
+	b.ofFlow.Match.TunnelDst = &dstIP
+	return b
+}
+
 func ctLabelRange(high, low uint64, rng Range, match *ofctrl.FlowMatch) {
 	// [127..64] [63..0]
 	//   high     low

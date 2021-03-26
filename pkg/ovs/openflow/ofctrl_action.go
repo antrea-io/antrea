@@ -239,6 +239,11 @@ func (a *ofFlowAction) LoadRegRange(regID int, value uint32, rng Range) FlowBuil
 	return a.builder
 }
 
+// LoadToPktMarkRange is an action to load data into pkt_mark at specified range.
+func (a *ofFlowAction) LoadPktMarkRange(value uint32, rng Range) FlowBuilder {
+	return a.LoadRange(NxmFieldPktMark, uint64(value), rng)
+}
+
 // Move is an action to copy all data from "fromField" to "toField". Fields with name "fromField" and "fromField" should
 // have the same data length, otherwise there will be error when realizing the flow on OFSwitch.
 func (a *ofFlowAction) Move(fromField, toField string) FlowBuilder {

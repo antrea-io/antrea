@@ -21,6 +21,7 @@ import (
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow/cookie"
+	"github.com/vmware-tanzu/antrea/pkg/agent/types"
 	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
 )
 
@@ -194,6 +195,37 @@ func (c *client) externalFlows(nodeIP net.IP, localSubnet net.IPNet, localGatewa
 	flows := c.snatCommonFlows(nodeIP, localSubnet, localGatewayMAC, cookie.SNAT)
 	flows = append(flows, c.uplinkSNATFlows(localSubnet, cookie.SNAT)...)
 	flows = append(flows, c.snatImplementationFlows(nodeIP, cookie.SNAT)...)
+	return flows
+}
+
+func (c *client) snatMarkFlows(snatIP net.IP, mark uint32) []binding.Flow {
+	snatIPRange := &binding.IPRange{StartIP: snatIP, EndIP: snatIP}
+	ctCommitTable := c.pipeline[conntrackCommitTable]
+	nextTable := ctCommitTable.GetNext()
+	flows := []binding.Flow{
+		c.snatIPFromTunnelFlow(snatIP, mark),
+		ctCommitTable.BuildFlow(priorityNormal).
+			MatchProtocol(binding.ProtocolIP).
+			MatchCTStateNew(true).MatchCTStateTrk(true).MatchCTStateDNAT(false).
+			MatchPktMark(mark, &types.SNATIPMarkMask).
+			Action().CT(true, nextTable, CtZone).
+			SNAT(snatIPRange, nil).
+			LoadToMark(snatCTMark).CTDone().
+			Cookie(c.cookieAllocator.Request(cookie.SNAT).Raw()).
+			Done(),
+	}
+
+	if c.enableProxy {
+		flows = append(flows, ctCommitTable.BuildFlow(priorityNormal).
+			MatchProtocol(binding.ProtocolIP).
+			MatchCTStateNew(true).MatchCTStateTrk(true).MatchCTStateDNAT(true).
+			MatchPktMark(mark, &types.SNATIPMarkMask).
+			Action().CT(true, nextTable, ctZoneSNAT).
+			SNAT(snatIPRange, nil).
+			LoadToMark(snatCTMark).CTDone().
+			Cookie(c.cookieAllocator.Request(cookie.SNAT).Raw()).
+			Done())
+	}
 	return flows
 }
 

@@ -1328,3 +1328,84 @@ func prepareExternalFlows(nodeIP net.IP, localSubnet *net.IPNet, gwMAC net.Hardw
 		},
 	}
 }
+
+func prepareSNATFlows(snatIP net.IP, mark, podOFPort, podOFPortRemote uint32, vMAC, localGwMAC net.HardwareAddr) []expectTableFlows {
+	var ipProtoStr, tunDstFieldName string
+	if snatIP.To4() != nil {
+		tunDstFieldName = "tun_dst"
+		ipProtoStr = "ip"
+	} else {
+		tunDstFieldName = "tun_ipv6_dst"
+		ipProtoStr = "ipv6"
+	}
+	return []expectTableFlows{
+		{
+			uint8(71),
+			[]*ofTestUtils.ExpectFlow{
+				{
+					MatchStr: fmt.Sprintf("priority=200,ct_state=+new+trk,%s,%s=%s", ipProtoStr, tunDstFieldName, snatIP),
+					ActStr:   fmt.Sprintf("load:0x%x->NXM_NX_PKT_MARK[0..7],goto_table:72", mark),
+				},
+				{
+					MatchStr: fmt.Sprintf("priority=200,ct_state=+new+trk,%s,in_port=%d", ipProtoStr, podOFPort),
+					ActStr:   fmt.Sprintf("load:0x%x->NXM_NX_PKT_MARK[0..7],goto_table:80", mark),
+				},
+				{
+					MatchStr: fmt.Sprintf("priority=200,%s,in_port=%d", ipProtoStr, podOFPortRemote),
+					ActStr:   fmt.Sprintf("set_field:%s->eth_src,set_field:%s->eth_dst,set_field:%s->%s,goto_table:72", localGwMAC.String(), vMAC.String(), snatIP, tunDstFieldName),
+				},
+			},
+		},
+	}
+}
+
+func TestSNATFlows(t *testing.T) {
+	c = ofClient.NewClient(br, bridgeMgmtAddr, ovsconfig.OVSDatapathNetdev, false, false, true)
+	err := ofTestUtils.PrepareOVSBridge(br)
+	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge %s", br))
+
+	config := prepareConfiguration()
+	_, err = c.Initialize(roundInfo, config.nodeConfig, config1.TrafficEncapModeEncap)
+	require.Nil(t, err, "Failed to initialize OFClient")
+
+	defer func() {
+		err = c.Disconnect()
+		assert.Nil(t, err, fmt.Sprintf("Error while disconnecting from OVS bridge: %v", err))
+		err = ofTestUtils.DeleteOVSBridge(br)
+		assert.Nil(t, err, fmt.Sprintf("Error while deleting OVS bridge: %v", err))
+	}()
+
+	snatIP := net.ParseIP("10.10.10.14")
+	snatIPV6 := net.ParseIP("a963:ca9b:172:10::16")
+	snatMark := uint32(14)
+	snatMarkV6 := uint32(16)
+	podOFPort := uint32(104)
+	podOFPortRemote := uint32(204)
+	podOFPortV6 := uint32(106)
+	podOFPortRemoteV6 := uint32(206)
+
+	vMAC := config.globalMAC
+	gwMAC := config.nodeConfig.GatewayConfig.MAC
+	expectedFlows := append(prepareSNATFlows(snatIP, snatMark, podOFPort, podOFPortRemote, vMAC, gwMAC),
+		prepareSNATFlows(snatIPV6, snatMarkV6, podOFPortV6, podOFPortRemoteV6, vMAC, gwMAC)...)
+
+	c.InstallSNATMarkFlows(snatIP, snatMark)
+	c.InstallSNATMarkFlows(snatIPV6, snatMarkV6)
+	c.InstallPodSNATFlows(podOFPort, snatIP, snatMark)
+	c.InstallPodSNATFlows(podOFPortRemote, snatIP, 0)
+	c.InstallPodSNATFlows(podOFPortV6, snatIPV6, snatMarkV6)
+	c.InstallPodSNATFlows(podOFPortRemoteV6, snatIPV6, 0)
+	for _, tableFlow := range expectedFlows {
+		ofTestUtils.CheckFlowExists(t, ovsCtlClient, tableFlow.tableID, true, tableFlow.flows)
+	}
+
+	c.UninstallPodSNATFlows(podOFPort)
+	c.UninstallPodSNATFlows(podOFPortRemote)
+	c.UninstallPodSNATFlows(podOFPortV6)
+	c.UninstallPodSNATFlows(podOFPortRemoteV6)
+	c.UninstallSNATMarkFlows(snatMark)
+	c.UninstallSNATMarkFlows(snatMarkV6)
+	for _, tableFlow := range expectedFlows {
+		ofTestUtils.CheckFlowExists(t, ovsCtlClient, tableFlow.tableID, false, tableFlow.flows)
+	}
+}

@@ -31,3 +31,7 @@ func (c *client) externalFlows(nodeIP net.IP, localSubnet net.IPNet, localGatewa
 	}
 	return c.snatCommonFlows(nodeIP, localSubnet, localGatewayMAC, cookie.SNAT)
 }
+
+func (c *client) snatMarkFlows(snatIP net.IP, mark uint32) []binding.Flow {
+	return []binding.Flow{c.snatIPFromTunnelFlow(snatIP, mark)}
+}

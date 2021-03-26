@@ -377,6 +377,20 @@ func (mr *MockClientMockRecorder) InstallPodFlows(arg0, arg1, arg2, arg3 interfa
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallPodFlows", reflect.TypeOf((*MockClient)(nil).InstallPodFlows), arg0, arg1, arg2, arg3)
 }
 
+// InstallPodSNATFlows mocks base method
+func (m *MockClient) InstallPodSNATFlows(arg0 uint32, arg1 net.IP, arg2 uint32) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "InstallPodSNATFlows", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// InstallPodSNATFlows indicates an expected call of InstallPodSNATFlows
+func (mr *MockClientMockRecorder) InstallPodSNATFlows(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallPodSNATFlows", reflect.TypeOf((*MockClient)(nil).InstallPodSNATFlows), arg0, arg1, arg2)
+}
+
 // InstallPolicyRuleFlows mocks base method
 func (m *MockClient) InstallPolicyRuleFlows(arg0 *types.PolicyRule) error {
 	m.ctrl.T.Helper()
@@ -389,6 +403,20 @@ func (m *MockClient) InstallPolicyRuleFlows(arg0 *types.PolicyRule) error {
 func (mr *MockClientMockRecorder) InstallPolicyRuleFlows(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallPolicyRuleFlows", reflect.TypeOf((*MockClient)(nil).InstallPolicyRuleFlows), arg0)
+}
+
+// InstallSNATMarkFlows mocks base method
+func (m *MockClient) InstallSNATMarkFlows(arg0 net.IP, arg1 uint32) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "InstallSNATMarkFlows", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// InstallSNATMarkFlows indicates an expected call of InstallSNATMarkFlows
+func (mr *MockClientMockRecorder) InstallSNATMarkFlows(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallSNATMarkFlows", reflect.TypeOf((*MockClient)(nil).InstallSNATMarkFlows), arg0, arg1)
 }
 
 // InstallServiceFlows mocks base method
@@ -651,6 +679,20 @@ func (mr *MockClientMockRecorder) UninstallPodFlows(arg0 interface{}) *gomock.Ca
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UninstallPodFlows", reflect.TypeOf((*MockClient)(nil).UninstallPodFlows), arg0)
 }
 
+// UninstallPodSNATFlows mocks base method
+func (m *MockClient) UninstallPodSNATFlows(arg0 uint32) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UninstallPodSNATFlows", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UninstallPodSNATFlows indicates an expected call of UninstallPodSNATFlows
+func (mr *MockClientMockRecorder) UninstallPodSNATFlows(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UninstallPodSNATFlows", reflect.TypeOf((*MockClient)(nil).UninstallPodSNATFlows), arg0)
+}
+
 // UninstallPolicyRuleFlows mocks base method
 func (m *MockClient) UninstallPolicyRuleFlows(arg0 uint32) ([]string, error) {
 	m.ctrl.T.Helper()
@@ -664,6 +706,20 @@ func (m *MockClient) UninstallPolicyRuleFlows(arg0 uint32) ([]string, error) {
 func (mr *MockClientMockRecorder) UninstallPolicyRuleFlows(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UninstallPolicyRuleFlows", reflect.TypeOf((*MockClient)(nil).UninstallPolicyRuleFlows), arg0)
+}
+
+// UninstallSNATMarkFlows mocks base method
+func (m *MockClient) UninstallSNATMarkFlows(arg0 uint32) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UninstallSNATMarkFlows", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UninstallSNATMarkFlows indicates an expected call of UninstallSNATMarkFlows
+func (mr *MockClientMockRecorder) UninstallSNATMarkFlows(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UninstallSNATMarkFlows", reflect.TypeOf((*MockClient)(nil).UninstallSNATMarkFlows), arg0)
 }
 
 // UninstallServiceFlows mocks base method
