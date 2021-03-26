@@ -693,6 +693,20 @@ func (mr *MockActionMockRecorder) LoadARPOperation(arg0 interface{}) *gomock.Cal
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadARPOperation", reflect.TypeOf((*MockAction)(nil).LoadARPOperation), arg0)
 }
 
+// LoadPktMarkRange mocks base method
+func (m *MockAction) LoadPktMarkRange(arg0 uint32, arg1 openflow.Range) openflow.FlowBuilder {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LoadPktMarkRange", arg0, arg1)
+	ret0, _ := ret[0].(openflow.FlowBuilder)
+	return ret0
+}
+
+// LoadPktMarkRange indicates an expected call of LoadPktMarkRange
+func (mr *MockActionMockRecorder) LoadPktMarkRange(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadPktMarkRange", reflect.TypeOf((*MockAction)(nil).LoadPktMarkRange), arg0, arg1)
+}
+
 // LoadRange mocks base method
 func (m *MockAction) LoadRange(arg0 string, arg1 uint64, arg2 openflow.Range) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
@@ -1745,6 +1759,20 @@ func (m *MockFlowBuilder) MatchTunMetadata(arg0 int, arg1 uint32) openflow.FlowB
 func (mr *MockFlowBuilderMockRecorder) MatchTunMetadata(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchTunMetadata", reflect.TypeOf((*MockFlowBuilder)(nil).MatchTunMetadata), arg0, arg1)
+}
+
+// MatchTunnelDst mocks base method
+func (m *MockFlowBuilder) MatchTunnelDst(arg0 net.IP) openflow.FlowBuilder {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MatchTunnelDst", arg0)
+	ret0, _ := ret[0].(openflow.FlowBuilder)
+	return ret0
+}
+
+// MatchTunnelDst indicates an expected call of MatchTunnelDst
+func (mr *MockFlowBuilderMockRecorder) MatchTunnelDst(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchTunnelDst", reflect.TypeOf((*MockFlowBuilder)(nil).MatchTunnelDst), arg0)
 }
 
 // MatchXXReg mocks base method

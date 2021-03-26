@@ -69,6 +69,7 @@ const (
 	NxmFieldTunMetadata = "NXM_NX_TUN_METADATA"
 	NxmFieldIPToS       = "NXM_OF_IP_TOS"
 	NxmFieldXXReg       = "NXM_NX_XXREG"
+	NxmFieldPktMark     = "NXM_NX_PKT_MARK"
 )
 
 const (
@@ -170,6 +171,7 @@ type Flow interface {
 type Action interface {
 	LoadARPOperation(value uint16) FlowBuilder
 	LoadRegRange(regID int, value uint32, to Range) FlowBuilder
+	LoadPktMarkRange(value uint32, to Range) FlowBuilder
 	LoadRange(name string, addr uint64, to Range) FlowBuilder
 	Move(from, to string) FlowBuilder
 	MoveRange(fromName, toName string, from, to Range) FlowBuilder
@@ -234,6 +236,7 @@ type FlowBuilder interface {
 	MatchDstPort(port uint16, portMask *uint16) FlowBuilder
 	MatchICMPv6Type(icmp6Type byte) FlowBuilder
 	MatchICMPv6Code(icmp6Code byte) FlowBuilder
+	MatchTunnelDst(dstIP net.IP) FlowBuilder
 	MatchTunMetadata(index int, data uint32) FlowBuilder
 	// MatchCTSrcIP matches the source IPv4 address of the connection tracker original direction tuple.
 	MatchCTSrcIP(ip net.IP) FlowBuilder

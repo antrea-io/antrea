@@ -157,6 +157,30 @@ type Client interface {
 	// SNAT with the Openflow NAT action.
 	InstallExternalFlows() error
 
+	// InstallSNATMarkFlows installs flows for a local SNAT IP. On Linux, a
+	// single flow is added to mark the packets tunnelled from remote Nodes
+	// that should be SNAT'd with the SNAT IP. On Windows, an extra flow is
+	// added to perform SNAT for the marked packets with the SNAT IP.
+	InstallSNATMarkFlows(snatIP net.IP, mark uint32) error
+
+	// UninstallSNATMarkFlows removes the flows installed to set the packet
+	// mark for a SNAT IP.
+	UninstallSNATMarkFlows(mark uint32) error
+
+	// InstallSNATPolicyFlow installs the SNAT flows for a local Pod. If the
+	// SNAT IP for the Pod is on the local Node, a non-zero SNAT ID should
+	// allocated for the SNAT IP, and the installed flow sets the SNAT IP
+	// mark on the egress packets from the ofPort; if the SNAT IP is on a
+	// remote Node, snatMark should be set to 0, and the installed flow
+	// tunnels egress packets to the remote Node using the SNAT IP as the
+	// tunnel destination, and the packets should be SNAT'd on the remote
+	// Node. As of now, a Pod can be configured to use only a single SNAT
+	// IP in a single address family (IPv4 or IPv6).
+	InstallPodSNATFlows(ofPort uint32, snatIP net.IP, snatMark uint32) error
+
+	// UninstallPodSNATFlows removes the SNAT flows for the local Pod.
+	UninstallPodSNATFlows(ofPort uint32) error
+
 	// Disconnect disconnects the connection between client and OFSwitch.
 	Disconnect() error
 
@@ -672,6 +696,36 @@ func (c *client) InstallExternalFlows() error {
 	}
 	c.hostNetworkingFlows = append(c.hostNetworkingFlows, flows...)
 	return nil
+}
+
+func (c *client) InstallSNATMarkFlows(snatIP net.IP, mark uint32) error {
+	flows := c.snatMarkFlows(snatIP, mark)
+	cacheKey := fmt.Sprintf("s%x", mark)
+	c.replayMutex.RLock()
+	defer c.replayMutex.RUnlock()
+	return c.addFlows(c.snatFlowCache, cacheKey, flows)
+}
+
+func (c *client) UninstallSNATMarkFlows(mark uint32) error {
+	cacheKey := fmt.Sprintf("s%x", mark)
+	c.replayMutex.RLock()
+	defer c.replayMutex.RUnlock()
+	return c.deleteFlows(c.snatFlowCache, cacheKey)
+}
+
+func (c *client) InstallPodSNATFlows(ofPort uint32, snatIP net.IP, snatMark uint32) error {
+	flows := []binding.Flow{c.snatRuleFlow(ofPort, snatIP, snatMark, c.nodeConfig.GatewayConfig.MAC)}
+	cacheKey := fmt.Sprintf("p%x", ofPort)
+	c.replayMutex.RLock()
+	defer c.replayMutex.RUnlock()
+	return c.addFlows(c.snatFlowCache, cacheKey, flows)
+}
+
+func (c *client) UninstallPodSNATFlows(ofPort uint32) error {
+	cacheKey := fmt.Sprintf("p%x", ofPort)
+	c.replayMutex.RLock()
+	defer c.replayMutex.RUnlock()
+	return c.deleteFlows(c.snatFlowCache, cacheKey)
 }
 
 func (c *client) ReplayFlows() {
