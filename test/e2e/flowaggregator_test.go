@@ -24,6 +24,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	ipfixregistry "github.com/vmware/go-ipfix/pkg/registry"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
@@ -40,6 +41,7 @@ DATA SET:
   DATA RECORD-0:
     flowStartSeconds: 1608338066
     flowEndSeconds: 1608338072
+	flowEndReason: 2
     sourceTransportPort: 43600
     destinationTransportPort: 5201
     protocolIdentifier: 6
@@ -65,6 +67,7 @@ DATA SET:
     ingressNetworkPolicyNamespace: antrea-test
     egressNetworkPolicyName: test-flow-aggregator-networkpolicy-egress
     egressNetworkPolicyNamespace: antrea-test
+	flowType: 1
     destinationClusterIPv4: 0.0.0.0
     originalExporterIPv4Address: 10.10.0.1
     originalObservationDomainId: 2134708971
@@ -242,8 +245,10 @@ func checkRecordsForFlows(t *testing.T, data *TestData, srcIP string, dstIP stri
 				// Check if record has both Pod name of source and destination pod.
 				if isIntraNode {
 					checkPodAndNodeData(t, record, "perftest-a", controlPlaneNodeName(), "perftest-b", controlPlaneNodeName())
+					checkFlowType(t, record, ipfixregistry.IntraNode)
 				} else {
 					checkPodAndNodeData(t, record, "perftest-a", controlPlaneNodeName(), "perftest-c", workerNodeName(1))
+					checkFlowType(t, record, ipfixregistry.InterNode)
 				}
 
 				if checkService {
@@ -334,6 +339,11 @@ func checkBandwidthFromRecord(t *testing.T, record, bandwidth string) {
 			break
 		}
 	}
+}
+
+// TODO: Add a test that checks the functionality of Pod-To-External flow.
+func checkFlowType(t *testing.T, record string, flowType uint8) {
+	assert.Containsf(t, record, fmt.Sprintf("%s: %d", "flowType", flowType), "Record does not have correct flowType")
 }
 
 func getRecordsFromOutput(output string) []string {
