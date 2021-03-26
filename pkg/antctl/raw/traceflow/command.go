@@ -257,7 +257,8 @@ func parseFlow() (*v1alpha1.Packet, error) {
 	for k, v := range protocols {
 		if _, ok := fields[k]; ok {
 			if isIPv6 {
-				pkt.IPv6Header.NextHeader = &v
+				protocol := v
+				pkt.IPv6Header.NextHeader = &protocol
 			} else {
 				pkt.IPHeader.Protocol = v
 			}

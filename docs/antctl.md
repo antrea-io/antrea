@@ -400,7 +400,7 @@ consist of Namespace and Pod, Service or IP. The command supports
 yaml and json output. If users want a non blocking operation, an option: `--wait=false` can
 be added to start the traceflow without waiting for result. Then, the deletion operation
 will not be conducted. Besides, users can specify header protocol (ICMP, TCP and UDP),
-source/destination ports and TCP flags.
+source/destination ports and TCP flags, and can specify if it's IPv6 or not as well.
 
 For example:
 

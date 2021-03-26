@@ -22,7 +22,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/apis/ops/v1alpha1"
 )
 
-var protocolTCP    = int32(6)
+var protocolTCP = int32(6)
 
 // TestGetPortFields tests if a flow can be turned into a map.
 func TestGetPortFields(t *testing.T) {
