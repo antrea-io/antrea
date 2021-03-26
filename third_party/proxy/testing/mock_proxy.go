@@ -1,4 +1,4 @@
-// Copyright 2020 Antrea Authors
+// Copyright 2021 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,7 +21,6 @@ package testing
 
 import (
 	gomock "github.com/golang/mock/gomock"
-	proxy "github.com/vmware-tanzu/antrea/third_party/proxy"
 	v1 "k8s.io/api/core/v1"
 	reflect "reflect"
 )
@@ -47,21 +46,6 @@ func NewMockProvider(ctrl *gomock.Controller) *MockProvider {
 // EXPECT returns an object that allows the caller to indicate expected use
 func (m *MockProvider) EXPECT() *MockProviderMockRecorder {
 	return m.recorder
-}
-
-// GetServiceByIP mocks base method
-func (m *MockProvider) GetServiceByIP(arg0 string) (proxy.ServicePortName, bool) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetServiceByIP", arg0)
-	ret0, _ := ret[0].(proxy.ServicePortName)
-	ret1, _ := ret[1].(bool)
-	return ret0, ret1
-}
-
-// GetServiceByIP indicates an expected call of GetServiceByIP
-func (mr *MockProviderMockRecorder) GetServiceByIP(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetServiceByIP", reflect.TypeOf((*MockProvider)(nil).GetServiceByIP), arg0)
 }
 
 // OnEndpointsAdd mocks base method

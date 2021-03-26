@@ -52,7 +52,6 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/signals"
 	"github.com/vmware-tanzu/antrea/pkg/util/cipher"
 	"github.com/vmware-tanzu/antrea/pkg/version"
-	k8sproxy "github.com/vmware-tanzu/antrea/third_party/proxy"
 )
 
 // informerDefaultResync is the default resync period if a handler doesn't specify one.
@@ -339,10 +338,6 @@ func run(o *Options) error {
 		v4Enabled := config.IsIPv4Enabled(nodeConfig, networkConfig.TrafficEncapMode)
 		v6Enabled := config.IsIPv6Enabled(nodeConfig, networkConfig.TrafficEncapMode)
 
-		var proxyProvider k8sproxy.Provider
-		if proxier != nil {
-			proxyProvider = proxier.GetProxyProvider()
-		}
 		flowRecords := flowrecords.NewFlowRecords()
 		connStore := connections.NewConnectionStore(
 			connections.InitializeConnTrackDumper(nodeConfig, serviceCIDRNet, serviceCIDRNetv6, ovsDatapathType, features.DefaultFeatureGate.Enabled(features.AntreaProxy)),
@@ -350,7 +345,7 @@ func run(o *Options) error {
 			ifaceStore,
 			v4Enabled,
 			v6Enabled,
-			proxyProvider,
+			proxier,
 			networkPolicyController,
 			o.pollInterval)
 		go connStore.Run(stopCh)

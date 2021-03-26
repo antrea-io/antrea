@@ -159,15 +159,6 @@ func (proxier *metaProxier) OnEndpointsSynced() {
 	proxier.ipv6Proxier.OnEndpointsSynced()
 }
 
-func (proxier *metaProxier) GetServiceByIP(serviceStr string) (ServicePortName, bool) {
-	if utilnet.IsIPv6String(serviceStr) {
-		return proxier.ipv6Proxier.GetServiceByIP(serviceStr)
-	} else {
-		return proxier.ipv4Proxier.GetServiceByIP(serviceStr)
-	}
-
-}
-
 func (proxier *metaProxier) Run(stopCh <-chan struct{}) {
 	go proxier.ipv4Proxier.Run(stopCh)
 	proxier.ipv6Proxier.Run(stopCh)
