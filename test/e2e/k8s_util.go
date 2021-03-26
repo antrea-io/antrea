@@ -163,34 +163,30 @@ func (k *KubernetesUtils) CreateOrUpdateDeployment(ns, deploymentName string, re
 	zero := int64(0)
 	log.Infof("Creating/updating Deployment '%s/%s'", ns, deploymentName)
 	makeContainerSpec := func(port int32, protocol v1.Protocol) v1.Container {
-		var command []string
-		var env []v1.EnvVar
+		var args []string
 		switch protocol {
 		case v1.ProtocolTCP:
-			command = []string{"/agnhost", "serve-hostname", "--tcp", "--http=false", "--port", fmt.Sprintf("%d", port)}
+			args = []string{fmt.Sprintf("/agnhost serve-hostname --tcp --http=false --port=%d", port)}
 		case v1.ProtocolUDP:
-			command = []string{"/agnhost", "serve-hostname", "--udp", "--http=false", "--port", fmt.Sprintf("%d", port)}
+			args = []string{fmt.Sprintf("/agnhost serve-hostname --udp --http=false --port=%d", port)}
 		case v1.ProtocolSCTP:
-			env = append(env, v1.EnvVar{
-				Name:  fmt.Sprintf("SERVE_SCTP_PORT_%d", port),
-				Value: "foo",
-			})
-			command = []string{"/agnhost", "porter"}
+			args = []string{fmt.Sprintf("/agnhost porter")}
 		default:
-			log.Errorf("invalid protocol %v", protocol)
+			args = []string{fmt.Sprintf("/agnhost serve-hostname --udp --http=false --port=%d & /agnhost serve-hostname --tcp --http=false --port=%d & /agnhost porter", port, port)}
+
 		}
 		return v1.Container{
 			Name:            fmt.Sprintf("c%d", port),
 			ImagePullPolicy: v1.PullIfNotPresent,
 			Image:           "k8s.gcr.io/e2e-test-images/agnhost:2.29",
-			Env:             env,
-			Command:         command,
+			Env:             []v1.EnvVar{{Name: fmt.Sprintf("SERVE_SCTP_PORT_%d", port), Value: "foo"}},
+			Command:         []string{"/bin/bash", "-c"},
+			Args:            args,
 			SecurityContext: &v1.SecurityContext{},
 			Ports: []v1.ContainerPort{
 				{
 					ContainerPort: port,
 					Name:          fmt.Sprintf("serve-%d", port),
-					Protocol:      protocol,
 				},
 			},
 		}
@@ -213,10 +209,8 @@ func (k *KubernetesUtils) CreateOrUpdateDeployment(ns, deploymentName string, re
 				Spec: v1.PodSpec{
 					TerminationGracePeriodSeconds: &zero,
 					Containers: []v1.Container{
-						makeContainerSpec(80, v1.ProtocolTCP),
-						makeContainerSpec(81, v1.ProtocolTCP),
-						makeContainerSpec(5000, v1.ProtocolUDP),
-						makeContainerSpec(6000, v1.ProtocolSCTP),
+						makeContainerSpec(80, "ALL"),
+						makeContainerSpec(81, "ALL"),
 						makeContainerSpec(8080, v1.ProtocolTCP),
 						makeContainerSpec(8081, v1.ProtocolTCP),
 						makeContainerSpec(8082, v1.ProtocolTCP),
@@ -581,14 +575,16 @@ func (k *KubernetesUtils) waitForPodInNamespace(ns string, pod string) (*string,
 
 func (k *KubernetesUtils) waitForHTTPServers(allPods []Pod) error {
 	const maxTries = 10
-	log.Infof("waiting for HTTP servers (ports 80, 81, 5000, 6000 and 8080:8085) to become ready")
+	log.Infof("waiting for HTTP servers (ports 80, 81 and 8080:8085) to become ready")
 	var wrong int
 	for i := 0; i < maxTries; i++ {
 		reachability := NewReachability(allPods, Connected)
 		k.Validate(allPods, reachability, 80, v1.ProtocolTCP)
+		k.Validate(allPods, reachability, 80, v1.ProtocolUDP)
+		k.Validate(allPods, reachability, 80, v1.ProtocolSCTP)
 		k.Validate(allPods, reachability, 81, v1.ProtocolTCP)
-		k.Validate(allPods, reachability, 5000, v1.ProtocolUDP)
-		k.Validate(allPods, reachability, 6000, v1.ProtocolSCTP)
+		k.Validate(allPods, reachability, 81, v1.ProtocolUDP)
+		k.Validate(allPods, reachability, 81, v1.ProtocolSCTP)
 		for j := 8080; j < 8086; j++ {
 			k.Validate(allPods, reachability, int32(j), v1.ProtocolTCP)
 		}
