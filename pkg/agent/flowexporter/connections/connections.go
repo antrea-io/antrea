@@ -28,8 +28,8 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	"github.com/vmware-tanzu/antrea/pkg/agent/metrics"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
+	"github.com/vmware-tanzu/antrea/pkg/agent/proxy"
 	"github.com/vmware-tanzu/antrea/pkg/querier"
-	"github.com/vmware-tanzu/antrea/third_party/proxy"
 )
 
 var serviceProtocolMap = map[uint8]corev1.Protocol{
@@ -58,7 +58,7 @@ type connectionStore struct {
 	ifaceStore           interfacestore.InterfaceStore
 	v4Enabled            bool
 	v6Enabled            bool
-	antreaProxier        proxy.Provider
+	antreaProxier        proxy.Proxier
 	networkPolicyQuerier querier.AgentNetworkPolicyInfoQuerier
 	pollInterval         time.Duration
 	mutex                sync.Mutex
@@ -70,7 +70,7 @@ func NewConnectionStore(
 	ifaceStore interfacestore.InterfaceStore,
 	v4Enabled bool,
 	v6Enabled bool,
-	proxier proxy.Provider,
+	proxier proxy.Proxier,
 	npQuerier querier.AgentNetworkPolicyInfoQuerier,
 	pollInterval time.Duration,
 ) *connectionStore {

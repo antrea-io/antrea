@@ -37,10 +37,10 @@ import (
 	interfacestoretest "github.com/vmware-tanzu/antrea/pkg/agent/interfacestore/testing"
 	"github.com/vmware-tanzu/antrea/pkg/agent/metrics"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
+	proxytest "github.com/vmware-tanzu/antrea/pkg/agent/proxy/testing"
 	cpv1beta "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
 	queriertest "github.com/vmware-tanzu/antrea/pkg/querier/testing"
 	k8sproxy "github.com/vmware-tanzu/antrea/third_party/proxy"
-	k8proxytest "github.com/vmware-tanzu/antrea/third_party/proxy/testing"
 )
 
 var (
@@ -164,7 +164,7 @@ func TestConnectionStore_addAndUpdateConn(t *testing.T) {
 	// Mock interface store with one of the couple of IPs correspond to Pods
 	mockIfaceStore := interfacestoretest.NewMockInterfaceStore(ctrl)
 	mockConnDumper := connectionstest.NewMockConnTrackDumper(ctrl)
-	mockProxier := k8proxytest.NewMockProvider(ctrl)
+	mockProxier := proxytest.NewMockProxier(ctrl)
 	npQuerier := queriertest.NewMockAgentNetworkPolicyInfoQuerier(ctrl)
 	connStore := NewConnectionStore(mockConnDumper, flowrecords.NewFlowRecords(), mockIfaceStore, true, false, mockProxier, npQuerier, testPollInterval)
 
