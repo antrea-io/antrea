@@ -64,9 +64,8 @@ func newController() *traceflowController {
 }
 
 func TestTraceflow(t *testing.T) {
-	// Use shorter timeout.
-	timeoutDuration = 2 * time.Second
-	timeoutCheckInterval = timeoutDuration / 2
+	// Check timeout more frequently.
+	timeoutCheckInterval = time.Second
 
 	tfc := newController()
 	stopCh := make(chan struct{})
@@ -84,6 +83,7 @@ func TestTraceflow(t *testing.T) {
 		Spec: crdv1alpha1.TraceflowSpec{
 			Source:      crdv1alpha1.Source{Namespace: "ns1", Pod: "pod1"},
 			Destination: crdv1alpha1.Destination{Namespace: "ns2", Pod: "pod2"},
+			Timeout:     2, // 2 seconds timeout
 		},
 	}
 
@@ -118,9 +118,9 @@ func TestTraceflow(t *testing.T) {
 	tfc.client.CrdV1alpha1().Traceflows().Create(context.TODO(), &tf1, metav1.CreateOptions{})
 	res, _ = tfc.waitForTraceflow("tf1", crdv1alpha1.Running, time.Second)
 	assert.NotNil(t, res)
-	res, _ = tfc.waitForTraceflow("tf1", crdv1alpha1.Failed, timeoutDuration*2)
+	res, _ = tfc.waitForTraceflow("tf1", crdv1alpha1.Failed, defaultTimeoutDuration*2)
 	assert.NotNil(t, res)
-	assert.True(t, time.Now().Sub(startTime) >= timeoutDuration)
+	assert.True(t, time.Now().Sub(startTime) >= time.Second*time.Duration(tf1.Spec.Timeout))
 	assert.Equal(t, res.Status.Reason, traceflowTimeout)
 	assert.True(t, res.Status.DataplaneTag == 0)
 	assert.Equal(t, numRunningTraceflows(), 0)

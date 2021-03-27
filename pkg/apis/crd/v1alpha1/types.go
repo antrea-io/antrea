@@ -92,6 +92,9 @@ const (
 	EtherTypeIPv6 uint16 = 0x86DD
 )
 
+// Default timeout in seconds.
+const DefaultTraceflowTimeout uint16 = 20
+
 // +genclient
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -108,6 +111,13 @@ type TraceflowSpec struct {
 	Source      Source      `json:"source,omitempty"`
 	Destination Destination `json:"destination,omitempty"`
 	Packet      Packet      `json:"packet,omitempty"`
+	// LiveTraffic indicates the Traceflow is to trace the live traffic
+	// rather than an injected packet, when set to true. The first packet of
+	// the first connection that matches the packet spec will be traced.
+	LiveTraffic bool `json:"liveTraffic,omitempty"`
+	// Timeout specifies the timeout of the Traceflow in seconds. Defaults
+	// to 20 seconds if not set.
+	Timeout uint16 `json:"timeout,omitempty"`
 }
 
 // Source describes the source spec of the traceflow.
