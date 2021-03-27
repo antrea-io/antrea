@@ -16,6 +16,7 @@ package networkpolicy
 
 import (
 	"context"
+	"fmt"
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -49,10 +50,41 @@ func (n *NetworkPolicyController) updateClusterGroup(oldObj, curObj interface{})
 	klog.V(2).Infof("Processing UPDATE event for ClusterGroup %s", cg.Name)
 	newGroup := n.processClusterGroup(cg)
 	oldGroup := n.processClusterGroup(og)
-	ipBlockUpdated := newGroup.IPBlock != oldGroup.IPBlock
-	svcRefUpdated := newGroup.ServiceReference != oldGroup.ServiceReference
-	if getNormalizedNameForSelector(newGroup.Selector) == getNormalizedNameForSelector(oldGroup.Selector) && !ipBlockUpdated && !svcRefUpdated {
-		// No change in the selectors of the ClusterGroup. No need to enqueue for further sync.
+
+	selectorUpdated := func() bool {
+		return getNormalizedNameForSelector(newGroup.Selector) != getNormalizedNameForSelector(oldGroup.Selector)
+	}
+	svcRefUpdated := func() bool {
+		oldSvc, newSvc := oldGroup.ServiceReference, newGroup.ServiceReference
+		if oldSvc != nil && newSvc != nil && oldSvc.Name == newSvc.Name && oldSvc.Namespace == newSvc.Namespace {
+			return false
+		} else if oldSvc == nil && newSvc == nil {
+			return false
+		}
+		return true
+	}
+	ipBlockUpdated := func() bool {
+		oldIPB, newIPB := oldGroup.IPBlock, newGroup.IPBlock
+		// ClusterGroup ipBlock does not support Except
+		if oldIPB != nil && newIPB != nil && ipNetToCIDRStr(oldIPB.CIDR) == ipNetToCIDRStr(newIPB.CIDR) {
+			return false
+		} else if oldIPB == nil && newIPB == nil {
+			return false
+		}
+		return true
+	}
+	childGroupsUpdated := func() bool {
+		oldChildGroups, newChildGroups := sets.String{}, sets.String{}
+		for _, c := range oldGroup.ChildGroups {
+			oldChildGroups.Insert(c)
+		}
+		for _, c := range newGroup.ChildGroups {
+			newChildGroups.Insert(c)
+		}
+		return !oldChildGroups.Equal(newChildGroups)
+	}
+	if !ipBlockUpdated() && !svcRefUpdated() && !selectorUpdated() && !childGroupsUpdated() {
+		// No change in the contents of the ClusterGroup. No need to enqueue for further sync.
 		return
 	}
 	n.internalGroupStore.Update(newGroup)
@@ -88,6 +120,12 @@ func (n *NetworkPolicyController) processClusterGroup(cg *corev1a2.ClusterGroup)
 	internalGroup := antreatypes.Group{
 		Name: cg.Name,
 		UID:  cg.UID,
+	}
+	if len(cg.Spec.ChildGroups) > 0 {
+		for _, childCGName := range cg.Spec.ChildGroups {
+			internalGroup.ChildGroups = append(internalGroup.ChildGroups, string(childCGName))
+		}
+		return &internalGroup
 	}
 	if cg.Spec.IPBlock != nil {
 		ipb, _ := toAntreaIPBlockForCRD(cg.Spec.IPBlock)
@@ -178,14 +216,14 @@ func (n *NetworkPolicyController) syncInternalGroup(key string) error {
 	} else {
 		n.groupingInterface.DeleteGroup(clusterGroupType, grp.Name)
 	}
-	// for ipBlock Groups, newMemberSet and grp.GroupMembers will both be empty.
 	if selectorUpdated {
-		// Update the internal Group object in the store with the Pods as GroupMembers.
+		// Update the internal Group object in the store with the new selector.
 		updatedGrp := &antreatypes.Group{
 			UID:              grp.UID,
 			Name:             grp.Name,
 			Selector:         grp.Selector,
 			ServiceReference: grp.ServiceReference,
+			ChildGroups:      grp.ChildGroups,
 		}
 		klog.V(2).Infof("Updating existing internal Group %s", key)
 		n.internalGroupStore.Update(updatedGrp)
@@ -197,7 +235,23 @@ func (n *NetworkPolicyController) syncInternalGroup(key string) error {
 		klog.Errorf("Failed to update ClusterGroup %s GroupMembersComputed condition to %s: %v", cg.Name, v1.ConditionTrue, err)
 		return err
 	}
+	n.triggerParentGroupSync(grp)
 	return n.triggerCNPUpdates(cg)
+}
+
+func (n *NetworkPolicyController) triggerParentGroupSync(grp *antreatypes.Group) {
+	// TODO: if the max supported group nesting level increases, a Group having children
+	//  will no longer be a valid indication that it cannot have parents.
+	if len(grp.ChildGroups) == 0 {
+		parentGroupObjs, err := n.internalGroupStore.GetByIndex(store.ChildGroupIndex, grp.Name)
+		if err != nil {
+			klog.Errorf("Error retrieving parents of ClusterGroup %s: %v", grp.Name, err)
+		}
+		for _, p := range parentGroupObjs {
+			parentGrp := p.(*antreatypes.Group)
+			n.enqueueInternalGroup(parentGrp.Name)
+		}
+	}
 }
 
 // triggerCNPUpdates triggers processing of ClusterNetworkPolicies associated with the input ClusterGroup.
@@ -333,25 +387,49 @@ func (n *NetworkPolicyController) GetAssociatedGroups(name, namespace string) ([
 	if !exists {
 		return nil, nil
 	}
-	groupObjs := make([]antreatypes.Group, 0, len(clusterGroups))
+	var groupObjs []antreatypes.Group
 	for _, g := range clusterGroups {
-		group, found, _ := n.internalGroupStore.Get(g)
-		if found {
-			groupObjs = append(groupObjs, *group.(*antreatypes.Group))
+		groupObjs = append(groupObjs, n.getAssociatedGroupsByName(g)...)
+	}
+	// Remove duplicates in the groupObj slice.
+	groupKeys, j := make(map[string]bool), 0
+	for _, g := range groupObjs {
+		if _, exists := groupKeys[g.Name]; !exists {
+			groupKeys[g.Name] = true
+			groupObjs[j] = g
+			j++
 		}
 	}
-	return groupObjs, nil
+	return groupObjs[:j], nil
+}
+
+// getAssociatedGroupsByName retrieves the internal Group and all it's parent Group objects
+// (if any) by Group name.
+func (n *NetworkPolicyController) getAssociatedGroupsByName(grpName string) []antreatypes.Group {
+	var groups []antreatypes.Group
+	groupObj, found, _ := n.internalGroupStore.Get(grpName)
+	if !found {
+		return groups
+	}
+	grp := groupObj.(*antreatypes.Group)
+	groups = append(groups, *grp)
+	parentGroupObjs, err := n.internalGroupStore.GetByIndex(store.ChildGroupIndex, grp.Name)
+	if err != nil {
+		klog.Errorf("Error retrieving parents of ClusterGroup %s: %v", grp.Name, err)
+	}
+	for _, p := range parentGroupObjs {
+		parentGrp := p.(*antreatypes.Group)
+		groups = append(groups, *parentGrp)
+	}
+	return groups
 }
 
 // GetGroupMembers returns the current members of a ClusterGroup.
 func (n *NetworkPolicyController) GetGroupMembers(cgName string) (controlplane.GroupMemberSet, error) {
-	pods, externalEntities := n.groupingInterface.GetEntities(clusterGroupType, cgName)
-	memberSet := controlplane.GroupMemberSet{}
-	for _, pod := range pods {
-		memberSet.Insert(podToGroupMember(pod, true))
+	groupObj, found, _ := n.internalGroupStore.Get(cgName)
+	if found {
+		group := groupObj.(*antreatypes.Group)
+		return n.getClusterGroupMemberSet(group), nil
 	}
-	for _, entity := range externalEntities {
-		memberSet.Insert(externalEntityToGroupMember(entity))
-	}
-	return memberSet, nil
+	return controlplane.GroupMemberSet{}, fmt.Errorf("no internal Group with name %s is found", cgName)
 }

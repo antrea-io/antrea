@@ -232,6 +232,11 @@ func (in *GroupSpec) DeepCopyInto(out *GroupSpec) {
 		*out = new(v1.LabelSelector)
 		(*in).DeepCopyInto(*out)
 	}
+	if in.ChildGroups != nil {
+		in, out := &in.ChildGroups, &out.ChildGroups
+		*out = make([]ClusterGroupReference, len(*in))
+		copy(*out, *in)
+	}
 	return
 }
 

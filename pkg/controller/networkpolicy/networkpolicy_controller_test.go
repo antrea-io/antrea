@@ -92,7 +92,6 @@ func newController(objects ...runtime.Object) (*fake.Clientset, *networkPolicyCo
 	internalNetworkPolicyStore := store.NewNetworkPolicyStore()
 	internalGroupStore := store.NewGroupStore()
 	cgInformer := crdInformerFactory.Core().V1alpha2().ClusterGroups()
-	cgStore := crdInformerFactory.Core().V1alpha2().ClusterGroups().Informer().GetStore()
 	groupEntityIndex := grouping.NewGroupEntityIndex()
 	groupingController := grouping.NewGroupEntityController(groupEntityIndex,
 		informerFactory.Core().V1().Pods(),
@@ -126,7 +125,7 @@ func newController(objects ...runtime.Object) (*fake.Clientset, *networkPolicyCo
 		informerFactory.Networking().V1().NetworkPolicies().Informer().GetStore(),
 		crdInformerFactory.Security().V1alpha1().ClusterNetworkPolicies().Informer().GetStore(),
 		crdInformerFactory.Security().V1alpha1().Tiers().Informer().GetStore(),
-		cgStore,
+		crdInformerFactory.Core().V1alpha2().ClusterGroups().Informer().GetStore(),
 		appliedToGroupStore,
 		addressGroupStore,
 		internalNetworkPolicyStore,
@@ -2820,6 +2819,32 @@ func TestCIDRStrToIPNet(t *testing.T) {
 	}
 }
 
+func TestIPNetToCIDRStr(t *testing.T) {
+	ipNetV4, _ := cidrStrToIPNet("10.9.8.7/6")
+	ipNetV6, _ := cidrStrToIPNet("2002::1234:abcd:ffff:c0a8:101/64")
+	tests := []struct {
+		name string
+		inC  controlplane.IPNet
+		expC string
+	}{
+		{
+			name: "ipv4-address",
+			inC:  *ipNetV4,
+			expC: "10.9.8.7/6",
+		},
+		{
+			name: "ipv6-address",
+			inC:  *ipNetV6,
+			expC: "2002::1234:abcd:ffff:c0a8:101/64",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expC, ipNetToCIDRStr(tt.inC))
+		})
+	}
+}
+
 func TestIPStrToIPAddress(t *testing.T) {
 	ip1 := "10.0.1.10"
 	expIP1 := net.ParseIP(ip1)
@@ -2900,6 +2925,37 @@ func TestGetAppliedToWorkloads(t *testing.T) {
 			PodSelector: &selectorB,
 		},
 	}
+	selectorC := metav1.LabelSelector{MatchLabels: map[string]string{"foo3": "bar3"}}
+	cgC := v1alpha2.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{Name: "cgC", UID: "uidC"},
+		Spec: v1alpha2.GroupSpec{
+			PodSelector: &selectorC,
+		},
+	}
+	cgD := v1alpha2.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{Name: "cgD", UID: "uidD"},
+		Spec: v1alpha2.GroupSpec{
+			PodSelector: &selectorC,
+		},
+	}
+	nestedCG1 := v1alpha2.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{Name: "nested-cg-A-B", UID: "uidE"},
+		Spec: v1alpha2.GroupSpec{
+			ChildGroups: []v1alpha2.ClusterGroupReference{"cgA", "cgB"},
+		},
+	}
+	nestedCG2 := v1alpha2.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{Name: "nested-cg-A-C", UID: "uidF"},
+		Spec: v1alpha2.GroupSpec{
+			ChildGroups: []v1alpha2.ClusterGroupReference{"cgA", "cgC"},
+		},
+	}
+	nestedCG3 := v1alpha2.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{Name: "nested-cg-A-C", UID: "uidG"},
+		Spec: v1alpha2.GroupSpec{
+			ChildGroups: []v1alpha2.ClusterGroupReference{"cgA", "cgC", "cgD"},
+		},
+	}
 	podA := getPod("podA", "nsA", "nodeA", "10.0.0.1", false)
 	podA.Labels = map[string]string{"foo1": "bar1"}
 	podB := getPod("podB", "nsA", "nodeB", "10.0.0.2", false)
@@ -2928,21 +2984,170 @@ func TestGetAppliedToWorkloads(t *testing.T) {
 			expPods: emptyPods,
 			expEEs:  emptyEEs,
 		},
+		{
+			name: "atg-for-nested-cg-one-child-empty",
+			inATG: &antreatypes.AppliedToGroup{
+				Name: nestedCG1.Name,
+				UID:  nestedCG1.UID,
+			},
+			expPods: []*corev1.Pod{podA},
+			expEEs:  emptyEEs,
+		},
+		{
+			name: "atg-for-nested-cg-both-children-match-pod",
+			inATG: &antreatypes.AppliedToGroup{
+				Name: nestedCG2.Name,
+				UID:  nestedCG2.UID,
+			},
+			expPods: []*corev1.Pod{podA, podB},
+			expEEs:  emptyEEs,
+		},
+		{
+			name: "atg-for-nested-cg-children-overlap-pod",
+			inATG: &antreatypes.AppliedToGroup{
+				Name: nestedCG3.Name,
+				UID:  nestedCG3.UID,
+			},
+			expPods: []*corev1.Pod{podA, podB},
+			expEEs:  emptyEEs,
+		},
 	}
 	_, c := newController()
 	c.groupingInterface.AddPod(podA)
 	c.groupingInterface.AddPod(podB)
-	c.cgStore.Add(&cgA)
-	c.cgStore.Add(&cgB)
-	c.addClusterGroup(&cgA)
-	c.syncInternalGroup(cgA.Name)
-	c.addClusterGroup(&cgB)
-	c.syncInternalGroup(cgB.Name)
+	clusterGroups := []v1alpha2.ClusterGroup{cgA, cgB, cgC, cgD, nestedCG1, nestedCG2}
+	for i, cg := range clusterGroups {
+		c.cgStore.Add(&clusterGroups[i])
+		c.addClusterGroup(&clusterGroups[i])
+		c.syncInternalGroup(cg.Name)
+	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			actualPods, actualEEs := c.getAppliedToWorkloads(tt.inATG)
 			assert.Equal(t, tt.expEEs, actualEEs)
 			assert.Equal(t, tt.expPods, actualPods)
+		})
+	}
+}
+
+func TestGetAddressGroupMemberSet(t *testing.T) {
+	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
+	cgA := v1alpha2.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{Name: "cgA", UID: "uidA"},
+		Spec: v1alpha2.GroupSpec{
+			PodSelector: &selectorA,
+		},
+	}
+	selectorB := metav1.LabelSelector{MatchLabels: map[string]string{"foo2": "bar2"}}
+	cgB := v1alpha2.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{Name: "cgB", UID: "uidB"},
+		Spec: v1alpha2.GroupSpec{
+			PodSelector: &selectorB,
+		},
+	}
+	selectorC := metav1.LabelSelector{MatchLabels: map[string]string{"foo3": "bar3"}}
+	cgC := v1alpha2.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{Name: "cgC", UID: "uidC"},
+		Spec: v1alpha2.GroupSpec{
+			PodSelector: &selectorC,
+		},
+	}
+	cgD := v1alpha2.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{Name: "cgD", UID: "uidD"},
+		Spec: v1alpha2.GroupSpec{
+			PodSelector: &selectorC,
+		},
+	}
+	nestedCG1 := v1alpha2.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{Name: "nested-cg-A-B", UID: "uidE"},
+		Spec: v1alpha2.GroupSpec{
+			ChildGroups: []v1alpha2.ClusterGroupReference{"cgA", "cgB"},
+		},
+	}
+	nestedCG2 := v1alpha2.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{Name: "nested-cg-A-C", UID: "uidF"},
+		Spec: v1alpha2.GroupSpec{
+			ChildGroups: []v1alpha2.ClusterGroupReference{"cgA", "cgC"},
+		},
+	}
+	nestedCG3 := v1alpha2.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{Name: "nested-cg-A-C", UID: "uidG"},
+		Spec: v1alpha2.GroupSpec{
+			ChildGroups: []v1alpha2.ClusterGroupReference{"cgA", "cgC", "cgD"},
+		},
+	}
+	podA := getPod("podA", "nsA", "nodeA", "10.0.0.1", false)
+	podA.Labels = map[string]string{"foo1": "bar1"}
+	podB := getPod("podB", "nsA", "nodeB", "10.0.0.2", false)
+	podB.Labels = map[string]string{"foo3": "bar3"}
+
+	podAMemberSet := controlplane.GroupMemberSet{}
+	podAMemberSet.Insert(podToGroupMember(podA, true))
+	podABMemberSet := controlplane.GroupMemberSet{}
+	podABMemberSet.Insert(podToGroupMember(podA, true))
+	podABMemberSet.Insert(podToGroupMember(podB, true))
+	tests := []struct {
+		name         string
+		inAddrGrp    *antreatypes.AddressGroup
+		expMemberSet controlplane.GroupMemberSet
+	}{
+		{
+			name: "addrgrp-for-cg",
+			inAddrGrp: &antreatypes.AddressGroup{
+				Name: cgA.Name,
+				UID:  cgA.UID,
+			},
+			expMemberSet: podAMemberSet,
+		},
+		{
+			name: "addrgrp-for-cg-no-pod-match",
+			inAddrGrp: &antreatypes.AddressGroup{
+				Name: cgB.Name,
+				UID:  cgB.UID,
+			},
+			expMemberSet: controlplane.GroupMemberSet{},
+		},
+		{
+			name: "addrgrp-for-nested-cg-one-child-empty",
+			inAddrGrp: &antreatypes.AddressGroup{
+				Name: nestedCG1.Name,
+				UID:  nestedCG1.UID,
+			},
+			expMemberSet: podAMemberSet,
+		},
+		{
+			name: "addrgrp-for-nested-cg-both-children-match-pod",
+			inAddrGrp: &antreatypes.AddressGroup{
+				Name: nestedCG2.Name,
+				UID:  nestedCG2.UID,
+			},
+			expMemberSet: podABMemberSet,
+		},
+		{
+			name: "addrgrp-for-nested-cg-children-overlap-pod",
+			inAddrGrp: &antreatypes.AddressGroup{
+				Name: nestedCG3.Name,
+				UID:  nestedCG3.UID,
+			},
+			expMemberSet: podABMemberSet,
+		},
+	}
+	_, c := newController()
+	c.groupingInterface.AddPod(podA)
+	c.groupingInterface.AddPod(podB)
+	clusterGroups := []v1alpha2.ClusterGroup{cgA, cgB, cgC, cgD, nestedCG1, nestedCG2}
+	for i, cg := range clusterGroups {
+		c.cgStore.Add(&clusterGroups[i])
+		c.addClusterGroup(&clusterGroups[i])
+		c.syncInternalGroup(cg.Name)
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			actualMemberSet := c.getAddressGroupMemberSet(tt.inAddrGrp)
+			extraItems := actualMemberSet.Difference(tt.expMemberSet)
+			missingItems := tt.expMemberSet.Difference(actualMemberSet)
+			assert.Equal(t, []*controlplane.GroupMember{}, extraItems.Items())
+			assert.Equal(t, []*controlplane.GroupMember{}, missingItems.Items())
 		})
 	}
 }

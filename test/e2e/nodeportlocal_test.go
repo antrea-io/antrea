@@ -211,7 +211,7 @@ func NPLTestMultiplePods(t *testing.T) {
 		validatePortInRange(t, nplAnnotations, defaultStartPort, defaultEndPort)
 		checkTrafficForNPL(testData, r, nplAnnotations, clientName)
 
-		testData.deletePod(testPodName)
+		testData.deletePod(testNamespace, testPodName)
 		checkNPLRulesForPod(t, testData, r, nplAnnotations, antreaPod, testPodIP, false)
 	}
 }
@@ -274,7 +274,7 @@ func NPLTestPodAddMultiPort(t *testing.T) {
 	validatePortInRange(t, nplAnnotations, defaultStartPort, defaultEndPort)
 	checkTrafficForNPL(testData, r, nplAnnotations, clientName)
 
-	testData.deletePod(testPodName)
+	testData.deletePod(testNamespace, testPodName)
 	checkNPLRulesForPod(t, testData, r, nplAnnotations, antreaPod, testPodIP, false)
 }
 

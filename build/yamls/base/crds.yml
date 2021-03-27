@@ -715,6 +715,8 @@ spec:
             spec:
               type: object
               properties:
+                childGroups:
+                  x-kubernetes-preserve-unknown-fields: true
                 podSelector:
                   x-kubernetes-preserve-unknown-fields: true
                 namespaceSelector:

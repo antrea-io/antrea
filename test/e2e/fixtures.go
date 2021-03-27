@@ -335,7 +335,7 @@ func teardownTest(tb testing.TB, data *TestData) {
 
 func deletePodWrapper(tb testing.TB, data *TestData, name string) {
 	tb.Logf("Deleting Pod '%s'", name)
-	if err := data.deletePod(name); err != nil {
+	if err := data.deletePod(testNamespace, name); err != nil {
 		tb.Logf("Error when deleting Pod: %v", err)
 	}
 }

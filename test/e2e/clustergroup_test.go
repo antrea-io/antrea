@@ -136,6 +136,115 @@ func testInvalidCGServiceRefWithIPBlock(t *testing.T) {
 	}
 }
 
+func testInvalidCGChildGroupDoesNotExist(t *testing.T) {
+	invalidErr := fmt.Errorf("clustergroup childGroup does not exist")
+	cgName := "child-group-not-exist"
+	cg := &corev1a1.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: cgName,
+		},
+		Spec: corev1a1.GroupSpec{
+			ChildGroups: []corev1a1.ClusterGroupReference{corev1a1.ClusterGroupReference("some-non-existing-cg")},
+		},
+	}
+	if _, err := k8sUtils.CreateOrUpdateCG(cg); err == nil {
+		// Above creation of CG must fail as it is an invalid spec.
+		failOnError(invalidErr, t)
+	}
+}
+
+var testChildCGName = "test-child-cg"
+
+func createChildCGForTest(t *testing.T) {
+	cg := &corev1a1.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: testChildCGName,
+		},
+		Spec: corev1a1.GroupSpec{
+			PodSelector: &metav1.LabelSelector{},
+		},
+	}
+	if _, err := k8sUtils.CreateOrUpdateCG(cg); err != nil {
+		failOnError(err, t)
+	}
+}
+
+func cleanupChildCGForTest(t *testing.T) {
+	if err := k8sUtils.DeleteCG(testChildCGName); err != nil {
+		failOnError(err, t)
+	}
+}
+
+func testInvalidCGChildGroupWithPodSelector(t *testing.T) {
+	invalidErr := fmt.Errorf("clustergroup created with childGroups and podSelector")
+	cgName := "child-group-pod-selector"
+	pSel := &metav1.LabelSelector{MatchLabels: map[string]string{"pod": "x"}}
+	cg := &corev1a1.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: cgName,
+		},
+		Spec: corev1a1.GroupSpec{
+			PodSelector: pSel,
+			ChildGroups: []corev1a1.ClusterGroupReference{corev1a1.ClusterGroupReference(testChildCGName)},
+		},
+	}
+	if _, err := k8sUtils.CreateOrUpdateCG(cg); err == nil {
+		// Above creation of CG must fail as it is an invalid spec.
+		failOnError(invalidErr, t)
+	}
+}
+
+func testInvalidCGChildGroupWithServiceReference(t *testing.T) {
+	invalidErr := fmt.Errorf("clustergroup created with childGroups and ServiceReference")
+	cgName := "child-group-svcref"
+	svcRef := &corev1a1.ServiceReference{
+		Namespace: "y",
+		Name:      "test-svc",
+	}
+	cg := &corev1a1.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: cgName,
+		},
+		Spec: corev1a1.GroupSpec{
+			ServiceReference: svcRef,
+			ChildGroups:      []corev1a1.ClusterGroupReference{corev1a1.ClusterGroupReference(testChildCGName)},
+		},
+	}
+	if _, err := k8sUtils.CreateOrUpdateCG(cg); err == nil {
+		// Above creation of CG must fail as it is an invalid spec.
+		failOnError(invalidErr, t)
+	}
+}
+
+func testInvalidCGMaxNestedLevel(t *testing.T) {
+	invalidErr := fmt.Errorf("clustergroup created with childGroup which has childGroups itself")
+	cgName1, cgName2 := "cg-nested-1", "cg-nested-2"
+	cg1 := &corev1a1.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{Name: cgName1},
+		Spec: corev1a1.GroupSpec{
+			ChildGroups: []corev1a1.ClusterGroupReference{corev1a1.ClusterGroupReference(testChildCGName)},
+		},
+	}
+	if _, err := k8sUtils.CreateOrUpdateCG(cg1); err != nil {
+		// Above creation of CG must succeed as it is a valid spec.
+		failOnError(err, t)
+	}
+	cg2 := &corev1a1.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{Name: cgName2},
+		Spec: corev1a1.GroupSpec{
+			ChildGroups: []corev1a1.ClusterGroupReference{corev1a1.ClusterGroupReference(cgName1)},
+		},
+	}
+	if _, err := k8sUtils.CreateOrUpdateCG(cg2); err == nil {
+		// Above creation of CG must fail as it is an invalid spec.
+		failOnError(invalidErr, t)
+	}
+	// cleanup cg-nested-1
+	if err := k8sUtils.DeleteCG(cgName1); err != nil {
+		failOnError(err, t)
+	}
+}
+
 func TestClusterGroup(t *testing.T) {
 	data, err := setupTest(t)
 	if err != nil {
@@ -151,6 +260,14 @@ func TestClusterGroup(t *testing.T) {
 		t.Run("Case=ServiceRefWithPodSelectorDenied", func(t *testing.T) { testInvalidCGServiceRefWithPodSelector(t) })
 		t.Run("Case=ServiceRefWithNamespaceSelectorDenied", func(t *testing.T) { testInvalidCGServiceRefWithNSSelector(t) })
 		t.Run("Case=ServiceRefWithIPBlockDenied", func(t *testing.T) { testInvalidCGServiceRefWithIPBlock(t) })
+		t.Run("Case=InvalidChildGroupName", func(t *testing.T) { testInvalidCGChildGroupDoesNotExist(t) })
+	})
+	t.Run("TestGroupClusterGroupValidateChildGroup", func(t *testing.T) {
+		createChildCGForTest(t)
+		t.Run("Case=ChildGroupWithPodSelectorDenied", func(t *testing.T) { testInvalidCGChildGroupWithPodSelector(t) })
+		t.Run("Case=ChildGroupWithPodServiceReferenceDenied", func(t *testing.T) { testInvalidCGChildGroupWithServiceReference(t) })
+		t.Run("Case=ChildGroupExceedMaxNestedLevel", func(t *testing.T) { testInvalidCGMaxNestedLevel(t) })
+		cleanupChildCGForTest(t)
 	})
 	failOnError(k8sUtils.CleanCGs(), t)
 }
