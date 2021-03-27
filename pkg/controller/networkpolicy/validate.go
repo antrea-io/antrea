@@ -29,6 +29,8 @@ import (
 
 	corev1a2 "github.com/vmware-tanzu/antrea/pkg/apis/core/v1alpha2"
 	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
+	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy/store"
+	"github.com/vmware-tanzu/antrea/pkg/controller/types"
 	"github.com/vmware-tanzu/antrea/pkg/util/env"
 )
 
@@ -630,10 +632,10 @@ func (t *tierValidator) deleteValidate(oldObj interface{}, userInfo authenticati
 	return "", true
 }
 
-// validateAntreaGroupSelectors ensures that an IPBlock is not set along with namespaceSelector and/or a
+// validateAntreaGroupSpec ensures that an IPBlock is not set along with namespaceSelector and/or a
 // podSelector. Similarly, ExternalEntitySelector cannot be set with PodSelector.
-func validateAntreaGroupSelectors(s corev1a2.GroupSpec) (string, bool) {
-	selector, serviceRef, ipBlock := 0, 0, 0
+func validateAntreaGroupSpec(s corev1a2.GroupSpec) (string, bool) {
+	selector, serviceRef, ipBlock, childGroups := 0, 0, 0, 0
 	if s.NamespaceSelector != nil || s.ExternalEntitySelector != nil || s.PodSelector != nil {
 		selector = 1
 	}
@@ -646,8 +648,37 @@ func validateAntreaGroupSelectors(s corev1a2.GroupSpec) (string, bool) {
 	if s.ServiceReference != nil {
 		serviceRef = 1
 	}
-	if selector+serviceRef+ipBlock > 1 {
-		return fmt.Sprint("At most one of podSelector/namespaceSelector, externalEntitySelector/namespaceSelector, serviceReference or ipBlock can be set for a ClusterGroup"), false
+	if len(s.ChildGroups) > 0 {
+		childGroups = 1
+	}
+	if selector+serviceRef+ipBlock+childGroups > 1 {
+		return fmt.Sprint("At most one of podSelector/namespaceSelector, externalEntitySelector/namespaceSelector, serviceReference, ipBlock or childGroups can be set for a ClusterGroup"), false
+	}
+	return "", true
+}
+
+func (g *groupValidator) validateChildGroup(s *corev1a2.ClusterGroup, isUpdate bool) (string, bool) {
+	if len(s.Spec.ChildGroups) > 0 {
+		if isUpdate {
+			parentGrps, err := g.networkPolicyController.internalGroupStore.GetByIndex(store.ChildGroupIndex, s.Name)
+			if err != nil {
+				return fmt.Sprintf("error retrieving parents of ClusterGroup %s: %v", s.Name, err), false
+			}
+			// TODO: relax this constraint when max group nesting level increases.
+			if len(parentGrps) > 0 {
+				return fmt.Sprintf("cannot set childGroups for ClusterGroup %s, who has %d parents", s.Name, len(parentGrps)), false
+			}
+		}
+		for _, groupname := range s.Spec.ChildGroups {
+			cg, err := g.networkPolicyController.cgLister.Get(string(groupname))
+			if err != nil {
+				return fmt.Sprintf("child group %s does not exist", string(groupname)), false
+			}
+			// TODO: relax this constraint when max group nesting level increases.
+			if len(cg.Spec.ChildGroups) > 0 {
+				return fmt.Sprintf("cannot set ClusterGroup %s as childGroup, who has %d childGroups itself", string(groupname), len(cg.Spec.ChildGroups)), false
+			}
+		}
 	}
 	return "", true
 }
@@ -655,13 +686,21 @@ func validateAntreaGroupSelectors(s corev1a2.GroupSpec) (string, bool) {
 // createValidate validates the CREATE events of ClusterGroup resources.
 func (g *groupValidator) createValidate(curObj interface{}, userInfo authenticationv1.UserInfo) (string, bool) {
 	curCG := curObj.(*corev1a2.ClusterGroup)
-	return validateAntreaGroupSelectors(curCG.Spec)
+	reason, allowed := validateAntreaGroupSpec(curCG.Spec)
+	if !allowed {
+		return reason, allowed
+	}
+	return g.validateChildGroup(curCG, false)
 }
 
 // updateValidate validates the UPDATE events of ClusterGroup resources.
 func (g *groupValidator) updateValidate(curObj, oldObj interface{}, userInfo authenticationv1.UserInfo) (string, bool) {
 	curCG := curObj.(*corev1a2.ClusterGroup)
-	return validateAntreaGroupSelectors(curCG.Spec)
+	reason, allowed := validateAntreaGroupSpec(curCG.Spec)
+	if !allowed {
+		return reason, allowed
+	}
+	return g.validateChildGroup(curCG, true)
 }
 
 // deleteValidate validates the DELETE events of ClusterGroup resources.
@@ -669,8 +708,29 @@ func (g *groupValidator) deleteValidate(oldObj interface{}, userInfo authenticat
 	oldCG := oldObj.(*corev1a2.ClusterGroup)
 	// ClusterGroup with existing ACNP references cannot be deleted.
 	cnps, err := g.networkPolicyController.cnpInformer.Informer().GetIndexer().ByIndex(ClusterGroupIndex, oldCG.Name)
-	if err != nil || len(cnps) > 0 {
-		return fmt.Sprintf("cluster group %s is referenced by %d Antrea ClusterNetworkPolicies", oldCG.Name, len(cnps)), false
+	if err != nil {
+		return fmt.Sprintf("error occurred when retrieving Antrea ClusterNetworkPolicies that refer to ClusterGroup %s: %v", oldCG.Name, err), false
+	}
+	if len(cnps) > 0 {
+		cnpNameList := make([]string, len(cnps))
+		for i := range cnps {
+			cnpObj := cnps[i].(*secv1alpha1.ClusterNetworkPolicy)
+			cnpNameList[i] = cnpObj.Name
+		}
+		return fmt.Sprintf("ClusterGroup %s is referenced by %d Antrea ClusterNetworkPolicies: %v", oldCG.Name, len(cnps), cnpNameList), false
+	}
+	// ClusterGroup referenced by other ClusterGroups as childGroup cannot be deleted.
+	parentGrps, err := g.networkPolicyController.internalGroupStore.GetByIndex(store.ChildGroupIndex, oldCG.Name)
+	if err != nil {
+		return fmt.Sprintf("error retrieving parents of ClusterGroup %s: %v", oldCG.Name, err), false
+	}
+	if len(parentGrps) > 0 {
+		parentGrpNameList := make([]string, len(parentGrps))
+		for i := range parentGrps {
+			grpObject := parentGrps[i].(*types.Group)
+			parentGrpNameList[i] = grpObject.Name
+		}
+		return fmt.Sprintf("ClusterGroup %s is referenced by %d ClusterGroups as childGroup: %v", oldCG.Name, len(parentGrps), parentGrpNameList), false
 	}
 	return "", true
 }

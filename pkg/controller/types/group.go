@@ -112,4 +112,6 @@ type Group struct {
 	// ServiceReference is reference to a v1.Service, which this Group keeps in sync
 	// and updates Selector based on the Service's selector.
 	ServiceReference *controlplane.ServiceReference
+	// ChildGroups is the list of Group names that belongs to this Group.
+	ChildGroups []string
 }

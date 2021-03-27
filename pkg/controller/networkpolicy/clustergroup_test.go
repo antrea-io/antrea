@@ -122,6 +122,20 @@ func TestProcessClusterGroup(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "cg-with-child-groups",
+			inputGroup: &corev1a2.ClusterGroup{
+				ObjectMeta: metav1.ObjectMeta{Name: "cgF", UID: "uidF"},
+				Spec: corev1a2.GroupSpec{
+					ChildGroups: []corev1a2.ClusterGroupReference{"cgA", "cgB"},
+				},
+			},
+			expectedGroup: &antreatypes.Group{
+				UID:         "uidF",
+				Name:        "cgF",
+				ChildGroups: []string{"cgA", "cgB"},
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -317,6 +331,20 @@ func TestUpdateClusterGroup(t *testing.T) {
 					Name:      "test-svc",
 					Namespace: "test-ns",
 				},
+			},
+		},
+		{
+			name: "cg-update-child-groups",
+			updatedGroup: &corev1a2.ClusterGroup{
+				ObjectMeta: metav1.ObjectMeta{Name: "cgA", UID: "uidA"},
+				Spec: corev1a2.GroupSpec{
+					ChildGroups: []corev1a2.ClusterGroupReference{"cgB", "cgC"},
+				},
+			},
+			expectedGroup: &antreatypes.Group{
+				UID:         "uidA",
+				Name:        "cgA",
+				ChildGroups: []string{"cgB", "cgC"},
 			},
 		},
 	}
@@ -599,7 +627,7 @@ var testPods = []*corev1.Pod{
 					Status: corev1.ConditionTrue,
 				},
 			},
-			PodIP: "10.10.1.1",
+			PodIPs: []corev1.PodIP{{IP: "10.10.1.1"}},
 		},
 	},
 	{
@@ -616,7 +644,7 @@ var testPods = []*corev1.Pod{
 					Status: corev1.ConditionTrue,
 				},
 			},
-			PodIP: "10.10.1.2",
+			PodIPs: []corev1.PodIP{{IP: "10.10.1.2"}},
 		},
 	},
 }
@@ -660,19 +688,34 @@ var externalEntities = []*corev1a2.ExternalEntity{
 
 var groups = []antreatypes.Group{
 	{
+		UID:      "groupUID0",
+		Name:     "group0",
+		Selector: antreatypes.NewGroupSelector("test-ns", &metav1.LabelSelector{MatchLabels: map[string]string{"app": "foo"}}, nil, nil),
+	},
+	{
 		UID:      "groupUID1",
 		Name:     "group1",
-		Selector: antreatypes.NewGroupSelector("test-ns", &metav1.LabelSelector{MatchLabels: map[string]string{"app": "foo"}}, nil, nil),
+		Selector: antreatypes.NewGroupSelector("test-ns", nil, nil, nil),
 	},
 	{
 		UID:      "groupUID2",
 		Name:     "group2",
-		Selector: antreatypes.NewGroupSelector("test-ns", nil, nil, nil),
+		Selector: antreatypes.NewGroupSelector("test-ns", &metav1.LabelSelector{MatchLabels: map[string]string{"app": "other"}}, nil, nil),
 	},
 	{
-		UID:      "groupUID3",
-		Name:     "group3",
-		Selector: antreatypes.NewGroupSelector("test-ns", &metav1.LabelSelector{MatchLabels: map[string]string{"app": "other"}}, nil, nil),
+		UID:         "groupUID3",
+		Name:        "group3",
+		ChildGroups: []string{"group0", "group1"},
+	},
+	{
+		UID:         "groupUID4",
+		Name:        "group4",
+		ChildGroups: []string{"group0", "group2"},
+	},
+	{
+		UID:         "groupUID5",
+		Name:        "group5",
+		ChildGroups: []string{"group1", "group2"},
 	},
 }
 
@@ -689,14 +732,14 @@ func TestGetAssociatedGroups(t *testing.T) {
 			groups,
 			"pod1",
 			"test-ns",
-			[]antreatypes.Group{groups[0], groups[1]},
+			[]antreatypes.Group{groups[0], groups[1], groups[3], groups[4], groups[5]},
 		},
 		{
 			"single-group-association",
 			groups,
 			"pod2",
 			"test-ns",
-			[]antreatypes.Group{groups[1]},
+			[]antreatypes.Group{groups[1], groups[3], groups[5]},
 		},
 		{
 			"no-group-association",
@@ -717,7 +760,9 @@ func TestGetAssociatedGroups(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			for i, g := range tt.existingGroups {
 				npc.internalGroupStore.Create(&tt.existingGroups[i])
-				npc.groupingInterface.AddGroup(clusterGroupType, g.Name, g.Selector)
+				if g.Selector != nil {
+					npc.groupingInterface.AddGroup(clusterGroupType, g.Name, g.Selector)
+				}
 			}
 			groups, err := npc.GetAssociatedGroups(tt.queryName, tt.queryNamespace)
 			assert.Equal(t, err, nil)
@@ -727,6 +772,11 @@ func TestGetAssociatedGroups(t *testing.T) {
 }
 
 func TestGetGroupMembers(t *testing.T) {
+	pod1MemberSet := controlplane.GroupMemberSet{}
+	pod1MemberSet.Insert(podToGroupMember(testPods[0], true))
+	pod12MemberSet := controlplane.GroupMemberSet{}
+	pod12MemberSet.Insert(podToGroupMember(testPods[0], true))
+	pod12MemberSet.Insert(podToGroupMember(testPods[1], true))
 	tests := []struct {
 		name            string
 		group           antreatypes.Group
@@ -735,32 +785,12 @@ func TestGetGroupMembers(t *testing.T) {
 		{
 			"multiple-members",
 			groups[1],
-			controlplane.GroupMemberSet{
-				"test-ns/pod1": &controlplane.GroupMember{
-					Pod: &controlplane.PodReference{
-						Name:      "pod1",
-						Namespace: "test-ns",
-					},
-				},
-				"test-ns/pod2": &controlplane.GroupMember{
-					Pod: &controlplane.PodReference{
-						Name:      "pod2",
-						Namespace: "test-ns",
-					},
-				},
-			},
+			pod12MemberSet,
 		},
 		{
 			"single-member",
 			groups[0],
-			controlplane.GroupMemberSet{
-				"test-ns/pod1": &controlplane.GroupMember{
-					Pod: &controlplane.PodReference{
-						Name:      "pod1",
-						Namespace: "test-ns",
-					},
-				},
-			},
+			pod1MemberSet,
 		},
 		{
 			"no-member",
@@ -777,10 +807,11 @@ func TestGetGroupMembers(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			npc.internalGroupStore.Create(&tt.group)
 			npc.groupingInterface.AddGroup(clusterGroupType, tt.group.Name, tt.group.Selector)
 			members, err := npc.GetGroupMembers(tt.group.Name)
-			assert.Equal(t, err, nil)
-			assert.Equal(t, members, tt.expectedMembers)
+			assert.Equal(t, nil, err)
+			assert.Equal(t, tt.expectedMembers, members)
 		})
 	}
 }

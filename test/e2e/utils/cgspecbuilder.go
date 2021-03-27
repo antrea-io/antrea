@@ -81,3 +81,12 @@ func (b *ClusterGroupSpecBuilder) SetServiceReference(svcNS, svcName string) *Cl
 	b.Spec.ServiceReference = svcRef
 	return b
 }
+
+func (b *ClusterGroupSpecBuilder) SetChildGroups(cgs []string) *ClusterGroupSpecBuilder {
+	var childGroups []corev1a2.ClusterGroupReference
+	for _, c := range cgs {
+		childGroups = append(childGroups, corev1a2.ClusterGroupReference(c))
+	}
+	b.Spec.ChildGroups = childGroups
+	return b
+}

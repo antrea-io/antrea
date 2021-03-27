@@ -60,6 +60,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy/store"
 	antreatypes "github.com/vmware-tanzu/antrea/pkg/controller/types"
 	"github.com/vmware-tanzu/antrea/pkg/features"
+	"github.com/vmware-tanzu/antrea/pkg/k8s"
 	utilsets "github.com/vmware-tanzu/antrea/pkg/util/sets"
 )
 
@@ -1070,7 +1071,7 @@ func (n *NetworkPolicyController) syncAddressGroup(key string) error {
 		internalNP := internalNPObj.(*antreatypes.NetworkPolicy)
 		utilsets.Merge(addrGroupNodeNames, internalNP.SpanMeta.NodeNames)
 	}
-	memberSet := n.populateAddressGroupMemberSet(addressGroup)
+	memberSet := n.getAddressGroupMemberSet(addressGroup)
 	updatedAddressGroup := &antreatypes.AddressGroup{
 		Name:         addressGroup.Name,
 		UID:          addressGroup.UID,
@@ -1083,29 +1084,52 @@ func (n *NetworkPolicyController) syncAddressGroup(key string) error {
 	return nil
 }
 
-func (n *NetworkPolicyController) populateAddressGroupMemberSet(g *antreatypes.AddressGroup) controlplane.GroupMemberSet {
-	var pods []*v1.Pod
-	var externalEntities []*v1alpha2.ExternalEntity
+// getAddressGroupMemberSet knows how to construct a GroupMemberSet that contains
+// all the entities selected by an AddressGroup.
+func (n *NetworkPolicyController) getAddressGroupMemberSet(g *antreatypes.AddressGroup) controlplane.GroupMemberSet {
 	// Check if an internal Group object exists corresponding to this AddressGroup.
-	_, found, _ := n.internalGroupStore.Get(g.Name)
+	groupObj, found, _ := n.internalGroupStore.Get(g.Name)
 	if found {
 		// This AddressGroup is derived from a ClusterGroup.
-		pods, externalEntities = n.groupingInterface.GetEntities(clusterGroupType, g.Name)
-	} else {
-		pods, externalEntities = n.groupingInterface.GetEntities(addressGroupType, g.Name)
+		group := groupObj.(*antreatypes.Group)
+		return n.getClusterGroupMemberSet(group)
 	}
-	memberSet := controlplane.GroupMemberSet{}
+	return n.getMemberSetForGroupType(addressGroupType, g.Name)
+}
+
+// getClusterGroupMemberSet knows how to construct a GroupMemberSet that contains
+// all the entities selected by a ClusterGroup. For ClusterGroup that has childGroups,
+// the members are computed as the union of all its childGroup's members.
+func (n *NetworkPolicyController) getClusterGroupMemberSet(group *antreatypes.Group) controlplane.GroupMemberSet {
+	if len(group.ChildGroups) == 0 {
+		return n.getMemberSetForGroupType(clusterGroupType, group.Name)
+	}
+	groupMemberSet := controlplane.GroupMemberSet{}
+	for _, childName := range group.ChildGroups {
+		childGroup, found, _ := n.internalGroupStore.Get(childName)
+		if found {
+			child := childGroup.(*antreatypes.Group)
+			groupMemberSet = groupMemberSet.Union(n.getMemberSetForGroupType(clusterGroupType, child.Name))
+		}
+	}
+	return groupMemberSet
+}
+
+// getMemberSetForGroupType knows how to construct a GroupMemberSet for the given
+// groupType and group name.
+func (n *NetworkPolicyController) getMemberSetForGroupType(groupType grouping.GroupType, name string) controlplane.GroupMemberSet {
+	groupMemberSet := controlplane.GroupMemberSet{}
+	pods, externalEntities := n.groupingInterface.GetEntities(groupType, name)
 	for _, pod := range pods {
 		if len(pod.Status.PodIPs) == 0 {
-			// No need to insert Pod IPAddress when it is unset.
 			continue
 		}
-		memberSet.Insert(podToGroupMember(pod, true))
+		groupMemberSet.Insert(podToGroupMember(pod, true))
 	}
-	for _, entity := range externalEntities {
-		memberSet.Insert(externalEntityToGroupMember(entity))
+	for _, ee := range externalEntities {
+		groupMemberSet.Insert(externalEntityToGroupMember(ee))
 	}
-	return memberSet
+	return groupMemberSet
 }
 
 // podToGroupMember is util function to convert a Pod to a GroupMember type.
@@ -1243,15 +1267,46 @@ func (n *NetworkPolicyController) syncAppliedToGroup(key string) error {
 	return nil
 }
 
-// getAppliedToWorkloads returns a list of workloads like Pods and ExternalEntities matching an AppliedToGroup
+// getAppliedToWorkloads returns a list of workloads (Pods and ExternalEntities) selected by an AppliedToGroup
 // for standalone selectors or corresponding to a ClusterGroup.
 func (n *NetworkPolicyController) getAppliedToWorkloads(g *antreatypes.AppliedToGroup) ([]*v1.Pod, []*v1alpha2.ExternalEntity) {
 	// Check if an internal Group object exists corresponding to this AppliedToGroup.
-	_, found, _ := n.internalGroupStore.Get(g.Name)
+	group, found, _ := n.internalGroupStore.Get(g.Name)
 	if found {
-		return n.groupingInterface.GetEntities(clusterGroupType, g.Name)
+		// This AppliedToGroup is derived from a ClusterGroup.
+		grp := group.(*antreatypes.Group)
+		return n.getClusterGroupWorkloads(grp)
 	}
 	return n.groupingInterface.GetEntities(appliedToGroupType, g.Name)
+}
+
+// getClusterGroupWorkloads returns a list of workloads (Pods and ExternalEntities) selected by a ClusterGroup.
+// For ClusterGroup that has childGroups, the workloads are computed as the union of all its childGroup's workloads.
+func (n *NetworkPolicyController) getClusterGroupWorkloads(group *antreatypes.Group) ([]*v1.Pod, []*v1alpha2.ExternalEntity) {
+	if len(group.ChildGroups) == 0 {
+		return n.groupingInterface.GetEntities(clusterGroupType, group.Name)
+	}
+	podNameSet, eeNameSet := sets.String{}, sets.String{}
+	var pods []*v1.Pod
+	var ees []*v1alpha2.ExternalEntity
+	for _, childName := range group.ChildGroups {
+		childPods, childEEs := n.groupingInterface.GetEntities(clusterGroupType, childName)
+		for _, pod := range childPods {
+			podString := k8s.NamespacedName(pod.Namespace, pod.Name)
+			if !podNameSet.Has(podString) {
+				podNameSet.Insert(podString)
+				pods = append(pods, pod)
+			}
+		}
+		for _, ee := range childEEs {
+			eeString := k8s.NamespacedName(ee.Namespace, ee.Name)
+			if !eeNameSet.Has(eeString) {
+				eeNameSet.Insert(eeString)
+				ees = append(ees, ee)
+			}
+		}
+	}
+	return pods, ees
 }
 
 // syncInternalNetworkPolicy retrieves all the AppliedToGroups associated with
@@ -1346,6 +1401,11 @@ func cidrStrToIPNet(cidr string) (*controlplane.IPNet, error) {
 		PrefixLength: int32(prefixLen64),
 	}
 	return ipNet, nil
+}
+
+// ipNetToCIDRStr returns the CIDR notation of a controlplane.IPNet.
+func ipNetToCIDRStr(ipNet controlplane.IPNet) string {
+	return net.IP(ipNet.IP).String() + "/" + strconv.Itoa(int(ipNet.PrefixLength))
 }
 
 // internalNetworkPolicyKeyFunc knows how to generate the key for an internal NetworkPolicy based on the object metadata

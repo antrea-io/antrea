@@ -27,7 +27,8 @@ import (
 )
 
 const (
-	ServiceIndex = "service"
+	ServiceIndex    = "service"
+	ChildGroupIndex = "childGroup"
 )
 
 // GroupKeyFunc knows how to get the key of an Group.
@@ -56,6 +57,13 @@ func NewGroupStore() storage.Interface {
 				return []string{}, nil
 			}
 			return []string{k8s.NamespacedName(g.ServiceReference.Namespace, g.ServiceReference.Name)}, nil
+		},
+		ChildGroupIndex: func(obj interface{}) ([]string, error) {
+			g, ok := obj.(*antreatypes.Group)
+			if !ok {
+				return []string{}, nil
+			}
+			return g.ChildGroups, nil
 		},
 	}
 	// genEventFunc is set to nil, thus watchers of this store will not be created.
