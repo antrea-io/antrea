@@ -46,7 +46,7 @@ var (
 	k8sUtils                             *KubernetesUtils
 	allTestList                          []*TestCase
 	pods, namespaces                     []string
-	podIPs                               map[string]string
+	podIPs                               map[string][]string
 	p80, p81, p8080, p8081, p8082, p8085 int32
 )
 
@@ -1388,7 +1388,12 @@ func testACNPPriorityOverride(t *testing.T) {
 		SetPriority(1.001).
 		SetAppliedToGroup([]ACNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}, NSSelector: map[string]string{"ns": "x"}}})
 	podZBIP, _ := podIPs["z/b"]
-	cidr := podZBIP + "/32"
+	cidr := podZBIP[0]
+	if strings.Contains(cidr, ".") {
+		cidr += "/32"
+	} else {
+		cidr += "/128"
+	}
 	// Highest priority. Drops traffic from z/b to x/a.
 	builder1.AddIngress(v1.ProtocolTCP, &p80, nil, nil, &cidr, nil, nil,
 		nil, nil, nil, crdv1alpha1.RuleActionDrop, "", "")
@@ -1467,7 +1472,12 @@ func testACNPTierOverride(t *testing.T) {
 		SetPriority(100).
 		SetAppliedToGroup([]ACNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}, NSSelector: map[string]string{"ns": "x"}}})
 	podZBIP, _ := podIPs["z/b"]
-	cidr := podZBIP + "/32"
+	cidr := podZBIP[0]
+	if strings.Contains(cidr, ".") {
+		cidr += "/32"
+	} else {
+		cidr += "/128"
+	}
 	// Highest priority tier. Drops traffic from z/b to x/a.
 	builder1.AddIngress(v1.ProtocolTCP, &p80, nil, nil, &cidr, nil, nil,
 		nil, nil, nil, crdv1alpha1.RuleActionDrop, "", "")
@@ -1925,12 +1935,19 @@ func testAuditLoggingBasic(t *testing.T, data *TestData) {
 	assert.Equalf(t, true, strings.Contains(stdout, "test-log-acnp-deny"), "audit log does not contain entries for test-log-acnp-deny")
 
 	destinations := []string{"z/a", "z/b", "z/c"}
-	srcIP, _ := podIPs["x/a"]
+	srcIPs, _ := podIPs["x/a"]
 	for _, d := range destinations {
-		dstIP, _ := podIPs[d]
-		// The audit log should contain log entry `... Drop <ofPriority> SRC: <x/a IP> DEST: <z/* IP> ...`
-		pattern := `Drop [0-9]+ SRC: ` + srcIP + ` DEST: ` + dstIP
-		assert.Regexp(t, pattern, stdout, "audit log does not contain expected entry for x/a to %s", d)
+		dstIPs, _ := podIPs[d]
+		for i := 0; i < len(srcIPs); i++ {
+			for j := 0; j < len(dstIPs); j++ {
+				if strings.Contains(srcIPs[i], ".") == strings.Contains(dstIPs[j], ".") {
+					// The audit log should contain log entry `... Drop <ofPriority> SRC: <x/a IP> DEST: <z/* IP> ...`
+					pattern := `Drop [0-9]+ SRC: ` + srcIPs[i] + ` DEST: ` + dstIPs[j]
+					assert.Regexp(t, pattern, stdout, "audit log does not contain expected entry for x/a to %s", d)
+					break
+				}
+			}
+		}
 	}
 	failOnError(k8sUtils.CleanACNPs(), t)
 }

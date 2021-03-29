@@ -2318,7 +2318,7 @@ data:
     # Enable Antrea ClusterNetworkPolicy feature to complement K8s NetworkPolicy for cluster admins
     # to define security policies which apply to the entire cluster, and Antrea NetworkPolicy
     # feature that supports priorities, rule actions and externalEntities in the future.
-    #  AntreaPolicy: false
+      AntreaPolicy: true
 
     # Enable flowexporter which exports polled conntrack connections as IPFIX flow records from each
     # agent to a configured collector.
@@ -2473,7 +2473,7 @@ data:
     # Enable Antrea ClusterNetworkPolicy feature to complement K8s NetworkPolicy for cluster admins
     # to define security policies which apply to the entire cluster, and Antrea NetworkPolicy
     # feature that supports priorities, rule actions and externalEntities in the future.
-    #  AntreaPolicy: false
+      AntreaPolicy: true
 
     # Enable collecting and exposing NetworkPolicy statistics.
     #  NetworkPolicyStats: false
