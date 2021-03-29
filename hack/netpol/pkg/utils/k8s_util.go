@@ -104,7 +104,7 @@ func (k *Kubernetes) Probe(ns1, pod1, ns2, pod2 string, port int) (bool, error) 
 		"/bin/sh",
 		"-c",
 		// 3 tries, timeout is 1 second
-		fmt.Sprintf("for i in $(seq 1 3); do ncat -vz -w 1 %s %d && exit 0 || true; done; exit 1", toIP, port),
+		fmt.Sprintf("for i in $(seq 1 3); do /agnhost connect %s:%d --timeout=1s --protocol=tcp && exit 0 || true; done; exit 1", toIP, port),
 	}
 	// HACK: inferring container name as c80, c81, etc, for simplicity.
 	containerName := fmt.Sprintf("c%v", port)
@@ -205,9 +205,9 @@ func (k *Kubernetes) CreateOrUpdateDeployment(ns, deploymentName string, replica
 		return v1.Container{
 			Name:            fmt.Sprintf("c%d", port),
 			ImagePullPolicy: v1.PullIfNotPresent,
-			Image:           "antrea/netpol-test:latest",
+			Image:           "k8s.gcr.io/e2e-test-images/agnhost:2.29",
 			// "-k" for persistent server
-			Command:         []string{"ncat", "-lk", "-p", fmt.Sprintf("%d", port)},
+			Command:         []string{"/agnhost", "serve-hostname", "--tcp", "--http=false", "--port", fmt.Sprintf("%d", port)},
 			SecurityContext: &v1.SecurityContext{},
 			Ports: []v1.ContainerPort{
 				{

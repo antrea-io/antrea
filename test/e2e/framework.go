@@ -937,8 +937,8 @@ func (data *TestData) createServerPod(name string, portName string, portNum int3
 
 // createCustomPod creates a Pod in given Namespace with custom labels.
 func (data *TestData) createServerPodWithLabels(name, ns string, portNum int32, labels map[string]string) error {
-	cmd := []string{"ncat", "-lk", "-p", fmt.Sprintf("%d", portNum)}
-	image := "antrea/netpol-test:latest"
+	cmd := []string{"/agnhost", "serve-hostname", "--tcp", "--http=false", "--port", fmt.Sprintf("%d", portNum)}
+	image := "k8s.gcr.io/e2e-test-images/agnhost:2.29"
 	env := corev1.EnvVar{Name: fmt.Sprintf("SERVE_PORT_%d", portNum), Value: "foo"}
 	port := corev1.ContainerPort{ContainerPort: portNum}
 	containerName := fmt.Sprintf("c%v", portNum)
