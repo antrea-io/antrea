@@ -23,5 +23,5 @@ type MirroringHandler interface {
 	AddNewObject(obj metav1.Object) error
 	SyncObject(legacyObj, newObj metav1.Object) error
 	DeleteNewObject(namespace, name string) error
-	LiberateNewObject(obj metav1.Object) error
+	UpdateNewObject(obj metav1.Object) error
 }

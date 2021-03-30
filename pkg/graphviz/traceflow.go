@@ -110,7 +110,7 @@ func isSender(result *crdv1alpha1.NodeResult) bool {
 	if len(result.Observations) == 0 {
 		return false
 	}
-	if result.Observations[0].Component != crdv1alpha1.SpoofGuard || result.Observations[0].Action != crdv1alpha1.Forwarded {
+	if result.Observations[0].Component != crdv1alpha1.ComponentSpoofGuard || result.Observations[0].Action != crdv1alpha1.ActionForwarded {
 		return false
 	}
 	return true
@@ -120,7 +120,7 @@ func isReceiver(result *crdv1alpha1.NodeResult) bool {
 	if len(result.Observations) == 0 {
 		return false
 	}
-	if result.Observations[0].Component != crdv1alpha1.Forwarding || result.Observations[0].Action != crdv1alpha1.Received {
+	if result.Observations[0].Component != crdv1alpha1.ComponentForwarding || result.Observations[0].Action != crdv1alpha1.ActionReceived {
 		return false
 	}
 	return true
@@ -184,10 +184,10 @@ func getTraceflowMessage(o *crdv1alpha1.Observation, spec *crdv1alpha1.Traceflow
 			spec.Destination.Pod = o.Pod[strings.Index(o.Pod, `/`)+1:]
 		}
 	}
-	if o.Action != crdv1alpha1.Dropped && len(o.TranslatedDstIP) > 0 {
+	if o.Action != crdv1alpha1.ActionDropped && len(o.TranslatedDstIP) > 0 {
 		str += "\nTranslated Destination IP: " + o.TranslatedDstIP
 	}
-	if o.Action != crdv1alpha1.Dropped && len(o.TunnelDstIP) > 0 {
+	if o.Action != crdv1alpha1.ActionDropped && len(o.TunnelDstIP) > 0 {
 		str += "\nTunnel Destination IP : " + o.TunnelDstIP
 	}
 	return str
@@ -303,12 +303,12 @@ func genSubGraph(graph *gographviz.Graph, cluster *gographviz.SubGraph, result *
 			} else {
 				edge.Attrs[gographviz.MinLen] = "1"
 			}
-			if o.Action == crdv1alpha1.Dropped && !isForwardDir {
+			if o.Action == crdv1alpha1.ActionDropped && !isForwardDir {
 				edge.Attrs[gographviz.Style] = `"invis"`
 			}
 		}
 		// Set the pattern of node.
-		if o.Action == crdv1alpha1.Dropped {
+		if o.Action == crdv1alpha1.ActionDropped {
 			node.Attrs[gographviz.Color] = fireBrick
 			node.Attrs[gographviz.FillColor] = mistyRose
 		} else {
@@ -361,7 +361,7 @@ func GenGraph(tf *crdv1alpha1.Traceflow) (string, error) {
 		switch senderRst.Observations[len(senderRst.Observations)-1].Action {
 		// If the last action of the sender is FORWARDED,
 		// then the packet has been sent out by sender, implying that there is a disconnection.
-		case crdv1alpha1.Forwarded:
+		case crdv1alpha1.ActionForwarded:
 			lastNode, err := createEndpointNodeWithDefaultStyle(graph, graph.Name, getDstNodeName(tf))
 			if err != nil {
 				return "", err
@@ -374,7 +374,7 @@ func GenGraph(tf *crdv1alpha1.Traceflow) (string, error) {
 			if err != nil {
 				return "", err
 			}
-		case crdv1alpha1.Delivered:
+		case crdv1alpha1.ActionDelivered:
 			lastNode, err := createEndpointNodeWithDefaultStyle(graph, cluster1.Name, getDstNodeName(tf))
 			if err != nil {
 				return "", err

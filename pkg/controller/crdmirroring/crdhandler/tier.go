@@ -75,17 +75,15 @@ func (c *TierHandler) SyncObject(legacyObj, newObj metav1.Object) error {
 	return nil
 }
 
-//DeleteNewObject deletes the mirrored new Tier.
+// DeleteNewObject deletes the mirrored new Tier.
 func (c *TierHandler) DeleteNewObject(namespace, name string) error {
 	client := c.client.CrdV1alpha1().Tiers()
 	return client.Delete(context.TODO(), name, metav1.DeleteOptions{})
 }
 
-// LiberateNewObject updates the mirrored new ClusterGroup by deleting "crd.antrea.io/managed-by" annotation, then it
-// will not be managed by mirroring controller anymore.
-func (c *TierHandler) LiberateNewObject(newObj metav1.Object) error {
-	n := newObj.(*crd.Tier).DeepCopy()
-	delete(n.Annotations, types.ManagedBy)
+// UpdateNewObject updates the mirrored new ClusterGroup.
+func (c *TierHandler) UpdateNewObject(newObj metav1.Object) error {
+	n := newObj.(*crd.Tier)
 	newClient := c.client.CrdV1alpha1().Tiers()
 	_, err := newClient.Update(context.TODO(), n, metav1.UpdateOptions{})
 	return err

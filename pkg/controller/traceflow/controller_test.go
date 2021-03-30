@@ -98,11 +98,11 @@ func TestTraceflow(t *testing.T) {
 	res.Status.Results = []crdv1alpha1.NodeResult{
 		// Sender
 		{
-			Observations: []crdv1alpha1.Observation{{Component: crdv1alpha1.SpoofGuard}},
+			Observations: []crdv1alpha1.Observation{{Component: crdv1alpha1.ComponentSpoofGuard}},
 		},
 		// Receiver
 		{
-			Observations: []crdv1alpha1.Observation{{Action: crdv1alpha1.Delivered}},
+			Observations: []crdv1alpha1.Observation{{Action: crdv1alpha1.ActionDelivered}},
 		},
 	}
 	tfc.client.CrdV1alpha1().Traceflows().Update(context.TODO(), res, metav1.UpdateOptions{})

@@ -32,23 +32,23 @@ const (
 type TraceflowComponent string
 
 const (
-	SpoofGuard             TraceflowComponent = "SpoofGuard"
-	LB                     TraceflowComponent = "LB"
-	Routing                TraceflowComponent = "Routing"
+	ComponentSpoofGuard    TraceflowComponent = "SpoofGuard"
+	ComponentLB            TraceflowComponent = "LB"
+	ComponentRouting       TraceflowComponent = "Routing"
 	ComponentNetworkPolicy TraceflowComponent = "NetworkPolicy"
-	Forwarding             TraceflowComponent = "Forwarding"
+	ComponentForwarding    TraceflowComponent = "Forwarding"
 )
 
 type TraceflowAction string
 
 const (
-	Delivered TraceflowAction = "Delivered"
-	Received  TraceflowAction = "Received"
-	Forwarded TraceflowAction = "Forwarded"
-	Dropped   TraceflowAction = "Dropped"
-	// ForwardedOutOfOverlay indicates that the packet has been forwarded out of the network
+	ActionDelivered TraceflowAction = "Delivered"
+	ActionReceived  TraceflowAction = "Received"
+	ActionForwarded TraceflowAction = "Forwarded"
+	ActionDropped   TraceflowAction = "Dropped"
+	// ActionForwardedOutOfOverlay indicates that the packet has been forwarded out of the network
 	// managed by Antrea. This indicates that the Traceflow request can be considered complete.
-	ForwardedOutOfOverlay TraceflowAction = "ForwardedOutOfOverlay"
+	ActionForwardedOutOfOverlay TraceflowAction = "ForwardedOutOfOverlay"
 )
 
 // List the supported protocols and their codes in traceflow.

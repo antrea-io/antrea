@@ -74,17 +74,15 @@ func (c *ExternalEntityHandler) SyncObject(legacyObj, newObj metav1.Object) erro
 	return nil
 }
 
-//DeleteNewObject deletes the mirrored new ExternalEntity.
+// DeleteNewObject deletes the mirrored new ExternalEntity.
 func (c *ExternalEntityHandler) DeleteNewObject(namespace, name string) error {
 	client := c.client.CrdV1alpha2().ExternalEntities(namespace)
 	return client.Delete(context.TODO(), name, metav1.DeleteOptions{})
 }
 
-// LiberateNewObject updates the mirrored new ClusterGroup by deleting "crd.antrea.io/managed-by" annotation, then it
-// will not be managed by mirroring controller anymore.
-func (c *ExternalEntityHandler) LiberateNewObject(newObj metav1.Object) error {
-	n := newObj.(*crd.ExternalEntity).DeepCopy()
-	delete(n.Annotations, types.ManagedBy)
+// UpdateNewObject updates the mirrored new ClusterGroup.
+func (c *ExternalEntityHandler) UpdateNewObject(newObj metav1.Object) error {
+	n := newObj.(*crd.ExternalEntity)
 	newClient := c.client.CrdV1alpha2().ExternalEntities(newObj.GetNamespace())
 	_, err := newClient.Update(context.TODO(), n, metav1.UpdateOptions{})
 	return err

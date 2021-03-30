@@ -29,6 +29,8 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/apis/crd/v1beta1"
 	clientset "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned"
 	controllerquerier "github.com/vmware-tanzu/antrea/pkg/controller/querier"
+	legacyv1beta1 "github.com/vmware-tanzu/antrea/pkg/legacyapis/clusterinformation/v1beta1"
+	legacyclientset "github.com/vmware-tanzu/antrea/pkg/legacyclient/clientset/versioned"
 )
 
 const (
@@ -38,17 +40,30 @@ const (
 
 type controllerMonitor struct {
 	client       clientset.Interface
+	legacyClient legacyclientset.Interface
 	nodeInformer coreinformers.NodeInformer
 	// nodeListerSynced is a function which returns true if the node shared informer has been synced at least once.
 	nodeListerSynced cache.InformerSynced
 	querier          controllerquerier.ControllerQuerier
 	// controllerCRD is the desired state of controller monitoring CRD which controllerMonitor expects.
-	controllerCRD *v1beta1.AntreaControllerInfo
+	controllerCRD       *v1beta1.AntreaControllerInfo
+	legacyControllerCRD *legacyv1beta1.AntreaControllerInfo
 }
 
 // NewControllerMonitor creates a new controller monitor.
-func NewControllerMonitor(client clientset.Interface, nodeInformer coreinformers.NodeInformer, querier controllerquerier.ControllerQuerier) *controllerMonitor {
-	m := &controllerMonitor{client: client, nodeInformer: nodeInformer, nodeListerSynced: nodeInformer.Informer().HasSynced, querier: querier, controllerCRD: nil}
+func NewControllerMonitor(client clientset.Interface,
+	legacyClient legacyclientset.Interface,
+	nodeInformer coreinformers.NodeInformer,
+	querier controllerquerier.ControllerQuerier) *controllerMonitor {
+	m := &controllerMonitor{
+		client:              client,
+		legacyClient:        legacyClient,
+		nodeInformer:        nodeInformer,
+		nodeListerSynced:    nodeInformer.Informer().HasSynced,
+		querier:             querier,
+		controllerCRD:       nil,
+		legacyControllerCRD: nil,
+	}
 	nodeInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc:    nil,
 		UpdateFunc: nil,
@@ -68,9 +83,13 @@ func (monitor *controllerMonitor) Run(stopCh <-chan struct{}) {
 	}
 
 	monitor.deleteStaleAgentCRDs()
+	monitor.deleteLegacyStaleAgentCRDs()
 
 	// Sync controller monitoring CRD every minute util stopCh is closed.
 	wait.Until(monitor.syncControllerCRD, time.Minute, stopCh)
+
+	// Sync legacy controller monitoring CRD every minute util stopCh is closed.
+	wait.Until(monitor.syncLegacyControllerCRD, time.Minute, stopCh)
 }
 
 func (monitor *controllerMonitor) syncControllerCRD() {
@@ -161,6 +180,7 @@ func (monitor *controllerMonitor) deleteStaleAgentCRD(old interface{}) {
 		}
 	}
 	monitor.deleteAgentCRD(node.Name)
+	monitor.deleteLegacyAgentCRD(node.Name)
 }
 
 func (monitor *controllerMonitor) deleteAgentCRD(name string) {
@@ -169,4 +189,101 @@ func (monitor *controllerMonitor) deleteAgentCRD(name string) {
 	if err != nil {
 		klog.Errorf("Failed to delete agent monitoring CRD %s: %v", name, err)
 	}
+}
+
+func (monitor *controllerMonitor) syncLegacyControllerCRD() {
+	var err error = nil
+	if monitor.legacyControllerCRD != nil {
+		if monitor.legacyControllerCRD, err = monitor.updateLegacyControllerCRD(true); err == nil {
+			return
+		}
+		klog.Errorf("Failed to partially update legacy controller monitoring CRD: %v", err)
+		monitor.legacyControllerCRD = nil
+	}
+
+	monitor.legacyControllerCRD, err = monitor.getLegacyControllerCRD(crdName)
+
+	if errors.IsNotFound(err) {
+		monitor.legacyControllerCRD, err = monitor.createLegacyControllerCRD(crdName)
+		if err != nil {
+			klog.Errorf("Failed to create legacy controller monitoring CRD: %v", err)
+			monitor.legacyControllerCRD = nil
+		}
+		return
+	}
+
+	if err != nil {
+		klog.Errorf("Failed to get legacy controller monitoring CRD: %v", err)
+		monitor.legacyControllerCRD = nil
+		return
+	}
+
+	monitor.legacyControllerCRD, err = monitor.updateLegacyControllerCRD(false)
+	if err != nil {
+		klog.Errorf("Failed to entirely update legacy controller monitoring CRD: %v", err)
+		monitor.legacyControllerCRD = nil
+	}
+}
+
+func (monitor *controllerMonitor) getLegacyControllerCRD(crdName string) (*legacyv1beta1.AntreaControllerInfo, error) {
+	return monitor.legacyClient.ClusterinformationV1beta1().AntreaControllerInfos().Get(context.TODO(), crdName, metav1.GetOptions{})
+}
+
+func (monitor *controllerMonitor) createLegacyControllerCRD(crdName string) (*legacyv1beta1.AntreaControllerInfo, error) {
+	controllerCRD := new(v1beta1.AntreaControllerInfo)
+	controllerCRD.Name = crdName
+	monitor.querier.GetControllerInfo(controllerCRD, false)
+	legacyControllerCRD := controllerInfoDeepCopy(controllerCRD)
+	klog.V(2).Infof("Creating legacy controller monitoring CRD %+v", legacyControllerCRD)
+	return monitor.legacyClient.ClusterinformationV1beta1().AntreaControllerInfos().Create(context.TODO(), legacyControllerCRD, metav1.CreateOptions{})
+}
+
+func (monitor *controllerMonitor) updateLegacyControllerCRD(partial bool) (*legacyv1beta1.AntreaControllerInfo, error) {
+	monitor.querier.GetControllerInfo(monitor.controllerCRD, partial)
+	monitor.legacyControllerCRD = controllerInfoDeepCopy(monitor.controllerCRD)
+	klog.V(2).Infof("Updating controller monitoring CRD %+v, partial: %t", monitor.legacyControllerCRD, partial)
+	return monitor.legacyClient.ClusterinformationV1beta1().AntreaControllerInfos().Update(context.TODO(), monitor.legacyControllerCRD, metav1.UpdateOptions{})
+}
+
+func (monitor *controllerMonitor) deleteLegacyStaleAgentCRDs() {
+	crds, err := monitor.legacyClient.ClusterinformationV1beta1().AntreaAgentInfos().List(context.TODO(), metav1.ListOptions{
+		ResourceVersion: "0",
+	})
+	if err != nil {
+		klog.Errorf("Failed to list legacy agent monitoring CRDs: %v", err)
+		return
+	}
+
+	nodeLister := monitor.nodeInformer.Lister()
+	for _, crd := range crds.Items {
+		_, err := nodeLister.Get(crd.Name)
+		if errors.IsNotFound(err) {
+			monitor.deleteLegacyAgentCRD(crd.Name)
+		}
+	}
+}
+
+func (monitor *controllerMonitor) deleteLegacyAgentCRD(name string) {
+	klog.Infof("Deleting legacy agent monitoring CRD %s", name)
+	err := monitor.legacyClient.ClusterinformationV1beta1().AntreaAgentInfos().Delete(context.TODO(), name, metav1.DeleteOptions{})
+	if err != nil {
+		klog.Errorf("Failed to delete legacy agent monitoring CRD %s: %v", name, err)
+	}
+}
+
+func controllerInfoDeepCopy(ac *v1beta1.AntreaControllerInfo) *legacyv1beta1.AntreaControllerInfo {
+	lac := new(legacyv1beta1.AntreaControllerInfo)
+	lac.Name = ac.Name
+	lac.Version = ac.Version
+	lac.PodRef = *ac.PodRef.DeepCopy()
+	lac.NodeRef = *ac.NodeRef.DeepCopy()
+	lac.ServiceRef = *ac.ServiceRef.DeepCopy()
+	lac.NetworkPolicyControllerInfo = *ac.NetworkPolicyControllerInfo.DeepCopy()
+	lac.ConnectedAgentNum = ac.ConnectedAgentNum
+	lac.ControllerConditions = []v1beta1.ControllerCondition{}
+	for _, cc := range ac.ControllerConditions {
+		lac.ControllerConditions = append(lac.ControllerConditions, *cc.DeepCopy())
+	}
+	lac.APIPort = ac.APIPort
+	return lac
 }

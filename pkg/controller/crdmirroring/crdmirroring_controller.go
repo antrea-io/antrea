@@ -19,6 +19,8 @@ import (
 	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/tools/cache"
@@ -198,14 +200,16 @@ func (c *Controller) syncMirroring(key string) error {
 			if err != nil {
 				return fmt.Errorf("failed to sync data between legacy and new %s %s/%s: %v", c.crdName, namespace, name, err)
 			}
-
 		} else {
 			// If the legacy object annotated with "crd.antrea.io/stop-mirror" and the new object annotated with "crd.antrea.io/managed-by",
-			// this means that user wants to stop mirroring and liberate the new object.
-			klog.V(4).Infof("Update the mirrored new %s %s/%s, then the mirrored new is liberated from mirroring", c.crdName, namespace, name)
-			err = c.mirroringHandler.LiberateNewObject(newObj)
+			// this means that user wants to stop mirroring.
+			klog.V(4).Infof("Update the mirrored new %s %s/%s, then mirroring is stopped", c.crdName, namespace, name)
+			newObjCopied := deepCopy(newObj)
+			delete(newObjCopied.GetAnnotations(), types.ManagedBy)
+
+			err = c.mirroringHandler.UpdateNewObject(newObjCopied)
 			if err != nil {
-				return fmt.Errorf("failed to liberate mirrored new %s %s/%s: %v", c.crdName, namespace, name, err)
+				return fmt.Errorf("failed to update the mirrored new %s %s/%s: %v", c.crdName, namespace, name, err)
 			}
 		}
 	}
@@ -237,4 +241,93 @@ func (c *Controller) handleErr(err error, key interface{}) {
 	klog.Warningf("Retry budget exceeded, dropping %q resource out of the queue: %v", key, err)
 	c.queue.Forget(key)
 	utilruntime.HandleError(err)
+}
+
+func (c *Controller) onNewCRDAdd(obj interface{}) {
+	crd := obj.(metav1.Object)
+
+	_, exist := crd.GetAnnotations()[types.ManagedBy]
+	if exist {
+		klog.V(4).Infof("Processing mirroring %s %s/%s ADD event", c.crdName, crd.GetNamespace(), crd.GetName())
+		c.queueCRD(obj)
+	}
+}
+
+func (c *Controller) onNewCRDUpdate(prevObj, obj interface{}) {
+	crd := obj.(metav1.Object)
+
+	_, exist := crd.GetAnnotations()[types.ManagedBy]
+	if exist {
+		klog.V(4).Infof("Processing mirroring %s %s/%s UPDATE event", c.crdName, crd.GetNamespace(), crd.GetName())
+		c.queueCRD(obj)
+	}
+}
+
+func (c *Controller) onNewCRDDelete(obj interface{}) {
+	crd := getCRDFromDeleteAction(obj)
+	if crd == nil {
+		return
+	}
+
+	_, exist := crd.GetAnnotations()[types.ManagedBy]
+	if exist {
+		klog.V(4).Infof("Processing mirroring %s %s/%s DELETE event", c.crdName, crd.GetNamespace(), crd.GetName())
+		c.queueCRD(obj)
+	}
+}
+
+func (c *Controller) onLegacyCRDAdd(obj interface{}) {
+	crd := obj.(metav1.Object)
+
+	_, exist := crd.GetAnnotations()[types.StopMirror]
+	if !exist {
+		klog.V(4).Infof("Processing legacy %s %s/%s ADD event", c.crdName, crd.GetNamespace(), crd.GetName())
+		c.queueCRD(obj)
+	}
+}
+
+func (c *Controller) onLegacyCRDUpdate(prevObj, obj interface{}) {
+	prevCrd := prevObj.(metav1.Object)
+
+	_, exist := prevCrd.GetAnnotations()[types.StopMirror]
+	if !exist {
+		klog.V(4).Infof("Processing legacy %s %s/%s UPDATE event", c.crdName, prevCrd.GetNamespace(), prevCrd.GetName())
+		c.queueCRD(obj)
+	}
+}
+
+func (c *Controller) onLegacyCRDDelete(obj interface{}) {
+	crd := getCRDFromDeleteAction(obj)
+	if crd == nil {
+		return
+	}
+
+	_, exist := crd.GetAnnotations()[types.StopMirror]
+	if !exist {
+		klog.V(4).Infof("Processing legacy %s %s/%s DELETE event", c.crdName, crd.GetNamespace(), crd.GetName())
+		c.queueCRD(obj)
+	}
+}
+
+func getCRDFromDeleteAction(obj interface{}) metav1.Object {
+	_, ok := obj.(metav1.Object)
+	if ok {
+		return obj.(metav1.Object)
+	}
+	tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
+	if !ok {
+		utilruntime.HandleError(fmt.Errorf("couldn't get object from tombstone %#v", obj))
+		return nil
+	}
+
+	_, ok = tombstone.Obj.(metav1.Object)
+	if ok {
+		return tombstone.Obj.(metav1.Object)
+	}
+	utilruntime.HandleError(fmt.Errorf("tombstone contained object that is not a object resource: %#v", obj))
+	return nil
+}
+
+func deepCopy(obj metav1.Object) metav1.Object {
+	return obj.(runtime.Object).DeepCopyObject().(metav1.Object)
 }

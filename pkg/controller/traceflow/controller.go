@@ -285,10 +285,10 @@ func (c *Controller) checkTraceflowStatus(tf *crdv1alpha1.Traceflow) error {
 	receiver := false
 	for i, nodeResult := range tf.Status.Results {
 		for j, ob := range nodeResult.Observations {
-			if ob.Component == crdv1alpha1.SpoofGuard {
+			if ob.Component == crdv1alpha1.ComponentSpoofGuard {
 				sender = true
 			}
-			if ob.Action == crdv1alpha1.Delivered || ob.Action == crdv1alpha1.Dropped || ob.Action == crdv1alpha1.ForwardedOutOfOverlay {
+			if ob.Action == crdv1alpha1.ActionDelivered || ob.Action == crdv1alpha1.ActionDropped || ob.Action == crdv1alpha1.ActionForwardedOutOfOverlay {
 				receiver = true
 			}
 			if ob.TranslatedDstIP != "" {

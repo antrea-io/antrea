@@ -50,15 +50,15 @@ import (
 
 const (
 	informerDefaultResync = 30 * time.Second
-	timeout               = 2 * time.Minute
+	timeout               = 2 * time.Second
 	mockWait              = 200 * time.Millisecond
 
-	NetworkPolicy        = "NetworkPolicy"
-	ClusterNetworkPolicy = "ClusterNetworkPolicy"
-	Tier                 = "Tier"
-	ClusterGroup         = "ClusterGroup"
-	ExternalEntity       = "ExternalEntity"
-	Traceflow            = "Traceflow"
+	networkPolicy        = "NetworkPolicy"
+	clusterNetworkPolicy = "ClusterNetworkPolicy"
+	tier                 = "Tier"
+	clusterGroup         = "ClusterGroup"
+	externalEntity       = "ExternalEntity"
+	traceflow            = "Traceflow"
 )
 
 var (
@@ -115,7 +115,7 @@ func newMirroringController(crdName string) *mirroringController {
 	m := &mirroringController{}
 
 	switch crdName {
-	case NetworkPolicy:
+	case networkPolicy:
 		crdInformer := crdInformerFactory.Crd().V1alpha1().NetworkPolicies()
 		legacyCRDInformer := legacyCRDInformerFactory.Security().V1alpha1().NetworkPolicies()
 		informer = crdInformer.Informer()
@@ -123,7 +123,7 @@ func newMirroringController(crdName string) *mirroringController {
 
 		m.testHandler = NewNetworkPolicyTestHandler(crdInformer.Lister(), legacyCRDInformer.Lister(), client, legacyClient)
 		mirroringHandler = crdhandler.NewNetworkPolicyHandler(crdInformer.Lister(), legacyCRDInformer.Lister(), client, legacyClient)
-	case ClusterNetworkPolicy:
+	case clusterNetworkPolicy:
 		crdInformer := crdInformerFactory.Crd().V1alpha1().ClusterNetworkPolicies()
 		legacyCRDInformer := legacyCRDInformerFactory.Security().V1alpha1().ClusterNetworkPolicies()
 		informer = crdInformer.Informer()
@@ -131,7 +131,7 @@ func newMirroringController(crdName string) *mirroringController {
 
 		m.testHandler = NewClusterNetworkPolicyTestHandler(crdInformer.Lister(), legacyCRDInformer.Lister(), client, legacyClient)
 		mirroringHandler = crdhandler.NewClusterNetworkPolicyHandler(crdInformer.Lister(), legacyCRDInformer.Lister(), client, legacyClient)
-	case Tier:
+	case tier:
 		crdInformer := crdInformerFactory.Crd().V1alpha1().Tiers()
 		legacyCRDInformer := legacyCRDInformerFactory.Security().V1alpha1().Tiers()
 		informer = crdInformer.Informer()
@@ -139,7 +139,7 @@ func newMirroringController(crdName string) *mirroringController {
 
 		m.testHandler = NewTierTestHandler(crdInformer.Lister(), legacyCRDInformer.Lister(), client, legacyClient)
 		mirroringHandler = crdhandler.NewTierHandler(crdInformer.Lister(), legacyCRDInformer.Lister(), client, legacyClient)
-	case ClusterGroup:
+	case clusterGroup:
 		crdInformer := crdInformerFactory.Crd().V1alpha2().ClusterGroups()
 		legacyCRDInformer := legacyCRDInformerFactory.Core().V1alpha2().ClusterGroups()
 		informer = crdInformer.Informer()
@@ -147,7 +147,7 @@ func newMirroringController(crdName string) *mirroringController {
 
 		m.testHandler = NewClusterGroupTestHandler(crdInformer.Lister(), legacyCRDInformer.Lister(), client, legacyClient)
 		mirroringHandler = crdhandler.NewClusterGroupHandler(crdInformer.Lister(), legacyCRDInformer.Lister(), client, legacyClient)
-	case ExternalEntity:
+	case externalEntity:
 		crdInformer := crdInformerFactory.Crd().V1alpha2().ExternalEntities()
 		legacyCRDInformer := legacyCRDInformerFactory.Core().V1alpha2().ExternalEntities()
 		informer = crdInformer.Informer()
@@ -155,7 +155,7 @@ func newMirroringController(crdName string) *mirroringController {
 
 		m.testHandler = NewExternalEntityTestHandler(crdInformer.Lister(), legacyCRDInformer.Lister(), client, legacyClient)
 		mirroringHandler = crdhandler.NewExternalEntityHandler(crdInformer.Lister(), legacyCRDInformer.Lister(), client, legacyClient)
-	case Traceflow:
+	case traceflow:
 		crdInformer := crdInformerFactory.Crd().V1alpha1().Traceflows()
 		legacyCRDInformer := legacyCRDInformerFactory.Ops().V1alpha1().Traceflows()
 		informer = crdInformer.Informer()
@@ -181,24 +181,24 @@ func buildObj(crdName, namespace, name string) metav1.Object {
 	var obj metav1.Object
 
 	switch crdName {
-	case NetworkPolicy:
+	case networkPolicy:
 		obj = &legacysecurity.NetworkPolicy{}
 		obj.SetNamespace(namespace)
 		obj.(*legacysecurity.NetworkPolicy).Spec.Priority = priority1
-	case ClusterNetworkPolicy:
+	case clusterNetworkPolicy:
 		obj = &legacysecurity.ClusterNetworkPolicy{}
 		obj.(*legacysecurity.ClusterNetworkPolicy).Spec.Priority = priority1
-	case Tier:
+	case tier:
 		obj = &legacysecurity.Tier{}
 		obj.(*legacysecurity.Tier).Spec = spec1
-	case ClusterGroup:
+	case clusterGroup:
 		obj = &legacycore.ClusterGroup{}
 		obj.(*legacycore.ClusterGroup).Spec.PodSelector = &labelSelector1
-	case ExternalEntity:
+	case externalEntity:
 		obj = &legacycore.ExternalEntity{}
 		obj.SetNamespace(namespace)
 		obj.(*legacycore.ExternalEntity).Spec.Endpoints = endPoints1
-	case Traceflow:
+	case traceflow:
 		obj = &legacyops.Traceflow{}
 		obj.(*legacyops.Traceflow).Spec.Source = source1
 	}
@@ -209,116 +209,77 @@ func buildObj(crdName, namespace, name string) metav1.Object {
 }
 
 func updateLegacyObj(crdName string, obj metav1.Object) metav1.Object {
-	var res metav1.Object
+	res := deepCopy(obj)
 	switch crdName {
-	case NetworkPolicy:
-		res = obj.(*legacysecurity.NetworkPolicy).DeepCopy()
+	case networkPolicy:
 		res.(*legacysecurity.NetworkPolicy).Spec.Priority = priority2
-	case ClusterNetworkPolicy:
-		res = obj.(*legacysecurity.ClusterNetworkPolicy).DeepCopy()
+	case clusterNetworkPolicy:
 		res.(*legacysecurity.ClusterNetworkPolicy).Spec.Priority = priority2
-	case Tier:
-		res = obj.(*legacysecurity.Tier).DeepCopy()
-		res.(*legacysecurity.Tier).DeepCopy().Spec = spec2
-	case ClusterGroup:
-		res = obj.(*legacycore.ClusterGroup).DeepCopy()
+	case tier:
+		res.(*legacysecurity.Tier).Spec = spec2
+	case clusterGroup:
 		res.(*legacycore.ClusterGroup).Spec.PodSelector = &labelSelector2
-	case ExternalEntity:
-		res = obj.(*legacycore.ExternalEntity).DeepCopy()
+	case externalEntity:
 		res.(*legacycore.ExternalEntity).Spec.Endpoints = endPoints2
-	case Traceflow:
-		res = obj.(*legacyops.Traceflow).DeepCopy()
+	case traceflow:
 		res.(*legacyops.Traceflow).Spec.Source = source2
 	}
-
 	return res
 }
 
-func updateLegacyObjAnnotation(crdName string, obj metav1.Object) metav1.Object {
-	var res metav1.Object
-	switch crdName {
-	case NetworkPolicy:
-		res = obj.(*legacysecurity.NetworkPolicy).DeepCopy()
-		res.(*legacysecurity.NetworkPolicy).Annotations = map[string]string{types.StopMirror: "true"}
-	case ClusterNetworkPolicy:
-		res = obj.(*legacysecurity.ClusterNetworkPolicy).DeepCopy()
-		res.(*legacysecurity.ClusterNetworkPolicy).Annotations = map[string]string{types.StopMirror: "true"}
-	case Tier:
-		res = obj.(*legacysecurity.Tier).DeepCopy()
-		res.(*legacysecurity.Tier).Annotations = map[string]string{types.StopMirror: "true"}
-	case ClusterGroup:
-		res = obj.(*legacycore.ClusterGroup).DeepCopy()
-		res.(*legacycore.ClusterGroup).Annotations = map[string]string{types.StopMirror: "true"}
-	case ExternalEntity:
-		res = obj.(*legacycore.ExternalEntity).DeepCopy()
-		res.(*legacycore.ExternalEntity).Annotations = map[string]string{types.StopMirror: "true"}
-	case Traceflow:
-		res = obj.(*legacyops.Traceflow).DeepCopy()
-		res.(*legacyops.Traceflow).Annotations = map[string]string{types.StopMirror: "true"}
-	}
-
+func updateLegacyObjAnnotation(obj metav1.Object) metav1.Object {
+	res := deepCopy(obj)
+	res.SetAnnotations(map[string]string{types.StopMirror: "true"})
 	return res
 }
 
 func updateNewObj(crdName string, obj metav1.Object) metav1.Object {
-	var res metav1.Object
+	res := deepCopy(obj)
 	switch crdName {
-	case NetworkPolicy:
-		res = obj.(*crdv1alpha1.NetworkPolicy).DeepCopy()
+	case networkPolicy:
 		res.(*crdv1alpha1.NetworkPolicy).Spec.Priority = priority2
-	case ClusterNetworkPolicy:
-		res = obj.(*crdv1alpha1.ClusterNetworkPolicy).DeepCopy()
+	case clusterNetworkPolicy:
 		res.(*crdv1alpha1.ClusterNetworkPolicy).Spec.Priority = priority2
-	case Tier:
-		res = obj.(*crdv1alpha1.Tier).DeepCopy()
+	case tier:
 		res.(*crdv1alpha1.Tier).DeepCopy().Spec = spec2
-	case ClusterGroup:
-		res = obj.(*crdv1alpha2.ClusterGroup).DeepCopy()
+	case clusterGroup:
 		res.(*crdv1alpha2.ClusterGroup).Spec.PodSelector = &labelSelector2
-	case ExternalEntity:
-		res = obj.(*crdv1alpha2.ExternalEntity).DeepCopy()
+	case externalEntity:
 		res.(*crdv1alpha2.ExternalEntity).Spec.Endpoints = endPoints2
-	case Traceflow:
-		res = obj.(*crdv1alpha1.Traceflow).DeepCopy()
+	case traceflow:
 		res.(*crdv1alpha1.Traceflow).Spec.Source = source2
 	}
-
 	return res
 }
 
 func updateNewObjStatus(crdName string, obj metav1.Object) metav1.Object {
-	var res metav1.Object
+	res := deepCopy(obj)
 	switch crdName {
-	case NetworkPolicy:
-		res = obj.(*crdv1alpha1.NetworkPolicy).DeepCopy()
+	case networkPolicy:
 		res.(*crdv1alpha1.NetworkPolicy).Status = npStatus
-	case ClusterNetworkPolicy:
-		res = obj.(*crdv1alpha1.ClusterNetworkPolicy).DeepCopy()
+	case clusterNetworkPolicy:
 		res.(*crdv1alpha1.ClusterNetworkPolicy).Status = npStatus
-	case ClusterGroup:
-		res = obj.(*crdv1alpha2.ClusterGroup).DeepCopy()
+	case clusterGroup:
 		res.(*crdv1alpha2.ClusterGroup).Status.Conditions = conditions
-	case Traceflow:
-		res = obj.(*crdv1alpha1.Traceflow).DeepCopy()
+	case traceflow:
 		res.(*crdv1alpha1.Traceflow).Status = tfStatus
 	}
-
 	return res
 }
 
 func assertSpec(t *testing.T, crdName string, expectedObj, res metav1.Object) {
 	switch crdName {
-	case NetworkPolicy:
+	case networkPolicy:
 		assert.Equal(t, expectedObj.(*legacysecurity.NetworkPolicy).Spec, res.(*crdv1alpha1.NetworkPolicy).Spec)
-	case ClusterNetworkPolicy:
+	case clusterNetworkPolicy:
 		assert.Equal(t, expectedObj.(*legacysecurity.ClusterNetworkPolicy).Spec, res.(*crdv1alpha1.ClusterNetworkPolicy).Spec)
-	case Tier:
+	case tier:
 		assert.Equal(t, expectedObj.(*legacysecurity.Tier).Spec, res.(*crdv1alpha1.Tier).Spec)
-	case ClusterGroup:
+	case clusterGroup:
 		assert.Equal(t, expectedObj.(*legacycore.ClusterGroup).Spec, res.(*crdv1alpha2.ClusterGroup).Spec)
-	case ExternalEntity:
+	case externalEntity:
 		assert.Equal(t, expectedObj.(*legacycore.ExternalEntity).Spec, res.(*crdv1alpha2.ExternalEntity).Spec)
-	case Traceflow:
+	case traceflow:
 		assert.Equal(t, expectedObj.(*legacyops.Traceflow).Spec, res.(*crdv1alpha1.Traceflow).Spec)
 	}
 }
@@ -1510,7 +1471,7 @@ func (c *mirroringController) testNewLiberate(t *testing.T) {
 		t.Fatalf("Expected no error running LegacyAddAndWait, got %v", err)
 	}
 
-	legacyObj, newObj, err := c.testHandler.NewLiberateAndWait(updateLegacyObjAnnotation(c.crdName, obj))
+	legacyObj, newObj, err := c.testHandler.NewLiberateAndWait(updateLegacyObjAnnotation(obj))
 	if err != nil {
 		t.Fatalf("Expected no error running NewLiberateAndWait, got %v", err)
 	}
@@ -1597,10 +1558,10 @@ func testCRD(t *testing.T, crd string) {
 }
 
 func TestCRDMirroringController(t *testing.T) {
-	t.Run(ClusterGroup, func(t *testing.T) { testCRD(t, ClusterGroup) })
-	t.Run(ExternalEntity, func(t *testing.T) { testCRD(t, ExternalEntity) })
-	t.Run(NetworkPolicy, func(t *testing.T) { testCRD(t, NetworkPolicy) })
-	t.Run(ClusterNetworkPolicy, func(t *testing.T) { testCRD(t, ClusterNetworkPolicy) })
-	t.Run(Tier, func(t *testing.T) { testCRD(t, Tier) })
-	t.Run(Traceflow, func(t *testing.T) { testCRD(t, Traceflow) })
+	t.Run(clusterGroup, func(t *testing.T) { testCRD(t, clusterGroup) })
+	t.Run(externalEntity, func(t *testing.T) { testCRD(t, externalEntity) })
+	t.Run(networkPolicy, func(t *testing.T) { testCRD(t, networkPolicy) })
+	t.Run(clusterNetworkPolicy, func(t *testing.T) { testCRD(t, clusterNetworkPolicy) })
+	t.Run(tier, func(t *testing.T) { testCRD(t, tier) })
+	t.Run(traceflow, func(t *testing.T) { testCRD(t, traceflow) })
 }

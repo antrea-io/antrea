@@ -41,7 +41,7 @@ func Test_getNetworkPolicyObservation(t *testing.T) {
 			want: &crdv1alpha1.Observation{
 				Component:     crdv1alpha1.ComponentNetworkPolicy,
 				ComponentInfo: "IngressMetric",
-				Action:        crdv1alpha1.Dropped,
+				Action:        crdv1alpha1.ActionDropped,
 			},
 		},
 		{
@@ -53,7 +53,7 @@ func Test_getNetworkPolicyObservation(t *testing.T) {
 			want: &crdv1alpha1.Observation{
 				Component:     crdv1alpha1.ComponentNetworkPolicy,
 				ComponentInfo: "IngressRule",
-				Action:        crdv1alpha1.Forwarded,
+				Action:        crdv1alpha1.ActionForwarded,
 			},
 		},
 		{
@@ -65,7 +65,7 @@ func Test_getNetworkPolicyObservation(t *testing.T) {
 			want: &crdv1alpha1.Observation{
 				Component:     crdv1alpha1.ComponentNetworkPolicy,
 				ComponentInfo: "EgressDefaultRule",
-				Action:        crdv1alpha1.Dropped,
+				Action:        crdv1alpha1.ActionDropped,
 			},
 		},
 		{
@@ -77,7 +77,7 @@ func Test_getNetworkPolicyObservation(t *testing.T) {
 			want: &crdv1alpha1.Observation{
 				Component:     crdv1alpha1.ComponentNetworkPolicy,
 				ComponentInfo: "EgressRule",
-				Action:        crdv1alpha1.Forwarded,
+				Action:        crdv1alpha1.ActionForwarded,
 			},
 		},
 	}

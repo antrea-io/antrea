@@ -67,6 +67,11 @@ func run(o *Options) error {
 	if err != nil {
 		return fmt.Errorf("error creating K8s clients: %v", err)
 	}
+	legacyCRDClient, err := k8s.CreateLegacyCRDClient(o.config.ClientConnection, o.config.KubeAPIServerOverride)
+	if err != nil {
+		return fmt.Errorf("error creating legacy CRD client: %v", err)
+	}
+
 	informerFactory := informers.NewSharedInformerFactory(k8sClient, informerDefaultResync)
 	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, informerDefaultResync)
 	traceflowInformer := crdInformerFactory.Crd().V1alpha1().Traceflows()
@@ -300,7 +305,7 @@ func run(o *Options) error {
 		networkPolicyController,
 		o.config.APIPort)
 
-	agentMonitor := monitor.NewAgentMonitor(crdClient, agentQuerier)
+	agentMonitor := monitor.NewAgentMonitor(crdClient, legacyCRDClient, agentQuerier)
 
 	go agentMonitor.Run(stopCh)
 

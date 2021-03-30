@@ -101,13 +101,13 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*opsv1alpha1.Tracefl
 
 	if isSender {
 		ob := new(opsv1alpha1.Observation)
-		ob.Component = opsv1alpha1.SpoofGuard
-		ob.Action = opsv1alpha1.Forwarded
+		ob.Component = opsv1alpha1.ComponentSpoofGuard
+		ob.Action = opsv1alpha1.ActionForwarded
 		obs = append(obs, *ob)
 	} else {
 		ob := new(opsv1alpha1.Observation)
-		ob.Component = opsv1alpha1.Forwarding
-		ob.Action = opsv1alpha1.Received
+		ob.Component = opsv1alpha1.ComponentForwarding
+		ob.Action = opsv1alpha1.ActionReceived
 		ob.ComponentInfo = openflow.GetFlowTableName(openflow.ClassifierTable)
 		obs = append(obs, *ob)
 	}
@@ -141,8 +141,8 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*opsv1alpha1.Tracefl
 	}
 	if isValidCtNw(ctNwDst) && ipDst != ctNwDst {
 		ob := &opsv1alpha1.Observation{
-			Component:       opsv1alpha1.LB,
-			Action:          opsv1alpha1.Forwarded,
+			Component:       opsv1alpha1.ComponentLB,
+			Action:          opsv1alpha1.ActionForwarded,
 			TranslatedDstIP: ipDst,
 		}
 		obs = append(obs, *ob)
@@ -219,19 +219,19 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*opsv1alpha1.Tracefl
 		}
 		if c.networkConfig.TrafficEncapMode.SupportsEncap() && outputPort == config.DefaultTunOFPort {
 			ob.TunnelDstIP = tunnelDstIP
-			ob.Action = opsv1alpha1.Forwarded
+			ob.Action = opsv1alpha1.ActionForwarded
 		} else if ipDst == gatewayIP.String() && outputPort == config.HostGatewayOFPort {
-			ob.Action = opsv1alpha1.Delivered
+			ob.Action = opsv1alpha1.ActionDelivered
 		} else if c.networkConfig.TrafficEncapMode.SupportsEncap() && outputPort == config.HostGatewayOFPort {
-			ob.Action = opsv1alpha1.ForwardedOutOfOverlay
+			ob.Action = opsv1alpha1.ActionForwardedOutOfOverlay
 		} else if outputPort == config.HostGatewayOFPort { // noEncap
-			ob.Action = opsv1alpha1.Forwarded
+			ob.Action = opsv1alpha1.ActionForwarded
 		} else {
 			// Output port is Pod port, packet is delivered.
-			ob.Action = opsv1alpha1.Delivered
+			ob.Action = opsv1alpha1.ActionDelivered
 		}
 		ob.ComponentInfo = openflow.GetFlowTableName(binding.TableIDType(tableID))
-		ob.Component = opsv1alpha1.Forwarding
+		ob.Component = opsv1alpha1.ComponentForwarding
 		obs = append(obs, *ob)
 	}
 
@@ -294,20 +294,20 @@ func getNetworkPolicyObservation(tableID uint8, ingress bool) *opsv1alpha1.Obser
 		case uint8(openflow.IngressMetricTable), uint8(openflow.IngressDefaultTable):
 			// Packet dropped by ANP/default drop rule
 			ob.ComponentInfo = openflow.GetFlowTableName(binding.TableIDType(tableID))
-			ob.Action = opsv1alpha1.Dropped
+			ob.Action = opsv1alpha1.ActionDropped
 		default:
 			ob.ComponentInfo = openflow.GetFlowTableName(openflow.IngressRuleTable)
-			ob.Action = opsv1alpha1.Forwarded
+			ob.Action = opsv1alpha1.ActionForwarded
 		}
 	} else {
 		switch tableID {
 		case uint8(openflow.EgressMetricTable), uint8(openflow.EgressDefaultTable):
 			// Packet dropped by ANP/default drop rule
 			ob.ComponentInfo = openflow.GetFlowTableName(binding.TableIDType(tableID))
-			ob.Action = opsv1alpha1.Dropped
+			ob.Action = opsv1alpha1.ActionDropped
 		default:
 			ob.ComponentInfo = openflow.GetFlowTableName(openflow.EgressRuleTable)
-			ob.Action = opsv1alpha1.Forwarded
+			ob.Action = opsv1alpha1.ActionForwarded
 		}
 	}
 	return ob

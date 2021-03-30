@@ -88,17 +88,15 @@ func (c *TraceflowHandler) SyncObject(legacyObj, newObj metav1.Object) error {
 	return nil
 }
 
-//DeleteNewObject deletes the mirrored new Traceflow.
+// DeleteNewObject deletes the mirrored new Traceflow.
 func (c *TraceflowHandler) DeleteNewObject(namespace, name string) error {
 	client := c.client.CrdV1alpha1().Traceflows()
 	return client.Delete(context.TODO(), name, metav1.DeleteOptions{})
 }
 
-// LiberateNewObject updates the mirrored new ClusterGroup by deleting "crd.antrea.io/managed-by" annotation, then it
-// will not be managed by mirroring controller anymore.
-func (c *TraceflowHandler) LiberateNewObject(newObj metav1.Object) error {
-	n := newObj.(*crd.Traceflow).DeepCopy()
-	delete(n.Annotations, types.ManagedBy)
+// UpdateNewObject updates the mirrored new ClusterGroup.
+func (c *TraceflowHandler) UpdateNewObject(newObj metav1.Object) error {
+	n := newObj.(*crd.Traceflow)
 	newClient := c.client.CrdV1alpha1().Traceflows()
 	_, err := newClient.Update(context.TODO(), n, metav1.UpdateOptions{})
 	return err
