@@ -98,6 +98,7 @@ if $PULL; then
         if [[ ${DOCKER_REGISTRY} == "" ]]; then
             docker pull $PLATFORM_ARG "${image}" || true
         else
+            rc=0
             docker pull "${DOCKER_REGISTRY}/${image}" || rc=$?
             if [[ $rc -eq 0 ]]; then
                 docker tag "${DOCKER_REGISTRY}/${image}" "${image}"
