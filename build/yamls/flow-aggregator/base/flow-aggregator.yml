@@ -5,12 +5,6 @@ metadata:
   name: flow-aggregator
 ---
 apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: flow-aggregator-ca
-  namespace: flow-aggregator
----
-apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: flow-aggregator
@@ -26,6 +20,9 @@ rules:
     resources: ["configmaps"]
     resourceNames: ["flow-aggregator-ca"]
     verbs: ["get", "update"]
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["create"]
   - apiGroups: [""]
     resources: ["secrets"]
     resourceNames: ["flow-aggregator-client-tls"]

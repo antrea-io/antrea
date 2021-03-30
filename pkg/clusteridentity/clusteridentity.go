@@ -20,6 +20,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	clientset "k8s.io/client-go/kubernetes"
@@ -54,8 +56,21 @@ func NewClusterIdentityAllocator(
 
 func (a *ClusterIdentityAllocator) updateConfigMapIfNeeded() error {
 	configMap, err := a.k8sClient.CoreV1().ConfigMaps(a.clusterIdentityConfigMapNamespace).Get(context.TODO(), a.clusterIdentityConfigMapName, metav1.GetOptions{})
+	exists := true
 	if err != nil {
-		return fmt.Errorf("error when getting '%s/%s' ConfigMap: %v", a.clusterIdentityConfigMapNamespace, a.clusterIdentityConfigMapName, err)
+		if !errors.IsNotFound(err) {
+			return fmt.Errorf("error when getting '%s/%s' ConfigMap: %v", a.clusterIdentityConfigMapNamespace, a.clusterIdentityConfigMapName, err)
+		}
+		exists = false
+		configMap = &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      a.clusterIdentityConfigMapName,
+				Namespace: a.clusterIdentityConfigMapNamespace,
+				Labels: map[string]string{
+					"app": "antrea",
+				},
+			},
+		}
 	}
 
 	// returns a triplet consisting of the cluster UUID, a boolean indicating if the UUID needs
@@ -88,8 +103,14 @@ func (a *ClusterIdentityAllocator) updateConfigMapIfNeeded() error {
 	configMap.Data = map[string]string{
 		uuidConfigMapKey: clusterUUID.String(),
 	}
-	if _, err := a.k8sClient.CoreV1().ConfigMaps(a.clusterIdentityConfigMapNamespace).Update(context.TODO(), configMap, metav1.UpdateOptions{}); err != nil {
-		return fmt.Errorf("error when updating '%s/%s' ConfigMap with new cluster identity: %v", a.clusterIdentityConfigMapNamespace, a.clusterIdentityConfigMapName, err)
+	if exists {
+		if _, err := a.k8sClient.CoreV1().ConfigMaps(a.clusterIdentityConfigMapNamespace).Update(context.TODO(), configMap, metav1.UpdateOptions{}); err != nil {
+			return fmt.Errorf("error when updating '%s/%s' ConfigMap with new cluster identity: %v", a.clusterIdentityConfigMapNamespace, a.clusterIdentityConfigMapName, err)
+		}
+	} else {
+		if _, err := a.k8sClient.CoreV1().ConfigMaps(a.clusterIdentityConfigMapNamespace).Create(context.TODO(), configMap, metav1.CreateOptions{}); err != nil {
+			return fmt.Errorf("error when creating '%s/%s' ConfigMap with new cluster identity: %v", a.clusterIdentityConfigMapNamespace, a.clusterIdentityConfigMapName, err)
+		}
 	}
 	klog.Infof("New cluster UUID: %v", clusterUUID)
 	return nil
