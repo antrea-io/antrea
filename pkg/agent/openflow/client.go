@@ -15,6 +15,7 @@
 package openflow
 
 import (
+	"antrea.io/antrea/pkg/util/runtime"
 	"fmt"
 	"math/rand"
 	"net"
@@ -666,6 +667,16 @@ func (c *client) initialize() error {
 	if c.encapMode.IsNetworkPolicyOnly() {
 		if err := c.setupPolicyOnlyFlows(); err != nil {
 			return fmt.Errorf("failed to setup policy only flows: %w", err)
+		}
+	}
+	// TODO: remove OS detection after windows OVS support OF meter
+	// Only add meter entry on Linux. Skip add meter entry for Windows OVS for now.
+	if !runtime.IsWindowsPlatform() {
+		if err := c.ovsctlClient.AddMeterEntry(PacketInMeterIdNP, PacketInMeterRateNP); err != nil {
+			return fmt.Errorf("failed to install OpenFlow meter entry (meterId:%d, rate:%d) for NetworkPolicy packet-in rate limiting: %v", PacketInMeterIdNP, PacketInMeterRateNP, err)
+		}
+		if err := c.ovsctlClient.AddMeterEntry(PacketInMeterIdTF, PacketInMeterRateTF); err != nil {
+			return fmt.Errorf("failed to install OpenFlow meter entry (meterId:%d, rate:%d) for TraceFlow packet-in rate limiting: %v", PacketInMeterIdTF, PacketInMeterRateTF, err)
 		}
 	}
 	return nil

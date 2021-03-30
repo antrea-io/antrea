@@ -204,6 +204,7 @@ type Action interface {
 	GotoTable(table TableIDType) FlowBuilder
 	SendToController(reason uint8) FlowBuilder
 	Note(notes string) FlowBuilder
+	Meter(meterId uint32) FlowBuilder
 }
 
 type FlowBuilder interface {

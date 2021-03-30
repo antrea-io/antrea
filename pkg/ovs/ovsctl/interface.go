@@ -45,6 +45,10 @@ type OVSCtlClient interface {
 	DumpGroups() ([]string, error)
 	// DumpPortsDesc returns OpenFlow ports descriptions of the bridge.
 	DumpPortsDesc() ([][]string, error)
+	// AddMeterEntry adds a meter entry with specific meterId and rate to the bridge.
+	// `rate` is represented as number of packets per second.
+	// Packets which exceed the rate will be dropped.
+	AddMeterEntry(meterId uint32, rate uint32) error
 	// RunOfctlCmd executes "ovs-ofctl" command and returns the outputs.
 	RunOfctlCmd(cmd string, args ...string) ([]byte, error)
 	// SetPortNoFlood sets the given port with config "no-flood". This configuration must work with OpenFlow10.

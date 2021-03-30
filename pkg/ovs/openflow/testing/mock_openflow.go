@@ -749,6 +749,20 @@ func (mr *MockActionMockRecorder) LoadRegRange(arg0, arg1, arg2 interface{}) *go
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadRegRange", reflect.TypeOf((*MockAction)(nil).LoadRegRange), arg0, arg1, arg2)
 }
 
+// Meter mocks base method
+func (m *MockAction) Meter(arg0 uint32) openflow.FlowBuilder {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Meter", arg0)
+	ret0, _ := ret[0].(openflow.FlowBuilder)
+	return ret0
+}
+
+// Meter indicates an expected call of Meter
+func (mr *MockActionMockRecorder) Meter(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Meter", reflect.TypeOf((*MockAction)(nil).Meter), arg0)
+}
+
 // Move mocks base method
 func (m *MockAction) Move(arg0, arg1 string) openflow.FlowBuilder {
 	m.ctrl.T.Helper()

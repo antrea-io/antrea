@@ -838,12 +838,22 @@ func (c *client) traceflowNetworkPolicyFlows(dataplaneTag uint8, timeout uint16,
 			if ctx.dropFlow.FlowProtocol() == "" {
 				copyFlowBuilderIPv6 := ctx.dropFlow.CopyToBuilder(priorityNormal+2, false)
 				copyFlowBuilderIPv6 = copyFlowBuilderIPv6.MatchProtocol(binding.ProtocolIPv6)
+				// TODO: remove OS detection after windows OVS support OF meter.
+				// Only apply OF meter on Linux. Skip apply OF meter for Windows OVS for now.
+				if !runtime.IsWindowsPlatform() {
+					copyFlowBuilderIPv6 = copyFlowBuilderIPv6.Action().Meter(PacketInMeterIdTF)
+				}
 				flows = append(flows, copyFlowBuilderIPv6.MatchIPDSCP(dataplaneTag).
 					SetHardTimeout(timeout).
 					Cookie(c.cookieAllocator.Request(category).Raw()).
 					Action().SendToController(uint8(PacketInReasonTF)).
 					Done())
 				copyFlowBuilder = copyFlowBuilder.MatchProtocol(binding.ProtocolIP)
+			}
+			// TODO: remove OS detection after windows OVS support OF meter.
+			// Only apply OF meter on Linux. Skip apply OF meter for Windows OVS for now.
+			if !runtime.IsWindowsPlatform() {
+				copyFlowBuilder = copyFlowBuilder.Action().Meter(PacketInMeterIdTF)
 			}
 			flows = append(flows, copyFlowBuilder.MatchIPDSCP(dataplaneTag).
 				SetHardTimeout(timeout).
@@ -862,12 +872,22 @@ func (c *client) traceflowNetworkPolicyFlows(dataplaneTag uint8, timeout uint16,
 				if flow.FlowProtocol() == "" {
 					copyFlowBuilderIPv6 := flow.CopyToBuilder(priorityNormal+2, false)
 					copyFlowBuilderIPv6 = copyFlowBuilderIPv6.MatchProtocol(binding.ProtocolIPv6)
+					// TODO: remove OS detection after windows OVS support OF meter.
+					// Only apply OF meter on Linux. Skip apply OF meter for Windows OVS for now.
+					if !runtime.IsWindowsPlatform() {
+						copyFlowBuilderIPv6 = copyFlowBuilderIPv6.Action().Meter(PacketInMeterIdTF)
+					}
 					flows = append(flows, copyFlowBuilderIPv6.MatchIPDSCP(dataplaneTag).
 						SetHardTimeout(timeout).
 						Cookie(c.cookieAllocator.Request(category).Raw()).
 						Action().SendToController(uint8(PacketInReasonTF)).
 						Done())
 					copyFlowBuilder = copyFlowBuilder.MatchProtocol(binding.ProtocolIP)
+				}
+				// TODO: remove OS detection after windows OVS support OF meter.
+				// Only apply OF meter on Linux. Skip apply OF meter for Windows OVS for now.
+				if !runtime.IsWindowsPlatform() {
+					copyFlowBuilder = copyFlowBuilder.Action().Meter(PacketInMeterIdTF)
 				}
 				flows = append(flows, copyFlowBuilder.MatchIPDSCP(dataplaneTag).
 					SetHardTimeout(timeout).
@@ -1004,6 +1024,12 @@ func (c *client) traceflowL2ForwardOutputFlows(dataplaneTag uint8, liveTraffic, 
 
 			// Do not send to controller if captures only dropped packet.
 			if !droppedOnly {
+				// TODO: remove OS detection after windows OVS support OF meter.
+				// Only apply OF meter on Linux. Skip apply OF meter for Windows OVS for now.
+				if !runtime.IsWindowsPlatform() {
+					fb1 = fb1.Action().Meter(PacketInMeterIdTF)
+					fb2 = fb2.Action().Meter(PacketInMeterIdTF)
+				}
 				fb1 = fb1.Action().SendToController(uint8(PacketInReasonTF))
 				fb2 = fb2.Action().SendToController(uint8(PacketInReasonTF))
 			}
@@ -1026,6 +1052,11 @@ func (c *client) traceflowL2ForwardOutputFlows(dataplaneTag uint8, liveTraffic, 
 				Action().OutputRegRange(int(PortCacheReg), ofPortRegRange).
 				Cookie(c.cookieAllocator.Request(category).Raw())
 			if !droppedOnly {
+				// TODO: remove OS detection after windows OVS support OF meter.
+				// Only apply OF meter on Linux. Skip apply OF meter for Windows OVS for now.
+				if !runtime.IsWindowsPlatform() {
+					fb1 = fb1.Action().Meter(PacketInMeterIdTF)
+				}
 				fb1 = fb1.Action().SendToController(uint8(PacketInReasonTF))
 			}
 			flows = append(flows, fb1.Done())
@@ -1045,6 +1076,11 @@ func (c *client) traceflowL2ForwardOutputFlows(dataplaneTag uint8, liveTraffic, 
 				MatchRegRange(int(marksReg), portFoundMark, ofPortMarkRange).
 				Cookie(c.cookieAllocator.Request(category).Raw())
 			if !droppedOnly {
+				// TODO: remove OS detection after windows OVS support OF meter.
+				// Only apply OF meter on Linux. Skip apply OF meter for Windows OVS for now.
+				if !runtime.IsWindowsPlatform() {
+					fb = fb.Action().Meter(PacketInMeterIdTF)
+				}
 				fb = fb.Action().SendToController(uint8(PacketInReasonTF))
 			}
 			if liveTraffic {
@@ -1061,6 +1097,11 @@ func (c *client) traceflowL2ForwardOutputFlows(dataplaneTag uint8, liveTraffic, 
 			MatchRegRange(int(marksReg), portFoundMark, ofPortMarkRange).
 			Cookie(c.cookieAllocator.Request(category).Raw())
 		if !droppedOnly {
+			// TODO: remove OS detection after windows OVS support OF meter.
+			// Only apply OF meter on Linux. Skip apply OF meter for Windows OVS for now.
+			if !runtime.IsWindowsPlatform() {
+				fb = fb.Action().Meter(PacketInMeterIdTF)
+			}
 			fb = fb.Action().SendToController(uint8(PacketInReasonTF))
 		}
 		if liveTraffic {
@@ -1522,8 +1563,14 @@ func (c *client) conjunctionActionFlow(conjunctionID uint32, tableID binding.Tab
 			ctZone = CtZoneV6
 		}
 		if enableLogging {
-			return c.pipeline[tableID].BuildFlow(ofPriority).MatchProtocol(proto).
-				MatchConjID(conjunctionID).
+			fb := c.pipeline[tableID].BuildFlow(ofPriority).MatchProtocol(proto).
+				MatchConjID(conjunctionID)
+			// TODO: remove OS detection after windows OVS support OF meter.
+			// Only apply OF meter on Linux. Skip apply OF meter for Windows OVS for now.
+			if !runtime.IsWindowsPlatform() {
+				fb = fb.Action().Meter(PacketInMeterIdNP)
+			}
+			return fb.
 				Action().LoadRegRange(int(conjReg), conjunctionID, binding.Range{0, 31}).         // Traceflow.
 				Action().LoadRegRange(int(marksReg), DispositionAllow, APDispositionMarkRange).   // AntreaPolicy.
 				Action().LoadRegRange(int(marksReg), CustomReasonLogging, CustomReasonMarkRange). // Enable logging.
@@ -1582,6 +1629,11 @@ func (c *client) conjunctionActionDenyFlow(conjunctionID uint32, tableID binding
 	}
 
 	if enableLogging || c.enableDenyTracking || disposition == DispositionRej {
+		// TODO: remove OS detection after windows OVS support OF meter.
+		// Only apply OF meter on Linux. Skip apply OF meter for Windows OVS for now.
+		if !runtime.IsWindowsPlatform() {
+			flowBuilder = flowBuilder.Action().Meter(PacketInMeterIdNP)
+		}
 		flowBuilder = flowBuilder.
 			Action().LoadRegRange(int(marksReg), uint32(customReason), CustomReasonMarkRange).
 			Action().SendToController(uint8(PacketInReasonNP))

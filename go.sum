@@ -121,8 +121,8 @@ github.com/containernetworking/cni v0.8.0/go.mod h1:LGwApLUm2FpoOfxTDEeq8T9ipbpZ
 github.com/containernetworking/plugins v0.8.7 h1:bU7QieuAp+sACI2vCzESJ3FoT860urYP+lThyZkb/2M=
 github.com/containernetworking/plugins v0.8.7/go.mod h1:R7lXeZaBzpfqapcAbHRW8/CYwm0dHzbz0XEjofx0uB0=
 github.com/contiv/libOpenflow v0.0.0-20201014051314-c1702744526c/go.mod h1:DtsPlJOByJZ+MO9YITEGUlbJ/jfh/ef0qeNyBYaeNR4=
-github.com/contiv/libOpenflow v0.0.0-20210312221048-1d504242120d h1:qHFOB6hTrpBzbYdhOMyQwHdX7XfLGGoqN/NfgDrSEXg=
-github.com/contiv/libOpenflow v0.0.0-20210312221048-1d504242120d/go.mod h1:DtsPlJOByJZ+MO9YITEGUlbJ/jfh/ef0qeNyBYaeNR4=
+github.com/contiv/libOpenflow v0.0.0-20210416161057-27e68f0e5fce h1:pcwRbFTaAKuEUWkLM6Ywm/s75GcWmp4bPUXlXQS1V8s=
+github.com/contiv/libOpenflow v0.0.0-20210416161057-27e68f0e5fce/go.mod h1:DtsPlJOByJZ+MO9YITEGUlbJ/jfh/ef0qeNyBYaeNR4=
 github.com/contiv/libovsdb v0.0.0-20170227191248-d0061a53e358 h1:AiA9SKyNXulsU7aAnyka3UFHYOIH00A9HvdIRnDXlg0=
 github.com/contiv/libovsdb v0.0.0-20170227191248-d0061a53e358/go.mod h1:+qKEHaNVPj+wrn5st7TEFH9wcUWCJq5ZBvVKPQwzAeg=
 github.com/coreos/bbolt v1.3.2/go.mod h1:iRUV2dpdMOn7Bo10OQBFzIJO9kkE559Wcmn+qkEiiKk=

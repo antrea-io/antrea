@@ -17,7 +17,7 @@ require (
 	github.com/confluentinc/bincover v0.1.0
 	github.com/containernetworking/cni v0.8.0
 	github.com/containernetworking/plugins v0.8.7
-	github.com/contiv/libOpenflow v0.0.0-20210312221048-1d504242120d
+	github.com/contiv/libOpenflow v0.0.0-20210416161057-27e68f0e5fce
 	github.com/contiv/ofnet v0.0.0-00010101000000-000000000000
 	github.com/coreos/go-iptables v0.4.5
 	github.com/elazarl/goproxy v0.0.0-20190911111923-ecfe977594f1 // indirect

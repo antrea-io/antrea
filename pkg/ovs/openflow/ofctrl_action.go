@@ -330,6 +330,11 @@ func (a *ofFlowAction) SendToController(reason uint8) FlowBuilder {
 	return a.builder
 }
 
+func (a *ofFlowAction) Meter(meterId uint32) FlowBuilder {
+	a.builder.ofFlow.Meter(meterId)
+	return a.builder
+}
+
 //  Learn is an action which adds or modifies a flow in an OpenFlow table.
 func (a *ofFlowAction) Learn(id TableIDType, priority uint16, idleTimeout, hardTimeout uint16, cookieID uint64) LearnAction {
 	la := &ofLearnAction{
