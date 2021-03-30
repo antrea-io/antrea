@@ -84,6 +84,12 @@ rules:
       - get
       - update
   - apiGroups:
+      - ""
+    resources:
+      - configmaps
+    verbs:
+      - create
+  - apiGroups:
       - apiregistration.k8s.io
     resources:
       - apiservices
