@@ -134,7 +134,8 @@ func run(o *Options) error {
 		serviceCIDRNetv6,
 		networkConfig,
 		networkReadyCh,
-		features.DefaultFeatureGate.Enabled(features.AntreaProxy))
+		features.DefaultFeatureGate.Enabled(features.AntreaProxy),
+		encapMode)
 	err = agentInitializer.Initialize()
 	if err != nil {
 		return fmt.Errorf("error initializing agent: %v", err)

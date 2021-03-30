@@ -63,7 +63,7 @@ func NewClient(serviceCIDR *net.IPNet, networkConfig *config.NetworkConfig, noSN
 func (c *Client) Initialize(nodeConfig *config.NodeConfig, done func()) error {
 	c.nodeConfig = nodeConfig
 	if bridgeInf, err := net.InterfaceByName(nodeConfig.OVSBridge); err != nil {
-		return err
+		klog.Warningf("Failed to find the interface %s: %v", nodeConfig.OVSBridge, err)
 	} else {
 		c.bridgeInfIndex = bridgeInf.Index
 	}
@@ -96,7 +96,7 @@ func (c *Client) Reconcile(podCIDRs []string) error {
 			c.hostRoutes.Store(dst, rt)
 			continue
 		}
-		if rt.LinkIndex != c.nodeConfig.UplinkNetConfig.Index {
+		if c.nodeConfig.UplinkNetConfig != nil && rt.LinkIndex != c.nodeConfig.UplinkNetConfig.Index {
 			continue
 		}
 		err := c.nr.RemoveNetRoute(rt.LinkIndex, rt.DestinationSubnet, rt.GatewayAddress)
@@ -122,19 +122,18 @@ func (c *Client) AddRoutes(podCIDR *net.IPNet, nodeName string, peerNodeIP, peer
 		// Set the peerNodeIP as next hop.
 		route.LinkIndex = c.bridgeInfIndex
 		route.GatewayAddress = peerNodeIP
-	} else {
-		// NoEncap traffic to Node on the different subnet needs underlying routing support.
-		// Use host default route inside the Node.
 	}
+	// NoEncap traffic to Node on the different subnet needs underlying routing support.
+	// Use host default route inside the Node.
 
 	if found {
-		existedRoute := obj.(*netroute.Route)
-		if existedRoute.GatewayAddress.Equal(route.GatewayAddress) {
+		existingRoute := obj.(*netroute.Route)
+		if existingRoute.GatewayAddress.Equal(route.GatewayAddress) {
 			klog.V(4).Infof("Route with destination %s already exists on %s (%s)", podCIDR.String(), nodeName, peerNodeIP)
 			return nil
 		}
 		// Remove the existing route entry if the gateway address is not as expected.
-		if err := c.nr.RemoveNetRoute(existedRoute.LinkIndex, existedRoute.DestinationSubnet, existedRoute.GatewayAddress); err != nil {
+		if err := c.nr.RemoveNetRoute(existingRoute.LinkIndex, existingRoute.DestinationSubnet, existingRoute.GatewayAddress); err != nil {
 			klog.Errorf("Failed to delete existing route entry with destination %s gateway %s on %s (%s)", podCIDR.String(), peerGwIP.String(), nodeName, peerNodeIP)
 			return err
 		}

@@ -57,7 +57,7 @@ func TestCheckUnsupportedFeatures(t *testing.T) {
 		{
 			"noEncap mode",
 			AgentConfig{TrafficEncapMode: config.TrafficEncapModeNoEncap.String()},
-			false,
+			true,
 		},
 		{
 			"GRE tunnel",

@@ -43,6 +43,12 @@ const (
 	commandRetryInternal = time.Second
 )
 
+// AdapterPSParam consists of key and value of a NetAdapter PS parameter.
+type AdapterPSParam struct {
+	K string
+	V string
+}
+
 func GetNSPath(containerNetNS string) (string, error) {
 	return containerNetNS, nil
 }
@@ -465,4 +471,19 @@ func HostInterfaceExists(ifaceName string) bool {
 		return false
 	}
 	return true
+}
+
+// AdapterPSParam configures netadapter.
+func SetAdapter(adapterName, ps string, params []AdapterPSParam) error {
+	cmd := fmt.Sprintf("%s -Name %s", ps, adapterName)
+	for _, p := range params {
+		cmd = fmt.Sprintf("%s -%s", cmd, p.K)
+		if p.V != "" {
+			cmd = fmt.Sprintf("%s %s", cmd, p.V)
+		}
+	}
+	if err := InvokePSCommand(cmd); err != nil {
+		return err
+	}
+	return nil
 }

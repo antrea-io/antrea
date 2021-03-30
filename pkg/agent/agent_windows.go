@@ -176,6 +176,41 @@ func (i *Initializer) prepareOVSBridge() error {
 		klog.Errorf("Failed to set the uplink port with no-flood config: %v", err)
 		return err
 	}
+
+	if i.encapMode != config.TrafficEncapModeNoEncap {
+		return nil
+	}
+
+	// Due to bugs in Windows OVS, these configurations on OVS bridge are needed for noencap mode.
+	pss := []struct {
+		ps     string
+		params []util.AdapterPSParam
+	}{
+		{
+			"Disable-NetAdapterChecksumOffload",
+			[]util.AdapterPSParam{
+				{K: "TcpIPv4", V: ""},
+			},
+		},
+		{
+			"Disable-NetAdapterLso",
+			[]util.AdapterPSParam{
+				{K: "IPv4", V: ""},
+			},
+		},
+		{
+			"Disable-NetAdapterRsc",
+			[]util.AdapterPSParam{
+				{K: "IPv4", V: ""},
+			},
+		},
+	}
+
+	for _, ps := range pss {
+		if err := util.SetAdapter(brName, ps.ps, ps.params); err != nil {
+			return fmt.Errorf("failed to %s on %s: %v", ps.ps, brName, err)
+		}
+	}
 	return nil
 }
 
