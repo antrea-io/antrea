@@ -97,19 +97,3 @@ type NetworkPolicy struct {
 	// Must be false for K8s NetworkPolicy.
 	AppliedToPerRule bool
 }
-
-// EgressGroup describes a set of GroupMembers to apply Egress to.
-type EgressGroup struct {
-	SpanMeta
-	// UID is generated from the hash value of GroupSelector.NormalizedName.
-	// In case the AppliedToGroup is created for a ClusterGroup, the UID is
-	// that of the corresponding ClusterGroup.
-	UID types.UID
-	// Name of this group, currently it's same as UID.
-	Name string
-	// GroupMemberByNode is a mapping from nodeName to a set of GroupMembers on the Node,
-	// either GroupMembers or ExternalEntity on the external node.
-	// It will be converted to a slice of GroupMember for transferring according
-	// to client's selection.
-	GroupMemberByNode map[string]controlplane.GroupMemberSet
-}

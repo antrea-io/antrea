@@ -27,6 +27,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/cniserver"
 	_ "github.com/vmware-tanzu/antrea/pkg/agent/cniserver/ipam"
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
+	"github.com/vmware-tanzu/antrea/pkg/agent/controller/egress"
 	"github.com/vmware-tanzu/antrea/pkg/agent/controller/networkpolicy"
 	"github.com/vmware-tanzu/antrea/pkg/agent/controller/noderoute"
 	"github.com/vmware-tanzu/antrea/pkg/agent/controller/traceflow"
@@ -94,7 +95,7 @@ func run(o *Options) error {
 	ofClient := openflow.NewClient(o.config.OVSBridge, ovsBridgeMgmtAddr, ovsDatapathType,
 		features.DefaultFeatureGate.Enabled(features.AntreaProxy),
 		features.DefaultFeatureGate.Enabled(features.AntreaPolicy),
-		false)
+		features.DefaultFeatureGate.Enabled(features.Egress))
 
 	_, serviceCIDRNet, _ := net.ParseCIDR(o.config.ServiceCIDR)
 	var serviceCIDRNetv6 *net.IPNet
@@ -235,6 +236,11 @@ func run(o *Options) error {
 			serviceCIDRNet)
 	}
 
+	var egressController *egress.Controller
+	if features.DefaultFeatureGate.Enabled(features.Egress) {
+		egressController = egress.NewEgressController(ofClient, routeClient, crdInformerFactory, antreaClientProvider, ifaceStore)
+	}
+
 	// TODO: we should call this after installing flows for initial node routes
 	//  and initial NetworkPolicies so that no packets will be mishandled.
 	if err := agentInitializer.FlowRestoreComplete(); err != nil {
@@ -276,6 +282,10 @@ func run(o *Options) error {
 	go nodeRouteController.Run(stopCh)
 
 	go networkPolicyController.Run(stopCh)
+
+	if features.DefaultFeatureGate.Enabled(features.Egress) {
+		go egressController.Run(stopCh)
+	}
 
 	if features.DefaultFeatureGate.Enabled(features.NetworkPolicyStats) {
 		go statsCollector.Run(stopCh)

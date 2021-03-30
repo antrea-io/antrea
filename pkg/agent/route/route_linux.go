@@ -354,20 +354,12 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet, podIPSet string, snatMa
 
 	writeLine(iptablesData, "*nat")
 	writeLine(iptablesData, iptables.MakeChainLine(antreaPostRoutingChain))
-<<<<<<< HEAD
 	// Egress rules must be inserted before the default masquerade rule.
-=======
-	// Egress rule must be inserted before the default masquerade rule.
->>>>>>> b5d2dd19 (Add iptables interface for implementing Egress)
 	for snatMark, snatIP := range snatMarkToIP {
 		// Cannot reuse snatRuleSpec to generate the rule as it doesn't have "`" in the comment.
 		writeLine(iptablesData, []string{
 			"-A", antreaPostRoutingChain,
-<<<<<<< HEAD
 			"-m", "comment", "--comment", `"Antrea: SNAT Pod to external packets"`,
-=======
-			"-m", "comment", "--comment", `"Antrea: snat pod to external packets"`,
->>>>>>> b5d2dd19 (Add iptables interface for implementing Egress)
 			"-m", "mark", "--mark", fmt.Sprintf("%#08x/%#08x", snatMark, types.SNATIPMarkMask),
 			"-j", iptables.SNATTarget, "--to", snatIP.String(),
 		}...)

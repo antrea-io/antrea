@@ -73,6 +73,14 @@ rules:
       - watch
       - list
   - apiGroups:
+    - egress.antrea.tanzu.vmware.com
+    resources:
+      - egresses
+    verbs:
+      - get
+      - watch
+      - list
+  - apiGroups:
       - controlplane.antrea.tanzu.vmware.com
     resources:
       - nodestatssummaries
