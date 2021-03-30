@@ -668,6 +668,14 @@ func (c *client) initialize() error {
 			return fmt.Errorf("failed to setup policy only flows: %w", err)
 		}
 	}
+	if c.ovsMetersAreSupported {
+		if err := c.genPacketInMeter(PacketInMeterIDNP, PacketInMeterRateNP).Add(); err != nil {
+			return fmt.Errorf("failed to install OpenFlow meter entry (meterID:%d, rate:%d) for NetworkPolicy packet-in rate limiting: %v", PacketInMeterIDNP, PacketInMeterRateNP, err)
+		}
+		if err := c.genPacketInMeter(PacketInMeterIDTF, PacketInMeterRateTF).Add(); err != nil {
+			return fmt.Errorf("failed to install OpenFlow meter entry (meterID:%d, rate:%d) for TraceFlow packet-in rate limiting: %v", PacketInMeterIDTF, PacketInMeterRateTF, err)
+		}
+	}
 	return nil
 }
 
@@ -700,6 +708,17 @@ func (c *client) Initialize(roundInfo types.RoundInfo, nodeConfig *config.NodeCo
 	// the previous round have been deleted).
 	if err := c.deleteFlowsByRoundNum(roundInfo.RoundNum); err != nil {
 		return nil, fmt.Errorf("error when deleting exiting flows for current round number: %v", err)
+	}
+
+	// In the normal case, there should be no existing meter entries. This is needed in case the
+	// antrea-agent container is restarted (but not the antrea-ovs one), which will add meter
+	// entries during initialization, but the meter entries added during the previous
+	// initialization still exist. Trying to add an existing meter entry will cause an
+	// OFPMMFC_METER_EXISTS error.
+	if c.ovsMetersAreSupported {
+		if err := c.bridge.DeleteMeterAll(); err != nil {
+			return nil, fmt.Errorf("error when deleting all meter entries: %v", err)
+		}
 	}
 
 	return connCh, c.initialize()
