@@ -630,21 +630,19 @@ func (c *client) connectionTrackFlows(category cookie.Category) []binding.Flow {
 				Action().CT(true, connectionTrackCommitTable.GetNext(), ctZone).LoadToMark(gatewayCTMark).CTDone().
 				Cookie(c.cookieAllocator.Request(category).Raw()).
 				Done(),
+			// Add reject response packet bypass flow.
+			c.conntrackBypassRejectFlow(proto),
 		)
 	}
-
-	// Add reject response packet bypass flow.
-	flows = append(flows, c.conntrackBypassRejectFlow())
-
 	return flows
 }
 
 // conntrackBypassRejectFlow generates a flow which is used to bypass the reject
 // response packet sent by the controller to avoid unexpected packet drop.
-func (c *client) conntrackBypassRejectFlow() binding.Flow {
+func (c *client) conntrackBypassRejectFlow(proto binding.Protocol) binding.Flow {
 	connectionTrackStateTable := c.pipeline[conntrackStateTable]
 	return connectionTrackStateTable.BuildFlow(priorityHigh).
-		MatchProtocol(binding.ProtocolIP).
+		MatchProtocol(proto).
 		MatchRegRange(int(marksReg), CustomReasonReject, CustomReasonMarkRange).
 		Cookie(c.cookieAllocator.Request(cookie.Default).Raw()).
 		Action().ResubmitToTable(connectionTrackStateTable.GetNext()).

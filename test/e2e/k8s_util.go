@@ -104,13 +104,9 @@ func (k *KubernetesUtils) Probe(ns1, pod1, ns2, pod2 string, port int32, protoco
 	toPod := toPods[0]
 
 	// Both IPv4 and IPv6 address should be tested.
-	var toIPs []string
-	for _, toIP := range toPod.Status.PodIPs {
-		toIPs = append(toIPs, toIP.IP)
-	}
-
 	connectivity := Unknown
-	for _, toIP := range toIPs {
+	for _, eachIP := range toPod.Status.PodIPs {
+		toIP := eachIP.IP
 		// If it's an IPv6 address, add "[]" around it.
 		if strings.Contains(toIP, ":") {
 			toIP = fmt.Sprintf("[%s]", toIP)
@@ -194,7 +190,7 @@ func (k *KubernetesUtils) CreateOrUpdateDeployment(ns, deploymentName string, re
 		case v1.ProtocolUDP:
 			args = []string{fmt.Sprintf("/agnhost serve-hostname --udp --http=false --port=%d", port)}
 		case v1.ProtocolSCTP:
-			args = []string{fmt.Sprintf("/agnhost porter")}
+			args = []string{"/agnhost porter"}
 		default:
 			args = []string{fmt.Sprintf("/agnhost serve-hostname --udp --http=false --port=%d & /agnhost serve-hostname --tcp --http=false --port=%d & /agnhost porter", port, port)}
 
@@ -643,7 +639,7 @@ func (k *KubernetesUtils) waitForPodInNamespace(ns string, pod string) ([]string
 			for _, podIP := range k8sPod.Status.PodIPs {
 				podIPs = append(podIPs, podIP.IP)
 			}
-			log.Debugf("IPs of Pod '%s/%s' is: %s", ns, pod, podIPs)
+			log.Debugf("IPs of Pod '%s/%s': %s", ns, pod, podIPs)
 			log.Debugf("Pod running: %s/%s", ns, pod)
 			return podIPs, nil
 		}
