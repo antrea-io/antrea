@@ -135,6 +135,13 @@ if [[ "$WORKDIR" != "$DEFAULT_WORKDIR" && "$KUBECONFIG_PATH" == "$DEFAULT_KUBECO
     KUBECONFIG_PATH=$WORKDIR/.kube/config
 fi
 
+# If DOCKER_REGISTRY is non null, we ensure that "make" commands never pull from docker.io.
+NO_PULL=
+if [[ ${DOCKER_REGISTRY} != "" ]]; then
+    NO_PULL=1
+fi
+export NO_PULL
+
 function saveLogs() {
     echo "=== Truncate old logs ==="
     mkdir -p $WORKDIR/antrea_logs
@@ -284,24 +291,18 @@ function deliver_antrea {
     # because they might be being used in other builds running simultaneously.
     docker image prune -f --filter "until=1h" || true > /dev/null
     cd $GIT_CHECKOUT_DIR
-    if [[ ${DOCKER_REGISTRY} != "" ]]; then
-        docker pull ${DOCKER_REGISTRY}/antrea/base-ubuntu:2.14.0
-        docker tag ${DOCKER_REGISTRY}/antrea/base-ubuntu:2.14.0 antrea/base-ubuntu:2.14.0
-        docker pull ${DOCKER_REGISTRY}/antrea/golang:1.15
-        docker tag ${DOCKER_REGISTRY}/antrea/golang:1.15 golang:1.15
-    fi
     for i in `seq 2`
     do
         if [[ "$COVERAGE" == true ]]; then
-            VERSION="$CLUSTER" DOCKER_REGISTRY="${DOCKER_REGISTRY}" make build-ubuntu-coverage && break
+            VERSION="$CLUSTER" DOCKER_REGISTRY="${DOCKER_REGISTRY}" ./hack/build-antrea-ubuntu-all.sh --pull --coverage && break
         else
-            VERSION="$CLUSTER" DOCKER_REGISTRY="${DOCKER_REGISTRY}" make && break
+            VERSION="$CLUSTER" DOCKER_REGISTRY="${DOCKER_REGISTRY}" ./hack/build-antrea-ubuntu-all.sh --pull && break
         fi
     done
     if [[ "$COVERAGE" == true ]]; then
-      VERSION="$CLUSTER" DOCKER_REGISTRY="${DOCKER_REGISTRY}" make flow-aggregator-ubuntu-coverage
+      VERSION="$CLUSTER" make flow-aggregator-ubuntu-coverage
     else
-      VERSION="$CLUSTER" DOCKER_REGISTRY="${DOCKER_REGISTRY}" make flow-aggregator-image
+      VERSION="$CLUSTER" make flow-aggregator-image
     fi
     cd ci/jenkins
 
@@ -396,12 +397,8 @@ function run_integration {
     VM_IP=$(govc vm.ip ${VM_NAME}) # wait for VM to be on
 
     set -x
-    echo "===== Run Integration test ====="
-    if [[ ${DOCKER_REGISTRY} != "" ]]; then
-        docker pull ${DOCKER_REGISTRY}/antrea/openvswitch:2.14.0
-        docker tag ${DOCKER_REGISTRY}/antrea/openvswitch:2.14.0 antrea/openvswitch:2.14.0
-    fi
-    ${SSH_WITH_UTILS_KEY} -n jenkins@${VM_IP} "git clone ${ghprbAuthorRepoGitUrl} antrea && cd antrea && git checkout ${GIT_BRANCH} && DOCKER_REGISTRY=${DOCKER_REGISTRY} make docker-test-integration"
+    echo "===== Run Integration tests ====="
+    ${SSH_WITH_UTILS_KEY} -n jenkins@${VM_IP} "git clone ${ghprbAuthorRepoGitUrl} antrea && cd antrea && git checkout ${GIT_BRANCH} && DOCKER_REGISTRY=${DOCKER_REGISTRY} ./build/images/ovs/build.sh --pull && NO_PULL=${NO_PULL} make docker-test-integration"
     if [[ "$COVERAGE" == true ]]; then
         ${SSH_WITH_UTILS_KEY} -n jenkins@${VM_IP} "curl -s https://codecov.io/bash | bash -s -- -c -t ${CODECOV_TOKEN} -F integration-tests -f '.coverage/coverage-integration.txt'"
     fi

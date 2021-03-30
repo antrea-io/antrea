@@ -84,9 +84,21 @@ CNI_BINARIES_VERSION=$(head -n 1 ../deps/cni-binaries-version)
 
 if $PULL; then
     docker pull $PLATFORM_ARG ubuntu:20.04
-    docker pull $PLATFORM_ARG antrea/openvswitch:$OVS_VERSION
-    docker pull $PLATFORM_ARG antrea/cni-binaries:$CNI_BINARIES_VERSION || true
-    docker pull $PLATFORM_ARG antrea/base-ubuntu:$OVS_VERSION || true
+    IMAGES_LIST=(
+        "antrea/openvswitch:$OVS_VERSION"
+        "antrea/cni-binaries:$CNI_BINARIES_VERSION"
+        "antrea/base-ubuntu:$OVS_VERSION"
+    )
+    for image in "${IMAGES_LIST[@]}"; do
+        if [[ ${DOCKER_REGISTRY} == "" ]]; then
+            docker pull $PLATFORM_ARG "${image}" || true
+        else
+            docker pull "${DOCKER_REGISTRY}/${image}" || rc=$?
+            if [[ $rc -eq 0 ]]; then
+                docker tag "${DOCKER_REGISTRY}/${image}" "${image}"
+            fi
+        fi
+    done
 fi
 
 docker build $PLATFORM_ARG --target cni-binaries \

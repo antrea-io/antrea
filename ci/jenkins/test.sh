@@ -93,21 +93,17 @@ done
 if [[ "$WORKDIR" != "$DEFAULT_WORKDIR" && "$KUBECONFIG_PATH" == "$DEFAULT_KUBECONFIG_PATH" ]]; then
     KUBECONFIG_PATH=${WORKDIR}/.kube/config
 fi
+NO_PULL=
 if [[ "$DOCKER_REGISTRY" != "" ]]; then
     # Image pulling policy of Sonobuoy is 'Always' by default. With dockerhub rate limit, sometimes it is better to use
     # cache when registry is used.
     IMAGE_PULL_POLICY="IfNotPresent"
+    # If DOCKER_REGISTRY is non null, we ensure that "make" commands never pull from docker.io.
+    NO_PULL=1
 fi
+export NO_PULL
 
 E2ETEST_PATH=${WORKDIR}/kubernetes/_output/dockerized/bin/linux/amd64/e2e.test
-
-function pull_antrea_ubuntu_image {
-    harbor_images=("base-ubuntu:2.14.0" "golang:1.15")
-    antrea_images=("antrea/base-ubuntu:2.14.0" "golang:1.15")
-    for i in {0..4}; do
-        docker pull ${DOCKER_REGISTRY}/antrea/${harbor_images[i]} && docker tag ${DOCKER_REGISTRY}/antrea/${harbor_images[i]} ${antrea_images[i]} || true
-    done
-}
 
 function export_govc_env_var {
     export GOVC_URL=$GOVC_URL
@@ -187,10 +183,7 @@ function deliver_antrea_windows {
     make clean
     docker images | grep 'antrea-ubuntu' | awk '{print $3}' | xargs -r docker rmi -f || true
     docker images | grep '<none>' | awk '{print $3}' | xargs -r docker rmi || true
-    if [[ "$DOCKER_REGISTRY" != "" ]]; then
-        pull_antrea_ubuntu_image
-    fi
-    DOCKER_REGISTRY="${DOCKER_REGISTRY}" make
+    ./hack/build-antrea-ubuntu-all.sh --pull
     if [[ "$TESTCASE" =~ "networkpolicy" ]]; then
         make windows-bin
     fi
@@ -284,12 +277,11 @@ function deliver_antrea {
     docker images | grep 'antrea-ubuntu' | awk '{print $3}' | xargs -r docker rmi -f || true
     docker images | grep '<none>' | awk '{print $3}' | xargs -r docker rmi || true
     if [[ "${DOCKER_REGISTRY}" != "" ]]; then
-        pull_antrea_ubuntu_image
         docker pull "${DOCKER_REGISTRY}/antrea/sonobuoy-systemd-logs:v0.3"
         docker tag "${DOCKER_REGISTRY}/antrea/sonobuoy-systemd-logs:v0.3" "sonobuoy/systemd-logs:v0.3"
     fi
-    DOCKER_REGISTRY=${DOCKER_REGISTRY} make
-    DOCKER_REGISTRY=${DOCKER_REGISTRY} make flow-aggregator-image
+    ./hack/build-antrea-ubuntu-all.sh --pull
+    make flow-aggregator-image
 
     echo "====== Delivering Antrea to all the Nodes ======"
     echo "=== Fill serviceCIDRv6 and serviceCIDR ==="
