@@ -19,8 +19,15 @@ jobs:
         AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID_SES }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY_SES }}
       run: |
-        cd ci/clair-scan
-        ./run.sh
+        mkdir clair-reports
+        ./ci/clair-scan/run.sh ./clair-reports
+    - name: Upload Clair scan reports
+      if: ${{ always() }}
+      uses: actions/upload-artifact@v2
+      with:
+        name: clair-scan-reports
+        path: clair-reports/*.json
+        retention-days: 90 # max value
   skip:
     if: github.repository != 'vmware-tanzu/antrea'
     runs-on: [ubuntu-latest]
