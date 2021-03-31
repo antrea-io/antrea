@@ -22,6 +22,8 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/apis/ops/v1alpha1"
 )
 
+var protocolTCP = int32(6)
+
 // TestGetPortFields tests if a flow can be turned into a map.
 func TestGetPortFields(t *testing.T) {
 	tcs := []struct {
@@ -108,6 +110,24 @@ func TestParseFlow(t *testing.T) {
 					Packet: v1alpha1.Packet{
 						IPHeader: v1alpha1.IPHeader{
 							Protocol: 6,
+						},
+						TransportHeader: v1alpha1.TransportHeader{
+							TCP: &v1alpha1.TCPHeader{
+								DstPort: 4321,
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			flow:    "tcp,tcp_dst=4321,ipv6",
+			success: true,
+			expected: &v1alpha1.Traceflow{
+				Spec: v1alpha1.TraceflowSpec{
+					Packet: v1alpha1.Packet{
+						IPv6Header: &v1alpha1.IPv6Header{
+							NextHeader: &protocolTCP,
 						},
 						TransportHeader: v1alpha1.TransportHeader{
 							TCP: &v1alpha1.TCPHeader{
