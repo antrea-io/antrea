@@ -289,7 +289,7 @@ function deliver_antrea {
         docker tag "${DOCKER_REGISTRY}/antrea/sonobuoy-systemd-logs:v0.3" "sonobuoy/systemd-logs:v0.3"
     fi
     DOCKER_REGISTRY=${DOCKER_REGISTRY} make
-    DOCKER_REGISTRY=${DOCKER_REGISTRY} make flow-aggregator-ubuntu
+    DOCKER_REGISTRY=${DOCKER_REGISTRY} make flow-aggregator-image
 
     echo "====== Delivering Antrea to all the Nodes ======"
     echo "=== Fill serviceCIDRv6 and serviceCIDR ==="

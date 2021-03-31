@@ -85,6 +85,6 @@ jobs:
         DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
         VERSION: ${{ needs.get-version.outputs.version }}
       run: |
-        make flow-aggregator-ubuntu
+        make flow-aggregator-image
         echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
         docker push antrea/flow-aggregator:"${VERSION}"
