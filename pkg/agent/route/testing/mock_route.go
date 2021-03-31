@@ -50,17 +50,17 @@ func (m *MockInterface) EXPECT() *MockInterfaceMockRecorder {
 }
 
 // AddRoutes mocks base method
-func (m *MockInterface) AddRoutes(arg0 *net.IPNet, arg1, arg2 net.IP) error {
+func (m *MockInterface) AddRoutes(arg0 *net.IPNet, arg1 string, arg2, arg3 net.IP) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AddRoutes", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "AddRoutes", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // AddRoutes indicates an expected call of AddRoutes
-func (mr *MockInterfaceMockRecorder) AddRoutes(arg0, arg1, arg2 interface{}) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) AddRoutes(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddRoutes", reflect.TypeOf((*MockInterface)(nil).AddRoutes), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddRoutes", reflect.TypeOf((*MockInterface)(nil).AddRoutes), arg0, arg1, arg2, arg3)
 }
 
 // AddSNATRule mocks base method
