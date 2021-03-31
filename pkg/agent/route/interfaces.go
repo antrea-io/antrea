@@ -45,6 +45,12 @@ type Interface interface {
 	// if linkName is nil, it should remove the routes.
 	UnMigrateRoutesFromGw(route *net.IPNet, linkName string) error
 
+	// AddSNATRule should add rule to SNAT outgoing traffic with the mark, using the provided SNAT IP.
+	AddSNATRule(snatIP net.IP, mark uint32) error
+
+	// DeleteSNATRule should delete rule to SNAT outgoing traffic with the mark.
+	DeleteSNATRule(mark uint32) error
+
 	// Run starts the sync loop.
 	Run(stopCh <-chan struct{})
 }
