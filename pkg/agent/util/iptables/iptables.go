@@ -39,6 +39,7 @@ const (
 	MarkTarget       = "MARK"
 	ConnTrackTarget  = "CT"
 	NoTrackTarget    = "NOTRACK"
+	SNATTarget       = "SNAT"
 
 	PreRoutingChain  = "PREROUTING"
 	ForwardChain     = "FORWARD"
@@ -47,6 +48,14 @@ const (
 
 	waitSeconds              = 10
 	waitIntervalMicroSeconds = 200000
+)
+
+type Protocol byte
+
+const (
+	ProtocolDual Protocol = iota
+	ProtocolIPv4
+	ProtocolIPv6
 )
 
 // https://netfilter.org/projects/iptables/files/changes-iptables-1.6.2.txt:
@@ -139,6 +148,40 @@ func (c *Client) EnsureRule(table string, chain string, ruleSpec []string) error
 	}
 	klog.V(2).Infof("Appended rule %v to table %s chain %s", ruleSpec, table, chain)
 	return nil
+}
+
+// InsertRule checks if target rule already exists, inserts it if not.
+func (c *Client) InsertRule(protocol Protocol, table string, chain string, ruleSpec []string) error {
+	for idx := range c.ipts {
+		ipt := c.ipts[idx]
+		if !matchProtocol(ipt, protocol) {
+			continue
+		}
+		exist, err := ipt.Exists(table, chain, ruleSpec...)
+		if err != nil {
+			return fmt.Errorf("error checking if rule %v exists in table %s chain %s: %v", ruleSpec, table, chain, err)
+		}
+		if exist {
+			return nil
+		}
+		if err := ipt.Insert(table, chain, 1, ruleSpec...); err != nil {
+			return fmt.Errorf("error inserting rule %v to table %s chain %s: %v", ruleSpec, table, chain, err)
+		}
+	}
+	klog.V(2).Infof("Inserted rule %v to table %s chain %s", ruleSpec, table, chain)
+	return nil
+}
+
+func matchProtocol(ipt *iptables.IPTables, protocol Protocol) bool {
+	switch protocol {
+	case ProtocolDual:
+		return true
+	case ProtocolIPv4:
+		return ipt.Proto() == iptables.ProtocolIPv4
+	case ProtocolIPv6:
+		return ipt.Proto() == iptables.ProtocolIPv6
+	}
+	return false
 }
 
 // DeleteRule checks if target rule already exists, deletes the rule if found.

@@ -195,8 +195,8 @@ func TestInitialize(t *testing.T) {
 `,
 			"filter": `:ANTREA-FORWARD - [0:0]
 -A FORWARD -m comment --comment "Antrea: jump to Antrea forwarding rules" -j ANTREA-FORWARD
--A ANTREA-FORWARD -i antrea-gw0 -m comment --comment "Antrea: accept packets from local pods" -j ACCEPT
--A ANTREA-FORWARD -o antrea-gw0 -m comment --comment "Antrea: accept packets to local pods" -j ACCEPT
+-A ANTREA-FORWARD -i antrea-gw0 -m comment --comment "Antrea: accept packets from local Pods" -j ACCEPT
+-A ANTREA-FORWARD -o antrea-gw0 -m comment --comment "Antrea: accept packets to local Pods" -j ACCEPT
 `,
 			"mangle": `:ANTREA-MANGLE - [0:0]
 :ANTREA-OUTPUT - [0:0]
@@ -206,7 +206,7 @@ func TestInitialize(t *testing.T) {
 `,
 			"nat": `:ANTREA-POSTROUTING - [0:0]
 -A POSTROUTING -m comment --comment "Antrea: jump to Antrea postrouting rules" -j ANTREA-POSTROUTING
--A ANTREA-POSTROUTING -s 10.10.10.0/24 -m comment --comment "Antrea: masquerade pod to external packets" -m set ! --match-set ANTREA-POD-IP dst -j MASQUERADE
+-A ANTREA-POSTROUTING -s 10.10.10.0/24 -m comment --comment "Antrea: masquerade Pod to external packets" -m set ! --match-set ANTREA-POD-IP dst -j MASQUERADE
 `}
 
 		if tc.noSNAT {
@@ -252,11 +252,17 @@ func TestIpTablesSync(t *testing.T) {
 	select {
 	case <-inited: // Node network initialized
 	}
+
+	snatIP := net.ParseIP("1.1.1.1")
+	mark := uint32(1)
+	assert.NoError(t, routeClient.AddSNATRule(snatIP, mark))
+
 	tcs := []struct {
 		RuleSpec, Cmd, Table, Chain string
 	}{
 		{Table: "raw", Cmd: "-A", Chain: "OUTPUT", RuleSpec: "-m comment --comment \"Antrea: jump to Antrea output rules\" -j ANTREA-OUTPUT"},
-		{Table: "filter", Cmd: "-A", Chain: "ANTREA-FORWARD", RuleSpec: "-i antrea-gw0 -m comment --comment \"Antrea: accept packets from local pods\" -j ACCEPT"},
+		{Table: "filter", Cmd: "-A", Chain: "ANTREA-FORWARD", RuleSpec: "-i antrea-gw0 -m comment --comment \"Antrea: accept packets from local Pods\" -j ACCEPT"},
+		{Table: "nat", Cmd: "-A", Chain: "ANTREA-POSTROUTING", RuleSpec: fmt.Sprintf("-m comment --comment \"Antrea: SNAT Pod to external packets\" -m mark --mark %#x/0xff -j SNAT --to-source %s", mark, snatIP)},
 	}
 	// we delete some rules, start the sync goroutine, wait for sync operation to restore them.
 	for _, tc := range tcs {
@@ -279,6 +285,41 @@ func TestIpTablesSync(t *testing.T) {
 		assert.Contains(t, string(actualData), contains, "%s command's output did not contain rule: %s", saveCmd, contains)
 	}
 	close(stopCh)
+}
+
+func TestAddAndDeleteSNATRule(t *testing.T) {
+	skipIfNotInContainer(t)
+	gwLink := createDummyGW(t)
+	defer netlink.LinkDel(gwLink)
+
+	routeClient, err := route.NewClient(serviceCIDR, &config.NetworkConfig{TrafficEncapMode: config.TrafficEncapModeEncap}, false)
+	assert.Nil(t, err)
+
+	inited := make(chan struct{})
+	err = routeClient.Initialize(nodeConfig, func() {
+		close(inited)
+	})
+	assert.NoError(t, err)
+	select {
+	case <-inited: // Node network initialized
+	}
+
+	snatIP := net.ParseIP("1.1.1.1")
+	mark := uint32(1)
+	expectedRule := fmt.Sprintf("-m comment --comment \"Antrea: SNAT Pod to external packets\" -m mark --mark %#x/0xff -j SNAT --to-source %s", mark, snatIP)
+
+	assert.NoError(t, routeClient.AddSNATRule(snatIP, mark))
+	saveCmd := fmt.Sprintf("iptables-save -t nat | grep ANTREA-POSTROUTING")
+	// #nosec G204: ignore in test code
+	actualData, err := exec.Command("bash", "-c", saveCmd).Output()
+	assert.NoError(t, err, "error executing iptables-save cmd")
+	assert.Contains(t, string(actualData), expectedRule)
+
+	assert.NoError(t, routeClient.DeleteSNATRule(mark))
+	// #nosec G204: ignore in test code
+	actualData, err = exec.Command("bash", "-c", saveCmd).Output()
+	assert.NoError(t, err, "error executing iptables-save cmd")
+	assert.NotContains(t, string(actualData), expectedRule)
 }
 
 func TestAddAndDeleteRoutes(t *testing.T) {
