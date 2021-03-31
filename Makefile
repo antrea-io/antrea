@@ -152,7 +152,7 @@ docker-test-integration: .coverage
 ifneq ($(NO_PULL),)
 	docker build -t antrea/test -f build/images/test/Dockerfile --build-arg OVS_VERSION=$(OVS_VERSION) .
 else
-	docker build --pull -t antrea/test -f build/images/test/Dockerfile -build-arg OVS_VERSION=$(OVS_VERSION) .
+	docker build --pull -t antrea/test -f build/images/test/Dockerfile --build-arg OVS_VERSION=$(OVS_VERSION) .
 endif
 	@docker run --privileged --rm \
 		-e "GOCACHE=/tmp/gocache" \
