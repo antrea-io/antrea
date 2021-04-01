@@ -15,7 +15,7 @@
 // +k8s:openapi-gen=true
 // +k8s:deepcopy-gen=package
 // +k8s:defaulter-gen=TypeMeta
-// +groupName=system.antrea.tanzu.vmware.com
+// +groupName=system.antrea.io
 
 // Package v1beta1 contains the v1beta1 version of the Antrea "system" API
 // group definitions.

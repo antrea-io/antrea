@@ -20,8 +20,8 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	corev1a1 "github.com/vmware-tanzu/antrea/pkg/apis/core/v1alpha2"
-	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
+	crdv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha1"
+	crdv1alpha2 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha2"
 )
 
 func testInvalidCGIPBlockWithPodSelector(t *testing.T) {
@@ -29,12 +29,12 @@ func testInvalidCGIPBlockWithPodSelector(t *testing.T) {
 	cgName := "ipb-pod"
 	pSel := &metav1.LabelSelector{MatchLabels: map[string]string{"pod": "x"}}
 	cidr := "10.0.0.10/32"
-	ipb := &secv1alpha1.IPBlock{CIDR: cidr}
-	cg := &corev1a1.ClusterGroup{
+	ipb := &crdv1alpha1.IPBlock{CIDR: cidr}
+	cg := &crdv1alpha2.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: cgName,
 		},
-		Spec: corev1a1.GroupSpec{
+		Spec: crdv1alpha2.GroupSpec{
 			PodSelector: pSel,
 			IPBlock:     ipb,
 		},
@@ -50,12 +50,12 @@ func testInvalidCGIPBlockWithNSSelector(t *testing.T) {
 	cgName := "ipb-ns"
 	nSel := &metav1.LabelSelector{MatchLabels: map[string]string{"ns": "y"}}
 	cidr := "10.0.0.10/32"
-	ipb := &secv1alpha1.IPBlock{CIDR: cidr}
-	cg := &corev1a1.ClusterGroup{
+	ipb := &crdv1alpha1.IPBlock{CIDR: cidr}
+	cg := &crdv1alpha2.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: cgName,
 		},
-		Spec: corev1a1.GroupSpec{
+		Spec: crdv1alpha2.GroupSpec{
 			NamespaceSelector: nSel,
 			IPBlock:           ipb,
 		},
@@ -70,15 +70,15 @@ func testInvalidCGServiceRefWithPodSelector(t *testing.T) {
 	invalidErr := fmt.Errorf("clustergroup created with serviceReference and podSelector")
 	cgName := "svcref-pod-selector"
 	pSel := &metav1.LabelSelector{MatchLabels: map[string]string{"pod": "x"}}
-	svcRef := &corev1a1.ServiceReference{
+	svcRef := &crdv1alpha2.ServiceReference{
 		Namespace: "y",
 		Name:      "test-svc",
 	}
-	cg := &corev1a1.ClusterGroup{
+	cg := &crdv1alpha2.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: cgName,
 		},
-		Spec: corev1a1.GroupSpec{
+		Spec: crdv1alpha2.GroupSpec{
 			PodSelector:      pSel,
 			ServiceReference: svcRef,
 		},
@@ -93,15 +93,15 @@ func testInvalidCGServiceRefWithNSSelector(t *testing.T) {
 	invalidErr := fmt.Errorf("clustergroup created with serviceReference and namespaceSelector")
 	cgName := "svcref-ns-selector"
 	nSel := &metav1.LabelSelector{MatchLabels: map[string]string{"ns": "y"}}
-	svcRef := &corev1a1.ServiceReference{
+	svcRef := &crdv1alpha2.ServiceReference{
 		Namespace: "y",
 		Name:      "test-svc",
 	}
-	cg := &corev1a1.ClusterGroup{
+	cg := &crdv1alpha2.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: cgName,
 		},
-		Spec: corev1a1.GroupSpec{
+		Spec: crdv1alpha2.GroupSpec{
 			NamespaceSelector: nSel,
 			ServiceReference:  svcRef,
 		},
@@ -116,16 +116,16 @@ func testInvalidCGServiceRefWithIPBlock(t *testing.T) {
 	invalidErr := fmt.Errorf("clustergroup created with ipblock and namespaceSelector")
 	cgName := "ipb-svcref"
 	cidr := "10.0.0.10/32"
-	ipb := &secv1alpha1.IPBlock{CIDR: cidr}
-	svcRef := &corev1a1.ServiceReference{
+	ipb := &crdv1alpha1.IPBlock{CIDR: cidr}
+	svcRef := &crdv1alpha2.ServiceReference{
 		Namespace: "y",
 		Name:      "test-svc",
 	}
-	cg := &corev1a1.ClusterGroup{
+	cg := &crdv1alpha2.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: cgName,
 		},
-		Spec: corev1a1.GroupSpec{
+		Spec: crdv1alpha2.GroupSpec{
 			ServiceReference: svcRef,
 			IPBlock:          ipb,
 		},
@@ -139,12 +139,12 @@ func testInvalidCGServiceRefWithIPBlock(t *testing.T) {
 func testInvalidCGChildGroupDoesNotExist(t *testing.T) {
 	invalidErr := fmt.Errorf("clustergroup childGroup does not exist")
 	cgName := "child-group-not-exist"
-	cg := &corev1a1.ClusterGroup{
+	cg := &crdv1alpha2.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: cgName,
 		},
-		Spec: corev1a1.GroupSpec{
-			ChildGroups: []corev1a1.ClusterGroupReference{corev1a1.ClusterGroupReference("some-non-existing-cg")},
+		Spec: crdv1alpha2.GroupSpec{
+			ChildGroups: []crdv1alpha2.ClusterGroupReference{crdv1alpha2.ClusterGroupReference("some-non-existing-cg")},
 		},
 	}
 	if _, err := k8sUtils.CreateOrUpdateCG(cg); err == nil {
@@ -156,11 +156,11 @@ func testInvalidCGChildGroupDoesNotExist(t *testing.T) {
 var testChildCGName = "test-child-cg"
 
 func createChildCGForTest(t *testing.T) {
-	cg := &corev1a1.ClusterGroup{
+	cg := &crdv1alpha2.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: testChildCGName,
 		},
-		Spec: corev1a1.GroupSpec{
+		Spec: crdv1alpha2.GroupSpec{
 			PodSelector: &metav1.LabelSelector{},
 		},
 	}
@@ -179,13 +179,13 @@ func testInvalidCGChildGroupWithPodSelector(t *testing.T) {
 	invalidErr := fmt.Errorf("clustergroup created with childGroups and podSelector")
 	cgName := "child-group-pod-selector"
 	pSel := &metav1.LabelSelector{MatchLabels: map[string]string{"pod": "x"}}
-	cg := &corev1a1.ClusterGroup{
+	cg := &crdv1alpha2.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: cgName,
 		},
-		Spec: corev1a1.GroupSpec{
+		Spec: crdv1alpha2.GroupSpec{
 			PodSelector: pSel,
-			ChildGroups: []corev1a1.ClusterGroupReference{corev1a1.ClusterGroupReference(testChildCGName)},
+			ChildGroups: []crdv1alpha2.ClusterGroupReference{crdv1alpha2.ClusterGroupReference(testChildCGName)},
 		},
 	}
 	if _, err := k8sUtils.CreateOrUpdateCG(cg); err == nil {
@@ -197,17 +197,17 @@ func testInvalidCGChildGroupWithPodSelector(t *testing.T) {
 func testInvalidCGChildGroupWithServiceReference(t *testing.T) {
 	invalidErr := fmt.Errorf("clustergroup created with childGroups and ServiceReference")
 	cgName := "child-group-svcref"
-	svcRef := &corev1a1.ServiceReference{
+	svcRef := &crdv1alpha2.ServiceReference{
 		Namespace: "y",
 		Name:      "test-svc",
 	}
-	cg := &corev1a1.ClusterGroup{
+	cg := &crdv1alpha2.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: cgName,
 		},
-		Spec: corev1a1.GroupSpec{
+		Spec: crdv1alpha2.GroupSpec{
 			ServiceReference: svcRef,
-			ChildGroups:      []corev1a1.ClusterGroupReference{corev1a1.ClusterGroupReference(testChildCGName)},
+			ChildGroups:      []crdv1alpha2.ClusterGroupReference{crdv1alpha2.ClusterGroupReference(testChildCGName)},
 		},
 	}
 	if _, err := k8sUtils.CreateOrUpdateCG(cg); err == nil {
@@ -219,20 +219,20 @@ func testInvalidCGChildGroupWithServiceReference(t *testing.T) {
 func testInvalidCGMaxNestedLevel(t *testing.T) {
 	invalidErr := fmt.Errorf("clustergroup created with childGroup which has childGroups itself")
 	cgName1, cgName2 := "cg-nested-1", "cg-nested-2"
-	cg1 := &corev1a1.ClusterGroup{
+	cg1 := &crdv1alpha2.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{Name: cgName1},
-		Spec: corev1a1.GroupSpec{
-			ChildGroups: []corev1a1.ClusterGroupReference{corev1a1.ClusterGroupReference(testChildCGName)},
+		Spec: crdv1alpha2.GroupSpec{
+			ChildGroups: []crdv1alpha2.ClusterGroupReference{crdv1alpha2.ClusterGroupReference(testChildCGName)},
 		},
 	}
 	if _, err := k8sUtils.CreateOrUpdateCG(cg1); err != nil {
 		// Above creation of CG must succeed as it is a valid spec.
 		failOnError(err, t)
 	}
-	cg2 := &corev1a1.ClusterGroup{
+	cg2 := &crdv1alpha2.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{Name: cgName2},
-		Spec: corev1a1.GroupSpec{
-			ChildGroups: []corev1a1.ClusterGroupReference{corev1a1.ClusterGroupReference(cgName1)},
+		Spec: crdv1alpha2.GroupSpec{
+			ChildGroups: []crdv1alpha2.ClusterGroupReference{crdv1alpha2.ClusterGroupReference(cgName1)},
 		},
 	}
 	if _, err := k8sUtils.CreateOrUpdateCG(cg2); err == nil {

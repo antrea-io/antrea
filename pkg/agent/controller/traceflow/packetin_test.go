@@ -19,7 +19,7 @@ import (
 	"testing"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
-	opsv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/ops/v1alpha1"
+	crdv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha1"
 )
 
 func Test_getNetworkPolicyObservation(t *testing.T) {
@@ -30,7 +30,7 @@ func Test_getNetworkPolicyObservation(t *testing.T) {
 	tests := []struct {
 		name string
 		args args
-		want *opsv1alpha1.Observation
+		want *crdv1alpha1.Observation
 	}{
 		{
 			name: "ingress metric drop",
@@ -38,10 +38,10 @@ func Test_getNetworkPolicyObservation(t *testing.T) {
 				tableID: uint8(openflow.IngressMetricTable),
 				ingress: true,
 			},
-			want: &opsv1alpha1.Observation{
-				Component:     opsv1alpha1.NetworkPolicy,
+			want: &crdv1alpha1.Observation{
+				Component:     crdv1alpha1.ComponentNetworkPolicy,
 				ComponentInfo: "IngressMetric",
-				Action:        opsv1alpha1.Dropped,
+				Action:        crdv1alpha1.ActionDropped,
 			},
 		},
 		{
@@ -50,10 +50,10 @@ func Test_getNetworkPolicyObservation(t *testing.T) {
 				tableID: uint8(openflow.L2ForwardingOutTable),
 				ingress: true,
 			},
-			want: &opsv1alpha1.Observation{
-				Component:     opsv1alpha1.NetworkPolicy,
+			want: &crdv1alpha1.Observation{
+				Component:     crdv1alpha1.ComponentNetworkPolicy,
 				ComponentInfo: "IngressRule",
-				Action:        opsv1alpha1.Forwarded,
+				Action:        crdv1alpha1.ActionForwarded,
 			},
 		},
 		{
@@ -62,10 +62,10 @@ func Test_getNetworkPolicyObservation(t *testing.T) {
 				tableID: uint8(openflow.EgressDefaultTable),
 				ingress: false,
 			},
-			want: &opsv1alpha1.Observation{
-				Component:     opsv1alpha1.NetworkPolicy,
+			want: &crdv1alpha1.Observation{
+				Component:     crdv1alpha1.ComponentNetworkPolicy,
 				ComponentInfo: "EgressDefaultRule",
-				Action:        opsv1alpha1.Dropped,
+				Action:        crdv1alpha1.ActionDropped,
 			},
 		},
 		{
@@ -74,10 +74,10 @@ func Test_getNetworkPolicyObservation(t *testing.T) {
 				tableID: uint8(openflow.L2ForwardingOutTable),
 				ingress: false,
 			},
-			want: &opsv1alpha1.Observation{
-				Component:     opsv1alpha1.NetworkPolicy,
+			want: &crdv1alpha1.Observation{
+				Component:     crdv1alpha1.ComponentNetworkPolicy,
 				ComponentInfo: "EgressRule",
-				Action:        opsv1alpha1.Forwarded,
+				Action:        crdv1alpha1.ActionForwarded,
 			},
 		},
 	}

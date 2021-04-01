@@ -51,13 +51,18 @@ var (
 		"v1beta2.controlplane.antrea.tanzu.vmware.com",
 		"v1beta1.networking.antrea.tanzu.vmware.com",
 		"v1beta1.system.antrea.tanzu.vmware.com",
+		"v1alpha1.stats.antrea.io",
+		"v1beta1.system.antrea.io",
+		"v1beta2.controlplane.antrea.io",
 	}
 	// validatingWebhooks contains all the ValidatingWebhookConfigurations backed by antrea-controller.
 	validatingWebhooks = []string{
 		"crdvalidator.antrea.tanzu.vmware.com",
+		"crdvalidator.antrea.io",
 	}
 	mutationWebhooks = []string{
 		"crdmutator.antrea.tanzu.vmware.com",
+		"crdmutator.antrea.io",
 	}
 	optionalMutationWebhooks = []string{
 		"labelsmutator.antrea.io",

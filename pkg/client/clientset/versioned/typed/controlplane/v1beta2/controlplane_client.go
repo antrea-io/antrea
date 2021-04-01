@@ -30,7 +30,7 @@ type ControlplaneV1beta2Interface interface {
 	NodeStatsSummariesGetter
 }
 
-// ControlplaneV1beta2Client is used to interact with features provided by the controlplane.antrea.tanzu.vmware.com group.
+// ControlplaneV1beta2Client is used to interact with features provided by the controlplane.antrea.io group.
 type ControlplaneV1beta2Client struct {
 	restClient rest.Interface
 }

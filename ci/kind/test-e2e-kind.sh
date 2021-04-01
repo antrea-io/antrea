@@ -23,12 +23,12 @@ function echoerr {
 }
 
 _usage="Usage: $0 [--encap-mode <mode>] [--no-proxy] [--np] [--coverage] [--help|-h]
-        --encap-mode                  Traffic encapsulation mode. (default is 'encap')
+        --encap-mode                  Traffic encapsulation mode. (default is 'encap').
         --no-proxy                    Disables Antrea proxy.
-        --endpointslice               Enables Antrea proxy and EndpointSlice support
+        --endpointslice               Enables Antrea proxy and EndpointSlice support.
         --np                          Enables Namespaced Antrea NetworkPolicy CRDs and ClusterNetworkPolicy related CRDs.
         --coverage                    Enables measure Antrea code coverage when run e2e tests on kind.
-        --help, -h                    Print this message and exit
+        --help, -h                    Print this message and exit.
 "
 
 function print_usage {

@@ -23,7 +23,7 @@ import (
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/querier"
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/common"
-	"github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1"
+	"github.com/vmware-tanzu/antrea/pkg/apis/crd/v1beta1"
 )
 
 // AntreaAgentInfoResponse is the struct for the response of agentinfo command.

@@ -22,7 +22,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 
 	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
-	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
+	crdv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha1"
 	antreatypes "github.com/vmware-tanzu/antrea/pkg/controller/types"
 )
 
@@ -35,32 +35,32 @@ var (
 
 func TestProcessAntreaNetworkPolicy(t *testing.T) {
 	p10 := float64(10)
-	allowAction := secv1alpha1.RuleActionAllow
+	allowAction := crdv1alpha1.RuleActionAllow
 	protocolTCP := controlplane.ProtocolTCP
 	tests := []struct {
 		name                    string
-		inputPolicy             *secv1alpha1.NetworkPolicy
+		inputPolicy             *crdv1alpha1.NetworkPolicy
 		expectedPolicy          *antreatypes.NetworkPolicy
 		expectedAppliedToGroups int
 		expectedAddressGroups   int
 	}{
 		{
 			name: "rules-with-same-selectors",
-			inputPolicy: &secv1alpha1.NetworkPolicy{
+			inputPolicy: &crdv1alpha1.NetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{Namespace: "ns1", Name: "npA", UID: "uidA"},
-				Spec: secv1alpha1.NetworkPolicySpec{
-					AppliedTo: []secv1alpha1.NetworkPolicyPeer{
+				Spec: crdv1alpha1.NetworkPolicySpec{
+					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
 						{PodSelector: &selectorA},
 					},
 					Priority: p10,
-					Ingress: []secv1alpha1.Rule{
+					Ingress: []crdv1alpha1.Rule{
 						{
-							Ports: []secv1alpha1.NetworkPolicyPort{
+							Ports: []crdv1alpha1.NetworkPolicyPort{
 								{
 									Port: &int80,
 								},
 							},
-							From: []secv1alpha1.NetworkPolicyPeer{
+							From: []crdv1alpha1.NetworkPolicyPeer{
 								{
 									PodSelector:       &selectorB,
 									NamespaceSelector: &selectorC,
@@ -69,14 +69,14 @@ func TestProcessAntreaNetworkPolicy(t *testing.T) {
 							Action: &allowAction,
 						},
 					},
-					Egress: []secv1alpha1.Rule{
+					Egress: []crdv1alpha1.Rule{
 						{
-							Ports: []secv1alpha1.NetworkPolicyPort{
+							Ports: []crdv1alpha1.NetworkPolicyPort{
 								{
 									Port: &int81,
 								},
 							},
-							To: []secv1alpha1.NetworkPolicyPeer{
+							To: []crdv1alpha1.NetworkPolicyPeer{
 								{
 									PodSelector:       &selectorB,
 									NamespaceSelector: &selectorC,
@@ -135,21 +135,21 @@ func TestProcessAntreaNetworkPolicy(t *testing.T) {
 		},
 		{
 			name: "rules-with-different-selectors",
-			inputPolicy: &secv1alpha1.NetworkPolicy{
+			inputPolicy: &crdv1alpha1.NetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{Namespace: "ns2", Name: "npB", UID: "uidB"},
-				Spec: secv1alpha1.NetworkPolicySpec{
-					AppliedTo: []secv1alpha1.NetworkPolicyPeer{
+				Spec: crdv1alpha1.NetworkPolicySpec{
+					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
 						{PodSelector: &selectorA},
 					},
 					Priority: p10,
-					Ingress: []secv1alpha1.Rule{
+					Ingress: []crdv1alpha1.Rule{
 						{
-							Ports: []secv1alpha1.NetworkPolicyPort{
+							Ports: []crdv1alpha1.NetworkPolicyPort{
 								{
 									Port: &int80,
 								},
 							},
-							From: []secv1alpha1.NetworkPolicyPeer{
+							From: []crdv1alpha1.NetworkPolicyPeer{
 								{
 									PodSelector: &selectorB,
 								},
@@ -157,12 +157,12 @@ func TestProcessAntreaNetworkPolicy(t *testing.T) {
 							Action: &allowAction,
 						},
 						{
-							Ports: []secv1alpha1.NetworkPolicyPort{
+							Ports: []crdv1alpha1.NetworkPolicyPort{
 								{
 									Port: &int81,
 								},
 							},
-							From: []secv1alpha1.NetworkPolicyPeer{
+							From: []crdv1alpha1.NetworkPolicyPeer{
 								{
 									NamespaceSelector: &selectorC,
 								},
@@ -220,24 +220,24 @@ func TestProcessAntreaNetworkPolicy(t *testing.T) {
 		},
 		{
 			name: "appliedTo-per-rule",
-			inputPolicy: &secv1alpha1.NetworkPolicy{
+			inputPolicy: &crdv1alpha1.NetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{Namespace: "ns3", Name: "npC", UID: "uidC"},
-				Spec: secv1alpha1.NetworkPolicySpec{
+				Spec: crdv1alpha1.NetworkPolicySpec{
 					AppliedTo: nil,
 					Priority:  p10,
-					Ingress: []secv1alpha1.Rule{
+					Ingress: []crdv1alpha1.Rule{
 						{
-							AppliedTo: []secv1alpha1.NetworkPolicyPeer{
+							AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
 								{
 									PodSelector: &selectorA,
 								},
 							},
-							Ports: []secv1alpha1.NetworkPolicyPort{
+							Ports: []crdv1alpha1.NetworkPolicyPort{
 								{
 									Port: &int80,
 								},
 							},
-							From: []secv1alpha1.NetworkPolicyPeer{
+							From: []crdv1alpha1.NetworkPolicyPeer{
 								{
 									PodSelector: &selectorB,
 								},
@@ -245,17 +245,17 @@ func TestProcessAntreaNetworkPolicy(t *testing.T) {
 							Action: &allowAction,
 						},
 						{
-							AppliedTo: []secv1alpha1.NetworkPolicyPeer{
+							AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
 								{
 									PodSelector: &selectorB,
 								},
 							},
-							Ports: []secv1alpha1.NetworkPolicyPort{
+							Ports: []crdv1alpha1.NetworkPolicyPort{
 								{
 									Port: &int81,
 								},
 							},
-							From: []secv1alpha1.NetworkPolicyPeer{
+							From: []crdv1alpha1.NetworkPolicyPeer{
 								{
 									NamespaceSelector: &selectorC,
 								},
@@ -319,23 +319,23 @@ func TestProcessAntreaNetworkPolicy(t *testing.T) {
 		},
 		{
 			name: "with-port-range",
-			inputPolicy: &secv1alpha1.NetworkPolicy{
+			inputPolicy: &crdv1alpha1.NetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{Namespace: "ns4", Name: "npD", UID: "uidD"},
-				Spec: secv1alpha1.NetworkPolicySpec{
-					AppliedTo: []secv1alpha1.NetworkPolicyPeer{
+				Spec: crdv1alpha1.NetworkPolicySpec{
+					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
 						{PodSelector: &selectorA},
 					},
 					Priority: p10,
-					Ingress: []secv1alpha1.Rule{
+					Ingress: []crdv1alpha1.Rule{
 						{
-							Ports: []secv1alpha1.NetworkPolicyPort{
+							Ports: []crdv1alpha1.NetworkPolicyPort{
 								{
 									Protocol: &k8sProtocolTCP,
 									Port:     &int1000,
 									EndPort:  &int32For1999,
 								},
 							},
-							From: []secv1alpha1.NetworkPolicyPeer{
+							From: []crdv1alpha1.NetworkPolicyPeer{
 								{
 									PodSelector:       &selectorB,
 									NamespaceSelector: &selectorC,
@@ -392,7 +392,7 @@ func TestProcessAntreaNetworkPolicy(t *testing.T) {
 
 func TestAddANP(t *testing.T) {
 	p10 := float64(10)
-	allowAction := secv1alpha1.RuleActionAllow
+	allowAction := crdv1alpha1.RuleActionAllow
 	protocolTCP := controlplane.ProtocolTCP
 	int80 := intstr.FromInt(80)
 	selectorAll := metav1.LabelSelector{}
@@ -400,29 +400,29 @@ func TestAddANP(t *testing.T) {
 	matchAllPeerEgress.AddressGroups = []string{getNormalizedUID(toGroupSelector("", nil, &selectorAll, nil).NormalizedName)}
 	tests := []struct {
 		name               string
-		inputPolicy        *secv1alpha1.NetworkPolicy
+		inputPolicy        *crdv1alpha1.NetworkPolicy
 		expPolicy          *antreatypes.NetworkPolicy
 		expAppliedToGroups int
 		expAddressGroups   int
 	}{
 		{
 			name: "application-tier-policy",
-			inputPolicy: &secv1alpha1.NetworkPolicy{
+			inputPolicy: &crdv1alpha1.NetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "anpA", UID: "uidA"},
-				Spec: secv1alpha1.NetworkPolicySpec{
-					AppliedTo: []secv1alpha1.NetworkPolicyPeer{
+				Spec: crdv1alpha1.NetworkPolicySpec{
+					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
 						{PodSelector: &selectorA},
 					},
 					Priority: p10,
 					Tier:     "Application",
-					Ingress: []secv1alpha1.Rule{
+					Ingress: []crdv1alpha1.Rule{
 						{
-							Ports: []secv1alpha1.NetworkPolicyPort{
+							Ports: []crdv1alpha1.NetworkPolicyPort{
 								{
 									Port: &int80,
 								},
 							},
-							From: []secv1alpha1.NetworkPolicyPeer{
+							From: []crdv1alpha1.NetworkPolicyPeer{
 								{
 									PodSelector:            &selectorB,
 									NamespaceSelector:      &selectorC,
@@ -468,23 +468,23 @@ func TestAddANP(t *testing.T) {
 		},
 		{
 			name: "with-port-range",
-			inputPolicy: &secv1alpha1.NetworkPolicy{
+			inputPolicy: &crdv1alpha1.NetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{Namespace: "nsB", Name: "npB", UID: "uidB"},
-				Spec: secv1alpha1.NetworkPolicySpec{
-					AppliedTo: []secv1alpha1.NetworkPolicyPeer{
+				Spec: crdv1alpha1.NetworkPolicySpec{
+					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
 						{PodSelector: &selectorA},
 					},
 					Priority: p10,
-					Ingress: []secv1alpha1.Rule{
+					Ingress: []crdv1alpha1.Rule{
 						{
-							Ports: []secv1alpha1.NetworkPolicyPort{
+							Ports: []crdv1alpha1.NetworkPolicyPort{
 								{
 									Protocol: &k8sProtocolTCP,
 									Port:     &int1000,
 									EndPort:  &int32For1999,
 								},
 							},
-							From: []secv1alpha1.NetworkPolicyPeer{
+							From: []crdv1alpha1.NetworkPolicyPeer{
 								{
 									PodSelector:       &selectorB,
 									NamespaceSelector: &selectorC,
@@ -561,15 +561,15 @@ func TestDeleteANP(t *testing.T) {
 }
 
 // util functions for testing.
-func getANP() *secv1alpha1.NetworkPolicy {
+func getANP() *crdv1alpha1.NetworkPolicy {
 	p10 := float64(10)
-	allowAction := secv1alpha1.RuleActionAllow
+	allowAction := crdv1alpha1.RuleActionAllow
 	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
 	selectorB := metav1.LabelSelector{MatchLabels: map[string]string{"foo2": "bar2"}}
 	selectorC := metav1.LabelSelector{MatchLabels: map[string]string{"foo3": "bar3"}}
-	ingressRules := []secv1alpha1.Rule{
+	ingressRules := []crdv1alpha1.Rule{
 		{
-			From: []secv1alpha1.NetworkPolicyPeer{
+			From: []crdv1alpha1.NetworkPolicyPeer{
 				{
 					NamespaceSelector: &selectorB,
 				},
@@ -577,9 +577,9 @@ func getANP() *secv1alpha1.NetworkPolicy {
 			Action: &allowAction,
 		},
 	}
-	egressRules := []secv1alpha1.Rule{
+	egressRules := []crdv1alpha1.Rule{
 		{
-			To: []secv1alpha1.NetworkPolicyPeer{
+			To: []crdv1alpha1.NetworkPolicyPeer{
 				{
 					ExternalEntitySelector: &selectorC,
 				},
@@ -587,10 +587,10 @@ func getANP() *secv1alpha1.NetworkPolicy {
 			Action: &allowAction,
 		},
 	}
-	npObj := &secv1alpha1.NetworkPolicy{
+	npObj := &crdv1alpha1.NetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{Namespace: "test-ns", Name: "test-anp"},
-		Spec: secv1alpha1.NetworkPolicySpec{
-			AppliedTo: []secv1alpha1.NetworkPolicyPeer{
+		Spec: crdv1alpha1.NetworkPolicySpec{
+			AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
 				{PodSelector: &selectorA},
 			},
 			Priority: p10,

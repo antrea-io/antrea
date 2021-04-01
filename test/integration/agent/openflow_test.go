@@ -37,7 +37,7 @@ import (
 	k8stypes "github.com/vmware-tanzu/antrea/pkg/agent/proxy/types"
 	"github.com/vmware-tanzu/antrea/pkg/agent/types"
 	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
-	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
+	crdv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha1"
 	ofconfig "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsctl"
@@ -184,7 +184,7 @@ func TestReplayFlowsNetworkPolicyFlows(t *testing.T) {
 
 	port2 := intstr.FromInt(8080)
 	tcpProtocol := v1beta2.ProtocolTCP
-	defaultAction := secv1alpha1.RuleActionAllow
+	defaultAction := crdv1alpha1.RuleActionAllow
 	npPort1 := v1beta2.Service{Protocol: &tcpProtocol, Port: &port2}
 	toIPList := prepareIPAddresses(toList)
 	rule := &types.PolicyRule{
@@ -363,7 +363,7 @@ func TestNetworkPolicyFlows(t *testing.T) {
 
 	port2 := intstr.FromInt(8080)
 	tcpProtocol := v1beta2.ProtocolTCP
-	defaultAction := secv1alpha1.RuleActionAllow
+	defaultAction := crdv1alpha1.RuleActionAllow
 	npPort1 := v1beta2.Service{Protocol: &tcpProtocol, Port: &port2}
 	toIPList := prepareIPAddresses(toList)
 	rule := &types.PolicyRule{

@@ -29,6 +29,7 @@ Generate a YAML manifest for Antrea using Kustomize and print it to stdout.
         --ipsec                       Generate a manifest with IPSec encryption of tunnel traffic enabled
         --all-features                Generate a manifest with all alpha features enabled
         --no-proxy                    Generate a manifest with Antrea proxy disabled
+        --no-legacy-crd               Generate a manifest without legacy CRD mirroring support enabled
         --endpointslice               Generate a manifest with EndpointSlice support enabled
         --np                          Generate a manifest with ClusterNetworkPolicy and Antrea NetworkPolicy features enabled
         --k8s-1.15                    Generates a manifest which supports Kubernetes 1.15.
@@ -64,6 +65,7 @@ KIND=false
 IPSEC=false
 ALLFEATURES=false
 PROXY=true
+LEGACY_CRD=true
 ENDPOINTSLICE=false
 NP=false
 KEEP=false
@@ -108,6 +110,10 @@ case $key in
     ;;
     --no-proxy)
     PROXY=false
+    shift
+    ;;
+    --no-legacy-crd)
+    LEGACY_CRD=false
     shift
     ;;
     --endpointslice)
@@ -254,6 +260,10 @@ fi
 
 if ! $PROXY; then
     sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*AntreaProxy[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  AntreaProxy: false/" antrea-agent.conf
+fi
+
+if ! $LEGACY_CRD; then
+    sed -i.bak -E "s/^#legacyCRDMirroring[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/legacyCRDMirroring: false/" antrea-controller.conf
 fi
 
 if $ENDPOINTSLICE; then

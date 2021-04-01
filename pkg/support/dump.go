@@ -15,7 +15,7 @@ import (
 	"k8s.io/utils/exec"
 
 	agentquerier "github.com/vmware-tanzu/antrea/pkg/agent/querier"
-	clusterinformationv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1"
+	clusterinformationv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1beta1"
 	controllerquerier "github.com/vmware-tanzu/antrea/pkg/controller/querier"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsctl"
 	"github.com/vmware-tanzu/antrea/pkg/querier"

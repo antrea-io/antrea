@@ -21,57 +21,57 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
-	corev1a2 "github.com/vmware-tanzu/antrea/pkg/apis/core/v1alpha2"
-	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
+	crdv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha1"
+	crdv1alpha2 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha2"
 	antreatypes "github.com/vmware-tanzu/antrea/pkg/controller/types"
 )
 
 func TestProcessClusterNetworkPolicy(t *testing.T) {
 	p10 := float64(10)
 	t10 := int32(10)
-	tierA := secv1alpha1.Tier{
+	tierA := crdv1alpha1.Tier{
 		ObjectMeta: metav1.ObjectMeta{Name: "tier-A", UID: "uidA"},
-		Spec: secv1alpha1.TierSpec{
+		Spec: crdv1alpha1.TierSpec{
 			Priority:    t10,
 			Description: "tier-A",
 		},
 	}
 
-	allowAction := secv1alpha1.RuleActionAllow
+	allowAction := crdv1alpha1.RuleActionAllow
 	protocolTCP := controlplane.ProtocolTCP
 	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
 	selectorB := metav1.LabelSelector{MatchLabels: map[string]string{"foo2": "bar2"}}
 	selectorC := metav1.LabelSelector{MatchLabels: map[string]string{"foo3": "bar3"}}
-	cgA := corev1a2.ClusterGroup{
+	cgA := crdv1alpha2.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{Name: "cgA", UID: "uidA"},
-		Spec: corev1a2.GroupSpec{
+		Spec: crdv1alpha2.GroupSpec{
 			NamespaceSelector: &selectorA,
 		},
 	}
 	tests := []struct {
 		name                    string
-		inputPolicy             *secv1alpha1.ClusterNetworkPolicy
+		inputPolicy             *crdv1alpha1.ClusterNetworkPolicy
 		expectedPolicy          *antreatypes.NetworkPolicy
 		expectedAppliedToGroups int
 		expectedAddressGroups   int
 	}{
 		{
 			name: "rules-with-same-selectors",
-			inputPolicy: &secv1alpha1.ClusterNetworkPolicy{
+			inputPolicy: &crdv1alpha1.ClusterNetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{Name: "cnpA", UID: "uidA"},
-				Spec: secv1alpha1.ClusterNetworkPolicySpec{
-					AppliedTo: []secv1alpha1.NetworkPolicyPeer{
+				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
+					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
 						{PodSelector: &selectorA},
 					},
 					Priority: p10,
-					Ingress: []secv1alpha1.Rule{
+					Ingress: []crdv1alpha1.Rule{
 						{
-							Ports: []secv1alpha1.NetworkPolicyPort{
+							Ports: []crdv1alpha1.NetworkPolicyPort{
 								{
 									Port: &int80,
 								},
 							},
-							From: []secv1alpha1.NetworkPolicyPeer{
+							From: []crdv1alpha1.NetworkPolicyPeer{
 								{
 									PodSelector:       &selectorB,
 									NamespaceSelector: &selectorC,
@@ -80,14 +80,14 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 							Action: &allowAction,
 						},
 					},
-					Egress: []secv1alpha1.Rule{
+					Egress: []crdv1alpha1.Rule{
 						{
-							Ports: []secv1alpha1.NetworkPolicyPort{
+							Ports: []crdv1alpha1.NetworkPolicyPort{
 								{
 									Port: &int81,
 								},
 							},
-							To: []secv1alpha1.NetworkPolicyPeer{
+							To: []crdv1alpha1.NetworkPolicyPeer{
 								{
 									PodSelector:       &selectorB,
 									NamespaceSelector: &selectorC,
@@ -145,21 +145,21 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 		},
 		{
 			name: "rules-with-different-selectors",
-			inputPolicy: &secv1alpha1.ClusterNetworkPolicy{
+			inputPolicy: &crdv1alpha1.ClusterNetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{Namespace: "", Name: "cnpB", UID: "uidB"},
-				Spec: secv1alpha1.ClusterNetworkPolicySpec{
-					AppliedTo: []secv1alpha1.NetworkPolicyPeer{
+				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
+					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
 						{PodSelector: &selectorA},
 					},
 					Priority: p10,
-					Ingress: []secv1alpha1.Rule{
+					Ingress: []crdv1alpha1.Rule{
 						{
-							Ports: []secv1alpha1.NetworkPolicyPort{
+							Ports: []crdv1alpha1.NetworkPolicyPort{
 								{
 									Port: &int80,
 								},
 							},
-							From: []secv1alpha1.NetworkPolicyPeer{
+							From: []crdv1alpha1.NetworkPolicyPeer{
 								{
 									PodSelector: &selectorB,
 								},
@@ -167,12 +167,12 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 							Action: &allowAction,
 						},
 						{
-							Ports: []secv1alpha1.NetworkPolicyPort{
+							Ports: []crdv1alpha1.NetworkPolicyPort{
 								{
 									Port: &int81,
 								},
 							},
-							From: []secv1alpha1.NetworkPolicyPeer{
+							From: []crdv1alpha1.NetworkPolicyPeer{
 								{
 									NamespaceSelector: &selectorC,
 								},
@@ -229,22 +229,22 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 		},
 		{
 			name: "with-tier-A",
-			inputPolicy: &secv1alpha1.ClusterNetworkPolicy{
+			inputPolicy: &crdv1alpha1.ClusterNetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{Namespace: "", Name: "cnpC", UID: "uidC"},
-				Spec: secv1alpha1.ClusterNetworkPolicySpec{
-					AppliedTo: []secv1alpha1.NetworkPolicyPeer{
+				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
+					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
 						{PodSelector: &selectorA},
 					},
 					Priority: p10,
 					Tier:     "tier-A",
-					Ingress: []secv1alpha1.Rule{
+					Ingress: []crdv1alpha1.Rule{
 						{
-							Ports: []secv1alpha1.NetworkPolicyPort{
+							Ports: []crdv1alpha1.NetworkPolicyPort{
 								{
 									Port: &int80,
 								},
 							},
-							From: []secv1alpha1.NetworkPolicyPeer{
+							From: []crdv1alpha1.NetworkPolicyPeer{
 								{
 									PodSelector: &selectorB,
 								},
@@ -252,12 +252,12 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 							Action: &allowAction,
 						},
 						{
-							Ports: []secv1alpha1.NetworkPolicyPort{
+							Ports: []crdv1alpha1.NetworkPolicyPort{
 								{
 									Port: &int81,
 								},
 							},
-							From: []secv1alpha1.NetworkPolicyPeer{
+							From: []crdv1alpha1.NetworkPolicyPeer{
 								{
 									NamespaceSelector: &selectorC,
 								},
@@ -314,23 +314,23 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 		},
 		{
 			name: "with-port-range",
-			inputPolicy: &secv1alpha1.ClusterNetworkPolicy{
+			inputPolicy: &crdv1alpha1.ClusterNetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{Namespace: "", Name: "cnpD", UID: "uidD"},
-				Spec: secv1alpha1.ClusterNetworkPolicySpec{
-					AppliedTo: []secv1alpha1.NetworkPolicyPeer{
+				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
+					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
 						{PodSelector: &selectorA},
 					},
 					Priority: p10,
-					Ingress: []secv1alpha1.Rule{
+					Ingress: []crdv1alpha1.Rule{
 						{
-							Ports: []secv1alpha1.NetworkPolicyPort{
+							Ports: []crdv1alpha1.NetworkPolicyPort{
 								{
 									Protocol: &k8sProtocolTCP,
 									Port:     &int1000,
 									EndPort:  &int32For1999,
 								},
 							},
-							From: []secv1alpha1.NetworkPolicyPeer{
+							From: []crdv1alpha1.NetworkPolicyPeer{
 								{
 									PodSelector: &selectorB,
 								},
@@ -374,24 +374,24 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 		},
 		{
 			name: "appliedTo-per-rule",
-			inputPolicy: &secv1alpha1.ClusterNetworkPolicy{
+			inputPolicy: &crdv1alpha1.ClusterNetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{Name: "cnpH", UID: "uidH"},
-				Spec: secv1alpha1.ClusterNetworkPolicySpec{
+				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
 					AppliedTo: nil,
 					Priority:  p10,
-					Ingress: []secv1alpha1.Rule{
+					Ingress: []crdv1alpha1.Rule{
 						{
-							AppliedTo: []secv1alpha1.NetworkPolicyPeer{
+							AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
 								{
 									PodSelector: &selectorA,
 								},
 							},
-							Ports: []secv1alpha1.NetworkPolicyPort{
+							Ports: []crdv1alpha1.NetworkPolicyPort{
 								{
 									Port: &int80,
 								},
 							},
-							From: []secv1alpha1.NetworkPolicyPeer{
+							From: []crdv1alpha1.NetworkPolicyPeer{
 								{
 									PodSelector: &selectorB,
 								},
@@ -399,18 +399,18 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 							Action: &allowAction,
 						},
 						{
-							AppliedTo: []secv1alpha1.NetworkPolicyPeer{
+							AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
 								{
 									PodSelector:       &selectorB,
 									NamespaceSelector: &selectorC,
 								},
 							},
-							Ports: []secv1alpha1.NetworkPolicyPort{
+							Ports: []crdv1alpha1.NetworkPolicyPort{
 								{
 									Port: &int81,
 								},
 							},
-							From: []secv1alpha1.NetworkPolicyPeer{
+							From: []crdv1alpha1.NetworkPolicyPeer{
 								{
 									NamespaceSelector: &selectorC,
 								},
@@ -473,21 +473,21 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 		},
 		{
 			name: "with-cluster-group-ingress-egress",
-			inputPolicy: &secv1alpha1.ClusterNetworkPolicy{
+			inputPolicy: &crdv1alpha1.ClusterNetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{Name: "cnpI", UID: "uidI"},
-				Spec: secv1alpha1.ClusterNetworkPolicySpec{
-					AppliedTo: []secv1alpha1.NetworkPolicyPeer{
+				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
+					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
 						{PodSelector: &selectorA},
 					},
 					Priority: p10,
-					Ingress: []secv1alpha1.Rule{
+					Ingress: []crdv1alpha1.Rule{
 						{
-							Ports: []secv1alpha1.NetworkPolicyPort{
+							Ports: []crdv1alpha1.NetworkPolicyPort{
 								{
 									Port: &int80,
 								},
 							},
-							From: []secv1alpha1.NetworkPolicyPeer{
+							From: []crdv1alpha1.NetworkPolicyPeer{
 								{
 									Group: cgA.Name,
 								},
@@ -495,14 +495,14 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 							Action: &allowAction,
 						},
 					},
-					Egress: []secv1alpha1.Rule{
+					Egress: []crdv1alpha1.Rule{
 						{
-							Ports: []secv1alpha1.NetworkPolicyPort{
+							Ports: []crdv1alpha1.NetworkPolicyPort{
 								{
 									Port: &int81,
 								},
 							},
-							To: []secv1alpha1.NetworkPolicyPeer{
+							To: []crdv1alpha1.NetworkPolicyPeer{
 								{
 									Group: cgA.Name,
 								},
@@ -559,23 +559,23 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 		},
 		{
 			name: "with-applied-to-cluster-group-ingress-egress",
-			inputPolicy: &secv1alpha1.ClusterNetworkPolicy{
+			inputPolicy: &crdv1alpha1.ClusterNetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{Name: "cnpI", UID: "uidI"},
-				Spec: secv1alpha1.ClusterNetworkPolicySpec{
+				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
 					Priority: p10,
-					Ingress: []secv1alpha1.Rule{
+					Ingress: []crdv1alpha1.Rule{
 						{
-							Ports: []secv1alpha1.NetworkPolicyPort{
+							Ports: []crdv1alpha1.NetworkPolicyPort{
 								{
 									Port: &int80,
 								},
 							},
-							From: []secv1alpha1.NetworkPolicyPeer{
+							From: []crdv1alpha1.NetworkPolicyPeer{
 								{
 									PodSelector: &selectorB,
 								},
 							},
-							AppliedTo: []secv1alpha1.NetworkPolicyPeer{
+							AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
 								{
 									Group: cgA.Name,
 								},
@@ -583,19 +583,19 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 							Action: &allowAction,
 						},
 					},
-					Egress: []secv1alpha1.Rule{
+					Egress: []crdv1alpha1.Rule{
 						{
-							Ports: []secv1alpha1.NetworkPolicyPort{
+							Ports: []crdv1alpha1.NetworkPolicyPort{
 								{
 									Port: &int81,
 								},
 							},
-							To: []secv1alpha1.NetworkPolicyPeer{
+							To: []crdv1alpha1.NetworkPolicyPeer{
 								{
 									PodSelector: &selectorB,
 								},
 							},
-							AppliedTo: []secv1alpha1.NetworkPolicyPeer{
+							AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
 								{
 									Group: cgA.Name,
 								},
@@ -672,19 +672,19 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 func TestAddCNP(t *testing.T) {
 	p10 := float64(10)
 	emergencyTierPriority := int32(1)
-	emergencyTier := secv1alpha1.Tier{
+	emergencyTier := crdv1alpha1.Tier{
 		ObjectMeta: metav1.ObjectMeta{Name: "emergency", UID: "tE"},
-		Spec: secv1alpha1.TierSpec{
+		Spec: crdv1alpha1.TierSpec{
 			Priority: emergencyTierPriority,
 		},
 	}
-	appTier := secv1alpha1.Tier{
+	appTier := crdv1alpha1.Tier{
 		ObjectMeta: metav1.ObjectMeta{Name: "application", UID: "tA"},
-		Spec: secv1alpha1.TierSpec{
+		Spec: crdv1alpha1.TierSpec{
 			Priority: DefaultTierPriority,
 		},
 	}
-	allowAction := secv1alpha1.RuleActionAllow
+	allowAction := crdv1alpha1.RuleActionAllow
 	protocolTCP := controlplane.ProtocolTCP
 	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
 	selectorB := metav1.LabelSelector{MatchLabels: map[string]string{"foo2": "bar2"}}
@@ -694,29 +694,29 @@ func TestAddCNP(t *testing.T) {
 	matchAllPeerEgress.AddressGroups = []string{getNormalizedUID(toGroupSelector("", nil, &selectorAll, nil).NormalizedName)}
 	tests := []struct {
 		name               string
-		inputPolicy        *secv1alpha1.ClusterNetworkPolicy
+		inputPolicy        *crdv1alpha1.ClusterNetworkPolicy
 		expPolicy          *antreatypes.NetworkPolicy
 		expAppliedToGroups int
 		expAddressGroups   int
 	}{
 		{
 			name: "application-tier-policy",
-			inputPolicy: &secv1alpha1.ClusterNetworkPolicy{
+			inputPolicy: &crdv1alpha1.ClusterNetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{Name: "cnpA", UID: "uidA"},
-				Spec: secv1alpha1.ClusterNetworkPolicySpec{
-					AppliedTo: []secv1alpha1.NetworkPolicyPeer{
+				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
+					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
 						{PodSelector: &selectorA},
 					},
 					Priority: p10,
 					Tier:     "application",
-					Ingress: []secv1alpha1.Rule{
+					Ingress: []crdv1alpha1.Rule{
 						{
-							Ports: []secv1alpha1.NetworkPolicyPort{
+							Ports: []crdv1alpha1.NetworkPolicyPort{
 								{
 									Port: &int80,
 								},
 							},
-							From: []secv1alpha1.NetworkPolicyPeer{
+							From: []crdv1alpha1.NetworkPolicyPeer{
 								{
 									PodSelector:       &selectorB,
 									NamespaceSelector: &selectorC,
@@ -760,21 +760,21 @@ func TestAddCNP(t *testing.T) {
 		},
 		{
 			name: "empty-tier-policy",
-			inputPolicy: &secv1alpha1.ClusterNetworkPolicy{
+			inputPolicy: &crdv1alpha1.ClusterNetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{Name: "cnpB", UID: "uidB"},
-				Spec: secv1alpha1.ClusterNetworkPolicySpec{
-					AppliedTo: []secv1alpha1.NetworkPolicyPeer{
+				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
+					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
 						{PodSelector: &selectorA},
 					},
 					Priority: p10,
-					Ingress: []secv1alpha1.Rule{
+					Ingress: []crdv1alpha1.Rule{
 						{
-							Ports: []secv1alpha1.NetworkPolicyPort{
+							Ports: []crdv1alpha1.NetworkPolicyPort{
 								{
 									Port: &int80,
 								},
 							},
-							From: []secv1alpha1.NetworkPolicyPeer{
+							From: []crdv1alpha1.NetworkPolicyPeer{
 								{
 									PodSelector:       &selectorB,
 									NamespaceSelector: &selectorC,
@@ -818,22 +818,22 @@ func TestAddCNP(t *testing.T) {
 		},
 		{
 			name: "emergency-tier-policy",
-			inputPolicy: &secv1alpha1.ClusterNetworkPolicy{
+			inputPolicy: &crdv1alpha1.ClusterNetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{Name: "cnpD", UID: "uidD"},
-				Spec: secv1alpha1.ClusterNetworkPolicySpec{
-					AppliedTo: []secv1alpha1.NetworkPolicyPeer{
+				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
+					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
 						{PodSelector: &selectorA},
 					},
 					Priority: p10,
 					Tier:     "emergency",
-					Ingress: []secv1alpha1.Rule{
+					Ingress: []crdv1alpha1.Rule{
 						{
-							Ports: []secv1alpha1.NetworkPolicyPort{
+							Ports: []crdv1alpha1.NetworkPolicyPort{
 								{
 									Port: &int80,
 								},
 							},
-							From: []secv1alpha1.NetworkPolicyPeer{
+							From: []crdv1alpha1.NetworkPolicyPeer{
 								{
 									PodSelector:       &selectorB,
 									NamespaceSelector: &selectorC,
@@ -877,22 +877,22 @@ func TestAddCNP(t *testing.T) {
 		},
 		{
 			name: "static-tier-policy",
-			inputPolicy: &secv1alpha1.ClusterNetworkPolicy{
+			inputPolicy: &crdv1alpha1.ClusterNetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{Name: "cnpE", UID: "uidE"},
-				Spec: secv1alpha1.ClusterNetworkPolicySpec{
-					AppliedTo: []secv1alpha1.NetworkPolicyPeer{
+				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
+					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
 						{PodSelector: &selectorA},
 					},
 					Priority: p10,
 					Tier:     "Emergency",
-					Ingress: []secv1alpha1.Rule{
+					Ingress: []crdv1alpha1.Rule{
 						{
-							Ports: []secv1alpha1.NetworkPolicyPort{
+							Ports: []crdv1alpha1.NetworkPolicyPort{
 								{
 									Port: &int80,
 								},
 							},
-							From: []secv1alpha1.NetworkPolicyPeer{
+							From: []crdv1alpha1.NetworkPolicyPeer{
 								{
 									PodSelector:       &selectorB,
 									NamespaceSelector: &selectorC,
@@ -936,21 +936,21 @@ func TestAddCNP(t *testing.T) {
 		},
 		{
 			name: "rules-with-same-selectors",
-			inputPolicy: &secv1alpha1.ClusterNetworkPolicy{
+			inputPolicy: &crdv1alpha1.ClusterNetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{Name: "cnpF", UID: "uidF"},
-				Spec: secv1alpha1.ClusterNetworkPolicySpec{
-					AppliedTo: []secv1alpha1.NetworkPolicyPeer{
+				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
+					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
 						{PodSelector: &selectorA},
 					},
 					Priority: p10,
-					Ingress: []secv1alpha1.Rule{
+					Ingress: []crdv1alpha1.Rule{
 						{
-							Ports: []secv1alpha1.NetworkPolicyPort{
+							Ports: []crdv1alpha1.NetworkPolicyPort{
 								{
 									Port: &int80,
 								},
 							},
-							From: []secv1alpha1.NetworkPolicyPeer{
+							From: []crdv1alpha1.NetworkPolicyPeer{
 								{
 									PodSelector:       &selectorB,
 									NamespaceSelector: &selectorC,
@@ -959,14 +959,14 @@ func TestAddCNP(t *testing.T) {
 							Action: &allowAction,
 						},
 					},
-					Egress: []secv1alpha1.Rule{
+					Egress: []crdv1alpha1.Rule{
 						{
-							Ports: []secv1alpha1.NetworkPolicyPort{
+							Ports: []crdv1alpha1.NetworkPolicyPort{
 								{
 									Port: &int81,
 								},
 							},
-							To: []secv1alpha1.NetworkPolicyPeer{
+							To: []crdv1alpha1.NetworkPolicyPeer{
 								{
 									PodSelector:       &selectorB,
 									NamespaceSelector: &selectorC,
@@ -1024,21 +1024,21 @@ func TestAddCNP(t *testing.T) {
 		},
 		{
 			name: "rules-with-different-selectors",
-			inputPolicy: &secv1alpha1.ClusterNetworkPolicy{
+			inputPolicy: &crdv1alpha1.ClusterNetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{Name: "cnpG", UID: "uidG"},
-				Spec: secv1alpha1.ClusterNetworkPolicySpec{
-					AppliedTo: []secv1alpha1.NetworkPolicyPeer{
+				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
+					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
 						{PodSelector: &selectorA},
 					},
 					Priority: p10,
-					Ingress: []secv1alpha1.Rule{
+					Ingress: []crdv1alpha1.Rule{
 						{
-							Ports: []secv1alpha1.NetworkPolicyPort{
+							Ports: []crdv1alpha1.NetworkPolicyPort{
 								{
 									Port: &int80,
 								},
 							},
-							From: []secv1alpha1.NetworkPolicyPeer{
+							From: []crdv1alpha1.NetworkPolicyPeer{
 								{
 									PodSelector: &selectorB,
 								},
@@ -1046,12 +1046,12 @@ func TestAddCNP(t *testing.T) {
 							Action: &allowAction,
 						},
 						{
-							Ports: []secv1alpha1.NetworkPolicyPort{
+							Ports: []crdv1alpha1.NetworkPolicyPort{
 								{
 									Port: &int81,
 								},
 							},
-							From: []secv1alpha1.NetworkPolicyPeer{
+							From: []crdv1alpha1.NetworkPolicyPeer{
 								{
 									NamespaceSelector: &selectorC,
 								},
@@ -1108,23 +1108,23 @@ func TestAddCNP(t *testing.T) {
 		},
 		{
 			name: "with-port-range",
-			inputPolicy: &secv1alpha1.ClusterNetworkPolicy{
+			inputPolicy: &crdv1alpha1.ClusterNetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{Namespace: "", Name: "cnpH", UID: "uidH"},
-				Spec: secv1alpha1.ClusterNetworkPolicySpec{
-					AppliedTo: []secv1alpha1.NetworkPolicyPeer{
+				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
+					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
 						{PodSelector: &selectorA},
 					},
 					Priority: p10,
-					Ingress: []secv1alpha1.Rule{
+					Ingress: []crdv1alpha1.Rule{
 						{
-							Ports: []secv1alpha1.NetworkPolicyPort{
+							Ports: []crdv1alpha1.NetworkPolicyPort{
 								{
 									Protocol: &k8sProtocolTCP,
 									Port:     &int1000,
 									EndPort:  &int32For1999,
 								},
 							},
-							From: []secv1alpha1.NetworkPolicyPeer{
+							From: []crdv1alpha1.NetworkPolicyPeer{
 								{
 									PodSelector: &selectorB,
 								},
@@ -1210,7 +1210,7 @@ func TestGetTierPriority(t *testing.T) {
 	p10 := int32(10)
 	tests := []struct {
 		name      string
-		inputTier *secv1alpha1.Tier
+		inputTier *crdv1alpha1.Tier
 		expPrio   int32
 	}{
 		{
@@ -1220,9 +1220,9 @@ func TestGetTierPriority(t *testing.T) {
 		},
 		{
 			name: "tier10",
-			inputTier: &secv1alpha1.Tier{
+			inputTier: &crdv1alpha1.Tier{
 				ObjectMeta: metav1.ObjectMeta{Name: "tA", UID: "uidA"},
-				Spec: secv1alpha1.TierSpec{
+				Spec: crdv1alpha1.TierSpec{
 					Priority:    p10,
 					Description: "tier10",
 				},
@@ -1249,25 +1249,25 @@ func TestProcessRefCG(t *testing.T) {
 	cidr := "10.0.0.0/24"
 	cidrIPNet, _ := cidrStrToIPNet(cidr)
 	// cgA with selector present in cache
-	cgA := corev1a2.ClusterGroup{
+	cgA := crdv1alpha2.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{Name: "cgA", UID: "uidA"},
-		Spec: corev1a2.GroupSpec{
+		Spec: crdv1alpha2.GroupSpec{
 			NamespaceSelector: &selectorA,
 		},
 	}
 	// cgB with IPBlock present in cache
-	cgB := corev1a2.ClusterGroup{
+	cgB := crdv1alpha2.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{Name: "cgB", UID: "uidB"},
-		Spec: corev1a2.GroupSpec{
-			IPBlock: &secv1alpha1.IPBlock{
+		Spec: crdv1alpha2.GroupSpec{
+			IPBlock: &crdv1alpha1.IPBlock{
 				CIDR: cidr,
 			},
 		},
 	}
 	// cgC not found in cache
-	cgC := corev1a2.ClusterGroup{
+	cgC := crdv1alpha2.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{Name: "cgC", UID: "uidC"},
-		Spec: corev1a2.GroupSpec{
+		Spec: crdv1alpha2.GroupSpec{
 			NamespaceSelector: &selectorA,
 		},
 	}
@@ -1323,25 +1323,25 @@ func TestProcessAppliedToGroupsForCGs(t *testing.T) {
 	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
 	cidr := "10.0.0.0/24"
 	// cgA with selector present in cache
-	cgA := corev1a2.ClusterGroup{
+	cgA := crdv1alpha2.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{Name: "cgA", UID: "uidA"},
-		Spec: corev1a2.GroupSpec{
+		Spec: crdv1alpha2.GroupSpec{
 			NamespaceSelector: &selectorA,
 		},
 	}
 	// cgB with IPBlock present in cache
-	cgB := corev1a2.ClusterGroup{
+	cgB := crdv1alpha2.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{Name: "cgB", UID: "uidB"},
-		Spec: corev1a2.GroupSpec{
-			IPBlock: &secv1alpha1.IPBlock{
+		Spec: crdv1alpha2.GroupSpec{
+			IPBlock: &crdv1alpha1.IPBlock{
 				CIDR: cidr,
 			},
 		},
 	}
 	// cgC not found in cache
-	cgC := corev1a2.ClusterGroup{
+	cgC := crdv1alpha2.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{Name: "cgC", UID: "uidC"},
-		Spec: corev1a2.GroupSpec{
+		Spec: crdv1alpha2.GroupSpec{
 			NamespaceSelector: &selectorA,
 		},
 	}
@@ -1386,15 +1386,15 @@ func TestProcessAppliedToGroupsForCGs(t *testing.T) {
 
 // util functions for testing.
 
-func getCNP() *secv1alpha1.ClusterNetworkPolicy {
+func getCNP() *crdv1alpha1.ClusterNetworkPolicy {
 	p10 := float64(10)
-	allowAction := secv1alpha1.RuleActionAllow
+	allowAction := crdv1alpha1.RuleActionAllow
 	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
 	selectorB := metav1.LabelSelector{MatchLabels: map[string]string{"foo2": "bar2"}}
 	selectorC := metav1.LabelSelector{MatchLabels: map[string]string{"foo3": "bar3"}}
-	ingressRules := []secv1alpha1.Rule{
+	ingressRules := []crdv1alpha1.Rule{
 		{
-			From: []secv1alpha1.NetworkPolicyPeer{
+			From: []crdv1alpha1.NetworkPolicyPeer{
 				{
 					NamespaceSelector: &selectorB,
 				},
@@ -1402,9 +1402,9 @@ func getCNP() *secv1alpha1.ClusterNetworkPolicy {
 			Action: &allowAction,
 		},
 	}
-	egressRules := []secv1alpha1.Rule{
+	egressRules := []crdv1alpha1.Rule{
 		{
-			To: []secv1alpha1.NetworkPolicyPeer{
+			To: []crdv1alpha1.NetworkPolicyPeer{
 				{
 					PodSelector: &selectorC,
 				},
@@ -1412,10 +1412,10 @@ func getCNP() *secv1alpha1.ClusterNetworkPolicy {
 			Action: &allowAction,
 		},
 	}
-	npObj := &secv1alpha1.ClusterNetworkPolicy{
+	npObj := &crdv1alpha1.ClusterNetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{Name: "test-cnp"},
-		Spec: secv1alpha1.ClusterNetworkPolicySpec{
-			AppliedTo: []secv1alpha1.NetworkPolicyPeer{
+		Spec: crdv1alpha1.ClusterNetworkPolicySpec{
+			AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
 				{PodSelector: &selectorA},
 			},
 			Priority: p10,

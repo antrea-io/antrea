@@ -1,4 +1,4 @@
-// Copyright 2020 Antrea Authors
+// Copyright 2021 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -33,9 +33,9 @@ type FakeNetworkPolicyStats struct {
 	ns   string
 }
 
-var networkpolicystatsResource = schema.GroupVersionResource{Group: "stats.antrea.tanzu.vmware.com", Version: "v1alpha1", Resource: "networkpolicystats"}
+var networkpolicystatsResource = schema.GroupVersionResource{Group: "stats.antrea.io", Version: "v1alpha1", Resource: "networkpolicystats"}
 
-var networkpolicystatsKind = schema.GroupVersionKind{Group: "stats.antrea.tanzu.vmware.com", Version: "v1alpha1", Kind: "NetworkPolicyStats"}
+var networkpolicystatsKind = schema.GroupVersionKind{Group: "stats.antrea.io", Version: "v1alpha1", Kind: "NetworkPolicyStats"}
 
 // Get takes name of the networkPolicyStats, and returns the corresponding networkPolicyStats object, and an error if there is any.
 func (c *FakeNetworkPolicyStats) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.NetworkPolicyStats, err error) {

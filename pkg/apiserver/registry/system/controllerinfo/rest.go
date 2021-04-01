@@ -24,7 +24,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/registry/rest"
 
-	clusterinfo "github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1"
+	crdv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1beta1"
 	system "github.com/vmware-tanzu/antrea/pkg/apis/system/v1beta1"
 	"github.com/vmware-tanzu/antrea/pkg/controller/querier"
 )
@@ -49,12 +49,12 @@ func NewREST(querier querier.ControllerQuerier) *REST {
 }
 
 func (r *REST) New() runtime.Object {
-	return &clusterinfo.AntreaControllerInfo{}
+	return &crdv1beta1.AntreaControllerInfo{}
 }
 
-func (r *REST) getControllerInfo() *clusterinfo.AntreaControllerInfo {
+func (r *REST) getControllerInfo() *crdv1beta1.AntreaControllerInfo {
 	// Now AntreaControllerInfo has a single instance.
-	info := new(clusterinfo.AntreaControllerInfo)
+	info := new(crdv1beta1.AntreaControllerInfo)
 	r.controllerQuerier.GetControllerInfo(info, false)
 	info.Name = ControllerInfoResourceName
 	return info
@@ -70,7 +70,7 @@ func (r *REST) Get(ctx context.Context, name string, options *metav1.GetOptions)
 }
 
 func (r *REST) NewList() runtime.Object {
-	return &clusterinfo.AntreaControllerInfoList{}
+	return &crdv1beta1.AntreaControllerInfoList{}
 }
 
 func (r *REST) List(ctx context.Context, options *internalversion.ListOptions) (runtime.Object, error) {
@@ -78,7 +78,7 @@ func (r *REST) List(ctx context.Context, options *internalversion.ListOptions) (
 	if options != nil && options.LabelSelector != nil {
 		labelSelector = options.LabelSelector
 	}
-	list := new(clusterinfo.AntreaControllerInfoList)
+	list := new(crdv1beta1.AntreaControllerInfoList)
 	item := r.getControllerInfo()
 	if labelSelector.Matches(labels.Set(item.Labels)) {
 		list.Items = append(list.Items, *item)
