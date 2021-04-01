@@ -1,4 +1,4 @@
-// Copyright 2020 Antrea Authors
+// Copyright 2021 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -2122,6 +2122,7 @@ func cleanupLegacyTestCaseServicesAndGroups(t *testing.T, c *TestCase) {
 }
 
 func TestLegacyAntreaPolicy(t *testing.T) {
+	skipIfProviderIs(t, "kind", "This test is for legacy API groups and is almost the same as new API groups'.")
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
@@ -2217,6 +2218,7 @@ func TestLegacyAntreaPolicy(t *testing.T) {
 }
 
 func TestLegacyAntreaPolicyStatus(t *testing.T) {
+	skipIfProviderIs(t, "kind", "This test is for legacy API groups and is almost the same as new API groups'.")
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
@@ -2280,6 +2282,7 @@ func TestLegacyAntreaPolicyStatus(t *testing.T) {
 // TestLegacyANPNetworkPolicyStatsWithDropAction tests antreanetworkpolicystats can correctly collect dropped packets stats from ANP if
 // networkpolicystats feature is enabled
 func TestLegacyANPNetworkPolicyStatsWithDropAction(t *testing.T) {
+	skipIfProviderIs(t, "kind", "This test is for legacy API groups and is almost the same as new API groups'.")
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
@@ -2431,6 +2434,7 @@ func TestLegacyANPNetworkPolicyStatsWithDropAction(t *testing.T) {
 }
 
 func TestLegacyAntreaClusterNetworkPolicyStats(t *testing.T) {
+	skipIfProviderIs(t, "kind", "This test is for legacy API groups and is almost the same as new API groups'.")
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)

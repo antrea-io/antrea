@@ -25,7 +25,7 @@ import (
 	crdlister "github.com/vmware-tanzu/antrea/pkg/client/listers/crd/v1alpha1"
 	"github.com/vmware-tanzu/antrea/pkg/controller/crdmirroring/types"
 	legacysecurity "github.com/vmware-tanzu/antrea/pkg/legacyapis/security/v1alpha1"
-	legacycrdclientset "github.com/vmware-tanzu/antrea/pkg/legacyclient/clientset/versioned"
+	legacysecurityclientset "github.com/vmware-tanzu/antrea/pkg/legacyclient/clientset/versioned"
 	legacysecuritylister "github.com/vmware-tanzu/antrea/pkg/legacyclient/listers/security/v1alpha1"
 )
 
@@ -33,13 +33,13 @@ type NetworkPolicyHandler struct {
 	lister       crdlister.NetworkPolicyLister
 	legacyLister legacysecuritylister.NetworkPolicyLister
 	client       crdclientset.Interface
-	legacyClient legacycrdclientset.Interface
+	legacyClient legacysecurityclientset.Interface
 }
 
 func NewNetworkPolicyHandler(lister crdlister.NetworkPolicyLister,
 	legacyLister legacysecuritylister.NetworkPolicyLister,
 	client crdclientset.Interface,
-	legacyClient legacycrdclientset.Interface) types.MirroringHandler {
+	legacyClient legacysecurityclientset.Interface) types.MirroringHandler {
 	mc := &NetworkPolicyHandler{
 		lister:       lister,
 		legacyLister: legacyLister,
@@ -97,8 +97,8 @@ func (c *NetworkPolicyHandler) DeleteNewObject(namespace, name string) error {
 // UpdateNewObject updates the mirrored new ClusterGroup.
 func (c *NetworkPolicyHandler) UpdateNewObject(newObj metav1.Object) error {
 	n := newObj.(*crd.NetworkPolicy)
-	newClient := c.client.CrdV1alpha1().NetworkPolicies(newObj.GetNamespace())
-	_, err := newClient.Update(context.TODO(), n, metav1.UpdateOptions{})
+	client := c.client.CrdV1alpha1().NetworkPolicies(newObj.GetNamespace())
+	_, err := client.Update(context.TODO(), n, metav1.UpdateOptions{})
 	return err
 }
 

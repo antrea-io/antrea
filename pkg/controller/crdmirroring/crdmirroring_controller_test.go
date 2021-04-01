@@ -121,48 +121,89 @@ func newMirroringController(crdName string) *mirroringController {
 		informer = crdInformer.Informer()
 		legacyInformer = legacyCRDInformer.Informer()
 
-		m.testHandler = NewNetworkPolicyTestHandler(crdInformer.Lister(), legacyCRDInformer.Lister(), client, legacyClient)
-		mirroringHandler = crdhandler.NewNetworkPolicyHandler(crdInformer.Lister(), legacyCRDInformer.Lister(), client, legacyClient)
+		m.testHandler = NewNetworkPolicyTestHandler(crdInformer.Lister(),
+			legacyCRDInformer.Lister(),
+			client,
+			legacyClient)
+		mirroringHandler = crdhandler.NewNetworkPolicyHandler(crdInformer.Lister(),
+			legacyCRDInformer.Lister(),
+			client,
+			legacyClient)
+
 	case clusterNetworkPolicy:
 		crdInformer := crdInformerFactory.Crd().V1alpha1().ClusterNetworkPolicies()
 		legacyCRDInformer := legacyCRDInformerFactory.Security().V1alpha1().ClusterNetworkPolicies()
 		informer = crdInformer.Informer()
 		legacyInformer = legacyCRDInformer.Informer()
 
-		m.testHandler = NewClusterNetworkPolicyTestHandler(crdInformer.Lister(), legacyCRDInformer.Lister(), client, legacyClient)
-		mirroringHandler = crdhandler.NewClusterNetworkPolicyHandler(crdInformer.Lister(), legacyCRDInformer.Lister(), client, legacyClient)
+		m.testHandler = NewClusterNetworkPolicyTestHandler(crdInformer.Lister(),
+			legacyCRDInformer.Lister(),
+			client,
+			legacyClient)
+		mirroringHandler = crdhandler.NewClusterNetworkPolicyHandler(crdInformer.Lister(),
+			legacyCRDInformer.Lister(),
+			client.CrdV1alpha1().ClusterNetworkPolicies(),
+			legacyClient.SecurityV1alpha1().ClusterNetworkPolicies())
+
 	case tier:
 		crdInformer := crdInformerFactory.Crd().V1alpha1().Tiers()
 		legacyCRDInformer := legacyCRDInformerFactory.Security().V1alpha1().Tiers()
 		informer = crdInformer.Informer()
 		legacyInformer = legacyCRDInformer.Informer()
 
-		m.testHandler = NewTierTestHandler(crdInformer.Lister(), legacyCRDInformer.Lister(), client, legacyClient)
-		mirroringHandler = crdhandler.NewTierHandler(crdInformer.Lister(), legacyCRDInformer.Lister(), client, legacyClient)
+		m.testHandler = NewTierTestHandler(crdInformer.Lister(),
+			legacyCRDInformer.Lister(),
+			client,
+			legacyClient)
+		mirroringHandler = crdhandler.NewTierHandler(crdInformer.Lister(),
+			legacyCRDInformer.Lister(),
+			client.CrdV1alpha1().Tiers(),
+			legacyClient.SecurityV1alpha1().Tiers())
+
 	case clusterGroup:
 		crdInformer := crdInformerFactory.Crd().V1alpha2().ClusterGroups()
 		legacyCRDInformer := legacyCRDInformerFactory.Core().V1alpha2().ClusterGroups()
 		informer = crdInformer.Informer()
 		legacyInformer = legacyCRDInformer.Informer()
 
-		m.testHandler = NewClusterGroupTestHandler(crdInformer.Lister(), legacyCRDInformer.Lister(), client, legacyClient)
-		mirroringHandler = crdhandler.NewClusterGroupHandler(crdInformer.Lister(), legacyCRDInformer.Lister(), client, legacyClient)
+		m.testHandler = NewClusterGroupTestHandler(crdInformer.Lister(),
+			legacyCRDInformer.Lister(),
+			client,
+			legacyClient)
+		mirroringHandler = crdhandler.NewClusterGroupHandler(crdInformer.Lister(),
+			legacyCRDInformer.Lister(),
+			client.CrdV1alpha2().ClusterGroups(),
+			legacyClient.CoreV1alpha2().ClusterGroups())
+
 	case externalEntity:
 		crdInformer := crdInformerFactory.Crd().V1alpha2().ExternalEntities()
 		legacyCRDInformer := legacyCRDInformerFactory.Core().V1alpha2().ExternalEntities()
 		informer = crdInformer.Informer()
 		legacyInformer = legacyCRDInformer.Informer()
 
-		m.testHandler = NewExternalEntityTestHandler(crdInformer.Lister(), legacyCRDInformer.Lister(), client, legacyClient)
-		mirroringHandler = crdhandler.NewExternalEntityHandler(crdInformer.Lister(), legacyCRDInformer.Lister(), client, legacyClient)
+		m.testHandler = NewExternalEntityTestHandler(crdInformer.Lister(),
+			legacyCRDInformer.Lister(),
+			client,
+			legacyClient)
+		mirroringHandler = crdhandler.NewExternalEntityHandler(crdInformer.Lister(),
+			legacyCRDInformer.Lister(),
+			client,
+			legacyClient)
+
 	case traceflow:
 		crdInformer := crdInformerFactory.Crd().V1alpha1().Traceflows()
 		legacyCRDInformer := legacyCRDInformerFactory.Ops().V1alpha1().Traceflows()
 		informer = crdInformer.Informer()
 		legacyInformer = legacyCRDInformer.Informer()
 
-		m.testHandler = NewTraceflowTestHandler(crdInformer.Lister(), legacyCRDInformer.Lister(), client, legacyClient)
-		mirroringHandler = crdhandler.NewTraceflowHandler(crdInformer.Lister(), legacyCRDInformer.Lister(), client, legacyClient)
+		m.testHandler = NewTraceflowTestHandler(crdInformer.Lister(),
+			legacyCRDInformer.Lister(),
+			client,
+			legacyClient)
+		mirroringHandler = crdhandler.NewTraceflowHandler(crdInformer.Lister(),
+			legacyCRDInformer.Lister(),
+			client.CrdV1alpha1().Traceflows(),
+			legacyClient.OpsV1alpha1().Traceflows())
 	}
 
 	c := NewController(informer, legacyInformer, mirroringHandler, crdName)

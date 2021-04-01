@@ -70,7 +70,7 @@ func CreateClients(config componentbaseconfig.ClientConnectionConfiguration, kub
 	return client, aggregatorClient, crdClient, nil
 }
 
-// CreateLegacyCRD creates legacyCRD client from the given config.
+// CreateLegacyCRDClient creates legacyCRD client from the given config.
 func CreateLegacyCRDClient(config componentbaseconfig.ClientConnectionConfiguration, kubeAPIServerOverride string) (legacycrdclientset.Interface, error) {
 	var kubeConfig *rest.Config
 	var err error

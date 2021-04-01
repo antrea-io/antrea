@@ -21,25 +21,25 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	crd "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha1"
-	crdclientset "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned"
+	crdclient "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/crd/v1alpha1"
 	crdlister "github.com/vmware-tanzu/antrea/pkg/client/listers/crd/v1alpha1"
 	"github.com/vmware-tanzu/antrea/pkg/controller/crdmirroring/types"
 	legacysecurity "github.com/vmware-tanzu/antrea/pkg/legacyapis/security/v1alpha1"
-	legacycrdclientset "github.com/vmware-tanzu/antrea/pkg/legacyclient/clientset/versioned"
+	legacysecurityclient "github.com/vmware-tanzu/antrea/pkg/legacyclient/clientset/versioned/typed/security/v1alpha1"
 	legacysecuritylister "github.com/vmware-tanzu/antrea/pkg/legacyclient/listers/security/v1alpha1"
 )
 
 type TierHandler struct {
 	lister       crdlister.TierLister
 	legacyLister legacysecuritylister.TierLister
-	client       crdclientset.Interface
-	legacyClient legacycrdclientset.Interface
+	client       crdclient.TierInterface
+	legacyClient legacysecurityclient.TierInterface
 }
 
 func NewTierHandler(lister crdlister.TierLister,
 	legacyLister legacysecuritylister.TierLister,
-	client crdclientset.Interface,
-	legacyClient legacycrdclientset.Interface) types.MirroringHandler {
+	client crdclient.TierInterface,
+	legacyClient legacysecurityclient.TierInterface) types.MirroringHandler {
 	mc := &TierHandler{
 		lister:       lister,
 		legacyLister: legacyLister,
@@ -59,8 +59,7 @@ func (c *TierHandler) GetNewObject(namespace, name string) (metav1.Object, error
 func (c *TierHandler) AddNewObject(obj metav1.Object) error {
 	l := obj.(*legacysecurity.Tier)
 	n := c.buildNewObject(l)
-	client := c.client.CrdV1alpha1().Tiers()
-	_, err := client.Create(context.TODO(), n, metav1.CreateOptions{})
+	_, err := c.client.Create(context.TODO(), n, metav1.CreateOptions{})
 	return err
 }
 
@@ -68,8 +67,7 @@ func (c *TierHandler) AddNewObject(obj metav1.Object) error {
 func (c *TierHandler) SyncObject(legacyObj, newObj metav1.Object) error {
 	if !c.deepEqualSpecAndLabels(legacyObj, newObj) {
 		n := c.syncNewObject(legacyObj, newObj)
-		newClient := c.client.CrdV1alpha1().Tiers()
-		_, err := newClient.Update(context.TODO(), n, metav1.UpdateOptions{})
+		_, err := c.client.Update(context.TODO(), n, metav1.UpdateOptions{})
 		return err
 	}
 	return nil
@@ -77,15 +75,13 @@ func (c *TierHandler) SyncObject(legacyObj, newObj metav1.Object) error {
 
 // DeleteNewObject deletes the mirrored new Tier.
 func (c *TierHandler) DeleteNewObject(namespace, name string) error {
-	client := c.client.CrdV1alpha1().Tiers()
-	return client.Delete(context.TODO(), name, metav1.DeleteOptions{})
+	return c.client.Delete(context.TODO(), name, metav1.DeleteOptions{})
 }
 
 // UpdateNewObject updates the mirrored new ClusterGroup.
 func (c *TierHandler) UpdateNewObject(newObj metav1.Object) error {
 	n := newObj.(*crd.Tier)
-	newClient := c.client.CrdV1alpha1().Tiers()
-	_, err := newClient.Update(context.TODO(), n, metav1.UpdateOptions{})
+	_, err := c.client.Update(context.TODO(), n, metav1.UpdateOptions{})
 	return err
 }
 

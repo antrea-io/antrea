@@ -164,17 +164,50 @@ func run(o *Options) error {
 	var cgMirroringController *crdmirroring.Controller
 	var eeMirroringController *crdmirroring.Controller
 	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) && o.config.LegacyCRDMirroring {
-		anpMirroringHandler := crdhandler.NewNetworkPolicyHandler(anpInformer.Lister(), legacyANPInformer.Lister(), crdClient, legacyCRDClient)
-		cnpMirroringHandler := crdhandler.NewClusterNetworkPolicyHandler(cnpInformer.Lister(), legacyCNPInformer.Lister(), crdClient, legacyCRDClient)
-		tierMirroringHandler := crdhandler.NewTierHandler(tierInformer.Lister(), legacyTierInformer.Lister(), crdClient, legacyCRDClient)
-		cgMirroringHandler := crdhandler.NewClusterGroupHandler(cgInformer.Lister(), legacyCGInformer.Lister(), crdClient, legacyCRDClient)
-		eeMirroringHandler := crdhandler.NewExternalEntityHandler(eeInformer.Lister(), legacyEEInformer.Lister(), crdClient, legacyCRDClient)
+		anpMirroringHandler := crdhandler.NewNetworkPolicyHandler(anpInformer.Lister(),
+			legacyANPInformer.Lister(),
+			crdClient,
+			legacyCRDClient)
+		anpMirroringController = crdmirroring.NewController(anpInformer.Informer(),
+			legacyANPInformer.Informer(),
+			anpMirroringHandler,
+			"NetworkPolicy")
 
-		anpMirroringController = crdmirroring.NewController(anpInformer.Informer(), legacyANPInformer.Informer(), anpMirroringHandler, "NetworkPolicy")
-		cnpMirroringController = crdmirroring.NewController(cnpInformer.Informer(), legacyCNPInformer.Informer(), cnpMirroringHandler, "ClusterNetworkPolicy")
-		tierMirroringController = crdmirroring.NewController(tierInformer.Informer(), legacyTierInformer.Informer(), tierMirroringHandler, "Tier")
-		cgMirroringController = crdmirroring.NewController(cgInformer.Informer(), legacyCGInformer.Informer(), cgMirroringHandler, "ClusterGroup")
-		eeMirroringController = crdmirroring.NewController(eeInformer.Informer(), legacyEEInformer.Informer(), eeMirroringHandler, "ExternalEntity")
+		cnpMirroringHandler := crdhandler.NewClusterNetworkPolicyHandler(cnpInformer.Lister(),
+			legacyCNPInformer.Lister(),
+			crdClient.CrdV1alpha1().ClusterNetworkPolicies(),
+			legacyCRDClient.SecurityV1alpha1().ClusterNetworkPolicies())
+		cnpMirroringController = crdmirroring.NewController(cnpInformer.Informer(),
+			legacyCNPInformer.Informer(),
+			cnpMirroringHandler,
+			"ClusterNetworkPolicy")
+
+		tierMirroringHandler := crdhandler.NewTierHandler(tierInformer.Lister(),
+			legacyTierInformer.Lister(),
+			crdClient.CrdV1alpha1().Tiers(),
+			legacyCRDClient.SecurityV1alpha1().Tiers())
+		tierMirroringController = crdmirroring.NewController(tierInformer.Informer(),
+			legacyTierInformer.Informer(),
+			tierMirroringHandler,
+			"Tier")
+
+		cgMirroringHandler := crdhandler.NewClusterGroupHandler(cgInformer.Lister(),
+			legacyCGInformer.Lister(),
+			crdClient.CrdV1alpha2().ClusterGroups(),
+			legacyCRDClient.CoreV1alpha2().ClusterGroups())
+		cgMirroringController = crdmirroring.NewController(cgInformer.Informer(),
+			legacyCGInformer.Informer(),
+			cgMirroringHandler,
+			"ClusterGroup")
+
+		eeMirroringHandler := crdhandler.NewExternalEntityHandler(eeInformer.Lister(),
+			legacyEEInformer.Lister(),
+			crdClient,
+			legacyCRDClient)
+		eeMirroringController = crdmirroring.NewController(eeInformer.Informer(),
+			legacyEEInformer.Informer(),
+			eeMirroringHandler,
+			"ExternalEntity")
 	}
 
 	endpointQuerier := networkpolicy.NewEndpointQuerier(networkPolicyController)
@@ -190,8 +223,14 @@ func run(o *Options) error {
 
 	var traceflowMirroringController *crdmirroring.Controller
 	if features.DefaultFeatureGate.Enabled(features.Traceflow) && o.config.LegacyCRDMirroring {
-		tfMirroringHandler := crdhandler.NewTraceflowHandler(tfInformer.Lister(), legacyTFInformer.Lister(), crdClient, legacyCRDClient)
-		traceflowMirroringController = crdmirroring.NewController(tfInformer.Informer(), legacyTFInformer.Informer(), tfMirroringHandler, "Traceflow")
+		tfMirroringHandler := crdhandler.NewTraceflowHandler(tfInformer.Lister(),
+			legacyTFInformer.Lister(),
+			crdClient.CrdV1alpha1().Traceflows(),
+			legacyCRDClient.OpsV1alpha1().Traceflows())
+		traceflowMirroringController = crdmirroring.NewController(tfInformer.Informer(),
+			legacyTFInformer.Informer(),
+			tfMirroringHandler,
+			"Traceflow")
 	}
 
 	// statsAggregator takes stats summaries from antrea-agents, aggregates them, and serves the Stats APIs with the

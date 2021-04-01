@@ -31,7 +31,7 @@ import (
 )
 
 const (
-	// maxRetries is the number of times an legacy CRD resource will be retried
+	// maxRetries is the number of times a legacy CRD resource will be retried
 	// before it is dropped out of the queue.
 	maxRetries = 15
 
@@ -324,7 +324,7 @@ func getCRDFromDeleteAction(obj interface{}) metav1.Object {
 	if ok {
 		return tombstone.Obj.(metav1.Object)
 	}
-	utilruntime.HandleError(fmt.Errorf("tombstone contained object that is not a object resource: %#v", obj))
+	utilruntime.HandleError(fmt.Errorf("tombstone contained object that is not an object resource: %#v", obj))
 	return nil
 }
 

@@ -2472,7 +2472,7 @@ data:
     # TLS min version from: VersionTLS10, VersionTLS11, VersionTLS12, VersionTLS13.
     #tlsMinVersion:
 
-    # If Antrea is upgraded from version <= v0.13 and legacy CRDs is used, this option should be
+    # If Antrea is upgraded from version <= v0.13 and legacy CRDs are used, this option should be
     # enabled, otherwise the CRDs created with the legacy API groups will not take any effect and
     # work as expected. When the mirroring is enabled, if a legacy CRD is created with legacy API
     # groups, mirroring-controller will create a new CRD with the Spec and Labels from the legacy
@@ -2480,15 +2480,17 @@ data:
     # CRD automatically. In addition, the modification of Status in new CRD will also be synchronized
     # to legacy CRD automatically. If a legacy CRD is deleted, the corresponding new CRD will be deleted.
     # Note that: to decouple a new CRD from the corresponding legacy CRD, the legacy CRD should be
-    # annotated with "crd.antrea.io/stop-mirror". Afterwards, CRUD of new CRDs should be done through
-    # the new API group.
+    # annotated with "crd.antrea.io/stop-mirror". Afterwards, updates to the legacy CRDs will no
+    # longer be reflected in the new CRD, and all CRUD operations should be done through the new
+    # API groups. After adding the annotation, legacy CRDs can be deleted safely without impacting
+    # new CRDs.
     #legacyCRDMirroring: true
 kind: ConfigMap
 metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-dm25c5ghfm
+  name: antrea-config-f9cht7228c
   namespace: kube-system
 ---
 apiVersion: v1
@@ -2617,7 +2619,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-dm25c5ghfm
+          name: antrea-config-f9cht7228c
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -2961,7 +2963,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-dm25c5ghfm
+          name: antrea-config-f9cht7228c
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d

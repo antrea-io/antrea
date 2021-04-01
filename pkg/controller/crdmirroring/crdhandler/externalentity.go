@@ -25,7 +25,7 @@ import (
 	crdlister "github.com/vmware-tanzu/antrea/pkg/client/listers/crd/v1alpha2"
 	"github.com/vmware-tanzu/antrea/pkg/controller/crdmirroring/types"
 	legacycore "github.com/vmware-tanzu/antrea/pkg/legacyapis/core/v1alpha2"
-	legacycrdclientset "github.com/vmware-tanzu/antrea/pkg/legacyclient/clientset/versioned"
+	legacycoreclientset "github.com/vmware-tanzu/antrea/pkg/legacyclient/clientset/versioned"
 	legacycorelister "github.com/vmware-tanzu/antrea/pkg/legacyclient/listers/core/v1alpha2"
 )
 
@@ -33,13 +33,13 @@ type ExternalEntityHandler struct {
 	lister       crdlister.ExternalEntityLister
 	legacyLister legacycorelister.ExternalEntityLister
 	client       crdclientset.Interface
-	legacyClient legacycrdclientset.Interface
+	legacyClient legacycoreclientset.Interface
 }
 
 func NewExternalEntityHandler(lister crdlister.ExternalEntityLister,
 	legacyLister legacycorelister.ExternalEntityLister,
 	client crdclientset.Interface,
-	legacyClient legacycrdclientset.Interface) types.MirroringHandler {
+	legacyClient legacycoreclientset.Interface) types.MirroringHandler {
 	mc := &ExternalEntityHandler{
 		lister:       lister,
 		legacyLister: legacyLister,
@@ -83,8 +83,8 @@ func (c *ExternalEntityHandler) DeleteNewObject(namespace, name string) error {
 // UpdateNewObject updates the mirrored new ClusterGroup.
 func (c *ExternalEntityHandler) UpdateNewObject(newObj metav1.Object) error {
 	n := newObj.(*crd.ExternalEntity)
-	newClient := c.client.CrdV1alpha2().ExternalEntities(newObj.GetNamespace())
-	_, err := newClient.Update(context.TODO(), n, metav1.UpdateOptions{})
+	client := c.client.CrdV1alpha2().ExternalEntities(newObj.GetNamespace())
+	_, err := client.Update(context.TODO(), n, metav1.UpdateOptions{})
 	return err
 }
 

@@ -30,7 +30,7 @@ import (
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
-	opsv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha1"
+	crdv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha1"
 	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
 )
 
@@ -66,7 +66,7 @@ func (c *Controller) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
 	return err
 }
 
-func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*opsv1alpha1.Traceflow, *opsv1alpha1.NodeResult, error) {
+func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1alpha1.Traceflow, *crdv1alpha1.NodeResult, error) {
 	matchers := pktIn.GetMatches()
 	var match *ofctrl.MatchField
 
@@ -95,19 +95,19 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*opsv1alpha1.Tracefl
 		return nil, nil, err
 	}
 
-	obs := make([]opsv1alpha1.Observation, 0)
+	obs := make([]crdv1alpha1.Observation, 0)
 	isSender := c.isSender(uint8(tag))
 	tableID := pktIn.TableId
 
 	if isSender {
-		ob := new(opsv1alpha1.Observation)
-		ob.Component = opsv1alpha1.ComponentSpoofGuard
-		ob.Action = opsv1alpha1.ActionForwarded
+		ob := new(crdv1alpha1.Observation)
+		ob.Component = crdv1alpha1.ComponentSpoofGuard
+		ob.Action = crdv1alpha1.ActionForwarded
 		obs = append(obs, *ob)
 	} else {
-		ob := new(opsv1alpha1.Observation)
-		ob.Component = opsv1alpha1.ComponentForwarding
-		ob.Action = opsv1alpha1.ActionReceived
+		ob := new(crdv1alpha1.Observation)
+		ob.Component = crdv1alpha1.ComponentForwarding
+		ob.Action = crdv1alpha1.ActionReceived
 		ob.ComponentInfo = openflow.GetFlowTableName(openflow.ClassifierTable)
 		obs = append(obs, *ob)
 	}
@@ -140,9 +140,9 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*opsv1alpha1.Tracefl
 		return nil, nil, fmt.Errorf("unsupported traceflow packet ether type %d", pktIn.Data.Ethertype)
 	}
 	if isValidCtNw(ctNwDst) && ipDst != ctNwDst {
-		ob := &opsv1alpha1.Observation{
-			Component:       opsv1alpha1.ComponentLB,
-			Action:          opsv1alpha1.ActionForwarded,
+		ob := &crdv1alpha1.Observation{
+			Component:       crdv1alpha1.ComponentLB,
+			Action:          crdv1alpha1.ActionForwarded,
 			TranslatedDstIP: ipDst,
 		}
 		obs = append(obs, *ob)
@@ -197,7 +197,7 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*opsv1alpha1.Tracefl
 
 	// Get output table.
 	if tableID == uint8(openflow.L2ForwardingOutTable) {
-		ob := new(opsv1alpha1.Observation)
+		ob := new(crdv1alpha1.Observation)
 		tunnelDstIP := ""
 		isIPv6 := c.nodeConfig.NodeIPAddr.IP.To4() == nil
 		if match = getMatchTunnelDstField(matchers, isIPv6); match != nil {
@@ -219,23 +219,23 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*opsv1alpha1.Tracefl
 		}
 		if c.networkConfig.TrafficEncapMode.SupportsEncap() && outputPort == config.DefaultTunOFPort {
 			ob.TunnelDstIP = tunnelDstIP
-			ob.Action = opsv1alpha1.ActionForwarded
+			ob.Action = crdv1alpha1.ActionForwarded
 		} else if ipDst == gatewayIP.String() && outputPort == config.HostGatewayOFPort {
-			ob.Action = opsv1alpha1.ActionDelivered
+			ob.Action = crdv1alpha1.ActionDelivered
 		} else if c.networkConfig.TrafficEncapMode.SupportsEncap() && outputPort == config.HostGatewayOFPort {
-			ob.Action = opsv1alpha1.ActionForwardedOutOfOverlay
+			ob.Action = crdv1alpha1.ActionForwardedOutOfOverlay
 		} else if outputPort == config.HostGatewayOFPort { // noEncap
-			ob.Action = opsv1alpha1.ActionForwarded
+			ob.Action = crdv1alpha1.ActionForwarded
 		} else {
 			// Output port is Pod port, packet is delivered.
-			ob.Action = opsv1alpha1.ActionDelivered
+			ob.Action = crdv1alpha1.ActionDelivered
 		}
 		ob.ComponentInfo = openflow.GetFlowTableName(binding.TableIDType(tableID))
-		ob.Component = opsv1alpha1.ComponentForwarding
+		ob.Component = crdv1alpha1.ComponentForwarding
 		obs = append(obs, *ob)
 	}
 
-	nodeResult := opsv1alpha1.NodeResult{Node: c.nodeConfig.Name, Timestamp: time.Now().Unix(), Observations: obs}
+	nodeResult := crdv1alpha1.NodeResult{Node: c.nodeConfig.Name, Timestamp: time.Now().Unix(), Observations: obs}
 	return tf, &nodeResult, nil
 }
 
@@ -286,28 +286,28 @@ func getCTDstValue(matchers *ofctrl.Matchers, isIPv6 bool) (string, error) {
 	return regValue.String(), nil
 }
 
-func getNetworkPolicyObservation(tableID uint8, ingress bool) *opsv1alpha1.Observation {
-	ob := new(opsv1alpha1.Observation)
-	ob.Component = opsv1alpha1.ComponentNetworkPolicy
+func getNetworkPolicyObservation(tableID uint8, ingress bool) *crdv1alpha1.Observation {
+	ob := new(crdv1alpha1.Observation)
+	ob.Component = crdv1alpha1.ComponentNetworkPolicy
 	if ingress {
 		switch tableID {
 		case uint8(openflow.IngressMetricTable), uint8(openflow.IngressDefaultTable):
 			// Packet dropped by ANP/default drop rule
 			ob.ComponentInfo = openflow.GetFlowTableName(binding.TableIDType(tableID))
-			ob.Action = opsv1alpha1.ActionDropped
+			ob.Action = crdv1alpha1.ActionDropped
 		default:
 			ob.ComponentInfo = openflow.GetFlowTableName(openflow.IngressRuleTable)
-			ob.Action = opsv1alpha1.ActionForwarded
+			ob.Action = crdv1alpha1.ActionForwarded
 		}
 	} else {
 		switch tableID {
 		case uint8(openflow.EgressMetricTable), uint8(openflow.EgressDefaultTable):
 			// Packet dropped by ANP/default drop rule
 			ob.ComponentInfo = openflow.GetFlowTableName(binding.TableIDType(tableID))
-			ob.Action = opsv1alpha1.ActionDropped
+			ob.Action = crdv1alpha1.ActionDropped
 		default:
 			ob.ComponentInfo = openflow.GetFlowTableName(openflow.EgressRuleTable)
-			ob.Action = opsv1alpha1.ActionForwarded
+			ob.Action = crdv1alpha1.ActionForwarded
 		}
 	}
 	return ob
