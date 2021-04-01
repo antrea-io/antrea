@@ -268,6 +268,8 @@ func testInvalidCGMaxNestedLevel(t *testing.T) {
 }
 
 func TestClusterGroup(t *testing.T) {
+	skipIfHasWindowsNodes(t)
+
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)

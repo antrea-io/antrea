@@ -33,15 +33,65 @@ should be deleted. This ensures that all tests are run on a clean testbed.
 
 * ipv6-ds-e2e: e2e tests in a dual-stack setup.
 
+```shell
+#!/bin/bash
+set -e
+DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
+./ci/jenkins/test.sh --testcase e2e --registry ${DOCKER_REGISTRY}
+```
+
 * ipv6-ds-conformance: conformance tests in a dual-stack setup.
+
+```shell
+#!/bin/bash
+set -e
+DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
+./ci/jenkins/test.sh --testcase conformance --registry ${DOCKER_REGISTRY}
+```
 
 * ipv6-ds-networkpolicy: NetworkPolicy tests in a dual-stack setup.
 
+```shell
+#!/bin/bash
+set -e
+DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
+./ci/jenkins/test.sh --testcase networkpolicy --registry ${DOCKER_REGISTRY}
+```
+
 * ipv6-only-e2e: e2e tests in an IPv6 only setup.
+
+```shell
+#!/bin/bash
+set -e
+DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
+./ci/jenkins/test.sh --testcase e2e --registry ${DOCKER_REGISTRY}
+```
 
 * ipv6-only-conformance: conformance tests in an IPv6 only setup.
 
+```shell
+#!/bin/bash
+set -e
+DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
+./ci/jenkins/test.sh --testcase conformance --registry ${DOCKER_REGISTRY}
+```
+
 * ipv6-only-networkpolicy: NetworkPolicy tests in an IPv6 only setup.
+
+```shell
+#!/bin/bash
+set -e
+DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
+./ci/jenkins/test.sh --testcase networkpolicy --registry ${DOCKER_REGISTRY}
+```
+
+* windows e2e: e2e tests in a Windows setup.
+
+```shell
+#!/bin/bash
+DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
+./ci/jenkins/test.sh --testcase windows-e2e --registry ${DOCKER_REGISTRY}
+```
 
 * windows conformance: community tests on Windows cluster, focusing on "Conformance|sig-windows" and "sig-network",
   and skipping "LinuxOnly", "Slow", "Serial", "Disruptive", "Flaky", "Feature", "sig-cli", "sig-storage", "sig-auth",
@@ -49,7 +99,19 @@ should be deleted. This ensures that all tests are run on a clean testbed.
   Services should be able to create a functioning NodePort service [Conformance]", "Service endpoints latency should not
   be very high".
 
+```shell
+#!/bin/bash
+DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
+./ci/jenkins/test.sh --testcase windows-conformance --registry ${DOCKER_REGISTRY}
+```
+
 * windows network policy: community tests on Windows cluster, focusing on "Feature:NetworkPolicy".
+
+```shell
+#!/bin/bash
+DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
+./ci/jenkins/test.sh --testcase windows-networkpolicy --registry ${DOCKER_REGISTRY}
+```
 
 * [whole-conformance [daily]](https://jenkins.antrea-ci.rocks/job/antrea-whole-conformance-for-pull-request/):
   community tests using sonobuoy, with certified-conformance mode.
@@ -68,6 +130,11 @@ should be deleted. This ensures that all tests are run on a clean testbed.
 
 * Jenkins Windows OVS validator: this job only executes for PRs that include changes to [hack/windows/Install-OVS.ps1](hack/windows/Install-OVS.ps1). It validates
   if Windows OVS can be installed correctly.
+
+```shell
+#!/bin/bash
+./ci/jenkins/test.sh --testcase windows-install-ovs
+```
 
 * [EKS conformance/network policy [bi-daily]](http://jenkins.antrea-ci.rocks/view/cloud/job/cloud-antrea-eks-conformance-net-policy/)
   community tests on EKS cluster using sonobuoy, focusing on "Conformance" and "Feature:NetworkPolicy", skipping the same regexes as in job __conformance__ above, as well as "NodePort" (See [#690](https://github.com/vmware-tanzu/antrea/issues/690)).\

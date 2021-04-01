@@ -60,6 +60,7 @@ func TestIPSecTunnelConnectivity(t *testing.T) {
 	skipIfProviderIs(t, "kind", "IPSec tunnel does not work with Kind")
 	skipIfIPv6Cluster(t)
 	skipIfNumNodesLessThan(t, 2)
+	skipIfHasWindowsNodes(t)
 
 	data, err := setupTest(t)
 	if err != nil {
@@ -94,6 +95,7 @@ func TestIPSecDeleteStaleTunnelPorts(t *testing.T) {
 	skipIfProviderIs(t, "kind", "IPSec tunnel does not work with Kind")
 	skipIfIPv6Cluster(t)
 	skipIfNumNodesLessThan(t, 2)
+	skipIfHasWindowsNodes(t)
 
 	data, err := setupTest(t)
 	if err != nil {
