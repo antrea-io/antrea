@@ -291,6 +291,10 @@ function deliver_antrea {
     # because they might be being used in other builds running simultaneously.
     docker image prune -f --filter "until=1h" || true > /dev/null
     cd $GIT_CHECKOUT_DIR
+    # Ensure that files in the Docker context have the correct permissions, or Docker caching cannot
+    # be leveraged successfully
+    chmod -R g-w build/images/ovs
+    chmod -R g-w build/images/base
     for i in `seq 2`
     do
         if [[ "$COVERAGE" == true ]]; then
@@ -398,7 +402,8 @@ function run_integration {
 
     set -x
     echo "===== Run Integration tests ====="
-    ${SSH_WITH_UTILS_KEY} -n jenkins@${VM_IP} "git clone ${ghprbAuthorRepoGitUrl} antrea && cd antrea && git checkout ${GIT_BRANCH} && DOCKER_REGISTRY=${DOCKER_REGISTRY} ./build/images/ovs/build.sh --pull && NO_PULL=${NO_PULL} make docker-test-integration"
+    # umask ensures that files are cloned with the correct permissions so that Docker caching can be leveraged
+    ${SSH_WITH_UTILS_KEY} -n jenkins@${VM_IP} "umask 0022 && git clone ${ghprbAuthorRepoGitUrl} antrea && cd antrea && git checkout ${GIT_BRANCH} && DOCKER_REGISTRY=${DOCKER_REGISTRY} ./build/images/ovs/build.sh --pull && NO_PULL=${NO_PULL} make docker-test-integration"
     if [[ "$COVERAGE" == true ]]; then
         ${SSH_WITH_UTILS_KEY} -n jenkins@${VM_IP} "curl -s https://codecov.io/bash | bash -s -- -c -t ${CODECOV_TOKEN} -F integration-tests -f '.coverage/coverage-integration.txt'"
     fi

@@ -183,6 +183,8 @@ function deliver_antrea_windows {
     make clean
     docker images | grep 'antrea-ubuntu' | awk '{print $3}' | xargs -r docker rmi -f || true
     docker images | grep '<none>' | awk '{print $3}' | xargs -r docker rmi || true
+    chmod -R g-w build/images/ovs
+    chmod -R g-w build/images/base
     ./hack/build-antrea-ubuntu-all.sh --pull
     if [[ "$TESTCASE" =~ "networkpolicy" ]]; then
         make windows-bin
@@ -280,6 +282,8 @@ function deliver_antrea {
         docker pull "${DOCKER_REGISTRY}/antrea/sonobuoy-systemd-logs:v0.3"
         docker tag "${DOCKER_REGISTRY}/antrea/sonobuoy-systemd-logs:v0.3" "sonobuoy/systemd-logs:v0.3"
     fi
+    chmod -R g-w build/images/ovs
+    chmod -R g-w build/images/base
     ./hack/build-antrea-ubuntu-all.sh --pull
     make flow-aggregator-image
 
