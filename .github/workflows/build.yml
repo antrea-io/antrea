@@ -134,7 +134,9 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - name: Build flow-aggregator Docker image
-      run: make flow-aggregator-ubuntu
+      run: make flow-aggregator-image
+    - name: Check flow-aggregator Docker image
+      run: docker run projects.registry.vmware.com/antrea/flow-aggregator --version
     - name: Push flow-aggregator Docker image to registry
       if: ${{ github.repository == 'vmware-tanzu/antrea' && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
       env:

@@ -122,13 +122,11 @@ spec:
         - --config
         - /etc/flow-aggregator/flow-aggregator.conf
         - --logtostderr=false
-        - --log_dir=/var/log/flowaggregator
+        - --log_dir=/var/log/antrea/flow-aggregator
         - --alsologtostderr
         - --log_file_max_size=100
         - --log_file_max_num=4
         - --v=0
-        command:
-          - flow-aggregator
         name: flow-aggregator
         image: flow-aggregator
         ports:
@@ -138,9 +136,14 @@ spec:
           name: flow-aggregator-config
           readOnly: true
           subPath: flow-aggregator.conf
+        - mountPath: /var/log/antrea/flow-aggregator
+          name: host-var-log-antrea-flow-aggregator
       serviceAccountName: flow-aggregator
       volumes:
       - name: flow-aggregator-config
         configMap:
           name: flow-aggregator-configmap
-        
+      - name: host-var-log-antrea-flow-aggregator
+        hostPath:
+          path: /var/log/antrea/flow-aggregator
+          type: DirectoryOrCreate

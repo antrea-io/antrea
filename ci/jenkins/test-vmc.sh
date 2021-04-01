@@ -301,7 +301,7 @@ function deliver_antrea {
     if [[ "$COVERAGE" == true ]]; then
       VERSION="$CLUSTER" DOCKER_REGISTRY="${DOCKER_REGISTRY}" make flow-aggregator-ubuntu-coverage
     else
-      VERSION="$CLUSTER" DOCKER_REGISTRY="${DOCKER_REGISTRY}" make flow-aggregator-ubuntu
+      VERSION="$CLUSTER" DOCKER_REGISTRY="${DOCKER_REGISTRY}" make flow-aggregator-image
     fi
     cd ci/jenkins
 
