@@ -23,19 +23,19 @@ import (
 	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/common"
-	clusterinfo "github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1"
+	crdv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1beta1"
 )
 
 // Response includes all data fields of clusterinfo.AntreaControllerInfo, but
 // removes the resource meta fields.
 type Response struct {
-	Version                     string                                  `json:"version,omitempty"`                     // Antrea binary version
-	PodRef                      corev1.ObjectReference                  `json:"podRef,omitempty"`                      // The Pod that Antrea Controller is running in
-	NodeRef                     corev1.ObjectReference                  `json:"nodeRef,omitempty"`                     // The Node that Antrea Controller is running in
-	ServiceRef                  corev1.ObjectReference                  `json:"serviceRef,omitempty"`                  // Antrea Controller Service
-	NetworkPolicyControllerInfo clusterinfo.NetworkPolicyControllerInfo `json:"networkPolicyControllerInfo,omitempty"` // Antrea Controller NetworkPolicy information
-	ConnectedAgentNum           int32                                   `json:"connectedAgentNum,omitempty"`           // Number of agents which are connected to this controller
-	ControllerConditions        []clusterinfo.ControllerCondition       `json:"controllerConditions,omitempty"`        // Controller condition contains types like ControllerHealthy
+	Version                     string                                 `json:"version,omitempty"`                     // Antrea binary version
+	PodRef                      corev1.ObjectReference                 `json:"podRef,omitempty"`                      // The Pod that Antrea Controller is running in
+	NodeRef                     corev1.ObjectReference                 `json:"nodeRef,omitempty"`                     // The Node that Antrea Controller is running in
+	ServiceRef                  corev1.ObjectReference                 `json:"serviceRef,omitempty"`                  // Antrea Controller Service
+	NetworkPolicyControllerInfo crdv1beta1.NetworkPolicyControllerInfo `json:"networkPolicyControllerInfo,omitempty"` // Antrea Controller NetworkPolicy information
+	ConnectedAgentNum           int32                                  `json:"connectedAgentNum,omitempty"`           // Number of agents which are connected to this controller
+	ControllerConditions        []crdv1beta1.ControllerCondition       `json:"controllerConditions,omitempty"`        // Controller condition contains types like ControllerHealthy
 }
 
 func Transform(reader io.Reader, _ bool, _ map[string]string) (interface{}, error) {
@@ -44,7 +44,7 @@ func Transform(reader io.Reader, _ bool, _ map[string]string) (interface{}, erro
 		return nil, err
 	}
 	klog.Infof("version transform received: %s", string(b))
-	controllerInfo := new(clusterinfo.AntreaControllerInfo)
+	controllerInfo := new(crdv1beta1.AntreaControllerInfo)
 	err = json.Unmarshal(b, controllerInfo)
 	if err != nil {
 		return nil, err

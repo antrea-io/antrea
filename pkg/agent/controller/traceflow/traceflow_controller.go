@@ -38,10 +38,10 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/agent/util"
-	opsv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/ops/v1alpha1"
+	crdv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha1"
 	clientsetversioned "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned"
-	opsinformers "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions/ops/v1alpha1"
-	opslisters "github.com/vmware-tanzu/antrea/pkg/client/listers/ops/v1alpha1"
+	crdinformers "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions/crd/v1alpha1"
+	crdlisters "github.com/vmware-tanzu/antrea/pkg/client/listers/crd/v1alpha1"
 	"github.com/vmware-tanzu/antrea/pkg/features"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
 	"github.com/vmware-tanzu/antrea/pkg/querier"
@@ -75,8 +75,8 @@ type Controller struct {
 	serviceLister          corelisters.ServiceLister
 	serviceListerSynced    cache.InformerSynced
 	traceflowClient        clientsetversioned.Interface
-	traceflowInformer      opsinformers.TraceflowInformer
-	traceflowLister        opslisters.TraceflowLister
+	traceflowInformer      crdinformers.TraceflowInformer
+	traceflowLister        crdlisters.TraceflowLister
 	traceflowListerSynced  cache.InformerSynced
 	ovsBridgeClient        ovsconfig.OVSBridgeClient
 	ofClient               openflow.Client
@@ -98,7 +98,7 @@ func NewTraceflowController(
 	kubeClient clientset.Interface,
 	informerFactory informers.SharedInformerFactory,
 	traceflowClient clientsetversioned.Interface,
-	traceflowInformer opsinformers.TraceflowInformer,
+	traceflowInformer crdinformers.TraceflowInformer,
 	client openflow.Client,
 	npQuerier querier.AgentNetworkPolicyInfoQuerier,
 	ovsBridgeClient ovsconfig.OVSBridgeClient,
@@ -143,7 +143,7 @@ func NewTraceflowController(
 }
 
 // enqueueTraceflow adds an object to the controller work queue.
-func (c *Controller) enqueueTraceflow(tf *opsv1alpha1.Traceflow) {
+func (c *Controller) enqueueTraceflow(tf *crdv1alpha1.Traceflow) {
 	c.queue.Add(tf.Name)
 }
 
@@ -170,19 +170,19 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 }
 
 func (c *Controller) addTraceflow(obj interface{}) {
-	tf := obj.(*opsv1alpha1.Traceflow)
+	tf := obj.(*crdv1alpha1.Traceflow)
 	klog.Infof("Processing Traceflow %s ADD event", tf.Name)
 	c.enqueueTraceflow(tf)
 }
 
 func (c *Controller) updateTraceflow(_, curObj interface{}) {
-	tf := curObj.(*opsv1alpha1.Traceflow)
+	tf := curObj.(*crdv1alpha1.Traceflow)
 	klog.Infof("Processing Traceflow %s UPDATE event", tf.Name)
 	c.enqueueTraceflow(tf)
 }
 
 func (c *Controller) deleteTraceflow(old interface{}) {
-	tf := old.(*opsv1alpha1.Traceflow)
+	tf := old.(*crdv1alpha1.Traceflow)
 	klog.Infof("Processing Traceflow %s DELETE event", tf.Name)
 	c.deallocateTag(tf)
 }
@@ -242,7 +242,7 @@ func (c *Controller) syncTraceflow(traceflowName string) error {
 		return err
 	}
 	switch tf.Status.Phase {
-	case opsv1alpha1.Running:
+	case crdv1alpha1.Running:
 		if tf.Status.DataplaneTag != 0 {
 			start := false
 			c.runningTraceflowsMutex.Lock()
@@ -265,7 +265,7 @@ func (c *Controller) syncTraceflow(traceflowName string) error {
 
 // startTraceflow deploys OVS flow entries for Traceflow and inject packet if current Node
 // is Sender Node.
-func (c *Controller) startTraceflow(tf *opsv1alpha1.Traceflow) error {
+func (c *Controller) startTraceflow(tf *crdv1alpha1.Traceflow) error {
 	err := c.validateTraceflow(tf)
 	defer func() {
 		if err != nil {
@@ -294,7 +294,7 @@ func (c *Controller) startTraceflow(tf *opsv1alpha1.Traceflow) error {
 	return err
 }
 
-func (c *Controller) validateTraceflow(tf *opsv1alpha1.Traceflow) error {
+func (c *Controller) validateTraceflow(tf *crdv1alpha1.Traceflow) error {
 	if tf.Spec.Destination.Service != "" && !features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
 		return errors.New("using Service destination requires AntreaProxy feature enabled")
 	}
@@ -312,7 +312,7 @@ func (c *Controller) validateTraceflow(tf *opsv1alpha1.Traceflow) error {
 	return nil
 }
 
-func (c *Controller) injectPacket(tf *opsv1alpha1.Traceflow) error {
+func (c *Controller) injectPacket(tf *crdv1alpha1.Traceflow) error {
 	podInterfaces := c.interfaceStore.GetContainerInterfacesByPod(tf.Spec.Source.Pod, tf.Spec.Source.Namespace)
 	// Update Traceflow phase to Running.
 	klog.V(2).Infof("Injecting packet for Traceflow %s", tf.Name)
@@ -452,19 +452,19 @@ func (c *Controller) injectPacket(tf *opsv1alpha1.Traceflow) error {
 		-1)
 }
 
-func (c *Controller) errorTraceflowCRD(tf *opsv1alpha1.Traceflow, reason string) (*opsv1alpha1.Traceflow, error) {
-	tf.Status.Phase = opsv1alpha1.Failed
+func (c *Controller) errorTraceflowCRD(tf *crdv1alpha1.Traceflow, reason string) (*crdv1alpha1.Traceflow, error) {
+	tf.Status.Phase = crdv1alpha1.Failed
 
 	type Traceflow struct {
-		Status opsv1alpha1.TraceflowStatus `json:"status,omitempty"`
+		Status crdv1alpha1.TraceflowStatus `json:"status,omitempty"`
 	}
-	patchData := Traceflow{Status: opsv1alpha1.TraceflowStatus{Phase: tf.Status.Phase, Reason: reason}}
+	patchData := Traceflow{Status: crdv1alpha1.TraceflowStatus{Phase: tf.Status.Phase, Reason: reason}}
 	payloads, _ := json.Marshal(patchData)
-	return c.traceflowClient.OpsV1alpha1().Traceflows().Patch(context.TODO(), tf.Name, types.MergePatchType, payloads, metav1.PatchOptions{}, "status")
+	return c.traceflowClient.CrdV1alpha1().Traceflows().Patch(context.TODO(), tf.Name, types.MergePatchType, payloads, metav1.PatchOptions{}, "status")
 }
 
 // Deallocate tag from cache.
-func (c *Controller) deallocateTag(tf *opsv1alpha1.Traceflow) {
+func (c *Controller) deallocateTag(tf *crdv1alpha1.Traceflow) {
 	dataplaneTag := uint8(0)
 	c.runningTraceflowsMutex.Lock()
 	// Controller could have deallocated the tag and cleared the DataplaneTag
@@ -503,7 +503,7 @@ func (c *Controller) isSender(tag uint8) bool {
 }
 
 // getTraceflowCRD gets traceflow CRD by data plane tag.
-func (c *Controller) GetRunningTraceflowCRD(tag uint8) (*opsv1alpha1.Traceflow, error) {
+func (c *Controller) GetRunningTraceflowCRD(tag uint8) (*crdv1alpha1.Traceflow, error) {
 	c.runningTraceflowsMutex.RLock()
 	defer c.runningTraceflowsMutex.RUnlock()
 	if traceflowName, ok := c.runningTraceflows[tag]; ok {

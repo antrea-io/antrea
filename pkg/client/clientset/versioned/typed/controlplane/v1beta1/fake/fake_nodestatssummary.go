@@ -1,4 +1,4 @@
-// Copyright 2020 Antrea Authors
+// Copyright 2021 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,9 +30,9 @@ type FakeNodeStatsSummaries struct {
 	Fake *FakeControlplaneV1beta1
 }
 
-var nodestatssummariesResource = schema.GroupVersionResource{Group: "controlplane.antrea.tanzu.vmware.com", Version: "v1beta1", Resource: "nodestatssummaries"}
+var nodestatssummariesResource = schema.GroupVersionResource{Group: "controlplane.antrea.io", Version: "v1beta1", Resource: "nodestatssummaries"}
 
-var nodestatssummariesKind = schema.GroupVersionKind{Group: "controlplane.antrea.tanzu.vmware.com", Version: "v1beta1", Kind: "NodeStatsSummary"}
+var nodestatssummariesKind = schema.GroupVersionKind{Group: "controlplane.antrea.io", Version: "v1beta1", Kind: "NodeStatsSummary"}
 
 // Create takes the representation of a nodeStatsSummary and creates it.  Returns the server's representation of the nodeStatsSummary, and an error, if there is any.
 func (c *FakeNodeStatsSummaries) Create(ctx context.Context, nodeStatsSummary *v1beta1.NodeStatsSummary, opts v1.CreateOptions) (result *v1beta1.NodeStatsSummary, err error) {

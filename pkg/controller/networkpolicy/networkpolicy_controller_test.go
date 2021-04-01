@@ -37,7 +37,7 @@ import (
 	"k8s.io/client-go/util/workqueue"
 
 	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
-	"github.com/vmware-tanzu/antrea/pkg/apis/core/v1alpha2"
+	"github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha2"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
 	fakeversioned "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/fake"
 	crdinformers "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions"
@@ -91,20 +91,21 @@ func newController(objects ...runtime.Object) (*fake.Clientset, *networkPolicyCo
 	addressGroupStore := store.NewAddressGroupStore()
 	internalNetworkPolicyStore := store.NewNetworkPolicyStore()
 	internalGroupStore := store.NewGroupStore()
-	cgInformer := crdInformerFactory.Core().V1alpha2().ClusterGroups()
+	cgInformer := crdInformerFactory.Crd().V1alpha2().ClusterGroups()
+	cgStore := crdInformerFactory.Crd().V1alpha2().ClusterGroups().Informer().GetStore()
 	groupEntityIndex := grouping.NewGroupEntityIndex()
 	groupingController := grouping.NewGroupEntityController(groupEntityIndex,
 		informerFactory.Core().V1().Pods(),
 		informerFactory.Core().V1().Namespaces(),
-		crdInformerFactory.Core().V1alpha2().ExternalEntities())
+		crdInformerFactory.Crd().V1alpha2().ExternalEntities())
 	npController := NewNetworkPolicyController(client,
 		crdClient,
 		groupEntityIndex,
 		informerFactory.Core().V1().Services(),
 		informerFactory.Networking().V1().NetworkPolicies(),
-		crdInformerFactory.Security().V1alpha1().ClusterNetworkPolicies(),
-		crdInformerFactory.Security().V1alpha1().NetworkPolicies(),
-		crdInformerFactory.Security().V1alpha1().Tiers(),
+		crdInformerFactory.Crd().V1alpha1().ClusterNetworkPolicies(),
+		crdInformerFactory.Crd().V1alpha1().NetworkPolicies(),
+		crdInformerFactory.Crd().V1alpha1().Tiers(),
 		cgInformer,
 		addressGroupStore,
 		appliedToGroupStore,
@@ -112,7 +113,7 @@ func newController(objects ...runtime.Object) (*fake.Clientset, *networkPolicyCo
 		internalGroupStore)
 	npController.networkPolicyListerSynced = alwaysReady
 	npController.cnpListerSynced = alwaysReady
-	npController.tierLister = crdInformerFactory.Security().V1alpha1().Tiers().Lister()
+	npController.tierLister = crdInformerFactory.Crd().V1alpha1().Tiers().Lister()
 	npController.tierListerSynced = alwaysReady
 	npController.cgInformer = cgInformer
 	npController.cgLister = cgInformer.Lister()
@@ -123,9 +124,9 @@ func newController(objects ...runtime.Object) (*fake.Clientset, *networkPolicyCo
 		npController,
 		informerFactory.Core().V1().Services().Informer().GetStore(),
 		informerFactory.Networking().V1().NetworkPolicies().Informer().GetStore(),
-		crdInformerFactory.Security().V1alpha1().ClusterNetworkPolicies().Informer().GetStore(),
-		crdInformerFactory.Security().V1alpha1().Tiers().Informer().GetStore(),
-		crdInformerFactory.Core().V1alpha2().ClusterGroups().Informer().GetStore(),
+		crdInformerFactory.Crd().V1alpha1().ClusterNetworkPolicies().Informer().GetStore(),
+		crdInformerFactory.Crd().V1alpha1().Tiers().Informer().GetStore(),
+		cgStore,
 		appliedToGroupStore,
 		addressGroupStore,
 		internalNetworkPolicyStore,
@@ -147,7 +148,7 @@ func newControllerWithoutEventHandler(objects ...runtime.Object) (*fake.Clientse
 	internalNetworkPolicyStore := store.NewNetworkPolicyStore()
 	internalGroupStore := store.NewGroupStore()
 	networkPolicyInformer := informerFactory.Networking().V1().NetworkPolicies()
-	cgStore := crdInformerFactory.Core().V1alpha2().ClusterGroups().Informer().GetStore()
+	cgStore := crdInformerFactory.Crd().V1alpha2().ClusterGroups().Informer().GetStore()
 	groupEntityIndex := grouping.NewGroupEntityIndex()
 	npController := &NetworkPolicyController{
 		kubeClient:                 client,
@@ -169,8 +170,8 @@ func newControllerWithoutEventHandler(objects ...runtime.Object) (*fake.Clientse
 		npController,
 		informerFactory.Core().V1().Services().Informer().GetStore(),
 		informerFactory.Networking().V1().NetworkPolicies().Informer().GetStore(),
-		crdInformerFactory.Security().V1alpha1().ClusterNetworkPolicies().Informer().GetStore(),
-		crdInformerFactory.Security().V1alpha1().Tiers().Informer().GetStore(),
+		crdInformerFactory.Crd().V1alpha1().ClusterNetworkPolicies().Informer().GetStore(),
+		crdInformerFactory.Crd().V1alpha1().Tiers().Informer().GetStore(),
 		cgStore,
 		appliedToGroupStore,
 		addressGroupStore,

@@ -49,8 +49,8 @@ import (
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	crdclientset "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned"
-	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/security/v1alpha1"
 	"github.com/vmware-tanzu/antrea/pkg/features"
+	legacycrdclientset "github.com/vmware-tanzu/antrea/pkg/legacyclient/clientset/versioned"
 	"github.com/vmware-tanzu/antrea/test/e2e/providers"
 )
 
@@ -147,8 +147,8 @@ type TestData struct {
 	kubeConfig         *restclient.Config
 	clientset          kubernetes.Interface
 	aggregatorClient   aggregatorclientset.Interface
-	securityClient     secv1alpha1.SecurityV1alpha1Interface
 	crdClient          crdclientset.Interface
+	legacyCrdClient    legacycrdclientset.Interface
 	logsDirForTestCase string
 }
 
@@ -764,19 +764,19 @@ func (data *TestData) createClient() error {
 	if err != nil {
 		return fmt.Errorf("error when creating kubernetes aggregatorClient: %v", err)
 	}
-	securityClient, err := secv1alpha1.NewForConfig(kubeConfig)
-	if err != nil {
-		return fmt.Errorf("error when creating Antrea securityClient: %v", err)
-	}
 	crdClient, err := crdclientset.NewForConfig(kubeConfig)
 	if err != nil {
 		return fmt.Errorf("error when creating CRD client: %v", err)
 	}
+	legacyCrdClient, err := legacycrdclientset.NewForConfig(kubeConfig)
+	if err != nil {
+		return fmt.Errorf("error when creating legacy CRD client: %v", err)
+	}
 	data.kubeConfig = kubeConfig
 	data.clientset = clientset
 	data.aggregatorClient = aggregatorClient
-	data.securityClient = securityClient
 	data.crdClient = crdClient
+	data.legacyCrdClient = legacyCrdClient
 	return nil
 }
 

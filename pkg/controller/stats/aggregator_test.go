@@ -30,7 +30,7 @@ import (
 	featuregatetesting "k8s.io/component-base/featuregate/testing"
 
 	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
-	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
+	crdv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha1"
 	statsv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/stats/v1alpha1"
 	fakeversioned "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/fake"
 	crdinformers "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions"
@@ -44,16 +44,16 @@ var (
 	np2 = &networkingv1.NetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{Namespace: "foo", Name: "baz", UID: "uid2"},
 	}
-	cnp1 = &secv1alpha1.ClusterNetworkPolicy{
+	cnp1 = &crdv1alpha1.ClusterNetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{Namespace: "", Name: "bar", UID: "uid3"},
 	}
-	cnp2 = &secv1alpha1.ClusterNetworkPolicy{
+	cnp2 = &crdv1alpha1.ClusterNetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{Namespace: "", Name: "baz", UID: "uid4"},
 	}
-	anp1 = &secv1alpha1.NetworkPolicy{
+	anp1 = &crdv1alpha1.NetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{Namespace: "foo", Name: "bar", UID: "uid5"},
 	}
-	anp2 = &secv1alpha1.NetworkPolicy{
+	anp2 = &crdv1alpha1.NetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{Namespace: "foo", Name: "baz", UID: "uid6"},
 	}
 )
@@ -491,7 +491,7 @@ func TestAggregatorCollectListGet(t *testing.T) {
 			informerFactory := informers.NewSharedInformerFactory(client, 12*time.Hour)
 			crdClient := fakeversioned.NewSimpleClientset(append(tt.existingAntreaClusterNetworkPolicies, tt.existingAntreaNetworkPolicies...)...)
 			crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, 12*time.Hour)
-			a := NewAggregator(informerFactory.Networking().V1().NetworkPolicies(), crdInformerFactory.Security().V1alpha1().ClusterNetworkPolicies(), crdInformerFactory.Security().V1alpha1().NetworkPolicies())
+			a := NewAggregator(informerFactory.Networking().V1().NetworkPolicies(), crdInformerFactory.Crd().V1alpha1().ClusterNetworkPolicies(), crdInformerFactory.Crd().V1alpha1().NetworkPolicies())
 			informerFactory.Start(stopCh)
 			crdInformerFactory.Start(stopCh)
 			go a.Run(stopCh)
@@ -537,7 +537,7 @@ func TestDeleteNetworkPolicy(t *testing.T) {
 	informerFactory := informers.NewSharedInformerFactory(client, 12*time.Hour)
 	crdClient := fakeversioned.NewSimpleClientset(cnp1, anp1)
 	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, 12*time.Hour)
-	a := NewAggregator(informerFactory.Networking().V1().NetworkPolicies(), crdInformerFactory.Security().V1alpha1().ClusterNetworkPolicies(), crdInformerFactory.Security().V1alpha1().NetworkPolicies())
+	a := NewAggregator(informerFactory.Networking().V1().NetworkPolicies(), crdInformerFactory.Crd().V1alpha1().ClusterNetworkPolicies(), crdInformerFactory.Crd().V1alpha1().NetworkPolicies())
 	informerFactory.Start(stopCh)
 	crdInformerFactory.Start(stopCh)
 	go a.Run(stopCh)
@@ -597,8 +597,8 @@ func TestDeleteNetworkPolicy(t *testing.T) {
 	require.Equal(t, 1, len(a.ListAntreaNetworkPolicyStats("")))
 
 	client.NetworkingV1().NetworkPolicies(np1.Namespace).Delete(context.TODO(), np1.Name, metav1.DeleteOptions{})
-	crdClient.SecurityV1alpha1().ClusterNetworkPolicies().Delete(context.TODO(), cnp1.Name, metav1.DeleteOptions{})
-	crdClient.SecurityV1alpha1().NetworkPolicies(anp1.Namespace).Delete(context.TODO(), anp1.Name, metav1.DeleteOptions{})
+	crdClient.CrdV1alpha1().ClusterNetworkPolicies().Delete(context.TODO(), cnp1.Name, metav1.DeleteOptions{})
+	crdClient.CrdV1alpha1().NetworkPolicies(anp1.Namespace).Delete(context.TODO(), anp1.Name, metav1.DeleteOptions{})
 	// Event handlers are asynchronous, it's supposed to finish very soon.
 	err = wait.PollImmediate(100*time.Millisecond, time.Second, func() (done bool, err error) {
 		return len(a.ListNetworkPolicyStats("")) == 0 && len(a.ListAntreaClusterNetworkPolicyStats()) == 0 && len(a.ListAntreaNetworkPolicyStats("")) == 0, nil

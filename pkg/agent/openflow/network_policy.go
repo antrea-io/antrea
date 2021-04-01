@@ -24,7 +24,7 @@ import (
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/types"
 	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
-	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
+	crdv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha1"
 	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
 	thirdpartynp "github.com/vmware-tanzu/antrea/third_party/networkpolicy"
 )
@@ -867,10 +867,10 @@ func (c *client) calculateActionFlowChangesForRule(rule *types.PolicyRule) *poli
 		// Install action flows.
 		var actionFlows []binding.Flow
 		var metricFlows []binding.Flow
-		if rule.IsAntreaNetworkPolicyRule() && *rule.Action == secv1alpha1.RuleActionDrop {
+		if rule.IsAntreaNetworkPolicyRule() && *rule.Action == crdv1alpha1.RuleActionDrop {
 			metricFlows = append(metricFlows, c.denyRuleMetricFlow(ruleOfID, isIngress))
 			actionFlows = append(actionFlows, c.conjunctionActionDenyFlow(ruleOfID, ruleTable.GetID(), rule.Priority, DispositionDrop, rule.EnableLogging))
-		} else if rule.IsAntreaNetworkPolicyRule() && *rule.Action == secv1alpha1.RuleActionReject {
+		} else if rule.IsAntreaNetworkPolicyRule() && *rule.Action == crdv1alpha1.RuleActionReject {
 			metricFlows = append(metricFlows, c.denyRuleMetricFlow(ruleOfID, isIngress))
 			actionFlows = append(actionFlows, c.conjunctionActionDenyFlow(ruleOfID, ruleTable.GetID(), rule.Priority, DispositionRej, rule.EnableLogging))
 		} else {

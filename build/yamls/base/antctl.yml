@@ -13,6 +13,7 @@ rules:
   - apiGroups:
       - controlplane.antrea.tanzu.vmware.com
       - networking.antrea.tanzu.vmware.com
+      - controlplane.antrea.io
     resources:
       - networkpolicies
       - appliedtogroups
@@ -22,6 +23,7 @@ rules:
       - list
   - apiGroups:
       - stats.antrea.tanzu.vmware.com
+      - stats.antrea.io
     resources:
       - networkpolicystats
       - antreaclusternetworkpolicystats
@@ -31,6 +33,7 @@ rules:
       - list
   - apiGroups:
       - system.antrea.tanzu.vmware.com
+      - system.antrea.io
     resources:
       - controllerinfos
       - agentinfos
@@ -38,6 +41,7 @@ rules:
       - get
   - apiGroups:
       - system.antrea.tanzu.vmware.com
+      - system.antrea.io
     resources:
       - supportbundles
     verbs:
@@ -45,6 +49,7 @@ rules:
       - post
   - apiGroups:
       - system.antrea.tanzu.vmware.com
+      - system.antrea.io
     resources:
       - supportbundles/download
     verbs:

@@ -3,6 +3,9 @@ package e2e
 import (
 	"io"
 	"os"
+	"time"
+
+	"k8s.io/klog"
 )
 
 // IsDirEmpty checks whether a directory is empty or not.
@@ -18,4 +21,12 @@ func IsDirEmpty(name string) (bool, error) {
 		return true, nil
 	}
 	return false, err
+}
+
+func timeCost() func(string) {
+	start := time.Now()
+	return func(status string) {
+		tc := time.Since(start)
+		klog.Infof("Confirming %s status costs %v", status, tc)
+	}
 }

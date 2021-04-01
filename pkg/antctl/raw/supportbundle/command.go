@@ -290,7 +290,7 @@ func downloadAll(agentClients map[string]*rest.RESTClient, controllerClient *res
 func createAgentClients(k8sClientset kubernetes.Interface, antreaClientset antrea.Interface, cfgTmpl *rest.Config, nameFilter string, nameList []string) (map[string]*rest.RESTClient, error) {
 	clients := map[string]*rest.RESTClient{}
 	nodeAgentInfoMap := map[string]string{}
-	agentInfoList, err := antreaClientset.ClusterinformationV1beta1().AntreaAgentInfos().List(context.TODO(), metav1.ListOptions{ResourceVersion: "0"})
+	agentInfoList, err := antreaClientset.CrdV1beta1().AntreaAgentInfos().List(context.TODO(), metav1.ListOptions{ResourceVersion: "0"})
 	if err != nil {
 		return nil, err
 	}
@@ -344,7 +344,7 @@ func createAgentClients(k8sClientset kubernetes.Interface, antreaClientset antre
 }
 
 func createControllerClient(k8sClientset kubernetes.Interface, antreaClientset antrea.Interface, cfgTmpl *rest.Config) (*rest.RESTClient, error) {
-	controllerInfo, err := antreaClientset.ClusterinformationV1beta1().AntreaControllerInfos().Get(context.TODO(), "antrea-controller", metav1.GetOptions{})
+	controllerInfo, err := antreaClientset.CrdV1beta1().AntreaControllerInfos().Get(context.TODO(), "antrea-controller", metav1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}

@@ -27,7 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog"
 
-	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
+	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha1"
 )
 
 var (
@@ -153,7 +153,7 @@ func (n *NetworkPolicyController) initTier(t *secv1alpha1.Tier) {
 	retryAttempt := 1
 	for {
 		klog.V(2).Infof("Creating %s Tier", t.Name)
-		_, err = n.crdClient.SecurityV1alpha1().Tiers().Create(context.TODO(), t, metav1.CreateOptions{})
+		_, err = n.crdClient.CrdV1alpha1().Tiers().Create(context.TODO(), t, metav1.CreateOptions{})
 		// Attempt to recreate Tier after a backoff only if it does not exist.
 		if err != nil && !errors.IsAlreadyExists(err) {
 			klog.Warningf("Failed to create %s Tier on init: %v. Retry attempt: %d", t.Name, err, retryAttempt)
@@ -181,7 +181,7 @@ func (n *NetworkPolicyController) updateTier(t *secv1alpha1.Tier) {
 	retryAttempt := 1
 	for {
 		klog.V(2).Infof("Updating %s Tier", t.Name)
-		_, err = n.crdClient.SecurityV1alpha1().Tiers().Update(context.TODO(), t, metav1.UpdateOptions{})
+		_, err = n.crdClient.CrdV1alpha1().Tiers().Update(context.TODO(), t, metav1.UpdateOptions{})
 		// Attempt to update Tier after a backoff.
 		if err != nil {
 			klog.Warningf("Failed to update %s Tier on init: %v. Retry attempt: %d", t.Name, err, retryAttempt)

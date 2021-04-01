@@ -13,7 +13,7 @@
 // limitations under the License.
 
 // +k8s:deepcopy-gen=package
-// +groupName=stats.antrea.tanzu.vmware.com
+// +groupName=stats.antrea.io
 
 // Package stats is the internal version of the Antrea Stats API.
 // Refer to https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api_changes.md doc

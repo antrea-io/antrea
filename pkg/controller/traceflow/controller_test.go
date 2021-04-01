@@ -29,7 +29,7 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
 
-	ops "github.com/vmware-tanzu/antrea/pkg/apis/ops/v1alpha1"
+	crdv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha1"
 	"github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned"
 	fakeversioned "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/fake"
 	crdinformers "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions"
@@ -53,7 +53,7 @@ func newController() *traceflowController {
 	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, informerDefaultResync)
 	controller := NewTraceflowController(crdClient,
 		informerFactory.Core().V1().Pods(),
-		crdInformerFactory.Ops().V1alpha1().Traceflows())
+		crdInformerFactory.Crd().V1alpha1().Traceflows())
 	controller.traceflowListerSynced = alwaysReady
 	return &traceflowController{
 		controller,
@@ -79,46 +79,46 @@ func TestTraceflow(t *testing.T) {
 		return len(tfc.runningTraceflows)
 	}
 
-	tf1 := ops.Traceflow{
+	tf1 := crdv1alpha1.Traceflow{
 		ObjectMeta: metav1.ObjectMeta{Name: "tf1", UID: "uid1"},
-		Spec: ops.TraceflowSpec{
-			Source:      ops.Source{Namespace: "ns1", Pod: "pod1"},
-			Destination: ops.Destination{Namespace: "ns2", Pod: "pod2"},
+		Spec: crdv1alpha1.TraceflowSpec{
+			Source:      crdv1alpha1.Source{Namespace: "ns1", Pod: "pod1"},
+			Destination: crdv1alpha1.Destination{Namespace: "ns2", Pod: "pod2"},
 		},
 	}
 
-	tfc.client.OpsV1alpha1().Traceflows().Create(context.TODO(), &tf1, metav1.CreateOptions{})
-	res, _ := tfc.waitForTraceflow("tf1", ops.Running, time.Second)
+	tfc.client.CrdV1alpha1().Traceflows().Create(context.TODO(), &tf1, metav1.CreateOptions{})
+	res, _ := tfc.waitForTraceflow("tf1", crdv1alpha1.Running, time.Second)
 	assert.NotNil(t, res)
 	// DataplaneTag should be allocated by Controller.
 	assert.True(t, res.Status.DataplaneTag > 0)
 	assert.Equal(t, numRunningTraceflows(), 1)
 
 	// Test Controller handling of successful Traceflow.
-	res.Status.Results = []ops.NodeResult{
+	res.Status.Results = []crdv1alpha1.NodeResult{
 		// Sender
 		{
-			Observations: []ops.Observation{{Component: ops.SpoofGuard}},
+			Observations: []crdv1alpha1.Observation{{Component: crdv1alpha1.ComponentSpoofGuard}},
 		},
 		// Receiver
 		{
-			Observations: []ops.Observation{{Action: ops.Delivered}},
+			Observations: []crdv1alpha1.Observation{{Action: crdv1alpha1.ActionDelivered}},
 		},
 	}
-	tfc.client.OpsV1alpha1().Traceflows().Update(context.TODO(), res, metav1.UpdateOptions{})
-	res, _ = tfc.waitForTraceflow("tf1", ops.Succeeded, time.Second)
+	tfc.client.CrdV1alpha1().Traceflows().Update(context.TODO(), res, metav1.UpdateOptions{})
+	res, _ = tfc.waitForTraceflow("tf1", crdv1alpha1.Succeeded, time.Second)
 	assert.NotNil(t, res)
 	// DataplaneTag should be deallocated by Controller.
 	assert.True(t, res.Status.DataplaneTag == 0)
 	assert.Equal(t, numRunningTraceflows(), 0)
-	tfc.client.OpsV1alpha1().Traceflows().Delete(context.TODO(), "tf1", metav1.DeleteOptions{})
+	tfc.client.CrdV1alpha1().Traceflows().Delete(context.TODO(), "tf1", metav1.DeleteOptions{})
 
 	// Test Traceflow timeout.
 	startTime := time.Now()
-	tfc.client.OpsV1alpha1().Traceflows().Create(context.TODO(), &tf1, metav1.CreateOptions{})
-	res, _ = tfc.waitForTraceflow("tf1", ops.Running, time.Second)
+	tfc.client.CrdV1alpha1().Traceflows().Create(context.TODO(), &tf1, metav1.CreateOptions{})
+	res, _ = tfc.waitForTraceflow("tf1", crdv1alpha1.Running, time.Second)
 	assert.NotNil(t, res)
-	res, _ = tfc.waitForTraceflow("tf1", ops.Failed, timeoutDuration*2)
+	res, _ = tfc.waitForTraceflow("tf1", crdv1alpha1.Failed, timeoutDuration*2)
 	assert.NotNil(t, res)
 	assert.True(t, time.Now().Sub(startTime) >= timeoutDuration)
 	assert.Equal(t, res.Status.Reason, traceflowTimeout)
@@ -128,11 +128,11 @@ func TestTraceflow(t *testing.T) {
 	close(stopCh)
 }
 
-func (tfc *traceflowController) waitForTraceflow(name string, phase ops.TraceflowPhase, timeout time.Duration) (*ops.Traceflow, error) {
-	var tf *ops.Traceflow
+func (tfc *traceflowController) waitForTraceflow(name string, phase crdv1alpha1.TraceflowPhase, timeout time.Duration) (*crdv1alpha1.Traceflow, error) {
+	var tf *crdv1alpha1.Traceflow
 	var err error
 	if err = wait.Poll(100*time.Millisecond, timeout, func() (bool, error) {
-		tf, err = tfc.client.OpsV1alpha1().Traceflows().Get(context.TODO(), name, metav1.GetOptions{})
+		tf, err = tfc.client.CrdV1alpha1().Traceflows().Get(context.TODO(), name, metav1.GetOptions{})
 		if err != nil || tf.Status.Phase != phase {
 			return false, nil
 		}
@@ -147,7 +147,7 @@ func newCRDClientset() *fakeversioned.Clientset {
 	client := fakeversioned.NewSimpleClientset()
 
 	client.PrependReactor("create", "traceflows", k8stesting.ReactionFunc(func(action k8stesting.Action) (bool, runtime.Object, error) {
-		tf := action.(k8stesting.CreateAction).GetObject().(*ops.Traceflow)
+		tf := action.(k8stesting.CreateAction).GetObject().(*crdv1alpha1.Traceflow)
 
 		// Fake client does not set CreationTimestamp.
 		if tf.ObjectMeta.CreationTimestamp == (metav1.Time{}) {

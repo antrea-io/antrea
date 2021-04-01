@@ -24,7 +24,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 
-	"github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1"
+	"github.com/vmware-tanzu/antrea/pkg/apis/crd/v1beta1"
 )
 
 type fakeControllerQuerier struct{}

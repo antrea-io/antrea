@@ -26,7 +26,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	interfacestoretest "github.com/vmware-tanzu/antrea/pkg/agent/interfacestore/testing"
 	openflowtest "github.com/vmware-tanzu/antrea/pkg/agent/openflow/testing"
-	"github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1"
+	"github.com/vmware-tanzu/antrea/pkg/apis/crd/v1beta1"
 	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
 	ovsconfigtest "github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig/testing"
 	queriertest "github.com/vmware-tanzu/antrea/pkg/querier/testing"

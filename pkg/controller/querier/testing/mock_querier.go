@@ -1,4 +1,4 @@
-// Copyright 2020 Antrea Authors
+// Copyright 2021 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@ package testing
 
 import (
 	gomock "github.com/golang/mock/gomock"
-	v1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1"
+	v1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1beta1"
 	reflect "reflect"
 )
 

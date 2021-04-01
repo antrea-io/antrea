@@ -20,7 +20,7 @@ import (
 )
 
 // GroupName is the group name use in this package
-const GroupName = "stats.antrea.tanzu.vmware.com"
+const GroupName = "stats.antrea.io"
 
 // SchemeGroupVersion is group version used to register these objects
 var SchemeGroupVersion = schema.GroupVersion{Group: GroupName, Version: runtime.APIVersionInternal}

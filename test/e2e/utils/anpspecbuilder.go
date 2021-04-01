@@ -19,11 +19,12 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
-	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
+	crdv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha1"
+	legacysecv1alpha1 "github.com/vmware-tanzu/antrea/pkg/legacyapis/security/v1alpha1"
 )
 
 type AntreaNetworkPolicySpecBuilder struct {
-	Spec      secv1alpha1.NetworkPolicySpec
+	Spec      crdv1alpha1.NetworkPolicySpec
 	Name      string
 	Namespace string
 }
@@ -33,14 +34,30 @@ type ANPAppliedToSpec struct {
 	PodSelectorMatchExp []metav1.LabelSelectorRequirement
 }
 
-func (b *AntreaNetworkPolicySpecBuilder) Get() *secv1alpha1.NetworkPolicy {
+func (b *AntreaNetworkPolicySpecBuilder) Get() *crdv1alpha1.NetworkPolicy {
 	if b.Spec.Ingress == nil {
-		b.Spec.Ingress = []secv1alpha1.Rule{}
+		b.Spec.Ingress = []crdv1alpha1.Rule{}
 	}
 	if b.Spec.Egress == nil {
-		b.Spec.Egress = []secv1alpha1.Rule{}
+		b.Spec.Egress = []crdv1alpha1.Rule{}
 	}
-	return &secv1alpha1.NetworkPolicy{
+	return &crdv1alpha1.NetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      b.Name,
+			Namespace: b.Namespace,
+		},
+		Spec: b.Spec,
+	}
+}
+
+func (b *AntreaNetworkPolicySpecBuilder) GetLegacy() *legacysecv1alpha1.NetworkPolicy {
+	if b.Spec.Ingress == nil {
+		b.Spec.Ingress = []crdv1alpha1.Rule{}
+	}
+	if b.Spec.Egress == nil {
+		b.Spec.Egress = []crdv1alpha1.Rule{}
+	}
+	return &legacysecv1alpha1.NetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      b.Name,
 			Namespace: b.Namespace,
@@ -74,7 +91,7 @@ func (b *AntreaNetworkPolicySpecBuilder) SetAppliedToGroup(specs []ANPAppliedToS
 }
 
 func (b *AntreaNetworkPolicySpecBuilder) GetAppliedToPeer(podSelector map[string]string,
-	podSelectorMatchExp []metav1.LabelSelectorRequirement) secv1alpha1.NetworkPolicyPeer {
+	podSelectorMatchExp []metav1.LabelSelectorRequirement) crdv1alpha1.NetworkPolicyPeer {
 	var ps *metav1.LabelSelector
 	if podSelector != nil {
 		ps = &metav1.LabelSelector{
@@ -89,7 +106,7 @@ func (b *AntreaNetworkPolicySpecBuilder) GetAppliedToPeer(podSelector map[string
 			MatchExpressions: podSelectorMatchExp,
 		}
 	}
-	return secv1alpha1.NetworkPolicyPeer{
+	return crdv1alpha1.NetworkPolicyPeer{
 		PodSelector: ps,
 	}
 }
@@ -98,12 +115,12 @@ func (b *AntreaNetworkPolicySpecBuilder) AddIngress(protoc v1.Protocol,
 	port *int32, portName *string, endPort *int32, cidr *string,
 	podSelector map[string]string, nsSelector map[string]string,
 	podSelectorMatchExp []metav1.LabelSelectorRequirement, nsSelectorMatchExp []metav1.LabelSelectorRequirement,
-	ruleAppliedToSpecs []ANPAppliedToSpec, action secv1alpha1.RuleAction, name string) *AntreaNetworkPolicySpecBuilder {
+	ruleAppliedToSpecs []ANPAppliedToSpec, action crdv1alpha1.RuleAction, name string) *AntreaNetworkPolicySpecBuilder {
 
 	var ps, ns *metav1.LabelSelector
-	var appliedTos []secv1alpha1.NetworkPolicyPeer
+	var appliedTos []crdv1alpha1.NetworkPolicyPeer
 	if b.Spec.Ingress == nil {
-		b.Spec.Ingress = []secv1alpha1.Rule{}
+		b.Spec.Ingress = []crdv1alpha1.Rule{}
 	}
 
 	if podSelector != nil {
@@ -132,30 +149,30 @@ func (b *AntreaNetworkPolicySpecBuilder) AddIngress(protoc v1.Protocol,
 			MatchExpressions: nsSelectorMatchExp,
 		}
 	}
-	var ipBlock *secv1alpha1.IPBlock
+	var ipBlock *crdv1alpha1.IPBlock
 	if cidr != nil {
-		ipBlock = &secv1alpha1.IPBlock{
+		ipBlock = &crdv1alpha1.IPBlock{
 			CIDR: *cidr,
 		}
 	}
 	for _, at := range ruleAppliedToSpecs {
 		appliedTos = append(appliedTos, b.GetAppliedToPeer(at.PodSelector, at.PodSelectorMatchExp))
 	}
-	var policyPeer []secv1alpha1.NetworkPolicyPeer
+	var policyPeer []crdv1alpha1.NetworkPolicyPeer
 	if ps != nil || ns != nil || ipBlock != nil {
-		policyPeer = []secv1alpha1.NetworkPolicyPeer{{
+		policyPeer = []crdv1alpha1.NetworkPolicyPeer{{
 			PodSelector:       ps,
 			NamespaceSelector: ns,
 			IPBlock:           ipBlock,
 		}}
 	}
 
-	var ports []secv1alpha1.NetworkPolicyPort
+	var ports []crdv1alpha1.NetworkPolicyPort
 	if port != nil && portName != nil {
 		panic("specify portname or port, not both")
 	}
 	if portName != nil {
-		ports = []secv1alpha1.NetworkPolicyPort{
+		ports = []crdv1alpha1.NetworkPolicyPort{
 			{
 				Port:     &intstr.IntOrString{Type: intstr.String, StrVal: *portName},
 				Protocol: &protoc,
@@ -167,7 +184,7 @@ func (b *AntreaNetworkPolicySpecBuilder) AddIngress(protoc v1.Protocol,
 		if port != nil {
 			pVal = &intstr.IntOrString{IntVal: *port}
 		}
-		ports = []secv1alpha1.NetworkPolicyPort{
+		ports = []crdv1alpha1.NetworkPolicyPort{
 			{
 				Port:     pVal,
 				EndPort:  endPort,
@@ -176,7 +193,7 @@ func (b *AntreaNetworkPolicySpecBuilder) AddIngress(protoc v1.Protocol,
 		}
 	}
 
-	newRule := secv1alpha1.Rule{
+	newRule := crdv1alpha1.Rule{
 		From:      policyPeer,
 		Ports:     ports,
 		Action:    &action,
@@ -191,7 +208,7 @@ func (b *AntreaNetworkPolicySpecBuilder) AddEgress(protoc v1.Protocol,
 	port *int32, portName *string, endPort *int32, cidr *string,
 	podSelector map[string]string, nsSelector map[string]string,
 	podSelectorMatchExp []metav1.LabelSelectorRequirement, nsSelectorMatchExp []metav1.LabelSelectorRequirement,
-	ruleAppliedToSpecs []ANPAppliedToSpec, action secv1alpha1.RuleAction, name string) *AntreaNetworkPolicySpecBuilder {
+	ruleAppliedToSpecs []ANPAppliedToSpec, action crdv1alpha1.RuleAction, name string) *AntreaNetworkPolicySpecBuilder {
 
 	// For simplicity, we just reuse the Ingress code here.  The underlying data model for ingress/egress is identical
 	// With the exception of calling the rule `To` vs. `From`.
@@ -200,7 +217,7 @@ func (b *AntreaNetworkPolicySpecBuilder) AddEgress(protoc v1.Protocol,
 		podSelectorMatchExp, nsSelectorMatchExp, ruleAppliedToSpecs, action, name)
 	theRule := c.Get().Spec.Ingress[0]
 
-	b.Spec.Egress = append(b.Spec.Egress, secv1alpha1.Rule{
+	b.Spec.Egress = append(b.Spec.Egress, crdv1alpha1.Rule{
 		To:        theRule.From,
 		Ports:     theRule.Ports,
 		Action:    theRule.Action,

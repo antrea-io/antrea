@@ -26,7 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog"
 
-	"github.com/vmware-tanzu/antrea/pkg/apis/core/v1alpha2"
+	"github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha2"
 	"github.com/vmware-tanzu/antrea/pkg/controller/types"
 	utilsets "github.com/vmware-tanzu/antrea/pkg/util/sets"
 )

@@ -22,8 +22,8 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog"
 
-	"github.com/vmware-tanzu/antrea/pkg/apis/core/v1alpha2"
-	corev1a2informers "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions/core/v1alpha2"
+	"github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha2"
+	crdv1a2informers "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions/crd/v1alpha2"
 	"github.com/vmware-tanzu/antrea/pkg/features"
 )
 
@@ -38,7 +38,7 @@ type GroupEntityController struct {
 	// podListerSynced is a function which returns true if the Pod shared informer has been synced at least once.
 	podListerSynced cache.InformerSynced
 
-	externalEntityInformer corev1a2informers.ExternalEntityInformer
+	externalEntityInformer crdv1a2informers.ExternalEntityInformer
 	// externalEntityListerSynced is a function which returns true if the ExternalEntity shared informer has been synced at least once.
 	externalEntityListerSynced cache.InformerSynced
 
@@ -52,7 +52,7 @@ type GroupEntityController struct {
 func NewGroupEntityController(groupEntityIndex *GroupEntityIndex,
 	podInformer coreinformers.PodInformer,
 	namespaceInformer coreinformers.NamespaceInformer,
-	externalEntityInformer corev1a2informers.ExternalEntityInformer) *GroupEntityController {
+	externalEntityInformer crdv1a2informers.ExternalEntityInformer) *GroupEntityController {
 	c := &GroupEntityController{
 		groupEntityIndex:           groupEntityIndex,
 		podInformer:                podInformer,
