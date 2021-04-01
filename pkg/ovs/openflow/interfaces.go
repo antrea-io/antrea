@@ -107,7 +107,7 @@ type Bridge interface {
 	// SubscribePacketIn registers a consumer to listen to PacketIn messages matching the provided reason. When the
 	// Bridge receives a PacketIn message with the specified reason, it sends the message to the consumer using the
 	// provided channel.
-	SubscribePacketIn(reason uint8, ch chan *ofctrl.PacketIn) error
+	SubscribePacketIn(reason uint8, pktInQueue *PacketInQueue) error
 	// AddTLVMap adds a TLV mapping with OVS field tun_metadataX. The value loaded in tun_metadataX is transported by
 	// Geneve header with the specified <optClass, optType, optLength>. The value of OptLength must be a multiple of 4.
 	// The value loaded into field tun_metadataX must fit within optLength bytes.

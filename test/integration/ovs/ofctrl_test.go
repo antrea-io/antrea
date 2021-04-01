@@ -27,6 +27,7 @@ import (
 	"github.com/contiv/ofnet/ofctrl"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/time/rate"
 
 	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
@@ -570,8 +571,8 @@ func TestPacketOutIn(t *testing.T) {
 	defer bridge.Disconnect()
 
 	reason := uint8(1)
-	pktCh := make(chan *ofctrl.PacketIn)
-	err = bridge.SubscribePacketIn(reason, pktCh)
+	pktInQueue := binding.NewPacketInQueue(200, rate.Limit(100))
+	err = bridge.SubscribePacketIn(reason, pktInQueue)
 	require.Nil(t, err)
 
 	srcMAC, _ := net.ParseMAC("11:11:11:11:11:11")
@@ -588,7 +589,7 @@ func TestPacketOutIn(t *testing.T) {
 	stopCh := make(chan struct{})
 
 	go func() {
-		pktIn := <-pktCh
+		pktIn := pktInQueue.GetRateLimited(make(chan struct{}))
 		matchers := pktIn.GetMatches()
 
 		reg2Match := matchers.GetMatchByName("NXM_NX_REG2")
