@@ -1,7 +1,7 @@
 --config
 /etc/flow-aggregator/flow-aggregator.conf
 --logtostderr=false
---log_dir=/var/log/flowaggregator
+--log_dir=/var/log/antrea/flow-aggregator
 --alsologtostderr
 --log_file_max_size=100
 --log_file_max_num=4
