@@ -93,13 +93,12 @@ CNI_BINARIES_VERSION=$(head -n 1 build/images/deps/cni-binaries-version)
 # image! This is a bit more inconvenient to maintain, but we rarely introduce
 # new base images in the build chain.
 if $PULL; then
-    # Always pull ubuntu:20.04 from DockerHub even if DOCKER_REGISTRY is set, as
-    # it is not an Antrea image and there should be no rate-limiting for
-    # Canonical images.
-    docker pull $PLATFORM_ARG ubuntu:20.04
     if [[ ${DOCKER_REGISTRY} == "" ]]; then
+        docker pull $PLATFORM_ARG ubuntu:20.04
         docker pull $PLATFORM_ARG golang:1.15
     else
+        docker pull ${DOCKER_REGISTRY}/antrea/ubuntu:20.04
+        docker tag ${DOCKER_REGISTRY}/antrea/ubuntu:20.04 ubuntu:20.04
         docker pull ${DOCKER_REGISTRY}/antrea/golang:1.15
         docker tag ${DOCKER_REGISTRY}/antrea/golang:1.15 golang:1.15
     fi
