@@ -21,12 +21,6 @@ UNAME_S := $(shell uname -s)
 USERID  := $(shell id -u)
 GRPID   := $(shell id -g)
 
-# If NO_PULL is set, base Docker images will not be pulled.
-# If DOCKER_REGISTRY is set, we always set NO_PULL.
-ifneq ($(DOCKER_REGISTRY),)
-	NO_PULL := 1
-endif
-
 .PHONY: bin
 bin:
 	@mkdir -p $(BINDIR)
