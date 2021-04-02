@@ -60,13 +60,23 @@ var protocols = map[string]int32{
 	"udp":  17,
 }
 
+type CapturedPacket struct {
+	SrcIP           string                    `json:"srcIP" yaml:"srcIP"`
+	DstIP           string                    `json:"dstIP" yaml:"dstIP"`
+	Length          uint16                    `json:"length" yaml:"length"`
+	IPHeader        *v1alpha1.IPHeader        `json:"ipHeader,omitempty" yaml:"ipHeader,omitempty"`
+	IPv6Header      *v1alpha1.IPv6Header      `json:"ipv6Header,omitempty" yaml:"ipv6Header,omitempty"`
+	TransportHeader *v1alpha1.TransportHeader `json:"transportHeader,omitempty" yaml:"tranportHeader,omitempty"`
+}
+
 // Response is the response of antctl Traceflow.
 type Response struct {
-	Name        string                  `json:"name" yaml:"name"`                                   // Traceflow name
-	Phase       v1alpha1.TraceflowPhase `json:"phase,omitempty" yaml:"phase,omitempty"`             // Traceflow phase
-	Source      string                  `json:"source,omitempty" yaml:"source,omitempty"`           // Traceflow source, e.g. "default/pod0"
-	Destination string                  `json:"destination,omitempty" yaml:"destination,omitempty"` // Traceflow destination, e.g. "default/pod1"
-	NodeResults []v1alpha1.NodeResult   `json:"results,omitempty" yaml:"results,omitempty"`         // Traceflow node results
+	Name           string                  `json:"name" yaml:"name"`                                         // Traceflow name
+	Phase          v1alpha1.TraceflowPhase `json:"phase,omitempty" yaml:"phase,omitempty"`                   // Traceflow phase
+	Source         string                  `json:"source,omitempty" yaml:"source,omitempty"`                 // Traceflow source, e.g. "default/pod0"
+	Destination    string                  `json:"destination,omitempty" yaml:"destination,omitempty"`       // Traceflow destination, e.g. "default/pod1"
+	NodeResults    []v1alpha1.NodeResult   `json:"results,omitempty" yaml:"results,omitempty"`               // Traceflow node results
+	CapturedPacket *CapturedPacket         `json:"capturedPacket,omitempty" yaml:"capturedPacket,omitempty"` // Captured packet in live-traffic Traceflow
 }
 
 func init() {
@@ -357,6 +367,18 @@ func output(tf *v1alpha1.Traceflow) error {
 	} else if len(tf.Spec.Destination.Service) != 0 {
 		r.Destination = fmt.Sprintf("%s/%s", tf.Spec.Destination.Namespace, tf.Spec.Destination.Service)
 	}
+
+	pkt := tf.Status.CapturedPacket
+	if pkt != nil {
+		r.CapturedPacket = &CapturedPacket{SrcIP: pkt.SrcIP, DstIP: pkt.DstIP, Length: pkt.Length, IPv6Header: pkt.IPv6Header}
+		if pkt.IPv6Header == nil {
+			r.CapturedPacket.IPHeader = &pkt.IPHeader
+		}
+		if pkt.TransportHeader.TCP != nil || pkt.TransportHeader.UDP != nil || pkt.TransportHeader.ICMP != nil {
+			r.CapturedPacket.TransportHeader = &pkt.TransportHeader
+		}
+	}
+
 	if option.outputType == "json" {
 		if err := jsonOutput(&r); err != nil {
 			return fmt.Errorf("error when converting output to json: %w", err)
