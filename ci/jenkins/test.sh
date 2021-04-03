@@ -185,7 +185,7 @@ function deliver_antrea_windows {
     docker images | grep '<none>' | awk '{print $3}' | xargs -r docker rmi || true
     chmod -R g-w build/images/ovs
     chmod -R g-w build/images/base
-    ./hack/build-antrea-ubuntu-all.sh --pull
+    DOCKER_REGISTRY="${DOCKER_REGISTRY}" ./hack/build-antrea-ubuntu-all.sh --pull
     if [[ "$TESTCASE" =~ "networkpolicy" ]]; then
         make windows-bin
     fi
@@ -284,7 +284,7 @@ function deliver_antrea {
     fi
     chmod -R g-w build/images/ovs
     chmod -R g-w build/images/base
-    ./hack/build-antrea-ubuntu-all.sh --pull
+    DOCKER_REGISTRY="${DOCKER_REGISTRY}" ./hack/build-antrea-ubuntu-all.sh --pull
     make flow-aggregator-image
 
     echo "====== Delivering Antrea to all the Nodes ======"

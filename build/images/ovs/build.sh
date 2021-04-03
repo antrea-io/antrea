@@ -89,7 +89,12 @@ OVS_VERSION=$(head -n 1 ../deps/ovs-version)
 # See https://github.com/moby/moby/issues/34715.
 
 if $PULL; then
-    docker pull $PLATFORM_ARG ubuntu:20.04
+    if [[ ${DOCKER_REGISTRY} == "" ]]; then
+        docker pull $PLATFORM_ARG ubuntu:20.04
+    else
+        docker pull ${DOCKER_REGISTRY}/antrea/ubuntu:20.04
+        docker tag ${DOCKER_REGISTRY}/antrea/ubuntu:20.04 ubuntu:20.04
+    fi
     IMAGES_LIST=(
         "antrea/openvswitch-debs:$OVS_VERSION"
         "antrea/openvswitch:$OVS_VERSION"

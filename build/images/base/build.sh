@@ -83,7 +83,12 @@ OVS_VERSION=$(head -n 1 ../deps/ovs-version)
 CNI_BINARIES_VERSION=$(head -n 1 ../deps/cni-binaries-version)
 
 if $PULL; then
-    docker pull $PLATFORM_ARG ubuntu:20.04
+    if [[ ${DOCKER_REGISTRY} == "" ]]; then
+        docker pull $PLATFORM_ARG ubuntu:20.04
+    else
+        docker pull ${DOCKER_REGISTRY}/antrea/ubuntu:20.04
+        docker tag ${DOCKER_REGISTRY}/antrea/ubuntu:20.04 ubuntu:20.04
+    fi
     IMAGES_LIST=(
         "antrea/openvswitch:$OVS_VERSION"
         "antrea/cni-binaries:$CNI_BINARIES_VERSION"
