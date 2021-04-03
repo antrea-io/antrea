@@ -222,6 +222,11 @@ func (in *GroupSpec) DeepCopyInto(out *GroupSpec) {
 		*out = new(v1alpha1.IPBlock)
 		**out = **in
 	}
+	if in.IPBlocks != nil {
+		in, out := &in.IPBlocks, &out.IPBlocks
+		*out = make([]v1alpha1.IPBlock, len(*in))
+		copy(*out, *in)
+	}
 	if in.ServiceReference != nil {
 		in, out := &in.ServiceReference, &out.ServiceReference
 		*out = new(ServiceReference)

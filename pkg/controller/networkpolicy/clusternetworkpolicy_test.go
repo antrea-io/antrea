@@ -1280,7 +1280,7 @@ func TestProcessRefCG(t *testing.T) {
 		name        string
 		inputCG     string
 		expectedAG  string
-		expectedIPB *controlplane.IPBlock
+		expectedIPB []controlplane.IPBlock
 	}{
 		{
 			name:        "empty-cg-no-result",
@@ -1304,9 +1304,11 @@ func TestProcessRefCG(t *testing.T) {
 			name:       "cg-with-ipblock",
 			inputCG:    cgB.Name,
 			expectedAG: "",
-			expectedIPB: &controlplane.IPBlock{
-				CIDR:   *cidrIPNet,
-				Except: []controlplane.IPNet{},
+			expectedIPB: []controlplane.IPBlock{
+				{
+					CIDR:   *cidrIPNet,
+					Except: []controlplane.IPNet{},
+				},
 			},
 		},
 	}

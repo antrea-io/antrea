@@ -1182,9 +1182,9 @@ func testACNPClusterGroupUpdate(t *testing.T) {
 func testACNPClusterGroupAppliedToPodAdd(t *testing.T, data *TestData) {
 	cgName := "cg-pod-custom-pod-zj"
 	cgBuilder := &ClusterGroupSpecBuilder{}
-	cgBuilder = cgBuilder.SetName(cgName)
-	cgBuilder = cgBuilder.SetNamespaceSelector(map[string]string{"ns": "z"}, nil)
-	cgBuilder = cgBuilder.SetPodSelector(map[string]string{"pod": "j"}, nil)
+	cgBuilder = cgBuilder.SetName(cgName).
+		SetNamespaceSelector(map[string]string{"ns": "z"}, nil).
+		SetPodSelector(map[string]string{"pod": "j"}, nil)
 	builder := &ClusterNetworkPolicySpecBuilder{}
 	builder = builder.SetName("acnp-deny-cg-with-zj-to-xj-egress").
 		SetPriority(1.0).
@@ -1226,14 +1226,18 @@ func testACNPClusterGroupAppliedToPodAdd(t *testing.T, data *TestData) {
 func testACNPClusterGroupRefRulePodAdd(t *testing.T, data *TestData) {
 	cgName := "cg-pod-custom-pod-zk"
 	cgBuilder := &ClusterGroupSpecBuilder{}
-	cgBuilder = cgBuilder.SetName(cgName)
-	cgBuilder = cgBuilder.SetNamespaceSelector(map[string]string{"ns": "z"}, nil)
-	cgBuilder = cgBuilder.SetPodSelector(map[string]string{"pod": "k"}, nil)
+	cgBuilder = cgBuilder.SetName(cgName).
+		SetNamespaceSelector(map[string]string{"ns": "z"}, nil).
+		SetPodSelector(map[string]string{"pod": "k"}, nil)
 	builder := &ClusterNetworkPolicySpecBuilder{}
 	builder = builder.SetName("acnp-deny-xk-to-cg-with-zk-egress").
 		SetPriority(1.0).
-		SetAppliedToGroup([]ACNPAppliedToSpec{{PodSelector: map[string]string{"pod": "k"},
-			NSSelector: map[string]string{"ns": "x"}}})
+		SetAppliedToGroup([]ACNPAppliedToSpec{
+			{
+				PodSelector: map[string]string{"pod": "k"},
+				NSSelector:  map[string]string{"ns": "x"},
+			},
+		})
 	builder.AddEgress(v1.ProtocolTCP, &p80, nil, nil, nil, nil, nil,
 		nil, nil, nil, crdv1alpha1.RuleActionDrop, cgName, "")
 	cp := []*CustomProbe{
@@ -1266,6 +1270,49 @@ func testACNPClusterGroupRefRulePodAdd(t *testing.T, data *TestData) {
 		{"ACNP Drop Egress From Pod: x/k to ClusterGroup with Pod: z/k for Pod ADD event", testStep},
 	}
 	executeTestsWithData(t, testCase, data)
+}
+
+func testACNPClusterGroupRefRuleIPBlocks(t *testing.T) {
+	podXAIP, _ := podIPs["x/a"]
+	podXBIP, _ := podIPs["x/b"]
+	podXCIP, _ := podIPs["x/c"]
+	cidrXA, cidrXB, cidrXC := podXAIP+"/32", podXBIP+"/32", podXCIP+"/32"
+	cgName := "cg-ipblock-pod-in-ns-x"
+	cgBuilder := &ClusterGroupSpecBuilder{}
+	cgBuilder = cgBuilder.SetName(cgName).
+		SetIPBlocks([]crdv1alpha1.IPBlock{{CIDR: cidrXA}, {CIDR: cidrXB}, {CIDR: cidrXC}})
+
+	builder := &ClusterNetworkPolicySpecBuilder{}
+	builder = builder.SetName("acnp-deny-ya-to-x-ips-ingress").
+		SetPriority(1.0).
+		SetAppliedToGroup([]ACNPAppliedToSpec{
+			{
+				PodSelector: map[string]string{"pod": "a"},
+				NSSelector:  map[string]string{"ns": "y"},
+			},
+		})
+	builder.AddIngress(v1.ProtocolTCP, &p80, nil, nil, nil, nil, nil,
+		nil, nil, nil, crdv1alpha1.RuleActionDrop, cgName, "")
+	reachability := NewReachability(allPods, Connected)
+	reachability.Expect(Pod("x/a"), Pod("y/a"), Dropped)
+	reachability.Expect(Pod("x/b"), Pod("y/a"), Dropped)
+	reachability.Expect(Pod("x/c"), Pod("y/a"), Dropped)
+	testStep := []*TestStep{
+		{
+			"Port 80",
+			reachability,
+			[]metav1.Object{builder.Get()},
+			[]metav1.Object{cgBuilder.Get()},
+			[]int32{80},
+			v1.ProtocolTCP,
+			0,
+			nil,
+		},
+	}
+	testCase := []*TestCase{
+		{"ACNP Drop Ingress From Pod: y/a to ClusterGroup with ipBlocks of Pods IPs in NS x", testStep},
+	}
+	executeTests(t, testCase)
 }
 
 // testBaselineNamespaceIsolation tests that a ACNP in the baseline Tier is able to enforce default namespace isolation,
@@ -2466,6 +2513,7 @@ func TestAntreaPolicy(t *testing.T) {
 		t.Run("Case=ACNPClusterGroupUpdateAppliedTo", func(t *testing.T) { testACNPClusterGroupUpdateAppliedTo(t) })
 		t.Run("Case=ACNPClusterGroupAppliedToPodAdd", func(t *testing.T) { testACNPClusterGroupAppliedToPodAdd(t, data) })
 		t.Run("Case=ACNPClusterGroupRefRulePodAdd", func(t *testing.T) { testACNPClusterGroupRefRulePodAdd(t, data) })
+		t.Run("Case=ACNPClusterGroupRefRuleIPBlocks", func(t *testing.T) { testACNPClusterGroupRefRuleIPBlocks(t) })
 		t.Run("Case=ACNPClusterGroupIngressRuleDenyCGWithXBtoYA", func(t *testing.T) { testACNPIngressRuleDenyCGWithXBtoYA(t) })
 		t.Run("Case=ACNPClusterGroupServiceRef", func(t *testing.T) { testACNPClusterGroupServiceRefCreateAndUpdate(t, data) })
 		t.Run("Case=ACNPNestedClusterGroup", func(t *testing.T) { testACNPNestedClusterGroupCreateAndUpdate(t, data) })
