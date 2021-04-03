@@ -725,6 +725,14 @@ spec:
                     cidr:
                       type: string
                       format: cidr
+                ipBlocks:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      cidr:
+                        type: string
+                        format: cidr
                 serviceReference:
                   type: object
                   properties:
@@ -1490,6 +1498,14 @@ spec:
                     cidr:
                       type: string
                       format: cidr
+                ipBlocks:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      cidr:
+                        type: string
+                        format: cidr
                 serviceReference:
                   type: object
                   properties:

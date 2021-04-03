@@ -119,8 +119,15 @@ type GroupSpec struct {
 	// IPBlock describes the IPAddresses/IPBlocks that is matched in to/from.
 	// IPBlock cannot be set as part of the AppliedTo field.
 	// Cannot be set with any other selector or ServiceReference.
+	// Cannot be set with IPBlocks.
 	// +optional
 	IPBlock *v1alpha1.IPBlock `json:"ipBlock,omitempty"`
+	// IPBlocks is a list of IPAddresses/IPBlocks that is matched in to/from.
+	// IPBlock cannot be set as part of the AppliedTo field.
+	// Cannot be set with any other selector or ServiceReference.
+	// Cannot be set with IPBlock.
+	// +optional
+	IPBlocks []v1alpha1.IPBlock `json:"ipBlocks,omitempty"`
 	// Select backend Pods of the referred Service.
 	// Cannot be set with any other selector or ipBlock.
 	// +optional

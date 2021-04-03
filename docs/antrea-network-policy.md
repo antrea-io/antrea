@@ -602,19 +602,18 @@ order in which they are enforced.
 A ClusterGroup (CG) CRD is a specification of how workloads are grouped together.
 It allows admins to group Pods using traditional label selectors, which can then
 be referenced in ACNP in place of stand-alone `podSelector` and/or `namespaceSelector`.
-In addition, ClusterGroup also supports Pod grouping by `serviceReference`. ClusterGroup
-specified by `serviceReference` will contain the same Pod members that are currently
-selected by the Service's selector.
+In addition to `podSelector` and `namespaceSelector`, ClusterGroup also supports the
+following ways to select endpoints:
+
+- Pod grouping by `serviceReference`. ClusterGroup specified by `serviceReference` will
+contain the same Pod members that are currently selected by the Service's selector.
+- `ipBlock` or `ipBlocks` to share IPBlocks between ACNPs.
+- `childGroups` to select other ClusterGroups by name.
+
 ClusterGroups allow admins to separate the concern of grouping of workloads from
 the security aspect of Antrea-native policies.
 It adds another level of indirection allowing users to update group membership
 without having to update individual policy rules.
-In addition to specifying label selectors to group workloads, admins can create a
-ClusterGroup to share IPBlocks.
-An `ipBlock` selector may not be specified with a `podSelector` and `namespaceSelector`,
-i.e. a single ClusterGroup can either group workloads or share IPBlocks.
-A ClusterGroup is cluster scoped resource and therefore can only be set in an Antrea
-ClusterNetworkPolicy's `appliedTo` and `to`/`from` peers.
 
 ### The ClusterGroup resource
 
@@ -643,9 +642,9 @@ kind: ClusterGroup
 metadata:
   name: test-cg-ip-block
 spec:
-  # IPBlock cannot be set along with PodSelector, NamespaceSelector or serviceReference.
-  ipBlock:
-    cidr: 10.0.10.0/24
+  # IPBlocks cannot be set along with PodSelector, NamespaceSelector or serviceReference.
+  ipBlocks:
+  - cidr: 10.0.10.0/24
 status:
   conditions:
     - type: "GroupMembersComputed"
@@ -657,7 +656,7 @@ kind: ClusterGroup
 metadata:
   name: test-cg-svc-ref
 spec:
-  # ServiceReference cannot be set along with PodSelector, NamespaceSelector or ipBlock.
+  # ServiceReference cannot be set along with PodSelector, NamespaceSelector or ipBlocks.
   serviceReference:
     name: test-service
     namespace: default
@@ -666,7 +665,34 @@ status:
     - type: "GroupMembersComputed"
       status: "True"
       lastTransitionTime: "2021-01-29T20:21:46Z"
+---
+apiVersion: core.antrea.tanzu.vmware.com/v1alpha2
+kind: ClusterGroup
+metadata:
+  name: test-cg-nested
+spec:
+  childGroups: [test-cg-sel, test-cg-ip-blocks, test-cg-svc-ref]
+status:
+  conditions:
+    - type: "GroupMembersComputed"
+      status: "True"
+      lastTransitionTime: "2021-01-29T20:21:48Z"
 ```
+
+There are a few __restrictions__ on how ClusterGroups can be configured:
+
+- A ClusterGroup is a cluster-scoped resource and therefore can only be set in an Antrea
+ClusterNetworkPolicy's `appliedTo` and `to`/`from` peers.
+- For the `childGroup` field, currently only one level of nesting is supported:
+If a ClusterGroup has childGroups, it cannot be selected as a childGroup by other ClusterGroups.
+- ClusterGroup must exist before another ClusterGroup can select it by name as its childGroup.
+A ClusterGroup cannot be deleted if it is referred to by other ClusterGroup as childGroup.
+This restriction may be lifted in future releases.
+- At most one of `podSelector`, `serviceReference`, `ipBlock`, `ipBlocks` or `childGroups`
+can be set for a ClusterGroup, i.e. a single ClusterGroup can either group workloads,
+represent IP CIDRs or select other ClusterGroups. A parent ClusterGroup can select different
+types of ClusterGroups (Pod/Service/CIDRs), but as mentioned above, it cannot select a
+ClusterGroup that has childGroups itself.
 
 **spec**: The ClusterGroup `spec` has all the information needed to define a
 cluster-wide group.
@@ -684,6 +710,14 @@ If set with a `podSelector`, all matching Pods from Namespaces selected by the
 "sources" or `egress` "destinations".
 A ClusterGroup with `ipBlock` referenced in an ACNP's `appliedTo` field will be
 ignored, and the policy will have no effect.
+For a same ClusterGroup, `ipBlock` and `ipBlocks` cannot be set concurrently.
+ipBlock will be deprecated for ipBlocks in future versions of ClusterGroup.
+
+**ipBlocks**: This selects a list of IP CIDR ranges to allow as `ingress`
+"sources" or `egress` "destinations".
+A ClusterGroup with `ipBlocks` referenced in an ACNP's `appliedTo` field will be
+ignored, and the policy will have no effect.
+For a same ClusterGroup, `ipBlock` and `ipBlocks` cannot be set concurrently.
 
 **serviceReference**: Pods that serve as the backend for the specified Service
 will be grouped. Services without selectors are currently not supported, and will
@@ -693,6 +727,10 @@ When ClusterGroups with `serviceReference` are used in ACNPs as `appliedTo` or
 traffic enforcement. `ServiceReference` is merely a mechanism to group Pods and
 ensure that a ClusterGroup stays in sync with the set of Pods selected by a given
 Service.
+
+**childGroups**: This selects existing ClusterGroups by name. The effective members
+of the "parent" ClusterGrup will be the union of all its childGroups' members.
+See the section above for restrictions.
 
 **status**: The ClusterGroup `status` field determines the overall realization
 status of the group.
