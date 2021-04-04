@@ -73,6 +73,16 @@ spec:
           name: Destination-IP
           type: string
           priority: 10
+        - jsonPath: .spec.liveTraffic
+          description: Trace live traffic.
+          name: Live-Traffic
+          type: boolean
+          priority: 10
+        - jsonPath: .spec.timeout
+          description: Timeout in seconds.
+          name: Timeout
+          type: integer
+          priority: 10
         - jsonPath: .metadata.creationTimestamp
           name: Age
           type: date
@@ -86,7 +96,6 @@ spec:
               type: object
               required:
                 - source
-                - destination
               properties:
                 source:
                   type: object
@@ -110,10 +119,6 @@ spec:
                     ip:
                       type: string
                       pattern: ^(((([1]?\d)?\d|2[0-4]\d|25[0-5])\.){3}(([1]?\d)?\d|2[0-4]\d|25[0-5]))|([\da-fA-F]{1,4}(\:[\da-fA-F]{1,4}){7})|(([\da-fA-F]{1,4}:){0,5}::([\da-fA-F]{1,4}:){0,5}[\da-fA-F]{1,4})$
-                  oneOf:
-                    - required: ["pod", "namespace"]
-                    - required: ["service", "namespace"]
-                    - required: ["ip"]
                 packet:
                   type: object
                   properties:
@@ -165,6 +170,10 @@ spec:
                               type: integer
                             flags:
                               type: integer
+                liveTraffic:
+                  type: boolean
+                timeout:
+                  type: integer
             status:
               type: object
               properties:
@@ -854,7 +863,6 @@ spec:
               type: object
               required:
                 - source
-                - destination
               properties:
                 source:
                   type: object
@@ -878,10 +886,6 @@ spec:
                     ip:
                       type: string
                       pattern: ^(((([1]?\d)?\d|2[0-4]\d|25[0-5])\.){3}(([1]?\d)?\d|2[0-4]\d|25[0-5]))|([\da-fA-F]{1,4}(\:[\da-fA-F]{1,4}){7})|(([\da-fA-F]{1,4}:){0,5}::([\da-fA-F]{1,4}:){0,5}[\da-fA-F]{1,4})$
-                  oneOf:
-                    - required: ["pod", "namespace"]
-                    - required: ["service", "namespace"]
-                    - required: ["ip"]
                 packet:
                   type: object
                   properties:

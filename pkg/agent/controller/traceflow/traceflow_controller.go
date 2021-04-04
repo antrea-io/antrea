@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/contiv/libOpenflow/protocol"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -43,12 +44,10 @@ import (
 	crdinformers "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions/crd/v1alpha1"
 	crdlisters "github.com/vmware-tanzu/antrea/pkg/client/listers/crd/v1alpha1"
 	"github.com/vmware-tanzu/antrea/pkg/features"
+	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
 	"github.com/vmware-tanzu/antrea/pkg/querier"
 )
-
-type icmpType uint8
-type icmpCode uint8
 
 const (
 	controllerName = "AntreaAgentTraceflowController"
@@ -62,11 +61,23 @@ const (
 	// Seconds delay before injecting packet into OVS. The time of different nodes may not be completely
 	// synchronized, which requires a delay before inject packet.
 	injectPacketDelay = 5
+
 	// ICMP Echo Request type and code.
-	icmpEchoRequestType   icmpType = 8
-	icmpv6EchoRequestType icmpType = 128
-	icmpEchoRequestCode   icmpCode = 0
+	icmpEchoRequestType   uint8 = 8
+	icmpv6EchoRequestType uint8 = 128
+	icmpEchoRequestCode   uint8 = 0
+
+	defaultTTL uint8 = 64
 )
+
+type traceflowState struct {
+	name        string
+	tag         uint8
+	liveTraffic bool
+	isSender    bool
+	// Agent received the first Traceflow packet from OVS.
+	receivedPacket bool
+}
 
 // Controller is responsible for setting up Openflow entries and injecting traceflow packet into
 // the switch for traceflow request.
@@ -87,9 +98,9 @@ type Controller struct {
 	serviceCIDR            *net.IPNet // K8s Service ClusterIP CIDR
 	queue                  workqueue.RateLimitingInterface
 	runningTraceflowsMutex sync.RWMutex
-	runningTraceflows      map[uint8]string // tag->traceflowName if tf.Status.Phase is Running.
-	injectedTagsMutex      sync.RWMutex
-	injectedTags           map[uint8]string // tag->traceflowName if this Node is sender.
+	// runningTraceflows is a map for storing the running Traceflow state
+	// with dataplane tag to be the key.
+	runningTraceflows map[uint8]*traceflowState
 }
 
 // NewTraceflowController instantiates a new Controller object which will process Traceflow
@@ -120,8 +131,8 @@ func NewTraceflowController(
 		nodeConfig:            nodeConfig,
 		serviceCIDR:           serviceCIDR,
 		queue:                 workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "traceflow"),
-		runningTraceflows:     make(map[uint8]string),
-		injectedTags:          make(map[uint8]string)}
+		runningTraceflows:     make(map[uint8]*traceflowState),
+	}
 
 	// Add handlers for Traceflow events.
 	traceflowInformer.Informer().AddEventHandlerWithResyncPeriod(
@@ -184,7 +195,7 @@ func (c *Controller) updateTraceflow(_, curObj interface{}) {
 func (c *Controller) deleteTraceflow(old interface{}) {
 	tf := old.(*crdv1alpha1.Traceflow)
 	klog.Infof("Processing Traceflow %s DELETE event", tf.Name)
-	c.deallocateTag(tf)
+	c.enqueueTraceflow(tf)
 }
 
 // worker is a long-running function that will continually call the processTraceflowItem function
@@ -239,15 +250,19 @@ func (c *Controller) syncTraceflow(traceflowName string) error {
 
 	tf, err := c.traceflowLister.Get(traceflowName)
 	if err != nil {
+		if apierrors.IsNotFound(err) {
+			c.cleanupTraceflow(traceflowName)
+			return nil
+		}
 		return err
 	}
+
 	switch tf.Status.Phase {
 	case crdv1alpha1.Running:
 		if tf.Status.DataplaneTag != 0 {
 			start := false
 			c.runningTraceflowsMutex.Lock()
 			if _, ok := c.runningTraceflows[tf.Status.DataplaneTag]; !ok {
-				c.runningTraceflows[tf.Status.DataplaneTag] = tf.Name
 				start = true
 			}
 			c.runningTraceflowsMutex.Unlock()
@@ -258,7 +273,7 @@ func (c *Controller) syncTraceflow(traceflowName string) error {
 			klog.Warningf("Invalid data plane tag %d for Traceflow %s", tf.Status.DataplaneTag, tf.Name)
 		}
 	default:
-		c.deallocateTag(tf)
+		c.cleanupTraceflow(traceflowName)
 	}
 	return err
 }
@@ -269,28 +284,64 @@ func (c *Controller) startTraceflow(tf *crdv1alpha1.Traceflow) error {
 	err := c.validateTraceflow(tf)
 	defer func() {
 		if err != nil {
+			c.cleanupTraceflow(tf.Name)
 			c.errorTraceflowCRD(tf, fmt.Sprintf("Node: %s, error: %+v", c.nodeConfig.Name, err))
 		}
 	}()
 	if err != nil {
 		return err
 	}
-	// Deploy flow entries for traceflow
-	klog.V(2).Infof("Deploy flow entries for Traceflow %s", tf.Name)
-	err = c.ofClient.InstallTraceflowFlows(tf.Status.DataplaneTag)
+
+	// TODO: let controller compute the source Node, and the source Node can just return an error,
+	//  if fails to find the Pod.
+	podInterfaces := c.interfaceStore.GetContainerInterfacesByPod(tf.Spec.Source.Pod, tf.Spec.Source.Namespace)
+	liveTraffic := tf.Spec.LiveTraffic
+	isSender := len(podInterfaces) > 0
+
+	var packet, matchPacket *binding.Packet
+	var srcOFPort uint32
+	if isSender {
+		packet, err = c.preparePacket(tf, podInterfaces[0])
+		if err != nil {
+			return err
+		}
+		srcOFPort = uint32(podInterfaces[0].OFPort)
+		// On the source Node, trace the first packet of the first
+		// connection that matches the Traceflow spec.
+		if liveTraffic {
+			matchPacket = packet
+		}
+		klog.V(2).Infof("Traceflow packet %v", *packet)
+	}
+
+	// Store Traceflow to cache.
+	c.runningTraceflowsMutex.Lock()
+	tfState := traceflowState{name: tf.Name, tag: tf.Status.DataplaneTag, liveTraffic: tf.Spec.LiveTraffic, isSender: isSender}
+	c.runningTraceflows[tfState.tag] = &tfState
+	c.runningTraceflowsMutex.Unlock()
+
+	// Install flow entries for traceflow.
+	klog.V(2).Infof("Installing flow entries for Traceflow %s", tf.Name)
+	timeout := tf.Spec.Timeout
+	if timeout == 0 {
+		timeout = crdv1alpha1.DefaultTraceflowTimeout
+	}
+	err = c.ofClient.InstallTraceflowFlows(tfState.tag, liveTraffic, matchPacket, srcOFPort, timeout)
 	if err != nil {
 		return err
 	}
 
-	// TODO: let controller compute the source Node, and the source Node can just return an error,
-	//  if fails to find the Pod.
-	// Inject packet if this Node is sender.
-	podInterfaces := c.interfaceStore.GetContainerInterfacesByPod(tf.Spec.Source.Pod, tf.Spec.Source.Namespace)
-	// Skip inject packet if Pod not found in current Node.
-	if len(podInterfaces) == 0 {
-		return nil
+	// Skip packet injection if the source Pod is not found on the local Node.
+	if !liveTraffic && isSender {
+		if packet.DestinationMAC == nil {
+			// If the destination is Service/IP or the packet will
+			// be sent to remote Node, wait a small period for other
+			// Nodes.
+			time.Sleep(time.Duration(injectPacketDelay) * time.Second)
+		}
+		klog.V(2).Infof("Injecting packet for Traceflow %s", tf.Name)
+		err = c.ofClient.SendTraceflowPacket(tfState.tag, packet, srcOFPort, -1)
 	}
-	err = c.injectPacket(tf)
 	return err
 }
 
@@ -312,144 +363,171 @@ func (c *Controller) validateTraceflow(tf *crdv1alpha1.Traceflow) error {
 	return nil
 }
 
-func (c *Controller) injectPacket(tf *crdv1alpha1.Traceflow) error {
-	podInterfaces := c.interfaceStore.GetContainerInterfacesByPod(tf.Spec.Source.Pod, tf.Spec.Source.Namespace)
-	// Update Traceflow phase to Running.
-	klog.V(2).Infof("Injecting packet for Traceflow %s", tf.Name)
-	c.injectedTagsMutex.Lock()
-	c.injectedTags[tf.Status.DataplaneTag] = tf.Name
-	c.injectedTagsMutex.Unlock()
-
-	var srcTCPPort, dstTCPPort, srcUDPPort, dstUDPPort, idICMP, sequenceICMP uint16
-	var flagsTCP uint8
-
-	// Calculate destination MAC/IP.
-	isIPv6 := tf.Spec.Packet.IPv6Header != nil
-	srcIP := ""
-	dstMAC := ""
-	dstIP := tf.Spec.Destination.IP
-	if isIPv6 {
-		srcIP = podInterfaces[0].GetIPv6Addr().String()
-	} else {
-		srcIP = podInterfaces[0].GetIPv4Addr().String()
-	}
-	if err := validateIPVersion(srcIP, isIPv6); err != nil {
-		return err
+func (c *Controller) preparePacket(tf *crdv1alpha1.Traceflow, intf *interfacestore.InterfaceConfig) (*binding.Packet, error) {
+	liveTraffic := tf.Spec.LiveTraffic
+	isICMP := false
+	packet := new(binding.Packet)
+	packet.IsIPv6 = tf.Spec.Packet.IPv6Header != nil
+	if !liveTraffic {
+		if packet.IsIPv6 {
+			packet.SourceIP = intf.GetIPv6Addr()
+			if packet.SourceIP == nil {
+				return nil, errors.New("source Pod does not have an IPv6 address")
+			}
+		} else {
+			packet.SourceIP = intf.GetIPv4Addr()
+			if packet.SourceIP == nil {
+				return nil, errors.New("source Pod does not have an IPv4 address")
+			}
+		}
+		packet.SourceMAC = intf.MAC
 	}
 
-	if dstIP != "" {
-		dstPodInterface, hasInterface := c.interfaceStore.GetInterfaceByIP(dstIP)
-		if hasInterface {
-			dstMAC = dstPodInterface.MAC.String()
+	if tf.Spec.Destination.IP != "" {
+		packet.DestinationIP = net.ParseIP(tf.Spec.Destination.IP)
+		if packet.DestinationIP == nil {
+			return nil, errors.New("invalid destination IP address")
+		}
+		if !packet.IsIPv6 {
+			packet.DestinationIP = packet.DestinationIP.To4()
+			if packet.DestinationIP == nil {
+				return nil, errors.New("destination IP should be an IPv4 address")
+			}
+		} else if packet.DestinationIP.To4() != nil {
+			return nil, errors.New("destination IP should be an IPv6 address")
+		}
+		if !liveTraffic {
+			dstPodInterface, hasInterface := c.interfaceStore.GetInterfaceByIP(tf.Spec.Destination.IP)
+			if hasInterface {
+				packet.DestinationMAC = dstPodInterface.MAC
+			}
 		}
 	} else if tf.Spec.Destination.Pod != "" {
 		dstPodInterfaces := c.interfaceStore.GetContainerInterfacesByPod(tf.Spec.Destination.Pod, tf.Spec.Destination.Namespace)
 		if len(dstPodInterfaces) > 0 {
-			dstMAC = dstPodInterfaces[0].MAC.String()
-			if isIPv6 {
-				dstIP = dstPodInterfaces[0].GetIPv6Addr().String()
+			if packet.IsIPv6 {
+				packet.DestinationIP = dstPodInterfaces[0].GetIPv6Addr()
 			} else {
-				dstIP = dstPodInterfaces[0].GetIPv4Addr().String()
+				packet.DestinationIP = dstPodInterfaces[0].GetIPv4Addr()
+			}
+			if !liveTraffic {
+				packet.DestinationMAC = dstPodInterfaces[0].MAC
 			}
 		} else {
 			dstPod, err := c.kubeClient.CoreV1().Pods(tf.Spec.Destination.Namespace).Get(context.TODO(), tf.Spec.Destination.Pod, metav1.GetOptions{})
 			if err != nil {
-				return err
+				return nil, fmt.Errorf("failed to get the destination Pod: %v", err)
 			}
-			// dstMAC is "" here, will be set to Gateway MAC in ofClient.SendTraceflowPacket
+			// DestinationMAC is nil here, will be set to gateway
+			// MAC in ofClient.SendTraceflowPacket()
 			podIPs := make([]net.IP, len(dstPod.Status.PodIPs))
 			for i, ip := range dstPod.Status.PodIPs {
 				podIPs[i] = net.ParseIP(ip.IP)
 			}
-			if isIPv6 {
-				ipv6, _ := util.GetIPWithFamily(podIPs, util.FamilyIPv6)
-				dstIP = ipv6.String()
+			if packet.IsIPv6 {
+				packet.DestinationIP, _ = util.GetIPWithFamily(podIPs, util.FamilyIPv6)
 			} else {
-				dstIP = util.GetIPv4Addr(podIPs).String()
+				packet.DestinationIP = util.GetIPv4Addr(podIPs)
+			}
+		}
+		if packet.DestinationIP == nil {
+			if packet.IsIPv6 {
+				return nil, errors.New("destination Pod does not have an IPv6 address")
+			} else {
+				return nil, errors.New("destination Pod does not have an IPv4 address")
 			}
 		}
 	} else if tf.Spec.Destination.Service != "" {
 		dstSvc, err := c.serviceLister.Services(tf.Spec.Destination.Namespace).Get(tf.Spec.Destination.Service)
 		if err != nil {
-			return err
+			return nil, fmt.Errorf("failed to get the destination Service: %v", err)
 		}
-		dstIP = dstSvc.Spec.ClusterIP
-		flagsTCP = 2
-	}
-	if err := validateIPVersion(dstIP, isIPv6); err != nil {
-		return err
+		if dstSvc.Spec.ClusterIP == "" {
+			return nil, errors.New("destination Service does not have a ClusterIP")
+		}
+		packet.DestinationIP = net.ParseIP(dstSvc.Spec.ClusterIP)
+		if !packet.IsIPv6 {
+			packet.DestinationIP = packet.DestinationIP.To4()
+			if packet.DestinationIP == nil {
+				return nil, errors.New("destination Service does not have an IPv4 ClusterIP")
+			}
+		} else if packet.DestinationIP.To4() != nil {
+			return nil, errors.New("destination Service does not have an IPv6 ClusterIP")
+		}
+
+		if !liveTraffic {
+			// Set the SYN flag. In encap mode, the SYN flag is only required for
+			// Service traffic, but probably we should always set it.
+			packet.TCPFlags = 2
+		}
+	} else if !liveTraffic {
+		return nil, errors.New("destination is not specified")
 	}
 
-	if dstMAC == "" {
-		// If the destination is Service/IP or the packet will be sent to remote Node, wait a small period for other Nodes.
-		time.Sleep(time.Duration(injectPacketDelay) * time.Second)
-	}
-
-	var ipProtocol uint8
-	var ttl uint8
-	var ipFlags uint16
-	if isIPv6 {
-		if tf.Spec.Packet.IPv6Header.NextHeader == nil {
-			ipProtocol = protocol.Type_IPv6ICMP
-		} else {
-			ipProtocol = uint8(*tf.Spec.Packet.IPv6Header.NextHeader)
+	if tf.Spec.Packet.IPv6Header != nil {
+		// IP Protocol 0 (IPv6 Hop-by-Hop Option) is not supported by
+		// Traceflow. If NextHeader is not provided, protocol ICMPv6
+		// will be used as the default.
+		if tf.Spec.Packet.IPv6Header.NextHeader != nil {
+			packet.IPProto = uint8(*tf.Spec.Packet.IPv6Header.NextHeader)
 		}
-		ttl = uint8(tf.Spec.Packet.IPv6Header.HopLimit)
-		ipFlags = 0
+		if !liveTraffic {
+			packet.TTL = uint8(tf.Spec.Packet.IPv6Header.HopLimit)
+			packet.IPFlags = 0
+		}
 	} else {
-		ipProtocol = uint8(tf.Spec.Packet.IPHeader.Protocol)
-		// Protocol is 0 (IPv6 Hop-by-Hop Option) if not set in CRD, which is not supported by Traceflow
-		// Use Protocol=1 (ICMP) as default.
-		if ipProtocol == 0 {
-			ipProtocol = protocol.Type_ICMP
+		packet.IPProto = uint8(tf.Spec.Packet.IPHeader.Protocol)
+		if !liveTraffic {
+			packet.TTL = uint8(tf.Spec.Packet.IPHeader.TTL)
+			packet.IPFlags = uint16(tf.Spec.Packet.IPHeader.Flags)
 		}
-		ttl = uint8(tf.Spec.Packet.IPHeader.TTL)
-		ipFlags = uint16(tf.Spec.Packet.IPHeader.Flags)
+	}
+	if !liveTraffic && packet.TTL == 0 {
+		packet.TTL = defaultTTL
 	}
 
+	// TCP > UDP > ICMP > other IP protocol.
 	if tf.Spec.Packet.TransportHeader.TCP != nil {
-		srcTCPPort = uint16(tf.Spec.Packet.TransportHeader.TCP.SrcPort)
-		dstTCPPort = uint16(tf.Spec.Packet.TransportHeader.TCP.DstPort)
+		packet.IPProto = protocol.Type_TCP
+		packet.SourcePort = uint16(tf.Spec.Packet.TransportHeader.TCP.SrcPort)
+		packet.DestinationPort = uint16(tf.Spec.Packet.TransportHeader.TCP.DstPort)
 		if tf.Spec.Packet.TransportHeader.TCP.Flags != 0 {
-			flagsTCP = uint8(tf.Spec.Packet.TransportHeader.TCP.Flags)
+			packet.TCPFlags = uint8(tf.Spec.Packet.TransportHeader.TCP.Flags)
+		}
+	} else if tf.Spec.Packet.TransportHeader.UDP != nil {
+		packet.IPProto = protocol.Type_UDP
+		packet.SourcePort = uint16(tf.Spec.Packet.TransportHeader.UDP.SrcPort)
+		packet.DestinationPort = uint16(tf.Spec.Packet.TransportHeader.UDP.DstPort)
+	} else if tf.Spec.Packet.TransportHeader.ICMP != nil {
+		isICMP = true
+		if !liveTraffic {
+			packet.ICMPEchoID = uint16(tf.Spec.Packet.TransportHeader.ICMP.ID)
+			packet.ICMPEchoSeq = uint16(tf.Spec.Packet.TransportHeader.ICMP.Sequence)
 		}
 	}
-	if tf.Spec.Packet.TransportHeader.UDP != nil {
-		srcUDPPort = uint16(tf.Spec.Packet.TransportHeader.UDP.SrcPort)
-		dstUDPPort = uint16(tf.Spec.Packet.TransportHeader.UDP.DstPort)
+
+	if packet.IPProto == 0 || packet.IPProto == protocol.Type_ICMP || packet.IPProto == protocol.Type_IPv6ICMP {
+		// IPProto defaults to ICMP.
+		isICMP = true
 	}
-	if tf.Spec.Packet.TransportHeader.ICMP != nil {
-		idICMP = uint16(tf.Spec.Packet.TransportHeader.ICMP.ID)
-		sequenceICMP = uint16(tf.Spec.Packet.TransportHeader.ICMP.Sequence)
+	if isICMP {
+		if packet.IsIPv6 {
+			packet.IPProto = protocol.Type_IPv6ICMP
+			if !liveTraffic {
+				packet.ICMPType = icmpv6EchoRequestType
+			}
+		} else {
+			packet.IPProto = protocol.Type_ICMP
+			if !liveTraffic {
+				packet.ICMPType = icmpEchoRequestType
+			}
+		}
+		if !liveTraffic {
+			packet.ICMPCode = icmpEchoRequestCode
+		}
 	}
 
-	var packetOutIcmpEchoRequestType icmpType
-	if isIPv6 {
-		packetOutIcmpEchoRequestType = icmpv6EchoRequestType
-	} else {
-		packetOutIcmpEchoRequestType = icmpEchoRequestType
-	}
-
-	return c.ofClient.SendTraceflowPacket(
-		tf.Status.DataplaneTag,
-		podInterfaces[0].MAC.String(),
-		dstMAC,
-		srcIP,
-		dstIP,
-		ipProtocol,
-		ttl,
-		ipFlags,
-		srcTCPPort,
-		dstTCPPort,
-		flagsTCP,
-		srcUDPPort,
-		dstUDPPort,
-		uint8(packetOutIcmpEchoRequestType),
-		uint8(icmpEchoRequestCode),
-		idICMP,
-		sequenceICMP,
-		uint32(podInterfaces[0].OFPort),
-		-1)
+	return packet, nil
 }
 
 func (c *Controller) errorTraceflowCRD(tf *crdv1alpha1.Traceflow, reason string) (*crdv1alpha1.Traceflow, error) {
@@ -463,68 +541,29 @@ func (c *Controller) errorTraceflowCRD(tf *crdv1alpha1.Traceflow, reason string)
 	return c.traceflowClient.CrdV1alpha1().Traceflows().Patch(context.TODO(), tf.Name, types.MergePatchType, payloads, metav1.PatchOptions{}, "status")
 }
 
-// Deallocate tag from cache.
-func (c *Controller) deallocateTag(tf *crdv1alpha1.Traceflow) {
-	dataplaneTag := uint8(0)
+// Delete Traceflow from cache.
+func (c *Controller) deleteTraceflowState(tfName string) *traceflowState {
 	c.runningTraceflowsMutex.Lock()
+	defer c.runningTraceflowsMutex.Unlock()
 	// Controller could have deallocated the tag and cleared the DataplaneTag
 	// field in the Traceflow Status, so try looking up the tag from the
 	// cache by Traceflow name.
-	for tag, existingTraceflowName := range c.runningTraceflows {
-		if tf.Name == existingTraceflowName {
+	for tag, tfState := range c.runningTraceflows {
+		if tfName == tfState.name {
 			delete(c.runningTraceflows, tag)
-			dataplaneTag = tag
-			break
-		}
-	}
-	c.runningTraceflowsMutex.Unlock()
-	if dataplaneTag == 0 {
-		return
-	}
-	c.injectedTagsMutex.Lock()
-	if existingTraceflowName, ok := c.injectedTags[dataplaneTag]; ok {
-		if tf.Name == existingTraceflowName {
-			delete(c.injectedTags, dataplaneTag)
-		} else {
-			klog.Warningf("runningTraceflows cache mismatch tag: %d name: %s existingName: %s",
-				dataplaneTag, tf.Name, existingTraceflowName)
-		}
-	}
-	c.injectedTagsMutex.Unlock()
-}
-
-func (c *Controller) isSender(tag uint8) bool {
-	c.injectedTagsMutex.RLock()
-	defer c.injectedTagsMutex.RUnlock()
-	if _, ok := c.injectedTags[tag]; ok {
-		return true
-	}
-	return false
-}
-
-// getTraceflowCRD gets traceflow CRD by data plane tag.
-func (c *Controller) GetRunningTraceflowCRD(tag uint8) (*crdv1alpha1.Traceflow, error) {
-	c.runningTraceflowsMutex.RLock()
-	defer c.runningTraceflowsMutex.RUnlock()
-	if traceflowName, ok := c.runningTraceflows[tag]; ok {
-		return c.traceflowLister.Get(traceflowName)
-	}
-	return nil, errors.New(fmt.Sprintf("traceflow with the data plane tag %d doesn't exist", tag))
-}
-
-func validateIPVersion(ip string, isIPv6 bool) error {
-	parsedIP := net.ParseIP(ip)
-	if parsedIP == nil {
-		return errors.New(fmt.Sprintf("invalid ip string %s", ip))
-	}
-	if isIPv6 {
-		if parsedIP.To4() != nil {
-			return errors.New(fmt.Sprintf("expect IPv6, but got IPv4 %s", ip))
-		}
-	} else {
-		if parsedIP.To4() == nil {
-			return errors.New(fmt.Sprintf("expect IPv4, but got IPv6 %s", ip))
+			return tfState
 		}
 	}
 	return nil
+}
+
+// Delete Traceflow state and OVS flows.
+func (c *Controller) cleanupTraceflow(tfName string) {
+	tfState := c.deleteTraceflowState(tfName)
+	if tfState != nil {
+		err := c.ofClient.UninstallTraceflowFlows(tfState.tag)
+		if err != nil {
+			klog.Errorf("Failed to uninstall Traceflow %s flows: %v", tfName, err)
+		}
+	}
 }

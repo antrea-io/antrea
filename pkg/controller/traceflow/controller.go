@@ -62,12 +62,13 @@ const (
 
 	// String set to TraceflowStatus.Reason.
 	traceflowTimeout = "Traceflow timeout"
+
+	// Traceflow timeout period.
+	defaultTimeoutDuration = time.Second * time.Duration(crdv1alpha1.DefaultTraceflowTimeout)
 )
 
 var (
-	// Traceflow timeout period.
-	timeoutDuration      = 2 * time.Minute
-	timeoutCheckInterval = timeoutDuration / 2
+	timeoutCheckInterval = 10 * time.Second
 )
 
 // Controller is for traceflow.
@@ -311,8 +312,13 @@ func (c *Controller) checkTraceflowStatus(tf *crdv1alpha1.Traceflow) error {
 		c.deallocateTagForTF(tf)
 		return c.updateTraceflowStatus(tf, crdv1alpha1.Succeeded, "", 0)
 	}
+
+	timeoutSeconds := int64(tf.Spec.Timeout)
+	if timeoutSeconds == 0 {
+		timeoutSeconds = int64(defaultTimeoutDuration.Seconds())
+	}
 	// CreationTimestamp is of second accuracy.
-	if time.Now().Unix() > tf.CreationTimestamp.Unix()+int64(timeoutDuration.Seconds()) {
+	if time.Now().Unix() > tf.CreationTimestamp.Unix()+timeoutSeconds {
 		c.deallocateTagForTF(tf)
 		return c.updateTraceflowStatus(tf, crdv1alpha1.Failed, traceflowTimeout, 0)
 	}

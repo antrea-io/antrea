@@ -109,6 +109,23 @@ func (b *ofPacketOutBuilder) SetIPProtocol(proto Protocol) PacketOutBuilder {
 	return b
 }
 
+// ofPacketOutBuilder sets IP protocol in the packet's IP header with the
+// intetger protocol value.
+func (b *ofPacketOutBuilder) SetIPProtocolValue(isIPv6 bool, protoValue uint8) PacketOutBuilder {
+	if isIPv6 {
+		if b.pktOut.IPv6Header == nil {
+			b.pktOut.IPv6Header = new(protocol.IPv6)
+		}
+		b.pktOut.IPv6Header.NextHeader = protoValue
+	} else {
+		if b.pktOut.IPHeader == nil {
+			b.pktOut.IPHeader = new(protocol.IPv4)
+		}
+		b.pktOut.IPHeader.Protocol = protoValue
+	}
+	return b
+}
+
 // SetTTL sets TTL in the packet's IP header.
 func (b *ofPacketOutBuilder) SetTTL(ttl uint8) PacketOutBuilder {
 	if b.pktOut.IPv6Header == nil {
