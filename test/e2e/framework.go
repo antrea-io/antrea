@@ -1536,28 +1536,19 @@ func (data *TestData) doesOVSPortExist(antreaPodName string, portName string) (b
 }
 
 func (data *TestData) GetEncapMode() (config.TrafficEncapModeType, error) {
-	mapList, err := data.clientset.CoreV1().ConfigMaps(antreaNamespace).List(context.TODO(), metav1.ListOptions{})
+	configMap, err := data.GetAntreaConfigMap(antreaNamespace)
 	if err != nil {
-		return config.TrafficEncapModeInvalid, err
+		return config.TrafficEncapModeInvalid, fmt.Errorf("failed to get Antrea ConfigMap: %v", err)
 	}
-	for _, m := range mapList.Items {
-		if strings.HasPrefix(m.Name, "antrea-config") {
-			configMap, err := data.clientset.CoreV1().ConfigMaps(antreaNamespace).Get(context.TODO(), m.Name, metav1.GetOptions{})
-			if err != nil {
-				return config.TrafficEncapModeInvalid, err
+	for _, antreaConfig := range configMap.Data {
+		for _, mode := range config.GetTrafficEncapModes() {
+			searchStr := fmt.Sprintf("trafficEncapMode: %s", mode)
+			if strings.Index(strings.ToLower(antreaConfig), strings.ToLower(searchStr)) != -1 {
+				return mode, nil
 			}
-			for _, antreaConfig := range configMap.Data {
-				for _, mode := range config.GetTrafficEncapModes() {
-					searchStr := fmt.Sprintf("trafficEncapMode: %s", mode)
-					if strings.Index(strings.ToLower(antreaConfig), strings.ToLower(searchStr)) != -1 {
-						return mode, nil
-					}
-				}
-			}
-			return config.TrafficEncapModeEncap, nil
 		}
 	}
-	return config.TrafficEncapModeInvalid, fmt.Errorf("antrea-conf config map is not found")
+	return config.TrafficEncapModeEncap, nil
 }
 
 func (data *TestData) getFeatures(confName string, antreaNamespace string) (featuregate.FeatureGate, error) {

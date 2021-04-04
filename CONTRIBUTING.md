@@ -180,6 +180,7 @@ To develop locally, you can follow these steps:
  2. Checkout your feature branch and `cd` into it.
  3. To build all Go files and install them under `bin`, run `make bin`
  4. To run all Go unit tests, run `make test-unit`
+ 5. To build the Antrea Ubuntu Docker image separately with the binaries generated in step 2, run `make ubuntu`
 
 ### CI testing
 

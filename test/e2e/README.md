@@ -179,6 +179,10 @@ manifest to the control-plane Docker container:
 go test -v github.com/vmware-tanzu/antrea/test/e2e -provider=kind
 ```
 
+`generate-manifest.sh` supports generating the Antrea manifest with different
+Antrea configurations. Run `./hack/generate-manifest.sh --help` to see the
+supported config options.
+
 As part of code development, if you want to run the tests with local changes,
 then make the code changes on the local repo and
 [build the image](../../CONTRIBUTING.md#building-and-testing-your-change).
