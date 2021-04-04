@@ -30,6 +30,10 @@ func (c *FakeCrdV1alpha2) ClusterGroups() v1alpha2.ClusterGroupInterface {
 	return &FakeClusterGroups{c}
 }
 
+func (c *FakeCrdV1alpha2) Egresses() v1alpha2.EgressInterface {
+	return &FakeEgresses{c}
+}
+
 func (c *FakeCrdV1alpha2) ExternalEntities(namespace string) v1alpha2.ExternalEntityInterface {
 	return &FakeExternalEntities{c, namespace}
 }

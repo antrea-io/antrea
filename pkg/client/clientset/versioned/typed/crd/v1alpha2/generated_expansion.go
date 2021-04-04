@@ -18,4 +18,6 @@ package v1alpha2
 
 type ClusterGroupExpansion interface{}
 
+type EgressExpansion interface{}
+
 type ExternalEntityExpansion interface{}

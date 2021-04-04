@@ -25,6 +25,7 @@ import (
 type CrdV1alpha2Interface interface {
 	RESTClient() rest.Interface
 	ClusterGroupsGetter
+	EgressesGetter
 	ExternalEntitiesGetter
 }
 
@@ -35,6 +36,10 @@ type CrdV1alpha2Client struct {
 
 func (c *CrdV1alpha2Client) ClusterGroups() ClusterGroupInterface {
 	return newClusterGroups(c)
+}
+
+func (c *CrdV1alpha2Client) Egresses() EgressInterface {
+	return newEgresses(c)
 }
 
 func (c *CrdV1alpha2Client) ExternalEntities(namespace string) ExternalEntityInterface {
