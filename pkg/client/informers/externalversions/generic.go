@@ -65,6 +65,8 @@ func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource
 		// Group=crd.antrea.io, Version=v1alpha2
 	case v1alpha2.SchemeGroupVersion.WithResource("clustergroups"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Crd().V1alpha2().ClusterGroups().Informer()}, nil
+	case v1alpha2.SchemeGroupVersion.WithResource("egresses"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Crd().V1alpha2().Egresses().Informer()}, nil
 	case v1alpha2.SchemeGroupVersion.WithResource("externalentities"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Crd().V1alpha2().ExternalEntities().Informer()}, nil
 
