@@ -1291,6 +1291,11 @@ spec:
       name: Live-Traffic
       priority: 10
       type: boolean
+    - description: Capture only the dropped packet.
+      jsonPath: .spec.droppedOnly
+      name: Dropped-Only
+      priority: 10
+      type: boolean
     - description: Timeout in seconds.
       jsonPath: .spec.timeout
       name: Timeout
@@ -1317,6 +1322,8 @@ spec:
                   service:
                     type: string
                 type: object
+              droppedOnly:
+                type: boolean
               liveTraffic:
                 type: boolean
               packet:

@@ -53,7 +53,9 @@ func (c *Controller) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
 		}
 		update := tf.DeepCopy()
 		update.Status.Results = append(update.Status.Results, *nodeResult)
-		update.Status.CapturedPacket = packet
+		if packet != nil {
+			update.Status.CapturedPacket = packet
+		}
 		_, err = c.traceflowClient.CrdV1alpha1().Traceflows().UpdateStatus(context.TODO(), update, v1.UpdateOptions{})
 		if err != nil {
 			klog.Warningf("Update traceflow failed: %+v", err)
@@ -108,7 +110,10 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1alpha1.Tracefl
 		// Uninstall the OVS flows after receiving the first packet, to
 		// avoid capturing too many matched packets.
 		c.ofClient.UninstallTraceflowFlows(tag)
-		if tfState.isSender {
+		// Report the captured dropped packet, if the Traceflow is for
+		// the dropped packet only; otherwise only the sender reports
+		// the first captured packet.
+		if tfState.isSender || tfState.droppedOnly {
 			capturedPacket = parseCapturedPacket(pktIn)
 		}
 	}

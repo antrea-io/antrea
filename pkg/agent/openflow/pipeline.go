@@ -936,54 +936,59 @@ func (c *client) l2ForwardCalcFlow(dstMAC net.HardwareAddr, ofPort uint32, skipI
 
 // traceflowL2ForwardOutputFlows generates Traceflow specific flows that outputs traceflow packets
 // to OVS port and Antrea Agent after L2forwarding calculation.
-func (c *client) traceflowL2ForwardOutputFlows(dataplaneTag uint8, liveTraffic bool, timeout uint16, category cookie.Category) []binding.Flow {
+func (c *client) traceflowL2ForwardOutputFlows(dataplaneTag uint8, liveTraffic, droppedOnly bool, timeout uint16, category cookie.Category) []binding.Flow {
 	flows := []binding.Flow{}
 	l2FwdOutTable := c.pipeline[L2ForwardingOutTable]
 	for _, ipProtocol := range []binding.Protocol{binding.ProtocolIP, binding.ProtocolIPv6} {
 		if c.encapMode.SupportsEncap() {
 			// SendToController and Output if output port is tunnel port.
-			flows = append(flows, l2FwdOutTable.BuildFlow(priorityNormal+3).
+			fb1 := l2FwdOutTable.BuildFlow(priorityNormal+3).
 				MatchReg(int(PortCacheReg), config.DefaultTunOFPort).
 				MatchIPDSCP(dataplaneTag).
 				SetHardTimeout(timeout).
 				MatchProtocol(ipProtocol).
 				MatchRegRange(int(marksReg), portFoundMark, ofPortMarkRange).
 				Action().OutputRegRange(int(PortCacheReg), ofPortRegRange).
-				Action().SendToController(uint8(PacketInReasonTF)).
-				Cookie(c.cookieAllocator.Request(category).Raw()).
-				Done())
+				Cookie(c.cookieAllocator.Request(category).Raw())
 			// For injected packets, only SendToController if output port is local
 			// gateway. In encapMode, a Traceflow packet going out of the gateway
 			// port (i.e. exiting the overlay) essentially means that the Traceflow
 			// request is complete.
-			flowBuilder := l2FwdOutTable.BuildFlow(priorityNormal+2).
+			fb2 := l2FwdOutTable.BuildFlow(priorityNormal+2).
 				MatchReg(int(PortCacheReg), config.HostGatewayOFPort).
 				MatchIPDSCP(dataplaneTag).
 				SetHardTimeout(timeout).
 				MatchProtocol(ipProtocol).
 				MatchRegRange(int(marksReg), portFoundMark, ofPortMarkRange).
-				Action().SendToController(uint8(PacketInReasonTF)).
 				Cookie(c.cookieAllocator.Request(category).Raw())
+
+			// Do not send to controller if captures only dropped packet.
+			if !droppedOnly {
+				fb1 = fb1.Action().SendToController(uint8(PacketInReasonTF))
+				fb2 = fb2.Action().SendToController(uint8(PacketInReasonTF))
+			}
 			if liveTraffic {
 				// Clear the loaded DSCP bits before output.
-				flowBuilder = flowBuilder.Action().LoadIPDSCP(0).
+				fb2 = fb2.Action().LoadIPDSCP(0).
 					Action().OutputRegRange(int(PortCacheReg), ofPortRegRange)
 			}
-			flows = append(flows, flowBuilder.Done())
+			flows = append(flows, fb1.Done(), fb2.Done())
 		} else {
 			// SendToController and Output if output port is local gateway. Unlike in
 			// encapMode, inter-Node Pod-to-Pod traffic is expected to go out of the
 			// gateway port on the way to its destination.
-			flows = append(flows, l2FwdOutTable.BuildFlow(priorityNormal+2).
+			fb1 := l2FwdOutTable.BuildFlow(priorityNormal+2).
 				MatchReg(int(PortCacheReg), config.HostGatewayOFPort).
 				MatchIPDSCP(dataplaneTag).
 				SetHardTimeout(timeout).
 				MatchProtocol(ipProtocol).
 				MatchRegRange(int(marksReg), portFoundMark, ofPortMarkRange).
 				Action().OutputRegRange(int(PortCacheReg), ofPortRegRange).
-				Action().SendToController(uint8(PacketInReasonTF)).
-				Cookie(c.cookieAllocator.Request(category).Raw()).
-				Done())
+				Cookie(c.cookieAllocator.Request(category).Raw())
+			if !droppedOnly {
+				fb1 = fb1.Action().SendToController(uint8(PacketInReasonTF))
+			}
+			flows = append(flows, fb1.Done())
 		}
 		// Only SendToController if output port is local gateway and destination IP is gateway.
 		gatewayIP := c.nodeConfig.GatewayConfig.IPv4
@@ -991,34 +996,38 @@ func (c *client) traceflowL2ForwardOutputFlows(dataplaneTag uint8, liveTraffic b
 			gatewayIP = c.nodeConfig.GatewayConfig.IPv6
 		}
 		if gatewayIP != nil {
-			flowBuilder := l2FwdOutTable.BuildFlow(priorityNormal+3).
+			fb := l2FwdOutTable.BuildFlow(priorityNormal+3).
 				MatchReg(int(PortCacheReg), config.HostGatewayOFPort).
 				MatchDstIP(gatewayIP).
 				MatchIPDSCP(dataplaneTag).
 				SetHardTimeout(timeout).
 				MatchProtocol(ipProtocol).
 				MatchRegRange(int(marksReg), portFoundMark, ofPortMarkRange).
-				Action().SendToController(uint8(PacketInReasonTF)).
 				Cookie(c.cookieAllocator.Request(category).Raw())
+			if !droppedOnly {
+				fb = fb.Action().SendToController(uint8(PacketInReasonTF))
+			}
 			if liveTraffic {
-				flowBuilder = flowBuilder.Action().LoadIPDSCP(0).
+				fb = fb.Action().LoadIPDSCP(0).
 					Action().OutputRegRange(int(PortCacheReg), ofPortRegRange)
 			}
-			flows = append(flows, flowBuilder.Done())
+			flows = append(flows, fb.Done())
 		}
 		// Only SendToController if output port is Pod port.
-		flowBuilder := l2FwdOutTable.BuildFlow(priorityNormal+2).
+		fb := l2FwdOutTable.BuildFlow(priorityNormal+2).
 			MatchIPDSCP(dataplaneTag).
 			SetHardTimeout(timeout).
 			MatchProtocol(ipProtocol).
 			MatchRegRange(int(marksReg), portFoundMark, ofPortMarkRange).
-			Action().SendToController(uint8(PacketInReasonTF)).
 			Cookie(c.cookieAllocator.Request(category).Raw())
+		if !droppedOnly {
+			fb = fb.Action().SendToController(uint8(PacketInReasonTF))
+		}
 		if liveTraffic {
-			flowBuilder = flowBuilder.Action().LoadIPDSCP(0).
+			fb = fb.Action().LoadIPDSCP(0).
 				Action().OutputRegRange(int(PortCacheReg), ofPortRegRange)
 		}
-		flows = append(flows, flowBuilder.Done())
+		flows = append(flows, fb.Done())
 	}
 	return flows
 }

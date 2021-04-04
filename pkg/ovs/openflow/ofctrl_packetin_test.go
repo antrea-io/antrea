@@ -20,6 +20,7 @@ import (
 	"github.com/contiv/libOpenflow/protocol"
 	"github.com/contiv/libOpenflow/util"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestGetTCPHeaderData(t *testing.T) {
@@ -32,9 +33,8 @@ func TestGetTCPHeaderData(t *testing.T) {
 		expectTCPCode    uint8
 	}
 	tests := []struct {
-		name    string
-		args    args
-		wantErr bool
+		name string
+		args args
 	}{
 		{
 			name: "ipv4",
@@ -52,7 +52,6 @@ func TestGetTCPHeaderData(t *testing.T) {
 				expectTCPAckNum:  0,
 				expectTCPCode:    2,
 			},
-			wantErr: false,
 		},
 	}
 	for _, tt := range tests {
@@ -65,14 +64,12 @@ func TestGetTCPHeaderData(t *testing.T) {
 			pktIn.Data = bf
 
 			tcpSrcPort, tcpDstPort, tcpSeqNum, tcpAckNum, tcpCode, err := GetTCPHeaderData(pktIn)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("getPacketInfo() error = %v, wantErr %v", err, tt.wantErr)
-			}
-			assert.Equal(t, tt.args.expectTCPSrcPort, tcpSrcPort, "Expect to retrieve exact TCP src port while differed")
-			assert.Equal(t, tt.args.expectTCPDstPort, tcpDstPort, "Expect to retrieve exact TCP dst port while differed")
-			assert.Equal(t, tt.args.expectTCPSeqNum, tcpSeqNum, "Expect to retrieve exact TCP seq num while differed")
-			assert.Equal(t, tt.args.expectTCPAckNum, tcpAckNum, "Expect to retrieve exact TCP ack num while differed")
-			assert.Equal(t, tt.args.expectTCPCode, tcpCode, "Expect to retrieve exact TCP code while differed")
+			require.NoError(t, err, "GetTCPHeaderData() returned an error")
+			assert.Equal(t, tt.args.expectTCPSrcPort, tcpSrcPort)
+			assert.Equal(t, tt.args.expectTCPDstPort, tcpDstPort)
+			assert.Equal(t, tt.args.expectTCPSeqNum, tcpSeqNum)
+			assert.Equal(t, tt.args.expectTCPAckNum, tcpAckNum)
+			assert.Equal(t, tt.args.expectTCPCode, tcpCode)
 		})
 	}
 }

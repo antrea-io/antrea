@@ -115,6 +115,9 @@ type TraceflowSpec struct {
 	// rather than an injected packet, when set to true. The first packet of
 	// the first connection that matches the packet spec will be traced.
 	LiveTraffic bool `json:"liveTraffic,omitempty"`
+	// DroppedOnly indicates only the dropped packet should be captured in a
+	// live-traffic Traceflow.
+	DroppedOnly bool `json:"droppedOnly,omitempty"`
 	// Timeout specifies the timeout of the Traceflow in seconds. Defaults
 	// to 20 seconds if not set.
 	Timeout uint16 `json:"timeout,omitempty"`
