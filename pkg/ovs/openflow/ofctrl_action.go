@@ -244,6 +244,11 @@ func (a *ofFlowAction) LoadPktMarkRange(value uint32, rng Range) FlowBuilder {
 	return a.LoadRange(NxmFieldPktMark, uint64(value), rng)
 }
 
+// LoadIPDSCP is an action to load data to IP DSCP bits.
+func (a *ofFlowAction) LoadIPDSCP(value uint8) FlowBuilder {
+	return a.LoadRange(NxmFieldIPToS, uint64(value), IPDSCPToSRange)
+}
+
 // Move is an action to copy all data from "fromField" to "toField". Fields with name "fromField" and "fromField" should
 // have the same data length, otherwise there will be error when realizing the flow on OFSwitch.
 func (a *ofFlowAction) Move(fromField, toField string) FlowBuilder {

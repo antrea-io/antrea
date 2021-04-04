@@ -15,7 +15,6 @@
 package openflow
 
 import (
-	"errors"
 	"fmt"
 	"math/rand"
 	"net"
@@ -224,29 +223,13 @@ type Client interface {
 	SubscribePacketIn(reason uint8, ch chan *ofctrl.PacketIn) error
 
 	// SendTraceflowPacket injects packet to specified OVS port for Openflow.
-	SendTraceflowPacket(
-		dataplaneTag uint8,
-		srcMAC string,
-		dstMAC string,
-		srcIP string,
-		dstIP string,
-		ipProtocol uint8,
-		ttl uint8,
-		ipFlags uint16,
-		tcpSrcPort uint16,
-		tcpDstPort uint16,
-		tcpFlags uint8,
-		udpSrcPort uint16,
-		udpDstPort uint16,
-		icmpType uint8,
-		icmpCode uint8,
-		icmpID uint16,
-		icmpSequence uint16,
-		inPort uint32,
-		outPort int32) error
+	SendTraceflowPacket(dataplaneTag uint8, packet *binding.Packet, inPort uint32, outPort int32) error
 
-	// InstallTraceflowFlows installs flows for specific traceflow request.
-	InstallTraceflowFlows(dataplaneTag uint8) error
+	// InstallTraceflowFlows installs flows for a Traceflow request.
+	InstallTraceflowFlows(dataplaneTag uint8, liveTraffic bool, packet *binding.Packet, srcOFPort uint32, timeoutSeconds uint16) error
+
+	// UninstallTraceflowFlows uninstalls flows for a Traceflow request.
+	UninstallTraceflowFlows(dataplaneTag uint8) error
 
 	// Initial tun_metadata0 in TLV map for Traceflow.
 	InitialTLVMap() error
@@ -813,108 +796,57 @@ func (c *client) SubscribePacketIn(reason uint8, ch chan *ofctrl.PacketIn) error
 	return c.bridge.SubscribePacketIn(reason, ch)
 }
 
-func (c *client) SendTraceflowPacket(
-	dataplaneTag uint8,
-	srcMAC string,
-	dstMAC string,
-	srcIP string,
-	dstIP string,
-	IPProtocol uint8,
-	ttl uint8,
-	ipFlags uint16,
-	tcpSrcPort uint16,
-	tcpDstPort uint16,
-	tcpFlags uint8,
-	udpSrcPort uint16,
-	udpDstPort uint16,
-	icmpType uint8,
-	icmpCode uint8,
-	icmpID uint16,
-	icmpSequence uint16,
-	inPort uint32,
-	outPort int32) error {
-
+func (c *client) SendTraceflowPacket(dataplaneTag uint8, packet *binding.Packet, inPort uint32, outPort int32) error {
 	packetOutBuilder := c.bridge.BuildPacketOut()
-	parsedSrcMAC, err := net.ParseMAC(srcMAC)
-	if err != nil {
-		return err
-	}
-	var parsedDstMAC net.HardwareAddr
-	if dstMAC == "" {
-		parsedDstMAC = c.nodeConfig.GatewayConfig.MAC
-	} else {
-		parsedDstMAC, err = net.ParseMAC(dstMAC)
-		if err != nil {
-			return err
-		}
-	}
 
-	parsedSrcIP := net.ParseIP(srcIP)
-	parsedDstIP := net.ParseIP(dstIP)
-	if parsedSrcIP == nil || parsedDstIP == nil {
-		return errors.New("invalid IP")
+	if packet.DestinationMAC == nil {
+		packet.DestinationMAC = c.nodeConfig.GatewayConfig.MAC
 	}
-	isIPv6 := parsedSrcIP.To4() == nil
-	if isIPv6 != (parsedDstIP.To4() == nil) {
-		return errors.New("IP version mismatch")
-	}
-
 	// Set ethernet header
-	packetOutBuilder = packetOutBuilder.SetSrcMAC(parsedSrcMAC)
-	packetOutBuilder = packetOutBuilder.SetDstMAC(parsedDstMAC)
+	packetOutBuilder = packetOutBuilder.SetDstMAC(packet.DestinationMAC).SetSrcMAC(packet.SourceMAC)
+
 	// Set IP header
-	packetOutBuilder = packetOutBuilder.SetSrcIP(parsedSrcIP)
-	packetOutBuilder = packetOutBuilder.SetDstIP(parsedDstIP)
-	if ttl == 0 {
-		packetOutBuilder = packetOutBuilder.SetTTL(128)
-	} else {
-		packetOutBuilder = packetOutBuilder.SetTTL(ttl)
-	}
-	if !isIPv6 {
-		packetOutBuilder = packetOutBuilder.SetIPFlags(ipFlags)
+	packetOutBuilder = packetOutBuilder.SetDstIP(packet.DestinationIP).SetSrcIP(packet.SourceIP).SetTTL(packet.TTL)
+	if !packet.IsIPv6 {
+		packetOutBuilder = packetOutBuilder.SetIPFlags(packet.IPFlags)
 	}
 
 	// Set transport header
-	switch IPProtocol {
-	case protocol.Type_ICMP:
-		if isIPv6 {
-			return errors.New("cannot set protocol ICMP in IPv6 packet")
+	switch packet.IPProto {
+	case protocol.Type_ICMP, protocol.Type_IPv6ICMP:
+		if packet.IPProto == protocol.Type_ICMP {
+			packetOutBuilder = packetOutBuilder.SetIPProtocol(binding.ProtocolICMP)
+		} else {
+			packetOutBuilder = packetOutBuilder.SetIPProtocol(binding.ProtocolICMPv6)
 		}
-		packetOutBuilder = packetOutBuilder.SetIPProtocol(binding.ProtocolICMP)
-		packetOutBuilder = packetOutBuilder.SetICMPType(icmpType)
-		packetOutBuilder = packetOutBuilder.SetICMPCode(icmpCode)
-		packetOutBuilder = packetOutBuilder.SetICMPID(icmpID)
-		packetOutBuilder = packetOutBuilder.SetICMPSequence(icmpSequence)
-	case protocol.Type_IPv6ICMP:
-		if !isIPv6 {
-			return errors.New("cannot set protocol ICMPv6 in IPv4 packet")
-		}
-		packetOutBuilder = packetOutBuilder.SetIPProtocol(binding.ProtocolICMPv6)
-		packetOutBuilder = packetOutBuilder.SetICMPType(icmpType)
-		packetOutBuilder = packetOutBuilder.SetICMPCode(icmpCode)
-		packetOutBuilder = packetOutBuilder.SetICMPID(icmpID)
-		packetOutBuilder = packetOutBuilder.SetICMPSequence(icmpSequence)
+		packetOutBuilder = packetOutBuilder.SetICMPType(packet.ICMPType).
+			SetICMPCode(packet.ICMPCode).
+			SetICMPID(packet.ICMPEchoID).
+			SetICMPSequence(packet.ICMPEchoSeq)
 	case protocol.Type_TCP:
-		if isIPv6 {
+		if packet.IsIPv6 {
 			packetOutBuilder = packetOutBuilder.SetIPProtocol(binding.ProtocolTCPv6)
 		} else {
 			packetOutBuilder = packetOutBuilder.SetIPProtocol(binding.ProtocolTCP)
 		}
+		tcpSrcPort := packet.SourcePort
 		if tcpSrcPort == 0 {
 			// #nosec G404: random number generator not used for security purposes.
 			tcpSrcPort = uint16(rand.Uint32())
 		}
-		packetOutBuilder = packetOutBuilder.SetTCPSrcPort(tcpSrcPort)
-		packetOutBuilder = packetOutBuilder.SetTCPDstPort(tcpDstPort)
-		packetOutBuilder = packetOutBuilder.SetTCPFlags(tcpFlags)
+		packetOutBuilder = packetOutBuilder.SetTCPDstPort(packet.DestinationPort).
+			SetTCPSrcPort(tcpSrcPort).
+			SetTCPFlags(packet.TCPFlags)
 	case protocol.Type_UDP:
-		if isIPv6 {
+		if packet.IsIPv6 {
 			packetOutBuilder = packetOutBuilder.SetIPProtocol(binding.ProtocolUDPv6)
 		} else {
 			packetOutBuilder = packetOutBuilder.SetIPProtocol(binding.ProtocolUDP)
 		}
-		packetOutBuilder = packetOutBuilder.SetUDPSrcPort(udpSrcPort)
-		packetOutBuilder = packetOutBuilder.SetUDPDstPort(udpDstPort)
+		packetOutBuilder = packetOutBuilder.SetUDPDstPort(packet.DestinationPort).
+			SetUDPSrcPort(packet.SourcePort)
+	default:
+		packetOutBuilder = packetOutBuilder.SetIPProtocolValue(packet.IsIPv6, packet.IPProto)
 	}
 
 	packetOutBuilder = packetOutBuilder.SetInport(inPort)
@@ -927,12 +859,18 @@ func (c *client) SendTraceflowPacket(
 	return c.bridge.SendPacketOut(packetOutObj)
 }
 
-func (c *client) InstallTraceflowFlows(dataplaneTag uint8) error {
+func (c *client) InstallTraceflowFlows(dataplaneTag uint8, liveTraffic bool, packet *binding.Packet, srcOFPort uint32, timeoutSeconds uint16) error {
+	cacheKey := fmt.Sprintf("%x", dataplaneTag)
 	flows := []binding.Flow{}
-	flows = append(flows, c.traceflowL2ForwardOutputFlows(dataplaneTag, cookie.Default)...)
-	flows = append(flows, c.traceflowConnectionTrackFlows(dataplaneTag, cookie.Default)...)
-	flows = append(flows, c.traceflowNetworkPolicyFlows(dataplaneTag, cookie.Default)...)
-	return c.AddAll(flows)
+	flows = append(flows, c.traceflowConnectionTrackFlows(dataplaneTag, packet, srcOFPort, timeoutSeconds, cookie.Default)...)
+	flows = append(flows, c.traceflowL2ForwardOutputFlows(dataplaneTag, liveTraffic, timeoutSeconds, cookie.Default)...)
+	flows = append(flows, c.traceflowNetworkPolicyFlows(dataplaneTag, timeoutSeconds, cookie.Default)...)
+	return c.addFlows(c.tfFlowCache, cacheKey, flows)
+}
+
+func (c *client) UninstallTraceflowFlows(dataplaneTag uint8) error {
+	cacheKey := fmt.Sprintf("%x", dataplaneTag)
+	return c.deleteFlows(c.tfFlowCache, cacheKey)
 }
 
 // Add TLV map optClass 0x0104, optType 0x80 optLength 4 tunMetadataIndex 0 to store data plane tag

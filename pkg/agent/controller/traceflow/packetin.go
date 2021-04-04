@@ -43,6 +43,7 @@ func (c *Controller) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
 		klog.Errorf("parsePacketIn error: %+v", err)
 		return err
 	}
+
 	// Retry when update CRD conflict which caused by multiple agents updating one CRD at same time.
 	err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		tf, err := c.traceflowInformer.Lister().Get(oldTf.Name)
@@ -89,17 +90,32 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1alpha1.Tracefl
 		return nil, nil, fmt.Errorf("unsupported traceflow packet Ethertype: %d", pktIn.Data.Ethertype)
 	}
 
-	// Get traceflow CRD from cache by data plane tag.
-	tf, err := c.GetRunningTraceflowCRD(uint8(tag))
-	if err != nil {
-		return nil, nil, err
+	firstPacket := false
+	c.runningTraceflowsMutex.RLock()
+	tfState, exists := c.runningTraceflows[tag]
+	if exists {
+		firstPacket = !tfState.receivedPacket
+		tfState.receivedPacket = true
+	}
+	c.runningTraceflowsMutex.RUnlock()
+	if !exists {
+		return nil, nil, fmt.Errorf("Traceflow for dataplane tag %d not found in cache", pktIn.Data.Ethertype)
 	}
 
-	obs := make([]crdv1alpha1.Observation, 0)
-	isSender := c.isSender(uint8(tag))
-	tableID := pktIn.TableId
+	if tfState.liveTraffic && firstPacket {
+		// Uninstall the OVS flows after receiving the first packet, to
+		// avoid capturing too many matched packets.
+		c.ofClient.UninstallTraceflowFlows(tag)
+	}
 
-	if isSender {
+	tf, err := c.traceflowLister.Get(tfState.name)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get Traceflow %s CRD: %v", tfState.name, err)
+	}
+
+	obs := []crdv1alpha1.Observation{}
+	tableID := pktIn.TableId
+	if tfState.isSender {
 		ob := new(crdv1alpha1.Observation)
 		ob.Component = crdv1alpha1.ComponentSpoofGuard
 		ob.Action = crdv1alpha1.ActionForwarded

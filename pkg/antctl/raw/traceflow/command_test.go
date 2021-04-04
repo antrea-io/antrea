@@ -98,6 +98,7 @@ func TestParseFlow(t *testing.T) {
 						IPHeader: v1alpha1.IPHeader{
 							Protocol: 1,
 						},
+						TransportHeader: v1alpha1.TransportHeader{},
 					},
 				},
 			},

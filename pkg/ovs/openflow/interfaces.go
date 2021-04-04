@@ -78,6 +78,9 @@ const (
 	DeleteMessage
 )
 
+// IPDSCPToSRange stores the DSCP bits in ToS field of IP header.
+var IPDSCPToSRange = Range{2, 7}
+
 // Bridge defines operations on an openflow bridge.
 type Bridge interface {
 	CreateTable(id, next TableIDType, missAction MissActionType) Table
@@ -172,6 +175,7 @@ type Action interface {
 	LoadARPOperation(value uint16) FlowBuilder
 	LoadRegRange(regID int, value uint32, to Range) FlowBuilder
 	LoadPktMarkRange(value uint32, to Range) FlowBuilder
+	LoadIPDSCP(value uint8) FlowBuilder
 	LoadRange(name string, addr uint64, to Range) FlowBuilder
 	Move(from, to string) FlowBuilder
 	MoveRange(fromName, toName string, from, to Range) FlowBuilder
@@ -205,6 +209,7 @@ type Action interface {
 type FlowBuilder interface {
 	MatchPriority(uint16) FlowBuilder
 	MatchProtocol(name Protocol) FlowBuilder
+	MatchIPProtocolValue(isIPv6 bool, protoValue uint8) FlowBuilder
 	MatchReg(regID int, data uint32) FlowBuilder
 	MatchXXReg(regID int, data []byte) FlowBuilder
 	MatchRegRange(regID int, data uint32, rng Range) FlowBuilder
@@ -220,7 +225,7 @@ type FlowBuilder interface {
 	MatchARPSpa(ip net.IP) FlowBuilder
 	MatchARPTpa(ip net.IP) FlowBuilder
 	MatchARPOp(op uint16) FlowBuilder
-	MatchIPDscp(dscp uint8) FlowBuilder
+	MatchIPDSCP(dscp uint8) FlowBuilder
 	MatchCTStateNew(isSet bool) FlowBuilder
 	MatchCTStateRel(isSet bool) FlowBuilder
 	MatchCTStateRpl(isSet bool) FlowBuilder
@@ -234,6 +239,7 @@ type FlowBuilder interface {
 	MatchPktMark(value uint32, mask *uint32) FlowBuilder
 	MatchConjID(value uint32) FlowBuilder
 	MatchDstPort(port uint16, portMask *uint16) FlowBuilder
+	MatchSrcPort(port uint16, portMask *uint16) FlowBuilder
 	MatchICMPv6Type(icmp6Type byte) FlowBuilder
 	MatchICMPv6Code(icmp6Code byte) FlowBuilder
 	MatchTunnelDst(dstIP net.IP) FlowBuilder
@@ -320,6 +326,7 @@ type PacketOutBuilder interface {
 	SetSrcIP(ip net.IP) PacketOutBuilder
 	SetDstIP(ip net.IP) PacketOutBuilder
 	SetIPProtocol(protocol Protocol) PacketOutBuilder
+	SetIPProtocolValue(isIPv6 bool, protoValue uint8) PacketOutBuilder
 	SetTTL(ttl uint8) PacketOutBuilder
 	SetIPFlags(flags uint16) PacketOutBuilder
 	SetTCPSrcPort(port uint16) PacketOutBuilder
@@ -355,4 +362,22 @@ type IPRange struct {
 type PortRange struct {
 	StartPort uint16
 	EndPort   uint16
+}
+
+type Packet struct {
+	IsIPv6          bool
+	DestinationMAC  net.HardwareAddr
+	SourceMAC       net.HardwareAddr
+	DestinationIP   net.IP
+	SourceIP        net.IP
+	IPProto         uint8
+	IPFlags         uint16
+	TTL             uint8
+	DestinationPort uint16
+	SourcePort      uint16
+	TCPFlags        uint8
+	ICMPType        uint8
+	ICMPCode        uint8
+	ICMPEchoID      uint16
+	ICMPEchoSeq     uint16
 }

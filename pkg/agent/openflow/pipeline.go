@@ -23,6 +23,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/contiv/libOpenflow/protocol"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog"
 
@@ -313,9 +314,9 @@ var (
 	// metricEgressRuleIDRange takes 32..63 range of ct_label to store the egress rule ID.
 	metricEgressRuleIDRange = binding.Range{32, 63}
 
-	// traceflowTagToSRange stores dataplaneTag at range 2-7 in ToS field of IP header.
-	// IPv4/v6 DSCP (bits 2-7) field supports exact match only.
-	traceflowTagToSRange = binding.Range{2, 7}
+	// traceflowTagToSRange stores Traceflow dataplane tag to DSCP bits of
+	// IP header ToS field.
+	traceflowTagToSRange = binding.IPDSCPToSRange
 
 	// snatPktMarkRange takes an 8-bit range of pkt_mark to store the ID of
 	// a SNAT IP. The bit range must match SNATIPMarkMask.
@@ -361,7 +362,7 @@ type client struct {
 	ingressEntryTable  binding.TableIDType
 	pipeline           map[binding.TableIDType]binding.Table
 	// Flow caches for corresponding deletions.
-	nodeFlowCache, podFlowCache, serviceFlowCache, snatFlowCache *flowCategoryCache
+	nodeFlowCache, podFlowCache, serviceFlowCache, snatFlowCache, tfFlowCache *flowCategoryCache
 	// "fixed" flows installed by the agent after initialization and which do not change during
 	// the lifetime of the client.
 	gatewayFlows, defaultServiceFlows, defaultTunnelFlows, hostNetworkingFlows []binding.Flow
@@ -695,42 +696,98 @@ func (c *client) kubeProxyFlows(category cookie.Category) []binding.Flow {
 
 // TODO: Use DuplicateToBuilder or integrate this function into original one to avoid unexpected
 // difference.
-// traceflowConnectionTrackFlows generates Traceflow specific flows that bypass the drop flow in
-// connectionTrackFlows to avoid unexpected packet drop in Traceflow. It also ensures that if any
-// Traceflow packet has ct_state +rpl, it is dropped. This may happen when the Traceflow request
-// destination is the Node's IP.
-func (c *client) traceflowConnectionTrackFlows(dataplaneTag uint8, category cookie.Category) []binding.Flow {
+// traceflowConnectionTrackFlows generates Traceflow specific flows in the
+// connectionTrackStateTable. When packet is not provided, the flows bypass the
+// drop flow in connectionTrackFlows to avoid unexpected drop of the injected
+// Traceflow packet, and to drop any Traceflow packet that has ct_state +rpl,
+// which may happen when the Traceflow request destination is the Node's IP.
+// When packet is provided, a flow is added to mark the first packet as the
+// Traceflow packet, for the first connection that is initiated by srcOFPort
+// and matches the provided packet.
+func (c *client) traceflowConnectionTrackFlows(dataplaneTag uint8, packet *binding.Packet, srcOFPort uint32, timeout uint16, category cookie.Category) []binding.Flow {
 	connectionTrackStateTable := c.pipeline[conntrackStateTable]
 	var flows []binding.Flow
 
-	flowBuilder := connectionTrackStateTable.BuildFlow(priorityLow + 1).
-		MatchProtocol(binding.ProtocolIP).
-		MatchIPDscp(dataplaneTag).
-		SetHardTimeout(300).
-		Cookie(c.cookieAllocator.Request(category).Raw())
-	if c.enableProxy {
-		flowBuilder = flowBuilder.
-			Action().ResubmitToTable(sessionAffinityTable).
-			Action().ResubmitToTable(serviceLBTable)
+	if packet == nil {
+		flowBuilder := connectionTrackStateTable.BuildFlow(priorityLow + 1).
+			MatchProtocol(binding.ProtocolIP).
+			MatchIPDSCP(dataplaneTag).
+			SetHardTimeout(timeout).
+			Cookie(c.cookieAllocator.Request(category).Raw())
+		if c.enableProxy {
+			flowBuilder = flowBuilder.
+				Action().ResubmitToTable(sessionAffinityTable).
+				Action().ResubmitToTable(serviceLBTable)
+		} else {
+			flowBuilder = flowBuilder.
+				Action().ResubmitToTable(connectionTrackStateTable.GetNext())
+		}
+		flows = append(flows, flowBuilder.Done())
+
+		flows = append(flows, connectionTrackStateTable.BuildFlow(priorityLow+2).
+			MatchProtocol(binding.ProtocolIP).
+			MatchIPDSCP(dataplaneTag).
+			MatchCTStateTrk(true).MatchCTStateRpl(true).
+			SetHardTimeout(timeout).
+			Cookie(c.cookieAllocator.Request(category).Raw()).
+			Action().Drop().
+			Done())
 	} else {
-		flowBuilder = flowBuilder.
-			Action().ResubmitToTable(connectionTrackStateTable.GetNext())
+		flowBuilder := connectionTrackStateTable.BuildFlow(priorityLow).
+			MatchInPort(srcOFPort).
+			MatchCTStateNew(true).MatchCTStateTrk(true).
+			SetHardTimeout(timeout).
+			Cookie(c.cookieAllocator.Request(category).Raw()).
+			Action().LoadIPDSCP(dataplaneTag)
+
+		if packet.DestinationIP != nil {
+			flowBuilder = flowBuilder.MatchDstIP(packet.DestinationIP)
+		}
+		// Match transport header
+		switch packet.IPProto {
+		case protocol.Type_ICMP:
+			flowBuilder = flowBuilder.MatchProtocol(binding.ProtocolICMP)
+		case protocol.Type_IPv6ICMP:
+			flowBuilder = flowBuilder.MatchProtocol(binding.ProtocolICMPv6)
+		case protocol.Type_TCP:
+			if packet.IsIPv6 {
+				flowBuilder = flowBuilder.MatchProtocol(binding.ProtocolTCPv6)
+			} else {
+				flowBuilder = flowBuilder.MatchProtocol(binding.ProtocolTCP)
+			}
+		case protocol.Type_UDP:
+			if packet.IsIPv6 {
+				flowBuilder = flowBuilder.MatchProtocol(binding.ProtocolUDPv6)
+			} else {
+				flowBuilder = flowBuilder.MatchProtocol(binding.ProtocolUDP)
+			}
+		default:
+			flowBuilder = flowBuilder.MatchIPProtocolValue(packet.IsIPv6, packet.IPProto)
+
+		}
+		if packet.IPProto == protocol.Type_TCP || packet.IPProto == protocol.Type_UDP {
+			if packet.DestinationPort != 0 {
+				flowBuilder = flowBuilder.MatchDstPort(packet.DestinationPort, nil)
+			}
+			if packet.SourcePort != 0 {
+				flowBuilder = flowBuilder.MatchSrcPort(packet.SourcePort, nil)
+			}
+		}
+
+		if c.enableProxy {
+			flowBuilder = flowBuilder.
+				Action().ResubmitToTable(sessionAffinityTable).
+				Action().ResubmitToTable(serviceLBTable)
+		} else {
+			flowBuilder = flowBuilder.
+				Action().ResubmitToTable(connectionTrackStateTable.GetNext())
+		}
+		flows = []binding.Flow{flowBuilder.Done()}
 	}
-	flows = append(flows, flowBuilder.Done())
-
-	flows = append(flows, connectionTrackStateTable.BuildFlow(priorityLow+2).
-		MatchProtocol(binding.ProtocolIP).
-		MatchIPDscp(dataplaneTag).
-		MatchCTStateTrk(true).MatchCTStateRpl(true).
-		SetHardTimeout(300).
-		Cookie(c.cookieAllocator.Request(category).Raw()).
-		Action().Drop().
-		Done())
-
 	return flows
 }
 
-func (c *client) traceflowNetworkPolicyFlows(dataplaneTag uint8, category cookie.Category) []binding.Flow {
+func (c *client) traceflowNetworkPolicyFlows(dataplaneTag uint8, timeout uint16, category cookie.Category) []binding.Flow {
 	flows := []binding.Flow{}
 	c.conjMatchFlowLock.Lock()
 	defer c.conjMatchFlowLock.Unlock()
@@ -741,15 +798,15 @@ func (c *client) traceflowNetworkPolicyFlows(dataplaneTag uint8, category cookie
 			if ctx.dropFlow.FlowProtocol() == "" {
 				copyFlowBuilderIPv6 := ctx.dropFlow.CopyToBuilder(priorityNormal+2, false)
 				copyFlowBuilderIPv6 = copyFlowBuilderIPv6.MatchProtocol(binding.ProtocolIPv6)
-				flows = append(flows, copyFlowBuilderIPv6.MatchIPDscp(dataplaneTag).
-					SetHardTimeout(300).
+				flows = append(flows, copyFlowBuilderIPv6.MatchIPDSCP(dataplaneTag).
+					SetHardTimeout(timeout).
 					Cookie(c.cookieAllocator.Request(category).Raw()).
 					Action().SendToController(uint8(PacketInReasonTF)).
 					Done())
 				copyFlowBuilder = copyFlowBuilder.MatchProtocol(binding.ProtocolIP)
 			}
-			flows = append(flows, copyFlowBuilder.MatchIPDscp(dataplaneTag).
-				SetHardTimeout(300).
+			flows = append(flows, copyFlowBuilder.MatchIPDSCP(dataplaneTag).
+				SetHardTimeout(timeout).
 				Cookie(c.cookieAllocator.Request(category).Raw()).
 				Action().SendToController(uint8(PacketInReasonTF)).
 				Done())
@@ -765,15 +822,15 @@ func (c *client) traceflowNetworkPolicyFlows(dataplaneTag uint8, category cookie
 				if flow.FlowProtocol() == "" {
 					copyFlowBuilderIPv6 := flow.CopyToBuilder(priorityNormal+2, false)
 					copyFlowBuilderIPv6 = copyFlowBuilderIPv6.MatchProtocol(binding.ProtocolIPv6)
-					flows = append(flows, copyFlowBuilderIPv6.MatchIPDscp(dataplaneTag).
-						SetHardTimeout(300).
+					flows = append(flows, copyFlowBuilderIPv6.MatchIPDSCP(dataplaneTag).
+						SetHardTimeout(timeout).
 						Cookie(c.cookieAllocator.Request(category).Raw()).
 						Action().SendToController(uint8(PacketInReasonTF)).
 						Done())
 					copyFlowBuilder = copyFlowBuilder.MatchProtocol(binding.ProtocolIP)
 				}
-				flows = append(flows, copyFlowBuilder.MatchIPDscp(dataplaneTag).
-					SetHardTimeout(300).
+				flows = append(flows, copyFlowBuilder.MatchIPDSCP(dataplaneTag).
+					SetHardTimeout(timeout).
 					Cookie(c.cookieAllocator.Request(category).Raw()).
 					Action().SendToController(uint8(PacketInReasonTF)).
 					Done())
@@ -879,41 +936,48 @@ func (c *client) l2ForwardCalcFlow(dstMAC net.HardwareAddr, ofPort uint32, skipI
 
 // traceflowL2ForwardOutputFlows generates Traceflow specific flows that outputs traceflow packets
 // to OVS port and Antrea Agent after L2forwarding calculation.
-func (c *client) traceflowL2ForwardOutputFlows(dataplaneTag uint8, category cookie.Category) []binding.Flow {
+func (c *client) traceflowL2ForwardOutputFlows(dataplaneTag uint8, liveTraffic bool, timeout uint16, category cookie.Category) []binding.Flow {
 	flows := []binding.Flow{}
+	l2FwdOutTable := c.pipeline[L2ForwardingOutTable]
 	for _, ipProtocol := range []binding.Protocol{binding.ProtocolIP, binding.ProtocolIPv6} {
 		if c.encapMode.SupportsEncap() {
 			// SendToController and Output if output port is tunnel port.
-			flows = append(flows, c.pipeline[L2ForwardingOutTable].BuildFlow(priorityNormal+3).
+			flows = append(flows, l2FwdOutTable.BuildFlow(priorityNormal+3).
 				MatchReg(int(PortCacheReg), config.DefaultTunOFPort).
-				MatchIPDscp(dataplaneTag).
-				SetHardTimeout(300).
+				MatchIPDSCP(dataplaneTag).
+				SetHardTimeout(timeout).
 				MatchProtocol(ipProtocol).
 				MatchRegRange(int(marksReg), portFoundMark, ofPortMarkRange).
 				Action().OutputRegRange(int(PortCacheReg), ofPortRegRange).
 				Action().SendToController(uint8(PacketInReasonTF)).
 				Cookie(c.cookieAllocator.Request(category).Raw()).
 				Done())
-			// Only SendToController if output port is local gateway. In encapMode, a
-			// Traceflow packet going out of the gateway port (i.e. exiting the overlay)
-			// essentially means that the Traceflow request is complete.
-			flows = append(flows, c.pipeline[L2ForwardingOutTable].BuildFlow(priorityNormal+2).
+			// For injected packets, only SendToController if output port is local
+			// gateway. In encapMode, a Traceflow packet going out of the gateway
+			// port (i.e. exiting the overlay) essentially means that the Traceflow
+			// request is complete.
+			flowBuilder := l2FwdOutTable.BuildFlow(priorityNormal+2).
 				MatchReg(int(PortCacheReg), config.HostGatewayOFPort).
-				MatchIPDscp(dataplaneTag).
-				SetHardTimeout(300).
+				MatchIPDSCP(dataplaneTag).
+				SetHardTimeout(timeout).
 				MatchProtocol(ipProtocol).
 				MatchRegRange(int(marksReg), portFoundMark, ofPortMarkRange).
 				Action().SendToController(uint8(PacketInReasonTF)).
-				Cookie(c.cookieAllocator.Request(category).Raw()).
-				Done())
+				Cookie(c.cookieAllocator.Request(category).Raw())
+			if liveTraffic {
+				// Clear the loaded DSCP bits before output.
+				flowBuilder = flowBuilder.Action().LoadIPDSCP(0).
+					Action().OutputRegRange(int(PortCacheReg), ofPortRegRange)
+			}
+			flows = append(flows, flowBuilder.Done())
 		} else {
 			// SendToController and Output if output port is local gateway. Unlike in
 			// encapMode, inter-Node Pod-to-Pod traffic is expected to go out of the
 			// gateway port on the way to its destination.
-			flows = append(flows, c.pipeline[L2ForwardingOutTable].BuildFlow(priorityNormal+2).
+			flows = append(flows, l2FwdOutTable.BuildFlow(priorityNormal+2).
 				MatchReg(int(PortCacheReg), config.HostGatewayOFPort).
-				MatchIPDscp(dataplaneTag).
-				SetHardTimeout(300).
+				MatchIPDSCP(dataplaneTag).
+				SetHardTimeout(timeout).
 				MatchProtocol(ipProtocol).
 				MatchRegRange(int(marksReg), portFoundMark, ofPortMarkRange).
 				Action().OutputRegRange(int(PortCacheReg), ofPortRegRange).
@@ -927,26 +991,34 @@ func (c *client) traceflowL2ForwardOutputFlows(dataplaneTag uint8, category cook
 			gatewayIP = c.nodeConfig.GatewayConfig.IPv6
 		}
 		if gatewayIP != nil {
-			flows = append(flows, c.pipeline[L2ForwardingOutTable].BuildFlow(priorityNormal+3).
+			flowBuilder := l2FwdOutTable.BuildFlow(priorityNormal+3).
 				MatchReg(int(PortCacheReg), config.HostGatewayOFPort).
 				MatchDstIP(gatewayIP).
-				MatchIPDscp(dataplaneTag).
-				SetHardTimeout(300).
+				MatchIPDSCP(dataplaneTag).
+				SetHardTimeout(timeout).
 				MatchProtocol(ipProtocol).
 				MatchRegRange(int(marksReg), portFoundMark, ofPortMarkRange).
 				Action().SendToController(uint8(PacketInReasonTF)).
-				Cookie(c.cookieAllocator.Request(category).Raw()).
-				Done())
+				Cookie(c.cookieAllocator.Request(category).Raw())
+			if liveTraffic {
+				flowBuilder = flowBuilder.Action().LoadIPDSCP(0).
+					Action().OutputRegRange(int(PortCacheReg), ofPortRegRange)
+			}
+			flows = append(flows, flowBuilder.Done())
 		}
 		// Only SendToController if output port is Pod port.
-		flows = append(flows, c.pipeline[L2ForwardingOutTable].BuildFlow(priorityNormal+2).
-			MatchIPDscp(dataplaneTag).
-			SetHardTimeout(300).
+		flowBuilder := l2FwdOutTable.BuildFlow(priorityNormal+2).
+			MatchIPDSCP(dataplaneTag).
+			SetHardTimeout(timeout).
 			MatchProtocol(ipProtocol).
 			MatchRegRange(int(marksReg), portFoundMark, ofPortMarkRange).
 			Action().SendToController(uint8(PacketInReasonTF)).
-			Cookie(c.cookieAllocator.Request(category).Raw()).
-			Done())
+			Cookie(c.cookieAllocator.Request(category).Raw())
+		if liveTraffic {
+			flowBuilder = flowBuilder.Action().LoadIPDSCP(0).
+				Action().OutputRegRange(int(PortCacheReg), ofPortRegRange)
+		}
+		flows = append(flows, flowBuilder.Done())
 	}
 	return flows
 }
@@ -2033,6 +2105,7 @@ func NewClient(bridgeName, mgmtAddr string, ovsDatapathType ovsconfig.OVSDatapat
 		nodeFlowCache:            newFlowCategoryCache(),
 		podFlowCache:             newFlowCategoryCache(),
 		serviceFlowCache:         newFlowCategoryCache(),
+		tfFlowCache:              newFlowCategoryCache(),
 		policyCache:              policyCache,
 		groupCache:               sync.Map{},
 		globalConjMatchFlowCache: map[string]*conjMatchFlowContext{},

@@ -17,6 +17,7 @@ package e2e
 import (
 	"context"
 	"fmt"
+	"net"
 	"strings"
 	"testing"
 	"time"
@@ -476,6 +477,47 @@ func TestTraceflowIntraNode(t *testing.T) {
 			expectedPhase: v1alpha1.Failed,
 		},
 		{
+			name:      "intraNodeICMPDstIPLiveTraceflowIPv4",
+			ipVersion: 4,
+			tf: &v1alpha1.Traceflow{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: randName(fmt.Sprintf("%s-%s-to-%s-", testNamespace, node1Pods[0], dstPodIPv4Str)),
+				},
+				Spec: v1alpha1.TraceflowSpec{
+					Source: v1alpha1.Source{
+						Namespace: testNamespace,
+						Pod:       node1Pods[0],
+					},
+					Destination: v1alpha1.Destination{
+						IP: dstPodIPv4Str,
+					},
+					LiveTraffic: true,
+				},
+			},
+			expectedPhase: v1alpha1.Succeeded,
+			expectedResults: []v1alpha1.NodeResult{
+				{
+					Node: node1,
+					Observations: []v1alpha1.Observation{
+						{
+							Component: v1alpha1.ComponentSpoofGuard,
+							Action:    v1alpha1.ActionForwarded,
+						},
+						{
+							Component:     v1alpha1.ComponentNetworkPolicy,
+							ComponentInfo: "EgressRule",
+							Action:        v1alpha1.ActionForwarded,
+						},
+						{
+							Component:     v1alpha1.ComponentForwarding,
+							ComponentInfo: "Output",
+							Action:        v1alpha1.ActionDelivered,
+						},
+					},
+				},
+			},
+		},
+		{
 			name:      "intraNodeTraceflowIPv6",
 			ipVersion: 6,
 			tf: &v1alpha1.Traceflow{
@@ -697,6 +739,47 @@ func TestTraceflowIntraNode(t *testing.T) {
 				},
 			},
 			expectedPhase: v1alpha1.Failed,
+		},
+		{
+			name:      "intraNodeICMPDstIPLiveTraceflowIPv6",
+			ipVersion: 6,
+			tf: &v1alpha1.Traceflow{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: randName(fmt.Sprintf("%s-%s-to-%s-", testNamespace, node1Pods[0], dstPodIPv6Str)),
+				},
+				Spec: v1alpha1.TraceflowSpec{
+					Source: v1alpha1.Source{
+						Namespace: testNamespace,
+						Pod:       node1Pods[0],
+					},
+					Destination: v1alpha1.Destination{
+						IP: dstPodIPv6Str,
+					},
+					LiveTraffic: true,
+				},
+			},
+			expectedPhase: v1alpha1.Succeeded,
+			expectedResults: []v1alpha1.NodeResult{
+				{
+					Node: node1,
+					Observations: []v1alpha1.Observation{
+						{
+							Component: v1alpha1.ComponentSpoofGuard,
+							Action:    v1alpha1.ActionForwarded,
+						},
+						{
+							Component:     v1alpha1.ComponentNetworkPolicy,
+							ComponentInfo: "EgressRule",
+							Action:        v1alpha1.ActionForwarded,
+						},
+						{
+							Component:     v1alpha1.ComponentForwarding,
+							ComponentInfo: "Output",
+							Action:        v1alpha1.ActionDelivered,
+						},
+					},
+				},
+			},
 		},
 	}
 
@@ -1162,6 +1245,63 @@ func TestTraceflowInterNode(t *testing.T) {
 			},
 		},
 		{
+			name:      "interNodeICMPDstPodLiveTraceflowIPv4",
+			ipVersion: 4,
+			tf: &v1alpha1.Traceflow{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: randName(fmt.Sprintf("%s-%s-to-%s-", testNamespace, node1Pods[0], node2Pods[0])),
+				},
+				Spec: v1alpha1.TraceflowSpec{
+					Source: v1alpha1.Source{
+						Namespace: testNamespace,
+						Pod:       node1Pods[0],
+					},
+					Destination: v1alpha1.Destination{
+						Namespace: testNamespace,
+						Pod:       node2Pods[0],
+					},
+					LiveTraffic: true,
+				},
+			},
+			expectedPhase: v1alpha1.Succeeded,
+			expectedResults: []v1alpha1.NodeResult{
+				{
+					Node: node1,
+					Observations: []v1alpha1.Observation{
+						{
+							Component: v1alpha1.ComponentSpoofGuard,
+							Action:    v1alpha1.ActionForwarded,
+						},
+						{
+							Component:     v1alpha1.ComponentNetworkPolicy,
+							ComponentInfo: "EgressRule",
+							Action:        v1alpha1.ActionForwarded,
+						},
+						{
+							Component:     v1alpha1.ComponentForwarding,
+							ComponentInfo: "Output",
+							Action:        v1alpha1.ActionForwarded,
+						},
+					},
+				},
+				{
+					Node: node2,
+					Observations: []v1alpha1.Observation{
+						{
+							Component:     v1alpha1.ComponentForwarding,
+							ComponentInfo: "Classification",
+							Action:        v1alpha1.ActionReceived,
+						},
+						{
+							Component:     v1alpha1.ComponentForwarding,
+							ComponentInfo: "Output",
+							Action:        v1alpha1.ActionDelivered,
+						},
+					},
+				},
+			},
+		},
+		{
 			name:      "interNodeTraceflowIPv6",
 			ipVersion: 6,
 			tf: &v1alpha1.Traceflow{
@@ -1426,6 +1566,63 @@ func TestTraceflowInterNode(t *testing.T) {
 				},
 			},
 		},
+		{
+			name:      "interNodeICMPDstPodLiveTraceflowIPv6",
+			ipVersion: 6,
+			tf: &v1alpha1.Traceflow{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: randName(fmt.Sprintf("%s-%s-to-%s-", testNamespace, node1Pods[0], node2Pods[0])),
+				},
+				Spec: v1alpha1.TraceflowSpec{
+					Source: v1alpha1.Source{
+						Namespace: testNamespace,
+						Pod:       node1Pods[0],
+					},
+					Destination: v1alpha1.Destination{
+						Namespace: testNamespace,
+						Pod:       node2Pods[0],
+					},
+					LiveTraffic: true,
+				},
+			},
+			expectedPhase: v1alpha1.Succeeded,
+			expectedResults: []v1alpha1.NodeResult{
+				{
+					Node: node1,
+					Observations: []v1alpha1.Observation{
+						{
+							Component: v1alpha1.ComponentSpoofGuard,
+							Action:    v1alpha1.ActionForwarded,
+						},
+						{
+							Component:     v1alpha1.ComponentNetworkPolicy,
+							ComponentInfo: "EgressRule",
+							Action:        v1alpha1.ActionForwarded,
+						},
+						{
+							Component:     v1alpha1.ComponentForwarding,
+							ComponentInfo: "Output",
+							Action:        v1alpha1.ActionForwarded,
+						},
+					},
+				},
+				{
+					Node: node2,
+					Observations: []v1alpha1.Observation{
+						{
+							Component:     v1alpha1.ComponentForwarding,
+							ComponentInfo: "Classification",
+							Action:        v1alpha1.ActionReceived,
+						},
+						{
+							Component:     v1alpha1.ComponentForwarding,
+							ComponentInfo: "Output",
+							Action:        v1alpha1.ActionDelivered,
+						},
+					},
+				},
+			},
+		},
 	}
 
 	t.Run("traceflowGroupTest", func(t *testing.T) {
@@ -1647,6 +1844,32 @@ func runTestTraceflow(t *testing.T, data *TestData, tc testcase) {
 			t.Errorf("Error when deleting traceflow: %v", err)
 		}
 	}()
+
+	if tc.tf.Spec.LiveTraffic {
+		// LiveTraffic Traceflow test supports only ICMP traffic from
+		// the source Pod to an IP or another Pod.
+		var dstPodIPs *PodIPs
+		srcPod := tc.tf.Spec.Source.Pod
+		dstPod := tc.tf.Spec.Destination.Pod
+		dstIP := tc.tf.Spec.Destination.IP
+		if dstIP != "" {
+			ip := net.ParseIP(dstIP)
+			if ip.To4() != nil {
+				dstPodIPs = &PodIPs{ipv4: &ip}
+			} else {
+				dstPodIPs = &PodIPs{ipv6: &ip}
+			}
+		} else {
+			podIPs := waitForPodIPs(t, data, []string{dstPod})
+			dstPodIPs = podIPs[dstPod]
+		}
+		// Give a little time for Nodes to install OVS flows.
+		time.Sleep(time.Second * 2)
+		// Send an ICMP echo packet from the source Pod to the destination.
+		if err := data.runPingCommandFromTestPod(srcPod, dstPodIPs, 2); err != nil {
+			t.Logf("Ping '%s' -> '%v' failed: ERROR (%v)", srcPod, *dstPodIPs, err)
+		}
+	}
 
 	tf, err := data.waitForTraceflow(t, tc.tf.Name, tc.expectedPhase)
 	if err != nil {

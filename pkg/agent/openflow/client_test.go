@@ -31,7 +31,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow/cookie"
 	oftest "github.com/vmware-tanzu/antrea/pkg/agent/openflow/testing"
-	ofconfig "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
+	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
 	ovsoftest "github.com/vmware-tanzu/antrea/pkg/ovs/openflow/testing"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
 )
@@ -39,7 +39,7 @@ import (
 const bridgeName = "dummy-br"
 
 var (
-	bridgeMgmtAddr = ofconfig.GetMgmtAddress(ovsconfig.DefaultOVSRunDir, bridgeName)
+	bridgeMgmtAddr = binding.GetMgmtAddress(ovsconfig.DefaultOVSRunDir, bridgeName)
 	gwMAC, _       = net.ParseMAC("AA:BB:CC:DD:EE:EE")
 	gwIP, ipNet, _ = net.ParseCIDR("10.0.1.1/24")
 	gwIPv6, _, _   = net.ParseCIDR("f00d::b00:0:0:0/80")
@@ -280,7 +280,7 @@ func Test_client_InstallTraceflowFlows(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 			c := tt.prepareFunc(ctrl)
-			if err := c.InstallTraceflowFlows(tt.args.dataplaneTag); (err != nil) != tt.wantErr {
+			if err := c.InstallTraceflowFlows(tt.args.dataplaneTag, false, nil, 0, 300); (err != nil) != tt.wantErr {
 				t.Errorf("InstallTraceflowFlows() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
@@ -290,168 +290,95 @@ func Test_client_InstallTraceflowFlows(t *testing.T) {
 func Test_client_SendTraceflowPacket(t *testing.T) {
 	type args struct {
 		dataplaneTag uint8
-		srcMAC       string
-		dstMAC       string
-		srcIP        string
-		dstIP        string
-		IPProtocol   uint8
-		ttl          uint8
-		IPFlags      uint16
-		TCPSrcPort   uint16
-		TCPDstPort   uint16
-		TCPFlags     uint8
-		UDPSrcPort   uint16
-		UDPDstPort   uint16
-		ICMPType     uint8
-		ICMPCode     uint8
-		ICMPID       uint16
-		ICMPSequence uint16
-		inPort       uint32
-		outPort      int32
+		binding.Packet
+		inPort  uint32
+		outPort int32
 	}
+	srcMAC, _ := net.ParseMAC("11:22:33:44:55:66")
+	dstMAC, _ := net.ParseMAC("11:22:33:44:55:77")
 	tests := []struct {
 		name    string
 		args    args
 		wantErr bool
 	}{
 		{
-			name:    "err noSrcMAC",
-			args:    args{},
-			wantErr: true,
-		},
-		{
-			name: "err invalidDstMAC",
-			args: args{
-				srcMAC: "11:22:33:44:55:66",
-				dstMAC: "invalidMAC",
-			},
-			wantErr: true,
-		},
-		{
-			name: "err noIP",
-			args: args{
-				srcMAC: "11:22:33:44:55:66",
-				dstMAC: "11:22:33:44:55:77",
-			},
-			wantErr: true,
-		},
-		{
-			name: "err IPVersionMismatch",
-			args: args{
-				srcMAC: "11:22:33:44:55:66",
-				dstMAC: "11:22:33:44:55:77",
-				srcIP:  "1.2.3.4",
-				dstIP:  "1111::5555",
-			},
-			wantErr: true,
-		},
-		{
 			name: "IPv4 ICMP",
 			args: args{
-				srcMAC:     "11:22:33:44:55:66",
-				dstMAC:     "11:22:33:44:55:77",
-				srcIP:      "1.2.3.4",
-				dstIP:      "1.2.3.5",
-				ttl:        64,
-				IPProtocol: 1,
+				Packet: binding.Packet{
+					SourceMAC:      srcMAC,
+					DestinationMAC: dstMAC,
+					SourceIP:       net.ParseIP("1.2.3.4"),
+					DestinationIP:  net.ParseIP("1.2.3.5"),
+					IPProto:        1,
+					TTL:            64,
+				},
 			},
-			wantErr: false,
-		},
-		{
-			name: "IPv4 ICMP invalid",
-			args: args{
-				srcMAC:     "11:22:33:44:55:66",
-				dstMAC:     "",
-				srcIP:      "1.2.3.4",
-				dstIP:      "1.2.3.5",
-				ttl:        64,
-				IPProtocol: 58,
-				outPort:    -1,
-			},
-			wantErr: true,
-		},
-		{
-			name: "IPv4 ICMP",
-			args: args{
-				srcMAC:     "11:22:33:44:55:66",
-				dstMAC:     "",
-				srcIP:      "1.2.3.4",
-				dstIP:      "1.2.3.5",
-				ttl:        64,
-				IPProtocol: 1,
-				outPort:    -1,
-			},
-			wantErr: false,
 		},
 		{
 			name: "IPv4 TCP",
 			args: args{
-				srcMAC:     "11:22:33:44:55:66",
-				dstMAC:     "11:22:33:44:55:77",
-				srcIP:      "1.2.3.4",
-				dstIP:      "1.2.3.5",
-				IPProtocol: 6,
+				Packet: binding.Packet{
+					SourceMAC:      srcMAC,
+					DestinationMAC: dstMAC,
+					SourceIP:       net.ParseIP("1.2.3.4"),
+					DestinationIP:  net.ParseIP("1.2.3.5"),
+					IPProto:        6,
+					TTL:            64,
+				},
 			},
-			wantErr: false,
 		},
 		{
 			name: "IPv4 UDP",
 			args: args{
-				srcMAC:     "11:22:33:44:55:66",
-				dstMAC:     "11:22:33:44:55:77",
-				srcIP:      "1.2.3.4",
-				dstIP:      "1.2.3.5",
-				IPProtocol: 17,
+				Packet: binding.Packet{
+					SourceMAC:      srcMAC,
+					DestinationMAC: dstMAC,
+					SourceIP:       net.ParseIP("1.2.3.4"),
+					DestinationIP:  net.ParseIP("1.2.3.5"),
+					IPProto:        17,
+					TTL:            64,
+				},
 			},
-			wantErr: false,
-		},
-		{
-			name: "IPv6 ICMP invalid",
-			args: args{
-				srcMAC:     "11:22:33:44:55:66",
-				dstMAC:     "",
-				srcIP:      "1111::4444",
-				dstIP:      "1111::5555",
-				ttl:        64,
-				IPProtocol: 1,
-				outPort:    -1,
-			},
-			wantErr: true,
 		},
 		{
 			name: "IPv6 ICMPv6",
 			args: args{
-				srcMAC:     "11:22:33:44:55:66",
-				dstMAC:     "",
-				srcIP:      "1111::4444",
-				dstIP:      "1111::5555",
-				ttl:        64,
-				IPProtocol: 58,
-				outPort:    -1,
+				Packet: binding.Packet{
+					SourceMAC:      srcMAC,
+					DestinationMAC: dstMAC,
+					SourceIP:       net.ParseIP("1111::4444"),
+					DestinationIP:  net.ParseIP("1111::5555"),
+					IPProto:        58,
+					TTL:            64,
+				},
+				outPort: -1,
 			},
-			wantErr: false,
 		},
 		{
 			name: "IPv6 TCP",
 			args: args{
-				srcMAC:     "11:22:33:44:55:66",
-				dstMAC:     "11:22:33:44:55:77",
-				srcIP:      "1111::4444",
-				dstIP:      "1111::5555",
-				IPProtocol: 6,
+				Packet: binding.Packet{
+					SourceMAC:      srcMAC,
+					DestinationMAC: dstMAC,
+					SourceIP:       net.ParseIP("1111::4444"),
+					DestinationIP:  net.ParseIP("1111::5555"),
+					IPProto:        6,
+					TTL:            64,
+				},
 			},
-			wantErr: false,
 		},
 		{
 			name: "IPv6 UDP",
 			args: args{
-				srcMAC:     "11:22:33:44:55:66",
-				dstMAC:     "11:22:33:44:55:77",
-				srcIP:      "1111::4444",
-				dstIP:      "1111::5555",
-				IPProtocol: 17,
+				Packet: binding.Packet{
+					SourceMAC:      srcMAC,
+					DestinationMAC: dstMAC,
+					SourceIP:       net.ParseIP("1111::4444"),
+					DestinationIP:  net.ParseIP("1111::5555"),
+					IPProto:        17,
+					TTL:            64,
+				},
 			},
-			wantErr: false,
 		},
 	}
 	for _, tt := range tests {
@@ -459,7 +386,7 @@ func Test_client_SendTraceflowPacket(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 			c := prepareSendTraceflowPacket(ctrl, !tt.wantErr)
-			if err := c.SendTraceflowPacket(tt.args.dataplaneTag, tt.args.srcMAC, tt.args.dstMAC, tt.args.srcIP, tt.args.dstIP, tt.args.IPProtocol, tt.args.ttl, tt.args.IPFlags, tt.args.TCPSrcPort, tt.args.TCPDstPort, tt.args.TCPFlags, tt.args.UDPSrcPort, tt.args.UDPDstPort, tt.args.ICMPType, tt.args.ICMPCode, tt.args.ICMPID, tt.args.ICMPSequence, tt.args.inPort, tt.args.outPort); (err != nil) != tt.wantErr {
+			if err := c.SendTraceflowPacket(tt.args.dataplaneTag, &tt.args.Packet, tt.args.inPort, tt.args.outPort); (err != nil) != tt.wantErr {
 				t.Errorf("SendTraceflowPacket() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
@@ -477,10 +404,10 @@ func prepareTraceflowFlow(ctrl *gomock.Controller) *client {
 
 	mFlow := ovsoftest.NewMockFlow(ctrl)
 	ctx := &conjMatchFlowContext{dropFlow: mFlow}
-	mFlow.EXPECT().FlowProtocol().Return(ofconfig.Protocol("ip"))
+	mFlow.EXPECT().FlowProtocol().Return(binding.Protocol("ip"))
 	mFlow.EXPECT().CopyToBuilder(priorityNormal+2, false).Return(c.pipeline[EgressDefaultTable].BuildFlow(priorityNormal + 2)).Times(1)
 	c.globalConjMatchFlowCache["mockContext"] = ctx
-	c.policyCache.Add(&policyRuleConjunction{metricFlows: []ofconfig.Flow{c.denyRuleMetricFlow(123, false)}})
+	c.policyCache.Add(&policyRuleConjunction{metricFlows: []binding.Flow{c.denyRuleMetricFlow(123, false)}})
 	return c
 }
 
@@ -490,7 +417,7 @@ func prepareSendTraceflowPacket(ctrl *gomock.Controller, success bool) *client {
 	c.nodeConfig = nodeConfig
 	m := ovsoftest.NewMockBridge(ctrl)
 	c.bridge = m
-	bridge := ofconfig.OFBridge{}
+	bridge := binding.OFBridge{}
 	m.EXPECT().BuildPacketOut().Return(bridge.BuildPacketOut()).Times(1)
 	if success {
 		m.EXPECT().SendPacketOut(gomock.Any()).Times(1)
@@ -577,7 +504,7 @@ func prepareSetBasePacketOutBuilder(ctrl *gomock.Controller, success bool) *clie
 	c := ofClient.(*client)
 	m := ovsoftest.NewMockBridge(ctrl)
 	c.bridge = m
-	bridge := ofconfig.OFBridge{}
+	bridge := binding.OFBridge{}
 	m.EXPECT().BuildPacketOut().Return(bridge.BuildPacketOut()).Times(1)
 	if success {
 		m.EXPECT().SendPacketOut(gomock.Any()).Times(1)
