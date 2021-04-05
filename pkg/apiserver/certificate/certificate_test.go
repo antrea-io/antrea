@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	fakeapiextensionclientset "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset/fake"
 	"k8s.io/apimachinery/pkg/util/wait"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
 	fakeclientset "k8s.io/client-go/kubernetes/fake"
@@ -183,7 +184,8 @@ func TestApplyServerCert(t *testing.T) {
 
 			clientset := fakeclientset.NewSimpleClientset()
 			aggregatorClientset := fakeaggregatorclientset.NewSimpleClientset()
-			got, err := ApplyServerCert(tt.selfSignedCert, clientset, aggregatorClientset, secureServing)
+			apiExtensionClient := fakeapiextensionclientset.NewSimpleClientset()
+			got, err := ApplyServerCert(tt.selfSignedCert, clientset, aggregatorClientset, apiExtensionClient, secureServing)
 
 			if err != nil || tt.wantErr {
 				if (err != nil) != tt.wantErr {

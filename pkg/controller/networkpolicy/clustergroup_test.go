@@ -25,6 +25,7 @@ import (
 	"antrea.io/antrea/pkg/apis/controlplane"
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	crdv1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
+	crdv1alpha3 "antrea.io/antrea/pkg/apis/crd/v1alpha3"
 	antreatypes "antrea.io/antrea/pkg/controller/types"
 )
 
@@ -37,14 +38,14 @@ func TestProcessClusterGroup(t *testing.T) {
 	cidrIPNet, _ := cidrStrToIPNet(cidr)
 	tests := []struct {
 		name          string
-		inputGroup    *crdv1alpha2.ClusterGroup
+		inputGroup    *crdv1alpha3.ClusterGroup
 		expectedGroup *antreatypes.Group
 	}{
 		{
 			name: "cg-with-ns-selector",
-			inputGroup: &crdv1alpha2.ClusterGroup{
+			inputGroup: &crdv1alpha3.ClusterGroup{
 				ObjectMeta: metav1.ObjectMeta{Name: "cgA", UID: "uidA"},
-				Spec: crdv1alpha2.GroupSpec{
+				Spec: crdv1alpha3.GroupSpec{
 					NamespaceSelector: &selectorA,
 				},
 			},
@@ -56,9 +57,9 @@ func TestProcessClusterGroup(t *testing.T) {
 		},
 		{
 			name: "cg-with-pod-selector",
-			inputGroup: &crdv1alpha2.ClusterGroup{
+			inputGroup: &crdv1alpha3.ClusterGroup{
 				ObjectMeta: metav1.ObjectMeta{Name: "cgB", UID: "uidB"},
-				Spec: crdv1alpha2.GroupSpec{
+				Spec: crdv1alpha3.GroupSpec{
 					PodSelector: &selectorB,
 				},
 			},
@@ -70,9 +71,9 @@ func TestProcessClusterGroup(t *testing.T) {
 		},
 		{
 			name: "cg-with-pod-ns-selector",
-			inputGroup: &crdv1alpha2.ClusterGroup{
+			inputGroup: &crdv1alpha3.ClusterGroup{
 				ObjectMeta: metav1.ObjectMeta{Name: "cgC", UID: "uidC"},
-				Spec: crdv1alpha2.GroupSpec{
+				Spec: crdv1alpha3.GroupSpec{
 					NamespaceSelector: &selectorD,
 					PodSelector:       &selectorC,
 				},
@@ -85,11 +86,13 @@ func TestProcessClusterGroup(t *testing.T) {
 		},
 		{
 			name: "cg-with-ip-block",
-			inputGroup: &crdv1alpha2.ClusterGroup{
+			inputGroup: &crdv1alpha3.ClusterGroup{
 				ObjectMeta: metav1.ObjectMeta{Name: "cgD", UID: "uidD"},
-				Spec: crdv1alpha2.GroupSpec{
-					IPBlock: &crdv1alpha1.IPBlock{
-						CIDR: cidr,
+				Spec: crdv1alpha3.GroupSpec{
+					IPBlocks: []crdv1alpha1.IPBlock{
+						{
+							CIDR: cidr,
+						},
 					},
 				},
 			},
@@ -106,10 +109,10 @@ func TestProcessClusterGroup(t *testing.T) {
 		},
 		{
 			name: "cg-with-svc-reference",
-			inputGroup: &crdv1alpha2.ClusterGroup{
+			inputGroup: &crdv1alpha3.ClusterGroup{
 				ObjectMeta: metav1.ObjectMeta{Name: "cgE", UID: "uidE"},
-				Spec: crdv1alpha2.GroupSpec{
-					ServiceReference: &crdv1alpha2.ServiceReference{
+				Spec: crdv1alpha3.GroupSpec{
+					ServiceReference: &crdv1alpha3.ServiceReference{
 						Name:      "test-svc",
 						Namespace: "test-ns",
 					},
@@ -126,10 +129,10 @@ func TestProcessClusterGroup(t *testing.T) {
 		},
 		{
 			name: "cg-with-child-groups",
-			inputGroup: &crdv1alpha2.ClusterGroup{
+			inputGroup: &crdv1alpha3.ClusterGroup{
 				ObjectMeta: metav1.ObjectMeta{Name: "cgF", UID: "uidF"},
-				Spec: crdv1alpha2.GroupSpec{
-					ChildGroups: []crdv1alpha2.ClusterGroupReference{"cgA", "cgB"},
+				Spec: crdv1alpha3.GroupSpec{
+					ChildGroups: []crdv1alpha3.ClusterGroupReference{"cgA", "cgB"},
 				},
 			},
 			expectedGroup: &antreatypes.Group{
@@ -157,14 +160,14 @@ func TestAddClusterGroup(t *testing.T) {
 	cidrIPNet, _ := cidrStrToIPNet(cidr)
 	tests := []struct {
 		name          string
-		inputGroup    *crdv1alpha2.ClusterGroup
+		inputGroup    *crdv1alpha3.ClusterGroup
 		expectedGroup *antreatypes.Group
 	}{
 		{
 			name: "cg-with-ns-selector",
-			inputGroup: &crdv1alpha2.ClusterGroup{
+			inputGroup: &crdv1alpha3.ClusterGroup{
 				ObjectMeta: metav1.ObjectMeta{Name: "cgA", UID: "uidA"},
-				Spec: crdv1alpha2.GroupSpec{
+				Spec: crdv1alpha3.GroupSpec{
 					NamespaceSelector: &selectorA,
 				},
 			},
@@ -176,9 +179,9 @@ func TestAddClusterGroup(t *testing.T) {
 		},
 		{
 			name: "cg-with-pod-selector",
-			inputGroup: &crdv1alpha2.ClusterGroup{
+			inputGroup: &crdv1alpha3.ClusterGroup{
 				ObjectMeta: metav1.ObjectMeta{Name: "cgB", UID: "uidB"},
-				Spec: crdv1alpha2.GroupSpec{
+				Spec: crdv1alpha3.GroupSpec{
 					PodSelector: &selectorB,
 				},
 			},
@@ -190,9 +193,9 @@ func TestAddClusterGroup(t *testing.T) {
 		},
 		{
 			name: "cg-with-pod-ns-selector",
-			inputGroup: &crdv1alpha2.ClusterGroup{
+			inputGroup: &crdv1alpha3.ClusterGroup{
 				ObjectMeta: metav1.ObjectMeta{Name: "cgC", UID: "uidC"},
-				Spec: crdv1alpha2.GroupSpec{
+				Spec: crdv1alpha3.GroupSpec{
 					NamespaceSelector: &selectorD,
 					PodSelector:       &selectorC,
 				},
@@ -205,11 +208,13 @@ func TestAddClusterGroup(t *testing.T) {
 		},
 		{
 			name: "cg-with-ip-block",
-			inputGroup: &crdv1alpha2.ClusterGroup{
+			inputGroup: &crdv1alpha3.ClusterGroup{
 				ObjectMeta: metav1.ObjectMeta{Name: "cgD", UID: "uidD"},
-				Spec: crdv1alpha2.GroupSpec{
-					IPBlock: &crdv1alpha1.IPBlock{
-						CIDR: cidr,
+				Spec: crdv1alpha3.GroupSpec{
+					IPBlocks: []crdv1alpha1.IPBlock{
+						{
+							CIDR: cidr,
+						},
 					},
 				},
 			},
@@ -242,9 +247,9 @@ func TestUpdateClusterGroup(t *testing.T) {
 	selectorB := metav1.LabelSelector{MatchLabels: map[string]string{"foo2": "bar2"}}
 	selectorC := metav1.LabelSelector{MatchLabels: map[string]string{"foo3": "bar3"}}
 	selectorD := metav1.LabelSelector{MatchLabels: map[string]string{"foo4": "bar4"}}
-	testCG := crdv1alpha2.ClusterGroup{
+	testCG := crdv1alpha3.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{Name: "cgA", UID: "uidA"},
-		Spec: crdv1alpha2.GroupSpec{
+		Spec: crdv1alpha3.GroupSpec{
 			NamespaceSelector: &selectorA,
 		},
 	}
@@ -252,14 +257,14 @@ func TestUpdateClusterGroup(t *testing.T) {
 	cidrIPNet, _ := cidrStrToIPNet(cidr)
 	tests := []struct {
 		name          string
-		updatedGroup  *crdv1alpha2.ClusterGroup
+		updatedGroup  *crdv1alpha3.ClusterGroup
 		expectedGroup *antreatypes.Group
 	}{
 		{
 			name: "cg-update-ns-selector",
-			updatedGroup: &crdv1alpha2.ClusterGroup{
+			updatedGroup: &crdv1alpha3.ClusterGroup{
 				ObjectMeta: metav1.ObjectMeta{Name: "cgA", UID: "uidA"},
-				Spec: crdv1alpha2.GroupSpec{
+				Spec: crdv1alpha3.GroupSpec{
 					NamespaceSelector: &selectorB,
 				},
 			},
@@ -271,9 +276,9 @@ func TestUpdateClusterGroup(t *testing.T) {
 		},
 		{
 			name: "cg-update-pod-selector",
-			updatedGroup: &crdv1alpha2.ClusterGroup{
+			updatedGroup: &crdv1alpha3.ClusterGroup{
 				ObjectMeta: metav1.ObjectMeta{Name: "cgA", UID: "uidA"},
-				Spec: crdv1alpha2.GroupSpec{
+				Spec: crdv1alpha3.GroupSpec{
 					PodSelector: &selectorC,
 				},
 			},
@@ -285,9 +290,9 @@ func TestUpdateClusterGroup(t *testing.T) {
 		},
 		{
 			name: "cg-update-pod-ns-selector",
-			updatedGroup: &crdv1alpha2.ClusterGroup{
+			updatedGroup: &crdv1alpha3.ClusterGroup{
 				ObjectMeta: metav1.ObjectMeta{Name: "cgA", UID: "uidA"},
-				Spec: crdv1alpha2.GroupSpec{
+				Spec: crdv1alpha3.GroupSpec{
 					NamespaceSelector: &selectorD,
 					PodSelector:       &selectorC,
 				},
@@ -300,11 +305,13 @@ func TestUpdateClusterGroup(t *testing.T) {
 		},
 		{
 			name: "cg-update-ip-block",
-			updatedGroup: &crdv1alpha2.ClusterGroup{
+			updatedGroup: &crdv1alpha3.ClusterGroup{
 				ObjectMeta: metav1.ObjectMeta{Name: "cgA", UID: "uidA"},
-				Spec: crdv1alpha2.GroupSpec{
-					IPBlock: &crdv1alpha1.IPBlock{
-						CIDR: cidr,
+				Spec: crdv1alpha3.GroupSpec{
+					IPBlocks: []crdv1alpha1.IPBlock{
+						{
+							CIDR: cidr,
+						},
 					},
 				},
 			},
@@ -321,10 +328,10 @@ func TestUpdateClusterGroup(t *testing.T) {
 		},
 		{
 			name: "cg-update-svc-reference",
-			updatedGroup: &crdv1alpha2.ClusterGroup{
+			updatedGroup: &crdv1alpha3.ClusterGroup{
 				ObjectMeta: metav1.ObjectMeta{Name: "cgA", UID: "uidA"},
-				Spec: crdv1alpha2.GroupSpec{
-					ServiceReference: &crdv1alpha2.ServiceReference{
+				Spec: crdv1alpha3.GroupSpec{
+					ServiceReference: &crdv1alpha3.ServiceReference{
 						Name:      "test-svc",
 						Namespace: "test-ns",
 					},
@@ -341,10 +348,10 @@ func TestUpdateClusterGroup(t *testing.T) {
 		},
 		{
 			name: "cg-update-child-groups",
-			updatedGroup: &crdv1alpha2.ClusterGroup{
+			updatedGroup: &crdv1alpha3.ClusterGroup{
 				ObjectMeta: metav1.ObjectMeta{Name: "cgA", UID: "uidA"},
-				Spec: crdv1alpha2.GroupSpec{
-					ChildGroups: []crdv1alpha2.ClusterGroupReference{"cgB", "cgC"},
+				Spec: crdv1alpha3.GroupSpec{
+					ChildGroups: []crdv1alpha3.ClusterGroupReference{"cgB", "cgC"},
 				},
 			},
 			expectedGroup: &antreatypes.Group{
@@ -369,9 +376,9 @@ func TestUpdateClusterGroup(t *testing.T) {
 
 func TestDeleteCG(t *testing.T) {
 	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
-	testCG := crdv1alpha2.ClusterGroup{
+	testCG := crdv1alpha3.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{Name: "cgA", UID: "uidA"},
-		Spec: crdv1alpha2.GroupSpec{
+		Spec: crdv1alpha3.GroupSpec{
 			NamespaceSelector: &selectorA,
 		},
 	}
@@ -386,15 +393,15 @@ func TestDeleteCG(t *testing.T) {
 func TestGroupMembersComputedConditionEqual(t *testing.T) {
 	tests := []struct {
 		name          string
-		existingConds []crdv1alpha2.GroupCondition
+		existingConds []crdv1alpha3.GroupCondition
 		checkStatus   corev1.ConditionStatus
 		expValue      bool
 	}{
 		{
 			name: "groupmem-cond-exists-not-equal",
-			existingConds: []crdv1alpha2.GroupCondition{
+			existingConds: []crdv1alpha3.GroupCondition{
 				{
-					Type:   crdv1alpha2.GroupMembersComputed,
+					Type:   crdv1alpha3.GroupMembersComputed,
 					Status: corev1.ConditionFalse,
 				},
 			},
@@ -403,9 +410,9 @@ func TestGroupMembersComputedConditionEqual(t *testing.T) {
 		},
 		{
 			name: "groupmem-cond-exists-equal",
-			existingConds: []crdv1alpha2.GroupCondition{
+			existingConds: []crdv1alpha3.GroupCondition{
 				{
-					Type:   crdv1alpha2.GroupMembersComputed,
+					Type:   crdv1alpha3.GroupMembersComputed,
 					Status: corev1.ConditionTrue,
 				},
 			},
@@ -414,7 +421,7 @@ func TestGroupMembersComputedConditionEqual(t *testing.T) {
 		},
 		{
 			name: "groupmem-cond-not-exists-not-equal",
-			existingConds: []crdv1alpha2.GroupCondition{
+			existingConds: []crdv1alpha3.GroupCondition{
 				{
 					Status: corev1.ConditionFalse,
 				},
@@ -425,8 +432,8 @@ func TestGroupMembersComputedConditionEqual(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			inCond := crdv1alpha2.GroupCondition{
-				Type:   crdv1alpha2.GroupMembersComputed,
+			inCond := crdv1alpha3.GroupCondition{
+				Type:   crdv1alpha3.GroupMembersComputed,
 				Status: tt.checkStatus,
 			}
 			actualValue := groupMembersComputedConditionEqual(tt.existingConds, inCond)

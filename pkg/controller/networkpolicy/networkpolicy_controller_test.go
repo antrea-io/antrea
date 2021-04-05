@@ -38,6 +38,7 @@ import (
 
 	"antrea.io/antrea/pkg/apis/controlplane"
 	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
+	"antrea.io/antrea/pkg/apis/crd/v1alpha3"
 	"antrea.io/antrea/pkg/apiserver/storage"
 	fakeversioned "antrea.io/antrea/pkg/client/clientset/versioned/fake"
 	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions"
@@ -91,8 +92,7 @@ func newController(objects ...runtime.Object) (*fake.Clientset, *networkPolicyCo
 	addressGroupStore := store.NewAddressGroupStore()
 	internalNetworkPolicyStore := store.NewNetworkPolicyStore()
 	internalGroupStore := store.NewGroupStore()
-	cgInformer := crdInformerFactory.Crd().V1alpha2().ClusterGroups()
-	cgStore := crdInformerFactory.Crd().V1alpha2().ClusterGroups().Informer().GetStore()
+	cgInformer := crdInformerFactory.Crd().V1alpha3().ClusterGroups()
 	groupEntityIndex := grouping.NewGroupEntityIndex()
 	groupingController := grouping.NewGroupEntityController(groupEntityIndex,
 		informerFactory.Core().V1().Pods(),
@@ -126,7 +126,7 @@ func newController(objects ...runtime.Object) (*fake.Clientset, *networkPolicyCo
 		informerFactory.Networking().V1().NetworkPolicies().Informer().GetStore(),
 		crdInformerFactory.Crd().V1alpha1().ClusterNetworkPolicies().Informer().GetStore(),
 		crdInformerFactory.Crd().V1alpha1().Tiers().Informer().GetStore(),
-		cgStore,
+		crdInformerFactory.Crd().V1alpha3().ClusterGroups().Informer().GetStore(),
 		appliedToGroupStore,
 		addressGroupStore,
 		internalNetworkPolicyStore,
@@ -949,11 +949,11 @@ func TestAddPod(t *testing.T) {
 	selectorGroup := metav1.LabelSelector{
 		MatchLabels: map[string]string{"clustergroup": "yes"},
 	}
-	testCG := &v1alpha2.ClusterGroup{
+	testCG := &v1alpha3.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "cgA",
 		},
-		Spec: v1alpha2.GroupSpec{
+		Spec: v1alpha3.GroupSpec{
 			PodSelector: &selectorGroup,
 		},
 	}
@@ -1426,11 +1426,11 @@ func TestDeletePod(t *testing.T) {
 	selectorGroup := metav1.LabelSelector{
 		MatchLabels: ruleLabels,
 	}
-	testCG := &v1alpha2.ClusterGroup{
+	testCG := &v1alpha3.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "cgA",
 		},
-		Spec: v1alpha2.GroupSpec{
+		Spec: v1alpha3.GroupSpec{
 			PodSelector: &selectorGroup,
 		},
 	}
@@ -1487,11 +1487,11 @@ func TestAddNamespace(t *testing.T) {
 	selectorGroup := metav1.LabelSelector{
 		MatchLabels: map[string]string{"clustergroup": "yes"},
 	}
-	testCG := &v1alpha2.ClusterGroup{
+	testCG := &v1alpha3.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "cgA",
 		},
-		Spec: v1alpha2.GroupSpec{
+		Spec: v1alpha3.GroupSpec{
 			NamespaceSelector: &selectorGroup,
 		},
 	}
@@ -1645,11 +1645,11 @@ func TestDeleteNamespace(t *testing.T) {
 	selectorGroup := metav1.LabelSelector{
 		MatchLabels: map[string]string{"clustergroup": "yes"},
 	}
-	testCG := &v1alpha2.ClusterGroup{
+	testCG := &v1alpha3.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "cgA",
 		},
-		Spec: v1alpha2.GroupSpec{
+		Spec: v1alpha3.GroupSpec{
 			NamespaceSelector: &selectorGroup,
 		},
 	}
@@ -1836,23 +1836,23 @@ func TestAddAndUpdateService(t *testing.T) {
 			},
 		},
 	}
-	testCG1 := &v1alpha2.ClusterGroup{
+	testCG1 := &v1alpha3.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "cg-1",
 		},
-		Spec: v1alpha2.GroupSpec{
-			ServiceReference: &v1alpha2.ServiceReference{
+		Spec: v1alpha3.GroupSpec{
+			ServiceReference: &v1alpha3.ServiceReference{
 				Name:      "test-svc-1",
 				Namespace: "test-ns",
 			},
 		},
 	}
-	testCG2 := &v1alpha2.ClusterGroup{
+	testCG2 := &v1alpha3.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "cg-2",
 		},
-		Spec: v1alpha2.GroupSpec{
-			ServiceReference: &v1alpha2.ServiceReference{
+		Spec: v1alpha3.GroupSpec{
+			ServiceReference: &v1alpha3.ServiceReference{
 				Name:      "test-svc-2",
 				Namespace: "test-ns",
 			},
@@ -1942,12 +1942,12 @@ func TestDeleteService(t *testing.T) {
 			},
 		},
 	}
-	testCG := &v1alpha2.ClusterGroup{
+	testCG := &v1alpha3.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "test-cg",
 		},
-		Spec: v1alpha2.GroupSpec{
-			ServiceReference: &v1alpha2.ServiceReference{
+		Spec: v1alpha3.GroupSpec{
+			ServiceReference: &v1alpha3.ServiceReference{
 				Name:      "test-svc",
 				Namespace: "test-ns",
 			},
@@ -2937,9 +2937,9 @@ func TestDeleteFinalStateUnknownNetworkPolicy(t *testing.T) {
 
 func TestInternalGroupKeyFunc(t *testing.T) {
 	expValue := "cgA"
-	cg := v1alpha2.ClusterGroup{
+	cg := v1alpha3.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{Name: "cgA", UID: "uid-a"},
-		Spec: v1alpha2.GroupSpec{
+		Spec: v1alpha3.GroupSpec{
 			NamespaceSelector: &selectorA,
 		},
 	}
@@ -2951,48 +2951,48 @@ func TestGetAppliedToWorkloads(t *testing.T) {
 	var emptyEEs []*v1alpha2.ExternalEntity
 	var emptyPods []*corev1.Pod
 	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
-	cgA := v1alpha2.ClusterGroup{
+	cgA := v1alpha3.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{Name: "cgA", UID: "uidA"},
-		Spec: v1alpha2.GroupSpec{
+		Spec: v1alpha3.GroupSpec{
 			PodSelector: &selectorA,
 		},
 	}
 	selectorB := metav1.LabelSelector{MatchLabels: map[string]string{"foo2": "bar2"}}
-	cgB := v1alpha2.ClusterGroup{
+	cgB := v1alpha3.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{Name: "cgB", UID: "uidB"},
-		Spec: v1alpha2.GroupSpec{
+		Spec: v1alpha3.GroupSpec{
 			PodSelector: &selectorB,
 		},
 	}
 	selectorC := metav1.LabelSelector{MatchLabels: map[string]string{"foo3": "bar3"}}
-	cgC := v1alpha2.ClusterGroup{
+	cgC := v1alpha3.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{Name: "cgC", UID: "uidC"},
-		Spec: v1alpha2.GroupSpec{
+		Spec: v1alpha3.GroupSpec{
 			PodSelector: &selectorC,
 		},
 	}
-	cgD := v1alpha2.ClusterGroup{
+	cgD := v1alpha3.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{Name: "cgD", UID: "uidD"},
-		Spec: v1alpha2.GroupSpec{
+		Spec: v1alpha3.GroupSpec{
 			PodSelector: &selectorC,
 		},
 	}
-	nestedCG1 := v1alpha2.ClusterGroup{
+	nestedCG1 := v1alpha3.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{Name: "nested-cg-A-B", UID: "uidE"},
-		Spec: v1alpha2.GroupSpec{
-			ChildGroups: []v1alpha2.ClusterGroupReference{"cgA", "cgB"},
+		Spec: v1alpha3.GroupSpec{
+			ChildGroups: []v1alpha3.ClusterGroupReference{"cgA", "cgB"},
 		},
 	}
-	nestedCG2 := v1alpha2.ClusterGroup{
+	nestedCG2 := v1alpha3.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{Name: "nested-cg-A-C", UID: "uidF"},
-		Spec: v1alpha2.GroupSpec{
-			ChildGroups: []v1alpha2.ClusterGroupReference{"cgA", "cgC"},
+		Spec: v1alpha3.GroupSpec{
+			ChildGroups: []v1alpha3.ClusterGroupReference{"cgA", "cgC"},
 		},
 	}
-	nestedCG3 := v1alpha2.ClusterGroup{
+	nestedCG3 := v1alpha3.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{Name: "nested-cg-A-C", UID: "uidG"},
-		Spec: v1alpha2.GroupSpec{
-			ChildGroups: []v1alpha2.ClusterGroupReference{"cgA", "cgC", "cgD"},
+		Spec: v1alpha3.GroupSpec{
+			ChildGroups: []v1alpha3.ClusterGroupReference{"cgA", "cgC", "cgD"},
 		},
 	}
 	podA := getPod("podA", "nsA", "nodeA", "10.0.0.1", false)
@@ -3054,7 +3054,7 @@ func TestGetAppliedToWorkloads(t *testing.T) {
 	_, c := newController()
 	c.groupingInterface.AddPod(podA)
 	c.groupingInterface.AddPod(podB)
-	clusterGroups := []v1alpha2.ClusterGroup{cgA, cgB, cgC, cgD, nestedCG1, nestedCG2}
+	clusterGroups := []v1alpha3.ClusterGroup{cgA, cgB, cgC, cgD, nestedCG1, nestedCG2}
 	for i, cg := range clusterGroups {
 		c.cgStore.Add(&clusterGroups[i])
 		c.addClusterGroup(&clusterGroups[i])
@@ -3071,48 +3071,48 @@ func TestGetAppliedToWorkloads(t *testing.T) {
 
 func TestGetAddressGroupMemberSet(t *testing.T) {
 	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
-	cgA := v1alpha2.ClusterGroup{
+	cgA := v1alpha3.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{Name: "cgA", UID: "uidA"},
-		Spec: v1alpha2.GroupSpec{
+		Spec: v1alpha3.GroupSpec{
 			PodSelector: &selectorA,
 		},
 	}
 	selectorB := metav1.LabelSelector{MatchLabels: map[string]string{"foo2": "bar2"}}
-	cgB := v1alpha2.ClusterGroup{
+	cgB := v1alpha3.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{Name: "cgB", UID: "uidB"},
-		Spec: v1alpha2.GroupSpec{
+		Spec: v1alpha3.GroupSpec{
 			PodSelector: &selectorB,
 		},
 	}
 	selectorC := metav1.LabelSelector{MatchLabels: map[string]string{"foo3": "bar3"}}
-	cgC := v1alpha2.ClusterGroup{
+	cgC := v1alpha3.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{Name: "cgC", UID: "uidC"},
-		Spec: v1alpha2.GroupSpec{
+		Spec: v1alpha3.GroupSpec{
 			PodSelector: &selectorC,
 		},
 	}
-	cgD := v1alpha2.ClusterGroup{
+	cgD := v1alpha3.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{Name: "cgD", UID: "uidD"},
-		Spec: v1alpha2.GroupSpec{
+		Spec: v1alpha3.GroupSpec{
 			PodSelector: &selectorC,
 		},
 	}
-	nestedCG1 := v1alpha2.ClusterGroup{
+	nestedCG1 := v1alpha3.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{Name: "nested-cg-A-B", UID: "uidE"},
-		Spec: v1alpha2.GroupSpec{
-			ChildGroups: []v1alpha2.ClusterGroupReference{"cgA", "cgB"},
+		Spec: v1alpha3.GroupSpec{
+			ChildGroups: []v1alpha3.ClusterGroupReference{"cgA", "cgB"},
 		},
 	}
-	nestedCG2 := v1alpha2.ClusterGroup{
+	nestedCG2 := v1alpha3.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{Name: "nested-cg-A-C", UID: "uidF"},
-		Spec: v1alpha2.GroupSpec{
-			ChildGroups: []v1alpha2.ClusterGroupReference{"cgA", "cgC"},
+		Spec: v1alpha3.GroupSpec{
+			ChildGroups: []v1alpha3.ClusterGroupReference{"cgA", "cgC"},
 		},
 	}
-	nestedCG3 := v1alpha2.ClusterGroup{
+	nestedCG3 := v1alpha3.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{Name: "nested-cg-A-C", UID: "uidG"},
-		Spec: v1alpha2.GroupSpec{
-			ChildGroups: []v1alpha2.ClusterGroupReference{"cgA", "cgC", "cgD"},
+		Spec: v1alpha3.GroupSpec{
+			ChildGroups: []v1alpha3.ClusterGroupReference{"cgA", "cgC", "cgD"},
 		},
 	}
 	podA := getPod("podA", "nsA", "nodeA", "10.0.0.1", false)
@@ -3174,7 +3174,7 @@ func TestGetAddressGroupMemberSet(t *testing.T) {
 	_, c := newController()
 	c.groupingInterface.AddPod(podA)
 	c.groupingInterface.AddPod(podB)
-	clusterGroups := []v1alpha2.ClusterGroup{cgA, cgB, cgC, cgD, nestedCG1, nestedCG2}
+	clusterGroups := []v1alpha3.ClusterGroup{cgA, cgB, cgC, cgD, nestedCG1, nestedCG2}
 	for i, cg := range clusterGroups {
 		c.cgStore.Add(&clusterGroups[i])
 		c.addClusterGroup(&clusterGroups[i])

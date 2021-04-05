@@ -18,10 +18,12 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	crdv1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
+	crdv1alpha3 "antrea.io/antrea/pkg/apis/crd/v1alpha3"
 )
 
 func testInvalidCGIPBlockWithPodSelector(t *testing.T) {
@@ -29,17 +31,17 @@ func testInvalidCGIPBlockWithPodSelector(t *testing.T) {
 	cgName := "ipb-pod"
 	pSel := &metav1.LabelSelector{MatchLabels: map[string]string{"pod": "x"}}
 	cidr := "10.0.0.10/32"
-	ipb := &crdv1alpha1.IPBlock{CIDR: cidr}
-	cg := &crdv1alpha2.ClusterGroup{
+	ipb := []crdv1alpha1.IPBlock{{CIDR: cidr}}
+	cg := &crdv1alpha3.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: cgName,
 		},
-		Spec: crdv1alpha2.GroupSpec{
+		Spec: crdv1alpha3.GroupSpec{
 			PodSelector: pSel,
-			IPBlock:     ipb,
+			IPBlocks:    ipb,
 		},
 	}
-	if _, err := k8sUtils.CreateOrUpdateCG(cg); err == nil {
+	if _, err := k8sUtils.CreateOrUpdateV1Alpha3CG(cg); err == nil {
 		// Above creation of CG must fail as it is an invalid spec.
 		failOnError(invalidErr, t)
 	}
@@ -50,17 +52,17 @@ func testInvalidCGIPBlockWithNSSelector(t *testing.T) {
 	cgName := "ipb-ns"
 	nSel := &metav1.LabelSelector{MatchLabels: map[string]string{"ns": "y"}}
 	cidr := "10.0.0.10/32"
-	ipb := &crdv1alpha1.IPBlock{CIDR: cidr}
-	cg := &crdv1alpha2.ClusterGroup{
+	ipb := []crdv1alpha1.IPBlock{{CIDR: cidr}}
+	cg := &crdv1alpha3.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: cgName,
 		},
-		Spec: crdv1alpha2.GroupSpec{
+		Spec: crdv1alpha3.GroupSpec{
 			NamespaceSelector: nSel,
-			IPBlock:           ipb,
+			IPBlocks:          ipb,
 		},
 	}
-	if _, err := k8sUtils.CreateOrUpdateCG(cg); err == nil {
+	if _, err := k8sUtils.CreateOrUpdateV1Alpha3CG(cg); err == nil {
 		// Above creation of CG must fail as it is an invalid spec.
 		failOnError(invalidErr, t)
 	}
@@ -82,7 +84,7 @@ func testInvalidCGIPBlockWithIPBlocks(t *testing.T) {
 			IPBlock:  ipb,
 		},
 	}
-	if _, err := k8sUtils.CreateOrUpdateCG(cg); err == nil {
+	if _, err := k8sUtils.CreateOrUpdateV1Alpha2CG(cg); err == nil {
 		// Above creation of CG must fail as it is an invalid spec.
 		failOnError(invalidErr, t)
 	}
@@ -92,20 +94,20 @@ func testInvalidCGServiceRefWithPodSelector(t *testing.T) {
 	invalidErr := fmt.Errorf("clustergroup created with serviceReference and podSelector")
 	cgName := "svcref-pod-selector"
 	pSel := &metav1.LabelSelector{MatchLabels: map[string]string{"pod": "x"}}
-	svcRef := &crdv1alpha2.ServiceReference{
+	svcRef := &crdv1alpha3.ServiceReference{
 		Namespace: "y",
 		Name:      "test-svc",
 	}
-	cg := &crdv1alpha2.ClusterGroup{
+	cg := &crdv1alpha3.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: cgName,
 		},
-		Spec: crdv1alpha2.GroupSpec{
+		Spec: crdv1alpha3.GroupSpec{
 			PodSelector:      pSel,
 			ServiceReference: svcRef,
 		},
 	}
-	if _, err := k8sUtils.CreateOrUpdateCG(cg); err == nil {
+	if _, err := k8sUtils.CreateOrUpdateV1Alpha3CG(cg); err == nil {
 		// Above creation of CG must fail as it is an invalid spec.
 		failOnError(invalidErr, t)
 	}
@@ -115,20 +117,20 @@ func testInvalidCGServiceRefWithNSSelector(t *testing.T) {
 	invalidErr := fmt.Errorf("clustergroup created with serviceReference and namespaceSelector")
 	cgName := "svcref-ns-selector"
 	nSel := &metav1.LabelSelector{MatchLabels: map[string]string{"ns": "y"}}
-	svcRef := &crdv1alpha2.ServiceReference{
+	svcRef := &crdv1alpha3.ServiceReference{
 		Namespace: "y",
 		Name:      "test-svc",
 	}
-	cg := &crdv1alpha2.ClusterGroup{
+	cg := &crdv1alpha3.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: cgName,
 		},
-		Spec: crdv1alpha2.GroupSpec{
+		Spec: crdv1alpha3.GroupSpec{
 			NamespaceSelector: nSel,
 			ServiceReference:  svcRef,
 		},
 	}
-	if _, err := k8sUtils.CreateOrUpdateCG(cg); err == nil {
+	if _, err := k8sUtils.CreateOrUpdateV1Alpha3CG(cg); err == nil {
 		// Above creation of CG must fail as it is an invalid spec.
 		failOnError(invalidErr, t)
 	}
@@ -138,21 +140,21 @@ func testInvalidCGServiceRefWithIPBlock(t *testing.T) {
 	invalidErr := fmt.Errorf("clustergroup created with ipblock and namespaceSelector")
 	cgName := "ipb-svcref"
 	cidr := "10.0.0.10/32"
-	ipb := &crdv1alpha1.IPBlock{CIDR: cidr}
-	svcRef := &crdv1alpha2.ServiceReference{
+	ipb := []crdv1alpha1.IPBlock{{CIDR: cidr}}
+	svcRef := &crdv1alpha3.ServiceReference{
 		Namespace: "y",
 		Name:      "test-svc",
 	}
-	cg := &crdv1alpha2.ClusterGroup{
+	cg := &crdv1alpha3.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: cgName,
 		},
-		Spec: crdv1alpha2.GroupSpec{
+		Spec: crdv1alpha3.GroupSpec{
 			ServiceReference: svcRef,
-			IPBlock:          ipb,
+			IPBlocks:         ipb,
 		},
 	}
-	if _, err := k8sUtils.CreateOrUpdateCG(cg); err == nil {
+	if _, err := k8sUtils.CreateOrUpdateV1Alpha3CG(cg); err == nil {
 		// Above creation of CG must fail as it is an invalid spec.
 		failOnError(invalidErr, t)
 	}
@@ -161,15 +163,15 @@ func testInvalidCGServiceRefWithIPBlock(t *testing.T) {
 func testInvalidCGChildGroupDoesNotExist(t *testing.T) {
 	invalidErr := fmt.Errorf("clustergroup childGroup does not exist")
 	cgName := "child-group-not-exist"
-	cg := &crdv1alpha2.ClusterGroup{
+	cg := &crdv1alpha3.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: cgName,
 		},
-		Spec: crdv1alpha2.GroupSpec{
-			ChildGroups: []crdv1alpha2.ClusterGroupReference{crdv1alpha2.ClusterGroupReference("some-non-existing-cg")},
+		Spec: crdv1alpha3.GroupSpec{
+			ChildGroups: []crdv1alpha3.ClusterGroupReference{crdv1alpha3.ClusterGroupReference("some-non-existing-cg")},
 		},
 	}
-	if _, err := k8sUtils.CreateOrUpdateCG(cg); err == nil {
+	if _, err := k8sUtils.CreateOrUpdateV1Alpha3CG(cg); err == nil {
 		// Above creation of CG must fail as it is an invalid spec.
 		failOnError(invalidErr, t)
 	}
@@ -178,21 +180,21 @@ func testInvalidCGChildGroupDoesNotExist(t *testing.T) {
 var testChildCGName = "test-child-cg"
 
 func createChildCGForTest(t *testing.T) {
-	cg := &crdv1alpha2.ClusterGroup{
+	cg := &crdv1alpha3.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: testChildCGName,
 		},
-		Spec: crdv1alpha2.GroupSpec{
+		Spec: crdv1alpha3.GroupSpec{
 			PodSelector: &metav1.LabelSelector{},
 		},
 	}
-	if _, err := k8sUtils.CreateOrUpdateCG(cg); err != nil {
+	if _, err := k8sUtils.CreateOrUpdateV1Alpha3CG(cg); err != nil {
 		failOnError(err, t)
 	}
 }
 
 func cleanupChildCGForTest(t *testing.T) {
-	if err := k8sUtils.DeleteCG(testChildCGName); err != nil {
+	if err := k8sUtils.DeleteV1Alpha3CG(testChildCGName); err != nil {
 		failOnError(err, t)
 	}
 }
@@ -201,16 +203,16 @@ func testInvalidCGChildGroupWithPodSelector(t *testing.T) {
 	invalidErr := fmt.Errorf("clustergroup created with childGroups and podSelector")
 	cgName := "child-group-pod-selector"
 	pSel := &metav1.LabelSelector{MatchLabels: map[string]string{"pod": "x"}}
-	cg := &crdv1alpha2.ClusterGroup{
+	cg := &crdv1alpha3.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: cgName,
 		},
-		Spec: crdv1alpha2.GroupSpec{
+		Spec: crdv1alpha3.GroupSpec{
 			PodSelector: pSel,
-			ChildGroups: []crdv1alpha2.ClusterGroupReference{crdv1alpha2.ClusterGroupReference(testChildCGName)},
+			ChildGroups: []crdv1alpha3.ClusterGroupReference{crdv1alpha3.ClusterGroupReference(testChildCGName)},
 		},
 	}
-	if _, err := k8sUtils.CreateOrUpdateCG(cg); err == nil {
+	if _, err := k8sUtils.CreateOrUpdateV1Alpha3CG(cg); err == nil {
 		// Above creation of CG must fail as it is an invalid spec.
 		failOnError(invalidErr, t)
 	}
@@ -219,20 +221,20 @@ func testInvalidCGChildGroupWithPodSelector(t *testing.T) {
 func testInvalidCGChildGroupWithServiceReference(t *testing.T) {
 	invalidErr := fmt.Errorf("clustergroup created with childGroups and ServiceReference")
 	cgName := "child-group-svcref"
-	svcRef := &crdv1alpha2.ServiceReference{
+	svcRef := &crdv1alpha3.ServiceReference{
 		Namespace: "y",
 		Name:      "test-svc",
 	}
-	cg := &crdv1alpha2.ClusterGroup{
+	cg := &crdv1alpha3.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: cgName,
 		},
-		Spec: crdv1alpha2.GroupSpec{
+		Spec: crdv1alpha3.GroupSpec{
 			ServiceReference: svcRef,
-			ChildGroups:      []crdv1alpha2.ClusterGroupReference{crdv1alpha2.ClusterGroupReference(testChildCGName)},
+			ChildGroups:      []crdv1alpha3.ClusterGroupReference{crdv1alpha3.ClusterGroupReference(testChildCGName)},
 		},
 	}
-	if _, err := k8sUtils.CreateOrUpdateCG(cg); err == nil {
+	if _, err := k8sUtils.CreateOrUpdateV1Alpha3CG(cg); err == nil {
 		// Above creation of CG must fail as it is an invalid spec.
 		failOnError(invalidErr, t)
 	}
@@ -241,30 +243,75 @@ func testInvalidCGChildGroupWithServiceReference(t *testing.T) {
 func testInvalidCGMaxNestedLevel(t *testing.T) {
 	invalidErr := fmt.Errorf("clustergroup created with childGroup which has childGroups itself")
 	cgName1, cgName2 := "cg-nested-1", "cg-nested-2"
-	cg1 := &crdv1alpha2.ClusterGroup{
+	cg1 := &crdv1alpha3.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{Name: cgName1},
-		Spec: crdv1alpha2.GroupSpec{
-			ChildGroups: []crdv1alpha2.ClusterGroupReference{crdv1alpha2.ClusterGroupReference(testChildCGName)},
+		Spec: crdv1alpha3.GroupSpec{
+			ChildGroups: []crdv1alpha3.ClusterGroupReference{crdv1alpha3.ClusterGroupReference(testChildCGName)},
 		},
 	}
-	if _, err := k8sUtils.CreateOrUpdateCG(cg1); err != nil {
+	if _, err := k8sUtils.CreateOrUpdateV1Alpha3CG(cg1); err != nil {
 		// Above creation of CG must succeed as it is a valid spec.
 		failOnError(err, t)
 	}
-	cg2 := &crdv1alpha2.ClusterGroup{
+	cg2 := &crdv1alpha3.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{Name: cgName2},
-		Spec: crdv1alpha2.GroupSpec{
-			ChildGroups: []crdv1alpha2.ClusterGroupReference{crdv1alpha2.ClusterGroupReference(cgName1)},
+		Spec: crdv1alpha3.GroupSpec{
+			ChildGroups: []crdv1alpha3.ClusterGroupReference{crdv1alpha3.ClusterGroupReference(cgName1)},
 		},
 	}
-	if _, err := k8sUtils.CreateOrUpdateCG(cg2); err == nil {
+	if _, err := k8sUtils.CreateOrUpdateV1Alpha3CG(cg2); err == nil {
 		// Above creation of CG must fail as it is an invalid spec.
 		failOnError(invalidErr, t)
 	}
 	// cleanup cg-nested-1
-	if err := k8sUtils.DeleteCG(cgName1); err != nil {
+	if err := k8sUtils.DeleteV1Alpha3CG(cgName1); err != nil {
 		failOnError(err, t)
 	}
+}
+
+func testClusterGroupConversionV1A2AndV1A3(t *testing.T) {
+	cgName1, cgName2 := "cg-v1a2", "cg-v1a3"
+	ipb1 := crdv1alpha1.IPBlock{
+		CIDR: "192.168.1.0/24",
+	}
+	ipb2 := crdv1alpha1.IPBlock{
+		CIDR: "192.168.2.0/24",
+	}
+	cg1 := &crdv1alpha2.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{Name: cgName1},
+		Spec: crdv1alpha2.GroupSpec{
+			IPBlock: &ipb1,
+		},
+	}
+	cg2 := &crdv1alpha3.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{Name: cgName2},
+		Spec: crdv1alpha3.GroupSpec{
+			IPBlocks: []crdv1alpha1.IPBlock{
+				ipb1,
+				ipb2,
+			},
+		},
+	}
+	if _, err := k8sUtils.CreateOrUpdateV1Alpha2CG(cg1); err != nil {
+		// Above creation of CG must succeed as it is a valid spec.
+		failOnError(err, t)
+	}
+	// Get v1alpha3 version of ClusterGroup, which was created as v1alpha2
+	cg1Returned, err := k8sUtils.GetV1Alpha3CG(cgName1)
+	if err != nil {
+		failOnError(err, t)
+	}
+	assert.ElementsMatch(t, cg1Returned.Spec.IPBlocks, []crdv1alpha1.IPBlock{ipb1})
+	if _, err := k8sUtils.CreateOrUpdateV1Alpha3CG(cg2); err != nil {
+		// Above creation of CG must succeed as it is a valid spec.
+		failOnError(err, t)
+	}
+	// Get v1alpha2 version of ClusterGroup, which was created as v1alpha3
+	cg2Returned, err := k8sUtils.GetV1Alpha2CG(cgName2)
+	if err != nil {
+		failOnError(err, t)
+	}
+	assert.ElementsMatch(t, cg2Returned.Spec.IPBlocks, []crdv1alpha1.IPBlock{ipb1, ipb2})
 }
 
 func TestClusterGroup(t *testing.T) {
@@ -294,6 +341,8 @@ func TestClusterGroup(t *testing.T) {
 		t.Run("Case=ChildGroupExceedMaxNestedLevel", func(t *testing.T) { testInvalidCGMaxNestedLevel(t) })
 		cleanupChildCGForTest(t)
 	})
-
+	t.Run("TestGroupClusterGroupConversion", func(t *testing.T) {
+		t.Run("Case=ConvertBetweenV1A2AndV1A3", func(t *testing.T) { testClusterGroupConversionV1A2AndV1A3(t) })
+	})
 	k8sUtils.Cleanup(namespaces) // clean up all cluster-scope resources, including CGs
 }

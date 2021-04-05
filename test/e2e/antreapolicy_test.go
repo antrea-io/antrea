@@ -35,6 +35,7 @@ import (
 	"antrea.io/antrea/pkg/agent/config"
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	crdv1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
+	crdv1alpha3 "antrea.io/antrea/pkg/apis/crd/v1alpha3"
 	"antrea.io/antrea/pkg/features"
 	legacycorev1a2 "antrea.io/antrea/pkg/legacyapis/core/v1alpha2"
 	legacysecv1alpha1 "antrea.io/antrea/pkg/legacyapis/security/v1alpha1"
@@ -944,10 +945,10 @@ func testACNPNoEffectOnOtherProtocols(t *testing.T) {
 // testACNPAppliedToDenyXBtoCGWithYA tests traffic from X/B to ClusterGroup Y/A on named port 81 is dropped.
 func testACNPAppliedToDenyXBtoCGWithYA(t *testing.T) {
 	cgName := "cg-pods-ya"
-	cgBuilder := &ClusterGroupSpecBuilder{}
-	cgBuilder = cgBuilder.SetName(cgName)
-	cgBuilder = cgBuilder.SetNamespaceSelector(map[string]string{"ns": "y"}, nil)
-	cgBuilder = cgBuilder.SetPodSelector(map[string]string{"pod": "a"}, nil)
+	cgBuilder := &ClusterGroupV1Alpha2SpecBuilder{}
+	cgBuilder = cgBuilder.SetName(cgName).
+		SetNamespaceSelector(map[string]string{"ns": "y"}, nil).
+		SetPodSelector(map[string]string{"pod": "a"}, nil)
 	port81Name := "serve-81"
 	builder := &ClusterNetworkPolicySpecBuilder{}
 	builder = builder.SetName("acnp-deny-cg-with-ya-from-xb").
@@ -981,10 +982,10 @@ func testACNPAppliedToDenyXBtoCGWithYA(t *testing.T) {
 // testACNPIngressRuleDenyCGWithXBtoYA tests traffic from ClusterGroup with X/B to Y/A on named port 81 is dropped.
 func testACNPIngressRuleDenyCGWithXBtoYA(t *testing.T) {
 	cgName := "cg-pods-xb"
-	cgBuilder := &ClusterGroupSpecBuilder{}
-	cgBuilder = cgBuilder.SetName(cgName)
-	cgBuilder = cgBuilder.SetNamespaceSelector(map[string]string{"ns": "x"}, nil)
-	cgBuilder = cgBuilder.SetPodSelector(map[string]string{"pod": "b"}, nil)
+	cgBuilder := &ClusterGroupV1Alpha2SpecBuilder{}
+	cgBuilder = cgBuilder.SetName(cgName).
+		SetNamespaceSelector(map[string]string{"ns": "x"}, nil).
+		SetPodSelector(map[string]string{"pod": "b"}, nil)
 	port81Name := "serve-81"
 	builder := &ClusterNetworkPolicySpecBuilder{}
 	builder = builder.SetName("acnp-deny-cg-with-xb-to-ya").
@@ -1018,9 +1019,8 @@ func testACNPIngressRuleDenyCGWithXBtoYA(t *testing.T) {
 // testACNPAppliedToRuleCGWithPodsAToNsZ tests that a ACNP is able to drop egress traffic from CG with pods labelled A namespace Z.
 func testACNPAppliedToRuleCGWithPodsAToNsZ(t *testing.T) {
 	cgName := "cg-pods-a"
-	cgBuilder := &ClusterGroupSpecBuilder{}
-	cgBuilder = cgBuilder.SetName(cgName)
-	cgBuilder = cgBuilder.SetPodSelector(map[string]string{"pod": "a"}, nil)
+	cgBuilder := &ClusterGroupV1Alpha3SpecBuilder{}
+	cgBuilder = cgBuilder.SetName(cgName).SetPodSelector(map[string]string{"pod": "a"}, nil)
 	builder := &ClusterNetworkPolicySpecBuilder{}
 	builder = builder.SetName("acnp-deny-cg-with-a-to-z").
 		SetPriority(1.0)
@@ -1058,9 +1058,8 @@ func testACNPAppliedToRuleCGWithPodsAToNsZ(t *testing.T) {
 // testACNPEgressRulePodsAToCGWithNsZ tests that a ACNP is able to drop egress traffic from pods labelled A to a CG with namespace Z.
 func testACNPEgressRulePodsAToCGWithNsZ(t *testing.T) {
 	cgName := "cg-ns-z"
-	cgBuilder := &ClusterGroupSpecBuilder{}
-	cgBuilder = cgBuilder.SetName(cgName)
-	cgBuilder = cgBuilder.SetNamespaceSelector(map[string]string{"ns": "z"}, nil)
+	cgBuilder := &ClusterGroupV1Alpha3SpecBuilder{}
+	cgBuilder = cgBuilder.SetName(cgName).SetNamespaceSelector(map[string]string{"ns": "z"}, nil)
 	builder := &ClusterNetworkPolicySpecBuilder{}
 	builder = builder.SetName("acnp-deny-a-to-cg-with-z-egress").
 		SetPriority(1.0).
@@ -1098,13 +1097,11 @@ func testACNPEgressRulePodsAToCGWithNsZ(t *testing.T) {
 
 func testACNPClusterGroupUpdateAppliedTo(t *testing.T) {
 	cgName := "cg-pods-a-then-c"
-	cgBuilder := &ClusterGroupSpecBuilder{}
-	cgBuilder = cgBuilder.SetName(cgName)
-	cgBuilder = cgBuilder.SetPodSelector(map[string]string{"pod": "a"}, nil)
+	cgBuilder := &ClusterGroupV1Alpha3SpecBuilder{}
+	cgBuilder = cgBuilder.SetName(cgName).SetPodSelector(map[string]string{"pod": "a"}, nil)
 	// Update CG Pod selector to group Pods C
-	updatedCgBuilder := &ClusterGroupSpecBuilder{}
-	updatedCgBuilder = updatedCgBuilder.SetName(cgName)
-	updatedCgBuilder = updatedCgBuilder.SetPodSelector(map[string]string{"pod": "c"}, nil)
+	updatedCgBuilder := &ClusterGroupV1Alpha3SpecBuilder{}
+	updatedCgBuilder = updatedCgBuilder.SetName(cgName).SetPodSelector(map[string]string{"pod": "c"}, nil)
 	builder := &ClusterNetworkPolicySpecBuilder{}
 	builder = builder.SetName("acnp-deny-cg-with-a-to-z-egress").
 		SetPriority(1.0).
@@ -1161,13 +1158,11 @@ func testACNPClusterGroupUpdateAppliedTo(t *testing.T) {
 
 func testACNPClusterGroupUpdate(t *testing.T) {
 	cgName := "cg-ns-z-then-y"
-	cgBuilder := &ClusterGroupSpecBuilder{}
-	cgBuilder = cgBuilder.SetName(cgName)
-	cgBuilder = cgBuilder.SetNamespaceSelector(map[string]string{"ns": "z"}, nil)
+	cgBuilder := &ClusterGroupV1Alpha3SpecBuilder{}
+	cgBuilder = cgBuilder.SetName(cgName).SetNamespaceSelector(map[string]string{"ns": "z"}, nil)
 	// Update CG NS selector to group Pods from Namespace Y
-	updatedCgBuilder := &ClusterGroupSpecBuilder{}
-	updatedCgBuilder = updatedCgBuilder.SetName(cgName)
-	updatedCgBuilder = updatedCgBuilder.SetNamespaceSelector(map[string]string{"ns": "y"}, nil)
+	updatedCgBuilder := &ClusterGroupV1Alpha3SpecBuilder{}
+	updatedCgBuilder = updatedCgBuilder.SetName(cgName).SetNamespaceSelector(map[string]string{"ns": "y"}, nil)
 	builder := &ClusterNetworkPolicySpecBuilder{}
 	builder = builder.SetName("acnp-deny-a-to-cg-with-z-egress").
 		SetPriority(1.0).
@@ -1224,7 +1219,7 @@ func testACNPClusterGroupUpdate(t *testing.T) {
 
 func testACNPClusterGroupAppliedToPodAdd(t *testing.T, data *TestData) {
 	cgName := "cg-pod-custom-pod-zj"
-	cgBuilder := &ClusterGroupSpecBuilder{}
+	cgBuilder := &ClusterGroupV1Alpha3SpecBuilder{}
 	cgBuilder = cgBuilder.SetName(cgName).
 		SetNamespaceSelector(map[string]string{"ns": "z"}, nil).
 		SetPodSelector(map[string]string{"pod": "j"}, nil)
@@ -1268,7 +1263,7 @@ func testACNPClusterGroupAppliedToPodAdd(t *testing.T, data *TestData) {
 
 func testACNPClusterGroupRefRulePodAdd(t *testing.T, data *TestData) {
 	cgName := "cg-pod-custom-pod-zk"
-	cgBuilder := &ClusterGroupSpecBuilder{}
+	cgBuilder := &ClusterGroupV1Alpha3SpecBuilder{}
 	cgBuilder = cgBuilder.SetName(cgName).
 		SetNamespaceSelector(map[string]string{"ns": "z"}, nil).
 		SetPodSelector(map[string]string{"pod": "k"}, nil)
@@ -1319,6 +1314,7 @@ func testACNPClusterGroupRefRuleIPBlocks(t *testing.T) {
 	podXAIP, _ := podIPs["x/a"]
 	podXBIP, _ := podIPs["x/b"]
 	podXCIP, _ := podIPs["x/c"]
+	podZAIP, _ := podIPs["z/a"]
 	// There are three situations of a Pod's IP(s):
 	// 1. Only one IPv4 address.
 	// 2. Only one IPv6 address.
@@ -1330,16 +1326,23 @@ func testACNPClusterGroupRefRuleIPBlocks(t *testing.T) {
 		}
 		return ip + "/128"
 	}
-	cgName := "cg-ipblock-pod-in-ns-x"
-	cgBuilder := &ClusterGroupSpecBuilder{}
-	var ipBlock []crdv1alpha1.IPBlock
+	var ipBlock1, ipBlock2 []crdv1alpha1.IPBlock
 	for i := 0; i < len(podXAIP); i++ {
-		ipBlock = append(ipBlock, crdv1alpha1.IPBlock{CIDR: genCIDR(podXAIP[i])})
-		ipBlock = append(ipBlock, crdv1alpha1.IPBlock{CIDR: genCIDR(podXBIP[i])})
-		ipBlock = append(ipBlock, crdv1alpha1.IPBlock{CIDR: genCIDR(podXCIP[i])})
+		ipBlock1 = append(ipBlock1, crdv1alpha1.IPBlock{CIDR: genCIDR(podXAIP[i])})
+		ipBlock1 = append(ipBlock1, crdv1alpha1.IPBlock{CIDR: genCIDR(podXBIP[i])})
+		ipBlock1 = append(ipBlock1, crdv1alpha1.IPBlock{CIDR: genCIDR(podXCIP[i])})
+		ipBlock2 = append(ipBlock2, crdv1alpha1.IPBlock{CIDR: genCIDR(podZAIP[i])})
 	}
-	cgBuilder = cgBuilder.SetName(cgName).
-		SetIPBlocks(ipBlock)
+
+	cgv1a3Name := "cg-ipblocks-pod-in-ns-x"
+	cgBuilder := &ClusterGroupV1Alpha3SpecBuilder{}
+	cgBuilder = cgBuilder.SetName(cgv1a3Name).
+		SetIPBlocks(ipBlock1)
+	// crd/v1alpha2 ClusterGroups should be converted to crd/v1alpha3.
+	cgv1a2Name := "cg-ipblock-pod-za"
+	cgBuilder2 := &ClusterGroupV1Alpha3SpecBuilder{}
+	cgBuilder2 = cgBuilder2.SetName(cgv1a2Name).
+		SetIPBlocks(ipBlock2)
 
 	builder := &ClusterNetworkPolicySpecBuilder{}
 	builder = builder.SetName("acnp-deny-ya-to-x-ips-ingress").
@@ -1351,17 +1354,21 @@ func testACNPClusterGroupRefRuleIPBlocks(t *testing.T) {
 			},
 		})
 	builder.AddIngress(v1.ProtocolTCP, &p80, nil, nil, nil, nil, nil,
-		nil, nil, nil, crdv1alpha1.RuleActionDrop, cgName, "")
+		nil, nil, nil, crdv1alpha1.RuleActionDrop, cgv1a3Name, "")
+	builder.AddIngress(v1.ProtocolTCP, &p80, nil, nil, nil, nil, nil,
+		nil, nil, nil, crdv1alpha1.RuleActionDrop, cgv1a2Name, "")
+
 	reachability := NewReachability(allPods, Connected)
 	reachability.Expect(Pod("x/a"), Pod("y/a"), Dropped)
 	reachability.Expect(Pod("x/b"), Pod("y/a"), Dropped)
 	reachability.Expect(Pod("x/c"), Pod("y/a"), Dropped)
+	reachability.Expect(Pod("z/a"), Pod("y/a"), Dropped)
 	testStep := []*TestStep{
 		{
 			"Port 80",
 			reachability,
 			[]metav1.Object{builder.Get()},
-			[]metav1.Object{cgBuilder.Get()},
+			[]metav1.Object{cgBuilder.Get(), cgBuilder2.Get()},
 			[]int32{80},
 			v1.ProtocolTCP,
 			0,
@@ -1369,7 +1376,7 @@ func testACNPClusterGroupRefRuleIPBlocks(t *testing.T) {
 		},
 	}
 	testCase := []*TestCase{
-		{"ACNP Drop Ingress From Pod: y/a to ClusterGroup with ipBlocks of Pods IPs in NS x", testStep},
+		{"ACNP Drop Ingress From Pod: y/a to ClusterGroup with ipBlocks", testStep},
 	}
 	executeTests(t, testCase)
 }
@@ -2135,9 +2142,9 @@ func testACNPClusterGroupServiceRefCreateAndUpdate(t *testing.T, data *TestData)
 	svc2 := k8sUtils.BuildService("svc2", "y", 80, 80, map[string]string{"app": "b"}, nil)
 
 	cg1Name, cg2Name := "cg-svc1", "cg-svc2"
-	cgBuilder1 := &ClusterGroupSpecBuilder{}
+	cgBuilder1 := &ClusterGroupV1Alpha3SpecBuilder{}
 	cgBuilder1 = cgBuilder1.SetName(cg1Name).SetServiceReference("x", "svc1")
-	cgBuilder2 := &ClusterGroupSpecBuilder{}
+	cgBuilder2 := &ClusterGroupV1Alpha3SpecBuilder{}
 	cgBuilder2 = cgBuilder2.SetName(cg2Name).SetServiceReference("y", "svc2")
 
 	builder := &ClusterNetworkPolicySpecBuilder{}
@@ -2220,14 +2227,14 @@ func testACNPClusterGroupServiceRefCreateAndUpdate(t *testing.T, data *TestData)
 func testACNPNestedClusterGroupCreateAndUpdate(t *testing.T, data *TestData) {
 	svc1 := k8sUtils.BuildService("svc1", "x", 80, 80, map[string]string{"app": "a"}, nil)
 	cg1Name, cg2Name := "cg-svc-x-a", "cg-select-y-b"
-	cgBuilder1 := &ClusterGroupSpecBuilder{}
+	cgBuilder1 := &ClusterGroupV1Alpha3SpecBuilder{}
 	cgBuilder1 = cgBuilder1.SetName(cg1Name).SetServiceReference("x", "svc1")
-	cgBuilder2 := &ClusterGroupSpecBuilder{}
+	cgBuilder2 := &ClusterGroupV1Alpha3SpecBuilder{}
 	cgBuilder2 = cgBuilder2.SetName(cg2Name).
 		SetNamespaceSelector(map[string]string{"ns": "y"}, nil).
 		SetPodSelector(map[string]string{"pod": "b"}, nil)
 	cgNestedName := "cg-nested"
-	cgBuilderNested := &ClusterGroupSpecBuilder{}
+	cgBuilderNested := &ClusterGroupV1Alpha3SpecBuilder{}
 	cgBuilderNested = cgBuilderNested.SetName(cgNestedName).SetChildGroups([]string{cg1Name})
 
 	builder := &ClusterNetworkPolicySpecBuilder{}
@@ -2418,8 +2425,11 @@ func cleanupTestCasePolicies(t *testing.T, c *TestCase) {
 func applyTestStepServicesAndGroups(t *testing.T, step *TestStep) {
 	for _, obj := range step.ServicesAndGroups {
 		switch o := obj.(type) {
+		case *crdv1alpha3.ClusterGroup:
+			_, err := k8sUtils.CreateOrUpdateV1Alpha3CG(o)
+			failOnError(err, t)
 		case *crdv1alpha2.ClusterGroup:
-			_, err := k8sUtils.CreateOrUpdateCG(o)
+			_, err := k8sUtils.CreateOrUpdateV1Alpha2CG(o)
 			failOnError(err, t)
 		case *v1.Service:
 			_, err := k8sUtils.CreateOrUpdateService(o)
@@ -2439,13 +2449,16 @@ func cleanupTestCaseServicesAndGroups(t *testing.T, c *TestCase) {
 	// be created before referred and can only be deleted after the parentGroup is deleted,
 	// CG deletion must be performed in the reverse order of creation. An orderedGroups
 	// list is used to maintain the order of group creation.
-	svcsToDelete, groupsToDelete := sets.String{}, sets.String{}
+	svcsToDelete, v1a2GroupsToDelete, v1a3GroupsToDelete := sets.String{}, sets.String{}, sets.String{}
 	var orderedGroups []string
 	for _, step := range c.Steps {
 		for _, obj := range step.ServicesAndGroups {
 			switch o := obj.(type) {
+			case *crdv1alpha3.ClusterGroup:
+				v1a3GroupsToDelete.Insert(o.Name)
+				orderedGroups = append(orderedGroups, o.Name)
 			case *crdv1alpha2.ClusterGroup:
-				groupsToDelete.Insert(o.Name)
+				v1a2GroupsToDelete.Insert(o.Name)
 				orderedGroups = append(orderedGroups, o.Name)
 			case *v1.Service:
 				svcsToDelete.Insert(o.Namespace + "/" + o.Name)
@@ -2454,10 +2467,12 @@ func cleanupTestCaseServicesAndGroups(t *testing.T, c *TestCase) {
 	}
 	for i := len(orderedGroups) - 1; i >= 0; i-- {
 		cg := orderedGroups[i]
-		if groupsToDelete.Has(cg) {
-			failOnError(k8sUtils.DeleteCG(cg), t)
-			failOnError(waitForResourceDelete("", cg, resourceCG, timeout), t)
-			groupsToDelete.Delete(cg)
+		if v1a2GroupsToDelete.Has(cg) {
+			failOnError(k8sUtils.DeleteV1Alpha2CG(cg), t)
+			v1a2GroupsToDelete.Delete(cg)
+		} else if v1a3GroupsToDelete.Has(cg) {
+			failOnError(k8sUtils.DeleteV1Alpha3CG(cg), t)
+			v1a3GroupsToDelete.Delete(cg)
 		}
 	}
 	for _, svc := range svcsToDelete.List() {
@@ -2512,7 +2527,7 @@ func waitForResourceReady(obj metav1.Object, timeout time.Duration) error {
 		case *legacysecv1alpha1.Tier:
 			_, err = k8sUtils.GetTier(p.Name)
 		case *legacycorev1a2.ClusterGroup:
-			_, err = k8sUtils.GetCG(p.Name)
+			_, err = k8sUtils.GetV1Alpha2CG(p.Name)
 		case *crdv1alpha1.ClusterNetworkPolicy:
 			_, err = k8sUtils.GetACNP(p.Name)
 		case *crdv1alpha1.NetworkPolicy:
@@ -2520,7 +2535,9 @@ func waitForResourceReady(obj metav1.Object, timeout time.Duration) error {
 		case *crdv1alpha1.Tier:
 			_, err = k8sUtils.GetTier(p.Name)
 		case *crdv1alpha2.ClusterGroup:
-			_, err = k8sUtils.GetCG(p.Name)
+			_, err = k8sUtils.GetV1Alpha2CG(p.Name)
+		case *crdv1alpha3.ClusterGroup:
+			_, err = k8sUtils.GetV1Alpha3CG(p.Name)
 		case *v1net.NetworkPolicy:
 			_, err = k8sUtils.GetNetworkPolicy(p.Namespace, p.Name)
 		case *v1.Service:
@@ -2548,7 +2565,7 @@ func waitForResourceDelete(namespace, name string, resource string, timeout time
 		case resourceTier:
 			_, err = k8sUtils.GetTier(name)
 		case resourceCG:
-			_, err = k8sUtils.GetCG(name)
+			_, err = k8sUtils.GetV1Alpha3CG(name)
 		case resourceNetworkPolicy:
 			_, err = k8sUtils.GetNetworkPolicy(namespace, name)
 		case resourceSVC:
