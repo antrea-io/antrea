@@ -48,6 +48,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&ExternalEntityList{},
 		&ClusterGroup{},
 		&ClusterGroupList{},
+		&Egress{},
+		&EgressList{},
 	)
 
 	metav1.AddToGroupVersion(scheme, SchemeGroupVersion)

@@ -38,6 +38,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/handlers/endpoint"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/handlers/loglevel"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/handlers/webhook"
+	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/controlplane/egressgroup"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/controlplane/nodestatssummary"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/networkpolicy/addressgroup"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/networkpolicy/appliedtogroup"
@@ -93,6 +94,7 @@ type ExtraConfig struct {
 	addressGroupStore             storage.Interface
 	appliedToGroupStore           storage.Interface
 	networkPolicyStore            storage.Interface
+	egressGroupStore              storage.Interface
 	controllerQuerier             querier.ControllerQuerier
 	endpointQuerier               controllernetworkpolicy.EndpointQuerier
 	networkPolicyController       *controllernetworkpolicy.NetworkPolicyController
@@ -130,7 +132,7 @@ type completedConfig struct {
 
 func NewConfig(
 	genericConfig *genericapiserver.Config,
-	addressGroupStore, appliedToGroupStore, networkPolicyStore, groupStore storage.Interface,
+	addressGroupStore, appliedToGroupStore, networkPolicyStore, groupStore, egressGroupStore storage.Interface,
 	caCertController *certificate.CACertController,
 	statsAggregator *stats.Aggregator,
 	controllerQuerier querier.ControllerQuerier,
@@ -143,6 +145,7 @@ func NewConfig(
 			addressGroupStore:             addressGroupStore,
 			appliedToGroupStore:           appliedToGroupStore,
 			networkPolicyStore:            networkPolicyStore,
+			egressGroupStore:              egressGroupStore,
 			caCertController:              caCertController,
 			statsAggregator:               statsAggregator,
 			controllerQuerier:             controllerQuerier,
@@ -165,6 +168,7 @@ func installAPIGroup(s *APIServer, c completedConfig) error {
 	clusterGroupMembershipStorage := clustergroupmember.NewREST(c.extraConfig.networkPolicyController)
 	groupAssociationStorage := groupassociation.NewREST(c.extraConfig.networkPolicyController)
 	nodeStatsSummaryStorage := nodestatssummary.NewREST(c.extraConfig.statsAggregator)
+	egressGroupStorage := egressgroup.NewREST(c.extraConfig.egressGroupStore)
 	cpGroup := genericapiserver.NewDefaultAPIGroupInfo(controlplane.GroupName, Scheme, metav1.ParameterCodec, Codecs)
 	cpv1beta2Storage := map[string]rest.Storage{}
 	cpv1beta2Storage["addressgroups"] = addressGroupStorage
@@ -174,6 +178,7 @@ func installAPIGroup(s *APIServer, c completedConfig) error {
 	cpv1beta2Storage["nodestatssummaries"] = nodeStatsSummaryStorage
 	cpv1beta2Storage["groupassociations"] = groupAssociationStorage
 	cpv1beta2Storage["clustergroupmembers"] = clusterGroupMembershipStorage
+	cpv1beta2Storage["egressgroups"] = egressGroupStorage
 	cpGroup.VersionedResourcesStorageMap["v1beta2"] = cpv1beta2Storage
 
 	systemGroup := genericapiserver.NewDefaultAPIGroupInfo(system.GroupName, Scheme, metav1.ParameterCodec, Codecs)
@@ -201,7 +206,15 @@ func installAPIGroup(s *APIServer, c completedConfig) error {
 	legacyCPv1beta1Storage["networkpolicies"] = networkPolicyStorage
 	legacyCPv1beta1Storage["nodestatssummaries"] = nodeStatsSummaryStorage
 	legacyCPGroup.VersionedResourcesStorageMap["v1beta1"] = legacyCPv1beta1Storage
-	legacyCPGroup.VersionedResourcesStorageMap["v1beta2"] = cpv1beta2Storage
+	legacyCPv1beta2Storage := map[string]rest.Storage{}
+	legacyCPv1beta2Storage["addressgroups"] = addressGroupStorage
+	legacyCPv1beta2Storage["appliedtogroups"] = appliedToGroupStorage
+	legacyCPv1beta2Storage["networkpolicies"] = networkPolicyStorage
+	legacyCPv1beta2Storage["networkpolicies/status"] = networkPolicyStatusStorage
+	legacyCPv1beta2Storage["nodestatssummaries"] = nodeStatsSummaryStorage
+	legacyCPv1beta2Storage["groupassociations"] = groupAssociationStorage
+	legacyCPv1beta2Storage["clustergroupmembers"] = clusterGroupMembershipStorage
+	legacyCPGroup.VersionedResourcesStorageMap["v1beta2"] = legacyCPv1beta2Storage
 
 	legacyNetworkingGroup := genericapiserver.NewDefaultAPIGroupInfo(legacynetworking.GroupName, Scheme, metav1.ParameterCodec, Codecs)
 	// TODO: networkingGroup is the legacy group of controlplane NetworkPolicy APIs. To allow live upgrades from up to

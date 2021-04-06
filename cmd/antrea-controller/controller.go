@@ -38,6 +38,8 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/clusteridentity"
 	"github.com/vmware-tanzu/antrea/pkg/controller/crdmirroring"
 	"github.com/vmware-tanzu/antrea/pkg/controller/crdmirroring/crdhandler"
+	"github.com/vmware-tanzu/antrea/pkg/controller/egress"
+	egressstore "github.com/vmware-tanzu/antrea/pkg/controller/egress/store"
 	"github.com/vmware-tanzu/antrea/pkg/controller/grouping"
 	"github.com/vmware-tanzu/antrea/pkg/controller/metrics"
 	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy"
@@ -111,6 +113,7 @@ func run(o *Options) error {
 	tierInformer := crdInformerFactory.Crd().V1alpha1().Tiers()
 	tfInformer := crdInformerFactory.Crd().V1alpha1().Traceflows()
 	cgInformer := crdInformerFactory.Crd().V1alpha2().ClusterGroups()
+	egressInformer := crdInformerFactory.Crd().V1alpha2().Egresses()
 
 	clusterIdentityAllocator := clusteridentity.NewClusterIdentityAllocator(
 		env.GetAntreaNamespace(),
@@ -122,6 +125,7 @@ func run(o *Options) error {
 	addressGroupStore := store.NewAddressGroupStore()
 	appliedToGroupStore := store.NewAppliedToGroupStore()
 	networkPolicyStore := store.NewNetworkPolicyStore()
+	egressGroupStore := egressstore.NewEgressGroupStore()
 	groupStore := store.NewGroupStore()
 	groupEntityIndex := grouping.NewGroupEntityIndex()
 	groupEntityController := grouping.NewGroupEntityController(groupEntityIndex, podInformer, namespaceInformer, eeInformer)
@@ -216,6 +220,11 @@ func run(o *Options) error {
 
 	controllerMonitor := monitor.NewControllerMonitor(crdClient, legacyCRDClient, nodeInformer, controllerQuerier)
 
+	var egressController *egress.EgressController
+	if features.DefaultFeatureGate.Enabled(features.Egress) {
+		egressController = egress.NewEgressController(groupEntityIndex, egressInformer, egressGroupStore)
+	}
+
 	var traceflowController *traceflow.Controller
 	if features.DefaultFeatureGate.Enabled(features.Traceflow) {
 		traceflowController = traceflow.NewTraceflowController(crdClient, podInformer, tfInformer)
@@ -254,6 +263,7 @@ func run(o *Options) error {
 		appliedToGroupStore,
 		networkPolicyStore,
 		groupStore,
+		egressGroupStore,
 		controllerQuerier,
 		endpointQuerier,
 		networkPolicyController,
@@ -324,6 +334,9 @@ func run(o *Options) error {
 			go eeMirroringController.Run(stopCh)
 		}
 	}
+	if features.DefaultFeatureGate.Enabled(features.Egress) {
+		go egressController.Run(stopCh)
+	}
 
 	<-stopCh
 	klog.Info("Stopping Antrea controller")
@@ -339,6 +352,7 @@ func createAPIServerConfig(kubeconfig string,
 	appliedToGroupStore storage.Interface,
 	networkPolicyStore storage.Interface,
 	groupStore storage.Interface,
+	egressGroupStore storage.Interface,
 	controllerQuerier querier.ControllerQuerier,
 	endpointQuerier networkpolicy.EndpointQuerier,
 	npController *networkpolicy.NetworkPolicyController,
@@ -396,6 +410,7 @@ func createAPIServerConfig(kubeconfig string,
 		appliedToGroupStore,
 		networkPolicyStore,
 		groupStore,
+		egressGroupStore,
 		caCertController,
 		statsAggregator,
 		controllerQuerier,
