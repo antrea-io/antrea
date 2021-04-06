@@ -84,12 +84,15 @@ The mirroring controller behaves as follows:
   Custom Resource with the same `Spec` and `Labels` as the legacy one.
 * Any update to the `Spec` and / or `Labels` of the legacy Custom Resource will
   be reflected identically in the new Custom Resource.
-* Any update to the `Status` of the new mirrored Custom Rsource will be
+* Any update to the `Status` of the new mirrored Custom Resource will be
   reflected back identically in the legacy Custom Resource.
 * If the legacy Custom Resource is deleted, the mirrored one will be deleted
   automatically as well.
+* Manual updates to new mirrored Custom Resources will be overwritten by the
+  controller.
 * If a legacy Custom Resource is annotated with `"crd.antrea.io/stop-mirror"`,
-  the Custom Resource is ignored.
+  it will then be ignored, and updates to the corresponding new Custom
+  Resource will no longer be overwritten.
 
 This gives us the following upgrade sequence for a client application which uses
 the legacy Antrea CRDs:
@@ -118,7 +121,7 @@ the legacy Antrea CRDs:
    deletions) are not applied to the corresponding new resource any more, and
    changes to the new resources are now possible (they will not be overwritten
    by the controller). As an example, the command below will annotate *all* ANPs
-   in the current namespace with `"crd.antrea.io/stop-mirror"`.
+   in the current Namespace with `"crd.antrea.io/stop-mirror"`.
 
    ```bash
    kubectl annotate lanp.security.antrea.tanzu.vmware.com --all crd.antrea.io/stop-mirror=''
@@ -140,7 +143,7 @@ the legacy Antrea CRDs:
 
 6. Safely delete all legacy CRDs previously managed by the application. As an
    example, the command below will delete *all* legacy ANPs in the current
-   namespace:
+   Namespace:
 
    ```bash
    kubectl delete lanp.security.antrea.tanzu.vmware.com
