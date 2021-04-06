@@ -203,29 +203,26 @@ func (c *NPLController) enqueueSvcUpdate(oldObj, newObj interface{}) {
 		return
 	}
 
-	var podKeys sets.String
-	// Check for annotation changes in the Service. Pod sets don't change
-	// in case of annotation and Service type updates.
-	if oldSvcAnnotation != newSvcAnnotation &&
-		(oldSvcAnnotation == "true" || newSvcAnnotation == "true") {
-		podKeys = sets.NewString(c.getPodsFromService(newSvc)...)
+	if newSvcAnnotation == "true" && newSvc.Spec.Type == corev1.ServiceTypeNodePort {
+		klog.Warningf("Service %s is of type NodePort and cannot be used for NodePortLocal, the '%s' annotation will have no effect", newSvc.Name, NPLEnabledAnnotationKey)
 	}
 
-	// Check for Service type changes, NodePort to non-NodePort and vice versa.
-	if oldSvc.Spec.Type != newSvc.Spec.Type &&
-		(oldSvc.Spec.Type == corev1.ServiceTypeNodePort || newSvc.Spec.Type == corev1.ServiceTypeNodePort) {
-		if podKeys == nil {
+	podKeys := sets.String{}
+	oldNPLEnabled := oldSvcAnnotation == "true" && oldSvc.Spec.Type != corev1.ServiceTypeNodePort
+	newNPLEnabled := newSvcAnnotation == "true" && newSvc.Spec.Type != corev1.ServiceTypeNodePort
+
+	if oldNPLEnabled != newNPLEnabled {
+		// Process Pods corresponding to Service with valid NPL annotation and Service type.
+		if oldNPLEnabled {
+			podKeys = sets.NewString(c.getPodsFromService(oldSvc)...)
+		} else if newNPLEnabled {
 			podKeys = sets.NewString(c.getPodsFromService(newSvc)...)
 		}
-	}
-
-	if !reflect.DeepEqual(oldSvc.Spec.Selector, newSvc.Spec.Selector) {
+	} else if oldNPLEnabled && newNPLEnabled && !reflect.DeepEqual(oldSvc.Spec.Selector, newSvc.Spec.Selector) {
 		// Disjunctive union of Pods from both Service sets.
 		oldPodSet := sets.NewString(c.getPodsFromService(oldSvc)...)
-		if podKeys == nil {
-			podKeys = sets.NewString(c.getPodsFromService(newSvc)...)
-		}
-		podKeys = utilsets.SymmetricDifference(oldPodSet, podKeys)
+		newPodSet := sets.NewString(c.getPodsFromService(newSvc)...)
+		podKeys = utilsets.SymmetricDifference(oldPodSet, newPodSet)
 	}
 
 	for podKey := range podKeys {
