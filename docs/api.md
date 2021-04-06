@@ -34,3 +34,136 @@ These are the API group versions which are curently available when using Antrea.
 | API group | API version | API Service? | Introduced in | Deprecated in | Removed in |
 |---|---|---|---|---|---|
 | `core.antrea.tanzu.vmware.com` | `v1alpha1` | No | v0.8.0 | v0.11.0 | v0.11.0 |
+
+## API renaming from `*.antrea.tanzu.vmware.com` to `*.antrea.io`
+
+For the v1.0 release, we undertook to rename all Antrea API to use the
+`antrea.io` suffix instead of the `antrea.tanzu.vmware.com` suffix. For more
+information about the motivations behind this undertaking, please refer to
+[Github issue #1715](https://github.com/vmware-tanzu/antrea/issues/1715).
+
+As part of this renaming, and to avoid profileration of API groups, we have
+decided to group all the Custom Resource Definitions (CRDs) defined by Antrea in
+a single API group: `crd.antrea.io`. In the future, resources within that group
+will be versioned individually as needed, and this will be reflected in the
+table above.
+
+To avoid disruptions to existing Antrea users, our requirements for this
+renaming process were as follows:
+
+1. As per our [upgrade
+   policy](versioning.md#antrea-upgrade-and-supported-version-skew), older
+   Agents need to be able to communicate with a new upgraded Controller, using
+   the old `controlplane.antrea.tanzu.vmware.com` API. Once both the Controller
+   and the Agent are upgraded, they communicate using `controlplane.antrea.io`.
+2. API Services can be accessed using either API version.
+3. After upgrade, Custom Resources can be managed using either API
+   version. Resources created using the old API (before or after upgrade) can be
+   accessed using the new API (or the old one).
+4. For each resource in each API group, the new resource type should be
+   backward-compatible with the old resource type, and, whenever possible,
+   forward-compatible. This simplifies the upgrade of existing client
+   applications which leverage the Antrea API. These applications can be easily
+   upgraded to use the new API version, with no change to the business
+   logic. Custom Resources created before upgrading the application can be
+   accessed through the new API with no loss of information.
+
+To achieve our 3rd goal, we introduced a new Kubernetes controller in the Antrea
+Controller, in charge of mirroring "old" Custom Resources (created using the
+`*.antrea.tanzu.vmware.com` API groups) to the new (`*.antrea.io`) API. This new
+mirroring controller is enabled by default, but can be disabled by setting
+`legacyCRDMirroring` to `false` in the `antrea-controller` configuration
+options. Thanks to this controller, the Antrea components (Agent and Controller)
+only need to watch Custom Resources created with the new API group. If any
+client still uses the old (or "legacy") API groups, these Custom Resources will
+be mirrored to the new API group and handled as expected.
+
+The mirroring controller behaves as follows:
+
+* If a Custom Resource is created with the legacy API, it will create a new
+  Custom Resource with the same `Spec` and `Labels` as the legacy one.
+* Any update to the `Spec` and / or `Labels` of the legacy Custom Resource will
+  be reflected identically in the new Custom Resource.
+* Any update to the `Status` of the new mirrored Custom Rsource will be
+  reflected back identically in the legacy Custom Resource.
+* If the legacy Custom Resource is deleted, the mirrored one will be deleted
+  automatically as well.
+* If a legacy Custom Resource is annotated with `"crd.antrea.io/stop-mirror"`,
+  the Custom Resource is ignored.
+
+This gives us the following upgrade sequence for a client application which uses
+the legacy Antrea CRDs:
+
+1. Ensure that Antrea has been upgraded in the cluster to a version greater than
+   or equal to v1.0, and that legacy CRD mirroring is enabled (this is the case
+   by default).
+
+2. Check that all Custom Resources have been mirrored. All the new ones should
+   be annotated with `"crd.antrea.io/managed-by":
+   "crdmirroring-controller"`. The first command below will display all the
+   legacy AntreaNetworkPolicies (ANPs). The second one will display all the ones
+   which exist in the new `crd.antrea.io` API group. You can then compare the
+   two lists.
+
+   ```bash
+   kubectl get lanp.security.antrea.tanzu.vmware.com -o=jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}'
+   kubectl get anp.crd.antrea.io -o=jsonpath='{range .items[?(@.metadata.annotations.crd\.antrea\.io/managed-by=="crdmirroring-controller")]}{.metadata.name}{"\n"}{end}'
+   ```
+
+3. Stop the old version of the application, which uses the legacy CRDs.
+
+4. Annotate all existing Custom Resources managed by the application with
+   `"crd.antrea.io/stop-mirror"`. From now on, the mirroring controller will
+   ignore these legacy resources: updates to the legacy resources (including
+   deletions) are not applied to the corresponding new resource any more, and
+   changes to the new resources are now possible (they will not be overwritten
+   by the controller). As an example, the command below will annotate *all* ANPs
+   in the current namespace with `"crd.antrea.io/stop-mirror"`.
+
+   ```bash
+   kubectl annotate lanp.security.antrea.tanzu.vmware.com --all crd.antrea.io/stop-mirror=''
+   ```
+
+5. Check that none of the new Custom Resources still have the
+   `"crd.antrea.io/managed-by": "crdmirroring-controller"` annotation. Running
+   the same command as before should return an empty list:
+
+   ```bash
+   kubectl get anp.crd.antrea.io -o=jsonpath='{range .items[?(@.metadata.annotations.crd\.antrea\.io/managed-by=="crdmirroring-controller")]}{.metadata.name}{"\n"}{end}'
+   ```
+
+   If you remove the filter, all your ANPs should still exist:
+
+   ```bash
+   kubectl get anp.crd.antrea.io -o=jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}'
+   ```
+
+6. Safely delete all legacy CRDs previously managed by the application. As an
+   example, the command below will delete *all* legacy ANPs in the current
+   namespace:
+
+   ```bash
+   kubectl delete lanp.security.antrea.tanzu.vmware.com
+   ```
+
+   Once again, all new ANPs should still exist, which can be confirmed with:
+
+   ```bash
+   kubectl get anp.crd.antrea.io -o=jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}'
+   ```
+
+7. Start the new version of the application, which uses the new CRDs. All
+   mirrored Custom Resources should be available for the application to access.
+
+8. At this stage, if all applications have been updated, legacy CRD mirroring
+   can be disabled in the Antrea Controller configuration.
+
+Note that for CRDs which are "owned" by Antrea, `AntreaAgentInfo` and
+`AntreaControllerInfo`, resources are automatically created by the Antrea
+components using both API versions.
+
+All legacy API groups are planned for removal in December 2021. All versions of
+Antrea released after that will no longer include support for legacy API groups
+and will no longer ship with the mirroring controller. We recommend that all
+applications using the Antrea API be upgraded before then using the procedure
+detailed above.

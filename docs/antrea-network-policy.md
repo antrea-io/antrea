@@ -59,7 +59,7 @@ as was the case initially.
 An example Tier might look like this:
 
 ```yaml
-apiVersion: security.antrea.tanzu.vmware.com/v1alpha1
+apiVersion: crd.antrea.io/v1alpha1
 kind: Tier
 metadata:
   name: mytier
@@ -136,13 +136,13 @@ The following kubectl commands can be used to retrieve Tier resources:
     kubectl get tiers
 
     # Use long name with API Group
-    kubectl get tiers.security.antrea.tanzu.vmware.com
+    kubectl get tiers.crd.antrea.io
 
     # Use short name
     kubectl get tr
 
     # Use short name with API Group
-    kubectl get tr.security.antrea.tanzu.vmware.com
+    kubectl get tr.crd.antrea.io
 
     # Sort output by Tier priority
     kubectl get tiers --sort-by=.spec.priority
@@ -197,7 +197,7 @@ ConfigMap as follows:
 Example ClusterNetworkPolicies might look like this:
 
 ```yaml
-apiVersion: security.antrea.tanzu.vmware.com/v1alpha1
+apiVersion: crd.antrea.io/v1alpha1
 kind: ClusterNetworkPolicy
 metadata:
   name: acnp-with-stand-alone-selectors
@@ -242,7 +242,7 @@ spec:
         name: DropToThirdParty
         enableLogging: true
 ---
-apiVersion: security.antrea.tanzu.vmware.com/v1alpha1
+apiVersion: crd.antrea.io/v1alpha1
 kind: ClusterNetworkPolicy
 metadata:
   name: acnp-with-cluster-groups
@@ -422,13 +422,13 @@ The following kubectl commands can be used to retrieve ACNP resources:
     kubectl get clusternetworkpolicies
 
     # Use long name with API Group
-    kubectl get clusternetworkpolicies.security.antrea.tanzu.vmware.com
+    kubectl get clusternetworkpolicies.crd.antrea.io
 
     # Use short name
     kubectl get acnp
 
     # Use short name with API Group
-    kubectl get acnp.security.antrea.tanzu.vmware.com
+    kubectl get acnp.crd.antrea.io
 ```
 
 All of the above commands produce output similar to what is shown below:
@@ -456,7 +456,7 @@ feature gate.
 An example Antrea NetworkPolicy might look like this:
 
 ```yaml
-apiVersion: security.antrea.tanzu.vmware.com/v1alpha1
+apiVersion: crd.antrea.io/v1alpha1
 kind: NetworkPolicy
 metadata:
   name: test-anp
@@ -520,13 +520,13 @@ The following kubectl commands can be used to retrieve ANP resources:
 
 ```bash
     # Use long name with API Group
-    kubectl get networkpolicies.security.antrea.tanzu.vmware.com
+    kubectl get networkpolicies.crd.antrea.io
 
     # Use short name
     kubectl get anp
 
     # Use short name with API Group
-    kubectl get anp.security.antrea.tanzu.vmware.com
+    kubectl get anp.crd.antrea.io
 ```
 
 All of the above commands produce output similar to what is shown below:
@@ -620,7 +620,7 @@ without having to update individual policy rules.
 An example ClusterGroup might look like this:
 
 ```yaml
-apiVersion: core.antrea.tanzu.vmware.com/v1alpha2
+apiVersion: crd.antrea.io/v1alpha2
 kind: ClusterGroup
 metadata:
   name: test-cg-sel
@@ -637,7 +637,7 @@ status:
       status: "True"
       lastTransitionTime: "2021-01-29T19:59:39Z"
 ---
-apiVersion: core.antrea.tanzu.vmware.com/v1alpha2
+apiVersion: crd.antrea.io/v1alpha2
 kind: ClusterGroup
 metadata:
   name: test-cg-ip-block
@@ -651,7 +651,7 @@ status:
       status: "True"
       lastTransitionTime: "2021-01-29T19:59:39Z"
 ---
-apiVersion: core.antrea.tanzu.vmware.com/v1alpha2
+apiVersion: crd.antrea.io/v1alpha2
 kind: ClusterGroup
 metadata:
   name: test-cg-svc-ref
@@ -666,7 +666,7 @@ status:
       status: "True"
       lastTransitionTime: "2021-01-29T20:21:46Z"
 ---
-apiVersion: core.antrea.tanzu.vmware.com/v1alpha2
+apiVersion: crd.antrea.io/v1alpha2
 kind: ClusterGroup
 metadata:
   name: test-cg-nested
@@ -745,13 +745,13 @@ The following kubectl commands can be used to retrieve CG resources:
 
 ```bash
     # Use long name with API Group
-    kubectl get clustergroups.core.antrea.tanzu.vmware.com
+    kubectl get clustergroups.crd.antrea.io
 
     # Use short name
     kubectl get cg
 
     # Use short name with API Group
-    kubectl get cg.core.antrea.tanzu.vmware.com
+    kubectl get cg.crd.antrea.io
 ```
 
 ## Select Namespace by Name
@@ -799,7 +799,7 @@ Namespaces with the `antrea.io/metadata.name: <namespaceName>` label. Users may 
 use this reserved label to select Namespaces by name as follows:
 
 ```yaml
-apiVersion: security.antrea.tanzu.vmware.com/v1alpha1
+apiVersion: crd.antrea.io/v1alpha1
 kind: NetworkPolicy
 metadata:
   name: test-anp-by-name

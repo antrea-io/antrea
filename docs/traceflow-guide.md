@@ -61,7 +61,7 @@ You can start a new trace by creating Traceflow CRD via kubectl and a YAML file 
 configuration of Traceflow CRD. An example YAML file of Traceflow CRD might look like this:
 
 ```yaml
-apiVersion: ops.antrea.tanzu.vmware.com/v1alpha1
+apiVersion: crd.antrea.io/v1alpha1
 kind: Traceflow
 metadata:
   name: tf-test
@@ -90,7 +90,7 @@ of destination Pod named `tcp-sts-2` using TCP protocol.
 Antrea Traceflow supports IPv6 traffic. An example YAML file of Traceflow CRD might look like this:
 
 ```yaml
-apiVersion: ops.antrea.tanzu.vmware.com/v1alpha1
+apiVersion: crd.antrea.io/v1alpha1
 kind: Traceflow
 metadata:
   name: tf-test-ipv6
