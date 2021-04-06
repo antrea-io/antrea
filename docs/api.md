@@ -84,8 +84,9 @@ The mirroring controller behaves as follows:
   Custom Resource with the same `Spec` and `Labels` as the legacy one.
 * Any update to the `Spec` and / or `Labels` of the legacy Custom Resource will
   be reflected identically in the new Custom Resource.
-* Any update to the `Status` of the new mirrored Custom Resource will be
-  reflected back identically in the legacy Custom Resource.
+* Any update to the `Status` of the new mirrored Custom Resource (assuming it
+  has a `Status` field) will be reflected back identically in the legacy Custom
+  Resource.
 * If the legacy Custom Resource is deleted, the mirrored one will be deleted
   automatically as well.
 * Manual updates to new mirrored Custom Resources will be overwritten by the
