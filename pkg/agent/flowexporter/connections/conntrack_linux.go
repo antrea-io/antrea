@@ -155,6 +155,10 @@ func NetlinkFlowToAntreaConnection(conn *conntrack.Flow) *flowexporter.Connectio
 		SourcePodName:           "",
 		DestinationPodNamespace: "",
 		DestinationPodName:      "",
+		TCPState:                "",
+	}
+	if conn.ProtoInfo.TCP != nil {
+		newConn.TCPState = stateToString(conn.ProtoInfo.TCP.State)
 	}
 
 	// Get the stop time from dumped connection if the connection is terminated(dying state).
@@ -184,4 +188,25 @@ func SetupConntrackParameters() error {
 func (ct *connTrackSystem) GetMaxConnections() (int, error) {
 	maxConns, err := sysctl.GetSysctlNet("netfilter/nf_conntrack_max")
 	return maxConns, err
+}
+
+// reference: https://github.com/torvalds/linux/blob/master/net/netfilter/nf_conntrack_proto_tcp.c#L51-L62
+func stateToString(state uint8) string {
+	stateList := []string{
+		"NONE",
+		"SYN_SENT",
+		"SYN_RECV",
+		"ESTABLISHED",
+		"FIN_WAIT",
+		"CLOSE_WAIT",
+		"LAST_ACK",
+		"TIME_WAIT",
+		"CLOSE",
+		"SYN_SENT2",
+	}
+	if state > uint8(9) { // invalid state number
+		return ""
+	} else {
+		return stateList[state]
+	}
 }

@@ -221,7 +221,7 @@ func checkRecordsForFlows(t *testing.T, data *TestData, srcIP string, dstIP stri
 		if err != nil || rc != 0 {
 			return false, err
 		}
-		return strings.Contains(collectorOutput, srcIP) && strings.Contains(collectorOutput, dstIP), nil
+		return strings.Count(collectorOutput, srcIP) >= expectedNumDataRecords && strings.Count(collectorOutput, dstIP) >= expectedNumDataRecords, nil
 	})
 	require.NoErrorf(t, err, "IPFIX collector did not receive the expected records and timed out with error: %v", err)
 

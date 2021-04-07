@@ -21,7 +21,7 @@ import (
 
 type ConnectionKey [5]string
 
-type ConnectionMapCallBack func(key ConnectionKey, conn Connection) error
+type ConnectionMapCallBack func(key ConnectionKey, conn *Connection) error
 type FlowRecordCallBack func(key ConnectionKey, record FlowRecord) error
 
 type Tuple struct {
@@ -41,7 +41,10 @@ type Connection struct {
 	// For established connections: StopTime is latest time when it was polled.
 	StopTime time.Time
 	// IsPresent flag helps in cleaning up connections when they are not in conntrack table anymore.
-	IsPresent          bool
+	IsPresent bool
+	// DoneExport marks whether the related flow records are already exported or not so that we can
+	// safely delete the connection from the connection map.
+	DoneExport         bool
 	Zone               uint16
 	Mark               uint32
 	StatusFlag         uint32
@@ -60,6 +63,7 @@ type Connection struct {
 	IngressNetworkPolicyNamespace string
 	EgressNetworkPolicyName       string
 	EgressNetworkPolicyNamespace  string
+	TCPState                      string
 }
 
 type FlowRecord struct {

@@ -69,14 +69,11 @@ var (
 		"ingressNetworkPolicyNamespace",
 		"egressNetworkPolicyName",
 		"egressNetworkPolicyNamespace",
+		"tcpState",
+		"flowType",
 	}
 	AntreaInfoElementsIPv4 = append(antreaInfoElementsCommon, []string{"destinationClusterIPv4"}...)
 	AntreaInfoElementsIPv6 = append(antreaInfoElementsCommon, []string{"destinationClusterIPv6"}...)
-)
-
-const (
-	idleTimeoutReason   = uint8(0x01)
-	activeTimeoutReason = uint8(0x02)
 )
 
 type flowExporter struct {
@@ -261,7 +258,7 @@ func (exp *flowExporter) sendFlowRecords() error {
 		// (activeFlowTimeout or idleFlowTimeout) are met. A flow is considered
 		// to be idle if its packet counts haven't changed since the last export.
 		if time.Since(record.LastExportTime) >= exp.idleFlowTimeout {
-			if ((record.Conn.OriginalPackets <= record.PrevPackets) && (record.Conn.ReversePackets <= record.PrevReversePackets)) || !record.Conn.IsPresent {
+			if ((record.Conn.OriginalPackets <= record.PrevPackets) && (record.Conn.ReversePackets <= record.PrevReversePackets)) || flowexporter.IsConnectionDying(&record.Conn) {
 				// Idle flow timeout
 				record.IsActive = false
 				recordNeedsSending = true
@@ -284,7 +281,6 @@ func (exp *flowExporter) sendFlowRecords() error {
 				if _, err := exp.sendDataSet(); err != nil {
 					return err
 				}
-				exp.numDataSetsSent = exp.numDataSetsSent + 1
 			} else {
 				if err := exp.ipfixSet.PrepareSet(ipfixentities.Data, exp.templateIDv4); err != nil {
 					return err
@@ -296,19 +292,17 @@ func (exp *flowExporter) sendFlowRecords() error {
 				if _, err := exp.sendDataSet(); err != nil {
 					return err
 				}
-				exp.numDataSetsSent = exp.numDataSetsSent + 1
 			}
-			// If the connection is not present in the conntrack table anymore,
-			// then we delete the connection in connection store and record store.
-			// Please note that our record cache policy is that we keep the record in
-			// the record map as long as the corresponding connection is present in
-			// the conntrack table.
-			if !record.Conn.IsPresent {
-				klog.V(2).Infof("Deleting the inactive connection with key: %v from both connection map and record map", key)
-				if err := exp.connStore.DeleteConnectionByKey(key); err != nil {
+			exp.numDataSetsSent = exp.numDataSetsSent + 1
+
+			if flowexporter.IsConnectionDying(&record.Conn) {
+				// If the connection is in dying state or connection is not in conntrack table,
+				// we will delete the flow records from records map.
+				klog.V(2).Infof("Deleting the inactive flow records with key: %v from record map", key)
+				if err := exp.flowRecords.DeleteFlowRecordWithoutLock(key); err != nil {
 					return err
 				}
-				if err := exp.flowRecords.DeleteFlowRecordWithoutLock(key); err != nil {
+				if err := exp.connStore.SetExportDone(key); err != nil {
 					return err
 				}
 			} else {
@@ -396,10 +390,12 @@ func (exp *flowExporter) addRecordToSet(record flowexporter.FlowRecord) error {
 		case "flowEndSeconds":
 			ie.Value = uint32(record.Conn.StopTime.Unix())
 		case "flowEndReason":
-			if record.IsActive {
-				ie.Value = activeTimeoutReason
+			if flowexporter.IsConnectionDying(&record.Conn) {
+				ie.Value = ipfixregistry.EndOfFlowReason
+			} else if record.IsActive {
+				ie.Value = ipfixregistry.ActiveTimeoutReason
 			} else {
-				ie.Value = idleTimeoutReason
+				ie.Value = ipfixregistry.IdleTimeoutReason
 			}
 		case "sourceIPv4Address":
 			ie.Value = record.Conn.TupleOrig.SourceAddress
@@ -517,6 +513,15 @@ func (exp *flowExporter) addRecordToSet(record flowexporter.FlowRecord) error {
 			ie.Value = record.Conn.EgressNetworkPolicyName
 		case "egressNetworkPolicyNamespace":
 			ie.Value = record.Conn.EgressNetworkPolicyNamespace
+		case "tcpState":
+			ie.Value = record.Conn.TCPState
+		case "flowType":
+			// TODO: assign flow type to support Pod-to-External flows
+			if record.Conn.SourcePodName == "" || record.Conn.DestinationPodName == "" {
+				ie.Value = ipfixregistry.InterNode
+			} else {
+				ie.Value = ipfixregistry.IntraNode
+			}
 		}
 	}
 

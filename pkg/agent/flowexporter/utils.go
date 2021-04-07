@@ -18,6 +18,10 @@ import (
 	"strconv"
 )
 
+const (
+	connectionDyingFlag = uint32(1 << 9)
+)
+
 // NewConnectionKey creates 5-tuple of flow as connection key
 func NewConnectionKey(conn *Connection) ConnectionKey {
 	return ConnectionKey{conn.TupleOrig.SourceAddress.String(),
@@ -26,4 +30,21 @@ func NewConnectionKey(conn *Connection) ConnectionKey {
 		strconv.FormatUint(uint64(conn.TupleReply.SourcePort), 10),
 		strconv.FormatUint(uint64(conn.TupleOrig.Protocol), 10),
 	}
+}
+
+func IsConnectionDying(conn *Connection) bool {
+	// "TIME_WAIT" state indicates local endpoint has closed the connection.
+	// "CLOSE" state indicates closing RST flag is set and connection is closed.
+	if conn.TCPState == "TIME_WAIT" || conn.TCPState == "CLOSE" {
+		return true
+	}
+	// connections in other protocol with dying bit set
+	if conn.TCPState == "" && (conn.StatusFlag&connectionDyingFlag != 0) {
+		return true
+	}
+	// Connection no longer exists in conntrack table.
+	if !conn.IsPresent {
+		return true
+	}
+	return false
 }
