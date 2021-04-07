@@ -28,7 +28,6 @@ require (
 	github.com/golang/protobuf v1.3.2
 	github.com/google/uuid v1.1.1
 	github.com/kevinburke/ssh_config v0.0.0-20190725054713-01f96b0aa0cd
-	github.com/kr/text v0.2.0 // indirect
 	github.com/niemeyer/pretty v0.0.0-20200227124842-a10e7caefd8e // indirect
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/common v0.4.1
@@ -42,7 +41,7 @@ require (
 	github.com/stretchr/testify v1.6.1
 	github.com/ti-mo/conntrack v0.3.0
 	github.com/vishvananda/netlink v1.1.0
-	github.com/vmware/go-ipfix v0.4.5
+	github.com/vmware/go-ipfix v0.4.7
 	golang.org/x/crypto v0.0.0-20200820211705-5c72a883971a
 	golang.org/x/exp v0.0.0-20190312203227-4b39c73a6495
 	golang.org/x/mod v0.4.0

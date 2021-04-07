@@ -64,6 +64,8 @@ var (
 		"ingressNetworkPolicyNamespace",
 		"egressNetworkPolicyName",
 		"egressNetworkPolicyNamespace",
+		"tcpState",
+		"flowType",
 	}
 	antreaInfoElementsIPv4   = append(antreaInfoElementsCommon, []string{"destinationClusterIPv4"}...)
 	antreaInfoElementsIPv6   = append(antreaInfoElementsCommon, []string{"destinationClusterIPv6"}...)
@@ -75,6 +77,8 @@ var (
 
 	nonStatsElementList = []string{
 		"flowEndSeconds",
+		"flowEndReason",
+		"tcpState",
 	}
 	statsElementList = []string{
 		"octetDeltaCount",

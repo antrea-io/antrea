@@ -39,7 +39,7 @@ var (
 		"ipv6-icmp": 58,
 	}
 	// Mapping is defined at https://github.com/torvalds/linux/blob/v5.9/include/uapi/linux/netfilter/nf_conntrack_common.h#L42
-	stateMap = map[string]uint32{
+	conntrackStatusMap = map[string]uint32{
 		"EXPECTED":      uint32(1),
 		"SEEN_REPLY":    uint32(1 << 1),
 		"ASSURED":       uint32(1 << 2),
@@ -125,7 +125,7 @@ func (ct *connTrackOvsCtl) ovsAppctlDumpConnections(zoneFilter uint16) ([]*flowe
 
 // flowStringToAntreaConnection parses the flow string and converts to Antrea connection.
 // Example of flow string:
-// "tcp,orig=(src=10.10.1.2,dst=10.10.1.3,sport=45170,dport=2379,packets=80743,bytes=5416239),reply=(src=10.10.1.3,dst=10.10.1.2,sport=2379,dport=45170,packets=63361,bytes=4811261),start=2020-07-24T05:07:01.591,id=462801621,mark=32,zone=65520,status=SEEN_REPLY|ASSURED|CONFIRMED|SRC_NAT_DONE|DST_NAT_DONE,timeout=86397"
+// "tcp,orig=(src=127.0.0.1,dst=127.0.0.1,sport=45218,dport=2379,packets=320108,bytes=24615344),reply=(src=127.0.0.1,dst=127.0.0.1,sport=2379,dport=45218,packets=239595,bytes=24347883),start=2020-07-24T05:07:03.998,id=3750535678,status=SEEN_REPLY|ASSURED|CONFIRMED|SRC_NAT_DONE|DST_NAT_DONE,timeout=86399,protoinfo=(state_orig=ESTABLISHED,state_reply=ESTABLISHED,wscale_orig=7,wscale_reply=7,flags_orig=WINDOW_SCALE|SACK_PERM|MAXACK_SET,flags_reply=WINDOW_SCALE|SACK_PERM|MAXACK_SET)"
 func flowStringToAntreaConnection(flow string, zoneFilter uint16) (*flowexporter.Connection, error) {
 	conn := flowexporter.Connection{}
 	flowSlice := strings.Split(flow, ",")
@@ -253,6 +253,13 @@ func flowStringToAntreaConnection(flow string, zoneFilter uint16) (*flowexporter
 				return nil, fmt.Errorf("conversion of id %s to int failed", fields[len(fields)-1])
 			}
 			conn.ID = uint32(val)
+		case strings.Contains(fs, "protoinfo"):
+			fields := strings.Split(fs, "(")
+			// retrieve tcpState from state or state_orig
+			if strings.Contains(fields[1], "state") {
+				items := strings.Split(fields[1], "=")
+				conn.TCPState = items[1]
+			}
 		}
 	}
 	if !inZone {
@@ -303,11 +310,7 @@ func statusStringToStateFlag(status string) uint32 {
 	statusFlag := uint32(0)
 	statusSlice := strings.Split(status, "|")
 	for _, subStatus := range statusSlice {
-		statusFlag = statusFlag | stateMap[subStatus]
+		statusFlag = statusFlag | conntrackStatusMap[subStatus]
 	}
 	return statusFlag
 }
-
-/*func isStatusSet(statusFlag uint32, status string) bool {
-	return statusFlag&stateMap[status] != 0
-}*/

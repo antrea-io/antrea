@@ -42,17 +42,15 @@ type ConnectionStore interface {
 	// Run enables the periodical polling of conntrack connections at a given flowPollInterval.
 	Run(stopCh <-chan struct{})
 	// GetConnByKey gets the connection in connection map given the connection key.
-	GetConnByKey(flowTuple flowexporter.ConnectionKey) (*flowexporter.Connection, bool)
+	GetConnByKey(connKey flowexporter.ConnectionKey) (*flowexporter.Connection, bool)
+	// SetExportDone sets DoneExport field of connection to true given the connection key.
+	SetExportDone(connKey flowexporter.ConnectionKey) error
 	// ForAllConnectionsDo execute the callback for each connection in connection map.
 	ForAllConnectionsDo(callback flowexporter.ConnectionMapCallBack) error
-	// DeleteConnectionByKey deletes the connection in connection map given the
-	// connection key. This function is called from Flow Exporter once the connection
-	// is deleted from conntrack module.
-	DeleteConnectionByKey(connKey flowexporter.ConnectionKey) error
 }
 
 type connectionStore struct {
-	connections          map[flowexporter.ConnectionKey]flowexporter.Connection
+	connections          map[flowexporter.ConnectionKey]*flowexporter.Connection
 	flowRecords          *flowrecords.FlowRecords
 	connDumper           ConnTrackDumper
 	ifaceStore           interfacestore.InterfaceStore
@@ -75,7 +73,7 @@ func NewConnectionStore(
 	pollInterval time.Duration,
 ) *connectionStore {
 	return &connectionStore{
-		connections:          make(map[flowexporter.ConnectionKey]flowexporter.Connection),
+		connections:          make(map[flowexporter.ConnectionKey]*flowexporter.Connection),
 		flowRecords:          flowRecords,
 		connDumper:           connTrackDumper,
 		ifaceStore:           ifaceStore,
@@ -117,11 +115,16 @@ func (cs *connectionStore) Run(stopCh <-chan struct{}) {
 func (cs *connectionStore) addOrUpdateConn(conn *flowexporter.Connection) {
 	connKey := flowexporter.NewConnectionKey(conn)
 
-	existingConn, exists := cs.GetConnByKey(connKey)
-
 	cs.mutex.Lock()
 	defer cs.mutex.Unlock()
+	existingConn, exists := cs.connections[connKey]
+
 	if exists {
+		// avoid updating stats of the existing connection that is about to close
+		if flowexporter.IsConnectionDying(existingConn) {
+			existingConn.IsPresent = true
+			return
+		}
 		// Update the necessary fields that are used in generating flow records.
 		// Can same 5-tuple flow get deleted and added to conntrack table? If so use ID.
 		existingConn.StopTime = conn.StopTime
@@ -129,9 +132,8 @@ func (cs *connectionStore) addOrUpdateConn(conn *flowexporter.Connection) {
 		existingConn.OriginalPackets = conn.OriginalPackets
 		existingConn.ReverseBytes = conn.ReverseBytes
 		existingConn.ReversePackets = conn.ReversePackets
+		existingConn.TCPState = conn.TCPState
 		existingConn.IsPresent = true
-		// Reassign the flow to update the map
-		cs.connections[connKey] = *existingConn
 		klog.V(4).Infof("Antrea flow updated: %v", existingConn)
 	} else {
 		// sourceIP/destinationIP are mapped only to local pods and not remote pods.
@@ -201,16 +203,28 @@ func (cs *connectionStore) addOrUpdateConn(conn *flowexporter.Connection) {
 		metrics.TotalAntreaConnectionsInConnTrackTable.Inc()
 		klog.V(4).Infof("New Antrea flow added: %v", conn)
 		// Add new antrea connection to connection store
-		cs.connections[connKey] = *conn
+		cs.connections[connKey] = conn
 	}
 }
 
 // GetConnByKey gets the connection in connection map given the connection key.
-func (cs *connectionStore) GetConnByKey(flowTuple flowexporter.ConnectionKey) (*flowexporter.Connection, bool) {
+func (cs *connectionStore) GetConnByKey(connKey flowexporter.ConnectionKey) (*flowexporter.Connection, bool) {
 	cs.mutex.Lock()
 	defer cs.mutex.Unlock()
-	conn, found := cs.connections[flowTuple]
-	return &conn, found
+	conn, found := cs.connections[connKey]
+	return conn, found
+}
+
+// SetExportDone sets DoneExport field of connection to true given the connection key.
+func (cs *connectionStore) SetExportDone(connKey flowexporter.ConnectionKey) error {
+	cs.mutex.Lock()
+	defer cs.mutex.Unlock()
+	if conn, found := cs.connections[connKey]; !found {
+		return fmt.Errorf("connection with key %v does not exist in connection map", connKey)
+	} else {
+		conn.DoneExport = true
+		return nil
+	}
 }
 
 // ForAllConnectionsDo execute the callback for each connection in connection map.
@@ -233,15 +247,22 @@ func (cs *connectionStore) ForAllConnectionsDo(callback flowexporter.ConnectionM
 // TODO: As optimization, only poll invalid/closed connections during every poll, and poll the established connections right before the export.
 func (cs *connectionStore) Poll() ([]int, error) {
 	klog.V(2).Infof("Polling conntrack")
-	// Reset isActive flag for all connections in connection map before dumping flows in conntrack module.
-	// This is to specify that the connection and the flow record can be deleted after the next export.
-	resetConn := func(key flowexporter.ConnectionKey, conn flowexporter.Connection) error {
-		conn.IsPresent = false
-		cs.connections[key] = conn
+	// Reset IsPresent flag for all connections in connection map before dumping flows in conntrack module.
+	// if the connection does not exist in conntrack table and has been exported, we will delete it from connection map.
+	deleteIfStaleOrResetConn := func(key flowexporter.ConnectionKey, conn *flowexporter.Connection) error {
+		if !conn.IsPresent && conn.DoneExport {
+			if err := cs.deleteConnectionByKeyWithoutLock(key); err != nil {
+				return err
+			}
+		} else {
+			conn.IsPresent = false
+		}
 		return nil
 	}
-	// We do not expect any error as resetConn is not returning any error
-	cs.ForAllConnectionsDo(resetConn)
+
+	if err := cs.ForAllConnectionsDo(deleteIfStaleOrResetConn); err != nil {
+		return []int{}, err
+	}
 
 	var zones []uint16
 	var connsLens []int
@@ -275,14 +296,13 @@ func (cs *connectionStore) Poll() ([]int, error) {
 	return connsLens, nil
 }
 
-// DeleteConnectionByKey deletes the connection in connection map given the connection key.
-func (cs *connectionStore) DeleteConnectionByKey(connKey flowexporter.ConnectionKey) error {
-	_, exists := cs.GetConnByKey(connKey)
+// deleteConnectionByKeyWithoutLock deletes the connection in connection map given the
+// connection key without grabbing the lock. Caller is expected to grab lock.
+func (cs *connectionStore) deleteConnectionByKeyWithoutLock(connKey flowexporter.ConnectionKey) error {
+	_, exists := cs.connections[connKey]
 	if !exists {
 		return fmt.Errorf("connection with key %v doesn't exist in map", connKey)
 	}
-	cs.mutex.Lock()
-	defer cs.mutex.Unlock()
 	delete(cs.connections, connKey)
 	metrics.TotalAntreaConnectionsInConnTrackTable.Dec()
 	return nil

@@ -160,11 +160,11 @@ func testSendDataSet(t *testing.T, v4Enabled bool, v6Enabled bool) {
 	var recordv4, recordv6 flowexporter.FlowRecord
 	var elemListv4, elemListv6 []*ipfixentities.InfoElementWithValue
 	if v4Enabled {
-		recordv4 = getFlowRecord(getConnection(false, true), false, true)
+		recordv4 = getFlowRecord(getConnection(false, true, 302, 6, "ESTABLISHED"), false, true)
 		elemListv4 = getElemList(IANAInfoElementsIPv4, AntreaInfoElementsIPv4)
 	}
 	if v6Enabled {
-		recordv6 = getFlowRecord(getConnection(true, true), true, true)
+		recordv6 = getFlowRecord(getConnection(true, true, 302, 6, "ESTABLISHED"), true, true)
 		elemListv6 = getElemList(IANAInfoElementsIPv6, AntreaInfoElementsIPv6)
 	}
 	flowExp := &flowExporter{
@@ -224,6 +224,8 @@ func getElemList(ianaIE []string, antreaIE []string) []*ipfixentities.InfoElemen
 			elemList[i] = ipfixentities.NewInfoElementWithValue(ie.Element, uint32(time.Time{}.Unix()))
 		case "flowEndSeconds":
 			elemList[i] = ipfixentities.NewInfoElementWithValue(ie.Element, uint32(time.Now().Unix()))
+		case "flowEndReason":
+			elemList[i] = ipfixentities.NewInfoElementWithValue(ie.Element, uint8(0))
 		case "sourceIPv4Address", "destinationIPv4Address", "sourceIPv6Address", "destinationIPv6Address":
 			elemList[i] = ipfixentities.NewInfoElementWithValue(ie.Element, net.ParseIP(""))
 		case "destinationClusterIPv4":
@@ -245,18 +247,19 @@ func getElemList(ianaIE []string, antreaIE []string) []*ipfixentities.InfoElemen
 	return elemList
 }
 
-func getConnection(isIPv6 bool, isPresent bool) *flowexporter.Connection {
+func getConnection(isIPv6 bool, isPresent bool, statusFlag uint32, protoID uint8, tcpState string) *flowexporter.Connection {
 	var tuple, revTuple flowexporter.Tuple
 	if !isIPv6 {
 		tuple, revTuple = makeTuple(&net.IP{1, 2, 3, 4}, &net.IP{4, 3, 2, 1}, 6, 65280, 255)
 	} else {
 		srcIP := net.IP([]byte{0x20, 0x1, 0x0, 0x0, 0x32, 0x38, 0xdf, 0xe1, 0x0, 0x63, 0x0, 0x0, 0x0, 0x0, 0xfe, 0xfb})
 		dstIP := net.IP([]byte{0x20, 0x1, 0x0, 0x0, 0x32, 0x38, 0xdf, 0xe1, 0x0, 0x63, 0x0, 0x0, 0x0, 0x0, 0xfe, 0xfc})
-		tuple, revTuple = makeTuple(&srcIP, &dstIP, 6, 65280, 255)
+		tuple, revTuple = makeTuple(&srcIP, &dstIP, protoID, 65280, 255)
 	}
 	conn := &flowexporter.Connection{
 		StartTime:                     time.Time{},
 		StopTime:                      time.Time{},
+		StatusFlag:                    statusFlag,
 		OriginalPackets:               0xab,
 		OriginalBytes:                 0xabcd,
 		ReversePackets:                0xa,
@@ -273,6 +276,7 @@ func getConnection(isIPv6 bool, isPresent bool) *flowexporter.Connection {
 		EgressNetworkPolicyName:       "np",
 		EgressNetworkPolicyNamespace:  "np-ns",
 		DestinationServicePortName:    "service",
+		TCPState:                      tcpState,
 	}
 	return conn
 }
@@ -346,6 +350,9 @@ func runSendFlowRecordTests(t *testing.T, flowExp *flowExporter, isIPv6 bool) {
 		isRecordActive     bool
 		packetDifference   uint64
 		lastExportTimeDiff time.Duration
+		tcpState           string
+		statusFlag         uint32
+		protoID            uint8
 	}{
 		{
 			"active flow record",
@@ -353,6 +360,9 @@ func runSendFlowRecordTests(t *testing.T, flowExp *flowExporter, isIPv6 bool) {
 			true,
 			0x2, // non-zero number for active records
 			testActiveFlowTimeout,
+			"SYN_SENT",
+			0x4,
+			6,
 		},
 		{
 			"idle flow record",
@@ -360,6 +370,9 @@ func runSendFlowRecordTests(t *testing.T, flowExp *flowExporter, isIPv6 bool) {
 			true,
 			0x0, // zero for idle records
 			testIdleFlowTimeout,
+			"ESTABLISHED",
+			302,
+			6,
 		},
 		{
 			"idle flow record that is still inactive",
@@ -367,6 +380,9 @@ func runSendFlowRecordTests(t *testing.T, flowExp *flowExporter, isIPv6 bool) {
 			false,
 			0x0,
 			testIdleFlowTimeout,
+			"",
+			0x204,
+			17,
 		},
 		{
 			"idle flow record becomes active",
@@ -374,6 +390,9 @@ func runSendFlowRecordTests(t *testing.T, flowExp *flowExporter, isIPv6 bool) {
 			true,
 			0x0,
 			testActiveFlowTimeout,
+			"SYN_SENT",
+			302,
+			6,
 		},
 		{
 			"idle flow record for deleted connection",
@@ -381,14 +400,17 @@ func runSendFlowRecordTests(t *testing.T, flowExp *flowExporter, isIPv6 bool) {
 			true,
 			0x1,
 			testIdleFlowTimeout,
+			"TIME_WAIT",
+			0x204,
+			6,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			conn := getConnection(isIPv6, tt.isConnPresent)
+			conn := getConnection(isIPv6, tt.isConnPresent, tt.statusFlag, tt.protoID, tt.tcpState)
 			connKey := flowexporter.NewConnectionKey(conn)
 			flowExp.flowRecords = flowrecords.NewFlowRecords()
-			err := flowExp.flowRecords.AddOrUpdateFlowRecord(connKey, *conn)
+			err := flowExp.flowRecords.AddOrUpdateFlowRecord(connKey, conn)
 			assert.NoError(t, err)
 			flowExp.numDataSetsSent = 0
 
@@ -411,15 +433,15 @@ func runSendFlowRecordTests(t *testing.T, flowExp *flowExporter, isIPv6 bool) {
 					mockDataSet.EXPECT().PrepareSet(ipfixentities.Data, flowExp.templateIDv6).Return(nil)
 					mockDataSet.EXPECT().AddRecord(flowExp.elementsListv6, flowExp.templateIDv6).Return(nil)
 				}
+				if flowexporter.IsConnectionDying(conn) {
+					mockConnStore.EXPECT().SetExportDone(connKey)
+				}
 				mockIPFIXExpProc.EXPECT().SendSet(mockDataSet).Return(0, nil)
 				mockDataSet.EXPECT().ResetSet()
-				if !tt.isConnPresent {
-					mockConnStore.EXPECT().DeleteConnectionByKey(connKey).Return(nil)
-				}
 				err = flowExp.sendFlowRecords()
 				assert.NoError(t, err)
 				assert.Equalf(t, uint64(1), flowExp.numDataSetsSent, "data set should have been sent.")
-				if !tt.isConnPresent {
+				if flowexporter.IsConnectionDying(conn) {
 					_, recPresent := flowExp.flowRecords.GetFlowRecordFromMap(&connKey)
 					assert.Falsef(t, recPresent, "record should not be in the map")
 				}
