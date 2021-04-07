@@ -96,7 +96,7 @@ func testSendTemplateSet(t *testing.T, v4Enabled bool, v6Enabled bool) {
 func sendTemplateSet(t *testing.T, ctrl *gomock.Controller, mockIPFIXExpProc *ipfixtest.MockIPFIXExportingProcess, mockIPFIXRegistry *ipfixtest.MockIPFIXRegistry, flowExp *flowExporter, isIPv6 bool) {
 	var mockTempSet *ipfixentitiestesting.MockSet
 	mockTempSet = ipfixentitiestesting.NewMockSet(ctrl)
-
+	flowExp.ipfixSet = mockTempSet
 	// Following consists of all elements that are in IANAInfoElements and AntreaInfoElements (globals)
 	// Only the element name is needed, other arguments have dummy values.
 	var elemList = make([]*ipfixentities.InfoElementWithValue, 0)
@@ -125,8 +125,14 @@ func sendTemplateSet(t *testing.T, ctrl *gomock.Controller, mockIPFIXExpProc *ip
 	}
 	// Passing 0 for sentBytes as it is not used anywhere in the test. If this not a call to mock, the actual sentBytes
 	// above elements: IANAInfoElements, IANAReverseInfoElements and AntreaInfoElements.
+	mockTempSet.EXPECT().ResetSet()
+	if !isIPv6 {
+		mockTempSet.EXPECT().PrepareSet(ipfixentities.Template, testTemplateIDv4).Return(nil)
+	} else {
+		mockTempSet.EXPECT().PrepareSet(ipfixentities.Template, testTemplateIDv6).Return(nil)
+	}
 	mockIPFIXExpProc.EXPECT().SendSet(mockTempSet).Return(0, nil)
-	_, err := flowExp.sendTemplateSet(mockTempSet, isIPv6)
+	_, err := flowExp.sendTemplateSet(isIPv6)
 	assert.NoError(t, err, "Error in sending template set")
 
 	eL := flowExp.elementsListv4

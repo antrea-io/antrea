@@ -232,11 +232,7 @@ func (exp *flowExporter) initFlowExporter() error {
 	if exp.v4Enabled {
 		templateID := exp.process.NewTemplateID()
 		exp.templateIDv4 = templateID
-		if err = exp.ipfixSet.PrepareSet(ipfixentities.Template, exp.templateIDv4); err != nil {
-			return err
-		}
-		sentBytes, err := exp.sendTemplateSet(exp.ipfixSet, false)
-		exp.ipfixSet.ResetSet()
+		sentBytes, err := exp.sendTemplateSet(false)
 		if err != nil {
 			return err
 		}
@@ -246,11 +242,7 @@ func (exp *flowExporter) initFlowExporter() error {
 	if exp.v6Enabled {
 		templateID := exp.process.NewTemplateID()
 		exp.templateIDv6 = templateID
-		if err = exp.ipfixSet.PrepareSet(ipfixentities.Template, exp.templateIDv6); err != nil {
-			return err
-		}
-		sentBytes, err := exp.sendTemplateSet(exp.ipfixSet, true)
-		exp.ipfixSet.ResetSet()
+		sentBytes, err := exp.sendTemplateSet(true)
 		if err != nil {
 			return err
 		}
@@ -359,7 +351,7 @@ func (exp *flowExporter) sendFlowRecords() error {
 	return nil
 }
 
-func (exp *flowExporter) sendTemplateSet(templateSet ipfixentities.Set, isIPv6 bool) (int, error) {
+func (exp *flowExporter) sendTemplateSet(isIPv6 bool) (int, error) {
 	elements := make([]*ipfixentities.InfoElementWithValue, 0)
 
 	IANAInfoElements := IANAInfoElementsIPv4
@@ -394,13 +386,15 @@ func (exp *flowExporter) sendTemplateSet(templateSet ipfixentities.Set, isIPv6 b
 		ieWithValue := ipfixentities.NewInfoElementWithValue(element, nil)
 		elements = append(elements, ieWithValue)
 	}
-
-	err := templateSet.AddRecord(elements, templateID)
+	exp.ipfixSet.ResetSet()
+	if err := exp.ipfixSet.PrepareSet(ipfixentities.Template, templateID); err != nil {
+		return 0, err
+	}
+	err := exp.ipfixSet.AddRecord(elements, templateID)
 	if err != nil {
 		return 0, fmt.Errorf("error in adding record to template set: %v", err)
 	}
-
-	sentBytes, err := exp.process.SendSet(templateSet)
+	sentBytes, err := exp.process.SendSet(exp.ipfixSet)
 	if err != nil {
 		return 0, fmt.Errorf("error in IPFIX exporting process when sending template record: %v", err)
 	}

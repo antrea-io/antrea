@@ -185,12 +185,14 @@ func TestFlowAggregator_sendTemplateSet(t *testing.T) {
 			elemList = append(elemList, ipfixentities.NewInfoElementWithValue(ipfixentities.NewInfoElement(ie, 0, 0, ipfixregistry.AntreaEnterpriseID, 0), nil))
 			mockIPFIXRegistry.EXPECT().GetInfoElement(ie, ipfixregistry.AntreaEnterpriseID).Return(elemList[i+len(ianaInfoElements)+len(ianaReverseInfoElements)+len(antreaInfoElements)+len(aggregatorElements)+len(antreaSourceStatsElementList)].Element, nil)
 		}
+		mockTempSet.EXPECT().ResetSet()
+		mockTempSet.EXPECT().PrepareSet(ipfixentities.Template, testTemplateID).Return(nil)
 		mockTempSet.EXPECT().AddRecord(elemList, testTemplateID).Return(nil)
 		// Passing 0 for sentBytes as it is not used anywhere in the test. If this not a call to mock, the actual sentBytes
 		// above elements: ianaInfoElements, ianaReverseInfoElements and antreaInfoElements.
 		mockIPFIXExpProc.EXPECT().SendSet(mockTempSet).Return(0, nil)
 
-		_, err := fa.sendTemplateSet(mockTempSet, isIPv6)
+		_, err := fa.sendTemplateSet(isIPv6)
 		assert.NoErrorf(t, err, "Error in sending template record: %v, isIPv6: %v", err, isIPv6)
 	}
 }
