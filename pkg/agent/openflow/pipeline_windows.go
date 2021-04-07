@@ -281,7 +281,7 @@ func (c *client) hostBridgeUplinkFlows(localSubnet net.IPNet, category cookie.Ca
 			Cookie(c.cookieAllocator.Request(category).Raw()).
 			Done(),
 	}
-	// The packages received from uplink are forwarded to LOCAL interface by default.
+	// The packages received from uplink are forwarded to OVS bridge local interface by default.
 	// If NoEncap is enabled, the reply packets from remote Pod can be forwarded to local Pod directly.
 	// by explicitly resubmitting them to EgressRuleTable and marking "macRewriteMark" at same time.
 	if c.encapMode.SupportsNoEncap() {

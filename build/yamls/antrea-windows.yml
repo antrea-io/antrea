@@ -80,7 +80,7 @@ data:
     #                    supporting Pod traffic across IP subnets.
     # hybrid:            noEncap if source and destination Nodes are on the same subnet, otherwise encap.
     #
-    #trafficEncapMode: encap
+    trafficEncapMode: noEncap
 
   antrea-cni.conflist: |
     {

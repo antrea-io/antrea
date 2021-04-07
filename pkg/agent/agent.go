@@ -71,7 +71,6 @@ type Initializer struct {
 	// networkReadyCh should be closed once the Node's network is ready.
 	// The CNI server will wait for it before handling any CNI Add requests.
 	networkReadyCh chan<- struct{}
-	encapMode      config.TrafficEncapModeType
 }
 
 func NewInitializer(
@@ -87,8 +86,7 @@ func NewInitializer(
 	serviceCIDRv6 *net.IPNet,
 	networkConfig *config.NetworkConfig,
 	networkReadyCh chan<- struct{},
-	enableProxy bool,
-	encapMode config.TrafficEncapModeType) *Initializer {
+	enableProxy bool) *Initializer {
 	return &Initializer{
 		ovsBridgeClient: ovsBridgeClient,
 		client:          k8sClient,
@@ -103,7 +101,6 @@ func NewInitializer(
 		networkConfig:   networkConfig,
 		networkReadyCh:  networkReadyCh,
 		enableProxy:     enableProxy,
-		encapMode:       encapMode,
 	}
 }
 

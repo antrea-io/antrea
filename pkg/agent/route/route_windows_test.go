@@ -62,7 +62,6 @@ func TestRouteOperation(t *testing.T) {
 		},
 	}
 	called := false
-	// OVS bridge has not been created and it is unnecessary in the test, so a warning log will appear.
 	err = client.Initialize(nodeConfig, func() { called = true })
 	require.Nil(t, err)
 	require.True(t, called)

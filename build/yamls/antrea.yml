@@ -1377,7 +1377,7 @@ data:
     # networkPolicyOnly: Antrea enforces NetworkPolicy only, and utilizes CNI chaining and delegates Pod
     #                    IPAM and connectivity to the primary CNI.
     #
-    #trafficEncapMode: encap
+    trafficEncapMode: noEncap
 
     # Whether or not to SNAT (using the Node IP) the egress traffic from a Pod to the external network.
     # This option is for the noEncap traffic mode only, and the default value is false. In the noEncap
