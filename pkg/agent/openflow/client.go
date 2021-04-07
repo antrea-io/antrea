@@ -20,7 +20,6 @@ import (
 	"net"
 
 	"github.com/contiv/libOpenflow/protocol"
-	"github.com/contiv/ofnet/ofctrl"
 	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
@@ -218,9 +217,11 @@ type Client interface {
 	// the old priority with the desired one, for each priority update on that table.
 	ReassignFlowPriorities(updates map[uint16]uint16, table binding.TableIDType) error
 
-	// SubscribePacketIn subscribes packet-in channel in bridge. This method requires a receiver to
-	// pop data from "ch" timely, otherwise it will block all inbound messages from OVS.
-	SubscribePacketIn(reason uint8, ch chan *ofctrl.PacketIn) error
+	// SubscribePacketIn subscribes to packet in messages for the given reason. Packets
+	// will be placed in the queue and if the queue is full, the packet in messages
+	// will be dropped. pktInQueue supports rate-limiting for the consumer, in order to
+	// constrain the compute resources that may be used by the consumer.
+	SubscribePacketIn(reason uint8, pktInQueue *binding.PacketInQueue) error
 
 	// SendTraceflowPacket injects packet to specified OVS port for Openflow.
 	SendTraceflowPacket(dataplaneTag uint8, packet *binding.Packet, inPort uint32, outPort int32) error
@@ -792,8 +793,8 @@ func (c *client) setupPolicyOnlyFlows() error {
 	return nil
 }
 
-func (c *client) SubscribePacketIn(reason uint8, ch chan *ofctrl.PacketIn) error {
-	return c.bridge.SubscribePacketIn(reason, ch)
+func (c *client) SubscribePacketIn(reason uint8, pktInQueue *binding.PacketInQueue) error {
+	return c.bridge.SubscribePacketIn(reason, pktInQueue)
 }
 
 func (c *client) SendTraceflowPacket(dataplaneTag uint8, packet *binding.Packet, inPort uint32, outPort int32) error {

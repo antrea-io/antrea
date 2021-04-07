@@ -20,7 +20,6 @@
 package testing
 
 import (
-	ofctrl "github.com/contiv/ofnet/ofctrl"
 	gomock "github.com/golang/mock/gomock"
 	config "github.com/vmware-tanzu/antrea/pkg/agent/config"
 	types "github.com/vmware-tanzu/antrea/pkg/agent/types"
@@ -610,7 +609,7 @@ func (mr *MockClientMockRecorder) StartPacketInHandler(arg0, arg1 interface{}) *
 }
 
 // SubscribePacketIn mocks base method
-func (m *MockClient) SubscribePacketIn(arg0 byte, arg1 chan *ofctrl.PacketIn) error {
+func (m *MockClient) SubscribePacketIn(arg0 byte, arg1 *openflow.PacketInQueue) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "SubscribePacketIn", arg0, arg1)
 	ret0, _ := ret[0].(error)

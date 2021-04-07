@@ -15,12 +15,13 @@
 package openflow
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/contiv/ofnet/ofctrl"
-	"k8s.io/client-go/util/workqueue"
+	"golang.org/x/time/rate"
 	"k8s.io/klog"
+
+	"github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
 )
 
 type ofpPacketInReason uint8
@@ -30,11 +31,15 @@ type PacketInHandler interface {
 }
 
 const (
-	// Max packetInQueue size.
-	packetInQueueSize int = 256
 	// PacketIn reasons
 	PacketInReasonTF ofpPacketInReason = 1
 	PacketInReasonNP ofpPacketInReason = 0
+	// PacketInQueueSize defines the size of PacketInQueue.
+	// When PacketInQueue reaches PacketInQueueSize, new packet-in will be dropped.
+	PacketInQueueSize = 200
+	// PacketInQueueRate defines the maximum frequency of getting items from PacketInQueue.
+	// PacketInQueueRate is represented as number of events per second.
+	PacketInQueueRate = 100
 )
 
 // RegisterPacketInHandler stores controller handler in a map of map with reason and name as keys.
@@ -53,33 +58,15 @@ func (c *client) RegisterPacketInHandler(packetHandlerReason uint8, packetHandle
 // featureStartPacketIn contains packetin resources specifically for each feature that uses packetin.
 type featureStartPacketIn struct {
 	reason        uint8
-	subscribeCh   chan *ofctrl.PacketIn
 	stopCh        <-chan struct{}
-	packetInQueue *workqueue.Type
+	packetInQueue *openflow.PacketInQueue
 }
 
 func newfeatureStartPacketIn(reason uint8, stopCh <-chan struct{}) *featureStartPacketIn {
 	featurePacketIn := featureStartPacketIn{reason: reason, stopCh: stopCh}
-	featurePacketIn.subscribeCh = make(chan *ofctrl.PacketIn)
-	featurePacketIn.packetInQueue = workqueue.NewNamed(string(reason))
-	return &featurePacketIn
-}
+	featurePacketIn.packetInQueue = openflow.NewPacketInQueue(PacketInQueueSize, rate.Limit(PacketInQueueRate))
 
-func (f *featureStartPacketIn) ListenPacketIn() {
-	for {
-		select {
-		case pktIn := <-f.subscribeCh:
-			// Ensure that the queue doesn't grow too big. This is NOT to provide an exact guarantee.
-			if f.packetInQueue.Len() < packetInQueueSize {
-				f.packetInQueue.Add(pktIn)
-			} else {
-				klog.Warningf("Max packetInQueue size exceeded.")
-			}
-		case <-f.stopCh:
-			f.packetInQueue.ShutDown()
-			return
-		}
-	}
+	return &featurePacketIn
 }
 
 // StartPacketInHandler is the starting point for processing feature packetin requests.
@@ -99,29 +86,22 @@ func (c *client) StartPacketInHandler(packetInStartedReason []uint8, stopCh <-ch
 }
 
 func (c *client) subscribeFeaturePacketIn(featurePacketIn *featureStartPacketIn) error {
-	err := c.SubscribePacketIn(featurePacketIn.reason, featurePacketIn.subscribeCh)
+	err := c.SubscribePacketIn(featurePacketIn.reason, featurePacketIn.packetInQueue)
 	if err != nil {
-		return errors.New(fmt.Sprintf("Subscribe %d PacketIn failed %+v", featurePacketIn.reason, err))
+		return fmt.Errorf("subscribe %d PacketIn failed %+v", featurePacketIn.reason, err)
 	}
-	go c.parsePacketIn(featurePacketIn.packetInQueue, featurePacketIn.reason)
-	go featurePacketIn.ListenPacketIn()
+	go c.parsePacketIn(featurePacketIn)
 	return nil
 }
 
-func (c *client) parsePacketIn(packetInQueue workqueue.Interface, packetHandlerReason uint8) {
+func (c *client) parsePacketIn(featurePacketIn *featureStartPacketIn) {
 	for {
-		obj, quit := packetInQueue.Get()
-		if quit {
-			break
-		}
-		packetInQueue.Done(obj)
-		pktIn, ok := obj.(*ofctrl.PacketIn)
-		if !ok {
-			klog.Errorf("Invalid packetin data in queue, skipping.")
-			continue
+		pktIn := featurePacketIn.packetInQueue.GetRateLimited(featurePacketIn.stopCh)
+		if pktIn == nil {
+			return
 		}
 		// Use corresponding handlers subscribed to the reason to handle PacketIn
-		for name, handler := range c.packetInHandlers[packetHandlerReason] {
+		for name, handler := range c.packetInHandlers[featurePacketIn.reason] {
 			err := handler.HandlePacketIn(pktIn)
 			if err != nil {
 				klog.Errorf("PacketIn handler %s failed to process packet: %+v", name, err)
