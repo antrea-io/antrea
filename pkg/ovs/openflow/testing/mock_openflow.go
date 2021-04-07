@@ -262,7 +262,7 @@ func (mr *MockBridgeMockRecorder) SendPacketOut(arg0 interface{}) *gomock.Call {
 }
 
 // SubscribePacketIn mocks base method
-func (m *MockBridge) SubscribePacketIn(arg0 byte, arg1 chan *ofctrl.PacketIn) error {
+func (m *MockBridge) SubscribePacketIn(arg0 byte, arg1 *openflow.PacketInQueue) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "SubscribePacketIn", arg0, arg1)
 	ret0, _ := ret[0].(error)
