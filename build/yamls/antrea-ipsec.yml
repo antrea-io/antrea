@@ -654,7 +654,9 @@ spec:
                 items:
                   properties:
                     ip:
-                      pattern: ^(((([1]?\d)?\d|2[0-4]\d|25[0-5])\.){3}(([1]?\d)?\d|2[0-4]\d|25[0-5]))|([\da-fA-F]{1,4}(\:[\da-fA-F]{1,4}){7})|(([\da-fA-F]{1,4}:){0,5}::([\da-fA-F]{1,4}:){0,5}[\da-fA-F]{1,4})$
+                      oneOf:
+                      - format: ipv4
+                      - format: ipv6
                       type: string
                     name:
                       type: string
@@ -710,7 +712,9 @@ spec:
                 items:
                   properties:
                     ip:
-                      pattern: ^(((([1]?\d)?\d|2[0-4]\d|25[0-5])\.){3}(([1]?\d)?\d|2[0-4]\d|25[0-5]))|([\da-fA-F]{1,4}(\:[\da-fA-F]{1,4}){7})|(([\da-fA-F]{1,4}:){0,5}::([\da-fA-F]{1,4}:){0,5}[\da-fA-F]{1,4})$
+                      oneOf:
+                      - format: ipv4
+                      - format: ipv6
                       type: string
                     name:
                       type: string
@@ -1256,7 +1260,9 @@ spec:
               destination:
                 properties:
                   ip:
-                    pattern: ^(((([1]?\d)?\d|2[0-4]\d|25[0-5])\.){3}(([1]?\d)?\d|2[0-4]\d|25[0-5]))|([\da-fA-F]{1,4}(\:[\da-fA-F]{1,4}){7})|(([\da-fA-F]{1,4}:){0,5}::([\da-fA-F]{1,4}:){0,5}[\da-fA-F]{1,4})$
+                    oneOf:
+                    - format: ipv4
+                    - format: ipv6
                     type: string
                   namespace:
                     type: string
@@ -1276,7 +1282,9 @@ spec:
                       protocol:
                         type: integer
                       srcIP:
-                        pattern: ^(((([1]?\d)?\d|2[0-4]\d|25[0-5])\.){3}(([1]?\d)?\d|2[0-4]\d|25[0-5]))|([\da-fA-F]{1,4}(\:[\da-fA-F]{1,4}){7})|(([\da-fA-F]{1,4}:){0,5}::([\da-fA-F]{1,4}:){0,5}[\da-fA-F]{1,4})$
+                        oneOf:
+                        - format: ipv4
+                        - format: ipv6
                         type: string
                       ttl:
                         type: integer
@@ -1434,7 +1442,9 @@ spec:
               destination:
                 properties:
                   ip:
-                    pattern: ^(((([1]?\d)?\d|2[0-4]\d|25[0-5])\.){3}(([1]?\d)?\d|2[0-4]\d|25[0-5]))|([\da-fA-F]{1,4}(\:[\da-fA-F]{1,4}){7})|(([\da-fA-F]{1,4}:){0,5}::([\da-fA-F]{1,4}:){0,5}[\da-fA-F]{1,4})$
+                    oneOf:
+                    - format: ipv4
+                    - format: ipv6
                     type: string
                   namespace:
                     type: string
@@ -1452,7 +1462,9 @@ spec:
                       protocol:
                         type: integer
                       srcIP:
-                        pattern: ^(((([1]?\d)?\d|2[0-4]\d|25[0-5])\.){3}(([1]?\d)?\d|2[0-4]\d|25[0-5]))|([\da-fA-F]{1,4}(\:[\da-fA-F]{1,4}){7})|(([\da-fA-F]{1,4}:){0,5}::([\da-fA-F]{1,4}:){0,5}[\da-fA-F]{1,4})$
+                        oneOf:
+                        - format: ipv4
+                        - format: ipv6
                         type: string
                       ttl:
                         type: integer

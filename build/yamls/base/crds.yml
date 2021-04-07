@@ -118,7 +118,9 @@ spec:
                       type: string
                     ip:
                       type: string
-                      pattern: ^(((([1]?\d)?\d|2[0-4]\d|25[0-5])\.){3}(([1]?\d)?\d|2[0-4]\d|25[0-5]))|([\da-fA-F]{1,4}(\:[\da-fA-F]{1,4}){7})|(([\da-fA-F]{1,4}:){0,5}::([\da-fA-F]{1,4}:){0,5}[\da-fA-F]{1,4})$
+                      oneOf:
+                        - format: ipv4
+                        - format: ipv6
                 packet:
                   type: object
                   properties:
@@ -127,7 +129,9 @@ spec:
                       properties:
                         srcIP:
                           type: string
-                          pattern: ^(((([1]?\d)?\d|2[0-4]\d|25[0-5])\.){3}(([1]?\d)?\d|2[0-4]\d|25[0-5]))|([\da-fA-F]{1,4}(\:[\da-fA-F]{1,4}){7})|(([\da-fA-F]{1,4}:){0,5}::([\da-fA-F]{1,4}:){0,5}[\da-fA-F]{1,4})$
+                          oneOf:
+                            - format: ipv4
+                            - format: ipv6
                         protocol:
                           type: integer
                         ttl:
@@ -673,7 +677,9 @@ spec:
                     properties:
                       ip:
                         type: string
-                        pattern: ^(((([1]?\d)?\d|2[0-4]\d|25[0-5])\.){3}(([1]?\d)?\d|2[0-4]\d|25[0-5]))|([\da-fA-F]{1,4}(\:[\da-fA-F]{1,4}){7})|(([\da-fA-F]{1,4}:){0,5}::([\da-fA-F]{1,4}:){0,5}[\da-fA-F]{1,4})$
+                        oneOf:
+                          - format: ipv4
+                          - format: ipv6
                       name:
                         type: string
                 ports:
@@ -885,7 +891,9 @@ spec:
                       type: string
                     ip:
                       type: string
-                      pattern: ^(((([1]?\d)?\d|2[0-4]\d|25[0-5])\.){3}(([1]?\d)?\d|2[0-4]\d|25[0-5]))|([\da-fA-F]{1,4}(\:[\da-fA-F]{1,4}){7})|(([\da-fA-F]{1,4}:){0,5}::([\da-fA-F]{1,4}:){0,5}[\da-fA-F]{1,4})$
+                      oneOf:
+                        - format: ipv4
+                        - format: ipv6
                 packet:
                   type: object
                   properties:
@@ -894,7 +902,9 @@ spec:
                       properties:
                         srcIP:
                           type: string
-                          pattern: ^(((([1]?\d)?\d|2[0-4]\d|25[0-5])\.){3}(([1]?\d)?\d|2[0-4]\d|25[0-5]))|([\da-fA-F]{1,4}(\:[\da-fA-F]{1,4}){7})|(([\da-fA-F]{1,4}:){0,5}::([\da-fA-F]{1,4}:){0,5}[\da-fA-F]{1,4})$
+                          oneOf:
+                            - format: ipv4
+                            - format: ipv6
                         protocol:
                           type: integer
                         ttl:
@@ -1440,7 +1450,9 @@ spec:
                     properties:
                       ip:
                         type: string
-                        pattern: ^(((([1]?\d)?\d|2[0-4]\d|25[0-5])\.){3}(([1]?\d)?\d|2[0-4]\d|25[0-5]))|([\da-fA-F]{1,4}(\:[\da-fA-F]{1,4}){7})|(([\da-fA-F]{1,4}:){0,5}::([\da-fA-F]{1,4}:){0,5}[\da-fA-F]{1,4})$
+                        oneOf:
+                          - format: ipv4
+                          - format: ipv6
                       name:
                         type: string
                 ports:
