@@ -644,11 +644,39 @@ spec:
     singular: egress
   scope: Cluster
   versions:
-  - name: v1alpha2
+  - additionalPrinterColumns:
+    - description: Specifies the SNAT IP address for the selected workloads.
+      jsonPath: .spec.egressIP
+      name: EgressIP
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha2
     schema:
       openAPIV3Schema:
+        properties:
+          spec:
+            properties:
+              appliedTo:
+                properties:
+                  namespaceSelector:
+                    x-kubernetes-preserve-unknown-fields: true
+                  podSelector:
+                    x-kubernetes-preserve-unknown-fields: true
+                type: object
+              egressIP:
+                oneOf:
+                - format: ipv4
+                - format: ipv6
+                type: string
+            required:
+            - appliedTo
+            - egressIP
+            type: object
+        required:
+        - spec
         type: object
-        x-kubernetes-preserve-unknown-fields: true
     served: true
     storage: true
 ---
