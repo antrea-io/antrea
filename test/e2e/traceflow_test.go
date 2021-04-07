@@ -745,7 +745,7 @@ func TestTraceflowIntraNode(t *testing.T) {
 			ipVersion: 6,
 			tf: &v1alpha1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: randName(fmt.Sprintf("%s-%s-to-%s-", testNamespace, node1Pods[0], dstPodIPv6Str)),
+					Name: randName(fmt.Sprintf("%s-%s-to-%s-", testNamespace, node1Pods[0], strings.ReplaceAll(dstPodIPv6Str, ":", "--"))),
 				},
 				Spec: v1alpha1.TraceflowSpec{
 					Source: v1alpha1.Source{
@@ -754,6 +754,11 @@ func TestTraceflowIntraNode(t *testing.T) {
 					},
 					Destination: v1alpha1.Destination{
 						IP: dstPodIPv6Str,
+					},
+					Packet: v1alpha1.Packet{
+						IPv6Header: &v1alpha1.IPv6Header{
+							NextHeader: &protocolICMPv6,
+						},
 					},
 					LiveTraffic: true,
 				},
@@ -789,7 +794,7 @@ func TestTraceflowIntraNode(t *testing.T) {
 			ipVersion: 4,
 			tf: &v1alpha1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: randName(fmt.Sprintf("%s-%s-to-%s-", testNamespace, node1Pods[0], strings.ReplaceAll(gwIPv4Str, ":", "--"))),
+					Name: randName(fmt.Sprintf("%s-%s-to-%s-", testNamespace, node1Pods[0], gwIPv4Str)),
 				},
 				Spec: v1alpha1.TraceflowSpec{
 					Source: v1alpha1.Source{
@@ -1581,6 +1586,11 @@ func TestTraceflowInterNode(t *testing.T) {
 					Destination: v1alpha1.Destination{
 						Namespace: testNamespace,
 						Pod:       node2Pods[0],
+					},
+					Packet: v1alpha1.Packet{
+						IPv6Header: &v1alpha1.IPv6Header{
+							NextHeader: &protocolICMPv6,
+						},
 					},
 					LiveTraffic: true,
 				},
