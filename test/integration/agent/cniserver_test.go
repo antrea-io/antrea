@@ -108,39 +108,40 @@ const (
 	ipamEndStr = `
     }`
 
-	chainCNINetworkConfigTemplate = `{
-"cniVersion":"{{.CNIVersion}}",
-"name":"azure",
-"prevResult":
-  {
-    "cniVersion":"{{.CNIVersion}}",
-    "interfaces":
-     [
-       {"name":"eth0"},
-       {"name":"eth0"}
-     ],
-    "ips":
-     [
-       {
-         "version":"4",
-         "address":"{{.Subnet}}",
-         "gateway":"{{.Gateway}}"}
-     ],
-    "routes":
-     [
-       {
-         "dst":"{{ (index .Routes 0) }}",
-         "gw":"{{.Gateway}}"
-       }
-     ],
-     "dns":
+	chainCNIPrevResultTemplate = `{
+  "cniVersion":"{{.CNIVersion}}",
+  "interfaces":
+   [
+     {"name":"eth0"},
+     {"name":"eth0"}
+   ],
+  "ips":
+   [
      {
-       "nameservers":
-        [
-          "{{.DNS}}"
-        ]
+       "version":"4",
+       "address":"{{.Subnet}}",
+       "gateway":"{{.Gateway}}"}
+   ],
+  "routes":
+   [
+     {
+       "dst":"{{ (index .Routes 0) }}",
+       "gw":"{{.Gateway}}"
      }
-  } 
+   ],
+   "dns":
+   {
+     "nameservers":
+      [
+        "{{.DNS}}"
+      ]
+   }
+}`
+
+	chainCNIConfStr = `{
+"cniVersion":"%s",
+"name":"azure",
+"prevResult":%s
 }`
 )
 
@@ -799,12 +800,12 @@ func TestCNIServerChaining(t *testing.T) {
 		}
 
 		// create request
-		confParser := template.Must(template.New("").Parse(chainCNINetworkConfigTemplate))
-		conf := bytes.NewBuffer(nil)
-		if err := confParser.Execute(conf, tc); err != nil {
+		prevResultParser := template.Must(template.New("").Parse(chainCNIPrevResultTemplate))
+		prevResult := bytes.NewBuffer(nil)
+		if err := prevResultParser.Execute(prevResult, tc); err != nil {
 			t.Errorf("parse template failed: %v", err)
 		}
-		tc.networkConfig = conf.String()
+		tc.networkConfig = fmt.Sprintf(chainCNIConfStr, tc.CNIVersion, prevResult.String())
 		cniReq := tc.createCmdArgs(netNS, "")
 
 		// test cmdAdd
@@ -828,7 +829,8 @@ func TestCNIServerChaining(t *testing.T) {
 		mock.InOrder(orderedCalls...)
 		cniResp, err := server.CmdAdd(ctx, cniReq)
 		testRequire.Nil(err)
-		testRequire.Equal(tc.networkConfig, string(cniResp.CniResult))
+		// in chaining mode, we do not modify the result
+		testRequire.JSONEq(prevResult.String(), string(cniResp.CniResult))
 
 		// test cmdDel
 		containterHostRt := &net.IPNet{IP: podIP, Mask: net.CIDRMask(32, 32)}
