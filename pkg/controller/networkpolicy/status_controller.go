@@ -268,10 +268,15 @@ func (c *StatusController) syncHandler(key string) error {
 	// It means the NetworkPolicy hasn't been processed once. Set it to Pending to differentiate from NetworkPolicies
 	// that spans 0 Node.
 	if internalNP.SpanMeta.NodeNames == nil {
-		return c.npControlInterface.UpdateAntreaNetworkPolicyStatus(internalNP.SourceRef.Namespace, internalNP.SourceRef.Name, &secv1alpha1.NetworkPolicyStatus{
+		status := &secv1alpha1.NetworkPolicyStatus{
 			Phase:              secv1alpha1.NetworkPolicyPending,
 			ObservedGeneration: internalNP.Generation,
-		})
+		}
+		if internalNP.SourceRef.Type == controlplane.AntreaNetworkPolicy {
+			return c.npControlInterface.UpdateAntreaNetworkPolicyStatus(internalNP.SourceRef.Namespace, internalNP.SourceRef.Name, status)
+		} else {
+			return c.npControlInterface.UpdateAntreaClusterNetworkPolicyStatus(internalNP.SourceRef.Name, status)
+		}
 	}
 	desiredNodes := len(internalNP.SpanMeta.NodeNames)
 	currentNodes := 0
