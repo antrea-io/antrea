@@ -89,6 +89,7 @@ func init() {
   $antctl traceflow -S busybox0 -f tcp,tcp_dst=80 --live-traffic -t 1m
 `,
 		RunE: runE,
+		Args: cobra.NoArgs,
 	}
 
 	Command.Flags().StringVarP(&option.source, "source", "S", "", "source of the Traceflow: Namespace/Pod or Pod")

@@ -17,6 +17,7 @@ package antctl
 import (
 	"bytes"
 	"fmt"
+	"os"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -59,4 +60,23 @@ func TestCommandVersionRequestError(t *testing.T) {
 	expected := fmt.Sprintf("antctlVersion: %s", antreaversion.GetFullVersion())
 	assert.Contains(t, bufOut.String(), expected)
 	assert.Contains(t, bufOut.String(), serverError.Error())
+}
+
+// TestExtraArgs ensures that there will be an error if extra positional
+// arguments are passed to the traceflow command.
+func TestExtraArgs(t *testing.T) {
+	cmd := &cobra.Command{
+		Use: "antctl",
+	}
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	client := NewMockAntctlClient(ctrl)
+	var bufOut bytes.Buffer
+	CommandList.applyToRootCommand(cmd, client, os.Stdout)
+
+	extraArg := "icmp"
+	cmd.SetOut(&bufOut)
+	cmd.SetArgs([]string{"traceflow", "-S", "pod1", "-D", "pod2", extraArg})
+	cmd.Execute()
+	assert.Contains(t, bufOut.String(), fmt.Sprintf("unknown command %q for", extraArg))
 }
