@@ -93,6 +93,16 @@ func skipIfEncapModeIsNot(tb testing.TB, data *TestData, encapMode config.Traffi
 	}
 }
 
+func skipIfEncapModeIsNotAndProviderIs(tb testing.TB, data *TestData, encapMode config.TrafficEncapModeType, name string) {
+	currentEncapMode, err := data.GetEncapMode()
+	if err != nil {
+		tb.Fatalf("Failed to get encap mode: %v", err)
+	}
+	if currentEncapMode != encapMode && testOptions.providerName == name {
+		tb.Skipf("Skipping test when encap mode is '%s' and provider is '%s', test requires '%s'", currentEncapMode.String(), name, encapMode.String())
+	}
+}
+
 func ensureAntreaRunning(tb testing.TB, data *TestData) error {
 	tb.Logf("Applying Antrea YAML")
 	if err := data.deployAntrea(); err != nil {

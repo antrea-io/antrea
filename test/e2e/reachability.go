@@ -59,6 +59,7 @@ type PodConnectivityMark string
 
 const (
 	Connected PodConnectivityMark = "Con"
+	Unknown   PodConnectivityMark = "Unk"
 	Error     PodConnectivityMark = "Err"
 	Dropped   PodConnectivityMark = "Drp"
 	Rejected  PodConnectivityMark = "Rej"

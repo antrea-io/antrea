@@ -102,39 +102,57 @@ func (k *KubernetesUtils) Probe(ns1, pod1, ns2, pod2 string, port int32, protoco
 		return Error, fmt.Errorf("no Pod of label pod=%s in Namespace %s found", pod2, ns2)
 	}
 	toPod := toPods[0]
-	toIP := toPod.Status.PodIP
 
-	// There seems to be an issue when running Antrea in Kind where tunnel traffic is dropped at
-	// first. This leads to the first test being run consistently failing. To avoid this issue
-	// until it is resolved, we try to connect 3 times.
-	// See https://github.com/vmware-tanzu/antrea/issues/467.
-	cmd := []string{
-		"/bin/sh",
-		"-c",
-	}
-	switch protocol {
-	case v1.ProtocolTCP:
-		cmd = append(cmd, fmt.Sprintf("for i in $(seq 1 3); do /agnhost connect %s:%d --timeout=1s --protocol=tcp && exit 0 || true; done; exit 1", toIP, port))
-	case v1.ProtocolUDP:
-		cmd = append(cmd, fmt.Sprintf("for i in $(seq 1 3); do /agnhost connect %s:%d --timeout=1s --protocol=udp && exit 0 || true; done; exit 1", toIP, port))
-	case v1.ProtocolSCTP:
-		cmd = append(cmd, fmt.Sprintf("for i in $(seq 1 3); do /agnhost connect %s:%d --timeout=1s --protocol=sctp && exit 0 || true; done; exit 1", toIP, port))
-	}
-	// HACK: inferring container name as c80, c81, etc, for simplicity.
-	containerName := fmt.Sprintf("c%v", port)
-	log.Tracef("Running: kubectl exec %s -c %s -n %s -- %s", fromPod.Name, containerName, fromPod.Namespace, strings.Join(cmd, " "))
-	stdout, stderr, err := k.runCommandFromPod(fromPod.Namespace, fromPod.Name, containerName, cmd)
-	if err != nil {
-		// log this error as trace since may be an expected failure
-		log.Tracef("%s/%s -> %s/%s: error when running command: err - %v /// stdout - %s /// stderr - %s", ns1, pod1, ns2, pod2, err, stdout, stderr)
-		// do not return an error
-		if strings.Contains(stderr, "TIMEOUT") {
-			return Dropped, nil
+	// Both IPv4 and IPv6 address should be tested.
+	connectivity := Unknown
+	for _, eachIP := range toPod.Status.PodIPs {
+		toIP := eachIP.IP
+		// If it's an IPv6 address, add "[]" around it.
+		if strings.Contains(toIP, ":") {
+			toIP = fmt.Sprintf("[%s]", toIP)
+		}
+
+		// There seems to be an issue when running Antrea in Kind where tunnel traffic is dropped at
+		// first. This leads to the first test being run consistently failing. To avoid this issue
+		// until it is resolved, we try to connect 3 times.
+		// See https://github.com/vmware-tanzu/antrea/issues/467.
+		cmd := []string{
+			"/bin/sh",
+			"-c",
+		}
+		switch protocol {
+		case v1.ProtocolTCP:
+			cmd = append(cmd, fmt.Sprintf("for i in $(seq 1 3); do /agnhost connect %s:%d --timeout=1s --protocol=tcp && exit 0 || true; done; exit 1", toIP, port))
+		case v1.ProtocolUDP:
+			cmd = append(cmd, fmt.Sprintf("for i in $(seq 1 3); do /agnhost connect %s:%d --timeout=1s --protocol=udp && exit 0 || true; done; exit 1", toIP, port))
+		case v1.ProtocolSCTP:
+			cmd = append(cmd, fmt.Sprintf("for i in $(seq 1 3); do /agnhost connect %s:%d --timeout=1s --protocol=sctp && exit 0 || true; done; exit 1", toIP, port))
+		}
+		// HACK: inferring container name as c80, c81, etc, for simplicity.
+		containerName := fmt.Sprintf("c%v", port)
+		log.Tracef("Running: kubectl exec %s -c %s -n %s -- %s", fromPod.Name, containerName, fromPod.Namespace, strings.Join(cmd, " "))
+		stdout, stderr, err := k.runCommandFromPod(fromPod.Namespace, fromPod.Name, containerName, cmd)
+		var curConnectivity PodConnectivityMark
+		if err != nil {
+			// log this error as trace since may be an expected failure
+			log.Tracef("%s/%s -> %s/%s: error when running command: err - %v /// stdout - %s /// stderr - %s", ns1, pod1, ns2, pod2, err, stdout, stderr)
+			// do not return an error
+			if strings.Contains(stderr, "TIMEOUT") {
+				curConnectivity = Dropped
+			} else {
+				curConnectivity = Rejected
+			}
 		} else {
-			return Rejected, nil
+			curConnectivity = Connected
+		}
+
+		if connectivity == Unknown {
+			connectivity = curConnectivity
+		} else if connectivity != curConnectivity {
+			return Error, nil
 		}
 	}
-	return Connected, nil
+	return connectivity, nil
 }
 
 // CreateOrUpdateNamespace is a convenience function for idempotent setup of Namespaces
@@ -172,7 +190,7 @@ func (k *KubernetesUtils) CreateOrUpdateDeployment(ns, deploymentName string, re
 		case v1.ProtocolUDP:
 			args = []string{fmt.Sprintf("/agnhost serve-hostname --udp --http=false --port=%d", port)}
 		case v1.ProtocolSCTP:
-			args = []string{fmt.Sprintf("/agnhost porter")}
+			args = []string{"/agnhost porter"}
 		default:
 			args = []string{fmt.Sprintf("/agnhost serve-hostname --udp --http=false --port=%d & /agnhost serve-hostname --tcp --http=false --port=%d & /agnhost porter", port, port)}
 
@@ -605,7 +623,7 @@ func (k *KubernetesUtils) CleanANPs(namespaces []string) error {
 	return nil
 }
 
-func (k *KubernetesUtils) waitForPodInNamespace(ns string, pod string) (*string, error) {
+func (k *KubernetesUtils) waitForPodInNamespace(ns string, pod string) ([]string, error) {
 	log.Infof("Waiting for Pod '%s/%s'", ns, pod)
 	for {
 		k8sPod, err := k.GetPodByLabel(ns, pod)
@@ -616,13 +634,14 @@ func (k *KubernetesUtils) waitForPodInNamespace(ns string, pod string) (*string,
 		if k8sPod != nil && k8sPod.Status.Phase == v1.PodRunning {
 			if k8sPod.Status.PodIP == "" {
 				return nil, errors.WithMessagef(err, "unable to get IP of Pod '%s/%s'", ns, pod)
-			} else {
-				log.Debugf("IP of Pod '%s/%s' is: %s", ns, pod, k8sPod.Status.PodIP)
 			}
-
+			var podIPs []string
+			for _, podIP := range k8sPod.Status.PodIPs {
+				podIPs = append(podIPs, podIP.IP)
+			}
+			log.Debugf("IPs of Pod '%s/%s': %s", ns, pod, podIPs)
 			log.Debugf("Pod running: %s/%s", ns, pod)
-			podIP := k8sPod.Status.PodIP
-			return &podIP, nil
+			return podIPs, nil
 		}
 		log.Infof("Pod '%s/%s' not ready, waiting ...", ns, pod)
 		time.Sleep(2 * time.Second)
@@ -688,7 +707,7 @@ func (k *KubernetesUtils) Validate(allPods []Pod, reachability *Reachability, po
 	}
 }
 
-func (k *KubernetesUtils) Bootstrap(namespaces, pods []string) (*map[string]string, error) {
+func (k *KubernetesUtils) Bootstrap(namespaces, pods []string) (*map[string][]string, error) {
 	for _, ns := range namespaces {
 		_, err := k.CreateOrUpdateNamespace(ns, map[string]string{"ns": ns})
 		if err != nil {
@@ -704,18 +723,18 @@ func (k *KubernetesUtils) Bootstrap(namespaces, pods []string) (*map[string]stri
 		}
 	}
 	var allPods []Pod
-	podIPs := make(map[string]string, len(pods)*len(namespaces))
+	podIPs := make(map[string][]string, len(pods)*len(namespaces))
 	for _, podName := range pods {
 		for _, ns := range namespaces {
 			allPods = append(allPods, NewPod(ns, podName))
 		}
 	}
 	for _, pod := range allPods {
-		ip, err := k.waitForPodInNamespace(pod.Namespace(), pod.PodName())
-		if ip == nil || err != nil {
+		ips, err := k.waitForPodInNamespace(pod.Namespace(), pod.PodName())
+		if ips == nil || err != nil {
 			return nil, errors.WithMessagef(err, "unable to wait for Pod '%s/%s'", pod.Namespace(), pod.PodName())
 		}
-		podIPs[pod.String()] = *ip
+		podIPs[pod.String()] = ips
 	}
 
 	// Ensure that all the HTTP servers have time to start properly.

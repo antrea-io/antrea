@@ -633,6 +633,12 @@ func testLegacyACNPPriorityOverrideDefaultDeny(t *testing.T) {
 func testLegacyACNPAllowNoDefaultIsolation(t *testing.T, protocol v1.Protocol) {
 	if protocol == v1.ProtocolSCTP {
 		skipIfProviderIs(t, "kind", "OVS userspace conntrack does not have the SCTP support for now.")
+		// SCTP testing is failing on our IPv6 CI testbeds at the moment. This seems to be
+		// related to an issue with ESX networking for SCTPv6 traffic when the Pods are on
+		// different Node VMs which are themselves on different ESX hosts. We are
+		// investigating the issue and disabling the tests for IPv6 clusters in the
+		// meantime.
+		skipIfIPv6Cluster(t)
 	}
 	builder := &ClusterNetworkPolicySpecBuilder{}
 	builder = builder.SetName("acnp-allow-x-ingress-y-egress-z").
@@ -666,6 +672,12 @@ func testLegacyACNPAllowNoDefaultIsolation(t *testing.T, protocol v1.Protocol) {
 func testLegacyACNPDropEgress(t *testing.T, protocol v1.Protocol) {
 	if protocol == v1.ProtocolSCTP {
 		skipIfProviderIs(t, "kind", "OVS userspace conntrack does not have the SCTP support for now.")
+		// SCTP testing is failing on our IPv6 CI testbeds at the moment. This seems to be
+		// related to an issue with ESX networking for SCTPv6 traffic when the Pods are on
+		// different Node VMs which are themselves on different ESX hosts. We are
+		// investigating the issue and disabling the tests for IPv6 clusters in the
+		// meantime.
+		skipIfIPv6Cluster(t)
 	}
 	builder := &ClusterNetworkPolicySpecBuilder{}
 	builder = builder.SetName("acnp-deny-a-to-z-egress").
@@ -1193,10 +1205,8 @@ func testLegacyACNPPriorityOverride(t *testing.T) {
 	builder1 = builder1.SetName("acnp-priority1").
 		SetPriority(1.001).
 		SetAppliedToGroup([]ACNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}, NSSelector: map[string]string{"ns": "x"}}})
-	podZBIP, _ := podIPs["z/b"]
-	cidr := podZBIP + "/32"
 	// Highest priority. Drops traffic from z/b to x/a.
-	builder1.AddIngress(v1.ProtocolTCP, &p80, nil, nil, &cidr, nil, nil,
+	builder1.AddIngress(v1.ProtocolTCP, &p80, nil, nil, nil, map[string]string{"pod": "b"}, map[string]string{"ns": "z"},
 		nil, nil, nil, crdv1alpha1.RuleActionDrop, "", "")
 
 	builder2 := &ClusterNetworkPolicySpecBuilder{}
@@ -1272,10 +1282,8 @@ func testLegacyACNPTierOverride(t *testing.T) {
 		SetTier("emergency").
 		SetPriority(100).
 		SetAppliedToGroup([]ACNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}, NSSelector: map[string]string{"ns": "x"}}})
-	podZBIP, _ := podIPs["z/b"]
-	cidr := podZBIP + "/32"
-	// Highest priority tier. Drops traffic from z/b to x/a.
-	builder1.AddIngress(v1.ProtocolTCP, &p80, nil, nil, &cidr, nil, nil,
+	// Highest priority. Drops traffic from z/b to x/a.
+	builder1.AddIngress(v1.ProtocolTCP, &p80, nil, nil, nil, map[string]string{"pod": "b"}, map[string]string{"ns": "z"},
 		nil, nil, nil, crdv1alpha1.RuleActionDrop, "", "")
 
 	builder2 := &ClusterNetworkPolicySpecBuilder{}
@@ -1731,12 +1739,19 @@ func testLegacyAuditLoggingBasic(t *testing.T, data *TestData) {
 	assert.Equalf(t, true, strings.Contains(stdout, "test-log-acnp-deny"), "audit log does not contain entries for test-log-acnp-deny")
 
 	destinations := []string{"z/a", "z/b", "z/c"}
-	srcIP, _ := podIPs["x/a"]
+	srcIPs, _ := podIPs["x/a"]
 	for _, d := range destinations {
-		dstIP, _ := podIPs[d]
-		// The audit log should contain log entry `... Drop <ofPriority> SRC: <x/a IP> DEST: <z/* IP> ...`
-		pattern := `Drop [0-9]+ SRC: ` + srcIP + ` DEST: ` + dstIP
-		assert.Regexp(t, pattern, stdout, "audit log does not contain expected entry for x/a to %s", d)
+		dstIPs, _ := podIPs[d]
+		for i := 0; i < len(srcIPs); i++ {
+			for j := 0; j < len(dstIPs); j++ {
+				if strings.Contains(srcIPs[i], ".") == strings.Contains(dstIPs[j], ".") {
+					// The audit log should contain log entry `... Drop <ofPriority> SRC: <x/a IP> DEST: <z/* IP> ...`
+					pattern := `Drop [0-9]+ SRC: ` + srcIPs[i] + ` DEST: ` + dstIPs[j]
+					assert.Regexp(t, pattern, stdout, "audit log does not contain expected entry for x/a to %s", d)
+					break
+				}
+			}
+		}
 	}
 	failOnError(k8sUtils.CleanLegacyACNPs(), t)
 }
@@ -2388,7 +2403,7 @@ func TestLegacyANPNetworkPolicyStatsWithDropAction(t *testing.T) {
 			}
 			if clusterInfo.podV6NetworkCIDR != "" {
 				cmd := []string{"/bin/sh", "-c", fmt.Sprintf("echo test | nc -w 4 -u %s 80", serverIPs.ipv6.String())}
-				cmd2 := []string{"/bin/sh", "-c", fmt.Sprintf("echo test | nc -w 4 -u %s 443", serverIPs.ipv4.String())}
+				cmd2 := []string{"/bin/sh", "-c", fmt.Sprintf("echo test | nc -w 4 -u %s 443", serverIPs.ipv6.String())}
 				data.runCommandFromPod(testNamespace, clientName, busyboxContainerName, cmd)
 				data.runCommandFromPod(testNamespace, clientName, busyboxContainerName, cmd2)
 			}
@@ -2539,7 +2554,7 @@ func TestLegacyAntreaClusterNetworkPolicyStats(t *testing.T) {
 			}
 			if clusterInfo.podV6NetworkCIDR != "" {
 				cmd := []string{"/bin/sh", "-c", fmt.Sprintf("echo test | nc -w 4 -u %s 800", serverIPs.ipv6.String())}
-				cmd2 := []string{"/bin/sh", "-c", fmt.Sprintf("echo test | nc -w 4 -u %s 4430", serverIPs.ipv4.String())}
+				cmd2 := []string{"/bin/sh", "-c", fmt.Sprintf("echo test | nc -w 4 -u %s 4430", serverIPs.ipv6.String())}
 				data.runCommandFromPod(testNamespace, clientName, busyboxContainerName, cmd)
 				data.runCommandFromPod(testNamespace, clientName, busyboxContainerName, cmd2)
 			}
