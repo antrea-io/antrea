@@ -32,6 +32,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 
+	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	crdv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha1"
 	crdv1alpha2 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha2"
 	"github.com/vmware-tanzu/antrea/pkg/features"
@@ -46,7 +47,7 @@ var (
 	k8sUtils                             *KubernetesUtils
 	allTestList                          []*TestCase
 	pods, namespaces                     []string
-	podIPs                               map[string]string
+	podIPs                               map[string][]string
 	p80, p81, p8080, p8081, p8082, p8085 int32
 )
 
@@ -780,6 +781,12 @@ func testACNPPriorityOverrideDefaultDeny(t *testing.T) {
 func testACNPAllowNoDefaultIsolation(t *testing.T, protocol v1.Protocol) {
 	if protocol == v1.ProtocolSCTP {
 		skipIfProviderIs(t, "kind", "OVS userspace conntrack does not have the SCTP support for now.")
+		// SCTP testing is failing on our IPv6 CI testbeds at the moment. This seems to be
+		// related to an issue with ESX networking for SCTPv6 traffic when the Pods are on
+		// different Node VMs which are themselves on different ESX hosts. We are
+		// investigating the issue and disabling the tests for IPv6 clusters in the
+		// meantime.
+		skipIfIPv6Cluster(t)
 	}
 	builder := &ClusterNetworkPolicySpecBuilder{}
 	builder = builder.SetName("acnp-allow-x-ingress-y-egress-z").
@@ -813,6 +820,12 @@ func testACNPAllowNoDefaultIsolation(t *testing.T, protocol v1.Protocol) {
 func testACNPDropEgress(t *testing.T, protocol v1.Protocol) {
 	if protocol == v1.ProtocolSCTP {
 		skipIfProviderIs(t, "kind", "OVS userspace conntrack does not have the SCTP support for now.")
+		// SCTP testing is failing on our IPv6 CI testbeds at the moment. This seems to be
+		// related to an issue with ESX networking for SCTPv6 traffic when the Pods are on
+		// different Node VMs which are themselves on different ESX hosts. We are
+		// investigating the issue and disabling the tests for IPv6 clusters in the
+		// meantime.
+		skipIfIPv6Cluster(t)
 	}
 	builder := &ClusterNetworkPolicySpecBuilder{}
 	builder = builder.SetName("acnp-deny-a-to-z-egress").
@@ -1276,11 +1289,27 @@ func testACNPClusterGroupRefRuleIPBlocks(t *testing.T) {
 	podXAIP, _ := podIPs["x/a"]
 	podXBIP, _ := podIPs["x/b"]
 	podXCIP, _ := podIPs["x/c"]
-	cidrXA, cidrXB, cidrXC := podXAIP+"/32", podXBIP+"/32", podXCIP+"/32"
+	// There are three situations of a Pod's IP(s):
+	// 1. Only one IPv4 address.
+	// 2. Only one IPv6 address.
+	// 3. One IPv4 and one IPv6 address, and we don't know the order in list.
+	// We need to add all IP(s) of Pods as CIDR to IPBlock.
+	genCIDR := func(ip string) string {
+		if strings.Contains(ip, ".") {
+			return ip + "/32"
+		}
+		return ip + "/128"
+	}
 	cgName := "cg-ipblock-pod-in-ns-x"
 	cgBuilder := &ClusterGroupSpecBuilder{}
+	var ipBlock []crdv1alpha1.IPBlock
+	for i := 0; i < len(podXAIP); i++ {
+		ipBlock = append(ipBlock, crdv1alpha1.IPBlock{CIDR: genCIDR(podXAIP[i])})
+		ipBlock = append(ipBlock, crdv1alpha1.IPBlock{CIDR: genCIDR(podXBIP[i])})
+		ipBlock = append(ipBlock, crdv1alpha1.IPBlock{CIDR: genCIDR(podXCIP[i])})
+	}
 	cgBuilder = cgBuilder.SetName(cgName).
-		SetIPBlocks([]crdv1alpha1.IPBlock{{CIDR: cidrXA}, {CIDR: cidrXB}, {CIDR: cidrXC}})
+		SetIPBlocks(ipBlock)
 
 	builder := &ClusterNetworkPolicySpecBuilder{}
 	builder = builder.SetName("acnp-deny-ya-to-x-ips-ingress").
@@ -1387,10 +1416,8 @@ func testACNPPriorityOverride(t *testing.T) {
 	builder1 = builder1.SetName("acnp-priority1").
 		SetPriority(1.001).
 		SetAppliedToGroup([]ACNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}, NSSelector: map[string]string{"ns": "x"}}})
-	podZBIP, _ := podIPs["z/b"]
-	cidr := podZBIP + "/32"
 	// Highest priority. Drops traffic from z/b to x/a.
-	builder1.AddIngress(v1.ProtocolTCP, &p80, nil, nil, &cidr, nil, nil,
+	builder1.AddIngress(v1.ProtocolTCP, &p80, nil, nil, nil, map[string]string{"pod": "b"}, map[string]string{"ns": "z"},
 		nil, nil, nil, crdv1alpha1.RuleActionDrop, "", "")
 
 	builder2 := &ClusterNetworkPolicySpecBuilder{}
@@ -1466,10 +1493,8 @@ func testACNPTierOverride(t *testing.T) {
 		SetTier("emergency").
 		SetPriority(100).
 		SetAppliedToGroup([]ACNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}, NSSelector: map[string]string{"ns": "x"}}})
-	podZBIP, _ := podIPs["z/b"]
-	cidr := podZBIP + "/32"
 	// Highest priority tier. Drops traffic from z/b to x/a.
-	builder1.AddIngress(v1.ProtocolTCP, &p80, nil, nil, &cidr, nil, nil,
+	builder1.AddIngress(v1.ProtocolTCP, &p80, nil, nil, nil, map[string]string{"pod": "b"}, map[string]string{"ns": "z"},
 		nil, nil, nil, crdv1alpha1.RuleActionDrop, "", "")
 
 	builder2 := &ClusterNetworkPolicySpecBuilder{}
@@ -1775,7 +1800,12 @@ func testACNPRejectEgress(t *testing.T) {
 }
 
 // testACNPRejectIngress tests that a ACNP is able to reject egress traffic from pods labelled A to namespace Z.
-func testACNPRejectIngress(t *testing.T, protocol v1.Protocol) {
+func testACNPRejectIngress(t *testing.T, data *TestData, protocol v1.Protocol) {
+	// TCP rejection can't work on Kind when the traffic mode is noEncap. Skip it.
+	// https://github.com/vmware-tanzu/antrea/issues/2025
+	if protocol == v1.ProtocolTCP {
+		skipIfEncapModeIsNotAndProviderIs(t, data, config.TrafficEncapModeEncap, "kind")
+	}
 	builder := &ClusterNetworkPolicySpecBuilder{}
 	builder = builder.SetName("acnp-reject-a-from-z-ingress").
 		SetPriority(1.0).
@@ -1925,12 +1955,19 @@ func testAuditLoggingBasic(t *testing.T, data *TestData) {
 	assert.Equalf(t, true, strings.Contains(stdout, "test-log-acnp-deny"), "audit log does not contain entries for test-log-acnp-deny")
 
 	destinations := []string{"z/a", "z/b", "z/c"}
-	srcIP, _ := podIPs["x/a"]
+	srcIPs, _ := podIPs["x/a"]
 	for _, d := range destinations {
-		dstIP, _ := podIPs[d]
-		// The audit log should contain log entry `... Drop <ofPriority> SRC: <x/a IP> DEST: <z/* IP> ...`
-		pattern := `Drop [0-9]+ SRC: ` + srcIP + ` DEST: ` + dstIP
-		assert.Regexp(t, pattern, stdout, "audit log does not contain expected entry for x/a to %s", d)
+		dstIPs, _ := podIPs[d]
+		for i := 0; i < len(srcIPs); i++ {
+			for j := 0; j < len(dstIPs); j++ {
+				if strings.Contains(srcIPs[i], ".") == strings.Contains(dstIPs[j], ".") {
+					// The audit log should contain log entry `... Drop <ofPriority> SRC: <x/a IP> DEST: <z/* IP> ...`
+					pattern := `Drop [0-9]+ SRC: ` + srcIPs[i] + ` DEST: ` + dstIPs[j]
+					assert.Regexp(t, pattern, stdout, "audit log does not contain expected entry for x/a to %s", d)
+					break
+				}
+			}
+		}
 	}
 	failOnError(k8sUtils.CleanACNPs(), t)
 }
@@ -2494,8 +2531,8 @@ func TestAntreaPolicy(t *testing.T) {
 		t.Run("Case=ACNPDropEgressSCTP", func(t *testing.T) { testACNPDropEgress(t, v1.ProtocolSCTP) })
 		t.Run("Case=ACNPPortRange", func(t *testing.T) { testACNPPortRange(t) })
 		t.Run("Case=ACNPRejectEgress", func(t *testing.T) { testACNPRejectEgress(t) })
-		t.Run("Case=ACNPRejectIngress", func(t *testing.T) { testACNPRejectIngress(t, v1.ProtocolTCP) })
-		t.Run("Case=ACNPRejectIngressUDP", func(t *testing.T) { testACNPRejectIngress(t, v1.ProtocolUDP) })
+		t.Run("Case=ACNPRejectIngress", func(t *testing.T) { testACNPRejectIngress(t, data, v1.ProtocolTCP) })
+		t.Run("Case=ACNPRejectIngressUDP", func(t *testing.T) { testACNPRejectIngress(t, data, v1.ProtocolUDP) })
 		t.Run("Case=ACNPNoEffectOnOtherProtocols", func(t *testing.T) { testACNPNoEffectOnOtherProtocols(t) })
 		t.Run("Case=ACNPBaselinePolicy", func(t *testing.T) { testBaselineNamespaceIsolation(t) })
 		t.Run("Case=ACNPPrioirtyOverride", func(t *testing.T) { testACNPPriorityOverride(t) })
@@ -2696,7 +2733,7 @@ func TestANPNetworkPolicyStatsWithDropAction(t *testing.T) {
 			}
 			if clusterInfo.podV6NetworkCIDR != "" {
 				cmd := []string{"/bin/sh", "-c", fmt.Sprintf("echo test | nc -w 4 -u %s 80", serverIPs.ipv6.String())}
-				cmd2 := []string{"/bin/sh", "-c", fmt.Sprintf("echo test | nc -w 4 -u %s 443", serverIPs.ipv4.String())}
+				cmd2 := []string{"/bin/sh", "-c", fmt.Sprintf("echo test | nc -w 4 -u %s 443", serverIPs.ipv6.String())}
 				data.runCommandFromPod(testNamespace, clientName, busyboxContainerName, cmd)
 				data.runCommandFromPod(testNamespace, clientName, busyboxContainerName, cmd2)
 			}
@@ -2846,7 +2883,7 @@ func TestAntreaClusterNetworkPolicyStats(t *testing.T) {
 			}
 			if clusterInfo.podV6NetworkCIDR != "" {
 				cmd := []string{"/bin/sh", "-c", fmt.Sprintf("echo test | nc -w 4 -u %s 800", serverIPs.ipv6.String())}
-				cmd2 := []string{"/bin/sh", "-c", fmt.Sprintf("echo test | nc -w 4 -u %s 4430", serverIPs.ipv4.String())}
+				cmd2 := []string{"/bin/sh", "-c", fmt.Sprintf("echo test | nc -w 4 -u %s 4430", serverIPs.ipv6.String())}
 				data.runCommandFromPod(testNamespace, clientName, busyboxContainerName, cmd)
 				data.runCommandFromPod(testNamespace, clientName, busyboxContainerName, cmd2)
 			}
