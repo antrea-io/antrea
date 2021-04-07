@@ -27,6 +27,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/cniserver"
 	_ "github.com/vmware-tanzu/antrea/pkg/agent/cniserver/ipam"
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
+	"github.com/vmware-tanzu/antrea/pkg/agent/controller/egress"
 	"github.com/vmware-tanzu/antrea/pkg/agent/controller/networkpolicy"
 	"github.com/vmware-tanzu/antrea/pkg/agent/controller/noderoute"
 	"github.com/vmware-tanzu/antrea/pkg/agent/controller/traceflow"
@@ -75,6 +76,7 @@ func run(o *Options) error {
 	informerFactory := informers.NewSharedInformerFactory(k8sClient, informerDefaultResync)
 	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, informerDefaultResync)
 	traceflowInformer := crdInformerFactory.Crd().V1alpha1().Traceflows()
+	egressInformer := crdInformerFactory.Crd().V1alpha2().Egresses()
 
 	// Create Antrea Clientset for the given config.
 	antreaClientProvider := agent.NewAntreaClientProvider(o.config.AntreaClientConnection, k8sClient)
@@ -99,7 +101,7 @@ func run(o *Options) error {
 	ofClient := openflow.NewClient(o.config.OVSBridge, ovsBridgeMgmtAddr, ovsDatapathType,
 		features.DefaultFeatureGate.Enabled(features.AntreaProxy),
 		features.DefaultFeatureGate.Enabled(features.AntreaPolicy),
-		false)
+		features.DefaultFeatureGate.Enabled(features.Egress))
 
 	_, serviceCIDRNet, _ := net.ParseCIDR(o.config.ServiceCIDR)
 	var serviceCIDRNetv6 *net.IPNet
@@ -189,6 +191,11 @@ func run(o *Options) error {
 	var statsCollector *stats.Collector
 	if features.DefaultFeatureGate.Enabled(features.NetworkPolicyStats) {
 		statsCollector = stats.NewCollector(antreaClientProvider, ofClient, networkPolicyController)
+	}
+
+	var egressController *egress.EgressController
+	if features.DefaultFeatureGate.Enabled(features.Egress) {
+		egressController = egress.NewEgressController(ofClient, egressInformer, antreaClientProvider, ifaceStore, routeClient, nodeConfig.Name)
 	}
 
 	var proxier proxy.Proxier
@@ -281,6 +288,10 @@ func run(o *Options) error {
 	go nodeRouteController.Run(stopCh)
 
 	go networkPolicyController.Run(stopCh)
+
+	if features.DefaultFeatureGate.Enabled(features.Egress) {
+		go egressController.Run(stopCh)
+	}
 
 	if features.DefaultFeatureGate.Enabled(features.NetworkPolicyStats) {
 		go statsCollector.Run(stopCh)

@@ -122,6 +122,7 @@ type ClusterInfo struct {
 	svcV4NetworkCIDR     string
 	svcV6NetworkCIDR     string
 	controlPlaneNodeName string
+	controlPlaneNodeIP   string
 	nodes                map[int]ClusterNode
 	k8sServerVersion     string
 }
@@ -230,6 +231,10 @@ func controlPlaneNodeName() string {
 	return clusterInfo.controlPlaneNodeName
 }
 
+func controlPlaneNodeIP() string {
+	return clusterInfo.controlPlaneNodeIP
+}
+
 // nodeName returns an empty string if there is no Node with the provided idx. If idx is 0, the name
 // of the control-plane Node will be returned.
 func nodeName(idx int) string {
@@ -308,22 +313,23 @@ func collectClusterInfo() error {
 			return ok
 		}()
 
-		var nodeIdx int
-		// If multiple control-plane Nodes (HA), we will select the last one in the list
-		if isControlPlaneNode {
-			nodeIdx = 0
-			clusterInfo.controlPlaneNodeName = node.Name
-		} else {
-			nodeIdx = workerIdx
-			workerIdx++
-		}
-
 		var nodeIP string
 		for _, address := range node.Status.Addresses {
 			if address.Type == corev1.NodeInternalIP {
 				nodeIP = address.Address
 				break
 			}
+		}
+
+		var nodeIdx int
+		// If multiple control-plane Nodes (HA), we will select the last one in the list
+		if isControlPlaneNode {
+			nodeIdx = 0
+			clusterInfo.controlPlaneNodeName = node.Name
+			clusterInfo.controlPlaneNodeIP = nodeIP
+		} else {
+			nodeIdx = workerIdx
+			workerIdx++
 		}
 
 		var podV4NetworkCIDR, podV6NetworkCIDR string
