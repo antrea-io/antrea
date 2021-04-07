@@ -633,6 +633,58 @@ kind: CustomResourceDefinition
 metadata:
   labels:
     app: antrea
+  name: egresses.crd.antrea.io
+spec:
+  group: crd.antrea.io
+  names:
+    kind: Egress
+    plural: egresses
+    shortNames:
+    - eg
+    singular: egress
+  scope: Cluster
+  versions:
+  - additionalPrinterColumns:
+    - description: Specifies the SNAT IP address for the selected workloads.
+      jsonPath: .spec.egressIP
+      name: EgressIP
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha2
+    schema:
+      openAPIV3Schema:
+        properties:
+          spec:
+            properties:
+              appliedTo:
+                properties:
+                  namespaceSelector:
+                    x-kubernetes-preserve-unknown-fields: true
+                  podSelector:
+                    x-kubernetes-preserve-unknown-fields: true
+                type: object
+              egressIP:
+                oneOf:
+                - format: ipv4
+                - format: ipv6
+                type: string
+            required:
+            - appliedTo
+            - egressIP
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  labels:
+    app: antrea
   name: externalentities.core.antrea.tanzu.vmware.com
 spec:
   group: core.antrea.tanzu.vmware.com
