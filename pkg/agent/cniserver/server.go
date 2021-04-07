@@ -188,6 +188,12 @@ func updateResultIfaceConfig(result *current.Result, defaultIPv4Gateway net.IP, 
 	}
 }
 
+func resultToResponse(result *current.Result) *cnipb.CniCmdResponse {
+	var resultBytes bytes.Buffer
+	_ = result.PrintTo(&resultBytes)
+	return &cnipb.CniCmdResponse{CniResult: resultBytes.Bytes()}
+}
+
 func (s *CNIServer) loadNetworkConfig(request *cnipb.CniCmdRequest) (*CNIConfig, error) {
 	cniConfig := &CNIConfig{}
 	cniConfig.CniCmdArgs = request.CniArgs
@@ -333,7 +339,7 @@ func (s *CNIServer) parsePrevResultFromRequest(networkConfig *NetworkConfig) (*c
 		klog.Errorf("Failed to parse previous network configuration")
 		return nil, s.decodingFailureResponse("prevResult")
 	}
-	// Convert whatever the IPAM result was into the current Result type (for the current CNI
+	// Convert whatever the result was into the current Result type (for the current CNI
 	// version)
 	prevResult, err := current.NewResultFromResult(networkConfig.PrevResult)
 	if err != nil {
@@ -456,12 +462,10 @@ func (s *CNIServer) CmdAdd(ctx context.Context, request *cnipb.CniCmdRequest) (*
 	// Notify the Pod update event to required components.
 	s.podUpdates <- v1beta2.PodReference{Name: podName, Namespace: podNamespace}
 
-	var resultBytes bytes.Buffer
-	_ = result.PrintTo(&resultBytes)
 	klog.Infof("CmdAdd for container %v succeeded", cniConfig.ContainerId)
 	// mark success as true to avoid rollback
 	success = true
-	return &cnipb.CniCmdResponse{CniResult: resultBytes.Bytes()}, nil
+	return resultToResponse(result), nil
 }
 
 func (s *CNIServer) CmdDel(_ context.Context, request *cnipb.CniCmdRequest) (
@@ -596,7 +600,7 @@ func (s *CNIServer) Run(stopCh <-chan struct{}) {
 // be called prior to Antrea CNI to allocate IP and ports. Antrea takes allocated port
 // and hooks it to OVS br-int.
 func (s *CNIServer) interceptAdd(cniConfig *CNIConfig) (*cnipb.CniCmdResponse, error) {
-	klog.Infof("CNI Chaining: add")
+	klog.Infof("CNI Chaining: add for container %s", cniConfig.ContainerId)
 	prevResult, response := s.parsePrevResultFromRequest(cniConfig.NetworkConfig)
 	if response != nil {
 		klog.Infof("Failed to parse prev result for container %s", cniConfig.ContainerId)
@@ -604,7 +608,6 @@ func (s *CNIServer) interceptAdd(cniConfig *CNIConfig) (*cnipb.CniCmdResponse, e
 	}
 	podName := string(cniConfig.K8S_POD_NAME)
 	podNamespace := string(cniConfig.K8S_POD_NAMESPACE)
-	result := make([]byte, 0, 0)
 	if err := s.podConfigurator.connectInterceptedInterface(
 		podName,
 		podNamespace,
@@ -612,26 +615,29 @@ func (s *CNIServer) interceptAdd(cniConfig *CNIConfig) (*cnipb.CniCmdResponse, e
 		s.hostNetNsPath(cniConfig.Netns),
 		cniConfig.Ifname,
 		prevResult.IPs); err != nil {
-		return &cnipb.CniCmdResponse{CniResult: result}, fmt.Errorf("failed to connect container %s to ovs: %w", cniConfig.ContainerId, err)
+		return &cnipb.CniCmdResponse{CniResult: []byte("")}, fmt.Errorf("failed to connect container %s to ovs: %w", cniConfig.ContainerId, err)
 	}
 	// Notify the Pod update event to required components.
 	s.podUpdates <- v1beta2.PodReference{Name: podName, Namespace: podNamespace}
 
-	return &cnipb.CniCmdResponse{CniResult: cniConfig.NetworkConfiguration}, nil
+	// we return prevResult, which should be exactly what we received from
+	// the runtime, potentially converted to the current CNI version used by
+	// Antrea.
+	return resultToResponse(prevResult), nil
 }
 
 func (s *CNIServer) interceptDel(cniConfig *CNIConfig) (*cnipb.CniCmdResponse, error) {
-	klog.Infof("CNI Chaining: delete")
-	return &cnipb.CniCmdResponse{CniResult: make([]byte, 0, 0)}, s.podConfigurator.disconnectInterceptedInterface(
+	klog.Infof("CNI Chaining: delete for container %s", cniConfig.ContainerId)
+	return &cnipb.CniCmdResponse{CniResult: []byte("")}, s.podConfigurator.disconnectInterceptedInterface(
 		string(cniConfig.K8S_POD_NAME),
 		string(cniConfig.K8S_POD_NAMESPACE),
 		cniConfig.ContainerId)
 }
 
-func (s *CNIServer) interceptCheck(_ *CNIConfig) (*cnipb.CniCmdResponse, error) {
-	klog.Infof("CNI Chaining: check")
+func (s *CNIServer) interceptCheck(cniConfig *CNIConfig) (*cnipb.CniCmdResponse, error) {
+	klog.Infof("CNI Chaining: check for container %s", cniConfig.ContainerId)
 	// TODO, check for host interface setup later
-	return &cnipb.CniCmdResponse{CniResult: make([]byte, 0, 0)}, nil
+	return &cnipb.CniCmdResponse{CniResult: []byte("")}, nil
 }
 
 // reconcile performs startup reconciliation for the CNI server. The CNI server is in charge of
