@@ -202,15 +202,22 @@ func (c *NPLController) enqueueSvcUpdate(oldObj, newObj interface{}) {
 		return
 	}
 
+	if newSvcAnnotation == "true" && newSvc.Spec.Type == corev1.ServiceTypeNodePort {
+		klog.Warningf("Service %s is of type NodePort and cannot be used for NodePortLocal, the '%s' annotation will have no effect", newSvc.Name, NPLEnabledAnnotationKey)
+	}
+
 	podKeys := sets.String{}
-	if oldSvcAnnotation != newSvcAnnotation {
-		// Process Pods corresponding to Service with valid NPL annotation.
-		if oldSvcAnnotation == "true" {
+	oldNPLEnabled := oldSvcAnnotation == "true" && oldSvc.Spec.Type != corev1.ServiceTypeNodePort
+	newNPLEnabled := newSvcAnnotation == "true" && newSvc.Spec.Type != corev1.ServiceTypeNodePort
+
+	if oldNPLEnabled != newNPLEnabled {
+		// Process Pods corresponding to Service with valid NPL annotation and Service type.
+		if oldNPLEnabled {
 			podKeys = sets.NewString(c.getPodsFromService(oldSvc)...)
-		} else if newSvcAnnotation == "true" {
+		} else if newNPLEnabled {
 			podKeys = sets.NewString(c.getPodsFromService(newSvc)...)
 		}
-	} else if !reflect.DeepEqual(oldSvc.Spec.Selector, newSvc.Spec.Selector) {
+	} else if oldNPLEnabled && newNPLEnabled && !reflect.DeepEqual(oldSvc.Spec.Selector, newSvc.Spec.Selector) {
 		// Disjunctive union of Pods from both Service sets.
 		oldPodSet := sets.NewString(c.getPodsFromService(oldSvc)...)
 		newPodSet := sets.NewString(c.getPodsFromService(newSvc)...)
