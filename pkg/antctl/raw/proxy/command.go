@@ -132,6 +132,7 @@ func init() {
 		Long:    "Run a reverse proxy to access Antrea API (Controller or Agent). Command only supports remote mode. HTTPS connections between the proxy and the Antrea API will not be secure (no certificate verification).",
 		Example: proxyCommandExample,
 		RunE:    runE,
+		Args:    cobra.NoArgs,
 	}
 
 	// Options are the same as for "kubectl proxy"
