@@ -41,13 +41,13 @@ complement the K8s NetworkPolicy.
 
 Starting with Antrea v1.0, Antrea-native policies are enabled by default, which
 means that no additional configuration is required in order to use the
-Antrea-native Policy CRDs.
+Antrea-native policy CRDs.
 
 ## Tier
 
-Antrea supports grouping Antrea-native Policy CRDs together in a tiered fashion
+Antrea supports grouping Antrea-native policy CRDs together in a tiered fashion
 to provide a hierarchy of security policies. This is achieved by setting the
-`tier` field when defining an Antrea-native Policy CRD (e.g. an Antrea
+`tier` field when defining an Antrea-native policy CRD (e.g. an Antrea
 ClusterNetworkPolicy object) to the appropriate tier name. Each tier has a
 priority associated with it, which determines its relative order among all tiers.
 
@@ -165,7 +165,7 @@ All of the above commands produce output similar to what is shown below:
 
 ## Antrea ClusterNetworkPolicy
 
-Antrea ClusterNetworkPolicy (ACNP), one of the two Antrea-native Policy CRDs
+Antrea ClusterNetworkPolicy (ACNP), one of the two Antrea-native policy CRDs
 introduced, is a specification of how workloads within a cluster communicate
 with each other and other external endpoints. The ClusterNetworkPolicy is
 supposed to aid cluster admins to configure the security policy for the
@@ -422,7 +422,7 @@ All of the above commands produce output similar to what is shown below:
 
 ## Antrea NetworkPolicy
 
-Antrea NetworkPolicy (ANP) is another Policy CRD, which is similar to the
+Antrea NetworkPolicy (ANP) is another policy CRD, which is similar to the
 ClusterNetworkPolicy CRD, however its scope is limited to a Namespace.
 The purpose of introducing this CRD is to allow admins to take advantage of
 advanced NetworkPolicy features and apply them within a Namespace to
@@ -480,7 +480,7 @@ spec:
 
 Antrea NetworkPolicy shares it's spec with ClusterNetworkPolicy. However,
 the following documents some of the key differences between the two Antrea
-Policy CRDs.
+policy CRDs.
 
 - Antrea NetworkPolicy is Namespaced while ClusterNetworkPolicy operates at
   cluster scope.
@@ -516,7 +516,7 @@ All of the above commands produce output similar to what is shown below:
 
 ## Antrea-native Policy ordering based on priorities
 
-Antrea-native Policy CRDs are ordered based on priorities set at various levels.
+Antrea-native policy CRDs are ordered based on priorities set at various levels.
 
 ### Ordering based on Tier priority
 
@@ -529,7 +529,7 @@ policies will be enforced last.
 
 ### Ordering based on policy priority
 
-Within a tier, Antrea-native Policy CRDs are ordered by the `priority` at the policy
+Within a tier, Antrea-native policy CRDs are ordered by the `priority` at the policy
 level. Thus, the policy with the highest precedence (lowest priority number
 value) is enforced first. This ordering is performed solely based on the
 `priority` assigned, as opposed to the "Kind" of the resource, i.e. the relative
@@ -814,14 +814,14 @@ admission controller for backwards-compatibility.
 
 ## RBAC
 
-Antrea-native Policy CRDs are meant for admins to manage the security of their
+Antrea-native policy CRDs are meant for admins to manage the security of their
 cluster. Thus, access to manage these CRDs must be granted to subjects which
 have the authority to outline the security policies for the cluster and/or
 Namespaces. On cluster initialization, Antrea grants the permissions to edit
 these CRDs with `admin` and the `edit` ClusterRole. In addition to this, Antrea
 also grants the permission to view these CRDs with the `view` ClusterRole.
 Cluster admins can therefore grant these ClusterRoles to any subject who may
-be responsible to manage the Antrea Policy CRDs. The admins may also decide to
+be responsible to manage the Antrea policy CRDs. The admins may also decide to
 share the `view` ClusterRole to a wider range of subjects to allow them to read
 the policies that may affect their workloads.
 Similar RBAC is applied to the ClusterGroup resource.
@@ -833,7 +833,7 @@ Similar RBAC is applied to the ClusterGroup resource.
   Tiers in a cluster be less than or equal to 10.
 - In order to reduce the churn in the agent, it is recommended to set the policy
   priority within the range 1.0 to 100.0.
-- The v1alpha1 Policy CRDs support up to 10,000 unique priorities at policy level,
+- The v1alpha1 policy CRDs support up to 10,000 unique priorities at policy level,
   and up to 50,000 unique priorities at rule level, across all tiers except for
   the "baseline" tier. For any two policy rules, their rule level priorities are only
   considered equal if they share the same tier, and have the same policy priority

@@ -31,7 +31,7 @@ const (
 
 	// alpha: v0.8
 	// beta: v1.0
-	// Enables support for  ClusterNetworkPolicy and AntreaNetworkPolicy CRDs.
+	// Enables support for ClusterNetworkPolicy and AntreaNetworkPolicy CRDs.
 	AntreaPolicy featuregate.Feature = "AntreaPolicy"
 
 	// alpha: v0.13
