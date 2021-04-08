@@ -429,9 +429,14 @@ func (c *NPLController) handleAddUpdatePod(key string, obj interface{}) error {
 			podPorts[port] = struct{}{}
 			portData := c.portTable.GetEntryByPodIPPort(podIP, int(cport.ContainerPort))
 			if portData == nil { // rule does not exist
-				nodePort, err = c.portTable.AddRule(podIP, port)
-				if err != nil {
-					return fmt.Errorf("failed to add rule for Pod %s: %v", key, err)
+				if int(cport.HostPort) > 0 {
+					klog.V(4).Infof("Host Port is defined for Container %s in Pod %s, thus extra NPL port is not allocated", container.Name, key)
+					nodePort = int(cport.HostPort)
+				} else {
+					nodePort, err = c.portTable.AddRule(podIP, port)
+					if err != nil {
+						return fmt.Errorf("failed to add rule for Pod %s: %v", key, err)
+					}
 				}
 			} else {
 				nodePort = portData.NodePort
