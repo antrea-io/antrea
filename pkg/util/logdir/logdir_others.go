@@ -16,4 +16,4 @@
 
 package logdir
 
-const antreaWellKnownLogDir = "/var/logs/antrea"
+const antreaWellKnownLogDir = "/var/log/antrea"
