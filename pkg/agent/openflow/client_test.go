@@ -280,7 +280,7 @@ func Test_client_InstallTraceflowFlows(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 			c := tt.prepareFunc(ctrl)
-			if err := c.InstallTraceflowFlows(tt.args.dataplaneTag, false, nil, 0, 300); (err != nil) != tt.wantErr {
+			if err := c.InstallTraceflowFlows(tt.args.dataplaneTag, false, false, nil, 0, 300); (err != nil) != tt.wantErr {
 				t.Errorf("InstallTraceflowFlows() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})

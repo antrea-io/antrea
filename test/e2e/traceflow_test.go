@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -40,6 +41,7 @@ type testcase struct {
 	tf              *v1alpha1.Traceflow
 	expectedPhase   v1alpha1.TraceflowPhase
 	expectedResults []v1alpha1.NodeResult
+	expectedPktCap  *v1alpha1.Packet
 	// required IP version, skip if not match, default is 0 (no restrict)
 	ipVersion int
 }
@@ -515,6 +517,12 @@ func TestTraceflowIntraNode(t *testing.T) {
 						},
 					},
 				},
+			},
+			expectedPktCap: &v1alpha1.Packet{
+				SrcIP:    node1IPs[0].ipv4.String(),
+				DstIP:    dstPodIPv4Str,
+				Length:   84, // default ping packet length.
+				IPHeader: v1alpha1.IPHeader{Protocol: 1, TTL: 64, Flags: 2},
 			},
 		},
 		{
@@ -1915,5 +1923,8 @@ func runTestTraceflow(t *testing.T, data *TestData, tc testcase) {
 				return
 			}
 		}
+	}
+	if tc.expectedPktCap != nil && !reflect.DeepEqual(tc.expectedPktCap, tf.Status.CapturedPacket) {
+		t.Fatalf("Captured packet should be: %+v, but got: %+v", tc.expectedPktCap, tf.Status.CapturedPacket)
 	}
 }

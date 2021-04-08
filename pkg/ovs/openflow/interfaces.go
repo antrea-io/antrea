@@ -370,6 +370,7 @@ type Packet struct {
 	SourceMAC       net.HardwareAddr
 	DestinationIP   net.IP
 	SourceIP        net.IP
+	IPLength        uint16
 	IPProto         uint8
 	IPFlags         uint16
 	TTL             uint8

@@ -115,6 +115,9 @@ type TraceflowSpec struct {
 	// rather than an injected packet, when set to true. The first packet of
 	// the first connection that matches the packet spec will be traced.
 	LiveTraffic bool `json:"liveTraffic,omitempty"`
+	// DroppedOnly indicates only the dropped packet should be captured in a
+	// live-traffic Traceflow.
+	DroppedOnly bool `json:"droppedOnly,omitempty"`
 	// Timeout specifies the timeout of the Traceflow in seconds. Defaults
 	// to 20 seconds if not set.
 	Timeout uint16 `json:"timeout,omitempty"`
@@ -143,30 +146,30 @@ type Destination struct {
 // IPHeader describes spec of an IPv4 header.
 type IPHeader struct {
 	// SrcIP is the source IP.
-	SrcIP string `json:"srcIP,omitempty"`
+	SrcIP string `json:"srcIP,omitempty" yaml:"srcIP,omitempty"`
 	// Protocol is the IP protocol.
-	Protocol int32 `json:"protocol,omitempty"`
+	Protocol int32 `json:"protocol,omitempty" yaml:"protocol,omitempty"`
 	// TTL is the IP TTL.
-	TTL int32 `json:"ttl,omitempty"`
+	TTL int32 `json:"ttl,omitempty" yaml:"ttl,omitempty"`
 	// Flags is the flags for IP.
-	Flags int32 `json:"flags,omitempty"`
+	Flags int32 `json:"flags,omitempty" yaml:"flags,omitempty"`
 }
 
 // IPv6Header describes spec of an IPv6 header.
 type IPv6Header struct {
 	// SrcIP is the source IPv6.
-	SrcIP string `json:"srcIP,omitempty"`
+	SrcIP string `json:"srcIP,omitempty" yaml:"srcIP,omitempty"`
 	// NextHeader is the IPv6 protocol.
-	NextHeader *int32 `json:"nextHeader,omitempty"`
+	NextHeader *int32 `json:"nextHeader,omitempty" yaml:"nextHeader,omitempty"`
 	// HopLimit is the IPv6 Hop Limit.
-	HopLimit int32 `json:"hopLimit,omitempty"`
+	HopLimit int32 `json:"hopLimit,omitempty" yaml:"hopLimit,omitempty"`
 }
 
 // TransportHeader describes spec of a TransportHeader.
 type TransportHeader struct {
-	ICMP *ICMPEchoRequestHeader `json:"icmp,omitempty"`
-	UDP  *UDPHeader             `json:"udp,omitempty"`
-	TCP  *TCPHeader             `json:"tcp,omitempty"`
+	ICMP *ICMPEchoRequestHeader `json:"icmp,omitempty" yaml:"icmp,omitempty"`
+	UDP  *UDPHeader             `json:"udp,omitempty" yaml:"udp,omitempty"`
+	TCP  *TCPHeader             `json:"tcp,omitempty" yaml:"tcp,omitempty"`
 }
 
 // ICMPEchoRequestHeader describes spec of an ICMP echo request header.
@@ -197,6 +200,10 @@ type TCPHeader struct {
 
 // Packet includes header info.
 type Packet struct {
+	SrcIP string `json:"srcIP,omitempty"`
+	DstIP string `json:"dstIP,omitempty"`
+	// Length is the IP packet length (includes the IPv4 or IPv6 header length).
+	Length uint16 `json:"length,omitempty"`
 	// TODO: change type IPHeader to *IPHeader and correct all internal references
 	IPHeader        IPHeader        `json:"ipHeader,omitempty"`
 	IPv6Header      *IPv6Header     `json:"ipv6Header,omitempty"`
@@ -213,6 +220,8 @@ type TraceflowStatus struct {
 	DataplaneTag uint8 `json:"dataplaneTag,omitempty"`
 	// Results is the collection of all observations on different nodes.
 	Results []NodeResult `json:"results,omitempty"`
+	// CapturedPacket is the captured packet in live-traffic Traceflow.
+	CapturedPacket *Packet `json:"capturedPacket,omitempty"`
 }
 
 type NodeResult struct {
