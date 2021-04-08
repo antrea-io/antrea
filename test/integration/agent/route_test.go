@@ -262,7 +262,7 @@ func TestIpTablesSync(t *testing.T) {
 	}{
 		{Table: "raw", Cmd: "-A", Chain: "OUTPUT", RuleSpec: "-m comment --comment \"Antrea: jump to Antrea output rules\" -j ANTREA-OUTPUT"},
 		{Table: "filter", Cmd: "-A", Chain: "ANTREA-FORWARD", RuleSpec: "-i antrea-gw0 -m comment --comment \"Antrea: accept packets from local Pods\" -j ACCEPT"},
-		{Table: "nat", Cmd: "-A", Chain: "ANTREA-POSTROUTING", RuleSpec: fmt.Sprintf("-m comment --comment \"Antrea: SNAT Pod to external packets\" -m mark --mark %#x/0xff -j SNAT --to-source %s", mark, snatIP)},
+		{Table: "nat", Cmd: "-A", Chain: "ANTREA-POSTROUTING", RuleSpec: fmt.Sprintf("! -o antrea-gw0 -m comment --comment \"Antrea: SNAT Pod to external packets\" -m mark --mark %#x/0xff -j SNAT --to-source %s", mark, snatIP)},
 	}
 	// we delete some rules, start the sync goroutine, wait for sync operation to restore them.
 	for _, tc := range tcs {
@@ -306,7 +306,7 @@ func TestAddAndDeleteSNATRule(t *testing.T) {
 
 	snatIP := net.ParseIP("1.1.1.1")
 	mark := uint32(1)
-	expectedRule := fmt.Sprintf("-m comment --comment \"Antrea: SNAT Pod to external packets\" -m mark --mark %#x/0xff -j SNAT --to-source %s", mark, snatIP)
+	expectedRule := fmt.Sprintf("! -o antrea-gw0 -m comment --comment \"Antrea: SNAT Pod to external packets\" -m mark --mark %#x/0xff -j SNAT --to-source %s", mark, snatIP)
 
 	assert.NoError(t, routeClient.AddSNATRule(snatIP, mark))
 	saveCmd := fmt.Sprintf("iptables-save -t nat | grep ANTREA-POSTROUTING")
