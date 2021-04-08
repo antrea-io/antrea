@@ -33,7 +33,7 @@ Includes all the changes from [0.12.1].
   * EndpointSlice needs to be [enabled](https://kubernetes.io/docs/tasks/administer-cluster/enabling-endpointslices/) in the K8s cluster
   * Only the "discovery.k8s.io/v1beta1" EndpointSlice API is supported
 - Add support for arm/v7 and arm64 by providing Antrea Docker images for these architectures. ([#1771](https://github.com/vmware-tanzu/antrea/pull/1771), [@antoninbas])
-  * Refer to the [documentation](https://github.com/vmware-tanzu/antrea/blob/main/docs/arm-support.md) for instructions on how to use the image
+  * Refer to the [documentation](https://github.com/vmware-tanzu/antrea/blob/v0.13.0/docs/arm-support.md) for instructions on how to use the image
 - Support IPv6 packets in Traceflow. ([#1579](https://github.com/vmware-tanzu/antrea/pull/1579), [@gran-vmv])
 - Add the following Prometheus metrics to the the AntreaProxy implementation: "antrea_proxy_sync_proxy_rules_duration_seconds", "antrea_proxy_total_endpoints_installed", "antrea_proxy_total_endpoints_updates", "antrea_proxy_total_services_installed", "antrea_proxy_total_services_updates". ([#1704](https://github.com/vmware-tanzu/antrea/pull/1704), [@weiqiangt])
 - Add the following Prometheus metrics to count Status updates for Antrea-native policies: "antrea_controller_acnp_status_updates", "antrea_controller_anp_status_updates". ([#1801](https://github.com/vmware-tanzu/antrea/pull/1801), [@antoninbas])
