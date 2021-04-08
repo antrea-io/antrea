@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 
 	"github.com/contiv/libOpenflow/openflow13"
 	"github.com/contiv/libOpenflow/protocol"
@@ -31,11 +32,12 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/util/ip"
+	"github.com/vmware-tanzu/antrea/pkg/util/logdir"
 )
 
 const (
-	logDir      string = "/var/log/antrea/networkpolicy/"
-	logfileName string = "np.log"
+	logfileSubdir string = "networkpolicy"
+	logfileName   string = "np.log"
 
 	IPv4HdrLen uint16 = 20
 	IPv6HdrLen uint16 = 40
@@ -71,14 +73,13 @@ type logInfo struct {
 // initLogger is called while newing Antrea network policy agent controller.
 // Customize AntreaPolicyLogger specifically for Antrea Policies audit logging.
 func initLogger() error {
-	// logging file should be /var/log/antrea/networkpolicy/np.log
+	logDir := filepath.Join(logdir.GetLogDir(), logfileSubdir)
 	if _, err := os.Stat(logDir); os.IsNotExist(err) {
 		os.Mkdir(logDir, 0755)
 	}
-	file, err := os.OpenFile(logDir+logfileName, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
+	file, err := os.OpenFile(filepath.Join(logDir, logfileName), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
 	if err != nil {
-		klog.Errorf("Failed to initialize logger to audit Antrea Policies %v", err)
-		return err
+		return fmt.Errorf("failed to initialize logger to audit Antrea Policies %v", err)
 	}
 
 	AntreaPolicyLogger = log.New(file, "", log.Ldate|log.Lmicroseconds)
