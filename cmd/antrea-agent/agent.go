@@ -353,6 +353,7 @@ func run(o *Options) error {
 	if features.DefaultFeatureGate.Enabled(features.FlowExporter) {
 		v4Enabled := config.IsIPv4Enabled(nodeConfig, networkConfig.TrafficEncapMode)
 		v6Enabled := config.IsIPv6Enabled(nodeConfig, networkConfig.TrafficEncapMode)
+		isNetworkPolicyOnly := networkConfig.TrafficEncapMode.IsNetworkPolicyOnly()
 
 		flowRecords := flowrecords.NewFlowRecords()
 		connStore := connections.NewConnectionStore(
@@ -376,7 +377,9 @@ func run(o *Options) error {
 			o.config.EnableTLSToFlowAggregator,
 			v4Enabled,
 			v6Enabled,
-			k8sClient)
+			k8sClient,
+			nodeRouteController,
+			isNetworkPolicyOnly)
 		if err != nil {
 			return fmt.Errorf("error when creating IPFIX flow exporter: %v", err)
 		}

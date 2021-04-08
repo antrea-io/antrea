@@ -37,6 +37,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/route"
 	"github.com/vmware-tanzu/antrea/pkg/agent/util"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
+	utilip "github.com/vmware-tanzu/antrea/pkg/util/ip"
 )
 
 const (
@@ -97,7 +98,8 @@ func NewNodeRouteController(
 		nodeLister:       nodeInformer.Lister(),
 		nodeListerSynced: nodeInformer.Informer().HasSynced,
 		queue:            workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "noderoute"),
-		installedNodes:   cache.NewIndexer(nodeRouteInfoKeyFunc, cache.Indexers{nodeRouteInfoPodCIDRIndexName: nodeRouteInfoPodCIDRIndexFunc})}
+		installedNodes:   cache.NewIndexer(nodeRouteInfoKeyFunc, cache.Indexers{nodeRouteInfoPodCIDRIndexName: nodeRouteInfoPodCIDRIndexFunc}),
+	}
 	nodeInformer.Informer().AddEventHandlerWithResyncPeriod(
 		cache.ResourceEventHandlerFuncs{
 			AddFunc: func(cur interface{}) {
@@ -614,4 +616,40 @@ func GetNodeAddr(node *corev1.Node) (net.IP, error) {
 		return nil, fmt.Errorf("<%v> is not a valid ip address", ipAddrStr)
 	}
 	return ipAddr, nil
+}
+
+func (c *Controller) IPInPodSubnets(ip net.IP) bool {
+	var ipCIDR *net.IPNet
+	var curNodeCIDRStr string
+	if ip.To4() != nil {
+		var podIPv4CIDRMaskSize int
+		if c.nodeConfig.PodIPv4CIDR != nil {
+			curNodeCIDRStr = c.nodeConfig.PodIPv4CIDR.String()
+			podIPv4CIDRMaskSize, _ = c.nodeConfig.PodIPv4CIDR.Mask.Size()
+		} else {
+			return false
+		}
+		v4Mask := net.CIDRMask(podIPv4CIDRMaskSize, utilip.V4BitLen)
+		ipCIDR = &net.IPNet{
+			IP:   ip.Mask(v4Mask),
+			Mask: v4Mask,
+		}
+
+	} else {
+		var podIPv6CIDRMaskSize int
+		if c.nodeConfig.PodIPv6CIDR != nil {
+			curNodeCIDRStr = c.nodeConfig.PodIPv6CIDR.String()
+			podIPv6CIDRMaskSize, _ = c.nodeConfig.PodIPv6CIDR.Mask.Size()
+		} else {
+			return false
+		}
+		v6Mask := net.CIDRMask(podIPv6CIDRMaskSize, utilip.V6BitLen)
+		ipCIDR = &net.IPNet{
+			IP:   ip.Mask(v6Mask),
+			Mask: v6Mask,
+		}
+	}
+	ipCIDRStr := ipCIDR.String()
+	nodeInCluster, _ := c.installedNodes.ByIndex(nodeRouteInfoPodCIDRIndexName, ipCIDRStr)
+	return len(nodeInCluster) > 0 || ipCIDRStr == curNodeCIDRStr
 }
