@@ -409,6 +409,24 @@ func TestPodAddMultiPort(t *testing.T) {
 	assert.True(t, testData.portTable.RuleExists(defaultPodIP, newPort))
 }
 
+// TestPodAddHostPort creates a Pod with host ports and verifies that the Pod's NPL annotation
+// is updated with host port, without allocating extra port from NPL pool.
+// No rule is required for this case.
+func TestPodAddHostPort(t *testing.T) {
+	testSvc := getTestSvc()
+	testPod := getTestPod()
+	hostPort := 4001
+	testPod.Spec.Containers[0].Ports[0].HostPort = int32(hostPort)
+	testData := setUp(t, testSvc, testPod)
+	defer testData.tearDown()
+
+	value, err := testData.pollForPodAnnotation(testPod.Name, true)
+	require.NoError(t, err, "Poll for annotation check failed")
+	nplData := testData.checkAnnotationValue(value, defaultPort)
+	assert.Equal(t, nplData[0].NodePort, hostPort)
+	assert.False(t, testData.portTable.RuleExists(defaultPodIP, defaultPort))
+}
+
 // TestMultiplePods creates multiple Pods and verifies that NPL annotations for both Pods are
 // updated correctly, along with the local port table.
 func TestMultiplePods(t *testing.T) {
