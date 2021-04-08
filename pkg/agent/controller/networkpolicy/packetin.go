@@ -23,7 +23,6 @@ import (
 
 	"github.com/contiv/libOpenflow/openflow13"
 	"github.com/contiv/libOpenflow/protocol"
-	"github.com/contiv/libOpenflow/util"
 	"github.com/contiv/ofnet/ofctrl"
 	"gopkg.in/natefinch/lumberjack.v2"
 	"k8s.io/klog"
@@ -282,7 +281,7 @@ func (c *Controller) rejectRequest(pktIn *ofctrl.PacketIn) error {
 
 	if prot == protocol.Type_TCP {
 		// Get TCP data.
-		oriTCPSrcPort, oriTCPDstPort, oriTCPSeqNum, _, err := getTCPHeaderData(pktIn.Data.Data)
+		oriTCPSrcPort, oriTCPDstPort, oriTCPSeqNum, _, _, err := binding.GetTCPHeaderData(pktIn.Data.Data)
 		if err != nil {
 			return err
 		}
@@ -329,27 +328,4 @@ func (c *Controller) rejectRequest(pktIn *ofctrl.PacketIn) error {
 			icmpData,
 			true)
 	}
-}
-
-// getTCPHeaderData gets TCP header data from IP packet.
-func getTCPHeaderData(ipPkt util.Message) (tcpSrcPort uint16, tcpDstPort uint16, tcpSeqNum uint32, tcpAckNum uint32, err error) {
-	var tcpBytes []byte
-
-	// Transfer Buffer to TCP
-	switch typedIPPkt := ipPkt.(type) {
-	case *protocol.IPv4:
-		tcpBytes, err = typedIPPkt.Data.(*util.Buffer).MarshalBinary()
-	case *protocol.IPv6:
-		tcpBytes, err = typedIPPkt.Data.(*util.Buffer).MarshalBinary()
-	}
-	if err != nil {
-		return 0, 0, 0, 0, err
-	}
-	tcpIn := new(protocol.TCP)
-	err = tcpIn.UnmarshalBinary(tcpBytes)
-	if err != nil {
-		return 0, 0, 0, 0, err
-	}
-
-	return tcpIn.PortSrc, tcpIn.PortDst, tcpIn.SeqNum, tcpIn.AckNum, nil
 }

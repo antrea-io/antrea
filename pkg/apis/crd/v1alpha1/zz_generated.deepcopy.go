@@ -696,6 +696,11 @@ func (in *TraceflowStatus) DeepCopyInto(out *TraceflowStatus) {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
 	}
+	if in.CapturedPacket != nil {
+		in, out := &in.CapturedPacket, &out.CapturedPacket
+		*out = new(Packet)
+		(*in).DeepCopyInto(*out)
+	}
 	return
 }
 

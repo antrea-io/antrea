@@ -282,33 +282,45 @@ func (c *Controller) startTraceflow(tf *crdv1alpha1.Traceflow) error {
 }
 
 func (c *Controller) checkTraceflowStatus(tf *crdv1alpha1.Traceflow) error {
-	sender := false
-	receiver := false
-	for i, nodeResult := range tf.Status.Results {
-		for j, ob := range nodeResult.Observations {
-			if ob.Component == crdv1alpha1.ComponentSpoofGuard {
-				sender = true
-			}
-			if ob.Action == crdv1alpha1.ActionDelivered || ob.Action == crdv1alpha1.ActionDropped || ob.Action == crdv1alpha1.ActionForwardedOutOfOverlay {
-				receiver = true
-			}
-			if ob.TranslatedDstIP != "" {
-				// Add Pod ns/name to observation if TranslatedDstIP (a.k.a. Service Endpoint address) is Pod IP.
-				pods, err := c.podInformer.Informer().GetIndexer().ByIndex(podIPsIndex, ob.TranslatedDstIP)
-				if err != nil {
-					klog.Infof("Unable to find Pod from IP, error: %+v", err)
-				} else if len(pods) > 0 {
-					pod, ok := pods[0].(*corev1.Pod)
-					if !ok {
-						klog.Warningf("Invalid Pod obj in cache")
-					} else {
-						tf.Status.Results[i].Observations[j].Pod = fmt.Sprintf("%s/%s", pod.Namespace, pod.Name)
+	succeeded := false
+	if tf.Spec.LiveTraffic && tf.Spec.DroppedOnly {
+		// There should be only one reported NodeResult for droppedOnly
+		// Traceflow.
+		if len(tf.Status.Results) > 0 {
+			succeeded = true
+		}
+	} else {
+		sender := false
+		receiver := false
+		for i, nodeResult := range tf.Status.Results {
+			for j, ob := range nodeResult.Observations {
+				if ob.Component == crdv1alpha1.ComponentSpoofGuard {
+					sender = true
+				}
+				if ob.Action == crdv1alpha1.ActionDelivered ||
+					ob.Action == crdv1alpha1.ActionDropped ||
+					ob.Action == crdv1alpha1.ActionForwardedOutOfOverlay {
+					receiver = true
+				}
+				if ob.TranslatedDstIP != "" {
+					// Add Pod ns/name to observation if TranslatedDstIP (a.k.a. Service Endpoint address) is Pod IP.
+					pods, err := c.podInformer.Informer().GetIndexer().ByIndex(podIPsIndex, ob.TranslatedDstIP)
+					if err != nil {
+						klog.Infof("Unable to find Pod from IP, error: %+v", err)
+					} else if len(pods) > 0 {
+						pod, ok := pods[0].(*corev1.Pod)
+						if !ok {
+							klog.Warningf("Invalid Pod obj in cache")
+						} else {
+							tf.Status.Results[i].Observations[j].Pod = fmt.Sprintf("%s/%s", pod.Namespace, pod.Name)
+						}
 					}
 				}
 			}
 		}
+		succeeded = sender && receiver
 	}
-	if sender && receiver {
+	if succeeded {
 		c.deallocateTagForTF(tf)
 		return c.updateTraceflowStatus(tf, crdv1alpha1.Succeeded, "", 0)
 	}

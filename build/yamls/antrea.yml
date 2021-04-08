@@ -1295,6 +1295,11 @@ spec:
       name: Live-Traffic
       priority: 10
       type: boolean
+    - description: Capture only the dropped packet.
+      jsonPath: .spec.droppedOnly
+      name: Dropped-Only
+      priority: 10
+      type: boolean
     - description: Timeout in seconds.
       jsonPath: .spec.timeout
       name: Timeout
@@ -1323,6 +1328,8 @@ spec:
                   service:
                     type: string
                 type: object
+              droppedOnly:
+                type: boolean
               liveTraffic:
                 type: boolean
               packet:
@@ -1395,6 +1402,50 @@ spec:
             type: object
           status:
             properties:
+              capturedPacket:
+                properties:
+                  dstIP:
+                    type: string
+                  ipHeader:
+                    properties:
+                      flags:
+                        type: integer
+                      protocol:
+                        type: integer
+                      ttl:
+                        type: integer
+                    type: object
+                  ipv6Header:
+                    properties:
+                      hopLimit:
+                        type: integer
+                      nextHeader:
+                        type: integer
+                    type: object
+                  length:
+                    type: integer
+                  srcIP:
+                    type: string
+                  transportHeader:
+                    properties:
+                      tcp:
+                        properties:
+                          dstPort:
+                            type: integer
+                          flags:
+                            type: integer
+                          srcPort:
+                            type: integer
+                        type: object
+                      udp:
+                        properties:
+                          dstPort:
+                            type: integer
+                          srcPort:
+                            type: integer
+                        type: object
+                    type: object
+                type: object
               dataplaneTag:
                 type: integer
               phase:

@@ -74,6 +74,7 @@ type traceflowState struct {
 	name        string
 	tag         uint8
 	liveTraffic bool
+	droppedOnly bool
 	isSender    bool
 	// Agent received the first Traceflow packet from OVS.
 	receivedPacket bool
@@ -308,6 +309,9 @@ func (c *Controller) startTraceflow(tf *crdv1alpha1.Traceflow) error {
 		srcOFPort = uint32(podInterfaces[0].OFPort)
 		// On the source Node, trace the first packet of the first
 		// connection that matches the Traceflow spec.
+		// TODO: support specifying only the Destination Pod for
+		// live-traffic Traceflow, which will trace the matched traffic
+		// to the destination Pod from any source.
 		if liveTraffic {
 			matchPacket = packet
 		}
@@ -316,7 +320,10 @@ func (c *Controller) startTraceflow(tf *crdv1alpha1.Traceflow) error {
 
 	// Store Traceflow to cache.
 	c.runningTraceflowsMutex.Lock()
-	tfState := traceflowState{name: tf.Name, tag: tf.Status.DataplaneTag, liveTraffic: tf.Spec.LiveTraffic, isSender: isSender}
+	tfState := traceflowState{
+		name: tf.Name, tag: tf.Status.DataplaneTag,
+		liveTraffic: liveTraffic, droppedOnly: tf.Spec.DroppedOnly && liveTraffic,
+		isSender: isSender}
 	c.runningTraceflows[tfState.tag] = &tfState
 	c.runningTraceflowsMutex.Unlock()
 
@@ -326,7 +333,7 @@ func (c *Controller) startTraceflow(tf *crdv1alpha1.Traceflow) error {
 	if timeout == 0 {
 		timeout = crdv1alpha1.DefaultTraceflowTimeout
 	}
-	err = c.ofClient.InstallTraceflowFlows(tfState.tag, liveTraffic, matchPacket, srcOFPort, timeout)
+	err = c.ofClient.InstallTraceflowFlows(tfState.tag, liveTraffic, tfState.droppedOnly, matchPacket, srcOFPort, timeout)
 	if err != nil {
 		return err
 	}
@@ -506,8 +513,8 @@ func (c *Controller) preparePacket(tf *crdv1alpha1.Traceflow, intf *interfacesto
 		}
 	}
 
-	if packet.IPProto == 0 || packet.IPProto == protocol.Type_ICMP || packet.IPProto == protocol.Type_IPv6ICMP {
-		// IPProto defaults to ICMP.
+	// Defaults to ICMP if not live-traffic Traceflow.
+	if packet.IPProto == 0 && !liveTraffic || packet.IPProto == protocol.Type_ICMP || packet.IPProto == protocol.Type_IPv6ICMP {
 		isICMP = true
 	}
 	if isICMP {

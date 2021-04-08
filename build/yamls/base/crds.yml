@@ -128,6 +128,11 @@ spec:
           name: Live-Traffic
           type: boolean
           priority: 10
+        - jsonPath: .spec.droppedOnly
+          description: Capture only the dropped packet.
+          name: Dropped-Only
+          type: boolean
+          priority: 10
         - jsonPath: .spec.timeout
           description: Timeout in seconds.
           name: Timeout
@@ -226,6 +231,8 @@ spec:
                               type: integer
                 liveTraffic:
                   type: boolean
+                droppedOnly:
+                  type: boolean
                 timeout:
                   type: integer
             status:
@@ -273,6 +280,51 @@ spec:
                               type: string
                             tunnelDstIP:
                               type: string
+                capturedPacket:
+                  properties:
+                    srcIP:
+                      type: string
+                    dstIP:
+                      type: string
+                    length:
+                      type: integer
+                    ipHeader:
+                      properties:
+                        flags:
+                          type: integer
+                        protocol:
+                          type: integer
+                        ttl:
+                          type: integer
+                      type: object
+                    ipv6Header:
+                      properties:
+                        hopLimit:
+                          type: integer
+                        nextHeader:
+                          type: integer
+                      type: object
+                    transportHeader:
+                      properties:
+                        tcp:
+                          properties:
+                            dstPort:
+                              type: integer
+                            srcPort:
+                              type: integer
+                            flags:
+                              type: integer
+                          type: object
+                        udp:
+                          properties:
+                            dstPort:
+                              type: integer
+                            srcPort:
+                              type: integer
+                          type: object
+                        # ICMP echo is not supported.
+                      type: object
+                  type: object
       subresources:
         status: {}
   scope: Cluster

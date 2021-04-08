@@ -49,8 +49,9 @@ var (
 		outputType  string
 		flow        string
 		liveTraffic bool
-		nowait      bool
+		droppedOnly bool
 		timeout     time.Duration
+		nowait      bool
 	}{}
 )
 
@@ -60,13 +61,23 @@ var protocols = map[string]int32{
 	"udp":  17,
 }
 
+type CapturedPacket struct {
+	SrcIP           string                    `json:"srcIP" yaml:"srcIP"`
+	DstIP           string                    `json:"dstIP" yaml:"dstIP"`
+	Length          uint16                    `json:"length" yaml:"length"`
+	IPHeader        *v1alpha1.IPHeader        `json:"ipHeader,omitempty" yaml:"ipHeader,omitempty"`
+	IPv6Header      *v1alpha1.IPv6Header      `json:"ipv6Header,omitempty" yaml:"ipv6Header,omitempty"`
+	TransportHeader *v1alpha1.TransportHeader `json:"transportHeader,omitempty" yaml:"tranportHeader,omitempty"`
+}
+
 // Response is the response of antctl Traceflow.
 type Response struct {
-	Name        string                  `json:"name" yaml:"name"`                                   // Traceflow name
-	Phase       v1alpha1.TraceflowPhase `json:"phase,omitempty" yaml:"phase,omitempty"`             // Traceflow phase
-	Source      string                  `json:"source,omitempty" yaml:"source,omitempty"`           // Traceflow source, e.g. "default/pod0"
-	Destination string                  `json:"destination,omitempty" yaml:"destination,omitempty"` // Traceflow destination, e.g. "default/pod1"
-	NodeResults []v1alpha1.NodeResult   `json:"results,omitempty" yaml:"results,omitempty"`         // Traceflow node results
+	Name           string                  `json:"name" yaml:"name"`                                         // Traceflow name
+	Phase          v1alpha1.TraceflowPhase `json:"phase,omitempty" yaml:"phase,omitempty"`                   // Traceflow phase
+	Source         string                  `json:"source,omitempty" yaml:"source,omitempty"`                 // Traceflow source, e.g. "default/pod0"
+	Destination    string                  `json:"destination,omitempty" yaml:"destination,omitempty"`       // Traceflow destination, e.g. "default/pod1"
+	NodeResults    []v1alpha1.NodeResult   `json:"results,omitempty" yaml:"results,omitempty"`               // Traceflow node results
+	CapturedPacket *CapturedPacket         `json:"capturedPacket,omitempty" yaml:"capturedPacket,omitempty"` // Captured packet in live-traffic Traceflow
 }
 
 func init() {
@@ -75,18 +86,18 @@ func init() {
 		Short:   "Start a Traceflows",
 		Long:    "Start a Traceflows from one Pod to another Pod/Service/IP.",
 		Aliases: []string{"tf", "traceflows"},
-		Example: `  Start a Traceflow from busybox0 to busybox1, both Pods are in Namespace default
-  $antctl traceflow -S busybox0 -D busybox1
-  Start a Traceflow from busybox0 to destination IP, source is in Namespace default
-  $antctl traceflow -S busybox0 -D 123.123.123.123
-  Start a Traceflow from busybox0 to destination Service, source and destination are in Namespace default
-  $antctl traceflow -S busybox0 -D svc0 -f tcp,tcp_dst=80,tcp_flags=2
-  Start a Traceflow from busybox0 in Namespace ns0 to busybox1 in Namespace ns1, output type is json
-  $antctl traceflow -S ns0/busybox0 -D ns1/busybox1 -o json
-  Start a Traceflow from busybox0 to busybox1, with a TCP packet to destination port 80
-  $antctl traceflow -S busybox0 -D busybox1 -f tcp,tcp_dst=80
-  Start a Traceflow for live TCP traffic from busybox0 to TCP port 80, with 1 minute timeout
-  $antctl traceflow -S busybox0 -f tcp,tcp_dst=80 --live-traffic -t 1m
+		Example: `  Start a Traceflow from pod1 to pod2, both Pods are in Namespace default
+  $antctl traceflow -S pod1 -D pod2
+  Start a Traceflow from pod1 in Namepace ns1 to a destination IP
+  $antctl traceflow -S ns1/pod1 -D 123.123.123.123
+  Start a Traceflow from pod1 to Service svc1 in Namespace ns1
+  $antctl traceflow -S pod1 -D ns1/svc1 -f tcp,tcp_dst=80
+  Start a Traceflow from pod1 to pod2, with a UDP packet to destination port 1234
+  $antctl traceflow -S pod1 -D pod2 -f udp,udp_dst=1234
+  Start a Traceflow for live TCP traffic from pod1 to svc1, with 1 minute timeout
+  $antctl traceflow -S pod1 -D svc1 -f tcp --live-traffic -t 1m
+  Start a Traceflow to capture the first dropped TCP packet from pod1 to port 80 within 10 minutes
+  $antctl traceflow -S pod1 -f tcp,tcp_dst=80 --live-traffic --dropped-only -t 10m
 `,
 		RunE: runE,
 		Args: cobra.NoArgs,
@@ -97,6 +108,7 @@ func init() {
 	Command.Flags().StringVarP(&option.outputType, "output", "o", "yaml", "output type: yaml (default), json")
 	Command.Flags().StringVarP(&option.flow, "flow", "f", "", "specify the flow (packet headers) of the Traceflow packet, including tcp_src, tcp_dst, tcp_flags, udp_src, udp_dst, ipv6")
 	Command.Flags().BoolVarP(&option.liveTraffic, "live-traffic", "L", false, "if set, the Traceflow will trace the first packet of the matched live traffic flow")
+	Command.Flags().BoolVarP(&option.droppedOnly, "dropped-only", "", false, "if set, capture only the dropped packet in a live-traffic Traceflow")
 	Command.Flags().BoolVarP(&option.nowait, "nowait", "", false, "if set, command returns without retrieving results")
 }
 
@@ -117,6 +129,11 @@ func runE(cmd *cobra.Command, _ []string) error {
 
 	if !option.liveTraffic && len(option.destination) == 0 {
 		fmt.Println("Please provide destination")
+		return nil
+	}
+
+	if !option.liveTraffic && option.droppedOnly {
+		fmt.Println("--dropped-only works only with live-traffic Traceflow")
 		return nil
 	}
 
@@ -248,8 +265,9 @@ func newTraceflow(client kubernetes.Interface) (*v1alpha1.Traceflow, error) {
 			Source:      src,
 			Destination: dst,
 			Packet:      *pkt,
-			Timeout:     uint16(option.timeout.Seconds()),
 			LiveTraffic: option.liveTraffic,
+			DroppedOnly: option.droppedOnly,
+			Timeout:     uint16(option.timeout.Seconds()),
 		},
 	}
 	return tf, nil
@@ -358,6 +376,18 @@ func output(tf *v1alpha1.Traceflow) error {
 	} else if len(tf.Spec.Destination.Service) != 0 {
 		r.Destination = fmt.Sprintf("%s/%s", tf.Spec.Destination.Namespace, tf.Spec.Destination.Service)
 	}
+
+	pkt := tf.Status.CapturedPacket
+	if pkt != nil {
+		r.CapturedPacket = &CapturedPacket{SrcIP: pkt.SrcIP, DstIP: pkt.DstIP, Length: pkt.Length, IPv6Header: pkt.IPv6Header}
+		if pkt.IPv6Header == nil {
+			r.CapturedPacket.IPHeader = &pkt.IPHeader
+		}
+		if pkt.TransportHeader.TCP != nil || pkt.TransportHeader.UDP != nil || pkt.TransportHeader.ICMP != nil {
+			r.CapturedPacket.TransportHeader = &pkt.TransportHeader
+		}
+	}
+
 	if option.outputType == "json" {
 		if err := jsonOutput(&r); err != nil {
 			return fmt.Errorf("error when converting output to json: %w", err)
