@@ -360,6 +360,7 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet, podIPSet string, snatMa
 		writeLine(iptablesData, []string{
 			"-A", antreaPostRoutingChain,
 			"-m", "comment", "--comment", `"Antrea: SNAT Pod to external packets"`,
+			"!", "-o", c.nodeConfig.GatewayConfig.Name,
 			"-m", "mark", "--mark", fmt.Sprintf("%#08x/%#08x", snatMark, types.SNATIPMarkMask),
 			"-j", iptables.SNATTarget, "--to", snatIP.String(),
 		}...)
@@ -683,9 +684,12 @@ func (c *Client) UnMigrateRoutesFromGw(route *net.IPNet, linkName string) error 
 	return nil
 }
 
-func snatRuleSpec(snatIP net.IP, snatMark uint32) []string {
+func (c *Client) snatRuleSpec(snatIP net.IP, snatMark uint32) []string {
 	return []string{
 		"-m", "comment", "--comment", "Antrea: SNAT Pod to external packets",
+		// The condition is needed to prevent the rule from being applied to local out packets destined for Pods, which
+		// have "0x1/0x1" mark.
+		"!", "-o", c.nodeConfig.GatewayConfig.Name,
 		"-m", "mark", "--mark", fmt.Sprintf("%#08x/%#08x", snatMark, types.SNATIPMarkMask),
 		"-j", iptables.SNATTarget, "--to", snatIP.String(),
 	}
@@ -697,7 +701,7 @@ func (c *Client) AddSNATRule(snatIP net.IP, mark uint32) error {
 		protocol = iptables.ProtocolIPv6
 	}
 	c.markToSNATIP.Store(mark, snatIP)
-	return c.ipt.InsertRule(protocol, iptables.NATTable, antreaPostRoutingChain, snatRuleSpec(snatIP, mark))
+	return c.ipt.InsertRule(protocol, iptables.NATTable, antreaPostRoutingChain, c.snatRuleSpec(snatIP, mark))
 }
 
 func (c *Client) DeleteSNATRule(mark uint32) error {
@@ -708,5 +712,5 @@ func (c *Client) DeleteSNATRule(mark uint32) error {
 	}
 	c.markToSNATIP.Delete(mark)
 	snatIP := value.(net.IP)
-	return c.ipt.DeleteRule(iptables.NATTable, antreaPostRoutingChain, snatRuleSpec(snatIP, mark))
+	return c.ipt.DeleteRule(iptables.NATTable, antreaPostRoutingChain, c.snatRuleSpec(snatIP, mark))
 }
