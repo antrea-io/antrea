@@ -27,9 +27,11 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog"
 
+	"github.com/vmware-tanzu/antrea/pkg/agent/controller/noderoute"
 	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter"
 	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter/connections"
 	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter/flowrecords"
+	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/ipfix"
 	"github.com/vmware-tanzu/antrea/pkg/util/env"
 )
@@ -94,6 +96,8 @@ type flowExporter struct {
 	idleFlowTimeout           time.Duration
 	enableTLSToFlowAggregator bool
 	k8sClient                 kubernetes.Interface
+	nodeRouteController       *noderoute.Controller
+	isNetworkPolicyOnly       bool
 }
 
 func genObservationID() (uint32, error) {
@@ -123,7 +127,8 @@ func prepareExporterInputArgs(collectorAddr, collectorProto string) (exporter.Ex
 
 func NewFlowExporter(connStore connections.ConnectionStore, records *flowrecords.FlowRecords,
 	collectorAddr string, collectorProto string, activeFlowTimeout time.Duration, idleFlowTimeout time.Duration,
-	enableTLSToFlowAggregator bool, v4Enabled bool, v6Enabled bool, k8sClient kubernetes.Interface) (*flowExporter, error) {
+	enableTLSToFlowAggregator bool, v4Enabled bool, v6Enabled bool, k8sClient kubernetes.Interface,
+	nodeRouteController *noderoute.Controller, isNetworkPolicyOnly bool) (*flowExporter, error) {
 	// Initialize IPFIX registry
 	registry := ipfix.NewIPFIXRegistry()
 	registry.LoadRegistry()
@@ -133,6 +138,7 @@ func NewFlowExporter(connStore connections.ConnectionStore, records *flowrecords
 	if err != nil {
 		return nil, err
 	}
+
 	return &flowExporter{
 		connStore:                 connStore,
 		flowRecords:               records,
@@ -145,6 +151,8 @@ func NewFlowExporter(connStore connections.ConnectionStore, records *flowrecords
 		ipfixSet:                  ipfix.NewSet(false),
 		enableTLSToFlowAggregator: enableTLSToFlowAggregator,
 		k8sClient:                 k8sClient,
+		nodeRouteController:       nodeRouteController,
+		isNetworkPolicyOnly:       isNetworkPolicyOnly,
 	}, nil
 }
 
@@ -516,12 +524,7 @@ func (exp *flowExporter) addRecordToSet(record flowexporter.FlowRecord) error {
 		case "tcpState":
 			ie.Value = record.Conn.TCPState
 		case "flowType":
-			// TODO: assign flow type to support Pod-to-External flows
-			if record.Conn.SourcePodName == "" || record.Conn.DestinationPodName == "" {
-				ie.Value = ipfixregistry.InterNode
-			} else {
-				ie.Value = ipfixregistry.IntraNode
-			}
+			ie.Value = exp.findFlowType(record)
 		}
 	}
 
@@ -543,4 +546,33 @@ func (exp *flowExporter) sendDataSet() (int, error) {
 	}
 	klog.V(4).Infof("Data set sent successfully. Bytes sent: %d", sentBytes)
 	return sentBytes, nil
+}
+
+func (exp *flowExporter) findFlowType(record flowexporter.FlowRecord) uint8 {
+	// TODO: support Pod-To-External flows in network policy only mode.
+	if exp.isNetworkPolicyOnly {
+		if record.Conn.SourcePodName == "" || record.Conn.DestinationPodName == "" {
+			return ipfixregistry.InterNode
+		}
+		return ipfixregistry.IntraNode
+	}
+
+	if exp.nodeRouteController == nil {
+		klog.Warningf("Can't find flowType without nodeRouteController")
+		return 0
+	}
+	if exp.nodeRouteController.IPInPodSubnets(record.Conn.TupleOrig.SourceAddress) {
+		if record.Conn.Mark == openflow.ServiceCTMark || exp.nodeRouteController.IPInPodSubnets(record.Conn.TupleOrig.DestinationAddress) {
+			if record.Conn.SourcePodName == "" || record.Conn.DestinationPodName == "" {
+				return ipfixregistry.InterNode
+			}
+			return ipfixregistry.IntraNode
+		} else {
+			return ipfixregistry.ToExternal
+		}
+	} else {
+		// We do not support External-To-Pod flows for now.
+		klog.Warningf("Source IP: %s doesn't exist in PodCIDRs", record.Conn.TupleOrig.SourceAddress.String())
+		return 0
+	}
 }

@@ -23,8 +23,8 @@ import (
 )
 
 const (
-	v4BitLen = 8 * net.IPv4len
-	v6BitLen = 8 * net.IPv6len
+	V4BitLen = 8 * net.IPv4len
+	V6BitLen = 8 * net.IPv6len
 )
 
 // This function takes in one allow CIDR and multiple except CIDRs and gives diff CIDRs
@@ -71,9 +71,9 @@ func diffFromCIDR(allowCIDR, exceptCIDR *net.IPNet) []*net.IPNet {
 	exceptStartIP := exceptCIDR.IP.Mask(exceptCIDR.Mask)
 	var bits int
 	if allowStartIP.To4() != nil {
-		bits = v4BitLen
+		bits = V4BitLen
 	} else {
-		bits = v6BitLen
+		bits = V6BitLen
 	}
 
 	// New CIDRs should not contain the IPs in exceptCIDR. Manipulating the bits in start IP of
