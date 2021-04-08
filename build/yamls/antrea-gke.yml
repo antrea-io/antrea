@@ -1387,18 +1387,18 @@ spec:
                 type: object
               source:
                 properties:
+                  ip:
+                    oneOf:
+                    - format: ipv4
+                    - format: ipv6
+                    type: string
                   namespace:
                     type: string
                   pod:
                     type: string
-                required:
-                - pod
-                - namespace
                 type: object
               timeout:
                 type: integer
-            required:
-            - source
             type: object
           status:
             properties:

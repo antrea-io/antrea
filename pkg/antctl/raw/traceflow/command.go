@@ -96,14 +96,14 @@ func init() {
   $antctl traceflow -S pod1 -D pod2 -f udp,udp_dst=1234
   Start a Traceflow for live TCP traffic from pod1 to svc1, with 1 minute timeout
   $antctl traceflow -S pod1 -D svc1 -f tcp --live-traffic -t 1m
-  Start a Traceflow to capture the first dropped TCP packet from pod1 to port 80 within 10 minutes
-  $antctl traceflow -S pod1 -f tcp,tcp_dst=80 --live-traffic --dropped-only -t 10m
+  Start a Traceflow to capture the first dropped TCP packet to pod1 on port 80, within 10 minutes
+  $antctl traceflow -D pod1 -f tcp,tcp_dst=80 --live-traffic --dropped-only -t 10m
 `,
 		RunE: runE,
 		Args: cobra.NoArgs,
 	}
 
-	Command.Flags().StringVarP(&option.source, "source", "S", "", "source of the Traceflow: Namespace/Pod or Pod")
+	Command.Flags().StringVarP(&option.source, "source", "S", "", "source of the Traceflow: Namespace/Pod, Pod, or IP")
 	Command.Flags().StringVarP(&option.destination, "destination", "D", "", "destination of the Traceflow: Namespace/Pod, Pod, Namespace/Service, Service or IP")
 	Command.Flags().StringVarP(&option.outputType, "output", "o", "yaml", "output type: yaml (default), json")
 	Command.Flags().StringVarP(&option.flow, "flow", "f", "", "specify the flow (packet headers) of the Traceflow packet, including tcp_src, tcp_dst, tcp_flags, udp_src, udp_dst, ipv6")
@@ -122,13 +122,18 @@ func runE(cmd *cobra.Command, _ []string) error {
 		option.timeout = defaultTimeout
 	}
 
-	if len(option.source) == 0 {
+	if !option.liveTraffic && option.source == "" {
 		fmt.Println("Please provide source")
 		return nil
 	}
 
-	if !option.liveTraffic && len(option.destination) == 0 {
+	if !option.liveTraffic && option.destination == "" {
 		fmt.Println("Please provide destination")
+		return nil
+	}
+
+	if option.source == "" && option.destination == "" {
+		fmt.Println("One of source and destination must be a Pod")
 		return nil
 	}
 
@@ -205,17 +210,33 @@ func runE(cmd *cobra.Command, _ []string) error {
 }
 
 func newTraceflow(client kubernetes.Interface) (*v1alpha1.Traceflow, error) {
-	var name string
+	var srcName, dstName string
 	var src v1alpha1.Source
-	split := strings.Split(option.source, "/")
-	if len(split) == 1 {
-		src.Namespace = "default"
-		src.Pod = split[0]
-	} else if len(split) == 2 && len(split[0]) != 0 && len(split[1]) != 0 {
-		src.Namespace = split[0]
-		src.Pod = split[1]
+
+	if option.source != "" {
+		srcIP := net.ParseIP(option.source)
+		if srcIP != nil {
+			if !option.liveTraffic {
+				return nil, errors.New("source must be a Pod if not a live-traffic Traceflow")
+			}
+			src.IP = srcIP.String()
+			srcName = src.IP
+		} else {
+			split := strings.Split(option.source, "/")
+			if len(split) == 1 {
+				src.Namespace = "default"
+				src.Pod = split[0]
+				srcName = src.Pod
+			} else if len(split) == 2 && len(split[0]) != 0 && len(split[1]) != 0 {
+				src.Namespace = split[0]
+				src.Pod = split[1]
+				srcName = fmt.Sprintf("%s-%s", src.Namespace, src.Pod)
+			} else {
+				return nil, errors.New("source should be in the format of Namespace/Pod or Pod, or an IP address")
+			}
+		}
 	} else {
-		return nil, fmt.Errorf("source should be in the format of Namespace/Pod or Pod")
+		srcName = "any"
 	}
 
 	var dst v1alpha1.Destination
@@ -223,18 +244,20 @@ func newTraceflow(client kubernetes.Interface) (*v1alpha1.Traceflow, error) {
 		dstIP := net.ParseIP(option.destination)
 		if dstIP != nil {
 			dst.IP = dstIP.String()
-			name = getTFName(fmt.Sprintf("%s-%s-to-%s", src.Namespace, src.Pod, dst.IP))
+			dstName = dst.IP
 		} else {
 			var isPod bool
 			var dest string
 			var err error
-			split = strings.Split(option.destination, "/")
+			split := strings.Split(option.destination, "/")
 			if len(split) == 1 {
 				dst.Namespace = "default"
 				dest = split[0]
+				dstName = dest
 			} else if len(split) == 2 && len(split[0]) != 0 && len(split[1]) != 0 {
 				dst.Namespace = split[0]
 				dest = split[1]
+				dstName = fmt.Sprintf("%s-%s", dst.Namespace, dest)
 			} else {
 				return nil, fmt.Errorf("destination should be in the format of Namespace/Pod, Pod, Namespace/Service or Service")
 			}
@@ -246,10 +269,13 @@ func newTraceflow(client kubernetes.Interface) (*v1alpha1.Traceflow, error) {
 			} else {
 				dst.Service = dest
 			}
-			name = getTFName(fmt.Sprintf("%s-%s-to-%s-%s", src.Namespace, src.Pod, dst.Namespace, dest))
 		}
 	} else {
-		name = getTFName(fmt.Sprintf("%s-%s-to-any", src.Namespace, src.Pod))
+		dstName = "any"
+	}
+
+	if src.Pod == "" && dst.Pod == "" {
+		return nil, errors.New("one of source and destination must be a Pod")
 	}
 
 	pkt, err := parseFlow()
@@ -257,6 +283,7 @@ func newTraceflow(client kubernetes.Interface) (*v1alpha1.Traceflow, error) {
 		return nil, fmt.Errorf("failed to parse flow: %w", err)
 	}
 
+	name := getTFName(fmt.Sprintf("%s-to-%s", srcName, dstName))
 	tf := &v1alpha1.Traceflow{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,

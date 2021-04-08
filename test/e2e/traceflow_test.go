@@ -45,6 +45,8 @@ type testcase struct {
 	// required IP version, skip if not match, default is 0 (no restrict)
 	ipVersion  int
 	skipReason string
+	// Source Pod to run ping for live-traffic Traceflow.
+	srcPod string
 }
 
 func skipIfTraceflowDisabled(t *testing.T, data *TestData) {
@@ -275,9 +277,12 @@ func TestTraceflowIntraNode(t *testing.T) {
 
 	node1Pods, node1IPs, node1CleanupFn := createTestBusyboxPods(t, data, 3, node1)
 	defer node1CleanupFn()
-	var srcPodIPv4Str, dstPodIPv4Str, dstPodIPv6Str string
+	var pod0IPv4Str, pod1IPv4Str, dstPodIPv4Str, dstPodIPv6Str string
 	if node1IPs[0].ipv4 != nil {
-		srcPodIPv4Str = node1IPs[0].ipv4.String()
+		pod0IPv4Str = node1IPs[0].ipv4.String()
+	}
+	if node1IPs[1].ipv4 != nil {
+		pod1IPv4Str = node1IPs[1].ipv4.String()
 	}
 	if node1IPs[2].ipv4 != nil {
 		dstPodIPv4Str = node1IPs[2].ipv4.String()
@@ -557,6 +562,7 @@ func TestTraceflowIntraNode(t *testing.T) {
 					LiveTraffic: true,
 				},
 			},
+			srcPod:        node1Pods[0],
 			expectedPhase: v1alpha1.Succeeded,
 			expectedResults: []v1alpha1.NodeResult{
 				{
@@ -580,8 +586,57 @@ func TestTraceflowIntraNode(t *testing.T) {
 				},
 			},
 			expectedPktCap: &v1alpha1.Packet{
-				SrcIP:    srcPodIPv4Str,
+				SrcIP:    pod0IPv4Str,
 				DstIP:    dstPodIPv4Str,
+				Length:   84, // default ping packet length.
+				IPHeader: v1alpha1.IPHeader{Protocol: 1, TTL: 64, Flags: 2},
+			},
+		},
+		{
+			name:      "intraNodeICMPSrcIPDroppedTraceflowIPv4",
+			ipVersion: 4,
+			tf: &v1alpha1.Traceflow{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: randName(fmt.Sprintf("%s-%s-to-%s-", testNamespace, node1Pods[0], dstPodIPv4Str)),
+				},
+				Spec: v1alpha1.TraceflowSpec{
+					Source: v1alpha1.Source{
+						IP: pod0IPv4Str,
+					},
+					Destination: v1alpha1.Destination{
+						Namespace: testNamespace,
+						Pod:       node1Pods[1],
+					},
+					Packet: v1alpha1.Packet{
+						IPHeader: v1alpha1.IPHeader{
+							Protocol: protocolICMP,
+						},
+					},
+					LiveTraffic: true,
+					DroppedOnly: true,
+				},
+			},
+			srcPod:        node1Pods[0],
+			expectedPhase: v1alpha1.Succeeded,
+			expectedResults: []v1alpha1.NodeResult{
+				{
+					Node: node1,
+					Observations: []v1alpha1.Observation{
+						{
+							Component: v1alpha1.ComponentForwarding,
+							Action:    v1alpha1.ActionReceived,
+						},
+						{
+							Component:     v1alpha1.ComponentNetworkPolicy,
+							ComponentInfo: "IngressDefaultRule",
+							Action:        v1alpha1.ActionDropped,
+						},
+					},
+				},
+			},
+			expectedPktCap: &v1alpha1.Packet{
+				SrcIP:    pod0IPv4Str,
+				DstIP:    pod1IPv4Str,
 				Length:   84, // default ping packet length.
 				IPHeader: v1alpha1.IPHeader{Protocol: 1, TTL: 64, Flags: 2},
 			},
@@ -832,6 +887,7 @@ func TestTraceflowIntraNode(t *testing.T) {
 					LiveTraffic: true,
 				},
 			},
+			srcPod:        node1Pods[0],
 			expectedPhase: v1alpha1.Succeeded,
 			expectedResults: []v1alpha1.NodeResult{
 				{
@@ -1107,9 +1163,8 @@ func TestTraceflowInterNode(t *testing.T) {
 					Node: node2,
 					Observations: []v1alpha1.Observation{
 						{
-							Component:     v1alpha1.ComponentForwarding,
-							ComponentInfo: "Classification",
-							Action:        v1alpha1.ActionReceived,
+							Component: v1alpha1.ComponentForwarding,
+							Action:    v1alpha1.ActionReceived,
 						},
 						{
 							Component:     v1alpha1.ComponentForwarding,
@@ -1172,9 +1227,8 @@ func TestTraceflowInterNode(t *testing.T) {
 					Node: node2,
 					Observations: []v1alpha1.Observation{
 						{
-							Component:     v1alpha1.ComponentForwarding,
-							ComponentInfo: "Classification",
-							Action:        v1alpha1.ActionReceived,
+							Component: v1alpha1.ComponentForwarding,
+							Action:    v1alpha1.ActionReceived,
 						},
 						{
 							Component:     v1alpha1.ComponentForwarding,
@@ -1232,9 +1286,8 @@ func TestTraceflowInterNode(t *testing.T) {
 					Node: node2,
 					Observations: []v1alpha1.Observation{
 						{
-							Component:     v1alpha1.ComponentForwarding,
-							ComponentInfo: "Classification",
-							Action:        v1alpha1.ActionReceived,
+							Component: v1alpha1.ComponentForwarding,
+							Action:    v1alpha1.ActionReceived,
 						},
 						{
 							Component:     v1alpha1.ComponentForwarding,
@@ -1305,9 +1358,8 @@ func TestTraceflowInterNode(t *testing.T) {
 					Node: node2,
 					Observations: []v1alpha1.Observation{
 						{
-							Component:     v1alpha1.ComponentForwarding,
-							ComponentInfo: "Classification",
-							Action:        v1alpha1.ActionReceived,
+							Component: v1alpha1.ComponentForwarding,
+							Action:    v1alpha1.ActionReceived,
 						},
 						{
 							Component:     v1alpha1.ComponentForwarding,
@@ -1337,6 +1389,7 @@ func TestTraceflowInterNode(t *testing.T) {
 					LiveTraffic: true,
 				},
 			},
+			srcPod:        node1Pods[0],
 			expectedPhase: v1alpha1.Succeeded,
 			expectedResults: []v1alpha1.NodeResult{
 				{
@@ -1362,9 +1415,8 @@ func TestTraceflowInterNode(t *testing.T) {
 					Node: node2,
 					Observations: []v1alpha1.Observation{
 						{
-							Component:     v1alpha1.ComponentForwarding,
-							ComponentInfo: "Classification",
-							Action:        v1alpha1.ActionReceived,
+							Component: v1alpha1.ComponentForwarding,
+							Action:    v1alpha1.ActionReceived,
 						},
 						{
 							Component:     v1alpha1.ComponentForwarding,
@@ -1429,9 +1481,8 @@ func TestTraceflowInterNode(t *testing.T) {
 					Node: node2,
 					Observations: []v1alpha1.Observation{
 						{
-							Component:     v1alpha1.ComponentForwarding,
-							ComponentInfo: "Classification",
-							Action:        v1alpha1.ActionReceived,
+							Component: v1alpha1.ComponentForwarding,
+							Action:    v1alpha1.ActionReceived,
 						},
 						{
 							Component:     v1alpha1.ComponentForwarding,
@@ -1495,9 +1546,8 @@ func TestTraceflowInterNode(t *testing.T) {
 					Node: node2,
 					Observations: []v1alpha1.Observation{
 						{
-							Component:     v1alpha1.ComponentForwarding,
-							ComponentInfo: "Classification",
-							Action:        v1alpha1.ActionReceived,
+							Component: v1alpha1.ComponentForwarding,
+							Action:    v1alpha1.ActionReceived,
 						},
 						{
 							Component:     v1alpha1.ComponentForwarding,
@@ -1555,9 +1605,8 @@ func TestTraceflowInterNode(t *testing.T) {
 					Node: node2,
 					Observations: []v1alpha1.Observation{
 						{
-							Component:     v1alpha1.ComponentForwarding,
-							ComponentInfo: "Classification",
-							Action:        v1alpha1.ActionReceived,
+							Component: v1alpha1.ComponentForwarding,
+							Action:    v1alpha1.ActionReceived,
 						},
 						{
 							Component:     v1alpha1.ComponentForwarding,
@@ -1628,9 +1677,8 @@ func TestTraceflowInterNode(t *testing.T) {
 					Node: node2,
 					Observations: []v1alpha1.Observation{
 						{
-							Component:     v1alpha1.ComponentForwarding,
-							ComponentInfo: "Classification",
-							Action:        v1alpha1.ActionReceived,
+							Component: v1alpha1.ComponentForwarding,
+							Action:    v1alpha1.ActionReceived,
 						},
 						{
 							Component:     v1alpha1.ComponentForwarding,
@@ -1665,6 +1713,7 @@ func TestTraceflowInterNode(t *testing.T) {
 					LiveTraffic: true,
 				},
 			},
+			srcPod:        node1Pods[0],
 			expectedPhase: v1alpha1.Succeeded,
 			expectedResults: []v1alpha1.NodeResult{
 				{
@@ -1690,9 +1739,8 @@ func TestTraceflowInterNode(t *testing.T) {
 					Node: node2,
 					Observations: []v1alpha1.Observation{
 						{
-							Component:     v1alpha1.ComponentForwarding,
-							ComponentInfo: "Classification",
-							Action:        v1alpha1.ActionReceived,
+							Component: v1alpha1.ComponentForwarding,
+							Action:    v1alpha1.ActionReceived,
 						},
 						{
 							Component:     v1alpha1.ComponentForwarding,
@@ -1935,10 +1983,8 @@ func runTestTraceflow(t *testing.T, data *TestData, tc testcase) {
 		// LiveTraffic Traceflow test supports only ICMP traffic from
 		// the source Pod to an IP or another Pod.
 		var dstPodIPs *PodIPs
-		srcPod := tc.tf.Spec.Source.Pod
-		dstPod := tc.tf.Spec.Destination.Pod
-		dstIP := tc.tf.Spec.Destination.IP
-		if dstIP != "" {
+		srcPod := tc.srcPod
+		if dstIP := tc.tf.Spec.Destination.IP; dstIP != "" {
 			ip := net.ParseIP(dstIP)
 			if ip.To4() != nil {
 				dstPodIPs = &PodIPs{ipv4: &ip}
@@ -1946,6 +1992,7 @@ func runTestTraceflow(t *testing.T, data *TestData, tc testcase) {
 				dstPodIPs = &PodIPs{ipv6: &ip}
 			}
 		} else {
+			dstPod := tc.tf.Spec.Destination.Pod
 			podIPs := waitForPodIPs(t, data, []string{dstPod})
 			dstPodIPs = podIPs[dstPod]
 		}
