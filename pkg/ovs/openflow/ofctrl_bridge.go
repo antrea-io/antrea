@@ -207,7 +207,7 @@ func (b *OFBridge) DumpTableStatus() []TableStatus {
 
 // PacketRcvd is a callback when a packetIn is received on ofctrl.OFSwitch.
 func (b *OFBridge) PacketRcvd(sw *ofctrl.OFSwitch, packet *ofctrl.PacketIn) {
-	klog.Infof("Received packet: %+v", packet)
+	klog.V(2).Infof("Received packet: %+v", packet)
 	reason := packet.Reason
 	v, found := b.pktConsumers.Load(reason)
 	if found {
