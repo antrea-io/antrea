@@ -16,6 +16,7 @@ package logdir
 
 import (
 	"flag"
+	"os"
 )
 
 // GetLogDir returns the path to the directory where Antrea logs are written.
@@ -27,7 +28,8 @@ func GetLogDir() string {
 	if logDirFlag == nil {
 		logDir = antreaWellKnownLogDir
 	} else if len(logDirFlag.Value.String()) == 0 {
-		logDir = logDirFlag.DefValue
+		// default log directory used by klog
+		logDir = os.TempDir()
 	} else {
 		logDir = logDirFlag.Value.String()
 	}
