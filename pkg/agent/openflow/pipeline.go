@@ -705,31 +705,32 @@ func (c *client) kubeProxyFlows(category cookie.Category) []binding.Flow {
 func (c *client) traceflowConnectionTrackFlows(dataplaneTag uint8, packet *binding.Packet, srcOFPort uint32, timeout uint16, category cookie.Category) []binding.Flow {
 	connectionTrackStateTable := c.pipeline[conntrackStateTable]
 	var flows []binding.Flow
-
 	if packet == nil {
-		flowBuilder := connectionTrackStateTable.BuildFlow(priorityLow + 1).
-			MatchProtocol(binding.ProtocolIP).
-			MatchIPDSCP(dataplaneTag).
-			SetHardTimeout(timeout).
-			Cookie(c.cookieAllocator.Request(category).Raw())
-		if c.enableProxy {
-			flowBuilder = flowBuilder.
-				Action().ResubmitToTable(sessionAffinityTable).
-				Action().ResubmitToTable(serviceLBTable)
-		} else {
-			flowBuilder = flowBuilder.
-				Action().ResubmitToTable(connectionTrackStateTable.GetNext())
-		}
-		flows = append(flows, flowBuilder.Done())
+		for _, ipProtocol := range c.ipProtocols {
+			flowBuilder := connectionTrackStateTable.BuildFlow(priorityLow + 1).
+				MatchProtocol(ipProtocol).
+				MatchIPDSCP(dataplaneTag).
+				SetHardTimeout(timeout).
+				Cookie(c.cookieAllocator.Request(category).Raw())
+			if c.enableProxy {
+				flowBuilder = flowBuilder.
+					Action().ResubmitToTable(sessionAffinityTable).
+					Action().ResubmitToTable(serviceLBTable)
+			} else {
+				flowBuilder = flowBuilder.
+					Action().ResubmitToTable(connectionTrackStateTable.GetNext())
+			}
+			flows = append(flows, flowBuilder.Done())
 
-		flows = append(flows, connectionTrackStateTable.BuildFlow(priorityLow+2).
-			MatchProtocol(binding.ProtocolIP).
-			MatchIPDSCP(dataplaneTag).
-			MatchCTStateTrk(true).MatchCTStateRpl(true).
-			SetHardTimeout(timeout).
-			Cookie(c.cookieAllocator.Request(category).Raw()).
-			Action().Drop().
-			Done())
+			flows = append(flows, connectionTrackStateTable.BuildFlow(priorityLow+2).
+				MatchProtocol(ipProtocol).
+				MatchIPDSCP(dataplaneTag).
+				MatchCTStateTrk(true).MatchCTStateRpl(true).
+				SetHardTimeout(timeout).
+				Cookie(c.cookieAllocator.Request(category).Raw()).
+				Action().Drop().
+				Done())
+		}
 	} else {
 		flowBuilder := connectionTrackStateTable.BuildFlow(priorityLow).
 			MatchInPort(srcOFPort).
@@ -937,7 +938,7 @@ func (c *client) l2ForwardCalcFlow(dstMAC net.HardwareAddr, ofPort uint32, skipI
 func (c *client) traceflowL2ForwardOutputFlows(dataplaneTag uint8, liveTraffic, droppedOnly bool, timeout uint16, category cookie.Category) []binding.Flow {
 	flows := []binding.Flow{}
 	l2FwdOutTable := c.pipeline[L2ForwardingOutTable]
-	for _, ipProtocol := range []binding.Protocol{binding.ProtocolIP, binding.ProtocolIPv6} {
+	for _, ipProtocol := range c.ipProtocols {
 		if c.encapMode.SupportsEncap() {
 			// SendToController and Output if output port is tunnel port.
 			fb1 := l2FwdOutTable.BuildFlow(priorityNormal+3).
