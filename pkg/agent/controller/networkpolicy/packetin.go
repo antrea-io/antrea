@@ -74,24 +74,21 @@ type logInfo struct {
 // Customize AntreaPolicyLogger specifically for Antrea Policies audit logging.
 func initLogger() error {
 	logDir := filepath.Join(logdir.GetLogDir(), logfileSubdir)
+	logFile := filepath.Join(logDir, logfileName)
 	if _, err := os.Stat(logDir); os.IsNotExist(err) {
 		os.Mkdir(logDir, 0755)
 	}
-	file, err := os.OpenFile(filepath.Join(logDir, logfileName), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
-	if err != nil {
-		return fmt.Errorf("failed to initialize logger to audit Antrea Policies %v", err)
-	}
 
-	AntreaPolicyLogger = log.New(file, "", log.Ldate|log.Lmicroseconds)
-	// Use lumberjack log file rotation
-	AntreaPolicyLogger.SetOutput(&lumberjack.Logger{
-		Filename:   logDir + logfileName,
+	// Use lumberjack log file rot
+	logOutput := &lumberjack.Logger{
+		Filename:   logFile,
 		MaxSize:    500,  // allow max 500 megabytes for one log file
 		MaxBackups: 3,    // allow max 3 old log file backups
 		MaxAge:     28,   // allow max 28 days maintenance of old log files
 		Compress:   true, // compress the old log files for backup
-	})
-	klog.V(2).Info("Initialized Antrea-native Policy Logger for audit logging")
+	}
+	AntreaPolicyLogger = log.New(logOutput, "", log.Ldate|log.Lmicroseconds)
+	klog.V(2).Infof("Initialized Antrea-native Policy Logger for audit logging with log file '%s'", logFile)
 	return nil
 }
 
