@@ -7,8 +7,6 @@ toc:
         url: /getting-started
       - page: Deploying on kind
         url: /kind
-      - page: Deploying on ARM
-        url: /arm-support
       - page: Configuration
         url: /configuration
   - title: Cloud Deployment

@@ -101,7 +101,7 @@ the Kubernetes API and handles authentication.
 # Start the proxy in the background
 kubectl proxy &
 # Access the antrea-controller API path
-curl 127.0.0.1:8001/apis/controlplane.antrea.tanzu.vmware.com
+curl 127.0.0.1:8001/apis/controlplane.antrea.io
 ```
 
 ### Using antctl proxy

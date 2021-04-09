@@ -10,7 +10,8 @@ result via CRD, antctl or UI graph.
 
 - [Prerequisites](#prerequisites)
 - [Start a New Trace](#start-a-new-trace)
-  - [Using kubectl and YAML file](#using-kubectl-and-yaml-file)
+  - [Using kubectl and YAML file (IPv4)](#using-kubectl-and-yaml-file-ipv4)
+  - [Using kubectl and YAML file (IPv6)](#using-kubectl-and-yaml-file-ipv6)
   - [Using antctl and spec config](#using-antctl-and-spec-config)
   - [Using Octant with antrea-octant-plugin](#using-octant-with-antrea-octant-plugin)
 - [View Traceflow Result and Graph](#view-traceflow-result-and-graph)
@@ -52,13 +53,13 @@ When starting a new trace, you can provide the following information which will 
 * transport protocol (TCP/UDP/ICMP)
 * transport ports
 
-### Using kubectl and YAML file
+### Using kubectl and YAML file (IPv4)
 
 You can start a new trace by creating Traceflow CRD via kubectl and a YAML file which contains the essential
 configuration of Traceflow CRD. An example YAML file of Traceflow CRD might look like this:
 
 ```yaml
-apiVersion: ops.antrea.tanzu.vmware.com/v1alpha1
+apiVersion: crd.antrea.io/v1alpha1
 kind: Traceflow
 metadata:
   name: tf-test
@@ -71,7 +72,7 @@ spec:
     pod: tcp-sts-2
     # destination can also be an IP address ('ip' field) or a Service name ('service' field); the 3 choices are mutually exclusive.
   packet:
-    ipHeader:
+    ipHeader: # If ipHeader/ipv6Header is not set, the default value is IPv4+ICMP.
       protocol: 6 # Protocol here can be 6 (TCP), 17 (UDP) or 1 (ICMP), default value is 1 (ICMP)
     transportHeader:
       tcp:
@@ -81,6 +82,31 @@ spec:
 
 The CRD above starts a new trace from port 10000 of source Pod named `tcp-sts-0` to port 80
 of destination Pod named `tcp-sts-2` using TCP protocol.
+
+### Using kubectl and YAML file (IPv6)
+
+Antrea Traceflow supports IPv6 traffic. An example YAML file of Traceflow CRD might look like this:
+
+```yaml
+apiVersion: crd.antrea.io/v1alpha1
+kind: Traceflow
+metadata:
+  name: tf-test-ipv6
+spec:
+  source:
+    namespace: default
+    pod: tcp-sts-0
+  destination:
+    namespace: default
+    pod: tcp-sts-2
+    # destination can also be an IPv6 address ('ip' field) or a Service name ('service' field); the 3 choices are mutually exclusive.
+  packet:
+    ipv6Header: # ipv6Header MUST be set to run Traceflow in IPv6, and ipHeader will be ignored when ipv6Header set.
+      nextHeader: 58 # Protocol here can be 6 (TCP), 17 (UDP) or 58 (ICMPv6), default value is 58 (ICMPv6)
+```
+
+The CRD above starts a new trace from source Pod named `tcp-sts-0` to destination Pod named `tcp-sts-2` using ICMPv6
+protocol.
 
 ### Using antctl and spec config
 
