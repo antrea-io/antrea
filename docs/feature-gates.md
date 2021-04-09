@@ -35,9 +35,9 @@ example, to enable `AntreaProxy` on Linux, edit the Agent configuration in the
 
 | Feature Name            | Component          | Default | Stage | Alpha Release | Beta Release | GA Release | Extra Requirements | Notes |
 | ----------------------- | ------------------ | ------- | ----- | ------------- | ------------ | ---------- | ------------------ | ----- |
-| `AntreaProxy`           | Agent              | `false` | Alpha | v0.8          | v0.11        | N/A        | Yes                | Must be enabled for Windows. |
+| `AntreaProxy`           | Agent              | `true`  | Alpha | v0.8          | v0.11        | N/A        | Yes                | Must be enabled for Windows. |
 | `EndpointSlice`         | Agent              | `false` | Alpha | v0.13.0       | N/A          | N/A        | Yes                |       |
-| `AntreaPolicy`          | Agent + Controller | `false` | Alpha | v0.8          | N/A          | N/A        | No                 | Agent side config required from v0.9.0+. |
+| `AntreaPolicy`          | Agent + Controller | `true`  | Alpha | v0.8          | v1.0         | N/A        | No                 | Agent side config required from v0.9.0+. |
 | `Traceflow`             | Agent + Controller | `false` | Alpha | v0.8          | v0.11        | N/A        | Yes                |       |
 | `FlowExporter`          | Agent              | `false` | Alpha | v0.9          | N/A          | N/A        | Yes                |       |
 | `NetworkPolicyStats`    | Agent + Controller | `false` | Alpha | v0.10         | N/A          | N/A        | No                 |       |
