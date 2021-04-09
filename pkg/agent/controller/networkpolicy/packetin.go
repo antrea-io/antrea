@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 
 	"github.com/contiv/libOpenflow/openflow13"
 	"github.com/contiv/libOpenflow/protocol"
@@ -31,11 +32,12 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/util/ip"
+	"github.com/vmware-tanzu/antrea/pkg/util/logdir"
 )
 
 const (
-	logDir      string = "/var/log/antrea/networkpolicy/"
-	logfileName string = "np.log"
+	logfileSubdir string = "networkpolicy"
+	logfileName   string = "np.log"
 
 	IPv4HdrLen uint16 = 20
 	IPv6HdrLen uint16 = 40
@@ -71,26 +73,22 @@ type logInfo struct {
 // initLogger is called while newing Antrea network policy agent controller.
 // Customize AntreaPolicyLogger specifically for Antrea Policies audit logging.
 func initLogger() error {
-	// logging file should be /var/log/antrea/networkpolicy/np.log
+	logDir := filepath.Join(logdir.GetLogDir(), logfileSubdir)
+	logFile := filepath.Join(logDir, logfileName)
 	if _, err := os.Stat(logDir); os.IsNotExist(err) {
 		os.Mkdir(logDir, 0755)
 	}
-	file, err := os.OpenFile(logDir+logfileName, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
-	if err != nil {
-		klog.Errorf("Failed to initialize logger to audit Antrea Policies %v", err)
-		return err
-	}
 
-	AntreaPolicyLogger = log.New(file, "", log.Ldate|log.Lmicroseconds)
-	// Use lumberjack log file rotation
-	AntreaPolicyLogger.SetOutput(&lumberjack.Logger{
-		Filename:   logDir + logfileName,
+	// Use lumberjack log file rot
+	logOutput := &lumberjack.Logger{
+		Filename:   logFile,
 		MaxSize:    500,  // allow max 500 megabytes for one log file
 		MaxBackups: 3,    // allow max 3 old log file backups
 		MaxAge:     28,   // allow max 28 days maintenance of old log files
 		Compress:   true, // compress the old log files for backup
-	})
-	klog.V(2).Info("Initialized Antrea-native Policy Logger for audit logging")
+	}
+	AntreaPolicyLogger = log.New(logOutput, "", log.Ldate|log.Lmicroseconds)
+	klog.V(2).Infof("Initialized Antrea-native Policy Logger for audit logging with log file '%s'", logFile)
 	return nil
 }
 
