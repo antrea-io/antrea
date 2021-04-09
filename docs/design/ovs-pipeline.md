@@ -4,7 +4,7 @@
 
 * *Node Route Controller*: the [K8s
   controller](https://kubernetes.io/docs/concepts/architecture/controller/)
-  which is part of the Antrea agent and watches for updates to Nodes. When a
+  which is part of the Antrea Agent and watches for updates to Nodes. When a
   Node is added, it updates the local networking configuration (e.g. configure
   the tunnel to the new Node). When a Node is deleted, it performs the necessary
   clean-ups.
@@ -578,7 +578,7 @@ This is the L3 routing table. It implements the following functionality:
   install one flow for each Pod created locally on the Node. For example:
 
 ```text
-table=70, priority=200,ip,reg0=0x80000/0x80000,nw_dst=10.10.0.2 actions=mod_dl_src:e2:e5:a4:9b:1c:b1,mod_dl_dst:12:9e:a6:47:d0:70,goto_table:71
+table=70, priority=200,ip,reg0=0x80000/0x80000,nw_dst=10.10.0.2 actions=mod_dl_src:e2:e5:a4:9b:1c:b1,mod_dl_dst:12:9e:a6:47:d0:70,goto_table:72
 ```
 
 * All tunnelled traffic destined to the local gateway (i.e. for which the
@@ -600,7 +600,7 @@ table=70, priority=200,ip,reg0=0x80000/0x80000,nw_dst=10.10.0.1 actions=mod_dl_d
   For a given peer Node, the flow may look like this:
 
 ```text
-table=70, priority=200,ip,nw_dst=10.10.1.0/24 actions=mod_dl_src:e2:e5:a4:9b:1c:b1,mod_dl_dst:aa:bb:cc:dd:ee:ff,load:0x1->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],load:0xc0a84d65->NXM_NX_TUN_IPV4_DST[],goto_table:71
+table=70, priority=200,ip,nw_dst=10.10.1.0/24 actions=mod_dl_src:e2:e5:a4:9b:1c:b1,mod_dl_dst:aa:bb:cc:dd:ee:ff,load:0x1->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],load:0xc0a84d65->NXM_NX_TUN_IPV4_DST[],goto_table:72
 ```
 
 If none of the flows described above are hit, traffic goes directly to
@@ -613,7 +613,69 @@ is required), as well as for local Pod-to-Pod traffic.
 table=70, priority=0 actions=goto_table:80
 ```
 
-### L3DecTTLTable (71)
+When the Egress feature is enabled, there will be two extra flows added into
+[L3ForwardingTable], which send the egress traffic from Pods to external network
+to [SNATTable] (rather than sending the traffic the [L2ForwardingCalcTable]
+directly). One of the flows is for egress traffic from local Pods; another
+one is for egress traffic from remote Pods, which is tunnelled to this Node to
+be SNAT'd with a SNAT IP configured on the Node. In the latter case, the flow
+also rewrites the destination MAC to the local gateway interface MAC.
+
+```text
+table=70, priority=190,ip,reg0=0x2/0xffff actions=goto_table:71
+table=70, priority=190,ip,reg0=0/0xffff actions=mod_dl_dst:e2:e5:a4:9b:1c:b1,goto_table:71
+```
+
+### SNATTable (71)
+
+This table is created only when the Egress feature is enabled. It includes flows
+to implement Egresses and select the right SNAT IPs for egress traffic from Pods
+to external network.
+
+When no Egress applies to Pods on the Node, and no SNAT IP is configured on the
+Node, [SNATTable] just has two flows. One drops egress traffic tunnelled from
+remote Nodes that does not match any SNAT IP configured on this Node, and the
+default flow that sends egress traffic from local Pods, which do not have any
+Egress applied, to [L2ForwardingCalcTable]. Such traffic will be SNAT'd with
+the default SNAT IP (by an iptables masquerade rule).
+
+```text
+table=71, priority=190,ct_state=+new+trk,ip,reg0=0/0xffff actions=drop
+table=71, priority=0 actions=goto_table:80
+```
+
+When there is an Egress applied to a Pod on the Node, a flow will be added for
+the Pod's egress traffic. If the SNAT IP of the Egress is configured on the
+local Node, the flow sets an 8 bits ID allocated for the SNAT IP to pkt_mark.
+The ID is for iptables SNAT rules to match the packets and perfrom SNAT with
+the right SNAT IP (Antrea Agent adds an iptables SNAT rule for each local SNAT
+IP that matches the ID).
+
+```text
+table=71, priority=200,ct_state=+new+trk,ip,in_port="pod1-7e503a" actions=load:0x1->NXM_NX_PKT_MARK[0..7],goto_table:80
+```
+
+When the SNAT IP of the Egress is on a remote Node, the flow will tunnel the
+packets to the remote Node with the tunnel's destination IP to be the SNAT IP.
+The packets will be SNAT'd on the remote Node. The same as a normal tunnel flow
+in [L3ForwardingTable], the flow will rewrite the packets' source and
+destination MAC addresses, load the SNAT IP to NXM_NX_TUN_IPV4_DST, and send the
+packets to [L3DecTTLTable].
+
+```text
+table=71, priority=200,ct_state=+new+trk,ip,in_port="pod2-357c21" actions=mod_dl_src:e2:e5:a4:9b:1c:b1,mod_dl_dst:aa:bb:cc:dd:ee:ff,load:0x1->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],load:0xc0a84d66->NXM_NX_TUN_IPV4_DST[],goto_table:72
+```
+
+Last, when a SNAT IP configured for Egresses is on the local Node, an additional
+flow is added in [SNATTable] for egress traffic from remote Node that should
+use the SNAT IP. The flow matches the tunnel destination IP (which should be
+equal to the SNAT IP), and sets the 8 bits ID of the SNAT IP to pkt_mark.
+
+```text
+table=71, priority=200,ct_state=+new+trk,ip,tun_dst="192.168.77.101" actions=load:0x1->NXM_NX_PKT_MARK[0..7],goto_table:80
+```
+
+### L3DecTTLTable (72)
 
 This is the table to decrement TTL for the IP packets destined to remote Nodes
 through a tunnel, or the IP packets received from a tunnel. But for the packets
@@ -624,9 +686,9 @@ IP stack should have already decremented TTL if that is needed.
 If you dump the flows for this table, you should see flows like the following:
 
 ```text
-1. table=71, priority=210,ip,reg0=0x1/0xffff, actions=goto_table:80
-2. table=71, priority=200,ip, actions=dec_ttl,goto_table:80
-3. table=71, priority=0, actions=goto_table:80
+1. table=72, priority=210,ip,reg0=0x1/0xffff, actions=goto_table:80
+2. table=72, priority=200,ip, actions=dec_ttl,goto_table:80
+3. table=72, priority=0, actions=goto_table:80
 ```
 
 The first flow is to bypass the TTL decrement for the packets from the gateway
@@ -869,7 +931,8 @@ resolved by the "dmac" table, [L2ForwardingCalcTable]). IP packets for which
 [EgressRuleTable]: #egressruletable-50
 [EgressDefaultTable]: #egressdefaulttable-60
 [L3ForwardingTable]: #l3forwardingtable-70
-[L3DecTTLTable]: #l3decttltable-71
+[SNATTable]: #snattable-71
+[L3DecTTLTable]: #l3decttltable-72
 [L2ForwardingCalcTable]: #l2forwardingcalctable-80
 [AntreaPolicyIngressRuleTable]: #antreapolicyingressruletable-85
 [IngressRuleTable]: #ingressruletable-90
