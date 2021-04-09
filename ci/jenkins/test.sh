@@ -204,13 +204,13 @@ function deliver_antrea_windows {
     done
 
     echo "===== Deliver Antrea Windows to Windows nodes ====="
-    rm antrea-windows.tar.gz || true
+    rm -f antrea-windows.tar.gz
     sed -i 's/if (!(Test-Path $AntreaAgentConfigPath))/if ($true)/' hack/windows/Helper.psm1
     kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 != role && $1 ~ /win/ {print $6}' | while read IP; do
         govc snapshot.revert -vm.ip ${IP} win-initial
         harbor_images=("sigwindowstools-kube-proxy:v1.18.0" "e2eteam-agnhost:2.13" "e2eteam-jessie-dnsutils:1.0" "e2eteam-pause:3.2")
         antrea_images=("sigwindowstools/kube-proxy:v1.18.0" "e2eteam/agnhost:2.13" "e2eteam/jessie-dnsutils:1.0" "e2eteam/pause:3.2")
-        for i in {0..4}; do
+        for i in "${!harbor_images[@]}"; do
             ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "docker pull ${DOCKER_REGISTRY}/antrea/${harbor_images[i]} && docker tag ${DOCKER_REGISTRY}/antrea/${harbor_images[i]} ${antrea_images[i]}" || true
         done
 
@@ -256,7 +256,7 @@ function deliver_antrea_windows {
             fi
         fi
     done
-    rm antrea-windows.tar.gz || true
+    rm -f antrea-windows.tar.gz
 }
 
 function deliver_antrea {
