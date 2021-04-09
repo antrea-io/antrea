@@ -58,11 +58,11 @@ Your feedback is more than welcome!
 * Check the [Antrea Team Calendar](https://calendar.google.com/calendar/embed?src=uuillgmcb1cu3rmv7r7jrhcrco%40group.calendar.google.com)
   and join the developer and user communities!
   + The [Antrea community meeting](https://VMware.zoom.us/j/823654111?pwd=MEV6blNtUUtqallVSkVFSGZtQ1kwUT09),
-every two weeks on Tuesday at 5AM UTC (9PM PDT, 6AM CET, 10.30AM IST, 1PM China).
+every two weeks on Tuesday at 5AM GMT.
     - [Meeting minutes](https://github.com/vmware-tanzu/antrea/wiki/Community-Meetings)
     - [Meeting recordings](https://www.youtube.com/playlist?list=PLH5zTfQ3otSA6EOYDNb-MvcQRXACdCbQw)
   + [Antrea office hours](https://VMware.zoom.us/j/94245798791?pwd=RzRNVXYxdDJnNjZnNjBiUVFHZGlXdz09),
-every two weeks on Tuesday at 10PM UTC (2PM PDT, 5PM EDT, 11PM CET, 6AM China)
+every two weeks on Tuesday at 10PM GMT.
 * Join our mailing lists to always stay up-to-date with Antrea development:
   + [projectantrea-announce](https://groups.google.com/forum/#!forum/projectantrea-announce)
 for important project announcements.
