@@ -60,7 +60,7 @@ func (p *antreaOctantPlugin) agentHandler(request service.Request) (component.Co
 
 // getControllerTable gets the table for displaying Controller information
 func (p *antreaOctantPlugin) getControllerTable(request service.Request) *component.Table {
-	controllers, err := p.client.ClusterinformationV1beta1().AntreaControllerInfos().List(context.TODO(), v1.ListOptions{
+	controllers, err := p.client.CrdV1beta1().AntreaControllerInfos().List(context.TODO(), v1.ListOptions{
 		ResourceVersion: "0",
 	})
 	if err != nil {
@@ -77,7 +77,7 @@ func (p *antreaOctantPlugin) getControllerTable(request service.Request) *compon
 			serviceCol: component.NewLink(controller.ServiceRef.Name, controller.ServiceRef.Name,
 				"/overview/namespace/"+controller.PodRef.Namespace+"/discovery-and-load-balancing/services/"+controller.ServiceRef.Name),
 			clusterInfoCrdCol: component.NewLink(controller.Name, controller.Name,
-				"/cluster-overview/custom-resources/antreacontrollerinfos.clusterinformation.antrea.tanzu.vmware.com/v1beta1/"+controller.Name),
+				"/cluster-overview/custom-resources/antreacontrollerinfos.crd.antrea.io/v1beta1/"+controller.Name),
 			heartbeatCol: component.NewText(controller.ControllerConditions[0].LastHeartbeatTime.String()),
 		})
 	}
@@ -87,7 +87,7 @@ func (p *antreaOctantPlugin) getControllerTable(request service.Request) *compon
 
 // getAgentTable gets the table for displaying Agent information.
 func (p *antreaOctantPlugin) getAgentTable(request service.Request) *component.Table {
-	agents, err := p.client.ClusterinformationV1beta1().AntreaAgentInfos().List(context.TODO(), v1.ListOptions{
+	agents, err := p.client.CrdV1beta1().AntreaAgentInfos().List(context.TODO(), v1.ListOptions{
 		ResourceVersion: "0",
 	})
 	if err != nil {
@@ -105,7 +105,7 @@ func (p *antreaOctantPlugin) getAgentTable(request service.Request) *component.T
 			bridgeCol:  component.NewText(agent.OVSInfo.BridgeName),
 			podNumCol:  component.NewText(strconv.Itoa(int(agent.LocalPodNum))),
 			clusterInfoCrdCol: component.NewLink(agent.Name, agent.Name,
-				"/cluster-overview/custom-resources/antreaagentinfos.clusterinformation.antrea.tanzu.vmware.com/v1beta1/"+agent.Name),
+				"/cluster-overview/custom-resources/antreaagentinfos.crd.antrea.io/v1beta1/"+agent.Name),
 			heartbeatCol: component.NewText(agent.AgentConditions[0].LastHeartbeatTime.String()),
 		})
 	}

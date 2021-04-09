@@ -22,7 +22,7 @@ import (
 
 	"github.com/awalterschulze/gographviz"
 
-	opsv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/ops/v1alpha1"
+	crdv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha1"
 )
 
 const (
@@ -106,21 +106,21 @@ func createClusterWithDefaultStyle(graph *gographviz.Graph, name string) (*gogra
 	return graph.SubGraphs.SubGraphs[name], nil
 }
 
-func isSender(result *opsv1alpha1.NodeResult) bool {
+func isSender(result *crdv1alpha1.NodeResult) bool {
 	if len(result.Observations) == 0 {
 		return false
 	}
-	if result.Observations[0].Component != opsv1alpha1.SpoofGuard || result.Observations[0].Action != opsv1alpha1.Forwarded {
+	if result.Observations[0].Component != crdv1alpha1.ComponentSpoofGuard || result.Observations[0].Action != crdv1alpha1.ActionForwarded {
 		return false
 	}
 	return true
 }
 
-func isReceiver(result *opsv1alpha1.NodeResult) bool {
+func isReceiver(result *crdv1alpha1.NodeResult) bool {
 	if len(result.Observations) == 0 {
 		return false
 	}
-	if result.Observations[0].Component != opsv1alpha1.Forwarding || result.Observations[0].Action != opsv1alpha1.Received {
+	if result.Observations[0].Component != crdv1alpha1.ComponentForwarding || result.Observations[0].Action != crdv1alpha1.ActionReceived {
 		return false
 	}
 	return true
@@ -137,7 +137,7 @@ func getWrappedStr(str string) string {
 	return `"` + wStr + `"`
 }
 
-func getNodeResult(tf *opsv1alpha1.Traceflow, fn func(result *opsv1alpha1.NodeResult) bool) *opsv1alpha1.NodeResult {
+func getNodeResult(tf *crdv1alpha1.Traceflow, fn func(result *crdv1alpha1.NodeResult) bool) *crdv1alpha1.NodeResult {
 	for i := range tf.Status.Results {
 		result := tf.Status.Results[i]
 		if fn(&result) {
@@ -147,14 +147,14 @@ func getNodeResult(tf *opsv1alpha1.Traceflow, fn func(result *opsv1alpha1.NodeRe
 	return nil
 }
 
-func getSrcNodeName(tf *opsv1alpha1.Traceflow) string {
+func getSrcNodeName(tf *crdv1alpha1.Traceflow) string {
 	if len(tf.Spec.Source.Namespace) > 0 && len(tf.Spec.Source.Pod) > 0 {
 		return getWrappedStr(tf.Spec.Source.Namespace + "/" + tf.Spec.Source.Pod)
 	}
 	return ""
 }
 
-func getDstNodeName(tf *opsv1alpha1.Traceflow) string {
+func getDstNodeName(tf *crdv1alpha1.Traceflow) string {
 	if len(tf.Spec.Destination.Namespace) > 0 && len(tf.Spec.Destination.Service) > 0 {
 		return getWrappedStr(tf.Spec.Destination.Namespace + "/" + tf.Spec.Destination.Pod +
 			"\nService: " + tf.Spec.Destination.Service)
@@ -169,13 +169,13 @@ func getDstNodeName(tf *opsv1alpha1.Traceflow) string {
 }
 
 // getTraceflowMessage gets the shown message string in traceflow graph.
-func getTraceflowMessage(o *opsv1alpha1.Observation, spec *opsv1alpha1.TraceflowSpec) string {
+func getTraceflowMessage(o *crdv1alpha1.Observation, spec *crdv1alpha1.TraceflowSpec) string {
 	str := string(o.Component)
 	if len(o.ComponentInfo) > 0 {
 		str += "\n" + o.ComponentInfo
 	}
 	str += "\n" + string(o.Action)
-	if o.Component == opsv1alpha1.NetworkPolicy && len(o.NetworkPolicy) > 0 {
+	if o.Component == crdv1alpha1.ComponentNetworkPolicy && len(o.NetworkPolicy) > 0 {
 		str += "\nNetpol: " + o.NetworkPolicy
 	}
 	if len(o.Pod) > 0 {
@@ -184,10 +184,10 @@ func getTraceflowMessage(o *opsv1alpha1.Observation, spec *opsv1alpha1.Traceflow
 			spec.Destination.Pod = o.Pod[strings.Index(o.Pod, `/`)+1:]
 		}
 	}
-	if o.Action != opsv1alpha1.Dropped && len(o.TranslatedDstIP) > 0 {
+	if o.Action != crdv1alpha1.ActionDropped && len(o.TranslatedDstIP) > 0 {
 		str += "\nTranslated Destination IP: " + o.TranslatedDstIP
 	}
-	if o.Action != opsv1alpha1.Dropped && len(o.TunnelDstIP) > 0 {
+	if o.Action != crdv1alpha1.ActionDropped && len(o.TunnelDstIP) > 0 {
 		str += "\nTunnel Destination IP : " + o.TunnelDstIP
 	}
 	return str
@@ -233,20 +233,20 @@ func genOutput(graph *gographviz.Graph, isSingleCluster bool) string {
 	return str
 }
 
-func getTraceflowStatusMessage(tf *opsv1alpha1.Traceflow) string {
+func getTraceflowStatusMessage(tf *crdv1alpha1.Traceflow) string {
 	switch tf.Status.Phase {
-	case opsv1alpha1.Failed:
+	case crdv1alpha1.Failed:
 		return getWrappedStr(fmt.Sprintf("Traceflow %s failed: %s", tf.Name, tf.Status.Reason))
-	case opsv1alpha1.Running:
+	case crdv1alpha1.Running:
 		return getWrappedStr(fmt.Sprintf("Traceflow %s is running...", tf.Name))
-	case opsv1alpha1.Pending:
+	case crdv1alpha1.Pending:
 		return getWrappedStr(fmt.Sprintf("Traceflow %s is pending...", tf.Name))
 	default:
 		return getWrappedStr("Unknown Traceflow status. Please check whether Antrea is running.")
 	}
 }
 
-func genSubGraph(graph *gographviz.Graph, cluster *gographviz.SubGraph, result *opsv1alpha1.NodeResult, spec *opsv1alpha1.TraceflowSpec,
+func genSubGraph(graph *gographviz.Graph, cluster *gographviz.SubGraph, result *crdv1alpha1.NodeResult, spec *crdv1alpha1.TraceflowSpec,
 	endpointNodeName string, isForwardDir bool, addNodeNum int) ([]*gographviz.Node, error) {
 	var nodes []*gographviz.Node
 
@@ -272,7 +272,7 @@ func genSubGraph(graph *gographviz.Graph, cluster *gographviz.SubGraph, result *
 
 	// Reorder the observations according to the direction of edges.
 	// Before that, deep copy observations to prevent possible risks of the original traceflow being modified.
-	obs := make([]opsv1alpha1.Observation, len(result.Observations))
+	obs := make([]crdv1alpha1.Observation, len(result.Observations))
 	copy(obs, result.Observations)
 	if !isForwardDir {
 		for i := len(obs)/2 - 1; i >= 0; i-- {
@@ -303,12 +303,12 @@ func genSubGraph(graph *gographviz.Graph, cluster *gographviz.SubGraph, result *
 			} else {
 				edge.Attrs[gographviz.MinLen] = "1"
 			}
-			if o.Action == opsv1alpha1.Dropped && !isForwardDir {
+			if o.Action == crdv1alpha1.ActionDropped && !isForwardDir {
 				edge.Attrs[gographviz.Style] = `"invis"`
 			}
 		}
 		// Set the pattern of node.
-		if o.Action == opsv1alpha1.Dropped {
+		if o.Action == crdv1alpha1.ActionDropped {
 			node.Attrs[gographviz.Color] = fireBrick
 			node.Attrs[gographviz.FillColor] = mistyRose
 		} else {
@@ -321,7 +321,7 @@ func genSubGraph(graph *gographviz.Graph, cluster *gographviz.SubGraph, result *
 	return nodes, nil
 }
 
-func GenGraph(tf *opsv1alpha1.Traceflow) (string, error) {
+func GenGraph(tf *crdv1alpha1.Traceflow) (string, error) {
 	g, _ := gographviz.ParseString(`digraph G {}`)
 	graph := gographviz.NewGraph()
 	if err := gographviz.Analyse(g, graph); err != nil {
@@ -337,10 +337,10 @@ func GenGraph(tf *opsv1alpha1.Traceflow) (string, error) {
 
 	senderRst := getNodeResult(tf, isSender)
 	receiverRst := getNodeResult(tf, isReceiver)
-	if tf.Status.Phase != opsv1alpha1.Succeeded {
+	if tf.Status.Phase != crdv1alpha1.Succeeded {
 		graph.Attrs[gographviz.Label] = getTraceflowStatusMessage(tf)
 	}
-	if tf == nil || senderRst == nil || tf.Status.Phase != opsv1alpha1.Succeeded || len(senderRst.Observations) == 0 {
+	if tf == nil || senderRst == nil || tf.Status.Phase != crdv1alpha1.Succeeded || len(senderRst.Observations) == 0 {
 		return genOutput(graph, true), nil
 	}
 
@@ -361,7 +361,7 @@ func GenGraph(tf *opsv1alpha1.Traceflow) (string, error) {
 		switch senderRst.Observations[len(senderRst.Observations)-1].Action {
 		// If the last action of the sender is FORWARDED,
 		// then the packet has been sent out by sender, implying that there is a disconnection.
-		case opsv1alpha1.Forwarded:
+		case crdv1alpha1.ActionForwarded:
 			lastNode, err := createEndpointNodeWithDefaultStyle(graph, graph.Name, getDstNodeName(tf))
 			if err != nil {
 				return "", err
@@ -374,7 +374,7 @@ func GenGraph(tf *opsv1alpha1.Traceflow) (string, error) {
 			if err != nil {
 				return "", err
 			}
-		case opsv1alpha1.Delivered:
+		case crdv1alpha1.ActionDelivered:
 			lastNode, err := createEndpointNodeWithDefaultStyle(graph, cluster1.Name, getDstNodeName(tf))
 			if err != nil {
 				return "", err

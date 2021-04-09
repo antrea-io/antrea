@@ -80,6 +80,8 @@ type Client struct {
 	nodeRoutes sync.Map
 	// nodeNeighbors caches IPv6 Neighbors to remote host gateway
 	nodeNeighbors sync.Map
+	// markToSNATIP caches marks to SNAT IPs. It's used in Egress feature.
+	markToSNATIP sync.Map
 	// iptablesInitialized is used to notify when iptables initialization is done.
 	iptablesInitialized chan struct{}
 }
@@ -239,9 +241,21 @@ func (c *Client) syncIPTables() error {
 		}
 	}
 
+	snatMarkToIPv4 := map[uint32]net.IP{}
+	snatMarkToIPv6 := map[uint32]net.IP{}
+	c.markToSNATIP.Range(func(key, value interface{}) bool {
+		snatMark := key.(uint32)
+		snatIP := value.(net.IP)
+		if snatIP.To4() != nil {
+			snatMarkToIPv4[snatMark] = snatIP
+		} else {
+			snatMarkToIPv6[snatMark] = snatIP
+		}
+		return true
+	})
 	// Use iptables-restore to configure IPv4 settings.
 	if v4Enabled {
-		iptablesData := c.restoreIptablesData(c.nodeConfig.PodIPv4CIDR, antreaPodIPSet)
+		iptablesData := c.restoreIptablesData(c.nodeConfig.PodIPv4CIDR, antreaPodIPSet, snatMarkToIPv4)
 		// Setting --noflush to keep the previous contents (i.e. non antrea managed chains) of the tables.
 		if err := c.ipt.Restore(iptablesData.Bytes(), false, false); err != nil {
 			return err
@@ -250,7 +264,7 @@ func (c *Client) syncIPTables() error {
 
 	// Use ip6tables-restore to configure IPv6 settings.
 	if v6Enabled {
-		iptablesData := c.restoreIptablesData(c.nodeConfig.PodIPv6CIDR, antreaPodIP6Set)
+		iptablesData := c.restoreIptablesData(c.nodeConfig.PodIPv6CIDR, antreaPodIP6Set, snatMarkToIPv6)
 		// Setting --noflush to keep the previous contents (i.e. non antrea managed chains) of the tables.
 		if err := c.ipt.Restore(iptablesData.Bytes(), false, true); err != nil {
 			return err
@@ -259,7 +273,7 @@ func (c *Client) syncIPTables() error {
 	return nil
 }
 
-func (c *Client) restoreIptablesData(podCIDR *net.IPNet, podIPSet string) *bytes.Buffer {
+func (c *Client) restoreIptablesData(podCIDR *net.IPNet, podIPSet string, snatMarkToIP map[uint32]net.IP) *bytes.Buffer {
 	// Create required rules in the antrea chains.
 	// Use iptables-restore as it flushes the involved chains and creates the desired rules
 	// with a single call, instead of string matching to clean up stale rules.
@@ -326,13 +340,13 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet, podIPSet string) *bytes
 	writeLine(iptablesData, iptables.MakeChainLine(antreaForwardChain))
 	writeLine(iptablesData, []string{
 		"-A", antreaForwardChain,
-		"-m", "comment", "--comment", `"Antrea: accept packets from local pods"`,
+		"-m", "comment", "--comment", `"Antrea: accept packets from local Pods"`,
 		"-i", hostGateway,
 		"-j", iptables.AcceptTarget,
 	}...)
 	writeLine(iptablesData, []string{
 		"-A", antreaForwardChain,
-		"-m", "comment", "--comment", `"Antrea: accept packets to local pods"`,
+		"-m", "comment", "--comment", `"Antrea: accept packets to local Pods"`,
 		"-o", hostGateway,
 		"-j", iptables.AcceptTarget,
 	}...)
@@ -340,10 +354,22 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet, podIPSet string) *bytes
 
 	writeLine(iptablesData, "*nat")
 	writeLine(iptablesData, iptables.MakeChainLine(antreaPostRoutingChain))
+	// Egress rules must be inserted before the default masquerade rule.
+	for snatMark, snatIP := range snatMarkToIP {
+		// Cannot reuse snatRuleSpec to generate the rule as it doesn't have "`" in the comment.
+		writeLine(iptablesData, []string{
+			"-A", antreaPostRoutingChain,
+			"-m", "comment", "--comment", `"Antrea: SNAT Pod to external packets"`,
+			"!", "-o", c.nodeConfig.GatewayConfig.Name,
+			"-m", "mark", "--mark", fmt.Sprintf("%#08x/%#08x", snatMark, types.SNATIPMarkMask),
+			"-j", iptables.SNATTarget, "--to", snatIP.String(),
+		}...)
+	}
+
 	if !c.noSNAT {
 		writeLine(iptablesData, []string{
 			"-A", antreaPostRoutingChain,
-			"-m", "comment", "--comment", `"Antrea: masquerade pod to external packets"`,
+			"-m", "comment", "--comment", `"Antrea: masquerade Pod to external packets"`,
 			"-s", podCIDR.String(), "-m", "set", "!", "--match-set", podIPSet, "dst",
 			"-j", iptables.MasqueradeTarget,
 		}...)
@@ -481,7 +507,7 @@ func (c *Client) listIPv6NeighborsOnGateway() (map[string]*netlink.Neigh, error)
 }
 
 // AddRoutes adds routes to a new podCIDR. It overrides the routes if they already exist.
-func (c *Client) AddRoutes(podCIDR *net.IPNet, nodeIP, nodeGwIP net.IP) error {
+func (c *Client) AddRoutes(podCIDR *net.IPNet, nodeName string, nodeIP, nodeGwIP net.IP) error {
 	podCIDRStr := podCIDR.String()
 	ipsetName := getIPSetName(podCIDR.IP)
 	// Add this podCIDR to antreaPodIPSet so that packets to them won't be masqueraded when they leave the host.
@@ -518,7 +544,7 @@ func (c *Client) AddRoutes(podCIDR *net.IPNet, nodeIP, nodeGwIP net.IP) error {
 
 	for _, route := range routes {
 		if err := netlink.RouteReplace(route); err != nil {
-			return fmt.Errorf("failed to install route to peer %s with netlink: %v", nodeIP, err)
+			return fmt.Errorf("failed to install route to peer %s (%s) with netlink. Route config: %s. Error: %v", nodeName, nodeIP, route.String(), err)
 		}
 	}
 
@@ -656,4 +682,35 @@ func (c *Client) UnMigrateRoutesFromGw(route *net.IPNet, linkName string) error 
 		}
 	}
 	return nil
+}
+
+func (c *Client) snatRuleSpec(snatIP net.IP, snatMark uint32) []string {
+	return []string{
+		"-m", "comment", "--comment", "Antrea: SNAT Pod to external packets",
+		// The condition is needed to prevent the rule from being applied to local out packets destined for Pods, which
+		// have "0x1/0x1" mark.
+		"!", "-o", c.nodeConfig.GatewayConfig.Name,
+		"-m", "mark", "--mark", fmt.Sprintf("%#08x/%#08x", snatMark, types.SNATIPMarkMask),
+		"-j", iptables.SNATTarget, "--to", snatIP.String(),
+	}
+}
+
+func (c *Client) AddSNATRule(snatIP net.IP, mark uint32) error {
+	protocol := iptables.ProtocolIPv4
+	if snatIP.To4() == nil {
+		protocol = iptables.ProtocolIPv6
+	}
+	c.markToSNATIP.Store(mark, snatIP)
+	return c.ipt.InsertRule(protocol, iptables.NATTable, antreaPostRoutingChain, c.snatRuleSpec(snatIP, mark))
+}
+
+func (c *Client) DeleteSNATRule(mark uint32) error {
+	value, ok := c.markToSNATIP.Load(mark)
+	if !ok {
+		klog.Warningf("Didn't find SNAT rule with mark %#x", mark)
+		return nil
+	}
+	c.markToSNATIP.Delete(mark)
+	snatIP := value.(net.IP)
+	return c.ipt.DeleteRule(iptables.NATTable, antreaPostRoutingChain, c.snatRuleSpec(snatIP, mark))
 }

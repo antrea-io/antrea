@@ -1,2 +1,2 @@
-http.host: "0.0.0.0"
+http.host: "${POD_IP}"
 path.config: /usr/share/logstash/pipeline

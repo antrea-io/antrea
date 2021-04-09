@@ -50,7 +50,7 @@ using the sonobuoy tool.
         --e2e-focus TestRegex                                     Run only tests matching a specific regex, this is useful to run a single tests for example.
         --e2e-skip TestRegex                                      Skip some tests matching a specific regex.
         --kubeconfig Kubeconfig                                   Explicit path to Kubeconfig file. You may also set the KUBECONFIG environment variable.
-        --kube-conformance-image ConformacneImage                 Container image override for the kube conformance image. Overrides --kube-conformance-image-version.
+        --kube-conformance-image ConformanceImage                 Container image override for the kube conformance image. Overrides --kube-conformance-image-version.
         --kube-conformance-image-version ConformanceImageVersion  Use specific version of the Conformance tests container image. Default is $KUBE_CONFORMANCE_IMAGE_VERSION.
         --log-mode                                                Use the flag to set either 'report', 'detail', or 'dump' level data for sonobouy results.
         --image-pull-policy                                       The ImagePullPolicy Sonobuoy should use for the aggregators and workers. (default Always)

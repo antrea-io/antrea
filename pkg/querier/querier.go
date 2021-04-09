@@ -17,6 +17,7 @@ package querier
 import (
 	v1 "k8s.io/api/core/v1"
 
+	"github.com/vmware-tanzu/antrea/pkg/agent/types"
 	cpv1beta "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
 	"github.com/vmware-tanzu/antrea/pkg/util/env"
 	"github.com/vmware-tanzu/antrea/pkg/version"
@@ -36,6 +37,7 @@ type AgentNetworkPolicyInfoQuerier interface {
 	GetAppliedToGroups() []cpv1beta.AppliedToGroup
 	GetAppliedNetworkPolicies(pod, namespace string, npFilter *NetworkPolicyQueryFilter) []cpv1beta.NetworkPolicy
 	GetNetworkPolicyByRuleFlowID(ruleFlowID uint32) *cpv1beta.NetworkPolicyReference
+	GetRuleByFlowID(ruleFlowID uint32) *types.PolicyRule
 }
 
 type ControllerNetworkPolicyInfoQuerier interface {

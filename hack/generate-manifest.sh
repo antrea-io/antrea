@@ -20,7 +20,7 @@ function echoerr {
     >&2 echo "$@"
 }
 
-_usage="Usage: $0 [--mode (dev|release)] [--encap-mode] [--kind] [--ipsec] [--no-proxy] [--np] [--k8s-1.15] [--keep] [--tun (geneve|vxlan|gre|stt)] [--verbose-log] [--help|-h]
+_usage="Usage: $0 [--mode (dev|release)] [--encap-mode] [--kind] [--ipsec] [--no-proxy] [--no-np] [--k8s-1.15] [--keep] [--tun (geneve|vxlan|gre|stt)] [--verbose-log] [--help|-h]
 Generate a YAML manifest for Antrea using Kustomize and print it to stdout.
         --mode (dev|release)          Choose the configuration variant that you need (default is 'dev')
         --encap-mode                  Traffic encapsulation mode. (default is 'encap')
@@ -29,8 +29,9 @@ Generate a YAML manifest for Antrea using Kustomize and print it to stdout.
         --ipsec                       Generate a manifest with IPSec encryption of tunnel traffic enabled
         --all-features                Generate a manifest with all alpha features enabled
         --no-proxy                    Generate a manifest with Antrea proxy disabled
+        --no-legacy-crd               Generate a manifest without legacy CRD mirroring support enabled
         --endpointslice               Generate a manifest with EndpointSlice support enabled
-        --np                          Generate a manifest with ClusterNetworkPolicy and Antrea NetworkPolicy features enabled
+        --no-np                       Generate a manifest with Antrea-native policies disabled
         --k8s-1.15                    Generates a manifest which supports Kubernetes 1.15.
         --keep                        Debug flag which will preserve the generated kustomization.yml
         --tun (geneve|vxlan|gre|stt)  Choose encap tunnel type from geneve, gre, stt and vxlan (default is geneve)
@@ -64,8 +65,9 @@ KIND=false
 IPSEC=false
 ALLFEATURES=false
 PROXY=true
+LEGACY_CRD=true
 ENDPOINTSLICE=false
-NP=false
+NP=true
 KEEP=false
 ENCAP_MODE=""
 CLOUD=""
@@ -110,13 +112,17 @@ case $key in
     PROXY=false
     shift
     ;;
+    --no-legacy-crd)
+    LEGACY_CRD=false
+    shift
+    ;;
     --endpointslice)
     PROXY=true
     ENDPOINTSLICE=true
     shift
     ;;
-    --np)
-    NP=true
+    --no-np)
+    NP=false
     shift
     ;;
     --k8s-1.15)
@@ -256,13 +262,17 @@ if ! $PROXY; then
     sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*AntreaProxy[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  AntreaProxy: false/" antrea-agent.conf
 fi
 
+if ! $LEGACY_CRD; then
+    sed -i.bak -E "s/^#legacyCRDMirroring[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/legacyCRDMirroring: false/" antrea-controller.conf
+fi
+
 if $ENDPOINTSLICE; then
     sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*EndpointSlice[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  EndpointSlice: true/" antrea-agent.conf
 fi
 
-if $NP; then
-    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*AntreaPolicy[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  AntreaPolicy: true/" antrea-controller.conf
-    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*AntreaPolicy[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  AntreaPolicy: true/" antrea-agent.conf
+if ! $NP; then
+    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*AntreaPolicy[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  AntreaPolicy: false/" antrea-controller.conf
+    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*AntreaPolicy[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  AntreaPolicy: false/" antrea-agent.conf
 fi
 
 if [[ $ENCAP_MODE != "" ]]; then

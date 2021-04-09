@@ -1,4 +1,4 @@
-// Copyright 2020 Antrea Authors
+// Copyright 2021 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,9 +32,9 @@ type FakeAppliedToGroups struct {
 	Fake *FakeControlplaneV1beta2
 }
 
-var appliedtogroupsResource = schema.GroupVersionResource{Group: "controlplane.antrea.tanzu.vmware.com", Version: "v1beta2", Resource: "appliedtogroups"}
+var appliedtogroupsResource = schema.GroupVersionResource{Group: "controlplane.antrea.io", Version: "v1beta2", Resource: "appliedtogroups"}
 
-var appliedtogroupsKind = schema.GroupVersionKind{Group: "controlplane.antrea.tanzu.vmware.com", Version: "v1beta2", Kind: "AppliedToGroup"}
+var appliedtogroupsKind = schema.GroupVersionKind{Group: "controlplane.antrea.io", Version: "v1beta2", Kind: "AppliedToGroup"}
 
 // Get takes name of the appliedToGroup, and returns the corresponding appliedToGroup object, and an error if there is any.
 func (c *FakeAppliedToGroups) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1beta2.AppliedToGroup, err error) {

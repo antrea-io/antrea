@@ -37,7 +37,15 @@ func NewFlowRecords() *FlowRecords {
 }
 
 // AddOrUpdateFlowRecord adds or updates the flow record in the record map given the connection.
-func (fr *FlowRecords) AddOrUpdateFlowRecord(key flowexporter.ConnectionKey, conn flowexporter.Connection) error {
+// It makes a copy of the connection object to record, to avoid race conditions between the
+// connection store and the flow exporter.
+func (fr *FlowRecords) AddOrUpdateFlowRecord(key flowexporter.ConnectionKey, conn *flowexporter.Connection) error {
+	// If the connection is in dying state and the corresponding flow records are already
+	// exported, then there is no need to add or update the record.
+	if flowexporter.IsConnectionDying(conn) && conn.DoneExport {
+		return nil
+	}
+
 	fr.mutex.Lock()
 	defer fr.mutex.Unlock()
 
@@ -48,7 +56,7 @@ func (fr *FlowRecords) AddOrUpdateFlowRecord(key flowexporter.ConnectionKey, con
 			isIPv6 = true
 		}
 		record = flowexporter.FlowRecord{
-			Conn:               conn,
+			Conn:               *conn,
 			PrevPackets:        0,
 			PrevBytes:          0,
 			PrevReversePackets: 0,
@@ -58,10 +66,11 @@ func (fr *FlowRecords) AddOrUpdateFlowRecord(key flowexporter.ConnectionKey, con
 			IsActive:           true,
 		}
 	} else {
-		record.Conn = conn
-		if (conn.OriginalPackets > record.PrevPackets) || (conn.ReversePackets > record.PrevReversePackets) {
+		// set IsActive flag to true when there are changes either in stats or TCP state
+		if (conn.OriginalPackets > record.PrevPackets) || (conn.ReversePackets > record.PrevReversePackets) || record.Conn.TCPState != conn.TCPState {
 			record.IsActive = true
 		}
+		record.Conn = *conn
 	}
 	fr.recordsMap[key] = record
 	return nil

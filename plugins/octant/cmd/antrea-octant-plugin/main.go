@@ -25,7 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/clientcmd"
 
-	opsv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/ops/v1alpha1"
+	crdv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha1"
 	clientset "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned"
 )
 
@@ -40,7 +40,7 @@ const (
 type antreaOctantPlugin struct {
 	client *clientset.Clientset
 	graph  string
-	lastTf *opsv1alpha1.Traceflow
+	lastTf *crdv1alpha1.Traceflow
 }
 
 func newAntreaOctantPlugin() *antreaOctantPlugin {
@@ -61,7 +61,7 @@ func newAntreaOctantPlugin() *antreaOctantPlugin {
 	return &antreaOctantPlugin{
 		client: client,
 		graph:  "",
-		lastTf: &opsv1alpha1.Traceflow{
+		lastTf: &crdv1alpha1.Traceflow{
 			ObjectMeta: v1.ObjectMeta{Name: ""},
 		},
 	}

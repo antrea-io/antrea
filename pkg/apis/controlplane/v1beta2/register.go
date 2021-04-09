@@ -21,7 +21,7 @@ import (
 )
 
 // GroupName is the group name used in this package.
-const GroupName = "controlplane.antrea.tanzu.vmware.com"
+const GroupName = "controlplane.antrea.io"
 
 var (
 	// SchemeGroupVersion is group version used to register these objects.
@@ -72,6 +72,9 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&NodeStatsSummary{},
 		&ClusterGroupMembers{},
 		&GroupAssociation{},
+		&EgressGroup{},
+		&EgressGroupPatch{},
+		&EgressGroupList{},
 	)
 
 	metav1.AddToGroupVersion(scheme, SchemeGroupVersion)

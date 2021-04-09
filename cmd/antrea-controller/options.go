@@ -37,6 +37,7 @@ func newOptions() *Options {
 		config: &ControllerConfig{
 			EnablePrometheusMetrics: true,
 			SelfSignedCert:          true,
+			LegacyCRDMirroring:      true,
 		},
 	}
 }

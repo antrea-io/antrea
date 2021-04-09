@@ -239,6 +239,16 @@ func (a *ofFlowAction) LoadRegRange(regID int, value uint32, rng Range) FlowBuil
 	return a.builder
 }
 
+// LoadToPktMarkRange is an action to load data into pkt_mark at specified range.
+func (a *ofFlowAction) LoadPktMarkRange(value uint32, rng Range) FlowBuilder {
+	return a.LoadRange(NxmFieldPktMark, uint64(value), rng)
+}
+
+// LoadIPDSCP is an action to load data to IP DSCP bits.
+func (a *ofFlowAction) LoadIPDSCP(value uint8) FlowBuilder {
+	return a.LoadRange(NxmFieldIPToS, uint64(value), IPDSCPToSRange)
+}
+
 // Move is an action to copy all data from "fromField" to "toField". Fields with name "fromField" and "fromField" should
 // have the same data length, otherwise there will be error when realizing the flow on OFSwitch.
 func (a *ofFlowAction) Move(fromField, toField string) FlowBuilder {
@@ -418,13 +428,13 @@ func (a *ofLearnAction) MatchLearnedUDPv6DstPort() LearnAction {
 	return a.MatchTransportDst(ProtocolUDPv6)
 }
 
-// MatchLearnedSTCPDstPort specifies that the sctp_dst field in the learned flow
+// MatchLearnedSCTPDstPort specifies that the sctp_dst field in the learned flow
 // must match the sctp_dst of the packet currently being processed.
 func (a *ofLearnAction) MatchLearnedSCTPDstPort() LearnAction {
 	return a.MatchTransportDst(ProtocolSCTP)
 }
 
-// MatchLearnedSTCPv6DstPort specifies that the sctp_dst field in the learned flow
+// MatchLearnedSCTPv6DstPort specifies that the sctp_dst field in the learned flow
 // must match the sctp_dst of the packet currently being processed.
 func (a *ofLearnAction) MatchLearnedSCTPv6DstPort() LearnAction {
 	return a.MatchTransportDst(ProtocolSCTPv6)

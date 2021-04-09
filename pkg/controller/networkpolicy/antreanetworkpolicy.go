@@ -20,7 +20,7 @@ import (
 	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
-	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
+	crdv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha1"
 	antreatypes "github.com/vmware-tanzu/antrea/pkg/controller/types"
 )
 
@@ -28,7 +28,7 @@ import (
 // which can be consumed by agents to configure corresponding rules on the Nodes.
 func (n *NetworkPolicyController) addANP(obj interface{}) {
 	defer n.heartbeat("addANP")
-	np := obj.(*secv1alpha1.NetworkPolicy)
+	np := obj.(*crdv1alpha1.NetworkPolicy)
 	klog.Infof("Processing Antrea NetworkPolicy %s/%s ADD event", np.Namespace, np.Name)
 	// Create an internal NetworkPolicy object corresponding to this
 	// NetworkPolicy and enqueue task to internal NetworkPolicy Workqueue.
@@ -43,14 +43,14 @@ func (n *NetworkPolicyController) addANP(obj interface{}) {
 // which can be consumed by agents to configure corresponding rules on the Nodes.
 func (n *NetworkPolicyController) updateANP(old, cur interface{}) {
 	defer n.heartbeat("updateANP")
-	curNP := cur.(*secv1alpha1.NetworkPolicy)
+	curNP := cur.(*crdv1alpha1.NetworkPolicy)
 	klog.Infof("Processing Antrea NetworkPolicy %s/%s UPDATE event", curNP.Namespace, curNP.Name)
 	// Update an internal NetworkPolicy, corresponding to this NetworkPolicy and
 	// enqueue task to internal NetworkPolicy Workqueue.
 	curInternalNP := n.processAntreaNetworkPolicy(curNP)
 	klog.V(2).Infof("Updating existing internal NetworkPolicy %s for %s", curInternalNP.Name, curInternalNP.SourceRef.ToString())
-	// Retrieve old secv1alpha1.NetworkPolicy object.
-	oldNP := old.(*secv1alpha1.NetworkPolicy)
+	// Retrieve old crdv1alpha1.NetworkPolicy object.
+	oldNP := old.(*crdv1alpha1.NetworkPolicy)
 	// Old and current NetworkPolicy share the same key.
 	key := internalNetworkPolicyKeyFunc(oldNP)
 	// Lock access to internal NetworkPolicy store such that concurrent access
@@ -87,14 +87,14 @@ func (n *NetworkPolicyController) updateANP(old, cur interface{}) {
 // deleteANP receives AntreaNetworkPolicy DELETED events and deletes resources
 // which can be consumed by agents to delete corresponding rules on the Nodes.
 func (n *NetworkPolicyController) deleteANP(old interface{}) {
-	np, ok := old.(*secv1alpha1.NetworkPolicy)
+	np, ok := old.(*crdv1alpha1.NetworkPolicy)
 	if !ok {
 		tombstone, ok := old.(cache.DeletedFinalStateUnknown)
 		if !ok {
 			klog.Errorf("Error decoding object when deleting Antrea NetworkPolicy, invalid type: %v", old)
 			return
 		}
-		np, ok = tombstone.Obj.(*secv1alpha1.NetworkPolicy)
+		np, ok = tombstone.Obj.(*crdv1alpha1.NetworkPolicy)
 		if !ok {
 			klog.Errorf("Error decoding object tombstone when deleting Antrea NetworkPolicy, invalid type: %v", tombstone.Obj)
 			return
@@ -118,12 +118,12 @@ func (n *NetworkPolicyController) deleteANP(old interface{}) {
 }
 
 // processAntreaNetworkPolicy creates an internal NetworkPolicy instance
-// corresponding to the secv1alpha1.NetworkPolicy object. This method
+// corresponding to the crdv1alpha1.NetworkPolicy object. This method
 // does not commit the internal NetworkPolicy in store, instead returns an
 // instance to the caller wherein, it will be either stored as a new Object
 // in case of ADD event or modified and store the updated instance, in case
 // of an UPDATE event.
-func (n *NetworkPolicyController) processAntreaNetworkPolicy(np *secv1alpha1.NetworkPolicy) *antreatypes.NetworkPolicy {
+func (n *NetworkPolicyController) processAntreaNetworkPolicy(np *crdv1alpha1.NetworkPolicy) *antreatypes.NetworkPolicy {
 	appliedToPerRule := len(np.Spec.AppliedTo) == 0
 	// appliedToGroupNames tracks all distinct appliedToGroups referred to by the Antrea NetworkPolicy,
 	// either in the spec section or in ingress/egress rules.
@@ -150,6 +150,7 @@ func (n *NetworkPolicyController) processAntreaNetworkPolicy(np *secv1alpha1.Net
 			Direction:       controlplane.DirectionIn,
 			From:            *n.toAntreaPeerForCRD(ingressRule.From, np, controlplane.DirectionIn, namedPortExists),
 			Services:        services,
+			Name:            ingressRule.Name,
 			Action:          ingressRule.Action,
 			Priority:        int32(idx),
 			EnableLogging:   ingressRule.EnableLogging,
@@ -171,6 +172,7 @@ func (n *NetworkPolicyController) processAntreaNetworkPolicy(np *secv1alpha1.Net
 			Direction:       controlplane.DirectionOut,
 			To:              *n.toAntreaPeerForCRD(egressRule.To, np, controlplane.DirectionOut, namedPortExists),
 			Services:        services,
+			Name:            egressRule.Name,
 			Action:          egressRule.Action,
 			Priority:        int32(idx),
 			EnableLogging:   egressRule.EnableLogging,

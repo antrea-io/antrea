@@ -27,7 +27,7 @@ import (
 	"k8s.io/client-go/util/workqueue"
 
 	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
-	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
+	crdv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha1"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
 	antreaclientset "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned"
 	antreafakeclientset "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/fake"
@@ -38,31 +38,31 @@ import (
 
 type fakeNetworkPolicyControl struct {
 	sync.Mutex
-	anpStatus *secv1alpha1.NetworkPolicyStatus
-	cnpStatus *secv1alpha1.NetworkPolicyStatus
+	anpStatus *crdv1alpha1.NetworkPolicyStatus
+	cnpStatus *crdv1alpha1.NetworkPolicyStatus
 }
 
-func (c *fakeNetworkPolicyControl) UpdateAntreaNetworkPolicyStatus(namespace, name string, status *secv1alpha1.NetworkPolicyStatus) error {
+func (c *fakeNetworkPolicyControl) UpdateAntreaNetworkPolicyStatus(namespace, name string, status *crdv1alpha1.NetworkPolicyStatus) error {
 	c.Lock()
 	defer c.Unlock()
 	c.anpStatus = status
 	return nil
 }
 
-func (c *fakeNetworkPolicyControl) UpdateAntreaClusterNetworkPolicyStatus(name string, status *secv1alpha1.NetworkPolicyStatus) error {
+func (c *fakeNetworkPolicyControl) UpdateAntreaClusterNetworkPolicyStatus(name string, status *crdv1alpha1.NetworkPolicyStatus) error {
 	c.Lock()
 	defer c.Unlock()
 	c.cnpStatus = status
 	return nil
 }
 
-func (c *fakeNetworkPolicyControl) getAntreaNetworkPolicyStatus() *secv1alpha1.NetworkPolicyStatus {
+func (c *fakeNetworkPolicyControl) getAntreaNetworkPolicyStatus() *crdv1alpha1.NetworkPolicyStatus {
 	c.Lock()
 	defer c.Unlock()
 	return c.anpStatus
 }
 
-func (c *fakeNetworkPolicyControl) getAntreaClusterNetworkPolicyStatus() *secv1alpha1.NetworkPolicyStatus {
+func (c *fakeNetworkPolicyControl) getAntreaClusterNetworkPolicyStatus() *crdv1alpha1.NetworkPolicyStatus {
 	c.Lock()
 	defer c.Unlock()
 	return c.cnpStatus
@@ -75,8 +75,8 @@ func newTestStatusController(initialObjects ...runtime.Object) (*StatusControlle
 	antreaInformerFactory := antreainformers.NewSharedInformerFactory(antreaClientset, 0)
 	networkPolicyControl := &fakeNetworkPolicyControl{}
 
-	cnpInformer := antreaInformerFactory.Security().V1alpha1().ClusterNetworkPolicies()
-	anpInformer := antreaInformerFactory.Security().V1alpha1().NetworkPolicies()
+	cnpInformer := antreaInformerFactory.Crd().V1alpha1().ClusterNetworkPolicies()
+	anpInformer := antreaInformerFactory.Crd().V1alpha1().NetworkPolicies()
 	statusController := &StatusController{
 		npControlInterface:         networkPolicyControl,
 		queue:                      workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "networkpolicy"),
@@ -113,7 +113,7 @@ func newNetworkPolicyStatus(name string, nodeName string, generation int64) *con
 
 func toAntreaNetworkPolicy(inp *types.NetworkPolicy) runtime.Object {
 	if inp.SourceRef.Type == controlplane.AntreaNetworkPolicy {
-		return &secv1alpha1.NetworkPolicy{
+		return &crdv1alpha1.NetworkPolicy{
 			ObjectMeta: v1.ObjectMeta{
 				Namespace:  inp.SourceRef.Namespace,
 				Name:       inp.SourceRef.Name,
@@ -121,7 +121,7 @@ func toAntreaNetworkPolicy(inp *types.NetworkPolicy) runtime.Object {
 			},
 		}
 	} else {
-		return &secv1alpha1.ClusterNetworkPolicy{
+		return &crdv1alpha1.ClusterNetworkPolicy{
 			ObjectMeta: v1.ObjectMeta{
 				Name:       inp.SourceRef.Name,
 				Generation: inp.Generation,
@@ -150,8 +150,8 @@ func TestCreateAntreaNetworkPolicy(t *testing.T) {
 		name                         string
 		networkPolicy                []*types.NetworkPolicy
 		collectedNetworkPolicyStatus []*controlplane.NetworkPolicyStatus
-		expectedANPStatus            *secv1alpha1.NetworkPolicyStatus
-		expectedCNPStatus            *secv1alpha1.NetworkPolicyStatus
+		expectedANPStatus            *crdv1alpha1.NetworkPolicyStatus
+		expectedCNPStatus            *crdv1alpha1.NetworkPolicyStatus
 	}{
 		{
 			name: "no realization status",
@@ -159,14 +159,14 @@ func TestCreateAntreaNetworkPolicy(t *testing.T) {
 				newInternalNetworkPolicy("anp1", 1, []string{"node1", "node2"}, newAntreaNetworkPolicyReference("ns1", "anp1")),
 				newInternalNetworkPolicy("cnp1", 1, []string{"node1", "node2"}, newAntreaClusterNetworkPolicyReference("cnp1")),
 			},
-			expectedANPStatus: &secv1alpha1.NetworkPolicyStatus{
-				Phase:                secv1alpha1.NetworkPolicyRealizing,
+			expectedANPStatus: &crdv1alpha1.NetworkPolicyStatus{
+				Phase:                crdv1alpha1.NetworkPolicyRealizing,
 				ObservedGeneration:   1,
 				CurrentNodesRealized: 0,
 				DesiredNodesRealized: 2,
 			},
-			expectedCNPStatus: &secv1alpha1.NetworkPolicyStatus{
-				Phase:                secv1alpha1.NetworkPolicyRealizing,
+			expectedCNPStatus: &crdv1alpha1.NetworkPolicyStatus{
+				Phase:                crdv1alpha1.NetworkPolicyRealizing,
 				ObservedGeneration:   1,
 				CurrentNodesRealized: 0,
 				DesiredNodesRealized: 2,
@@ -184,14 +184,14 @@ func TestCreateAntreaNetworkPolicy(t *testing.T) {
 				newNetworkPolicyStatus("cnp1", "node1", 2),
 				newNetworkPolicyStatus("cnp1", "node2", 3),
 			},
-			expectedANPStatus: &secv1alpha1.NetworkPolicyStatus{
-				Phase:                secv1alpha1.NetworkPolicyRealizing,
+			expectedANPStatus: &crdv1alpha1.NetworkPolicyStatus{
+				Phase:                crdv1alpha1.NetworkPolicyRealizing,
 				ObservedGeneration:   2,
 				CurrentNodesRealized: 1,
 				DesiredNodesRealized: 2,
 			},
-			expectedCNPStatus: &secv1alpha1.NetworkPolicyStatus{
-				Phase:                secv1alpha1.NetworkPolicyRealizing,
+			expectedCNPStatus: &crdv1alpha1.NetworkPolicyStatus{
+				Phase:                crdv1alpha1.NetworkPolicyRealizing,
 				ObservedGeneration:   3,
 				CurrentNodesRealized: 1,
 				DesiredNodesRealized: 2,
@@ -209,14 +209,14 @@ func TestCreateAntreaNetworkPolicy(t *testing.T) {
 				newNetworkPolicyStatus("cnp1", "node1", 4),
 				newNetworkPolicyStatus("cnp1", "node2", 4),
 			},
-			expectedANPStatus: &secv1alpha1.NetworkPolicyStatus{
-				Phase:                secv1alpha1.NetworkPolicyRealized,
+			expectedANPStatus: &crdv1alpha1.NetworkPolicyStatus{
+				Phase:                crdv1alpha1.NetworkPolicyRealized,
 				ObservedGeneration:   3,
 				CurrentNodesRealized: 2,
 				DesiredNodesRealized: 2,
 			},
-			expectedCNPStatus: &secv1alpha1.NetworkPolicyStatus{
-				Phase:                secv1alpha1.NetworkPolicyRealized,
+			expectedCNPStatus: &crdv1alpha1.NetworkPolicyStatus{
+				Phase:                crdv1alpha1.NetworkPolicyRealized,
 				ObservedGeneration:   4,
 				CurrentNodesRealized: 2,
 				DesiredNodesRealized: 2,
@@ -268,14 +268,14 @@ func TestUpdateAntreaNetworkPolicy(t *testing.T) {
 	statusController.UpdateStatus(newNetworkPolicyStatus("cnp1", "node5", 2))
 	// TODO: Use a determinate mechanism.
 	time.Sleep(500 * time.Millisecond)
-	assert.Equal(t, &secv1alpha1.NetworkPolicyStatus{
-		Phase:                secv1alpha1.NetworkPolicyRealized,
+	assert.Equal(t, &crdv1alpha1.NetworkPolicyStatus{
+		Phase:                crdv1alpha1.NetworkPolicyRealized,
 		ObservedGeneration:   1,
 		CurrentNodesRealized: 2,
 		DesiredNodesRealized: 2,
 	}, networkPolicyControl.getAntreaNetworkPolicyStatus())
-	assert.Equal(t, &secv1alpha1.NetworkPolicyStatus{
-		Phase:                secv1alpha1.NetworkPolicyRealized,
+	assert.Equal(t, &crdv1alpha1.NetworkPolicyStatus{
+		Phase:                crdv1alpha1.NetworkPolicyRealized,
 		ObservedGeneration:   2,
 		CurrentNodesRealized: 3,
 		DesiredNodesRealized: 3,
@@ -287,14 +287,14 @@ func TestUpdateAntreaNetworkPolicy(t *testing.T) {
 	networkPolicyStore.Update(cnp1Updated)
 	// TODO: Use a determinate mechanism.
 	time.Sleep(500 * time.Millisecond)
-	assert.Equal(t, &secv1alpha1.NetworkPolicyStatus{
-		Phase:                secv1alpha1.NetworkPolicyRealizing,
+	assert.Equal(t, &crdv1alpha1.NetworkPolicyStatus{
+		Phase:                crdv1alpha1.NetworkPolicyRealizing,
 		ObservedGeneration:   2,
 		CurrentNodesRealized: 0,
 		DesiredNodesRealized: 3,
 	}, networkPolicyControl.getAntreaNetworkPolicyStatus())
-	assert.Equal(t, &secv1alpha1.NetworkPolicyStatus{
-		Phase:                secv1alpha1.NetworkPolicyRealizing,
+	assert.Equal(t, &crdv1alpha1.NetworkPolicyStatus{
+		Phase:                crdv1alpha1.NetworkPolicyRealizing,
 		ObservedGeneration:   3,
 		CurrentNodesRealized: 0,
 		DesiredNodesRealized: 2,

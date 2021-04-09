@@ -32,6 +32,12 @@ rules:
   - update
 - apiGroups:
   - ""
+  resources:
+  - configmaps
+  verbs:
+  - create
+- apiGroups:
+  - ""
   resourceNames:
   - flow-aggregator-client-tls
   resources:
@@ -119,14 +125,6 @@ subjects:
   namespace: flow-aggregator
 ---
 apiVersion: v1
-kind: ConfigMap
-metadata:
-  labels:
-    app: flow-aggregator
-  name: flow-aggregator-ca
-  namespace: flow-aggregator
----
-apiVersion: v1
 data:
   flow-aggregator.conf: |
     # Provide the flow collector address as string with format <IP>:<port>[:<proto>], where proto is tcp or udp.
@@ -202,13 +200,11 @@ spec:
         - --config
         - /etc/flow-aggregator/flow-aggregator.conf
         - --logtostderr=false
-        - --log_dir=/var/log/flowaggregator
+        - --log_dir=/var/log/antrea/flow-aggregator
         - --alsologtostderr
         - --log_file_max_size=100
         - --log_file_max_num=4
         - --v=0
-        command:
-        - flow-aggregator
         image: projects.registry.vmware.com/antrea/flow-aggregator:latest
         imagePullPolicy: IfNotPresent
         name: flow-aggregator
@@ -219,8 +215,14 @@ spec:
           name: flow-aggregator-config
           readOnly: true
           subPath: flow-aggregator.conf
+        - mountPath: /var/log/antrea/flow-aggregator
+          name: host-var-log-antrea-flow-aggregator
       serviceAccountName: flow-aggregator
       volumes:
       - configMap:
           name: flow-aggregator-configmap-hf78268hm6
         name: flow-aggregator-config
+      - hostPath:
+          path: /var/log/antrea/flow-aggregator
+          type: DirectoryOrCreate
+        name: host-var-log-antrea-flow-aggregator

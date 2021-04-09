@@ -15,13 +15,11 @@
 package openflow
 
 import (
-	"errors"
 	"fmt"
 	"math/rand"
 	"net"
 
 	"github.com/contiv/libOpenflow/protocol"
-	"github.com/contiv/ofnet/ofctrl"
 	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
@@ -150,11 +148,36 @@ type Client interface {
 	// This function is only used for Windows platform.
 	InstallBridgeUplinkFlows() error
 
-	// InstallExternalFlows sets up flows to enable Pods to communicate to the external IP addresses. The corresponding
-	// OpenFlow entries include: 1) identify the packets from local Pods to the external IP address, 2) mark the traffic
-	// in the connection tracking context, and 3) SNAT the packets with Node IP.
-	// This function is only used for Windows platform.
+	// InstallExternalFlows sets up flows to enable Pods to communicate to
+	// the external IP addresses. The flows identify the packets from local
+	// Pods to the external IP address, and mark the packets to be SNAT'd
+	// with the configured SNAT IPs. On Windows Node, the flows also perform
+	// SNAT with the Openflow NAT action.
 	InstallExternalFlows() error
+
+	// InstallSNATMarkFlows installs flows for a local SNAT IP. On Linux, a
+	// single flow is added to mark the packets tunnelled from remote Nodes
+	// that should be SNAT'd with the SNAT IP. On Windows, an extra flow is
+	// added to perform SNAT for the marked packets with the SNAT IP.
+	InstallSNATMarkFlows(snatIP net.IP, mark uint32) error
+
+	// UninstallSNATMarkFlows removes the flows installed to set the packet
+	// mark for a SNAT IP.
+	UninstallSNATMarkFlows(mark uint32) error
+
+	// InstallSNATPolicyFlow installs the SNAT flows for a local Pod. If the
+	// SNAT IP for the Pod is on the local Node, a non-zero SNAT ID should
+	// allocated for the SNAT IP, and the installed flow sets the SNAT IP
+	// mark on the egress packets from the ofPort; if the SNAT IP is on a
+	// remote Node, snatMark should be set to 0, and the installed flow
+	// tunnels egress packets to the remote Node using the SNAT IP as the
+	// tunnel destination, and the packets should be SNAT'd on the remote
+	// Node. As of now, a Pod can be configured to use only a single SNAT
+	// IP in a single address family (IPv4 or IPv6).
+	InstallPodSNATFlows(ofPort uint32, snatIP net.IP, snatMark uint32) error
+
+	// UninstallPodSNATFlows removes the SNAT flows for the local Pod.
+	UninstallPodSNATFlows(ofPort uint32) error
 
 	// Disconnect disconnects the connection between client and OFSwitch.
 	Disconnect() error
@@ -194,34 +217,20 @@ type Client interface {
 	// the old priority with the desired one, for each priority update on that table.
 	ReassignFlowPriorities(updates map[uint16]uint16, table binding.TableIDType) error
 
-	// SubscribePacketIn subscribes packet-in channel in bridge. This method requires a receiver to
-	// pop data from "ch" timely, otherwise it will block all inbound messages from OVS.
-	SubscribePacketIn(reason uint8, ch chan *ofctrl.PacketIn) error
+	// SubscribePacketIn subscribes to packet in messages for the given reason. Packets
+	// will be placed in the queue and if the queue is full, the packet in messages
+	// will be dropped. pktInQueue supports rate-limiting for the consumer, in order to
+	// constrain the compute resources that may be used by the consumer.
+	SubscribePacketIn(reason uint8, pktInQueue *binding.PacketInQueue) error
 
 	// SendTraceflowPacket injects packet to specified OVS port for Openflow.
-	SendTraceflowPacket(
-		dataplaneTag uint8,
-		srcMAC string,
-		dstMAC string,
-		srcIP string,
-		dstIP string,
-		IPProtocol uint8,
-		ttl uint8,
-		IPFlags uint16,
-		TCPSrcPort uint16,
-		TCPDstPort uint16,
-		TCPFlags uint8,
-		UDPSrcPort uint16,
-		UDPDstPort uint16,
-		ICMPType uint8,
-		ICMPCode uint8,
-		ICMPID uint16,
-		ICMPSequence uint16,
-		inPort uint32,
-		outPort int32) error
+	SendTraceflowPacket(dataplaneTag uint8, packet *binding.Packet, inPort uint32, outPort int32) error
 
-	// InstallTraceflowFlows installs flows for specific traceflow request.
-	InstallTraceflowFlows(dataplaneTag uint8) error
+	// InstallTraceflowFlows installs flows for a Traceflow request.
+	InstallTraceflowFlows(dataplaneTag uint8, liveTraffic, droppedOnly bool, packet *binding.Packet, srcOFPort uint32, timeoutSeconds uint16) error
+
+	// UninstallTraceflowFlows uninstalls flows for a Traceflow request.
+	UninstallTraceflowFlows(dataplaneTag uint8) error
 
 	// Initial tun_metadata0 in TLV map for Traceflow.
 	InitialTLVMap() error
@@ -240,6 +249,33 @@ type Client interface {
 	IsIPv4Enabled() bool
 	// Returns if IPv6 is supported on this Node or not.
 	IsIPv6Enabled() bool
+	// SendTCPPacketOut sends TCP packet as a packet-out to OVS.
+	SendTCPPacketOut(
+		srcMAC string,
+		dstMAC string,
+		srcIP string,
+		dstIP string,
+		inPort uint32,
+		outPort int32,
+		isIPv6 bool,
+		tcpSrcPort uint16,
+		tcpDstPort uint16,
+		tcpAckNum uint32,
+		tcpFlag uint8,
+		isReject bool) error
+	// SendICMPPacketOut sends ICMP packet as a packet-out to OVS.
+	SendICMPPacketOut(
+		srcMAC string,
+		dstMAC string,
+		srcIP string,
+		dstIP string,
+		inPort uint32,
+		outPort int32,
+		isIPv6 bool,
+		icmpType uint8,
+		icmpCode uint8,
+		icmpData []byte,
+		isReject bool) error
 }
 
 // GetFlowTableStatus returns an array of flow table status.
@@ -476,22 +512,6 @@ func (c *client) UninstallServiceFlows(svcIP net.IP, svcPort uint16, protocol bi
 	return c.deleteFlows(c.serviceFlowCache, cacheKey)
 }
 
-func (c *client) InstallLoadBalancerServiceFromOutsideFlows(svcIP net.IP, svcPort uint16, protocol binding.Protocol) error {
-	c.replayMutex.RLock()
-	defer c.replayMutex.RUnlock()
-	var flows []binding.Flow
-	flows = append(flows, c.loadBalancerServiceFromOutsideFlow(svcIP, svcPort, protocol))
-	cacheKey := fmt.Sprintf("LoadBalancerService_%s_%d_%s", svcIP, svcPort, protocol)
-	return c.addFlows(c.serviceFlowCache, cacheKey, flows)
-}
-
-func (c *client) UninstallLoadBalancerServiceFromOutsideFlows(svcIP net.IP, svcPort uint16, protocol binding.Protocol) error {
-	c.replayMutex.RLock()
-	defer c.replayMutex.RUnlock()
-	cacheKey := fmt.Sprintf("LoadBalancerService_%s_%d_%s", svcIP, svcPort, protocol)
-	return c.deleteFlows(c.serviceFlowCache, cacheKey)
-}
-
 func (c *client) GetServiceFlowKeys(svcIP net.IP, svcPort uint16, protocol binding.Protocol, endpoints []proxy.Endpoint) []string {
 	cacheKey := generateServicePortFlowCacheKey(svcIP, svcPort, protocol)
 	flowKeys := c.getFlowKeysFromCache(c.serviceFlowCache, cacheKey)
@@ -579,16 +599,6 @@ func (c *client) InstallDefaultTunnelFlows() error {
 	return nil
 }
 
-func (c *client) InstallBridgeUplinkFlows() error {
-	flows := c.hostBridgeUplinkFlows(*c.nodeConfig.PodIPv4CIDR, cookie.Default)
-	c.hostNetworkingFlows = flows
-	if err := c.ofEntryOperations.AddAll(flows); err != nil {
-		return err
-	}
-	c.hostNetworkingFlows = flows
-	return nil
-}
-
 func (c *client) initialize() error {
 	if err := c.ofEntryOperations.AddAll(c.defaultFlows()); err != nil {
 		return fmt.Errorf("failed to install default flows: %v", err)
@@ -655,14 +665,51 @@ func (c *client) Initialize(roundInfo types.RoundInfo, nodeConfig *config.NodeCo
 
 func (c *client) InstallExternalFlows() error {
 	nodeIP := c.nodeConfig.NodeIPAddr.IP
-	podSubnet := c.nodeConfig.PodIPv4CIDR
-	flows := c.uplinkSNATFlows(cookie.SNAT)
-	flows = append(flows, c.snatFlows(nodeIP, *podSubnet, cookie.SNAT)...)
+	localGatewayMAC := c.nodeConfig.GatewayConfig.MAC
+
+	var flows []binding.Flow
+	if c.nodeConfig.PodIPv4CIDR != nil {
+		flows = c.externalFlows(nodeIP, *c.nodeConfig.PodIPv4CIDR, localGatewayMAC)
+	}
+	if c.nodeConfig.PodIPv6CIDR != nil {
+		flows = append(flows, c.externalFlows(nodeIP, *c.nodeConfig.PodIPv6CIDR, localGatewayMAC)...)
+	}
+
 	if err := c.ofEntryOperations.AddAll(flows); err != nil {
 		return fmt.Errorf("failed to install flows for external communication: %v", err)
 	}
 	c.hostNetworkingFlows = append(c.hostNetworkingFlows, flows...)
 	return nil
+}
+
+func (c *client) InstallSNATMarkFlows(snatIP net.IP, mark uint32) error {
+	flows := c.snatMarkFlows(snatIP, mark)
+	cacheKey := fmt.Sprintf("s%x", mark)
+	c.replayMutex.RLock()
+	defer c.replayMutex.RUnlock()
+	return c.addFlows(c.snatFlowCache, cacheKey, flows)
+}
+
+func (c *client) UninstallSNATMarkFlows(mark uint32) error {
+	cacheKey := fmt.Sprintf("s%x", mark)
+	c.replayMutex.RLock()
+	defer c.replayMutex.RUnlock()
+	return c.deleteFlows(c.snatFlowCache, cacheKey)
+}
+
+func (c *client) InstallPodSNATFlows(ofPort uint32, snatIP net.IP, snatMark uint32) error {
+	flows := []binding.Flow{c.snatRuleFlow(ofPort, snatIP, snatMark, c.nodeConfig.GatewayConfig.MAC)}
+	cacheKey := fmt.Sprintf("p%x", ofPort)
+	c.replayMutex.RLock()
+	defer c.replayMutex.RUnlock()
+	return c.addFlows(c.snatFlowCache, cacheKey, flows)
+}
+
+func (c *client) UninstallPodSNATFlows(ofPort uint32) error {
+	cacheKey := fmt.Sprintf("p%x", ofPort)
+	c.replayMutex.RLock()
+	defer c.replayMutex.RUnlock()
+	return c.deleteFlows(c.snatFlowCache, cacheKey)
 }
 
 func (c *client) ReplayFlows() {
@@ -746,112 +793,61 @@ func (c *client) setupPolicyOnlyFlows() error {
 	return nil
 }
 
-func (c *client) SubscribePacketIn(reason uint8, ch chan *ofctrl.PacketIn) error {
-	return c.bridge.SubscribePacketIn(reason, ch)
+func (c *client) SubscribePacketIn(reason uint8, pktInQueue *binding.PacketInQueue) error {
+	return c.bridge.SubscribePacketIn(reason, pktInQueue)
 }
 
-func (c *client) SendTraceflowPacket(
-	dataplaneTag uint8,
-	srcMAC string,
-	dstMAC string,
-	srcIP string,
-	dstIP string,
-	IPProtocol uint8,
-	ttl uint8,
-	IPFlags uint16,
-	TCPSrcPort uint16,
-	TCPDstPort uint16,
-	TCPFlags uint8,
-	UDPSrcPort uint16,
-	UDPDstPort uint16,
-	ICMPType uint8,
-	ICMPCode uint8,
-	ICMPID uint16,
-	ICMPSequence uint16,
-	inPort uint32,
-	outPort int32) error {
-
+func (c *client) SendTraceflowPacket(dataplaneTag uint8, packet *binding.Packet, inPort uint32, outPort int32) error {
 	packetOutBuilder := c.bridge.BuildPacketOut()
-	parsedSrcMAC, err := net.ParseMAC(srcMAC)
-	if err != nil {
-		return err
-	}
-	var parsedDstMAC net.HardwareAddr
-	if dstMAC == "" {
-		parsedDstMAC = c.nodeConfig.GatewayConfig.MAC
-	} else {
-		parsedDstMAC, err = net.ParseMAC(dstMAC)
-		if err != nil {
-			return err
-		}
-	}
 
-	parsedSrcIP := net.ParseIP(srcIP)
-	parsedDstIP := net.ParseIP(dstIP)
-	if parsedSrcIP == nil || parsedDstIP == nil {
-		return errors.New("invalid IP")
+	if packet.DestinationMAC == nil {
+		packet.DestinationMAC = c.nodeConfig.GatewayConfig.MAC
 	}
-	isIPv6 := parsedSrcIP.To4() == nil
-	if isIPv6 != (parsedDstIP.To4() == nil) {
-		return errors.New("IP version mismatch")
-	}
-
 	// Set ethernet header
-	packetOutBuilder = packetOutBuilder.SetSrcMAC(parsedSrcMAC)
-	packetOutBuilder = packetOutBuilder.SetDstMAC(parsedDstMAC)
+	packetOutBuilder = packetOutBuilder.SetDstMAC(packet.DestinationMAC).SetSrcMAC(packet.SourceMAC)
+
 	// Set IP header
-	packetOutBuilder = packetOutBuilder.SetSrcIP(parsedSrcIP)
-	packetOutBuilder = packetOutBuilder.SetDstIP(parsedDstIP)
-	if ttl == 0 {
-		packetOutBuilder = packetOutBuilder.SetTTL(128)
-	} else {
-		packetOutBuilder = packetOutBuilder.SetTTL(ttl)
-	}
-	if !isIPv6 {
-		packetOutBuilder = packetOutBuilder.SetIPFlags(IPFlags)
+	packetOutBuilder = packetOutBuilder.SetDstIP(packet.DestinationIP).SetSrcIP(packet.SourceIP).SetTTL(packet.TTL)
+	if !packet.IsIPv6 {
+		packetOutBuilder = packetOutBuilder.SetIPFlags(packet.IPFlags)
 	}
 
 	// Set transport header
-	switch IPProtocol {
-	case protocol.Type_ICMP:
-		if isIPv6 {
-			return errors.New("cannot set protocol ICMP in IPv6 packet")
+	switch packet.IPProto {
+	case protocol.Type_ICMP, protocol.Type_IPv6ICMP:
+		if packet.IPProto == protocol.Type_ICMP {
+			packetOutBuilder = packetOutBuilder.SetIPProtocol(binding.ProtocolICMP)
+		} else {
+			packetOutBuilder = packetOutBuilder.SetIPProtocol(binding.ProtocolICMPv6)
 		}
-		packetOutBuilder = packetOutBuilder.SetIPProtocol(binding.ProtocolICMP)
-		packetOutBuilder = packetOutBuilder.SetICMPType(ICMPType)
-		packetOutBuilder = packetOutBuilder.SetICMPCode(ICMPCode)
-		packetOutBuilder = packetOutBuilder.SetICMPID(ICMPID)
-		packetOutBuilder = packetOutBuilder.SetICMPSequence(ICMPSequence)
-	case protocol.Type_IPv6ICMP:
-		if !isIPv6 {
-			return errors.New("cannot set protocol ICMPv6 in IPv4 packet")
-		}
-		packetOutBuilder = packetOutBuilder.SetIPProtocol(binding.ProtocolICMPv6)
-		packetOutBuilder = packetOutBuilder.SetICMPType(ICMPType)
-		packetOutBuilder = packetOutBuilder.SetICMPCode(ICMPCode)
-		packetOutBuilder = packetOutBuilder.SetICMPID(ICMPID)
-		packetOutBuilder = packetOutBuilder.SetICMPSequence(ICMPSequence)
+		packetOutBuilder = packetOutBuilder.SetICMPType(packet.ICMPType).
+			SetICMPCode(packet.ICMPCode).
+			SetICMPID(packet.ICMPEchoID).
+			SetICMPSequence(packet.ICMPEchoSeq)
 	case protocol.Type_TCP:
-		if isIPv6 {
+		if packet.IsIPv6 {
 			packetOutBuilder = packetOutBuilder.SetIPProtocol(binding.ProtocolTCPv6)
 		} else {
 			packetOutBuilder = packetOutBuilder.SetIPProtocol(binding.ProtocolTCP)
 		}
-		if TCPSrcPort == 0 {
+		tcpSrcPort := packet.SourcePort
+		if tcpSrcPort == 0 {
 			// #nosec G404: random number generator not used for security purposes.
-			TCPSrcPort = uint16(rand.Uint32())
+			tcpSrcPort = uint16(rand.Uint32())
 		}
-		packetOutBuilder = packetOutBuilder.SetTCPSrcPort(TCPSrcPort)
-		packetOutBuilder = packetOutBuilder.SetTCPDstPort(TCPDstPort)
-		packetOutBuilder = packetOutBuilder.SetTCPFlags(TCPFlags)
+		packetOutBuilder = packetOutBuilder.SetTCPDstPort(packet.DestinationPort).
+			SetTCPSrcPort(tcpSrcPort).
+			SetTCPFlags(packet.TCPFlags)
 	case protocol.Type_UDP:
-		if isIPv6 {
+		if packet.IsIPv6 {
 			packetOutBuilder = packetOutBuilder.SetIPProtocol(binding.ProtocolUDPv6)
 		} else {
 			packetOutBuilder = packetOutBuilder.SetIPProtocol(binding.ProtocolUDP)
 		}
-		packetOutBuilder = packetOutBuilder.SetUDPSrcPort(UDPSrcPort)
-		packetOutBuilder = packetOutBuilder.SetUDPDstPort(UDPDstPort)
+		packetOutBuilder = packetOutBuilder.SetUDPDstPort(packet.DestinationPort).
+			SetUDPSrcPort(packet.SourcePort)
+	default:
+		packetOutBuilder = packetOutBuilder.SetIPProtocolValue(packet.IsIPv6, packet.IPProto)
 	}
 
 	packetOutBuilder = packetOutBuilder.SetInport(inPort)
@@ -864,12 +860,18 @@ func (c *client) SendTraceflowPacket(
 	return c.bridge.SendPacketOut(packetOutObj)
 }
 
-func (c *client) InstallTraceflowFlows(dataplaneTag uint8) error {
+func (c *client) InstallTraceflowFlows(dataplaneTag uint8, liveTraffic, droppedOnly bool, packet *binding.Packet, srcOFPort uint32, timeoutSeconds uint16) error {
+	cacheKey := fmt.Sprintf("%x", dataplaneTag)
 	flows := []binding.Flow{}
-	flows = append(flows, c.traceflowL2ForwardOutputFlows(dataplaneTag, cookie.Default)...)
-	flows = append(flows, c.traceflowConnectionTrackFlows(dataplaneTag, cookie.Default)...)
-	flows = append(flows, c.traceflowNetworkPolicyFlows(dataplaneTag, cookie.Default)...)
-	return c.AddAll(flows)
+	flows = append(flows, c.traceflowConnectionTrackFlows(dataplaneTag, packet, srcOFPort, timeoutSeconds, cookie.Default)...)
+	flows = append(flows, c.traceflowL2ForwardOutputFlows(dataplaneTag, liveTraffic, droppedOnly, timeoutSeconds, cookie.Default)...)
+	flows = append(flows, c.traceflowNetworkPolicyFlows(dataplaneTag, timeoutSeconds, cookie.Default)...)
+	return c.addFlows(c.tfFlowCache, cacheKey, flows)
+}
+
+func (c *client) UninstallTraceflowFlows(dataplaneTag uint8) error {
+	cacheKey := fmt.Sprintf("%x", dataplaneTag)
+	return c.deleteFlows(c.tfFlowCache, cacheKey)
 }
 
 // Add TLV map optClass 0x0104, optType 0x80 optLength 4 tunMetadataIndex 0 to store data plane tag
@@ -885,4 +887,121 @@ func (c *client) IsIPv4Enabled() bool {
 
 func (c *client) IsIPv6Enabled() bool {
 	return config.IsIPv6Enabled(c.nodeConfig, c.encapMode)
+}
+
+// setBasePacketOutBuilder sets base IP properties of a packetOutBuilder which can have more packet data added.
+func setBasePacketOutBuilder(packetOutBuilder binding.PacketOutBuilder, srcMAC string, dstMAC string, srcIP string, dstIP string, inPort uint32, outPort int32) (binding.PacketOutBuilder, error) {
+	// Set ethernet header.
+	parsedSrcMAC, err := net.ParseMAC(srcMAC)
+	if err != nil {
+		return nil, err
+	}
+	parsedDstMAC, err := net.ParseMAC(dstMAC)
+	if err != nil {
+		return nil, err
+	}
+	packetOutBuilder = packetOutBuilder.SetSrcMAC(parsedSrcMAC)
+	packetOutBuilder = packetOutBuilder.SetDstMAC(parsedDstMAC)
+
+	// Set IP header.
+	parsedSrcIP := net.ParseIP(srcIP)
+	parsedDstIP := net.ParseIP(dstIP)
+	if parsedSrcIP == nil || parsedDstIP == nil {
+		return nil, fmt.Errorf("invalid IP")
+	}
+	isIPv6 := parsedSrcIP.To4() == nil
+	if isIPv6 != (parsedDstIP.To4() == nil) {
+		return nil, fmt.Errorf("IP version mismatch")
+	}
+	packetOutBuilder = packetOutBuilder.SetSrcIP(parsedSrcIP)
+	packetOutBuilder = packetOutBuilder.SetDstIP(parsedDstIP)
+
+	packetOutBuilder = packetOutBuilder.SetTTL(128)
+
+	packetOutBuilder = packetOutBuilder.SetInport(inPort)
+	if outPort != -1 {
+		packetOutBuilder = packetOutBuilder.SetOutport(uint32(outPort))
+	}
+
+	return packetOutBuilder, nil
+}
+
+// SendTCPReject generates TCP packet as a packet-out and sends it to OVS.
+func (c *client) SendTCPPacketOut(
+	srcMAC string,
+	dstMAC string,
+	srcIP string,
+	dstIP string,
+	inPort uint32,
+	outPort int32,
+	isIPv6 bool,
+	tcpSrcPort uint16,
+	tcpDstPort uint16,
+	tcpAckNum uint32,
+	tcpFlag uint8,
+	isReject bool) error {
+	// Generate a base IP PacketOutBuilder.
+	packetOutBuilder, err := setBasePacketOutBuilder(c.bridge.BuildPacketOut(), srcMAC, dstMAC, srcIP, dstIP, inPort, outPort)
+	if err != nil {
+		return err
+	}
+	// Set protocol.
+	if isIPv6 {
+		packetOutBuilder = packetOutBuilder.SetIPProtocol(binding.ProtocolTCPv6)
+	} else {
+		packetOutBuilder = packetOutBuilder.SetIPProtocol(binding.ProtocolTCP)
+	}
+	// Set TCP header data.
+	packetOutBuilder = packetOutBuilder.SetTCPSrcPort(tcpSrcPort)
+	packetOutBuilder = packetOutBuilder.SetTCPDstPort(tcpDstPort)
+	packetOutBuilder = packetOutBuilder.SetTCPAckNum(tcpAckNum)
+	packetOutBuilder = packetOutBuilder.SetTCPFlags(tcpFlag)
+
+	// Reject response packet should bypass ConnTrack
+	if isReject {
+		name := fmt.Sprintf("%s%d", binding.NxmFieldReg, marksReg)
+		packetOutBuilder = packetOutBuilder.AddLoadAction(name, uint64(CustomReasonReject), CustomReasonMarkRange)
+	}
+
+	packetOutObj := packetOutBuilder.Done()
+	return c.bridge.SendPacketOut(packetOutObj)
+}
+
+// SendICMPReject generates ICMP packet as a packet-out and send it to OVS.
+func (c *client) SendICMPPacketOut(
+	srcMAC string,
+	dstMAC string,
+	srcIP string,
+	dstIP string,
+	inPort uint32,
+	outPort int32,
+	isIPv6 bool,
+	icmpType uint8,
+	icmpCode uint8,
+	icmpData []byte,
+	isReject bool) error {
+	// Generate a base IP PacketOutBuilder.
+	packetOutBuilder, err := setBasePacketOutBuilder(c.bridge.BuildPacketOut(), srcMAC, dstMAC, srcIP, dstIP, inPort, outPort)
+	if err != nil {
+		return err
+	}
+	// Set protocol.
+	if isIPv6 {
+		packetOutBuilder = packetOutBuilder.SetIPProtocol(binding.ProtocolICMPv6)
+	} else {
+		packetOutBuilder = packetOutBuilder.SetIPProtocol(binding.ProtocolICMP)
+	}
+	// Set ICMP header data.
+	packetOutBuilder = packetOutBuilder.SetICMPType(icmpType)
+	packetOutBuilder = packetOutBuilder.SetICMPCode(icmpCode)
+	packetOutBuilder = packetOutBuilder.SetICMPData(icmpData)
+
+	// Reject response packet should bypass ConnTrack
+	if isReject {
+		name := fmt.Sprintf("%s%d", binding.NxmFieldReg, marksReg)
+		packetOutBuilder = packetOutBuilder.AddLoadAction(name, uint64(CustomReasonReject), CustomReasonMarkRange)
+	}
+
+	packetOutObj := packetOutBuilder.Done()
+	return c.bridge.SendPacketOut(packetOutObj)
 }

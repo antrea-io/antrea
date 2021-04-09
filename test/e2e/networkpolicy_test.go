@@ -30,7 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/apiserver/handlers/agentinfo"
-	"github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1"
+	"github.com/vmware-tanzu/antrea/pkg/apis/crd/v1beta1"
 )
 
 func TestNetworkPolicyStats(t *testing.T) {
@@ -56,6 +56,18 @@ func TestNetworkPolicyStats(t *testing.T) {
 
 	clientName, _, cleanupFunc := createAndWaitForPod(t, data, data.createBusyboxPodOnNode, "test-client-", "")
 	defer cleanupFunc()
+
+	// When using the userspace OVS datapath and tunneling,
+	// the first IP packet sent on a tunnel is always dropped because of a missing ARP entry.
+	// So we need to  "warm-up" the tunnel.
+	if clusterInfo.podV4NetworkCIDR != "" {
+		cmd := []string{"/bin/sh", "-c", fmt.Sprintf("nc -vz -w 4 %s 80", serverIPs.ipv4.String())}
+		data.runCommandFromPod(testNamespace, clientName, busyboxContainerName, cmd)
+	}
+	if clusterInfo.podV6NetworkCIDR != "" {
+		cmd := []string{"/bin/sh", "-c", fmt.Sprintf("nc -vz -w 4 %s 80", serverIPs.ipv6.String())}
+		data.runCommandFromPod(testNamespace, clientName, busyboxContainerName, cmd)
+	}
 
 	np1, err := data.createNetworkPolicy("test-networkpolicy-ingress", &networkingv1.NetworkPolicySpec{
 		PodSelector: metav1.LabelSelector{},
@@ -782,12 +794,15 @@ func createAndWaitForPod(t *testing.T, data *TestData, createFunc func(name stri
 	return name, podIP, cleanupFunc
 }
 
-func createAndWaitForPodWithLabels(t *testing.T, data *TestData, createFunc func(name, ns string, portNum int32, labels map[string]string) error, name, ns string, portNum int32, labels map[string]string) (string, *PodIPs, func()) {
+func createAndWaitForPodWithLabels(t *testing.T, data *TestData, createFunc func(name, ns string, portNum int32, labels map[string]string) error, name, ns string, portNum int32, labels map[string]string) (string, *PodIPs, func() error) {
 	if err := createFunc(name, ns, portNum, labels); err != nil {
 		t.Fatalf("Error when creating busybox test Pod: %v", err)
 	}
-	cleanupFunc := func() {
-		deletePodWrapper(t, data, name)
+	cleanupFunc := func() error {
+		if err := data.deletePod(ns, name); err != nil {
+			return fmt.Errorf("error when deleting Pod: %v", err)
+		}
+		return nil
 	}
 	podIP, err := data.podWaitForIPs(defaultTimeout, name, ns)
 	if err != nil {

@@ -16,7 +16,7 @@
 // +k8s:deepcopy-gen=package
 // +k8s:protobuf-gen=package
 // +k8s:conversion-gen=github.com/vmware-tanzu/antrea/pkg/apis/stats
-// +groupName=stats.antrea.tanzu.vmware.com
+// +groupName=stats.antrea.io
 
 // Package v1alpha1 is the v1alpha1 version of the Antrea Stats API.
 package v1alpha1

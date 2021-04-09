@@ -17,13 +17,18 @@
   .PARAMETER LocalFile
   Specifies the path of a local OpenvSwitch package to be used for installation.
   When the param is used, "DownloadURL" and "DownloadDir" params will be ignored.
+
+  .PARAMETER ImportCertificate
+  Specifies if a certificate file is needed for OVS package. If true, certificate
+  will be retrieved from OVSExt.sys and a package.cer file will be generated.
 #>
 Param(
     [parameter(Mandatory = $false)] [string] $DownloadDir,
     [parameter(Mandatory = $false)] [string] $DownloadURL,
     [parameter(Mandatory = $false)] [string] $OVSInstallDir = "C:\openvswitch",
     [parameter(Mandatory = $false)] [bool] $CheckFileHash = $true,
-    [parameter(Mandatory = $false)] [string] $LocalFile
+    [parameter(Mandatory = $false)] [string] $LocalFile,
+    [parameter(Mandatory = $false)] [bool] $ImportCertificate = $true
 )
 
 $ErrorActionPreference = "Stop"
@@ -136,17 +141,17 @@ function InstallOVS() {
     $OVSDriverDir = "$OVSInstallDir\driver"
 
     # Install OVS driver certificate.
-    if (Test-Path $OVSDriverDir\package.cer) {
+    $DriverFile="$OVSDriverDir\OVSExt.sys"
+    if ($ImportCertificate) {
+        $CertificateFile = "$OVSDriverDir\package.cer"
+        if (!(Test-Path $CertificateFile)) {
+            $ExportType = [System.Security.Cryptography.X509Certificates.X509ContentType]::Cert;
+            $Cert = (Get-AuthenticodeSignature $DriverFile).SignerCertificate;
+            [System.IO.File]::WriteAllBytes($CertificateFile, $Cert.Export($ExportType));
+        }
         Log "Installing OVS driver certificate."
-        $cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2("$OVSDriverDir\package.cer")
-        $rootStore = Get-Item cert:\LocalMachine\TrustedPublisher
-        $rootStore.Open("ReadWrite")
-        $rootStore.Add($cert)
-        $rootStore.Close()
-        $rootStore = Get-Item cert:\LocalMachine\Root
-        $rootStore.Open("ReadWrite")
-        $rootStore.Add($cert)
-        $rootStore.Close()
+        Import-Certificate -FilePath "$CertificateFile" -CertStoreLocation cert:\LocalMachine\TrustedPublisher
+        Import-Certificate -FilePath "$CertificateFile" -CertStoreLocation cert:\LocalMachine\Root
     }
 
     # Install Microsoft Visual C++ Redistributable Package.
@@ -213,7 +218,7 @@ function ConfigOVS() {
     sc.exe failure ovs-vswitchd reset= 0 actions= restart/0/restart/0/restart/0
     Start-Service ovs-vswitchd
     # Set OVS version.
-    $OVS_VERSION=$(Get-Item $OVSInstallDir\driver\ovsext.sys).VersionInfo.ProductVersion
+    $OVS_VERSION=$(Get-Item $OVSInstallDir\driver\OVSExt.sys).VersionInfo.ProductVersion
     Log "Set OVS version to: $OVS_VERSION"
     ovs-vsctl --no-wait set Open_vSwitch . ovs_version=$OVS_VERSION
 }

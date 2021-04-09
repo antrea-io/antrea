@@ -17,6 +17,8 @@ package e2e
 import (
 	"context"
 	"fmt"
+	"net"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -29,8 +31,8 @@ import (
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
-	"github.com/vmware-tanzu/antrea/pkg/apis/ops/v1alpha1"
-	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
+	"github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha1"
+	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha1"
 	"github.com/vmware-tanzu/antrea/pkg/features"
 )
 
@@ -39,8 +41,10 @@ type testcase struct {
 	tf              *v1alpha1.Traceflow
 	expectedPhase   v1alpha1.TraceflowPhase
 	expectedResults []v1alpha1.NodeResult
+	expectedPktCap  *v1alpha1.Packet
 	// required IP version, skip if not match, default is 0 (no restrict)
-	ipVersion int
+	ipVersion  int
+	skipReason string
 }
 
 func skipIfTraceflowDisabled(t *testing.T, data *TestData) {
@@ -130,13 +134,13 @@ func TestTraceflowIntraNodeANP(t *testing.T) {
 					Node: node1,
 					Observations: []v1alpha1.Observation{
 						{
-							Component: v1alpha1.SpoofGuard,
-							Action:    v1alpha1.Forwarded,
+							Component: v1alpha1.ComponentSpoofGuard,
+							Action:    v1alpha1.ActionForwarded,
 						},
 						{
-							Component:     v1alpha1.NetworkPolicy,
+							Component:     v1alpha1.ComponentNetworkPolicy,
 							ComponentInfo: "IngressMetric",
-							Action:        v1alpha1.Dropped,
+							Action:        v1alpha1.ActionDropped,
 						},
 					},
 				},
@@ -177,13 +181,13 @@ func TestTraceflowIntraNodeANP(t *testing.T) {
 					Node: node1,
 					Observations: []v1alpha1.Observation{
 						{
-							Component: v1alpha1.SpoofGuard,
-							Action:    v1alpha1.Forwarded,
+							Component: v1alpha1.ComponentSpoofGuard,
+							Action:    v1alpha1.ActionForwarded,
 						},
 						{
-							Component:     v1alpha1.NetworkPolicy,
+							Component:     v1alpha1.ComponentNetworkPolicy,
 							ComponentInfo: "IngressMetric",
-							Action:        v1alpha1.Dropped,
+							Action:        v1alpha1.ActionDropped,
 						},
 					},
 				},
@@ -214,7 +218,10 @@ func TestTraceflowIntraNode(t *testing.T) {
 
 	node1Pods, node1IPs, node1CleanupFn := createTestBusyboxPods(t, data, 3, node1)
 	defer node1CleanupFn()
-	var dstPodIPv4Str, dstPodIPv6Str string
+	var srcPodIPv4Str, dstPodIPv4Str, dstPodIPv6Str string
+	if node1IPs[0].ipv4 != nil {
+		srcPodIPv4Str = node1IPs[0].ipv4.String()
+	}
 	if node1IPs[2].ipv4 != nil {
 		dstPodIPv4Str = node1IPs[2].ipv4.String()
 	}
@@ -292,18 +299,18 @@ func TestTraceflowIntraNode(t *testing.T) {
 					Node: node1,
 					Observations: []v1alpha1.Observation{
 						{
-							Component: v1alpha1.SpoofGuard,
-							Action:    v1alpha1.Forwarded,
+							Component: v1alpha1.ComponentSpoofGuard,
+							Action:    v1alpha1.ActionForwarded,
 						},
 						{
-							Component:     v1alpha1.NetworkPolicy,
+							Component:     v1alpha1.ComponentNetworkPolicy,
 							ComponentInfo: "EgressRule",
-							Action:        v1alpha1.Forwarded,
+							Action:        v1alpha1.ActionForwarded,
 						},
 						{
-							Component:     v1alpha1.NetworkPolicy,
+							Component:     v1alpha1.ComponentNetworkPolicy,
 							ComponentInfo: "IngressDefaultRule",
-							Action:        v1alpha1.Dropped,
+							Action:        v1alpha1.ActionDropped,
 						},
 					},
 				},
@@ -343,18 +350,18 @@ func TestTraceflowIntraNode(t *testing.T) {
 					Node: node1,
 					Observations: []v1alpha1.Observation{
 						{
-							Component: v1alpha1.SpoofGuard,
-							Action:    v1alpha1.Forwarded,
+							Component: v1alpha1.ComponentSpoofGuard,
+							Action:    v1alpha1.ActionForwarded,
 						},
 						{
-							Component:     v1alpha1.NetworkPolicy,
+							Component:     v1alpha1.ComponentNetworkPolicy,
 							ComponentInfo: "EgressRule",
-							Action:        v1alpha1.Forwarded,
+							Action:        v1alpha1.ActionForwarded,
 						},
 						{
-							Component:     v1alpha1.Forwarding,
+							Component:     v1alpha1.ComponentForwarding,
 							ComponentInfo: "Output",
-							Action:        v1alpha1.Delivered,
+							Action:        v1alpha1.ActionDelivered,
 						},
 					},
 				},
@@ -393,18 +400,18 @@ func TestTraceflowIntraNode(t *testing.T) {
 					Node: node1,
 					Observations: []v1alpha1.Observation{
 						{
-							Component: v1alpha1.SpoofGuard,
-							Action:    v1alpha1.Forwarded,
+							Component: v1alpha1.ComponentSpoofGuard,
+							Action:    v1alpha1.ActionForwarded,
 						},
 						{
-							Component:     v1alpha1.NetworkPolicy,
+							Component:     v1alpha1.ComponentNetworkPolicy,
 							ComponentInfo: "EgressRule",
-							Action:        v1alpha1.Forwarded,
+							Action:        v1alpha1.ActionForwarded,
 						},
 						{
-							Component:     v1alpha1.Forwarding,
+							Component:     v1alpha1.ComponentForwarding,
 							ComponentInfo: "Output",
-							Action:        v1alpha1.Delivered,
+							Action:        v1alpha1.ActionDelivered,
 						},
 					},
 				},
@@ -438,18 +445,18 @@ func TestTraceflowIntraNode(t *testing.T) {
 					Node: node1,
 					Observations: []v1alpha1.Observation{
 						{
-							Component: v1alpha1.SpoofGuard,
-							Action:    v1alpha1.Forwarded,
+							Component: v1alpha1.ComponentSpoofGuard,
+							Action:    v1alpha1.ActionForwarded,
 						},
 						{
-							Component:     v1alpha1.NetworkPolicy,
+							Component:     v1alpha1.ComponentNetworkPolicy,
 							ComponentInfo: "EgressRule",
-							Action:        v1alpha1.Forwarded,
+							Action:        v1alpha1.ActionForwarded,
 						},
 						{
-							Component:     v1alpha1.Forwarding,
+							Component:     v1alpha1.ComponentForwarding,
 							ComponentInfo: "Output",
-							Action:        v1alpha1.Delivered,
+							Action:        v1alpha1.ActionDelivered,
 						},
 					},
 				},
@@ -474,6 +481,53 @@ func TestTraceflowIntraNode(t *testing.T) {
 				},
 			},
 			expectedPhase: v1alpha1.Failed,
+		},
+		{
+			name:      "intraNodeICMPDstIPLiveTraceflowIPv4",
+			ipVersion: 4,
+			tf: &v1alpha1.Traceflow{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: randName(fmt.Sprintf("%s-%s-to-%s-", testNamespace, node1Pods[0], dstPodIPv4Str)),
+				},
+				Spec: v1alpha1.TraceflowSpec{
+					Source: v1alpha1.Source{
+						Namespace: testNamespace,
+						Pod:       node1Pods[0],
+					},
+					Destination: v1alpha1.Destination{
+						IP: dstPodIPv4Str,
+					},
+					LiveTraffic: true,
+				},
+			},
+			expectedPhase: v1alpha1.Succeeded,
+			expectedResults: []v1alpha1.NodeResult{
+				{
+					Node: node1,
+					Observations: []v1alpha1.Observation{
+						{
+							Component: v1alpha1.ComponentSpoofGuard,
+							Action:    v1alpha1.ActionForwarded,
+						},
+						{
+							Component:     v1alpha1.ComponentNetworkPolicy,
+							ComponentInfo: "EgressRule",
+							Action:        v1alpha1.ActionForwarded,
+						},
+						{
+							Component:     v1alpha1.ComponentForwarding,
+							ComponentInfo: "Output",
+							Action:        v1alpha1.ActionDelivered,
+						},
+					},
+				},
+			},
+			expectedPktCap: &v1alpha1.Packet{
+				SrcIP:    srcPodIPv4Str,
+				DstIP:    dstPodIPv4Str,
+				Length:   84, // default ping packet length.
+				IPHeader: v1alpha1.IPHeader{Protocol: 1, TTL: 64, Flags: 2},
+			},
 		},
 		{
 			name:      "intraNodeTraceflowIPv6",
@@ -510,18 +564,18 @@ func TestTraceflowIntraNode(t *testing.T) {
 					Node: node1,
 					Observations: []v1alpha1.Observation{
 						{
-							Component: v1alpha1.SpoofGuard,
-							Action:    v1alpha1.Forwarded,
+							Component: v1alpha1.ComponentSpoofGuard,
+							Action:    v1alpha1.ActionForwarded,
 						},
 						{
-							Component:     v1alpha1.NetworkPolicy,
+							Component:     v1alpha1.ComponentNetworkPolicy,
 							ComponentInfo: "EgressRule",
-							Action:        v1alpha1.Forwarded,
+							Action:        v1alpha1.ActionForwarded,
 						},
 						{
-							Component:     v1alpha1.NetworkPolicy,
+							Component:     v1alpha1.ComponentNetworkPolicy,
 							ComponentInfo: "IngressDefaultRule",
-							Action:        v1alpha1.Dropped,
+							Action:        v1alpha1.ActionDropped,
 						},
 					},
 				},
@@ -561,18 +615,18 @@ func TestTraceflowIntraNode(t *testing.T) {
 					Node: node1,
 					Observations: []v1alpha1.Observation{
 						{
-							Component: v1alpha1.SpoofGuard,
-							Action:    v1alpha1.Forwarded,
+							Component: v1alpha1.ComponentSpoofGuard,
+							Action:    v1alpha1.ActionForwarded,
 						},
 						{
-							Component:     v1alpha1.NetworkPolicy,
+							Component:     v1alpha1.ComponentNetworkPolicy,
 							ComponentInfo: "EgressRule",
-							Action:        v1alpha1.Forwarded,
+							Action:        v1alpha1.ActionForwarded,
 						},
 						{
-							Component:     v1alpha1.Forwarding,
+							Component:     v1alpha1.ComponentForwarding,
 							ComponentInfo: "Output",
-							Action:        v1alpha1.Delivered,
+							Action:        v1alpha1.ActionDelivered,
 						},
 					},
 				},
@@ -611,18 +665,18 @@ func TestTraceflowIntraNode(t *testing.T) {
 					Node: node1,
 					Observations: []v1alpha1.Observation{
 						{
-							Component: v1alpha1.SpoofGuard,
-							Action:    v1alpha1.Forwarded,
+							Component: v1alpha1.ComponentSpoofGuard,
+							Action:    v1alpha1.ActionForwarded,
 						},
 						{
-							Component:     v1alpha1.NetworkPolicy,
+							Component:     v1alpha1.ComponentNetworkPolicy,
 							ComponentInfo: "EgressRule",
-							Action:        v1alpha1.Forwarded,
+							Action:        v1alpha1.ActionForwarded,
 						},
 						{
-							Component:     v1alpha1.Forwarding,
+							Component:     v1alpha1.ComponentForwarding,
 							ComponentInfo: "Output",
-							Action:        v1alpha1.Delivered,
+							Action:        v1alpha1.ActionDelivered,
 						},
 					},
 				},
@@ -656,18 +710,18 @@ func TestTraceflowIntraNode(t *testing.T) {
 					Node: node1,
 					Observations: []v1alpha1.Observation{
 						{
-							Component: v1alpha1.SpoofGuard,
-							Action:    v1alpha1.Forwarded,
+							Component: v1alpha1.ComponentSpoofGuard,
+							Action:    v1alpha1.ActionForwarded,
 						},
 						{
-							Component:     v1alpha1.NetworkPolicy,
+							Component:     v1alpha1.ComponentNetworkPolicy,
 							ComponentInfo: "EgressRule",
-							Action:        v1alpha1.Forwarded,
+							Action:        v1alpha1.ActionForwarded,
 						},
 						{
-							Component:     v1alpha1.Forwarding,
+							Component:     v1alpha1.ComponentForwarding,
 							ComponentInfo: "Output",
-							Action:        v1alpha1.Delivered,
+							Action:        v1alpha1.ActionDelivered,
 						},
 					},
 				},
@@ -698,6 +752,52 @@ func TestTraceflowIntraNode(t *testing.T) {
 			},
 			expectedPhase: v1alpha1.Failed,
 		},
+		{
+			name:      "intraNodeICMPDstIPLiveTraceflowIPv6",
+			ipVersion: 6,
+			tf: &v1alpha1.Traceflow{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: randName(fmt.Sprintf("%s-%s-to-%s-", testNamespace, node1Pods[0], strings.ReplaceAll(dstPodIPv6Str, ":", "--"))),
+				},
+				Spec: v1alpha1.TraceflowSpec{
+					Source: v1alpha1.Source{
+						Namespace: testNamespace,
+						Pod:       node1Pods[0],
+					},
+					Destination: v1alpha1.Destination{
+						IP: dstPodIPv6Str,
+					},
+					Packet: v1alpha1.Packet{
+						IPv6Header: &v1alpha1.IPv6Header{
+							NextHeader: &protocolICMPv6,
+						},
+					},
+					LiveTraffic: true,
+				},
+			},
+			expectedPhase: v1alpha1.Succeeded,
+			expectedResults: []v1alpha1.NodeResult{
+				{
+					Node: node1,
+					Observations: []v1alpha1.Observation{
+						{
+							Component: v1alpha1.ComponentSpoofGuard,
+							Action:    v1alpha1.ActionForwarded,
+						},
+						{
+							Component:     v1alpha1.ComponentNetworkPolicy,
+							ComponentInfo: "EgressRule",
+							Action:        v1alpha1.ActionForwarded,
+						},
+						{
+							Component:     v1alpha1.ComponentForwarding,
+							ComponentInfo: "Output",
+							Action:        v1alpha1.ActionDelivered,
+						},
+					},
+				},
+			},
+		},
 	}
 
 	if gwIPv4Str != "" {
@@ -706,7 +806,7 @@ func TestTraceflowIntraNode(t *testing.T) {
 			ipVersion: 4,
 			tf: &v1alpha1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: randName(fmt.Sprintf("%s-%s-to-%s-", testNamespace, node1Pods[0], strings.ReplaceAll(gwIPv4Str, ":", "--"))),
+					Name: randName(fmt.Sprintf("%s-%s-to-%s-", testNamespace, node1Pods[0], gwIPv4Str)),
 				},
 				Spec: v1alpha1.TraceflowSpec{
 					Source: v1alpha1.Source{
@@ -729,18 +829,18 @@ func TestTraceflowIntraNode(t *testing.T) {
 					Node: node1,
 					Observations: []v1alpha1.Observation{
 						{
-							Component: v1alpha1.SpoofGuard,
-							Action:    v1alpha1.Forwarded,
+							Component: v1alpha1.ComponentSpoofGuard,
+							Action:    v1alpha1.ActionForwarded,
 						},
 						{
-							Component:     v1alpha1.NetworkPolicy,
+							Component:     v1alpha1.ComponentNetworkPolicy,
 							ComponentInfo: "EgressRule",
-							Action:        v1alpha1.Forwarded,
+							Action:        v1alpha1.ActionForwarded,
 						},
 						{
-							Component:     v1alpha1.Forwarding,
+							Component:     v1alpha1.ComponentForwarding,
 							ComponentInfo: "Output",
-							Action:        v1alpha1.Delivered,
+							Action:        v1alpha1.ActionDelivered,
 						},
 					},
 				},
@@ -777,18 +877,18 @@ func TestTraceflowIntraNode(t *testing.T) {
 					Node: node1,
 					Observations: []v1alpha1.Observation{
 						{
-							Component: v1alpha1.SpoofGuard,
-							Action:    v1alpha1.Forwarded,
+							Component: v1alpha1.ComponentSpoofGuard,
+							Action:    v1alpha1.ActionForwarded,
 						},
 						{
-							Component:     v1alpha1.NetworkPolicy,
+							Component:     v1alpha1.ComponentNetworkPolicy,
 							ComponentInfo: "EgressRule",
-							Action:        v1alpha1.Forwarded,
+							Action:        v1alpha1.ActionForwarded,
 						},
 						{
-							Component:     v1alpha1.Forwarding,
+							Component:     v1alpha1.ComponentForwarding,
 							ComponentInfo: "Output",
-							Action:        v1alpha1.Delivered,
+							Action:        v1alpha1.ActionDelivered,
 						},
 					},
 				},
@@ -931,18 +1031,18 @@ func TestTraceflowInterNode(t *testing.T) {
 					Node: node1,
 					Observations: []v1alpha1.Observation{
 						{
-							Component: v1alpha1.SpoofGuard,
-							Action:    v1alpha1.Forwarded,
+							Component: v1alpha1.ComponentSpoofGuard,
+							Action:    v1alpha1.ActionForwarded,
 						},
 						{
-							Component:     v1alpha1.NetworkPolicy,
+							Component:     v1alpha1.ComponentNetworkPolicy,
 							ComponentInfo: "EgressRule",
-							Action:        v1alpha1.Forwarded,
+							Action:        v1alpha1.ActionForwarded,
 						},
 						{
-							Component:     v1alpha1.Forwarding,
+							Component:     v1alpha1.ComponentForwarding,
 							ComponentInfo: "Output",
-							Action:        v1alpha1.Forwarded,
+							Action:        v1alpha1.ActionForwarded,
 						},
 					},
 				},
@@ -950,14 +1050,14 @@ func TestTraceflowInterNode(t *testing.T) {
 					Node: node2,
 					Observations: []v1alpha1.Observation{
 						{
-							Component:     v1alpha1.Forwarding,
+							Component:     v1alpha1.ComponentForwarding,
 							ComponentInfo: "Classification",
-							Action:        v1alpha1.Received,
+							Action:        v1alpha1.ActionReceived,
 						},
 						{
-							Component:     v1alpha1.Forwarding,
+							Component:     v1alpha1.ComponentForwarding,
 							ComponentInfo: "Output",
-							Action:        v1alpha1.Delivered,
+							Action:        v1alpha1.ActionDelivered,
 						},
 					},
 				},
@@ -996,18 +1096,18 @@ func TestTraceflowInterNode(t *testing.T) {
 					Node: node1,
 					Observations: []v1alpha1.Observation{
 						{
-							Component: v1alpha1.SpoofGuard,
-							Action:    v1alpha1.Forwarded,
+							Component: v1alpha1.ComponentSpoofGuard,
+							Action:    v1alpha1.ActionForwarded,
 						},
 						{
-							Component:     v1alpha1.NetworkPolicy,
+							Component:     v1alpha1.ComponentNetworkPolicy,
 							ComponentInfo: "EgressRule",
-							Action:        v1alpha1.Forwarded,
+							Action:        v1alpha1.ActionForwarded,
 						},
 						{
-							Component:     v1alpha1.Forwarding,
+							Component:     v1alpha1.ComponentForwarding,
 							ComponentInfo: "Output",
-							Action:        v1alpha1.Forwarded,
+							Action:        v1alpha1.ActionForwarded,
 						},
 					},
 				},
@@ -1015,14 +1115,14 @@ func TestTraceflowInterNode(t *testing.T) {
 					Node: node2,
 					Observations: []v1alpha1.Observation{
 						{
-							Component:     v1alpha1.Forwarding,
+							Component:     v1alpha1.ComponentForwarding,
 							ComponentInfo: "Classification",
-							Action:        v1alpha1.Received,
+							Action:        v1alpha1.ActionReceived,
 						},
 						{
-							Component:     v1alpha1.Forwarding,
+							Component:     v1alpha1.ComponentForwarding,
 							ComponentInfo: "Output",
-							Action:        v1alpha1.Delivered,
+							Action:        v1alpha1.ActionDelivered,
 						},
 					},
 				},
@@ -1056,18 +1156,18 @@ func TestTraceflowInterNode(t *testing.T) {
 					Node: node1,
 					Observations: []v1alpha1.Observation{
 						{
-							Component: v1alpha1.SpoofGuard,
-							Action:    v1alpha1.Forwarded,
+							Component: v1alpha1.ComponentSpoofGuard,
+							Action:    v1alpha1.ActionForwarded,
 						},
 						{
-							Component:     v1alpha1.NetworkPolicy,
+							Component:     v1alpha1.ComponentNetworkPolicy,
 							ComponentInfo: "EgressRule",
-							Action:        v1alpha1.Forwarded,
+							Action:        v1alpha1.ActionForwarded,
 						},
 						{
-							Component:     v1alpha1.Forwarding,
+							Component:     v1alpha1.ComponentForwarding,
 							ComponentInfo: "Output",
-							Action:        v1alpha1.Forwarded,
+							Action:        v1alpha1.ActionForwarded,
 						},
 					},
 				},
@@ -1075,14 +1175,14 @@ func TestTraceflowInterNode(t *testing.T) {
 					Node: node2,
 					Observations: []v1alpha1.Observation{
 						{
-							Component:     v1alpha1.Forwarding,
+							Component:     v1alpha1.ComponentForwarding,
 							ComponentInfo: "Classification",
-							Action:        v1alpha1.Received,
+							Action:        v1alpha1.ActionReceived,
 						},
 						{
-							Component:     v1alpha1.Forwarding,
+							Component:     v1alpha1.ComponentForwarding,
 							ComponentInfo: "Output",
-							Action:        v1alpha1.Delivered,
+							Action:        v1alpha1.ActionDelivered,
 						},
 					},
 				},
@@ -1123,24 +1223,24 @@ func TestTraceflowInterNode(t *testing.T) {
 					Node: node1,
 					Observations: []v1alpha1.Observation{
 						{
-							Component: v1alpha1.SpoofGuard,
-							Action:    v1alpha1.Forwarded,
+							Component: v1alpha1.ComponentSpoofGuard,
+							Action:    v1alpha1.ActionForwarded,
 						},
 						{
-							Component:       v1alpha1.LB,
+							Component:       v1alpha1.ComponentLB,
 							Pod:             fmt.Sprintf("%s/%s", testNamespace, "nginx"),
 							TranslatedDstIP: nginxIPv4Str,
-							Action:          v1alpha1.Forwarded,
+							Action:          v1alpha1.ActionForwarded,
 						},
 						{
-							Component:     v1alpha1.NetworkPolicy,
+							Component:     v1alpha1.ComponentNetworkPolicy,
 							ComponentInfo: "EgressRule",
-							Action:        v1alpha1.Forwarded,
+							Action:        v1alpha1.ActionForwarded,
 						},
 						{
-							Component:     v1alpha1.Forwarding,
+							Component:     v1alpha1.ComponentForwarding,
 							ComponentInfo: "Output",
-							Action:        v1alpha1.Forwarded,
+							Action:        v1alpha1.ActionForwarded,
 						},
 					},
 				},
@@ -1148,14 +1248,71 @@ func TestTraceflowInterNode(t *testing.T) {
 					Node: node2,
 					Observations: []v1alpha1.Observation{
 						{
-							Component:     v1alpha1.Forwarding,
+							Component:     v1alpha1.ComponentForwarding,
 							ComponentInfo: "Classification",
-							Action:        v1alpha1.Received,
+							Action:        v1alpha1.ActionReceived,
 						},
 						{
-							Component:     v1alpha1.Forwarding,
+							Component:     v1alpha1.ComponentForwarding,
 							ComponentInfo: "Output",
-							Action:        v1alpha1.Delivered,
+							Action:        v1alpha1.ActionDelivered,
+						},
+					},
+				},
+			},
+		},
+		{
+			name:      "interNodeICMPDstPodLiveTraceflowIPv4",
+			ipVersion: 4,
+			tf: &v1alpha1.Traceflow{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: randName(fmt.Sprintf("%s-%s-to-%s-", testNamespace, node1Pods[0], node2Pods[0])),
+				},
+				Spec: v1alpha1.TraceflowSpec{
+					Source: v1alpha1.Source{
+						Namespace: testNamespace,
+						Pod:       node1Pods[0],
+					},
+					Destination: v1alpha1.Destination{
+						Namespace: testNamespace,
+						Pod:       node2Pods[0],
+					},
+					LiveTraffic: true,
+				},
+			},
+			expectedPhase: v1alpha1.Succeeded,
+			expectedResults: []v1alpha1.NodeResult{
+				{
+					Node: node1,
+					Observations: []v1alpha1.Observation{
+						{
+							Component: v1alpha1.ComponentSpoofGuard,
+							Action:    v1alpha1.ActionForwarded,
+						},
+						{
+							Component:     v1alpha1.ComponentNetworkPolicy,
+							ComponentInfo: "EgressRule",
+							Action:        v1alpha1.ActionForwarded,
+						},
+						{
+							Component:     v1alpha1.ComponentForwarding,
+							ComponentInfo: "Output",
+							Action:        v1alpha1.ActionForwarded,
+						},
+					},
+				},
+				{
+					Node: node2,
+					Observations: []v1alpha1.Observation{
+						{
+							Component:     v1alpha1.ComponentForwarding,
+							ComponentInfo: "Classification",
+							Action:        v1alpha1.ActionReceived,
+						},
+						{
+							Component:     v1alpha1.ComponentForwarding,
+							ComponentInfo: "Output",
+							Action:        v1alpha1.ActionDelivered,
 						},
 					},
 				},
@@ -1196,18 +1353,18 @@ func TestTraceflowInterNode(t *testing.T) {
 					Node: node1,
 					Observations: []v1alpha1.Observation{
 						{
-							Component: v1alpha1.SpoofGuard,
-							Action:    v1alpha1.Forwarded,
+							Component: v1alpha1.ComponentSpoofGuard,
+							Action:    v1alpha1.ActionForwarded,
 						},
 						{
-							Component:     v1alpha1.NetworkPolicy,
+							Component:     v1alpha1.ComponentNetworkPolicy,
 							ComponentInfo: "EgressRule",
-							Action:        v1alpha1.Forwarded,
+							Action:        v1alpha1.ActionForwarded,
 						},
 						{
-							Component:     v1alpha1.Forwarding,
+							Component:     v1alpha1.ComponentForwarding,
 							ComponentInfo: "Output",
-							Action:        v1alpha1.Forwarded,
+							Action:        v1alpha1.ActionForwarded,
 						},
 					},
 				},
@@ -1215,22 +1372,23 @@ func TestTraceflowInterNode(t *testing.T) {
 					Node: node2,
 					Observations: []v1alpha1.Observation{
 						{
-							Component:     v1alpha1.Forwarding,
+							Component:     v1alpha1.ComponentForwarding,
 							ComponentInfo: "Classification",
-							Action:        v1alpha1.Received,
+							Action:        v1alpha1.ActionReceived,
 						},
 						{
-							Component:     v1alpha1.Forwarding,
+							Component:     v1alpha1.ComponentForwarding,
 							ComponentInfo: "Output",
-							Action:        v1alpha1.Delivered,
+							Action:        v1alpha1.ActionDelivered,
 						},
 					},
 				},
 			},
 		},
 		{
-			name:      "interNodeUDPDstIPTraceflowIPv6",
-			ipVersion: 6,
+			name:       "interNodeUDPDstIPTraceflowIPv6",
+			skipReason: "IPv6 testbed issue prevents running this test, we suspect an ESX datapath issue",
+			ipVersion:  6,
 			tf: &v1alpha1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: randName(fmt.Sprintf("%s-%s-to-%s-", testNamespace, node1Pods[0], strings.ReplaceAll(dstPodIPv6Str, ":", "--"))),
@@ -1261,18 +1419,18 @@ func TestTraceflowInterNode(t *testing.T) {
 					Node: node1,
 					Observations: []v1alpha1.Observation{
 						{
-							Component: v1alpha1.SpoofGuard,
-							Action:    v1alpha1.Forwarded,
+							Component: v1alpha1.ComponentSpoofGuard,
+							Action:    v1alpha1.ActionForwarded,
 						},
 						{
-							Component:     v1alpha1.NetworkPolicy,
+							Component:     v1alpha1.ComponentNetworkPolicy,
 							ComponentInfo: "EgressRule",
-							Action:        v1alpha1.Forwarded,
+							Action:        v1alpha1.ActionForwarded,
 						},
 						{
-							Component:     v1alpha1.Forwarding,
+							Component:     v1alpha1.ComponentForwarding,
 							ComponentInfo: "Output",
-							Action:        v1alpha1.Forwarded,
+							Action:        v1alpha1.ActionForwarded,
 						},
 					},
 				},
@@ -1280,14 +1438,14 @@ func TestTraceflowInterNode(t *testing.T) {
 					Node: node2,
 					Observations: []v1alpha1.Observation{
 						{
-							Component:     v1alpha1.Forwarding,
+							Component:     v1alpha1.ComponentForwarding,
 							ComponentInfo: "Classification",
-							Action:        v1alpha1.Received,
+							Action:        v1alpha1.ActionReceived,
 						},
 						{
-							Component:     v1alpha1.Forwarding,
+							Component:     v1alpha1.ComponentForwarding,
 							ComponentInfo: "Output",
-							Action:        v1alpha1.Delivered,
+							Action:        v1alpha1.ActionDelivered,
 						},
 					},
 				},
@@ -1321,18 +1479,18 @@ func TestTraceflowInterNode(t *testing.T) {
 					Node: node1,
 					Observations: []v1alpha1.Observation{
 						{
-							Component: v1alpha1.SpoofGuard,
-							Action:    v1alpha1.Forwarded,
+							Component: v1alpha1.ComponentSpoofGuard,
+							Action:    v1alpha1.ActionForwarded,
 						},
 						{
-							Component:     v1alpha1.NetworkPolicy,
+							Component:     v1alpha1.ComponentNetworkPolicy,
 							ComponentInfo: "EgressRule",
-							Action:        v1alpha1.Forwarded,
+							Action:        v1alpha1.ActionForwarded,
 						},
 						{
-							Component:     v1alpha1.Forwarding,
+							Component:     v1alpha1.ComponentForwarding,
 							ComponentInfo: "Output",
-							Action:        v1alpha1.Forwarded,
+							Action:        v1alpha1.ActionForwarded,
 						},
 					},
 				},
@@ -1340,14 +1498,14 @@ func TestTraceflowInterNode(t *testing.T) {
 					Node: node2,
 					Observations: []v1alpha1.Observation{
 						{
-							Component:     v1alpha1.Forwarding,
+							Component:     v1alpha1.ComponentForwarding,
 							ComponentInfo: "Classification",
-							Action:        v1alpha1.Received,
+							Action:        v1alpha1.ActionReceived,
 						},
 						{
-							Component:     v1alpha1.Forwarding,
+							Component:     v1alpha1.ComponentForwarding,
 							ComponentInfo: "Output",
-							Action:        v1alpha1.Delivered,
+							Action:        v1alpha1.ActionDelivered,
 						},
 					},
 				},
@@ -1388,24 +1546,24 @@ func TestTraceflowInterNode(t *testing.T) {
 					Node: node1,
 					Observations: []v1alpha1.Observation{
 						{
-							Component: v1alpha1.SpoofGuard,
-							Action:    v1alpha1.Forwarded,
+							Component: v1alpha1.ComponentSpoofGuard,
+							Action:    v1alpha1.ActionForwarded,
 						},
 						{
-							Component:       v1alpha1.LB,
+							Component:       v1alpha1.ComponentLB,
 							Pod:             fmt.Sprintf("%s/%s", testNamespace, "nginx"),
 							TranslatedDstIP: nginxIPv6Str,
-							Action:          v1alpha1.Forwarded,
+							Action:          v1alpha1.ActionForwarded,
 						},
 						{
-							Component:     v1alpha1.NetworkPolicy,
+							Component:     v1alpha1.ComponentNetworkPolicy,
 							ComponentInfo: "EgressRule",
-							Action:        v1alpha1.Forwarded,
+							Action:        v1alpha1.ActionForwarded,
 						},
 						{
-							Component:     v1alpha1.Forwarding,
+							Component:     v1alpha1.ComponentForwarding,
 							ComponentInfo: "Output",
-							Action:        v1alpha1.Forwarded,
+							Action:        v1alpha1.ActionForwarded,
 						},
 					},
 				},
@@ -1413,14 +1571,76 @@ func TestTraceflowInterNode(t *testing.T) {
 					Node: node2,
 					Observations: []v1alpha1.Observation{
 						{
-							Component:     v1alpha1.Forwarding,
+							Component:     v1alpha1.ComponentForwarding,
 							ComponentInfo: "Classification",
-							Action:        v1alpha1.Received,
+							Action:        v1alpha1.ActionReceived,
 						},
 						{
-							Component:     v1alpha1.Forwarding,
+							Component:     v1alpha1.ComponentForwarding,
 							ComponentInfo: "Output",
-							Action:        v1alpha1.Delivered,
+							Action:        v1alpha1.ActionDelivered,
+						},
+					},
+				},
+			},
+		},
+		{
+			name:      "interNodeICMPDstPodLiveTraceflowIPv6",
+			ipVersion: 6,
+			tf: &v1alpha1.Traceflow{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: randName(fmt.Sprintf("%s-%s-to-%s-", testNamespace, node1Pods[0], node2Pods[0])),
+				},
+				Spec: v1alpha1.TraceflowSpec{
+					Source: v1alpha1.Source{
+						Namespace: testNamespace,
+						Pod:       node1Pods[0],
+					},
+					Destination: v1alpha1.Destination{
+						Namespace: testNamespace,
+						Pod:       node2Pods[0],
+					},
+					Packet: v1alpha1.Packet{
+						IPv6Header: &v1alpha1.IPv6Header{
+							NextHeader: &protocolICMPv6,
+						},
+					},
+					LiveTraffic: true,
+				},
+			},
+			expectedPhase: v1alpha1.Succeeded,
+			expectedResults: []v1alpha1.NodeResult{
+				{
+					Node: node1,
+					Observations: []v1alpha1.Observation{
+						{
+							Component: v1alpha1.ComponentSpoofGuard,
+							Action:    v1alpha1.ActionForwarded,
+						},
+						{
+							Component:     v1alpha1.ComponentNetworkPolicy,
+							ComponentInfo: "EgressRule",
+							Action:        v1alpha1.ActionForwarded,
+						},
+						{
+							Component:     v1alpha1.ComponentForwarding,
+							ComponentInfo: "Output",
+							Action:        v1alpha1.ActionForwarded,
+						},
+					},
+				},
+				{
+					Node: node2,
+					Observations: []v1alpha1.Observation{
+						{
+							Component:     v1alpha1.ComponentForwarding,
+							ComponentInfo: "Classification",
+							Action:        v1alpha1.ActionReceived,
+						},
+						{
+							Component:     v1alpha1.ComponentForwarding,
+							ComponentInfo: "Output",
+							Action:        v1alpha1.ActionDelivered,
 						},
 					},
 				},
@@ -1481,13 +1701,13 @@ func TestTraceflowExternalIP(t *testing.T) {
 				Node: node,
 				Observations: []v1alpha1.Observation{
 					{
-						Component: v1alpha1.SpoofGuard,
-						Action:    v1alpha1.Forwarded,
+						Component: v1alpha1.ComponentSpoofGuard,
+						Action:    v1alpha1.ActionForwarded,
 					},
 					{
-						Component:     v1alpha1.Forwarding,
+						Component:     v1alpha1.ComponentForwarding,
 						ComponentInfo: "Output",
-						Action:        v1alpha1.ForwardedOutOfOverlay,
+						Action:        v1alpha1.ActionForwardedOutOfOverlay,
 					},
 				},
 			},
@@ -1502,7 +1722,7 @@ func (data *TestData) waitForTraceflow(t *testing.T, name string, phase v1alpha1
 	var err error
 	timeout := 15 * time.Second
 	if err = wait.PollImmediate(defaultInterval, timeout, func() (bool, error) {
-		tf, err = data.crdClient.OpsV1alpha1().Traceflows().Get(context.TODO(), name, metav1.GetOptions{})
+		tf, err = data.crdClient.CrdV1alpha1().Traceflows().Get(context.TODO(), name, metav1.GetOptions{})
 		if err != nil || tf.Status.Phase != phase {
 			return false, nil
 		}
@@ -1571,7 +1791,7 @@ func (data *TestData) createANPDenyIngress(key string, value string, name string
 			Egress: []secv1alpha1.Rule{},
 		},
 	}
-	anpCreated, err := k8sUtils.securityClient.NetworkPolicies(testNamespace).Create(context.TODO(), &anp, metav1.CreateOptions{})
+	anpCreated, err := k8sUtils.crdClient.CrdV1alpha1().NetworkPolicies(testNamespace).Create(context.TODO(), &anp, metav1.CreateOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -1580,7 +1800,7 @@ func (data *TestData) createANPDenyIngress(key string, value string, name string
 
 // deleteAntreaNetworkpolicy deletes an Antrea NetworkPolicy.
 func (data *TestData) deleteAntreaNetworkpolicy(policy *secv1alpha1.NetworkPolicy) error {
-	if err := k8sUtils.securityClient.NetworkPolicies(testNamespace).Delete(context.TODO(), policy.Name, metav1.DeleteOptions{}); err != nil {
+	if err := k8sUtils.crdClient.CrdV1alpha1().NetworkPolicies(testNamespace).Delete(context.TODO(), policy.Name, metav1.DeleteOptions{}); err != nil {
 		return fmt.Errorf("unable to cleanup policy %v: %v", policy.Name, err)
 	}
 	return nil
@@ -1639,14 +1859,43 @@ func runTestTraceflow(t *testing.T, data *TestData, tc testcase) {
 	case 6:
 		skipIfNotIPv6Cluster(t)
 	}
-	if _, err := data.crdClient.OpsV1alpha1().Traceflows().Create(context.TODO(), tc.tf, metav1.CreateOptions{}); err != nil {
+	if tc.skipReason != "" {
+		t.Skip(tc.skipReason)
+	}
+	if _, err := data.crdClient.CrdV1alpha1().Traceflows().Create(context.TODO(), tc.tf, metav1.CreateOptions{}); err != nil {
 		t.Fatalf("Error when creating traceflow: %v", err)
 	}
 	defer func() {
-		if err := data.crdClient.OpsV1alpha1().Traceflows().Delete(context.TODO(), tc.tf.Name, metav1.DeleteOptions{}); err != nil {
+		if err := data.crdClient.CrdV1alpha1().Traceflows().Delete(context.TODO(), tc.tf.Name, metav1.DeleteOptions{}); err != nil {
 			t.Errorf("Error when deleting traceflow: %v", err)
 		}
 	}()
+
+	if tc.tf.Spec.LiveTraffic {
+		// LiveTraffic Traceflow test supports only ICMP traffic from
+		// the source Pod to an IP or another Pod.
+		var dstPodIPs *PodIPs
+		srcPod := tc.tf.Spec.Source.Pod
+		dstPod := tc.tf.Spec.Destination.Pod
+		dstIP := tc.tf.Spec.Destination.IP
+		if dstIP != "" {
+			ip := net.ParseIP(dstIP)
+			if ip.To4() != nil {
+				dstPodIPs = &PodIPs{ipv4: &ip}
+			} else {
+				dstPodIPs = &PodIPs{ipv6: &ip}
+			}
+		} else {
+			podIPs := waitForPodIPs(t, data, []string{dstPod})
+			dstPodIPs = podIPs[dstPod]
+		}
+		// Give a little time for Nodes to install OVS flows.
+		time.Sleep(time.Second * 2)
+		// Send an ICMP echo packet from the source Pod to the destination.
+		if err := data.runPingCommandFromTestPod(srcPod, dstPodIPs, 2); err != nil {
+			t.Logf("Ping '%s' -> '%v' failed: ERROR (%v)", srcPod, *dstPodIPs, err)
+		}
+	}
 
 	tf, err := data.waitForTraceflow(t, tc.tf.Name, tc.expectedPhase)
 	if err != nil {
@@ -1663,7 +1912,7 @@ func runTestTraceflow(t *testing.T, data *TestData, tc testcase) {
 			return
 		}
 	} else if len(tc.expectedResults) > 0 {
-		if tf.Status.Results[0].Observations[0].Component == v1alpha1.SpoofGuard {
+		if tf.Status.Results[0].Observations[0].Component == v1alpha1.ComponentSpoofGuard {
 			if err = compareObservations(tc.expectedResults[0], tf.Status.Results[0]); err != nil {
 				t.Fatal(err)
 				return
@@ -1682,5 +1931,8 @@ func runTestTraceflow(t *testing.T, data *TestData, tc testcase) {
 				return
 			}
 		}
+	}
+	if tc.expectedPktCap != nil && !reflect.DeepEqual(tc.expectedPktCap, tf.Status.CapturedPacket) {
+		t.Fatalf("Captured packet should be: %+v, but got: %+v", tc.expectedPktCap, tf.Status.CapturedPacket)
 	}
 }

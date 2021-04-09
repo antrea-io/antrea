@@ -30,7 +30,7 @@ import (
 	featuregatetesting "k8s.io/component-base/featuregate/testing"
 
 	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
-	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
+	crdv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha1"
 	statsv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/stats/v1alpha1"
 	fakeversioned "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/fake"
 	crdinformers "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions"
@@ -44,16 +44,16 @@ var (
 	np2 = &networkingv1.NetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{Namespace: "foo", Name: "baz", UID: "uid2"},
 	}
-	cnp1 = &secv1alpha1.ClusterNetworkPolicy{
+	cnp1 = &crdv1alpha1.ClusterNetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{Namespace: "", Name: "bar", UID: "uid3"},
 	}
-	cnp2 = &secv1alpha1.ClusterNetworkPolicy{
+	cnp2 = &crdv1alpha1.ClusterNetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{Namespace: "", Name: "baz", UID: "uid4"},
 	}
-	anp1 = &secv1alpha1.NetworkPolicy{
+	anp1 = &crdv1alpha1.NetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{Namespace: "foo", Name: "bar", UID: "uid5"},
 	}
-	anp2 = &secv1alpha1.NetworkPolicy{
+	anp2 = &crdv1alpha1.NetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{Namespace: "foo", Name: "baz", UID: "uid6"},
 	}
 )
@@ -89,20 +89,38 @@ func TestAggregatorCollectListGet(t *testing.T) {
 					AntreaClusterNetworkPolicies: []controlplane.NetworkPolicyStats{
 						{
 							NetworkPolicy: controlplane.NetworkPolicyReference{UID: cnp1.UID},
-							TrafficStats: statsv1alpha1.TrafficStats{
-								Bytes:    20,
-								Packets:  5,
-								Sessions: 2,
+							RuleTrafficStats: []statsv1alpha1.RuleTrafficStats{
+								{
+									Name: "rule1",
+									TrafficStats: statsv1alpha1.TrafficStats{
+										Bytes:    20,
+										Packets:  5,
+										Sessions: 2,
+									},
+								},
+								{
+									Name: "rule3",
+									TrafficStats: statsv1alpha1.TrafficStats{
+										Bytes:    22,
+										Packets:  52,
+										Sessions: 22,
+									},
+								},
 							},
 						},
 					},
 					AntreaNetworkPolicies: []controlplane.NetworkPolicyStats{
 						{
 							NetworkPolicy: controlplane.NetworkPolicyReference{UID: anp1.UID},
-							TrafficStats: statsv1alpha1.TrafficStats{
-								Bytes:    20,
-								Packets:  5,
-								Sessions: 2,
+							RuleTrafficStats: []statsv1alpha1.RuleTrafficStats{
+								{
+									Name: "rule2",
+									TrafficStats: statsv1alpha1.TrafficStats{
+										Bytes:    20,
+										Packets:  5,
+										Sessions: 2,
+									},
+								},
 							},
 						},
 					},
@@ -124,20 +142,30 @@ func TestAggregatorCollectListGet(t *testing.T) {
 					AntreaClusterNetworkPolicies: []controlplane.NetworkPolicyStats{
 						{
 							NetworkPolicy: controlplane.NetworkPolicyReference{UID: cnp1.UID},
-							TrafficStats: statsv1alpha1.TrafficStats{
-								Bytes:    20,
-								Packets:  8,
-								Sessions: 5,
+							RuleTrafficStats: []statsv1alpha1.RuleTrafficStats{
+								{
+									Name: "rule3",
+									TrafficStats: statsv1alpha1.TrafficStats{
+										Bytes:    20,
+										Packets:  8,
+										Sessions: 5,
+									},
+								},
 							},
 						},
 					},
 					AntreaNetworkPolicies: []controlplane.NetworkPolicyStats{
 						{
 							NetworkPolicy: controlplane.NetworkPolicyReference{UID: anp1.UID},
-							TrafficStats: statsv1alpha1.TrafficStats{
-								Bytes:    100,
-								Packets:  10,
-								Sessions: 5,
+							RuleTrafficStats: []statsv1alpha1.RuleTrafficStats{
+								{
+									Name: "rule4",
+									TrafficStats: statsv1alpha1.TrafficStats{
+										Bytes:    100,
+										Packets:  10,
+										Sessions: 5,
+									},
+								},
 							},
 						},
 					},
@@ -176,9 +204,27 @@ func TestAggregatorCollectListGet(t *testing.T) {
 						Name: cnp1.Name,
 					},
 					TrafficStats: statsv1alpha1.TrafficStats{
-						Bytes:    40,
-						Packets:  13,
-						Sessions: 7,
+						Bytes:    62,
+						Packets:  65,
+						Sessions: 29,
+					},
+					RuleTrafficStats: []statsv1alpha1.RuleTrafficStats{
+						{
+							Name: "rule1",
+							TrafficStats: statsv1alpha1.TrafficStats{
+								Bytes:    20,
+								Packets:  5,
+								Sessions: 2,
+							},
+						},
+						{
+							Name: "rule3",
+							TrafficStats: statsv1alpha1.TrafficStats{
+								Bytes:    42,
+								Packets:  60,
+								Sessions: 27,
+							},
+						},
 					},
 				},
 				{
@@ -190,6 +236,7 @@ func TestAggregatorCollectListGet(t *testing.T) {
 						Packets:  0,
 						Sessions: 0,
 					},
+					RuleTrafficStats: nil,
 				},
 			},
 			expectedAntreaNetworkPolicyStats: []statsv1alpha1.AntreaNetworkPolicyStats{
@@ -202,6 +249,24 @@ func TestAggregatorCollectListGet(t *testing.T) {
 						Bytes:    120,
 						Packets:  15,
 						Sessions: 7,
+					},
+					RuleTrafficStats: []statsv1alpha1.RuleTrafficStats{
+						{
+							Name: "rule2",
+							TrafficStats: statsv1alpha1.TrafficStats{
+								Bytes:    20,
+								Packets:  5,
+								Sessions: 2,
+							},
+						},
+						{
+							Name: "rule4",
+							TrafficStats: statsv1alpha1.TrafficStats{
+								Bytes:    100,
+								Packets:  10,
+								Sessions: 5,
+							},
+						},
 					},
 				},
 				{
@@ -237,20 +302,30 @@ func TestAggregatorCollectListGet(t *testing.T) {
 					AntreaClusterNetworkPolicies: []controlplane.NetworkPolicyStats{
 						{
 							NetworkPolicy: controlplane.NetworkPolicyReference{UID: cnp1.UID},
-							TrafficStats: statsv1alpha1.TrafficStats{
-								Bytes:    20,
-								Packets:  8,
-								Sessions: 5,
+							RuleTrafficStats: []statsv1alpha1.RuleTrafficStats{
+								{
+									Name: "rule5",
+									TrafficStats: statsv1alpha1.TrafficStats{
+										Bytes:    20,
+										Packets:  8,
+										Sessions: 5,
+									},
+								},
 							},
 						},
 					},
 					AntreaNetworkPolicies: []controlplane.NetworkPolicyStats{
 						{
 							NetworkPolicy: controlplane.NetworkPolicyReference{UID: anp1.UID},
-							TrafficStats: statsv1alpha1.TrafficStats{
-								Bytes:    20,
-								Packets:  8,
-								Sessions: 5,
+							RuleTrafficStats: []statsv1alpha1.RuleTrafficStats{
+								{
+									Name: "rule6",
+									TrafficStats: statsv1alpha1.TrafficStats{
+										Bytes:    20,
+										Packets:  8,
+										Sessions: 5,
+									},
+								},
 							},
 						},
 					},
@@ -298,6 +373,113 @@ func TestAggregatorCollectListGet(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "support old style traffic stats collection",
+			summaries: []*controlplane.NodeStatsSummary{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "node-1",
+					},
+					NetworkPolicies: []controlplane.NetworkPolicyStats{},
+					AntreaClusterNetworkPolicies: []controlplane.NetworkPolicyStats{
+						{
+							NetworkPolicy: controlplane.NetworkPolicyReference{UID: cnp1.UID},
+							TrafficStats: statsv1alpha1.TrafficStats{
+								Bytes:    20,
+								Packets:  8,
+								Sessions: 5,
+							},
+						},
+					},
+					AntreaNetworkPolicies: []controlplane.NetworkPolicyStats{
+						{
+							NetworkPolicy: controlplane.NetworkPolicyReference{UID: anp1.UID},
+							TrafficStats: statsv1alpha1.TrafficStats{
+								Bytes:    20,
+								Packets:  8,
+								Sessions: 5,
+							},
+						},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "node-2",
+					},
+					NetworkPolicies: []controlplane.NetworkPolicyStats{
+						{
+							NetworkPolicy: controlplane.NetworkPolicyReference{UID: np2.UID},
+							TrafficStats: statsv1alpha1.TrafficStats{
+								Bytes:    10,
+								Packets:  8,
+								Sessions: 5,
+							},
+						},
+					},
+					AntreaClusterNetworkPolicies: []controlplane.NetworkPolicyStats{
+						{
+							NetworkPolicy: controlplane.NetworkPolicyReference{UID: cnp1.UID},
+							TrafficStats: statsv1alpha1.TrafficStats{
+								Bytes:    10,
+								Packets:  8,
+								Sessions: 5,
+							},
+						},
+					},
+					AntreaNetworkPolicies: []controlplane.NetworkPolicyStats{
+						{
+							NetworkPolicy: controlplane.NetworkPolicyReference{UID: anp1.UID},
+							TrafficStats: statsv1alpha1.TrafficStats{
+								Bytes:    30,
+								Packets:  3,
+								Sessions: 5,
+							},
+						},
+					},
+				},
+			},
+			existingNetworkPolicies:              []runtime.Object{np2},
+			existingAntreaClusterNetworkPolicies: []runtime.Object{cnp1},
+			existingAntreaNetworkPolicies:        []runtime.Object{anp1},
+			expectedNetworkPolicyStats: []statsv1alpha1.NetworkPolicyStats{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      np2.Name,
+						Namespace: np2.Namespace,
+					},
+					TrafficStats: statsv1alpha1.TrafficStats{
+						Bytes:    10,
+						Packets:  8,
+						Sessions: 5,
+					},
+				},
+			},
+			expectedAntreaClusterNetworkPolicyStats: []statsv1alpha1.AntreaClusterNetworkPolicyStats{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: cnp1.Name,
+					},
+					TrafficStats: statsv1alpha1.TrafficStats{
+						Bytes:    30,
+						Packets:  16,
+						Sessions: 10,
+					},
+				},
+			},
+			expectedAntreaNetworkPolicyStats: []statsv1alpha1.AntreaNetworkPolicyStats{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      anp1.Name,
+						Namespace: anp1.Namespace,
+					},
+					TrafficStats: statsv1alpha1.TrafficStats{
+						Bytes:    50,
+						Packets:  11,
+						Sessions: 10,
+					},
+				},
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -309,7 +491,7 @@ func TestAggregatorCollectListGet(t *testing.T) {
 			informerFactory := informers.NewSharedInformerFactory(client, 12*time.Hour)
 			crdClient := fakeversioned.NewSimpleClientset(append(tt.existingAntreaClusterNetworkPolicies, tt.existingAntreaNetworkPolicies...)...)
 			crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, 12*time.Hour)
-			a := NewAggregator(informerFactory.Networking().V1().NetworkPolicies(), crdInformerFactory.Security().V1alpha1().ClusterNetworkPolicies(), crdInformerFactory.Security().V1alpha1().NetworkPolicies())
+			a := NewAggregator(informerFactory.Networking().V1().NetworkPolicies(), crdInformerFactory.Crd().V1alpha1().ClusterNetworkPolicies(), crdInformerFactory.Crd().V1alpha1().NetworkPolicies())
 			informerFactory.Start(stopCh)
 			crdInformerFactory.Start(stopCh)
 			go a.Run(stopCh)
@@ -333,12 +515,14 @@ func TestAggregatorCollectListGet(t *testing.T) {
 				actualStats, exists := a.GetAntreaClusterNetworkPolicyStats(Stats.Name)
 				require.True(t, exists)
 				require.Equal(t, Stats.TrafficStats, actualStats.TrafficStats)
+				require.ElementsMatch(t, Stats.RuleTrafficStats, actualStats.RuleTrafficStats)
 			}
 			assert.Equal(t, len(tt.expectedAntreaNetworkPolicyStats), len(a.ListAntreaNetworkPolicyStats("")))
 			for _, Stats := range tt.expectedAntreaNetworkPolicyStats {
 				actualStats, exists := a.GetAntreaNetworkPolicyStats(Stats.Namespace, Stats.Name)
 				require.True(t, exists)
 				require.Equal(t, Stats.TrafficStats, actualStats.TrafficStats)
+				require.ElementsMatch(t, Stats.RuleTrafficStats, actualStats.RuleTrafficStats)
 			}
 		})
 	}
@@ -353,7 +537,7 @@ func TestDeleteNetworkPolicy(t *testing.T) {
 	informerFactory := informers.NewSharedInformerFactory(client, 12*time.Hour)
 	crdClient := fakeversioned.NewSimpleClientset(cnp1, anp1)
 	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, 12*time.Hour)
-	a := NewAggregator(informerFactory.Networking().V1().NetworkPolicies(), crdInformerFactory.Security().V1alpha1().ClusterNetworkPolicies(), crdInformerFactory.Security().V1alpha1().NetworkPolicies())
+	a := NewAggregator(informerFactory.Networking().V1().NetworkPolicies(), crdInformerFactory.Crd().V1alpha1().ClusterNetworkPolicies(), crdInformerFactory.Crd().V1alpha1().NetworkPolicies())
 	informerFactory.Start(stopCh)
 	crdInformerFactory.Start(stopCh)
 	go a.Run(stopCh)
@@ -375,20 +559,30 @@ func TestDeleteNetworkPolicy(t *testing.T) {
 		AntreaClusterNetworkPolicies: []controlplane.NetworkPolicyStats{
 			{
 				NetworkPolicy: controlplane.NetworkPolicyReference{UID: cnp1.UID},
-				TrafficStats: statsv1alpha1.TrafficStats{
-					Bytes:    30,
-					Packets:  3,
-					Sessions: 3,
+				RuleTrafficStats: []statsv1alpha1.RuleTrafficStats{
+					{
+						Name: "rule1",
+						TrafficStats: statsv1alpha1.TrafficStats{
+							Bytes:    30,
+							Packets:  3,
+							Sessions: 3,
+						},
+					},
 				},
 			},
 		},
 		AntreaNetworkPolicies: []controlplane.NetworkPolicyStats{
 			{
 				NetworkPolicy: controlplane.NetworkPolicyReference{UID: anp1.UID},
-				TrafficStats: statsv1alpha1.TrafficStats{
-					Bytes:    30,
-					Packets:  3,
-					Sessions: 3,
+				RuleTrafficStats: []statsv1alpha1.RuleTrafficStats{
+					{
+						Name: "rule2",
+						TrafficStats: statsv1alpha1.TrafficStats{
+							Bytes:    30,
+							Packets:  3,
+							Sessions: 3,
+						},
+					},
 				},
 			},
 		},
@@ -403,8 +597,8 @@ func TestDeleteNetworkPolicy(t *testing.T) {
 	require.Equal(t, 1, len(a.ListAntreaNetworkPolicyStats("")))
 
 	client.NetworkingV1().NetworkPolicies(np1.Namespace).Delete(context.TODO(), np1.Name, metav1.DeleteOptions{})
-	crdClient.SecurityV1alpha1().ClusterNetworkPolicies().Delete(context.TODO(), cnp1.Name, metav1.DeleteOptions{})
-	crdClient.SecurityV1alpha1().NetworkPolicies(anp1.Namespace).Delete(context.TODO(), anp1.Name, metav1.DeleteOptions{})
+	crdClient.CrdV1alpha1().ClusterNetworkPolicies().Delete(context.TODO(), cnp1.Name, metav1.DeleteOptions{})
+	crdClient.CrdV1alpha1().NetworkPolicies(anp1.Namespace).Delete(context.TODO(), anp1.Name, metav1.DeleteOptions{})
 	// Event handlers are asynchronous, it's supposed to finish very soon.
 	err = wait.PollImmediate(100*time.Millisecond, time.Second, func() (done bool, err error) {
 		return len(a.ListNetworkPolicyStats("")) == 0 && len(a.ListAntreaClusterNetworkPolicyStats()) == 0 && len(a.ListAntreaNetworkPolicyStats("")) == 0, nil

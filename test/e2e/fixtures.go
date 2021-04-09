@@ -16,6 +16,7 @@ package e2e
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"sync"
@@ -92,6 +93,16 @@ func skipIfEncapModeIsNot(tb testing.TB, data *TestData, encapMode config.Traffi
 	}
 }
 
+func skipIfEncapModeIsNotAndProviderIs(tb testing.TB, data *TestData, encapMode config.TrafficEncapModeType, name string) {
+	currentEncapMode, err := data.GetEncapMode()
+	if err != nil {
+		tb.Fatalf("Failed to get encap mode: %v", err)
+	}
+	if currentEncapMode != encapMode && testOptions.providerName == name {
+		tb.Skipf("Skipping test when encap mode is '%s' and provider is '%s', test requires '%s'", currentEncapMode.String(), name, encapMode.String())
+	}
+}
+
 func ensureAntreaRunning(tb testing.TB, data *TestData) error {
 	tb.Logf("Applying Antrea YAML")
 	if err := data.deployAntrea(); err != nil {
@@ -140,30 +151,36 @@ func setupTest(tb testing.TB) (*TestData, error) {
 	return testData, nil
 }
 
-func setupTestWithIPFIXCollector(tb testing.TB) (*TestData, error, bool) {
-	// TODO: remove hardcoding to IPv4 after flow aggregator supports IPv6
-	isIPv6 := false
-	if _, err := setupTest(tb); err != nil {
-		return nil, err, isIPv6
+func setupTestWithIPFIXCollector(tb testing.TB) (*TestData, bool, bool, error) {
+	v4Enabled := clusterInfo.podV4NetworkCIDR != ""
+	v6Enabled := clusterInfo.podV6NetworkCIDR != ""
+	testData, err := setupTest(tb)
+	if err != nil {
+		return testData, v4Enabled, v6Enabled, err
 	}
 	// Create pod using ipfix collector image
-	if err := testData.createPodOnNode("ipfix-collector", "", ipfixCollectorImage, nil, nil, nil, nil, true, nil); err != nil {
+	if err = testData.createPodOnNode("ipfix-collector", "", ipfixCollectorImage, nil, nil, nil, nil, true, nil); err != nil {
 		tb.Errorf("Error when creating the ipfix collector Pod: %v", err)
 	}
 	ipfixCollectorIP, err := testData.podWaitForIPs(defaultTimeout, "ipfix-collector", testNamespace)
 	if err != nil || len(ipfixCollectorIP.ipStrings) == 0 {
 		tb.Errorf("Error when waiting to get ipfix collector Pod IP: %v", err)
-		return nil, err, isIPv6
+		return nil, v4Enabled, v6Enabled, err
 	}
-	ipStr := ipfixCollectorIP.ipv4.String()
-	ipfixCollectorAddr := fmt.Sprintf("%s:%s:tcp", ipStr, ipfixCollectorPort)
+	var ipStr string
+	if v6Enabled && ipfixCollectorIP.ipv6 != nil {
+		ipStr = ipfixCollectorIP.ipv6.String()
+	} else {
+		ipStr = ipfixCollectorIP.ipv4.String()
+	}
+	ipfixCollectorAddr := fmt.Sprintf("%s:tcp", net.JoinHostPort(ipStr, ipfixCollectorPort))
+
+	faClusterIPAddr := ""
 	tb.Logf("Applying flow aggregator YAML with ipfix collector address: %s", ipfixCollectorAddr)
 	faClusterIP, err := testData.deployFlowAggregator(ipfixCollectorAddr)
 	if err != nil {
-		return testData, err, isIPv6
+		return testData, v4Enabled, v6Enabled, err
 	}
-
-	faClusterIPAddr := ""
 	if testOptions.providerName == "kind" {
 		// In Kind cluster, there are issues with DNS name resolution on worker nodes.
 		// Please note that CoreDNS services are forced on to control-plane Node.
@@ -171,14 +188,14 @@ func setupTestWithIPFIXCollector(tb testing.TB) (*TestData, error, bool) {
 	}
 	tb.Logf("Deploying flow exporter with collector address: %s", faClusterIPAddr)
 	if err = testData.deployAntreaFlowExporter(faClusterIPAddr); err != nil {
-		return testData, err, isIPv6
+		return testData, v4Enabled, v6Enabled, err
 	}
 
 	tb.Logf("Checking CoreDNS deployment")
 	if err = testData.checkCoreDNSPods(defaultTimeout); err != nil {
-		return testData, err, isIPv6
+		return testData, v4Enabled, v6Enabled, err
 	}
-	return testData, nil, isIPv6
+	return testData, v4Enabled, v6Enabled, nil
 }
 
 func exportLogs(tb testing.TB, data *TestData, logsSubDir string, writeNodeLogs bool) {
@@ -304,8 +321,10 @@ func exportLogs(tb testing.TB, data *TestData, logsSubDir string, writeNodeLogs 
 }
 
 func teardownFlowAggregator(tb testing.TB, data *TestData) {
-	if err := testData.gracefulExitFlowAggregator(testOptions.coverageDir); err != nil {
-		tb.Fatalf("Error when gracefully exiting Flow Aggregator: %v", err)
+	if testOptions.enableCoverage {
+		if err := testData.gracefulExitFlowAggregator(testOptions.coverageDir); err != nil {
+			tb.Fatalf("Error when gracefully exiting Flow Aggregator: %v", err)
+		}
 	}
 	tb.Logf("Deleting '%s' K8s Namespace", flowAggregatorNamespace)
 	if err := data.deleteNamespace(flowAggregatorNamespace, defaultTimeout); err != nil {
@@ -326,7 +345,7 @@ func teardownTest(tb testing.TB, data *TestData) {
 
 func deletePodWrapper(tb testing.TB, data *TestData, name string) {
 	tb.Logf("Deleting Pod '%s'", name)
-	if err := data.deletePod(name); err != nil {
+	if err := data.deletePod(testNamespace, name); err != nil {
 		tb.Logf("Error when deleting Pod: %v", err)
 	}
 }

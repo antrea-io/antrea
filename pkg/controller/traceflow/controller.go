@@ -31,10 +31,10 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog"
 
-	opsv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/ops/v1alpha1"
+	crdv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha1"
 	"github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned"
-	opsinformers "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions/ops/v1alpha1"
-	opslisters "github.com/vmware-tanzu/antrea/pkg/client/listers/ops/v1alpha1"
+	crdinformers "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions/crd/v1alpha1"
+	crdlisters "github.com/vmware-tanzu/antrea/pkg/client/listers/crd/v1alpha1"
 )
 
 const (
@@ -62,20 +62,21 @@ const (
 
 	// String set to TraceflowStatus.Reason.
 	traceflowTimeout = "Traceflow timeout"
+
+	// Traceflow timeout period.
+	defaultTimeoutDuration = time.Second * time.Duration(crdv1alpha1.DefaultTraceflowTimeout)
 )
 
 var (
-	// Traceflow timeout period.
-	timeoutDuration      = 2 * time.Minute
-	timeoutCheckInterval = timeoutDuration / 2
+	timeoutCheckInterval = 10 * time.Second
 )
 
 // Controller is for traceflow.
 type Controller struct {
 	client                 versioned.Interface
 	podInformer            coreinformers.PodInformer
-	traceflowInformer      opsinformers.TraceflowInformer
-	traceflowLister        opslisters.TraceflowLister
+	traceflowInformer      crdinformers.TraceflowInformer
+	traceflowLister        crdlisters.TraceflowLister
 	traceflowListerSynced  cache.InformerSynced
 	queue                  workqueue.RateLimitingInterface
 	runningTraceflowsMutex sync.Mutex
@@ -83,7 +84,7 @@ type Controller struct {
 }
 
 // NewTraceflowController creates a new traceflow controller and adds podIP indexer to podInformer.
-func NewTraceflowController(client versioned.Interface, podInformer coreinformers.PodInformer, traceflowInformer opsinformers.TraceflowInformer) *Controller {
+func NewTraceflowController(client versioned.Interface, podInformer coreinformers.PodInformer, traceflowInformer crdinformers.TraceflowInformer) *Controller {
 	c := &Controller{
 		client:                client,
 		podInformer:           podInformer,
@@ -123,7 +124,7 @@ func podIPsIndexFunc(obj interface{}) ([]string, error) {
 }
 
 // enqueueTraceflow adds an object to the controller work queue.
-func (c *Controller) enqueueTraceflow(tf *opsv1alpha1.Traceflow) {
+func (c *Controller) enqueueTraceflow(tf *crdv1alpha1.Traceflow) {
 	c.queue.Add(tf.Name)
 }
 
@@ -143,7 +144,7 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 		klog.Errorf("Failed to list all Antrea Traceflows")
 	}
 	for _, tf := range tfs {
-		if tf.Status.Phase == opsv1alpha1.Running {
+		if tf.Status.Phase == crdv1alpha1.Running {
 			if err := c.occupyTag(tf); err != nil {
 				klog.Errorf("Load Traceflow data plane tag failed %v+: %v", tf, err)
 			}
@@ -161,19 +162,19 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 }
 
 func (c *Controller) addTraceflow(obj interface{}) {
-	tf := obj.(*opsv1alpha1.Traceflow)
+	tf := obj.(*crdv1alpha1.Traceflow)
 	klog.Infof("Processing Traceflow %s ADD event", tf.Name)
 	c.enqueueTraceflow(tf)
 }
 
 func (c *Controller) updateTraceflow(_, curObj interface{}) {
-	tf := curObj.(*opsv1alpha1.Traceflow)
+	tf := curObj.(*crdv1alpha1.Traceflow)
 	klog.Infof("Processing Traceflow %s UPDATE event", tf.Name)
 	c.enqueueTraceflow(tf)
 }
 
 func (c *Controller) deleteTraceflow(old interface{}) {
-	tf := old.(*opsv1alpha1.Traceflow)
+	tf := old.(*crdv1alpha1.Traceflow)
 	klog.Infof("Processing Traceflow %s DELETE event", tf.Name)
 	c.deallocateTagForTF(tf)
 }
@@ -252,18 +253,18 @@ func (c *Controller) syncTraceflow(traceflowName string) error {
 		return err
 	}
 	switch tf.Status.Phase {
-	case "", opsv1alpha1.Pending:
+	case "", crdv1alpha1.Pending:
 		err = c.startTraceflow(tf)
-	case opsv1alpha1.Running:
+	case crdv1alpha1.Running:
 		err = c.checkTraceflowStatus(tf)
-	case opsv1alpha1.Failed:
+	case crdv1alpha1.Failed:
 		// Deallocate tag when agent set Traceflow status to Failed.
 		c.deallocateTagForTF(tf)
 	}
 	return err
 }
 
-func (c *Controller) startTraceflow(tf *opsv1alpha1.Traceflow) error {
+func (c *Controller) startTraceflow(tf *crdv1alpha1.Traceflow) error {
 	// Allocate data plane tag.
 	tag, err := c.allocateTag(tf.Name)
 	if err != nil {
@@ -273,64 +274,81 @@ func (c *Controller) startTraceflow(tf *opsv1alpha1.Traceflow) error {
 		return nil
 	}
 
-	err = c.updateTraceflowStatus(tf, opsv1alpha1.Running, "", tag)
+	err = c.updateTraceflowStatus(tf, crdv1alpha1.Running, "", tag)
 	if err != nil {
 		c.deallocateTag(tf.Name, tag)
 	}
 	return err
 }
 
-func (c *Controller) checkTraceflowStatus(tf *opsv1alpha1.Traceflow) error {
-	sender := false
-	receiver := false
-	for i, nodeResult := range tf.Status.Results {
-		for j, ob := range nodeResult.Observations {
-			if ob.Component == opsv1alpha1.SpoofGuard {
-				sender = true
-			}
-			if ob.Action == opsv1alpha1.Delivered || ob.Action == opsv1alpha1.Dropped || ob.Action == opsv1alpha1.ForwardedOutOfOverlay {
-				receiver = true
-			}
-			if ob.TranslatedDstIP != "" {
-				// Add Pod ns/name to observation if TranslatedDstIP (a.k.a. Service Endpoint address) is Pod IP.
-				pods, err := c.podInformer.Informer().GetIndexer().ByIndex(podIPsIndex, ob.TranslatedDstIP)
-				if err != nil {
-					klog.Infof("Unable to find Pod from IP, error: %+v", err)
-				} else if len(pods) > 0 {
-					pod, ok := pods[0].(*corev1.Pod)
-					if !ok {
-						klog.Warningf("Invalid Pod obj in cache")
-					} else {
-						tf.Status.Results[i].Observations[j].Pod = fmt.Sprintf("%s/%s", pod.Namespace, pod.Name)
+func (c *Controller) checkTraceflowStatus(tf *crdv1alpha1.Traceflow) error {
+	succeeded := false
+	if tf.Spec.LiveTraffic && tf.Spec.DroppedOnly {
+		// There should be only one reported NodeResult for droppedOnly
+		// Traceflow.
+		if len(tf.Status.Results) > 0 {
+			succeeded = true
+		}
+	} else {
+		sender := false
+		receiver := false
+		for i, nodeResult := range tf.Status.Results {
+			for j, ob := range nodeResult.Observations {
+				if ob.Component == crdv1alpha1.ComponentSpoofGuard {
+					sender = true
+				}
+				if ob.Action == crdv1alpha1.ActionDelivered ||
+					ob.Action == crdv1alpha1.ActionDropped ||
+					ob.Action == crdv1alpha1.ActionForwardedOutOfOverlay {
+					receiver = true
+				}
+				if ob.TranslatedDstIP != "" {
+					// Add Pod ns/name to observation if TranslatedDstIP (a.k.a. Service Endpoint address) is Pod IP.
+					pods, err := c.podInformer.Informer().GetIndexer().ByIndex(podIPsIndex, ob.TranslatedDstIP)
+					if err != nil {
+						klog.Infof("Unable to find Pod from IP, error: %+v", err)
+					} else if len(pods) > 0 {
+						pod, ok := pods[0].(*corev1.Pod)
+						if !ok {
+							klog.Warningf("Invalid Pod obj in cache")
+						} else {
+							tf.Status.Results[i].Observations[j].Pod = fmt.Sprintf("%s/%s", pod.Namespace, pod.Name)
+						}
 					}
 				}
 			}
 		}
+		succeeded = sender && receiver
 	}
-	if sender && receiver {
+	if succeeded {
 		c.deallocateTagForTF(tf)
-		return c.updateTraceflowStatus(tf, opsv1alpha1.Succeeded, "", 0)
+		return c.updateTraceflowStatus(tf, crdv1alpha1.Succeeded, "", 0)
+	}
+
+	timeoutSeconds := int64(tf.Spec.Timeout)
+	if timeoutSeconds == 0 {
+		timeoutSeconds = int64(defaultTimeoutDuration.Seconds())
 	}
 	// CreationTimestamp is of second accuracy.
-	if time.Now().Unix() > tf.CreationTimestamp.Unix()+int64(timeoutDuration.Seconds()) {
+	if time.Now().Unix() > tf.CreationTimestamp.Unix()+timeoutSeconds {
 		c.deallocateTagForTF(tf)
-		return c.updateTraceflowStatus(tf, opsv1alpha1.Failed, traceflowTimeout, 0)
+		return c.updateTraceflowStatus(tf, crdv1alpha1.Failed, traceflowTimeout, 0)
 	}
 	return nil
 }
 
-func (c *Controller) updateTraceflowStatus(tf *opsv1alpha1.Traceflow, phase opsv1alpha1.TraceflowPhase, reason string, dataPlaneTag uint8) error {
+func (c *Controller) updateTraceflowStatus(tf *crdv1alpha1.Traceflow, phase crdv1alpha1.TraceflowPhase, reason string, dataPlaneTag uint8) error {
 	update := tf.DeepCopy()
 	update.Status.Phase = phase
 	update.Status.DataplaneTag = dataPlaneTag
 	if reason != "" {
 		update.Status.Reason = reason
 	}
-	_, err := c.client.OpsV1alpha1().Traceflows().UpdateStatus(context.TODO(), update, metav1.UpdateOptions{})
+	_, err := c.client.CrdV1alpha1().Traceflows().UpdateStatus(context.TODO(), update, metav1.UpdateOptions{})
 	return err
 }
 
-func (c *Controller) occupyTag(tf *opsv1alpha1.Traceflow) error {
+func (c *Controller) occupyTag(tf *crdv1alpha1.Traceflow) error {
 	tag := tf.Status.DataplaneTag
 	if tag < minTagNum || tag > maxTagNum {
 		return errors.New("this Traceflow CRD's data plane tag is out of range")
@@ -373,7 +391,7 @@ func (c *Controller) allocateTag(name string) (uint8, error) {
 }
 
 // Deallocates tag from cache. Ignore DataplaneTag == 0 which is an invalid case.
-func (c *Controller) deallocateTagForTF(tf *opsv1alpha1.Traceflow) {
+func (c *Controller) deallocateTagForTF(tf *crdv1alpha1.Traceflow) {
 	if tf.Status.DataplaneTag != 0 {
 		c.deallocateTag(tf.Name, tf.Status.DataplaneTag)
 	}

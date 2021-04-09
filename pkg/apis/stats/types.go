@@ -24,9 +24,10 @@ import (
 type AntreaClusterNetworkPolicyStats struct {
 	metav1.TypeMeta
 	metav1.ObjectMeta
-
 	// The traffic stats of the Antrea ClusterNetworkPolicy.
 	TrafficStats TrafficStats
+	// The traffic stats of the Antrea ClusterNetworkPolicy rules.
+	RuleTrafficStats []RuleTrafficStats
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -49,6 +50,8 @@ type AntreaNetworkPolicyStats struct {
 
 	// The traffic stats of the Antrea NetworkPolicy.
 	TrafficStats TrafficStats
+	// The traffic stats of the Antrea NetworkPolicy, from rule perspective.
+	RuleTrafficStats []RuleTrafficStats
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -92,4 +95,10 @@ type TrafficStats struct {
 	Bytes int64
 	// Sessions is the sessions count hit by the NetworkPolicy.
 	Sessions int64
+}
+
+// RuleTrafficStats contains TrafficStats of single rule inside a NetworkPolicy.
+type RuleTrafficStats struct {
+	Name         string
+	TrafficStats TrafficStats
 }

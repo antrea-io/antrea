@@ -26,9 +26,9 @@ import (
 	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
-	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
+	crdv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha1"
 	statsv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/stats/v1alpha1"
-	secvinformers "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions/security/v1alpha1"
+	crdvinformers "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions/crd/v1alpha1"
 	"github.com/vmware-tanzu/antrea/pkg/features"
 	"github.com/vmware-tanzu/antrea/pkg/k8s"
 )
@@ -69,7 +69,7 @@ func uidIndexFunc(obj interface{}) ([]string, error) {
 	return []string{string(meta.GetUID())}, nil
 }
 
-func NewAggregator(networkPolicyInformer networkinginformers.NetworkPolicyInformer, cnpInformer secvinformers.ClusterNetworkPolicyInformer, anpInformer secvinformers.NetworkPolicyInformer) *Aggregator {
+func NewAggregator(networkPolicyInformer networkinginformers.NetworkPolicyInformer, cnpInformer crdvinformers.ClusterNetworkPolicyInformer, anpInformer crdvinformers.NetworkPolicyInformer) *Aggregator {
 	aggregator := &Aggregator{
 		networkPolicyStats: cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc, uidIndex: uidIndexFunc}),
 		dataCh:             make(chan *controlplane.NodeStatsSummary, 1000),
@@ -158,7 +158,7 @@ func (a *Aggregator) deleteNetworkPolicy(obj interface{}) {
 
 // addCNP handles ClusterNetworkPolicy ADD events and creates corresponding ClusterNetworkPolicyStats objects.
 func (a *Aggregator) addCNP(obj interface{}) {
-	cnp := obj.(*secv1alpha1.ClusterNetworkPolicy)
+	cnp := obj.(*crdv1alpha1.ClusterNetworkPolicy)
 	stats := &statsv1alpha1.AntreaClusterNetworkPolicyStats{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: cnp.Name,
@@ -173,14 +173,14 @@ func (a *Aggregator) addCNP(obj interface{}) {
 
 // deleteCNP handles ClusterNetworkPolicy DELETE events and deletes corresponding ClusterNetworkPolicyStats objects.
 func (a *Aggregator) deleteCNP(obj interface{}) {
-	cnp, ok := obj.(*secv1alpha1.ClusterNetworkPolicy)
+	cnp, ok := obj.(*crdv1alpha1.ClusterNetworkPolicy)
 	if !ok {
 		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
 		if !ok {
 			klog.Errorf("Error decoding object when deleting Antrea ClusterNetworkPolicy, invalid type: %v", obj)
 			return
 		}
-		cnp, ok = tombstone.Obj.(*secv1alpha1.ClusterNetworkPolicy)
+		cnp, ok = tombstone.Obj.(*crdv1alpha1.ClusterNetworkPolicy)
 		if !ok {
 			klog.Errorf("Error decoding object tombstone when deleting Antrea ClusterNetworkPolicy, invalid type: %v", tombstone.Obj)
 			return
@@ -197,7 +197,7 @@ func (a *Aggregator) deleteCNP(obj interface{}) {
 
 // addANP handles Antrea NetworkPolicy ADD events and creates corresponding AntreaNetworkPolicyStats objects.
 func (a *Aggregator) addANP(obj interface{}) {
-	anp := obj.(*secv1alpha1.NetworkPolicy)
+	anp := obj.(*crdv1alpha1.NetworkPolicy)
 	stats := &statsv1alpha1.AntreaNetworkPolicyStats{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: anp.Namespace,
@@ -213,14 +213,14 @@ func (a *Aggregator) addANP(obj interface{}) {
 
 // deleteANP handles Antrea NetworkPolicy DELETE events and deletes corresponding AntreaNetworkPolicyStats objects.
 func (a *Aggregator) deleteANP(obj interface{}) {
-	anp, ok := obj.(*secv1alpha1.NetworkPolicy)
+	anp, ok := obj.(*crdv1alpha1.NetworkPolicy)
 	if !ok {
 		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
 		if !ok {
 			klog.Errorf("Error decoding object when deleting Antrea NetworkPolicy, invalid type: %v", obj)
 			return
 		}
-		anp, ok = tombstone.Obj.(*secv1alpha1.NetworkPolicy)
+		anp, ok = tombstone.Obj.(*crdv1alpha1.NetworkPolicy)
 		if !ok {
 			klog.Errorf("Error decoding object tombstone when deleting Antrea NetworkPolicy, invalid type: %v", tombstone.Obj)
 			return
@@ -347,17 +347,29 @@ func (a *Aggregator) doCollect(summary *controlplane.NodeStatsSummary) {
 			if len(objs) > 0 {
 				// The object returned by cache is supposed to be read only, create a new object and update it.
 				curStats := objs[0].(*statsv1alpha1.AntreaClusterNetworkPolicyStats).DeepCopy()
-				addUp(&curStats.TrafficStats, &stats.TrafficStats)
+				// antrea agents may not be updated and still use TrafficStats to collect overall networkpolicy
+				if stats.TrafficStats.Bytes > 0 {
+					addUp(&curStats.TrafficStats, &stats.TrafficStats)
+				} else {
+					addRulesUp(&curStats.RuleTrafficStats, &curStats.TrafficStats, stats.RuleTrafficStats)
+				}
 				a.antreaClusterNetworkPolicyStats.Update(curStats)
 			}
 		}
+
 		for _, stats := range summary.AntreaNetworkPolicies {
 			// The policy have might been removed, skip processing it if missing.
 			objs, _ := a.antreaNetworkPolicyStats.ByIndex(uidIndex, string(stats.NetworkPolicy.UID))
+
 			if len(objs) > 0 {
 				// The object returned by cache is supposed to be read only, create a new object and update it.
 				curStats := objs[0].(*statsv1alpha1.AntreaNetworkPolicyStats).DeepCopy()
-				addUp(&curStats.TrafficStats, &stats.TrafficStats)
+				// antrea agents may not be updated and still use TrafficStats to collect overall networkpolicy
+				if stats.TrafficStats.Bytes > 0 {
+					addUp(&curStats.TrafficStats, &stats.TrafficStats)
+				} else {
+					addRulesUp(&curStats.RuleTrafficStats, &curStats.TrafficStats, stats.RuleTrafficStats)
+				}
 				a.antreaNetworkPolicyStats.Update(curStats)
 			}
 		}
@@ -368,4 +380,35 @@ func addUp(stats *statsv1alpha1.TrafficStats, inc *statsv1alpha1.TrafficStats) {
 	stats.Sessions += inc.Sessions
 	stats.Packets += inc.Packets
 	stats.Bytes += inc.Bytes
+}
+
+func addRulesUp(ruleStats *[]statsv1alpha1.RuleTrafficStats, ruleSumStats *statsv1alpha1.TrafficStats, inc []statsv1alpha1.RuleTrafficStats) {
+	incMap := make(map[string]*statsv1alpha1.TrafficStats)
+	for i, v := range inc {
+		incMap[v.Name] = &inc[i].TrafficStats
+	}
+	// accumulate incMap traffics stats to the current traffic stats
+	for _, v := range incMap {
+		addUp(ruleSumStats, v)
+	}
+	// accumulate the rule traffic stats as the rule has already 'existed' in the ruleStats
+	for i, v := range *ruleStats {
+		stats, exist := incMap[v.Name]
+		if exist {
+			(*ruleStats)[i].TrafficStats = statsv1alpha1.TrafficStats{
+				Packets:  v.TrafficStats.Packets + stats.Packets,
+				Bytes:    v.TrafficStats.Bytes + stats.Bytes,
+				Sessions: v.TrafficStats.Sessions + stats.Sessions,
+			}
+		}
+		delete(incMap, v.Name)
+	}
+	// convert remaining incs to RuleTrafficStats and add it to current traffic stats
+	for k, v := range incMap {
+		rs := statsv1alpha1.RuleTrafficStats{
+			Name:         k,
+			TrafficStats: *v,
+		}
+		*ruleStats = append(*ruleStats, rs)
+	}
 }

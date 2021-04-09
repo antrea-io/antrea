@@ -30,7 +30,8 @@ const (
 	// MyFeature featuregate.Feature = "MyFeature"
 
 	// alpha: v0.8
-	// Allows to apply ClusterNetworkPolicy and AntreaNetworkPolicy CRDs.
+	// beta: v1.0
+	// Enables support for ClusterNetworkPolicy and AntreaNetworkPolicy CRDs.
 	AntreaPolicy featuregate.Feature = "AntreaPolicy"
 
 	// alpha: v0.13
@@ -61,6 +62,10 @@ const (
 	// alpha: v0.13
 	// Expose Pod ports through NodePort
 	NodePortLocal featuregate.Feature = "NodePortLocal"
+
+	// alpha: v1.0
+	// Enable controlling SNAT IPs of Pod egress traffic.
+	Egress featuregate.Feature = "Egress"
 )
 
 var (
@@ -75,8 +80,9 @@ var (
 	// To add a new feature, define a key for it above and add it here. The features will be
 	// available throughout Antrea binaries.
 	defaultAntreaFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
-		AntreaPolicy:       {Default: false, PreRelease: featuregate.Alpha},
+		AntreaPolicy:       {Default: true, PreRelease: featuregate.Beta},
 		AntreaProxy:        {Default: true, PreRelease: featuregate.Beta},
+		Egress:             {Default: false, PreRelease: featuregate.Alpha},
 		EndpointSlice:      {Default: false, PreRelease: featuregate.Alpha},
 		Traceflow:          {Default: true, PreRelease: featuregate.Beta},
 		FlowExporter:       {Default: false, PreRelease: featuregate.Alpha},
@@ -96,6 +102,7 @@ var (
 	// still define a separate defaultAntreaFeatureGates map for Windows.
 	unsupportedFeaturesOnWindows = map[featuregate.Feature]struct{}{
 		NodePortLocal: {},
+		Egress:        {},
 	}
 )
 

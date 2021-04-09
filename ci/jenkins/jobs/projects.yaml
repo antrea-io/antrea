@@ -166,7 +166,7 @@
           wrappers:
           - timeout:
               fail: true
-              timeout: 10
+              timeout: 20
               type: absolute
           - credentials-binding:
               - text:
@@ -208,7 +208,7 @@
           wrappers:
           - timeout:
               fail: true
-              timeout: 10
+              timeout: 20
               type: absolute
           - credentials-binding:
               - text:
@@ -279,7 +279,7 @@
                 variable: CODECOV_TOKEN
           - timeout:
               fail: true
-              timeout: 80
+              timeout: 100
               type: absolute
           - credentials-binding:
             - text:

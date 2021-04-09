@@ -1,0 +1,63 @@
+- project:
+    name: Post-builders
+    jobs:
+        - 'Console-fetcher':
+            disabled: false
+            node: {}
+
+- job-template:
+    name: 'Console-fetcher'
+    node: '{node}'
+    disabled: '{disabled}'
+    parameters:
+      - string:
+          name: TARGET_BUILD_NAME
+      - string:
+          name: TARGET_BUILD_NUMBER
+    builders:
+      - inject:
+          properties-content: |
+            LOGDIR=$WORKSPACE/ci-artifacts/logs
+            NFS_LOGS=$WORKSPACE/../CI_LOGS
+            MAX_LOG_DAYS=60
+            EXT_SERVER=13.74.249.42
+            LOGSERVER={}@$EXT_SERVER
+      - fetch-text-console
+      - upload-console-logs
+    properties:
+      - build-discarder:
+          days-to-keep: 60
+          num-to-keep: 100
+          artifact-days-to-keep: 60
+          artifact-num-to-keep: 100
+    publishers:
+      - email-ext:
+          recipients: {}
+          subject: Console fetcher Failed
+          failure: true
+          always: false
+          content-type: text
+          body: "Failed "
+
+- builder:
+    name: fetch-text-console
+    builders:
+         - shell: |
+             #!/bin/bash -ex
+             sleep 30
+             pushd $WORKSPACE
+             rm -rf $TARGET_BUILD_NAME/$TARGET_BUILD_NUMBER/consoleText
+             mkdir -p $TARGET_BUILD_NAME/
+             mkdir -p $TARGET_BUILD_NAME/$TARGET_BUILD_NUMBER/           
+             wget http://dev-l-vrt-019-4:8080/job/$TARGET_BUILD_NAME/$TARGET_BUILD_NUMBER/consoleText -P $WORKSPACE/$TARGET_BUILD_NAME/$TARGET_BUILD_NUMBER/
+             popd
+
+- builder:
+    name: upload-console-logs
+    builders:
+         - shell: |
+             #!/bin/bash -ex
+             UPLOAD_LOGPATH=$TARGET_BUILD_NAME/$TARGET_BUILD_NUMBER/
+             target=/var/www/html/$UPLOAD_LOGPATH
+             scp $WORKSPACE/$UPLOAD_LOGPATH/* $LOGSERVER:$target 2>&1 | tee > /dev/null
+

@@ -22,6 +22,7 @@ import (
 	"time"
 
 	v1 "k8s.io/api/admissionregistration/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -50,13 +51,18 @@ var (
 		"v1beta2.controlplane.antrea.tanzu.vmware.com",
 		"v1beta1.networking.antrea.tanzu.vmware.com",
 		"v1beta1.system.antrea.tanzu.vmware.com",
+		"v1alpha1.stats.antrea.io",
+		"v1beta1.system.antrea.io",
+		"v1beta2.controlplane.antrea.io",
 	}
 	// validatingWebhooks contains all the ValidatingWebhookConfigurations backed by antrea-controller.
 	validatingWebhooks = []string{
 		"crdvalidator.antrea.tanzu.vmware.com",
+		"crdvalidator.antrea.io",
 	}
 	mutationWebhooks = []string{
 		"crdmutator.antrea.tanzu.vmware.com",
+		"crdmutator.antrea.io",
 	}
 	optionalMutationWebhooks = []string{
 		"labelsmutator.antrea.io",
@@ -245,8 +251,21 @@ func (c *CACertController) syncConfigMap(caCert []byte) error {
 	// Use the Antrea Pod Namespace for the CA cert ConfigMap.
 	caConfigMapNamespace := GetCAConfigMapNamespace()
 	caConfigMap, err := c.client.CoreV1().ConfigMaps(caConfigMapNamespace).Get(context.TODO(), CAConfigMapName, metav1.GetOptions{})
+	exists := true
 	if err != nil {
-		return fmt.Errorf("error getting ConfigMap %s: %v", CAConfigMapName, err)
+		if !errors.IsNotFound(err) {
+			return fmt.Errorf("error getting ConfigMap %s: %v", CAConfigMapName, err)
+		}
+		exists = false
+		caConfigMap = &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      CAConfigMapName,
+				Namespace: caConfigMapNamespace,
+				Labels: map[string]string{
+					"app": "antrea",
+				},
+			},
+		}
 	}
 	if caConfigMap.Data != nil && caConfigMap.Data[CAConfigMapKey] == string(caCert) {
 		return nil
@@ -254,8 +273,14 @@ func (c *CACertController) syncConfigMap(caCert []byte) error {
 	caConfigMap.Data = map[string]string{
 		CAConfigMapKey: string(caCert),
 	}
-	if _, err := c.client.CoreV1().ConfigMaps(caConfigMapNamespace).Update(context.TODO(), caConfigMap, metav1.UpdateOptions{}); err != nil {
-		return fmt.Errorf("error updating ConfigMap %s: %v", CAConfigMapName, err)
+	if exists {
+		if _, err := c.client.CoreV1().ConfigMaps(caConfigMapNamespace).Update(context.TODO(), caConfigMap, metav1.UpdateOptions{}); err != nil {
+			return fmt.Errorf("error updating ConfigMap %s: %v", CAConfigMapName, err)
+		}
+	} else {
+		if _, err := c.client.CoreV1().ConfigMaps(caConfigMapNamespace).Create(context.TODO(), caConfigMap, metav1.CreateOptions{}); err != nil {
+			return fmt.Errorf("error creating ConfigMap %s: %v", CAConfigMapName, err)
+		}
 	}
 	return nil
 }

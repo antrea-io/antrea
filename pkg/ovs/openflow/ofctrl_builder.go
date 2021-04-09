@@ -251,6 +251,17 @@ func (b *ofFlowBuilder) MatchPktMark(value uint32, mask *uint32) FlowBuilder {
 	return b
 }
 
+// MatchTunnelDst adds match condition for matching tun_dst or tun_ipv6_dst.
+func (b *ofFlowBuilder) MatchTunnelDst(dstIP net.IP) FlowBuilder {
+	if dstIP.To4() != nil {
+		b.matchers = append(b.matchers, fmt.Sprintf("tun_dst=%s", dstIP.String()))
+	} else {
+		b.matchers = append(b.matchers, fmt.Sprintf("tun_ipv6_dst=%s", dstIP.String()))
+	}
+	b.ofFlow.Match.TunnelDst = &dstIP
+	return b
+}
+
 func ctLabelRange(high, low uint64, rng Range, match *ofctrl.FlowMatch) {
 	// [127..64] [63..0]
 	//   high     low
@@ -405,10 +416,10 @@ func (b *ofFlowBuilder) MatchARPOp(op uint16) FlowBuilder {
 	return b
 }
 
-// MatchIPDscp adds match condition for matching DSCP field in the IP header. Note, OVS use TOS to present DSCP, and
+// MatchIPDSCP adds match condition for matching DSCP field in the IP header. Note, OVS use TOS to present DSCP, and
 // the field name is shown as "nw_tos" with OVS command line, and the value is calculated by shifting the given value
 // left 2 bits.
-func (b *ofFlowBuilder) MatchIPDscp(dscp uint8) FlowBuilder {
+func (b *ofFlowBuilder) MatchIPDSCP(dscp uint8) FlowBuilder {
 	b.matchers = append(b.matchers, fmt.Sprintf("nw_tos=%d", dscp<<2))
 	b.Match.IpDscp = dscp
 	return b
@@ -464,12 +475,36 @@ func (b *ofFlowBuilder) MatchProtocol(protocol Protocol) FlowBuilder {
 	return b
 }
 
+// MatchProtocol adds match condition for IP protocol with the intetger value.
+func (b *ofFlowBuilder) MatchIPProtocolValue(isIPv6 bool, protoValue uint8) FlowBuilder {
+	if isIPv6 {
+		b.Match.Ethertype = 0x86dd
+	} else {
+		b.Match.Ethertype = 0x0800
+	}
+	b.Match.IpProto = protoValue
+	return b
+}
+
 // MatchDstPort adds match condition for matching destination port in transport layer. OVS will match the port exactly
 // if portMask is nil.
 func (b *ofFlowBuilder) MatchDstPort(port uint16, portMask *uint16) FlowBuilder {
 	b.Match.DstPort = port
 	b.Match.DstPortMask = portMask
 	matchStr := fmt.Sprintf("tp_dst=0x%x", port)
+	if portMask != nil {
+		matchStr = fmt.Sprintf("%s/0x%x", matchStr, portMask)
+	}
+	b.matchers = append(b.matchers, matchStr)
+	return b
+}
+
+// MatchSrcPort adds match condition for matching source port in transport layer. OVS will match the port exactly
+// if portMask is nil.
+func (b *ofFlowBuilder) MatchSrcPort(port uint16, portMask *uint16) FlowBuilder {
+	b.Match.SrcPort = port
+	b.Match.SrcPortMask = portMask
+	matchStr := fmt.Sprintf("tp_src=0x%x", port)
 	if portMask != nil {
 		matchStr = fmt.Sprintf("%s/0x%x", matchStr, portMask)
 	}

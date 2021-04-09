@@ -82,7 +82,9 @@ spec:
             - name: bootstrap.memory_lock
               value: "false"
             - name: network.host
-              value: "0.0.0.0"
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
             - name: http.port
               value: "9200"
             - name: discovery.type
@@ -155,7 +157,9 @@ spec:
             - name: action.destructive_requires_name
               value: "true"
             - name: SERVER_HOST
-              value: "0.0.0.0"
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
             - name: SERVER_PORT
               value: "5601"
             - name: ELASTICSEARCH_URL
@@ -201,6 +205,11 @@ spec:
       containers:
         - name: logstash
           image: docker.elastic.co/logstash/logstash-oss:7.8.0
+          env:
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
           volumeMounts:
             - name: logstash-definition-volume
               mountPath: /usr/share/logstash/definitions

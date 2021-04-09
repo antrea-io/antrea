@@ -36,6 +36,11 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
 	crdinformers "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions"
 	"github.com/vmware-tanzu/antrea/pkg/clusteridentity"
+	"github.com/vmware-tanzu/antrea/pkg/controller/crdmirroring"
+	"github.com/vmware-tanzu/antrea/pkg/controller/crdmirroring/crdhandler"
+	"github.com/vmware-tanzu/antrea/pkg/controller/egress"
+	egressstore "github.com/vmware-tanzu/antrea/pkg/controller/egress/store"
+	"github.com/vmware-tanzu/antrea/pkg/controller/grouping"
 	"github.com/vmware-tanzu/antrea/pkg/controller/metrics"
 	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy"
 	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy/store"
@@ -44,6 +49,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/controller/traceflow"
 	"github.com/vmware-tanzu/antrea/pkg/features"
 	"github.com/vmware-tanzu/antrea/pkg/k8s"
+	legacycrdinformers "github.com/vmware-tanzu/antrea/pkg/legacyclient/informers/externalversions"
 	"github.com/vmware-tanzu/antrea/pkg/log"
 	"github.com/vmware-tanzu/antrea/pkg/monitor"
 	"github.com/vmware-tanzu/antrea/pkg/signals"
@@ -101,12 +107,13 @@ func run(o *Options) error {
 	serviceInformer := informerFactory.Core().V1().Services()
 	networkPolicyInformer := informerFactory.Networking().V1().NetworkPolicies()
 	nodeInformer := informerFactory.Core().V1().Nodes()
-	cnpInformer := crdInformerFactory.Security().V1alpha1().ClusterNetworkPolicies()
-	externalEntityInformer := crdInformerFactory.Core().V1alpha2().ExternalEntities()
-	anpInformer := crdInformerFactory.Security().V1alpha1().NetworkPolicies()
-	tierInformer := crdInformerFactory.Security().V1alpha1().Tiers()
-	traceflowInformer := crdInformerFactory.Ops().V1alpha1().Traceflows()
-	cgInformer := crdInformerFactory.Core().V1alpha2().ClusterGroups()
+	cnpInformer := crdInformerFactory.Crd().V1alpha1().ClusterNetworkPolicies()
+	eeInformer := crdInformerFactory.Crd().V1alpha2().ExternalEntities()
+	anpInformer := crdInformerFactory.Crd().V1alpha1().NetworkPolicies()
+	tierInformer := crdInformerFactory.Crd().V1alpha1().Tiers()
+	tfInformer := crdInformerFactory.Crd().V1alpha1().Traceflows()
+	cgInformer := crdInformerFactory.Crd().V1alpha2().ClusterGroups()
+	egressInformer := crdInformerFactory.Crd().V1alpha2().Egresses()
 
 	clusterIdentityAllocator := clusteridentity.NewClusterIdentityAllocator(
 		env.GetAntreaNamespace(),
@@ -118,14 +125,28 @@ func run(o *Options) error {
 	addressGroupStore := store.NewAddressGroupStore()
 	appliedToGroupStore := store.NewAppliedToGroupStore()
 	networkPolicyStore := store.NewNetworkPolicyStore()
+	egressGroupStore := egressstore.NewEgressGroupStore()
 	groupStore := store.NewGroupStore()
+	groupEntityIndex := grouping.NewGroupEntityIndex()
+	groupEntityController := grouping.NewGroupEntityController(groupEntityIndex, podInformer, namespaceInformer, eeInformer)
+
+	legacyCRDClient, err := k8s.CreateLegacyCRDClient(o.config.ClientConnection, "")
+	if err != nil {
+		return fmt.Errorf("error creating legacy CRD client: %v", err)
+	}
+
+	legacyCRDInformerFactory := legacycrdinformers.NewSharedInformerFactory(legacyCRDClient, informerDefaultResync)
+	legacyANPInformer := legacyCRDInformerFactory.Security().V1alpha1().NetworkPolicies()
+	legacyCNPInformer := legacyCRDInformerFactory.Security().V1alpha1().ClusterNetworkPolicies()
+	legacyTierInformer := legacyCRDInformerFactory.Security().V1alpha1().Tiers()
+	legacyCGInformer := legacyCRDInformerFactory.Core().V1alpha2().ClusterGroups()
+	legacyEEInformer := legacyCRDInformerFactory.Core().V1alpha2().ExternalEntities()
+	legacyTFInformer := legacyCRDInformerFactory.Ops().V1alpha1().Traceflows()
 
 	networkPolicyController := networkpolicy.NewNetworkPolicyController(client,
 		crdClient,
-		podInformer,
-		namespaceInformer,
+		groupEntityIndex,
 		serviceInformer,
-		externalEntityInformer,
 		networkPolicyInformer,
 		cnpInformer,
 		anpInformer,
@@ -141,15 +162,84 @@ func run(o *Options) error {
 		networkPolicyStatusController = networkpolicy.NewStatusController(crdClient, networkPolicyStore, cnpInformer, anpInformer)
 	}
 
+	var anpMirroringController *crdmirroring.Controller
+	var cnpMirroringController *crdmirroring.Controller
+	var tierMirroringController *crdmirroring.Controller
+	var cgMirroringController *crdmirroring.Controller
+	var eeMirroringController *crdmirroring.Controller
+	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) && o.config.LegacyCRDMirroring {
+		anpMirroringHandler := crdhandler.NewNetworkPolicyHandler(anpInformer.Lister(),
+			legacyANPInformer.Lister(),
+			crdClient,
+			legacyCRDClient)
+		anpMirroringController = crdmirroring.NewController(anpInformer.Informer(),
+			legacyANPInformer.Informer(),
+			anpMirroringHandler,
+			"NetworkPolicy")
+
+		cnpMirroringHandler := crdhandler.NewClusterNetworkPolicyHandler(cnpInformer.Lister(),
+			legacyCNPInformer.Lister(),
+			crdClient.CrdV1alpha1().ClusterNetworkPolicies(),
+			legacyCRDClient.SecurityV1alpha1().ClusterNetworkPolicies())
+		cnpMirroringController = crdmirroring.NewController(cnpInformer.Informer(),
+			legacyCNPInformer.Informer(),
+			cnpMirroringHandler,
+			"ClusterNetworkPolicy")
+
+		tierMirroringHandler := crdhandler.NewTierHandler(tierInformer.Lister(),
+			legacyTierInformer.Lister(),
+			crdClient.CrdV1alpha1().Tiers(),
+			legacyCRDClient.SecurityV1alpha1().Tiers())
+		tierMirroringController = crdmirroring.NewController(tierInformer.Informer(),
+			legacyTierInformer.Informer(),
+			tierMirroringHandler,
+			"Tier")
+
+		cgMirroringHandler := crdhandler.NewClusterGroupHandler(cgInformer.Lister(),
+			legacyCGInformer.Lister(),
+			crdClient.CrdV1alpha2().ClusterGroups(),
+			legacyCRDClient.CoreV1alpha2().ClusterGroups())
+		cgMirroringController = crdmirroring.NewController(cgInformer.Informer(),
+			legacyCGInformer.Informer(),
+			cgMirroringHandler,
+			"ClusterGroup")
+
+		eeMirroringHandler := crdhandler.NewExternalEntityHandler(eeInformer.Lister(),
+			legacyEEInformer.Lister(),
+			crdClient,
+			legacyCRDClient)
+		eeMirroringController = crdmirroring.NewController(eeInformer.Informer(),
+			legacyEEInformer.Informer(),
+			eeMirroringHandler,
+			"ExternalEntity")
+	}
+
 	endpointQuerier := networkpolicy.NewEndpointQuerier(networkPolicyController)
 
 	controllerQuerier := querier.NewControllerQuerier(networkPolicyController, o.config.APIPort)
 
-	controllerMonitor := monitor.NewControllerMonitor(crdClient, nodeInformer, controllerQuerier)
+	controllerMonitor := monitor.NewControllerMonitor(crdClient, legacyCRDClient, nodeInformer, controllerQuerier)
+
+	var egressController *egress.EgressController
+	if features.DefaultFeatureGate.Enabled(features.Egress) {
+		egressController = egress.NewEgressController(groupEntityIndex, egressInformer, egressGroupStore)
+	}
 
 	var traceflowController *traceflow.Controller
 	if features.DefaultFeatureGate.Enabled(features.Traceflow) {
-		traceflowController = traceflow.NewTraceflowController(crdClient, podInformer, traceflowInformer)
+		traceflowController = traceflow.NewTraceflowController(crdClient, podInformer, tfInformer)
+	}
+
+	var traceflowMirroringController *crdmirroring.Controller
+	if features.DefaultFeatureGate.Enabled(features.Traceflow) && o.config.LegacyCRDMirroring {
+		tfMirroringHandler := crdhandler.NewTraceflowHandler(tfInformer.Lister(),
+			legacyTFInformer.Lister(),
+			crdClient.CrdV1alpha1().Traceflows(),
+			legacyCRDClient.OpsV1alpha1().Traceflows())
+		traceflowMirroringController = crdmirroring.NewController(tfInformer.Informer(),
+			legacyTFInformer.Informer(),
+			tfMirroringHandler,
+			"Traceflow")
 	}
 
 	// statsAggregator takes stats summaries from antrea-agents, aggregates them, and serves the Stats APIs with the
@@ -173,6 +263,7 @@ func run(o *Options) error {
 		appliedToGroupStore,
 		networkPolicyStore,
 		groupStore,
+		egressGroupStore,
 		controllerQuerier,
 		endpointQuerier,
 		networkPolicyController,
@@ -203,10 +294,13 @@ func run(o *Options) error {
 
 	informerFactory.Start(stopCh)
 	crdInformerFactory.Start(stopCh)
+	legacyCRDInformerFactory.Start(stopCh)
 
 	go clusterIdentityAllocator.Run(stopCh)
 
 	go controllerMonitor.Run(stopCh)
+
+	go groupEntityController.Run(stopCh)
 
 	go networkPolicyController.Run(stopCh)
 
@@ -228,6 +322,22 @@ func run(o *Options) error {
 		go networkPolicyStatusController.Run(stopCh)
 	}
 
+	if o.config.LegacyCRDMirroring {
+		if features.DefaultFeatureGate.Enabled(features.Traceflow) {
+			go traceflowMirroringController.Run(stopCh)
+		}
+		if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
+			go anpMirroringController.Run(stopCh)
+			go cnpMirroringController.Run(stopCh)
+			go tierMirroringController.Run(stopCh)
+			go cgMirroringController.Run(stopCh)
+			go eeMirroringController.Run(stopCh)
+		}
+	}
+	if features.DefaultFeatureGate.Enabled(features.Egress) {
+		go egressController.Run(stopCh)
+	}
+
 	<-stopCh
 	klog.Info("Stopping Antrea controller")
 	return nil
@@ -242,6 +352,7 @@ func createAPIServerConfig(kubeconfig string,
 	appliedToGroupStore storage.Interface,
 	networkPolicyStore storage.Interface,
 	groupStore storage.Interface,
+	egressGroupStore storage.Interface,
 	controllerQuerier querier.ControllerQuerier,
 	endpointQuerier networkpolicy.EndpointQuerier,
 	npController *networkpolicy.NetworkPolicyController,
@@ -299,6 +410,7 @@ func createAPIServerConfig(kubeconfig string,
 		appliedToGroupStore,
 		networkPolicyStore,
 		groupStore,
+		egressGroupStore,
 		caCertController,
 		statsAggregator,
 		controllerQuerier,

@@ -37,10 +37,10 @@ import (
 	interfacestoretest "github.com/vmware-tanzu/antrea/pkg/agent/interfacestore/testing"
 	"github.com/vmware-tanzu/antrea/pkg/agent/metrics"
 	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
+	proxytest "github.com/vmware-tanzu/antrea/pkg/agent/proxy/testing"
 	cpv1beta "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
 	queriertest "github.com/vmware-tanzu/antrea/pkg/querier/testing"
 	k8sproxy "github.com/vmware-tanzu/antrea/third_party/proxy"
-	k8proxytest "github.com/vmware-tanzu/antrea/third_party/proxy/testing"
 )
 
 var (
@@ -82,7 +82,7 @@ func TestConnectionStore_addAndUpdateConn(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	metrics.InitializeConnectionMetrics()
-	// Create two flows; one is already in connectionStore and other one is new
+	// Create three flows; two are already in connectionStore and another one is new
 	refTime := time.Now()
 	// Flow-1, which is already in connectionStore
 	tuple1, revTuple1 := makeTuple(&net.IP{1, 2, 3, 4}, &net.IP{4, 3, 2, 1}, 6, 65280, 255)
@@ -110,24 +110,38 @@ func TestConnectionStore_addAndUpdateConn(t *testing.T) {
 		TupleReply:      revTuple2,
 		IsPresent:       true,
 	}
-	// To test service name mapping.
-	tuple3, revTuple3 := makeTuple(&net.IP{10, 10, 10, 10}, &net.IP{20, 20, 20, 20}, 6, 5000, 80)
+	// Flow-3 , which is already in connectionStore
+	tuple3, revTuple3 := makeTuple(&net.IP{10, 10, 10, 10}, &net.IP{4, 3, 2, 1}, 6, 60000, 100)
 	testFlow3 := flowexporter.Connection{
-		TupleOrig:  tuple3,
-		TupleReply: revTuple3,
+		StartTime:       refTime.Add(-(time.Second * 50)),
+		StopTime:        refTime,
+		OriginalPackets: 0xffff,
+		OriginalBytes:   0xbaaaaa,
+		ReversePackets:  0xff,
+		ReverseBytes:    0xbaaa,
+		TupleOrig:       tuple3,
+		TupleReply:      revTuple3,
+		TCPState:        "TIME_WAIT",
+		IsPresent:       true,
+	}
+	// To test service name mapping.
+	tuple4, revTuple4 := makeTuple(&net.IP{10, 10, 10, 10}, &net.IP{20, 20, 20, 20}, 6, 5000, 80)
+	testFlow4 := flowexporter.Connection{
+		TupleOrig:  tuple4,
+		TupleReply: revTuple4,
 		Mark:       openflow.ServiceCTMark,
 		IsPresent:  true,
 	}
 	// To test NetworkPolicy mapping.
-	tuple4, revTuple4 := makeTuple(&net.IP{30, 30, 30, 30}, &net.IP{20, 20, 20, 20}, 6, 5000, 80)
-	testFlow4 := flowexporter.Connection{
-		TupleOrig:  tuple4,
-		TupleReply: revTuple4,
+	tuple5, revTuple5 := makeTuple(&net.IP{30, 30, 30, 30}, &net.IP{20, 20, 20, 20}, 6, 5000, 80)
+	testFlow5 := flowexporter.Connection{
+		TupleOrig:  tuple5,
+		TupleReply: revTuple5,
 		Labels:     []byte{0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x2},
 		IsPresent:  true,
 	}
 	// Create copy of old conntrack flow for testing purposes.
-	// This flow is already in connection store.
+	// These two flows are already in connection store.
 	oldTestFlow1 := flowexporter.Connection{
 		StartTime:               testFlow1.StartTime,
 		StopTime:                testFlow1.StopTime.Add(-(time.Second * 30)),
@@ -142,6 +156,23 @@ func TestConnectionStore_addAndUpdateConn(t *testing.T) {
 		DestinationPodNamespace: "",
 		DestinationPodName:      "",
 		IsPresent:               true,
+		TCPState:                "",
+	}
+	oldTestFlow3 := flowexporter.Connection{
+		StartTime:               testFlow3.StartTime,
+		StopTime:                testFlow3.StopTime.Add(-(time.Second * 30)),
+		OriginalPackets:         0xffff,
+		OriginalBytes:           0xbaaaaa,
+		ReversePackets:          0xff,
+		ReverseBytes:            0xbaaa,
+		TupleOrig:               tuple3,
+		TupleReply:              revTuple3,
+		SourcePodNamespace:      "ns3",
+		SourcePodName:           "pod3",
+		DestinationPodNamespace: "",
+		DestinationPodName:      "",
+		IsPresent:               true,
+		TCPState:                "TIME_WAIT",
 	}
 	podConfigFlow2 := &interfacestore.ContainerInterfaceConfig{
 		ContainerID:  "2",
@@ -164,14 +195,17 @@ func TestConnectionStore_addAndUpdateConn(t *testing.T) {
 	// Mock interface store with one of the couple of IPs correspond to Pods
 	mockIfaceStore := interfacestoretest.NewMockInterfaceStore(ctrl)
 	mockConnDumper := connectionstest.NewMockConnTrackDumper(ctrl)
-	mockProxier := k8proxytest.NewMockProvider(ctrl)
+	mockProxier := proxytest.NewMockProxier(ctrl)
 	npQuerier := queriertest.NewMockAgentNetworkPolicyInfoQuerier(ctrl)
 	connStore := NewConnectionStore(mockConnDumper, flowrecords.NewFlowRecords(), mockIfaceStore, true, false, mockProxier, npQuerier, testPollInterval)
 
-	// Add flow1conn to the Connection map
+	// Add flow1conn and flow3conn to the Connection map
 	testFlow1Tuple := flowexporter.NewConnectionKey(&testFlow1)
-	connStore.connections[testFlow1Tuple] = oldTestFlow1
+	connStore.connections[testFlow1Tuple] = &oldTestFlow1
+	testFlow3Tuple := flowexporter.NewConnectionKey(&testFlow3)
+	connStore.connections[testFlow3Tuple] = &oldTestFlow3
 	// For testing purposes, increment the metric
+	metrics.TotalAntreaConnectionsInConnTrackTable.Inc()
 	metrics.TotalAntreaConnectionsInConnTrackTable.Inc()
 
 	addOrUpdateConnTests := []struct {
@@ -179,8 +213,9 @@ func TestConnectionStore_addAndUpdateConn(t *testing.T) {
 	}{
 		{testFlow1}, // To test update part of function.
 		{testFlow2}, // To test add part of function.
-		{testFlow3}, // To test service name mapping.
-		{testFlow4}, // To test NetworkPolicy mapping.
+		{testFlow3}, // To test update part of function for dying connection.
+		{testFlow4}, // To test service name mapping.
+		{testFlow5}, // To test NetworkPolicy mapping.
 	}
 	for i, test := range addOrUpdateConnTests {
 		flowTuple := flowexporter.NewConnectionKey(&test.flow)
@@ -198,6 +233,13 @@ func TestConnectionStore_addAndUpdateConn(t *testing.T) {
 			expConn.DestinationPodNamespace = "ns2"
 			expConn.DestinationPodName = "pod2"
 		case 2:
+			// Tests update part of the function for dying connection.
+
+			expConn.SourcePodNamespace = "ns3"
+			expConn.SourcePodName = "pod3"
+			expConn.TCPState = "TIME_WAIT"
+			expConn.StopTime = refTime.Add(-(time.Second * 30))
+		case 3:
 			// Tests service name mapping.
 			mockIfaceStore.EXPECT().GetInterfaceByIP(expConn.TupleOrig.SourceAddress.String()).Return(nil, false)
 			mockIfaceStore.EXPECT().GetInterfaceByIP(expConn.TupleReply.SourceAddress.String()).Return(nil, false)
@@ -206,7 +248,7 @@ func TestConnectionStore_addAndUpdateConn(t *testing.T) {
 			serviceStr := fmt.Sprintf("%s:%d/%s", expConn.TupleOrig.DestinationAddress.String(), expConn.TupleOrig.DestinationPort, protocol)
 			mockProxier.EXPECT().GetServiceByIP(serviceStr).Return(servicePortName, true)
 			expConn.DestinationServicePortName = servicePortName.String()
-		case 3:
+		case 4:
 			// Tests NetworkPolicy mapping.
 			mockIfaceStore.EXPECT().GetInterfaceByIP(expConn.TupleOrig.SourceAddress.String()).Return(nil, false)
 			mockIfaceStore.EXPECT().GetInterfaceByIP(expConn.TupleReply.SourceAddress.String()).Return(nil, false)
@@ -272,13 +314,12 @@ func TestConnectionStore_ForAllConnectionsDo(t *testing.T) {
 	connStore := NewConnectionStore(mockConnDumper, flowrecords.NewFlowRecords(), mockIfaceStore, true, false, nil, nil, testPollInterval)
 	// Add flows to the Connection store
 	for i, flow := range testFlows {
-		connStore.connections[*testFlowKeys[i]] = *flow
+		connStore.connections[*testFlowKeys[i]] = flow
 	}
 
-	resetTwoFields := func(key flowexporter.ConnectionKey, conn flowexporter.Connection) error {
+	resetTwoFields := func(key flowexporter.ConnectionKey, conn *flowexporter.Connection) error {
 		conn.IsPresent = false
 		conn.OriginalPackets = 0
-		connStore.connections[key] = conn
 		return nil
 	}
 	connStore.ForAllConnectionsDo(resetTwoFields)
@@ -337,11 +378,11 @@ func TestConnectionStore_DeleteConnectionByKey(t *testing.T) {
 	connStore := NewConnectionStore(mockConnDumper, flowrecords.NewFlowRecords(), mockIfaceStore, true, false, nil, nil, testPollInterval)
 	// Add flows to the connection store.
 	for i, flow := range testFlows {
-		connStore.connections[*testFlowKeys[i]] = *flow
+		connStore.connections[*testFlowKeys[i]] = flow
 	}
 	// Delete the connections in connection store.
 	for i := 0; i < len(testFlows); i++ {
-		err := connStore.DeleteConnectionByKey(*testFlowKeys[i])
+		err := connStore.deleteConnectionByKeyWithoutLock(*testFlowKeys[i])
 		assert.Nil(t, err, "DeleteConnectionByKey should return nil")
 		_, exists := connStore.GetConnByKey(*testFlowKeys[i])
 		assert.Equal(t, exists, false, "connection should be deleted in connection store")

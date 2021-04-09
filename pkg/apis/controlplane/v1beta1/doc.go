@@ -16,7 +16,7 @@
 // +k8s:deepcopy-gen=package
 // +k8s:protobuf-gen=package
 // +k8s:conversion-gen=github.com/vmware-tanzu/antrea/pkg/apis/controlplane
-// +groupName=controlplane.antrea.tanzu.vmware.com
+// +groupName=controlplane.antrea.io
 
 // Package v1beta1 is the v1beta1 version of the Antrea NetworkPolicy API messages.
 package v1beta1
