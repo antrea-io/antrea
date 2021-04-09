@@ -17,30 +17,22 @@
 package support
 
 import (
-	"flag"
 	"fmt"
 	"path"
 	"path/filepath"
+
+	"github.com/vmware-tanzu/antrea/pkg/util/logdir"
 )
 
 const (
-	antreaWindowsWellKnownLogDir = `C:\k\antrea\logs`
-	antreaWindowsOVSLogDir       = `C:\openvswitch\var\log\openvswitch`
-	antreaWindowsKubeletLogDir   = `C:\var\log\kubelet`
+	antreaWindowsOVSLogDir     = `C:\openvswitch\var\log\openvswitch`
+	antreaWindowsKubeletLogDir = `C:\var\log\kubelet`
 )
 
 // Todo: Logs for OVS and kubelet are collected from the fixed path currently, more enhancements are needed to support
 // collecting them from a configurable path in the future.
 func (d *agentDumper) DumpLog(basedir string) error {
-	logDirFlag := flag.CommandLine.Lookup("log_dir")
-	var logDir string
-	if logDirFlag == nil {
-		logDir = antreaWindowsWellKnownLogDir
-	} else if len(logDirFlag.Value.String()) == 0 {
-		logDir = logDirFlag.DefValue
-	} else {
-		logDir = logDirFlag.Value.String()
-	}
+	logDir := logdir.GetLogDir()
 	if err := fileCopy(d.fs, path.Join(basedir, "logs", "agent"), logDir, "rancher-wins-antrea-agent"); err != nil {
 		return err
 	}
