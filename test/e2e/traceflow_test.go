@@ -217,7 +217,10 @@ func TestTraceflowIntraNode(t *testing.T) {
 
 	node1Pods, node1IPs, node1CleanupFn := createTestBusyboxPods(t, data, 3, node1)
 	defer node1CleanupFn()
-	var dstPodIPv4Str, dstPodIPv6Str string
+	var srcPodIPv4Str, dstPodIPv4Str, dstPodIPv6Str string
+	if node1IPs[0].ipv4 != nil {
+		srcPodIPv4Str = node1IPs[0].ipv4.String()
+	}
 	if node1IPs[2].ipv4 != nil {
 		dstPodIPv4Str = node1IPs[2].ipv4.String()
 	}
@@ -519,7 +522,7 @@ func TestTraceflowIntraNode(t *testing.T) {
 				},
 			},
 			expectedPktCap: &v1alpha1.Packet{
-				SrcIP:    node1IPs[0].ipv4.String(),
+				SrcIP:    srcPodIPv4Str,
 				DstIP:    dstPodIPv4Str,
 				Length:   84, // default ping packet length.
 				IPHeader: v1alpha1.IPHeader{Protocol: 1, TTL: 64, Flags: 2},
