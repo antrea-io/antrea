@@ -31,7 +31,8 @@ import (
 
 func TestEgress(t *testing.T) {
 	skipIfProviderIs(t, "kind", "pkt_mark field is not properly supported for OVS userspace (netdev) datapath.")
-	skipIfNotIPv4Cluster(t)
+	// TODO: remove this after making the test support IPv6 and dual-stack.
+	skipIfIPv6Cluster(t)
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
