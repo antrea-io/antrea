@@ -17,25 +17,17 @@
 package support
 
 import (
-	"flag"
 	"fmt"
 	"path"
 	"path/filepath"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/agent/util/iptables"
+	"github.com/vmware-tanzu/antrea/pkg/util/logdir"
 )
 
 func (d *agentDumper) DumpLog(basedir string) error {
-	logDirFlag := flag.CommandLine.Lookup("log_dir")
-	var logDir string
-	if logDirFlag == nil {
-		logDir = antreaLinuxWellKnownLogDir
-	} else if len(logDirFlag.Value.String()) == 0 {
-		logDir = logDirFlag.DefValue
-	} else {
-		logDir = logDirFlag.Value.String()
-	}
+	logDir := logdir.GetLogDir()
 	if err := fileCopy(d.fs, path.Join(basedir, "logs", "agent"), logDir, "antrea-agent"); err != nil {
 		return err
 	}
