@@ -39,11 +39,15 @@ few new CRDs supported by Antrea to provide the administrator with more control
 over security within the cluster, and which are meant to co-exist with and
 complement the K8s NetworkPolicy.
 
+Starting with Antrea v1.0, Antrea-native policies are enabled by default, which
+means that no additional configuration is required in order to use the
+Antrea-native policy CRDs.
+
 ## Tier
 
-Antrea supports grouping Antrea-native Policy CRDs together in a tiered fashion
+Antrea supports grouping Antrea-native policy CRDs together in a tiered fashion
 to provide a hierarchy of security policies. This is achieved by setting the
-`tier` field when defining an Antrea-native Policy CRD (e.g. an Antrea
+`tier` field when defining an Antrea-native policy CRD (e.g. an Antrea
 ClusterNetworkPolicy object) to the appropriate tier name. Each tier has a
 priority associated with it, which determines its relative order among all tiers.
 
@@ -59,7 +63,7 @@ as was the case initially.
 An example Tier might look like this:
 
 ```yaml
-apiVersion: security.antrea.tanzu.vmware.com/v1alpha1
+apiVersion: crd.antrea.io/v1alpha1
 kind: Tier
 metadata:
   name: mytier
@@ -136,13 +140,13 @@ The following kubectl commands can be used to retrieve Tier resources:
     kubectl get tiers
 
     # Use long name with API Group
-    kubectl get tiers.security.antrea.tanzu.vmware.com
+    kubectl get tiers.crd.antrea.io
 
     # Use short name
     kubectl get tr
 
     # Use short name with API Group
-    kubectl get tr.security.antrea.tanzu.vmware.com
+    kubectl get tr.crd.antrea.io
 
     # Sort output by Tier priority
     kubectl get tiers --sort-by=.spec.priority
@@ -161,7 +165,7 @@ All of the above commands produce output similar to what is shown below:
 
 ## Antrea ClusterNetworkPolicy
 
-Antrea ClusterNetworkPolicy (ACNP), one of the two Antrea-native Policy CRDs
+Antrea ClusterNetworkPolicy (ACNP), one of the two Antrea-native policy CRDs
 introduced, is a specification of how workloads within a cluster communicate
 with each other and other external endpoints. The ClusterNetworkPolicy is
 supposed to aid cluster admins to configure the security policy for the
@@ -170,34 +174,12 @@ their apps and affects Pods within the Namespace in which the K8s NetworkPolicy
 is created. Rules belonging to ClusterNetworkPolicies are enforced before any
 rule belonging to a K8s NetworkPolicy.
 
-**Note**: ClusterNetworkPolicy is currently in "Alpha" stage. In order to
-enable them, edit the Controller and Agent configuration in the `antrea`
-ConfigMap as follows:
-
-```yaml
-   antrea-controller.conf: |
-     featureGates:
-       # Enable AntreaPolicy feature to complement K8s NetworkPolicy
-       # for cluster admins to define security policies which apply to the
-       # entire cluster.
-       AntreaPolicy: true
-```
-
-```yaml
-   antrea-agent.conf: |
-     featureGates:
-       # Enable AntreaPolicy feature to complement K8s NetworkPolicy
-       # for cluster admins to define security policies which apply to the
-       # entire cluster.
-       AntreaPolicy: true
-```
-
 ### The Antrea ClusterNetworkPolicy resource
 
 Example ClusterNetworkPolicies might look like this:
 
 ```yaml
-apiVersion: security.antrea.tanzu.vmware.com/v1alpha1
+apiVersion: crd.antrea.io/v1alpha1
 kind: ClusterNetworkPolicy
 metadata:
   name: acnp-with-stand-alone-selectors
@@ -242,7 +224,7 @@ spec:
         name: DropToThirdParty
         enableLogging: true
 ---
-apiVersion: security.antrea.tanzu.vmware.com/v1alpha1
+apiVersion: crd.antrea.io/v1alpha1
 kind: ClusterNetworkPolicy
 metadata:
   name: acnp-with-cluster-groups
@@ -422,13 +404,13 @@ The following kubectl commands can be used to retrieve ACNP resources:
     kubectl get clusternetworkpolicies
 
     # Use long name with API Group
-    kubectl get clusternetworkpolicies.security.antrea.tanzu.vmware.com
+    kubectl get clusternetworkpolicies.crd.antrea.io
 
     # Use short name
     kubectl get acnp
 
     # Use short name with API Group
-    kubectl get acnp.security.antrea.tanzu.vmware.com
+    kubectl get acnp.crd.antrea.io
 ```
 
 All of the above commands produce output similar to what is shown below:
@@ -440,23 +422,19 @@ All of the above commands produce output similar to what is shown below:
 
 ## Antrea NetworkPolicy
 
-Antrea NetworkPolicy (ANP) is another Policy CRD, which is similar to the
+Antrea NetworkPolicy (ANP) is another policy CRD, which is similar to the
 ClusterNetworkPolicy CRD, however its scope is limited to a Namespace.
 The purpose of introducing this CRD is to allow admins to take advantage of
 advanced NetworkPolicy features and apply them within a Namespace to
 complement the K8s NetworkPolicies. Similar to the ClusterNetworkPolicy
 resource, Antrea NetworkPolicy can also be associated with Tiers.
 
-**Note**: Antrea NetworkPolicy is currently in "Alpha" stage and is enabled
-along with Tiers and ClusterNetworkPolicy as part of the `AntreaPolicy`
-feature gate.
-
 ### The Antrea NetworkPolicy resource
 
 An example Antrea NetworkPolicy might look like this:
 
 ```yaml
-apiVersion: security.antrea.tanzu.vmware.com/v1alpha1
+apiVersion: crd.antrea.io/v1alpha1
 kind: NetworkPolicy
 metadata:
   name: test-anp
@@ -502,7 +480,7 @@ spec:
 
 Antrea NetworkPolicy shares it's spec with ClusterNetworkPolicy. However,
 the following documents some of the key differences between the two Antrea
-Policy CRDs.
+policy CRDs.
 
 - Antrea NetworkPolicy is Namespaced while ClusterNetworkPolicy operates at
   cluster scope.
@@ -520,13 +498,13 @@ The following kubectl commands can be used to retrieve ANP resources:
 
 ```bash
     # Use long name with API Group
-    kubectl get networkpolicies.security.antrea.tanzu.vmware.com
+    kubectl get networkpolicies.crd.antrea.io
 
     # Use short name
     kubectl get anp
 
     # Use short name with API Group
-    kubectl get anp.security.antrea.tanzu.vmware.com
+    kubectl get anp.crd.antrea.io
 ```
 
 All of the above commands produce output similar to what is shown below:
@@ -538,7 +516,7 @@ All of the above commands produce output similar to what is shown below:
 
 ## Antrea-native Policy ordering based on priorities
 
-Antrea-native Policy CRDs are ordered based on priorities set at various levels.
+Antrea-native policy CRDs are ordered based on priorities set at various levels.
 
 ### Ordering based on Tier priority
 
@@ -551,7 +529,7 @@ policies will be enforced last.
 
 ### Ordering based on policy priority
 
-Within a tier, Antrea-native Policy CRDs are ordered by the `priority` at the policy
+Within a tier, Antrea-native policy CRDs are ordered by the `priority` at the policy
 level. Thus, the policy with the highest precedence (lowest priority number
 value) is enforced first. This ordering is performed solely based on the
 `priority` assigned, as opposed to the "Kind" of the resource, i.e. the relative
@@ -602,26 +580,25 @@ order in which they are enforced.
 A ClusterGroup (CG) CRD is a specification of how workloads are grouped together.
 It allows admins to group Pods using traditional label selectors, which can then
 be referenced in ACNP in place of stand-alone `podSelector` and/or `namespaceSelector`.
-In addition, ClusterGroup also supports Pod grouping by `serviceReference`. ClusterGroup
-specified by `serviceReference` will contain the same Pod members that are currently
-selected by the Service's selector.
+In addition to `podSelector` and `namespaceSelector`, ClusterGroup also supports the
+following ways to select endpoints:
+
+- Pod grouping by `serviceReference`. ClusterGroup specified by `serviceReference` will
+contain the same Pod members that are currently selected by the Service's selector.
+- `ipBlock` or `ipBlocks` to share IPBlocks between ACNPs.
+- `childGroups` to select other ClusterGroups by name.
+
 ClusterGroups allow admins to separate the concern of grouping of workloads from
 the security aspect of Antrea-native policies.
 It adds another level of indirection allowing users to update group membership
 without having to update individual policy rules.
-In addition to specifying label selectors to group workloads, admins can create a
-ClusterGroup to share IPBlocks.
-An `ipBlock` selector may not be specified with a `podSelector` and `namespaceSelector`,
-i.e. a single ClusterGroup can either group workloads or share IPBlocks.
-A ClusterGroup is cluster scoped resource and therefore can only be set in an Antrea
-ClusterNetworkPolicy's `appliedTo` and `to`/`from` peers.
 
 ### The ClusterGroup resource
 
 An example ClusterGroup might look like this:
 
 ```yaml
-apiVersion: core.antrea.tanzu.vmware.com/v1alpha2
+apiVersion: crd.antrea.io/v1alpha2
 kind: ClusterGroup
 metadata:
   name: test-cg-sel
@@ -638,26 +615,26 @@ status:
       status: "True"
       lastTransitionTime: "2021-01-29T19:59:39Z"
 ---
-apiVersion: core.antrea.tanzu.vmware.com/v1alpha2
+apiVersion: crd.antrea.io/v1alpha2
 kind: ClusterGroup
 metadata:
   name: test-cg-ip-block
 spec:
-  # IPBlock cannot be set along with PodSelector, NamespaceSelector or serviceReference.
-  ipBlock:
-    cidr: 10.0.10.0/24
+  # IPBlocks cannot be set along with PodSelector, NamespaceSelector or serviceReference.
+  ipBlocks:
+  - cidr: 10.0.10.0/24
 status:
   conditions:
     - type: "GroupMembersComputed"
       status: "True"
       lastTransitionTime: "2021-01-29T19:59:39Z"
 ---
-apiVersion: core.antrea.tanzu.vmware.com/v1alpha2
+apiVersion: crd.antrea.io/v1alpha2
 kind: ClusterGroup
 metadata:
   name: test-cg-svc-ref
 spec:
-  # ServiceReference cannot be set along with PodSelector, NamespaceSelector or ipBlock.
+  # ServiceReference cannot be set along with PodSelector, NamespaceSelector or ipBlocks.
   serviceReference:
     name: test-service
     namespace: default
@@ -666,7 +643,34 @@ status:
     - type: "GroupMembersComputed"
       status: "True"
       lastTransitionTime: "2021-01-29T20:21:46Z"
+---
+apiVersion: crd.antrea.io/v1alpha2
+kind: ClusterGroup
+metadata:
+  name: test-cg-nested
+spec:
+  childGroups: [test-cg-sel, test-cg-ip-blocks, test-cg-svc-ref]
+status:
+  conditions:
+    - type: "GroupMembersComputed"
+      status: "True"
+      lastTransitionTime: "2021-01-29T20:21:48Z"
 ```
+
+There are a few __restrictions__ on how ClusterGroups can be configured:
+
+- A ClusterGroup is a cluster-scoped resource and therefore can only be set in an Antrea
+ClusterNetworkPolicy's `appliedTo` and `to`/`from` peers.
+- For the `childGroup` field, currently only one level of nesting is supported:
+If a ClusterGroup has childGroups, it cannot be selected as a childGroup by other ClusterGroups.
+- ClusterGroup must exist before another ClusterGroup can select it by name as its childGroup.
+A ClusterGroup cannot be deleted if it is referred to by other ClusterGroup as childGroup.
+This restriction may be lifted in future releases.
+- At most one of `podSelector`, `serviceReference`, `ipBlock`, `ipBlocks` or `childGroups`
+can be set for a ClusterGroup, i.e. a single ClusterGroup can either group workloads,
+represent IP CIDRs or select other ClusterGroups. A parent ClusterGroup can select different
+types of ClusterGroups (Pod/Service/CIDRs), but as mentioned above, it cannot select a
+ClusterGroup that has childGroups itself.
 
 **spec**: The ClusterGroup `spec` has all the information needed to define a
 cluster-wide group.
@@ -684,6 +688,14 @@ If set with a `podSelector`, all matching Pods from Namespaces selected by the
 "sources" or `egress` "destinations".
 A ClusterGroup with `ipBlock` referenced in an ACNP's `appliedTo` field will be
 ignored, and the policy will have no effect.
+For a same ClusterGroup, `ipBlock` and `ipBlocks` cannot be set concurrently.
+ipBlock will be deprecated for ipBlocks in future versions of ClusterGroup.
+
+**ipBlocks**: This selects a list of IP CIDR ranges to allow as `ingress`
+"sources" or `egress` "destinations".
+A ClusterGroup with `ipBlocks` referenced in an ACNP's `appliedTo` field will be
+ignored, and the policy will have no effect.
+For a same ClusterGroup, `ipBlock` and `ipBlocks` cannot be set concurrently.
 
 **serviceReference**: Pods that serve as the backend for the specified Service
 will be grouped. Services without selectors are currently not supported, and will
@@ -693,6 +705,10 @@ When ClusterGroups with `serviceReference` are used in ACNPs as `appliedTo` or
 traffic enforcement. `ServiceReference` is merely a mechanism to group Pods and
 ensure that a ClusterGroup stays in sync with the set of Pods selected by a given
 Service.
+
+**childGroups**: This selects existing ClusterGroups by name. The effective members
+of the "parent" ClusterGrup will be the union of all its childGroups' members.
+See the section above for restrictions.
 
 **status**: The ClusterGroup `status` field determines the overall realization
 status of the group.
@@ -707,13 +723,13 @@ The following kubectl commands can be used to retrieve CG resources:
 
 ```bash
     # Use long name with API Group
-    kubectl get clustergroups.core.antrea.tanzu.vmware.com
+    kubectl get clustergroups.crd.antrea.io
 
     # Use short name
     kubectl get cg
 
     # Use short name with API Group
-    kubectl get cg.core.antrea.tanzu.vmware.com
+    kubectl get cg.crd.antrea.io
 ```
 
 ## Select Namespace by Name
@@ -761,7 +777,7 @@ Namespaces with the `antrea.io/metadata.name: <namespaceName>` label. Users may 
 use this reserved label to select Namespaces by name as follows:
 
 ```yaml
-apiVersion: security.antrea.tanzu.vmware.com/v1alpha1
+apiVersion: crd.antrea.io/v1alpha1
 kind: NetworkPolicy
 metadata:
   name: test-anp-by-name
@@ -798,14 +814,14 @@ admission controller for backwards-compatibility.
 
 ## RBAC
 
-Antrea-native Policy CRDs are meant for admins to manage the security of their
+Antrea-native policy CRDs are meant for admins to manage the security of their
 cluster. Thus, access to manage these CRDs must be granted to subjects which
 have the authority to outline the security policies for the cluster and/or
 Namespaces. On cluster initialization, Antrea grants the permissions to edit
 these CRDs with `admin` and the `edit` ClusterRole. In addition to this, Antrea
 also grants the permission to view these CRDs with the `view` ClusterRole.
 Cluster admins can therefore grant these ClusterRoles to any subject who may
-be responsible to manage the Antrea Policy CRDs. The admins may also decide to
+be responsible to manage the Antrea policy CRDs. The admins may also decide to
 share the `view` ClusterRole to a wider range of subjects to allow them to read
 the policies that may affect their workloads.
 Similar RBAC is applied to the ClusterGroup resource.
@@ -817,7 +833,7 @@ Similar RBAC is applied to the ClusterGroup resource.
   Tiers in a cluster be less than or equal to 10.
 - In order to reduce the churn in the agent, it is recommended to set the policy
   priority within the range 1.0 to 100.0.
-- The v1alpha1 Policy CRDs support up to 10,000 unique priorities at policy level,
+- The v1alpha1 policy CRDs support up to 10,000 unique priorities at policy level,
   and up to 50,000 unique priorities at rule level, across all tiers except for
   the "baseline" tier. For any two policy rules, their rule level priorities are only
   considered equal if they share the same tier, and have the same policy priority

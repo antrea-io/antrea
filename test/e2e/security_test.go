@@ -31,7 +31,7 @@ import (
 	certutil "k8s.io/client-go/util/cert"
 
 	"github.com/vmware-tanzu/antrea/pkg/apis"
-	"github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1"
+	"github.com/vmware-tanzu/antrea/pkg/apis/crd/v1beta1"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/certificate"
 )
 

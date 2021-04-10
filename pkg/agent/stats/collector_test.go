@@ -15,6 +15,7 @@
 package stats
 
 import (
+	"sort"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -62,7 +63,7 @@ func TestCollect(t *testing.T) {
 	tests := []struct {
 		name                    string
 		ruleStats               map[uint32]*agenttypes.RuleMetric
-		ofIDToPolicyMap         map[uint32]*cpv1beta.NetworkPolicyReference
+		ofIDToPolicyMap         map[uint32]*agenttypes.PolicyRule
 		expectedStatsCollection *statsCollection
 	}{
 		{
@@ -84,10 +85,10 @@ func TestCollect(t *testing.T) {
 					Sessions: 3,
 				},
 			},
-			ofIDToPolicyMap: map[uint32]*cpv1beta.NetworkPolicyReference{
-				1: &np1,
-				2: &np1,
-				3: &np2,
+			ofIDToPolicyMap: map[uint32]*agenttypes.PolicyRule{
+				1: {PolicyRef: &np1},
+				2: {PolicyRef: &np1},
+				3: {PolicyRef: &np2},
 			},
 			expectedStatsCollection: &statsCollection{
 				networkPolicyStats: map[types.UID]*statsv1alpha1.TrafficStats{
@@ -102,8 +103,8 @@ func TestCollect(t *testing.T) {
 						Sessions: 3,
 					},
 				},
-				antreaClusterNetworkPolicyStats: map[types.UID]*statsv1alpha1.TrafficStats{},
-				antreaNetworkPolicyStats:        map[types.UID]*statsv1alpha1.TrafficStats{},
+				antreaClusterNetworkPolicyStats: map[types.UID]map[string]*statsv1alpha1.TrafficStats{},
+				antreaNetworkPolicyStats:        map[types.UID]map[string]*statsv1alpha1.TrafficStats{},
 			},
 		},
 		{
@@ -125,10 +126,10 @@ func TestCollect(t *testing.T) {
 					Sessions: 3,
 				},
 			},
-			ofIDToPolicyMap: map[uint32]*cpv1beta.NetworkPolicyReference{
-				1: &np1,
-				2: &acnp1,
-				3: &anp1,
+			ofIDToPolicyMap: map[uint32]*agenttypes.PolicyRule{
+				1: {PolicyRef: &np1},
+				2: {Name: "rule1", PolicyRef: &acnp1},
+				3: {Name: "rule2", PolicyRef: &anp1},
 			},
 			expectedStatsCollection: &statsCollection{
 				networkPolicyStats: map[types.UID]*statsv1alpha1.TrafficStats{
@@ -138,18 +139,22 @@ func TestCollect(t *testing.T) {
 						Sessions: 1,
 					},
 				},
-				antreaClusterNetworkPolicyStats: map[types.UID]*statsv1alpha1.TrafficStats{
+				antreaClusterNetworkPolicyStats: map[types.UID]map[string]*statsv1alpha1.TrafficStats{
 					acnp1.UID: {
-						Bytes:    15,
-						Packets:  2,
-						Sessions: 1,
+						"rule1": {
+							Bytes:    15,
+							Packets:  2,
+							Sessions: 1,
+						},
 					},
 				},
-				antreaNetworkPolicyStats: map[types.UID]*statsv1alpha1.TrafficStats{
+				antreaNetworkPolicyStats: map[types.UID]map[string]*statsv1alpha1.TrafficStats{
 					anp1.UID: {
-						Bytes:    30,
-						Packets:  5,
-						Sessions: 3,
+						"rule2": {
+							Bytes:    30,
+							Packets:  5,
+							Sessions: 3,
+						},
 					},
 				},
 			},
@@ -168,8 +173,8 @@ func TestCollect(t *testing.T) {
 					Sessions: 1,
 				},
 			},
-			ofIDToPolicyMap: map[uint32]*cpv1beta.NetworkPolicyReference{
-				1: &np1,
+			ofIDToPolicyMap: map[uint32]*agenttypes.PolicyRule{
+				1: {PolicyRef: &np1},
 				2: nil,
 			},
 			expectedStatsCollection: &statsCollection{
@@ -180,8 +185,8 @@ func TestCollect(t *testing.T) {
 						Sessions: 1,
 					},
 				},
-				antreaClusterNetworkPolicyStats: map[types.UID]*statsv1alpha1.TrafficStats{},
-				antreaNetworkPolicyStats:        map[types.UID]*statsv1alpha1.TrafficStats{},
+				antreaClusterNetworkPolicyStats: map[types.UID]map[string]*statsv1alpha1.TrafficStats{},
+				antreaNetworkPolicyStats:        map[types.UID]map[string]*statsv1alpha1.TrafficStats{},
 			},
 		},
 	}
@@ -191,7 +196,7 @@ func TestCollect(t *testing.T) {
 			npQuerier := queriertest.NewMockAgentNetworkPolicyInfoQuerier(ctrl)
 			ofClient.EXPECT().NetworkPolicyMetrics().Return(tt.ruleStats).Times(1)
 			for ofID, policy := range tt.ofIDToPolicyMap {
-				npQuerier.EXPECT().GetNetworkPolicyByRuleFlowID(ofID).Return(policy)
+				npQuerier.EXPECT().GetRuleByFlowID(ofID).Return(policy)
 			}
 
 			m := &Collector{ofClient: ofClient, networkPolicyQuerier: npQuerier}
@@ -325,6 +330,226 @@ func TestCalculateDiff(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			actualMetrics := calculateDiff(tt.curStats, tt.lastStats)
+			assert.ElementsMatch(t, tt.expectedstatsList, actualMetrics)
+		})
+	}
+}
+
+func TestCalculateRuleDiff(t *testing.T) {
+	tests := []struct {
+		name              string
+		lastStats         map[types.UID]map[string]*statsv1alpha1.TrafficStats
+		curStats          map[types.UID]map[string]*statsv1alpha1.TrafficStats
+		expectedstatsList []cpv1beta.NetworkPolicyStats
+	}{
+		{
+			name: "new networkpolicy and existing networkpolicy",
+			lastStats: map[types.UID]map[string]*statsv1alpha1.TrafficStats{
+				"uid1": {
+					"rule1": {
+						Bytes:    1,
+						Packets:  1,
+						Sessions: 1,
+					},
+				},
+			},
+			curStats: map[types.UID]map[string]*statsv1alpha1.TrafficStats{
+				"uid1": {
+					"rule1": {
+						Bytes:    2,
+						Packets:  10,
+						Sessions: 10,
+					},
+					"rule2": {
+						Bytes:    5,
+						Packets:  5,
+						Sessions: 5,
+					},
+				},
+				"uid2": {
+					"rule3": {
+						Bytes:    1,
+						Packets:  1,
+						Sessions: 1,
+					},
+				},
+			},
+			expectedstatsList: []cpv1beta.NetworkPolicyStats{
+				{
+					NetworkPolicy: cpv1beta.NetworkPolicyReference{UID: "uid1"},
+					RuleTrafficStats: []statsv1alpha1.RuleTrafficStats{
+						{
+							Name: "rule1",
+							TrafficStats: statsv1alpha1.TrafficStats{
+								Bytes:    1,
+								Packets:  9,
+								Sessions: 9,
+							},
+						},
+						{
+							Name: "rule2",
+							TrafficStats: statsv1alpha1.TrafficStats{
+								Bytes:    5,
+								Packets:  5,
+								Sessions: 5,
+							},
+						},
+					},
+				},
+				{
+					NetworkPolicy: cpv1beta.NetworkPolicyReference{UID: "uid2"},
+					RuleTrafficStats: []statsv1alpha1.RuleTrafficStats{
+						{
+							Name: "rule3",
+							TrafficStats: statsv1alpha1.TrafficStats{
+								Bytes:    1,
+								Packets:  1,
+								Sessions: 1,
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "unchanged networkpolicy",
+			lastStats: map[types.UID]map[string]*statsv1alpha1.TrafficStats{
+				"uid1": {
+					"rule20": {
+						Bytes:    0,
+						Packets:  0,
+						Sessions: 0,
+					},
+				},
+				"uid2": {
+					"rule1": {
+						Bytes:    1,
+						Packets:  10,
+						Sessions: 10,
+					},
+					"rule2": {
+						Bytes:    5,
+						Packets:  5,
+						Sessions: 5,
+					},
+					"rule3": {
+						Bytes:    1,
+						Packets:  1,
+						Sessions: 1,
+					},
+				},
+			},
+			curStats: map[types.UID]map[string]*statsv1alpha1.TrafficStats{
+				"uid1": {
+					"rule20": {
+						Bytes:    0,
+						Packets:  0,
+						Sessions: 0,
+					},
+				},
+				"uid2": {
+					"rule1": {
+						Bytes:    1,
+						Packets:  10,
+						Sessions: 10,
+					},
+					"rule2": {
+						Bytes:    5,
+						Packets:  5,
+						Sessions: 5,
+					},
+					"rule3": {
+						Bytes:    1,
+						Packets:  1,
+						Sessions: 1,
+					},
+				},
+			},
+			expectedstatsList: []cpv1beta.NetworkPolicyStats{},
+		},
+		{
+			name: "negative statistic",
+			lastStats: map[types.UID]map[string]*statsv1alpha1.TrafficStats{
+				"uid1": {
+					"rule1": {
+						Bytes:    10,
+						Packets:  100,
+						Sessions: 1,
+					},
+				},
+			},
+			curStats: map[types.UID]map[string]*statsv1alpha1.TrafficStats{
+				"uid1": {
+					"rule1": {
+						Bytes:    1,
+						Packets:  10,
+						Sessions: 10,
+					},
+					"rule2": {
+						Bytes:    5,
+						Packets:  5,
+						Sessions: 5,
+					},
+				},
+				"uid2": {
+					"rule3": {
+						Bytes:    1,
+						Packets:  1,
+						Sessions: 1,
+					},
+				},
+			},
+			expectedstatsList: []cpv1beta.NetworkPolicyStats{
+				{
+					NetworkPolicy: cpv1beta.NetworkPolicyReference{UID: "uid1"},
+					RuleTrafficStats: []statsv1alpha1.RuleTrafficStats{
+						{
+							Name: "rule1",
+							TrafficStats: statsv1alpha1.TrafficStats{
+								Bytes:    1,
+								Packets:  10,
+								Sessions: 10,
+							},
+						},
+						{
+							Name: "rule2",
+							TrafficStats: statsv1alpha1.TrafficStats{
+								Bytes:    5,
+								Packets:  5,
+								Sessions: 5,
+							},
+						},
+					},
+				},
+				{
+					NetworkPolicy: cpv1beta.NetworkPolicyReference{UID: "uid2"},
+					RuleTrafficStats: []statsv1alpha1.RuleTrafficStats{
+						{
+							Name: "rule3",
+							TrafficStats: statsv1alpha1.TrafficStats{
+								Bytes:    1,
+								Packets:  1,
+								Sessions: 1,
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			actualMetrics := calculateRuleDiff(tt.curStats, tt.lastStats)
+			for _, v := range actualMetrics {
+				sort.SliceStable(v.RuleTrafficStats, func(i, j int) bool {
+					return v.RuleTrafficStats[i].Name < v.RuleTrafficStats[j].Name
+				})
+			}
+			for _, v := range tt.expectedstatsList {
+				sort.SliceStable(v.RuleTrafficStats, func(i, j int) bool {
+					return v.RuleTrafficStats[i].Name < v.RuleTrafficStats[j].Name
+				})
+			}
 			assert.ElementsMatch(t, tt.expectedstatsList, actualMetrics)
 		})
 	}

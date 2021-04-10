@@ -18,7 +18,7 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
-ANTREA_ROOT=$(dirname "${BASH_SOURCE[0]}")/..
+ANTREA_ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )/../" && pwd )"
 IMAGE_NAME="antrea/codegen:kubernetes-1.18.4"
 
 function docker_run() {

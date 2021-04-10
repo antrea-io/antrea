@@ -22,7 +22,8 @@ import (
 	unsafe "unsafe"
 
 	controlplane "github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
-	v1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
+	v1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha1"
+	statsv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/stats/v1alpha1"
 	conversion "k8s.io/apimachinery/pkg/conversion"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	types "k8s.io/apimachinery/pkg/types"
@@ -799,6 +800,7 @@ func autoConvert_controlplane_NetworkPolicyRule_To_v1beta1_NetworkPolicyRule(in 
 	} else {
 		out.Services = nil
 	}
+	// WARNING: in.Name requires manual conversion: does not exist in peer-type
 	out.Priority = in.Priority
 	out.Action = (*v1alpha1.RuleAction)(unsafe.Pointer(in.Action))
 	out.EnableLogging = in.EnableLogging
@@ -811,6 +813,7 @@ func autoConvert_v1beta1_NetworkPolicyStats_To_controlplane_NetworkPolicyStats(i
 		return err
 	}
 	out.TrafficStats = in.TrafficStats
+	out.RuleTrafficStats = *(*[]statsv1alpha1.RuleTrafficStats)(unsafe.Pointer(&in.RuleTrafficStats))
 	return nil
 }
 
@@ -824,6 +827,7 @@ func autoConvert_controlplane_NetworkPolicyStats_To_v1beta1_NetworkPolicyStats(i
 		return err
 	}
 	out.TrafficStats = in.TrafficStats
+	out.RuleTrafficStats = *(*[]statsv1alpha1.RuleTrafficStats)(unsafe.Pointer(&in.RuleTrafficStats))
 	return nil
 }
 

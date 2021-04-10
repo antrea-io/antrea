@@ -1,4 +1,4 @@
-// Copyright 2020 Antrea Authors
+// Copyright 2021 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,9 +30,9 @@ type FakeSupportBundles struct {
 	Fake *FakeSystemV1beta1
 }
 
-var supportbundlesResource = schema.GroupVersionResource{Group: "system.antrea.tanzu.vmware.com", Version: "v1beta1", Resource: "supportbundles"}
+var supportbundlesResource = schema.GroupVersionResource{Group: "system.antrea.io", Version: "v1beta1", Resource: "supportbundles"}
 
-var supportbundlesKind = schema.GroupVersionKind{Group: "system.antrea.tanzu.vmware.com", Version: "v1beta1", Kind: "SupportBundle"}
+var supportbundlesKind = schema.GroupVersionKind{Group: "system.antrea.io", Version: "v1beta1", Kind: "SupportBundle"}
 
 // Get takes name of the supportBundle, and returns the corresponding supportBundle object, and an error if there is any.
 func (c *FakeSupportBundles) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1beta1.SupportBundle, err error) {

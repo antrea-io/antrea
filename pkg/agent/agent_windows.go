@@ -188,19 +188,6 @@ func (i *Initializer) initHostNetworkFlows() error {
 	return nil
 }
 
-// initExternalConnectivityFlows installs OpenFlow entries to SNAT Pod traffic
-// using Node IP, and then Pod could communicate to the external IP addresses.
-func (i *Initializer) initExternalConnectivityFlows() error {
-	if i.nodeConfig.PodIPv4CIDR == nil {
-		return fmt.Errorf("Failed to find valid IPv4 PodCIDR")
-	}
-	// Install OpenFlow entries on the OVS to enable Pod traffic to communicate to external IP addresses.
-	if err := i.ofClient.InstallExternalFlows(); err != nil {
-		return err
-	}
-	return nil
-}
-
 // getTunnelLocalIP returns local_ip of tunnel port
 func (i *Initializer) getTunnelPortLocalIP() net.IP {
 	return i.nodeConfig.NodeIPAddr.IP

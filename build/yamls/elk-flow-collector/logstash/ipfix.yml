@@ -4118,3 +4118,9 @@
   135:
     - :uint64
     - :reverseOctetDeltaCountFromDestinationNode
+  136:
+    - :string
+    - :tcpState
+  137:
+    - :uint8
+    - :flowType

@@ -20,6 +20,16 @@ def filter(event)
         event.remove("[ipfix][protocolIdentifier]")
         event.set("[ipfix][protocolIdentifier]", "UDP")
     end
+    if event.get("[ipfix][destinationIPv6Address]").nil?
+        event.set("[ipfix][destinationIP]", event.get("[ipfix][destinationIPv4Address]"))
+    else
+        event.set("[ipfix][destinationIP]", event.get("[ipfix][destinationIPv6Address]"))
+    end
+    if event.get("[ipfix][sourceIPv6Address]").nil?
+        event.set("[ipfix][sourceIP]", event.get("[ipfix][sourceIPv4Address]"))
+    else
+        event.set("[ipfix][sourceIP]", event.get("[ipfix][sourceIPv6Address]"))
+    end
     if event.get("[ipfix][sourcePodName]") != ""
         if event.get("[ipfix][destinationServicePortName]") != ""
             flowkey = ""
@@ -51,7 +61,7 @@ def filter(event)
             flowkey << ":"
             flowkey << event.get("[ipfix][sourceTransportPort]").to_s
             flowkey << "->"
-            flowkey << event.get("[ipfix][destinationIPv4Address]")
+            flowkey << event.get("[ipfix][destinationIP]")
             flowkey << ":"
             flowkey << event.get("[ipfix][destinationTransportPort]").to_s
             flowkey << " "

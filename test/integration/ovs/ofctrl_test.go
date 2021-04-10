@@ -27,6 +27,7 @@ import (
 	"github.com/contiv/ofnet/ofctrl"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/time/rate"
 
 	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
@@ -67,7 +68,7 @@ var (
 	peerGW           = net.ParseIP("192.168.2.1")
 	vMAC, _          = net.ParseMAC("aa:bb:cc:dd:ee:ff")
 
-	ipDscp = uint8(10)
+	ipDSCP = uint8(10)
 )
 
 func newOFBridge(brName string) binding.Bridge {
@@ -570,8 +571,8 @@ func TestPacketOutIn(t *testing.T) {
 	defer bridge.Disconnect()
 
 	reason := uint8(1)
-	pktCh := make(chan *ofctrl.PacketIn)
-	err = bridge.SubscribePacketIn(reason, pktCh)
+	pktInQueue := binding.NewPacketInQueue(200, rate.Limit(100))
+	err = bridge.SubscribePacketIn(reason, pktInQueue)
 	require.Nil(t, err)
 
 	srcMAC, _ := net.ParseMAC("11:11:11:11:11:11")
@@ -588,7 +589,7 @@ func TestPacketOutIn(t *testing.T) {
 	stopCh := make(chan struct{})
 
 	go func() {
-		pktIn := <-pktCh
+		pktIn := pktInQueue.GetRateLimited(make(chan struct{}))
 		matchers := pktIn.GetMatches()
 
 		reg2Match := matchers.GetMatchByName("NXM_NX_REG2")
@@ -974,7 +975,7 @@ func prepareFlows(table binding.Table) ([]binding.Flow, []*ExpectFlow) {
 			Cookie(getCookieID()).
 			MatchProtocol(binding.ProtocolIP).
 			MatchSrcIP(podIP).
-			MatchIPDscp(ipDscp).
+			MatchIPDSCP(ipDSCP).
 			Action().GotoTable(table.GetNext()).
 			Done(),
 		table.BuildFlow(priorityNormal+20).MatchProtocol(binding.ProtocolTCP).Cookie(getCookieID()).MatchDstPort(uint16(8080), nil).
@@ -1015,7 +1016,7 @@ func prepareFlows(table binding.Table) ([]binding.Flow, []*ExpectFlow) {
 		&ExpectFlow{"priority=200,dl_dst=aa:aa:aa:aa:aa:13", fmt.Sprintf("load:0x3->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],%s", gotoTableAction)},
 		&ExpectFlow{"priority=200,ip,reg0=0x10000/0x10000", "output:NXM_NX_REG1[]"},
 		&ExpectFlow{"priority=200,ip,nw_dst=172.16.0.0/16", "output:1"},
-		&ExpectFlow{fmt.Sprintf("priority=200,ip,nw_src=192.168.1.3,nw_tos=%d", ipDscp<<2), gotoTableAction},
+		&ExpectFlow{fmt.Sprintf("priority=200,ip,nw_src=192.168.1.3,nw_tos=%d", ipDSCP<<2), gotoTableAction},
 		&ExpectFlow{"priority=220,tcp,tp_dst=8080", "conjunction(1001,3/3)"},
 		&ExpectFlow{"priority=220,ip,nw_src=192.168.1.3", "conjunction(1001,1/3)"},
 		&ExpectFlow{"priority=220,ip,nw_dst=192.168.3.0/24", "conjunction(1001,2/3)"},

@@ -20,22 +20,20 @@ import (
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
-	corev1a2 "github.com/vmware-tanzu/antrea/pkg/apis/core/v1alpha2"
-	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
+	crdv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha1"
+	crdv1alpha2 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha2"
 	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy/store"
 	antreatypes "github.com/vmware-tanzu/antrea/pkg/controller/types"
-	"github.com/vmware-tanzu/antrea/pkg/k8s"
 )
 
 // addClusterGroup is responsible for processing the ADD event of a ClusterGroup resource.
 func (n *NetworkPolicyController) addClusterGroup(curObj interface{}) {
-	cg := curObj.(*corev1a2.ClusterGroup)
+	cg := curObj.(*crdv1alpha2.ClusterGroup)
 	key := internalGroupKeyFunc(cg)
 	klog.V(2).Infof("Processing ADD event for ClusterGroup %s", cg.Name)
 	newGroup := n.processClusterGroup(cg)
@@ -46,16 +44,47 @@ func (n *NetworkPolicyController) addClusterGroup(curObj interface{}) {
 
 // updateClusterGroup is responsible for processing the UPDATE event of a ClusterGroup resource.
 func (n *NetworkPolicyController) updateClusterGroup(oldObj, curObj interface{}) {
-	cg := curObj.(*corev1a2.ClusterGroup)
-	og := oldObj.(*corev1a2.ClusterGroup)
+	cg := curObj.(*crdv1alpha2.ClusterGroup)
+	og := oldObj.(*crdv1alpha2.ClusterGroup)
 	key := internalGroupKeyFunc(cg)
 	klog.V(2).Infof("Processing UPDATE event for ClusterGroup %s", cg.Name)
 	newGroup := n.processClusterGroup(cg)
 	oldGroup := n.processClusterGroup(og)
-	ipBlockUpdated := newGroup.IPBlock != oldGroup.IPBlock
-	svcRefUpdated := newGroup.ServiceReference != oldGroup.ServiceReference
-	if getNormalizedNameForSelector(newGroup.Selector) == getNormalizedNameForSelector(oldGroup.Selector) && !ipBlockUpdated && !svcRefUpdated {
-		// No change in the selectors of the ClusterGroup. No need to enqueue for further sync.
+
+	selectorUpdated := func() bool {
+		return getNormalizedNameForSelector(newGroup.Selector) != getNormalizedNameForSelector(oldGroup.Selector)
+	}
+	svcRefUpdated := func() bool {
+		oldSvc, newSvc := oldGroup.ServiceReference, newGroup.ServiceReference
+		if oldSvc != nil && newSvc != nil && oldSvc.Name == newSvc.Name && oldSvc.Namespace == newSvc.Namespace {
+			return false
+		} else if oldSvc == nil && newSvc == nil {
+			return false
+		}
+		return true
+	}
+	ipBlocksUpdated := func() bool {
+		oldIPBs, newIPBs := sets.String{}, sets.String{}
+		for _, ipb := range oldGroup.IPBlocks {
+			oldIPBs.Insert(ipNetToCIDRStr(ipb.CIDR))
+		}
+		for _, ipb := range newGroup.IPBlocks {
+			newIPBs.Insert(ipNetToCIDRStr(ipb.CIDR))
+		}
+		return oldIPBs.Equal(newIPBs)
+	}
+	childGroupsUpdated := func() bool {
+		oldChildGroups, newChildGroups := sets.String{}, sets.String{}
+		for _, c := range oldGroup.ChildGroups {
+			oldChildGroups.Insert(c)
+		}
+		for _, c := range newGroup.ChildGroups {
+			newChildGroups.Insert(c)
+		}
+		return !oldChildGroups.Equal(newChildGroups)
+	}
+	if !ipBlocksUpdated() && !svcRefUpdated() && !selectorUpdated() && !childGroupsUpdated() {
+		// No change in the contents of the ClusterGroup. No need to enqueue for further sync.
 		return
 	}
 	n.internalGroupStore.Update(newGroup)
@@ -64,7 +93,7 @@ func (n *NetworkPolicyController) updateClusterGroup(oldObj, curObj interface{})
 
 // deleteClusterGroup is responsible for processing the DELETE event of a ClusterGroup resource.
 func (n *NetworkPolicyController) deleteClusterGroup(oldObj interface{}) {
-	og, ok := oldObj.(*corev1a2.ClusterGroup)
+	og, ok := oldObj.(*crdv1alpha2.ClusterGroup)
 	klog.V(2).Infof("Processing DELETE event for ClusterGroup %s", og.Name)
 	if !ok {
 		tombstone, ok := oldObj.(cache.DeletedFinalStateUnknown)
@@ -72,7 +101,7 @@ func (n *NetworkPolicyController) deleteClusterGroup(oldObj interface{}) {
 			klog.Errorf("Error decoding object when deleting ClusterGroup, invalid type: %v", oldObj)
 			return
 		}
-		og, ok = tombstone.Obj.(*corev1a2.ClusterGroup)
+		og, ok = tombstone.Obj.(*crdv1alpha2.ClusterGroup)
 		if !ok {
 			klog.Errorf("Error decoding object tombstone when deleting ClusterGroup, invalid type: %v", tombstone.Obj)
 			return
@@ -84,16 +113,29 @@ func (n *NetworkPolicyController) deleteClusterGroup(oldObj interface{}) {
 	if err != nil {
 		klog.Errorf("Unable to delete internal Group %s from store: %v", key, err)
 	}
+	n.enqueueInternalGroup(key)
 }
 
-func (n *NetworkPolicyController) processClusterGroup(cg *corev1a2.ClusterGroup) *antreatypes.Group {
+func (n *NetworkPolicyController) processClusterGroup(cg *crdv1alpha2.ClusterGroup) *antreatypes.Group {
 	internalGroup := antreatypes.Group{
 		Name: cg.Name,
 		UID:  cg.UID,
 	}
+	if len(cg.Spec.ChildGroups) > 0 {
+		for _, childCGName := range cg.Spec.ChildGroups {
+			internalGroup.ChildGroups = append(internalGroup.ChildGroups, string(childCGName))
+		}
+		return &internalGroup
+	}
 	if cg.Spec.IPBlock != nil {
 		ipb, _ := toAntreaIPBlockForCRD(cg.Spec.IPBlock)
-		internalGroup.IPBlock = ipb
+		internalGroup.IPBlocks = append(internalGroup.IPBlocks, *ipb)
+		return &internalGroup
+	} else if len(cg.Spec.IPBlocks) > 0 {
+		for i := range cg.Spec.IPBlocks {
+			ipb, _ := toAntreaIPBlockForCRD(&cg.Spec.IPBlocks[i])
+			internalGroup.IPBlocks = append(internalGroup.IPBlocks, *ipb)
+		}
 		return &internalGroup
 	}
 	svcSelector := cg.Spec.ServiceReference
@@ -108,39 +150,6 @@ func (n *NetworkPolicyController) processClusterGroup(cg *corev1a2.ClusterGroup)
 		internalGroup.Selector = groupSelector
 	}
 	return &internalGroup
-}
-
-// filterInternalGroupsForPodOrExternalEntity computes a list of internal Group keys which match the
-// Pod/ExternalEntity's labels.
-func (n *NetworkPolicyController) filterInternalGroupsForPodOrExternalEntity(obj metav1.Object) sets.String {
-	matchingKeySet := sets.String{}
-	internalGroups := n.internalGroupStore.List()
-	ns, _ := n.namespaceLister.Get(obj.GetNamespace())
-	for _, group := range internalGroups {
-		key, _ := store.GroupKeyFunc(group)
-		g := group.(*antreatypes.Group)
-		if g.Selector != nil && n.labelsMatchGroupSelector(obj, ns, g.Selector) {
-			matchingKeySet.Insert(key)
-			klog.V(2).Infof("%s/%s matched internal Group %s", obj.GetNamespace(), obj.GetName(), key)
-		}
-	}
-	return matchingKeySet
-}
-
-// filterInternalGroupsForNamespace computes a list of internal Group keys which
-// match the Namespace's labels.
-func (n *NetworkPolicyController) filterInternalGroupsForNamespace(namespace *v1.Namespace) sets.String {
-	matchingKeys := sets.String{}
-	internalGroups := n.internalGroupStore.List()
-	for _, group := range internalGroups {
-		key, _ := store.GroupKeyFunc(group)
-		g := group.(*antreatypes.Group)
-		if g.Selector != nil && g.Selector.NamespaceSelector != nil && g.Selector.NamespaceSelector.Matches(labels.Set(namespace.Labels)) {
-			matchingKeys.Insert(key)
-			klog.V(2).Infof("Namespace %s matched internal Group %s", namespace.Name, key)
-		}
-	}
-	return matchingKeys
 }
 
 // filterInternalGroupsForService computes a list of internal Group keys which references the Service.
@@ -197,6 +206,7 @@ func (n *NetworkPolicyController) syncInternalGroup(key string) error {
 	grpObj, found, _ := n.internalGroupStore.Get(key)
 	if !found {
 		klog.V(2).Infof("Internal group %s not found.", key)
+		n.groupingInterface.DeleteGroup(clusterGroupType, key)
 		return nil
 	}
 	grp := grpObj.(*antreatypes.Group)
@@ -207,32 +217,21 @@ func (n *NetworkPolicyController) syncInternalGroup(key string) error {
 		return nil
 	}
 	selectorUpdated := n.processServiceReference(grp)
-	newMemberSet := controlplane.GroupMemberSet{}
 	if grp.Selector != nil {
-		// Find all Pods matching its selectors and update store.
-		pods, externalEntities := n.processSelector(*grp.Selector)
-		for _, pod := range pods {
-			if len(pod.Status.PodIPs) == 0 {
-				// No need to insert Pod IPAddress when it is unset.
-				continue
-			}
-			newMemberSet.Insert(podToGroupMember(pod, true))
-		}
-		for _, entity := range externalEntities {
-			newMemberSet.Insert(externalEntityToGroupMember(entity))
-		}
+		n.groupingInterface.AddGroup(clusterGroupType, grp.Name, grp.Selector)
+	} else {
+		n.groupingInterface.DeleteGroup(clusterGroupType, grp.Name)
 	}
-	// for ipBlock Groups, newMemberSet and grp.GroupMembers will both be empty.
-	if selectorUpdated || !newMemberSet.Equal(grp.GroupMembers) {
-		// Update the internal Group object in the store with the Pods as GroupMembers.
+	if selectorUpdated {
+		// Update the internal Group object in the store with the new selector.
 		updatedGrp := &antreatypes.Group{
 			UID:              grp.UID,
 			Name:             grp.Name,
 			Selector:         grp.Selector,
 			ServiceReference: grp.ServiceReference,
-			GroupMembers:     newMemberSet,
+			ChildGroups:      grp.ChildGroups,
 		}
-		klog.V(2).Infof("Updating existing internal Group %s with %d GroupMembers", key, len(newMemberSet))
+		klog.V(2).Infof("Updating existing internal Group %s", key)
 		n.internalGroupStore.Update(updatedGrp)
 	}
 	// Update the ClusterGroup status to Realized as Antrea has recognized the Group and
@@ -242,11 +241,27 @@ func (n *NetworkPolicyController) syncInternalGroup(key string) error {
 		klog.Errorf("Failed to update ClusterGroup %s GroupMembersComputed condition to %s: %v", cg.Name, v1.ConditionTrue, err)
 		return err
 	}
+	n.triggerParentGroupSync(grp)
 	return n.triggerCNPUpdates(cg)
 }
 
+func (n *NetworkPolicyController) triggerParentGroupSync(grp *antreatypes.Group) {
+	// TODO: if the max supported group nesting level increases, a Group having children
+	//  will no longer be a valid indication that it cannot have parents.
+	if len(grp.ChildGroups) == 0 {
+		parentGroupObjs, err := n.internalGroupStore.GetByIndex(store.ChildGroupIndex, grp.Name)
+		if err != nil {
+			klog.Errorf("Error retrieving parents of ClusterGroup %s: %v", grp.Name, err)
+		}
+		for _, p := range parentGroupObjs {
+			parentGrp := p.(*antreatypes.Group)
+			n.enqueueInternalGroup(parentGrp.Name)
+		}
+	}
+}
+
 // triggerCNPUpdates triggers processing of ClusterNetworkPolicies associated with the input ClusterGroup.
-func (n *NetworkPolicyController) triggerCNPUpdates(cg *corev1a2.ClusterGroup) error {
+func (n *NetworkPolicyController) triggerCNPUpdates(cg *crdv1alpha2.ClusterGroup) error {
 	// If a ClusterGroup is added/updated, it might have a reference in ClusterNetworkPolicy.
 	cnps, err := n.cnpInformer.Informer().GetIndexer().ByIndex(ClusterGroupIndex, cg.Name)
 	if err != nil {
@@ -254,7 +269,7 @@ func (n *NetworkPolicyController) triggerCNPUpdates(cg *corev1a2.ClusterGroup) e
 		return err
 	}
 	for _, obj := range cnps {
-		cnp := obj.(*secv1alpha1.ClusterNetworkPolicy)
+		cnp := obj.(*crdv1alpha1.ClusterNetworkPolicy)
 		// Re-process ClusterNetworkPolicies which may be affected due to updates to CG.
 		curInternalNP := n.processClusterNetworkPolicy(cnp)
 		klog.V(2).Infof("Updating existing internal NetworkPolicy %s for %s", curInternalNP.Name, curInternalNP.SourceRef.ToString())
@@ -295,31 +310,31 @@ func (n *NetworkPolicyController) triggerCNPUpdates(cg *corev1a2.ClusterGroup) e
 }
 
 // updateGroupStatus updates the Status subresource for a ClusterGroup.
-func (n *NetworkPolicyController) updateGroupStatus(cg *corev1a2.ClusterGroup, cStatus v1.ConditionStatus) error {
-	condStatus := corev1a2.GroupCondition{
+func (n *NetworkPolicyController) updateGroupStatus(cg *crdv1alpha2.ClusterGroup, cStatus v1.ConditionStatus) error {
+	condStatus := crdv1alpha2.GroupCondition{
 		Status: cStatus,
-		Type:   corev1a2.GroupMembersComputed,
+		Type:   crdv1alpha2.GroupMembersComputed,
 	}
 	if groupMembersComputedConditionEqual(cg.Status.Conditions, condStatus) {
 		// There is no change in conditions.
 		return nil
 	}
 	condStatus.LastTransitionTime = metav1.Now()
-	status := corev1a2.GroupStatus{
-		Conditions: []corev1a2.GroupCondition{condStatus},
+	status := crdv1alpha2.GroupStatus{
+		Conditions: []crdv1alpha2.GroupCondition{condStatus},
 	}
 	klog.V(4).Infof("Updating ClusterGroup %s status to %#v", cg.Name, condStatus)
 	toUpdate := cg.DeepCopy()
 	toUpdate.Status = status
-	_, err := n.crdClient.CoreV1alpha2().ClusterGroups().UpdateStatus(context.TODO(), toUpdate, metav1.UpdateOptions{})
+	_, err := n.crdClient.CrdV1alpha2().ClusterGroups().UpdateStatus(context.TODO(), toUpdate, metav1.UpdateOptions{})
 	return err
 }
 
 // groupMembersComputedConditionEqual checks whether the condition status for GroupMembersComputed condition
 // is same. Returns true if equal, otherwise returns false. It disregards the lastTransitionTime field.
-func groupMembersComputedConditionEqual(conds []corev1a2.GroupCondition, condition corev1a2.GroupCondition) bool {
+func groupMembersComputedConditionEqual(conds []crdv1alpha2.GroupCondition, condition crdv1alpha2.GroupCondition) bool {
 	for _, c := range conds {
-		if c.Type == corev1a2.GroupMembersComputed {
+		if c.Type == crdv1alpha2.GroupMembersComputed {
 			if c.Status == condition.Status {
 				return true
 			}
@@ -366,24 +381,61 @@ func (n *NetworkPolicyController) serviceToGroupSelector(service *v1.Service) *a
 // GetAssociatedGroups retrieves the internal Groups associated with the entity being
 // queried (Pod or ExternalEntity identified by name and namespace).
 func (n *NetworkPolicyController) GetAssociatedGroups(name, namespace string) ([]antreatypes.Group, error) {
-	memberKey := k8s.NamespacedName(namespace, name)
-	groups, err := n.internalGroupStore.GetByIndex(store.GroupMemberIndex, memberKey)
+	// Try Pod first, then ExternalEntity.
+	groups, exists := n.groupingInterface.GetGroupsForPod(namespace, name)
+	if !exists {
+		groups, exists = n.groupingInterface.GetGroupsForExternalEntity(namespace, name)
+		if !exists {
+			return nil, nil
+		}
+	}
+	clusterGroups, exists := groups[clusterGroupType]
+	if !exists {
+		return nil, nil
+	}
+	var groupObjs []antreatypes.Group
+	for _, g := range clusterGroups {
+		groupObjs = append(groupObjs, n.getAssociatedGroupsByName(g)...)
+	}
+	// Remove duplicates in the groupObj slice.
+	groupKeys, j := make(map[string]bool), 0
+	for _, g := range groupObjs {
+		if _, exists := groupKeys[g.Name]; !exists {
+			groupKeys[g.Name] = true
+			groupObjs[j] = g
+			j++
+		}
+	}
+	return groupObjs[:j], nil
+}
+
+// getAssociatedGroupsByName retrieves the internal Group and all it's parent Group objects
+// (if any) by Group name.
+func (n *NetworkPolicyController) getAssociatedGroupsByName(grpName string) []antreatypes.Group {
+	var groups []antreatypes.Group
+	groupObj, found, _ := n.internalGroupStore.Get(grpName)
+	if !found {
+		return groups
+	}
+	grp := groupObj.(*antreatypes.Group)
+	groups = append(groups, *grp)
+	parentGroupObjs, err := n.internalGroupStore.GetByIndex(store.ChildGroupIndex, grp.Name)
 	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve Group associated with key %s", memberKey)
+		klog.Errorf("Error retrieving parents of ClusterGroup %s: %v", grp.Name, err)
 	}
-	groupObjs := make([]antreatypes.Group, len(groups))
-	for i, g := range groups {
-		groupObjs[i] = *g.(*antreatypes.Group)
+	for _, p := range parentGroupObjs {
+		parentGrp := p.(*antreatypes.Group)
+		groups = append(groups, *parentGrp)
 	}
-	return groupObjs, nil
+	return groups
 }
 
 // GetGroupMembers returns the current members of a ClusterGroup.
 func (n *NetworkPolicyController) GetGroupMembers(cgName string) (controlplane.GroupMemberSet, error) {
-	g, found, err := n.internalGroupStore.Get(cgName)
-	if err != nil || !found {
-		return nil, fmt.Errorf("failed to get internal group associated with ClusterGroup %s", cgName)
+	groupObj, found, _ := n.internalGroupStore.Get(cgName)
+	if found {
+		group := groupObj.(*antreatypes.Group)
+		return n.getClusterGroupMemberSet(group), nil
 	}
-	internalGroup := g.(*antreatypes.Group)
-	return internalGroup.GroupMembers, nil
+	return controlplane.GroupMemberSet{}, fmt.Errorf("no internal Group with name %s is found", cgName)
 }

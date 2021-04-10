@@ -84,15 +84,24 @@ parameters have to be set in the Antrea Agent ConfigMap:
     # L4 transport protocols.
     #flowCollectorAddr: "flow-aggregator.flow-aggregator.svc:4739:tcp"
     
-    # Provide flow poll interval as a duration string. This determines how often the flow exporter dumps connections from the conntrack module.
-    # Flow poll interval should be greater than or equal to 1s (one second).
+    # Provide flow poll interval as a duration string. This determines how often the
+    # flow exporter dumps connections from the conntrack module. Flow poll interval
+    # should be greater than or equal to 1s (one second).
     # Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
     #flowPollInterval: "5s"
-    
-    # Provide flow export frequency, which is the number of poll cycles elapsed before flow exporter exports flow records to
-    # the flow collector.
-    # Flow export frequency should be greater than or equal to 1.
-    #flowExportFrequency: 12
+
+    # Provide the active flow export timeout, which is the timeout after which a flow
+    # record is sent to the collector for active flows. Thus, for flows with a continuous
+    # stream of packets, a flow record will be exported to the collector once the elapsed
+    # time since the last export event is equal to the value of this timeout.
+    # Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
+    #activeFlowExportTimeout: "60s"
+
+    # Provide the idle flow export timeout, which is the timeout after which a flow
+    # record is sent to the collector for idle flows. A flow is considered idle if no
+    # packet matching this flow has been observed since the last export event.
+    # Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
+    #idleFlowExportTimeout: "15s"
 
     # Enable TLS communication from flow exporter to flow aggregator.
     #enableTLSToFlowAggregator: true
@@ -103,13 +112,13 @@ which uses the DNS name of the Flow Aggregator Service, if the Service is deploy
 with the Name and Namespace set to `flow-aggregator`. If you deploy the Flow Aggregator
 Service with a different Name and Namespace, then either use the appropriate DNS
 name or the Cluster IP of the Service. Please note that the default values for
-`flowPollInterval` and `flowExportFrequency` parameters are set to 5s and 12, respectively.
+`flowPollInterval`, `activeFlowExportTimeout`, and `idleFlowExportTimeout` parameters are set to 5s, 60s, and 15s, respectively.
 TLS communication between the Flow Exporter and the Flow Aggregator is enabled by default.
 Please modify them as per your requirements.
 
 ### IPFIX Information Elements (IEs) in a Flow Record
 
-There are 23 IPFIX IEs in each exported flow record, which are defined in the
+There are 34 IPFIX IEs in each exported flow record, which are defined in the
 IANA-assigned IE registry, the Reverse IANA-assigned IE registry and the Antrea
 IE registry. The reverse IEs are used to provide bi-directional information about
 the flow. All the IEs used by the Antrea Flow Exporter are listed below:
@@ -120,6 +129,7 @@ the flow. All the IEs used by the Antrea Flow Exporter are listed below:
 |--------------------------|---------------|----------|----------------|
 | flowStartSeconds         | 0             | 150      | dateTimeSeconds|
 | flowEndSeconds           | 0             | 151      | dateTimeSeconds|
+| flowEndReason            | 0             | 136      | unsigned8      |
 | sourceIPv4Address        | 0             | 8        | ipv4Address    |
 | destinationIPv4Address   | 0             | 12       | ipv4Address    |
 | sourceIPv6Address        | 0             | 27       | ipv6Address    |
@@ -159,6 +169,8 @@ the flow. All the IEs used by the Antrea Flow Exporter are listed below:
 | ingressNetworkPolicyNamespace| 56506         | 111      | string      |
 | egressNetworkPolicyName      | 56506         | 112      | string      |
 | egressNetworkPolicyNamespace | 56506         | 113      | string      |
+| tcpState                     | 56506         | 136      | string      |
+| flowType                     | 56506         | 137      | unsigned8   |
 
 ### Supported capabilities
 
@@ -181,9 +193,7 @@ for inter-Node flows. It is the responsibility of the [Flow Aggregator](#flow-ag
 to correlate flows from the source and destination Nodes and produce complete flow
 records.
 
-Flow Exporter is supported in IPv4 clusters, IPv6 clusters and dual-stack clusters.
-Please note that Flow Aggregator is only supported in IPv4 clusters. We plan to
-enable the Flow Aggregator support to IPv6 clusters and dual-stack clusters soon.
+Both Flow Exporter and Flow Aggregator are supported in IPv4 clusters, IPv6 clusters and dual-stack clusters.
 
 #### Connection Metrics
 

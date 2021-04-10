@@ -19,7 +19,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
-	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
+	crdv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha1"
 	statsv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/stats/v1alpha1"
 )
 
@@ -197,13 +197,16 @@ type NetworkPolicyRule struct {
 	To NetworkPolicyPeer
 	// Services is a list of services which should be matched.
 	Services []Service
+	// Name describes the intention of this rule.
+	// Name should be unique within the policy.
+	Name string
 	// Priority defines the priority of the Rule as compared to other rules in the
 	// NetworkPolicy.
 	Priority int32
 	// Action specifies the action to be applied on the rule. i.e. Allow/Drop. An empty
 	// action “nil” defaults to Allow action, which would be the case for rules created for
 	// K8s NetworkPolicy.
-	Action *secv1alpha1.RuleAction
+	Action *crdv1alpha1.RuleAction
 	// EnableLogging is used to indicate if agent should generate logs
 	// when rules are matched. Should be default to false.
 	EnableLogging bool
@@ -288,6 +291,8 @@ type NetworkPolicyStats struct {
 	NetworkPolicy NetworkPolicyReference
 	// The stats of the NetworkPolicy.
 	TrafficStats statsv1alpha1.TrafficStats
+	// The stats of the NetworkPolicy rules. It's empty for K8s NetworkPolicies as they don't have rule name to identify a rule.
+	RuleTrafficStats []statsv1alpha1.RuleTrafficStats
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -324,4 +329,29 @@ type GroupAssociation struct {
 	// AssociatedGroups is a list of GroupReferences that is associated with the
 	// Pod/ExternalEntity being queried.
 	AssociatedGroups []GroupReference
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+type EgressGroup struct {
+	metav1.TypeMeta
+	metav1.ObjectMeta
+	// GroupMembers is a list of GroupMember selected by this group.
+	GroupMembers []GroupMember
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// EgressGroupPatch describes the incremental update of an EgressGroup.
+type EgressGroupPatch struct {
+	metav1.TypeMeta
+	metav1.ObjectMeta
+	AddedGroupMembers   []GroupMember
+	RemovedGroupMembers []GroupMember
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// EgressGroupList is a list of EgressGroup objects.
+type EgressGroupList struct {
+	metav1.TypeMeta
+	metav1.ListMeta
+	Items []EgressGroup
 }

@@ -48,20 +48,6 @@ func (m *MockConnectionStore) EXPECT() *MockConnectionStoreMockRecorder {
 	return m.recorder
 }
 
-// DeleteConnectionByKey mocks base method
-func (m *MockConnectionStore) DeleteConnectionByKey(arg0 flowexporter.ConnectionKey) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteConnectionByKey", arg0)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// DeleteConnectionByKey indicates an expected call of DeleteConnectionByKey
-func (mr *MockConnectionStoreMockRecorder) DeleteConnectionByKey(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteConnectionByKey", reflect.TypeOf((*MockConnectionStore)(nil).DeleteConnectionByKey), arg0)
-}
-
 // ForAllConnectionsDo mocks base method
 func (m *MockConnectionStore) ForAllConnectionsDo(arg0 flowexporter.ConnectionMapCallBack) error {
 	m.ctrl.T.Helper()
@@ -101,6 +87,20 @@ func (m *MockConnectionStore) Run(arg0 <-chan struct{}) {
 func (mr *MockConnectionStoreMockRecorder) Run(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Run", reflect.TypeOf((*MockConnectionStore)(nil).Run), arg0)
+}
+
+// SetExportDone mocks base method
+func (m *MockConnectionStore) SetExportDone(arg0 flowexporter.ConnectionKey) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetExportDone", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SetExportDone indicates an expected call of SetExportDone
+func (mr *MockConnectionStoreMockRecorder) SetExportDone(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetExportDone", reflect.TypeOf((*MockConnectionStore)(nil).SetExportDone), arg0)
 }
 
 // MockConnTrackDumper is a mock of ConnTrackDumper interface

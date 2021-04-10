@@ -63,6 +63,21 @@ func (mr *MockProxierMockRecorder) GetProxyProvider() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetProxyProvider", reflect.TypeOf((*MockProxier)(nil).GetProxyProvider))
 }
 
+// GetServiceByIP mocks base method
+func (m *MockProxier) GetServiceByIP(arg0 string) (proxy.ServicePortName, bool) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetServiceByIP", arg0)
+	ret0, _ := ret[0].(proxy.ServicePortName)
+	ret1, _ := ret[1].(bool)
+	return ret0, ret1
+}
+
+// GetServiceByIP indicates an expected call of GetServiceByIP
+func (mr *MockProxierMockRecorder) GetServiceByIP(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetServiceByIP", reflect.TypeOf((*MockProxier)(nil).GetServiceByIP), arg0)
+}
+
 // GetServiceFlowKeys mocks base method
 func (m *MockProxier) GetServiceFlowKeys(arg0, arg1 string) ([]string, []openflow.GroupIDType, bool) {
 	m.ctrl.T.Helper()

@@ -32,7 +32,7 @@ import (
 	oftest "github.com/vmware-tanzu/antrea/pkg/agent/openflow/testing"
 	"github.com/vmware-tanzu/antrea/pkg/agent/types"
 	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
-	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
+	crdv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha1"
 	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
 	mocks "github.com/vmware-tanzu/antrea/pkg/ovs/openflow/testing"
 	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
@@ -147,7 +147,7 @@ func TestInstallPolicyRuleFlows(t *testing.T) {
 	c = prepareClient(ctrl)
 	c.nodeConfig = &config.NodeConfig{PodIPv4CIDR: podIPv4CIDR, PodIPv6CIDR: nil}
 	c.ipProtocols = []binding.Protocol{binding.ProtocolIP}
-	defaultAction := secv1alpha1.RuleActionAllow
+	defaultAction := crdv1alpha1.RuleActionAllow
 	ruleID1 := uint32(101)
 	rule1 := &types.PolicyRule{
 		Direction: v1beta2.DirectionOut,
@@ -288,7 +288,7 @@ func TestBatchInstallPolicyRuleFlows(t *testing.T) {
 	c = prepareClient(ctrl)
 	c.nodeConfig = &config.NodeConfig{PodIPv4CIDR: podIPv4CIDR, PodIPv6CIDR: nil}
 	c.ipProtocols = []binding.Protocol{binding.ProtocolIP}
-	defaultAction := secv1alpha1.RuleActionAllow
+	defaultAction := crdv1alpha1.RuleActionAllow
 	priorityRule2 := uint16(10000)
 
 	ruleID1 := uint32(10)
@@ -417,7 +417,7 @@ func TestInstallPolicyRuleFlowsInDualStackCluster(t *testing.T) {
 	c = prepareClient(ctrl)
 	c.nodeConfig = &config.NodeConfig{PodIPv4CIDR: podIPv4CIDR, PodIPv6CIDR: podIPv6CIDR}
 	c.ipProtocols = []binding.Protocol{binding.ProtocolIP, binding.ProtocolIPv6}
-	defaultAction := secv1alpha1.RuleActionAllow
+	defaultAction := crdv1alpha1.RuleActionAllow
 	ruleID1 := uint32(101)
 	rule1 := &types.PolicyRule{
 		Direction: v1beta2.DirectionOut,

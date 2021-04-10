@@ -19,10 +19,10 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
-	clusterinfo "github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1"
+	crdv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1beta1"
 )
 
-const GroupName = "system.antrea.tanzu.vmware.com"
+const GroupName = "system.antrea.io"
 
 var (
 	SchemeGroupVersion = schema.GroupVersion{
@@ -52,8 +52,8 @@ func Resource(resource string) schema.GroupResource {
 func addKnownTypes(scheme *runtime.Scheme) error {
 	scheme.AddKnownTypes(
 		SchemeGroupVersion,
-		&clusterinfo.AntreaControllerInfo{},
-		&clusterinfo.AntreaControllerInfoList{},
+		&crdv1beta1.AntreaControllerInfo{},
+		&crdv1beta1.AntreaControllerInfoList{},
 		&SupportBundle{},
 	)
 

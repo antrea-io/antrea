@@ -19,7 +19,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
-	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
+	crdv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha1"
 	statsv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/stats/v1alpha1"
 )
 
@@ -211,13 +211,16 @@ type NetworkPolicyRule struct {
 	// Action specifies the action to be applied on the rule. i.e. Allow/Drop. An empty
 	// action “nil” defaults to Allow action, which would be the case for rules created for
 	// K8s Network Policy.
-	Action *secv1alpha1.RuleAction `json:"action,omitempty" protobuf:"bytes,6,opt,name=action,casttype=github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1.RuleAction"`
+	Action *crdv1alpha1.RuleAction `json:"action,omitempty" protobuf:"bytes,6,opt,name=action,casttype=github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1.RuleAction"`
 	// EnableLogging indicates whether or not to generate logs when rules are matched. Default to false.
 	EnableLogging bool `json:"enableLogging" protobuf:"varint,7,opt,name=enableLogging"`
 	// AppliedToGroups is a list of names of AppliedToGroups to which this rule applies.
 	// Cannot be set in conjunction with NetworkPolicy.AppliedToGroups of the NetworkPolicy
 	// that this Rule is referred to.
 	AppliedToGroups []string `json:"appliedToGroups,omitempty" protobuf:"bytes,8,opt,name=appliedToGroups"`
+	// Name describes the intention of this rule.
+	// Name should be unique within the policy.
+	Name string `json:"name,omitempty" protobuf:"bytes,9,opt,name=name"`
 }
 
 // Protocol defines network protocols supported for things like container ports.
@@ -299,6 +302,8 @@ type NetworkPolicyStats struct {
 	NetworkPolicy NetworkPolicyReference `json:"networkPolicy,omitempty" protobuf:"bytes,1,opt,name=networkPolicy"`
 	// The stats of the NetworkPolicy.
 	TrafficStats statsv1alpha1.TrafficStats `json:"trafficStats,omitempty" protobuf:"bytes,2,opt,name=trafficStats"`
+	// The stats of the NetworkPolicy rules. It's empty for K8s NetworkPolicies as they don't have rule name to identify a rule.
+	RuleTrafficStats []statsv1alpha1.RuleTrafficStats `json:"ruleTrafficStats,omitempty" protobuf:"bytes,3,rep,name=ruleTrafficStats"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -335,4 +340,32 @@ type GroupAssociation struct {
 	// AssociatedGroups is a list of GroupReferences that is associated with the
 	// Pod/ExternalEntity being queried.
 	AssociatedGroups []GroupReference `json:"associatedGroups" protobuf:"bytes,2,rep,name=associatedGroups"`
+}
+
+// +genclient
+// +genclient:nonNamespaced
+// +genclient:onlyVerbs=list,get,watch
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+type EgressGroup struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
+	// GroupMembers is list of resources selected by this group.
+	GroupMembers []GroupMember `json:"groupMembers,omitempty" protobuf:"bytes,2,rep,name=groupMembers"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// EgressGroupPatch describes the incremental update of an EgressGroup.
+type EgressGroupPatch struct {
+	metav1.TypeMeta
+	metav1.ObjectMeta   `protobuf:"bytes,1,opt,name=objectMeta"`
+	AddedGroupMembers   []GroupMember `protobuf:"bytes,2,rep,name=addedGroupMembers"`
+	RemovedGroupMembers []GroupMember `protobuf:"bytes,3,rep,name=removedGroupMembers"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// EgressGroupList is a list of EgressGroup objects.
+type EgressGroupList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
+	Items           []EgressGroup `json:"items" protobuf:"bytes,2,rep,name=items"`
 }

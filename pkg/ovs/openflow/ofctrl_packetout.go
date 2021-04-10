@@ -109,6 +109,23 @@ func (b *ofPacketOutBuilder) SetIPProtocol(proto Protocol) PacketOutBuilder {
 	return b
 }
 
+// ofPacketOutBuilder sets IP protocol in the packet's IP header with the
+// intetger protocol value.
+func (b *ofPacketOutBuilder) SetIPProtocolValue(isIPv6 bool, protoValue uint8) PacketOutBuilder {
+	if isIPv6 {
+		if b.pktOut.IPv6Header == nil {
+			b.pktOut.IPv6Header = new(protocol.IPv6)
+		}
+		b.pktOut.IPv6Header.NextHeader = protoValue
+	} else {
+		if b.pktOut.IPHeader == nil {
+			b.pktOut.IPHeader = new(protocol.IPv4)
+		}
+		b.pktOut.IPHeader.Protocol = protoValue
+	}
+	return b
+}
+
 // SetTTL sets TTL in the packet's IP header.
 func (b *ofPacketOutBuilder) SetTTL(ttl uint8) PacketOutBuilder {
 	if b.pktOut.IPv6Header == nil {
@@ -157,6 +174,21 @@ func (b *ofPacketOutBuilder) SetTCPFlags(flags uint8) PacketOutBuilder {
 		b.pktOut.TCPHeader = new(protocol.TCP)
 	}
 	b.pktOut.TCPHeader.Code = flags
+	return b
+}
+func (b *ofPacketOutBuilder) SetTCPSeqNum(seqNum uint32) PacketOutBuilder {
+	if b.pktOut.TCPHeader == nil {
+		b.pktOut.TCPHeader = new(protocol.TCP)
+	}
+	b.pktOut.TCPHeader.SeqNum = seqNum
+	return b
+}
+
+func (b *ofPacketOutBuilder) SetTCPAckNum(ackNum uint32) PacketOutBuilder {
+	if b.pktOut.TCPHeader == nil {
+		b.pktOut.TCPHeader = new(protocol.TCP)
+	}
+	b.pktOut.TCPHeader.AckNum = ackNum
 	return b
 }
 
@@ -214,6 +246,14 @@ func (b *ofPacketOutBuilder) SetICMPSequence(seq uint16) PacketOutBuilder {
 	return b
 }
 
+func (b *ofPacketOutBuilder) SetICMPData(data []byte) PacketOutBuilder {
+	if b.pktOut.ICMPHeader == nil {
+		b.pktOut.ICMPHeader = new(protocol.ICMP)
+	}
+	b.pktOut.ICMPHeader.Data = data
+	return b
+}
+
 // SetInport sets the in_port field of the packetOut message.
 func (b *ofPacketOutBuilder) SetInport(inPort uint32) PacketOutBuilder {
 	b.pktOut.InPort = inPort
@@ -241,15 +281,19 @@ func (b *ofPacketOutBuilder) Done() *ofctrl.PacketOut {
 	}
 	if b.pktOut.IPv6Header == nil {
 		if b.pktOut.ICMPHeader != nil {
-			b.setICMPData()
+			if len(b.pktOut.ICMPHeader.Data) == 0 {
+				b.setICMPData()
+			}
 			b.pktOut.ICMPHeader.Checksum = b.icmpHeaderChecksum()
 			b.pktOut.IPHeader.Length = 20 + b.pktOut.ICMPHeader.Len()
 		} else if b.pktOut.TCPHeader != nil {
 			b.pktOut.TCPHeader.HdrLen = 5
 			// #nosec G404: random number generator not used for security purposes
 			b.pktOut.TCPHeader.SeqNum = rand.Uint32()
-			// #nosec G404: random number generator not used for security purposes
-			b.pktOut.TCPHeader.AckNum = rand.Uint32()
+			if b.pktOut.TCPHeader.AckNum == 0 {
+				// #nosec G404: random number generator not used for security purposes
+				b.pktOut.TCPHeader.AckNum = rand.Uint32()
+			}
 			b.pktOut.TCPHeader.Checksum = b.tcpHeaderChecksum()
 			b.pktOut.IPHeader.Length = 20 + b.pktOut.TCPHeader.Len()
 		} else if b.pktOut.UDPHeader != nil {
@@ -264,15 +308,19 @@ func (b *ofPacketOutBuilder) Done() *ofctrl.PacketOut {
 		b.pktOut.IPHeader.Checksum = b.ipHeaderChecksum()
 	} else {
 		if b.pktOut.ICMPHeader != nil {
-			b.setICMPData()
+			if len(b.pktOut.ICMPHeader.Data) == 0 {
+				b.setICMPData()
+			}
 			b.pktOut.ICMPHeader.Checksum = b.icmpHeaderChecksum()
 			b.pktOut.IPv6Header.Length = b.pktOut.ICMPHeader.Len()
 		} else if b.pktOut.TCPHeader != nil {
 			b.pktOut.TCPHeader.HdrLen = 5
 			// #nosec G404: random number generator not used for security purposes
 			b.pktOut.TCPHeader.SeqNum = rand.Uint32()
-			// #nosec G404: random number generator not used for security purposes
-			b.pktOut.TCPHeader.AckNum = rand.Uint32()
+			if b.pktOut.TCPHeader.AckNum == 0 {
+				// #nosec G404: random number generator not used for security purposes
+				b.pktOut.TCPHeader.AckNum = rand.Uint32()
+			}
 			b.pktOut.TCPHeader.Checksum = b.tcpHeaderChecksum()
 			b.pktOut.IPv6Header.Length = b.pktOut.TCPHeader.Len()
 		} else if b.pktOut.UDPHeader != nil {

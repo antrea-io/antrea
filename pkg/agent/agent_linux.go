@@ -35,11 +35,6 @@ func (i *Initializer) initHostNetworkFlows() error {
 	return nil
 }
 
-// initExternalConnectivityFlows returns immediately on Linux. The corresponding functions are provided in routeClient.
-func (i *Initializer) initExternalConnectivityFlows() error {
-	return nil
-}
-
 // getTunnelLocalIP returns local_ip of tunnel port.
 // On linux platform, local_ip option is not needed.
 func (i *Initializer) getTunnelPortLocalIP() net.IP {

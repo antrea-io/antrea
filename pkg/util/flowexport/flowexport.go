@@ -33,7 +33,7 @@ func ParseFlowCollectorAddr(addr string, defaultPort string, defaultProtocol str
 	}
 	if match {
 		idx := strings.Index(addr, "]")
-		strSlice = append(strSlice, addr[:idx+1])
+		strSlice = append(strSlice, addr[1:idx])
 		strSlice = append(strSlice, strings.Split(addr[idx+2:], ":")...)
 	} else {
 		strSlice = strings.Split(addr, ":")

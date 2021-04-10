@@ -28,9 +28,10 @@ import (
 type AntreaClusterNetworkPolicyStats struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
-
 	// The traffic stats of the Antrea ClusterNetworkPolicy.
 	TrafficStats TrafficStats `json:"trafficStats,omitempty" protobuf:"bytes,2,opt,name=trafficStats"`
+	// The traffic stats of the Antrea ClusterNetworkPolicy, from rule perspective.
+	RuleTrafficStats []RuleTrafficStats `json:"ruleTrafficStats,omitempty" protobuf:"bytes,3,rep,name=ruleTrafficStats"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -53,9 +54,10 @@ type AntreaClusterNetworkPolicyStatsList struct {
 type AntreaNetworkPolicyStats struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
-
 	// The traffic stats of the Antrea NetworkPolicy.
 	TrafficStats TrafficStats `json:"trafficStats,omitempty" protobuf:"bytes,2,opt,name=trafficStats"`
+	// The traffic stats of the Antrea NetworkPolicy, from rule perspective.
+	RuleTrafficStats []RuleTrafficStats `json:"ruleTrafficStats,omitempty" protobuf:"bytes,3,rep,name=ruleTrafficStats"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -102,4 +104,10 @@ type TrafficStats struct {
 	Bytes int64 `json:"bytes,omitempty" protobuf:"varint,2,opt,name=bytes"`
 	// Sessions is the sessions count hit by the NetworkPolicy.
 	Sessions int64 `json:"sessions,omitempty" protobuf:"varint,3,opt,name=sessions"`
+}
+
+// RuleTrafficStats contains TrafficStats of single rule inside a NetworkPolicy.
+type RuleTrafficStats struct {
+	Name         string       `json:"name,omitempty" protobuf:"bytes,1,opt,name=name"`
+	TrafficStats TrafficStats `json:"trafficStats,omitempty" protobuf:"bytes,2,opt,name=trafficStats"`
 }

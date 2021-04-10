@@ -25,7 +25,7 @@ import (
 	interfacestore "github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
 	openflow "github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	proxy "github.com/vmware-tanzu/antrea/pkg/agent/proxy"
-	v1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1"
+	v1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1beta1"
 	ovsctl "github.com/vmware-tanzu/antrea/pkg/ovs/ovsctl"
 	querier "github.com/vmware-tanzu/antrea/pkg/querier"
 	kubernetes "k8s.io/client-go/kubernetes"

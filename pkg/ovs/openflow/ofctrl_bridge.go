@@ -9,6 +9,7 @@ import (
 
 	"github.com/contiv/libOpenflow/openflow13"
 	"github.com/contiv/ofnet/ofctrl"
+	"golang.org/x/time/rate"
 	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/metrics"
@@ -206,12 +207,12 @@ func (b *OFBridge) DumpTableStatus() []TableStatus {
 
 // PacketRcvd is a callback when a packetIn is received on ofctrl.OFSwitch.
 func (b *OFBridge) PacketRcvd(sw *ofctrl.OFSwitch, packet *ofctrl.PacketIn) {
-	klog.Infof("Received packet: %+v", packet)
+	klog.V(2).Infof("Received packet: %+v", packet)
 	reason := packet.Reason
-	ch, found := b.pktConsumers.Load(reason)
+	v, found := b.pktConsumers.Load(reason)
 	if found {
-		pktCh, _ := ch.(chan *ofctrl.PacketIn)
-		pktCh <- packet
+		pktInQueue, _ := v.(*PacketInQueue)
+		pktInQueue.AddOrDrop(packet)
 	}
 }
 
@@ -519,12 +520,50 @@ func (b *OFBridge) AddOFEntriesInBundle(addEntries []OFEntry, modEntries []OFEnt
 	return nil
 }
 
-func (b *OFBridge) SubscribePacketIn(reason uint8, ch chan *ofctrl.PacketIn) error {
+type PacketInQueue struct {
+	rateLimiter *rate.Limiter
+	packetsCh   chan *ofctrl.PacketIn
+}
+
+func NewPacketInQueue(size int, r rate.Limit) *PacketInQueue {
+	return &PacketInQueue{rateLimiter: rate.NewLimiter(r, 1), packetsCh: make(chan *ofctrl.PacketIn, size)}
+}
+
+func (q *PacketInQueue) AddOrDrop(packet *ofctrl.PacketIn) bool {
+	select {
+	case q.packetsCh <- packet:
+		return true
+	default:
+		// Channel is full.
+		return false
+	}
+}
+
+func (q *PacketInQueue) GetRateLimited(stopCh <-chan struct{}) *ofctrl.PacketIn {
+	when := q.rateLimiter.Reserve().Delay()
+	t := time.NewTimer(when)
+	defer t.Stop()
+
+	select {
+	case <-stopCh:
+		return nil
+	case <-t.C:
+		break
+	}
+	select {
+	case <-stopCh:
+		return nil
+	case packet := <-q.packetsCh:
+		return packet
+	}
+}
+
+func (b *OFBridge) SubscribePacketIn(reason uint8, pktInQueue *PacketInQueue) error {
 	_, exist := b.pktConsumers.Load(reason)
 	if exist {
 		return fmt.Errorf("packetIn reason %d already exists", reason)
 	}
-	b.pktConsumers.Store(reason, ch)
+	b.pktConsumers.Store(reason, pktInQueue)
 	return nil
 }
 

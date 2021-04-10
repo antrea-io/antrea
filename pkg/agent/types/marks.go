@@ -23,4 +23,8 @@ const (
 var (
 	// HostLocalSourceMark is the mark generated from HostLocalSourceBit.
 	HostLocalSourceMark = uint32(1 << HostLocalSourceBit)
+
+	// SNATIPMarkMask is the bits of packet mark that stores the ID of the
+	// SNAT IP for a "Pod -> external" egress packet, that is to be SNAT'd.
+	SNATIPMarkMask = uint32(0xFF)
 )

@@ -17,7 +17,7 @@ require (
 	github.com/confluentinc/bincover v0.1.0
 	github.com/containernetworking/cni v0.8.0
 	github.com/containernetworking/plugins v0.8.7
-	github.com/contiv/libOpenflow v0.0.0-20201116154255-01db743640b1
+	github.com/contiv/libOpenflow v0.0.0-20210312221048-1d504242120d
 	github.com/contiv/ofnet v0.0.0-00010101000000-000000000000
 	github.com/coreos/go-iptables v0.4.5
 	github.com/elazarl/goproxy v0.0.0-20190911111923-ecfe977594f1 // indirect
@@ -28,7 +28,6 @@ require (
 	github.com/golang/protobuf v1.3.2
 	github.com/google/uuid v1.1.1
 	github.com/kevinburke/ssh_config v0.0.0-20190725054713-01f96b0aa0cd
-	github.com/kr/text v0.2.0 // indirect
 	github.com/niemeyer/pretty v0.0.0-20200227124842-a10e7caefd8e // indirect
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/common v0.4.1
@@ -42,7 +41,7 @@ require (
 	github.com/stretchr/testify v1.6.1
 	github.com/ti-mo/conntrack v0.3.0
 	github.com/vishvananda/netlink v1.1.0
-	github.com/vmware/go-ipfix v0.4.5
+	github.com/vmware/go-ipfix v0.4.7
 	golang.org/x/crypto v0.0.0-20200820211705-5c72a883971a
 	golang.org/x/exp v0.0.0-20190312203227-4b39c73a6495
 	golang.org/x/mod v0.4.0
@@ -70,12 +69,9 @@ replace (
 	// hcshim repo is modifed to add "AdditionalParams" field to HNSEndpoint struct.
 	// We will use this replace before pushing the change to hcshim upstream repo.
 	github.com/Microsoft/hcsshim v0.8.9 => github.com/ruicao93/hcsshim v0.8.10-0.20210114035434-63fe00c1b9aa
-	// temporary replacement to avoid Antrea Agent panics for some Traceflow requests
-	// see https://github.com/vmware-tanzu/antrea/issues/1878
-	github.com/contiv/libOpenflow => github.com/antoninbas/libOpenflow v0.0.0-20210218001059-32f2e57d0435
 	// antrea/plugins/octant/go.mod also has this replacement since replace statement in dependencies
 	// were ignored. We need to change antrea/plugins/octant/go.mod if there is any change here.
-	github.com/contiv/ofnet => github.com/wenyingd/ofnet v0.0.0-20210205051801-5a4f247248d4
+	github.com/contiv/ofnet => github.com/wenyingd/ofnet v0.0.0-20210318032909-171b6795a2da
 	// fake.NewSimpleClientset is quite slow when it's initialized with massive objects due to
 	// https://github.com/kubernetes/kubernetes/issues/89574. It takes more than tens of minutes to
 	// init a fake client with 200k objects, which makes it hard to run the NetworkPolicy scale test.

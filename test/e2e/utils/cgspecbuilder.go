@@ -17,17 +17,27 @@ package utils
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	corev1a2 "github.com/vmware-tanzu/antrea/pkg/apis/core/v1alpha2"
-	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
+	crdv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha1"
+	crdv1alpha2 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha2"
+	legacycorev1alpha2 "github.com/vmware-tanzu/antrea/pkg/legacyapis/core/v1alpha2"
 )
 
 type ClusterGroupSpecBuilder struct {
-	Spec corev1a2.GroupSpec
+	Spec crdv1alpha2.GroupSpec
 	Name string
 }
 
-func (b *ClusterGroupSpecBuilder) Get() *corev1a2.ClusterGroup {
-	return &corev1a2.ClusterGroup{
+func (b *ClusterGroupSpecBuilder) Get() *crdv1alpha2.ClusterGroup {
+	return &crdv1alpha2.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: b.Name,
+		},
+		Spec: b.Spec,
+	}
+}
+
+func (b *ClusterGroupSpecBuilder) GetLegacy() *legacycorev1alpha2.ClusterGroup {
+	return &legacycorev1alpha2.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: b.Name,
 		},
@@ -68,16 +78,25 @@ func (b *ClusterGroupSpecBuilder) SetNamespaceSelector(nsSelector map[string]str
 	return b
 }
 
-func (b *ClusterGroupSpecBuilder) SetIPBlock(ipb *secv1alpha1.IPBlock) *ClusterGroupSpecBuilder {
-	b.Spec.IPBlock = ipb
+func (b *ClusterGroupSpecBuilder) SetIPBlocks(ipBlocks []crdv1alpha1.IPBlock) *ClusterGroupSpecBuilder {
+	b.Spec.IPBlocks = ipBlocks
 	return b
 }
 
 func (b *ClusterGroupSpecBuilder) SetServiceReference(svcNS, svcName string) *ClusterGroupSpecBuilder {
-	svcRef := &corev1a2.ServiceReference{
+	svcRef := &crdv1alpha2.ServiceReference{
 		Namespace: svcNS,
 		Name:      svcName,
 	}
 	b.Spec.ServiceReference = svcRef
+	return b
+}
+
+func (b *ClusterGroupSpecBuilder) SetChildGroups(cgs []string) *ClusterGroupSpecBuilder {
+	var childGroups []crdv1alpha2.ClusterGroupReference
+	for _, c := range cgs {
+		childGroups = append(childGroups, crdv1alpha2.ClusterGroupReference(c))
+	}
+	b.Spec.ChildGroups = childGroups
 	return b
 }

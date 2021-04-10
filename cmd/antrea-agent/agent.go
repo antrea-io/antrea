@@ -27,6 +27,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/cniserver"
 	_ "github.com/vmware-tanzu/antrea/pkg/agent/cniserver/ipam"
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
+	"github.com/vmware-tanzu/antrea/pkg/agent/controller/egress"
 	"github.com/vmware-tanzu/antrea/pkg/agent/controller/networkpolicy"
 	"github.com/vmware-tanzu/antrea/pkg/agent/controller/noderoute"
 	"github.com/vmware-tanzu/antrea/pkg/agent/controller/traceflow"
@@ -52,7 +53,6 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/signals"
 	"github.com/vmware-tanzu/antrea/pkg/util/cipher"
 	"github.com/vmware-tanzu/antrea/pkg/version"
-	k8sproxy "github.com/vmware-tanzu/antrea/third_party/proxy"
 )
 
 // informerDefaultResync is the default resync period if a handler doesn't specify one.
@@ -68,9 +68,15 @@ func run(o *Options) error {
 	if err != nil {
 		return fmt.Errorf("error creating K8s clients: %v", err)
 	}
+	legacyCRDClient, err := k8s.CreateLegacyCRDClient(o.config.ClientConnection, o.config.KubeAPIServerOverride)
+	if err != nil {
+		return fmt.Errorf("error creating legacy CRD client: %v", err)
+	}
+
 	informerFactory := informers.NewSharedInformerFactory(k8sClient, informerDefaultResync)
 	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, informerDefaultResync)
-	traceflowInformer := crdInformerFactory.Ops().V1alpha1().Traceflows()
+	traceflowInformer := crdInformerFactory.Crd().V1alpha1().Traceflows()
+	egressInformer := crdInformerFactory.Crd().V1alpha2().Egresses()
 
 	// Create Antrea Clientset for the given config.
 	antreaClientProvider := agent.NewAntreaClientProvider(o.config.AntreaClientConnection, k8sClient)
@@ -94,7 +100,8 @@ func run(o *Options) error {
 	ovsBridgeMgmtAddr := ofconfig.GetMgmtAddress(o.config.OVSRunDir, o.config.OVSBridge)
 	ofClient := openflow.NewClient(o.config.OVSBridge, ovsBridgeMgmtAddr, ovsDatapathType,
 		features.DefaultFeatureGate.Enabled(features.AntreaProxy),
-		features.DefaultFeatureGate.Enabled(features.AntreaPolicy))
+		features.DefaultFeatureGate.Enabled(features.AntreaPolicy),
+		features.DefaultFeatureGate.Enabled(features.Egress))
 
 	_, serviceCIDRNet, _ := net.ParseCIDR(o.config.ServiceCIDR)
 	var serviceCIDRNetv6 *net.IPNet
@@ -184,6 +191,11 @@ func run(o *Options) error {
 	var statsCollector *stats.Collector
 	if features.DefaultFeatureGate.Enabled(features.NetworkPolicyStats) {
 		statsCollector = stats.NewCollector(antreaClientProvider, ofClient, networkPolicyController)
+	}
+
+	var egressController *egress.EgressController
+	if features.DefaultFeatureGate.Enabled(features.Egress) {
+		egressController = egress.NewEgressController(ofClient, egressInformer, antreaClientProvider, ifaceStore, routeClient, nodeConfig.Name)
 	}
 
 	var proxier proxy.Proxier
@@ -277,6 +289,10 @@ func run(o *Options) error {
 
 	go networkPolicyController.Run(stopCh)
 
+	if features.DefaultFeatureGate.Enabled(features.Egress) {
+		go egressController.Run(stopCh)
+	}
+
 	if features.DefaultFeatureGate.Enabled(features.NetworkPolicyStats) {
 		go statsCollector.Run(stopCh)
 	}
@@ -300,7 +316,7 @@ func run(o *Options) error {
 		networkPolicyController,
 		o.config.APIPort)
 
-	agentMonitor := monitor.NewAgentMonitor(crdClient, agentQuerier)
+	agentMonitor := monitor.NewAgentMonitor(crdClient, legacyCRDClient, agentQuerier)
 
 	go agentMonitor.Run(stopCh)
 
@@ -337,11 +353,8 @@ func run(o *Options) error {
 	if features.DefaultFeatureGate.Enabled(features.FlowExporter) {
 		v4Enabled := config.IsIPv4Enabled(nodeConfig, networkConfig.TrafficEncapMode)
 		v6Enabled := config.IsIPv6Enabled(nodeConfig, networkConfig.TrafficEncapMode)
+		isNetworkPolicyOnly := networkConfig.TrafficEncapMode.IsNetworkPolicyOnly()
 
-		var proxyProvider k8sproxy.Provider
-		if proxier != nil {
-			proxyProvider = proxier.GetProxyProvider()
-		}
 		flowRecords := flowrecords.NewFlowRecords()
 		connStore := connections.NewConnectionStore(
 			connections.InitializeConnTrackDumper(nodeConfig, serviceCIDRNet, serviceCIDRNetv6, ovsDatapathType, features.DefaultFeatureGate.Enabled(features.AntreaProxy)),
@@ -349,7 +362,7 @@ func run(o *Options) error {
 			ifaceStore,
 			v4Enabled,
 			v6Enabled,
-			proxyProvider,
+			proxier,
 			networkPolicyController,
 			o.pollInterval)
 		go connStore.Run(stopCh)
@@ -364,7 +377,9 @@ func run(o *Options) error {
 			o.config.EnableTLSToFlowAggregator,
 			v4Enabled,
 			v6Enabled,
-			k8sClient)
+			k8sClient,
+			nodeRouteController,
+			isNetworkPolicyOnly)
 		if err != nil {
 			return fmt.Errorf("error when creating IPFIX flow exporter: %v", err)
 		}

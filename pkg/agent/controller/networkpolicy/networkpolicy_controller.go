@@ -17,6 +17,7 @@ package networkpolicy
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"sync"
 	"time"
 
@@ -43,6 +44,8 @@ const (
 	// Default number of workers processing a rule change.
 	defaultWorkers = 4
 )
+
+var emptyWatch = watch.NewEmptyWatch()
 
 // Controller is responsible for watching Antrea AddressGroups, AppliedToGroups,
 // and NetworkPolicies, feeding them to ruleCache, getting dirty rules from
@@ -87,6 +90,7 @@ type Controller struct {
 	appliedToGroupWatcher *watcher
 	addressGroupWatcher   *watcher
 	fullSyncGroup         sync.WaitGroup
+	ifaceStore            interfacestore.InterfaceStore
 }
 
 // NewNetworkPolicyController returns a new *Controller.
@@ -310,6 +314,7 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 		fullSyncWaitGroup: &c.fullSyncGroup,
 		fullSynced:        false,
 	}
+	c.ifaceStore = ifaceStore
 	return c, nil
 }
 
@@ -346,6 +351,14 @@ func (c *Controller) GetAppliedToGroups() []v1beta2.AppliedToGroup {
 }
 
 func (c *Controller) GetNetworkPolicyByRuleFlowID(ruleFlowID uint32) *v1beta2.NetworkPolicyReference {
+	rule := c.GetRuleByFlowID(ruleFlowID)
+	if rule == nil {
+		return nil
+	}
+	return rule.PolicyRef
+}
+
+func (c *Controller) GetRuleByFlowID(ruleFlowID uint32) *types.PolicyRule {
 	rule, exists, err := c.reconciler.GetRuleByFlowID(ruleFlowID)
 	if err != nil {
 		klog.Errorf("Error when getting network policy by rule flow ID: %v", err)
@@ -354,7 +367,7 @@ func (c *Controller) GetNetworkPolicyByRuleFlowID(ruleFlowID uint32) *v1beta2.Ne
 	if !exists {
 		return nil
 	}
-	return rule.PolicyRef
+	return rule
 }
 
 func (c *Controller) GetControllerConnectionStatus() bool {
@@ -574,6 +587,12 @@ func (w *watcher) watch() {
 	watcher, err := w.watchFunc()
 	if err != nil {
 		klog.Warningf("Failed to start watch for %s: %v", w.objectType, err)
+		return
+	}
+	// Watch method doesn't return error but "emptyWatch" in case of some partial data errors,
+	// e.g. timeout error. Make sure that watcher is not empty and log warning otherwise.
+	if reflect.TypeOf(watcher) == reflect.TypeOf(emptyWatch) {
+		klog.Warningf("Failed to start watch for %s, please ensure antrea service is reachable for the agent", w.objectType)
 		return
 	}
 

@@ -30,7 +30,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/metrics"
 	antreatypes "github.com/vmware-tanzu/antrea/pkg/agent/types"
 	v1beta "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
-	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
+	crdv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha1"
 	"github.com/vmware-tanzu/antrea/pkg/querier"
 )
 
@@ -61,8 +61,10 @@ type rule struct {
 	To v1beta.NetworkPolicyPeer
 	// Protocols and Ports of this rule.
 	Services []v1beta.Service
+	// Name of this rule. Empty for k8s NetworkPolicy.
+	Name string
 	// Action of this rule. nil for k8s NetworkPolicy.
-	Action *secv1alpha1.RuleAction
+	Action *crdv1alpha1.RuleAction
 	// Priority of this rule within the NetworkPolicy. Defaults to -1 for K8s NetworkPolicy.
 	Priority int32
 	// The highest rule Priority within the NetworkPolicy. Defaults to -1 for K8s NetworkPolicy.
@@ -548,6 +550,7 @@ func toRule(r *v1beta.NetworkPolicyRule, policy *v1beta.NetworkPolicy, maxPriori
 		PolicyPriority:  policy.Priority,
 		TierPriority:    policy.TierPriority,
 		AppliedToGroups: appliedToGroups,
+		Name:            r.Name,
 		PolicyUID:       policy.UID,
 		SourceRef:       policy.SourceRef,
 		EnableLogging:   r.EnableLogging,

@@ -30,17 +30,18 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/rand"
-	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/util/workqueue"
 
 	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
-	"github.com/vmware-tanzu/antrea/pkg/apis/core/v1alpha2"
+	"github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha2"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
 	fakeversioned "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/fake"
 	crdinformers "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions"
+	"github.com/vmware-tanzu/antrea/pkg/controller/grouping"
 	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy/store"
 	antreatypes "github.com/vmware-tanzu/antrea/pkg/controller/types"
 )
@@ -67,9 +68,6 @@ var (
 
 type networkPolicyController struct {
 	*NetworkPolicyController
-	podStore                   cache.Store
-	externalEntityStore        cache.Store
-	namespaceStore             cache.Store
 	serviceStore               cache.Store
 	networkPolicyStore         cache.Store
 	cnpStore                   cache.Store
@@ -80,6 +78,7 @@ type networkPolicyController struct {
 	internalNetworkPolicyStore storage.Interface
 	informerFactory            informers.SharedInformerFactory
 	crdInformerFactory         crdinformers.SharedInformerFactory
+	groupingController         *grouping.GroupEntityController
 }
 
 // objects is an initial set of K8s objects that is exposed through the client.
@@ -92,28 +91,29 @@ func newController(objects ...runtime.Object) (*fake.Clientset, *networkPolicyCo
 	addressGroupStore := store.NewAddressGroupStore()
 	internalNetworkPolicyStore := store.NewNetworkPolicyStore()
 	internalGroupStore := store.NewGroupStore()
-	cgInformer := crdInformerFactory.Core().V1alpha2().ClusterGroups()
-	cgStore := crdInformerFactory.Core().V1alpha2().ClusterGroups().Informer().GetStore()
-	npController := NewNetworkPolicyController(client,
-		crdClient,
+	cgInformer := crdInformerFactory.Crd().V1alpha2().ClusterGroups()
+	cgStore := crdInformerFactory.Crd().V1alpha2().ClusterGroups().Informer().GetStore()
+	groupEntityIndex := grouping.NewGroupEntityIndex()
+	groupingController := grouping.NewGroupEntityController(groupEntityIndex,
 		informerFactory.Core().V1().Pods(),
 		informerFactory.Core().V1().Namespaces(),
+		crdInformerFactory.Crd().V1alpha2().ExternalEntities())
+	npController := NewNetworkPolicyController(client,
+		crdClient,
+		groupEntityIndex,
 		informerFactory.Core().V1().Services(),
-		crdInformerFactory.Core().V1alpha2().ExternalEntities(),
 		informerFactory.Networking().V1().NetworkPolicies(),
-		crdInformerFactory.Security().V1alpha1().ClusterNetworkPolicies(),
-		crdInformerFactory.Security().V1alpha1().NetworkPolicies(),
-		crdInformerFactory.Security().V1alpha1().Tiers(),
+		crdInformerFactory.Crd().V1alpha1().ClusterNetworkPolicies(),
+		crdInformerFactory.Crd().V1alpha1().NetworkPolicies(),
+		crdInformerFactory.Crd().V1alpha1().Tiers(),
 		cgInformer,
 		addressGroupStore,
 		appliedToGroupStore,
 		internalNetworkPolicyStore,
 		internalGroupStore)
-	npController.podListerSynced = alwaysReady
-	npController.namespaceListerSynced = alwaysReady
 	npController.networkPolicyListerSynced = alwaysReady
 	npController.cnpListerSynced = alwaysReady
-	npController.tierLister = crdInformerFactory.Security().V1alpha1().Tiers().Lister()
+	npController.tierLister = crdInformerFactory.Crd().V1alpha1().Tiers().Lister()
 	npController.tierListerSynced = alwaysReady
 	npController.cgInformer = cgInformer
 	npController.cgLister = cgInformer.Lister()
@@ -122,19 +122,63 @@ func newController(objects ...runtime.Object) (*fake.Clientset, *networkPolicyCo
 	npController.serviceListerSynced = alwaysReady
 	return client, &networkPolicyController{
 		npController,
-		informerFactory.Core().V1().Pods().Informer().GetStore(),
-		crdInformerFactory.Core().V1alpha2().ExternalEntities().Informer().GetStore(),
-		informerFactory.Core().V1().Namespaces().Informer().GetStore(),
 		informerFactory.Core().V1().Services().Informer().GetStore(),
 		informerFactory.Networking().V1().NetworkPolicies().Informer().GetStore(),
-		crdInformerFactory.Security().V1alpha1().ClusterNetworkPolicies().Informer().GetStore(),
-		crdInformerFactory.Security().V1alpha1().Tiers().Informer().GetStore(),
+		crdInformerFactory.Crd().V1alpha1().ClusterNetworkPolicies().Informer().GetStore(),
+		crdInformerFactory.Crd().V1alpha1().Tiers().Informer().GetStore(),
 		cgStore,
 		appliedToGroupStore,
 		addressGroupStore,
 		internalNetworkPolicyStore,
 		informerFactory,
 		crdInformerFactory,
+		groupingController,
+	}
+}
+
+// newControllerWithoutEventHandler creates a networkPolicyController that doesn't register event handlers so that the
+// tests can call event handlers in their own ways.
+func newControllerWithoutEventHandler(objects ...runtime.Object) (*fake.Clientset, *networkPolicyController) {
+	client := newClientset(objects...)
+	crdClient := fakeversioned.NewSimpleClientset()
+	informerFactory := informers.NewSharedInformerFactory(client, informerDefaultResync)
+	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, informerDefaultResync)
+	appliedToGroupStore := store.NewAppliedToGroupStore()
+	addressGroupStore := store.NewAddressGroupStore()
+	internalNetworkPolicyStore := store.NewNetworkPolicyStore()
+	internalGroupStore := store.NewGroupStore()
+	networkPolicyInformer := informerFactory.Networking().V1().NetworkPolicies()
+	cgStore := crdInformerFactory.Crd().V1alpha2().ClusterGroups().Informer().GetStore()
+	groupEntityIndex := grouping.NewGroupEntityIndex()
+	npController := &NetworkPolicyController{
+		kubeClient:                 client,
+		crdClient:                  crdClient,
+		networkPolicyInformer:      networkPolicyInformer,
+		networkPolicyLister:        networkPolicyInformer.Lister(),
+		networkPolicyListerSynced:  networkPolicyInformer.Informer().HasSynced,
+		addressGroupStore:          addressGroupStore,
+		appliedToGroupStore:        appliedToGroupStore,
+		internalNetworkPolicyStore: internalNetworkPolicyStore,
+		internalGroupStore:         internalGroupStore,
+		appliedToGroupQueue:        workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "appliedToGroup"),
+		addressGroupQueue:          workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "addressGroup"),
+		internalNetworkPolicyQueue: workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "internalNetworkPolicy"),
+		internalGroupQueue:         workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "internalGroup"),
+		groupingInterface:          groupEntityIndex,
+	}
+	return client, &networkPolicyController{
+		npController,
+		informerFactory.Core().V1().Services().Informer().GetStore(),
+		informerFactory.Networking().V1().NetworkPolicies().Informer().GetStore(),
+		crdInformerFactory.Crd().V1alpha1().ClusterNetworkPolicies().Informer().GetStore(),
+		crdInformerFactory.Crd().V1alpha1().Tiers().Informer().GetStore(),
+		cgStore,
+		appliedToGroupStore,
+		addressGroupStore,
+		internalNetworkPolicyStore,
+		informerFactory,
+		crdInformerFactory,
+		nil,
 	}
 }
 
@@ -1276,7 +1320,7 @@ func TestAddPod(t *testing.T) {
 	npc.cgStore.Add(testCG)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			npc.podStore.Add(tt.addedPod)
+			npc.groupingInterface.AddPod(tt.addedPod)
 			appGroupID := getNormalizedUID(toGroupSelector("nsA", &selectorSpec, nil, nil).NormalizedName)
 			inGroupID := getNormalizedUID(toGroupSelector("nsA", &selectorIn, nil, nil).NormalizedName)
 			outGroupID := getNormalizedUID(toGroupSelector("nsA", &selectorOut, nil, nil).NormalizedName)
@@ -1291,8 +1335,7 @@ func TestAddPod(t *testing.T) {
 			updatedInAddrGroup := updatedInAddrGroupObj.(*antreatypes.AddressGroup)
 			updatedOutAddrGroupObj, _, _ := npc.addressGroupStore.Get(outGroupID)
 			updatedOutAddrGroup := updatedOutAddrGroupObj.(*antreatypes.AddressGroup)
-			groupObj, _, _ := npc.internalGroupStore.Get(groupKey)
-			grp := groupObj.(*antreatypes.Group)
+			groupMembers, _ := npc.GetGroupMembers(groupKey)
 			if tt.appGroupMatch {
 				assert.Len(t, podsAdded, 1, "expected Pod to match AppliedToGroup")
 			} else {
@@ -1304,7 +1347,7 @@ func TestAddPod(t *testing.T) {
 			}
 			assert.Equal(t, tt.inAddressGroupMatch, updatedInAddrGroup.GroupMembers.Has(memberPod))
 			assert.Equal(t, tt.outAddressGroupMatch, updatedOutAddrGroup.GroupMembers.Has(memberPod))
-			assert.Equal(t, tt.groupMatch, grp.GroupMembers.Has(memberPod))
+			assert.Equal(t, tt.groupMatch, groupMembers.Has(memberPod))
 		})
 	}
 }
@@ -1365,8 +1408,8 @@ func TestDeletePod(t *testing.T) {
 	_, npc := newController()
 	npc.addNetworkPolicy(matchNPObj)
 	npc.addClusterGroup(testCG)
-	npc.podStore.Add(p1)
-	npc.podStore.Add(p2)
+	npc.groupingInterface.AddPod(p1)
+	npc.groupingInterface.AddPod(p2)
 	npc.syncAppliedToGroup(matchAppGID)
 	// Retrieve AddressGroup.
 	adgs := npc.addressGroupStore.List()
@@ -1375,7 +1418,7 @@ func TestDeletePod(t *testing.T) {
 	addrGroup := addrGroupObj.(*antreatypes.AddressGroup)
 	npc.syncAddressGroup(addrGroup.Name)
 	// Delete Pod P1 matching the AppliedToGroup.
-	npc.podStore.Delete(p1)
+	npc.groupingInterface.DeletePod(p1)
 	npc.syncAppliedToGroup(matchAppGID)
 	appGroupObj, _, _ := npc.appliedToGroupStore.Get(matchAppGID)
 	appGroup := appGroupObj.(*antreatypes.AppliedToGroup)
@@ -1383,17 +1426,16 @@ func TestDeletePod(t *testing.T) {
 	// Ensure Pod1 reference is removed from AppliedToGroup.
 	assert.Len(t, podsAdded, 0, "expected Pod to be deleted from AppliedToGroup")
 	// Delete Pod P2 matching the NetworkPolicy Rule.
-	npc.podStore.Delete(p2)
+	npc.groupingInterface.DeletePod(p2)
 	npc.syncAddressGroup(addrGroup.Name)
 	npc.syncInternalGroup(groupKey)
 	updatedAddrGroupObj, _, _ := npc.addressGroupStore.Get(addrGroup.Name)
 	updatedAddrGroup := updatedAddrGroupObj.(*antreatypes.AddressGroup)
 	// Ensure Pod2 IP is removed from AddressGroup.
 	memberPod2 := &controlplane.GroupMember{IPs: []controlplane.IPAddress{ipStrToIPAddress(p2IP)}}
-	groupObj, _, _ := npc.internalGroupStore.Get(groupKey)
-	grp := groupObj.(*antreatypes.Group)
+	groupMembers, _ := npc.GetGroupMembers(groupKey)
 	assert.False(t, updatedAddrGroup.GroupMembers.Has(memberPod2))
-	assert.False(t, grp.GroupMembers.Has(memberPod2))
+	assert.False(t, groupMembers.Has(memberPod2))
 }
 
 func TestAddNamespace(t *testing.T) {
@@ -1513,18 +1555,19 @@ func TestAddNamespace(t *testing.T) {
 			groupMatch:           true,
 		},
 	}
-	_, npc := newController()
-	npc.addNetworkPolicy(testNPObj)
-	npc.addClusterGroup(testCG)
-	npc.cgStore.Add(testCG)
-	groupKey := testCG.Name
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			npc.namespaceStore.Add(tt.addedNamespace)
+			_, npc := newController()
+			npc.addNetworkPolicy(testNPObj)
+			npc.addClusterGroup(testCG)
+			npc.cgStore.Add(testCG)
+			groupKey := testCG.Name
+
+			npc.groupingInterface.AddNamespace(tt.addedNamespace)
 			p1 := getPod("p1", "nsA", "nodeA", "1.2.3.4", false)
 			p2 := getPod("p2", "nsA", "nodeA", "2.2.3.4", false)
-			npc.podStore.Add(p1)
-			npc.podStore.Add(p2)
+			npc.groupingInterface.AddPod(p1)
+			npc.groupingInterface.AddPod(p2)
 			inGroupID := getNormalizedUID(toGroupSelector("", nil, &selectorIn, nil).NormalizedName)
 			outGroupID := getNormalizedUID(toGroupSelector("", nil, &selectorOut, nil).NormalizedName)
 			npc.syncAddressGroup(inGroupID)
@@ -1534,8 +1577,7 @@ func TestAddNamespace(t *testing.T) {
 			updatedInAddrGroup := updatedInAddrGroupObj.(*antreatypes.AddressGroup)
 			updatedOutAddrGroupObj, _, _ := npc.addressGroupStore.Get(outGroupID)
 			updatedOutAddrGroup := updatedOutAddrGroupObj.(*antreatypes.AddressGroup)
-			groupObj, _, _ := npc.internalGroupStore.Get(groupKey)
-			grp := groupObj.(*antreatypes.Group)
+			groupMembers, _ := npc.GetGroupMembers(groupKey)
 			memberPod1 := &controlplane.GroupMember{
 				Pod: &controlplane.PodReference{Name: "p1", Namespace: "nsA"},
 				IPs: []controlplane.IPAddress{ipStrToIPAddress("1.2.3.4")},
@@ -1548,8 +1590,8 @@ func TestAddNamespace(t *testing.T) {
 			assert.Equal(t, tt.inAddressGroupMatch, updatedInAddrGroup.GroupMembers.Has(memberPod2))
 			assert.Equal(t, tt.outAddressGroupMatch, updatedOutAddrGroup.GroupMembers.Has(memberPod1))
 			assert.Equal(t, tt.outAddressGroupMatch, updatedOutAddrGroup.GroupMembers.Has(memberPod2))
-			assert.Equal(t, tt.groupMatch, grp.GroupMembers.Has(memberPod1))
-			assert.Equal(t, tt.groupMatch, grp.GroupMembers.Has(memberPod2))
+			assert.Equal(t, tt.groupMatch, groupMembers.Has(memberPod1))
+			assert.Equal(t, tt.groupMatch, groupMembers.Has(memberPod2))
 		})
 	}
 }
@@ -1679,18 +1721,18 @@ func TestDeleteNamespace(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			p1 := getPod("p1", "nsA", "", "1.1.1.1", false)
 			p2 := getPod("p2", "nsA", "", "1.1.1.2", false)
-			npc.namespaceStore.Add(tt.deletedNamespace)
-			npc.podStore.Add(p1)
-			npc.podStore.Add(p2)
-			npc.namespaceStore.Delete(tt.deletedNamespace)
+			npc.groupingInterface.AddNamespace(tt.deletedNamespace)
+			npc.groupingInterface.AddPod(p1)
+			npc.groupingInterface.AddPod(p2)
+			npc.groupingInterface.DeleteNamespace(tt.deletedNamespace)
 			inGroupID := getNormalizedUID(toGroupSelector("", nil, &selectorIn, nil).NormalizedName)
 			outGroupID := getNormalizedUID(toGroupSelector("", nil, &selectorOut, nil).NormalizedName)
 			npc.syncAddressGroup(inGroupID)
 			npc.syncAddressGroup(outGroupID)
 			npc.syncInternalGroup(groupKey)
-			npc.podStore.Delete(p1)
-			npc.podStore.Delete(p2)
-			npc.namespaceStore.Delete(tt.deletedNamespace)
+			npc.groupingInterface.DeletePod(p1)
+			npc.groupingInterface.DeletePod(p2)
+			npc.groupingInterface.DeleteNamespace(tt.deletedNamespace)
 			npc.syncAddressGroup(inGroupID)
 			npc.syncAddressGroup(outGroupID)
 			npc.syncInternalGroup(groupKey)
@@ -1698,8 +1740,7 @@ func TestDeleteNamespace(t *testing.T) {
 			updatedInAddrGroup := updatedInAddrGroupObj.(*antreatypes.AddressGroup)
 			updatedOutAddrGroupObj, _, _ := npc.addressGroupStore.Get(outGroupID)
 			updatedOutAddrGroup := updatedOutAddrGroupObj.(*antreatypes.AddressGroup)
-			groupObj, _, _ := npc.internalGroupStore.Get(groupKey)
-			grp := groupObj.(*antreatypes.Group)
+			groupMembers, _ := npc.GetGroupMembers(groupKey)
 			memberPod1 := &controlplane.GroupMember{IPs: []controlplane.IPAddress{ipStrToIPAddress("1.1.1.1")}}
 			memberPod2 := &controlplane.GroupMember{IPs: []controlplane.IPAddress{ipStrToIPAddress("1.1.1.2")}}
 			if tt.inAddressGroupMatch {
@@ -1711,8 +1752,8 @@ func TestDeleteNamespace(t *testing.T) {
 				assert.False(t, updatedOutAddrGroup.GroupMembers.Has(memberPod2))
 			}
 			if tt.groupMatch {
-				assert.False(t, grp.GroupMembers.Has(memberPod1))
-				assert.False(t, grp.GroupMembers.Has(memberPod2))
+				assert.False(t, groupMembers.Has(memberPod1))
+				assert.False(t, groupMembers.Has(memberPod2))
 			}
 		})
 	}
@@ -1809,8 +1850,8 @@ func TestAddAndUpdateService(t *testing.T) {
 	npc.cgStore.Add(testCG2)
 	npc.addClusterGroup(testCG1)
 	npc.addClusterGroup(testCG2)
-	npc.podStore.Add(testPod1)
-	npc.podStore.Add(testPod2)
+	npc.groupingInterface.AddPod(testPod1)
+	npc.groupingInterface.AddPod(testPod2)
 	npc.serviceStore.Add(testSvc1)
 	npc.serviceStore.Add(testSvc2)
 	npc.syncInternalGroup(testCG1.Name)
@@ -1829,21 +1870,18 @@ func TestAddAndUpdateService(t *testing.T) {
 		},
 		IPs: []controlplane.IPAddress{ipStrToIPAddress("4.3.2.1")},
 	}
-	groupObj1, _, _ := npc.internalGroupStore.Get(testCG1.Name)
-	grp1 := groupObj1.(*antreatypes.Group)
-	assert.True(t, grp1.GroupMembers.Has(memberPod1))
-	assert.False(t, grp1.GroupMembers.Has(memberPod2))
-	groupObj2, _, _ := npc.internalGroupStore.Get(testCG2.Name)
-	grp2 := groupObj2.(*antreatypes.Group)
-	assert.False(t, grp2.GroupMembers.Has(memberPod1))
-	assert.False(t, grp2.GroupMembers.Has(memberPod2))
+	groupMembers1, _ := npc.GetGroupMembers(testCG1.Name)
+	assert.True(t, groupMembers1.Has(memberPod1))
+	assert.False(t, groupMembers1.Has(memberPod2))
+	groupMembers2, _ := npc.GetGroupMembers(testCG2.Name)
+	assert.False(t, groupMembers2.Has(memberPod1))
+	assert.False(t, groupMembers2.Has(memberPod2))
 	// Update svc-1 to select app test-2 instead
 	npc.serviceStore.Update(testSvc1Updated)
 	npc.syncInternalGroup(testCG1.Name)
-	groupObj1Updated, _, _ := npc.internalGroupStore.Get(testCG1.Name)
-	grp1Updated := groupObj1Updated.(*antreatypes.Group)
-	assert.False(t, grp1Updated.GroupMembers.Has(memberPod1))
-	assert.True(t, grp1Updated.GroupMembers.Has(memberPod2))
+	groupMembers1Updated, _ := npc.GetGroupMembers(testCG1.Name)
+	assert.False(t, groupMembers1Updated.Has(memberPod1))
+	assert.True(t, groupMembers1Updated.Has(memberPod2))
 }
 
 func TestDeleteService(t *testing.T) {
@@ -1889,7 +1927,7 @@ func TestDeleteService(t *testing.T) {
 	_, npc := newController()
 	npc.cgStore.Add(testCG)
 	npc.addClusterGroup(testCG)
-	npc.podStore.Add(testPod)
+	npc.groupingInterface.AddPod(testPod)
 	npc.serviceStore.Add(testSvc)
 	npc.syncInternalGroup(testCG.Name)
 	memberPod := &controlplane.GroupMember{
@@ -1899,223 +1937,13 @@ func TestDeleteService(t *testing.T) {
 		},
 		IPs: []controlplane.IPAddress{ipStrToIPAddress("1.2.3.4")},
 	}
-	groupObj, _, _ := npc.internalGroupStore.Get(testCG.Name)
-	grp := groupObj.(*antreatypes.Group)
-	assert.True(t, grp.GroupMembers.Has(memberPod))
+	groupMembers, _ := npc.GetGroupMembers(testCG.Name)
+	assert.True(t, groupMembers.Has(memberPod))
 	// Make sure that after Service deletion, the Pod member is removed from Group.
 	npc.serviceStore.Delete(testSvc)
 	npc.syncInternalGroup(testCG.Name)
-	groupObjUpdated, _, _ := npc.internalGroupStore.Get(testCG.Name)
-	grpUpdated := groupObjUpdated.(*antreatypes.Group)
-	assert.False(t, grpUpdated.GroupMembers.Has(memberPod))
-}
-
-func TestFilterAddressGroupsForPodOrExternalEntity(t *testing.T) {
-	selectorSpec := metav1.LabelSelector{
-		MatchLabels: map[string]string{"purpose": "test-select"},
-	}
-	eeSelectorSpec := metav1.LabelSelector{
-		MatchLabels: map[string]string{"platform": "aws"},
-	}
-	ns1 := &corev1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:   "ns1",
-			Labels: map[string]string{"purpose": "test-select"},
-		},
-	}
-	ns2 := &corev1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "ns2",
-		},
-	}
-	addrGrp1 := &antreatypes.AddressGroup{
-		UID:      "uid1",
-		Name:     "AddrGrp1",
-		Selector: *toGroupSelector("ns1", &selectorSpec, nil, nil),
-	}
-	addrGrp2 := &antreatypes.AddressGroup{
-		UID:      "uid2",
-		Name:     "AddrGrp2",
-		Selector: *toGroupSelector("ns1", nil, nil, &eeSelectorSpec),
-	}
-	addrGrp3 := &antreatypes.AddressGroup{
-		UID:      "uid3",
-		Name:     "AddrGrp3",
-		Selector: *toGroupSelector("", nil, &selectorSpec, nil),
-	}
-	addrGrp4 := &antreatypes.AddressGroup{
-		UID:      "uid4",
-		Name:     "AddrGrp4",
-		Selector: *toGroupSelector("", &selectorSpec, &selectorSpec, nil),
-	}
-
-	pod1 := getPod("pod1", "ns1", "node1", "1.1.1.1", false)
-	pod1.Labels = map[string]string{"purpose": "test-select"}
-	pod2 := getPod("pod2", "ns1", "node1", "1.1.1.2", false)
-	pod3 := getPod("pod3", "ns2", "node1", "1.1.1.3", false)
-	ee1 := &v1alpha2.ExternalEntity{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "ee1",
-			Namespace: "ns1",
-			Labels:    map[string]string{"platform": "aws"},
-		},
-	}
-	ee2 := &v1alpha2.ExternalEntity{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "ee2",
-			Namespace: "ns1",
-			Labels:    map[string]string{"platform": "gke"},
-		},
-	}
-	tests := []struct {
-		name           string
-		toMatch        metav1.Object
-		expectedGroups sets.String
-	}{
-		{
-			"pod-match-selector-match-ns",
-			pod1,
-			sets.NewString("AddrGrp1", "AddrGrp3", "AddrGrp4"),
-		},
-		{
-			"pod-unmatch-selector-match-ns",
-			pod2,
-			sets.NewString("AddrGrp3"),
-		},
-		{
-			"pod-unmatch-selector-unmatch-ns",
-			pod3,
-			sets.String{},
-		},
-		{
-			"externalEntity-match-selector-match-ns",
-			ee1,
-			sets.NewString("AddrGrp2", "AddrGrp3"),
-		},
-		{
-			"externalEntity-unmatch-selector-match-ns",
-			ee2,
-			sets.NewString("AddrGrp3"),
-		},
-	}
-	_, npc := newController()
-	npc.addressGroupStore.Create(addrGrp1)
-	npc.addressGroupStore.Create(addrGrp2)
-	npc.addressGroupStore.Create(addrGrp3)
-	npc.addressGroupStore.Create(addrGrp4)
-	npc.namespaceStore.Add(ns1)
-	npc.namespaceStore.Add(ns2)
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.expectedGroups, npc.filterAddressGroupsForPodOrExternalEntity(tt.toMatch),
-				"Filtered AddressGroups does not match expectation")
-		})
-	}
-}
-
-func TestFilterAppliedToGroupsForPodOrExternalEntity(t *testing.T) {
-	selectorSpec := metav1.LabelSelector{
-		MatchLabels: map[string]string{"purpose": "test-select"},
-	}
-	eeSelectorSpec := metav1.LabelSelector{
-		MatchLabels: map[string]string{"platform": "aws"},
-	}
-	ns1 := &corev1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:   "ns1",
-			Labels: map[string]string{"purpose": "test-select"},
-		},
-	}
-	ns2 := &corev1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "ns2",
-		},
-	}
-	atGrp1 := &antreatypes.AppliedToGroup{
-		UID:      "uid1",
-		Name:     "ATGrp1",
-		Selector: *toGroupSelector("ns1", &selectorSpec, nil, nil),
-	}
-	atGrp2 := &antreatypes.AppliedToGroup{
-		UID:      "uid2",
-		Name:     "ATGrp2",
-		Selector: *toGroupSelector("ns1", nil, nil, &eeSelectorSpec),
-	}
-	atGrp3 := &antreatypes.AppliedToGroup{
-		UID:      "uid3",
-		Name:     "ATGrp3",
-		Selector: *toGroupSelector("", nil, &selectorSpec, nil),
-	}
-	atGrp4 := &antreatypes.AppliedToGroup{
-		UID:      "uid4",
-		Name:     "ATGrp4",
-		Selector: *toGroupSelector("", &selectorSpec, &selectorSpec, nil),
-	}
-
-	pod1 := getPod("pod1", "ns1", "node1", "1.1.1.1", false)
-	pod1.Labels = map[string]string{"purpose": "test-select"}
-	pod2 := getPod("pod2", "ns1", "node1", "1.1.1.2", false)
-	pod3 := getPod("pod3", "ns2", "node1", "1.1.1.3", false)
-	ee1 := &v1alpha2.ExternalEntity{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "ee1",
-			Namespace: "ns1",
-			Labels:    map[string]string{"platform": "aws"},
-		},
-	}
-	ee2 := &v1alpha2.ExternalEntity{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "ee2",
-			Namespace: "ns1",
-			Labels:    map[string]string{"platform": "gke"},
-		},
-	}
-	tests := []struct {
-		name           string
-		toMatch        metav1.Object
-		expectedGroups sets.String
-	}{
-		{
-			"pod-match-selector-match-ns",
-			pod1,
-			sets.NewString("ATGrp1", "ATGrp3", "ATGrp4"),
-		},
-		{
-			"pod-unmatch-selector-match-ns",
-			pod2,
-			sets.NewString("ATGrp3"),
-		},
-		{
-			"pod-unmatch-selector-unmatch-ns",
-			pod3,
-			sets.String{},
-		},
-		{
-			"externalEntity-match-selector-match-ns",
-			ee1,
-			sets.NewString("ATGrp2", "ATGrp3"),
-		},
-		{
-			"externalEntity-unmatch-selector-match-ns",
-			ee2,
-			sets.NewString("ATGrp3"),
-		},
-	}
-	_, npc := newController()
-	npc.appliedToGroupStore.Create(atGrp1)
-	npc.appliedToGroupStore.Create(atGrp2)
-	npc.appliedToGroupStore.Create(atGrp3)
-	npc.appliedToGroupStore.Create(atGrp4)
-	npc.namespaceStore.Add(ns1)
-	npc.namespaceStore.Add(ns2)
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.expectedGroups, npc.filterAppliedToGroupsForPodOrExternalEntity(tt.toMatch),
-				"Filtered AppliedTo Groups does not match expectation")
-		})
-	}
+	groupMembersUpdated, _ := npc.GetGroupMembers(testCG.Name)
+	assert.False(t, groupMembersUpdated.Has(memberPod))
 }
 
 func TestToGroupSelector(t *testing.T) {
@@ -2992,6 +2820,32 @@ func TestCIDRStrToIPNet(t *testing.T) {
 	}
 }
 
+func TestIPNetToCIDRStr(t *testing.T) {
+	ipNetV4, _ := cidrStrToIPNet("10.9.8.7/6")
+	ipNetV6, _ := cidrStrToIPNet("2002::1234:abcd:ffff:c0a8:101/64")
+	tests := []struct {
+		name string
+		inC  controlplane.IPNet
+		expC string
+	}{
+		{
+			name: "ipv4-address",
+			inC:  *ipNetV4,
+			expC: "10.9.8.7/6",
+		},
+		{
+			name: "ipv6-address",
+			inC:  *ipNetV6,
+			expC: "2002::1234:abcd:ffff:c0a8:101/64",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expC, ipNetToCIDRStr(tt.inC))
+		})
+	}
+}
+
 func TestIPStrToIPAddress(t *testing.T) {
 	ip1 := "10.0.1.10"
 	expIP1 := net.ParseIP(ip1)
@@ -3020,40 +2874,6 @@ func TestIPStrToIPAddress(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestDeleteFinalStateUnknownPod(t *testing.T) {
-	_, c := newController()
-	c.heartbeatCh = make(chan heartbeat, 2)
-	ns := metav1.NamespaceDefault
-	pod := getPod("p1", ns, "", "1.1.1.1", false)
-	c.addPod(pod)
-	key, _ := cache.MetaNamespaceKeyFunc(pod)
-	c.deletePod(cache.DeletedFinalStateUnknown{Key: key, Obj: pod})
-	close(c.heartbeatCh)
-	var ok bool
-	_, ok = <-c.heartbeatCh
-	assert.True(t, ok, "Missing event on channel")
-	_, ok = <-c.heartbeatCh
-	assert.True(t, ok, "Missing event on channel")
-}
-
-func TestDeleteFinalStateUnknownNamespace(t *testing.T) {
-	_, c := newController()
-	c.heartbeatCh = make(chan heartbeat, 2)
-	ns := &corev1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "nsA",
-		},
-	}
-	c.addNamespace(ns)
-	c.deleteNamespace(cache.DeletedFinalStateUnknown{Key: "nsA", Obj: ns})
-	close(c.heartbeatCh)
-	var ok bool
-	_, ok = <-c.heartbeatCh
-	assert.True(t, ok, "Missing event on channel")
-	_, ok = <-c.heartbeatCh
-	assert.True(t, ok, "Missing event on channel")
 }
 
 func TestDeleteFinalStateUnknownNetworkPolicy(t *testing.T) {
@@ -3106,6 +2926,37 @@ func TestGetAppliedToWorkloads(t *testing.T) {
 			PodSelector: &selectorB,
 		},
 	}
+	selectorC := metav1.LabelSelector{MatchLabels: map[string]string{"foo3": "bar3"}}
+	cgC := v1alpha2.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{Name: "cgC", UID: "uidC"},
+		Spec: v1alpha2.GroupSpec{
+			PodSelector: &selectorC,
+		},
+	}
+	cgD := v1alpha2.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{Name: "cgD", UID: "uidD"},
+		Spec: v1alpha2.GroupSpec{
+			PodSelector: &selectorC,
+		},
+	}
+	nestedCG1 := v1alpha2.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{Name: "nested-cg-A-B", UID: "uidE"},
+		Spec: v1alpha2.GroupSpec{
+			ChildGroups: []v1alpha2.ClusterGroupReference{"cgA", "cgB"},
+		},
+	}
+	nestedCG2 := v1alpha2.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{Name: "nested-cg-A-C", UID: "uidF"},
+		Spec: v1alpha2.GroupSpec{
+			ChildGroups: []v1alpha2.ClusterGroupReference{"cgA", "cgC"},
+		},
+	}
+	nestedCG3 := v1alpha2.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{Name: "nested-cg-A-C", UID: "uidG"},
+		Spec: v1alpha2.GroupSpec{
+			ChildGroups: []v1alpha2.ClusterGroupReference{"cgA", "cgC", "cgD"},
+		},
+	}
 	podA := getPod("podA", "nsA", "nodeA", "10.0.0.1", false)
 	podA.Labels = map[string]string{"foo1": "bar1"}
 	podB := getPod("podB", "nsA", "nodeB", "10.0.0.2", false)
@@ -3134,16 +2985,43 @@ func TestGetAppliedToWorkloads(t *testing.T) {
 			expPods: emptyPods,
 			expEEs:  emptyEEs,
 		},
+		{
+			name: "atg-for-nested-cg-one-child-empty",
+			inATG: &antreatypes.AppliedToGroup{
+				Name: nestedCG1.Name,
+				UID:  nestedCG1.UID,
+			},
+			expPods: []*corev1.Pod{podA},
+			expEEs:  emptyEEs,
+		},
+		{
+			name: "atg-for-nested-cg-both-children-match-pod",
+			inATG: &antreatypes.AppliedToGroup{
+				Name: nestedCG2.Name,
+				UID:  nestedCG2.UID,
+			},
+			expPods: []*corev1.Pod{podA, podB},
+			expEEs:  emptyEEs,
+		},
+		{
+			name: "atg-for-nested-cg-children-overlap-pod",
+			inATG: &antreatypes.AppliedToGroup{
+				Name: nestedCG3.Name,
+				UID:  nestedCG3.UID,
+			},
+			expPods: []*corev1.Pod{podA, podB},
+			expEEs:  emptyEEs,
+		},
 	}
 	_, c := newController()
-	c.podStore.Add(podA)
-	c.podStore.Add(podB)
-	c.cgStore.Add(&cgA)
-	c.cgStore.Add(&cgB)
-	c.addClusterGroup(&cgA)
-	c.syncInternalGroup(cgA.Name)
-	c.addClusterGroup(&cgB)
-	c.syncInternalGroup(cgB.Name)
+	c.groupingInterface.AddPod(podA)
+	c.groupingInterface.AddPod(podB)
+	clusterGroups := []v1alpha2.ClusterGroup{cgA, cgB, cgC, cgD, nestedCG1, nestedCG2}
+	for i, cg := range clusterGroups {
+		c.cgStore.Add(&clusterGroups[i])
+		c.addClusterGroup(&clusterGroups[i])
+		c.syncInternalGroup(cg.Name)
+	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			actualPods, actualEEs := c.getAppliedToWorkloads(tt.inATG)
@@ -3153,20 +3031,126 @@ func TestGetAppliedToWorkloads(t *testing.T) {
 	}
 }
 
-func getQueuedGroups(npc *networkPolicyController) (atGroups, addrGroups sets.String) {
-	atGroups, addrGroups = sets.NewString(), sets.NewString()
-	atLen, addrLen := npc.appliedToGroupQueue.Len(), npc.addressGroupQueue.Len()
-	for i := 0; i < atLen; i++ {
-		id, _ := npc.appliedToGroupQueue.Get()
-		atGroups.Insert(id.(string))
-		npc.appliedToGroupQueue.Done(id)
+func TestGetAddressGroupMemberSet(t *testing.T) {
+	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
+	cgA := v1alpha2.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{Name: "cgA", UID: "uidA"},
+		Spec: v1alpha2.GroupSpec{
+			PodSelector: &selectorA,
+		},
 	}
-	for i := 0; i < addrLen; i++ {
-		id, _ := npc.addressGroupQueue.Get()
-		addrGroups.Insert(id.(string))
-		npc.addressGroupQueue.Done(id)
+	selectorB := metav1.LabelSelector{MatchLabels: map[string]string{"foo2": "bar2"}}
+	cgB := v1alpha2.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{Name: "cgB", UID: "uidB"},
+		Spec: v1alpha2.GroupSpec{
+			PodSelector: &selectorB,
+		},
 	}
-	return
+	selectorC := metav1.LabelSelector{MatchLabels: map[string]string{"foo3": "bar3"}}
+	cgC := v1alpha2.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{Name: "cgC", UID: "uidC"},
+		Spec: v1alpha2.GroupSpec{
+			PodSelector: &selectorC,
+		},
+	}
+	cgD := v1alpha2.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{Name: "cgD", UID: "uidD"},
+		Spec: v1alpha2.GroupSpec{
+			PodSelector: &selectorC,
+		},
+	}
+	nestedCG1 := v1alpha2.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{Name: "nested-cg-A-B", UID: "uidE"},
+		Spec: v1alpha2.GroupSpec{
+			ChildGroups: []v1alpha2.ClusterGroupReference{"cgA", "cgB"},
+		},
+	}
+	nestedCG2 := v1alpha2.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{Name: "nested-cg-A-C", UID: "uidF"},
+		Spec: v1alpha2.GroupSpec{
+			ChildGroups: []v1alpha2.ClusterGroupReference{"cgA", "cgC"},
+		},
+	}
+	nestedCG3 := v1alpha2.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{Name: "nested-cg-A-C", UID: "uidG"},
+		Spec: v1alpha2.GroupSpec{
+			ChildGroups: []v1alpha2.ClusterGroupReference{"cgA", "cgC", "cgD"},
+		},
+	}
+	podA := getPod("podA", "nsA", "nodeA", "10.0.0.1", false)
+	podA.Labels = map[string]string{"foo1": "bar1"}
+	podB := getPod("podB", "nsA", "nodeB", "10.0.0.2", false)
+	podB.Labels = map[string]string{"foo3": "bar3"}
+
+	podAMemberSet := controlplane.GroupMemberSet{}
+	podAMemberSet.Insert(podToGroupMember(podA, true))
+	podABMemberSet := controlplane.GroupMemberSet{}
+	podABMemberSet.Insert(podToGroupMember(podA, true))
+	podABMemberSet.Insert(podToGroupMember(podB, true))
+	tests := []struct {
+		name         string
+		inAddrGrp    *antreatypes.AddressGroup
+		expMemberSet controlplane.GroupMemberSet
+	}{
+		{
+			name: "addrgrp-for-cg",
+			inAddrGrp: &antreatypes.AddressGroup{
+				Name: cgA.Name,
+				UID:  cgA.UID,
+			},
+			expMemberSet: podAMemberSet,
+		},
+		{
+			name: "addrgrp-for-cg-no-pod-match",
+			inAddrGrp: &antreatypes.AddressGroup{
+				Name: cgB.Name,
+				UID:  cgB.UID,
+			},
+			expMemberSet: controlplane.GroupMemberSet{},
+		},
+		{
+			name: "addrgrp-for-nested-cg-one-child-empty",
+			inAddrGrp: &antreatypes.AddressGroup{
+				Name: nestedCG1.Name,
+				UID:  nestedCG1.UID,
+			},
+			expMemberSet: podAMemberSet,
+		},
+		{
+			name: "addrgrp-for-nested-cg-both-children-match-pod",
+			inAddrGrp: &antreatypes.AddressGroup{
+				Name: nestedCG2.Name,
+				UID:  nestedCG2.UID,
+			},
+			expMemberSet: podABMemberSet,
+		},
+		{
+			name: "addrgrp-for-nested-cg-children-overlap-pod",
+			inAddrGrp: &antreatypes.AddressGroup{
+				Name: nestedCG3.Name,
+				UID:  nestedCG3.UID,
+			},
+			expMemberSet: podABMemberSet,
+		},
+	}
+	_, c := newController()
+	c.groupingInterface.AddPod(podA)
+	c.groupingInterface.AddPod(podB)
+	clusterGroups := []v1alpha2.ClusterGroup{cgA, cgB, cgC, cgD, nestedCG1, nestedCG2}
+	for i, cg := range clusterGroups {
+		c.cgStore.Add(&clusterGroups[i])
+		c.addClusterGroup(&clusterGroups[i])
+		c.syncInternalGroup(cg.Name)
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			actualMemberSet := c.getAddressGroupMemberSet(tt.inAddrGrp)
+			extraItems := actualMemberSet.Difference(tt.expMemberSet)
+			missingItems := tt.expMemberSet.Difference(actualMemberSet)
+			assert.Equal(t, []*controlplane.GroupMember{}, extraItems.Items())
+			assert.Equal(t, []*controlplane.GroupMember{}, missingItems.Items())
+		})
+	}
 }
 
 func getK8sNetworkPolicyObj() *networkingv1.NetworkPolicy {

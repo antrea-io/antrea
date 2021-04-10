@@ -35,9 +35,11 @@ import (
 	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/antctl/runtime"
-	"github.com/vmware-tanzu/antrea/pkg/apis/ops/v1alpha1"
+	"github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha1"
 	clientset "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned"
 )
+
+const defaultTimeout time.Duration = time.Second * 10
 
 var (
 	Command *cobra.Command
@@ -46,7 +48,10 @@ var (
 		destination string
 		outputType  string
 		flow        string
-		waiting     bool
+		liveTraffic bool
+		droppedOnly bool
+		timeout     time.Duration
+		nowait      bool
 	}{}
 )
 
@@ -56,13 +61,23 @@ var protocols = map[string]int32{
 	"udp":  17,
 }
 
+type CapturedPacket struct {
+	SrcIP           string                    `json:"srcIP" yaml:"srcIP"`
+	DstIP           string                    `json:"dstIP" yaml:"dstIP"`
+	Length          uint16                    `json:"length" yaml:"length"`
+	IPHeader        *v1alpha1.IPHeader        `json:"ipHeader,omitempty" yaml:"ipHeader,omitempty"`
+	IPv6Header      *v1alpha1.IPv6Header      `json:"ipv6Header,omitempty" yaml:"ipv6Header,omitempty"`
+	TransportHeader *v1alpha1.TransportHeader `json:"transportHeader,omitempty" yaml:"tranportHeader,omitempty"`
+}
+
 // Response is the response of antctl Traceflow.
 type Response struct {
-	Name        string                  `json:"name" yaml:"name"`                                   // Traceflow name
-	Phase       v1alpha1.TraceflowPhase `json:"phase,omitempty" yaml:"phase,omitempty"`             // Traceflow phase
-	Source      string                  `json:"source,omitempty" yaml:"source,omitempty"`           // Traceflow source, e.g. "default/pod0"
-	Destination string                  `json:"destination,omitempty" yaml:"destination,omitempty"` // Traceflow destination, e.g. "default/pod1"
-	NodeResults []v1alpha1.NodeResult   `json:"results,omitempty" yaml:"results,omitempty"`         // Traceflow node results
+	Name           string                  `json:"name" yaml:"name"`                                         // Traceflow name
+	Phase          v1alpha1.TraceflowPhase `json:"phase,omitempty" yaml:"phase,omitempty"`                   // Traceflow phase
+	Source         string                  `json:"source,omitempty" yaml:"source,omitempty"`                 // Traceflow source, e.g. "default/pod0"
+	Destination    string                  `json:"destination,omitempty" yaml:"destination,omitempty"`       // Traceflow destination, e.g. "default/pod1"
+	NodeResults    []v1alpha1.NodeResult   `json:"results,omitempty" yaml:"results,omitempty"`               // Traceflow node results
+	CapturedPacket *CapturedPacket         `json:"capturedPacket,omitempty" yaml:"capturedPacket,omitempty"` // Captured packet in live-traffic Traceflow
 }
 
 func init() {
@@ -71,30 +86,54 @@ func init() {
 		Short:   "Start a Traceflows",
 		Long:    "Start a Traceflows from one Pod to another Pod/Service/IP.",
 		Aliases: []string{"tf", "traceflows"},
-		Example: `  Start a Traceflow from busybox0 to busybox1, both Pods are in Namespace default
-  $antctl traceflow -S busybox0 -D busybox1
-  Start a Traceflow from busybox0 to destination IP, source is in Namespace default
-  $antctl traceflow -S busybox0 -D 123.123.123.123
-  Start a Traceflow from busybox0 to destination Service, source and destination are in Namespace default
-  $antctl traceflow -S busybox0 -D svc0 -f tcp,tcp_dst=80,tcp_flags=2
-  Start a Traceflow from busybox0 in Namespace ns0 to busybox1 in Namespace ns1, output type is json
-  $antctl traceflow -S ns0/busybox0 -D ns1/busybox1 -o json
-  Start a Traceflow from busybox0 to busybox1, with TCP header and 80 as destination port
-  $antctl traceflow -S busybox0 -D busybox1 -f tcp,tcp_dst=80
+		Example: `  Start a Traceflow from pod1 to pod2, both Pods are in Namespace default
+  $antctl traceflow -S pod1 -D pod2
+  Start a Traceflow from pod1 in Namepace ns1 to a destination IP
+  $antctl traceflow -S ns1/pod1 -D 123.123.123.123
+  Start a Traceflow from pod1 to Service svc1 in Namespace ns1
+  $antctl traceflow -S pod1 -D ns1/svc1 -f tcp,tcp_dst=80
+  Start a Traceflow from pod1 to pod2, with a UDP packet to destination port 1234
+  $antctl traceflow -S pod1 -D pod2 -f udp,udp_dst=1234
+  Start a Traceflow for live TCP traffic from pod1 to svc1, with 1 minute timeout
+  $antctl traceflow -S pod1 -D svc1 -f tcp --live-traffic -t 1m
+  Start a Traceflow to capture the first dropped TCP packet from pod1 to port 80 within 10 minutes
+  $antctl traceflow -S pod1 -f tcp,tcp_dst=80 --live-traffic --dropped-only -t 10m
 `,
 		RunE: runE,
+		Args: cobra.NoArgs,
 	}
 
 	Command.Flags().StringVarP(&option.source, "source", "S", "", "source of the Traceflow: Namespace/Pod or Pod")
 	Command.Flags().StringVarP(&option.destination, "destination", "D", "", "destination of the Traceflow: Namespace/Pod, Pod, Namespace/Service, Service or IP")
 	Command.Flags().StringVarP(&option.outputType, "output", "o", "yaml", "output type: yaml (default), json")
-	Command.Flags().BoolVarP(&option.waiting, "wait", "", true, "if false, command returns without retrieving results")
-	Command.Flags().StringVarP(&option.flow, "flow", "f", "", "specify the flow (packet headers) of the Traceflow packet, including tcp_src, tcp_dst, tcp_flags, udp_src, udp_dst")
+	Command.Flags().StringVarP(&option.flow, "flow", "f", "", "specify the flow (packet headers) of the Traceflow packet, including tcp_src, tcp_dst, tcp_flags, udp_src, udp_dst, ipv6")
+	Command.Flags().BoolVarP(&option.liveTraffic, "live-traffic", "L", false, "if set, the Traceflow will trace the first packet of the matched live traffic flow")
+	Command.Flags().BoolVarP(&option.droppedOnly, "dropped-only", "", false, "if set, capture only the dropped packet in a live-traffic Traceflow")
+	Command.Flags().BoolVarP(&option.nowait, "nowait", "", false, "if set, command returns without retrieving results")
 }
 
 func runE(cmd *cobra.Command, _ []string) error {
-	if len(option.source) == 0 || len(option.destination) == 0 {
-		fmt.Println("Please provide source and destination.")
+	option.timeout, _ = cmd.Flags().GetDuration("timeout")
+	if option.timeout > time.Hour*12 {
+		fmt.Println("Timeout cannot be longer than 12 hours")
+		return nil
+	}
+	if option.timeout == 0 {
+		option.timeout = defaultTimeout
+	}
+
+	if len(option.source) == 0 {
+		fmt.Println("Please provide source")
+		return nil
+	}
+
+	if !option.liveTraffic && len(option.destination) == 0 {
+		fmt.Println("Please provide destination")
+		return nil
+	}
+
+	if !option.liveTraffic && option.droppedOnly {
+		fmt.Println("--dropped-only works only with live-traffic Traceflow")
 		return nil
 	}
 
@@ -123,24 +162,24 @@ func runE(cmd *cobra.Command, _ []string) error {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if _, err = client.OpsV1alpha1().Traceflows().Create(ctx, tf, metav1.CreateOptions{}); err != nil {
+	if _, err = client.CrdV1alpha1().Traceflows().Create(ctx, tf, metav1.CreateOptions{}); err != nil {
 		return fmt.Errorf("error when creating Traceflow, is Traceflow feature gate enabled? %w", err)
 	}
 	defer func() {
-		if option.waiting {
-			if err = client.OpsV1alpha1().Traceflows().Delete(context.TODO(), tf.Name, metav1.DeleteOptions{}); err != nil {
+		if !option.nowait {
+			if err = client.CrdV1alpha1().Traceflows().Delete(context.TODO(), tf.Name, metav1.DeleteOptions{}); err != nil {
 				klog.Errorf("error when deleting Traceflow: %+v", err)
 			}
 		}
 	}()
 
-	if !option.waiting {
+	if option.nowait {
 		return nil
 	}
 
 	var res *v1alpha1.Traceflow
-	err = wait.Poll(1*time.Second, 15*time.Second, func() (bool, error) {
-		res, err = client.OpsV1alpha1().Traceflows().Get(context.TODO(), tf.Name, metav1.GetOptions{})
+	err = wait.Poll(1*time.Second, option.timeout, func() (bool, error) {
+		res, err = client.CrdV1alpha1().Traceflows().Get(context.TODO(), tf.Name, metav1.GetOptions{})
 		if err != nil {
 			return false, err
 		}
@@ -180,33 +219,37 @@ func newTraceflow(client kubernetes.Interface) (*v1alpha1.Traceflow, error) {
 	}
 
 	var dst v1alpha1.Destination
-	dstIP := net.ParseIP(option.destination)
-	if dstIP != nil {
-		dst.IP = dstIP.String()
-		name = getTFName(fmt.Sprintf("%s-%s-to-%s", src.Namespace, src.Pod, dst.IP))
+	if option.destination != "" {
+		dstIP := net.ParseIP(option.destination)
+		if dstIP != nil {
+			dst.IP = dstIP.String()
+			name = getTFName(fmt.Sprintf("%s-%s-to-%s", src.Namespace, src.Pod, dst.IP))
+		} else {
+			var isPod bool
+			var dest string
+			var err error
+			split = strings.Split(option.destination, "/")
+			if len(split) == 1 {
+				dst.Namespace = "default"
+				dest = split[0]
+			} else if len(split) == 2 && len(split[0]) != 0 && len(split[1]) != 0 {
+				dst.Namespace = split[0]
+				dest = split[1]
+			} else {
+				return nil, fmt.Errorf("destination should be in the format of Namespace/Pod, Pod, Namespace/Service or Service")
+			}
+			if isPod, err = dstIsPod(client, dst.Namespace, dest); err != nil {
+				return nil, fmt.Errorf("failed to check if destination is Pod or Service: %w", err)
+			}
+			if isPod {
+				dst.Pod = dest
+			} else {
+				dst.Service = dest
+			}
+			name = getTFName(fmt.Sprintf("%s-%s-to-%s-%s", src.Namespace, src.Pod, dst.Namespace, dest))
+		}
 	} else {
-		var isPod bool
-		var dest string
-		var err error
-		split = strings.Split(option.destination, "/")
-		if len(split) == 1 {
-			dst.Namespace = "default"
-			dest = split[0]
-		} else if len(split) == 2 && len(split[0]) != 0 && len(split[1]) != 0 {
-			dst.Namespace = split[0]
-			dest = split[1]
-		} else {
-			return nil, fmt.Errorf("destination should be in the format of Namespace/Pod, Pod, Namespace/Service or Service")
-		}
-		if isPod, err = dstIsPod(client, dst.Namespace, dest); err != nil {
-			return nil, fmt.Errorf("failed to check if destination is Pod or Service: %w", err)
-		}
-		if isPod {
-			dst.Pod = dest
-		} else {
-			dst.Service = dest
-		}
-		name = getTFName(fmt.Sprintf("%s-%s-to-%s-%s", src.Namespace, src.Pod, dst.Namespace, dest))
+		name = getTFName(fmt.Sprintf("%s-%s-to-any", src.Namespace, src.Pod))
 	}
 
 	pkt, err := parseFlow()
@@ -222,9 +265,11 @@ func newTraceflow(client kubernetes.Interface) (*v1alpha1.Traceflow, error) {
 			Source:      src,
 			Destination: dst,
 			Packet:      *pkt,
+			LiveTraffic: option.liveTraffic,
+			DroppedOnly: option.droppedOnly,
+			Timeout:     uint16(option.timeout.Seconds()),
 		},
 	}
-
 	return tf, nil
 }
 
@@ -248,10 +293,20 @@ func parseFlow() (*v1alpha1.Packet, error) {
 		return nil, fmt.Errorf("error when parsing the flow: %w", err)
 	}
 
-	pkt := new(v1alpha1.Packet)
+	var pkt v1alpha1.Packet
+
+	_, isIPv6 := fields["ipv6"]
+	if isIPv6 {
+		pkt.IPv6Header = new(v1alpha1.IPv6Header)
+	}
 	for k, v := range protocols {
 		if _, ok := fields[k]; ok {
-			pkt.IPHeader.Protocol = v
+			if isIPv6 {
+				protocol := v
+				pkt.IPv6Header.NextHeader = &protocol
+			} else {
+				pkt.IPHeader.Protocol = v
+			}
 			break
 		}
 	}
@@ -283,7 +338,7 @@ func parseFlow() (*v1alpha1.Packet, error) {
 		pkt.TransportHeader.UDP.DstPort = int32(r)
 	}
 
-	return pkt, nil
+	return &pkt, nil
 }
 
 func getPortFields(cleanFlow string) (map[string]int, error) {
@@ -312,16 +367,27 @@ func output(tf *v1alpha1.Traceflow) error {
 		Name:        tf.Name,
 		Phase:       tf.Status.Phase,
 		Source:      fmt.Sprintf("%s/%s", tf.Spec.Source.Namespace, tf.Spec.Source.Pod),
-		Destination: tf.Spec.Destination.IP,
 		NodeResults: tf.Status.Results,
 	}
-	if len(tf.Spec.Destination.IP) == 0 {
-		if len(tf.Spec.Destination.Service) != 0 {
-			r.Destination = fmt.Sprintf("%s/%s", tf.Spec.Destination.Namespace, tf.Spec.Destination.Service)
-		} else {
-			r.Destination = fmt.Sprintf("%s/%s", tf.Spec.Destination.Namespace, tf.Spec.Destination.Pod)
+	if len(tf.Spec.Destination.IP) > 0 {
+		r.Destination = tf.Spec.Destination.IP
+	} else if len(tf.Spec.Destination.Pod) != 0 {
+		r.Destination = fmt.Sprintf("%s/%s", tf.Spec.Destination.Namespace, tf.Spec.Destination.Pod)
+	} else if len(tf.Spec.Destination.Service) != 0 {
+		r.Destination = fmt.Sprintf("%s/%s", tf.Spec.Destination.Namespace, tf.Spec.Destination.Service)
+	}
+
+	pkt := tf.Status.CapturedPacket
+	if pkt != nil {
+		r.CapturedPacket = &CapturedPacket{SrcIP: pkt.SrcIP, DstIP: pkt.DstIP, Length: pkt.Length, IPv6Header: pkt.IPv6Header}
+		if pkt.IPv6Header == nil {
+			r.CapturedPacket.IPHeader = &pkt.IPHeader
+		}
+		if pkt.TransportHeader.TCP != nil || pkt.TransportHeader.UDP != nil || pkt.TransportHeader.ICMP != nil {
+			r.CapturedPacket.TransportHeader = &pkt.TransportHeader
 		}
 	}
+
 	if option.outputType == "json" {
 		if err := jsonOutput(&r); err != nil {
 			return fmt.Errorf("error when converting output to json: %w", err)
@@ -359,7 +425,7 @@ func jsonOutput(r *Response) error {
 }
 
 func getTFName(prefix string) string {
-	if !option.waiting {
+	if option.nowait {
 		return prefix
 	}
 	return fmt.Sprintf("%s-%s", prefix, rand.String(8))

@@ -94,6 +94,35 @@ message ClusterGroupMembers {
   repeated GroupMember effectiveMembers = 2;
 }
 
+// +genclient
+// +genclient:nonNamespaced
+// +genclient:onlyVerbs=list,get,watch
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+message EgressGroup {
+  optional k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
+
+  // GroupMembers is list of resources selected by this group.
+  repeated GroupMember groupMembers = 2;
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// EgressGroupList is a list of EgressGroup objects.
+message EgressGroupList {
+  optional k8s.io.apimachinery.pkg.apis.meta.v1.ListMeta metadata = 1;
+
+  repeated EgressGroup items = 2;
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// EgressGroupPatch describes the incremental update of an EgressGroup.
+message EgressGroupPatch {
+  optional k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta objectMeta = 1;
+
+  repeated GroupMember addedGroupMembers = 2;
+
+  repeated GroupMember removedGroupMembers = 3;
+}
+
 // ExternalEntityReference represents a ExternalEntity Reference.
 message ExternalEntityReference {
   // The name of this ExternalEntity.
@@ -270,6 +299,10 @@ message NetworkPolicyRule {
   // Cannot be set in conjunction with NetworkPolicy.AppliedToGroups of the NetworkPolicy
   // that this Rule is referred to.
   repeated string appliedToGroups = 8;
+
+  // Name describes the intention of this rule.
+  // Name should be unique within the policy.
+  optional string name = 9;
 }
 
 // NetworkPolicyStats contains the information and traffic stats of a NetworkPolicy.
@@ -279,6 +312,9 @@ message NetworkPolicyStats {
 
   // The stats of the NetworkPolicy.
   optional github.com.vmware_tanzu.antrea.pkg.apis.stats.v1alpha1.TrafficStats trafficStats = 2;
+
+  // The stats of the NetworkPolicy rules. It's empty for K8s NetworkPolicies as they don't have rule name to identify a rule.
+  repeated github.com.vmware_tanzu.antrea.pkg.apis.stats.v1alpha1.RuleTrafficStats ruleTrafficStats = 3;
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

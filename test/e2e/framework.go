@@ -49,8 +49,8 @@ import (
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	crdclientset "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned"
-	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/security/v1alpha1"
 	"github.com/vmware-tanzu/antrea/pkg/features"
+	legacycrdclientset "github.com/vmware-tanzu/antrea/pkg/legacyclient/clientset/versioned"
 	"github.com/vmware-tanzu/antrea/test/e2e/providers"
 )
 
@@ -98,7 +98,7 @@ const (
 	busyboxImage        = "projects.registry.vmware.com/library/busybox"
 	nginxImage          = "projects.registry.vmware.com/antrea/nginx"
 	perftoolImage       = "projects.registry.vmware.com/antrea/perftool"
-	ipfixCollectorImage = "projects.registry.vmware.com/antrea/ipfix-collector:v0.4.3"
+	ipfixCollectorImage = "projects.registry.vmware.com/antrea/ipfix-collector:v0.4.7"
 	ipfixCollectorPort  = "4739"
 
 	nginxLBService = "nginx-loadbalancer"
@@ -122,6 +122,7 @@ type ClusterInfo struct {
 	svcV4NetworkCIDR     string
 	svcV6NetworkCIDR     string
 	controlPlaneNodeName string
+	controlPlaneNodeIP   string
 	nodes                map[int]ClusterNode
 	k8sServerVersion     string
 }
@@ -147,8 +148,8 @@ type TestData struct {
 	kubeConfig         *restclient.Config
 	clientset          kubernetes.Interface
 	aggregatorClient   aggregatorclientset.Interface
-	securityClient     secv1alpha1.SecurityV1alpha1Interface
 	crdClient          crdclientset.Interface
+	legacyCrdClient    legacycrdclientset.Interface
 	logsDirForTestCase string
 }
 
@@ -230,6 +231,10 @@ func controlPlaneNodeName() string {
 	return clusterInfo.controlPlaneNodeName
 }
 
+func controlPlaneNodeIP() string {
+	return clusterInfo.controlPlaneNodeIP
+}
+
 // nodeName returns an empty string if there is no Node with the provided idx. If idx is 0, the name
 // of the control-plane Node will be returned.
 func nodeName(idx int) string {
@@ -308,22 +313,23 @@ func collectClusterInfo() error {
 			return ok
 		}()
 
-		var nodeIdx int
-		// If multiple control-plane Nodes (HA), we will select the last one in the list
-		if isControlPlaneNode {
-			nodeIdx = 0
-			clusterInfo.controlPlaneNodeName = node.Name
-		} else {
-			nodeIdx = workerIdx
-			workerIdx++
-		}
-
 		var nodeIP string
 		for _, address := range node.Status.Addresses {
 			if address.Type == corev1.NodeInternalIP {
 				nodeIP = address.Address
 				break
 			}
+		}
+
+		var nodeIdx int
+		// If multiple control-plane Nodes (HA), we will select the last one in the list
+		if isControlPlaneNode {
+			nodeIdx = 0
+			clusterInfo.controlPlaneNodeName = node.Name
+			clusterInfo.controlPlaneNodeIP = nodeIP
+		} else {
+			nodeIdx = workerIdx
+			workerIdx++
 		}
 
 		var podV4NetworkCIDR, podV6NetworkCIDR string
@@ -570,7 +576,8 @@ func (data *TestData) deployFlowAggregator(ipfixCollector string) (string, error
 	}
 	if rc, _, _, err = provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl -n %s rollout status deployment/%s --timeout=%v", flowAggregatorNamespace, flowAggregatorDeployment, 2*defaultTimeout)); err != nil || rc != 0 {
 		_, stdout, _, _ := provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl -n %s describe pod", flowAggregatorNamespace))
-		return stdout, fmt.Errorf("error when waiting for flow aggregator rollout to complete. kubectl describe output: %v", stdout)
+		_, logStdout, _, _ := provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl -n %s logs -l app=flow-aggregator", flowAggregatorNamespace))
+		return stdout, fmt.Errorf("error when waiting for flow aggregator rollout to complete. kubectl describe output: %s, logs: %s", stdout, logStdout)
 	}
 	svc, err := data.clientset.CoreV1().Services(flowAggregatorNamespace).Get(context.TODO(), flowAggregatorDeployment, metav1.GetOptions{})
 	if err != nil {
@@ -681,7 +688,8 @@ func (data *TestData) waitForAntreaDaemonSetPods(timeout time.Duration) error {
 		return true, nil
 	})
 	if err == wait.ErrWaitTimeout {
-		return fmt.Errorf("antrea-agent DaemonSet not ready within %v", defaultTimeout)
+		_, stdout, _, _ := provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl -n %s describe pod", antreaNamespace))
+		return fmt.Errorf("antrea-agent DaemonSet not ready within %v; kubectl describe pod output: %v", defaultTimeout, stdout)
 	} else if err != nil {
 		return err
 	}
@@ -762,19 +770,19 @@ func (data *TestData) createClient() error {
 	if err != nil {
 		return fmt.Errorf("error when creating kubernetes aggregatorClient: %v", err)
 	}
-	securityClient, err := secv1alpha1.NewForConfig(kubeConfig)
-	if err != nil {
-		return fmt.Errorf("error when creating Antrea securityClient: %v", err)
-	}
 	crdClient, err := crdclientset.NewForConfig(kubeConfig)
 	if err != nil {
 		return fmt.Errorf("error when creating CRD client: %v", err)
 	}
+	legacyCrdClient, err := legacycrdclientset.NewForConfig(kubeConfig)
+	if err != nil {
+		return fmt.Errorf("error when creating legacy CRD client: %v", err)
+	}
 	data.kubeConfig = kubeConfig
 	data.clientset = clientset
 	data.aggregatorClient = aggregatorClient
-	data.securityClient = securityClient
 	data.crdClient = crdClient
+	data.legacyCrdClient = legacyCrdClient
 	return nil
 }
 
@@ -935,8 +943,8 @@ func (data *TestData) createServerPod(name string, portName string, portNum int3
 
 // createCustomPod creates a Pod in given Namespace with custom labels.
 func (data *TestData) createServerPodWithLabels(name, ns string, portNum int32, labels map[string]string) error {
-	cmd := []string{"ncat", "-lk", "-p", fmt.Sprintf("%d", portNum)}
-	image := "antrea/netpol-test:latest"
+	cmd := []string{"/agnhost", "serve-hostname", "--tcp", "--http=false", "--port", fmt.Sprintf("%d", portNum)}
+	image := "k8s.gcr.io/e2e-test-images/agnhost:2.29"
 	env := corev1.EnvVar{Name: fmt.Sprintf("SERVE_PORT_%d", portNum), Value: "foo"}
 	port := corev1.ContainerPort{ContainerPort: portNum}
 	containerName := fmt.Sprintf("c%v", portNum)
@@ -949,12 +957,12 @@ func (data *TestData) createServerPodWithLabels(name, ns string, portNum int32, 
 }
 
 // deletePod deletes a Pod in the test namespace.
-func (data *TestData) deletePod(name string) error {
+func (data *TestData) deletePod(namespace, name string) error {
 	var gracePeriodSeconds int64 = 5
 	deleteOptions := metav1.DeleteOptions{
 		GracePeriodSeconds: &gracePeriodSeconds,
 	}
-	if err := data.clientset.CoreV1().Pods(testNamespace).Delete(context.TODO(), name, deleteOptions); err != nil {
+	if err := data.clientset.CoreV1().Pods(namespace).Delete(context.TODO(), name, deleteOptions); err != nil {
 		if !errors.IsNotFound(err) {
 			return err
 		}
@@ -965,7 +973,7 @@ func (data *TestData) deletePod(name string) error {
 // Deletes a Pod in the test namespace then waits us to timeout for the Pod not to be visible to the
 // client any more.
 func (data *TestData) deletePodAndWait(timeout time.Duration, name string) error {
-	if err := data.deletePod(name); err != nil {
+	if err := data.deletePod(testNamespace, name); err != nil {
 		return err
 	}
 
@@ -1534,28 +1542,19 @@ func (data *TestData) doesOVSPortExist(antreaPodName string, portName string) (b
 }
 
 func (data *TestData) GetEncapMode() (config.TrafficEncapModeType, error) {
-	mapList, err := data.clientset.CoreV1().ConfigMaps(antreaNamespace).List(context.TODO(), metav1.ListOptions{})
+	configMap, err := data.GetAntreaConfigMap(antreaNamespace)
 	if err != nil {
-		return config.TrafficEncapModeInvalid, err
+		return config.TrafficEncapModeInvalid, fmt.Errorf("failed to get Antrea ConfigMap: %v", err)
 	}
-	for _, m := range mapList.Items {
-		if strings.HasPrefix(m.Name, "antrea-config") {
-			configMap, err := data.clientset.CoreV1().ConfigMaps(antreaNamespace).Get(context.TODO(), m.Name, metav1.GetOptions{})
-			if err != nil {
-				return config.TrafficEncapModeInvalid, err
+	for _, antreaConfig := range configMap.Data {
+		for _, mode := range config.GetTrafficEncapModes() {
+			searchStr := fmt.Sprintf("trafficEncapMode: %s", mode)
+			if strings.Index(strings.ToLower(antreaConfig), strings.ToLower(searchStr)) != -1 {
+				return mode, nil
 			}
-			for _, antreaConfig := range configMap.Data {
-				for _, mode := range config.GetTrafficEncapModes() {
-					searchStr := fmt.Sprintf("trafficEncapMode: %s", mode)
-					if strings.Index(strings.ToLower(antreaConfig), strings.ToLower(searchStr)) != -1 {
-						return mode, nil
-					}
-				}
-			}
-			return config.TrafficEncapModeEncap, nil
 		}
 	}
-	return config.TrafficEncapModeInvalid, fmt.Errorf("antrea-conf config map is not found")
+	return config.TrafficEncapModeEncap, nil
 }
 
 func (data *TestData) getFeatures(confName string, antreaNamespace string) (featuregate.FeatureGate, error) {

@@ -93,21 +93,17 @@ done
 if [[ "$WORKDIR" != "$DEFAULT_WORKDIR" && "$KUBECONFIG_PATH" == "$DEFAULT_KUBECONFIG_PATH" ]]; then
     KUBECONFIG_PATH=${WORKDIR}/.kube/config
 fi
+NO_PULL=
 if [[ "$DOCKER_REGISTRY" != "" ]]; then
     # Image pulling policy of Sonobuoy is 'Always' by default. With dockerhub rate limit, sometimes it is better to use
     # cache when registry is used.
     IMAGE_PULL_POLICY="IfNotPresent"
+    # If DOCKER_REGISTRY is non null, we ensure that "make" commands never pull from docker.io.
+    NO_PULL=1
 fi
+export NO_PULL
 
 E2ETEST_PATH=${WORKDIR}/kubernetes/_output/dockerized/bin/linux/amd64/e2e.test
-
-function pull_antrea_ubuntu_image {
-    harbor_images=("base-ubuntu:2.14.0" "golang:1.15")
-    antrea_images=("antrea/base-ubuntu:2.14.0" "golang:1.15")
-    for i in {0..4}; do
-        docker pull ${DOCKER_REGISTRY}/antrea/${harbor_images[i]} && docker tag ${DOCKER_REGISTRY}/antrea/${harbor_images[i]} ${antrea_images[i]} || true
-    done
-}
 
 function export_govc_env_var {
     export GOVC_URL=$GOVC_URL
@@ -187,10 +183,9 @@ function deliver_antrea_windows {
     make clean
     docker images | grep 'antrea-ubuntu' | awk '{print $3}' | xargs -r docker rmi -f || true
     docker images | grep '<none>' | awk '{print $3}' | xargs -r docker rmi || true
-    if [[ "$DOCKER_REGISTRY" != "" ]]; then
-        pull_antrea_ubuntu_image
-    fi
-    DOCKER_REGISTRY="${DOCKER_REGISTRY}" make
+    chmod -R g-w build/images/ovs
+    chmod -R g-w build/images/base
+    DOCKER_REGISTRY="${DOCKER_REGISTRY}" ./hack/build-antrea-ubuntu-all.sh --pull
     if [[ "$TESTCASE" =~ "networkpolicy" ]]; then
         make windows-bin
     fi
@@ -209,13 +204,13 @@ function deliver_antrea_windows {
     done
 
     echo "===== Deliver Antrea Windows to Windows nodes ====="
-    rm antrea-windows.tar.gz || true
+    rm -f antrea-windows.tar.gz
     sed -i 's/if (!(Test-Path $AntreaAgentConfigPath))/if ($true)/' hack/windows/Helper.psm1
     kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 != role && $1 ~ /win/ {print $6}' | while read IP; do
         govc snapshot.revert -vm.ip ${IP} win-initial
         harbor_images=("sigwindowstools-kube-proxy:v1.18.0" "e2eteam-agnhost:2.13" "e2eteam-jessie-dnsutils:1.0" "e2eteam-pause:3.2")
         antrea_images=("sigwindowstools/kube-proxy:v1.18.0" "e2eteam/agnhost:2.13" "e2eteam/jessie-dnsutils:1.0" "e2eteam/pause:3.2")
-        for i in {0..4}; do
+        for i in "${!harbor_images[@]}"; do
             ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "docker pull ${DOCKER_REGISTRY}/antrea/${harbor_images[i]} && docker tag ${DOCKER_REGISTRY}/antrea/${harbor_images[i]} ${antrea_images[i]}" || true
         done
 
@@ -249,7 +244,7 @@ function deliver_antrea_windows {
                     timeout 2m scp -o StrictHostKeyChecking=no -T jenkins/antrea_repo.tar.gz Administrator@${IP}: && break
                 done
                 ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "docker pull ${DOCKER_REGISTRY}/antrea/golang:1.15 && docker tag ${DOCKER_REGISTRY}/antrea/golang:1.15 golang:1.15"
-                ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "rm -rf antrea && mkdir antrea && cd antrea && tar -xzvf ../antrea_repo.tar.gz && sed -i \"s|build/images/Dockerfile.build.windows .|build/images/Dockerfile.build.windows . --network host|g\" Makefile && DOCKER_REGISTRY=${DOCKER_REGISTRY} make build-windows && docker save -o antrea-windows.tar projects.registry.vmware.com/antrea/antrea-windows:latest && gzip -f antrea-windows.tar" || true
+                ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "rm -rf antrea && mkdir antrea && cd antrea && tar -xzvf ../antrea_repo.tar.gz && sed -i \"s|build/images/Dockerfile.build.windows .|build/images/Dockerfile.build.windows . --network host|g\" Makefile && NO_PULL=${NO_PULL} make build-windows && docker save -o antrea-windows.tar projects.registry.vmware.com/antrea/antrea-windows:latest && gzip -f antrea-windows.tar" || true
                 for i in `seq 2`; do
                     timeout 2m scp -o StrictHostKeyChecking=no -T Administrator@${IP}:antrea/antrea-windows.tar.gz . && break
                 done
@@ -261,7 +256,7 @@ function deliver_antrea_windows {
             fi
         fi
     done
-    rm antrea-windows.tar.gz || true
+    rm -f antrea-windows.tar.gz
 }
 
 function deliver_antrea {
@@ -284,11 +279,13 @@ function deliver_antrea {
     docker images | grep 'antrea-ubuntu' | awk '{print $3}' | xargs -r docker rmi -f || true
     docker images | grep '<none>' | awk '{print $3}' | xargs -r docker rmi || true
     if [[ "${DOCKER_REGISTRY}" != "" ]]; then
-        pull_antrea_ubuntu_image
         docker pull "${DOCKER_REGISTRY}/antrea/sonobuoy-systemd-logs:v0.3"
         docker tag "${DOCKER_REGISTRY}/antrea/sonobuoy-systemd-logs:v0.3" "sonobuoy/systemd-logs:v0.3"
     fi
-    DOCKER_REGISTRY=${DOCKER_REGISTRY} make
+    chmod -R g-w build/images/ovs
+    chmod -R g-w build/images/base
+    DOCKER_REGISTRY="${DOCKER_REGISTRY}" ./hack/build-antrea-ubuntu-all.sh --pull
+    make flow-aggregator-image
 
     echo "====== Delivering Antrea to all the Nodes ======"
     echo "=== Fill serviceCIDRv6 and serviceCIDR ==="
@@ -311,10 +308,13 @@ function deliver_antrea {
 
     cp -f build/yamls/*.yml $WORKDIR
     docker save -o antrea-ubuntu.tar projects.registry.vmware.com/antrea/antrea-ubuntu:latest
+    docker save -o flow-aggregator.tar projects.registry.vmware.com/antrea/flow-aggregator:latest
 
     kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 != role {print $6}' | while read IP; do
         rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no" antrea-ubuntu.tar jenkins@[${IP}]:${WORKDIR}/antrea-ubuntu.tar
+        rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no" flow-aggregator.tar jenkins@[${IP}]:${WORKDIR}/flow-aggregator.tar
         ssh -o StrictHostKeyChecking=no -n jenkins@${IP} "docker images | grep 'antrea-ubuntu' | awk '{print \$3}' | xargs -r docker rmi ; docker load -i ${WORKDIR}/antrea-ubuntu.tar ; docker images | grep '<none>' | awk '{print \$3}' | xargs -r docker rmi" || true
+        ssh -o StrictHostKeyChecking=no -n jenkins@${IP} "docker images | grep 'flow-aggregator' | awk '{print \$3}' | xargs -r docker rmi ; docker load -i ${WORKDIR}/flow-aggregator.tar ; docker images | grep '<none>' | awk '{print \$3}' | xargs -r docker rmi" || true
         if [[ "${DOCKER_REGISTRY}" != "" ]]; then
             ssh -o StrictHostKeyChecking=no -n jenkins@${IP} "docker pull ${DOCKER_REGISTRY}/antrea/sonobuoy-systemd-logs:v0.3 ; docker tag ${DOCKER_REGISTRY}/antrea/sonobuoy-systemd-logs:v0.3 sonobuoy/systemd-logs:v0.3"
         fi
@@ -336,7 +336,7 @@ function run_e2e {
 
     set +e
     mkdir -p `pwd`/antrea-test-logs
-    go test -v github.com/vmware-tanzu/antrea/test/e2e --logs-export-dir `pwd`/antrea-test-logs -timeout=50m --prometheus
+    go test -v github.com/vmware-tanzu/antrea/test/e2e --logs-export-dir `pwd`/antrea-test-logs -timeout=100m --prometheus
     if [[ "$?" != "0" ]]; then
         TEST_FAILURE=true
     fi

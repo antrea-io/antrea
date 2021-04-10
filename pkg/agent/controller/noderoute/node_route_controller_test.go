@@ -22,6 +22,7 @@ import (
 
 	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/golang/mock/gomock"
+	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/informers"
@@ -35,11 +36,13 @@ import (
 )
 
 var (
-	gatewayMAC, _  = net.ParseMAC("00:00:00:00:00:01")
-	_, podCIDR, _  = net.ParseCIDR("1.1.1.0/24")
-	podCIDRGateway = ip.NextIP(podCIDR.IP)
-	nodeIP1        = net.ParseIP("10.10.10.10")
-	nodeIP2        = net.ParseIP("10.10.10.11")
+	gatewayMAC, _   = net.ParseMAC("00:00:00:00:00:01")
+	_, podCIDR, _   = net.ParseCIDR("1.1.1.0/24")
+	_, podCIDR2, _  = net.ParseCIDR("1.1.2.0/24")
+	podCIDRGateway  = ip.NextIP(podCIDR.IP)
+	podCIDR2Gateway = ip.NextIP(podCIDR2.IP)
+	nodeIP1         = net.ParseIP("10.10.10.10")
+	nodeIP2         = net.ParseIP("10.10.10.11")
 )
 
 type fakeController struct {
@@ -131,7 +134,7 @@ func TestControllerWithDuplicatePodCIDR(t *testing.T) {
 		// The 2nd argument is Any() because the argument is unpredictable when it uses pointer as the key of map.
 		// The argument type is map[*net.IPNet]net.IP.
 		c.ofClient.EXPECT().InstallNodeFlows("node1", gomock.Any(), nodeIP1, uint32(0)).Times(1)
-		c.routeClient.EXPECT().AddRoutes(podCIDR, nodeIP1, podCIDRGateway).Times(1)
+		c.routeClient.EXPECT().AddRoutes(podCIDR, "node1", nodeIP1, podCIDRGateway).Times(1)
 		c.processNextWorkItem()
 
 		// Since node1 is not deleted yet, routes and flows for node2 shouldn't be installed as its PodCIDR is duplicate.
@@ -148,7 +151,7 @@ func TestControllerWithDuplicatePodCIDR(t *testing.T) {
 		// The 2nd argument is Any() because the argument is unpredictable when it uses pointer as the key of map.
 		// The argument type is map[*net.IPNet]net.IP.
 		c.ofClient.EXPECT().InstallNodeFlows("node2", gomock.Any(), nodeIP2, uint32(0)).Times(1)
-		c.routeClient.EXPECT().AddRoutes(podCIDR, nodeIP2, podCIDRGateway).Times(1)
+		c.routeClient.EXPECT().AddRoutes(podCIDR, "node2", nodeIP2, podCIDRGateway).Times(1)
 		c.processNextWorkItem()
 	}()
 
@@ -157,4 +160,71 @@ func TestControllerWithDuplicatePodCIDR(t *testing.T) {
 		t.Errorf("Test didn't finish in time")
 	case <-finishCh:
 	}
+}
+
+func TestIPInPodSubnets(t *testing.T) {
+	c, closeFn := newController(t)
+	defer closeFn()
+	defer c.queue.ShutDown()
+
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+	c.informerFactory.Start(stopCh)
+	// Must wait for cache sync, otherwise resource creation events will be missing if the resources are created
+	// in-between list and watch call of an informer. This is because fake clientset doesn't support watching with
+	// resourceVersion. A watcher of fake clientset only gets events that happen after the watcher is created.
+	c.informerFactory.WaitForCacheSync(stopCh)
+	c.Controller.nodeConfig.PodIPv4CIDR = podCIDR
+
+	node1 := &corev1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "node1",
+		},
+		Spec: corev1.NodeSpec{
+			PodCIDR:  podCIDR.String(),
+			PodCIDRs: []string{podCIDR.String()},
+		},
+		Status: corev1.NodeStatus{
+			Addresses: []corev1.NodeAddress{
+				{
+					Type:    corev1.NodeInternalIP,
+					Address: nodeIP1.String(),
+				},
+			},
+		},
+	}
+	node2 := &corev1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "node2",
+		},
+		Spec: corev1.NodeSpec{
+			PodCIDR:  podCIDR2.String(),
+			PodCIDRs: []string{podCIDR2.String()},
+		},
+		Status: corev1.NodeStatus{
+			Addresses: []corev1.NodeAddress{
+				{
+					Type:    corev1.NodeInternalIP,
+					Address: nodeIP2.String(),
+				},
+			},
+		},
+	}
+
+	c.clientset.CoreV1().Nodes().Create(context.TODO(), node1, metav1.CreateOptions{})
+	// The 2nd argument is Any() because the argument is unpredictable when it uses pointer as the key of map.
+	// The argument type is map[*net.IPNet]net.IP.
+	c.ofClient.EXPECT().InstallNodeFlows("node1", gomock.Any(), nodeIP1, uint32(0)).Times(1)
+	c.routeClient.EXPECT().AddRoutes(podCIDR, "node1", nodeIP1, podCIDRGateway).Times(1)
+	c.processNextWorkItem()
+
+	c.clientset.CoreV1().Nodes().Create(context.TODO(), node2, metav1.CreateOptions{})
+	c.ofClient.EXPECT().InstallNodeFlows("node2", gomock.Any(), nodeIP2, uint32(0)).Times(1)
+	c.routeClient.EXPECT().AddRoutes(podCIDR2, "node2", nodeIP2, podCIDR2Gateway).Times(1)
+	c.processNextWorkItem()
+
+	assert.Equal(t, true, c.Controller.IPInPodSubnets(net.ParseIP("1.1.1.1")))
+	assert.Equal(t, true, c.Controller.IPInPodSubnets(net.ParseIP("1.1.2.1")))
+	assert.Equal(t, false, c.Controller.IPInPodSubnets(net.ParseIP("10.10.10.10")))
+	assert.Equal(t, false, c.Controller.IPInPodSubnets(net.ParseIP("8.8.8.8")))
 }

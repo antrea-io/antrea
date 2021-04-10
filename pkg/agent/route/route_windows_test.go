@@ -67,13 +67,13 @@ func TestRouteOperation(t *testing.T) {
 	require.True(t, called)
 
 	// Add initial routes.
-	err = client.AddRoutes(destCIDR1, peerNodeIP1, gwIP1)
+	err = client.AddRoutes(destCIDR1, "node1", peerNodeIP1, gwIP1)
 	require.Nil(t, err)
 	routes1, err := nr.GetNetRoutes(gwLink, destCIDR1)
 	require.Nil(t, err)
 	assert.Equal(t, 1, len(routes1))
 
-	err = client.AddRoutes(destCIDR2, peerNodeIP2, gwIP2)
+	err = client.AddRoutes(destCIDR2, "node2", peerNodeIP2, gwIP2)
 	require.Nil(t, err)
 	routes2, err := nr.GetNetRoutes(gwLink, destCIDR2)
 	require.Nil(t, err)

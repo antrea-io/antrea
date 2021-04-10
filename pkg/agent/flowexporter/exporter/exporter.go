@@ -27,9 +27,11 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog"
 
+	"github.com/vmware-tanzu/antrea/pkg/agent/controller/noderoute"
 	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter"
 	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter/connections"
 	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter/flowrecords"
+	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
 	"github.com/vmware-tanzu/antrea/pkg/ipfix"
 	"github.com/vmware-tanzu/antrea/pkg/util/env"
 )
@@ -69,32 +71,33 @@ var (
 		"ingressNetworkPolicyNamespace",
 		"egressNetworkPolicyName",
 		"egressNetworkPolicyNamespace",
+		"tcpState",
+		"flowType",
 	}
 	AntreaInfoElementsIPv4 = append(antreaInfoElementsCommon, []string{"destinationClusterIPv4"}...)
 	AntreaInfoElementsIPv6 = append(antreaInfoElementsCommon, []string{"destinationClusterIPv6"}...)
 )
 
-const (
-	idleTimeoutReason   = uint8(0x01)
-	activeTimeoutReason = uint8(0x02)
-)
-
 type flowExporter struct {
-	connStore         connections.ConnectionStore
-	flowRecords       *flowrecords.FlowRecords
-	process           ipfix.IPFIXExportingProcess
-	elementsListv4    []*ipfixentities.InfoElementWithValue
-	elementsListv6    []*ipfixentities.InfoElementWithValue
-	ipfixSet          ipfix.IPFIXSet
-	numDataSetsSent   uint64 // used for unit tests.
-	templateIDv4      uint16
-	templateIDv6      uint16
-	registry          ipfix.IPFIXRegistry
-	v4Enabled         bool
-	v6Enabled         bool
-	exporterInput     exporter.ExporterInput
-	activeFlowTimeout time.Duration
-	idleFlowTimeout   time.Duration
+	connStore                 connections.ConnectionStore
+	flowRecords               *flowrecords.FlowRecords
+	process                   ipfix.IPFIXExportingProcess
+	elementsListv4            []*ipfixentities.InfoElementWithValue
+	elementsListv6            []*ipfixentities.InfoElementWithValue
+	ipfixSet                  ipfix.IPFIXSet
+	numDataSetsSent           uint64 // used for unit tests.
+	templateIDv4              uint16
+	templateIDv6              uint16
+	registry                  ipfix.IPFIXRegistry
+	v4Enabled                 bool
+	v6Enabled                 bool
+	exporterInput             exporter.ExporterInput
+	activeFlowTimeout         time.Duration
+	idleFlowTimeout           time.Duration
+	enableTLSToFlowAggregator bool
+	k8sClient                 kubernetes.Interface
+	nodeRouteController       *noderoute.Controller
+	isNetworkPolicyOnly       bool
 }
 
 func genObservationID() (uint32, error) {
@@ -107,40 +110,13 @@ func genObservationID() (uint32, error) {
 	return h.Sum32(), nil
 }
 
-func prepareExporterInputArgs(collectorAddr, collectorProto string, enableTLSToFlowAggregator bool, k8sClient kubernetes.Interface) (exporter.ExporterInput, error) {
+func prepareExporterInputArgs(collectorAddr, collectorProto string) (exporter.ExporterInput, error) {
 	expInput := exporter.ExporterInput{}
 	var err error
 	// Exporting process requires domain observation ID.
 	expInput.ObservationDomainID, err = genObservationID()
 	if err != nil {
 		return expInput, err
-	}
-
-	if enableTLSToFlowAggregator {
-		// if CA certificate, client certificate and key do not exist during initialization,
-		// it will retry to obtain the credentials in next export cycle
-		expInput.CACert, err = getCACert(k8sClient)
-		if err != nil {
-			return expInput, fmt.Errorf("cannot retrieve CA cert: %v", err)
-		}
-		expInput.ClientCert, expInput.ClientKey, err = getClientCertKey(k8sClient)
-		if err != nil {
-			return expInput, fmt.Errorf("cannot retrieve client cert and key: %v", err)
-		}
-		// TLS transport does not need any tempRefTimeout as it is applicable only
-		// for TCP transport, so sending 0.
-		expInput.TempRefTimeout = 0
-		expInput.IsEncrypted = true
-	} else if collectorProto == "tcp" {
-		// TCP transport does not need any tempRefTimeout, so sending 0.
-		// tempRefTimeout is the template refresh timeout, which specifies how often
-		// the exporting process should send the template again.
-		expInput.TempRefTimeout = 0
-		expInput.IsEncrypted = false
-	} else {
-		// For UDP transport, hardcoding tempRefTimeout value as 1800s.
-		expInput.TempRefTimeout = 1800
-		expInput.IsEncrypted = false
 	}
 	expInput.CollectorAddress = collectorAddr
 	expInput.CollectorProtocol = collectorProto
@@ -151,26 +127,32 @@ func prepareExporterInputArgs(collectorAddr, collectorProto string, enableTLSToF
 
 func NewFlowExporter(connStore connections.ConnectionStore, records *flowrecords.FlowRecords,
 	collectorAddr string, collectorProto string, activeFlowTimeout time.Duration, idleFlowTimeout time.Duration,
-	enableTLSToFlowAggregator bool, v4Enabled bool, v6Enabled bool, k8sClient kubernetes.Interface) (*flowExporter, error) {
+	enableTLSToFlowAggregator bool, v4Enabled bool, v6Enabled bool, k8sClient kubernetes.Interface,
+	nodeRouteController *noderoute.Controller, isNetworkPolicyOnly bool) (*flowExporter, error) {
 	// Initialize IPFIX registry
 	registry := ipfix.NewIPFIXRegistry()
 	registry.LoadRegistry()
 
 	// Prepare input args for IPFIX exporting process.
-	expInput, err := prepareExporterInputArgs(collectorAddr, collectorProto, enableTLSToFlowAggregator, k8sClient)
+	expInput, err := prepareExporterInputArgs(collectorAddr, collectorProto)
 	if err != nil {
 		return nil, err
 	}
+
 	return &flowExporter{
-		connStore:         connStore,
-		flowRecords:       records,
-		registry:          registry,
-		v4Enabled:         v4Enabled,
-		v6Enabled:         v6Enabled,
-		exporterInput:     expInput,
-		activeFlowTimeout: activeFlowTimeout,
-		idleFlowTimeout:   idleFlowTimeout,
-		ipfixSet:          ipfix.NewSet(false),
+		connStore:                 connStore,
+		flowRecords:               records,
+		registry:                  registry,
+		v4Enabled:                 v4Enabled,
+		v6Enabled:                 v6Enabled,
+		exporterInput:             expInput,
+		activeFlowTimeout:         activeFlowTimeout,
+		idleFlowTimeout:           idleFlowTimeout,
+		ipfixSet:                  ipfix.NewSet(false),
+		enableTLSToFlowAggregator: enableTLSToFlowAggregator,
+		k8sClient:                 k8sClient,
+		nodeRouteController:       nodeRouteController,
+		isNetworkPolicyOnly:       isNetworkPolicyOnly,
 	}, nil
 }
 
@@ -212,10 +194,36 @@ func (exp *flowExporter) Export() {
 
 func (exp *flowExporter) initFlowExporter() error {
 	var err error
-	exp.process, err = ipfix.NewIPFIXExportingProcess(exp.exporterInput)
+	if exp.enableTLSToFlowAggregator {
+		// if CA certificate, client certificate and key do not exist during initialization,
+		// it will retry to obtain the credentials in next export cycle
+		exp.exporterInput.CACert, err = getCACert(exp.k8sClient)
+		if err != nil {
+			return fmt.Errorf("cannot retrieve CA cert: %v", err)
+		}
+		exp.exporterInput.ClientCert, exp.exporterInput.ClientKey, err = getClientCertKey(exp.k8sClient)
+		if err != nil {
+			return fmt.Errorf("cannot retrieve client cert and key: %v", err)
+		}
+		// TLS transport does not need any tempRefTimeout, so sending 0.
+		exp.exporterInput.TempRefTimeout = 0
+		exp.exporterInput.IsEncrypted = true
+	} else if exp.exporterInput.CollectorProtocol == "tcp" {
+		// TCP transport does not need any tempRefTimeout, so sending 0.
+		// tempRefTimeout is the template refresh timeout, which specifies how often
+		// the exporting process should send the template again.
+		exp.exporterInput.TempRefTimeout = 0
+		exp.exporterInput.IsEncrypted = false
+	} else {
+		// For UDP transport, hardcoding tempRefTimeout value as 1800s.
+		exp.exporterInput.TempRefTimeout = 1800
+		exp.exporterInput.IsEncrypted = false
+	}
+	expProcess, err := ipfix.NewIPFIXExportingProcess(exp.exporterInput)
 	if err != nil {
 		return fmt.Errorf("error when starting exporter: %v", err)
 	}
+	exp.process = expProcess
 	if exp.v4Enabled {
 		templateID := exp.process.NewTemplateID()
 		exp.templateIDv4 = templateID
@@ -258,7 +266,7 @@ func (exp *flowExporter) sendFlowRecords() error {
 		// (activeFlowTimeout or idleFlowTimeout) are met. A flow is considered
 		// to be idle if its packet counts haven't changed since the last export.
 		if time.Since(record.LastExportTime) >= exp.idleFlowTimeout {
-			if ((record.Conn.OriginalPackets <= record.PrevPackets) && (record.Conn.ReversePackets <= record.PrevReversePackets)) || !record.Conn.IsPresent {
+			if ((record.Conn.OriginalPackets <= record.PrevPackets) && (record.Conn.ReversePackets <= record.PrevReversePackets)) || flowexporter.IsConnectionDying(&record.Conn) {
 				// Idle flow timeout
 				record.IsActive = false
 				recordNeedsSending = true
@@ -281,7 +289,6 @@ func (exp *flowExporter) sendFlowRecords() error {
 				if _, err := exp.sendDataSet(); err != nil {
 					return err
 				}
-				exp.numDataSetsSent = exp.numDataSetsSent + 1
 			} else {
 				if err := exp.ipfixSet.PrepareSet(ipfixentities.Data, exp.templateIDv4); err != nil {
 					return err
@@ -293,19 +300,17 @@ func (exp *flowExporter) sendFlowRecords() error {
 				if _, err := exp.sendDataSet(); err != nil {
 					return err
 				}
-				exp.numDataSetsSent = exp.numDataSetsSent + 1
 			}
-			// If the connection is not present in the conntrack table anymore,
-			// then we delete the connection in connection store and record store.
-			// Please note that our record cache policy is that we keep the record in
-			// the record map as long as the corresponding connection is present in
-			// the conntrack table.
-			if !record.Conn.IsPresent {
-				klog.V(2).Infof("Deleting the inactive connection with key: %v from both connection map and record map", key)
-				if err := exp.connStore.DeleteConnectionByKey(key); err != nil {
+			exp.numDataSetsSent = exp.numDataSetsSent + 1
+
+			if flowexporter.IsConnectionDying(&record.Conn) {
+				// If the connection is in dying state or connection is not in conntrack table,
+				// we will delete the flow records from records map.
+				klog.V(2).Infof("Deleting the inactive flow records with key: %v from record map", key)
+				if err := exp.flowRecords.DeleteFlowRecordWithoutLock(key); err != nil {
 					return err
 				}
-				if err := exp.flowRecords.DeleteFlowRecordWithoutLock(key); err != nil {
+				if err := exp.connStore.SetExportDone(key); err != nil {
 					return err
 				}
 			} else {
@@ -393,10 +398,12 @@ func (exp *flowExporter) addRecordToSet(record flowexporter.FlowRecord) error {
 		case "flowEndSeconds":
 			ie.Value = uint32(record.Conn.StopTime.Unix())
 		case "flowEndReason":
-			if record.IsActive {
-				ie.Value = activeTimeoutReason
+			if flowexporter.IsConnectionDying(&record.Conn) {
+				ie.Value = ipfixregistry.EndOfFlowReason
+			} else if record.IsActive {
+				ie.Value = ipfixregistry.ActiveTimeoutReason
 			} else {
-				ie.Value = idleTimeoutReason
+				ie.Value = ipfixregistry.IdleTimeoutReason
 			}
 		case "sourceIPv4Address":
 			ie.Value = record.Conn.TupleOrig.SourceAddress
@@ -514,6 +521,10 @@ func (exp *flowExporter) addRecordToSet(record flowexporter.FlowRecord) error {
 			ie.Value = record.Conn.EgressNetworkPolicyName
 		case "egressNetworkPolicyNamespace":
 			ie.Value = record.Conn.EgressNetworkPolicyNamespace
+		case "tcpState":
+			ie.Value = record.Conn.TCPState
+		case "flowType":
+			ie.Value = exp.findFlowType(record)
 		}
 	}
 
@@ -535,4 +546,33 @@ func (exp *flowExporter) sendDataSet() (int, error) {
 	}
 	klog.V(4).Infof("Data set sent successfully. Bytes sent: %d", sentBytes)
 	return sentBytes, nil
+}
+
+func (exp *flowExporter) findFlowType(record flowexporter.FlowRecord) uint8 {
+	// TODO: support Pod-To-External flows in network policy only mode.
+	if exp.isNetworkPolicyOnly {
+		if record.Conn.SourcePodName == "" || record.Conn.DestinationPodName == "" {
+			return ipfixregistry.InterNode
+		}
+		return ipfixregistry.IntraNode
+	}
+
+	if exp.nodeRouteController == nil {
+		klog.Warningf("Can't find flowType without nodeRouteController")
+		return 0
+	}
+	if exp.nodeRouteController.IPInPodSubnets(record.Conn.TupleOrig.SourceAddress) {
+		if record.Conn.Mark == openflow.ServiceCTMark || exp.nodeRouteController.IPInPodSubnets(record.Conn.TupleOrig.DestinationAddress) {
+			if record.Conn.SourcePodName == "" || record.Conn.DestinationPodName == "" {
+				return ipfixregistry.InterNode
+			}
+			return ipfixregistry.IntraNode
+		} else {
+			return ipfixregistry.ToExternal
+		}
+	} else {
+		// We do not support External-To-Pod flows for now.
+		klog.Warningf("Source IP: %s doesn't exist in PodCIDRs", record.Conn.TupleOrig.SourceAddress.String())
+		return 0
+	}
 }

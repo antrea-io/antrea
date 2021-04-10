@@ -13,7 +13,7 @@
 // limitations under the License.
 
 // +k8s:deepcopy-gen=package
-// +groupName=controlplane.antrea.tanzu.vmware.com
+// +groupName=controlplane.antrea.io
 
 // Package controlplane contains the latest (or "internal") version of the Antrea
 // NetworkPolicy API messages. This is the API messages as represented in memory.

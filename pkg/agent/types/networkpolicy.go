@@ -16,7 +16,7 @@ package types
 
 import (
 	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
-	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
+	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha1"
 	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
 )
 
@@ -77,6 +77,7 @@ type PolicyRule struct {
 	Service       []v1beta2.Service
 	Action        *secv1alpha1.RuleAction
 	Priority      *uint16
+	Name          string
 	FlowID        uint32
 	TableID       binding.TableIDType
 	PolicyRef     *v1beta2.NetworkPolicyReference

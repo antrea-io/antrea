@@ -30,8 +30,6 @@ import (
 
 	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
 	cpinstall "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/install"
-	"github.com/vmware-tanzu/antrea/pkg/apis/networking"
-	networkinginstall "github.com/vmware-tanzu/antrea/pkg/apis/networking/install"
 	apistats "github.com/vmware-tanzu/antrea/pkg/apis/stats"
 	statsinstall "github.com/vmware-tanzu/antrea/pkg/apis/stats/install"
 	systeminstall "github.com/vmware-tanzu/antrea/pkg/apis/system/install"
@@ -40,6 +38,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/handlers/endpoint"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/handlers/loglevel"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/handlers/webhook"
+	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/controlplane/egressgroup"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/controlplane/nodestatssummary"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/networkpolicy/addressgroup"
 	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/networkpolicy/appliedtogroup"
@@ -56,6 +55,14 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/controller/querier"
 	"github.com/vmware-tanzu/antrea/pkg/controller/stats"
 	"github.com/vmware-tanzu/antrea/pkg/features"
+	legacycontrolplane "github.com/vmware-tanzu/antrea/pkg/legacyapis/controlplane"
+	legacycpinstall "github.com/vmware-tanzu/antrea/pkg/legacyapis/controlplane/install"
+	legacynetworking "github.com/vmware-tanzu/antrea/pkg/legacyapis/networking"
+	legacynetworkinginstall "github.com/vmware-tanzu/antrea/pkg/legacyapis/networking/install"
+	legacyapistats "github.com/vmware-tanzu/antrea/pkg/legacyapis/stats"
+	legacystatsinstall "github.com/vmware-tanzu/antrea/pkg/legacyapis/stats/install"
+	legacysysteminstall "github.com/vmware-tanzu/antrea/pkg/legacyapis/system/install"
+	legacysystem "github.com/vmware-tanzu/antrea/pkg/legacyapis/system/v1beta1"
 )
 
 var (
@@ -71,8 +78,13 @@ var (
 func init() {
 	cpinstall.Install(Scheme)
 	systeminstall.Install(Scheme)
-	networkinginstall.Install(Scheme)
 	statsinstall.Install(Scheme)
+
+	legacycpinstall.Install(Scheme)
+	legacysysteminstall.Install(Scheme)
+	legacynetworkinginstall.Install(Scheme)
+	legacystatsinstall.Install(Scheme)
+
 	// We need to add the options to empty v1, see sample-apiserver/pkg/apiserver/apiserver.go.
 	metav1.AddToGroupVersion(Scheme, schema.GroupVersion{Version: "v1"})
 }
@@ -82,6 +94,7 @@ type ExtraConfig struct {
 	addressGroupStore             storage.Interface
 	appliedToGroupStore           storage.Interface
 	networkPolicyStore            storage.Interface
+	egressGroupStore              storage.Interface
 	controllerQuerier             querier.ControllerQuerier
 	endpointQuerier               controllernetworkpolicy.EndpointQuerier
 	networkPolicyController       *controllernetworkpolicy.NetworkPolicyController
@@ -119,7 +132,7 @@ type completedConfig struct {
 
 func NewConfig(
 	genericConfig *genericapiserver.Config,
-	addressGroupStore, appliedToGroupStore, networkPolicyStore, groupStore storage.Interface,
+	addressGroupStore, appliedToGroupStore, networkPolicyStore, groupStore, egressGroupStore storage.Interface,
 	caCertController *certificate.CACertController,
 	statsAggregator *stats.Aggregator,
 	controllerQuerier querier.ControllerQuerier,
@@ -132,6 +145,7 @@ func NewConfig(
 			addressGroupStore:             addressGroupStore,
 			appliedToGroupStore:           appliedToGroupStore,
 			networkPolicyStore:            networkPolicyStore,
+			egressGroupStore:              egressGroupStore,
 			caCertController:              caCertController,
 			statsAggregator:               statsAggregator,
 			controllerQuerier:             controllerQuerier,
@@ -154,13 +168,8 @@ func installAPIGroup(s *APIServer, c completedConfig) error {
 	clusterGroupMembershipStorage := clustergroupmember.NewREST(c.extraConfig.networkPolicyController)
 	groupAssociationStorage := groupassociation.NewREST(c.extraConfig.networkPolicyController)
 	nodeStatsSummaryStorage := nodestatssummary.NewREST(c.extraConfig.statsAggregator)
+	egressGroupStorage := egressgroup.NewREST(c.extraConfig.egressGroupStore)
 	cpGroup := genericapiserver.NewDefaultAPIGroupInfo(controlplane.GroupName, Scheme, metav1.ParameterCodec, Codecs)
-	cpv1beta1Storage := map[string]rest.Storage{}
-	cpv1beta1Storage["addressgroups"] = addressGroupStorage
-	cpv1beta1Storage["appliedtogroups"] = appliedToGroupStorage
-	cpv1beta1Storage["networkpolicies"] = networkPolicyStorage
-	cpv1beta1Storage["nodestatssummaries"] = nodeStatsSummaryStorage
-	cpGroup.VersionedResourcesStorageMap["v1beta1"] = cpv1beta1Storage
 	cpv1beta2Storage := map[string]rest.Storage{}
 	cpv1beta2Storage["addressgroups"] = addressGroupStorage
 	cpv1beta2Storage["appliedtogroups"] = appliedToGroupStorage
@@ -169,16 +178,8 @@ func installAPIGroup(s *APIServer, c completedConfig) error {
 	cpv1beta2Storage["nodestatssummaries"] = nodeStatsSummaryStorage
 	cpv1beta2Storage["groupassociations"] = groupAssociationStorage
 	cpv1beta2Storage["clustergroupmembers"] = clusterGroupMembershipStorage
+	cpv1beta2Storage["egressgroups"] = egressGroupStorage
 	cpGroup.VersionedResourcesStorageMap["v1beta2"] = cpv1beta2Storage
-
-	// TODO: networkingGroup is the legacy group of controlplane NetworkPolicy APIs. To allow live upgrades from up to
-	// two minor versions, the APIs must be kept for two minor releases before it can be deleted.
-	networkingGroup := genericapiserver.NewDefaultAPIGroupInfo(networking.GroupName, Scheme, metav1.ParameterCodec, Codecs)
-	networkingStorage := map[string]rest.Storage{}
-	networkingStorage["addressgroups"] = addressGroupStorage
-	networkingStorage["appliedtogroups"] = appliedToGroupStorage
-	networkingStorage["networkpolicies"] = networkPolicyStorage
-	networkingGroup.VersionedResourcesStorageMap["v1beta1"] = networkingStorage
 
 	systemGroup := genericapiserver.NewDefaultAPIGroupInfo(system.GroupName, Scheme, metav1.ParameterCodec, Codecs)
 	systemStorage := map[string]rest.Storage{}
@@ -195,7 +196,44 @@ func installAPIGroup(s *APIServer, c completedConfig) error {
 	statsStorage["antreanetworkpolicystats"] = antreanetworkpolicystats.NewREST(c.extraConfig.statsAggregator)
 	statsGroup.VersionedResourcesStorageMap["v1alpha1"] = statsStorage
 
-	groups := []*genericapiserver.APIGroupInfo{&cpGroup, &networkingGroup, &systemGroup, &statsGroup}
+	groups := []*genericapiserver.APIGroupInfo{&cpGroup, &systemGroup, &statsGroup}
+
+	// legacy groups
+	legacyCPGroup := genericapiserver.NewDefaultAPIGroupInfo(legacycontrolplane.GroupName, Scheme, metav1.ParameterCodec, Codecs)
+	legacyCPv1beta1Storage := map[string]rest.Storage{}
+	legacyCPv1beta1Storage["addressgroups"] = addressGroupStorage
+	legacyCPv1beta1Storage["appliedtogroups"] = appliedToGroupStorage
+	legacyCPv1beta1Storage["networkpolicies"] = networkPolicyStorage
+	legacyCPv1beta1Storage["nodestatssummaries"] = nodeStatsSummaryStorage
+	legacyCPGroup.VersionedResourcesStorageMap["v1beta1"] = legacyCPv1beta1Storage
+	legacyCPv1beta2Storage := map[string]rest.Storage{}
+	legacyCPv1beta2Storage["addressgroups"] = addressGroupStorage
+	legacyCPv1beta2Storage["appliedtogroups"] = appliedToGroupStorage
+	legacyCPv1beta2Storage["networkpolicies"] = networkPolicyStorage
+	legacyCPv1beta2Storage["networkpolicies/status"] = networkPolicyStatusStorage
+	legacyCPv1beta2Storage["nodestatssummaries"] = nodeStatsSummaryStorage
+	legacyCPv1beta2Storage["groupassociations"] = groupAssociationStorage
+	legacyCPv1beta2Storage["clustergroupmembers"] = clusterGroupMembershipStorage
+	legacyCPGroup.VersionedResourcesStorageMap["v1beta2"] = legacyCPv1beta2Storage
+
+	legacyNetworkingGroup := genericapiserver.NewDefaultAPIGroupInfo(legacynetworking.GroupName, Scheme, metav1.ParameterCodec, Codecs)
+	// TODO: networkingGroup is the legacy group of controlplane NetworkPolicy APIs. To allow live upgrades from up to
+	// two minor versions, the APIs must be kept for two minor releases before it can be deleted.
+	legacyNetworkingStorage := map[string]rest.Storage{}
+	legacyNetworkingStorage["addressgroups"] = addressGroupStorage
+	legacyNetworkingStorage["appliedtogroups"] = appliedToGroupStorage
+	legacyNetworkingStorage["networkpolicies"] = networkPolicyStorage
+	legacyNetworkingGroup.VersionedResourcesStorageMap["v1beta1"] = legacyNetworkingStorage
+
+	legacySystemGroup := genericapiserver.NewDefaultAPIGroupInfo(legacysystem.GroupName, Scheme, metav1.ParameterCodec, Codecs)
+	legacySystemGroup.VersionedResourcesStorageMap["v1beta1"] = systemStorage
+
+	legacyStatsGroup := genericapiserver.NewDefaultAPIGroupInfo(legacyapistats.GroupName, Scheme, metav1.ParameterCodec, Codecs)
+	legacyStatsGroup.VersionedResourcesStorageMap["v1alpha1"] = statsStorage
+
+	// legacy API groups
+	groups = append(groups, &legacyCPGroup, &legacyNetworkingGroup, &legacySystemGroup, &legacyStatsGroup)
+
 	for _, apiGroupInfo := range groups {
 		if err := s.GenericAPIServer.InstallAPIGroup(apiGroupInfo); err != nil {
 			return err
@@ -262,6 +300,7 @@ func installHandlers(c *ExtraConfig, s *genericapiserver.GenericAPIServer) {
 		s.Handler.NonGoRestfulMux.HandleFunc("/validate/acnp", webhook.HandleValidationNetworkPolicy(v))
 		s.Handler.NonGoRestfulMux.HandleFunc("/validate/anp", webhook.HandleValidationNetworkPolicy(v))
 		s.Handler.NonGoRestfulMux.HandleFunc("/validate/clustergroup", webhook.HandleValidationNetworkPolicy(v))
+
 		// Install a post start hook to initialize Tiers on start-up
 		s.AddPostStartHook("initialize-tiers", func(context genericapiserver.PostStartHookContext) error {
 			go c.networkPolicyController.InitializeTiers()

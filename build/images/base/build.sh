@@ -23,8 +23,8 @@ function echoerr {
     >&2 echo "$@"
 }
 
-_usage="Usage: OVS_VERSION=<VERSION> $0 [--pull] [--push] [--platform <PLATFORM>]
-Build the antrea/base-ubuntu:<VERSION> image.
+_usage="Usage: $0 [--pull] [--push] [--platform <PLATFORM>]
+Build the antrea/base-ubuntu:<OVS_VERSION> image.
         --pull                  Always attempt to pull a newer version of the base images
         --push                  Push the built image to the registry
         --platform <PLATFORM>   Target platform for the image if server is multi-platform capable"
@@ -65,11 +65,6 @@ case $key in
 esac
 done
 
-if [ -z "$OVS_VERSION" ]; then
-    echoerr "The OVS_VERSION env variable must be set to a valid value (e.g. 2.14.0)"
-    exit 1
-fi
-
 if [ "$PLATFORM" != "" ] && $PUSH; then
     echoerr "Cannot use --platform with --push"
     exit 1
@@ -84,17 +79,49 @@ THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
 pushd $THIS_DIR > /dev/null
 
+OVS_VERSION=$(head -n 1 ../deps/ovs-version)
+CNI_BINARIES_VERSION=$(head -n 1 ../deps/cni-binaries-version)
+
 if $PULL; then
-    docker pull $PLATFORM_ARG ubuntu:20.04
-    docker pull $PLATFORM_ARG antrea/openvswitch:$OVS_VERSION
+    if [[ ${DOCKER_REGISTRY} == "" ]]; then
+        docker pull $PLATFORM_ARG ubuntu:20.04
+    else
+        docker pull ${DOCKER_REGISTRY}/antrea/ubuntu:20.04
+        docker tag ${DOCKER_REGISTRY}/antrea/ubuntu:20.04 ubuntu:20.04
+    fi
+    IMAGES_LIST=(
+        "antrea/openvswitch:$OVS_VERSION"
+        "antrea/cni-binaries:$CNI_BINARIES_VERSION"
+        "antrea/base-ubuntu:$OVS_VERSION"
+    )
+    for image in "${IMAGES_LIST[@]}"; do
+        if [[ ${DOCKER_REGISTRY} == "" ]]; then
+            docker pull $PLATFORM_ARG "${image}" || true
+        else
+            rc=0
+            docker pull "${DOCKER_REGISTRY}/${image}" || rc=$?
+            if [[ $rc -eq 0 ]]; then
+                docker tag "${DOCKER_REGISTRY}/${image}" "${image}"
+            fi
+        fi
+    done
 fi
 
+docker build $PLATFORM_ARG --target cni-binaries \
+       --cache-from antrea/cni-binaries:$CNI_BINARIES_VERSION \
+       -t antrea/cni-binaries:$CNI_BINARIES_VERSION \
+       --build-arg CNI_BINARIES_VERSION=$CNI_BINARIES_VERSION \
+       --build-arg OVS_VERSION=$OVS_VERSION .
+
 docker build $PLATFORM_ARG \
+       --cache-from antrea/cni-binaries:$CNI_BINARIES_VERSION \
+       --cache-from antrea/base-ubuntu:$OVS_VERSION \
        -t antrea/base-ubuntu:$OVS_VERSION \
-       -f Dockerfile \
+       --build-arg CNI_BINARIES_VERSION=$CNI_BINARIES_VERSION \
        --build-arg OVS_VERSION=$OVS_VERSION .
 
 if $PUSH; then
+    docker push antrea/cni-binaries:$CNI_BINARIES_VERSION
     docker push antrea/base-ubuntu:$OVS_VERSION
 fi
 

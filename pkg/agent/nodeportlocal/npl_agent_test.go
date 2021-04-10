@@ -259,6 +259,30 @@ func TestSvcNamespaceUpdate(t *testing.T) {
 	assert.False(t, testData.portTable.RuleExists(defaultPodIP, defaultPort))
 }
 
+// TestSvcTypeUpdate updates Service type from ClusterIP to NodePort
+// and checks whether Pod annotations are removed.
+func TestSvcTypeUpdate(t *testing.T) {
+	testData, testSvc, testPod := setUpWithTestServiceAndPod(t)
+	defer testData.tearDown()
+
+	// Update Service type to NodePort.
+	testSvc.Spec.Type = "NodePort"
+	testData.updateServiceOrFail(testSvc)
+
+	// Check that annotation and the rule are removed.
+	_, err := testData.pollForPodAnnotation(testPod.Name, false)
+	require.NoError(t, err, "Poll for annotation check failed")
+	assert.False(t, testData.portTable.RuleExists(defaultPodIP, defaultPort))
+
+	// Update Service type to ClusterIP.
+	testSvc.Spec.Type = "ClusterIP"
+	testData.updateServiceOrFail(testSvc)
+
+	_, err = testData.pollForPodAnnotation(testPod.Name, true)
+	require.NoError(t, err, "Poll for annotation check failed")
+	assert.True(t, testData.portTable.RuleExists(defaultPodIP, defaultPort))
+}
+
 // TestSvcUpdateAnnotation updates the Service spec to disabled NPL. It then verifies that the Pod's
 // NPL annotation is removed and that the port table is updated.
 func TestSvcUpdateAnnotation(t *testing.T) {
@@ -273,6 +297,14 @@ func TestSvcUpdateAnnotation(t *testing.T) {
 	_, err := testData.pollForPodAnnotation(testPod.Name, false)
 	require.NoError(t, err, "Poll for annotation check failed")
 	assert.False(t, testData.portTable.RuleExists(defaultPodIP, defaultPort))
+
+	// Enable NPL back.
+	testSvc.Annotations = map[string]string{nplk8s.NPLEnabledAnnotationKey: "true"}
+	testData.updateServiceOrFail(testSvc)
+
+	_, err = testData.pollForPodAnnotation(testPod.Name, true)
+	require.NoError(t, err, "Poll for annotation check failed")
+	assert.True(t, testData.portTable.RuleExists(defaultPodIP, defaultPort))
 }
 
 // TestSvcRemoveAnnotation is the same as TestSvcUpdateAnnotation, but it deletes the NPL enabled
@@ -295,12 +327,19 @@ func TestSvcUpdateSelector(t *testing.T) {
 	testData, testSvc, testPod := setUpWithTestServiceAndPod(t)
 	defer testData.tearDown()
 
-	testSvc.Spec.Selector = map[string]string{"foo": "invalid-selector"}
+	testSvc.Spec.Selector = map[string]string{defaultAppSelectorKey: "invalid-selector"}
 	testData.updateServiceOrFail(testSvc)
 
 	_, err := testData.pollForPodAnnotation(testPod.Name, false)
 	require.NoError(t, err, "Poll for annotation check failed")
 	assert.False(t, testData.portTable.RuleExists(defaultPodIP, defaultPort))
+
+	testSvc.Spec.Selector = map[string]string{defaultAppSelectorKey: defaultAppSelectorVal}
+	testData.updateServiceOrFail(testSvc)
+
+	_, err = testData.pollForPodAnnotation(testPod.Name, true)
+	require.NoError(t, err, "Poll for annotation check failed")
+	assert.True(t, testData.portTable.RuleExists(defaultPodIP, defaultPort))
 }
 
 // TestPodUpdateSelectorLabel updates the Pod's labels so that the Pod is no longer selected by the
@@ -368,6 +407,24 @@ func TestPodAddMultiPort(t *testing.T) {
 	assert.NotEqual(t, nplData[0].NodePort, nplData[1].NodePort)
 	assert.True(t, testData.portTable.RuleExists(defaultPodIP, defaultPort))
 	assert.True(t, testData.portTable.RuleExists(defaultPodIP, newPort))
+}
+
+// TestPodAddHostPort creates a Pod with host ports and verifies that the Pod's NPL annotation
+// is updated with host port, without allocating extra port from NPL pool.
+// No rule is required for this case.
+func TestPodAddHostPort(t *testing.T) {
+	testSvc := getTestSvc()
+	testPod := getTestPod()
+	hostPort := 4001
+	testPod.Spec.Containers[0].Ports[0].HostPort = int32(hostPort)
+	testData := setUp(t, testSvc, testPod)
+	defer testData.tearDown()
+
+	value, err := testData.pollForPodAnnotation(testPod.Name, true)
+	require.NoError(t, err, "Poll for annotation check failed")
+	nplData := testData.checkAnnotationValue(value, defaultPort)
+	assert.Equal(t, nplData[0].NodePort, hostPort)
+	assert.False(t, testData.portTable.RuleExists(defaultPodIP, defaultPort))
 }
 
 // TestMultiplePods creates multiple Pods and verifies that NPL annotations for both Pods are

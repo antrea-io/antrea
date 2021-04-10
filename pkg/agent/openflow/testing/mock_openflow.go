@@ -20,7 +20,6 @@
 package testing
 
 import (
-	ofctrl "github.com/contiv/ofnet/ofctrl"
 	gomock "github.com/golang/mock/gomock"
 	config "github.com/vmware-tanzu/antrea/pkg/agent/config"
 	types "github.com/vmware-tanzu/antrea/pkg/agent/types"
@@ -377,6 +376,20 @@ func (mr *MockClientMockRecorder) InstallPodFlows(arg0, arg1, arg2, arg3 interfa
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallPodFlows", reflect.TypeOf((*MockClient)(nil).InstallPodFlows), arg0, arg1, arg2, arg3)
 }
 
+// InstallPodSNATFlows mocks base method
+func (m *MockClient) InstallPodSNATFlows(arg0 uint32, arg1 net.IP, arg2 uint32) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "InstallPodSNATFlows", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// InstallPodSNATFlows indicates an expected call of InstallPodSNATFlows
+func (mr *MockClientMockRecorder) InstallPodSNATFlows(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallPodSNATFlows", reflect.TypeOf((*MockClient)(nil).InstallPodSNATFlows), arg0, arg1, arg2)
+}
+
 // InstallPolicyRuleFlows mocks base method
 func (m *MockClient) InstallPolicyRuleFlows(arg0 *types.PolicyRule) error {
 	m.ctrl.T.Helper()
@@ -389,6 +402,20 @@ func (m *MockClient) InstallPolicyRuleFlows(arg0 *types.PolicyRule) error {
 func (mr *MockClientMockRecorder) InstallPolicyRuleFlows(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallPolicyRuleFlows", reflect.TypeOf((*MockClient)(nil).InstallPolicyRuleFlows), arg0)
+}
+
+// InstallSNATMarkFlows mocks base method
+func (m *MockClient) InstallSNATMarkFlows(arg0 net.IP, arg1 uint32) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "InstallSNATMarkFlows", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// InstallSNATMarkFlows indicates an expected call of InstallSNATMarkFlows
+func (mr *MockClientMockRecorder) InstallSNATMarkFlows(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallSNATMarkFlows", reflect.TypeOf((*MockClient)(nil).InstallSNATMarkFlows), arg0, arg1)
 }
 
 // InstallServiceFlows mocks base method
@@ -420,17 +447,17 @@ func (mr *MockClientMockRecorder) InstallServiceGroup(arg0, arg1, arg2 interface
 }
 
 // InstallTraceflowFlows mocks base method
-func (m *MockClient) InstallTraceflowFlows(arg0 byte) error {
+func (m *MockClient) InstallTraceflowFlows(arg0 byte, arg1, arg2 bool, arg3 *openflow.Packet, arg4 uint32, arg5 uint16) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "InstallTraceflowFlows", arg0)
+	ret := m.ctrl.Call(m, "InstallTraceflowFlows", arg0, arg1, arg2, arg3, arg4, arg5)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // InstallTraceflowFlows indicates an expected call of InstallTraceflowFlows
-func (mr *MockClientMockRecorder) InstallTraceflowFlows(arg0 interface{}) *gomock.Call {
+func (mr *MockClientMockRecorder) InstallTraceflowFlows(arg0, arg1, arg2, arg3, arg4, arg5 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallTraceflowFlows", reflect.TypeOf((*MockClient)(nil).InstallTraceflowFlows), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallTraceflowFlows", reflect.TypeOf((*MockClient)(nil).InstallTraceflowFlows), arg0, arg1, arg2, arg3, arg4, arg5)
 }
 
 // IsConnected mocks base method
@@ -527,18 +554,46 @@ func (mr *MockClientMockRecorder) ReplayFlows() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReplayFlows", reflect.TypeOf((*MockClient)(nil).ReplayFlows))
 }
 
-// SendTraceflowPacket mocks base method
-func (m *MockClient) SendTraceflowPacket(arg0 byte, arg1, arg2, arg3, arg4 string, arg5, arg6 byte, arg7, arg8, arg9 uint16, arg10 byte, arg11, arg12 uint16, arg13, arg14 byte, arg15, arg16 uint16, arg17 uint32, arg18 int32) error {
+// SendICMPPacketOut mocks base method
+func (m *MockClient) SendICMPPacketOut(arg0, arg1, arg2, arg3 string, arg4 uint32, arg5 int32, arg6 bool, arg7, arg8 byte, arg9 []byte, arg10 bool) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SendTraceflowPacket", arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11, arg12, arg13, arg14, arg15, arg16, arg17, arg18)
+	ret := m.ctrl.Call(m, "SendICMPPacketOut", arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SendICMPPacketOut indicates an expected call of SendICMPPacketOut
+func (mr *MockClientMockRecorder) SendICMPPacketOut(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendICMPPacketOut", reflect.TypeOf((*MockClient)(nil).SendICMPPacketOut), arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10)
+}
+
+// SendTCPPacketOut mocks base method
+func (m *MockClient) SendTCPPacketOut(arg0, arg1, arg2, arg3 string, arg4 uint32, arg5 int32, arg6 bool, arg7, arg8 uint16, arg9 uint32, arg10 byte, arg11 bool) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SendTCPPacketOut", arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SendTCPPacketOut indicates an expected call of SendTCPPacketOut
+func (mr *MockClientMockRecorder) SendTCPPacketOut(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendTCPPacketOut", reflect.TypeOf((*MockClient)(nil).SendTCPPacketOut), arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11)
+}
+
+// SendTraceflowPacket mocks base method
+func (m *MockClient) SendTraceflowPacket(arg0 byte, arg1 *openflow.Packet, arg2 uint32, arg3 int32) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SendTraceflowPacket", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // SendTraceflowPacket indicates an expected call of SendTraceflowPacket
-func (mr *MockClientMockRecorder) SendTraceflowPacket(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11, arg12, arg13, arg14, arg15, arg16, arg17, arg18 interface{}) *gomock.Call {
+func (mr *MockClientMockRecorder) SendTraceflowPacket(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendTraceflowPacket", reflect.TypeOf((*MockClient)(nil).SendTraceflowPacket), arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11, arg12, arg13, arg14, arg15, arg16, arg17, arg18)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendTraceflowPacket", reflect.TypeOf((*MockClient)(nil).SendTraceflowPacket), arg0, arg1, arg2, arg3)
 }
 
 // StartPacketInHandler mocks base method
@@ -554,7 +609,7 @@ func (mr *MockClientMockRecorder) StartPacketInHandler(arg0, arg1 interface{}) *
 }
 
 // SubscribePacketIn mocks base method
-func (m *MockClient) SubscribePacketIn(arg0 byte, arg1 chan *ofctrl.PacketIn) error {
+func (m *MockClient) SubscribePacketIn(arg0 byte, arg1 *openflow.PacketInQueue) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "SubscribePacketIn", arg0, arg1)
 	ret0, _ := ret[0].(error)
@@ -623,6 +678,20 @@ func (mr *MockClientMockRecorder) UninstallPodFlows(arg0 interface{}) *gomock.Ca
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UninstallPodFlows", reflect.TypeOf((*MockClient)(nil).UninstallPodFlows), arg0)
 }
 
+// UninstallPodSNATFlows mocks base method
+func (m *MockClient) UninstallPodSNATFlows(arg0 uint32) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UninstallPodSNATFlows", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UninstallPodSNATFlows indicates an expected call of UninstallPodSNATFlows
+func (mr *MockClientMockRecorder) UninstallPodSNATFlows(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UninstallPodSNATFlows", reflect.TypeOf((*MockClient)(nil).UninstallPodSNATFlows), arg0)
+}
+
 // UninstallPolicyRuleFlows mocks base method
 func (m *MockClient) UninstallPolicyRuleFlows(arg0 uint32) ([]string, error) {
 	m.ctrl.T.Helper()
@@ -636,6 +705,20 @@ func (m *MockClient) UninstallPolicyRuleFlows(arg0 uint32) ([]string, error) {
 func (mr *MockClientMockRecorder) UninstallPolicyRuleFlows(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UninstallPolicyRuleFlows", reflect.TypeOf((*MockClient)(nil).UninstallPolicyRuleFlows), arg0)
+}
+
+// UninstallSNATMarkFlows mocks base method
+func (m *MockClient) UninstallSNATMarkFlows(arg0 uint32) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UninstallSNATMarkFlows", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UninstallSNATMarkFlows indicates an expected call of UninstallSNATMarkFlows
+func (mr *MockClientMockRecorder) UninstallSNATMarkFlows(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UninstallSNATMarkFlows", reflect.TypeOf((*MockClient)(nil).UninstallSNATMarkFlows), arg0)
 }
 
 // UninstallServiceFlows mocks base method
@@ -664,6 +747,20 @@ func (m *MockClient) UninstallServiceGroup(arg0 openflow.GroupIDType) error {
 func (mr *MockClientMockRecorder) UninstallServiceGroup(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UninstallServiceGroup", reflect.TypeOf((*MockClient)(nil).UninstallServiceGroup), arg0)
+}
+
+// UninstallTraceflowFlows mocks base method
+func (m *MockClient) UninstallTraceflowFlows(arg0 byte) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UninstallTraceflowFlows", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UninstallTraceflowFlows indicates an expected call of UninstallTraceflowFlows
+func (mr *MockClientMockRecorder) UninstallTraceflowFlows(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UninstallTraceflowFlows", reflect.TypeOf((*MockClient)(nil).UninstallTraceflowFlows), arg0)
 }
 
 // MockOFEntryOperations is a mock of OFEntryOperations interface

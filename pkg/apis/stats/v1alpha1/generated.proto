@@ -1,4 +1,4 @@
-// Copyright 2020 Antrea Authors
+// Copyright 2021 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,6 +31,9 @@ message AntreaClusterNetworkPolicyStats {
 
   // The traffic stats of the Antrea ClusterNetworkPolicy.
   optional TrafficStats trafficStats = 2;
+
+  // The traffic stats of the Antrea ClusterNetworkPolicy, from rule perspective.
+  repeated RuleTrafficStats ruleTrafficStats = 3;
 }
 
 // AntreaClusterNetworkPolicyStatsList is a list of AntreaClusterNetworkPolicyStats.
@@ -47,6 +50,9 @@ message AntreaNetworkPolicyStats {
 
   // The traffic stats of the Antrea NetworkPolicy.
   optional TrafficStats trafficStats = 2;
+
+  // The traffic stats of the Antrea NetworkPolicy, from rule perspective.
+  repeated RuleTrafficStats ruleTrafficStats = 3;
 }
 
 // AntreaNetworkPolicyStatsList is a list of AntreaNetworkPolicyStats.
@@ -71,6 +77,13 @@ message NetworkPolicyStatsList {
 
   // List of NetworkPolicyStats.
   repeated NetworkPolicyStats items = 2;
+}
+
+// RuleTrafficStats contains TrafficStats of single rule inside a NetworkPolicy.
+message RuleTrafficStats {
+  optional string name = 1;
+
+  optional TrafficStats trafficStats = 2;
 }
 
 // TrafficStats contains the traffic stats of a NetworkPolicy.

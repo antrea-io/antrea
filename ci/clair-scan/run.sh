@@ -12,6 +12,10 @@ else
     exit 1
 fi
 
+if [ -n "$1" ]; then
+    REPORTS_OUT_DIR=$(cd "$1" && pwd)
+fi
+
 THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 pushd "$THIS_DIR" > /dev/null
 
@@ -62,5 +66,10 @@ fi
 
 ./clair-scanner --clair=http://localhost:6060 --ip "$CLAIR_SCANNER_IP" -r "clair.$VERSION.json" "antrea/antrea-ubuntu:$VERSION" || test -f "clair.$VERSION.json"
 ./clair-scanner --clair=http://localhost:6060 --ip "$CLAIR_SCANNER_IP" -r "clair.latest.json" "antrea/antrea-ubuntu:latest" || test -f "clair.latest.json"
+
+if [ -n "$REPORTS_OUT_DIR" ]; then
+    echo "Copying Clair scan reports to $REPORTS_OUT_DIR"
+    cp "clair.$VERSION.json" "clair.latest.json" "$REPORTS_OUT_DIR"
+fi
 
 go run . --report "clair.$VERSION.json" --report-cmp "clair.latest.json"

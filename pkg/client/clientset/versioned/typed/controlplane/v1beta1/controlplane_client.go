@@ -1,4 +1,4 @@
-// Copyright 2020 Antrea Authors
+// Copyright 2021 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,7 +30,7 @@ type ControlplaneV1beta1Interface interface {
 	NodeStatsSummariesGetter
 }
 
-// ControlplaneV1beta1Client is used to interact with features provided by the controlplane.antrea.tanzu.vmware.com group.
+// ControlplaneV1beta1Client is used to interact with features provided by the controlplane.antrea.io group.
 type ControlplaneV1beta1Client struct {
 	restClient rest.Interface
 }

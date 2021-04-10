@@ -1,5 +1,7 @@
-ARG OVS_VERSION=2.14.0
+ARG OVS_VERSION
 FROM ubuntu:20.04 as cni-binaries
+
+ARG CNI_BINARIES_VERSION
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends wget ca-certificates
@@ -17,7 +19,7 @@ RUN set -eux; \
          *) pluginsArch=''; echo >&2; echo >&2 "unsupported architecture '$dpkgArch'"; echo >&2 ; exit 1 ;; \
     esac; \
     mkdir -p /opt/cni/bin; \
-    wget -q -O - https://github.com/containernetworking/plugins/releases/download/v0.8.7/cni-plugins-linux-${pluginsArch}-v0.8.7.tgz | tar xz -C /opt/cni/bin $CNI_PLUGINS
+    wget -q -O - https://github.com/containernetworking/plugins/releases/download/$CNI_BINARIES_VERSION/cni-plugins-linux-${pluginsArch}-$CNI_BINARIES_VERSION.tgz | tar xz -C /opt/cni/bin $CNI_PLUGINS
 
 
 FROM antrea/openvswitch:${OVS_VERSION}

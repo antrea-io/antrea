@@ -195,8 +195,8 @@ func TestInitialize(t *testing.T) {
 `,
 			"filter": `:ANTREA-FORWARD - [0:0]
 -A FORWARD -m comment --comment "Antrea: jump to Antrea forwarding rules" -j ANTREA-FORWARD
--A ANTREA-FORWARD -i antrea-gw0 -m comment --comment "Antrea: accept packets from local pods" -j ACCEPT
--A ANTREA-FORWARD -o antrea-gw0 -m comment --comment "Antrea: accept packets to local pods" -j ACCEPT
+-A ANTREA-FORWARD -i antrea-gw0 -m comment --comment "Antrea: accept packets from local Pods" -j ACCEPT
+-A ANTREA-FORWARD -o antrea-gw0 -m comment --comment "Antrea: accept packets to local Pods" -j ACCEPT
 `,
 			"mangle": `:ANTREA-MANGLE - [0:0]
 :ANTREA-OUTPUT - [0:0]
@@ -206,7 +206,7 @@ func TestInitialize(t *testing.T) {
 `,
 			"nat": `:ANTREA-POSTROUTING - [0:0]
 -A POSTROUTING -m comment --comment "Antrea: jump to Antrea postrouting rules" -j ANTREA-POSTROUTING
--A ANTREA-POSTROUTING -s 10.10.10.0/24 -m comment --comment "Antrea: masquerade pod to external packets" -m set ! --match-set ANTREA-POD-IP dst -j MASQUERADE
+-A ANTREA-POSTROUTING -s 10.10.10.0/24 -m comment --comment "Antrea: masquerade Pod to external packets" -m set ! --match-set ANTREA-POD-IP dst -j MASQUERADE
 `}
 
 		if tc.noSNAT {
@@ -252,11 +252,17 @@ func TestIpTablesSync(t *testing.T) {
 	select {
 	case <-inited: // Node network initialized
 	}
+
+	snatIP := net.ParseIP("1.1.1.1")
+	mark := uint32(1)
+	assert.NoError(t, routeClient.AddSNATRule(snatIP, mark))
+
 	tcs := []struct {
 		RuleSpec, Cmd, Table, Chain string
 	}{
 		{Table: "raw", Cmd: "-A", Chain: "OUTPUT", RuleSpec: "-m comment --comment \"Antrea: jump to Antrea output rules\" -j ANTREA-OUTPUT"},
-		{Table: "filter", Cmd: "-A", Chain: "ANTREA-FORWARD", RuleSpec: "-i antrea-gw0 -m comment --comment \"Antrea: accept packets from local pods\" -j ACCEPT"},
+		{Table: "filter", Cmd: "-A", Chain: "ANTREA-FORWARD", RuleSpec: "-i antrea-gw0 -m comment --comment \"Antrea: accept packets from local Pods\" -j ACCEPT"},
+		{Table: "nat", Cmd: "-A", Chain: "ANTREA-POSTROUTING", RuleSpec: fmt.Sprintf("! -o antrea-gw0 -m comment --comment \"Antrea: SNAT Pod to external packets\" -m mark --mark %#x/0xff -j SNAT --to-source %s", mark, snatIP)},
 	}
 	// we delete some rules, start the sync goroutine, wait for sync operation to restore them.
 	for _, tc := range tcs {
@@ -281,6 +287,41 @@ func TestIpTablesSync(t *testing.T) {
 	close(stopCh)
 }
 
+func TestAddAndDeleteSNATRule(t *testing.T) {
+	skipIfNotInContainer(t)
+	gwLink := createDummyGW(t)
+	defer netlink.LinkDel(gwLink)
+
+	routeClient, err := route.NewClient(serviceCIDR, &config.NetworkConfig{TrafficEncapMode: config.TrafficEncapModeEncap}, false)
+	assert.Nil(t, err)
+
+	inited := make(chan struct{})
+	err = routeClient.Initialize(nodeConfig, func() {
+		close(inited)
+	})
+	assert.NoError(t, err)
+	select {
+	case <-inited: // Node network initialized
+	}
+
+	snatIP := net.ParseIP("1.1.1.1")
+	mark := uint32(1)
+	expectedRule := fmt.Sprintf("! -o antrea-gw0 -m comment --comment \"Antrea: SNAT Pod to external packets\" -m mark --mark %#x/0xff -j SNAT --to-source %s", mark, snatIP)
+
+	assert.NoError(t, routeClient.AddSNATRule(snatIP, mark))
+	saveCmd := fmt.Sprintf("iptables-save -t nat | grep ANTREA-POSTROUTING")
+	// #nosec G204: ignore in test code
+	actualData, err := exec.Command("bash", "-c", saveCmd).Output()
+	assert.NoError(t, err, "error executing iptables-save cmd")
+	assert.Contains(t, string(actualData), expectedRule)
+
+	assert.NoError(t, routeClient.DeleteSNATRule(mark))
+	// #nosec G204: ignore in test code
+	actualData, err = exec.Command("bash", "-c", saveCmd).Output()
+	assert.NoError(t, err, "error executing iptables-save cmd")
+	assert.NotContains(t, string(actualData), expectedRule)
+}
+
 func TestAddAndDeleteRoutes(t *testing.T) {
 	skipIfNotInContainer(t)
 
@@ -290,16 +331,17 @@ func TestAddAndDeleteRoutes(t *testing.T) {
 	tcs := []struct {
 		// variations
 		mode     config.TrafficEncapModeType
+		nodeName string
 		peerCIDR string
 		peerIP   net.IP
 		// expectations
 		uplink netlink.Link // indicates outbound of the route.
 	}{
-		{mode: config.TrafficEncapModeEncap, peerCIDR: "10.10.20.0/24", peerIP: localPeerIP, uplink: gwLink},
-		{mode: config.TrafficEncapModeNoEncap, peerCIDR: "10.10.30.0/24", peerIP: localPeerIP, uplink: nodeLink},
-		{mode: config.TrafficEncapModeNoEncap, peerCIDR: "10.10.40.0/24", peerIP: remotePeerIP, uplink: nil},
-		{mode: config.TrafficEncapModeHybrid, peerCIDR: "10.10.50.0/24", peerIP: localPeerIP, uplink: nodeLink},
-		{mode: config.TrafficEncapModeHybrid, peerCIDR: "10.10.60.0/24", peerIP: remotePeerIP, uplink: gwLink},
+		{mode: config.TrafficEncapModeEncap, nodeName: "node0", peerCIDR: "10.10.20.0/24", peerIP: localPeerIP, uplink: gwLink},
+		{mode: config.TrafficEncapModeNoEncap, nodeName: "node1", peerCIDR: "10.10.30.0/24", peerIP: localPeerIP, uplink: nodeLink},
+		{mode: config.TrafficEncapModeNoEncap, nodeName: "node2", peerCIDR: "10.10.40.0/24", peerIP: remotePeerIP, uplink: nil},
+		{mode: config.TrafficEncapModeHybrid, nodeName: "node3", peerCIDR: "10.10.50.0/24", peerIP: localPeerIP, uplink: nodeLink},
+		{mode: config.TrafficEncapModeHybrid, nodeName: "node4", peerCIDR: "10.10.60.0/24", peerIP: remotePeerIP, uplink: gwLink},
 	}
 
 	for _, tc := range tcs {
@@ -311,7 +353,7 @@ func TestAddAndDeleteRoutes(t *testing.T) {
 
 		_, peerCIDR, _ := net.ParseCIDR(tc.peerCIDR)
 		nhCIDRIP := ip.NextIP(peerCIDR.IP)
-		assert.NoError(t, routeClient.AddRoutes(peerCIDR, tc.peerIP, nhCIDRIP), "adding routes failed")
+		assert.NoError(t, routeClient.AddRoutes(peerCIDR, tc.nodeName, tc.peerIP, nhCIDRIP), "adding routes failed")
 
 		expRouteStr := ""
 		if tc.uplink != nil {
@@ -358,6 +400,7 @@ func TestReconcile(t *testing.T) {
 	tcs := []struct {
 		// variations
 		mode             config.TrafficEncapModeType
+		nodeName         string
 		addedRoutes      []peer
 		desiredPeerCIDRs []string
 		desiredNodeIPs   []string
@@ -365,7 +408,8 @@ func TestReconcile(t *testing.T) {
 		expRoutes map[string]netlink.Link
 	}{
 		{
-			mode: config.TrafficEncapModeEncap,
+			mode:     config.TrafficEncapModeEncap,
+			nodeName: "nodeEncap",
 			addedRoutes: []peer{
 				{peerCIDR: "10.10.20.0/24", peerIP: remotePeerIP},
 				{peerCIDR: "10.10.30.0/24", peerIP: ip.NextIP((remotePeerIP))},
@@ -375,7 +419,8 @@ func TestReconcile(t *testing.T) {
 			expRoutes:        map[string]netlink.Link{"10.10.20.0/24": gwLink, "10.10.30.0/24": nil},
 		},
 		{
-			mode: config.TrafficEncapModeNoEncap,
+			mode:     config.TrafficEncapModeNoEncap,
+			nodeName: "nodeNoEncap",
 			addedRoutes: []peer{
 				{peerCIDR: "10.10.20.0/24", peerIP: localPeerIP},
 				{peerCIDR: "10.10.30.0/24", peerIP: ip.NextIP((localPeerIP))},
@@ -385,7 +430,8 @@ func TestReconcile(t *testing.T) {
 			expRoutes:        map[string]netlink.Link{"10.10.20.0/24": nodeLink, "10.10.30.0/24": nil},
 		},
 		{
-			mode: config.TrafficEncapModeHybrid,
+			mode:     config.TrafficEncapModeHybrid,
+			nodeName: "nodeHybrid",
 			addedRoutes: []peer{
 				{peerCIDR: "10.10.20.0/24", peerIP: localPeerIP},
 				{peerCIDR: "10.10.30.0/24", peerIP: ip.NextIP((localPeerIP))},
@@ -408,7 +454,7 @@ func TestReconcile(t *testing.T) {
 		for _, route := range tc.addedRoutes {
 			_, peerNet, _ := net.ParseCIDR(route.peerCIDR)
 			peerGwIP := ip.NextIP(peerNet.IP)
-			assert.NoError(t, routeClient.AddRoutes(peerNet, route.peerIP, peerGwIP), "adding routes failed")
+			assert.NoError(t, routeClient.AddRoutes(peerNet, tc.nodeName, route.peerIP, peerGwIP), "adding routes failed")
 		}
 
 		assert.NoError(t, routeClient.Reconcile(tc.desiredPeerCIDRs), "reconcile failed")
@@ -514,18 +560,19 @@ func TestIPv6RoutesAndNeighbors(t *testing.T) {
 
 	tcs := []struct {
 		// variations
+		nodeName string
 		peerCIDR string
 		// expectations
 		uplink netlink.Link
 	}{
-		{peerCIDR: "10.10.20.0/24", uplink: gwLink},
-		{peerCIDR: "fd74:ca9b:172:18::/64", uplink: gwLink},
+		{peerCIDR: "10.10.20.0/24", nodeName: "node0", uplink: gwLink},
+		{peerCIDR: "fd74:ca9b:172:18::/64", nodeName: "node1", uplink: gwLink},
 	}
 
 	for _, tc := range tcs {
 		_, peerCIDR, _ := net.ParseCIDR(tc.peerCIDR)
 		nhCIDRIP := ip.NextIP(peerCIDR.IP)
-		assert.NoError(t, routeClient.AddRoutes(peerCIDR, localPeerIP, nhCIDRIP), "adding routes failed")
+		assert.NoError(t, routeClient.AddRoutes(peerCIDR, tc.nodeName, localPeerIP, nhCIDRIP), "adding routes failed")
 
 		link := tc.uplink
 		nhIP := nhCIDRIP
