@@ -33,8 +33,8 @@ virtualbox`.
 
 You can install all the dependencies with [brew](https://brew.sh/):
 
-* `brew cask install virtualbox`
-* `brew cask install vagrant`
+* `brew install --cask virtualbox`
+* `brew install --cask vagrant`
 * `brew install ansible`
 
 If an action is required on your part, `brew` will let you know in its log
