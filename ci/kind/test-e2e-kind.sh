@@ -105,7 +105,10 @@ fi
 
 COMMON_IMAGES_LIST=("gcr.io/kubernetes-e2e-test-images/agnhost:2.8" "projects.registry.vmware.com/library/busybox" "projects.registry.vmware.com/antrea/nginx" "projects.registry.vmware.com/antrea/perftool" "projects.registry.vmware.com/antrea/ipfix-collector:v0.4.7")
 for image in "${COMMON_IMAGES_LIST[@]}"; do
-    docker pull $image
+    for i in `seq 3`; do
+        docker pull $image && break
+        sleep 1
+    done
 done
 if $coverage; then
     manifest_args="$manifest_args --coverage"
