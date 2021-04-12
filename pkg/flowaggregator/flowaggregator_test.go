@@ -22,6 +22,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
+	ipfixintermediate "github.com/vmware/go-ipfix/pkg/intermediate"
 	ipfixregistry "github.com/vmware/go-ipfix/pkg/registry"
 
 	ipfixtest "github.com/vmware-tanzu/antrea/pkg/ipfix/testing"
@@ -36,6 +37,71 @@ const (
 
 // TODO: We will add another test for sendDataRecord when we support adding multiple records to single set.
 // Currently, we are supporting adding only one record from one flow key to the set.
+
+func TestFlowAggregator_sendFlowKeyRecord(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockIPFIXExpProc := ipfixtest.NewMockIPFIXExportingProcess(ctrl)
+	mockIPFIXRegistry := ipfixtest.NewMockIPFIXRegistry(ctrl)
+	mockDataSet := ipfixtest.NewMockIPFIXSet(ctrl)
+	mockRecord := ipfixtest.NewMockIPFIXRecord(ctrl)
+	mockAggregationProcess := ipfixtest.NewMockIPFIXAggregationProcess(ctrl)
+
+	fa := &flowAggregator{
+		"",
+		"",
+		"tcp",
+		nil,
+		mockAggregationProcess,
+		testExportInterval,
+		mockIPFIXExpProc,
+		testTemplateIDv4,
+		testTemplateIDv6,
+		mockIPFIXRegistry,
+		mockDataSet,
+		"",
+		nil,
+		testObservationDomainID,
+	}
+
+	key1 := ipfixintermediate.FlowKey{"10.0.0.1", "10.0.0.2", 6, 1234, 5678}
+	key2 := ipfixintermediate.FlowKey{"2001:0:3238:dfe1:63::fefb", "2001:0:3238:dfe1:63::fefc", 6, 1234, 5678}
+	record1 := ipfixintermediate.AggregationFlowRecord{
+		mockRecord,
+		true,
+		true,
+	}
+	record2 := ipfixintermediate.AggregationFlowRecord{
+		mockRecord,
+		false,
+		true,
+	}
+
+	for key_idx, key := range []ipfixintermediate.FlowKey{key1, key2} {
+		for record_idx, record := range []ipfixintermediate.AggregationFlowRecord{record1, record2} {
+			if record_idx == 0 {
+				templateID := fa.templateIDv4
+				if key_idx == 1 {
+					templateID = fa.templateIDv6
+				}
+				mockDataSet.EXPECT().ResetSet()
+				mockDataSet.EXPECT().PrepareSet(ipfixentities.Data, templateID).Return(nil)
+				elementList := make([]*ipfixentities.InfoElementWithValue, 0)
+				mockRecord.EXPECT().GetOrderedElementList().Return(elementList)
+				mockDataSet.EXPECT().AddRecord(elementList, templateID).Return(nil)
+				mockIPFIXExpProc.EXPECT().SendSet(mockDataSet).Return(0, nil)
+				mockAggregationProcess.EXPECT().DeleteFlowKeyFromMapWithoutLock(key)
+
+				err := fa.sendFlowKeyRecord(key, record)
+				assert.NoError(t, err, "Error in sending flow key record: %v", err)
+			} else {
+				err := fa.sendFlowKeyRecord(key, record)
+				assert.NoError(t, err, "Error in sending flow key record: %v", err)
+			}
+		}
+	}
+}
 
 func TestFlowAggregator_sendTemplateSet(t *testing.T) {
 	ctrl := gomock.NewController(t)
