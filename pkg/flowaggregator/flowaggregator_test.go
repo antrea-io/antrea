@@ -35,7 +35,6 @@ const (
 	testObservationDomainID = 0xabcd
 )
 
-// TODO: We will add another test for sendDataRecord when we support adding multiple records to single set.
 // Currently, we are supporting adding only one record from one flow key to the set.
 
 func TestFlowAggregator_sendFlowKeyRecord(t *testing.T) {
@@ -67,16 +66,8 @@ func TestFlowAggregator_sendFlowKeyRecord(t *testing.T) {
 
 	key1 := ipfixintermediate.FlowKey{"10.0.0.1", "10.0.0.2", 6, 1234, 5678}
 	key2 := ipfixintermediate.FlowKey{"2001:0:3238:dfe1:63::fefb", "2001:0:3238:dfe1:63::fefc", 6, 1234, 5678}
-	record1 := ipfixintermediate.AggregationFlowRecord{
-		mockRecord,
-		true,
-		true,
-	}
-	record2 := ipfixintermediate.AggregationFlowRecord{
-		mockRecord,
-		false,
-		true,
-	}
+	record1 := ipfixintermediate.AggregationFlowRecord{mockRecord, true, true}
+	record2 := ipfixintermediate.AggregationFlowRecord{mockRecord, false, true}
 
 	for key_idx, key := range []ipfixintermediate.FlowKey{key1, key2} {
 		for record_idx, record := range []ipfixintermediate.AggregationFlowRecord{record1, record2} {
@@ -94,10 +85,10 @@ func TestFlowAggregator_sendFlowKeyRecord(t *testing.T) {
 				mockAggregationProcess.EXPECT().DeleteFlowKeyFromMapWithoutLock(key)
 
 				err := fa.sendFlowKeyRecord(key, record)
-				assert.NoError(t, err, "Error in sending flow key record: %v", err)
+				assert.NoError(t, err, "Error in sending flow key record: %v, key: %v, record: %v", err, key, record)
 			} else {
 				err := fa.sendFlowKeyRecord(key, record)
-				assert.NoError(t, err, "Error in sending flow key record: %v", err)
+				assert.NoError(t, err, "Error in sending flow key record: %v, key: %v, record: %v", err, key, record)
 			}
 		}
 	}
