@@ -1016,7 +1016,7 @@ func prepareGatewayFlows(gwIPs []net.IP, gwMAC net.HardwareAddr, vMAC net.Hardwa
 			[]*ofTestUtils.ExpectFlow{
 				{
 					MatchStr: fmt.Sprintf("priority=200,dl_dst=%s", gwMAC.String()),
-					ActStr:   fmt.Sprintf("load:0x%x->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],goto_table:105", config1.HostGatewayOFPort),
+					ActStr:   fmt.Sprintf("load:0x%x->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],goto_table:101", config1.HostGatewayOFPort),
 				},
 			},
 		},
@@ -1097,7 +1097,7 @@ func prepareTunnelFlows(tunnelPort uint32, vMAC net.HardwareAddr) []expectTableF
 			[]*ofTestUtils.ExpectFlow{
 				{
 					MatchStr: fmt.Sprintf("priority=200,dl_dst=%s", vMAC.String()),
-					ActStr:   fmt.Sprintf("load:0x%x->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],goto_table:105", config1.DefaultTunOFPort),
+					ActStr:   fmt.Sprintf("load:0x%x->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],goto_table:101", config1.DefaultTunOFPort),
 				},
 			},
 		},
@@ -1236,7 +1236,7 @@ func prepareDefaultFlows(config *testConfig) []expectTableFlows {
 		},
 		{
 			uint8(80),
-			[]*ofTestUtils.ExpectFlow{{MatchStr: "priority=0", ActStr: "goto_table:105"}},
+			[]*ofTestUtils.ExpectFlow{{MatchStr: "priority=0", ActStr: "goto_table:101"}},
 		},
 		{
 			uint8(90),
