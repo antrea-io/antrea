@@ -2912,6 +2912,8 @@ spec:
       component: antrea-agent
   template:
     metadata:
+      annotations:
+        kubectl.kubernetes.io/default-container: antrea-agent
       labels:
         app: antrea
         component: antrea-agent
