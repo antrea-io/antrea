@@ -74,3 +74,21 @@ func comparePodName(k, v string, t *testing.T) {
 		t.Errorf("Failed to retrieve pod name, want: %s, get: %s", v, podName)
 	}
 }
+
+func TestGetAntreaConfigMapName(t *testing.T) {
+	testTable := map[string]string{
+		"antrea-config-asjqowieut": "antrea-config-asjqowieut",
+		"antrea-config-x":          "antrea-config-x",
+	}
+
+	for k, v := range testTable {
+		if k != "" {
+			_ = os.Setenv(antreaConfigMapEnvKey, k)
+			defer os.Unsetenv(antreaConfigMapEnvKey)
+		}
+		configMapName := GetAntreaConfigMapName()
+		if configMapName != v {
+			t.Errorf("Failed to retrieve antrea configmap name, want: %s, get: %s", v, configMapName)
+		}
+	}
+}

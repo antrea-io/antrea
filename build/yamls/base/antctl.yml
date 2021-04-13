@@ -63,6 +63,7 @@ rules:
       - /ovsflows
       - /ovstracing
       - /podinterfaces
+      - /featuregates
     verbs:
       - get
 ---

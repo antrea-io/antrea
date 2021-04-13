@@ -79,7 +79,7 @@ var (
 	// defaultAntreaFeatureGates consists of all known Antrea-specific feature keys.
 	// To add a new feature, define a key for it above and add it here. The features will be
 	// available throughout Antrea binaries.
-	defaultAntreaFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
+	DefaultAntreaFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
 		AntreaPolicy:       {Default: true, PreRelease: featuregate.Beta},
 		AntreaProxy:        {Default: true, PreRelease: featuregate.Beta},
 		Egress:             {Default: false, PreRelease: featuregate.Alpha},
@@ -107,12 +107,12 @@ var (
 )
 
 func init() {
-	runtime.Must(DefaultMutableFeatureGate.Add(defaultAntreaFeatureGates))
+	runtime.Must(DefaultMutableFeatureGate.Add(DefaultAntreaFeatureGates))
 }
 
 // SupportedOnWindows checks whether a feature is supported on a Windows Node.
 func SupportedOnWindows(feature featuregate.Feature) bool {
-	_, exists := defaultAntreaFeatureGates[feature]
+	_, exists := DefaultAntreaFeatureGates[feature]
 	if !exists {
 		return false
 	}

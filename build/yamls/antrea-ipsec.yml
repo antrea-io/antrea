@@ -3054,6 +3054,7 @@ rules:
   - /ovsflows
   - /ovstracing
   - /podinterfaces
+  - /featuregates
   verbs:
   - get
 ---
@@ -3229,6 +3230,7 @@ rules:
   - pods
   - namespaces
   - services
+  - configmaps
   verbs:
   - get
   - watch
@@ -3844,6 +3846,8 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: spec.serviceAccountName
+        - name: ANTREA_CONFIG_MAP_NAME
+          value: antrea-config-h5kbhh859d
         image: projects.registry.vmware.com/antrea/antrea-ubuntu:latest
         imagePullPolicy: IfNotPresent
         livenessProbe:

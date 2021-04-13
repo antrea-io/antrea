@@ -37,8 +37,12 @@ type controllerQuerier struct {
 	apiPort                  int
 }
 
-func NewControllerQuerier(networkPolicyInfoQuerier querier.ControllerNetworkPolicyInfoQuerier, apiPort int) *controllerQuerier {
-	return &controllerQuerier{networkPolicyInfoQuerier: networkPolicyInfoQuerier, apiPort: apiPort}
+func NewControllerQuerier(networkPolicyInfoQuerier querier.ControllerNetworkPolicyInfoQuerier,
+	apiPort int) *controllerQuerier {
+	return &controllerQuerier{
+		networkPolicyInfoQuerier: networkPolicyInfoQuerier,
+		apiPort:                  apiPort,
+	}
 }
 
 // getNetworkPolicyInfoQuerier gets current network policy info querier.

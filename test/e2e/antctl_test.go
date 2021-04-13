@@ -63,7 +63,7 @@ func antctlCoverageArgs(antctlPath string) []string {
 	return []string{antctlPath, "-test.run=TestBincoverRunMain", fmt.Sprintf("-test.coverprofile=antctl-%s.out", timeStamp)}
 }
 
-// TestAntctlAgentLocalAccess ensures antctl is accessible in a agent Pod.
+// TestAntctlAgentLocalAccess ensures antctl is accessible in an agent Pod.
 func TestAntctlAgentLocalAccess(t *testing.T) {
 	skipIfHasWindowsNodes(t)
 

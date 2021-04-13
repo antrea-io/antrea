@@ -210,6 +210,8 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: spec.serviceAccountName
+            - name: ANTREA_CONFIG_MAP_NAME
+              value: "$(ANTREA_CONFIG_MAP_NAME)"
           ports:
             - containerPort: 10349
               name: api
