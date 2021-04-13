@@ -138,6 +138,9 @@ spec:
           subPath: flow-aggregator.conf
         - mountPath: /var/log/antrea/flow-aggregator
           name: host-var-log-antrea-flow-aggregator
+      nodeSelector:
+        kubernetes.io/os: linux
+        kubernetes.io/arch: amd64
       serviceAccountName: flow-aggregator
       volumes:
       - name: flow-aggregator-config
