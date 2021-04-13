@@ -1,4 +1,4 @@
-// Copyright 2020 Antrea Authors
+// Copyright 2021 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -35,7 +35,7 @@ const (
 	testObservationDomainID = 0xabcd
 )
 
-// Currently, we are supporting adding only one record from one flow key to the set.
+// TODO: Currently, we are supporting adding only one record from one flow key to the set. We will improve TestFlowAggregator_sendFlowKeyRecord when we support adding multiple records to single set.
 
 func TestFlowAggregator_sendFlowKeyRecord(t *testing.T) {
 	ctrl := gomock.NewController(t)
@@ -64,16 +64,54 @@ func TestFlowAggregator_sendFlowKeyRecord(t *testing.T) {
 		testObservationDomainID,
 	}
 
-	key1 := ipfixintermediate.FlowKey{"10.0.0.1", "10.0.0.2", 6, 1234, 5678}
-	key2 := ipfixintermediate.FlowKey{"2001:0:3238:dfe1:63::fefb", "2001:0:3238:dfe1:63::fefc", 6, 1234, 5678}
-	record1 := ipfixintermediate.AggregationFlowRecord{mockRecord, true, true}
-	record2 := ipfixintermediate.AggregationFlowRecord{mockRecord, false, true}
+	key_testcases := []struct {
+		key    ipfixintermediate.FlowKey
+		isIPV6 bool
+	}{
+		{
+			ipfixintermediate.FlowKey{
+				SourceAddress:      "10.0.0.1",
+				DestinationAddress: "10.0.0.2",
+				Protocol:           6,
+				SourcePort:         1234,
+				DestinationPort:    5678,
+			},
+			false,
+		},
+		{
+			ipfixintermediate.FlowKey{
+				SourceAddress:      "2001:0:3238:dfe1:63::fefb",
+				DestinationAddress: "2001:0:3238:dfe1:63::fefc",
+				Protocol:           6,
+				SourcePort:         1234,
+				DestinationPort:    5678,
+			},
+			true,
+		},
+	}
 
-	for key_idx, key := range []ipfixintermediate.FlowKey{key1, key2} {
-		for record_idx, record := range []ipfixintermediate.AggregationFlowRecord{record1, record2} {
-			if record_idx == 0 {
+	record_testcases := []struct {
+		Record      ipfixentities.Record
+		ReadyToSend bool
+		IsActive    bool
+	}{
+		{
+			Record:      mockRecord,
+			ReadyToSend: true,
+			IsActive:    true,
+		},
+		{
+			Record:      mockRecord,
+			ReadyToSend: false,
+			IsActive:    true,
+		},
+	}
+
+	for _, key_tc := range key_testcases {
+		for _, record := range record_testcases {
+			if record.ReadyToSend {
 				templateID := fa.templateIDv4
-				if key_idx == 1 {
+				if key_tc.isIPV6 {
 					templateID = fa.templateIDv6
 				}
 				mockDataSet.EXPECT().ResetSet()
@@ -82,13 +120,13 @@ func TestFlowAggregator_sendFlowKeyRecord(t *testing.T) {
 				mockRecord.EXPECT().GetOrderedElementList().Return(elementList)
 				mockDataSet.EXPECT().AddRecord(elementList, templateID).Return(nil)
 				mockIPFIXExpProc.EXPECT().SendSet(mockDataSet).Return(0, nil)
-				mockAggregationProcess.EXPECT().DeleteFlowKeyFromMapWithoutLock(key)
+				mockAggregationProcess.EXPECT().DeleteFlowKeyFromMapWithoutLock(key_tc.key)
 
-				err := fa.sendFlowKeyRecord(key, record)
-				assert.NoError(t, err, "Error in sending flow key record: %v, key: %v, record: %v", err, key, record)
+				err := fa.sendFlowKeyRecord(key_tc.key, record)
+				assert.NoError(t, err, "Error in sending flow key record: %v, key: %v, record: %v", err, key_tc.key, record)
 			} else {
-				err := fa.sendFlowKeyRecord(key, record)
-				assert.NoError(t, err, "Error in sending flow key record: %v, key: %v, record: %v", err, key, record)
+				err := fa.sendFlowKeyRecord(key_tc.key, record)
+				assert.NoError(t, err, "Error in sending flow key record: %v, key: %v, record: %v", err, key_tc.key, record)
 			}
 		}
 	}

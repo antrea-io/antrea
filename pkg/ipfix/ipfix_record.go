@@ -1,4 +1,4 @@
-// Copyright 2020 Antrea Authors
+// Copyright 2021 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -36,6 +36,10 @@ type IPFIXRecord interface {
 
 type ipfixRecord struct {
 	record ipfixentities.Record
+}
+
+func NewDataRecord(id uint16) *ipfixRecord {
+	return &ipfixRecord{record: ipfixentities.NewDataRecord(id)}
 }
 
 func (r *ipfixRecord) PrepareRecord() (uint16, error) {
