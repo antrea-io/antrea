@@ -106,7 +106,8 @@ func TestSyncStatusForNewPolicy(t *testing.T) {
 			go statusController.Run(stopCh)
 
 			ruleCache.AddNetworkPolicy(tt.policy)
-			rules := ruleCache.getRulesByNetworkPolicy(string(tt.policy.UID))
+			ruleCache.AddAppliedToGroup(newAppliedToGroup("appliedToGroup1", []v1beta2.GroupMember{*newAppliedToGroupMember("pod1", "ns1")}))
+			rules := ruleCache.getEffectiveRulesByNetworkPolicy(string(tt.policy.UID))
 			for i, rule := range rules {
 				// Only make specified number of rules realized.
 				if i >= tt.realizedRules {
@@ -127,10 +128,11 @@ func TestSyncStatusUpForUpdatedPolicy(t *testing.T) {
 	defer close(stopCh)
 	go statusController.Run(stopCh)
 
+	ruleCache.AddAppliedToGroup(newAppliedToGroup("appliedToGroup1", []v1beta2.GroupMember{*newAppliedToGroupMember("pod1", "ns1")}))
 	policy := newNetworkPolicy("policy1", "uid1", []string{"addressGroup1"}, []string{}, []string{"appliedToGroup1"}, nil)
 	policy.Generation = 1
 	ruleCache.AddNetworkPolicy(policy)
-	rule1 := ruleCache.getRulesByNetworkPolicy(string(policy.UID))[0]
+	rule1 := ruleCache.getEffectiveRulesByNetworkPolicy(string(policy.UID))[0]
 	statusController.SetRuleRealization(rule1.ID, policy.UID)
 
 	matchGeneration := func(generation int64) error {
@@ -150,7 +152,7 @@ func TestSyncStatusUpForUpdatedPolicy(t *testing.T) {
 	ruleCache.UpdateNetworkPolicy(policy)
 	assert.Error(t, matchGeneration(policy.Generation), "The generation should not be updated to %v but was updated", policy.Generation)
 
-	rules := ruleCache.getRulesByNetworkPolicy(string(policy.UID))
+	rules := ruleCache.getEffectiveRulesByNetworkPolicy(string(policy.UID))
 	for _, rule := range rules {
 		// Only call SetRuleRealization for new rule.
 		if rule.ID != rule1.ID {
@@ -185,7 +187,7 @@ func BenchmarkSyncHandler(b *testing.B) {
 		policy.Rules = append(policy.Rules, newPolicyRule(v1beta2.DirectionOut, nil, []string{fmt.Sprintf("addressGroup%d", i)}, nil))
 	}
 	ruleCache.AddNetworkPolicy(policy)
-	rules := ruleCache.getRulesByNetworkPolicy(string(policy.UID))
+	rules := ruleCache.getEffectiveRulesByNetworkPolicy(string(policy.UID))
 	for _, rule := range rules {
 		statusController.SetRuleRealization(rule.ID, policy.UID)
 	}
