@@ -46,6 +46,8 @@ Generate a YAML manifest for Antrea using Kustomize and print it to stdout.
 
 In 'release' mode, environment variables IMG_NAME and IMG_TAG must be set.
 
+In 'dev' mode, environment variable IMG_NAME can be set to use a custom image.
+
 This tool uses kustomize (https://github.com/kubernetes-sigs/kustomize) to generate manifests for
 Antrea. You can set the KUSTOMIZE environment variable to the path of the kustomize binary you want
 us to use. Otherwise we will download the appropriate version of the kustomize binary and use
@@ -421,11 +423,16 @@ $KUSTOMIZE edit add base $BASE
 find ../../patches/$MODE -name \*.yml -exec cp {} . \;
 
 if [ "$MODE" == "dev" ]; then
-    if $COVERAGE; then
-        $KUSTOMIZE edit set image antrea=antrea/antrea-ubuntu-coverage:latest
-    else
-        $KUSTOMIZE edit set image antrea=projects.registry.vmware.com/antrea/antrea-ubuntu:latest
+    if [[ -z "$IMG_NAME" ]]; then
+        if $COVERAGE; then
+            IMG_NAME="antrea/antrea-ubuntu-coverage:latest"
+        else
+            IMG_NAME="projects.registry.vmware.com/antrea/antrea-ubuntu:latest"
+        fi
     fi
+
+    $KUSTOMIZE edit set image antrea=$IMG_NAME
+
     $KUSTOMIZE edit add patch --path agentImagePullPolicy.yml
     $KUSTOMIZE edit add patch --path controllerImagePullPolicy.yml
     if $VERBOSE_LOG; then
