@@ -23,11 +23,16 @@ K8S_SERVICE_NETWORK_CIDR = (MODE == "v4") ? K8S_SERVICE_NETWORK_V4_CIDR : K8S_SE
 NODE_NETWORK_V4_PREFIX = "192.168.77."
 NODE_NETWORK_V6_PREFIX = "fd3b:fcf5:3e92:d732::"
 
+MEMORY = 2048
+if ENV['K8S_NODE_LARGE'] == "true"
+  MEMORY = 4096
+end
+
 Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
   config.vm.box = "ubuntu/focal64"
 
   config.vm.provider "virtualbox" do |v|
-    v.memory = 2048
+    v.memory = MEMORY
     # 2 CPUS required to initialize K8s cluster with "kubeadm init"
     v.cpus = 2
   end
