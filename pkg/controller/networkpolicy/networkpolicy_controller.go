@@ -1211,8 +1211,9 @@ func (n *NetworkPolicyController) syncAppliedToGroup(key string) error {
 	appliedToGroup := appliedToGroupObj.(*antreatypes.AppliedToGroup)
 	pods, externalEntities := n.getAppliedToWorkloads(appliedToGroup)
 	for _, pod := range pods {
-		if pod.Spec.NodeName == "" {
+		if pod.Spec.NodeName == "" || pod.Spec.HostNetwork == true {
 			// No need to process Pod when it's not scheduled.
+			// HostNetwork Pods will not be applied to by policies.
 			continue
 		}
 		scheduledPodNum++
