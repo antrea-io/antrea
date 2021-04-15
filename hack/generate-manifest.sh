@@ -42,6 +42,7 @@ Generate a YAML manifest for Antrea using Kustomize and print it to stdout.
         --coverage                    Generates a manifest which supports measuring code coverage of Antrea binaries.
         --simulator                   Generates a manifest with antrea-agent simulator included
         --custom-adm-controller       Generates a manifest with custom Antrea admission controller to validate/mutate resources.
+        --hw-offload                  Generates a manifest with hw-offload enabled in the antrea-ovs container.
         --help, -h                    Print this message and exit
 
 In 'release' mode, environment variables IMG_NAME and IMG_TAG must be set.
@@ -80,6 +81,7 @@ COVERAGE=false
 K8S_115=false
 SIMULATOR=false
 CUSTOM_ADM_CONTROLLER=false
+HW_OFFLOAD=false
 
 while [[ $# -gt 0 ]]
 do
@@ -157,6 +159,10 @@ case $key in
     ;;
     --custom-adm-controller)
     CUSTOM_ADM_CONTROLLER=true
+    shift
+    ;;
+    --hw-offload)
+    HW_OFFLOAD=true
     shift
     ;;
     -h|--help)
@@ -413,6 +419,16 @@ if $CUSTOM_ADM_CONTROLLER; then
     $KUSTOMIZE edit add base $BASE
     $KUSTOMIZE edit add resource webhook.yml
     BASE=../admissioncontroller
+    cd ..
+fi
+
+if $HW_OFFLOAD; then
+    mkdir hwoffload && cd hwoffload
+    cp ../../patches/hwoffload/hwOffload.yml .
+    touch kustomization.yml
+    $KUSTOMIZE edit add base $BASE
+    $KUSTOMIZE edit add patch --path hwOffload.yml
+    BASE=../hwoffload
     cd ..
 fi
 
