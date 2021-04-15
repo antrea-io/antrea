@@ -463,9 +463,9 @@ func (c *Controller) syncRule(key string) error {
 		klog.V(4).Infof("Finished syncing rule %q. (%v)", key, time.Since(startTime))
 	}()
 
-	rule, exists, completed := c.ruleCache.GetCompletedRule(key)
-	if !exists {
-		klog.V(2).Infof("Rule %v had been deleted, removing its flows", key)
+	rule, effective, realizable := c.ruleCache.GetCompletedRule(key)
+	if !effective {
+		klog.V(2).Infof("Rule %v was not effective, removing its flows", key)
 		if err := c.reconciler.Forget(key); err != nil {
 			return err
 		}
@@ -476,10 +476,10 @@ func (c *Controller) syncRule(key string) error {
 		}
 		return nil
 	}
-	// If the rule is not complete, we can simply skip it as it will be marked as dirty
+	// If the rule is not realizable, we can simply skip it as it will be marked as dirty
 	// and queued again when we receive the missing group it missed.
-	if !completed {
-		klog.V(2).Infof("Rule %v was not complete, skipping", key)
+	if !realizable {
+		klog.V(2).Infof("Rule %v was not realizable, skipping", key)
 		return nil
 	}
 	if err := c.reconciler.Reconcile(rule); err != nil {
@@ -502,9 +502,13 @@ func (c *Controller) syncRules(keys []string) error {
 
 	var allRules []*CompletedRule
 	for _, key := range keys {
-		rule, exists, completed := c.ruleCache.GetCompletedRule(key)
-		if !exists || !completed {
-			klog.Errorf("Rule %s is not complete or does not exist in cache", key)
+		rule, effective, realizable := c.ruleCache.GetCompletedRule(key)
+		// It's normal that a rule is not effective on this Node but abnormal that it is not realizable after watchers
+		// complete full sync.
+		if !effective {
+			klog.Infof("Rule %s is not effective on this Node", key)
+		} else if !realizable {
+			klog.Errorf("Rule %s is effective but not realizable", key)
 		} else {
 			allRules = append(allRules, rule)
 		}
