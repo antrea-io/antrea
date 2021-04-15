@@ -42,9 +42,12 @@ Generate a YAML manifest for Antrea using Kustomize and print it to stdout.
         --coverage                    Generates a manifest which supports measuring code coverage of Antrea binaries.
         --simulator                   Generates a manifest with antrea-agent simulator included
         --custom-adm-controller       Generates a manifest with custom Antrea admission controller to validate/mutate resources.
+        --hw-offload                  Generates a manifest with hw-offload enabled in the antrea-ovs container.
         --help, -h                    Print this message and exit
 
 In 'release' mode, environment variables IMG_NAME and IMG_TAG must be set.
+
+In 'dev' mode, environment variable IMG_NAME can be set to use a custom image.
 
 This tool uses kustomize (https://github.com/kubernetes-sigs/kustomize) to generate manifests for
 Antrea. You can set the KUSTOMIZE environment variable to the path of the kustomize binary you want
@@ -78,6 +81,7 @@ COVERAGE=false
 K8S_115=false
 SIMULATOR=false
 CUSTOM_ADM_CONTROLLER=false
+HW_OFFLOAD=false
 
 while [[ $# -gt 0 ]]
 do
@@ -155,6 +159,10 @@ case $key in
     ;;
     --custom-adm-controller)
     CUSTOM_ADM_CONTROLLER=true
+    shift
+    ;;
+    --hw-offload)
+    HW_OFFLOAD=true
     shift
     ;;
     -h|--help)
@@ -414,6 +422,16 @@ if $CUSTOM_ADM_CONTROLLER; then
     cd ..
 fi
 
+if $HW_OFFLOAD; then
+    mkdir hwoffload && cd hwoffload
+    cp ../../patches/hwoffload/hwOffload.yml .
+    touch kustomization.yml
+    $KUSTOMIZE edit add base $BASE
+    $KUSTOMIZE edit add patch --path hwOffload.yml
+    BASE=../hwoffload
+    cd ..
+fi
+
 mkdir $MODE && cd $MODE
 touch kustomization.yml
 $KUSTOMIZE edit add base $BASE
@@ -421,11 +439,16 @@ $KUSTOMIZE edit add base $BASE
 find ../../patches/$MODE -name \*.yml -exec cp {} . \;
 
 if [ "$MODE" == "dev" ]; then
-    if $COVERAGE; then
-        $KUSTOMIZE edit set image antrea=antrea/antrea-ubuntu-coverage:latest
-    else
-        $KUSTOMIZE edit set image antrea=projects.registry.vmware.com/antrea/antrea-ubuntu:latest
+    if [[ -z "$IMG_NAME" ]]; then
+        if $COVERAGE; then
+            IMG_NAME="antrea/antrea-ubuntu-coverage:latest"
+        else
+            IMG_NAME="projects.registry.vmware.com/antrea/antrea-ubuntu:latest"
+        fi
     fi
+
+    $KUSTOMIZE edit set image antrea=$IMG_NAME
+
     $KUSTOMIZE edit add patch --path agentImagePullPolicy.yml
     $KUSTOMIZE edit add patch --path controllerImagePullPolicy.yml
     if $VERBOSE_LOG; then

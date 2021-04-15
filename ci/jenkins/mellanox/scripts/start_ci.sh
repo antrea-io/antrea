@@ -78,11 +78,11 @@ EOF
         cp -rf "$antrea_scm_dir" $WORKSPACE/antrea-cni
         pushd $WORKSPACE/antrea-cni
         
-        sudo docker build -t antrea/antrea-ubuntu:latest -f build/images/Dockerfile.build.ubuntu --build-arg OVS_VERSION=$(head -n 1 build/images/deps/ovs-version) .
+        sudo docker build -t "$ANTREA_CNI_HARBOR_IMAGE" -f build/images/Dockerfile.build.ubuntu --build-arg OVS_VERSION=$(head -n 1 build/images/deps/ovs-version) .
         let status=status+$?
         popd
     else
-        build_github_project "antrea-cni" "sudo docker build -t antrea/antrea-ubuntu:latest -f build/images/Dockerfile.build.ubuntu --build-arg OVS_VERSION=$(head -n 1 build/images/deps/ovs-version) ."
+        build_github_project "antrea-cni" "sudo docker build -t "$ANTREA_CNI_HARBOR_IMAGE" -f build/images/Dockerfile.build.ubuntu --build-arg OVS_VERSION=$(head -n 1 build/images/deps/ovs-version) ."
         let status=status+$?
     fi
 
@@ -91,14 +91,13 @@ EOF
         return $status
     fi
 
-    if [[ -z "${ANTREA_CNI_PR}${ANTREA_CNI_BRANCH}" ]];then
-        change_image_name $ANTREA_CNI_HARBOR_IMAGE antrea/antrea-ubuntu
+    IMG_NAME="$ANTREA_CNI_HARBOR_IMAGE" bash $WORKSPACE/antrea-cni/hack/generate-manifest.sh --hw-offload > $ARTIFACTS/antrea.yml
+    let status=status+$?
+    if [ "$status" != 0 ]; then
+        echo "ERROR: Failed to generate antrea manifest!"
+        return $status
     fi
     
-    if [[ -z "$(grep hw-offload $WORKSPACE/antrea-cni/build/yamls/antrea.yml)" ]];then
-        sed -i '/start_ovs/a\        - --hw-offload' $WORKSPACE/antrea-cni/build/yamls/antrea.yml
-    fi
-
     cat > $ARTIFACTS/antrea-net.yaml <<EOF
 apiVersion: "k8s.cni.cncf.io/v1"
 kind: NetworkAttachmentDefinition
@@ -158,7 +157,7 @@ kubectl create -f $ARTIFACTS/antrea-net.yaml
 kubectl create -f $ARTIFACTS/configMap.yaml
 kubectl create -f $(ls -l $WORKSPACE/sriov-network-device-plugin/deployments/*/sriovdp-daemonset.yaml|tail -n1|awk '{print $NF}')
 
-kubectl create -f $WORKSPACE/antrea-cni/build/yamls/antrea.yml
+kubectl create -f $ARTIFACTS/antrea.yml
 
 cp $ARTIFACTS/antrea-net.yaml $(ls -l $WORKSPACE/sriov-network-device-plugin/deployments/*/sriovdp-daemonset.yaml|tail -n1|awk '{print $NF}') $ARTIFACTS/
 echo "All code in $WORKSPACE"
