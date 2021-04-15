@@ -759,6 +759,65 @@ func testANPBasic(t *testing.T) {
 	executeTests(t, testCase)
 }
 
+// testANPMultipleAppliedTo tests traffic from X/B to Y/A on port 80 will be dropped, after applying Antrea
+// NetworkPolicy that applies to multiple AppliedTos, one of which doesn't select any Pod. It also ensures the Policy is
+// updated correctly when one of its AppliedToGroup starts and stops selecting Pods.
+func testANPMultipleAppliedTo(t *testing.T) {
+	tempLabel := randName("temp-")
+	builder := &AntreaNetworkPolicySpecBuilder{}
+	// Make it apply to an extra dummy AppliedTo to ensure it handles multiple AppliedToGroups correctly.
+	// See https://github.com/vmware-tanzu/antrea/issues/2083.
+	builder = builder.SetName("y", "np-multiple-appliedto").SetPriority(1.0).
+		SetAppliedToGroup(map[string]string{"pod": "a"}, nil).
+		SetAppliedToGroup(map[string]string{tempLabel: ""}, nil).
+		AddIngress(v1.ProtocolTCP, &p80, nil, nil, map[string]string{"pod": "b"}, map[string]string{"ns": "x"}, nil, nil, secv1alpha1.RuleActionDrop)
+
+	reachability := NewReachability(allPods, true)
+	reachability.Expect(Pod("x/b"), Pod("y/a"), false)
+
+	_, err := k8sUtils.CreateOrUpdateANP(builder.Get())
+	failOnError(err, t)
+	time.Sleep(networkPolicyDelay)
+	k8sUtils.Validate(allPods, reachability, 80)
+	reachability.PrintSummary(true, true, true)
+	_, wrong, _ := reachability.Summary()
+	if wrong != 0 {
+		t.Errorf("failure -- %d wrong results", wrong)
+	}
+
+	t.Logf("Making the Policy apply to y/c by labeling it with the temporary label that matches the dummy AppliedTo")
+	podYC, _ := k8sUtils.GetPod("y", "c")
+	podYC.Labels[tempLabel] = ""
+	podYC, err = k8sUtils.clientset.CoreV1().Pods(podYC.Namespace).Update(context.TODO(), podYC, metav1.UpdateOptions{})
+	assert.NoError(t, err)
+	reachability = NewReachability(allPods, true)
+	reachability.Expect(Pod("x/b"), Pod("y/a"), false)
+	reachability.Expect(Pod("x/b"), Pod("y/c"), false)
+	time.Sleep(networkPolicyDelay)
+	k8sUtils.Validate(allPods, reachability, 80)
+	reachability.PrintSummary(true, true, true)
+	_, wrong, _ = reachability.Summary()
+	if wrong != 0 {
+		t.Errorf("failure -- %d wrong results", wrong)
+	}
+
+	t.Logf("Making the Policy not apply to y/c by removing the temporary label")
+	delete(podYC.Labels, tempLabel)
+	_, err = k8sUtils.clientset.CoreV1().Pods(podYC.Namespace).Update(context.TODO(), podYC, metav1.UpdateOptions{})
+	assert.NoError(t, err)
+	reachability = NewReachability(allPods, true)
+	reachability.Expect(Pod("x/b"), Pod("y/a"), false)
+	time.Sleep(networkPolicyDelay)
+	k8sUtils.Validate(allPods, reachability, 80)
+	reachability.PrintSummary(true, true, true)
+	_, wrong, _ = reachability.Summary()
+	if wrong != 0 {
+		t.Errorf("failure -- %d wrong results", wrong)
+	}
+
+	failOnError(k8sUtils.CleanANPs(namespaces), t)
+}
+
 // testAuditLoggingBasic tests that a audit log is generated when egress drop applied
 func testAuditLoggingBasic(t *testing.T, data *TestData) {
 	builder := &ClusterNetworkPolicySpecBuilder{}
@@ -919,6 +978,7 @@ func TestAntreaPolicy(t *testing.T) {
 		t.Run("Case=CNPPriorityConflictingRule", func(t *testing.T) { testCNPPriorityConflictingRule(t) })
 		t.Run("Case=CNPRulePriority", func(t *testing.T) { testCNPRulePrioirty(t) })
 		t.Run("Case=ANPBasic", func(t *testing.T) { testANPBasic(t) })
+		t.Run("Case=testANPMultipleAppliedTo", func(t *testing.T) { testANPMultipleAppliedTo(t) })
 	})
 	// print results for reachability tests
 	printResults()

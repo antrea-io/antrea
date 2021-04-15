@@ -277,7 +277,7 @@ func TestAddMultipleGroupsRule(t *testing.T) {
 	desiredRule := &CompletedRule{
 		rule:          &rule{Direction: v1beta2.DirectionIn, Services: services},
 		FromAddresses: v1beta2.NewGroupMemberSet(newAddressGroupMember("1.1.1.1"), newAddressGroupMember("2.2.2.2"), newAddressGroupMember("3.3.3.3")),
-		ToAddresses:   v1beta2.NewGroupMemberSet(),
+		ToAddresses:   nil,
 		TargetMembers: v1beta2.NewGroupMemberSet(newAppliedToGroupMember("pod1", "ns1"), newAppliedToGroupMember("pod2", "ns2")),
 	}
 	stopCh := make(chan struct{})
@@ -306,37 +306,33 @@ func TestAddMultipleGroupsRule(t *testing.T) {
 	assert.Equal(t, 1, controller.GetAddressGroupNum())
 	assert.Equal(t, 1, controller.GetAppliedToGroupNum())
 
-	// addressGroup2 comes, no rule will be synced due to missing appliedToGroup2 data.
+	// addressGroup2 comes, policy1 will be synced with the TargetMembers populated from appliedToGroup1.
 	addressGroupWatcher.Add(newAddressGroup("addressGroup2", []v1beta2.GroupMember{*newAddressGroupMember("1.1.1.1"), *newAddressGroupMember("3.3.3.3")}))
 	select {
 	case ruleID := <-reconciler.updated:
-		t.Fatalf("Expected no update, got %v", ruleID)
+		actualRule, _ := reconciler.getLastRealized(ruleID)
+		assert.Equal(t, actualRule.Direction, desiredRule.Direction)
+		assert.ElementsMatch(t, actualRule.Services, desiredRule.Services)
+		assert.Equal(t, actualRule.FromAddresses, desiredRule.FromAddresses)
+		assert.Equal(t, actualRule.ToAddresses, desiredRule.ToAddresses)
+		assert.Equal(t, actualRule.TargetMembers, v1beta2.NewGroupMemberSet(newAppliedToGroupMember("pod1", "ns1")))
 	case <-time.After(time.Millisecond * 100):
+		t.Fatal("Expected one update, got none")
 	}
 	assert.Equal(t, 1, controller.GetNetworkPolicyNum())
 	assert.Equal(t, 2, controller.GetAddressGroupNum())
 	assert.Equal(t, 1, controller.GetAppliedToGroupNum())
 
-	// appliedToGroup2 comes, policy1 will be synced.
+	// appliedToGroup2 comes, policy1 will be synced with the TargetMembers populated from appliedToGroup1 and appliedToGroup2.
 	appliedToGroupWatcher.Add(newAppliedToGroup("appliedToGroup2", []v1beta2.GroupMember{*newAppliedToGroupMember("pod2", "ns2")}))
 	select {
 	case ruleID := <-reconciler.updated:
 		actualRule, _ := reconciler.getLastRealized(ruleID)
-		if actualRule.Direction != desiredRule.Direction {
-			t.Errorf("Expected Direction %v, got %v", actualRule.Direction, desiredRule.Direction)
-		}
-		if !assert.ElementsMatch(t, actualRule.Services, desiredRule.Services) {
-			t.Errorf("Expected Services %v, got %v", actualRule.Services, desiredRule.Services)
-		}
-		if !actualRule.FromAddresses.Equal(desiredRule.FromAddresses) {
-			t.Errorf("Expected FromAddresses %v, got %v", actualRule.FromAddresses, desiredRule.FromAddresses)
-		}
-		if !actualRule.ToAddresses.Equal(desiredRule.ToAddresses) {
-			t.Errorf("Expected ToAddresses %v, got %v", actualRule.ToAddresses, desiredRule.ToAddresses)
-		}
-		if !actualRule.TargetMembers.Equal(desiredRule.TargetMembers) {
-			t.Errorf("Expected Pods %v, got %v", actualRule.TargetMembers, desiredRule.TargetMembers)
-		}
+		assert.Equal(t, actualRule.Direction, desiredRule.Direction)
+		assert.ElementsMatch(t, actualRule.Services, desiredRule.Services)
+		assert.Equal(t, actualRule.FromAddresses, desiredRule.FromAddresses)
+		assert.Equal(t, actualRule.ToAddresses, desiredRule.ToAddresses)
+		assert.Equal(t, actualRule.TargetMembers, desiredRule.TargetMembers)
 	case <-time.After(time.Millisecond * 100):
 		t.Fatal("Expected one update, got none")
 	}
