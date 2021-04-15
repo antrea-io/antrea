@@ -221,22 +221,32 @@ func (c *ruleCache) getAppliedNetworkPolicies(pod, namespace string, npFilter *q
 	return policies
 }
 
-func (c *ruleCache) getRule(ruleID string) (*rule, bool) {
-	obj, exists, _ := c.rules.GetByKey(ruleID)
-	if !exists {
-		return nil, false
-	}
-	return obj.(*rule), true
-}
-
-func (c *ruleCache) getRulesByNetworkPolicy(uid string) []*rule {
+func (c *ruleCache) getEffectiveRulesByNetworkPolicy(uid string) []*rule {
 	objs, _ := c.rules.ByIndex(policyIndex, uid)
 	if len(objs) == 0 {
 		return nil
 	}
-	rules := make([]*rule, len(objs))
-	for i, obj := range objs {
-		rules[i] = obj.(*rule)
+	rules := make([]*rule, 0, len(objs))
+
+	// A rule is considered effective when any of its AppliedToGroups can be populated.
+	isEffective := func(r *rule) bool {
+		for _, g := range r.AppliedToGroups {
+			_, exists := c.appliedToSetByGroup[g]
+			if exists {
+				return true
+			}
+		}
+		return false
+	}
+
+	c.appliedToSetLock.RLock()
+	defer c.appliedToSetLock.RUnlock()
+
+	for _, obj := range objs {
+		rule := obj.(*rule)
+		if isEffective(rule) {
+			rules = append(rules, rule)
+		}
 	}
 	return rules
 }
@@ -522,13 +532,13 @@ func (c *ruleCache) PatchAppliedToGroup(patch *v1beta.AppliedToGroupPatch) error
 }
 
 // DeleteAppliedToGroup deletes a cached *v1beta.AppliedToGroup.
-// It should only happen when a group is no longer referenced by any rule, so
-// no need to mark dirty rules.
+// It may be called when a rule becomes ineffective, so it needs to mark dirty rules.
 func (c *ruleCache) DeleteAppliedToGroup(group *v1beta.AppliedToGroup) error {
 	c.appliedToSetLock.Lock()
 	defer c.appliedToSetLock.Unlock()
 
 	delete(c.appliedToSetByGroup, group.Name)
+	c.onAppliedToGroupUpdate(group.Name)
 	return nil
 }
 
@@ -697,26 +707,38 @@ func (c *ruleCache) deleteNetworkPolicyLocked(uid string) error {
 }
 
 // GetCompletedRule constructs a *CompletedRule for the provided ruleID.
-// If the rule is not found or not completed due to missing group data,
-// the return value will indicate it.
-func (c *ruleCache) GetCompletedRule(ruleID string) (completedRule *CompletedRule, exists bool, completed bool) {
+// If the rule is not effective or not realizable due to missing group data, the return value will indicate it.
+// A rule is considered effective when any of its AppliedToGroups can be populated.
+// A rule is considered realizable when it's effective and all of its AddressGroups can be populated.
+// When a rule is not effective, it should be removed from the datapath.
+// When a rule is effective but not realizable, the caller should wait for it being realizable before doing anything.
+// When a rule is effective and realizable, the caller should realize it.
+// This is because some AppliedToGroups in a rule might never be sent to this Node if one of the following is true:
+//   - The original policy has multiple AppliedToGroups and some AppliedToGroups' span does not include this Node.
+//   - The original policy is appliedTo-per-rule, and some of the rule's AppliedToGroups do not include this Node.
+//   - The original policy is appliedTo-per-rule, none of the rule's AppliedToGroups includes this Node, but some other rules' (in the same policy) AppliedToGroups include this Node.
+// In these cases, it is not guaranteed that all AppliedToGroups in the rule will eventually be present in the cache.
+// Only the AppliedToGroups whose span includes this Node will eventually be received.
+func (c *ruleCache) GetCompletedRule(ruleID string) (completedRule *CompletedRule, effective bool, realizable bool) {
 	obj, exists, _ := c.rules.GetByKey(ruleID)
 	if !exists {
 		return nil, false, false
 	}
 
 	r := obj.(*rule)
+
+	groupMembers, anyExists := c.unionAppliedToGroups(r.AppliedToGroups)
+	if !anyExists {
+		return nil, false, false
+	}
+
 	var fromAddresses, toAddresses v1beta.GroupMemberSet
+	var completed bool
 	if r.Direction == v1beta.DirectionIn {
 		fromAddresses, completed = c.unionAddressGroups(r.From.AddressGroups)
 	} else {
 		toAddresses, completed = c.unionAddressGroups(r.To.AddressGroups)
 	}
-	if !completed {
-		return nil, true, false
-	}
-
-	groupMembers, completed := c.unionAppliedToGroups(r.AppliedToGroups)
 	if !completed {
 		return nil, true, false
 	}
@@ -768,20 +790,21 @@ func (c *ruleCache) unionAddressGroups(groupNames []string) (v1beta.GroupMemberS
 }
 
 // unionAppliedToGroups gets the union of pods of the provided appliedTo groups.
-// If any group is not found, nil and false will be returned to indicate the
-// set is not complete yet.
+// If any group is found, the union and true will be returned. Otherwise an empty set and false will be returned.
 func (c *ruleCache) unionAppliedToGroups(groupNames []string) (v1beta.GroupMemberSet, bool) {
 	c.appliedToSetLock.RLock()
 	defer c.appliedToSetLock.RUnlock()
 
+	anyExists := false
 	set := v1beta.NewGroupMemberSet()
 	for _, groupName := range groupNames {
 		curSet, exists := c.appliedToSetByGroup[groupName]
 		if !exists {
 			klog.V(2).Infof("AppliedToGroup %v was not found", groupName)
-			return nil, false
+			continue
 		}
+		anyExists = true
 		set = set.Union(curSet)
 	}
-	return set, true
+	return set, anyExists
 }
