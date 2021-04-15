@@ -165,7 +165,7 @@ spec:
             - name: ELASTICSEARCH_URL
               value: "http://elasticsearch:9200"
             - name: KIBANA_DEFAULTAPPID
-              value: "dashboard/653cf1e0-2fd2-11e7-99ed-49759aed30f5"
+              value: "dashboard/3b331b30-b987-11ea-b16e-fb06687c3589"
             - name: LOGGING_QUIET
               value: "true"
           ports:
