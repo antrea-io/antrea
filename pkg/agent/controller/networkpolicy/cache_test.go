@@ -771,12 +771,24 @@ func TestRuleCacheGetCompletedRule(t *testing.T) {
 		From:            v1beta2.NetworkPolicyPeer{AddressGroups: []string{"addressGroup1", "addressGroup2", "addressGroup3"}},
 		AppliedToGroups: []string{"appliedToGroup1", "appliedToGroup2"},
 	}
+	rule4 := &rule{
+		ID:              "rule4",
+		Direction:       v1beta2.DirectionIn,
+		From:            v1beta2.NetworkPolicyPeer{AddressGroups: []string{"addressGroup1", "addressGroup2"}},
+		AppliedToGroups: []string{"appliedToGroup1", "appliedToGroup2", "appliedToGroup3"},
+	}
+	rule5 := &rule{
+		ID:              "rule5",
+		Direction:       v1beta2.DirectionIn,
+		From:            v1beta2.NetworkPolicyPeer{AddressGroups: []string{"addressGroup1", "addressGroup2"}},
+		AppliedToGroups: []string{"appliedToGroup3", "appliedToGroup4"},
+	}
 	tests := []struct {
 		name              string
 		args              string
 		wantCompletedRule *CompletedRule
-		wantExists        bool
-		wantCompleted     bool
+		wantEffective     bool
+		wantRealizable    bool
 	}{
 		{
 			"one-group-rule",
@@ -803,15 +815,34 @@ func TestRuleCacheGetCompletedRule(t *testing.T) {
 			true,
 		},
 		{
-			"incompleted-rule",
+			"missing-one-addressgroup-rule",
 			rule3.ID,
 			nil,
 			true,
 			false,
 		},
 		{
+			"missing-one-appliedtogroup-rule",
+			rule4.ID,
+			&CompletedRule{
+				rule:          rule4,
+				FromAddresses: addressGroup1.Union(addressGroup2),
+				ToAddresses:   nil,
+				TargetMembers: appliedToGroup1.Union(appliedToGroup2),
+			},
+			true,
+			true,
+		},
+		{
+			"missing-all-appliedtogroups-rule",
+			rule5.ID,
+			nil,
+			false,
+			false,
+		},
+		{
 			"non-existing-rule",
-			"rule4",
+			"rule6",
 			nil,
 			false,
 			false,
@@ -827,16 +858,18 @@ func TestRuleCacheGetCompletedRule(t *testing.T) {
 			c.rules.Add(rule1)
 			c.rules.Add(rule2)
 			c.rules.Add(rule3)
+			c.rules.Add(rule4)
+			c.rules.Add(rule5)
 
-			gotCompletedRule, gotExists, gotCompleted := c.GetCompletedRule(tt.args)
+			gotCompletedRule, gotEffective, gotRealizable := c.GetCompletedRule(tt.args)
 			if !reflect.DeepEqual(gotCompletedRule, tt.wantCompletedRule) {
 				t.Errorf("GetCompletedRule() gotCompletedRule = %v, want %v", gotCompletedRule, tt.wantCompletedRule)
 			}
-			if gotExists != tt.wantExists {
-				t.Errorf("GetCompletedRule() gotExists = %v, want %v", gotExists, tt.wantExists)
+			if gotEffective != tt.wantEffective {
+				t.Errorf("GetCompletedRule() gotEffective = %v, want %v", gotEffective, tt.wantEffective)
 			}
-			if gotCompleted != tt.wantCompleted {
-				t.Errorf("GetCompletedRule() gotCompleted = %v, want %v", gotCompleted, tt.wantCompleted)
+			if gotRealizable != tt.wantRealizable {
+				t.Errorf("GetCompletedRule() gotRealizable = %v, want %v", gotRealizable, tt.wantRealizable)
 			}
 		})
 	}
