@@ -424,19 +424,13 @@ func (exp *flowExporter) addRecordToSet(record flowexporter.FlowRecord) error {
 		case "octetTotalCount":
 			ie.Value = record.Conn.OriginalBytes
 		case "packetDeltaCount":
-			deltaPkts := int64(0)
-			if record.PrevPackets != 0 {
-				deltaPkts = int64(record.Conn.OriginalPackets) - int64(record.PrevPackets)
-			}
+			deltaPkts := int64(record.Conn.OriginalPackets) - int64(record.PrevPackets)
 			if deltaPkts < 0 {
 				klog.Warningf("Packet delta count for connection should not be negative: %d", deltaPkts)
 			}
 			ie.Value = uint64(deltaPkts)
 		case "octetDeltaCount":
-			deltaBytes := int64(0)
-			if record.PrevBytes != 0 {
-				deltaBytes = int64(record.Conn.OriginalBytes) - int64(record.PrevBytes)
-			}
+			deltaBytes := int64(record.Conn.OriginalBytes) - int64(record.PrevBytes)
 			if deltaBytes < 0 {
 				klog.Warningf("Byte delta count for connection should not be negative: %d", deltaBytes)
 			}
@@ -446,19 +440,13 @@ func (exp *flowExporter) addRecordToSet(record flowexporter.FlowRecord) error {
 		case "reverseOctetTotalCount":
 			ie.Value = record.Conn.ReverseBytes
 		case "reversePacketDeltaCount":
-			deltaPkts := int64(0)
-			if record.PrevReversePackets != 0 {
-				deltaPkts = int64(record.Conn.ReversePackets) - int64(record.PrevReversePackets)
-			}
+			deltaPkts := int64(record.Conn.ReversePackets) - int64(record.PrevReversePackets)
 			if deltaPkts < 0 {
 				klog.Warningf("Packet delta count for connection should not be negative: %d", deltaPkts)
 			}
 			ie.Value = uint64(deltaPkts)
 		case "reverseOctetDeltaCount":
-			deltaBytes := int64(0)
-			if record.PrevReverseBytes != 0 {
-				deltaBytes = int64(record.Conn.ReverseBytes) - int64(record.PrevReverseBytes)
-			}
+			deltaBytes := int64(record.Conn.ReverseBytes) - int64(record.PrevReverseBytes)
 			if deltaBytes < 0 {
 				klog.Warningf("Byte delta count for connection should not be negative: %d", deltaBytes)
 			}

@@ -120,9 +120,9 @@ func (cs *connectionStore) addOrUpdateConn(conn *flowexporter.Connection) {
 	existingConn, exists := cs.connections[connKey]
 
 	if exists {
+		existingConn.IsPresent = true
 		// avoid updating stats of the existing connection that is about to close
 		if flowexporter.IsConnectionDying(existingConn) {
-			existingConn.IsPresent = true
 			return
 		}
 		// Update the necessary fields that are used in generating flow records.
@@ -133,7 +133,6 @@ func (cs *connectionStore) addOrUpdateConn(conn *flowexporter.Connection) {
 		existingConn.ReverseBytes = conn.ReverseBytes
 		existingConn.ReversePackets = conn.ReversePackets
 		existingConn.TCPState = conn.TCPState
-		existingConn.IsPresent = true
 		klog.V(4).Infof("Antrea flow updated: %v", existingConn)
 	} else {
 		// sourceIP/destinationIP are mapped only to local pods and not remote pods.
