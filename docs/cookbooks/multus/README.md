@@ -1,7 +1,7 @@
 # Using Antrea with Multus
 
 This guide will describe how to use Project Antrea with
-[Multus](https://github.com/intel/multus-cni), in order to attach multiple
+[Multus](https://github.com/k8snetworkplumbingwg/multus-cni), in order to attach multiple
 network interfaces to Pods. In this scenario, Antrea is used for the default
 network, i.e. it is the CNI plugin which provisions the "primary" network
 interface ("eth0") for each Pod. For the sake of this guide, we will use the
@@ -93,7 +93,7 @@ version](https://github.com/vmware-tanzu/antrea/releases).
 ### Step 2: Deploy Multus as a DaemonSet
 
 ```bash
-git clone https://github.com/intel/multus-cni.git && cd multus-cni
+git clone https://github.com/k8snetworkplumbingwg/multus-cni && cd multus-cni
 cat ./images/multus-daemonset.yml | kubectl apply -f -
 ```
 
