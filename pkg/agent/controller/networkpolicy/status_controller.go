@@ -164,7 +164,7 @@ func (c *StatusController) syncHandler(uid types.UID) error {
 	if policy == nil {
 		return nil
 	}
-	desiredRules := c.ruleCache.getRulesByNetworkPolicy(string(uid))
+	desiredRules := c.ruleCache.getEffectiveRulesByNetworkPolicy(string(uid))
 	// The policy must have been deleted, no further processing.
 	if len(desiredRules) == 0 {
 		return nil

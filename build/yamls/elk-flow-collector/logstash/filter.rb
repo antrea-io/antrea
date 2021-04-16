@@ -2,7 +2,6 @@ require 'date'
 # register accepts the hashmap passed to "script_params"
 # it runs once at startup
 def register(params)
-    @interval = params["interval"]
     @@time_map = Hash.new
 end
 
@@ -93,9 +92,12 @@ def filter(event)
         event.set("[ipfix][reverseThroughput]", event.get("[ipfix][reverseOctetDeltaCountFromSourceNode]").to_i / duration.to_i)
         @@time_map[key] = t
      else
-        @@time_map[key] = DateTime.strptime(event.get("[ipfix][flowEndSeconds]").to_s, '%Y-%m-%dT%H:%M:%S').to_time.to_i
-        event.set("[ipfix][throughput]", event.get("[ipfix][octetDeltaCountFromSourceNode]").to_i / @interval.to_i)
-        event.set("[ipfix][reverseThroughput]", event.get("[ipfix][reverseOctetDeltaCountFromSourceNode]").to_i / @interval.to_i)
+        startTime = DateTime.strptime(event.get("[ipfix][flowStartSeconds]").to_s, '%Y-%m-%dT%H:%M:%S').to_time.to_i
+        endTime = DateTime.strptime(event.get("[ipfix][flowEndSeconds]").to_s, '%Y-%m-%dT%H:%M:%S').to_time.to_i
+        duration = endTime-startTime
+        event.set("[ipfix][throughput]", event.get("[ipfix][octetDeltaCountFromSourceNode]").to_i / duration.to_i)
+        event.set("[ipfix][reverseThroughput]", event.get("[ipfix][reverseOctetDeltaCountFromSourceNode]").to_i / duration.to_i)
+        @@time_map[key] = endTime
      end
     return [event]
 end

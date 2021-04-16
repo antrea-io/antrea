@@ -124,7 +124,10 @@ DOCKER_IMAGES=("busybox" "projects.registry.vmware.com/antrea/antrea-ubuntu:$FRO
 
 for img in "${DOCKER_IMAGES[@]}"; do
     echo "Pulling $img"
-    docker pull $img > /dev/null
+    for i in `seq 3`; do
+        docker pull $img > /dev/null && break
+        sleep 1
+    done
 done
 
 DOCKER_IMAGES+=("projects.registry.vmware.com/antrea/antrea-ubuntu:latest")

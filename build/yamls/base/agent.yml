@@ -13,6 +13,10 @@ spec:
     type: RollingUpdate
   template:
     metadata:
+      annotations:
+        # Starting with v1.21, Kubernetes supports default container annotation.
+        # Using "kubectl logs/exec/attach/cp" doesn't have to specify "-c antrea-agent" when troubleshooting.
+        kubectl.kubernetes.io/default-container: antrea-agent
       labels:
         component: antrea-agent
     spec:

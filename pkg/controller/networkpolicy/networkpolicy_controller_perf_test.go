@@ -360,8 +360,11 @@ func newPod(namespace, name string, labels map[string]string) *corev1.Pod {
 	podIP := getRandomIP()
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: name, UID: types.UID(uuid.New().String()), Labels: labels},
-		Spec:       corev1.PodSpec{NodeName: getRandomNodeName()},
-		Status:     corev1.PodStatus{PodIP: podIP, PodIPs: []corev1.PodIP{{IP: podIP}}},
+		Spec: corev1.PodSpec{
+			NodeName:    getRandomNodeName(),
+			HostNetwork: false,
+		},
+		Status: corev1.PodStatus{PodIP: podIP, PodIPs: []corev1.PodIP{{IP: podIP}}},
 	}
 	return pod
 }
