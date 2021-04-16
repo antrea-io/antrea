@@ -42,7 +42,7 @@ func TestFlowAggregator_sendFlowKeyRecord(t *testing.T) {
 
 	mockIPFIXExpProc := ipfixtest.NewMockIPFIXExportingProcess(ctrl)
 	mockIPFIXRegistry := ipfixtest.NewMockIPFIXRegistry(ctrl)
-	mockDataSet := ipfixtest.NewMockIPFIXSet(ctrl)
+	mockDataSet := ipfixentitiestesting.NewMockSet(ctrl)
 	mockRecord := ipfixentitiestesting.NewMockRecord(ctrl)
 	mockAggregationProcess := ipfixtest.NewMockIPFIXAggregationProcess(ctrl)
 
@@ -152,7 +152,7 @@ func TestFlowAggregator_sendTemplateSet(t *testing.T) {
 
 	mockIPFIXExpProc := ipfixtest.NewMockIPFIXExportingProcess(ctrl)
 	mockIPFIXRegistry := ipfixtest.NewMockIPFIXRegistry(ctrl)
-	mockTempSet := ipfixtest.NewMockIPFIXSet(ctrl)
+	mockTempSet := ipfixentitiestesting.NewMockSet(ctrl)
 
 	fa := &flowAggregator{
 		"",
@@ -165,7 +165,7 @@ func TestFlowAggregator_sendTemplateSet(t *testing.T) {
 		testTemplateIDv4,
 		testTemplateIDv6,
 		mockIPFIXRegistry,
-		ipfixtest.NewMockIPFIXSet(ctrl),
+		ipfixentitiestesting.NewMockSet(ctrl),
 		"",
 		nil,
 		testObservationDomainID,

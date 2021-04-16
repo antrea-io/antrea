@@ -84,7 +84,7 @@ type flowExporter struct {
 	process                   ipfix.IPFIXExportingProcess
 	elementsListv4            []*ipfixentities.InfoElementWithValue
 	elementsListv6            []*ipfixentities.InfoElementWithValue
-	ipfixSet                  ipfix.IPFIXSet
+	ipfixSet                  ipfixentities.Set
 	numDataSetsSent           uint64 // used for unit tests.
 	templateIDv4              uint16
 	templateIDv6              uint16
@@ -148,7 +148,7 @@ func NewFlowExporter(connStore connections.ConnectionStore, records *flowrecords
 		exporterInput:             expInput,
 		activeFlowTimeout:         activeFlowTimeout,
 		idleFlowTimeout:           idleFlowTimeout,
-		ipfixSet:                  ipfix.NewSet(false),
+		ipfixSet:                  ipfixentities.NewSet(false),
 		enableTLSToFlowAggregator: enableTLSToFlowAggregator,
 		k8sClient:                 k8sClient,
 		nodeRouteController:       nodeRouteController,
@@ -327,7 +327,7 @@ func (exp *flowExporter) sendFlowRecords() error {
 	return nil
 }
 
-func (exp *flowExporter) sendTemplateSet(templateSet ipfix.IPFIXSet, isIPv6 bool) (int, error) {
+func (exp *flowExporter) sendTemplateSet(templateSet ipfixentities.Set, isIPv6 bool) (int, error) {
 	elements := make([]*ipfixentities.InfoElementWithValue, 0)
 
 	IANAInfoElements := IANAInfoElementsIPv4
