@@ -2,7 +2,10 @@ VAGRANTFILE_API_VERSION = "2"
 
 NUM_WORKERS = 2
 
+MODE = "v4"
 K8S_POD_NETWORK_CIDR = "10.10.0.0/16"
+K8S_SERVICE_NETWORK_CIDR = "10.96.0.0/12"
+K8S_NODE_CP_GW_IP = "10.10.0.1"
 
 Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
   config.vm.box = "ubuntu/bionic64"
@@ -19,7 +22,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
   end
 
   groups = {
-    "control-plane" => ["k8s-node-control-plane"],
+    "controlplane" => ["k8s-node-control-plane"],
     "workers" => ["k8s-node-worker-[1:#{NUM_WORKERS}]"],
   }
 
@@ -38,7 +41,10 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
         node_ip: node_ip,
         node_name: "k8s-node-control-plane",
         k8s_pod_network_cidr: K8S_POD_NETWORK_CIDR,
+        k8s_service_network_cidr: K8S_SERVICE_NETWORK_CIDR,
         k8s_api_server_ip: node_ip,
+        k8s_ip_family: MODE,
+        k8s_antrea_gw_ip: K8S_NODE_CP_GW_IP,
       }
     end
   end
