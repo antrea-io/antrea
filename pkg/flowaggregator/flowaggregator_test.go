@@ -22,6 +22,8 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
+	ipfixentitiestesting "github.com/vmware/go-ipfix/pkg/entities/testing"
+	ipfixintermediate "github.com/vmware/go-ipfix/pkg/intermediate"
 	ipfixregistry "github.com/vmware/go-ipfix/pkg/registry"
 
 	ipfixtest "github.com/vmware-tanzu/antrea/pkg/ipfix/testing"
@@ -34,8 +36,115 @@ const (
 	testObservationDomainID = 0xabcd
 )
 
-// TODO: We will add another test for sendDataRecord when we support adding multiple records to single set.
-// Currently, we are supporting adding only one record from one flow key to the set.
+func TestFlowAggregator_sendFlowKeyRecord(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockIPFIXExpProc := ipfixtest.NewMockIPFIXExportingProcess(ctrl)
+	mockIPFIXRegistry := ipfixtest.NewMockIPFIXRegistry(ctrl)
+	mockDataSet := ipfixtest.NewMockIPFIXSet(ctrl)
+	mockRecord := ipfixentitiestesting.NewMockRecord(ctrl)
+	mockAggregationProcess := ipfixtest.NewMockIPFIXAggregationProcess(ctrl)
+
+	fa := &flowAggregator{
+		"",
+		"",
+		"tcp",
+		nil,
+		mockAggregationProcess,
+		testExportInterval,
+		mockIPFIXExpProc,
+		testTemplateIDv4,
+		testTemplateIDv6,
+		mockIPFIXRegistry,
+		mockDataSet,
+		"",
+		nil,
+		testObservationDomainID,
+	}
+
+	ipv4Key := ipfixintermediate.FlowKey{
+		SourceAddress:      "10.0.0.1",
+		DestinationAddress: "10.0.0.2",
+		Protocol:           6,
+		SourcePort:         1234,
+		DestinationPort:    5678,
+	}
+
+	ipv6Key := ipfixintermediate.FlowKey{
+		SourceAddress:      "2001:0:3238:dfe1:63::fefb",
+		DestinationAddress: "2001:0:3238:dfe1:63::fefc",
+		Protocol:           6,
+		SourcePort:         1234,
+		DestinationPort:    5678,
+	}
+
+	readyRecord := ipfixintermediate.AggregationFlowRecord{
+		Record:      mockRecord,
+		ReadyToSend: true,
+		IsActive:    true,
+	}
+
+	notReadyRecord := ipfixintermediate.AggregationFlowRecord{
+		Record:      mockRecord,
+		ReadyToSend: false,
+		IsActive:    true,
+	}
+
+	testcases := []struct {
+		name       string
+		isIPv6     bool
+		flowKey    ipfixintermediate.FlowKey
+		flowRecord ipfixintermediate.AggregationFlowRecord
+	}{
+		{
+			"IPv4_ready_to_send",
+			false,
+			ipv4Key,
+			readyRecord,
+		},
+		{
+			"IPv6_ready_to_send",
+			true,
+			ipv6Key,
+			readyRecord,
+		},
+		{
+			"IPv4_not_ready_to_send",
+			false,
+			ipv4Key,
+			notReadyRecord,
+		},
+		{
+			"IPv6_not_ready_to_send",
+			true,
+			ipv6Key,
+			notReadyRecord,
+		},
+	}
+
+	for _, tc := range testcases {
+		if tc.flowRecord.ReadyToSend {
+			templateID := fa.templateIDv4
+			if tc.isIPv6 {
+				templateID = fa.templateIDv6
+			}
+			mockDataSet.EXPECT().ResetSet()
+			mockDataSet.EXPECT().PrepareSet(ipfixentities.Data, templateID).Return(nil)
+			elementList := make([]*ipfixentities.InfoElementWithValue, 0)
+			mockRecord.EXPECT().GetOrderedElementList().Return(elementList)
+			mockDataSet.EXPECT().AddRecord(elementList, templateID).Return(nil)
+			mockIPFIXExpProc.EXPECT().SendSet(mockDataSet).Return(0, nil)
+			mockAggregationProcess.EXPECT().DeleteFlowKeyFromMapWithoutLock(tc.flowKey)
+
+			err := fa.sendFlowKeyRecord(tc.flowKey, tc.flowRecord)
+			assert.NoError(t, err, "Error in sending flow key record: %v, key: %v, record: %v", err, tc.flowKey, tc.flowRecord)
+		} else {
+			err := fa.sendFlowKeyRecord(tc.flowKey, tc.flowRecord)
+			assert.NoError(t, err, "Error in sending flow key record that is not ready: %v, key: %v, record: %v", err, tc.flowKey, tc.flowRecord)
+		}
+	}
+}
 
 func TestFlowAggregator_sendTemplateSet(t *testing.T) {
 	ctrl := gomock.NewController(t)
