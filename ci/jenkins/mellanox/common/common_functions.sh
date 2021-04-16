@@ -79,9 +79,9 @@ k8s_build(){
     fi
     rm -rf $GOPATH/src/k8s.io/kubernetes
 
-    go get -d k8s.io/kubernetes
+    git clone https://github.com/kubernetes/kubernetes.git $WORKSPACE/src/k8s.io/kubernetes
 
-    pushd $GOPATH/src/k8s.io/kubernetes
+    pushd $WORKSPACE/src/k8s.io/kubernetes
     git checkout ${KUBERNETES_VERSION}
     git log -p -1 > $ARTIFACTS/kubernetes.txt
 

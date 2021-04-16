@@ -1193,6 +1193,44 @@ func TestAddPod(t *testing.T) {
 			groupMatch:           false,
 		},
 		{
+			name: "match-all-selectors-host-network",
+			addedPod: &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "podA",
+					Namespace: "nsA",
+					Labels: map[string]string{
+						"role":     "app",
+						"group":    "appliedTo",
+						"inGroup":  "inAddress",
+						"outGroup": "outAddress",
+					},
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{{
+						Name: "container-1",
+					}},
+					NodeName:    "nodeA",
+					HostNetwork: true,
+				},
+				Status: corev1.PodStatus{
+					Conditions: []corev1.PodCondition{
+						{
+							Type:   corev1.PodReady,
+							Status: corev1.ConditionTrue,
+						},
+					},
+					PodIP: "1.2.3.4",
+					PodIPs: []corev1.PodIP{
+						{IP: "1.2.3.4"},
+					},
+				},
+			},
+			appGroupMatch:        false,
+			inAddressGroupMatch:  true,
+			outAddressGroupMatch: true,
+			groupMatch:           false,
+		},
+		{
 			name: "match-spec-podselector-no-podip",
 			addedPod: &corev1.Pod{
 				ObjectMeta: metav1.ObjectMeta{

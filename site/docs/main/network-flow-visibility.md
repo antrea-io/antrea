@@ -387,13 +387,6 @@ or
 svn export https://github.com/vmware-tanzu/antrea/trunk/build/yamls/elk-flow-collector/
 ```
 
-To configure the export interval as `flowExportInterval` in [Configuration](#configuration),
-modify the `interval` value (in seconds) in `elk-flow-collector/logstash/logstash.conf`
-
-```conf
-script_params => { "interval" => 60 }
-```
-
 To create the required K8s resources in the `elk-flow-collector` folder and get
 everything up-and-running, run following commands:
 

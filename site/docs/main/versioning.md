@@ -18,19 +18,6 @@ Antrea versions are expressed as `x.y.z`, where `x` is the major version, `y` is
 the minor version, and `z` is the patch version, following [Semantic Versioning]
 terminology.
 
-The major version for Antrea is currently 0. In particular, this means that the
-Antrea APIs are still evolving at a pretty fast pace and that some features
-which we consider important for a K8s network plugin have not been implemented
-yet or have not reached the *General Availability* (GA) stability level. We have
-not yet established a definitive list of features that should be GA before we
-switch to a major version number of 1, but here are a few important features
-that are likely to be included.
-
-* Antrea-native policies (in particular, `security.antrea.tanzu.vmware.com` API
-  group should be stable and in version `v1`)
-* Antrea Proxy
-* IPv6 and dual-stack support
-
 ### Minor releases and patch releases
 
 Unlike minor releases, patch releases should not contain miscellaneous feature

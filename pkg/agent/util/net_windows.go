@@ -39,8 +39,8 @@ const (
 	LocalHNSNetwork      = "antrea-hnsnetwork"
 	OVSExtensionID       = "583CC151-73EC-4A6A-8B47-578297AD7623"
 	namedPipePrefix      = `\\.\pipe\`
-	commandMaxRetry      = 5
-	commandRetryInternal = time.Second
+	commandRetryTimeout  = 5 * time.Second
+	commandRetryInterval = time.Second
 )
 
 func GetNSPath(containerNetNS string) (string, error) {
@@ -62,7 +62,7 @@ func EnableHostInterface(ifaceName string) error {
 	// Enable-NetAdapter is not a blocking operation based on our testing.
 	// It returns immediately no matter whether the interface has been enabled or not.
 	// So we need to check the interface status to ensure it is up before returning.
-	if err := wait.PollImmediate(commandRetryInternal, commandMaxRetry, func() (done bool, err error) {
+	if err := wait.PollImmediate(commandRetryInterval, commandRetryTimeout, func() (done bool, err error) {
 		if err := InvokePSCommand(cmd); err != nil {
 			klog.Errorf("Failed to run command %s: %v", cmd, err)
 			return false, nil
