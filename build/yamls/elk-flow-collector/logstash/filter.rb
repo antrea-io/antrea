@@ -19,6 +19,18 @@ def filter(event)
         event.remove("[ipfix][protocolIdentifier]")
         event.set("[ipfix][protocolIdentifier]", "UDP")
     end
+
+    flowType = event.get("[ipfix][flowType]")
+    if flowType == 1
+        event.set("[ipfix][flowTypeStr]", "Intra-Node")
+    elsif flowType == 2
+        event.set("[ipfix][flowTypeStr]", "Inter-Node")
+    elsif flowType == 3
+        event.set("[ipfix][flowTypeStr]", "To External")
+    elsif flowType == 4
+        event.set("[ipfix][flowTypeStr]", "From External")
+    end
+
     if event.get("[ipfix][destinationIPv6Address]").nil?
         event.set("[ipfix][destinationIP]", event.get("[ipfix][destinationIPv4Address]"))
     else
@@ -42,7 +54,7 @@ def filter(event)
             flowkey << event.get("[ipfix][protocolIdentifier]").to_s
             event.set("[ipfix][flowKeyPodToService]", flowkey)
         end
-        if event.get("[ipfix][destinationPodName]") != ""
+        if event.get("[ipfix][flowType]") != 3
             flowkey = ""
             flowkey << event.get("[ipfix][sourcePodName]")
             flowkey << ":"
@@ -53,6 +65,7 @@ def filter(event)
             flowkey << event.get("[ipfix][destinationTransportPort]").to_s
             flowkey << " "
             flowkey << event.get("[ipfix][protocolIdentifier]").to_s
+            event.set("[ipfix][flowKey]", flowkey)
             event.set("[ipfix][flowKeyPodToPod]", flowkey)
         else
             flowkey = ""
@@ -65,7 +78,8 @@ def filter(event)
             flowkey << event.get("[ipfix][destinationTransportPort]").to_s
             flowkey << " "
             flowkey << event.get("[ipfix][protocolIdentifier]").to_s
-            event.set("[ipfix][flowKeyPodToPod]", flowkey)
+            event.set("[ipfix][flowKey]", flowkey)
+            event.set("[ipfix][flowKeyPodToExternal]", flowkey)
         end
     end
     if event.get("[ipfix][ingressNetworkPolicyName]") == ""
@@ -84,20 +98,20 @@ def filter(event)
         event.remove("[ipfix][egressNetworkPolicyNamespace]")
         event.set("[ipfix][egressNetworkPolicyNamespace]", "N/A")
     end
-    key = event.get("[ipfix][flowKeyPodToPod]")
-     if @@time_map.has_key?(key)
-        t = DateTime.strptime(event.get("[ipfix][flowEndSeconds]").to_s, '%Y-%m-%dT%H:%M:%S').to_time.to_i
-        duration = t - @@time_map[key]
-        event.set("[ipfix][throughput]", event.get("[ipfix][octetDeltaCountFromSourceNode]").to_i / duration.to_i)
-        event.set("[ipfix][reverseThroughput]", event.get("[ipfix][reverseOctetDeltaCountFromSourceNode]").to_i / duration.to_i)
-        @@time_map[key] = t
-     else
-        startTime = DateTime.strptime(event.get("[ipfix][flowStartSeconds]").to_s, '%Y-%m-%dT%H:%M:%S').to_time.to_i
-        endTime = DateTime.strptime(event.get("[ipfix][flowEndSeconds]").to_s, '%Y-%m-%dT%H:%M:%S').to_time.to_i
-        duration = endTime-startTime
-        event.set("[ipfix][throughput]", event.get("[ipfix][octetDeltaCountFromSourceNode]").to_i / duration.to_i)
-        event.set("[ipfix][reverseThroughput]", event.get("[ipfix][reverseOctetDeltaCountFromSourceNode]").to_i / duration.to_i)
-        @@time_map[key] = endTime
-     end
+    key = event.get("[ipfix][flowKey]")
+    if @@time_map.has_key?(key)
+       t = DateTime.strptime(event.get("[ipfix][flowEndSeconds]").to_s, '%Y-%m-%dT%H:%M:%S').to_time.to_i
+       duration = t - @@time_map[key]
+       event.set("[ipfix][throughput]", event.get("[ipfix][octetDeltaCountFromSourceNode]").to_i / duration.to_i)
+       event.set("[ipfix][reverseThroughput]", event.get("[ipfix][reverseOctetDeltaCountFromSourceNode]").to_i / duration.to_i)
+       @@time_map[key] = t
+    else
+       startTime = DateTime.strptime(event.get("[ipfix][flowStartSeconds]").to_s, '%Y-%m-%dT%H:%M:%S').to_time.to_i
+       endTime = DateTime.strptime(event.get("[ipfix][flowEndSeconds]").to_s, '%Y-%m-%dT%H:%M:%S').to_time.to_i
+       duration = endTime-startTime
+       event.set("[ipfix][throughput]", event.get("[ipfix][octetDeltaCountFromSourceNode]").to_i / duration.to_i)
+       event.set("[ipfix][reverseThroughput]", event.get("[ipfix][reverseOctetDeltaCountFromSourceNode]").to_i / duration.to_i)
+       @@time_map[key] = endTime
+    end
     return [event]
 end
