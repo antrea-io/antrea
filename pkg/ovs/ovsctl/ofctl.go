@@ -36,7 +36,6 @@ func (c *ovsCtlClient) DumpFlows(args ...string) ([]string, error) {
 		flowList = append(flowList, trimFlowStr(scanner.Text()))
 	}
 	return flowList, nil
-
 }
 
 func (c *ovsCtlClient) DumpMatchedFlow(matchStr string) (string, error) {
@@ -64,11 +63,14 @@ func (c *ovsCtlClient) DumpTableFlows(table uint8) ([]string, error) {
 	return c.DumpFlows(fmt.Sprintf("table=%d", table))
 }
 
-func (c *ovsCtlClient) DumpGroup(groupID int) (string, error) {
-	// There seems a bug in ovs-ofctl that dump-groups always returns all
-	// the groups when using Openflow13, even when the group ID is provided.
-	// As a workaround, we do not specify Openflow13 to run the command.
-	groupDump, err := c.runOfctlCmd(false, "dump-groups", strconv.Itoa(groupID))
+func (c *ovsCtlClient) DumpGroup(groupID uint32) (string, error) {
+	// Only OpenFlow 1.5 and later support dumping a specific group. Earlier
+	// versions of OpenFlow always dump all groups. But when OpenFlow
+	// version is not specified, ovs-ofctl defaults to use OpenFlow10 but
+	// with the Nicira extensions enabled, which can support dumping a
+	// single group too. So here, we do not specify Openflow13 to run the
+	// command.
+	groupDump, err := c.runOfctlCmd(false, "dump-groups", strconv.FormatUint(uint64(groupID), 10))
 	if err != nil {
 		return "", err
 	}
@@ -85,27 +87,18 @@ func (c *ovsCtlClient) DumpGroup(groupID int) (string, error) {
 	return strings.TrimSpace(scanner.Text()), nil
 }
 
-func (c *ovsCtlClient) DumpGroups(args ...string) ([][]string, error) {
-	groupsDump, err := c.RunOfctlCmd("dump-groups", args...)
+func (c *ovsCtlClient) DumpGroups() ([]string, error) {
+	groupsDump, err := c.RunOfctlCmd("dump-groups")
 	if err != nil {
 		return nil, err
 	}
-	groupsDumpStr := strings.TrimSpace(string(groupsDump))
-
-	scanner := bufio.NewScanner(strings.NewReader(groupsDumpStr))
+	scanner := bufio.NewScanner(strings.NewReader(string(groupsDump)))
 	scanner.Split(bufio.ScanLines)
 	// Skip the first line.
 	scanner.Scan()
-	rawGroupItems := []string{}
+	groupList := []string{}
 	for scanner.Scan() {
-		rawGroupItems = append(rawGroupItems, scanner.Text())
-	}
-
-	var groupList [][]string
-	for _, rawGroupItem := range rawGroupItems {
-		rawGroupItem = strings.TrimSpace(rawGroupItem)
-		elems := strings.Split(rawGroupItem, ",bucket=")
-		groupList = append(groupList, elems)
+		groupList = append(groupList, strings.TrimSpace(scanner.Text()))
 	}
 	return groupList, nil
 }

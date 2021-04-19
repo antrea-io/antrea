@@ -51,7 +51,7 @@ type testCase struct {
 	namespace      string
 	query          string
 	expectedStatus int
-	dumpGroups     bool
+	resps          []Response
 }
 
 func TestBadRequests(t *testing.T) {
@@ -61,12 +61,15 @@ func TestBadRequests(t *testing.T) {
 		"NetworkPolicy only":        "?networkpolicy=np1",
 		"Namespace only":            "?namespace=ns1",
 		"Pod and NetworkPolicy":     "?pod=pod1&&networkpolicy=np1",
-		"Pod and Table":             "?pod=pod1&&table=0",
+		"Pod and table":             "?pod=pod1&&table=0",
 		"Non-existing table number": "?table=123",
 		"Non-existing table name":   "?table=notexist",
 		"Too big table number":      "?table=256",
 		"Invalid table number":      "?table=0classification",
 		"Invalid table name":        "?table=classification0",
+		"Invalid group IDs":         "?groups=all,0",
+		"Too big group ID":          "?groups=123,4294967296",
+		"Negative group ID":         "?groups=-1",
 	}
 
 	handler := HandleFunc(nil)
@@ -135,7 +138,7 @@ func TestServiceFlows(t *testing.T) {
 			namespace:      "ns1",
 			query:          "?service=svc1&&namespace=ns1",
 			expectedStatus: http.StatusOK,
-			dumpGroups:     true,
+			resps:          append(testResponses, testGroupResponses...),
 		},
 		{
 			test:           "Non-existing Service",
@@ -159,7 +162,7 @@ func TestServiceFlows(t *testing.T) {
 				ovsctl.EXPECT().DumpMatchedFlow(f).Return(testDumpFlows[i], nil).Times(1)
 			}
 			for i, g := range testGroupIDs {
-				ovsctl.EXPECT().DumpGroup(int(g)).Return(testDumpGroups[i], nil).Times(1)
+				ovsctl.EXPECT().DumpGroup(uint32(g)).Return(testDumpGroups[i], nil).Times(1)
 			}
 		} else {
 			p.EXPECT().GetServiceFlowKeys(tc.name, tc.namespace).Return(nil, nil, false).Times(1)
@@ -243,6 +246,74 @@ func TestTableFlows(t *testing.T) {
 
 }
 
+func TestGroups(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	testcases := []struct {
+		testCase
+		groupIDs     []uint32
+		dumpedGroups []string
+	}{
+		{
+			testCase: testCase{
+				test:           "All groups",
+				query:          "?groups=all",
+				expectedStatus: http.StatusOK,
+				resps:          testGroupResponses,
+			},
+			dumpedGroups: testDumpGroups,
+		},
+		{
+			testCase: testCase{
+				test:           "Group 1234",
+				query:          "?groups=1234",
+				expectedStatus: http.StatusOK,
+				resps:          []Response{{"group1234"}},
+			},
+			groupIDs:     []uint32{1234},
+			dumpedGroups: []string{"group1234"},
+		},
+		{
+			testCase: testCase{
+				test:           "Non-existing group 1234",
+				query:          "?groups=1234",
+				expectedStatus: http.StatusOK,
+				resps:          []Response{},
+			},
+			groupIDs:     []uint32{1234},
+			dumpedGroups: []string{""},
+		},
+		{
+			testCase: testCase{
+				test:           "Group 10, 100, and 1000",
+				query:          "?groups=10,100,1000",
+				expectedStatus: http.StatusOK,
+				resps:          []Response{{"group10"}, {"group1000"}},
+			},
+			groupIDs:     []uint32{10, 100, 1000},
+			dumpedGroups: []string{"group10", "", "group1000"},
+		},
+	}
+	for _, tc := range testcases {
+		ovsctl := ovsctltest.NewMockOVSCtlClient(ctrl)
+		q := aqtest.NewMockAgentQuerier(ctrl)
+		if tc.groupIDs == nil {
+			// Get all.
+			q.EXPECT().GetOVSCtlClient().Return(ovsctl).Times(1)
+			ovsctl.EXPECT().DumpGroups().Return(tc.dumpedGroups, nil).Times(1)
+		} else {
+			// Get all.
+			q.EXPECT().GetOVSCtlClient().Return(ovsctl).Times(len(tc.groupIDs))
+			for i, id := range tc.groupIDs {
+				ovsctl.EXPECT().DumpGroup(id).Return(tc.dumpedGroups[i], nil).Times(1)
+			}
+		}
+
+		runHTTPTest(t, &tc.testCase, q)
+	}
+}
+
 func runHTTPTest(t *testing.T, tc *testCase, aq agentquerier.AgentQuerier) {
 	handler := HandleFunc(aq)
 	req, err := http.NewRequest(http.MethodGet, tc.query, nil)
@@ -256,8 +327,8 @@ func runHTTPTest(t *testing.T, tc *testCase, aq agentquerier.AgentQuerier) {
 		var received []Response
 		err = json.Unmarshal(recorder.Body.Bytes(), &received)
 		assert.Nil(t, err)
-		if tc.dumpGroups {
-			assert.Equal(t, append(testResponses, testGroupResponses...), received)
+		if tc.resps != nil {
+			assert.Equal(t, tc.resps, received)
 		} else {
 			assert.Equal(t, testResponses, received)
 		}
