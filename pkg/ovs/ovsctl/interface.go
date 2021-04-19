@@ -40,9 +40,9 @@ type OVSCtlClient interface {
 	// DumpTableFlows returns all flows in the table.
 	DumpTableFlows(table uint8) ([]string, error)
 	// DumpGroup returns the OpenFlow group if it exists on the bridge.
-	DumpGroup(groupID int) (string, error)
+	DumpGroup(groupID uint32) (string, error)
 	// DumpGroups returns OpenFlow groups of the bridge.
-	DumpGroups(args ...string) ([][]string, error)
+	DumpGroups() ([]string, error)
 	// DumpPortsDesc returns OpenFlow ports descriptions of the bridge.
 	DumpPortsDesc() ([][]string, error)
 	// RunOfctlCmd executes "ovs-ofctl" command and returns the outputs.
