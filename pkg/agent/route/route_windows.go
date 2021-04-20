@@ -18,6 +18,7 @@ package route
 
 import (
 	"errors"
+	"fmt"
 	"net"
 	"sync"
 
@@ -63,7 +64,7 @@ func NewClient(serviceCIDR *net.IPNet, networkConfig *config.NetworkConfig, noSN
 func (c *Client) Initialize(nodeConfig *config.NodeConfig, done func()) error {
 	c.nodeConfig = nodeConfig
 	if bridgeInf, err := net.InterfaceByName(nodeConfig.OVSBridge); err != nil {
-		klog.Warningf("Failed to find the interface %s: %v", nodeConfig.OVSBridge, err)
+		return fmt.Errorf("failed to find the interface %s: %v", nodeConfig.OVSBridge, err)
 	} else {
 		c.bridgeInfIndex = bridgeInf.Index
 	}
@@ -96,6 +97,7 @@ func (c *Client) Reconcile(podCIDRs []string) error {
 			c.hostRoutes.Store(dst, rt)
 			continue
 		}
+		// If the route is not for uplink interface, ignore it.
 		if c.nodeConfig.UplinkNetConfig != nil && rt.LinkIndex != c.nodeConfig.UplinkNetConfig.Index {
 			continue
 		}

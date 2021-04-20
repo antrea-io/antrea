@@ -281,15 +281,22 @@ func (c *client) hostBridgeUplinkFlows(localSubnet net.IPNet, category cookie.Ca
 			Cookie(c.cookieAllocator.Request(category).Raw()).
 			Done(),
 	}
-	// The packages received from uplink are forwarded to OVS bridge local interface by default.
-	// If NoEncap is enabled, the reply packets from remote Pod can be forwarded to local Pod directly.
-	// by explicitly resubmitting them to EgressRuleTable and marking "macRewriteMark" at same time.
 	if c.encapMode.SupportsNoEncap() {
+		// If NoEncap is enabled, the return traffic goes the symmetric path as the requests. After inputting from uplink,
+		// the return traffic is forwarded to host stack via br-int. Then it is routed to antrea-gw0 and enters OVS again.
+		// Finally, it reaches its destination.
 		flows = append(flows, c.pipeline[conntrackStateTable].BuildFlow(priorityHigh).MatchProtocol(binding.ProtocolIP).
 			MatchRegRange(int(marksReg), markTrafficFromUplink, binding.Range{0, 15}).
+			MatchCTStateNew(true).MatchCTStateTrk(true).
 			MatchDstIPNet(localSubnet).
 			Action().LoadRegRange(int(marksReg), macRewriteMark, macRewriteMarkRange).
 			Action().ResubmitToTable(EgressRuleTable).
+			Cookie(c.cookieAllocator.Request(category).Raw()).
+			Done())
+		flows = append(flows, c.pipeline[conntrackStateTable].BuildFlow(priorityHigh).MatchProtocol(binding.ProtocolIP).
+			MatchRegRange(int(marksReg), markTrafficFromUplink, binding.Range{0, 15}).
+			MatchDstIPNet(localSubnet).
+			Action().Output(int(bridgeOFPort)).
 			Cookie(c.cookieAllocator.Request(category).Raw()).
 			Done())
 	}
