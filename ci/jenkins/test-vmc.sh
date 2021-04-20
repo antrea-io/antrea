@@ -244,6 +244,11 @@ function setup_cluster() {
             exit 1
         fi
     fi
+
+    # Remove a taint on Node from capv: node.cloudprovider.kubernetes.io/uninitialized=true:NoSchedule
+    kubectl get node --no-headers=true --kubeconfig "${GIT_CHECKOUT_DIR}/jenkins/out/kubeconfig" | awk '{print $1}' | while read nodename; do
+        kubectl taint nodes $nodename node.cloudprovider.kubernetes.io/uninitialized=true:NoSchedule- || true
+    done
 }
 
 function copy_image {
