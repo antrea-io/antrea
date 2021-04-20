@@ -37,7 +37,8 @@ type Connection struct {
 	ID        uint32
 	Timeout   uint32
 	StartTime time.Time
-	// For invalid and closed connections: StopTime is the time when connection was updated last.
+	// For invalid and closed connections or deny connections: StopTime is the time when connection
+	// was updated last.
 	// For established connections: StopTime is latest time when it was polled.
 	StopTime time.Time
 	// IsPresent flag helps in cleaning up connections when they are not in conntrack table anymore.
@@ -50,20 +51,29 @@ type Connection struct {
 	StatusFlag         uint32
 	Labels, LabelsMask []byte
 	// TODO: Have a separate field for protocol. No need to keep it in Tuple.
-	TupleOrig, TupleReply          Tuple
+	FlowKey                        Tuple
 	OriginalPackets, OriginalBytes uint64
 	ReversePackets, ReverseBytes   uint64
 	// Fields specific to Antrea
-	SourcePodNamespace            string
-	SourcePodName                 string
-	DestinationPodNamespace       string
-	DestinationPodName            string
-	DestinationServicePortName    string
-	IngressNetworkPolicyName      string
-	IngressNetworkPolicyNamespace string
-	EgressNetworkPolicyName       string
-	EgressNetworkPolicyNamespace  string
-	TCPState                      string
+	SourcePodNamespace             string
+	SourcePodName                  string
+	DestinationPodNamespace        string
+	DestinationPodName             string
+	DestinationServicePortName     string
+	DestinationServiceAddress      net.IP
+	DestinationServicePort         uint16
+	IngressNetworkPolicyName       string
+	IngressNetworkPolicyNamespace  string
+	IngressNetworkPolicyRuleAction uint8
+	EgressNetworkPolicyName        string
+	EgressNetworkPolicyNamespace   string
+	EgressNetworkPolicyRuleAction  uint8
+	TCPState                       string
+	// fields specific to deny connections
+	// DeltaBytes and DeltaPackets are octetDeltaCount and packetDeltaCount over each active
+	// flow timeout duration.
+	DeltaBytes, DeltaPackets uint64
+	LastExportTime           time.Time
 }
 
 type FlowRecord struct {

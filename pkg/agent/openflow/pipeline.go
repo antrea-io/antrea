@@ -223,7 +223,7 @@ func (rt regType) reg() string {
 
 const (
 	// marksReg stores traffic-source mark and pod-found mark.
-	// traffic-source resides in [0..15], pod-found resides in [16], Antrea Policy disposition in [21-22], Custom Reasons in [24-25]
+	// traffic-source resides in [0..15], pod-found resides in [16], Antrea Policy disposition in [21-22], Custom Reasons in [24-26]
 	marksReg        regType = 0
 	PortCacheReg    regType = 1
 	swapReg         regType = 2
@@ -268,7 +268,7 @@ const (
 	DispositionDrop  = 0b01
 	DispositionRej   = 0b10
 
-	// custom reason is loaded in marksReg [24-25]
+	// custom reason is loaded in marksReg [24-26]
 	// The custom reason mark is used to indicate the reason(s) for sending the packet
 	// to the controller. Reasons can be or-ed to indicate that the packets was sent
 	// for multiple reasons.
@@ -284,6 +284,11 @@ const (
 	// controller send reject packet as packet-out, we want reject response to bypass
 	// the connTrack to avoid unexpected drop.
 	CustomReasonReject = 0b10
+	// CustomReasonDeny is used when sending packet-in message to controller indicating
+	// that the corresponding connection has been dropped or rejected. It can be consumed
+	// by the Flow Exporter to export flow records for connections denied by network
+	// policy rules.
+	CustomReasonDeny = 0b100
 )
 
 var DispositionToString = map[uint32]string{
@@ -313,10 +318,10 @@ var (
 	// disposition of Antrea Policy. It could have more bits to support more disposition
 	// that Antrea policy support in the future.
 	APDispositionMarkRange = binding.Range{21, 22}
-	// CustomReasonMarkRange takes the 24 to 25 bits of register marksReg to indicate
+	// CustomReasonMarkRange takes the 24 to 26 bits of register marksReg to indicate
 	// the reason of sending packet to the controller. It could have more bits to
 	// support more customReason in the future.
-	CustomReasonMarkRange = binding.Range{24, 25}
+	CustomReasonMarkRange = binding.Range{24, 26}
 	// endpointIPRegRange takes a 32-bit range of register endpointIPReg to store
 	// the selected Service Endpoint IP.
 	endpointIPRegRange = binding.Range{0, 31}
@@ -376,6 +381,7 @@ func portToUint16(port int) uint16 {
 type client struct {
 	enableProxy        bool
 	enableAntreaPolicy bool
+	enableDenyTracking bool
 	enableEgress       bool
 	roundInfo          types.RoundInfo
 	cookieAllocator    cookie.Allocator
@@ -1537,18 +1543,24 @@ func (c *client) conjunctionActionDenyFlow(conjunctionID uint32, tableID binding
 		Action().LoadRegRange(int(CNPDenyConjIDReg), conjunctionID, binding.Range{0, 31}).
 		Action().LoadRegRange(int(marksReg), cnpDenyMark, cnpDenyMarkRange)
 
+	var customReason int
+	if c.enableDenyTracking {
+		customReason += CustomReasonDeny
+		flowBuilder = flowBuilder.
+			Action().LoadRegRange(int(marksReg), disposition, APDispositionMarkRange)
+	}
 	if enableLogging {
-		customReason := CustomReasonLogging
-		if disposition == DispositionRej {
-			customReason += CustomReasonReject
-		}
+		customReason += CustomReasonLogging
 		flowBuilder = flowBuilder.
-			Action().LoadRegRange(int(marksReg), disposition, APDispositionMarkRange).
+			Action().LoadRegRange(int(marksReg), disposition, APDispositionMarkRange)
+	}
+	if disposition == DispositionRej {
+		customReason += CustomReasonReject
+	}
+
+	if enableLogging || c.enableDenyTracking || disposition == DispositionRej {
+		flowBuilder = flowBuilder.
 			Action().LoadRegRange(int(marksReg), uint32(customReason), CustomReasonMarkRange).
-			Action().SendToController(uint8(PacketInReasonNP))
-	} else if disposition == DispositionRej {
-		flowBuilder = flowBuilder.
-			Action().LoadRegRange(int(marksReg), CustomReasonReject, CustomReasonMarkRange). // Do the rejection.
 			Action().SendToController(uint8(PacketInReasonNP))
 	}
 
@@ -1697,6 +1709,15 @@ func (c *client) conjunctiveMatchFlow(tableID binding.TableIDType, matchKey *typ
 // defaultDropFlow generates the flow to drop packets if the match condition is matched.
 func (c *client) defaultDropFlow(tableID binding.TableIDType, matchKey *types.MatchKey, matchValue interface{}) binding.Flow {
 	fb := c.pipeline[tableID].BuildFlow(priorityNormal)
+	if c.enableDenyTracking {
+		return c.addFlowMatch(fb, matchKey, matchValue).
+			Action().Drop().
+			Action().LoadRegRange(int(marksReg), DispositionDrop, APDispositionMarkRange).
+			Action().LoadRegRange(int(marksReg), CustomReasonDeny, CustomReasonMarkRange).
+			Action().SendToController(uint8(PacketInReasonNP)).
+			Cookie(c.cookieAllocator.Request(cookie.Default).Raw()).
+			Done()
+	}
 	return c.addFlowMatch(fb, matchKey, matchValue).
 		Action().Drop().
 		Cookie(c.cookieAllocator.Request(cookie.Default).Raw()).
@@ -2131,7 +2152,7 @@ func (c *client) generatePipeline() {
 }
 
 // NewClient is the constructor of the Client interface.
-func NewClient(bridgeName, mgmtAddr string, ovsDatapathType ovsconfig.OVSDatapathType, enableProxy, enableAntreaPolicy, enableEgress bool) Client {
+func NewClient(bridgeName, mgmtAddr string, ovsDatapathType ovsconfig.OVSDatapathType, enableProxy, enableAntreaPolicy, enableEgress bool, enableDenyTracking bool) Client {
 	bridge := binding.NewOFBridge(bridgeName, mgmtAddr)
 	policyCache := cache.NewIndexer(
 		policyConjKeyFunc,
@@ -2141,6 +2162,7 @@ func NewClient(bridgeName, mgmtAddr string, ovsDatapathType ovsconfig.OVSDatapat
 		bridge:                   bridge,
 		enableProxy:              enableProxy,
 		enableAntreaPolicy:       enableAntreaPolicy,
+		enableDenyTracking:       enableDenyTracking,
 		enableEgress:             enableEgress,
 		nodeFlowCache:            newFlowCategoryCache(),
 		podFlowCache:             newFlowCategoryCache(),

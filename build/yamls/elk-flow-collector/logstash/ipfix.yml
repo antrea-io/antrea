@@ -4124,3 +4124,9 @@
   137:
     - :uint8
     - :flowType
+  139:
+    - :uint8
+    - :ingressNetworkPolicyRuleAction
+  140:
+    - :uint8
+    - :egressNetworkPolicyRuleAction

@@ -31,6 +31,27 @@ def filter(event)
         event.set("[ipfix][flowTypeStr]", "From External")
     end
 
+    ingressRuleAction = event.get("[ipfix][ingressNetworkPolicyRuleAction]")
+    egressRuleAction = event.get("[ipfix][egressNetworkPolicyRuleAction]")
+    if ingressRuleAction == 0
+        event.set("[ipfix][ingressNetworkPolicyRuleActionStr]", "No Action")
+    elsif ingressRuleAction == 1
+        event.set("[ipfix][ingressNetworkPolicyRuleActionStr]", "Allow")
+    elsif ingressRuleAction == 2
+        event.set("[ipfix][ingressNetworkPolicyRuleActionStr]", "Drop")
+    elsif ingressRuleAction == 3
+        event.set("[ipfix][ingressNetworkPolicyRuleActionStr]", "Reject")
+    end
+    if egressRuleAction == 0
+        event.set("[ipfix][egressNetworkPolicyRuleActionStr]", "No Action")
+    elsif egressRuleAction == 1
+        event.set("[ipfix][egressNetworkPolicyRuleActionStr]", "Allow")
+    elsif egressRuleAction == 2
+        event.set("[ipfix][egressNetworkPolicyRuleActionStr]", "Drop")
+    elsif egressRuleAction == 3
+        event.set("[ipfix][egressNetworkPolicyRuleActionStr]", "Reject")
+    end
+
     if event.get("[ipfix][destinationIPv6Address]").nil?
         event.set("[ipfix][destinationIP]", event.get("[ipfix][destinationIPv4Address]"))
     else
