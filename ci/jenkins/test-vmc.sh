@@ -268,6 +268,20 @@ function copy_image {
   ${SSH_WITH_ANTREA_CI_KEY} -n capv@${IP} "sudo crictl images | grep '<none>' | awk '{print \$3}' | xargs -r crictl rmi"
 }
 
+function run_codecov {
+    flag=$1
+    file=$2
+    dir=$3
+    remote=$4
+    ip=$5
+
+    if [[ $remote ]]; then
+        ${SSH_WITH_UTILS_KEY} -n jenkins@${ip} "curl -s https://codecov.io/bash | env -i bash -s -- -c -t ${CODECOV_TOKEN} -F ${flag} -f ${file}"
+    else
+        curl -s https://codecov.io/bash | env -i bash -s -- -c -t ${CODECOV_TOKEN} -F ${flag} -f ${file} -s ${dir}
+    fi
+}
+
 function deliver_antrea {
     echo "====== Building Antrea for the Following Commit ======"
     git show --numstat
@@ -403,7 +417,7 @@ function run_integration {
     fi
     ${SSH_WITH_UTILS_KEY} -n jenkins@${VM_IP} "git clone ${ghprbAuthorRepoGitUrl} antrea && cd antrea && git checkout ${GIT_BRANCH} && DOCKER_REGISTRY=${DOCKER_REGISTRY} make docker-test-integration"
     if [[ "$COVERAGE" == true ]]; then
-        ${SSH_WITH_UTILS_KEY} -n jenkins@${VM_IP} "curl -s https://codecov.io/bash | bash -s -- -c -t ${CODECOV_TOKEN} -F integration-tests -f '.coverage/coverage-integration.txt'"
+        run_codecov "integration-tests" ".coverage/coverage-integration.txt" "" true ${VM_IP}
     fi
 }
 
@@ -455,7 +469,7 @@ function run_e2e {
     tar -zcf ${GIT_CHECKOUT_DIR}/antrea-test-logs.tar.gz ${GIT_CHECKOUT_DIR}/antrea-test-logs
     if [[ "$COVERAGE" == true ]]; then
         tar -zcf ${GIT_CHECKOUT_DIR}/e2e-coverage.tar.gz ${GIT_CHECKOUT_DIR}/e2e-coverage
-        curl -s https://codecov.io/bash | bash -s -- -c -t ${CODECOV_TOKEN} -F e2e-tests -f '*.cov.out*' -s ${GIT_CHECKOUT_DIR}/e2e-coverage
+        run_codecov "e2e-tests" "*.cov.out*" "${GIT_CHECKOUT_DIR}/e2e-coverage" false ""
     fi
 }
 
@@ -519,7 +533,7 @@ function run_conformance {
         mkdir -p ${GIT_CHECKOUT_DIR}/conformance-coverage
         collect_coverage
         tar -zcf ${GIT_CHECKOUT_DIR}/$TESTCASE-coverage.tar.gz ${GIT_CHECKOUT_DIR}/conformance-coverage
-        curl -s https://codecov.io/bash | bash -s -- -c -t ${CODECOV_TOKEN} -F e2e-tests -f '*antrea*' -s ${GIT_CHECKOUT_DIR}/conformance-coverage
+        run_codecov "e2e-tests" "*antrea*" "${GIT_CHECKOUT_DIR}/conformance-coverage" false ""
     fi
 }
 
