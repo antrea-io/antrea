@@ -447,17 +447,17 @@ func (mr *MockClientMockRecorder) InstallServiceGroup(arg0, arg1, arg2 interface
 }
 
 // InstallTraceflowFlows mocks base method
-func (m *MockClient) InstallTraceflowFlows(arg0 byte, arg1, arg2 bool, arg3 *openflow.Packet, arg4 uint32, arg5 uint16) error {
+func (m *MockClient) InstallTraceflowFlows(arg0 byte, arg1, arg2, arg3 bool, arg4 *openflow.Packet, arg5 uint32, arg6 uint16) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "InstallTraceflowFlows", arg0, arg1, arg2, arg3, arg4, arg5)
+	ret := m.ctrl.Call(m, "InstallTraceflowFlows", arg0, arg1, arg2, arg3, arg4, arg5, arg6)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // InstallTraceflowFlows indicates an expected call of InstallTraceflowFlows
-func (mr *MockClientMockRecorder) InstallTraceflowFlows(arg0, arg1, arg2, arg3, arg4, arg5 interface{}) *gomock.Call {
+func (mr *MockClientMockRecorder) InstallTraceflowFlows(arg0, arg1, arg2, arg3, arg4, arg5, arg6 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallTraceflowFlows", reflect.TypeOf((*MockClient)(nil).InstallTraceflowFlows), arg0, arg1, arg2, arg3, arg4, arg5)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallTraceflowFlows", reflect.TypeOf((*MockClient)(nil).InstallTraceflowFlows), arg0, arg1, arg2, arg3, arg4, arg5, arg6)
 }
 
 // IsConnected mocks base method

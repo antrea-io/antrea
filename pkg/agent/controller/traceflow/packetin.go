@@ -113,7 +113,7 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1alpha1.Tracefl
 	}
 	c.runningTraceflowsMutex.RUnlock()
 	if !exists {
-		return nil, nil, nil, fmt.Errorf("Traceflow for dataplane tag %d not found in cache", pktIn.Data.Ethertype)
+		return nil, nil, nil, fmt.Errorf("Traceflow for dataplane tag %d not found in cache", tag)
 	}
 
 	var capturedPacket *crdv1alpha1.Packet
@@ -122,9 +122,11 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1alpha1.Tracefl
 		// avoid capturing too many matched packets.
 		c.ofClient.UninstallTraceflowFlows(tag)
 		// Report the captured dropped packet, if the Traceflow is for
-		// the dropped packet only; otherwise only the sender reports
-		// the first captured packet.
-		if tfState.isSender || tfState.droppedOnly {
+		// the dropped packet only; report too if only the receiver
+		// captures packets in the Traceflow (live-traffic Traceflow
+		// that has only destination Pod set); otherwise only the sender
+		// should report the first captured packet.
+		if tfState.isSender || tfState.receiverOnly || tfState.droppedOnly {
 			capturedPacket = parseCapturedPacket(pktIn)
 		}
 	}
@@ -145,32 +147,33 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1alpha1.Tracefl
 		ob := new(crdv1alpha1.Observation)
 		ob.Component = crdv1alpha1.ComponentForwarding
 		ob.Action = crdv1alpha1.ActionReceived
-		ob.ComponentInfo = openflow.GetFlowTableName(openflow.ClassifierTable)
 		obs = append(obs, *ob)
 	}
 
 	// Collect Service DNAT.
-	if isValidCtNw(ctNwDst) && ipDst != ctNwDst {
-		ob := &crdv1alpha1.Observation{
-			Component:       crdv1alpha1.ComponentLB,
-			Action:          crdv1alpha1.ActionForwarded,
-			TranslatedDstIP: ipDst,
+	if !tfState.receiverOnly {
+		if isValidCtNw(ctNwDst) && ipDst != ctNwDst {
+			ob := &crdv1alpha1.Observation{
+				Component:       crdv1alpha1.ComponentLB,
+				Action:          crdv1alpha1.ActionForwarded,
+				TranslatedDstIP: ipDst,
+			}
+			obs = append(obs, *ob)
 		}
-		obs = append(obs, *ob)
-	}
 
-	// Collect egress conjunctionID and get NetworkPolicy from cache.
-	if match := getMatchRegField(matchers, uint32(openflow.EgressReg)); match != nil {
-		egressInfo, err := getRegValue(match, nil)
-		if err != nil {
-			return nil, nil, nil, err
+		// Collect egress conjunctionID and get NetworkPolicy from cache.
+		if match := getMatchRegField(matchers, uint32(openflow.EgressReg)); match != nil {
+			egressInfo, err := getRegValue(match, nil)
+			if err != nil {
+				return nil, nil, nil, err
+			}
+			ob := getNetworkPolicyObservation(tableID, false)
+			npRef := c.networkPolicyQuerier.GetNetworkPolicyByRuleFlowID(egressInfo)
+			if npRef != nil {
+				ob.NetworkPolicy = npRef.ToString()
+			}
+			obs = append(obs, *ob)
 		}
-		ob := getNetworkPolicyObservation(tableID, false)
-		npRef := c.networkPolicyQuerier.GetNetworkPolicyByRuleFlowID(egressInfo)
-		if npRef != nil {
-			ob.NetworkPolicy = npRef.ToString()
-		}
-		obs = append(obs, *ob)
 	}
 
 	// Collect ingress conjunctionID and get NetworkPolicy from cache.
