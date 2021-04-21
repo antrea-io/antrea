@@ -80,16 +80,26 @@ func TestTraceflowIntraNodeANP(t *testing.T) {
 	failOnError(err, t)
 
 	node1 := nodeName(0)
-	node1Pods, _, node1CleanupFn := createTestBusyboxPods(t, data, 2, node1)
+	node1Pods, _, node1CleanupFn := createTestBusyboxPods(t, data, 3, node1)
 	defer node1CleanupFn()
 
 	var denyIngress *secv1alpha1.NetworkPolicy
 	denyIngressName := "test-anp-deny-ingress"
-	if denyIngress, err = data.createANPDenyIngress("antrea-e2e", node1Pods[1], denyIngressName); err != nil {
+	if denyIngress, err = data.createANPDenyIngress("antrea-e2e", node1Pods[1], denyIngressName, false); err != nil {
 		t.Fatalf("Error when creating Antrea NetworkPolicy: %v", err)
 	}
 	defer func() {
 		if err = data.deleteAntreaNetworkpolicy(denyIngress); err != nil {
+			t.Errorf("Error when deleting Antrea NetworkPolicy: %v", err)
+		}
+	}()
+	var rejectIngress *secv1alpha1.NetworkPolicy
+	rejectIngressName := "test-anp-reject-ingress"
+	if rejectIngress, err = data.createANPDenyIngress("antrea-e2e", node1Pods[2], rejectIngressName, true); err != nil {
+		t.Fatalf("Error when creating Antrea NetworkPolicy: %v", err)
+	}
+	defer func() {
+		if err = data.deleteAntreaNetworkpolicy(rejectIngress); err != nil {
 			t.Errorf("Error when deleting Antrea NetworkPolicy: %v", err)
 		}
 	}()
@@ -141,6 +151,53 @@ func TestTraceflowIntraNodeANP(t *testing.T) {
 							Component:     v1alpha1.ComponentNetworkPolicy,
 							ComponentInfo: "IngressMetric",
 							Action:        v1alpha1.ActionDropped,
+						},
+					},
+				},
+			},
+		},
+		{
+			name:      "ANPRejectIngressIPv4",
+			ipVersion: 4,
+			tf: &v1alpha1.Traceflow{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: randName(fmt.Sprintf("%s-%s-to-%s-%s-", testNamespace, node1Pods[0], testNamespace, node1Pods[2])),
+				},
+				Spec: v1alpha1.TraceflowSpec{
+					Source: v1alpha1.Source{
+						Namespace: testNamespace,
+						Pod:       node1Pods[0],
+					},
+					Destination: v1alpha1.Destination{
+						Namespace: testNamespace,
+						Pod:       node1Pods[2],
+					},
+					Packet: v1alpha1.Packet{
+						IPHeader: v1alpha1.IPHeader{
+							Protocol: protocolTCP,
+						},
+						TransportHeader: v1alpha1.TransportHeader{
+							TCP: &v1alpha1.TCPHeader{
+								DstPort: 80,
+								Flags:   2,
+							},
+						},
+					},
+				},
+			},
+			expectedPhase: v1alpha1.Succeeded,
+			expectedResults: []v1alpha1.NodeResult{
+				{
+					Node: node1,
+					Observations: []v1alpha1.Observation{
+						{
+							Component: v1alpha1.ComponentSpoofGuard,
+							Action:    v1alpha1.ActionForwarded,
+						},
+						{
+							Component:     v1alpha1.ComponentNetworkPolicy,
+							ComponentInfo: "IngressMetric",
+							Action:        v1alpha1.ActionRejected,
 						},
 					},
 				},
@@ -1759,8 +1816,11 @@ func compareObservations(expected v1alpha1.NodeResult, actual v1alpha1.NodeResul
 }
 
 // createANPDenyIngress creates an Antrea NetworkPolicy that denies ingress traffic for pods of specific label.
-func (data *TestData) createANPDenyIngress(key string, value string, name string) (*secv1alpha1.NetworkPolicy, error) {
+func (data *TestData) createANPDenyIngress(key string, value string, name string, isReject bool) (*secv1alpha1.NetworkPolicy, error) {
 	dropACT := secv1alpha1.RuleActionDrop
+	if isReject {
+		dropACT = secv1alpha1.RuleActionReject
+	}
 	anp := secv1alpha1.NetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
