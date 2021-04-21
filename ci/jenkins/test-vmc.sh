@@ -282,7 +282,7 @@ function run_codecov {
     remote=$4
     ip=$5
 
-    if [[ $remote ]]; then
+    if [[ $remote == true ]]; then
         ${SSH_WITH_UTILS_KEY} -n jenkins@${ip} "curl -s https://codecov.io/bash | env -i bash -s -- -c -t ${CODECOV_TOKEN} -F ${flag} -f ${file}"
     else
         curl -s https://codecov.io/bash | env -i bash -s -- -c -t ${CODECOV_TOKEN} -F ${flag} -f ${file} -s ${dir}
