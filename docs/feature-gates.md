@@ -51,7 +51,10 @@ example, to enable `AntreaProxy` on Linux, edit the Agent configuration in the
 `AntreaProxy` implements Service load-balancing for ClusterIP Services as part
 of the OVS pipeline, as opposed to relying on kube-proxy. This only applies to
 traffic originating from Pods, and destined to ClusterIP Services. In
-particular, it does not apply to NodePort Services.
+particular, it does not apply to NodePort Services. Kindly remind that due
+to some restrictions on the implementation of Services in Antrea, the maximum
+number of Endpoints that Antrea can support at the moment is 800. If the number
+of Endpoints for a given Service exceeds 800, extra Endpoints will be dropped.
 
 Note that this feature must be enabled for Windows. The Antrea Windows YAML
 manifest provided as part of releases enables this feature by default. If you

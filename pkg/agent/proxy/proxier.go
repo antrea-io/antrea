@@ -25,6 +25,7 @@ import (
 	"k8s.io/api/discovery/v1beta1"
 	"k8s.io/apimachinery/pkg/runtime"
 	k8sapitypes "k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/klog"
@@ -42,6 +43,10 @@ import (
 const (
 	resyncPeriod  = time.Minute
 	componentName = "antrea-agent-proxy"
+	// Due to the maximum message size in Openflow 1.3 and the implementation of Services in Antrea, the maximum number
+	// of Endpoints that Antrea can support at the moment is 800. If the number of Endpoints for a given Service exceeds
+	// 800, extra Endpoints will be dropped.
+	maxEndpoints = 800
 )
 
 // Proxier wraps proxy.Provider and adds extra methods. It is introduced for
@@ -90,6 +95,8 @@ type proxier struct {
 	serviceStringMap map[string]k8sproxy.ServicePortName
 	// serviceStringMapMutex protects serviceStringMap object.
 	serviceStringMapMutex sync.Mutex
+	// oversizeServiceSet records the Services that have more than 800 Endpoints.
+	oversizeServiceSet sets.String
 
 	runner              *k8sproxy.BoundedFrequencyRunner
 	stopChan            <-chan struct{}
@@ -117,6 +124,9 @@ func (p *proxier) removeStaleServices() {
 		}
 		svcInfo := svcPort.(*types.ServiceInfo)
 		klog.V(2).Infof("Removing stale Service: %s %s", svcPortName.Name, svcInfo.String())
+		if p.oversizeServiceSet.Has(svcInfo.String()) {
+			p.oversizeServiceSet.Delete(svcInfo.String())
+		}
 		if err := p.ofClient.UninstallServiceFlows(svcInfo.ClusterIP(), uint16(svcInfo.Port()), svcInfo.OFProtocol); err != nil {
 			klog.Errorf("Failed to remove flows of Service %v: %v", svcPortName, err)
 			continue
@@ -293,6 +303,18 @@ func (p *proxier) installServices() {
 		}
 
 		if needUpdateEndpoints {
+			if len(endpointUpdateList) > maxEndpoints {
+				endpointUpdateList = endpointUpdateList[:maxEndpoints]
+				if !p.oversizeServiceSet.Has(svcInfo.String()) {
+					klog.Warningf("Since Endpoints of Service %s exceeds %d, extra Endpoints will be dropped.", svcInfo.String(), maxEndpoints)
+					p.oversizeServiceSet.Insert(svcInfo.String())
+				}
+			} else {
+				if p.oversizeServiceSet.Has(svcInfo.String()) {
+					p.oversizeServiceSet.Delete(svcInfo.String())
+				}
+			}
+
 			err := p.ofClient.InstallEndpointFlows(svcInfo.OFProtocol, endpointUpdateList)
 			if err != nil {
 				klog.Errorf("Error when installing Endpoints flows: %v", err)
@@ -605,6 +627,7 @@ func NewProxier(
 		endpointsMap:             types.EndpointsMap{},
 		endpointReferenceCounter: map[string]int{},
 		serviceStringMap:         map[string]k8sproxy.ServicePortName{},
+		oversizeServiceSet:       sets.NewString(),
 		groupCounter:             types.NewGroupCounter(),
 		ofClient:                 ofClient,
 		isIPv6:                   isIPv6,
