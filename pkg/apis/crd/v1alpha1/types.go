@@ -130,6 +130,9 @@ type Source struct {
 	Namespace string `json:"namespace,omitempty"`
 	// Pod is the source pod.
 	Pod string `json:"pod,omitempty"`
+	// IP is the source IPv4 or IPv6 address. IP as the source is supported
+	// only for live-traffic Traceflow.
+	IP string `json:"ip,omitempty"`
 }
 
 // Destination describes the destination spec of the traceflow.

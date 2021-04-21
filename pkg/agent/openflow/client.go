@@ -227,7 +227,7 @@ type Client interface {
 	SendTraceflowPacket(dataplaneTag uint8, packet *binding.Packet, inPort uint32, outPort int32) error
 
 	// InstallTraceflowFlows installs flows for a Traceflow request.
-	InstallTraceflowFlows(dataplaneTag uint8, liveTraffic, droppedOnly bool, packet *binding.Packet, srcOFPort uint32, timeoutSeconds uint16) error
+	InstallTraceflowFlows(dataplaneTag uint8, liveTraffic, droppedOnly, receiverOnly bool, packet *binding.Packet, ofPort uint32, timeoutSeconds uint16) error
 
 	// UninstallTraceflowFlows uninstalls flows for a Traceflow request.
 	UninstallTraceflowFlows(dataplaneTag uint8) error
@@ -860,10 +860,10 @@ func (c *client) SendTraceflowPacket(dataplaneTag uint8, packet *binding.Packet,
 	return c.bridge.SendPacketOut(packetOutObj)
 }
 
-func (c *client) InstallTraceflowFlows(dataplaneTag uint8, liveTraffic, droppedOnly bool, packet *binding.Packet, srcOFPort uint32, timeoutSeconds uint16) error {
+func (c *client) InstallTraceflowFlows(dataplaneTag uint8, liveTraffic, droppedOnly, receiverOnly bool, packet *binding.Packet, ofPort uint32, timeoutSeconds uint16) error {
 	cacheKey := fmt.Sprintf("%x", dataplaneTag)
 	flows := []binding.Flow{}
-	flows = append(flows, c.traceflowConnectionTrackFlows(dataplaneTag, packet, srcOFPort, timeoutSeconds, cookie.Default)...)
+	flows = append(flows, c.traceflowConnectionTrackFlows(dataplaneTag, receiverOnly, packet, ofPort, timeoutSeconds, cookie.Default)...)
 	flows = append(flows, c.traceflowL2ForwardOutputFlows(dataplaneTag, liveTraffic, droppedOnly, timeoutSeconds, cookie.Default)...)
 	flows = append(flows, c.traceflowNetworkPolicyFlows(dataplaneTag, timeoutSeconds, cookie.Default)...)
 	return c.addFlows(c.tfFlowCache, cacheKey, flows)
