@@ -17,6 +17,7 @@ package ipfix
 import (
 	"fmt"
 
+	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
 	ipfixexport "github.com/vmware/go-ipfix/pkg/exporter"
 )
 
@@ -25,7 +26,7 @@ var _ IPFIXExportingProcess = new(ipfixExportingProcess)
 // IPFIXExportingProcess interface is added to facilitate unit testing without involving the code from go-ipfix library.
 type IPFIXExportingProcess interface {
 	NewTemplateID() uint16
-	SendSet(set IPFIXSet) (int, error)
+	SendSet(set ipfixentities.Set) (int, error)
 	CloseConnToCollector()
 }
 
@@ -44,8 +45,8 @@ func NewIPFIXExportingProcess(input ipfixexport.ExporterInput) (*ipfixExportingP
 	}, nil
 }
 
-func (exp *ipfixExportingProcess) SendSet(set IPFIXSet) (int, error) {
-	sentBytes, err := exp.ExportingProcess.SendSet(set.GetSet())
+func (exp *ipfixExportingProcess) SendSet(set ipfixentities.Set) (int, error) {
+	sentBytes, err := exp.ExportingProcess.SendSet(set)
 	return sentBytes, err
 }
 
