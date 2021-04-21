@@ -299,6 +299,7 @@ func (c *Controller) checkTraceflowStatus(tf *crdv1alpha1.Traceflow) error {
 				}
 				if ob.Action == crdv1alpha1.ActionDelivered ||
 					ob.Action == crdv1alpha1.ActionDropped ||
+					ob.Action == crdv1alpha1.ActionRejected ||
 					ob.Action == crdv1alpha1.ActionForwardedOutOfOverlay {
 					receiver = true
 				}

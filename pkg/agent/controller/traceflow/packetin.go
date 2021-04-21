@@ -72,23 +72,34 @@ func (c *Controller) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
 
 func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1alpha1.Traceflow, *crdv1alpha1.NodeResult, *crdv1alpha1.Packet, error) {
 	matchers := pktIn.GetMatches()
-	var match *ofctrl.MatchField
 
 	// Get data plane tag.
 	// Directly read data plane tag from packet.
+	var err error
 	var tag uint8
+	var ctNwDst, ipDst string
 	if pktIn.Data.Ethertype == protocol.IPv4_MSG {
 		ipPacket, ok := pktIn.Data.Data.(*protocol.IPv4)
 		if !ok {
 			return nil, nil, nil, errors.New("invalid traceflow IPv4 packet")
 		}
 		tag = ipPacket.DSCP
+		ctNwDst, err = getCTDstValue(matchers, false)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		ipDst = ipPacket.NWDst.String()
 	} else if pktIn.Data.Ethertype == protocol.IPv6_MSG {
 		ipv6Packet, ok := pktIn.Data.Data.(*protocol.IPv6)
 		if !ok {
 			return nil, nil, nil, errors.New("invalid traceflow IPv6 packet")
 		}
 		tag = ipv6Packet.TrafficClass >> 2
+		ctNwDst, err = getCTDstValue(matchers, true)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		ipDst = ipv6Packet.NWDst.String()
 	} else {
 		return nil, nil, nil, fmt.Errorf("unsupported traceflow packet Ethertype: %d", pktIn.Data.Ethertype)
 	}
@@ -139,32 +150,6 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1alpha1.Tracefl
 	}
 
 	// Collect Service DNAT.
-	ctNwDst := ""
-	ipDst := ""
-	switch pktIn.Data.Ethertype {
-	case protocol.IPv4_MSG:
-		ipPacket, ok := pktIn.Data.Data.(*protocol.IPv4)
-		if !ok {
-			return nil, nil, nil, errors.New("invalid traceflow IPv4 packet")
-		}
-		ctNwDst, err = getCTDstValue(matchers, false)
-		if err != nil {
-			return nil, nil, nil, err
-		}
-		ipDst = ipPacket.NWDst.String()
-	case protocol.IPv6_MSG:
-		ipPacket, ok := pktIn.Data.Data.(*protocol.IPv6)
-		if !ok {
-			return nil, nil, nil, errors.New("invalid traceflow IPv6 packet")
-		}
-		ctNwDst, err = getCTDstValue(matchers, true)
-		if err != nil {
-			return nil, nil, nil, err
-		}
-		ipDst = ipPacket.NWDst.String()
-	default:
-		return nil, nil, nil, fmt.Errorf("unsupported traceflow packet ether type %d", pktIn.Data.Ethertype)
-	}
 	if isValidCtNw(ctNwDst) && ipDst != ctNwDst {
 		ob := &crdv1alpha1.Observation{
 			Component:       crdv1alpha1.ComponentLB,
@@ -175,7 +160,7 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1alpha1.Tracefl
 	}
 
 	// Collect egress conjunctionID and get NetworkPolicy from cache.
-	if match = getMatchRegField(matchers, uint32(openflow.EgressReg)); match != nil {
+	if match := getMatchRegField(matchers, uint32(openflow.EgressReg)); match != nil {
 		egressInfo, err := getRegValue(match, nil)
 		if err != nil {
 			return nil, nil, nil, err
@@ -189,7 +174,7 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1alpha1.Tracefl
 	}
 
 	// Collect ingress conjunctionID and get NetworkPolicy from cache.
-	if match = getMatchRegField(matchers, uint32(openflow.IngressReg)); match != nil {
+	if match := getMatchRegField(matchers, uint32(openflow.IngressReg)); match != nil {
 		ingressInfo, err := getRegValue(match, nil)
 		if err != nil {
 			return nil, nil, nil, err
@@ -205,14 +190,18 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1alpha1.Tracefl
 	// Get drop table.
 	if tableID == uint8(openflow.EgressMetricTable) || tableID == uint8(openflow.IngressMetricTable) {
 		ob := getNetworkPolicyObservation(tableID, tableID == uint8(openflow.IngressMetricTable))
-		if match = getMatchRegField(matchers, uint32(openflow.CNPDenyConjIDReg)); match != nil {
+		if match := getMatchRegField(matchers, uint32(openflow.CNPDenyConjIDReg)); match != nil {
 			notAllowConjInfo, err := getRegValue(match, nil)
 			if err != nil {
 				return nil, nil, nil, err
 			}
-			npRef := c.networkPolicyQuerier.GetNetworkPolicyByRuleFlowID(notAllowConjInfo)
-			if npRef != nil {
-				ob.NetworkPolicy = npRef.ToString()
+			if ruleRef := c.networkPolicyQuerier.GetRuleByFlowID(notAllowConjInfo); ruleRef != nil {
+				if npRef := ruleRef.PolicyRef; npRef != nil {
+					ob.NetworkPolicy = npRef.ToString()
+				}
+				if ruleRef.Action != nil && *ruleRef.Action == crdv1alpha1.RuleActionReject {
+					ob.Action = crdv1alpha1.ActionRejected
+				}
 			}
 		}
 		obs = append(obs, *ob)
@@ -226,14 +215,14 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1alpha1.Tracefl
 		ob := new(crdv1alpha1.Observation)
 		tunnelDstIP := ""
 		isIPv6 := c.nodeConfig.NodeIPAddr.IP.To4() == nil
-		if match = getMatchTunnelDstField(matchers, isIPv6); match != nil {
+		if match := getMatchTunnelDstField(matchers, isIPv6); match != nil {
 			tunnelDstIP, err = getTunnelDstValue(match)
 			if err != nil {
 				return nil, nil, nil, err
 			}
 		}
 		var outputPort uint32
-		if match = getMatchRegField(matchers, uint32(openflow.PortCacheReg)); match != nil {
+		if match := getMatchRegField(matchers, uint32(openflow.PortCacheReg)); match != nil {
 			outputPort, err = getRegValue(match, nil)
 			if err != nil {
 				return nil, nil, nil, err
