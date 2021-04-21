@@ -58,9 +58,10 @@ const (
 	maxRetryDelay = 300 * time.Second
 	// Default number of workers processing traceflow request.
 	defaultWorkers = 4
-	// Seconds delay before injecting packet into OVS. The time of different nodes may not be completely
+	// Delay in milliseconds before injecting packet into OVS. The time of different nodes may not be completely
 	// synchronized, which requires a delay before inject packet.
-	injectPacketDelay = 5
+	injectPacketDelay      = 2000
+	injectLocalPacketDelay = 100
 
 	// ICMP Echo Request type and code.
 	icmpEchoRequestType   uint8 = 8
@@ -365,7 +366,11 @@ func (c *Controller) startTraceflow(tf *crdv1alpha1.Traceflow) error {
 			// If the destination is Service/IP or the packet will
 			// be sent to remote Node, wait a small period for other
 			// Nodes.
-			time.Sleep(time.Duration(injectPacketDelay) * time.Second)
+			time.Sleep(time.Duration(injectPacketDelay) * time.Millisecond)
+		} else {
+			// Issue #2116
+			// Wait a small period after flows installed to avoid unexpected behavior.
+			time.Sleep(time.Duration(injectLocalPacketDelay) * time.Millisecond)
 		}
 		klog.V(2).Infof("Injecting packet for Traceflow %s", tf.Name)
 		err = c.ofClient.SendTraceflowPacket(tfState.tag, packet, ofPort, -1)
