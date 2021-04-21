@@ -236,7 +236,8 @@ kubectl apply -f https://raw.githubusercontent.com/vmware-tanzu/antrea/main/buil
 
 The following configuration parameters have to be provided through the Flow Aggregator
 ConfigMap. `externalFlowCollectorAddr` is a mandatory parameter. We provide an example
-value for this parameter in the following snippet.
+value for this parameter in the following snippet. If you have deployed the ELK
+flow collector, then please use the address, `<Logstash Cluster IP>:4739:UDP`.
 
 ```yaml
 flow-aggregator.conf: |
@@ -331,15 +332,24 @@ different Nodes can be preserved.
 ## Quick deployment
 
 If you would like to quickly try Network Flow Visibility feature, you can deploy
-Antrea and the Flow Aggregator Service with the required configuration on a
-[vagrant setup](../test/e2e/README.md). You can use the following command:
+Antrea, the Flow Aggregator Service and the ELK Flow Collector on the
+[Vagrant setup](../test/e2e/README.md). However, the ELK Flow Collector deployment
+requires the Vagrant Nodes to have higher memory than default, so we have to provision
+the Nodes with the `--large` option. You can use the following command:
 
 ```shell
-./infra/vagrant/push_antrea.sh -fc <externalFlowCollectorAddr>
+./infra/vagrant/provision.sh --large
+./infra/vagrant/push_antrea.sh --flow-collector ELK
 ```
 
-For example, the address of ELK Flow Collector can be provided as `externalFlowCollectorAddr`
-after successfully following the steps given in [here](#deployment-steps).
+Alternatively, given any external IPFIX flow collector, you can deploy Antrea and
+the Flow Aggregator Service on a default Vagrant setup by running the following
+commands:
+
+```shell
+./infra/vagrant/provision.sh
+./infra/vagrant/push_antrea.sh --flow-collector <externalFlowCollectorAddress>
+```
 
 ## ELK Flow Collector
 
@@ -369,10 +379,15 @@ exploration.
 
 ### Deployment Steps
 
-First step is to fetch the necessary resources from the Antrea repository. You can
-either clone the entire repo or download the particular folder using the subversion (svn)
-utility. If the deployed version of Antrea has a release `<TAG>` (e.g. `v0.10.0`),
-then you can use the following command:
+If you are looking for steps to deploy the ELK Flow Collector along with a new Antrea
+cluster and the Flow Aggregator Service, then please refer to the
+[quick deployment](#quick-deployment) section.
+
+The following steps will deploy the ELK Flow Collector on an existing Kubernetes
+cluster, which uses Antrea as the CNI. First step is to fetch the necessary resources
+from the Antrea repository. You can either clone the entire repo or download the
+particular folder using the subversion(svn) utility. If the deployed version of
+Antrea has a release `<TAG>` (e.g. `v0.10.0`), then you can use the following command:
 
 ```shell
 git clone --depth 1 --branch <TAG> https://github.com/vmware-tanzu/antrea.git && cd antrea/build/yamls/
@@ -398,12 +413,13 @@ kubectl create configmap logstash-configmap -n elk-flow-collector --from-file=./
 kubectl apply -f ./elk-flow-collector/elk-flow-collector.yml -n elk-flow-collector
 ```
 
-Kibana dashboard is exposed as a Nodeport Service, which can be accessed via
-`http://[NodeIP]: 30007`
+Please refer to the [Flow Aggregator Configuration](#configuration-1) to configure
+external flow collector as Logstash Service Cluster IP.
 
-`elk-flow-collector/kibana.ndjson` is an auto-generated reusable file containing
-pre-built objects for visualizing Pod-to-Pod, Pod-to-Service and Node-to-Node
-flow records. To import the dashboards into Kibana, go to
+Kibana dashboard is exposed as a Nodeport Service, which can be accessed via
+`http://[NodeIP]: 30007`. `elk-flow-collector/kibana.ndjson` is an auto-generated
+reusable file containing pre-built objects for visualizing Pod-to-Pod, Pod-to-Service
+and Node-to-Node flow records. To import the dashboards into Kibana, go to
 **Management -> Saved Objects** and import `elk-flow-collector/kibana.ndjson`.
 
 ### Pre-built Dashboards
