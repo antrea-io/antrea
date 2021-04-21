@@ -22,6 +22,7 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
+	ipfixentitiestesting "github.com/vmware/go-ipfix/pkg/entities/testing"
 	ipfixregistry "github.com/vmware/go-ipfix/pkg/registry"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter"
@@ -92,8 +93,8 @@ func testSendTemplateSet(t *testing.T, v4Enabled bool, v6Enabled bool) {
 }
 
 func sendTemplateSet(t *testing.T, ctrl *gomock.Controller, mockIPFIXExpProc *ipfixtest.MockIPFIXExportingProcess, mockIPFIXRegistry *ipfixtest.MockIPFIXRegistry, flowExp *flowExporter, isIPv6 bool) {
-	var mockTempSet *ipfixtest.MockIPFIXSet
-	mockTempSet = ipfixtest.NewMockIPFIXSet(ctrl)
+	var mockTempSet *ipfixentitiestesting.MockSet
+	mockTempSet = ipfixentitiestesting.NewMockSet(ctrl)
 
 	// Following consists of all elements that are in IANAInfoElements and AntreaInfoElements (globals)
 	// Only the element name is needed, other arguments have dummy values.
@@ -154,7 +155,7 @@ func testSendDataSet(t *testing.T, v4Enabled bool, v6Enabled bool) {
 	defer ctrl.Finish()
 
 	mockIPFIXExpProc := ipfixtest.NewMockIPFIXExportingProcess(ctrl)
-	mockDataSet := ipfixtest.NewMockIPFIXSet(ctrl)
+	mockDataSet := ipfixentitiestesting.NewMockSet(ctrl)
 	mockIPFIXRegistry := ipfixtest.NewMockIPFIXRegistry(ctrl)
 
 	var recordv4, recordv6 flowexporter.FlowRecord
@@ -338,7 +339,7 @@ func runSendFlowRecordTests(t *testing.T, flowExp *flowExporter, isIPv6 bool) {
 	defer ctrl.Finish()
 
 	mockIPFIXExpProc := ipfixtest.NewMockIPFIXExportingProcess(ctrl)
-	mockDataSet := ipfixtest.NewMockIPFIXSet(ctrl)
+	mockDataSet := ipfixentitiestesting.NewMockSet(ctrl)
 	mockConnStore := connectionstest.NewMockConnectionStore(ctrl)
 	flowExp.process = mockIPFIXExpProc
 	flowExp.ipfixSet = mockDataSet
