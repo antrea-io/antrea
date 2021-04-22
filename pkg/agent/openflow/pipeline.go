@@ -2073,15 +2073,16 @@ func priorityIndexFunc(obj interface{}) ([]string, error) {
 func (c *client) generatePipeline() {
 	bridge := c.bridge
 	c.pipeline = map[binding.TableIDType]binding.Table{
-		ClassifierTable:       bridge.CreateTable(ClassifierTable, spoofGuardTable, binding.TableMissActionDrop),
-		arpResponderTable:     bridge.CreateTable(arpResponderTable, binding.LastTableID, binding.TableMissActionDrop),
-		conntrackTable:        bridge.CreateTable(conntrackTable, conntrackStateTable, binding.TableMissActionNone),
-		EgressRuleTable:       bridge.CreateTable(EgressRuleTable, EgressDefaultTable, binding.TableMissActionNext),
-		EgressDefaultTable:    bridge.CreateTable(EgressDefaultTable, EgressMetricTable, binding.TableMissActionNext),
-		EgressMetricTable:     bridge.CreateTable(EgressMetricTable, l3ForwardingTable, binding.TableMissActionNext),
-		l3ForwardingTable:     bridge.CreateTable(l3ForwardingTable, l2ForwardingCalcTable, binding.TableMissActionNext),
-		l3DecTTLTable:         bridge.CreateTable(l3DecTTLTable, l2ForwardingCalcTable, binding.TableMissActionNext),
-		l2ForwardingCalcTable: bridge.CreateTable(l2ForwardingCalcTable, conntrackCommitTable, binding.TableMissActionNext),
+		ClassifierTable:    bridge.CreateTable(ClassifierTable, spoofGuardTable, binding.TableMissActionDrop),
+		arpResponderTable:  bridge.CreateTable(arpResponderTable, binding.LastTableID, binding.TableMissActionDrop),
+		conntrackTable:     bridge.CreateTable(conntrackTable, conntrackStateTable, binding.TableMissActionNone),
+		EgressRuleTable:    bridge.CreateTable(EgressRuleTable, EgressDefaultTable, binding.TableMissActionNext),
+		EgressDefaultTable: bridge.CreateTable(EgressDefaultTable, EgressMetricTable, binding.TableMissActionNext),
+		EgressMetricTable:  bridge.CreateTable(EgressMetricTable, l3ForwardingTable, binding.TableMissActionNext),
+		l3ForwardingTable:  bridge.CreateTable(l3ForwardingTable, l2ForwardingCalcTable, binding.TableMissActionNext),
+		l3DecTTLTable:      bridge.CreateTable(l3DecTTLTable, l2ForwardingCalcTable, binding.TableMissActionNext),
+		// Packets from l2ForwardingCalcTable should be forwarded to IngressMetricTable by default to collect ingress stats.
+		l2ForwardingCalcTable: bridge.CreateTable(l2ForwardingCalcTable, IngressMetricTable, binding.TableMissActionNext),
 		IngressRuleTable:      bridge.CreateTable(IngressRuleTable, IngressDefaultTable, binding.TableMissActionNext),
 		IngressDefaultTable:   bridge.CreateTable(IngressDefaultTable, IngressMetricTable, binding.TableMissActionNext),
 		IngressMetricTable:    bridge.CreateTable(IngressMetricTable, conntrackCommitTable, binding.TableMissActionNext),
