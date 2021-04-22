@@ -12,14 +12,16 @@ based on any one of these K8s versions should work with that Antrea version.
 | Antrea Version | Installer / Distribution | Cloud Infra | Node Info | Node Size | Conformance Results | Comments |
 |-|-|-|-|-|-|-|
 | v1.0.0 | Kubeadm v1.21.0 | AWS EC2 | Ubuntu 20.04.2 LTS (5.4.0-1045-aws) amd64, docker://20.10.6 | t3.medium |  |  |
-|  |  |  | Windows Server 2019 Datacenter (10.0.17763.1817), docker://19.3.14 | t3.medium |  |  |
-|  |  |  | Ubuntu 20.04.2 LTS (5.4.0-1045-aws) arm64, docker://20.10.6 | t3.medium |  |  |
-|  | Rancher v2.5.7, K8s v1.20.5-rancher1-1 | AWS EC2 | Ubuntu 18.04.5 LTS (5.4.0-1045-aws) amd64, docker://19.3.15 | t3a.medium | Some tests failing because of [this issue](https://github.com/kubernetes/kubernetes/pull/100199) |  |
-|  | K3s v1.19.8+k3s1 | [OSUOSL] | Ubuntu 20.04.1 LTS (5.4.0-66-generic) arm64, containerd://1.4.3-k3s3 | 2 vCPUs, 4GB RAM | Installed with [k3sup] 0.9.13 | Antrea CI |
-|  | Kops v1.20, K8s v1.20.5 | AWS EC2 | Ubuntu 20.04.2 LTS (5.4.0-1041-aws) amd64, containerd://1.4.4 | t3.medium | [results tarball](http://downloads.antrea.io/artifacts/sonobuoy-conformance/kops_202104212218_sonobuoy_bf0f8e77-c9df-472a-85e2-65e456cf4d83.tar.gz) |  |
-|  | EKS, K8s v1.17.12 | AWS | AmazonLinux2, docker | t3.medium |  | Antrea CI |
-|  | GKE, K8s v1.19.8-gke.1600 | GCP | Ubuntu 18.04, docker | e2-standard-4 |  | Antrea CI |
-|  | AKS, K8s v.18.14 | Azure | Ubuntu 18.04, moby | Standard_DS2_v2 |  | Antrea CI |
+| - | - | - | Windows Server 2019 Datacenter (10.0.17763.1817), docker://19.3.14 | t3.medium |  |  |
+| - | - | - | Ubuntu 20.04.2 LTS (5.4.0-1045-aws) arm64, docker://20.10.6 | t3.medium |  |  |
+| - | Cluster API Provider vSphere (CAPV), K8s 1.19.1 | VMC on AWS, vSphere 7.0.1 | Ubuntu 18.04, containerd | 2 vCPUs, 8GB RAM |  | Antrea CI |
+| - | Rancher v2.5.7, K8s v1.20.5-rancher1-1 | AWS EC2 | Ubuntu 18.04.5 LTS (5.4.0-1045-aws) amd64, docker://19.3.15 | t3a.medium | Some tests failing because of [this issue](https://github.com/kubernetes/kubernetes/issues/100197) |  |
+| - | K3s v1.19.8+k3s1 | [OSUOSL] | Ubuntu 20.04.1 LTS (5.4.0-66-generic) arm64, containerd://1.4.3-k3s3 | 2 vCPUs, 4GB RAM |  | Antrea CI, cluster installed with [k3sup] 0.9.13 |
+| - | Kops v1.20, K8s v1.20.5 | AWS EC2 | Ubuntu 20.04.2 LTS (5.4.0-1041-aws) amd64, containerd://1.4.4 | t3.medium | [results tarball](http://downloads.antrea.io/artifacts/sonobuoy-conformance/kops_202104212218_sonobuoy_bf0f8e77-c9df-472a-85e2-65e456cf4d83.tar.gz) |  |
+| - | EKS, K8s v1.17.12 | AWS | AmazonLinux2, docker | t3.medium |  | Antrea CI |
+| - | GKE, K8s v1.19.8-gke.1600 | GCP | Ubuntu 18.04, docker | e2-standard-4 |  | Antrea CI |
+| - | AKS, K8s v.18.14 | Azure | Ubuntu 18.04, moby | Standard_DS2_v2 |  | Antrea CI |
+| - | Kind v0.9.0, K8s v1.19.1 | N/A | Ubuntu 20.10, containerd://1.4.0 | N/A |  | [Requirements for using Antrea on Kind](kind.md) |
 
 ## Installer-specific instructions
 
@@ -41,6 +43,10 @@ When creating a cluster, run K3s with the following options:
 
 When creating a cluster, run Kops with `--networking cni`, to enable CNI for the
 cluster without deploying a specific network plugin.
+
+### Kind
+
+To deploy Antrea on Kind, please follow these [steps](kind.md).
 
 ## Updating the list
 
