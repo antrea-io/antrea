@@ -15,7 +15,7 @@ metadata:
 ---
 apiVersion: v1
 data:
-  antrea-agent.conf: |+
+  antrea-agent.conf: |
     # FeatureGates is a map of feature names to bools that enable or disable experimental features.
     featureGates:
     # Enable antrea proxy which provides ServiceLB for in-cluster services in antrea agent.
@@ -81,7 +81,6 @@ data:
     # hybrid:            noEncap if source and destination Nodes are on the same subnet, otherwise encap.
     #
     #trafficEncapMode: encap
-
   antrea-cni.conflist: |
     {
         "cniVersion":"0.3.0",
@@ -100,7 +99,7 @@ kind: ConfigMap
 metadata:
   labels:
     app: antrea
-  name: antrea-windows-config-8bb5gbgcdg
+  name: antrea-windows-config-4kcddbh9tt
   namespace: kube-system
 ---
 apiVersion: apps/v1
@@ -188,7 +187,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-windows-config-8bb5gbgcdg
+          name: antrea-windows-config-4kcddbh9tt
         name: antrea-windows-config
       - configMap:
           defaultMode: 420

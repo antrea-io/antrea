@@ -56,6 +56,7 @@ func TestRouteOperation(t *testing.T) {
 	client, err := NewClient(serviceCIDR, &config.NetworkConfig{}, false)
 	require.Nil(t, err)
 	nodeConfig := &config.NodeConfig{
+		OVSBridge: "Loopback Pseudo-Interface 1",
 		GatewayConfig: &config.GatewayConfig{
 			Name:      hostGateway,
 			LinkIndex: gwLink,
