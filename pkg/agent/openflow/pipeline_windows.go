@@ -287,14 +287,6 @@ func (c *client) hostBridgeUplinkFlows(localSubnet net.IPNet, category cookie.Ca
 		// Finally, it reaches its destination.
 		flows = append(flows, c.pipeline[conntrackStateTable].BuildFlow(priorityHigh).MatchProtocol(binding.ProtocolIP).
 			MatchRegRange(int(marksReg), markTrafficFromUplink, binding.Range{0, 15}).
-			MatchCTStateNew(true).MatchCTStateTrk(true).
-			MatchDstIPNet(localSubnet).
-			Action().LoadRegRange(int(marksReg), macRewriteMark, macRewriteMarkRange).
-			Action().ResubmitToTable(EgressRuleTable).
-			Cookie(c.cookieAllocator.Request(category).Raw()).
-			Done())
-		flows = append(flows, c.pipeline[conntrackStateTable].BuildFlow(priorityHigh).MatchProtocol(binding.ProtocolIP).
-			MatchRegRange(int(marksReg), markTrafficFromUplink, binding.Range{0, 15}).
 			MatchDstIPNet(localSubnet).
 			Action().Output(int(bridgeOFPort)).
 			Cookie(c.cookieAllocator.Request(category).Raw()).

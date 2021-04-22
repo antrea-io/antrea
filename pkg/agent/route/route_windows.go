@@ -63,11 +63,11 @@ func NewClient(serviceCIDR *net.IPNet, networkConfig *config.NetworkConfig, noSN
 // Service LoadBalancing is provided by OpenFlow.
 func (c *Client) Initialize(nodeConfig *config.NodeConfig, done func()) error {
 	c.nodeConfig = nodeConfig
-	if bridgeInf, err := net.InterfaceByName(nodeConfig.OVSBridge); err != nil {
+	bridgeInf, err := net.InterfaceByName(nodeConfig.OVSBridge)
+	if err != nil {
 		return fmt.Errorf("failed to find the interface %s: %v", nodeConfig.OVSBridge, err)
-	} else {
-		c.bridgeInfIndex = bridgeInf.Index
 	}
+	c.bridgeInfIndex = bridgeInf.Index
 	if err := c.initFwRules(); err != nil {
 		return err
 	}
