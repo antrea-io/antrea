@@ -25,6 +25,14 @@ based on any one of these K8s versions should work with that Antrea version.
 
 ## Installer-specific instructions
 
+### Kubeadm
+
+When running `kubeadm init` to create a cluster, you need to provide a range of
+IP addresses for the Pod network using `--pod-network-cidr`. By default, a /24
+subnet will be allocated out of the CIDR to every Node which joins the cluster,
+so make sure you use a large enough CIDR to accommodate the number of Nodes you
+want. Once the cluster has been created, this CIDR cannot be changed.
+
 ### Rancher
 
 When creating a workload cluster, set the [network
