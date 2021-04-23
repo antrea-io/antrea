@@ -25,9 +25,51 @@ spec:
                 type: object
                 properties:
                   podSelector:
-                    x-kubernetes-preserve-unknown-fields: true
+                    properties:
+                      matchExpressions:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            key:
+                              type: string
+                            operator:
+                              enum:
+                                - In
+                                - NotIn
+                                - Exists
+                                - DoesNotExist
+                              type: string
+                            values:
+                              type: array
+                              items:
+                                type: string
+                      matchLabels:
+                        type: object
+                    type: object
                   namespaceSelector:
-                    x-kubernetes-preserve-unknown-fields: true
+                    properties:
+                      matchExpressions:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            key:
+                              type: string
+                            operator:
+                              enum:
+                                - In
+                                - NotIn
+                                - Exists
+                                - DoesNotExist
+                              type: string
+                            values:
+                              type: array
+                              items:
+                                type: string
+                      matchLabels:
+                        type: object
+                    type: object
               egressIP:
                 type: string
                 oneOf:
@@ -434,9 +476,51 @@ spec:
                     # Ensure that Spec.AppliedTo does not allow IPBlock field
                     properties:
                       podSelector:
-                        x-kubernetes-preserve-unknown-fields: true
+                        properties:
+                          matchExpressions:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                key:
+                                  type: string
+                                operator:
+                                  enum:
+                                    - In
+                                    - NotIn
+                                    - Exists
+                                    - DoesNotExist
+                                  type: string
+                                values:
+                                  type: array
+                                  items:
+                                    type: string
+                          matchLabels:
+                            type: object
+                        type: object
                       namespaceSelector:
-                        x-kubernetes-preserve-unknown-fields: true
+                        properties:
+                          matchExpressions:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                key:
+                                  type: string
+                                operator:
+                                  enum:
+                                    - In
+                                    - NotIn
+                                    - Exists
+                                    - DoesNotExist
+                                  type: string
+                                values:
+                                  type: array
+                                  items:
+                                    type: string
+                          matchLabels:
+                            type: object
+                        type: object
                       group:
                         type: string
                 ingress:
@@ -453,9 +537,51 @@ spec:
                           # Ensure that rule AppliedTo does not allow IPBlock field
                           properties:
                             podSelector:
-                              x-kubernetes-preserve-unknown-fields: true
+                              properties:
+                                matchExpressions:
+                                  type: array
+                                  items:
+                                    type: object
+                                    properties:
+                                      key:
+                                        type: string
+                                      operator:
+                                        enum:
+                                          - In
+                                          - NotIn
+                                          - Exists
+                                          - DoesNotExist
+                                        type: string
+                                      values:
+                                        type: array
+                                        items:
+                                          type: string
+                                matchLabels:
+                                  type: object
+                              type: object
                             namespaceSelector:
-                              x-kubernetes-preserve-unknown-fields: true
+                              properties:
+                                matchExpressions:
+                                  type: array
+                                  items:
+                                    type: object
+                                    properties:
+                                      key:
+                                        type: string
+                                      operator:
+                                        enum:
+                                          - In
+                                          - NotIn
+                                          - Exists
+                                          - DoesNotExist
+                                        type: string
+                                      values:
+                                        type: array
+                                        items:
+                                          type: string
+                                matchLabels:
+                                  type: object
+                              type: object
                             group:
                               type: string
                       # Ensure that Action field allows only ALLOW, DROP and REJECT values
@@ -479,9 +605,51 @@ spec:
                           type: object
                           properties:
                             podSelector:
-                              x-kubernetes-preserve-unknown-fields: true
+                              properties:
+                                matchExpressions:
+                                  type: array
+                                  items:
+                                    type: object
+                                    properties:
+                                      key:
+                                        type: string
+                                      operator:
+                                        enum:
+                                          - In
+                                          - NotIn
+                                          - Exists
+                                          - DoesNotExist
+                                        type: string
+                                      values:
+                                        type: array
+                                        items:
+                                          type: string
+                                matchLabels:
+                                  type: object
+                              type: object
                             namespaceSelector:
-                              x-kubernetes-preserve-unknown-fields: true
+                              properties:
+                                matchExpressions:
+                                  type: array
+                                  items:
+                                    type: object
+                                    properties:
+                                      key:
+                                        type: string
+                                      operator:
+                                        enum:
+                                          - In
+                                          - NotIn
+                                          - Exists
+                                          - DoesNotExist
+                                        type: string
+                                      values:
+                                        type: array
+                                        items:
+                                          type: string
+                                matchLabels:
+                                  type: object
+                              type: object
                             ipBlock:
                               type: object
                               properties:
@@ -508,9 +676,51 @@ spec:
                           # Ensure that rule AppliedTo does not allow IPBlock field
                           properties:
                             podSelector:
-                              x-kubernetes-preserve-unknown-fields: true
+                              properties:
+                                matchExpressions:
+                                  type: array
+                                  items:
+                                    type: object
+                                    properties:
+                                      key:
+                                        type: string
+                                      operator:
+                                        enum:
+                                          - In
+                                          - NotIn
+                                          - Exists
+                                          - DoesNotExist
+                                        type: string
+                                      values:
+                                        type: array
+                                        items:
+                                          type: string
+                                matchLabels:
+                                  type: object
+                              type: object
                             namespaceSelector:
-                              x-kubernetes-preserve-unknown-fields: true
+                              properties:
+                                matchExpressions:
+                                  type: array
+                                  items:
+                                    type: object
+                                    properties:
+                                      key:
+                                        type: string
+                                      operator:
+                                        enum:
+                                          - In
+                                          - NotIn
+                                          - Exists
+                                          - DoesNotExist
+                                        type: string
+                                      values:
+                                        type: array
+                                        items:
+                                          type: string
+                                matchLabels:
+                                  type: object
+                              type: object
                             group:
                               type: string
                       # Ensure that Action field allows only ALLOW, DROP and REJECT values
@@ -534,9 +744,51 @@ spec:
                           type: object
                           properties:
                             podSelector:
-                              x-kubernetes-preserve-unknown-fields: true
+                              properties:
+                                matchExpressions:
+                                  type: array
+                                  items:
+                                    type: object
+                                    properties:
+                                      key:
+                                        type: string
+                                      operator:
+                                        enum:
+                                          - In
+                                          - NotIn
+                                          - Exists
+                                          - DoesNotExist
+                                        type: string
+                                      values:
+                                        type: array
+                                        items:
+                                          type: string
+                                matchLabels:
+                                  type: object
+                              type: object
                             namespaceSelector:
-                              x-kubernetes-preserve-unknown-fields: true
+                              properties:
+                                matchExpressions:
+                                  type: array
+                                  items:
+                                    type: object
+                                    properties:
+                                      key:
+                                        type: string
+                                      operator:
+                                        enum:
+                                          - In
+                                          - NotIn
+                                          - Exists
+                                          - DoesNotExist
+                                        type: string
+                                      values:
+                                        type: array
+                                        items:
+                                          type: string
+                                matchLabels:
+                                  type: object
+                              type: object
                             ipBlock:
                               type: object
                               properties:
@@ -667,9 +919,51 @@ spec:
                           type: object
                           properties:
                             podSelector:
-                              x-kubernetes-preserve-unknown-fields: true
+                              properties:
+                                matchExpressions:
+                                  type: array
+                                  items:
+                                    type: object
+                                    properties:
+                                      key:
+                                        type: string
+                                      operator:
+                                        enum:
+                                          - In
+                                          - NotIn
+                                          - Exists
+                                          - DoesNotExist
+                                        type: string
+                                      values:
+                                        type: array
+                                        items:
+                                          type: string
+                                matchLabels:
+                                  type: object
+                              type: object
                             namespaceSelector:
-                              x-kubernetes-preserve-unknown-fields: true
+                              properties:
+                                matchExpressions:
+                                  type: array
+                                  items:
+                                    type: object
+                                    properties:
+                                      key:
+                                        type: string
+                                      operator:
+                                        enum:
+                                          - In
+                                          - NotIn
+                                          - Exists
+                                          - DoesNotExist
+                                        type: string
+                                      values:
+                                        type: array
+                                        items:
+                                          type: string
+                                matchLabels:
+                                  type: object
+                              type: object
                             externalEntitySelector:
                               x-kubernetes-preserve-unknown-fields: true
                             ipBlock:
@@ -719,9 +1013,51 @@ spec:
                           type: object
                           properties:
                             podSelector:
-                              x-kubernetes-preserve-unknown-fields: true
+                              properties:
+                                matchExpressions:
+                                  type: array
+                                  items:
+                                    type: object
+                                    properties:
+                                      key:
+                                        type: string
+                                      operator:
+                                        enum:
+                                          - In
+                                          - NotIn
+                                          - Exists
+                                          - DoesNotExist
+                                        type: string
+                                      values:
+                                        type: array
+                                        items:
+                                          type: string
+                                matchLabels:
+                                  type: object
+                              type: object
                             namespaceSelector:
-                              x-kubernetes-preserve-unknown-fields: true
+                              properties:
+                                matchExpressions:
+                                  type: array
+                                  items:
+                                    type: object
+                                    properties:
+                                      key:
+                                        type: string
+                                      operator:
+                                        enum:
+                                          - In
+                                          - NotIn
+                                          - Exists
+                                          - DoesNotExist
+                                        type: string
+                                      values:
+                                        type: array
+                                        items:
+                                          type: string
+                                matchLabels:
+                                  type: object
+                              type: object
                             externalEntitySelector:
                               x-kubernetes-preserve-unknown-fields: true
                             ipBlock:
@@ -831,9 +1167,51 @@ spec:
                 childGroups:
                   x-kubernetes-preserve-unknown-fields: true
                 podSelector:
-                  x-kubernetes-preserve-unknown-fields: true
+                  properties:
+                    matchExpressions:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          key:
+                            type: string
+                          operator:
+                            enum:
+                              - In
+                              - NotIn
+                              - Exists
+                              - DoesNotExist
+                            type: string
+                          values:
+                            type: array
+                            items:
+                              type: string
+                    matchLabels:
+                      type: object
+                  type: object
                 namespaceSelector:
-                  x-kubernetes-preserve-unknown-fields: true
+                  properties:
+                    matchExpressions:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          key:
+                            type: string
+                          operator:
+                            enum:
+                              - In
+                              - NotIn
+                              - Exists
+                              - DoesNotExist
+                            type: string
+                          values:
+                            type: array
+                            items:
+                              type: string
+                    matchLabels:
+                      type: object
+                  type: object
                 externalEntitySelector:
                   x-kubernetes-preserve-unknown-fields: true
                 ipBlock:
@@ -1205,9 +1583,51 @@ spec:
                     # Ensure that Spec.AppliedTo does not allow IPBlock field
                     properties:
                       podSelector:
-                        x-kubernetes-preserve-unknown-fields: true
+                        properties:
+                          matchExpressions:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                key:
+                                  type: string
+                                operator:
+                                  enum:
+                                    - In
+                                    - NotIn
+                                    - Exists
+                                    - DoesNotExist
+                                  type: string
+                                values:
+                                  type: array
+                                  items:
+                                    type: string
+                          matchLabels:
+                            type: object
+                        type: object
                       namespaceSelector:
-                        x-kubernetes-preserve-unknown-fields: true
+                        properties:
+                          matchExpressions:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                key:
+                                  type: string
+                                operator:
+                                  enum:
+                                    - In
+                                    - NotIn
+                                    - Exists
+                                    - DoesNotExist
+                                  type: string
+                                values:
+                                  type: array
+                                  items:
+                                    type: string
+                          matchLabels:
+                            type: object
+                        type: object
                       group:
                         type: string
                 ingress:
@@ -1224,9 +1644,51 @@ spec:
                           # Ensure that rule AppliedTo does not allow IPBlock field
                           properties:
                             podSelector:
-                              x-kubernetes-preserve-unknown-fields: true
+                              properties:
+                                matchExpressions:
+                                  type: array
+                                  items:
+                                    type: object
+                                    properties:
+                                      key:
+                                        type: string
+                                      operator:
+                                        enum:
+                                          - In
+                                          - NotIn
+                                          - Exists
+                                          - DoesNotExist
+                                        type: string
+                                      values:
+                                        type: array
+                                        items:
+                                          type: string
+                                matchLabels:
+                                  type: object
+                              type: object
                             namespaceSelector:
-                              x-kubernetes-preserve-unknown-fields: true
+                              properties:
+                                matchExpressions:
+                                  type: array
+                                  items:
+                                    type: object
+                                    properties:
+                                      key:
+                                        type: string
+                                      operator:
+                                        enum:
+                                          - In
+                                          - NotIn
+                                          - Exists
+                                          - DoesNotExist
+                                        type: string
+                                      values:
+                                        type: array
+                                        items:
+                                          type: string
+                                matchLabels:
+                                  type: object
+                              type: object
                             group:
                               type: string
                       # Ensure that Action field allows only ALLOW, DROP and REJECT values
@@ -1250,9 +1712,51 @@ spec:
                           type: object
                           properties:
                             podSelector:
-                              x-kubernetes-preserve-unknown-fields: true
+                              properties:
+                                matchExpressions:
+                                  type: array
+                                  items:
+                                    type: object
+                                    properties:
+                                      key:
+                                        type: string
+                                      operator:
+                                        enum:
+                                          - In
+                                          - NotIn
+                                          - Exists
+                                          - DoesNotExist
+                                        type: string
+                                      values:
+                                        type: array
+                                        items:
+                                          type: string
+                                matchLabels:
+                                  type: object
+                              type: object
                             namespaceSelector:
-                              x-kubernetes-preserve-unknown-fields: true
+                              properties:
+                                matchExpressions:
+                                  type: array
+                                  items:
+                                    type: object
+                                    properties:
+                                      key:
+                                        type: string
+                                      operator:
+                                        enum:
+                                          - In
+                                          - NotIn
+                                          - Exists
+                                          - DoesNotExist
+                                        type: string
+                                      values:
+                                        type: array
+                                        items:
+                                          type: string
+                                matchLabels:
+                                  type: object
+                              type: object
                             ipBlock:
                               type: object
                               properties:
@@ -1279,9 +1783,51 @@ spec:
                           # Ensure that rule AppliedTo does not allow IPBlock field
                           properties:
                             podSelector:
-                              x-kubernetes-preserve-unknown-fields: true
+                              properties:
+                                matchExpressions:
+                                  type: array
+                                  items:
+                                    type: object
+                                    properties:
+                                      key:
+                                        type: string
+                                      operator:
+                                        enum:
+                                          - In
+                                          - NotIn
+                                          - Exists
+                                          - DoesNotExist
+                                        type: string
+                                      values:
+                                        type: array
+                                        items:
+                                          type: string
+                                matchLabels:
+                                  type: object
+                              type: object
                             namespaceSelector:
-                              x-kubernetes-preserve-unknown-fields: true
+                              properties:
+                                matchExpressions:
+                                  type: array
+                                  items:
+                                    type: object
+                                    properties:
+                                      key:
+                                        type: string
+                                      operator:
+                                        enum:
+                                          - In
+                                          - NotIn
+                                          - Exists
+                                          - DoesNotExist
+                                        type: string
+                                      values:
+                                        type: array
+                                        items:
+                                          type: string
+                                matchLabels:
+                                  type: object
+                              type: object
                             group:
                               type: string
                       # Ensure that Action field allows only ALLOW, DROP and REJECT values
@@ -1305,9 +1851,51 @@ spec:
                           type: object
                           properties:
                             podSelector:
-                              x-kubernetes-preserve-unknown-fields: true
+                              properties:
+                                matchExpressions:
+                                  type: array
+                                  items:
+                                    type: object
+                                    properties:
+                                      key:
+                                        type: string
+                                      operator:
+                                        enum:
+                                          - In
+                                          - NotIn
+                                          - Exists
+                                          - DoesNotExist
+                                        type: string
+                                      values:
+                                        type: array
+                                        items:
+                                          type: string
+                                matchLabels:
+                                  type: object
+                              type: object
                             namespaceSelector:
-                              x-kubernetes-preserve-unknown-fields: true
+                              properties:
+                                matchExpressions:
+                                  type: array
+                                  items:
+                                    type: object
+                                    properties:
+                                      key:
+                                        type: string
+                                      operator:
+                                        enum:
+                                          - In
+                                          - NotIn
+                                          - Exists
+                                          - DoesNotExist
+                                        type: string
+                                      values:
+                                        type: array
+                                        items:
+                                          type: string
+                                matchLabels:
+                                  type: object
+                              type: object
                             ipBlock:
                               type: object
                               properties:
@@ -1439,9 +2027,51 @@ spec:
                           type: object
                           properties:
                             podSelector:
-                              x-kubernetes-preserve-unknown-fields: true
+                              properties:
+                                matchExpressions:
+                                  type: array
+                                  items:
+                                    type: object
+                                    properties:
+                                      key:
+                                        type: string
+                                      operator:
+                                        enum:
+                                          - In
+                                          - NotIn
+                                          - Exists
+                                          - DoesNotExist
+                                        type: string
+                                      values:
+                                        type: array
+                                        items:
+                                          type: string
+                                matchLabels:
+                                  type: object
+                              type: object
                             namespaceSelector:
-                              x-kubernetes-preserve-unknown-fields: true
+                              properties:
+                                matchExpressions:
+                                  type: array
+                                  items:
+                                    type: object
+                                    properties:
+                                      key:
+                                        type: string
+                                      operator:
+                                        enum:
+                                          - In
+                                          - NotIn
+                                          - Exists
+                                          - DoesNotExist
+                                        type: string
+                                      values:
+                                        type: array
+                                        items:
+                                          type: string
+                                matchLabels:
+                                  type: object
+                              type: object
                             externalEntitySelector:
                               x-kubernetes-preserve-unknown-fields: true
                             ipBlock:
@@ -1491,9 +2121,51 @@ spec:
                           type: object
                           properties:
                             podSelector:
-                              x-kubernetes-preserve-unknown-fields: true
+                              properties:
+                                matchExpressions:
+                                  type: array
+                                  items:
+                                    type: object
+                                    properties:
+                                      key:
+                                        type: string
+                                      operator:
+                                        enum:
+                                          - In
+                                          - NotIn
+                                          - Exists
+                                          - DoesNotExist
+                                        type: string
+                                      values:
+                                        type: array
+                                        items:
+                                          type: string
+                                matchLabels:
+                                  type: object
+                              type: object
                             namespaceSelector:
-                              x-kubernetes-preserve-unknown-fields: true
+                              properties:
+                                matchExpressions:
+                                  type: array
+                                  items:
+                                    type: object
+                                    properties:
+                                      key:
+                                        type: string
+                                      operator:
+                                        enum:
+                                          - In
+                                          - NotIn
+                                          - Exists
+                                          - DoesNotExist
+                                        type: string
+                                      values:
+                                        type: array
+                                        items:
+                                          type: string
+                                matchLabels:
+                                  type: object
+                              type: object
                             externalEntitySelector:
                               x-kubernetes-preserve-unknown-fields: true
                             ipBlock:
@@ -1605,9 +2277,51 @@ spec:
                 childGroups:
                   x-kubernetes-preserve-unknown-fields: true
                 podSelector:
-                  x-kubernetes-preserve-unknown-fields: true
+                  properties:
+                    matchExpressions:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          key:
+                            type: string
+                          operator:
+                            enum:
+                              - In
+                              - NotIn
+                              - Exists
+                              - DoesNotExist
+                            type: string
+                          values:
+                            type: array
+                            items:
+                              type: string
+                    matchLabels:
+                      type: object
+                  type: object
                 namespaceSelector:
-                  x-kubernetes-preserve-unknown-fields: true
+                  properties:
+                    matchExpressions:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          key:
+                            type: string
+                          operator:
+                            enum:
+                              - In
+                              - NotIn
+                              - Exists
+                              - DoesNotExist
+                            type: string
+                          values:
+                            type: array
+                            items:
+                              type: string
+                    matchLabels:
+                      type: object
+                  type: object
                 externalEntitySelector:
                   x-kubernetes-preserve-unknown-fields: true
                 ipBlock:
