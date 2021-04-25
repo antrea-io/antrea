@@ -17,6 +17,7 @@ package proxy
 import (
 	"fmt"
 	"net"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -124,8 +125,8 @@ func (p *proxier) removeStaleServices() {
 		}
 		svcInfo := svcPort.(*types.ServiceInfo)
 		klog.V(2).Infof("Removing stale Service: %s %s", svcPortName.Name, svcInfo.String())
-		if p.oversizeServiceSet.Has(svcInfo.String()) {
-			p.oversizeServiceSet.Delete(svcInfo.String())
+		if p.oversizeServiceSet.Has(svcPortName.String()) {
+			p.oversizeServiceSet.Delete(svcPortName.String())
 		}
 		if err := p.ofClient.UninstallServiceFlows(svcInfo.ClusterIP(), uint16(svcInfo.Port()), svcInfo.OFProtocol); err != nil {
 			klog.Errorf("Failed to remove flows of Service %v: %v", svcPortName, err)
@@ -274,6 +275,34 @@ func (p *proxier) installServices() {
 			}
 			endpointUpdateList = append(endpointUpdateList, endpoint)
 		}
+
+		// If the length of endpointUpdateList > maxEndpoints, endpointUpdateList should be cut. However, the iteration
+		// of map in Golang is random, so endpointUpdateList are not always in the same order. If endpointUpdateList is
+		// cut directly without any sorting, some Endpoints may not be installed on the cut endpointUpdateList(Last sync,
+		// these Endpoints may be cut off from endpointUpdateList, they are of course not installed.) So cutting
+		// endpointUpdateList after sorting can avoid this situation in some degree.
+		if len(endpointUpdateList) > maxEndpoints {
+			if !p.oversizeServiceSet.Has(svcPortName.String()) {
+				klog.Warningf("Since Endpoints of Service %s exceeds %d, extra Endpoints will be dropped", svcPortName.String(), maxEndpoints)
+				p.oversizeServiceSet.Insert(svcPortName.String())
+			}
+
+			needUpdateEndpoints = false
+			sort.Sort(byEndpoint(endpointUpdateList))
+			endpointUpdateList = endpointUpdateList[:maxEndpoints]
+			// Check if the cut endpointUpdateList are all installed.
+			for _, endpoint := range endpointUpdateList {
+				if _, ok := endpointsInstalled[endpoint.String()]; !ok {
+					needUpdateEndpoints = true
+					break
+				}
+			}
+		} else {
+			if p.oversizeServiceSet.Has(svcPortName.String()) {
+				p.oversizeServiceSet.Delete(svcPortName.String())
+			}
+		}
+
 		if len(endpoints) < len(endpointsInstalled) { // There are Endpoints which expired.
 			klog.V(2).Infof("Some Endpoints of Service %s removed, updating Endpoints", svcInfo.String())
 			needUpdateEndpoints = true
@@ -303,18 +332,6 @@ func (p *proxier) installServices() {
 		}
 
 		if needUpdateEndpoints {
-			if len(endpointUpdateList) > maxEndpoints {
-				endpointUpdateList = endpointUpdateList[:maxEndpoints]
-				if !p.oversizeServiceSet.Has(svcInfo.String()) {
-					klog.Warningf("Since Endpoints of Service %s exceeds %d, extra Endpoints will be dropped.", svcInfo.String(), maxEndpoints)
-					p.oversizeServiceSet.Insert(svcInfo.String())
-				}
-			} else {
-				if p.oversizeServiceSet.Has(svcInfo.String()) {
-					p.oversizeServiceSet.Delete(svcInfo.String())
-				}
-			}
-
 			err := p.ofClient.InstallEndpointFlows(svcInfo.OFProtocol, endpointUpdateList)
 			if err != nil {
 				klog.Errorf("Error when installing Endpoints flows: %v", err)

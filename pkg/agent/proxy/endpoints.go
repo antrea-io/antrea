@@ -220,3 +220,16 @@ func (t *endpointsChangesTracker) Update(em types.EndpointsMap) {
 		}
 	}
 }
+
+// byEndpoint helps sort Endpoint
+type byEndpoint []k8sproxy.Endpoint
+
+func (p byEndpoint) Len() int {
+	return len(p)
+}
+func (p byEndpoint) Swap(i, j int) {
+	p[i], p[j] = p[j], p[i]
+}
+func (p byEndpoint) Less(i, j int) bool {
+	return p[i].String() < p[j].String()
+}
