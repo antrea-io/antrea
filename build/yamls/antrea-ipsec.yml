@@ -119,7 +119,28 @@ spec:
               childGroups:
                 x-kubernetes-preserve-unknown-fields: true
               externalEntitySelector:
-                x-kubernetes-preserve-unknown-fields: true
+                properties:
+                  matchExpressions:
+                    items:
+                      properties:
+                        key:
+                          type: string
+                        operator:
+                          enum:
+                          - In
+                          - NotIn
+                          - Exists
+                          - DoesNotExist
+                          type: string
+                        values:
+                          items:
+                            type: string
+                          type: array
+                      type: object
+                    type: array
+                  matchLabels:
+                    type: object
+                type: object
               ipBlock:
                 properties:
                   cidr:
@@ -135,9 +156,51 @@ spec:
                   type: object
                 type: array
               namespaceSelector:
-                x-kubernetes-preserve-unknown-fields: true
+                properties:
+                  matchExpressions:
+                    items:
+                      properties:
+                        key:
+                          type: string
+                        operator:
+                          enum:
+                          - In
+                          - NotIn
+                          - Exists
+                          - DoesNotExist
+                          type: string
+                        values:
+                          items:
+                            type: string
+                          type: array
+                      type: object
+                    type: array
+                  matchLabels:
+                    type: object
+                type: object
               podSelector:
-                x-kubernetes-preserve-unknown-fields: true
+                properties:
+                  matchExpressions:
+                    items:
+                      properties:
+                        key:
+                          type: string
+                        operator:
+                          enum:
+                          - In
+                          - NotIn
+                          - Exists
+                          - DoesNotExist
+                          type: string
+                        values:
+                          items:
+                            type: string
+                          type: array
+                      type: object
+                    type: array
+                  matchLabels:
+                    type: object
+                type: object
               serviceReference:
                 properties:
                   name:
@@ -191,7 +254,28 @@ spec:
               childGroups:
                 x-kubernetes-preserve-unknown-fields: true
               externalEntitySelector:
-                x-kubernetes-preserve-unknown-fields: true
+                properties:
+                  matchExpressions:
+                    items:
+                      properties:
+                        key:
+                          type: string
+                        operator:
+                          enum:
+                          - In
+                          - NotIn
+                          - Exists
+                          - DoesNotExist
+                          type: string
+                        values:
+                          items:
+                            type: string
+                          type: array
+                      type: object
+                    type: array
+                  matchLabels:
+                    type: object
+                type: object
               ipBlock:
                 properties:
                   cidr:
@@ -207,9 +291,51 @@ spec:
                   type: object
                 type: array
               namespaceSelector:
-                x-kubernetes-preserve-unknown-fields: true
+                properties:
+                  matchExpressions:
+                    items:
+                      properties:
+                        key:
+                          type: string
+                        operator:
+                          enum:
+                          - In
+                          - NotIn
+                          - Exists
+                          - DoesNotExist
+                          type: string
+                        values:
+                          items:
+                            type: string
+                          type: array
+                      type: object
+                    type: array
+                  matchLabels:
+                    type: object
+                type: object
               podSelector:
-                x-kubernetes-preserve-unknown-fields: true
+                properties:
+                  matchExpressions:
+                    items:
+                      properties:
+                        key:
+                          type: string
+                        operator:
+                          enum:
+                          - In
+                          - NotIn
+                          - Exists
+                          - DoesNotExist
+                          type: string
+                        values:
+                          items:
+                            type: string
+                          type: array
+                      type: object
+                    type: array
+                  matchLabels:
+                    type: object
+                type: object
               serviceReference:
                 properties:
                   name:
@@ -289,9 +415,51 @@ spec:
                     group:
                       type: string
                     namespaceSelector:
-                      x-kubernetes-preserve-unknown-fields: true
+                      properties:
+                        matchExpressions:
+                          items:
+                            properties:
+                              key:
+                                type: string
+                              operator:
+                                enum:
+                                - In
+                                - NotIn
+                                - Exists
+                                - DoesNotExist
+                                type: string
+                              values:
+                                items:
+                                  type: string
+                                type: array
+                            type: object
+                          type: array
+                        matchLabels:
+                          type: object
+                      type: object
                     podSelector:
-                      x-kubernetes-preserve-unknown-fields: true
+                      properties:
+                        matchExpressions:
+                          items:
+                            properties:
+                              key:
+                                type: string
+                              operator:
+                                enum:
+                                - In
+                                - NotIn
+                                - Exists
+                                - DoesNotExist
+                                type: string
+                              values:
+                                items:
+                                  type: string
+                                type: array
+                            type: object
+                          type: array
+                        matchLabels:
+                          type: object
+                      type: object
                   type: object
                 type: array
               egress:
@@ -309,9 +477,51 @@ spec:
                           group:
                             type: string
                           namespaceSelector:
-                            x-kubernetes-preserve-unknown-fields: true
+                            properties:
+                              matchExpressions:
+                                items:
+                                  properties:
+                                    key:
+                                      type: string
+                                    operator:
+                                      enum:
+                                      - In
+                                      - NotIn
+                                      - Exists
+                                      - DoesNotExist
+                                      type: string
+                                    values:
+                                      items:
+                                        type: string
+                                      type: array
+                                  type: object
+                                type: array
+                              matchLabels:
+                                type: object
+                            type: object
                           podSelector:
-                            x-kubernetes-preserve-unknown-fields: true
+                            properties:
+                              matchExpressions:
+                                items:
+                                  properties:
+                                    key:
+                                      type: string
+                                    operator:
+                                      enum:
+                                      - In
+                                      - NotIn
+                                      - Exists
+                                      - DoesNotExist
+                                      type: string
+                                    values:
+                                      items:
+                                        type: string
+                                      type: array
+                                  type: object
+                                type: array
+                              matchLabels:
+                                type: object
+                            type: object
                         type: object
                       type: array
                     enableLogging:
@@ -341,9 +551,51 @@ spec:
                                 type: string
                             type: object
                           namespaceSelector:
-                            x-kubernetes-preserve-unknown-fields: true
+                            properties:
+                              matchExpressions:
+                                items:
+                                  properties:
+                                    key:
+                                      type: string
+                                    operator:
+                                      enum:
+                                      - In
+                                      - NotIn
+                                      - Exists
+                                      - DoesNotExist
+                                      type: string
+                                    values:
+                                      items:
+                                        type: string
+                                      type: array
+                                  type: object
+                                type: array
+                              matchLabels:
+                                type: object
+                            type: object
                           podSelector:
-                            x-kubernetes-preserve-unknown-fields: true
+                            properties:
+                              matchExpressions:
+                                items:
+                                  properties:
+                                    key:
+                                      type: string
+                                    operator:
+                                      enum:
+                                      - In
+                                      - NotIn
+                                      - Exists
+                                      - DoesNotExist
+                                      type: string
+                                    values:
+                                      items:
+                                        type: string
+                                      type: array
+                                  type: object
+                                type: array
+                              matchLabels:
+                                type: object
+                            type: object
                         type: object
                       type: array
                   required:
@@ -365,9 +617,51 @@ spec:
                           group:
                             type: string
                           namespaceSelector:
-                            x-kubernetes-preserve-unknown-fields: true
+                            properties:
+                              matchExpressions:
+                                items:
+                                  properties:
+                                    key:
+                                      type: string
+                                    operator:
+                                      enum:
+                                      - In
+                                      - NotIn
+                                      - Exists
+                                      - DoesNotExist
+                                      type: string
+                                    values:
+                                      items:
+                                        type: string
+                                      type: array
+                                  type: object
+                                type: array
+                              matchLabels:
+                                type: object
+                            type: object
                           podSelector:
-                            x-kubernetes-preserve-unknown-fields: true
+                            properties:
+                              matchExpressions:
+                                items:
+                                  properties:
+                                    key:
+                                      type: string
+                                    operator:
+                                      enum:
+                                      - In
+                                      - NotIn
+                                      - Exists
+                                      - DoesNotExist
+                                      type: string
+                                    values:
+                                      items:
+                                        type: string
+                                      type: array
+                                  type: object
+                                type: array
+                              matchLabels:
+                                type: object
+                            type: object
                         type: object
                       type: array
                     enableLogging:
@@ -384,9 +678,51 @@ spec:
                                 type: string
                             type: object
                           namespaceSelector:
-                            x-kubernetes-preserve-unknown-fields: true
+                            properties:
+                              matchExpressions:
+                                items:
+                                  properties:
+                                    key:
+                                      type: string
+                                    operator:
+                                      enum:
+                                      - In
+                                      - NotIn
+                                      - Exists
+                                      - DoesNotExist
+                                      type: string
+                                    values:
+                                      items:
+                                        type: string
+                                      type: array
+                                  type: object
+                                type: array
+                              matchLabels:
+                                type: object
+                            type: object
                           podSelector:
-                            x-kubernetes-preserve-unknown-fields: true
+                            properties:
+                              matchExpressions:
+                                items:
+                                  properties:
+                                    key:
+                                      type: string
+                                    operator:
+                                      enum:
+                                      - In
+                                      - NotIn
+                                      - Exists
+                                      - DoesNotExist
+                                      type: string
+                                    values:
+                                      items:
+                                        type: string
+                                      type: array
+                                  type: object
+                                type: array
+                              matchLabels:
+                                type: object
+                            type: object
                         type: object
                       type: array
                     name:
@@ -484,9 +820,51 @@ spec:
                     group:
                       type: string
                     namespaceSelector:
-                      x-kubernetes-preserve-unknown-fields: true
+                      properties:
+                        matchExpressions:
+                          items:
+                            properties:
+                              key:
+                                type: string
+                              operator:
+                                enum:
+                                - In
+                                - NotIn
+                                - Exists
+                                - DoesNotExist
+                                type: string
+                              values:
+                                items:
+                                  type: string
+                                type: array
+                            type: object
+                          type: array
+                        matchLabels:
+                          type: object
+                      type: object
                     podSelector:
-                      x-kubernetes-preserve-unknown-fields: true
+                      properties:
+                        matchExpressions:
+                          items:
+                            properties:
+                              key:
+                                type: string
+                              operator:
+                                enum:
+                                - In
+                                - NotIn
+                                - Exists
+                                - DoesNotExist
+                                type: string
+                              values:
+                                items:
+                                  type: string
+                                type: array
+                            type: object
+                          type: array
+                        matchLabels:
+                          type: object
+                      type: object
                   type: object
                 type: array
               egress:
@@ -504,9 +882,51 @@ spec:
                           group:
                             type: string
                           namespaceSelector:
-                            x-kubernetes-preserve-unknown-fields: true
+                            properties:
+                              matchExpressions:
+                                items:
+                                  properties:
+                                    key:
+                                      type: string
+                                    operator:
+                                      enum:
+                                      - In
+                                      - NotIn
+                                      - Exists
+                                      - DoesNotExist
+                                      type: string
+                                    values:
+                                      items:
+                                        type: string
+                                      type: array
+                                  type: object
+                                type: array
+                              matchLabels:
+                                type: object
+                            type: object
                           podSelector:
-                            x-kubernetes-preserve-unknown-fields: true
+                            properties:
+                              matchExpressions:
+                                items:
+                                  properties:
+                                    key:
+                                      type: string
+                                    operator:
+                                      enum:
+                                      - In
+                                      - NotIn
+                                      - Exists
+                                      - DoesNotExist
+                                      type: string
+                                    values:
+                                      items:
+                                        type: string
+                                      type: array
+                                  type: object
+                                type: array
+                              matchLabels:
+                                type: object
+                            type: object
                         type: object
                       type: array
                     enableLogging:
@@ -536,9 +956,51 @@ spec:
                                 type: string
                             type: object
                           namespaceSelector:
-                            x-kubernetes-preserve-unknown-fields: true
+                            properties:
+                              matchExpressions:
+                                items:
+                                  properties:
+                                    key:
+                                      type: string
+                                    operator:
+                                      enum:
+                                      - In
+                                      - NotIn
+                                      - Exists
+                                      - DoesNotExist
+                                      type: string
+                                    values:
+                                      items:
+                                        type: string
+                                      type: array
+                                  type: object
+                                type: array
+                              matchLabels:
+                                type: object
+                            type: object
                           podSelector:
-                            x-kubernetes-preserve-unknown-fields: true
+                            properties:
+                              matchExpressions:
+                                items:
+                                  properties:
+                                    key:
+                                      type: string
+                                    operator:
+                                      enum:
+                                      - In
+                                      - NotIn
+                                      - Exists
+                                      - DoesNotExist
+                                      type: string
+                                    values:
+                                      items:
+                                        type: string
+                                      type: array
+                                  type: object
+                                type: array
+                              matchLabels:
+                                type: object
+                            type: object
                         type: object
                       type: array
                   required:
@@ -560,9 +1022,51 @@ spec:
                           group:
                             type: string
                           namespaceSelector:
-                            x-kubernetes-preserve-unknown-fields: true
+                            properties:
+                              matchExpressions:
+                                items:
+                                  properties:
+                                    key:
+                                      type: string
+                                    operator:
+                                      enum:
+                                      - In
+                                      - NotIn
+                                      - Exists
+                                      - DoesNotExist
+                                      type: string
+                                    values:
+                                      items:
+                                        type: string
+                                      type: array
+                                  type: object
+                                type: array
+                              matchLabels:
+                                type: object
+                            type: object
                           podSelector:
-                            x-kubernetes-preserve-unknown-fields: true
+                            properties:
+                              matchExpressions:
+                                items:
+                                  properties:
+                                    key:
+                                      type: string
+                                    operator:
+                                      enum:
+                                      - In
+                                      - NotIn
+                                      - Exists
+                                      - DoesNotExist
+                                      type: string
+                                    values:
+                                      items:
+                                        type: string
+                                      type: array
+                                  type: object
+                                type: array
+                              matchLabels:
+                                type: object
+                            type: object
                         type: object
                       type: array
                     enableLogging:
@@ -579,9 +1083,51 @@ spec:
                                 type: string
                             type: object
                           namespaceSelector:
-                            x-kubernetes-preserve-unknown-fields: true
+                            properties:
+                              matchExpressions:
+                                items:
+                                  properties:
+                                    key:
+                                      type: string
+                                    operator:
+                                      enum:
+                                      - In
+                                      - NotIn
+                                      - Exists
+                                      - DoesNotExist
+                                      type: string
+                                    values:
+                                      items:
+                                        type: string
+                                      type: array
+                                  type: object
+                                type: array
+                              matchLabels:
+                                type: object
+                            type: object
                           podSelector:
-                            x-kubernetes-preserve-unknown-fields: true
+                            properties:
+                              matchExpressions:
+                                items:
+                                  properties:
+                                    key:
+                                      type: string
+                                    operator:
+                                      enum:
+                                      - In
+                                      - NotIn
+                                      - Exists
+                                      - DoesNotExist
+                                      type: string
+                                    values:
+                                      items:
+                                        type: string
+                                      type: array
+                                  type: object
+                                type: array
+                              matchLabels:
+                                type: object
+                            type: object
                         type: object
                       type: array
                     name:
@@ -661,9 +1207,51 @@ spec:
               appliedTo:
                 properties:
                   namespaceSelector:
-                    x-kubernetes-preserve-unknown-fields: true
+                    properties:
+                      matchExpressions:
+                        items:
+                          properties:
+                            key:
+                              type: string
+                            operator:
+                              enum:
+                              - In
+                              - NotIn
+                              - Exists
+                              - DoesNotExist
+                              type: string
+                            values:
+                              items:
+                                type: string
+                              type: array
+                          type: object
+                        type: array
+                      matchLabels:
+                        type: object
+                    type: object
                   podSelector:
-                    x-kubernetes-preserve-unknown-fields: true
+                    properties:
+                      matchExpressions:
+                        items:
+                          properties:
+                            key:
+                              type: string
+                            operator:
+                              enum:
+                              - In
+                              - NotIn
+                              - Exists
+                              - DoesNotExist
+                              type: string
+                            values:
+                              items:
+                                type: string
+                              type: array
+                          type: object
+                        type: array
+                      matchLabels:
+                        type: object
+                    type: object
                 type: object
               egressIP:
                 oneOf:
@@ -845,8 +1433,28 @@ spec:
                 items:
                   properties:
                     podSelector:
+                      properties:
+                        matchExpressions:
+                          items:
+                            properties:
+                              key:
+                                type: string
+                              operator:
+                                enum:
+                                - In
+                                - NotIn
+                                - Exists
+                                - DoesNotExist
+                                type: string
+                              values:
+                                items:
+                                  type: string
+                                type: array
+                            type: object
+                          type: array
+                        matchLabels:
+                          type: object
                       type: object
-                      x-kubernetes-preserve-unknown-fields: true
                   type: object
                 type: array
               egress:
@@ -862,8 +1470,28 @@ spec:
                       items:
                         properties:
                           podSelector:
+                            properties:
+                              matchExpressions:
+                                items:
+                                  properties:
+                                    key:
+                                      type: string
+                                    operator:
+                                      enum:
+                                      - In
+                                      - NotIn
+                                      - Exists
+                                      - DoesNotExist
+                                      type: string
+                                    values:
+                                      items:
+                                        type: string
+                                      type: array
+                                  type: object
+                                type: array
+                              matchLabels:
+                                type: object
                             type: object
-                            x-kubernetes-preserve-unknown-fields: true
                         type: object
                       type: array
                     enableLogging:
@@ -885,7 +1513,28 @@ spec:
                       items:
                         properties:
                           externalEntitySelector:
-                            x-kubernetes-preserve-unknown-fields: true
+                            properties:
+                              matchExpressions:
+                                items:
+                                  properties:
+                                    key:
+                                      type: string
+                                    operator:
+                                      enum:
+                                      - In
+                                      - NotIn
+                                      - Exists
+                                      - DoesNotExist
+                                      type: string
+                                    values:
+                                      items:
+                                        type: string
+                                      type: array
+                                  type: object
+                                type: array
+                              matchLabels:
+                                type: object
+                            type: object
                           ipBlock:
                             properties:
                               cidr:
@@ -893,9 +1542,51 @@ spec:
                                 type: string
                             type: object
                           namespaceSelector:
-                            x-kubernetes-preserve-unknown-fields: true
+                            properties:
+                              matchExpressions:
+                                items:
+                                  properties:
+                                    key:
+                                      type: string
+                                    operator:
+                                      enum:
+                                      - In
+                                      - NotIn
+                                      - Exists
+                                      - DoesNotExist
+                                      type: string
+                                    values:
+                                      items:
+                                        type: string
+                                      type: array
+                                  type: object
+                                type: array
+                              matchLabels:
+                                type: object
+                            type: object
                           podSelector:
-                            x-kubernetes-preserve-unknown-fields: true
+                            properties:
+                              matchExpressions:
+                                items:
+                                  properties:
+                                    key:
+                                      type: string
+                                    operator:
+                                      enum:
+                                      - In
+                                      - NotIn
+                                      - Exists
+                                      - DoesNotExist
+                                      type: string
+                                    values:
+                                      items:
+                                        type: string
+                                      type: array
+                                  type: object
+                                type: array
+                              matchLabels:
+                                type: object
+                            type: object
                         type: object
                       type: array
                   required:
@@ -915,8 +1606,28 @@ spec:
                       items:
                         properties:
                           podSelector:
+                            properties:
+                              matchExpressions:
+                                items:
+                                  properties:
+                                    key:
+                                      type: string
+                                    operator:
+                                      enum:
+                                      - In
+                                      - NotIn
+                                      - Exists
+                                      - DoesNotExist
+                                      type: string
+                                    values:
+                                      items:
+                                        type: string
+                                      type: array
+                                  type: object
+                                type: array
+                              matchLabels:
+                                type: object
                             type: object
-                            x-kubernetes-preserve-unknown-fields: true
                         type: object
                       type: array
                     enableLogging:
@@ -925,7 +1636,28 @@ spec:
                       items:
                         properties:
                           externalEntitySelector:
-                            x-kubernetes-preserve-unknown-fields: true
+                            properties:
+                              matchExpressions:
+                                items:
+                                  properties:
+                                    key:
+                                      type: string
+                                    operator:
+                                      enum:
+                                      - In
+                                      - NotIn
+                                      - Exists
+                                      - DoesNotExist
+                                      type: string
+                                    values:
+                                      items:
+                                        type: string
+                                      type: array
+                                  type: object
+                                type: array
+                              matchLabels:
+                                type: object
+                            type: object
                           ipBlock:
                             properties:
                               cidr:
@@ -933,9 +1665,51 @@ spec:
                                 type: string
                             type: object
                           namespaceSelector:
-                            x-kubernetes-preserve-unknown-fields: true
+                            properties:
+                              matchExpressions:
+                                items:
+                                  properties:
+                                    key:
+                                      type: string
+                                    operator:
+                                      enum:
+                                      - In
+                                      - NotIn
+                                      - Exists
+                                      - DoesNotExist
+                                      type: string
+                                    values:
+                                      items:
+                                        type: string
+                                      type: array
+                                  type: object
+                                type: array
+                              matchLabels:
+                                type: object
+                            type: object
                           podSelector:
-                            x-kubernetes-preserve-unknown-fields: true
+                            properties:
+                              matchExpressions:
+                                items:
+                                  properties:
+                                    key:
+                                      type: string
+                                    operator:
+                                      enum:
+                                      - In
+                                      - NotIn
+                                      - Exists
+                                      - DoesNotExist
+                                      type: string
+                                    values:
+                                      items:
+                                        type: string
+                                      type: array
+                                  type: object
+                                type: array
+                              matchLabels:
+                                type: object
+                            type: object
                         type: object
                       type: array
                     name:
@@ -1031,8 +1805,28 @@ spec:
                 items:
                   properties:
                     podSelector:
+                      properties:
+                        matchExpressions:
+                          items:
+                            properties:
+                              key:
+                                type: string
+                              operator:
+                                enum:
+                                - In
+                                - NotIn
+                                - Exists
+                                - DoesNotExist
+                                type: string
+                              values:
+                                items:
+                                  type: string
+                                type: array
+                            type: object
+                          type: array
+                        matchLabels:
+                          type: object
                       type: object
-                      x-kubernetes-preserve-unknown-fields: true
                   type: object
                 type: array
               egress:
@@ -1048,8 +1842,28 @@ spec:
                       items:
                         properties:
                           podSelector:
+                            properties:
+                              matchExpressions:
+                                items:
+                                  properties:
+                                    key:
+                                      type: string
+                                    operator:
+                                      enum:
+                                      - In
+                                      - NotIn
+                                      - Exists
+                                      - DoesNotExist
+                                      type: string
+                                    values:
+                                      items:
+                                        type: string
+                                      type: array
+                                  type: object
+                                type: array
+                              matchLabels:
+                                type: object
                             type: object
-                            x-kubernetes-preserve-unknown-fields: true
                         type: object
                       type: array
                     enableLogging:
@@ -1071,7 +1885,28 @@ spec:
                       items:
                         properties:
                           externalEntitySelector:
-                            x-kubernetes-preserve-unknown-fields: true
+                            properties:
+                              matchExpressions:
+                                items:
+                                  properties:
+                                    key:
+                                      type: string
+                                    operator:
+                                      enum:
+                                      - In
+                                      - NotIn
+                                      - Exists
+                                      - DoesNotExist
+                                      type: string
+                                    values:
+                                      items:
+                                        type: string
+                                      type: array
+                                  type: object
+                                type: array
+                              matchLabels:
+                                type: object
+                            type: object
                           ipBlock:
                             properties:
                               cidr:
@@ -1079,9 +1914,51 @@ spec:
                                 type: string
                             type: object
                           namespaceSelector:
-                            x-kubernetes-preserve-unknown-fields: true
+                            properties:
+                              matchExpressions:
+                                items:
+                                  properties:
+                                    key:
+                                      type: string
+                                    operator:
+                                      enum:
+                                      - In
+                                      - NotIn
+                                      - Exists
+                                      - DoesNotExist
+                                      type: string
+                                    values:
+                                      items:
+                                        type: string
+                                      type: array
+                                  type: object
+                                type: array
+                              matchLabels:
+                                type: object
+                            type: object
                           podSelector:
-                            x-kubernetes-preserve-unknown-fields: true
+                            properties:
+                              matchExpressions:
+                                items:
+                                  properties:
+                                    key:
+                                      type: string
+                                    operator:
+                                      enum:
+                                      - In
+                                      - NotIn
+                                      - Exists
+                                      - DoesNotExist
+                                      type: string
+                                    values:
+                                      items:
+                                        type: string
+                                      type: array
+                                  type: object
+                                type: array
+                              matchLabels:
+                                type: object
+                            type: object
                         type: object
                       type: array
                   required:
@@ -1101,8 +1978,28 @@ spec:
                       items:
                         properties:
                           podSelector:
+                            properties:
+                              matchExpressions:
+                                items:
+                                  properties:
+                                    key:
+                                      type: string
+                                    operator:
+                                      enum:
+                                      - In
+                                      - NotIn
+                                      - Exists
+                                      - DoesNotExist
+                                      type: string
+                                    values:
+                                      items:
+                                        type: string
+                                      type: array
+                                  type: object
+                                type: array
+                              matchLabels:
+                                type: object
                             type: object
-                            x-kubernetes-preserve-unknown-fields: true
                         type: object
                       type: array
                     enableLogging:
@@ -1111,7 +2008,28 @@ spec:
                       items:
                         properties:
                           externalEntitySelector:
-                            x-kubernetes-preserve-unknown-fields: true
+                            properties:
+                              matchExpressions:
+                                items:
+                                  properties:
+                                    key:
+                                      type: string
+                                    operator:
+                                      enum:
+                                      - In
+                                      - NotIn
+                                      - Exists
+                                      - DoesNotExist
+                                      type: string
+                                    values:
+                                      items:
+                                        type: string
+                                      type: array
+                                  type: object
+                                type: array
+                              matchLabels:
+                                type: object
+                            type: object
                           ipBlock:
                             properties:
                               cidr:
@@ -1119,9 +2037,51 @@ spec:
                                 type: string
                             type: object
                           namespaceSelector:
-                            x-kubernetes-preserve-unknown-fields: true
+                            properties:
+                              matchExpressions:
+                                items:
+                                  properties:
+                                    key:
+                                      type: string
+                                    operator:
+                                      enum:
+                                      - In
+                                      - NotIn
+                                      - Exists
+                                      - DoesNotExist
+                                      type: string
+                                    values:
+                                      items:
+                                        type: string
+                                      type: array
+                                  type: object
+                                type: array
+                              matchLabels:
+                                type: object
+                            type: object
                           podSelector:
-                            x-kubernetes-preserve-unknown-fields: true
+                            properties:
+                              matchExpressions:
+                                items:
+                                  properties:
+                                    key:
+                                      type: string
+                                    operator:
+                                      enum:
+                                      - In
+                                      - NotIn
+                                      - Exists
+                                      - DoesNotExist
+                                      type: string
+                                    values:
+                                      items:
+                                        type: string
+                                      type: array
+                                  type: object
+                                type: array
+                              matchLabels:
+                                type: object
+                            type: object
                         type: object
                       type: array
                     name:
