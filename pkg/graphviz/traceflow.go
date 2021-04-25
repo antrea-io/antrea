@@ -15,7 +15,6 @@
 package graphviz
 
 import (
-	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -42,7 +41,7 @@ var (
 	clusterDstName = "cluster_destination"
 )
 
-// createDirectedEdgeWithDefaultStyle creates a node with default style (usually used to represent a component in traceflow) .
+// createNodeWithDefaultStyle creates a node with default style (usually used to represent a component in traceflow) .
 func createNodeWithDefaultStyle(graph *gographviz.Graph, parentGraph string, name string) (*gographviz.Node, error) {
 	err := graph.AddNode(parentGraph, name, map[string]string{
 		"shape": "box",
@@ -81,7 +80,7 @@ func createDirectedEdgeWithDefaultStyle(graph *gographviz.Graph, start *gographv
 	}
 	edges := graph.Edges.SrcToDsts[start.Name][end.Name]
 	if len(edges) == 0 {
-		return nil, errors.New(fmt.Sprintf("Failed to create a new edge between node %s and node %s", start.Name, end.Name))
+		return nil, fmt.Errorf("failed to create a new edge between node %s and node %s", start.Name, end.Name)
 	}
 	edge := edges[len(edges)-1]
 	if isForwardDir {
@@ -92,7 +91,7 @@ func createDirectedEdgeWithDefaultStyle(graph *gographviz.Graph, start *gographv
 	return edge, nil
 }
 
-// createDirectedEdgeWithDefaultStyle creates a cluster with default style.
+// createClusterWithDefaultStyle creates a cluster with default style.
 // In Graphviz, cluster is a subgraph which is surrounded by a rectangle and the nodes belonging to the cluster are drawn together.
 // In traceflow, a cluster is usually used to represent a K8s node.
 func createClusterWithDefaultStyle(graph *gographviz.Graph, name string) (*gographviz.SubGraph, error) {
@@ -151,6 +150,13 @@ func getSrcNodeName(tf *crdv1alpha1.Traceflow) string {
 	if len(tf.Spec.Source.Namespace) > 0 && len(tf.Spec.Source.Pod) > 0 {
 		return getWrappedStr(tf.Spec.Source.Namespace + "/" + tf.Spec.Source.Pod)
 	}
+	if tf.Spec.LiveTraffic {
+		if len(tf.Spec.Source.IP) > 0 {
+			return getWrappedStr(tf.Spec.Source.IP)
+		} else {
+			return getWrappedStr(tf.Status.CapturedPacket.SrcIP)
+		}
+	}
 	return ""
 }
 
@@ -164,6 +170,9 @@ func getDstNodeName(tf *crdv1alpha1.Traceflow) string {
 	}
 	if len(tf.Spec.Destination.Namespace) > 0 && len(tf.Spec.Destination.Pod) > 0 {
 		return getWrappedStr(tf.Spec.Destination.Namespace + "/" + tf.Spec.Destination.Pod)
+	}
+	if tf.Spec.LiveTraffic {
+		return getWrappedStr(tf.Status.CapturedPacket.DstIP)
 	}
 	return ""
 }
@@ -341,6 +350,53 @@ func GenGraph(tf *crdv1alpha1.Traceflow) (string, error) {
 		graph.Attrs[gographviz.Label] = getTraceflowStatusMessage(tf)
 	}
 	if tf == nil || senderRst == nil || tf.Status.Phase != crdv1alpha1.Succeeded || len(senderRst.Observations) == 0 {
+		// For live traffic, when the source is IP or empty, there is no result from the sender Node result in the traceflow status.
+		if senderRst == nil && tf.Spec.LiveTraffic && tf.Status.Phase == crdv1alpha1.Succeeded {
+			// Draw the nodes for the sender.
+			srcCluster, err := createClusterWithDefaultStyle(graph, clusterSrcName)
+			if err != nil {
+				return "", err
+			}
+			srcCluster.Attrs[gographviz.Label] = "source"
+			srcCluster.Attrs[gographviz.LabelJust] = "l"
+			// For live traffic data, we only know src IP from capturedPacket
+			node, err := createEndpointNodeWithDefaultStyle(graph, srcCluster.Name, getWrappedStr(tf.Status.CapturedPacket.SrcIP))
+			if err != nil {
+				return "", err
+			}
+
+			// create an invisble edge before destination cluster, otherwise the source cluster will
+			// always be on the right even source subGraph is before desitination subGraph in graph string.
+			err = graph.AddEdge(node.Name, node.Name, true, map[string]string{
+				"style": "invis",
+			})
+			if err != nil {
+				return "", err
+			}
+			dstCluster, err := createClusterWithDefaultStyle(graph, clusterDstName)
+			if err != nil {
+				return "", err
+			}
+			nodes, err := genSubGraph(graph, dstCluster, receiverRst, &tf.Spec, getDstNodeName(tf), false, 0)
+			if err != nil {
+				return "", err
+			}
+			// Draw the cross-cluster edge.
+			edge, err := createDirectedEdgeWithDefaultStyle(graph, node, nodes[len(nodes)-1], true)
+			if err != nil {
+				return "", err
+			}
+			edge.Attrs[gographviz.Constraint] = "false"
+
+			// add an anonymous subgraph to make two nodes in the same level.
+			// refer to https://github.com/awalterschulze/gographviz/issues/59
+			graph.AddAttr("G", "newrank", "true")
+			graph.AddSubGraph("G", "force_node_same_level", map[string]string{"rank": "same"})
+			graph.AddNode("force_node_same_level", node.Name, nil)
+			graph.AddNode("force_node_same_level", nodes[len(nodes)-1].Name, nil)
+
+			return genOutput(graph, false), nil
+		}
 		return genOutput(graph, true), nil
 	}
 
