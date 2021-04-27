@@ -34,8 +34,16 @@ func (c *FakeControlplaneV1beta2) AppliedToGroups() v1beta2.AppliedToGroupInterf
 	return &FakeAppliedToGroups{c}
 }
 
+func (c *FakeControlplaneV1beta2) ClusterGroupMembers() v1beta2.ClusterGroupMembersInterface {
+	return &FakeClusterGroupMembers{c}
+}
+
 func (c *FakeControlplaneV1beta2) EgressGroups() v1beta2.EgressGroupInterface {
 	return &FakeEgressGroups{c}
+}
+
+func (c *FakeControlplaneV1beta2) GroupAssociations(namespace string) v1beta2.GroupAssociationInterface {
+	return &FakeGroupAssociations{c, namespace}
 }
 
 func (c *FakeControlplaneV1beta2) NetworkPolicies() v1beta2.NetworkPolicyInterface {
