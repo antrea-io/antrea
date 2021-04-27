@@ -108,7 +108,7 @@ func (t *endpointsChangesTracker) OnEndpointUpdate(previous, current *corev1.End
 	return len(t.changes) > 0
 }
 
-// EndpointSliceUpdate updates the given service's endpoints change map based on the <previous, current> endpoints pair.
+// OnEndpointSliceUpdate updates the given service's endpoints change map based on the <previous, current> endpoints pair.
 // It returns true if items changed, otherwise it returns false. Will add/update/delete items of endpointsChange Map.
 // If removeSlice is true, slice will be removed, otherwise it will be added or updated.
 func (t *endpointsChangesTracker) OnEndpointSliceUpdate(endpointSlice *discovery.EndpointSlice, removeSlice bool) bool {

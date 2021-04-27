@@ -269,37 +269,37 @@ func (p *proxier) installServices() {
 		}
 
 		var endpointUpdateList []k8sproxy.Endpoint
-		for _, endpoint := range endpoints { // Check if there is any installed Endpoint which is not expected anymore.
-			if _, ok := endpointsInstalled[endpoint.String()]; !ok { // There is an expected Endpoint which is not installed.
-				needUpdateEndpoints = true
-			}
-			endpointUpdateList = append(endpointUpdateList, endpoint)
-		}
-
-		// If the length of endpointUpdateList > maxEndpoints, endpointUpdateList should be cut. However, the iteration
-		// of map in Golang is random, so endpointUpdateList are not always in the same order. If endpointUpdateList is
-		// cut directly without any sorting, some Endpoints may not be installed on the cut endpointUpdateList(Last sync,
-		// these Endpoints may be cut off from endpointUpdateList, they are of course not installed.) So cutting
-		// endpointUpdateList after sorting can avoid this situation in some degree.
-		if len(endpointUpdateList) > maxEndpoints {
+		if len(endpoints) > maxEndpoints {
 			if !p.oversizeServiceSet.Has(svcPortName.String()) {
 				klog.Warningf("Since Endpoints of Service %s exceeds %d, extra Endpoints will be dropped", svcPortName.String(), maxEndpoints)
 				p.oversizeServiceSet.Insert(svcPortName.String())
 			}
+			// If the length of endpoints > maxEndpoints, endpoints should be cut. However, endpoints is a map. Therefore,
+			// iterate the map and append every Endpoint to a slice endpointList. Since the iteration order of map in
+			// Golang is random, if cut directly without any sorting, some Endpoints may not be installed. So cutting
+			// slice endpointList after sorting can avoid this situation in some degree.
+			var endpointList []k8sproxy.Endpoint
+			for _, endpoint := range endpoints {
+				endpointList = append(endpointList, endpoint)
+			}
+			sort.Sort(byEndpoint(endpointList))
+			endpointList = endpointList[:maxEndpoints]
 
-			needUpdateEndpoints = false
-			sort.Sort(byEndpoint(endpointUpdateList))
-			endpointUpdateList = endpointUpdateList[:maxEndpoints]
-			// Check if the cut endpointUpdateList are all installed.
-			for _, endpoint := range endpointUpdateList {
-				if _, ok := endpointsInstalled[endpoint.String()]; !ok {
+			for _, endpoint := range endpointList { // Check if there is any installed Endpoint which is not expected anymore.
+				if _, ok := endpointsInstalled[endpoint.String()]; !ok { // There is an expected Endpoint which is not installed.
 					needUpdateEndpoints = true
-					break
 				}
+				endpointUpdateList = append(endpointUpdateList, endpoint)
 			}
 		} else {
 			if p.oversizeServiceSet.Has(svcPortName.String()) {
 				p.oversizeServiceSet.Delete(svcPortName.String())
+			}
+			for _, endpoint := range endpoints { // Check if there is any installed Endpoint which is not expected anymore.
+				if _, ok := endpointsInstalled[endpoint.String()]; !ok { // There is an expected Endpoint which is not installed.
+					needUpdateEndpoints = true
+				}
+				endpointUpdateList = append(endpointUpdateList, endpoint)
 			}
 		}
 
