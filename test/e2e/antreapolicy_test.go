@@ -664,6 +664,36 @@ func testInvalidTierANPRefDelete(t *testing.T) {
 	failOnError(k8sUtils.DeleteTier(tr.Name), t)
 }
 
+// testInvalidACNPPodSelectorNsSelectorMatchExpressions testes creating a ClusterNetworkPolicy with invalid LabelSelector(MatchExpressions)
+func testInvalidACNPPodSelectorNsSelectorMatchExpressions(t *testing.T) {
+	invalidLSErr := fmt.Errorf("create Antrea NetworkPolicy with namespaceSelector but matchExpressions invalid")
+
+	allowAction := crdv1alpha1.RuleActionAllow
+	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"env": "dummy"}}
+	nsSelectA := metav1.LabelSelector{MatchExpressions: []metav1.LabelSelectorRequirement{{Key: "env", Operator: "xxx", Values: []string{"xxxx"}}}}
+
+	var acnp = &crdv1alpha1.ClusterNetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: testNamespace, Name: "cnptest", Labels: map[string]string{"antrea-e2e": "cnp1"}},
+		Spec: crdv1alpha1.ClusterNetworkPolicySpec{
+			AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+				{PodSelector: &selectorA},
+				{NamespaceSelector: &nsSelectA},
+			},
+			Priority: 10,
+			Ingress: []crdv1alpha1.Rule{
+				{
+					Action: &allowAction,
+				},
+			},
+		},
+	}
+
+	if _, err := k8sUtils.CreateOrUpdateACNP(acnp); err == nil {
+		failOnError(invalidLSErr, t)
+	}
+}
+
 // testACNPAllowXBtoA tests traffic from X/B to pods with label A, after applying the default deny
 // k8s NetworkPolicies in all namespaces and ACNP to allow X/B to A.
 func testACNPAllowXBtoA(t *testing.T) {
@@ -2560,6 +2590,7 @@ func TestAntreaPolicy(t *testing.T) {
 		t.Run("Case=ANPTierDoesNotExistDenied", func(t *testing.T) { testInvalidANPTierDoesNotExist(t) })
 		t.Run("Case=ANPPortRangePortUnsetDenied", func(t *testing.T) { testInvalidANPPortRangePortUnset(t) })
 		t.Run("Case=ANPPortRangePortEndPortSmallDenied", func(t *testing.T) { testInvalidANPPortRangeEndPortSmall(t) })
+		t.Run("Case=ACNPInvalidPodSelectorNsSelectorMatchExpressions", func(t *testing.T) { testInvalidACNPPodSelectorNsSelectorMatchExpressions(t) })
 	})
 
 	t.Run("TestGroupValidateTiers", func(t *testing.T) {
@@ -2994,80 +3025,4 @@ func TestAntreaClusterNetworkPolicyStats(t *testing.T) {
 		failOnError(err, t)
 	}
 	k8sUtils.Cleanup(namespaces)
-}
-
-func testInvalidACNPPodSelectorNsSelectorMatchExpressions(t *testing.T) {
-	invalidLSErr := fmt.Errorf("invalid Antrea NetworkPolicy with namespaceSelector but matchExpressions invalid")
-
-	allowAction := crdv1alpha1.RuleActionAllow
-	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"env": "dummy"}}
-	nsSelectA := metav1.LabelSelector{MatchExpressions: []metav1.LabelSelectorRequirement{{Key: "env", Operator: "xxx", Values: []string{"xxxx"}}}}
-
-	var acnp = &crdv1alpha1.ClusterNetworkPolicy{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: testNamespace, Name: "cnptest", Labels: map[string]string{"antrea-e2e": "cnp1"}},
-		Spec: crdv1alpha1.ClusterNetworkPolicySpec{
-			AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
-				{PodSelector: &selectorA},
-				{NamespaceSelector: &nsSelectA},
-			},
-			Priority: 10,
-			Ingress: []crdv1alpha1.Rule{
-				{
-					Action: &allowAction,
-				},
-			},
-		},
-	}
-
-	if _, err := k8sUtils.CreateOrUpdateACNP(acnp); err == nil {
-		failOnError(invalidLSErr, t)
-	}
-}
-
-func testInvalidCGPPodSelectorNsSelectorMatchExpressions(t *testing.T) {
-	invalidLSErr := fmt.Errorf("invalid clustergroup with namespaceSelector but matchExpressions invalid")
-
-	nsSelectA := metav1.LabelSelector{MatchExpressions: []metav1.LabelSelectorRequirement{{Key: "env", Operator: "xxx", Values: []string{"xxxx"}}}}
-
-	cgName := "cg-test"
-	cg := &crdv1alpha2.ClusterGroup{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: cgName,
-		},
-		Spec: crdv1alpha2.GroupSpec{
-			NamespaceSelector: &nsSelectA,
-		},
-	}
-	if _, err := k8sUtils.CreateOrUpdateCG(cg); err == nil {
-		// Above creation of CG must fail as it is an invalid spec.
-		failOnError(invalidLSErr, t)
-	}
-}
-
-func TestInvalidLabelSelectorInResource(t *testing.T) {
-	data, err := setupTest(t)
-	if err != nil {
-		t.Fatalf("Error when setting up test: %v", err)
-	}
-	defer teardownTest(t, data)
-	initK8s := func() {
-		skipIfAntreaPolicyDisabled(t, data)
-		var err error
-		// k8sUtils is a global var
-		k8sUtils, err = NewKubernetesUtils(data)
-		failOnError(err, t)
-	}
-	if k8sUtils == nil {
-		initK8s()
-	}
-
-	t.Run("TestGroupInvalidLabelSelectorInResource", func(t *testing.T) {
-		t.Run("Case=InvalidACNPPodSelectorNsSelectorMatchExpressions", func(t *testing.T) {
-			testInvalidACNPPodSelectorNsSelectorMatchExpressions(t)
-		})
-		t.Run("CASE=InvalidCGPPodSelectorNsSelectorMatchExpressions", func(t *testing.T) {
-			testInvalidCGPPodSelectorNsSelectorMatchExpressions(t)
-		})
-	})
 }
