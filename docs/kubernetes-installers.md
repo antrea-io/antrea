@@ -20,7 +20,7 @@ based on any one of these K8s versions should work with that Antrea version.
 | - | Kops v1.20, K8s v1.20.5 | AWS EC2 | Ubuntu 20.04.2 LTS (5.4.0-1041-aws) amd64, containerd://1.4.4 | t3.medium | [results tarball](http://downloads.antrea.io/artifacts/sonobuoy-conformance/kops_202104212218_sonobuoy_bf0f8e77-c9df-472a-85e2-65e456cf4d83.tar.gz) |  |
 | - | EKS, K8s v1.17.12 | AWS | AmazonLinux2, docker | t3.medium |  | Antrea CI |
 | - | GKE, K8s v1.19.8-gke.1600 | GCP | Ubuntu 18.04, docker | e2-standard-4 |  | Antrea CI |
-| - | AKS, K8s v.18.14 | Azure | Ubuntu 18.04, moby | Standard_DS2_v2 |  | Antrea CI |
+| - | AKS, K8s v1.18.14 | Azure | Ubuntu 18.04, moby | Standard_DS2_v2 |  | Antrea CI |
 | - | Kind v0.9.0, K8s v1.19.1 | N/A | Ubuntu 20.10, containerd://1.4.0 | N/A |  | [Requirements for using Antrea on Kind](kind.md) |
 
 ## Installer-specific instructions
