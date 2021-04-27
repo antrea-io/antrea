@@ -110,9 +110,16 @@ parameters have to be set in the Antrea Agent ConfigMap:
 
 Please note that the default value for `flowCollectorAddr` is `"flow-aggregator.flow-aggregator.svc:4739:tcp"`,
 which uses the DNS name of the Flow Aggregator Service, if the Service is deployed
-with the Name and Namespace set to `flow-aggregator`. If you deploy the Flow Aggregator
-Service with a different Name and Namespace, then either use the appropriate DNS
-name or the Cluster IP of the Service. Please note that the default values for
+with the Name and Namespace set to `flow-aggregator`. For Antrea Agent running on
+a Windows node, the user is required to change the default value of `HOST` in `flowCollectorAddr`
+from DNS name to the Cluster IP of the Flow Aggregator service. The reason is because
+on Windows the Antrea Agent runs as a process, it uses the host's default DNS setting and the DNS
+resolver will not be configured to talk to the CoreDNS Service for cluster local DNS queries like
+`flow-aggregator.flow-aggregator.svc`. In addition, if you deploy the Flow Aggregator Service
+with a different Name and Namespace, then either use the appropriate DNS name or the Cluster IP of
+the Service.
+
+Please note that the default values for
 `flowPollInterval`, `activeFlowExportTimeout`, and `idleFlowExportTimeout` parameters are set to 5s, 60s, and 15s, respectively.
 TLS communication between the Flow Exporter and the Flow Aggregator is enabled by default.
 Please modify them as per your requirements.
