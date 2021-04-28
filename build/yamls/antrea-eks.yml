@@ -139,7 +139,7 @@ spec:
                       type: object
                     type: array
                   matchLabels:
-                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
                 type: object
               ipBlock:
                 properties:
@@ -176,7 +176,7 @@ spec:
                       type: object
                     type: array
                   matchLabels:
-                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
                 type: object
               podSelector:
                 properties:
@@ -199,7 +199,7 @@ spec:
                       type: object
                     type: array
                   matchLabels:
-                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
                 type: object
               serviceReference:
                 properties:
@@ -274,7 +274,7 @@ spec:
                       type: object
                     type: array
                   matchLabels:
-                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
                 type: object
               ipBlock:
                 properties:
@@ -311,7 +311,7 @@ spec:
                       type: object
                     type: array
                   matchLabels:
-                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
                 type: object
               podSelector:
                 properties:
@@ -334,7 +334,7 @@ spec:
                       type: object
                     type: array
                   matchLabels:
-                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
                 type: object
               serviceReference:
                 properties:
@@ -435,7 +435,7 @@ spec:
                             type: object
                           type: array
                         matchLabels:
-                          type: object
+                          x-kubernetes-preserve-unknown-fields: true
                       type: object
                     podSelector:
                       properties:
@@ -458,7 +458,7 @@ spec:
                             type: object
                           type: array
                         matchLabels:
-                          type: object
+                          x-kubernetes-preserve-unknown-fields: true
                       type: object
                   type: object
                 type: array
@@ -497,7 +497,7 @@ spec:
                                   type: object
                                 type: array
                               matchLabels:
-                                type: object
+                                x-kubernetes-preserve-unknown-fields: true
                             type: object
                           podSelector:
                             properties:
@@ -520,7 +520,7 @@ spec:
                                   type: object
                                 type: array
                               matchLabels:
-                                type: object
+                                x-kubernetes-preserve-unknown-fields: true
                             type: object
                         type: object
                       type: array
@@ -571,7 +571,7 @@ spec:
                                   type: object
                                 type: array
                               matchLabels:
-                                type: object
+                                x-kubernetes-preserve-unknown-fields: true
                             type: object
                           podSelector:
                             properties:
@@ -594,7 +594,7 @@ spec:
                                   type: object
                                 type: array
                               matchLabels:
-                                type: object
+                                x-kubernetes-preserve-unknown-fields: true
                             type: object
                         type: object
                       type: array
@@ -637,7 +637,7 @@ spec:
                                   type: object
                                 type: array
                               matchLabels:
-                                type: object
+                                x-kubernetes-preserve-unknown-fields: true
                             type: object
                           podSelector:
                             properties:
@@ -660,7 +660,7 @@ spec:
                                   type: object
                                 type: array
                               matchLabels:
-                                type: object
+                                x-kubernetes-preserve-unknown-fields: true
                             type: object
                         type: object
                       type: array
@@ -698,7 +698,7 @@ spec:
                                   type: object
                                 type: array
                               matchLabels:
-                                type: object
+                                x-kubernetes-preserve-unknown-fields: true
                             type: object
                           podSelector:
                             properties:
@@ -721,7 +721,7 @@ spec:
                                   type: object
                                 type: array
                               matchLabels:
-                                type: object
+                                x-kubernetes-preserve-unknown-fields: true
                             type: object
                         type: object
                       type: array
@@ -840,7 +840,7 @@ spec:
                             type: object
                           type: array
                         matchLabels:
-                          type: object
+                          x-kubernetes-preserve-unknown-fields: true
                       type: object
                     podSelector:
                       properties:
@@ -863,7 +863,7 @@ spec:
                             type: object
                           type: array
                         matchLabels:
-                          type: object
+                          x-kubernetes-preserve-unknown-fields: true
                       type: object
                   type: object
                 type: array
@@ -902,7 +902,7 @@ spec:
                                   type: object
                                 type: array
                               matchLabels:
-                                type: object
+                                x-kubernetes-preserve-unknown-fields: true
                             type: object
                           podSelector:
                             properties:
@@ -925,7 +925,7 @@ spec:
                                   type: object
                                 type: array
                               matchLabels:
-                                type: object
+                                x-kubernetes-preserve-unknown-fields: true
                             type: object
                         type: object
                       type: array
@@ -976,7 +976,7 @@ spec:
                                   type: object
                                 type: array
                               matchLabels:
-                                type: object
+                                x-kubernetes-preserve-unknown-fields: true
                             type: object
                           podSelector:
                             properties:
@@ -999,7 +999,7 @@ spec:
                                   type: object
                                 type: array
                               matchLabels:
-                                type: object
+                                x-kubernetes-preserve-unknown-fields: true
                             type: object
                         type: object
                       type: array
@@ -1042,7 +1042,7 @@ spec:
                                   type: object
                                 type: array
                               matchLabels:
-                                type: object
+                                x-kubernetes-preserve-unknown-fields: true
                             type: object
                           podSelector:
                             properties:
@@ -1065,7 +1065,7 @@ spec:
                                   type: object
                                 type: array
                               matchLabels:
-                                type: object
+                                x-kubernetes-preserve-unknown-fields: true
                             type: object
                         type: object
                       type: array
@@ -1103,7 +1103,7 @@ spec:
                                   type: object
                                 type: array
                               matchLabels:
-                                type: object
+                                x-kubernetes-preserve-unknown-fields: true
                             type: object
                           podSelector:
                             properties:
@@ -1126,7 +1126,7 @@ spec:
                                   type: object
                                 type: array
                               matchLabels:
-                                type: object
+                                x-kubernetes-preserve-unknown-fields: true
                             type: object
                         type: object
                       type: array
@@ -1227,7 +1227,7 @@ spec:
                           type: object
                         type: array
                       matchLabels:
-                        type: object
+                        x-kubernetes-preserve-unknown-fields: true
                     type: object
                   podSelector:
                     properties:
@@ -1250,7 +1250,7 @@ spec:
                           type: object
                         type: array
                       matchLabels:
-                        type: object
+                        x-kubernetes-preserve-unknown-fields: true
                     type: object
                 type: object
               egressIP:
@@ -1453,7 +1453,7 @@ spec:
                             type: object
                           type: array
                         matchLabels:
-                          type: object
+                          x-kubernetes-preserve-unknown-fields: true
                       type: object
                   type: object
                 type: array
@@ -1490,7 +1490,7 @@ spec:
                                   type: object
                                 type: array
                               matchLabels:
-                                type: object
+                                x-kubernetes-preserve-unknown-fields: true
                             type: object
                         type: object
                       type: array
@@ -1533,7 +1533,7 @@ spec:
                                   type: object
                                 type: array
                               matchLabels:
-                                type: object
+                                x-kubernetes-preserve-unknown-fields: true
                             type: object
                           ipBlock:
                             properties:
@@ -1562,7 +1562,7 @@ spec:
                                   type: object
                                 type: array
                               matchLabels:
-                                type: object
+                                x-kubernetes-preserve-unknown-fields: true
                             type: object
                           podSelector:
                             properties:
@@ -1585,7 +1585,7 @@ spec:
                                   type: object
                                 type: array
                               matchLabels:
-                                type: object
+                                x-kubernetes-preserve-unknown-fields: true
                             type: object
                         type: object
                       type: array
@@ -1626,7 +1626,7 @@ spec:
                                   type: object
                                 type: array
                               matchLabels:
-                                type: object
+                                x-kubernetes-preserve-unknown-fields: true
                             type: object
                         type: object
                       type: array
@@ -1656,7 +1656,7 @@ spec:
                                   type: object
                                 type: array
                               matchLabels:
-                                type: object
+                                x-kubernetes-preserve-unknown-fields: true
                             type: object
                           ipBlock:
                             properties:
@@ -1685,7 +1685,7 @@ spec:
                                   type: object
                                 type: array
                               matchLabels:
-                                type: object
+                                x-kubernetes-preserve-unknown-fields: true
                             type: object
                           podSelector:
                             properties:
@@ -1708,7 +1708,7 @@ spec:
                                   type: object
                                 type: array
                               matchLabels:
-                                type: object
+                                x-kubernetes-preserve-unknown-fields: true
                             type: object
                         type: object
                       type: array
@@ -1825,7 +1825,7 @@ spec:
                             type: object
                           type: array
                         matchLabels:
-                          type: object
+                          x-kubernetes-preserve-unknown-fields: true
                       type: object
                   type: object
                 type: array
@@ -1862,7 +1862,7 @@ spec:
                                   type: object
                                 type: array
                               matchLabels:
-                                type: object
+                                x-kubernetes-preserve-unknown-fields: true
                             type: object
                         type: object
                       type: array
@@ -1905,7 +1905,7 @@ spec:
                                   type: object
                                 type: array
                               matchLabels:
-                                type: object
+                                x-kubernetes-preserve-unknown-fields: true
                             type: object
                           ipBlock:
                             properties:
@@ -1934,7 +1934,7 @@ spec:
                                   type: object
                                 type: array
                               matchLabels:
-                                type: object
+                                x-kubernetes-preserve-unknown-fields: true
                             type: object
                           podSelector:
                             properties:
@@ -1957,7 +1957,7 @@ spec:
                                   type: object
                                 type: array
                               matchLabels:
-                                type: object
+                                x-kubernetes-preserve-unknown-fields: true
                             type: object
                         type: object
                       type: array
@@ -1998,7 +1998,7 @@ spec:
                                   type: object
                                 type: array
                               matchLabels:
-                                type: object
+                                x-kubernetes-preserve-unknown-fields: true
                             type: object
                         type: object
                       type: array
@@ -2028,7 +2028,7 @@ spec:
                                   type: object
                                 type: array
                               matchLabels:
-                                type: object
+                                x-kubernetes-preserve-unknown-fields: true
                             type: object
                           ipBlock:
                             properties:
@@ -2057,7 +2057,7 @@ spec:
                                   type: object
                                 type: array
                               matchLabels:
-                                type: object
+                                x-kubernetes-preserve-unknown-fields: true
                             type: object
                           podSelector:
                             properties:
@@ -2080,7 +2080,7 @@ spec:
                                   type: object
                                 type: array
                               matchLabels:
-                                type: object
+                                x-kubernetes-preserve-unknown-fields: true
                             type: object
                         type: object
                       type: array

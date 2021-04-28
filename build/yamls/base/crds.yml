@@ -25,6 +25,7 @@ spec:
                 type: object
                 properties:
                   podSelector:
+                    type: object
                     properties:
                       matchExpressions:
                         type: array
@@ -45,9 +46,9 @@ spec:
                               items:
                                 type: string
                       matchLabels:
-                        type: object
-                    type: object
+                        x-kubernetes-preserve-unknown-fields: true
                   namespaceSelector:
+                    type: object
                     properties:
                       matchExpressions:
                         type: array
@@ -68,8 +69,7 @@ spec:
                               items:
                                 type: string
                       matchLabels:
-                        type: object
-                    type: object
+                        x-kubernetes-preserve-unknown-fields: true
               egressIP:
                 type: string
                 oneOf:
@@ -476,6 +476,7 @@ spec:
                     # Ensure that Spec.AppliedTo does not allow IPBlock field
                     properties:
                       podSelector:
+                        type: object
                         properties:
                           matchExpressions:
                             type: array
@@ -496,9 +497,9 @@ spec:
                                   items:
                                     type: string
                           matchLabels:
-                            type: object
-                        type: object
+                            x-kubernetes-preserve-unknown-fields: true
                       namespaceSelector:
+                        type: object
                         properties:
                           matchExpressions:
                             type: array
@@ -519,8 +520,7 @@ spec:
                                   items:
                                     type: string
                           matchLabels:
-                            type: object
-                        type: object
+                            x-kubernetes-preserve-unknown-fields: true
                       group:
                         type: string
                 ingress:
@@ -537,6 +537,7 @@ spec:
                           # Ensure that rule AppliedTo does not allow IPBlock field
                           properties:
                             podSelector:
+                              type: object
                               properties:
                                 matchExpressions:
                                   type: array
@@ -557,9 +558,9 @@ spec:
                                         items:
                                           type: string
                                 matchLabels:
-                                  type: object
-                              type: object
+                                  x-kubernetes-preserve-unknown-fields: true
                             namespaceSelector:
+                              type: object
                               properties:
                                 matchExpressions:
                                   type: array
@@ -580,8 +581,7 @@ spec:
                                         items:
                                           type: string
                                 matchLabels:
-                                  type: object
-                              type: object
+                                  x-kubernetes-preserve-unknown-fields: true
                             group:
                               type: string
                       # Ensure that Action field allows only ALLOW, DROP and REJECT values
@@ -605,6 +605,7 @@ spec:
                           type: object
                           properties:
                             podSelector:
+                              type: object
                               properties:
                                 matchExpressions:
                                   type: array
@@ -625,9 +626,9 @@ spec:
                                         items:
                                           type: string
                                 matchLabels:
-                                  type: object
-                              type: object
+                                  x-kubernetes-preserve-unknown-fields: true
                             namespaceSelector:
+                              type: object
                               properties:
                                 matchExpressions:
                                   type: array
@@ -648,8 +649,7 @@ spec:
                                         items:
                                           type: string
                                 matchLabels:
-                                  type: object
-                              type: object
+                                  x-kubernetes-preserve-unknown-fields: true
                             ipBlock:
                               type: object
                               properties:
@@ -676,6 +676,7 @@ spec:
                           # Ensure that rule AppliedTo does not allow IPBlock field
                           properties:
                             podSelector:
+                              type: object
                               properties:
                                 matchExpressions:
                                   type: array
@@ -696,9 +697,9 @@ spec:
                                         items:
                                           type: string
                                 matchLabels:
-                                  type: object
-                              type: object
+                                  x-kubernetes-preserve-unknown-fields: true
                             namespaceSelector:
+                              type: object
                               properties:
                                 matchExpressions:
                                   type: array
@@ -719,8 +720,7 @@ spec:
                                         items:
                                           type: string
                                 matchLabels:
-                                  type: object
-                              type: object
+                                  x-kubernetes-preserve-unknown-fields: true
                             group:
                               type: string
                       # Ensure that Action field allows only ALLOW, DROP and REJECT values
@@ -744,6 +744,7 @@ spec:
                           type: object
                           properties:
                             podSelector:
+                              type: object
                               properties:
                                 matchExpressions:
                                   type: array
@@ -764,9 +765,9 @@ spec:
                                         items:
                                           type: string
                                 matchLabels:
-                                  type: object
-                              type: object
+                                  x-kubernetes-preserve-unknown-fields: true
                             namespaceSelector:
+                              type: object
                               properties:
                                 matchExpressions:
                                   type: array
@@ -787,8 +788,7 @@ spec:
                                         items:
                                           type: string
                                 matchLabels:
-                                  type: object
-                              type: object
+                                  x-kubernetes-preserve-unknown-fields: true
                             ipBlock:
                               type: object
                               properties:
@@ -901,7 +901,7 @@ spec:
                                   items:
                                     type: string
                           matchLabels:
-                            type: object
+                            x-kubernetes-preserve-unknown-fields: true
                 ingress:
                   type: array
                   items:
@@ -937,7 +937,7 @@ spec:
                                         items:
                                           type: string
                                 matchLabels:
-                                  type: object
+                                  x-kubernetes-preserve-unknown-fields: true
                       # Ensure that Action field allows only ALLOW, DROP and REJECT values
                       action:
                         type: string
@@ -959,6 +959,7 @@ spec:
                           type: object
                           properties:
                             podSelector:
+                              type: object
                               properties:
                                 matchExpressions:
                                   type: array
@@ -979,9 +980,9 @@ spec:
                                         items:
                                           type: string
                                 matchLabels:
-                                  type: object
-                              type: object
+                                  x-kubernetes-preserve-unknown-fields: true
                             namespaceSelector:
+                              type: object
                               properties:
                                 matchExpressions:
                                   type: array
@@ -1002,9 +1003,9 @@ spec:
                                         items:
                                           type: string
                                 matchLabels:
-                                  type: object
-                              type: object
+                                  x-kubernetes-preserve-unknown-fields: true
                             externalEntitySelector:
+                              type: object
                               properties:
                                 matchExpressions:
                                   type: array
@@ -1025,8 +1026,7 @@ spec:
                                         items:
                                           type: string
                                 matchLabels:
-                                  type: object
-                              type: object
+                                  x-kubernetes-preserve-unknown-fields: true
                             ipBlock:
                               type: object
                               properties:
@@ -1072,7 +1072,7 @@ spec:
                                         items:
                                           type: string
                                 matchLabels:
-                                  type: object
+                                  x-kubernetes-preserve-unknown-fields: true
                       # Ensure that Action field allows only ALLOW, DROP and REJECT values
                       action:
                         type: string
@@ -1094,6 +1094,7 @@ spec:
                           type: object
                           properties:
                             podSelector:
+                              type: object
                               properties:
                                 matchExpressions:
                                   type: array
@@ -1114,9 +1115,9 @@ spec:
                                         items:
                                           type: string
                                 matchLabels:
-                                  type: object
-                              type: object
+                                  x-kubernetes-preserve-unknown-fields: true
                             namespaceSelector:
+                              type: object
                               properties:
                                 matchExpressions:
                                   type: array
@@ -1137,9 +1138,9 @@ spec:
                                         items:
                                           type: string
                                 matchLabels:
-                                  type: object
-                              type: object
+                                  x-kubernetes-preserve-unknown-fields: true
                             externalEntitySelector:
+                              type: object
                               properties:
                                 matchExpressions:
                                   type: array
@@ -1160,8 +1161,7 @@ spec:
                                         items:
                                           type: string
                                 matchLabels:
-                                  type: object
-                              type: object
+                                  x-kubernetes-preserve-unknown-fields: true
                             ipBlock:
                               type: object
                               properties:
@@ -1269,6 +1269,7 @@ spec:
                 childGroups:
                   x-kubernetes-preserve-unknown-fields: true
                 podSelector:
+                  type: object
                   properties:
                     matchExpressions:
                       type: array
@@ -1289,9 +1290,9 @@ spec:
                             items:
                               type: string
                     matchLabels:
-                      type: object
-                  type: object
+                      x-kubernetes-preserve-unknown-fields: true
                 namespaceSelector:
+                  type: object
                   properties:
                     matchExpressions:
                       type: array
@@ -1312,9 +1313,9 @@ spec:
                             items:
                               type: string
                     matchLabels:
-                      type: object
-                  type: object
+                      x-kubernetes-preserve-unknown-fields: true
                 externalEntitySelector:
+                  type: object
                   properties:
                     matchExpressions:
                       type: array
@@ -1335,8 +1336,7 @@ spec:
                             items:
                               type: string
                     matchLabels:
-                      type: object
-                  type: object
+                      x-kubernetes-preserve-unknown-fields: true
                 ipBlock:
                   type: object
                   properties:
@@ -1706,6 +1706,7 @@ spec:
                     # Ensure that Spec.AppliedTo does not allow IPBlock field
                     properties:
                       podSelector:
+                        type: object
                         properties:
                           matchExpressions:
                             type: array
@@ -1726,9 +1727,9 @@ spec:
                                   items:
                                     type: string
                           matchLabels:
-                            type: object
-                        type: object
+                            x-kubernetes-preserve-unknown-fields: true
                       namespaceSelector:
+                        type: object
                         properties:
                           matchExpressions:
                             type: array
@@ -1749,8 +1750,7 @@ spec:
                                   items:
                                     type: string
                           matchLabels:
-                            type: object
-                        type: object
+                            x-kubernetes-preserve-unknown-fields: true
                       group:
                         type: string
                 ingress:
@@ -1767,6 +1767,7 @@ spec:
                           # Ensure that rule AppliedTo does not allow IPBlock field
                           properties:
                             podSelector:
+                              type: object
                               properties:
                                 matchExpressions:
                                   type: array
@@ -1787,9 +1788,9 @@ spec:
                                         items:
                                           type: string
                                 matchLabels:
-                                  type: object
-                              type: object
+                                  x-kubernetes-preserve-unknown-fields: true
                             namespaceSelector:
+                              type: object
                               properties:
                                 matchExpressions:
                                   type: array
@@ -1810,8 +1811,7 @@ spec:
                                         items:
                                           type: string
                                 matchLabels:
-                                  type: object
-                              type: object
+                                  x-kubernetes-preserve-unknown-fields: true
                             group:
                               type: string
                       # Ensure that Action field allows only ALLOW, DROP and REJECT values
@@ -1835,6 +1835,7 @@ spec:
                           type: object
                           properties:
                             podSelector:
+                              type: object
                               properties:
                                 matchExpressions:
                                   type: array
@@ -1855,9 +1856,9 @@ spec:
                                         items:
                                           type: string
                                 matchLabels:
-                                  type: object
-                              type: object
+                                  x-kubernetes-preserve-unknown-fields: true
                             namespaceSelector:
+                              type: object
                               properties:
                                 matchExpressions:
                                   type: array
@@ -1878,8 +1879,7 @@ spec:
                                         items:
                                           type: string
                                 matchLabels:
-                                  type: object
-                              type: object
+                                  x-kubernetes-preserve-unknown-fields: true
                             ipBlock:
                               type: object
                               properties:
@@ -1906,6 +1906,7 @@ spec:
                           # Ensure that rule AppliedTo does not allow IPBlock field
                           properties:
                             podSelector:
+                              type: object
                               properties:
                                 matchExpressions:
                                   type: array
@@ -1926,9 +1927,9 @@ spec:
                                         items:
                                           type: string
                                 matchLabels:
-                                  type: object
-                              type: object
+                                  x-kubernetes-preserve-unknown-fields: true
                             namespaceSelector:
+                              type: object
                               properties:
                                 matchExpressions:
                                   type: array
@@ -1949,8 +1950,7 @@ spec:
                                         items:
                                           type: string
                                 matchLabels:
-                                  type: object
-                              type: object
+                                  x-kubernetes-preserve-unknown-fields: true
                             group:
                               type: string
                       # Ensure that Action field allows only ALLOW, DROP and REJECT values
@@ -1974,6 +1974,7 @@ spec:
                           type: object
                           properties:
                             podSelector:
+                              type: object
                               properties:
                                 matchExpressions:
                                   type: array
@@ -1994,9 +1995,9 @@ spec:
                                         items:
                                           type: string
                                 matchLabels:
-                                  type: object
-                              type: object
+                                  x-kubernetes-preserve-unknown-fields: true
                             namespaceSelector:
+                              type: object
                               properties:
                                 matchExpressions:
                                   type: array
@@ -2017,8 +2018,7 @@ spec:
                                         items:
                                           type: string
                                 matchLabels:
-                                  type: object
-                              type: object
+                                  x-kubernetes-preserve-unknown-fields: true
                             ipBlock:
                               type: object
                               properties:
@@ -2132,7 +2132,7 @@ spec:
                                   items:
                                     type: string
                           matchLabels:
-                            type: object
+                            x-kubernetes-preserve-unknown-fields: true
                 ingress:
                   type: array
                   items:
@@ -2147,6 +2147,7 @@ spec:
                           # Ensure that rule AppliedTo does not allow NamespaceSelector/IPBlock field
                           properties:
                             podSelector:
+                              type: object
                               properties:
                                 matchExpressions:
                                   type: array
@@ -2167,8 +2168,7 @@ spec:
                                         items:
                                           type: string
                                 matchLabels:
-                                  type: object
-                              type: object
+                                  x-kubernetes-preserve-unknown-fields: true
                       # Ensure that Action field allows only ALLOW, DROP and REJECT values
                       action:
                         type: string
@@ -2190,6 +2190,7 @@ spec:
                           type: object
                           properties:
                             podSelector:
+                              type: object
                               properties:
                                 matchExpressions:
                                   type: array
@@ -2210,9 +2211,9 @@ spec:
                                         items:
                                           type: string
                                 matchLabels:
-                                  type: object
-                              type: object
+                                  x-kubernetes-preserve-unknown-fields: true
                             namespaceSelector:
+                              type: object
                               properties:
                                 matchExpressions:
                                   type: array
@@ -2233,9 +2234,9 @@ spec:
                                         items:
                                           type: string
                                 matchLabels:
-                                  type: object
-                              type: object
+                                  x-kubernetes-preserve-unknown-fields: true
                             externalEntitySelector:
+                              type: object
                               properties:
                                 matchExpressions:
                                   type: array
@@ -2256,8 +2257,7 @@ spec:
                                         items:
                                           type: string
                                 matchLabels:
-                                  type: object
-                              type: object
+                                  x-kubernetes-preserve-unknown-fields: true
                             ipBlock:
                               type: object
                               properties:
@@ -2303,7 +2303,7 @@ spec:
                                         items:
                                           type: string
                                 matchLabels:
-                                  type: object
+                                  x-kubernetes-preserve-unknown-fields: true
                       # Ensure that Action field allows only ALLOW, DROP and REJECT values
                       action:
                         type: string
@@ -2325,6 +2325,7 @@ spec:
                           type: object
                           properties:
                             podSelector:
+                              type: object
                               properties:
                                 matchExpressions:
                                   type: array
@@ -2345,9 +2346,9 @@ spec:
                                         items:
                                           type: string
                                 matchLabels:
-                                  type: object
-                              type: object
+                                  x-kubernetes-preserve-unknown-fields: true
                             namespaceSelector:
+                              type: object
                               properties:
                                 matchExpressions:
                                   type: array
@@ -2368,9 +2369,9 @@ spec:
                                         items:
                                           type: string
                                 matchLabels:
-                                  type: object
-                              type: object
+                                  x-kubernetes-preserve-unknown-fields: true
                             externalEntitySelector:
+                              type: object
                               properties:
                                 matchExpressions:
                                   type: array
@@ -2391,8 +2392,7 @@ spec:
                                         items:
                                           type: string
                                 matchLabels:
-                                  type: object
-                              type: object
+                                  x-kubernetes-preserve-unknown-fields: true
                             ipBlock:
                               type: object
                               properties:
@@ -2502,6 +2502,7 @@ spec:
                 childGroups:
                   x-kubernetes-preserve-unknown-fields: true
                 podSelector:
+                  type: object
                   properties:
                     matchExpressions:
                       type: array
@@ -2522,9 +2523,9 @@ spec:
                             items:
                               type: string
                     matchLabels:
-                      type: object
-                  type: object
+                      x-kubernetes-preserve-unknown-fields: true
                 namespaceSelector:
+                  type: object
                   properties:
                     matchExpressions:
                       type: array
@@ -2545,9 +2546,9 @@ spec:
                             items:
                               type: string
                     matchLabels:
-                      type: object
-                  type: object
+                      x-kubernetes-preserve-unknown-fields: true
                 externalEntitySelector:
+                  type: object
                   properties:
                     matchExpressions:
                       type: array
@@ -2568,8 +2569,7 @@ spec:
                             items:
                               type: string
                     matchLabels:
-                      type: object
-                  type: object
+                      x-kubernetes-preserve-unknown-fields: true
                 ipBlock:
                   type: object
                   properties:
