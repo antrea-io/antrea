@@ -29,7 +29,7 @@ add your success story and logo.
 [Contributor Guide](CONTRIBUTING.md).
 
 2. Add a link to your website, twitter feed, GitHub page, etc. to the links
-on the bottom of this Markdown file. Use a reference number > than 100.
+on the bottom of this Markdown file. Use a reference number > 100.
 *Example:* `[110]: https://example.com`
 
 3. Add your name to the success stories, using **bold** format, and attach your
