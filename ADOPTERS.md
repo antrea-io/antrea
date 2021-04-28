@@ -21,7 +21,7 @@ of how they use it.
 It would be great to have your success story and logo on our list of
 Antrea adopters!
 
-To add yourself, you can follow the steps outlined bellow, alternatively,
+To add yourself, you can follow the steps outlined below, alternatively,
 feel free to reach out via Slack or on Github to have our team
 add your success story and logo.
 
@@ -33,9 +33,9 @@ on the bottom of this Markdown file. Use a reference number > than 100.
 *Example:* `[110]: https://example.com`
 
 3. Add your name to the success stories, using **bold** format, and attach your
-link define in step 1) to your name. *Example:* `**[Example][110]**`
+link defined in step 1) to your name. *Example:* `**[Example][110]**`
 
-4. Bellow your name, describe your organization or yourself and how you make
+4. Below your name, describe your organization or yourself and how you make
 use of Antrea. Optionally, list the features of Antrea you are using.
 
 5. If you are willing to share contact details, e.g. your Twitter handle, etc.
