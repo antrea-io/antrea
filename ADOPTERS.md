@@ -12,6 +12,10 @@ height="50"></a>&nbsp; &nbsp; &nbsp;
 Below is a list of adopters of Antrea that have publicly shared the details
 of how they use it.
 
+**[Glasnostic][100]**
+
+**[Infrabuilder][101]**
+
 ## Adding yourself as an Adopter
 
 It would be great to have your success story and logo on our list of
@@ -26,10 +30,10 @@ add your success story and logo.
 
 2. Add a link to your website, twitter feed, GitHub page, etc. to the links
 on the bottom of this Markdown file. Use a reference number > than 100.
-*Example:* `[100]: https://example.com`
+*Example:* `[110]: https://example.com`
 
 3. Add your name to the success stories, using **bold** format, and attach your
-link define in step 1) to your name. *Example:* `**[Example][100]**`
+link define in step 1) to your name. *Example:* `**[Example][110]**`
 
 4. Bellow your name, describe your organization or yourself and how you make
 use of Antrea. Optionally, list the features of Antrea you are using.
@@ -65,3 +69,5 @@ Follow the steps above to add your organization to the list of Antrea Adopters.
 We will follow up and publish it to the [antrea.io][1] website.
 
 [1]: https://antrea.io
+[100]: https://glasnostic.com
+[101]: https://infrabuilder.com
