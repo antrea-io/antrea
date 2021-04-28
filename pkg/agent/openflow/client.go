@@ -753,8 +753,10 @@ func (c *client) ReplayFlows() {
 		return true
 	}
 
-	c.groupCache.Range(func(id, gEntry interface{}) bool {
-		if err := gEntry.(binding.Group).Add(); err != nil {
+	c.groupCache.Range(func(id, value interface{}) bool {
+		group := value.(binding.Group)
+		group.Reset()
+		if err := group.Add(); err != nil {
 			klog.Errorf("Error when replaying cached group %d: %v", id, err)
 		}
 		return true

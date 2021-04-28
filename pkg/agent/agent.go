@@ -427,7 +427,7 @@ func (i *Initializer) FlowRestoreComplete() error {
 	if err != nil {
 		if err == wait.ErrWaitTimeout {
 			// This could happen if the method is triggered by OVS disconnection event, in which OVS doesn't restart.
-			klog.Info("flow-restore-wait was not true, skip cleaning up it")
+			klog.Info("flow-restore-wait was not true, skip cleaning it up")
 			return nil
 		}
 		return err
