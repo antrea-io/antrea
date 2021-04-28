@@ -84,7 +84,7 @@ func createDummyGW(t *testing.T) netlink.Link {
 
 func skipIfNotInContainer(t *testing.T) {
 	if _, incontainer := os.LookupEnv("INCONTAINER"); !incontainer {
-		// test changes file system, routing table. Run in contain only
+		// test changes file system, routing table. Run in container only
 		t.Skipf("Skipping test which is run only in container")
 	}
 }
@@ -380,10 +380,63 @@ func TestAddAndDeleteRoutes(t *testing.T) {
 		output, err := ExecOutputTrim(fmt.Sprintf("ip route show table 0 exact %s", peerCIDR))
 		assert.NoError(t, err)
 		assert.Equal(t, "", output, "expected no routes to %s", peerCIDR)
-
 		entries, err = ipset.ListEntries("ANTREA-POD-IP")
 		assert.NoError(t, err, "list ipset entries failed")
 		assert.NotContains(t, entries, tc.peerCIDR, "entry should not be in ipset")
+	}
+}
+
+func TestSyncRoutes(t *testing.T) {
+	skipIfNotInContainer(t)
+	gwLink := createDummyGW(t)
+	defer netlink.LinkDel(gwLink)
+
+	tcs := []struct {
+		// variations
+		mode     config.TrafficEncapModeType
+		nodeName string
+		peerCIDR string
+		peerIP   net.IP
+		// expectations
+		uplink netlink.Link // indicates outbound of the route.
+	}{
+		{mode: config.TrafficEncapModeEncap, nodeName: "node0", peerCIDR: "10.10.20.0/24", peerIP: localPeerIP, uplink: gwLink},
+		{mode: config.TrafficEncapModeNoEncap, nodeName: "node1", peerCIDR: "10.10.30.0/24", peerIP: localPeerIP, uplink: nodeLink},
+		{mode: config.TrafficEncapModeNoEncap, nodeName: "node2", peerCIDR: "10.10.40.0/24", peerIP: remotePeerIP, uplink: nil},
+		{mode: config.TrafficEncapModeHybrid, nodeName: "node3", peerCIDR: "10.10.50.0/24", peerIP: localPeerIP, uplink: nodeLink},
+		{mode: config.TrafficEncapModeHybrid, nodeName: "node4", peerCIDR: "10.10.60.0/24", peerIP: remotePeerIP, uplink: gwLink},
+	}
+
+	for _, tc := range tcs {
+		t.Logf("Running test with mode %s peer cidr %s peer ip %s node config %s", tc.mode, tc.peerCIDR, tc.peerIP, nodeConfig)
+		routeClient, err := route.NewClient(serviceCIDR, &config.NetworkConfig{TrafficEncapMode: tc.mode}, false)
+		assert.NoError(t, err)
+		err = routeClient.Initialize(nodeConfig, func() {})
+		assert.NoError(t, err)
+
+		_, peerCIDR, _ := net.ParseCIDR(tc.peerCIDR)
+		nhCIDRIP := ip.NextIP(peerCIDR.IP)
+		assert.NoError(t, routeClient.AddRoutes(peerCIDR, tc.nodeName, tc.peerIP, nhCIDRIP), "adding routes failed")
+
+		listCmd := fmt.Sprintf("ip route show table 0 exact %s", peerCIDR)
+		expOutput, err := exec.Command("bash", "-c", listCmd).Output()
+		assert.NoError(t, err, "error executing ip route command: %s", listCmd)
+
+		if len(expOutput) > 0 {
+			delCmd := fmt.Sprintf("ip route del %s", peerCIDR.String())
+			_, err = exec.Command("bash", "-c", delCmd).Output()
+			assert.NoError(t, err, "error executing ip route command: %s", delCmd)
+		}
+
+		stopCh := make(chan struct{})
+		defer close(stopCh)
+		route.IPTablesSyncInterval = 2 * time.Second
+		go routeClient.Run(stopCh)
+		time.Sleep(route.IPTablesSyncInterval) // wait for one iteration of sync operation.
+
+		output, err := exec.Command("bash", "-c", listCmd).Output()
+		assert.NoError(t, err, "error executing ip route command: %s", listCmd)
+		assert.Equal(t, expOutput, output, "error syncing route")
 	}
 }
 

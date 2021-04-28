@@ -127,6 +127,10 @@ func run(o *Options) error {
 	// networkReadyCh is used to notify that the Node's network is ready.
 	// Functions that rely on the Node's network should wait for the channel to close.
 	networkReadyCh := make(chan struct{})
+	// set up signal capture: the first SIGTERM / SIGINT signal is handled gracefully and will
+	// cause the stopCh channel to be closed; if another signal is received before the program
+	// exits, we will force exit.
+	stopCh := signals.RegisterSignalHandlers()
 	// Initialize agent and node network.
 	agentInitializer := agent.NewInitializer(
 		k8sClient,
@@ -141,6 +145,7 @@ func run(o *Options) error {
 		serviceCIDRNetv6,
 		networkConfig,
 		networkReadyCh,
+		stopCh,
 		features.DefaultFeatureGate.Enabled(features.AntreaProxy))
 	err = agentInitializer.Initialize()
 	if err != nil {
@@ -256,10 +261,6 @@ func run(o *Options) error {
 	if err := antreaClientProvider.RunOnce(); err != nil {
 		return err
 	}
-	// set up signal capture: the first SIGTERM / SIGINT signal is handled gracefully and will
-	// cause the stopCh channel to be closed; if another signal is received before the program
-	// exits, we will force exit.
-	stopCh := signals.RegisterSignalHandlers()
 
 	// Start the NPL agent.
 	if features.DefaultFeatureGate.Enabled(features.NodePortLocal) {

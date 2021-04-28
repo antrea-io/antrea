@@ -71,6 +71,7 @@ type Initializer struct {
 	// networkReadyCh should be closed once the Node's network is ready.
 	// The CNI server will wait for it before handling any CNI Add requests.
 	networkReadyCh chan<- struct{}
+	stopCh         <-chan struct{}
 }
 
 func NewInitializer(
@@ -86,6 +87,7 @@ func NewInitializer(
 	serviceCIDRv6 *net.IPNet,
 	networkConfig *config.NetworkConfig,
 	networkReadyCh chan<- struct{},
+	stopCh <-chan struct{},
 	enableProxy bool) *Initializer {
 	return &Initializer{
 		ovsBridgeClient: ovsBridgeClient,
@@ -100,6 +102,7 @@ func NewInitializer(
 		serviceCIDRv6:   serviceCIDRv6,
 		networkConfig:   networkConfig,
 		networkReadyCh:  networkReadyCh,
+		stopCh:          stopCh,
 		enableProxy:     enableProxy,
 	}
 }
@@ -845,6 +848,13 @@ func (i *Initializer) allocateGatewayAddresses(localSubnets []*net.IPNet, gatewa
 	if err := util.ConfigureLinkAddresses(i.nodeConfig.GatewayConfig.LinkIndex, gwIPs); err != nil {
 		return err
 	}
+	// Periodically check whether IP configuration of the gateway is correct.
+	// Terminate when stopCh is closed.
+	go wait.Until(func() {
+		if err := util.ConfigureLinkAddresses(i.nodeConfig.GatewayConfig.LinkIndex, gwIPs); err != nil {
+			klog.Errorf("Failed to check IP configuration of the gateway: %v", err)
+		}
+	}, 60*time.Second, i.stopCh)
 
 	for _, gwIP := range gwIPs {
 		if gwIP.IP.To4() != nil {
