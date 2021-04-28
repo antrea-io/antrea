@@ -145,6 +145,14 @@ cases to our [automated test suite](ci/README.md) to guarantee enough
 coverage. A PR that makes significant code changes without contributing new test
 cases will be flagged by reviewers and will not be accepted.
 
+### Cherry-picks to release branches
+
+If your PR fixes a critical bug, it may need to be backported to older release
+branches which are still maintained. If this is the case, one of the Antrea
+maintainers will let you know once your PR is approved. Please refer to the
+documentation on [cherry-picks](docs/contributors/cherry-picks.md) for more
+information.
+
 ### Inclusive Naming
 
 For symbol names and documentation, do not introduce new usage of harmful
