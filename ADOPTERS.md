@@ -45,10 +45,10 @@ add a line where people can find you.
 
     ```markdown
     **[Example][100]**
-    Example.com is a company operating internationaly, focusing on creating
+    Example.com is a company operating internationally, focusing on creating
     documentation examples. We are using Antrea in our K8s clusters deployed
     using Kubeadm. We making use of Antrea's Network Policy capabilities.
-    You can reach us on twiter @vmwopensource.
+    You can reach us on twitter @vmwopensource.
     ....
     [100]: https://example.com
     ```
