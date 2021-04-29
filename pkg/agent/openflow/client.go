@@ -384,6 +384,7 @@ func (c *client) GetPodFlowKeys(interfaceName string) []string {
 func (c *client) InstallServiceGroup(groupID binding.GroupIDType, withSessionAffinity bool, endpoints []proxy.Endpoint) error {
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
+
 	group := c.serviceEndpointGroup(groupID, withSessionAffinity, endpoints...)
 	if err := group.Add(); err != nil {
 		return fmt.Errorf("error when installing Service Endpoints Group: %w", err)
@@ -443,7 +444,7 @@ func (c *client) InstallServiceFlows(groupID binding.GroupIDType, svcIP net.IP, 
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
 	var flows []binding.Flow
-	flows = append(flows, c.serviceLBFlow(groupID, svcIP, svcPort, protocol))
+	flows = append(flows, c.serviceLBFlow(groupID, svcIP, svcPort, protocol, affinityTimeout != 0))
 	if affinityTimeout != 0 {
 		flows = append(flows, c.serviceLearnFlow(groupID, svcIP, svcPort, protocol, affinityTimeout))
 	}
