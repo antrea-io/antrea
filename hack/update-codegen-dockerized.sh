@@ -40,6 +40,7 @@ $GOPATH/bin/client-gen \
   --plural-exceptions "NetworkPolicyStats:NetworkPolicyStats" \
   --plural-exceptions "AntreaNetworkPolicyStats:AntreaNetworkPolicyStats" \
   --plural-exceptions "AntreaClusterNetworkPolicyStats:AntreaClusterNetworkPolicyStats" \
+  --plural-exceptions "ClusterGroupMembers:ClusterGroupMembers" \
   --go-header-file hack/boilerplate/license_header.go.txt
 
 # Generate listers with K8s codegen tools.
@@ -107,6 +108,7 @@ $GOPATH/bin/client-gen \
   --plural-exceptions "NetworkPolicyStats:NetworkPolicyStats" \
   --plural-exceptions "AntreaNetworkPolicyStats:AntreaNetworkPolicyStats" \
   --plural-exceptions "AntreaClusterNetworkPolicyStats:AntreaClusterNetworkPolicyStats" \
+  --plural-exceptions "ClusterGroupMembers:ClusterGroupMembers" \
   --go-header-file hack/boilerplate/license_header.go.txt
 
 # Generate legacy listers with K8s codegen tools.

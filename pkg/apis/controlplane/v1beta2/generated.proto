@@ -86,6 +86,9 @@ message AppliedToGroupPatch {
   repeated GroupMember removedGroupMembers = 3;
 }
 
+// +genclient
+// +genclient:nonNamespaced
+// +genclient:onlyVerbs=get
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // ClusterGroupMembers is a list of GroupMember objects that are currently selected by a ClusterGroup.
 message ClusterGroupMembers {
@@ -132,6 +135,8 @@ message ExternalEntityReference {
   optional string namespace = 2;
 }
 
+// +genclient
+// +genclient:onlyVerbs=get
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // GroupAssociation is the message format in an API response for groupassociation queries.
 message GroupAssociation {
