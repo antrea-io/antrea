@@ -30,10 +30,11 @@ type ofGroup struct {
 // ofSwitch keeps a list of all Group objects, so this operation is
 // needed. Reset() should be called before replaying the Group to OVS.
 func (g *ofGroup) Reset() {
-	// An error ("group already exists") is not possible here since the same
-	// group was created successfully before. If something is wrong and
-	// there is an error, g.ofctrl will be set to nil and the Agent will
-	// crash later.
+	// An error ("group already exists") is not possible here since we are
+	// using a new instance of ofSwitch and re-creating a group which was
+	// created successfully before. There will be no duplicate group IDs. If
+	// something is wrong and there is an error, g.ofctrl will be set to nil
+	// and the Agent will crash later.
 	newGroup, _ := g.bridge.ofSwitch.NewGroup(g.ofctrl.ID, g.ofctrl.GroupType)
 	newGroup.Buckets = g.ofctrl.Buckets
 	g.ofctrl = newGroup
