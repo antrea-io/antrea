@@ -591,11 +591,16 @@ func expectedProxyServiceGroupAndFlows(gid uint32, svc svcConfig, endpointList [
 		nw_proto = 132
 		learnProtoField = "OXM_OF_SCTP_DST[]"
 	}
+
+	serviceLearnReg := 2
+	if stickyAge != 0 {
+		serviceLearnReg = 3
+	}
 	cookieAllocator := cookie.NewAllocator(roundInfo.RoundNum)
 	svcFlows := expectTableFlows{tableID: 41, flows: []*ofTestUtils.ExpectFlow{
 		{
 			MatchStr: fmt.Sprintf("priority=200,%s,reg4=0x10000/0x70000,nw_dst=%s,tp_dst=%d", string(svc.protocol), svc.ip.String(), svc.port),
-			ActStr:   fmt.Sprintf("group:%d", gid),
+			ActStr:   fmt.Sprintf("load:0x%x->NXM_NX_REG4[16..18],load:0x1->NXM_NX_REG0[19],group:%d", serviceLearnReg, gid),
 		},
 		{
 			MatchStr: fmt.Sprintf("priority=190,%s,reg4=0x30000/0x70000,nw_dst=%s,tp_dst=%d", string(svc.protocol), svc.ip.String(), svc.port),
@@ -608,7 +613,7 @@ func expectedProxyServiceGroupAndFlows(gid uint32, svc svcConfig, endpointList [
 	for _, ep := range endpointList {
 		epIP := ipToHexString(net.ParseIP(ep.IP()))
 		epPort, _ := ep.Port()
-		bucket := fmt.Sprintf("weight:100,actions=load:%s->NXM_NX_REG3[],load:0x%x->NXM_NX_REG4[0..15],load:0x2->NXM_NX_REG4[16..18],load:0x1->NXM_NX_REG0[19],resubmit(,42)", epIP, epPort)
+		bucket := fmt.Sprintf("weight:100,actions=load:%s->NXM_NX_REG3[],load:0x%x->NXM_NX_REG4[0..15],resubmit(,42)", epIP, epPort)
 		groupBuckets = append(groupBuckets, bucket)
 
 		unionVal := (0b010 << 16) + uint32(epPort)
