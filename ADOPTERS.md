@@ -12,7 +12,7 @@ height="50"></a>&nbsp; &nbsp; &nbsp;
 Below is a list of adopters of Antrea that have publicly shared the details
 of how they use it.
 
-**[Glasnostic](https://glasnostic.com])**
+**[Glasnostic](https://glasnostic.com)**
 
 **[Infrabuilder](https://infrabuilder.com)**
 
