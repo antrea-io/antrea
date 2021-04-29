@@ -12,9 +12,9 @@ height="50"></a>&nbsp; &nbsp; &nbsp;
 Below is a list of adopters of Antrea that have publicly shared the details
 of how they use it.
 
-**[Glasnostic][100]**
+**[Glasnostic](https://glasnostic.com])**
 
-**[Infrabuilder][101]**
+**[Infrabuilder](https://infrabuilder.com)**
 
 ## Adding yourself as an Adopter
 
@@ -28,38 +28,39 @@ add your success story and logo.
 1. Prepare your addition and PR as described in the Antrea
 [Contributor Guide](CONTRIBUTING.md).
 
-2. Add a link to your website, twitter feed, GitHub page, etc. to the links
-on the bottom of this Markdown file. Use a reference number > 100.
-*Example:* `[110]: https://example.com`
+2. Add your name to the success stories, using **bold** format with a link to
+your web site like this: `**[Example](https://example.com)**`
 
-3. Add your name to the success stories, using **bold** format, and attach your
-link defined in step 1) to your name. *Example:* `**[Example][110]**`
-
-4. Below your name, describe your organization or yourself and how you make
+3. Below your name, describe your organization or yourself and how you make
 use of Antrea. Optionally, list the features of Antrea you are using.
 
-5. If you are willing to share contact details, e.g. your Twitter handle, etc.
+4. If you are willing to share contact details, e.g. your Twitter handle, etc.
 add a line where people can find you.
 
     Example:
 
     ```markdown
-    **[Example][100]**
+    **[Example](https://example.com)**
     Example.com is a company operating internationally, focusing on creating
     documentation examples. We are using Antrea in our K8s clusters deployed
     using Kubeadm. We making use of Antrea's Network Policy capabilities.
     You can reach us on twitter @vmwopensource.
-    ....
-    [100]: https://example.com
     ```
 
-6. (Optional) To add your logo, simply drop your logo in PNG or SVG format with
+5. (Optional) To add your logo, simply drop your logo in PNG or SVG format with
 a maximum size of 50KB to the [adopters](docs/assets/adopters) directory.
 Name the image file something that reflects your company (e.g., if your company
-is called Acme, name the image acme-logo.png). Our team will take care of
-linking the logo into the top of this page
+is called Acme, name the image acme-logo.png). Then add an inline html link
+directly bellow the [Antrea Adopters section](#Antrea-Adopters). Use the
+following format:
 
-7. Send a PR with your addition as described in the Antrea
+    ```html
+    <a href="http://example.com" border="0" target="_blank">
+    <img alt="example.com" src="docs/assets/adopters/example-logo.png"
+    height="50"></a>&nbsp; &nbsp; &nbsp;
+    ```
+
+6. Send a PR with your addition as described in the Antrea
 [Contributor Guide](CONTRIBUTING.md)
 
 ## Adding a logo to Antrea.io
@@ -69,5 +70,3 @@ Follow the steps above to add your organization to the list of Antrea Adopters.
 We will follow up and publish it to the [antrea.io][1] website.
 
 [1]: https://antrea.io
-[100]: https://glasnostic.com
-[101]: https://infrabuilder.com
