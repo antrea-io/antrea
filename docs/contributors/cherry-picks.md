@@ -44,14 +44,14 @@ policy](../versioning.md#minor-releases-and-patch-releases).
 
   If the cherry-picked PR does not apply cleanly against an old release branch,
   the script will let you resolve conflicts manually. This is one of the reasons
-  why we ask contributors to backport their own bug fixes, as thei participation
-  is critical in case of such a conflict.
+  why we ask contributors to backport their own bug fixes, as their
+  participation is critical in case of such a conflict.
 
 The script will create a PR on Github for you, which will automatically be
 labelled with `kind/cherry-pick`. This PR will go through the normal testing
-process, although it should be very quickly given that the original PR was
-already approved and merged into the main branch. The PR should also go through
-normal CI testing. In some cases, a few CI tests may fail because we do not have
+process, although it should be very quick given that the original PR was already
+approved and merged into the main branch. The PR should also go through normal
+CI testing. In some cases, a few CI tests may fail because we do not have
 dedicated CI infrastructure for past Antrea releases. If this happens, the PR
 will be merged despite the presence of CI test failures.
 
