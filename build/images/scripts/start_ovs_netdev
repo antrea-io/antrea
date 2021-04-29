@@ -35,6 +35,7 @@ function add_br_phy {
     ip addr flush dev eth0 2>/dev/null
     ip link set eth0 up
     ip route add default via "$gw" dev br-phy
+    iptables -t raw -A PREROUTING -i eth0 -j DROP
 }
 
 function del_br_phy {
@@ -44,6 +45,7 @@ function del_br_phy {
     ip addr add "$inet" dev eth0
     ip link set eth0 up
     ip route add default via "$gw" dev eth0
+    iptables -t raw -D PREROUTING -i eth0 -j DROP
 }
 
 function start_ovs {
