@@ -11,6 +11,19 @@ Some experimental features can be enabled / disabled using [Feature Gates](docs/
 
 ## Unreleased
 
+## 1.0.1 - 2021-04-29
+
+### Fixed
+
+- It was discovered that the AntreaProxy implementation has an upper-bound for the number of Endpoints it can support for each Service: we increase this upper-bound from ~500 to 800, log a warning for Services with a number of Endpoints greater than 800, and arbitrarily drop some Endpoints so we can still provide load-balancing for the Service. ([#2101](https://github.com/vmware-tanzu/antrea/pull/2101), [@hongliangl])
+- Fix Antrea-native policy with multiple AppliedTo selectors: some rules were never realized by the Agents as they thought they had only received partial information from the Controller. ([#2084](https://github.com/vmware-tanzu/antrea/pull/2084), [@tnqn])
+- Fix re-installation of the OpenFlow groups when the OVS daemons are restarted to ensure that AntreaProxy keeps functioning. ([#2134](https://github.com/vmware-tanzu/antrea/pull/2134), [@antoninbas])
+- Fix IPFIX flow records exported by the Antrea Agent. ([#2089](https://github.com/vmware-tanzu/antrea/pull/2089), [@zyiou])
+  * If a connection spanned multiple export cycles, it wasn't handled properly and no record was sent for the connection
+  * If a connection spanned a single export cycle, a single record was sent but "delta counters" were set to 0 which caused flow visualization to omit the flow in dashboards
+- Fix incorrect stats reporting for ingress rules of some NetworkPolicies: some types of traffic were bypassing the OVS table keeping track of statistics once the connection was established, causing packet and byte stats to be incorrect. ([#2078](https://github.com/vmware-tanzu/antrea/pull/2078), [@ceclinux])
+- Fix the retry logic when enabling the OVS bridge local interface on Windows Nodes. ([#2081](https://github.com/vmware-tanzu/antrea/pull/2081), [@antoninbas]) [Windows]
+
 ## 1.0.0 - 2021-04-09
 
 Includes all the changes from [0.13.1].
