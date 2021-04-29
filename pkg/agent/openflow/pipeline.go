@@ -1769,12 +1769,21 @@ func (c *client) serviceLearnFlow(groupID binding.GroupIDType, svcIP net.IP, svc
 
 // serviceLBFlow generates the flow which uses the specific group to do Endpoint
 // selection.
-func (c *client) serviceLBFlow(groupID binding.GroupIDType, svcIP net.IP, svcPort uint16, protocol binding.Protocol) binding.Flow {
+func (c *client) serviceLBFlow(groupID binding.GroupIDType, svcIP net.IP, svcPort uint16, protocol binding.Protocol, withSessionAffinity bool) binding.Flow {
+	var lbResultMark uint32
+	if withSessionAffinity {
+		lbResultMark = marksRegServiceNeedLearn
+	} else {
+		lbResultMark = marksRegServiceSelected
+	}
+
 	return c.pipeline[serviceLBTable].BuildFlow(priorityNormal).
 		MatchProtocol(protocol).
 		MatchDstPort(svcPort, nil).
 		MatchDstIP(svcIP).
 		MatchRegRange(int(serviceLearnReg), marksRegServiceNeedLB, serviceLearnRegRange).
+		Action().LoadRegRange(int(serviceLearnReg), lbResultMark, serviceLearnRegRange).
+		Action().LoadRegRange(int(marksReg), macRewriteMark, macRewriteMarkRange).
 		Action().Group(groupID).
 		Cookie(c.cookieAllocator.Request(cookie.Service).Raw()).
 		Done()
@@ -1840,13 +1849,10 @@ func (c *client) hairpinSNATFlow(endpointIP net.IP) binding.Flow {
 func (c *client) serviceEndpointGroup(groupID binding.GroupIDType, withSessionAffinity bool, endpoints ...proxy.Endpoint) binding.Group {
 	group := c.bridge.CreateGroup(groupID).ResetBuckets()
 	var resubmitTableID binding.TableIDType
-	var lbResultMark uint32
 	if withSessionAffinity {
 		resubmitTableID = serviceLBTable
-		lbResultMark = marksRegServiceNeedLearn
 	} else {
 		resubmitTableID = endpointDNATTable
-		lbResultMark = marksRegServiceSelected
 	}
 
 	for _, endpoint := range endpoints {
@@ -1859,8 +1865,6 @@ func (c *client) serviceEndpointGroup(groupID binding.GroupIDType, withSessionAf
 			group = group.Bucket().Weight(100).
 				LoadReg(int(endpointIPReg), ipVal).
 				LoadRegRange(int(endpointPortReg), uint32(portVal), endpointPortRegRange).
-				LoadRegRange(int(serviceLearnReg), lbResultMark, serviceLearnRegRange).
-				LoadRegRange(int(marksReg), macRewriteMark, macRewriteMarkRange).
 				ResubmitToTable(resubmitTableID).
 				Done()
 		} else if ipProtocol == binding.ProtocolIPv6 {
@@ -1868,8 +1872,6 @@ func (c *client) serviceEndpointGroup(groupID binding.GroupIDType, withSessionAf
 			group = group.Bucket().Weight(100).
 				LoadXXReg(int(endpointIPv6XXReg), ipVal).
 				LoadRegRange(int(endpointPortReg), uint32(portVal), endpointPortRegRange).
-				LoadRegRange(int(serviceLearnReg), lbResultMark, serviceLearnRegRange).
-				LoadRegRange(int(marksReg), macRewriteMark, macRewriteMarkRange).
 				ResubmitToTable(resubmitTableID).
 				Done()
 		}
