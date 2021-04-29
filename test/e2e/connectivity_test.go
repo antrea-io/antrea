@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
@@ -327,8 +328,9 @@ func TestOVSRestartSameNode(t *testing.T) {
 }
 
 // TestOVSFlowReplay checks that when OVS restarts unexpectedly the Antrea agent takes care of
-// replaying flows. More precisely this test checks that Pod connectivity still works after deleting
-// the flows and force-restarting the OVS dameons.
+// replaying flows. More precisely this test checks that we have the same number of flows and groups
+// after deleting them and force-restarting the OVS daemons. We also make sure that Pod connectivity
+// still works.
 func TestOVSFlowReplay(t *testing.T) {
 	skipIfProviderIs(t, "kind", "stopping OVS daemons create connectivity issues")
 	data, err := setupTest(t)
@@ -360,15 +362,45 @@ func TestOVSFlowReplay(t *testing.T) {
 	}
 	t.Logf("The Antrea Pod for Node '%s' is '%s'", workerNode, antreaPodName)
 
-	t.Logf("Deleting flows and restarting OVS daemons on Node '%s'", workerNode)
-	delFlows := func() {
+	countFlows := func() int {
+		cmd := []string{"ovs-ofctl", "dump-flows", defaultBridgeName}
+		stdout, stderr, err := data.runCommandFromPod(antreaNamespace, antreaPodName, ovsContainerName, cmd)
+		if err != nil {
+			t.Fatalf("error when dumping flows: <%v>, err: <%v>", stderr, err)
+		}
+		count := strings.Count(stdout, "\n")
+		t.Logf("Counted %d flow in OVS bridge '%s' for Node '%s'", count, defaultBridgeName, workerNode)
+		return count
+	}
+	countGroups := func() int {
+		cmd := []string{"ovs-ofctl", "dump-groups", defaultBridgeName}
+		stdout, stderr, err := data.runCommandFromPod(antreaNamespace, antreaPodName, ovsContainerName, cmd)
+		if err != nil {
+			t.Fatalf("error when dumping groups: <%v>, err: <%v>", stderr, err)
+		}
+		count := strings.Count(stdout, "\n")
+		t.Logf("Counted %d group in OVS bridge '%s' for Node '%s'", count, defaultBridgeName, workerNode)
+		return count
+	}
+
+	numFlows1, numGroups1 := countFlows(), countGroups()
+
+	// This is necessary because "ovs-ctl restart" saves and restores OpenFlow flows for the
+	// bridge. An alternative may be to kill the antrea-ovs container running on that Node.
+	t.Logf("Deleting flows / groups and restarting OVS daemons on Node '%s'", workerNode)
+	delFlowsAndGroups := func() {
 		cmd := []string{"ovs-ofctl", "del-flows", defaultBridgeName}
 		_, stderr, err := data.runCommandFromPod(antreaNamespace, antreaPodName, ovsContainerName, cmd)
 		if err != nil {
 			t.Fatalf("error when deleting flows: <%v>, err: <%v>", stderr, err)
 		}
+		cmd = []string{"ovs-ofctl", "del-groups", defaultBridgeName}
+		_, stderr, err = data.runCommandFromPod(antreaNamespace, antreaPodName, ovsContainerName, cmd)
+		if err != nil {
+			t.Fatalf("error when deleting groups: <%v>, err: <%v>", stderr, err)
+		}
 	}
-	delFlows()
+	delFlowsAndGroups()
 	restartCmd := []string{"/usr/share/openvswitch/scripts/ovs-ctl", "--system-id=random", "restart", "--db-file=/var/run/openvswitch/conf.db"}
 	if stdout, stderr, err := data.runCommandFromPod(antreaNamespace, antreaPodName, ovsContainerName, restartCmd); err != nil {
 		t.Fatalf("Error when restarting OVS with ovs-ctl: %v - stdout: %s - stderr: %s", err, stdout, stderr)
@@ -378,6 +410,10 @@ func TestOVSFlowReplay(t *testing.T) {
 	// interval.
 	t.Logf("Running second ping mesh to check that flows have been restored")
 	data.runPingMesh(t, podNames)
+
+	numFlows2, numGroups2 := countFlows(), countGroups()
+	assert.Equal(t, numFlows1, numFlows2, "Mismatch in OVS flow count after flow replay")
+	assert.Equal(t, numGroups1, numGroups2, "Mismatch in OVS group count after flow replay")
 }
 
 // TestPingLargeMTU verifies that fragmented ICMP packets are handled correctly. Until OVS 2.12.0,
