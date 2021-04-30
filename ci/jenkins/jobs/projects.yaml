@@ -279,7 +279,7 @@
                 variable: CODECOV_TOKEN
           - timeout:
               fail: true
-              timeout: 100
+              timeout: 120
               type: absolute
           - credentials-binding:
             - text:
