@@ -11,6 +11,21 @@ Some experimental features can be enabled / disabled using [Feature Gates](docs/
 
 ## Unreleased
 
+## 0.13.2 - 2021-04-30
+
+### Fixed
+
+- It was discovered that the AntreaProxy implementation has an upper-bound for the number of Endpoints it can support for each Service: we increase this upper-bound from ~500 to 800, log a warning for Services with a number of Endpoints greater than 800, and arbitrarily drop some Endpoints so we can still provide load-balancing for the Service. ([#2101](https://github.com/vmware-tanzu/antrea/pull/2101), [@hongliangl])
+- Fix Antrea-native policy with multiple AppliedTo selectors: some rules were never realized by the Agents as they thought they had only received partial information from the Controller. ([#2084](https://github.com/vmware-tanzu/antrea/pull/2084), [@tnqn])
+- Fix re-installation of the OpenFlow groups when the OVS daemons are restarted to ensure that AntreaProxy keeps functioning. ([#2134](https://github.com/vmware-tanzu/antrea/pull/2134), [@antoninbas])
+- Fix the retry logic when enabling the OVS bridge local interface on Windows Nodes. ([#2081](https://github.com/vmware-tanzu/antrea/pull/2081), [@antoninbas]) [Windows]
+- Fix audit logging on Windows Nodes: the log directory was not configured properly, causing Agent initialization to fail on Windows when the AntreaPolicy feature was enabled. ([#2052](https://github.com/vmware-tanzu/antrea/pull/2052), [@antoninbas]) [Windows]
+- When selecting the Pods corresponding to a Service for which NodePortLocal has been enabled, Pods should be filtered by Namespace. ([#1927](https://github.com/vmware-tanzu/antrea/pull/1927), [@chauhanshubham])
+- Correctly handle Service Type changes for NodePortLocal, and update Pod annotations accordingly. ([#1936](https://github.com/vmware-tanzu/antrea/pull/1936), [@chauhanshubham])
+- Use correct output format for CNI Add in networkPolicyOnly mode: this was not an issue with Docker but was causing failures with containerd. ([#2037](https://github.com/vmware-tanzu/antrea/pull/2037), [@antoninbas] [@dantingl])
+- Fix audit logging of IPv6 traffic for Antrea-native policies: IPv6 packets were ignored by the Agent instead of being parsed and logged to file. ([#1990](https://github.com/vmware-tanzu/antrea/pull/1990), [@antoninbas])
+- Fix Status updates for ClusterNetworkPolicies. ([#2036](https://github.com/vmware-tanzu/antrea/pull/2036), [@Dyanngg])
+
 ## 0.13.1 - 2021-03-12
 
 ### Fixed
@@ -28,7 +43,7 @@ Includes all the changes from [0.12.1].
 
 ### Added
 
-- Add [NodePortLocal] feature to improve integration with external load-balancers. ([#1459](https://github.com/vmware-tanzu/antrea/pull/1459) [#1743](https://github.com/vmware-tanzu/antrea/pull/1743) [#1758](https://github.com/vmware-tanzu/antrea/pull/1758), [@monotosh-avi] [@shubhamavi] [@hemantavi]) [Alpha - Feature Gate: `NodePortLocal`]
+- Add [NodePortLocal] feature to improve integration with external load-balancers. ([#1459](https://github.com/vmware-tanzu/antrea/pull/1459) [#1743](https://github.com/vmware-tanzu/antrea/pull/1743) [#1758](https://github.com/vmware-tanzu/antrea/pull/1758), [@monotosh-avi] [@chauhanshubham] [@hemantavi]) [Alpha - Feature Gate: `NodePortLocal`]
   * Services can be annotated with "nodeportlocal.antrea.io/enabled" to indicate that NodePortLocal should be enabled for this Service's Pod Endpoints
   * For each container port exposed by such a Pod, the Antrea Agent will allocate a local Node port value and traffic sent to this Node port will be forwarded to the container port using DNAT
   * The mapping from allocated Node ports to container ports is stored in a new Pod annotation, "nodeportlocal.antrea.io", e.g. to be consumed by external load-balancers
@@ -44,7 +59,7 @@ Includes all the changes from [0.12.1].
   * EndpointSlice needs to be [enabled](https://kubernetes.io/docs/tasks/administer-cluster/enabling-endpointslices/) in the K8s cluster
   * Only the "discovery.k8s.io/v1beta1" EndpointSlice API is supported
 - Add support for arm/v7 and arm64 by providing Antrea Docker images for these architectures. ([#1771](https://github.com/vmware-tanzu/antrea/pull/1771), [@antoninbas])
-  * Refer to the [documentation](https://github.com/vmware-tanzu/antrea/blob/main/docs/arm-support.md) for instructions on how to use the image
+  * Refer to the [documentation](https://github.com/vmware-tanzu/antrea/blob/v0.13.0/docs/arm-support.md) for instructions on how to use the image
 - Support IPv6 packets in Traceflow. ([#1579](https://github.com/vmware-tanzu/antrea/pull/1579), [@gran-vmv])
 - Add the following Prometheus metrics to the the AntreaProxy implementation: "antrea_proxy_sync_proxy_rules_duration_seconds", "antrea_proxy_total_endpoints_installed", "antrea_proxy_total_endpoints_updates", "antrea_proxy_total_services_installed", "antrea_proxy_total_services_updates". ([#1704](https://github.com/vmware-tanzu/antrea/pull/1704), [@weiqiangt])
 - Add the following Prometheus metrics to count Status updates for Antrea-native policies: "antrea_controller_acnp_status_updates", "antrea_controller_anp_status_updates". ([#1801](https://github.com/vmware-tanzu/antrea/pull/1801), [@antoninbas])
@@ -742,6 +757,8 @@ The Monitoring [CRDs] feature is graduated from Alpha to Beta.
 [@anfernee]: https://github.com/anfernee
 [@antoninbas]: https://github.com/antoninbas
 [@ceclinux]: https://github.com/ceclinux
+[@chauhanshubham]: https://github.com/chauhanshubham
+[@dantingl]: https://github.com/dantingl
 [@dreamtalen]: https://github.com/dreamtalen
 [@dumlutimuralp]: https://github.com/dumlutimuralp
 [@Dyanngg]: https://github.com/Dyanngg
@@ -765,7 +782,6 @@ The Monitoring [CRDs] feature is graduated from Alpha to Beta.
 [@qiyueyao]: https://github.com/qiyueyao
 [@reachjainrahul]: https://github.com/reachjainrahul
 [@ruicao93]: https://github.com/ruicao93
-[@shubhamavi]: https://github.com/shubhamavi
 [@siddhant94]: https://github.com/siddhant94
 [@srikartati]: https://github.com/srikartati
 [@suwang48404]: https://github.com/suwang48404
