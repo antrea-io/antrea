@@ -466,3 +466,12 @@ func HostInterfaceExists(ifaceName string) bool {
 	}
 	return true
 }
+
+// SetInterfaceMTU configures interface MTU on host for Pods. MTU change cannot be realized with HNSEndpoint because
+// there's no MTU field in HNSEndpoint:
+// https://github.com/Microsoft/hcsshim/blob/4a468a6f7ae547974bc32911395c51fb1862b7df/internal/hns/hnsendpoint.go#L12
+func SetInterfaceMTU(ifaceName string, mtu int) error {
+	cmd := fmt.Sprintf("Set-NetIPInterface -IncludeAllCompartments -InterfaceAlias \"%s\" -NlMtuBytes %d",
+		ifaceName, mtu)
+	return InvokePSCommand(cmd)
+}
