@@ -21,6 +21,7 @@ based on any one of these K8s versions should work with that Antrea version.
 | - | EKS, K8s v1.17.12 | AWS | AmazonLinux2, docker | t3.medium |  | Antrea CI |
 | - | GKE, K8s v1.19.8-gke.1600 | GCP | Ubuntu 18.04, docker | e2-standard-4 |  | Antrea CI |
 | - | AKS, K8s v1.18.14 | Azure | Ubuntu 18.04, moby | Standard_DS2_v2 |  | Antrea CI |
+| - | AKS, K8s v1.19.9 | Azure | Ubuntu 18.04, containerd | Standard_DS2_v2 |  | Antrea CI |
 | - | Kind v0.9.0, K8s v1.19.1 | N/A | Ubuntu 20.10, containerd://1.4.0 | N/A |  | [Requirements for using Antrea on Kind](kind.md) |
 
 ## Installer-specific instructions

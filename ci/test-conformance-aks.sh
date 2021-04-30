@@ -30,7 +30,7 @@ RUN_CLEANUP_ONLY=false
 KUBECONFIG_PATH="$HOME/jenkins/out/aks"
 TEST_FAILURE=false
 MODE="report"
-KUBE_CONFORMANCE_IMAGE_VERSION=v1.18.5
+KUBE_CONFORMANCE_IMAGE_VERSION=v1.19.4
 
 _usage="Usage: $0 [--cluster-name <AKSClusterNameToUse>] [--kubeconfig <KubeconfigSavePath>] [--k8s-version <ClusterVersion>]\
                   [--azure-app-id <AppID>] [--azure-tenant-id <TenantID>] [--azure-password <Password>] \
@@ -226,7 +226,7 @@ function deliver_antrea_to_aks() {
 
     for IP in ${NODE_IPS}; do
         scp -o StrictHostKeyChecking=no -i ${SSH_PRIVATE_KEY_PATH} ${antrea_image}.tar azureuser@${IP}:~
-        ssh -o StrictHostKeyChecking=no -i ${SSH_PRIVATE_KEY_PATH} -n azureuser@${IP} "sudo docker load -i ~/${antrea_image}.tar ; sudo docker tag ${DOCKER_IMG_NAME}:${DOCKER_IMG_VERSION} ${DOCKER_IMG_NAME}:latest"
+        ssh -o StrictHostKeyChecking=no -i ${SSH_PRIVATE_KEY_PATH} -n azureuser@${IP} "sudo ctr -n=k8s.io images import ~/${antrea_image}.tar ; sudo ctr -n=k8s.io images tag ${DOCKER_IMG_NAME}:${DOCKER_IMG_VERSION} ${DOCKER_IMG_NAME}:latest"
     done
     rm ${antrea_image}.tar
 
