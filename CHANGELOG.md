@@ -11,6 +11,18 @@ Some experimental features can be enabled / disabled using [Feature Gates](docs/
 
 ## Unreleased
 
+## 0.11.4 - 2021-05-03
+
+### Fixed
+
+- It was discovered that the AntreaProxy implementation has an upper-bound for the number of Endpoints it can support for each Service: we increase this upper-bound from ~500 to 800, log a warning for Services with a number of Endpoints greater than 800, and arbitrarily drop some Endpoints so we can still provide load-balancing for the Service. ([#2101](https://github.com/vmware-tanzu/antrea/pull/2101), [@hongliangl])
+- Fix Antrea-native policy with multiple AppliedTo selectors: some rules were never realized by the Agents as they thought they had only received partial information from the Controller. ([#2084](https://github.com/vmware-tanzu/antrea/pull/2084), [@tnqn])
+- Fix re-installation of the OpenFlow groups when the OVS daemons are restarted to ensure that AntreaProxy keeps functioning. ([#2134](https://github.com/vmware-tanzu/antrea/pull/2134), [@antoninbas])
+- Fix audit logging on Windows Nodes: the log directory was not configured properly, causing Agent initialization to fail on Windows when the AntreaPolicy feature was enabled. ([#2052](https://github.com/vmware-tanzu/antrea/pull/2052), [@antoninbas]) [Windows]
+- Use correct output format for CNI Add in networkPolicyOnly mode: this was not an issue with Docker but was causing failures with containerd. ([#2037](https://github.com/vmware-tanzu/antrea/pull/2037), [@antoninbas] [@dantingl])
+- Fix audit logging of IPv6 traffic for Antrea-native policies: IPv6 packets were ignored by the Agent instead of being parsed and logged to file. ([#1990](https://github.com/vmware-tanzu/antrea/pull/1990), [@antoninbas])
+- Fix Status updates for ClusterNetworkPolicies. ([#2036](https://github.com/vmware-tanzu/antrea/pull/2036), [@Dyanngg])
+
 ## 0.11.3 - 2021-02-25
 
 ### Fixed
@@ -614,6 +626,7 @@ The Monitoring [CRDs] feature is graduated from Alpha to Beta.
 [@andrewsykim]: https://github.com/andrewsykim
 [@antoninbas]: https://github.com/antoninbas
 [@ceclinux]: https://github.com/ceclinux
+[@dantingl]: https://github.com/dantingl
 [@dreamtalen]: https://github.com/dreamtalen
 [@Dyanngg]: https://github.com/Dyanngg
 [@gran-vmv]: https://github.com/gran-vmv
