@@ -31,6 +31,7 @@
   - [Pre-built Dashboards](#pre-built-dashboards)
     - [Overview](#overview-1)
     - [Pod-to-Pod Flows](#pod-to-pod-flows)
+    - [Pod-to-External Flows](#pod-to-external-flows)
     - [Pod-to-Service Flows](#pod-to-service-flows)
     - [Flow Records](#flow-records)
     - [Node Throughput](#node-throughput)
@@ -436,10 +437,10 @@ Visualization Overview Dashboard">
 
 #### Pod-to-Pod Flows
 
-Pod-to-Pod Tx and Rx traffic is shown in sankey diagrams. Corresponding
+Pod-to-Pod cumulative Tx and Rx traffic is shown in sankey diagrams. Corresponding
 source or destination Pod throughput is visualized using line graph.
 
-<img src="https://downloads.antrea.io/static/03022021/flow-visualization-pod-to-pod-1.png" width="900" alt="Flow
+<img src="https://downloads.antrea.io/static/04292021/flow-visualization-pod-to-pod-1.png" width="900" alt="Flow
 Visualization Pod-to-Pod Dashboard">
 
 <img src="https://downloads.antrea.io/static/02052021/flow-visualization-pod-to-pod-2.png" width="900" alt="Flow
@@ -448,9 +449,20 @@ Visualization Pod-to-Pod Dashboard">
 <img src="https://downloads.antrea.io/static/02052021/flow-visualization-pod-to-pod-3.png" width="900" alt="Flow
 Visualization Pod-to-Pod Dashboard">
 
+#### Pod-to-External Flows
+
+Pod-to-External cumulative Tx and Rx traffic is shown in sankey diagrams. Corresponding
+source or destination throughput is visualized using line graph.
+
+<img src="https://downloads.antrea.io/static/04292021/flow-visualization-pod-to-external-1.png" width="900" alt="Flow
+Visualization Pod-to-External Dashboard">
+
+<img src="https://downloads.antrea.io/static/04292021/flow-visualization-pod-to-external-2.png" width="900" alt="Flow
+Visualization Pod-to-External Dashboard">
+
 #### Pod-to-Service Flows
 
-Pod-to-Service traffic is presented similar to Pod-to-Pod traffic.
+Pod-to-Service traffic is presented similar to Pod-to-Pod/External traffic.
 Corresponding source or destination IP addresses is shown in tooltips.
 
 <img src="https://downloads.antrea.io/static/03022021/flow-visualization-pod-to-service-1.png" width="900" alt="Flow
@@ -468,7 +480,7 @@ Visualization Pod-to-Service Dashboard">
 Flow Records dashboard shows the raw flow records over time with support
 for filters.
 
-<img src="https://downloads.antrea.io/static/02052021/flow-visualization-flow-record.png" width="900" alt="Flow
+<img src="https://downloads.antrea.io/static/04292021/flow-visualization-flow-record.png" width="900" alt="Flow
 Visualization Flow Record Dashboard">
 
 #### Node Throughput
