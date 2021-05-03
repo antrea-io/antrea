@@ -13,13 +13,16 @@ function copy_root_markdowns_to_docs_main {
   # Copy README.md and other root markdown docs used in site documentation
   printf "Copying root markdown docs and fixing up relative links\n"
 
-  ROOT_DOCS=( README CONTRIBUTING CODE_OF_CONDUCT CHANGELOG ROADMAP )
+  ROOT_DOCS=( README CONTRIBUTING CODE_OF_CONDUCT ROADMAP ADOPTERS )
 
   for doc in "${ROOT_DOCS[@]}"; do
       cp -f ../../../${doc}.md .
       sed -i.bak 's/\([("]\)\(\/\)\{0,1\}docs\//\1/g' ${doc}.md
       rm -f ${doc}.md.bak
   done
+
+  # Fix links to adopters' logos
+  sed -i.bak 's/^<img\(.*\)src="assets\//<img\1src="..\/assets\//' ADOPTERS.md
 }
 
 function copy_markdowns_to_docs_main {
@@ -63,7 +66,7 @@ function copy_markdowns_to_docs_main {
 
   printf "Removing '..' from links to root docs\n"
   for doc in $(find "$PWD" -type f -name "*.md"); do
-      sed -i.bak 's/\[\(.*\)\](\.\.\/\(.*\)\([README\|CONTRIBUTING\|CODE_OF_CONDUCT\|CHANGELOG\|ROADMAP]\)\.md/[\1](\2\3.md/' ${doc}
+      sed -i.bak 's/\[\(.*\)\](\.\.\/\(.*\)\([README\|CONTRIBUTING\|CODE_OF_CONDUCT\|CHANGELOG\|ROADMAP\|ADOPTERS]\)\.md/[\1](\2\3.md/' ${doc}
       rm -f ${doc}.bak
   done
 
@@ -94,7 +97,11 @@ for doc in $(find "$PWD" -type f -name "*.md"); do
     rm -f ${doc}.bak
 done
 
+printf "Copying API reference\n"
 cp -f ../../api-reference.md .
+
+printf "Adding CHANGELOG link\n"
+echo "Please refer to the CHANGELOG on [Github](https://github.com/vmware-tanzu/antrea/tree/main/CHANGELOG)" > CHANGELOG.md
 
 popd
 

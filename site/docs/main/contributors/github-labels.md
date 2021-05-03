@@ -19,15 +19,20 @@ The labels in this list originated within Kubernetes at
 | area/api                           | Issues or PRs related to an API | Any |
 | area/blog                          | Issues or PRs related to blog entries | Any |
 | area/build-release                 | Issues or PRs related to building and releasing | Any |
-| area/component/antctl              | Issues or PRs releated to the command line interface component | Any |
-| area/component/agent               | Issues or PRs related to the agent component | Any |
+| area/component/antctl              | Issues or PRs related to the command line interface component | Any |
+| area/component/agent               | Issues or PRs related to the Agent component | Any |
 | area/component/cni                 | Issues or PRs related to the cni component | Any |
-| area/component/controller          | Issues or PRs related to the controller component | Any |
+| area/component/controller          | Issues or PRs related to the Controller component | Any |
+| area/component/flow-aggregator     | Issues or PRs related to the Flow Aggregator component | Any |
 | area/component/octant-plugin       | Issues or PRs related to the octant-plugin component | Any |
 | area/dependency                    | Issues or PRs related to dependency changes | Any |
 | area/endpoint/identity             | Issues or PRs related to endpoint identity | Any |
 | area/endpoint/selection            | Issues or PRs related to endpoint selection | Any |
 | area/endpoint/type                 | Issues or PRs related to endpoint type | Any |
+| area/flow-visibility               | Issues or PRs related to flow visibility support in Antrea | Any |
+| area/flow-visibility/aggregation   | Issues or PRs related to flow aggregation | Any |
+| area/flow-visibility/elk           | Issues or PRs related to the reference ELK configuration for flow visualization | Any |
+| area/flow-visibility/export        | Issues or PRs related to the Flow Exporter functions in the Agent | Any |
 | area/ipam                          | Issues or PRs related to IP address management (IPAM) | Any |
 | area/interface                     | Issues or PRs related to network interfaces | Any |
 | area/licensing                     | Issues or PRs related to Antrea licensing | Any |

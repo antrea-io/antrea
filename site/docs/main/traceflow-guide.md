@@ -1,18 +1,26 @@
 # Traceflow User Guide
 
-Antrea supports using Traceflow for network diagnosis: it generates tracing requests for traffic going through
-Antrea-managed Pod network. Creating a new Traceflow CRD triggers the Traceflow module to inject packet into OVS,
-provide various observation points along the packet's path and populate these observations into the status field of
-the Traceflow CRD. Users can start a new trace simply from kubectl, antctl or Antrea-Octant-Plugin and view Traceflow
-result via CRD, antctl or UI graph.
+Antrea supports using Traceflow for network diagnosis. It can inject a packet
+into OVS on a Node and trace the forwarding path of the packet across Nodes,
+and it can also trace a matched packet of real traffic from or to a Pod. In
+either case, a Traceflow operation is triggered by a Traceflow CRD which
+specifies the type of Traceflow, the source and destination of the packet to
+trace, and the headers of the packet. And the Traceflow results will be
+populated to the `status` field of the Traceflow CRD, which include the
+observations of the trace packet at various observations points in the
+forwarding path. Besides creating the Traceflow CRD using kubectl, users can
+also start a Traceflow using `antctl`, or from the Antrea Octant Plugin. When
+using the Antrea Octant plugin, the Traceflow results can be visualized using a
+graph.
 
 ## Table of Contents
 
 - [Prerequisites](#prerequisites)
-- [Start a New Trace](#start-a-new-trace)
+- [Start a New Traceflow](#start-a-new-traceflow)
   - [Using kubectl and YAML file (IPv4)](#using-kubectl-and-yaml-file-ipv4)
   - [Using kubectl and YAML file (IPv6)](#using-kubectl-and-yaml-file-ipv6)
-  - [Using antctl and spec config](#using-antctl-and-spec-config)
+  - [Live-traffic Traceflow](#live-traffic-traceflow)
+  - [Using antctl](#using-antctl)
   - [Using Octant with antrea-octant-plugin](#using-octant-with-antrea-octant-plugin)
 - [View Traceflow Result and Graph](#view-traceflow-result-and-graph)
 - [View Traceflow CRDs](#view-traceflow-crds)
@@ -20,10 +28,11 @@ result via CRD, antctl or UI graph.
 
 ## Prerequisites
 
-You need to enable Traceflow from the featureGates map defined in antrea.yml for
-both Controller and Agent. In order to use a Service as the destination in
-traces, you also need to ensure [AntreaProxy](feature-gates.md) is enabled in
-the Agent configuration:
+The Traceflow feature is enabled by default since Antrea version 0.11.0. If you
+are using an Antrea version before 0.11.0, you need to enable Traceflow from the
+featureGates map defined in antrea.yml for both Controller and Agent. In order
+to use a Service as the destination in traces, you also need to ensure [AntreaProxy](feature-gates.md)
+is enabled in the Agent configuration:
 
 ```yaml
   antrea-controller.conf: |
@@ -42,9 +51,10 @@ the Agent configuration:
 
 For antrea-octant-plugin installation, please refer to [antrea-octant-installation](octant-plugin-installation.md).
 
-## Start a New Trace
+## Start a New Traceflow
 
-You can choose to use kubectl together with YAML file, antctl with spec information or Octant UI to start a new trace.
+You can choose to use `kubectl` together with a YAML file, the `antctl traceflow`
+command, or the Octant UI to start a new trace.
 
 When starting a new trace, you can provide the following information which will be used to build the trace packet:
 
@@ -108,7 +118,55 @@ spec:
 The CRD above starts a new trace from source Pod named `tcp-sts-0` to destination Pod named `tcp-sts-2` using ICMPv6
 protocol.
 
-### Using antctl and spec config
+### Live-traffic Traceflow
+
+Starting from Antrea version 1.0.0, you can trace a packet of the real traffic
+from or to a Pod, instead of the injected packet. To start such a Traceflow, add
+`liveTraffic: true` to the Traceflow `spec`. Then, the first packet of the first
+connection that matches the Traceflow spec will be traced (connections opened
+before the Traceflow was initiated will be ignored), and the headers of the
+packet will be captured and reported in the `status` field of the Traceflow CRD,
+in addition to the observations. A live-traffic Traceflow requires only one of
+`source` and `destination` to be specified. When `source` or `destination` is
+not specified, it means that a packet can be captured regardless of its source
+or destination. One of `source` and `destination`  must be a Pod. When `source`
+is not specified, or is an IP address, only the receiver Node will capture the
+packet and trace it after the L2 forwarding observation point. This means that
+even if the source of the packet is on the same Node as the destination, no
+observations on the sending path will be reported for the Traceflow. By default,
+a live-traffic Traceflow (the same as a normal Traceflow) will timeout in 20
+seconds, and if no matched packet captured before the timeout the Traceflow
+will fail. But you can specify a different timeout value, by adding
+`timeout: <value-in-seconds>` to the Traceflow `spec`.
+
+In some cases, it might be useful to capture the packets dropped by
+NetworkPolicies (inc. K8s NetworkPolicies or Antrea native policies). You can
+add `droppedOnly: true` to the live-traffic Traceflow `spec`, then the first
+packet that matches the Traceflow spec and is dropped by a NetworkPolicy will
+be captured and traced.
+
+The following example is a live-traffic Traceflow that captures a dropped UDP
+packet to UDP port 1234 of Pod udp-server, within 1 minute:
+
+```yaml
+apiVersion: crd.antrea.io/v1alpha1
+kind: Traceflow
+metadata:
+  name: tf-test
+spec:
+  liveTraffic: true
+  droppedOnly: true
+  destination:
+    namespace: default
+    pod: udp-server
+  packet:
+    transportHeader:
+      udp:
+        dstPort: 1234
+  timeout: 60
+```
+
+### Using antctl
 
 Please refer to the corresponding [antctl page](antctl.md#traceflow).
 
