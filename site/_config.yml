@@ -135,6 +135,12 @@ defaults:
       gh: https://github.com/vmware-tanzu/antrea/tree/v0.13.1
       layout: "docs"
   - scope:
+      path: docs/v0.13.2
+    values:
+      version: v0.13.2
+      gh: https://github.com/vmware-tanzu/antrea/tree/v0.13.2
+      layout: "docs"
+  - scope:
       path: docs/v1.0.0
     values:
       version: v1.0.0
@@ -161,6 +167,7 @@ versions:
   - main
   - v1.0.1
   - v1.0.0
+  - v0.13.2
   - v0.13.1
   - v0.13.0
   - v0.12.2
