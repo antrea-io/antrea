@@ -24,18 +24,22 @@
     - [Correlation of Flow Records](#correlation-of-flow-records)
     - [Aggregation of Flow Records](#aggregation-of-flow-records)
 - [Quick deployment](#quick-deployment)
-- [ELK Flow Collector](#elk-flow-collector)
-  - [Purpose](#purpose)
-  - [About Elastic Stack](#about-elastic-stack)
-  - [Deployment Steps](#deployment-steps)
-  - [Pre-built Dashboards](#pre-built-dashboards)
-    - [Overview](#overview-1)
-    - [Pod-to-Pod Flows](#pod-to-pod-flows)
-    - [Pod-to-External Flows](#pod-to-external-flows)
-    - [Pod-to-Service Flows](#pod-to-service-flows)
-    - [Flow Records](#flow-records)
-    - [Node Throughput](#node-throughput)
-    - [Network Policy](#network-policy)
+- [Flow Collectors](#flow-collectors)
+  - [Go-ipfix Collector](#go-ipfix-collector)
+    - [Deployment Steps](#deployment-steps)
+    - [Output Flow Records](#output-flow-records)
+  - [ELK Flow Collector](#elk-flow-collector)
+    - [Purpose](#purpose)
+    - [About Elastic Stack](#about-elastic-stack)
+    - [Deployment Steps](#deployment-steps-1)
+    - [Pre-built Dashboards](#pre-built-dashboards)
+      - [Overview](#overview-1)
+      - [Pod-to-Pod Flows](#pod-to-pod-flows)
+      - [Pod-to-External Flows](#pod-to-external-flows)
+      - [Pod-to-Service Flows](#pod-to-service-flows)
+      - [Flow Records](#flow-records)
+      - [Node Throughput](#node-throughput)
+      - [Network Policy](#network-policy)
 <!-- /toc -->
 
 ## Overview
@@ -237,8 +241,14 @@ kubectl apply -f https://raw.githubusercontent.com/vmware-tanzu/antrea/main/buil
 
 The following configuration parameters have to be provided through the Flow Aggregator
 ConfigMap. `externalFlowCollectorAddr` is a mandatory parameter. We provide an example
-value for this parameter in the following snippet. If you have deployed the ELK
-flow collector, then please use the address, `<Logstash Cluster IP>:4739:UDP`.
+value for this parameter in the following snippet.  
+
+* If you have deployed the [go-ipfix collector](#deployment-steps),
+then please use the address:  
+`<Ipfix-Collector Cluster IP>:<port>:<TCP|UDP>`
+* If you have deployed the [ELK
+flow collector](#deployment-steps-1), then please use the address:  
+`<Logstash Cluster IP>:4739:UDP`
 
 ```yaml
 flow-aggregator.conf: |
@@ -352,9 +362,49 @@ commands:
 ./infra/vagrant/push_antrea.sh --flow-collector <externalFlowCollectorAddress>
 ```
 
-## ELK Flow Collector
+## Flow Collectors
 
-### Purpose
+Here we list two choices the external configured flow collector: go-ipfix collector
+and ELK flow collector. For each collector, we introduce how to deploy it and how
+to output or visualize the collected flow records information.
+
+### Go-ipfix Collector
+
+#### Deployment Steps
+
+The go-ipfix collector can be built from [go-ipfix library](https://github.com/vmware/go-ipfix).
+It is used to collect, decode and log the IPFIX records.
+
+* To deploy a released version of the go-ipfix collector, please choose one
+deployment manifest from the list of releases (supported after v0.5.2).
+For any given release <TAG> (e.g. v0.5.2), you can deploy the collector as follows:
+
+```shell
+kubectl apply -f https://github.com/vmware/go-ipfix/releases/download/<TAG>/ipfix-collector.yaml
+```
+
+* To deploy the latest version of the go-ipfix collector (built from the main branch),
+use the checked-in [deployment manifest](https://github.com/vmware/go-ipfix/blob/main/build/yamls/ipfix-collector.yaml):
+
+```shell
+kubectl apply -f https://raw.githubusercontent.com/vmware/go-ipfix/main/build/yamls/ipfix-collector.yaml
+```
+
+Go-ipfix collector also supports customization on its parameters: port and protocol.
+Please follow the [go-ipfix documentation](https://github.com/vmware/go-ipfix#readme)
+to configure those parameters if needed.
+
+#### Output Flow Records
+
+To output the flow records collected by the go-ipfix collector, use the command below:
+
+```shell
+kubectl logs <ipfix-collector-pod-name> -n ipfix
+```
+
+### ELK Flow Collector
+
+#### Purpose
 
 Antrea supports sending IPFIX flow records through the Flow Exporter feature
 described above. The Elastic Stack (ELK Stack) works as the data collector, data
@@ -362,7 +412,7 @@ storage and visualization tool for flow records and flow-related information. Th
 document provides the guidelines for deploying Elastic Stack with support for
 Antrea-specific IPFIX fields in a Kubernetes cluster.
 
-### About Elastic Stack
+#### About Elastic Stack
 
 [Elastic Stack](https://www.elastic.co) is a group of open source products to
 help collect, store, search, analyze and visualize data in real time. We will
@@ -378,13 +428,13 @@ engine, supports storing, searching and indexing records received.
 [Kibana](https://www.elastic.co/kibana/) is mainly for data visualization and
 exploration.
 
-### Deployment Steps
+#### Deployment Steps
 
-If you are looking for steps to deploy the ELK Flow Collector along with a new Antrea
+If you are looking for steps to deploy the ELK flow collector along with a new Antrea
 cluster and the Flow Aggregator Service, then please refer to the
 [quick deployment](#quick-deployment) section.
 
-The following steps will deploy the ELK Flow Collector on an existing Kubernetes
+The following steps will deploy the ELK flow collector on an existing Kubernetes
 cluster, which uses Antrea as the CNI. First step is to fetch the necessary resources
 from the Antrea repository. You can either clone the entire repo or download the
 particular folder using the subversion(svn) utility. If the deployed version of
@@ -423,19 +473,19 @@ reusable file containing pre-built objects for visualizing Pod-to-Pod, Pod-to-Se
 and Node-to-Node flow records. To import the dashboards into Kibana, go to
 **Management -> Saved Objects** and import `elk-flow-collector/kibana.ndjson`.
 
-### Pre-built Dashboards
+#### Pre-built Dashboards
 
 The following dashboards are pre-built and are recommended for Antrea flow
 visualization.
 
-#### Overview
+##### Overview
 
 An overview of Pod-based flow records information is provided.
 
 <img src="https://downloads.antrea.io/static/02052021/flow-visualization-overview.png" width="900" alt="Flow
 Visualization Overview Dashboard">
 
-#### Pod-to-Pod Flows
+##### Pod-to-Pod Flows
 
 Pod-to-Pod cumulative Tx and Rx traffic is shown in sankey diagrams. Corresponding
 source or destination Pod throughput is visualized using line graph.
@@ -449,7 +499,7 @@ Visualization Pod-to-Pod Dashboard">
 <img src="https://downloads.antrea.io/static/02052021/flow-visualization-pod-to-pod-3.png" width="900" alt="Flow
 Visualization Pod-to-Pod Dashboard">
 
-#### Pod-to-External Flows
+##### Pod-to-External Flows
 
 Pod-to-External cumulative Tx and Rx traffic is shown in sankey diagrams. Corresponding
 source or destination throughput is visualized using line graph.
@@ -460,7 +510,7 @@ Visualization Pod-to-External Dashboard">
 <img src="https://downloads.antrea.io/static/04292021/flow-visualization-pod-to-external-2.png" width="900" alt="Flow
 Visualization Pod-to-External Dashboard">
 
-#### Pod-to-Service Flows
+##### Pod-to-Service Flows
 
 Pod-to-Service traffic is presented similar to Pod-to-Pod/External traffic.
 Corresponding source or destination IP addresses is shown in tooltips.
@@ -475,7 +525,7 @@ Visualization Pod-to-Service Dashboard">
 <img src="https://downloads.antrea.io/static/02052021/flow-visualization-pod-to-service-3.png" width="900" alt="Flow
 Visualization Pod-to-Service Dashboard">
 
-#### Flow Records
+##### Flow Records
 
 Flow Records dashboard shows the raw flow records over time with support
 for filters.
@@ -483,7 +533,7 @@ for filters.
 <img src="https://downloads.antrea.io/static/04292021/flow-visualization-flow-record.png" width="900" alt="Flow
 Visualization Flow Record Dashboard">
 
-#### Node Throughput
+##### Node Throughput
 
 Node Throughput dashboard shows the visualization of inter-Node and
 intra-Node traffic by aggregating all the Pod traffic per Node.
@@ -497,7 +547,7 @@ a better overview of Node bandwidth consumption.
 <img src="https://downloads.antrea.io/static/03022021/flow-visualization-node-2.png" width="900" alt="Flow
 Visualization Node Throughput Dashboard">
 
-#### Network Policy
+##### Network Policy
 
 Network Policy dashboard provides filters over ingress network policy name and namespace, egress
 network policy name and namespace to view corresponding flow throughput under network policy. Flows
