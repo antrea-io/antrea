@@ -749,26 +749,6 @@ func (br *OVSBridge) GetPortList() ([]OVSPortData, Error) {
 	return portList, nil
 }
 
-func (br *OVSBridge) SetInterfaceMTU(name string, MTU int) error {
-	tx := br.ovsdb.Transaction(openvSwitchSchema)
-
-	tx.Update(dbtransaction.Update{
-		Table: "Interface",
-		Where: [][]interface{}{{"name", "==", name}},
-		Row: map[string]interface{}{
-			"mtu_request": MTU,
-		},
-	})
-
-	_, err, temporary := tx.Commit()
-	if err != nil {
-		klog.Error("Transaction failed: ", err)
-		return NewTransactionError(err, temporary)
-	}
-
-	return nil
-}
-
 // GetOVSVersion either returns the version of OVS, or an error.
 func (br *OVSBridge) GetOVSVersion() (string, Error) {
 	tx := br.ovsdb.Transaction(openvSwitchSchema)

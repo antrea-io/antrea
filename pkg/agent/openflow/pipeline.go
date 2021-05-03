@@ -695,14 +695,18 @@ func (c *client) kubeProxyFlows(category cookie.Category) []binding.Flow {
 // TODO: Use DuplicateToBuilder or integrate this function into original one to avoid unexpected
 // difference.
 // traceflowConnectionTrackFlows generates Traceflow specific flows in the
-// connectionTrackStateTable. When packet is not provided, the flows bypass the
-// drop flow in connectionTrackFlows to avoid unexpected drop of the injected
-// Traceflow packet, and to drop any Traceflow packet that has ct_state +rpl,
-// which may happen when the Traceflow request destination is the Node's IP.
-// When packet is provided, a flow is added to mark the first packet as the
-// Traceflow packet, for the first connection that is initiated by srcOFPort
-// and matches the provided packet.
-func (c *client) traceflowConnectionTrackFlows(dataplaneTag uint8, packet *binding.Packet, srcOFPort uint32, timeout uint16, category cookie.Category) []binding.Flow {
+// connectionTrackStateTable or l2ForwardingCalcTable.  When packet is not
+// provided, the flows bypass the drop flow in connectionTrackFlows to avoid
+// unexpected drop of the injected Traceflow packet, and to drop any Traceflow
+// packet that has ct_state +rpl, which may happen when the Traceflow request
+// destination is the Node's IP.
+// When packet is provided, a flow is added to mark - the first packet of the
+// first connection that matches the provided packet - as the Traceflow packet.
+// The flow is added in connectionTrackStateTable when receiverOnly is false and
+// it also matches in_port to be the provided ofPort (the sender Pod); otherwise
+// when receiverOnly is true, the flow is added into l2ForwardingCalcTable and
+// matches the destination MAC (the receiver Pod MAC).
+func (c *client) traceflowConnectionTrackFlows(dataplaneTag uint8, receiverOnly bool, packet *binding.Packet, ofPort uint32, timeout uint16, category cookie.Category) []binding.Flow {
 	connectionTrackStateTable := c.pipeline[conntrackStateTable]
 	var flows []binding.Flow
 	if packet == nil {
@@ -732,16 +736,40 @@ func (c *client) traceflowConnectionTrackFlows(dataplaneTag uint8, packet *bindi
 				Done())
 		}
 	} else {
-		flowBuilder := connectionTrackStateTable.BuildFlow(priorityLow).
-			MatchInPort(srcOFPort).
-			MatchCTStateNew(true).MatchCTStateTrk(true).
-			SetHardTimeout(timeout).
-			Cookie(c.cookieAllocator.Request(category).Raw()).
-			Action().LoadIPDSCP(dataplaneTag)
-
-		if packet.DestinationIP != nil {
-			flowBuilder = flowBuilder.MatchDstIP(packet.DestinationIP)
+		var flowBuilder binding.FlowBuilder
+		if !receiverOnly {
+			flowBuilder = connectionTrackStateTable.BuildFlow(priorityLow).
+				MatchInPort(ofPort).
+				Action().LoadIPDSCP(dataplaneTag)
+			if packet.DestinationIP != nil {
+				flowBuilder = flowBuilder.MatchDstIP(packet.DestinationIP)
+			}
+			if c.enableProxy {
+				flowBuilder = flowBuilder.
+					Action().ResubmitToTable(sessionAffinityTable).
+					Action().ResubmitToTable(serviceLBTable)
+			} else {
+				flowBuilder = flowBuilder.
+					Action().ResubmitToTable(connectionTrackStateTable.GetNext())
+			}
+		} else {
+			l2FwdCalcTable := c.pipeline[l2ForwardingCalcTable]
+			nextTable := c.ingressEntryTable
+			flowBuilder = l2FwdCalcTable.BuildFlow(priorityHigh).
+				MatchDstMAC(packet.DestinationMAC).
+				Action().LoadRegRange(int(PortCacheReg), ofPort, ofPortRegRange).
+				Action().LoadRegRange(int(marksReg), portFoundMark, ofPortMarkRange).
+				Action().LoadIPDSCP(dataplaneTag).
+				Action().GotoTable(nextTable)
+			if packet.SourceIP != nil {
+				flowBuilder = flowBuilder.MatchSrcIP(packet.SourceIP)
+			}
 		}
+
+		flowBuilder = flowBuilder.MatchCTStateNew(true).MatchCTStateTrk(true).
+			SetHardTimeout(timeout).
+			Cookie(c.cookieAllocator.Request(category).Raw())
+
 		// Match transport header
 		switch packet.IPProto {
 		case protocol.Type_ICMP:
@@ -771,15 +799,6 @@ func (c *client) traceflowConnectionTrackFlows(dataplaneTag uint8, packet *bindi
 			if packet.SourcePort != 0 {
 				flowBuilder = flowBuilder.MatchSrcPort(packet.SourcePort, nil)
 			}
-		}
-
-		if c.enableProxy {
-			flowBuilder = flowBuilder.
-				Action().ResubmitToTable(sessionAffinityTable).
-				Action().ResubmitToTable(serviceLBTable)
-		} else {
-			flowBuilder = flowBuilder.
-				Action().ResubmitToTable(connectionTrackStateTable.GetNext())
 		}
 		flows = []binding.Flow{flowBuilder.Done()}
 	}
@@ -1903,12 +1922,21 @@ func (c *client) serviceLearnFlow(groupID binding.GroupIDType, svcIP net.IP, svc
 
 // serviceLBFlow generates the flow which uses the specific group to do Endpoint
 // selection.
-func (c *client) serviceLBFlow(groupID binding.GroupIDType, svcIP net.IP, svcPort uint16, protocol binding.Protocol) binding.Flow {
+func (c *client) serviceLBFlow(groupID binding.GroupIDType, svcIP net.IP, svcPort uint16, protocol binding.Protocol, withSessionAffinity bool) binding.Flow {
+	var lbResultMark uint32
+	if withSessionAffinity {
+		lbResultMark = marksRegServiceNeedLearn
+	} else {
+		lbResultMark = marksRegServiceSelected
+	}
+
 	return c.pipeline[serviceLBTable].BuildFlow(priorityNormal).
 		MatchProtocol(protocol).
 		MatchDstPort(svcPort, nil).
 		MatchDstIP(svcIP).
 		MatchRegRange(int(serviceLearnReg), marksRegServiceNeedLB, serviceLearnRegRange).
+		Action().LoadRegRange(int(serviceLearnReg), lbResultMark, serviceLearnRegRange).
+		Action().LoadRegRange(int(marksReg), macRewriteMark, macRewriteMarkRange).
 		Action().Group(groupID).
 		Cookie(c.cookieAllocator.Request(cookie.Service).Raw()).
 		Done()
@@ -1974,13 +2002,10 @@ func (c *client) hairpinSNATFlow(endpointIP net.IP) binding.Flow {
 func (c *client) serviceEndpointGroup(groupID binding.GroupIDType, withSessionAffinity bool, endpoints ...proxy.Endpoint) binding.Group {
 	group := c.bridge.CreateGroup(groupID).ResetBuckets()
 	var resubmitTableID binding.TableIDType
-	var lbResultMark uint32
 	if withSessionAffinity {
 		resubmitTableID = serviceLBTable
-		lbResultMark = marksRegServiceNeedLearn
 	} else {
 		resubmitTableID = endpointDNATTable
-		lbResultMark = marksRegServiceSelected
 	}
 
 	for _, endpoint := range endpoints {
@@ -1993,8 +2018,6 @@ func (c *client) serviceEndpointGroup(groupID binding.GroupIDType, withSessionAf
 			group = group.Bucket().Weight(100).
 				LoadReg(int(endpointIPReg), ipVal).
 				LoadRegRange(int(endpointPortReg), uint32(portVal), endpointPortRegRange).
-				LoadRegRange(int(serviceLearnReg), lbResultMark, serviceLearnRegRange).
-				LoadRegRange(int(marksReg), macRewriteMark, macRewriteMarkRange).
 				ResubmitToTable(resubmitTableID).
 				Done()
 		} else if ipProtocol == binding.ProtocolIPv6 {
@@ -2002,8 +2025,6 @@ func (c *client) serviceEndpointGroup(groupID binding.GroupIDType, withSessionAf
 			group = group.Bucket().Weight(100).
 				LoadXXReg(int(endpointIPv6XXReg), ipVal).
 				LoadRegRange(int(endpointPortReg), uint32(portVal), endpointPortRegRange).
-				LoadRegRange(int(serviceLearnReg), lbResultMark, serviceLearnRegRange).
-				LoadRegRange(int(marksReg), macRewriteMark, macRewriteMarkRange).
 				ResubmitToTable(resubmitTableID).
 				Done()
 		}
@@ -2054,15 +2075,16 @@ func priorityIndexFunc(obj interface{}) ([]string, error) {
 func (c *client) generatePipeline() {
 	bridge := c.bridge
 	c.pipeline = map[binding.TableIDType]binding.Table{
-		ClassifierTable:       bridge.CreateTable(ClassifierTable, spoofGuardTable, binding.TableMissActionDrop),
-		arpResponderTable:     bridge.CreateTable(arpResponderTable, binding.LastTableID, binding.TableMissActionDrop),
-		conntrackTable:        bridge.CreateTable(conntrackTable, conntrackStateTable, binding.TableMissActionNone),
-		EgressRuleTable:       bridge.CreateTable(EgressRuleTable, EgressDefaultTable, binding.TableMissActionNext),
-		EgressDefaultTable:    bridge.CreateTable(EgressDefaultTable, EgressMetricTable, binding.TableMissActionNext),
-		EgressMetricTable:     bridge.CreateTable(EgressMetricTable, l3ForwardingTable, binding.TableMissActionNext),
-		l3ForwardingTable:     bridge.CreateTable(l3ForwardingTable, l2ForwardingCalcTable, binding.TableMissActionNext),
-		l3DecTTLTable:         bridge.CreateTable(l3DecTTLTable, l2ForwardingCalcTable, binding.TableMissActionNext),
-		l2ForwardingCalcTable: bridge.CreateTable(l2ForwardingCalcTable, conntrackCommitTable, binding.TableMissActionNext),
+		ClassifierTable:    bridge.CreateTable(ClassifierTable, spoofGuardTable, binding.TableMissActionDrop),
+		arpResponderTable:  bridge.CreateTable(arpResponderTable, binding.LastTableID, binding.TableMissActionDrop),
+		conntrackTable:     bridge.CreateTable(conntrackTable, conntrackStateTable, binding.TableMissActionNone),
+		EgressRuleTable:    bridge.CreateTable(EgressRuleTable, EgressDefaultTable, binding.TableMissActionNext),
+		EgressDefaultTable: bridge.CreateTable(EgressDefaultTable, EgressMetricTable, binding.TableMissActionNext),
+		EgressMetricTable:  bridge.CreateTable(EgressMetricTable, l3ForwardingTable, binding.TableMissActionNext),
+		l3ForwardingTable:  bridge.CreateTable(l3ForwardingTable, l2ForwardingCalcTable, binding.TableMissActionNext),
+		l3DecTTLTable:      bridge.CreateTable(l3DecTTLTable, l2ForwardingCalcTable, binding.TableMissActionNext),
+		// Packets from l2ForwardingCalcTable should be forwarded to IngressMetricTable by default to collect ingress stats.
+		l2ForwardingCalcTable: bridge.CreateTable(l2ForwardingCalcTable, IngressMetricTable, binding.TableMissActionNext),
 		IngressRuleTable:      bridge.CreateTable(IngressRuleTable, IngressDefaultTable, binding.TableMissActionNext),
 		IngressDefaultTable:   bridge.CreateTable(IngressDefaultTable, IngressMetricTable, binding.TableMissActionNext),
 		IngressMetricTable:    bridge.CreateTable(IngressMetricTable, conntrackCommitTable, binding.TableMissActionNext),

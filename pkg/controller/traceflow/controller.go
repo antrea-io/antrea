@@ -299,6 +299,7 @@ func (c *Controller) checkTraceflowStatus(tf *crdv1alpha1.Traceflow) error {
 				}
 				if ob.Action == crdv1alpha1.ActionDelivered ||
 					ob.Action == crdv1alpha1.ActionDropped ||
+					ob.Action == crdv1alpha1.ActionRejected ||
 					ob.Action == crdv1alpha1.ActionForwardedOutOfOverlay {
 					receiver = true
 				}
@@ -318,7 +319,11 @@ func (c *Controller) checkTraceflowStatus(tf *crdv1alpha1.Traceflow) error {
 				}
 			}
 		}
-		succeeded = sender && receiver
+		// When the Source Pod is specified, the Traceflow should receive
+		// results from both the sender and the receiver. When the Source
+		// Pod is not specified (in live-traffic Traceflow), only the
+		// receiver Node will report the results.
+		succeeded = (sender && receiver) || (receiver && tf.Spec.Source.Pod == "")
 	}
 	if succeeded {
 		c.deallocateTagForTF(tf)

@@ -26,7 +26,9 @@ type ControlplaneV1beta2Interface interface {
 	RESTClient() rest.Interface
 	AddressGroupsGetter
 	AppliedToGroupsGetter
+	ClusterGroupMembersGetter
 	EgressGroupsGetter
+	GroupAssociationsGetter
 	NetworkPoliciesGetter
 	NodeStatsSummariesGetter
 }
@@ -44,8 +46,16 @@ func (c *ControlplaneV1beta2Client) AppliedToGroups() AppliedToGroupInterface {
 	return newAppliedToGroups(c)
 }
 
+func (c *ControlplaneV1beta2Client) ClusterGroupMembers() ClusterGroupMembersInterface {
+	return newClusterGroupMembers(c)
+}
+
 func (c *ControlplaneV1beta2Client) EgressGroups() EgressGroupInterface {
 	return newEgressGroups(c)
+}
+
+func (c *ControlplaneV1beta2Client) GroupAssociations(namespace string) GroupAssociationInterface {
+	return newGroupAssociations(c, namespace)
 }
 
 func (c *ControlplaneV1beta2Client) NetworkPolicies() NetworkPolicyInterface {

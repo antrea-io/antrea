@@ -71,6 +71,7 @@ type Initializer struct {
 	// networkReadyCh should be closed once the Node's network is ready.
 	// The CNI server will wait for it before handling any CNI Add requests.
 	networkReadyCh chan<- struct{}
+	stopCh         <-chan struct{}
 }
 
 func NewInitializer(
@@ -86,6 +87,7 @@ func NewInitializer(
 	serviceCIDRv6 *net.IPNet,
 	networkConfig *config.NetworkConfig,
 	networkReadyCh chan<- struct{},
+	stopCh <-chan struct{},
 	enableProxy bool) *Initializer {
 	return &Initializer{
 		ovsBridgeClient: ovsBridgeClient,
@@ -100,6 +102,7 @@ func NewInitializer(
 		serviceCIDRv6:   serviceCIDRv6,
 		networkConfig:   networkConfig,
 		networkReadyCh:  networkReadyCh,
+		stopCh:          stopCh,
 		enableProxy:     enableProxy,
 	}
 }
@@ -278,6 +281,12 @@ func persistRoundNum(num uint64, bridgeClient ovsconfig.OVSBridgeClient, interva
 // agent restarts (with the agent crashing before step 4 can be completed). With the sequence
 // described above, We guarantee that at most two rounds of flows exist in the switch at any given
 // time.
+// Note that at the moment we assume that all OpenFlow groups are deleted every time there is an
+// Antrea Agent restart. This allows us to add the necessary groups without having to worry about
+// the operation failing because a (stale) group with the same ID already exists in OVS. This
+// assumption is currently guaranteed by the ofnet implementation:
+// https://github.com/wenyingd/ofnet/blob/14a78b27ef8762e45a0cfc858c4d07a4572a99d5/ofctrl/fgraphSwitch.go#L57-L62
+// All previous groups have been deleted by the time the call to i.ofClient.Initialize returns.
 func (i *Initializer) initOpenFlowPipeline() error {
 	roundInfo := getRoundInfo(i.ovsBridgeClient)
 
@@ -424,7 +433,7 @@ func (i *Initializer) FlowRestoreComplete() error {
 	if err != nil {
 		if err == wait.ErrWaitTimeout {
 			// This could happen if the method is triggered by OVS disconnection event, in which OVS doesn't restart.
-			klog.Info("flow-restore-wait was not true, skip cleaning up it")
+			klog.Info("flow-restore-wait was not true, skip cleaning it up")
 			return nil
 		}
 		return err
@@ -845,6 +854,13 @@ func (i *Initializer) allocateGatewayAddresses(localSubnets []*net.IPNet, gatewa
 	if err := util.ConfigureLinkAddresses(i.nodeConfig.GatewayConfig.LinkIndex, gwIPs); err != nil {
 		return err
 	}
+	// Periodically check whether IP configuration of the gateway is correct.
+	// Terminate when stopCh is closed.
+	go wait.Until(func() {
+		if err := util.ConfigureLinkAddresses(i.nodeConfig.GatewayConfig.LinkIndex, gwIPs); err != nil {
+			klog.Errorf("Failed to check IP configuration of the gateway: %v", err)
+		}
+	}, 60*time.Second, i.stopCh)
 
 	for _, gwIP := range gwIPs {
 		if gwIP.IP.To4() != nil {

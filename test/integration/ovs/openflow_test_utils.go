@@ -71,7 +71,7 @@ func CheckFlowExists(t *testing.T, ovsCtlClient ovsctl.OVSCtlClient, tableID uin
 
 func CheckGroupExists(t *testing.T, ovsCtlClient ovsctl.OVSCtlClient, groupID binding.GroupIDType, groupType string, buckets []string, expectExists bool) {
 	// dump groups
-	groupList, err := ovsCtlClient.DumpGroups()
+	groupList, err := OfCtlDumpGroups(ovsCtlClient)
 	if err != nil {
 		t.Errorf("Error dumping flows: Err %v", err)
 	}
@@ -139,4 +139,18 @@ func OfctlDumpTableFlows(ovsCtlClient ovsctl.OVSCtlClient, table uint8) ([]strin
 func OfctlDeleteFlows(ovsCtlClient ovsctl.OVSCtlClient) error {
 	_, err := ovsCtlClient.RunOfctlCmd("del-flows")
 	return err
+}
+
+func OfCtlDumpGroups(ovsCtlClient ovsctl.OVSCtlClient) ([][]string, error) {
+	rawGroupItems, err := ovsCtlClient.DumpGroups()
+	if err != nil {
+		return nil, err
+	}
+
+	var groupList [][]string
+	for _, item := range rawGroupItems {
+		elems := strings.Split(item, ",bucket=")
+		groupList = append(groupList, elems)
+	}
+	return groupList, nil
 }

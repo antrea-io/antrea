@@ -103,6 +103,10 @@ Also check out [@ProjectAntrea](https://twitter.com/ProjectAntrea) on Twitter!
 Refer to the [Changelog](CHANGELOG.md) for a detailed list of features
 introduced for each version release.
 
+## Adopters
+
+For a list of Antrea Adopters, please refer to [ADOPTERS.md](ADOPTERS.md).
+
 ## Roadmap
 
 We are adding features very quickly to Antrea. Check out the list of features we

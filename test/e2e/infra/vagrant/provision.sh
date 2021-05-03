@@ -1,10 +1,15 @@
 #!/usr/bin/env bash
 
 function usage() {
-    echo "Usage: provision.sh [--ip-family <v4|v6>] [-h|--help]"
+    echo "Usage: provision.sh [--ip-family <v4|v6>] [-l|--large] [-h|--help]
+    Provisions the Vagrant VMs.
+    --ip-family <v4|v6>  Deploy IPv4 or IPv6 Kubernetes cluster.
+    --large              Deploy large vagrant VMs with 2 vCPUs and 4096MB memory.
+                         By default, we deploy VMs with 2 vCPUs and 2048MB memory."
 }
 
 K8S_IP_FAMILY="v4"
+K8S_NODE_LARGE=false
 while [[ $# -gt 0 ]]
 do
 key="$1"
@@ -13,6 +18,10 @@ case $key in
     --ip-family)
     K8S_IP_FAMILY="$2"
     shift 2
+    ;;
+    -l|--large)
+    K8S_NODE_LARGE=true
+    shift 1
     ;;
     -h|--help)
     usage
@@ -28,6 +37,7 @@ THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
 pushd $THIS_DIR
 
+export K8S_NODE_LARGE
 export K8S_IP_FAMILY
 
 # A few important considerations for IPv6 clusters:

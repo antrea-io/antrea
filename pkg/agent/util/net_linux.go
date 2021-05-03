@@ -38,7 +38,7 @@ func GetNetLink(dev string) netlink.Link {
 	return link
 }
 
-// GetPeerLinkBridge returns peer device and its attached bridge (if applicable)
+// GetNSPeerDevBridge returns peer device and its attached bridge (if applicable)
 // for device dev in network space indicated by nsPath
 func GetNSPeerDevBridge(nsPath, dev string) (*net.Interface, string, error) {
 	var peerIdx int

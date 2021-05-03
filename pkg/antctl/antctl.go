@@ -299,6 +299,10 @@ var CommandList = &commandList{
   $ antctl get ovsflows -N np1 -n ns1
   Dump OVS flows of a flow Table
   $ antctl get ovsflows -T IngressRule
+  Dump OVS groups
+  $ antctl get ovsflows -G 10,20
+  Dump all OVS groups
+  $ antctl get ovsflows -G all
 
   Antrea OVS Flow Tables:` + generateFlowTableHelpMsg(),
 			agentEndpoint: &endpoint{
@@ -329,6 +333,11 @@ var CommandList = &commandList{
 							name:      "table",
 							usage:     "Comma separated Antrea OVS flow table names or numbers",
 							shorthand: "T",
+						},
+						{
+							name:      "groups",
+							usage:     "Comma separated OVS group IDs. Use 'all' to dump all groups",
+							shorthand: "G",
 						},
 					},
 					outputType: multiple,

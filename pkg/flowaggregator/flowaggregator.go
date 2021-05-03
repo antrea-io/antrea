@@ -161,7 +161,7 @@ type flowAggregator struct {
 	templateIDv4                uint16
 	templateIDv6                uint16
 	registry                    ipfix.IPFIXRegistry
-	set                         ipfix.IPFIXSet
+	set                         ipfixentities.Set
 	flowAggregatorAddress       string
 	k8sClient                   kubernetes.Interface
 	observationDomainID         uint32
@@ -189,7 +189,7 @@ func NewFlowAggregator(
 		0,
 		0,
 		registry,
-		ipfix.NewSet(false),
+		ipfixentities.NewSet(false),
 		flowAggregatorAddress,
 		k8sClient,
 		observationDomainID,
@@ -390,7 +390,7 @@ func (fa *flowAggregator) sendFlowKeyRecord(key ipfixintermediate.FlowKey, recor
 	return nil
 }
 
-func (fa *flowAggregator) sendTemplateSet(templateSet ipfix.IPFIXSet, isIPv6 bool) (int, error) {
+func (fa *flowAggregator) sendTemplateSet(templateSet ipfixentities.Set, isIPv6 bool) (int, error) {
 	elements := make([]*ipfixentities.InfoElementWithValue, 0)
 	ianaInfoElements := ianaInfoElementsIPv4
 	antreaInfoElements := antreaInfoElementsIPv4
@@ -458,7 +458,7 @@ func (fa *flowAggregator) sendTemplateSet(templateSet ipfix.IPFIXSet, isIPv6 boo
 	return bytesSent, err
 }
 
-func (fa *flowAggregator) sendDataSet(dataSet ipfix.IPFIXSet) (int, error) {
+func (fa *flowAggregator) sendDataSet(dataSet ipfixentities.Set) (int, error) {
 	sentBytes, err := fa.exportingProcess.SendSet(dataSet)
 	if err != nil {
 		return 0, fmt.Errorf("error when sending data set: %v", err)

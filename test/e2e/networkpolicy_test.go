@@ -31,6 +31,7 @@ import (
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/apiserver/handlers/agentinfo"
 	"github.com/vmware-tanzu/antrea/pkg/apis/crd/v1beta1"
+	"github.com/vmware-tanzu/antrea/pkg/apis/stats/v1alpha1"
 )
 
 func TestNetworkPolicyStats(t *testing.T) {
@@ -142,12 +143,23 @@ func TestNetworkPolicyStats(t *testing.T) {
 	}
 
 	if err := wait.Poll(5*time.Second, defaultTimeout, func() (bool, error) {
+		var ingressStats *v1alpha1.NetworkPolicyStats
 		for _, np := range []string{"test-networkpolicy-ingress", "test-networkpolicy-egress"} {
 			stats, err := data.crdClient.StatsV1alpha1().NetworkPolicyStats(testNamespace).Get(context.TODO(), np, metav1.GetOptions{})
 			if err != nil {
 				return false, err
 			}
 			t.Logf("Got NetworkPolicy stats: %v", stats)
+			if ingressStats != nil {
+				if stats.TrafficStats.Packets != ingressStats.TrafficStats.Packets {
+					return false, nil
+				}
+				if stats.TrafficStats.Bytes != ingressStats.TrafficStats.Bytes {
+					return false, nil
+				}
+			} else {
+				ingressStats = stats
+			}
 			if stats.TrafficStats.Sessions != int64(totalSessions) {
 				return false, nil
 			}

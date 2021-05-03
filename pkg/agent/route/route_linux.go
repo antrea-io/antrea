@@ -152,7 +152,49 @@ func (c *Client) syncIPInfra() {
 		klog.Errorf("Failed to sync iptables: %v", err)
 		return
 	}
-	klog.V(3).Infof("Successfully synced node iptables")
+	if err := c.syncRoutes(); err != nil {
+		klog.Errorf("Failed to sync routes: %v", err)
+	}
+	klog.V(3).Infof("Successfully synced node iptables and routes")
+}
+
+func (c *Client) syncRoutes() error {
+	routeList, err := netlink.RouteList(nil, netlink.FAMILY_ALL)
+	if err != nil {
+		return err
+	}
+	routeMap := make(map[string]*netlink.Route)
+	for i := range routeList {
+		r := &routeList[i]
+		if r.Dst == nil {
+			continue
+		}
+		routeMap[r.Dst.String()] = r
+	}
+	c.nodeRoutes.Range(func(_, v interface{}) bool {
+		for _, route := range v.([]*netlink.Route) {
+			r, ok := routeMap[route.Dst.String()]
+			if ok && routeEqual(route, r) {
+				continue
+			}
+			if err := netlink.RouteReplace(route); err != nil {
+				klog.Errorf("Failed to add route to the gateway: %v", err)
+				return false
+			}
+		}
+		return true
+	})
+	return nil
+}
+
+func routeEqual(x, y *netlink.Route) bool {
+	if x == nil || y == nil {
+		return false
+	}
+	return x.LinkIndex == y.LinkIndex &&
+		x.Dst.IP.Equal(y.Dst.IP) &&
+		bytes.Equal(x.Dst.Mask, y.Dst.Mask) &&
+		x.Gw.Equal(y.Gw)
 }
 
 // syncIPSet ensures that the required ipset exists and it has the initial members.
@@ -578,13 +620,14 @@ func (c *Client) DeleteRoutes(podCIDR *net.IPNet) error {
 
 	routes, exists := c.nodeRoutes.Load(podCIDRStr)
 	if exists {
+		c.nodeRoutes.Delete(podCIDRStr)
 		for _, r := range routes.([]*netlink.Route) {
 			klog.V(4).Infof("Deleting route %v", r)
 			if err := netlink.RouteDel(r); err != nil && err != unix.ESRCH {
+				c.nodeRoutes.Store(podCIDRStr, routes)
 				return err
 			}
 		}
-		c.nodeRoutes.Delete(podCIDRStr)
 	}
 	if podCIDR.IP.To4() == nil {
 		neigh, exists := c.nodeNeighbors.Load(podCIDRStr)
