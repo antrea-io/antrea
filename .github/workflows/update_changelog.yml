@@ -1,0 +1,59 @@
+name: Update CHANGELOG after release
+
+on:
+  push:
+    tags:
+      - v*
+
+jobs:
+  check-version:
+    runs-on: [ubuntu-latest]
+    outputs:
+      version: ${{ steps.get-version.outputs.version }}
+    steps:
+    - name: Extract version from Github ref
+      id: get-version
+      env:
+        TAG: ${{ github.ref }}
+      shell: bash
+      run: |
+        version=${TAG:10}
+        if [[ "$version" == *-* ]]; then
+          echo "$version is a release candidate or a pre-release"
+          exit 0
+        fi
+        echo "::set-output name=version::$version"
+
+  pr-update-changelog:
+    runs-on: [ubuntu-latest]
+    needs: check-version
+    if: ${{ needs.check-version.outputs.version != '' }}
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+          ref: main
+      - name: Cherry-pick changelog commit
+        env:
+          VERSION: ${{ needs.check-version.outputs.version }}
+        shell: bash
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          commit_hash=$(git log "$VERSION" --format="%H" --grep="Update CHANGELOG for $VERSION release")
+          if [[ -z "$commit_hash" ]]; then
+            echo "Cannot find commit"
+            exit 1
+          fi
+          git cherry-pick "$commit_hash"
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v3
+        with:
+          delete-branch: true
+          title: "Update CHANGELOG for ${{ needs.check-version.outputs.version }} release"
+          body: |
+            PR was opened automatically from Github Actions
+      - name: Check outputs
+        run: |
+          echo "Pull Request Number - ${{ steps.cpr.outputs.pull-request-number }}"
+          echo "Pull Request URL - ${{ steps.cpr.outputs.pull-request-url }}"

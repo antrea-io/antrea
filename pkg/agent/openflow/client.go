@@ -227,7 +227,7 @@ type Client interface {
 	SendTraceflowPacket(dataplaneTag uint8, packet *binding.Packet, inPort uint32, outPort int32) error
 
 	// InstallTraceflowFlows installs flows for a Traceflow request.
-	InstallTraceflowFlows(dataplaneTag uint8, liveTraffic, droppedOnly bool, packet *binding.Packet, srcOFPort uint32, timeoutSeconds uint16) error
+	InstallTraceflowFlows(dataplaneTag uint8, liveTraffic, droppedOnly, receiverOnly bool, packet *binding.Packet, ofPort uint32, timeoutSeconds uint16) error
 
 	// UninstallTraceflowFlows uninstalls flows for a Traceflow request.
 	UninstallTraceflowFlows(dataplaneTag uint8) error
@@ -434,6 +434,7 @@ func (c *client) GetPodFlowKeys(interfaceName string) []string {
 func (c *client) InstallServiceGroup(groupID binding.GroupIDType, withSessionAffinity bool, endpoints []proxy.Endpoint) error {
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
+
 	group := c.serviceEndpointGroup(groupID, withSessionAffinity, endpoints...)
 	if err := group.Add(); err != nil {
 		return fmt.Errorf("error when installing Service Endpoints Group: %w", err)
@@ -497,7 +498,7 @@ func (c *client) InstallServiceFlows(groupID binding.GroupIDType, svcIP net.IP, 
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
 	var flows []binding.Flow
-	flows = append(flows, c.serviceLBFlow(groupID, svcIP, svcPort, protocol))
+	flows = append(flows, c.serviceLBFlow(groupID, svcIP, svcPort, protocol, affinityTimeout != 0))
 	if affinityTimeout != 0 {
 		flows = append(flows, c.serviceLearnFlow(groupID, svcIP, svcPort, protocol, affinityTimeout))
 	}
@@ -753,8 +754,10 @@ func (c *client) ReplayFlows() {
 		return true
 	}
 
-	c.groupCache.Range(func(id, gEntry interface{}) bool {
-		if err := gEntry.(binding.Group).Add(); err != nil {
+	c.groupCache.Range(func(id, value interface{}) bool {
+		group := value.(binding.Group)
+		group.Reset()
+		if err := group.Add(); err != nil {
 			klog.Errorf("Error when replaying cached group %d: %v", id, err)
 		}
 		return true
@@ -860,10 +863,10 @@ func (c *client) SendTraceflowPacket(dataplaneTag uint8, packet *binding.Packet,
 	return c.bridge.SendPacketOut(packetOutObj)
 }
 
-func (c *client) InstallTraceflowFlows(dataplaneTag uint8, liveTraffic, droppedOnly bool, packet *binding.Packet, srcOFPort uint32, timeoutSeconds uint16) error {
+func (c *client) InstallTraceflowFlows(dataplaneTag uint8, liveTraffic, droppedOnly, receiverOnly bool, packet *binding.Packet, ofPort uint32, timeoutSeconds uint16) error {
 	cacheKey := fmt.Sprintf("%x", dataplaneTag)
 	flows := []binding.Flow{}
-	flows = append(flows, c.traceflowConnectionTrackFlows(dataplaneTag, packet, srcOFPort, timeoutSeconds, cookie.Default)...)
+	flows = append(flows, c.traceflowConnectionTrackFlows(dataplaneTag, receiverOnly, packet, ofPort, timeoutSeconds, cookie.Default)...)
 	flows = append(flows, c.traceflowL2ForwardOutputFlows(dataplaneTag, liveTraffic, droppedOnly, timeoutSeconds, cookie.Default)...)
 	flows = append(flows, c.traceflowNetworkPolicyFlows(dataplaneTag, timeoutSeconds, cookie.Default)...)
 	return c.addFlows(c.tfFlowCache, cacheKey, flows)

@@ -5,6 +5,8 @@ toc:
         url: /index.html
       - page: Getting Started
         url: /getting-started
+      - page: Support for K8s Installers
+        url: /kubernetes-installers
       - page: Deploying on kind
         url: /kind
       - page: Configuration
@@ -89,3 +91,5 @@ toc:
       url: /changelog
     - page: Code of Conduct
       url: /code_of_conduct
+    - page: Antrea Adopters
+      url: /adopters

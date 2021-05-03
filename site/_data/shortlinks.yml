@@ -76,3 +76,6 @@
 - title: Release Instructions
   key: release
   destination: maintainers/release
+- title: Support for K8s Installers
+  key: k8s-installers
+  destination: kubernetes-installers

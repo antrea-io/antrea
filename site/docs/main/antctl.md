@@ -235,7 +235,7 @@ Starting from version 0.6.0, Antrea Agent supports dumping Antrea OVS flows. The
 `antctl` `get ovsflows` (or `get of`) command can dump all OVS flows, flows
 added for a specified Pod, or flows added for Service load-balancing of a
 specified Service, or flows added to realize a specified NetworkPolicy, or flows
-in a specified OVS flow table.
+in the specified OVS flow tables, or all or the specified OVS groups.
 
 ```bash
 antctl get ovsflows
@@ -244,7 +244,8 @@ antctl get ovsflows -S SERVICE -n NAMESPACE
 antctl get ovsflows -N NETWORKPOLICY -n NAMESPACE
 antctl get ovsflows -T TABLE_A,TABLE_B
 antctl get ovsflows -T TABLE_A,TABLE_B_NUM
-antctl get ovsflows -T TABLE_A_NUM,TABLE_B_NUM
+antctl get ovsflows -G all
+antctl get ovsflows -G GROUP_ID1,GROUP_ID2
 ```
 
 OVS flow tables can be specified using table names, or the table numbers.
@@ -389,22 +390,18 @@ result: |
 
 ### Traceflow
 
-`antctl traceflow` command is used to start a traceflow and retrieve its result. After the
-result is collected, the traceflow will be deleted. Users can also create a traceflow with
-`kubectl`, but `antctl traceflow` offers a simpler approach.
+`antctl traceflow` (or `antctl tf`) command is used to start a Traceflow and
+retrieve its result. After the result is collected, the Traceflow will be
+deleted. Users can also create a Traceflow with `kubectl`, but `antctl traceflow`
+offers a simpler way. For more information about Traceflow, refer to the
+[Traceflow guide](traceflow-guide.md).
 
-The required options for this command are `source` and `destination`, which
-consist of Namespace and Pod, Service or IP. The command supports
-yaml and json output. If users want a non blocking operation, an option: `--wait=false` can
-be added to start the traceflow without waiting for result. Then, the deletion operation
-will not be conducted. Besides, users can specify header protocol (ICMP, TCP and UDP),
-source/destination ports and TCP flags, and can specify if it's IPv6 or not as well.
-
-For example:
+To start a regular Traceflow, both `--source` (or `-S`) and `--destination` (or
+`-D`) arguments must be specified, and the source must be a Pod. For example:
 
 ```bash
-$ antctl traceflow -S busybox0 -D busybox1
-name: default-busybox0-to-default-busybox1-fpllngzi
+$ antctl tf -S busybox0 -D busybox1
+name: busybox0-to-busybox1-fpllngzi
 phase: Succeeded
 source: default/busybox0
 destination: default/busybox1
@@ -417,6 +414,42 @@ results:
   - component: Forwarding
     componentInfo: Output
     action: Delivered
+```
+
+To start a live-traffic Traceflow, add the `--live-traffic` (or `-L`) flag. Add
+the `--dropped-only` flag to indicate only the packet dropped by a NetworkPolicy
+should be captured in the live-traffic Traceflow. A live-traffic Traceflow
+just requires one of `--source` and `--destination` arguments to be specified,
+and at least one of them must be a Pod.
+
+The `--flow` (or `-f`) argument can be used to specify the Traceflow packet
+headers with the [ovs-ofctl](http://www.openvswitch.org//support/dist-docs/ovs-ofctl.8.txt)
+flow syntax. The supported flow fields include: IP family (`ipv6` to indicate an
+IPv6 packet), IP protocol (`icmp`, `icmpv6`, `tcp`, `udp`), source and
+destination ports (`tcp_src`, `tcp_dst`, `udp_src`, `udp_dst`), and TCP flags
+(`tcp_flags`).
+
+By default, the command will wait for the Traceflow to succeed or fail, or
+timeout. The default timeout is 10 seconds, but can be changed with the
+`--timeout` (or `-t`) argument. Add the `--no-wait` flag to start a Traceflow
+without waiting for its results. In this case, the command will not delete the
+Traceflow resource. The `traceflow` command supports yaml and json output.
+
+More examples of `antctl traceflow`:
+
+```bash
+# Start a Traceflow from pod1 to pod2, both Pods are in Namespace default
+$ antctl traceflow -S pod1 -D pod2
+# Start a Traceflow from pod1 in Namepace ns1 to a destination IP
+$ antctl traceflow -S ns1/pod1 -D 123.123.123.123
+# Start a Traceflow from pod1 to Service svc1 in Namespace ns1
+$ antctl traceflow -S pod1 -D ns1/svc1 -f tcp,tcp_dst=80
+# Start a Traceflow from pod1 to pod2, with a UDP packet to destination port 1234
+$ antctl traceflow -S pod1 -D pod2 -f udp,udp_dst=1234
+# Start a Traceflow for live TCP traffic from pod1 to svc1, with 1 minute timeout
+$ antctl traceflow -S pod1 -D svc1 -f tcp --live-traffic -t 1m
+# Start a Traceflow to capture the first dropped TCP packet to pod1 on port 80, within 10 minutes
+$ antctl traceflow -D pod1 -f tcp,tcp_dst=80 --live-traffic --dropped-only -t 10m
 ```
 
 ### Antctl Proxy

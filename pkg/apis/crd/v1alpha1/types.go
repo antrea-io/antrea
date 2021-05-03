@@ -46,6 +46,7 @@ const (
 	ActionReceived  TraceflowAction = "Received"
 	ActionForwarded TraceflowAction = "Forwarded"
 	ActionDropped   TraceflowAction = "Dropped"
+	ActionRejected  TraceflowAction = "Rejected"
 	// ActionForwardedOutOfOverlay indicates that the packet has been forwarded out of the network
 	// managed by Antrea. This indicates that the Traceflow request can be considered complete.
 	ActionForwardedOutOfOverlay TraceflowAction = "ForwardedOutOfOverlay"
@@ -129,6 +130,9 @@ type Source struct {
 	Namespace string `json:"namespace,omitempty"`
 	// Pod is the source pod.
 	Pod string `json:"pod,omitempty"`
+	// IP is the source IPv4 or IPv6 address. IP as the source is supported
+	// only for live-traffic Traceflow.
+	IP string `json:"ip,omitempty"`
 }
 
 // Destination describes the destination spec of the traceflow.

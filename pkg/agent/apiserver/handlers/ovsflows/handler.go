@@ -71,7 +71,7 @@ func dumpFlows(aq agentquerier.AgentQuerier, table binding.TableIDType) ([]Respo
 func dumpMatchedGroups(aq agentquerier.AgentQuerier, groupIDs []binding.GroupIDType) ([]Response, error) {
 	resps := []Response{}
 	for _, g := range groupIDs {
-		groupStr, err := aq.GetOVSCtlClient().DumpGroup(int(g))
+		groupStr, err := aq.GetOVSCtlClient().DumpGroup(uint32(g))
 		if err != nil {
 			klog.Errorf("Failed to dump group %d: %v", g, err)
 			return nil, err
@@ -85,9 +85,9 @@ func dumpMatchedGroups(aq agentquerier.AgentQuerier, groupIDs []binding.GroupIDT
 
 // nil is returned if the flow table can not be found (the passed table name or
 // number is invalid).
-func getTableFlows(aq agentquerier.AgentQuerier, table string) ([]Response, error) {
+func getTableFlows(aq agentquerier.AgentQuerier, tables string) ([]Response, error) {
 	var resps []Response
-	for _, tableSeg := range strings.Split(strings.TrimSpace(table), ",") {
+	for _, tableSeg := range strings.Split(tables, ",") {
 		tableSeg = strings.TrimSpace(tableSeg)
 		var tableNumber binding.TableIDType
 		// Table nubmer is a 8-bit unsigned integer.
@@ -110,6 +110,36 @@ func getTableFlows(aq agentquerier.AgentQuerier, table string) ([]Response, erro
 		resps = append(resps, resp...)
 	}
 	return resps, nil
+}
+
+// nil is returned if the passed group IDs are invalid.
+func getGroups(aq agentquerier.AgentQuerier, groups string) ([]Response, error) {
+	if strings.EqualFold(groups, "all") {
+		groupStrs, err := aq.GetOVSCtlClient().DumpGroups()
+		if err != nil {
+			return nil, err
+		}
+		resps := make([]Response, 0, len(groupStrs))
+		for _, s := range groupStrs {
+			resps = append(resps, Response{s})
+		}
+		return resps, nil
+	}
+
+	var groupIDs []binding.GroupIDType
+	for _, id := range strings.Split(groups, ",") {
+		id = strings.TrimSpace(id)
+		// Group ID is a 32-bit unsigned integer.
+		n, err := strconv.ParseUint(id, 10, 32)
+		if err != nil {
+			return nil, nil
+		}
+		groupIDs = append(groupIDs, binding.GroupIDType(n))
+	}
+	if groupIDs == nil {
+		return nil, nil
+	}
+	return dumpMatchedGroups(aq, groupIDs)
 }
 
 func getPodFlows(aq agentquerier.AgentQuerier, podName, namespace string) ([]Response, error) {
@@ -159,13 +189,14 @@ func HandleFunc(aq agentquerier.AgentQuerier) http.HandlerFunc {
 		networkPolicy := r.URL.Query().Get("networkpolicy")
 		namespace := r.URL.Query().Get("namespace")
 		table := r.URL.Query().Get("table")
+		groups := r.URL.Query().Get("groups")
 
 		if (pod != "" || service != "" || networkPolicy != "") && namespace == "" {
 			http.Error(w, "namespace must be provided", http.StatusBadRequest)
 			return
 		}
 
-		if pod == "" && service == "" && networkPolicy == "" && namespace == "" && table == "" {
+		if pod == "" && service == "" && networkPolicy == "" && namespace == "" && table == "" && groups == "" {
 			resps, err = dumpFlows(aq, binding.TableIDAll)
 		} else if pod != "" {
 			// Pod Namespace must be provided to dump flows of a Pod.
@@ -182,6 +213,12 @@ func HandleFunc(aq agentquerier.AgentQuerier) http.HandlerFunc {
 			resps, err = getTableFlows(aq, table)
 			if err == nil && resps == nil {
 				http.Error(w, "invalid table name or number", http.StatusBadRequest)
+				return
+			}
+		} else if groups != "" {
+			resps, err = getGroups(aq, groups)
+			if err == nil && resps == nil {
+				http.Error(w, "invalid group ID", http.StatusBadRequest)
 				return
 			}
 		} else {

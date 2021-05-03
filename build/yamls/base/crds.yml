@@ -149,19 +149,19 @@ spec:
           properties:
             spec:
               type: object
-              required:
-                - source
               properties:
                 source:
                   type: object
-                  required:
-                    - pod
-                    - namespace
                   properties:
                     pod:
                       type: string
                     namespace:
                       type: string
+                    ip:
+                      type: string
+                      oneOf:
+                        - format: ipv4
+                        - format: ipv6
                 destination:
                   type: object
                   properties:

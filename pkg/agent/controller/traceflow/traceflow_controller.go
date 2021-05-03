@@ -58,9 +58,10 @@ const (
 	maxRetryDelay = 300 * time.Second
 	// Default number of workers processing traceflow request.
 	defaultWorkers = 4
-	// Seconds delay before injecting packet into OVS. The time of different nodes may not be completely
+	// Delay in milliseconds before injecting packet into OVS. The time of different nodes may not be completely
 	// synchronized, which requires a delay before inject packet.
-	injectPacketDelay = 5
+	injectPacketDelay      = 2000
+	injectLocalPacketDelay = 100
 
 	// ICMP Echo Request type and code.
 	icmpEchoRequestType   uint8 = 8
@@ -75,7 +76,9 @@ type traceflowState struct {
 	tag         uint8
 	liveTraffic bool
 	droppedOnly bool
-	isSender    bool
+	// Live-traffic Traceflow with only destination Pod specified.
+	receiverOnly bool
+	isSender     bool
 	// Agent received the first Traceflow packet from OVS.
 	receivedPacket bool
 }
@@ -293,25 +296,44 @@ func (c *Controller) startTraceflow(tf *crdv1alpha1.Traceflow) error {
 		return err
 	}
 
-	// TODO: let controller compute the source Node, and the source Node can just return an error,
-	//  if fails to find the Pod.
-	podInterfaces := c.interfaceStore.GetContainerInterfacesByPod(tf.Spec.Source.Pod, tf.Spec.Source.Namespace)
 	liveTraffic := tf.Spec.LiveTraffic
-	isSender := len(podInterfaces) > 0
+	if tf.Spec.Source.Pod == "" && tf.Spec.Destination.Pod == "" {
+		klog.Errorf("Traceflow %s has neither source nor destination Pod specified", tf.Name)
+		return nil
+	}
+	if tf.Spec.Source.Pod == "" && !liveTraffic {
+		klog.Errorf("Traceflow %s does not have source Pod specified", tf.Name)
+		return nil
+	}
+
+	receiverOnly := false
+	var pod, ns string
+	if tf.Spec.Source.Pod != "" {
+		pod = tf.Spec.Source.Pod
+		ns = tf.Spec.Source.Namespace
+	} else {
+		// Live-traffic Traceflow with only the Destination Pod specified.
+		pod = tf.Spec.Destination.Pod
+		ns = tf.Spec.Destination.Namespace
+		receiverOnly = true
+	}
+
+	// TODO: let controller compute the sender/receiver Node, and the sender
+	// /receiver Node can just return an error, if fails to find the Pod.
+	podInterfaces := c.interfaceStore.GetContainerInterfacesByPod(pod, ns)
+	isSender := len(podInterfaces) > 0 && !receiverOnly
 
 	var packet, matchPacket *binding.Packet
-	var srcOFPort uint32
-	if isSender {
-		packet, err = c.preparePacket(tf, podInterfaces[0])
+	var ofPort uint32
+	if len(podInterfaces) > 0 {
+		packet, err = c.preparePacket(tf, podInterfaces[0], receiverOnly)
 		if err != nil {
 			return err
 		}
-		srcOFPort = uint32(podInterfaces[0].OFPort)
-		// On the source Node, trace the first packet of the first
-		// connection that matches the Traceflow spec.
-		// TODO: support specifying only the Destination Pod for
-		// live-traffic Traceflow, which will trace the matched traffic
-		// to the destination Pod from any source.
+		ofPort = uint32(podInterfaces[0].OFPort)
+		// On the sender or receiver (the receiverOnly case) Node, trace
+		// the first packet of the first connection that matches the
+		// Traceflow spec.
 		if liveTraffic {
 			matchPacket = packet
 		}
@@ -323,7 +345,7 @@ func (c *Controller) startTraceflow(tf *crdv1alpha1.Traceflow) error {
 	tfState := traceflowState{
 		name: tf.Name, tag: tf.Status.DataplaneTag,
 		liveTraffic: liveTraffic, droppedOnly: tf.Spec.DroppedOnly && liveTraffic,
-		isSender: isSender}
+		receiverOnly: receiverOnly, isSender: isSender}
 	c.runningTraceflows[tfState.tag] = &tfState
 	c.runningTraceflowsMutex.Unlock()
 
@@ -333,7 +355,7 @@ func (c *Controller) startTraceflow(tf *crdv1alpha1.Traceflow) error {
 	if timeout == 0 {
 		timeout = crdv1alpha1.DefaultTraceflowTimeout
 	}
-	err = c.ofClient.InstallTraceflowFlows(tfState.tag, liveTraffic, tfState.droppedOnly, matchPacket, srcOFPort, timeout)
+	err = c.ofClient.InstallTraceflowFlows(tfState.tag, liveTraffic, tfState.droppedOnly, receiverOnly, matchPacket, ofPort, timeout)
 	if err != nil {
 		return err
 	}
@@ -344,10 +366,14 @@ func (c *Controller) startTraceflow(tf *crdv1alpha1.Traceflow) error {
 			// If the destination is Service/IP or the packet will
 			// be sent to remote Node, wait a small period for other
 			// Nodes.
-			time.Sleep(time.Duration(injectPacketDelay) * time.Second)
+			time.Sleep(time.Duration(injectPacketDelay) * time.Millisecond)
+		} else {
+			// Issue #2116
+			// Wait a small period after flows installed to avoid unexpected behavior.
+			time.Sleep(time.Duration(injectLocalPacketDelay) * time.Millisecond)
 		}
 		klog.V(2).Infof("Injecting packet for Traceflow %s", tf.Name)
-		err = c.ofClient.SendTraceflowPacket(tfState.tag, packet, srcOFPort, -1)
+		err = c.ofClient.SendTraceflowPacket(tfState.tag, packet, ofPort, -1)
 	}
 	return err
 }
@@ -370,7 +396,7 @@ func (c *Controller) validateTraceflow(tf *crdv1alpha1.Traceflow) error {
 	return nil
 }
 
-func (c *Controller) preparePacket(tf *crdv1alpha1.Traceflow, intf *interfacestore.InterfaceConfig) (*binding.Packet, error) {
+func (c *Controller) preparePacket(tf *crdv1alpha1.Traceflow, intf *interfacestore.InterfaceConfig, receiverOnly bool) (*binding.Packet, error) {
 	liveTraffic := tf.Spec.LiveTraffic
 	isICMP := false
 	packet := new(binding.Packet)
@@ -390,18 +416,24 @@ func (c *Controller) preparePacket(tf *crdv1alpha1.Traceflow, intf *interfacesto
 		packet.SourceMAC = intf.MAC
 	}
 
-	if tf.Spec.Destination.IP != "" {
+	if receiverOnly {
+		if tf.Spec.Source.IP != "" {
+			packet.SourceIP = net.ParseIP(tf.Spec.Source.IP)
+			isIPv6 := packet.SourceIP.To4() == nil
+			if isIPv6 != packet.IsIPv6 {
+				return nil, errors.New("source IP does not match the IP header family")
+			}
+		}
+		// The packet will be matched with the Pod MAC.
+		packet.DestinationMAC = intf.MAC
+	} else if tf.Spec.Destination.IP != "" {
 		packet.DestinationIP = net.ParseIP(tf.Spec.Destination.IP)
 		if packet.DestinationIP == nil {
 			return nil, errors.New("invalid destination IP address")
 		}
-		if !packet.IsIPv6 {
-			packet.DestinationIP = packet.DestinationIP.To4()
-			if packet.DestinationIP == nil {
-				return nil, errors.New("destination IP should be an IPv4 address")
-			}
-		} else if packet.DestinationIP.To4() != nil {
-			return nil, errors.New("destination IP should be an IPv6 address")
+		isIPv6 := packet.DestinationIP.To4() == nil
+		if isIPv6 != packet.IsIPv6 {
+			return nil, errors.New("destination IP does not match the IP header family")
 		}
 		if !liveTraffic {
 			dstPodInterface, hasInterface := c.interfaceStore.GetInterfaceByIP(tf.Spec.Destination.IP)

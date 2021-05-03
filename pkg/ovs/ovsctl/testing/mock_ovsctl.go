@@ -68,7 +68,7 @@ func (mr *MockOVSCtlClientMockRecorder) DumpFlows(arg0 ...interface{}) *gomock.C
 }
 
 // DumpGroup mocks base method
-func (m *MockOVSCtlClient) DumpGroup(arg0 int) (string, error) {
+func (m *MockOVSCtlClient) DumpGroup(arg0 uint32) (string, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "DumpGroup", arg0)
 	ret0, _ := ret[0].(string)
@@ -83,22 +83,18 @@ func (mr *MockOVSCtlClientMockRecorder) DumpGroup(arg0 interface{}) *gomock.Call
 }
 
 // DumpGroups mocks base method
-func (m *MockOVSCtlClient) DumpGroups(arg0 ...string) ([][]string, error) {
+func (m *MockOVSCtlClient) DumpGroups() ([]string, error) {
 	m.ctrl.T.Helper()
-	varargs := []interface{}{}
-	for _, a := range arg0 {
-		varargs = append(varargs, a)
-	}
-	ret := m.ctrl.Call(m, "DumpGroups", varargs...)
-	ret0, _ := ret[0].([][]string)
+	ret := m.ctrl.Call(m, "DumpGroups")
+	ret0, _ := ret[0].([]string)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // DumpGroups indicates an expected call of DumpGroups
-func (mr *MockOVSCtlClientMockRecorder) DumpGroups(arg0 ...interface{}) *gomock.Call {
+func (mr *MockOVSCtlClientMockRecorder) DumpGroups() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DumpGroups", reflect.TypeOf((*MockOVSCtlClient)(nil).DumpGroups), arg0...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DumpGroups", reflect.TypeOf((*MockOVSCtlClient)(nil).DumpGroups))
 }
 
 // DumpMatchedFlow mocks base method

@@ -81,6 +81,9 @@ type GroupMember struct {
 	Ports []NamedPort `json:"ports,omitempty" protobuf:"bytes,4,rep,name=ports"`
 }
 
+// +genclient
+// +genclient:nonNamespaced
+// +genclient:onlyVerbs=get
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // ClusterGroupMembers is a list of GroupMember objects that are currently selected by a ClusterGroup.
 type ClusterGroupMembers struct {
@@ -332,6 +335,8 @@ type GroupReference struct {
 	UID types.UID `json:"uid,omitempty" protobuf:"bytes,3,opt,name=uid,casttype=k8s.io/apimachinery/pkg/types.UID"`
 }
 
+// +genclient
+// +genclient:onlyVerbs=get
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // GroupAssociation is the message format in an API response for groupassociation queries.
 type GroupAssociation struct {

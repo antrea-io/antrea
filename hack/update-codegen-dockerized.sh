@@ -40,6 +40,7 @@ $GOPATH/bin/client-gen \
   --plural-exceptions "NetworkPolicyStats:NetworkPolicyStats" \
   --plural-exceptions "AntreaNetworkPolicyStats:AntreaNetworkPolicyStats" \
   --plural-exceptions "AntreaClusterNetworkPolicyStats:AntreaClusterNetworkPolicyStats" \
+  --plural-exceptions "ClusterGroupMembers:ClusterGroupMembers" \
   --go-header-file hack/boilerplate/license_header.go.txt
 
 # Generate listers with K8s codegen tools.
@@ -107,6 +108,7 @@ $GOPATH/bin/client-gen \
   --plural-exceptions "NetworkPolicyStats:NetworkPolicyStats" \
   --plural-exceptions "AntreaNetworkPolicyStats:AntreaNetworkPolicyStats" \
   --plural-exceptions "AntreaClusterNetworkPolicyStats:AntreaClusterNetworkPolicyStats" \
+  --plural-exceptions "ClusterGroupMembers:ClusterGroupMembers" \
   --go-header-file hack/boilerplate/license_header.go.txt
 
 # Generate legacy listers with K8s codegen tools.
@@ -150,7 +152,7 @@ MOCKGEN_TARGETS=(
   "pkg/antctl AntctlClient ."
   "pkg/controller/networkpolicy EndpointQuerier testing"
   "pkg/controller/querier ControllerQuerier testing"
-  "pkg/ipfix IPFIXExportingProcess,IPFIXSet,IPFIXRegistry,IPFIXCollectingProcess,IPFIXAggregationProcess testing"
+  "pkg/ipfix IPFIXExportingProcess,IPFIXRegistry,IPFIXCollectingProcess,IPFIXAggregationProcess testing"
   "pkg/ovs/openflow Bridge,Table,Flow,Action,CTAction,FlowBuilder testing"
   "pkg/ovs/ovsconfig OVSBridgeClient testing"
   "pkg/ovs/ovsctl OVSCtlClient testing"

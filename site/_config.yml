@@ -105,6 +105,12 @@ defaults:
       gh: https://github.com/vmware-tanzu/antrea/tree/v0.11.3
       layout: "docs"
   - scope:
+      path: docs/v0.11.4
+    values:
+      version: v0.11.4
+      gh: https://github.com/vmware-tanzu/antrea/tree/v0.11.4
+      layout: "docs"
+  - scope:
       path: docs/v0.12.0
     values:
       version: v0.12.0
@@ -123,6 +129,12 @@ defaults:
       gh: https://github.com/vmware-tanzu/antrea/tree/v0.12.2
       layout: "docs"
   - scope:
+      path: docs/v0.12.3
+    values:
+      version: v0.12.3
+      gh: https://github.com/vmware-tanzu/antrea/tree/v0.12.3
+      layout: "docs"
+  - scope:
       path: docs/v0.13.0
     values:
       version: v0.13.0
@@ -135,10 +147,22 @@ defaults:
       gh: https://github.com/vmware-tanzu/antrea/tree/v0.13.1
       layout: "docs"
   - scope:
+      path: docs/v0.13.2
+    values:
+      version: v0.13.2
+      gh: https://github.com/vmware-tanzu/antrea/tree/v0.13.2
+      layout: "docs"
+  - scope:
       path: docs/v1.0.0
     values:
       version: v1.0.0
       gh: https://github.com/vmware-tanzu/antrea/tree/v1.0.0
+      layout: "docs"
+  - scope:
+      path: docs/v1.0.1
+    values:
+      version: v1.0.1
+      gh: https://github.com/vmware-tanzu/antrea/tree/v1.0.1
       layout: "docs"
 page_gen:
   - data: shortlinks
@@ -150,15 +174,19 @@ collections:
   - features
   - presentations
 versioning: true
-latest: v1.0.0
+latest: v1.0.1
 versions:
   - main
+  - v1.0.1
   - v1.0.0
+  - v0.13.2
   - v0.13.1
   - v0.13.0
+  - v0.12.3
   - v0.12.2
   - v0.12.1
   - v0.12.0
+  - v0.11.4
   - v0.11.3
   - v0.11.2
   - v0.11.1

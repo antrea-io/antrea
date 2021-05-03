@@ -157,6 +157,11 @@ func (ic *ifConfigurator) configureContainerLink(
 	// Update IPConfig with the index of target interface in the result. The index is used in CNI CmdCheck.
 	ifaceIdx := 1
 	containerIP.Interface = &ifaceIdx
+
+	ifaceName := fmt.Sprintf("vEthernet (%s)", endpoint.Name)
+	if err := util.SetInterfaceMTU(ifaceName, mtu); err != nil {
+		return fmt.Errorf("failed to configure MTU on container interface '%s': %v", ifaceName, err)
+	}
 	return nil
 }
 
