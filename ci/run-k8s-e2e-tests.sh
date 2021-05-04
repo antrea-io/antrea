@@ -147,6 +147,9 @@ fi
 
 echoerr "Using this sonobuoy: $SONOBUOY"
 
+# Incremented by 1 for every sonobuoy run invocation with at least one failed test
+errors=0
+
 function run_sonobuoy() {
     local focus_regex="$1"
     local skip_regex="$2"
@@ -170,8 +173,12 @@ function run_sonobuoy() {
                 --sonobuoy-image ${SONOBUOY_IMAGE} --e2e-repo-config ${CONFORMANCE_IMAGE_CONFIG_PATH}
     fi
     set +x
-    results=$($SONOBUOY retrieve $KUBECONFIG_OPTION)
-    $SONOBUOY results $results --mode=$MODE
+    results_path=$($SONOBUOY retrieve $KUBECONFIG_OPTION)
+    results=$($SONOBUOY results $results_path --mode=$MODE)
+    echo "$results"
+    if grep -Fxq "Failed tests:" <<< "$results"; then
+        errors=$((errors+1))
+    fi
 }
 
 function run_conformance() {
@@ -216,5 +223,7 @@ if $RUN_NETWORK_POLICY; then
     run_network_policy
 fi
 
-echoerr "Deleting sonobuoy resources because tests were successful"
+echoerr "Deleting sonobuoy resources"
 $SONOBUOY delete --wait $KUBECONFIG_OPTION
+
+exit $errors

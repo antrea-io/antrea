@@ -224,14 +224,14 @@ function run_conformance() {
     skip_regex="\[Slow\]|\[Serial\]|\[Disruptive\]|\[Flaky\]|\[Feature:.+\]|\[sig-cli\]|\[sig-storage\]|\[sig-auth\]|\[sig-api-machinery\]|\[sig-apps\]|\[sig-node\]|NodePort"
     ${GIT_CHECKOUT_DIR}/ci/run-k8s-e2e-tests.sh --e2e-conformance --e2e-network-policy --e2e-skip ${skip_regex} \
        --kube-conformance-image-version ${KUBE_CONFORMANCE_IMAGE_VERSION} \
-       --log-mode ${MODE} > ${GIT_CHECKOUT_DIR}/eks-test.log
+       --log-mode ${MODE} > ${GIT_CHECKOUT_DIR}/eks-test.log || TEST_FAILURE=true
 
-    if grep -Fxq "Failed tests:" ${GIT_CHECKOUT_DIR}/eks-test.log
-    then
-        echo "Failed cases exist."
-        TEST_FAILURE=true
-    else
+    if [[ "$TEST_FAILURE" == false ]]; then
         echo "All tests passed."
+        echo "=== SUCCESS !!! ==="
+    else
+        echo "Failed cases exist."
+        echo "=== FAILURE !!! ==="
     fi
 
     echo "=== Cleanup Antrea Installation ==="
@@ -239,12 +239,6 @@ function run_conformance() {
     do
         kubectl delete -f ${antrea_yml} --ignore-not-found=true || true
     done
-
-    if [[ "$TEST_FAILURE" == false ]]; then
-        echo "=== SUCCESS !!! ==="
-    else
-        echo "=== FAILURE !!! ==="
-    fi
 }
 
 function cleanup_cluster() {

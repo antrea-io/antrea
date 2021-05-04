@@ -256,16 +256,21 @@ function run_conformance() {
     echo "=== Running Antrea Conformance and Network Policy Tests ==="
     ${GIT_CHECKOUT_DIR}/ci/run-k8s-e2e-tests.sh --e2e-conformance --e2e-network-policy \
       --kube-conformance-image-version ${KUBE_CONFORMANCE_IMAGE_VERSION} \
-      --log-mode ${MODE} > ${GIT_CHECKOUT_DIR}/aks-test.log
+      --log-mode ${MODE} > ${GIT_CHECKOUT_DIR}/aks-test.log || TEST_FAILURE=true
 
-    if grep -Fxq "Failed tests:" ${GIT_CHECKOUT_DIR}/aks-test.log
-    then
-        echo "Failed cases exist."
-        echo "=== FAILURE !!! ==="
-    else
+    if [[ "$TEST_FAILURE" == false ]]; then
         echo "All tests passed."
         echo "=== SUCCESS !!! ==="
+    else
+        echo "Failed cases exist."
+        echo "=== FAILURE !!! ==="
     fi
+
+    echo "=== Cleanup Antrea Installation ==="
+    for antrea_yml in ${GIT_CHECKOUT_DIR}/build/yamls/*.yml
+    do
+        kubectl delete -f ${antrea_yml} --ignore-not-found=true || true
+    done
 }
 
 function cleanup_cluster() {

@@ -263,16 +263,17 @@ function run_conformance() {
 
     ${GIT_CHECKOUT_DIR}/ci/run-k8s-e2e-tests.sh --e2e-conformance --e2e-network-policy \
       --kube-conformance-image-version ${KUBE_CONFORMANCE_IMAGE_VERSION} \
-      --log-mode ${MODE} > ${GIT_CHECKOUT_DIR}/gke-test.log
+      --log-mode ${MODE} > ${GIT_CHECKOUT_DIR}/gke-test.log || TEST_FAILURE=true
+
+    if [[ "$TEST_FAILURE" == false ]]; then
+        echo "All tests passed."
+        echo "=== SUCCESS !!! ==="
+    else
+        echo "Failed cases exist."
+        echo "=== FAILURE !!! ==="
+    fi
 
     ${GCLOUD_PATH} compute firewall-rules delete allow-nodeport
-    if grep -Fxq "Failed tests:" ${GIT_CHECKOUT_DIR}/gke-test.log
-    then
-        echo "Failed cases exist."
-        TEST_FAILURE=true
-    else
-        echo "All tests passed."
-    fi
 
     if [[ -z ${GIT_CHECKOUT_DIR+x} ]]; then
         GIT_CHECKOUT_DIR=..
@@ -282,11 +283,6 @@ function run_conformance() {
     do
         kubectl delete -f ${antrea_yml} --ignore-not-found=true || true
     done
-
-    if [[ "$TEST_FAILURE" == false ]]; then
-        echo "=== SUCCESS !!! ==="
-    fi
-    echo "=== FAILURE !!! ==="
 }
 
 function cleanup_cluster() {
