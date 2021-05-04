@@ -43,6 +43,7 @@ Generate a YAML manifest for Antrea using Kustomize and print it to stdout.
         --simulator                   Generates a manifest with antrea-agent simulator included
         --custom-adm-controller       Generates a manifest with custom Antrea admission controller to validate/mutate resources.
         --hw-offload                  Generates a manifest with hw-offload enabled in the antrea-ovs container.
+        --sriov                       Generates a manifest which enables use of Kubelet API for SR-IOV device info.
         --help, -h                    Print this message and exit
 
 In 'release' mode, environment variables IMG_NAME and IMG_TAG must be set.
@@ -82,6 +83,7 @@ K8S_115=false
 SIMULATOR=false
 CUSTOM_ADM_CONTROLLER=false
 HW_OFFLOAD=false
+SRIOV=false
 
 while [[ $# -gt 0 ]]
 do
@@ -163,6 +165,10 @@ case $key in
     ;;
     --hw-offload)
     HW_OFFLOAD=true
+    shift
+    ;;
+    --sriov)
+    SRIOV=true
     shift
     ;;
     -h|--help)
@@ -429,6 +435,16 @@ if $HW_OFFLOAD; then
     $KUSTOMIZE edit add base $BASE
     $KUSTOMIZE edit add patch --path hwOffload.yml
     BASE=../hwoffload
+    cd ..
+fi
+
+if $SRIOV; then
+    mkdir sriov && cd sriov
+    cp ../../patches/sriov/sriov.yml .
+    touch kustomization.yml
+    $KUSTOMIZE edit add base $BASE
+    $KUSTOMIZE edit add patch --path sriov.yml
+    BASE=../sriov
     cd ..
 fi
 

@@ -113,11 +113,15 @@ func (ic *ifConfigurator) configureContainerLink(
 	containerNetNS string,
 	containerIFDev string,
 	mtu int,
-	sriovVFDeviceID string,
+	brSriovVFDeviceID string,
+	podSriovVFDeviceID string,
 	result *current.Result,
 ) error {
-	if sriovVFDeviceID != "" {
+	if brSriovVFDeviceID != "" {
 		return fmt.Errorf("OVS hardware offload is not supported on windows")
+	}
+	if podSriovVFDeviceID != "" {
+		return fmt.Errorf("Pod SR-IOV interface is not supported on windows")
 	}
 	// We must use the infra container to generate the endpoint name to ensure infra and workload containers use the
 	// same HNSEndpoint.

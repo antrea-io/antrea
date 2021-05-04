@@ -26,6 +26,7 @@ require (
 	github.com/golang/mock v1.5.0
 	github.com/golang/protobuf v1.5.0
 	github.com/google/uuid v1.1.2
+	github.com/k8snetworkplumbingwg/sriov-cni v2.1.0+incompatible
 	github.com/kevinburke/ssh_config v0.0.0-20190725054713-01f96b0aa0cd
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822
 	github.com/pkg/errors v0.9.1
@@ -62,6 +63,7 @@ require (
 	k8s.io/kube-aggregator v0.21.0
 	k8s.io/kube-openapi v0.0.0-20210305164622-f622666832c1
 	k8s.io/kubectl v0.21.0
+	k8s.io/kubelet v0.21.0
 	k8s.io/utils v0.0.0-20210305010621-2afb4311ab10
 )
 
