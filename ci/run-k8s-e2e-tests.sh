@@ -14,7 +14,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-set -eo pipefail
+# ERR trap is inherited by shell functions
+set -E
+
+# Possible exit codes are 0 (all tests pass), 1 (all tests were run, but at least one failed) and 2
+# (internal error when running tests, not a test failure).
+trap 'exit 2' ERR
 
 function echoerr {
     >&2 echo "$@"
@@ -42,7 +47,8 @@ _usage="Usage: $0 [--e2e-conformance] [--e2e-network-policy] [--e2e-focus <TestR
                   [--kubeconfig <Kubeconfig>] [--kube-conformance-image-version <ConformanceImageVersion>]
                   [--log-mode <SonobuoyResultLogLevel>]
 Run the K8s e2e community tests (Conformance & Network Policy) which are relevant to Project Antrea,
-using the sonobuoy tool.
+using the sonobuoy tool. Possible exit codes are 0 (all tests pass), 1 (all tests were run, but at
+least one failed) and 2 (internal error when running tests, not a test failure).
         --e2e-conformance                                         Run Conformance tests.
         --e2e-whole-conformance                                   Run whole Conformance tests.
         --e2e-network-policy                                      Run Network Policy tests.
@@ -226,4 +232,7 @@ fi
 echoerr "Deleting sonobuoy resources"
 $SONOBUOY delete --wait $KUBECONFIG_OPTION
 
-exit $errors
+if [[ $errors -ne 0 ]]; then
+    exit 1
+fi
+exit 0

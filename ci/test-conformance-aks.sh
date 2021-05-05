@@ -28,7 +28,7 @@ RUN_ALL=true
 RUN_SETUP_ONLY=false
 RUN_CLEANUP_ONLY=false
 KUBECONFIG_PATH="$HOME/jenkins/out/aks"
-TEST_FAILURE=false
+TEST_SCRIPT_RC=0
 MODE="report"
 KUBE_CONFORMANCE_IMAGE_VERSION=v1.19.4
 
@@ -256,13 +256,16 @@ function run_conformance() {
     echo "=== Running Antrea Conformance and Network Policy Tests ==="
     ${GIT_CHECKOUT_DIR}/ci/run-k8s-e2e-tests.sh --e2e-conformance --e2e-network-policy \
       --kube-conformance-image-version ${KUBE_CONFORMANCE_IMAGE_VERSION} \
-      --log-mode ${MODE} > ${GIT_CHECKOUT_DIR}/aks-test.log || TEST_FAILURE=true
+      --log-mode ${MODE} > ${GIT_CHECKOUT_DIR}/aks-test.log || TEST_SCRIPT_RC=$?
 
-    if [[ "$TEST_FAILURE" == false ]]; then
+    if [[ $TEST_SCRIPT_RC -eq 0 ]]; then
         echo "All tests passed."
         echo "=== SUCCESS !!! ==="
+    elif [[ $TEST_SCRIPT_RC -eq 1 ]]; then
+        echo "Failed test cases exist."
+        echo "=== FAILURE !!! ==="
     else
-        echo "Failed cases exist."
+        echo "Unexpected error when running tests."
         echo "=== FAILURE !!! ==="
     fi
 
@@ -306,6 +309,6 @@ if [[ "$RUN_ALL" == true || "$RUN_CLEANUP_ONLY" == true ]]; then
     cleanup_cluster
 fi
 
-if [[ "$RUN_CLEANUP_ONLY" == false &&  "$TEST_FAILURE" == true ]]; then
+if [[ "$RUN_CLEANUP_ONLY" == false && $TEST_SCRIPT_RC -ne 0 ]]; then
     exit 1
 fi

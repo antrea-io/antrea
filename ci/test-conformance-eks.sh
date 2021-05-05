@@ -30,7 +30,7 @@ RUN_SETUP_ONLY=false
 RUN_CLEANUP_ONLY=false
 KUBECONFIG_PATH="$HOME/jenkins/out/eks"
 MODE="report"
-TEST_FAILURE=false
+TEST_SCRIPT_RC=0
 KUBE_CONFORMANCE_IMAGE_VERSION=v1.18.5
 
 _usage="Usage: $0 [--cluster-name <EKSClusterNameToUse>] [--kubeconfig <KubeconfigSavePath>] [--k8s-version <ClusterVersion>]\
@@ -224,13 +224,16 @@ function run_conformance() {
     skip_regex="\[Slow\]|\[Serial\]|\[Disruptive\]|\[Flaky\]|\[Feature:.+\]|\[sig-cli\]|\[sig-storage\]|\[sig-auth\]|\[sig-api-machinery\]|\[sig-apps\]|\[sig-node\]|NodePort"
     ${GIT_CHECKOUT_DIR}/ci/run-k8s-e2e-tests.sh --e2e-conformance --e2e-network-policy --e2e-skip ${skip_regex} \
        --kube-conformance-image-version ${KUBE_CONFORMANCE_IMAGE_VERSION} \
-       --log-mode ${MODE} > ${GIT_CHECKOUT_DIR}/eks-test.log || TEST_FAILURE=true
+       --log-mode ${MODE} > ${GIT_CHECKOUT_DIR}/eks-test.log || TEST_SCRIPT_RC=$?
 
-    if [[ "$TEST_FAILURE" == false ]]; then
+    if [[ $TEST_SCRIPT_RC -eq 0 ]]; then
         echo "All tests passed."
         echo "=== SUCCESS !!! ==="
+    elif [[ $TEST_SCRIPT_RC -eq 1 ]]; then
+        echo "Failed test cases exist."
+        echo "=== FAILURE !!! ==="
     else
-        echo "Failed cases exist."
+        echo "Unexpected error when running tests."
         echo "=== FAILURE !!! ==="
     fi
 
@@ -275,6 +278,6 @@ if [[ "$RUN_ALL" == true || "$RUN_CLEANUP_ONLY" == true ]]; then
     cleanup_cluster
 fi
 
-if [[ "$RUN_CLEANUP_ONLY" == false &&  "$TEST_FAILURE" == true ]]; then
+if [[ "$RUN_CLEANUP_ONLY" == false && $TEST_SCRIPT_RC -ne 0 ]]; then
     exit 1
 fi
