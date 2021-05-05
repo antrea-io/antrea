@@ -48,20 +48,6 @@ func (m *MockOVSCtlClient) EXPECT() *MockOVSCtlClientMockRecorder {
 	return m.recorder
 }
 
-// AddMeterEntry mocks base method
-func (m *MockOVSCtlClient) AddMeterEntry(arg0, arg1 uint32) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AddMeterEntry", arg0, arg1)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// AddMeterEntry indicates an expected call of AddMeterEntry
-func (mr *MockOVSCtlClientMockRecorder) AddMeterEntry(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddMeterEntry", reflect.TypeOf((*MockOVSCtlClient)(nil).AddMeterEntry), arg0, arg1)
-}
-
 // DumpFlows mocks base method
 func (m *MockOVSCtlClient) DumpFlows(arg0 ...string) ([]string, error) {
 	m.ctrl.T.Helper()

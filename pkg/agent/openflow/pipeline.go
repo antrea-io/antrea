@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/contiv/libOpenflow/protocol"
+	"github.com/contiv/ofnet/ofctrl"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 
@@ -2176,6 +2177,19 @@ func policyConjKeyFunc(obj interface{}) (string, error) {
 func priorityIndexFunc(obj interface{}) ([]string, error) {
 	conj := obj.(*policyRuleConjunction)
 	return conj.ActionFlowPriorities(), nil
+}
+
+// genPacketInMeter generates a meter entry with specific meterId and rate.
+// `rate` is represented as number of packets per second.
+// Packets which exceed the rate will be dropped.
+func (c *client) genPacketInMeter(meterID binding.MeterIDType, rate uint32) binding.Meter {
+	meter := c.bridge.CreateMeter(meterID, ofctrl.MeterBurst|ofctrl.MeterPktps).ResetMeterBands()
+	meter = meter.MeterBand().
+		MeterType(ofctrl.MeterDrop).
+		Rate(rate).
+		Burst(2 * rate).
+		Done()
+	return meter
 }
 
 func (c *client) generatePipeline() {

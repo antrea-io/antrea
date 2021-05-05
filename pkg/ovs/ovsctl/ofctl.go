@@ -103,11 +103,6 @@ func (c *ovsCtlClient) DumpGroups() ([]string, error) {
 	return groupList, nil
 }
 
-func (c *ovsCtlClient) AddMeterEntry(meterId uint32, rate uint32) error {
-	_, err := c.RunOfctlCmd("add-meter", fmt.Sprintf("meter=%d,pktps,band=type=drop,rate=%d", meterId, rate))
-	return err
-}
-
 func (c *ovsCtlClient) DumpPortsDesc() ([][]string, error) {
 	portsDescDump, err := c.RunOfctlCmd("dump-ports-desc")
 	if err != nil {

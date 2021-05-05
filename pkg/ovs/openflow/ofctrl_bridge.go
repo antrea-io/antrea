@@ -168,6 +168,27 @@ func (b *OFBridge) DeleteGroup(id GroupIDType) bool {
 	return true
 }
 
+func (b *OFBridge) CreateMeter(id MeterIDType, flags ofctrl.MeterFlag) Meter {
+	ofctrlMeter, err := b.ofSwitch.NewMeter(uint32(id), flags)
+
+	if err != nil {
+		ofctrlMeter = b.ofSwitch.GetMeter(uint32(id))
+	}
+	m := &ofMeter{bridge: b, ofctrl: ofctrlMeter}
+	return m
+}
+
+func (b *OFBridge) DeleteMeter(id MeterIDType) bool {
+	m := b.ofSwitch.GetMeter(uint32(id))
+	if m == nil {
+		return true
+	}
+	if err := m.Delete(); err != nil {
+		return false
+	}
+	return true
+}
+
 func (b *OFBridge) CreateTable(id, next TableIDType, missAction MissActionType) Table {
 	t := newOFTable(id, next, missAction)
 

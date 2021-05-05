@@ -672,10 +672,10 @@ func (c *client) initialize() error {
 	// TODO: remove OS detection after windows OVS support OF meter
 	// Only add meter entry on Linux. Skip add meter entry for Windows OVS for now.
 	if !runtime.IsWindowsPlatform() {
-		if err := c.ovsctlClient.AddMeterEntry(PacketInMeterIdNP, PacketInMeterRateNP); err != nil {
+		if err := c.genPacketInMeter(PacketInMeterIdNP, PacketInMeterRateNP).Add(); err != nil {
 			return fmt.Errorf("failed to install OpenFlow meter entry (meterId:%d, rate:%d) for NetworkPolicy packet-in rate limiting: %v", PacketInMeterIdNP, PacketInMeterRateNP, err)
 		}
-		if err := c.ovsctlClient.AddMeterEntry(PacketInMeterIdTF, PacketInMeterRateTF); err != nil {
+		if err := c.genPacketInMeter(PacketInMeterIdTF, PacketInMeterRateTF).Add(); err != nil {
 			return fmt.Errorf("failed to install OpenFlow meter entry (meterId:%d, rate:%d) for TraceFlow packet-in rate limiting: %v", PacketInMeterIdTF, PacketInMeterRateTF, err)
 		}
 	}

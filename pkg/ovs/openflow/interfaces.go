@@ -24,6 +24,7 @@ import (
 type Protocol string
 type TableIDType uint8
 type GroupIDType uint32
+type MeterIDType uint32
 
 type MissActionType uint32
 type Range [2]uint32
@@ -87,6 +88,8 @@ type Bridge interface {
 	DeleteTable(id TableIDType) bool
 	CreateGroup(id GroupIDType) Group
 	DeleteGroup(id GroupIDType) bool
+	CreateMeter(id MeterIDType, flags ofctrl.MeterFlag) Meter
+	DeleteMeter(id MeterIDType) bool
 	DumpTableStatus() []TableStatus
 	// DumpFlows queries the Openflow entries from OFSwitch. The filter of the query is Openflow cookieID; the result is
 	// a map from flow cookieID to FlowStates.
@@ -141,6 +144,7 @@ type EntryType string
 const (
 	FlowEntry  EntryType = "FlowEntry"
 	GroupEntry EntryType = "GroupEntry"
+	MeterEntry EntryType = "MeterEntry"
 )
 
 type OFEntry interface {
@@ -301,6 +305,21 @@ type BucketBuilder interface {
 	LoadRegRange(regID int, data uint32, rng Range) BucketBuilder
 	ResubmitToTable(tableID TableIDType) BucketBuilder
 	Done() Group
+}
+
+type Meter interface {
+	OFEntry
+	ResetMeterBands() Meter
+	MeterBand() MeterBandBuilder
+}
+
+type MeterBandBuilder interface {
+	MeterType(meterType ofctrl.MeterType) MeterBandBuilder
+	Rate(rate uint32) MeterBandBuilder
+	Burst(burst uint32) MeterBandBuilder
+	PrecLevel(precLevel uint8) MeterBandBuilder
+	Experimenter(experimenter uint32) MeterBandBuilder
+	Done() Meter
 }
 
 type CTAction interface {
