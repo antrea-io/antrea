@@ -433,29 +433,31 @@ function run_e2e {
     export PATH=$GOROOT/bin:$PATH
     export KUBECONFIG=$GIT_CHECKOUT_DIR/jenkins/out/kubeconfig
 
-    mkdir -p $GIT_CHECKOUT_DIR/test/e2e/infra/vagrant/playbook/kube
-    cp -f $GIT_CHECKOUT_DIR/jenkins/out/kubeconfig $GIT_CHECKOUT_DIR/test/e2e/infra/vagrant/playbook/kube/config
+    mkdir -p "${WORKDIR}/.kube"
+    cp -f "${GIT_CHECKOUT_DIR}/jenkins/out/kubeconfig" "${WORKDIR}/.kube/config"
 
     echo "=== Generate ssh-config ==="
-    cp -f $GIT_CHECKOUT_DIR/ci/jenkins/ssh-config $GIT_CHECKOUT_DIR/test/e2e/infra/vagrant/ssh-config
+    mkdir -p "${WORKDIR}/.ssh"
+    SSHCONFIGPATH="${WORKDIR}/.ssh/config"
+    cp -f "${GIT_CHECKOUT_DIR}/ci/jenkins/ssh-config" "${SSHCONFIGPATH}"
     control_plane_name="$(kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 == role {print $1}')"
     control_plane_ip="$(kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 == role {print $6}')"
     echo "=== Control-plane Node ip: ${control_plane_ip} ==="
-    sed -i "s/CONTROLPLANENODEIP/${control_plane_ip}/g" $GIT_CHECKOUT_DIR/test/e2e/infra/vagrant/ssh-config
+    sed -i "s/CONTROLPLANENODEIP/${control_plane_ip}/g" "${SSHCONFIGPATH}"
     echo "=== Move kubeconfig to control-plane Node ==="
     ${SSH_WITH_ANTREA_CI_KEY} -n capv@${control_plane_ip} "if [ ! -d ".kube" ]; then mkdir .kube; fi"
-    ${SCP_WITH_ANTREA_CI_KEY} $GIT_CHECKOUT_DIR/jenkins/out/kubeconfig capv@${control_plane_ip}:~/.kube/config
-    sed -i "s/CONTROLPLANENODE/${control_plane_name}/g" $GIT_CHECKOUT_DIR/test/e2e/infra/vagrant/ssh-config
-    echo "    IdentityFile ${GIT_CHECKOUT_DIR}/jenkins/key/antrea-ci-key" >> $GIT_CHECKOUT_DIR/test/e2e/infra/vagrant/ssh-config
+    ${SCP_WITH_ANTREA_CI_KEY} "${GIT_CHECKOUT_DIR}/jenkins/out/kubeconfig" capv@${control_plane_ip}:~/.kube/config
+    sed -i "s/CONTROLPLANENODE/${control_plane_name}/g" "${SSHCONFIGPATH}"
+    echo "    IdentityFile ${GIT_CHECKOUT_DIR}/jenkins/key/antrea-ci-key" >> "${SSHCONFIGPATH}"
 
     set +e
     mkdir -p ${GIT_CHECKOUT_DIR}/antrea-test-logs
     if [[ "$COVERAGE" == true ]]; then
         rm -rf ${GIT_CHECKOUT_DIR}/e2e-coverage
         mkdir -p ${GIT_CHECKOUT_DIR}/e2e-coverage
-        go test -v -timeout=100m github.com/vmware-tanzu/antrea/test/e2e --logs-export-dir ${GIT_CHECKOUT_DIR}/antrea-test-logs --prometheus --coverage --coverage-dir ${GIT_CHECKOUT_DIR}/e2e-coverage
+        go test -v -timeout=100m github.com/vmware-tanzu/antrea/test/e2e --logs-export-dir ${GIT_CHECKOUT_DIR}/antrea-test-logs --provider remote --prometheus --coverage --coverage-dir ${GIT_CHECKOUT_DIR}/e2e-coverage
     else
-        go test -v -timeout=100m github.com/vmware-tanzu/antrea/test/e2e --logs-export-dir ${GIT_CHECKOUT_DIR}/antrea-test-logs --prometheus
+        go test -v -timeout=100m github.com/vmware-tanzu/antrea/test/e2e --logs-export-dir ${GIT_CHECKOUT_DIR}/antrea-test-logs --provider remote --prometheus
     fi
 
     test_rc=$?

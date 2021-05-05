@@ -2006,7 +2006,7 @@ func runTestTraceflow(t *testing.T, data *TestData, tc testcase) {
 		// Give a little time for Nodes to install OVS flows.
 		time.Sleep(time.Second * 2)
 		// Send an ICMP echo packet from the source Pod to the destination.
-		if err := data.runPingCommandFromTestPod(srcPod, dstPodIPs, 2, 0, false); err != nil {
+		if err := data.runPingCommandFromTestPod(srcPod, dstPodIPs, busyboxContainerName, 2, 0, false); err != nil {
 			t.Logf("Ping '%s' -> '%v' failed: ERROR (%v)", srcPod, *dstPodIPs, err)
 		}
 	}

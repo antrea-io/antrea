@@ -368,9 +368,10 @@ function run_e2e {
     export PATH=$GOROOT/bin:$PATH
     export KUBECONFIG=$KUBECONFIG_PATH
 
-    mkdir -p test/e2e/infra/vagrant/playbook/kube
-    cp -f "${WORKDIR}/kube.conf" test/e2e/infra/vagrant/playbook/kube/config
-    cp -f "${WORKDIR}/ssh-config" test/e2e/infra/vagrant/ssh-config
+    mkdir -p "${WORKDIR}/.kube"
+    mkdir -p "${WORKDIR}/.ssh"
+    cp -f "${WORKDIR}/kube.conf" "${WORKDIR}/.kube/config"
+    cp -f "${WORKDIR}/ssh-config" "${WORKDIR}/.ssh/config"
 
     set +e
     mkdir -p `pwd`/antrea-test-logs
@@ -425,13 +426,14 @@ function run_e2e_windows {
     clean_for_windows_install_cni
     wait_for_antrea_windows_pods_ready
 
-    mkdir -p test/e2e/infra/vagrant/playbook/kube
-    cp -f "${WORKDIR}/kube.conf" test/e2e/infra/vagrant/playbook/kube/config
-    cp -f "${WORKDIR}/ssh-config" test/e2e/infra/vagrant/ssh-config
+    mkdir -p "${WORKDIR}/.kube"
+    mkdir -p "${WORKDIR}/.ssh"
+    cp -f "${WORKDIR}/kube.conf" "${WORKDIR}/.kube/config"
+    cp -f "${WORKDIR}/ssh-config" "${WORKDIR}/.ssh/config"
 
     set +e
     mkdir -p `pwd`/antrea-test-logs
-    go test -v github.com/vmware-tanzu/antrea/test/e2e --logs-export-dir `pwd`/antrea-test-logs -timeout=50m --prometheus
+    go test -v github.com/vmware-tanzu/antrea/test/e2e --logs-export-dir `pwd`/antrea-test-logs --provider remote -timeout=50m --prometheus
     if [[ "$?" != "0" ]]; then
         TEST_FAILURE=true
     fi

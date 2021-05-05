@@ -71,6 +71,7 @@ const (
 	antreaDefaultGW            string = "antrea-gw0"
 	testNamespace              string = "antrea-test"
 	busyboxContainerName       string = "busybox"
+	agnhostContainerName       string = "agnhost"
 	controllerContainerName    string = "antrea-controller"
 	ovsContainerName           string = "antrea-ovs"
 	agentContainerName         string = "antrea-agent"
@@ -96,7 +97,7 @@ const (
 
 	nameSuffixLength int = 8
 
-	agnhostImage        = "gcr.io/kubernetes-e2e-test-images/agnhost:2.8"
+	agnhostImage        = "projects.registry.vmware.com/antrea/agnhost:2.26"
 	busyboxImage        = "projects.registry.vmware.com/library/busybox"
 	busyboxWindowsImage = "projects.registry.vmware.com/antrea/e2eteam-busybox:1.29-windows-amd64-1809"
 	nginxImage          = "projects.registry.vmware.com/antrea/nginx"
@@ -175,12 +176,12 @@ type PodIPs struct {
 func (p PodIPs) String() string {
 	res := ""
 	if p.ipv4 != nil {
-		res += fmt.Sprintf("IPv4: %s, ", p.ipv4.String())
+		res += fmt.Sprintf("IPv4(%s),", p.ipv4.String())
 	}
 	if p.ipv6 != nil {
-		res += fmt.Sprintf("IPv6: %s, ", p.ipv6.String())
+		res += fmt.Sprintf("IPv6(%s),", p.ipv6.String())
 	}
-	return fmt.Sprintf("%sIP strings: %s", res, strings.Join(p.ipStrings, ", "))
+	return fmt.Sprintf("%sIPstrings(%s)", res, strings.Join(p.ipStrings, ","))
 }
 
 func (p *PodIPs) hasSameIP(p1 *PodIPs) bool {
@@ -1545,7 +1546,7 @@ func parseArpingStdout(out string) (sent uint32, received uint32, loss float32, 
 	return sent, received, loss, nil
 }
 
-func (data *TestData) runPingCommandFromTestPod(podName string, targetPodIPs *PodIPs, count int, size int, isWindows bool) error {
+func (data *TestData) runPingCommandFromTestPod(podName string, targetPodIPs *PodIPs, ctrName string, count int, size int, isWindows bool) error {
 	countOption, sizeOption := "-c", "-s"
 	if isWindows {
 		// Options used in Windows e2eteam-busybox are different from Linux busybox.
@@ -1558,13 +1559,13 @@ func (data *TestData) runPingCommandFromTestPod(podName string, targetPodIPs *Po
 	}
 	if targetPodIPs.ipv4 != nil {
 		cmd = append(cmd, targetPodIPs.ipv4.String())
-		if stdout, stderr, err := data.runCommandFromPod(testNamespace, podName, busyboxContainerName, cmd); err != nil {
+		if stdout, stderr, err := data.runCommandFromPod(testNamespace, podName, ctrName, cmd); err != nil {
 			return fmt.Errorf("error when running ping command: %v - stdout: %s - stderr: %s", err, stdout, stderr)
 		}
 	}
 	if targetPodIPs.ipv6 != nil {
 		cmd = append(cmd, "-6", targetPodIPs.ipv6.String())
-		if stdout, stderr, err := data.runCommandFromPod(testNamespace, podName, busyboxContainerName, cmd); err != nil {
+		if stdout, stderr, err := data.runCommandFromPod(testNamespace, podName, ctrName, cmd); err != nil {
 			return fmt.Errorf("error when running ping command: %v - stdout: %s - stderr: %s", err, stdout, stderr)
 		}
 	}
@@ -1954,3 +1955,97 @@ func (data *TestData) copyNodeFiles(nodeName string, fileName string, covDir str
 	w.WriteString(stdout)
 	return nil
 }
+
+func (data *TestData) createDaemonSet(name string, ns string, ctrName string, image string, cmd []string, args []string) (*appsv1.DaemonSet, func() error, error) {
+	podSpec := corev1.PodSpec{
+		Tolerations: []corev1.Toleration{
+			{Key: "node-role.kubernetes.io/master", Effect: "NoSchedule"},
+		},
+		Containers: []corev1.Container{
+			{
+				Name:            ctrName,
+				Image:           image,
+				ImagePullPolicy: corev1.PullIfNotPresent,
+				Command:         cmd,
+				Args:            args,
+			},
+		},
+	}
+	dsSpec := appsv1.DaemonSetSpec{
+		Selector: &metav1.LabelSelector{
+			MatchLabels: map[string]string{
+				"antrea-e2e": name,
+			},
+		},
+		Template: corev1.PodTemplateSpec{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: name,
+				Labels: map[string]string{
+					"antrea-e2e": name,
+				},
+			},
+			Spec: podSpec,
+		},
+		UpdateStrategy:       appsv1.DaemonSetUpdateStrategy{},
+		MinReadySeconds:      0,
+		RevisionHistoryLimit: nil,
+	}
+	ds := &appsv1.DaemonSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+			Labels: map[string]string{
+				"antrea-e2e": name,
+			},
+		},
+		Spec: dsSpec,
+	}
+
+	resDS, err := data.clientset.AppsV1().DaemonSets(ns).Create(context.TODO(), ds, metav1.CreateOptions{})
+	if err != nil {
+		return nil, nil, err
+	}
+	cleanup := func() error {
+		if err := data.clientset.AppsV1().DaemonSets(ns).Delete(context.TODO(), name, metav1.DeleteOptions{}); err != nil {
+			return err
+		}
+		return nil
+	}
+
+	return resDS, cleanup, nil
+}
+
+func (data *TestData) waitForDaemonSetPods(timeout time.Duration, dsName string, namespace string) error {
+	err := wait.Poll(defaultInterval, timeout, func() (bool, error) {
+		if ds, err := data.clientset.AppsV1().DaemonSets(namespace).Get(context.TODO(), dsName, metav1.GetOptions{}); err != nil {
+			return false, err
+		} else {
+			if ds.Status.NumberReady != int32(clusterInfo.numNodes) {
+				return false, nil
+			}
+			return true, nil
+		}
+	})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+//func (data *TestData) daemonSetPodsWaitForIPs(timeout time.Duration, dsName string, namespace string) error {
+//	listOptions := metav1.ListOptions{
+//		LabelSelector: fmt.Sprintf("antrea-e2e=%s", dsName),
+//	}
+//	pl, err := data.clientset.CoreV1().Pods(testNamespace).List(context.TODO(), listOptions)
+//	if err != nil {
+//		return err
+//	}
+//	if len(pl.Items) != clusterInfo.numNodes {
+//		return fmt.Errorf("number of Pods from DaemonSet '%s' is not equal to number of Nodes", dsName)
+//	}
+//	for _, p := range pl.Items {
+//		if _, err := data.podWaitForIPs(timeout, p.Name, namespace); err != nil {
+//			return err
+//		}
+//	}
+//	return nil
+//}

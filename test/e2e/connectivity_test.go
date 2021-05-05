@@ -15,6 +15,7 @@
 package e2e
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"strings"
@@ -23,6 +24,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 )
@@ -54,7 +56,7 @@ func (data *TestData) runPingMesh(t *testing.T, podNames []string, isWindows []b
 			if podName1 == podName2 {
 				continue
 			}
-			if err := data.runPingCommandFromTestPod(podName1, podIPs[podName2], pingCount, 0, isWindows[i]); err != nil {
+			if err := data.runPingCommandFromTestPod(podName1, podIPs[podName2], agnhostContainerName, pingCount, 0, isWindows[i]); err != nil {
 				t.Errorf("Ping '%s' -> '%s': ERROR (%v)", podName1, podName2, err)
 			} else {
 				t.Logf("Ping '%s' -> '%s': OK", podName1, podName2)
@@ -145,53 +147,63 @@ func TestHostPortPodConnectivity(t *testing.T) {
 	data.testHostPortPodConnectivity(t)
 }
 
-// createPodsOnDifferentNodes creates numPods busybox test Pods and assign them to Nodes in the following fashion. If there
-// are any Windows Nodes, at least involve one. Then if there're > 1 Windows Nodes, involve another Windows one. Then
-// involve one Linux Node. Finally, involve the remaining Pods in the round-robin fashion. This function returns the names
-// of the created Pods as well as a function which will delete the Pods when called.
-func createPodsOnDifferentNodes(t *testing.T, data *TestData, numPods int) (podNames []string, isWindows []bool, cleanup func()) {
-	podNames = make([]string, 0, numPods)
-
-	cleanup = func() {
-		for _, podName := range podNames {
-			deletePodWrapper(t, data, podName)
-		}
+// createPodsOnDifferentNodes creates numPods agnhost test Pods and assign them to Nodes in the following fashion. This
+// function returns the names of the created Pods as well as a function which will delete the Pods when called.
+func createPodsOnDifferentNodes(t *testing.T, data *TestData, numPods int) (podNames []string, isWindows []bool, cleanup func() error) {
+	dsName := "connectivity-test"
+	_, cleanup, err := data.createDaemonSet(dsName, testNamespace, agnhostContainerName, agnhostImage, []string{"sleep", "3600"}, nil)
+	if err != nil {
+		t.Fatalf("Error when creating DaemonSet '%s': %v", dsName, err)
+	}
+	if err := data.waitForDaemonSetPods(defaultTimeout, dsName, testNamespace); err != nil {
+		t.Fatalf("Error when waiting for DaemonSet Pods to get IPs: %v", err)
 	}
 
-	involvedNodes := make(map[int]bool)
+	podNames = make([]string, 0, numPods)
+	for idx := range choosePodsOnDifferentNodes(numPods) {
+		nodeName := clusterInfo.nodes[idx].name
+		pods, err := data.clientset.CoreV1().Pods(testNamespace).List(context.TODO(), metav1.ListOptions{
+			FieldSelector: "spec.nodeName=" + nodeName,
+			LabelSelector: fmt.Sprintf("antrea-e2e=%s", dsName),
+		})
+		if err != nil {
+			t.Fatalf("Error when getting connectivity test Pod on Node '%s': %v", nodeName, err)
+		}
+		if len(pods.Items) != 1 {
+			t.Fatalf("Error that connectivity test Pod on Node '%s' is not 1: %v", nodeName, err)
+		}
+		podNames = append(podNames, pods.Items[0].Name)
+		isWindows = append(isWindows, clusterInfo.windowsNodes[nodeName])
+	}
+	return podNames, isWindows, cleanup
+}
+
+// choosePodsOnDifferentNodes chooses the Nodes to test connectivity according to Pod number. If there are any Windows Nodes,
+// at least involve one. Then if there're > 1 Windows Nodes, involve another Windows one. Then involve one Linux Node.
+// Finally, involve the remaining Pods in the round-robin fashion.
+func choosePodsOnDifferentNodes(numPods int) map[int]bool {
+	nodes := make(map[int]bool)
 	if len(clusterInfo.windowsNodes) > 0 && numPods > 1 {
-		involvedNodes[clusterInfo.windowsNodeIndexes[0]] = true
+		nodes[clusterInfo.windowsNodeIndexes[0]] = true
 		if len(clusterInfo.windowsNodes) > 1 {
-			involvedNodes[clusterInfo.windowsNodeIndexes[1]] = true
+			nodes[clusterInfo.windowsNodeIndexes[1]] = true
 		}
 		if clusterInfo.numNodes-len(clusterInfo.windowsNodes) > 0 {
 			for idx, n := range clusterInfo.nodes {
 				if n.os == "linux" {
-					involvedNodes[idx] = true
+					nodes[idx] = true
 					break
 				}
 			}
 		}
 	}
-	for idx := 0; len(involvedNodes) < numPods; idx++ {
+	for idx := 0; len(nodes) < numPods; idx++ {
 		i := idx % clusterInfo.numNodes
-		if !involvedNodes[i] {
-			involvedNodes[i] = true
+		if !nodes[i] {
+			nodes[i] = true
 		}
 	}
-
-	for idx := range involvedNodes {
-		podName := randName(fmt.Sprintf("test-pod-%d-", idx))
-		nodeName := nodeName(idx)
-		isWindows = append(isWindows, clusterInfo.windowsNodes[nodeName])
-		t.Logf("Creating busybox test Pods '%s' on '%s'", podName, nodeName)
-		if err := data.createBusyboxPodOnNode(podName, nodeName); err != nil {
-			cleanup()
-			t.Fatalf("Error when creating busybox test Pod '%s': %v", podName, err)
-		}
-		podNames = append(podNames, podName)
-	}
-	return podNames, isWindows, cleanup
+	return nodes
 }
 
 func (data *TestData) testPodConnectivityDifferentNodes(t *testing.T) {
@@ -486,7 +498,7 @@ func TestPingLargeMTU(t *testing.T) {
 
 	pingSize := 2000
 	t.Logf("Running ping with size %d between Pods %s and %s", pingSize, podNames[0], podNames[1])
-	if err := data.runPingCommandFromTestPod(podNames[0], podIPs[podNames[1]], pingCount, pingSize, isWindows[0]); err != nil {
+	if err := data.runPingCommandFromTestPod(podNames[0], podIPs[podNames[1]], agnhostContainerName, pingCount, pingSize, isWindows[0]); err != nil {
 		t.Error(err)
 	}
 }
