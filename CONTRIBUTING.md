@@ -5,21 +5,23 @@ Thank you for taking the time out to contribute to project Antrea!
 This guide will walk you through the process of making your first commit and how
 to effectively get it merged upstream.
 
-- [Developer Guide](#developer-guide)
-  - [Getting Started](#getting-started)
-    - [CLA](#cla)
-    - [Accounts Setup](#accounts-setup)
-  - [Contribute](#contribute)
-    - [GitHub Workflow](#github-workflow)
-    - [Getting reviewers](#getting-reviewers)
-    - [Inclusive Naming](#inclusive-naming)
-    - [Building and testing your change](#building-and-testing-your-change)
-    - [CI testing](#ci-testing)
-    - [Reverting a commit](#reverting-a-commit)
-  - [Issue and PR Management](#issue-and-pr-management)
-    - [Filing An Issue](#filing-an-issue)
-    - [Issue Triage](#issue-triage)
-    - [Issue and PR Kinds](#issue-and-pr-kinds)
+<!-- toc -->
+- [Getting Started](#getting-started)
+  - [CLA](#cla)
+  - [Accounts Setup](#accounts-setup)
+- [Contribute](#contribute)
+  - [GitHub Workflow](#github-workflow)
+  - [Getting reviewers](#getting-reviewers)
+  - [Cherry-picks to release branches](#cherry-picks-to-release-branches)
+  - [Inclusive Naming](#inclusive-naming)
+  - [Building and testing your change](#building-and-testing-your-change)
+  - [CI testing](#ci-testing)
+  - [Reverting a commit](#reverting-a-commit)
+- [Issue and PR Management](#issue-and-pr-management)
+  - [Filing An Issue](#filing-an-issue)
+  - [Issue Triage](#issue-triage)
+  - [Issue and PR Kinds](#issue-and-pr-kinds)
+<!-- /toc -->
 
 ## Getting Started
 
