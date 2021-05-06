@@ -176,15 +176,6 @@ func (i *Initializer) prepareOVSBridge() error {
 		klog.Errorf("Failed to set the uplink port with no-flood config: %v", err)
 		return err
 	}
-
-	// If noencap/hybrid mode, br-int needs enabling IP forwarding for return traffic.
-	if i.networkConfig.TrafficEncapMode == config.TrafficEncapModeNoEncap ||
-		i.networkConfig.TrafficEncapMode == config.TrafficEncapModeHybrid {
-		if err := util.EnableIPForwarding(brName); err != nil {
-			return fmt.Errorf("failed to enable IP forwarding on interface %s: %v", brName, err)
-		}
-	}
-
 	return nil
 }
 

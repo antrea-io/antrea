@@ -29,6 +29,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/agent/types"
 	"github.com/vmware-tanzu/antrea/pkg/agent/util"
 	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
+	"github.com/vmware-tanzu/antrea/pkg/util/runtime"
 	"github.com/vmware-tanzu/antrea/third_party/proxy"
 )
 
@@ -594,6 +595,14 @@ func (c *client) InstallGatewayFlows() error {
 	// In NoEncap , no traffic from tunnel port
 	if c.encapMode.SupportsEncap() {
 		flows = append(flows, c.l3FwdFlowToGateway(gatewayIPs, gatewayConfig.MAC, cookie.Default)...)
+	}
+	if runtime.IsWindowsPlatform() && c.encapMode.SupportsNoEncap() {
+		if gatewayConfig.IPv4 != nil {
+			flows = append(flows, c.l3FwdFlowRouteToWindowsGW(gatewayConfig.MAC, gatewayConfig.IPv4, cookie.Default)...)
+		}
+		if gatewayConfig.IPv6 != nil {
+			flows = append(flows, c.l3FwdFlowRouteToWindowsGW(gatewayConfig.MAC, gatewayConfig.IPv6, cookie.Default)...)
+		}
 	}
 
 	if err := c.ofEntryOperations.AddAll(flows); err != nil {

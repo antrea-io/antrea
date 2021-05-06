@@ -2052,3 +2052,17 @@ func NewClient(bridgeName, mgmtAddr string, ovsDatapathType ovsconfig.OVSDatapat
 	c.generatePipeline()
 	return c
 }
+
+// l3FwdFlowRouteToWindowsGW adds a flow table to forward traffic to antrea-gw0 on Windows in NoEncap mode. It is for Windows.
+func (c *client) l3FwdFlowRouteToWindowsGW(localGatewayMAC net.HardwareAddr, localGatewayIP net.IP, category cookie.Category) []binding.Flow {
+	flows := []binding.Flow{
+		c.pipeline[l3ForwardingTable].BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
+			MatchRegRange(int(marksReg), macRewriteMark, macRewriteMarkRange).
+			MatchDstIP(localGatewayIP).
+			Action().SetDstMAC(localGatewayMAC).
+			Action().GotoTable(l3DecTTLTable).
+			Cookie(c.cookieAllocator.Request(category).Raw()).
+			Done(),
+	}
+	return flows
+}
