@@ -14,6 +14,12 @@ of how they use it.
 
 **[Glasnostic](https://glasnostic.com)**
 
+Glasnostic makes modern cloud operations resilient. It does this by shaping how
+systems interact, automatically and in real-time. As a result, DevOps and SRE
+teams can deploy reliably, prevent failure and assure the customer experience.
+We use Antrea's Open vSwitch support to tune how services interact in Kubernetes
+clusters. We are @glasnostic on Twitter.
+
 **[Infrabuilder](https://infrabuilder.com)**
 
 ## Adding yourself as an Adopter
