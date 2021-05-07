@@ -292,5 +292,6 @@ func TestClusterGroup(t *testing.T) {
 		t.Run("Case=ChildGroupExceedMaxNestedLevel", func(t *testing.T) { testInvalidCGMaxNestedLevel(t) })
 		cleanupChildCGForTest(t)
 	})
-	failOnError(k8sUtils.CleanCGs(), t)
+
+	k8sUtils.Cleanup(namespaces) // clean up all cluster-scope resources, including CGs
 }
