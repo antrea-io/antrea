@@ -164,9 +164,9 @@ function collect_windows_network_info_and_logs {
 }
 
 function wait_for_antrea_windows_pods_ready {
-    kubectl apply -f "${WORKDIR}/build/yamls/antrea.yml"
+    kubectl apply -f "${WORKDIR}/antrea.yml"
     kubectl apply -f "${WORKDIR}/kube-proxy-windows.yml"
-    kubectl apply -f "${WORKDIR}/build/yamls/antrea-windows.yml"
+    kubectl apply -f "${WORKDIR}/antrea-windows.yml"
     kubectl rollout restart deployment/coredns -n kube-system
     kubectl rollout status deployment/coredns -n kube-system
     kubectl rollout status deployment.apps/antrea-controller -n kube-system

@@ -47,7 +47,7 @@ func waitForPodIPs(t *testing.T, data *TestData, podNames []string) map[string]*
 
 // runPingMesh runs a ping mesh between all the provided Pods after first retrieving their IP
 // addresses.
-func (data *TestData) runPingMesh(t *testing.T, podNames []string, isWindows []bool) {
+func (data *TestData) runPingMesh(t *testing.T, podNames []string, ctrname string, isWindows []bool) {
 	podIPs := waitForPodIPs(t, data, podNames)
 
 	t.Logf("Ping mesh test between all Pods")
@@ -56,7 +56,7 @@ func (data *TestData) runPingMesh(t *testing.T, podNames []string, isWindows []b
 			if podName1 == podName2 {
 				continue
 			}
-			if err := data.runPingCommandFromTestPod(podName1, podIPs[podName2], agnhostContainerName, pingCount, 0, isWindows[i]); err != nil {
+			if err := data.runPingCommandFromTestPod(podName1, podIPs[podName2], ctrname, pingCount, 0, isWindows[i]); err != nil {
 				t.Errorf("Ping '%s' -> '%s': ERROR (%v)", podName1, podName2, err)
 			} else {
 				t.Logf("Ping '%s' -> '%s': OK", podName1, podName2)
@@ -78,17 +78,17 @@ func (data *TestData) testPodConnectivitySameNode(t *testing.T) {
 	}
 	workerNode := workerNodeName(i)
 
-	t.Logf("Creating %d busybox test Pods on '%s'", numPods, workerNode)
+	t.Logf("Creating %d agnhost test Pods on '%s'", numPods, workerNode)
 	var isWindows []bool
 	for _, podName := range podNames {
 		isWindows = append(isWindows, clusterInfo.windowsNodes[workerNode])
-		if err := data.createBusyboxPodOnNode(podName, workerNode); err != nil {
-			t.Fatalf("Error when creating busybox test Pod '%s': %v", podName, err)
+		if err := data.createAgnhostPodOnNode(podName, workerNode); err != nil {
+			t.Fatalf("Error when creating agnhost test Pod '%s': %v", podName, err)
 		}
 		defer deletePodWrapper(t, data, podName)
 	}
 
-	data.runPingMesh(t, podNames, isWindows)
+	data.runPingMesh(t, podNames, agnhostContainerName, isWindows)
 }
 
 // TestPodConnectivitySameNode checks that Pods running on the same Node can reach each other, by
@@ -164,7 +164,7 @@ func createPodsOnDifferentNodes(t *testing.T, data *TestData, numPods int) (podN
 		nodeName := clusterInfo.nodes[idx].name
 		pods, err := data.clientset.CoreV1().Pods(testNamespace).List(context.TODO(), metav1.ListOptions{
 			FieldSelector: "spec.nodeName=" + nodeName,
-			LabelSelector: fmt.Sprintf("antrea-e2e=%s", dsName),
+			LabelSelector: "antrea-e2e=" + dsName,
 		})
 		if err != nil {
 			t.Fatalf("Error when getting connectivity test Pod on Node '%s': %v", nodeName, err)
@@ -226,7 +226,7 @@ func (data *TestData) testPodConnectivityDifferentNodes(t *testing.T) {
 	podNames, isWindows, deletePods := createPodsOnDifferentNodes(t, data, numPods)
 	defer deletePods()
 
-	data.runPingMesh(t, podNames, isWindows)
+	data.runPingMesh(t, podNames, agnhostContainerName, isWindows)
 }
 
 // TestPodConnectivityDifferentNodes checks that Pods running on different Nodes can reach each
@@ -309,11 +309,11 @@ func TestPodConnectivityAfterAntreaRestart(t *testing.T) {
 	podNames, isWindows, deletePods := createPodsOnDifferentNodes(t, data, numPods)
 	defer deletePods()
 
-	data.runPingMesh(t, podNames, isWindows)
+	data.runPingMesh(t, podNames, agnhostContainerName, isWindows)
 
 	data.redeployAntrea(t, false)
 
-	data.runPingMesh(t, podNames, isWindows)
+	data.runPingMesh(t, podNames, agnhostContainerName, isWindows)
 }
 
 // TestOVSRestartSameNode verifies that datapath flows are not removed when the Antrea Agent Pod is
@@ -417,7 +417,7 @@ func TestOVSFlowReplay(t *testing.T) {
 		defer deletePodWrapper(t, data, podName)
 	}
 
-	data.runPingMesh(t, podNames, isWindows)
+	data.runPingMesh(t, podNames, busyboxContainerName, isWindows)
 
 	var antreaPodName string
 	if antreaPodName, err = data.getAntreaPodOnNode(workerNode); err != nil {
@@ -472,7 +472,7 @@ func TestOVSFlowReplay(t *testing.T) {
 	// This should give Antrea ~10s to restore flows, since we generate 10 "pings" with a 1s
 	// interval.
 	t.Logf("Running second ping mesh to check that flows have been restored")
-	data.runPingMesh(t, podNames, isWindows)
+	data.runPingMesh(t, podNames, busyboxContainerName, isWindows)
 
 	numFlows2, numGroups2 := countFlows(), countGroups()
 	assert.Equal(t, numFlows1, numFlows2, "Mismatch in OVS flow count after flow replay")
@@ -484,7 +484,6 @@ func TestOVSFlowReplay(t *testing.T) {
 // and this test was failing when Antrea was running on a Kind cluster.
 func TestPingLargeMTU(t *testing.T) {
 	skipIfNumNodesLessThan(t, 2)
-	skipIfHasWindowsNodes(t)
 
 	data, err := setupTest(t)
 	if err != nil {

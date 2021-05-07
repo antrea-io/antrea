@@ -246,6 +246,7 @@ func testLegacyInvalidCGMaxNestedLevel(t *testing.T) {
 
 func TestLegacyClusterGroup(t *testing.T) {
 	skipIfProviderIs(t, "kind", "This test is for legacy API groups and is almost the same as new API groups'.")
+	skipIfHasWindowsNodes(t)
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
