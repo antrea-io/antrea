@@ -33,7 +33,8 @@ add your success story and logo.
 your web site like this: `**[Example](https://example.com)**`
 
 3. Below your name, describe your organization or yourself and how you make
-use of Antrea. Optionally, list the features of Antrea you are using.
+use of Antrea. Optionally, list the features of Antrea you are using. Please
+keep the line width at 80 characters maximum, and avoid trailing spaces.
 
 4. If you are willing to share contact details, e.g. your Twitter handle, etc.
 add a line where people can find you.
