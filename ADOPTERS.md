@@ -3,9 +3,6 @@
 <a href="http://glasnostic.com" border="0" target="_blank">
 <img alt="glasnostic.com" src="docs/assets/adopters/glasnostic-logo.png"
 height="50"></a>&nbsp; &nbsp; &nbsp;
-<a href="http://infrabuilder.com" border="0" target="_blank">
-<img alt="infrabuilder.com" src="docs/assets/adopters/infrabuilder-logo.png"
-height="50"></a>&nbsp; &nbsp; &nbsp;
 
 ## Success Stories
 
@@ -19,8 +16,6 @@ systems interact, automatically and in real-time. As a result, DevOps and SRE
 teams can deploy reliably, prevent failure and assure the customer experience.
 We use Antrea's Open vSwitch support to tune how services interact in Kubernetes
 clusters. We are @glasnostic on Twitter.
-
-**[Infrabuilder](https://infrabuilder.com)**
 
 ## Adding yourself as an Adopter
 
