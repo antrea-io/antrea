@@ -79,6 +79,7 @@ The labels in this list originated within Kubernetes at
 | area/transit/routing               | Issues or PRs related to routing and forwarding | Any |
 | kind/api-change                    | Categorizes issue or PR as related to adding, removing, or otherwise changing an API. | Any |
 | kind/bug                           | Categorizes issue or PR as related to a bug.              | Any                |
+| kind/cherry-pick                   | Categorizes issue or PR as related to the cherry-pick of a bug fix from the main branch to a release branch | Any |
 | kind/cleanup                       | Categorizes issue or PR as related to cleaning up code, process, or technical debt | Any |
 | kind/deprecation                   | Categorizes issue or PR as related to feature marked for deprecation | Any |
 | kind/design                        | Categorizes issue or PR as related to design | Any |

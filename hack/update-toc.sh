@@ -46,3 +46,4 @@ cd "${ROOT}"
 
 # Update tables of contents if necessary.
 find docs -name '*.md' | grep -Fxvf hack/.notableofcontents | xargs mdtoc --inplace
+mdtoc --inplace CONTRIBUTING.md
