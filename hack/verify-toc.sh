@@ -47,3 +47,4 @@ cd "${ROOT}"
 echo "Checking table of contents are up to date..."
 # Verify tables of contents are up-to-date
 find docs -name '*.md' | grep -Fxvf hack/.notableofcontents | xargs mdtoc --inplace --dryrun
+mdtoc --inplace --dryrun CONTRIBUTING.md
