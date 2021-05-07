@@ -48,16 +48,6 @@ function copy_markdowns_to_docs_main {
       rm -f ${doc}.bak
   done
 
-  # For some reason (list formatting I think), jekyll / redcarpet does not like
-  # the "toc" comments
-  printf "Fixing up HTML comments\n"
-  for doc in $(find "$PWD" -type f -name "*.md"); do
-      sed -i.bak '/<!-- toc -->/d' ${doc}
-      rm -f ${doc}.bak
-      sed -i.bak '/<!-- \/toc -->/d' ${doc}
-      rm -f ${doc}.bak
-  done
-
   printf "Removing absolute links to non-docs\n"
   for doc in $(find "$PWD" -type f -name "*.md"); do
       sed -i.bak 's/\[\(.*\)\](\/\(.*\))/\1 (`\/\2`)/' ${doc}
@@ -94,6 +84,16 @@ done
 printf "Changing links to LICENSE file\n"
 for doc in $(find "$PWD" -type f -name "*.md"); do
     sed -i.bak 's/\[\(.*\)\](LICENSE)/[\1](https:\/\/raw.githubusercontent.com\/vmware-tanzu\/antrea\/master\/LICENSE)/' ${doc}
+    rm -f ${doc}.bak
+done
+
+# For some reason (list formatting I think), jekyll / redcarpet does not like
+# the "toc" comments
+printf "Fixing up HTML comments\n"
+for doc in $(find "$PWD" -type f -name "*.md"); do
+    sed -i.bak '/<!-- toc -->/d' ${doc}
+    rm -f ${doc}.bak
+    sed -i.bak '/<!-- \/toc -->/d' ${doc}
     rm -f ${doc}.bak
 done
 
