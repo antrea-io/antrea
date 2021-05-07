@@ -3,9 +3,6 @@
 <a href="http://glasnostic.com" border="0" target="_blank">
 <img alt="glasnostic.com" src="../assets/adopters/glasnostic-logo.png"
 height="50"></a>&nbsp; &nbsp; &nbsp;
-<a href="http://infrabuilder.com" border="0" target="_blank">
-<img alt="infrabuilder.com" src="../assets/adopters/infrabuilder-logo.png"
-height="50"></a>&nbsp; &nbsp; &nbsp;
 
 ## Success Stories
 
@@ -14,7 +11,11 @@ of how they use it.
 
 **[Glasnostic](https://glasnostic.com)**
 
-**[Infrabuilder](https://infrabuilder.com)**
+Glasnostic makes modern cloud operations resilient. It does this by shaping how
+systems interact, automatically and in real-time. As a result, DevOps and SRE
+teams can deploy reliably, prevent failure and assure the customer experience.
+We use Antrea's Open vSwitch support to tune how services interact in Kubernetes
+clusters. We are @glasnostic on Twitter.
 
 ## Adding yourself as an Adopter
 
@@ -32,7 +33,8 @@ add your success story and logo.
 your web site like this: `**[Example](https://example.com)**`
 
 3. Below your name, describe your organization or yourself and how you make
-use of Antrea. Optionally, list the features of Antrea you are using.
+use of Antrea. Optionally, list the features of Antrea you are using. Please
+keep the line width at 80 characters maximum, and avoid trailing spaces.
 
 4. If you are willing to share contact details, e.g. your Twitter handle, etc.
 add a line where people can find you.
