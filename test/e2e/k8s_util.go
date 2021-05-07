@@ -749,16 +749,16 @@ func (k *KubernetesUtils) Bootstrap(namespaces, pods []string) (*map[string][]st
 func (k *KubernetesUtils) Cleanup(namespaces []string) {
 	// Cleanup any cluster-scoped resources.
 	if err := k.CleanACNPs(); err != nil {
-		log.Infof("Error when cleaning-up ACNPs: %v", err)
+		log.Errorf("Error when cleaning-up ACNPs: %v", err)
 	}
 	if err := k.CleanCGs(); err != nil {
-		log.Infof("Error when cleaning-up CGs: %v", err)
+		log.Errorf("Error when cleaning-up CGs: %v", err)
 	}
 
 	for _, ns := range namespaces {
 		log.Infof("Deleting test Namespace %s", ns)
 		if err := k.clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{}); err != nil {
-			log.Infof("Error when deleting Namespace '%s': %v", ns, err)
+			log.Errorf("Error when deleting Namespace '%s': %v", ns, err)
 		}
 	}
 }
@@ -962,19 +962,19 @@ func (k *KubernetesUtils) CleanLegacyACNPs() error {
 	return nil
 }
 
-func (k *KubernetesUtils) LegacyCleanup(namespaces []string) error {
+func (k *KubernetesUtils) LegacyCleanup(namespaces []string) {
 	// Cleanup any cluster-scoped resources.
 	if err := k.CleanLegacyACNPs(); err != nil {
-		return err
+		log.Errorf("Error when cleaning-up ACNPs: %v", err)
 	}
 	if err := k.CleanLegacyCGs(); err != nil {
-		return err
+		log.Errorf("Error when cleaning-up CGs: %v", err)
 	}
+
 	for _, ns := range namespaces {
 		log.Infof("Deleting test Namespace %s", ns)
 		if err := k.clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{}); err != nil {
-			return err
+			log.Errorf("Error when deleting Namespace '%s': %v", ns, err)
 		}
 	}
-	return nil
 }
