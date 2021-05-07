@@ -3,6 +3,7 @@ docs/api.md
 docs/antrea-agent-simulator.md
 docs/assets/README.md
 docs/assets/logo/README.md
+docs/contributors/cherry-picks.md
 docs/contributors/code-generation.md
 docs/contributors/eks-terraform.md
 docs/contributors/github-labels.md
@@ -24,6 +25,7 @@ docs/kubernetes-installers.md
 docs/maintainers/build-kubemark.md
 docs/maintainers/getting-started-gif.md
 docs/maintainers/release.md
+docs/network-requirements.md
 docs/noencap-hybrid-modes.md
 docs/octant-plugin-installation.md
 docs/os-issues.md
