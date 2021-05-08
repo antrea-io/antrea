@@ -70,6 +70,21 @@ func (d *fakeLocalIPDetector) HasSynced() bool {
 	return true
 }
 
+type fakeIPAssigner struct {
+}
+
+func (a *fakeIPAssigner) AssignEgressIP(egressIP, egressName string) error {
+	return nil
+}
+
+func (a *fakeIPAssigner) UnassignEgressIP(egressName string) error {
+	return nil
+}
+
+func (a *fakeIPAssigner) AssignedIPs() (ips map[string]string) {
+	return
+}
+
 var _ LocalIPDetector = &fakeLocalIPDetector{}
 
 type antreaClientGetter struct {
@@ -124,6 +139,7 @@ func newFakeController(t *testing.T, initObjects []runtime.Object) *fakeControll
 		egressBindings:       map[string]*egressBinding{},
 		egressStates:         map[string]*egressState{},
 		egressIPStates:       map[string]*egressIPState{},
+		ipAssigner:           &fakeIPAssigner{},
 	}
 	return &fakeController{
 		EgressController:   egressController,
