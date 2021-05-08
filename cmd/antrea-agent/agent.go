@@ -21,6 +21,7 @@ import (
 
 	"k8s.io/client-go/informers"
 	"k8s.io/klog/v2"
+	"github.com/vmware-tanzu/antrea/pkg/agent/memberlist"
 
 	"antrea.io/antrea/pkg/agent"
 	"antrea.io/antrea/pkg/agent/apiserver"
@@ -77,6 +78,7 @@ func run(o *Options) error {
 	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, informerDefaultResync)
 	traceflowInformer := crdInformerFactory.Crd().V1alpha1().Traceflows()
 	egressInformer := crdInformerFactory.Crd().V1alpha2().Egresses()
+	nodeInformer := informerFactory.Core().V1().Nodes()
 
 	// Create Antrea Clientset for the given config.
 	antreaClientProvider := agent.NewAntreaClientProvider(o.config.AntreaClientConnection, k8sClient)
@@ -199,8 +201,10 @@ func run(o *Options) error {
 	}
 
 	var egressController *egress.EgressController
+	var memberlistServer *memberlist.Server
 	if features.DefaultFeatureGate.Enabled(features.Egress) {
 		egressController = egress.NewEgressController(ofClient, egressInformer, antreaClientProvider, ifaceStore, routeClient, nodeConfig.Name)
+		memberlistServer = memberlist.NewMemberlistServer(o.config.MemberlistPort, nodeInformer,nodeConfig)
 	}
 
 	var proxier proxy.Proxier
@@ -292,6 +296,7 @@ func run(o *Options) error {
 
 	if features.DefaultFeatureGate.Enabled(features.Egress) {
 		go egressController.Run(stopCh)
+		go memberlistServer.Run(stopCh)
 	}
 
 	if features.DefaultFeatureGate.Enabled(features.NetworkPolicyStats) {
