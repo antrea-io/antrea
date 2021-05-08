@@ -127,8 +127,8 @@ type ClusterInfo struct {
 	controlPlaneNodeName string
 	controlPlaneNodeIP   string
 	nodes                map[int]ClusterNode
-	windowsNodes         map[string]bool
-	windowsNodeIndexes   []int
+	nodesOS              map[string]string
+	windowsNodes         []int
 	k8sServerVersion     string
 }
 
@@ -147,6 +147,11 @@ type TestOptions struct {
 var testOptions TestOptions
 
 var provider providers.ProviderInterface
+
+type podInfo struct {
+	name string
+	os   string
+}
 
 // TestData stores the state required for each test case.
 type TestData struct {
@@ -312,7 +317,7 @@ func collectClusterInfo() error {
 	}
 	workerIdx := 1
 	clusterInfo.nodes = make(map[int]ClusterNode)
-	clusterInfo.windowsNodes = make(map[string]bool)
+	clusterInfo.nodesOS = make(map[string]string)
 	for _, node := range nodes.Items {
 		isControlPlaneNode := func() bool {
 			_, ok := node.Labels[labelNodeRoleControlPlane()]
@@ -377,9 +382,9 @@ func collectClusterInfo() error {
 			os:               node.Status.NodeInfo.OperatingSystem,
 		}
 		if node.Status.NodeInfo.OperatingSystem == "windows" {
-			clusterInfo.windowsNodes[node.Name] = true
-			clusterInfo.windowsNodeIndexes = append(clusterInfo.windowsNodeIndexes, nodeIdx)
+			clusterInfo.windowsNodes = append(clusterInfo.windowsNodes, nodeIdx)
 		}
+		clusterInfo.nodesOS[node.Name] = node.Status.NodeInfo.OperatingSystem
 	}
 	if clusterInfo.controlPlaneNodeName == "" {
 		return fmt.Errorf("error when listing cluster Nodes: control-plane Node not found")
@@ -1537,11 +1542,13 @@ func parseArpingStdout(out string) (sent uint32, received uint32, loss float32, 
 	return sent, received, loss, nil
 }
 
-func (data *TestData) runPingCommandFromTestPod(podName string, targetPodIPs *PodIPs, ctrName string, count int, size int, isWindows bool) error {
+func (data *TestData) runPingCommandFromTestPod(podInfo podInfo, targetPodIPs *PodIPs, ctrName string, count int, size int) error {
 	countOption, sizeOption := "-c", "-s"
-	if isWindows {
+	if podInfo.os == "windows" {
 		countOption = "-n"
 		sizeOption = "-l"
+	} else if podInfo.os != "linux" {
+		return fmt.Errorf("OS of Pod '%s' is not clear", podInfo.name)
 	}
 	cmd := []string{"ping", countOption, strconv.Itoa(count)}
 	if size != 0 {
@@ -1549,13 +1556,13 @@ func (data *TestData) runPingCommandFromTestPod(podName string, targetPodIPs *Po
 	}
 	if targetPodIPs.ipv4 != nil {
 		cmd = append(cmd, targetPodIPs.ipv4.String())
-		if stdout, stderr, err := data.runCommandFromPod(testNamespace, podName, ctrName, cmd); err != nil {
+		if stdout, stderr, err := data.runCommandFromPod(testNamespace, podInfo.name, ctrName, cmd); err != nil {
 			return fmt.Errorf("error when running ping command: %v - stdout: %s - stderr: %s", err, stdout, stderr)
 		}
 	}
 	if targetPodIPs.ipv6 != nil {
 		cmd = append(cmd, "-6", targetPodIPs.ipv6.String())
-		if stdout, stderr, err := data.runCommandFromPod(testNamespace, podName, ctrName, cmd); err != nil {
+		if stdout, stderr, err := data.runCommandFromPod(testNamespace, podInfo.name, ctrName, cmd); err != nil {
 			return fmt.Errorf("error when running ping command: %v - stdout: %s - stderr: %s", err, stdout, stderr)
 		}
 	}

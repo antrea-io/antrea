@@ -308,7 +308,7 @@ func exportLogs(tb testing.TB, data *TestData, logsSubDir string, writeNodeLogs 
 		const numLines = 100
 		// --no-pager ensures the command does not hang.
 		cmd := fmt.Sprintf("journalctl -u kubelet -n %d --no-pager", numLines)
-		if clusterInfo.windowsNodes[nodeName] {
+		if clusterInfo.nodesOS[nodeName] == "windows" {
 			cmd = "Get-EventLog -LogName \"System\" -Source \"Service Control Manager\" | grep kubelet ; Get-EventLog -LogName \"Application\" -Source \"nssm\" | grep kubelet"
 		}
 		rc, stdout, _, err := RunCommandOnNode(nodeName, cmd)

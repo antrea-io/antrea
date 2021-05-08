@@ -2000,13 +2000,13 @@ func runTestTraceflow(t *testing.T, data *TestData, tc testcase) {
 			}
 		} else {
 			dstPod := tc.tf.Spec.Destination.Pod
-			podIPs := waitForPodIPs(t, data, []string{dstPod})
+			podIPs := waitForPodIPs(t, data, []podInfo{{dstPod, "linux"}})
 			dstPodIPs = podIPs[dstPod]
 		}
 		// Give a little time for Nodes to install OVS flows.
 		time.Sleep(time.Second * 2)
 		// Send an ICMP echo packet from the source Pod to the destination.
-		if err := data.runPingCommandFromTestPod(srcPod, dstPodIPs, busyboxContainerName, 2, 0, false); err != nil {
+		if err := data.runPingCommandFromTestPod(podInfo{srcPod, "linux"}, dstPodIPs, busyboxContainerName, 2, 0); err != nil {
 			t.Logf("Ping '%s' -> '%v' failed: ERROR (%v)", srcPod, *dstPodIPs, err)
 		}
 	}

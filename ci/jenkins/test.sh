@@ -456,7 +456,7 @@ function run_conformance_windows {
         # Antrea Windows agent Pods are deployed for Windows Conformance test
         wait_for_antrea_windows_pods_ready
     else
-        # Antrea Windows agent are deployed with scripts as processes on host for Windows NetworkPolicy test
+        # Antrea Windows agents are deployed with scripts as processes on host for Windows NetworkPolicy test
         wait_for_antrea_windows_processes_ready
     fi
 
