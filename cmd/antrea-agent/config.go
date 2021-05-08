@@ -98,6 +98,11 @@ type AgentConfig struct {
 	// APIPort is the port for the antrea-agent APIServer to serve on.
 	// Defaults to 10350.
 	APIPort int `yaml:"apiPort,omitempty"`
+
+	// ClusterPort is the port for the antrea-agent cluster to serve on.
+	// Defaults to 10351.
+	ClusterPort int `yaml:"clusterPort,omitempty"`
+
 	// Enable metrics exposure via Prometheus. Initializes Prometheus metrics listener
 	// Defaults to true.
 	EnablePrometheusMetrics bool `yaml:"enablePrometheusMetrics,omitempty"`

@@ -35,6 +35,7 @@ import (
 
 	"antrea.io/antrea/pkg/agent"
 	"antrea.io/antrea/pkg/agent/interfacestore"
+	"antrea.io/antrea/pkg/agent/memberlist"
 	"antrea.io/antrea/pkg/agent/openflow"
 	"antrea.io/antrea/pkg/agent/route"
 	cpv1b2 "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
@@ -127,6 +128,8 @@ type EgressController struct {
 
 	egressIPStates      map[string]*egressIPState
 	egressIPStatesMutex sync.Mutex
+
+	cluster *memberlist.Cluster
 }
 
 func NewEgressController(
@@ -136,6 +139,7 @@ func NewEgressController(
 	ifaceStore interfacestore.InterfaceStore,
 	routeClient route.Interface,
 	nodeName string,
+	cluster *memberlist.Cluster,
 ) *EgressController {
 	localIPDetector := NewLocalIPDetector()
 	c := &EgressController{
@@ -154,6 +158,7 @@ func NewEgressController(
 		egressBindings:       map[string]*egressBinding{},
 		localIPDetector:      localIPDetector,
 		idAllocator:          newIDAllocator(minEgressMark, maxEgressMark),
+		cluster:              cluster,
 	}
 
 	c.egressInformer.AddIndexers(cache.Indexers{egressIPIndex: func(obj interface{}) ([]string, error) {
@@ -222,6 +227,8 @@ func (c *EgressController) Run(stopCh <-chan struct{}) {
 	if !cache.WaitForNamedCacheSync(controllerName, stopCh, c.egressListerSynced, c.localIPDetector.HasSynced) {
 		return
 	}
+
+	go c.cluster.Run(stopCh)
 
 	go wait.NonSlidingUntil(c.watchEgressGroup, 5*time.Second, stopCh)
 

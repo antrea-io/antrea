@@ -193,6 +193,10 @@ func (o *Options) setDefaults() {
 		o.config.APIPort = apis.AntreaAgentAPIPort
 	}
 
+	if o.config.ClusterPort == 0 {
+		o.config.ClusterPort = apis.AntreaAgentClusterPort
+	}
+
 	if features.DefaultFeatureGate.Enabled(features.FlowExporter) {
 		if o.config.FlowCollectorAddr == "" {
 			o.config.FlowCollectorAddr = defaultFlowCollectorAddress

@@ -19,4 +19,6 @@ const (
 	AntreaControllerAPIPort = 10349
 	// AntreaAgentAPIPort is the default port for the antrea-agent APIServer.
 	AntreaAgentAPIPort = 10350
+	// AntreaAgentClusterPort is the default port for the antrea-agent cluster
+	AntreaAgentClusterPort = 10351
 )

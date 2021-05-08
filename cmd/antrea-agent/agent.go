@@ -35,6 +35,7 @@ import (
 	"antrea.io/antrea/pkg/agent/flowexporter/exporter"
 	"antrea.io/antrea/pkg/agent/flowexporter/flowrecords"
 	"antrea.io/antrea/pkg/agent/interfacestore"
+	"antrea.io/antrea/pkg/agent/memberlist"
 	"antrea.io/antrea/pkg/agent/metrics"
 	npl "antrea.io/antrea/pkg/agent/nodeportlocal"
 	"antrea.io/antrea/pkg/agent/openflow"
@@ -77,6 +78,8 @@ func run(o *Options) error {
 	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, informerDefaultResync)
 	traceflowInformer := crdInformerFactory.Crd().V1alpha1().Traceflows()
 	egressInformer := crdInformerFactory.Crd().V1alpha2().Egresses()
+	nodeInformer := informerFactory.Core().V1().Nodes()
+	ipPoolInformer := crdInformerFactory.Crd().V1alpha2().ExternalIPPools()
 
 	// Create Antrea Clientset for the given config.
 	antreaClientProvider := agent.NewAntreaClientProvider(o.config.AntreaClientConnection, k8sClient)
@@ -223,7 +226,14 @@ func run(o *Options) error {
 
 	var egressController *egress.EgressController
 	if features.DefaultFeatureGate.Enabled(features.Egress) {
-		egressController = egress.NewEgressController(ofClient, egressInformer, antreaClientProvider, ifaceStore, routeClient, nodeConfig.Name)
+		cluster, err := memberlist.NewCluster(o.config.ClusterPort, nodeInformer, nodeConfig, ipPoolInformer)
+		if err != nil {
+			return fmt.Errorf("initializing egress node memberlist cluster failed:%v", err)
+		}
+		egressController = egress.NewEgressController(
+			ofClient, egressInformer, antreaClientProvider, ifaceStore, routeClient, nodeConfig.Name,
+			cluster,
+		)
 	}
 
 	isChaining := false
