@@ -400,7 +400,7 @@ func GetLocalBroadcastIP(ipNet *net.IPNet) net.IP {
 	return lastAddr
 }
 
-// GetDefaultGatewayByInterfaceIndex returns the default gateway configured on the speicified interface.
+// GetDefaultGatewayByInterfaceIndex returns the default gateway configured on the specified interface.
 func GetDefaultGatewayByInterfaceIndex(ifIndex int) (string, error) {
 	cmd := fmt.Sprintf("$(Get-NetRoute -InterfaceIndex %d -DestinationPrefix 0.0.0.0/0 ).NextHop", ifIndex)
 	defaultGW, err := CallPSCommand(cmd)

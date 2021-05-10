@@ -3052,6 +3052,7 @@ rules:
   - get
   - watch
   - list
+  - patch
 - apiGroups:
   - ""
   resources:
