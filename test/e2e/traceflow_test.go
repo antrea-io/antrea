@@ -590,6 +590,9 @@ func TestTraceflowIntraNode(t *testing.T) {
 				DstIP:    dstPodIPv4Str,
 				Length:   84, // default ping packet length.
 				IPHeader: v1alpha1.IPHeader{Protocol: 1, TTL: 64, Flags: 2},
+				TransportHeader: v1alpha1.TransportHeader{
+					ICMP: &v1alpha1.ICMPEchoRequestHeader{},
+				},
 			},
 		},
 		{
@@ -639,6 +642,9 @@ func TestTraceflowIntraNode(t *testing.T) {
 				DstIP:    pod1IPv4Str,
 				Length:   84, // default ping packet length.
 				IPHeader: v1alpha1.IPHeader{Protocol: 1, TTL: 64, Flags: 2},
+				TransportHeader: v1alpha1.TransportHeader{
+					ICMP: &v1alpha1.ICMPEchoRequestHeader{},
+				},
 			},
 		},
 		{
@@ -2039,7 +2045,14 @@ func runTestTraceflow(t *testing.T, data *TestData, tc testcase) {
 			}
 		}
 	}
-	if tc.expectedPktCap != nil && !reflect.DeepEqual(tc.expectedPktCap, tf.Status.CapturedPacket) {
-		t.Fatalf("Captured packet should be: %+v, but got: %+v", tc.expectedPktCap, tf.Status.CapturedPacket)
+	if tc.expectedPktCap != nil {
+		pktCap := tf.Status.CapturedPacket
+		if tc.expectedPktCap.TransportHeader.ICMP != nil {
+			// We cannot predict ICMP echo ID and sequence number.
+			pktCap.TransportHeader.ICMP = &v1alpha1.ICMPEchoRequestHeader{}
+		}
+		if !reflect.DeepEqual(tc.expectedPktCap, pktCap) {
+			t.Fatalf("Captured packet should be: %+v, but got: %+v", tc.expectedPktCap, tf.Status.CapturedPacket)
+		}
 	}
 }
