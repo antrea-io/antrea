@@ -233,6 +233,7 @@ const (
 	macRewriteMark = 0b1
 	// cnpDenyMark indicates the packet is denied(Drop/Reject).
 	cnpDenyMark = 0b1
+	bypassHostMark = 0b11
 
 	// gatewayCTMark is used to to mark connections initiated through the host gateway interface
 	// (i.e. for which the first packet of the connection was received through the gateway).
@@ -2064,5 +2065,29 @@ func (c *client) l3FwdFlowRouteToWindowsGW(localGatewayMAC net.HardwareAddr, loc
 			Cookie(c.cookieAllocator.Request(category).Raw()).
 			Done(),
 	}
+	return flows
+}
+
+// l3FwdFlowToRemoteViaRouting enhances Windows Noencap mode performance by bypassing host network.
+func (c *client) l3FwdFlowToRemoteViaRouting(
+    gatewayMAC net.HardwareAddr,
+    peerSubnet net.IPNet,
+    category cookie.Category) []binding.Flow {
+	var flows []binding.Flow
+	ipProto := getIPProtocol(peerSubnet.IP)
+	l3FwdTable := c.pipeline[l3ForwardingTable]
+	flows = append(flows, l3FwdTable.BuildFlow(priorityNormal).MatchProtocol(ipProto).
+		MatchDstIPNet(peerSubnet).
+		Action().SetDstMAC(gatewayMAC).
+		Action().GotoTable(l3FwdTable.GetNext()).
+		Cookie(c.cookieAllocator.Request(category).Raw()).
+		Done())
+	flows = append(flows, c.pipeline[l2ForwardingCalcTable].BuildFlow(priorityNormal).
+		MatchDstMAC(gatewayMAC).
+		Action().LoadRegRange(int(PortCacheReg), bypassHostMark, ofPortRegRange).
+		Action().LoadRegRange(int(marksReg), macRewriteMark, ofPortMarkRange).
+		Action().GotoTable(conntrackCommitTable).
+		Cookie(c.cookieAllocator.Request(category).Raw()).
+		Done())
 	return flows
 }

@@ -459,6 +459,10 @@ func (c *Controller) addNodeRoute(nodeName string, node *corev1.Node) error {
 		klog.Errorf("Failed to retrieve IP address of Node %s: %v", nodeName, err)
 		return nil
 	}
+	peerNodeMAC, err := GetNodeMAC(node)
+	if err != nil {
+		klog.Infof("Failed to retrieve MAC of Node %s: %v", nodeName, err)
+	}
 
 	ipsecTunOFPort := int32(0)
 	if c.networkConfig.EnableIPSecTunnel {
@@ -474,7 +478,8 @@ func (c *Controller) addNodeRoute(nodeName string, node *corev1.Node) error {
 		nodeName,
 		peerConfig,
 		peerNodeIP,
-		uint32(ipsecTunOFPort))
+		uint32(ipsecTunOFPort),
+		peerNodeMAC)
 	if err != nil {
 		return fmt.Errorf("failed to install flows to Node %s: %v", nodeName, err)
 	}
@@ -614,4 +619,19 @@ func GetNodeAddr(node *corev1.Node) (net.IP, error) {
 		return nil, fmt.Errorf("<%v> is not a valid ip address", ipAddrStr)
 	}
 	return ipAddr, nil
+}
+
+// GetNodeMAC gets Node's br-int MAC from its annotation. It is for Windows Noencap mode only.
+func GetNodeMAC(node *corev1.Node) (net.HardwareAddr, error) {
+	annotation := "node.antrea.io"
+	macStr := node.Annotations[annotation]
+	if macStr == "" {
+		return nil, nil
+	} else {
+		mac, err := net.ParseMAC(macStr)
+		if err != nil {
+			return nil, err
+		}
+		return mac, nil
+	}
 }

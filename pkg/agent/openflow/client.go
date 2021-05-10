@@ -71,7 +71,8 @@ type Client interface {
 		hostname string,
 		peerConfigs map[*net.IPNet]net.IP,
 		tunnelPeerIP net.IP,
-		ipsecTunOFPort uint32) error
+		ipsecTunOFPort uint32,
+	    	peerNodeMAC net.HardwareAddr) error
 
 	// UninstallNodeFlows removes the connection to the remote Node specified with the
 	// hostname. UninstallNodeFlows will do nothing if no connection to the host was established.
@@ -352,7 +353,8 @@ func (c *client) deleteFlows(cache *flowCategoryCache, flowCacheKey string) erro
 func (c *client) InstallNodeFlows(hostname string,
 	peerConfigs map[*net.IPNet]net.IP,
 	tunnelPeerIP net.IP,
-	ipsecTunOFPort uint32) error {
+	ipsecTunOFPort uint32,
+	remoteGatewayMAC net.HardwareAddr) error {
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
 
@@ -369,6 +371,8 @@ func (c *client) InstallNodeFlows(hostname string,
 			// tunnelPeerIP is the Node Internal Address. In a dual-stack setup, whether this address is an IPv4 address or an
 			// IPv6 one is decided by the address family of Node Internal Address.
 			flows = append(flows, c.l3FwdFlowToRemote(localGatewayMAC, *peerPodCIDR, tunnelPeerIP, cookie.Node))
+		} else if runtime.IsWindowsPlatform() && !c.encapMode.NeedsRoutingToPeer(tunnelPeerIP, c.nodeConfig.NodeIPAddr) && remoteGatewayMAC != nil {
+			flows = append(flows, c.l3FwdFlowToRemoteViaRouting(remoteGatewayMAC, *peerPodCIDR, cookie.Node)...)
 		} else {
 			flows = append(flows, c.l3FwdFlowToRemoteViaGW(localGatewayMAC, *peerPodCIDR, cookie.Node))
 		}
