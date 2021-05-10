@@ -35,6 +35,7 @@ import (
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/openflow"
 	"antrea.io/antrea/pkg/agent/route"
+	"antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/agent/util"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 	utilip "antrea.io/antrea/pkg/util/ip"
@@ -135,6 +136,7 @@ type nodeRouteInfo struct {
 	podCIDRs  []*net.IPNet
 	nodeIP    net.IP
 	gatewayIP []net.IP
+	nodeMAC   net.HardwareAddr
 }
 
 // enqueueNode adds an object to the controller work queue
@@ -406,8 +408,14 @@ func (c *Controller) deleteNodeRoute(nodeName string) error {
 }
 
 func (c *Controller) addNodeRoute(nodeName string, node *corev1.Node) error {
-	if _, installed, _ := c.installedNodes.GetByKey(nodeName); installed {
-		// Route is already added for this Node.
+	peerNodeMAC, err := getNodeMAC(node)
+	if err != nil {
+		klog.Errorf("Error when retrieving MAC of Node %s: %v", nodeName, err)
+	}
+
+	nrInfo, installed, _ := c.installedNodes.GetByKey(nodeName)
+	if installed && nrInfo != nil && nrInfo.(*nodeRouteInfo).nodeMAC != nil && nrInfo.(*nodeRouteInfo).nodeMAC.String() == peerNodeMAC.String() {
+		// Route is already added for this Node and Node MAC isn't changed.
 		return nil
 	}
 
@@ -431,7 +439,7 @@ func (c *Controller) addNodeRoute(nodeName string, node *corev1.Node) error {
 			return nil
 		}
 
-		nodesHaveSamePodCIDR, _ := c.installedNodes.ByIndex(nodeRouteInfoPodCIDRIndexName, podCIDR)
+		nodesHaveSamePodCIDR, _ := c.installedNodes.IndexKeys(nodeRouteInfoPodCIDRIndexName, podCIDR)
 		// PodCIDRs can be released from deleted Nodes and allocated to new Nodes. For server side, it won't happen that a
 		// PodCIDR is allocated to more than one Node at any point. However, for client side, if a resync happens to occur
 		// when there are Node creation and deletion events, the informer will generate the events in a way that all
@@ -441,9 +449,9 @@ func (c *Controller) addNodeRoute(nodeName string, node *corev1.Node) error {
 		// stale routes, flows, and relevant cache of this podCIDR are removed appropriately, we wait for the Node deletion
 		// event to be processed before proceeding, or the route installation and uninstallation operations may override or
 		// conflict with each other.
-		if len(nodesHaveSamePodCIDR) > 0 {
+		if len(nodesHaveSamePodCIDR) > 0 && (len(nodesHaveSamePodCIDR) != 1 || nodesHaveSamePodCIDR[0] != nodeName) {
 			// Return an error so that the Node will be put back to the workqueue and will be retried later.
-			return fmt.Errorf("skipping addNodeRoute for Node %s because podCIDR %s is duplicate with Node %s, will retry later", nodeName, podCIDR, nodesHaveSamePodCIDR[0].(*nodeRouteInfo).nodeName)
+			return fmt.Errorf("skipping addNodeRoute for Node %s because podCIDR %s is duplicate with Node %s, will retry later", nodeName, podCIDR, nodesHaveSamePodCIDR[0])
 		}
 
 		peerPodCIDRAddr, peerPodCIDR, err := net.ParseCIDR(podCIDR)
@@ -476,7 +484,8 @@ func (c *Controller) addNodeRoute(nodeName string, node *corev1.Node) error {
 		nodeName,
 		peerConfig,
 		peerNodeIP,
-		uint32(ipsecTunOFPort))
+		uint32(ipsecTunOFPort),
+		peerNodeMAC)
 	if err != nil {
 		return fmt.Errorf("failed to install flows to Node %s: %v", nodeName, err)
 	}
@@ -493,6 +502,7 @@ func (c *Controller) addNodeRoute(nodeName string, node *corev1.Node) error {
 		podCIDRs:  podCIDRs,
 		nodeIP:    peerNodeIP,
 		gatewayIP: peerGatewayIPs,
+		nodeMAC:   peerNodeMAC,
 	})
 	return err
 }
@@ -652,4 +662,17 @@ func (c *Controller) IPInPodSubnets(ip net.IP) bool {
 	ipCIDRStr := ipCIDR.String()
 	nodeInCluster, _ := c.installedNodes.ByIndex(nodeRouteInfoPodCIDRIndexName, ipCIDRStr)
 	return len(nodeInCluster) > 0 || ipCIDRStr == curNodeCIDRStr
+}
+
+// getNodeMAC gets Node's br-int MAC from its annotation. It is for Windows Noencap mode only.
+func getNodeMAC(node *corev1.Node) (net.HardwareAddr, error) {
+	macStr := node.Annotations[types.NodeMACAddressAnnotationKey]
+	if macStr == "" {
+		return nil, nil
+	}
+	mac, err := net.ParseMAC(macStr)
+	if err != nil {
+		return nil, err
+	}
+	return mac, nil
 }

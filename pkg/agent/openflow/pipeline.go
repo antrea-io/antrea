@@ -354,6 +354,7 @@ type OFEntryOperations interface {
 	Delete(flow binding.Flow) error
 	AddAll(flows []binding.Flow) error
 	ModifyAll(flows []binding.Flow) error
+	BundleOps(adds []binding.Flow, mods []binding.Flow, dels []binding.Flow) error
 	DeleteAll(flows []binding.Flow) error
 	AddOFEntries(ofEntries []binding.OFEntry) error
 	DeleteOFEntries(ofEntries []binding.OFEntry) error
@@ -419,32 +420,34 @@ func (c *client) GetTunnelVirtualMAC() net.HardwareAddr {
 	return globalVirtualMAC
 }
 
-func (c *client) changeAll(flows []binding.Flow, action ofAction) error {
-	if len(flows) == 0 {
+func (c *client) changeAll(flowsMap map[ofAction][]binding.Flow) error {
+	if len(flowsMap) == 0 {
 		return nil
-	}
-	var adds, mods, dels []binding.Flow
-	if action == add {
-		adds = flows
-	} else if action == mod {
-		mods = flows
-	} else if action == del {
-		dels = flows
-	} else {
-		return fmt.Errorf("OF Action not exists: %s", action)
 	}
 
 	startTime := time.Now()
 	defer func() {
 		d := time.Since(startTime)
-		metrics.OVSFlowOpsLatency.WithLabelValues(action.String()).Observe(float64(d.Milliseconds()))
+		for k, v := range flowsMap {
+			if len(v) != 0 {
+				metrics.OVSFlowOpsLatency.WithLabelValues(k.String()).Observe(float64(d.Milliseconds()))
+			}
+		}
 	}()
 
-	if err := c.bridge.AddFlowsInBundle(adds, mods, dels); err != nil {
-		metrics.OVSFlowOpsErrorCount.WithLabelValues(action.String()).Inc()
+	if err := c.bridge.AddFlowsInBundle(flowsMap[add], flowsMap[mod], flowsMap[del]); err != nil {
+		for k, v := range flowsMap {
+			if len(v) != 0 {
+				metrics.OVSFlowOpsErrorCount.WithLabelValues(k.String()).Inc()
+			}
+		}
 		return err
 	}
-	metrics.OVSFlowOpsCount.WithLabelValues(action.String()).Inc()
+	for k, v := range flowsMap {
+		if len(v) != 0 {
+			metrics.OVSFlowOpsCount.WithLabelValues(k.String()).Inc()
+		}
+	}
 	return nil
 }
 
@@ -461,15 +464,19 @@ func (c *client) Delete(flow binding.Flow) error {
 }
 
 func (c *client) AddAll(flows []binding.Flow) error {
-	return c.changeAll(flows, add)
+	return c.changeAll(map[ofAction][]binding.Flow{add: flows})
 }
 
 func (c *client) ModifyAll(flows []binding.Flow) error {
-	return c.changeAll(flows, mod)
+	return c.changeAll(map[ofAction][]binding.Flow{mod: flows})
 }
 
 func (c *client) DeleteAll(flows []binding.Flow) error {
-	return c.changeAll(flows, del)
+	return c.changeAll(map[ofAction][]binding.Flow{del: flows})
+}
+
+func (c *client) BundleOps(adds []binding.Flow, mods []binding.Flow, dels []binding.Flow) error {
+	return c.changeAll(map[ofAction][]binding.Flow{add: adds, mod: mods, del: dels})
 }
 
 func (c *client) changeOFEntries(ofEntries []binding.OFEntry, action ofAction) error {
@@ -486,7 +493,6 @@ func (c *client) changeOFEntries(ofEntries []binding.OFEntry, action ofAction) e
 	} else {
 		return fmt.Errorf("OF Entries Action not exists: %s", action)
 	}
-
 	startTime := time.Now()
 	defer func() {
 		d := time.Since(startTime)
