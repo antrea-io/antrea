@@ -29,12 +29,12 @@ import (
 	"k8s.io/client-go/tools/record"
 	"k8s.io/component-base/metrics/testutil"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
-	ofmock "github.com/vmware-tanzu/antrea/pkg/agent/openflow/testing"
-	"github.com/vmware-tanzu/antrea/pkg/agent/proxy/metrics"
-	"github.com/vmware-tanzu/antrea/pkg/agent/proxy/types"
-	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
-	k8sproxy "github.com/vmware-tanzu/antrea/third_party/proxy"
+	"antrea.io/antrea/pkg/agent/openflow"
+	ofmock "antrea.io/antrea/pkg/agent/openflow/testing"
+	"antrea.io/antrea/pkg/agent/proxy/metrics"
+	"antrea.io/antrea/pkg/agent/proxy/types"
+	binding "antrea.io/antrea/pkg/ovs/openflow"
+	k8sproxy "antrea.io/antrea/third_party/proxy"
 )
 
 func makeNamespaceName(namespace, name string) apimachinerytypes.NamespacedName {

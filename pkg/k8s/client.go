@@ -22,8 +22,8 @@ import (
 	"k8s.io/klog/v2"
 	aggregatorclientset "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 
-	crdclientset "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned"
-	legacycrdclientset "github.com/vmware-tanzu/antrea/pkg/legacyclient/clientset/versioned"
+	crdclientset "antrea.io/antrea/pkg/client/clientset/versioned"
+	legacycrdclientset "antrea.io/antrea/pkg/legacyclient/clientset/versioned"
 )
 
 // CreateClients creates kube clients from the given config.

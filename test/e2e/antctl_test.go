@@ -24,8 +24,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/vmware-tanzu/antrea/pkg/antctl"
-	"github.com/vmware-tanzu/antrea/pkg/antctl/runtime"
+	"antrea.io/antrea/pkg/antctl"
+	"antrea.io/antrea/pkg/antctl/runtime"
 )
 
 type cmdAndReturnCode struct {

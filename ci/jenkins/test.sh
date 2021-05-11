@@ -336,7 +336,7 @@ function run_e2e {
 
     set +e
     mkdir -p `pwd`/antrea-test-logs
-    go test -v github.com/vmware-tanzu/antrea/test/e2e --logs-export-dir `pwd`/antrea-test-logs -timeout=100m --prometheus
+    go test -v antrea.io/antrea/test/e2e --logs-export-dir `pwd`/antrea-test-logs -timeout=100m --prometheus
     if [[ "$?" != "0" ]]; then
         TEST_FAILURE=true
     fi

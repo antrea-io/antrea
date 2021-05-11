@@ -27,12 +27,12 @@ import (
 	"github.com/spf13/afero"
 	"k8s.io/utils/exec"
 
-	agentquerier "github.com/vmware-tanzu/antrea/pkg/agent/querier"
-	clusterinformationv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1beta1"
-	controllerquerier "github.com/vmware-tanzu/antrea/pkg/controller/querier"
-	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsctl"
-	"github.com/vmware-tanzu/antrea/pkg/querier"
-	"github.com/vmware-tanzu/antrea/pkg/util/logdir"
+	agentquerier "antrea.io/antrea/pkg/agent/querier"
+	clusterinformationv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
+	controllerquerier "antrea.io/antrea/pkg/controller/querier"
+	"antrea.io/antrea/pkg/ovs/ovsctl"
+	"antrea.io/antrea/pkg/querier"
+	"antrea.io/antrea/pkg/util/logdir"
 )
 
 // AgentDumper is the interface for dumping runtime information of the agent. Its

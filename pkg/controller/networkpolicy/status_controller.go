@@ -28,14 +28,14 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 
-	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
-	crdv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha1"
-	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
-	antreaclientset "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned"
-	crdinformers "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions/crd/v1alpha1"
-	crdlisters "github.com/vmware-tanzu/antrea/pkg/client/listers/crd/v1alpha1"
-	"github.com/vmware-tanzu/antrea/pkg/controller/metrics"
-	antreatypes "github.com/vmware-tanzu/antrea/pkg/controller/types"
+	"antrea.io/antrea/pkg/apis/controlplane"
+	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	"antrea.io/antrea/pkg/apiserver/storage"
+	antreaclientset "antrea.io/antrea/pkg/client/clientset/versioned"
+	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha1"
+	crdlisters "antrea.io/antrea/pkg/client/listers/crd/v1alpha1"
+	"antrea.io/antrea/pkg/controller/metrics"
+	antreatypes "antrea.io/antrea/pkg/controller/types"
 )
 
 const (

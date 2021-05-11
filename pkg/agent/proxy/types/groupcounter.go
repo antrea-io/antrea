@@ -17,8 +17,8 @@ package types
 import (
 	"sync"
 
-	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
-	k8sproxy "github.com/vmware-tanzu/antrea/third_party/proxy"
+	binding "antrea.io/antrea/pkg/ovs/openflow"
+	k8sproxy "antrea.io/antrea/third_party/proxy"
 )
 
 // GroupCounter generates and manages global unique group ID.

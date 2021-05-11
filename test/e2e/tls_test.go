@@ -23,7 +23,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/vmware-tanzu/antrea/pkg/apis"
+	"antrea.io/antrea/pkg/apis"
 )
 
 const (

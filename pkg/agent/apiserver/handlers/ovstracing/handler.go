@@ -29,11 +29,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/apiserver/handlers"
-	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
-	"github.com/vmware-tanzu/antrea/pkg/agent/querier"
-	"github.com/vmware-tanzu/antrea/pkg/agent/util"
-	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsctl"
+	"antrea.io/antrea/pkg/agent/apiserver/handlers"
+	"antrea.io/antrea/pkg/agent/interfacestore"
+	"antrea.io/antrea/pkg/agent/querier"
+	"antrea.io/antrea/pkg/agent/util"
+	"antrea.io/antrea/pkg/ovs/ovsctl"
 )
 
 // Response is the response struct of ovsflows command.

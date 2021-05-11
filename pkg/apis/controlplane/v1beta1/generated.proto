@@ -16,9 +16,9 @@
 
 syntax = "proto2";
 
-package github.com.vmware_tanzu.antrea.pkg.apis.controlplane.v1beta1;
+package antrea_io.antrea.pkg.apis.controlplane.v1beta1;
 
-import "github.com/vmware-tanzu/antrea/pkg/apis/stats/v1alpha1/generated.proto";
+import "antrea.io/antrea/pkg/apis/stats/v1alpha1/generated.proto";
 import "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto";
 import "k8s.io/apimachinery/pkg/runtime/generated.proto";
 import "k8s.io/apimachinery/pkg/runtime/schema/generated.proto";
@@ -265,10 +265,10 @@ message NetworkPolicyStats {
   optional NetworkPolicyReference networkPolicy = 1;
 
   // The stats of the NetworkPolicy.
-  optional github.com.vmware_tanzu.antrea.pkg.apis.stats.v1alpha1.TrafficStats trafficStats = 2;
+  optional antrea_io.antrea.pkg.apis.stats.v1alpha1.TrafficStats trafficStats = 2;
 
   // The stats of the NetworkPolicy rules. It's empty for K8s NetworkPolicies as they don't have rule name to identify a rule.
-  repeated github.com.vmware_tanzu.antrea.pkg.apis.stats.v1alpha1.RuleTrafficStats ruleTrafficStats = 3;
+  repeated antrea_io.antrea.pkg.apis.stats.v1alpha1.RuleTrafficStats ruleTrafficStats = 3;
 }
 
 // NodeStatsSummary contains stats produced on a Node. It's used by the antrea-agents to report stats to the antrea-controller.

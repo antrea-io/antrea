@@ -28,7 +28,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 
-	antreastorage "github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
+	antreastorage "antrea.io/antrea/pkg/apiserver/storage"
 )
 
 const (

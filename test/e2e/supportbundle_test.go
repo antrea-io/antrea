@@ -29,11 +29,11 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/rest"
 
-	agentapiserver "github.com/vmware-tanzu/antrea/pkg/agent/apiserver"
-	"github.com/vmware-tanzu/antrea/pkg/apis"
-	systemv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/system/v1beta1"
-	controllerapiserver "github.com/vmware-tanzu/antrea/pkg/apiserver"
-	clientset "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned"
+	agentapiserver "antrea.io/antrea/pkg/agent/apiserver"
+	"antrea.io/antrea/pkg/apis"
+	systemv1beta1 "antrea.io/antrea/pkg/apis/system/v1beta1"
+	controllerapiserver "antrea.io/antrea/pkg/apiserver"
+	clientset "antrea.io/antrea/pkg/client/clientset/versioned"
 )
 
 // getAccessToken retrieves the local access token of an antrea component API server.

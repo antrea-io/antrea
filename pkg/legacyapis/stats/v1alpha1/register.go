@@ -19,7 +19,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
-	"github.com/vmware-tanzu/antrea/pkg/apis/stats/v1alpha1"
+	"antrea.io/antrea/pkg/apis/stats/v1alpha1"
 )
 
 // GroupName is the group name use in this package

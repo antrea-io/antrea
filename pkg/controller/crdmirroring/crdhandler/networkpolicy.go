@@ -20,13 +20,13 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	crd "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha1"
-	crdclientset "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned"
-	crdlister "github.com/vmware-tanzu/antrea/pkg/client/listers/crd/v1alpha1"
-	"github.com/vmware-tanzu/antrea/pkg/controller/crdmirroring/types"
-	legacysecurity "github.com/vmware-tanzu/antrea/pkg/legacyapis/security/v1alpha1"
-	legacysecurityclientset "github.com/vmware-tanzu/antrea/pkg/legacyclient/clientset/versioned"
-	legacysecuritylister "github.com/vmware-tanzu/antrea/pkg/legacyclient/listers/security/v1alpha1"
+	crd "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	crdclientset "antrea.io/antrea/pkg/client/clientset/versioned"
+	crdlister "antrea.io/antrea/pkg/client/listers/crd/v1alpha1"
+	"antrea.io/antrea/pkg/controller/crdmirroring/types"
+	legacysecurity "antrea.io/antrea/pkg/legacyapis/security/v1alpha1"
+	legacysecurityclientset "antrea.io/antrea/pkg/legacyclient/clientset/versioned"
+	legacysecuritylister "antrea.io/antrea/pkg/legacyclient/listers/security/v1alpha1"
 )
 
 type NetworkPolicyHandler struct {

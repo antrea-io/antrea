@@ -23,7 +23,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/agent/config"
 )
 
 func skipIfNotBenchmarkTest(tb testing.TB) {

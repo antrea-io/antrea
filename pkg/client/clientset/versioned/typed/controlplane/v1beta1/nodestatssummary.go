@@ -19,8 +19,8 @@ package v1beta1
 import (
 	"context"
 
-	v1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1"
-	scheme "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/scheme"
+	v1beta1 "antrea.io/antrea/pkg/apis/controlplane/v1beta1"
+	scheme "antrea.io/antrea/pkg/client/clientset/versioned/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	rest "k8s.io/client-go/rest"
 )

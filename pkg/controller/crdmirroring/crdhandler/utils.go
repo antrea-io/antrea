@@ -16,7 +16,7 @@ package crdhandler
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/vmware-tanzu/antrea/pkg/controller/crdmirroring/types"
+	"antrea.io/antrea/pkg/controller/crdmirroring/types"
 )
 
 func setMetaData(legacyObj, newObj metav1.Object) {

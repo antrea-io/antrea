@@ -20,7 +20,7 @@ import (
 	"path"
 	"strings"
 
-	"github.com/vmware-tanzu/antrea/test/e2e/providers/exec"
+	"antrea.io/antrea/test/e2e/providers/exec"
 )
 
 type KindProvider struct {

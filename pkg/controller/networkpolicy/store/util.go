@@ -17,8 +17,8 @@ package store
 import (
 	"reflect"
 
-	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
-	"github.com/vmware-tanzu/antrea/pkg/controller/types"
+	"antrea.io/antrea/pkg/apiserver/storage"
+	"antrea.io/antrea/pkg/controller/types"
 )
 
 // keyAndSpanSelectFunc returns whether the provided selectors matches the key and/or the nodeNames.

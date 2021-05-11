@@ -25,12 +25,12 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 
-	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
-	crdv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha1"
-	statsv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/stats/v1alpha1"
-	crdvinformers "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions/crd/v1alpha1"
-	"github.com/vmware-tanzu/antrea/pkg/features"
-	"github.com/vmware-tanzu/antrea/pkg/k8s"
+	"antrea.io/antrea/pkg/apis/controlplane"
+	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	statsv1alpha1 "antrea.io/antrea/pkg/apis/stats/v1alpha1"
+	crdvinformers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha1"
+	"antrea.io/antrea/pkg/features"
+	"antrea.io/antrea/pkg/k8s"
 )
 
 const (

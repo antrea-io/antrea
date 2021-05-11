@@ -19,7 +19,7 @@ package connections
 import (
 	"net"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/agent/config"
 )
 
 func NewConnTrackSystem(nodeConfig *config.NodeConfig, serviceCIDRv4 *net.IPNet, serviceCIDRv6 *net.IPNet, isAntreaProxyEnabled bool) *connTrackOvsCtl {

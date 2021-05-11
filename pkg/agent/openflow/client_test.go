@@ -28,12 +28,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/config"
-	"github.com/vmware-tanzu/antrea/pkg/agent/openflow/cookie"
-	oftest "github.com/vmware-tanzu/antrea/pkg/agent/openflow/testing"
-	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
-	ovsoftest "github.com/vmware-tanzu/antrea/pkg/ovs/openflow/testing"
-	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
+	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/agent/openflow/cookie"
+	oftest "antrea.io/antrea/pkg/agent/openflow/testing"
+	binding "antrea.io/antrea/pkg/ovs/openflow"
+	ovsoftest "antrea.io/antrea/pkg/ovs/openflow/testing"
+	"antrea.io/antrea/pkg/ovs/ovsconfig"
 )
 
 const bridgeName = "dummy-br"

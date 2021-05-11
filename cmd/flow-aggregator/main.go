@@ -25,8 +25,8 @@ import (
 	"k8s.io/component-base/logs"
 	"k8s.io/klog/v2"
 
-	"github.com/vmware-tanzu/antrea/pkg/log"
-	"github.com/vmware-tanzu/antrea/pkg/version"
+	"antrea.io/antrea/pkg/log"
+	"antrea.io/antrea/pkg/version"
 )
 
 func main() {

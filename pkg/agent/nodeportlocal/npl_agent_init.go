@@ -21,9 +21,9 @@ import (
 	"fmt"
 	"time"
 
-	nplk8s "github.com/vmware-tanzu/antrea/pkg/agent/nodeportlocal/k8s"
-	"github.com/vmware-tanzu/antrea/pkg/agent/nodeportlocal/portcache"
-	"github.com/vmware-tanzu/antrea/pkg/agent/nodeportlocal/util"
+	nplk8s "antrea.io/antrea/pkg/agent/nodeportlocal/k8s"
+	"antrea.io/antrea/pkg/agent/nodeportlocal/portcache"
+	"antrea.io/antrea/pkg/agent/nodeportlocal/util"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"

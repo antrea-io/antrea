@@ -12,7 +12,7 @@ import (
 	"golang.org/x/time/rate"
 	"k8s.io/klog/v2"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/metrics"
+	"antrea.io/antrea/pkg/agent/metrics"
 )
 
 const (

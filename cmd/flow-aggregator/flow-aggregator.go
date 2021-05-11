@@ -25,9 +25,9 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 
-	"github.com/vmware-tanzu/antrea/pkg/clusteridentity"
-	aggregator "github.com/vmware-tanzu/antrea/pkg/flowaggregator"
-	"github.com/vmware-tanzu/antrea/pkg/signals"
+	"antrea.io/antrea/pkg/clusteridentity"
+	aggregator "antrea.io/antrea/pkg/flowaggregator"
+	"antrea.io/antrea/pkg/signals"
 )
 
 // genObservationDomainID generates an IPFIX Observation Domain ID when one is not provided by the

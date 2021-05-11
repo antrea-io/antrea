@@ -28,10 +28,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"k8s.io/apimachinery/pkg/util/wait"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/apiserver/handlers/podinterface"
-	"github.com/vmware-tanzu/antrea/pkg/agent/config"
-	"github.com/vmware-tanzu/antrea/pkg/agent/openflow/cookie"
-	"github.com/vmware-tanzu/antrea/pkg/clusteridentity"
+	"antrea.io/antrea/pkg/agent/apiserver/handlers/podinterface"
+	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/agent/openflow/cookie"
+	"antrea.io/antrea/pkg/clusteridentity"
 )
 
 // TestDeploy is a "no-op" test that simply performs setup and teardown.

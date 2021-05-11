@@ -34,10 +34,10 @@ else
         DOCKER_IMG_VERSION := $(VERSION)
 endif
 
-VERSION_LDFLAGS = -X github.com/vmware-tanzu/antrea/pkg/version.Version=$(VERSION)
-VERSION_LDFLAGS += -X github.com/vmware-tanzu/antrea/pkg/version.GitSHA=$(GIT_SHA)
-VERSION_LDFLAGS += -X github.com/vmware-tanzu/antrea/pkg/version.GitTreeState=$(GIT_TREE_STATE)
-VERSION_LDFLAGS += -X github.com/vmware-tanzu/antrea/pkg/version.ReleaseStatus=$(RELEASE_STATUS)
+VERSION_LDFLAGS = -X antrea.io/antrea/pkg/version.Version=$(VERSION)
+VERSION_LDFLAGS += -X antrea.io/antrea/pkg/version.GitSHA=$(GIT_SHA)
+VERSION_LDFLAGS += -X antrea.io/antrea/pkg/version.GitTreeState=$(GIT_TREE_STATE)
+VERSION_LDFLAGS += -X antrea.io/antrea/pkg/version.ReleaseStatus=$(RELEASE_STATUS)
 
 version-info:
 	@echo "===> Version information <==="

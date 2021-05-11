@@ -14,7 +14,7 @@
 
 package main
 
-import "github.com/vmware-tanzu/antrea/pkg/flowaggregator"
+import "antrea.io/antrea/pkg/flowaggregator"
 
 type FlowAggregatorConfig struct {
 	// Provide the flow collector address as string with format <IP>:<port>[:<proto>], where proto is tcp or udp.

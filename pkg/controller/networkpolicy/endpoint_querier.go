@@ -21,9 +21,9 @@ package networkpolicy
 import (
 	"k8s.io/apimachinery/pkg/types"
 
-	cpv1beta "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
-	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy/store"
-	antreatypes "github.com/vmware-tanzu/antrea/pkg/controller/types"
+	cpv1beta "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/pkg/controller/networkpolicy/store"
+	antreatypes "antrea.io/antrea/pkg/controller/types"
 )
 
 // EndpointQuerier handles requests for antctl query

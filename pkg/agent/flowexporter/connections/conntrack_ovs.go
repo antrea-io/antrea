@@ -23,10 +23,10 @@ import (
 
 	"k8s.io/klog/v2"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/config"
-	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter"
-	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
-	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsctl"
+	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/agent/flowexporter"
+	"antrea.io/antrea/pkg/agent/openflow"
+	"antrea.io/antrea/pkg/ovs/ovsctl"
 )
 
 // Following map is for converting protocol name (string) to protocol identifier

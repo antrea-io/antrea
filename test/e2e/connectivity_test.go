@@ -24,7 +24,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/agent/config"
 )
 
 const pingCount = 5

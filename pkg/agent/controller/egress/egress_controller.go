@@ -33,15 +33,15 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent"
-	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
-	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
-	"github.com/vmware-tanzu/antrea/pkg/agent/route"
-	cpv1b2 "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
-	crdv1a2 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha2"
-	crdinformers "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions/crd/v1alpha2"
-	crdlisters "github.com/vmware-tanzu/antrea/pkg/client/listers/crd/v1alpha2"
-	"github.com/vmware-tanzu/antrea/pkg/k8s"
+	"antrea.io/antrea/pkg/agent"
+	"antrea.io/antrea/pkg/agent/interfacestore"
+	"antrea.io/antrea/pkg/agent/openflow"
+	"antrea.io/antrea/pkg/agent/route"
+	cpv1b2 "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
+	crdv1a2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
+	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha2"
+	crdlisters "antrea.io/antrea/pkg/client/listers/crd/v1alpha2"
+	"antrea.io/antrea/pkg/k8s"
 )
 
 const (

@@ -19,7 +19,7 @@ package fake
 import (
 	"context"
 
-	v1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/system/v1beta1"
+	v1beta1 "antrea.io/antrea/pkg/apis/system/v1beta1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	testing "k8s.io/client-go/testing"

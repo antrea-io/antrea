@@ -1,4 +1,4 @@
-module github.com/vmware-tanzu/antrea/ci/clair
+module antrea.io/antrea/ci/clair
 
 go 1.15
 

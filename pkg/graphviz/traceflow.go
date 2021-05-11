@@ -22,7 +22,7 @@ import (
 
 	"github.com/awalterschulze/gographviz"
 
-	crdv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha1"
+	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 )
 
 const (

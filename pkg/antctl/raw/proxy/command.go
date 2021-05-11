@@ -29,10 +29,10 @@ import (
 	"k8s.io/klog/v2"
 	"k8s.io/kubectl/pkg/proxy"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/controller/noderoute"
-	"github.com/vmware-tanzu/antrea/pkg/antctl/runtime"
-	clusterinformationv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1beta1"
-	antrea "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned"
+	"antrea.io/antrea/pkg/agent/controller/noderoute"
+	"antrea.io/antrea/pkg/antctl/runtime"
+	clusterinformationv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
+	antrea "antrea.io/antrea/pkg/client/clientset/versioned"
 )
 
 const (

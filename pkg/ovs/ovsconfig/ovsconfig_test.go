@@ -20,7 +20,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	ofconfig "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
+	ofconfig "antrea.io/antrea/pkg/ovs/openflow"
 )
 
 const (

@@ -27,16 +27,16 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/tools/cache"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/config"
-	"github.com/vmware-tanzu/antrea/pkg/agent/openflow/cookie"
-	oftest "github.com/vmware-tanzu/antrea/pkg/agent/openflow/testing"
-	"github.com/vmware-tanzu/antrea/pkg/agent/types"
-	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
-	crdv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha1"
-	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
-	mocks "github.com/vmware-tanzu/antrea/pkg/ovs/openflow/testing"
-	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
-	ovsctltest "github.com/vmware-tanzu/antrea/pkg/ovs/ovsctl/testing"
+	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/agent/openflow/cookie"
+	oftest "antrea.io/antrea/pkg/agent/openflow/testing"
+	"antrea.io/antrea/pkg/agent/types"
+	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
+	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	binding "antrea.io/antrea/pkg/ovs/openflow"
+	mocks "antrea.io/antrea/pkg/ovs/openflow/testing"
+	"antrea.io/antrea/pkg/ovs/ovsconfig"
+	ovsctltest "antrea.io/antrea/pkg/ovs/ovsctl/testing"
 )
 
 var (

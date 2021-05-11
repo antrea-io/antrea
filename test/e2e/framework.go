@@ -47,11 +47,11 @@ import (
 	"k8s.io/component-base/featuregate"
 	aggregatorclientset "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/config"
-	crdclientset "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned"
-	"github.com/vmware-tanzu/antrea/pkg/features"
-	legacycrdclientset "github.com/vmware-tanzu/antrea/pkg/legacyclient/clientset/versioned"
-	"github.com/vmware-tanzu/antrea/test/e2e/providers"
+	"antrea.io/antrea/pkg/agent/config"
+	crdclientset "antrea.io/antrea/pkg/client/clientset/versioned"
+	"antrea.io/antrea/pkg/features"
+	legacycrdclientset "antrea.io/antrea/pkg/legacyclient/clientset/versioned"
+	"antrea.io/antrea/test/e2e/providers"
 )
 
 const (

@@ -26,13 +26,13 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/ti-mo/conntrack"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/config"
-	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter"
-	connectionstest "github.com/vmware-tanzu/antrea/pkg/agent/flowexporter/connections/testing"
-	"github.com/vmware-tanzu/antrea/pkg/agent/metrics"
-	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
-	"github.com/vmware-tanzu/antrea/pkg/agent/util/sysctl"
-	ovsctltest "github.com/vmware-tanzu/antrea/pkg/ovs/ovsctl/testing"
+	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/agent/flowexporter"
+	connectionstest "antrea.io/antrea/pkg/agent/flowexporter/connections/testing"
+	"antrea.io/antrea/pkg/agent/metrics"
+	"antrea.io/antrea/pkg/agent/openflow"
+	"antrea.io/antrea/pkg/agent/util/sysctl"
+	ovsctltest "antrea.io/antrea/pkg/ovs/ovsctl/testing"
 )
 
 var (

@@ -16,4 +16,4 @@
 // +k8s:deepcopy-gen=package
 // +groupName=security.antrea.tanzu.vmware.com
 
-package v1alpha1 // import "github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
+package v1alpha1 // import "antrea.io/antrea/pkg/apis/security/v1alpha1"

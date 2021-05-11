@@ -41,13 +41,13 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 
-	agentapiserver "github.com/vmware-tanzu/antrea/pkg/agent/apiserver"
-	"github.com/vmware-tanzu/antrea/pkg/agent/controller/noderoute"
-	"github.com/vmware-tanzu/antrea/pkg/antctl/runtime"
-	"github.com/vmware-tanzu/antrea/pkg/apis"
-	systemv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/system/v1beta1"
-	controllerapiserver "github.com/vmware-tanzu/antrea/pkg/apiserver"
-	antrea "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned"
+	agentapiserver "antrea.io/antrea/pkg/agent/apiserver"
+	"antrea.io/antrea/pkg/agent/controller/noderoute"
+	"antrea.io/antrea/pkg/antctl/runtime"
+	"antrea.io/antrea/pkg/apis"
+	systemv1beta1 "antrea.io/antrea/pkg/apis/system/v1beta1"
+	controllerapiserver "antrea.io/antrea/pkg/apiserver"
+	antrea "antrea.io/antrea/pkg/client/clientset/versioned"
 )
 
 const (

@@ -21,7 +21,7 @@ import (
 	"github.com/containernetworking/cni/pkg/invoke"
 	"github.com/containernetworking/cni/pkg/types/current"
 
-	cnipb "github.com/vmware-tanzu/antrea/pkg/apis/cni/v1beta1"
+	cnipb "antrea.io/antrea/pkg/apis/cni/v1beta1"
 )
 
 var ipamDrivers map[string]IPAMDriver

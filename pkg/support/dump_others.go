@@ -21,9 +21,9 @@ import (
 	"path"
 	"path/filepath"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/config"
-	"github.com/vmware-tanzu/antrea/pkg/agent/util/iptables"
-	"github.com/vmware-tanzu/antrea/pkg/util/logdir"
+	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/agent/util/iptables"
+	"antrea.io/antrea/pkg/util/logdir"
 )
 
 func (d *agentDumper) DumpLog(basedir string) error {

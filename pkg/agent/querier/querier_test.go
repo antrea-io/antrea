@@ -23,13 +23,13 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/config"
-	interfacestoretest "github.com/vmware-tanzu/antrea/pkg/agent/interfacestore/testing"
-	openflowtest "github.com/vmware-tanzu/antrea/pkg/agent/openflow/testing"
-	"github.com/vmware-tanzu/antrea/pkg/apis/crd/v1beta1"
-	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
-	ovsconfigtest "github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig/testing"
-	queriertest "github.com/vmware-tanzu/antrea/pkg/querier/testing"
+	"antrea.io/antrea/pkg/agent/config"
+	interfacestoretest "antrea.io/antrea/pkg/agent/interfacestore/testing"
+	openflowtest "antrea.io/antrea/pkg/agent/openflow/testing"
+	"antrea.io/antrea/pkg/apis/crd/v1beta1"
+	binding "antrea.io/antrea/pkg/ovs/openflow"
+	ovsconfigtest "antrea.io/antrea/pkg/ovs/ovsconfig/testing"
+	queriertest "antrea.io/antrea/pkg/querier/testing"
 )
 
 const ovsVersion = "2.10.0"

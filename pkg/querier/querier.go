@@ -17,10 +17,10 @@ package querier
 import (
 	v1 "k8s.io/api/core/v1"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/types"
-	cpv1beta "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
-	"github.com/vmware-tanzu/antrea/pkg/util/env"
-	"github.com/vmware-tanzu/antrea/pkg/version"
+	"antrea.io/antrea/pkg/agent/types"
+	cpv1beta "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/pkg/util/env"
+	"antrea.io/antrea/pkg/version"
 )
 
 type NetworkPolicyInfoQuerier interface {
