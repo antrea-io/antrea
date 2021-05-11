@@ -1066,8 +1066,10 @@ func TestTraceflowInterNode(t *testing.T) {
 		dstPodIPv6Str = node2IPs[0].ipv6.String()
 	}
 
-	require.NoError(t, data.createNginxPod("nginx", node2))
-	nginxIP, err := data.podWaitForIPs(defaultTimeout, "nginx", testNamespace)
+	// Create Service backend Pod. The "hairpin" testcases require 1 backend Pod.
+	nginxPodName := "nginx"
+	require.NoError(t, data.createNginxPod(nginxPodName, node2))
+	nginxIP, err := data.podWaitForIPs(defaultTimeout, nginxPodName, testNamespace)
 	require.NoError(t, err)
 
 	var nginxIPv4Str, nginxIPv6Str, svcIPv4Name, svcIPv6Name string
@@ -1349,7 +1351,7 @@ func TestTraceflowInterNode(t *testing.T) {
 						},
 						{
 							Component:       v1alpha1.ComponentLB,
-							Pod:             fmt.Sprintf("%s/%s", testNamespace, "nginx"),
+							Pod:             fmt.Sprintf("%s/%s", testNamespace, nginxPodName),
 							TranslatedDstIP: nginxIPv4Str,
 							Action:          v1alpha1.ActionForwarded,
 						},
@@ -1371,6 +1373,64 @@ func TestTraceflowInterNode(t *testing.T) {
 						{
 							Component: v1alpha1.ComponentForwarding,
 							Action:    v1alpha1.ActionReceived,
+						},
+						{
+							Component:     v1alpha1.ComponentForwarding,
+							ComponentInfo: "Output",
+							Action:        v1alpha1.ActionDelivered,
+						},
+					},
+				},
+			},
+		},
+		{
+			name:      "hairpinServiceTraceflowIPv4",
+			ipVersion: 4,
+			tf: &v1alpha1.Traceflow{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: randName(fmt.Sprintf("%s-%s-to-svc-%s-", testNamespace, nginxPodName, svcIPv4Name)),
+				},
+				Spec: v1alpha1.TraceflowSpec{
+					Source: v1alpha1.Source{
+						Namespace: testNamespace,
+						Pod:       nginxPodName,
+					},
+					Destination: v1alpha1.Destination{
+						Namespace: testNamespace,
+						Service:   svcIPv4Name,
+					},
+					Packet: v1alpha1.Packet{
+						IPHeader: v1alpha1.IPHeader{
+							Protocol: protocolTCP,
+						},
+						TransportHeader: v1alpha1.TransportHeader{
+							TCP: &v1alpha1.TCPHeader{
+								DstPort: 80,
+								Flags:   2,
+							},
+						},
+					},
+				},
+			},
+			expectedPhase: v1alpha1.Succeeded,
+			expectedResults: []v1alpha1.NodeResult{
+				{
+					Node: node2,
+					Observations: []v1alpha1.Observation{
+						{
+							Component: v1alpha1.ComponentSpoofGuard,
+							Action:    v1alpha1.ActionForwarded,
+						},
+						{
+							Component:       v1alpha1.ComponentLB,
+							Pod:             fmt.Sprintf("%s/%s", testNamespace, nginxPodName),
+							TranslatedDstIP: nginxIPv4Str,
+							Action:          v1alpha1.ActionForwarded,
+						},
+						{
+							Component:     v1alpha1.ComponentNetworkPolicy,
+							ComponentInfo: "EgressRule",
+							Action:        v1alpha1.ActionForwarded,
 						},
 						{
 							Component:     v1alpha1.ComponentForwarding,
@@ -1668,7 +1728,7 @@ func TestTraceflowInterNode(t *testing.T) {
 						},
 						{
 							Component:       v1alpha1.ComponentLB,
-							Pod:             fmt.Sprintf("%s/%s", testNamespace, "nginx"),
+							Pod:             fmt.Sprintf("%s/%s", testNamespace, nginxPodName),
 							TranslatedDstIP: nginxIPv6Str,
 							Action:          v1alpha1.ActionForwarded,
 						},
@@ -1690,6 +1750,64 @@ func TestTraceflowInterNode(t *testing.T) {
 						{
 							Component: v1alpha1.ComponentForwarding,
 							Action:    v1alpha1.ActionReceived,
+						},
+						{
+							Component:     v1alpha1.ComponentForwarding,
+							ComponentInfo: "Output",
+							Action:        v1alpha1.ActionDelivered,
+						},
+					},
+				},
+			},
+		},
+		{
+			name:      "hairpinServiceTraceflowIPv6",
+			ipVersion: 6,
+			tf: &v1alpha1.Traceflow{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: randName(fmt.Sprintf("%s-%s-to-svc-%s-", testNamespace, nginxPodName, svcIPv6Name)),
+				},
+				Spec: v1alpha1.TraceflowSpec{
+					Source: v1alpha1.Source{
+						Namespace: testNamespace,
+						Pod:       nginxPodName,
+					},
+					Destination: v1alpha1.Destination{
+						Namespace: testNamespace,
+						Service:   svcIPv6Name,
+					},
+					Packet: v1alpha1.Packet{
+						IPv6Header: &v1alpha1.IPv6Header{
+							NextHeader: &protocolTCP,
+						},
+						TransportHeader: v1alpha1.TransportHeader{
+							TCP: &v1alpha1.TCPHeader{
+								DstPort: 80,
+								Flags:   2,
+							},
+						},
+					},
+				},
+			},
+			expectedPhase: v1alpha1.Succeeded,
+			expectedResults: []v1alpha1.NodeResult{
+				{
+					Node: node2,
+					Observations: []v1alpha1.Observation{
+						{
+							Component: v1alpha1.ComponentSpoofGuard,
+							Action:    v1alpha1.ActionForwarded,
+						},
+						{
+							Component:       v1alpha1.ComponentLB,
+							Pod:             fmt.Sprintf("%s/%s", testNamespace, nginxPodName),
+							TranslatedDstIP: nginxIPv6Str,
+							Action:          v1alpha1.ActionForwarded,
+						},
+						{
+							Component:     v1alpha1.ComponentNetworkPolicy,
+							ComponentInfo: "EgressRule",
+							Action:        v1alpha1.ActionForwarded,
 						},
 						{
 							Component:     v1alpha1.ComponentForwarding,
