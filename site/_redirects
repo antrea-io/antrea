@@ -1,0 +1,4 @@
+# TODO: this could be auto-generated based on the different repositories in antrea-io
+# See https://github.com/knative/website/tree/main/tools/redir-gen
+
+/antrea/* go-get=1 /golang/antrea.html 200
