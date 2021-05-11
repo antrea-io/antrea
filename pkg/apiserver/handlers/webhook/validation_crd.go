@@ -21,7 +21,7 @@ import (
 	"net/http"
 
 	admv1 "k8s.io/api/admission/v1"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 
 	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy"
 )

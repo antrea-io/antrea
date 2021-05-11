@@ -21,7 +21,7 @@ import (
 	"strings"
 
 	"k8s.io/component-base/featuregate"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/features"

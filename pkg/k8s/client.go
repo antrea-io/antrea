@@ -19,7 +19,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	componentbaseconfig "k8s.io/component-base/config"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 	aggregatorclientset "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 
 	crdclientset "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned"

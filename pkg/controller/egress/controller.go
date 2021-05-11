@@ -22,7 +22,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 
 	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
 	egressv1alpha2 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha2"

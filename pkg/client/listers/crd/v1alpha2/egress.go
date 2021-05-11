@@ -24,10 +24,13 @@ import (
 )
 
 // EgressLister helps list Egresses.
+// All objects returned here must be treated as read-only.
 type EgressLister interface {
 	// List lists all Egresses in the indexer.
+	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1alpha2.Egress, err error)
 	// Get retrieves the Egress from the index for a given name.
+	// Objects returned here must be treated as read-only.
 	Get(name string) (*v1alpha2.Egress, error)
 	EgressListerExpansion
 }
