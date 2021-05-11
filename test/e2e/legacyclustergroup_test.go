@@ -270,5 +270,6 @@ func TestLegacyClusterGroup(t *testing.T) {
 		t.Run("Case=LegacyChildGroupExceedMaxNestedLevel", func(t *testing.T) { testLegacyInvalidCGMaxNestedLevel(t) })
 		cleanupLegacyChildCGForTest(t)
 	})
-	failOnError(k8sUtils.CleanLegacyCGs(), t)
+
+	k8sUtils.LegacyCleanup(namespaces) // clean up all cluster-scope resources, including CGs
 }
