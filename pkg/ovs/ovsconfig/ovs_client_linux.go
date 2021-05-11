@@ -18,7 +18,7 @@ package ovsconfig
 
 import (
 	"github.com/TomCodeLV/OVSDB-golang-lib/pkg/dbtransaction"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 )
 
 func (br *OVSBridge) SetInterfaceMTU(name string, MTU int) error {

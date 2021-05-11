@@ -20,7 +20,7 @@ import (
 	"time"
 
 	"k8s.io/client-go/informers"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent"
 	"github.com/vmware-tanzu/antrea/pkg/agent/apiserver"

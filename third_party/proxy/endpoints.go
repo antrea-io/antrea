@@ -31,7 +31,7 @@ limitations under the License.
 Modifies:
 - Remove imports: "net", "reflect", "strconv", "sync", "time", "k8s.io/api/core/v1",
   "k8s.io/api/discovery/v1beta1", "k8s.io/apimachinery/pkg/util/sets",
-  "k8s.io/client-go/tools/record", "k8s.io/klog", "k8s.io/utils/net"
+  "k8s.io/client-go/tools/record", "k8s.io/klog/v2", "k8s.io/utils/net"
 - Remove vars: "supportedEndpointSliceAddressTypes"
 - Remove functions: "newBaseEndpointInfo", "makeEndpointFunc",
   "NewEndpointChangeTracker", "detectStaleConnections"

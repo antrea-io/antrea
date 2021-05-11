@@ -25,7 +25,7 @@ import (
 
 	"github.com/contiv/libOpenflow/protocol"
 	"k8s.io/client-go/tools/cache"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
 	"github.com/vmware-tanzu/antrea/pkg/agent/metrics"

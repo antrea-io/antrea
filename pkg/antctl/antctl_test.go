@@ -55,6 +55,7 @@ func TestCommandVersionRequestError(t *testing.T) {
 	client.EXPECT().request(gomock.Any()).Return(nil, serverError)
 
 	rootCmd.SetOut(&bufOut)
+	rootCmd.SetErr(&bufOut)
 	rootCmd.SetArgs([]string{"version"})
 	rootCmd.Execute()
 	expected := fmt.Sprintf("antctlVersion: %s", antreaversion.GetFullVersion())
@@ -76,6 +77,7 @@ func TestExtraArgs(t *testing.T) {
 
 	extraArg := "icmp"
 	cmd.SetOut(&bufOut)
+	cmd.SetErr(&bufOut)
 	cmd.SetArgs([]string{"traceflow", "-S", "pod1", "-D", "pod2", extraArg})
 	cmd.Execute()
 	assert.Contains(t, bufOut.String(), fmt.Sprintf("unknown command %q for", extraArg))

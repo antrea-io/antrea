@@ -40,8 +40,8 @@ package proxy
 import (
 	"fmt"
 
-	"k8s.io/api/core/v1"
-	"k8s.io/klog"
+	v1 "k8s.io/api/core/v1"
+	"k8s.io/klog/v2"
 	utilnet "k8s.io/utils/net"
 )
 
@@ -69,7 +69,8 @@ func (proxier *metaProxier) SyncLoop() {
 
 // OnServiceAdd is called whenever creation of new service object is observed.
 func (proxier *metaProxier) OnServiceAdd(service *v1.Service) {
-	if *(service.Spec.IPFamily) == v1.IPv4Protocol {
+	ipfamily := service.Spec.IPFamilies[0]
+	if ipfamily == v1.IPv4Protocol {
 		proxier.ipv4Proxier.OnServiceAdd(service)
 		return
 	}
@@ -80,7 +81,8 @@ func (proxier *metaProxier) OnServiceAdd(service *v1.Service) {
 // service object is observed.
 func (proxier *metaProxier) OnServiceUpdate(oldService, service *v1.Service) {
 	// IPFamily is immutable, hence we only need to check on the new service
-	if *(service.Spec.IPFamily) == v1.IPv4Protocol {
+	ipfamily := service.Spec.IPFamilies[0]
+	if ipfamily == v1.IPv4Protocol {
 		proxier.ipv4Proxier.OnServiceUpdate(oldService, service)
 		return
 	}
@@ -91,7 +93,8 @@ func (proxier *metaProxier) OnServiceUpdate(oldService, service *v1.Service) {
 // OnServiceDelete is called whenever deletion of an existing service
 // object is observed.
 func (proxier *metaProxier) OnServiceDelete(service *v1.Service) {
-	if *(service.Spec.IPFamily) == v1.IPv4Protocol {
+	ipfamily := service.Spec.IPFamilies[0]
+	if ipfamily == v1.IPv4Protocol {
 		proxier.ipv4Proxier.OnServiceDelete(service)
 		return
 	}
