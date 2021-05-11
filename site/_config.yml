@@ -173,6 +173,7 @@ collections:
   - contributors
   - features
   - presentations
+  - golang
 versioning: true
 latest: v1.0.1
 versions:
@@ -217,6 +218,7 @@ include:
   - CONTRIBUTING.md
   - README.md
   - CODE_OF_CONDUCT.md
+  - _redirects
 # Exclude these files from your production _site
 exclude:
   - Gemfile
