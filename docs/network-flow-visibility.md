@@ -163,26 +163,30 @@ the flow. All the IEs used by the Antrea Flow Exporter are listed below:
 
 #### IEs from Antrea IE Registry
 
-| IPFIX Information Element     | Enterprise ID | Field ID | Type        |
-|-------------------------------|---------------|----------|-------------|
-| sourcePodNamespace            | 56506         | 100      | string      |
-| sourcePodName                 | 56506         | 101      | string      |
-| destinationPodNamespace       | 56506         | 102      | string      |
-| destinationPodName            | 56506         | 103      | string      |
-| sourceNodeName                | 56506         | 104      | string      |
-| destinationNodeName           | 56506         | 105      | string      |
-| destinationClusterIPv4        | 56506         | 106      | ipv4Address |
-| destinationClusterIPv6        | 56506         | 107      | ipv6Address |
-| destinationServicePort        | 56506         | 108      | unsigned16  |
-| destinationServicePortName    | 56506         | 109      | string      |
-| ingressNetworkPolicyName      | 56506         | 110      | string      |
-| ingressNetworkPolicyNamespace | 56506         | 111      | string      |
-| egressNetworkPolicyName       | 56506         | 112      | string      |
-| egressNetworkPolicyNamespace  | 56506         | 113      | string      |
-| tcpState                      | 56506         | 136      | string      |
-| flowType                      | 56506         | 137      | unsigned8   |
-| ingressNetworkPolicyRuleAction| 56506         | 139      | unsigned8   |
-| egressNetworkPolicyRuleAction | 56506         | 140      | unsigned8   |
+| IPFIX Information Element        | Enterprise ID | Field ID | Type        |
+|----------------------------------|---------------|----------|-------------|
+| sourcePodNamespace               | 56506         | 100      | string      |
+| sourcePodName                    | 56506         | 101      | string      |
+| destinationPodNamespace          | 56506         | 102      | string      |
+| destinationPodName               | 56506         | 103      | string      |
+| sourceNodeName                   | 56506         | 104      | string      |
+| destinationNodeName              | 56506         | 105      | string      |
+| destinationClusterIPv4           | 56506         | 106      | ipv4Address |
+| destinationClusterIPv6           | 56506         | 107      | ipv6Address |
+| destinationServicePort           | 56506         | 108      | unsigned16  |
+| destinationServicePortName       | 56506         | 109      | string      |
+| ingressNetworkPolicyName         | 56506         | 110      | string      |
+| ingressNetworkPolicyNamespace    | 56506         | 111      | string      |
+| ingressNetworkPolicyType         | 56506         | 115      | unsigned8   |
+| ingressNetworkPolicyRuleName     | 56506         | 141      | string      |
+| egressNetworkPolicyName          | 56506         | 112      | string      |
+| egressNetworkPolicyNamespace     | 56506         | 113      | string      |
+| egressNetworkPolicyType          | 56506         | 118      | unsigned8   |
+| egressNetworkPolicyRuleName      | 56506         | 142      | string      |
+| ingressNetworkPolicyRuleAction   | 56506         | 139      | unsigned8   |
+| egressNetworkPolicyRuleAction    | 56506         | 140      | unsigned8   |
+| tcpState                         | 56506         | 136      | string      |
+| flowType                         | 56506         | 137      | unsigned8   |
 
 ### Supported capabilities
 

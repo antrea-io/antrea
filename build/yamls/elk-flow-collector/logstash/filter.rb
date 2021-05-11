@@ -119,6 +119,22 @@ def filter(event)
         event.remove("[ipfix][egressNetworkPolicyNamespace]")
         event.set("[ipfix][egressNetworkPolicyNamespace]", "N/A")
     end
+    ingressNetworkPolicyType = event.get("[ipfix][ingressNetworkPolicyType]")
+    if ingressNetworkPolicyType == 1
+        event.set("[ipfix][ingressNetworkPolicyTypeStr]", "K8s NetworkPolicy")
+    elsif ingressNetworkPolicyType == 2
+        event.set("[ipfix][ingressNetworkPolicyTypeStr]", "Antrea NetworkPolicy")
+    elsif ingressNetworkPolicyType == 3
+        event.set("[ipfix][ingressNetworkPolicyTypeStr]", "Antrea ClusterNetworkPolicy")
+    end
+    egressNetworkPolicyType = event.get("[ipfix][egressNetworkPolicyType]")
+    if egressNetworkPolicyType == 1
+        event.set("[ipfix][egressNetworkPolicyTypeStr]", "K8s NetworkPolicy")
+    elsif egressNetworkPolicyType == 2
+        event.set("[ipfix][egressNetworkPolicyTypeStr]", "Antrea NetworkPolicy")
+    elsif egressNetworkPolicyType == 3
+        event.set("[ipfix][egressNetworkPolicyTypeStr]", "Antrea ClusterNetworkPolicy")
+    end
     key = event.get("[ipfix][flowKey]")
     if @@time_map.has_key?(key)
        t = DateTime.strptime(event.get("[ipfix][flowEndSeconds]").to_s, '%Y-%m-%dT%H:%M:%S').to_time.to_i

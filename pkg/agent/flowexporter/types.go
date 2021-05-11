@@ -64,9 +64,13 @@ type Connection struct {
 	DestinationServicePort         uint16
 	IngressNetworkPolicyName       string
 	IngressNetworkPolicyNamespace  string
+	IngressNetworkPolicyType       uint8
+	IngressNetworkPolicyRuleName   string
 	IngressNetworkPolicyRuleAction uint8
 	EgressNetworkPolicyName        string
 	EgressNetworkPolicyNamespace   string
+	EgressNetworkPolicyType        uint8
+	EgressNetworkPolicyRuleName    string
 	EgressNetworkPolicyRuleAction  uint8
 	TCPState                       string
 	// fields specific to deny connections

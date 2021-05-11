@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
 	ipfixentitiestesting "github.com/vmware/go-ipfix/pkg/entities/testing"
+	"github.com/vmware/go-ipfix/pkg/registry"
 	ipfixregistry "github.com/vmware/go-ipfix/pkg/registry"
 
 	"antrea.io/antrea/pkg/agent/flowexporter"
@@ -244,6 +245,10 @@ func getElemList(ianaIE []string, antreaIE []string) []*ipfixentities.InfoElemen
 			elemList[i] = ipfixentities.NewInfoElementWithValue(ie.Element, "")
 		case "ingressNetworkPolicyName", "ingressNetworkPolicyNamespace", "egressNetworkPolicyName", "egressNetworkPolicyNamespace":
 			elemList[i] = ipfixentities.NewInfoElementWithValue(ie.Element, "")
+		case "ingressNetworkPolicyRuleName", "egressNetworkPolicyRuleName":
+			elemList[i] = ipfixentities.NewInfoElementWithValue(ie.Element, "")
+		case "ingressNetworkPolicyType", "egressNetworkPolicyType", "ingressNetworkPolicyRuleAction", "egressNetworkPolicyRuleAction":
+			elemList[i] = ipfixentities.NewInfoElementWithValue(ie.Element, uint8(0))
 		}
 	}
 	return elemList
@@ -274,8 +279,12 @@ func getConnection(isIPv6 bool, isPresent bool, statusFlag uint32, protoID uint8
 		DestinationPodName:            "",
 		IngressNetworkPolicyName:      "",
 		IngressNetworkPolicyNamespace: "",
+		IngressNetworkPolicyType:      registry.PolicyTypeK8sNetworkPolicy,
+		IngressNetworkPolicyRuleName:  "",
 		EgressNetworkPolicyName:       "np",
 		EgressNetworkPolicyNamespace:  "np-ns",
+		EgressNetworkPolicyType:       registry.PolicyTypeK8sNetworkPolicy,
+		EgressNetworkPolicyRuleName:   "",
 		DestinationServicePortName:    "service",
 		TCPState:                      tcpState,
 	}

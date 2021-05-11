@@ -15,7 +15,6 @@
 package e2e
 
 import (
-	"context"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -27,12 +26,12 @@ import (
 	"github.com/stretchr/testify/require"
 	ipfixregistry "github.com/vmware/go-ipfix/pkg/registry"
 	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 
 	secv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	"antrea.io/antrea/test/e2e/utils"
 )
 
 /* Sample output from the collector:
@@ -44,7 +43,7 @@ DATA SET:
   DATA RECORD-0:
     flowStartSeconds: 1608338066
     flowEndSeconds: 1608338072
-	flowEndReason: 2
+    flowEndReason: 2
     sourceTransportPort: 43600
     destinationTransportPort: 5201
     protocolIdentifier: 6
@@ -68,9 +67,15 @@ DATA SET:
     destinationServicePortName:
     ingressNetworkPolicyName: test-flow-aggregator-networkpolicy-ingress
     ingressNetworkPolicyNamespace: antrea-test
+    ingressNetworkPolicyType: 2
+    ingressNetworkPolicyRuleName: test-ingress-rule-name
+	ingressNetworkPolicyRuleAction: 1
     egressNetworkPolicyName: test-flow-aggregator-networkpolicy-egress
     egressNetworkPolicyNamespace: antrea-test
-	flowType: 1
+    egressNetworkPolicyType: 2
+    egressNetworkPolicyRuleName: test-egress-rule-name
+	egressNetworkPolicyRuleAction: 1
+    flowType: 1
     destinationClusterIPv4: 0.0.0.0
     originalExporterIPv4Address: 10.10.0.1
     originalObservationDomainId: 2134708971
@@ -98,16 +103,20 @@ AntreaProxy enabled (Inter-Node): Flow record from destination Node is ignored, 
 */
 
 const (
-	ingressAllowNetworkPolicyName = "test-flow-aggregator-networkpolicy-ingress-allow"
-	ingressRejectANPName          = "test-flow-aggregator-anp-ingress-reject"
-	ingressDropANPName            = "test-flow-aggregator-anp-ingress-drop"
-	ingressDenyNPName             = "test-flow-aggregator-np-ingress-deny"
-	egressAllowNetworkPolicyName  = "test-flow-aggregator-networkpolicy-egress-allow"
-	egressRejectANPName           = "test-flow-aggregator-anp-engress-reject"
-	egressDropANPName             = "test-flow-aggregator-anp-engress-drop"
-	egressDenyNPName              = "test-flow-aggregator-np-egress-deny"
-	collectorCheckTimeout         = 12 * time.Second
-	iperfTimeSec                  = 12
+	ingressAllowNetworkPolicyName  = "test-flow-aggregator-networkpolicy-ingress-allow"
+	ingressRejectANPName           = "test-flow-aggregator-anp-ingress-reject"
+	ingressDropANPName             = "test-flow-aggregator-anp-ingress-drop"
+	ingressDenyNPName              = "test-flow-aggregator-np-ingress-deny"
+	egressAllowNetworkPolicyName   = "test-flow-aggregator-networkpolicy-egress-allow"
+	egressRejectANPName            = "test-flow-aggregator-anp-engress-reject"
+	egressDropANPName              = "test-flow-aggregator-anp-engress-drop"
+	egressDenyNPName               = "test-flow-aggregator-np-egress-deny"
+	ingressAntreaNetworkPolicyName = "test-flow-aggregator-antrea-networkpolicy-ingress"
+	egressAntreaNetworkPolicyName  = "test-flow-aggregator-antrea-networkpolicy-egress"
+	testIngressRuleName            = "test-ingress-rule-name"
+	testEgressRuleName             = "test-egress-rule-name"
+	collectorCheckTimeout          = 12 * time.Second
+	iperfTimeSec                   = 12
 	// Single iperf run results in two connections with separate ports (control connection and actual data connection).
 	// As 2s is the export active timeout of flow exporter and iperf traffic runs for 12s, we expect totally 12 records
 	// exporting to the flow aggregator at time 2s, 4s, 6s, 8s, 10s, and 12s after iperf traffic begins.
@@ -132,6 +141,11 @@ func TestFlowAggregator(t *testing.T) {
 	}
 	defer teardownTest(t, data)
 	defer teardownFlowAggregator(t, data)
+
+	k8sUtils, err = NewKubernetesUtils(data)
+	if err != nil {
+		t.Fatalf("Error when creating Kubernetes utils client: %v", err)
+	}
 
 	podAIPs, podBIPs, podCIPs, podDIPs, podEIPs, err := createPerftestPods(data)
 	if err != nil {
@@ -158,9 +172,11 @@ func testHelper(t *testing.T, data *TestData, podAIPs, podBIPs, podCIPs, podDIPs
 
 	// OVS userspace implementation of conntrack doesn't maintain packet or byte counter statistics, so we ignore the bandwidth test in Kind cluster.
 	checkBandwidth := testOptions.providerName != "kind"
-	// IntraNodeFlows tests the case, where Pods are deployed on same Node and their flow information is exported as IPFIX flow records.
+	// IntraNodeFlows tests the case, where Pods are deployed on same Node
+	// and their flow information is exported as IPFIX flow records.
+	// K8s network policies are being tested here.
 	t.Run("IntraNodeFlows", func(t *testing.T) {
-		np1, np2 := deployNetworkPolicies(t, data, "perftest-a", "perftest-b")
+		np1, np2 := deployK8sNetworkPolicies(t, data, "perftest-a", "perftest-b")
 		defer func() {
 			if np1 != nil {
 				if err = data.deleteNetworkpolicy(np1); err != nil {
@@ -174,9 +190,9 @@ func testHelper(t *testing.T, data *TestData, podAIPs, podBIPs, podCIPs, podDIPs
 			}
 		}()
 		if !isIPv6 {
-			checkRecordsForFlows(t, data, podAIPs.ipv4.String(), podBIPs.ipv4.String(), isIPv6, true, false, true, checkBandwidth)
+			checkRecordsForFlows(t, data, podAIPs.ipv4.String(), podBIPs.ipv4.String(), isIPv6, true, false, true, false, checkBandwidth)
 		} else {
-			checkRecordsForFlows(t, data, podAIPs.ipv6.String(), podBIPs.ipv6.String(), isIPv6, true, false, true, checkBandwidth)
+			checkRecordsForFlows(t, data, podAIPs.ipv6.String(), podBIPs.ipv6.String(), isIPv6, true, false, true, false, checkBandwidth)
 		}
 	})
 
@@ -287,24 +303,22 @@ func testHelper(t *testing.T, data *TestData, podAIPs, podBIPs, podCIPs, podDIPs
 
 	// InterNodeFlows tests the case, where Pods are deployed on different Nodes
 	// and their flow information is exported as IPFIX flow records.
+	// Antrea network policies are being tested here.
 	t.Run("InterNodeFlows", func(t *testing.T) {
-		np1, np2 := deployNetworkPolicies(t, data, "perftest-a", "perftest-c")
+		skipIfAntreaPolicyDisabled(t, data)
+		anp1, anp2 := deployAntreaNetworkPolicies(t, data, "perftest-a", "perftest-c")
 		defer func() {
-			if np1 != nil {
-				if err = data.deleteNetworkpolicy(np1); err != nil {
-					t.Errorf("Error when deleting network policy: %v", err)
-				}
+			if anp1 != nil {
+				k8sUtils.DeleteANP(testNamespace, anp1.Name)
 			}
-			if np2 != nil {
-				if err = data.deleteNetworkpolicy(np2); err != nil {
-					t.Errorf("Error when deleting network policy: %v", err)
-				}
+			if anp2 != nil {
+				k8sUtils.DeleteANP(testNamespace, anp2.Name)
 			}
 		}()
 		if !isIPv6 {
-			checkRecordsForFlows(t, data, podAIPs.ipv4.String(), podCIPs.ipv4.String(), isIPv6, false, false, true, checkBandwidth)
+			checkRecordsForFlows(t, data, podAIPs.ipv4.String(), podCIPs.ipv4.String(), isIPv6, false, false, false, true, checkBandwidth)
 		} else {
-			checkRecordsForFlows(t, data, podAIPs.ipv6.String(), podCIPs.ipv6.String(), isIPv6, false, false, true, checkBandwidth)
+			checkRecordsForFlows(t, data, podAIPs.ipv6.String(), podCIPs.ipv6.String(), isIPv6, false, false, false, true, checkBandwidth)
 		}
 	})
 
@@ -417,9 +431,9 @@ func testHelper(t *testing.T, data *TestData, podAIPs, podBIPs, podCIPs, podDIPs
 	t.Run("LocalServiceAccess", func(t *testing.T) {
 		skipIfProxyDisabled(t, data)
 		if !isIPv6 {
-			checkRecordsForFlows(t, data, podAIPs.ipv4.String(), svcB.Spec.ClusterIP, isIPv6, true, true, false, checkBandwidth)
+			checkRecordsForFlows(t, data, podAIPs.ipv4.String(), svcB.Spec.ClusterIP, isIPv6, true, true, false, false, checkBandwidth)
 		} else {
-			checkRecordsForFlows(t, data, podAIPs.ipv6.String(), svcB.Spec.ClusterIP, isIPv6, true, true, false, checkBandwidth)
+			checkRecordsForFlows(t, data, podAIPs.ipv6.String(), svcB.Spec.ClusterIP, isIPv6, true, true, false, false, checkBandwidth)
 		}
 	})
 
@@ -427,14 +441,14 @@ func testHelper(t *testing.T, data *TestData, podAIPs, podBIPs, podCIPs, podDIPs
 	t.Run("RemoteServiceAccess", func(t *testing.T) {
 		skipIfProxyDisabled(t, data)
 		if !isIPv6 {
-			checkRecordsForFlows(t, data, podAIPs.ipv4.String(), svcC.Spec.ClusterIP, isIPv6, false, true, false, checkBandwidth)
+			checkRecordsForFlows(t, data, podAIPs.ipv4.String(), svcC.Spec.ClusterIP, isIPv6, false, true, false, false, checkBandwidth)
 		} else {
-			checkRecordsForFlows(t, data, podAIPs.ipv6.String(), svcC.Spec.ClusterIP, isIPv6, false, true, false, checkBandwidth)
+			checkRecordsForFlows(t, data, podAIPs.ipv6.String(), svcC.Spec.ClusterIP, isIPv6, false, true, false, false, checkBandwidth)
 		}
 	})
 }
 
-func checkRecordsForFlows(t *testing.T, data *TestData, srcIP string, dstIP string, isIPv6 bool, isIntraNode bool, checkService bool, checkNetworkPolicy bool, checkBandwidth bool) {
+func checkRecordsForFlows(t *testing.T, data *TestData, srcIP string, dstIP string, isIPv6 bool, isIntraNode bool, checkService bool, checkK8sNetworkPolicy bool, checkAntreaNetworkPolicy bool, checkBandwidth bool) {
 	timeStart := time.Now()
 	timeStartSec := timeStart.Unix()
 	var cmdStr string
@@ -507,24 +521,42 @@ func checkRecordsForFlows(t *testing.T, data *TestData, srcIP string, dstIP stri
 						t.Errorf("Record with ServiceIP does not have Service name")
 					}
 				} else {
-					if !strings.Contains(record, "antrea-test/perftest-c") {
-						t.Errorf("Record with ServiceIP does not have Service name")
+					checkPodAndNodeData(t, record, "perftest-a", controlPlaneNodeName(), "perftest-c", workerNodeName(1))
+					checkFlowType(t, record, ipfixregistry.FlowTypeInterNode)
+				}
+				assert := assert.New(t)
+				if checkService {
+					if isIntraNode {
+						if !strings.Contains(record, "antrea-test/perftest-b") {
+							t.Errorf("Record with ServiceIP does not have Service name")
+						}
+					} else {
+						if !strings.Contains(record, "antrea-test/perftest-c") {
+							t.Errorf("Record with ServiceIP does not have Service name")
+						}
 					}
 				}
-			}
-			if checkNetworkPolicy {
-				// Check if records have both ingress and egress network policies.
-				if !strings.Contains(record, ingressAllowNetworkPolicyName) {
-					t.Errorf("Record does not have NetworkPolicy name with ingress rule")
+				if checkK8sNetworkPolicy {
+					// Check if records have both ingress and egress network policies.
+					assert.Contains(record, fmt.Sprintf("ingressNetworkPolicyName: %s", ingressAllowNetworkPolicyName), "Record does not have the correct NetworkPolicy name with the ingress rule")
+					assert.Contains(record, fmt.Sprintf("ingressNetworkPolicyNamespace: %s", testNamespace), "Record does not have the correct NetworkPolicy Namespace with the ingress rule")
+					assert.Contains(record, fmt.Sprintf("ingressNetworkPolicyType: %d", ipfixregistry.PolicyTypeK8sNetworkPolicy), "Record does not have the correct NetworkPolicy Type with the ingress rule")
+					assert.Contains(record, fmt.Sprintf("egressNetworkPolicyName: %s", egressAllowNetworkPolicyName), "Record does not have the correct NetworkPolicy name with the egress rule")
+					assert.Contains(record, fmt.Sprintf("egressNetworkPolicyNamespace: %s", testNamespace), "Record does not have the correct NetworkPolicy Namespace with the egress rule")
+					assert.Contains(record, fmt.Sprintf("egressNetworkPolicyType: %d", ipfixregistry.PolicyTypeK8sNetworkPolicy), "Record does not have the correct NetworkPolicy Type with the egress rule")
 				}
-				if !strings.Contains(record, fmt.Sprintf("%s: %s", "ingressNetworkPolicyNamespace", testNamespace)) {
-					t.Errorf("Record does not have correct ingressNetworkPolicyNamespace")
-				}
-				if !strings.Contains(record, egressAllowNetworkPolicyName) {
-					t.Errorf("Record does not have NetworkPolicy name with egress rule")
-				}
-				if !strings.Contains(record, fmt.Sprintf("%s: %s", "egressNetworkPolicyNamespace", testNamespace)) {
-					t.Errorf("Record does not have correct egressNetworkPolicyNamespace")
+				if checkAntreaNetworkPolicy {
+					// Check if records have both ingress and egress network policies.
+					assert.Contains(record, fmt.Sprintf("ingressNetworkPolicyName: %s", ingressAntreaNetworkPolicyName), "Record does not have the correct NetworkPolicy name with the ingress rule")
+					assert.Contains(record, fmt.Sprintf("ingressNetworkPolicyNamespace: %s", testNamespace), "Record does not have the correct NetworkPolicy Namespace with the ingress rule")
+					assert.Contains(record, fmt.Sprintf("ingressNetworkPolicyType: %d", ipfixregistry.PolicyTypeAntreaNetworkPolicy), "Record does not have the correct NetworkPolicy Type with the ingress rule")
+					assert.Contains(record, fmt.Sprintf("ingressNetworkPolicyRuleName: %s", testIngressRuleName), "Record does not have the correct NetworkPolicy RuleName with the ingress rule")
+					assert.Contains(record, fmt.Sprintf("ingressNetworkPolicyRuleAction: %d", ipfixregistry.NetworkPolicyRuleActionAllow), "Record does not have the correct NetworkPolicy RuleAction with the ingress rule")
+					assert.Contains(record, fmt.Sprintf("egressNetworkPolicyName: %s", egressAntreaNetworkPolicyName), "Record does not have the correct NetworkPolicy name with the egress rule")
+					assert.Contains(record, fmt.Sprintf("egressNetworkPolicyNamespace: %s", testNamespace), "Record does not have the correct NetworkPolicy Namespace with the egress rule")
+					assert.Contains(record, fmt.Sprintf("egressNetworkPolicyType: %d", ipfixregistry.PolicyTypeAntreaNetworkPolicy), "Record does not have the correct NetworkPolicy Type with the egress rule")
+					assert.Contains(record, fmt.Sprintf("egressNetworkPolicyRuleName: %s", testEgressRuleName), "Record does not have the correct NetworkPolicy RuleName with the egress rule")
+					assert.Contains(record, fmt.Sprintf("egressNetworkPolicyRuleAction: %d", ipfixregistry.NetworkPolicyRuleActionAllow), "Record does not have the correct NetworkPolicy RuleAction with the egress rule")
 				}
 			}
 			// Skip the bandwidth check for the iperf control flow records which have 0 delta count.
@@ -608,26 +640,34 @@ func checkRecordsForDenyFlows(t *testing.T, data *TestData, testFlow1, testFlow2
 				checkPodAndNodeData(t, record, srcPodName, controlPlaneNodeName(), dstPodName, workerNodeName(1))
 				checkFlowType(t, record, ipfixregistry.FlowTypeInterNode)
 			}
-
+			assert := assert.New(t)
 			if !isANP { // K8s Network Policies
 				if strings.Contains(record, ingressDropStr) && !strings.Contains(record, ingressDropANPName) {
-					assert.Contains(t, record, testFlow1.dstIP)
+					assert.Contains(record, testFlow1.dstIP)
 				} else if strings.Contains(record, egressDropStr) && !strings.Contains(record, egressDropANPName) {
-					assert.Contains(t, record, testFlow2.dstIP)
+					assert.Contains(record, testFlow2.dstIP)
 				}
 			} else { // Antrea Network Policies
 				if strings.Contains(record, ingressRejectStr) {
-					assert.Contains(t, record, ingressRejectANPName, "Record does not have Antrea NetworkPolicy name with ingress reject rule")
-					assert.Contains(t, record, fmt.Sprintf("%s: %s", "ingressNetworkPolicyNamespace", testNamespace), "Record does not have correct ingressNetworkPolicyNamespace")
+					assert.Contains(record, ingressRejectANPName, "Record does not have Antrea NetworkPolicy name with ingress reject rule")
+					assert.Contains(record, fmt.Sprintf("ingressNetworkPolicyNamespace: %s", testNamespace), "Record does not have correct ingressNetworkPolicyNamespace")
+					assert.Contains(record, fmt.Sprintf("ingressNetworkPolicyType: %d", ipfixregistry.PolicyTypeAntreaNetworkPolicy), "Record does not have the correct NetworkPolicy Type with the ingress reject rule")
+					assert.Contains(record, fmt.Sprintf("ingressNetworkPolicyRuleName: %s", testIngressRuleName), "Record does not have the correct NetworkPolicy RuleName with the ingress reject rule")
 				} else if strings.Contains(record, ingressDropStr) {
-					assert.Contains(t, record, ingressDropANPName, "Record does not have Antrea NetworkPolicy name with ingress drop rule")
-					assert.Contains(t, record, fmt.Sprintf("%s: %s", "ingressNetworkPolicyNamespace", testNamespace), "Record does not have correct ingressNetworkPolicyNamespace")
+					assert.Contains(record, ingressDropANPName, "Record does not have Antrea NetworkPolicy name with ingress drop rule")
+					assert.Contains(record, fmt.Sprintf("ingressNetworkPolicyNamespace: %s", testNamespace), "Record does not have correct ingressNetworkPolicyNamespace")
+					assert.Contains(record, fmt.Sprintf("ingressNetworkPolicyType: %d", ipfixregistry.PolicyTypeAntreaNetworkPolicy), "Record does not have the correct NetworkPolicy Type with the ingress drop rule")
+					assert.Contains(record, fmt.Sprintf("ingressNetworkPolicyRuleName: %s", testIngressRuleName), "Record does not have the correct NetworkPolicy RuleName with the ingress drop rule")
 				} else if strings.Contains(record, egressRejectStr) {
-					assert.Contains(t, record, egressRejectANPName, "Record does not have Antrea NetworkPolicy name with egress reject rule")
-					assert.Contains(t, record, fmt.Sprintf("%s: %s", "egressNetworkPolicyNamespace", testNamespace), "Record does not have correct egressNetworkPolicyNamespace")
+					assert.Contains(record, egressRejectANPName, "Record does not have Antrea NetworkPolicy name with egress reject rule")
+					assert.Contains(record, fmt.Sprintf("egressNetworkPolicyNamespace: %s", testNamespace), "Record does not have correct egressNetworkPolicyNamespace")
+					assert.Contains(record, fmt.Sprintf("egressNetworkPolicyType: %d", ipfixregistry.PolicyTypeAntreaNetworkPolicy), "Record does not have the correct NetworkPolicy Type with the egress reject rule")
+					assert.Contains(record, fmt.Sprintf("egressNetworkPolicyRuleName: %s", testEgressRuleName), "Record does not have the correct NetworkPolicy RuleName with the egress reject rule")
 				} else if strings.Contains(record, egressDropStr) {
-					assert.Contains(t, record, egressDropANPName, "Record does not have Antrea NetworkPolicy name with egress drop rule")
-					assert.Contains(t, record, fmt.Sprintf("%s: %s", "egressNetworkPolicyNamespace", testNamespace), "Record does not have correct egressNetworkPolicyNamespace")
+					assert.Contains(record, egressDropANPName, "Record does not have Antrea NetworkPolicy name with egress drop rule")
+					assert.Contains(record, fmt.Sprintf("egressNetworkPolicyNamespace: %s", testNamespace), "Record does not have correct egressNetworkPolicyNamespace")
+					assert.Contains(record, fmt.Sprintf("egressNetworkPolicyType: %d", ipfixregistry.PolicyTypeAntreaNetworkPolicy), "Record does not have the correct NetworkPolicy Type with the egress drop rule")
+					assert.Contains(record, fmt.Sprintf("egressNetworkPolicyRuleName: %s", testEgressRuleName), "Record does not have the correct NetworkPolicy RuleName with the egress drop rule")
 				}
 			}
 
@@ -642,24 +682,13 @@ func checkBandwidthByInterval(t *testing.T, bandwidthInMbps float64, octetCount 
 }
 
 func checkPodAndNodeData(t *testing.T, record, srcPod, srcNode, dstPod, dstNode string) {
-	if !strings.Contains(record, srcPod) {
-		t.Errorf("Record with srcIP does not have Pod name")
-	}
-	if !strings.Contains(record, fmt.Sprintf("%s: %s", "sourcePodNamespace", testNamespace)) {
-		t.Errorf("Record does not have correct sourcePodNamespace")
-	}
-	if !strings.Contains(record, fmt.Sprintf("%s: %s", "sourceNodeName", srcNode)) {
-		t.Errorf("Record does not have correct sourceNodeName")
-	}
-	if !strings.Contains(record, dstPod) {
-		t.Errorf("Record with dstIP does not have Pod name")
-	}
-	if !strings.Contains(record, fmt.Sprintf("%s: %s", "destinationPodNamespace", testNamespace)) {
-		t.Errorf("Record does not have correct destinationPodNamespace")
-	}
-	if !strings.Contains(record, fmt.Sprintf("%s: %s", "destinationNodeName", dstNode)) {
-		t.Errorf("Record does not have correct destinationNodeName")
-	}
+	assert := assert.New(t)
+	assert.Contains(record, srcPod, "Record with srcIP does not have Pod name")
+	assert.Contains(record, fmt.Sprintf("sourcePodNamespace: %s", testNamespace), "Record does not have correct sourcePodNamespace")
+	assert.Contains(record, fmt.Sprintf("sourceNodeName: %s", srcNode), "Record does not have correct sourceNodeName")
+	assert.Contains(record, dstPod, "Record with dstIP does not have Pod name")
+	assert.Contains(record, fmt.Sprintf("destinationPodNamespace: %s", testNamespace), "Record does not have correct destinationPodNamespace")
+	assert.Contains(record, fmt.Sprintf("destinationNodeName: %s", dstNode), "Record does not have correct destinationNodeName")
 }
 
 func getUnit64FieldFromRecord(t *testing.T, record string, field string) uint64 {
@@ -677,7 +706,7 @@ func getUnit64FieldFromRecord(t *testing.T, record string, field string) uint64 
 
 // TODO: Add a test that checks the functionality of Pod-To-External flow.
 func checkFlowType(t *testing.T, record string, flowType uint8) {
-	assert.Containsf(t, record, fmt.Sprintf("%s: %d", "flowType", flowType), "Record does not have correct flowType")
+	assert.Containsf(t, record, fmt.Sprintf("flowType: %d", flowType), "Record does not have correct flowType")
 }
 
 func getRecordsFromOutput(output string) []string {
@@ -692,8 +721,8 @@ func getRecordsFromOutput(output string) []string {
 	return recordSlices
 }
 
-func deployNetworkPolicies(t *testing.T, data *TestData, srcPod, dstPod string) (np1 *networkingv1.NetworkPolicy, np2 *networkingv1.NetworkPolicy) {
-	// Add NetworkPolicy between two iperf Pods.
+func deployK8sNetworkPolicies(t *testing.T, data *TestData, srcPod, dstPod string) (np1 *networkingv1.NetworkPolicy, np2 *networkingv1.NetworkPolicy) {
+	// Add K8s NetworkPolicy between two iperf Pods.
 	var err error
 	np1, err = data.createNetworkPolicy(ingressAllowNetworkPolicyName, &networkingv1.NetworkPolicySpec{
 		PodSelector: metav1.LabelSelector{},
@@ -735,25 +764,80 @@ func deployNetworkPolicies(t *testing.T, data *TestData, srcPod, dstPod string) 
 	return np1, np2
 }
 
-func deployDenyAntreaNetworkPolicies(t *testing.T, data *TestData, srcPod, podReject, podDrop string, isIngress bool) (anp1 *secv1alpha1.NetworkPolicy, anp2 *secv1alpha1.NetworkPolicy) {
-	var err error
-	k8sUtils, _ = NewKubernetesUtils(data)
-	if isIngress {
-		if anp1, err = data.createANPDenyIngress("antrea-e2e", podReject, ingressRejectANPName, true); err != nil {
-			t.Fatalf("Error when creating Antrea NetworkPolicy: %v", err)
-		}
-		if anp2, err = data.createANPDenyIngress("antrea-e2e", podDrop, ingressDropANPName, false); err != nil {
-			t.Fatalf("Error when creating Antrea NetworkPolicy: %v", err)
-		}
-	} else {
-		if anp1, err = data.createANPDenyEgress(srcPod, podReject, egressRejectANPName, true); err != nil {
-			t.Fatalf("Error when creating Antrea NetworkPolicy: %v", err)
-		}
-		if anp2, err = data.createANPDenyEgress(srcPod, podDrop, egressDropANPName, false); err != nil {
-			t.Fatalf("Error when creating Antrea NetworkPolicy: %v", err)
-		}
+func deployAntreaNetworkPolicies(t *testing.T, data *TestData, srcPod, dstPod string) (anp1 *secv1alpha1.NetworkPolicy, anp2 *secv1alpha1.NetworkPolicy) {
+	builder1 := &utils.AntreaNetworkPolicySpecBuilder{}
+	// apply anp to dstPod, allow ingress from srcPod
+	builder1 = builder1.SetName(testNamespace, ingressAntreaNetworkPolicyName).
+		SetPriority(2.0).
+		SetAppliedToGroup([]utils.ANPAppliedToSpec{{PodSelector: map[string]string{"antrea-e2e": dstPod}}})
+	builder1 = builder1.AddIngress(corev1.ProtocolTCP, nil, nil, nil, nil, map[string]string{"antrea-e2e": srcPod}, map[string]string{},
+		nil, nil, nil, secv1alpha1.RuleActionAllow, testIngressRuleName)
+	anp1 = builder1.Get()
+	anp1, err1 := k8sUtils.CreateOrUpdateANP(anp1)
+	if err1 != nil {
+		failOnError(fmt.Errorf("Error when creating Antrea Network Policy: %v", err1), t)
 	}
 
+	builder2 := &utils.AntreaNetworkPolicySpecBuilder{}
+	// apply anp to srcPod, allow egress to dstPod
+	builder2 = builder2.SetName(testNamespace, egressAntreaNetworkPolicyName).
+		SetPriority(2.0).
+		SetAppliedToGroup([]utils.ANPAppliedToSpec{{PodSelector: map[string]string{"antrea-e2e": srcPod}}})
+	builder2 = builder2.AddEgress(corev1.ProtocolTCP, nil, nil, nil, nil, map[string]string{"antrea-e2e": dstPod}, map[string]string{},
+		nil, nil, nil, secv1alpha1.RuleActionAllow, testEgressRuleName)
+	anp2 = builder2.Get()
+	anp2, err2 := k8sUtils.CreateOrUpdateANP(anp2)
+	if err2 != nil {
+		failOnError(fmt.Errorf("Error when creating Network Policy: %v", err2), t)
+	}
+
+	// Wait for network policies to be realized.
+	if err := WaitNetworkPolicyRealize(2, data); err != nil {
+		t.Errorf("Error when waiting for Antrea Network Policy to be realized: %v", err)
+	}
+	t.Log("Antrea Network Policies are realized.")
+	return anp1, anp2
+}
+
+func deployDenyAntreaNetworkPolicies(t *testing.T, data *TestData, srcPod, podReject, podDrop string, isIngress bool) (anp1 *secv1alpha1.NetworkPolicy, anp2 *secv1alpha1.NetworkPolicy) {
+	var err error
+	builder1 := &utils.AntreaNetworkPolicySpecBuilder{}
+	builder2 := &utils.AntreaNetworkPolicySpecBuilder{}
+	if isIngress {
+		// apply reject and drop ingress rule to destination pods
+		builder1 = builder1.SetName(testNamespace, ingressRejectANPName).
+			SetPriority(2.0).
+			SetAppliedToGroup([]utils.ANPAppliedToSpec{{PodSelector: map[string]string{"antrea-e2e": podReject}}})
+		builder1 = builder1.AddIngress(corev1.ProtocolTCP, nil, nil, nil, nil, map[string]string{"antrea-e2e": srcPod}, map[string]string{},
+			nil, nil, nil, secv1alpha1.RuleActionReject, testIngressRuleName)
+		builder2 = builder2.SetName(testNamespace, ingressDropANPName).
+			SetPriority(2.0).
+			SetAppliedToGroup([]utils.ANPAppliedToSpec{{PodSelector: map[string]string{"antrea-e2e": podDrop}}})
+		builder2 = builder2.AddIngress(corev1.ProtocolTCP, nil, nil, nil, nil, map[string]string{"antrea-e2e": srcPod}, map[string]string{},
+			nil, nil, nil, secv1alpha1.RuleActionDrop, testIngressRuleName)
+	} else {
+		// apply reject and drop egress rule to source pod
+		builder1 = builder1.SetName(testNamespace, egressRejectANPName).
+			SetPriority(2.0).
+			SetAppliedToGroup([]utils.ANPAppliedToSpec{{PodSelector: map[string]string{"antrea-e2e": srcPod}}})
+		builder1 = builder1.AddEgress(corev1.ProtocolTCP, nil, nil, nil, nil, map[string]string{"antrea-e2e": podReject}, map[string]string{},
+			nil, nil, nil, secv1alpha1.RuleActionReject, testEgressRuleName)
+		builder2 = builder2.SetName(testNamespace, egressDropANPName).
+			SetPriority(2.0).
+			SetAppliedToGroup([]utils.ANPAppliedToSpec{{PodSelector: map[string]string{"antrea-e2e": srcPod}}})
+		builder2 = builder2.AddEgress(corev1.ProtocolTCP, nil, nil, nil, nil, map[string]string{"antrea-e2e": podDrop}, map[string]string{},
+			nil, nil, nil, secv1alpha1.RuleActionDrop, testEgressRuleName)
+	}
+	anp1 = builder1.Get()
+	anp1, err = k8sUtils.CreateOrUpdateANP(anp1)
+	if err != nil {
+		failOnError(fmt.Errorf("Error when creating Antrea Network Policy: %v", err), t)
+	}
+	anp2 = builder2.Get()
+	anp2, err = k8sUtils.CreateOrUpdateANP(anp2)
+	if err != nil {
+		failOnError(fmt.Errorf("Error when creating Antrea Network Policy: %v", err), t)
+	}
 	// Wait for Antrea NetworkPolicy to be realized.
 	if err := WaitNetworkPolicyRealize(2, data); err != nil {
 		t.Errorf("Error when waiting for Antrea Network Policy to be realized: %v", err)
@@ -804,7 +888,7 @@ func createPerftestPods(data *TestData) (podAIPs *PodIPs, podBIPs *PodIPs, podCI
 		return nil, nil, nil, nil, nil, fmt.Errorf("Error when waiting for the perftest client Pod: %v", err)
 	}
 
-	if err := data.createPodOnNode("perftest-b", controlPlaneNodeName(), perftoolImage, nil, nil, nil, []v1.ContainerPort{{Protocol: v1.ProtocolTCP, ContainerPort: iperfPort}}, false, nil); err != nil {
+	if err := data.createPodOnNode("perftest-b", controlPlaneNodeName(), perftoolImage, nil, nil, nil, []corev1.ContainerPort{{Protocol: corev1.ProtocolTCP, ContainerPort: iperfPort}}, false, nil); err != nil {
 		return nil, nil, nil, nil, nil, fmt.Errorf("Error when creating the perftest server Pod: %v", err)
 	}
 	podBIPs, err = data.podWaitForIPs(defaultTimeout, "perftest-b", testNamespace)
@@ -812,7 +896,7 @@ func createPerftestPods(data *TestData) (podAIPs *PodIPs, podBIPs *PodIPs, podCI
 		return nil, nil, nil, nil, nil, fmt.Errorf("Error when getting the perftest server Pod's IPs: %v", err)
 	}
 
-	if err := data.createPodOnNode("perftest-c", workerNodeName(1), perftoolImage, nil, nil, nil, []v1.ContainerPort{{Protocol: v1.ProtocolTCP, ContainerPort: iperfPort}}, false, nil); err != nil {
+	if err := data.createPodOnNode("perftest-c", workerNodeName(1), perftoolImage, nil, nil, nil, []corev1.ContainerPort{{Protocol: corev1.ProtocolTCP, ContainerPort: iperfPort}}, false, nil); err != nil {
 		return nil, nil, nil, nil, nil, fmt.Errorf("Error when creating the perftest server Pod: %v", err)
 	}
 	podCIPs, err = data.podWaitForIPs(defaultTimeout, "perftest-c", testNamespace)
@@ -820,7 +904,7 @@ func createPerftestPods(data *TestData) (podAIPs *PodIPs, podBIPs *PodIPs, podCI
 		return nil, nil, nil, nil, nil, fmt.Errorf("Error when getting the perftest server Pod's IPs: %v", err)
 	}
 
-	if err := data.createPodOnNode("perftest-d", controlPlaneNodeName(), perftoolImage, nil, nil, nil, []v1.ContainerPort{{Protocol: v1.ProtocolTCP, ContainerPort: iperfPort}}, false, nil); err != nil {
+	if err := data.createPodOnNode("perftest-d", controlPlaneNodeName(), perftoolImage, nil, nil, nil, []corev1.ContainerPort{{Protocol: corev1.ProtocolTCP, ContainerPort: iperfPort}}, false, nil); err != nil {
 		return nil, nil, nil, nil, nil, fmt.Errorf("Error when creating the perftest server Pod: %v", err)
 	}
 	podDIPs, err = data.podWaitForIPs(defaultTimeout, "perftest-d", testNamespace)
@@ -828,7 +912,7 @@ func createPerftestPods(data *TestData) (podAIPs *PodIPs, podBIPs *PodIPs, podCI
 		return nil, nil, nil, nil, nil, fmt.Errorf("Error when getting the perftest server Pod's IPs: %v", err)
 	}
 
-	if err := data.createPodOnNode("perftest-e", workerNodeName(1), perftoolImage, nil, nil, nil, []v1.ContainerPort{{Protocol: v1.ProtocolTCP, ContainerPort: iperfPort}}, false, nil); err != nil {
+	if err := data.createPodOnNode("perftest-e", workerNodeName(1), perftoolImage, nil, nil, nil, []corev1.ContainerPort{{Protocol: corev1.ProtocolTCP, ContainerPort: iperfPort}}, false, nil); err != nil {
 		return nil, nil, nil, nil, nil, fmt.Errorf("Error when creating the perftest server Pod: %v", err)
 	}
 	podEIPs, err = data.podWaitForIPs(defaultTimeout, "perftest-e", testNamespace)
@@ -845,12 +929,12 @@ func createPerftestServices(data *TestData, isIPv6 bool) (svcB *corev1.Service, 
 		svcIPFamily = corev1.IPv6Protocol
 	}
 
-	svcB, err = data.createService("perftest-b", iperfPort, iperfPort, map[string]string{"antrea-e2e": "perftest-b"}, false, v1.ServiceTypeClusterIP, &svcIPFamily)
+	svcB, err = data.createService("perftest-b", iperfPort, iperfPort, map[string]string{"antrea-e2e": "perftest-b"}, false, corev1.ServiceTypeClusterIP, &svcIPFamily)
 	if err != nil {
 		return nil, nil, fmt.Errorf("Error when creating perftest-b Service: %v", err)
 	}
 
-	svcC, err = data.createService("perftest-c", iperfPort, iperfPort, map[string]string{"antrea-e2e": "perftest-c"}, false, v1.ServiceTypeClusterIP, &svcIPFamily)
+	svcC, err = data.createService("perftest-c", iperfPort, iperfPort, map[string]string{"antrea-e2e": "perftest-c"}, false, corev1.ServiceTypeClusterIP, &svcIPFamily)
 	if err != nil {
 		return nil, nil, fmt.Errorf("Error when creating perftest-c Service: %v", err)
 	}
@@ -865,55 +949,4 @@ func deletePerftestServices(t *testing.T, data *TestData) {
 			t.Logf("Error when deleting %s Service: %v", serviceName, err)
 		}
 	}
-}
-
-// createANPDenyEgress creates an Antrea NetworkPolicy that denies egress traffic for pods of specific label.
-func (data *TestData) createANPDenyEgress(srcPod, dstPod, name string, isReject bool) (*secv1alpha1.NetworkPolicy, error) {
-	dropACT := secv1alpha1.RuleActionDrop
-	if isReject {
-		dropACT = secv1alpha1.RuleActionReject
-	}
-	anp := secv1alpha1.NetworkPolicy{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: name,
-			Labels: map[string]string{
-				"antrea-e2e": srcPod,
-			},
-		},
-		Spec: secv1alpha1.NetworkPolicySpec{
-			Tier:     defaultTierName,
-			Priority: 250,
-			AppliedTo: []secv1alpha1.NetworkPolicyPeer{
-				{
-					PodSelector: &metav1.LabelSelector{
-						MatchLabels: map[string]string{
-							"antrea-e2e": srcPod,
-						},
-					},
-				},
-			},
-			Ingress: []secv1alpha1.Rule{},
-			Egress: []secv1alpha1.Rule{
-				{
-					Action: &dropACT,
-					Ports:  []secv1alpha1.NetworkPolicyPort{},
-					From:   []secv1alpha1.NetworkPolicyPeer{},
-					To: []secv1alpha1.NetworkPolicyPeer{
-						{
-							PodSelector: &metav1.LabelSelector{
-								MatchLabels: map[string]string{
-									"antrea-e2e": dstPod,
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-	}
-	anpCreated, err := k8sUtils.crdClient.CrdV1alpha1().NetworkPolicies(testNamespace).Create(context.TODO(), &anp, metav1.CreateOptions{})
-	if err != nil {
-		return nil, err
-	}
-	return anpCreated, nil
 }
