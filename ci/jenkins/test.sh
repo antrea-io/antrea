@@ -183,7 +183,7 @@ function wait_for_antrea_windows_pods_ready {
 }
 
 function wait_for_antrea_windows_processes_ready {
-    kubectl apply -f "${WORKDIR}/build/yamls/antrea.yml"
+    kubectl apply -f "${WORKDIR}/antrea.yml"
     kubectl rollout restart deployment/coredns -n kube-system
     kubectl rollout status deployment/coredns -n kube-system
     kubectl rollout status deployment.apps/antrea-controller -n kube-system

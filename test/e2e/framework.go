@@ -148,6 +148,7 @@ var testOptions TestOptions
 
 var provider providers.ProviderInterface
 
+// podInfo combines OS info with a Pod name. It is useful when choosing commands and options on Pods of different OS (Windows, Linux).
 type podInfo struct {
 	name string
 	os   string
@@ -1963,7 +1964,7 @@ func (data *TestData) createAgnhostPodOnNode(name string, nodeName string) error
 func (data *TestData) createDaemonSet(name string, ns string, ctrName string, image string, cmd []string, args []string) (*appsv1.DaemonSet, func() error, error) {
 	podSpec := corev1.PodSpec{
 		Tolerations: []corev1.Toleration{
-			{Key: "node-role.kubernetes.io/master", Effect: "NoSchedule"},
+			controlPlaneNoScheduleToleration(),
 		},
 		Containers: []corev1.Container{
 			{

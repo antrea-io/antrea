@@ -147,7 +147,9 @@ func TestHostPortPodConnectivity(t *testing.T) {
 }
 
 // createPodsOnDifferentNodes creates agnhost Pods through a DaemonSet. This function returns information of the created
-// Pods as well as a function which will delete the Pods when called.
+// Pods as well as a function which will delete the Pods when called. Since Pods can be on Nodes of different OSes, podInfo
+// slice instead of PodName slice is used to inform caller of correct commands and options. Linux and Windows Pods are
+// alternating in this podInfo slice so that the test can cover different connectivity cases between different OSes.
 func createPodsOnDifferentNodes(t *testing.T, data *TestData) (podInfos []podInfo, cleanup func() error) {
 	dsName := "connectivity-test"
 	_, cleanup, err := data.createDaemonSet(dsName, testNamespace, agnhostContainerName, agnhostImage, []string{"sleep", "3600"}, nil)
@@ -188,12 +190,7 @@ func createPodsOnDifferentNodes(t *testing.T, data *TestData) (podInfos []podInf
 }
 
 func (data *TestData) testPodConnectivityDifferentNodes(t *testing.T) {
-	numPods := 2
-	// If there're Windows Nodes, an ideal testbed is a cluster of 1 Control Plane Node, 1 Linux worker and 2
-	// Windows Nodes, which is the setup of Windows CI testbed.
-	if len(clusterInfo.windowsNodes) > 1 && (clusterInfo.numNodes-len(clusterInfo.windowsNodes)) > 1 {
-		numPods = 3
-	}
+	numPods, maxPods := 2, 3
 	encapMode, err := data.GetEncapMode()
 	if err != nil {
 		t.Errorf("Failed to retrieve encap mode: %v", err)
@@ -201,11 +198,14 @@ func (data *TestData) testPodConnectivityDifferentNodes(t *testing.T) {
 	if encapMode == config.TrafficEncapModeHybrid {
 		// To adequately test hybrid traffic across and within
 		// subnet, all Nodes should have a Pod.
-		numPods = clusterInfo.numNodes
+		numPods = maxPods
 	}
 	podInfos, deletePods := createPodsOnDifferentNodes(t, data)
 	defer deletePods()
 
+	if len(podInfos) > maxPods {
+		podInfos = podInfos[:maxPods]
+	}
 	data.runPingMesh(t, podInfos[:numPods], agnhostContainerName)
 }
 
@@ -382,10 +382,6 @@ func TestOVSFlowReplay(t *testing.T) {
 		podInfos[i].name = randName(fmt.Sprintf("test-pod-%d-", i))
 	}
 	workerNode := workerNodeName(1)
-
-	if len(clusterInfo.windowsNodes) != 0 {
-		workerNode = workerNodeName(clusterInfo.windowsNodes[0])
-	}
 
 	t.Logf("Creating %d busybox test Pods on '%s'", numPods, workerNode)
 	for i := range podInfos {
