@@ -364,7 +364,13 @@ spec:
                             srcPort:
                               type: integer
                           type: object
-                        # ICMP echo is not supported.
+                        icmp:
+                          properties:
+                            id:
+                              type: integer
+                            sequence:
+                              type: integer
+                          type: object
                       type: object
                   type: object
       subresources:
