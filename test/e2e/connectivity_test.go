@@ -72,7 +72,7 @@ func (data *TestData) testPodConnectivitySameNode(t *testing.T) {
 	for idx := range podInfos {
 		podInfos[idx].name = randName(fmt.Sprintf("test-pod-%d-", idx))
 	}
-	// If there're any Windows Nodes, set workerNode to one of them.
+	// If there are Windows Nodes, set workerNode to one of them.
 	workerNode := workerNodeName(1)
 	if len(clusterInfo.windowsNodes) != 0 {
 		workerNode = workerNodeName(clusterInfo.windowsNodes[0])
