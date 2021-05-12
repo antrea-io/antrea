@@ -2138,6 +2138,7 @@ func cleanupLegacyTestCaseServicesAndGroups(t *testing.T, c *TestCase) {
 
 func TestLegacyAntreaPolicy(t *testing.T) {
 	skipIfProviderIs(t, "kind", "This test is for legacy API groups and is almost the same as new API groups'.")
+	skipIfHasWindowsNodes(t)
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
@@ -2234,6 +2235,7 @@ func TestLegacyAntreaPolicy(t *testing.T) {
 
 func TestLegacyAntreaPolicyStatus(t *testing.T) {
 	skipIfProviderIs(t, "kind", "This test is for legacy API groups and is almost the same as new API groups'.")
+	skipIfHasWindowsNodes(t)
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
@@ -2298,6 +2300,7 @@ func TestLegacyAntreaPolicyStatus(t *testing.T) {
 // networkpolicystats feature is enabled
 func TestLegacyANPNetworkPolicyStatsWithDropAction(t *testing.T) {
 	skipIfProviderIs(t, "kind", "This test is for legacy API groups and is almost the same as new API groups'.")
+	skipIfHasWindowsNodes(t)
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
@@ -2450,6 +2453,7 @@ func TestLegacyANPNetworkPolicyStatsWithDropAction(t *testing.T) {
 
 func TestLegacyAntreaClusterNetworkPolicyStats(t *testing.T) {
 	skipIfProviderIs(t, "kind", "This test is for legacy API groups and is almost the same as new API groups'.")
+	skipIfHasWindowsNodes(t)
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)

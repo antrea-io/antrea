@@ -42,6 +42,7 @@ func skipIfNotUpgradeTest(t *testing.T) {
 func TestUpgrade(t *testing.T) {
 	skipIfNotUpgradeTest(t)
 	skipIfNumNodesLessThan(t, 2)
+	skipIfHasWindowsNodes(t)
 
 	data, err := setupTest(t)
 	if err != nil {

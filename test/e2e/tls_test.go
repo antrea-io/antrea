@@ -38,6 +38,8 @@ var (
 
 // TestAntreaApiserverTLSConfig tests Cipher Suite and TLSVersion config on Antrea apiserver, Controller side or Agent side.
 func TestAntreaApiserverTLSConfig(t *testing.T) {
+	skipIfHasWindowsNodes(t)
+
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)

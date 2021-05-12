@@ -36,6 +36,8 @@ import (
 
 // TestDeploy is a "no-op" test that simply performs setup and teardown.
 func TestDeploy(t *testing.T) {
+	skipIfHasWindowsNodes(t)
+
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
@@ -47,6 +49,8 @@ func TestDeploy(t *testing.T) {
 // deploying a busybox Pod, then waiting for the K8s apiserver to report the new IP address for that
 // Pod, and finally verifying that the IP address is in the Pod Network CIDR for the cluster.
 func TestPodAssignIP(t *testing.T) {
+	skipIfHasWindowsNodes(t)
+
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
@@ -176,6 +180,8 @@ func (data *TestData) testDeletePod(t *testing.T, podName string, nodeName strin
 // TestDeletePod creates a Pod, then deletes it, and checks that the veth interface (in the Node
 // network namespace) and the OVS port for the container get removed.
 func TestDeletePod(t *testing.T) {
+	skipIfHasWindowsNodes(t)
+
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
@@ -198,6 +204,8 @@ func TestDeletePod(t *testing.T) {
 
 // TestAntreaGracefulExit verifies that Antrea Pods can terminate gracefully.
 func TestAntreaGracefulExit(t *testing.T) {
+	skipIfHasWindowsNodes(t)
+
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
@@ -230,6 +238,8 @@ func TestAntreaGracefulExit(t *testing.T) {
 // address. If the 2 IP addresses match, then it is an error. This is not a perfect test, as it
 // assumes that IP addresses are assigned in-order and not randomly.
 func TestIPAMRestart(t *testing.T) {
+	skipIfHasWindowsNodes(t)
+
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
@@ -292,6 +302,8 @@ func TestIPAMRestart(t *testing.T) {
 // cluster) are removed and missing routes are added.
 func TestReconcileGatewayRoutesOnStartup(t *testing.T) {
 	skipIfNumNodesLessThan(t, 2)
+	skipIfHasWindowsNodes(t)
+
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
@@ -563,6 +575,8 @@ func getRoundNumber(data *TestData, podName string) (uint64, error) {
 // Network Policies) are removed correctly.
 func TestDeletePreviousRoundFlowsOnStartup(t *testing.T) {
 	skipIfRunCoverage(t, "Stopping Agent does not work with Coverage")
+	skipIfHasWindowsNodes(t)
+
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
@@ -690,6 +704,8 @@ func TestDeletePreviousRoundFlowsOnStartup(t *testing.T) {
 // traffic. So we just check the number of ARP packets is greater than 3.
 func TestGratuitousARP(t *testing.T) {
 	skipIfNotIPv4Cluster(t)
+	skipIfHasWindowsNodes(t)
+
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
@@ -740,6 +756,8 @@ func TestGratuitousARP(t *testing.T) {
 // TestClusterIdentity verifies that the antrea-cluster-identity ConfigMap is
 // populated correctly by the Antrea Controller.
 func TestClusterIdentity(t *testing.T) {
+	skipIfHasWindowsNodes(t)
+
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
