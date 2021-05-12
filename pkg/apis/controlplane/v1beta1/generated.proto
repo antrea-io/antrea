@@ -27,10 +27,6 @@ import "k8s.io/apimachinery/pkg/util/intstr/generated.proto";
 // Package-wide variables from generator "generated".
 option go_package = "v1beta1";
 
-// +genclient
-// +genclient:nonNamespaced
-// +genclient:onlyVerbs=list,get,watch
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // AddressGroup is the message format of antrea/pkg/controller/types.AddressGroup in an API response.
 message AddressGroup {
   optional k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
@@ -40,7 +36,6 @@ message AddressGroup {
   repeated GroupMember groupMembers = 3;
 }
 
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // AddressGroupList is a list of AddressGroup objects.
 message AddressGroupList {
   optional k8s.io.apimachinery.pkg.apis.meta.v1.ListMeta metadata = 1;
@@ -48,7 +43,6 @@ message AddressGroupList {
   repeated AddressGroup items = 2;
 }
 
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // AddressGroupPatch describes the incremental update of an AddressGroup.
 message AddressGroupPatch {
   optional k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
@@ -62,10 +56,6 @@ message AddressGroupPatch {
   repeated GroupMember removedGroupMembers = 5;
 }
 
-// +genclient
-// +genclient:nonNamespaced
-// +genclient:onlyVerbs=list,get,watch
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // AppliedToGroup is the message format of antrea/pkg/controller/types.AppliedToGroup in an API response.
 message AppliedToGroup {
   optional k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
@@ -77,7 +67,6 @@ message AppliedToGroup {
   repeated GroupMember groupMembers = 3;
 }
 
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // AppliedToGroupList is a list of AppliedToGroup objects.
 message AppliedToGroupList {
   optional k8s.io.apimachinery.pkg.apis.meta.v1.ListMeta metadata = 1;
@@ -85,7 +74,6 @@ message AppliedToGroupList {
   repeated AppliedToGroup items = 2;
 }
 
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // AppliedToGroupPatch describes the incremental update of an AppliedToGroup.
 message AppliedToGroupPatch {
   optional k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
@@ -173,9 +161,6 @@ message NamedPort {
   optional string protocol = 3;
 }
 
-// +genclient
-// +genclient:onlyVerbs=list,get,watch
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // NetworkPolicy is the message format of antrea/pkg/controller/types.NetworkPolicy in an API response.
 message NetworkPolicy {
   optional k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
@@ -198,7 +183,6 @@ message NetworkPolicy {
   optional NetworkPolicyReference sourceRef = 6;
 }
 
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // NetworkPolicyList is a list of NetworkPolicy objects.
 message NetworkPolicyList {
   optional k8s.io.apimachinery.pkg.apis.meta.v1.ListMeta metadata = 1;
