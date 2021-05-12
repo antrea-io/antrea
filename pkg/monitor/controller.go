@@ -24,13 +24,13 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/tools/cache"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 
-	"github.com/vmware-tanzu/antrea/pkg/apis/crd/v1beta1"
-	clientset "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned"
-	controllerquerier "github.com/vmware-tanzu/antrea/pkg/controller/querier"
-	legacyv1beta1 "github.com/vmware-tanzu/antrea/pkg/legacyapis/clusterinformation/v1beta1"
-	legacyclientset "github.com/vmware-tanzu/antrea/pkg/legacyclient/clientset/versioned"
+	"antrea.io/antrea/pkg/apis/crd/v1beta1"
+	clientset "antrea.io/antrea/pkg/client/clientset/versioned"
+	controllerquerier "antrea.io/antrea/pkg/controller/querier"
+	legacyv1beta1 "antrea.io/antrea/pkg/legacyapis/clusterinformation/v1beta1"
+	legacyclientset "antrea.io/antrea/pkg/legacyclient/clientset/versioned"
 )
 
 const (

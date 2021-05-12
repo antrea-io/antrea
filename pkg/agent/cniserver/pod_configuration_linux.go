@@ -19,9 +19,9 @@ package cniserver
 import (
 	"github.com/containernetworking/cni/pkg/types/current"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
+	"antrea.io/antrea/pkg/agent/interfacestore"
 )
 
 // connectInterfaceToOVS connects an existing interface to ovs br-int.

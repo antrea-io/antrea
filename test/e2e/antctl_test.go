@@ -24,8 +24,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/vmware-tanzu/antrea/pkg/antctl"
-	"github.com/vmware-tanzu/antrea/pkg/antctl/runtime"
+	"antrea.io/antrea/pkg/antctl"
+	"antrea.io/antrea/pkg/antctl/runtime"
 )
 
 type cmdAndReturnCode struct {
@@ -65,6 +65,8 @@ func antctlCoverageArgs(antctlPath string) []string {
 
 // TestAntctlAgentLocalAccess ensures antctl is accessible in a agent Pod.
 func TestAntctlAgentLocalAccess(t *testing.T) {
+	skipIfHasWindowsNodes(t)
+
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
@@ -126,6 +128,8 @@ func copyAntctlToNode(data *TestData, nodeName string, antctlName string, nodeAn
 // the kubernetes cluster. It uses the antctl client binary copied from the controller
 // Pod.
 func TestAntctlControllerRemoteAccess(t *testing.T) {
+	skipIfHasWindowsNodes(t)
+
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
@@ -185,6 +189,8 @@ func TestAntctlControllerRemoteAccess(t *testing.T) {
 // TestAntctlVerboseMode ensures no unexpected outputs during the execution of
 // the antctl client.
 func TestAntctlVerboseMode(t *testing.T) {
+	skipIfHasWindowsNodes(t)
+
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
@@ -261,6 +267,8 @@ func runAntctProxy(nodeName string, antctlName string, nodeAntctlPath string, pr
 // Agent API.
 func TestAntctlProxy(t *testing.T) {
 	const proxyPort = 8001
+
+	skipIfHasWindowsNodes(t)
 
 	data, err := setupTest(t)
 	if err != nil {

@@ -26,9 +26,9 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/watch"
 
-	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
-	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
-	"github.com/vmware-tanzu/antrea/pkg/controller/types"
+	"antrea.io/antrea/pkg/apis/controlplane"
+	"antrea.io/antrea/pkg/apiserver/storage"
+	"antrea.io/antrea/pkg/controller/types"
 )
 
 func newAddressGroupMemberPod(podName, ip string) *controlplane.GroupMember {

@@ -158,7 +158,7 @@ popd
 rm -rf $TMP_DIR
 
 rc=0
-go test -v -run=TestUpgrade github.com/vmware-tanzu/antrea/test/e2e -provider=kind -upgrade.toYML=antrea-new.yml --upgrade.controllerOnly=$CONTROLLER_ONLY --logs-export-dir=$ANTREA_LOG_DIR || rc=$?
+go test -v -run=TestUpgrade antrea.io/antrea/test/e2e -provider=kind -upgrade.toYML=antrea-new.yml --upgrade.controllerOnly=$CONTROLLER_ONLY --logs-export-dir=$ANTREA_LOG_DIR || rc=$?
 
 $THIS_DIR/kind-setup.sh destroy kind
 

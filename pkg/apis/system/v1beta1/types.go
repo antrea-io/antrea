@@ -28,6 +28,7 @@ const (
 // +genclient:nonNamespaced
 // +genclient:onlyVerbs=get,create,delete
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
 type SupportBundle struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

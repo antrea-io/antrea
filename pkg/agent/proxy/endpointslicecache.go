@@ -29,7 +29,7 @@ limitations under the License.
 //
 // Original file https://raw.githubusercontent.com/kubernetes/kubernetes/0c0d4fea8dd6bdcd16b9e1d35da3f7d209341a6f/pkg/proxy/endpointslicecache.go
 // If this file is located in third_party, there will be an import cycle issue when building Antrea as this file imports
-// "github.com/vmware-tanzu/antrea/pkg/agent/proxy/types".
+// "antrea.io/antrea/pkg/agent/proxy/types".
 // Remove makeEndpointInfo and recorder in fields.
 // Remove unused standardEndpointInfo.
 // Remove unneeded sort.Sort in endpointsMapFromEndpointInfo.
@@ -47,11 +47,11 @@ import (
 	v1 "k8s.io/api/core/v1"
 	discovery "k8s.io/api/discovery/v1beta1"
 	apimachinerytypes "k8s.io/apimachinery/pkg/types"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 	utilnet "k8s.io/utils/net"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/proxy/types"
-	"github.com/vmware-tanzu/antrea/third_party/proxy"
+	"antrea.io/antrea/pkg/agent/proxy/types"
+	"antrea.io/antrea/third_party/proxy"
 )
 
 // EndpointSliceCache is used as a cache of EndpointSlice information.

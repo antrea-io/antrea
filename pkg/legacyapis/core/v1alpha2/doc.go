@@ -16,4 +16,4 @@
 // +k8s:deepcopy-gen=package
 // +groupName=core.antrea.tanzu.vmware.com
 
-package v1alpha2 // import "github.com/vmware-tanzu/antrea/pkg/apis/legacyclient/core/v1alpha2"
+package v1alpha2 // import "antrea.io/antrea/pkg/apis/legacyclient/core/v1alpha2"

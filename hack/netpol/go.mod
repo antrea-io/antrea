@@ -1,4 +1,4 @@
-module github.com/vmware-tanzu/antrea/hack/netpol
+module antrea.io/antrea/hack/netpol
 
 go 1.15
 

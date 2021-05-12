@@ -25,11 +25,11 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/apiserver/pkg/registry/rest"
 
-	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
-	"github.com/vmware-tanzu/antrea/pkg/apiserver/registry/networkpolicy"
-	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
-	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy/store"
-	"github.com/vmware-tanzu/antrea/pkg/controller/types"
+	"antrea.io/antrea/pkg/apis/controlplane"
+	"antrea.io/antrea/pkg/apiserver/registry/networkpolicy"
+	"antrea.io/antrea/pkg/apiserver/storage"
+	"antrea.io/antrea/pkg/controller/networkpolicy/store"
+	"antrea.io/antrea/pkg/controller/types"
 )
 
 // REST implements rest.Storage for AppliedToGroups.

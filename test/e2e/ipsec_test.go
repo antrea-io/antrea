@@ -22,7 +22,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/wait"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/util"
+	"antrea.io/antrea/pkg/agent/util"
 )
 
 func (data *TestData) readSecurityAssociationsStatus(nodeName string) (up int, connecting int, err error) {
@@ -60,6 +60,7 @@ func TestIPSecTunnelConnectivity(t *testing.T) {
 	skipIfProviderIs(t, "kind", "IPSec tunnel does not work with Kind")
 	skipIfIPv6Cluster(t)
 	skipIfNumNodesLessThan(t, 2)
+	skipIfHasWindowsNodes(t)
 
 	data, err := setupTest(t)
 	if err != nil {
@@ -94,6 +95,7 @@ func TestIPSecDeleteStaleTunnelPorts(t *testing.T) {
 	skipIfProviderIs(t, "kind", "IPSec tunnel does not work with Kind")
 	skipIfIPv6Cluster(t)
 	skipIfNumNodesLessThan(t, 2)
+	skipIfHasWindowsNodes(t)
 
 	data, err := setupTest(t)
 	if err != nil {

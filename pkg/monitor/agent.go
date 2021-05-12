@@ -21,13 +21,13 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 
-	agentquerier "github.com/vmware-tanzu/antrea/pkg/agent/querier"
-	"github.com/vmware-tanzu/antrea/pkg/apis/crd/v1beta1"
-	clientset "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned"
-	legacyv1beta1 "github.com/vmware-tanzu/antrea/pkg/legacyapis/clusterinformation/v1beta1"
-	legacyclientset "github.com/vmware-tanzu/antrea/pkg/legacyclient/clientset/versioned"
+	agentquerier "antrea.io/antrea/pkg/agent/querier"
+	"antrea.io/antrea/pkg/apis/crd/v1beta1"
+	clientset "antrea.io/antrea/pkg/client/clientset/versioned"
+	legacyv1beta1 "antrea.io/antrea/pkg/legacyapis/clusterinformation/v1beta1"
+	legacyclientset "antrea.io/antrea/pkg/legacyclient/clientset/versioned"
 )
 
 type agentMonitor struct {

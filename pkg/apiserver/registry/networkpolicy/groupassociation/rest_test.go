@@ -23,9 +23,9 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/endpoints/request"
 
-	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
-	antreatypes "github.com/vmware-tanzu/antrea/pkg/controller/types"
-	"github.com/vmware-tanzu/antrea/pkg/k8s"
+	"antrea.io/antrea/pkg/apis/controlplane"
+	antreatypes "antrea.io/antrea/pkg/controller/types"
+	"antrea.io/antrea/pkg/k8s"
 )
 
 type fakeQuerier struct {

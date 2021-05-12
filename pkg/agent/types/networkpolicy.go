@@ -15,9 +15,9 @@
 package types
 
 import (
-	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
-	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha1"
-	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
+	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
+	secv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	binding "antrea.io/antrea/pkg/ovs/openflow"
 )
 
 type MatchKey struct {

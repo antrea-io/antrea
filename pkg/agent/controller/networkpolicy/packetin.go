@@ -26,13 +26,13 @@ import (
 	"github.com/contiv/libOpenflow/protocol"
 	"github.com/contiv/ofnet/ofctrl"
 	"gopkg.in/natefinch/lumberjack.v2"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/config"
-	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
-	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
-	"github.com/vmware-tanzu/antrea/pkg/util/ip"
-	"github.com/vmware-tanzu/antrea/pkg/util/logdir"
+	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/agent/openflow"
+	binding "antrea.io/antrea/pkg/ovs/openflow"
+	"antrea.io/antrea/pkg/util/ip"
+	"antrea.io/antrea/pkg/util/logdir"
 )
 
 const (

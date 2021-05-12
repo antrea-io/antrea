@@ -28,10 +28,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
-	crdv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha1"
-	crdv1alpha2 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha2"
-	legacycorev1a2 "github.com/vmware-tanzu/antrea/pkg/legacyapis/core/v1alpha2"
-	legacysecv1alpha1 "github.com/vmware-tanzu/antrea/pkg/legacyapis/security/v1alpha1"
+	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	crdv1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
+	legacycorev1a2 "antrea.io/antrea/pkg/legacyapis/core/v1alpha2"
+	legacysecv1alpha1 "antrea.io/antrea/pkg/legacyapis/security/v1alpha1"
 )
 
 type KubernetesUtils struct {
@@ -746,22 +746,21 @@ func (k *KubernetesUtils) Bootstrap(namespaces, pods []string) (*map[string][]st
 	return &podIPs, nil
 }
 
-func (k *KubernetesUtils) Cleanup(namespaces []string) error {
+func (k *KubernetesUtils) Cleanup(namespaces []string) {
 	// Cleanup any cluster-scoped resources.
 	if err := k.CleanACNPs(); err != nil {
-		return err
+		log.Errorf("Error when cleaning-up ACNPs: %v", err)
 	}
 	if err := k.CleanCGs(); err != nil {
-		return err
+		log.Errorf("Error when cleaning-up CGs: %v", err)
 	}
 
 	for _, ns := range namespaces {
 		log.Infof("Deleting test Namespace %s", ns)
 		if err := k.clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{}); err != nil {
-			return err
+			log.Errorf("Error when deleting Namespace '%s': %v", ns, err)
 		}
 	}
-	return nil
 }
 
 // CreateOrUpdateANP is a convenience function for updating/creating Antrea NetworkPolicies.
@@ -963,19 +962,19 @@ func (k *KubernetesUtils) CleanLegacyACNPs() error {
 	return nil
 }
 
-func (k *KubernetesUtils) LegacyCleanup(namespaces []string) error {
+func (k *KubernetesUtils) LegacyCleanup(namespaces []string) {
 	// Cleanup any cluster-scoped resources.
 	if err := k.CleanLegacyACNPs(); err != nil {
-		return err
+		log.Errorf("Error when cleaning-up ACNPs: %v", err)
 	}
 	if err := k.CleanLegacyCGs(); err != nil {
-		return err
+		log.Errorf("Error when cleaning-up CGs: %v", err)
 	}
+
 	for _, ns := range namespaces {
 		log.Infof("Deleting test Namespace %s", ns)
 		if err := k.clientset.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{}); err != nil {
-			return err
+			log.Errorf("Error when deleting Namespace '%s': %v", ns, err)
 		}
 	}
-	return nil
 }

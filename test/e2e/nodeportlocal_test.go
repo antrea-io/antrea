@@ -28,7 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/nodeportlocal/k8s"
+	"antrea.io/antrea/pkg/agent/nodeportlocal/k8s"
 )
 
 const (
@@ -157,6 +157,8 @@ func validatePortInRange(t *testing.T, nplAnnotations []k8s.NPLAnnotation, start
 
 func TestNPLAddPod(t *testing.T) {
 	skipIfNotIPv4Cluster(t)
+	skipIfHasWindowsNodes(t)
+
 	testData, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
@@ -284,6 +286,8 @@ func NPLTestPodAddMultiPort(t *testing.T) {
 // - Verify Pod Annotation, iptables rules and traffic to test Pod.
 func TestNPLMultiplePodsAgentRestart(t *testing.T) {
 	skipIfNotIPv4Cluster(t)
+	skipIfHasWindowsNodes(t)
+
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
@@ -339,6 +343,8 @@ func TestNPLMultiplePodsAgentRestart(t *testing.T) {
 // - Verify that updated port range is being used for NPL.
 func TestNPLChangePortRangeAgentRestart(t *testing.T) {
 	skipIfNotIPv4Cluster(t)
+	skipIfHasWindowsNodes(t)
+
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)

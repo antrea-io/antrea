@@ -20,9 +20,9 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	crdv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha1"
-	crdv1alpha2 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha2"
-	legacycorev1alpha2 "github.com/vmware-tanzu/antrea/pkg/legacyapis/core/v1alpha2"
+	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	crdv1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
+	legacycorev1alpha2 "antrea.io/antrea/pkg/legacyapis/core/v1alpha2"
 )
 
 func testLegacyInvalidCGIPBlockWithPodSelector(t *testing.T) {
@@ -246,6 +246,7 @@ func testLegacyInvalidCGMaxNestedLevel(t *testing.T) {
 
 func TestLegacyClusterGroup(t *testing.T) {
 	skipIfProviderIs(t, "kind", "This test is for legacy API groups and is almost the same as new API groups'.")
+	skipIfHasWindowsNodes(t)
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
@@ -270,5 +271,6 @@ func TestLegacyClusterGroup(t *testing.T) {
 		t.Run("Case=LegacyChildGroupExceedMaxNestedLevel", func(t *testing.T) { testLegacyInvalidCGMaxNestedLevel(t) })
 		cleanupLegacyChildCGForTest(t)
 	})
-	failOnError(k8sUtils.CleanLegacyCGs(), t)
+
+	k8sUtils.LegacyCleanup(namespaces) // clean up all cluster-scope resources, including CGs
 }

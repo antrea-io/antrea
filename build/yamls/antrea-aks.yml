@@ -2388,6 +2388,13 @@ spec:
                     type: string
                   transportHeader:
                     properties:
+                      icmp:
+                        properties:
+                          id:
+                            type: integer
+                          sequence:
+                            type: integer
+                        type: object
                       tcp:
                         properties:
                           dstPort:

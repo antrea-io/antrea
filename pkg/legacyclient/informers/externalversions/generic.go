@@ -19,10 +19,10 @@ package externalversions
 import (
 	"fmt"
 
-	v1beta1 "github.com/vmware-tanzu/antrea/pkg/legacyapis/clusterinformation/v1beta1"
-	v1alpha2 "github.com/vmware-tanzu/antrea/pkg/legacyapis/core/v1alpha2"
-	v1alpha1 "github.com/vmware-tanzu/antrea/pkg/legacyapis/ops/v1alpha1"
-	securityv1alpha1 "github.com/vmware-tanzu/antrea/pkg/legacyapis/security/v1alpha1"
+	v1beta1 "antrea.io/antrea/pkg/legacyapis/clusterinformation/v1beta1"
+	v1alpha2 "antrea.io/antrea/pkg/legacyapis/core/v1alpha2"
+	v1alpha1 "antrea.io/antrea/pkg/legacyapis/ops/v1alpha1"
+	securityv1alpha1 "antrea.io/antrea/pkg/legacyapis/security/v1alpha1"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	cache "k8s.io/client-go/tools/cache"
 )

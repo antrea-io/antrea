@@ -35,9 +35,9 @@ import (
 	"k8s.io/client-go/informers"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
 
-	nplk8s "github.com/vmware-tanzu/antrea/pkg/agent/nodeportlocal/k8s"
-	"github.com/vmware-tanzu/antrea/pkg/agent/nodeportlocal/portcache"
-	npltest "github.com/vmware-tanzu/antrea/pkg/agent/nodeportlocal/rules/testing"
+	nplk8s "antrea.io/antrea/pkg/agent/nodeportlocal/k8s"
+	"antrea.io/antrea/pkg/agent/nodeportlocal/portcache"
+	npltest "antrea.io/antrea/pkg/agent/nodeportlocal/rules/testing"
 )
 
 func newPortTable(c *gomock.Controller) *portcache.PortTable {

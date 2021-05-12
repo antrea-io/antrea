@@ -23,9 +23,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/nodeportlocal/portcache"
-	"github.com/vmware-tanzu/antrea/pkg/agent/nodeportlocal/rules"
-	utilsets "github.com/vmware-tanzu/antrea/pkg/util/sets"
+	"antrea.io/antrea/pkg/agent/nodeportlocal/portcache"
+	"antrea.io/antrea/pkg/agent/nodeportlocal/rules"
+	utilsets "antrea.io/antrea/pkg/util/sets"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -35,7 +35,7 @@ import (
 	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 )
 
 const (

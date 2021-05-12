@@ -17,17 +17,20 @@
 package v1alpha1
 
 import (
-	v1alpha1 "github.com/vmware-tanzu/antrea/pkg/legacyapis/security/v1alpha1"
+	v1alpha1 "antrea.io/antrea/pkg/legacyapis/security/v1alpha1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/tools/cache"
 )
 
 // TierLister helps list Tiers.
+// All objects returned here must be treated as read-only.
 type TierLister interface {
 	// List lists all Tiers in the indexer.
+	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1alpha1.Tier, err error)
 	// Get retrieves the Tier from the index for a given name.
+	// Objects returned here must be treated as read-only.
 	Get(name string) (*v1alpha1.Tier, error)
 	TierListerExpansion
 }

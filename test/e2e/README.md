@@ -107,7 +107,7 @@ kubectl cluster-info
 
 Make sure that your cluster was provisioned and that the Antrea build artifacts
 were pushed to all the Nodes. You can then run the tests from the top-level
-directory with `go test -v -timeout=30m github.com/vmware-tanzu/antrea/test/e2e`
+directory with `go test -v -timeout=30m antrea.io/antrea/test/e2e`
 (the `-v` enables verbose output).
 
 If you are running the test for the first time and are using the scripts we
@@ -117,7 +117,7 @@ therefore need the following steps:
 1. `./infra/vagrant/provision.sh`
 2. `make`
 3. `./infra/vagrant/push_antrea.sh`
-4. `go test -v -timeout=30m github.com/vmware-tanzu/antrea/test/e2e`
+4. `go test -v -timeout=30m antrea.io/antrea/test/e2e`
 
 If you need to test an updated version of Antrea, just run
 `./infra/vagrant/push_antrea.sh` and then run the tests again.
@@ -132,7 +132,7 @@ temporary directory. You may also choose your own directory using
 
 ```bash
 mkdir antrea-test-logs
-go test -count=1 -v -run=TestDeletePod github.com/vmware-tanzu/antrea/test/e2e --logs-export-dir `pwd`/antrea-test-logs
+go test -count=1 -v -run=TestDeletePod antrea.io/antrea/test/e2e --logs-export-dir `pwd`/antrea-test-logs
 ```
 
 If the user provides a log directory which was used for a previous run, existing
@@ -149,7 +149,7 @@ enabled explicitly.
 * To load Antrea into the cluster with Prometheus enabled, use:
 `./infra/vagrant/push_antrea.sh --prometheus`
 * To run the Prometheus tests within the e2e suite, use:
-`go test -v github.com/vmware-tanzu/antrea/test/e2e --prometheus`
+`go test -v antrea.io/antrea/test/e2e --prometheus`
 
 ## Running the e2e tests on a Kind cluster
 
@@ -176,7 +176,7 @@ manifest to the control-plane Docker container:
 
 ```bash
 ./hack/generate-manifest.sh --kind | docker exec -i kind-control-plane dd of=/root/antrea.yml
-go test -v github.com/vmware-tanzu/antrea/test/e2e -provider=kind
+go test -v antrea.io/antrea/test/e2e -provider=kind
 ```
 
 `generate-manifest.sh` supports generating the Antrea manifest with different
@@ -198,7 +198,7 @@ To run all benchmarks, without the standard e2e tests:
 
 ```bash
 go test -v -timeout=30m -run=XXX -bench=. \
-    github.com/vmware-tanzu/antrea/test/e2e \
+    antrea.io/antrea/test/e2e \
     --performance.http.concurrency=16
 ```
 
@@ -210,7 +210,7 @@ If you would like to run the performance tests in a different scale, you could r
 
 ```bash
 go test -v -timeout=30m -run=XXX -bench=BenchmarkCustomize \
-    github.com/vmware-tanzu/antrea/test/e2e \
+    antrea.io/antrea/test/e2e \
     --performance.http.requests=5000 \
     --performance.http.policy_rules=1000 \
     --performance.http.concurrency=16

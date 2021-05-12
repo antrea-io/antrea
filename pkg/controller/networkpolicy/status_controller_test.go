@@ -26,14 +26,14 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/util/workqueue"
 
-	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
-	crdv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha1"
-	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
-	antreaclientset "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned"
-	antreafakeclientset "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/fake"
-	antreainformers "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions"
-	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy/store"
-	"github.com/vmware-tanzu/antrea/pkg/controller/types"
+	"antrea.io/antrea/pkg/apis/controlplane"
+	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	"antrea.io/antrea/pkg/apiserver/storage"
+	antreaclientset "antrea.io/antrea/pkg/client/clientset/versioned"
+	antreafakeclientset "antrea.io/antrea/pkg/client/clientset/versioned/fake"
+	antreainformers "antrea.io/antrea/pkg/client/informers/externalversions"
+	"antrea.io/antrea/pkg/controller/networkpolicy/store"
+	"antrea.io/antrea/pkg/controller/types"
 )
 
 type fakeNetworkPolicyControl struct {

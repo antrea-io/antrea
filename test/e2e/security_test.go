@@ -30,9 +30,9 @@ import (
 	restclient "k8s.io/client-go/rest"
 	certutil "k8s.io/client-go/util/cert"
 
-	"github.com/vmware-tanzu/antrea/pkg/apis"
-	"github.com/vmware-tanzu/antrea/pkg/apis/crd/v1beta1"
-	"github.com/vmware-tanzu/antrea/pkg/apiserver/certificate"
+	"antrea.io/antrea/pkg/apis"
+	"antrea.io/antrea/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/pkg/apiserver/certificate"
 )
 
 const (
@@ -45,6 +45,8 @@ const (
 
 // TestUserProvidedCert tests the selfSignedCert=false case. It covers dynamic server certificate.
 func TestUserProvidedCert(t *testing.T) {
+	skipIfHasWindowsNodes(t)
+
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
@@ -112,6 +114,8 @@ func TestUserProvidedCert(t *testing.T) {
 
 // TestSelfSignedCert tests the selfSignedCert=true case.
 func TestSelfSignedCert(t *testing.T) {
+	skipIfHasWindowsNodes(t)
+
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)

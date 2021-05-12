@@ -17,7 +17,7 @@ package v1beta2
 import (
 	"context"
 
-	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 )
 
 // The NetworkPolicyExpansion interface allows manually adding extra methods to the NetworkPolicyInterface.

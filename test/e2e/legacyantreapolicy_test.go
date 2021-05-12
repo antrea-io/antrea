@@ -31,11 +31,11 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 
-	crdv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha1"
-	legacycorev1a2 "github.com/vmware-tanzu/antrea/pkg/legacyapis/core/v1alpha2"
-	legacysecurityv1alpha1 "github.com/vmware-tanzu/antrea/pkg/legacyapis/security/v1alpha1"
-	legacysecv1alpha1 "github.com/vmware-tanzu/antrea/pkg/legacyapis/security/v1alpha1"
-	. "github.com/vmware-tanzu/antrea/test/e2e/utils"
+	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	legacycorev1a2 "antrea.io/antrea/pkg/legacyapis/core/v1alpha2"
+	legacysecurityv1alpha1 "antrea.io/antrea/pkg/legacyapis/security/v1alpha1"
+	legacysecv1alpha1 "antrea.io/antrea/pkg/legacyapis/security/v1alpha1"
+	. "antrea.io/antrea/test/e2e/utils"
 )
 
 const (
@@ -2138,6 +2138,7 @@ func cleanupLegacyTestCaseServicesAndGroups(t *testing.T, c *TestCase) {
 
 func TestLegacyAntreaPolicy(t *testing.T) {
 	skipIfProviderIs(t, "kind", "This test is for legacy API groups and is almost the same as new API groups'.")
+	skipIfHasWindowsNodes(t)
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
@@ -2234,6 +2235,7 @@ func TestLegacyAntreaPolicy(t *testing.T) {
 
 func TestLegacyAntreaPolicyStatus(t *testing.T) {
 	skipIfProviderIs(t, "kind", "This test is for legacy API groups and is almost the same as new API groups'.")
+	skipIfHasWindowsNodes(t)
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
@@ -2298,6 +2300,7 @@ func TestLegacyAntreaPolicyStatus(t *testing.T) {
 // networkpolicystats feature is enabled
 func TestLegacyANPNetworkPolicyStatsWithDropAction(t *testing.T) {
 	skipIfProviderIs(t, "kind", "This test is for legacy API groups and is almost the same as new API groups'.")
+	skipIfHasWindowsNodes(t)
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
@@ -2450,6 +2453,7 @@ func TestLegacyANPNetworkPolicyStatsWithDropAction(t *testing.T) {
 
 func TestLegacyAntreaClusterNetworkPolicyStats(t *testing.T) {
 	skipIfProviderIs(t, "kind", "This test is for legacy API groups and is almost the same as new API groups'.")
+	skipIfHasWindowsNodes(t)
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)

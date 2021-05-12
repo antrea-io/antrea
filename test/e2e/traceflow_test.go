@@ -29,11 +29,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/config"
-	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
-	"github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha1"
-	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha1"
-	"github.com/vmware-tanzu/antrea/pkg/features"
+	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	secv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	"antrea.io/antrea/pkg/features"
 )
 
 type testcase struct {
@@ -71,6 +71,8 @@ var (
 
 // TestTraceflowIntraNodeANP verifies if traceflow can trace intra node traffic with some Antrea NetworkPolicy sets.
 func TestTraceflowIntraNodeANP(t *testing.T) {
+	skipIfHasWindowsNodes(t)
+
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
@@ -265,6 +267,8 @@ func TestTraceflowIntraNodeANP(t *testing.T) {
 
 // TestTraceflowIntraNode verifies if traceflow can trace intra node traffic with some NetworkPolicies set.
 func TestTraceflowIntraNode(t *testing.T) {
+	skipIfHasWindowsNodes(t)
+
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
@@ -590,6 +594,9 @@ func TestTraceflowIntraNode(t *testing.T) {
 				DstIP:    dstPodIPv4Str,
 				Length:   84, // default ping packet length.
 				IPHeader: v1alpha1.IPHeader{Protocol: 1, TTL: 64, Flags: 2},
+				TransportHeader: v1alpha1.TransportHeader{
+					ICMP: &v1alpha1.ICMPEchoRequestHeader{},
+				},
 			},
 		},
 		{
@@ -639,6 +646,9 @@ func TestTraceflowIntraNode(t *testing.T) {
 				DstIP:    pod1IPv4Str,
 				Length:   84, // default ping packet length.
 				IPHeader: v1alpha1.IPHeader{Protocol: 1, TTL: 64, Flags: 2},
+				TransportHeader: v1alpha1.TransportHeader{
+					ICMP: &v1alpha1.ICMPEchoRequestHeader{},
+				},
 			},
 		},
 		{
@@ -1023,6 +1033,7 @@ func TestTraceflowIntraNode(t *testing.T) {
 // TestTraceflowInterNode verifies if traceflow can trace inter nodes traffic with some NetworkPolicies set.
 func TestTraceflowInterNode(t *testing.T) {
 	skipIfNumNodesLessThan(t, 2)
+	skipIfHasWindowsNodes(t)
 
 	data, err := setupTest(t)
 	if err != nil {
@@ -1764,6 +1775,8 @@ func TestTraceflowInterNode(t *testing.T) {
 }
 
 func TestTraceflowExternalIP(t *testing.T) {
+	skipIfHasWindowsNodes(t)
+
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
@@ -1993,13 +2006,13 @@ func runTestTraceflow(t *testing.T, data *TestData, tc testcase) {
 			}
 		} else {
 			dstPod := tc.tf.Spec.Destination.Pod
-			podIPs := waitForPodIPs(t, data, []string{dstPod})
+			podIPs := waitForPodIPs(t, data, []podInfo{{dstPod, "linux"}})
 			dstPodIPs = podIPs[dstPod]
 		}
 		// Give a little time for Nodes to install OVS flows.
 		time.Sleep(time.Second * 2)
 		// Send an ICMP echo packet from the source Pod to the destination.
-		if err := data.runPingCommandFromTestPod(srcPod, dstPodIPs, 2); err != nil {
+		if err := data.runPingCommandFromTestPod(podInfo{srcPod, "linux"}, dstPodIPs, busyboxContainerName, 2, 0); err != nil {
 			t.Logf("Ping '%s' -> '%v' failed: ERROR (%v)", srcPod, *dstPodIPs, err)
 		}
 	}
@@ -2039,7 +2052,14 @@ func runTestTraceflow(t *testing.T, data *TestData, tc testcase) {
 			}
 		}
 	}
-	if tc.expectedPktCap != nil && !reflect.DeepEqual(tc.expectedPktCap, tf.Status.CapturedPacket) {
-		t.Fatalf("Captured packet should be: %+v, but got: %+v", tc.expectedPktCap, tf.Status.CapturedPacket)
+	if tc.expectedPktCap != nil {
+		pktCap := tf.Status.CapturedPacket
+		if tc.expectedPktCap.TransportHeader.ICMP != nil {
+			// We cannot predict ICMP echo ID and sequence number.
+			pktCap.TransportHeader.ICMP = &v1alpha1.ICMPEchoRequestHeader{}
+		}
+		if !reflect.DeepEqual(tc.expectedPktCap, pktCap) {
+			t.Fatalf("Captured packet should be: %+v, but got: %+v", tc.expectedPktCap, tf.Status.CapturedPacket)
+		}
 	}
 }

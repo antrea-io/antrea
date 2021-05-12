@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -29,14 +30,13 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	k8stesting "k8s.io/client-go/testing"
 	"k8s.io/component-base/metrics/legacyregistry"
-	"k8s.io/component-base/metrics/testutil"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/metrics"
-	agenttypes "github.com/vmware-tanzu/antrea/pkg/agent/types"
-	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
-	"github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned"
-	"github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/fake"
-	"github.com/vmware-tanzu/antrea/pkg/querier"
+	"antrea.io/antrea/pkg/agent/metrics"
+	agenttypes "antrea.io/antrea/pkg/agent/types"
+	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/pkg/client/clientset/versioned"
+	"antrea.io/antrea/pkg/client/clientset/versioned/fake"
+	"antrea.io/antrea/pkg/querier"
 )
 
 const testNamespace = "ns1"

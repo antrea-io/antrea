@@ -19,10 +19,10 @@ package openflow
 import (
 	"net"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/config"
-	"github.com/vmware-tanzu/antrea/pkg/agent/openflow/cookie"
-	"github.com/vmware-tanzu/antrea/pkg/agent/types"
-	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
+	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/agent/openflow/cookie"
+	"antrea.io/antrea/pkg/agent/types"
+	binding "antrea.io/antrea/pkg/ovs/openflow"
 )
 
 const (

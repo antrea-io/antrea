@@ -19,14 +19,15 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
-	crdv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha1"
-	statsv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/stats/v1alpha1"
+	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	statsv1alpha1 "antrea.io/antrea/pkg/apis/stats/v1alpha1"
 )
 
 // +genclient
 // +genclient:nonNamespaced
 // +genclient:onlyVerbs=list,get,watch
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
 // AppliedToGroup is the message format of antrea/pkg/controller/types.AppliedToGroup in an API response.
 type AppliedToGroup struct {
 	metav1.TypeMeta   `json:",inline"`
@@ -95,6 +96,7 @@ type GroupMember struct {
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
 // AppliedToGroupPatch describes the incremental update of an AppliedToGroup.
 type AppliedToGroupPatch struct {
 	metav1.TypeMeta     `json:",inline"`
@@ -106,6 +108,7 @@ type AppliedToGroupPatch struct {
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
 // AppliedToGroupList is a list of AppliedToGroup objects.
 type AppliedToGroupList struct {
 	metav1.TypeMeta `json:",inline"`
@@ -117,6 +120,7 @@ type AppliedToGroupList struct {
 // +genclient:nonNamespaced
 // +genclient:onlyVerbs=list,get,watch
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
 // AddressGroup is the message format of antrea/pkg/controller/types.AddressGroup in an API response.
 type AddressGroup struct {
 	metav1.TypeMeta   `json:",inline"`
@@ -135,6 +139,7 @@ type IPNet struct {
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
 // AddressGroupPatch describes the incremental update of an AddressGroup.
 type AddressGroupPatch struct {
 	metav1.TypeMeta     `json:",inline"`
@@ -146,6 +151,7 @@ type AddressGroupPatch struct {
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
 // AddressGroupList is a list of AddressGroup objects.
 type AddressGroupList struct {
 	metav1.TypeMeta `json:",inline"`
@@ -175,6 +181,7 @@ type NetworkPolicyReference struct {
 // +genclient
 // +genclient:onlyVerbs=list,get,watch
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
 // NetworkPolicy is the message format of antrea/pkg/controller/types.NetworkPolicy in an API response.
 type NetworkPolicy struct {
 	metav1.TypeMeta   `json:",inline"`
@@ -219,7 +226,7 @@ type NetworkPolicyRule struct {
 	// Action specifies the action to be applied on the rule. i.e. Allow/Drop. An empty
 	// action “nil” defaults to Allow action, which would be the case for rules created for
 	// K8s Network Policy.
-	Action *crdv1alpha1.RuleAction `json:"action,omitempty" protobuf:"bytes,6,opt,name=action,casttype=github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1.RuleAction"`
+	Action *crdv1alpha1.RuleAction `json:"action,omitempty" protobuf:"bytes,6,opt,name=action,casttype=antrea.io/antrea/pkg/apis/security/v1alpha1.RuleAction"`
 	// EnableLogging indicates whether or not to generate logs when rules are matched. Default to false.
 	EnableLogging bool `json:"enableLogging" protobuf:"varint,7,opt,name=enableLogging"`
 }
@@ -268,6 +275,7 @@ type IPBlock struct {
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
 // NetworkPolicyList is a list of NetworkPolicy objects.
 type NetworkPolicyList struct {
 	metav1.TypeMeta `json:",inline"`

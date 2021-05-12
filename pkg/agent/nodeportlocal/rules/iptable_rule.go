@@ -20,9 +20,9 @@ import (
 	"bytes"
 	"fmt"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/util/iptables"
+	"antrea.io/antrea/pkg/agent/util/iptables"
 
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 )
 
 // NodePortLocalChain is the name of the chain in IPTABLES for Node Port Local

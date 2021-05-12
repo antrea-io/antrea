@@ -20,8 +20,8 @@ import (
 	"strings"
 	"testing"
 
-	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
-	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsctl"
+	binding "antrea.io/antrea/pkg/ovs/openflow"
+	"antrea.io/antrea/pkg/ovs/ovsctl"
 )
 
 func PrepareOVSBridge(brName string) error {

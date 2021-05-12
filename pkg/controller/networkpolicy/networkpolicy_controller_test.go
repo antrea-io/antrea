@@ -36,14 +36,14 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 
-	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
-	"github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha2"
-	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
-	fakeversioned "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/fake"
-	crdinformers "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions"
-	"github.com/vmware-tanzu/antrea/pkg/controller/grouping"
-	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy/store"
-	antreatypes "github.com/vmware-tanzu/antrea/pkg/controller/types"
+	"antrea.io/antrea/pkg/apis/controlplane"
+	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
+	"antrea.io/antrea/pkg/apiserver/storage"
+	fakeversioned "antrea.io/antrea/pkg/client/clientset/versioned/fake"
+	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions"
+	"antrea.io/antrea/pkg/controller/grouping"
+	"antrea.io/antrea/pkg/controller/networkpolicy/store"
+	antreatypes "antrea.io/antrea/pkg/controller/types"
 )
 
 var alwaysReady = func() bool { return true }

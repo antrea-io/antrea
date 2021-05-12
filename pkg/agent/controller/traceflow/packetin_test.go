@@ -24,8 +24,8 @@ import (
 	"github.com/contiv/ofnet/ofctrl"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
-	crdv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha1"
+	"antrea.io/antrea/pkg/agent/openflow"
+	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 )
 
 func Test_getNetworkPolicyObservation(t *testing.T) {
@@ -118,10 +118,7 @@ func TestParseCapturedPacket(t *testing.T) {
 
 	udpPktIn := protocol.IPv4{Length: 50, Flags: 0, TTL: 128, NWSrc: srcIPv4, NWDst: dstIPv4, Protocol: protocol.Type_UDP}
 	udp := protocol.UDP{PortSrc: 1080, PortDst: 80}
-	bytes, _ = udp.MarshalBinary()
-	bf = new(util.Buffer)
-	bf.UnmarshalBinary(bytes)
-	udpPktIn.Data = bf
+	udpPktIn.Data = &udp
 	udpPktCap := crdv1alpha1.Packet{
 		SrcIP: udpPktIn.NWSrc.String(), DstIP: udpPktIn.NWDst.String(), Length: udpPktIn.Length,
 		IPHeader: crdv1alpha1.IPHeader{Protocol: int32(udpPktIn.Protocol), TTL: int32(udpPktIn.TTL), Flags: int32(udpPktIn.Flags)},
@@ -131,10 +128,14 @@ func TestParseCapturedPacket(t *testing.T) {
 	}
 
 	icmpv6PktIn := protocol.IPv6{Length: 960, HopLimit: 8, NWSrc: srcIPv6, NWDst: dstIPv6, NextHeader: protocol.Type_IPv6ICMP}
+	icmpEchoReq := []uint8{0, 1, 0, 123}
+	icmp := protocol.ICMP{Type: 128, Code: 0, Data: icmpEchoReq}
+	icmpv6PktIn.Data = &icmp
 	nextHdr := int32(icmpv6PktIn.NextHeader)
 	icmpv6PktCap := crdv1alpha1.Packet{
 		SrcIP: icmpv6PktIn.NWSrc.String(), DstIP: icmpv6PktIn.NWDst.String(), Length: icmpv6PktIn.Length + 40,
-		IPv6Header: &crdv1alpha1.IPv6Header{NextHeader: &nextHdr, HopLimit: int32(icmpv6PktIn.HopLimit)},
+		IPv6Header:      &crdv1alpha1.IPv6Header{NextHeader: &nextHdr, HopLimit: int32(icmpv6PktIn.HopLimit)},
+		TransportHeader: crdv1alpha1.TransportHeader{ICMP: &crdv1alpha1.ICMPEchoRequestHeader{ID: 1, Sequence: 123}},
 	}
 
 	tests := []struct {

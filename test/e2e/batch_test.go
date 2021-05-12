@@ -24,6 +24,8 @@ import (
 
 // TestBatchCreatePods verifies there is no FD leak after batched Pod creation.
 func TestBatchCreatePods(t *testing.T) {
+	skipIfHasWindowsNodes(t)
+
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)

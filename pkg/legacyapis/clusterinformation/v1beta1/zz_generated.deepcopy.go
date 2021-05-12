@@ -19,7 +19,7 @@
 package v1beta1
 
 import (
-	crdv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1beta1"
+	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 )
 
