@@ -41,7 +41,7 @@ NETWORKPOLICY_SKIP="should allow egress access to server in CIDR block|should en
 CONTROL_PLANE_NODE_ROLE="master"
 
 _usage="Usage: $0 [--kubeconfig <KubeconfigSavePath>] [--workdir <HomePath>]
-                  [--testcase <windows-install-ovs|windows-conformance|windows-networkpolicy|e2e|conformance|networkpolicy>]
+                  [--testcase <windows-install-ovs|windows-conformance|windows-networkpolicy|windows-e2e|e2e|conformance|networkpolicy>]
 
 Run K8s e2e community tests (Conformance & Network Policy) or Antrea e2e tests on a remote (Jenkins) Windows or Linux cluster.
 
@@ -130,7 +130,7 @@ function clean_for_windows_install_cni {
     kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 != role && $1 ~ /win/ {print $6}' | while read IP; do
         CLEAN_LIST=("/cygdrive/c/opt/cni/bin/antrea.exe" "/cygdrive/c/opt/cni/bin/host-local.exe" "/cygdrive/c/k/antrea/etc/antrea-agent.conf" "/cygdrive/c/etc/cni/net.d/10-antrea.conflist" "/cygdrive/c/k/antrea/bin/antrea-agent.exe")
         for file in "${CLEAN_LIST[@]}"; do
-            ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "rm ${file}" || true
+            ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "rm -f ${file}"
         done
     done
 }
@@ -161,6 +161,43 @@ function collect_windows_network_info_and_logs {
         kubectl logs $AGENTNAME -n kube-system -c antrea-ovs > antrea_agent_log/$AGENTNAME/antrea-ovs.log || true
     done
     tar zcf antrea_agent_log.tar.gz antrea_agent_log
+}
+
+function wait_for_antrea_windows_pods_ready {
+    kubectl apply -f "${WORKDIR}/antrea.yml"
+    kubectl apply -f "${WORKDIR}/kube-proxy-windows.yml"
+    kubectl apply -f "${WORKDIR}/antrea-windows.yml"
+    kubectl rollout restart deployment/coredns -n kube-system
+    kubectl rollout status deployment/coredns -n kube-system
+    kubectl rollout status deployment.apps/antrea-controller -n kube-system
+    kubectl rollout status daemonset/antrea-agent -n kube-system
+    kubectl rollout status daemonset.apps/antrea-agent-windows -n kube-system
+    kubectl rollout status daemonset/kube-proxy-windows -n kube-system
+    kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 != role && $1 ~ /win/ {print $6}' | while read IP; do
+        for i in `seq 5`; do
+            sleep 5
+            timeout 5s ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "powershell Get-NetAdapter -Name br-int -ErrorAction SilentlyContinue" && break
+        done
+        sleep 10
+    done
+}
+
+function wait_for_antrea_windows_processes_ready {
+    kubectl apply -f "${WORKDIR}/antrea.yml"
+    kubectl rollout restart deployment/coredns -n kube-system
+    kubectl rollout status deployment/coredns -n kube-system
+    kubectl rollout status deployment.apps/antrea-controller -n kube-system
+    kubectl rollout status daemonset/antrea-agent -n kube-system
+    kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 != role && $1 ~ /win/ {print $6}' | while read IP; do
+        echo "===== Run script to startup Antrea agent ====="
+        ANTREA_VERSION=$(ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "/cygdrive/c/k/antrea/bin/antrea-agent.exe --version" | awk '{print $3}')
+        ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "chmod +x /cygdrive/c/k/antrea/Start.ps1 && powershell 'c:\k\antrea\Start.ps1 -AntreaVersion ${ANTREA_VERSION}'"
+        for i in `seq 5`; do
+            sleep 5
+            timeout 5s ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "powershell Get-NetAdapter -Name br-int -ErrorAction SilentlyContinue" && break
+        done
+        sleep 10
+    done
 }
 
 function deliver_antrea_windows {
@@ -235,16 +272,17 @@ function deliver_antrea_windows {
             scp -o StrictHostKeyChecking=no -T hack/windows/Helper.psm1 Administrator@${IP}:/cygdrive/c/k/antrea/
             scp -o StrictHostKeyChecking=no -T build/yamls/windows/base/conf/antrea-cni.conflist Administrator@${IP}:/cygdrive/c/etc/cni/net.d/10-antrea.conflist
             scp -o StrictHostKeyChecking=no -T build/yamls/windows/base/conf/antrea-agent.conf Administrator@${IP}:/cygdrive/c/k/antrea/etc
-        elif [ "$TESTCASE" == "windows-conformance" ]; then
+        else
             if ! (test -f antrea-windows.tar.gz); then
                 # Compress antrea repo and copy it to a Windows node
                 mkdir -p jenkins
-                tar --exclude='./jenkins' -czvf jenkins/antrea_repo.tar.gz -C "$(pwd)" .
+                tar --exclude='./jenkins' -czf jenkins/antrea_repo.tar.gz -C "$(pwd)" .
                 for i in `seq 2`; do
                     timeout 2m scp -o StrictHostKeyChecking=no -T jenkins/antrea_repo.tar.gz Administrator@${IP}: && break
                 done
+                echo "=== Build Windows on Windows Node==="
                 ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "docker pull ${DOCKER_REGISTRY}/antrea/golang:1.15 && docker tag ${DOCKER_REGISTRY}/antrea/golang:1.15 golang:1.15"
-                ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "rm -rf antrea && mkdir antrea && cd antrea && tar -xzvf ../antrea_repo.tar.gz && sed -i \"s|build/images/Dockerfile.build.windows .|build/images/Dockerfile.build.windows . --network host|g\" Makefile && NO_PULL=${NO_PULL} make build-windows && docker save -o antrea-windows.tar projects.registry.vmware.com/antrea/antrea-windows:latest && gzip -f antrea-windows.tar" || true
+                ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "rm -rf antrea && mkdir antrea && cd antrea && tar -xzf ../antrea_repo.tar.gz && sed -i \"s|build/images/Dockerfile.build.windows .|build/images/Dockerfile.build.windows . --network host|g\" Makefile && NO_PULL=${NO_PULL} make build-windows && docker save -o antrea-windows.tar ${DOCKER_REGISTRY}/antrea/antrea-windows:latest && gzip -f antrea-windows.tar" || true
                 for i in `seq 2`; do
                     timeout 2m scp -o StrictHostKeyChecking=no -T Administrator@${IP}:antrea/antrea-windows.tar.gz . && break
                 done
@@ -330,9 +368,10 @@ function run_e2e {
     export PATH=$GOROOT/bin:$PATH
     export KUBECONFIG=$KUBECONFIG_PATH
 
-    mkdir -p test/e2e/infra/vagrant/playbook/kube
-    cp -f "${WORKDIR}/kube.conf" test/e2e/infra/vagrant/playbook/kube/config
-    cp -f "${WORKDIR}/ssh-config" test/e2e/infra/vagrant/ssh-config
+    mkdir -p "${WORKDIR}/.kube"
+    mkdir -p "${WORKDIR}/.ssh"
+    cp -f "${WORKDIR}/kube.conf" "${WORKDIR}/.kube/config"
+    cp -f "${WORKDIR}/ssh-config" "${WORKDIR}/.ssh/config"
 
     set +e
     mkdir -p `pwd`/antrea-test-logs
@@ -375,6 +414,34 @@ function run_conformance {
     fi
 }
 
+function run_e2e_windows {
+    echo "====== Running Antrea e2e Tests ======"
+    export GO111MODULE=on
+    export GOPATH=${WORKDIR}/go
+    export GOROOT=/usr/local/go
+    export GOCACHE=${WORKDIR}/.cache/go-build
+    export PATH=$GOROOT/bin:$PATH
+    export KUBECONFIG=$KUBECONFIG_PATH
+
+    clean_for_windows_install_cni
+    wait_for_antrea_windows_pods_ready
+
+    mkdir -p "${WORKDIR}/.kube"
+    mkdir -p "${WORKDIR}/.ssh"
+    cp -f "${WORKDIR}/kube.conf" "${WORKDIR}/.kube/config"
+    cp -f "${WORKDIR}/ssh-config" "${WORKDIR}/.ssh/config"
+
+    set +e
+    mkdir -p `pwd`/antrea-test-logs
+    go test -v github.com/vmware-tanzu/antrea/test/e2e --logs-export-dir `pwd`/antrea-test-logs --provider remote -timeout=50m --prometheus
+    if [[ "$?" != "0" ]]; then
+        TEST_FAILURE=true
+    fi
+    set -e
+
+    tar -zcf antrea-test-logs.tar.gz antrea-test-logs
+}
+
 function run_conformance_windows {
     echo "====== Running Antrea Conformance Tests ======"
     export GO111MODULE=on
@@ -385,39 +452,12 @@ function run_conformance_windows {
     export KUBECONFIG=$KUBECONFIG_PATH
 
     if [[ "$TESTCASE" == "windows-conformance" ]]; then
+        # Antrea Windows agent Pods are deployed for Windows Conformance test
         clean_for_windows_install_cni
-        kubectl apply -f build/yamls/antrea.yml
-        kubectl apply -f ${WORKDIR}/kube-proxy-windows.yml
-        kubectl apply -f build/yamls/antrea-windows.yml
-        kubectl rollout restart deployment/coredns -n kube-system
-        kubectl rollout status deployment/coredns -n kube-system
-        kubectl rollout status deployment.apps/antrea-controller -n kube-system
-        kubectl rollout status daemonset/antrea-agent -n kube-system
-        kubectl rollout status daemonset.apps/antrea-agent-windows -n kube-system
-        kubectl rollout status daemonset/kube-proxy-windows -n kube-system
-        kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 != role && $1 ~ /win/ {print $6}' | while read IP; do
-            for i in `seq 5`; do
-                sleep 5
-                timeout 5s ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "powershell Get-NetAdapter -Name br-int -ErrorAction SilentlyContinue" && break
-            done
-            sleep 10
-        done
+        wait_for_antrea_windows_pods_ready
     else
-        kubectl apply -f build/yamls/antrea.yml
-        kubectl rollout restart deployment/coredns -n kube-system
-        kubectl rollout status deployment/coredns -n kube-system
-        kubectl rollout status deployment.apps/antrea-controller -n kube-system
-        kubectl rollout status daemonset/antrea-agent -n kube-system
-        kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 != role && $1 ~ /win/ {print $6}' | while read IP; do
-            echo "===== Run script to startup antrea agent ====="
-            ANTREA_VERSION=$(ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "/cygdrive/c/k/antrea/bin/antrea-agent.exe --version" | awk '{print $3}')
-            ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "chmod +x /cygdrive/c/k/antrea/Start.ps1 && powershell 'c:\k\antrea\Start.ps1 -AntreaVersion ${ANTREA_VERSION}'"
-            for i in `seq 5`; do
-                sleep 5
-                timeout 5s ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "powershell Get-NetAdapter -Name br-int -ErrorAction SilentlyContinue" && break
-            done
-            sleep 10
-        done
+        # Antrea Windows agents are deployed with scripts as processes on host for Windows NetworkPolicy test
+        wait_for_antrea_windows_processes_ready
     fi
 
     echo "====== Run test with e2e.test ======"
@@ -464,7 +504,11 @@ if [[ ${TESTCASE} == "windows-install-ovs" ]]; then
     run_install_windows_ovs
 elif [[ ${TESTCASE} =~ "windows" ]]; then
     deliver_antrea_windows
-    run_conformance_windows
+    if [[ ${TESTCASE} =~ "e2e" ]]; then
+        run_e2e_windows
+    else
+        run_conformance_windows
+    fi
     clean_antrea
 elif [[ ${TESTCASE} =~ "e2e" ]]; then
     deliver_antrea

@@ -103,6 +103,12 @@ func skipIfEncapModeIsNotAndProviderIs(tb testing.TB, data *TestData, encapMode 
 	}
 }
 
+func skipIfHasWindowsNodes(tb testing.TB) {
+	if len(clusterInfo.windowsNodes) != 0 {
+		tb.Skipf("Skipping test as the cluster has Windows Nodes")
+	}
+}
+
 func ensureAntreaRunning(tb testing.TB, data *TestData) error {
 	tb.Logf("Applying Antrea YAML")
 	if err := data.deployAntrea(); err != nil {
@@ -302,10 +308,13 @@ func exportLogs(tb testing.TB, data *TestData, logsSubDir string, writeNodeLogs 
 		const numLines = 100
 		// --no-pager ensures the command does not hang.
 		cmd := fmt.Sprintf("journalctl -u kubelet -n %d --no-pager", numLines)
+		if clusterInfo.nodesOS[nodeName] == "windows" {
+			cmd = "Get-EventLog -LogName \"System\" -Source \"Service Control Manager\" | grep kubelet ; Get-EventLog -LogName \"Application\" -Source \"nssm\" | grep kubelet"
+		}
 		rc, stdout, _, err := RunCommandOnNode(nodeName, cmd)
 		if err != nil || rc != 0 {
 			// return an error and skip subsequent Nodes
-			return fmt.Errorf("error when running journalctl on Node '%s', is it available?", nodeName)
+			return fmt.Errorf("error when running journalctl on Node '%s', is it available? Error: %v", nodeName, err)
 		}
 		w := getNodeWriter(nodeName, "kubelet")
 		if w == nil {

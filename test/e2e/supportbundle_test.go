@@ -47,6 +47,8 @@ func getAccessToken(podName string, containerName string, tokenPath string, data
 
 // testSupportBundle tests all support bundle related APIs.
 func testSupportBundle(name string, t *testing.T) {
+	skipIfHasWindowsNodes(t)
+
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)

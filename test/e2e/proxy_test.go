@@ -44,6 +44,8 @@ func skipIfProxyDisabled(t *testing.T, data *TestData) {
 
 func TestProxyServiceSessionAffinity(t *testing.T) {
 	skipIfProviderIs(t, "kind", "#881 Does not work in Kind, needs to be investigated.")
+	skipIfHasWindowsNodes(t)
+
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
@@ -112,6 +114,8 @@ func testProxyServiceSessionAffinity(ipFamily *corev1.IPFamily, ingressIPs []str
 }
 
 func TestProxyHairpin(t *testing.T) {
+	skipIfHasWindowsNodes(t)
+
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
@@ -149,6 +153,8 @@ func testProxyHairpin(ipFamily *corev1.IPFamily, data *TestData, t *testing.T) {
 }
 
 func TestProxyEndpointLifeCycle(t *testing.T) {
+	skipIfHasWindowsNodes(t)
+
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
@@ -208,6 +214,8 @@ func testProxyEndpointLifeCycle(ipFamily *corev1.IPFamily, data *TestData, t *te
 }
 
 func TestProxyServiceLifeCycle(t *testing.T) {
+	skipIfHasWindowsNodes(t)
+
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
