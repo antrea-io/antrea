@@ -22,14 +22,14 @@ import (
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/config"
-	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
-	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
-	"github.com/vmware-tanzu/antrea/pkg/agent/proxy"
-	"github.com/vmware-tanzu/antrea/pkg/apis/crd/v1beta1"
-	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
-	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsctl"
-	"github.com/vmware-tanzu/antrea/pkg/querier"
+	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/agent/interfacestore"
+	"antrea.io/antrea/pkg/agent/openflow"
+	"antrea.io/antrea/pkg/agent/proxy"
+	"antrea.io/antrea/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/pkg/ovs/ovsconfig"
+	"antrea.io/antrea/pkg/ovs/ovsctl"
+	"antrea.io/antrea/pkg/querier"
 )
 
 var _ AgentQuerier = new(agentQuerier)

@@ -20,8 +20,8 @@ import (
 	"context"
 	"time"
 
-	v1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/stats/v1alpha1"
-	scheme "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/scheme"
+	v1alpha1 "antrea.io/antrea/pkg/apis/stats/v1alpha1"
+	scheme "antrea.io/antrea/pkg/client/clientset/versioned/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	watch "k8s.io/apimachinery/pkg/watch"
 	rest "k8s.io/client-go/rest"

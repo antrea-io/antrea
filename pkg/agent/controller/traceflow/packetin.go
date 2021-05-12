@@ -28,10 +28,10 @@ import (
 	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/config"
-	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
-	crdv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha1"
-	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
+	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/agent/openflow"
+	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	binding "antrea.io/antrea/pkg/ovs/openflow"
 )
 
 func (c *Controller) HandlePacketIn(pktIn *ofctrl.PacketIn) error {

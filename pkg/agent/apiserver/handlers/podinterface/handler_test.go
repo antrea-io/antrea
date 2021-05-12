@@ -24,9 +24,9 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
-	interfacestoretest "github.com/vmware-tanzu/antrea/pkg/agent/interfacestore/testing"
-	queriertest "github.com/vmware-tanzu/antrea/pkg/agent/querier/testing"
+	"antrea.io/antrea/pkg/agent/interfacestore"
+	interfacestoretest "antrea.io/antrea/pkg/agent/interfacestore/testing"
+	queriertest "antrea.io/antrea/pkg/agent/querier/testing"
 )
 
 // There are 3 pod-interfaces:

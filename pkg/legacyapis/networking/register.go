@@ -18,7 +18,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
-	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
+	"antrea.io/antrea/pkg/apis/controlplane"
 )
 
 // GroupName is the group name used in this package.

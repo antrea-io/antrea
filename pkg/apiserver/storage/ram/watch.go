@@ -23,7 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/klog/v2"
 
-	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
+	"antrea.io/antrea/pkg/apiserver/storage"
 )
 
 type bookmarkEvent struct {

@@ -24,7 +24,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 
-	antreaversion "github.com/vmware-tanzu/antrea/pkg/version"
+	antreaversion "antrea.io/antrea/pkg/version"
 )
 
 var (

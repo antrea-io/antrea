@@ -33,16 +33,16 @@ import (
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/cniserver/ipam"
-	"github.com/vmware-tanzu/antrea/pkg/agent/config"
-	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
-	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
-	"github.com/vmware-tanzu/antrea/pkg/agent/route"
-	"github.com/vmware-tanzu/antrea/pkg/agent/types"
-	"github.com/vmware-tanzu/antrea/pkg/agent/util"
-	cnipb "github.com/vmware-tanzu/antrea/pkg/apis/cni/v1beta1"
-	"github.com/vmware-tanzu/antrea/pkg/cni"
-	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
+	"antrea.io/antrea/pkg/agent/cniserver/ipam"
+	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/agent/interfacestore"
+	"antrea.io/antrea/pkg/agent/openflow"
+	"antrea.io/antrea/pkg/agent/route"
+	"antrea.io/antrea/pkg/agent/types"
+	"antrea.io/antrea/pkg/agent/util"
+	cnipb "antrea.io/antrea/pkg/apis/cni/v1beta1"
+	"antrea.io/antrea/pkg/cni"
+	"antrea.io/antrea/pkg/ovs/ovsconfig"
 )
 
 const (

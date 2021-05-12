@@ -26,7 +26,7 @@ import (
 	ipfixintermediate "github.com/vmware/go-ipfix/pkg/intermediate"
 	ipfixregistry "github.com/vmware/go-ipfix/pkg/registry"
 
-	ipfixtest "github.com/vmware-tanzu/antrea/pkg/ipfix/testing"
+	ipfixtest "antrea.io/antrea/pkg/ipfix/testing"
 )
 
 const (

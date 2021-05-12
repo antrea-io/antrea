@@ -21,7 +21,7 @@ package v1alpha1
 import (
 	unsafe "unsafe"
 
-	stats "github.com/vmware-tanzu/antrea/pkg/apis/stats"
+	stats "antrea.io/antrea/pkg/apis/stats"
 	conversion "k8s.io/apimachinery/pkg/conversion"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 )

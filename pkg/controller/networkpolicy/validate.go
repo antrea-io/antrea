@@ -27,11 +27,11 @@ import (
 	"k8s.io/apiserver/pkg/authentication/serviceaccount"
 	"k8s.io/klog/v2"
 
-	crdv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha1"
-	crdv1alpha2 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha2"
-	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy/store"
-	"github.com/vmware-tanzu/antrea/pkg/controller/types"
-	"github.com/vmware-tanzu/antrea/pkg/util/env"
+	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	crdv1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
+	"antrea.io/antrea/pkg/controller/networkpolicy/store"
+	"antrea.io/antrea/pkg/controller/types"
+	"antrea.io/antrea/pkg/util/env"
 )
 
 // validator interface introduces the set of functions that must be implemented

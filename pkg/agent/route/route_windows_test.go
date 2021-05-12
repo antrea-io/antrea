@@ -25,7 +25,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"k8s.io/klog/v2"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/agent/config"
 )
 
 func getNetLinkIndex(dev string) int {

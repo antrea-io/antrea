@@ -25,10 +25,10 @@ import (
 	ipfixentitiestesting "github.com/vmware/go-ipfix/pkg/entities/testing"
 	ipfixregistry "github.com/vmware/go-ipfix/pkg/registry"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter"
-	connectionstest "github.com/vmware-tanzu/antrea/pkg/agent/flowexporter/connections/testing"
-	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter/flowrecords"
-	ipfixtest "github.com/vmware-tanzu/antrea/pkg/ipfix/testing"
+	"antrea.io/antrea/pkg/agent/flowexporter"
+	connectionstest "antrea.io/antrea/pkg/agent/flowexporter/connections/testing"
+	"antrea.io/antrea/pkg/agent/flowexporter/flowrecords"
+	ipfixtest "antrea.io/antrea/pkg/ipfix/testing"
 )
 
 const (

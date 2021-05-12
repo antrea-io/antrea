@@ -24,9 +24,9 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/registry/rest"
 
-	crdv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1beta1"
-	system "github.com/vmware-tanzu/antrea/pkg/apis/system/v1beta1"
-	"github.com/vmware-tanzu/antrea/pkg/controller/querier"
+	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
+	system "antrea.io/antrea/pkg/apis/system/v1beta1"
+	"antrea.io/antrea/pkg/controller/querier"
 )
 
 // REST implements rest.Storage for ControllerInfo.

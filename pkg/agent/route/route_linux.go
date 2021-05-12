@@ -30,13 +30,13 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/config"
-	"github.com/vmware-tanzu/antrea/pkg/agent/types"
-	"github.com/vmware-tanzu/antrea/pkg/agent/util"
-	"github.com/vmware-tanzu/antrea/pkg/agent/util/ipset"
-	"github.com/vmware-tanzu/antrea/pkg/agent/util/iptables"
-	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
-	"github.com/vmware-tanzu/antrea/pkg/util/env"
+	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/agent/types"
+	"antrea.io/antrea/pkg/agent/util"
+	"antrea.io/antrea/pkg/agent/util/ipset"
+	"antrea.io/antrea/pkg/agent/util/iptables"
+	"antrea.io/antrea/pkg/ovs/ovsconfig"
+	"antrea.io/antrea/pkg/util/env"
 )
 
 const (

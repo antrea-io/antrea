@@ -28,10 +28,10 @@ import (
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	"k8s.io/client-go/rest"
 
-	agentapiserver "github.com/vmware-tanzu/antrea/pkg/agent/apiserver"
-	"github.com/vmware-tanzu/antrea/pkg/antctl/runtime"
-	"github.com/vmware-tanzu/antrea/pkg/apis"
-	controllerapiserver "github.com/vmware-tanzu/antrea/pkg/apiserver"
+	agentapiserver "antrea.io/antrea/pkg/agent/apiserver"
+	"antrea.io/antrea/pkg/antctl/runtime"
+	"antrea.io/antrea/pkg/apis"
+	controllerapiserver "antrea.io/antrea/pkg/apiserver"
 )
 
 // requestOption describes options to issue requests.

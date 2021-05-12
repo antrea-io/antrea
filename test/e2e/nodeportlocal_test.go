@@ -28,7 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/nodeportlocal/k8s"
+	"antrea.io/antrea/pkg/agent/nodeportlocal/k8s"
 )
 
 const (

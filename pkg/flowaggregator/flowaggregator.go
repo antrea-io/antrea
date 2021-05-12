@@ -27,7 +27,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 
-	"github.com/vmware-tanzu/antrea/pkg/ipfix"
+	"antrea.io/antrea/pkg/ipfix"
 )
 
 var (

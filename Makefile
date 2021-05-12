@@ -24,27 +24,27 @@ GRPID   := $(shell id -g)
 .PHONY: bin
 bin:
 	@mkdir -p $(BINDIR)
-	GOOS=linux $(GO) build -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' github.com/vmware-tanzu/antrea/cmd/...
+	GOOS=linux $(GO) build -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' antrea.io/antrea/cmd/...
 
 .PHONY: antrea-agent
 antrea-agent:
 	@mkdir -p $(BINDIR)
-	GOOS=linux $(GO) build -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' github.com/vmware-tanzu/antrea/cmd/antrea-agent
+	GOOS=linux $(GO) build -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' antrea.io/antrea/cmd/antrea-agent
 
 .PHONY: antrea-agent-simulator
 antrea-agent-simulator:
 	@mkdir -p $(BINDIR)
-	GOOS=linux $(GO) build -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' github.com/vmware-tanzu/antrea/cmd/antrea-agent-simulator
+	GOOS=linux $(GO) build -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' antrea.io/antrea/cmd/antrea-agent-simulator
 
 .PHONY: antrea-agent-instr-binary
 antrea-agent-instr-binary:
 	@mkdir -p $(BINDIR)
-	GOOS=linux $(GO) test -tags testbincover -covermode count -coverpkg=github.com/vmware-tanzu/antrea/pkg/... -c -o $(BINDIR)/antrea-agent-coverage $(GOFLAGS) -ldflags '$(LDFLAGS)' github.com/vmware-tanzu/antrea/cmd/antrea-agent
+	GOOS=linux $(GO) test -tags testbincover -covermode count -coverpkg=antrea.io/antrea/pkg/... -c -o $(BINDIR)/antrea-agent-coverage $(GOFLAGS) -ldflags '$(LDFLAGS)' antrea.io/antrea/cmd/antrea-agent
 
 .PHONY: antrea-controller
 antrea-controller:
 	@mkdir -p $(BINDIR)
-	GOOS=linux $(GO) build -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' github.com/vmware-tanzu/antrea/cmd/antrea-controller
+	GOOS=linux $(GO) build -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' antrea.io/antrea/cmd/antrea-controller
 
 .PHONY: .coverage
 .coverage:
@@ -53,38 +53,37 @@ antrea-controller:
 .PHONY: antrea-controller-instr-binary
 antrea-controller-instr-binary:
 	@mkdir -p $(BINDIR)
-	GOOS=linux $(GO) test -tags testbincover -covermode count -coverpkg=github.com/vmware-tanzu/antrea/pkg/... -c -o $(BINDIR)/antrea-controller-coverage $(GOFLAGS) -ldflags '$(LDFLAGS)' github.com/vmware-tanzu/antrea/cmd/antrea-controller
+	GOOS=linux $(GO) test -tags testbincover -covermode count -coverpkg=antrea.io/antrea/pkg/... -c -o $(BINDIR)/antrea-controller-coverage $(GOFLAGS) -ldflags '$(LDFLAGS)' antrea.io/antrea/cmd/antrea-controller
 
 .PHONY: antrea-cni
 antrea-cni:
 	@mkdir -p $(BINDIR)
-	GOOS=linux $(GO) build -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' github.com/vmware-tanzu/antrea/cmd/antrea-cni
+	GOOS=linux $(GO) build -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' antrea.io/antrea/cmd/antrea-cni
 
 .PHONY: antctl-ubuntu
 antctl-ubuntu:
 	@mkdir -p $(BINDIR)
-	GOOS=linux $(GO) build -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' github.com/vmware-tanzu/antrea/cmd/antctl
+	GOOS=linux $(GO) build -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' antrea.io/antrea/cmd/antctl
 
 .PHONY: antctl-instr-binary
 antctl-instr-binary:
 	@mkdir -p $(BINDIR)
-	GOOS=linux $(GO) test -tags testbincover -covermode count -coverpkg=github.com/vmware-tanzu/antrea/pkg/... -c -o $(BINDIR)/antctl-coverage $(GOFLAGS) -ldflags '$(LDFLAGS)' github.com/vmware-tanzu/antrea/cmd/antctl
+	GOOS=linux $(GO) test -tags testbincover -covermode count -coverpkg=antrea.io/antrea/pkg/... -c -o $(BINDIR)/antctl-coverage $(GOFLAGS) -ldflags '$(LDFLAGS)' antrea.io/antrea/cmd/antctl
 
 .PHONY: windows-bin
 windows-bin:
 	@mkdir -p $(BINDIR)
-	GOOS=windows $(GO) build -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' github.com/vmware-tanzu/antrea/cmd/antrea-cni \
-		github.com/vmware-tanzu/antrea/cmd/antrea-agent
+	GOOS=windows $(GO) build -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' antrea.io/antrea/cmd/antrea-cni antrea.io/antrea/cmd/antrea-agent
 
 .PHONY: flow-aggregator
 flow-aggregator:
 	@mkdir -p $(BINDIR)
-	GOOS=linux $(GO) build -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' github.com/vmware-tanzu/antrea/cmd/flow-aggregator
+	GOOS=linux $(GO) build -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' antrea.io/antrea/cmd/flow-aggregator
 
 .PHONY: flow-aggregator-instr-binary
 flow-aggregator-instr-binary:
 	@mkdir -p $(BINDIR)
-	GOOS=linux $(GO) test -tags testbincover -covermode count -coverpkg=github.com/vmware-tanzu/antrea/pkg/... -c -o $(BINDIR)/flow-aggregator-coverage $(GOFLAGS) -ldflags '$(LDFLAGS)' github.com/vmware-tanzu/antrea/cmd/flow-aggregator
+	GOOS=linux $(GO) test -tags testbincover -covermode count -coverpkg=antrea.io/antrea/pkg/... -c -o $(BINDIR)/flow-aggregator-coverage $(GOFLAGS) -ldflags '$(LDFLAGS)' antrea.io/antrea/cmd/flow-aggregator
 
 .PHONY: test-unit test-integration
 ifeq ($(UNAME_S),Linux)
@@ -120,10 +119,10 @@ DOCKER_ENV := \
 	@docker run --rm -u $$(id -u):$$(id -g) \
 		-e "GOCACHE=/tmp/gocache" \
 		-e "GOPATH=/tmp/gopath" \
-		-w /usr/src/github.com/vmware-tanzu/antrea \
+		-w /usr/src/antrea.io/antrea \
 		-v $(DOCKER_CACHE)/gopath:/tmp/gopath \
 		-v $(DOCKER_CACHE)/gocache:/tmp/gocache \
-		-v $(CURDIR):/usr/src/github.com/vmware-tanzu/antrea \
+		-v $(CURDIR):/usr/src/antrea.io/antrea \
 		golang:1.15
 
 .PHONY: docker-bin
@@ -152,11 +151,11 @@ endif
 		-e "GOCACHE=/tmp/gocache" \
 		-e "GOPATH=/tmp/gopath" \
 		-e "INCONTAINER=true" \
-		-w /usr/src/github.com/vmware-tanzu/antrea \
+		-w /usr/src/antrea.io/antrea \
 		-v $(DOCKER_CACHE)/gopath:/tmp/gopath \
 		-v $(DOCKER_CACHE)/gocache:/tmp/gocache \
-		-v $(CURDIR)/.coverage:/usr/src/github.com/vmware-tanzu/antrea/.coverage \
-		-v $(CURDIR):/usr/src/github.com/vmware-tanzu/antrea:ro \
+		-v $(CURDIR)/.coverage:/usr/src/antrea.io/antrea/.coverage \
+		-v $(CURDIR):/usr/src/antrea.io/antrea:ro \
 		-v /lib/modules:/lib/modules \
 		--sysctl net.ipv6.conf.all.disable_ipv6=0 \
 		antrea/test test-integration $(USERID) $(GRPID)
@@ -172,7 +171,7 @@ docker-tidy: $(DOCKER_CACHE)
 
 ANTCTL_BINARIES := antctl-darwin antctl-linux antctl-windows
 $(ANTCTL_BINARIES): antctl-%:
-	@GOOS=$* $(GO) build -o $(BINDIR)/$@ $(GOFLAGS) -ldflags '$(LDFLAGS)' github.com/vmware-tanzu/antrea/cmd/antctl
+	@GOOS=$* $(GO) build -o $(BINDIR)/$@ $(GOFLAGS) -ldflags '$(LDFLAGS)' antrea.io/antrea/cmd/antctl
 	@if [[ $@ != *windows ]]; then \
 	  chmod 0755 $(BINDIR)/$@; \
 	else \
@@ -184,19 +183,19 @@ antctl: $(ANTCTL_BINARIES)
 
 .PHONY: antctl-release
 antctl-release:
-	@$(GO) build -o $(BINDIR)/$(ANTCTL_BINARY_NAME) $(GOFLAGS) -ldflags '-s -w $(LDFLAGS)' github.com/vmware-tanzu/antrea/cmd/antctl
+	@$(GO) build -o $(BINDIR)/$(ANTCTL_BINARY_NAME) $(GOFLAGS) -ldflags '-s -w $(LDFLAGS)' antrea.io/antrea/cmd/antctl
 
 .PHONY: .linux-test-unit
 .linux-test-unit: .coverage
 	@echo
 	@echo "==> Running unit tests <=="
-	$(GO) test -race -coverprofile=.coverage/coverage-unit.txt -covermode=atomic -cover github.com/vmware-tanzu/antrea/cmd/... github.com/vmware-tanzu/antrea/pkg/...
+	$(GO) test -race -coverprofile=.coverage/coverage-unit.txt -covermode=atomic -cover antrea.io/antrea/cmd/... antrea.io/antrea/pkg/...
 
 .PHONY: .windows-test-unit
 .windows-test-unit:
 	@echo
 	@echo "==> Running unit tests <=="
-	$(GO) test -race github.com/vmware-tanzu/antrea/cmd/... github.com/vmware-tanzu/antrea/pkg/...
+	$(GO) test -race antrea.io/antrea/cmd/... antrea.io/antrea/pkg/...
 
 .PHONY: tidy
 tidy:
@@ -210,7 +209,7 @@ tidy:
 	@echo
 	@echo "==> Running integration tests <=="
 	@echo "SOME TESTS WILL FAIL IF NOT RUN AS ROOT!"
-	$(GO) test -coverpkg=github.com/vmware-tanzu/antrea/pkg/... -coverprofile=.coverage/coverage-integration.txt -covermode=atomic -cover github.com/vmware-tanzu/antrea/test/integration/...
+	$(GO) test -coverpkg=antrea.io/antrea/pkg/... -coverprofile=.coverage/coverage-integration.txt -covermode=atomic -cover antrea.io/antrea/test/integration/...
 
 test-tidy:
 	@echo

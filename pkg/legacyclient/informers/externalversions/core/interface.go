@@ -17,8 +17,8 @@
 package core
 
 import (
-	v1alpha2 "github.com/vmware-tanzu/antrea/pkg/legacyclient/informers/externalversions/core/v1alpha2"
-	internalinterfaces "github.com/vmware-tanzu/antrea/pkg/legacyclient/informers/externalversions/internalinterfaces"
+	v1alpha2 "antrea.io/antrea/pkg/legacyclient/informers/externalversions/core/v1alpha2"
+	internalinterfaces "antrea.io/antrea/pkg/legacyclient/informers/externalversions/internalinterfaces"
 )
 
 // Interface provides access to each of this group's versions.

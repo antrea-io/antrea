@@ -19,7 +19,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/types"
+	"antrea.io/antrea/pkg/agent/types"
 )
 
 var (

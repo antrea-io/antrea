@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/nodeportlocal/rules"
+	"antrea.io/antrea/pkg/agent/nodeportlocal/rules"
 )
 
 type NodePortData struct {

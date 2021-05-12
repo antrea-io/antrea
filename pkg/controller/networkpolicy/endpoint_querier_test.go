@@ -26,7 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 
-	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 )
 
 // pods represent kubernetes pods for testing proper query results

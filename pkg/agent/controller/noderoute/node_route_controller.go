@@ -31,13 +31,13 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/config"
-	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
-	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
-	"github.com/vmware-tanzu/antrea/pkg/agent/route"
-	"github.com/vmware-tanzu/antrea/pkg/agent/util"
-	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
-	utilip "github.com/vmware-tanzu/antrea/pkg/util/ip"
+	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/agent/interfacestore"
+	"antrea.io/antrea/pkg/agent/openflow"
+	"antrea.io/antrea/pkg/agent/route"
+	"antrea.io/antrea/pkg/agent/util"
+	"antrea.io/antrea/pkg/ovs/ovsconfig"
+	utilip "antrea.io/antrea/pkg/util/ip"
 )
 
 const (

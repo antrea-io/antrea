@@ -19,8 +19,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
-	crdv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1beta1"
-	"github.com/vmware-tanzu/antrea/pkg/apis/system/v1beta1"
+	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/pkg/apis/system/v1beta1"
 )
 
 const GroupName = "system.antrea.tanzu.vmware.com"

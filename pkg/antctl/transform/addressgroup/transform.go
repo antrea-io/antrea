@@ -18,9 +18,9 @@ import (
 	"io"
 	"reflect"
 
-	"github.com/vmware-tanzu/antrea/pkg/antctl/transform"
-	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/common"
-	cpv1beta "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/pkg/antctl/transform"
+	"antrea.io/antrea/pkg/antctl/transform/common"
+	cpv1beta "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 )
 
 type Response struct {

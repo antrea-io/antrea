@@ -25,8 +25,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/config"
-	"github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha2"
+	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
 )
 
 func TestEgress(t *testing.T) {

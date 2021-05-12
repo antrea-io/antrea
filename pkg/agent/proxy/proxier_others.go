@@ -18,7 +18,7 @@ package proxy
 import (
 	"net"
 
-	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
+	binding "antrea.io/antrea/pkg/ovs/openflow"
 )
 
 // installLoadBalancerServiceFlows install OpenFlow entries for LoadBalancer Service.

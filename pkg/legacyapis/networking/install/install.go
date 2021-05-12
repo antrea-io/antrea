@@ -18,8 +18,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 
-	"github.com/vmware-tanzu/antrea/pkg/legacyapis/networking"
-	"github.com/vmware-tanzu/antrea/pkg/legacyapis/networking/v1beta1"
+	"antrea.io/antrea/pkg/legacyapis/networking"
+	"antrea.io/antrea/pkg/legacyapis/networking/v1beta1"
 )
 
 // Install registers the API group and adds types to a scheme

@@ -25,8 +25,8 @@ import (
 	v1 "k8s.io/api/admission/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 
-	"github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy"
-	queriermock "github.com/vmware-tanzu/antrea/pkg/controller/networkpolicy/testing"
+	"antrea.io/antrea/pkg/controller/networkpolicy"
+	queriermock "antrea.io/antrea/pkg/controller/networkpolicy/testing"
 )
 
 type TestCase struct {

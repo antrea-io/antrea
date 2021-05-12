@@ -21,7 +21,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/vmware-tanzu/antrea/pkg/flowaggregator"
+	"antrea.io/antrea/pkg/flowaggregator"
 )
 
 const (

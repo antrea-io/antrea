@@ -26,12 +26,12 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
-	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
-	openflowtest "github.com/vmware-tanzu/antrea/pkg/agent/openflow/testing"
-	"github.com/vmware-tanzu/antrea/pkg/agent/types"
-	"github.com/vmware-tanzu/antrea/pkg/agent/util"
-	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/pkg/agent/interfacestore"
+	"antrea.io/antrea/pkg/agent/openflow"
+	openflowtest "antrea.io/antrea/pkg/agent/openflow/testing"
+	"antrea.io/antrea/pkg/agent/types"
+	"antrea.io/antrea/pkg/agent/util"
+	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 )
 
 var (

@@ -17,8 +17,8 @@
 package v1alpha2
 
 import (
-	v1alpha2 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha2"
-	"github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/scheme"
+	v1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
+	"antrea.io/antrea/pkg/client/clientset/versioned/scheme"
 	rest "k8s.io/client-go/rest"
 )
 

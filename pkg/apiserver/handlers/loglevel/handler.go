@@ -21,7 +21,7 @@ import (
 
 	"k8s.io/klog/v2"
 
-	"github.com/vmware-tanzu/antrea/pkg/log"
+	"antrea.io/antrea/pkg/log"
 )
 
 // HandleFunc returns the function which can handle the /loglevel API request.

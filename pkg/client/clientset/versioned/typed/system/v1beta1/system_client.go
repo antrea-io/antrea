@@ -17,8 +17,8 @@
 package v1beta1
 
 import (
-	v1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/system/v1beta1"
-	"github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/scheme"
+	v1beta1 "antrea.io/antrea/pkg/apis/system/v1beta1"
+	"antrea.io/antrea/pkg/client/clientset/versioned/scheme"
 	rest "k8s.io/client-go/rest"
 )
 

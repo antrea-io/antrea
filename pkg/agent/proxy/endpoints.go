@@ -25,8 +25,8 @@ import (
 	apimachinerytypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/proxy/types"
-	k8sproxy "github.com/vmware-tanzu/antrea/third_party/proxy"
+	"antrea.io/antrea/pkg/agent/proxy/types"
+	k8sproxy "antrea.io/antrea/third_party/proxy"
 )
 
 var supportedEndpointSliceAddressTypes = map[discovery.AddressType]struct{}{

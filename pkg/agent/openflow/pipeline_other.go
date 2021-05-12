@@ -20,8 +20,8 @@ package openflow
 import (
 	"net"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/openflow/cookie"
-	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
+	"antrea.io/antrea/pkg/agent/openflow/cookie"
+	binding "antrea.io/antrea/pkg/ovs/openflow"
 )
 
 // externalFlows returns the flows needed to enable SNAT for external traffic.

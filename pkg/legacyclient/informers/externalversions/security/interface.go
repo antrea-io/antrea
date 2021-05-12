@@ -17,8 +17,8 @@
 package security
 
 import (
-	internalinterfaces "github.com/vmware-tanzu/antrea/pkg/legacyclient/informers/externalversions/internalinterfaces"
-	v1alpha1 "github.com/vmware-tanzu/antrea/pkg/legacyclient/informers/externalversions/security/v1alpha1"
+	internalinterfaces "antrea.io/antrea/pkg/legacyclient/informers/externalversions/internalinterfaces"
+	v1alpha1 "antrea.io/antrea/pkg/legacyclient/informers/externalversions/security/v1alpha1"
 )
 
 // Interface provides access to each of this group's versions.

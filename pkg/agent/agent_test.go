@@ -23,11 +23,11 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/cniserver"
-	"github.com/vmware-tanzu/antrea/pkg/agent/config"
-	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
-	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
-	ovsconfigtest "github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig/testing"
+	"antrea.io/antrea/pkg/agent/cniserver"
+	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/agent/interfacestore"
+	"antrea.io/antrea/pkg/ovs/ovsconfig"
+	ovsconfigtest "antrea.io/antrea/pkg/ovs/ovsconfig/testing"
 )
 
 func newAgentInitializer(ovsBridgeClient ovsconfig.OVSBridgeClient, ifaceStore interfacestore.InterfaceStore) *Initializer {

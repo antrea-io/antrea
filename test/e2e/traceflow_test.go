@@ -29,11 +29,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/config"
-	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
-	"github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha1"
-	secv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha1"
-	"github.com/vmware-tanzu/antrea/pkg/features"
+	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	secv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	"antrea.io/antrea/pkg/features"
 )
 
 type testcase struct {
