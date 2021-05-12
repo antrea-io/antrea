@@ -6,7 +6,7 @@ on:
 
 jobs:
   stale:
-    if: github.repository == 'vmware-tanzu/antrea'
+    if: github.repository == 'antrea-io/antrea'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/stale@v3.0.8
@@ -24,7 +24,7 @@ jobs:
           debug-only: false
           operations-per-run: 200
   skip:
-    if: github.repository != 'vmware-tanzu/antrea'
+    if: github.repository != 'antrea-io/antrea'
     runs-on: ubuntu-latest
     steps:
       - name: Skip
