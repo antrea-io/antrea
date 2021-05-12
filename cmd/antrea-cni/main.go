@@ -20,8 +20,8 @@ import (
 	"github.com/containernetworking/cni/pkg/skel"
 	cniversion "github.com/containernetworking/cni/pkg/version"
 
-	"github.com/vmware-tanzu/antrea/pkg/cni"
-	"github.com/vmware-tanzu/antrea/pkg/version"
+	"antrea.io/antrea/pkg/cni"
+	"antrea.io/antrea/pkg/version"
 )
 
 func main() {

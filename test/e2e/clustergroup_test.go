@@ -20,8 +20,8 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	crdv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha1"
-	crdv1alpha2 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha2"
+	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	crdv1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
 )
 
 func testInvalidCGIPBlockWithPodSelector(t *testing.T) {
@@ -268,6 +268,8 @@ func testInvalidCGMaxNestedLevel(t *testing.T) {
 }
 
 func TestClusterGroup(t *testing.T) {
+	skipIfHasWindowsNodes(t)
+
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
@@ -292,5 +294,6 @@ func TestClusterGroup(t *testing.T) {
 		t.Run("Case=ChildGroupExceedMaxNestedLevel", func(t *testing.T) { testInvalidCGMaxNestedLevel(t) })
 		cleanupChildCGForTest(t)
 	})
-	failOnError(k8sUtils.CleanCGs(), t)
+
+	k8sUtils.Cleanup(namespaces) // clean up all cluster-scope resources, including CGs
 }

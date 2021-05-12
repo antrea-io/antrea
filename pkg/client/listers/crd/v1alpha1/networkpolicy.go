@@ -17,15 +17,17 @@
 package v1alpha1
 
 import (
-	v1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha1"
+	v1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/tools/cache"
 )
 
 // NetworkPolicyLister helps list NetworkPolicies.
+// All objects returned here must be treated as read-only.
 type NetworkPolicyLister interface {
 	// List lists all NetworkPolicies in the indexer.
+	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1alpha1.NetworkPolicy, err error)
 	// NetworkPolicies returns an object that can list and get NetworkPolicies.
 	NetworkPolicies(namespace string) NetworkPolicyNamespaceLister
@@ -56,10 +58,13 @@ func (s *networkPolicyLister) NetworkPolicies(namespace string) NetworkPolicyNam
 }
 
 // NetworkPolicyNamespaceLister helps list and get NetworkPolicies.
+// All objects returned here must be treated as read-only.
 type NetworkPolicyNamespaceLister interface {
 	// List lists all NetworkPolicies in the indexer for a given namespace.
+	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1alpha1.NetworkPolicy, err error)
 	// Get retrieves the NetworkPolicy from the indexer for a given namespace and name.
+	// Objects returned here must be treated as read-only.
 	Get(name string) (*v1alpha1.NetworkPolicy, error)
 	NetworkPolicyNamespaceListerExpansion
 }

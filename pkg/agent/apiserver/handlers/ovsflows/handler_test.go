@@ -23,17 +23,17 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
-	interfacestoretest "github.com/vmware-tanzu/antrea/pkg/agent/interfacestore/testing"
-	oftest "github.com/vmware-tanzu/antrea/pkg/agent/openflow/testing"
-	proxytest "github.com/vmware-tanzu/antrea/pkg/agent/proxy/testing"
-	agentquerier "github.com/vmware-tanzu/antrea/pkg/agent/querier"
-	aqtest "github.com/vmware-tanzu/antrea/pkg/agent/querier/testing"
-	cpv1beta "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
-	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
-	ovsctltest "github.com/vmware-tanzu/antrea/pkg/ovs/ovsctl/testing"
-	"github.com/vmware-tanzu/antrea/pkg/querier"
-	queriertest "github.com/vmware-tanzu/antrea/pkg/querier/testing"
+	"antrea.io/antrea/pkg/agent/interfacestore"
+	interfacestoretest "antrea.io/antrea/pkg/agent/interfacestore/testing"
+	oftest "antrea.io/antrea/pkg/agent/openflow/testing"
+	proxytest "antrea.io/antrea/pkg/agent/proxy/testing"
+	agentquerier "antrea.io/antrea/pkg/agent/querier"
+	aqtest "antrea.io/antrea/pkg/agent/querier/testing"
+	cpv1beta "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
+	binding "antrea.io/antrea/pkg/ovs/openflow"
+	ovsctltest "antrea.io/antrea/pkg/ovs/ovsctl/testing"
+	"antrea.io/antrea/pkg/querier"
+	queriertest "antrea.io/antrea/pkg/querier/testing"
 )
 
 var (

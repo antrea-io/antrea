@@ -19,7 +19,7 @@ import (
 	"io"
 	"io/ioutil"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/apiserver/handlers/ovstracing"
+	"antrea.io/antrea/pkg/agent/apiserver/handlers/ovstracing"
 )
 
 func Transform(reader io.Reader, _ bool, _ map[string]string) (interface{}, error) {

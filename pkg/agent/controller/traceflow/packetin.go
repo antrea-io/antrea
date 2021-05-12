@@ -26,12 +26,12 @@ import (
 	"github.com/contiv/ofnet/ofctrl"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/util/retry"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/config"
-	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
-	crdv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha1"
-	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
+	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/agent/openflow"
+	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	binding "antrea.io/antrea/pkg/ovs/openflow"
 )
 
 func (c *Controller) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
@@ -359,6 +359,8 @@ func parseCapturedPacket(pktIn *ofctrl.PacketIn) *crdv1alpha1.Packet {
 		capturedPacket.TransportHeader.TCP = &crdv1alpha1.TCPHeader{SrcPort: int32(pkt.SourcePort), DstPort: int32(pkt.DestinationPort), Flags: int32(pkt.TCPFlags)}
 	} else if pkt.IPProto == protocol.Type_UDP {
 		capturedPacket.TransportHeader.UDP = &crdv1alpha1.UDPHeader{SrcPort: int32(pkt.SourcePort), DstPort: int32(pkt.DestinationPort)}
+	} else if pkt.IPProto == protocol.Type_ICMP || pkt.IPProto == protocol.Type_IPv6ICMP {
+		capturedPacket.TransportHeader.ICMP = &crdv1alpha1.ICMPEchoRequestHeader{ID: int32(pkt.ICMPEchoID), Sequence: int32(pkt.ICMPEchoSeq)}
 	}
 	return &capturedPacket
 }

@@ -20,9 +20,9 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
-	"github.com/vmware-tanzu/antrea/pkg/agent/querier"
-	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/common"
+	"antrea.io/antrea/pkg/agent/interfacestore"
+	"antrea.io/antrea/pkg/agent/querier"
+	"antrea.io/antrea/pkg/antctl/transform/common"
 )
 
 // Response describes the response struct of pod-interface command.

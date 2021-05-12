@@ -29,10 +29,10 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
 
-	crdv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha1"
-	"github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned"
-	fakeversioned "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/fake"
-	crdinformers "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions"
+	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	"antrea.io/antrea/pkg/client/clientset/versioned"
+	fakeversioned "antrea.io/antrea/pkg/client/clientset/versioned/fake"
+	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions"
 )
 
 var alwaysReady = func() bool { return true }

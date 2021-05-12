@@ -25,10 +25,10 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent"
-	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/pkg/agent"
+	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 )
 
 const (

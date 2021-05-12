@@ -19,7 +19,7 @@ import (
 	"net"
 	"sort"
 
-	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 )
 
 const (

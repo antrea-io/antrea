@@ -20,15 +20,15 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent"
-	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
-	agenttypes "github.com/vmware-tanzu/antrea/pkg/agent/types"
-	cpv1beta "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
-	statsv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/stats/v1alpha1"
-	"github.com/vmware-tanzu/antrea/pkg/querier"
-	"github.com/vmware-tanzu/antrea/pkg/util/env"
+	"antrea.io/antrea/pkg/agent"
+	"antrea.io/antrea/pkg/agent/openflow"
+	agenttypes "antrea.io/antrea/pkg/agent/types"
+	cpv1beta "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
+	statsv1alpha1 "antrea.io/antrea/pkg/apis/stats/v1alpha1"
+	"antrea.io/antrea/pkg/querier"
+	"antrea.io/antrea/pkg/util/env"
 )
 
 const (

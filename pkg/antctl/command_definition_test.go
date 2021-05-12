@@ -29,16 +29,16 @@ import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/apiserver/handlers/agentinfo"
-	"github.com/vmware-tanzu/antrea/pkg/agent/apiserver/handlers/podinterface"
-	"github.com/vmware-tanzu/antrea/pkg/antctl/runtime"
-	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/addressgroup"
-	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/appliedtogroup"
-	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/common"
-	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/controllerinfo"
-	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/networkpolicy"
-	cpv1beta "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
-	"github.com/vmware-tanzu/antrea/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/pkg/agent/apiserver/handlers/agentinfo"
+	"antrea.io/antrea/pkg/agent/apiserver/handlers/podinterface"
+	"antrea.io/antrea/pkg/antctl/runtime"
+	"antrea.io/antrea/pkg/antctl/transform/addressgroup"
+	"antrea.io/antrea/pkg/antctl/transform/appliedtogroup"
+	"antrea.io/antrea/pkg/antctl/transform/common"
+	"antrea.io/antrea/pkg/antctl/transform/controllerinfo"
+	"antrea.io/antrea/pkg/antctl/transform/networkpolicy"
+	cpv1beta "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/pkg/apis/crd/v1beta1"
 )
 
 type Foobar struct {

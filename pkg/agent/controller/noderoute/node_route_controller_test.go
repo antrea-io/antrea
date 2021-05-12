@@ -28,11 +28,11 @@ import (
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/config"
-	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
-	oftest "github.com/vmware-tanzu/antrea/pkg/agent/openflow/testing"
-	routetest "github.com/vmware-tanzu/antrea/pkg/agent/route/testing"
-	ovsconfigtest "github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig/testing"
+	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/agent/interfacestore"
+	oftest "antrea.io/antrea/pkg/agent/openflow/testing"
+	routetest "antrea.io/antrea/pkg/agent/route/testing"
+	ovsconfigtest "antrea.io/antrea/pkg/ovs/ovsconfig/testing"
 )
 
 var (

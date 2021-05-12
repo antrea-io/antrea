@@ -30,17 +30,17 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/util/workqueue"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
-	openflowtest "github.com/vmware-tanzu/antrea/pkg/agent/openflow/testing"
-	routetest "github.com/vmware-tanzu/antrea/pkg/agent/route/testing"
-	"github.com/vmware-tanzu/antrea/pkg/agent/util"
-	cpv1b2 "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
-	crdv1a2 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha2"
-	"github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned"
-	"github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/fake"
-	fakeversioned "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/fake"
-	crdinformers "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions"
-	"github.com/vmware-tanzu/antrea/pkg/k8s"
+	"antrea.io/antrea/pkg/agent/interfacestore"
+	openflowtest "antrea.io/antrea/pkg/agent/openflow/testing"
+	routetest "antrea.io/antrea/pkg/agent/route/testing"
+	"antrea.io/antrea/pkg/agent/util"
+	cpv1b2 "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
+	crdv1a2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
+	"antrea.io/antrea/pkg/client/clientset/versioned"
+	"antrea.io/antrea/pkg/client/clientset/versioned/fake"
+	fakeversioned "antrea.io/antrea/pkg/client/clientset/versioned/fake"
+	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions"
+	"antrea.io/antrea/pkg/k8s"
 )
 
 const (

@@ -26,15 +26,15 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter"
-	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter/connections"
-	connectionstest "github.com/vmware-tanzu/antrea/pkg/agent/flowexporter/connections/testing"
-	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter/flowrecords"
-	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
-	interfacestoretest "github.com/vmware-tanzu/antrea/pkg/agent/interfacestore/testing"
-	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
-	"github.com/vmware-tanzu/antrea/pkg/agent/util/sysctl"
-	queriertest "github.com/vmware-tanzu/antrea/pkg/querier/testing"
+	"antrea.io/antrea/pkg/agent/flowexporter"
+	"antrea.io/antrea/pkg/agent/flowexporter/connections"
+	connectionstest "antrea.io/antrea/pkg/agent/flowexporter/connections/testing"
+	"antrea.io/antrea/pkg/agent/flowexporter/flowrecords"
+	"antrea.io/antrea/pkg/agent/interfacestore"
+	interfacestoretest "antrea.io/antrea/pkg/agent/interfacestore/testing"
+	"antrea.io/antrea/pkg/agent/openflow"
+	"antrea.io/antrea/pkg/agent/util/sysctl"
+	queriertest "antrea.io/antrea/pkg/querier/testing"
 )
 
 const testPollInterval = 0 // Not used in the test, hence 0.

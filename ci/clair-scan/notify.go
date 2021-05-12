@@ -24,7 +24,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ses"
 	"gopkg.in/gomail.v2"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 )
 
 const (

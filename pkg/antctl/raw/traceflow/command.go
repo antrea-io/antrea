@@ -32,11 +32,11 @@ import (
 	"k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 
-	"github.com/vmware-tanzu/antrea/pkg/antctl/runtime"
-	"github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha1"
-	clientset "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned"
+	"antrea.io/antrea/pkg/antctl/runtime"
+	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	clientset "antrea.io/antrea/pkg/client/clientset/versioned"
 )
 
 const defaultTimeout time.Duration = time.Second * 10

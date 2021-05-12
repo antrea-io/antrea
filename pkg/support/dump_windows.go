@@ -21,7 +21,7 @@ import (
 	"path"
 	"path/filepath"
 
-	"github.com/vmware-tanzu/antrea/pkg/util/logdir"
+	"antrea.io/antrea/pkg/util/logdir"
 )
 
 const (

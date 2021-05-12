@@ -21,7 +21,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/registry/rest"
 
-	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
+	"antrea.io/antrea/pkg/apis/controlplane"
 )
 
 // statsCollector is the interface required by the handler.

@@ -20,14 +20,14 @@ import (
 	"strconv"
 	"strings"
 
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
-	agentquerier "github.com/vmware-tanzu/antrea/pkg/agent/querier"
-	"github.com/vmware-tanzu/antrea/pkg/antctl/transform/common"
-	"github.com/vmware-tanzu/antrea/pkg/features"
-	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
-	"github.com/vmware-tanzu/antrea/pkg/querier"
+	"antrea.io/antrea/pkg/agent/openflow"
+	agentquerier "antrea.io/antrea/pkg/agent/querier"
+	"antrea.io/antrea/pkg/antctl/transform/common"
+	"antrea.io/antrea/pkg/features"
+	binding "antrea.io/antrea/pkg/ovs/openflow"
+	"antrea.io/antrea/pkg/querier"
 )
 
 // Response is the response struct of ovsflows command.

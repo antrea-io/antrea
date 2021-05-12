@@ -29,12 +29,12 @@ import (
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 
-	crdv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha1"
-	"github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned"
-	crdinformers "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions/crd/v1alpha1"
-	crdlisters "github.com/vmware-tanzu/antrea/pkg/client/listers/crd/v1alpha1"
+	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	"antrea.io/antrea/pkg/client/clientset/versioned"
+	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha1"
+	crdlisters "antrea.io/antrea/pkg/client/listers/crd/v1alpha1"
 )
 
 const (

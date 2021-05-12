@@ -20,13 +20,13 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	crd "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha1"
-	crdclient "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/crd/v1alpha1"
-	crdlister "github.com/vmware-tanzu/antrea/pkg/client/listers/crd/v1alpha1"
-	"github.com/vmware-tanzu/antrea/pkg/controller/crdmirroring/types"
-	legacyops "github.com/vmware-tanzu/antrea/pkg/legacyapis/ops/v1alpha1"
-	legacyopsclient "github.com/vmware-tanzu/antrea/pkg/legacyclient/clientset/versioned/typed/ops/v1alpha1"
-	legacyopslister "github.com/vmware-tanzu/antrea/pkg/legacyclient/listers/ops/v1alpha1"
+	crd "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	crdclient "antrea.io/antrea/pkg/client/clientset/versioned/typed/crd/v1alpha1"
+	crdlister "antrea.io/antrea/pkg/client/listers/crd/v1alpha1"
+	"antrea.io/antrea/pkg/controller/crdmirroring/types"
+	legacyops "antrea.io/antrea/pkg/legacyapis/ops/v1alpha1"
+	legacyopsclient "antrea.io/antrea/pkg/legacyclient/clientset/versioned/typed/ops/v1alpha1"
+	legacyopslister "antrea.io/antrea/pkg/legacyclient/listers/ops/v1alpha1"
 )
 
 type TraceflowHandler struct {

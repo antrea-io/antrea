@@ -22,10 +22,10 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/tools/cache"
 
-	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
-	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
-	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage/ram"
-	"github.com/vmware-tanzu/antrea/pkg/controller/types"
+	"antrea.io/antrea/pkg/apis/controlplane"
+	"antrea.io/antrea/pkg/apiserver/storage"
+	"antrea.io/antrea/pkg/apiserver/storage/ram"
+	"antrea.io/antrea/pkg/controller/types"
 )
 
 // addressGroupEvent implements storage.InternalEvent.

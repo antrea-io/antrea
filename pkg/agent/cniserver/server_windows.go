@@ -20,7 +20,7 @@ import (
 	"strings"
 
 	"github.com/containernetworking/cni/pkg/types/current"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 )
 
 const dockerInfraContainerNetNS = "none"

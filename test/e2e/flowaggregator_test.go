@@ -105,6 +105,8 @@ const (
 )
 
 func TestFlowAggregator(t *testing.T) {
+	skipIfHasWindowsNodes(t)
+
 	data, v4Enabled, v6Enabled, err := setupTestWithIPFIXCollector(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)

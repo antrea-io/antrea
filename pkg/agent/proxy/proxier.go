@@ -29,16 +29,16 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/tools/record"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 	utilnet "k8s.io/utils/net"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
-	"github.com/vmware-tanzu/antrea/pkg/agent/proxy/metrics"
-	"github.com/vmware-tanzu/antrea/pkg/agent/proxy/types"
-	"github.com/vmware-tanzu/antrea/pkg/features"
-	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
-	k8sproxy "github.com/vmware-tanzu/antrea/third_party/proxy"
-	"github.com/vmware-tanzu/antrea/third_party/proxy/config"
+	"antrea.io/antrea/pkg/agent/openflow"
+	"antrea.io/antrea/pkg/agent/proxy/metrics"
+	"antrea.io/antrea/pkg/agent/proxy/types"
+	"antrea.io/antrea/pkg/features"
+	binding "antrea.io/antrea/pkg/ovs/openflow"
+	k8sproxy "antrea.io/antrea/third_party/proxy"
+	"antrea.io/antrea/third_party/proxy/config"
 )
 
 const (

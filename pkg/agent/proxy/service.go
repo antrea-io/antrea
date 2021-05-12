@@ -20,8 +20,8 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/tools/record"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/proxy/types"
-	k8sproxy "github.com/vmware-tanzu/antrea/third_party/proxy"
+	"antrea.io/antrea/pkg/agent/proxy/types"
+	k8sproxy "antrea.io/antrea/third_party/proxy"
 )
 
 type serviceChangesTracker struct {

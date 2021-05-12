@@ -31,7 +31,7 @@ import (
 	"k8s.io/apiserver/pkg/storage"
 	"k8s.io/client-go/tools/cache"
 
-	antreastorage "github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
+	antreastorage "antrea.io/antrea/pkg/apiserver/storage"
 )
 
 // testEvent implements InternalEvent.

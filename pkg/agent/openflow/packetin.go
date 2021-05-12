@@ -19,9 +19,9 @@ import (
 
 	"github.com/contiv/ofnet/ofctrl"
 	"golang.org/x/time/rate"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 
-	"github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
+	"antrea.io/antrea/pkg/ovs/openflow"
 )
 
 type ofpPacketInReason uint8

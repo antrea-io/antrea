@@ -21,11 +21,11 @@ import (
 	"strings"
 
 	"k8s.io/component-base/featuregate"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/config"
-	"github.com/vmware-tanzu/antrea/pkg/features"
-	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
+	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/features"
+	"antrea.io/antrea/pkg/ovs/ovsconfig"
 )
 
 func (o *Options) checkUnsupportedFeatures() error {

@@ -26,7 +26,7 @@ import (
 	"k8s.io/utils/exec"
 	exectesting "k8s.io/utils/exec/testing"
 
-	system "github.com/vmware-tanzu/antrea/pkg/apis/system/v1beta1"
+	system "antrea.io/antrea/pkg/apis/system/v1beta1"
 )
 
 type testExec struct {

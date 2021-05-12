@@ -29,12 +29,12 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 	featuregatetesting "k8s.io/component-base/featuregate/testing"
 
-	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
-	crdv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha1"
-	statsv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/stats/v1alpha1"
-	fakeversioned "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/fake"
-	crdinformers "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions"
-	"github.com/vmware-tanzu/antrea/pkg/features"
+	"antrea.io/antrea/pkg/apis/controlplane"
+	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	statsv1alpha1 "antrea.io/antrea/pkg/apis/stats/v1alpha1"
+	fakeversioned "antrea.io/antrea/pkg/client/clientset/versioned/fake"
+	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions"
+	"antrea.io/antrea/pkg/features"
 )
 
 var (

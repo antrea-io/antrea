@@ -30,6 +30,8 @@ const iperfPort = 5201
 func TestBenchmarkBandwidthIntraNode(t *testing.T) {
 	skipIfNotBenchmarkTest(t)
 	skipIfNotIPv4Cluster(t)
+	skipIfHasWindowsNodes(t)
+
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
@@ -58,6 +60,8 @@ func TestBenchmarkBandwidthIntraNode(t *testing.T) {
 }
 
 func benchmarkBandwidthService(t *testing.T, endpointNode, clientNode string) {
+	skipIfHasWindowsNodes(t)
+
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
@@ -111,6 +115,8 @@ func TestPodTrafficShaping(t *testing.T) {
 	skipIfIPv6Cluster(t)
 	nodeName := controlPlaneNodeName()
 	skipIfMissingKernelModule(t, nodeName, []string{"ifb", "sch_tbf", "sch_ingress"})
+	skipIfHasWindowsNodes(t)
+
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)

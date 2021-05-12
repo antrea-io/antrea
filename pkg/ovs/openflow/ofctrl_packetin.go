@@ -15,13 +15,21 @@
 package openflow
 
 import (
+	"encoding/binary"
+	"errors"
+
 	"github.com/contiv/libOpenflow/protocol"
 	"github.com/contiv/libOpenflow/util"
 	"github.com/contiv/ofnet/ofctrl"
 )
 
+const (
+	icmpEchoRequestType  uint8 = 8
+	icmp6EchoRequestType uint8 = 128
+)
+
 // GetTCPHeaderData gets TCP header data from IP packet.
-func GetTCPHeaderData(ipPkt util.Message) (tcpSrcPort uint16, tcpDstPort uint16, tcpSeqNum uint32, tcpAckNum uint32, tcpFlags uint8, err error) {
+func GetTCPHeaderData(ipPkt util.Message) (tcpSrcPort, tcpDstPort uint16, tcpSeqNum, tcpAckNum uint32, tcpFlags uint8, err error) {
 	var tcpBytes []byte
 
 	// Transfer Buffer to TCP
@@ -43,25 +51,34 @@ func GetTCPHeaderData(ipPkt util.Message) (tcpSrcPort uint16, tcpDstPort uint16,
 	return tcpIn.PortSrc, tcpIn.PortDst, tcpIn.SeqNum, tcpIn.AckNum, tcpIn.Code, nil
 }
 
-func getUDPHeaderData(ipPkt util.Message) (udpSrcPort uint16, udpDstPort uint16, err error) {
-	var udpBytes []byte
-
+func getUDPHeaderData(ipPkt util.Message) (udpSrcPort, udpDstPort uint16, err error) {
+	var udpIn *protocol.UDP
 	switch typedIPPkt := ipPkt.(type) {
 	case *protocol.IPv4:
-		udpBytes, err = typedIPPkt.Data.(*util.Buffer).MarshalBinary()
+		udpIn = typedIPPkt.Data.(*protocol.UDP)
 	case *protocol.IPv6:
-		udpBytes, err = typedIPPkt.Data.(*util.Buffer).MarshalBinary()
+		udpIn = typedIPPkt.Data.(*protocol.UDP)
 	}
-	if err != nil {
-		return 0, 0, err
-	}
-	udpIn := new(protocol.UDP)
-	err = udpIn.UnmarshalBinary(udpBytes)
-	if err != nil {
-		return 0, 0, err
+	return udpIn.PortSrc, udpIn.PortDst, nil
+}
+
+func getICMPHeaderData(ipPkt util.Message) (icmpType, icmpCode uint8, icmpEchoID, icmpEchoSeq uint16, err error) {
+	var icmpIn *protocol.ICMP
+	switch typedIPPkt := ipPkt.(type) {
+	case *protocol.IPv4:
+		icmpIn = typedIPPkt.Data.(*protocol.ICMP)
+	case *protocol.IPv6:
+		icmpIn = typedIPPkt.Data.(*protocol.ICMP)
 	}
 
-	return udpIn.PortSrc, udpIn.PortDst, nil
+	if icmpIn.Type == icmpEchoRequestType || icmpIn.Type == icmp6EchoRequestType {
+		if len(icmpIn.Data) < 4 {
+			return 0, 0, 0, 0, errors.New("ICMP payload is too short to unmarshal an ICMP echo message")
+		}
+		icmpEchoID = binary.BigEndian.Uint16(icmpIn.Data[:2])
+		icmpEchoSeq = binary.BigEndian.Uint16(icmpIn.Data[2:4])
+	}
+	return icmpIn.Type, icmpIn.Code, icmpEchoID, icmpEchoSeq, nil
 }
 
 func ParsePacketIn(pktIn *ofctrl.PacketIn) (*Packet, error) {
@@ -95,14 +112,13 @@ func ParsePacketIn(pktIn *ofctrl.PacketIn) (*Packet, error) {
 	var err error
 	if packet.IPProto == protocol.Type_TCP {
 		packet.SourcePort, packet.DestinationPort, _, _, packet.TCPFlags, err = GetTCPHeaderData(pktIn.Data.Data)
-		if err != nil {
-			return nil, err
-		}
 	} else if packet.IPProto == protocol.Type_UDP {
 		packet.SourcePort, packet.DestinationPort, err = getUDPHeaderData(pktIn.Data.Data)
-		if err != nil {
-			return nil, err
-		}
+	} else if packet.IPProto == protocol.Type_ICMP || packet.IPProto == protocol.Type_IPv6ICMP {
+		_, _, packet.ICMPEchoID, packet.ICMPEchoSeq, err = getICMPHeaderData(pktIn.Data.Data)
+	}
+	if err != nil {
+		return nil, err
 	}
 	return &packet, nil
 }

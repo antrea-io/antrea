@@ -17,8 +17,8 @@
 package v1alpha2
 
 import (
-	v1alpha2 "github.com/vmware-tanzu/antrea/pkg/legacyapis/core/v1alpha2"
-	"github.com/vmware-tanzu/antrea/pkg/legacyclient/clientset/versioned/scheme"
+	v1alpha2 "antrea.io/antrea/pkg/legacyapis/core/v1alpha2"
+	"antrea.io/antrea/pkg/legacyclient/clientset/versioned/scheme"
 	rest "k8s.io/client-go/rest"
 )
 

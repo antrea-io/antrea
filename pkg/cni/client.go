@@ -26,8 +26,8 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/util"
-	cnipb "github.com/vmware-tanzu/antrea/pkg/apis/cni/v1beta1"
+	"antrea.io/antrea/pkg/agent/util"
+	cnipb "antrea.io/antrea/pkg/apis/cni/v1beta1"
 )
 
 type Action int

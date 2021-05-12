@@ -22,14 +22,14 @@ import (
 
 	"github.com/spf13/pflag"
 	"gopkg.in/yaml.v2"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/config"
-	"github.com/vmware-tanzu/antrea/pkg/apis"
-	"github.com/vmware-tanzu/antrea/pkg/cni"
-	"github.com/vmware-tanzu/antrea/pkg/features"
-	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
-	"github.com/vmware-tanzu/antrea/pkg/util/flowexport"
+	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/apis"
+	"antrea.io/antrea/pkg/cni"
+	"antrea.io/antrea/pkg/features"
+	"antrea.io/antrea/pkg/ovs/ovsconfig"
+	"antrea.io/antrea/pkg/util/flowexport"
 )
 
 const (

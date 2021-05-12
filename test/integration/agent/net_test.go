@@ -24,7 +24,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/util"
+	"antrea.io/antrea/pkg/agent/util"
 )
 
 func init() {

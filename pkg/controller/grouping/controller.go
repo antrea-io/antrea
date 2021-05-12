@@ -20,11 +20,11 @@ import (
 	v1 "k8s.io/api/core/v1"
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/tools/cache"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 
-	"github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha2"
-	crdv1a2informers "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions/crd/v1alpha2"
-	"github.com/vmware-tanzu/antrea/pkg/features"
+	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
+	crdv1a2informers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha2"
+	"antrea.io/antrea/pkg/features"
 )
 
 const (

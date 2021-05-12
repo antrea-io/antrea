@@ -29,7 +29,7 @@ limitations under the License.
 // limitations under the License.
 
 Modifies:
-- Replace import from "k8s.io/kubernetes/pkg/api/v1/service" to  "github.com/vmware-tanzu/antrea/pkg/agent/proxy/upstream/util"
+- Replace import from "k8s.io/kubernetes/pkg/api/v1/service" to  "antrea.io/antrea/pkg/agent/proxy/upstream/util"
 - Remove import "k8s.io/kubernetes/pkg/proxy/metrics" and related invokes
 */
 
@@ -42,14 +42,14 @@ import (
 	"strings"
 	"sync"
 
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/tools/record"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 	utilnet "k8s.io/utils/net"
 
-	utilproxy "github.com/vmware-tanzu/antrea/third_party/proxy/util"
+	utilproxy "antrea.io/antrea/third_party/proxy/util"
 )
 
 // BaseServiceInfo contains base information that defines a service.

@@ -18,8 +18,8 @@ import (
 	"net"
 	"strconv"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/util"
-	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
+	"antrea.io/antrea/pkg/agent/util"
+	"antrea.io/antrea/pkg/ovs/ovsconfig"
 )
 
 const (

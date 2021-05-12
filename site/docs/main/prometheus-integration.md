@@ -222,6 +222,10 @@ remaining lifetime on the certificate used to authenticate a request.
 inflight request limit of this apiserver per request kind in last second.
 - **apiserver_envelope_encryption_dek_cache_fill_percent:** Percent of the
 cache slots currently occupied by cached DEKs.
+- **apiserver_flowcontrol_read_vs_write_request_count_samples:** Periodic
+observations of the number of requests
+- **apiserver_flowcontrol_read_vs_write_request_count_watermarks:** Watermarks
+of the number of requests
 - **apiserver_longrunning_gauge:** Gauge of all active long-running apiserver
 requests broken out by verb, group, version, resource, scope and component. Not
 all requests are tracked this way.
@@ -230,9 +234,11 @@ for a given resources
 - **apiserver_request_duration_seconds:** Response latency distribution in
 seconds for each verb, dry run value, group, version, resource, subresource,
 scope and component.
+- **apiserver_request_filter_duration_seconds:** Request filter latency
+distribution in seconds, for each filter type
 - **apiserver_request_total:** Counter of apiserver requests broken out
 for each verb, dry run value, group, version, resource, scope, component,
-and HTTP response contentType and code.
+and HTTP response code.
 - **apiserver_response_sizes:** Response size distribution in bytes for each
 group, version, verb, resource, subresource, scope and component.
 - **apiserver_storage_data_key_generation_duration_seconds:** Latencies in
@@ -241,6 +247,8 @@ seconds of data encryption key(DEK) generation operations.
 failed data encryption key(DEK) generation operations.
 - **apiserver_storage_envelope_transformation_cache_misses_total:** Total
 number of cache misses while accessing key decryption key(KEK).
+- **apiserver_tls_handshake_errors_total:** Number of requests dropped with
+'TLS handshake error from' error
 - **apiserver_watch_events_sizes:** Watch event size distribution in bytes
 - **apiserver_watch_events_total:** Number of events sent in watch clients
 
@@ -261,7 +269,8 @@ broken out by result.
 
 #### Go Metrics
 
-- **go_gc_duration_seconds:** A summary of the GC invocation durations.
+- **go_gc_duration_seconds:** A summary of the pause duration of garbage
+collection cycles.
 - **go_goroutines:** Number of goroutines that currently exist.
 - **go_info:** Information about the Go environment.
 - **go_memstats_alloc_bytes:** Number of bytes allocated and still in use.
@@ -316,3 +325,19 @@ in seconds.
 - **process_virtual_memory_bytes:** Virtual memory size in bytes.
 - **process_virtual_memory_max_bytes:** Maximum amount of virtual memory
 available in bytes.
+
+#### Workqueue Metrics
+
+- **workqueue_adds_total:** Total number of adds handled by workqueue
+- **workqueue_depth:** Current depth of workqueue
+- **workqueue_longest_running_processor_seconds:** How many seconds has the
+longest running processor for workqueue been running.
+- **workqueue_queue_duration_seconds:** How long in seconds an item stays
+in workqueue before being requested.
+- **workqueue_retries_total:** Total number of retries handled by workqueue
+- **workqueue_unfinished_work_seconds:** How many seconds of work has
+done that is in progress and hasn't been observed by work_duration. Large
+values indicate stuck threads. One can deduce the number of stuck threads
+by observing the rate at which this increases.
+- **workqueue_work_duration_seconds:** How long in seconds processing an
+item from workqueue takes.

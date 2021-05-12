@@ -24,8 +24,8 @@ import (
 	"github.com/spf13/pflag"
 	"gopkg.in/yaml.v2"
 
-	"github.com/vmware-tanzu/antrea/pkg/flowaggregator"
-	"github.com/vmware-tanzu/antrea/pkg/util/flowexport"
+	"antrea.io/antrea/pkg/flowaggregator"
+	"antrea.io/antrea/pkg/util/flowexport"
 )
 
 const (

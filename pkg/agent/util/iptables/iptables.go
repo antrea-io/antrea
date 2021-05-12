@@ -25,7 +25,7 @@ import (
 
 	"github.com/blang/semver"
 	"github.com/coreos/go-iptables/iptables"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 )
 
 const (

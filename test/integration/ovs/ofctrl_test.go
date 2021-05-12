@@ -29,9 +29,9 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/time/rate"
 
-	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
-	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
-	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsctl"
+	binding "antrea.io/antrea/pkg/ovs/openflow"
+	"antrea.io/antrea/pkg/ovs/ovsconfig"
+	"antrea.io/antrea/pkg/ovs/ovsctl"
 )
 
 var (

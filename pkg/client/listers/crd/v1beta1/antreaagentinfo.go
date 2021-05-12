@@ -17,17 +17,20 @@
 package v1beta1
 
 import (
-	v1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1beta1"
+	v1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/tools/cache"
 )
 
 // AntreaAgentInfoLister helps list AntreaAgentInfos.
+// All objects returned here must be treated as read-only.
 type AntreaAgentInfoLister interface {
 	// List lists all AntreaAgentInfos in the indexer.
+	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1beta1.AntreaAgentInfo, err error)
 	// Get retrieves the AntreaAgentInfo from the index for a given name.
+	// Objects returned here must be treated as read-only.
 	Get(name string) (*v1beta1.AntreaAgentInfo, error)
 	AntreaAgentInfoListerExpansion
 }

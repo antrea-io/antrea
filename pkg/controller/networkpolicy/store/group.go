@@ -20,10 +20,10 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/cache"
 
-	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
-	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage/ram"
-	antreatypes "github.com/vmware-tanzu/antrea/pkg/controller/types"
-	"github.com/vmware-tanzu/antrea/pkg/k8s"
+	"antrea.io/antrea/pkg/apiserver/storage"
+	"antrea.io/antrea/pkg/apiserver/storage/ram"
+	antreatypes "antrea.io/antrea/pkg/controller/types"
+	"antrea.io/antrea/pkg/k8s"
 )
 
 const (

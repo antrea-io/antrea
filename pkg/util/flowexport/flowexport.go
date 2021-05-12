@@ -20,7 +20,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/vmware-tanzu/antrea/pkg/flowaggregator"
+	"antrea.io/antrea/pkg/flowaggregator"
 )
 
 // ParseFlowCollectorAddr parses the flow collector address input for flow exporter and aggregator

@@ -25,14 +25,14 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/config"
-	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
-	interfacestoretest "github.com/vmware-tanzu/antrea/pkg/agent/interfacestore/testing"
-	oftest "github.com/vmware-tanzu/antrea/pkg/agent/openflow/testing"
-	"github.com/vmware-tanzu/antrea/pkg/agent/querier"
-	aqtest "github.com/vmware-tanzu/antrea/pkg/agent/querier/testing"
-	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsctl"
-	ovsctltest "github.com/vmware-tanzu/antrea/pkg/ovs/ovsctl/testing"
+	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/agent/interfacestore"
+	interfacestoretest "antrea.io/antrea/pkg/agent/interfacestore/testing"
+	oftest "antrea.io/antrea/pkg/agent/openflow/testing"
+	"antrea.io/antrea/pkg/agent/querier"
+	aqtest "antrea.io/antrea/pkg/agent/querier/testing"
+	"antrea.io/antrea/pkg/ovs/ovsctl"
+	ovsctltest "antrea.io/antrea/pkg/ovs/ovsctl/testing"
 )
 
 var (

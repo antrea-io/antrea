@@ -33,14 +33,14 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apiserver/pkg/registry/rest"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 	"k8s.io/utils/exec"
 
-	agentquerier "github.com/vmware-tanzu/antrea/pkg/agent/querier"
-	systemv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/system/v1beta1"
-	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsctl"
-	"github.com/vmware-tanzu/antrea/pkg/querier"
-	"github.com/vmware-tanzu/antrea/pkg/support"
+	agentquerier "antrea.io/antrea/pkg/agent/querier"
+	systemv1beta1 "antrea.io/antrea/pkg/apis/system/v1beta1"
+	"antrea.io/antrea/pkg/ovs/ovsctl"
+	"antrea.io/antrea/pkg/querier"
+	"antrea.io/antrea/pkg/support"
 )
 
 const (

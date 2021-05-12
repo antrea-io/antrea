@@ -21,9 +21,9 @@ import (
 	sync "sync"
 	time "time"
 
-	versioned "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned"
-	crd "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions/crd"
-	internalinterfaces "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions/internalinterfaces"
+	versioned "antrea.io/antrea/pkg/client/clientset/versioned"
+	crd "antrea.io/antrea/pkg/client/informers/externalversions/crd"
+	internalinterfaces "antrea.io/antrea/pkg/client/informers/externalversions/internalinterfaces"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"

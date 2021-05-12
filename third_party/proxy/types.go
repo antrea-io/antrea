@@ -29,7 +29,7 @@ limitations under the License.
 // limitations under the License.
 
 Modifies:
-- Replace import "k8s.io/kubernetes/pkg/proxy/config" with "github.com/vmware-tanzu/antrea/third_party/proxy/config"
+- Replace import "k8s.io/kubernetes/pkg/proxy/config" with "antrea.io/antrea/third_party/proxy/config"
 - Remove config.EndpointSliceHandler, config.NodeHandler from Provider interface type
 - Remove NodeHandler, EndpointSliceHandler, Sync() from Provider interface
 - Add Run() to Provider interface
@@ -44,7 +44,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 
-	"github.com/vmware-tanzu/antrea/third_party/proxy/config"
+	"antrea.io/antrea/third_party/proxy/config"
 )
 
 // Provider is the interface provided by proxier implementations.

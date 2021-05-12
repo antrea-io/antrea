@@ -18,8 +18,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 
-	"github.com/vmware-tanzu/antrea/pkg/legacyapis/stats"
-	"github.com/vmware-tanzu/antrea/pkg/legacyapis/stats/v1alpha1"
+	"antrea.io/antrea/pkg/legacyapis/stats"
+	"antrea.io/antrea/pkg/legacyapis/stats/v1alpha1"
 )
 
 // Install registers the API group and adds types to a scheme

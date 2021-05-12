@@ -60,7 +60,7 @@ Your feedback is more than welcome!
   + The [Antrea community meeting](https://VMware.zoom.us/j/823654111?pwd=MEV6blNtUUtqallVSkVFSGZtQ1kwUT09),
 every two weeks on Tuesday at 5AM GMT+1 (United Kingdom time). See Antrea team calendar for localized times.
     - [Meeting minutes](https://github.com/vmware-tanzu/antrea/wiki/Community-Meetings)
-    - [Meeting recordings](https://www.youtube.com/playlist?list=PLH5zTfQ3otSA6EOYDNb-MvcQRXACdCbQw)
+    - [Meeting recordings](https://www.youtube.com/playlist?list=PLuzde2hYeDBdw0BuQCYbYqxzoJYY1hfwv)
   + [Antrea office hours](https://VMware.zoom.us/j/94245798791?pwd=RzRNVXYxdDJnNjZnNjBiUVFHZGlXdz09),
 every two weeks on Tuesday at 10PM GMT+1 (United Kingdom time). See Antrea team calendar for localized times.
 * Join our mailing lists to always stay up-to-date with Antrea development:

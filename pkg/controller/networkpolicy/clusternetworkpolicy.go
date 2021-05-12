@@ -17,11 +17,11 @@ package networkpolicy
 import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/tools/cache"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 
-	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
-	crdv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha1"
-	antreatypes "github.com/vmware-tanzu/antrea/pkg/controller/types"
+	"antrea.io/antrea/pkg/apis/controlplane"
+	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	antreatypes "antrea.io/antrea/pkg/controller/types"
 )
 
 // addCNP receives ClusterNetworkPolicy ADD events and creates resources

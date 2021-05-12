@@ -25,7 +25,7 @@ import (
 	"github.com/spf13/pflag"
 	"k8s.io/component-base/logs"
 
-	"github.com/vmware-tanzu/antrea/pkg/antctl"
+	"antrea.io/antrea/pkg/antctl"
 )
 
 var commandName = path.Base(os.Args[0])

@@ -31,6 +31,7 @@ import (
 	"github.com/containernetworking/plugins/pkg/ip"
 	"golang.org/x/mod/semver"
 	"gopkg.in/yaml.v2"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -47,11 +48,11 @@ import (
 	"k8s.io/component-base/featuregate"
 	aggregatorclientset "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/config"
-	crdclientset "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned"
-	"github.com/vmware-tanzu/antrea/pkg/features"
-	legacycrdclientset "github.com/vmware-tanzu/antrea/pkg/legacyclient/clientset/versioned"
-	"github.com/vmware-tanzu/antrea/test/e2e/providers"
+	"antrea.io/antrea/pkg/agent/config"
+	crdclientset "antrea.io/antrea/pkg/client/clientset/versioned"
+	"antrea.io/antrea/pkg/features"
+	legacycrdclientset "antrea.io/antrea/pkg/legacyclient/clientset/versioned"
+	"antrea.io/antrea/test/e2e/providers"
 )
 
 const (
@@ -64,11 +65,13 @@ const (
 	antreaConfigVolume         string = "antrea-config"
 	flowAggregatorConfigVolume string = "flow-aggregator-config"
 	antreaDaemonSet            string = "antrea-agent"
+	antreaWindowsDaemonSet     string = "antrea-agent-windows"
 	antreaDeployment           string = "antrea-controller"
 	flowAggregatorDeployment   string = "flow-aggregator"
 	antreaDefaultGW            string = "antrea-gw0"
 	testNamespace              string = "antrea-test"
 	busyboxContainerName       string = "busybox"
+	agnhostContainerName       string = "agnhost"
 	controllerContainerName    string = "antrea-controller"
 	ovsContainerName           string = "antrea-ovs"
 	agentContainerName         string = "antrea-agent"
@@ -94,7 +97,7 @@ const (
 
 	nameSuffixLength int = 8
 
-	agnhostImage        = "gcr.io/kubernetes-e2e-test-images/agnhost:2.8"
+	agnhostImage        = "projects.registry.vmware.com/antrea/agnhost:2.26"
 	busyboxImage        = "projects.registry.vmware.com/library/busybox"
 	nginxImage          = "projects.registry.vmware.com/antrea/nginx"
 	perftoolImage       = "projects.registry.vmware.com/antrea/perftool"
@@ -112,10 +115,10 @@ type ClusterNode struct {
 	podV6NetworkCIDR string
 	gwV4Addr         string
 	gwV6Addr         string
+	os               string
 }
 
 type ClusterInfo struct {
-	numWorkerNodes       int
 	numNodes             int
 	podV4NetworkCIDR     string
 	podV6NetworkCIDR     string
@@ -124,6 +127,8 @@ type ClusterInfo struct {
 	controlPlaneNodeName string
 	controlPlaneNodeIP   string
 	nodes                map[int]ClusterNode
+	nodesOS              map[string]string
+	windowsNodes         []int
 	k8sServerVersion     string
 }
 
@@ -142,6 +147,12 @@ type TestOptions struct {
 var testOptions TestOptions
 
 var provider providers.ProviderInterface
+
+// podInfo combines OS info with a Pod name. It is useful when choosing commands and options on Pods of different OS (Windows, Linux).
+type podInfo struct {
+	name string
+	os   string
+}
 
 // TestData stores the state required for each test case.
 type TestData struct {
@@ -170,12 +181,12 @@ type PodIPs struct {
 func (p PodIPs) String() string {
 	res := ""
 	if p.ipv4 != nil {
-		res += fmt.Sprintf("IPv4: %s, ", p.ipv4.String())
+		res += fmt.Sprintf("IPv4(%s),", p.ipv4.String())
 	}
 	if p.ipv6 != nil {
-		res += fmt.Sprintf("IPv6: %s, ", p.ipv6.String())
+		res += fmt.Sprintf("IPv6(%s),", p.ipv6.String())
 	}
-	return fmt.Sprintf("%sIP strings: %s", res, strings.Join(p.ipStrings, ", "))
+	return fmt.Sprintf("%sIPstrings(%s)", res, strings.Join(p.ipStrings, ","))
 }
 
 func (p *PodIPs) hasSameIP(p1 *PodIPs) bool {
@@ -307,6 +318,7 @@ func collectClusterInfo() error {
 	}
 	workerIdx := 1
 	clusterInfo.nodes = make(map[int]ClusterNode)
+	clusterInfo.nodesOS = make(map[string]string)
 	for _, node := range nodes.Items {
 		isControlPlaneNode := func() bool {
 			_, ok := node.Labels[labelNodeRoleControlPlane()]
@@ -368,13 +380,17 @@ func collectClusterInfo() error {
 			podV6NetworkCIDR: podV6NetworkCIDR,
 			gwV4Addr:         gwV4Addr,
 			gwV6Addr:         gwV6Addr,
+			os:               node.Status.NodeInfo.OperatingSystem,
 		}
+		if node.Status.NodeInfo.OperatingSystem == "windows" {
+			clusterInfo.windowsNodes = append(clusterInfo.windowsNodes, nodeIdx)
+		}
+		clusterInfo.nodesOS[node.Name] = node.Status.NodeInfo.OperatingSystem
 	}
 	if clusterInfo.controlPlaneNodeName == "" {
 		return fmt.Errorf("error when listing cluster Nodes: control-plane Node not found")
 	}
 	clusterInfo.numNodes = workerIdx
-	clusterInfo.numWorkerNodes = clusterInfo.numNodes - 1
 
 	retrieveCIDRs := func(cmd string, reg string) ([]string, error) {
 		res := make([]string, 2)
@@ -651,9 +667,28 @@ func (data *TestData) getAgentContainersRestartCount() (int, error) {
 // available, i.e. all the Nodes have one or more of the Antrea daemon Pod running and available.
 func (data *TestData) waitForAntreaDaemonSetPods(timeout time.Duration) error {
 	err := wait.Poll(defaultInterval, timeout, func() (bool, error) {
-		daemonSet, err := data.clientset.AppsV1().DaemonSets(antreaNamespace).Get(context.TODO(), antreaDaemonSet, metav1.GetOptions{})
-		if err != nil {
-			return false, fmt.Errorf("error when getting Antrea daemonset: %v", err)
+		getDS := func(dsName string, os string) (*appsv1.DaemonSet, error) {
+			ds, err := data.clientset.AppsV1().DaemonSets(antreaNamespace).Get(context.TODO(), dsName, metav1.GetOptions{})
+			if err != nil {
+				return nil, fmt.Errorf("error when getting Antrea %s daemonset: %v", os, err)
+			}
+			return ds, nil
+		}
+		var dsLinux *appsv1.DaemonSet
+		var err error
+		if dsLinux, err = getDS(antreaDaemonSet, "Linux"); err != nil {
+			return false, err
+		}
+		currentNumAvailable := dsLinux.Status.NumberAvailable
+		UpdatedNumberScheduled := dsLinux.Status.UpdatedNumberScheduled
+
+		if len(clusterInfo.windowsNodes) != 0 {
+			var dsWindows *appsv1.DaemonSet
+			if dsWindows, err = getDS(antreaWindowsDaemonSet, "Windows"); err != nil {
+				return false, err
+			}
+			currentNumAvailable += dsWindows.Status.NumberAvailable
+			UpdatedNumberScheduled += dsWindows.Status.UpdatedNumberScheduled
 		}
 
 		// Make sure that all Daemon Pods are available.
@@ -662,8 +697,7 @@ func (data *TestData) waitForAntreaDaemonSetPods(timeout time.Duration) error {
 		// first time we get the DaemonSet's Status, we would return immediately instead of
 		// waiting.
 		desiredNumber := int32(clusterInfo.numNodes)
-		if daemonSet.Status.NumberAvailable != desiredNumber ||
-			daemonSet.Status.UpdatedNumberScheduled != desiredNumber {
+		if currentNumAvailable != desiredNumber || UpdatedNumberScheduled != desiredNumber {
 			return false, nil
 		}
 
@@ -802,26 +836,37 @@ func (data *TestData) deleteAntrea(timeout time.Duration) error {
 		GracePeriodSeconds: &gracePeriodSeconds,
 		PropagationPolicy:  &propagationPolicy,
 	}
-	if err := data.clientset.AppsV1().DaemonSets(antreaNamespace).Delete(context.TODO(), antreaDaemonSet, deleteOptions); err != nil {
-		if errors.IsNotFound(err) {
-			// no Antrea DaemonSet running, we return right away
-			return nil
-		}
-		return fmt.Errorf("error when trying to delete Antrea DaemonSet: %v", err)
-	}
-	err := wait.Poll(defaultInterval, timeout, func() (bool, error) {
-		if _, err := data.clientset.AppsV1().DaemonSets(antreaNamespace).Get(context.TODO(), antreaDaemonSet, metav1.GetOptions{}); err != nil {
-			if errors.IsNotFound(err) {
-				// Antrea DaemonSet does not exist any more, success
-				return true, nil
-			}
-			return false, fmt.Errorf("error when trying to get Antrea DaemonSet after deletion: %v", err)
-		}
 
-		// Keep trying
-		return false, nil
-	})
-	return err
+	deleteDS := func(ds string) error {
+		if err := data.clientset.AppsV1().DaemonSets(antreaNamespace).Delete(context.TODO(), ds, deleteOptions); err != nil {
+			if errors.IsNotFound(err) {
+				// no Antrea DaemonSet running, we return right away
+				return nil
+			}
+			return fmt.Errorf("error when trying to delete Antrea DaemonSet: %v", err)
+		}
+		err := wait.Poll(defaultInterval, timeout, func() (bool, error) {
+			if _, err := data.clientset.AppsV1().DaemonSets(antreaNamespace).Get(context.TODO(), ds, metav1.GetOptions{}); err != nil {
+				if errors.IsNotFound(err) {
+					// Antrea DaemonSet does not exist any more, success
+					return true, nil
+				}
+				return false, fmt.Errorf("error when trying to get Antrea DaemonSet after deletion: %v", err)
+			}
+
+			// Keep trying
+			return false, nil
+		})
+		return err
+	}
+	if err := deleteDS(antreaDaemonSet); err != nil {
+		return err
+	}
+	if err := deleteDS(antreaWindowsDaemonSet); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // getImageName gets the image name from the fully qualified URI.
@@ -1284,6 +1329,10 @@ func (data *TestData) createService(serviceName string, port, targetPort int32, 
 func (data *TestData) createServiceWithAnnotations(serviceName string, port, targetPort int32, selector map[string]string, affinity bool,
 	serviceType corev1.ServiceType, ipFamily *corev1.IPFamily, annotations map[string]string) (*corev1.Service, error) {
 	affinityType := corev1.ServiceAffinityNone
+	var ipFamilies []corev1.IPFamily
+	if ipFamily != nil {
+		ipFamilies = append(ipFamilies, *ipFamily)
+	}
 	if affinity {
 		affinityType = corev1.ServiceAffinityClientIP
 	}
@@ -1303,9 +1352,9 @@ func (data *TestData) createServiceWithAnnotations(serviceName string, port, tar
 				Port:       port,
 				TargetPort: intstr.FromInt(int(targetPort)),
 			}},
-			Type:     serviceType,
-			Selector: selector,
-			IPFamily: ipFamily,
+			Type:       serviceType,
+			Selector:   selector,
+			IPFamilies: ipFamilies,
 		},
 	}
 	return data.clientset.CoreV1().Services(testNamespace).Create(context.TODO(), &service, metav1.CreateOptions{})
@@ -1498,18 +1547,28 @@ func parseArpingStdout(out string) (sent uint32, received uint32, loss float32, 
 	return sent, received, loss, nil
 }
 
-func (data *TestData) runPingCommandFromTestPod(podName string, targetPodIPs *PodIPs, count int) error {
-	var cmd []string
+func (data *TestData) runPingCommandFromTestPod(podInfo podInfo, targetPodIPs *PodIPs, ctrName string, count int, size int) error {
+	countOption, sizeOption := "-c", "-s"
+	if podInfo.os == "windows" {
+		countOption = "-n"
+		sizeOption = "-l"
+	} else if podInfo.os != "linux" {
+		return fmt.Errorf("OS of Pod '%s' is not clear", podInfo.name)
+	}
+	cmd := []string{"ping", countOption, strconv.Itoa(count)}
+	if size != 0 {
+		cmd = append(cmd, sizeOption, strconv.Itoa(size))
+	}
 	if targetPodIPs.ipv4 != nil {
-		cmd = []string{"ping", "-c", strconv.Itoa(count), targetPodIPs.ipv4.String()}
-		if _, _, err := data.runCommandFromPod(testNamespace, podName, busyboxContainerName, cmd); err != nil {
-			return err
+		cmd = append(cmd, targetPodIPs.ipv4.String())
+		if stdout, stderr, err := data.runCommandFromPod(testNamespace, podInfo.name, ctrName, cmd); err != nil {
+			return fmt.Errorf("error when running ping command: %v - stdout: %s - stderr: %s", err, stdout, stderr)
 		}
 	}
 	if targetPodIPs.ipv6 != nil {
-		cmd = []string{"ping", "-6", "-c", strconv.Itoa(count), targetPodIPs.ipv6.String()}
-		if _, _, err := data.runCommandFromPod(testNamespace, podName, busyboxContainerName, cmd); err != nil {
-			return err
+		cmd = append(cmd, "-6", targetPodIPs.ipv6.String())
+		if stdout, stderr, err := data.runCommandFromPod(testNamespace, podInfo.name, ctrName, cmd); err != nil {
+			return fmt.Errorf("error when running ping command: %v - stdout: %s - stderr: %s", err, stdout, stderr)
 		}
 	}
 	return nil
@@ -1896,5 +1955,87 @@ func (data *TestData) copyNodeFiles(nodeName string, fileName string, covDir str
 		return nil
 	}
 	w.WriteString(stdout)
+	return nil
+}
+
+// createAgnhostPodOnNode creates a Pod in the test namespace with a single agnhost container. The
+// Pod will be scheduled on the specified Node (if nodeName is not empty).
+func (data *TestData) createAgnhostPodOnNode(name string, nodeName string) error {
+	sleepDuration := 3600 // seconds
+	return data.createPodOnNode(name, nodeName, agnhostImage, []string{"sleep", strconv.Itoa(sleepDuration)}, nil, nil, nil, false, nil)
+}
+
+func (data *TestData) createDaemonSet(name string, ns string, ctrName string, image string, cmd []string, args []string) (*appsv1.DaemonSet, func() error, error) {
+	podSpec := corev1.PodSpec{
+		Tolerations: []corev1.Toleration{
+			controlPlaneNoScheduleToleration(),
+		},
+		Containers: []corev1.Container{
+			{
+				Name:            ctrName,
+				Image:           image,
+				ImagePullPolicy: corev1.PullIfNotPresent,
+				Command:         cmd,
+				Args:            args,
+			},
+		},
+	}
+	dsSpec := appsv1.DaemonSetSpec{
+		Selector: &metav1.LabelSelector{
+			MatchLabels: map[string]string{
+				"antrea-e2e": name,
+			},
+		},
+		Template: corev1.PodTemplateSpec{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: name,
+				Labels: map[string]string{
+					"antrea-e2e": name,
+				},
+			},
+			Spec: podSpec,
+		},
+		UpdateStrategy:       appsv1.DaemonSetUpdateStrategy{},
+		MinReadySeconds:      0,
+		RevisionHistoryLimit: nil,
+	}
+	ds := &appsv1.DaemonSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+			Labels: map[string]string{
+				"antrea-e2e": name,
+			},
+		},
+		Spec: dsSpec,
+	}
+
+	resDS, err := data.clientset.AppsV1().DaemonSets(ns).Create(context.TODO(), ds, metav1.CreateOptions{})
+	if err != nil {
+		return nil, nil, err
+	}
+	cleanup := func() error {
+		if err := data.clientset.AppsV1().DaemonSets(ns).Delete(context.TODO(), name, metav1.DeleteOptions{}); err != nil {
+			return err
+		}
+		return nil
+	}
+
+	return resDS, cleanup, nil
+}
+
+func (data *TestData) waitForDaemonSetPods(timeout time.Duration, dsName string, namespace string) error {
+	err := wait.Poll(defaultInterval, timeout, func() (bool, error) {
+		if ds, err := data.clientset.AppsV1().DaemonSets(namespace).Get(context.TODO(), dsName, metav1.GetOptions{}); err != nil {
+			return false, err
+		} else {
+			if ds.Status.NumberReady != int32(clusterInfo.numNodes) {
+				return false, nil
+			}
+			return true, nil
+		}
+	})
+	if err != nil {
+		return err
+	}
 	return nil
 }

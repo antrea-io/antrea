@@ -25,17 +25,17 @@ import (
 
 	"github.com/contiv/libOpenflow/protocol"
 	"k8s.io/client-go/tools/cache"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/config"
-	"github.com/vmware-tanzu/antrea/pkg/agent/metrics"
-	"github.com/vmware-tanzu/antrea/pkg/agent/openflow/cookie"
-	"github.com/vmware-tanzu/antrea/pkg/agent/types"
-	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
-	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
-	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsctl"
-	"github.com/vmware-tanzu/antrea/pkg/util/runtime"
-	"github.com/vmware-tanzu/antrea/third_party/proxy"
+	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/agent/metrics"
+	"antrea.io/antrea/pkg/agent/openflow/cookie"
+	"antrea.io/antrea/pkg/agent/types"
+	binding "antrea.io/antrea/pkg/ovs/openflow"
+	"antrea.io/antrea/pkg/ovs/ovsconfig"
+	"antrea.io/antrea/pkg/ovs/ovsctl"
+	"antrea.io/antrea/pkg/util/runtime"
+	"antrea.io/antrea/third_party/proxy"
 )
 
 const (
