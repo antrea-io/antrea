@@ -451,9 +451,9 @@ function run_conformance_windows {
     export PATH=$GOROOT/bin:$PATH
     export KUBECONFIG=$KUBECONFIG_PATH
 
-    clean_for_windows_install_cni
     if [[ "$TESTCASE" == "windows-conformance" ]]; then
         # Antrea Windows agent Pods are deployed for Windows Conformance test
+        clean_for_windows_install_cni
         wait_for_antrea_windows_pods_ready
     else
         # Antrea Windows agents are deployed with scripts as processes on host for Windows NetworkPolicy test
