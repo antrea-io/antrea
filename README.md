@@ -3,7 +3,7 @@
 ![Antrea Logo](docs/assets/logo/antrea_logo.svg)
 
 ![Build Status](https://github.com/antrea-io/antrea/workflows/Go/badge.svg?branch=main)
-[![Go Report Card](https://goreportcard.com/badge/github.com/antrea-io/antrea)](https://goreportcard.com/report/github.com/antrea-io/antrea)
+[![Go Report Card](https://goreportcard.com/badge/antrea.io/antrea)](https://goreportcard.com/report/antrea.io/antrea)
 [![CII Best Practices](https://bestpractices.coreinfrastructure.org/projects/4173/badge)](https://bestpractices.coreinfrastructure.org/projects/4173)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 ![GitHub release](https://img.shields.io/github/release/antrea-io/antrea.svg?include_prereleases)
