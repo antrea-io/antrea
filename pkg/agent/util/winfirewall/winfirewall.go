@@ -23,7 +23,7 @@ import (
 
 	"k8s.io/klog/v2"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/util"
+	"antrea.io/antrea/pkg/agent/util"
 )
 
 type FWRuleDirection string

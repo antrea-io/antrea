@@ -24,9 +24,9 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 
-	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
-	"github.com/vmware-tanzu/antrea/pkg/controller/egress/store"
-	"github.com/vmware-tanzu/antrea/pkg/controller/types"
+	"antrea.io/antrea/pkg/apis/controlplane"
+	"antrea.io/antrea/pkg/controller/egress/store"
+	"antrea.io/antrea/pkg/controller/types"
 )
 
 func TestRESTList(t *testing.T) {

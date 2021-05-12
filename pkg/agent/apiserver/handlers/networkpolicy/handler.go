@@ -21,9 +21,9 @@ import (
 	"net/url"
 	"strings"
 
-	agentquerier "github.com/vmware-tanzu/antrea/pkg/agent/querier"
-	cpv1beta "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
-	"github.com/vmware-tanzu/antrea/pkg/querier"
+	agentquerier "antrea.io/antrea/pkg/agent/querier"
+	cpv1beta "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/pkg/querier"
 )
 
 // HandleFunc creates a http.HandlerFunc which uses an AgentNetworkPolicyInfoQuerier

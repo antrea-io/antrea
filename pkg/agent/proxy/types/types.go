@@ -18,8 +18,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	utilnet "k8s.io/utils/net"
 
-	"github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
-	k8sproxy "github.com/vmware-tanzu/antrea/third_party/proxy"
+	"antrea.io/antrea/pkg/ovs/openflow"
+	k8sproxy "antrea.io/antrea/third_party/proxy"
 )
 
 // ServiceInfo is the internal struct for caching service information.

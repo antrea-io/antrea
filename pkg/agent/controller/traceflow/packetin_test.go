@@ -24,8 +24,8 @@ import (
 	"github.com/contiv/ofnet/ofctrl"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
-	crdv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha1"
+	"antrea.io/antrea/pkg/agent/openflow"
+	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 )
 
 func Test_getNetworkPolicyObservation(t *testing.T) {

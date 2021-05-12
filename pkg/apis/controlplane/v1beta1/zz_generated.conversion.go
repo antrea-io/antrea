@@ -21,9 +21,9 @@ package v1beta1
 import (
 	unsafe "unsafe"
 
-	controlplane "github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
-	v1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha1"
-	statsv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/stats/v1alpha1"
+	controlplane "antrea.io/antrea/pkg/apis/controlplane"
+	v1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	statsv1alpha1 "antrea.io/antrea/pkg/apis/stats/v1alpha1"
 	conversion "k8s.io/apimachinery/pkg/conversion"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	types "k8s.io/apimachinery/pkg/types"

@@ -16,4 +16,4 @@
 // +k8s:deepcopy-gen=package
 // +groupName=crd.antrea.io
 
-package v1alpha2 // import "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha2"
+package v1alpha2 // import "antrea.io/antrea/pkg/apis/crd/v1alpha2"

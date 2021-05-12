@@ -20,13 +20,13 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	crd "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha2"
-	crdclient "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/crd/v1alpha2"
-	crdlister "github.com/vmware-tanzu/antrea/pkg/client/listers/crd/v1alpha2"
-	"github.com/vmware-tanzu/antrea/pkg/controller/crdmirroring/types"
-	legacycore "github.com/vmware-tanzu/antrea/pkg/legacyapis/core/v1alpha2"
-	legacycoreclient "github.com/vmware-tanzu/antrea/pkg/legacyclient/clientset/versioned/typed/core/v1alpha2"
-	legacycorelister "github.com/vmware-tanzu/antrea/pkg/legacyclient/listers/core/v1alpha2"
+	crd "antrea.io/antrea/pkg/apis/crd/v1alpha2"
+	crdclient "antrea.io/antrea/pkg/client/clientset/versioned/typed/crd/v1alpha2"
+	crdlister "antrea.io/antrea/pkg/client/listers/crd/v1alpha2"
+	"antrea.io/antrea/pkg/controller/crdmirroring/types"
+	legacycore "antrea.io/antrea/pkg/legacyapis/core/v1alpha2"
+	legacycoreclient "antrea.io/antrea/pkg/legacyclient/clientset/versioned/typed/core/v1alpha2"
+	legacycorelister "antrea.io/antrea/pkg/legacyclient/listers/core/v1alpha2"
 )
 
 type ClusterGroupHandler struct {

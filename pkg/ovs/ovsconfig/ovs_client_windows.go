@@ -17,7 +17,7 @@
 package ovsconfig
 
 import (
-	"github.com/vmware-tanzu/antrea/pkg/agent/util"
+	"antrea.io/antrea/pkg/agent/util"
 )
 
 func (br *OVSBridge) SetInterfaceMTU(name string, MTU int) error {

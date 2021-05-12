@@ -20,8 +20,8 @@ import (
 	"context"
 	"time"
 
-	v1beta1 "github.com/vmware-tanzu/antrea/pkg/legacyapis/clusterinformation/v1beta1"
-	scheme "github.com/vmware-tanzu/antrea/pkg/legacyclient/clientset/versioned/scheme"
+	v1beta1 "antrea.io/antrea/pkg/legacyapis/clusterinformation/v1beta1"
+	scheme "antrea.io/antrea/pkg/legacyclient/clientset/versioned/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"

@@ -17,8 +17,8 @@
 package clusterinformation
 
 import (
-	v1beta1 "github.com/vmware-tanzu/antrea/pkg/legacyclient/informers/externalversions/clusterinformation/v1beta1"
-	internalinterfaces "github.com/vmware-tanzu/antrea/pkg/legacyclient/informers/externalversions/internalinterfaces"
+	v1beta1 "antrea.io/antrea/pkg/legacyclient/informers/externalversions/clusterinformation/v1beta1"
+	internalinterfaces "antrea.io/antrea/pkg/legacyclient/informers/externalversions/internalinterfaces"
 )
 
 // Interface provides access to each of this group's versions.

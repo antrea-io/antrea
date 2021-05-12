@@ -26,10 +26,10 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 	featuregatetesting "k8s.io/component-base/featuregate/testing"
 
-	"github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha2"
-	fakeversioned "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/fake"
-	crdinformers "github.com/vmware-tanzu/antrea/pkg/client/informers/externalversions"
-	"github.com/vmware-tanzu/antrea/pkg/features"
+	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
+	fakeversioned "antrea.io/antrea/pkg/client/clientset/versioned/fake"
+	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions"
+	"antrea.io/antrea/pkg/features"
 )
 
 const informerDefaultResync = 30 * time.Second

@@ -30,9 +30,9 @@ import (
 	restclient "k8s.io/client-go/rest"
 	certutil "k8s.io/client-go/util/cert"
 
-	"github.com/vmware-tanzu/antrea/pkg/apis"
-	"github.com/vmware-tanzu/antrea/pkg/apis/crd/v1beta1"
-	"github.com/vmware-tanzu/antrea/pkg/apiserver/certificate"
+	"antrea.io/antrea/pkg/apis"
+	"antrea.io/antrea/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/pkg/apiserver/certificate"
 )
 
 const (

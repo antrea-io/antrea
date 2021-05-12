@@ -29,9 +29,9 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/wait"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/apiserver/handlers/agentinfo"
-	"github.com/vmware-tanzu/antrea/pkg/apis/crd/v1beta1"
-	"github.com/vmware-tanzu/antrea/pkg/apis/stats/v1alpha1"
+	"antrea.io/antrea/pkg/agent/apiserver/handlers/agentinfo"
+	"antrea.io/antrea/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/pkg/apis/stats/v1alpha1"
 )
 
 func TestNetworkPolicyStats(t *testing.T) {

@@ -23,7 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
-	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
+	"antrea.io/antrea/pkg/apis/controlplane"
 )
 
 var (

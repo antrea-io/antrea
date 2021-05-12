@@ -26,7 +26,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/agent/config"
 )
 
 const pingCount = 5

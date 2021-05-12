@@ -21,8 +21,8 @@ import (
 	"github.com/spf13/pflag"
 	"gopkg.in/yaml.v2"
 
-	"github.com/vmware-tanzu/antrea/pkg/apis"
-	"github.com/vmware-tanzu/antrea/pkg/features"
+	"antrea.io/antrea/pkg/apis"
+	"antrea.io/antrea/pkg/features"
 )
 
 type Options struct {

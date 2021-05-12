@@ -24,7 +24,7 @@ import (
 	"github.com/kevinburke/ssh_config"
 	"golang.org/x/crypto/ssh"
 
-	"github.com/vmware-tanzu/antrea/test/e2e/providers/exec"
+	"antrea.io/antrea/test/e2e/providers/exec"
 )
 
 func vagrantPath() (string, error) {

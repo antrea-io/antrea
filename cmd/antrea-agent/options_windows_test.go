@@ -21,8 +21,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/config"
-	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
+	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/ovs/ovsconfig"
 )
 
 func TestCheckUnsupportedFeatures(t *testing.T) {

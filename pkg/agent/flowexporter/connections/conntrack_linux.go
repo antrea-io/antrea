@@ -24,10 +24,10 @@ import (
 	"github.com/ti-mo/conntrack"
 	"k8s.io/klog/v2"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/config"
-	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter"
-	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
-	"github.com/vmware-tanzu/antrea/pkg/agent/util/sysctl"
+	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/agent/flowexporter"
+	"antrea.io/antrea/pkg/agent/openflow"
+	"antrea.io/antrea/pkg/agent/util/sysctl"
 )
 
 // connTrackSystem implements ConnTrackDumper. This is for linux kernel datapath.

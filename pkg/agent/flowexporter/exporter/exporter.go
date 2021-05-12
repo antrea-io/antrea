@@ -27,13 +27,13 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/controller/noderoute"
-	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter"
-	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter/connections"
-	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter/flowrecords"
-	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
-	"github.com/vmware-tanzu/antrea/pkg/ipfix"
-	"github.com/vmware-tanzu/antrea/pkg/util/env"
+	"antrea.io/antrea/pkg/agent/controller/noderoute"
+	"antrea.io/antrea/pkg/agent/flowexporter"
+	"antrea.io/antrea/pkg/agent/flowexporter/connections"
+	"antrea.io/antrea/pkg/agent/flowexporter/flowrecords"
+	"antrea.io/antrea/pkg/agent/openflow"
+	"antrea.io/antrea/pkg/ipfix"
+	"antrea.io/antrea/pkg/util/env"
 )
 
 var (

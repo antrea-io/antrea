@@ -15,8 +15,8 @@
 package rule
 
 import (
-	cpv1beta "github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
-	"github.com/vmware-tanzu/antrea/pkg/util/ip"
+	cpv1beta "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/pkg/util/ip"
 )
 
 type service struct {

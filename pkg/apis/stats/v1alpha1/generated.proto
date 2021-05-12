@@ -16,7 +16,7 @@
 
 syntax = "proto2";
 
-package github.com.vmware_tanzu.antrea.pkg.apis.stats.v1alpha1;
+package antrea_io.antrea.pkg.apis.stats.v1alpha1;
 
 import "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto";
 import "k8s.io/apimachinery/pkg/runtime/generated.proto";

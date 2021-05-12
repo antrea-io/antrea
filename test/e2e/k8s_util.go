@@ -28,10 +28,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
-	crdv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha1"
-	crdv1alpha2 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha2"
-	legacycorev1a2 "github.com/vmware-tanzu/antrea/pkg/legacyapis/core/v1alpha2"
-	legacysecv1alpha1 "github.com/vmware-tanzu/antrea/pkg/legacyapis/security/v1alpha1"
+	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	crdv1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
+	legacycorev1a2 "antrea.io/antrea/pkg/legacyapis/core/v1alpha2"
+	legacysecv1alpha1 "antrea.io/antrea/pkg/legacyapis/security/v1alpha1"
 )
 
 type KubernetesUtils struct {

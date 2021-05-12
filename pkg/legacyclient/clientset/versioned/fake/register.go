@@ -17,14 +17,14 @@
 package fake
 
 import (
-	clusterinformationv1beta1 "github.com/vmware-tanzu/antrea/pkg/legacyapis/clusterinformation/v1beta1"
-	controlplanev1beta1 "github.com/vmware-tanzu/antrea/pkg/legacyapis/controlplane/v1beta1"
-	controlplanev1beta2 "github.com/vmware-tanzu/antrea/pkg/legacyapis/controlplane/v1beta2"
-	corev1alpha2 "github.com/vmware-tanzu/antrea/pkg/legacyapis/core/v1alpha2"
-	opsv1alpha1 "github.com/vmware-tanzu/antrea/pkg/legacyapis/ops/v1alpha1"
-	securityv1alpha1 "github.com/vmware-tanzu/antrea/pkg/legacyapis/security/v1alpha1"
-	statsv1alpha1 "github.com/vmware-tanzu/antrea/pkg/legacyapis/stats/v1alpha1"
-	systemv1beta1 "github.com/vmware-tanzu/antrea/pkg/legacyapis/system/v1beta1"
+	clusterinformationv1beta1 "antrea.io/antrea/pkg/legacyapis/clusterinformation/v1beta1"
+	controlplanev1beta1 "antrea.io/antrea/pkg/legacyapis/controlplane/v1beta1"
+	controlplanev1beta2 "antrea.io/antrea/pkg/legacyapis/controlplane/v1beta2"
+	corev1alpha2 "antrea.io/antrea/pkg/legacyapis/core/v1alpha2"
+	opsv1alpha1 "antrea.io/antrea/pkg/legacyapis/ops/v1alpha1"
+	securityv1alpha1 "antrea.io/antrea/pkg/legacyapis/security/v1alpha1"
+	statsv1alpha1 "antrea.io/antrea/pkg/legacyapis/stats/v1alpha1"
+	systemv1beta1 "antrea.io/antrea/pkg/legacyapis/system/v1beta1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"

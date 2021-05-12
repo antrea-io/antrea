@@ -29,11 +29,11 @@ import (
 	componentbaseconfig "k8s.io/component-base/config"
 	"k8s.io/klog/v2"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent"
-	"github.com/vmware-tanzu/antrea/pkg/k8s"
-	"github.com/vmware-tanzu/antrea/pkg/signals"
-	"github.com/vmware-tanzu/antrea/pkg/util/env"
-	"github.com/vmware-tanzu/antrea/pkg/version"
+	"antrea.io/antrea/pkg/agent"
+	"antrea.io/antrea/pkg/k8s"
+	"antrea.io/antrea/pkg/signals"
+	"antrea.io/antrea/pkg/util/env"
+	"antrea.io/antrea/pkg/version"
 )
 
 func run() error {

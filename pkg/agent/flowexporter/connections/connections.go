@@ -23,13 +23,13 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/klog/v2"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter"
-	"github.com/vmware-tanzu/antrea/pkg/agent/flowexporter/flowrecords"
-	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
-	"github.com/vmware-tanzu/antrea/pkg/agent/metrics"
-	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
-	"github.com/vmware-tanzu/antrea/pkg/agent/proxy"
-	"github.com/vmware-tanzu/antrea/pkg/querier"
+	"antrea.io/antrea/pkg/agent/flowexporter"
+	"antrea.io/antrea/pkg/agent/flowexporter/flowrecords"
+	"antrea.io/antrea/pkg/agent/interfacestore"
+	"antrea.io/antrea/pkg/agent/metrics"
+	"antrea.io/antrea/pkg/agent/openflow"
+	"antrea.io/antrea/pkg/agent/proxy"
+	"antrea.io/antrea/pkg/querier"
 )
 
 var serviceProtocolMap = map[uint8]corev1.Protocol{

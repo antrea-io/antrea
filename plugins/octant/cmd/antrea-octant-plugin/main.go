@@ -25,8 +25,8 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/clientcmd"
 
-	crdv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha1"
-	clientset "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned"
+	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	clientset "antrea.io/antrea/pkg/client/clientset/versioned"
 )
 
 var (

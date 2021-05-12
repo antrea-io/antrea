@@ -19,9 +19,9 @@ package externalversions
 import (
 	"fmt"
 
-	v1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha1"
-	v1alpha2 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha2"
-	v1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1beta1"
+	v1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	v1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
+	v1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	cache "k8s.io/client-go/tools/cache"
 )

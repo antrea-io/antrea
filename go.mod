@@ -1,4 +1,4 @@
-module github.com/vmware-tanzu/antrea
+module antrea.io/antrea
 
 go 1.15
 

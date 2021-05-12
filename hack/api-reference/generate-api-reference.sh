@@ -34,6 +34,6 @@ cd $TMP_DIR/refdocs && go build -o gen && cd -
 
 BIN=$TMP_DIR/refdocs/gen
 
-$BIN -config gen-config.json -api-dir github.com/vmware-tanzu/antrea/pkg/apis -out-file $OUTPUT -template-dir template -skip-missing-api-version
+$BIN -config gen-config.json -api-dir antrea.io/antrea/pkg/apis -out-file $OUTPUT -template-dir template -skip-missing-api-version
 
 echo "API reference doc generated as $OUTPUT"

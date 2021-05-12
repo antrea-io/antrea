@@ -43,7 +43,7 @@ import (
 	"net"
 	"strconv"
 
-	utilproxy "github.com/vmware-tanzu/antrea/third_party/proxy/util"
+	utilproxy "antrea.io/antrea/third_party/proxy/util"
 )
 
 // BaseEndpointInfo contains base information that defines an endpoint.

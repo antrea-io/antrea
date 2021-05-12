@@ -17,7 +17,7 @@
 package fake
 
 import (
-	v1beta1 "github.com/vmware-tanzu/antrea/pkg/legacyclient/clientset/versioned/typed/clusterinformation/v1beta1"
+	v1beta1 "antrea.io/antrea/pkg/legacyclient/clientset/versioned/typed/clusterinformation/v1beta1"
 	rest "k8s.io/client-go/rest"
 	testing "k8s.io/client-go/testing"
 )

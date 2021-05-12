@@ -18,7 +18,7 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
+	"antrea.io/antrea/pkg/ovs/ovsconfig"
 )
 
 const (

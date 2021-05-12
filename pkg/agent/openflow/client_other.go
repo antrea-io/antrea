@@ -20,7 +20,7 @@ package openflow
 import (
 	"net"
 
-	binding "github.com/vmware-tanzu/antrea/pkg/ovs/openflow"
+	binding "antrea.io/antrea/pkg/ovs/openflow"
 )
 
 func (c *client) InstallBridgeUplinkFlows() error {

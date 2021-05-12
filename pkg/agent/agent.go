@@ -29,17 +29,17 @@ import (
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/cniserver"
-	"github.com/vmware-tanzu/antrea/pkg/agent/config"
-	"github.com/vmware-tanzu/antrea/pkg/agent/controller/noderoute"
-	"github.com/vmware-tanzu/antrea/pkg/agent/interfacestore"
-	"github.com/vmware-tanzu/antrea/pkg/agent/openflow"
-	"github.com/vmware-tanzu/antrea/pkg/agent/openflow/cookie"
-	"github.com/vmware-tanzu/antrea/pkg/agent/route"
-	"github.com/vmware-tanzu/antrea/pkg/agent/types"
-	"github.com/vmware-tanzu/antrea/pkg/agent/util"
-	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
-	"github.com/vmware-tanzu/antrea/pkg/util/env"
+	"antrea.io/antrea/pkg/agent/cniserver"
+	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/agent/controller/noderoute"
+	"antrea.io/antrea/pkg/agent/interfacestore"
+	"antrea.io/antrea/pkg/agent/openflow"
+	"antrea.io/antrea/pkg/agent/openflow/cookie"
+	"antrea.io/antrea/pkg/agent/route"
+	"antrea.io/antrea/pkg/agent/types"
+	"antrea.io/antrea/pkg/agent/util"
+	"antrea.io/antrea/pkg/ovs/ovsconfig"
+	"antrea.io/antrea/pkg/util/env"
 )
 
 const (

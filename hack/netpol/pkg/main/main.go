@@ -8,9 +8,9 @@ import (
 	v1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 
+	. "antrea.io/antrea/hack/netpol/pkg/utils"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
-	. "github.com/vmware-tanzu/antrea/hack/netpol/pkg/utils"
 )
 
 // common for all tests.  these get hardcoded into the Expect() clauses,

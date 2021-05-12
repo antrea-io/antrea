@@ -27,8 +27,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/registry/rest"
 
-	statsv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/stats/v1alpha1"
-	"github.com/vmware-tanzu/antrea/pkg/features"
+	statsv1alpha1 "antrea.io/antrea/pkg/apis/stats/v1alpha1"
+	"antrea.io/antrea/pkg/features"
 )
 
 type REST struct {

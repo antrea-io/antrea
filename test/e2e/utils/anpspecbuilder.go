@@ -19,8 +19,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
-	crdv1alpha1 "github.com/vmware-tanzu/antrea/pkg/apis/crd/v1alpha1"
-	legacysecv1alpha1 "github.com/vmware-tanzu/antrea/pkg/legacyapis/security/v1alpha1"
+	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	legacysecv1alpha1 "antrea.io/antrea/pkg/legacyapis/security/v1alpha1"
 )
 
 type AntreaNetworkPolicySpecBuilder struct {
