@@ -7,7 +7,6 @@ to effectively get it merged upstream.
 
 <!-- toc -->
 - [Getting Started](#getting-started)
-  - [CLA](#cla)
   - [Accounts Setup](#accounts-setup)
 - [Contribute](#contribute)
   - [GitHub Workflow](#github-workflow)
@@ -17,6 +16,7 @@ to effectively get it merged upstream.
   - [Building and testing your change](#building-and-testing-your-change)
   - [CI testing](#ci-testing)
   - [Reverting a commit](#reverting-a-commit)
+  - [Sign-off Your Work](#sign-off-your-work)
 - [Issue and PR Management](#issue-and-pr-management)
   - [Filing An Issue](#filing-an-issue)
   - [Issue Triage](#issue-triage)
@@ -29,22 +29,12 @@ To get started, let's ensure you have completed the following prerequisites for
 contributing to project Antrea:
 
 1. Read and observe the [code of conduct](CODE_OF_CONDUCT.md).
-2. Sign the [CLA](#cla).
-3. Check out the [Architecture document](docs/design/architecture.md) for the Antrea
+2. Check out the [Architecture document](docs/design/architecture.md) for the Antrea
    architecture and design.
-4. Set up necessary [accounts](#accounts-setup).
-5. Set up your [development environment](docs/contributors/manual-installation.md)
+3. Set up necessary [accounts](#accounts-setup).
+4. Set up your [development environment](docs/contributors/manual-installation.md)
 
 Now that you're setup, skip ahead to learn how to [contribute](#contribute).
-
-### CLA
-
-We welcome contributions from everyone but we can only accept them if you sign
-our Contributor License Agreement (CLA). If you would like to contribute and you
-have not signed it, our CLA-bot will walk you through the process when you open
-a Pull Request. For questions about the CLA process, see the
-[FAQ](https://cla.vmware.com/faq) or submit a question through the GitHub issue
-tracker.
 
 ### Accounts Setup
 
@@ -99,11 +89,12 @@ project's repository.
     git checkout -b branchName
     ```
 
-4. Make changes and commit it locally.
+4. Make changes and commit it locally. Make sure that your commit is
+   [signed](#sign-off-your-work).
 
     ```bash
     git add <modifiedFile>
-    git commit
+    git commit -s
     ```
 
 5. Update the "Unreleased" section of the [CHANGELOG](CHANGELOG.md) for any
@@ -212,10 +203,11 @@ For more information about the tests we run as part of CI, please refer to
     git rebase upstream/main
     ```
 
-3. Create a revert based on the SHA of the commit.
+3. Create a revert based on the SHA of the commit. The commit needs to be
+   [signed](#sign-off-your-work).
 
     ```bash
-    git revert SHA
+    git revert -s SHA
     ```
 
 4. Push this new commit.
@@ -227,6 +219,46 @@ For more information about the tests we run as part of CI, please refer to
 5. Create a Pull Request on GitHub.
    Visit your fork at `https://github.com/antrea-io/antrea` and click
    `Compare & Pull Request` button next to your `remoteRevertName` branch.
+
+### Sign-off Your Work
+
+As a CNCF project, Antrea must enforce the [Developer Certificate of
+Origin](https://developercertificate.org/) (DCO) on all Pull Requests. We
+require that for all commits consituting the Pull Request, the commit message
+contains the `Signed-off-by` line with an email address that matches the commit
+author. By adding this line to their commit messages, contributors *sign-off*
+that they adhere to the requirements of the DCO.
+
+Git provides the `-s` command-line option to append the required line
+automatically to the commiot message:
+
+```bash
+git commit -s -m 'This is my commit message'
+```
+
+For an existing commit, you can also use this option with `--amend`:
+
+```bash
+git commit -s --amend
+```
+
+If more than one person works on something it's possible for more than one
+person to sign-off on it. For example:
+
+```bash
+Signed-off-by: Some Developer somedev@example.com
+Signed-off-by: Another Developer anotherdev@example.com
+```
+
+We use the [DCO Github App](https://github.com/apps/dco) to enforce that all
+commits in a Pull Request include the reuired `Signed-off-by` line. If this is
+not the case, the app will report a filed status for the Pull Request and it
+will be blocked from being merged.
+
+Compared to our earlier CLA, DCO tends to make the experience simpler for new
+contributors. If you are contributing as an employee, there is no need for your
+employer to sign anything; the DCO assumes you are authorized to submit
+contributions (it's your responsibility to check with your employer).
 
 ## Issue and PR Management
 
