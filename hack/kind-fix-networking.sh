@@ -17,7 +17,7 @@
 # This script is required for Antrea to work properly in a Kind cluster on Linux. It takes care of
 # disabling TX hardware checksum offload for the veth interface (in the host's network namespace) of
 # each Kind Node. This is required when using OVS in userspace mode. Refer to
-# https://github.com/vmware-tanzu/antrea/issues/14 for more information.
+# https://github.com/antrea-io/antrea/issues/14 for more information.
 
 # The script uses the antrea/ethtool Docker image (so that ethtool does not need to be installed on
 # the Linux host).
@@ -29,6 +29,6 @@ for node in "$@"; do
     peerName=$(docker run --net=host antrea/ethtool:latest ip link | grep ^"$peerIdx": | awk -F[:@] '{ print $2 }' | cut -c 2-)
     echo "Disabling TX checksum offload for node $node ($peerName)"
     docker run --net=host --privileged antrea/ethtool:latest ethtool -K "$peerName" tx off
-    # Workaround for https://github.com/vmware-tanzu/antrea/issues/324
+    # Workaround for https://github.com/antrea-io/antrea/issues/324
     docker exec "$node" sysctl -w net.ipv4.tcp_retries2=4
 done

@@ -1832,7 +1832,7 @@ func testACNPRejectEgress(t *testing.T) {
 // testACNPRejectIngress tests that a ACNP is able to reject egress traffic from pods labelled A to namespace Z.
 func testACNPRejectIngress(t *testing.T, data *TestData, protocol v1.Protocol) {
 	// TCP rejection can't work on Kind when the traffic mode is noEncap. Skip it.
-	// https://github.com/vmware-tanzu/antrea/issues/2025
+	// https://github.com/antrea-io/antrea/issues/2025
 	if protocol == v1.ProtocolTCP {
 		skipIfEncapModeIsNotAndProviderIs(t, data, config.TrafficEncapModeEncap, "kind")
 	}
@@ -1958,7 +1958,7 @@ func testANPMultipleAppliedTo(t *testing.T, singleRule bool) {
 	builder := &AntreaNetworkPolicySpecBuilder{}
 	builder = builder.SetName("y", "np-multiple-appliedto").SetPriority(1.0)
 	// Make it apply to an extra dummy AppliedTo to ensure it handles multiple AppliedToGroups correctly.
-	// See https://github.com/vmware-tanzu/antrea/issues/2083.
+	// See https://github.com/antrea-io/antrea/issues/2083.
 	if singleRule {
 		builder.SetAppliedToGroup([]ANPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}}, {PodSelector: map[string]string{tempLabel: ""}}})
 		builder.AddIngress(v1.ProtocolTCP, &p80, nil, nil, nil, map[string]string{"pod": "b"}, map[string]string{"ns": "x"},

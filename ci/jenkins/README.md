@@ -137,7 +137,7 @@ DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
 ```
 
 * [EKS conformance/network policy [bi-daily]](http://jenkins.antrea-ci.rocks/view/cloud/job/cloud-antrea-eks-conformance-net-policy/)
-  community tests on EKS cluster using sonobuoy, focusing on "Conformance" and "Feature:NetworkPolicy", skipping the same regexes as in job __conformance__ above, as well as "NodePort" (See [#690](https://github.com/vmware-tanzu/antrea/issues/690)).\
+  community tests on EKS cluster using sonobuoy, focusing on "Conformance" and "Feature:NetworkPolicy", skipping the same regexes as in job __conformance__ above, as well as "NodePort" (See [#690](https://github.com/antrea-io/antrea/issues/690)).\
   Current test environment matrix:
 
   |  K8s Version |    Node Type    |  Node AMI Family |  Status  |

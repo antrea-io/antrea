@@ -81,7 +81,7 @@ fix_ovs_ctl
 start_ovs
 
 # Restrict read permissions for "others"
-# See discussion in https://github.com/vmware-tanzu/antrea/issues/1292
+# See discussion in https://github.com/antrea-io/antrea/issues/1292
 chmod 0640 $OVS_DB_FILE
 
 if [[ "$#" -ge 1 ]] && [[ "$1" == "--start-ovs-only" ]]; then

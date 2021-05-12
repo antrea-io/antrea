@@ -232,7 +232,7 @@ func getIPSetName(ip net.IP) string {
 // writeEKSMangleRule writes an additional iptables mangle rule to the
 // iptablesData buffer, which is required to ensure that the reverse path for
 // NodePort Service traffic is correct on EKS.
-// See https://github.com/vmware-tanzu/antrea/issues/678.
+// See https://github.com/antrea-io/antrea/issues/678.
 func (c *Client) writeEKSMangleRule(iptablesData *bytes.Buffer) {
 	// TODO: the following should be taking into account:
 	//   1) AWS_VPC_CNI_NODE_PORT_SUPPORT may be set to false (by default is
@@ -360,7 +360,7 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet, podIPSet string, snatMa
 	writeLine(iptablesData, iptables.MakeChainLine(antreaOutputChain))
 	hostGateway := c.nodeConfig.GatewayConfig.Name
 	// When Antrea is used to enforce NetworkPolicies in EKS, an additional iptables
-	// mangle rule is required. See https://github.com/vmware-tanzu/antrea/issues/678.
+	// mangle rule is required. See https://github.com/antrea-io/antrea/issues/678.
 	if env.IsCloudEKS() {
 		c.writeEKSMangleRule(iptablesData)
 	}

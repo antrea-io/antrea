@@ -120,7 +120,7 @@ func bootstrap(k8s *Kubernetes) error {
 	}
 
 	// Ensure that all the HTTP servers have time to start properly.
-	// See https://github.com/vmware-tanzu/antrea/issues/472.
+	// See https://github.com/antrea-io/antrea/issues/472.
 	if err := waitForHTTPServers(k8s); err != nil {
 		return err
 	}

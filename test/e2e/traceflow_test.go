@@ -1047,7 +1047,7 @@ func TestTraceflowInterNode(t *testing.T) {
 		t.Fatalf("Failed to retrieve encap mode: %v", err)
 	}
 	if encapMode != config.TrafficEncapModeNoEncap {
-		// https://github.com/vmware-tanzu/antrea/issues/897
+		// https://github.com/antrea-io/antrea/issues/897
 		skipIfProviderIs(t, "kind", "Skipping inter-Node Traceflow test for Kind because of #897")
 	}
 

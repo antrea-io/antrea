@@ -245,7 +245,7 @@ func (data *TestData) setupDifferentNamedPorts(t *testing.T) (checkFn func(), cl
 		// Due to netdev datapath bug, sometimes datapath flows are not flushed after new openflows that change the
 		// actions are installed, causing client1 to still be able to connect to the servers after creating a policy
 		// that disallows it. The test waits for 10 seconds so that the datapath flows will expire.
-		// See https://github.com/vmware-tanzu/antrea/issues/1608 for more details.
+		// See https://github.com/antrea-io/antrea/issues/1608 for more details.
 		time.Sleep(10 * time.Second)
 	}
 

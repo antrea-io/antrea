@@ -394,7 +394,7 @@ if $KIND; then
     $KUSTOMIZE edit add patch --path startOvs.yml
     # this adds a small delay before running the antrea-agent process, to give the antrea-ovs
     # container enough time to set up the br-phy bridge.
-    # workaround for https://github.com/vmware-tanzu/antrea/issues/801
+    # workaround for https://github.com/antrea-io/antrea/issues/801
     if $COVERAGE; then
         cp ../../patches/coverage/startAgentCov.yml .
         $KUSTOMIZE edit add patch --path startAgentCov.yml
