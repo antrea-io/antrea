@@ -230,7 +230,7 @@ author. By adding this line to their commit messages, contributors *sign-off*
 that they adhere to the requirements of the DCO.
 
 Git provides the `-s` command-line option to append the required line
-automatically to the commiot message:
+automatically to the commit message:
 
 ```bash
 git commit -s -m 'This is my commit message'
@@ -251,8 +251,8 @@ Signed-off-by: Another Developer anotherdev@example.com
 ```
 
 We use the [DCO Github App](https://github.com/apps/dco) to enforce that all
-commits in a Pull Request include the reuired `Signed-off-by` line. If this is
-not the case, the app will report a filed status for the Pull Request and it
+commits in a Pull Request include the required `Signed-off-by` line. If this is
+not the case, the app will report a failed status for the Pull Request and it
 will be blocked from being merged.
 
 Compared to our earlier CLA, DCO tends to make the experience simpler for new
