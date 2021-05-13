@@ -197,7 +197,7 @@ func (c *interfaceCache) GetInterfacesByEntity(name, namespace string) []*Interf
 // GetContainerInterfacesByPod retrieves InterfaceConfigs for the Pod.
 // It's possible that more than one container interface (with different containerIDs) has the same Pod namespace and
 // name temporarily when the previous Pod is being deleted and the new Pod is being created almost simultaneously.
-// https://github.com/vmware-tanzu/antrea/issues/785#issuecomment-642051884
+// https://github.com/antrea-io/antrea/issues/785#issuecomment-642051884
 func (c *interfaceCache) GetContainerInterfacesByPod(podName string, podNamespace string) []*InterfaceConfig {
 	c.RLock()
 	defer c.RUnlock()

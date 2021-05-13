@@ -19,7 +19,7 @@ policy](../versioning.md#minor-releases-and-patch-releases).
 * The PR was identified as a good candidate for backporting by an Antrea
   maintainer: they will leave a comment on Github for the PR and provide a list
   of release branches to which the patch should be backported (example:
-  [`release-1.0`](https://github.com/vmware-tanzu/antrea/tree/release-1.0)).
+  [`release-1.0`](https://github.com/antrea-io/antrea/tree/release-1.0)).
 * Have the [Github CLI](https://cli.github.com/) installed (version >= 1.3) and
   make sure you authenticate yourself by running `gh auth`.
 * Your own fork of the Antrea repository, and a clone of this fork with two

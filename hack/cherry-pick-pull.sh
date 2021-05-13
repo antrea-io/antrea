@@ -20,7 +20,7 @@
 # with some changes: remove REGENERATE_DOCS, add 'kind/cherry-pick' label when
 # creating PR
 
-# Usage Instructions: https://github.com/vmware-tanzu/antrea/blob/main/docs/contributors/cherry-picks.md
+# Usage Instructions: https://github.com/antrea-io/antrea/blob/main/docs/contributors/cherry-picks.md
 
 # Checkout a PR from GitHub. (Yes, this is sitting in a Git tree. How
 # meta.) Assumes you care about pulls from remote "upstream" and
@@ -69,7 +69,7 @@ if [[ "$#" -lt 2 ]]; then
   echo "  Set UPSTREAM_REMOTE (default: upstream) and FORK_REMOTE (default: origin)"
   echo "  to override the default remote names to what you have locally."
   echo
-  echo "  For merge process info, see https://github.com/vmware-tanzu/antrea/blob/main/docs/contributors/cherry-picks.md"
+  echo "  For merge process info, see https://github.com/antrea-io/antrea/blob/main/docs/contributors/cherry-picks.md"
   exit 2
 fi
 

@@ -97,7 +97,7 @@ if $endpointslice; then
     manifest_args="$manifest_args --endpointslice"
 fi
 if $np; then
-    # See https://github.com/vmware-tanzu/antrea/issues/897
+    # See https://github.com/antrea-io/antrea/issues/897
     manifest_args="$manifest_args --tun vxlan"
 else
     manifest_args="$manifest_args --no-np"

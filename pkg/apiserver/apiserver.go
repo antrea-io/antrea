@@ -268,7 +268,7 @@ func CleanupDeprecatedAPIServices(aggregatorClient clientset.Interface) error {
 	// After Antrea upgrades from an old version to a new version that
 	// deprecates a registered APIService, the APIService should be deleted,
 	// otherwise K8s will fail to delete an existing Namespace.
-	// Also check: https://github.com/vmware-tanzu/antrea/issues/494
+	// Also check: https://github.com/antrea-io/antrea/issues/494
 	deprecatedAPIServices := []string{}
 	for _, as := range deprecatedAPIServices {
 		err := aggregatorClient.ApiregistrationV1().APIServices().Delete(context.TODO(), as, metav1.DeleteOptions{})

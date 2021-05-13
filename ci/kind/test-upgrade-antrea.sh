@@ -83,7 +83,7 @@ if [ -z "$FROM_TAG" ] && [ -z "$FROM_VERSION_N_MINUS" ]; then
 fi
 
 # Exclude peeled tags and release candidates from the version list.
-VERSIONS=$(git ls-remote --tags --ref https://github.com/vmware-tanzu/antrea.git | \
+VERSIONS=$(git ls-remote --tags --ref https://github.com/antrea-io/antrea.git | \
                grep -v rc | \
                awk '{print $2}' | awk -F/ '{print $3}' | \
                sort --version-sort -r)
@@ -148,7 +148,7 @@ unset KUSTOMIZE
 $ROOT_DIR/hack/generate-manifest.sh --kind --on-delete | docker exec -i kind-control-plane dd of=/root/antrea-new.yml
 
 TMP_ANTREA_DIR=$(mktemp -d)
-git clone --branch $FROM_TAG --depth 1 https://github.com/vmware-tanzu/antrea.git $TMP_ANTREA_DIR
+git clone --branch $FROM_TAG --depth 1 https://github.com/antrea-io/antrea.git $TMP_ANTREA_DIR
 pushd $TMP_ANTREA_DIR > /dev/null
 export IMG_NAME=projects.registry.vmware.com/antrea/antrea-ubuntu
 export IMG_TAG=$FROM_TAG

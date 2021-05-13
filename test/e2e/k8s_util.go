@@ -115,7 +115,7 @@ func (k *KubernetesUtils) Probe(ns1, pod1, ns2, pod2 string, port int32, protoco
 		// There seems to be an issue when running Antrea in Kind where tunnel traffic is dropped at
 		// first. This leads to the first test being run consistently failing. To avoid this issue
 		// until it is resolved, we try to connect 3 times.
-		// See https://github.com/vmware-tanzu/antrea/issues/467.
+		// See https://github.com/antrea-io/antrea/issues/467.
 		cmd := []string{
 			"/bin/sh",
 			"-c",
@@ -738,7 +738,7 @@ func (k *KubernetesUtils) Bootstrap(namespaces, pods []string) (*map[string][]st
 	}
 
 	// Ensure that all the HTTP servers have time to start properly.
-	// See https://github.com/vmware-tanzu/antrea/issues/472.
+	// See https://github.com/antrea-io/antrea/issues/472.
 	if err := k.waitForHTTPServers(allPods); err != nil {
 		return nil, err
 	}

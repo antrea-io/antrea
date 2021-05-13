@@ -99,7 +99,7 @@ func (k *Kubernetes) Probe(ns1, pod1, ns2, pod2 string, port int) (bool, error) 
 	// There seems to be an issue when running Antrea in Kind where tunnel traffic is dropped at
 	// first. This leads to the first test being run consistently failing. To avoid this issue
 	// until it is resolved, we try to connect 3 times.
-	// See https://github.com/vmware-tanzu/antrea/issues/467.
+	// See https://github.com/antrea-io/antrea/issues/467.
 	cmd := []string{
 		"/bin/sh",
 		"-c",

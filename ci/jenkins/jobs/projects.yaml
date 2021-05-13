@@ -3,7 +3,7 @@
     # should be defined as a global variable somewhere else
     name: antrea
     git_credentials_id: ANTREA_GIT_CREDENTIAL
-    org_repo: vmware-tanzu/antrea
+    org_repo: antrea-io/antrea
     jobs:
       - '{name}-{test_name}-for-period':
           test_name: job-updater
