@@ -20,8 +20,7 @@ import (
 	"time"
 
 	"k8s.io/client-go/informers"
-	"k8s.io/klog/v2"
-	"github.com/vmware-tanzu/antrea/pkg/agent/memberlist"
+	"k8s.io/klog"
 
 	"antrea.io/antrea/pkg/agent"
 	"antrea.io/antrea/pkg/agent/apiserver"
@@ -36,6 +35,7 @@ import (
 	"antrea.io/antrea/pkg/agent/flowexporter/exporter"
 	"antrea.io/antrea/pkg/agent/flowexporter/flowrecords"
 	"antrea.io/antrea/pkg/agent/interfacestore"
+	"antrea.io/antrea/pkg/agent/memberlist"
 	"antrea.io/antrea/pkg/agent/metrics"
 	npl "antrea.io/antrea/pkg/agent/nodeportlocal"
 	"antrea.io/antrea/pkg/agent/openflow"
@@ -204,7 +204,7 @@ func run(o *Options) error {
 	var memberlistServer *memberlist.Server
 	if features.DefaultFeatureGate.Enabled(features.Egress) {
 		egressController = egress.NewEgressController(ofClient, egressInformer, antreaClientProvider, ifaceStore, routeClient, nodeConfig.Name)
-		memberlistServer = memberlist.NewMemberlistServer(o.config.MemberlistPort, nodeInformer,nodeConfig)
+		memberlistServer = memberlist.NewMemberlistServer(o.config.MemberlistPort, nodeInformer, nodeConfig)
 	}
 
 	var proxier proxy.Proxier
