@@ -34,10 +34,13 @@ import (
 const (
 	testTemplateIDv4        = uint16(256)
 	testTemplateIDv6        = uint16(257)
-	testActiveTimeout       = 60 * time.Second
-	testInactiveTimeout     = 180 * time.Second
 	testObservationDomainID = 0xabcd
 	informerDefaultResync   = 12 * time.Hour
+)
+
+var (
+	testActiveTimeout   = 60 * time.Second
+	testInactiveTimeout = 180 * time.Second
 )
 
 func TestFlowAggregator_sendFlowKeyRecord(t *testing.T) {

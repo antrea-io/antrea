@@ -28,6 +28,7 @@ type IPFIXCollectingProcess interface {
 	Start()
 	Stop()
 	GetMsgChan() chan *ipfixentities.Message
+	GetCollectingProcess() *ipfixcollect.CollectingProcess
 }
 
 type ipfixCollectingProcess struct {
@@ -55,4 +56,8 @@ func (cp *ipfixCollectingProcess) Stop() {
 
 func (cp *ipfixCollectingProcess) GetMsgChan() chan *ipfixentities.Message {
 	return cp.CollectingProcess.GetMsgChan()
+}
+
+func (cp *ipfixCollectingProcess) GetCollectingProcess() *ipfixcollect.CollectingProcess {
+	return cp.CollectingProcess
 }

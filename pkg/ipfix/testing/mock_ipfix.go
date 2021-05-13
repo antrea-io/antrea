@@ -21,6 +21,7 @@ package testing
 
 import (
 	gomock "github.com/golang/mock/gomock"
+	collector "github.com/vmware/go-ipfix/pkg/collector"
 	entities "github.com/vmware/go-ipfix/pkg/entities"
 	intermediate "github.com/vmware/go-ipfix/pkg/intermediate"
 	reflect "reflect"
@@ -162,6 +163,20 @@ func NewMockIPFIXCollectingProcess(ctrl *gomock.Controller) *MockIPFIXCollecting
 // EXPECT returns an object that allows the caller to indicate expected use
 func (m *MockIPFIXCollectingProcess) EXPECT() *MockIPFIXCollectingProcessMockRecorder {
 	return m.recorder
+}
+
+// GetCollectingProcess mocks base method
+func (m *MockIPFIXCollectingProcess) GetCollectingProcess() *collector.CollectingProcess {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetCollectingProcess")
+	ret0, _ := ret[0].(*collector.CollectingProcess)
+	return ret0
+}
+
+// GetCollectingProcess indicates an expected call of GetCollectingProcess
+func (mr *MockIPFIXCollectingProcessMockRecorder) GetCollectingProcess() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCollectingProcess", reflect.TypeOf((*MockIPFIXCollectingProcess)(nil).GetCollectingProcess))
 }
 
 // GetMsgChan mocks base method
