@@ -64,7 +64,7 @@ helping with code reviews, triaging of bugs, documentation updates, filing
 [new issues](#filing-an-issue) or writing blogs/manuals etc.
 
 In order to help you get your hands "dirty", there is a list of
-[starter](https://github.com/vmware-tanzu/antrea/labels/Good%20first%20issue)
+[starter](https://github.com/antrea-io/antrea/labels/Good%20first%20issue)
 issues from which you can choose.
 
 ### GitHub Workflow
@@ -74,7 +74,7 @@ submit pull requests to have their changes considered and merged into the
 project's repository.
 
 1. Fork your own copy of the repository to your GitHub account by clicking on
-   `Fork` button on [Antrea's GitHub repository](https://github.com/vmware-tanzu/antrea).
+   `Fork` button on [Antrea's GitHub repository](https://github.com/antrea-io/antrea).
 2. Clone the forked repository on your local setup.
 
     ```bash
@@ -84,7 +84,7 @@ project's repository.
     Add a remote upstream to track upstream Antrea repository.
 
     ```bash
-    git remote add upstream https://github.com/vmware-tanzu/antrea
+    git remote add upstream https://github.com/antrea-io/antrea
     ```
 
     Never push to upstream remote
@@ -123,7 +123,7 @@ project's repository.
     ```
 
 8. Create a Pull request on GitHub.
-   Visit your fork at `https://github.com/vmware-tanzu/antrea` and click
+   Visit your fork at `https://github.com/antrea-io/antrea` and click
    `Compare & Pull Request` button next to your `remoteBranchName` branch.
 
 ### Getting reviewers
@@ -225,7 +225,7 @@ For more information about the tests we run as part of CI, please refer to
     ```
 
 5. Create a Pull Request on GitHub.
-   Visit your fork at `https://github.com/vmware-tanzu/antrea` and click
+   Visit your fork at `https://github.com/antrea-io/antrea` and click
    `Compare & Pull Request` button next to your `remoteRevertName` branch.
 
 ## Issue and PR Management
@@ -237,12 +237,12 @@ discussion, see [docs/issue-management.md](docs/contributors/issue-management.md
 ### Filing An Issue
 
 Help is always appreciated. If you find something that needs fixing, please file
-an issue [here](https://github.com/vmware-tanzu/antrea/issues). Please ensure
+an issue [here](https://github.com/antrea-io/antrea/issues). Please ensure
 that the issue is self explanatory and has enough information for an assignee to
 get started.
 
 Before picking up a task, go through the existing
-[issues](https://github.com/vmware-tanzu/antrea/issues) and make sure that your
+[issues](https://github.com/antrea-io/antrea/issues) and make sure that your
 change is not already being worked on. If it does not exist, please create a new
 issue and discuss it with other members.
 

@@ -219,18 +219,18 @@ the Flow Aggregator.
 ### Deployment
 
 To deploy a released version of Flow Aggregator Service, pick a deployment manifest from the
-[list of releases](https://github.com/vmware-tanzu/antrea/releases). For any
+[list of releases](https://github.com/antrea-io/antrea/releases). For any
 given release `<TAG>` (e.g. `v0.12.0`), you can deploy Flow Aggregator as follows:
 
 ```bash
-kubectl apply -f https://github.com/vmware-tanzu/antrea/releases/download/<TAG>/flow-aggregator.yml
+kubectl apply -f https://github.com/antrea-io/antrea/releases/download/<TAG>/flow-aggregator.yml
 ```
 
 To deploy the latest version of Flow Aggregator Service (built from the main branch), use the
 checked-in [deployment yaml](/build/yamls/flow-aggregator.yml):
 
 ```bash
-kubectl apply -f https://raw.githubusercontent.com/vmware-tanzu/antrea/main/build/yamls/flow-aggregator.yml
+kubectl apply -f https://raw.githubusercontent.com/antrea-io/antrea/main/build/yamls/flow-aggregator.yml
 ```
 
 ### Configuration
@@ -391,18 +391,18 @@ particular folder using the subversion(svn) utility. If the deployed version of
 Antrea has a release `<TAG>` (e.g. `v0.10.0`), then you can use the following command:
 
 ```shell
-git clone --depth 1 --branch <TAG> https://github.com/vmware-tanzu/antrea.git && cd antrea/build/yamls/
+git clone --depth 1 --branch <TAG> https://github.com/antrea-io/antrea.git && cd antrea/build/yamls/
 or
-svn export https://github.com/vmware-tanzu/antrea/tags/<TAG>/build/yamls/elk-flow-collector/
+svn export https://github.com/antrea-io/antrea/tags/<TAG>/build/yamls/elk-flow-collector/
 ```
 
 If the deployed version of Antrea is the latest version, i.e., built from the main
 branch, then you can use the following command:
 
 ```shell
-git clone --depth 1 --branch main https://github.com/vmware-tanzu/antrea.git && cd antrea/build/yamls/
+git clone --depth 1 --branch main https://github.com/antrea-io/antrea.git && cd antrea/build/yamls/
 or
-svn export https://github.com/vmware-tanzu/antrea/trunk/build/yamls/elk-flow-collector/
+svn export https://github.com/antrea-io/antrea/trunk/build/yamls/elk-flow-collector/
 ```
 
 To create the required K8s resources in the `elk-flow-collector` folder and get

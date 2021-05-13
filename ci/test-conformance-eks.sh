@@ -220,7 +220,7 @@ function run_conformance() {
     echo "=== Running Antrea Conformance and Network Policy Tests ==="
 
     # Skip NodePort related cases for EKS since by default eksctl does not create security groups for nodeport service
-    # access through node external IP. See https://github.com/vmware-tanzu/antrea/issues/690
+    # access through node external IP. See https://github.com/antrea-io/antrea/issues/690
     skip_regex="\[Slow\]|\[Serial\]|\[Disruptive\]|\[Flaky\]|\[Feature:.+\]|\[sig-cli\]|\[sig-storage\]|\[sig-auth\]|\[sig-api-machinery\]|\[sig-apps\]|\[sig-node\]|NodePort"
     ${GIT_CHECKOUT_DIR}/ci/run-k8s-e2e-tests.sh --e2e-conformance --e2e-network-policy --e2e-skip ${skip_regex} \
        --kube-conformance-image-version ${KUBE_CONFORMANCE_IMAGE_VERSION} \

@@ -1701,7 +1701,7 @@ func (c *client) defaultDropFlow(tableID binding.TableIDType, matchKey *types.Ma
 //    traffic from kube-proxy proxied traffic.
 // 2. pkt_mark field is not properly supported for OVS userspace (netdev) datapath.
 // Note that there is a defect in the latter way that NodePort Service access by external clients will be masqueraded as
-// a local gateway IP to bypass Network Policies. See https://github.com/vmware-tanzu/antrea/issues/280.
+// a local gateway IP to bypass Network Policies. See https://github.com/antrea-io/antrea/issues/280.
 // TODO: Fix it after replacing kube-proxy with AntreaProxy.
 func (c *client) localProbeFlow(localGatewayIPs []net.IP, category cookie.Category) []binding.Flow {
 	var flows []binding.Flow

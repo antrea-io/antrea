@@ -40,7 +40,7 @@ These are the API group versions which are curently available when using Antrea.
 For the v1.0 release, we undertook to rename all Antrea API to use the
 `antrea.io` suffix instead of the `antrea.tanzu.vmware.com` suffix. For more
 information about the motivations behind this undertaking, please refer to
-[Github issue #1715](https://github.com/vmware-tanzu/antrea/issues/1715).
+[Github issue #1715](https://github.com/antrea-io/antrea/issues/1715).
 
 As part of this renaming, and to avoid profileration of API groups, we have
 decided to group all the Custom Resource Definitions (CRDs) defined by Antrea in

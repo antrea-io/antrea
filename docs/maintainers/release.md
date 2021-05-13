@@ -25,7 +25,7 @@ release. We use `<TAG>` as a placeholder for the release tag (e.g. `v0.1.0`).
      [dockerhub](https://hub.docker.com/u/antrea) with the correct tag.
   2. the assets have been uploaded to the release (`antctl` binaries and yaml
      manifests). In particular, the following link should work:
-     `https://github.com/vmware-tanzu/antrea/releases/download/<TAG>/antrea.yml`.
+     `https://github.com/antrea-io/antrea/releases/download/<TAG>/antrea.yml`.
 
 * Open a PR against the master branch with the following commits:
   1. the commit updating the [CHANGELOG](../../CHANGELOG), cherry-picked from

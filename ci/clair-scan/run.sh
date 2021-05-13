@@ -22,7 +22,7 @@ pushd "$THIS_DIR" > /dev/null
 # The highest Antrea release version, excluding release candidates.
 # We also exclude peeled tags from the output (vX.Y.Z^{}) as they could lead to
 # an invalid version number.
-VERSION=$(git ls-remote --tags --ref https://github.com/vmware-tanzu/antrea.git | \
+VERSION=$(git ls-remote --tags --ref https://github.com/antrea-io/antrea.git | \
               grep -v rc | \
               awk '{print $2}' | awk -F/ '{print $3}' | \
               sort --version-sort -r | head -n 1)

@@ -20,7 +20,7 @@ jobs:
     - uses: actions/checkout@v2
       with:
         fetch-depth: 0
-    - uses: vmware-tanzu/antrea/ci/gh-actions/has-changes@main
+    - uses: antrea-io/antrea/ci/gh-actions/has-changes@main
       id: check_diff
       with:
         args: docs/* ci/jenkins/* *.md hack/.notableofcontents
