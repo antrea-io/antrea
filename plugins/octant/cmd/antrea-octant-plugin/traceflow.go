@@ -158,22 +158,14 @@ func (p *antreaOctantPlugin) actionHandler(request *service.ActionRequest) error
 			return nil
 		}
 
-		// Judge whether the name of traceflow is duplicated.
-		// If it is, then the user created more than one traceflow in one second, which is not allowed.
 		tfName := sourceName + "-" + dst + "-" + time.Now().Format(TIME_FORMAT_YYYYMMDD_HHMMSS)
-		ctx := context.Background()
-		err = p.checkDuplicateTf(tfName, ctx, request)
-		if err != nil {
-			return nil
-		}
-
 		tf := initTfSpec(tfName, source, destination, protocol)
 		if hasTimeout {
 			tf.Spec.Timeout = timeout
 		}
 
 		updateIPHeader(tf, hasSrcPort, hasDstPort, srcPort, dstPort)
-		p.createTfCR(tf, request, ctx, tfName)
+		p.createTfCR(tf, request, context.Background(), tfName)
 		return nil
 	case addLiveTfAction:
 		srcNamespace, err := checkNamespace(request)
@@ -275,8 +267,6 @@ func (p *antreaOctantPlugin) actionHandler(request *service.ActionRequest) error
 			dropOnlyChecked = true
 		}
 
-		// Judge whether the name of traceflow is duplicated.
-		// If it is, then the user created more than one traceflow in one second, which is not allowed.
 		tfName := "live-"
 		if srcLen == 0 {
 			tfName += "dst-" + dst
@@ -286,13 +276,6 @@ func (p *antreaOctantPlugin) actionHandler(request *service.ActionRequest) error
 			tfName += sourceName + "-" + dst
 		}
 		tfName += "-" + time.Now().Format(TIME_FORMAT_YYYYMMDD_HHMMSS)
-
-		ctx := context.Background()
-		err = p.checkDuplicateTf(tfName, ctx, request)
-		if err != nil {
-			return nil
-		}
-
 		tf := initTfSpec(tfName, source, destination, protocol)
 		tf.Spec.LiveTraffic = true
 		if dropOnlyChecked {
@@ -303,7 +286,7 @@ func (p *antreaOctantPlugin) actionHandler(request *service.ActionRequest) error
 		}
 
 		updateIPHeader(tf, hasSrcPort, hasDstPort, srcPort, dstPort)
-		p.createTfCR(tf, request, ctx, tfName)
+		p.createTfCR(tf, request, context.Background(), tfName)
 		return nil
 	case showGraphAction:
 		traceName, err := request.Payload.StringSlice(traceNameCol)
@@ -552,17 +535,6 @@ func alertPrinter(request *service.ActionRequest, logMsg string, alertMsg string
 		alert = action.CreateAlert(action.AlertTypeError, alertMsg, action.DefaultAlertExpiration)
 	}
 	request.DashboardClient.SendAlert(request.Context(), request.ClientID, alert)
-}
-
-func (p *antreaOctantPlugin) checkDuplicateTf(tfName string, ctx context.Context, request *service.ActionRequest) error {
-	tfOld, _ := p.client.CrdV1alpha1().Traceflows().Get(ctx, tfName, v1.GetOptions{})
-	if tfOld.Name == tfName {
-		alertPrinter(request, invalidInputMsg+
-			fmt.Sprintf("duplicate traceflow \"%s\": same source Pod and destination Pod in less than one second: %+v.", tfName, tfOld),
-			"Duplicate traceflow: same source Pod and destination Pod in less than one second.", nil, nil)
-		return errors.New("duplicate traceflow")
-	}
-	return nil
 }
 
 func (p *antreaOctantPlugin) createTfCR(tf *crdv1alpha1.Traceflow, request *service.ActionRequest, ctx context.Context, tfName string) {
