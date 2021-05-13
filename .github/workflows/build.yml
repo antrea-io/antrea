@@ -49,7 +49,7 @@ jobs:
       if: ${{ github.repository == 'antrea-io/antrea' && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
       uses: benc-uk/workflow-dispatch@v1
       with:
-        repo: antrea-io/antrea-build-infra
+        repo: vmware-tanzu/antrea-build-infra
         ref: refs/heads/main
         workflow: Build Antrea ARM images and push manifest
         token: ${{ secrets.ANTREA_BUILD_INFRA_WORKFLOW_DISPATCH_PAT }}
