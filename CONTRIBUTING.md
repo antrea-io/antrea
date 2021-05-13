@@ -224,7 +224,7 @@ For more information about the tests we run as part of CI, please refer to
 
 As a CNCF project, Antrea must enforce the [Developer Certificate of
 Origin](https://developercertificate.org/) (DCO) on all Pull Requests. We
-require that for all commits consituting the Pull Request, the commit message
+require that for all commits constituting the Pull Request, the commit message
 contains the `Signed-off-by` line with an email address that matches the commit
 author. By adding this line to their commit messages, contributors *sign-off*
 that they adhere to the requirements of the DCO.
