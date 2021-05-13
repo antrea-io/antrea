@@ -1,6 +1,7 @@
 # Antrea
 
 ![Antrea Logo](docs/assets/logo/antrea_logo.svg)
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fantrea-io%2Fantrea.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2Fantrea-io%2Fantrea?ref=badge_shield)
 
 ![Build Status](https://github.com/antrea-io/antrea/workflows/Go/badge.svg?branch=main)
 [![Go Report Card](https://goreportcard.com/badge/antrea.io/antrea)](https://goreportcard.com/report/antrea.io/antrea)
@@ -116,3 +117,6 @@ in!
 ## License
 
 Antrea is licensed under the [Apache License, version 2.0](LICENSE)
+
+
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fantrea-io%2Fantrea.svg?type=large)](https://app.fossa.com/projects/git%2Bgithub.com%2Fantrea-io%2Fantrea?ref=badge_large)
