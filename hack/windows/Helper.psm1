@@ -54,7 +54,8 @@ function Install-AntreaAgent {
         [parameter(Mandatory = $false, HelpMessage="Kubernetes home path")] [string] $KubernetesHome="c:\k",
         [parameter(Mandatory = $false, HelpMessage="kubeconfig file path")] [string] $KubeConfig="c:\k\config",
         [parameter(Mandatory = $false, HelpMessage="Antrea version to use")] [string] $AntreaVersion="latest",
-        [parameter(Mandatory = $false, HelpMessage="Antrea home path")] [string] $AntreaHome="c:\k\antrea"
+        [parameter(Mandatory = $false, HelpMessage="Antrea home path")] [string] $AntreaHome="c:\k\antrea",
+        [parameter(Mandatory = $false, HelpMessage="Kubernetes download")] [string] $KubernetesURL="dl.k8s.io"
     )
     $ErrorActionPreference = "Stop"
 
@@ -92,9 +93,9 @@ function Install-AntreaAgent {
 
     New-DirectoryIfNotExist $KubernetesHome
     # Download kubectl
-    Get-WebFileIfNotExist $kubectl  "https://dl.k8s.io/$KubernetesVersion/bin/windows/amd64/kubectl.exe"
+    Get-WebFileIfNotExist $kubectl  "https://$KubernetesURL/$KubernetesVersion/bin/windows/amd64/kubectl.exe"
     # Download kube-proxy
-    Get-WebFileIfNotExist $KubeProxy "https://dl.k8s.io/$KubernetesVersion/bin/windows/amd64/kube-proxy.exe"
+    Get-WebFileIfNotExist $KubeProxy "https://$KubernetesURL/$KubernetesVersion/bin/windows/amd64/kube-proxy.exe"
     # Download yq
     Get-WebFileIfNotExist $yq "https://github.com/mikefarah/yq/releases/download/3.3.2/yq_windows_amd64.exe"
 
