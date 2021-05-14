@@ -309,17 +309,27 @@ function deliver_antrea {
     # be leveraged successfully
     chmod -R g-w build/images/ovs
     chmod -R g-w build/images/base
-    for i in `seq 3`
-    do
+    # Pull images from Dockerhub first then try Harbor.
+    for i in `seq 3`; do
         if [[ "$COVERAGE" == true ]]; then
-            VERSION="$CLUSTER" DOCKER_REGISTRY="${DOCKER_REGISTRY}" ./hack/build-antrea-ubuntu-all.sh --pull --coverage && break
+            VERSION="$CLUSTER" ./hack/build-antrea-ubuntu-all.sh --pull --coverage && break
         else
-            VERSION="$CLUSTER" DOCKER_REGISTRY="${DOCKER_REGISTRY}" ./hack/build-antrea-ubuntu-all.sh --pull && break
+            VERSION="$CLUSTER" ./hack/build-antrea-ubuntu-all.sh --pull && break
         fi
     done
     if [ $? -ne 0 ]; then
-        echoerr "Failed to build antrea images"
-        exit 1
+        echoerr "Failed to build antrea images with Dockerhub"
+        for i in `seq 3`; do
+            if [[ "$COVERAGE" == true ]]; then
+                VERSION="$CLUSTER" DOCKER_REGISTRY="${DOCKER_REGISTRY}" ./hack/build-antrea-ubuntu-all.sh --pull --coverage && break
+            else
+                VERSION="$CLUSTER" DOCKER_REGISTRY="${DOCKER_REGISTRY}" ./hack/build-antrea-ubuntu-all.sh --pull && break
+            fi
+        done
+        if [ $? -ne 0 ]; then
+            echoerr "Failed to build antrea images with Harbor"
+            exit 1
+        fi
     fi
     if [[ "$COVERAGE" == true ]]; then
       VERSION="$CLUSTER" make flow-aggregator-ubuntu-coverage
