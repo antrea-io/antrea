@@ -81,6 +81,11 @@ spec:
                 - format: ipv6
               externalIPPool:
                 type: string
+          status:
+            type: object
+            properties:
+              nodeName:
+                type: string
     additionalPrinterColumns:
     - description: Specifies the SNAT IP address for the selected workloads.
       jsonPath: .spec.egressIP
@@ -89,6 +94,12 @@ spec:
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
+    - description: The Owner Node of egress IP
+      jsonPath: .status.nodeName
+      name: Status
+      type: string
+    subresources:
+      status: {}
   scope: Cluster
   names:
     plural: egresses

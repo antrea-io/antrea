@@ -26,6 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/watch"
@@ -40,8 +41,10 @@ import (
 	"antrea.io/antrea/pkg/agent/route"
 	cpv1b2 "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	crdv1a2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
+	clientsetversioned "antrea.io/antrea/pkg/client/clientset/versioned"
 	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha2"
 	crdlisters "antrea.io/antrea/pkg/client/listers/crd/v1alpha2"
+	"antrea.io/antrea/pkg/controller/metrics"
 	"antrea.io/antrea/pkg/util/k8s"
 )
 
@@ -102,6 +105,7 @@ type egressBinding struct {
 type EgressController struct {
 	ofClient             openflow.Client
 	routeClient          route.Interface
+	crdClient            clientsetversioned.Interface
 	antreaClientProvider agent.AntreaClientProvider
 
 	egressInformer     cache.SharedIndexInformer
@@ -179,6 +183,7 @@ func NewEgressController(
 		resyncPeriod,
 	)
 	localIPDetector.AddEventHandler(c.onLocalIPUpdate)
+	c.cluster.AddClusterNodeEventHandler(c.onClusterNodeUpdate)
 	return c
 }
 
@@ -214,6 +219,39 @@ func (c *EgressController) onLocalIPUpdate(ip string, added bool) {
 	}
 }
 
+func (c *EgressController) onClusterNodeUpdate(nodeName string, join bool) {
+	var egresses []*crdv1a2.Egress
+	if join {
+		//	list all egress of local node, and move not hit egress
+		c.egressStatesMutex.RLock()
+		defer c.egressStatesMutex.RUnlock()
+		for egressName := range c.egressStates {
+			if c.cluster.ShouldSelect(egressName) {
+				continue
+			}
+			egress, _ := c.egressLister.Get(egressName)
+			egresses = append(egresses, egress)
+		}
+		klog.V(0).InfoS("Detected cluster node joined, egress should unbind", "nodeName", nodeName)
+	} else {
+		//	list egress owned by left node and handler the egress if hit by local node
+		egressesOfLeftNode, _ := c.egressLister.List(labels.Everything())
+		for _, egress := range egressesOfLeftNode {
+			if egress.Status.NodeName != nodeName {
+				continue
+			}
+			if c.cluster.ShouldSelect(egress.Name) {
+				egresses = append(egresses, egress)
+			}
+		}
+		klog.V(0).InfoS("Detected cluster node left, and egress should bind", "nodeName", nodeName)
+	}
+	for _, egress := range egresses {
+		c.enqueueEgress(egress)
+	}
+	klog.V(0).InfoS("Egress should move and enqueue egress worker", "num", len(egresses))
+}
+
 // Run will create defaultWorkers workers (go routines) which will process the Egress events from the
 // workqueue.
 func (c *EgressController) Run(stopCh <-chan struct{}) {
@@ -231,6 +269,18 @@ func (c *EgressController) Run(stopCh <-chan struct{}) {
 	go c.cluster.Run(stopCh)
 
 	go wait.NonSlidingUntil(c.watchEgressGroup, 5*time.Second, stopCh)
+
+	// if node support egress failover
+	if c.cluster.LocalNodeJoined() {
+		// when a new node join gossip cluster, it should handle the egress that hit itself(moved from other nodes)
+		egresses, _ := c.egressLister.List(labels.Everything())
+
+		for _, e := range egresses {
+			if e.Spec.ExternalIPPool != "" && c.cluster.ShouldSelect(e.Name) {
+				c.enqueueEgress(e)
+			}
+		}
+	}
 
 	for i := 0; i < defaultWorkers; i++ {
 		go wait.Until(c.worker, time.Second, stopCh)
@@ -450,6 +500,22 @@ func (c *EgressController) unbindPodEgress(pod, egress string) (string, bool) {
 	return "", false
 }
 
+func (c *EgressController) updateEgressStatus(egress *crdv1a2.Egress, nodeName string) error {
+	klog.V(0).Infof("Egress status : %#v, update to : %s", egress.Status, nodeName)
+	if egress.Status.NodeName == nodeName {
+		return nil
+	}
+	toUpdate := egress.DeepCopy()
+	toUpdate.Status.NodeName = nodeName
+	if _, err := c.crdClient.CrdV1alpha2().Egresses().UpdateStatus(context.TODO(), toUpdate, metav1.UpdateOptions{}); err != nil {
+		klog.Warningf("egress update error: %s", err)
+		return err
+	}
+	klog.V(0).Infof("update egress %s status success", egress.Name)
+	metrics.AntreaEgressStatusUpdates.Inc()
+	return nil
+}
+
 func (c *EgressController) syncEgress(egressName string) error {
 	startTime := time.Now()
 	defer func() {
@@ -471,6 +537,29 @@ func (c *EgressController) syncEgress(egressName string) error {
 			return nil
 		}
 		return err
+	}
+
+	if egress.Spec.ExternalIPPool != "" && c.cluster.LocalNodeJoined() {
+		if c.cluster.ShouldSelect(egressName) {
+			if !c.localIPDetector.IsLocalIP(egress.Spec.EgressIP) {
+				a := NewNodeEgressIPAssigner(c.cluster.NodeConfig)
+				if err := a.AssignOwnerNodeEgressIP(egress.Spec.EgressIP); err != nil {
+					return err
+				}
+			}
+			if err := c.updateEgressStatus(egress, c.nodeName); err != nil {
+				return fmt.Errorf("update egress status error:%v", err)
+			}
+			klog.V(0).InfoS("Assigned owner node for egress and update status",
+				"nodeName", c.nodeName, "egress", egressName)
+		} else {
+			if c.localIPDetector.IsLocalIP(egress.Spec.EgressIP) {
+				a := NewNodeEgressIPAssigner(c.cluster.NodeConfig)
+				if err := a.UnAssignOwnerNodeEgressIP(egress.Spec.EgressIP); err != nil {
+					return err
+				}
+			}
+		}
 	}
 
 	eState, exist := c.getEgressState(egressName)

@@ -465,7 +465,7 @@ func (c *Cluster) updateLocalNodeStatus() {
 		return
 	}
 	shouldJoin := c.shouldJoinCluster(c.nodeName)
-	joined := c.localNodeJoined()
+	joined := c.LocalNodeJoined()
 	if joined && !shouldJoin {
 		c.writeLocalNodeCh(true)
 	} else if !joined && shouldJoin {
@@ -492,13 +492,13 @@ func (c *Cluster) nodeList() []string {
 	return nodes
 }
 
-// localNodeJoined if merbers num in cluster is 1 means local node not joined in other clusters
-func (c *Cluster) localNodeJoined() bool {
+// LocalNodeJoined if merbers num in cluster is 1 means local node not joined in other clusters
+func (c *Cluster) LocalNodeJoined() bool {
 	// while node joined cluster, num of member will >= 1; if leave cluster, num of member will be 0
 	return c.mList.NumMembers() >= 1
 }
 
-func (c *Cluster) shouldSelect(name string) bool {
+func (c *Cluster) ShouldSelect(name string) bool {
 	c.conHashMapRWLock.RLock()
 	defer c.conHashMapRWLock.RUnlock()
 	myNode := c.nodeName
@@ -517,6 +517,6 @@ func (c *Cluster) notify(nodeName string, isJoinNode bool) {
 	}
 }
 
-func (c *Cluster) addClusterNodeEventHandler(handler clusterNodeEventHandler) {
+func (c *Cluster) AddClusterNodeEventHandler(handler clusterNodeEventHandler) {
 	c.ClusterNodeEventHandlers = append(c.ClusterNodeEventHandlers, handler)
 }

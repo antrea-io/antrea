@@ -145,10 +145,13 @@ rules:
       - crd.antrea.io
     resources:
       - egresses
+      - egresses/status
     verbs:
       - get
       - watch
       - list
+      - update
+      - patch
 ---
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1

@@ -123,7 +123,7 @@ func TestNewCluster(t *testing.T) {
 	cache.WaitForCacheSync(stopCh, nodeInformer.Informer().HasSynced)
 	cache.WaitForCacheSync(stopCh, ipPoolInformer.Informer().HasSynced)
 
-	s.addClusterNodeEventHandler(func(nodeName string, added bool) {
+	s.AddClusterNodeEventHandler(func(nodeName string, added bool) {
 		t.Logf("notified node %s added (%t) node event handler", nodeName, added)
 	})
 
@@ -284,7 +284,7 @@ func TestCluster_Run(t *testing.T) {
 	cache.WaitForCacheSync(stopCh, nodeInformer.Informer().HasSynced)
 	cache.WaitForCacheSync(stopCh, ipPoolInformer.Informer().HasSynced)
 
-	s.addClusterNodeEventHandler(func(nodeName string, added bool) {
+	s.AddClusterNodeEventHandler(func(nodeName string, added bool) {
 		t.Logf("notified node %s added (%t) node event handler", nodeName, added)
 	})
 
@@ -752,7 +752,7 @@ func TestCluster_ShouldSelect(t *testing.T) {
 	hitCount := 0
 	for i := 0; i < egressNum; i++ {
 		egressName := fmt.Sprintf("%s-%d", genRandomStr(10), i)
-		if node1Cluster.shouldSelect(egressName) {
+		if node1Cluster.ShouldSelect(egressName) {
 			hitCount++
 		}
 	}
