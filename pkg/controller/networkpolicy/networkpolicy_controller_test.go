@@ -532,6 +532,61 @@ func TestAddNetworkPolicy(t *testing.T) {
 			expAppliedToGroups: 1,
 			expAddressGroups:   2,
 		},
+		{
+			name: "rule-with-end-port",
+			inputPolicy: &networkingv1.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "npG", UID: "uidG"},
+				Spec: networkingv1.NetworkPolicySpec{
+					PodSelector: selectorA,
+					Ingress: []networkingv1.NetworkPolicyIngressRule{
+						{
+							Ports: []networkingv1.NetworkPolicyPort{
+								{
+									Protocol: &k8sProtocolTCP,
+									Port:     &int1000,
+									EndPort:  &int32For1999,
+								},
+							},
+							From: []networkingv1.NetworkPolicyPeer{
+								{
+									PodSelector: &selectorB,
+								},
+							},
+						},
+					},
+				},
+			},
+			expPolicy: &antreatypes.NetworkPolicy{
+				UID:  "uidG",
+				Name: "uidG",
+				SourceRef: &controlplane.NetworkPolicyReference{
+					Type:      controlplane.K8sNetworkPolicy,
+					Namespace: "nsA",
+					Name:      "npG",
+					UID:       "uidG",
+				},
+				Rules: []controlplane.NetworkPolicyRule{
+					{
+						Direction: controlplane.DirectionIn,
+						From: controlplane.NetworkPolicyPeer{
+							AddressGroups: []string{getNormalizedUID(toGroupSelector("nsA", &selectorB, nil, nil).NormalizedName)},
+						},
+						Services: []controlplane.Service{
+							{
+								Protocol: &protocolTCP,
+								Port:     &int1000,
+								EndPort:  &int32For1999,
+							},
+						},
+						Priority: defaultRulePriority,
+						Action:   &defaultAction,
+					},
+				},
+				AppliedToGroups: []string{getNormalizedUID(toGroupSelector("nsA", &selectorA, nil, nil).NormalizedName)},
+			},
+			expAppliedToGroups: 1,
+			expAddressGroups:   1,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -549,7 +604,7 @@ func TestAddNetworkPolicy(t *testing.T) {
 	for _, tt := range tests {
 		npc.addNetworkPolicy(tt.inputPolicy)
 	}
-	assert.Equal(t, 6, npc.GetNetworkPolicyNum(), "expected networkPolicy number is 6")
+	assert.Equal(t, 7, npc.GetNetworkPolicyNum(), "expected networkPolicy number is 7")
 	assert.Equal(t, 4, npc.GetAddressGroupNum(), "expected addressGroup number is 4")
 	assert.Equal(t, 2, npc.GetAppliedToGroupNum(), "appliedToGroup number is 2")
 }

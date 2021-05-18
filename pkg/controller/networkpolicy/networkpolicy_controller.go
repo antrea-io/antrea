@@ -529,11 +529,11 @@ func toAntreaServices(npPorts []networkingv1.NetworkPolicyPort) ([]controlplane.
 		if npPort.Port != nil && npPort.Port.Type == intstr.String {
 			namedPortExists = true
 		}
-		antreaService := controlplane.Service{
+		antreaServices = append(antreaServices, controlplane.Service{
 			Protocol: toAntreaProtocol(npPort.Protocol),
 			Port:     npPort.Port,
-		}
-		antreaServices = append(antreaServices, antreaService)
+			EndPort:  npPort.EndPort,
+		})
 	}
 	return antreaServices, namedPortExists
 }
