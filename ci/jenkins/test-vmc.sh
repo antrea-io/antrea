@@ -309,7 +309,7 @@ function deliver_antrea {
     # be leveraged successfully
     chmod -R g-w build/images/ovs
     chmod -R g-w build/images/base
-    for i in `seq 2`
+    for i in `seq 3`
     do
         if [[ "$COVERAGE" == true ]]; then
             VERSION="$CLUSTER" DOCKER_REGISTRY="${DOCKER_REGISTRY}" ./hack/build-antrea-ubuntu-all.sh --pull --coverage && break
@@ -317,6 +317,10 @@ function deliver_antrea {
             VERSION="$CLUSTER" DOCKER_REGISTRY="${DOCKER_REGISTRY}" ./hack/build-antrea-ubuntu-all.sh --pull && break
         fi
     done
+    if [ $? -ne 0 ]; then
+        echoerr "Failed to build antrea images"
+        exit 1
+    fi
     if [[ "$COVERAGE" == true ]]; then
       VERSION="$CLUSTER" make flow-aggregator-ubuntu-coverage
     else
