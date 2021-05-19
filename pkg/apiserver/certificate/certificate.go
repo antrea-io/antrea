@@ -21,6 +21,7 @@ import (
 	"path"
 	"time"
 
+	apiextensionclientset "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apiserver/pkg/server/dynamiccertificates"
 	"k8s.io/apiserver/pkg/server/options"
@@ -66,7 +67,10 @@ func GetAntreaServerNames() []string {
 	return []string{antreaServerName}
 }
 
-func ApplyServerCert(selfSignedCert bool, client kubernetes.Interface, aggregatorClient clientset.Interface,
+func ApplyServerCert(selfSignedCert bool,
+	client kubernetes.Interface,
+	aggregatorClient clientset.Interface,
+	apiExtensionClient apiextensionclientset.Interface,
 	secureServing *options.SecureServingOptionsWithLoopback) (*CACertController, error) {
 	var err error
 	var caContentProvider dynamiccertificates.CAContentProvider
@@ -105,7 +109,7 @@ func ApplyServerCert(selfSignedCert bool, client kubernetes.Interface, aggregato
 		}
 	}
 
-	caCertController := newCACertController(caContentProvider, client, aggregatorClient)
+	caCertController := newCACertController(caContentProvider, client, aggregatorClient, apiExtensionClient)
 
 	if selfSignedCert {
 		go rotateSelfSignedCertificates(caCertController, secureServing, maxRotateDuration)

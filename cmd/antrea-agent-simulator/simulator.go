@@ -38,7 +38,7 @@ import (
 
 func run() error {
 	klog.Infof("Starting Antrea agent simulator (version %s)", version.GetFullVersion())
-	k8sClient, _, _, err := k8s.CreateClients(componentbaseconfig.ClientConnectionConfiguration{}, "")
+	k8sClient, _, _, _, err := k8s.CreateClients(componentbaseconfig.ClientConnectionConfiguration{}, "")
 	if err != nil {
 		return fmt.Errorf("error creating K8s clients: %v", err)
 	}
