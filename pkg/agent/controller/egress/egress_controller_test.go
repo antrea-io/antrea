@@ -40,7 +40,7 @@ import (
 	"antrea.io/antrea/pkg/client/clientset/versioned/fake"
 	fakeversioned "antrea.io/antrea/pkg/client/clientset/versioned/fake"
 	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions"
-	"antrea.io/antrea/pkg/k8s"
+	"antrea.io/antrea/pkg/util/k8s"
 )
 
 const (

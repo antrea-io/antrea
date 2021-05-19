@@ -38,6 +38,7 @@ import (
 	"antrea.io/antrea/pkg/agent/util"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 	utilip "antrea.io/antrea/pkg/util/ip"
+	"antrea.io/antrea/pkg/util/k8s"
 )
 
 const (
@@ -212,7 +213,7 @@ func (c *Controller) removeStaleTunnelPorts() error {
 				continue
 			}
 
-			peerNodeIP, err := GetNodeAddr(node)
+			peerNodeIP, err := k8s.GetNodeAddr(node)
 			if err != nil {
 				klog.Errorf("Failed to retrieve IP address of Node %s: %v", node.Name, err)
 				continue
@@ -456,7 +457,7 @@ func (c *Controller) addNodeRoute(nodeName string, node *corev1.Node) error {
 		podCIDRs = append(podCIDRs, peerPodCIDR)
 	}
 
-	peerNodeIP, err := GetNodeAddr(node)
+	peerNodeIP, err := k8s.GetNodeAddr(node)
 	if err != nil {
 		klog.Errorf("Failed to retrieve IP address of Node %s: %v", nodeName, err)
 		return nil
@@ -591,31 +592,6 @@ func ParseTunnelInterfaceConfig(
 	}
 	interfaceConfig.OVSPortConfig = portConfig
 	return interfaceConfig
-}
-
-// GetNodeAddr gets the available IP address of a Node. GetNodeAddr will first try to get the
-// NodeInternalIP, then try to get the NodeExternalIP.
-// Note: Although K8s supports dual-stack, there is only a single Internal address per Node because of issue (
-// kubernetes/kubernetes#91940 ). The Node might have multiple addresses after the issue is fixed, and one per address
-// family. And we should change the return type at that time.
-func GetNodeAddr(node *corev1.Node) (net.IP, error) {
-	addresses := make(map[corev1.NodeAddressType]string)
-	for _, addr := range node.Status.Addresses {
-		addresses[addr.Type] = addr.Address
-	}
-	var ipAddrStr string
-	if internalIP, ok := addresses[corev1.NodeInternalIP]; ok {
-		ipAddrStr = internalIP
-	} else if externalIP, ok := addresses[corev1.NodeExternalIP]; ok {
-		ipAddrStr = externalIP
-	} else {
-		return nil, fmt.Errorf("node %s has neither external ip nor internal ip", node.Name)
-	}
-	ipAddr := net.ParseIP(ipAddrStr)
-	if ipAddr == nil {
-		return nil, fmt.Errorf("<%v> is not a valid ip address", ipAddrStr)
-	}
-	return ipAddr, nil
 }
 
 func (c *Controller) IPInPodSubnets(ip net.IP) bool {

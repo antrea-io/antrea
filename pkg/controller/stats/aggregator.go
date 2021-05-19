@@ -30,7 +30,7 @@ import (
 	statsv1alpha1 "antrea.io/antrea/pkg/apis/stats/v1alpha1"
 	crdvinformers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha1"
 	"antrea.io/antrea/pkg/features"
-	"antrea.io/antrea/pkg/k8s"
+	"antrea.io/antrea/pkg/util/k8s"
 )
 
 const (
