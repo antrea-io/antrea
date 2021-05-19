@@ -16,7 +16,9 @@ package ipfix
 
 import (
 	"fmt"
+	"time"
 
+	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
 	ipfixintermediate "github.com/vmware/go-ipfix/pkg/intermediate"
 )
 
@@ -26,8 +28,9 @@ var _ IPFIXAggregationProcess = new(ipfixAggregationProcess)
 type IPFIXAggregationProcess interface {
 	Start()
 	Stop()
-	ForAllRecordsDo(callback ipfixintermediate.FlowKeyRecordMapCallBack) error
-	DeleteFlowKeyFromMapWithoutLock(flowKey ipfixintermediate.FlowKey)
+	ForAllExpiredFlowRecordsDo(callback ipfixintermediate.FlowKeyRecordMapCallBack) error
+	GetExpiryFromExpirePriorityQueue() time.Duration
+	ResetStatElementsInRecord(record ipfixentities.Record) error
 }
 
 type ipfixAggregationProcess struct {
@@ -53,10 +56,15 @@ func (ap *ipfixAggregationProcess) Stop() {
 	ap.AggregationProcess.Stop()
 }
 
-func (ap *ipfixAggregationProcess) ForAllRecordsDo(callback ipfixintermediate.FlowKeyRecordMapCallBack) error {
-	return ap.AggregationProcess.ForAllRecordsDo(callback)
+func (ap *ipfixAggregationProcess) ForAllExpiredFlowRecordsDo(callback ipfixintermediate.FlowKeyRecordMapCallBack) error {
+	err := ap.AggregationProcess.ForAllExpiredFlowRecordsDo(callback)
+	return err
 }
 
-func (ap *ipfixAggregationProcess) DeleteFlowKeyFromMapWithoutLock(flowKey ipfixintermediate.FlowKey) {
-	ap.AggregationProcess.DeleteFlowKeyFromMapWithoutLock(flowKey)
+func (ap *ipfixAggregationProcess) GetExpiryFromExpirePriorityQueue() time.Duration {
+	return ap.AggregationProcess.GetExpiryFromExpirePriorityQueue()
+}
+
+func (ap *ipfixAggregationProcess) ResetStatElementsInRecord(record ipfixentities.Record) error {
+	return ap.AggregationProcess.ResetStatElementsInRecord(record)
 }

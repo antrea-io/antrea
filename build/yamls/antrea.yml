@@ -3636,7 +3636,7 @@ data:
     # stream of packets, a flow record will be exported to the collector once the elapsed
     # time since the last export event is equal to the value of this timeout.
     # Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
-    #activeFlowExportTimeout: "60s"
+    #activeFlowExportTimeout: "30s"
 
     # Provide the idle flow export timeout, which is the timeout after which a flow
     # record is sent to the collector for idle flows. A flow is considered idle if no
@@ -3746,7 +3746,7 @@ metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-5ct9ktdt77
+  name: antrea-config-42cft4gc5f
   namespace: kube-system
 ---
 apiVersion: v1
@@ -3866,7 +3866,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-5ct9ktdt77
+          name: antrea-config-42cft4gc5f
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -4177,7 +4177,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-5ct9ktdt77
+          name: antrea-config-42cft4gc5f
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d

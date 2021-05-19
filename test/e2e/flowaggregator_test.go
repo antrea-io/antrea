@@ -247,10 +247,10 @@ func checkRecordsForFlows(t *testing.T, data *TestData, srcIP string, dstIP stri
 				// Check if record has both Pod name of source and destination pod.
 				if isIntraNode {
 					checkPodAndNodeData(t, record, "perftest-a", controlPlaneNodeName(), "perftest-b", controlPlaneNodeName())
-					checkFlowType(t, record, ipfixregistry.IntraNode)
+					checkFlowType(t, record, ipfixregistry.FlowTypeIntraNode)
 				} else {
 					checkPodAndNodeData(t, record, "perftest-a", controlPlaneNodeName(), "perftest-c", workerNodeName(1))
-					checkFlowType(t, record, ipfixregistry.InterNode)
+					checkFlowType(t, record, ipfixregistry.FlowTypeInterNode)
 				}
 
 				if checkService {
