@@ -540,9 +540,9 @@ func (exp *flowExporter) findFlowType(record flowexporter.FlowRecord) uint8 {
 	// TODO: support Pod-To-External flows in network policy only mode.
 	if exp.isNetworkPolicyOnly {
 		if record.Conn.SourcePodName == "" || record.Conn.DestinationPodName == "" {
-			return ipfixregistry.InterNode
+			return ipfixregistry.FlowTypeInterNode
 		}
-		return ipfixregistry.IntraNode
+		return ipfixregistry.FlowTypeIntraNode
 	}
 
 	if exp.nodeRouteController == nil {
@@ -552,11 +552,11 @@ func (exp *flowExporter) findFlowType(record flowexporter.FlowRecord) uint8 {
 	if exp.nodeRouteController.IPInPodSubnets(record.Conn.TupleOrig.SourceAddress) {
 		if record.Conn.Mark == openflow.ServiceCTMark || exp.nodeRouteController.IPInPodSubnets(record.Conn.TupleOrig.DestinationAddress) {
 			if record.Conn.SourcePodName == "" || record.Conn.DestinationPodName == "" {
-				return ipfixregistry.InterNode
+				return ipfixregistry.FlowTypeInterNode
 			}
-			return ipfixregistry.IntraNode
+			return ipfixregistry.FlowTypeIntraNode
 		} else {
-			return ipfixregistry.ToExternal
+			return ipfixregistry.FlowTypeToExternal
 		}
 	} else {
 		// We do not support External-To-Pod flows for now.

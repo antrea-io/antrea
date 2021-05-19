@@ -609,7 +609,11 @@ func (data *TestData) mutateFlowAggregatorConfigMap(ipfixCollector string) error
 	}
 	flowAggregatorConf, _ := configMap.Data[flowAggregatorConfName]
 	flowAggregatorConf = strings.Replace(flowAggregatorConf, "#externalFlowCollectorAddr: \"\"", fmt.Sprintf("externalFlowCollectorAddr: \"%s\"", ipfixCollector), 1)
-	flowAggregatorConf = strings.Replace(flowAggregatorConf, "#flowExportInterval: 60s", "flowExportInterval: 5s", 1)
+	// We expect at least two flow records at the external flow collector, so picked
+	// 4s and 6s for active and inactive flow timeouts, respectively, considering
+	// the fact that test flows run for 10s.
+	flowAggregatorConf = strings.Replace(flowAggregatorConf, "#activeFlowRecordTimeout: 60s", "activeFlowRecordTimeout: 4s", 1)
+	flowAggregatorConf = strings.Replace(flowAggregatorConf, "#inactiveFlowRecordTimeout: 90s", "inactiveFlowRecordTimeout: 6s", 1)
 	if testOptions.providerName == "kind" {
 		// In Kind cluster, there are issues with DNS name resolution on worker nodes.
 		// We will skip TLS testing for Kind cluster because the server certificate is generated with Flow aggregator's DNS name
