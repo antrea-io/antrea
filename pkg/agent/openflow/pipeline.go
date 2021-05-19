@@ -92,6 +92,27 @@ const (
 	ipv6LinkLocalAddr = "FE80::/10"
 )
 
+type ofAction int32
+
+const (
+	add ofAction = iota
+	mod
+	del
+)
+
+func (a ofAction) String() string {
+	switch a {
+	case add:
+		return "add"
+	case mod:
+		return "modify"
+	case del:
+		return "delete"
+	default:
+		return "unknown"
+	}
+}
+
 var (
 	// egressTables map records all IDs of tables related to
 	// egress rules.
@@ -332,6 +353,7 @@ type OFEntryOperations interface {
 	Modify(flow binding.Flow) error
 	Delete(flow binding.Flow) error
 	AddAll(flows []binding.Flow) error
+	ModifyAll(flows []binding.Flow) error
 	DeleteAll(flows []binding.Flow) error
 	AddOFEntries(ofEntries []binding.OFEntry) error
 	DeleteOFEntries(ofEntries []binding.OFEntry) error
@@ -397,105 +419,93 @@ func (c *client) GetTunnelVirtualMAC() net.HardwareAddr {
 	return globalVirtualMAC
 }
 
-func (c *client) Add(flow binding.Flow) error {
-	startTime := time.Now()
-	defer func() {
-		d := time.Since(startTime)
-		metrics.OVSFlowOpsLatency.WithLabelValues("add").Observe(float64(d.Milliseconds()))
-	}()
-	if err := c.bridge.AddFlowsInBundle([]binding.Flow{flow}, nil, nil); err != nil {
-		metrics.OVSFlowOpsErrorCount.WithLabelValues("add").Inc()
-		return err
-	}
-	metrics.OVSFlowOpsCount.WithLabelValues("add").Inc()
-	return nil
-}
-
-func (c *client) Modify(flow binding.Flow) error {
-	startTime := time.Now()
-	defer func() {
-		d := time.Since(startTime)
-		metrics.OVSFlowOpsLatency.WithLabelValues("modify").Observe(float64(d.Milliseconds()))
-	}()
-	if err := c.bridge.AddFlowsInBundle(nil, []binding.Flow{flow}, nil); err != nil {
-		metrics.OVSFlowOpsErrorCount.WithLabelValues("modify").Inc()
-		return err
-	}
-	metrics.OVSFlowOpsCount.WithLabelValues("modify").Inc()
-	return nil
-}
-
-func (c *client) Delete(flow binding.Flow) error {
-	startTime := time.Now()
-	defer func() {
-		d := time.Since(startTime)
-		metrics.OVSFlowOpsLatency.WithLabelValues("delete").Observe(float64(d.Milliseconds()))
-	}()
-	if err := c.bridge.AddFlowsInBundle(nil, nil, []binding.Flow{flow}); err != nil {
-		metrics.OVSFlowOpsErrorCount.WithLabelValues("delete").Inc()
-		return err
-	}
-	metrics.OVSFlowOpsCount.WithLabelValues("delete").Inc()
-	return nil
-}
-
-func (c *client) AddAll(flows []binding.Flow) error {
+func (c *client) changeAll(flows []binding.Flow, action ofAction) error {
 	if len(flows) == 0 {
 		return nil
 	}
+	var adds, mods, dels []binding.Flow
+	if action == add {
+		adds = flows
+	} else if action == mod {
+		mods = flows
+	} else if action == del {
+		dels = flows
+	} else {
+		return fmt.Errorf("OF Action not exists: %s", action)
+	}
+
 	startTime := time.Now()
 	defer func() {
 		d := time.Since(startTime)
-		metrics.OVSFlowOpsLatency.WithLabelValues("add").Observe(float64(d.Milliseconds()))
+		metrics.OVSFlowOpsLatency.WithLabelValues(action.String()).Observe(float64(d.Milliseconds()))
 	}()
-	if err := c.bridge.AddFlowsInBundle(flows, nil, nil); err != nil {
-		metrics.OVSFlowOpsErrorCount.WithLabelValues("add").Inc()
+
+	if err := c.bridge.AddFlowsInBundle(adds, mods, dels); err != nil {
+		metrics.OVSFlowOpsErrorCount.WithLabelValues(action.String()).Inc()
 		return err
 	}
-	metrics.OVSFlowOpsCount.WithLabelValues("add").Inc()
+	metrics.OVSFlowOpsCount.WithLabelValues(action.String()).Inc()
 	return nil
 }
 
+func (c *client) Add(flow binding.Flow) error {
+	return c.AddAll([]binding.Flow{flow})
+}
+
+func (c *client) Modify(flow binding.Flow) error {
+	return c.ModifyAll([]binding.Flow{flow})
+}
+
+func (c *client) Delete(flow binding.Flow) error {
+	return c.DeleteAll([]binding.Flow{flow})
+}
+
+func (c *client) AddAll(flows []binding.Flow) error {
+	return c.changeAll(flows, add)
+}
+
+func (c *client) ModifyAll(flows []binding.Flow) error {
+	return c.changeAll(flows, mod)
+}
+
 func (c *client) DeleteAll(flows []binding.Flow) error {
+	return c.changeAll(flows, del)
+}
+
+func (c *client) changeOFEntries(ofEntries []binding.OFEntry, action ofAction) error {
+	if len(ofEntries) == 0 {
+		return nil
+	}
+	var adds, mods, dels []binding.OFEntry
+	if action == add {
+		adds = ofEntries
+	} else if action == mod {
+		mods = ofEntries
+	} else if action == del {
+		dels = ofEntries
+	} else {
+		return fmt.Errorf("OF Entries Action not exists: %s", action)
+	}
+
 	startTime := time.Now()
 	defer func() {
 		d := time.Since(startTime)
-		metrics.OVSFlowOpsLatency.WithLabelValues("delete").Observe(float64(d.Milliseconds()))
+		metrics.OVSFlowOpsLatency.WithLabelValues(action.String()).Observe(float64(d.Milliseconds()))
 	}()
-	if err := c.bridge.AddFlowsInBundle(nil, nil, flows); err != nil {
-		metrics.OVSFlowOpsErrorCount.WithLabelValues("delete").Inc()
+	if err := c.bridge.AddOFEntriesInBundle(adds, mods, dels); err != nil {
+		metrics.OVSFlowOpsErrorCount.WithLabelValues(action.String()).Inc()
 		return err
 	}
-	metrics.OVSFlowOpsCount.WithLabelValues("delete").Inc()
+	metrics.OVSFlowOpsCount.WithLabelValues(action.String()).Inc()
 	return nil
 }
 
 func (c *client) AddOFEntries(ofEntries []binding.OFEntry) error {
-	startTime := time.Now()
-	defer func() {
-		d := time.Since(startTime)
-		metrics.OVSFlowOpsLatency.WithLabelValues("add").Observe(float64(d.Milliseconds()))
-	}()
-	if err := c.bridge.AddOFEntriesInBundle(ofEntries, nil, nil); err != nil {
-		metrics.OVSFlowOpsErrorCount.WithLabelValues("add").Inc()
-		return err
-	}
-	metrics.OVSFlowOpsCount.WithLabelValues("add").Inc()
-	return nil
+	return c.changeOFEntries(ofEntries, add)
 }
 
 func (c *client) DeleteOFEntries(ofEntries []binding.OFEntry) error {
-	startTime := time.Now()
-	defer func() {
-		d := time.Since(startTime)
-		metrics.OVSFlowOpsLatency.WithLabelValues("delete").Observe(float64(d.Milliseconds()))
-	}()
-	if err := c.bridge.AddOFEntriesInBundle(nil, nil, ofEntries); err != nil {
-		metrics.OVSFlowOpsErrorCount.WithLabelValues("delete").Inc()
-		return err
-	}
-	metrics.OVSFlowOpsCount.WithLabelValues("delete").Inc()
-	return nil
+	return c.changeOFEntries(ofEntries, del)
 }
 
 // defaultFlows generates the default flows of all tables.
