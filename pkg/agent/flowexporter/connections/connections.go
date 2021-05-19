@@ -174,6 +174,9 @@ func (cs *connectionStore) addOrUpdateConn(conn *flowexporter.Connection) {
 		// IDs stored in the connection label.
 		if len(conn.Labels) != 0 {
 			klog.V(4).Infof("connection label: %x; label masks: %x", conn.Labels, conn.LabelsMask)
+			// We always expect labels from conntrack dumper to be added in little-endian format right now
+			// In kernel datapath, the labels uses the "native" endianness for the system, which are little-endian
+			// on most of the modern CPUs based on x86 architecture like Intel, AMD, etc.
 			ingressOfID := binary.LittleEndian.Uint32(conn.Labels[:4])
 			egressOfID := binary.LittleEndian.Uint32(conn.Labels[4:8])
 			if ingressOfID != 0 {
