@@ -766,7 +766,7 @@ func testLegacyACNPNoEffectOnOtherProtocols(t *testing.T) {
 // testACNPAppliedToDenyXBtoCGWithYA tests traffic from X/B to ClusterGroup Y/A on named port 81 is dropped.
 func testLegacyACNPAppliedToDenyXBtoCGWithYA(t *testing.T) {
 	cgName := "cg-pods-ya"
-	cgBuilder := &ClusterGroupSpecBuilder{}
+	cgBuilder := &ClusterGroupV1Alpha2SpecBuilder{}
 	cgBuilder = cgBuilder.SetName(cgName)
 	cgBuilder = cgBuilder.SetNamespaceSelector(map[string]string{"ns": "y"}, nil)
 	cgBuilder = cgBuilder.SetPodSelector(map[string]string{"pod": "a"}, nil)
@@ -803,7 +803,7 @@ func testLegacyACNPAppliedToDenyXBtoCGWithYA(t *testing.T) {
 // testACNPIngressRuleDenyCGWithXBtoYA tests traffic from ClusterGroup with X/B to Y/A on named port 81 is dropped.
 func testLegacyACNPIngressRuleDenyCGWithXBtoYA(t *testing.T) {
 	cgName := "cg-pods-xb"
-	cgBuilder := &ClusterGroupSpecBuilder{}
+	cgBuilder := &ClusterGroupV1Alpha2SpecBuilder{}
 	cgBuilder = cgBuilder.SetName(cgName)
 	cgBuilder = cgBuilder.SetNamespaceSelector(map[string]string{"ns": "x"}, nil)
 	cgBuilder = cgBuilder.SetPodSelector(map[string]string{"pod": "b"}, nil)
@@ -840,7 +840,7 @@ func testLegacyACNPIngressRuleDenyCGWithXBtoYA(t *testing.T) {
 // testACNPAppliedToRuleCGWithPodsAToNsZ tests that a ACNP is able to drop egress traffic from CG with pods labelled A namespace Z.
 func testLegacyACNPAppliedToRuleCGWithPodsAToNsZ(t *testing.T) {
 	cgName := "cg-pods-a"
-	cgBuilder := &ClusterGroupSpecBuilder{}
+	cgBuilder := &ClusterGroupV1Alpha2SpecBuilder{}
 	cgBuilder = cgBuilder.SetName(cgName)
 	cgBuilder = cgBuilder.SetPodSelector(map[string]string{"pod": "a"}, nil)
 	builder := &ClusterNetworkPolicySpecBuilder{}
@@ -880,7 +880,7 @@ func testLegacyACNPAppliedToRuleCGWithPodsAToNsZ(t *testing.T) {
 // testACNPEgressRulePodsAToCGWithNsZ tests that a ACNP is able to drop egress traffic from pods labelled A to a CG with namespace Z.
 func testLegacyACNPEgressRulePodsAToCGWithNsZ(t *testing.T) {
 	cgName := "cg-ns-z"
-	cgBuilder := &ClusterGroupSpecBuilder{}
+	cgBuilder := &ClusterGroupV1Alpha2SpecBuilder{}
 	cgBuilder = cgBuilder.SetName(cgName)
 	cgBuilder = cgBuilder.SetNamespaceSelector(map[string]string{"ns": "z"}, nil)
 	builder := &ClusterNetworkPolicySpecBuilder{}
@@ -920,11 +920,11 @@ func testLegacyACNPEgressRulePodsAToCGWithNsZ(t *testing.T) {
 
 func testLegacyACNPClusterGroupUpdateAppliedTo(t *testing.T) {
 	cgName := "cg-pods-a-then-c"
-	cgBuilder := &ClusterGroupSpecBuilder{}
+	cgBuilder := &ClusterGroupV1Alpha2SpecBuilder{}
 	cgBuilder = cgBuilder.SetName(cgName)
 	cgBuilder = cgBuilder.SetPodSelector(map[string]string{"pod": "a"}, nil)
 	// Update CG Pod selector to group Pods C
-	updatedCgBuilder := &ClusterGroupSpecBuilder{}
+	updatedCgBuilder := &ClusterGroupV1Alpha2SpecBuilder{}
 	updatedCgBuilder = updatedCgBuilder.SetName(cgName)
 	updatedCgBuilder = updatedCgBuilder.SetPodSelector(map[string]string{"pod": "c"}, nil)
 	builder := &ClusterNetworkPolicySpecBuilder{}
@@ -983,11 +983,11 @@ func testLegacyACNPClusterGroupUpdateAppliedTo(t *testing.T) {
 
 func testLegacyACNPClusterGroupUpdate(t *testing.T) {
 	cgName := "cg-ns-z-then-y"
-	cgBuilder := &ClusterGroupSpecBuilder{}
+	cgBuilder := &ClusterGroupV1Alpha2SpecBuilder{}
 	cgBuilder = cgBuilder.SetName(cgName)
 	cgBuilder = cgBuilder.SetNamespaceSelector(map[string]string{"ns": "z"}, nil)
 	// Update CG NS selector to group Pods from Namespace Y
-	updatedCgBuilder := &ClusterGroupSpecBuilder{}
+	updatedCgBuilder := &ClusterGroupV1Alpha2SpecBuilder{}
 	updatedCgBuilder = updatedCgBuilder.SetName(cgName)
 	updatedCgBuilder = updatedCgBuilder.SetNamespaceSelector(map[string]string{"ns": "y"}, nil)
 	builder := &ClusterNetworkPolicySpecBuilder{}
@@ -1046,7 +1046,7 @@ func testLegacyACNPClusterGroupUpdate(t *testing.T) {
 
 func testLegacyACNPClusterGroupAppliedToPodAdd(t *testing.T, data *TestData) {
 	cgName := "cg-pod-custom-pod-zj"
-	cgBuilder := &ClusterGroupSpecBuilder{}
+	cgBuilder := &ClusterGroupV1Alpha2SpecBuilder{}
 	cgBuilder = cgBuilder.SetName(cgName)
 	cgBuilder = cgBuilder.SetNamespaceSelector(map[string]string{"ns": "z"}, nil)
 	cgBuilder = cgBuilder.SetPodSelector(map[string]string{"pod": "j"}, nil)
@@ -1090,7 +1090,7 @@ func testLegacyACNPClusterGroupAppliedToPodAdd(t *testing.T, data *TestData) {
 
 func testLegacyACNPClusterGroupRefRulePodAdd(t *testing.T, data *TestData) {
 	cgName := "cg-pod-custom-pod-zk"
-	cgBuilder := &ClusterGroupSpecBuilder{}
+	cgBuilder := &ClusterGroupV1Alpha2SpecBuilder{}
 	cgBuilder = cgBuilder.SetName(cgName)
 	cgBuilder = cgBuilder.SetNamespaceSelector(map[string]string{"ns": "z"}, nil)
 	cgBuilder = cgBuilder.SetPodSelector(map[string]string{"pod": "k"}, nil)
@@ -1823,9 +1823,9 @@ func testLegacyACNPClusterGroupServiceRefCreateAndUpdate(t *testing.T, data *Tes
 	svc2 := k8sUtils.BuildService("svc2", "y", 80, 80, map[string]string{"app": "b"}, nil)
 
 	cg1Name, cg2Name := "cg-svc1", "cg-svc2"
-	cgBuilder1 := &ClusterGroupSpecBuilder{}
+	cgBuilder1 := &ClusterGroupV1Alpha2SpecBuilder{}
 	cgBuilder1 = cgBuilder1.SetName(cg1Name).SetServiceReference("x", "svc1")
-	cgBuilder2 := &ClusterGroupSpecBuilder{}
+	cgBuilder2 := &ClusterGroupV1Alpha2SpecBuilder{}
 	cgBuilder2 = cgBuilder2.SetName(cg2Name).SetServiceReference("y", "svc2")
 
 	builder := &ClusterNetworkPolicySpecBuilder{}
@@ -1908,14 +1908,14 @@ func testLegacyACNPClusterGroupServiceRefCreateAndUpdate(t *testing.T, data *Tes
 func testLegacyACNPNestedClusterGroupCreateAndUpdate(t *testing.T, data *TestData) {
 	svc1 := k8sUtils.BuildService("svc1", "x", 80, 80, map[string]string{"app": "a"}, nil)
 	cg1Name, cg2Name := "cg-svc-x-a", "cg-select-y-b"
-	cgBuilder1 := &ClusterGroupSpecBuilder{}
+	cgBuilder1 := &ClusterGroupV1Alpha2SpecBuilder{}
 	cgBuilder1 = cgBuilder1.SetName(cg1Name).SetServiceReference("x", "svc1")
-	cgBuilder2 := &ClusterGroupSpecBuilder{}
+	cgBuilder2 := &ClusterGroupV1Alpha2SpecBuilder{}
 	cgBuilder2 = cgBuilder2.SetName(cg2Name).
 		SetNamespaceSelector(map[string]string{"ns": "y"}, nil).
 		SetPodSelector(map[string]string{"pod": "b"}, nil)
 	cgNestedName := "cg-nested"
-	cgBuilderNested := &ClusterGroupSpecBuilder{}
+	cgBuilderNested := &ClusterGroupV1Alpha2SpecBuilder{}
 	cgBuilderNested = cgBuilderNested.SetName(cgNestedName).SetChildGroups([]string{cg1Name})
 
 	builder := &ClusterNetworkPolicySpecBuilder{}

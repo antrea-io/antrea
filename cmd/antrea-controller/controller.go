@@ -22,6 +22,7 @@ import (
 	"path"
 	"time"
 
+	apiextensionclientset "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	genericopenapi "k8s.io/apiserver/pkg/endpoints/openapi"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
@@ -88,6 +89,7 @@ var allowedPaths = []string{
 	"/validate/acnp",
 	"/validate/anp",
 	"/validate/clustergroup",
+	"/convert/clustergroup",
 }
 
 // run starts Antrea Controller with the given options and waits for termination signal.
@@ -96,7 +98,7 @@ func run(o *Options) error {
 	// Create K8s Clientset, Aggregator Clientset, CRD Clientset and SharedInformerFactory for the given config.
 	// Aggregator Clientset is used to update the CABundle of the APIServices backed by antrea-controller so that
 	// the aggregator can verify its serving certificate.
-	client, aggregatorClient, crdClient, err := k8s.CreateClients(o.config.ClientConnection, "")
+	client, aggregatorClient, crdClient, apiExtensionClient, err := k8s.CreateClients(o.config.ClientConnection, "")
 	if err != nil {
 		return fmt.Errorf("error creating K8s clients: %v", err)
 	}
@@ -112,7 +114,8 @@ func run(o *Options) error {
 	anpInformer := crdInformerFactory.Crd().V1alpha1().NetworkPolicies()
 	tierInformer := crdInformerFactory.Crd().V1alpha1().Tiers()
 	tfInformer := crdInformerFactory.Crd().V1alpha1().Traceflows()
-	cgInformer := crdInformerFactory.Crd().V1alpha2().ClusterGroups()
+	cgv1a2Informer := crdInformerFactory.Crd().V1alpha2().ClusterGroups()
+	cgInformer := crdInformerFactory.Crd().V1alpha3().ClusterGroups()
 	egressInformer := crdInformerFactory.Crd().V1alpha2().Egresses()
 
 	clusterIdentityAllocator := clusteridentity.NewClusterIdentityAllocator(
@@ -195,11 +198,11 @@ func run(o *Options) error {
 			tierMirroringHandler,
 			"Tier")
 
-		cgMirroringHandler := crdhandler.NewClusterGroupHandler(cgInformer.Lister(),
+		cgMirroringHandler := crdhandler.NewClusterGroupHandler(cgv1a2Informer.Lister(),
 			legacyCGInformer.Lister(),
 			crdClient.CrdV1alpha2().ClusterGroups(),
 			legacyCRDClient.CoreV1alpha2().ClusterGroups())
-		cgMirroringController = crdmirroring.NewController(cgInformer.Informer(),
+		cgMirroringController = crdmirroring.NewController(cgv1a2Informer.Informer(),
 			legacyCGInformer.Informer(),
 			cgMirroringHandler,
 			"ClusterGroup")
@@ -257,6 +260,7 @@ func run(o *Options) error {
 	apiServerConfig, err := createAPIServerConfig(o.config.ClientConnection.Kubeconfig,
 		client,
 		aggregatorClient,
+		apiExtensionClient,
 		o.config.SelfSignedCert,
 		o.config.APIPort,
 		addressGroupStore,
@@ -346,6 +350,7 @@ func run(o *Options) error {
 func createAPIServerConfig(kubeconfig string,
 	client clientset.Interface,
 	aggregatorClient aggregatorclientset.Interface,
+	apiExtensionClient apiextensionclientset.Interface,
 	selfSignedCert bool,
 	bindPort int,
 	addressGroupStore storage.Interface,
@@ -365,7 +370,7 @@ func createAPIServerConfig(kubeconfig string,
 	authentication := genericoptions.NewDelegatingAuthenticationOptions()
 	authorization := genericoptions.NewDelegatingAuthorizationOptions().WithAlwaysAllowPaths(allowedPaths...)
 
-	caCertController, err := certificate.ApplyServerCert(selfSignedCert, client, aggregatorClient, secureServing)
+	caCertController, err := certificate.ApplyServerCert(selfSignedCert, client, aggregatorClient, apiExtensionClient, secureServing)
 	if err != nil {
 		return nil, fmt.Errorf("error applying server cert: %v", err)
 	}

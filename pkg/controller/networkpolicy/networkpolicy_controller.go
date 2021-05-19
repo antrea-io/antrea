@@ -52,9 +52,9 @@ import (
 	"antrea.io/antrea/pkg/apiserver/storage"
 	"antrea.io/antrea/pkg/client/clientset/versioned"
 	secinformers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha1"
-	corev1a2informers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha2"
+	crdv1a3informers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha3"
 	seclisters "antrea.io/antrea/pkg/client/listers/crd/v1alpha1"
-	corev1a2listers "antrea.io/antrea/pkg/client/listers/crd/v1alpha2"
+	crdv1a3listers "antrea.io/antrea/pkg/client/listers/crd/v1alpha3"
 	"antrea.io/antrea/pkg/controller/grouping"
 	"antrea.io/antrea/pkg/controller/metrics"
 	"antrea.io/antrea/pkg/controller/networkpolicy/store"
@@ -161,10 +161,10 @@ type NetworkPolicyController struct {
 	// tierListerSynced is a function which returns true if the Tiers shared informer has been synced at least once.
 	tierListerSynced cache.InformerSynced
 
-	cgInformer corev1a2informers.ClusterGroupInformer
+	cgInformer crdv1a3informers.ClusterGroupInformer
 	// cgLister is able to list/get ClusterGroups and is populated by the shared informer passed to
 	// NewClusterGroupController.
-	cgLister corev1a2listers.ClusterGroupLister
+	cgLister crdv1a3listers.ClusterGroupLister
 	// cgListerSynced is a function which returns true if the ClusterGroup shared informer has been synced at least
 	// once.
 	cgListerSynced cache.InformerSynced
@@ -218,7 +218,7 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 	cnpInformer secinformers.ClusterNetworkPolicyInformer,
 	anpInformer secinformers.NetworkPolicyInformer,
 	tierInformer secinformers.TierInformer,
-	cgInformer corev1a2informers.ClusterGroupInformer,
+	cgInformer crdv1a3informers.ClusterGroupInformer,
 	addressGroupStore storage.Interface,
 	appliedToGroupStore storage.Interface,
 	internalNetworkPolicyStore storage.Interface,

@@ -22,7 +22,7 @@ import (
 
 	"antrea.io/antrea/pkg/apis/controlplane"
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
-	crdv1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
+	crdv1alpha3 "antrea.io/antrea/pkg/apis/crd/v1alpha3"
 	antreatypes "antrea.io/antrea/pkg/controller/types"
 )
 
@@ -42,9 +42,9 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
 	selectorB := metav1.LabelSelector{MatchLabels: map[string]string{"foo2": "bar2"}}
 	selectorC := metav1.LabelSelector{MatchLabels: map[string]string{"foo3": "bar3"}}
-	cgA := crdv1alpha2.ClusterGroup{
+	cgA := crdv1alpha3.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{Name: "cgA", UID: "uidA"},
-		Spec: crdv1alpha2.GroupSpec{
+		Spec: crdv1alpha3.GroupSpec{
 			NamespaceSelector: &selectorA,
 		},
 	}
@@ -1249,25 +1249,27 @@ func TestProcessRefCG(t *testing.T) {
 	cidr := "10.0.0.0/24"
 	cidrIPNet, _ := cidrStrToIPNet(cidr)
 	// cgA with selector present in cache
-	cgA := crdv1alpha2.ClusterGroup{
+	cgA := crdv1alpha3.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{Name: "cgA", UID: "uidA"},
-		Spec: crdv1alpha2.GroupSpec{
+		Spec: crdv1alpha3.GroupSpec{
 			NamespaceSelector: &selectorA,
 		},
 	}
 	// cgB with IPBlock present in cache
-	cgB := crdv1alpha2.ClusterGroup{
+	cgB := crdv1alpha3.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{Name: "cgB", UID: "uidB"},
-		Spec: crdv1alpha2.GroupSpec{
-			IPBlock: &crdv1alpha1.IPBlock{
-				CIDR: cidr,
+		Spec: crdv1alpha3.GroupSpec{
+			IPBlocks: []crdv1alpha1.IPBlock{
+				{
+					CIDR: cidr,
+				},
 			},
 		},
 	}
 	// cgC not found in cache
-	cgC := crdv1alpha2.ClusterGroup{
+	cgC := crdv1alpha3.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{Name: "cgC", UID: "uidC"},
-		Spec: crdv1alpha2.GroupSpec{
+		Spec: crdv1alpha3.GroupSpec{
 			NamespaceSelector: &selectorA,
 		},
 	}
@@ -1325,25 +1327,27 @@ func TestProcessAppliedToGroupsForCGs(t *testing.T) {
 	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
 	cidr := "10.0.0.0/24"
 	// cgA with selector present in cache
-	cgA := crdv1alpha2.ClusterGroup{
+	cgA := crdv1alpha3.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{Name: "cgA", UID: "uidA"},
-		Spec: crdv1alpha2.GroupSpec{
+		Spec: crdv1alpha3.GroupSpec{
 			NamespaceSelector: &selectorA,
 		},
 	}
 	// cgB with IPBlock present in cache
-	cgB := crdv1alpha2.ClusterGroup{
+	cgB := crdv1alpha3.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{Name: "cgB", UID: "uidB"},
-		Spec: crdv1alpha2.GroupSpec{
-			IPBlock: &crdv1alpha1.IPBlock{
-				CIDR: cidr,
+		Spec: crdv1alpha3.GroupSpec{
+			IPBlocks: []crdv1alpha1.IPBlock{
+				{
+					CIDR: cidr,
+				},
 			},
 		},
 	}
 	// cgC not found in cache
-	cgC := crdv1alpha2.ClusterGroup{
+	cgC := crdv1alpha3.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{Name: "cgC", UID: "uidC"},
-		Spec: crdv1alpha2.GroupSpec{
+		Spec: crdv1alpha3.GroupSpec{
 			NamespaceSelector: &selectorA,
 		},
 	}

@@ -1,6 +1,4 @@
-// +build !windows
-
-// Copyright 2020 Antrea Authors
+// Copyright 2021 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,13 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package ovsctl
+// +k8s:openapi-gen=true
+// +k8s:deepcopy-gen=package
+// +groupName=crd.antrea.io
 
-import "os/exec"
-
-// File path of the ovs-vswitchd control UNIX domain socket.
-const ovsVSwitchdUDS = "/var/run/openvswitch/ovs-vswitchd.*.ctl"
-
-func getOVSCommand(cmdStr string) *exec.Cmd {
-	return exec.Command("/bin/sh", "-c", cmdStr) // lgtm[go/command-injection]
-}
+package v1alpha3 // import "antrea.io/antrea/pkg/apis/crd/v1alpha3"
