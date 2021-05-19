@@ -118,10 +118,10 @@ func (o *Options) validate(args []string) error {
 		}
 		o.aggregatorTransportProtocol = transportProtocol
 	}
-	if o.config.flowAggregatorAddress == "" {
+	if o.config.FlowAggregatorAddress == "" {
 		o.flowAggregatorAddress = defaultFlowAggregatorAddress
 	} else {
-		o.flowAggregatorAddress = o.config.flowAggregatorAddress
+		o.flowAggregatorAddress = o.config.FlowAggregatorAddress
 	}
 	return nil
 }

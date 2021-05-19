@@ -79,25 +79,24 @@ var (
 )
 
 type flowExporter struct {
-	connStore                 connections.ConnectionStore
-	flowRecords               *flowrecords.FlowRecords
-	process                   ipfix.IPFIXExportingProcess
-	elementsListv4            []*ipfixentities.InfoElementWithValue
-	elementsListv6            []*ipfixentities.InfoElementWithValue
-	ipfixSet                  ipfixentities.Set
-	numDataSetsSent           uint64 // used for unit tests.
-	templateIDv4              uint16
-	templateIDv6              uint16
-	registry                  ipfix.IPFIXRegistry
-	v4Enabled                 bool
-	v6Enabled                 bool
-	exporterInput             exporter.ExporterInput
-	activeFlowTimeout         time.Duration
-	idleFlowTimeout           time.Duration
-	enableTLSToFlowAggregator bool
-	k8sClient                 kubernetes.Interface
-	nodeRouteController       *noderoute.Controller
-	isNetworkPolicyOnly       bool
+	connStore           connections.ConnectionStore
+	flowRecords         *flowrecords.FlowRecords
+	process             ipfix.IPFIXExportingProcess
+	elementsListv4      []*ipfixentities.InfoElementWithValue
+	elementsListv6      []*ipfixentities.InfoElementWithValue
+	ipfixSet            ipfixentities.Set
+	numDataSetsSent     uint64 // used for unit tests.
+	templateIDv4        uint16
+	templateIDv6        uint16
+	registry            ipfix.IPFIXRegistry
+	v4Enabled           bool
+	v6Enabled           bool
+	exporterInput       exporter.ExporterInput
+	activeFlowTimeout   time.Duration
+	idleFlowTimeout     time.Duration
+	k8sClient           kubernetes.Interface
+	nodeRouteController *noderoute.Controller
+	isNetworkPolicyOnly bool
 }
 
 func genObservationID() (uint32, error) {
@@ -119,7 +118,13 @@ func prepareExporterInputArgs(collectorAddr, collectorProto string) (exporter.Ex
 		return expInput, err
 	}
 	expInput.CollectorAddress = collectorAddr
-	expInput.CollectorProtocol = collectorProto
+	if collectorProto == "tls" {
+		expInput.IsEncrypted = true
+		expInput.CollectorProtocol = "tcp"
+	} else {
+		expInput.IsEncrypted = false
+		expInput.CollectorProtocol = collectorProto
+	}
 	expInput.PathMTU = 0
 
 	return expInput, nil
@@ -127,7 +132,7 @@ func prepareExporterInputArgs(collectorAddr, collectorProto string) (exporter.Ex
 
 func NewFlowExporter(connStore connections.ConnectionStore, records *flowrecords.FlowRecords,
 	collectorAddr string, collectorProto string, activeFlowTimeout time.Duration, idleFlowTimeout time.Duration,
-	enableTLSToFlowAggregator bool, v4Enabled bool, v6Enabled bool, k8sClient kubernetes.Interface,
+	v4Enabled bool, v6Enabled bool, k8sClient kubernetes.Interface,
 	nodeRouteController *noderoute.Controller, isNetworkPolicyOnly bool) (*flowExporter, error) {
 	// Initialize IPFIX registry
 	registry := ipfix.NewIPFIXRegistry()
@@ -140,19 +145,18 @@ func NewFlowExporter(connStore connections.ConnectionStore, records *flowrecords
 	}
 
 	return &flowExporter{
-		connStore:                 connStore,
-		flowRecords:               records,
-		registry:                  registry,
-		v4Enabled:                 v4Enabled,
-		v6Enabled:                 v6Enabled,
-		exporterInput:             expInput,
-		activeFlowTimeout:         activeFlowTimeout,
-		idleFlowTimeout:           idleFlowTimeout,
-		ipfixSet:                  ipfixentities.NewSet(false),
-		enableTLSToFlowAggregator: enableTLSToFlowAggregator,
-		k8sClient:                 k8sClient,
-		nodeRouteController:       nodeRouteController,
-		isNetworkPolicyOnly:       isNetworkPolicyOnly,
+		connStore:           connStore,
+		flowRecords:         records,
+		registry:            registry,
+		v4Enabled:           v4Enabled,
+		v6Enabled:           v6Enabled,
+		exporterInput:       expInput,
+		activeFlowTimeout:   activeFlowTimeout,
+		idleFlowTimeout:     idleFlowTimeout,
+		ipfixSet:            ipfixentities.NewSet(false),
+		k8sClient:           k8sClient,
+		nodeRouteController: nodeRouteController,
+		isNetworkPolicyOnly: isNetworkPolicyOnly,
 	}, nil
 }
 
@@ -194,7 +198,7 @@ func (exp *flowExporter) Export() {
 
 func (exp *flowExporter) initFlowExporter() error {
 	var err error
-	if exp.enableTLSToFlowAggregator {
+	if exp.exporterInput.IsEncrypted {
 		// if CA certificate, client certificate and key do not exist during initialization,
 		// it will retry to obtain the credentials in next export cycle
 		exp.exporterInput.CACert, err = getCACert(exp.k8sClient)
@@ -207,17 +211,14 @@ func (exp *flowExporter) initFlowExporter() error {
 		}
 		// TLS transport does not need any tempRefTimeout, so sending 0.
 		exp.exporterInput.TempRefTimeout = 0
-		exp.exporterInput.IsEncrypted = true
 	} else if exp.exporterInput.CollectorProtocol == "tcp" {
 		// TCP transport does not need any tempRefTimeout, so sending 0.
 		// tempRefTimeout is the template refresh timeout, which specifies how often
 		// the exporting process should send the template again.
 		exp.exporterInput.TempRefTimeout = 0
-		exp.exporterInput.IsEncrypted = false
 	} else {
 		// For UDP transport, hardcoding tempRefTimeout value as 1800s.
 		exp.exporterInput.TempRefTimeout = 1800
-		exp.exporterInput.IsEncrypted = false
 	}
 	expProcess, err := ipfix.NewIPFIXExportingProcess(exp.exporterInput)
 	if err != nil {

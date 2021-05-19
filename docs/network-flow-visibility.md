@@ -85,9 +85,10 @@ parameters have to be set in the Antrea Agent ConfigMap:
     # to the Antrea Flow Aggregator Service. If IP, it can be either IPv4 or IPv6.
     # However, IPv6 address should be wrapped with [].
     # If PORT is empty, we default to 4739, the standard IPFIX port.
-    # If no PROTO is given, we consider "tcp" as default. We support "tcp" and "udp"
-    # L4 transport protocols.
-    #flowCollectorAddr: "flow-aggregator.flow-aggregator.svc:4739:tcp"
+    # If no PROTO is given, we consider "tls" as default. We support "tls", "tcp" and
+    # "udp" protocols. "tls" is used for securing communication between flow exporter and
+    # flow aggregator.
+    #flowCollectorAddr: "flow-aggregator.flow-aggregator.svc:4739:tls"
     
     # Provide flow poll interval as a duration string. This determines how often the
     # flow exporter dumps connections from the conntrack module. Flow poll interval
@@ -107,12 +108,9 @@ parameters have to be set in the Antrea Agent ConfigMap:
     # packet matching this flow has been observed since the last export event.
     # Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
     #idleFlowExportTimeout: "15s"
-
-    # Enable TLS communication from flow exporter to flow aggregator.
-    #enableTLSToFlowAggregator: true
 ```
 
-Please note that the default value for `flowCollectorAddr` is `"flow-aggregator.flow-aggregator.svc:4739:tcp"`,
+Please note that the default value for `flowCollectorAddr` is `"flow-aggregator.flow-aggregator.svc:4739:tls"`,
 which uses the DNS name of the Flow Aggregator Service, if the Service is deployed
 with the Name and Namespace set to `flow-aggregator`. For Antrea Agent running on
 a Windows node, the user is required to change the default value of `HOST` in `flowCollectorAddr`
@@ -279,11 +277,10 @@ flow-aggregator.conf: |
 
 Please note that the default values for `flowExportInterval`, `aggregatorTransportProtocol`,
 and `flowAggregatorAddress` parameters are set to `60s`, `tls` and `flow-aggregator.flow-aggregator.svc`,
-respectively. Please make sure that `aggregatorTransportProtocol` is set to `tls` and
-`enableTLSToFlowAggregator` in `agent-agent.conf` is set to true to guarantee secure communication
-works properly. `enableTLSToFlowAggregator` and `aggregatorTransportProtocol` must always match,
-so TLS must either be enabled for both sides or disabled for both sides. Please modify the parameters
-as per your requirements.
+respectively. Please make sure that `aggregatorTransportProtocol` and protocol of `flowCollectorAddr` in
+`agent-agent.conf` are set to `tls` to guarantee secure communication works properly. Protocol of
+`flowCollectorAddr` and `aggregatorTransportProtocol` must always match, so TLS must either be enabled for
+both sides or disabled for both sides. Please modify the parameters as per your requirements.
 
 ### IPFIX Information Elements (IEs) in an Aggregated Flow Record
 

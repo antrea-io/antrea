@@ -375,7 +375,6 @@ func run(o *Options) error {
 			o.flowCollectorProto,
 			o.activeFlowTimeout,
 			o.idleFlowTimeout,
-			o.config.EnableTLSToFlowAggregator,
 			v4Enabled,
 			v6Enabled,
 			k8sClient,
