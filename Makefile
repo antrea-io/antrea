@@ -55,10 +55,12 @@ antrea-controller-instr-binary:
 	@mkdir -p $(BINDIR)
 	GOOS=linux $(GO) test -tags testbincover -covermode count -coverpkg=antrea.io/antrea/pkg/... -c -o $(BINDIR)/antrea-controller-coverage $(GOFLAGS) -ldflags '$(LDFLAGS)' antrea.io/antrea/cmd/antrea-controller
 
+# diable cgo for antrea-cni since it can be installed on some systems with
+# incompatible or missing system libraries.
 .PHONY: antrea-cni
 antrea-cni:
 	@mkdir -p $(BINDIR)
-	GOOS=linux $(GO) build -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' antrea.io/antrea/cmd/antrea-cni
+	GOOS=linux CGO_ENABLED=0 $(GO) build -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' antrea.io/antrea/cmd/antrea-cni
 
 .PHONY: antctl-ubuntu
 antctl-ubuntu:
@@ -70,10 +72,13 @@ antctl-instr-binary:
 	@mkdir -p $(BINDIR)
 	GOOS=linux $(GO) test -tags testbincover -covermode count -coverpkg=antrea.io/antrea/pkg/... -c -o $(BINDIR)/antctl-coverage $(GOFLAGS) -ldflags '$(LDFLAGS)' antrea.io/antrea/cmd/antctl
 
+# diable cgo for antrea-cni and antrea-agent: antrea-cni is meant to be
+# installed on the host and the antrea-agent is run as a process on Windows
+# hosts (we also distribute it as a release binary).
 .PHONY: windows-bin
 windows-bin:
 	@mkdir -p $(BINDIR)
-	GOOS=windows $(GO) build -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' antrea.io/antrea/cmd/antrea-cni antrea.io/antrea/cmd/antrea-agent
+	GOOS=windows CGO_ENABLED=0 $(GO) build -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' antrea.io/antrea/cmd/antrea-cni antrea.io/antrea/cmd/antrea-agent
 
 .PHONY: flow-aggregator
 flow-aggregator:
