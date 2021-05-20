@@ -1066,7 +1066,8 @@ func TestTraceflowInterNode(t *testing.T) {
 		dstPodIPv6Str = node2IPs[0].ipv6.String()
 	}
 
-	// Create Service backend Pod. The "hairpin" testcases require 1 backend Pod.
+	// Create Service backend Pod. The "hairpin" testcases require the Service to have a single backend Pod,
+	// and no more, in order to be deterministic.
 	nginxPodName := "nginx"
 	require.NoError(t, data.createNginxPod(nginxPodName, node2))
 	nginxIP, err := data.podWaitForIPs(defaultTimeout, nginxPodName, testNamespace)
