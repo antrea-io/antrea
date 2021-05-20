@@ -387,7 +387,10 @@ func GenGraph(tf *crdv1alpha1.Traceflow) (string, error) {
 				return "", err
 			}
 			edge.Attrs[gographviz.Constraint] = "false"
-
+			err = createCapturedPacketNode(graph, dstCluster.Name, tf)
+			if err != nil {
+				return "", err
+			}
 			// add an anonymous subgraph to make two nodes in the same level.
 			// refer to https://github.com/awalterschulze/gographviz/issues/59
 			graph.AddAttr("G", "newrank", "true")
@@ -440,6 +443,12 @@ func GenGraph(tf *crdv1alpha1.Traceflow) (string, error) {
 				return "", err
 			}
 		}
+		if tf.Spec.LiveTraffic && tf.Status.Phase == crdv1alpha1.Succeeded {
+			err = createCapturedPacketNode(graph, cluster1.Name, tf)
+			if err != nil {
+				return "", err
+			}
+		}
 		return genOutput(graph, true), nil
 	}
 
@@ -475,6 +484,62 @@ func GenGraph(tf *crdv1alpha1.Traceflow) (string, error) {
 		}
 		edge.Attrs[gographviz.Constraint] = "false"
 	}
-
+	if tf.Spec.LiveTraffic && tf.Status.Phase == crdv1alpha1.Succeeded {
+		err = createCapturedPacketNode(graph, cluster2.Name, tf)
+		if err != nil {
+			return "", err
+		}
+	}
 	return genOutput(graph, false), nil
+}
+
+func getCapturedPacketLabel(tf *crdv1alpha1.Traceflow) string {
+	label := "Captured Packet:\\lSource IP: " + tf.Status.CapturedPacket.SrcIP + "\\l" +
+		"Destination IP: " + tf.Status.CapturedPacket.DstIP + "\\l" +
+		"Length: " + fmt.Sprintf("%d", tf.Status.CapturedPacket.Length) + "\\l"
+
+	if tf.Status.CapturedPacket.IPv6Header == nil {
+		label = label + "IPv4 Header: " + "\\l" +
+			"    Flags: " + fmt.Sprintf("%d", tf.Status.CapturedPacket.IPHeader.Flags) + "\\l" +
+			"    Protocol: " + fmt.Sprintf("%d", tf.Status.CapturedPacket.IPHeader.Protocol) + "\\l" +
+			"    TTL: " + fmt.Sprintf("%d", tf.Status.CapturedPacket.IPHeader.TTL) + "\\l"
+	} else {
+		label = label + "IPv6 Header: \\l" +
+			"    Next Header: " + fmt.Sprintf("%d", *tf.Status.CapturedPacket.IPv6Header.NextHeader) + "\\l" +
+			"    Hop Limit: " + fmt.Sprintf("%d", tf.Status.CapturedPacket.IPv6Header.HopLimit) + "\\l"
+	}
+
+	if tf.Status.CapturedPacket.TransportHeader != (crdv1alpha1.TransportHeader{}) {
+		label = label + "Transport Header: \\l"
+		if tf.Status.CapturedPacket.TransportHeader.TCP != nil {
+			label = label + "    TCP: " + "\\l" +
+				"        Source Port: " + fmt.Sprintf("%d", tf.Status.CapturedPacket.TransportHeader.TCP.SrcPort) + "\\l" +
+				"        Destination Port: " + fmt.Sprintf("%d", tf.Status.CapturedPacket.TransportHeader.TCP.DstPort) + "\\l"
+		}
+		if tf.Status.CapturedPacket.TransportHeader.UDP != nil {
+			label = label + "    UDP: " + "\\l" +
+				"        Source Port: " + fmt.Sprintf("%d", tf.Status.CapturedPacket.TransportHeader.UDP.SrcPort) + "\\l" +
+				"        Destination Port: " + fmt.Sprintf("%d", tf.Status.CapturedPacket.TransportHeader.UDP.DstPort) + "\\l"
+		}
+		if tf.Status.CapturedPacket.TransportHeader.ICMP != nil {
+			label = label + "    ICMP: " + "\\l" +
+				"        ID: " + fmt.Sprintf("%d", tf.Status.CapturedPacket.TransportHeader.ICMP.ID) + "\\l" +
+				"        Sequence: " + fmt.Sprintf("%d", tf.Status.CapturedPacket.TransportHeader.ICMP.Sequence) + "\\l"
+		}
+	}
+
+	return label
+}
+
+func createCapturedPacketNode(graph *gographviz.Graph, parentGraph string, tf *crdv1alpha1.Traceflow) error {
+	err := graph.AddNode(parentGraph, "capturedPacket", map[string]string{
+		"shape": "note",
+		"style": `"rounded,filled,solid"`,
+		"color": dimGrey,
+		"label": `"` + getCapturedPacketLabel(tf) + `"`,
+	})
+	if err != nil {
+		return err
+	}
+	return nil
 }
