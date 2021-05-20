@@ -54,11 +54,16 @@ for build in "${ANTREA_BUILDS[@]}"; do
     arch="${args[1]}"
     suffix="${args[2]}"
 
-    GOOS=$os GOARCH=$arch ANTCTL_BINARY_NAME="antctl-$suffix" BINDIR="$OUTPUT_DIR"/ make antctl-release
-    cd ./plugins/octant && GOOS=$os GOARCH=$arch ANTREA_OCTANT_PLUGIN_BINARY_NAME="antrea-octant-plugin-$suffix" \
+    # cgo is disabled by default when cross-compiling, but enabled by default
+    # for native builds. We ensure it is always disabled for portability since
+    # these binaries will be distributed as release assets.
+    GOOS=$os GOARCH=$arch CGO_ENABLED=0 ANTCTL_BINARY_NAME="antctl-$suffix" BINDIR="$OUTPUT_DIR"/ make antctl-release
+    cd ./plugins/octant && GOOS=$os GOARCH=$arch CGO_ENABLED=0 ANTREA_OCTANT_PLUGIN_BINARY_NAME="antrea-octant-plugin-$suffix" \
     BINDIR="$OUTPUT_DIR" make antrea-octant-plugin-release && cd ../..
 done
 
+# the windows-bin Makefile target builds antrea-cni and antrea-agent with cgo
+# explicitly disabled.
 BINDIR="$OUTPUT_DIR" make windows-bin
 sed "s/AntreaVersion=\"latest\"/AntreaVersion=\"$VERSION\"/" ./hack/windows/Start.ps1 > "$OUTPUT_DIR"/Start.ps1
 
