@@ -31,8 +31,8 @@ import (
 const (
 	AppliedToGroupIndex   = "appliedToGroup"
 	AddressGroupIndex     = "addressGroup"
-	PerNamespaceRuleIndex = "perNamespaceRule"
-	HasPerNamespaceRule   = "hasPerNamespaceRule"
+	PerNamespaceRuleIndex = "hasPerNamespaceRule"
+	HasPerNamespaceRule   = "true"
 )
 
 // networkPolicyEvent implements storage.InternalEvent.

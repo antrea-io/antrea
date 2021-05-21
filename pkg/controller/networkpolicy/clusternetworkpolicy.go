@@ -123,7 +123,7 @@ func (n *NetworkPolicyController) deleteCNP(old interface{}) {
 }
 
 // filterPerNamespaceRuleACNPsByNSLabels gets all ClusterNetworkPolicy names that will need to be
-// re-processed if a Namespace adds or removes the input labels.
+// re-processed based on the entire label set of an added/updated/deleted Namespace.
 func (n *NetworkPolicyController) filterPerNamespaceRuleACNPsByNSLabels(nsLabels labels.Set) sets.String {
 	n.internalNetworkPolicyMutex.Lock()
 	defer n.internalNetworkPolicyMutex.Unlock()
@@ -152,14 +152,11 @@ func (n *NetworkPolicyController) addNamespace(obj interface{}) {
 	defer n.heartbeat("addNamespace")
 	namespace := obj.(*v1.Namespace)
 	klog.V(2).Infof("Processing Namespace %s ADD event, labels: %v", namespace.Name, namespace.Labels)
-	affectedACNPs := n.filterPerNamespaceRuleACNPsByNSLabels(labels.Set(namespace.Labels))
-	for _, cnpName := range affectedACNPs.List() {
-		cnp, err := n.cnpLister.Get(cnpName)
-		if err != nil {
-			klog.Errorf("Error getting Antrea ClusterNetworkPolicy %s", cnpName)
-			continue
+	affectedACNPs := n.filterPerNamespaceRuleACNPsByNSLabels(namespace.Labels)
+	for cnpName := range affectedACNPs {
+		if cnp, err := n.cnpLister.Get(cnpName); err == nil {
+			n.updateCNP(cnp, cnp)
 		}
-		n.updateCNP(cnp, cnp)
 	}
 }
 
@@ -173,13 +170,10 @@ func (n *NetworkPolicyController) updateNamespace(oldObj, curObj interface{}) {
 	affectedACNPsByOldLabels := n.filterPerNamespaceRuleACNPsByNSLabels(oldLabelSet)
 	affectedACNPsByCurLabels := n.filterPerNamespaceRuleACNPsByNSLabels(curLabelSet)
 	affectedACNPs := utilsets.SymmetricDifference(affectedACNPsByOldLabels, affectedACNPsByCurLabels)
-	for _, cnpName := range affectedACNPs.List() {
-		cnp, err := n.cnpLister.Get(cnpName)
-		if err != nil {
-			klog.Errorf("Error getting Antrea ClusterNetworkPolicy %s", cnpName)
-			continue
+	for cnpName := range affectedACNPs {
+		if cnp, err := n.cnpLister.Get(cnpName); err == nil {
+			n.updateCNP(cnp, cnp)
 		}
-		n.updateCNP(cnp, cnp)
 	}
 }
 
@@ -219,26 +213,24 @@ func (n *NetworkPolicyController) deleteNamespace(old interface{}) {
 // in case of ADD event or modified and store the updated instance, in case
 // of an UPDATE event.
 func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *crdv1alpha1.ClusterNetworkPolicy) *antreatypes.NetworkPolicy {
-
 	hasPerNamespaceRule := hasPerNamespaceRule(cnp)
 	// If one of the ACNP rule is a per-namespace rule (a peer in that rule has namspaces.Match set
-	// to Self), the policy will need to be converted appliedTo per rule policy, as the appliedTo will
-	// be different for rules created for each namespace.
+	// to Self), the policy will need to be converted to appliedTo per rule policy, as the appliedTo
+	// will be different for rules created for each namespace.
 	appliedToPerRule := len(cnp.Spec.AppliedTo) == 0 || hasPerNamespaceRule
-
 	// atgNamesSet tracks all distinct appliedToGroups referred to by the ClusterNetworkPolicy,
 	// either in the spec section or in ingress/egress rules.
 	// The span calculation and stale appliedToGroup cleanup logic would work seamlessly for both cases.
 	atgNamesSet := sets.String{}
-
 	// affectedNamespaceSelectors tracks all the appliedTo's namespaceSelectors of per-namespace rules.
-	// It is used as an index so that Namespace updates can trigger corresponding rules
+	// It is used as an index for internalNetworkPolicyStore, so that Namespace updates can trigger
+	// ACNPs that selects this Namespace's label to be re-processed, and corresponding rules
 	// to re-calculate affected Namespaces.
 	var affectedNamespaceSelectors []labels.Selector
-
 	// If appliedTo is set at spec level and the ACNP has per-namespace rules, then each appliedTo needs
 	// to be split into appliedToGroups for each of its affected Namespace.
 	var clusterAppliedToAffectedNS []string
+	// atgForNamespace is the appliedToGroups splitted by Namespaces.
 	var atgForNamespace []string
 	if hasPerNamespaceRule && len(cnp.Spec.AppliedTo) > 0 {
 		for _, at := range cnp.Spec.AppliedTo {

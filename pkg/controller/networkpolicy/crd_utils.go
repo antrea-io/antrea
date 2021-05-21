@@ -119,7 +119,7 @@ func (n *NetworkPolicyController) toAntreaPeerForCRD(peers []v1alpha1.NetworkPol
 	return &controlplane.NetworkPolicyPeer{AddressGroups: addressGroups, IPBlocks: ipBlocks}
 }
 
-// toAntreaPeerForCRD creates an Antrea controlplane NetworkPolicyPeer for crdv1alpha1 NetworkPolicyPeer
+// toNamespacedPeerForCRD creates an Antrea controlplane NetworkPolicyPeer for crdv1alpha1 NetworkPolicyPeer
 // for a particular Namespace. It is used when a single crdv1alpha1 NetworkPolicyPeer maps to multiple
 // controlplane NetworkPolicyPeers because the appliedTo workloads reside in different Namespaces.
 func (n *NetworkPolicyController) toNamespacedPeerForCRD(peers []v1alpha1.NetworkPolicyPeer, namespace string) *controlplane.NetworkPolicyPeer {
