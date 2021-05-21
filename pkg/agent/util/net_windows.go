@@ -367,7 +367,42 @@ func PrepareHNSNetwork(subnetCIDR *net.IPNet, nodeIPNet *net.IPNet, uplinkAdapte
 		hnsNet.Delete()
 		return err
 	}
+
+	if err = EnableRSCOnVSwitch(LocalHNSNetwork); err != nil {
+		return err
+	}
+
 	klog.Infof("Created HNSNetwork with name %s id %s", hnsNet.Name, hnsNet.Id)
+	return nil
+}
+
+// EnableRSCOnVSwitch enables RSC in the vSwitch to reduce host CPU utilization and increase throughput for virtual
+// workloads by coalescing multiple TCP segments into fewer, but larger segments.
+func EnableRSCOnVSwitch(vSwitch string) error {
+	cmd := fmt.Sprintf("Get-VMSwitch -Name %s | Select-Object -Property SoftwareRscEnabled | Format-Table -HideTableHeaders", vSwitch)
+	stdout, err := CallPSCommand(cmd)
+	if err != nil {
+		return err
+	}
+	stdout = strings.TrimSpace(stdout)
+	// RSC doc says it applies to Windows Server 2019, which is the only Windows operating system supported so far, so
+	// this should not happen. However, this is only an optimization, no need to crash the process even if it's not
+	// supported.
+	// https://docs.microsoft.com/en-us/windows-server/networking/technologies/hpn/rsc-in-the-vswitch
+	if len(stdout) == 0 {
+		klog.Warning("Receive Segment Coalescing (RSC) is not supported by this Windows Server version")
+		return nil
+	}
+	if strings.EqualFold(stdout, "True") {
+		klog.Infof("Receive Segment Coalescing (RSC) for vSwitch %s is already enabled", vSwitch)
+		return nil
+	}
+	cmd = fmt.Sprintf("Set-VMSwitch -Name %s -EnableSoftwareRsc $True", vSwitch)
+	err = InvokePSCommand(cmd)
+	if err != nil {
+		return err
+	}
+	klog.Infof("Enabled Receive Segment Coalescing (RSC) for vSwitch %s", vSwitch)
 	return nil
 }
 
