@@ -1984,10 +1984,10 @@ func testANPMultipleAppliedTo(t *testing.T, singleRule bool) {
 	failOnError(err, t)
 	time.Sleep(networkPolicyDelay)
 	k8sUtils.Validate(allPods, reachability, 80, v1.ProtocolTCP)
-	reachability.PrintSummary(true, true, true)
 	_, wrong, _ := reachability.Summary()
 	if wrong != 0 {
 		t.Errorf("failure -- %d wrong results", wrong)
+		reachability.PrintSummary(true, true, true)
 	}
 
 	t.Logf("Making the Policy apply to y/c by labeling it with the temporary label that matches the dummy AppliedTo")
@@ -2000,10 +2000,10 @@ func testANPMultipleAppliedTo(t *testing.T, singleRule bool) {
 	reachability.Expect(Pod("x/b"), Pod("y/c"), Dropped)
 	time.Sleep(networkPolicyDelay)
 	k8sUtils.Validate(allPods, reachability, 80, v1.ProtocolTCP)
-	reachability.PrintSummary(true, true, true)
 	_, wrong, _ = reachability.Summary()
 	if wrong != 0 {
 		t.Errorf("failure -- %d wrong results", wrong)
+		reachability.PrintSummary(true, true, true)
 	}
 
 	t.Logf("Making the Policy not apply to y/c by removing the temporary label")
@@ -2014,10 +2014,10 @@ func testANPMultipleAppliedTo(t *testing.T, singleRule bool) {
 	reachability.Expect(Pod("x/b"), Pod("y/a"), Dropped)
 	time.Sleep(networkPolicyDelay)
 	k8sUtils.Validate(allPods, reachability, 80, v1.ProtocolTCP)
-	reachability.PrintSummary(true, true, true)
 	_, wrong, _ = reachability.Summary()
 	if wrong != 0 {
 		t.Errorf("failure -- %d wrong results", wrong)
+		reachability.PrintSummary(true, true, true)
 	}
 
 	failOnError(k8sUtils.DeleteANP(builder.Namespace, builder.Name), t)
@@ -2324,11 +2324,11 @@ func executeTestsWithData(t *testing.T, testList []*TestCase, data *TestData) {
 					k8sUtils.Validate(allPods, reachability, port, step.Protocol)
 				}
 				step.Duration = time.Now().Sub(start)
-				reachability.PrintSummary(true, true, true)
 
 				_, wrong, _ := step.Reachability.Summary()
 				if wrong != 0 {
 					t.Errorf("failure -- %d wrong results", wrong)
+					reachability.PrintSummary(true, true, true)
 				}
 			}
 			if len(step.CustomProbes) > 0 && data == nil {
@@ -2485,7 +2485,7 @@ func cleanupTestCaseServicesAndGroups(t *testing.T, c *TestCase) {
 
 // printResults summarizes test results for all the testcases
 func printResults() {
-	fmt.Printf("\n\n---------------- Test Results ------------------\n\n")
+	fmt.Printf("\n---------------- Test Results ------------------\n")
 	failCount := 0
 	for _, testCase := range allTestList {
 		fmt.Printf("Test %s:\n", testCase.Name)
@@ -2504,15 +2504,15 @@ func printResults() {
 			}
 			fmt.Printf("\tStep %s on port %d, duration %d seconds, result: %s\n",
 				step.Name, step.Port, int(step.Duration.Seconds()), result)
-			fmt.Printf("\n%s\n", comparison.PrettyPrint("\t\t"))
+			if wrong != 0 {
+				fmt.Printf("\n%s\n", comparison.PrettyPrint("\t\t"))
+			}
 		}
 		if testFailed {
 			failCount++
 		}
-		fmt.Printf("\n\n")
 	}
-	fmt.Printf("=== TEST FAILURES: %d/%d ===\n", failCount, len(allTestList))
-	fmt.Printf("\n\n")
+	fmt.Printf("=== TEST FAILURES: %d/%d ===\n\n", failCount, len(allTestList))
 }
 
 func waitForResourceReady(obj metav1.Object, timeout time.Duration) error {

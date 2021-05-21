@@ -2005,11 +2005,11 @@ func executeLegacyTestsWithData(t *testing.T, testList []*TestCase, data *TestDa
 					k8sUtils.Validate(allPods, reachability, port, step.Protocol)
 				}
 				step.Duration = time.Now().Sub(start)
-				reachability.PrintSummary(true, true, true)
 
 				_, wrong, _ := step.Reachability.Summary()
 				if wrong != 0 {
 					t.Errorf("failure -- %d wrong results", wrong)
+					reachability.PrintSummary(true, true, true)
 				}
 			}
 			if len(step.CustomProbes) > 0 && data == nil {
