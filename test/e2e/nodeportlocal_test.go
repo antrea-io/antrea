@@ -101,12 +101,13 @@ func checkForNPLRuleInIPTables(t *testing.T, data *TestData, r *require.Assertio
 			return false, nil
 		}
 		for _, rule := range rules {
+			// For simplicity's sake, we only look for that one rule.
 			ruleSpec := []string{
-				"-p", "tcp", "-m", "tcp", "--dport",
-				fmt.Sprint(rule.nodePort), "-j", "DNAT", "--to-destination", fmt.Sprintf("%s:%d", rule.podIP, rule.podPort),
+				"-p", "tcp", "-m", "tcp", "--dport", fmt.Sprint(rule.nodePort),
+				"-j", "DNAT", "--to-destination", fmt.Sprintf("%s:%d", rule.podIP, rule.podPort),
 			}
 			rs := strings.Join(append([]string{"-A", "ANTREA-NODE-PORT-LOCAL"}, ruleSpec...), " ")
-			t.Logf("Searching for iptables rule: %v", rs)
+			t.Logf("Searching for iptables rule: '%v'", rs)
 
 			if strings.Contains(stdout, rs) && present {
 				t.Logf("Found rule in iptables")
@@ -167,10 +168,10 @@ func TestNPLAddPod(t *testing.T) {
 	enableNPLInConfigmap(t, testData)
 	t.Run("NPLTestMultiplePods", NPLTestMultiplePods)
 	t.Run("NPLTestPodAddMultiPort", NPLTestPodAddMultiPort)
+	t.Run("NPLTestLocalAccess", NPLTestLocalAccess)
 }
 
 // NPLTestMultiplePods tests NodePortLocal functionalities after adding multiple Pods.
-// - Enable NodePortLocal if not already enabled.
 // - Create a Service with nginx Pods.
 // - Verify that the required NodePortLocal annoation is added in each test Pod.
 // - Make sure iptables rules are correctly added in the Node from Antrea Agent Pod.
@@ -271,6 +272,44 @@ func NPLTestPodAddMultiPort(t *testing.T) {
 
 	antreaPod, err := testData.getAntreaPodOnNode(node)
 	r.NoError(err, "Error when getting Antrea Agent Pod on Node '%s'", node)
+
+	checkNPLRulesForPod(t, testData, r, nplAnnotations, antreaPod, testPodIP, true)
+	validatePortInRange(t, nplAnnotations, defaultStartPort, defaultEndPort)
+	checkTrafficForNPL(testData, r, nplAnnotations, clientName)
+
+	testData.deletePod(testNamespace, testPodName)
+	checkNPLRulesForPod(t, testData, r, nplAnnotations, antreaPod, testPodIP, false)
+}
+
+// NPLTestLocalAccess validates that a NodePortLocal Pod can be accessed locally
+// from the host network namespace.
+func NPLTestLocalAccess(t *testing.T) {
+	r := require.New(t)
+
+	annotation := make(map[string]string)
+	annotation[k8s.NPLEnabledAnnotationKey] = "true"
+	ipFamily := corev1.IPv4Protocol
+	testData.createNginxClusterIPServiceWithAnnotations(false, &ipFamily, annotation)
+
+	node := nodeName(0)
+
+	testPodName := randName("test-pod-")
+	err := testData.createNginxPod(testPodName, node)
+	r.NoError(err, "Error creating test Pod: %v", err)
+
+	clientName := randName("test-client-")
+	err = testData.createHostNetworkBusyboxPodOnNode(clientName, node)
+	r.NoError(err, "Error creating hostNetwork Pod %s: %v", clientName)
+
+	err = testData.podWaitForRunning(defaultTimeout, clientName, testNamespace)
+	r.NoError(err, "Error when waiting for Pod %s to be running", clientName)
+
+	antreaPod, err := testData.getAntreaPodOnNode(node)
+	r.NoError(err, "Error when getting Antrea Agent Pod on Node '%s'", node)
+
+	nplAnnotationString, testPodIP := getNPLAnnotation(t, testData, r, testPodName)
+	var nplAnnotations []k8s.NPLAnnotation
+	json.Unmarshal([]byte(nplAnnotationString), &nplAnnotations)
 
 	checkNPLRulesForPod(t, testData, r, nplAnnotations, antreaPod, testPodIP, true)
 	validatePortInRange(t, nplAnnotations, defaultStartPort, defaultEndPort)
