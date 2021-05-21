@@ -895,7 +895,6 @@ func TestIngressPolicyWithEndPort(t *testing.T) {
 				t.Fatalf("Pod %s should be able to connect %s, but was not able to connect", clientName, net.JoinHostPort(serverIP, fmt.Sprint(port)))
 			}
 		}
-
 	}
 
 	if clusterInfo.podV4NetworkCIDR != "" {
@@ -934,11 +933,11 @@ func TestIngressPolicyWithEndPort(t *testing.T) {
 	}
 	np, err := data.createNetworkPolicy("test-networkpolicy-ingress-with-endport", spec)
 	if err != nil {
-		t.Fatalf("Error when creating network policy: %v", err)
+		t.Fatalf("Error when creating NetworkPolicy: %v", err)
 	}
 	defer func() {
 		if err = data.deleteNetworkpolicy(np); err != nil {
-			t.Fatalf("Error when deleting network policy: %v", err)
+			t.Errorf("Error when deleting NetworkPolicy: %v", err)
 		}
 	}()
 
