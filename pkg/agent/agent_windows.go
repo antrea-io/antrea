@@ -71,7 +71,7 @@ func (i *Initializer) prepareHostNetwork() error {
 	// Create HNS network.
 	subnetCIDR := i.nodeConfig.PodIPv4CIDR
 	if subnetCIDR == nil {
-		return fmt.Errorf("Failed to find valid IPv4 PodCIDR")
+		return fmt.Errorf("failed to find valid IPv4 PodCIDR")
 	}
 	return util.PrepareHNSNetwork(subnetCIDR, i.nodeConfig.NodeIPAddr, adapter)
 }
@@ -82,7 +82,7 @@ func (i *Initializer) prepareOVSBridge() error {
 	hnsNetwork, err := hcsshim.GetHNSNetworkByName(util.LocalHNSNetwork)
 	defer func() {
 		// prepareOVSBridge only works on windows platform. The operation has a chance to fail on the first time agent
-		// starts up when OVS bridge uplink and local inteface have not been configured. If the operation fails, the
+		// starts up when OVS bridge uplink and local interface have not been configured. If the operation fails, the
 		// host can not communicate with external network. To make sure the agent can connect to API server in
 		// next retry, this step deletes OVS bridge and HNS network created previously which will restore the
 		// host network.
@@ -144,7 +144,7 @@ func (i *Initializer) prepareOVSBridge() error {
 
 	// Move network configuration of uplink interface to OVS bridge local interface.
 	// - The net configuration of uplink will be restored by OS if the attached HNS network is deleted.
-	// - When ovs-switchd is down, antrea-agent will disable OVS Extension. The OVS bridge local interface will work
+	// - When ovs-vswitchd is down, antrea-agent will disable OVS Extension. The OVS bridge local interface will work
 	//   like a normal interface on host and is responsible for forwarding host traffic.
 	if err = util.EnableHostInterface(brName); err != nil {
 		return err
