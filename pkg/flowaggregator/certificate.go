@@ -97,6 +97,12 @@ func generateCertKey(caCert *x509.Certificate, caKey *rsa.PrivateKey, isServer b
 			cert.IPAddresses = []net.IP{ip}
 		} else {
 			cert.DNSNames = []string{flowAggregatorAddress}
+			// add IP in certicate since flow exporter on Windows Node can't resolve DNS name
+			flowAggregatorIPs, err := net.LookupIP(flowAggregatorAddress)
+			if err != nil {
+				return nil, nil, err
+			}
+			cert.IPAddresses = flowAggregatorIPs
 		}
 	} else {
 		cert = &x509.Certificate{
