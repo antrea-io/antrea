@@ -21,9 +21,9 @@ import (
 	"k8s.io/klog/v2"
 )
 
-// nodeNameEnvKey is environment variable.
+// NodeNameEnvKey is environment variable.
 const (
-	nodeNameEnvKey     = "NODE_NAME"
+	NodeNameEnvKey     = "NODE_NAME"
 	podNameEnvKey      = "POD_NAME"
 	podNamespaceEnvKey = "POD_NAMESPACE"
 	svcAcctNameEnvKey  = "SERVICEACCOUNT_NAME"
@@ -37,11 +37,11 @@ const (
 // - Environment variable NODE_NAME, which should be set by Downward API
 // - OS's hostname
 func GetNodeName() (string, error) {
-	nodeName := os.Getenv(nodeNameEnvKey)
+	nodeName := os.Getenv(NodeNameEnvKey)
 	if nodeName != "" {
 		return nodeName, nil
 	}
-	klog.Infof("Environment variable %s not found, using hostname instead", nodeNameEnvKey)
+	klog.Infof("Environment variable %s not found, using hostname instead", NodeNameEnvKey)
 	var err error
 	nodeName, err = os.Hostname()
 	if err != nil {

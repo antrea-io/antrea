@@ -16,6 +16,7 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net"
 	"os"
@@ -25,8 +26,10 @@ import (
 
 	"github.com/containernetworking/plugins/pkg/ip"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	apitypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	clientset "k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent/cniserver"
@@ -52,6 +55,9 @@ const (
 	initialRoundNum         = 1
 	maxRetryForRoundNumSave = 5
 )
+
+// getIPNetDeviceFromIP is meant to be overridden for testing.
+var getIPNetDeviceFromIP = util.GetIPNetDeviceFromIP
 
 // Initializer knows how to setup host networking, OpenVSwitch, and Openflow.
 type Initializer struct {
@@ -637,11 +643,31 @@ func (i *Initializer) initNodeLocalConfig() error {
 
 	ipAddr, err := noderoute.GetNodeAddr(node)
 	if err != nil {
-		return fmt.Errorf("failed to obtain local IP address from k8s: %w", err)
+		return fmt.Errorf("failed to obtain local IP address from K8s: %w", err)
 	}
-	localAddr, localIntf, err := util.GetIPNetDeviceFromIP(ipAddr)
+	localAddr, localIntf, err := getIPNetDeviceFromIP(ipAddr)
 	if err != nil {
-		return fmt.Errorf("failed to get local IPNet:  %v", err)
+		return fmt.Errorf("failed to get local IPNet device with IP %v: %v", ipAddr, err)
+	}
+
+	// Update the Node's MAC address in the annotations of the Node. The MAC address will be used for direct routing by
+	// OVS in noencap case on Windows Nodes. As a mixture of Linux and Windows nodes is possible, Linux Nodes' MAC
+	// addresses should be reported too to make them discoverable for Windows Nodes.
+	if i.networkConfig.TrafficEncapMode.SupportsNoEncap() {
+		klog.Infof("Updating Node MAC annotation")
+		patch, _ := json.Marshal(map[string]interface{}{
+			"metadata": map[string]interface{}{
+				"annotations": map[string]string{
+					types.NodeMACAddressAnnotationKey: localIntf.HardwareAddr.String(),
+				},
+			},
+		})
+		if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+			_, err := i.client.CoreV1().Nodes().Patch(context.TODO(), nodeName, apitypes.MergePatchType, patch, metav1.PatchOptions{})
+			return err
+		}); err != nil {
+			return err
+		}
 	}
 
 	i.nodeConfig = &config.NodeConfig{
