@@ -41,6 +41,8 @@ type connTrackSystem struct {
 	connTrack            NetFilterConnTrack
 }
 
+// TODO: detect the endianness of the system when initializing conntrack dumper to handle situations on big-endian platforms.
+// All connection labels are required to store in little endian format in conntrack dumper.
 func NewConnTrackSystem(nodeConfig *config.NodeConfig, serviceCIDRv4 *net.IPNet, serviceCIDRv6 *net.IPNet, isAntreaProxyEnabled bool) *connTrackSystem {
 	if err := SetupConntrackParameters(); err != nil {
 		// Do not fail, but continue after logging an error as we can still dump flows with missing information.
