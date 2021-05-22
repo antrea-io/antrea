@@ -190,7 +190,7 @@ func setupTestWithIPFIXCollector(tb testing.TB) (*TestData, bool, bool, error) {
 	if testOptions.providerName == "kind" {
 		// In Kind cluster, there are issues with DNS name resolution on worker nodes.
 		// Please note that CoreDNS services are forced on to control-plane Node.
-		faClusterIPAddr = fmt.Sprintf("%s:%s:tcp", faClusterIP, ipfixCollectorPort)
+		faClusterIPAddr = fmt.Sprintf("%s:%s:tls", faClusterIP, ipfixCollectorPort)
 	}
 	tb.Logf("Deploying flow exporter with collector address: %s", faClusterIPAddr)
 	if err = testData.deployAntreaFlowExporter(faClusterIPAddr); err != nil {
