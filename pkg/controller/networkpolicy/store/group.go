@@ -23,7 +23,7 @@ import (
 	"antrea.io/antrea/pkg/apiserver/storage"
 	"antrea.io/antrea/pkg/apiserver/storage/ram"
 	antreatypes "antrea.io/antrea/pkg/controller/types"
-	"antrea.io/antrea/pkg/k8s"
+	"antrea.io/antrea/pkg/util/k8s"
 )
 
 const (

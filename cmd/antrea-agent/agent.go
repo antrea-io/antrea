@@ -45,13 +45,13 @@ import (
 	"antrea.io/antrea/pkg/agent/types"
 	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions"
 	"antrea.io/antrea/pkg/features"
-	"antrea.io/antrea/pkg/k8s"
 	"antrea.io/antrea/pkg/log"
 	"antrea.io/antrea/pkg/monitor"
 	ofconfig "antrea.io/antrea/pkg/ovs/openflow"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 	"antrea.io/antrea/pkg/signals"
 	"antrea.io/antrea/pkg/util/cipher"
+	"antrea.io/antrea/pkg/util/k8s"
 	"antrea.io/antrea/pkg/version"
 )
 

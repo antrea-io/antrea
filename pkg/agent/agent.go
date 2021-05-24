@@ -43,6 +43,7 @@ import (
 	"antrea.io/antrea/pkg/agent/util"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 	"antrea.io/antrea/pkg/util/env"
+	"antrea.io/antrea/pkg/util/k8s"
 )
 
 const (
@@ -641,7 +642,7 @@ func (i *Initializer) initNodeLocalConfig() error {
 		return err
 	}
 
-	ipAddr, err := noderoute.GetNodeAddr(node)
+	ipAddr, err := k8s.GetNodeAddr(node)
 	if err != nil {
 		return fmt.Errorf("failed to obtain local IP address from K8s: %w", err)
 	}

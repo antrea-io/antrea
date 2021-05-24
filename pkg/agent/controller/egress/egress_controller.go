@@ -41,7 +41,7 @@ import (
 	crdv1a2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
 	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha2"
 	crdlisters "antrea.io/antrea/pkg/client/listers/crd/v1alpha2"
-	"antrea.io/antrea/pkg/k8s"
+	"antrea.io/antrea/pkg/util/k8s"
 )
 
 const (
