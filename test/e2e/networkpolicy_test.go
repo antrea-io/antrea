@@ -941,6 +941,11 @@ func TestIngressPolicyWithEndPort(t *testing.T) {
 		}
 	}()
 
+	if np.Spec.Ingress[0].Ports[0].EndPort == nil {
+		t.Skipf("Skipping test as the kube-apiserver doesn't support `endPort` " +
+			"or `NetworkPolicyEndPort` feature-gate is not enabled.")
+	}
+
 	npCheck := func(serverIP string) {
 		for _, port := range serverPorts {
 			err = data.runNetcatCommandFromTestPod(clientName, serverIP, port)
