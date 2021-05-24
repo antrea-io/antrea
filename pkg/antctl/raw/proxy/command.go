@@ -29,10 +29,10 @@ import (
 	"k8s.io/klog/v2"
 	"k8s.io/kubectl/pkg/proxy"
 
-	"antrea.io/antrea/pkg/agent/controller/noderoute"
 	"antrea.io/antrea/pkg/antctl/runtime"
 	clusterinformationv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	antrea "antrea.io/antrea/pkg/client/clientset/versioned"
+	"antrea.io/antrea/pkg/util/k8s"
 )
 
 const (
@@ -185,7 +185,7 @@ func createAgentClientCfg(k8sClientset kubernetes.Interface, antreaClientset ant
 	if agentInfo == nil {
 		return nil, fmt.Errorf("no Antrea Agent found for Node name %s", nodeName)
 	}
-	nodeIP, err := noderoute.GetNodeAddr(node)
+	nodeIP, err := k8s.GetNodeAddr(node)
 	if err != nil {
 		return nil, fmt.Errorf("error when parsing IP of Node %s", nodeName)
 	}
@@ -205,7 +205,7 @@ func createControllerClientCfg(k8sClientset kubernetes.Interface, antreaClientse
 		return nil, fmt.Errorf("error when searching the Node of the controller: %w", err)
 	}
 	var controllerNodeIP net.IP
-	controllerNodeIP, err = noderoute.GetNodeAddr(controllerNode)
+	controllerNodeIP, err = k8s.GetNodeAddr(controllerNode)
 	if err != nil {
 		return nil, fmt.Errorf("error when parsing controller IP: %w", err)
 	}
