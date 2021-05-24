@@ -36,6 +36,10 @@ func (i *Initializer) prepareHostNetwork() error {
 	// If the HNS Network already exists, return immediately.
 	hnsNetwork, err := hcsshim.GetHNSNetworkByName(util.LocalHNSNetwork)
 	if err == nil {
+		// Enable RSC for existing vSwitch.
+		if err = util.EnableRSCOnVSwitch(util.LocalHNSNetwork); err != nil {
+			return err
+		}
 		// Save the uplink adapter name to check if the OVS uplink port has been created in prepareOVSBridge stage.
 		i.nodeConfig.UplinkNetConfig.Name = hnsNetwork.NetworkAdapterName
 		return nil
