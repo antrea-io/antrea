@@ -19,8 +19,8 @@ RUN set -eux; \
          *) pluginsArch=''; echo >&2; echo >&2 "unsupported architecture '$dpkgArch'"; echo >&2 ; exit 1 ;; \
     esac; \
     mkdir -p /opt/cni/bin; \
-    wget -q -O - https://github.com/containernetworking/plugins/releases/download/$CNI_BINARIES_VERSION/cni-plugins-linux-${pluginsArch}-$CNI_BINARIES_VERSION.tgz | tar xz -C /opt/cni/bin $CNI_PLUGINS
-
+    wget -q -O - https://github.com/containernetworking/plugins/releases/download/$CNI_BINARIES_VERSION/cni-plugins-linux-${pluginsArch}-$CNI_BINARIES_VERSION.tgz | tar xz -C /opt/cni/bin $CNI_PLUGINS; \
+    wget -q -O - https://downloads.antrea.io/whereabouts/v0.4/whereabouts-linux-${pluginsArch}.tgz | tar xz -C /opt/cni/bin/ whereabouts-linux-${pluginsArch}/whereabouts --strip-components=1
 
 FROM antrea/openvswitch:${OVS_VERSION}
 
