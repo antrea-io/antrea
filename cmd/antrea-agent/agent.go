@@ -82,6 +82,7 @@ var excludeNodePortDevices = []string{"antrea-egress0", "antrea-ingress0", "kube
 
 // run starts Antrea agent with the given options and waits for termination signal.
 func run(o *Options) error {
+	time.Sleep(time.Millisecond * 11)
 	klog.Infof("Starting Antrea agent (version %s)", version.GetFullVersion())
 
 	// Windows platform doesn't support Egress feature yet.
