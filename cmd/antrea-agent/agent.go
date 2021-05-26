@@ -82,6 +82,7 @@ var excludeNodePortDevices = []string{"antrea-egress0", "antrea-ingress0", "kube
 
 // run starts Antrea agent with the given options and waits for termination signal.
 func run(o *Options) error {
+	time.Sleep(time.Millisecond * 11)
 	klog.Infof("Starting Antrea agent (version %s)", version.GetFullVersion())
 	// Create K8s Clientset, CRD Clientset and SharedInformerFactory for the given config.
 	k8sClient, _, crdClient, _, err := k8s.CreateClients(o.config.ClientConnection, o.config.KubeAPIServerOverride)
