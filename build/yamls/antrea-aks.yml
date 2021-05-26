@@ -700,6 +700,11 @@ spec:
                               matchLabels:
                                 x-kubernetes-preserve-unknown-fields: true
                             type: object
+                          namespaces:
+                            properties:
+                              match:
+                                type: string
+                            type: object
                           podSelector:
                             properties:
                               matchExpressions:
@@ -826,6 +831,11 @@ spec:
                                 type: array
                               matchLabels:
                                 x-kubernetes-preserve-unknown-fields: true
+                            type: object
+                          namespaces:
+                            properties:
+                              match:
+                                type: string
                             type: object
                           podSelector:
                             properties:
@@ -1105,6 +1115,11 @@ spec:
                               matchLabels:
                                 x-kubernetes-preserve-unknown-fields: true
                             type: object
+                          namespaces:
+                            properties:
+                              match:
+                                type: string
+                            type: object
                           podSelector:
                             properties:
                               matchExpressions:
@@ -1231,6 +1246,11 @@ spec:
                                 type: array
                               matchLabels:
                                 x-kubernetes-preserve-unknown-fields: true
+                            type: object
+                          namespaces:
+                            properties:
+                              match:
+                                type: string
                             type: object
                           podSelector:
                             properties:

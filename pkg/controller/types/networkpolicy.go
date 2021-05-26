@@ -15,6 +15,7 @@
 package types
 
 import (
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 
@@ -96,4 +97,10 @@ type NetworkPolicy struct {
 	// AppliedToPerRule tracks if appliedTo is set per rule basis rather than in policy spec.
 	// Must be false for K8s NetworkPolicy.
 	AppliedToPerRule bool
+	// PerNamespaceSelectors maintains a list of unique Namespace selectors of appliedTo groups
+	// of the NetworkPolicy, for which a per-namespace rule is created.
+	// It is used as an index so that Namespace updates can trigger corresponding rules
+	// to re-calculate affected Namespaces.
+	// It is set only for AntreaClusterNetworkPolicies with per-namespace rules.
+	PerNamespaceSelectors []labels.Selector
 }

@@ -494,6 +494,9 @@ func (a *antreaPolicyValidator) validateAppliedTo(ingress, egress []crdv1alpha1.
 func (a *antreaPolicyValidator) validatePeers(ingress, egress []crdv1alpha1.Rule) (string, bool) {
 	checkPeers := func(peers []crdv1alpha1.NetworkPolicyPeer) (string, bool) {
 		for _, peer := range peers {
+			if peer.NamespaceSelector != nil && peer.Namespaces != nil {
+				return "namespaces and namespaceSelector cannot be set at the same time for a single NetworkPolicyPeer", false
+			}
 			if peer.Group == "" {
 				continue
 			}

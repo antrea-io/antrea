@@ -69,6 +69,7 @@ var (
 
 type networkPolicyController struct {
 	*NetworkPolicyController
+	namespaceStore             cache.Store
 	serviceStore               cache.Store
 	networkPolicyStore         cache.Store
 	cnpStore                   cache.Store
@@ -101,6 +102,7 @@ func newController(objects ...runtime.Object) (*fake.Clientset, *networkPolicyCo
 	npController := NewNetworkPolicyController(client,
 		crdClient,
 		groupEntityIndex,
+		informerFactory.Core().V1().Namespaces(),
 		informerFactory.Core().V1().Services(),
 		informerFactory.Networking().V1().NetworkPolicies(),
 		crdInformerFactory.Crd().V1alpha1().ClusterNetworkPolicies(),
@@ -111,6 +113,8 @@ func newController(objects ...runtime.Object) (*fake.Clientset, *networkPolicyCo
 		appliedToGroupStore,
 		internalNetworkPolicyStore,
 		internalGroupStore)
+	npController.namespaceLister = informerFactory.Core().V1().Namespaces().Lister()
+	npController.namespaceListerSynced = alwaysReady
 	npController.networkPolicyListerSynced = alwaysReady
 	npController.cnpListerSynced = alwaysReady
 	npController.tierLister = crdInformerFactory.Crd().V1alpha1().Tiers().Lister()
@@ -122,6 +126,7 @@ func newController(objects ...runtime.Object) (*fake.Clientset, *networkPolicyCo
 	npController.serviceListerSynced = alwaysReady
 	return client, &networkPolicyController{
 		npController,
+		informerFactory.Core().V1().Namespaces().Informer().GetStore(),
 		informerFactory.Core().V1().Services().Informer().GetStore(),
 		informerFactory.Networking().V1().NetworkPolicies().Informer().GetStore(),
 		crdInformerFactory.Crd().V1alpha1().ClusterNetworkPolicies().Informer().GetStore(),
@@ -168,6 +173,7 @@ func newControllerWithoutEventHandler(objects ...runtime.Object) (*fake.Clientse
 	}
 	return client, &networkPolicyController{
 		npController,
+		informerFactory.Core().V1().Namespaces().Informer().GetStore(),
 		informerFactory.Core().V1().Services().Informer().GetStore(),
 		informerFactory.Networking().V1().NetworkPolicies().Informer().GetStore(),
 		crdInformerFactory.Crd().V1alpha1().ClusterNetworkPolicies().Informer().GetStore(),
