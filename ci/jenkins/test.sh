@@ -169,15 +169,15 @@ function export_govc_env_var {
 
 function clean_antrea {
     echo "====== Cleanup Antrea Installation ======"
-    clean_ns "monitoring"
-    clean_ns "antrea-ipam-test"
-    clean_ns "antrea-test"
+    clean_ns "monitoring" || true
+    clean_ns "antrea-ipam-test" || true
+    clean_ns "antrea-test" || true
     echo "====== Cleanup Conformance Namespaces ======"
-    clean_ns "net"
-    clean_ns "service"
-    clean_ns "x-"
-    clean_ns "y-"
-    clean_ns "z-"
+    clean_ns "net" || true
+    clean_ns "service" || true
+    clean_ns "x-" || true
+    clean_ns "y-" || true
+    clean_ns "z-" || true
 
     # Delete antrea-prometheus first for k8s>=1.22 to avoid Pod stuck in Terminating state.
     kubectl delete -f ${WORKDIR}/antrea-prometheus.yml --ignore-not-found=true || true
@@ -517,9 +517,11 @@ function deliver_antrea_windows_containerd {
 function deliver_antrea {
     echo "====== Cleanup Antrea Installation Before Delivering Antrea ======"
     clean_antrea
+    echo "====== Cleanup Antrea Installation Before Delivering Antrea 2 ======"
     kubectl delete -f ${WORKDIR}/antrea-prometheus.yml || true
     kubectl delete daemonset antrea-agent -n kube-system || true
     kubectl delete -f ${WORKDIR}/antrea.yml || true
+    echo "====== Cleanup Antrea Installation Before Delivering Antrea 3 ======"
     if [[ $TESTBED_TYPE == "flexible-ipam" ]]; then
         redeploy_k8s_if_ip_mode_changes
     fi
@@ -868,9 +870,6 @@ function redeploy_k8s_if_ip_mode_changes() {
     else
         (( HAS_IPV4-- ))
         (( HAS_IPV6-- ))
-    fi
-    if [ ${HAS_IPV4} -eq ${INITIAL_VALUE} ] && [ ${HAS_IPV6} -eq ${INITIAL_VALUE} ]; then
-      return 0
     fi
 
     echo "===== Reset K8s cluster Nodes ====="
