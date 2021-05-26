@@ -15,7 +15,6 @@
 package openflow
 
 import (
-	"antrea.io/antrea/pkg/util/runtime"
 	"fmt"
 	"math/rand"
 	"net"
@@ -28,6 +27,7 @@ import (
 	"antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/agent/util"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
+	"antrea.io/antrea/pkg/util/runtime"
 	"antrea.io/antrea/third_party/proxy"
 )
 
@@ -672,11 +672,11 @@ func (c *client) initialize() error {
 	// TODO: remove OS detection after windows OVS support OF meter
 	// Only add meter entry on Linux. Skip add meter entry for Windows OVS for now.
 	if !runtime.IsWindowsPlatform() {
-		if err := c.genPacketInMeter(PacketInMeterIdNP, PacketInMeterRateNP).Add(); err != nil {
-			return fmt.Errorf("failed to install OpenFlow meter entry (meterId:%d, rate:%d) for NetworkPolicy packet-in rate limiting: %v", PacketInMeterIdNP, PacketInMeterRateNP, err)
+		if err := c.genPacketInMeter(PacketInMeterIDNP, PacketInMeterRateNP).Add(); err != nil {
+			return fmt.Errorf("failed to install OpenFlow meter entry (meterID:%d, rate:%d) for NetworkPolicy packet-in rate limiting: %v", PacketInMeterIDNP, PacketInMeterRateNP, err)
 		}
-		if err := c.genPacketInMeter(PacketInMeterIdTF, PacketInMeterRateTF).Add(); err != nil {
-			return fmt.Errorf("failed to install OpenFlow meter entry (meterId:%d, rate:%d) for TraceFlow packet-in rate limiting: %v", PacketInMeterIdTF, PacketInMeterRateTF, err)
+		if err := c.genPacketInMeter(PacketInMeterIDTF, PacketInMeterRateTF).Add(); err != nil {
+			return fmt.Errorf("failed to install OpenFlow meter entry (meterID:%d, rate:%d) for TraceFlow packet-in rate limiting: %v", PacketInMeterIDTF, PacketInMeterRateTF, err)
 		}
 	}
 	return nil

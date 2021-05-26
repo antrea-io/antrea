@@ -71,5 +71,5 @@ replace (
 	github.com/Microsoft/hcsshim v0.8.9 => github.com/ruicao93/hcsshim v0.8.10-0.20210114035434-63fe00c1b9aa
 	// antrea/plugins/octant/go.mod also has this replacement since replace statement in dependencies
 	// were ignored. We need to change antrea/plugins/octant/go.mod if there is any change here.
-	github.com/contiv/ofnet => github.com/graysonwu/ofnet v0.0.0-20210429223642-fd41fa29af0b
+	github.com/contiv/ofnet => github.com/wenyingd/ofnet v0.0.0-20210526054554-3e71e19fd0cf
 )

@@ -33,8 +33,8 @@ type PacketInHandler interface {
 const (
 	// We use OpenFlow Meter for packet-in rate limiting on OVS side.
 	// Meter Entry ID.
-	PacketInMeterIdNP = 1
-	PacketInMeterIdTF = 2
+	PacketInMeterIDNP = 1
+	PacketInMeterIDTF = 2
 	// Meter Entry Rate. It is represented as number of events per second.
 	// Packets which exceed the rate will be dropped.
 	PacketInMeterRateNP = 100

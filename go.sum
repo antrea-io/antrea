@@ -120,6 +120,8 @@ github.com/containernetworking/cni v0.8.0 h1:BT9lpgGoH4jw3lFC7Odz2prU5ruiYKcgAjM
 github.com/containernetworking/cni v0.8.0/go.mod h1:LGwApLUm2FpoOfxTDEeq8T9ipbpZ61X79hmU3w8FmsY=
 github.com/containernetworking/plugins v0.8.7 h1:bU7QieuAp+sACI2vCzESJ3FoT860urYP+lThyZkb/2M=
 github.com/containernetworking/plugins v0.8.7/go.mod h1:R7lXeZaBzpfqapcAbHRW8/CYwm0dHzbz0XEjofx0uB0=
+github.com/contiv/libOpenflow v0.0.0-20210521033357-6b49eccb12e0 h1:Vf4MMw2EBHj+sQaBgXiS6RR6CDi3ZF8xx59eZkWxmHY=
+github.com/contiv/libOpenflow v0.0.0-20210521033357-6b49eccb12e0/go.mod h1:DtsPlJOByJZ+MO9YITEGUlbJ/jfh/ef0qeNyBYaeNR4=
 github.com/contiv/libovsdb v0.0.0-20170227191248-d0061a53e358 h1:AiA9SKyNXulsU7aAnyka3UFHYOIH00A9HvdIRnDXlg0=
 github.com/contiv/libovsdb v0.0.0-20170227191248-d0061a53e358/go.mod h1:+qKEHaNVPj+wrn5st7TEFH9wcUWCJq5ZBvVKPQwzAeg=
 github.com/coreos/bbolt v1.3.2/go.mod h1:iRUV2dpdMOn7Bo10OQBFzIJO9kkE559Wcmn+qkEiiKk=
@@ -324,10 +326,6 @@ github.com/gorilla/websocket v0.0.0-20170926233335-4201258b820c/go.mod h1:E7qHFY
 github.com/gorilla/websocket v1.4.0/go.mod h1:E7qHFY5m1UJ88s3WnNqhKjPHQ0heANvMoAMk2YaljkQ=
 github.com/gorilla/websocket v1.4.2 h1:+/TMaTYc4QFitKJxsQ7Yye35DkWvkdLcvGKqM+x0Ufc=
 github.com/gorilla/websocket v1.4.2/go.mod h1:YR8l580nyteQvAITg2hZ9XVh4b55+EU/adAjf1fMHhE=
-github.com/graysonwu/libOpenflow v0.0.0-20210429222206-41e3a0e75b30 h1:zc0EyTTjrm4uz2XE5+bGMSOkRkTH008Jz/J9OgBaiZY=
-github.com/graysonwu/libOpenflow v0.0.0-20210429222206-41e3a0e75b30/go.mod h1:Xo20t4BuZJcU+BY+Sw7PSamVJ/YFF1zs/+NJiyQ8icM=
-github.com/graysonwu/ofnet v0.0.0-20210429223642-fd41fa29af0b h1:+5FPMeb+LtRBYkiUQodVavARlu403E8w27efjTAbKxI=
-github.com/graysonwu/ofnet v0.0.0-20210429223642-fd41fa29af0b/go.mod h1:p1z10aKxR6484zruUacogKpktO6n1fT3/15tyD3tsto=
 github.com/gregjones/httpcache v0.0.0-20180305231024-9cad4c3443a7/go.mod h1:FecbI9+v66THATjSRHfNgh1IVFe/9kFxbXtjV0ctIMA=
 github.com/grpc-ecosystem/go-grpc-middleware v1.0.0/go.mod h1:FiyG127CGDf3tlThmgyCl78X/SZQqEOJBCDaAfeWzPs=
 github.com/grpc-ecosystem/go-grpc-middleware v1.0.1-0.20190118093823-f849b5445de4 h1:z53tR0945TRRQO/fLEVPI6SMv7ZflF0TEaTAoU7tOzg=
@@ -600,6 +598,8 @@ github.com/vishvananda/netns v0.0.0-20191106174202-0a2b9b5464df h1:OviZH7qLw/7Zo
 github.com/vishvananda/netns v0.0.0-20191106174202-0a2b9b5464df/go.mod h1:JP3t17pCcGlemwknint6hfoeCVQrEMVwxRLRjXpq+BU=
 github.com/vmware/go-ipfix v0.5.2 h1:5VIW+HoJoq2i/mhN8ErNSYXNpjbtALImLIH72xh2Afc=
 github.com/vmware/go-ipfix v0.5.2/go.mod h1:rMDcGc5pEmG+wT2grK5ZgvsF1EOdxqHDnNkB/kFJT78=
+github.com/wenyingd/ofnet v0.0.0-20210526054554-3e71e19fd0cf h1:EEGpnM6W07pq2nKdqk+lig1Qit5f8eUe+Vt1ditTLgk=
+github.com/wenyingd/ofnet v0.0.0-20210526054554-3e71e19fd0cf/go.mod h1:tZiqxY3POhek8GrqcmU+5bvVzDwY1zZ7Wh9+zwaoV3s=
 github.com/xdg/scram v0.0.0-20180814205039-7eeb5667e42c/go.mod h1:lB8K/P019DLNhemzwFU4jHLhdvlE6uDZjXFejJXr49I=
 github.com/xdg/stringprep v1.0.0/go.mod h1:Jhud4/sHMO4oL310DaZAKk9ZaJ08SJfe+sJh0HrGL1Y=
 github.com/xiang90/probing v0.0.0-20190116061207-43a291ad63a2 h1:eY9dn8+vbi4tKz5Qo6v2eYzo7kUS51QINcR5jNpbZS8=
