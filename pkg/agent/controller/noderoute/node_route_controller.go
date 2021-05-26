@@ -410,11 +410,11 @@ func (c *Controller) deleteNodeRoute(nodeName string) error {
 func (c *Controller) addNodeRoute(nodeName string, node *corev1.Node) error {
 	peerNodeMAC, err := getNodeMAC(node)
 	if err != nil {
-		klog.Errorf("Error when retrieving MAC of Node %s: %v", nodeName, err)
+		return fmt.Errorf("error when retrieving MAC of Node %s: %v", nodeName, err)
 	}
 
 	nrInfo, installed, _ := c.installedNodes.GetByKey(nodeName)
-	if installed && nrInfo != nil && nrInfo.(*nodeRouteInfo).nodeMAC != nil && nrInfo.(*nodeRouteInfo).nodeMAC.String() == peerNodeMAC.String() {
+	if installed && nrInfo != nil && nrInfo.(*nodeRouteInfo).nodeMAC != nil && peerNodeMAC != nil && nrInfo.(*nodeRouteInfo).nodeMAC.String() == peerNodeMAC.String() {
 		// Route is already added for this Node and Node MAC isn't changed.
 		return nil
 	}
@@ -449,6 +449,8 @@ func (c *Controller) addNodeRoute(nodeName string, node *corev1.Node) error {
 		// stale routes, flows, and relevant cache of this podCIDR are removed appropriately, we wait for the Node deletion
 		// event to be processed before proceeding, or the route installation and uninstallation operations may override or
 		// conflict with each other.
+		// For Windows Noencap case, it is possible that nodesHaveSamePodCIDR is the Node itself because the Node
+		// MAC annotation is not set yet.
 		if len(nodesHaveSamePodCIDR) > 0 && (len(nodesHaveSamePodCIDR) != 1 || nodesHaveSamePodCIDR[0] != nodeName) {
 			// Return an error so that the Node will be put back to the workqueue and will be retried later.
 			return fmt.Errorf("skipping addNodeRoute for Node %s because podCIDR %s is duplicate with Node %s, will retry later", nodeName, podCIDR, nodesHaveSamePodCIDR[0])
@@ -672,7 +674,7 @@ func getNodeMAC(node *corev1.Node) (net.HardwareAddr, error) {
 	}
 	mac, err := net.ParseMAC(macStr)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to parse MAC `%s`, %v", macStr, err)
 	}
 	return mac, nil
 }

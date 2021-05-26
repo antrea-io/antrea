@@ -1153,9 +1153,8 @@ func (c *client) l3FwdFlowRouteToGW(gwMAC net.HardwareAddr, category cookie.Cate
 	return flows
 }
 
-// l3FwdFlowToGateway generates the L3 forward flows for traffic from tunnel to
-// the local gateway. It rewrites the destination MAC (should be
-// globalVirtualMAC) of the packets to the gateway interface MAC.
+// l3FwdFlowToGateway generates the L3 forward flows to rewrite the destination MAC of the packets to the gateway interface
+// MAC if the destination IP is the gateway IP.
 func (c *client) l3FwdFlowToGateway(localGatewayIPs []net.IP, localGatewayMAC net.HardwareAddr, category cookie.Category) []binding.Flow {
 	l3FwdTable := c.pipeline[l3ForwardingTable]
 	var flows []binding.Flow

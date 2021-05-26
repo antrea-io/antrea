@@ -313,7 +313,7 @@ func (c *client) addFlows(cache *flowCategoryCache, flowCacheKey string, flows [
 	return nil
 }
 
-// modifyFlows set the flows of flowCategoryCache be exactly same as the input.
+// modifyFlows set the flows of flowCategoryCache be exactly same as the provided slice for the given flowCacheKey.
 func (c *client) modifyFlows(cache *flowCategoryCache, flowCacheKey string, flows []binding.Flow) error {
 	oldFlowCacheI, ok := cache.Load(flowCacheKey)
 	fCache := flowCache{}
@@ -372,6 +372,7 @@ func (c *client) deleteFlows(cache *flowCategoryCache, flowCacheKey string) erro
 	return nil
 }
 
+// InstallNodeFlows installs flows for peer Nodes. Parameter remoteGatewayMAC is only for Windows.
 func (c *client) InstallNodeFlows(hostname string,
 	peerConfigs map[*net.IPNet]net.IP,
 	tunnelPeerIP net.IP,
