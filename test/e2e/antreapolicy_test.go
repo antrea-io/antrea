@@ -665,7 +665,7 @@ func testInvalidTierANPRefDelete(t *testing.T) {
 	failOnError(k8sUtils.DeleteTier(tr.Name), t)
 }
 
-// testInvalidACNPPodSelectorNsSelectorMatchExpressions testes creating a ClusterNetworkPolicy with invalid LabelSelector(MatchExpressions)
+// testInvalidACNPPodSelectorNsSelectorMatchExpressions tests creating a ClusterNetworkPolicy with invalid LabelSelector(MatchExpressions)
 func testInvalidACNPPodSelectorNsSelectorMatchExpressions(t *testing.T) {
 	invalidLSErr := fmt.Errorf("create Antrea NetworkPolicy with namespaceSelector but matchExpressions invalid")
 
