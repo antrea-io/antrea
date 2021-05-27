@@ -1056,6 +1056,24 @@ func (c *client) traceflowL2ForwardOutputFlows(dataplaneTag uint8, liveTraffic, 
 				Action().OutputRegRange(int(PortCacheReg), ofPortRegRange)
 		}
 		flows = append(flows, fb.Done())
+		if c.enableProxy {
+			// Only SendToController for hairpin traffic.
+			// This flow must have higher priority than the one installed by l2ForwardOutputServiceHairpinFlow
+			fbHairpin := l2FwdOutTable.BuildFlow(priorityHigh+2).
+				MatchIPDSCP(dataplaneTag).
+				SetHardTimeout(timeout).
+				MatchProtocol(ipProtocol).
+				MatchRegRange(int(marksReg), hairpinMark, hairpinMarkRange).
+				Cookie(c.cookieAllocator.Request(cookie.Service).Raw())
+			if !droppedOnly {
+				fbHairpin = fbHairpin.Action().SendToController(uint8(PacketInReasonTF))
+			}
+			if liveTraffic {
+				fbHairpin = fbHairpin.Action().LoadIPDSCP(0).
+					Action().OutputInPort()
+			}
+			flows = append(flows, fbHairpin.Done())
+		}
 	}
 	return flows
 }
