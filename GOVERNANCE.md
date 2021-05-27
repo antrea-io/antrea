@@ -43,8 +43,11 @@ and your membership needs to be approved by two maintainers: approval is
 indicated by leaving a `+1` comment. If a contributor is not active for a
 duration of 12 months (no contribution of any kind), they may be removed from
 the antrea-io Github organization. In case of privilege abuse (members receive
-write access to the organization), any maintainer can decide to remove the
-member.
+write access to the organization), any maintainer can decide to disable write
+access temporarily for the member. Within the next 2 weeks, the maintainer must
+either restore the member's privileges, or remove the member from the
+organization. The latter requires approval from at least one other maintainer,
+which must be obtained publicly either on Github or Slack.
 
 ### Maintainers
 
