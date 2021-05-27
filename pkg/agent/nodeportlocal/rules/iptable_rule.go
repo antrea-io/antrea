@@ -97,7 +97,7 @@ func (ipt *iptablesRules) AddAllRules(nplList []PodNodePort) error {
 	for _, nplData := range nplList {
 		destination := nplData.PodIP + ":" + fmt.Sprint(nplData.PodPort)
 		rule := buildRuleForPod(nplData.NodePort, destination)
-		writeLine(iptablesData, rule...)
+		writeLine(iptablesData, append([]string{"-A", NodePortLocalChain}, rule...)...)
 	}
 	writeLine(iptablesData, "COMMIT")
 	if err := ipt.table.Restore(iptablesData.Bytes(), false, false); err != nil {
