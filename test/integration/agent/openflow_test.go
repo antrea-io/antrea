@@ -290,7 +290,7 @@ func testInstallNodeFlows(t *testing.T, config *testConfig) {
 		peerConfig := map[*net.IPNet]net.IP{
 			&node.subnet: node.gateway,
 		}
-		err := c.InstallNodeFlows(node.name, peerConfig, node.nodeAddress, 0)
+		err := c.InstallNodeFlows(node.name, peerConfig, node.nodeAddress, 0, nil)
 		if err != nil {
 			t.Fatalf("Failed to install Openflow entries for node connectivity: %v", err)
 		}

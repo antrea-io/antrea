@@ -68,7 +68,8 @@ type Client interface {
 		hostname string,
 		peerConfigs map[*net.IPNet]net.IP,
 		tunnelPeerIP net.IP,
-		ipsecTunOFPort uint32) error
+		ipsecTunOFPort uint32,
+		peerNodeMAC net.HardwareAddr) error
 
 	// UninstallNodeFlows removes the connection to the remote Node specified with the
 	// hostname. UninstallNodeFlows will do nothing if no connection to the host was established.
@@ -312,6 +313,45 @@ func (c *client) addFlows(cache *flowCategoryCache, flowCacheKey string, flows [
 	return nil
 }
 
+// modifyFlows sets the flows of flowCategoryCache be exactly same as the provided slice for the given flowCacheKey.
+func (c *client) modifyFlows(cache *flowCategoryCache, flowCacheKey string, flows []binding.Flow) error {
+	oldFlowCacheI, ok := cache.Load(flowCacheKey)
+	fCache := flowCache{}
+	var err error
+	if !ok {
+		for _, flow := range flows {
+			fCache[flow.MatchString()] = flow
+		}
+
+		err = c.ofEntryOperations.AddAll(flows)
+	} else {
+		var adds, mods, dels []binding.Flow
+		oldFlowCache := oldFlowCacheI.(flowCache)
+		for _, flow := range flows {
+			matchString := flow.MatchString()
+			if _, ok := oldFlowCache[matchString]; ok {
+				mods = append(mods, flow)
+			} else {
+				adds = append(adds, flow)
+			}
+			fCache[matchString] = flow
+		}
+		for k, v := range oldFlowCache {
+			if _, ok := fCache[k]; !ok {
+				dels = append(dels, v)
+			}
+		}
+		err = c.ofEntryOperations.BundleOps(adds, mods, dels)
+	}
+	if err != nil {
+		return err
+	}
+
+	// Modify the flows in the flow cache.
+	cache.Store(flowCacheKey, fCache)
+	return nil
+}
+
 // deleteFlows deletes all the flows in the flow cache indexed by the provided flowCacheKey.
 func (c *client) deleteFlows(cache *flowCategoryCache, flowCacheKey string) error {
 	fCacheI, ok := cache.Load(flowCacheKey)
@@ -332,10 +372,12 @@ func (c *client) deleteFlows(cache *flowCategoryCache, flowCacheKey string) erro
 	return nil
 }
 
+// InstallNodeFlows installs flows for peer Nodes. Parameter remoteGatewayMAC is only for Windows.
 func (c *client) InstallNodeFlows(hostname string,
 	peerConfigs map[*net.IPNet]net.IP,
 	tunnelPeerIP net.IP,
-	ipsecTunOFPort uint32) error {
+	ipsecTunOFPort uint32,
+	remoteGatewayMAC net.HardwareAddr) error {
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
 
@@ -353,7 +395,7 @@ func (c *client) InstallNodeFlows(hostname string,
 			// IPv6 one is decided by the address family of Node Internal Address.
 			flows = append(flows, c.l3FwdFlowToRemote(localGatewayMAC, *peerPodCIDR, tunnelPeerIP, cookie.Node))
 		} else {
-			flows = append(flows, c.l3FwdFlowToRemoteViaGW(localGatewayMAC, *peerPodCIDR, cookie.Node))
+			flows = append(flows, c.l3FwdFlowToRemoteViaRouting(localGatewayMAC, remoteGatewayMAC, cookie.Node, tunnelPeerIP, peerPodCIDR)...)
 		}
 	}
 
@@ -364,7 +406,9 @@ func (c *client) InstallNodeFlows(hostname string,
 		flows = append(flows, c.tunnelClassifierFlow(ipsecTunOFPort, cookie.Node))
 	}
 
-	return c.addFlows(c.nodeFlowCache, hostname, flows)
+	// For Windows Noencap Mode, the OVS flows for Node need be be exactly same as the provided 'flows' slice because
+	// the Node flows may be processed more than once if the MAC annotation is updated.
+	return c.modifyFlows(c.nodeFlowCache, hostname, flows)
 }
 
 func (c *client) UninstallNodeFlows(hostname string) error {
@@ -576,10 +620,7 @@ func (c *client) InstallGatewayFlows() error {
 	// Add flow to ensure the liveness check packet could be forwarded correctly.
 	flows = append(flows, c.localProbeFlow(gatewayIPs, cookie.Default)...)
 	flows = append(flows, c.ctRewriteDstMACFlows(gatewayConfig.MAC, cookie.Default)...)
-	// In NoEncap , no traffic from tunnel port
-	if c.encapMode.SupportsEncap() {
-		flows = append(flows, c.l3FwdFlowToGateway(gatewayIPs, gatewayConfig.MAC, cookie.Default)...)
-	}
+	flows = append(flows, c.l3FwdFlowToGateway(gatewayIPs, gatewayConfig.MAC, cookie.Default)...)
 
 	if err := c.ofEntryOperations.AddAll(flows); err != nil {
 		return err
