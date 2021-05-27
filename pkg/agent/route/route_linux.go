@@ -599,8 +599,8 @@ func (c *Client) initServiceIPRoutes() error {
 }
 
 // Reconcile removes orphaned podCIDRs from ipset and removes routes to orphaned podCIDRs
-// based on the desired podCIDRs.
-func (c *Client) Reconcile(podCIDRs []string) error {
+// based on the desired podCIDRs. svcIPs are used for Windows only.
+func (c *Client) Reconcile(podCIDRs []string, svcIPs map[string]bool) error {
 	desiredPodCIDRs := sets.NewString(podCIDRs...)
 
 	// Remove orphaned podCIDRs from ipset.
@@ -841,6 +841,10 @@ func (c *Client) DeleteRoutes(podCIDR *net.IPNet) error {
 			c.nodeNeighbors.Delete(podCIDRStr)
 		}
 	}
+	return nil
+}
+
+func (c *Client) DeleteClusterIPRoute(svcIP net.IP) error {
 	return nil
 }
 

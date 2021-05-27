@@ -272,7 +272,7 @@ var (
 	// a SNAT IP. The bit range must match SNATIPMarkMask.
 	snatPktMarkRange = &binding.Range{0, 7}
 
-	globalVirtualMAC, _ = net.ParseMAC("aa:bb:cc:dd:ee:ff")
+	GlobalVirtualMAC, _ = net.ParseMAC("aa:bb:cc:dd:ee:ff")
 	hairpinIP           = net.ParseIP("169.254.169.252").To4()
 	hairpinIPv6         = net.ParseIP("fc00::aabb:ccdd:eeff").To16()
 )
@@ -355,7 +355,7 @@ type client struct {
 }
 
 func (c *client) GetTunnelVirtualMAC() net.HardwareAddr {
-	return globalVirtualMAC
+	return GlobalVirtualMAC
 }
 
 func (c *client) changeAll(flowsMap map[ofAction][]binding.Flow) error {
@@ -1158,7 +1158,7 @@ func (c *client) l2ForwardOutputFlows(category cookie.Category) []binding.Flow {
 }
 
 // l3FwdFlowToPod generates the L3 forward flows for traffic from tunnel to a
-// local Pod. It rewrites the destination MAC (should be globalVirtualMAC) to
+// local Pod. It rewrites the destination MAC (should be GlobalVirtualMAC) to
 // the Pod interface MAC, and rewrites the source MAC to the gateway interface
 // MAC.
 func (c *client) l3FwdFlowToPod(localGatewayMAC net.HardwareAddr, podInterfaceIPs []net.IP, podInterfaceMAC net.HardwareAddr, category cookie.Category) []binding.Flow {
@@ -1267,7 +1267,7 @@ func (c *client) l3FwdFlowToRemote(
 		MatchDstIPNet(peerSubnet).
 		// Rewrite src MAC to local gateway MAC and rewrite dst MAC to virtual MAC.
 		Action().SetSrcMAC(localGatewayMAC).
-		Action().SetDstMAC(globalVirtualMAC).
+		Action().SetDstMAC(GlobalVirtualMAC).
 		// Flow based tunnel. Set tunnel destination.
 		Action().SetTunnelDst(tunnelPeer).
 		Action().GotoTable(l3DecTTLTable).
@@ -1324,10 +1324,10 @@ func (c *client) arpResponderFlow(peerGatewayIP net.IP, category cookie.Category
 		MatchARPOp(arpOpRequest).
 		MatchARPTpa(peerGatewayIP).
 		Action().Move(binding.NxmFieldSrcMAC, binding.NxmFieldDstMAC).
-		Action().SetSrcMAC(globalVirtualMAC).
+		Action().SetSrcMAC(GlobalVirtualMAC).
 		Action().LoadARPOperation(arpOpReply).
 		Action().Move(binding.NxmFieldARPSha, binding.NxmFieldARPTha).
-		Action().SetARPSha(globalVirtualMAC).
+		Action().SetARPSha(GlobalVirtualMAC).
 		Action().Move(binding.NxmFieldARPSpa, binding.NxmFieldARPTpa).
 		Action().SetARPSpa(peerGatewayIP).
 		Action().OutputInPort().
@@ -1341,10 +1341,10 @@ func (c *client) arpResponderStaticFlow(category cookie.Category) binding.Flow {
 	return c.pipeline[arpResponderTable].BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolARP).
 		MatchARPOp(arpOpRequest).
 		Action().Move(binding.NxmFieldSrcMAC, binding.NxmFieldDstMAC).
-		Action().SetSrcMAC(globalVirtualMAC).
+		Action().SetSrcMAC(GlobalVirtualMAC).
 		Action().LoadARPOperation(arpOpReply).
 		Action().Move(binding.NxmFieldARPSha, binding.NxmFieldARPTha).
-		Action().SetARPSha(globalVirtualMAC).
+		Action().SetARPSha(GlobalVirtualMAC).
 		Action().Move(binding.NxmFieldARPTpa, SwapField.GetNXFieldName()).
 		Action().Move(binding.NxmFieldARPSpa, binding.NxmFieldARPTpa).
 		Action().Move(SwapField.GetNXFieldName(), binding.NxmFieldARPSpa).
@@ -2130,7 +2130,7 @@ func (c *client) snatRuleFlow(ofPort uint32, snatIP net.IP, snatMark uint32, loc
 		MatchProtocol(ipProto).
 		MatchInPort(ofPort).
 		Action().SetSrcMAC(localGatewayMAC).
-		Action().SetDstMAC(globalVirtualMAC).
+		Action().SetDstMAC(GlobalVirtualMAC).
 		// Set tunnel destination to the SNAT IP.
 		Action().SetTunnelDst(snatIP).
 		Action().GotoTable(l3DecTTLTable).

@@ -27,9 +27,9 @@ type Interface interface {
 	// It should be idempotent and can be safely called on every startup.
 	Initialize(nodeConfig *config.NodeConfig, done func()) error
 
-	// Reconcile should remove orphaned routes and related configuration based on the desired podCIDRs. If IPv6 is enabled
-	// in the cluster, Reconcile should also remove the orphaned IPv6 neighbors.
-	Reconcile(podCIDRs []string) error
+	// Reconcile should remove orphaned routes and related configuration based on the desired podCIDRs and Service IPs.
+	// If IPv6 is enabled in the cluster, Reconcile should also remove the orphaned IPv6 neighbors.
+	Reconcile(podCIDRs []string, svcIPs map[string]bool) error
 
 	// AddRoutes should add routes to the provided podCIDR.
 	// It should override the routes if they already exist, without error.
@@ -60,6 +60,10 @@ type Interface interface {
 
 	// AddClusterIPRoute adds route on K8s node for Service ClusterIP.
 	AddClusterIPRoute(svcIP net.IP) error
+
+	// DeleteClusterIPRoute deletes route for a Service IP when AntreaProxy is configured to handle
+	// ClusterIP Service traffic from host network.
+	DeleteClusterIPRoute(svcIP net.IP) error
 
 	// AddLoadBalancer adds configurations when a LoadBalancer Service is created.
 	AddLoadBalancer(externalIPs []string) error

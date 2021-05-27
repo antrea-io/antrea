@@ -46,6 +46,7 @@ const (
 	commandRetryInterval = time.Second
 
 	MetricDefault = 256
+	MetricHigh    = 50
 )
 
 type Route struct {
@@ -53,6 +54,21 @@ type Route struct {
 	DestinationSubnet *net.IPNet
 	GatewayAddress    net.IP
 	RouteMetric       int
+}
+
+func (r Route) String() string {
+	return fmt.Sprintf("LinkIndex: %d, DestinationSubnet: %s, GatewayAddress: %s, RouteMetric: %d",
+		r.LinkIndex, r.DestinationSubnet, r.GatewayAddress, r.RouteMetric)
+}
+
+type Neighbor struct {
+	LinkIndex        int
+	IPAddress        net.IP
+	LinkLayerAddress net.HardwareAddr
+}
+
+func (n Neighbor) String() string {
+	return fmt.Sprintf("LinkIndex: %d, IPAddress: %s, LinkLayerAddress: %s", n.LinkIndex, n.IPAddress, n.LinkLayerAddress)
 }
 
 func GetNSPath(containerNetNS string) (string, error) {
@@ -523,14 +539,45 @@ func NewNetRoute(route *Route) error {
 }
 
 func RemoveNetRoute(route *Route) error {
-	cmd := fmt.Sprintf("Remove-NetRoute -InterfaceIndex %v -DestinationPrefix %v -NextHop %v -Verbose -Confirm:$false",
-		route.LinkIndex, route.DestinationSubnet.String(), route.GatewayAddress.String())
+	cmd := fmt.Sprintf("Remove-NetRoute -InterfaceIndex %v -DestinationPrefix %v -Verbose -Confirm:$false",
+		route.LinkIndex, route.DestinationSubnet.String())
 	_, err := ps.RunCommand(cmd)
 	return err
 }
 
+func ReplaceNetRoute(route *Route) error {
+	rs, err := GetNetRoutes(route.LinkIndex, route.DestinationSubnet)
+	if err != nil {
+		return err
+	}
+
+	if len(rs) == 0 {
+		if err := NewNetRoute(route); err != nil {
+			return err
+		}
+		return nil
+	}
+	found := false
+	for _, r := range rs {
+		if r.GatewayAddress.Equal(route.GatewayAddress) {
+			found = true
+			break
+		}
+	}
+	if found {
+		return nil
+	}
+	if err := RemoveNetRoute(route); err != nil {
+		return err
+	}
+	if err := NewNetRoute(route); err != nil {
+		return err
+	}
+	return nil
+}
+
 func GetNetRoutes(linkIndex int, dstSubnet *net.IPNet) ([]Route, error) {
-	cmd := fmt.Sprintf("Get-NetRoute -InterfaceIndex %d -DestinationPrefix %s -erroraction Ignore | Format-Table -HideTableHeaders",
+	cmd := fmt.Sprintf("Get-NetRoute -InterfaceIndex %d -DestinationPrefix %s -ErrorAction Ignore | Format-Table -HideTableHeaders",
 		linkIndex, dstSubnet.String())
 	return getNetRoutes(cmd)
 }
@@ -542,23 +589,9 @@ func GetNetRoutesAll() ([]Route, error) {
 
 func getNetRoutes(cmd string) ([]Route, error) {
 	routesStr, _ := ps.RunCommand(cmd)
-	routes, err := parseRoutes(routesStr)
-	if err != nil {
-		return nil, err
-	}
-	return routes, nil
-}
-
-func parseRoutes(routesStr string) ([]Route, error) {
-	scanner := bufio.NewScanner(strings.NewReader(routesStr))
+	parsed := parseGetNetCmdResult(routesStr, 6)
 	var routes []Route
-	for scanner.Scan() {
-		items := strings.Fields(scanner.Text())
-		if len(items) < 6 {
-			// Skip if an empty line or something similar
-			continue
-		}
-
+	for _, items := range parsed {
 		idx, err := strconv.Atoi(items[0])
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse the LinkIndex '%s': %v", items[0], err)
@@ -581,6 +614,20 @@ func parseRoutes(routesStr string) ([]Route, error) {
 		routes = append(routes, route)
 	}
 	return routes, nil
+}
+
+func parseGetNetCmdResult(result string, itemNum int) [][]string {
+	scanner := bufio.NewScanner(strings.NewReader(result))
+	parsed := [][]string{}
+	for scanner.Scan() {
+		items := strings.Fields(scanner.Text())
+		if len(items) < itemNum {
+			// Skip if an empty line or something similar
+			continue
+		}
+		parsed = append(parsed, items)
+	}
+	return parsed
 }
 
 func CreateNetNatOnHost(subnetCIDR *net.IPNet) error {
@@ -606,6 +653,83 @@ func CreateNetNatOnHost(subnetCIDR *net.IPNet) error {
 	_, err := ps.RunCommand(cmd)
 	if err != nil {
 		klog.ErrorS(err, "Failed to add netnat", "name", netNatName, "internalIPInterfaceAddressPrefix", subnetCIDR.String())
+		return err
+	}
+	return nil
+}
+
+// GetNetNeighbor gets neighbor cache entries with Get-NetNeighbor.
+func GetNetNeighbor(neighbor *Neighbor) ([]Neighbor, error) {
+	cmd := fmt.Sprintf("Get-NetNeighbor -InterfaceIndex %d -IPAddress %s -ErrorAction Ignore | Format-Table -HideTableHeaders", neighbor.LinkIndex, neighbor.IPAddress.String())
+	neighborsStr, err := ps.RunCommand(cmd)
+	if err != nil {
+		return nil, err
+	}
+	parsed := parseGetNetCmdResult(neighborsStr, 5)
+	var neighbors []Neighbor
+	for _, items := range parsed {
+		idx, err := strconv.Atoi(items[0])
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse the LinkIndex '%s': %v", items[0], err)
+		}
+		dstIP := net.ParseIP(items[1])
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse the DestinationIP '%s': %v", items[1], err)
+		}
+		// Get-NetRoute returns LinkLayerAddress like "AA-BB-CC-DD-EE-FF".
+		mac, err := net.ParseMAC(strings.ReplaceAll(items[2], "-", ":"))
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse the Gateway MAC '%s': %v", items[2], err)
+		}
+		neighbor := Neighbor{
+			LinkIndex:        idx,
+			IPAddress:        dstIP,
+			LinkLayerAddress: mac,
+		}
+		neighbors = append(neighbors, neighbor)
+	}
+	return neighbors, nil
+}
+
+// NewNetNeighbor creates a new neighbor cache entry with New-NetNeighbor.
+func NewNetNeighbor(neighbor *Neighbor) error {
+	cmd := fmt.Sprintf("New-NetNeighbor -InterfaceIndex %d -IPAddress %s -LinkLayerAddress %s -State Permanent",
+		neighbor.LinkIndex, neighbor.IPAddress, neighbor.LinkLayerAddress)
+	_, err := ps.RunCommand(cmd)
+	return err
+}
+
+// SetNetNeighbor modifies a neighbor cache entry with Set-NetNeighbor.
+func SetNetNeighbor(neighbor *Neighbor) error {
+	cmd := fmt.Sprintf("Set-NetNeighbor -InterfaceIndex %d -IPAddress %s -LinkLayerAddress %s -State Permanent",
+		neighbor.LinkIndex, neighbor.IPAddress, neighbor.LinkLayerAddress)
+	_, err := ps.RunCommand(cmd)
+	return err
+}
+
+func ReplaceNetNeighbor(neighbor *Neighbor) error {
+	neighbors, err := GetNetNeighbor(neighbor)
+	if err != nil {
+		return err
+	}
+
+	if len(neighbors) == 0 {
+		if err := NewNetNeighbor(neighbor); err != nil {
+			return err
+		}
+		return nil
+	}
+	found := false
+	for _, n := range neighbors {
+		if n.LinkLayerAddress.String() == neighbor.LinkLayerAddress.String() {
+			found = true
+			break
+		}
+	}
+	if found {
+		return nil
+	}
+	if err := SetNetNeighbor(neighbor); err != nil {
 		return err
 	}
 	return nil

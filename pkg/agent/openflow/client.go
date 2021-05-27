@@ -198,7 +198,7 @@ type Client interface {
 	// the new round number.
 	DeleteStaleFlows() error
 
-	// GetTunnelVirtualMAC() returns globalVirtualMAC used for tunnel traffic.
+	// GetTunnelVirtualMAC() returns GlobalVirtualMAC used for tunnel traffic.
 	GetTunnelVirtualMAC() net.HardwareAddr
 
 	// GetPodFlowKeys returns the keys (match strings) of the cached flows for a
@@ -698,7 +698,7 @@ func (c *client) InstallGatewayFlows() error {
 func (c *client) InstallDefaultTunnelFlows() error {
 	flows := []binding.Flow{
 		c.tunnelClassifierFlow(config.DefaultTunOFPort, cookie.Default),
-		c.l2ForwardCalcFlow(globalVirtualMAC, config.DefaultTunOFPort, true, cookie.Default),
+		c.l2ForwardCalcFlow(GlobalVirtualMAC, config.DefaultTunOFPort, true, cookie.Default),
 	}
 	if err := c.ofEntryOperations.AddAll(flows); err != nil {
 		return err
