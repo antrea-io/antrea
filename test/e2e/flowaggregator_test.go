@@ -106,11 +106,14 @@ const (
 	egressRejectANPName           = "test-flow-aggregator-anp-engress-reject"
 	egressDropANPName             = "test-flow-aggregator-anp-engress-drop"
 	egressDenyNPName              = "test-flow-aggregator-np-egress-deny"
-	collectorCheckTimeout         = 10 * time.Second
+	collectorCheckTimeout         = 12 * time.Second
+	iperfTimeSec                  = 12
 	// Single iperf run results in two connections with separate ports (control connection and actual data connection).
-	// As 5s is export interval and iperf traffic runs for 10s, we expect about 4 records exporting to the flow aggregator.
-	// Since flow aggregator will aggregate records based on 5-tuple connection key, we expect 2 records.
-	expectedNumDataRecords = 2
+	// As 2s is the export active timeout of flow exporter and iperf traffic runs for 12s, we expect totally 12 records
+	// exporting to the flow aggregator at time 2s, 4s, 6s, 8s, 10s, and 12s after iperf traffic begins.
+	// Since flow aggregator will aggregate records based on 5-tuple connection key and active timeout is 3.5 seconds,
+	// we expect 3 records at time 5.5s, 9s, and 12.5s after iperf traffic begins.
+	expectedNumDataRecords = 3
 )
 
 type testFlow struct {
@@ -153,6 +156,8 @@ func testHelper(t *testing.T, data *TestData, podAIPs, podBIPs, podCIPs, podDIPs
 	// Wait for the Service to be realized.
 	time.Sleep(3 * time.Second)
 
+	// OVS userspace implementation of conntrack doesn't maintain packet or byte counter statistics, so we ignore the bandwidth test in Kind cluster.
+	checkBandwidth := testOptions.providerName != "kind"
 	// IntraNodeFlows tests the case, where Pods are deployed on same Node and their flow information is exported as IPFIX flow records.
 	t.Run("IntraNodeFlows", func(t *testing.T) {
 		np1, np2 := deployNetworkPolicies(t, data, "perftest-a", "perftest-b")
@@ -168,11 +173,10 @@ func testHelper(t *testing.T, data *TestData, podAIPs, podBIPs, podCIPs, podDIPs
 				}
 			}
 		}()
-		// TODO: Skipping bandwidth check for Intra-Node flows as it is flaky.
 		if !isIPv6 {
-			checkRecordsForFlows(t, data, podAIPs.ipv4.String(), podBIPs.ipv4.String(), isIPv6, true, false, true, false)
+			checkRecordsForFlows(t, data, podAIPs.ipv4.String(), podBIPs.ipv4.String(), isIPv6, true, false, true, checkBandwidth)
 		} else {
-			checkRecordsForFlows(t, data, podAIPs.ipv6.String(), podBIPs.ipv6.String(), isIPv6, true, false, true, false)
+			checkRecordsForFlows(t, data, podAIPs.ipv6.String(), podBIPs.ipv6.String(), isIPv6, true, false, true, checkBandwidth)
 		}
 	})
 
@@ -298,9 +302,9 @@ func testHelper(t *testing.T, data *TestData, podAIPs, podBIPs, podCIPs, podDIPs
 			}
 		}()
 		if !isIPv6 {
-			checkRecordsForFlows(t, data, podAIPs.ipv4.String(), podCIPs.ipv4.String(), isIPv6, false, false, true, true)
+			checkRecordsForFlows(t, data, podAIPs.ipv4.String(), podCIPs.ipv4.String(), isIPv6, false, false, true, checkBandwidth)
 		} else {
-			checkRecordsForFlows(t, data, podAIPs.ipv6.String(), podCIPs.ipv6.String(), isIPv6, false, false, true, true)
+			checkRecordsForFlows(t, data, podAIPs.ipv6.String(), podCIPs.ipv6.String(), isIPv6, false, false, true, checkBandwidth)
 		}
 	})
 
@@ -412,11 +416,10 @@ func testHelper(t *testing.T, data *TestData, podAIPs, podBIPs, podCIPs, podDIPs
 	// LocalServiceAccess tests the case, where Pod and Service are deployed on the same Node and their flow information is exported as IPFIX flow records.
 	t.Run("LocalServiceAccess", func(t *testing.T) {
 		skipIfProxyDisabled(t, data)
-		// TODO: Skipping bandwidth check for LocalServiceAccess flows as it is flaky.
 		if !isIPv6 {
-			checkRecordsForFlows(t, data, podAIPs.ipv4.String(), svcB.Spec.ClusterIP, isIPv6, true, true, false, false)
+			checkRecordsForFlows(t, data, podAIPs.ipv4.String(), svcB.Spec.ClusterIP, isIPv6, true, true, false, checkBandwidth)
 		} else {
-			checkRecordsForFlows(t, data, podAIPs.ipv6.String(), svcB.Spec.ClusterIP, isIPv6, true, true, false, false)
+			checkRecordsForFlows(t, data, podAIPs.ipv6.String(), svcB.Spec.ClusterIP, isIPv6, true, true, false, checkBandwidth)
 		}
 	})
 
@@ -424,26 +427,39 @@ func testHelper(t *testing.T, data *TestData, podAIPs, podBIPs, podCIPs, podDIPs
 	t.Run("RemoteServiceAccess", func(t *testing.T) {
 		skipIfProxyDisabled(t, data)
 		if !isIPv6 {
-			checkRecordsForFlows(t, data, podAIPs.ipv4.String(), svcC.Spec.ClusterIP, isIPv6, false, true, false, true)
+			checkRecordsForFlows(t, data, podAIPs.ipv4.String(), svcC.Spec.ClusterIP, isIPv6, false, true, false, checkBandwidth)
 		} else {
-			checkRecordsForFlows(t, data, podAIPs.ipv6.String(), svcC.Spec.ClusterIP, isIPv6, false, true, false, true)
+			checkRecordsForFlows(t, data, podAIPs.ipv6.String(), svcC.Spec.ClusterIP, isIPv6, false, true, false, checkBandwidth)
 		}
 	})
 }
 
 func checkRecordsForFlows(t *testing.T, data *TestData, srcIP string, dstIP string, isIPv6 bool, isIntraNode bool, checkService bool, checkNetworkPolicy bool, checkBandwidth bool) {
 	timeStart := time.Now()
+	timeStartSec := timeStart.Unix()
 	var cmdStr string
 	if !isIPv6 {
-		cmdStr = fmt.Sprintf("iperf3 -c %s|grep sender|awk '{print $7,$8}'", dstIP)
+		cmdStr = fmt.Sprintf("iperf3 -c %s -t %d|grep sender|awk '{print $7,$8}'", dstIP, iperfTimeSec)
 	} else {
-		cmdStr = fmt.Sprintf("iperf3 -6 -c %s|grep sender|awk '{print $7,$8}'", dstIP)
+		cmdStr = fmt.Sprintf("iperf3 -6 -c %s -t %d|grep sender|awk '{print $7,$8}'", dstIP, iperfTimeSec)
 	}
 	stdout, _, err := data.runCommandFromPod(testNamespace, "perftest-a", "perftool", []string{"bash", "-c", cmdStr})
 	if err != nil {
 		t.Errorf("Error when running iperf3 client: %v", err)
 	}
 	bandwidth := strings.TrimSpace(stdout)
+	bwSlice := strings.Split(bandwidth, " ")
+	// bandwidth from iperf output
+	bandwidthInFloat, err := strconv.ParseFloat(bwSlice[0], 64)
+	require.NoErrorf(t, err, "Error when converting iperf bandwidth %s to float64 type", bwSlice[0])
+	var bandwidthInMbps float64
+	if strings.Contains(bwSlice[1], "Mbits") {
+		bandwidthInMbps = bandwidthInFloat
+	} else if strings.Contains(bwSlice[1], "Gbits") {
+		bandwidthInMbps = bandwidthInFloat * float64(1024)
+	} else {
+		t.Fatalf("Unit of the traffic bandwidth reported by iperf should either be Mbits or Gbits, failing the test.")
+	}
 
 	// Polling to make sure all the data records corresponding to the iperf flow
 	// are received.
@@ -452,7 +468,16 @@ func checkRecordsForFlows(t *testing.T, data *TestData, srcIP string, dstIP stri
 		if err != nil || rc != 0 {
 			return false, err
 		}
-		return strings.Count(collectorOutput, srcIP) >= expectedNumDataRecords && strings.Count(collectorOutput, dstIP) >= expectedNumDataRecords, nil
+		recordSlices := getRecordsFromOutput(collectorOutput)
+		for _, record := range recordSlices {
+			exportTime := int64(getUnit64FieldFromRecord(t, record, "flowEndSeconds"))
+			if strings.Contains(record, srcIP) && strings.Contains(record, dstIP) {
+				if exportTime >= timeStartSec+iperfTimeSec {
+					return true, nil
+				}
+			}
+		}
+		return false, nil
 	})
 	require.NoErrorf(t, err, "IPFIX collector did not receive the expected records and timed out with error: %v", err)
 
@@ -460,57 +485,70 @@ func checkRecordsForFlows(t *testing.T, data *TestData, srcIP string, dstIP stri
 	if err != nil || rc != 0 {
 		t.Errorf("Error when getting logs %v, rc: %v", err, rc)
 	}
-
 	// Iterate over recordSlices and build some results to test with expected results
 	recordSlices := getRecordsFromOutput(collectorOutput)
 	dataRecordsCount := 0
+	var octetTotalCount uint64
 	for _, record := range recordSlices {
 		if strings.Contains(record, srcIP) && strings.Contains(record, dstIP) {
 			dataRecordsCount = dataRecordsCount + 1
-			// In Kind clusters, there are two flow records for the iperf flow.
-			// One of them has no bytes and we ignore that flow record.
-			if !strings.Contains(record, "octetDeltaCount: 0") {
-				// Check if record has both Pod name of source and destination pod.
-				if isIntraNode {
-					checkPodAndNodeData(t, record, "perftest-a", controlPlaneNodeName(), "perftest-b", controlPlaneNodeName())
-					checkFlowType(t, record, ipfixregistry.FlowTypeIntraNode)
-				} else {
-					checkPodAndNodeData(t, record, "perftest-a", controlPlaneNodeName(), "perftest-c", workerNodeName(1))
-					checkFlowType(t, record, ipfixregistry.FlowTypeInterNode)
-				}
+			// Check if record has both Pod name of source and destination Pod.
+			if isIntraNode {
+				checkPodAndNodeData(t, record, "perftest-a", controlPlaneNodeName(), "perftest-b", controlPlaneNodeName())
+				checkFlowType(t, record, ipfixregistry.FlowTypeIntraNode)
+			} else {
+				checkPodAndNodeData(t, record, "perftest-a", controlPlaneNodeName(), "perftest-c", workerNodeName(1))
+				checkFlowType(t, record, ipfixregistry.FlowTypeInterNode)
+			}
 
-				if checkService {
-					if isIntraNode {
-						if !strings.Contains(record, "antrea-test/perftest-b") {
-							t.Errorf("Record with ServiceIP does not have Service name")
-						}
-					} else {
-						if !strings.Contains(record, "antrea-test/perftest-c") {
-							t.Errorf("Record with ServiceIP does not have Service name")
-						}
+			if checkService {
+				if isIntraNode {
+					if !strings.Contains(record, "antrea-test/perftest-b") {
+						t.Errorf("Record with ServiceIP does not have Service name")
+					}
+				} else {
+					if !strings.Contains(record, "antrea-test/perftest-c") {
+						t.Errorf("Record with ServiceIP does not have Service name")
 					}
 				}
-				if checkNetworkPolicy {
-					// Check if records have both ingress and egress network policies.
-					if !strings.Contains(record, ingressAllowNetworkPolicyName) {
-						t.Errorf("Record does not have NetworkPolicy name with ingress rule")
-					}
-					if !strings.Contains(record, fmt.Sprintf("%s: %s", "ingressNetworkPolicyNamespace", testNamespace)) {
-						t.Errorf("Record does not have correct ingressNetworkPolicyNamespace")
-					}
-					if !strings.Contains(record, egressAllowNetworkPolicyName) {
-						t.Errorf("Record does not have NetworkPolicy name with egress rule")
-					}
-					if !strings.Contains(record, fmt.Sprintf("%s: %s", "egressNetworkPolicyNamespace", testNamespace)) {
-						t.Errorf("Record does not have correct egressNetworkPolicyNamespace")
-					}
+			}
+			if checkNetworkPolicy {
+				// Check if records have both ingress and egress network policies.
+				if !strings.Contains(record, ingressAllowNetworkPolicyName) {
+					t.Errorf("Record does not have NetworkPolicy name with ingress rule")
 				}
-				// Check the bandwidth using octetDeltaCount in data record.
-				if checkBandwidth {
-					checkBandwidthFromRecord(t, record, bandwidth)
+				if !strings.Contains(record, fmt.Sprintf("%s: %s", "ingressNetworkPolicyNamespace", testNamespace)) {
+					t.Errorf("Record does not have correct ingressNetworkPolicyNamespace")
+				}
+				if !strings.Contains(record, egressAllowNetworkPolicyName) {
+					t.Errorf("Record does not have NetworkPolicy name with egress rule")
+				}
+				if !strings.Contains(record, fmt.Sprintf("%s: %s", "egressNetworkPolicyNamespace", testNamespace)) {
+					t.Errorf("Record does not have correct egressNetworkPolicyNamespace")
+				}
+			}
+			// Skip the bandwidth check for the iperf control flow records which have 0 delta count.
+			if checkBandwidth && !strings.Contains(record, "octetDeltaCount: 0") {
+				exportTime := int64(getUnit64FieldFromRecord(t, record, "flowEndSeconds"))
+				curOctetTotalCount := getUnit64FieldFromRecord(t, record, "octetTotalCountFromSourceNode")
+				if curOctetTotalCount > octetTotalCount {
+					octetTotalCount = curOctetTotalCount
+				}
+				curOctetDeltaCount := getUnit64FieldFromRecord(t, record, "octetDeltaCountFromSourceNode")
+				// Check the bandwidth using octetDeltaCountFromSourceNode, if this record
+				// is not either the first record or the last in the stream of records.
+				if curOctetDeltaCount != curOctetTotalCount && exportTime < timeStartSec+iperfTimeSec {
+					t.Logf("Check the bandwidth using octetDeltaCountFromSourceNode in data record.")
+					// This middle record should aggregate two records from Flow Exporter
+					checkBandwidthByInterval(t, bandwidthInMbps, curOctetDeltaCount, float64(2*exporterActiveFlowExportTimeout/time.Second), "octetDeltaCountFromSourceNode")
 				}
 			}
 		}
+	}
+	// Average bandwidth check is done after iterating through all records using the largest octetTotalCountFromSourceNode.
+	if checkBandwidth && octetTotalCount > 0 {
+		t.Logf("Check the average bandwidth using octetTotalCountFromSourceNode %v in data record.", octetTotalCount)
+		checkBandwidthByInterval(t, bandwidthInMbps, octetTotalCount, float64(iperfTimeSec), "octetTotalCountFromSourceNode")
 	}
 	// Checking only data records as data records cannot be decoded without template
 	// record.
@@ -597,6 +635,12 @@ func checkRecordsForDenyFlows(t *testing.T, data *TestData, testFlow1, testFlow2
 	}
 }
 
+func checkBandwidthByInterval(t *testing.T, bandwidthInMbps float64, octetCount uint64, interval float64, field string) {
+	recBandwidth := float64(octetCount) * 8 / 1000000 / interval
+	t.Logf("Iperf throughput: %.2f Mbits/s, IPFIX record throughput calculated through %s: %.2f Mbits/s", bandwidthInMbps, field, recBandwidth)
+	assert.InDeltaf(t, recBandwidth, bandwidthInMbps, bandwidthInMbps*0.15, "Difference between Iperf bandwidth and IPFIX record bandwidth calculated through %s should be lower than 15%%", field)
+}
+
 func checkPodAndNodeData(t *testing.T, record, srcPod, srcNode, dstPod, dstNode string) {
 	if !strings.Contains(record, srcPod) {
 		t.Errorf("Record with srcIP does not have Pod name")
@@ -618,35 +662,17 @@ func checkPodAndNodeData(t *testing.T, record, srcPod, srcNode, dstPod, dstNode 
 	}
 }
 
-func checkBandwidthFromRecord(t *testing.T, record, bandwidth string) {
-	// Split the record in lines to compute bandwidth
+func getUnit64FieldFromRecord(t *testing.T, record string, field string) uint64 {
 	splitLines := strings.Split(record, "\n")
 	for _, line := range splitLines {
-		if strings.Contains(line, "octetDeltaCount:") {
+		if strings.Contains(line, field) {
 			lineSlice := strings.Split(line, ":")
-			deltaBytes, err := strconv.ParseFloat(strings.TrimSpace(lineSlice[1]), 64)
-			if err != nil {
-				t.Errorf("Error in converting octetDeltaCount to float type")
-			}
-			// Flow Aggregator uses 5s as export interval; we use
-			// 2s as export interval for Flow Exporter.
-			recBandwidth := (deltaBytes * 8.0) / float64(5*time.Second.Nanoseconds())
-			// bandwidth from iperf output
-			bwSlice := strings.Split(bandwidth, " ")
-			iperfBandwidth, err := strconv.ParseFloat(bwSlice[0], 64)
-			if err != nil {
-				t.Errorf("Error in converting iperf bandwidth to float64 type")
-			}
-			if strings.Contains(bwSlice[1], "Mbits") {
-				iperfBandwidth = iperfBandwidth / float64(1000)
-			}
-			t.Logf("Iperf bandwidth: %v", iperfBandwidth)
-			t.Logf("IPFIX record bandwidth: %v", recBandwidth)
-			// TODO: Make bandwidth test more robust.
-			assert.InDeltaf(t, recBandwidth, iperfBandwidth, 10, "Difference between Iperf bandwidth and IPFIX record bandwidth should be lower than 10")
-			break
+			value, err := strconv.ParseUint(strings.TrimSpace(lineSlice[1]), 10, 64)
+			require.NoError(t, err, "Error when converting %s to uint64 type", field)
+			return value
 		}
 	}
+	return 0
 }
 
 // TODO: Add a test that checks the functionality of Pod-To-External flow.
