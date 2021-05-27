@@ -21,6 +21,7 @@ import (
 
 	"github.com/google/uuid"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
@@ -29,6 +30,8 @@ import (
 	aggregator "antrea.io/antrea/pkg/flowaggregator"
 	"antrea.io/antrea/pkg/signals"
 )
+
+const informerDefaultResync = 12 * time.Hour
 
 // genObservationDomainID generates an IPFIX Observation Domain ID when one is not provided by the
 // user through the flow aggregator configuration. It will first try to generate one
@@ -79,6 +82,9 @@ func run(o *Options) error {
 		return fmt.Errorf("error when creating K8s client: %v", err)
 	}
 
+	informerFactory := informers.NewSharedInformerFactory(k8sClient, informerDefaultResync)
+	podInformer := informerFactory.Core().V1().Pods()
+
 	var observationDomainID uint32
 	if o.config.ObservationDomainID != nil {
 		observationDomainID = *o.config.ObservationDomainID
@@ -96,6 +102,7 @@ func run(o *Options) error {
 		o.flowAggregatorAddress,
 		k8sClient,
 		observationDomainID,
+		podInformer,
 	)
 	err = flowAggregator.InitCollectingProcess()
 	if err != nil {
@@ -106,6 +113,9 @@ func run(o *Options) error {
 		return fmt.Errorf("error when creating aggregation process: %v", err)
 	}
 	go flowAggregator.Run(stopCh)
+
+	informerFactory.Start(stopCh)
+
 	<-stopCh
 	klog.Infof("Stopping flow aggregator")
 	return nil

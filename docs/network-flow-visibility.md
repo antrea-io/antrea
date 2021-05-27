@@ -163,24 +163,26 @@ the flow. All the IEs used by the Antrea Flow Exporter are listed below:
 
 #### IEs from Antrea IE Registry
 
-| IPFIX Information Element    | Enterprise ID | Field ID | Type        |
-|------------------------------|---------------|----------|-------------|
-| sourcePodNamespace           | 56506         | 100      | string      |
-| sourcePodName                | 56506         | 101      | string      |
-| destinationPodNamespace      | 56506         | 102      | string      |
-| destinationPodName           | 56506         | 103      | string      |
-| sourceNodeName               | 56506         | 104      | string      |
-| destinationNodeName          | 56506         | 105      | string      |
-| destinationClusterIPv4       | 56506         | 106      | ipv4Address |
-| destinationClusterIPv6       | 56506         | 107      | ipv6Address |
-| destinationServicePort       | 56506         | 108      | unsigned16  |
-| destinationServicePortName   | 56506         | 109      | string      |
-| ingressNetworkPolicyName     | 56506         | 110      | string      |
-| ingressNetworkPolicyNamespace| 56506         | 111      | string      |
-| egressNetworkPolicyName      | 56506         | 112      | string      |
-| egressNetworkPolicyNamespace | 56506         | 113      | string      |
-| tcpState                     | 56506         | 136      | string      |
-| flowType                     | 56506         | 137      | unsigned8   |
+| IPFIX Information Element     | Enterprise ID | Field ID | Type        |
+|-------------------------------|---------------|----------|-------------|
+| sourcePodNamespace            | 56506         | 100      | string      |
+| sourcePodName                 | 56506         | 101      | string      |
+| destinationPodNamespace       | 56506         | 102      | string      |
+| destinationPodName            | 56506         | 103      | string      |
+| sourceNodeName                | 56506         | 104      | string      |
+| destinationNodeName           | 56506         | 105      | string      |
+| destinationClusterIPv4        | 56506         | 106      | ipv4Address |
+| destinationClusterIPv6        | 56506         | 107      | ipv6Address |
+| destinationServicePort        | 56506         | 108      | unsigned16  |
+| destinationServicePortName    | 56506         | 109      | string      |
+| ingressNetworkPolicyName      | 56506         | 110      | string      |
+| ingressNetworkPolicyNamespace | 56506         | 111      | string      |
+| egressNetworkPolicyName       | 56506         | 112      | string      |
+| egressNetworkPolicyNamespace  | 56506         | 113      | string      |
+| tcpState                      | 56506         | 136      | string      |
+| flowType                      | 56506         | 137      | unsigned8   |
+| ingressNetworkPolicyRuleAction| 56506         | 139      | unsigned8   |
+| egressNetworkPolicyRuleAction | 56506         | 140      | unsigned8   |
 
 ### Supported capabilities
 
@@ -195,11 +197,15 @@ starting with Antrea v0.11. In the future, we will enable the support for Extern
 flows.
 
 Kubernetes information such as Node name, Pod name, Pod Namespace, Service name,
-NetworkPolicy name and NetworkPolicy Namespace, is added to the flow records. For
-flow records that are exported from any given Antrea Agent, the Flow Exporter only
-provides the information of Kubernetes entities that are local to the Antrea Agent.
-In other words, flow records are only complete for intra-Node flows, but incomplete
-for inter-Node flows. It is the responsibility of the [Flow Aggregator](#flow-aggregator)
+NetworkPolicy name and NetworkPolicy Namespace, is added to the flow records.
+Network Policy Rule Action (Allow, Reject, Drop) is also supported for both
+Antrea-native NetworkPolicies and K8s NetworkPolicies. For K8s NetworkPolicies,
+connections dropped due to [isolated Pod behavior](https://kubernetes.io/docs/concepts/services-networking/network-policies/#isolated-and-non-isolated-pods)
+will be assigned the Drop action.
+For flow records that are exported from any given Antrea Agent, the Flow Exporter
+only provides the information of Kubernetes entities that are local to the Antrea
+Agent. In other words, flow records are only complete for intra-Node flows, but
+incomplete for inter-Node flows. It is the responsibility of the [Flow Aggregator](#flow-aggregator)
 to correlate flows from the source and destination Nodes and produce complete flow
 records.
 
@@ -210,7 +216,8 @@ Both Flow Exporter and Flow Aggregator are supported in IPv4 clusters, IPv6 clus
 We support following connection metrics as Prometheus metrics that are exposed
 through [Antrea Agent apiserver endpoint](prometheus-integration.md):
 `antrea_agent_conntrack_total_connection_count`,
-`antrea_agent_conntrack_antrea_connection_count` and
+`antrea_agent_conntrack_antrea_connection_count`,
+`antrea_agent_denied_connection_count` and
 `antrea_agent_conntrack_max_connection_count`
 
 ## Flow Aggregator
