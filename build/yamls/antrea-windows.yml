@@ -86,6 +86,16 @@ data:
 
     # Enable TLS communication from flow exporter to flow aggregator.
     #enableTLSToFlowAggregator: true
+
+    # Determines how traffic is encapsulated. It has the following options:
+    # encap(default):    Inter-node Pod traffic is always encapsulated and Pod to external network
+    #                    traffic is SNAT'd.
+    # noEncap:           Inter-node Pod traffic is not encapsulated; Pod to external network traffic is
+    #                    SNAT'd if noSNAT is not set to true. Underlying network must be capable of
+    #                    supporting Pod traffic across IP subnets.
+    # hybrid:            noEncap if source and destination Nodes are on the same subnet, otherwise encap.
+    #
+    #trafficEncapMode: encap
   antrea-cni.conflist: |
     {
         "cniVersion":"0.3.0",
@@ -104,7 +114,7 @@ kind: ConfigMap
 metadata:
   labels:
     app: antrea
-  name: antrea-windows-config-6cmd972m6b
+  name: antrea-windows-config-g5hmmkbh55
   namespace: kube-system
 ---
 apiVersion: apps/v1
@@ -192,7 +202,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-windows-config-6cmd972m6b
+          name: antrea-windows-config-g5hmmkbh55
         name: antrea-windows-config
       - configMap:
           defaultMode: 420

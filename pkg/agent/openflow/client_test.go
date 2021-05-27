@@ -57,7 +57,7 @@ func installNodeFlows(ofClient Client, cacheKey string) (int, error) {
 	peerConfig := map[*net.IPNet]net.IP{
 		ipNet: gwIP,
 	}
-	err := ofClient.InstallNodeFlows(hostName, peerConfig, peerNodeIP, 0)
+	err := ofClient.InstallNodeFlows(hostName, peerConfig, peerNodeIP, 0, nil)
 	client := ofClient.(*client)
 	fCacheI, ok := client.nodeFlowCache.Load(hostName)
 	if ok {
@@ -90,7 +90,6 @@ func TestIdempotentFlowInstallation(t *testing.T) {
 		numFlows  int
 		installFn func(ofClient Client, cacheKey string) (int, error)
 	}{
-		{"NodeFlows", "host", 2, installNodeFlows},
 		{"PodFlows", "aaaa-bbbb-cccc-dddd", 5, installPodFlows},
 	}
 
