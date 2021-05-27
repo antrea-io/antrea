@@ -31,8 +31,8 @@ type serviceChangesTracker struct {
 	initialized bool
 }
 
-func newServiceChangesTracker(recorder record.EventRecorder, isIPv6 bool) *serviceChangesTracker {
-	return &serviceChangesTracker{tracker: k8sproxy.NewServiceChangeTracker(types.NewServiceInfo, &isIPv6, recorder)}
+func newServiceChangesTracker(recorder record.EventRecorder, ipFamily v1.IPFamily) *serviceChangesTracker {
+	return &serviceChangesTracker{tracker: k8sproxy.NewServiceChangeTracker(types.NewServiceInfo, ipFamily, recorder, nil)}
 }
 
 func (sh *serviceChangesTracker) OnServiceSynced() {
@@ -53,5 +53,5 @@ func (sh *serviceChangesTracker) Synced() bool {
 }
 
 func (sh *serviceChangesTracker) Update(serviceMap k8sproxy.ServiceMap) k8sproxy.UpdateServiceMapResult {
-	return k8sproxy.UpdateServiceMap(serviceMap, sh.tracker)
+	return serviceMap.Update(sh.tracker)
 }
