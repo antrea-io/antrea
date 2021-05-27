@@ -97,10 +97,6 @@ func (c *Client) Reconcile(podCIDRs []string) error {
 			c.hostRoutes.Store(dst, rt)
 			continue
 		}
-		// If the route is not for uplink interface, ignore it.
-		if c.nodeConfig.UplinkNetConfig != nil && rt.LinkIndex != c.nodeConfig.UplinkNetConfig.Index {
-			continue
-		}
 		err := c.nr.RemoveNetRoute(rt.LinkIndex, rt.DestinationSubnet, rt.GatewayAddress)
 		if err != nil {
 			return err
@@ -195,7 +191,7 @@ func (c *Client) listRoutes() (map[string]*netroute.Route, error) {
 	rtMap := make(map[string]*netroute.Route)
 	for idx := range routes {
 		rt := routes[idx]
-		if rt.LinkIndex != c.nodeConfig.GatewayConfig.LinkIndex && rt.LinkIndex != c.bridgeInfIndex {
+		if rt.LinkIndex != c.nodeConfig.GatewayConfig.LinkIndex {
 			continue
 		}
 		// Only process IPv4 route entries in the loop.

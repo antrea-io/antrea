@@ -408,13 +408,15 @@ func (c *Controller) deleteNodeRoute(nodeName string) error {
 }
 
 func (c *Controller) addNodeRoute(nodeName string, node *corev1.Node) error {
+	// It is only for Windows Noencap mode to get Node MAC.
 	peerNodeMAC, err := getNodeMAC(node)
 	if err != nil {
 		return fmt.Errorf("error when retrieving MAC of Node %s: %v", nodeName, err)
 	}
 
 	nrInfo, installed, _ := c.installedNodes.GetByKey(nodeName)
-	if installed && nrInfo != nil && nrInfo.(*nodeRouteInfo).nodeMAC != nil && peerNodeMAC != nil && nrInfo.(*nodeRouteInfo).nodeMAC.String() == peerNodeMAC.String() {
+
+	if installed && nrInfo.(*nodeRouteInfo).nodeMAC.String() == peerNodeMAC.String() {
 		// Route is already added for this Node and Node MAC isn't changed.
 		return nil
 	}
@@ -450,7 +452,8 @@ func (c *Controller) addNodeRoute(nodeName string, node *corev1.Node) error {
 		// event to be processed before proceeding, or the route installation and uninstallation operations may override or
 		// conflict with each other.
 		// For Windows Noencap case, it is possible that nodesHaveSamePodCIDR is the Node itself because the Node
-		// MAC annotation is not set yet.
+		// MAC annotation was not set yet when the Node was initially installed. Then it is processed for the second
+		// time when its MAC annotation is updated.
 		if len(nodesHaveSamePodCIDR) > 0 && (len(nodesHaveSamePodCIDR) != 1 || nodesHaveSamePodCIDR[0] != nodeName) {
 			// Return an error so that the Node will be put back to the workqueue and will be retried later.
 			return fmt.Errorf("skipping addNodeRoute for Node %s because podCIDR %s is duplicate with Node %s, will retry later", nodeName, podCIDR, nodesHaveSamePodCIDR[0])
@@ -666,7 +669,7 @@ func (c *Controller) IPInPodSubnets(ip net.IP) bool {
 	return len(nodeInCluster) > 0 || ipCIDRStr == curNodeCIDRStr
 }
 
-// getNodeMAC gets Node's br-int MAC from its annotation. It is for Windows Noencap mode only.
+// getNodeMAC gets Node's br-int MAC from its annotation. It is only for Windows Noencap mode.
 func getNodeMAC(node *corev1.Node) (net.HardwareAddr, error) {
 	macStr := node.Annotations[types.NodeMACAddressAnnotationKey]
 	if macStr == "" {
@@ -674,7 +677,7 @@ func getNodeMAC(node *corev1.Node) (net.HardwareAddr, error) {
 	}
 	mac, err := net.ParseMAC(macStr)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse MAC `%s`, %v", macStr, err)
+		return nil, fmt.Errorf("failed to parse MAC `%s`: %v", macStr, err)
 	}
 	return mac, nil
 }

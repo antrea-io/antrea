@@ -313,7 +313,7 @@ func (c *client) addFlows(cache *flowCategoryCache, flowCacheKey string, flows [
 	return nil
 }
 
-// modifyFlows set the flows of flowCategoryCache be exactly same as the provided slice for the given flowCacheKey.
+// modifyFlows sets the flows of flowCategoryCache be exactly same as the provided slice for the given flowCacheKey.
 func (c *client) modifyFlows(cache *flowCategoryCache, flowCacheKey string, flows []binding.Flow) error {
 	oldFlowCacheI, ok := cache.Load(flowCacheKey)
 	fCache := flowCache{}
@@ -406,6 +406,8 @@ func (c *client) InstallNodeFlows(hostname string,
 		flows = append(flows, c.tunnelClassifierFlow(ipsecTunOFPort, cookie.Node))
 	}
 
+	// For Windows Noencap Mode, the OVS flows for Node need be be exactly same as the provided 'flows' slice because
+	// the Node flows may be processed more than once if the MAC annotation is updated.
 	return c.modifyFlows(c.nodeFlowCache, hostname, flows)
 }
 
