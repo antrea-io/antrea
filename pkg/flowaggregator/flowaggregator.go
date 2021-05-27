@@ -24,7 +24,10 @@ import (
 	"github.com/vmware/go-ipfix/pkg/exporter"
 	ipfixintermediate "github.com/vmware/go-ipfix/pkg/intermediate"
 	ipfixregistry "github.com/vmware/go-ipfix/pkg/registry"
+	corev1 "k8s.io/api/core/v1"
+	coreinformers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/ipfix"
@@ -62,8 +65,10 @@ var (
 		"destinationServicePortName",
 		"ingressNetworkPolicyName",
 		"ingressNetworkPolicyNamespace",
+		"ingressNetworkPolicyRuleAction",
 		"egressNetworkPolicyName",
 		"egressNetworkPolicyNamespace",
+		"egressNetworkPolicyRuleAction",
 		"tcpState",
 		"flowType",
 	}
@@ -130,6 +135,7 @@ var (
 		"destinationServicePortName",
 		"ingressNetworkPolicyName",
 		"ingressNetworkPolicyNamespace",
+		"ingressNetworkPolicyRuleAction",
 		"egressNetworkPolicyName",
 		"egressNetworkPolicyNamespace",
 	}
@@ -140,6 +146,9 @@ const (
 	udpTransport         = "udp"
 	tcpTransport         = "tcp"
 	collectorAddress     = "0.0.0.0:4739"
+
+	// PodInfo index name for Pod cache.
+	podInfoIndex = "podInfo"
 )
 
 type AggregatorTransportProtocol string
@@ -166,6 +175,7 @@ type flowAggregator struct {
 	flowAggregatorAddress       string
 	k8sClient                   kubernetes.Interface
 	observationDomainID         uint32
+	podInformer                 coreinformers.PodInformer
 }
 
 func NewFlowAggregator(
@@ -177,6 +187,7 @@ func NewFlowAggregator(
 	flowAggregatorAddress string,
 	k8sClient kubernetes.Interface,
 	observationDomainID uint32,
+	podInformer coreinformers.PodInformer,
 ) *flowAggregator {
 	registry := ipfix.NewIPFIXRegistry()
 	registry.LoadRegistry()
@@ -191,8 +202,21 @@ func NewFlowAggregator(
 		flowAggregatorAddress:       flowAggregatorAddress,
 		k8sClient:                   k8sClient,
 		observationDomainID:         observationDomainID,
+		podInformer:                 podInformer,
 	}
+	podInformer.Informer().AddIndexers(cache.Indexers{podInfoIndex: podInfoIndexFunc})
 	return fa
+}
+
+func podInfoIndexFunc(obj interface{}) ([]string, error) {
+	pod, ok := obj.(*corev1.Pod)
+	if !ok {
+		return nil, fmt.Errorf("obj is not pod: %+v", obj)
+	}
+	if pod.Status.PodIP == "" {
+		klog.V(4).Infof("Pod %s/%s has not been assigned IP yet. ", pod.Namespace, pod.Name)
+	}
+	return []string{pod.Status.PodIP}, nil
 }
 
 func (fa *flowAggregator) InitCollectingProcess() error {
@@ -382,6 +406,10 @@ func (fa *flowAggregator) sendFlowKeyRecord(key ipfixintermediate.FlowKey, recor
 	if err := fa.set.PrepareSet(ipfixentities.Data, templateID); err != nil {
 		return err
 	}
+	if !fa.aggregationProcess.IsMetadataFilled(record) {
+		fa.fillK8sMetadata(key, record.Record)
+		fa.aggregationProcess.SetMetadataFilled(record)
+	}
 	err := fa.set.AddRecord(record.Record.GetOrderedElementList(), templateID)
 	if err != nil {
 		return err
@@ -464,4 +492,55 @@ func (fa *flowAggregator) sendTemplateSet(templateSet ipfixentities.Set, isIPv6 
 	}
 	bytesSent, err := fa.exportingProcess.SendSet(templateSet)
 	return bytesSent, err
+}
+
+// fillK8sMetadata fills Pod name, Pod namespace and Node name for inter-Node flows
+// that have incomplete info due to deny network policy.
+func (fa *flowAggregator) fillK8sMetadata(key ipfixintermediate.FlowKey, record ipfixentities.Record) {
+	if fa.podInformer == nil {
+		klog.Warning("No pod podInformer is provided for filling k8s metadata.")
+		return
+	}
+	// fill source Pod info when sourcePodName is empty
+	if sourcePodName, exist := record.GetInfoElementWithValue("sourcePodName"); exist {
+		if sourcePodName.Value == "" {
+			pods, err := fa.podInformer.Informer().GetIndexer().ByIndex(podInfoIndex, key.SourceAddress)
+			if err == nil && len(pods) > 0 {
+				pod, ok := pods[0].(*corev1.Pod)
+				if !ok {
+					klog.Warningf("Invalid Pod obj in cache")
+				}
+				sourcePodName.Value = pod.Name
+				if sourcePodNamespace, exist := record.GetInfoElementWithValue("sourcePodNamespace"); exist {
+					sourcePodNamespace.Value = pod.Namespace
+				}
+				if sourceNodeName, exist := record.GetInfoElementWithValue("sourceNodeName"); exist {
+					sourceNodeName.Value = pod.Spec.NodeName
+				}
+			} else {
+				klog.Warning(err)
+			}
+		}
+	}
+	// fill destination Pod info when destinationPodName is empty
+	if destinationPodName, exist := record.GetInfoElementWithValue("destinationPodName"); exist {
+		if destinationPodName.Value == "" {
+			pods, err := fa.podInformer.Informer().GetIndexer().ByIndex(podInfoIndex, key.DestinationAddress)
+			if len(pods) > 0 && err == nil {
+				pod, ok := pods[0].(*corev1.Pod)
+				if !ok {
+					klog.Warningf("Invalid Pod obj in cache")
+				}
+				destinationPodName.Value = pod.Name
+				if destinationPodNamespace, exist := record.GetInfoElementWithValue("destinationPodNamespace"); exist {
+					destinationPodNamespace.Value = pod.Namespace
+				}
+				if destinationNodeName, exist := record.GetInfoElementWithValue("destinationNodeName"); exist {
+					destinationNodeName.Value = pod.Spec.NodeName
+				}
+			} else {
+				klog.Warning(err)
+			}
+		}
+	}
 }

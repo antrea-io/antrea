@@ -101,7 +101,8 @@ func run(o *Options) error {
 	ofClient := openflow.NewClient(o.config.OVSBridge, ovsBridgeMgmtAddr, ovsDatapathType,
 		features.DefaultFeatureGate.Enabled(features.AntreaProxy),
 		features.DefaultFeatureGate.Enabled(features.AntreaPolicy),
-		features.DefaultFeatureGate.Enabled(features.Egress))
+		features.DefaultFeatureGate.Enabled(features.Egress),
+		features.DefaultFeatureGate.Enabled(features.FlowExporter))
 
 	_, serviceCIDRNet, _ := net.ParseCIDR(o.config.ServiceCIDR)
 	var serviceCIDRNetv6 *net.IPNet
@@ -163,6 +164,22 @@ func run(o *Options) error {
 		networkConfig,
 		nodeConfig)
 
+	var proxier proxy.Proxier
+	if features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
+		v4Enabled := config.IsIPv4Enabled(nodeConfig, networkConfig.TrafficEncapMode)
+		v6Enabled := config.IsIPv6Enabled(nodeConfig, networkConfig.TrafficEncapMode)
+		switch {
+		case v4Enabled && v6Enabled:
+			proxier = proxy.NewDualStackProxier(nodeConfig.Name, informerFactory, ofClient)
+		case v4Enabled:
+			proxier = proxy.NewProxier(nodeConfig.Name, informerFactory, ofClient, false)
+		case v6Enabled:
+			proxier = proxy.NewProxier(nodeConfig.Name, informerFactory, ofClient, true)
+		default:
+			return fmt.Errorf("at least one of IPv4 or IPv6 should be enabled")
+		}
+	}
+
 	// entityUpdates is a channel for receiving entity updates from CNIServer and
 	// notifying NetworkPolicyController to reconcile rules related to the
 	// updated entities.
@@ -177,6 +194,11 @@ func run(o *Options) error {
 	// if AntreaPolicy feature is enabled.
 	statusManagerEnabled := antreaPolicyEnabled
 	loggingEnabled := antreaPolicyEnabled
+
+	var denyConnStore *connections.DenyConnectionStore
+	if features.DefaultFeatureGate.Enabled(features.FlowExporter) {
+		denyConnStore = connections.NewDenyConnectionStore(ifaceStore, proxier)
+	}
 	networkPolicyController, err := networkpolicy.NewNetworkPolicyController(
 		antreaClientProvider,
 		ofClient,
@@ -186,6 +208,7 @@ func run(o *Options) error {
 		antreaPolicyEnabled,
 		statusManagerEnabled,
 		loggingEnabled,
+		denyConnStore,
 		asyncRuleDeleteInterval)
 	if err != nil {
 		return fmt.Errorf("error creating new NetworkPolicy controller: %v", err)
@@ -201,22 +224,6 @@ func run(o *Options) error {
 	var egressController *egress.EgressController
 	if features.DefaultFeatureGate.Enabled(features.Egress) {
 		egressController = egress.NewEgressController(ofClient, egressInformer, antreaClientProvider, ifaceStore, routeClient, nodeConfig.Name)
-	}
-
-	var proxier proxy.Proxier
-	if features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
-		v4Enabled := config.IsIPv4Enabled(nodeConfig, networkConfig.TrafficEncapMode)
-		v6Enabled := config.IsIPv6Enabled(nodeConfig, networkConfig.TrafficEncapMode)
-		switch {
-		case v4Enabled && v6Enabled:
-			proxier = proxy.NewDualStackProxier(nodeConfig.Name, informerFactory, ofClient)
-		case v4Enabled:
-			proxier = proxy.NewProxier(nodeConfig.Name, informerFactory, ofClient, false)
-		case v6Enabled:
-			proxier = proxy.NewProxier(nodeConfig.Name, informerFactory, ofClient, true)
-		default:
-			return fmt.Errorf("at least one of IPv4 or IPv6 should be enabled")
-		}
 	}
 
 	isChaining := false
@@ -357,7 +364,7 @@ func run(o *Options) error {
 		isNetworkPolicyOnly := networkConfig.TrafficEncapMode.IsNetworkPolicyOnly()
 
 		flowRecords := flowrecords.NewFlowRecords()
-		connStore := connections.NewConnectionStore(
+		conntrackConnStore := connections.NewConntrackConnectionStore(
 			connections.InitializeConnTrackDumper(nodeConfig, serviceCIDRNet, serviceCIDRNetv6, ovsDatapathType, features.DefaultFeatureGate.Enabled(features.AntreaProxy)),
 			flowRecords,
 			ifaceStore,
@@ -366,11 +373,12 @@ func run(o *Options) error {
 			proxier,
 			networkPolicyController,
 			o.pollInterval)
-		go connStore.Run(stopCh)
+		go conntrackConnStore.Run(stopCh)
 
 		flowExporter, err := exporter.NewFlowExporter(
-			connStore,
+			conntrackConnStore,
 			flowRecords,
+			denyConnStore,
 			o.flowCollectorAddr,
 			o.flowCollectorProto,
 			o.activeFlowTimeout,

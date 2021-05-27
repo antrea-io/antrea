@@ -41,8 +41,8 @@ func filterAntreaConns(conns []*flowexporter.Connection, nodeConfig *config.Node
 		if conn.Zone != zoneFilter {
 			continue
 		}
-		srcIP := conn.TupleOrig.SourceAddress
-		dstIP := conn.TupleReply.SourceAddress
+		srcIP := conn.FlowKey.SourceAddress
+		dstIP := conn.FlowKey.DestinationAddress
 
 		// Consider Pod-to-Pod, Pod-To-Service and Pod-To-External flows.
 		if srcIP.Equal(nodeConfig.GatewayConfig.IPv4) || dstIP.Equal(nodeConfig.GatewayConfig.IPv4) {

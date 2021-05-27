@@ -114,6 +114,8 @@ func TestFlowAggregator_sendFlowKeyRecord(t *testing.T) {
 		mockDataSet.EXPECT().AddRecord(elementList, templateID).Return(nil)
 		mockIPFIXExpProc.EXPECT().SendSet(mockDataSet).Return(0, nil)
 		mockAggregationProcess.EXPECT().ResetStatElementsInRecord(mockRecord).Return(nil)
+		mockAggregationProcess.EXPECT().IsMetadataFilled(tc.flowRecord).Return(false)
+		mockAggregationProcess.EXPECT().SetMetadataFilled(tc.flowRecord)
 
 		err := fa.sendFlowKeyRecord(tc.flowKey, tc.flowRecord)
 		assert.NoError(t, err, "Error in sending flow key record: %v, key: %v, record: %v", err, tc.flowKey, tc.flowRecord)

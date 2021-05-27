@@ -31,6 +31,8 @@ type IPFIXAggregationProcess interface {
 	ForAllExpiredFlowRecordsDo(callback ipfixintermediate.FlowKeyRecordMapCallBack) error
 	GetExpiryFromExpirePriorityQueue() time.Duration
 	ResetStatElementsInRecord(record ipfixentities.Record) error
+	SetMetadataFilled(record ipfixintermediate.AggregationFlowRecord)
+	IsMetadataFilled(record ipfixintermediate.AggregationFlowRecord) bool
 }
 
 type ipfixAggregationProcess struct {
@@ -67,4 +69,12 @@ func (ap *ipfixAggregationProcess) GetExpiryFromExpirePriorityQueue() time.Durat
 
 func (ap *ipfixAggregationProcess) ResetStatElementsInRecord(record ipfixentities.Record) error {
 	return ap.AggregationProcess.ResetStatElementsInRecord(record)
+}
+
+func (ap *ipfixAggregationProcess) SetMetadataFilled(record ipfixintermediate.AggregationFlowRecord) {
+	ap.AggregationProcess.SetMetadataFilled(record, true)
+}
+
+func (ap *ipfixAggregationProcess) IsMetadataFilled(record ipfixintermediate.AggregationFlowRecord) bool {
+	return ap.AggregationProcess.IsMetadataFilled(record)
 }

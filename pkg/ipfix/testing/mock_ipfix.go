@@ -253,6 +253,20 @@ func (mr *MockIPFIXAggregationProcessMockRecorder) GetExpiryFromExpirePriorityQu
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetExpiryFromExpirePriorityQueue", reflect.TypeOf((*MockIPFIXAggregationProcess)(nil).GetExpiryFromExpirePriorityQueue))
 }
 
+// IsMetadataFilled mocks base method
+func (m *MockIPFIXAggregationProcess) IsMetadataFilled(arg0 intermediate.AggregationFlowRecord) bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IsMetadataFilled", arg0)
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// IsMetadataFilled indicates an expected call of IsMetadataFilled
+func (mr *MockIPFIXAggregationProcessMockRecorder) IsMetadataFilled(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsMetadataFilled", reflect.TypeOf((*MockIPFIXAggregationProcess)(nil).IsMetadataFilled), arg0)
+}
+
 // ResetStatElementsInRecord mocks base method
 func (m *MockIPFIXAggregationProcess) ResetStatElementsInRecord(arg0 entities.Record) error {
 	m.ctrl.T.Helper()
@@ -265,6 +279,18 @@ func (m *MockIPFIXAggregationProcess) ResetStatElementsInRecord(arg0 entities.Re
 func (mr *MockIPFIXAggregationProcessMockRecorder) ResetStatElementsInRecord(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResetStatElementsInRecord", reflect.TypeOf((*MockIPFIXAggregationProcess)(nil).ResetStatElementsInRecord), arg0)
+}
+
+// SetMetadataFilled mocks base method
+func (m *MockIPFIXAggregationProcess) SetMetadataFilled(arg0 intermediate.AggregationFlowRecord) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SetMetadataFilled", arg0)
+}
+
+// SetMetadataFilled indicates an expected call of SetMetadataFilled
+func (mr *MockIPFIXAggregationProcessMockRecorder) SetMetadataFilled(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetMetadataFilled", reflect.TypeOf((*MockIPFIXAggregationProcess)(nil).SetMetadataFilled), arg0)
 }
 
 // Start mocks base method
