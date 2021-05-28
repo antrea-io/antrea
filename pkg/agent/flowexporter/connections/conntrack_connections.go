@@ -158,25 +158,31 @@ func (cs *ConntrackConnectionStore) addNetworkPolicyMetadata(conn *flowexporter.
 		egressOfID := binary.LittleEndian.Uint32(conn.Labels[4:8])
 		if ingressOfID != 0 {
 			policy := cs.networkPolicyQuerier.GetNetworkPolicyByRuleFlowID(ingressOfID)
-			if policy == nil {
+			rule := cs.networkPolicyQuerier.GetRuleByFlowID(ingressOfID)
+			if policy == nil || rule == nil {
 				// This should not happen because the rule flow ID to rule mapping is
 				// preserved for max(5s, flowPollInterval) even after the rule deletion.
-				klog.Warningf("Cannot find NetworkPolicy that has rule with ingressOfID %v", ingressOfID)
+				klog.Warningf("Cannot find NetworkPolicy or rule with ingressOfID %v", ingressOfID)
 			} else {
 				conn.IngressNetworkPolicyName = policy.Name
 				conn.IngressNetworkPolicyNamespace = policy.Namespace
+				conn.IngressNetworkPolicyType = flowexporter.PolicyTypeToUint8(policy.Type)
+				conn.IngressNetworkPolicyRuleName = rule.Name
 				conn.IngressNetworkPolicyRuleAction = registry.NetworkPolicyRuleActionAllow
 			}
 		}
 		if egressOfID != 0 {
 			policy := cs.networkPolicyQuerier.GetNetworkPolicyByRuleFlowID(egressOfID)
-			if policy == nil {
+			rule := cs.networkPolicyQuerier.GetRuleByFlowID(egressOfID)
+			if policy == nil || rule == nil {
 				// This should not happen because the rule flow ID to rule mapping is
 				// preserved for max(5s, flowPollInterval) even after the rule deletion.
-				klog.Warningf("Cannot find NetworkPolicy that has rule with egressOfID %v", egressOfID)
+				klog.Warningf("Cannot find NetworkPolicy or rule with egressOfID %v", egressOfID)
 			} else {
 				conn.EgressNetworkPolicyName = policy.Name
 				conn.EgressNetworkPolicyNamespace = policy.Namespace
+				conn.EgressNetworkPolicyType = flowexporter.PolicyTypeToUint8(policy.Type)
+				conn.EgressNetworkPolicyRuleName = rule.Name
 				conn.EgressNetworkPolicyRuleAction = registry.NetworkPolicyRuleActionAllow
 			}
 		}

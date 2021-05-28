@@ -18,6 +18,8 @@ import (
 	"strconv"
 
 	"github.com/vmware/go-ipfix/pkg/registry"
+
+	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 )
 
 const (
@@ -62,5 +64,19 @@ func RuleActionToUint8(action string) uint8 {
 		return registry.NetworkPolicyRuleActionReject
 	default:
 		return registry.NetworkPolicyRuleActionNoAction
+	}
+}
+
+// policyTypeToUint8 converts NetworkPolicy type to uint8
+func PolicyTypeToUint8(policyType v1beta2.NetworkPolicyType) uint8 {
+	switch policyType {
+	case v1beta2.K8sNetworkPolicy:
+		return registry.PolicyTypeK8sNetworkPolicy
+	case v1beta2.AntreaNetworkPolicy:
+		return registry.PolicyTypeAntreaNetworkPolicy
+	case v1beta2.AntreaClusterNetworkPolicy:
+		return registry.PolicyTypeAntreaClusterNetworkPolicy
+	default:
+		return registry.PolicyTypeK8sNetworkPolicy
 	}
 }

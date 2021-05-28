@@ -26,6 +26,7 @@ import (
 	"github.com/contiv/libOpenflow/openflow13"
 	"github.com/contiv/libOpenflow/protocol"
 	"github.com/contiv/ofnet/ofctrl"
+	"github.com/vmware/go-ipfix/pkg/registry"
 	"gopkg.in/natefinch/lumberjack.v2"
 	"k8s.io/klog/v2"
 
@@ -380,8 +381,10 @@ func (c *Controller) storeDenyConnection(pktIn *ofctrl.PacketIn) error {
 
 	// For K8s NetworkPolicy implicit drop action, we cannot get name/namespace.
 	if tableID == openflow.IngressDefaultTable {
+		denyConn.IngressNetworkPolicyType = registry.PolicyTypeK8sNetworkPolicy
 		denyConn.IngressNetworkPolicyRuleAction = flowexporter.RuleActionToUint8(disposition)
 	} else if tableID == openflow.EgressDefaultTable {
+		denyConn.EgressNetworkPolicyType = registry.PolicyTypeK8sNetworkPolicy
 		denyConn.EgressNetworkPolicyRuleAction = flowexporter.RuleActionToUint8(disposition)
 	} else { // Get name and namespace for Antrea Network Policy or Antrea Cluster Network Policy
 		// Set match to corresponding ingress/egress reg according to disposition
@@ -391,18 +394,23 @@ func (c *Controller) storeDenyConnection(pktIn *ofctrl.PacketIn) error {
 			return fmt.Errorf("error when obtaining rule id from reg: %v", err)
 		}
 		policy := c.GetNetworkPolicyByRuleFlowID(ruleID)
+		rule := c.GetRuleByFlowID(ruleID)
 
-		if policy == nil {
+		if policy == nil || rule == nil {
 			// Default drop by K8s NetworkPolicy
-			klog.V(4).Infof("Cannot find NetworkPolicy that has ruleID %v", ruleID)
+			klog.V(4).Infof("Cannot find NetworkPolicy or rule that has ruleID %v", ruleID)
 		} else {
 			if tableID == openflow.AntreaPolicyIngressRuleTable {
 				denyConn.IngressNetworkPolicyName = policy.Name
 				denyConn.IngressNetworkPolicyNamespace = policy.Namespace
+				denyConn.IngressNetworkPolicyType = flowexporter.PolicyTypeToUint8(policy.Type)
+				denyConn.IngressNetworkPolicyRuleName = rule.Name
 				denyConn.IngressNetworkPolicyRuleAction = flowexporter.RuleActionToUint8(disposition)
 			} else if tableID == openflow.AntreaPolicyEgressRuleTable {
 				denyConn.EgressNetworkPolicyName = policy.Name
 				denyConn.EgressNetworkPolicyNamespace = policy.Namespace
+				denyConn.EgressNetworkPolicyType = flowexporter.PolicyTypeToUint8(policy.Type)
+				denyConn.EgressNetworkPolicyRuleName = rule.Name
 				denyConn.EgressNetworkPolicyRuleAction = flowexporter.RuleActionToUint8(disposition)
 			}
 		}
