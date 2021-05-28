@@ -57,18 +57,18 @@ on the tunnel mode you choose, please check [network requirements](./network-req
 ## Installation
 
 To deploy a released version of Antrea, pick a deployment manifest from the
-[list of releases](https://github.com/vmware-tanzu/antrea/releases). For any
+[list of releases](https://github.com/antrea-io/antrea/releases). For any
 given release `<TAG>` (e.g. `v0.1.0`), you can deploy Antrea as follows:
 
 ```bash
-kubectl apply -f https://github.com/vmware-tanzu/antrea/releases/download/<TAG>/antrea.yml
+kubectl apply -f https://github.com/antrea-io/antrea/releases/download/<TAG>/antrea.yml
 ```
 
 To deploy the latest version of Antrea (built from the main branch), use the
 checked-in deployment yaml (`/build/yamls/antrea.yml`):
 
 ```bash
-kubectl apply -f https://raw.githubusercontent.com/vmware-tanzu/antrea/main/build/yamls/antrea.yml
+kubectl apply -f https://raw.githubusercontent.com/antrea-io/antrea/main/build/yamls/antrea.yml
 ```
 
 Antrea supports some experimental features that can be enabled or disabled,

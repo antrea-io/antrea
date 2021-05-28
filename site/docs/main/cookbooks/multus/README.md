@@ -48,14 +48,14 @@ when provisioning your VMs.
 
 If you need to create a K8s cluster to test this guide, we suggest you create
 one by following [these
-steps](https://github.com/vmware-tanzu/antrea/tree/main/test/e2e#creating-the-test-kubernetes-cluster-with-vagrant). You
+steps](https://github.com/antrea-io/antrea/tree/main/test/e2e#creating-the-test-kubernetes-cluster-with-vagrant). You
 will need to use a slightly modified Vagrantfile, which you can find
 [here](test/Vagrantfile). Note that this Vagrantfile will create 3 VMs on your
 machine, and each VM will be allocated 2GB of memory, so make sure you have
 enough memory available. You can create the cluster with the following steps:
 
 ```bash
-git clone https://github.com/vmware-tanzu/antrea.git
+git clone https://github.com/antrea-io/antrea.git
 cd antrea
 cp docs/cookbooks/multus/test/Vagrantfile test/e2e/infra/vagrant/
 cd test/e2e/infra/vagrant
@@ -84,11 +84,11 @@ deploy Antrea, please refer to
 Antrea, use:
 
 ```bash
-kubectl apply -f https://raw.githubusercontent.com/vmware-tanzu/antrea/main/build/yamls/antrea.yml
+kubectl apply -f https://raw.githubusercontent.com/antrea-io/antrea/main/build/yamls/antrea.yml
 ```
 
 You may also choose a [released Antrea
-version](https://github.com/vmware-tanzu/antrea/releases).
+version](https://github.com/antrea-io/antrea/releases).
 
 ### Step 2: Deploy Multus as a DaemonSet
 
@@ -134,7 +134,7 @@ This step is required if you want the Node to be able to communicate with the
 Pods using the secondary network:
 
 ```bash
-wget https://raw.githubusercontent.com/vmware-tanzu/antrea/main/docs/cookbooks/multus/resources/macvlan-host-init.yml
+wget https://raw.githubusercontent.com/antrea-io/antrea/main/docs/cookbooks/multus/resources/macvlan-host-init.yml
 # edit file as needed
 kubectl apply -f macvlan-host-init.yml
 ```
@@ -167,7 +167,7 @@ required. You can then apply the following manifest after making the necessary
 edits:
 
 ```bash
-wget https://raw.githubusercontent.com/vmware-tanzu/antrea/main/docs/cookbooks/multus/resources/dhcp-server.yml
+wget https://raw.githubusercontent.com/antrea-io/antrea/main/docs/cookbooks/multus/resources/dhcp-server.yml
 # edit file as needed
 kubectl apply -f dhcp-server.yml
 ```
@@ -190,7 +190,7 @@ periodically. To deploy the DHCP daemon (as a DaemonSet), you can use the
 following command:
 
 ```bash
-kubectl apply -f https://raw.githubusercontent.com/vmware-tanzu/antrea/main/docs/cookbooks/multus/resources/dhcp-daemon.yml
+kubectl apply -f https://raw.githubusercontent.com/antrea-io/antrea/main/docs/cookbooks/multus/resources/dhcp-daemon.yml
 ```
 
 No edits to the manifest should be required, regardless of which K8s cluster you
@@ -204,7 +204,7 @@ a set of Pods (as a Deployment) which all request a macvlan secondary interface,
 using the provided manifest:
 
 ```bash
-kubectl apply -f https://raw.githubusercontent.com/vmware-tanzu/antrea/main/docs/cookbooks/multus/resources/test.yml
+kubectl apply -f https://raw.githubusercontent.com/antrea-io/antrea/main/docs/cookbooks/multus/resources/test.yml
 ```
 
 You can then `kubectl exec` into the Pods to inspect the networking

@@ -2,11 +2,12 @@
 
 ![Antrea Logo](assets/logo/antrea_logo.svg)
 
-![Build Status](https://github.com/vmware-tanzu/antrea/workflows/Go/badge.svg?branch=main)
-[![Go Report Card](https://goreportcard.com/badge/github.com/vmware-tanzu/antrea)](https://goreportcard.com/report/github.com/vmware-tanzu/antrea)
+![Build Status](https://github.com/antrea-io/antrea/workflows/Go/badge.svg?branch=main)
+[![Go Report Card](https://goreportcard.com/badge/antrea.io/antrea)](https://goreportcard.com/report/antrea.io/antrea)
 [![CII Best Practices](https://bestpractices.coreinfrastructure.org/projects/4173/badge)](https://bestpractices.coreinfrastructure.org/projects/4173)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-![GitHub release](https://img.shields.io/github/release/vmware-tanzu/antrea.svg?include_prereleases)
+![GitHub release](https://img.shields.io/github/release/antrea-io/antrea.svg?include_prereleases)
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fantrea-io%2Fantrea.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2Fantrea-io%2Fantrea?ref=badge_shield)
 
 ## Overview
 
@@ -48,7 +49,7 @@ The Antrea community welcomes new contributors. We are waiting for your PRs!
 about setting up your development environment and our contribution workflow.
 * Learn about Antrea's [Architecture and Design](design/architecture.md).
 Your feedback is more than welcome!
-* Check out [Open Issues](https://github.com/vmware-tanzu/antrea/issues).
+* Check out [Open Issues](https://github.com/antrea-io/antrea/issues).
 * Join the Antrea [community](#community) and ask us any question you may have.
 
 ### Community
@@ -59,7 +60,7 @@ Your feedback is more than welcome!
   and join the developer and user communities!
   + The [Antrea community meeting](https://VMware.zoom.us/j/823654111?pwd=MEV6blNtUUtqallVSkVFSGZtQ1kwUT09),
 every two weeks on Tuesday at 5AM GMT+1 (United Kingdom time). See Antrea team calendar for localized times.
-    - [Meeting minutes](https://github.com/vmware-tanzu/antrea/wiki/Community-Meetings)
+    - [Meeting minutes](https://github.com/antrea-io/antrea/wiki/Community-Meetings)
     - [Meeting recordings](https://www.youtube.com/playlist?list=PLuzde2hYeDBdw0BuQCYbYqxzoJYY1hfwv)
   + [Antrea office hours](https://VMware.zoom.us/j/94245798791?pwd=RzRNVXYxdDJnNjZnNjBiUVFHZGlXdz09),
 every two weeks on Tuesday at 10PM GMT+1 (United Kingdom time). See Antrea team calendar for localized times.
@@ -115,4 +116,6 @@ in!
 
 ## License
 
-Antrea is licensed under the [Apache License, version 2.0](https://raw.githubusercontent.com/vmware-tanzu/antrea/master/LICENSE)
+Antrea is licensed under the [Apache License, version 2.0](https://raw.githubusercontent.com/antrea-io/antrea/master/LICENSE)
+
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fantrea-io%2Fantrea.svg?type=large)](https://app.fossa.com/projects/git%2Bgithub.com%2Fantrea-io%2Fantrea?ref=badge_large)

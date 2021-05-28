@@ -7,7 +7,7 @@ reported by Antrea users. When possible we try to provide a workaround.
 
 | Issues |
 | ------ |
-| [#626](https://github.com/vmware-tanzu/antrea/issues/626) |
+| [#626](https://github.com/antrea-io/antrea/issues/626) |
 
 **CoreOS Container Linux has reached its
   [end-of-life](https://www.openshift.com/learn/topics/coreos) on May 26, 2020
@@ -61,8 +61,8 @@ networkd `Unmanaged` option was not supported before that.
 
 | Issues |
 | ------ |
-| [#591](https://github.com/vmware-tanzu/antrea/issues/591) |
-| [#1516](https://github.com/vmware-tanzu/antrea/issues/1516) |
+| [#591](https://github.com/antrea-io/antrea/issues/591) |
+| [#1516](https://github.com/antrea-io/antrea/issues/1516) |
 
 If your K8s Nodes are running Photon OS 3.0, you may see error messages in the
 antrea-agent logs like this one: `"Received bundle error msg: [...]"`. These

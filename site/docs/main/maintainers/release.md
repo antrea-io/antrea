@@ -12,7 +12,7 @@ release. We use `<TAG>` as a placeholder for the release tag (e.g. `v0.1.0`).
      release should be mentioned. The commit message must be *exactly* `"Update
      CHANGELOG for <TAG> release"`, as a bot will look for this commit and
      cherry-pick it to update the main branch (starting with Antrea v1.0).
-  2. a commit to update [VERSION](https://github.com/vmware-tanzu/antrea/blob/master/VERSION) as needed.
+  2. a commit to update [VERSION](https://github.com/antrea-io/antrea/blob/master/VERSION) as needed.
 
 * Make the release on Github with the release branch as the target: copy the
   relevant section of the [CHANGELOG](../../CHANGELOG) for the release
@@ -25,7 +25,7 @@ release. We use `<TAG>` as a placeholder for the release tag (e.g. `v0.1.0`).
      [dockerhub](https://hub.docker.com/u/antrea) with the correct tag.
   2. the assets have been uploaded to the release (`antctl` binaries and yaml
      manifests). In particular, the following link should work:
-     `https://github.com/vmware-tanzu/antrea/releases/download/<TAG>/antrea.yml`.
+     `https://github.com/antrea-io/antrea/releases/download/<TAG>/antrea.yml`.
 
 * Open a PR against the master branch with the following commits:
   1. the commit updating the [CHANGELOG](../../CHANGELOG), cherry-picked from
@@ -33,7 +33,7 @@ release. We use `<TAG>` as a placeholder for the release tag (e.g. `v0.1.0`).
      [workflow](../../.github/workflows/update_changelog.yml) takes care of
      automatically opening a PR with that change, so that step is no longer
      required.
-  2. a commit to update [VERSION](https://github.com/vmware-tanzu/antrea/blob/master/VERSION) to the next minor version (+
+  2. a commit to update [VERSION](https://github.com/antrea-io/antrea/blob/master/VERSION) to the next minor version (+
      "-dev" suffix) if needed (i.e. if we have just released a new minor
      version). For example, if the release was for `v0.1.0`, the VERSION file
      should be updated to `v0.2.0-dev`. If the release was for `v0.1.1`, the

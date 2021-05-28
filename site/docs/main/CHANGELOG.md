@@ -1,1 +1,1 @@
-Please refer to the CHANGELOG on [Github](https://github.com/vmware-tanzu/antrea/tree/main/CHANGELOG)
+Please refer to the CHANGELOG on [Github](https://github.com/antrea-io/antrea/tree/main/CHANGELOG)

@@ -58,7 +58,7 @@ defaults:
     path: docs/$VERSION
   values:
     version: $VERSION
-    gh: https://github.com/vmware-tanzu/antrea/tree/$VERSION
+    gh: https://github.com/antrea-io/antrea/tree/$VERSION
     layout: "docs"
 EOF
     yq m -a=append -i "${THIS_DIR}/_config.yml" "$version_page_scope"

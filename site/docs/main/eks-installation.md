@@ -10,24 +10,24 @@ This will restart existing Pods (except those in host network), so that Antrea c
 (i.e. enforce NetworkPolicies on them) once it is installed.
 
 ```bash
-kubectl apply -f https://raw.githubusercontent.com/vmware-tanzu/antrea/main/build/yamls/antrea-eks-node-init.yml
+kubectl apply -f https://raw.githubusercontent.com/antrea-io/antrea/main/build/yamls/antrea-eks-node-init.yml
 ```
 
 To deploy a released version of Antrea, pick a deployment manifest from the
-[list of releases](https://github.com/vmware-tanzu/antrea/releases).
+[list of releases](https://github.com/antrea-io/antrea/releases).
 Note that EKS support was added in release 0.5.0, which means you cannot
 pick a release older than 0.5.0. For any given release `<TAG>` (e.g. `v0.5.0`),
 you can deploy Antrea as follows:
 
 ```bash
-kubectl apply -f https://github.com/vmware-tanzu/antrea/releases/download/<TAG>/antrea-eks.yml
+kubectl apply -f https://github.com/antrea-io/antrea/releases/download/<TAG>/antrea-eks.yml
 ```
 
 To deploy the latest version of Antrea (built from the main branch), use the
 checked-in deployment yaml (`/build/yamls/antrea-eks.yml`):
 
 ```bash
-kubectl apply -f https://raw.githubusercontent.com/vmware-tanzu/antrea/main/build/yamls/antrea-eks.yml
+kubectl apply -f https://raw.githubusercontent.com/antrea-io/antrea/main/build/yamls/antrea-eks.yml
 ```
 
 Now Antrea should be plugged into the EKS CNI and is ready to enforce NetworkPolicy.

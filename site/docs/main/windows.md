@@ -65,7 +65,7 @@ First install Antrea (v0.13.0+ is required for Containerd).
 
 ```bash
 # Example:
-kubectl apply -f https://github.com/vmware-tanzu/antrea/releases/download/v0.13.0/antrea.yml
+kubectl apply -f https://github.com/antrea-io/antrea/releases/download/v0.13.0/antrea.yml
 ```
 
 Then, you can run the following commands. [nssm](https://nssm.cc/) will install Antrea as a Windows service. Please ensure
@@ -88,7 +88,7 @@ $KubeProxyKubeconfigPath="<KubeProxyKubeconfigPath>"
 $KubernetesHome="c:/k"
 $AntreaHome="c:/k/antrea"
 
-curl.exe -LO "https://raw.githubusercontent.com/vmware-tanzu/antrea/${TAG}/hack/windows/Helper.psm1"
+curl.exe -LO "https://raw.githubusercontent.com/antrea-io/antrea/${TAG}/hack/windows/Helper.psm1"
 
 Import-Module ./Helper.psm1
 Install-AntreaAgent -KubernetesVersion "$KubernetesVersion" -KubernetesHome "$KubernetesHome" -KubeConfig "$KubeConfig" -AntreaVersion "$TAG" -AntreaHome "$AntreaHome"
@@ -118,7 +118,7 @@ document.
 
 ```bash
 # Example:
-kubectl apply -f https://github.com/vmware-tanzu/antrea/releases/download/<TAG>/antrea.yml
+kubectl apply -f https://github.com/antrea-io/antrea/releases/download/<TAG>/antrea.yml
 ```
 
 #### Add Windows kube-proxy DaemonSet
@@ -194,7 +194,7 @@ Download and apply `antrea-windows.yml`.
 
 ```bash
 # Example:
-kubectl apply -f https://github.com/vmware-tanzu/antrea/releases/download/<TAG>/antrea-windows.yml
+kubectl apply -f https://github.com/antrea-io/antrea/releases/download/<TAG>/antrea-windows.yml
 ```
 
 #### Join Windows worker Nodes
@@ -223,7 +223,7 @@ Restart-Computer
 Then, install the OVS using the script.
 
 ```powershell
-curl.exe -LO https://raw.githubusercontent.com/vmware-tanzu/antrea/main/hack/windows/Install-OVS.ps1
+curl.exe -LO https://raw.githubusercontent.com/antrea-io/antrea/main/hack/windows/Install-OVS.ps1
 .\Install-OVS.ps1 # Test-only
 .\Install-OVS.ps1 -ImportCertificate $false -Local -LocalFile <PathToOVSPackage> # Production
 ```
@@ -261,9 +261,9 @@ Run the following commands to prepare the Node environment needed by antrea-agen
 ```powershell
 mkdir c:\k\antrea
 cd c:\k\antrea
-curl.exe -LO https://raw.githubusercontent.com/vmware-tanzu/antrea/main/hack/windows/Clean-AntreaNetwork.ps1
-curl.exe -LO https://raw.githubusercontent.com/vmware-tanzu/antrea/main/hack/windows/Prepare-ServiceInterface.ps1
-curl.exe -LO https://raw.githubusercontent.com/vmware-tanzu/antrea/main/hack/windows/Prepare-AntreaAgent.ps1
+curl.exe -LO https://raw.githubusercontent.com/antrea-io/antrea/main/hack/windows/Clean-AntreaNetwork.ps1
+curl.exe -LO https://raw.githubusercontent.com/antrea-io/antrea/main/hack/windows/Prepare-ServiceInterface.ps1
+curl.exe -LO https://raw.githubusercontent.com/antrea-io/antrea/main/hack/windows/Prepare-AntreaAgent.ps1
 .\Prepare-AntreaAgent.ps1
 ```
 
@@ -371,7 +371,7 @@ steps. And then run the following commands in powershell.
 ```powershell
 mkdir c:\k\antrea
 cd c:\k\antrea
-curl.exe -LO https://github.com/vmware-tanzu/antrea/releases/download/<TAG>/Start.ps1
+curl.exe -LO https://github.com/antrea-io/antrea/releases/download/<TAG>/Start.ps1
 # $KubeConfigPath is the path of kubeconfig file
 ./Start.ps1 -kubeconfig $KubeConfigPath
 ```
@@ -385,7 +385,7 @@ curl.exe -LO https://github.com/vmware-tanzu/antrea/releases/download/<TAG>/Star
 1. HNS Network is not persistent on Windows. So after the Windows Node reboots,
 the HNS Network created by antrea-agent is removed, and the Open vSwitch
 Extension is disabled by default. In this case, the stale OVS bridge and ports
-should be removed. A help script [Clean-AntreaNetwork.ps1](https://raw.githubusercontent.com/vmware-tanzu/antrea/main/hack/windows/Clean-AntreaNetwork.ps1)
+should be removed. A help script [Clean-AntreaNetwork.ps1](https://raw.githubusercontent.com/antrea-io/antrea/main/hack/windows/Clean-AntreaNetwork.ps1)
 can be used to clean the OVS bridge.
 
 2. Hyper-V feature cannot be installed on Windows Node due to the processor not

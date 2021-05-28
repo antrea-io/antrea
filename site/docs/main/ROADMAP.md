@@ -52,7 +52,7 @@ based on SNAT IP and enforce specific policies on the traffic. However, the
 Egress feature still has several major limitations which need to be addressed.
 For example, today the SNAT IPs used in Egresses must be manually configured on
 the Nodes, and there is no auto-failover of Egress Nodes. Also check the
-[egress policy proposal](https://github.com/vmware-tanzu/antrea/issues/667) to
+[egress policy proposal](https://github.com/antrea-io/antrea/issues/667) to
 learn more.
 
 * **NFV and Telco use cases**

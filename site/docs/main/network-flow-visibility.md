@@ -23,18 +23,22 @@
     - [Correlation of Flow Records](#correlation-of-flow-records)
     - [Aggregation of Flow Records](#aggregation-of-flow-records)
 - [Quick deployment](#quick-deployment)
-- [ELK Flow Collector](#elk-flow-collector)
-  - [Purpose](#purpose)
-  - [About Elastic Stack](#about-elastic-stack)
-  - [Deployment Steps](#deployment-steps)
-  - [Pre-built Dashboards](#pre-built-dashboards)
-    - [Overview](#overview-1)
-    - [Pod-to-Pod Flows](#pod-to-pod-flows)
-    - [Pod-to-External Flows](#pod-to-external-flows)
-    - [Pod-to-Service Flows](#pod-to-service-flows)
-    - [Flow Records](#flow-records)
-    - [Node Throughput](#node-throughput)
-    - [Network Policy](#network-policy)
+- [Flow Collectors](#flow-collectors)
+  - [Go-ipfix Collector](#go-ipfix-collector)
+    - [Deployment Steps](#deployment-steps)
+    - [Output Flow Records](#output-flow-records)
+  - [ELK Flow Collector](#elk-flow-collector)
+    - [Purpose](#purpose)
+    - [About Elastic Stack](#about-elastic-stack)
+    - [Deployment Steps](#deployment-steps-1)
+    - [Pre-built Dashboards](#pre-built-dashboards)
+      - [Overview](#overview-1)
+      - [Pod-to-Pod Flows](#pod-to-pod-flows)
+      - [Pod-to-External Flows](#pod-to-external-flows)
+      - [Pod-to-Service Flows](#pod-to-service-flows)
+      - [Flow Records](#flow-records)
+      - [Node Throughput](#node-throughput)
+      - [Network Policy](#network-policy)
 
 ## Overview
 
@@ -79,9 +83,10 @@ parameters have to be set in the Antrea Agent ConfigMap:
     # to the Antrea Flow Aggregator Service. If IP, it can be either IPv4 or IPv6.
     # However, IPv6 address should be wrapped with [].
     # If PORT is empty, we default to 4739, the standard IPFIX port.
-    # If no PROTO is given, we consider "tcp" as default. We support "tcp" and "udp"
-    # L4 transport protocols.
-    #flowCollectorAddr: "flow-aggregator.flow-aggregator.svc:4739:tcp"
+    # If no PROTO is given, we consider "tls" as default. We support "tls", "tcp" and
+    # "udp" protocols. "tls" is used for securing communication between flow exporter and
+    # flow aggregator.
+    #flowCollectorAddr: "flow-aggregator.flow-aggregator.svc:4739:tls"
     
     # Provide flow poll interval as a duration string. This determines how often the
     # flow exporter dumps connections from the conntrack module. Flow poll interval
@@ -101,16 +106,20 @@ parameters have to be set in the Antrea Agent ConfigMap:
     # packet matching this flow has been observed since the last export event.
     # Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
     #idleFlowExportTimeout: "15s"
-
-    # Enable TLS communication from flow exporter to flow aggregator.
-    #enableTLSToFlowAggregator: true
 ```
 
-Please note that the default value for `flowCollectorAddr` is `"flow-aggregator.flow-aggregator.svc:4739:tcp"`,
+Please note that the default value for `flowCollectorAddr` is `"flow-aggregator.flow-aggregator.svc:4739:tls"`,
 which uses the DNS name of the Flow Aggregator Service, if the Service is deployed
-with the Name and Namespace set to `flow-aggregator`. If you deploy the Flow Aggregator
-Service with a different Name and Namespace, then either use the appropriate DNS
-name or the Cluster IP of the Service. Please note that the default values for
+with the Name and Namespace set to `flow-aggregator`. For Antrea Agent running on
+a Windows node, the user is required to change the default value of `HOST` in `flowCollectorAddr`
+from DNS name to the Cluster IP of the Flow Aggregator service. The reason is because
+on Windows the Antrea Agent runs as a process, it uses the host's default DNS setting and the DNS
+resolver will not be configured to talk to the CoreDNS Service for cluster local DNS queries like
+`flow-aggregator.flow-aggregator.svc`. In addition, if you deploy the Flow Aggregator Service
+with a different Name and Namespace, then either use the appropriate DNS name or the Cluster IP of
+the Service.
+
+Please note that the default values for
 `flowPollInterval`, `activeFlowExportTimeout`, and `idleFlowExportTimeout` parameters are set to 5s, 60s, and 15s, respectively.
 TLS communication between the Flow Exporter and the Flow Aggregator is enabled by default.
 Please modify them as per your requirements.
@@ -152,24 +161,30 @@ the flow. All the IEs used by the Antrea Flow Exporter are listed below:
 
 #### IEs from Antrea IE Registry
 
-| IPFIX Information Element    | Enterprise ID | Field ID | Type        |
-|------------------------------|---------------|----------|-------------|
-| sourcePodNamespace           | 56506         | 100      | string      |
-| sourcePodName                | 56506         | 101      | string      |
-| destinationPodNamespace      | 56506         | 102      | string      |
-| destinationPodName           | 56506         | 103      | string      |
-| sourceNodeName               | 56506         | 104      | string      |
-| destinationNodeName          | 56506         | 105      | string      |
-| destinationClusterIPv4       | 56506         | 106      | ipv4Address |
-| destinationClusterIPv6       | 56506         | 107      | ipv6Address |
-| destinationServicePort       | 56506         | 108      | unsigned16  |
-| destinationServicePortName   | 56506         | 109      | string      |
-| ingressNetworkPolicyName     | 56506         | 110      | string      |
-| ingressNetworkPolicyNamespace| 56506         | 111      | string      |
-| egressNetworkPolicyName      | 56506         | 112      | string      |
-| egressNetworkPolicyNamespace | 56506         | 113      | string      |
-| tcpState                     | 56506         | 136      | string      |
-| flowType                     | 56506         | 137      | unsigned8   |
+| IPFIX Information Element        | Enterprise ID | Field ID | Type        |
+|----------------------------------|---------------|----------|-------------|
+| sourcePodNamespace               | 56506         | 100      | string      |
+| sourcePodName                    | 56506         | 101      | string      |
+| destinationPodNamespace          | 56506         | 102      | string      |
+| destinationPodName               | 56506         | 103      | string      |
+| sourceNodeName                   | 56506         | 104      | string      |
+| destinationNodeName              | 56506         | 105      | string      |
+| destinationClusterIPv4           | 56506         | 106      | ipv4Address |
+| destinationClusterIPv6           | 56506         | 107      | ipv6Address |
+| destinationServicePort           | 56506         | 108      | unsigned16  |
+| destinationServicePortName       | 56506         | 109      | string      |
+| ingressNetworkPolicyName         | 56506         | 110      | string      |
+| ingressNetworkPolicyNamespace    | 56506         | 111      | string      |
+| ingressNetworkPolicyType         | 56506         | 115      | unsigned8   |
+| ingressNetworkPolicyRuleName     | 56506         | 141      | string      |
+| egressNetworkPolicyName          | 56506         | 112      | string      |
+| egressNetworkPolicyNamespace     | 56506         | 113      | string      |
+| egressNetworkPolicyType          | 56506         | 118      | unsigned8   |
+| egressNetworkPolicyRuleName      | 56506         | 142      | string      |
+| ingressNetworkPolicyRuleAction   | 56506         | 139      | unsigned8   |
+| egressNetworkPolicyRuleAction    | 56506         | 140      | unsigned8   |
+| tcpState                         | 56506         | 136      | string      |
+| flowType                         | 56506         | 137      | unsigned8   |
 
 ### Supported capabilities
 
@@ -184,11 +199,15 @@ starting with Antrea v0.11. In the future, we will enable the support for Extern
 flows.
 
 Kubernetes information such as Node name, Pod name, Pod Namespace, Service name,
-NetworkPolicy name and NetworkPolicy Namespace, is added to the flow records. For
-flow records that are exported from any given Antrea Agent, the Flow Exporter only
-provides the information of Kubernetes entities that are local to the Antrea Agent.
-In other words, flow records are only complete for intra-Node flows, but incomplete
-for inter-Node flows. It is the responsibility of the [Flow Aggregator](#flow-aggregator)
+NetworkPolicy name and NetworkPolicy Namespace, is added to the flow records.
+Network Policy Rule Action (Allow, Reject, Drop) is also supported for both
+Antrea-native NetworkPolicies and K8s NetworkPolicies. For K8s NetworkPolicies,
+connections dropped due to [isolated Pod behavior](https://kubernetes.io/docs/concepts/services-networking/network-policies/#isolated-and-non-isolated-pods)
+will be assigned the Drop action.
+For flow records that are exported from any given Antrea Agent, the Flow Exporter
+only provides the information of Kubernetes entities that are local to the Antrea
+Agent. In other words, flow records are only complete for intra-Node flows, but
+incomplete for inter-Node flows. It is the responsibility of the [Flow Aggregator](#flow-aggregator)
 to correlate flows from the source and destination Nodes and produce complete flow
 records.
 
@@ -199,7 +218,8 @@ Both Flow Exporter and Flow Aggregator are supported in IPv4 clusters, IPv6 clus
 We support following connection metrics as Prometheus metrics that are exposed
 through [Antrea Agent apiserver endpoint](prometheus-integration.md):
 `antrea_agent_conntrack_total_connection_count`,
-`antrea_agent_conntrack_antrea_connection_count` and
+`antrea_agent_conntrack_antrea_connection_count`,
+`antrea_agent_denied_connection_count` and
 `antrea_agent_conntrack_max_connection_count`
 
 ## Flow Aggregator
@@ -217,26 +237,32 @@ the Flow Aggregator.
 ### Deployment
 
 To deploy a released version of Flow Aggregator Service, pick a deployment manifest from the
-[list of releases](https://github.com/vmware-tanzu/antrea/releases). For any
+[list of releases](https://github.com/antrea-io/antrea/releases). For any
 given release `<TAG>` (e.g. `v0.12.0`), you can deploy Flow Aggregator as follows:
 
 ```bash
-kubectl apply -f https://github.com/vmware-tanzu/antrea/releases/download/<TAG>/flow-aggregator.yml
+kubectl apply -f https://github.com/antrea-io/antrea/releases/download/<TAG>/flow-aggregator.yml
 ```
 
 To deploy the latest version of Flow Aggregator Service (built from the main branch), use the
 checked-in deployment yaml (`/build/yamls/flow-aggregator.yml`):
 
 ```bash
-kubectl apply -f https://raw.githubusercontent.com/vmware-tanzu/antrea/main/build/yamls/flow-aggregator.yml
+kubectl apply -f https://raw.githubusercontent.com/antrea-io/antrea/main/build/yamls/flow-aggregator.yml
 ```
 
 ### Configuration
 
 The following configuration parameters have to be provided through the Flow Aggregator
 ConfigMap. `externalFlowCollectorAddr` is a mandatory parameter. We provide an example
-value for this parameter in the following snippet. If you have deployed the ELK
-flow collector, then please use the address, `<Logstash Cluster IP>:4739:UDP`.
+value for this parameter in the following snippet.  
+
+* If you have deployed the [go-ipfix collector](#deployment-steps),
+then please use the address:  
+`<Ipfix-Collector Cluster IP>:<port>:<TCP|UDP>`
+* If you have deployed the [ELK
+flow collector](#deployment-steps-1), then please use the address:  
+`<Logstash Cluster IP>:4739:UDP`
 
 ```yaml
 flow-aggregator.conf: |
@@ -260,11 +286,10 @@ flow-aggregator.conf: |
 
 Please note that the default values for `flowExportInterval`, `aggregatorTransportProtocol`,
 and `flowAggregatorAddress` parameters are set to `60s`, `tls` and `flow-aggregator.flow-aggregator.svc`,
-respectively. Please make sure that `aggregatorTransportProtocol` is set to `tls` and
-`enableTLSToFlowAggregator` in `agent-agent.conf` is set to true to guarantee secure communication
-works properly. `enableTLSToFlowAggregator` and `aggregatorTransportProtocol` must always match,
-so TLS must either be enabled for both sides or disabled for both sides. Please modify the parameters
-as per your requirements.
+respectively. Please make sure that `aggregatorTransportProtocol` and protocol of `flowCollectorAddr` in
+`agent-agent.conf` are set to `tls` to guarantee secure communication works properly. Protocol of
+`flowCollectorAddr` and `aggregatorTransportProtocol` must always match, so TLS must either be enabled for
+both sides or disabled for both sides. Please modify the parameters as per your requirements.
 
 ### IPFIX Information Elements (IEs) in an Aggregated Flow Record
 
@@ -350,9 +375,49 @@ commands:
 ./infra/vagrant/push_antrea.sh --flow-collector <externalFlowCollectorAddress>
 ```
 
-## ELK Flow Collector
+## Flow Collectors
 
-### Purpose
+Here we list two choices the external configured flow collector: go-ipfix collector
+and ELK flow collector. For each collector, we introduce how to deploy it and how
+to output or visualize the collected flow records information.
+
+### Go-ipfix Collector
+
+#### Deployment Steps
+
+The go-ipfix collector can be built from [go-ipfix library](https://github.com/vmware/go-ipfix).
+It is used to collect, decode and log the IPFIX records.
+
+* To deploy a released version of the go-ipfix collector, please choose one
+deployment manifest from the list of releases (supported after v0.5.2).
+For any given release <TAG> (e.g. v0.5.2), you can deploy the collector as follows:
+
+```shell
+kubectl apply -f https://github.com/vmware/go-ipfix/releases/download/<TAG>/ipfix-collector.yaml
+```
+
+* To deploy the latest version of the go-ipfix collector (built from the main branch),
+use the checked-in [deployment manifest](https://github.com/vmware/go-ipfix/blob/main/build/yamls/ipfix-collector.yaml):
+
+```shell
+kubectl apply -f https://raw.githubusercontent.com/vmware/go-ipfix/main/build/yamls/ipfix-collector.yaml
+```
+
+Go-ipfix collector also supports customization on its parameters: port and protocol.
+Please follow the [go-ipfix documentation](https://github.com/vmware/go-ipfix#readme)
+to configure those parameters if needed.
+
+#### Output Flow Records
+
+To output the flow records collected by the go-ipfix collector, use the command below:
+
+```shell
+kubectl logs <ipfix-collector-pod-name> -n ipfix
+```
+
+### ELK Flow Collector
+
+#### Purpose
 
 Antrea supports sending IPFIX flow records through the Flow Exporter feature
 described above. The Elastic Stack (ELK Stack) works as the data collector, data
@@ -360,7 +425,7 @@ storage and visualization tool for flow records and flow-related information. Th
 document provides the guidelines for deploying Elastic Stack with support for
 Antrea-specific IPFIX fields in a Kubernetes cluster.
 
-### About Elastic Stack
+#### About Elastic Stack
 
 [Elastic Stack](https://www.elastic.co) is a group of open source products to
 help collect, store, search, analyze and visualize data in real time. We will
@@ -376,31 +441,31 @@ engine, supports storing, searching and indexing records received.
 [Kibana](https://www.elastic.co/kibana/) is mainly for data visualization and
 exploration.
 
-### Deployment Steps
+#### Deployment Steps
 
-If you are looking for steps to deploy the ELK Flow Collector along with a new Antrea
+If you are looking for steps to deploy the ELK flow collector along with a new Antrea
 cluster and the Flow Aggregator Service, then please refer to the
 [quick deployment](#quick-deployment) section.
 
-The following steps will deploy the ELK Flow Collector on an existing Kubernetes
+The following steps will deploy the ELK flow collector on an existing Kubernetes
 cluster, which uses Antrea as the CNI. First step is to fetch the necessary resources
 from the Antrea repository. You can either clone the entire repo or download the
 particular folder using the subversion(svn) utility. If the deployed version of
 Antrea has a release `<TAG>` (e.g. `v0.10.0`), then you can use the following command:
 
 ```shell
-git clone --depth 1 --branch <TAG> https://github.com/vmware-tanzu/antrea.git && cd antrea/build/yamls/
+git clone --depth 1 --branch <TAG> https://github.com/antrea-io/antrea.git && cd antrea/build/yamls/
 or
-svn export https://github.com/vmware-tanzu/antrea/tags/<TAG>/build/yamls/elk-flow-collector/
+svn export https://github.com/antrea-io/antrea/tags/<TAG>/build/yamls/elk-flow-collector/
 ```
 
 If the deployed version of Antrea is the latest version, i.e., built from the main
 branch, then you can use the following command:
 
 ```shell
-git clone --depth 1 --branch main https://github.com/vmware-tanzu/antrea.git && cd antrea/build/yamls/
+git clone --depth 1 --branch main https://github.com/antrea-io/antrea.git && cd antrea/build/yamls/
 or
-svn export https://github.com/vmware-tanzu/antrea/trunk/build/yamls/elk-flow-collector/
+svn export https://github.com/antrea-io/antrea/trunk/build/yamls/elk-flow-collector/
 ```
 
 To create the required K8s resources in the `elk-flow-collector` folder and get
@@ -421,19 +486,19 @@ reusable file containing pre-built objects for visualizing Pod-to-Pod, Pod-to-Se
 and Node-to-Node flow records. To import the dashboards into Kibana, go to
 **Management -> Saved Objects** and import `elk-flow-collector/kibana.ndjson`.
 
-### Pre-built Dashboards
+#### Pre-built Dashboards
 
 The following dashboards are pre-built and are recommended for Antrea flow
 visualization.
 
-#### Overview
+##### Overview
 
 An overview of Pod-based flow records information is provided.
 
 <img src="https://downloads.antrea.io/static/02052021/flow-visualization-overview.png" width="900" alt="Flow
 Visualization Overview Dashboard">
 
-#### Pod-to-Pod Flows
+##### Pod-to-Pod Flows
 
 Pod-to-Pod cumulative Tx and Rx traffic is shown in sankey diagrams. Corresponding
 source or destination Pod throughput is visualized using line graph.
@@ -447,7 +512,7 @@ Visualization Pod-to-Pod Dashboard">
 <img src="https://downloads.antrea.io/static/02052021/flow-visualization-pod-to-pod-3.png" width="900" alt="Flow
 Visualization Pod-to-Pod Dashboard">
 
-#### Pod-to-External Flows
+##### Pod-to-External Flows
 
 Pod-to-External cumulative Tx and Rx traffic is shown in sankey diagrams. Corresponding
 source or destination throughput is visualized using line graph.
@@ -458,7 +523,7 @@ Visualization Pod-to-External Dashboard">
 <img src="https://downloads.antrea.io/static/04292021/flow-visualization-pod-to-external-2.png" width="900" alt="Flow
 Visualization Pod-to-External Dashboard">
 
-#### Pod-to-Service Flows
+##### Pod-to-Service Flows
 
 Pod-to-Service traffic is presented similar to Pod-to-Pod/External traffic.
 Corresponding source or destination IP addresses is shown in tooltips.
@@ -473,7 +538,7 @@ Visualization Pod-to-Service Dashboard">
 <img src="https://downloads.antrea.io/static/02052021/flow-visualization-pod-to-service-3.png" width="900" alt="Flow
 Visualization Pod-to-Service Dashboard">
 
-#### Flow Records
+##### Flow Records
 
 Flow Records dashboard shows the raw flow records over time with support
 for filters.
@@ -481,7 +546,7 @@ for filters.
 <img src="https://downloads.antrea.io/static/04292021/flow-visualization-flow-record.png" width="900" alt="Flow
 Visualization Flow Record Dashboard">
 
-#### Node Throughput
+##### Node Throughput
 
 Node Throughput dashboard shows the visualization of inter-Node and
 intra-Node traffic by aggregating all the Pod traffic per Node.
@@ -495,7 +560,7 @@ a better overview of Node bandwidth consumption.
 <img src="https://downloads.antrea.io/static/03022021/flow-visualization-node-2.png" width="900" alt="Flow
 Visualization Node Throughput Dashboard">
 
-#### Network Policy
+##### Network Policy
 
 Network Policy dashboard provides filters over ingress network policy name and namespace, egress
 network policy name and namespace to view corresponding flow throughput under network policy. Flows
