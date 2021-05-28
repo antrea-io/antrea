@@ -502,22 +502,26 @@ function run_install_windows_ovs {
 
 if [[ ${TESTCASE} == "windows-install-ovs" ]]; then
     run_install_windows_ovs
-elif [[ ${TESTCASE} =~ "windows" ]]; then
+    if [[ ${TEST_FAILURE} == true ]]; then
+        exit 1
+    fi
+    exit 0
+fi
+
+trap clean_antrea EXIT
+if [[ ${TESTCASE} =~ "windows" ]]; then
     deliver_antrea_windows
     if [[ ${TESTCASE} =~ "e2e" ]]; then
         run_e2e_windows
     else
         run_conformance_windows
     fi
-    clean_antrea
 elif [[ ${TESTCASE} =~ "e2e" ]]; then
     deliver_antrea
     run_e2e
-    clean_antrea
 else
     deliver_antrea
     run_conformance
-    clean_antrea
 fi
 
 if [[ ${TEST_FAILURE} == true ]]; then
