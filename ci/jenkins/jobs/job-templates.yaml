@@ -165,7 +165,7 @@
      builders: '{builders}'
      parameters:
      - string:
-         default: https://github.com/vmware-tanzu/antrea/
+         default: https://github.com/antrea-io/antrea/
          description: The repository to checkout Antrea for this test.
          name: ANTREA_REPO
          trim: 'true'
@@ -206,7 +206,7 @@
          name: CLUSTERNAME
          trim: 'false'
      - string:
-         default: https://github.com/vmware-tanzu/antrea/
+         default: https://github.com/antrea-io/antrea/
          description: The repository to checkout Antrea for this test.
          name: ANTREA_REPO
          trim: 'true'

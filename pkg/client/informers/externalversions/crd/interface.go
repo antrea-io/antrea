@@ -19,6 +19,7 @@ package crd
 import (
 	v1alpha1 "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha1"
 	v1alpha2 "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha2"
+	v1alpha3 "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha3"
 	v1beta1 "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1beta1"
 	internalinterfaces "antrea.io/antrea/pkg/client/informers/externalversions/internalinterfaces"
 )
@@ -29,6 +30,8 @@ type Interface interface {
 	V1alpha1() v1alpha1.Interface
 	// V1alpha2 provides access to shared informers for resources in V1alpha2.
 	V1alpha2() v1alpha2.Interface
+	// V1alpha3 provides access to shared informers for resources in V1alpha3.
+	V1alpha3() v1alpha3.Interface
 	// V1beta1 provides access to shared informers for resources in V1beta1.
 	V1beta1() v1beta1.Interface
 }
@@ -52,6 +55,11 @@ func (g *group) V1alpha1() v1alpha1.Interface {
 // V1alpha2 returns a new v1alpha2.Interface.
 func (g *group) V1alpha2() v1alpha2.Interface {
 	return v1alpha2.New(g.factory, g.namespace, g.tweakListOptions)
+}
+
+// V1alpha3 returns a new v1alpha3.Interface.
+func (g *group) V1alpha3() v1alpha3.Interface {
+	return v1alpha3.New(g.factory, g.namespace, g.tweakListOptions)
 }
 
 // V1beta1 returns a new v1beta1.Interface.

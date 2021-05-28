@@ -95,10 +95,16 @@ type ServicePort interface {
 	HealthCheckNodePort() int
 	// GetNodePort returns a service Node port if present. If return 0, it means not present.
 	NodePort() int
-	// GetOnlyNodeLocalEndpoints returns if a service has only node local endpoints
-	OnlyNodeLocalEndpoints() bool
+	// NodeLocalExternal returns if a service has only node local endpoints for external traffic.
+	NodeLocalExternal() bool
+	// NodeLocalInternal returns if a service has only node local endpoints for internal traffic.
+	NodeLocalInternal() bool
+	// InternalTrafficPolicy returns service InternalTrafficPolicy
+	InternalTrafficPolicy() *v1.ServiceInternalTrafficPolicyType
 	// TopologyKeys returns service TopologyKeys as a string array.
 	TopologyKeys() []string
+	// HintsAnnotation returns the value of the v1.AnnotationTopologyAwareHints annotation.
+	HintsAnnotation() string
 }
 
 // Endpoint in an interface which abstracts information about an endpoint.

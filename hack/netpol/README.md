@@ -100,7 +100,7 @@ Create the policy probe tests:
 ```
 kubectl create clusterrolebinding netpol --clusterrole=cluster-admin --serviceaccount=kube-system:netpol
 kubectl create sa netpol -n kube-system
-kubectl apply -f https://raw.githubusercontent.com/vmware-tanzu/antrea/main/hack/netpol/install.yml
+kubectl apply -f https://raw.githubusercontent.com/antrea-io/antrea/main/hack/netpol/install.yml
 ```
 
 Now, look at the results of the network policy probe:

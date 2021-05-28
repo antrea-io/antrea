@@ -232,7 +232,7 @@ func getIPSetName(ip net.IP) string {
 // writeEKSMangleRule writes an additional iptables mangle rule to the
 // iptablesData buffer, which is required to ensure that the reverse path for
 // NodePort Service traffic is correct on EKS.
-// See https://github.com/vmware-tanzu/antrea/issues/678.
+// See https://github.com/antrea-io/antrea/issues/678.
 func (c *Client) writeEKSMangleRule(iptablesData *bytes.Buffer) {
 	// TODO: the following should be taking into account:
 	//   1) AWS_VPC_CNI_NODE_PORT_SUPPORT may be set to false (by default is
@@ -358,9 +358,9 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet, podIPSet string, snatMa
 	writeLine(iptablesData, "*mangle")
 	writeLine(iptablesData, iptables.MakeChainLine(antreaMangleChain))
 	writeLine(iptablesData, iptables.MakeChainLine(antreaOutputChain))
-	hostGateway := c.nodeConfig.GatewayConfig.Name
+
 	// When Antrea is used to enforce NetworkPolicies in EKS, an additional iptables
-	// mangle rule is required. See https://github.com/vmware-tanzu/antrea/issues/678.
+	// mangle rule is required. See https://github.com/antrea-io/antrea/issues/678.
 	if env.IsCloudEKS() {
 		c.writeEKSMangleRule(iptablesData)
 	}
@@ -371,7 +371,7 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet, podIPSet string, snatMa
 	// will have non local source addresses.
 	writeLine(iptablesData, []string{
 		"-A", antreaOutputChain,
-		"-m", "comment", "--comment", `"Antrea: mark local output packets"`,
+		"-m", "comment", "--comment", `"Antrea: mark LOCAL output packets"`,
 		"-m", "addrtype", "--src-type", "LOCAL",
 		"-o", c.nodeConfig.GatewayConfig.Name,
 		"-j", iptables.MarkTarget, "--or-mark", fmt.Sprintf("%#08x", types.HostLocalSourceMark),
@@ -383,13 +383,13 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet, podIPSet string, snatMa
 	writeLine(iptablesData, []string{
 		"-A", antreaForwardChain,
 		"-m", "comment", "--comment", `"Antrea: accept packets from local Pods"`,
-		"-i", hostGateway,
+		"-i", c.nodeConfig.GatewayConfig.Name,
 		"-j", iptables.AcceptTarget,
 	}...)
 	writeLine(iptablesData, []string{
 		"-A", antreaForwardChain,
 		"-m", "comment", "--comment", `"Antrea: accept packets to local Pods"`,
-		"-o", hostGateway,
+		"-o", c.nodeConfig.GatewayConfig.Name,
 		"-j", iptables.AcceptTarget,
 	}...)
 	writeLine(iptablesData, "COMMIT")
@@ -416,6 +416,21 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet, podIPSet string, snatMa
 			"-j", iptables.MasqueradeTarget,
 		}...)
 	}
+
+	// For local traffic going out of the gateway interface, if the source IP does not match any
+	// of the gateway's IP addresses, the traffic needs to be masqueraded. Otherwise, we observe
+	// that ARP requests may advertise a different source IP address, in which case they will be
+	// dropped by the SpoofGuard table in the OVS pipeline. See description for the arp_announce
+	// sysctl parameter.
+	writeLine(iptablesData, []string{
+		"-A", antreaPostRoutingChain,
+		"-m", "comment", "--comment", `"Antrea: masquerade LOCAL traffic"`,
+		"-o", c.nodeConfig.GatewayConfig.Name,
+		"-m", "addrtype", "!", "--src-type", "LOCAL", "--limit-iface-out",
+		"-m", "addrtype", "--src-type", "LOCAL",
+		"-j", iptables.MasqueradeTarget, "--random-fully",
+	}...)
+
 	writeLine(iptablesData, "COMMIT")
 	return iptablesData
 }

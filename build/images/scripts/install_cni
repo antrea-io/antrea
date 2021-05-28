@@ -24,8 +24,11 @@ install -m 755 /opt/cni/bin/loopback /host/opt/cni/bin/loopback
 # Install PortMap CNI binary file. It is required to support hostPort.
 install -m 755 /opt/cni/bin/portmap /host/opt/cni/bin/portmap
 
-# Install bandwidth CNI binary file, It is required to support traffic shaping.
+# Install bandwidth CNI binary file. It is required to support traffic shaping.
 install -m 755 /opt/cni/bin/bandwidth /host/opt/cni/bin/bandwidth
+
+# Install whereabouts IPAM binary file. Required for global IPAM support specific to CNF use cases.
+install -m 755 /opt/cni/bin/whereabouts /host/opt/cni/bin/whereabouts
 
 # Load the OVS kernel module
 modprobe openvswitch || (echo "Failed to load the OVS kernel module from the container, try running 'modprobe openvswitch' on your Nodes"; exit 1)

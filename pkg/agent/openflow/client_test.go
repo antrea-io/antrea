@@ -57,7 +57,7 @@ func installNodeFlows(ofClient Client, cacheKey string) (int, error) {
 	peerConfig := map[*net.IPNet]net.IP{
 		ipNet: gwIP,
 	}
-	err := ofClient.InstallNodeFlows(hostName, peerConfig, peerNodeIP, 0)
+	err := ofClient.InstallNodeFlows(hostName, peerConfig, peerNodeIP, 0, nil)
 	client := ofClient.(*client)
 	fCacheI, ok := client.nodeFlowCache.Load(hostName)
 	if ok {
@@ -90,7 +90,6 @@ func TestIdempotentFlowInstallation(t *testing.T) {
 		numFlows  int
 		installFn func(ofClient Client, cacheKey string) (int, error)
 	}{
-		{"NodeFlows", "host", 2, installNodeFlows},
 		{"PodFlows", "aaaa-bbbb-cccc-dddd", 5, installPodFlows},
 	}
 
@@ -101,7 +100,7 @@ func TestIdempotentFlowInstallation(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 			m := oftest.NewMockOFEntryOperations(ctrl)
-			ofClient := NewClient(bridgeName, bridgeMgmtAddr, ovsconfig.OVSDatapathSystem, true, false, false)
+			ofClient := NewClient(bridgeName, bridgeMgmtAddr, ovsconfig.OVSDatapathSystem, true, false, false, false)
 			client := ofClient.(*client)
 			client.cookieAllocator = cookie.NewAllocator(0)
 			client.ofEntryOperations = m
@@ -129,7 +128,7 @@ func TestIdempotentFlowInstallation(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 			m := oftest.NewMockOFEntryOperations(ctrl)
-			ofClient := NewClient(bridgeName, bridgeMgmtAddr, ovsconfig.OVSDatapathSystem, true, false, false)
+			ofClient := NewClient(bridgeName, bridgeMgmtAddr, ovsconfig.OVSDatapathSystem, true, false, false, false)
 			client := ofClient.(*client)
 			client.cookieAllocator = cookie.NewAllocator(0)
 			client.ofEntryOperations = m
@@ -170,7 +169,7 @@ func TestFlowInstallationFailed(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 			m := oftest.NewMockOFEntryOperations(ctrl)
-			ofClient := NewClient(bridgeName, bridgeMgmtAddr, ovsconfig.OVSDatapathSystem, true, false, false)
+			ofClient := NewClient(bridgeName, bridgeMgmtAddr, ovsconfig.OVSDatapathSystem, true, false, false, false)
 			client := ofClient.(*client)
 			client.cookieAllocator = cookie.NewAllocator(0)
 			client.ofEntryOperations = m
@@ -204,7 +203,7 @@ func TestConcurrentFlowInstallation(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 			m := oftest.NewMockOFEntryOperations(ctrl)
-			ofClient := NewClient(bridgeName, bridgeMgmtAddr, ovsconfig.OVSDatapathSystem, true, false, false)
+			ofClient := NewClient(bridgeName, bridgeMgmtAddr, ovsconfig.OVSDatapathSystem, true, false, false, false)
 			client := ofClient.(*client)
 			client.cookieAllocator = cookie.NewAllocator(0)
 			client.ofEntryOperations = m
@@ -394,7 +393,7 @@ func Test_client_SendTraceflowPacket(t *testing.T) {
 }
 
 func prepareTraceflowFlow(ctrl *gomock.Controller) *client {
-	ofClient := NewClient(bridgeName, bridgeMgmtAddr, ovsconfig.OVSDatapathSystem, true, true, false)
+	ofClient := NewClient(bridgeName, bridgeMgmtAddr, ovsconfig.OVSDatapathSystem, true, true, false, false)
 	c := ofClient.(*client)
 	c.cookieAllocator = cookie.NewAllocator(0)
 	c.nodeConfig = nodeConfig
@@ -412,7 +411,7 @@ func prepareTraceflowFlow(ctrl *gomock.Controller) *client {
 }
 
 func prepareSendTraceflowPacket(ctrl *gomock.Controller, success bool) *client {
-	ofClient := NewClient(bridgeName, bridgeMgmtAddr, ovsconfig.OVSDatapathSystem, true, true, false)
+	ofClient := NewClient(bridgeName, bridgeMgmtAddr, ovsconfig.OVSDatapathSystem, true, true, false, false)
 	c := ofClient.(*client)
 	c.nodeConfig = nodeConfig
 	m := ovsoftest.NewMockBridge(ctrl)
@@ -500,7 +499,7 @@ func Test_client_setBasePacketOutBuilder(t *testing.T) {
 }
 
 func prepareSetBasePacketOutBuilder(ctrl *gomock.Controller, success bool) *client {
-	ofClient := NewClient(bridgeName, bridgeMgmtAddr, ovsconfig.OVSDatapathSystem, true, true, false)
+	ofClient := NewClient(bridgeName, bridgeMgmtAddr, ovsconfig.OVSDatapathSystem, true, true, false, false)
 	c := ofClient.(*client)
 	m := ovsoftest.NewMockBridge(ctrl)
 	c.bridge = m

@@ -41,6 +41,8 @@ type connTrackSystem struct {
 	connTrack            NetFilterConnTrack
 }
 
+// TODO: detect the endianness of the system when initializing conntrack dumper to handle situations on big-endian platforms.
+// All connection labels are required to store in little endian format in conntrack dumper.
 func NewConnTrackSystem(nodeConfig *config.NodeConfig, serviceCIDRv4 *net.IPNet, serviceCIDRv6 *net.IPNet, isAntreaProxyEnabled bool) *connTrackSystem {
 	if err := SetupConntrackParameters(); err != nil {
 		// Do not fail, but continue after logging an error as we can still dump flows with missing information.
@@ -119,43 +121,36 @@ func (nfct *netFilterConnTrack) DumpFlowsInCtZone(zoneFilter uint16) ([]*flowexp
 }
 
 func NetlinkFlowToAntreaConnection(conn *conntrack.Flow) *flowexporter.Connection {
-	tupleOrig := flowexporter.Tuple{
+	tuple := flowexporter.Tuple{
 		SourceAddress:      conn.TupleOrig.IP.SourceAddress,
-		DestinationAddress: conn.TupleOrig.IP.DestinationAddress,
+		DestinationAddress: conn.TupleReply.IP.SourceAddress,
 		Protocol:           conn.TupleOrig.Proto.Protocol,
 		SourcePort:         conn.TupleOrig.Proto.SourcePort,
-		DestinationPort:    conn.TupleOrig.Proto.DestinationPort,
-	}
-
-	tupleReply := flowexporter.Tuple{
-		SourceAddress:      conn.TupleReply.IP.SourceAddress,
-		DestinationAddress: conn.TupleReply.IP.DestinationAddress,
-		Protocol:           conn.TupleReply.Proto.Protocol,
-		SourcePort:         conn.TupleReply.Proto.SourcePort,
-		DestinationPort:    conn.TupleReply.Proto.DestinationPort,
+		DestinationPort:    conn.TupleReply.Proto.SourcePort,
 	}
 	// Assign all the applicable fields
 	newConn := flowexporter.Connection{
-		ID:                      conn.ID,
-		Timeout:                 conn.Timeout,
-		StartTime:               conn.Timestamp.Start,
-		IsPresent:               true,
-		Zone:                    conn.Zone,
-		Mark:                    conn.Mark,
-		Labels:                  conn.Labels,
-		LabelsMask:              conn.LabelsMask,
-		StatusFlag:              uint32(conn.Status.Value),
-		TupleOrig:               tupleOrig,
-		TupleReply:              tupleReply,
-		OriginalPackets:         conn.CountersOrig.Packets,
-		OriginalBytes:           conn.CountersOrig.Bytes,
-		ReversePackets:          conn.CountersReply.Packets,
-		ReverseBytes:            conn.CountersReply.Bytes,
-		SourcePodNamespace:      "",
-		SourcePodName:           "",
-		DestinationPodNamespace: "",
-		DestinationPodName:      "",
-		TCPState:                "",
+		ID:                        conn.ID,
+		Timeout:                   conn.Timeout,
+		StartTime:                 conn.Timestamp.Start,
+		IsPresent:                 true,
+		Zone:                      conn.Zone,
+		Mark:                      conn.Mark,
+		Labels:                    conn.Labels,
+		LabelsMask:                conn.LabelsMask,
+		StatusFlag:                uint32(conn.Status.Value),
+		FlowKey:                   tuple,
+		DestinationServiceAddress: conn.TupleOrig.IP.DestinationAddress,
+		DestinationServicePort:    conn.TupleOrig.Proto.DestinationPort,
+		OriginalPackets:           conn.CountersOrig.Packets,
+		OriginalBytes:             conn.CountersOrig.Bytes,
+		ReversePackets:            conn.CountersReply.Packets,
+		ReverseBytes:              conn.CountersReply.Bytes,
+		SourcePodNamespace:        "",
+		SourcePodName:             "",
+		DestinationPodNamespace:   "",
+		DestinationPodName:        "",
+		TCPState:                  "",
 	}
 	if conn.ProtoInfo.TCP != nil {
 		newConn.TCPState = stateToString(conn.ProtoInfo.TCP.State)

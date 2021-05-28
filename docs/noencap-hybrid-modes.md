@@ -32,7 +32,7 @@ If the Node network does allow Pod IPs sent out from the Nodes, you can
 configure Antrea to run in the `Hybrid` mode by setting the `trafficEncapMode`
 config option of `antrea-agent` to `hybrid`. The `trafficEncapMode` config
 option is defined in `antrea-agent.conf` of the `antrea` ConfigMap in the
-[Antrea deployment YAML](https://github.com/vmware-tanzu/antrea/blob/main/build/yamls/antrea.yml).
+[Antrea deployment YAML](https://github.com/antrea-io/antrea/blob/main/build/yamls/antrea.yml).
 
 ```yaml
   antrea-agent.conf: |
@@ -82,7 +82,7 @@ outside of the Pod network, using the Node's IP address as the SNAT IP. In the
 Antrea might be unnecessary. In this case, you can disable it by setting the
 `noSNAT` config option to `true`. The `trafficEncapMode` and `noSNAT` config
 options are defined in `antrea-agent.conf` of the `antrea` ConfigMap in the
-[Antrea deployment YAML](https://github.com/vmware-tanzu/antrea/blob/main/build/yamls/antrea.yml).
+[Antrea deployment YAML](https://github.com/antrea-io/antrea/blob/main/build/yamls/antrea.yml).
 
 ```yaml
   antrea-agent.conf: |

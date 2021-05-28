@@ -15,20 +15,20 @@ deploying Antrea with IPsec encyption enabled.
 
 You can simply apply the [Antrea IPsec deployment yaml](/build/yamls/antrea-ipsec.yml)
 to deploy Antrea with IPsec encyption enabled. To deploy a released version of
-Antrea, pick a version from the [list of releases](https://github.com/vmware-tanzu/antrea/releases).
+Antrea, pick a version from the [list of releases](https://github.com/antrea-io/antrea/releases).
 Note that IPsec support was added in release 0.3.0, which means you can not
 pick a release older than 0.3.0. For any given release `<TAG>` (e.g. `v0.8.2`),
 get the Antrea IPsec deployment yaml at:
 
 ```text
-https://github.com/vmware-tanzu/antrea/releases/download/<TAG>/antrea-ipsec.yml
+https://github.com/antrea-io/antrea/releases/download/<TAG>/antrea-ipsec.yml
 ```
 
 To deploy the latest version of Antrea (built from the main branch), get the
 IPsec deployment yaml at:
 
 ```text
-https://raw.githubusercontent.com/vmware-tanzu/antrea/main/build/yamls/antrea-ipsec.yml
+https://raw.githubusercontent.com/antrea-io/antrea/main/build/yamls/antrea-ipsec.yml
 ```
 
 Antrea leverages strongSwan as the IKE daemon, and supports using pre-shared key

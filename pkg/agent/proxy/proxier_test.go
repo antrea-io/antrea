@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"net"
 	"testing"
+	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
@@ -87,9 +88,15 @@ func NewFakeProxier(ofClient openflow.Client, isIPv6 bool) *proxier {
 		runtime.NewScheme(),
 		corev1.EventSource{Component: componentName, Host: hostname},
 	)
+
+	ipFamily := corev1.IPv4Protocol
+	if isIPv6 {
+		ipFamily = corev1.IPv6Protocol
+	}
+
 	p := &proxier{
 		endpointsChanges:         newEndpointsChangesTracker(hostname, false, isIPv6),
-		serviceChanges:           newServiceChangesTracker(recorder, isIPv6),
+		serviceChanges:           newServiceChangesTracker(recorder, ipFamily),
 		serviceMap:               k8sproxy.ServiceMap{},
 		serviceInstalledMap:      k8sproxy.ServiceMap{},
 		endpointsInstalledMap:    types.EndpointsMap{},
@@ -100,6 +107,7 @@ func NewFakeProxier(ofClient openflow.Client, isIPv6 bool) *proxier {
 		serviceStringMap:         map[string]k8sproxy.ServicePortName{},
 		isIPv6:                   isIPv6,
 	}
+	p.runner = k8sproxy.NewBoundedFrequencyRunner(componentName, p.syncProxyRules, time.Second, 30*time.Second, 2)
 	return p
 }
 
@@ -214,6 +222,81 @@ func TestClusterIPv4(t *testing.T) {
 
 func TestClusterIPv6(t *testing.T) {
 	testClusterIP(t, net.ParseIP("10:20::41"), net.ParseIP("10:180::1"), true)
+}
+
+func TestDualStackService(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockOFClient := ofmock.NewMockClient(ctrl)
+	fpv4 := NewFakeProxier(mockOFClient, false)
+	fpv6 := NewFakeProxier(mockOFClient, true)
+	metaProxier := k8sproxy.NewMetaProxier(fpv4, fpv6)
+
+	svcPort := 80
+	svcPortName := k8sproxy.ServicePortName{
+		NamespacedName: makeNamespaceName("ns1", "svc1"),
+		Port:           "80",
+		Protocol:       corev1.ProtocolTCP,
+	}
+	svcIPv4 := net.ParseIP("10.20.30.41")
+	svcIPv6 := net.ParseIP("10:20::41")
+
+	s := makeTestService(svcPortName.Namespace, svcPortName.Name, func(svc *corev1.Service) {
+		svc.Spec.ClusterIP = svcIPv4.String()
+		svc.Spec.ClusterIPs = []string{svcIPv4.String(), svcIPv6.String()}
+		svc.Spec.IPFamilies = []corev1.IPFamily{corev1.IPv4Protocol, corev1.IPv6Protocol}
+		svc.Spec.Ports = []corev1.ServicePort{{
+			Name:     svcPortName.Port,
+			Port:     int32(svcPort),
+			Protocol: corev1.ProtocolTCP,
+		}}
+	})
+
+	epv4 := makeTestEndpoints(svcPortName.Namespace, svcPortName.Name, func(ept *corev1.Endpoints) {
+		ept.Subsets = []corev1.EndpointSubset{{
+			Addresses: []corev1.EndpointAddress{{
+				IP: "10.180.30.41",
+			}},
+			Ports: []corev1.EndpointPort{{
+				Name:     svcPortName.Port,
+				Port:     int32(svcPort),
+				Protocol: corev1.ProtocolTCP,
+			}},
+		}}
+	})
+
+	epv6 := makeTestEndpoints(svcPortName.Namespace, svcPortName.Name, func(ept *corev1.Endpoints) {
+		ept.Subsets = []corev1.EndpointSubset{{
+			Addresses: []corev1.EndpointAddress{{
+				IP: "10:180::1",
+			}},
+			Ports: []corev1.EndpointPort{{
+				Name:     svcPortName.Port,
+				Port:     int32(svcPort),
+				Protocol: corev1.ProtocolTCP,
+			}},
+		}}
+	})
+
+	metaProxier.OnServiceUpdate(nil, s)
+	metaProxier.OnServiceSynced()
+	metaProxier.OnEndpointsUpdate(nil, epv4)
+	metaProxier.OnEndpointsUpdate(nil, epv6)
+	metaProxier.OnEndpointsSynced()
+
+	groupIDv4, _ := fpv4.groupCounter.Get(svcPortName)
+	groupIDv6, _ := fpv6.groupCounter.Get(svcPortName)
+
+	mockOFClient.EXPECT().InstallServiceGroup(groupIDv4, false, gomock.Any()).Times(1)
+	mockOFClient.EXPECT().InstallEndpointFlows(binding.ProtocolTCP, gomock.Any()).Times(1)
+	mockOFClient.EXPECT().InstallServiceFlows(groupIDv4, svcIPv4, uint16(svcPort), binding.ProtocolTCP, uint16(0)).Times(1)
+
+	mockOFClient.EXPECT().InstallServiceGroup(groupIDv6, false, gomock.Any()).Times(1)
+	mockOFClient.EXPECT().InstallEndpointFlows(binding.ProtocolTCPv6, gomock.Any()).Times(1)
+	mockOFClient.EXPECT().InstallServiceFlows(groupIDv6, svcIPv6, uint16(svcPort), binding.ProtocolTCPv6, uint16(0)).Times(1)
+
+	fpv4.syncProxyRules()
+	fpv6.syncProxyRules()
 }
 
 func testClusterIPRemoval(t *testing.T, svcIP net.IP, epIP net.IP, isIPv6 bool) {

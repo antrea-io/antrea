@@ -24,6 +24,7 @@ import (
 	entities "github.com/vmware/go-ipfix/pkg/entities"
 	intermediate "github.com/vmware/go-ipfix/pkg/intermediate"
 	reflect "reflect"
+	time "time"
 )
 
 // MockIPFIXExportingProcess is a mock of IPFIXExportingProcess interface
@@ -224,30 +225,72 @@ func (m *MockIPFIXAggregationProcess) EXPECT() *MockIPFIXAggregationProcessMockR
 	return m.recorder
 }
 
-// DeleteFlowKeyFromMapWithoutLock mocks base method
-func (m *MockIPFIXAggregationProcess) DeleteFlowKeyFromMapWithoutLock(arg0 intermediate.FlowKey) {
+// ForAllExpiredFlowRecordsDo mocks base method
+func (m *MockIPFIXAggregationProcess) ForAllExpiredFlowRecordsDo(arg0 intermediate.FlowKeyRecordMapCallBack) error {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "DeleteFlowKeyFromMapWithoutLock", arg0)
-}
-
-// DeleteFlowKeyFromMapWithoutLock indicates an expected call of DeleteFlowKeyFromMapWithoutLock
-func (mr *MockIPFIXAggregationProcessMockRecorder) DeleteFlowKeyFromMapWithoutLock(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteFlowKeyFromMapWithoutLock", reflect.TypeOf((*MockIPFIXAggregationProcess)(nil).DeleteFlowKeyFromMapWithoutLock), arg0)
-}
-
-// ForAllRecordsDo mocks base method
-func (m *MockIPFIXAggregationProcess) ForAllRecordsDo(arg0 intermediate.FlowKeyRecordMapCallBack) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ForAllRecordsDo", arg0)
+	ret := m.ctrl.Call(m, "ForAllExpiredFlowRecordsDo", arg0)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// ForAllRecordsDo indicates an expected call of ForAllRecordsDo
-func (mr *MockIPFIXAggregationProcessMockRecorder) ForAllRecordsDo(arg0 interface{}) *gomock.Call {
+// ForAllExpiredFlowRecordsDo indicates an expected call of ForAllExpiredFlowRecordsDo
+func (mr *MockIPFIXAggregationProcessMockRecorder) ForAllExpiredFlowRecordsDo(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ForAllRecordsDo", reflect.TypeOf((*MockIPFIXAggregationProcess)(nil).ForAllRecordsDo), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ForAllExpiredFlowRecordsDo", reflect.TypeOf((*MockIPFIXAggregationProcess)(nil).ForAllExpiredFlowRecordsDo), arg0)
+}
+
+// GetExpiryFromExpirePriorityQueue mocks base method
+func (m *MockIPFIXAggregationProcess) GetExpiryFromExpirePriorityQueue() time.Duration {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetExpiryFromExpirePriorityQueue")
+	ret0, _ := ret[0].(time.Duration)
+	return ret0
+}
+
+// GetExpiryFromExpirePriorityQueue indicates an expected call of GetExpiryFromExpirePriorityQueue
+func (mr *MockIPFIXAggregationProcessMockRecorder) GetExpiryFromExpirePriorityQueue() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetExpiryFromExpirePriorityQueue", reflect.TypeOf((*MockIPFIXAggregationProcess)(nil).GetExpiryFromExpirePriorityQueue))
+}
+
+// IsMetadataFilled mocks base method
+func (m *MockIPFIXAggregationProcess) IsMetadataFilled(arg0 intermediate.AggregationFlowRecord) bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IsMetadataFilled", arg0)
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// IsMetadataFilled indicates an expected call of IsMetadataFilled
+func (mr *MockIPFIXAggregationProcessMockRecorder) IsMetadataFilled(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsMetadataFilled", reflect.TypeOf((*MockIPFIXAggregationProcess)(nil).IsMetadataFilled), arg0)
+}
+
+// ResetStatElementsInRecord mocks base method
+func (m *MockIPFIXAggregationProcess) ResetStatElementsInRecord(arg0 entities.Record) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ResetStatElementsInRecord", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// ResetStatElementsInRecord indicates an expected call of ResetStatElementsInRecord
+func (mr *MockIPFIXAggregationProcessMockRecorder) ResetStatElementsInRecord(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResetStatElementsInRecord", reflect.TypeOf((*MockIPFIXAggregationProcess)(nil).ResetStatElementsInRecord), arg0)
+}
+
+// SetMetadataFilled mocks base method
+func (m *MockIPFIXAggregationProcess) SetMetadataFilled(arg0 intermediate.AggregationFlowRecord) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SetMetadataFilled", arg0)
+}
+
+// SetMetadataFilled indicates an expected call of SetMetadataFilled
+func (mr *MockIPFIXAggregationProcessMockRecorder) SetMetadataFilled(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetMetadataFilled", reflect.TypeOf((*MockIPFIXAggregationProcess)(nil).SetMetadataFilled), arg0)
 }
 
 // Start mocks base method

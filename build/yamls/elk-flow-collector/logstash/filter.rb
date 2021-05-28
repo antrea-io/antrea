@@ -31,6 +31,27 @@ def filter(event)
         event.set("[ipfix][flowTypeStr]", "From External")
     end
 
+    ingressRuleAction = event.get("[ipfix][ingressNetworkPolicyRuleAction]")
+    egressRuleAction = event.get("[ipfix][egressNetworkPolicyRuleAction]")
+    if ingressRuleAction == 0
+        event.set("[ipfix][ingressNetworkPolicyRuleActionStr]", "No Action")
+    elsif ingressRuleAction == 1
+        event.set("[ipfix][ingressNetworkPolicyRuleActionStr]", "Allow")
+    elsif ingressRuleAction == 2
+        event.set("[ipfix][ingressNetworkPolicyRuleActionStr]", "Drop")
+    elsif ingressRuleAction == 3
+        event.set("[ipfix][ingressNetworkPolicyRuleActionStr]", "Reject")
+    end
+    if egressRuleAction == 0
+        event.set("[ipfix][egressNetworkPolicyRuleActionStr]", "No Action")
+    elsif egressRuleAction == 1
+        event.set("[ipfix][egressNetworkPolicyRuleActionStr]", "Allow")
+    elsif egressRuleAction == 2
+        event.set("[ipfix][egressNetworkPolicyRuleActionStr]", "Drop")
+    elsif egressRuleAction == 3
+        event.set("[ipfix][egressNetworkPolicyRuleActionStr]", "Reject")
+    end
+
     if event.get("[ipfix][destinationIPv6Address]").nil?
         event.set("[ipfix][destinationIP]", event.get("[ipfix][destinationIPv4Address]"))
     else
@@ -97,6 +118,22 @@ def filter(event)
     if event.get("[ipfix][egressNetworkPolicyNamespace]") == ""
         event.remove("[ipfix][egressNetworkPolicyNamespace]")
         event.set("[ipfix][egressNetworkPolicyNamespace]", "N/A")
+    end
+    ingressNetworkPolicyType = event.get("[ipfix][ingressNetworkPolicyType]")
+    if ingressNetworkPolicyType == 1
+        event.set("[ipfix][ingressNetworkPolicyTypeStr]", "K8s NetworkPolicy")
+    elsif ingressNetworkPolicyType == 2
+        event.set("[ipfix][ingressNetworkPolicyTypeStr]", "Antrea NetworkPolicy")
+    elsif ingressNetworkPolicyType == 3
+        event.set("[ipfix][ingressNetworkPolicyTypeStr]", "Antrea ClusterNetworkPolicy")
+    end
+    egressNetworkPolicyType = event.get("[ipfix][egressNetworkPolicyType]")
+    if egressNetworkPolicyType == 1
+        event.set("[ipfix][egressNetworkPolicyTypeStr]", "K8s NetworkPolicy")
+    elsif egressNetworkPolicyType == 2
+        event.set("[ipfix][egressNetworkPolicyTypeStr]", "Antrea NetworkPolicy")
+    elsif egressNetworkPolicyType == 3
+        event.set("[ipfix][egressNetworkPolicyTypeStr]", "Antrea ClusterNetworkPolicy")
     end
     key = event.get("[ipfix][flowKey]")
     if @@time_map.has_key?(key)

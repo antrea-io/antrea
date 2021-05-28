@@ -45,7 +45,7 @@ func ParseFlowCollectorAddr(addr string, defaultPort string, defaultProtocol str
 		} else {
 			port = strSlice[1]
 		}
-		if (strSlice[2] != "udp") && (strSlice[2] != "tcp") {
+		if (strSlice[2] != "tls") && (strSlice[2] != "tcp") && (strSlice[2] != "udp") {
 			return host, port, proto, fmt.Errorf("connection over %s transport proto is not supported", strSlice[2])
 		}
 		proto = strSlice[2]

@@ -39,7 +39,6 @@ const (
 
 var Recipients = []string{
 	"projectantrea-dev@googlegroups.com",
-	"projectantrea-maintainers@googlegroups.com",
 }
 
 func isNeeded(stats *reportStats, maxScore int, newStats *reportStats) bool {

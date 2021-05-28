@@ -101,10 +101,15 @@ const (
 	busyboxImage        = "projects.registry.vmware.com/library/busybox"
 	nginxImage          = "projects.registry.vmware.com/antrea/nginx"
 	perftoolImage       = "projects.registry.vmware.com/antrea/perftool"
-	ipfixCollectorImage = "projects.registry.vmware.com/antrea/ipfix-collector:v0.4.7"
+	ipfixCollectorImage = "projects.registry.vmware.com/antrea/ipfix-collector:v0.5.2"
 	ipfixCollectorPort  = "4739"
 
 	nginxLBService = "nginx-loadbalancer"
+
+	exporterActiveFlowExportTimeout     = 2 * time.Second
+	exporterInactiveFlowExportTimeout   = 1 * time.Second
+	aggregatorActiveFlowRecordTimeout   = 3500 * time.Millisecond
+	aggregatorInactiveFlowRecordTimeout = 6 * time.Second
 )
 
 type ClusterNode struct {
@@ -563,16 +568,11 @@ func (data *TestData) deployAntreaFlowExporter(ipfixCollector string) error {
 	ac := []configChange{
 		{"FlowExporter", "true", true},
 		{"flowPollInterval", "\"1s\"", false},
-		{"activeFlowExportTimeout", "\"2s\"", false},
-		{"inactiveFlowExportTimeout", "\"1s\"", false},
+		{"activeFlowExportTimeout", fmt.Sprintf("\"%v\"", exporterActiveFlowExportTimeout), false},
+		{"inactiveFlowExportTimeout", fmt.Sprintf("\"%v\"", exporterInactiveFlowExportTimeout), false},
 	}
 	if ipfixCollector != "" {
 		ac = append(ac, configChange{"flowCollectorAddr", fmt.Sprintf("\"%s\"", ipfixCollector), false})
-	}
-	if testOptions.providerName == "kind" {
-		// In Kind cluster, there are issues with DNS name resolution on worker nodes.
-		// We will skip TLS testing for Kind cluster because the server certificate is generated with Flow aggregator's DNS name
-		ac = append(ac, configChange{"enableTLSToFlowAggregator", "false", false})
 	}
 	return data.mutateAntreaConfigMap(nil, ac, false, true)
 }
@@ -587,7 +587,11 @@ func (data *TestData) deployFlowAggregator(ipfixCollector string) (string, error
 	if err != nil || rc != 0 {
 		return "", fmt.Errorf("error when deploying flow aggregator; %s not available on the control-plane Node", flowAggYaml)
 	}
-	if err = data.mutateFlowAggregatorConfigMap(ipfixCollector); err != nil {
+	svc, err := data.clientset.CoreV1().Services(flowAggregatorNamespace).Get(context.TODO(), flowAggregatorDeployment, metav1.GetOptions{})
+	if err != nil {
+		return "", fmt.Errorf("unable to get service %v: %v", flowAggregatorDeployment, err)
+	}
+	if err = data.mutateFlowAggregatorConfigMap(ipfixCollector, svc.Spec.ClusterIP); err != nil {
 		return "", err
 	}
 	if rc, _, _, err = provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl -n %s rollout status deployment/%s --timeout=%v", flowAggregatorNamespace, flowAggregatorDeployment, 2*defaultTimeout)); err != nil || rc != 0 {
@@ -595,25 +599,23 @@ func (data *TestData) deployFlowAggregator(ipfixCollector string) (string, error
 		_, logStdout, _, _ := provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl -n %s logs -l app=flow-aggregator", flowAggregatorNamespace))
 		return stdout, fmt.Errorf("error when waiting for flow aggregator rollout to complete. kubectl describe output: %s, logs: %s", stdout, logStdout)
 	}
-	svc, err := data.clientset.CoreV1().Services(flowAggregatorNamespace).Get(context.TODO(), flowAggregatorDeployment, metav1.GetOptions{})
-	if err != nil {
-		return "", fmt.Errorf("unable to get service %v: %v", flowAggregatorDeployment, err)
-	}
 	return svc.Spec.ClusterIP, nil
 }
 
-func (data *TestData) mutateFlowAggregatorConfigMap(ipfixCollector string) error {
+func (data *TestData) mutateFlowAggregatorConfigMap(ipfixCollector string, faClusterIP string) error {
 	configMap, err := data.GetFlowAggregatorConfigMap()
 	if err != nil {
 		return err
 	}
 	flowAggregatorConf, _ := configMap.Data[flowAggregatorConfName]
 	flowAggregatorConf = strings.Replace(flowAggregatorConf, "#externalFlowCollectorAddr: \"\"", fmt.Sprintf("externalFlowCollectorAddr: \"%s\"", ipfixCollector), 1)
-	flowAggregatorConf = strings.Replace(flowAggregatorConf, "#flowExportInterval: 60s", "flowExportInterval: 5s", 1)
+	flowAggregatorConf = strings.Replace(flowAggregatorConf, "#activeFlowRecordTimeout: 60s", fmt.Sprintf("activeFlowRecordTimeout: %v", aggregatorActiveFlowRecordTimeout), 1)
+	flowAggregatorConf = strings.Replace(flowAggregatorConf, "#inactiveFlowRecordTimeout: 90s", fmt.Sprintf("inactiveFlowRecordTimeout: %v", aggregatorInactiveFlowRecordTimeout), 1)
 	if testOptions.providerName == "kind" {
 		// In Kind cluster, there are issues with DNS name resolution on worker nodes.
-		// We will skip TLS testing for Kind cluster because the server certificate is generated with Flow aggregator's DNS name
-		flowAggregatorConf = strings.Replace(flowAggregatorConf, "#aggregatorTransportProtocol: \"tls\"", "aggregatorTransportProtocol: \"tcp\"", 1)
+		// We will use flow aggregator service cluster IP to generate the server certificate for tls communication
+		faAddress := fmt.Sprintf("flowAggregatorAddress: %s", faClusterIP)
+		flowAggregatorConf = strings.Replace(flowAggregatorConf, "#flowAggregatorAddress: \"flow-aggregator.flow-aggregator.svc\"", faAddress, 1)
 	}
 	configMap.Data[flowAggregatorConfName] = flowAggregatorConf
 	if _, err := data.clientset.CoreV1().ConfigMaps(flowAggregatorNamespace).Update(context.TODO(), configMap, metav1.UpdateOptions{}); err != nil {

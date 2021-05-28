@@ -29,7 +29,8 @@ PS> .\Prepare-Node.ps1 -KubernetesVersion v1.18.0 -InstallOVS -NodeIP 192.168.1.
 Param(
     [parameter(Mandatory = $false, HelpMessage="Kubernetes version to use")] [string] $KubernetesVersion="v1.18.0",
     [parameter(Mandatory = $true, HelpMessage="Node IP")] [string] $NodeIP,
-    [parameter(Mandatory = $false)] [switch] $InstallOVS = $false
+    [parameter(Mandatory = $false)] [switch] $InstallOVS = $false,
+    [parameter(Mandatory = $false, HelpMessage="Kubernetes download")] [string] $KubernetesURL="dl.k8s.io"
 )
 $ErrorActionPreference = 'Stop'
 
@@ -64,8 +65,8 @@ $env:Path += ";$global:KubernetesPath"
 [Environment]::SetEnvironmentVariable("Path", $env:Path, [System.EnvironmentVariableTarget]::Machine)
 [Environment]::SetEnvironmentVariable("NODE_IP", $NodeIP, [System.EnvironmentVariableTarget]::Machine)
 
-DownloadFile $kubeletBinPath https://dl.k8s.io/$KubernetesVersion/bin/windows/amd64/kubelet.exe
-DownloadFile "$global:KubernetesPath\kubeadm.exe" https://dl.k8s.io/$KubernetesVersion/bin/windows/amd64/kubeadm.exe
+DownloadFile $kubeletBinPath "https://$KubernetesURL/$KubernetesVersion/bin/windows/amd64/kubelet.exe"
+DownloadFile "$global:KubernetesPath\kubeadm.exe" "https://$KubernetesURL/$KubernetesVersion/bin/windows/amd64/kubeadm.exe"
 DownloadFile "$global:KubernetesPath\wins.exe" https://github.com/rancher/wins/releases/download/v0.0.4/wins.exe
 
 # Create host network to allow kubelet to schedule hostNetwork pods

@@ -514,14 +514,8 @@ func (p *proxier) OnServiceUpdate(oldService, service *corev1.Service) {
 	} else {
 		metrics.ServicesUpdatesTotal.Inc()
 	}
-	var isIPv6 bool
-	if oldService != nil {
-		isIPv6 = utilnet.IsIPv6String(oldService.Spec.ClusterIP)
-	} else {
-		isIPv6 = utilnet.IsIPv6String(service.Spec.ClusterIP)
-	}
-	if isIPv6 == p.isIPv6 {
-		if p.serviceChanges.OnServiceUpdate(oldService, service) && p.isInitialized() {
+	if p.serviceChanges.OnServiceUpdate(oldService, service) {
+		if p.isInitialized() {
 			p.runner.Run()
 		}
 	}
@@ -632,12 +626,17 @@ func NewProxier(
 
 	enableEndpointSlice := features.DefaultFeatureGate.Enabled(features.EndpointSlice)
 
+	ipFamily := corev1.IPv4Protocol
+	if isIPv6 {
+		ipFamily = corev1.IPv6Protocol
+	}
+
 	p := &proxier{
 		enableEndpointSlice:      enableEndpointSlice,
 		endpointsConfig:          config.NewEndpointsConfig(informerFactory.Core().V1().Endpoints(), resyncPeriod),
 		serviceConfig:            config.NewServiceConfig(informerFactory.Core().V1().Services(), resyncPeriod),
 		endpointsChanges:         newEndpointsChangesTracker(hostname, enableEndpointSlice, isIPv6),
-		serviceChanges:           newServiceChangesTracker(recorder, isIPv6),
+		serviceChanges:           newServiceChangesTracker(recorder, ipFamily),
 		serviceMap:               k8sproxy.ServiceMap{},
 		serviceInstalledMap:      k8sproxy.ServiceMap{},
 		endpointsInstalledMap:    types.EndpointsMap{},
@@ -659,7 +658,6 @@ func NewProxier(
 		p.endpointsConfig = config.NewEndpointsConfig(informerFactory.Core().V1().Endpoints(), resyncPeriod)
 		p.endpointsConfig.RegisterEventHandler(p)
 	}
-	p.runner = k8sproxy.NewBoundedFrequencyRunner(componentName, p.syncProxyRules, 0, 30*time.Second, -1)
 	return p
 }
 

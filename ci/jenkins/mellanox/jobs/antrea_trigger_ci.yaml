@@ -119,7 +119,7 @@
         num-to-keep: 50
     - email-ext:
         recipients: {mailing-list}
-        subject: Failed CI for vmware-tanzu/antrea project
+        subject: Failed CI for antrea-io/antrea project
         failure: true
         content-type: html
         body: '${FILE,path="/tmp/failling_email_body.html"}'

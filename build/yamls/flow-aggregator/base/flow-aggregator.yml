@@ -10,16 +10,18 @@ metadata:
   name: flow-aggregator
   namespace: flow-aggregator
 ---
-kind: Role
+kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   name: flow-aggregator-role
-  namespace: flow-aggregator
 rules:
   - apiGroups: [""]
     resources: ["configmaps"]
     resourceNames: ["flow-aggregator-ca"]
     verbs: ["get", "update"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
   - apiGroups: [""]
     resources: ["configmaps"]
     verbs: ["create"]
@@ -31,17 +33,16 @@ rules:
     resources: ["secrets"]
     verbs: ["create"]
 ---
-kind: RoleBinding
+kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
-  name: flow-aggregator-role-binding
-  namespace: flow-aggregator
+  name: flow-aggregator-cluster-role-binding
 subjects:
   - kind: ServiceAccount
     name: flow-aggregator
     namespace: flow-aggregator
 roleRef:
-  kind: Role
+  kind: ClusterRole
   name: flow-aggregator-role
   apiGroup: rbac.authorization.k8s.io
 ---

@@ -35,9 +35,11 @@ import (
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/openflow"
 	"antrea.io/antrea/pkg/agent/route"
+	"antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/agent/util"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 	utilip "antrea.io/antrea/pkg/util/ip"
+	"antrea.io/antrea/pkg/util/k8s"
 )
 
 const (
@@ -135,6 +137,7 @@ type nodeRouteInfo struct {
 	podCIDRs  []*net.IPNet
 	nodeIP    net.IP
 	gatewayIP []net.IP
+	nodeMAC   net.HardwareAddr
 }
 
 // enqueueNode adds an object to the controller work queue
@@ -212,7 +215,7 @@ func (c *Controller) removeStaleTunnelPorts() error {
 				continue
 			}
 
-			peerNodeIP, err := GetNodeAddr(node)
+			peerNodeIP, err := k8s.GetNodeAddr(node)
 			if err != nil {
 				klog.Errorf("Failed to retrieve IP address of Node %s: %v", node.Name, err)
 				continue
@@ -406,8 +409,16 @@ func (c *Controller) deleteNodeRoute(nodeName string) error {
 }
 
 func (c *Controller) addNodeRoute(nodeName string, node *corev1.Node) error {
-	if _, installed, _ := c.installedNodes.GetByKey(nodeName); installed {
-		// Route is already added for this Node.
+	// It is only for Windows Noencap mode to get Node MAC.
+	peerNodeMAC, err := getNodeMAC(node)
+	if err != nil {
+		return fmt.Errorf("error when retrieving MAC of Node %s: %v", nodeName, err)
+	}
+
+	nrInfo, installed, _ := c.installedNodes.GetByKey(nodeName)
+
+	if installed && nrInfo.(*nodeRouteInfo).nodeMAC.String() == peerNodeMAC.String() {
+		// Route is already added for this Node and Node MAC isn't changed.
 		return nil
 	}
 
@@ -431,7 +442,7 @@ func (c *Controller) addNodeRoute(nodeName string, node *corev1.Node) error {
 			return nil
 		}
 
-		nodesHaveSamePodCIDR, _ := c.installedNodes.ByIndex(nodeRouteInfoPodCIDRIndexName, podCIDR)
+		nodesHaveSamePodCIDR, _ := c.installedNodes.IndexKeys(nodeRouteInfoPodCIDRIndexName, podCIDR)
 		// PodCIDRs can be released from deleted Nodes and allocated to new Nodes. For server side, it won't happen that a
 		// PodCIDR is allocated to more than one Node at any point. However, for client side, if a resync happens to occur
 		// when there are Node creation and deletion events, the informer will generate the events in a way that all
@@ -441,9 +452,12 @@ func (c *Controller) addNodeRoute(nodeName string, node *corev1.Node) error {
 		// stale routes, flows, and relevant cache of this podCIDR are removed appropriately, we wait for the Node deletion
 		// event to be processed before proceeding, or the route installation and uninstallation operations may override or
 		// conflict with each other.
-		if len(nodesHaveSamePodCIDR) > 0 {
+		// For Windows Noencap case, it is possible that nodesHaveSamePodCIDR is the Node itself because the Node
+		// MAC annotation was not set yet when the Node was initially installed. Then it is processed for the second
+		// time when its MAC annotation is updated.
+		if len(nodesHaveSamePodCIDR) > 0 && (len(nodesHaveSamePodCIDR) != 1 || nodesHaveSamePodCIDR[0] != nodeName) {
 			// Return an error so that the Node will be put back to the workqueue and will be retried later.
-			return fmt.Errorf("skipping addNodeRoute for Node %s because podCIDR %s is duplicate with Node %s, will retry later", nodeName, podCIDR, nodesHaveSamePodCIDR[0].(*nodeRouteInfo).nodeName)
+			return fmt.Errorf("skipping addNodeRoute for Node %s because podCIDR %s is duplicate with Node %s, will retry later", nodeName, podCIDR, nodesHaveSamePodCIDR[0])
 		}
 
 		peerPodCIDRAddr, peerPodCIDR, err := net.ParseCIDR(podCIDR)
@@ -456,7 +470,7 @@ func (c *Controller) addNodeRoute(nodeName string, node *corev1.Node) error {
 		podCIDRs = append(podCIDRs, peerPodCIDR)
 	}
 
-	peerNodeIP, err := GetNodeAddr(node)
+	peerNodeIP, err := k8s.GetNodeAddr(node)
 	if err != nil {
 		klog.Errorf("Failed to retrieve IP address of Node %s: %v", nodeName, err)
 		return nil
@@ -476,7 +490,8 @@ func (c *Controller) addNodeRoute(nodeName string, node *corev1.Node) error {
 		nodeName,
 		peerConfig,
 		peerNodeIP,
-		uint32(ipsecTunOFPort))
+		uint32(ipsecTunOFPort),
+		peerNodeMAC)
 	if err != nil {
 		return fmt.Errorf("failed to install flows to Node %s: %v", nodeName, err)
 	}
@@ -493,6 +508,7 @@ func (c *Controller) addNodeRoute(nodeName string, node *corev1.Node) error {
 		podCIDRs:  podCIDRs,
 		nodeIP:    peerNodeIP,
 		gatewayIP: peerGatewayIPs,
+		nodeMAC:   peerNodeMAC,
 	})
 	return err
 }
@@ -593,31 +609,6 @@ func ParseTunnelInterfaceConfig(
 	return interfaceConfig
 }
 
-// GetNodeAddr gets the available IP address of a Node. GetNodeAddr will first try to get the
-// NodeInternalIP, then try to get the NodeExternalIP.
-// Note: Although K8s supports dual-stack, there is only a single Internal address per Node because of issue (
-// kubernetes/kubernetes#91940 ). The Node might have multiple addresses after the issue is fixed, and one per address
-// family. And we should change the return type at that time.
-func GetNodeAddr(node *corev1.Node) (net.IP, error) {
-	addresses := make(map[corev1.NodeAddressType]string)
-	for _, addr := range node.Status.Addresses {
-		addresses[addr.Type] = addr.Address
-	}
-	var ipAddrStr string
-	if internalIP, ok := addresses[corev1.NodeInternalIP]; ok {
-		ipAddrStr = internalIP
-	} else if externalIP, ok := addresses[corev1.NodeExternalIP]; ok {
-		ipAddrStr = externalIP
-	} else {
-		return nil, fmt.Errorf("node %s has neither external ip nor internal ip", node.Name)
-	}
-	ipAddr := net.ParseIP(ipAddrStr)
-	if ipAddr == nil {
-		return nil, fmt.Errorf("<%v> is not a valid ip address", ipAddrStr)
-	}
-	return ipAddr, nil
-}
-
 func (c *Controller) IPInPodSubnets(ip net.IP) bool {
 	var ipCIDR *net.IPNet
 	var curNodeCIDRStr string
@@ -652,4 +643,17 @@ func (c *Controller) IPInPodSubnets(ip net.IP) bool {
 	ipCIDRStr := ipCIDR.String()
 	nodeInCluster, _ := c.installedNodes.ByIndex(nodeRouteInfoPodCIDRIndexName, ipCIDRStr)
 	return len(nodeInCluster) > 0 || ipCIDRStr == curNodeCIDRStr
+}
+
+// getNodeMAC gets Node's br-int MAC from its annotation. It is only for Windows Noencap mode.
+func getNodeMAC(node *corev1.Node) (net.HardwareAddr, error) {
+	macStr := node.Annotations[types.NodeMACAddressAnnotationKey]
+	if macStr == "" {
+		return nil, nil
+	}
+	mac, err := net.ParseMAC(macStr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse MAC `%s`: %v", macStr, err)
+	}
+	return mac, nil
 }

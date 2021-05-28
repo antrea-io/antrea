@@ -30,6 +30,7 @@ import (
 
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	crdv1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
+	crdv1alpha3 "antrea.io/antrea/pkg/apis/crd/v1alpha3"
 	legacycorev1a2 "antrea.io/antrea/pkg/legacyapis/core/v1alpha2"
 	legacysecv1alpha1 "antrea.io/antrea/pkg/legacyapis/security/v1alpha1"
 )
@@ -115,7 +116,7 @@ func (k *KubernetesUtils) Probe(ns1, pod1, ns2, pod2 string, port int32, protoco
 		// There seems to be an issue when running Antrea in Kind where tunnel traffic is dropped at
 		// first. This leads to the first test being run consistently failing. To avoid this issue
 		// until it is resolved, we try to connect 3 times.
-		// See https://github.com/vmware-tanzu/antrea/issues/467.
+		// See https://github.com/antrea-io/antrea/issues/467.
 		cmd := []string{
 			"/bin/sh",
 			"-c",
@@ -435,8 +436,8 @@ func (k *KubernetesUtils) DeleteTier(name string) error {
 	return nil
 }
 
-// CreateOrUpdateCG is a convenience function for idempotent setup of ClusterGroups
-func (k *KubernetesUtils) CreateOrUpdateCG(cg *crdv1alpha2.ClusterGroup) (*crdv1alpha2.ClusterGroup, error) {
+// CreateOrUpdateV1Alpha2CG is a convenience function for idempotent setup of crd/v1alpha2 ClusterGroups
+func (k *KubernetesUtils) CreateOrUpdateV1Alpha2CG(cg *crdv1alpha2.ClusterGroup) (*crdv1alpha2.ClusterGroup, error) {
 	log.Infof("Creating/updating ClusterGroup %s", cg.Name)
 	cgReturned, err := k.crdClient.CrdV1alpha2().ClusterGroups().Get(context.TODO(), cg.Name, metav1.GetOptions{})
 	if err != nil {
@@ -455,12 +456,40 @@ func (k *KubernetesUtils) CreateOrUpdateCG(cg *crdv1alpha2.ClusterGroup) (*crdv1
 	return nil, fmt.Errorf("error occurred in creating/updating ClusterGroup %s", cg.Name)
 }
 
-// CreateCG is a convenience function for creating an Antrea ClusterGroup by name and selector.
-func (k *KubernetesUtils) CreateCG(name string, pSelector, nSelector *metav1.LabelSelector, ipBlock *crdv1alpha1.IPBlock) (*crdv1alpha2.ClusterGroup, error) {
-	log.Infof("Creating clustergroup %s", name)
-	_, err := k.crdClient.CrdV1alpha2().ClusterGroups().Get(context.TODO(), name, metav1.GetOptions{})
+// CreateOrUpdateV1Alpha3CG is a convenience function for idempotent setup of crd/v1alpha3 ClusterGroups
+func (k *KubernetesUtils) CreateOrUpdateV1Alpha3CG(cg *crdv1alpha3.ClusterGroup) (*crdv1alpha3.ClusterGroup, error) {
+	log.Infof("Creating/updating ClusterGroup %s", cg.Name)
+	cgReturned, err := k.crdClient.CrdV1alpha3().ClusterGroups().Get(context.TODO(), cg.Name, metav1.GetOptions{})
 	if err != nil {
-		cg := &crdv1alpha2.ClusterGroup{
+		cgr, err := k.crdClient.CrdV1alpha3().ClusterGroups().Create(context.TODO(), cg, metav1.CreateOptions{})
+		if err != nil {
+			log.Infof("Unable to create cluster group %s: %v", cg.Name, err)
+			return nil, err
+		}
+		return cgr, nil
+	} else if cgReturned.Name != "" {
+		log.Debugf("ClusterGroup with name %s already exists, updating", cg.Name)
+		cgReturned.Spec = cg.Spec
+		cgr, err := k.crdClient.CrdV1alpha3().ClusterGroups().Update(context.TODO(), cgReturned, metav1.UpdateOptions{})
+		return cgr, err
+	}
+	return nil, fmt.Errorf("error occurred in creating/updating ClusterGroup %s", cg.Name)
+}
+
+func (k *KubernetesUtils) GetV1Alpha2CG(cgName string) (*crdv1alpha2.ClusterGroup, error) {
+	return k.crdClient.CrdV1alpha2().ClusterGroups().Get(context.TODO(), cgName, metav1.GetOptions{})
+}
+
+func (k *KubernetesUtils) GetV1Alpha3CG(cgName string) (*crdv1alpha3.ClusterGroup, error) {
+	return k.crdClient.CrdV1alpha3().ClusterGroups().Get(context.TODO(), cgName, metav1.GetOptions{})
+}
+
+// CreateCG is a convenience function for creating an Antrea ClusterGroup by name and selector.
+func (k *KubernetesUtils) CreateCG(name string, pSelector, nSelector *metav1.LabelSelector, ipBlocks []crdv1alpha1.IPBlock) (*crdv1alpha3.ClusterGroup, error) {
+	log.Infof("Creating clustergroup %s", name)
+	_, err := k.crdClient.CrdV1alpha3().ClusterGroups().Get(context.TODO(), name, metav1.GetOptions{})
+	if err != nil {
+		cg := &crdv1alpha3.ClusterGroup{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: name,
 			},
@@ -471,10 +500,10 @@ func (k *KubernetesUtils) CreateCG(name string, pSelector, nSelector *metav1.Lab
 		if nSelector != nil {
 			cg.Spec.NamespaceSelector = nSelector
 		}
-		if ipBlock != nil {
-			cg.Spec.IPBlock = ipBlock
+		if len(ipBlocks) > 0 {
+			cg.Spec.IPBlocks = ipBlocks
 		}
-		cg, err = k.crdClient.CrdV1alpha2().ClusterGroups().Create(context.TODO(), cg, metav1.CreateOptions{})
+		cg, err = k.crdClient.CrdV1alpha3().ClusterGroups().Create(context.TODO(), cg, metav1.CreateOptions{})
 		if err != nil {
 			log.Debugf("Unable to create clustergroup %s: %s", name, err)
 		}
@@ -492,10 +521,20 @@ func (k *KubernetesUtils) GetCG(name string) (*crdv1alpha2.ClusterGroup, error) 
 	return res, nil
 }
 
-// DeleteCG is a convenience function for deleting ClusterGroup by name.
-func (k *KubernetesUtils) DeleteCG(name string) error {
+// DeleteV1Alpha2CG is a convenience function for deleting crd/v1alpha2 ClusterGroup by name.
+func (k *KubernetesUtils) DeleteV1Alpha2CG(name string) error {
 	log.Infof("Deleting ClusterGroup %s", name)
 	err := k.crdClient.CrdV1alpha2().ClusterGroups().Delete(context.TODO(), name, metav1.DeleteOptions{})
+	if err != nil {
+		return errors.Wrapf(err, "unable to delete ClusterGroup %s", name)
+	}
+	return nil
+}
+
+// DeleteV1Alpha3CG is a convenience function for deleting core/v1alpha3 ClusterGroup by name.
+func (k *KubernetesUtils) DeleteV1Alpha3CG(name string) error {
+	log.Infof("deleting ClusterGroup %s", name)
+	err := k.crdClient.CrdV1alpha3().ClusterGroups().Delete(context.TODO(), name, metav1.DeleteOptions{})
 	if err != nil {
 		return errors.Wrapf(err, "unable to delete ClusterGroup %s", name)
 	}
@@ -506,10 +545,19 @@ func (k *KubernetesUtils) DeleteCG(name string) error {
 func (k *KubernetesUtils) CleanCGs() error {
 	l, err := k.crdClient.CrdV1alpha2().ClusterGroups().List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
-		return errors.Wrapf(err, "unable to list ClusterGroups")
+		return errors.Wrapf(err, "unable to list ClusterGroups in v1alpha2")
 	}
 	for _, cg := range l.Items {
-		if err := k.DeleteCG(cg.Name); err != nil {
+		if err := k.DeleteV1Alpha2CG(cg.Name); err != nil {
+			return err
+		}
+	}
+	l2, err := k.crdClient.CrdV1alpha3().ClusterGroups().List(context.TODO(), metav1.ListOptions{})
+	if err != nil {
+		return errors.Wrapf(err, "unable to list ClusterGroups in v1alpha3")
+	}
+	for _, cg := range l2.Items {
+		if err := k.DeleteV1Alpha3CG(cg.Name); err != nil {
 			return err
 		}
 	}
@@ -738,7 +786,7 @@ func (k *KubernetesUtils) Bootstrap(namespaces, pods []string) (*map[string][]st
 	}
 
 	// Ensure that all the HTTP servers have time to start properly.
-	// See https://github.com/vmware-tanzu/antrea/issues/472.
+	// See https://github.com/antrea-io/antrea/issues/472.
 	if err := k.waitForHTTPServers(allPods); err != nil {
 		return nil, err
 	}

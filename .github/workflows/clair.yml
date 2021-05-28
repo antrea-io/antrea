@@ -7,7 +7,7 @@ on:
 
 jobs:
   build:
-    if: github.repository == 'vmware-tanzu/antrea'
+    if: github.repository == 'antrea-io/antrea'
     runs-on: [ubuntu-latest]
     steps:
     - uses: actions/checkout@v2
@@ -29,7 +29,7 @@ jobs:
         path: clair-reports/*.json
         retention-days: 90 # max value
   skip:
-    if: github.repository != 'vmware-tanzu/antrea'
+    if: github.repository != 'antrea-io/antrea'
     runs-on: [ubuntu-latest]
     steps:
       - name: Skip

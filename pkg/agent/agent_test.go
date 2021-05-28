@@ -15,19 +15,27 @@
 package agent
 
 import (
+	"context"
 	"fmt"
 	"net"
+	"os"
 	"testing"
 
 	mock "github.com/golang/mock/gomock"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes/fake"
 
 	"antrea.io/antrea/pkg/agent/cniserver"
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/interfacestore"
+	"antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 	ovsconfigtest "antrea.io/antrea/pkg/ovs/ovsconfig/testing"
+	"antrea.io/antrea/pkg/util/env"
 )
 
 func newAgentInitializer(ovsBridgeClient ovsconfig.OVSBridgeClient, ifaceStore interfacestore.InterfaceStore) *Initializer {
@@ -133,4 +141,121 @@ func TestGetRoundInfo(t *testing.T) {
 	mockOVSBridgeClient.EXPECT().GetExternalIDs().Return(externalIDs, nil)
 	roundInfo = getRoundInfo(mockOVSBridgeClient)
 	assert.Equal(t, uint64(initialRoundNum), roundInfo.RoundNum, "Unexpected round number")
+}
+
+func TestInitNodeLocalConfig(t *testing.T) {
+	nodeName := "node1"
+	ovsBridge := "br-int"
+	nodeIPStr := "192.168.10.10"
+	_, nodeIPNet, _ := net.ParseCIDR("192.168.10.10/24")
+	macAddr, _ := net.ParseMAC("00:00:5e:00:53:01")
+	ipDevice := &net.Interface{
+		Index:        10,
+		MTU:          1500,
+		Name:         "ens160",
+		HardwareAddr: macAddr,
+	}
+	podCIDRStr := "172.16.10.0/24"
+	_, podCIDR, _ := net.ParseCIDR(podCIDRStr)
+	tests := []struct {
+		name                   string
+		trafficEncapMode       config.TrafficEncapModeType
+		tunnelType             ovsconfig.TunnelType
+		mtu                    int
+		expectedMTU            int
+		expectedNodeAnnotation map[string]string
+	}{
+		{
+			name:                   "noencap mode",
+			trafficEncapMode:       config.TrafficEncapModeNoEncap,
+			mtu:                    0,
+			expectedMTU:            1500,
+			expectedNodeAnnotation: map[string]string{types.NodeMACAddressAnnotationKey: macAddr.String()},
+		},
+		{
+			name:                   "hybrid mode",
+			trafficEncapMode:       config.TrafficEncapModeHybrid,
+			mtu:                    0,
+			expectedMTU:            1500,
+			expectedNodeAnnotation: map[string]string{types.NodeMACAddressAnnotationKey: macAddr.String()},
+		},
+		{
+			name:                   "encap mode, geneve tunnel",
+			trafficEncapMode:       config.TrafficEncapModeEncap,
+			tunnelType:             ovsconfig.GeneveTunnel,
+			mtu:                    0,
+			expectedMTU:            1450,
+			expectedNodeAnnotation: nil,
+		},
+		{
+			name:                   "encap mode, mtu specified",
+			trafficEncapMode:       config.TrafficEncapModeEncap,
+			tunnelType:             ovsconfig.GeneveTunnel,
+			mtu:                    1400,
+			expectedMTU:            1400,
+			expectedNodeAnnotation: nil,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			node := &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: nodeName,
+				},
+				Spec: corev1.NodeSpec{
+					PodCIDR: podCIDRStr,
+				},
+				Status: corev1.NodeStatus{
+					Addresses: []corev1.NodeAddress{
+						{
+							Type:    corev1.NodeInternalIP,
+							Address: nodeIPStr,
+						},
+					},
+				},
+			}
+			client := fake.NewSimpleClientset(node)
+			ifaceStore := interfacestore.NewInterfaceStore()
+			defer mockGetIPNetDeviceFromIP(nodeIPNet, ipDevice)()
+			defer mockNodeNameEnv(nodeName)()
+
+			initializer := &Initializer{
+				client:     client,
+				ifaceStore: ifaceStore,
+				mtu:        tt.mtu,
+				ovsBridge:  ovsBridge,
+				networkConfig: &config.NetworkConfig{
+					TrafficEncapMode: tt.trafficEncapMode,
+					TunnelType:       tt.tunnelType,
+				},
+			}
+			require.NoError(t, initializer.initNodeLocalConfig())
+			expectedNodeConfig := config.NodeConfig{
+				Name:            nodeName,
+				OVSBridge:       ovsBridge,
+				DefaultTunName:  defaultTunInterfaceName,
+				PodIPv4CIDR:     podCIDR,
+				NodeIPAddr:      nodeIPNet,
+				NodeMTU:         tt.expectedMTU,
+				UplinkNetConfig: new(config.AdapterNetConfig),
+			}
+			assert.Equal(t, expectedNodeConfig, *initializer.nodeConfig)
+			node, err := client.CoreV1().Nodes().Get(context.TODO(), nodeName, metav1.GetOptions{})
+			require.NoError(t, err)
+			assert.Equal(t, tt.expectedNodeAnnotation, node.Annotations)
+		})
+	}
+}
+
+func mockGetIPNetDeviceFromIP(ipNet *net.IPNet, ipDevice *net.Interface) func() {
+	prevGetIPNetDeviceFromIP := getIPNetDeviceFromIP
+	getIPNetDeviceFromIP = func(localIP net.IP) (*net.IPNet, *net.Interface, error) {
+		return ipNet, ipDevice, nil
+	}
+	return func() { getIPNetDeviceFromIP = prevGetIPNetDeviceFromIP }
+}
+
+func mockNodeNameEnv(name string) func() {
+	_ = os.Setenv(env.NodeNameEnvKey, name)
+	return func() { os.Unsetenv(env.NodeNameEnvKey) }
 }

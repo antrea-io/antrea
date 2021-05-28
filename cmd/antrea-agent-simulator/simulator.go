@@ -30,15 +30,15 @@ import (
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent"
-	"antrea.io/antrea/pkg/k8s"
 	"antrea.io/antrea/pkg/signals"
 	"antrea.io/antrea/pkg/util/env"
+	"antrea.io/antrea/pkg/util/k8s"
 	"antrea.io/antrea/pkg/version"
 )
 
 func run() error {
 	klog.Infof("Starting Antrea agent simulator (version %s)", version.GetFullVersion())
-	k8sClient, _, _, err := k8s.CreateClients(componentbaseconfig.ClientConnectionConfiguration{}, "")
+	k8sClient, _, _, _, err := k8s.CreateClients(componentbaseconfig.ClientConnectionConfiguration{}, "")
 	if err != nil {
 		return fmt.Errorf("error creating K8s clients: %v", err)
 	}

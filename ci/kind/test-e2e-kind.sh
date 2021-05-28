@@ -97,13 +97,13 @@ if $endpointslice; then
     manifest_args="$manifest_args --endpointslice"
 fi
 if $np; then
-    # See https://github.com/vmware-tanzu/antrea/issues/897
+    # See https://github.com/antrea-io/antrea/issues/897
     manifest_args="$manifest_args --tun vxlan"
 else
     manifest_args="$manifest_args --no-np"
 fi
 
-COMMON_IMAGES_LIST=("gcr.io/kubernetes-e2e-test-images/agnhost:2.8" "projects.registry.vmware.com/library/busybox" "projects.registry.vmware.com/antrea/nginx" "projects.registry.vmware.com/antrea/perftool" "projects.registry.vmware.com/antrea/ipfix-collector:v0.4.7")
+COMMON_IMAGES_LIST=("gcr.io/kubernetes-e2e-test-images/agnhost:2.8" "projects.registry.vmware.com/library/busybox" "projects.registry.vmware.com/antrea/nginx" "projects.registry.vmware.com/antrea/perftool" "projects.registry.vmware.com/antrea/ipfix-collector:v0.5.2")
 for image in "${COMMON_IMAGES_LIST[@]}"; do
     for i in `seq 3`; do
         docker pull $image && break

@@ -77,7 +77,6 @@ config_antrea() {
   echo "=== Configuring Antrea Flow Exporter Address ==="
   sed -i -e "s/#flowCollectorAddr.*/flowCollectorAddr: \"${LOGSTASH_IP}:${LOGSTASH_PORT}:${LOGSTASH_PROTOCOL}\"/g" ${GIT_CHECKOUT_DIR}/build/yamls/antrea.yml
   sed -i -e "s/#  FlowExporter: false/  FlowExporter: true/g" ${GIT_CHECKOUT_DIR}/build/yamls/antrea.yml
-  sed -i -e "s/#enableTLSToFlowAggregator: true/enableTLSToFlowAggregator: false/g" ${GIT_CHECKOUT_DIR}/build/yamls/antrea.yml
 }
 
 # Antrea agent flow exporter starts to send CoreDNS flow records.

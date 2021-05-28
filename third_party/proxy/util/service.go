@@ -35,7 +35,7 @@ Modifies:
 
 package util
 
-import "k8s.io/api/core/v1"
+import v1 "k8s.io/api/core/v1"
 
 // RequestsOnlyLocalTraffic checks if service requests OnlyLocal traffic.
 func RequestsOnlyLocalTraffic(service *v1.Service) bool {
@@ -44,6 +44,15 @@ func RequestsOnlyLocalTraffic(service *v1.Service) bool {
 		return false
 	}
 	return service.Spec.ExternalTrafficPolicy == v1.ServiceExternalTrafficPolicyTypeLocal
+}
+
+// RequestsOnlyLocalTrafficForInternal checks if service prefers Node Local
+// endpoints for internal traffic
+func RequestsOnlyLocalTrafficForInternal(service *v1.Service) bool {
+	if service.Spec.InternalTrafficPolicy == nil {
+		return false
+	}
+	return *service.Spec.InternalTrafficPolicy == v1.ServiceInternalTrafficPolicyLocal
 }
 
 // NeedsHealthCheck checks if service needs health check.

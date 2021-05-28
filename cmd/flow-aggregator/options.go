@@ -31,7 +31,8 @@ import (
 const (
 	defaultExternalFlowCollectorTransport = "tcp"
 	defaultExternalFlowCollectorPort      = "4739"
-	defaultFlowExportInterval             = 60 * time.Second
+	defaultActiveFlowRecordTimeout        = 60 * time.Second
+	defaultInactiveFlowRecordTimeout      = 90 * time.Second
 	defaultAggregatorTransportProtocol    = flowaggregator.AggregatorTransportProtocolTLS
 	defaultFlowAggregatorAddress          = "flow-aggregator.flow-aggregator.svc"
 )
@@ -45,8 +46,10 @@ type Options struct {
 	externalFlowCollectorAddr string
 	// IPFIX flow collector transport protocol
 	externalFlowCollectorProto string
-	// Flow export interval of the flow aggregator
-	exportInterval time.Duration
+	// Expiration timeout for active flow records in the flow aggregator
+	activeFlowRecordTimeout time.Duration
+	// Expiration timeout for inactive flow records in the flow aggregator
+	inactiveFlowRecordTimeout time.Duration
 	// Transport protocol over which the aggregator collects IPFIX records from all Agents
 	aggregatorTransportProtocol flowaggregator.AggregatorTransportProtocol
 	// DNS name or IP address of flow aggregator for generating TLS certificate
@@ -90,14 +93,21 @@ func (o *Options) validate(args []string) error {
 	}
 	o.externalFlowCollectorAddr = net.JoinHostPort(host, port)
 	o.externalFlowCollectorProto = proto
-	if o.config.FlowExportInterval == "" {
-		o.exportInterval = defaultFlowExportInterval
+	if o.config.ActiveFlowRecordTimeout == "" {
+		o.activeFlowRecordTimeout = defaultActiveFlowRecordTimeout
 	} else {
-		flowExportInterval, err := flowexport.ParseFlowIntervalString(o.config.FlowExportInterval)
+		o.activeFlowRecordTimeout, err = time.ParseDuration(o.config.ActiveFlowRecordTimeout)
 		if err != nil {
 			return err
 		}
-		o.exportInterval = flowExportInterval
+	}
+	if o.config.InactiveFlowRecordTimeout == "" {
+		o.inactiveFlowRecordTimeout = defaultInactiveFlowRecordTimeout
+	} else {
+		o.inactiveFlowRecordTimeout, err = time.ParseDuration(o.config.ActiveFlowRecordTimeout)
+		if err != nil {
+			return err
+		}
 	}
 	if o.config.AggregatorTransportProtocol == "" {
 		o.aggregatorTransportProtocol = defaultAggregatorTransportProtocol
@@ -108,10 +118,10 @@ func (o *Options) validate(args []string) error {
 		}
 		o.aggregatorTransportProtocol = transportProtocol
 	}
-	if o.config.flowAggregatorAddress == "" {
+	if o.config.FlowAggregatorAddress == "" {
 		o.flowAggregatorAddress = defaultFlowAggregatorAddress
 	} else {
-		o.flowAggregatorAddress = o.config.flowAggregatorAddress
+		o.flowAggregatorAddress = o.config.FlowAggregatorAddress
 	}
 	return nil
 }

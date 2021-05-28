@@ -78,7 +78,7 @@ function modify {
   peerName=$(docker run --net=host antrea/ethtool:latest ip link | grep ^"$peerIdx": | awk -F[:@] '{ print $2 }' | cut -c 2-)
   echo "Disabling TX checksum offload for node $node ($peerName)"
   docker run --net=host --privileged antrea/ethtool:latest ethtool -K "$peerName" tx off
-  # Workaround for https://github.com/vmware-tanzu/antrea/issues/324
+  # Workaround for https://github.com/antrea-io/antrea/issues/324
   docker exec "$node" sysctl -w net.ipv4.tcp_retries2=4
 }
 
@@ -233,6 +233,8 @@ function create {
   cat <<EOF > $config_file
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
+featureGates:
+  NetworkPolicyEndPort: true
 networking:
   disableDefaultCNI: true
   podSubnet: $POD_CIDR

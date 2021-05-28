@@ -245,7 +245,7 @@ func (data *TestData) setupDifferentNamedPorts(t *testing.T) (checkFn func(), cl
 		// Due to netdev datapath bug, sometimes datapath flows are not flushed after new openflows that change the
 		// actions are installed, causing client1 to still be able to connect to the servers after creating a policy
 		// that disallows it. The test waits for 10 seconds so that the datapath flows will expire.
-		// See https://github.com/vmware-tanzu/antrea/issues/1608 for more details.
+		// See https://github.com/antrea-io/antrea/issues/1608 for more details.
 		time.Sleep(10 * time.Second)
 	}
 
@@ -795,6 +795,167 @@ func TestIngressPolicyWithoutPortNumber(t *testing.T) {
 		// Client1 can't access server.
 		if err = data.runNetcatCommandFromTestPod(client1Name, serverIP, serverPort); err == nil {
 			t.Fatalf("Pod %s should not be able to connect %s, but was able to connect", client1Name, serverAddress)
+		}
+	}
+
+	if clusterInfo.podV4NetworkCIDR != "" {
+		npCheck(serverIPs.ipv4.String())
+	}
+	if clusterInfo.podV6NetworkCIDR != "" {
+		npCheck(serverIPs.ipv6.String())
+	}
+}
+
+func TestIngressPolicyWithEndPort(t *testing.T) {
+	skipIfHasWindowsNodes(t)
+
+	data, err := setupTest(t)
+	if err != nil {
+		t.Fatalf("Error when setting up test: %v", err)
+	}
+	defer teardownTest(t, data)
+
+	serverPort := int32(80)
+	serverEndPort := int32(84)
+	policyPort := int32(81)
+	policyEndPort := int32(83)
+
+	var serverPorts []int32
+	for i := serverPort; i <= serverEndPort; i++ {
+		serverPorts = append(serverPorts, i)
+	}
+
+	// makeContainerSpec creates a Container listening on a specific port.
+	makeContainerSpec := func(port int32) corev1.Container {
+		return corev1.Container{
+			Name:            fmt.Sprintf("c%d", port),
+			ImagePullPolicy: corev1.PullIfNotPresent,
+			Image:           agnhostImage,
+			Command:         []string{"/bin/bash", "-c"},
+			Args:            []string{fmt.Sprintf("/agnhost serve-hostname --tcp --http=false --port=%d", port)},
+			Ports: []corev1.ContainerPort{
+				{
+					ContainerPort: port,
+					Name:          fmt.Sprintf("serve-%d", port),
+					Protocol:      corev1.ProtocolTCP,
+				},
+			},
+		}
+	}
+
+	// createAgnhostPodOnNodeWithMultiPort creates a Pod in the test namespace with
+	// multiple agnhost containers listening on multiple ports.
+	// The Pod will be scheduled on the specified Node (if nodeName is not empty).
+	createAgnhostPodOnNodeWithMultiPort := func(name string, nodeName string) error {
+		var containers []corev1.Container
+		for _, port := range serverPorts {
+			containers = append(containers, makeContainerSpec(port))
+		}
+		podSpec := corev1.PodSpec{
+			Containers:    containers,
+			RestartPolicy: corev1.RestartPolicyNever,
+			HostNetwork:   false,
+		}
+		if nodeName != "" {
+			podSpec.NodeSelector = map[string]string{
+				"kubernetes.io/hostname": nodeName,
+			}
+		}
+		if nodeName == controlPlaneNodeName() {
+			// tolerate NoSchedule taint if we want Pod to run on control-plane Node
+			noScheduleToleration := controlPlaneNoScheduleToleration()
+			podSpec.Tolerations = []corev1.Toleration{noScheduleToleration}
+		}
+		pod := &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: name,
+				Labels: map[string]string{
+					"antrea-e2e": name,
+					"app":        getImageName(agnhostImage),
+				},
+			},
+			Spec: podSpec,
+		}
+		if _, err := data.clientset.CoreV1().Pods(testNamespace).Create(context.TODO(), pod, metav1.CreateOptions{}); err != nil {
+			return err
+		}
+		return nil
+	}
+
+	serverName, serverIPs, cleanupFunc := createAndWaitForPod(t, data, createAgnhostPodOnNodeWithMultiPort, "test-server-", "")
+	defer cleanupFunc()
+
+	clientName, _, cleanupFunc := createAndWaitForPod(t, data, data.createBusyboxPodOnNode, "test-client-", "")
+	defer cleanupFunc()
+
+	preCheck := func(serverIP string) {
+		// The client can connect to server on all ports.
+		for _, port := range serverPorts {
+			if err = data.runNetcatCommandFromTestPod(clientName, serverIP, port); err != nil {
+				t.Fatalf("Pod %s should be able to connect %s, but was not able to connect", clientName, net.JoinHostPort(serverIP, fmt.Sprint(port)))
+			}
+		}
+	}
+
+	if clusterInfo.podV4NetworkCIDR != "" {
+		preCheck(serverIPs.ipv4.String())
+	}
+	if clusterInfo.podV6NetworkCIDR != "" {
+		preCheck(serverIPs.ipv6.String())
+	}
+
+	protocol := corev1.ProtocolTCP
+	spec := &networkingv1.NetworkPolicySpec{
+		PodSelector: metav1.LabelSelector{
+			MatchLabels: map[string]string{
+				"antrea-e2e": serverName,
+			},
+		},
+		PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
+		Ingress: []networkingv1.NetworkPolicyIngressRule{
+			{
+				Ports: []networkingv1.NetworkPolicyPort{
+					{
+						Protocol: &protocol,
+						Port:     &intstr.IntOrString{Type: intstr.Int, IntVal: policyPort},
+						EndPort:  &policyEndPort,
+					},
+				},
+				From: []networkingv1.NetworkPolicyPeer{{
+					PodSelector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							"antrea-e2e": clientName,
+						},
+					}},
+				},
+			},
+		},
+	}
+	np, err := data.createNetworkPolicy("test-networkpolicy-ingress-with-endport", spec)
+	if err != nil {
+		t.Fatalf("Error when creating NetworkPolicy: %v", err)
+	}
+	defer func() {
+		if err = data.deleteNetworkpolicy(np); err != nil {
+			t.Errorf("Error when deleting NetworkPolicy: %v", err)
+		}
+	}()
+
+	if np.Spec.Ingress[0].Ports[0].EndPort == nil {
+		t.Skipf("Skipping test as the kube-apiserver doesn't support `endPort` " +
+			"or `NetworkPolicyEndPort` feature-gate is not enabled.")
+	}
+
+	npCheck := func(serverIP string) {
+		for _, port := range serverPorts {
+			err = data.runNetcatCommandFromTestPod(clientName, serverIP, port)
+			if port >= policyPort && port <= policyEndPort {
+				if err != nil {
+					t.Errorf("Pod %s should be able to connect %s, but was not able to connect", clientName, net.JoinHostPort(serverIP, fmt.Sprint(port)))
+				}
+			} else if err == nil {
+				t.Errorf("Pod %s should be not able to connect %s, but was able to connect", clientName, net.JoinHostPort(serverIP, fmt.Sprint(port)))
+			}
 		}
 	}
 

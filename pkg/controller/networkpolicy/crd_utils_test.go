@@ -25,7 +25,7 @@ import (
 
 	"antrea.io/antrea/pkg/apis/controlplane"
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
-	crdv1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
+	crdv1alpha3 "antrea.io/antrea/pkg/apis/crd/v1alpha3"
 )
 
 func TestToAntreaServicesForCRD(t *testing.T) {
@@ -152,9 +152,9 @@ func TestToAntreaPeerForCRD(t *testing.T) {
 	matchAllPodsPeer := matchAllPeer
 	matchAllPodsPeer.AddressGroups = []string{getNormalizedUID(toGroupSelector("", nil, &selectorAll, nil).NormalizedName)}
 	// cgA with selector present in cache
-	cgA := crdv1alpha2.ClusterGroup{
+	cgA := crdv1alpha3.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{Name: "cgA", UID: "uidA"},
-		Spec: crdv1alpha2.GroupSpec{
+		Spec: crdv1alpha3.GroupSpec{
 			NamespaceSelector: &selectorA,
 		},
 	}

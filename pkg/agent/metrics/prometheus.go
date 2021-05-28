@@ -136,6 +136,16 @@ var (
 		},
 	)
 
+	TotalDenyConnections = metrics.NewGauge(
+		&metrics.GaugeOpts{
+			Namespace:      metricNamespaceAntrea,
+			Subsystem:      metricSubsystemAgent,
+			Name:           "denied_connection_count",
+			Help:           "Number of denied connections detected by Flow Exporter deny connections tracking. This metric gets updated when a flow is rejected/dropped by network policy.",
+			StabilityLevel: metrics.ALPHA,
+		},
+	)
+
 	MaxConnectionsInConnTrackTable = metrics.NewGauge(
 		&metrics.GaugeOpts{
 			Namespace:      metricNamespaceAntrea,
@@ -209,6 +219,9 @@ func InitializeConnectionMetrics() {
 	}
 	if err := legacyregistry.Register(TotalAntreaConnectionsInConnTrackTable); err != nil {
 		klog.Errorf("Failed to register antrea_agent_conntrack_antrea_connection_count with error: %v", err)
+	}
+	if err := legacyregistry.Register(TotalDenyConnections); err != nil {
+		klog.Errorf("Failed to register antrea_agent_denied_connection_count with error: %v", err)
 	}
 	if err := legacyregistry.Register(MaxConnectionsInConnTrackTable); err != nil {
 		klog.Errorf("Failed to register antrea_agent_conntrack_max_connection_count with error: %v", err)

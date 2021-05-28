@@ -42,7 +42,7 @@ func (o *Options) checkUnsupportedFeatures() error {
 		unsupported = append(unsupported, "OVSDatapathType: "+o.config.OVSDatapathType)
 	}
 	_, encapMode := config.GetTrafficEncapModeFromStr(o.config.TrafficEncapMode)
-	if encapMode != config.TrafficEncapModeEncap {
+	if encapMode == config.TrafficEncapModeNetworkPolicyOnly {
 		unsupported = append(unsupported, "TrafficEncapMode: "+encapMode.String())
 	}
 	if o.config.TunnelType == ovsconfig.GRETunnel {
