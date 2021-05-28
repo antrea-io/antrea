@@ -463,8 +463,9 @@ func checkRecordsForFlows(t *testing.T, data *TestData, srcIP string, dstIP stri
 
 	// Polling to make sure all the data records corresponding to the iperf flow
 	// are received.
-	err = wait.Poll(250*time.Millisecond, collectorCheckTimeout, func() (bool, error) {
-		rc, collectorOutput, _, err := provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl logs --since=%v ipfix-collector -n antrea-test", time.Since(timeStart).String()))
+	err = wait.PollImmediate(500*time.Millisecond, aggregatorInactiveFlowRecordTimeout, func() (bool, error) {
+		// `pod-running-timeout` option is added to cover scenarios where ipfix flow-collector has crashed after being deployed.
+		rc, collectorOutput, _, err := provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl logs --since=%v --pod-running-timeout=%v ipfix-collector -n antrea-test", time.Since(timeStart).String(), aggregatorInactiveFlowRecordTimeout.String()))
 		if err != nil || rc != 0 {
 			return false, err
 		}
