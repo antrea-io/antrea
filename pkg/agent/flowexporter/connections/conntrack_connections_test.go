@@ -15,6 +15,7 @@
 package connections
 
 import (
+	"encoding/binary"
 	"fmt"
 	"net"
 	"strings"
@@ -36,9 +37,56 @@ import (
 	interfacestoretest "antrea.io/antrea/pkg/agent/interfacestore/testing"
 	"antrea.io/antrea/pkg/agent/metrics"
 	"antrea.io/antrea/pkg/agent/openflow"
+	ofclient "antrea.io/antrea/pkg/agent/openflow"
 	proxytest "antrea.io/antrea/pkg/agent/proxy/testing"
+	agenttypes "antrea.io/antrea/pkg/agent/types"
+	cpv1beta "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
+	secv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	queriertest "antrea.io/antrea/pkg/querier/testing"
 	k8sproxy "antrea.io/antrea/third_party/proxy"
+)
+
+var (
+	np1 = cpv1beta.NetworkPolicyReference{
+		Type:      cpv1beta.K8sNetworkPolicy,
+		Namespace: "foo",
+		Name:      "bar",
+		UID:       "uid1",
+	}
+	np2 = cpv1beta.NetworkPolicyReference{
+		Type:      cpv1beta.AntreaNetworkPolicy,
+		Namespace: "foo",
+		Name:      "baz",
+		UID:       "uid2",
+	}
+	rule1 = agenttypes.PolicyRule{
+		Direction:     cpv1beta.DirectionIn,
+		From:          []agenttypes.Address{},
+		To:            []agenttypes.Address{},
+		Service:       []cpv1beta.Service{},
+		Action:        nil,
+		Priority:      nil,
+		Name:          "",
+		FlowID:        uint32(0),
+		TableID:       ofclient.IngressRuleTable,
+		PolicyRef:     &np1,
+		EnableLogging: false,
+	}
+	priority = uint16(50000)
+	action   = secv1alpha1.RuleActionAllow
+	rule2    = agenttypes.PolicyRule{
+		Direction:     cpv1beta.DirectionOut,
+		From:          []agenttypes.Address{},
+		To:            []agenttypes.Address{},
+		Service:       []cpv1beta.Service{},
+		Action:        &action,
+		Priority:      &priority,
+		Name:          "allow",
+		FlowID:        uint32(0),
+		TableID:       ofclient.EgressRuleTable,
+		PolicyRef:     &np2,
+		EnableLogging: false,
+	}
 )
 
 func TestConntrackConnectionStore_AddOrUpdateConn(t *testing.T) {
@@ -200,6 +248,27 @@ func TestConntrackConnectionStore_AddOrUpdateConn(t *testing.T) {
 			serviceStr := fmt.Sprintf("%s:%d/%s", expConn.DestinationServiceAddress.String(), expConn.DestinationServicePort, protocol)
 			mockProxier.EXPECT().GetServiceByIP(serviceStr).Return(servicePortName, true)
 			expConn.DestinationServicePortName = servicePortName.String()
+		case 4:
+			// Tests NetworkPolicy mapping.
+			mockIfaceStore.EXPECT().GetInterfaceByIP(expConn.FlowKey.SourceAddress.String()).Return(nil, false)
+			mockIfaceStore.EXPECT().GetInterfaceByIP(expConn.FlowKey.SourceAddress.String()).Return(nil, false)
+
+			ingressOfID := binary.LittleEndian.Uint32(test.flow.Labels[:4])
+			npQuerier.EXPECT().GetNetworkPolicyByRuleFlowID(ingressOfID).Return(&np1)
+			npQuerier.EXPECT().GetRuleByFlowID(ingressOfID).Return(&rule1)
+			expConn.IngressNetworkPolicyName = np1.Name
+			expConn.IngressNetworkPolicyNamespace = np1.Namespace
+			expConn.IngressNetworkPolicyType = flowexporter.PolicyTypeToUint8(np1.Type)
+			expConn.IngressNetworkPolicyRuleName = rule1.Name
+
+			egressOfID := binary.LittleEndian.Uint32(test.flow.Labels[4:8])
+			npQuerier.EXPECT().GetNetworkPolicyByRuleFlowID(egressOfID).Return(&np2)
+			npQuerier.EXPECT().GetRuleByFlowID(egressOfID).Return(&rule2)
+			expConn.EgressNetworkPolicyName = np2.Name
+			expConn.EgressNetworkPolicyNamespace = np2.Namespace
+			expConn.EgressNetworkPolicyType = flowexporter.PolicyTypeToUint8(np2.Type)
+			expConn.EgressNetworkPolicyRuleName = rule2.Name
+			expConn.EgressNetworkPolicyRuleAction = flowexporter.RuleActionToUint8(string(*rule2.Action))
 		}
 		conntrackConnStore.AddOrUpdateConn(&test.flow)
 		actualConn, ok := conntrackConnStore.GetConnByKey(flowTuple)

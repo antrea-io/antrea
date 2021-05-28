@@ -69,9 +69,13 @@ var (
 		"destinationServicePortName",
 		"ingressNetworkPolicyName",
 		"ingressNetworkPolicyNamespace",
+		"ingressNetworkPolicyType",
+		"ingressNetworkPolicyRuleName",
 		"ingressNetworkPolicyRuleAction",
 		"egressNetworkPolicyName",
 		"egressNetworkPolicyNamespace",
+		"egressNetworkPolicyType",
+		"egressNetworkPolicyRuleName",
 		"egressNetworkPolicyRuleAction",
 		"tcpState",
 		"flowType",
@@ -531,12 +535,20 @@ func (exp *flowExporter) addRecordToSet(record flowexporter.FlowRecord) error {
 			ie.Value = record.Conn.IngressNetworkPolicyName
 		case "ingressNetworkPolicyNamespace":
 			ie.Value = record.Conn.IngressNetworkPolicyNamespace
+		case "ingressNetworkPolicyType":
+			ie.Value = record.Conn.IngressNetworkPolicyType
+		case "ingressNetworkPolicyRuleName":
+			ie.Value = record.Conn.IngressNetworkPolicyRuleName
 		case "ingressNetworkPolicyRuleAction":
 			ie.Value = record.Conn.IngressNetworkPolicyRuleAction
 		case "egressNetworkPolicyName":
 			ie.Value = record.Conn.EgressNetworkPolicyName
 		case "egressNetworkPolicyNamespace":
 			ie.Value = record.Conn.EgressNetworkPolicyNamespace
+		case "egressNetworkPolicyType":
+			ie.Value = record.Conn.EgressNetworkPolicyType
+		case "egressNetworkPolicyRuleName":
+			ie.Value = record.Conn.EgressNetworkPolicyRuleName
 		case "egressNetworkPolicyRuleAction":
 			ie.Value = record.Conn.EgressNetworkPolicyRuleAction
 		case "tcpState":
@@ -649,12 +661,20 @@ func (exp *flowExporter) addDenyConnToSet(conn *flowexporter.Connection, flowEnd
 			ie.Value = conn.IngressNetworkPolicyName
 		case "ingressNetworkPolicyNamespace":
 			ie.Value = conn.IngressNetworkPolicyNamespace
+		case "ingressNetworkPolicyType":
+			ie.Value = conn.IngressNetworkPolicyType
+		case "ingressNetworkPolicyRuleName":
+			ie.Value = conn.IngressNetworkPolicyRuleName
 		case "ingressNetworkPolicyRuleAction":
 			ie.Value = conn.IngressNetworkPolicyRuleAction
 		case "egressNetworkPolicyName":
 			ie.Value = conn.EgressNetworkPolicyName
 		case "egressNetworkPolicyNamespace":
 			ie.Value = conn.EgressNetworkPolicyNamespace
+		case "egressNetworkPolicyType":
+			ie.Value = conn.EgressNetworkPolicyType
+		case "egressNetworkPolicyRuleName":
+			ie.Value = conn.EgressNetworkPolicyRuleName
 		case "egressNetworkPolicyRuleAction":
 			ie.Value = conn.EgressNetworkPolicyRuleAction
 		case "tcpState":
