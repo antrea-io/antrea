@@ -317,10 +317,7 @@ func (fa *flowAggregator) initExportingProcess() error {
 	fa.exportingProcess = ep
 	// Currently, we send two templates for IPv4 and IPv6 regardless of the IP families supported by cluster
 	fa.templateIDv4 = fa.exportingProcess.NewTemplateID()
-	if err := fa.set.PrepareSet(ipfixentities.Template, fa.templateIDv4); err != nil {
-		return fmt.Errorf("error when preparing IPv4 template set: %v", err)
-	}
-	bytesSent, err := fa.sendTemplateSet(fa.set, false)
+	bytesSent, err := fa.sendTemplateSet(false)
 	if err != nil {
 		fa.exportingProcess.CloseConnToCollector()
 		fa.exportingProcess = nil
@@ -330,12 +327,8 @@ func (fa *flowAggregator) initExportingProcess() error {
 	}
 	klog.V(2).Infof("Initialized exporting process and sent %d bytes size of IPv4 template set", bytesSent)
 
-	fa.set.ResetSet()
 	fa.templateIDv6 = fa.exportingProcess.NewTemplateID()
-	if err := fa.set.PrepareSet(ipfixentities.Template, fa.templateIDv6); err != nil {
-		return fmt.Errorf("error when preparing IPv6 template set: %v", err)
-	}
-	bytesSent, err = fa.sendTemplateSet(fa.set, true)
+	bytesSent, err = fa.sendTemplateSet(true)
 	if err != nil {
 		fa.exportingProcess.CloseConnToCollector()
 		fa.exportingProcess = nil
@@ -426,7 +419,7 @@ func (fa *flowAggregator) sendFlowKeyRecord(key ipfixintermediate.FlowKey, recor
 	return nil
 }
 
-func (fa *flowAggregator) sendTemplateSet(templateSet ipfixentities.Set, isIPv6 bool) (int, error) {
+func (fa *flowAggregator) sendTemplateSet(isIPv6 bool) (int, error) {
 	elements := make([]*ipfixentities.InfoElementWithValue, 0)
 	ianaInfoElements := ianaInfoElementsIPv4
 	antreaInfoElements := antreaInfoElementsIPv4
@@ -486,11 +479,15 @@ func (fa *flowAggregator) sendTemplateSet(templateSet ipfixentities.Set, isIPv6 
 		ie := ipfixentities.NewInfoElementWithValue(element, nil)
 		elements = append(elements, ie)
 	}
-	err := templateSet.AddRecord(elements, templateID)
+	fa.set.ResetSet()
+	if err := fa.set.PrepareSet(ipfixentities.Template, templateID); err != nil {
+		return 0, err
+	}
+	err := fa.set.AddRecord(elements, templateID)
 	if err != nil {
 		return 0, fmt.Errorf("error when adding record to set, error: %v", err)
 	}
-	bytesSent, err := fa.exportingProcess.SendSet(templateSet)
+	bytesSent, err := fa.exportingProcess.SendSet(fa.set)
 	return bytesSent, err
 }
 
