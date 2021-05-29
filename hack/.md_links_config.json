@@ -16,7 +16,10 @@
             "pattern": "^https://calendar.google.com/*"
         },
         {
-             "pattern": "^https://github.com/[^/]*$"
+            "pattern": "^https://github.com/[^/]*$"
+        },
+        {
+            "pattern": "^https://app.fossa.com/api/*"
         }
     ],
     "retryOn429": false,

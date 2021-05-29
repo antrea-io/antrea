@@ -23,9 +23,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
 	ipfixentitiestesting "github.com/vmware/go-ipfix/pkg/entities/testing"
+	"github.com/vmware/go-ipfix/pkg/registry"
 	ipfixregistry "github.com/vmware/go-ipfix/pkg/registry"
 
 	"antrea.io/antrea/pkg/agent/flowexporter"
+	"antrea.io/antrea/pkg/agent/flowexporter/connections"
 	connectionstest "antrea.io/antrea/pkg/agent/flowexporter/connections/testing"
 	"antrea.io/antrea/pkg/agent/flowexporter/flowrecords"
 	ipfixtest "antrea.io/antrea/pkg/ipfix/testing"
@@ -95,7 +97,7 @@ func testSendTemplateSet(t *testing.T, v4Enabled bool, v6Enabled bool) {
 func sendTemplateSet(t *testing.T, ctrl *gomock.Controller, mockIPFIXExpProc *ipfixtest.MockIPFIXExportingProcess, mockIPFIXRegistry *ipfixtest.MockIPFIXRegistry, flowExp *flowExporter, isIPv6 bool) {
 	var mockTempSet *ipfixentitiestesting.MockSet
 	mockTempSet = ipfixentitiestesting.NewMockSet(ctrl)
-
+	flowExp.ipfixSet = mockTempSet
 	// Following consists of all elements that are in IANAInfoElements and AntreaInfoElements (globals)
 	// Only the element name is needed, other arguments have dummy values.
 	var elemList = make([]*ipfixentities.InfoElementWithValue, 0)
@@ -124,8 +126,14 @@ func sendTemplateSet(t *testing.T, ctrl *gomock.Controller, mockIPFIXExpProc *ip
 	}
 	// Passing 0 for sentBytes as it is not used anywhere in the test. If this not a call to mock, the actual sentBytes
 	// above elements: IANAInfoElements, IANAReverseInfoElements and AntreaInfoElements.
+	mockTempSet.EXPECT().ResetSet()
+	if !isIPv6 {
+		mockTempSet.EXPECT().PrepareSet(ipfixentities.Template, testTemplateIDv4).Return(nil)
+	} else {
+		mockTempSet.EXPECT().PrepareSet(ipfixentities.Template, testTemplateIDv6).Return(nil)
+	}
 	mockIPFIXExpProc.EXPECT().SendSet(mockTempSet).Return(0, nil)
-	_, err := flowExp.sendTemplateSet(mockTempSet, isIPv6)
+	_, err := flowExp.sendTemplateSet(isIPv6)
 	assert.NoError(t, err, "Error in sending template set")
 
 	eL := flowExp.elementsListv4
@@ -243,19 +251,23 @@ func getElemList(ianaIE []string, antreaIE []string) []*ipfixentities.InfoElemen
 			elemList[i] = ipfixentities.NewInfoElementWithValue(ie.Element, "")
 		case "ingressNetworkPolicyName", "ingressNetworkPolicyNamespace", "egressNetworkPolicyName", "egressNetworkPolicyNamespace":
 			elemList[i] = ipfixentities.NewInfoElementWithValue(ie.Element, "")
+		case "ingressNetworkPolicyRuleName", "egressNetworkPolicyRuleName":
+			elemList[i] = ipfixentities.NewInfoElementWithValue(ie.Element, "")
+		case "ingressNetworkPolicyType", "egressNetworkPolicyType", "ingressNetworkPolicyRuleAction", "egressNetworkPolicyRuleAction":
+			elemList[i] = ipfixentities.NewInfoElementWithValue(ie.Element, uint8(0))
 		}
 	}
 	return elemList
 }
 
 func getConnection(isIPv6 bool, isPresent bool, statusFlag uint32, protoID uint8, tcpState string) *flowexporter.Connection {
-	var tuple, revTuple flowexporter.Tuple
+	var tuple flowexporter.Tuple
 	if !isIPv6 {
-		tuple, revTuple = makeTuple(&net.IP{1, 2, 3, 4}, &net.IP{4, 3, 2, 1}, 6, 65280, 255)
+		tuple = flowexporter.Tuple{SourceAddress: net.IP{1, 2, 3, 4}, DestinationAddress: net.IP{4, 3, 2, 1}, Protocol: 6, SourcePort: 65280, DestinationPort: 255}
 	} else {
-		srcIP := net.IP([]byte{0x20, 0x1, 0x0, 0x0, 0x32, 0x38, 0xdf, 0xe1, 0x0, 0x63, 0x0, 0x0, 0x0, 0x0, 0xfe, 0xfb})
-		dstIP := net.IP([]byte{0x20, 0x1, 0x0, 0x0, 0x32, 0x38, 0xdf, 0xe1, 0x0, 0x63, 0x0, 0x0, 0x0, 0x0, 0xfe, 0xfc})
-		tuple, revTuple = makeTuple(&srcIP, &dstIP, protoID, 65280, 255)
+		srcIP := net.ParseIP("2001:0:3238:dfe1:63::fefb")
+		dstIP := net.ParseIP("2001:0:3238:dfe1:63::fefc")
+		tuple = flowexporter.Tuple{SourceAddress: srcIP, DestinationAddress: dstIP, Protocol: protoID, SourcePort: 65280, DestinationPort: 255}
 	}
 	conn := &flowexporter.Connection{
 		StartTime:                     time.Time{},
@@ -265,8 +277,7 @@ func getConnection(isIPv6 bool, isPresent bool, statusFlag uint32, protoID uint8
 		OriginalBytes:                 0xabcd,
 		ReversePackets:                0xa,
 		ReverseBytes:                  0xab,
-		TupleOrig:                     tuple,
-		TupleReply:                    revTuple,
+		FlowKey:                       tuple,
 		IsPresent:                     isPresent,
 		SourcePodNamespace:            "ns",
 		SourcePodName:                 "pod",
@@ -274,10 +285,34 @@ func getConnection(isIPv6 bool, isPresent bool, statusFlag uint32, protoID uint8
 		DestinationPodName:            "",
 		IngressNetworkPolicyName:      "",
 		IngressNetworkPolicyNamespace: "",
+		IngressNetworkPolicyType:      registry.PolicyTypeK8sNetworkPolicy,
+		IngressNetworkPolicyRuleName:  "",
 		EgressNetworkPolicyName:       "np",
 		EgressNetworkPolicyNamespace:  "np-ns",
+		EgressNetworkPolicyType:       registry.PolicyTypeK8sNetworkPolicy,
+		EgressNetworkPolicyRuleName:   "",
 		DestinationServicePortName:    "service",
 		TCPState:                      tcpState,
+	}
+	return conn
+}
+
+func getDenyConnection(isIPv6 bool, isActive bool) *flowexporter.Connection {
+	var tuple, _ flowexporter.Tuple
+	if !isIPv6 {
+		tuple, _ = makeTuple(&net.IP{1, 2, 3, 4}, &net.IP{4, 3, 2, 1}, 6, 65280, 255)
+	} else {
+		srcIP := net.ParseIP("2001:0:3238:dfe1:63::fefb")
+		dstIP := net.ParseIP("2001:0:3238:dfe1:63::fefc")
+		tuple, _ = makeTuple(&srcIP, &dstIP, 6, 65280, 255)
+	}
+	conn := &flowexporter.Connection{
+		FlowKey:        tuple,
+		LastExportTime: time.Now().Add(-testIdleFlowTimeout),
+	}
+	if isActive {
+		conn.LastExportTime = time.Now().Add(-testActiveFlowTimeout)
+		conn.DeltaPackets = uint64(1)
 	}
 	return conn
 }
@@ -340,10 +375,10 @@ func runSendFlowRecordTests(t *testing.T, flowExp *flowExporter, isIPv6 bool) {
 
 	mockIPFIXExpProc := ipfixtest.NewMockIPFIXExportingProcess(ctrl)
 	mockDataSet := ipfixentitiestesting.NewMockSet(ctrl)
-	mockConnStore := connectionstest.NewMockConnectionStore(ctrl)
 	flowExp.process = mockIPFIXExpProc
 	flowExp.ipfixSet = mockDataSet
-	flowExp.connStore = mockConnStore
+	mockConnDumper := connectionstest.NewMockConnTrackDumper(ctrl)
+	flowExp.conntrackConnStore = connections.NewConntrackConnectionStore(mockConnDumper, flowrecords.NewFlowRecords(), nil, !isIPv6, isIPv6, nil, nil, 1)
 
 	tests := []struct {
 		name               string
@@ -354,6 +389,7 @@ func runSendFlowRecordTests(t *testing.T, flowExp *flowExporter, isIPv6 bool) {
 		tcpState           string
 		statusFlag         uint32
 		protoID            uint8
+		isDenyConnActive   bool
 	}{
 		{
 			"active flow record",
@@ -364,6 +400,7 @@ func runSendFlowRecordTests(t *testing.T, flowExp *flowExporter, isIPv6 bool) {
 			"SYN_SENT",
 			0x4,
 			6,
+			true,
 		},
 		{
 			"idle flow record",
@@ -374,6 +411,7 @@ func runSendFlowRecordTests(t *testing.T, flowExp *flowExporter, isIPv6 bool) {
 			"ESTABLISHED",
 			302,
 			6,
+			false,
 		},
 		{
 			"idle flow record that is still inactive",
@@ -384,6 +422,7 @@ func runSendFlowRecordTests(t *testing.T, flowExp *flowExporter, isIPv6 bool) {
 			"",
 			0x204,
 			17,
+			false,
 		},
 		{
 			"idle flow record becomes active",
@@ -394,6 +433,7 @@ func runSendFlowRecordTests(t *testing.T, flowExp *flowExporter, isIPv6 bool) {
 			"SYN_SENT",
 			302,
 			6,
+			true,
 		},
 		{
 			"idle flow record for deleted connection",
@@ -404,16 +444,23 @@ func runSendFlowRecordTests(t *testing.T, flowExp *flowExporter, isIPv6 bool) {
 			"TIME_WAIT",
 			0x204,
 			6,
+			false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			conn := getConnection(isIPv6, tt.isConnPresent, tt.statusFlag, tt.protoID, tt.tcpState)
 			connKey := flowexporter.NewConnectionKey(conn)
+			flowExp.conntrackConnStore.AddOrUpdateConn(conn)
 			flowExp.flowRecords = flowrecords.NewFlowRecords()
 			err := flowExp.flowRecords.AddOrUpdateFlowRecord(connKey, conn)
 			assert.NoError(t, err)
 			flowExp.numDataSetsSent = 0
+
+			denyConn := getDenyConnection(isIPv6, tt.isDenyConnActive)
+			flowExp.denyConnStore = connections.NewDenyConnectionStore(nil, nil)
+			flowExp.denyConnStore.AddOrUpdateConn(denyConn, denyConn.LastExportTime, denyConn.DeltaBytes)
+			assert.Equal(t, getNumOfConnections(flowExp.denyConnStore), 1)
 
 			// Get the flow record and update it.
 			flowRec, exists := flowExp.flowRecords.GetFlowRecordFromMap(&connKey)
@@ -426,32 +473,47 @@ func runSendFlowRecordTests(t *testing.T, flowExp *flowExporter, isIPv6 bool) {
 			flowRec.LastExportTime = time.Now().Add(-tt.lastExportTimeDiff)
 			flowExp.flowRecords.AddFlowRecordToMap(&connKey, flowRec)
 
+			count := 1
 			if tt.isRecordActive {
-				if !isIPv6 {
-					mockDataSet.EXPECT().PrepareSet(ipfixentities.Data, flowExp.templateIDv4).Return(nil)
-					mockDataSet.EXPECT().AddRecord(flowExp.elementsListv4, flowExp.templateIDv4).Return(nil)
-				} else {
-					mockDataSet.EXPECT().PrepareSet(ipfixentities.Data, flowExp.templateIDv6).Return(nil)
-					mockDataSet.EXPECT().AddRecord(flowExp.elementsListv6, flowExp.templateIDv6).Return(nil)
-				}
-				if flowexporter.IsConnectionDying(conn) {
-					mockConnStore.EXPECT().SetExportDone(connKey)
-				}
-				mockIPFIXExpProc.EXPECT().SendSet(mockDataSet).Return(0, nil)
-				mockDataSet.EXPECT().ResetSet()
-				err = flowExp.sendFlowRecords()
-				assert.NoError(t, err)
-				assert.Equalf(t, uint64(1), flowExp.numDataSetsSent, "data set should have been sent.")
-				if flowexporter.IsConnectionDying(conn) {
-					_, recPresent := flowExp.flowRecords.GetFlowRecordFromMap(&connKey)
-					assert.Falsef(t, recPresent, "record should not be in the map")
-				}
-			} else {
-				err = flowExp.sendFlowRecords()
-				assert.NoError(t, err)
-				assert.Equalf(t, uint64(0), flowExp.numDataSetsSent, "data set should not have been sent.")
+				count += 1
 			}
+			if !isIPv6 {
+				mockDataSet.EXPECT().PrepareSet(ipfixentities.Data, flowExp.templateIDv4).Times(count).Return(nil)
+				mockDataSet.EXPECT().AddRecord(flowExp.elementsListv4, flowExp.templateIDv4).Times(count).Return(nil)
+			} else {
+				mockDataSet.EXPECT().PrepareSet(ipfixentities.Data, flowExp.templateIDv6).Times(count).Return(nil)
+				mockDataSet.EXPECT().AddRecord(flowExp.elementsListv6, flowExp.templateIDv6).Times(count).Return(nil)
+			}
+			mockIPFIXExpProc.EXPECT().SendSet(mockDataSet).Times(count).Return(0, nil)
+			mockDataSet.EXPECT().ResetSet().Times(count)
 
+			err = flowExp.sendFlowRecords()
+			assert.NoError(t, err)
+			assert.Equalf(t, uint64(count), flowExp.numDataSetsSent, "%v data sets should have been sent.", count)
+			if tt.isDenyConnActive {
+				connection, exist := flowExp.denyConnStore.GetConnByKey(connKey)
+				assert.True(t, exist)
+				assert.Equal(t, uint64(0), connection.DeltaPackets)
+				assert.Equal(t, uint64(0), connection.DeltaBytes)
+			} else {
+				assert.Equal(t, getNumOfConnections(flowExp.denyConnStore), 0)
+			}
+			if tt.isRecordActive && flowexporter.IsConnectionDying(conn) {
+				_, recPresent := flowExp.flowRecords.GetFlowRecordFromMap(&connKey)
+				assert.Falsef(t, recPresent, "record should not be in the map")
+				connection, _ := flowExp.conntrackConnStore.GetConnByKey(connKey)
+				assert.True(t, connection.DoneExport)
+			}
 		})
 	}
+}
+
+func getNumOfConnections(connStore *connections.DenyConnectionStore) int {
+	count := 0
+	countNumOfConns := func(key flowexporter.ConnectionKey, conn *flowexporter.Connection) error {
+		count++
+		return nil
+	}
+	connStore.ForAllConnectionsDo(countNumOfConns)
+	return count
 }

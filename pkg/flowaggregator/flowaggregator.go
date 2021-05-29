@@ -24,7 +24,10 @@ import (
 	"github.com/vmware/go-ipfix/pkg/exporter"
 	ipfixintermediate "github.com/vmware/go-ipfix/pkg/intermediate"
 	ipfixregistry "github.com/vmware/go-ipfix/pkg/registry"
+	corev1 "k8s.io/api/core/v1"
+	coreinformers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/ipfix"
@@ -62,8 +65,14 @@ var (
 		"destinationServicePortName",
 		"ingressNetworkPolicyName",
 		"ingressNetworkPolicyNamespace",
+		"ingressNetworkPolicyType",
+		"ingressNetworkPolicyRuleName",
+		"ingressNetworkPolicyRuleAction",
 		"egressNetworkPolicyName",
 		"egressNetworkPolicyNamespace",
+		"egressNetworkPolicyType",
+		"egressNetworkPolicyRuleName",
+		"egressNetworkPolicyRuleAction",
 		"tcpState",
 		"flowType",
 	}
@@ -130,8 +139,13 @@ var (
 		"destinationServicePortName",
 		"ingressNetworkPolicyName",
 		"ingressNetworkPolicyNamespace",
+		"ingressNetworkPolicyRuleAction",
+		"ingressNetworkPolicyType",
+		"ingressNetworkPolicyRuleName",
 		"egressNetworkPolicyName",
 		"egressNetworkPolicyNamespace",
+		"egressNetworkPolicyType",
+		"egressNetworkPolicyRuleName",
 	}
 )
 
@@ -140,6 +154,9 @@ const (
 	udpTransport         = "udp"
 	tcpTransport         = "tcp"
 	collectorAddress     = "0.0.0.0:4739"
+
+	// PodInfo index name for Pod cache.
+	podInfoIndex = "podInfo"
 )
 
 type AggregatorTransportProtocol string
@@ -156,7 +173,8 @@ type flowAggregator struct {
 	aggregatorTransportProtocol AggregatorTransportProtocol
 	collectingProcess           ipfix.IPFIXCollectingProcess
 	aggregationProcess          ipfix.IPFIXAggregationProcess
-	exportInterval              time.Duration
+	activeFlowRecordTimeout     time.Duration
+	inactiveFlowRecordTimeout   time.Duration
 	exportingProcess            ipfix.IPFIXExportingProcess
 	templateIDv4                uint16
 	templateIDv6                uint16
@@ -165,40 +183,51 @@ type flowAggregator struct {
 	flowAggregatorAddress       string
 	k8sClient                   kubernetes.Interface
 	observationDomainID         uint32
+	podInformer                 coreinformers.PodInformer
 }
 
 func NewFlowAggregator(
 	externalFlowCollectorAddr string,
 	externalFlowCollectorProto string,
-	exportInterval time.Duration,
+	activeFlowRecTimeout time.Duration,
+	inactiveFlowRecTimeout time.Duration,
 	aggregatorTransportProtocol AggregatorTransportProtocol,
 	flowAggregatorAddress string,
 	k8sClient kubernetes.Interface,
 	observationDomainID uint32,
+	podInformer coreinformers.PodInformer,
 ) *flowAggregator {
 	registry := ipfix.NewIPFIXRegistry()
 	registry.LoadRegistry()
 	fa := &flowAggregator{
-		externalFlowCollectorAddr,
-		externalFlowCollectorProto,
-		aggregatorTransportProtocol,
-		nil,
-		nil,
-		exportInterval,
-		nil,
-		0,
-		0,
-		registry,
-		ipfixentities.NewSet(false),
-		flowAggregatorAddress,
-		k8sClient,
-		observationDomainID,
+		externalFlowCollectorAddr:   externalFlowCollectorAddr,
+		externalFlowCollectorProto:  externalFlowCollectorProto,
+		aggregatorTransportProtocol: aggregatorTransportProtocol,
+		activeFlowRecordTimeout:     activeFlowRecTimeout,
+		inactiveFlowRecordTimeout:   inactiveFlowRecTimeout,
+		registry:                    registry,
+		set:                         ipfixentities.NewSet(false),
+		flowAggregatorAddress:       flowAggregatorAddress,
+		k8sClient:                   k8sClient,
+		observationDomainID:         observationDomainID,
+		podInformer:                 podInformer,
 	}
+	podInformer.Informer().AddIndexers(cache.Indexers{podInfoIndex: podInfoIndexFunc})
 	return fa
 }
 
+func podInfoIndexFunc(obj interface{}) ([]string, error) {
+	pod, ok := obj.(*corev1.Pod)
+	if !ok {
+		return nil, fmt.Errorf("obj is not pod: %+v", obj)
+	}
+	if pod.Status.PodIP == "" {
+		klog.V(4).Infof("Pod %s/%s has not been assigned IP yet. ", pod.Namespace, pod.Name)
+	}
+	return []string{pod.Status.PodIP}, nil
+}
+
 func (fa *flowAggregator) InitCollectingProcess() error {
-	var err error
 	var cpInput collector.CollectorInput
 	if fa.aggregatorTransportProtocol == AggregatorTransportProtocolTLS {
 		parentCert, privateKey, caCert, err := generateCACertKey()
@@ -245,6 +274,7 @@ func (fa *flowAggregator) InitCollectingProcess() error {
 			IsEncrypted:   false,
 		}
 	}
+	var err error
 	fa.collectingProcess, err = ipfix.NewIPFIXCollectingProcess(cpInput)
 	return err
 }
@@ -252,10 +282,12 @@ func (fa *flowAggregator) InitCollectingProcess() error {
 func (fa *flowAggregator) InitAggregationProcess() error {
 	var err error
 	apInput := ipfixintermediate.AggregationInput{
-		MessageChan:       fa.collectingProcess.GetMsgChan(),
-		WorkerNum:         aggregationWorkerNum,
-		CorrelateFields:   correlateFields,
-		AggregateElements: aggregationElements,
+		MessageChan:           fa.collectingProcess.GetMsgChan(),
+		WorkerNum:             aggregationWorkerNum,
+		CorrelateFields:       correlateFields,
+		ActiveExpiryTimeout:   fa.activeFlowRecordTimeout,
+		InactiveExpiryTimeout: fa.inactiveFlowRecordTimeout,
+		AggregateElements:     aggregationElements,
 	}
 	fa.aggregationProcess, err = ipfix.NewIPFIXAggregationProcess(apInput)
 	return err
@@ -297,10 +329,7 @@ func (fa *flowAggregator) initExportingProcess() error {
 	fa.exportingProcess = ep
 	// Currently, we send two templates for IPv4 and IPv6 regardless of the IP families supported by cluster
 	fa.templateIDv4 = fa.exportingProcess.NewTemplateID()
-	if err := fa.set.PrepareSet(ipfixentities.Template, fa.templateIDv4); err != nil {
-		return fmt.Errorf("error when preparing IPv4 template set: %v", err)
-	}
-	bytesSent, err := fa.sendTemplateSet(fa.set, false)
+	bytesSent, err := fa.sendTemplateSet(false)
 	if err != nil {
 		fa.exportingProcess.CloseConnToCollector()
 		fa.exportingProcess = nil
@@ -310,12 +339,8 @@ func (fa *flowAggregator) initExportingProcess() error {
 	}
 	klog.V(2).Infof("Initialized exporting process and sent %d bytes size of IPv4 template set", bytesSent)
 
-	fa.set.ResetSet()
 	fa.templateIDv6 = fa.exportingProcess.NewTemplateID()
-	if err := fa.set.PrepareSet(ipfixentities.Template, fa.templateIDv6); err != nil {
-		return fmt.Errorf("error when preparing IPv6 template set: %v", err)
-	}
-	bytesSent, err = fa.sendTemplateSet(fa.set, true)
+	bytesSent, err = fa.sendTemplateSet(true)
 	if err != nil {
 		fa.exportingProcess.CloseConnToCollector()
 		fa.exportingProcess = nil
@@ -329,46 +354,54 @@ func (fa *flowAggregator) initExportingProcess() error {
 }
 
 func (fa *flowAggregator) Run(stopCh <-chan struct{}) {
-	exportTicker := time.NewTicker(fa.exportInterval)
-	defer exportTicker.Stop()
 	go fa.collectingProcess.Start()
 	defer fa.collectingProcess.Stop()
 	go fa.aggregationProcess.Start()
 	defer fa.aggregationProcess.Stop()
+	go fa.flowRecordExpiryCheck(stopCh)
+
+	<-stopCh
+}
+
+func (fa *flowAggregator) flowRecordExpiryCheck(stopCh <-chan struct{}) {
+	expireTimer := time.NewTimer(fa.activeFlowRecordTimeout)
+
 	for {
 		select {
 		case <-stopCh:
 			if fa.exportingProcess != nil {
 				fa.exportingProcess.CloseConnToCollector()
 			}
+			expireTimer.Stop()
 			return
-		case <-exportTicker.C:
+		case <-expireTimer.C:
 			if fa.exportingProcess == nil {
 				err := fa.initExportingProcess()
 				if err != nil {
-					klog.Errorf("Error when initializing exporting process: %v, will retry in %s", err, fa.exportInterval)
-					// Initializing exporting process fails, will retry in next exportInterval
+					klog.Errorf("Error when initializing exporting process: %v, will retry in %s", err, fa.activeFlowRecordTimeout)
+					// Initializing exporting process fails, will retry in next cycle.
+					expireTimer.Reset(fa.activeFlowRecordTimeout)
 					continue
 				}
 			}
-			err := fa.aggregationProcess.ForAllRecordsDo(fa.sendFlowKeyRecord)
-			if err != nil {
-				klog.Errorf("Error when sending flow records: %v", err)
+			// Pop the flow record item from expire priority queue in the Aggregation
+			// Process and send the flow records.
+			if err := fa.aggregationProcess.ForAllExpiredFlowRecordsDo(fa.sendFlowKeyRecord); err != nil {
+				klog.Errorf("Error when sending expired flow records: %v", err)
 				// If there is an error when sending flow records because of intermittent connectivity, we reset the connection
 				// to IPFIX collector and retry in the next export cycle to reinitialize the connection and send flow records.
 				fa.exportingProcess.CloseConnToCollector()
 				fa.exportingProcess = nil
+				expireTimer.Reset(fa.activeFlowRecordTimeout)
 				continue
 			}
+			// Get the new expiry and reset the timer.
+			expireTimer.Reset(fa.aggregationProcess.GetExpiryFromExpirePriorityQueue())
 		}
 	}
 }
 
 func (fa *flowAggregator) sendFlowKeyRecord(key ipfixintermediate.FlowKey, record ipfixintermediate.AggregationFlowRecord) error {
-	if !record.ReadyToSend {
-		klog.V(4).Info("Skip sending record that is not correlated.")
-		return nil
-	}
 	templateID := fa.templateIDv4
 	if net.ParseIP(key.SourceAddress).To4() == nil || net.ParseIP(key.DestinationAddress).To4() == nil {
 		templateID = fa.templateIDv6
@@ -376,21 +409,29 @@ func (fa *flowAggregator) sendFlowKeyRecord(key ipfixintermediate.FlowKey, recor
 	// TODO: more records per data set will be supported when go-ipfix supports size check when adding records
 	fa.set.ResetSet()
 	if err := fa.set.PrepareSet(ipfixentities.Data, templateID); err != nil {
-		return fmt.Errorf("error when preparing set: %v", err)
+		return err
+	}
+	if !fa.aggregationProcess.IsMetadataFilled(record) {
+		fa.fillK8sMetadata(key, record.Record)
+		fa.aggregationProcess.SetMetadataFilled(record)
 	}
 	err := fa.set.AddRecord(record.Record.GetOrderedElementList(), templateID)
 	if err != nil {
-		return fmt.Errorf("error when adding the record to the set: %v", err)
+		return err
 	}
-	_, err = fa.sendDataSet(fa.set)
+	sentBytes, err := fa.exportingProcess.SendSet(fa.set)
 	if err != nil {
 		return err
 	}
-	fa.aggregationProcess.DeleteFlowKeyFromMapWithoutLock(key)
+	if err = fa.aggregationProcess.ResetStatElementsInRecord(record.Record); err != nil {
+		return err
+	}
+
+	klog.V(4).Infof("Data set sent successfully: %d Bytes sent", sentBytes)
 	return nil
 }
 
-func (fa *flowAggregator) sendTemplateSet(templateSet ipfixentities.Set, isIPv6 bool) (int, error) {
+func (fa *flowAggregator) sendTemplateSet(isIPv6 bool) (int, error) {
 	elements := make([]*ipfixentities.InfoElementWithValue, 0)
 	ianaInfoElements := ianaInfoElementsIPv4
 	antreaInfoElements := antreaInfoElementsIPv4
@@ -450,19 +491,65 @@ func (fa *flowAggregator) sendTemplateSet(templateSet ipfixentities.Set, isIPv6 
 		ie := ipfixentities.NewInfoElementWithValue(element, nil)
 		elements = append(elements, ie)
 	}
-	err := templateSet.AddRecord(elements, templateID)
+	fa.set.ResetSet()
+	if err := fa.set.PrepareSet(ipfixentities.Template, templateID); err != nil {
+		return 0, err
+	}
+	err := fa.set.AddRecord(elements, templateID)
 	if err != nil {
 		return 0, fmt.Errorf("error when adding record to set, error: %v", err)
 	}
-	bytesSent, err := fa.exportingProcess.SendSet(templateSet)
+	bytesSent, err := fa.exportingProcess.SendSet(fa.set)
 	return bytesSent, err
 }
 
-func (fa *flowAggregator) sendDataSet(dataSet ipfixentities.Set) (int, error) {
-	sentBytes, err := fa.exportingProcess.SendSet(dataSet)
-	if err != nil {
-		return 0, fmt.Errorf("error when sending data set: %v", err)
+// fillK8sMetadata fills Pod name, Pod namespace and Node name for inter-Node flows
+// that have incomplete info due to deny network policy.
+func (fa *flowAggregator) fillK8sMetadata(key ipfixintermediate.FlowKey, record ipfixentities.Record) {
+	if fa.podInformer == nil {
+		klog.Warning("No pod podInformer is provided for filling k8s metadata.")
+		return
 	}
-	klog.V(4).Infof("Data set sent successfully. Bytes sent: %d", sentBytes)
-	return sentBytes, nil
+	// fill source Pod info when sourcePodName is empty
+	if sourcePodName, exist := record.GetInfoElementWithValue("sourcePodName"); exist {
+		if sourcePodName.Value == "" {
+			pods, err := fa.podInformer.Informer().GetIndexer().ByIndex(podInfoIndex, key.SourceAddress)
+			if err == nil && len(pods) > 0 {
+				pod, ok := pods[0].(*corev1.Pod)
+				if !ok {
+					klog.Warningf("Invalid Pod obj in cache")
+				}
+				sourcePodName.Value = pod.Name
+				if sourcePodNamespace, exist := record.GetInfoElementWithValue("sourcePodNamespace"); exist {
+					sourcePodNamespace.Value = pod.Namespace
+				}
+				if sourceNodeName, exist := record.GetInfoElementWithValue("sourceNodeName"); exist {
+					sourceNodeName.Value = pod.Spec.NodeName
+				}
+			} else {
+				klog.Warning(err)
+			}
+		}
+	}
+	// fill destination Pod info when destinationPodName is empty
+	if destinationPodName, exist := record.GetInfoElementWithValue("destinationPodName"); exist {
+		if destinationPodName.Value == "" {
+			pods, err := fa.podInformer.Informer().GetIndexer().ByIndex(podInfoIndex, key.DestinationAddress)
+			if len(pods) > 0 && err == nil {
+				pod, ok := pods[0].(*corev1.Pod)
+				if !ok {
+					klog.Warningf("Invalid Pod obj in cache")
+				}
+				destinationPodName.Value = pod.Name
+				if destinationPodNamespace, exist := record.GetInfoElementWithValue("destinationPodNamespace"); exist {
+					destinationPodNamespace.Value = pod.Namespace
+				}
+				if destinationNodeName, exist := record.GetInfoElementWithValue("destinationNodeName"); exist {
+					destinationNodeName.Value = pod.Spec.NodeName
+				}
+			} else {
+				klog.Warning(err)
+			}
+		}
+	}
 }

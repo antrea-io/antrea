@@ -26,6 +26,8 @@ import (
 	fakecrdv1alpha1 "antrea.io/antrea/pkg/client/clientset/versioned/typed/crd/v1alpha1/fake"
 	crdv1alpha2 "antrea.io/antrea/pkg/client/clientset/versioned/typed/crd/v1alpha2"
 	fakecrdv1alpha2 "antrea.io/antrea/pkg/client/clientset/versioned/typed/crd/v1alpha2/fake"
+	crdv1alpha3 "antrea.io/antrea/pkg/client/clientset/versioned/typed/crd/v1alpha3"
+	fakecrdv1alpha3 "antrea.io/antrea/pkg/client/clientset/versioned/typed/crd/v1alpha3/fake"
 	crdv1beta1 "antrea.io/antrea/pkg/client/clientset/versioned/typed/crd/v1beta1"
 	fakecrdv1beta1 "antrea.io/antrea/pkg/client/clientset/versioned/typed/crd/v1beta1/fake"
 	statsv1alpha1 "antrea.io/antrea/pkg/client/clientset/versioned/typed/stats/v1alpha1"
@@ -104,6 +106,11 @@ func (c *Clientset) CrdV1alpha1() crdv1alpha1.CrdV1alpha1Interface {
 // CrdV1alpha2 retrieves the CrdV1alpha2Client
 func (c *Clientset) CrdV1alpha2() crdv1alpha2.CrdV1alpha2Interface {
 	return &fakecrdv1alpha2.FakeCrdV1alpha2{Fake: &c.Fake}
+}
+
+// CrdV1alpha3 retrieves the CrdV1alpha3Client
+func (c *Clientset) CrdV1alpha3() crdv1alpha3.CrdV1alpha3Interface {
+	return &fakecrdv1alpha3.FakeCrdV1alpha3{Fake: &c.Fake}
 }
 
 // CrdV1beta1 retrieves the CrdV1beta1Client

@@ -93,16 +93,9 @@ func (b *AntreaNetworkPolicySpecBuilder) SetAppliedToGroup(specs []ANPAppliedToS
 func (b *AntreaNetworkPolicySpecBuilder) GetAppliedToPeer(podSelector map[string]string,
 	podSelectorMatchExp []metav1.LabelSelectorRequirement) crdv1alpha1.NetworkPolicyPeer {
 	var ps *metav1.LabelSelector
-	if podSelector != nil {
+	if len(podSelector) > 0 || len(podSelectorMatchExp) > 0 {
 		ps = &metav1.LabelSelector{
-			MatchLabels: podSelector,
-		}
-		if podSelectorMatchExp != nil {
-			ps.MatchExpressions = podSelectorMatchExp
-		}
-	}
-	if podSelectorMatchExp != nil {
-		ps = &metav1.LabelSelector{
+			MatchLabels:      podSelector,
 			MatchExpressions: podSelectorMatchExp,
 		}
 	}
@@ -123,29 +116,15 @@ func (b *AntreaNetworkPolicySpecBuilder) AddIngress(protoc v1.Protocol,
 		b.Spec.Ingress = []crdv1alpha1.Rule{}
 	}
 
-	if podSelector != nil {
+	if len(podSelector) > 0 || len(podSelectorMatchExp) > 0 {
 		ps = &metav1.LabelSelector{
-			MatchLabels: podSelector,
-		}
-		if podSelectorMatchExp != nil {
-			ps.MatchExpressions = podSelectorMatchExp
-		}
-	}
-	if podSelectorMatchExp != nil {
-		ps = &metav1.LabelSelector{
+			MatchLabels:      podSelector,
 			MatchExpressions: podSelectorMatchExp,
 		}
 	}
-	if nsSelector != nil {
+	if len(nsSelector) > 0 || len(nsSelectorMatchExp) > 0 {
 		ns = &metav1.LabelSelector{
-			MatchLabels: nsSelector,
-		}
-		if nsSelectorMatchExp != nil {
-			ns.MatchExpressions = nsSelectorMatchExp
-		}
-	}
-	if nsSelectorMatchExp != nil {
-		ns = &metav1.LabelSelector{
+			MatchLabels:      nsSelector,
 			MatchExpressions: nsSelectorMatchExp,
 		}
 	}

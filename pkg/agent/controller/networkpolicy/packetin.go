@@ -21,14 +21,17 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/contiv/libOpenflow/openflow13"
 	"github.com/contiv/libOpenflow/protocol"
 	"github.com/contiv/ofnet/ofctrl"
+	"github.com/vmware/go-ipfix/pkg/registry"
 	"gopkg.in/natefinch/lumberjack.v2"
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/agent/flowexporter"
 	"antrea.io/antrea/pkg/agent/openflow"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 	"antrea.io/antrea/pkg/util/ip"
@@ -119,7 +122,11 @@ func (c *Controller) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
 			return err
 		}
 	}
-
+	if customReasons&openflow.CustomReasonDeny == openflow.CustomReasonDeny {
+		if err := c.storeDenyConnection(pktIn); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -326,4 +333,89 @@ func (c *Controller) rejectRequest(pktIn *ofctrl.PacketIn) error {
 			icmpData,
 			true)
 	}
+}
+
+func (c *Controller) storeDenyConnection(pktIn *ofctrl.PacketIn) error {
+	packet, err := binding.ParsePacketIn(pktIn)
+	if err != nil {
+		return fmt.Errorf("error in parsing packetin: %v", err)
+	}
+
+	// Get 5-tuple information
+	tuple := flowexporter.Tuple{
+		SourcePort:      packet.SourcePort,
+		DestinationPort: packet.DestinationPort,
+		Protocol:        packet.IPProto,
+	}
+	if packet.IsIPv6 {
+		tuple.SourceAddress = packet.SourceIP.To16()
+		tuple.DestinationAddress = packet.DestinationIP.To16()
+	} else {
+		tuple.SourceAddress = packet.SourceIP.To4()
+		tuple.DestinationAddress = packet.DestinationIP.To4()
+	}
+
+	// Generate deny connection and add to deny connection store
+	denyConn := flowexporter.Connection{}
+	denyConn.FlowKey = tuple
+	denyConn.DestinationServiceAddress = tuple.DestinationAddress
+	denyConn.DestinationServicePort = tuple.DestinationPort
+
+	// No need to obtain connection info again if it already exists in denyConnectionStore.
+	if conn, exist := c.denyConnStore.GetConnByKey(flowexporter.NewConnectionKey(&denyConn)); exist {
+		c.denyConnStore.AddOrUpdateConn(conn, time.Now(), uint64(packet.IPLength))
+		return nil
+	}
+
+	matchers := pktIn.GetMatches()
+	var match *ofctrl.MatchField
+	// Get table ID
+	tableID := binding.TableIDType(pktIn.TableId)
+	// Get disposition Allow, Drop or Reject
+	match = getMatchRegField(matchers, uint32(openflow.DispositionMarkReg))
+	id, err := getInfoInReg(match, openflow.APDispositionMarkRange.ToNXRange())
+	if err != nil {
+		return fmt.Errorf("error when getting disposition from reg: %v", err)
+	}
+	disposition := openflow.DispositionToString[id]
+
+	// For K8s NetworkPolicy implicit drop action, we cannot get name/namespace.
+	if tableID == openflow.IngressDefaultTable {
+		denyConn.IngressNetworkPolicyType = registry.PolicyTypeK8sNetworkPolicy
+		denyConn.IngressNetworkPolicyRuleAction = flowexporter.RuleActionToUint8(disposition)
+	} else if tableID == openflow.EgressDefaultTable {
+		denyConn.EgressNetworkPolicyType = registry.PolicyTypeK8sNetworkPolicy
+		denyConn.EgressNetworkPolicyRuleAction = flowexporter.RuleActionToUint8(disposition)
+	} else { // Get name and namespace for Antrea Network Policy or Antrea Cluster Network Policy
+		// Set match to corresponding ingress/egress reg according to disposition
+		match = getMatch(matchers, tableID, id)
+		ruleID, err := getInfoInReg(match, nil)
+		if err != nil {
+			return fmt.Errorf("error when obtaining rule id from reg: %v", err)
+		}
+		policy := c.GetNetworkPolicyByRuleFlowID(ruleID)
+		rule := c.GetRuleByFlowID(ruleID)
+
+		if policy == nil || rule == nil {
+			// Default drop by K8s NetworkPolicy
+			klog.V(4).Infof("Cannot find NetworkPolicy or rule that has ruleID %v", ruleID)
+		} else {
+			if tableID == openflow.AntreaPolicyIngressRuleTable {
+				denyConn.IngressNetworkPolicyName = policy.Name
+				denyConn.IngressNetworkPolicyNamespace = policy.Namespace
+				denyConn.IngressNetworkPolicyType = flowexporter.PolicyTypeToUint8(policy.Type)
+				denyConn.IngressNetworkPolicyRuleName = rule.Name
+				denyConn.IngressNetworkPolicyRuleAction = flowexporter.RuleActionToUint8(disposition)
+			} else if tableID == openflow.AntreaPolicyEgressRuleTable {
+				denyConn.EgressNetworkPolicyName = policy.Name
+				denyConn.EgressNetworkPolicyNamespace = policy.Namespace
+				denyConn.EgressNetworkPolicyType = flowexporter.PolicyTypeToUint8(policy.Type)
+				denyConn.EgressNetworkPolicyRuleName = rule.Name
+				denyConn.EgressNetworkPolicyRuleAction = flowexporter.RuleActionToUint8(disposition)
+			}
+		}
+	}
+
+	c.denyConnStore.AddOrUpdateConn(&denyConn, time.Now(), uint64(packet.IPLength))
+	return nil
 }

@@ -7,7 +7,7 @@ The community adopted this security disclosure policy to ensure vulnerabilities 
 
 If you believe you have identified a vulnerability, please work with the Antrea maintainers to fix it and disclose the issue responsibly.
 All security issues, confirmed or suspected, should be reported privately.
-Please avoid using github issues, and instead report the vulnerability to projectantrea-maintainers@googlegroups.com.
+Please avoid using github issues, and instead report the vulnerability to cncf-antrea-maintainers@lists.cncf.io.
 
 A vulnerability report should be filed if any of the following applies:
 
@@ -29,7 +29,7 @@ Provide a descriptive subject and include the following information in the body:
 ## Responding to a vulnerability
 
 A coordinator is assigned to each reported security issue. The coordinator is a member from the Antrea maintainers team, and will drive the fix and disclosure process.
-At the moment reports are received via email at projectantrea-maintainers@googlegroups.com.
+At the moment reports are received via email at cncf-antrea-maintainers@lists.cncf.io.
 The first steps performed by the coordinator are to confirm the validity of the report and send an embargo reminder to all parties involved.
 Antrea maintainers and issue reporters will review the issue for confirmation of impact and determination of affected components.
 
@@ -59,7 +59,7 @@ A fix is proposed as a patch to the current main branch, formatted with:
 git format-patch --stdout HEAD~1 > path/to/local/file.patch
 ```
 
-and then sent to projectantrea-maintainers@googlegroups.com.
+and then sent to cncf-antrea-maintainers@lists.cncf.io.
 
 **Please don't push the patch to the Antrea fork on your github account!**
 

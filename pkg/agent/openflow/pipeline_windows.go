@@ -281,5 +281,33 @@ func (c *client) hostBridgeUplinkFlows(localSubnet net.IPNet, category cookie.Ca
 			Cookie(c.cookieAllocator.Request(category).Raw()).
 			Done(),
 	}
+	if c.encapMode.SupportsNoEncap() {
+		// If NoEncap is enabled, the reply packets from remote Pod can be forwarded to local Pod directly.
+		// by explicitly resubmitting them to endpointDNATTable and marking "macRewriteMark" at same time.
+		flows = append(flows, c.pipeline[conntrackStateTable].BuildFlow(priorityHigh).MatchProtocol(binding.ProtocolIP).
+			MatchRegRange(int(marksReg), markTrafficFromUplink, binding.Range{0, 15}).
+			MatchDstIPNet(localSubnet).
+			Action().LoadRegRange(int(marksReg), macRewriteMark, macRewriteMarkRange).
+			Action().GotoTable(endpointDNATTable).
+			Cookie(c.cookieAllocator.Request(category).Raw()).
+			Done())
+	}
 	return flows
+}
+
+func (c *client) l3FwdFlowToRemoteViaRouting(localGatewayMAC net.HardwareAddr, remoteGatewayMAC net.HardwareAddr,
+	category cookie.Category, peerIP net.IP, peerPodCIDR *net.IPNet) []binding.Flow {
+	if !c.encapMode.NeedsRoutingToPeer(peerIP, c.nodeConfig.NodeIPAddr) && remoteGatewayMAC != nil {
+		// It enhances Windows Noencap mode performance by bypassing host network.
+		flows := []binding.Flow{c.pipeline[l2ForwardingCalcTable].BuildFlow(priorityNormal).
+			MatchDstMAC(remoteGatewayMAC).
+			Action().LoadRegRange(int(PortCacheReg), config.UplinkOFPort, ofPortRegRange).
+			Action().LoadRegRange(int(marksReg), macRewriteMark, ofPortMarkRange).
+			Action().GotoTable(conntrackCommitTable).
+			Cookie(c.cookieAllocator.Request(category).Raw()).
+			Done()}
+		flows = append(flows, c.l3FwdFlowToRemoteViaGW(remoteGatewayMAC, *peerPodCIDR, category))
+		return flows
+	}
+	return []binding.Flow{c.l3FwdFlowToRemoteViaGW(localGatewayMAC, *peerPodCIDR, category)}
 }

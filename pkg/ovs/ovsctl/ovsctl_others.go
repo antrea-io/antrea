@@ -22,5 +22,5 @@ import "os/exec"
 const ovsVSwitchdUDS = "/var/run/openvswitch/ovs-vswitchd.*.ctl"
 
 func getOVSCommand(cmdStr string) *exec.Cmd {
-	return exec.Command("/bin/sh", "-c", cmdStr)
+	return exec.Command("/bin/sh", "-c", cmdStr) // lgtm[go/command-injection]
 }

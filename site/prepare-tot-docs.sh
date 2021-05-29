@@ -62,7 +62,7 @@ function copy_markdowns_to_docs_main {
 
   printf "Changing links to VERSION file\n"
   for doc in $(find "$PWD" -type f -name "*.md"); do
-      sed -i.bak 's/\[\(.*\)\](.*VERSION)/[\1](https:\/\/github.com\/vmware-tanzu\/antrea\/blob\/master\/VERSION)/' ${doc}
+      sed -i.bak 's/\[\(.*\)\](.*VERSION)/[\1](https:\/\/github.com\/antrea-io\/antrea\/blob\/master\/VERSION)/' ${doc}
       rm -f ${doc}.bak
   done
 }
@@ -77,13 +77,13 @@ copy_root_markdowns_to_docs_main
 
 printf "Updating links to ci/README.md\n"
 for doc in $(find "$PWD" -type f -name "*.md"); do
-    sed -i.bak 's/(ci\/README\.md)/(https:\/\/github.com\/vmware-tanzu\/antrea\/blob\/master\/ci\/README.md)/' ${doc}
+    sed -i.bak 's/(ci\/README\.md)/(https:\/\/github.com\/antrea-io\/antrea\/blob\/master\/ci\/README.md)/' ${doc}
     rm -f ${doc}.bak
 done
 
 printf "Changing links to LICENSE file\n"
 for doc in $(find "$PWD" -type f -name "*.md"); do
-    sed -i.bak 's/\[\(.*\)\](LICENSE)/[\1](https:\/\/raw.githubusercontent.com\/vmware-tanzu\/antrea\/master\/LICENSE)/' ${doc}
+    sed -i.bak 's/\[\(.*\)\](LICENSE)/[\1](https:\/\/raw.githubusercontent.com\/antrea-io\/antrea\/master\/LICENSE)/' ${doc}
     rm -f ${doc}.bak
 done
 
@@ -101,7 +101,7 @@ printf "Copying API reference\n"
 cp -f ../../api-reference.md .
 
 printf "Adding CHANGELOG link\n"
-echo "Please refer to the CHANGELOG on [Github](https://github.com/vmware-tanzu/antrea/tree/main/CHANGELOG)" > CHANGELOG.md
+echo "Please refer to the CHANGELOG on [Github](https://github.com/antrea-io/antrea/tree/main/CHANGELOG)" > CHANGELOG.md
 
 popd
 

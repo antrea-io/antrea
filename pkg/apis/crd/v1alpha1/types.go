@@ -388,9 +388,18 @@ type NetworkPolicyPeer struct {
 	// workloads in To/From fields. If set with PodSelector,
 	// Pods are matched from Namespaces matched by the NamespaceSelector.
 	// Cannot be set with any other selector except PodSelector or
-	// ExternalEntitySelector.
+	// ExternalEntitySelector. Cannot be set with Namespaces.
 	// +optional
 	NamespaceSelector *metav1.LabelSelector `json:"namespaceSelector,omitempty"`
+	// Select Pod/ExternalEntity from Namespaces matched by specifc criteria.
+	// Current supported criteria is match: Self, which selects from the same
+	// Namespace of the appliedTo workloads.
+	// Cannot be set with any other selector except PodSelector or
+	// ExternalEntitySelector. This field can only be set when NetworkPolicyPeer
+	// is created for ClusterNetworkPolicy ingress/egress rules.
+	// Cannot be set with NamespaceSelector.
+	// +optional
+	Namespaces *PeerNamespaces `json:"namespaces,omitempty"`
 	// Select ExternalEntities from NetworkPolicy's Namespace as workloads
 	// in AppliedTo/To/From fields. If set with NamespaceSelector,
 	// ExternalEntities are matched from Namespaces matched by the
@@ -404,6 +413,17 @@ type NetworkPolicyPeer struct {
 	// selector.
 	Group string `json:"group,omitempty"`
 }
+
+type PeerNamespaces struct {
+	Match NamespaceMatchType `json:"match,omitempty"`
+}
+
+// NamespaceMatchType describes Namespace matching strategy.
+type NamespaceMatchType string
+
+const (
+	NamespaceMatchSelf NamespaceMatchType = "Self"
+)
 
 // IPBlock describes a particular CIDR (Ex. "192.168.1.1/24") that is allowed
 // or denied to/from the workloads matched by a Spec.AppliedTo.

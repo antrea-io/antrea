@@ -16,6 +16,10 @@ package flowexporter
 
 import (
 	"strconv"
+
+	"github.com/vmware/go-ipfix/pkg/registry"
+
+	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 )
 
 const (
@@ -24,11 +28,11 @@ const (
 
 // NewConnectionKey creates 5-tuple of flow as connection key
 func NewConnectionKey(conn *Connection) ConnectionKey {
-	return ConnectionKey{conn.TupleOrig.SourceAddress.String(),
-		strconv.FormatUint(uint64(conn.TupleOrig.SourcePort), 10),
-		conn.TupleReply.SourceAddress.String(),
-		strconv.FormatUint(uint64(conn.TupleReply.SourcePort), 10),
-		strconv.FormatUint(uint64(conn.TupleOrig.Protocol), 10),
+	return ConnectionKey{conn.FlowKey.SourceAddress.String(),
+		strconv.FormatUint(uint64(conn.FlowKey.SourcePort), 10),
+		conn.FlowKey.DestinationAddress.String(),
+		strconv.FormatUint(uint64(conn.FlowKey.DestinationPort), 10),
+		strconv.FormatUint(uint64(conn.FlowKey.Protocol), 10),
 	}
 }
 
@@ -47,4 +51,32 @@ func IsConnectionDying(conn *Connection) bool {
 		return true
 	}
 	return false
+}
+
+// RuleActionToUint8 converts network policy rule action to uint8.
+func RuleActionToUint8(action string) uint8 {
+	switch action {
+	case "Allow":
+		return registry.NetworkPolicyRuleActionAllow
+	case "Drop":
+		return registry.NetworkPolicyRuleActionDrop
+	case "Reject":
+		return registry.NetworkPolicyRuleActionReject
+	default:
+		return registry.NetworkPolicyRuleActionNoAction
+	}
+}
+
+// policyTypeToUint8 converts NetworkPolicy type to uint8
+func PolicyTypeToUint8(policyType v1beta2.NetworkPolicyType) uint8 {
+	switch policyType {
+	case v1beta2.K8sNetworkPolicy:
+		return registry.PolicyTypeK8sNetworkPolicy
+	case v1beta2.AntreaNetworkPolicy:
+		return registry.PolicyTypeAntreaNetworkPolicy
+	case v1beta2.AntreaClusterNetworkPolicy:
+		return registry.PolicyTypeAntreaClusterNetworkPolicy
+	default:
+		return registry.PolicyTypeK8sNetworkPolicy
+	}
 }

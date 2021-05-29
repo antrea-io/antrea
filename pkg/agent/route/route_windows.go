@@ -18,6 +18,7 @@ package route
 
 import (
 	"errors"
+	"fmt"
 	"net"
 	"sync"
 
@@ -36,11 +37,13 @@ const (
 )
 
 type Client struct {
-	nr          netroute.Interface
-	nodeConfig  *config.NodeConfig
-	serviceCIDR *net.IPNet
-	hostRoutes  *sync.Map
-	fwClient    *winfirewall.Client
+	nr             netroute.Interface
+	nodeConfig     *config.NodeConfig
+	networkConfig  *config.NetworkConfig
+	serviceCIDR    *net.IPNet
+	hostRoutes     *sync.Map
+	fwClient       *winfirewall.Client
+	bridgeInfIndex int
 }
 
 // NewClient returns a route client.
@@ -48,10 +51,11 @@ type Client struct {
 func NewClient(serviceCIDR *net.IPNet, networkConfig *config.NetworkConfig, noSNAT bool) (*Client, error) {
 	nr := netroute.New()
 	return &Client{
-		nr:          nr,
-		serviceCIDR: serviceCIDR,
-		hostRoutes:  &sync.Map{},
-		fwClient:    winfirewall.NewClient(),
+		nr:            nr,
+		networkConfig: networkConfig,
+		serviceCIDR:   serviceCIDR,
+		hostRoutes:    &sync.Map{},
+		fwClient:      winfirewall.NewClient(),
 	}, nil
 }
 
@@ -59,6 +63,11 @@ func NewClient(serviceCIDR *net.IPNet, networkConfig *config.NetworkConfig, noSN
 // Service LoadBalancing is provided by OpenFlow.
 func (c *Client) Initialize(nodeConfig *config.NodeConfig, done func()) error {
 	c.nodeConfig = nodeConfig
+	bridgeInf, err := net.InterfaceByName(nodeConfig.OVSBridge)
+	if err != nil {
+		return fmt.Errorf("failed to find the interface %s: %v", nodeConfig.OVSBridge, err)
+	}
+	c.bridgeInfIndex = bridgeInf.Index
 	if err := c.initFwRules(); err != nil {
 		return err
 	}
@@ -100,26 +109,43 @@ func (c *Client) Reconcile(podCIDRs []string) error {
 // It overrides the routes if they already exist, without error.
 func (c *Client) AddRoutes(podCIDR *net.IPNet, nodeName string, peerNodeIP, peerGwIP net.IP) error {
 	obj, found := c.hostRoutes.Load(podCIDR.String())
+	route := &netroute.Route{
+		DestinationSubnet: podCIDR,
+	}
+	if c.networkConfig.TrafficEncapMode.NeedsEncapToPeer(peerNodeIP, c.nodeConfig.NodeIPAddr) {
+		route.LinkIndex = c.nodeConfig.GatewayConfig.LinkIndex
+		route.GatewayAddress = peerGwIP
+	} else if !c.networkConfig.TrafficEncapMode.NeedsRoutingToPeer(peerNodeIP, c.nodeConfig.NodeIPAddr) {
+		// NoEncap traffic to Node on the same subnet.
+		// Set the peerNodeIP as next hop.
+		route.LinkIndex = c.bridgeInfIndex
+		route.GatewayAddress = peerNodeIP
+	}
+	// NoEncap traffic to Node on the different subnet needs underlying routing support.
+	// Use host default route inside the Node.
+
 	if found {
-		rt := obj.(*netroute.Route)
-		if rt.GatewayAddress.Equal(peerGwIP) {
+		existingRoute := obj.(*netroute.Route)
+		if existingRoute.GatewayAddress.Equal(route.GatewayAddress) {
 			klog.V(4).Infof("Route with destination %s already exists on %s (%s)", podCIDR.String(), nodeName, peerNodeIP)
 			return nil
 		}
 		// Remove the existing route entry if the gateway address is not as expected.
-		if err := c.nr.RemoveNetRoute(rt.LinkIndex, rt.DestinationSubnet, rt.GatewayAddress); err != nil {
+		if err := c.nr.RemoveNetRoute(existingRoute.LinkIndex, existingRoute.DestinationSubnet, existingRoute.GatewayAddress); err != nil {
 			klog.Errorf("Failed to delete existing route entry with destination %s gateway %s on %s (%s)", podCIDR.String(), peerGwIP.String(), nodeName, peerNodeIP)
 			return err
 		}
 	}
-	if err := c.nr.NewNetRoute(c.nodeConfig.GatewayConfig.LinkIndex, podCIDR, peerGwIP); err != nil {
+
+	if route.GatewayAddress == nil {
+		return nil
+	}
+
+	if err := c.nr.NewNetRoute(route.LinkIndex, route.DestinationSubnet, route.GatewayAddress); err != nil {
 		return err
 	}
-	c.hostRoutes.Store(podCIDR.String(), &netroute.Route{
-		LinkIndex:         c.nodeConfig.GatewayConfig.LinkIndex,
-		DestinationSubnet: podCIDR,
-		GatewayAddress:    peerGwIP,
-	})
+
+	c.hostRoutes.Store(podCIDR.String(), route)
 	klog.V(2).Infof("Added route with destination %s via %s on host gateway on %s (%s)", podCIDR.String(), peerGwIP.String(), nodeName, peerNodeIP)
 	return nil
 }

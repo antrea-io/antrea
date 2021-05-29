@@ -21,6 +21,7 @@ import (
 	controlplanev1beta2 "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	crdv1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
+	crdv1alpha3 "antrea.io/antrea/pkg/apis/crd/v1alpha3"
 	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	statsv1alpha1 "antrea.io/antrea/pkg/apis/stats/v1alpha1"
 	systemv1beta1 "antrea.io/antrea/pkg/apis/system/v1beta1"
@@ -39,6 +40,7 @@ var localSchemeBuilder = runtime.SchemeBuilder{
 	controlplanev1beta2.AddToScheme,
 	crdv1alpha1.AddToScheme,
 	crdv1alpha2.AddToScheme,
+	crdv1alpha3.AddToScheme,
 	crdv1beta1.AddToScheme,
 	statsv1alpha1.AddToScheme,
 	systemv1beta1.AddToScheme,

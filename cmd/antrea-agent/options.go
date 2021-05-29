@@ -38,11 +38,11 @@ const (
 	defaultHostProcPathPrefix      = "/host"
 	defaultServiceCIDR             = "10.96.0.0/12"
 	defaultTunnelType              = ovsconfig.GeneveTunnel
-	defaultFlowCollectorAddress    = "flow-aggregator.flow-aggregator.svc:4739:tcp"
-	defaultFlowCollectorTransport  = "tcp"
+	defaultFlowCollectorAddress    = "flow-aggregator.flow-aggregator.svc:4739:tls"
+	defaultFlowCollectorTransport  = "tls"
 	defaultFlowCollectorPort       = "4739"
 	defaultFlowPollInterval        = 5 * time.Second
-	defaultActiveFlowExportTimeout = 60 * time.Second
+	defaultActiveFlowExportTimeout = 30 * time.Second
 	defaultIdleFlowExportTimeout   = 15 * time.Second
 	defaultNPLPortRange            = "40000-41000"
 )
@@ -54,7 +54,7 @@ type Options struct {
 	config *AgentConfig
 	// IPFIX flow collector address
 	flowCollectorAddr string
-	// IPFIX flow collector L4 protocol
+	// IPFIX flow collector protocol
 	flowCollectorProto string
 	// Flow exporter poll interval
 	pollInterval time.Duration
@@ -67,8 +67,7 @@ type Options struct {
 func newOptions() *Options {
 	return &Options{
 		config: &AgentConfig{
-			EnablePrometheusMetrics:   true,
-			EnableTLSToFlowAggregator: true,
+			EnablePrometheusMetrics: true,
 		},
 	}
 }

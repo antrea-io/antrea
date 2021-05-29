@@ -62,8 +62,8 @@ URL, please take a further look at the network configurations in your
 environment. It may be due to the network policies or other security rules
 configured on your hosts.
 3. To deploy a released version of the plugin, you can download
-`https://github.com/vmware-tanzu/antrea/releases/download/<TAG>/antrea-octant.yml`,
-where `<TAG>` (e.g. `v0.8.2`) is the desired version (should match the version
+`https://github.com/antrea-io/antrea/releases/download/<TAG>/antrea-octant.yml`,
+where `<TAG>` (e.g. `v0.3.0`) is the desired version (should match the version
 of Antrea you are using). After making the necessary edits, you can apply the
 yaml with `kubectl`.
 
@@ -97,13 +97,13 @@ You can follow the steps listed below to install octant and antrea-octant-plugin
     export KUBECONFIG=/etc/kubernetes/admin.conf
     ```
 
-3. Get corresponding antrea-octant-plugin binary from [Release Assets](https://github.com/vmware-tanzu/antrea/releases)
+3. Get corresponding antrea-octant-plugin binary from [Release Assets](https://github.com/antrea-io/antrea/releases)
 based on your environment and move the binary to OCTANT_PLUGIN_PATH.
 
     For example, you can get antrea-octant-plugin-linux-x86_64 if it matches your operating system and architecture.
 
     ```bash
-    wget -O antrea-octant-plugin https://github.com/vmware-tanzu/antrea/releases/download/<TAG>/antrea-octant-plugin-linux-x86_64
+    wget -O antrea-octant-plugin https://github.com/antrea-io/antrea/releases/download/<TAG>/antrea-octant-plugin-linux-x86_64
     # Make sure antrea-octant-plugin is executable, otherwise Octant cannot find it.
     chmod a+x antrea-octant-plugin
     # If you did not change OCTANT_PLUGIN_PATH, the default folder should be $HOME/.config/octant/plugins.

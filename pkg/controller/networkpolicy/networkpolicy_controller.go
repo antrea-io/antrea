@@ -52,15 +52,15 @@ import (
 	"antrea.io/antrea/pkg/apiserver/storage"
 	"antrea.io/antrea/pkg/client/clientset/versioned"
 	secinformers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha1"
-	corev1a2informers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha2"
+	crdv1a3informers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha3"
 	seclisters "antrea.io/antrea/pkg/client/listers/crd/v1alpha1"
-	corev1a2listers "antrea.io/antrea/pkg/client/listers/crd/v1alpha2"
+	crdv1a3listers "antrea.io/antrea/pkg/client/listers/crd/v1alpha3"
 	"antrea.io/antrea/pkg/controller/grouping"
 	"antrea.io/antrea/pkg/controller/metrics"
 	"antrea.io/antrea/pkg/controller/networkpolicy/store"
 	antreatypes "antrea.io/antrea/pkg/controller/types"
 	"antrea.io/antrea/pkg/features"
-	"antrea.io/antrea/pkg/k8s"
+	"antrea.io/antrea/pkg/util/k8s"
 	utilsets "antrea.io/antrea/pkg/util/sets"
 )
 
@@ -126,6 +126,13 @@ type NetworkPolicyController struct {
 	// crdClient is the clientset for CRD API group.
 	crdClient versioned.Interface
 
+	namespaceInformer coreinformers.NamespaceInformer
+	// namespaceLister is able to list/get Namespaces and is populated by the shared informer passed to
+	// NewNetworkPolicyController.
+	namespaceLister corelisters.NamespaceLister
+	// namespaceListerSynced is a function which returns true if the Namespace shared informer has been synced at least once.
+	namespaceListerSynced cache.InformerSynced
+
 	serviceInformer coreinformers.ServiceInformer
 	// serviceLister is able to list/get Services and is populated by the shared informer passed to
 	// NewNetworkPolicyController.
@@ -161,10 +168,10 @@ type NetworkPolicyController struct {
 	// tierListerSynced is a function which returns true if the Tiers shared informer has been synced at least once.
 	tierListerSynced cache.InformerSynced
 
-	cgInformer corev1a2informers.ClusterGroupInformer
+	cgInformer crdv1a3informers.ClusterGroupInformer
 	// cgLister is able to list/get ClusterGroups and is populated by the shared informer passed to
 	// NewClusterGroupController.
-	cgLister corev1a2listers.ClusterGroupLister
+	cgLister crdv1a3listers.ClusterGroupLister
 	// cgListerSynced is a function which returns true if the ClusterGroup shared informer has been synced at least
 	// once.
 	cgListerSynced cache.InformerSynced
@@ -213,12 +220,13 @@ type heartbeat struct {
 func NewNetworkPolicyController(kubeClient clientset.Interface,
 	crdClient versioned.Interface,
 	groupingInterface grouping.Interface,
+	namespaceInformer coreinformers.NamespaceInformer,
 	serviceInformer coreinformers.ServiceInformer,
 	networkPolicyInformer networkinginformers.NetworkPolicyInformer,
 	cnpInformer secinformers.ClusterNetworkPolicyInformer,
 	anpInformer secinformers.NetworkPolicyInformer,
 	tierInformer secinformers.TierInformer,
-	cgInformer corev1a2informers.ClusterGroupInformer,
+	cgInformer crdv1a3informers.ClusterGroupInformer,
 	addressGroupStore storage.Interface,
 	appliedToGroupStore storage.Interface,
 	internalNetworkPolicyStore storage.Interface,
@@ -254,6 +262,9 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 	)
 	// Register Informer and add handlers for AntreaPolicy events only if the feature is enabled.
 	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
+		n.namespaceInformer = namespaceInformer
+		n.namespaceLister = namespaceInformer.Lister()
+		n.namespaceListerSynced = namespaceInformer.Informer().HasSynced
 		n.serviceInformer = serviceInformer
 		n.serviceLister = serviceInformer.Lister()
 		n.serviceListerSynced = serviceInformer.Informer().HasSynced
@@ -269,6 +280,15 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 		n.cgInformer = cgInformer
 		n.cgLister = cgInformer.Lister()
 		n.cgListerSynced = cgInformer.Informer().HasSynced
+		// Add handlers for Namespace events.
+		n.namespaceInformer.Informer().AddEventHandlerWithResyncPeriod(
+			cache.ResourceEventHandlerFuncs{
+				AddFunc:    n.addNamespace,
+				UpdateFunc: n.updateNamespace,
+				DeleteFunc: n.deleteNamespace,
+			},
+			resyncPeriod,
+		)
 		n.serviceInformer.Informer().AddEventHandlerWithResyncPeriod(
 			cache.ResourceEventHandlerFuncs{
 				AddFunc:    n.addService,
@@ -529,11 +549,11 @@ func toAntreaServices(npPorts []networkingv1.NetworkPolicyPort) ([]controlplane.
 		if npPort.Port != nil && npPort.Port.Type == intstr.String {
 			namedPortExists = true
 		}
-		antreaService := controlplane.Service{
+		antreaServices = append(antreaServices, controlplane.Service{
 			Protocol: toAntreaProtocol(npPort.Protocol),
 			Port:     npPort.Port,
-		}
-		antreaServices = append(antreaServices, antreaService)
+			EndPort:  npPort.EndPort,
+		})
 	}
 	return antreaServices, namedPortExists
 }
@@ -1346,15 +1366,17 @@ func (n *NetworkPolicyController) syncInternalNetworkPolicy(key string) error {
 		utilsets.Merge(nodeNames, appGroup.SpanMeta.NodeNames)
 	}
 	updatedNetworkPolicy := &antreatypes.NetworkPolicy{
-		UID:             internalNP.UID,
-		Name:            internalNP.Name,
-		SourceRef:       internalNP.SourceRef,
-		Rules:           internalNP.Rules,
-		AppliedToGroups: internalNP.AppliedToGroups,
-		Priority:        internalNP.Priority,
-		TierPriority:    internalNP.TierPriority,
-		SpanMeta:        antreatypes.SpanMeta{NodeNames: nodeNames},
-		Generation:      internalNP.Generation,
+		UID:                   internalNP.UID,
+		Name:                  internalNP.Name,
+		SourceRef:             internalNP.SourceRef,
+		Rules:                 internalNP.Rules,
+		AppliedToGroups:       internalNP.AppliedToGroups,
+		Priority:              internalNP.Priority,
+		TierPriority:          internalNP.TierPriority,
+		AppliedToPerRule:      internalNP.AppliedToPerRule,
+		PerNamespaceSelectors: internalNP.PerNamespaceSelectors,
+		SpanMeta:              antreatypes.SpanMeta{NodeNames: nodeNames},
+		Generation:            internalNP.Generation,
 	}
 	klog.V(4).Infof("Updating internal NetworkPolicy %s with %d Nodes", key, nodeNames.Len())
 	n.internalNetworkPolicyStore.Update(updatedNetworkPolicy)

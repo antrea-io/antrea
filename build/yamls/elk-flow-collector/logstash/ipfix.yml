@@ -4070,6 +4070,12 @@
   113:
     - :string
     - :egressNetworkPolicyNamespace
+  115:
+    - :uint8
+    - :ingressNetworkPolicyType
+  118:
+    - :uint8
+    - :egressNetworkPolicyType
   120:
     - :uint64
     - :packetTotalCountFromSourceNode
@@ -4124,3 +4130,16 @@
   137:
     - :uint8
     - :flowType
+  139:
+    - :uint8
+    - :ingressNetworkPolicyRuleAction
+  140:
+    - :uint8
+    - :egressNetworkPolicyRuleAction
+  141:
+    - :string
+    - :ingressNetworkPolicyRuleName
+  142:
+    - :string
+    - :egressNetworkPolicyRuleName
+

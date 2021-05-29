@@ -22,23 +22,23 @@ import (
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/apis/controlplane"
-	secv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	"antrea.io/antrea/pkg/controller/networkpolicy/store"
 	antreatypes "antrea.io/antrea/pkg/controller/types"
 )
 
 var (
-	// matchAllPodsPeerCrd is a secv1alpha1.NetworkPolicyPeer matching all
+	// matchAllPodsPeerCrd is a v1alpha1.NetworkPolicyPeer matching all
 	// Pods from all Namespaces.
-	matchAllPodsPeerCrd = secv1alpha1.NetworkPolicyPeer{
+	matchAllPodsPeerCrd = v1alpha1.NetworkPolicyPeer{
 		NamespaceSelector: &metav1.LabelSelector{},
 	}
 )
 
-// toAntreaServicesForCRD converts a slice of secv1alpha1.NetworkPolicyPort
+// toAntreaServicesForCRD converts a slice of v1alpha1.NetworkPolicyPort
 // objects to a slice of Antrea Service objects. A bool is returned along with
 // the Service objects to indicate whether any named port exists.
-func toAntreaServicesForCRD(npPorts []secv1alpha1.NetworkPolicyPort) ([]controlplane.Service, bool) {
+func toAntreaServicesForCRD(npPorts []v1alpha1.NetworkPolicyPort) ([]controlplane.Service, bool) {
 	var antreaServices []controlplane.Service
 	var namedPortExists bool
 	for _, npPort := range npPorts {
@@ -54,8 +54,8 @@ func toAntreaServicesForCRD(npPorts []secv1alpha1.NetworkPolicyPort) ([]controlp
 	return antreaServices, namedPortExists
 }
 
-// toAntreaIPBlockForCRD converts a secv1alpha1.IPBlock to an Antrea IPBlock.
-func toAntreaIPBlockForCRD(ipBlock *secv1alpha1.IPBlock) (*controlplane.IPBlock, error) {
+// toAntreaIPBlockForCRD converts a v1alpha1.IPBlock to an Antrea IPBlock.
+func toAntreaIPBlockForCRD(ipBlock *v1alpha1.IPBlock) (*controlplane.IPBlock, error) {
 	// Convert the allowed IPBlock to networkpolicy.IPNet.
 	ipNet, err := cidrStrToIPNet(ipBlock.CIDR)
 	if err != nil {
@@ -69,7 +69,10 @@ func toAntreaIPBlockForCRD(ipBlock *secv1alpha1.IPBlock) (*controlplane.IPBlock,
 	return antreaIPBlock, nil
 }
 
-func (n *NetworkPolicyController) toAntreaPeerForCRD(peers []secv1alpha1.NetworkPolicyPeer,
+// toAntreaPeerForCRD creates a Antrea controlplane NetworkPolicyPeer for crdv1alpha1 NetworkPolicyPeer.
+// It is used when peer's Namespaces are not matched by NamespaceMatchTypes, for which the controlplane
+// NetworkPolicyPeers will need to be created on a per Namespace basis.
+func (n *NetworkPolicyController) toAntreaPeerForCRD(peers []v1alpha1.NetworkPolicyPeer,
 	np metav1.Object, dir controlplane.Direction, namedPortExists bool) *controlplane.NetworkPolicyPeer {
 	var addressGroups []string
 	// NetworkPolicyPeer is supposed to match all addresses when it is empty and no clusterGroup is present.
@@ -91,7 +94,7 @@ func (n *NetworkPolicyController) toAntreaPeerForCRD(peers []secv1alpha1.Network
 	}
 	var ipBlocks []controlplane.IPBlock
 	for _, peer := range peers {
-		// A secv1alpha1.NetworkPolicyPeer will either have an IPBlock or a
+		// A v1alpha1.NetworkPolicyPeer will either have an IPBlock or a
 		// podSelector and/or namespaceSelector set or a reference to the
 		// ClusterGroup.
 		if peer.IPBlock != nil {
@@ -114,6 +117,18 @@ func (n *NetworkPolicyController) toAntreaPeerForCRD(peers []secv1alpha1.Network
 		}
 	}
 	return &controlplane.NetworkPolicyPeer{AddressGroups: addressGroups, IPBlocks: ipBlocks}
+}
+
+// toNamespacedPeerForCRD creates an Antrea controlplane NetworkPolicyPeer for crdv1alpha1 NetworkPolicyPeer
+// for a particular Namespace. It is used when a single crdv1alpha1 NetworkPolicyPeer maps to multiple
+// controlplane NetworkPolicyPeers because the appliedTo workloads reside in different Namespaces.
+func (n *NetworkPolicyController) toNamespacedPeerForCRD(peers []v1alpha1.NetworkPolicyPeer, namespace string) *controlplane.NetworkPolicyPeer {
+	var addressGroups []string
+	for _, peer := range peers {
+		normalizedUID := n.createAddressGroup(namespace, peer.PodSelector, nil, peer.ExternalEntitySelector)
+		addressGroups = append(addressGroups, normalizedUID)
+	}
+	return &controlplane.NetworkPolicyPeer{AddressGroups: addressGroups}
 }
 
 // createAppliedToGroupForClusterGroupCRD creates an AppliedToGroup object corresponding to a

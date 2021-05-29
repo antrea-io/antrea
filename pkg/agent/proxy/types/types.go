@@ -32,7 +32,7 @@ type ServiceInfo struct {
 // NewServiceInfo returns a new k8sproxy.ServicePort which abstracts a serviceInfo.
 func NewServiceInfo(port *corev1.ServicePort, service *corev1.Service, baseInfo *k8sproxy.BaseServiceInfo) k8sproxy.ServicePort {
 	info := &ServiceInfo{BaseServiceInfo: baseInfo}
-	if utilnet.IsIPv6String(service.Spec.ClusterIP) {
+	if utilnet.IsIPv6(baseInfo.ClusterIP()) {
 		info.OFProtocol = openflow.ProtocolTCPv6
 		if port.Protocol == corev1.ProtocolUDP {
 			info.OFProtocol = openflow.ProtocolUDPv6

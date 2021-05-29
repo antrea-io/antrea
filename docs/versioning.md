@@ -114,7 +114,7 @@ window of compatibility. If we reduce our release cadence in the future, we may
 revisit this policy as well.
 
 When directly applying a newer Antrea YAML manifest, as provided for each
-[release](https://github.com/vmware-tanzu/antrea/releases), there is no
+[release](https://github.com/antrea-io/antrea/releases), there is no
 guarantee that the Antrea Controller will be upgraded first. In practice, the
 Controller would be upgraded simultaneously with the first Agent(s) to be
 upgraded by the rolling update of the Agent DaemonSet. This may create some

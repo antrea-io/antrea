@@ -39,24 +39,6 @@ import (
 
 const testPollInterval = 0 // Not used in the test, hence 0.
 
-func makeTuple(srcIP *net.IP, dstIP *net.IP, protoID uint8, srcPort uint16, dstPort uint16) (*flowexporter.Tuple, *flowexporter.Tuple) {
-	tuple := &flowexporter.Tuple{
-		SourceAddress:      *srcIP,
-		DestinationAddress: *dstIP,
-		Protocol:           protoID,
-		SourcePort:         srcPort,
-		DestinationPort:    dstPort,
-	}
-	revTuple := &flowexporter.Tuple{
-		SourceAddress:      *dstIP,
-		DestinationAddress: *srcIP,
-		Protocol:           protoID,
-		SourcePort:         dstPort,
-		DestinationPort:    srcPort,
-	}
-	return tuple, revTuple
-}
-
 func createConnsForTest() ([]*flowexporter.Connection, []*flowexporter.ConnectionKey) {
 	// Reference for flow timestamp
 	refTime := time.Now()
@@ -64,7 +46,7 @@ func createConnsForTest() ([]*flowexporter.Connection, []*flowexporter.Connectio
 	testConns := make([]*flowexporter.Connection, 2)
 	testConnKeys := make([]*flowexporter.ConnectionKey, 2)
 	// Flow-1
-	tuple1, revTuple1 := makeTuple(&net.IP{1, 2, 3, 4}, &net.IP{4, 3, 2, 1}, 6, 65280, 255)
+	tuple1 := flowexporter.Tuple{SourceAddress: net.IP{1, 2, 3, 4}, DestinationAddress: net.IP{4, 3, 2, 1}, Protocol: 6, SourcePort: 65280, DestinationPort: 255}
 	testConn1 := &flowexporter.Connection{
 		StartTime:       refTime.Add(-(time.Second * 50)),
 		StopTime:        refTime,
@@ -72,14 +54,13 @@ func createConnsForTest() ([]*flowexporter.Connection, []*flowexporter.Connectio
 		OriginalBytes:   0xbaaaaa0000000000,
 		ReversePackets:  0xff,
 		ReverseBytes:    0xbaaa,
-		TupleOrig:       *tuple1,
-		TupleReply:      *revTuple1,
+		FlowKey:         tuple1,
 	}
 	testConnKey1 := flowexporter.NewConnectionKey(testConn1)
 	testConns[0] = testConn1
 	testConnKeys[0] = &testConnKey1
 	// Flow-2
-	tuple2, revTuple2 := makeTuple(&net.IP{5, 6, 7, 8}, &net.IP{8, 7, 6, 5}, 6, 60001, 200)
+	tuple2 := flowexporter.Tuple{SourceAddress: net.IP{5, 6, 7, 8}, DestinationAddress: net.IP{8, 7, 6, 5}, Protocol: 6, SourcePort: 60001, DestinationPort: 200}
 	testConn2 := &flowexporter.Connection{
 		StartTime:       refTime.Add(-(time.Second * 20)),
 		StopTime:        refTime,
@@ -87,8 +68,7 @@ func createConnsForTest() ([]*flowexporter.Connection, []*flowexporter.Connectio
 		OriginalBytes:   0xcbbb,
 		ReversePackets:  0xbbbb,
 		ReverseBytes:    0xcbbbb0000000000,
-		TupleOrig:       *tuple2,
-		TupleReply:      *revTuple2,
+		FlowKey:         tuple2,
 	}
 	testConnKey2 := flowexporter.NewConnectionKey(testConn2)
 	testConns[1] = testConn2
@@ -121,28 +101,28 @@ func TestConnectionStoreAndFlowRecords(t *testing.T) {
 	// Prepare connections and interface config for test
 	testConns, testConnKeys := createConnsForTest()
 	testIfConfigs := make([]*interfacestore.InterfaceConfig, 2)
-	testIfConfigs[0] = prepareInterfaceConfigs("1", "pod1", "ns1", "interface1", &testConns[0].TupleOrig.SourceAddress)
-	testIfConfigs[1] = prepareInterfaceConfigs("2", "pod2", "ns2", "interface2", &testConns[1].TupleOrig.DestinationAddress)
+	testIfConfigs[0] = prepareInterfaceConfigs("1", "pod1", "ns1", "interface1", &testConns[0].FlowKey.SourceAddress)
+	testIfConfigs[1] = prepareInterfaceConfigs("2", "pod2", "ns2", "interface2", &testConns[1].FlowKey.DestinationAddress)
 	// Create connectionStore, FlowRecords and associated mocks
 	connDumperMock := connectionstest.NewMockConnTrackDumper(ctrl)
 	ifStoreMock := interfacestoretest.NewMockInterfaceStore(ctrl)
 	npQuerier := queriertest.NewMockAgentNetworkPolicyInfoQuerier(ctrl)
 	// TODO: Enhance the integration test by testing service.
-	connStore := connections.NewConnectionStore(connDumperMock, flowrecords.NewFlowRecords(), ifStoreMock, true, false, nil, npQuerier, testPollInterval)
+	conntrackConnStore := connections.NewConntrackConnectionStore(connDumperMock, flowrecords.NewFlowRecords(), ifStoreMock, true, false, nil, npQuerier, testPollInterval)
 	// Expect calls for connStore.poll and other callees
 	connDumperMock.EXPECT().DumpFlows(uint16(openflow.CtZone)).Return(testConns, 0, nil)
 	connDumperMock.EXPECT().GetMaxConnections().Return(0, nil)
 	for i, testConn := range testConns {
 		if i == 0 {
-			ifStoreMock.EXPECT().GetInterfaceByIP(testConn.TupleOrig.SourceAddress.String()).Return(testIfConfigs[i], true)
-			ifStoreMock.EXPECT().GetInterfaceByIP(testConn.TupleOrig.DestinationAddress.String()).Return(nil, false)
+			ifStoreMock.EXPECT().GetInterfaceByIP(testConn.FlowKey.SourceAddress.String()).Return(testIfConfigs[i], true)
+			ifStoreMock.EXPECT().GetInterfaceByIP(testConn.FlowKey.DestinationAddress.String()).Return(nil, false)
 		} else {
-			ifStoreMock.EXPECT().GetInterfaceByIP(testConn.TupleOrig.SourceAddress.String()).Return(nil, false)
-			ifStoreMock.EXPECT().GetInterfaceByIP(testConn.TupleOrig.DestinationAddress.String()).Return(testIfConfigs[i], true)
+			ifStoreMock.EXPECT().GetInterfaceByIP(testConn.FlowKey.SourceAddress.String()).Return(nil, false)
+			ifStoreMock.EXPECT().GetInterfaceByIP(testConn.FlowKey.DestinationAddress.String()).Return(testIfConfigs[i], true)
 		}
 	}
 	// Execute connStore.Poll
-	connsLens, err := connStore.Poll()
+	connsLens, err := conntrackConnStore.Poll()
 	require.Nil(t, err, fmt.Sprintf("Failed to add connections to connection store: %v", err))
 	assert.Len(t, connsLens, 1, "length of connsLens is expected to be 1")
 	assert.Len(t, testConns, connsLens[0], "expected connections should be equal to number of testConns")
@@ -156,7 +136,7 @@ func TestConnectionStoreAndFlowRecords(t *testing.T) {
 			expConn.DestinationPodName = testIfConfigs[i].PodName
 			expConn.DestinationPodNamespace = testIfConfigs[i].PodNamespace
 		}
-		actualConn, found := connStore.GetConnByKey(*testConnKeys[i])
+		actualConn, found := conntrackConnStore.GetConnByKey(*testConnKeys[i])
 		assert.Equal(t, found, true, "testConn should be present in connection store")
 		assert.Equal(t, expConn, actualConn, "testConn and connection in connection store should be equal")
 	}

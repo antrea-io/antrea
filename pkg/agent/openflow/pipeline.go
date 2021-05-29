@@ -92,6 +92,27 @@ const (
 	ipv6LinkLocalAddr = "FE80::/10"
 )
 
+type ofAction int32
+
+const (
+	add ofAction = iota
+	mod
+	del
+)
+
+func (a ofAction) String() string {
+	switch a {
+	case add:
+		return "add"
+	case mod:
+		return "modify"
+	case del:
+		return "delete"
+	default:
+		return "unknown"
+	}
+}
+
 var (
 	// egressTables map records all IDs of tables related to
 	// egress rules.
@@ -202,7 +223,7 @@ func (rt regType) reg() string {
 
 const (
 	// marksReg stores traffic-source mark and pod-found mark.
-	// traffic-source resides in [0..15], pod-found resides in [16], Antrea Policy disposition in [21-22], Custom Reasons in [24-25]
+	// traffic-source resides in [0..15], pod-found resides in [16], Antrea Policy disposition in [21-22], Custom Reasons in [24-26]
 	marksReg        regType = 0
 	PortCacheReg    regType = 1
 	swapReg         regType = 2
@@ -247,7 +268,7 @@ const (
 	DispositionDrop  = 0b01
 	DispositionRej   = 0b10
 
-	// custom reason is loaded in marksReg [24-25]
+	// custom reason is loaded in marksReg [24-26]
 	// The custom reason mark is used to indicate the reason(s) for sending the packet
 	// to the controller. Reasons can be or-ed to indicate that the packets was sent
 	// for multiple reasons.
@@ -263,6 +284,11 @@ const (
 	// controller send reject packet as packet-out, we want reject response to bypass
 	// the connTrack to avoid unexpected drop.
 	CustomReasonReject = 0b10
+	// CustomReasonDeny is used when sending packet-in message to controller indicating
+	// that the corresponding connection has been dropped or rejected. It can be consumed
+	// by the Flow Exporter to export flow records for connections denied by network
+	// policy rules.
+	CustomReasonDeny = 0b100
 )
 
 var DispositionToString = map[uint32]string{
@@ -292,10 +318,10 @@ var (
 	// disposition of Antrea Policy. It could have more bits to support more disposition
 	// that Antrea policy support in the future.
 	APDispositionMarkRange = binding.Range{21, 22}
-	// CustomReasonMarkRange takes the 24 to 25 bits of register marksReg to indicate
+	// CustomReasonMarkRange takes the 24 to 26 bits of register marksReg to indicate
 	// the reason of sending packet to the controller. It could have more bits to
 	// support more customReason in the future.
-	CustomReasonMarkRange = binding.Range{24, 25}
+	CustomReasonMarkRange = binding.Range{24, 26}
 	// endpointIPRegRange takes a 32-bit range of register endpointIPReg to store
 	// the selected Service Endpoint IP.
 	endpointIPRegRange = binding.Range{0, 31}
@@ -332,6 +358,8 @@ type OFEntryOperations interface {
 	Modify(flow binding.Flow) error
 	Delete(flow binding.Flow) error
 	AddAll(flows []binding.Flow) error
+	ModifyAll(flows []binding.Flow) error
+	BundleOps(adds []binding.Flow, mods []binding.Flow, dels []binding.Flow) error
 	DeleteAll(flows []binding.Flow) error
 	AddOFEntries(ofEntries []binding.OFEntry) error
 	DeleteOFEntries(ofEntries []binding.OFEntry) error
@@ -354,6 +382,7 @@ func portToUint16(port int) uint16 {
 type client struct {
 	enableProxy        bool
 	enableAntreaPolicy bool
+	enableDenyTracking bool
 	enableEgress       bool
 	roundInfo          types.RoundInfo
 	cookieAllocator    cookie.Allocator
@@ -397,105 +426,98 @@ func (c *client) GetTunnelVirtualMAC() net.HardwareAddr {
 	return globalVirtualMAC
 }
 
-func (c *client) Add(flow binding.Flow) error {
+func (c *client) changeAll(flowsMap map[ofAction][]binding.Flow) error {
+	if len(flowsMap) == 0 {
+		return nil
+	}
+
 	startTime := time.Now()
 	defer func() {
 		d := time.Since(startTime)
-		metrics.OVSFlowOpsLatency.WithLabelValues("add").Observe(float64(d.Milliseconds()))
+		for k, v := range flowsMap {
+			if len(v) != 0 {
+				metrics.OVSFlowOpsLatency.WithLabelValues(k.String()).Observe(float64(d.Milliseconds()))
+			}
+		}
 	}()
-	if err := c.bridge.AddFlowsInBundle([]binding.Flow{flow}, nil, nil); err != nil {
-		metrics.OVSFlowOpsErrorCount.WithLabelValues("add").Inc()
+
+	if err := c.bridge.AddFlowsInBundle(flowsMap[add], flowsMap[mod], flowsMap[del]); err != nil {
+		for k, v := range flowsMap {
+			if len(v) != 0 {
+				metrics.OVSFlowOpsErrorCount.WithLabelValues(k.String()).Inc()
+			}
+		}
 		return err
 	}
-	metrics.OVSFlowOpsCount.WithLabelValues("add").Inc()
+	for k, v := range flowsMap {
+		if len(v) != 0 {
+			metrics.OVSFlowOpsCount.WithLabelValues(k.String()).Inc()
+		}
+	}
 	return nil
+}
+
+func (c *client) Add(flow binding.Flow) error {
+	return c.AddAll([]binding.Flow{flow})
 }
 
 func (c *client) Modify(flow binding.Flow) error {
-	startTime := time.Now()
-	defer func() {
-		d := time.Since(startTime)
-		metrics.OVSFlowOpsLatency.WithLabelValues("modify").Observe(float64(d.Milliseconds()))
-	}()
-	if err := c.bridge.AddFlowsInBundle(nil, []binding.Flow{flow}, nil); err != nil {
-		metrics.OVSFlowOpsErrorCount.WithLabelValues("modify").Inc()
-		return err
-	}
-	metrics.OVSFlowOpsCount.WithLabelValues("modify").Inc()
-	return nil
+	return c.ModifyAll([]binding.Flow{flow})
 }
 
 func (c *client) Delete(flow binding.Flow) error {
-	startTime := time.Now()
-	defer func() {
-		d := time.Since(startTime)
-		metrics.OVSFlowOpsLatency.WithLabelValues("delete").Observe(float64(d.Milliseconds()))
-	}()
-	if err := c.bridge.AddFlowsInBundle(nil, nil, []binding.Flow{flow}); err != nil {
-		metrics.OVSFlowOpsErrorCount.WithLabelValues("delete").Inc()
-		return err
-	}
-	metrics.OVSFlowOpsCount.WithLabelValues("delete").Inc()
-	return nil
+	return c.DeleteAll([]binding.Flow{flow})
 }
 
 func (c *client) AddAll(flows []binding.Flow) error {
-	if len(flows) == 0 {
-		return nil
-	}
-	startTime := time.Now()
-	defer func() {
-		d := time.Since(startTime)
-		metrics.OVSFlowOpsLatency.WithLabelValues("add").Observe(float64(d.Milliseconds()))
-	}()
-	if err := c.bridge.AddFlowsInBundle(flows, nil, nil); err != nil {
-		metrics.OVSFlowOpsErrorCount.WithLabelValues("add").Inc()
-		return err
-	}
-	metrics.OVSFlowOpsCount.WithLabelValues("add").Inc()
-	return nil
+	return c.changeAll(map[ofAction][]binding.Flow{add: flows})
+}
+
+func (c *client) ModifyAll(flows []binding.Flow) error {
+	return c.changeAll(map[ofAction][]binding.Flow{mod: flows})
 }
 
 func (c *client) DeleteAll(flows []binding.Flow) error {
+	return c.changeAll(map[ofAction][]binding.Flow{del: flows})
+}
+
+func (c *client) BundleOps(adds []binding.Flow, mods []binding.Flow, dels []binding.Flow) error {
+	return c.changeAll(map[ofAction][]binding.Flow{add: adds, mod: mods, del: dels})
+}
+
+func (c *client) changeOFEntries(ofEntries []binding.OFEntry, action ofAction) error {
+	if len(ofEntries) == 0 {
+		return nil
+	}
+	var adds, mods, dels []binding.OFEntry
+	if action == add {
+		adds = ofEntries
+	} else if action == mod {
+		mods = ofEntries
+	} else if action == del {
+		dels = ofEntries
+	} else {
+		return fmt.Errorf("OF Entries Action not exists: %s", action)
+	}
 	startTime := time.Now()
 	defer func() {
 		d := time.Since(startTime)
-		metrics.OVSFlowOpsLatency.WithLabelValues("delete").Observe(float64(d.Milliseconds()))
+		metrics.OVSFlowOpsLatency.WithLabelValues(action.String()).Observe(float64(d.Milliseconds()))
 	}()
-	if err := c.bridge.AddFlowsInBundle(nil, nil, flows); err != nil {
-		metrics.OVSFlowOpsErrorCount.WithLabelValues("delete").Inc()
+	if err := c.bridge.AddOFEntriesInBundle(adds, mods, dels); err != nil {
+		metrics.OVSFlowOpsErrorCount.WithLabelValues(action.String()).Inc()
 		return err
 	}
-	metrics.OVSFlowOpsCount.WithLabelValues("delete").Inc()
+	metrics.OVSFlowOpsCount.WithLabelValues(action.String()).Inc()
 	return nil
 }
 
 func (c *client) AddOFEntries(ofEntries []binding.OFEntry) error {
-	startTime := time.Now()
-	defer func() {
-		d := time.Since(startTime)
-		metrics.OVSFlowOpsLatency.WithLabelValues("add").Observe(float64(d.Milliseconds()))
-	}()
-	if err := c.bridge.AddOFEntriesInBundle(ofEntries, nil, nil); err != nil {
-		metrics.OVSFlowOpsErrorCount.WithLabelValues("add").Inc()
-		return err
-	}
-	metrics.OVSFlowOpsCount.WithLabelValues("add").Inc()
-	return nil
+	return c.changeOFEntries(ofEntries, add)
 }
 
 func (c *client) DeleteOFEntries(ofEntries []binding.OFEntry) error {
-	startTime := time.Now()
-	defer func() {
-		d := time.Since(startTime)
-		metrics.OVSFlowOpsLatency.WithLabelValues("delete").Observe(float64(d.Milliseconds()))
-	}()
-	if err := c.bridge.AddOFEntriesInBundle(nil, nil, ofEntries); err != nil {
-		metrics.OVSFlowOpsErrorCount.WithLabelValues("delete").Inc()
-		return err
-	}
-	metrics.OVSFlowOpsCount.WithLabelValues("delete").Inc()
-	return nil
+	return c.changeOFEntries(ofEntries, del)
 }
 
 // defaultFlows generates the default flows of all tables.
@@ -1046,6 +1068,24 @@ func (c *client) traceflowL2ForwardOutputFlows(dataplaneTag uint8, liveTraffic, 
 				Action().OutputRegRange(int(PortCacheReg), ofPortRegRange)
 		}
 		flows = append(flows, fb.Done())
+		if c.enableProxy {
+			// Only SendToController for hairpin traffic.
+			// This flow must have higher priority than the one installed by l2ForwardOutputServiceHairpinFlow
+			fbHairpin := l2FwdOutTable.BuildFlow(priorityHigh+2).
+				MatchIPDSCP(dataplaneTag).
+				SetHardTimeout(timeout).
+				MatchProtocol(ipProtocol).
+				MatchRegRange(int(marksReg), hairpinMark, hairpinMarkRange).
+				Cookie(c.cookieAllocator.Request(cookie.Service).Raw())
+			if !droppedOnly {
+				fbHairpin = fbHairpin.Action().SendToController(uint8(PacketInReasonTF))
+			}
+			if liveTraffic {
+				fbHairpin = fbHairpin.Action().LoadIPDSCP(0).
+					Action().OutputInPort()
+			}
+			flows = append(flows, fbHairpin.Done())
+		}
 	}
 	return flows
 }
@@ -1137,9 +1177,8 @@ func (c *client) l3FwdFlowRouteToGW(gwMAC net.HardwareAddr, category cookie.Cate
 	return flows
 }
 
-// l3FwdFlowToGateway generates the L3 forward flows for traffic from tunnel to
-// the local gateway. It rewrites the destination MAC (should be
-// globalVirtualMAC) of the packets to the gateway interface MAC.
+// l3FwdFlowToGateway generates the L3 forward flows to rewrite the destination MAC of the packets to the gateway interface
+// MAC if the destination IP is the gateway IP.
 func (c *client) l3FwdFlowToGateway(localGatewayIPs []net.IP, localGatewayMAC net.HardwareAddr, category cookie.Category) []binding.Flow {
 	l3FwdTable := c.pipeline[l3ForwardingTable]
 	var flows []binding.Flow
@@ -1527,18 +1566,24 @@ func (c *client) conjunctionActionDenyFlow(conjunctionID uint32, tableID binding
 		Action().LoadRegRange(int(CNPDenyConjIDReg), conjunctionID, binding.Range{0, 31}).
 		Action().LoadRegRange(int(marksReg), cnpDenyMark, cnpDenyMarkRange)
 
+	var customReason int
+	if c.enableDenyTracking {
+		customReason += CustomReasonDeny
+		flowBuilder = flowBuilder.
+			Action().LoadRegRange(int(marksReg), disposition, APDispositionMarkRange)
+	}
 	if enableLogging {
-		customReason := CustomReasonLogging
-		if disposition == DispositionRej {
-			customReason += CustomReasonReject
-		}
+		customReason += CustomReasonLogging
 		flowBuilder = flowBuilder.
-			Action().LoadRegRange(int(marksReg), disposition, APDispositionMarkRange).
+			Action().LoadRegRange(int(marksReg), disposition, APDispositionMarkRange)
+	}
+	if disposition == DispositionRej {
+		customReason += CustomReasonReject
+	}
+
+	if enableLogging || c.enableDenyTracking || disposition == DispositionRej {
+		flowBuilder = flowBuilder.
 			Action().LoadRegRange(int(marksReg), uint32(customReason), CustomReasonMarkRange).
-			Action().SendToController(uint8(PacketInReasonNP))
-	} else if disposition == DispositionRej {
-		flowBuilder = flowBuilder.
-			Action().LoadRegRange(int(marksReg), CustomReasonReject, CustomReasonMarkRange). // Do the rejection.
 			Action().SendToController(uint8(PacketInReasonNP))
 	}
 
@@ -1687,6 +1732,15 @@ func (c *client) conjunctiveMatchFlow(tableID binding.TableIDType, matchKey *typ
 // defaultDropFlow generates the flow to drop packets if the match condition is matched.
 func (c *client) defaultDropFlow(tableID binding.TableIDType, matchKey *types.MatchKey, matchValue interface{}) binding.Flow {
 	fb := c.pipeline[tableID].BuildFlow(priorityNormal)
+	if c.enableDenyTracking {
+		return c.addFlowMatch(fb, matchKey, matchValue).
+			Action().Drop().
+			Action().LoadRegRange(int(marksReg), DispositionDrop, APDispositionMarkRange).
+			Action().LoadRegRange(int(marksReg), CustomReasonDeny, CustomReasonMarkRange).
+			Action().SendToController(uint8(PacketInReasonNP)).
+			Cookie(c.cookieAllocator.Request(cookie.Default).Raw()).
+			Done()
+	}
 	return c.addFlowMatch(fb, matchKey, matchValue).
 		Action().Drop().
 		Cookie(c.cookieAllocator.Request(cookie.Default).Raw()).
@@ -1701,7 +1755,7 @@ func (c *client) defaultDropFlow(tableID binding.TableIDType, matchKey *types.Ma
 //    traffic from kube-proxy proxied traffic.
 // 2. pkt_mark field is not properly supported for OVS userspace (netdev) datapath.
 // Note that there is a defect in the latter way that NodePort Service access by external clients will be masqueraded as
-// a local gateway IP to bypass Network Policies. See https://github.com/vmware-tanzu/antrea/issues/280.
+// a local gateway IP to bypass Network Policies. See https://github.com/antrea-io/antrea/issues/280.
 // TODO: Fix it after replacing kube-proxy with AntreaProxy.
 func (c *client) localProbeFlow(localGatewayIPs []net.IP, category cookie.Category) []binding.Flow {
 	var flows []binding.Flow
@@ -2121,7 +2175,7 @@ func (c *client) generatePipeline() {
 }
 
 // NewClient is the constructor of the Client interface.
-func NewClient(bridgeName, mgmtAddr string, ovsDatapathType ovsconfig.OVSDatapathType, enableProxy, enableAntreaPolicy, enableEgress bool) Client {
+func NewClient(bridgeName, mgmtAddr string, ovsDatapathType ovsconfig.OVSDatapathType, enableProxy, enableAntreaPolicy, enableEgress bool, enableDenyTracking bool) Client {
 	bridge := binding.NewOFBridge(bridgeName, mgmtAddr)
 	policyCache := cache.NewIndexer(
 		policyConjKeyFunc,
@@ -2131,6 +2185,7 @@ func NewClient(bridgeName, mgmtAddr string, ovsDatapathType ovsconfig.OVSDatapat
 		bridge:                   bridge,
 		enableProxy:              enableProxy,
 		enableAntreaPolicy:       enableAntreaPolicy,
+		enableDenyTracking:       enableDenyTracking,
 		enableEgress:             enableEgress,
 		nodeFlowCache:            newFlowCategoryCache(),
 		podFlowCache:             newFlowCategoryCache(),

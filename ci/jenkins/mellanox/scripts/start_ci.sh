@@ -9,7 +9,7 @@ export ARTIFACTS=$WORKSPACE/artifacts
 export TIMEOUT=${TIMEOUT:-300}
 export POLL_INTERVAL=${POLL_INTERVAL:-10}
 
-export ANTREA_CNI_REPO=${ANTREA_CNI_REPO:-'https://github.com/vmware-tanzu/antrea.git'}
+export ANTREA_CNI_REPO=${ANTREA_CNI_REPO:-'https://github.com/antrea-io/antrea.git'}
 export ANTREA_CNI_BRANCH=${ANTREA_CNI_BRANCH:-''}
 export ANTREA_CNI_PR=${ANTREA_CNI_PR:-''}
 export ANTREA_CNI_HARBOR_IMAGE=${ANTREA_CNI_HARBOR_IMAGE:-${HARBOR_REGISTRY}/${HARBOR_PROJECT}/antrea}

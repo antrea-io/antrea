@@ -117,7 +117,9 @@ spec:
           spec:
             properties:
               childGroups:
-                x-kubernetes-preserve-unknown-fields: true
+                items:
+                  type: string
+                type: array
               externalEntitySelector:
                 properties:
                   matchExpressions:
@@ -236,6 +238,17 @@ metadata:
     app: antrea
   name: clustergroups.crd.antrea.io
 spec:
+  conversion:
+    strategy: Webhook
+    webhook:
+      clientConfig:
+        service:
+          name: antrea
+          namespace: kube-system
+          path: /convert/clustergroup
+      conversionReviewVersions:
+      - v1
+      - v1beta1
   group: crd.antrea.io
   names:
     kind: ClusterGroup
@@ -252,7 +265,9 @@ spec:
           spec:
             properties:
               childGroups:
-                x-kubernetes-preserve-unknown-fields: true
+                items:
+                  type: string
+                type: array
               externalEntitySelector:
                 properties:
                   matchExpressions:
@@ -281,6 +296,118 @@ spec:
                   cidr:
                     format: cidr
                     type: string
+                type: object
+              ipBlocks:
+                items:
+                  properties:
+                    cidr:
+                      format: cidr
+                      type: string
+                  type: object
+                type: array
+              namespaceSelector:
+                properties:
+                  matchExpressions:
+                    items:
+                      properties:
+                        key:
+                          type: string
+                        operator:
+                          enum:
+                          - In
+                          - NotIn
+                          - Exists
+                          - DoesNotExist
+                          type: string
+                        values:
+                          items:
+                            type: string
+                          type: array
+                      type: object
+                    type: array
+                  matchLabels:
+                    x-kubernetes-preserve-unknown-fields: true
+                type: object
+              podSelector:
+                properties:
+                  matchExpressions:
+                    items:
+                      properties:
+                        key:
+                          type: string
+                        operator:
+                          enum:
+                          - In
+                          - NotIn
+                          - Exists
+                          - DoesNotExist
+                          type: string
+                        values:
+                          items:
+                            type: string
+                          type: array
+                      type: object
+                    type: array
+                  matchLabels:
+                    x-kubernetes-preserve-unknown-fields: true
+                type: object
+              serviceReference:
+                properties:
+                  name:
+                    type: string
+                  namespace:
+                    type: string
+                type: object
+            type: object
+          status:
+            properties:
+              conditions:
+                items:
+                  properties:
+                    lastTransitionTime:
+                      type: string
+                    status:
+                      type: string
+                    type:
+                      type: string
+                  type: object
+                type: array
+            type: object
+        type: object
+    served: true
+    storage: false
+  - name: v1alpha3
+    schema:
+      openAPIV3Schema:
+        properties:
+          spec:
+            properties:
+              childGroups:
+                items:
+                  type: string
+                type: array
+              externalEntitySelector:
+                properties:
+                  matchExpressions:
+                    items:
+                      properties:
+                        key:
+                          type: string
+                        operator:
+                          enum:
+                          - In
+                          - NotIn
+                          - Exists
+                          - DoesNotExist
+                          type: string
+                        values:
+                          items:
+                            type: string
+                          type: array
+                      type: object
+                    type: array
+                  matchLabels:
+                    x-kubernetes-preserve-unknown-fields: true
                 type: object
               ipBlocks:
                 items:
@@ -573,6 +700,11 @@ spec:
                               matchLabels:
                                 x-kubernetes-preserve-unknown-fields: true
                             type: object
+                          namespaces:
+                            properties:
+                              match:
+                                type: string
+                            type: object
                           podSelector:
                             properties:
                               matchExpressions:
@@ -699,6 +831,11 @@ spec:
                                 type: array
                               matchLabels:
                                 x-kubernetes-preserve-unknown-fields: true
+                            type: object
+                          namespaces:
+                            properties:
+                              match:
+                                type: string
                             type: object
                           podSelector:
                             properties:
@@ -978,6 +1115,11 @@ spec:
                               matchLabels:
                                 x-kubernetes-preserve-unknown-fields: true
                             type: object
+                          namespaces:
+                            properties:
+                              match:
+                                type: string
+                            type: object
                           podSelector:
                             properties:
                               matchExpressions:
@@ -1104,6 +1246,11 @@ spec:
                                 type: array
                               matchLabels:
                                 x-kubernetes-preserve-unknown-fields: true
+                            type: object
+                          namespaces:
+                            properties:
+                              match:
+                                type: string
                             type: object
                           podSelector:
                             properties:
@@ -2925,6 +3072,7 @@ rules:
   - get
   - watch
   - list
+  - patch
 - apiGroups:
   - ""
   resources:
@@ -3105,6 +3253,13 @@ rules:
   - subjectaccessreviews
   verbs:
   - create
+- apiGroups:
+  - apiextensions.k8s.io
+  resources:
+  - customresourcedefinitions
+  verbs:
+  - get
+  - update
 - apiGroups:
   - ""
   resourceNames:
@@ -3482,9 +3637,10 @@ data:
     # to the Antrea Flow Aggregator service. If IP, it can be either IPv4 or IPv6.
     # However, IPv6 address should be wrapped with [].
     # If PORT is empty, we default to 4739, the standard IPFIX port.
-    # If no PROTO is given, we consider "tcp" as default. We support "tcp" and "udp"
-    # L4 transport protocols.
-    #flowCollectorAddr: "flow-aggregator.flow-aggregator.svc:4739:tcp"
+    # If no PROTO is given, we consider "tls" as default. We support "tls", "tcp" and
+    # "udp" protocols. "tls" is used for securing communication between flow exporter and
+    # flow aggregator.
+    #flowCollectorAddr: "flow-aggregator.flow-aggregator.svc:4739:tls"
 
     # Provide flow poll interval as a duration string. This determines how often the
     # flow exporter dumps connections from the conntrack module. Flow poll interval
@@ -3497,16 +3653,13 @@ data:
     # stream of packets, a flow record will be exported to the collector once the elapsed
     # time since the last export event is equal to the value of this timeout.
     # Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
-    #activeFlowExportTimeout: "60s"
+    #activeFlowExportTimeout: "30s"
 
     # Provide the idle flow export timeout, which is the timeout after which a flow
     # record is sent to the collector for idle flows. A flow is considered idle if no
     # packet matching this flow has been observed since the last export event.
     # Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
     #idleFlowExportTimeout: "15s"
-
-    # Enable TLS communication from flow exporter to flow aggregator.
-    #enableTLSToFlowAggregator: true
 
     # Provide the port range used by NodePortLocal. When the NodePortLocal feature is enabled, a port from that range will be assigned
     # whenever a Pod's container defines a specific port to be exposed (each container can define a list of ports as pod.spec.containers[].ports),
@@ -3607,7 +3760,7 @@ metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-gg4m728h98
+  name: antrea-config-t9hc8tf75d
   namespace: kube-system
 ---
 apiVersion: v1
@@ -3727,7 +3880,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-gg4m728h98
+          name: antrea-config-t9hc8tf75d
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -4038,7 +4191,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-gg4m728h98
+          name: antrea-config-t9hc8tf75d
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d
@@ -4261,6 +4414,7 @@ webhooks:
   - apiGroups:
     - crd.antrea.io
     apiVersions:
+    - v1alpha3
     - v1alpha2
     operations:
     - CREATE

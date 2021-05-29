@@ -16,7 +16,6 @@ package flowrecords
 
 import (
 	"fmt"
-	"net"
 	"sync"
 	"time"
 
@@ -52,7 +51,7 @@ func (fr *FlowRecords) AddOrUpdateFlowRecord(key flowexporter.ConnectionKey, con
 	record, exists := fr.recordsMap[key]
 	if !exists {
 		isIPv6 := false
-		if net.ParseIP(key[0]).To4() == nil {
+		if conn.FlowKey.SourceAddress.To4() == nil {
 			isIPv6 = true
 		}
 		record = flowexporter.FlowRecord{

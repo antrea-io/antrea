@@ -35,3 +35,8 @@ func (c *client) externalFlows(nodeIP net.IP, localSubnet net.IPNet, localGatewa
 func (c *client) snatMarkFlows(snatIP net.IP, mark uint32) []binding.Flow {
 	return []binding.Flow{c.snatIPFromTunnelFlow(snatIP, mark)}
 }
+
+func (c *client) l3FwdFlowToRemoteViaRouting(localGatewayMAC net.HardwareAddr, remoteGatewayMAC net.HardwareAddr,
+	category cookie.Category, peerIP net.IP, peerPodCIDR *net.IPNet) []binding.Flow {
+	return []binding.Flow{c.l3FwdFlowToRemoteViaGW(localGatewayMAC, *peerPodCIDR, category)}
+}

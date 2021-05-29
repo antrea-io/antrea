@@ -13,3 +13,5 @@ networking:
 apiServer:
   certSANs:
   - "{{ k8s_api_server_ip }}"
+  extraArgs:
+    feature-gates: "NetworkPolicyEndPort=true"
