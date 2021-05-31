@@ -40,3 +40,8 @@ func (i *Initializer) initHostNetworkFlows() error {
 func (i *Initializer) getTunnelPortLocalIP() net.IP {
 	return nil
 }
+
+// registerServiceforOS returns immediately on Linux.
+func (i *Initializer) registerServiceforOS() error {
+	return  nil
+}
