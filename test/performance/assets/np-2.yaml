@@ -1,0 +1,36 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"networking.k8s.io/v1","kind":"NetworkPolicy","metadata":{"annotations":{},"name":"np-2","namespace":"demox-1-ybxoeh"},"spec":{"egress":[{"ports":[{"port":53,"protocol":"TCP"},{"port":53,"protocol":"UDP"}]},{"to":[{"ipBlock":{"cidr":"20.0.0.0/8"}},{"ipBlock":{"cidr":"10.172.51.93/32"}},{"podSelector":{"matchLabels":{"app-1":"scale-1"}}},{"podSelector":{"matchLabels":{"app":"testpod"}}}]}],"podSelector":{"matchLabels":{"app-1":"scale-1"}},"policyTypes":["Egress"]}}
+  creationTimestamp: "2021-08-27T10:13:44Z"
+  generation: 1
+  name: np-2
+  namespace: demox-1-ybxoeh
+  resourceVersion: "38191067"
+  selfLink: /apis/networking.k8s.io/v1/namespaces/demox-1-ybxoeh/networkpolicies/np-2
+  uid: be9859b2-c9f1-46cd-af3d-4fa760fcc18d
+spec:
+  egress:
+    - ports:
+        - port: 53
+          protocol: TCP
+        - port: 53
+          protocol: UDP
+    - to:
+        - ipBlock:
+            cidr: 20.0.0.0/8
+        - ipBlock:
+            cidr: 10.172.51.93/32
+        - podSelector:
+            matchLabels:
+              app-1: scale-1
+        - podSelector:
+            matchLabels:
+              app: testpod
+  podSelector:
+    matchLabels:
+      app-1: scale-1
+  policyTypes:
+    - Egress

@@ -39,6 +39,7 @@ spec:
       initContainers:
       - name: init-inotify-limit
         image: projects.registry.vmware.com/library/busybox:latest
+        imagePullPolicy: IfNotPresent
         command: ['sysctl', '-w', 'fs.inotify.max_user_instances=200']
         securityContext:
           privileged: true

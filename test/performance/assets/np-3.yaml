@@ -1,0 +1,25 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"networking.k8s.io/v1","kind":"NetworkPolicy","metadata":{"annotations":{},"name":"np-3","namespace":"demox-1-ybxoeh"},"spec":{"ingress":[{"from":[{"ipBlock":{"cidr":"100.0.0.0/8"}},{"ipBlock":{"cidr":"20.0.0.0/8"}}]}],"podSelector":{"matchLabels":{"app":"testpod"}},"policyTypes":["Ingress"]}}
+  creationTimestamp: "2021-08-27T10:13:44Z"
+  generation: 1
+  name: np-3
+  namespace: demox-1-ybxoeh
+  resourceVersion: "38191077"
+  selfLink: /apis/networking.k8s.io/v1/namespaces/demox-1-ybxoeh/networkpolicies/np-3
+  uid: 4c2529fa-bdd6-45c4-a683-4b48f3603364
+spec:
+  ingress:
+    - from:
+        - ipBlock:
+            cidr: 100.0.0.0/8
+        - ipBlock:
+            cidr: 20.0.0.0/8
+  podSelector:
+    matchLabels:
+      app: testpod
+  policyTypes:
+    - Ingress

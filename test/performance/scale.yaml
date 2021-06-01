@@ -1,0 +1,27 @@
+timeout: 15m
+ipv6: false
+real_node: true
+repeat_times: 1
+pods_num_per_node: 40
+svc_num_per_node: 10
+np_num_per_node: 20
+namespace_num: 10
+record_prometheus: false
+pre_workload: true
+teardown: false
+scales:
+  - name: "ScaleRestartAgent"
+    package: "test/performance/framework"
+    repeat_times: 1
+  - name: "ScaleUpWorkloadPods"
+    package: "test/performance/framework"
+    repeat_times: 1
+  - name: "ScaleNetworkPolicy"
+    package: "test/performance/framework"
+    repeat_times: 1
+  - name: "ScaleService"
+    package: "test/performance/framework"
+    repeat_times: 1
+  - name: "ScaleServiceDemo"
+    package: "test/performance/framework"
+    repeat_times: 3

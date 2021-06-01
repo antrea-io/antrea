@@ -1,0 +1,12 @@
+{
+  "kind":"Namespace",
+  "apiVersion":"v1",
+  "metadata":{
+    "name":"antrea-scale-test-ns"
+  },
+  "spec":{
+    "finalizers":[
+
+    ]
+  }
+}
