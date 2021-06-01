@@ -289,6 +289,7 @@ func (p *antreaOctantPlugin) actionHandler(request *service.ActionRequest) error
 		}
 
 		updateIPHeader(tf, hasSrcPort, hasDstPort, srcPort, dstPort)
+		mostRecentTraceflow = tf
 		p.createTfCR(tf, request, context.Background(), tfName)
 		return nil
 	case showGraphAction:
@@ -319,13 +320,18 @@ func (p *antreaOctantPlugin) actionHandler(request *service.ActionRequest) error
 	case runTraceAgainAction:
 		// Check if traceflow has been run before
 		if mostRecentTraceflow == nil {
-			log.Printf("Failed to run traceflow again: Run a traceflow before attempting to run a traceflow again.\n")
+			alert := action.CreateAlert(action.AlertTypeError,
+				`Failed to run traceflow again: Use 'START NEW TRACE' or 'START NEW LIVE-TRAFFIC TRACE' to 
+				run a traceflow before attempting to run a traceflow again.`,
+				action.DefaultAlertExpiration)
+			request.DashboardClient.SendAlert(request.Context(), request.ClientID, alert)
 			return nil
 		}
 
 		// Get name of new traceflow
-		mostRecentTraceflow.Name = mostRecentTraceflow.Spec.Source.Pod + "-" + mostRecentTraceflow.Spec.Destination.Pod 
-		mostRecentTraceflow.Name += "-" + time.Now().Format(TIME_FORMAT_YYYYMMDD_HHMMSS)
+		temporaryRune := []rune(mostRecentTraceflow.Name)
+		mostRecentTraceflow.Name = string(temporaryRune[0:len(mostRecentTraceflow.Name)-15])
+		mostRecentTraceflow.Name += time.Now().Format(TIME_FORMAT_YYYYMMDD_HHMMSS)
 
 		p.createTfCR(mostRecentTraceflow, request, context.Background(), mostRecentTraceflow.Name)
 		return nil
