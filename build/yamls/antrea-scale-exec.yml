@@ -1,0 +1,172 @@
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: antrea-scale
+  namespace: default
+---
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: antrea-scale
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - nodes
+    verbs:
+      - get
+      - watch
+      - list
+  - apiGroups:
+      - ""
+    resources:
+      - pods
+      - endpoints
+      - services
+      - namespaces
+    verbs:
+      - create
+      - get
+      - watch
+      - list
+      - delete
+      - deletecollection
+  - apiGroups:
+    - ""
+    resources:
+      - pods/exec
+    verbs:
+      - create
+  - apiGroups:
+      - apps
+    resources:
+      - daemonsets
+      - deployments
+      - replicasets
+    verbs:
+      - create
+      - get
+      - delete
+      - list
+  - apiGroups:
+      - networking.k8s.io
+    resources:
+      - networkpolicies
+    verbs:
+      - get
+      - watch
+      - list
+      - create
+      - delete
+      - deletecollection
+  - apiGroups:
+      - clusterinformation.antrea.tanzu.vmware.com
+    resources:
+      - antreaagentinfos
+    verbs:
+      - get
+      - create
+      - update
+      - delete
+  - apiGroups:
+      - controlplane.antrea.tanzu.vmware.com
+      - networking.antrea.tanzu.vmware.com
+    resources:
+      - networkpolicies
+      - appliedtogroups
+      - addressgroups
+    verbs:
+      - get
+      - watch
+      - list
+  - apiGroups:
+      - controlplane.antrea.tanzu.vmware.com
+    resources:
+      - nodestatssummaries
+    verbs:
+      - create
+  - apiGroups:
+      - authentication.k8s.io
+    resources:
+      - tokenreviews
+    verbs:
+      - create
+  - apiGroups:
+      - ""
+    resourceNames:
+      - extension-apiserver-authentication
+    resources:
+      - configmaps
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - ""
+    resources:
+      - configmaps
+    resourceNames:
+      - antrea-ca
+    verbs:
+      - get
+      - watch
+      - list
+  - apiGroups:
+      - ops.antrea.tanzu.vmware.com
+    resources:
+      - traceflows
+      - traceflows/status
+    verbs:
+      - get
+      - watch
+      - list
+      - update
+      - patch
+      - create
+      - delete
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: antrea-scale
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: antrea-scale
+subjects:
+  - kind: ServiceAccount
+    name: antrea-scale
+    namespace: default
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: antrea-scale
+spec:
+  template:
+    metadata:
+      name: antrea-scale
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: antrea/instance
+                    operator: NotIn
+                    values:
+                      - simulator
+      containers:
+        - name: antrea-scale
+          image: antrea/antrea-scale:latest
+          imagePullPolicy: IfNotPresent
+          command: ["antrea-scale"]
+          args:
+             - "--config=scale.yml"
+      serviceAccountName: antrea-scale
+      restartPolicy: Never
+      priorityClassName: system-node-critical
+      nodeSelector:
+        kubernetes.io/os: linux
+  backoffLimit: 1

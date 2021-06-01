@@ -1,0 +1,18 @@
+This doc explains how to use antrea agent simulator
+
+1. build the image
+# make build-scale-simulator
+
+2. create the yaml file, this demo uses 500 simulators, this command will create a yaml file build/yamls/antrea-simulator.yml
+# make manifest-scale REPLICA=500
+
+3. taint the simulator node, in case that we do not want some pods run on the simulator node
+on the node which can use kubectl
+# kubectl taint -l 'antrea/instance=simulator' node mocknode=true:NoExecute
+
+4. create secret for kubemark
+# cp ~/.kube/config admin.conf
+# kubectl create secret generic kubeconfig --type=Opaque --namespace=kube-system --from-file=admin.conf
+
+5. apply the yaml file, synchronize the yaml file in step 2 to a node that can use kubectl
+# kubectl apply -f antrea-simulator.yml

@@ -1,0 +1,9 @@
+FROM ubuntu:20.04
+
+LABEL maintainer="Antrea <projectantrea-dev@googlegroups.com>"
+LABEL description="Antrea scale test image."
+
+USER root
+
+COPY test/performance/scale.yml .
+COPY bin/antrea-scale /usr/local/bin
