@@ -101,6 +101,11 @@ antrea-agent-simulator:
 	@mkdir -p $(BINDIR)
 	GOOS=linux $(GO) build -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' antrea.io/antrea/cmd/antrea-agent-simulator
 
+.PHONY: antrea-scale
+antrea-scale:
+	@mkdir -p $(BINDIR)
+	GOOS=linux $(GO) build -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' antrea.io/antrea/cmd/antrea-scale
+
 .PHONY: antrea-agent-instr-binary
 antrea-agent-instr-binary:
 	@mkdir -p $(BINDIR)
@@ -362,6 +367,12 @@ build-agent-ubuntu:
 
 .PHONY: build-ubuntu
 build-ubuntu: build-agent-ubuntu build-controller-ubuntu
+
+.PHONY: build-antrea-scale
+build-antrea-scale:
+	@echo "===> Building antrea/antrea-scale Docker image <==="
+	docker build -t antrea/antrea-scale:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.scale .
+	docker tag antrea/antrea-scale:$(DOCKER_IMG_VERSION) antrea/antrea-scale
 
 .PHONY: build-ubi
 build-ubi: build-agent-ubi build-controller-ubi
