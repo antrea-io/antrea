@@ -144,6 +144,7 @@ var (
 		"ingressNetworkPolicyRuleName",
 		"egressNetworkPolicyName",
 		"egressNetworkPolicyNamespace",
+		"egressNetworkPolicyRuleAction",
 		"egressNetworkPolicyType",
 		"egressNetworkPolicyRuleName",
 	}
