@@ -635,26 +635,32 @@ if [[ "$TESTCASE" != "e2e" && "$TESTCASE" != "conformance" && "$TESTCASE" != "al
     exit 1
 fi
 
+if [[ "$RUN_TEST_ONLY" == true ]]; then
+    if [[ "$TESTCASE" == "e2e" ]]; then
+        run_e2e
+    else
+        run_conformance
+    fi
+    if [[ "$TEST_FAILURE" == true ]]; then
+        exit 1
+    fi
+    exit 0
+fi
+
 if [[ "$TESTCASE" == "integration" ]]; then
     run_integration
-elif [[ "$TESTCASE" == "e2e" ]]; then
-    if [[ "$RUN_TEST_ONLY" == true ]]; then
-        run_e2e
-    else
-        setup_cluster
-        deliver_antrea
-        run_e2e
-        cleanup_cluster
-    fi
+    exit 0
+fi
+
+trap cleanup_cluster EXIT
+if [[ "$TESTCASE" == "e2e" ]]; then
+    setup_cluster
+    deliver_antrea
+    run_e2e
 else
-    if [[ "$RUN_TEST_ONLY" == true ]]; then
-        run_conformance
-    else
-        setup_cluster
-        deliver_antrea
-        run_conformance
-        cleanup_cluster
-    fi
+    setup_cluster
+    deliver_antrea
+    run_conformance
 fi
 
 if [[ "$TEST_FAILURE" == true ]]; then
