@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/pkg/errors"
@@ -38,12 +39,14 @@ import (
 type KubernetesUtils struct {
 	*TestData
 	podCache map[string][]v1.Pod
+	podLock  *sync.Mutex
 }
 
 func NewKubernetesUtils(data *TestData) (*KubernetesUtils, error) {
 	return &KubernetesUtils{
 		TestData: data,
 		podCache: map[string][]v1.Pod{},
+		podLock:  new(sync.Mutex),
 	}, nil
 }
 
@@ -79,7 +82,9 @@ func (k *KubernetesUtils) GetPodsByLabel(ns string, key string, val string) ([]v
 	if err != nil {
 		return nil, errors.WithMessage(err, "unable to list pods")
 	}
+	k.podLock.Lock()
 	k.podCache[fmt.Sprintf("%v_%v_%v", ns, key, val)] = v1PodList
+	k.podLock.Unlock()
 	return v1PodList, nil
 }
 
