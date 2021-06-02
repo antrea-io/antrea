@@ -974,7 +974,7 @@ func (data *TestData) createNginxPod(name, nodeName string) error {
 }
 
 // createServerPod creates a Pod that can listen to specified port and have named port set.
-func (data *TestData) createServerPod(name string, portName string, portNum int32, setHostPort bool) error {
+func (data *TestData) createServerPod(name string, portName string, portNum int32, setHostPort bool, hostNetwork bool) error {
 	// See https://github.com/kubernetes/kubernetes/blob/master/test/images/agnhost/porter/porter.go#L17 for the image's detail.
 	cmd := "porter"
 	env := corev1.EnvVar{Name: fmt.Sprintf("SERVE_PORT_%d", portNum), Value: "foo"}
@@ -983,7 +983,7 @@ func (data *TestData) createServerPod(name string, portName string, portNum int3
 		// If hostPort is to be set, it must match the container port number.
 		port.HostPort = int32(portNum)
 	}
-	return data.createPodOnNode(name, "", agnhostImage, nil, []string{cmd}, []corev1.EnvVar{env}, []corev1.ContainerPort{port}, false, nil)
+	return data.createPodOnNode(name, "", agnhostImage, nil, []string{cmd}, []corev1.EnvVar{env}, []corev1.ContainerPort{port}, hostNetwork, nil)
 }
 
 // createCustomPod creates a Pod in given Namespace with custom labels.
