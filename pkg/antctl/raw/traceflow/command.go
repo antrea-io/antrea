@@ -34,9 +34,8 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 
-	"antrea.io/antrea/pkg/antctl/runtime"
+	"antrea.io/antrea/pkg/antctl/raw"
 	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
-	clientset "antrea.io/antrea/pkg/client/clientset/versioned"
 )
 
 const defaultTimeout time.Duration = time.Second * 10
@@ -142,22 +141,14 @@ func runE(cmd *cobra.Command, _ []string) error {
 		return nil
 	}
 
-	kubeconfigPath, err := cmd.Flags().GetString("kubeconfig")
-	if err != nil {
-		return err
-	}
-	kubeconfig, err := runtime.ResolveKubeconfig(kubeconfigPath)
+	kubeconfig, err := raw.ResolveKubeconfig(cmd)
 	if err != nil {
 		return err
 	}
 
-	k8sclient, err := kubernetes.NewForConfig(kubeconfig)
+	k8sclient, client, err := raw.SetupClients(kubeconfig)
 	if err != nil {
-		return fmt.Errorf("error when creating kubernetes clientset: %w", err)
-	}
-	client, err := clientset.NewForConfig(kubeconfig)
-	if err != nil {
-		return fmt.Errorf("error when creating clientset: %w", err)
+		return fmt.Errorf("failed to create clientset: %w", err)
 	}
 
 	tf, err := newTraceflow(k8sclient)

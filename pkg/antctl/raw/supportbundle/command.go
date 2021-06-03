@@ -25,7 +25,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -37,15 +36,12 @@ import (
 	"gopkg.in/yaml.v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 
-	agentapiserver "antrea.io/antrea/pkg/agent/apiserver"
+	"antrea.io/antrea/pkg/antctl/raw"
 	"antrea.io/antrea/pkg/antctl/runtime"
-	"antrea.io/antrea/pkg/apis"
 	systemv1beta1 "antrea.io/antrea/pkg/apis/system/v1beta1"
-	controllerapiserver "antrea.io/antrea/pkg/apiserver"
 	antrea "antrea.io/antrea/pkg/client/clientset/versioned"
 	"antrea.io/antrea/pkg/util/k8s"
 )
@@ -113,36 +109,14 @@ func init() {
 	}
 }
 
-// TODO: enable secure connection.
-// TODO: generate kubeconfig in Antrea agent for antctl in-Pod access.
-func setupKubeconfig(kubeconfig *rest.Config) {
+func localSupportBundleRequest(cmd *cobra.Command, mode string) error {
+	kubeconfig, err := raw.ResolveKubeconfig(cmd)
+	if err != nil {
+		return err
+	}
 	kubeconfig.APIPath = "/apis"
 	kubeconfig.GroupVersion = &systemv1beta1.SchemeGroupVersion
-	kubeconfig.NegotiatedSerializer = scheme.Codecs.WithoutConversion()
-	kubeconfig.Insecure = true
-	kubeconfig.CAFile = ""
-	kubeconfig.CAData = nil
-	if runtime.InPod {
-		if runtime.Mode == runtime.ModeAgent {
-			kubeconfig.Host = net.JoinHostPort("127.0.0.1", strconv.Itoa(apis.AntreaAgentAPIPort))
-			kubeconfig.BearerTokenFile = agentapiserver.TokenPath
-		} else {
-			kubeconfig.Host = net.JoinHostPort("127.0.0.1", strconv.Itoa(apis.AntreaControllerAPIPort))
-			kubeconfig.BearerTokenFile = controllerapiserver.TokenPath
-		}
-	}
-}
-
-func localSupportBundleRequest(cmd *cobra.Command, mode string) error {
-	kubeconfigPath, err := cmd.Flags().GetString("kubeconfig")
-	if err != nil {
-		return err
-	}
-	kubeconfig, err := runtime.ResolveKubeconfig(kubeconfigPath)
-	if err != nil {
-		return err
-	}
-	setupKubeconfig(kubeconfig)
+	raw.SetupKubeconfig(kubeconfig)
 	client, err := rest.RESTClientFor(kubeconfig)
 	if err != nil {
 		return fmt.Errorf("error when creating rest client: %w", err)
@@ -468,28 +442,23 @@ func controllerRemoteRunE(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("error when resolving path '%s': %w", option.dir, err)
 	}
 
-	kubeconfigPath, err := cmd.Flags().GetString("kubeconfig")
+	kubeconfig, err := raw.ResolveKubeconfig(cmd)
 	if err != nil {
 		return err
 	}
-	kubeconfig, err := runtime.ResolveKubeconfig(kubeconfigPath)
-	if err != nil {
-		return err
-	}
+	kubeconfig.APIPath = "/apis"
+	kubeconfig.GroupVersion = &systemv1beta1.SchemeGroupVersion
 	restconfigTmpl := rest.CopyConfig(kubeconfig)
-	setupKubeconfig(restconfigTmpl)
+	raw.SetupKubeconfig(restconfigTmpl)
 	if server, err := Command.Flags().GetString("server"); err != nil {
 		kubeconfig.Host = server
 	}
 
-	k8sClientset, err := kubernetes.NewForConfig(kubeconfig)
+	k8sClientset, antreaClientset, err := raw.SetupClients(kubeconfig)
 	if err != nil {
-		return fmt.Errorf("failed to create client: %w", err)
+		return fmt.Errorf("failed to create clientset: %w", err)
 	}
-	antreaClientset, err := antrea.NewForConfig(kubeconfig)
-	if err != nil {
-		return fmt.Errorf("error when creating antrea clientset: %w", err)
-	}
+
 	var controllerClient *rest.RESTClient
 	var agentClients map[string]*rest.RESTClient
 

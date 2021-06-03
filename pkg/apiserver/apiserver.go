@@ -25,6 +25,7 @@ import (
 	"k8s.io/apiserver/pkg/registry/rest"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	"k8s.io/client-go/informers"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 	"k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 
@@ -36,6 +37,7 @@ import (
 	system "antrea.io/antrea/pkg/apis/system/v1beta1"
 	"antrea.io/antrea/pkg/apiserver/certificate"
 	"antrea.io/antrea/pkg/apiserver/handlers/endpoint"
+	"antrea.io/antrea/pkg/apiserver/handlers/featuregates"
 	"antrea.io/antrea/pkg/apiserver/handlers/loglevel"
 	"antrea.io/antrea/pkg/apiserver/handlers/webhook"
 	"antrea.io/antrea/pkg/apiserver/registry/controlplane/egressgroup"
@@ -91,6 +93,7 @@ func init() {
 
 // ExtraConfig holds custom apiserver config.
 type ExtraConfig struct {
+	k8sClient                     kubernetes.Interface
 	addressGroupStore             storage.Interface
 	appliedToGroupStore           storage.Interface
 	networkPolicyStore            storage.Interface
@@ -132,6 +135,7 @@ type completedConfig struct {
 
 func NewConfig(
 	genericConfig *genericapiserver.Config,
+	k8sClient kubernetes.Interface,
 	addressGroupStore, appliedToGroupStore, networkPolicyStore, groupStore, egressGroupStore storage.Interface,
 	caCertController *certificate.CACertController,
 	statsAggregator *stats.Aggregator,
@@ -142,6 +146,7 @@ func NewConfig(
 	return &Config{
 		genericConfig: genericConfig,
 		extraConfig: ExtraConfig{
+			k8sClient:                     k8sClient,
 			addressGroupStore:             addressGroupStore,
 			appliedToGroupStore:           appliedToGroupStore,
 			networkPolicyStore:            networkPolicyStore,
@@ -283,6 +288,7 @@ func CleanupDeprecatedAPIServices(aggregatorClient clientset.Interface) error {
 
 func installHandlers(c *ExtraConfig, s *genericapiserver.GenericAPIServer) {
 	s.Handler.NonGoRestfulMux.HandleFunc("/loglevel", loglevel.HandleFunc())
+	s.Handler.NonGoRestfulMux.HandleFunc("/featuregates", featuregates.HandleFunc(c.k8sClient))
 	s.Handler.NonGoRestfulMux.HandleFunc("/endpoint", endpoint.HandleFunc(c.endpointQuerier))
 	// Webhook to mutate Namespace labels and add its metadata.name as a label
 	s.Handler.NonGoRestfulMux.HandleFunc("/mutate/namespace", webhook.HandleMutationLabels())
