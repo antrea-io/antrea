@@ -515,51 +515,37 @@ func checkRecordsForFlows(t *testing.T, data *TestData, srcIP string, dstIP stri
 				checkPodAndNodeData(t, record, "perftest-a", controlPlaneNodeName(), "perftest-c", workerNodeName(1))
 				checkFlowType(t, record, ipfixregistry.FlowTypeInterNode)
 			}
-
+			assert := assert.New(t)
 			if checkService {
 				if isIntraNode {
-					if !strings.Contains(record, "antrea-test/perftest-b") {
-						t.Errorf("Record with ServiceIP does not have Service name")
-					}
+					assert.Contains(record, "antrea-test/perftest-b", "Record with ServiceIP does not have Service name")
 				} else {
-					checkPodAndNodeData(t, record, "perftest-a", controlPlaneNodeName(), "perftest-c", workerNodeName(1))
-					checkFlowType(t, record, ipfixregistry.FlowTypeInterNode)
-				}
-				assert := assert.New(t)
-				if checkService {
-					if isIntraNode {
-						if !strings.Contains(record, "antrea-test/perftest-b") {
-							t.Errorf("Record with ServiceIP does not have Service name")
-						}
-					} else {
-						if !strings.Contains(record, "antrea-test/perftest-c") {
-							t.Errorf("Record with ServiceIP does not have Service name")
-						}
-					}
-				}
-				if checkK8sNetworkPolicy {
-					// Check if records have both ingress and egress network policies.
-					assert.Contains(record, fmt.Sprintf("ingressNetworkPolicyName: %s", ingressAllowNetworkPolicyName), "Record does not have the correct NetworkPolicy name with the ingress rule")
-					assert.Contains(record, fmt.Sprintf("ingressNetworkPolicyNamespace: %s", testNamespace), "Record does not have the correct NetworkPolicy Namespace with the ingress rule")
-					assert.Contains(record, fmt.Sprintf("ingressNetworkPolicyType: %d", ipfixregistry.PolicyTypeK8sNetworkPolicy), "Record does not have the correct NetworkPolicy Type with the ingress rule")
-					assert.Contains(record, fmt.Sprintf("egressNetworkPolicyName: %s", egressAllowNetworkPolicyName), "Record does not have the correct NetworkPolicy name with the egress rule")
-					assert.Contains(record, fmt.Sprintf("egressNetworkPolicyNamespace: %s", testNamespace), "Record does not have the correct NetworkPolicy Namespace with the egress rule")
-					assert.Contains(record, fmt.Sprintf("egressNetworkPolicyType: %d", ipfixregistry.PolicyTypeK8sNetworkPolicy), "Record does not have the correct NetworkPolicy Type with the egress rule")
-				}
-				if checkAntreaNetworkPolicy {
-					// Check if records have both ingress and egress network policies.
-					assert.Contains(record, fmt.Sprintf("ingressNetworkPolicyName: %s", ingressAntreaNetworkPolicyName), "Record does not have the correct NetworkPolicy name with the ingress rule")
-					assert.Contains(record, fmt.Sprintf("ingressNetworkPolicyNamespace: %s", testNamespace), "Record does not have the correct NetworkPolicy Namespace with the ingress rule")
-					assert.Contains(record, fmt.Sprintf("ingressNetworkPolicyType: %d", ipfixregistry.PolicyTypeAntreaNetworkPolicy), "Record does not have the correct NetworkPolicy Type with the ingress rule")
-					assert.Contains(record, fmt.Sprintf("ingressNetworkPolicyRuleName: %s", testIngressRuleName), "Record does not have the correct NetworkPolicy RuleName with the ingress rule")
-					assert.Contains(record, fmt.Sprintf("ingressNetworkPolicyRuleAction: %d", ipfixregistry.NetworkPolicyRuleActionAllow), "Record does not have the correct NetworkPolicy RuleAction with the ingress rule")
-					assert.Contains(record, fmt.Sprintf("egressNetworkPolicyName: %s", egressAntreaNetworkPolicyName), "Record does not have the correct NetworkPolicy name with the egress rule")
-					assert.Contains(record, fmt.Sprintf("egressNetworkPolicyNamespace: %s", testNamespace), "Record does not have the correct NetworkPolicy Namespace with the egress rule")
-					assert.Contains(record, fmt.Sprintf("egressNetworkPolicyType: %d", ipfixregistry.PolicyTypeAntreaNetworkPolicy), "Record does not have the correct NetworkPolicy Type with the egress rule")
-					assert.Contains(record, fmt.Sprintf("egressNetworkPolicyRuleName: %s", testEgressRuleName), "Record does not have the correct NetworkPolicy RuleName with the egress rule")
-					assert.Contains(record, fmt.Sprintf("egressNetworkPolicyRuleAction: %d", ipfixregistry.NetworkPolicyRuleActionAllow), "Record does not have the correct NetworkPolicy RuleAction with the egress rule")
+					assert.Contains(record, "antrea-test/perftest-c", "Record with ServiceIP does not have Service name")
 				}
 			}
+			if checkK8sNetworkPolicy {
+				// Check if records have both ingress and egress network policies.
+				assert.Contains(record, fmt.Sprintf("ingressNetworkPolicyName: %s", ingressAllowNetworkPolicyName), "Record does not have the correct NetworkPolicy name with the ingress rule")
+				assert.Contains(record, fmt.Sprintf("ingressNetworkPolicyNamespace: %s", testNamespace), "Record does not have the correct NetworkPolicy Namespace with the ingress rule")
+				assert.Contains(record, fmt.Sprintf("ingressNetworkPolicyType: %d", ipfixregistry.PolicyTypeK8sNetworkPolicy), "Record does not have the correct NetworkPolicy Type with the ingress rule")
+				assert.Contains(record, fmt.Sprintf("egressNetworkPolicyName: %s", egressAllowNetworkPolicyName), "Record does not have the correct NetworkPolicy name with the egress rule")
+				assert.Contains(record, fmt.Sprintf("egressNetworkPolicyNamespace: %s", testNamespace), "Record does not have the correct NetworkPolicy Namespace with the egress rule")
+				assert.Contains(record, fmt.Sprintf("egressNetworkPolicyType: %d", ipfixregistry.PolicyTypeK8sNetworkPolicy), "Record does not have the correct NetworkPolicy Type with the egress rule")
+			}
+			if checkAntreaNetworkPolicy {
+				// Check if records have both ingress and egress network policies.
+				assert.Contains(record, fmt.Sprintf("ingressNetworkPolicyName: %s", ingressAntreaNetworkPolicyName), "Record does not have the correct NetworkPolicy name with the ingress rule")
+				assert.Contains(record, fmt.Sprintf("ingressNetworkPolicyNamespace: %s", testNamespace), "Record does not have the correct NetworkPolicy Namespace with the ingress rule")
+				assert.Contains(record, fmt.Sprintf("ingressNetworkPolicyType: %d", ipfixregistry.PolicyTypeAntreaNetworkPolicy), "Record does not have the correct NetworkPolicy Type with the ingress rule")
+				assert.Contains(record, fmt.Sprintf("ingressNetworkPolicyRuleName: %s", testIngressRuleName), "Record does not have the correct NetworkPolicy RuleName with the ingress rule")
+				assert.Contains(record, fmt.Sprintf("ingressNetworkPolicyRuleAction: %d", ipfixregistry.NetworkPolicyRuleActionAllow), "Record does not have the correct NetworkPolicy RuleAction with the ingress rule")
+				assert.Contains(record, fmt.Sprintf("egressNetworkPolicyName: %s", egressAntreaNetworkPolicyName), "Record does not have the correct NetworkPolicy name with the egress rule")
+				assert.Contains(record, fmt.Sprintf("egressNetworkPolicyNamespace: %s", testNamespace), "Record does not have the correct NetworkPolicy Namespace with the egress rule")
+				assert.Contains(record, fmt.Sprintf("egressNetworkPolicyType: %d", ipfixregistry.PolicyTypeAntreaNetworkPolicy), "Record does not have the correct NetworkPolicy Type with the egress rule")
+				assert.Contains(record, fmt.Sprintf("egressNetworkPolicyRuleName: %s", testEgressRuleName), "Record does not have the correct NetworkPolicy RuleName with the egress rule")
+				assert.Contains(record, fmt.Sprintf("egressNetworkPolicyRuleAction: %d", ipfixregistry.NetworkPolicyRuleActionAllow), "Record does not have the correct NetworkPolicy RuleAction with the egress rule")
+			}
+
 			// Skip the bandwidth check for the iperf control flow records which have 0 delta count.
 			if checkBandwidth && !strings.Contains(record, "octetDeltaCount: 0") {
 				exportTime := int64(getUnit64FieldFromRecord(t, record, "flowEndSeconds"))
