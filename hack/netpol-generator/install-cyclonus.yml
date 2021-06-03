@@ -11,11 +11,13 @@ spec:
       - command:
         - ./cyclonus
         - generate
-        - --mode=upstream
+        - --include=upstream-e2e
+        - --exclude=
         - --noisy=true
-        - --perturbation-wait-seconds=15
+        - --perturbation-wait-seconds=5
         - --cleanup-namespaces=true
+        - --server-protocol=tcp,udp
         name: cyclonus
         imagePullPolicy: IfNotPresent
-        image: mfenwick100/cyclonus:v0.1.4
+        image: mfenwick100/cyclonus:v0.4.7
       serviceAccount: cyclonus
