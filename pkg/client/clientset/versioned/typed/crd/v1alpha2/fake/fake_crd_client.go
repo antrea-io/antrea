@@ -38,6 +38,10 @@ func (c *FakeCrdV1alpha2) ExternalEntities(namespace string) v1alpha2.ExternalEn
 	return &FakeExternalEntities{c, namespace}
 }
 
+func (c *FakeCrdV1alpha2) ExternalIPPools() v1alpha2.ExternalIPPoolInterface {
+	return &FakeExternalIPPools{c}
+}
+
 // RESTClient returns a RESTClient that is used to communicate
 // with API server by this client implementation.
 func (c *FakeCrdV1alpha2) RESTClient() rest.Interface {

@@ -27,6 +27,7 @@ type CrdV1alpha2Interface interface {
 	ClusterGroupsGetter
 	EgressesGetter
 	ExternalEntitiesGetter
+	ExternalIPPoolsGetter
 }
 
 // CrdV1alpha2Client is used to interact with features provided by the crd.antrea.io group.
@@ -44,6 +45,10 @@ func (c *CrdV1alpha2Client) Egresses() EgressInterface {
 
 func (c *CrdV1alpha2Client) ExternalEntities(namespace string) ExternalEntityInterface {
 	return newExternalEntities(c, namespace)
+}
+
+func (c *CrdV1alpha2Client) ExternalIPPools() ExternalIPPoolInterface {
+	return newExternalIPPools(c)
 }
 
 // NewForConfig creates a new CrdV1alpha2Client for the given config.
