@@ -412,6 +412,7 @@ func createAPIServerConfig(kubeconfig string,
 
 	return apiserver.NewConfig(
 		serverConfig,
+		client,
 		addressGroupStore,
 		appliedToGroupStore,
 		networkPolicyStore,

@@ -17,6 +17,7 @@ rules:
       - pods
       - namespaces
       - services
+      - configmaps
     verbs:
       - get
       - watch

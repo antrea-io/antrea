@@ -23,6 +23,7 @@ import (
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
+	clientset "k8s.io/client-go/kubernetes"
 
 	"antrea.io/antrea/pkg/apis/crd/v1beta1"
 )
@@ -30,6 +31,8 @@ import (
 type fakeControllerQuerier struct{}
 
 func (q *fakeControllerQuerier) GetControllerInfo(info *v1beta1.AntreaControllerInfo, partial bool) {}
+
+func (q *fakeControllerQuerier) GetK8sClient() clientset.Interface { return nil }
 
 func TestRESTList(t *testing.T) {
 	tests := []struct {
