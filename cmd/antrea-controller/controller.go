@@ -117,6 +117,7 @@ func run(o *Options) error {
 	cgv1a2Informer := crdInformerFactory.Crd().V1alpha2().ClusterGroups()
 	cgInformer := crdInformerFactory.Crd().V1alpha3().ClusterGroups()
 	egressInformer := crdInformerFactory.Crd().V1alpha2().Egresses()
+	externalIPPoolInformer := crdInformerFactory.Crd().V1alpha2().ExternalIPPools()
 
 	clusterIdentityAllocator := clusteridentity.NewClusterIdentityAllocator(
 		env.GetAntreaNamespace(),
@@ -226,7 +227,7 @@ func run(o *Options) error {
 
 	var egressController *egress.EgressController
 	if features.DefaultFeatureGate.Enabled(features.Egress) {
-		egressController = egress.NewEgressController(groupEntityIndex, egressInformer, egressGroupStore)
+		egressController = egress.NewEgressController(crdClient, groupEntityIndex, egressInformer, externalIPPoolInformer, egressGroupStore)
 	}
 
 	var traceflowController *traceflow.Controller
