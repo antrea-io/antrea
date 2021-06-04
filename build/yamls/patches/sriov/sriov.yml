@@ -1,0 +1,17 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: antrea-agent
+spec:
+  template:
+    spec:
+      containers:
+      - name: antrea-agent
+        volumeMounts:
+        - mountPath: /var/lib/kubelet
+          name: host-kubelet
+          readOnly: true
+      volumes:
+      - hostPath:
+          path: /var/lib/kubelet
+        name: host-kubelet
