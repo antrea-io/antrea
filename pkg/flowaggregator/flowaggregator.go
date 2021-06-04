@@ -15,6 +15,8 @@
 package flowaggregator
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -117,6 +119,10 @@ var (
 		"reverseOctetTotalCountFromDestinationNode",
 		"reversePacketDeltaCountFromDestinationNode",
 		"reversePacketTotalCountFromDestinationNode",
+	}
+	antreaLabelsElementList = []string{
+		"sourcePodLabels",
+		"destinationPodLabels",
 	}
 	aggregationElements = &ipfixintermediate.AggregationElements{
 		NonStatsElements:                   nonStatsElementList,
@@ -445,6 +451,10 @@ func (fa *flowAggregator) sendFlowKeyRecord(key ipfixintermediate.FlowKey, recor
 		fa.fillK8sMetadata(key, record.Record)
 		fa.aggregationProcess.SetCorrelatedFieldsFilled(record)
 	}
+	if !fa.aggregationProcess.AreExternalFieldsFilled(*record) {
+		fa.fillPodLabels(key, record.Record)
+		fa.aggregationProcess.SetExternalFieldsFilled(record)
+	}
 	err := fa.set.AddRecord(record.Record.GetOrderedElementList(), templateID)
 	if err != nil {
 		return err
@@ -529,6 +539,14 @@ func (fa *flowAggregator) sendTemplateSet(isFlowKeyIPv6 bool, isOriginalExporter
 		ie := ipfixentities.NewInfoElementWithValue(element, nil)
 		elements = append(elements, ie)
 	}
+	for _, ie := range antreaLabelsElementList {
+		element, err := fa.registry.GetInfoElement(ie, ipfixregistry.AntreaEnterpriseID)
+		if err != nil {
+			return 0, fmt.Errorf("%s not present. returned error: %v", ie, err)
+		}
+		ie := ipfixentities.NewInfoElementWithValue(element, nil)
+		elements = append(elements, ie)
+	}
 	fa.set.ResetSet()
 	if err := fa.set.PrepareSet(ipfixentities.Template, templateID); err != nil {
 		return 0, err
@@ -544,10 +562,6 @@ func (fa *flowAggregator) sendTemplateSet(isFlowKeyIPv6 bool, isOriginalExporter
 // fillK8sMetadata fills Pod name, Pod namespace and Node name for inter-Node flows
 // that have incomplete info due to deny network policy.
 func (fa *flowAggregator) fillK8sMetadata(key ipfixintermediate.FlowKey, record ipfixentities.Record) {
-	if fa.podInformer == nil {
-		klog.Warning("No pod podInformer is provided for filling k8s metadata.")
-		return
-	}
 	// fill source Pod info when sourcePodName is empty
 	if sourcePodName, exist := record.GetInfoElementWithValue("sourcePodName"); exist {
 		if sourcePodName.Value == "" {
@@ -589,5 +603,50 @@ func (fa *flowAggregator) fillK8sMetadata(key ipfixintermediate.FlowKey, record 
 				klog.Warning(err)
 			}
 		}
+	}
+}
+
+func (fa *flowAggregator) fetchPodLabels(podAddress string) string {
+	pods, err := fa.podInformer.Informer().GetIndexer().ByIndex(podInfoIndex, podAddress)
+	if err != nil {
+		klog.Warning(err)
+		return ""
+	} else if len(pods) == 0 {
+		return ""
+	}
+	pod, ok := pods[0].(*corev1.Pod)
+	if !ok {
+		klog.Warningf("Invalid Pod obj in cache")
+	}
+	labelsJSON, err := json.Marshal(pod.GetLabels())
+	if err != nil {
+		klog.Warningf("JSON encoding of Pod labels failed: %v", err)
+		return ""
+	}
+	return string(labelsJSON)
+}
+
+func (fa *flowAggregator) fillPodLabels(key ipfixintermediate.FlowKey, record ipfixentities.Record) {
+	podLabelString := fa.fetchPodLabels(key.SourceAddress)
+	sourcePodLabelsElement, err := fa.registry.GetInfoElement("sourcePodLabels", ipfixregistry.AntreaEnterpriseID)
+	if err == nil {
+		sourcePodLabelsIE := ipfixentities.NewInfoElementWithValue(sourcePodLabelsElement, bytes.NewBufferString(podLabelString).Bytes())
+		err = record.AddInfoElement(sourcePodLabelsIE)
+		if err != nil {
+			klog.Warningf("Add sourcePodLabels InfoElementWithValue failed: %v", err)
+		}
+	} else {
+		klog.Warningf("Get sourcePodLabels InfoElement failed: %v", err)
+	}
+	podLabelString = fa.fetchPodLabels(key.DestinationAddress)
+	destinationPodLabelsElement, err := fa.registry.GetInfoElement("destinationPodLabels", ipfixregistry.AntreaEnterpriseID)
+	if err == nil {
+		destinationPodLabelsIE := ipfixentities.NewInfoElementWithValue(destinationPodLabelsElement, bytes.NewBufferString(podLabelString).Bytes())
+		err = record.AddInfoElement(destinationPodLabelsIE)
+		if err != nil {
+			klog.Warningf("Add destinationPodLabels InfoElementWithValue failed: %v", err)
+		}
+	} else {
+		klog.Warningf("Get destinationPodLabels InfoElement failed: %v", err)
 	}
 }

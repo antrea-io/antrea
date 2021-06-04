@@ -15,6 +15,7 @@
 package flowaggregator
 
 import (
+	"bytes"
 	"testing"
 	"time"
 
@@ -24,6 +25,8 @@ import (
 	ipfixentitiestesting "github.com/vmware/go-ipfix/pkg/entities/testing"
 	ipfixintermediate "github.com/vmware/go-ipfix/pkg/intermediate"
 	ipfixregistry "github.com/vmware/go-ipfix/pkg/registry"
+	"k8s.io/client-go/informers"
+	"k8s.io/client-go/kubernetes/fake"
 
 	ipfixtest "antrea.io/antrea/pkg/ipfix/testing"
 )
@@ -36,6 +39,7 @@ const (
 	testActiveTimeout       = 60 * time.Second
 	testInactiveTimeout     = 180 * time.Second
 	testObservationDomainID = 0xabcd
+	informerDefaultResync   = 12 * time.Hour
 )
 
 func TestFlowAggregator_sendFlowKeyRecord(t *testing.T) {
@@ -47,6 +51,9 @@ func TestFlowAggregator_sendFlowKeyRecord(t *testing.T) {
 	mockDataSet := ipfixentitiestesting.NewMockSet(ctrl)
 	mockRecord := ipfixentitiestesting.NewMockRecord(ctrl)
 	mockAggregationProcess := ipfixtest.NewMockIPFIXAggregationProcess(ctrl)
+
+	client := fake.NewSimpleClientset()
+	informerFactory := informers.NewSharedInformerFactory(client, informerDefaultResync)
 
 	fa := &flowAggregator{
 		externalFlowCollectorAddr:   "",
@@ -64,6 +71,7 @@ func TestFlowAggregator_sendFlowKeyRecord(t *testing.T) {
 		set:                         mockDataSet,
 		flowAggregatorAddress:       "",
 		observationDomainID:         testObservationDomainID,
+		podInformer:                 informerFactory.Core().V1().Pods(),
 	}
 	ipv4Key := ipfixintermediate.FlowKey{
 		SourceAddress:      "10.0.0.1",
@@ -119,7 +127,19 @@ func TestFlowAggregator_sendFlowKeyRecord(t *testing.T) {
 		mockIPFIXExpProc.EXPECT().SendSet(mockDataSet).Return(0, nil)
 		mockAggregationProcess.EXPECT().ResetStatElementsInRecord(mockRecord).Return(nil)
 		mockAggregationProcess.EXPECT().AreCorrelatedFieldsFilled(*tc.flowRecord).Return(false)
+		mockRecord.EXPECT().GetInfoElementWithValue("sourcePodName").Return(ipfixentities.NewInfoElementWithValue(ipfixentities.NewInfoElement("sourcePodName", 0, 0, ipfixregistry.AntreaEnterpriseID, 0), ""), false)
+		mockRecord.EXPECT().GetInfoElementWithValue("destinationPodName").Return(ipfixentities.NewInfoElementWithValue(ipfixentities.NewInfoElement("destinationPodName", 0, 0, ipfixregistry.AntreaEnterpriseID, 0), ""), false)
 		mockAggregationProcess.EXPECT().SetCorrelatedFieldsFilled(tc.flowRecord)
+		mockAggregationProcess.EXPECT().AreExternalFieldsFilled(*tc.flowRecord).Return(false)
+		sourcePodLabelsElement := ipfixentities.NewInfoElement("sourcePodLabels", 0, 0, ipfixregistry.AntreaEnterpriseID, 0)
+		mockIPFIXRegistry.EXPECT().GetInfoElement("sourcePodLabels", ipfixregistry.AntreaEnterpriseID).Return(sourcePodLabelsElement, nil)
+		sourcePodLabelsIE := ipfixentities.NewInfoElementWithValue(sourcePodLabelsElement, bytes.NewBufferString("").Bytes())
+		mockRecord.EXPECT().AddInfoElement(sourcePodLabelsIE).Return(nil)
+		destinationPodLabelsElement := ipfixentities.NewInfoElement("destinationPodLabels", 0, 0, ipfixregistry.AntreaEnterpriseID, 0)
+		mockIPFIXRegistry.EXPECT().GetInfoElement("destinationPodLabels", ipfixregistry.AntreaEnterpriseID).Return(ipfixentities.NewInfoElement("destinationPodLabels", 0, 0, ipfixregistry.AntreaEnterpriseID, 0), nil)
+		destinationPodLabelsIE := ipfixentities.NewInfoElementWithValue(destinationPodLabelsElement, bytes.NewBufferString("").Bytes())
+		mockRecord.EXPECT().AddInfoElement(destinationPodLabelsIE).Return(nil)
+		mockAggregationProcess.EXPECT().SetExternalFieldsFilled(tc.flowRecord)
 		mockAggregationProcess.EXPECT().IsExporterOfAggregatedRecordIPv4(*tc.flowRecord).Return(!tc.isIPv6)
 		mockAggregationProcess.EXPECT().IsAggregatedRecordIPv4(*tc.flowRecord).Return(!tc.isIPv6)
 
@@ -192,6 +212,10 @@ func TestFlowAggregator_sendTemplateSet(t *testing.T) {
 		for i, ie := range antreaDestinationStatsElementList {
 			elemList = append(elemList, ipfixentities.NewInfoElementWithValue(ipfixentities.NewInfoElement(ie, 0, 0, ipfixregistry.AntreaEnterpriseID, 0), nil))
 			mockIPFIXRegistry.EXPECT().GetInfoElement(ie, ipfixregistry.AntreaEnterpriseID).Return(elemList[i+len(ianaInfoElements)+len(ianaReverseInfoElements)+len(antreaInfoElements)+len(aggregatorElements)+len(antreaSourceStatsElementList)].Element, nil)
+		}
+		for i, ie := range antreaLabelsElementList {
+			elemList = append(elemList, ipfixentities.NewInfoElementWithValue(ipfixentities.NewInfoElement(ie, 0, 0, ipfixregistry.AntreaEnterpriseID, 0), nil))
+			mockIPFIXRegistry.EXPECT().GetInfoElement(ie, ipfixregistry.AntreaEnterpriseID).Return(elemList[i+len(ianaInfoElements)+len(ianaReverseInfoElements)+len(antreaInfoElements)+len(aggregatorElements)+len(antreaSourceStatsElementList)+len(antreaDestinationStatsElementList)].Element, nil)
 		}
 		mockTempSet.EXPECT().ResetSet()
 		mockTempSet.EXPECT().PrepareSet(ipfixentities.Template, testTemplateID).Return(nil)
