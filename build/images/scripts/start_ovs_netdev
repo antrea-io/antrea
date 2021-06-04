@@ -6,11 +6,10 @@ source daemon_status
 CONTAINER_NAME="antrea-ovs"
 OVS_DB_FILE="/var/run/openvswitch/conf.db"
 
-set -euo pipefail
-
-hwaddr=$(ip link show eth0 | grep link/ether | awk '{print $2}')
-inet=$(ip addr show eth0 | grep "inet " | awk '{ print $2 }')
-gw=$(ip route | grep default | awk '{ print $3 }')
+if ! ip addr show eth0 > /dev/null 2>&1; then
+    log_error $CONTAINER_NAME "No eth0 uplink found, exiting"
+    exit 1
+fi
 
 # Modify ovs-ctl so that the kernel module is no longer loaded since it is not
 # needed when using OVS in userspace mode. It also enables running OVS with the
@@ -23,7 +22,10 @@ function fix_ovs_ctl {
 # See http://docs.openvswitch.org/en/latest/howto/userspace-tunneling/
 function add_br_phy {
     log_info $CONTAINER_NAME "Creating OVS br-phy bridge for netdev datapath type"
-    ovs-vsctl --may-exist add-br br-phy \
+    hwaddr=$(ip link show eth0 | grep link/ether | awk '{print $2}')
+    inet=$(ip addr show eth0 | grep "inet " | awk '{ print $2 }')
+    gw=$(ip route | grep default | awk '{ print $3 }')
+    ovs-vsctl add-br br-phy \
               -- set Bridge br-phy datapath_type=netdev \
               -- br-set-external-id br-phy bridge-id br-phy \
               -- set bridge br-phy fail-mode=standalone \
@@ -39,6 +41,8 @@ function add_br_phy {
 }
 
 function del_br_phy {
+    inet=$(ip addr show br-phy | grep "inet " | awk '{ print $2 }')
+    gw=$(ip route | grep default | awk '{ print $3 }')
     log_info $CONTAINER_NAME "Deleting OVS br-phy bridge"
     ovs-vsctl del-port br-phy eth0
     ovs-vsctl del-br br-phy
@@ -75,6 +79,8 @@ function quit {
     exit 0
 }
 
+set -euo pipefail
+
 # Do not trap EXIT as it would then ignore the "exit 0" statement in quit and
 # exit with code 128 + SIGNAL
 trap "quit" INT TERM
@@ -88,6 +94,10 @@ chmod 0640 $OVS_DB_FILE
 
 if [[ "$#" -ge 1 ]] && [[ "$1" == "--start-ovs-only" ]]; then
   exit 0
+fi
+if ip addr show br-phy > /dev/null 2>&1; then
+    log_info $CONTAINER_NAME "OVS bridge br-phy already exists, attempting clean-up first"
+    del_br_phy || true
 fi
 add_br_phy
 
