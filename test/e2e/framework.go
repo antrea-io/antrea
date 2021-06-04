@@ -1562,15 +1562,15 @@ func (data *TestData) runPingCommandFromTestPod(podInfo podInfo, targetPodIPs *P
 		cmd = append(cmd, sizeOption, strconv.Itoa(size))
 	}
 	if targetPodIPs.ipv4 != nil {
-		cmd = append(cmd, targetPodIPs.ipv4.String())
-		if stdout, stderr, err := data.runCommandFromPod(testNamespace, podInfo.name, ctrName, cmd); err != nil {
-			return fmt.Errorf("error when running ping command: %v - stdout: %s - stderr: %s", err, stdout, stderr)
+		cmdV4 := append(cmd, "-4", targetPodIPs.ipv4.String())
+		if stdout, stderr, err := data.runCommandFromPod(testNamespace, podInfo.name, ctrName, cmdV4); err != nil {
+			return fmt.Errorf("error when running ping command '%s': %v - stdout: %s - stderr: %s", strings.Join(cmdV4, " "), err, stdout, stderr)
 		}
 	}
 	if targetPodIPs.ipv6 != nil {
-		cmd = append(cmd, "-6", targetPodIPs.ipv6.String())
-		if stdout, stderr, err := data.runCommandFromPod(testNamespace, podInfo.name, ctrName, cmd); err != nil {
-			return fmt.Errorf("error when running ping command: %v - stdout: %s - stderr: %s", err, stdout, stderr)
+		cmdV6 := append(cmd, "-6", targetPodIPs.ipv6.String())
+		if stdout, stderr, err := data.runCommandFromPod(testNamespace, podInfo.name, ctrName, cmdV6); err != nil {
+			return fmt.Errorf("error when running ping command '%s': %v - stdout: %s - stderr: %s", strings.Join(cmdV6, " "), err, stdout, stderr)
 		}
 	}
 	return nil
