@@ -380,6 +380,8 @@ github.com/jstemmer/go-junit-report v0.0.0-20190106144839-af01ea7f8024/go.mod h1
 github.com/jstemmer/go-junit-report v0.9.1/go.mod h1:Brl9GWCQeLvo8nXZwPNNblvFj/XSXhF0NWZEnDohbsk=
 github.com/jtolds/gls v4.20.0+incompatible/go.mod h1:QJZ7F/aHp+rZTRtaJ1ow/lLfFfVYBRgL+9YlvaHOwJU=
 github.com/julienschmidt/httprouter v1.2.0/go.mod h1:SYymIcj16QtmaHHD7aYtjjsJG7VTCxuUUipMqKk8s4w=
+github.com/k8snetworkplumbingwg/sriov-cni v2.1.0+incompatible h1:5comk9qUB9j99Oc+rvnm92RWWe9urdJ1TP3cXM3fmmc=
+github.com/k8snetworkplumbingwg/sriov-cni v2.1.0+incompatible/go.mod h1:sVTfViXOlaxc7X9fnixa5L1FQqEAybehD20yXyagYLE=
 github.com/kevinburke/ssh_config v0.0.0-20190725054713-01f96b0aa0cd h1:Coekwdh0v2wtGp9Gmz1Ze3eVRAWJMLokvN3QjdzCHLY=
 github.com/kevinburke/ssh_config v0.0.0-20190725054713-01f96b0aa0cd/go.mod h1:CT57kijsi8u/K/BOFA39wgDQJ9CxiF4nAY/ojJ6r6mM=
 github.com/kisielk/errcheck v1.1.0/go.mod h1:EZBBE59ingxPouuu3KfxchcWSUPOHkagtvWXihfKN4Q=
@@ -985,6 +987,8 @@ k8s.io/kube-openapi v0.0.0-20210305164622-f622666832c1 h1:bKbnE878105Y2291CtM1YO
 k8s.io/kube-openapi v0.0.0-20210305164622-f622666832c1/go.mod h1:wXW5VT87nVfh/iLV8FpR2uDvrFyomxbtb1KivDbvPTE=
 k8s.io/kubectl v0.21.0 h1:WZXlnG/yjcE4LWO2g6ULjFxtzK6H1TKzsfaBFuVIhNg=
 k8s.io/kubectl v0.21.0/go.mod h1:EU37NukZRXn1TpAkMUoy8Z/B2u6wjHDS4aInsDzVvks=
+k8s.io/kubelet v0.21.0 h1:1VUfM5vKqLPlWFI0zee6fm9kwIZ/UEOGCodVFN+OZrg=
+k8s.io/kubelet v0.21.0/go.mod h1:G5ZxMTVev9t4bhmsSxDAWhH6wXDYEVHVVFyYsw4laR4=
 k8s.io/metrics v0.21.0/go.mod h1:L3Ji9EGPP1YBbfm9sPfEXSpnj8i24bfQbAFAsW0NueQ=
 k8s.io/utils v0.0.0-20200410111917-5770800c2500/go.mod h1:sZAwmy6armz5eXlNoLmJcl4F1QuKu7sr+mFQ0byX7Ew=
 k8s.io/utils v0.0.0-20201110183641-67b214c5f920/go.mod h1:jPW/WVKK9YHAvNhRxK0md/EJ228hCsBRufyofKtW8HA=
