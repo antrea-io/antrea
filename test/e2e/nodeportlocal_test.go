@@ -135,7 +135,7 @@ func checkForNPLRuleInIPTables(t *testing.T, data *TestData, r *require.Assertio
 }
 
 func deleteNPLRuleFromIPTables(t *testing.T, data *TestData, r *require.Assertions, antreaPod string, rule nplRuleData) {
-	cmd := append([]string{"iptables", "-t", "nat", "-D", "ANTREA-NODE-PORT-LOCAL"}, buildRuleForPod(rule)...)
+	cmd := append([]string{"iptables", "-w", "10", "-t", "nat", "-D", "ANTREA-NODE-PORT-LOCAL"}, buildRuleForPod(rule)...)
 	t.Logf("Deleting iptables rule for %v", rule)
 	_, _, err := data.runCommandFromPod(antreaNamespace, antreaPod, agentContainerName, cmd)
 	r.NoError(err, "Error when deleting iptables rule")
@@ -376,6 +376,9 @@ func TestNPLMultiplePodsAgentRestart(t *testing.T) {
 	// Delete one iptables rule to ensure it gets re-installed correctly on restart.
 	nplAnnotations, testPodIP := getNPLAnnotations(t, testData, r, testPods[0])
 	r.Len(nplAnnotations, 1)
+	// Make sure the rule is present first. It should always be the case if the Pod was already
+	// annotated.
+	checkNPLRulesForPod(t, data, r, nplAnnotations, antreaPod, testPodIP, true)
 	ruleToDelete := nplRuleData{
 		nodePort: nplAnnotations[0].NodePort,
 		podIP:    testPodIP,
