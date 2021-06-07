@@ -81,7 +81,7 @@ func failOnError(err error, t *testing.T) {
 
 func warningOnTimeoutError(err error, t *testing.T) {
 	if err != nil {
-		log.Warningf("Timeout for getting expected status and the tests may get unexpted results.")
+		log.Warningf("Timeout for getting expected status and the tests may get unexpected results.")
 		t.Fatalf("test warned: %v", err)
 	}
 }
@@ -2535,6 +2535,9 @@ func waitForResourceDelete(namespace, name string, resource string, timeout time
 }
 
 func TestAntreaPolicy(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping TestAntreaPolicy in short mode")
+	}
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
