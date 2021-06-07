@@ -33,7 +33,6 @@ import (
 
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	legacycorev1a2 "antrea.io/antrea/pkg/legacyapis/core/v1alpha2"
-	legacysecurityv1alpha1 "antrea.io/antrea/pkg/legacyapis/security/v1alpha1"
 	legacysecv1alpha1 "antrea.io/antrea/pkg/legacyapis/security/v1alpha1"
 	. "antrea.io/antrea/test/e2e/utils"
 )
@@ -41,6 +40,29 @@ import (
 const (
 	mockWait = 900 * time.Millisecond
 )
+
+// TestLegacyAntreaPolicyStats is the top-level test which contains all subtests for
+// LegacyAntreaPolicyStats related test cases so they can share setup, teardown.
+func TestLegacyAntreaPolicyStats(t *testing.T) {
+	skipIfProviderIs(t, "kind", "This test is for legacy API groups and is almost the same as new API groups'.")
+	skipIfHasWindowsNodes(t)
+	skipIfAntreaPolicyDisabled(t)
+
+	data, err := setupTest(t)
+	if err != nil {
+		t.Fatalf("Error when setting up test: %v", err)
+	}
+	defer teardownTest(t, data)
+
+	t.Run("testLegacyANPNetworkPolicyStatsWithDropAction", func(t *testing.T) {
+		skipIfNetworkPolicyStatsDisabled(t)
+		testLegacyANPNetworkPolicyStatsWithDropAction(t, data)
+	})
+	t.Run("testLegacyAntreaClusterNetworkPolicyStats", func(t *testing.T) {
+		skipIfNetworkPolicyStatsDisabled(t)
+		testLegacyAntreaClusterNetworkPolicyStats(t, data)
+	})
+}
 
 func testLegacyMutateACNPNoTier(t *testing.T) {
 	invalidNpErr := fmt.Errorf("ACNP tier not mutated to default tier")
@@ -432,7 +454,7 @@ func testLegacyInvalidTierPriorityUpdate(t *testing.T) {
 		failOnError(fmt.Errorf("create Tier failed for tier prio-updated-tier: %v", err), t)
 	}
 	// Update this tier with new priority
-	newTier := legacysecurityv1alpha1.Tier{
+	newTier := legacysecv1alpha1.Tier{
 		ObjectMeta: oldTier.ObjectMeta,
 		Spec:       oldTier.Spec,
 	}
@@ -1535,7 +1557,7 @@ func testLegacyACNPPortRange(t *testing.T) {
 
 	var testSteps []*TestStep
 	testSteps = append(testSteps, &TestStep{
-		fmt.Sprintf("ACNP Drop Port 8080:8085"),
+		fmt.Sprint("ACNP Drop Port 8080:8085"),
 		reachability,
 		[]metav1.Object{builder.GetLegacy()},
 		nil,
@@ -1639,7 +1661,7 @@ func testLegacyANPPortRange(t *testing.T) {
 
 	var testSteps []*TestStep
 	testSteps = append(testSteps, &TestStep{
-		fmt.Sprintf("ANP Drop Port 8080:8085"),
+		fmt.Sprint("ANP Drop Port 8080:8085"),
 		reachability,
 		[]metav1.Object{builder.GetLegacy()},
 		nil,
@@ -1742,9 +1764,9 @@ func testLegacyAuditLoggingBasic(t *testing.T, data *TestData) {
 	assert.Equalf(t, true, strings.Contains(stdout, "test-log-acnp-deny"), "audit log does not contain entries for test-log-acnp-deny")
 
 	destinations := []string{"z/a", "z/b", "z/c"}
-	srcIPs, _ := podIPs["x/a"]
+	srcIPs := podIPs["x/a"]
 	for _, d := range destinations {
-		dstIPs, _ := podIPs[d]
+		dstIPs := podIPs[d]
 		for i := 0; i < len(srcIPs); i++ {
 			for j := 0; j < len(dstIPs); j++ {
 				if strings.Contains(srcIPs[i], ".") == strings.Contains(dstIPs[j], ".") {
@@ -2007,7 +2029,7 @@ func executeLegacyTestsWithData(t *testing.T, testList []*TestCase, data *TestDa
 				for _, port := range step.Port {
 					k8sUtils.Validate(allPods, reachability, port, step.Protocol)
 				}
-				step.Duration = time.Now().Sub(start)
+				step.Duration = time.Since(start)
 
 				_, wrong, _ := step.Reachability.Summary()
 				if wrong != 0 {
@@ -2142,11 +2164,14 @@ func cleanupLegacyTestCaseServicesAndGroups(t *testing.T, c *TestCase) {
 func TestLegacyAntreaPolicy(t *testing.T) {
 	skipIfProviderIs(t, "kind", "This test is for legacy API groups and is almost the same as new API groups'.")
 	skipIfHasWindowsNodes(t)
+	skipIfAntreaPolicyDisabled(t)
+
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
 	defer teardownTest(t, data)
+
 	initialize(t, data)
 
 	t.Run("TestGroupValidateAntreaNativePolicies", func(t *testing.T) {
@@ -2239,12 +2264,13 @@ func TestLegacyAntreaPolicy(t *testing.T) {
 func TestLegacyAntreaPolicyStatus(t *testing.T) {
 	skipIfProviderIs(t, "kind", "This test is for legacy API groups and is almost the same as new API groups'.")
 	skipIfHasWindowsNodes(t)
+	skipIfAntreaPolicyDisabled(t)
+
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
 	defer teardownTest(t, data)
-	skipIfAntreaPolicyDisabled(t, data)
 
 	_, _, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "server-0", controlPlaneNodeName(), testNamespace)
 	defer cleanupFunc()
@@ -2299,24 +2325,15 @@ func TestLegacyAntreaPolicyStatus(t *testing.T) {
 	assert.NoError(t, err, "Antrea ClusterNetworkPolicy failed to reach expected status")
 }
 
-// TestLegacyANPNetworkPolicyStatsWithDropAction tests antreanetworkpolicystats can correctly collect dropped packets stats from ANP if
+// testLegacyANPNetworkPolicyStatsWithDropAction tests antreanetworkpolicystats can correctly collect dropped packets stats from ANP if
 // networkpolicystats feature is enabled
-func TestLegacyANPNetworkPolicyStatsWithDropAction(t *testing.T) {
-	skipIfProviderIs(t, "kind", "This test is for legacy API groups and is almost the same as new API groups'.")
-	skipIfHasWindowsNodes(t)
-	data, err := setupTest(t)
-	if err != nil {
-		t.Fatalf("Error when setting up test: %v", err)
-	}
-	defer teardownTest(t, data)
-	skipIfAntreaPolicyDisabled(t, data)
-	skipIfNetworkPolicyStatsDisabled(t, data)
-
+func testLegacyANPNetworkPolicyStatsWithDropAction(t *testing.T, data *TestData) {
 	serverName, serverIPs, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "test-server-", "", testNamespace)
 	defer cleanupFunc()
 
 	clientName, _, cleanupFunc := createAndWaitForPod(t, data, data.createBusyboxPodOnNode, "test-client-", "", testNamespace)
 	defer cleanupFunc()
+	var err error
 	k8sUtils, err = NewKubernetesUtils(data)
 	failOnError(err, t)
 	p10 := float64(10)
@@ -2339,7 +2356,7 @@ func TestLegacyANPNetworkPolicyStatsWithDropAction(t *testing.T) {
 		cmd := []string{"/bin/sh", "-c", fmt.Sprintf("nc -vz -w 4 %s 80", serverIPs.ipv6.String())}
 		data.runCommandFromPod(testNamespace, clientName, busyboxContainerName, cmd)
 	}
-	var anp = &legacysecurityv1alpha1.NetworkPolicy{
+	var anp = &legacysecv1alpha1.NetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: "np1", Labels: map[string]string{"antrea-e2e": "np1"}},
 		Spec: crdv1alpha1.NetworkPolicySpec{
 			AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
@@ -2445,22 +2462,13 @@ func TestLegacyANPNetworkPolicyStatsWithDropAction(t *testing.T) {
 	k8sUtils.LegacyCleanup(namespaces)
 }
 
-func TestLegacyAntreaClusterNetworkPolicyStats(t *testing.T) {
-	skipIfProviderIs(t, "kind", "This test is for legacy API groups and is almost the same as new API groups'.")
-	skipIfHasWindowsNodes(t)
-	data, err := setupTest(t)
-	if err != nil {
-		t.Fatalf("Error when setting up test: %v", err)
-	}
-	defer teardownTest(t, data)
-	skipIfAntreaPolicyDisabled(t, data)
-	skipIfNetworkPolicyStatsDisabled(t, data)
-
+func testLegacyAntreaClusterNetworkPolicyStats(t *testing.T, data *TestData) {
 	serverName, serverIPs, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "test-server-", "", testNamespace)
 	defer cleanupFunc()
 
 	clientName, _, cleanupFunc := createAndWaitForPod(t, data, data.createBusyboxPodOnNode, "test-client-", "", testNamespace)
 	defer cleanupFunc()
+	var err error
 	k8sUtils, err = NewKubernetesUtils(data)
 	failOnError(err, t)
 	p10 := float64(10)

@@ -22,7 +22,11 @@ import (
 	"os"
 	"testing"
 	"time"
+
+	corev1 "k8s.io/api/core/v1"
 )
+
+var AntreaConfigMap *corev1.ConfigMap
 
 // setupLogging creates a temporary directory to export the test logs if necessary. If a directory
 // was provided by the user, it checks that the directory exists.
@@ -82,6 +86,7 @@ func testMain(m *testing.M) int {
 	flag.BoolVar(&testOptions.withBench, "benchtest", false, "Run tests include benchmark tests")
 	flag.BoolVar(&testOptions.enableCoverage, "coverage", false, "Run tests and measure coverage")
 	flag.StringVar(&testOptions.coverageDir, "coverage-dir", "", "Directory for coverage data files")
+	flag.StringVar(&testOptions.skipCases, "skip", "", "Key words to skip cases")
 	flag.Parse()
 
 	if err := initProvider(); err != nil {
@@ -115,7 +120,14 @@ func testMain(m *testing.M) int {
 		}
 		log.Printf("Num nodes: %d", clusterInfo.numNodes)
 	}
-
+	err := ensureAntreaRunning(testData)
+	if err != nil {
+		log.Fatalf("Error when deploying Antrea: %v", err)
+	}
+	AntreaConfigMap, err = testData.GetAntreaConfigMap(antreaNamespace)
+	if err != nil {
+		log.Fatalf("Error when getting antrea-config configmap: %v", err)
+	}
 	rand.Seed(time.Now().UnixNano())
 	defer testOptions.setupCoverage()
 	defer gracefulExitAntrea(testData)

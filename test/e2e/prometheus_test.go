@@ -80,6 +80,23 @@ func init() {
 	flag.BoolVar(&prometheusEnabled, "prometheus", false, "Enables Prometheus tests")
 }
 
+// TestPrometheus is the top-level test which contains all subtests for
+// Prometheus related test cases so they can share setup, teardown.
+func TestPrometheus(t *testing.T) {
+	skipIfPrometheusDisabled(t)
+	skipIfHasWindowsNodes(t)
+
+	data, err := setupTest(t)
+	if err != nil {
+		t.Fatalf("Error when setting up test: %v", err)
+	}
+	defer teardownTest(t, data)
+	t.Run("testPrometheusMetricsOnController", func(t *testing.T) { testPrometheusMetricsOnController(t, data) })
+	t.Run("testPrometheusMetricsOnAgent", func(t *testing.T) { testPrometheusMetricsOnAgent(t, data) })
+	t.Run("testPrometheusServerControllerMetrics", func(t *testing.T) { testPrometheusServerControllerMetrics(t, data) })
+	t.Run("testPrometheusServerAgentMetrics", func(t *testing.T) { testPrometheusServerAgentMetrics(t, data) })
+}
+
 // skipIfPrometheusDisabled checks if Prometheus testing enabled, skip otherwise
 func skipIfPrometheusDisabled(t *testing.T) {
 	if !prometheusEnabled {
@@ -230,33 +247,15 @@ func getPrometheusEndpoint(t *testing.T, data *TestData) (string, int32) {
 	return hostIP, nodePort
 }
 
-// TestPrometheusMetricsOnController validates that metrics are returned from Prometheus client on the Antrea Controller
+// testPrometheusMetricsOnController validates that metrics are returned from Prometheus client on the Antrea Controller
 // and checks that metrics in antreaControllerMetrics exists in the controller output
-func TestPrometheusMetricsOnController(t *testing.T) {
-	skipIfPrometheusDisabled(t)
-	skipIfHasWindowsNodes(t)
-
-	data, err := setupTest(t)
-	if err != nil {
-		t.Fatalf("Error when setting up test: %v", err)
-	}
-	defer teardownTest(t, data)
-
+func testPrometheusMetricsOnController(t *testing.T, data *TestData) {
 	testPrometheusMetricsOnPods(t, data, "antrea-controller", antreaControllerMetrics)
 }
 
-// TestPrometheusMetricsOnAgent validates that metrics are returned from Prometheus client on the Antrea Agent
+// testPrometheusMetricsOnAgent validates that metrics are returned from Prometheus client on the Antrea Agent
 // and checks that metrics in antreaAgentMetrics exists in the agent's output
-func TestPrometheusMetricsOnAgent(t *testing.T) {
-	skipIfPrometheusDisabled(t)
-	skipIfHasWindowsNodes(t)
-
-	data, err := setupTest(t)
-	if err != nil {
-		t.Fatalf("Error when setting up test: %v", err)
-	}
-	defer teardownTest(t, data)
-
+func testPrometheusMetricsOnAgent(t *testing.T, data *TestData) {
 	testPrometheusMetricsOnPods(t, data, "antrea-agent", antreaAgentMetrics)
 }
 
@@ -310,28 +309,10 @@ func testMetricsFromPrometheusServer(t *testing.T, data *TestData, prometheusJob
 	}
 }
 
-func TestPrometheusServerControllerMetrics(t *testing.T) {
-	skipIfPrometheusDisabled(t)
-	skipIfHasWindowsNodes(t)
-
-	data, err := setupTest(t)
-	if err != nil {
-		t.Fatalf("Error when setting up test: %v", err)
-	}
-	defer teardownTest(t, data)
-
+func testPrometheusServerControllerMetrics(t *testing.T, data *TestData) {
 	testMetricsFromPrometheusServer(t, data, "antrea-controllers", antreaControllerMetrics)
 }
 
-func TestPrometheusServerAgentMetrics(t *testing.T) {
-	skipIfPrometheusDisabled(t)
-	skipIfHasWindowsNodes(t)
-
-	data, err := setupTest(t)
-	if err != nil {
-		t.Fatalf("Error when setting up test: %v", err)
-	}
-	defer teardownTest(t, data)
-
+func testPrometheusServerAgentMetrics(t *testing.T, data *TestData) {
 	testMetricsFromPrometheusServer(t, data, "antrea-agents", antreaAgentMetrics)
 }

@@ -39,6 +39,7 @@ var (
 // TestAntreaApiserverTLSConfig tests Cipher Suite and TLSVersion config on Antrea apiserver, Controller side or Agent side.
 func TestAntreaApiserverTLSConfig(t *testing.T) {
 	skipIfHasWindowsNodes(t)
+	skipIfNotRequired(t, "mode-irrelevant")
 
 	data, err := setupTest(t)
 	if err != nil {
@@ -66,7 +67,9 @@ func TestAntreaApiserverTLSConfig(t *testing.T) {
 		{"AgentApiserver", agentPodName, agentContainerName, apis.AntreaAgentAPIPort, "Agent"},
 	}
 	for _, tc := range tests {
+		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			data.checkTLS(t, tc.podName, tc.containerName, tc.apiserver, tc.apiserverStr)
 		})
 	}

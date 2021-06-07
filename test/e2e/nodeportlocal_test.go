@@ -46,6 +46,22 @@ type nplRuleData struct {
 	podIP    string
 }
 
+// TestNodePortLocal is the top-level test which contains all subtests for
+// NodePortLocal related test cases so they can share setup, teardown.
+func TestNodePortLocal(t *testing.T) {
+	skipIfNotIPv4Cluster(t)
+	skipIfHasWindowsNodes(t)
+
+	data, err := setupTest(t)
+	if err != nil {
+		t.Fatalf("Error when setting up test: %v", err)
+	}
+	defer teardownTest(t, data)
+	t.Run("testNPLAddPod", func(t *testing.T) { testNPLAddPod(t, data) })
+	t.Run("testNPLMultiplePodsAgentRestart", func(t *testing.T) { testNPLMultiplePodsAgentRestart(t, data) })
+	t.Run("testNPLChangePortRangeAgentRestart", func(t *testing.T) { testNPLChangePortRangeAgentRestart(t, data) })
+}
+
 func getNPLAnnotation(t *testing.T, data *TestData, r *require.Assertions, testPodName string) (string, string) {
 	var nplAnn string
 	var testPodIP *PodIPs
@@ -214,16 +230,8 @@ func validatePortsInAnnotation(t *testing.T, r *require.Assertions, nplAnnotatio
 	r.Emptyf(targetPorts, "Target ports %v not found in Pod annotation", targetPorts)
 }
 
-func TestNPLAddPod(t *testing.T) {
-	skipIfNotIPv4Cluster(t)
-	skipIfHasWindowsNodes(t)
-
-	testData, err := setupTest(t)
-	if err != nil {
-		t.Fatalf("Error when setting up test: %v", err)
-	}
-	defer teardownTest(t, testData)
-	enableNPLInConfigmap(t, testData)
+func testNPLAddPod(t *testing.T, data *TestData) {
+	enableNPLInConfigmap(t, data)
 	t.Run("NPLTestMultiplePods", NPLTestMultiplePods)
 	t.Run("NPLTestPodAddMultiPort", NPLTestPodAddMultiPort)
 	t.Run("NPLTestLocalAccess", NPLTestLocalAccess)
@@ -373,20 +381,12 @@ func NPLTestLocalAccess(t *testing.T) {
 	checkNPLRulesForPod(t, testData, r, nplAnnotations, antreaPod, testPodIP, false)
 }
 
-// TestNPLMultiplePodsAndAgentRestart tests NodePortLocal functionalities after Antrea Agent restarts.
+// testNPLMultiplePodsAndAgentRestart tests NodePortLocal functionalities after Antrea Agent restarts.
 // - Create multiple Nginx Pods.
 // - Delete one of the NPL iptables rules.
 // - Restart Antrea Agent Pod.
 // - Verify Pod Annotation, iptables rules and traffic to test Pod.
-func TestNPLMultiplePodsAgentRestart(t *testing.T) {
-	skipIfNotIPv4Cluster(t)
-	skipIfHasWindowsNodes(t)
-
-	data, err := setupTest(t)
-	if err != nil {
-		t.Fatalf("Error when setting up test: %v", err)
-	}
-	defer teardownTest(t, data)
+func testNPLMultiplePodsAgentRestart(t *testing.T, data *TestData) {
 	enableNPLInConfigmap(t, data)
 	r := require.New(t)
 
@@ -397,11 +397,11 @@ func TestNPLMultiplePodsAgentRestart(t *testing.T) {
 
 	node := nodeName(0)
 	var testPods []string
-
+	var err error
 	for i := 0; i < 4; i++ {
 		testPodName := randName("test-pod-")
 		testPods = append(testPods, testPodName)
-		err = testData.createNginxPodOnNode(testPodName, testNamespace, node)
+		err = data.createNginxPodOnNode(testPodName, testNamespace, node)
 		r.NoError(err, "Error creating test Pod: %v", err)
 	}
 
@@ -445,20 +445,12 @@ func TestNPLMultiplePodsAgentRestart(t *testing.T) {
 
 }
 
-// TestNPLChangePortRangeAgentRestart tests NodePortLocal functionalities after changing port range.
+// testNPLChangePortRangeAgentRestart tests NodePortLocal functionalities after changing port range.
 // - Create multiple Nginx Pods.
 // - Change nplPortRange.
 // - Restart Antrea Agent Pods.
 // - Verify that updated port range is being used for NPL.
-func TestNPLChangePortRangeAgentRestart(t *testing.T) {
-	skipIfNotIPv4Cluster(t)
-	skipIfHasWindowsNodes(t)
-
-	data, err := setupTest(t)
-	if err != nil {
-		t.Fatalf("Error when setting up test: %v", err)
-	}
-	defer teardownTest(t, data)
+func testNPLChangePortRangeAgentRestart(t *testing.T, data *TestData) {
 	enableNPLInConfigmap(t, data)
 	r := require.New(t)
 
@@ -469,11 +461,11 @@ func TestNPLChangePortRangeAgentRestart(t *testing.T) {
 
 	node := nodeName(0)
 	var testPods []string
-
+	var err error
 	for i := 0; i < 4; i++ {
 		testPodName := randName("test-pod-")
 		testPods = append(testPods, testPodName)
-		err = testData.createNginxPodOnNode(testPodName, testNamespace, node)
+		err = data.createNginxPodOnNode(testPodName, testNamespace, node)
 		r.NoError(err, "Error Creating test Pod: %v", err)
 	}
 
