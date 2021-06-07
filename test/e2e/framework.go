@@ -399,7 +399,7 @@ func collectClusterInfo() error {
 
 	retrieveCIDRs := func(cmd string, reg string) ([]string, error) {
 		res := make([]string, 2)
-		rc, stdout, _, err := RunCommandOnNode(clusterInfo.controlPlaneNodeName, cmd)
+		rc, stdout, _, err := RunCommandOnNode(controlPlaneNodeName(), cmd)
 		if err != nil || rc != 0 {
 			return res, fmt.Errorf("error when running the following command `%s` on control-plane Node: %v, %s", cmd, err, stdout)
 		}
@@ -948,9 +948,7 @@ func (data *TestData) createBusyboxPodOnNode(name string, nodeName string) error
 // The Pod will be scheduled on the specified Node (if nodeName is not empty).
 func (data *TestData) createHostNetworkBusyboxPodOnNode(name string, nodeName string) error {
 	sleepDuration := 3600 // seconds
-	return data.createPodOnNode(name, nodeName, busyboxImage, []string{"sleep", strconv.Itoa(sleepDuration)}, nil, nil, nil, false, func(pod *corev1.Pod) {
-		pod.Spec.HostNetwork = true
-	})
+	return data.createPodOnNode(name, nodeName, busyboxImage, []string{"sleep", strconv.Itoa(sleepDuration)}, nil, nil, nil, true, nil)
 }
 
 // createBusyboxPod creates a Pod in the test namespace with a single busybox container.
