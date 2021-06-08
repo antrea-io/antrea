@@ -40,7 +40,6 @@ var (
 	addLiveTfAction     = "traceflow/addLiveTf"
 	showGraphAction     = "traceflow/showGraphAction"
 	runTraceAgainAction = "traceflow/runTraceAgain"
-	mostRecentTraceflow *crdv1alpha1.Traceflow
 )
 
 const (
@@ -167,7 +166,6 @@ func (p *antreaOctantPlugin) actionHandler(request *service.ActionRequest) error
 		}
 
 		updateIPHeader(tf, hasSrcPort, hasDstPort, srcPort, dstPort)
-		mostRecentTraceflow = tf
 		p.createTfCR(tf, request, context.Background(), tfName)
 		return nil
 	case addLiveTfAction:
@@ -289,7 +287,6 @@ func (p *antreaOctantPlugin) actionHandler(request *service.ActionRequest) error
 		}
 
 		updateIPHeader(tf, hasSrcPort, hasDstPort, srcPort, dstPort)
-		mostRecentTraceflow = tf
 		p.createTfCR(tf, request, context.Background(), tfName)
 		return nil
 	case showGraphAction:
@@ -319,7 +316,7 @@ func (p *antreaOctantPlugin) actionHandler(request *service.ActionRequest) error
 		return nil
 	case runTraceAgainAction:
 		// Check if traceflow has been run before
-		if mostRecentTraceflow == nil {
+		if p.lastTf == nil {
 			alert := action.CreateAlert(action.AlertTypeError,
 				`Failed to run traceflow again: Use 'START NEW TRACE' or 'START NEW LIVE-TRAFFIC TRACE' to 
 				run a traceflow before attempting to run a traceflow again.`,
@@ -327,13 +324,15 @@ func (p *antreaOctantPlugin) actionHandler(request *service.ActionRequest) error
 			request.DashboardClient.SendAlert(request.Context(), request.ClientID, alert)
 			return nil
 		}
+		tf := &crdv1alpha1.Traceflow{}
+		tf.Spec = p.lastTf.Spec
 
 		// Get name of new traceflow
-		temporaryRune := []rune(mostRecentTraceflow.Name)
-		mostRecentTraceflow.Name = string(temporaryRune[0:len(mostRecentTraceflow.Name)-15])
-		mostRecentTraceflow.Name += time.Now().Format(TIME_FORMAT_YYYYMMDD_HHMMSS)
+		temporaryRune := []rune(p.lastTf.Name)
+		tf.Name = string(temporaryRune[0:len(p.lastTf.Name)-15])
+		tf.Name += time.Now().Format(TIME_FORMAT_YYYYMMDD_HHMMSS)
 
-		p.createTfCR(mostRecentTraceflow, request, context.Background(), mostRecentTraceflow.Name)
+		p.createTfCR(tf, request, context.Background(), tf.Name)
 		return nil
 	default:
 		log.Fatalf("Failed to find defined handler after receiving action request for %s\n", pluginName)
@@ -730,8 +729,8 @@ func (p *antreaOctantPlugin) traceflowHandler(request service.Request) (componen
 		component.NewFormFieldHidden("action", runTraceAgainAction),
 	}}
 	runTraceAgain := component.Action{
-		Name: "Run Traceflow Again",
-		Title: "Run Traceflow Again",
+		Name: "Run Trace Again",
+		Title: "Run Trace Again",
 		Form: traceAgainForm,
 	}
 	card.SetBody(component.NewText(""))
