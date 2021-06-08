@@ -52,6 +52,19 @@ func (i *Initializer) prepareHostNetwork() error {
 	if err != nil {
 		return err
 	}
+	// To forward container traffic to physical network, Transparent HNSNetwork must have a physical adapter attached,
+	// otherwise creating it would fail with "The parameter is incorrect" if the provided adapter is virtual or "An
+	// adapter was not found" if no adapter is provided and no physical adapter is available on the host.
+	// If the discovered adapter is virtual, it likely means the physical adapter is already attached to another
+	// HNSNetwork. For example, docker may create HNSNetworks which attach to the physical adapter.
+	isVirtual, err := util.IsVirtualAdapter(adapter.Name)
+	if err != nil {
+		return err
+	}
+	if isVirtual {
+		klog.Errorf("Transparent HNSNetwork requires a physical adapter while the uplink interface \"%s\" is virtual, please detach it from other HNSNetworks and try again", adapter.Name)
+		return fmt.Errorf("uplink \"%s\" is not a physical adapter", adapter.Name)
+	}
 	i.nodeConfig.UplinkNetConfig.Name = adapter.Name
 	i.nodeConfig.UplinkNetConfig.MAC = adapter.HardwareAddr
 	i.nodeConfig.UplinkNetConfig.IP = i.nodeConfig.NodeIPAddr
