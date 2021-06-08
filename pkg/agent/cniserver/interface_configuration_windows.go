@@ -45,10 +45,13 @@ const (
 type ifConfigurator struct {
 	hnsNetwork *hcsshim.HNSNetwork
 	epCache    *sync.Map
-	ifCache    *sync.Map
 }
 
 func newInterfaceConfigurator(ovsDatapathType ovsconfig.OVSDatapathType, isOvsHardwareOffloadEnabled bool) (*ifConfigurator, error) {
+	hnsNetwork, err := hcsshim.GetHNSNetworkByName(util.LocalHNSNetwork)
+	if err != nil {
+		return nil, err
+	}
 	eps, err := hcsshim.HNSListEndpointRequest()
 	if err != nil {
 		return nil, err
@@ -59,27 +62,13 @@ func newInterfaceConfigurator(ovsDatapathType ovsconfig.OVSDatapathType, isOvsHa
 		epCache.Store(hnsEP.Name, hnsEP)
 	}
 	return &ifConfigurator{
-		epCache: epCache,
+		hnsNetwork: hnsNetwork,
+		epCache:    epCache,
 	}, nil
-
 }
 
 func (ic *ifConfigurator) addEndpoint(ep *hcsshim.HNSEndpoint) {
 	ic.epCache.Store(ep.Name, ep)
-}
-
-// ensureHNSNetwork checks if the target HNSNetwork is created on the node or not. If the HNSNetwork does not exit,
-// return error.
-func (ic *ifConfigurator) ensureHNSNetwork() error {
-	if ic.hnsNetwork != nil {
-		return nil
-	}
-	hnsNetwork, err := hcsshim.GetHNSNetworkByName(util.LocalHNSNetwork)
-	if err != nil {
-		return err
-	}
-	ic.hnsNetwork = hnsNetwork
-	return nil
 }
 
 func (ic *ifConfigurator) getEndpoint(name string) (*hcsshim.HNSEndpoint, bool) {
@@ -162,10 +151,6 @@ func (ic *ifConfigurator) configureContainerLink(
 
 // createContainerLink creates HNSEndpoint using the IP configuration in the IPAM result.
 func (ic *ifConfigurator) createContainerLink(endpointName string, result *current.Result, containerID, podName, podNamespace string) (hostLink *hcsshim.HNSEndpoint, err error) {
-	// Create a new Endpoint if not found.
-	if err := ic.ensureHNSNetwork(); err != nil {
-		return nil, err
-	}
 	containerIP, err := findContainerIPConfig(result.IPs)
 	if err != nil {
 		return nil, err
