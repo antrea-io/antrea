@@ -134,7 +134,7 @@ func TestTrafficEncapModeTypeNeedsEncapToPeer(t *testing.T) {
 	}
 }
 
-func TestTrafficEncapModeTypeNeedsRoutingToPeer(t *testing.T) {
+func TestTrafficEncapModeTypeNeedsDirectRoutingToPeer(t *testing.T) {
 	tests := []struct {
 		name    string
 		mode    TrafficEncapModeType
@@ -153,19 +153,9 @@ func TestTrafficEncapModeTypeNeedsRoutingToPeer(t *testing.T) {
 			expBool: false,
 		},
 		{
-			name:   "no-encap-mode-no-need-support",
+			name:   "no-encap-mode-need-direct-routing",
 			mode:   1,
 			peerIP: net.ParseIP("192.168.0.5"),
-			localIP: &net.IPNet{
-				IP:   net.IPv4(192, 168, 0, 1),
-				Mask: net.IPv4Mask(255, 255, 255, 0),
-			},
-			expBool: false,
-		},
-		{
-			name:   "no-encap-mode-need-support",
-			mode:   1,
-			peerIP: net.ParseIP("192.168.1.5"),
 			localIP: &net.IPNet{
 				IP:   net.IPv4(192, 168, 0, 1),
 				Mask: net.IPv4Mask(255, 255, 255, 0),
@@ -173,20 +163,30 @@ func TestTrafficEncapModeTypeNeedsRoutingToPeer(t *testing.T) {
 			expBool: true,
 		},
 		{
-			name:   "hybrid-mode",
-			mode:   2,
-			peerIP: net.ParseIP("192.168.0.5"),
+			name:   "no-encap-mode-no-need-direct-routing",
+			mode:   1,
+			peerIP: net.ParseIP("192.168.1.5"),
 			localIP: &net.IPNet{
 				IP:   net.IPv4(192, 168, 0, 1),
 				Mask: net.IPv4Mask(255, 255, 255, 0),
 			},
 			expBool: false,
 		},
+		{
+			name:   "hybrid-mode-need-direct-routing",
+			mode:   2,
+			peerIP: net.ParseIP("192.168.0.5"),
+			localIP: &net.IPNet{
+				IP:   net.IPv4(192, 168, 0, 1),
+				Mask: net.IPv4Mask(255, 255, 255, 0),
+			},
+			expBool: true,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			actualBool := tt.mode.NeedsRoutingToPeer(tt.peerIP, tt.localIP)
-			assert.Equal(t, tt.expBool, actualBool, "NeedsRoutingToPeer did not return correct result")
+			actualBool := tt.mode.NeedsDirectRoutingToPeer(tt.peerIP, tt.localIP)
+			assert.Equal(t, tt.expBool, actualBool, "NeedsDirectRoutingToPeer did not return correct result")
 		})
 	}
 }
