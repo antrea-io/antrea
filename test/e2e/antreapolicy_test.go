@@ -1944,7 +1944,10 @@ func testANPMultipleAppliedTo(t *testing.T, singleRule bool) {
 	}
 
 	t.Logf("Making the Policy apply to y/c by labeling it with the temporary label that matches the dummy AppliedTo")
-	podYC, _ := k8sUtils.GetPodByLabel("y", "c")
+	podYC, err := k8sUtils.GetPodByLabel("y", "c")
+	if err != nil {
+		t.Errorf("Failed to get Pod in Namespace y with label 'pod=c': %v", err)
+	}
 	podYC.Labels[tempLabel] = ""
 	podYC, err = k8sUtils.clientset.CoreV1().Pods(podYC.Namespace).Update(context.TODO(), podYC, metav1.UpdateOptions{})
 	assert.NoError(t, err)
@@ -1996,7 +1999,10 @@ func testAuditLoggingBasic(t *testing.T, data *TestData) {
 	k8sUtils.Probe("x", "a", "z", "c", p80, v1.ProtocolTCP)
 	time.Sleep(networkPolicyDelay)
 
-	podXA, _ := k8sUtils.GetPodByLabel("x", "a")
+	podXA, err := k8sUtils.GetPodByLabel("x", "a")
+	if err != nil {
+		t.Errorf("Failed to get Pod in Namespace x with label 'pod=a': %v", err)
+	}
 	// nodeName is guaranteed to be set at this stage, since the framework waits for all Pods to be in Running phase
 	nodeName := podXA.Spec.NodeName
 	antreaPodName, err := data.getAntreaPodOnNode(nodeName)
