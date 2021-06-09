@@ -36,9 +36,10 @@ import (
 )
 
 var (
-	addTfAction     = "traceflow/addTf"
-	addLiveTfAction = "traceflow/addLiveTf"
-	showGraphAction = "traceflow/showGraphAction"
+	addTfAction         = "traceflow/addTf"
+	addLiveTfAction     = "traceflow/addLiveTf"
+	showGraphAction     = "traceflow/showGraphAction"
+	runTraceAgainAction = "traceflow/runTraceAgain"
 )
 
 const (
@@ -95,7 +96,7 @@ func getDstType(tf *crdv1alpha1.Traceflow) string {
 	return ""
 }
 
-// actionHandler handlers clicks and actions from "Start New Trace", "Start New Live-traffic Trace" and "Generate Trace Graph" buttons.
+// actionHandler handlers clicks and actions from "Start New Trace", "Start New Live-traffic Trace",  "Generate Trace Graph", and "Run Trace Again" buttons
 func (p *antreaOctantPlugin) actionHandler(request *service.ActionRequest) error {
 	actionName, err := request.Payload.String("action")
 	if err != nil {
@@ -312,6 +313,26 @@ func (p *antreaOctantPlugin) actionHandler(request *service.ActionRequest) error
 			alertPrinter(request, "Failed to generate traceflow graph "+name, "Failed to generate traceflow graph", nil, err)
 			return nil
 		}
+		return nil
+	case runTraceAgainAction:
+		// Check if traceflow has been run before
+		if p.lastTf == nil {
+			alert := action.CreateAlert(action.AlertTypeError,
+				`Failed to run traceflow again: Use 'START NEW TRACE' or 'START NEW LIVE-TRAFFIC TRACE' to 
+				run a traceflow before attempting to run a traceflow again.`,
+				action.DefaultAlertExpiration)
+			request.DashboardClient.SendAlert(request.Context(), request.ClientID, alert)
+			return nil
+		}
+		tf := &crdv1alpha1.Traceflow{}
+		tf.Spec = p.lastTf.Spec
+
+		// Get name of new traceflow
+		temporaryRune := []rune(p.lastTf.Name)
+		tf.Name = string(temporaryRune[0:len(p.lastTf.Name)-15])
+		tf.Name += time.Now().Format(TIME_FORMAT_YYYYMMDD_HHMMSS)
+
+		p.createTfCR(tf, request, context.Background(), tf.Name)
 		return nil
 	default:
 		log.Fatalf("Failed to find defined handler after receiving action request for %s\n", pluginName)
@@ -702,10 +723,21 @@ func (p *antreaOctantPlugin) traceflowHandler(request service.Request) (componen
 		Title: "Generate Trace Graph",
 		Form:  graphForm,
 	}
+
+	// Run the previous traceflow again.
+	traceAgainForm := component.Form{Fields: []component.FormField{
+		component.NewFormFieldHidden("action", runTraceAgainAction),
+	}}
+	runTraceAgain := component.Action{
+		Name: "Run Trace Again",
+		Title: "Run Trace Again",
+		Form: traceAgainForm,
+	}
 	card.SetBody(component.NewText(""))
 	card.AddAction(addTf)
 	card.AddAction(addLiveTf)
 	card.AddAction(genGraph)
+	card.AddAction(runTraceAgain)
 
 	graphCard := component.NewCard(component.TitleFromString("Antrea Traceflow Graph"))
 	if p.lastTf.Name != "" {

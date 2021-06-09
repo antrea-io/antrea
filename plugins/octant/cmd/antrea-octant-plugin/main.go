@@ -73,7 +73,7 @@ func main() {
 	a := newAntreaOctantPlugin()
 
 	capabilities := &plugin.Capabilities{
-		ActionNames: []string{addTfAction, addLiveTfAction, showGraphAction},
+		ActionNames: []string{addTfAction, addLiveTfAction, showGraphAction, runTraceAgainAction},
 		IsModule:    true,
 	}
 
