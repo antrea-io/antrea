@@ -18,6 +18,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sync"
 
 	"github.com/vmware-tanzu/octant/pkg/navigation"
 	"github.com/vmware-tanzu/octant/pkg/plugin"
@@ -39,8 +40,12 @@ const (
 
 type antreaOctantPlugin struct {
 	client *clientset.Clientset
-	graph  string
-	lastTf *crdv1alpha1.Traceflow
+	// tfMutex protects the Traceflow state in case of multiple client
+	// sessions concurrently accessing the Traceflow functionality of the
+	// Antrea plugin.
+	tfMutex sync.Mutex
+	graph   string
+	lastTf  *crdv1alpha1.Traceflow
 }
 
 func newAntreaOctantPlugin() *antreaOctantPlugin {

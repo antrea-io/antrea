@@ -103,6 +103,10 @@ func (p *antreaOctantPlugin) actionHandler(request *service.ActionRequest) error
 		log.Printf("Failed to get input at string: %s\n", err)
 		return nil
 	}
+
+	p.tfMutex.Lock()
+	defer p.tfMutex.Unlock()
+
 	switch actionName {
 	case addTfAction:
 		srcNamespace, err := checkNamespace(request)
@@ -329,7 +333,7 @@ func (p *antreaOctantPlugin) actionHandler(request *service.ActionRequest) error
 
 		// Get name of new traceflow
 		temporaryRune := []rune(p.lastTf.Name)
-		tf.Name = string(temporaryRune[0:len(p.lastTf.Name)-15])
+		tf.Name = string(temporaryRune[0 : len(p.lastTf.Name)-15])
 		tf.Name += time.Now().Format(TIME_FORMAT_YYYYMMDD_HHMMSS)
 
 		p.createTfCR(tf, request, context.Background(), tf.Name)
@@ -729,15 +733,18 @@ func (p *antreaOctantPlugin) traceflowHandler(request service.Request) (componen
 		component.NewFormFieldHidden("action", runTraceAgainAction),
 	}}
 	runTraceAgain := component.Action{
-		Name: "Run Trace Again",
+		Name:  "Run Trace Again",
 		Title: "Run Trace Again",
-		Form: traceAgainForm,
+		Form:  traceAgainForm,
 	}
 	card.SetBody(component.NewText(""))
 	card.AddAction(addTf)
 	card.AddAction(addLiveTf)
 	card.AddAction(genGraph)
 	card.AddAction(runTraceAgain)
+
+	p.tfMutex.Lock()
+	defer p.tfMutex.Unlock()
 
 	graphCard := component.NewCard(component.TitleFromString("Antrea Traceflow Graph"))
 	if p.lastTf.Name != "" {
