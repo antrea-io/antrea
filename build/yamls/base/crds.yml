@@ -19,7 +19,11 @@ spec:
             type: object
             required:
             - appliedTo
-            - egressIP
+            anyOf:
+            - required:
+              - egressIP
+            - required:
+              - externalIPPool
             properties:
               appliedTo:
                 type: object
@@ -75,6 +79,8 @@ spec:
                 oneOf:
                 - format: ipv4
                 - format: ipv6
+              externalIPPool:
+                type: string
     additionalPrinterColumns:
     - description: Specifies the SNAT IP address for the selected workloads.
       jsonPath: .spec.egressIP
@@ -90,6 +96,83 @@ spec:
     kind: Egress
     shortNames:
     - eg
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: externalippools.crd.antrea.io
+spec:
+  group: crd.antrea.io
+  versions:
+    - name: v1alpha2
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          required:
+            - spec
+          properties:
+            spec:
+              type: object
+              required:
+                - ipRanges
+                - nodeSelector
+              properties:
+                ipRanges:
+                  type: array
+                  items:
+                    type: object
+                    oneOf:
+                      - required:
+                          - cidr
+                      - required:
+                          - start
+                          - end
+                    properties:
+                      cidr:
+                        type: string
+                        format: cidr
+                      start:
+                        type: string
+                        oneOf:
+                          - format: ipv4
+                          - format: ipv6
+                      end:
+                        type: string
+                        oneOf:
+                          - format: ipv4
+                          - format: ipv6
+                nodeSelector:
+                  type: object
+                  properties:
+                    matchExpressions:
+                      items:
+                        properties:
+                          key:
+                            type: string
+                          operator:
+                            enum:
+                              - In
+                              - NotIn
+                              - Exists
+                              - DoesNotExist
+                            type: string
+                          values:
+                            items:
+                              type: string
+                            type: array
+                        type: object
+                      type: array
+                    matchLabels:
+                      x-kubernetes-preserve-unknown-fields: true
+  scope: Cluster
+  names:
+    plural: externalippools
+    singular: externalippool
+    kind: ExternalIPPool
+    shortNames:
+      - eip
 ---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
