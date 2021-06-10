@@ -29,7 +29,7 @@ import (
 	"github.com/vmware-tanzu/octant/pkg/view/component"
 	"github.com/vmware-tanzu/octant/pkg/view/flexlayout"
 	"k8s.io/apimachinery/pkg/api/validation"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	"antrea.io/antrea/pkg/graphviz"
@@ -300,7 +300,7 @@ func (p *antreaOctantPlugin) actionHandler(request *service.ActionRequest) error
 		name := traceName[0]
 		// Invoke GenGraph to show
 		ctx := context.Background()
-		tf, err := p.client.CrdV1alpha1().Traceflows().Get(ctx, name, v1.GetOptions{})
+		tf, err := p.client.CrdV1alpha1().Traceflows().Get(ctx, name, metav1.GetOptions{})
 		if err != nil {
 			alertPrinter(request, invalidInputMsg+"failed to get traceflow CRD "+name,
 				"Failed to get traceflow CRD", nil, err)
@@ -329,7 +329,7 @@ func (p *antreaOctantPlugin) actionHandler(request *service.ActionRequest) error
 
 		// Get name of new traceflow
 		temporaryRune := []rune(p.lastTf.Name)
-		tf.Name = string(temporaryRune[0:len(p.lastTf.Name)-15])
+		tf.Name = string(temporaryRune[0 : len(p.lastTf.Name)-15])
 		tf.Name += time.Now().Format(TIME_FORMAT_YYYYMMDD_HHMMSS)
 
 		p.createTfCR(tf, request, context.Background(), tf.Name)
@@ -528,7 +528,7 @@ func validateIP(request *service.ActionRequest, ipStr string, ipType string) err
 
 func initTfSpec(tfName string, source crdv1alpha1.Source, destination crdv1alpha1.Destination, protocol string) *crdv1alpha1.Traceflow {
 	return &crdv1alpha1.Traceflow{
-		ObjectMeta: v1.ObjectMeta{
+		ObjectMeta: metav1.ObjectMeta{
 			Name: tfName,
 		},
 		Spec: crdv1alpha1.TraceflowSpec{
@@ -560,7 +560,7 @@ func alertPrinter(request *service.ActionRequest, logMsg string, alertMsg string
 
 func (p *antreaOctantPlugin) createTfCR(tf *crdv1alpha1.Traceflow, request *service.ActionRequest, ctx context.Context, tfName string) {
 	log.Printf("Get user input successfully, traceflow: %+v\n", tf)
-	tf, err := p.client.CrdV1alpha1().Traceflows().Create(ctx, tf, v1.CreateOptions{})
+	tf, err := p.client.CrdV1alpha1().Traceflows().Create(ctx, tf, metav1.CreateOptions{})
 	if err != nil {
 		alertPrinter(request, invalidInputMsg+"Failed to create traceflow CRD "+tfName,
 			"Failed to create traceflow CRD", nil, err)
@@ -574,7 +574,7 @@ func (p *antreaOctantPlugin) createTfCR(tf *crdv1alpha1.Traceflow, request *serv
 	go func(tfName string) {
 		age := time.Second * 300
 		time.Sleep(age)
-		err := p.client.CrdV1alpha1().Traceflows().Delete(context.Background(), tfName, v1.DeleteOptions{})
+		err := p.client.CrdV1alpha1().Traceflows().Delete(context.Background(), tfName, metav1.DeleteOptions{})
 		if err != nil {
 			log.Printf("Failed to delete traceflow CRD \"%s\", err: %s\n", tfName, err)
 			return
@@ -729,9 +729,9 @@ func (p *antreaOctantPlugin) traceflowHandler(request service.Request) (componen
 		component.NewFormFieldHidden("action", runTraceAgainAction),
 	}}
 	runTraceAgain := component.Action{
-		Name: "Run Trace Again",
+		Name:  "Run Trace Again",
 		Title: "Run Trace Again",
-		Form: traceAgainForm,
+		Form:  traceAgainForm,
 	}
 	card.SetBody(component.NewText(""))
 	card.AddAction(addTf)
@@ -744,7 +744,7 @@ func (p *antreaOctantPlugin) traceflowHandler(request service.Request) (componen
 		// Invoke GenGraph to show
 		log.Printf("Generating content from CRD...\n")
 		ctx := context.Background()
-		tf, err := p.client.CrdV1alpha1().Traceflows().Get(ctx, p.lastTf.Name, v1.GetOptions{})
+		tf, err := p.client.CrdV1alpha1().Traceflows().Get(ctx, p.lastTf.Name, metav1.GetOptions{})
 		if err != nil {
 			log.Printf("Failed to get latest CRD, using traceflow results cache, last traceflow name: %s, err: %s\n", p.lastTf.Name, err)
 			p.graph, err = graphviz.GenGraph(p.lastTf)
@@ -801,14 +801,15 @@ func (p *antreaOctantPlugin) traceflowHandler(request service.Request) (componen
 func (p *antreaOctantPlugin) getTfTable(request service.Request) *component.Table {
 	tfsItems := p.getSortedTfItems()
 	tfRows := make([]component.TableRow, 0)
-	for _, tf := range tfsItems {
+	for idx := range tfsItems {
+		tf := &tfsItems[idx]
 		tfRows = append(tfRows, component.TableRow{
 			tfNameCol:       component.NewLink(tf.Name, tf.Name, octantTraceflowCRDPath+tf.Name),
 			srcNamespaceCol: component.NewText(tf.Spec.Source.Namespace),
 			srcPodCol:       component.NewText(tf.Spec.Source.Pod),
 			dstNamespaceCol: component.NewText(tf.Spec.Destination.Namespace),
-			dstTypeCol:      component.NewText(getDstType(&tf)),
-			dstCol:          component.NewText(getDstName(&tf)),
+			dstTypeCol:      component.NewText(getDstType(tf)),
+			dstCol:          component.NewText(getDstName(tf)),
 			protocolCol:     component.NewText(crdv1alpha1.ProtocolsToString[tf.Spec.Packet.IPHeader.Protocol]),
 			phaseCol:        component.NewText(string(tf.Status.Phase)),
 			ageCol:          component.NewTimestamp(tf.CreationTimestamp.Time),
@@ -820,7 +821,7 @@ func (p *antreaOctantPlugin) getTfTable(request service.Request) *component.Tabl
 
 func (p *antreaOctantPlugin) getSortedTfItems() []crdv1alpha1.Traceflow {
 	ctx := context.Background()
-	tfs, err := p.client.CrdV1alpha1().Traceflows().List(ctx, v1.ListOptions{ResourceVersion: "0"})
+	tfs, err := p.client.CrdV1alpha1().Traceflows().List(ctx, metav1.ListOptions{ResourceVersion: "0"})
 	if err != nil {
 		log.Fatalf("Failed to get traceflows: %v\n", err)
 		return nil
