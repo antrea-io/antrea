@@ -604,6 +604,18 @@ function garbage_collection() {
     echo "=== Auto cleanup finished ==="
 }
 
+function clean_tmp() {
+    echo "===== Clean up stale files & folders older than 7 days under /tmp ====="
+    CLEAN_LIST=(
+        "*codecov*"
+        "kustomize-*"
+        "*antrea*"
+        "go-build*"
+    )
+    for item in "${CLEAN_LIST[@]}"; do
+        find /tmp -name "${item}" -mtime +7 -exec rm -rf {} \; 2>&1 | grep -v "Permission denied" || true
+    done
+}
 
 # ensures that the script can be run from anywhere
 THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
@@ -614,6 +626,7 @@ SCP_WITH_ANTREA_CI_KEY="scp -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyC
 SSH_WITH_ANTREA_CI_KEY="ssh -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i ${GIT_CHECKOUT_DIR}/jenkins/key/antrea-ci-key"
 SSH_WITH_UTILS_KEY="ssh -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i ${WORKDIR}/utils/key"
 
+clean_tmp
 if [[ "$RUN_GARBAGE_COLLECTION" == true ]]; then
     garbage_collection
     exit 0
