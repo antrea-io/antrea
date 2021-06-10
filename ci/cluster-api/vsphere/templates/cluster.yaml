@@ -37,14 +37,14 @@ spec:
     cloneMode: linkedClone
     datacenter: DATACENTERNAME
     datastore: WorkloadDatastore
-    diskGiB: 25
+    diskGiB: 40
     folder: antrea
     memoryMiB: 8192
     network:
       devices:
       - dhcp4: true
         networkName: NETWORKNAME
-    numCPUs: 2
+    numCPUs: 3
     resourcePool: RESOURCEPOOLPATH
     server: VCENTERNAME
     template: capv-haproxy-v0.6.3
@@ -99,14 +99,14 @@ spec:
       cloneMode: linkedClone
       datacenter: DATACENTERNAME
       datastore: WorkloadDatastore
-      diskGiB: 25
+      diskGiB: 40
       folder: antrea
       memoryMiB: 8192
       network:
         devices:
         - dhcp4: true
           networkName: NETWORKNAME
-      numCPUs: 2
+      numCPUs: 3
       resourcePool: RESOURCEPOOLPATH
       server: VCENTERNAME
       template: OVATEMPLATENAME
