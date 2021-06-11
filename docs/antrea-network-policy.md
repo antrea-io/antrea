@@ -254,6 +254,40 @@ spec:
           port: 5978
       name: DropToThirdParty
       enableLogging: true
+---
+apiVersion: crd.antrea.io/v1alpha1
+kind: ClusterNetworkPolicy
+metadata:
+  name: default-ns-isolation
+spec:
+  priority: 2
+  tier: baseline
+  appliedTo:
+    - namespaceSelector: {}       # Selects all Namespaces in the cluster
+  ingress:
+    - action: Allow
+      from:
+        - namespaces:
+            match: self           # Allow from Pods from same Namespace
+      name: AllowFromSameNS
+      enableLogging: false
+    - action: Drop
+      from:
+        - namespaceSelector: {}   # Drop from Pods from other all Namespaces
+      name: DropFromAllOtherNS
+      enableLogging: true
+  egress:
+    - action: Allow
+      to:
+        - namespaces:
+            match: self           # Allow to Pods from same Namespace
+      name: AllowToSameNS
+      enableLogging: false
+    - action: Drop
+      to:
+        - namespaceSelector: {}   # Drop to Pods from all other Namespaces
+      name: DropToAllOtherNS
+      enableLogging: true
 ```
 
 **spec**: The ClusterNetworkPolicy `spec` has all the information needed to
@@ -365,18 +399,29 @@ Usage of ClusterGroups along with stand-alone selectors is not allowed.
 
 ### Behavior of *to* and *from* selectors
 
-There are four kinds of selectors that can be specified in an ingress `from`
+There are five kinds of selectors that can be specified in an ingress `from`
 section or egress `to` section:
 
 **podSelector**: This selects particular Pods from all Namespaces as "sources",
 if set in `ingress` section, or as "destinations", if set in `egress` section.
 
 **namespaceSelector**: This selects particular Namespaces for which all Pods
-are grouped as `ingress` "sources" or `egress` "destinations".
+are grouped as `ingress` "sources" or `egress` "destinations". Cannot be set
+with `namespaces` field.
 
 **podSelector** and **namespaceSelector**:  A single to/from entry that
 specifies both namespaceSelector and podSelector selects particular Pods within
 particular Namespaces.
+
+**namespaces**: A `namespaces` field allows users to perform advanced matching on
+Namespace objects which cannot be done via label selectors. Currently, the
+`namespaces` field has only one matching strategy, `self`. If set to `self`, it indicates
+that the corresponding `podSelector` (or all Pods if `podSelector` is not set)
+should be evaluated from within the Namespace of the applied to workload, for which
+the ingress/egress rule is currently affected. This enables policy writers to create
+per-Namespace rules within a single policy. See the third example YAML above.
+This field is optional and cannot be set along with a `namespaceSelector` within the
+same peer.
 
 **ipBlock**: This selects particular IP CIDR ranges to allow as `ingress`
 "sources" or `egress` "destinations". These should be cluster-external IPs,
@@ -491,6 +536,8 @@ policy CRDs.
   NetworkPolicy is created. This behavior is similar to the K8s NetworkPolicy.
 - Antrea NetworkPolicy only supports stand-alone selectors. i.e. no support for
   ClusterGroup references.
+- Antrea NetworkPolicy does not support `namespaces` field within a peer, as ANP
+  themselves are scoped to a single Namespace.
 
 ### kubectl commands for Antrea NetworkPolicy
 
@@ -671,6 +718,7 @@ can be set for a ClusterGroup, i.e. a single ClusterGroup can either group workl
 represent IP CIDRs or select other ClusterGroups. A parent ClusterGroup can select different
 types of ClusterGroups (Pod/Service/CIDRs), but as mentioned above, it cannot select a
 ClusterGroup that has childGroups itself.
+- A ClusterGroup cannot be set with `namespaces` field.
 
 **spec**: The ClusterGroup `spec` has all the information needed to define a
 cluster-wide group.
