@@ -1,8 +1,8 @@
-Host CONTROLPLANENODE
+Host SSHCONFIGNODENAME
     SendEnv LANG LC_*
     HashKnownHosts yes
     GSSAPIAuthentication yes
     GSSAPIDelegateCredentials no
-    HostName CONTROLPLANENODEIP
+    HostName SSHCONFIGNODEIP
     Port 22
     User capv
