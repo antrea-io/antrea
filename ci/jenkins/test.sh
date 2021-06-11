@@ -499,6 +499,20 @@ function run_install_windows_ovs {
     fi
 }
 
+function clean_tmp() {
+    echo "===== Clean up stale files & folders older than 7 days under /tmp ====="
+    CLEAN_LIST=(
+        "*codecov*"
+        "kustomize-*"
+        "*antrea*"
+        "go-build*"
+    )
+    for item in "${CLEAN_LIST[@]}"; do
+        find /tmp -name "${item}" -mtime +7 -exec rm -rf {} \; 2>&1 | grep -v "Permission denied" || true
+    done
+}
+
+clean_tmp
 if [[ ${TESTCASE} == "windows-install-ovs" ]]; then
     run_install_windows_ovs
     if [[ ${TEST_FAILURE} == true ]]; then
