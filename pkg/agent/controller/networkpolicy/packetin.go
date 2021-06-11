@@ -59,6 +59,7 @@ const (
 
 var (
 	AntreaPolicyLogger *log.Logger
+	logDeduplication map[string]*logDedup
 )
 
 // logInfo will be set by retrieving info from packetin and register
@@ -71,6 +72,14 @@ type logInfo struct {
 	destIP      string // destination IP of the traffic logged
 	pktLength   uint16 // packet length of packetin
 	protocolStr string // protocol of the traffic logged
+}
+
+// TODO
+type logDedup struct {
+	count		int64
+	dupLogInfo	string
+	initTime	time.Time
+	bufferTimer	*time.Timer
 }
 
 // initLogger is called while newing Antrea network policy agent controller.
@@ -92,6 +101,7 @@ func initLogger() error {
 	}
 	AntreaPolicyLogger = log.New(logOutput, "", log.Ldate|log.Lmicroseconds)
 	klog.V(2).Infof("Initialized Antrea-native Policy Logger for audit logging with log file '%s'", logFile)
+	logDeduplication = make(map[string]*logDedup)
 	return nil
 }
 
@@ -147,8 +157,30 @@ func (c *Controller) logPacket(pktIn *ofctrl.PacketIn) error {
 		return fmt.Errorf("received error while handling packetin for NetworkPolicy: %v", err)
 	}
 
-	// Store log file
-	AntreaPolicyLogger.Printf("%s %s %s %s SRC: %s DEST: %s %d %s", ob.tableName, ob.npRef, ob.disposition, ob.ofPriority, ob.srcIP, ob.destIP, ob.pktLength, ob.protocolStr)
+	// TODO
+	logMsg := fmt.Sprintf("%s %s %s %s SRC: %s DEST: %s %d %s", ob.tableName, ob.npRef, ob.disposition, ob.ofPriority, ob.srcIP, ob.destIP, ob.pktLength, ob.protocolStr)
+	if ob.disposition == openflow.DispositionToString[openflow.DispositionAllow] {
+		AntreaPolicyLogger.Printf(logMsg)
+	} else {
+		_, ok := logDeduplication[logMsg]
+		if ok {
+			logDeduplication[logMsg].count++
+			logDeduplication[logMsg].bufferTimer.Reset(time.Second)
+		} else {
+			record := logDedup{1,logMsg, time.Now(), time.NewTimer(time.Second)}
+
+			go func(r *logDedup) {
+				<- r.bufferTimer.C
+				if r.count == 1 {
+					AntreaPolicyLogger.Printf(logMsg)
+				} else {
+					AntreaPolicyLogger.Printf("<-%d %d-> %s", r.count, time.Since(r.initTime), logDeduplication[r.dupLogInfo])
+				}
+			}(&record)
+
+			logDeduplication[logMsg] = &record
+		}
+	}
 	return nil
 }
 
