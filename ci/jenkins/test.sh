@@ -428,7 +428,22 @@ function run_e2e_windows {
     mkdir -p "${WORKDIR}/.kube"
     mkdir -p "${WORKDIR}/.ssh"
     cp -f "${WORKDIR}/kube.conf" "${WORKDIR}/.kube/config"
-    cp -f "${WORKDIR}/ssh-config" "${WORKDIR}/.ssh/config"
+    echo "=== Generate ssh-config ==="
+    SSH_CONFIG_DST="${WORKDIR}/.ssh/config"
+    kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 != role {print $1}' | while read sshconfig_nodename; do
+        echo "Generating ssh-config for Node ${sshconfig_nodename}"
+        sshconfig_nodeip="$(kubectl get node "${sshconfig_nodename}" -o jsonpath='{.status.addresses[0].address}')"
+        cp ci/jenkins/ssh-config "${SSH_CONFIG_DST}.new"
+        sed -i "s/SSHCONFIGNODEIP/${sshconfig_nodeip}/g" "${SSH_CONFIG_DST}.new"
+        sed -i "s/SSHCONFIGNODENAME/${sshconfig_nodename}/g" "${SSH_CONFIG_DST}.new"
+        if [[ "${sshconfig_nodename}" =~ "win" ]]; then
+            sed -i "s/capv/administrator/g" "${SSH_CONFIG_DST}.new"
+        else
+            sed -i "s/capv/jenkins/g" "${SSH_CONFIG_DST}.new"
+        fi
+        echo "    IdentityFile ${WORKDIR}/.ssh/id_rsa" >> "${SSH_CONFIG_DST}.new"
+        cat "${SSH_CONFIG_DST}.new" >> "${SSH_CONFIG_DST}"
+    done
 
     set +e
     mkdir -p `pwd`/antrea-test-logs
