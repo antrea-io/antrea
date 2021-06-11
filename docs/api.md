@@ -33,7 +33,7 @@ These are the API group versions which are curently available when using Antrea.
 | API group | API version | API Service? | Introduced in | Deprecated in | Removed in |
 |---|---|---|---|---|---|
 | `core.antrea.tanzu.vmware.com` | `v1alpha1` | No | v0.8.0 | v0.11.0 | v0.11.0 |
-| `networking.antrea.tanzu.vmware.com` | `v1beta1` | Yes | v0.3.0 | v0.10.0 | v1.2.0 | 
+| `networking.antrea.tanzu.vmware.com` | `v1beta1` | Yes | v0.3.0 | v0.10.0 | v1.2.0 |
 
 ## API renaming from `*.antrea.tanzu.vmware.com` to `*.antrea.io`
 
