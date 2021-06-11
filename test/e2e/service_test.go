@@ -48,7 +48,7 @@ func TestClusterIPHostAccess(t *testing.T) {
 
 	curlSvc := func(node string) {
 		// Retry is needed for rules to be installed by kube-proxy/antrea-proxy.
-		cmd := fmt.Sprintf("curl --connect-timeout 1 --retry 5 %s:80", svc.Spec.ClusterIP)
+		cmd := fmt.Sprintf("curl --connect-timeout 1 --retry 5 --retry-connrefused %s:80", svc.Spec.ClusterIP)
 		rc, stdout, stderr, err := RunCommandOnNode(node, cmd)
 		if rc != 0 || err != nil {
 			t.Errorf("Error when running command '%s' on Node '%s', rc: %d, stdout: %s, stderr: %s, error: %v",
