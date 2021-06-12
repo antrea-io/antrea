@@ -22,7 +22,7 @@ import (
 
 	"github.com/vmware-tanzu/octant/pkg/plugin/service"
 	"github.com/vmware-tanzu/octant/pkg/view/component"
-	"k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
@@ -60,7 +60,7 @@ func (p *antreaOctantPlugin) agentHandler(request service.Request) (component.Co
 
 // getControllerTable gets the table for displaying Controller information
 func (p *antreaOctantPlugin) getControllerTable(request service.Request) *component.Table {
-	controllers, err := p.client.CrdV1beta1().AntreaControllerInfos().List(context.TODO(), v1.ListOptions{
+	controllers, err := p.client.CrdV1beta1().AntreaControllerInfos().List(context.TODO(), metav1.ListOptions{
 		ResourceVersion: "0",
 	})
 	if err != nil {
@@ -87,7 +87,7 @@ func (p *antreaOctantPlugin) getControllerTable(request service.Request) *compon
 
 // getAgentTable gets the table for displaying Agent information.
 func (p *antreaOctantPlugin) getAgentTable(request service.Request) *component.Table {
-	agents, err := p.client.CrdV1beta1().AntreaAgentInfos().List(context.TODO(), v1.ListOptions{
+	agents, err := p.client.CrdV1beta1().AntreaAgentInfos().List(context.TODO(), metav1.ListOptions{
 		ResourceVersion: "0",
 	})
 	if err != nil {
