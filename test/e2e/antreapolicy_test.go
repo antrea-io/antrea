@@ -55,7 +55,10 @@ var (
 
 const (
 	// Provide enough time for policies to be enforced & deleted by the CNI plugin.
-	networkPolicyDelay = 1500 * time.Millisecond
+	networkPolicyDelay = 2000 * time.Millisecond
+	// Timeout when waiting for a policy status to be updated and for the
+	// policy to be considered realized.
+	policyRealizedTimeout = 5 * time.Second
 	// provide enough time for groups to have members computed.
 	groupDelay = time.Second
 	// Verification of deleting/creating resources timed out.
@@ -2743,7 +2746,7 @@ func TestAntreaPolicyStatus(t *testing.T) {
 		CurrentNodesRealized: 2,
 		DesiredNodesRealized: 2,
 	}
-	err = wait.Poll(100*time.Millisecond, 3*time.Second, func() (bool, error) {
+	err = wait.Poll(100*time.Millisecond, policyRealizedTimeout, func() (bool, error) {
 		anp, err := data.crdClient.CrdV1alpha1().NetworkPolicies(anp.Namespace).Get(context.TODO(), anp.Name, metav1.GetOptions{})
 		if err != nil {
 			return false, err
@@ -2751,7 +2754,7 @@ func TestAntreaPolicyStatus(t *testing.T) {
 		return anp.Status == expectedStatus, nil
 	})
 	assert.NoError(t, err, "Antrea NetworkPolicy failed to reach expected status")
-	err = wait.Poll(100*time.Millisecond, 3*time.Second, func() (bool, error) {
+	err = wait.Poll(100*time.Millisecond, policyRealizedTimeout, func() (bool, error) {
 		anp, err := data.crdClient.CrdV1alpha1().ClusterNetworkPolicies().Get(context.TODO(), acnp.Name, metav1.GetOptions{})
 		if err != nil {
 			return false, err
@@ -2759,6 +2762,40 @@ func TestAntreaPolicyStatus(t *testing.T) {
 		return anp.Status == expectedStatus, nil
 	})
 	assert.NoError(t, err, "Antrea ClusterNetworkPolicy failed to reach expected status")
+}
+
+// waitForANPRealized waits untils an ANP is realized and returns, or times out. A policy is
+// considered realized when its Status has been updated with DesiredNodesRealized > 0 and
+// CurrentNodesRealized == DesiredNodesRealized.
+func (data *TestData) waitForANPRealized(t *testing.T, namespace string, name string) error {
+	t.Logf("Waiting for ANP '%s/%s' to be realized", namespace, name)
+	if err := wait.Poll(100*time.Millisecond, policyRealizedTimeout, func() (bool, error) {
+		anp, err := data.crdClient.CrdV1alpha1().NetworkPolicies(namespace).Get(context.TODO(), name, metav1.GetOptions{})
+		if err != nil {
+			return false, err
+		}
+		return anp.Status.DesiredNodesRealized > 0 && anp.Status.CurrentNodesRealized == anp.Status.DesiredNodesRealized, nil
+	}); err != nil {
+		return fmt.Errorf("error when waiting for ANP '%s/%s' to be realized: %v", namespace, name, err)
+	}
+	return nil
+}
+
+// waitForACNPRealized waits untils an ACNP is realized and returns, or times out. A policy is
+// considered realized when its Status has been updated with DesiredNodesRealized > 0 and
+// CurrentNodesRealized == DesiredNodesRealized.
+func (data *TestData) waitForACNPRealized(t *testing.T, name string) error {
+	t.Logf("Waiting for ACNP '%s' to be realized", name)
+	if err := wait.Poll(100*time.Millisecond, policyRealizedTimeout, func() (bool, error) {
+		acnp, err := data.crdClient.CrdV1alpha1().ClusterNetworkPolicies().Get(context.TODO(), name, metav1.GetOptions{})
+		if err != nil {
+			return false, err
+		}
+		return acnp.Status.DesiredNodesRealized > 0 && acnp.Status.CurrentNodesRealized == acnp.Status.DesiredNodesRealized, nil
+	}); err != nil {
+		return fmt.Errorf("error when waiting for ACNP '%s' to be realized: %v", name, err)
+	}
+	return nil
 }
 
 // TestANPNetworkPolicyStatsWithDropAction tests antreanetworkpolicystats can correctly collect dropped packets stats from ANP if
@@ -2855,8 +2892,8 @@ func TestANPNetworkPolicyStatsWithDropAction(t *testing.T) {
 		failOnError(fmt.Errorf("create ANP failed for ANP %s: %v", anp.Name, err), t)
 	}
 
-	// Wait for a few seconds in case that connections are established before policies are enforced.
-	time.Sleep(networkPolicyDelay)
+	// Wait for the policy to be realized before attempting connections
+	failOnError(data.waitForANPRealized(t, anp.Namespace, anp.Name), t)
 
 	sessionsPerAddressFamily := 10
 	var wg sync.WaitGroup
@@ -3007,8 +3044,8 @@ func TestAntreaClusterNetworkPolicyStats(t *testing.T) {
 		failOnError(fmt.Errorf("create ACNP failed for ACNP %s: %v", acnp.Name, err), t)
 	}
 
-	// Wait for a few seconds in case that connections are established before policies are enforced.
-	time.Sleep(networkPolicyDelay)
+	// Wait for the policy to be realized before attempting connections
+	failOnError(data.waitForACNPRealized(t, acnp.Name), t)
 
 	sessionsPerAddressFamily := 10
 	var wg sync.WaitGroup
