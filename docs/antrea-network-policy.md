@@ -12,7 +12,7 @@
   - [The Antrea ClusterNetworkPolicy resource](#the-antrea-clusternetworkpolicy-resource)
     - [ACNP with stand alone selectors](#acnp-with-stand-alone-selectors)
     - [ACNP with ClusterGroup reference](#acnp-with-clustergroup-reference)
-    - [ACNP with Namespaces](#acnp-with-namespaces)
+    - [ACNP for default Namespace isolation](#acnp-for-default-namespace-isolation)
   - [Behavior of <em>to</em> and <em>from</em> selectors](#behavior-of-to-and-from-selectors)
   - [Key differences from K8s NetworkPolicy](#key-differences-from-k8s-networkpolicy)
   - [kubectl commands for Antrea ClusterNetworkPolicy](#kubectl-commands-for-antrea-clusternetworkpolicy)
@@ -265,7 +265,7 @@ spec:
       enableLogging: true
 ```
 
-#### ACNP with Namespaces
+#### ACNP for default Namespace isolation
 
 ```yaml
 apiVersion: crd.antrea.io/v1alpha1
