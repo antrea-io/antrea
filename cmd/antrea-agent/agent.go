@@ -191,6 +191,14 @@ func run(o *Options) error {
 		return fmt.Errorf("error creating new NetworkPolicy controller: %v", err)
 	}
 
+	serviceInitializer := newServiceInitializer(
+		"antrea-service")
+	err = serviceInitializer.registerServiceforOS()
+	if err != nil {
+		return fmt.Errorf("error self registering antrea agent: %v", err)
+	}
+
+
 	// statsCollector collects stats and reports to the antrea-controller periodically. For now it's only used for
 	// NetworkPolicy stats.
 	var statsCollector *stats.Collector

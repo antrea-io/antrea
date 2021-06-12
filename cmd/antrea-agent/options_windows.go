@@ -60,7 +60,3 @@ func (o *Options) checkUnsupportedFeatures() error {
 	}
 	return nil
 }
-
-
-
-
