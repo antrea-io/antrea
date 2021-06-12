@@ -23,7 +23,7 @@ import (
 	"github.com/vmware-tanzu/octant/pkg/navigation"
 	"github.com/vmware-tanzu/octant/pkg/plugin"
 	"github.com/vmware-tanzu/octant/pkg/plugin/service"
-	"k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/clientcmd"
 
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
@@ -67,7 +67,7 @@ func newAntreaOctantPlugin() *antreaOctantPlugin {
 		client: client,
 		graph:  "",
 		lastTf: &crdv1alpha1.Traceflow{
-			ObjectMeta: v1.ObjectMeta{Name: ""},
+			ObjectMeta: metav1.ObjectMeta{Name: ""},
 		},
 	}
 }
