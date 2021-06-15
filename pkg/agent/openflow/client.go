@@ -166,7 +166,7 @@ type Client interface {
 	// mark for a SNAT IP.
 	UninstallSNATMarkFlows(mark uint32) error
 
-	// InstallSNATPolicyFlow installs the SNAT flows for a local Pod. If the
+	// InstallPodSNATFlows installs the SNAT flows for a local Pod. If the
 	// SNAT IP for the Pod is on the local Node, a non-zero SNAT ID should
 	// allocated for the SNAT IP, and the installed flow sets the SNAT IP
 	// mark on the egress packets from the ofPort; if the SNAT IP is on a
