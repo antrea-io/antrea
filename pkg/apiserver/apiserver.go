@@ -59,8 +59,6 @@ import (
 	"antrea.io/antrea/pkg/features"
 	legacycontrolplane "antrea.io/antrea/pkg/legacyapis/controlplane"
 	legacycpinstall "antrea.io/antrea/pkg/legacyapis/controlplane/install"
-	legacynetworking "antrea.io/antrea/pkg/legacyapis/networking"
-	legacynetworkinginstall "antrea.io/antrea/pkg/legacyapis/networking/install"
 	legacyapistats "antrea.io/antrea/pkg/legacyapis/stats"
 	legacystatsinstall "antrea.io/antrea/pkg/legacyapis/stats/install"
 	legacysysteminstall "antrea.io/antrea/pkg/legacyapis/system/install"
@@ -84,7 +82,6 @@ func init() {
 
 	legacycpinstall.Install(Scheme)
 	legacysysteminstall.Install(Scheme)
-	legacynetworkinginstall.Install(Scheme)
 	legacystatsinstall.Install(Scheme)
 
 	// We need to add the options to empty v1, see sample-apiserver/pkg/apiserver/apiserver.go.
@@ -221,15 +218,6 @@ func installAPIGroup(s *APIServer, c completedConfig) error {
 	legacyCPv1beta2Storage["clustergroupmembers"] = clusterGroupMembershipStorage
 	legacyCPGroup.VersionedResourcesStorageMap["v1beta2"] = legacyCPv1beta2Storage
 
-	legacyNetworkingGroup := genericapiserver.NewDefaultAPIGroupInfo(legacynetworking.GroupName, Scheme, metav1.ParameterCodec, Codecs)
-	// TODO: networkingGroup is the legacy group of controlplane NetworkPolicy APIs. To allow live upgrades from up to
-	// two minor versions, the APIs must be kept for two minor releases before it can be deleted.
-	legacyNetworkingStorage := map[string]rest.Storage{}
-	legacyNetworkingStorage["addressgroups"] = addressGroupStorage
-	legacyNetworkingStorage["appliedtogroups"] = appliedToGroupStorage
-	legacyNetworkingStorage["networkpolicies"] = networkPolicyStorage
-	legacyNetworkingGroup.VersionedResourcesStorageMap["v1beta1"] = legacyNetworkingStorage
-
 	legacySystemGroup := genericapiserver.NewDefaultAPIGroupInfo(legacysystem.GroupName, Scheme, metav1.ParameterCodec, Codecs)
 	legacySystemGroup.VersionedResourcesStorageMap["v1beta1"] = systemStorage
 
@@ -237,7 +225,7 @@ func installAPIGroup(s *APIServer, c completedConfig) error {
 	legacyStatsGroup.VersionedResourcesStorageMap["v1alpha1"] = statsStorage
 
 	// legacy API groups
-	groups = append(groups, &legacyCPGroup, &legacyNetworkingGroup, &legacySystemGroup, &legacyStatsGroup)
+	groups = append(groups, &legacyCPGroup, &legacySystemGroup, &legacyStatsGroup)
 
 	for _, apiGroupInfo := range groups {
 		if err := s.GenericAPIServer.InstallAPIGroup(apiGroupInfo); err != nil {
@@ -274,7 +262,9 @@ func CleanupDeprecatedAPIServices(aggregatorClient clientset.Interface) error {
 	// deprecates a registered APIService, the APIService should be deleted,
 	// otherwise K8s will fail to delete an existing Namespace.
 	// Also check: https://github.com/antrea-io/antrea/issues/494
-	deprecatedAPIServices := []string{}
+	deprecatedAPIServices := []string{
+		"v1beta1.networking.antrea.tanzu.vmware.com",
+	}
 	for _, as := range deprecatedAPIServices {
 		err := aggregatorClient.ApiregistrationV1().APIServices().Delete(context.TODO(), as, metav1.DeleteOptions{})
 		if err == nil {

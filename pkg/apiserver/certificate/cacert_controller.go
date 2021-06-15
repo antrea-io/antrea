@@ -51,7 +51,6 @@ var (
 		"v1alpha1.stats.antrea.tanzu.vmware.com",
 		"v1beta1.controlplane.antrea.tanzu.vmware.com",
 		"v1beta2.controlplane.antrea.tanzu.vmware.com",
-		"v1beta1.networking.antrea.tanzu.vmware.com",
 		"v1beta1.system.antrea.tanzu.vmware.com",
 		"v1alpha1.stats.antrea.io",
 		"v1beta1.system.antrea.io",

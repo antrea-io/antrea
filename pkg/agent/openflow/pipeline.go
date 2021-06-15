@@ -1865,7 +1865,7 @@ func (c *client) snatIPFromTunnelFlow(snatIP net.IP, mark uint32) binding.Flow {
 }
 
 // snatRuleFlow generates a flow that applies the SNAT rule for a local Pod. If
-// the SNAT IP exists on the lcoal Node, it sets the packet mark with the ID of
+// the SNAT IP exists on the local Node, it sets the packet mark with the ID of
 // the SNAT IP, for the traffic from the ofPort to external; if the SNAT IP is
 // on a remote Node, it tunnels the packets to the SNAT IP.
 func (c *client) snatRuleFlow(ofPort uint32, snatIP net.IP, snatMark uint32, localGatewayMAC net.HardwareAddr) binding.Flow {
