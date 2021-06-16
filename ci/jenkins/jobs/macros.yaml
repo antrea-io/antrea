@@ -115,6 +115,15 @@
           ./ci/jenkins/test-vmc.sh --cluster-name "${{JOB_NAME}}-${{BUILD_NUMBER}}" --testcase '{conformance_type}' --coverage --codecov-token "${{CODECOV_TOKEN}}" --registry ${{DOCKER_REGISTRY}}
 
 - builder:
+      name: builder-conformance-ipam
+      builders:
+        - shell: |-
+            #!/bin/bash
+            set -ex
+            DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
+            ./ci/jenkins/test-vmc.sh --cluster-name "${{JOB_NAME}}-${{BUILD_NUMBER}}" --testcase '{conformance_type}' --coverage --codecov-token "${{CODECOV_TOKEN}}" --registry ${{DOCKER_REGISTRY}} --antrea-ipam
+
+- builder:
     name: builder-elk-flow-collector
     builders:
       - shell: |-

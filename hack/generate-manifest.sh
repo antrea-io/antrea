@@ -46,6 +46,7 @@ Generate a YAML manifest for Antrea using Kustomize and print it to stdout.
         --sriov                       Generates a manifest which enables use of Kubelet API for SR-IOV device info.
         --wireguard-go                Generate a manifest with WireGuard (golang implementation) encryption enabled.
                                       This option will work only for Kind clusters (when using '--kind').
+        --node-ipam-controller        Generate a manifest with Node IPAM Controller on.
         --help, -h                    Print this message and exit
 
 In 'release' mode, environment variables IMG_NAME and IMG_TAG must be set.

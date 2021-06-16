@@ -37,12 +37,13 @@ SECRET_EXIST=false
 TEST_FAILURE=false
 CLUSTER_READY=false
 DOCKER_REGISTRY=""
+NODE_IPAM_CONTROLLER=false
 # TODO: change to "control-plane" when testbeds are updated to K8s v1.20
 CONTROL_PLANE_NODE_ROLE="master"
 
 _usage="Usage: $0 [--cluster-name <VMCClusterNameToUse>] [--kubeconfig <KubeconfigSavePath>] [--workdir <HomePath>]
                   [--log-mode <SonobuoyResultLogLevel>] [--testcase <e2e|conformance|all-features-conformance|whole-conformance|networkpolicy>]
-                  [--garbage-collection] [--setup-only] [--cleanup-only] [--coverage] [--test-only] [--registry]
+                  [--garbage-collection] [--setup-only] [--cleanup-only] [--coverage] [--test-only] [--registry] [--antrea-ipam]
 
 Setup a VMC cluster to run K8s e2e community tests (E2e, Conformance, all features Conformance, whole Conformance & Network Policy).
 
@@ -57,7 +58,8 @@ Setup a VMC cluster to run K8s e2e community tests (E2e, Conformance, all featur
         --coverage               Run e2e with coverage.
         --test-only              Only run test on current cluster. Not set up/clean up the cluster.
         --codecov-token          Token used to upload coverage report(s) to Codecov.
-        --registry               Using private registry to pull images."
+        --registry               Using private registry to pull images.
+        --antrea-ipam            Enable Antrea IPAM Controller or not."
 
 function print_usage {
     echoerr "$_usage"
@@ -119,6 +121,10 @@ case $key in
     --codecov-token)
     CODECOV_TOKEN="$2"
     shift 2
+    ;;
+    --antrea-ipam)
+    NODE_IPAM_CONTROLLER=true
+    shift
     ;;
     -h|--help)
     print_usage
@@ -193,6 +199,17 @@ function setup_cluster() {
     sed -i "s/CLUSTERNAME/${CLUSTER}/g" ${GIT_CHECKOUT_DIR}/jenkins/out/cluster.yaml
     sed -i "s|SSHAUTHORIZEDKEYS|${publickey}|g" ${GIT_CHECKOUT_DIR}/jenkins/out/cluster.yaml
     sed -i "s/CLUSTERNAMESPACE/${CLUSTER}/g" ${GIT_CHECKOUT_DIR}/jenkins/out/namespace.yaml
+
+    echo "=== IPAM substitution ==="
+    if [[ "${NODE_IPAM_CONTROLLER}" == false ]]; then
+        sed -i "s|ALLOCATENODECIDRS|\"true\"|g" ${GIT_CHECKOUT_DIR}/jenkins/out/cluster.yaml
+        sed -i "s|PODCIDRS|100.96.0.0/11|g" ${GIT_CHECKOUT_DIR}/jenkins/out/cluster.yaml
+        sed -i "s|SVCCIDRS|100.64.0.0/13|g" ${GIT_CHECKOUT_DIR}/jenkins/out/cluster.yaml
+    else
+        sed -i "s|ALLOCATENODECIDRS|\"false\"|g" ${GIT_CHECKOUT_DIR}/jenkins/out/cluster.yaml
+        sed -i "s|PODCIDRS||g" ${GIT_CHECKOUT_DIR}/jenkins/out/cluster.yaml
+        sed -i "s|SVCCIDRS||g" ${GIT_CHECKOUT_DIR}/jenkins/out/cluster.yaml
+    fi
 
     echo "=== network spec value substitution==="
     index="$(($BUILD_NUMBER % 2))"
