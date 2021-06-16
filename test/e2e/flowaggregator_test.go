@@ -16,6 +16,7 @@ package e2e
 
 import (
 	"fmt"
+	"net"
 	"regexp"
 	"strconv"
 	"strings"
@@ -108,8 +109,8 @@ const (
 	ingressDropANPName             = "test-flow-aggregator-anp-ingress-drop"
 	ingressDenyNPName              = "test-flow-aggregator-np-ingress-deny"
 	egressAllowNetworkPolicyName   = "test-flow-aggregator-networkpolicy-egress-allow"
-	egressRejectANPName            = "test-flow-aggregator-anp-engress-reject"
-	egressDropANPName              = "test-flow-aggregator-anp-engress-drop"
+	egressRejectANPName            = "test-flow-aggregator-anp-egress-reject"
+	egressDropANPName              = "test-flow-aggregator-anp-egress-drop"
 	egressDenyNPName               = "test-flow-aggregator-np-egress-deny"
 	ingressAntreaNetworkPolicyName = "test-flow-aggregator-antrea-networkpolicy-ingress"
 	egressAntreaNetworkPolicyName  = "test-flow-aggregator-antrea-networkpolicy-egress"
@@ -430,20 +431,28 @@ func testHelper(t *testing.T, data *TestData, podAIPs, podBIPs, podCIPs, podDIPs
 	// LocalServiceAccess tests the case, where Pod and Service are deployed on the same Node and their flow information is exported as IPFIX flow records.
 	t.Run("LocalServiceAccess", func(t *testing.T) {
 		skipIfProxyDisabled(t, data)
-		if !isIPv6 {
-			checkRecordsForFlows(t, data, podAIPs.ipv4.String(), svcB.Spec.ClusterIP, isIPv6, true, true, false, false, checkBandwidth)
+		// In dual stack cluster, Service IP can be assigned as different IP family from specified.
+		// In that case, source IP and destination IP will align with IP family of Service IP.
+		// For IPv4-only and IPv6-only cluster, IP family of Service IP will be same as Pod IPs.
+		isServiceIPv6 := net.ParseIP(svcB.Spec.ClusterIP).To4() == nil
+		if isServiceIPv6 {
+			checkRecordsForFlows(t, data, podAIPs.ipv6.String(), svcB.Spec.ClusterIP, isServiceIPv6, true, true, false, false, checkBandwidth)
 		} else {
-			checkRecordsForFlows(t, data, podAIPs.ipv6.String(), svcB.Spec.ClusterIP, isIPv6, true, true, false, false, checkBandwidth)
+			checkRecordsForFlows(t, data, podAIPs.ipv4.String(), svcB.Spec.ClusterIP, isServiceIPv6, true, true, false, false, checkBandwidth)
 		}
 	})
 
 	// RemoteServiceAccess tests the case, where Pod and Service are deployed on different Nodes and their flow information is exported as IPFIX flow records.
 	t.Run("RemoteServiceAccess", func(t *testing.T) {
 		skipIfProxyDisabled(t, data)
-		if !isIPv6 {
-			checkRecordsForFlows(t, data, podAIPs.ipv4.String(), svcC.Spec.ClusterIP, isIPv6, false, true, false, false, checkBandwidth)
+		// In dual stack cluster, Service IP can be assigned as different IP family from specified.
+		// In that case, source IP and destination IP will align with IP family of Service IP.
+		// For IPv4-only and IPv6-only cluster, IP family of Service IP will be same as Pod IPs.
+		isServiceIPv6 := net.ParseIP(svcC.Spec.ClusterIP).To4() == nil
+		if isServiceIPv6 {
+			checkRecordsForFlows(t, data, podAIPs.ipv6.String(), svcC.Spec.ClusterIP, isServiceIPv6, false, true, false, false, checkBandwidth)
 		} else {
-			checkRecordsForFlows(t, data, podAIPs.ipv6.String(), svcC.Spec.ClusterIP, isIPv6, false, true, false, false, checkBandwidth)
+			checkRecordsForFlows(t, data, podAIPs.ipv4.String(), svcC.Spec.ClusterIP, isServiceIPv6, false, true, false, false, checkBandwidth)
 		}
 	})
 }
@@ -679,6 +688,9 @@ func checkPodAndNodeData(t *testing.T, record, srcPod, srcNode, dstPod, dstNode 
 }
 
 func getUnit64FieldFromRecord(t *testing.T, record string, field string) uint64 {
+	if strings.Contains(record, "TEMPLATE SET") {
+		return 0
+	}
 	splitLines := strings.Split(record, "\n")
 	for _, line := range splitLines {
 		if strings.Contains(line, field) {
