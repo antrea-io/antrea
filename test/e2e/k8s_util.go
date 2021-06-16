@@ -52,11 +52,8 @@ func NewKubernetesUtils(data *TestData) (*KubernetesUtils, error) {
 // GetPodByLabel returns a Pod with the matching Namespace and "pod" label.
 func (k *KubernetesUtils) GetPodByLabel(ns string, name string) (*v1.Pod, error) {
 	pods, err := k.getPodsUncached(ns, "pod", name)
-	if err != nil {
+	if err != nil || len(pods) == 0 {
 		return nil, errors.WithMessagef(err, "unable to get Pod in Namespace %s with label pod=%s", ns, name)
-	}
-	if len(pods) == 0 {
-		return nil, nil
 	}
 	return &pods[0], nil
 }
