@@ -193,6 +193,9 @@ func getTraceflowMessage(o *crdv1alpha1.Observation, spec *crdv1alpha1.Traceflow
 			spec.Destination.Pod = o.Pod[strings.Index(o.Pod, `/`)+1:]
 		}
 	}
+	if o.Action != crdv1alpha1.ActionDropped && len(o.TranslatedSrcIP) > 0 {
+		str += "\nTranslated Source IP: " + o.TranslatedSrcIP
+	}
 	if o.Action != crdv1alpha1.ActionDropped && len(o.TranslatedDstIP) > 0 {
 		str += "\nTranslated Destination IP: " + o.TranslatedDstIP
 	}

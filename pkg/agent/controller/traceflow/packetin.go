@@ -77,7 +77,7 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1alpha1.Tracefl
 	// Directly read data plane tag from packet.
 	var err error
 	var tag uint8
-	var ctNwDst, ipDst string
+	var ctNwDst, ctNwSrc, ipDst, ipSrc string
 	if pktIn.Data.Ethertype == protocol.IPv4_MSG {
 		ipPacket, ok := pktIn.Data.Data.(*protocol.IPv4)
 		if !ok {
@@ -88,7 +88,12 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1alpha1.Tracefl
 		if err != nil {
 			return nil, nil, nil, err
 		}
+		ctNwSrc, err = getCTSrcValue(matchers, false)
+		if err != nil {
+			return nil, nil, nil, err
+		}
 		ipDst = ipPacket.NWDst.String()
+		ipSrc = ipPacket.NWSrc.String()
 	} else if pktIn.Data.Ethertype == protocol.IPv6_MSG {
 		ipv6Packet, ok := pktIn.Data.Data.(*protocol.IPv6)
 		if !ok {
@@ -99,7 +104,12 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1alpha1.Tracefl
 		if err != nil {
 			return nil, nil, nil, err
 		}
+		ctNwSrc, err = getCTSrcValue(matchers, true)
+		if err != nil {
+			return nil, nil, nil, err
+		}
 		ipDst = ipv6Packet.NWDst.String()
+		ipSrc = ipv6Packet.NWSrc.String()
 	} else {
 		return nil, nil, nil, fmt.Errorf("unsupported traceflow packet Ethertype: %d", pktIn.Data.Ethertype)
 	}
@@ -150,7 +160,7 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1alpha1.Tracefl
 		obs = append(obs, *ob)
 	}
 
-	// Collect Service DNAT.
+	// Collect Service DNAT and SNAT.
 	if !tfState.receiverOnly {
 		if isValidCtNw(ctNwDst) && ipDst != ctNwDst {
 			ob := &crdv1alpha1.Observation{
@@ -158,9 +168,13 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1alpha1.Tracefl
 				Action:          crdv1alpha1.ActionForwarded,
 				TranslatedDstIP: ipDst,
 			}
+			// Service SNAT can only happen alongside DNAT
+			// and only for hairpinned packets at the moment.
+			if isValidCtNw(ctNwSrc) && ipSrc != ctNwSrc {
+				ob.TranslatedSrcIP = ipSrc
+			}
 			obs = append(obs, *ob)
 		}
-
 		// Collect egress conjunctionID and get NetworkPolicy from cache.
 		if match := getMatchRegField(matchers, uint32(openflow.EgressReg)); match != nil {
 			egressInfo, err := getRegValue(match, nil)
@@ -263,9 +277,9 @@ func getMatchRegField(matchers *ofctrl.Matchers, regNum uint32) *ofctrl.MatchFie
 
 func getMatchTunnelDstField(matchers *ofctrl.Matchers, isIPv6 bool) *ofctrl.MatchField {
 	if isIPv6 {
-		return matchers.GetMatchByName(fmt.Sprintf("NXM_NX_TUN_IPV6_DST"))
+		return matchers.GetMatchByName("NXM_NX_TUN_IPV6_DST")
 	}
-	return matchers.GetMatchByName(fmt.Sprintf("NXM_NX_TUN_IPV4_DST"))
+	return matchers.GetMatchByName("NXM_NX_TUN_IPV4_DST")
 }
 
 func getRegValue(regMatch *ofctrl.MatchField, rng *openflow13.NXRange) (uint32, error) {
@@ -300,6 +314,23 @@ func getCTDstValue(matchers *ofctrl.Matchers, isIPv6 bool) (string, error) {
 	regValue, ok := match.GetValue().(net.IP)
 	if !ok {
 		return "", errors.New("packet-in conntrack destination value cannot be retrieved from metadata")
+	}
+	return regValue.String(), nil
+}
+
+func getCTSrcValue(matchers *ofctrl.Matchers, isIPv6 bool) (string, error) {
+	var match *ofctrl.MatchField
+	if isIPv6 {
+		match = matchers.GetMatchByName("NXM_NX_CT_IPV6_SRC")
+	} else {
+		match = matchers.GetMatchByName("NXM_NX_CT_NW_SRC")
+	}
+	if match == nil {
+		return "", nil
+	}
+	regValue, ok := match.GetValue().(net.IP)
+	if !ok {
+		return "", errors.New("packet-in conntrack source value cannot be retrieved from metadata")
 	}
 	return regValue.String(), nil
 }
