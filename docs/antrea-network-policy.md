@@ -432,13 +432,12 @@ Namespace objects which cannot be done via label selectors. Currently, the
 that the corresponding `podSelector` (or all Pods if `podSelector` is not set)
 should only select Pods belonging to the same Namespace as the workload targeted
 (either through a policy-level AppliedTo or a rule-level Applied-To) by the current
-ingress or egress rule. This enables policy writers to create
-per-Namespace rules within a single policy. See the [third example](#acnp-with-namespaces) YAML above.
-This field is optional and cannot be set along with a `namespaceSelector` within the
-same peer.
+ingress or egress rule. This enables policy writers to create per-Namespace rules within a
+single policy. See the [third example](#acnp-for-default-namespace-isolation) YAML above. This field is
+optional and cannot be set along with a `namespaceSelector` within the same peer.
 
 **group**: A `group` refers to a ClusterGroup to which this ingress/egress peer, or
-an appliedTo must resolve to. More information on ClusterGroups can be found [here](#clustergroup).
+an `appliedTo` must resolve to. More information on ClusterGroups can be found [here](#clustergroup).
 
 **ipBlock**: This selects particular IP CIDR ranges to allow as `ingress`
 "sources" or `egress` "destinations". These should be cluster-external IPs,
