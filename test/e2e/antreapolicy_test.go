@@ -32,7 +32,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 
-	"antrea.io/antrea/pkg/agent/config"
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	crdv1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
 	crdv1alpha3 "antrea.io/antrea/pkg/apis/crd/v1alpha3"
@@ -1799,11 +1798,6 @@ func testACNPRejectEgress(t *testing.T) {
 
 // testACNPRejectIngress tests that a ACNP is able to reject egress traffic from pods labelled A to namespace Z.
 func testACNPRejectIngress(t *testing.T, data *TestData, protocol v1.Protocol) {
-	// TCP rejection can't work on Kind when the traffic mode is noEncap. Skip it.
-	// https://github.com/antrea-io/antrea/issues/2025
-	if protocol == v1.ProtocolTCP {
-		skipIfEncapModeIsNotAndProviderIs(t, data, config.TrafficEncapModeEncap, "kind")
-	}
 	builder := &ClusterNetworkPolicySpecBuilder{}
 	builder = builder.SetName("acnp-reject-a-from-z-ingress").
 		SetPriority(1.0).
