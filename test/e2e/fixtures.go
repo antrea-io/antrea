@@ -99,6 +99,12 @@ func skipIfHasWindowsNodes(tb testing.TB) {
 	}
 }
 
+func skipIfNoWindowsNodes(tb testing.TB) {
+	if len(clusterInfo.windowsNodes) == 0 {
+		tb.Skipf("Skipping test as the cluster has Windows Nodes")
+	}
+}
+
 func ensureAntreaRunning(tb testing.TB, data *TestData) error {
 	tb.Logf("Applying Antrea YAML")
 	if err := data.deployAntrea(); err != nil {
