@@ -7,19 +7,146 @@ spec:
   ports:
     - port: 443
       protocol: TCP
-      targetPort: 443
+      targetPort: api
   selector:
     component: antrea-controller
 ---
 apiVersion: apiregistration.k8s.io/v1
 kind: APIService
 metadata:
-  name: v1beta1.system.antrea.tanzu.vmware.com
+  name: v1beta2.controlplane.antrea.io
 spec:
-  insecureSkipTLSVerify: true
-  group: system.antrea.tanzu.vmware.com
+  group: controlplane.antrea.io
+  groupPriorityMinimum: 100
+  version: v1beta2
+  versionPriority: 100
+  service:
+    name: antrea
+    namespace: kube-system
+---
+apiVersion: apiregistration.k8s.io/v1
+kind: APIService
+metadata:
+  name: v1beta1.system.antrea.io
+spec:
+  group: system.antrea.io
   groupPriorityMinimum: 100
   version: v1beta1
+  versionPriority: 100
+  service:
+    name: antrea
+    namespace: kube-system
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: "crdmutator.antrea.io"
+webhooks:
+  - name: "acnpmutator.antrea.io"
+    clientConfig:
+      service:
+        name: "antrea"
+        namespace: "kube-system"
+        path: "/mutate/acnp"
+    rules:
+      - operations: ["CREATE", "UPDATE"]
+        apiGroups: ["crd.antrea.io"]
+        apiVersions: ["v1alpha1"]
+        resources: ["clusternetworkpolicies"]
+        scope: "Cluster"
+    admissionReviewVersions: ["v1", "v1beta1"]
+    sideEffects: None
+    timeoutSeconds: 5
+  - name: "anpmutator.antrea.io"
+    clientConfig:
+      service:
+        name: "antrea"
+        namespace: "kube-system"
+        path: "/mutate/anp"
+    rules:
+      - operations: ["CREATE", "UPDATE"]
+        apiGroups: ["crd.antrea.io"]
+        apiVersions: ["v1alpha1"]
+        resources: ["networkpolicies"]
+        scope: "Namespaced"
+    admissionReviewVersions: ["v1", "v1beta1"]
+    sideEffects: None
+    timeoutSeconds: 5
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: "crdvalidator.antrea.io"
+webhooks:
+  - name: "tiervalidator.antrea.io"
+    clientConfig:
+      service:
+        name: "antrea"
+        namespace: "kube-system"
+        path: "/validate/tier"
+    rules:
+      - operations: ["CREATE", "UPDATE", "DELETE"]
+        apiGroups: ["crd.antrea.io"]
+        apiVersions: ["v1alpha1"]
+        resources: ["tiers"]
+        scope: "Cluster"
+    admissionReviewVersions: ["v1", "v1beta1"]
+    sideEffects: None
+    timeoutSeconds: 5
+  - name: "acnpvalidator.antrea.io"
+    clientConfig:
+      service:
+        name: "antrea"
+        namespace: "kube-system"
+        path: "/validate/acnp"
+    rules:
+      - operations: ["CREATE", "UPDATE"]
+        apiGroups: ["crd.antrea.io"]
+        apiVersions: ["v1alpha1"]
+        resources: ["clusternetworkpolicies"]
+        scope: "Cluster"
+    admissionReviewVersions: ["v1", "v1beta1"]
+    sideEffects: None
+    timeoutSeconds: 5
+  - name: "anpvalidator.antrea.io"
+    clientConfig:
+      service:
+        name: "antrea"
+        namespace: "kube-system"
+        path: "/validate/anp"
+    rules:
+      - operations: ["CREATE", "UPDATE"]
+        apiGroups: ["crd.antrea.io"]
+        apiVersions: ["v1alpha1"]
+        resources: ["networkpolicies"]
+        scope: "Namespaced"
+    admissionReviewVersions: ["v1", "v1beta1"]
+    sideEffects: None
+    timeoutSeconds: 5
+  - name: "clustergroupvalidator.antrea.io"
+    clientConfig:
+      service:
+        name: "antrea"
+        namespace: "kube-system"
+        path: "/validate/clustergroup"
+    rules:
+      - operations: ["CREATE", "UPDATE", "DELETE"]
+        apiGroups: ["crd.antrea.io"]
+        apiVersions: ["v1alpha3", "v1alpha2"]
+        resources: ["clustergroups"]
+        scope: "Cluster"
+    admissionReviewVersions: ["v1", "v1beta1"]
+    sideEffects: None
+    timeoutSeconds: 5
+---
+apiVersion: apiregistration.k8s.io/v1
+kind: APIService
+metadata:
+  name: v1alpha1.stats.antrea.io
+spec:
+  group: stats.antrea.io
+  groupPriorityMinimum: 100
+  version: v1alpha1
   versionPriority: 100
   service:
     name: antrea
@@ -44,10 +171,7 @@ spec:
         component: antrea-controller
     spec:
       nodeSelector:
-        # Note: beta.kubernetes.io/os is targeted for removal in K8s v1.18, if running Antrea with 1.18
-        # or higher uncomment the following line and remove beta.kubernetes.io/os.
-        #kubernetes.io/os: linux
-        beta.kubernetes.io/os: linux
+        kubernetes.io/os: linux
       hostNetwork: true
       priorityClassName: system-cluster-critical
       tolerations:
@@ -61,8 +185,12 @@ spec:
       containers:
         - name: antrea-controller
           image: antrea
+          resources:
+            requests:
+              cpu: "200m"
           command: ["antrea-controller"]
-          args: ["--config", "/etc/antrea/antrea-controller.conf"]
+          # Log to both "/var/log/antrea/" and stderr (so "kubectl logs" can work).
+          args: ["--config", "/etc/antrea/antrea-controller.conf", "--logtostderr=false", "--log_dir=/var/log/antrea", "--alsologtostderr", "--log_file_max_size=100", "--log_file_max_num=4", "--v=0"]
           env:
             # Provide pod and node information for clusterinformation CRD.
             - name: POD_NAME
@@ -77,15 +205,229 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: spec.nodeName
+            # Provide ServiceAccount name for validation webhook.
+            - name: SERVICEACCOUNT_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.serviceAccountName
           ports:
-            - containerPort: 443
+            - containerPort: 10349
+              name: api
               protocol: TCP
+          readinessProbe:
+            httpGet:
+              host: localhost
+              path: /readyz
+              port: api
+              scheme: HTTPS
+            initialDelaySeconds: 5
+            timeoutSeconds: 5
+            periodSeconds: 10
+            failureThreshold: 5
+          livenessProbe:
+            httpGet:
+              host: localhost
+              path: /livez
+              port: api
+              scheme: HTTPS
+            timeoutSeconds: 5
+            periodSeconds: 10
+            failureThreshold: 5
           volumeMounts:
             - name: antrea-config
               mountPath: /etc/antrea/antrea-controller.conf
               subPath: antrea-controller.conf
               readOnly: true
+            - name: antrea-controller-tls
+              mountPath: /var/run/antrea/antrea-controller-tls
+            - name: host-var-log-antrea
+              mountPath: /var/log/antrea
       volumes:
         - name: antrea-config
           configMap:
             name: antrea-config
+        # Make it optional as we only read it when selfSignedCert=false.
+        - name: antrea-controller-tls
+          secret:
+            secretName: antrea-controller-tls
+            defaultMode: 0400
+            optional: true
+        - name: host-var-log-antrea
+          hostPath:
+            path: /var/log/antrea
+            type: DirectoryOrCreate
+---
+# Deprecated in v1.0.0.
+apiVersion: apiregistration.k8s.io/v1
+kind: APIService
+metadata:
+  name: v1beta2.controlplane.antrea.tanzu.vmware.com
+spec:
+  group: controlplane.antrea.tanzu.vmware.com
+  groupPriorityMinimum: 100
+  version: v1beta2
+  versionPriority: 100
+  service:
+    name: antrea
+    namespace: kube-system
+---
+# Deprecated in v1.0.0.
+apiVersion: apiregistration.k8s.io/v1
+kind: APIService
+metadata:
+  name: v1beta1.controlplane.antrea.tanzu.vmware.com
+spec:
+  group: controlplane.antrea.tanzu.vmware.com
+  groupPriorityMinimum: 100
+  version: v1beta1
+  versionPriority: 100
+  service:
+    name: antrea
+    namespace: kube-system
+---
+# Deprecated in v0.10
+apiVersion: apiregistration.k8s.io/v1
+kind: APIService
+metadata:
+  name: v1beta1.networking.antrea.tanzu.vmware.com
+spec:
+  group: networking.antrea.tanzu.vmware.com
+  groupPriorityMinimum: 100
+  version: v1beta1
+  versionPriority: 100
+  service:
+    name: antrea
+    namespace: kube-system
+---
+# Deprecated in v1.0.0.
+apiVersion: apiregistration.k8s.io/v1
+kind: APIService
+metadata:
+  name: v1beta1.system.antrea.tanzu.vmware.com
+spec:
+  group: system.antrea.tanzu.vmware.com
+  groupPriorityMinimum: 100
+  version: v1beta1
+  versionPriority: 100
+  service:
+    name: antrea
+    namespace: kube-system
+---
+# Deprecated in v1.0.0.
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: "crdmutator.antrea.tanzu.vmware.com"
+webhooks:
+  - name: "acnpmutator.antrea.tanzu.vmware.com"
+    clientConfig:
+      service:
+        name: "antrea"
+        namespace: "kube-system"
+        path: "/mutate/acnp"
+    rules:
+      - operations: ["CREATE", "UPDATE"]
+        apiGroups: ["security.antrea.tanzu.vmware.com"]
+        apiVersions: ["v1alpha1"]
+        resources: ["clusternetworkpolicies"]
+        scope: "Cluster"
+    admissionReviewVersions: ["v1", "v1beta1"]
+    sideEffects: None
+    timeoutSeconds: 5
+  - name: "anpmutator.antrea.tanzu.vmware.com"
+    clientConfig:
+      service:
+        name: "antrea"
+        namespace: "kube-system"
+        path: "/mutate/anp"
+    rules:
+      - operations: ["CREATE", "UPDATE"]
+        apiGroups: ["security.antrea.tanzu.vmware.com"]
+        apiVersions: ["v1alpha1"]
+        resources: ["networkpolicies"]
+        scope: "Namespaced"
+    admissionReviewVersions: ["v1", "v1beta1"]
+    sideEffects: None
+    timeoutSeconds: 5
+---
+# Deprecated in v1.0.0.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: "crdvalidator.antrea.tanzu.vmware.com"
+webhooks:
+  - name: "tiervalidator.antrea.tanzu.vmware.com"
+    clientConfig:
+      service:
+        name: "antrea"
+        namespace: "kube-system"
+        path: "/validate/tier"
+    rules:
+      - operations: ["CREATE", "UPDATE", "DELETE"]
+        apiGroups: ["security.antrea.tanzu.vmware.com"]
+        apiVersions: ["v1alpha1"]
+        resources: ["tiers"]
+        scope: "Cluster"
+    admissionReviewVersions: ["v1", "v1beta1"]
+    sideEffects: None
+    timeoutSeconds: 5
+  - name: "acnpvalidator.antrea.tanzu.vmware.com"
+    clientConfig:
+      service:
+        name: "antrea"
+        namespace: "kube-system"
+        path: "/validate/acnp"
+    rules:
+      - operations: ["CREATE", "UPDATE"]
+        apiGroups: ["security.antrea.tanzu.vmware.com"]
+        apiVersions: ["v1alpha1"]
+        resources: ["clusternetworkpolicies"]
+        scope: "Cluster"
+    admissionReviewVersions: ["v1", "v1beta1"]
+    sideEffects: None
+    timeoutSeconds: 5
+  - name: "anpvalidator.antrea.tanzu.vmware.com"
+    clientConfig:
+      service:
+        name: "antrea"
+        namespace: "kube-system"
+        path: "/validate/anp"
+    rules:
+      - operations: ["CREATE", "UPDATE"]
+        apiGroups: ["security.antrea.tanzu.vmware.com"]
+        apiVersions: ["v1alpha1"]
+        resources: ["networkpolicies"]
+        scope: "Namespaced"
+    admissionReviewVersions: ["v1", "v1beta1"]
+    sideEffects: None
+    timeoutSeconds: 5
+  - name: "clustergroupvalidator.antrea.tanzu.vmware.com"
+    clientConfig:
+      service:
+        name: "antrea"
+        namespace: "kube-system"
+        path: "/validate/clustergroup"
+    rules:
+      - operations: ["CREATE", "UPDATE", "DELETE"]
+        apiGroups: ["core.antrea.tanzu.vmware.com"]
+        apiVersions: ["v1alpha2"]
+        resources: ["clustergroups"]
+        scope: "Cluster"
+    admissionReviewVersions: ["v1", "v1beta1"]
+    sideEffects: None
+    timeoutSeconds: 5
+---
+# Deprecated in v1.0.0.
+apiVersion: apiregistration.k8s.io/v1
+kind: APIService
+metadata:
+  name: v1alpha1.stats.antrea.tanzu.vmware.com
+spec:
+  group: stats.antrea.tanzu.vmware.com
+  groupPriorityMinimum: 100
+  version: v1alpha1
+  versionPriority: 100
+  service:
+    name: antrea
+    namespace: kube-system
+---

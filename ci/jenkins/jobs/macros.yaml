@@ -2,9 +2,53 @@
     name: builder-job-updater
     builders:
       - shell: |-
-          cp /var/jenkins_home/tmp/defaults.yaml ci/jenkins/jobs
+          cp /var/lib/jenkins/utils/defaults.yaml ci/jenkins/jobs
           jenkins-jobs update -r ci/jenkins/jobs
           rm ci/jenkins/jobs/defaults.yaml
+
+- builder:
+      name: builder-integration
+      builders:
+        - shell: |-
+            #!/bin/bash
+            set -e
+            DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
+            ./ci/jenkins/test-vmc.sh --testcase integration --coverage --codecov-token "${CODECOV_TOKEN}" --registry ${DOCKER_REGISTRY}
+
+- builder:
+    name: builder-eks-cluster-cleanup
+    builders:
+      - shell: |-
+          #!/bin/bash
+          set -ex
+          source /home/ubuntu/.bashrc
+          sudo ./ci/test-conformance-eks.sh --cluster-name "${CLUSTERNAME}" --cleanup-only
+
+- builder:
+    name: builder-gke-cluster-cleanup
+    builders:
+      - shell: |-
+         #!/bin/bash
+         set -ex
+         source /home/ubuntu/.bashrc
+         ./ci/test-conformance-gke.sh --gcloud-path "${GCLOUD_PATH}" --cluster-name "${CLUSTERNAME}" --cleanup-only
+
+- builder:
+    name: builder-aks-cluster-cleanup
+    builders:
+      - shell: |-
+         #!/bin/bash
+         set -ex
+         source /home/ubuntu/.bashrc
+         ./ci/test-conformance-aks.sh --cluster-name "${CLUSTERNAME}" --cleanup-only
+
+- builder:
+    name: builder-workload-cluster-garbage-collection
+    builders:
+      - shell: |-
+          #!/bin/bash
+          set -ex
+          ./ci/jenkins/test-vmc.sh --garbage-collection
 
 - builder:
     name: builder-list-tests
@@ -14,7 +58,7 @@
 
           rm -f COMMENT_EXIST
           rm -f body.json
-          echo "{{\"body\": \"Thanks for your PR.\\\nUnit tests and code linters are run automatically every time the PR is updated.\\\nE2e, conformance and network policy tests can only be triggered by a member of the vmware-tanzu organization. Regular contributors to the project should join the org.\\\n\\\nThe following commands are available:\\\n* \`/test-e2e\`: to trigger e2e tests.\\\n* \`/skip-e2e\`: to skip e2e tests.\\\n* \`/test-conformance\`: to trigger conformance tests.\\\n* \`/skip-conformance\`: to skip conformance tests.\\\n* \`/test-networkpolicy\`: to trigger networkpolicy tests.\\\n* \`/skip-networkpolicy\`: to skip networkpolicy tests.\\\n* \`/test-all\`: to trigger all tests.\\\n* \`/skip-all\`: to skip all tests.\\\n\\\nThese commands can only be run by members of the vmware-tanzu organization.\"}}" > body.json
+          echo "{{\"body\": \"Thanks for your PR.\\\nUnit tests and code linters are run automatically every time the PR is updated.\\\nE2e, conformance and network policy tests can only be triggered by a member of the vmware-tanzu organization. Regular contributors to the project should join the org.\\\n\\\nThe following commands are available:\\\n* \`/test-e2e\`: to trigger e2e tests.\\\n* \`/skip-e2e\`: to skip e2e tests.\\\n* \`/test-conformance\`: to trigger conformance tests.\\\n* \`/skip-conformance\`: to skip conformance tests.\\\n* \`/test-networkpolicy\`: to trigger networkpolicy tests.\\\n* \`/skip-networkpolicy\`: to skip networkpolicy tests.\\\n* \`/test-ipv6-e2e\`: to trigger e2e tests in a dual-stack setup.\\\n* \`/skip-ipv6-e2e\`: to skip e2e tests a dual-stack setup.\\\n* \`/test-ipv6-conformance\`: to trigger conformance tests a dual-stack setup.\\\n* \`/skip-ipv6-conformance\`: to skip conformance tests a dual-stack setup.\\\n* \`/test-ipv6-networkpolicy\`: to trigger networkpolicy tests in a dual-stack setup.\\\n* \`/skip-ipv6-networkpolicy\`: to skip networkpolicy tests in a dual-stack setup.\\\n* \`/test-ipv6-only-e2e\`: to trigger e2e tests in an IPv6 only setup.\\\n* \`/skip-ipv6-only-e2e\`: to skip e2e tests an IPv6 only setup.\\\n* \`/test-ipv6-only-conformance\`: to trigger conformance tests an IPv6 only setup.\\\n* \`/skip-ipv6-only-conformance\`: to skip conformance tests an IPv6 only setup.\\\n* \`/test-ipv6-only-networkpolicy\`: to trigger networkpolicy tests in an IPv6 only setup.\\\n* \`/skip-ipv6-only-networkpolicy\`: to skip networkpolicy tests in an IPv6 only setup.\\\n* \`/test-all-features-conformance\`: to trigger conformance tests with all alpha features enabled.\\\n* \`/skip-all-features-conformance\`: to skip conformance tests with all alpha features enabled.\\\n* \`/test-whole-conformance\`: to trigger all conformance tests on linux.\\\n* \`/skip-whole-conformance\`: to skip all conformance tests on linux.\\\n* \`/test-windows-conformance\`: to trigger windows conformance tests.\\\n* \`/skip-windows-conformance\`: to skip windows conformance tests.\\\n* \`/test-windows-networkpolicy\`: to trigger windows networkpolicy tests.\\\n* \`/skip-windows-networkpolicy\`: to skip windows networkpolicy tests.\\\n* \`/test-hw-offload\`: to trigger ovs hardware offload test.\\\n* \`/skip-hw-offload\`: to skip ovs hardware offload test.\\\n* \`/test-all\`: to trigger all IPv4 tests (except whole conformance).\\\n* \`/skip-all\`: to skip all IPv4 tests (except whole conformance).\\n* \`/test-ipv6-all\`: to trigger all dual-stack tests.\\\n* \`/skip-ipv6-all\`: to skip all dual-stack tests.\\n* \`/test-ipv6-only-all\`: to trigger all IPv6 only tests.\\\n* \`/skip-ipv6-only-all\`: to skip all IPv6 only tests.\"}}" > body.json
 
           B="$(cat body.json | jq .body)"
 
@@ -40,135 +84,76 @@
           fi
 
 - builder:
+    name: builder-job-validator
+    builders:
+      - shell: |-
+          cp /var/lib/jenkins/utils/defaults.yaml ci/jenkins/jobs
+          jenkins-jobs test -r ci/jenkins/jobs/
+          rm ci/jenkins/jobs/defaults.yaml
+
+- builder:
     name: builder-pending-label
     builders:
       - shell: 'exit 1 # fail on purpose'
 
 - builder:
-    name: prepare-antrea
-    builders:
-      - shell: |-
-          echo ====== Cleanup Antrea Installation ======
-
-          export KUBECONFIG=/var/lib/jenkins/kube.conf
-          kubectl delete daemonset antrea-agent -n kube-system || true
-          kubectl delete -f /var/lib/jenkins/antrea.yml || true
-          kubectl delete ns antrea-test || true
-      - shell: |-
-          echo ====== Building Antrea for the Following Commit ======
-
-          git show --numstat
-
-          export GO111MODULE=on
-          export GOPATH=/var/lib/jenkins/go
-          export GOROOT=/usr/local/go
-          export GOCACHE="${WORKSPACE}/../gocache"
-          export PATH=$GOROOT/bin:$PATH
-
-          make clean
-          docker images | grep 'antrea-ubuntu' | awk '{print $3}' | xargs -r docker rmi || true
-          docker images | grep '<none>' | awk '{print $3}' | xargs -r docker rmi || true
-          make
-      - shell: |-
-          echo ====== Delivering Antrea to all the Nodes ======
-
-          export KUBECONFIG=/var/lib/jenkins/kube.conf
-
-          cp -f build/yamls/*.yml /var/lib/jenkins
-          docker save -o antrea-ubuntu.tar antrea/antrea-ubuntu:latest
-
-          kubectl get nodes -o wide --no-headers=true | awk '$3 != "master" {print $6}' | while read IP; do
-          rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no" antrea-ubuntu.tar jenkins@${IP}:/var/lib/jenkins/antrea-ubuntu.tar
-          ssh -o StrictHostKeyChecking=no -n jenkins@${IP} "docker images | grep 'antrea-ubuntu' | awk '{print \$3}' | xargs -r docker rmi ; docker load -i /var/lib/jenkins/antrea-ubuntu.tar ; docker images | grep '<none>' | awk '{print \$3}' | xargs -r docker rmi" || true
-          done
-
-- builder:
     name: builder-e2e
     builders:
       - shell: |-
-          echo ====== Running Antrea E2E Tests ======
-
-          export GO111MODULE=on
-          export JENKINS_HOME=/var/lib/jenkins
-          export GOPATH=$JENKINS_HOME/go
-          export GOROOT=/usr/local/go
-          export GOCACHE=$JENKINS_HOME/.cache/go-build
-          export PATH=$GOROOT/bin:$PATH
-          export KUBECONFIG=$JENKINS_HOME/kube.conf
-
-          mkdir -p test/e2e/infra/vagrant/playbook/kube
-          cp -f "${JENKINS_HOME}/kube.conf" test/e2e/infra/vagrant/playbook/kube/config
-          cp -f "${JENKINS_HOME}/ssh-config" test/e2e/infra/vagrant/ssh-config
-
-          set +e
-          mkdir -p `pwd`/antrea-test-logs
-          go test -v github.com/vmware-tanzu/antrea/test/e2e --logs-export-dir `pwd`/antrea-test-logs
-
-          test_rc=$?
-          set -e
-
-          tar -zcf antrea-test-logs.tar.gz antrea-test-logs
-
-          echo ====== Cleanup Antrea Installation ======
-
-          for antrea_yml in /var/lib/jenkins/*.yml
-          do
-            kubectl delete -f ${antrea_yml} --ignore-not-found=true || true
-          done
-
-          kubectl delete ns antrea-test || true
-
-          exit "$test_rc"
+          #!/bin/bash
+          set -ex
+          DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
+          ./ci/jenkins/test-vmc.sh --cluster-name "${JOB_NAME}-${BUILD_NUMBER}" --testcase e2e --coverage --codecov-token "${CODECOV_TOKEN}" --registry ${DOCKER_REGISTRY}
 
 - builder:
     name: builder-conformance
     builders:
       - shell: |-
-          echo ====== Running Antrea Conformance Tests ======
+          #!/bin/bash
+          set -ex
+          DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
+          ./ci/jenkins/test-vmc.sh --cluster-name "${{JOB_NAME}}-${{BUILD_NUMBER}}" --testcase '{conformance_type}' --coverage --codecov-token "${{CODECOV_TOKEN}}" --registry ${{DOCKER_REGISTRY}}
 
-          export GO111MODULE=on
-          export JENKINS_HOME=/var/lib/jenkins
-          export GOPATH=$JENKINS_HOME/go
-          export GOROOT=/usr/local/go
-          export GOCACHE=$JENKINS_HOME/.cache/go-build
-          export PATH=$GOROOT/bin:$PATH
-          export KUBECONFIG=$JENKINS_HOME/kube.conf
+- builder:
+    name: builder-elk-flow-collector
+    builders:
+      - shell: |-
+          #!/bin/bash
+          set -ex
+          ./ci/jenkins/test-vmc.sh --cluster-name "${JOB_NAME}-${BUILD_NUMBER}" --setup-only
+          ./ci/test-elk-flow-collector.sh --kubeconfig jenkins/out/kubeconfig
+          ./ci/jenkins/test-vmc.sh --cluster-name "${JOB_NAME}-${BUILD_NUMBER}" --cleanup-only
 
-          kubectl apply -f build/yamls/antrea.yml
-          kubectl rollout restart deployment/coredns -n kube-system
-          kubectl rollout status deployment/coredns -n kube-system
-          kubectl rollout status deployment.apps/antrea-controller -n kube-system
-          kubectl rollout status daemonset/antrea-agent -n kube-system
-
-          # Run sonobouy
-          sonobuoy delete --wait
-          sonobuoy run --wait --e2e-focus "{focus_regex}" --e2e-skip "{skip_regex}" --e2e-parallel y
-          results="$(sonobuoy retrieve)"
-          echo '=== Print all results ==='
-          sonobuoy results "$results"
-          echo '=== Print failed cases if any ==='
-          sonobuoy results "$results" >> RESULT
-
-          test_rc=0
-          if grep -Fxq "Failed tests:" RESULT
-          then
-            echo "Failed cases exist."
-            test_rc=1
-          else
-            echo "All tests passed."
+          if !(test -f TEST_FAILURE); then
+            echo "=== SUCCESS !!! ==="
+            exit 0
           fi
+          echo "=== FAILURE !!! ==="
+          exit 1
 
-          # Clean up sonobouy resources
-          sonobuoy delete --wait
-          rm RESULT
-
-          echo ====== Cleanup Antrea Installation ======
-
-          for antrea_yml in /var/lib/jenkins/*.yml
-          do
-            kubectl delete -f ${{antrea_yml}} --ignore-not-found=true || true
-          done
-          
-          kubectl delete ns antrea-test || true
-
-          exit "$test_rc"
+- builder:
+    name: builder-matrix
+    builders:
+      - shell: |-
+          #!/bin/bash
+          set -e
+          TEST_FAIL_E2E=0
+          TEST_FAIL_NP=0
+          TEST_FAIL_CONFORMANCE=0
+          DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
+          export JOB_NAME="matrix-${TEST_OS}-k8s-${K8S_VERSION//./-}-build-num"
+          ./ci/jenkins/test-vmc.sh --cluster-name "${JOB_NAME}-${BUILD_NUMBER}" --setup-only
+          ./ci/jenkins/test-vmc.sh --cluster-name "${JOB_NAME}-${BUILD_NUMBER}" --testcase 'whole-conformance' --test-only --registry ${DOCKER_REGISTRY} || TEST_FAIL_CONFORMANCE=1
+          ./ci/jenkins/test-vmc.sh --cluster-name "${JOB_NAME}-${BUILD_NUMBER}" --testcase 'networkpolicy' --test-only --registry ${DOCKER_REGISTRY} || TEST_FAIL_NP=1
+          ./ci/jenkins/test-vmc.sh --cluster-name "${JOB_NAME}-${BUILD_NUMBER}" --testcase e2e --test-only --registry ${DOCKER_REGISTRY} || TEST_FAIL_E2E=1 
+          ./ci/jenkins/test-vmc.sh --cluster-name "${JOB_NAME}-${BUILD_NUMBER}" --cleanup-only
+          if [ "${TEST_FAIL_E2E}" -eq 1 ]; then
+            echo "E2E Test failed!"
+          fi
+          if [ "${TEST_FAIL_NP}" -eq 1 ]; then
+            echo "Network Policy Test failed!"
+          fi
+          if [ "${TEST_FAIL_CONFORMANCE}" -eq 1 ]; then
+            echo "Whole Conformance Test failed!"
+          fi
+          exit $((TEST_FAIL_E2E + TEST_FAIL_NP + TEST_FAIL_CONFORMANCE))

@@ -1,0 +1,41 @@
+[
+	{
+		"op": "move",
+		"from": "/spec/versions/0/schema",
+		"path": "/spec/validation"
+	},
+	{
+		"op": "move",
+		"from": "/spec/versions/0/additionalPrinterColumns/0/jsonPath",
+		"path": "/spec/versions/0/additionalPrinterColumns/0/JSONPath"
+	},
+	{
+		"op": "move",
+		"from": "/spec/versions/0/additionalPrinterColumns/1/jsonPath",
+		"path": "/spec/versions/0/additionalPrinterColumns/1/JSONPath"
+	},
+	{
+		"op": "move",
+		"from": "/spec/versions/0/additionalPrinterColumns/2/jsonPath",
+		"path": "/spec/versions/0/additionalPrinterColumns/2/JSONPath"
+	},
+	{
+		"op": "move",
+		"from": "/spec/versions/0/additionalPrinterColumns/3/jsonPath",
+		"path": "/spec/versions/0/additionalPrinterColumns/3/JSONPath"
+	},
+	{
+		"op": "move",
+		"from": "/spec/versions/0/additionalPrinterColumns/4/jsonPath",
+		"path": "/spec/versions/0/additionalPrinterColumns/4/JSONPath"
+	},
+	{
+		"op": "move",
+		"from": "/spec/versions/0/additionalPrinterColumns",
+		"path": "/spec/additionalPrinterColumns"
+	},
+	{
+		"op": "remove",
+		"path": "/spec/versions/0/subresources"
+	}
+]

@@ -1,10 +1,10 @@
 ---
 layout: page
 title: Resources
-description: Octant Resources
+description: Antrea Resources
 id: resources
 ---
-Here you will find external resources about Octant, such as related projects, videos, podcasts, and community articles.
+Here you will find external resources about Antrea, such as related projects, videos, podcasts, and community articles.
 
 * [Octant: Workload-Navigation und -Visualisierung für Kubernetes](https://jaxenter.de/octant-vmware-kubernetes-workload-86300) - blog post by Dominik Mohilo 
 

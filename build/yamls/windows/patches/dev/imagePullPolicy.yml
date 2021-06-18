@@ -1,0 +1,13 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: antrea-agent-windows
+spec:
+  template:
+    spec:
+      containers:
+        - name: antrea-agent
+          imagePullPolicy: IfNotPresent
+      initContainers:
+        - name: install-cni
+          imagePullPolicy: IfNotPresent

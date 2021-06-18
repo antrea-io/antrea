@@ -48,6 +48,10 @@ function del_br_phy {
 
 function start_ovs {
     log_info $CONTAINER_NAME "Starting OVS"
+    # Unlike the start_ovs script, we don't set flow-restore-wait when starting OVS
+    # with the netdev datapath. This is because the Node's network relies on the
+    # forwarding of OVS so we cannot get Node, Pod, NetworkPolicy data from
+    # Kubernetes API to install proper flows before removing flow-restore-wait.
     /usr/share/openvswitch/scripts/ovs-ctl --system-id=random start --db-file=$OVS_DB_FILE
 }
 
@@ -74,8 +78,15 @@ function quit {
 trap "quit" INT TERM
 
 fix_ovs_ctl
-
 start_ovs
+
+# Restrict read permissions for "others"
+# See discussion in https://github.com/antrea-io/antrea/issues/1292
+chmod 0640 $OVS_DB_FILE
+
+if [[ "$#" -ge 1 ]] && [[ "$1" == "--start-ovs-only" ]]; then
+  exit 0
+fi
 add_br_phy
 
 log_info $CONTAINER_NAME "Started the loop that checks OVS status every 30 seconds"
@@ -87,7 +98,7 @@ while true; do
     SLEEP_PID=$!
     wait $SLEEP_PID
 
-    if ! check_ovs_status ; then
+    if ! check_ovs_status > /dev/null; then
         # OVS was stopped in the container.
         log_warning $CONTAINER_NAME "OVS was stopped. Starting it again"
 

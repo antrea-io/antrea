@@ -1,0 +1,230 @@
+apiVersion: v1
+data:
+  Run-AntreaAgent.ps1: |
+    $ErrorActionPreference = "Stop"
+    # wins will rename the binary when executing it. So we need to copy the binary everytime before running it.
+    mkdir -force /host/k/antrea/bin
+    cp /k/antrea/bin/* /host/k/antrea/bin/
+    C:/k/antrea/utils/wins.exe cli process run --path /k/antrea/bin/antrea-agent.exe --args "--config=/k/antrea/etc/antrea-agent.conf --logtostderr=false --log_dir=/k/antrea/logs/ --alsologtostderr --log_file_max_size=100 --log_file_max_num=4" --envs "KUBERNETES_SERVICE_HOST=$env:KUBERNETES_SERVICE_HOST KUBERNETES_SERVICE_PORT=$env:KUBERNETES_SERVICE_PORT ANTREA_SERVICE_HOST=$env:ANTREA_SERVICE_HOST ANTREA_SERVICE_PORT=$env:ANTREA_SERVICE_PORT NODE_NAME=$env:NODE_NAME"
+kind: ConfigMap
+metadata:
+  labels:
+    app: antrea
+  name: antrea-agent-windows-h7td2mh9gm
+  namespace: kube-system
+---
+apiVersion: v1
+data:
+  antrea-agent.conf: |
+    # FeatureGates is a map of feature names to bools that enable or disable experimental features.
+    featureGates:
+    # Enable antrea proxy which provides ServiceLB for in-cluster services in antrea agent.
+    # It should be enabled on Windows, otherwise NetworkPolicy will not take effect on
+    # Service traffic.
+    #  AntreaProxy: true
+
+    # Enable flowexporter which exports polled conntrack connections as IPFIX flow records from each agent to a configured collector.
+    #  FlowExporter: false
+
+    # Name of the OpenVSwitch bridge antrea-agent will create and use.
+    # Make sure it doesn't conflict with your existing OpenVSwitch bridges.
+    #ovsBridge: br-int
+
+    # Name of the interface antrea-agent will create and use for host <--> pod communication.
+    # Make sure it doesn't conflict with your existing interfaces.
+    #hostGateway: antrea-gw0
+
+    # Encapsulation mode for communication between Pods across Nodes, supported values:
+    # - geneve (default)
+    # - vxlan
+    # - stt
+    #tunnelType: geneve
+
+    # Default MTU to use for the host gateway interface and the network interface of each Pod.
+    # If omitted, antrea-agent will discover the MTU of the Node's primary interface and
+    # also adjust MTU to accommodate for tunnel encapsulation overhead.
+    #defaultMTU: 1450
+
+    # ClusterIP CIDR range for Services. It's required when AntreaProxy is not enabled, and should be
+    # set to the same value as the one specified by --service-cluster-ip-range for kube-apiserver. When
+    # AntreaProxy is enabled, this parameter is not needed and will be ignored if provided.
+    #serviceCIDR: 10.96.0.0/12
+
+    # The port for the antrea-agent APIServer to serve on.
+    #apiPort: 10350
+
+    # Enable metrics exposure via Prometheus. Initializes Prometheus metrics listener.
+    #enablePrometheusMetrics: true
+
+    # Provide the IPFIX collector address as a string with format <HOST>:[<PORT>][:<PROTO>].
+    # HOST can only be IP right now because there is a DNS resolution issue in current Windows support.
+    # IP can be either IPv4 or IPv6. However, IPv6 address should be wrapped with [].
+    # If PORT is empty, we default to 4739, the standard IPFIX port.
+    # If no PROTO is given, we consider "tls" as default. We support "tls", "tcp" and
+    # "udp" protocols. "tls" is used for securing communication between flow exporter and
+    # flow aggregator.
+    #flowCollectorAddr: "flow-aggregator.flow-aggregator.svc:4739:tls"
+
+    # Provide flow poll interval as a duration string. This determines how often the
+    # flow exporter dumps connections from the conntrack module. Flow poll interval
+    # should be greater than or equal to 1s (one second).
+    # Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
+    #flowPollInterval: "5s"
+
+    # Provide the active flow export timeout, which is the timeout after which a flow
+    # record is sent to the collector for active flows. Thus, for flows with a continuous
+    # stream of packets, a flow record will be exported to the collector once the elapsed
+    # time since the last export event is equal to the value of this timeout.
+    # Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
+    #activeFlowExportTimeout: "30s"
+
+    # Provide the idle flow export timeout, which is the timeout after which a flow
+    # record is sent to the collector for idle flows. A flow is considered idle if no
+    # packet matching this flow has been observed since the last export event.
+    # Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
+    #idleFlowExportTimeout: "15s"
+
+    # Enable TLS communication from flow exporter to flow aggregator.
+    #enableTLSToFlowAggregator: true
+
+    # Determines how traffic is encapsulated. It has the following options:
+    # encap(default):    Inter-node Pod traffic is always encapsulated and Pod to external network
+    #                    traffic is SNAT'd.
+    # noEncap:           Inter-node Pod traffic is not encapsulated; Pod to external network traffic is
+    #                    SNAT'd if noSNAT is not set to true. Underlying network must be capable of
+    #                    supporting Pod traffic across IP subnets.
+    # hybrid:            noEncap if source and destination Nodes are on the same subnet, otherwise encap.
+    #
+    #trafficEncapMode: encap
+  antrea-cni.conflist: |
+    {
+        "cniVersion":"0.3.0",
+        "name": "antrea",
+        "plugins": [
+            {
+                "type": "antrea",
+                "ipam": {
+                    "type": "host-local"
+                },
+                "capabilities": {"dns": true}
+            }
+        ]
+    }
+kind: ConfigMap
+metadata:
+  labels:
+    app: antrea
+  name: antrea-windows-config-g5hmmkbh55
+  namespace: kube-system
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  labels:
+    app: antrea
+    component: antrea-agent
+  name: antrea-agent-windows
+  namespace: kube-system
+spec:
+  selector:
+    matchLabels:
+      app: antrea
+      component: antrea-agent
+  template:
+    metadata:
+      labels:
+        app: antrea
+        component: antrea-agent
+    spec:
+      containers:
+      - args:
+        - -file
+        - /var/lib/antrea-windows/Run-AntreaAgent.ps1
+        command:
+        - pwsh
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        image: projects.registry.vmware.com/antrea/antrea-windows:latest
+        imagePullPolicy: IfNotPresent
+        name: antrea-agent
+        volumeMounts:
+        - mountPath: /host
+          name: host
+        - mountPath: \\.\pipe\rancher_wins
+          name: wins
+        - mountPath: /etc/antrea
+          name: antrea-windows-config
+        - mountPath: /var/lib/antrea-windows
+          name: antrea-agent-windows
+        - mountPath: /host/k/antrea/
+          name: host-antrea-home
+      hostNetwork: true
+      initContainers:
+      - args:
+        - -File
+        - /k/antrea/Install-WindowsCNI.ps1
+        command:
+        - pwsh
+        image: projects.registry.vmware.com/antrea/antrea-windows:latest
+        imagePullPolicy: IfNotPresent
+        name: install-cni
+        volumeMounts:
+        - mountPath: /etc/antrea
+          name: antrea-windows-config
+          readOnly: true
+        - mountPath: /host/etc/cni/net.d
+          name: host-cni-conf
+        - mountPath: /host/opt/cni/bin
+          name: host-cni-bin
+        - mountPath: /host/k/antrea/
+          name: host-antrea-home
+        - mountPath: /host
+          name: host
+      nodeSelector:
+        kubernetes.io/os: windows
+      priorityClassName: system-node-critical
+      serviceAccountName: antrea-agent
+      tolerations:
+      - key: CriticalAddonsOnly
+        operator: Exists
+      - effect: NoSchedule
+        operator: Exists
+      volumes:
+      - configMap:
+          name: antrea-windows-config-g5hmmkbh55
+        name: antrea-windows-config
+      - configMap:
+          defaultMode: 420
+          name: antrea-agent-windows-h7td2mh9gm
+        name: antrea-agent-windows
+      - hostPath:
+          path: /etc/cni/net.d
+          type: DirectoryOrCreate
+        name: host-cni-conf
+      - hostPath:
+          path: /opt/cni/bin
+          type: DirectoryOrCreate
+        name: host-cni-bin
+      - hostPath:
+          path: /k/antrea
+          type: DirectoryOrCreate
+        name: host-antrea-home
+      - hostPath:
+          path: /
+        name: host
+      - hostPath:
+          path: \\.\pipe\rancher_wins
+        name: wins
+  updateStrategy:
+    type: RollingUpdate

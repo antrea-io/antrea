@@ -1,0 +1,87 @@
+kind: DaemonSet
+apiVersion: apps/v1
+metadata:
+  labels:
+    app: antrea
+    component: antrea-node-init
+  name: antrea-node-init
+  namespace: kube-system
+spec:
+  selector:
+    matchLabels:
+      app: antrea
+      component: antrea-node-init
+  template:
+    metadata:
+      labels:
+        app: antrea
+        component: antrea-node-init
+    spec:
+      hostPID: true
+      hostNetwork: true
+      volumes:
+      - hostPath:
+          path: /var/run/aws-node
+          type: DirectoryOrCreate
+        name: host-aws-node-run-dir
+      containers:
+        - name: node-init
+          image: gcr.io/google-containers/startup-script:v1
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            privileged: true
+          volumeMounts:
+          - mountPath: /var/run/aws-node
+            name: host-aws-node-run-dir
+          env:
+          - name: STARTUP_SCRIPT
+            value: |
+              #! /bin/bash
+
+              set -o errexit
+              set -o pipefail
+              set -o nounset
+
+              if [ -f /opt/cni/antrea-node-init-status ]; then
+                  echo "Antrea node init already done. Exiting"
+                  exit
+              fi
+
+              echo "Initializing node for Antrea"
+
+              while true; do
+                  cni_conf=$(ls /etc/cni/net.d | head -n1)
+                  if [[ ! -z $cni_conf ]]; then break; fi
+                  echo "Waiting for cni conf file"
+                  sleep 2s
+              done
+              cni_conf="/etc/cni/net.d/$cni_conf"
+
+              while true; do
+                  if grep -sq "antrea" $cni_conf; then break; fi
+                  echo "Waiting for antrea config to be updated"
+                  sleep 2s
+              done
+
+              # Wait for kubelet to register the file update. Default sync time is 5sec
+              # https://github.com/kubernetes/kubernetes/blob/master/pkg/kubelet/dockershim/network/cni/cni.go#L50
+              sleep 5s
+
+              while true; do
+                  curl localhost:61679 && retry=false || retry=true
+                  if [ $retry == false ]; then break ; fi
+                  sleep 2s
+                  echo "Waiting for aws-k8s-agent"
+              done
+
+              # Fetch running containers from aws-k8s-agent and kill them
+              echo "\n"
+              for container_id in $(cat /var/run/aws-node/ipam.json | jq -r '.allocations | .[] | .containerID'); do
+                  echo "Restarting container with ID: ${container_id}"
+                  docker kill "${container_id}" || true
+              done
+
+              # Save the node init status, to avoid container restart in case of node-init pod restart or worker node reboot
+              touch /opt/cni/antrea-node-init-status
+
+              echo "Node initialization completed"

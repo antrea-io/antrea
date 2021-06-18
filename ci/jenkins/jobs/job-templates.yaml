@@ -4,9 +4,8 @@
     block-downstream: false
     block-upstream: false
     builders: '{builders}'
-    concurrent: true
+    concurrent: false
     description: '{description}'
-    disabled: false
     project-type: freestyle
     properties:
     - build-discarder:
@@ -16,12 +15,6 @@
         num-to-keep: 30
     - github:
         url: 'https://github.com/{org_repo}'
-    - throttle:
-        max-per-node: 1
-        max-total: 0
-        categories: '{throttle_concurrent_builds_category}'
-        option: category
-        enabled: '{throttle_concurrent_builds_enabled}'
     publishers: '{publishers}'
     scm:
     - git:
@@ -31,7 +24,56 @@
         refspec: +refs/heads/*:refs/remotes/origin/* +refs/pull/${{ghprbPullId}}/*:refs/remotes/origin/pr/${{ghprbPullId}}/*
         url: 'https://github.com/{org_repo}'
         wipe-workspace: true
-        included-regions: '{included_regions}'
+    triggers:
+    - github-pull-request:
+        admin-list: '{admin_list}'
+        allow-whitelist-orgs-as-admins: '{allow_whitelist_orgs_as_admins}'
+        auth-id: '{ghpr_auth}'
+        auto-close-on-fail: false
+        build-desc-template: null
+        github-hooks: true
+        only-trigger-phrase: '{only_trigger_phrase}'
+        org-list: '{org_list}'
+        permit-all: '{trigger_permit_all}'
+        trigger-phrase: '{trigger_phrase}'
+        white-list-target-branches: '{white_list_target_branches}'
+        white-list: '{white_list}'
+        status-context: '{status_context}'
+        status-url: '{status_url}'
+        success-status: '{success_status}'
+        failure-status: '{failure_status}'
+        error-status: '{error_status}'
+        triggered-status: '{triggered_status}'
+        started-status: '{started_status}'
+    wrappers: '{wrappers}'
+
+- job-template:
+    name: '{name}-{test_name}-job-validator'
+    node: '{node}'
+    block-downstream: false
+    block-upstream: false
+    builders: '{builders}'
+    concurrent: true
+    description: '{description}'
+    project-type: freestyle
+    properties:
+    - build-discarder:
+        artifact-days-to-keep: -1
+        artifact-num-to-keep: -1
+        days-to-keep: 7
+        num-to-keep: 30
+    - github:
+        url: 'https://github.com/{org_repo}'
+    publishers: '{publishers}'
+    scm:
+    - git:
+        branches:
+          - ${{sha1}}
+        credentials-id: '{git_credentials_id}'
+        name: origin
+        refspec: +refs/heads/*:refs/remotes/origin/* +refs/pull/${{ghprbPullId}}/*:refs/remotes/origin/pr/${{ghprbPullId}}/*
+        url: 'https://github.com/{org_repo}'
+        wipe-workspace: true
     triggers:
     - github-pull-request:
         admin-list: '{admin_list}'
@@ -53,7 +95,184 @@
         error-status: '{error_status}'
         triggered-status: '{triggered_status}'
         started-status: '{started_status}'
+        included-regions: '{included_regions}'
+    wrappers: '{wrappers}'
+
+- job-template:
+    name: '{name}-{test_name}-for-period'
+    node: '{node}'
+    block-downstream: false
+    block-upstream: false
+    builders: '{builders}'
+    concurrent: true
+    description: '{description}'
+    project-type: freestyle
+    properties:
+    - build-discarder:
+        artifact-days-to-keep: -1
+        artifact-num-to-keep: -1
+        days-to-keep: 7
+        num-to-keep: 30
+    triggers:
     - pollscm:
         cron: '{cron}'
         ignore-post-commit-hooks: '{ignore_post_commit_hooks}'
+    scm:
+    - git:
+        branches: '{branches}'
+        credentials-id: '{git_credentials_id}'
+        name: origin
+        refspec: +refs/heads/*:refs/remotes/origin/* +refs/pull/${{ghprbPullId}}/*:refs/remotes/origin/pr/${{ghprbPullId}}/*
+        url: 'https://github.com/{org_repo}'
+        wipe-workspace: true
+        included-regions: '{included_regions}'
+    publishers: '{publishers}'
+    wrappers: '{wrappers}'
+
+- job-template:
+    name: '{name}-{test_name}-for-gc'
+    node: '{node}'
+    builders: '{builders}'
+    description: '{description}'
+    properties:
+    - throttle:
+        max-per-node: 1
+        max-total: 0
+        categories: cleanup_and_gc
+        option: category
+        enabled: true
+    triggers:
+    - timed: '{timed}'
+    wrappers:
+    - timeout:
+        fail: true
+        timeout: 40
+        type: absolute
+    scm:
+    - git:
+        branches: '{branches}'
+        credentials-id: '{git_credentials_id}'
+        name: origin
+        refspec: +refs/heads/*:refs/remotes/origin/* +refs/pull/${{ghprbPullId}}/*:refs/remotes/origin/pr/${{ghprbPullId}}/*
+        url: 'https://github.com/{org_repo}'
+        wipe-workspace: true
+        included-regions: '{included_regions}'
+
+- job-template:
+     name: 'cloud-{name}-{test_name}'
+     node: '{node}'
+     triggers: '{triggers}'
+     builders: '{builders}'
+     parameters:
+     - string:
+         default: https://github.com/antrea-io/antrea/
+         description: The repository to checkout Antrea for this test.
+         name: ANTREA_REPO
+         trim: 'true'
+     - string:
+         default: main
+         description: The branch or SHA commit ID to checkout and build Antrea for this test.
+         name: ANTREA_GIT_REVISION
+         trim: 'true'
+     description: '{description}'
+     block-downstream: false
+     block-upstream: false
+     project-type: freestyle
+     properties:
+     - build-discarder:
+         artifact-days-to-keep: -1
+         artifact-num-to-keep: -1
+         days-to-keep: 7
+         num-to-keep: 30
+     - github:
+         url: '{repo_url}'
+     scm:
+     - git:
+         branches: '{branches}'
+         name: origin
+         url: '{repo_url}'
+     publishers: '{publishers}'
+     wrappers: '{wrappers}'
+
+- job-template:
+     name: 'cloud-{name}-{test_name}-cleanup'
+     node: '{node}'
+     triggers: '{triggers}'
+     builders: '{builders}'
+     parameters:
+     - string:
+         default: ''
+         description: The cluster name of the last finished build.
+         name: CLUSTERNAME
+         trim: 'false'
+     - string:
+         default: https://github.com/antrea-io/antrea/
+         description: The repository to checkout Antrea for this test.
+         name: ANTREA_REPO
+         trim: 'true'
+     - string:
+         default: main
+         description: The branch or SHA commit ID to checkout and build Antrea for this test.
+         name: ANTREA_GIT_REVISION
+         trim: 'true'
+     description: '{description}'
+     block-downstream: false
+     block-upstream: false
+     project-type: freestyle
+     properties:
+     - build-discarder:
+         artifact-days-to-keep: -1
+         artifact-num-to-keep: -1
+         days-to-keep: 7
+         num-to-keep: 30
+     - github:
+         url: '{repo_url}'
+     scm:
+     - git:
+         branches: '{branches}'
+         name: origin
+         url: '{repo_url}'
+     publishers: '{publishers}'
+     wrappers: '{wrappers}'
+
+- job-template:
+    name: '{name}-{test_name}-matrix-compatibility-test'
+    node: '{node}'
+    block-downstream: false
+    block-upstream: false
+    builders: '{builders}'
+    concurrent: true
+    description: '{description}'
+    project-type: matrix
+    execution-strategy:
+      sequential: true
+    scm:
+    - git:
+        branches: '{branches}'
+        credentials-id: '{git_credentials_id}'
+        name: origin
+        refspec: +refs/heads/*:refs/remotes/origin/* +refs/pull/${{ghprbPullId}}/*:refs/remotes/origin/pr/${{ghprbPullId}}/*
+        url: 'https://github.com/{org_repo}'
+        wipe-workspace: true
+        included-regions: '{included_regions}'
+    triggers:
+    - pollscm:
+        cron: '{cron}'
+        ignore-post-commit-hooks: '{ignore_post_commit_hooks}'
+    axes: '{axes}'
+    properties:
+    - build-discarder:
+        artifact-days-to-keep: -1
+        artifact-num-to-keep: -1
+        days-to-keep: 7
+        num-to-keep: 30
+    - throttle:
+        option: project
+        max-per-node: 2
+        max-total: 2
+        parameters-limit: true
+        matrix-configs: true
+        matrix-builds: true
+    publishers: '{publishers}'
+    parameters: '{parameters}'
     wrappers: '{wrappers}'

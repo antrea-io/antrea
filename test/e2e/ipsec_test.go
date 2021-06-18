@@ -15,20 +15,52 @@
 package e2e
 
 import (
+	"fmt"
+	"regexp"
+	"strconv"
 	"testing"
-	"time"
 
 	"k8s.io/apimachinery/pkg/util/wait"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/util"
+	"antrea.io/antrea/pkg/agent/util"
 )
+
+func (data *TestData) readSecurityAssociationsStatus(nodeName string) (up int, connecting int, err error) {
+	antreaPodName, err := data.getAntreaPodOnNode(nodeName)
+	if err != nil {
+		return 0, 0, err
+	}
+	cmd := []string{"ipsec", "status"}
+	stdout, stderr, err := data.runCommandFromPod(antreaNamespace, antreaPodName, "antrea-ipsec", cmd)
+	if err != nil {
+		return 0, 0, fmt.Errorf("error when running 'ipsec status' on '%s': %v - stdout: %s - stderr: %s", nodeName, err, stdout, stderr)
+	}
+	re := regexp.MustCompile(`Security Associations \((\d+) up, (\d+) connecting\)`)
+	matches := re.FindStringSubmatch(stdout)
+	if len(matches) == 0 {
+		return 0, 0, fmt.Errorf("unexpected 'ipsec status' output: %s", stdout)
+	}
+	if v, err := strconv.ParseUint(matches[1], 10, 32); err != nil {
+		return 0, 0, fmt.Errorf("error when retrieving 'up' SAs from 'ipsec status' output: %v", err)
+	} else {
+		up = int(v)
+	}
+	if v, err := strconv.ParseUint(matches[2], 10, 32); err != nil {
+		return 0, 0, fmt.Errorf("error when retrieving 'connecting' SAs from 'ipsec status' output: %v", err)
+	} else {
+		connecting = int(v)
+	}
+	return up, connecting, nil
+}
 
 // TestIPSecTunnelConnectivity checks that Pod traffic across two Nodes over
 // the IPSec tunnel, by creating multiple Pods across distinct Nodes and having
 // them ping each other.
 func TestIPSecTunnelConnectivity(t *testing.T) {
 	skipIfProviderIs(t, "kind", "IPSec tunnel does not work with Kind")
+	skipIfIPv6Cluster(t)
 	skipIfNumNodesLessThan(t, 2)
+	skipIfHasWindowsNodes(t)
 
 	data, err := setupTest(t)
 	if err != nil {
@@ -41,6 +73,17 @@ func TestIPSecTunnelConnectivity(t *testing.T) {
 
 	data.testPodConnectivityDifferentNodes(t)
 
+	// We know that testPodConnectivityDifferentNodes always creates a Pod on Node 0 for the
+	// inter-Node ping test.
+	nodeName := nodeName(0)
+	if up, _, err := data.readSecurityAssociationsStatus(nodeName); err != nil {
+		t.Errorf("Error when reading Security Associations: %v", err)
+	} else if up == 0 {
+		t.Errorf("Expected at least one 'up' Security Association, but got %d", up)
+	} else {
+		t.Logf("Found %d 'up' SecurityAssociation(s) for Node '%s'", up, nodeName)
+	}
+
 	// Restore normal Antrea deployment with IPSec disabled.
 	data.redeployAntrea(t, false)
 }
@@ -50,7 +93,9 @@ func TestIPSecTunnelConnectivity(t *testing.T) {
 // correctly.
 func TestIPSecDeleteStaleTunnelPorts(t *testing.T) {
 	skipIfProviderIs(t, "kind", "IPSec tunnel does not work with Kind")
+	skipIfIPv6Cluster(t)
 	skipIfNumNodesLessThan(t, 2)
+	skipIfHasWindowsNodes(t)
 
 	data, err := setupTest(t)
 	if err != nil {
@@ -82,7 +127,7 @@ func TestIPSecDeleteStaleTunnelPorts(t *testing.T) {
 	}
 
 	t.Logf("Checking that tunnel port has been created")
-	if err := wait.PollImmediate(1*time.Second, defaultTimeout, func() (found bool, err error) {
+	if err := wait.PollImmediate(defaultInterval, defaultTimeout, func() (found bool, err error) {
 		return doesOVSPortExist(), nil
 	}); err == wait.ErrWaitTimeout {
 		t.Fatalf("Timed out while waiting for OVS tunnel port to be created")
@@ -94,7 +139,7 @@ func TestIPSecDeleteStaleTunnelPorts(t *testing.T) {
 	data.redeployAntrea(t, false)
 
 	t.Logf("Checking that tunnel port has been deleted")
-	if err := wait.PollImmediate(1*time.Second, defaultTimeout, func() (found bool, err error) {
+	if err := wait.PollImmediate(defaultInterval, defaultTimeout, func() (found bool, err error) {
 		return !doesOVSPortExist(), nil
 	}); err == wait.ErrWaitTimeout {
 		t.Fatalf("Timed out while waiting for OVS tunnel port to be deleted")

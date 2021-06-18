@@ -24,7 +24,7 @@ import (
 	"github.com/kevinburke/ssh_config"
 	"golang.org/x/crypto/ssh"
 
-	"github.com/vmware-tanzu/antrea/test/e2e/providers/exec"
+	"antrea.io/antrea/test/e2e/providers/exec"
 )
 
 func vagrantPath() (string, error) {
@@ -92,6 +92,7 @@ func convertConfig(inConfig *ssh_config.Config, name string) (string, *ssh.Clien
 		return "", nil, fmt.Errorf("unable to parse private key from file '%s': %v", identityFile, err)
 	}
 
+	// #nosec G106: we are using ssh.InsecureIgnoreHostKey, but this is test code
 	config := &ssh.ClientConfig{
 		User:            values["User"],
 		Auth:            []ssh.AuthMethod{ssh.PublicKeys(signer)},

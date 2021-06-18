@@ -15,6 +15,7 @@
 package e2e
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"net/url"
@@ -23,22 +24,20 @@ import (
 	"time"
 
 	"golang.org/x/exp/rand"
-	"k8s.io/apimachinery/pkg/util/wait"
-
 	corev1 "k8s.io/api/core/v1"
 	networkv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 )
 
 const (
-	seed                            uint64 = 0xA1E47 // Use a specific rand seed to make the generated workloads always same
-	perfTestAppLabel                       = "antrea-perf-test"
-	podsConnectionNetworkPolicyName        = "pods.ingress"
-	workloadNetworkPolicyName              = "workloads.ingress"
-	perftoolImage                          = "antrea/perftool"
-	nginxImage                             = "nginx"
-	perftoolContainerName                  = "perftool"
-	nginxContainerName                     = "nginx"
+	seed uint64 = 0xA1E47 // Use a specific rand seed to make the generated workloads always same
+
+	perfTestAppLabel                = "antrea-perf-test"
+	podsConnectionNetworkPolicyName = "pods.ingress"
+	workloadNetworkPolicyName       = "workloads.ingress"
+	perftoolContainerName           = "perftool"
+	nginxContainerName              = "nginx"
 )
 
 var (
@@ -49,18 +48,15 @@ var (
 	customizePolicyRules = flag.Int("perf.http.policy_rules", 0, "Number of CIDRs in the network policy")
 	httpConcurrency      = flag.Int("perf.http.concurrency", 1, "Number of multiple requests to make at a time")
 	realizeTimeout       = flag.Duration("perf.realize.timeout", 5*time.Minute, "Timeout of the realization of network policies")
-	// tolerate NoSchedule taint to let the Pod run on master Node
-	noScheduleToleration = corev1.Toleration{
-		Key:      "node-role.kubernetes.io/master",
-		Operator: corev1.TolerationOpExists,
-		Effect:   corev1.TaintEffectNoSchedule,
-	}
-	labelSelector = &metav1.LabelSelector{
+	// tolerate NoSchedule taint to let the Pod run on control-plane Node
+	noScheduleToleration = controlPlaneNoScheduleToleration()
+	labelSelector        = &metav1.LabelSelector{
 		MatchLabels: map[string]string{"app": perfTestAppLabel},
 	}
 )
 
 func BenchmarkHTTPRequest(b *testing.B) {
+	skipIfNotIPv4Cluster(b)
 	for _, scale := range []struct{ requests, policyRules int }{
 		{100000, 0},
 		{1000000, 0},
@@ -75,6 +71,7 @@ func BenchmarkHTTPRequest(b *testing.B) {
 }
 
 func BenchmarkRealizeNetworkPolicy(b *testing.B) {
+	skipIfNotIPv4Cluster(b)
 	for _, policyRules := range []int{5000, 10000, 15000} {
 		b.Run(fmt.Sprintf("RealizeNetworkPolicy%d", policyRules), func(b *testing.B) {
 			withPerfTestSetup(func(data *TestData) { networkPolicyRealize(policyRules, data, b) }, b)
@@ -83,6 +80,7 @@ func BenchmarkRealizeNetworkPolicy(b *testing.B) {
 }
 
 func BenchmarkCustomizeHTTPRequest(b *testing.B) {
+	skipIfNotIPv4Cluster(b)
 	if *customizeRequests == 0 {
 		b.Skip("The value of perf.http.requests=0, skipped")
 	}
@@ -90,6 +88,7 @@ func BenchmarkCustomizeHTTPRequest(b *testing.B) {
 }
 
 func BenchmarkCustomizeRealizeNetworkPolicy(b *testing.B) {
+	skipIfNotIPv4Cluster(b)
 	if *customizePolicyRules == 0 {
 		b.Skip("The value of perf.http.policy_rules=0, skipped")
 	}
@@ -101,7 +100,7 @@ func randCidr(rndSrc rand.Source) string {
 }
 
 // createPerfTestPodDefinition creates the Pod specification for the perf test.
-// The Pod will be scheduled on the master Node.
+// The Pod will be scheduled on the control-plane Node.
 func createPerfTestPodDefinition(name, containerName, image string) *corev1.Pod {
 	podSpec := corev1.PodSpec{
 		Containers: []corev1.Container{
@@ -114,7 +113,7 @@ func createPerfTestPodDefinition(name, containerName, image string) *corev1.Pod 
 		RestartPolicy: corev1.RestartPolicyAlways,
 	}
 	podSpec.NodeSelector = map[string]string{
-		"kubernetes.io/hostname": masterNodeName(),
+		"kubernetes.io/hostname": controlPlaneNodeName(),
 	}
 
 	podSpec.Tolerations = []corev1.Toleration{noScheduleToleration}
@@ -143,7 +142,7 @@ func setupTestPodsConnection(data *TestData) error {
 		ObjectMeta: metav1.ObjectMeta{Name: podsConnectionNetworkPolicyName},
 		Spec:       npSpec,
 	}
-	_, err := data.clientset.NetworkingV1().NetworkPolicies(testNamespace).Create(np)
+	_, err := data.clientset.NetworkingV1().NetworkPolicies(testNamespace).Create(context.TODO(), np, metav1.CreateOptions{})
 	return err
 }
 
@@ -171,31 +170,31 @@ func generateWorkloadNetworkPolicy(policyRules int) *networkv1.NetworkPolicy {
 }
 
 func populateWorkloadNetworkPolicy(np *networkv1.NetworkPolicy, data *TestData) error {
-	_, err := data.clientset.NetworkingV1().NetworkPolicies(testNamespace).Create(np)
+	_, err := data.clientset.NetworkingV1().NetworkPolicies(testNamespace).Create(context.TODO(), np, metav1.CreateOptions{})
 	return err
 }
 
-func setupTestPods(data *TestData, b *testing.B) (nginxPodIP, perfPodIP string) {
+func setupTestPods(data *TestData, b *testing.B) (nginxPodIP, perfPodIP *PodIPs) {
 	b.Logf("Creating a nginx test Pod")
 	nginxPod := createPerfTestPodDefinition(benchNginxPodName, nginxContainerName, nginxImage)
-	_, err := data.clientset.CoreV1().Pods(testNamespace).Create(nginxPod)
+	_, err := data.clientset.CoreV1().Pods(testNamespace).Create(context.TODO(), nginxPod, metav1.CreateOptions{})
 	if err != nil {
 		b.Fatalf("Error when creating nginx test pod: %v", err)
 	}
 	b.Logf("Waiting IP assignment of the nginx test Pod")
-	nginxPodIP, err = data.podWaitForIP(defaultTimeout, benchNginxPodName)
+	nginxPodIP, err = data.podWaitForIPs(defaultTimeout, benchNginxPodName, testNamespace)
 	if err != nil {
 		b.Fatalf("Error when waiting for IP assignment of nginx test Pod: %v", err)
 	}
 
 	b.Logf("Creating a perftool test Pod")
 	perfPod := createPerfTestPodDefinition(perftoolPodName, perftoolContainerName, perftoolImage)
-	_, err = data.clientset.CoreV1().Pods(testNamespace).Create(perfPod)
+	_, err = data.clientset.CoreV1().Pods(testNamespace).Create(context.TODO(), perfPod, metav1.CreateOptions{})
 	if err != nil {
 		b.Fatalf("Error when creating perftool test Pod: %v", err)
 	}
-	b.Logf("Waiting IP assignment of the perftool test Pod")
-	perfPodIP, err = data.podWaitForIP(defaultTimeout, perftoolPodName)
+	b.Logf("Waiting for IP assignment of the perftool test Pod")
+	perfPodIP, err = data.podWaitForIPs(defaultTimeout, perftoolPodName, testNamespace)
 	if err != nil {
 		b.Fatalf("Error when waiting for IP assignment of perftool test Pod: %v", err)
 	}
@@ -203,12 +202,15 @@ func setupTestPods(data *TestData, b *testing.B) (nginxPodIP, perfPodIP string) 
 }
 
 // httpRequest runs a benchmark to measure intra-Node Pod-to-Pod HTTP request performance. It creates one perftool
-// Pod and one Nginx Pod, both on the master Node. The perftool will use apache-bench tool to issue perf.http.requests
+// Pod and one Nginx Pod, both on the control-plane Node. The perftool will use apache-bench tool to issue perf.http.requests
 // number of requests to the Nginx Pod. The number of concurrent requests will be determined by the value provided with
 // the http.perf.concurrency command-line flag (default is 1, for sequential requests). policyRules indicates how many CIDR
 // rules should be included in the network policy applied to the Pods.
 func httpRequest(requests, policyRules int, data *TestData, b *testing.B) {
 	nginxPodIP, _ := setupTestPods(data, b)
+
+	// performance_test only runs in IPv4 cluster, so here only check the IPv4 address of nginx server Pod.
+	nginxPodIPStr := nginxPodIP.ipv4.String()
 
 	err := setupTestPodsConnection(data) // enable Pods connectivity policy first
 	if err != nil {
@@ -221,14 +223,14 @@ func httpRequest(requests, policyRules int, data *TestData, b *testing.B) {
 		b.Fatalf("Error when populating workload network policy: %v", err)
 	}
 
-	b.Log("Waiting the workload network policy to be realized")
-	err = waitNetworkPolicyRealize(policyRules, data)
+	b.Log("Waiting for the workload network policy to be realized")
+	err = WaitNetworkPolicyRealize(policyRules, data)
 	if err != nil {
 		b.Fatalf("Checking network policies realization failed: %v", err)
 	}
 	b.Log("Network policy realized")
 
-	serverURL := &url.URL{Scheme: "http", Host: nginxPodIP, Path: "/"}
+	serverURL := &url.URL{Scheme: "http", Host: nginxPodIPStr, Path: "/"}
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
 		b.Logf("Running http request bench %d/%d", i+1, b.N)
@@ -249,40 +251,44 @@ func networkPolicyRealize(policyRules int, data *TestData, b *testing.B) {
 		go func() {
 			err := populateWorkloadNetworkPolicy(generateWorkloadNetworkPolicy(policyRules), data)
 			if err != nil {
-				b.Fatalf("Error when populating workload network policy: %v", err)
+				// cannot use Fatal in a goroutine
+				// if populating policies fails, WaitNetworkPolicyRealize will
+				// eventually time out and the test will fail, although it would be
+				// better to fail early in that case.
+				b.Errorf("Error when populating workload network policy: %v", err)
 			}
 		}()
 
-		b.Log("Waiting the network policy to be realized")
+		b.Log("Waiting for the network policy to be realized")
 		b.StartTimer()
-		err := waitNetworkPolicyRealize(policyRules, data)
+		err := WaitNetworkPolicyRealize(policyRules, data)
 		if err != nil {
 			b.Fatalf("Checking network policies realization failed: %v", err)
 		}
 		b.StopTimer()
 		b.Log("Network policy realized")
 
-		err = data.clientset.NetworkingV1().NetworkPolicies(testNamespace).Delete(workloadNetworkPolicyName, new(metav1.DeleteOptions))
+		err = data.clientset.NetworkingV1().NetworkPolicies(testNamespace).Delete(context.TODO(), workloadNetworkPolicyName, metav1.DeleteOptions{})
 		if err != nil {
 			b.Fatalf("Error when cleaning up network policies after running one bench iteration: %v", err)
 		}
 	}
 }
 
-func waitNetworkPolicyRealize(policyRules int, data *TestData) error {
+func WaitNetworkPolicyRealize(policyRules int, data *TestData) error {
 	return wait.PollImmediate(50*time.Millisecond, *realizeTimeout, func() (bool, error) {
 		return checkRealize(policyRules, data)
 	})
 }
 
 // checkRealize checks if all CIDR rules in the Network Policy have been realized as OVS flows. It counts the number of
-// flows installed in the ingressRuleTable of the OVS bridge of the master Node. This relies on the implementation
+// flows installed in the ingressRuleTable of the OVS bridge of the control-plane Node. This relies on the implementation
 // knowledge that given a single ingress policy, the Antrea agent will install exactly one flow per CIDR rule in table 90.
 // checkRealize returns true when the number of flows exceeds the number of CIDR, because each table has a default flow
 // entry which is used for default matching.
 // Since the check is done over SSH, the time measurement is not completely accurate.
 func checkRealize(policyRules int, data *TestData) (bool, error) {
-	antreaPodName, err := data.getAntreaPodOnNode(masterNodeName())
+	antreaPodName, err := data.getAntreaPodOnNode(controlPlaneNodeName())
 	if err != nil {
 		return false, err
 	}

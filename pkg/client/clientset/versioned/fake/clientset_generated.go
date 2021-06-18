@@ -1,4 +1,4 @@
-// Copyright 2019 Antrea Authors
+// Copyright 2021 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,11 +17,23 @@
 package fake
 
 import (
-	clientset "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned"
-	clusterinformationv1beta1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/clusterinformation/v1beta1"
-	fakeclusterinformationv1beta1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/clusterinformation/v1beta1/fake"
-	networkingv1beta1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/networking/v1beta1"
-	fakenetworkingv1beta1 "github.com/vmware-tanzu/antrea/pkg/client/clientset/versioned/typed/networking/v1beta1/fake"
+	clientset "antrea.io/antrea/pkg/client/clientset/versioned"
+	controlplanev1beta1 "antrea.io/antrea/pkg/client/clientset/versioned/typed/controlplane/v1beta1"
+	fakecontrolplanev1beta1 "antrea.io/antrea/pkg/client/clientset/versioned/typed/controlplane/v1beta1/fake"
+	controlplanev1beta2 "antrea.io/antrea/pkg/client/clientset/versioned/typed/controlplane/v1beta2"
+	fakecontrolplanev1beta2 "antrea.io/antrea/pkg/client/clientset/versioned/typed/controlplane/v1beta2/fake"
+	crdv1alpha1 "antrea.io/antrea/pkg/client/clientset/versioned/typed/crd/v1alpha1"
+	fakecrdv1alpha1 "antrea.io/antrea/pkg/client/clientset/versioned/typed/crd/v1alpha1/fake"
+	crdv1alpha2 "antrea.io/antrea/pkg/client/clientset/versioned/typed/crd/v1alpha2"
+	fakecrdv1alpha2 "antrea.io/antrea/pkg/client/clientset/versioned/typed/crd/v1alpha2/fake"
+	crdv1alpha3 "antrea.io/antrea/pkg/client/clientset/versioned/typed/crd/v1alpha3"
+	fakecrdv1alpha3 "antrea.io/antrea/pkg/client/clientset/versioned/typed/crd/v1alpha3/fake"
+	crdv1beta1 "antrea.io/antrea/pkg/client/clientset/versioned/typed/crd/v1beta1"
+	fakecrdv1beta1 "antrea.io/antrea/pkg/client/clientset/versioned/typed/crd/v1beta1/fake"
+	statsv1alpha1 "antrea.io/antrea/pkg/client/clientset/versioned/typed/stats/v1alpha1"
+	fakestatsv1alpha1 "antrea.io/antrea/pkg/client/clientset/versioned/typed/stats/v1alpha1/fake"
+	systemv1beta1 "antrea.io/antrea/pkg/client/clientset/versioned/typed/system/v1beta1"
+	fakesystemv1beta1 "antrea.io/antrea/pkg/client/clientset/versioned/typed/system/v1beta1/fake"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/discovery"
@@ -76,12 +88,42 @@ func (c *Clientset) Tracker() testing.ObjectTracker {
 
 var _ clientset.Interface = &Clientset{}
 
-// ClusterinformationV1beta1 retrieves the ClusterinformationV1beta1Client
-func (c *Clientset) ClusterinformationV1beta1() clusterinformationv1beta1.ClusterinformationV1beta1Interface {
-	return &fakeclusterinformationv1beta1.FakeClusterinformationV1beta1{Fake: &c.Fake}
+// ControlplaneV1beta1 retrieves the ControlplaneV1beta1Client
+func (c *Clientset) ControlplaneV1beta1() controlplanev1beta1.ControlplaneV1beta1Interface {
+	return &fakecontrolplanev1beta1.FakeControlplaneV1beta1{Fake: &c.Fake}
 }
 
-// NetworkingV1beta1 retrieves the NetworkingV1beta1Client
-func (c *Clientset) NetworkingV1beta1() networkingv1beta1.NetworkingV1beta1Interface {
-	return &fakenetworkingv1beta1.FakeNetworkingV1beta1{Fake: &c.Fake}
+// ControlplaneV1beta2 retrieves the ControlplaneV1beta2Client
+func (c *Clientset) ControlplaneV1beta2() controlplanev1beta2.ControlplaneV1beta2Interface {
+	return &fakecontrolplanev1beta2.FakeControlplaneV1beta2{Fake: &c.Fake}
+}
+
+// CrdV1alpha1 retrieves the CrdV1alpha1Client
+func (c *Clientset) CrdV1alpha1() crdv1alpha1.CrdV1alpha1Interface {
+	return &fakecrdv1alpha1.FakeCrdV1alpha1{Fake: &c.Fake}
+}
+
+// CrdV1alpha2 retrieves the CrdV1alpha2Client
+func (c *Clientset) CrdV1alpha2() crdv1alpha2.CrdV1alpha2Interface {
+	return &fakecrdv1alpha2.FakeCrdV1alpha2{Fake: &c.Fake}
+}
+
+// CrdV1alpha3 retrieves the CrdV1alpha3Client
+func (c *Clientset) CrdV1alpha3() crdv1alpha3.CrdV1alpha3Interface {
+	return &fakecrdv1alpha3.FakeCrdV1alpha3{Fake: &c.Fake}
+}
+
+// CrdV1beta1 retrieves the CrdV1beta1Client
+func (c *Clientset) CrdV1beta1() crdv1beta1.CrdV1beta1Interface {
+	return &fakecrdv1beta1.FakeCrdV1beta1{Fake: &c.Fake}
+}
+
+// StatsV1alpha1 retrieves the StatsV1alpha1Client
+func (c *Clientset) StatsV1alpha1() statsv1alpha1.StatsV1alpha1Interface {
+	return &fakestatsv1alpha1.FakeStatsV1alpha1{Fake: &c.Fake}
+}
+
+// SystemV1beta1 retrieves the SystemV1beta1Client
+func (c *Clientset) SystemV1beta1() systemv1beta1.SystemV1beta1Interface {
+	return &fakesystemv1beta1.FakeSystemV1beta1{Fake: &c.Fake}
 }

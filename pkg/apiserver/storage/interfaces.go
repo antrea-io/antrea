@@ -22,10 +22,6 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 )
 
-// Patched is an EventType in addition to EventTypes defined in k8s.io/apimachinery/pkg/watch/watch.go.
-// It indicates watch.Event contains an incremental update, not the object itself.
-const Patched watch.EventType = "PATCHED"
-
 // Selectors represent a watcher's conditions to select objects.
 type Selectors struct {
 	// Key is the identifier of the object the watcher monitors. It can be empty.
@@ -44,7 +40,7 @@ type InternalEvent interface {
 	// It will be called once for all watchers that are interested in the event. Expensive computation that will repeat
 	// for all watchers should be placed in GenEventFunc as pre-process. For example, the routine that groups a list of
 	// pods by nodes is a potential candidate.
-	ToWatchEvent(selectors *Selectors) *watch.Event
+	ToWatchEvent(selectors *Selectors, isInitEvent bool) *watch.Event
 	// GetResourceVersion returns the resourceVersion of this event.
 	// The resourceVersion is used to filter out previously buffered events when watcher is started.
 	GetResourceVersion() uint64
@@ -54,6 +50,9 @@ type InternalEvent interface {
 // Only a single InternalEvent will be generated for each add/update/delete, and the InternalEvent itself should be
 // immutable during its conversion to *watch.Event.
 type GenEventFunc func(key string, prevObj, obj interface{}, resourceVersion uint64) (InternalEvent, error)
+
+// SelectFunc checks whether an object match the provided selectors.
+type SelectFunc func(selectors *Selectors, key string, obj interface{}) bool
 
 // Interface offers a common storage interface for runtime.Object.
 // It's provided for Network Policy controller to store the translated Network Policy resources, then Antrea apiserver can

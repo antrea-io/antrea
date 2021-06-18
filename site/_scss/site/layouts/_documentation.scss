@@ -9,6 +9,7 @@
     @extend .table;
     @extend .table-striped;
     @extend .table-bordered;
+    font-size: 1rem;
     thead {
       @extend .thead-light;
     }

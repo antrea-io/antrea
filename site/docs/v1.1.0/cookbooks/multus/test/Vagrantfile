@@ -1,0 +1,70 @@
+VAGRANTFILE_API_VERSION = "2"
+
+NUM_WORKERS = 2
+
+MODE = "v4"
+K8S_POD_NETWORK_CIDR = "10.10.0.0/16"
+K8S_SERVICE_NETWORK_CIDR = "10.96.0.0/12"
+K8S_NODE_CP_GW_IP = "10.10.0.1"
+
+Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
+  config.vm.box = "ubuntu/bionic64"
+
+  config.vm.provider "virtualbox" do |v|
+    v.memory = 2048
+    # 2 CPUS required to initialize K8s cluster with "kubeadm init"
+    v.cpus = 2
+
+    v.customize [
+                             "modifyvm", :id,
+                             "--nicpromisc3", "allow-all"
+                ]
+  end
+
+  groups = {
+    "controlplane" => ["k8s-node-control-plane"],
+    "workers" => ["k8s-node-worker-[1:#{NUM_WORKERS}]"],
+  }
+
+  config.vm.define "k8s-node-control-plane" do |node|
+    node.vm.hostname = "k8s-node-control-plane"
+    node_ip = "192.168.77.100"
+    node.vm.network "private_network", ip: node_ip
+    node.vm.network "private_network", ip: "192.168.78.100", virtualbox__intnet: true
+
+    node.vm.provision :ansible  do |ansible|
+      ansible.playbook = "playbook/k8s.yml"
+      ansible.groups = groups
+      ansible.extra_vars = {
+        # Ubuntu bionic does not ship with python2
+        ansible_python_interpreter:"/usr/bin/python3",
+        node_ip: node_ip,
+        node_name: "k8s-node-control-plane",
+        k8s_pod_network_cidr: K8S_POD_NETWORK_CIDR,
+        k8s_service_network_cidr: K8S_SERVICE_NETWORK_CIDR,
+        k8s_api_server_ip: node_ip,
+        k8s_ip_family: MODE,
+        k8s_antrea_gw_ip: K8S_NODE_CP_GW_IP,
+      }
+    end
+  end
+
+  (1..NUM_WORKERS).each do |node_id|
+    config.vm.define "k8s-node-worker-#{node_id}" do |node|
+      node.vm.hostname = "k8s-node-worker-#{node_id}"
+      node_ip = "192.168.77.#{100 + node_id}"
+      node.vm.network "private_network", ip: node_ip
+      node.vm.network "private_network", ip: "192.168.78.#{100 + node_id}", virtualbox__intnet: true
+
+      node.vm.provision :ansible do |ansible|
+        ansible.playbook = "playbook/k8s.yml"
+        ansible.groups = groups
+        ansible.extra_vars = {
+          ansible_python_interpreter:"/usr/bin/python3",
+          node_ip: node_ip,
+          node_name: "k8s-node-worker-#{node_id}",
+        }
+      end
+    end
+  end
+end

@@ -16,6 +16,7 @@ rules:
       - nodes
       - pods
       - namespaces
+      - services
     verbs:
       - get
       - watch
@@ -29,22 +30,6 @@ rules:
       - watch
       - list
   - apiGroups:
-      - clusterinformation.antrea.tanzu.vmware.com
-    resources:
-      - antreacontrollerinfos
-    verbs:
-      - get
-      - create
-      - update
-      - delete
-  - apiGroups:
-      - clusterinformation.antrea.tanzu.vmware.com
-    resources:
-      - antreaagentinfos
-    verbs:
-      - list
-      - delete
-  - apiGroups:
       - authentication.k8s.io
     resources:
       - tokenreviews
@@ -56,29 +41,260 @@ rules:
       - subjectaccessreviews
     verbs:
       - create
+  - apiGroups:
+      - apiextensions.k8s.io
+    resources:
+      - customresourcedefinitions
+    verbs:
+      - get
+      - update
+  # This is the content of built-in role kube-system/extension-apiserver-authentication-reader.
+  # But it doesn't have list/watch permission before K8s v1.17.0 so the extension apiserver (antrea-controller) will
+  # have permission issue after bumping up apiserver library to a version that supports dynamic authentication.
+  # See https://github.com/kubernetes/kubernetes/pull/85375
+  # To support K8s clusters older than v1.17.0, we grant the required permissions directly instead of relying on
+  # the extension-apiserver-authentication role.
+  - apiGroups:
+      - ""
+    resourceNames:
+      - extension-apiserver-authentication
+    resources:
+      - configmaps
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - ""
+    resources:
+      - configmaps
+    resourceNames:
+      - antrea-ca
+      - antrea-cluster-identity
+    verbs:
+      - get
+      - update
+  - apiGroups:
+      - ""
+    resources:
+      - configmaps
+    verbs:
+      - create
+  - apiGroups:
+      - apiregistration.k8s.io
+    resources:
+      - apiservices
+    resourceNames:
+      - v1alpha1.stats.antrea.tanzu.vmware.com
+      - v1beta1.system.antrea.tanzu.vmware.com
+      - v1beta2.controlplane.antrea.tanzu.vmware.com
+      - v1beta1.controlplane.antrea.tanzu.vmware.com
+      - v1beta1.networking.antrea.tanzu.vmware.com
+      - v1alpha1.stats.antrea.io
+      - v1beta1.system.antrea.io
+      - v1beta2.controlplane.antrea.io
+    verbs:
+      - get
+      - update
+  - apiGroups:
+      - admissionregistration.k8s.io
+    resources:
+      - mutatingwebhookconfigurations
+      - validatingwebhookconfigurations
+    resourceNames:
+      - crdmutator.antrea.tanzu.vmware.com
+      - crdvalidator.antrea.tanzu.vmware.com
+      - labelsmutator.antrea.io
+      - crdmutator.antrea.io
+      - crdvalidator.antrea.io
+    verbs:
+      - get
+      - update
+  - apiGroups:
+      - crd.antrea.io
+    resources:
+      - antreacontrollerinfos
+    verbs:
+      - get
+      - create
+      - update
+      - delete
+  - apiGroups:
+      - crd.antrea.io
+    resources:
+      - antreaagentinfos
+    verbs:
+      - list
+      - delete
+  - apiGroups:
+      - crd.antrea.io
+    resources:
+      - clusternetworkpolicies
+      - networkpolicies
+    verbs:
+      - get
+      - watch
+      - list
+      - update
+      - patch
+      - create
+      - delete
+  - apiGroups:
+      - crd.antrea.io
+    resources:
+      - clusternetworkpolicies/status
+      - networkpolicies/status
+    verbs:
+      - update
+  - apiGroups:
+      - crd.antrea.io
+    resources:
+      - tiers
+    verbs:
+      - get
+      - watch
+      - list
+      - update
+      - patch
+      - create
+      - delete
+  - apiGroups:
+      - crd.antrea.io
+    resources:
+      - traceflows
+      - traceflows/status
+    verbs:
+      - get
+      - watch
+      - list
+      - update
+      - patch
+      - create
+      - delete
+  - apiGroups:
+      - crd.antrea.io
+    resources:
+      - externalentities
+      - clustergroups
+    verbs:
+      - get
+      - watch
+      - list
+      - update
+      - patch
+      - create
+      - delete
+  - apiGroups:
+      - crd.antrea.io
+    resources:
+      - clustergroups/status
+    verbs:
+      - update
+  - apiGroups:
+      - crd.antrea.io
+    resources:
+      - egresses
+    verbs:
+      - get
+      - watch
+      - list
+  # Deprecated in v1.0.0.
+  - apiGroups:
+    - clusterinformation.antrea.tanzu.vmware.com
+    resources:
+      - antreacontrollerinfos
+    verbs:
+      - get
+      - create
+      - update
+      - delete
+  # Deprecated in v1.0.0.
+  - apiGroups:
+      - clusterinformation.antrea.tanzu.vmware.com
+    resources:
+      - antreaagentinfos
+    verbs:
+      - list
+      - delete
+  # Deprecated in v1.0.0.
+  - apiGroups:
+      - security.antrea.tanzu.vmware.com
+    resources:
+      - clusternetworkpolicies
+      - networkpolicies
+    verbs:
+      - get
+      - watch
+      - list
+      - update
+      - patch
+      - create
+      - delete
+  # Deprecated in v1.0.0.
+  - apiGroups:
+      - security.antrea.tanzu.vmware.com
+    resources:
+      - clusternetworkpolicies/status
+      - networkpolicies/status
+    verbs:
+      - update
+  # Deprecated in v1.0.0.
+  - apiGroups:
+      - security.antrea.tanzu.vmware.com
+    resources:
+      - tiers
+    verbs:
+      - get
+      - watch
+      - list
+      - update
+      - patch
+      - create
+      - delete
+  # Deprecated in v1.0.0.
+  - apiGroups:
+      - ops.antrea.tanzu.vmware.com
+    resources:
+      - traceflows
+      - traceflows/status
+    verbs:
+      - get
+      - watch
+      - list
+      - update
+      - patch
+      - create
+      - delete
+  # Deprecated in v1.0.0.
+  - apiGroups:
+      - core.antrea.tanzu.vmware.com
+    resources:
+      - externalentities
+      - clustergroups
+    verbs:
+      - get
+      - watch
+      - list
+      - update
+      - patch
+      - create
+      - delete
+  # Deprecated in v1.0.0.
+  - apiGroups:
+      - core.antrea.tanzu.vmware.com
+    resources:
+      - clustergroups/status
+    verbs:
+      - update
 ---
 kind: ClusterRoleBinding
-apiVersion: rbac.authorization.k8s.io/v1beta1
+apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   name: antrea-controller
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
   name: antrea-controller
-subjects:
-  - kind: ServiceAccount
-    name: antrea-controller
-    namespace: kube-system
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  name: antrea-controller-authentication-reader
-  namespace: kube-system
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: Role
-  name: extension-apiserver-authentication-reader
 subjects:
   - kind: ServiceAccount
     name: antrea-controller

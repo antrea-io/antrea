@@ -15,7 +15,6 @@
 package providers
 
 import (
-	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -23,7 +22,7 @@ import (
 
 	"github.com/kevinburke/ssh_config"
 
-	"github.com/vmware-tanzu/antrea/test/e2e/providers/exec"
+	"antrea.io/antrea/test/e2e/providers/exec"
 )
 
 var (
@@ -38,7 +37,7 @@ func getSSHConfig() (*ssh_config.Config, error) {
 		return nil, err
 	}
 	if info.IsDir() {
-		return nil, errors.New(fmt.Sprintf("%s is not a file", *sshConfig))
+		return nil, fmt.Errorf("%s is not a file", *sshConfig)
 	}
 	f, err := os.Open(*sshConfig)
 	if err != nil {

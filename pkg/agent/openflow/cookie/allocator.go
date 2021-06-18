@@ -36,6 +36,7 @@ const (
 	Pod
 	Service
 	Policy
+	SNAT
 )
 
 func (c Category) String() string {
@@ -52,6 +53,8 @@ func (c Category) String() string {
 		return "Service"
 	case Policy:
 		return "Policy"
+	case SNAT:
+		return "SNAT"
 	default:
 		return "Invalid"
 	}
@@ -59,15 +62,16 @@ func (c Category) String() string {
 
 // ID defines segments a cookie ID contains. An ID is composed like:
 //  |------------------------- ID --------------------------|
-//  |- round 16bits -|- category 8bits -|- reserved 40bits -|
+//  |- round 16bits -|- category 8bits -|- reserved 8bits -|- objectID 32bits -|
 // The round segment represents the round id.
 // The category segment represents the category of flow this ID belongs.
 type ID uint64
 
-func newID(round uint64, cat Category) ID {
+func newID(round uint64, cat Category, objectID uint32) ID {
 	r := uint64(0)
 	r |= round << (64 - BitwidthRound)
 	r |= (uint64(cat) << BitwidthReserved) & CategoryMask
+	r |= uint64(objectID)
 	return ID(r)
 }
 
@@ -99,8 +103,10 @@ func (i ID) String() string {
 
 // Allocator defines operations of a cookie ID allocator.
 type Allocator interface {
-	// Request cookie IDs of flow categories.
+	// Request gets a cookie IDs of the flow category.
 	Request(cat Category) ID
+	// RequestWithObjectID gets a cookie ID of the flow category and objectID.
+	RequestWithObjectID(cat Category, objectID uint32) ID
 }
 
 type allocator struct {
@@ -109,7 +115,11 @@ type allocator struct {
 
 // Request returns a ID with the given category.
 func (a *allocator) Request(cat Category) ID {
-	return newID(a.round, cat)
+	return newID(a.round, cat, 0)
+}
+
+func (a *allocator) RequestWithObjectID(cat Category, objectID uint32) ID {
+	return newID(a.round, cat, objectID)
 }
 
 // NewAllocator creates a cookie ID allocator by using the given round number.

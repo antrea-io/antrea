@@ -25,7 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 
-	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
+	"antrea.io/antrea/pkg/apiserver/storage"
 )
 
 // simpleInternalEvent simply construct watch.Event based on the provided Type and Object
@@ -35,7 +35,7 @@ type simpleInternalEvent struct {
 	ResourceVersion uint64
 }
 
-func (e *simpleInternalEvent) ToWatchEvent(selectors *storage.Selectors) *watch.Event {
+func (e *simpleInternalEvent) ToWatchEvent(selectors *storage.Selectors, isInitEvent bool) *watch.Event {
 	return &watch.Event{
 		Type:   e.Type,
 		Object: e.Object,
@@ -50,7 +50,7 @@ func (e *simpleInternalEvent) GetResourceVersion() uint64 {
 // represents the case that the watcher is not interested in an object.
 type emptyInternalEvent struct{}
 
-func (e *emptyInternalEvent) ToWatchEvent(selectors *storage.Selectors) *watch.Event {
+func (e *emptyInternalEvent) ToWatchEvent(selectors *storage.Selectors, isInitEvent bool) *watch.Event {
 	return nil
 }
 
@@ -85,6 +85,7 @@ func TestEvents(t *testing.T) {
 				},
 			},
 			expected: []watch.Event{
+				{Type: watch.Bookmark, Object: &v1.Pod{}},
 				{Type: watch.Added, Object: &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1"}}},
 				{Type: watch.Modified, Object: &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod2"}}},
 				{Type: watch.Deleted, Object: &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod3"}}},
@@ -113,6 +114,7 @@ func TestEvents(t *testing.T) {
 			},
 			expected: []watch.Event{
 				{Type: watch.Added, Object: &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1"}}},
+				{Type: watch.Bookmark, Object: &v1.Pod{}},
 				{Type: watch.Modified, Object: &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod2"}}},
 				{Type: watch.Deleted, Object: &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod3"}}},
 			},
@@ -137,13 +139,14 @@ func TestEvents(t *testing.T) {
 			},
 			expected: []watch.Event{
 				{Type: watch.Added, Object: &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1"}}},
+				{Type: watch.Bookmark, Object: &v1.Pod{}},
 				{Type: watch.Deleted, Object: &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod3"}}},
 			},
 		},
 	}
 
 	for i, testCase := range testCases {
-		w := newStoreWatcher(10, &storage.Selectors{}, func() {})
+		w := newStoreWatcher(10, &storage.Selectors{}, func() {}, func() runtime.Object { return new(v1.Pod) })
 		go w.process(context.Background(), testCase.initEvents, 0)
 
 		for _, event := range testCase.addedEvents {
@@ -166,7 +169,7 @@ func TestEvents(t *testing.T) {
 }
 
 func TestAddTimeout(t *testing.T) {
-	w := newStoreWatcher(1, &storage.Selectors{}, func() {})
+	w := newStoreWatcher(1, &storage.Selectors{}, func() {}, func() runtime.Object { return new(v1.Pod) })
 	events := []storage.InternalEvent{
 		&simpleInternalEvent{
 			Type:            watch.Added,

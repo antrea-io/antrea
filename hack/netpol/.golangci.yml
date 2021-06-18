@@ -1,0 +1,14 @@
+# golangci-lint configuration used for CI
+run:
+  tests: true
+  timeout: 5m
+  skip-files:
+    - ".*\\.pb\\.go"
+  skip-dirs-use-default: true
+
+linters:
+  disable-all: true
+  enable:
+    - misspell
+    - gofmt
+    - deadcode

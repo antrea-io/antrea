@@ -15,8 +15,11 @@
 package ovs
 
 import (
+	"crypto/rand"
 	"flag"
+	"fmt"
 	"os"
+	"strconv"
 	"testing"
 	"time"
 
@@ -24,11 +27,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
+	"antrea.io/antrea/pkg/ovs/ovsconfig"
 )
 
 const (
-	defaultUDSAddress     = "/var/run/openvswitch/db.sock"
 	defaultBridgeName     = "br-antrea-test"
 	defaultConnectTimeout = 5 * time.Second
 )
@@ -58,7 +60,10 @@ func (data *testData) setup(t *testing.T) {
 		t.Fatalf("Could not establish connection to %s after %s", UDSAddress, defaultConnectTimeout)
 	}
 
-	data.br = ovsconfig.NewOVSBridge(bridgeName, "system", data.ovsdb)
+	// using the netdev datapath type does not impact test coverage but
+	// ensures that the integration tests can be run with Docker Desktop on
+	// macOS.
+	data.br = ovsconfig.NewOVSBridge(bridgeName, "netdev", data.ovsdb)
 	err = data.br.Create()
 	require.Nil(t, err, "Failed to create bridge %s", bridgeName)
 }
@@ -68,6 +73,15 @@ func (data *testData) teardown(t *testing.T) {
 		t.Errorf("Error when deleting bridge: %v", err)
 	}
 	data.ovsdb.Close()
+}
+
+func randomDatapathID() (string, error) {
+	buf := make([]byte, 8)
+	_, err := rand.Read(buf)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%016x", buf), nil
 }
 
 func TestOVSBridge(t *testing.T) {
@@ -80,6 +94,21 @@ func TestOVSBridge(t *testing.T) {
 		require.Nil(t, err, "Error when retrieving port list")
 		assert.Equal(t, expectedCount, len(portList))
 	}
+
+	// Test set fixed datapath ID
+	expectedDatapathID, err := randomDatapathID()
+	require.Nilf(t, err, "Failed to generate datapath ID: %s", err)
+	err = data.br.SetDatapathID(expectedDatapathID)
+	require.Nilf(t, err, "Set datapath id failed: %s", err)
+	var datapathID string
+	for retry := 0; retry < 3; retry++ {
+		datapathID, _ = data.br.GetDatapathID()
+		if datapathID == expectedDatapathID {
+			break
+		}
+		time.Sleep(time.Second)
+	}
+	assert.Equal(t, expectedDatapathID, datapathID)
 
 	deleteAllPorts(t, data.br)
 	checkPorts(0)
@@ -150,6 +179,87 @@ func TestOVSBridgeExternalIDs(t *testing.T) {
 	}
 }
 
+func TestOVSOtherConfig(t *testing.T) {
+	data := &testData{}
+	data.setup(t)
+	defer data.teardown(t)
+
+	otherConfigs := map[string]interface{}{"flow-restore-wait": "true", "foo1": "bar1"}
+	err := data.br.AddOVSOtherConfig(otherConfigs)
+	require.Nil(t, err, "Error when adding OVS other_config")
+
+	gotOtherConfigs, err := data.br.GetOVSOtherConfig()
+	require.Nil(t, err, "Error when getting OVS other_config")
+	require.Equal(t, map[string]string{"flow-restore-wait": "true", "foo1": "bar1"}, gotOtherConfigs, "other_config mismatched")
+
+	// Expect only the new config "foo2: bar2" will be added.
+	err = data.br.AddOVSOtherConfig(map[string]interface{}{"flow-restore-wait": "false", "foo2": "bar2"})
+	require.Nil(t, err, "Error when adding OVS other_config")
+
+	gotOtherConfigs, err = data.br.GetOVSOtherConfig()
+	require.Nil(t, err, "Error when getting OVS other_config")
+	require.Equal(t, map[string]string{"flow-restore-wait": "true", "foo1": "bar1", "foo2": "bar2"}, gotOtherConfigs, "other_config mismatched")
+
+	// Expect only the matched config "flow-restore-wait: true" will be deleted.
+	err = data.br.DeleteOVSOtherConfig(map[string]interface{}{"flow-restore-wait": "true", "foo1": "bar2"})
+	require.Nil(t, err, "Error when deleting OVS other_config")
+
+	gotOtherConfigs, err = data.br.GetOVSOtherConfig()
+	require.Nil(t, err, "Error when getting OVS other_config")
+	require.Equal(t, map[string]string{"foo1": "bar1", "foo2": "bar2"}, gotOtherConfigs, "other_config mismatched")
+}
+
+func TestTunnelOptionCsum(t *testing.T) {
+	testCases := map[string]struct {
+		initialCsum bool
+		updatedCsum bool
+	}{
+		"initial false, kept false": {
+			initialCsum: false,
+			updatedCsum: false,
+		},
+		"initial false, updated to true": {
+			initialCsum: false,
+			updatedCsum: true,
+		},
+		"initial true, kept true": {
+			initialCsum: true,
+			updatedCsum: true,
+		},
+		"initial true, updated to false": {
+			initialCsum: true,
+			updatedCsum: false,
+		},
+	}
+	for name, testCase := range testCases {
+		t.Run(name, func(t *testing.T) {
+			data := &testData{}
+			data.setup(t)
+			defer data.teardown(t)
+
+			name := "vxlan0"
+			_, err := data.br.CreateTunnelPortExt(name, ovsconfig.VXLANTunnel, ofPortRequest, testCase.initialCsum, "", "", "", nil)
+			require.Nil(t, err, "Error when creating tunnel port")
+			options, err := data.br.GetInterfaceOptions(name)
+			require.Nil(t, err, "Error when getting interface options")
+			actualInitialCsum, _ := strconv.ParseBool(options["csum"])
+			require.Equal(t, testCase.initialCsum, actualInitialCsum)
+
+			updatedOptions := map[string]interface{}{}
+			for k, v := range options {
+				updatedOptions[k] = v
+			}
+			updatedOptions["csum"] = strconv.FormatBool(testCase.updatedCsum)
+			err = data.br.SetInterfaceOptions(name, updatedOptions)
+			require.Nil(t, err, "Error when setting interface options")
+			options, err = data.br.GetInterfaceOptions(name)
+			require.Nil(t, err, "Error when getting interface options")
+			actualCsum, _ := strconv.ParseBool(options["csum"])
+			require.Equal(t, testCase.updatedCsum, actualCsum)
+		})
+	}
+}
+
 func deleteAllPorts(t *testing.T, br *ovsconfig.OVSBridge) {
 	portList, err := br.GetPortUUIDList()
 	require.Nil(t, err, "Error when retrieving port list")
@@ -183,13 +293,12 @@ func testCreatePort(t *testing.T, br *ovsconfig.OVSBridge, name string, ifType s
 	require.Nilf(t, err, "Failed to create %s port: %s", ifType, err)
 
 	ofPort, err := br.GetOFPort(name)
-	require.Nilf(t, err, "Failed to get ofport for %s port: %s", ifType, err)
 	if ifType != "" {
+		require.NoErrorf(t, err, "Failed to get ofport for %s port: %s", ifType, err)
 		assert.Equal(t, ofPortRequest, ofPort, "ofport does not match the requested value for %s port", ifType)
 		ofPortRequest++
 	} else {
-		// -1 will be assigned to a port without a valid interface backing.
-		assert.Equal(t, int32(-1), ofPort)
+		require.Error(t, err, "GetOFPort should return an error for a port without a valid interface backing")
 	}
 
 	port, err := br.GetPortData(uuid, ifName)
@@ -198,7 +307,9 @@ func testCreatePort(t *testing.T, br *ovsconfig.OVSBridge, name string, ifType s
 
 	assert.Equal(t, name, port.Name)
 	assert.Equal(t, ifName, port.IFName)
-	assert.Equal(t, ofPort, port.OFPort)
+	if ifType != "" {
+		assert.Equal(t, ofPort, port.OFPort)
+	}
 
 	for k, v := range externalIDs {
 		rv, ok := port.ExternalIDs[k]
@@ -235,7 +346,7 @@ func testDeletePort(t *testing.T, br *ovsconfig.OVSBridge, uuid string) {
 }
 
 func TestMain(m *testing.M) {
-	flag.StringVar(&UDSAddress, "ovsdb-socket", defaultUDSAddress, "Unix domain server socket named file for OVSDB")
+	flag.StringVar(&UDSAddress, "ovsdb-socket", defaultOVSDBAddress, "Unix domain server socket named file for OVSDB")
 	flag.StringVar(&bridgeName, "br-name", defaultBridgeName, "Bridge name to use for tests")
 	os.Exit(m.Run())
 }

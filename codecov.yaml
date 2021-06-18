@@ -1,0 +1,36 @@
+codecov:
+  branch: main
+  require_ci_to_pass: no
+
+comment:
+  layout: "reach,diff,flags,tree"
+  behavior: default
+  require_changes: no
+  require_base: no
+  require_head: no
+  after_n_builds: 1
+
+coverage:
+  status:
+    project:
+      default:
+        target: auto
+      antrea-unit-tests:
+        target: auto
+        flags:
+          - unit-tests
+      antrea-integration-tests:
+        target: auto
+        flags:
+          - integration-tests
+      antrea-e2e-tests:
+        target: auto
+        flags:
+          - e2e-tests
+
+ignore:
+  - "**/testing/mock_*.go"
+  - "**/*generate*.go"
+  - "pkg/client"
+  - "**/*.pb.go"
+  - "third_party"

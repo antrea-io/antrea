@@ -1,0 +1,15 @@
+resources:
+- agent.yml
+configMapGenerator:
+- files:
+  - conf/antrea-agent.conf
+  - conf/antrea-cni.conflist
+  name: antrea-windows-config
+- files:
+  - conf/Run-AntreaAgent.ps1
+  name: antrea-agent-windows
+commonLabels:
+  app: antrea
+namespace: kube-system
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization

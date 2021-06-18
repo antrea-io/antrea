@@ -1,0 +1,13 @@
+apiVersion: "k8s.cni.cncf.io/v1"
+kind: NetworkAttachmentDefinition
+metadata:
+  name: antrea-sriov
+  namespace: kube-system
+  annotations:
+    k8s.v1.cni.cncf.io/resourceName: mellanox.com/mlnx_sriov_rdma
+spec:
+  config: '{
+    "cniVersion": "0.3.1",
+    "name": "antrea",
+    "plugins": [ { "type": "antrea", "ipam": { "type": "host-local" } }, { "type": "portmap", "capabilities": {"portMappings": true}, { "type": "bandwidth", "capabilities": {"bandwidth": true} }]
+}'

@@ -1,4 +1,4 @@
-FROM ubuntu:18.04 as protoc
+FROM ubuntu:20.04 as protoc
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends wget ca-certificates unzip
@@ -10,24 +10,26 @@ RUN PROTOBUF_VERSION=3.0.2; ZIPNAME="protoc-${PROTOBUF_VERSION}-linux-x86_64.zip
   chmod -R +rX /tmp/protoc
 
 
-FROM golang:1.13
+FROM golang:1.15
 
 LABEL maintainer="Antrea <projectantrea-dev@googlegroups.com>"
-LABEL description="A Docker image based on golang 1.13 which includes codegen tools."
+LABEL description="A Docker image based on golang 1.15 which includes codegen tools."
 
 ENV GO111MODULE=on
 
-ARG K8S_VERSION=1.15.0
+ARG K8S_VERSION=1.21.0
 # The k8s.io/kube-openapi repo does not have tag, using a workable commit hash.
-ARG KUBEOPENAPI_VERSION=v0.0.0-20190228160746-b3a7cee44a30
+ARG KUBEOPENAPI_VERSION=v0.0.0-20210305164622-f622666832c1
 
 RUN go get k8s.io/code-generator/cmd/client-gen@kubernetes-$K8S_VERSION && \
     go get k8s.io/code-generator/cmd/deepcopy-gen@kubernetes-$K8S_VERSION && \
     go get k8s.io/code-generator/cmd/conversion-gen@kubernetes-$K8S_VERSION && \
+    go get k8s.io/code-generator/cmd/lister-gen@kubernetes-$K8S_VERSION && \
+    go get k8s.io/code-generator/cmd/informer-gen@kubernetes-$K8S_VERSION && \
     go get k8s.io/kube-openapi/cmd/openapi-gen@$KUBEOPENAPI_VERSION && \
     go get k8s.io/code-generator/cmd/go-to-protobuf@kubernetes-$K8S_VERSION && \
     go get k8s.io/code-generator/cmd/go-to-protobuf/protoc-gen-gogo@kubernetes-$K8S_VERSION && \
-    go get github.com/golang/mock/mockgen@1.3.1 && \
+    go get github.com/golang/mock/mockgen@v1.4.4 && \
     go get github.com/golang/protobuf/protoc-gen-go@v1.3.2 && \
     go get golang.org/x/tools/cmd/goimports
 

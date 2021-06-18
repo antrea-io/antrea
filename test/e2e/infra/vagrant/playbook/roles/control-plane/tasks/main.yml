@@ -1,0 +1,129 @@
+- name: Create kubeadm configuration file from template
+  template:
+    src: templates/kubeadm.conf.j2
+    dest: /tmp/kubeadm.conf
+
+- name: Compare kubeadmin configuration with existing one
+  command: diff /tmp/kubeadm.conf /home/{{ test_user }}/kubeadm.conf
+  failed_when: False
+  register: kubeadm_conf_diff
+  changed_when: kubeadm_conf_diff.rc != 0
+
+- name: Check cluster status
+  # specify kubeconfig since we are logged in as root
+  command: kubectl --kubeconfig /home/{{ test_user }}/.kube/config cluster-info
+  register: cluster_status
+  failed_when: False
+  changed_when: False
+
+- debug:
+    msg:
+      - "Cluster status is {{ cluster_status.rc }}"
+
+# Reset cluster if an issue is detected or if the config has changed
+- name: Reset cluster
+  command: kubeadm reset -f
+  when: kubeadm_conf_diff.changed or (cluster_status.rc != 0)
+  failed_when: False
+
+- name: Initialize the Kubernetes cluster using kubeadm
+  command: kubeadm init --config /tmp/kubeadm.conf
+  when: kubeadm_conf_diff.changed or (cluster_status.rc != 0)
+  register: kubeadm_init
+
+- name: Setup kubeconfig for test user
+  block:
+    - name: Create /home/{{ test_user }}/.kube directory
+      file:
+        path: /home/{{ test_user }}/.kube
+        state: directory
+        owner: "{{ test_user }}"
+        group: "{{ test_user }}"
+    - name: Copy kubeconfig file to /home/{{ test_user }}/.kube
+      copy:
+        src: /etc/kubernetes/admin.conf
+        remote_src: true
+        dest: /home/{{ test_user }}/.kube/config
+        owner: "{{ test_user }}"
+        group: "{{ test_user }}"
+
+# We currently copy the kube config and join command to the host so that it can
+# be copied to all the worker nodes when provisioning them. An alternative is to
+# create a new host with add_host and use hostvars. See
+# https://stackoverflow.com/a/47811099.
+
+- name: Generate join command and write to host
+  block:
+    - name: Generate join command
+      command: kubeadm token create --print-join-command
+      register: join_command
+    - name: Write join command to temporary file
+      copy:
+        content: "{{ join_command.stdout_lines[0] }}"
+        dest: /tmp/join-command
+    - name: Copy join command file to host
+      fetch:
+        src: /tmp/join-command
+        dest: kube/join-command
+        flat: yes
+  when: kubeadm_init.changed
+
+- name: Create CoreDNS ConfigMap file from template (IPv6)
+  template:
+    src: templates/coreDNS-cm.yml.j2
+    dest: /tmp/coreDNS-cm.yml
+  when: k8s_ip_family == "v6"
+
+- name: Edit CoreDNS ConfigMap (IPv6)
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  command: kubectl apply -f /tmp/coreDNS-cm.yml
+  when: (k8s_ip_family == "v6") and kubeadm_init.changed
+
+- name: Restart CoreDNS Pods (IPv6)
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  command: kubectl delete pods --namespace=kube-system -l k8s-app=kube-dns
+  when: (k8s_ip_family == "v6") and kubeadm_init.changed
+
+- name: Install socat DNS proxy UDP as service (IPv6)
+  template:
+    src: templates/socat-dns-proxy-udp.service.j2
+    dest: /etc/systemd/system/socat-dns-proxy-udp.service
+  when: k8s_ip_family == "v6"
+
+- name: Start socat DNS proxy UDP service (IPv6)
+  systemd:
+    name: socat-dns-proxy-udp
+    state: started
+    daemon_reload: yes
+  when: k8s_ip_family == "v6"
+
+- name: Install socat DNS proxy TCP as service (IPv6)
+  template:
+    src: templates/socat-dns-proxy-tcp.service.j2
+    dest: /etc/systemd/system/socat-dns-proxy-tcp.service
+  when: k8s_ip_family == "v6"
+
+- name: Start socat DNS proxy TCP service (IPv6)
+  systemd:
+    name: socat-dns-proxy-tcp
+    state: started
+    daemon_reload: yes
+  when: k8s_ip_family == "v6"
+
+# We copy the config file last, as we use it to determine whether the cluster
+# was setup correctly and with the appropriate configguration in future runs.
+- name: Copy kubeadm configuration to test user's home
+  copy:
+    src: /tmp/kubeadm.conf
+    remote_src: true
+    dest: /home/{{ test_user }}/kubeadm.conf
+    owner: "{{ test_user }}"
+    group: "{{ test_user }}"
+
+- name: Copy kubeconfig to host
+  fetch:
+    src: /home/{{ test_user }}/.kube/config
+    dest: kube/config
+    flat: yes

@@ -1,4 +1,4 @@
-// Copyright 2019 Antrea Authors
+// Copyright 2021 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,8 +17,14 @@
 package scheme
 
 import (
-	clusterinformationv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/clusterinformation/v1beta1"
-	networkingv1beta1 "github.com/vmware-tanzu/antrea/pkg/apis/networking/v1beta1"
+	controlplanev1beta1 "antrea.io/antrea/pkg/apis/controlplane/v1beta1"
+	controlplanev1beta2 "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
+	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	crdv1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
+	crdv1alpha3 "antrea.io/antrea/pkg/apis/crd/v1alpha3"
+	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
+	statsv1alpha1 "antrea.io/antrea/pkg/apis/stats/v1alpha1"
+	systemv1beta1 "antrea.io/antrea/pkg/apis/system/v1beta1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
@@ -30,8 +36,14 @@ var Scheme = runtime.NewScheme()
 var Codecs = serializer.NewCodecFactory(Scheme)
 var ParameterCodec = runtime.NewParameterCodec(Scheme)
 var localSchemeBuilder = runtime.SchemeBuilder{
-	clusterinformationv1beta1.AddToScheme,
-	networkingv1beta1.AddToScheme,
+	controlplanev1beta1.AddToScheme,
+	controlplanev1beta2.AddToScheme,
+	crdv1alpha1.AddToScheme,
+	crdv1alpha2.AddToScheme,
+	crdv1alpha3.AddToScheme,
+	crdv1beta1.AddToScheme,
+	statsv1alpha1.AddToScheme,
+	systemv1beta1.AddToScheme,
 }
 
 // AddToScheme adds all types of this clientset into the given scheme. This allows composition

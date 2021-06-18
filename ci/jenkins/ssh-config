@@ -1,0 +1,8 @@
+Host CONTROLPLANENODE
+    SendEnv LANG LC_*
+    HashKnownHosts yes
+    GSSAPIAuthentication yes
+    GSSAPIDelegateCredentials no
+    HostName CONTROLPLANENODEIP
+    Port 22
+    User capv

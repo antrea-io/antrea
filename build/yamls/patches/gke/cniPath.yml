@@ -1,0 +1,11 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: antrea-agent
+spec:
+  template:
+    spec:
+      volumes:
+      - hostPath:
+          path: /home/kubernetes/bin
+        name: host-cni-bin

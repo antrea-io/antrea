@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// +build linux
+
 package cni
 
 import (
@@ -26,7 +28,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	cnipb "github.com/vmware-tanzu/antrea/pkg/apis/cni/v1beta1"
+	cnipb "antrea.io/antrea/pkg/apis/cni/v1beta1"
 )
 
 type testClient struct {

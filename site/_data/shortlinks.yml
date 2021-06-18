@@ -1,12 +1,81 @@
 - title: Getting Started
   key: getting-started
   destination: getting-started
-- Title: Build with Drone
-  key: drone
-  destination: drone
-- Title: Release
+- title: Kind
+  key: kind
+  destination: kind
+- title: ARM Support
+  key: arm-support
+  destination: arm-support
+- title: manual
+  key: manual
+  destination: manual-installation
+- title: Configuration
+  key: configuration
+  destination: configuration
+- title: EKS
+  key: eks
+  destination: eks-installation
+- title: AKS
+  key: aks
+  destination: aks-installation
+- title: GKE
+  key: gke
+  destination: gke-installation
+- title: policy-only
+  key: policy-only
+  destination: policy-only
+- title: Network Policy
+  key: network-policy
+  destination: network-policy
+- title: antctl
+  key: antctl
+  destination: antctl
+- title: Architecture
+  key: architecture
+  destination: architecture
+- title: IPsec Tunnel
+  key: ipsec
+  destination: ipsec-tunnel
+- title: Securing Control Plane
+  key: securing-control-plane
+  destination: securing-control-plane
+- title: Troubleshooting
+  key: troubleshooting
+  destination: troubleshooting
+- title: OS-specific Known Issues
+  key: os-issues
+  destination: os-issues
+- title: OVS Pipeline
+  key: ovs
+  destination: ovs-pipeline
+- title: Feature Gates
+  key: feature-gates
+  destination: feature-gates
+- title: Network Flow Visibility
+  key: network-flow
+  destination: network-flow-visibility
+- title: Traceflow Guide
+  key: traceflow
+  destination: traceflow-guide
+- title: NoEncap and Hybrid Traffic Modes
+  key: noencap-hybrid-modes
+  destination: noencap-hybrid-modes
+- title: Windows
+  key: windows
+  destination: windows
+- title: Octant Plugin Installation
+  key: octant
+  destination: octant-plugin-installation
+- title: Prometheus Integration
+  key: prometheus
+  destination: prometheus-integration
+- title: Contributing
+  key: contributing
+  destination: contributing
+- title: Release Instructions
   key: release
-  destination: release
-- Title: Plugins
-  key: plugins
-  destination: Plugins
+  destination: maintainers/release
+- title: Support for K8s Installers
+  key: k8s-installers
+  destination: kubernetes-installers

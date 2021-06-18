@@ -16,18 +16,26 @@ package ipam
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/containernetworking/cni/pkg/invoke"
 	"github.com/containernetworking/cni/pkg/types/current"
-	cnipb "github.com/vmware-tanzu/antrea/pkg/apis/cni/v1beta1"
+
+	cnipb "antrea.io/antrea/pkg/apis/cni/v1beta1"
 )
 
 var ipamDrivers map[string]IPAMDriver
 
-type IPAMConfig struct {
-	Type    string `json:"type,omitempty"`
-	Subnet  string `json:"subnet,omitempty"`
+type Range struct {
+	Subnet  string `json:"subnet"`
 	Gateway string `json:"gateway,omitempty"`
+}
+
+type RangeSet []Range
+
+type IPAMConfig struct {
+	Type   string     `json:"type,omitempty"`
+	Ranges []RangeSet `json:"ranges,omitempty"`
 }
 
 type IPAMDriver interface {
@@ -35,6 +43,8 @@ type IPAMDriver interface {
 	Del(args *invoke.Args, networkConfig []byte) error
 	Check(args *invoke.Args, networkConfig []byte) error
 }
+
+var ipamResults = sync.Map{}
 
 func RegisterIPAMDriver(ipamType string, ipamDriver IPAMDriver) error {
 	if ipamDrivers == nil {
@@ -56,22 +66,52 @@ func argsFromEnv(cniArgs *cnipb.CniCmdArgs) *invoke.Args {
 	}
 }
 
-func ExecIPAMAdd(cniArgs *cnipb.CniCmdArgs, ipamType string) (*current.Result, error) {
+func ExecIPAMAdd(cniArgs *cnipb.CniCmdArgs, ipamType string, resultKey string) (*current.Result, error) {
+	// Return the cached IPAM result for the same Pod. This cache helps to ensure CNIAdd is idempotent. There are two
+	// usages of CNIAdd message on Windows: 1) add container network configuration, and 2) query Pod network status.
+	// kubelet on Windows sends CNIAdd messages to query Pod status periodically before the sandbox container is ready.
+	// The cache here is to ensure only one IP address is allocated to one Pod.
+	// TODO: A risk of IP re-allocation exists if agent restarts before kubelet queries Pod status and after the
+	//       container networking configurations is added.
+	obj, ok := GetIPFromCache(resultKey)
+	if ok {
+		return obj, nil
+	}
+
 	args := argsFromEnv(cniArgs)
 	driver := ipamDrivers[ipamType]
-	return driver.Add(args, cniArgs.NetworkConfiguration)
+	result, err := driver.Add(args, cniArgs.NetworkConfiguration)
+	if err != nil {
+		return nil, err
+	}
+	ipamResults.Store(resultKey, result)
+	return result, nil
 }
 
-func ExecIPAMDelete(cniArgs *cnipb.CniCmdArgs, ipamType string) error {
+func ExecIPAMDelete(cniArgs *cnipb.CniCmdArgs, ipamType string, resultKey string) error {
 	args := argsFromEnv(cniArgs)
 	driver := ipamDrivers[ipamType]
-	return driver.Del(args, cniArgs.NetworkConfiguration)
+	err := driver.Del(args, cniArgs.NetworkConfiguration)
+	if err != nil {
+		return err
+	}
+	ipamResults.Delete(resultKey)
+	return nil
 }
 
 func ExecIPAMCheck(cniArgs *cnipb.CniCmdArgs, ipamType string) error {
 	args := argsFromEnv(cniArgs)
 	driver := ipamDrivers[ipamType]
 	return driver.Check(args, cniArgs.NetworkConfiguration)
+}
+
+func GetIPFromCache(resultKey string) (*current.Result, bool) {
+	obj, ok := ipamResults.Load(resultKey)
+	if ok {
+		result := obj.(*current.Result)
+		return result, ok
+	}
+	return nil, ok
 }
 
 func IsIPAMTypeValid(ipamType string) bool {

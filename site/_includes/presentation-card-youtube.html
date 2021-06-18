@@ -1,0 +1,31 @@
+<div class="col-sm col-md-6">
+    <div class="card card-light mb-3 mb-md-0 blog-card">
+        <div class="card-body match-height">
+            <div class="presentation-thumbnail">
+              <div class="embed-responsive embed-responsive-16by9">
+                <iframe class="embed-responsive-item" src="{{ presentation.embed }}" frameborder="0" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+              </div>
+            </div>
+            <article class="presentation">
+              {% if presentation.external %}
+                {% assign presentation_url = presentation.external %}
+                {% assign target = "_blank" %}
+              {% else %}
+                {% assign presentation_url = presentation.url %}
+                {% assign target = "_self" %}
+              {% endif %}
+                <h5 class="text-center font-weight-medium">
+                    <a href="{{ site.baseurl }}{{ presentation_url }}" class="presentation-title" target="{{ target }}">{{ presentation.title }}</a>
+                </h5>
+                <div class="presentation-entry">
+                    {{ presentation.excerpt | strip_html }}
+                </div>
+                {% if presentation.slides %}
+                <div class="presentation-slides">
+                    <a href="{{ presentation.slides }}" target="_blank">[Slides]</a>
+                </div>
+                {% endif %}
+            </article>
+        </div>
+    </div>
+</div>

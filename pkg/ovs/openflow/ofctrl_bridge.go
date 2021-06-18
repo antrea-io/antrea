@@ -3,16 +3,19 @@ package openflow
 import (
 	"errors"
 	"fmt"
+	"strconv"
 	"sync"
 	"time"
 
 	"github.com/contiv/libOpenflow/openflow13"
 	"github.com/contiv/ofnet/ofctrl"
-	"k8s.io/klog"
+	"golang.org/x/time/rate"
+	"k8s.io/klog/v2"
+
+	"antrea.io/antrea/pkg/agent/metrics"
 )
 
 const (
-	OVSRunDir          = "/var/run/openvswitch"
 	ofTableExistsError = "Table already exists"
 )
 
@@ -61,6 +64,10 @@ func (t *ofTable) UpdateStatus(flowCountDelta int) {
 	} else {
 		t.flowCount += uint(flowCountDelta)
 	}
+
+	metrics.OVSTotalFlowCount.Add(float64(flowCountDelta))
+	metrics.OVSFlowCount.WithLabelValues(strconv.Itoa(int(t.id))).Add(float64(flowCountDelta))
+
 	t.updateTime = time.Now()
 }
 
@@ -69,6 +76,9 @@ func (t *ofTable) ResetStatus() {
 	defer t.Unlock()
 
 	t.flowCount = 0
+
+	metrics.OVSFlowCount.WithLabelValues(strconv.Itoa(int(t.id))).Set(0)
+
 	t.updateTime = time.Now()
 }
 
@@ -77,15 +87,18 @@ func (t *ofTable) BuildFlow(priority uint16) FlowBuilder {
 	fb := new(ofFlowBuilder)
 	fb.table = t
 	// Set ofctl.Table to Flow, otherwise the flow can't find OFSwitch to install.
-	fb.Flow = ofctrl.Flow{Table: t.Table, Match: ofctrl.FlowMatch{Priority: priority}}
+	fb.Flow = &ofctrl.Flow{Table: t.Table, Match: ofctrl.FlowMatch{Priority: priority}}
 	return fb
 }
 
 // DumpFlows dumps all existing Openflow entries from OFSwitch using cookie ID and table ID as filters.
-func (t *ofTable) DumpFlows(cookieID, cookieMask uint64) map[uint64]*FlowStates {
-	ofStats := t.Table.Switch.DumpFlowStats(cookieID, cookieMask, nil, &t.TableId)
+func (t *ofTable) DumpFlows(cookieID, cookieMask uint64) (map[uint64]*FlowStates, error) {
+	ofStats, err := t.Table.Switch.DumpFlowStats(cookieID, &cookieMask, nil, &t.TableId)
+	if err != nil {
+		return nil, err
+	}
 	if ofStats == nil {
-		return nil
+		return nil, nil
 	}
 	flowStats := make(map[uint64]*FlowStates)
 	for _, stat := range ofStats {
@@ -97,7 +110,7 @@ func (t *ofTable) DumpFlows(cookieID, cookieMask uint64) map[uint64]*FlowStates 
 		}
 		flowStats[cookie] = s
 	}
-	return flowStats
+	return flowStats, nil
 }
 
 func newOFTable(id, next TableIDType, missAction MissActionType) *ofTable {
@@ -111,6 +124,8 @@ func newOFTable(id, next TableIDType, missAction MissActionType) *ofTable {
 // OFBridge implements openflow.Bridge.
 type OFBridge struct {
 	bridgeName string
+	// Management address
+	mgmtAddr string
 	// sync.RWMutex protects tableCache from concurrent modification and iteration.
 	sync.RWMutex
 	// tableCache is used to cache ofTables.
@@ -129,6 +144,28 @@ type OFBridge struct {
 	connCh chan struct{}
 	// connected is an internal channel to notify if connected to the OFSwitch or not. It is used only in Connect method.
 	connected chan bool
+	// pktConsumers is a map from PacketIn reason to the channel that is used to publish the PacketIn message.
+	pktConsumers sync.Map
+}
+
+func (b *OFBridge) CreateGroup(id GroupIDType) Group {
+	ofctrlGroup, err := b.ofSwitch.NewGroup(uint32(id), ofctrl.GroupSelect)
+	if err != nil { // group already exists
+		ofctrlGroup = b.ofSwitch.GetGroup(uint32(id))
+	}
+	g := &ofGroup{bridge: b, ofctrl: ofctrlGroup}
+	return g
+}
+
+func (b *OFBridge) DeleteGroup(id GroupIDType) bool {
+	g := b.ofSwitch.GetGroup(uint32(id))
+	if g == nil {
+		return true
+	}
+	if err := g.Delete(); err != nil {
+		return false
+	}
+	return true
 }
 
 func (b *OFBridge) CreateTable(id, next TableIDType, missAction MissActionType) Table {
@@ -170,7 +207,13 @@ func (b *OFBridge) DumpTableStatus() []TableStatus {
 
 // PacketRcvd is a callback when a packetIn is received on ofctrl.OFSwitch.
 func (b *OFBridge) PacketRcvd(sw *ofctrl.OFSwitch, packet *ofctrl.PacketIn) {
-	klog.Infof("Received packet: %+v", packet)
+	klog.V(2).Infof("Received packet: %+v", packet)
+	reason := packet.Reason
+	v, found := b.pktConsumers.Load(reason)
+	if found {
+		pktInQueue, _ := v.(*PacketInQueue)
+		pktInQueue.AddOrDrop(packet)
+	}
 }
 
 // SwitchConnected is a callback when the remote OFSwitch is connected.
@@ -198,7 +241,7 @@ func (b *OFBridge) SwitchDisconnected(sw *ofctrl.OFSwitch) {
 	klog.Infof("OFSwitch is disconnected: %v", sw.DPID())
 }
 
-// Initialize creates ofctrl.Table for each table in the tableCache.
+// initialize creates ofctrl.Table for each table in the tableCache.
 func (b *OFBridge) initialize() {
 	b.Lock()
 	defer b.Unlock()
@@ -216,6 +259,8 @@ func (b *OFBridge) initialize() {
 		// reset flow counts, which is needed for reconnections
 		table.ResetStatus()
 	}
+
+	metrics.OVSTotalFlowCount.Set(0)
 }
 
 // Connect initiates the connection to the OFSwitch, and initializes ofTables after connected.
@@ -224,9 +269,8 @@ func (b *OFBridge) Connect(maxRetrySec int, connectionCh chan struct{}) error {
 	b.maxRetrySec = maxRetrySec
 	b.connected = make(chan bool)
 	errCh := make(chan error)
-	sockPath := fmt.Sprintf("%s/%s.mgmt", OVSRunDir, b.bridgeName)
 	go func() {
-		err := b.controller.Connect(sockPath)
+		err := b.controller.Connect(b.mgmtAddr)
 		if err != nil {
 			errCh <- err
 		}
@@ -253,10 +297,13 @@ func (b *OFBridge) Disconnect() error {
 
 // DumpFlows queries the Openflow entries from OFSwitch, the filter of the query is Openflow cookieID. The result is
 // a map from flow cookieID to FlowStates.
-func (b *OFBridge) DumpFlows(cookieID, cookieMask uint64) map[uint64]*FlowStates {
-	ofStats := b.ofSwitch.DumpFlowStats(cookieID, cookieMask, nil, nil)
+func (b *OFBridge) DumpFlows(cookieID, cookieMask uint64) (map[uint64]*FlowStates, error) {
+	ofStats, err := b.ofSwitch.DumpFlowStats(cookieID, &cookieMask, nil, nil)
+	if err != nil {
+		return nil, err
+	}
 	if ofStats == nil {
-		return nil
+		return nil, nil
 	}
 	flowStats := make(map[uint64]*FlowStates)
 	for _, stat := range ofStats {
@@ -268,7 +315,7 @@ func (b *OFBridge) DumpFlows(cookieID, cookieMask uint64) map[uint64]*FlowStates
 		}
 		flowStats[cookie] = s
 	}
-	return flowStats
+	return flowStats, nil
 }
 
 // DeleteFlowsByCookie removes Openflow entries from OFSwitch. The removed Openflow entries use the specific CookieID.
@@ -280,8 +327,7 @@ func (b *OFBridge) DeleteFlowsByCookie(cookieID, cookieMask uint64) error {
 	flowMod.OutPort = openflow13.P_ANY
 	flowMod.OutGroup = openflow13.OFPG_ANY
 	flowMod.TableId = openflow13.OFPTT_ALL
-	b.ofSwitch.Send(flowMod)
-	return nil
+	return b.ofSwitch.Send(flowMod)
 }
 
 func (b *OFBridge) IsConnected() bool {
@@ -304,17 +350,16 @@ func (b *OFBridge) AddFlowsInBundle(addflows []Flow, modFlows []Flow, delFlows [
 	syncFlows := func(flows []Flow, operation int) error {
 		for _, flow := range flows {
 			ofFlow := flow.(*ofFlow)
-			ofFlow.Flow.NextElem = ofFlow.lastAction
 			// "AddFlow" operation is async, the function only returns error which occur when constructing and sending
 			// the BundleAdd message. An absence of error does not mean that all Openflow entries are added into the
 			// bundle by the switch. The number of entries successfully added to the bundle by the switch will be
 			// returned by function "Complete".
-			flowMod, err := ofFlow.Flow.GenerateFlowModMessage(operation)
+			flowMod, err := ofFlow.Flow.GetBundleMessage(operation)
 			if err != nil {
 				return err
 			}
-			if err := tx.AddFlow(flowMod); err != nil {
-				// Close the bundle and abort it if there is error when adding the FlowMod message.
+			if err := tx.AddMessage(flowMod); err != nil {
+				// Close the bundle and cancel it if there is error when adding the FlowMod message.
 				_, err := tx.Complete()
 				if err == nil {
 					tx.Abort()
@@ -345,7 +390,7 @@ func (b *OFBridge) AddFlowsInBundle(addflows []Flow, modFlows []Flow, delFlows [
 	} else if count != len(addflows)+len(modFlows)+len(delFlows) {
 		// This case should not be possible if all the calls to "tx.AddFlow" returned nil. This is just a sanity check.
 		tx.Abort()
-		return errors.New("failed to add all Openflow entries in one transaction, abort it")
+		return errors.New("failed to add all Openflow entries in one transaction, cancelling it")
 	}
 
 	// Commit the bundle to the OFSwitch. The "Commit" operation is sync, and the Openflow entries should be realized if
@@ -358,17 +403,185 @@ func (b *OFBridge) AddFlowsInBundle(addflows []Flow, modFlows []Flow, delFlows [
 	for _, flow := range addflows {
 		ofFlow := flow.(*ofFlow)
 		ofFlow.table.UpdateStatus(1)
-		ofFlow.UpdateInstallStatus(true)
-	}
-	for _, flow := range modFlows {
-		ofFlow := flow.(*ofFlow)
-		ofFlow.UpdateInstallStatus(true)
 	}
 	for _, flow := range delFlows {
 		ofFlow := flow.(*ofFlow)
 		ofFlow.table.UpdateStatus(-1)
 	}
 	return nil
+}
+
+func (b *OFBridge) AddOFEntriesInBundle(addEntries []OFEntry, modEntries []OFEntry, delEntries []OFEntry) error {
+	// If no Openflow entries are requested to be added or modified or deleted on the OVS bridge, return immediately.
+	if len(addEntries) == 0 && len(modEntries) == 0 && len(delEntries) == 0 {
+		klog.V(2).Info("No Openflow entries need to be synced to the OVS bridge, returning")
+		return nil
+	}
+	type entryOperation struct {
+		entry     OFEntry
+		operation OFOperation
+	}
+	var flowSet, groupSet []entryOperation
+	// Classify the entries according to the EntryType, and set a correct operation type.
+	checkMessages := func(entries []OFEntry, operation OFOperation) {
+		for _, entry := range entries {
+			switch entry.Type() {
+			case FlowEntry:
+				flow := entry.(*ofFlow)
+				flowSet = append(flowSet, entryOperation{
+					entry:     flow,
+					operation: operation,
+				})
+			case GroupEntry:
+				group := entry.(*ofGroup)
+				groupSet = append(groupSet, entryOperation{
+					entry:     group,
+					operation: operation,
+				})
+			}
+		}
+	}
+
+	checkMessages(addEntries, AddMessage)
+	checkMessages(modEntries, ModifyMessage)
+	checkMessages(delEntries, DeleteMessage)
+
+	// Create a new transaction. Use ofctrl.Ordered to ensure the messages are realized on OVS in the order of adding
+	// messages. This type could ensure Group entry is realized on OVS in advance of Flow entry.
+	tx := b.ofSwitch.NewTransaction(ofctrl.Ordered)
+	// Open a bundle on the OFSwitch.
+	if err := tx.Begin(); err != nil {
+		return err
+	}
+
+	addMessage := func(entrySet []entryOperation) error {
+		if entrySet == nil {
+			return nil
+		}
+		for _, e := range entrySet {
+			msg, err := e.entry.GetBundleMessage(e.operation)
+			if err != nil {
+				return err
+			}
+			// "AddMessage" operation is async, the function only returns error which occur when constructing and sending
+			// the BundleAdd message. An absence of error does not mean that all OpenFlow entries are added into the
+			// bundle by the switch. The number of entries successfully added to the bundle by the switch will be
+			// returned by function "Complete".
+			if err := tx.AddMessage(msg); err != nil {
+				// Close the bundle and cancel it if there is error when adding the FlowMod message.
+				_, err := tx.Complete()
+				if err == nil {
+					tx.Abort()
+				}
+				return err
+			}
+		}
+		return nil
+	}
+
+	// Add Group modification messages in advance of Flow modification messages, so it can ensure the dependent Group
+	// exists when adding a new Flow entry. When OVS is deleting the Group, the corresponding Flow entry is removed
+	// together. It doesn't return an error when OVS is deleting a non-existing Flow entry.
+	for _, entries := range [][]entryOperation{
+		groupSet, flowSet,
+	} {
+		if err := addMessage(entries); err != nil {
+			return nil
+		}
+	}
+
+	// Close the bundle before committing it to the OFSwitch.
+	count, err := tx.Complete()
+	if err != nil {
+		return err
+	} else if count != len(addEntries)+len(modEntries)+len(delEntries) {
+		// This case should not be possible if all the calls to "tx.AddMessage" returned nil. This is just a sanity check.
+		tx.Abort()
+		return errors.New("failed to add all Openflow entries in one transaction, cancelling it")
+	}
+
+	// Commit the bundle to the OFSwitch. The "Commit" operation is sync, and the Openflow entries should be realized if
+	// there is no error returned.
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+
+	// Update TableStatus after the transaction is committed successfully.
+	for _, e := range flowSet {
+		ofFlow := e.entry.(*ofFlow)
+		switch e.operation {
+		case AddMessage:
+			ofFlow.table.UpdateStatus(1)
+		case DeleteMessage:
+			ofFlow.table.UpdateStatus(-1)
+		}
+	}
+
+	return nil
+}
+
+type PacketInQueue struct {
+	rateLimiter *rate.Limiter
+	packetsCh   chan *ofctrl.PacketIn
+}
+
+func NewPacketInQueue(size int, r rate.Limit) *PacketInQueue {
+	return &PacketInQueue{rateLimiter: rate.NewLimiter(r, 1), packetsCh: make(chan *ofctrl.PacketIn, size)}
+}
+
+func (q *PacketInQueue) AddOrDrop(packet *ofctrl.PacketIn) bool {
+	select {
+	case q.packetsCh <- packet:
+		return true
+	default:
+		// Channel is full.
+		return false
+	}
+}
+
+func (q *PacketInQueue) GetRateLimited(stopCh <-chan struct{}) *ofctrl.PacketIn {
+	when := q.rateLimiter.Reserve().Delay()
+	t := time.NewTimer(when)
+	defer t.Stop()
+
+	select {
+	case <-stopCh:
+		return nil
+	case <-t.C:
+		break
+	}
+	select {
+	case <-stopCh:
+		return nil
+	case packet := <-q.packetsCh:
+		return packet
+	}
+}
+
+func (b *OFBridge) SubscribePacketIn(reason uint8, pktInQueue *PacketInQueue) error {
+	_, exist := b.pktConsumers.Load(reason)
+	if exist {
+		return fmt.Errorf("packetIn reason %d already exists", reason)
+	}
+	b.pktConsumers.Store(reason, pktInQueue)
+	return nil
+}
+
+func (b *OFBridge) AddTLVMap(optClass uint16, optType uint8, optLength uint8, tunMetadataIndex uint16) error {
+	if err := b.ofSwitch.AddTunnelTLVMap(optClass, optType, optLength, tunMetadataIndex); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (b *OFBridge) SendPacketOut(packetOut *ofctrl.PacketOut) error {
+	return b.ofSwitch.Send(packetOut.GetMessage())
+}
+
+func (b *OFBridge) BuildPacketOut() PacketOutBuilder {
+	return &ofPacketOutBuilder{
+		pktOut: new(ofctrl.PacketOut),
+	}
 }
 
 // MaxRetry is a callback from OFController. It sets the max retry count that OFController attempts to connect to OFSwitch.
@@ -382,11 +595,13 @@ func (b *OFBridge) RetryInterval() time.Duration {
 	return b.retryInterval
 }
 
-func NewOFBridge(br string) Bridge {
+func NewOFBridge(br string, mgmtAddr string) Bridge {
 	s := &OFBridge{
 		bridgeName:    br,
+		mgmtAddr:      mgmtAddr,
 		tableCache:    make(map[TableIDType]*ofTable),
 		retryInterval: 1 * time.Second,
+		pktConsumers:  sync.Map{},
 	}
 	s.controller = ofctrl.NewController(s)
 	return s

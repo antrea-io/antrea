@@ -19,11 +19,25 @@ import (
 	"sync"
 	"time"
 
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 
-	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
+	"antrea.io/antrea/pkg/apiserver/storage"
 )
+
+type bookmarkEvent struct {
+	resourceVersion uint64
+	object          runtime.Object
+}
+
+func (b *bookmarkEvent) ToWatchEvent(selectors *storage.Selectors, isInitEvent bool) *watch.Event {
+	return &watch.Event{Type: watch.Bookmark, Object: b.object}
+}
+
+func (b *bookmarkEvent) GetResourceVersion() uint64 {
+	return b.resourceVersion
+}
 
 // storeWatcher implements watch.Interface
 type storeWatcher struct {
@@ -38,15 +52,18 @@ type storeWatcher struct {
 	forget func()
 	// stopOnce guarantees Stop function will perform exactly once.
 	stopOnce sync.Once
+	// newFunc is a function that creates new empty object of this type.
+	newFunc func() runtime.Object
 }
 
-func newStoreWatcher(chanSize int, selectors *storage.Selectors, forget func()) *storeWatcher {
+func newStoreWatcher(chanSize int, selectors *storage.Selectors, forget func(), newFunc func() runtime.Object) *storeWatcher {
 	return &storeWatcher{
 		input:     make(chan storage.InternalEvent, chanSize),
 		result:    make(chan watch.Event, chanSize),
 		done:      make(chan struct{}),
 		selectors: selectors,
 		forget:    forget,
+		newFunc:   newFunc,
 	}
 }
 
@@ -87,21 +104,29 @@ func (w *storeWatcher) add(event storage.InternalEvent, timer *time.Timer) bool 
 // if they are newer than the specified resourceVersion.
 func (w *storeWatcher) process(ctx context.Context, initEvents []storage.InternalEvent, resourceVersion uint64) {
 	for _, event := range initEvents {
-		w.sendWatchEvent(event)
+		w.sendWatchEvent(event, true)
 	}
+	// Send a dummy bookmark event to indicate the end of initEvents. This is
+	// an unusual way to use the bookmark event, as it is meant to be used to
+	// refresh the last resource version of a client. In Antrea we do not use
+	// resource version when restarting a watch, but we need a way to
+	// communicate to clients what the initial set of objects is, so that
+	// stale objects whose delete events were missed by the client (because
+	// the watch was down) can be deleted.
+	w.sendWatchEvent(&bookmarkEvent{resourceVersion, w.newFunc()}, true)
 	defer close(w.result)
 	for {
 		select {
 		case event, ok := <-w.input:
 			if !ok {
-				klog.Info("The input channel had been closed, stopping process")
+				klog.V(4).Info("The input channel has been closed, stopping process for watcher")
 				return
 			}
 			if event.GetResourceVersion() > resourceVersion {
-				w.sendWatchEvent(event)
+				w.sendWatchEvent(event, false)
 			}
 		case <-ctx.Done():
-			klog.Info("The context had been canceled, stopping process")
+			klog.V(4).Info("The context has been canceled, stopping process for watcher")
 			return
 		}
 	}
@@ -109,8 +134,8 @@ func (w *storeWatcher) process(ctx context.Context, initEvents []storage.Interna
 
 // sendWatchEvent converts an InternalEvent to watch.Event based on the watcher's selectors.
 // It sends the converted event to result channel, if not nil.
-func (w *storeWatcher) sendWatchEvent(event storage.InternalEvent) {
-	watchEvent := event.ToWatchEvent(w.selectors)
+func (w *storeWatcher) sendWatchEvent(event storage.InternalEvent, isInitEvent bool) {
+	watchEvent := event.ToWatchEvent(w.selectors, isInitEvent)
 	if watchEvent == nil {
 		// Watcher is not interested in that object.
 		return

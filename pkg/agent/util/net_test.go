@@ -16,6 +16,7 @@ package util
 
 import (
 	"fmt"
+	"net"
 	"strings"
 	"testing"
 )
@@ -23,7 +24,8 @@ import (
 func TestGenerateContainerInterfaceName(t *testing.T) {
 	podNamespace := "namespace1"
 	podName0 := "pod0"
-	iface0 := GenerateContainerInterfaceName(podName0, podNamespace)
+	containerID0 := "container0"
+	iface0 := GenerateContainerInterfaceName(podName0, podNamespace, containerID0)
 	if len(iface0) > interfaceNameLength {
 		t.Errorf("Failed to ensure length of interface name %s <= %d", iface0, interfaceNameLength)
 	}
@@ -31,16 +33,31 @@ func TestGenerateContainerInterfaceName(t *testing.T) {
 		t.Errorf("failed to use podName as prefix: %s", iface0)
 	}
 	podName1 := "pod1-abcde-12345"
-	iface1 := GenerateContainerInterfaceName(podName1, podNamespace)
+	iface1 := GenerateContainerInterfaceName(podName1, podNamespace, containerID0)
 	if len(iface1) != interfaceNameLength {
 		t.Errorf("Failed to ensure length of interface name as %d", interfaceNameLength)
 	}
 	if !strings.HasPrefix(iface1, "pod1-abc") {
 		t.Errorf("failed to use first 8 valid characters")
 	}
-	podName2 := "pod1-abcde-54321"
-	iface2 := GenerateContainerInterfaceName(podName2, podNamespace)
+	containerID1 := "container1"
+	iface2 := GenerateContainerInterfaceName(podName1, podNamespace, containerID1)
 	if iface1 == iface2 {
-		t.Errorf("failed to differentiate interfaces with pods has the same prefix")
+		t.Errorf("failed to differentiate interfaces with pods that have the same pod namespace and name")
 	}
+}
+
+func TestGetDefaultLocalNodeAddr(t *testing.T) {
+	conn, err := net.Dial("udp", "8.8.8.8:80")
+	if err != nil {
+		t.Error(err)
+	}
+	defer conn.Close()
+	ip := conn.LocalAddr().(*net.UDPAddr).IP
+
+	_, dev, err := GetIPNetDeviceFromIP(ip)
+	if err != nil {
+		t.Error(err)
+	}
+	t.Logf("IP obtained %s, %v", ip, dev)
 }

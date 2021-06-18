@@ -1,0 +1,154 @@
+// +build !windows
+
+// Copyright 2020 Antrea Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package rules
+
+import (
+	"bytes"
+	"fmt"
+
+	"antrea.io/antrea/pkg/agent/util/iptables"
+
+	"k8s.io/klog/v2"
+)
+
+// NodePortLocalChain is the name of the chain in IPTABLES for Node Port Local
+const NodePortLocalChain = "ANTREA-NODE-PORT-LOCAL"
+
+// IPTableRules provides a client to perform IPTABLES operations
+type iptablesRules struct {
+	name  string
+	table *iptables.Client
+}
+
+// NewIPTableRules retruns a new instance of IPTableRules
+func NewIPTableRules() *iptablesRules {
+	iptInstance, _ := iptables.New(true, false)
+	iptRule := iptablesRules{
+		name:  "NPL",
+		table: iptInstance,
+	}
+	return &iptRule
+}
+
+// Init initializes IPTABLES rules for NPL. Currently it deletes existing rules to ensure that no stale entries are present.
+func (ipt *iptablesRules) Init() error {
+	if err := ipt.InitRules(); err != nil {
+		return fmt.Errorf("initialization of NPL iptables rules failed: %v", err)
+	}
+	return nil
+}
+
+// InitRules creates the NPL chain and links it to the PREROUTING (for incoming
+// traffic) and OUTPUT chain (for locally-generated traffic). All NPL DNAT rules
+// will be added to this chain.
+func (ipt *iptablesRules) InitRules() error {
+	if err := ipt.table.EnsureChain(iptables.NATTable, NodePortLocalChain); err != nil {
+		return err
+	}
+	ruleSpec := []string{
+		"-p", "tcp", "-m", "addrtype", "--dst-type", "LOCAL", "-j", NodePortLocalChain,
+	}
+	if err := ipt.table.EnsureRule(iptables.NATTable, iptables.PreRoutingChain, ruleSpec); err != nil {
+		return err
+	}
+	if err := ipt.table.EnsureRule(iptables.NATTable, iptables.OutputChain, ruleSpec); err != nil {
+		return err
+	}
+	return nil
+}
+
+func buildRuleForPod(port int, podIP string) []string {
+	return []string{
+		"-p", "tcp", "-m", "tcp", "--dport", fmt.Sprint(port),
+		"-j", "DNAT", "--to-destination", podIP,
+	}
+}
+
+// AddRule appends a DNAT rule in NodePortLocalChain chain of NAT table
+func (ipt *iptablesRules) AddRule(port int, podIP string) error {
+	rule := buildRuleForPod(port, podIP)
+	if err := ipt.table.EnsureRule(iptables.NATTable, NodePortLocalChain, rule); err != nil {
+		return err
+	}
+	klog.Infof("Successfully added DNAT rule for Pod IP %s, port %d", podIP, port)
+	return nil
+}
+
+// AddAllRules constructs a list of iptables rules for the NPL chain and performs a
+// iptables-restore on this chain. It uses --no-flush to keep the previous rules intact.
+func (ipt *iptablesRules) AddAllRules(nplList []PodNodePort) error {
+	iptablesData := bytes.NewBuffer(nil)
+	writeLine(iptablesData, "*nat")
+	writeLine(iptablesData, iptables.MakeChainLine(NodePortLocalChain))
+	for _, nplData := range nplList {
+		destination := nplData.PodIP + ":" + fmt.Sprint(nplData.PodPort)
+		rule := buildRuleForPod(nplData.NodePort, destination)
+		writeLine(iptablesData, append([]string{"-A", NodePortLocalChain}, rule...)...)
+	}
+	writeLine(iptablesData, "COMMIT")
+	if err := ipt.table.Restore(iptablesData.Bytes(), false, false); err != nil {
+		return err
+	}
+	return nil
+}
+
+// DeleteRule deletes a specific NPL rule from NodePortLocalChain chain
+func (ipt *iptablesRules) DeleteRule(port int, podIP string) error {
+	klog.Infof("Deleting DNAT rule for Pod IP %s, port %d", podIP, port)
+	rule := buildRuleForPod(port, podIP)
+	if err := ipt.table.DeleteRule(iptables.NATTable, NodePortLocalChain, rule); err != nil {
+		return err
+	}
+	return nil
+}
+
+// DeleteAllRules deletes all NPL rules programmed in the node
+func (ipt *iptablesRules) DeleteAllRules() error {
+	exists, err := ipt.table.ChainExists(iptables.NATTable, NodePortLocalChain)
+	if err != nil {
+		return fmt.Errorf("failed to check if NodePortLocal chain exists in NAT table: %v", err)
+	}
+	if !exists {
+		return nil
+	}
+	ruleSpec := []string{
+		"-p", "tcp", "-m", "addrtype", "--dst-type", "LOCAL", "-j", NodePortLocalChain,
+	}
+	if err := ipt.table.DeleteRule(iptables.NATTable, iptables.PreRoutingChain, ruleSpec); err != nil {
+		return err
+	}
+	if err := ipt.table.DeleteRule(iptables.NATTable, iptables.OutputChain, ruleSpec); err != nil {
+		return err
+	}
+	if err := ipt.table.DeleteChain(iptables.NATTable, NodePortLocalChain); err != nil {
+		return err
+	}
+	return nil
+}
+
+// Join all words with spaces, terminate with newline and write to buf.
+func writeLine(buf *bytes.Buffer, words ...string) {
+	// We avoid strings.Join for performance reasons.
+	for i := range words {
+		buf.WriteString(words[i])
+		if i < len(words)-1 {
+			buf.WriteByte(' ')
+		} else {
+			buf.WriteByte('\n')
+		}
+	}
+}

@@ -1,15 +1,17 @@
 resources:
 - crds.yml
+- crds-rbac.yml
 - antctl.yml
 - controller-rbac.yml
 - controller.yml
 - agent-rbac.yml
 - agent.yml
+- cluster-identity-reader.yml
 configMapGenerator:
 - files:
   - conf/antrea-controller.conf
   - conf/antrea-agent.conf
-  - conf/antrea-cni.conf
+  - conf/antrea-cni.conflist
   name: antrea-config
 commonLabels:
   app: antrea

@@ -1,23 +1,10 @@
-FROM ubuntu:18.04 as cni-binaries
-
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends wget ca-certificates
-
-# Leading dot is required for the tar command below
-ENV CNI_PLUGINS="./host-local ./loopback"
-
-RUN mkdir -p /opt/cni/bin && \
-    wget -q -O - https://dl.k8s.io/network-plugins/cni-plugins-amd64-v0.7.5.tgz | tar xz -C /opt/cni/bin $CNI_PLUGINS
-
-
-FROM antrea/openvswitch:2.11.1
+ARG OVS_VERSION
+FROM antrea/base-ubuntu:${OVS_VERSION}
 
 LABEL maintainer="Antrea <projectantrea-dev@googlegroups.com>"
-LABEL description="A Docker image to deploy the Antrea CNI. Requires the Antrea binaries to be built prior to building the image."
+LABEL description="The Docker image to deploy the Antrea CNI. "
 
 USER root
-
-COPY --from=cni-binaries /opt/cni/bin /opt/cni/bin
 
 COPY build/images/scripts/* /usr/local/bin/
 COPY bin/* /usr/local/bin/

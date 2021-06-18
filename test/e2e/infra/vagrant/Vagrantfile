@@ -2,26 +2,57 @@ VAGRANTFILE_API_VERSION = "2"
 
 NUM_WORKERS = 1
 
-K8S_POD_NETWORK_CIDR = "10.10.0.0/16"
+MODE = ENV['K8S_IP_FAMILY'] || "v4"
+if MODE != "v4" && MODE != "v6"
+  raise "K8S_IP_FAMILY env variable should be one of 'v4' or 'v6'"
+end
+
+K8S_POD_NETWORK_V4_CIDR = "10.10.0.0/16"
+K8S_POD_NETWORK_V6_CIDR = "fd02::/48"
+K8S_POD_NETWORK_CIDR = (MODE == "v4") ? K8S_POD_NETWORK_V4_CIDR : K8S_POD_NETWORK_V6_CIDR
+
+# Only used for IPv6 clusters
+K8S_NODE_CP_GW_V4_IP = "10.10.0.1"
+K8S_NODE_CP_GW_V6_IP = "fd02::1"
+K8S_NODE_CP_GW_IP = (MODE == "v4") ? K8S_NODE_CP_GW_V4_IP : K8S_NODE_CP_GW_V6_IP
+
+K8S_SERVICE_NETWORK_V4_CIDR = "10.96.0.0/12"
+K8S_SERVICE_NETWORK_V6_CIDR = "fd03::/112"
+K8S_SERVICE_NETWORK_CIDR = (MODE == "v4") ? K8S_SERVICE_NETWORK_V4_CIDR : K8S_SERVICE_NETWORK_V6_CIDR
+
+NODE_NETWORK_V4_PREFIX = "192.168.77."
+NODE_NETWORK_V6_PREFIX = "fd3b:fcf5:3e92:d732::"
+
+MEMORY = 2048
+if ENV['K8S_NODE_LARGE'] == "true"
+  MEMORY = 4096
+end
 
 Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
-  config.vm.box = "ubuntu/bionic64"
+  config.vm.box = "ubuntu/focal64"
 
   config.vm.provider "virtualbox" do |v|
-    v.memory = 2048
-    # 2 CPUS required to initialize k8s cluster with "kubeadm init"
+    v.memory = MEMORY
+    # 2 CPUS required to initialize K8s cluster with "kubeadm init"
     v.cpus = 2
   end
 
   groups = {
-    "master" => ["k8s-node-master"],
+    "controlplane" => ["k8s-node-control-plane"],
     "workers" => ["k8s-node-worker-[1:#{NUM_WORKERS}]"],
   }
 
-  config.vm.define "k8s-node-master" do |node|
-    node.vm.hostname = "k8s-node-master"
-    node_ip = "192.168.77.100"
+  config.vm.define "k8s-node-control-plane" do |node|
+    node.vm.hostname = "k8s-node-control-plane"
+    node_ipv4 = NODE_NETWORK_V4_PREFIX + "100"
+    node_ipv6 = NODE_NETWORK_V6_PREFIX + "100"
+    node_ip = (MODE == "v4") ? node_ipv4 : node_ipv6
     node.vm.network "private_network", ip: node_ip
+
+    if MODE == "v6"
+      # add a fake default route for IPv6: required for ClusterIP traffic even though it is DNATed
+      node.vm.provision :shell, privileged: true, inline: "ip -6 route replace default via " + NODE_NETWORK_V6_PREFIX + "200"
+    end
 
     node.vm.provision :ansible  do |ansible|
       ansible.playbook = "playbook/k8s.yml"
@@ -30,9 +61,12 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
         # Ubuntu bionic does not ship with python2
         ansible_python_interpreter:"/usr/bin/python3",
         node_ip: node_ip,
-        node_name: "k8s-node-master",
+        node_name: "k8s-node-control-plane",
         k8s_pod_network_cidr: K8S_POD_NETWORK_CIDR,
+        k8s_service_network_cidr: K8S_SERVICE_NETWORK_CIDR,
         k8s_api_server_ip: node_ip,
+        k8s_ip_family: MODE,
+        k8s_antrea_gw_ip: K8S_NODE_CP_GW_IP,
       }
     end
   end
@@ -40,8 +74,15 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
   (1..NUM_WORKERS).each do |node_id|
     config.vm.define "k8s-node-worker-#{node_id}" do |node|
       node.vm.hostname = "k8s-node-worker-#{node_id}"
-      node_ip = "192.168.77.#{100 + node_id}"
+      node_ipv4 = NODE_NETWORK_V4_PREFIX + "#{100 + node_id}"
+      node_ipv6 = NODE_NETWORK_V6_PREFIX + "#{100 + node_id}"
+      node_ip = (MODE == "v4") ? node_ipv4 : node_ipv6
       node.vm.network "private_network", ip: node_ip
+
+      if MODE == "v6"
+        # add a fake default route for IPv6: required for ClusterIP traffic even though it is DNATed
+        node.vm.provision :shell, privileged: true, inline: "ip -6 route replace default via " + NODE_NETWORK_V6_PREFIX + "200"
+      end
 
       node.vm.provision :ansible do |ansible|
         ansible.playbook = "playbook/k8s.yml"

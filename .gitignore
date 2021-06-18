@@ -2,6 +2,7 @@ bin
 .mockgen
 .cache
 .golangci-bin
+.coverage/
 
 .DS_Store
 
@@ -12,3 +13,5 @@ bin
 *~
 
 .idea/
+.vscode/
+vendor

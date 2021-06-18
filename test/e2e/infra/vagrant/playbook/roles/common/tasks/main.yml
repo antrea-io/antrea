@@ -1,6 +1,6 @@
 - name: "Checking that Ansible version >= '2.4.0'"
   assert:
-    that: ansible_version.full >= "2.4.0"
+    that: ansible_version.full is version_compare('2.4.0', '>=')
 
 - import_tasks: base.yml
 
@@ -12,5 +12,8 @@
 
 # Kubelet will not start if the system has swap enabled
 - import_tasks: disable-swap.yml
+
+# Kubeadm may fail pre-flight checks without this
+- import_tasks: enable-forwarding.yml
 
 - import_tasks: kube.yml

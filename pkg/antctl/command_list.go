@@ -15,110 +15,59 @@
 package antctl
 
 import (
-	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"math"
-	"net/http"
-	"path/filepath"
+	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
-	"k8s.io/apiserver/pkg/server"
-	"k8s.io/apiserver/pkg/server/mux"
-	"k8s.io/client-go/util/homedir"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 
-	"github.com/vmware-tanzu/antrea/pkg/monitor"
+	"antrea.io/antrea/pkg/antctl/runtime"
 )
 
-// commandList organizes definitions.
+// commandList organizes commands definitions.
 // It is the protocol for a pair of antctl client and server.
 type commandList struct {
 	definitions []commandDefinition
+	rawCommands []rawCommand
 	codec       serializer.CodecFactory
 }
 
-func (cl *commandList) InstallToAPIServer(apiServer *server.GenericAPIServer, cq monitor.ControllerQuerier) {
-	cl.applyToMux(apiServer.Handler.NonGoRestfulMux, nil, cq)
-}
-
-// applyToMux adds the handler function of each commandDefinition in the
-// commandList to the mux with path /apis/<group_version>/<cmd>. It also adds
-// corresponding discovery handlers at /apis/<group_version> for kubernetes service
-// discovery.
-func (cl *commandList) applyToMux(mux *mux.PathRecorderMux, aq monitor.AgentQuerier, cq monitor.ControllerQuerier) {
-	resources := map[string][]metav1.APIResource{}
-	for _, def := range cl.definitions {
-		if def.HandlerFactory == nil {
-			continue
-		}
-		handler := def.HandlerFactory.Handler(aq, cq)
-		groupPath := "/apis/" + def.GroupVersion.String()
-		reqPath := def.requestPath(groupPath)
-		klog.Infof("Adding cli handler %s", reqPath)
-		mux.HandleFunc(reqPath, handler)
-		resources[groupPath] = append(resources[groupPath], metav1.APIResource{
-			Name:         def.Use,
-			SingularName: def.Use,
-			Kind:         def.Use,
-			Namespaced:   false,
-			Group:        def.GroupVersion.Group,
-			Version:      def.GroupVersion.Version,
-			Verbs:        metav1.Verbs{"get"},
-		})
-	}
-	// Setup up discovery handlers for command handlers.
-	for groupPath, resource := range resources {
-		mux.HandleFunc(groupPath, func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			l := metav1.APIResourceList{
-				TypeMeta:     metav1.TypeMeta{Kind: "APIResourceList", APIVersion: metav1.SchemeGroupVersion.Version},
-				GroupVersion: systemGroup.Version,
-				APIResources: resource,
-			}
-			jsonResp, err := json.MarshalIndent(l, "", "  ")
-			if err != nil {
-				w.WriteHeader(http.StatusInternalServerError)
-				return
-			}
-			_, err = w.Write(jsonResp)
-			if err != nil {
-				klog.Errorf("Error when responding APIResourceList: %v", err)
-				w.WriteHeader(http.StatusInternalServerError)
-			}
-		})
-	}
-}
-
-func (cl *commandList) applyFlagsToRootCommand(root *cobra.Command) {
-	defaultKubeconfig := filepath.Join(homedir.HomeDir(), ".kube", "config")
+func (cl *commandList) applyPersistentFlagsToRoot(root *cobra.Command) {
 	root.PersistentFlags().BoolP("verbose", "v", false, "enable verbose output")
-	root.PersistentFlags().StringP("kubeconfig", "k", defaultKubeconfig, "absolute path to the kubeconfig file")
+	root.PersistentFlags().StringP("kubeconfig", "k", "", "absolute path to the kubeconfig file")
 	root.PersistentFlags().DurationP("timeout", "t", 0, "time limit of the execution of the command")
+	root.PersistentFlags().StringP("server", "s", "", "address and port of the API server, taking precedence over the default endpoint and the one set in kubeconfig")
 }
 
-// ApplyToRootCommand applies the commandList to the root cobra command, it applies
-// each commandDefinition of it to the root command as a sub-command.
-func (cl *commandList) ApplyToRootCommand(root *cobra.Command, isAgent bool, inPod bool) {
-	client := &client{
-		inPod: inPod,
-		codec: cl.codec,
-	}
+// applyToRootCommand is the "internal" version of ApplyToRootCommand, used for testing
+func (cl *commandList) applyToRootCommand(root *cobra.Command, client AntctlClient, out io.Writer) {
 	for _, groupCommand := range groupCommands {
 		root.AddCommand(groupCommand)
 	}
 	for i := range cl.definitions {
-		def := cl.definitions[i]
-		if (def.Agent != isAgent) && (def.Controller != !isAgent) {
+		def := &cl.definitions[i]
+		if (runtime.Mode == runtime.ModeAgent && def.agentEndpoint == nil) ||
+			(runtime.Mode == runtime.ModeController && def.controllerEndpoint == nil) {
 			continue
 		}
-		def.applySubCommandToRoot(root, client, isAgent)
-		klog.Infof("Added command %s", def.Use)
+		def.applySubCommandToRoot(root, client, out)
+		klog.Infof("Added command %s", def.use)
 	}
-	cl.applyFlagsToRootCommand(root)
+	cl.applyPersistentFlagsToRoot(root)
+
+	for _, cmd := range cl.rawCommands {
+		if (runtime.Mode == runtime.ModeAgent && cmd.supportAgent) ||
+			(runtime.Mode == runtime.ModeController && cmd.supportController) {
+			root.AddCommand(cmd.cobraCommand)
+		}
+	}
+
+	root.SilenceUsage = true
 	root.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
 		enableVerbose, err := root.PersistentFlags().GetBool("verbose")
 		if err != nil {
@@ -136,7 +85,14 @@ func (cl *commandList) ApplyToRootCommand(root *cobra.Command, isAgent bool, inP
 		}
 		return nil
 	}
-	renderDescription(root, isAgent)
+	renderDescription(root)
+}
+
+// ApplyToRootCommand applies the commandList to the root cobra command, it applies
+// each commandDefinition of it to the root command as a sub-command.
+func (cl *commandList) ApplyToRootCommand(root *cobra.Command) {
+	client := newClient(cl.codec)
+	cl.applyToRootCommand(root, client, os.Stdout)
 }
 
 // validate checks the validation of the commandList.
@@ -147,21 +103,52 @@ func (cl *commandList) validate() []error {
 	}
 	for i, c := range cl.definitions {
 		for _, err := range c.validate() {
-			errs = append(errs, fmt.Errorf("#%d command<%s>: %w", i, c.Use, err))
+			errs = append(errs, fmt.Errorf("#%d command<%s>: %w", i, c.use, err))
 		}
 	}
 	return errs
 }
 
+// GetDebugCommands returns all commands supported by Controller or Agent that
+// are used for debugging purpose.
+func (cl *commandList) GetDebugCommands(mode string) [][]string {
+	var allCommands [][]string
+	for _, def := range cl.definitions {
+		// TODO: incorporate query commands into e2e testing once proxy access is implemented
+		if def.commandGroup == query {
+			continue
+		}
+		if mode == runtime.ModeController && def.use == "log-level" {
+			// log-level command does not support remote execution.
+			continue
+		}
+		if mode == runtime.ModeAgent && def.agentEndpoint != nil ||
+			mode == runtime.ModeController && def.controllerEndpoint != nil {
+			var currentCommand []string
+			if group, ok := groupCommands[def.commandGroup]; ok {
+				currentCommand = append(currentCommand, group.Use)
+			}
+			currentCommand = append(currentCommand, def.use)
+			allCommands = append(allCommands, currentCommand)
+		}
+	}
+	for _, cmd := range cl.rawCommands {
+		if cmd.cobraCommand.Use == "proxy" {
+			// proxy will keep running until interrupted so it
+			// cannot be used as is in e2e tests.
+			continue
+		}
+		if mode == runtime.ModeController && cmd.supportController ||
+			mode == runtime.ModeAgent && cmd.supportAgent {
+			allCommands = append(allCommands, strings.Split(cmd.cobraCommand.Use, " ")[:1])
+		}
+	}
+	return allCommands
+}
+
 // renderDescription replaces placeholders ${component} in Short and Long of a command
 // to the determined component during runtime.
-func renderDescription(command *cobra.Command, isAgent bool) {
-	var componentName string
-	if isAgent {
-		componentName = "agent"
-	} else {
-		componentName = "controller"
-	}
-	command.Short = strings.ReplaceAll(command.Short, "${component}", componentName)
-	command.Long = strings.ReplaceAll(command.Long, "${component}", componentName)
+func renderDescription(command *cobra.Command) {
+	command.Short = strings.ReplaceAll(command.Short, "${component}", runtime.Mode)
+	command.Long = strings.ReplaceAll(command.Long, "${component}", runtime.Mode)
 }

@@ -20,111 +20,156 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"net/http"
 	"net/url"
 	"time"
 
-	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
+	genericapiserver "k8s.io/apiserver/pkg/server"
 	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
-	"k8s.io/klog"
+
+	agentapiserver "antrea.io/antrea/pkg/agent/apiserver"
+	"antrea.io/antrea/pkg/antctl/runtime"
+	"antrea.io/antrea/pkg/apis"
+	controllerapiserver "antrea.io/antrea/pkg/apiserver"
 )
 
-// requestOption describes options to issue requests to the antctl server.
+// requestOption describes options to issue requests.
 type requestOption struct {
-	groupVersion *schema.GroupVersion
-	// path is the destination URL of the ongoing request.
-	path *url.URL
+	commandDefinition *commandDefinition
 	// kubeconfig is the path to the config file for kubectl.
 	kubeconfig string
-	// name is the command which is going to be requested.
-	name string
+	// args are the parameters of the ongoing resourceRequest.
+	args map[string]string
 	// timeout specifies a time limit for requests made by the client. The timeout
 	// duration includes connection setup, all redirects, and reading of the
 	// response body.
-	timeOut time.Duration
+	timeout time.Duration
+	// server is the address and port of the APIServer specified by user explicitly.
+	// If not set, antctl will connect to 127.0.0.1:10350 in agent mode, and will
+	// connect to the server set in kubeconfig in controller mode.
+	// It set, it takes precedence over the above default endpoints.
+	server string
 }
 
-// client issues requests to an antctl server and gets the response.
+type AntctlClient interface {
+	request(opt *requestOption) (io.Reader, error)
+}
+
+// client issues requests to endpoints.
 type client struct {
-	// inPod indicate whether the client is running in a pod or not.
-	inPod bool
 	// codec is the CodecFactory for this command, it is needed for remote accessing.
 	codec serializer.CodecFactory
 }
 
+func newClient(codec serializer.CodecFactory) AntctlClient {
+	return &client{codec: codec}
+}
+
 // resolveKubeconfig tries to load the kubeconfig specified in the requestOption.
 // It will return error if the stating of the file failed or the kubeconfig is malformed.
-// It will not try to look up InCluster configuration. If the kubeconfig is loaded,
-// the groupVersion and the codec in the requestOption will be populated into the
-// kubeconfig object.
+// If the default kubeconfig not exists, it will try to use an in-cluster config.
 func (c *client) resolveKubeconfig(opt *requestOption) (*rest.Config, error) {
-	kubeconfig, err := clientcmd.BuildConfigFromFlags("", opt.kubeconfig)
+	kubeconfig, err := runtime.ResolveKubeconfig(opt.kubeconfig)
 	if err != nil {
 		return nil, err
 	}
-	kubeconfig.GroupVersion = opt.groupVersion
-	kubeconfig.NegotiatedSerializer = serializer.DirectCodecFactory{CodecFactory: c.codec}
+	kubeconfig.NegotiatedSerializer = c.codec
+	if runtime.InPod {
+		kubeconfig.Insecure = true
+		kubeconfig.CAFile = ""
+		kubeconfig.CAData = nil
+		if runtime.Mode == runtime.ModeAgent {
+			kubeconfig.Host = net.JoinHostPort("127.0.0.1", fmt.Sprint(apis.AntreaAgentAPIPort))
+			kubeconfig.BearerTokenFile = agentapiserver.TokenPath
+		} else if runtime.Mode == runtime.ModeController {
+			kubeconfig.Host = net.JoinHostPort("127.0.0.1", fmt.Sprint(apis.AntreaControllerAPIPort))
+			kubeconfig.BearerTokenFile = controllerapiserver.TokenPath
+		}
+	}
 	return kubeconfig, nil
 }
 
-// localRequest issues the local request according to the requestOption. It only cares about
-// the groupVersion of the requestOption which will be used to construct the request
-// URI. localRequest is basically a raw http request, no authentication and authorization
-// will be done during the request. For safety concerns, it communicates with the
-// antctl server by a predefined unix domain socket. If the request succeeds, it
-// will return an io.Reader which contains the response data.
-func (c *client) localRequest(opt *requestOption) (io.Reader, error) {
-	client := &http.Client{
-		Transport: &http.Transport{
-			DialContext: func(ctx context.Context, _, _ string) (conn net.Conn, err error) {
-				if opt.timeOut != 0 {
-					var cancel context.CancelFunc
-					ctx, cancel = context.WithTimeout(ctx, opt.timeOut)
-					defer cancel()
-				}
-				return new(net.Dialer).DialContext(ctx, "unix", unixDomainSockAddr)
-			},
-		},
+func (c *client) request(opt *requestOption) (io.Reader, error) {
+	var e *endpoint
+	if runtime.Mode == runtime.ModeAgent {
+		e = opt.commandDefinition.agentEndpoint
+	} else {
+		e = opt.commandDefinition.controllerEndpoint
 	}
-	opt.path.Host = "antctl"
-	opt.path.Scheme = "http"
-	resp, err := client.Get(opt.path.String())
-	if err != nil {
-		return nil, err
+	if e.resourceEndpoint != nil {
+		return c.resourceRequest(e.resourceEndpoint, opt)
 	}
-	defer resp.Body.Close()
-	// Since we are going to close the connection, copying the response.
-	var buf bytes.Buffer
-	_, err = io.Copy(&buf, resp.Body)
-	return &buf, err
+	return c.nonResourceRequest(e.nonResourceEndpoint, opt)
 }
 
-// Request issues the appropriate request to the antctl server according to the
-// request options. If the inPod field of the client is true, the client will do
-// a local request by invoking localRequest. Otherwise, it will check the kubeconfig
-// and delegate the request destined to the antctl server to the kubernetes API server.
-// If the request succeeds, it will return an io.Reader which contains the response
-// data.
-func (c *client) Request(opt *requestOption) (io.Reader, error) {
-	if c.inPod {
-		klog.Infoln("antctl runs as local mode")
-		return c.localRequest(opt)
-	}
+func (c *client) nonResourceRequest(e *nonResourceEndpoint, opt *requestOption) (io.Reader, error) {
 	kubeconfig, err := c.resolveKubeconfig(opt)
 	if err != nil {
 		return nil, err
+	}
+	if opt.server != "" {
+		kubeconfig.Host = opt.server
 	}
 	restClient, err := rest.UnversionedRESTClientFor(kubeconfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create rest client: %w", err)
 	}
-	// If timeout is not set, no timeout.
-	restClient.Client.Timeout = opt.timeOut
-	result := restClient.Get().RequestURI(opt.path.RequestURI()).Do()
+	u := url.URL{Path: e.path}
+	q := u.Query()
+	for k, v := range opt.args {
+		q.Set(k, v)
+	}
+	u.RawQuery = q.Encode()
+	getter := restClient.Get().RequestURI(u.RequestURI()).Timeout(opt.timeout)
+	result, err := getter.DoRaw(context.TODO())
+	if err != nil {
+		statusErr, ok := err.(*errors.StatusError)
+		if !ok {
+			return nil, err
+		}
+		return nil, generateMessageForStatusErr(opt.commandDefinition, opt.args, statusErr)
+	}
+	return bytes.NewReader(result), nil
+}
+
+func (c *client) resourceRequest(e *resourceEndpoint, opt *requestOption) (io.Reader, error) {
+	kubeconfig, err := c.resolveKubeconfig(opt)
+	if err != nil {
+		return nil, err
+	}
+	if opt.server != "" {
+		kubeconfig.Host = opt.server
+	}
+	gv := e.groupVersionResource.GroupVersion()
+	kubeconfig.GroupVersion = &gv
+	kubeconfig.APIPath = genericapiserver.APIGroupPrefix
+
+	restClient, err := rest.RESTClientFor(kubeconfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create rest client: %w", err)
+	}
+	// If timeout is zero, there will be no timeout.
+	restClient.Client.Timeout = opt.timeout
+
+	resGetter := restClient.Get().
+		NamespaceIfScoped(opt.args["namespace"], e.namespaced).
+		Resource(e.groupVersionResource.Resource)
+
+	if len(e.resourceName) != 0 {
+		resGetter = resGetter.Name(e.resourceName)
+	} else if name, ok := opt.args["name"]; ok {
+		resGetter = resGetter.Name(name)
+	}
+
+	for arg, val := range opt.args {
+		if arg != "name" && arg != "namespace" {
+			resGetter = resGetter.Param(arg, val)
+		}
+	}
+	result := resGetter.Do(context.TODO())
 	if result.Error() != nil {
-		return nil, fmt.Errorf("error when requesting %s: %w", opt.path.RequestURI(), result.Error())
+		return nil, generateMessage(opt, result)
 	}
 	raw, err := result.Raw()
 	if err != nil {

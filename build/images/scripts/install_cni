@@ -5,17 +5,33 @@ set -euo pipefail
 # Todo: check version and continue installation only for a newer version
 
 # Install Antrea configuration file
-install -m 644 /etc/antrea/antrea-cni.conf /host/etc/cni/net.d/10-antrea.conf
+install -m 644 /etc/antrea/antrea-cni.conflist /host/etc/cni/net.d/10-antrea.conflist
 
 # Install Antrea binary file
 install -m 755 /usr/local/bin/antrea-cni /host/opt/cni/bin/antrea
 
-# Install the loopback plugin if not already present
-# It is required by kubelet on Linux when using docker as the container runtime
+# If more than one CNI config file exists, the file with the lowest name is
+# chosen i.e. existing 10-antrea.conf will be chosen over 10-antrea.conflist.
+# Hence, delete older 10-antrea.conf file.
+rm -f /host/etc/cni/net.d/10-antrea.conf
 
-if [ ! -f /host/opt/cni/bin/loopback ]; then
-    install -m 755 /opt/cni/bin/loopback /host/opt/cni/bin/loopback
-fi
+# Install the loopback plugin.
+# It is required by kubelet on Linux when using docker as the container runtime.
+# We replace the binary files even they are already present on the Node to make
+# sure expected versions are used.
+install -m 755 /opt/cni/bin/loopback /host/opt/cni/bin/loopback
+
+# Install PortMap CNI binary file. It is required to support hostPort.
+install -m 755 /opt/cni/bin/portmap /host/opt/cni/bin/portmap
+
+# Install bandwidth CNI binary file. It is required to support traffic shaping.
+install -m 755 /opt/cni/bin/bandwidth /host/opt/cni/bin/bandwidth
+
+# Install whereabouts IPAM binary file. Required for global IPAM support specific to CNF use cases.
+install -m 755 /opt/cni/bin/whereabouts /host/opt/cni/bin/whereabouts
 
 # Load the OVS kernel module
-modprobe openvswitch
+modprobe openvswitch || (echo "Failed to load the OVS kernel module from the container, try running 'modprobe openvswitch' on your Nodes"; exit 1)
+
+# Change the default permissions of the run directory.
+chmod 0750 /var/run/antrea

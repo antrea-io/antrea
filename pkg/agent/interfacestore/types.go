@@ -16,8 +16,10 @@ package interfacestore
 
 import (
 	"net"
+	"strconv"
 
-	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
+	"antrea.io/antrea/pkg/agent/util"
+	"antrea.io/antrea/pkg/ovs/ovsconfig"
 )
 
 const (
@@ -27,9 +29,15 @@ const (
 	GatewayInterface
 	// TunnelInterface is used to mark current interface is for tunnel port
 	TunnelInterface
+	// UplinkInterface is used to mark current interface is for uplink port
+	UplinkInterface
 )
 
 type InterfaceType uint8
+
+func (t InterfaceType) String() string {
+	return strconv.Itoa(int(t))
+}
 
 type OVSPortConfig struct {
 	PortUUID string
@@ -46,16 +54,21 @@ type TunnelInterfaceConfig struct {
 	Type ovsconfig.TunnelType
 	// Name of the remote Node.
 	NodeName string
+	// IP address of the local Node.
+	LocalIP net.IP
 	// IP address of the remote Node.
 	RemoteIP net.IP
 	PSK      string
+	// Whether options:csum is set for this tunnel interface.
+	// If true, encapsulation header UDP checksums will be computed on outgoing packets.
+	Csum bool
 }
 
 type InterfaceConfig struct {
 	Type InterfaceType
 	// Unique name of the interface, also used for the OVS port name.
 	InterfaceName string
-	IP            net.IP
+	IPs           []net.IP
 	MAC           net.HardwareAddr
 	*OVSPortConfig
 	*ContainerInterfaceConfig
@@ -69,11 +82,15 @@ type InterfaceStore interface {
 	AddInterface(interfaceConfig *InterfaceConfig)
 	DeleteInterface(interfaceConfig *InterfaceConfig)
 	GetInterface(interfaceKey string) (*InterfaceConfig, bool)
-	GetContainerInterface(podName string, podNamespace string) (*InterfaceConfig, bool)
+	GetInterfaceByName(interfaceName string) (*InterfaceConfig, bool)
+	GetContainerInterface(containerID string) (*InterfaceConfig, bool)
+	GetInterfacesByEntity(name string, namespace string) []*InterfaceConfig
+	GetContainerInterfacesByPod(podName string, podNamespace string) []*InterfaceConfig
+	GetInterfaceByIP(interfaceIP string) (*InterfaceConfig, bool)
 	GetNodeTunnelInterface(nodeName string) (*InterfaceConfig, bool)
 	GetContainerInterfaceNum() int
+	GetInterfacesByType(interfaceType InterfaceType) []*InterfaceConfig
 	Len() int
-	GetInterfaceKeys() []string
 	GetInterfaceKeysByType(interfaceType InterfaceType) []string
 }
 
@@ -84,7 +101,7 @@ func NewContainerInterface(
 	podName string,
 	podNamespace string,
 	mac net.HardwareAddr,
-	ip net.IP) *InterfaceConfig {
+	ips []net.IP) *InterfaceConfig {
 	containerConfig := &ContainerInterfaceConfig{
 		ContainerID:  containerID,
 		PodName:      podName,
@@ -92,7 +109,7 @@ func NewContainerInterface(
 	return &InterfaceConfig{
 		InterfaceName:            interfaceName,
 		Type:                     ContainerInterface,
-		IP:                       ip,
+		IPs:                      ips,
 		MAC:                      mac,
 		ContainerInterfaceConfig: containerConfig}
 }
@@ -105,8 +122,8 @@ func NewGatewayInterface(gatewayName string) *InterfaceConfig {
 
 // NewTunnelInterface creates InterfaceConfig for the default tunnel port
 // interface.
-func NewTunnelInterface(tunnelName string, tunnelType ovsconfig.TunnelType) *InterfaceConfig {
-	tunnelConfig := &TunnelInterfaceConfig{Type: tunnelType}
+func NewTunnelInterface(tunnelName string, tunnelType ovsconfig.TunnelType, localIP net.IP, csum bool) *InterfaceConfig {
+	tunnelConfig := &TunnelInterfaceConfig{Type: tunnelType, LocalIP: localIP, Csum: csum}
 	return &InterfaceConfig{InterfaceName: tunnelName, Type: TunnelInterface, TunnelInterfaceConfig: tunnelConfig}
 }
 
@@ -115,4 +132,20 @@ func NewTunnelInterface(tunnelName string, tunnelType ovsconfig.TunnelType) *Int
 func NewIPSecTunnelInterface(interfaceName string, tunnelType ovsconfig.TunnelType, nodeName string, nodeIP net.IP, psk string) *InterfaceConfig {
 	tunnelConfig := &TunnelInterfaceConfig{Type: tunnelType, NodeName: nodeName, RemoteIP: nodeIP, PSK: psk}
 	return &InterfaceConfig{InterfaceName: interfaceName, Type: TunnelInterface, TunnelInterfaceConfig: tunnelConfig}
+}
+
+// NewUplinkInterface creates InterfaceConfig for the uplink interface.
+func NewUplinkInterface(uplinkName string) *InterfaceConfig {
+	uplinkConfig := &InterfaceConfig{InterfaceName: uplinkName, Type: UplinkInterface}
+	return uplinkConfig
+}
+
+// TODO: remove this method after IPv4/IPv6 dual-stack is supported completely.
+func (c *InterfaceConfig) GetIPv4Addr() net.IP {
+	return util.GetIPv4Addr(c.IPs)
+}
+
+func (c *InterfaceConfig) GetIPv6Addr() net.IP {
+	ipv6, _ := util.GetIPWithFamily(c.IPs, util.FamilyIPv6)
+	return ipv6
 }

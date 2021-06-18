@@ -18,19 +18,21 @@ import (
 	"fmt"
 	"reflect"
 
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/tools/cache"
 
-	"github.com/vmware-tanzu/antrea/pkg/apis/networking"
-	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
-	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage/ram"
-	"github.com/vmware-tanzu/antrea/pkg/controller/types"
-	"github.com/vmware-tanzu/antrea/pkg/k8s"
+	"antrea.io/antrea/pkg/apis/controlplane"
+	"antrea.io/antrea/pkg/apiserver/storage"
+	"antrea.io/antrea/pkg/apiserver/storage/ram"
+	"antrea.io/antrea/pkg/controller/types"
 )
 
 const (
-	AppliedToGroupIndex = "appliedToGroup"
-	AddressGroupIndex   = "addressGroup"
+	AppliedToGroupIndex   = "appliedToGroup"
+	AddressGroupIndex     = "addressGroup"
+	PerNamespaceRuleIndex = "hasPerNamespaceRule"
+	HasPerNamespaceRule   = "true"
 )
 
 // networkPolicyEvent implements storage.InternalEvent.
@@ -40,10 +42,10 @@ type networkPolicyEvent struct {
 	// The previous version of the stored NetworkPolicy.
 	PrevPolicy *types.NetworkPolicy
 	// The current version of the transferred NetworkPolicy, which will be used in Added and Modified events.
-	CurrObject *networking.NetworkPolicy
+	CurrObject *controlplane.NetworkPolicy
 	// The previous version of the transferred NetworkPolicy, which will be used in Deleted events.
 	// Note that only metadata will be set in Deleted events for efficiency.
-	PrevObject *networking.NetworkPolicy
+	PrevObject *controlplane.NetworkPolicy
 	// The key of this NetworkPolicy.
 	Key             string
 	ResourceVersion uint64
@@ -53,20 +55,12 @@ type networkPolicyEvent struct {
 // 1. Added event will be generated if the Selectors was not interested in the object but is now.
 // 2. Modified event will be generated if the Selectors was and is interested in the object.
 // 3. Deleted event will be generated if the Selectors was interested in the object but is not now.
-func (event *networkPolicyEvent) ToWatchEvent(selectors *storage.Selectors) *watch.Event {
-	prevObjSelected, currObjSelected := false, false
-	if event.CurrPolicy != nil {
-		currObjSelected = filter(selectors, event.Key, event.CurrPolicy.NodeNames)
-	}
-	if event.PrevPolicy != nil {
-		prevObjSelected = filter(selectors, event.Key, event.PrevPolicy.NodeNames)
-	}
-	if !currObjSelected && !prevObjSelected {
-		// Watcher is not interested in that object.
-		return nil
-	}
+func (event *networkPolicyEvent) ToWatchEvent(selectors *storage.Selectors, isInitEvent bool) *watch.Event {
+	prevObjSelected, currObjSelected := isSelected(event.Key, event.PrevPolicy, event.CurrPolicy, selectors, isInitEvent)
 
 	switch {
+	case !currObjSelected && !prevObjSelected:
+		return nil
 	case currObjSelected && !prevObjSelected:
 		return &watch.Event{Type: watch.Added, Object: event.CurrObject}
 	case currObjSelected && prevObjSelected:
@@ -94,13 +88,13 @@ func genNetworkPolicyEvent(key string, prevObj, currObj interface{}, rv uint64) 
 
 	if prevObj != nil {
 		event.PrevPolicy = prevObj.(*types.NetworkPolicy)
-		event.PrevObject = new(networking.NetworkPolicy)
+		event.PrevObject = new(controlplane.NetworkPolicy)
 		ToNetworkPolicyMsg(event.PrevPolicy, event.PrevObject, false)
 	}
 
 	if currObj != nil {
 		event.CurrPolicy = currObj.(*types.NetworkPolicy)
-		event.CurrObject = new(networking.NetworkPolicy)
+		event.CurrObject = new(controlplane.NetworkPolicy)
 		ToNetworkPolicyMsg(event.CurrPolicy, event.CurrObject, true)
 	}
 
@@ -109,16 +103,25 @@ func genNetworkPolicyEvent(key string, prevObj, currObj interface{}, rv uint64) 
 
 // ToNetworkPolicyMsg converts the stored NetworkPolicy to its message form.
 // If includeBody is true, Rules and AppliedToGroups will be copied.
-func ToNetworkPolicyMsg(in *types.NetworkPolicy, out *networking.NetworkPolicy, includeBody bool) {
-	out.Namespace = in.Namespace
+func ToNetworkPolicyMsg(in *types.NetworkPolicy, out *controlplane.NetworkPolicy, includeBody bool) {
 	out.Name = in.Name
 	out.UID = in.UID
+	out.SourceRef = in.SourceRef
+	out.Generation = in.Generation
 	if !includeBody {
 		return
 	}
 	// Since stored objects are immutable, we just reference the fields here.
 	out.Rules = in.Rules
-	out.AppliedToGroups = in.AppliedToGroups
+	// AppliedToGroups at policy level only need to be populated to controlplane msg if
+	// appliedTo is not set per rule. Otherwise, the agent will read appliedTo from each
+	// rule, and in that case, the policy level appliedTo only contains span information,
+	// which the Antrea agent does not care about.
+	if !in.AppliedToPerRule {
+		out.AppliedToGroups = in.AppliedToGroups
+	}
+	out.Priority = in.Priority
+	out.TierPriority = in.TierPriority
 }
 
 // NetworkPolicyKeyFunc knows how to get the key of a NetworkPolicy.
@@ -127,7 +130,7 @@ func NetworkPolicyKeyFunc(obj interface{}) (string, error) {
 	if !ok {
 		return "", fmt.Errorf("object is not *types.NetworkPolicy: %v", obj)
 	}
-	return k8s.NamespacedName(policy.Namespace, policy.Name), nil
+	return policy.Name, nil
 }
 
 // NewNetworkPolicyStore creates a store of NetworkPolicy.
@@ -156,14 +159,24 @@ func NewNetworkPolicyStore() storage.Interface {
 				return []string{}, nil
 			}
 			for _, rule := range fp.Rules {
-				if rule.Direction == networking.DirectionIn {
+				if rule.Direction == controlplane.DirectionIn {
 					groupNames = append(groupNames, rule.From.AddressGroups...)
-				} else if rule.Direction == networking.DirectionOut {
+				} else if rule.Direction == controlplane.DirectionOut {
 					groupNames = append(groupNames, rule.To.AddressGroups...)
 				}
 			}
 			return groupNames, nil
 		},
+		PerNamespaceRuleIndex: func(obj interface{}) ([]string, error) {
+			fp, ok := obj.(*types.NetworkPolicy)
+			if !ok {
+				return []string{}, nil
+			}
+			if len(fp.PerNamespaceSelectors) > 0 {
+				return []string{HasPerNamespaceRule}, nil
+			}
+			return []string{}, nil
+		},
 	}
-	return ram.NewStore(NetworkPolicyKeyFunc, indexers, genNetworkPolicyEvent)
+	return ram.NewStore(NetworkPolicyKeyFunc, indexers, genNetworkPolicyEvent, keyAndSpanSelectFunc, func() runtime.Object { return new(controlplane.NetworkPolicy) })
 }

@@ -19,7 +19,30 @@ import (
 )
 
 type ControllerConfig struct {
-	// clientConnection specifies the kubeconfig file and client connection settings for the agent
-	// to communicate with the apiserver.
+	// FeatureGates is a map of feature names to bools that enable or disable experimental features.
+	FeatureGates map[string]bool `yaml:"featureGates,omitempty"`
+	// clientConnection specifies the kubeconfig file and client connection settings for the
+	// antrea-controller to communicate with the Kubernetes apiserver.
 	ClientConnection componentbaseconfig.ClientConnectionConfiguration `yaml:"clientConnection"`
+	// APIPort is the port for the antrea-controller APIServer to serve on.
+	// Defaults to 10349.
+	APIPort int `yaml:"apiPort,omitempty"`
+	// Enable metrics exposure via Prometheus. Initializes Prometheus metrics listener
+	// Defaults to true.
+	EnablePrometheusMetrics bool `yaml:"enablePrometheusMetrics,omitempty"`
+	// Indicates whether to use auto-generated self-signed TLS certificate.
+	// If false, A Secret named "antrea-controller-tls" must be provided with the following keys:
+	//   ca.crt: <CA certificate>
+	//   tls.crt: <TLS certificate>
+	//   tls.key: <TLS private key>
+	// And the Secret must be mounted to directory "/var/run/antrea/antrea-controller-tls" of the
+	// antrea-controller container.
+	// Defaults to true.
+	SelfSignedCert bool `yaml:"selfSignedCert,omitempty"`
+	// Cipher suites to use.
+	TLSCipherSuites string `yaml:"tlsCipherSuites,omitempty"`
+	// TLS min version.
+	TLSMinVersion string `yaml:"tlsMinVersion,omitempty"`
+	// Legacy CRD mirroring.
+	LegacyCRDMirroring bool `yaml:"legacyCRDMirroring,omitempty"`
 }

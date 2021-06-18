@@ -31,7 +31,7 @@ import (
 	"k8s.io/apiserver/pkg/storage"
 	"k8s.io/client-go/tools/cache"
 
-	antreastorage "github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
+	antreastorage "antrea.io/antrea/pkg/apiserver/storage"
 )
 
 // testEvent implements InternalEvent.
@@ -47,24 +47,24 @@ type testEvent struct {
 	ResourceVersion uint64
 }
 
-func (event *testEvent) ToWatchEvent(selectors *antreastorage.Selectors) *watch.Event {
-	filter := func(s *antreastorage.Selectors, key string, labels labels.Set, fields fields.Set) bool {
-		if s.Key != "" && key != s.Key {
-			return false
-		}
-		if s.Label.Empty() && s.Field.Empty() {
-			return true
-		}
-		if !s.Label.Matches(labels) {
-			return false
-		}
-		return s.Field.Matches(fields)
+func testFilter(s *antreastorage.Selectors, key string, labels labels.Set, fields fields.Set) bool {
+	if s.Key != "" && key != s.Key {
+		return false
 	}
+	if s.Label.Empty() && s.Field.Empty() {
+		return true
+	}
+	if !s.Label.Matches(labels) {
+		return false
+	}
+	return s.Field.Matches(fields)
+}
 
-	curObjPasses := event.Type != watch.Deleted && filter(selectors, event.Key, event.ObjLabels, event.ObjFields)
+func (event *testEvent) ToWatchEvent(selectors *antreastorage.Selectors, isInitEvent bool) *watch.Event {
+	curObjPasses := event.Type != watch.Deleted && testFilter(selectors, event.Key, event.ObjLabels, event.ObjFields)
 	oldObjPasses := false
 	if event.PrevObject != nil {
-		oldObjPasses = filter(selectors, event.Key, event.PrevObjLabels, event.PrevObjFields)
+		oldObjPasses = testFilter(selectors, event.Key, event.PrevObjLabels, event.PrevObjFields)
 	}
 	if !curObjPasses && !oldObjPasses {
 		// Watcher is not interested in that object.
@@ -121,6 +121,11 @@ func testGenEvent(key string, prevObj, obj interface{}, resourceVersion uint64) 
 	return event, nil
 }
 
+func testSelectFunc(selectors *antreastorage.Selectors, key string, obj interface{}) bool {
+	objLabels, objFields, _ := storage.DefaultClusterScopedAttr(obj.(runtime.Object))
+	return testFilter(selectors, key, objLabels, objFields)
+}
+
 func TestRamStoreCRUD(t *testing.T) {
 	key := "pod1"
 	testCases := []struct {
@@ -152,7 +157,7 @@ func TestRamStoreCRUD(t *testing.T) {
 		},
 	}
 	for i, testCase := range testCases {
-		store := NewStore(cache.MetaNamespaceKeyFunc, cache.Indexers{}, nil)
+		store := NewStore(cache.MetaNamespaceKeyFunc, cache.Indexers{}, nil, nil, func() runtime.Object { return new(v1.Pod) })
 
 		testCase.operations(store)
 		obj, _, err := store.Get(key)
@@ -218,7 +223,7 @@ func TestRamStoreGetByIndex(t *testing.T) {
 		},
 	}
 	for i, testCase := range testCases {
-		store := NewStore(cache.MetaNamespaceKeyFunc, indexers, testGenEvent)
+		store := NewStore(cache.MetaNamespaceKeyFunc, indexers, testGenEvent, nil, func() runtime.Object { return new(v1.Pod) })
 
 		testCase.operations(store)
 		objs, err := store.GetByIndex(indexName, indexKey)
@@ -262,7 +267,7 @@ func TestRamStoreList(t *testing.T) {
 		},
 	}
 	for i, testCase := range testCases {
-		store := NewStore(cache.MetaNamespaceKeyFunc, cache.Indexers{}, testGenEvent)
+		store := NewStore(cache.MetaNamespaceKeyFunc, cache.Indexers{}, testGenEvent, nil, func() runtime.Object { return new(v1.Pod) })
 
 		testCase.operations(store)
 		objs := store.List()
@@ -288,8 +293,9 @@ func TestRamStoreWatchAll(t *testing.T) {
 				store.Update(&v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1", Labels: map[string]string{"app": "nginx2"}}})
 			},
 			expected: []watch.Event{
-				{watch.Added, &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1", Labels: map[string]string{"app": "nginx1"}}}},
-				{watch.Modified, &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1", Labels: map[string]string{"app": "nginx2"}}}},
+				{Type: watch.Bookmark, Object: &v1.Pod{}},
+				{Type: watch.Added, Object: &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1", Labels: map[string]string{"app": "nginx1"}}}},
+				{Type: watch.Modified, Object: &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1", Labels: map[string]string{"app": "nginx2"}}}},
 			},
 		},
 		{
@@ -298,13 +304,14 @@ func TestRamStoreWatchAll(t *testing.T) {
 				store.Delete("pod1")
 			},
 			expected: []watch.Event{
-				{watch.Added, &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1", Labels: map[string]string{"app": "nginx1"}}}},
-				{watch.Deleted, &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1", Labels: map[string]string{"app": "nginx1"}}}},
+				{Type: watch.Bookmark, Object: &v1.Pod{}},
+				{Type: watch.Added, Object: &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1", Labels: map[string]string{"app": "nginx1"}}}},
+				{Type: watch.Deleted, Object: &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1", Labels: map[string]string{"app": "nginx1"}}}},
 			},
 		},
 	}
 	for i, testCase := range testCases {
-		store := NewStore(cache.MetaNamespaceKeyFunc, cache.Indexers{}, testGenEvent)
+		store := NewStore(cache.MetaNamespaceKeyFunc, cache.Indexers{}, testGenEvent, testSelectFunc, func() runtime.Object { return new(v1.Pod) })
 		w, err := store.Watch(context.Background(), "", labels.Everything(), fields.Everything())
 		if err != nil {
 			t.Errorf("%d: failed to watch object: %v", i, err)
@@ -346,9 +353,10 @@ func TestRamStoreWatchWithInitOperations(t *testing.T) {
 				store.Update(&v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod2", Labels: map[string]string{"app": "nginx3"}}})
 			},
 			expected: []watch.Event{
-				{watch.Added, &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1", Labels: map[string]string{"app": "nginx3"}}}},
-				{watch.Added, &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod2", Labels: map[string]string{"app": "nginx2"}}}},
-				{watch.Modified, &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod2", Labels: map[string]string{"app": "nginx3"}}}},
+				{Type: watch.Added, Object: &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1", Labels: map[string]string{"app": "nginx3"}}}},
+				{Type: watch.Bookmark, Object: &v1.Pod{}},
+				{Type: watch.Added, Object: &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod2", Labels: map[string]string{"app": "nginx2"}}}},
+				{Type: watch.Modified, Object: &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod2", Labels: map[string]string{"app": "nginx3"}}}},
 			},
 		},
 		{
@@ -361,13 +369,14 @@ func TestRamStoreWatchWithInitOperations(t *testing.T) {
 				store.Delete("pod1")
 			},
 			expected: []watch.Event{
-				{watch.Added, &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1", Labels: map[string]string{"app": "nginx1"}}}},
-				{watch.Deleted, &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1", Labels: map[string]string{"app": "nginx1"}}}},
+				{Type: watch.Added, Object: &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1", Labels: map[string]string{"app": "nginx1"}}}},
+				{Type: watch.Bookmark, Object: &v1.Pod{}},
+				{Type: watch.Deleted, Object: &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1", Labels: map[string]string{"app": "nginx1"}}}},
 			},
 		},
 	}
 	for i, testCase := range testCases {
-		store := NewStore(cache.MetaNamespaceKeyFunc, cache.Indexers{}, testGenEvent)
+		store := NewStore(cache.MetaNamespaceKeyFunc, cache.Indexers{}, testGenEvent, testSelectFunc, func() runtime.Object { return new(v1.Pod) })
 		// Init the storage before watching
 		testCase.initOperations(store)
 		w, err := store.Watch(context.Background(), "", labels.Everything(), fields.Everything())
@@ -406,8 +415,9 @@ func TestRamStoreWatchWithSelector(t *testing.T) {
 			},
 			labelSelector: labels.SelectorFromSet(labels.Set{"app": "nginx1"}),
 			expected: []watch.Event{
-				{watch.Added, &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1", Labels: map[string]string{"app": "nginx1"}}}},
-				{watch.Deleted, &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1", Labels: map[string]string{"app": "nginx1"}}}},
+				{Type: watch.Bookmark, Object: &v1.Pod{}},
+				{Type: watch.Added, Object: &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1", Labels: map[string]string{"app": "nginx1"}}}},
+				{Type: watch.Deleted, Object: &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1", Labels: map[string]string{"app": "nginx1"}}}},
 			},
 		},
 		{
@@ -417,7 +427,8 @@ func TestRamStoreWatchWithSelector(t *testing.T) {
 			},
 			labelSelector: labels.SelectorFromSet(labels.Set{"app": "nginx2"}),
 			expected: []watch.Event{
-				{watch.Added, &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1", Labels: map[string]string{"app": "nginx2"}}}},
+				{Type: watch.Bookmark, Object: &v1.Pod{}},
+				{Type: watch.Added, Object: &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1", Labels: map[string]string{"app": "nginx2"}}}},
 			},
 		},
 		{
@@ -429,13 +440,14 @@ func TestRamStoreWatchWithSelector(t *testing.T) {
 			},
 			labelSelector: labels.SelectorFromSet(labels.Set{"app": "nginx1"}),
 			expected: []watch.Event{
-				{watch.Added, &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1", Labels: map[string]string{"app": "nginx1"}}}},
-				{watch.Deleted, &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1", Labels: map[string]string{"app": "nginx1"}}}},
+				{Type: watch.Bookmark, Object: &v1.Pod{}},
+				{Type: watch.Added, Object: &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1", Labels: map[string]string{"app": "nginx1"}}}},
+				{Type: watch.Deleted, Object: &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1", Labels: map[string]string{"app": "nginx1"}}}},
 			},
 		},
 	}
 	for i, testCase := range testCases {
-		store := NewStore(cache.MetaNamespaceKeyFunc, cache.Indexers{}, testGenEvent)
+		store := NewStore(cache.MetaNamespaceKeyFunc, cache.Indexers{}, testGenEvent, testSelectFunc, func() runtime.Object { return new(v1.Pod) })
 		w, err := store.Watch(context.Background(), "", testCase.labelSelector, fields.Everything())
 		if err != nil {
 			t.Errorf("%d: failed to watch object: %v", i, err)
@@ -457,7 +469,7 @@ func TestRamStoreWatchWithSelector(t *testing.T) {
 }
 
 func TestRamStoreWatchTimeout(t *testing.T) {
-	store := NewStore(cache.MetaNamespaceKeyFunc, cache.Indexers{}, testGenEvent)
+	store := NewStore(cache.MetaNamespaceKeyFunc, cache.Indexers{}, testGenEvent, testSelectFunc, func() runtime.Object { return new(v1.Pod) })
 	// watcherChanSize*2+1 events can fill a watcher's buffer: input channel buffer + result channel buffer + 1 in-flight.
 	maxBuffered := watcherChanSize*2 + 1
 
@@ -468,9 +480,11 @@ func TestRamStoreWatchTimeout(t *testing.T) {
 	}
 	go func() {
 		ch := w1.ResultChan()
+		// Skip the bookmark event.
+		<-ch
 		for i := 0; i < maxBuffered+1; i++ {
 			actualEvent := <-ch
-			expectedEvent := watch.Event{watch.Added, &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("pod%d", i), Labels: map[string]string{"app": "nginx"}}}}
+			expectedEvent := watch.Event{Type: watch.Added, Object: &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("pod%d", i), Labels: map[string]string{"app": "nginx"}}}}
 			if !reflect.DeepEqual(actualEvent, expectedEvent) {
 				t.Errorf("Unexpected event %d, got %#v, expected %#v ", i, actualEvent, expectedEvent)
 			}
@@ -487,17 +501,20 @@ func TestRamStoreWatchTimeout(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed to watch object: %v", err)
 	}
-
+	// Skip the bookmark event.
+	<-w2.ResultChan()
 	assert.Equal(t, 2, store.GetWatchersNum(), "Unexpected watchers number")
 
 	for i := 0; i < maxBuffered; i++ {
 		store.Create(&v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("pod%d", i), Labels: map[string]string{"app": "nginx"}}})
 	}
 
+	// Terminating watchers is asynchronous, leave it some reaction time to avoid flakes.
+	terminationReactionTime := time.Millisecond * 100
 	select {
 	case <-w2.(*storeWatcher).done:
 		t.Fatal("w2 was stopped, expected not stopped")
-	case <-time.After(watcherAddTimeout + time.Millisecond*10):
+	case <-time.After(watcherAddTimeout + terminationReactionTime):
 	}
 
 	// w2 can't take one more event as it's buffer has been full, it should be terminated.
@@ -505,7 +522,7 @@ func TestRamStoreWatchTimeout(t *testing.T) {
 
 	select {
 	case <-w2.(*storeWatcher).done:
-	case <-time.After(watcherAddTimeout + time.Millisecond*10):
+	case <-time.After(watcherAddTimeout + terminationReactionTime):
 		t.Error("w2 was not stopped, expected stopped")
 	}
 	assert.Equal(t, 1, store.GetWatchersNum(), "Unexpected watchers number")

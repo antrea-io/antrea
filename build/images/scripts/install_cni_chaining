@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+
+source logging
+
+# Find the cni conf file with lowest name
+while true; do
+  cni_conf=$(ls /host/etc/cni/net.d | head -n1)
+  if [[ ! -z $cni_conf ]]; then
+    break
+  fi
+  log_info "CNI conf file not found. Retrying after 2 secs"
+  sleep 2s
+done
+cni_conf="/host/etc/cni/net.d/$cni_conf"
+
+if grep -sq "azure" $cni_conf; then
+  sed -i 's/"mode":"bridge",/"mode":"transparent",/g' $cni_conf
+fi
+
+cat $cni_conf | jq '.plugins[] | .type' | grep antrea > /dev/null 2>&1
+if [[ $? != 0 ]]; then
+  content=$(cat $cni_conf | jq '.plugins += [{"type": "antrea"}]')
+  echo "$content" > $cni_conf
+fi
+
+# Install Antrea binary file
+install -m 755 /usr/local/bin/antrea-cni /host/opt/cni/bin/antrea
+
+id
+# Load the OVS kernel module
+modprobe openvswitch || (echo "Failed to load the OVS kernel module from the container, try running 'modprobe openvswitch' on your Nodes"; exit 1)

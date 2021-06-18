@@ -13,10 +13,15 @@ spec:
     type: RollingUpdate
   template:
     metadata:
+      annotations:
+        # Starting with v1.21, Kubernetes supports default container annotation.
+        # Using "kubectl logs/exec/attach/cp" doesn't have to specify "-c antrea-agent" when troubleshooting.
+        kubectl.kubernetes.io/default-container: antrea-agent
       labels:
         component: antrea-agent
     spec:
       hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
       priorityClassName: system-node-critical
       tolerations:
         # Mark it as a critical add-on.
@@ -25,15 +30,18 @@ spec:
         # Make sure it gets scheduled on all nodes.
         - effect: NoSchedule
           operator: Exists
+        # Make sure it doesn't get evicted.
+        - effect: NoExecute
+          operator: Exists
       nodeSelector:
-        # Note: beta.kubernetes.io/os is targeted for removal in K8s v1.18, if running Antrea with 1.18
-        # or higher uncomment the following line and remove beta.kubernetes.io/os.
-        #kubernetes.io/os: linux
-        beta.kubernetes.io/os: linux
+        kubernetes.io/os: linux
       serviceAccountName: antrea-agent
       initContainers:
         - name: install-cni
           image: antrea
+          resources:
+            requests:
+              cpu: "100m"
           command: ["install_cni"]
           securityContext:
             capabilities:
@@ -42,8 +50,8 @@ spec:
                 - SYS_MODULE
           volumeMounts:
           - name: antrea-config
-            mountPath: /etc/antrea/antrea-cni.conf
-            subPath: antrea-cni.conf
+            mountPath: /etc/antrea/antrea-cni.conflist
+            subPath: antrea-cni.conflist
             readOnly: true
           - name: host-cni-conf
             mountPath: /host/etc/cni/net.d
@@ -53,16 +61,18 @@ spec:
           - name: host-lib-modules
             mountPath: /lib/modules
             readOnly: true
-          # depmod is required by modprobe when the Node OS is different from
-          # that of the Antrea Docker image.
-          - name: host-depmod
-            mountPath: /sbin/depmod
-            readOnly: true
+          # For changing the default permissions of the run directory.
+          - name: host-var-run-antrea
+            mountPath: /var/run/antrea
       containers:
         - name: antrea-agent
           image: antrea
+          resources:
+            requests:
+              cpu: "200m"
           command: ["antrea-agent"]
-          args: ["--config", "/etc/antrea/antrea-agent.conf"]
+          # Log to both "/var/log/antrea/" and stderr (so "kubectl logs" can work).
+          args: ["--config", "/etc/antrea/antrea-agent.conf", "--logtostderr=false", "--log_dir=/var/log/antrea", "--alsologtostderr", "--log_file_max_size=100", "--log_file_max_num=4", "--v=0"]
           env:
             # Provide pod and node information for clusterinformation CRD.
             - name: POD_NAME
@@ -77,6 +87,10 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: spec.nodeName
+          ports:
+            - containerPort: 10350
+              name: api
+              protocol: TCP
           livenessProbe:
             exec:
               command:
@@ -87,8 +101,18 @@ spec:
             timeoutSeconds: 5
             periodSeconds: 10
             failureThreshold: 5
+          readinessProbe:
+            httpGet:
+              host: localhost
+              path: /readyz
+              port: api
+              scheme: HTTPS
+            initialDelaySeconds: 5
+            timeoutSeconds: 5
+            periodSeconds: 10
+            failureThreshold: 5
           securityContext:
-            # antrea-agent needs to manipulate /proc/sys/net/ipv4/conf/XXX/send_redirects"
+            # antrea-agent needs to perform sysctl configuration.
             privileged: true
           volumeMounts:
           - name: antrea-config
@@ -109,6 +133,8 @@ spec:
           # antrea-agent can open the network namespace path when setting up Pod
           # networking. Different container runtimes may use /proc or /var/run/netns when invoking
           # the CNI commands. Docker uses /proc and containerd uses /var/run/netns.
+          - name: host-var-log-antrea
+            mountPath: /var/log/antrea
           - name: host-proc
             mountPath: /host/proc
             readOnly: true
@@ -122,7 +148,11 @@ spec:
             mountPath: /run/xtables.lock
         - name: antrea-ovs
           image: antrea
+          resources:
+            requests:
+              cpu: "200m"
           command: ["start_ovs"]
+          args: ["--log_file_max_size=100", "--log_file_max_num=4"]
           securityContext:
             # capabilities required by OVS daemons
             capabilities:
@@ -133,12 +163,16 @@ spec:
                 - IPC_LOCK
           livenessProbe:
             exec:
+              # docker CRI doesn't honor timeoutSeconds, add "timeout" to the command as a workaround.
+              # https://github.com/kubernetes/kubernetes/issues/51901
               command:
                 - /bin/sh
                 - -c
-                - timeout 5 container_liveness_probe ovs
+                - timeout 10 container_liveness_probe ovs
             initialDelaySeconds: 5
-            periodSeconds: 5
+            timeoutSeconds: 10
+            periodSeconds: 10
+            failureThreshold: 5
           volumeMounts:
           - name: host-var-run-antrea
             mountPath: /var/run/openvswitch
@@ -176,9 +210,6 @@ spec:
         - name: host-lib-modules
           hostPath:
             path: /lib/modules
-        - name: host-depmod
-          hostPath:
-            path: /sbin/depmod
         - name: xtables-lock
           hostPath:
             path: /run/xtables.lock

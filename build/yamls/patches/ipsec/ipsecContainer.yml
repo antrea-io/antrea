@@ -8,6 +8,9 @@ spec:
       containers:
         - name: antrea-ipsec
           image: antrea
+          resources:
+            requests:
+              cpu: "50m"
           command: ["start_ovs_ipsec"]
           livenessProbe:
             exec:

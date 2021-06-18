@@ -1,0 +1,216 @@
+name: Upload assets to release
+
+on:
+  release:
+    types:
+      - created
+
+jobs:
+  build:
+    runs-on: [ubuntu-latest]
+    steps:
+    - uses: actions/checkout@v2
+    - name: Build assets
+      env:
+        TAG: ${{ github.ref }}
+      run: |
+        mkdir assets
+        VERSION="${TAG:10}" ./hack/release/prepare-assets.sh ./assets
+    - name: Upload antctl-darwin-x86_64
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./assets/antctl-darwin-x86_64
+        asset_name: antctl-darwin-x86_64
+        asset_content_type: application/octet-stream
+    - name: Upload antctl-linux-arm
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./assets/antctl-linux-arm
+        asset_name: antctl-linux-arm
+        asset_content_type: application/octet-stream
+    - name: Upload antctl-linux-arm64
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./assets/antctl-linux-arm64
+        asset_name: antctl-linux-arm64
+        asset_content_type: application/octet-stream
+    - name: Upload antctl-linux-x86_64
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./assets/antctl-linux-x86_64
+        asset_name: antctl-linux-x86_64
+        asset_content_type: application/octet-stream
+    - name: Upload antctl-windows-x86_64.exe
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./assets/antctl-windows-x86_64.exe
+        asset_name: antctl-windows-x86_64.exe
+        asset_content_type: application/octet-stream
+    - name: Upload antrea-octant-plugin-darwin-x86_64
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./assets/antrea-octant-plugin-darwin-x86_64
+        asset_name: antrea-octant-plugin-darwin-x86_64
+        asset_content_type: application/octet-stream
+    - name: Upload antrea-octant-plugin-linux-arm
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./assets/antrea-octant-plugin-linux-arm
+        asset_name: antrea-octant-plugin-linux-arm
+        asset_content_type: application/octet-stream
+    - name: Upload antrea-octant-plugin-linux-arm64
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./assets/antrea-octant-plugin-linux-arm64
+        asset_name: antrea-octant-plugin-linux-arm64
+        asset_content_type: application/octet-stream
+    - name: Upload antrea-octant-plugin-linux-x86_64
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./assets/antrea-octant-plugin-linux-x86_64
+        asset_name: antrea-octant-plugin-linux-x86_64
+        asset_content_type: application/octet-stream
+    - name: Upload antrea-octant-plugin-windows-x86_64.exe
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./assets/antrea-octant-plugin-windows-x86_64.exe
+        asset_name: antrea-octant-plugin-windows-x86_64.exe
+        asset_content_type: application/octet-stream
+    - name: Upload antrea.yml
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./assets/antrea.yml
+        asset_name: antrea.yml
+        asset_content_type: application/octet-stream
+    - name: Upload antrea-ipsec.yml
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./assets/antrea-ipsec.yml
+        asset_name: antrea-ipsec.yml
+        asset_content_type: application/octet-stream
+    - name: Upload antrea-eks.yml
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./assets/antrea-eks.yml
+        asset_name: antrea-eks.yml
+        asset_content_type: application/octet-stream
+    - name: Upload antrea-gke.yml
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./assets/antrea-gke.yml
+        asset_name: antrea-gke.yml
+        asset_content_type: application/octet-stream
+    - name: Upload antrea-aks.yml
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./assets/antrea-aks.yml
+        asset_name: antrea-aks.yml
+        asset_content_type: application/octet-stream
+    - name: Upload antrea-kind.yml
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./assets/antrea-kind.yml
+        asset_name: antrea-kind.yml
+        asset_content_type: application/octet-stream
+    - name: Upload antrea-octant.yml
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./assets/antrea-octant.yml
+        asset_name: antrea-octant.yml
+        asset_content_type: application/octet-stream
+    - name: Upload antrea-windows.yml
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./assets/antrea-windows.yml
+        asset_name: antrea-windows.yml
+        asset_content_type: application/octet-stream
+    - name: Upload flow-aggregator.yml
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./assets/flow-aggregator.yml
+        asset_name: flow-aggregator.yml
+        asset_content_type: application/octet-stream
+    - name: Upload antrea-agent-windows-x86_64.exe
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./assets/antrea-agent.exe
+        asset_name: antrea-agent-windows-x86_64.exe
+        asset_content_type: application/octet-stream
+    - name: Upload antrea-cni-windows-x86_64.exe
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./assets/antrea-cni.exe
+        asset_name: antrea-cni-windows-x86_64.exe
+        asset_content_type: application/octet-stream
+    - name: Upload Start.ps1
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./assets/Start.ps1
+        asset_name: Start.ps1
+        asset_content_type: application/octet-stream

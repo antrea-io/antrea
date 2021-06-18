@@ -1,0 +1,27 @@
+{
+    "ignorePatterns": [
+        {
+            "pattern": "^/build/*"
+        },
+        {
+            "pattern": "^/hack/*"
+        },
+        {
+            "pattern": "^/test/*"
+        },
+        {
+            "pattern": "^/pkg/*"
+        },
+        {
+            "pattern": "^https://calendar.google.com/*"
+        },
+        {
+            "pattern": "^https://github.com/[^/]*$"
+        },
+        {
+            "pattern": "^https://app.fossa.com/api/*"
+        }
+    ],
+    "retryOn429": false,
+    "aliveStatusCodes": [200, 206, 429]
+}

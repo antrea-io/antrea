@@ -1,0 +1,133 @@
+- builder:
+    name: run-ci
+    builders:
+      - shell:
+          !include-raw: ../common/run_ci_scripts.sh
+
+- builder:
+    name: get-ci-scripts
+    builders:
+      - shell: |
+          #!/bin/bash -x
+          rm -rf $WORKSPACE/*
+          scripts_dir='ci/jenkins/mellanox'
+          if [[ ! -d /jenkins/workspace/${UPSTREAM_JOB_NAME}/PR/${PR_ID}/${scripts_dir} ]];then
+             git clone $ANTREA_REPO $WORKSPACE/antrea
+             mv $WORKSPACE/antrea/${scripts_dir}/* $WORKSPACE/
+          else
+             mv /jenkins/workspace/${UPSTREAM_JOB_NAME}/PR/${PR_ID}/${scripts_dir}/* $WORKSPACE/
+          fi
+
+- builder:
+    name: builder-pending-label
+    builders:
+      - shell: 'exit 1 # fail on purpose'
+
+- builder:
+    name: post-pending-page
+    builders:
+      - shell: |
+          ssh $LOGSERVER mkdir -p /var/www/html/${JOB_NAME}
+          ssh $LOGSERVER mkdir -p /var/www/html/${JOB_NAME}/${BUILD_ID}
+          scp /jenkins/pending_page.html $LOGSERVER:/var/www/html/${JOB_NAME}/${BUILD_ID}/consoleFull
+
+- builder:
+    name: post-in-progress-page
+    builders:
+      - shell: |
+          scp /jenkins/in_progress.html $LOGSERVER:/var/www/html/${UPSTREAM_JOB_NAME}/${UPSTREAM_BUILD_ID}/consoleFull
+
+- builder:
+    name: post-full-console
+    builders:
+      - shell: |
+          #!/bin/bash +x
+          set -x
+          sleep 10
+
+          env
+
+          # note(abdallahyas): we need to check if the downstream job was finished
+          # normally (either succeeded or failed) within the timeout period. This
+          # can be done by checking if the LAST_TRIGGERED_JOB_NAME is  passed to the
+          # upstream job, if not that means either the downstream job was stopped for
+          # some reason, or the upstream job was timed out before the downstream job
+          # is finished. In both cases it is impossible to know the downstream job id
+          # using jenkins normal means.
+
+          target_job_name=""
+          target_job_id=""
+          if [[ -z "${LAST_TRIGGERED_JOB_NAME}" ]];then
+              target_job_name="${JOB_NAME}"
+              target_job_id="${BUILD_ID}"
+          else
+              job_id_variable="TRIGGERED_BUILD_NUMBER_${LAST_TRIGGERED_JOB_NAME}"
+              LAST_TRIGGERED_JOB_ID=${!job_id_variable}
+              target_job_name="${LAST_TRIGGERED_JOB_NAME}"
+              target_job_id="${LAST_TRIGGERED_JOB_ID}"
+          fi
+
+          mkdir -p /jenkins/workspace/${target_job_name}
+          mkdir -p /jenkins/workspace/${target_job_name}/${target_job_id}/
+
+          cat > /jenkins/workspace/${target_job_name}/${target_job_id}/consoleFull << EOF
+          <!-- HTML meta refresh URL redirection -->
+          <html>
+          <head>
+             <meta http-equiv="refresh"
+             content="0; url=http://13.74.249.42/${target_job_name}/${target_job_id}">
+          </head>
+          <body>
+             <p>The page has moved to:
+             <a href="http://13.74.249.42/${target_job_name}/${target_job_id}">this page</a></p>
+          </body>
+          </html>
+          EOF
+
+          scp -r /jenkins/workspace/${target_job_name}/${target_job_id}/consoleFull $LOGSERVER:/var/www/html/${JOB_NAME}/${BUILD_ID}/
+
+- builder:
+    name: construct-downstream-fail-email
+    builders:
+      - shell: |
+          #!/bin/bash
+          cat > /tmp/failling_email_body.html << EOF
+          <html><body>
+          <br/><br/>Dear <i>Friend</i>,<br/>
+          <br/>Please check the failing <a href=${ghprbPullLink}> PR</a> :<br/>
+          <br/>Title: ${ghprbPullTitle}:<br/>
+          <br/>You can find the console output <a href=http://${EXT_SERVER}/${JOB_NAME}/${BUILD_ID}/consoleFull>here</a>.
+          <br/>You can find further logs <a href=http://${EXT_SERVER}/${LAST_TRIGGERED_JOB_NAME}/${LAST_TRIGGERED_JOB_ID}/>here</a>.
+          <br/>
+          <br/> Best Regards. <br/> <a href=http://dev-l-vrt-019-4:8080> Jenkins </a><br/>
+          EOF
+          exit 0
+
+- builder:
+    name: construct-fail-email
+    builders:
+      - shell: |
+          #!/bin/bash
+          cat > /tmp/failling_email_body.html << EOF
+          <html><body>
+          <br/><br/>Dear <i>Friend</i>,<br/>
+          <br/>Please check the failing <a href=${ghprbPullLink}> PR</a> :<br/>
+          <br/>Title: ${ghprbPullTitle}:<br/>
+          <br/>You can find the console output <a href=http://${EXT_SERVER}:8080/job/${JOB_NAME}/${BUILD_ID}/consoleFull>here</a>.
+          <br/>You can find further logs <a href=http://${EXT_SERVER}/${JOB_NAME}/${BUILD_ID}/>here</a>.
+          <br/>
+          <br/> Best Regards. <br/> <a href=http://dev-l-vrt-019-4:8080> Jenkins </a><br/>
+          EOF
+          exit 0
+
+- builder:
+    name: copy-scm-to-downstream
+    builders:
+      - shell: |
+          #!/bin/bash
+          set -x
+          downstream_dir="/jenkins/workspace/${JOB_NAME}/PR/${PR_ID}"
+          ssh stack@${DOWNSTREAM_MACHINE} mkdir -p "${downstream_dir}"
+          ssh stack@${DOWNSTREAM_MACHINE} rm -rf "${downstream_dir}/*"
+          scp -r $WORKSPACE/* stack@${DOWNSTREAM_MACHINE}:${downstream_dir}/
+          exit 0

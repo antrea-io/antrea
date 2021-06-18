@@ -16,7 +16,7 @@ syntax = "proto3";
 
 import "google/protobuf/any.proto";
 
-package github.com.vmware_tanzu.antrea.pkg.apis.cni.v1beta1;
+package antrea_io.antrea.pkg.apis.cni.v1beta1;
 
 option go_package = "v1beta1";
 

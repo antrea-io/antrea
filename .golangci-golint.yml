@@ -1,4 +1,4 @@
-# golangci-lint configuration used to run golint only
+# golangci-lint configuration used to run golint only (with all warnings enabled)
 run:
   tests: true
   timeout: 5m

@@ -1,49 +1,99 @@
 - project:
-    name: antrea-automation
-    git_credentials_id: ANTREA_GIT_CREDENTIAL
-    org_repo: vmware-tanzu/antrea
     # ghpr_auth, antrea_admin_list, antrea_org_list and antrea_white_list
     # should be defined as a global variable somewhere else
+    name: antrea
+    git_credentials_id: ANTREA_GIT_CREDENTIAL
+    org_repo: antrea-io/antrea
     jobs:
-      - '{name}-{test_name}-for-pull-request':
+      - '{name}-{test_name}-for-period':
           test_name: job-updater
-          node: null
+          node: 'antrea-test-node'
           description: 'This is for updating all antrea jobs.'
           builders:
             - builder-job-updater
-          trigger_phrase: null
-          allow_whitelist_orgs_as_admins: false
-          admin_list: []
-          org_list: []
-          white_list:
-          - nobody123_nobody123_
-          only_trigger_phrase: false
-          trigger_permit_all: true
-          throttle_concurrent_builds_category:
-          throttle_concurrent_builds_enabled: 'false'
-          status_context: should_disappear # this value doesn't matter.
-          status_url: null
-          success_status: --none--
-          failure_status: --none--
-          error_status: --none--
-          triggered_status: --none--
-          started_status: --none--
-          wrappers: []
-          publishers: []
           branches:
-          - '*/master'
+          - '*/main'
           included_regions:
           - ci/jenkins/jobs/.*
-          cron: 'H/10 * * * *'
+          cron: 'H/15 * * * *'
           ignore_post_commit_hooks: false
+          publishers: []
+          wrappers: []
+      - '{name}-{test_name}-for-period':
+          test_name: daily-whole-conformance
+          node: 'antrea-test-node'
+          description: 'This is for testing all conformance daily.'
+          builders:
+            - builder-conformance:
+                conformance_type: 'whole-conformance'
+          branches:
+          - '*/main'
+          included_regions: []
+          cron: 'H H * * *'
+          ignore_post_commit_hooks: false
+          publishers:
+          - email:
+              recipients: projectantrea-dev@googlegroups.com
+          - archive:
+              allow-empty: true
+              artifacts: 'ci/jenkins/*sonobuoy*.tar.gz, whole-conformance-coverage.tar.gz'
+              case-sensitive: true
+              default-excludes: true
+              fingerprint: false
+              only-if-success: false
+          wrappers:
+          - credentials-binding:
+            - text:
+                credential-id: VMC_NETWORK_0
+                variable: VMC_NETWORK_0
+            - text:
+                credential-id: VMC_NETWORK_1
+                variable: VMC_NETWORK_1
+            - text:
+                credential-id: VCENTERNAME
+                variable: VCENTERNAME
+            - text:
+                credential-id: DATACENTERNAME
+                variable: DATACENTERNAME
+            - text:
+                credential-id: RESOURCEPOOLPATH
+                variable: RESOURCEPOOLPATH
+      - '{name}-{test_name}-for-period':
+          test_name: daily-elk-flow-collector-validate
+          node: 'antrea-test-node'
+          description: 'This is for validating the elk flow collector manifest daily.'
+          builders:
+            - builder-elk-flow-collector
+          branches:
+          - '*/main'
+          included_regions: []
+          cron: 'H H * * *'
+          ignore_post_commit_hooks: false
+          publishers:
+          - email:
+              recipients: projectantrea-dev@googlegroups.com
+          wrappers: []
+      - '{name}-{test_name}-for-gc':
+          test_name: workload-cluster
+          node: 'antrea-test-node'
+          description: 'This is for deleting useless workload clusters.'
+          builders:
+            - builder-workload-cluster-garbage-collection
+          timed: 'H * * * *'
+          branches:
+          - '*/main'
+          included_regions: []
       - '{name}-{test_name}-for-pull-request':
           test_name: list-tests
           node: null
           description: 'This is for listing all test choices.'
+          branches:
+          - ${{sha1}}
           builders:
             - builder-list-tests:
                 org_repo: '{org_repo}'
           trigger_phrase: null
+          white_list_target_branches: []
           allow_whitelist_orgs_as_admins: false
           admin_list: []
           org_list: []
@@ -51,8 +101,6 @@
           - nobody123_nobody123_
           only_trigger_phrase: false
           trigger_permit_all: true
-          throttle_concurrent_builds_category:
-          throttle_concurrent_builds_enabled: 'false'
           status_context: should_disappear # this value doesn't matter.
           status_url: null
           success_status: --none--
@@ -66,26 +114,132 @@
                     credential-id: '{git_credentials_id}'
                     variable: GH_CREDENTIAL
           publishers: []
+      - '{name}-{test_name}-job-validator':
+          test_name: jenkins-job-validator
+          node: 'antrea-test-node'
+          description: 'This is for validating jenkins jobs code.'
+          builders:
+            - builder-job-validator
+          trigger_phrase: null
+          allow_whitelist_orgs_as_admins: false
+          admin_list: []
+          org_list: []
+          white_list:
+          - nobody123_nobody123_
+          only_trigger_phrase: false
+          trigger_permit_all: true
+          status_context: jenkins-jobs-validator
+          status_url: null
+          success_status: Validator passed.
+          failure_status: Failed.
+          error_status: Failed.
+          triggered_status: null
+          started_status: null
+          wrappers: []
+          publishers: []
+          included_regions:
+          - ci/jenkins/jobs/.*
+      - '{name}-{test_name}-for-pull-request':
+          test_name: integration
+          node: 'antrea-test-node'
+          description: 'This is the {test_name} test for {name}.'
           branches:
           - ${{sha1}}
-          included_regions: []
-          cron: ''
-          ignore_post_commit_hooks: null
+          builders:
+          - builder-integration
+          trigger_phrase: null
+          white_list_target_branches: []
+          allow_whitelist_orgs_as_admins: false
+          admin_list: []
+          org_list: []
+          white_list:
+          - nobody123_nobody123_
+          only_trigger_phrase: false
+          trigger_permit_all: true
+          status_context: Integration tests
+          status_url: null
+          success_status: Build finished.
+          failure_status: Failed.
+          error_status: Failed.
+          triggered_status: null
+          started_status: null
+          wrappers:
+          - timeout:
+              fail: true
+              timeout: 20
+              type: absolute
+          - credentials-binding:
+              - text:
+                  credential-id: GOVC_URL
+                  variable: GOVC_URL
+              - text:
+                  credential-id: GOVC_USERNAME
+                  variable: GOVC_USERNAME
+              - text:
+                  credential-id: GOVC_PASSWORD
+                  variable: GOVC_PASSWORD
+              - text:
+                  credential-id: CODECOV_TOKEN # Jenkins secret that stores codecov token
+                  variable: CODECOV_TOKEN
+          publishers: []
+      - '{name}-{test_name}-for-pull-request':
+          test_name: integration-manual
+          node: 'antrea-test-node'
+          description: 'This is the {test_name} test for {name}.'
+          branches:
+          - ${{sha1}}
+          builders:
+          - builder-integration
+          trigger_phrase: ^(?!Thanks for your PR).*/test-integration.*
+          white_list_target_branches: []
+          allow_whitelist_orgs_as_admins: true
+          admin_list: '{antrea_admin_list}'
+          org_list: '{antrea_org_list}'
+          white_list: '{antrea_white_list}'
+          only_trigger_phrase: true
+          trigger_permit_all: true
+          status_context: Integration tests
+          status_url: null
+          success_status: Build finished.
+          failure_status: Failed. Add comment /test-integration to re-trigger.
+          error_status: Failed. Add comment /test-integration to re-trigger.
+          triggered_status: null
+          started_status: null
+          wrappers:
+          - timeout:
+              fail: true
+              timeout: 20
+              type: absolute
+          - credentials-binding:
+              - text:
+                  credential-id: GOVC_URL
+                  variable: GOVC_URL
+              - text:
+                  credential-id: GOVC_USERNAME
+                  variable: GOVC_USERNAME
+              - text:
+                  credential-id: GOVC_PASSWORD
+                  variable: GOVC_PASSWORD
+              - text:
+                  credential-id: CODECOV_TOKEN # Jenkins secret that stores codecov token
+                  variable: CODECOV_TOKEN
+          publishers: []
       - '{name}-{test_name}-for-pull-request':
           test_name: e2e-pending-label
           node: null
           description: 'This is for marking PR as pending for e2e test.'
+          branches:
+          - ${{sha1}}
           builders:
             - builder-pending-label
           trigger_phrase: null
+          white_list_target_branches: []
           allow_whitelist_orgs_as_admins: false
           admin_list: []
           org_list: []
           white_list: []
           only_trigger_phrase: false
           trigger_permit_all: true
-          throttle_concurrent_builds_category:
-          throttle_concurrent_builds_enabled: 'false'
           status_context: jenkins-e2e
           status_url: --none--
           success_status: Pending test. Mark as failure. Add comment /test-e2e to trigger.
@@ -95,65 +249,77 @@
           started_status: null
           wrappers: []
           publishers: []
-          branches:
-          - ${{sha1}}
-          included_regions: []
-          cron: ''
-          ignore_post_commit_hooks: null
       - '{name}-{test_name}-for-pull-request':
           test_name: e2e
-          node: 'antrea-e2e-test'
+          node: 'antrea-test-node'
           description: 'This is the {test_name} test for {name}.'
+          branches:
+          - ${{sha1}}
           builders:
-            - prepare-antrea
             - builder-e2e
-          trigger_phrase: .*/test-(e2e|all).*
+          trigger_phrase: ^(?!Thanks for your PR).*/test-(e2e|all).*
+          white_list_target_branches: []
           allow_whitelist_orgs_as_admins: true
           admin_list: '{antrea_admin_list}'
           org_list: '{antrea_org_list}'
           white_list: '{antrea_white_list}'
           only_trigger_phrase: true
-          trigger_permit_all: false
-          throttle_concurrent_builds_category:
-            - e2e-lock-per-testbed
-          throttle_concurrent_builds_enabled: 'true'
+          trigger_permit_all: true
           status_context: jenkins-e2e
-          status_url: --none--
+          status_url: null
           success_status: Build finished.
           failure_status: Failed. Add comment /test-e2e to re-trigger.
           error_status: Failed. Add comment /test-e2e to re-trigger.
           triggered_status: null
           started_status: null
-          wrappers: []
+          wrappers:
+          - credentials-binding:
+            - text:
+                credential-id: CODECOV_TOKEN # Jenkins secret that stores codecov token
+                variable: CODECOV_TOKEN
+          - timeout:
+              fail: true
+              timeout: 120
+              type: absolute
+          - credentials-binding:
+            - text:
+                credential-id: VMC_NETWORK_0
+                variable: VMC_NETWORK_0
+            - text:
+                credential-id: VMC_NETWORK_1
+                variable: VMC_NETWORK_1
+            - text:
+                credential-id: VCENTERNAME
+                variable: VCENTERNAME
+            - text:
+                credential-id: DATACENTERNAME
+                variable: DATACENTERNAME
+            - text:
+                credential-id: RESOURCEPOOLPATH
+                variable: RESOURCEPOOLPATH
           publishers:
           - archive:
               allow-empty: true
-              artifacts: antrea-test-logs.tar.gz
+              artifacts: antrea-test-logs.tar.gz, e2e-coverage.tar.gz
               case-sensitive: true
               default-excludes: true
               fingerprint: false
               only-if-success: false
-          branches:
-          - ${{sha1}}
-          included_regions: []
-          cron: ''
-          ignore_post_commit_hooks: null
       - '{name}-{test_name}-for-pull-request':
           test_name: e2e-skip
           node: null
           description: 'This is for marking PR as passed.'
+          branches:
+          - ${{sha1}}
           builders: []
           allow_whitelist_orgs_as_admins: true
           admin_list: '{antrea_admin_list}'
-          org_list: []
-          white_list: []
-          only_trigger_phrase: true
           org_list: '{antrea_org_list}'
-          trigger_permit_all: false
-          trigger_phrase: .*/skip-(e2e|all).*
           white_list: '{antrea_white_list}'
-          throttle_concurrent_builds_category:
-          throttle_concurrent_builds_enabled: 'false'
+          only_trigger_phrase: true
+          trigger_permit_all: false
+          trigger_phrase: ^(?!Thanks for your PR).*/skip-(e2e|all).*
+          white_list_target_branches: []
           status_context: jenkins-e2e
           status_url: --none--
           success_status: Skipped test. Mark as succeeded.
@@ -163,26 +329,22 @@
           started_status: null
           wrappers: []
           publishers: []
-          branches:
-          - ${{sha1}}
-          included_regions: []
-          cron: ''
-          ignore_post_commit_hooks: null
       - '{name}-{test_name}-for-pull-request':
           test_name: conformance-pending-label
           node: null
           description: 'This is for marking PR as pending for conformance test.'
+          branches:
+          - ${{sha1}}
           builders:
             - builder-pending-label
           trigger_phrase: null
+          white_list_target_branches: []
           allow_whitelist_orgs_as_admins: false
           admin_list: []
           org_list: []
           white_list: []
           only_trigger_phrase: false
           trigger_permit_all: true
-          throttle_concurrent_builds_category:
-          throttle_concurrent_builds_enabled: 'false'
           status_context: jenkins-conformance
           status_url: --none--
           success_status: Pending test. Mark as failure. Add comment /test-conformance to trigger.
@@ -192,60 +354,78 @@
           started_status: null
           wrappers: []
           publishers: []
-          branches:
-          - ${{sha1}}
-          included_regions: []
-          cron: ''
-          ignore_post_commit_hooks: null
       - '{name}-{test_name}-for-pull-request':
           test_name: conformance
-          node: 'antrea-e2e-test'
+          node: 'antrea-test-node'
           description: 'This is the {test_name} test for {name}.'
+          branches:
+          - ${{sha1}}
           builders:
-            - prepare-antrea
             - builder-conformance:
-                focus_regex: '\[Conformance\]'
-                skip_regex: '\[Slow\]|\[Serial\]|\[Disruptive\]|\[Flaky\]|\[Feature:.+\]|\[sig-cli\]|\[sig-storage\]|\[sig-auth\]|\[sig-api-machinery\]|\[sig-apps\]|\[sig-node\]'
-          trigger_phrase: .*/test-(conformance|all).*
+                conformance_type: 'conformance'
+          trigger_phrase: ^(?!Thanks for your PR).*/test-(conformance|all).*
+          white_list_target_branches: []
           allow_whitelist_orgs_as_admins: true
           admin_list: '{antrea_admin_list}'
           org_list: '{antrea_org_list}'
           white_list: '{antrea_white_list}'
           only_trigger_phrase: true
-          trigger_permit_all: false
-          throttle_concurrent_builds_category:
-            - e2e-lock-per-testbed
-          throttle_concurrent_builds_enabled: 'true'
+          trigger_permit_all: true
           status_context: jenkins-conformance
-          status_url: --none--
+          status_url: null
           success_status: Build finished.
           failure_status: Failed. Add comment /test-conformance to re-trigger.
           error_status: Failed. Add comment /test-conformance to re-trigger.
           triggered_status: null
           started_status: null
-          wrappers: []
-          publishers: []
-          branches:
-          - ${{sha1}}
-          included_regions: []
-          cron: ''
-          ignore_post_commit_hooks: null
+          wrappers:
+          - credentials-binding:
+            - text:
+                credential-id: CODECOV_TOKEN # Jenkins secret that stores codecov token
+                variable: CODECOV_TOKEN
+          - timeout:
+              fail: true
+              timeout: 80
+              type: absolute
+          - credentials-binding:
+            - text:
+                credential-id: VMC_NETWORK_0
+                variable: VMC_NETWORK_0
+            - text:
+                credential-id: VMC_NETWORK_1
+                variable: VMC_NETWORK_1
+            - text:
+                credential-id: VCENTERNAME
+                variable: VCENTERNAME
+            - text:
+                credential-id: DATACENTERNAME
+                variable: DATACENTERNAME
+            - text:
+                credential-id: RESOURCEPOOLPATH
+                variable: RESOURCEPOOLPATH
+          publishers:
+          - archive:
+              allow-empty: true
+              artifacts: 'ci/jenkins/*sonobuoy*.tar.gz, conformance-coverage.tar.gz'
+              case-sensitive: true
+              default-excludes: true
+              fingerprint: false
+              only-if-success: false
       - '{name}-{test_name}-for-pull-request':
           test_name: conformance-skip
           node: null
           description: 'This is for marking PR as passed.'
+          branches:
+          - ${{sha1}}
           builders: []
           allow_whitelist_orgs_as_admins: true
           admin_list: '{antrea_admin_list}'
-          org_list: []
-          white_list: []
-          only_trigger_phrase: true
           org_list: '{antrea_org_list}'
-          trigger_permit_all: false
-          trigger_phrase: .*/skip-(conformance|all).*
           white_list: '{antrea_white_list}'
-          throttle_concurrent_builds_category:
-          throttle_concurrent_builds_enabled: 'false'
+          only_trigger_phrase: true
+          trigger_permit_all: false
+          trigger_phrase: ^(?!Thanks for your PR).*/skip-(conformance|all).*
+          white_list_target_branches: []
           status_context: jenkins-conformance
           status_url: --none--
           success_status: Skipped test. Mark as succeeded.
@@ -255,26 +435,193 @@
           started_status: null
           wrappers: []
           publishers: []
+      - '{name}-{test_name}-for-pull-request':
+          test_name: all-features-conformance-pending-label
+          node: null
+          description: 'This is for marking PR as pending for conformance test with all alpha features enabled.'
           branches:
           - ${{sha1}}
-          included_regions: []
-          cron: ''
-          ignore_post_commit_hooks: null
-      - '{name}-{test_name}-for-pull-request':
-          test_name: networkpolicy-pending-label
-          node: null
-          description: 'This is for marking PR as pending for networkpolicy test.'
           builders:
             - builder-pending-label
           trigger_phrase: null
+          white_list_target_branches: []
           allow_whitelist_orgs_as_admins: false
           admin_list: []
           org_list: []
           white_list: []
           only_trigger_phrase: false
           trigger_permit_all: true
-          throttle_concurrent_builds_category:
-          throttle_concurrent_builds_enabled: 'false'
+          status_context: jenkins-all-features-conformance
+          status_url: --none--
+          success_status: Pending test. Mark as failure. Add comment /test-all-features-conformance to trigger.
+          failure_status: Pending test. Mark as failure. Add comment /test-all-features-conformance to trigger.
+          error_status: Pending test. Mark as failure. Add comment /test-all-features-conformance to trigger.
+          triggered_status: null
+          started_status: null
+          wrappers: []
+          publishers: []
+      - '{name}-{test_name}-for-pull-request':
+          test_name: all-features-conformance
+          node: 'antrea-test-node'
+          description: 'This is the {test_name} test for {name}.'
+          branches:
+          - ${{sha1}}
+          builders:
+            - builder-conformance:
+                conformance_type: 'all-features-conformance'
+          trigger_phrase: ^(?!Thanks for your PR).*/test-(all-features-conformance|all).*
+          white_list_target_branches: []
+          allow_whitelist_orgs_as_admins: true
+          admin_list: '{antrea_admin_list}'
+          org_list: '{antrea_org_list}'
+          white_list: '{antrea_white_list}'
+          only_trigger_phrase: true
+          trigger_permit_all: true
+          status_context: jenkins-all-features-conformance
+          status_url: null
+          success_status: Build finished.
+          failure_status: Failed. Add comment /test-all-features-conformance to re-trigger.
+          error_status: Failed. Add comment /test-all-features-conformance to re-trigger.
+          triggered_status: null
+          started_status: null
+          wrappers:
+          - credentials-binding:
+            - text:
+                credential-id: CODECOV_TOKEN # Jenkins secret that stores codecov token
+                variable: CODECOV_TOKEN
+          - timeout:
+              fail: true
+              timeout: 80
+              type: absolute
+          publishers:
+          - archive:
+              allow-empty: true
+              artifacts: 'ci/jenkins/*sonobuoy*.tar.gz'
+              case-sensitive: true
+              default-excludes: true
+              fingerprint: false
+              only-if-success: false
+      - '{name}-{test_name}-for-pull-request':
+          test_name: all-features-conformance-skip
+          node: null
+          description: 'This is for marking PR as passed.'
+          branches:
+          - ${{sha1}}
+          builders: []
+          allow_whitelist_orgs_as_admins: true
+          admin_list: '{antrea_admin_list}'
+          org_list: '{antrea_org_list}'
+          white_list: '{antrea_white_list}'
+          only_trigger_phrase: true
+          trigger_permit_all: false
+          trigger_phrase: ^(?!Thanks for your PR).*/skip-(all-features-conformance|all).*
+          white_list_target_branches: []
+          status_context: jenkins-all-features-conformance
+          status_url: --none--
+          success_status: Skipped test. Mark as succeeded.
+          failure_status: Skipped test. Mark as succeeded.
+          error_status: Skipped test. Mark as succeeded.
+          triggered_status: null
+          started_status: null
+          wrappers: []
+          publishers: []
+      - '{name}-{test_name}-for-pull-request':
+          test_name: whole-conformance
+          node: 'antrea-test-node'
+          description: 'This is the {test_name} test for {name}.'
+          branches:
+          - ${{sha1}}
+          builders:
+            - builder-conformance:
+                conformance_type: 'whole-conformance'
+          trigger_phrase: .*/test-(whole-conformance).*
+          white_list_target_branches: []
+          allow_whitelist_orgs_as_admins: true
+          admin_list: '{antrea_admin_list}'
+          org_list: '{antrea_org_list}'
+          white_list: '{antrea_white_list}'
+          only_trigger_phrase: true
+          trigger_permit_all: true
+          status_context: jenkins-whole-conformance
+          status_url: null
+          success_status: Build finished.
+          failure_status: Failed. Add comment /test-whole-conformance to re-trigger.
+          error_status: Failed. Add comment /test-whole-conformance to re-trigger.
+          triggered_status: null
+          started_status: null
+          wrappers:
+          - credentials-binding:
+            - text:
+                credential-id: CODECOV_TOKEN # Jenkins secret that stores codecov token
+                variable: CODECOV_TOKEN
+          - timeout:
+              fail: true
+              timeout: 150
+              type: absolute
+          - credentials-binding:
+            - text:
+                credential-id: VMC_NETWORK_0
+                variable: VMC_NETWORK_0
+            - text:
+                credential-id: VMC_NETWORK_1
+                variable: VMC_NETWORK_1
+            - text:
+                credential-id: VCENTERNAME
+                variable: VCENTERNAME
+            - text:
+                credential-id: DATACENTERNAME
+                variable: DATACENTERNAME
+            - text:
+                credential-id: RESOURCEPOOLPATH
+                variable: RESOURCEPOOLPATH
+          publishers:
+          - archive:
+              allow-empty: true
+              artifacts: 'ci/jenkins/*sonobuoy*.tar.gz, whole-conformance-coverage.tar.gz'
+              case-sensitive: true
+              default-excludes: true
+              fingerprint: false
+              only-if-success: false
+      - '{name}-{test_name}-for-pull-request':
+          test_name: whole-conformance-skip
+          node: null
+          description: 'This is for marking PR as passed.'
+          branches:
+          - ${{sha1}}
+          builders: []
+          allow_whitelist_orgs_as_admins: true
+          admin_list: '{antrea_admin_list}'
+          org_list: '{antrea_org_list}'
+          white_list: '{antrea_white_list}'
+          only_trigger_phrase: true
+          trigger_permit_all: false
+          trigger_phrase: .*/skip-(whole-conformance).*
+          white_list_target_branches: []
+          status_context: jenkins-whole-conformance
+          status_url: --none--
+          success_status: Skipped test. Mark as succeeded.
+          failure_status: Skipped test. Mark as succeeded.
+          error_status: Skipped test. Mark as succeeded.
+          triggered_status: null
+          started_status: null
+          wrappers: []
+          publishers: []
+      - '{name}-{test_name}-for-pull-request':
+          test_name: networkpolicy-pending-label
+          node: null
+          description: 'This is for marking PR as pending for networkpolicy test.'
+          branches:
+          - ${{sha1}}
+          builders:
+            - builder-pending-label
+          trigger_phrase: null
+          white_list_target_branches: []
+          allow_whitelist_orgs_as_admins: false
+          admin_list: []
+          org_list: []
+          white_list: []
+          only_trigger_phrase: false
+          trigger_permit_all: true
           status_context: jenkins-networkpolicy
           status_url: --none--
           success_status: Pending test. Mark as failure. Add comment /test-networkpolicy to trigger.
@@ -284,60 +631,78 @@
           started_status: null
           wrappers: []
           publishers: []
-          branches:
-          - ${{sha1}}
-          included_regions: []
-          cron: ''
-          ignore_post_commit_hooks: null
       - '{name}-{test_name}-for-pull-request':
           test_name: networkpolicy
-          node: 'antrea-e2e-test'
+          node: 'antrea-test-node'
           description: 'This is the {test_name} test for {name}.'
+          branches:
+          - ${{sha1}}
           builders:
-            - prepare-antrea
             - builder-conformance:
-                focus_regex: '\[Feature:NetworkPolicy\]'
-                skip_regex: '.*allow ingress access from updated pod.*|.*named port.*'
-          trigger_phrase: .*/test-(networkpolicy|all).*
+                conformance_type: 'networkpolicy'
+          trigger_phrase: ^(?!Thanks for your PR).*/test-(networkpolicy|all).*
+          white_list_target_branches: []
           allow_whitelist_orgs_as_admins: true
           admin_list: '{antrea_admin_list}'
           org_list: '{antrea_org_list}'
           white_list: '{antrea_white_list}'
           only_trigger_phrase: true
-          trigger_permit_all: false
-          throttle_concurrent_builds_category:
-            - e2e-lock-per-testbed
-          throttle_concurrent_builds_enabled: 'true'
+          trigger_permit_all: true
           status_context: jenkins-networkpolicy
-          status_url: --none--
+          status_url: null
           success_status: Build finished.
           failure_status: Failed. Add comment /test-networkpolicy to re-trigger.
           error_status: Failed. Add comment /test-networkpolicy to re-trigger.
           triggered_status: null
           started_status: null
-          wrappers: []
-          publishers: []
-          branches:
-          - ${{sha1}}
-          included_regions: []
-          cron: ''
-          ignore_post_commit_hooks: null
+          wrappers:
+          - credentials-binding:
+            - text:
+                credential-id: CODECOV_TOKEN # Jenkins secret that stores codecov token
+                variable: CODECOV_TOKEN
+          - timeout:
+              fail: true
+              timeout: 80
+              type: absolute
+          - credentials-binding:
+            - text:
+                credential-id: VMC_NETWORK_0
+                variable: VMC_NETWORK_0
+            - text:
+                credential-id: VMC_NETWORK_1
+                variable: VMC_NETWORK_1
+            - text:
+                credential-id: VCENTERNAME
+                variable: VCENTERNAME
+            - text:
+                credential-id: DATACENTERNAME
+                variable: DATACENTERNAME
+            - text:
+                credential-id: RESOURCEPOOLPATH
+                variable: RESOURCEPOOLPATH
+          publishers:
+          - archive:
+              allow-empty: true
+              artifacts: 'ci/jenkins/*sonobuoy*.tar.gz, networkpolicy-coverage.tar.gz'
+              case-sensitive: true
+              default-excludes: true
+              fingerprint: false
+              only-if-success: false
       - '{name}-{test_name}-for-pull-request':
           test_name: networkpolicy-skip
           node: null
           description: 'This is for marking PR as passed.'
+          branches:
+          - ${{sha1}}
           builders: []
           allow_whitelist_orgs_as_admins: true
           admin_list: '{antrea_admin_list}'
-          org_list: []
-          white_list: []
-          only_trigger_phrase: true
           org_list: '{antrea_org_list}'
-          trigger_permit_all: false
-          trigger_phrase: .*/skip-(networkpolicy|all).*
           white_list: '{antrea_white_list}'
-          throttle_concurrent_builds_category:
-          throttle_concurrent_builds_enabled: 'false'
+          only_trigger_phrase: true
+          trigger_permit_all: false
+          trigger_phrase: ^(?!Thanks for your PR).*/skip-(networkpolicy|all).*
+          white_list_target_branches: []
           status_context: jenkins-networkpolicy
           status_url: --none--
           success_status: Skipped test. Mark as succeeded.
@@ -347,8 +712,330 @@
           started_status: null
           wrappers: []
           publishers: []
+      - 'cloud-{name}-{test_name}':
+          test_name: eks-conformance-net-policy
+          node: antrea-cloud
+          description: 'This is EKS conformance and network policy test for antrea.'
           branches:
-          - ${{sha1}}
+          - '${{ANTREA_GIT_REVISION}}'
+          repo_url: '${{ANTREA_REPO}}'
+          builders:
+          - shell: |-
+              #!/bin/bash
+              source /home/ubuntu/.bashrc
+              sudo ./ci/test-conformance-eks.sh --aws-access-key ${{AWS_ACCESS_KEY}} --aws-secret-key ${{AWS_SECRET_KEY}} \
+                --cluster-name ${{JOB_NAME}}-${{BUILD_NUMBER}} --log-mode detail --setup-only
+          triggers:
+          - timed: H H */2 * *
+          publishers:
+          - archive:
+              allow-empty: true
+              artifacts: 'eks-test.log, ci/*.tar.gz'
+              case-sensitive: true
+              default-excludes: true
+              fingerprint: false
+              only-if-success: false
+          - trigger-parameterized-builds:
+            - project:
+              - cloud-{name}-eks-cleanup
+              property-file: 'ci_properties.txt'
+          - email:
+              notify-every-unstable-build: true
+              recipients: projectantrea-dev@googlegroups.com
+          wrappers:
+          - credentials-binding:
+            - text:
+                credential-id: AWS_ACCESS_KEY # Jenkins secret that stores aws access key
+                variable: AWS_ACCESS_KEY
+            - text:
+                credential-id: AWS_SECRET_KEY # Jenkins secret that stores aws secret key
+                variable: AWS_SECRET_KEY
+      - 'cloud-{name}-{test_name}-cleanup':
+          test_name: eks
+          description: This is for deleting EKS test clusters.
+          builders:
+            - builder-eks-cluster-cleanup
+          concurrent: false
+          disabled: false
+          node: antrea-cloud
+          branches:
+          - '${{ANTREA_GIT_REVISION}}'
+          repo_url: '${{ANTREA_REPO}}'
+          publishers:
+          - email:
+              notify-every-unstable-build: true
+              recipients: projectantrea-dev@googlegroups.com
+          triggers: []
+          wrappers: []
+      - 'cloud-{name}-{test_name}':
+          test_name: gke-conformance-net-policy
+          node: antrea-cloud
+          description: 'This is GKE conformance and network policy test for antrea.'
+          branches:
+          - '${{ANTREA_GIT_REVISION}}'
+          repo_url: '${{ANTREA_REPO}}'
+          builders:
+          - shell: |-
+              #!/bin/bash
+              source /home/ubuntu/.bashrc
+              # gcloud auth login requires verification code from url
+              ${{GCLOUD_PATH}} auth activate-service-account --key-file=${{GCLOUD_KEY_PATH}}
+              sudo ./ci/test-conformance-gke.sh --cluster-name antrea-gke-${{BUILD_NUMBER}} \
+                --svc-account antrea-gcp@antrea.iam.gserviceaccount.com --gcloud-path ${{GCLOUD_PATH}} \
+                --log-mode detail --setup-only
+          triggers:
+          - timed: H H */2 * *
+          publishers:
+          - archive:
+              allow-empty: true
+              artifacts: 'gke-test.log, ci/*.tar.gz'
+              case-sensitive: true
+              default-excludes: true
+              fingerprint: false
+              only-if-success: false
+          - trigger-parameterized-builds:
+            - project:
+              - cloud-{name}-gke-cleanup
+              property-file: 'ci_properties.txt'
+          - email:
+              notify-every-unstable-build: true
+              recipients: projectantrea-dev@googlegroups.com
+          wrappers: []
+      - 'cloud-{name}-{test_name}-cleanup':
+          test_name: gke
+          description: This is for deleting GKE test clusters.
+          builders:
+            - builder-gke-cluster-cleanup
+          concurrent: false
+          disabled: false
+          node: antrea-cloud
+          branches:
+          - '${{ANTREA_GIT_REVISION}}'
+          repo_url: '${{ANTREA_REPO}}'
+          publishers:
+          - email:
+              notify-every-unstable-build: true
+              recipients: projectantrea-dev@googlegroups.com
+          triggers: []
+          wrappers: []
+      - 'cloud-{name}-{test_name}':
+          test_name: aks-conformance-net-policy
+          node: antrea-cloud
+          description: 'This is AKS conformance and network policy test for antrea.'
+          branches:
+          - '${{ANTREA_GIT_REVISION}}'
+          repo_url: '${{ANTREA_REPO}}'
+          builders:
+          - shell: |-
+              #!/bin/bash
+              source /home/ubuntu/.bashrc
+              sudo ./ci/test-conformance-aks.sh --azure-app-id ${{AZURE_APP_ID}} --azure-password ${{AZURE_PASSWORD}} \
+                --azure-tenant-id ${{AZURE_TENANT_ID}} --cluster-name ${{JOB_NAME}}-${{BUILD_NUMBER}} \
+                --log-mode detail --setup-only
+          triggers:
+          - timed: H H */2 * *
+          publishers:
+          - archive:
+              allow-empty: true
+              artifacts: 'aks-test.log, ci/*.tar.gz'
+              case-sensitive: true
+              default-excludes: true
+              fingerprint: false
+              only-if-success: false
+          - trigger-parameterized-builds:
+            - project:
+              - cloud-{name}-aks-cleanup
+              property-file: 'ci_properties.txt'
+          - email:
+              notify-every-unstable-build: true
+              recipients: projectantrea-dev@googlegroups.com
+          wrappers:
+          - credentials-binding:
+            - text:
+                credential-id: AZURE_APP_ID # Jenkins secret that stores azure app id
+                variable: AZURE_APP_ID
+            - text:
+                credential-id: AZURE_PASSWORD # Jenkins secret that stores azure password
+                variable: AZURE_PASSWORD
+            - text:
+                credential-id: AZURE_TENANT_ID # Jenkins secret that stores azure tenant id
+                variable: AZURE_TENANT_ID
+      - 'cloud-{name}-{test_name}-cleanup':
+          test_name: aks
+          description: This is for deleting AKS test clusters.
+          builders:
+            - builder-aks-cluster-cleanup
+          concurrent: false
+          disabled: false
+          node: antrea-cloud
+          branches:
+          - '${{ANTREA_GIT_REVISION}}'
+          repo_url: '${{ANTREA_REPO}}'
+          publishers:
+          - email:
+              notify-every-unstable-build: true
+              recipients: projectantrea-dev@googlegroups.com rahulj@vmware.com
+          triggers: []
+          wrappers: []
+      - '{name}-{test_name}-matrix-compatibility-test':
+          test_name: weekly
+          node: 'antrea-test-node'
+          description: 'This is weekly matrix compatibility test for Antrea.'
+          axes:
+            - axis:
+               type: user-defined
+               name: TEST_OS
+               values:
+                - centos-7
+                - photon-3
+            - axis:
+               type: user-defined
+               name: K8S_VERSION
+               values:
+                - v1.17.5
+                - v1.18.2
+            - axis:
+               type: user-defined
+               name: IS_MATRIX_TEST
+               values:
+                - true
+            - axis:
+               type: slave # TODO: use different term when Jenkins & Jenkins Job Builder are updated
+               name: labels
+               values:
+                - antrea-test-node
+          builders:
+            - builder-matrix
+          branches:
+          - '${{GIT_BRANCH}}'
           included_regions: []
-          cron: ''
-          ignore_post_commit_hooks: null
+          cron: 'H 20 * * 6'
+          ignore_post_commit_hooks: false
+          parameters:
+          - string:
+              default: 'main'
+              description: |-
+                  The branch name of the original repo. It must match one of the following patterns:
+                  - <branchName>
+                  - refs/heads/<branchName>
+                  - <remoteRepoName>/<branchName>
+                  - remotes/<remoteRepoName>/<branchName>
+                  - refs/remotes/<remoteRepoName>/<branchName>
+                  Tracks/checks out the specified branch.
+                  E.g. main, feature1, refs/heads/main, refs/heads/feature1/main, origin/main, remotes/origin/main, refs/remotes/origin/main, ...
+                  - <commitId>
+                  Checks out the specified commit.
+                  E.g. 5062ac843f2b947733e6a3b105977056821bd352, 5062ac84, ...
+                  - refs/tags/<tagName>
+                  Tracks/checks out the specified tag.
+                  E.g. refs/tags/git-2.3.0
+                  - <Wildcards>
+                  The syntax is of the form: REPOSITORYNAME/BRANCH. In addition, BRANCH is recognized as a shorthand of */BRANCH, '*' is recognized as a wildcard, and '**' is recognized as wildcard that includes the separator '/'. Therefore, origin/branches* would match origin/branches-foo but not origin/branches/foo, while origin/branches** would match both origin/branches-foo and origin/branches/foo.
+                  - :<regular expression>
+                  The syntax is of the form: :regexp. Regular expression syntax in branches to build will only build those branches whose names match the regular expression.
+                  Examples:
+                      - :^(?!(origin/prefix)).*
+                      matches: origin or origin/main or origin/feature
+                      does not match: origin/prefix or origin/prefix_123 or origin/prefix-abc
+              name: GIT_BRANCH
+              trim: 'true'
+          publishers:
+          - archive:
+              allow-empty: true
+              artifacts: 'IS_MATRIX_TEST/*/K8S_VERSION/*/TEST_OS/*/labels/antrea-test-node/antrea-test-logs.tar.gz, IS_MATRIX_TEST/*/K8S_VERSION/*/TEST_OS/*/labels/antrea-test-node/ci/jenkins/*sonobuoy*.tar.gz'
+              case-sensitive: true
+              default-excludes: true
+              fingerprint: false
+              only-if-success: false
+          - email:
+              recipients: projectantrea-dev@googlegroups.com
+          wrappers:
+             - workspace-cleanup
+             - timeout:
+                 timeout: 600
+                 type: absolute
+      - '{name}-{test_name}-matrix-compatibility-test':
+          test_name: upgrade
+          node: 'antrea-test-node'
+          description: 'This is the upgrade matrix compatibility test for Antrea. In this test, more than half of all Antrea agents are old-versioned.'
+          axes:
+            - axis:
+               type: user-defined
+               name: TEST_OS
+               values:
+                - ubuntu-1804
+                - centos-7
+                - photon-3
+            - axis:
+               type: user-defined
+               name: K8S_VERSION
+               values:
+                - v1.17.5
+                - v1.18.2
+            - axis:
+               type: user-defined
+               name: IS_MATRIX_TEST
+               values:
+                - true
+            - axis:
+               type: slave
+               name: labels
+               values:
+                - antrea-test-node
+          builders:
+            - builder-matrix
+          branches:
+          - '${{GIT_BRANCH}}'
+          included_regions: []
+          cron: 'H 15 * * 6'
+          ignore_post_commit_hooks: false
+          parameters:
+          - string:
+              name: OLD_ANTREA_VERSION
+              trim: 'true'
+              default: 'LATEST'
+              description:  |-
+                  The old Antrea version tag. Example: v0.1.0.
+                  If it's 'LATEST', we use the latest release tag by default.
+          - string:
+              default: 'main'
+              description: |-
+                  The branch name of the latest Antrea repo. It must match one of the following patterns:
+                  - <branchName>
+                  - refs/heads/<branchName>
+                  - <remoteRepoName>/<branchName>
+                  - remotes/<remoteRepoName>/<branchName>
+                  - refs/remotes/<remoteRepoName>/<branchName>
+                  Tracks/checks out the specified branch.
+                  E.g. main, feature1, refs/heads/main, refs/heads/feature1/main, origin/main, remotes/origin/main, refs/remotes/origin/main, ...
+                  - <commitId>
+                  Checks out the specified commit.
+                  E.g. 5062ac843f2b947733e6a3b105977056821bd352, 5062ac84, ...
+                  - refs/tags/<tagName>
+                  Tracks/checks out the specified tag.
+                  E.g. refs/tags/git-2.3.0
+                  - <Wildcards>
+                  The syntax is of the form: REPOSITORYNAME/BRANCH. In addition, BRANCH is recognized as a shorthand of */BRANCH, '*' is recognized as a wildcard, and '**' is recognized as wildcard that includes the separator '/'. Therefore, origin/branches* would match origin/branches-foo but not origin/branches/foo, while origin/branches** would match both origin/branches-foo and origin/branches/foo.
+                  - :<regular expression>
+                  The syntax is of the form: :regexp. Regular expression syntax in branches to build will only build those branches whose names match the regular expression.
+                  Examples:
+                      - :^(?!(origin/prefix)).*
+                      matches: origin or origin/main or origin/feature
+                      does not match: origin/prefix or origin/prefix_123 or origin/prefix-abc
+              name: GIT_BRANCH
+              trim: 'true'
+          publishers:
+          - archive:
+              allow-empty: true
+              artifacts: 'IS_MATRIX_TEST/*/K8S_VERSION/*/TEST_OS/*/labels/antrea-test-node/antrea-test-logs.tar.gz, IS_MATRIX_TEST/*/K8S_VERSION/*/TEST_OS/*/labels/antrea-test-node/ci/jenkins/*sonobuoy*.tar.gz'
+              case-sensitive: true
+              default-excludes: true
+              fingerprint: false
+              only-if-success: false
+          - email:
+              recipients: projectantrea-dev@googlegroups.com
+          wrappers:
+             - workspace-cleanup
+             - timeout:
+                 timeout: 600
+                 type: absolute

@@ -18,13 +18,14 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
-ANTREA_ROOT=$(dirname "${BASH_SOURCE[0]}")/..
-IMAGE_NAME="antrea/codegen:latest"
+ANTREA_ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )/../" && pwd )"
+IMAGE_NAME="antrea/codegen:kubernetes-1.21.0"
 
 function docker_run() {
+  docker pull ${IMAGE_NAME}
   docker run --rm \
-		-w /go/src/github.com/vmware-tanzu/antrea \
-		-v ${ANTREA_ROOT}:/go/src/github.com/vmware-tanzu/antrea \
+		-w /go/src/antrea.io/antrea \
+		-v ${ANTREA_ROOT}:/go/src/antrea.io/antrea \
 		"${IMAGE_NAME}" "$@"
 }
 

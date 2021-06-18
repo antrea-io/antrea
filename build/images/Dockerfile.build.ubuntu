@@ -1,16 +1,5 @@
-FROM ubuntu:18.04 as cni-binaries
-
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends wget ca-certificates
-
-# Leading dot is required for the tar command below
-ENV CNI_PLUGINS="./host-local ./loopback"
-
-RUN mkdir -p /opt/cni/bin && \
-    wget -q -O - https://dl.k8s.io/network-plugins/cni-plugins-amd64-v0.7.5.tgz | tar xz -C /opt/cni/bin $CNI_PLUGINS
-
-
-FROM golang:1.13 as antrea-build
+ARG OVS_VERSION
+FROM golang:1.15 as antrea-build
 
 WORKDIR /antrea
 
@@ -20,17 +9,14 @@ RUN go mod download
 
 COPY . /antrea
 
-RUN make bin
+RUN make antrea-agent antrea-controller antrea-cni antctl-ubuntu
 
-
-FROM antrea/openvswitch:2.11.1
+FROM antrea/base-ubuntu:${OVS_VERSION}
 
 LABEL maintainer="Antrea <projectantrea-dev@googlegroups.com>"
-LABEL description="A Docker image to deploy the Antrea CNI. Takes care of building the Antrea binaries as part of building the image."
+LABEL description="The Docker image to deploy the Antrea CNI. "
 
 USER root
 
-COPY --from=cni-binaries /opt/cni/bin /opt/cni/bin
-
-COPY --from=antrea-build /antrea/build/images/scripts/* /usr/local/bin/
+COPY build/images/scripts/* /usr/local/bin/
 COPY --from=antrea-build /antrea/bin/* /usr/local/bin/

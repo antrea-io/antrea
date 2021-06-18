@@ -19,20 +19,22 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net/url"
-	"os"
-	"path"
 	"reflect"
+	"sort"
+	"strconv"
 	"strings"
 	"text/tabwriter"
 
-	"github.com/fatih/structtag"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v2"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 
-	"github.com/vmware-tanzu/antrea/pkg/antctl/handlers"
+	"antrea.io/antrea/pkg/antctl/runtime"
+	"antrea.io/antrea/pkg/antctl/transform/common"
+	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/pkg/controller/networkpolicy"
 )
 
 type formatterType string
@@ -43,6 +45,11 @@ const (
 	tableFormatter formatterType = "table"
 )
 
+const (
+	maxTableOutputColumnLength int    = 50
+	sortByEffectivePriority    string = "effectivePriority"
+)
+
 // commandGroup is used to group commands, it could be specified in commandDefinition.
 // The default commandGroup of a commandDefinition is `flat` which means the command
 // is a direct sub-command of the root command. For any other commandGroup, the
@@ -51,10 +58,24 @@ const (
 // as:
 //   antctl <commandGroup> <command>
 type commandGroup uint
+type OutputType uint
+
+// There are two output types: single item or list and the actual type is decided by
+// OutputType value here and command's arguments.
+const (
+	// defaultType represents the output type is single item if there is an argument
+	// and its value is provided. If not, the output type is list.
+	defaultType OutputType = iota
+	// single represents the output type is always single item.
+	single
+	// multiple represents the output type is always list.
+	multiple
+)
 
 const (
 	flat commandGroup = iota
 	get
+	query
 )
 
 var groupCommands = map[commandGroup]*cobra.Command{
@@ -63,194 +84,273 @@ var groupCommands = map[commandGroup]*cobra.Command{
 		Short: "Get the status or resource of a topic",
 		Long:  "Get the status or resource of a topic",
 	},
+	query: {
+		Use:   "query",
+		Short: "Execute a user-provided query",
+		Long:  "Execute a user-provided query",
+	},
 }
 
-const (
-	// tagKey is the tag name of the antctl specific annotation.
-	// For example:
-	// 	type FooResponse struct {
-	// 		Bar BarType `antctl:"key"`
-	// 	}
-	// If the field is annotated with antctl:"key", the framework assumes this field
-	// could be used to retrieve a unique Response, thus the framework will generate
-	// corresponding arg options to the cobra.Command.
-	tagKey = "antctl"
-	// tagOptionKeyArg is the option for antctl annotation. It tells the antctl
-	// the field is a primary key.
-	tagOptionKeyArg = "key"
-)
+type endpointResponder interface {
+	OutputType() OutputType
+	flags() []flagInfo
+}
 
-// argOption describes one argument which can be used in a requestOption.
-type argOption struct {
-	name      string
-	fieldName string
-	usage     string
-	key       bool
+type resourceEndpoint struct {
+	groupVersionResource *schema.GroupVersionResource
+	resourceName         string
+	namespaced           bool
+}
+
+func (e *resourceEndpoint) OutputType() OutputType {
+	if len(e.resourceName) != 0 {
+		return single
+	}
+	return defaultType
+}
+
+func (e *resourceEndpoint) flags() []flagInfo {
+	var flags []flagInfo
+	if len(e.resourceName) == 0 {
+		flags = append(flags, flagInfo{
+			name:         "name",
+			defaultValue: "",
+			arg:          true,
+			usage:        "Retrieve the resource by name",
+		})
+	}
+	if e.namespaced {
+		flags = append(flags, flagInfo{
+			name:         "namespace",
+			shorthand:    "n",
+			defaultValue: metav1.NamespaceAll,
+			usage:        "Filter the resource by namespace",
+		})
+	}
+	if e.groupVersionResource == &v1beta2.NetworkPolicyVersionResource {
+		flags = append(flags, flagInfo{
+			name:            "sort-by",
+			defaultValue:    "",
+			supportedValues: []string{sortByEffectivePriority},
+			usage:           "Get NetworkPolicies in specific order. Current supported value is effectivePriority.",
+		})
+	}
+	return flags
+}
+
+type nonResourceEndpoint struct {
+	path       string
+	params     []flagInfo
+	outputType OutputType
+}
+
+func (e *nonResourceEndpoint) flags() []flagInfo {
+	return e.params
+}
+
+func (e *nonResourceEndpoint) OutputType() OutputType {
+	return e.outputType
+}
+
+// endpoint is used to specified the API for an antctl running against antrea-controller.
+type endpoint struct {
+	resourceEndpoint    *resourceEndpoint
+	nonResourceEndpoint *nonResourceEndpoint
+	// addonTransform is used to transform or update the response data received
+	// from the handler, it must returns an interface which has same type as
+	// TransformedResponse.
+	addonTransform func(reader io.Reader, single bool, opts map[string]string) (interface{}, error)
+	// requestErrorFallback is called when a client request fails, in which
+	// case transforms are called on the io.Reader object returned by this
+	// function. This is useful if a command still needs to output useful
+	// information in case of error.
+	requestErrorFallback func() (io.Reader, error)
 }
 
 // flagInfo represents a command-line flag that can be provided when invoking an antctl command.
 type flagInfo struct {
-	name         string
-	shorthand    string
-	defaultValue string
-	usage        string
+	name            string
+	shorthand       string
+	defaultValue    string
+	supportedValues []string
+	arg             bool
+	usage           string
+}
+
+// rawCommand defines a full function cobra.Command which lets developers
+// write complex client-side tasks. Only the global flags of the antctl framework will
+// be passed to the cobra.Command.
+type rawCommand struct {
+	cobraCommand      *cobra.Command
+	supportAgent      bool
+	supportController bool
 }
 
 // commandDefinition defines options to create a cobra.Command for an antctl client.
 type commandDefinition struct {
 	// Cobra related
-	Use     string // The lower value of it will be used as the endpoint path, like: <API group>/<lower(Use)>.
-	Short   string
-	Long    string
-	Example string // It will be filled with generated examples if it is not provided.
+	use     string
+	aliases []string
+	short   string
+	long    string
+	example string // It will be filled with generated examples if it is not provided.
 	// commandGroup represents the group of the command.
-	CommandGroup commandGroup
-	// Controller should be true if this command works for antrea-controller.
-	Controller bool
-	// Agent should be true if this command works for antrea-agent.
-	Agent bool
-	// SingleObject should be true if the handler always returns single object. The
-	// antctl assumes the response data as a slice of the objects by default.
-	SingleObject bool
-	// API is the endpoint for the command to retrieve data.
-	API string
-	// The handler factory of the command.
-	HandlerFactory handlers.Factory
-	// GroupVersion is the group version of the command handler, it should be set
-	// alongside with the HandlerFactory.
-	GroupVersion *schema.GroupVersion
-	// TransformedResponse is the final response struct of the command. If the
+	commandGroup       commandGroup
+	controllerEndpoint *endpoint
+	agentEndpoint      *endpoint
+	// transformedResponse is the final response struct of the command. If the
 	// AddonTransform is set, TransformedResponse is not needed to be used as the
 	// response struct of the handler, but it is still needed to guide the formatter.
 	// It should always be filled.
-	TransformedResponse reflect.Type
-	// AddonTransform is used to transform or update the response data received
-	// from the handler, it must returns an interface which has same type as
-	// TransformedResponse.
-	AddonTransform func(reader io.Reader, single bool) (interface{}, error)
-	// Flags is a list of all possible flags for this command.
-	Flags []flagInfo
+	transformedResponse reflect.Type
+}
+
+func (cd *commandDefinition) namespaced() bool {
+	if runtime.Mode == runtime.ModeAgent {
+		return cd.agentEndpoint != nil && cd.agentEndpoint.resourceEndpoint != nil && cd.agentEndpoint.resourceEndpoint.namespaced
+	} else if runtime.Mode == runtime.ModeController {
+		return cd.controllerEndpoint != nil && cd.controllerEndpoint.resourceEndpoint != nil && cd.controllerEndpoint.resourceEndpoint.namespaced
+	}
+	return false
+}
+
+func (cd *commandDefinition) getAddonTransform() func(reader io.Reader, single bool, opts map[string]string) (interface{}, error) {
+	if runtime.Mode == runtime.ModeAgent && cd.agentEndpoint != nil {
+		return cd.agentEndpoint.addonTransform
+	} else if runtime.Mode == runtime.ModeController && cd.controllerEndpoint != nil {
+		return cd.controllerEndpoint.addonTransform
+	}
+	return nil
+}
+
+func (cd *commandDefinition) getEndpoint() endpointResponder {
+	if runtime.Mode == runtime.ModeAgent {
+		if cd.agentEndpoint != nil {
+			if cd.agentEndpoint.resourceEndpoint != nil {
+				return cd.agentEndpoint.resourceEndpoint
+			}
+			return cd.agentEndpoint.nonResourceEndpoint
+		}
+	} else if runtime.Mode == runtime.ModeController {
+		if cd.controllerEndpoint != nil {
+			if cd.controllerEndpoint.resourceEndpoint != nil {
+				return cd.controllerEndpoint.resourceEndpoint
+			}
+			return cd.controllerEndpoint.nonResourceEndpoint
+		}
+	}
+	return nil
+}
+
+func (cd *commandDefinition) getRequestErrorFallback() func() (io.Reader, error) {
+	if runtime.Mode == runtime.ModeAgent {
+		if cd.agentEndpoint != nil {
+			return cd.agentEndpoint.requestErrorFallback
+		}
+	} else if runtime.Mode == runtime.ModeController {
+		if cd.controllerEndpoint != nil {
+			return cd.controllerEndpoint.requestErrorFallback
+		}
+	}
+	return nil
 }
 
 // applySubCommandToRoot applies the commandDefinition to a cobra.Command with
 // the client. It populates basic fields of a cobra.Command and creates the
 // appropriate RunE function for it according to the commandDefinition.
-func (cd *commandDefinition) applySubCommandToRoot(root *cobra.Command, client *client, isAgent bool) {
+func (cd *commandDefinition) applySubCommandToRoot(root *cobra.Command, client AntctlClient, out io.Writer) {
 	cmd := &cobra.Command{
-		Use:   cd.Use,
-		Short: cd.Short,
-		Long:  cd.Long,
+		Use:     cd.use,
+		Aliases: cd.aliases,
+		Short:   cd.short,
+		Long:    cd.long,
 	}
-	renderDescription(cmd, isAgent)
-
+	renderDescription(cmd)
 	cd.applyFlagsToCommand(cmd)
-	argOpt := cd.argOption()
-	if argOpt != nil {
-		cmd.Args = cobra.MaximumNArgs(1)
-		cmd.Use += fmt.Sprintf(" [%s]", argOpt.name)
-		cmd.Long += "\n\nArgs:\n" + fmt.Sprintf("  %s\t%s", argOpt.name, argOpt.usage)
-	} else {
-		cmd.Args = cobra.NoArgs
-	}
 
-	if groupCommand, ok := groupCommands[cd.CommandGroup]; ok {
+	if groupCommand, ok := groupCommands[cd.commandGroup]; ok {
 		groupCommand.AddCommand(cmd)
 	} else {
 		root.AddCommand(cmd)
 	}
 	cd.applyExampleToCommand(cmd)
 
-	cmd.RunE = cd.newCommandRunE(client)
+	cmd.RunE = cd.newCommandRunE(client, out)
 }
 
 // validate checks if the commandDefinition is valid.
 func (cd *commandDefinition) validate() []error {
 	var errs []error
-	if len(cd.Use) == 0 {
+	if len(cd.use) == 0 {
 		errs = append(errs, fmt.Errorf("the command does not have name"))
 	}
-	if cd.TransformedResponse == nil {
-		errs = append(errs, fmt.Errorf("%s: command does not define output struct", cd.Use))
-	}
-	if !cd.Agent && !cd.Controller {
-		errs = append(errs, fmt.Errorf("%s: command does not define any supported component", cd.Use))
-	}
-	if cd.HandlerFactory == nil && len(cd.API) == 0 {
-		errs = append(errs, fmt.Errorf("%s: no handler or API specified", cd.Use))
-	}
-	if len(cd.API) != 0 && cd.Agent {
-		errs = append(errs, fmt.Errorf("%s: commands for agent do not allow to request API directly", cd.Use))
-	}
-	if cd.HandlerFactory != nil && cd.GroupVersion == nil {
-		errs = append(errs, fmt.Errorf("%s: must provide the group version of customize handler", cd.Use))
-	}
-	existingFlags := map[string]bool{"output": true, "help": true, "kubeconfig": true, "timeout": true, "verbose": true}
-	for _, f := range cd.Flags {
-		if len(f.name) == 0 {
-			errs = append(errs, fmt.Errorf("%s: flag name cannot be empty", cd.Use))
-		} else {
-			if _, ok := existingFlags[f.name]; ok {
-				errs = append(errs, fmt.Errorf("%s: flag redefined: %s", cd.Use, f.name))
-			}
-			existingFlags[f.name] = true
+	existingAliases := make(map[string]bool)
+	for _, a := range cd.aliases {
+		if a == cd.use {
+			errs = append(errs, fmt.Errorf("%s: command alias is the same with use of the command", cd.use))
 		}
-		if len(f.shorthand) > 1 {
-			errs = append(errs, fmt.Errorf("%s: length of a flag shorthand cannot be larger than 1: %s", cd.Use, f.shorthand))
+		if _, ok := existingAliases[a]; ok {
+			errs = append(errs, fmt.Errorf("%s: command alias is provided twice: %s", cd.use, a))
+		}
+		existingAliases[a] = true
+	}
+	if cd.transformedResponse == nil {
+		errs = append(errs, fmt.Errorf("%s: command does not define output struct", cd.use))
+	}
+	if cd.agentEndpoint == nil && cd.controllerEndpoint == nil {
+		errs = append(errs, fmt.Errorf("%s: command does not define any supported component", cd.use))
+	}
+	if cd.agentEndpoint != nil && cd.agentEndpoint.nonResourceEndpoint != nil && cd.agentEndpoint.resourceEndpoint != nil {
+		errs = append(errs, fmt.Errorf("%s: command for agent can only define one endpoint", cd.use))
+	}
+	if cd.agentEndpoint != nil && cd.agentEndpoint.nonResourceEndpoint == nil && cd.agentEndpoint.resourceEndpoint == nil {
+		errs = append(errs, fmt.Errorf("%s: command for agent must define one endpoint", cd.use))
+	}
+	if cd.controllerEndpoint != nil && cd.controllerEndpoint.nonResourceEndpoint != nil && cd.controllerEndpoint.resourceEndpoint != nil {
+		errs = append(errs, fmt.Errorf("%s: command for controller can only define one endpoint", cd.use))
+	}
+	if cd.controllerEndpoint != nil && cd.controllerEndpoint.nonResourceEndpoint == nil && cd.controllerEndpoint.resourceEndpoint == nil {
+		errs = append(errs, fmt.Errorf("%s: command for controller must define one endpoint", cd.use))
+	}
+	empty := struct{}{}
+	existingFlags := map[string]struct{}{"output": empty, "help": empty, "kubeconfig": empty, "timeout": empty, "verbose": empty}
+	if endpoint := cd.getEndpoint(); endpoint != nil {
+		for _, f := range endpoint.flags() {
+			if len(f.name) == 0 {
+				errs = append(errs, fmt.Errorf("%s: flag name cannot be empty", cd.use))
+			} else {
+				if _, ok := existingFlags[f.name]; ok {
+					errs = append(errs, fmt.Errorf("%s: flag redefined: %s", cd.use, f.name))
+				}
+				existingFlags[f.name] = empty
+			}
+			if len(f.shorthand) > 1 {
+				errs = append(errs, fmt.Errorf("%s: length of a flag shorthand cannot be larger than 1: %s", cd.use, f.shorthand))
+			}
 		}
 	}
 	return errs
-}
-
-// argOptions returns the key argument of the commandDefinition. It traverses all
-// exported field and return an argOption based on the first field annotated with
-// antctl.
-func (cd *commandDefinition) argOption() *argOption {
-	for i := 0; i < cd.TransformedResponse.NumField(); i++ {
-		f := cd.TransformedResponse.Field(i)
-		tags, err := structtag.Parse(string(f.Tag))
-		if err != nil { // Broken cli tags, skip this field
-			continue
-		}
-		argOpt := &argOption{fieldName: f.Name}
-		jsonTag, err := tags.Get("json")
-		if err != nil {
-			argOpt.name = strings.ToLower(f.Name)
-		} else {
-			argOpt.name = jsonTag.Name
-		}
-
-		cliTag, err := tags.Get(tagKey)
-		if err != nil {
-			continue
-		}
-		argOpt.key = cliTag.Name == tagOptionKeyArg
-		argOpt.usage = strings.Join(cliTag.Options, ", ")
-		return argOpt
-	}
-	return nil
 }
 
 // decode parses the data in reader and converts it to one or more
 // TransformedResponse objects. If single is false, the return type is
 // []TransformedResponse. Otherwise, the return type is TransformedResponse.
 func (cd *commandDefinition) decode(r io.Reader, single bool) (interface{}, error) {
-	var result interface{}
-	if single || cd.SingleObject {
-		ref := reflect.New(cd.TransformedResponse)
-		err := json.NewDecoder(r).Decode(ref.Interface())
-		if err != nil {
-			return nil, err
-		}
-		result = ref.Interface()
+	var refType reflect.Type
+	if single {
+		refType = cd.transformedResponse
 	} else {
-		ref := reflect.New(reflect.SliceOf(cd.TransformedResponse))
-		err := json.NewDecoder(r).Decode(ref.Interface())
-		if err != nil {
-			return nil, err
-		}
-		result = reflect.Indirect(ref).Interface()
+		refType = reflect.SliceOf(cd.transformedResponse)
 	}
-	return result, nil
+	ref := reflect.New(refType)
+	err := json.NewDecoder(r).Decode(ref.Interface())
+	if err != nil {
+		return nil, err
+	}
+	if single {
+		return ref.Interface(), nil
+	}
+	return reflect.Indirect(ref).Interface(), nil
 }
 
 func jsonEncode(obj interface{}, output *bytes.Buffer) error {
@@ -279,8 +379,21 @@ func (cd *commandDefinition) jsonOutput(obj interface{}, writer io.Writer) error
 }
 
 func (cd *commandDefinition) yamlOutput(obj interface{}, writer io.Writer) error {
-	err := yaml.NewEncoder(writer).Encode(obj)
-	if err != nil {
+	var jsonObj interface{}
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(obj); err != nil {
+		return fmt.Errorf("error when outputing in yaml format: %w", err)
+	}
+	// Comment copied from: sigs.k8s.io/yaml
+	// We are using yaml.Unmarshal here (instead of json.Unmarshal) because the
+	// Go JSON library doesn't try to pick the right number type (int, float,
+	// etc.) when unmarshalling to interface{}, it just picks float64
+	// universally. go-yaml does go through the effort of picking the right
+	// number type, so we can preserve number type throughout this process.
+	if err := yaml.Unmarshal(buf.Bytes(), &jsonObj); err != nil {
+		return fmt.Errorf("error when outputing in yaml format: %w", err)
+	}
+	if err := yaml.NewEncoder(writer).Encode(jsonObj); err != nil {
 		return fmt.Errorf("error when outputing in yaml format: %w", err)
 	}
 	return nil
@@ -305,6 +418,216 @@ func respTransformer(obj interface{}) (interface{}, error) {
 	return target, nil
 }
 
+// tableOutputForGetCommands formats the table output for "get" commands.
+func (cd *commandDefinition) tableOutputForGetCommands(obj interface{}, writer io.Writer) error {
+	var list []common.TableOutput
+	if reflect.TypeOf(obj).Kind() == reflect.Slice {
+		s := reflect.ValueOf(obj)
+		if s.Len() == 0 || s.Index(0).Interface() == nil {
+			var buffer bytes.Buffer
+			buffer.WriteString("\n")
+			if _, err := io.Copy(writer, &buffer); err != nil {
+				return fmt.Errorf("error when copy output into writer: %w", err)
+			}
+			return nil
+		}
+		if _, ok := s.Index(0).Interface().(common.TableOutput); !ok {
+			return cd.tableOutput(obj, writer)
+		}
+		for i := 0; i < s.Len(); i++ {
+			ele := s.Index(i)
+			list = append(list, ele.Interface().(common.TableOutput))
+		}
+	} else {
+		ele, ok := obj.(common.TableOutput)
+		if !ok {
+			return cd.tableOutput(obj, writer)
+		}
+		list = []common.TableOutput{ele}
+	}
+
+	// Get the elements and headers of table.
+	args := list[0].GetTableHeader()
+	rows := make([][]string, len(list)+1)
+	rows[0] = list[0].GetTableHeader()
+	for i, element := range list {
+		rows[i+1] = element.GetTableRow(maxTableOutputColumnLength)
+	}
+
+	if list[0].SortRows() {
+		// Sort the table rows according to columns in order.
+		body := rows[1:]
+		sort.Slice(body, func(i, j int) bool {
+			for k := range body[i] {
+				if body[i][k] != body[j][k] {
+					return body[i][k] < body[j][k]
+				}
+			}
+			return true
+		})
+	}
+	// Construct the table.
+	numRows, numCols := len(list)+1, len(args)
+	widths := getColumnWidths(numRows, numCols, rows)
+	return constructTable(numRows, numCols, widths, rows, writer)
+}
+
+func getColumnWidths(numRows int, numCols int, rows [][]string) []int {
+	widths := make([]int, numCols)
+	if numCols == 1 {
+		// Do not limit the column length for a single column table.
+		// This is for the case a single column table can have long rows which cannot
+		// fit into a single line (one example is the ovsflows outputs).
+		widths[0] = 0
+	} else {
+		// Get the width of every column.
+		for j := 0; j < numCols; j++ {
+			width := len(rows[0][j])
+			for i := 1; i < numRows; i++ {
+				if len(rows[i][j]) == 0 {
+					rows[i][j] = "<NONE>"
+				}
+				if width < len(rows[i][j]) {
+					width = len(rows[i][j])
+				}
+			}
+			widths[j] = width
+			if j != 0 {
+				widths[j]++
+			}
+		}
+	}
+	return widths
+}
+
+func constructTable(numRows int, numCols int, widths []int, rows [][]string, writer io.Writer) error {
+	var buffer bytes.Buffer
+	for i := 0; i < numRows; i++ {
+		for j := 0; j < numCols; j++ {
+			val := ""
+			if j != 0 {
+				val = " " + val
+			}
+			val += rows[i][j]
+			if widths[j] > 0 {
+				val += strings.Repeat(" ", widths[j]-len(val))
+			}
+			buffer.WriteString(val)
+		}
+		buffer.WriteString("\n")
+	}
+	if _, err := io.Copy(writer, &buffer); err != nil {
+		return fmt.Errorf("error when copy output into writer: %w", err)
+	}
+
+	return nil
+}
+
+// tableOutputForQueryEndpoint implements printing sub tables (list of tables) for each response, utilizing constructTable
+// with multiplicity.
+func (cd *commandDefinition) tableOutputForQueryEndpoint(obj interface{}, writer io.Writer) error {
+	// intermittent new line buffer
+	var buffer bytes.Buffer
+	newLine := func() error {
+		buffer.WriteString("\n")
+		if _, err := io.Copy(writer, &buffer); err != nil {
+			return fmt.Errorf("error when copy output into writer: %w", err)
+		}
+		buffer.Reset()
+		return nil
+	}
+	// sort rows of sub table
+	sortRows := func(rows [][]string) {
+		body := rows[1:]
+		sort.Slice(body, func(i, j int) bool {
+			for k := range body[i] {
+				if body[i][k] != body[j][k] {
+					return body[i][k] < body[j][k]
+				}
+			}
+			return true
+		})
+	}
+	// constructs sub tables for responses
+	constructSubTable := func(header [][]string, body [][]string) error {
+		rows := append(header, body...)
+		sortRows(rows)
+		numRows, numCol := len(rows), len(rows[0])
+		widths := getColumnWidths(numRows, numCol, rows)
+		if err := constructTable(numRows, numCol, widths, rows, writer); err != nil {
+			return err
+		}
+		return nil
+	}
+	// construct sections of sub tables for responses (applied, ingress, egress)
+	constructSection := func(label [][]string, header [][]string, body [][]string, nonEmpty bool) error {
+		if err := constructSubTable(label, [][]string{}); err != nil {
+			return err
+		}
+		if nonEmpty {
+			if err := constructSubTable(header, body); err != nil {
+				return err
+			}
+		}
+		if err := newLine(); err != nil {
+			return err
+		}
+		return nil
+	}
+	// iterate through each endpoint and construct response
+	endpointQueryResponse := obj.(*networkpolicy.EndpointQueryResponse)
+	for _, endpoint := range endpointQueryResponse.Endpoints {
+		// transform applied policies to string representation
+		policies := make([][]string, 0)
+		for _, policy := range endpoint.Policies {
+			policyStr := []string{policy.Name, policy.Namespace, string(policy.UID)}
+			policies = append(policies, policyStr)
+		}
+		// transform egress and ingress rules to string representation
+		egress, ingress := make([][]string, 0), make([][]string, 0)
+		for _, rule := range endpoint.Rules {
+			ruleStr := []string{rule.Name, rule.Namespace, strconv.Itoa(rule.RuleIndex), string(rule.UID)}
+			if rule.Direction == v1beta2.DirectionIn {
+				ingress = append(ingress, ruleStr)
+			} else if rule.Direction == v1beta2.DirectionOut {
+				egress = append(egress, ruleStr)
+			}
+		}
+		// table label
+		if err := constructSubTable([][]string{{"Endpoint " + endpoint.Namespace + "/" + endpoint.Name}}, [][]string{}); err != nil {
+			return err
+		}
+		// applied policies
+		nonEmpty := len(policies) > 0
+		policyLabel := []string{"Applied Policies: None"}
+		if nonEmpty {
+			policyLabel = []string{"Applied Policies:"}
+		}
+		if err := constructSection([][]string{policyLabel}, [][]string{{"Name", "Namespace", "UID"}}, policies, nonEmpty); err != nil {
+			return err
+		}
+		// egress rules
+		nonEmpty = len(egress) > 0
+		egressLabel := []string{"Egress Rules: None"}
+		if nonEmpty {
+			egressLabel = []string{"Egress Rules:"}
+		}
+		if err := constructSection([][]string{egressLabel}, [][]string{{"Name", "Namespace", "Index", "UID"}}, egress, nonEmpty); err != nil {
+			return err
+		}
+		// ingress rules
+		nonEmpty = len(ingress) > 0
+		ingressLabel := []string{"Ingress Rules: None"}
+		if nonEmpty {
+			ingressLabel = []string{"Ingress Rules:"}
+		}
+		if err := constructSection([][]string{ingressLabel}, [][]string{{"Name", "Namespace", "Index", "UID"}}, ingress, nonEmpty); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (cd *commandDefinition) tableOutput(obj interface{}, writer io.Writer) error {
 	target, err := respTransformer(obj)
 	if err != nil {
@@ -319,7 +642,9 @@ func (cd *commandDefinition) tableOutput(obj interface{}, writer io.Writer) erro
 			for k := range m {
 				args = append(args, k)
 			}
-			break
+			// break after one iteration intentionally (we are just retrieving attribute
+			// names to use as the table header in the output)
+			break // nolint:staticcheck
 		}
 	} else {
 		m, _ := target.(map[string]interface{})
@@ -383,19 +708,32 @@ func (cd *commandDefinition) tableOutput(obj interface{}, writer io.Writer) erro
 // format. If the AddonTransform is set, it will use the function to transform
 // the data first. It will try to output the resp in the format ft specified after
 // doing transform.
-func (cd *commandDefinition) output(resp io.Reader, writer io.Writer, ft formatterType, single bool) (err error) {
+func (cd *commandDefinition) output(resp io.Reader, writer io.Writer, ft formatterType, single bool, args map[string]string) (err error) {
 	var obj interface{}
-	if cd.AddonTransform == nil { // Decode the data if there is no AddonTransform.
+	addonTransform := cd.getAddonTransform()
+
+	if addonTransform == nil { // Decode the data if there is no AddonTransform.
 		obj, err = cd.decode(resp, single)
+		if err == io.EOF {
+			// No response returned.
+			return nil
+		}
 		if err != nil {
-			return fmt.Errorf("error when decoding response: %w", err)
+			return fmt.Errorf("error when decoding response %v: %w", resp, err)
 		}
 	} else {
-		obj, err = cd.AddonTransform(resp, single)
+		obj, err = addonTransform(resp, single, args)
 		if err != nil {
 			return fmt.Errorf("error when doing local transform: %w", err)
 		}
 		klog.Infof("After transforming %v", obj)
+	}
+
+	if str, ok := obj.([]byte); ok {
+		// If the transformed response is of type []byte, just output
+		// the raw bytes.
+		_, err = writer.Write(str)
+		return err
 	}
 
 	// Output structure data in format
@@ -405,81 +743,140 @@ func (cd *commandDefinition) output(resp io.Reader, writer io.Writer, ft formatt
 	case yamlFormatter:
 		return cd.yamlOutput(obj, writer)
 	case tableFormatter:
-		return cd.tableOutput(obj, writer)
+		if cd.commandGroup == get {
+			return cd.tableOutputForGetCommands(obj, writer)
+		} else if cd.commandGroup == query {
+			if cd.controllerEndpoint.nonResourceEndpoint.path == "/endpoint" {
+				return cd.tableOutputForQueryEndpoint(obj, writer)
+			}
+		} else {
+			return cd.tableOutput(obj, writer)
+		}
 	default:
-		return fmt.Errorf("unsupport format type: %v", ft)
+		return fmt.Errorf("unsupported format type: %v", ft)
 	}
+	return nil
+}
+
+func (cd *commandDefinition) collectFlags(cmd *cobra.Command, args []string) (map[string]string, error) {
+	argMap := make(map[string]string)
+	if endpoint := cd.getEndpoint(); endpoint != nil {
+		for _, f := range endpoint.flags() {
+			if f.arg {
+				if len(args) > 0 {
+					argMap[f.name] = args[0]
+				}
+			} else {
+				vs, err := cmd.Flags().GetString(f.name)
+				if err == nil && len(vs) != 0 {
+					if f.supportedValues != nil && !cd.validateFlagValue(vs, f.supportedValues) {
+						return nil, fmt.Errorf("unsupported value %s for flag %s", vs, f.name)
+					}
+					argMap[f.name] = vs
+					continue
+				}
+			}
+		}
+	}
+	if cd.namespaced() {
+		argMap["namespace"], _ = cmd.Flags().GetString("namespace")
+	}
+	return argMap, nil
+}
+
+func (cd *commandDefinition) validateFlagValue(val string, supportedValues []string) bool {
+	for _, s := range supportedValues {
+		if s == val {
+			return true
+		}
+	}
+	return false
 }
 
 // newCommandRunE creates the RunE function for the command. The RunE function
-// checks the args according to ArgOptions and flags.
-func (cd *commandDefinition) newCommandRunE(c *client) func(*cobra.Command, []string) error {
+// checks the args according to argOption and flags.
+func (cd *commandDefinition) newCommandRunE(c AntctlClient, out io.Writer) func(*cobra.Command, []string) error {
 	return func(cmd *cobra.Command, args []string) error {
-		kubeconfigPath, _ := cmd.Flags().GetString("kubeconfig")
-		timeout, _ := cmd.Flags().GetDuration("timeout")
-		u := new(url.URL)
-		if len(cd.API) > 0 {
-			u.Path = cd.API
-		} else {
-			u.Path = path.Join("/apis", cd.GroupVersion.String(), strings.ToLower(cd.Use))
-		}
-
-		q := u.Query()
-		if len(args) > 0 {
-			q.Add(cd.argOption().name, args[0])
-		}
-		for _, f := range cd.Flags {
-			v, err := cmd.Flags().GetString(f.name)
-			if err != nil {
-				return err
-			}
-			q.Add(f.name, v)
-		}
-		u.RawQuery = q.Encode()
-
-		klog.Infof("Requesting URI %s", u.RequestURI())
-		resp, err := c.Request(&requestOption{
-			path:         u,
-			kubeconfig:   kubeconfigPath,
-			name:         cmd.Name(),
-			timeOut:      timeout,
-			groupVersion: cd.GroupVersion,
-		})
+		argMap, err := cd.collectFlags(cmd, args)
 		if err != nil {
 			return err
 		}
-		single := len(args) > 0
+		klog.Infof("Args: %v", argMap)
+		var argGet bool
+		for _, flag := range cd.getEndpoint().flags() {
+			if _, ok := argMap[flag.name]; ok && flag.arg == true {
+				argGet = true
+				break
+			}
+		}
+		kubeconfigPath, _ := cmd.Flags().GetString("kubeconfig")
+		timeout, _ := cmd.Flags().GetDuration("timeout")
+		server, _ := cmd.Flags().GetString("server")
 		outputFormat, err := cmd.Flags().GetString("output")
 		if err != nil {
 			return err
 		}
-		return cd.output(resp, os.Stdout, formatterType(outputFormat), single)
+
+		resp, requestErr := c.request(&requestOption{
+			commandDefinition: cd,
+			kubeconfig:        kubeconfigPath,
+			args:              argMap,
+			timeout:           timeout,
+			server:            server,
+		})
+		if requestErr != nil {
+			fallback := cd.getRequestErrorFallback()
+			if fallback == nil {
+				return requestErr
+			}
+			resp, err = fallback()
+			if err != nil {
+				return err
+			}
+		}
+		isSingle := cd.getEndpoint().OutputType() != multiple && (cd.getEndpoint().OutputType() == single || argGet)
+		if err := cd.output(resp, out, formatterType(outputFormat), isSingle, argMap); err != nil {
+			return err
+		}
+		return requestErr
 	}
 }
 
-// applyFlagsToCommand sets up flags for the command.
+// applyFlagsToCommand sets up args and flags for the command.
 func (cd *commandDefinition) applyFlagsToCommand(cmd *cobra.Command) {
-	cmd.Flags().StringP("output", "o", "json", "output format: json|yaml|table")
-	for _, f := range cd.Flags {
-		cmd.Flags().StringP(f.name, f.shorthand, f.defaultValue, f.usage)
+	var hasFlag bool
+	for _, flag := range cd.getEndpoint().flags() {
+		if flag.arg {
+			cmd.Args = cobra.MaximumNArgs(1)
+			cmd.Use += fmt.Sprintf(" [%s]", flag.name)
+			cmd.Long += fmt.Sprintf("\n\nArgs:\n  %s\t%s", flag.name, flag.usage)
+			hasFlag = true
+		} else {
+			cmd.Flags().StringP(flag.name, flag.shorthand, flag.defaultValue, flag.usage)
+		}
 	}
-}
-
-func (cd *commandDefinition) requestPath(prefix string) string {
-	return path.Join(prefix, strings.ToLower(cd.Use))
+	if !hasFlag {
+		cmd.Args = cobra.NoArgs
+	}
+	if cd.commandGroup == get {
+		cmd.Flags().StringP("output", "o", "table", "output format: json|table|yaml")
+	} else if cd.commandGroup == query {
+		cmd.Flags().StringP("output", "o", "table", "output format: json|table|yaml")
+	} else {
+		cmd.Flags().StringP("output", "o", "yaml", "output format: json|table|yaml")
+	}
 }
 
 // applyExampleToCommand generates examples according to the commandDefinition.
-// It only creates for commands which specified TransformedResponse. If the SingleObject
+// It only creates for commands which specified TransformedResponse. If the singleObject
 // is specified, it only creates one example to retrieve the single object. Otherwise,
 // it will generates examples about retrieving single object according to the key
 // argOption and retrieving the object list.
 func (cd *commandDefinition) applyExampleToCommand(cmd *cobra.Command) {
-	if len(cd.Example) != 0 {
-		cmd.Example = cd.Example
+	if len(cd.example) != 0 {
+		cmd.Example = cd.example
 		return
 	}
-
 	var commands []string
 	for iter := cmd; iter != nil; iter = iter.Parent() {
 		commands = append(commands, iter.Name())
@@ -489,18 +886,14 @@ func (cd *commandDefinition) applyExampleToCommand(cmd *cobra.Command) {
 	}
 
 	var buf bytes.Buffer
-	typeName := cd.TransformedResponse.Name()
-	dataName := strings.ToLower(strings.TrimSuffix(typeName, "Response"))
+	dataName := strings.ToLower(cd.use)
 
-	if cd.SingleObject {
+	if cd.getEndpoint().OutputType() == single {
 		fmt.Fprintf(&buf, "  Get the %s\n", dataName)
 		fmt.Fprintf(&buf, "  $ %s\n", strings.Join(commands, " "))
 	} else {
-		key := cd.argOption()
-		if key != nil {
-			fmt.Fprintf(&buf, "  Get a %s\n", dataName)
-			fmt.Fprintf(&buf, "  $ %s [%s]\n", strings.Join(commands, " "), key.name)
-		}
+		fmt.Fprintf(&buf, "  Get a %s\n", dataName)
+		fmt.Fprintf(&buf, "  $ %s [name]\n", strings.Join(commands, " "))
 		fmt.Fprintf(&buf, "  Get the list of %s\n", dataName)
 		fmt.Fprintf(&buf, "  $ %s\n", strings.Join(commands, " "))
 	}

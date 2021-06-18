@@ -18,23 +18,33 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net"
-
-	"github.com/vmware-tanzu/antrea/pkg/cni"
-	"github.com/vmware-tanzu/antrea/pkg/ovs/ovsconfig"
+	"time"
 
 	"github.com/spf13/pflag"
 	"gopkg.in/yaml.v2"
+	"k8s.io/klog/v2"
+
+	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/apis"
+	"antrea.io/antrea/pkg/cni"
+	"antrea.io/antrea/pkg/features"
+	"antrea.io/antrea/pkg/ovs/ovsconfig"
+	"antrea.io/antrea/pkg/util/flowexport"
 )
 
 const (
-	defaultOVSBridge          = "br-int"
-	defaultHostGateway        = "gw0"
-	defaultHostProcPathPrefix = "/host"
-	defaultServiceCIDR        = "10.96.0.0/12"
-	defaultMTUVXLAN           = 1450
-	defaultMTUGeneve          = 1450
-	defaultMTUGRE             = 1462
-	defaultMTUSTT             = 1500
+	defaultOVSBridge               = "br-int"
+	defaultHostGateway             = "antrea-gw0"
+	defaultHostProcPathPrefix      = "/host"
+	defaultServiceCIDR             = "10.96.0.0/12"
+	defaultTunnelType              = ovsconfig.GeneveTunnel
+	defaultFlowCollectorAddress    = "flow-aggregator.flow-aggregator.svc:4739:tls"
+	defaultFlowCollectorTransport  = "tls"
+	defaultFlowCollectorPort       = "4739"
+	defaultFlowPollInterval        = 5 * time.Second
+	defaultActiveFlowExportTimeout = 30 * time.Second
+	defaultIdleFlowExportTimeout   = 15 * time.Second
+	defaultNPLPortRange            = "40000-41000"
 )
 
 type Options struct {
@@ -42,11 +52,23 @@ type Options struct {
 	configFile string
 	// The configuration object
 	config *AgentConfig
+	// IPFIX flow collector address
+	flowCollectorAddr string
+	// IPFIX flow collector protocol
+	flowCollectorProto string
+	// Flow exporter poll interval
+	pollInterval time.Duration
+	// Active flow timeout to export records of active flows
+	activeFlowTimeout time.Duration
+	// Idle flow timeout to export records of inactive flows
+	idleFlowTimeout time.Duration
 }
 
 func newOptions() *Options {
 	return &Options{
-		config: new(AgentConfig),
+		config: &AgentConfig{
+			EnablePrometheusMetrics: true,
+		},
 	}
 }
 
@@ -58,11 +80,13 @@ func (o *Options) addFlags(fs *pflag.FlagSet) {
 // complete completes all the required options.
 func (o *Options) complete(args []string) error {
 	if len(o.configFile) > 0 {
-		c, err := o.loadConfigFromFile(o.configFile)
-		if err != nil {
+		if err := o.loadConfigFromFile(); err != nil {
 			return err
 		}
-		o.config = c
+	}
+	err := features.DefaultMutableFeatureGate.SetFromMap(o.config.FeatureGates)
+	if err != nil {
+		return err
 	}
 	o.setDefaults()
 	return nil
@@ -71,12 +95,19 @@ func (o *Options) complete(args []string) error {
 // validate validates all the required options. It must be called after complete.
 func (o *Options) validate(args []string) error {
 	if len(args) != 0 {
-		return fmt.Errorf("an empty argument list is not supported")
+		return fmt.Errorf("no positional arguments are supported")
 	}
+
 	// Validate service CIDR configuration
 	_, _, err := net.ParseCIDR(o.config.ServiceCIDR)
 	if err != nil {
-		return fmt.Errorf("service CIDR %s is invalid", o.config.ServiceCIDR)
+		return fmt.Errorf("Service CIDR %s is invalid", o.config.ServiceCIDR)
+	}
+	if o.config.ServiceCIDRv6 != "" {
+		_, _, err := net.ParseCIDR(o.config.ServiceCIDRv6)
+		if err != nil {
+			return fmt.Errorf("Service CIDR v6 %s is invalid", o.config.ServiceCIDRv6)
+		}
 	}
 	if o.config.TunnelType != ovsconfig.VXLANTunnel && o.config.TunnelType != ovsconfig.GeneveTunnel &&
 		o.config.TunnelType != ovsconfig.GRETunnel && o.config.TunnelType != ovsconfig.STTTunnel {
@@ -85,24 +116,49 @@ func (o *Options) validate(args []string) error {
 	if o.config.EnableIPSecTunnel && o.config.TunnelType != ovsconfig.GRETunnel {
 		return fmt.Errorf("IPSec encyption is supported only for GRE tunnel")
 	}
-	if o.config.OVSDatapathType != ovsconfig.OVSDatapathSystem && o.config.OVSDatapathType != ovsconfig.OVSDatapathNetdev {
+	if o.config.OVSDatapathType != string(ovsconfig.OVSDatapathSystem) && o.config.OVSDatapathType != string(ovsconfig.OVSDatapathNetdev) {
 		return fmt.Errorf("OVS datapath type %s is not supported", o.config.OVSDatapathType)
+	}
+	ok, encapMode := config.GetTrafficEncapModeFromStr(o.config.TrafficEncapMode)
+	if !ok {
+		return fmt.Errorf("TrafficEncapMode %s is unknown", o.config.TrafficEncapMode)
+	}
+
+	// Check if the enabled features are supported on the OS.
+	err = o.checkUnsupportedFeatures()
+	if err != nil {
+		return err
+	}
+
+	if encapMode.SupportsNoEncap() {
+		if !features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
+			return fmt.Errorf("TrafficEncapMode %s requires AntreaProxy to be enabled", o.config.TrafficEncapMode)
+		}
+		if o.config.EnableIPSecTunnel {
+			return fmt.Errorf("IPsec tunnel may only be enabled in %s mode", config.TrafficEncapModeEncap)
+		}
+	}
+	if o.config.NoSNAT && !(encapMode == config.TrafficEncapModeNoEncap || encapMode == config.TrafficEncapModeNetworkPolicyOnly) {
+		return fmt.Errorf("noSNAT is only applicable to the %s mode", config.TrafficEncapModeNoEncap)
+	}
+	if encapMode == config.TrafficEncapModeNetworkPolicyOnly {
+		// In the NetworkPolicyOnly mode, Antrea will not perform SNAT
+		// (but SNAT can be done by the primary CNI).
+		o.config.NoSNAT = true
+	}
+	if err := o.validateFlowExporterConfig(); err != nil {
+		return fmt.Errorf("failed to validate flow exporter config: %v", err)
 	}
 	return nil
 }
 
-func (o *Options) loadConfigFromFile(file string) (*AgentConfig, error) {
-	data, err := ioutil.ReadFile(file)
+func (o *Options) loadConfigFromFile() error {
+	data, err := ioutil.ReadFile(o.configFile)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	var c AgentConfig
-	err = yaml.UnmarshalStrict(data, &c)
-	if err != nil {
-		return nil, err
-	}
-	return &c, nil
+	return yaml.UnmarshalStrict(data, &o.config)
 }
 
 func (o *Options) setDefaults() {
@@ -113,13 +169,19 @@ func (o *Options) setDefaults() {
 		o.config.OVSBridge = defaultOVSBridge
 	}
 	if o.config.OVSDatapathType == "" {
-		o.config.OVSDatapathType = ovsconfig.OVSDatapathSystem
+		o.config.OVSDatapathType = string(ovsconfig.OVSDatapathSystem)
+	}
+	if o.config.OVSRunDir == "" {
+		o.config.OVSRunDir = ovsconfig.DefaultOVSRunDir
 	}
 	if o.config.HostGateway == "" {
 		o.config.HostGateway = defaultHostGateway
 	}
+	if o.config.TrafficEncapMode == "" {
+		o.config.TrafficEncapMode = config.TrafficEncapModeEncap.String()
+	}
 	if o.config.TunnelType == "" {
-		o.config.TunnelType = ovsconfig.VXLANTunnel
+		o.config.TunnelType = defaultTunnelType
 	}
 	if o.config.HostProcPathPrefix == "" {
 		o.config.HostProcPathPrefix = defaultHostProcPathPrefix
@@ -127,15 +189,71 @@ func (o *Options) setDefaults() {
 	if o.config.ServiceCIDR == "" {
 		o.config.ServiceCIDR = defaultServiceCIDR
 	}
-	if o.config.DefaultMTU == 0 {
-		if o.config.TunnelType == ovsconfig.VXLANTunnel {
-			o.config.DefaultMTU = defaultMTUVXLAN
-		} else if o.config.TunnelType == ovsconfig.GeneveTunnel {
-			o.config.DefaultMTU = defaultMTUGeneve
-		} else if o.config.TunnelType == ovsconfig.GRETunnel {
-			o.config.DefaultMTU = defaultMTUGRE
-		} else if o.config.TunnelType == ovsconfig.STTTunnel {
-			o.config.DefaultMTU = defaultMTUSTT
+	if o.config.APIPort == 0 {
+		o.config.APIPort = apis.AntreaAgentAPIPort
+	}
+
+	if features.DefaultFeatureGate.Enabled(features.FlowExporter) {
+		if o.config.FlowCollectorAddr == "" {
+			o.config.FlowCollectorAddr = defaultFlowCollectorAddress
+		}
+		if o.config.FlowPollInterval == "" {
+			o.pollInterval = defaultFlowPollInterval
+		}
+		if o.config.ActiveFlowExportTimeout == "" {
+			o.activeFlowTimeout = defaultActiveFlowExportTimeout
+		}
+		if o.config.IdleFlowExportTimeout == "" {
+			o.idleFlowTimeout = defaultIdleFlowExportTimeout
 		}
 	}
+
+	if features.DefaultFeatureGate.Enabled(features.NodePortLocal) {
+		if o.config.NPLPortRange == "" {
+			o.config.NPLPortRange = defaultNPLPortRange
+		}
+	}
+}
+
+func (o *Options) validateFlowExporterConfig() error {
+	if features.DefaultFeatureGate.Enabled(features.FlowExporter) {
+		host, port, proto, err := flowexport.ParseFlowCollectorAddr(o.config.FlowCollectorAddr, defaultFlowCollectorPort, defaultFlowCollectorTransport)
+		if err != nil {
+			return err
+		}
+		o.flowCollectorAddr = net.JoinHostPort(host, port)
+		o.flowCollectorProto = proto
+
+		// Parse the given flowPollInterval config
+		if o.config.FlowPollInterval != "" {
+			flowPollInterval, err := flowexport.ParseFlowIntervalString(o.config.FlowPollInterval)
+			if err != nil {
+				return err
+			}
+			o.pollInterval = flowPollInterval
+		}
+		// Parse the given activeFlowExportTimeout config
+		if o.config.ActiveFlowExportTimeout != "" {
+			o.activeFlowTimeout, err = time.ParseDuration(o.config.ActiveFlowExportTimeout)
+			if err != nil {
+				return fmt.Errorf("ActiveFlowExportTimeout is not provided in right format")
+			}
+			if o.activeFlowTimeout < o.pollInterval {
+				o.activeFlowTimeout = o.pollInterval
+				klog.Warningf("ActiveFlowExportTimeout must be greater than or equal to FlowPollInterval")
+			}
+		}
+		// Parse the given inactiveFlowExportTimeout config
+		if o.config.IdleFlowExportTimeout != "" {
+			o.idleFlowTimeout, err = time.ParseDuration(o.config.IdleFlowExportTimeout)
+			if err != nil {
+				return fmt.Errorf("IdleFlowExportTimeout is not provided in right format")
+			}
+			if o.idleFlowTimeout < o.pollInterval {
+				o.activeFlowTimeout = o.pollInterval
+				klog.Warningf("IdleFlowExportTimeout must be greater than or equal to FlowPollInterval")
+			}
+		}
+	}
+	return nil
 }

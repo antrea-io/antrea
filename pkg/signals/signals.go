@@ -19,10 +19,12 @@ import (
 	"os/signal"
 	"syscall"
 
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 )
 
-var capturedSignals = []os.Signal{syscall.SIGTERM, syscall.SIGINT}
+var (
+	capturedSignals = []os.Signal{syscall.SIGTERM, syscall.SIGINT, syscall.SIGQUIT}
+)
 
 // RegisterSignalHandlers registers a signal handler for capturedSignals and starts a goroutine that
 // will block until a signal is received. The first signal received will cause the stopCh channel to

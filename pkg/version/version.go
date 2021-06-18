@@ -17,6 +17,8 @@ package version
 import (
 	"fmt"
 	"runtime"
+
+	"github.com/blang/semver"
 )
 
 // These variables are set at build-time.
@@ -33,8 +35,9 @@ var (
 	ReleaseStatus = "unreleased"
 )
 
-func GetVersion() string {
-	return Version
+func GetVersion() semver.Version {
+	v, _ := semver.Parse(Version[1:])
+	return v
 }
 
 func GetGitSHA() string {
@@ -46,7 +49,7 @@ func GetGitSHA() string {
 // unreleased versions.
 func GetFullVersion() string {
 	if Version == "" {
-		return "UKNOWN"
+		return "UNKNOWN"
 	}
 	if ReleaseStatus == "released" {
 		return Version

@@ -23,23 +23,41 @@ import (
 	"testing"
 	"time"
 
+	"github.com/contiv/ofnet/ofctrl"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/vmware-tanzu/antrea/pkg/agent/openflow/cookie"
-	oftest "github.com/vmware-tanzu/antrea/pkg/agent/openflow/testing"
-	"github.com/vmware-tanzu/antrea/pkg/agent/types"
+	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/agent/openflow/cookie"
+	oftest "antrea.io/antrea/pkg/agent/openflow/testing"
+	binding "antrea.io/antrea/pkg/ovs/openflow"
+	ovsoftest "antrea.io/antrea/pkg/ovs/openflow/testing"
+	"antrea.io/antrea/pkg/ovs/ovsconfig"
 )
 
 const bridgeName = "dummy-br"
 
+var (
+	bridgeMgmtAddr = binding.GetMgmtAddress(ovsconfig.DefaultOVSRunDir, bridgeName)
+	gwMAC, _       = net.ParseMAC("AA:BB:CC:DD:EE:EE")
+	gwIP, ipNet, _ = net.ParseCIDR("10.0.1.1/24")
+	gwIPv6, _, _   = net.ParseCIDR("f00d::b00:0:0:0/80")
+	gatewayConfig  = &config.GatewayConfig{
+		IPv4: gwIP,
+		IPv6: gwIPv6,
+		MAC:  gwMAC,
+	}
+	nodeConfig = &config.NodeConfig{GatewayConfig: gatewayConfig}
+)
+
 func installNodeFlows(ofClient Client, cacheKey string) (int, error) {
 	hostName := cacheKey
-	gwMAC, _ := net.ParseMAC("AA:BB:CC:DD:EE:FF")
-	IP, IPNet, _ := net.ParseCIDR("10.0.1.1/24")
 	peerNodeIP := net.ParseIP("192.168.1.1")
-	err := ofClient.InstallNodeFlows(hostName, gwMAC, IP, *IPNet, peerNodeIP, types.DefaultTunOFPort)
+	peerConfig := map[*net.IPNet]net.IP{
+		ipNet: gwIP,
+	}
+	err := ofClient.InstallNodeFlows(hostName, peerConfig, peerNodeIP, 0, nil)
 	client := ofClient.(*client)
 	fCacheI, ok := client.nodeFlowCache.Load(hostName)
 	if ok {
@@ -51,11 +69,10 @@ func installNodeFlows(ofClient Client, cacheKey string) (int, error) {
 
 func installPodFlows(ofClient Client, cacheKey string) (int, error) {
 	containerID := cacheKey
-	gwMAC, _ := net.ParseMAC("AA:BB:CC:DD:EE:FF")
 	podMAC, _ := net.ParseMAC("AA:BB:CC:DD:EE:EE")
 	podIP := net.ParseIP("10.0.0.2")
 	ofPort := uint32(10)
-	err := ofClient.InstallPodFlows(containerID, podIP, podMAC, gwMAC, ofPort)
+	err := ofClient.InstallPodFlows(containerID, []net.IP{podIP}, podMAC, ofPort)
 	client := ofClient.(*client)
 	fCacheI, ok := client.podFlowCache.Load(containerID)
 	if ok {
@@ -73,7 +90,6 @@ func TestIdempotentFlowInstallation(t *testing.T) {
 		numFlows  int
 		installFn func(ofClient Client, cacheKey string) (int, error)
 	}{
-		{"NodeFlows", "host", 2, installNodeFlows},
 		{"PodFlows", "aaaa-bbbb-cccc-dddd", 5, installPodFlows},
 	}
 
@@ -83,11 +99,12 @@ func TestIdempotentFlowInstallation(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
-			m := oftest.NewMockFlowOperations(ctrl)
-			ofClient := NewClient(bridgeName)
+			m := oftest.NewMockOFEntryOperations(ctrl)
+			ofClient := NewClient(bridgeName, bridgeMgmtAddr, ovsconfig.OVSDatapathSystem, true, false, false, false)
 			client := ofClient.(*client)
 			client.cookieAllocator = cookie.NewAllocator(0)
-			client.flowOperations = m
+			client.ofEntryOperations = m
+			client.nodeConfig = nodeConfig
 
 			m.EXPECT().AddAll(gomock.Any()).Return(nil).Times(1)
 			// Installing the flows should succeed, and all the flows should be added into the cache.
@@ -110,11 +127,12 @@ func TestIdempotentFlowInstallation(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
-			m := oftest.NewMockFlowOperations(ctrl)
-			ofClient := NewClient(bridgeName)
+			m := oftest.NewMockOFEntryOperations(ctrl)
+			ofClient := NewClient(bridgeName, bridgeMgmtAddr, ovsconfig.OVSDatapathSystem, true, false, false, false)
 			client := ofClient.(*client)
 			client.cookieAllocator = cookie.NewAllocator(0)
-			client.flowOperations = m
+			client.ofEntryOperations = m
+			client.nodeConfig = nodeConfig
 
 			errorCall := m.EXPECT().AddAll(gomock.Any()).Return(errors.New("Bundle error")).Times(1)
 			m.EXPECT().AddAll(gomock.Any()).Return(nil).After(errorCall)
@@ -150,11 +168,12 @@ func TestFlowInstallationFailed(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
-			m := oftest.NewMockFlowOperations(ctrl)
-			ofClient := NewClient(bridgeName)
+			m := oftest.NewMockOFEntryOperations(ctrl)
+			ofClient := NewClient(bridgeName, bridgeMgmtAddr, ovsconfig.OVSDatapathSystem, true, false, false, false)
 			client := ofClient.(*client)
 			client.cookieAllocator = cookie.NewAllocator(0)
-			client.flowOperations = m
+			client.ofEntryOperations = m
+			client.nodeConfig = nodeConfig
 
 			// We generate an error for AddAll call.
 			m.EXPECT().AddAll(gomock.Any()).Return(errors.New("Bundle error"))
@@ -183,11 +202,12 @@ func TestConcurrentFlowInstallation(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
-			m := oftest.NewMockFlowOperations(ctrl)
-			ofClient := NewClient(bridgeName)
+			m := oftest.NewMockOFEntryOperations(ctrl)
+			ofClient := NewClient(bridgeName, bridgeMgmtAddr, ovsconfig.OVSDatapathSystem, true, false, false, false)
 			client := ofClient.(*client)
 			client.cookieAllocator = cookie.NewAllocator(0)
-			client.flowOperations = m
+			client.ofEntryOperations = m
+			client.nodeConfig = nodeConfig
 
 			var concurrentCalls atomic.Value // set to true if we observe concurrent calls
 			timeoutCh := make(chan struct{})
@@ -228,4 +248,265 @@ func TestConcurrentFlowInstallation(t *testing.T) {
 		})
 	}
 
+}
+
+func Test_client_InstallTraceflowFlows(t *testing.T) {
+	type ofSwitch struct {
+		ofctrl.OFSwitch
+	}
+	type fields struct {
+	}
+	type args struct {
+		dataplaneTag uint8
+	}
+	tests := []struct {
+		name        string
+		fields      fields
+		args        args
+		wantErr     bool
+		prepareFunc func(*gomock.Controller) *client
+	}{
+		{
+			name:        "traceflow flow",
+			fields:      fields{},
+			args:        args{dataplaneTag: 1},
+			wantErr:     false,
+			prepareFunc: prepareTraceflowFlow,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			c := tt.prepareFunc(ctrl)
+			if err := c.InstallTraceflowFlows(tt.args.dataplaneTag, false, false, false, nil, 0, 300); (err != nil) != tt.wantErr {
+				t.Errorf("InstallTraceflowFlows() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func Test_client_SendTraceflowPacket(t *testing.T) {
+	type args struct {
+		dataplaneTag uint8
+		binding.Packet
+		inPort  uint32
+		outPort int32
+	}
+	srcMAC, _ := net.ParseMAC("11:22:33:44:55:66")
+	dstMAC, _ := net.ParseMAC("11:22:33:44:55:77")
+	tests := []struct {
+		name    string
+		args    args
+		wantErr bool
+	}{
+		{
+			name: "IPv4 ICMP",
+			args: args{
+				Packet: binding.Packet{
+					SourceMAC:      srcMAC,
+					DestinationMAC: dstMAC,
+					SourceIP:       net.ParseIP("1.2.3.4"),
+					DestinationIP:  net.ParseIP("1.2.3.5"),
+					IPProto:        1,
+					TTL:            64,
+				},
+			},
+		},
+		{
+			name: "IPv4 TCP",
+			args: args{
+				Packet: binding.Packet{
+					SourceMAC:      srcMAC,
+					DestinationMAC: dstMAC,
+					SourceIP:       net.ParseIP("1.2.3.4"),
+					DestinationIP:  net.ParseIP("1.2.3.5"),
+					IPProto:        6,
+					TTL:            64,
+				},
+			},
+		},
+		{
+			name: "IPv4 UDP",
+			args: args{
+				Packet: binding.Packet{
+					SourceMAC:      srcMAC,
+					DestinationMAC: dstMAC,
+					SourceIP:       net.ParseIP("1.2.3.4"),
+					DestinationIP:  net.ParseIP("1.2.3.5"),
+					IPProto:        17,
+					TTL:            64,
+				},
+			},
+		},
+		{
+			name: "IPv6 ICMPv6",
+			args: args{
+				Packet: binding.Packet{
+					SourceMAC:      srcMAC,
+					DestinationMAC: dstMAC,
+					SourceIP:       net.ParseIP("1111::4444"),
+					DestinationIP:  net.ParseIP("1111::5555"),
+					IPProto:        58,
+					TTL:            64,
+				},
+				outPort: -1,
+			},
+		},
+		{
+			name: "IPv6 TCP",
+			args: args{
+				Packet: binding.Packet{
+					SourceMAC:      srcMAC,
+					DestinationMAC: dstMAC,
+					SourceIP:       net.ParseIP("1111::4444"),
+					DestinationIP:  net.ParseIP("1111::5555"),
+					IPProto:        6,
+					TTL:            64,
+				},
+			},
+		},
+		{
+			name: "IPv6 UDP",
+			args: args{
+				Packet: binding.Packet{
+					SourceMAC:      srcMAC,
+					DestinationMAC: dstMAC,
+					SourceIP:       net.ParseIP("1111::4444"),
+					DestinationIP:  net.ParseIP("1111::5555"),
+					IPProto:        17,
+					TTL:            64,
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			c := prepareSendTraceflowPacket(ctrl, !tt.wantErr)
+			if err := c.SendTraceflowPacket(tt.args.dataplaneTag, &tt.args.Packet, tt.args.inPort, tt.args.outPort); (err != nil) != tt.wantErr {
+				t.Errorf("SendTraceflowPacket() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func prepareTraceflowFlow(ctrl *gomock.Controller) *client {
+	ofClient := NewClient(bridgeName, bridgeMgmtAddr, ovsconfig.OVSDatapathSystem, true, true, false, false)
+	c := ofClient.(*client)
+	c.cookieAllocator = cookie.NewAllocator(0)
+	c.nodeConfig = nodeConfig
+	m := ovsoftest.NewMockBridge(ctrl)
+	m.EXPECT().AddFlowsInBundle(gomock.Any(), nil, nil).Return(nil).Times(1)
+	c.bridge = m
+
+	mFlow := ovsoftest.NewMockFlow(ctrl)
+	ctx := &conjMatchFlowContext{dropFlow: mFlow}
+	mFlow.EXPECT().FlowProtocol().Return(binding.Protocol("ip"))
+	mFlow.EXPECT().CopyToBuilder(priorityNormal+2, false).Return(c.pipeline[EgressDefaultTable].BuildFlow(priorityNormal + 2)).Times(1)
+	c.globalConjMatchFlowCache["mockContext"] = ctx
+	c.policyCache.Add(&policyRuleConjunction{metricFlows: []binding.Flow{c.denyRuleMetricFlow(123, false)}})
+	return c
+}
+
+func prepareSendTraceflowPacket(ctrl *gomock.Controller, success bool) *client {
+	ofClient := NewClient(bridgeName, bridgeMgmtAddr, ovsconfig.OVSDatapathSystem, true, true, false, false)
+	c := ofClient.(*client)
+	c.nodeConfig = nodeConfig
+	m := ovsoftest.NewMockBridge(ctrl)
+	c.bridge = m
+	bridge := binding.OFBridge{}
+	m.EXPECT().BuildPacketOut().Return(bridge.BuildPacketOut()).Times(1)
+	if success {
+		m.EXPECT().SendPacketOut(gomock.Any()).Times(1)
+	}
+	return c
+}
+
+func Test_client_setBasePacketOutBuilder(t *testing.T) {
+	type args struct {
+		srcMAC  string
+		dstMAC  string
+		srcIP   string
+		dstIP   string
+		inPort  uint32
+		outPort int32
+	}
+	tests := []struct {
+		name    string
+		args    args
+		wantErr bool
+	}{
+		{
+			name: "err invalidSrcMAC",
+			args: args{
+				srcMAC: "invalidMAC",
+				dstMAC: "11:22:33:44:55:66",
+			},
+			wantErr: true,
+		},
+		{
+			name: "err invalidDstMAC",
+			args: args{
+				srcMAC: "11:22:33:44:55:66",
+				dstMAC: "invalidMAC",
+			},
+			wantErr: true,
+		},
+		{
+			name: "err invalidSrcIP",
+			args: args{
+				srcMAC: "11:22:33:44:55:66",
+				dstMAC: "11:22:33:44:55:77",
+				srcIP:  "invalidIP",
+				dstIP:  "1.2.3.4",
+			},
+			wantErr: true,
+		},
+		{
+			name: "err invalidDstIP",
+			args: args{
+				srcMAC: "11:22:33:44:55:66",
+				dstMAC: "11:22:33:44:55:77",
+				srcIP:  "1.2.3.4",
+				dstIP:  "invalidIP",
+			},
+			wantErr: true,
+		},
+		{
+			name: "err IPVersionMismatch",
+			args: args{
+				srcMAC: "11:22:33:44:55:66",
+				dstMAC: "11:22:33:44:55:77",
+				srcIP:  "1.2.3.4",
+				dstIP:  "1111::5555",
+			},
+			wantErr: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			c := prepareSetBasePacketOutBuilder(ctrl, !tt.wantErr)
+			_, err := setBasePacketOutBuilder(c.bridge.BuildPacketOut(), tt.args.srcMAC, tt.args.dstMAC, tt.args.srcIP, tt.args.dstIP, tt.args.inPort, tt.args.outPort)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("setBasePacketOutBuilder() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func prepareSetBasePacketOutBuilder(ctrl *gomock.Controller, success bool) *client {
+	ofClient := NewClient(bridgeName, bridgeMgmtAddr, ovsconfig.OVSDatapathSystem, true, true, false, false)
+	c := ofClient.(*client)
+	m := ovsoftest.NewMockBridge(ctrl)
+	c.bridge = m
+	bridge := binding.OFBridge{}
+	m.EXPECT().BuildPacketOut().Return(bridge.BuildPacketOut()).Times(1)
+	if success {
+		m.EXPECT().SendPacketOut(gomock.Any()).Times(1)
+	}
+	return c
 }

@@ -2,7 +2,7 @@
 name: Proposal
 about: Describe a feature you are planning to implement
 title: ''
-labels: proposal
+labels: kind/design
 assignees: ''
 
 ---

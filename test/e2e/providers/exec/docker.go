@@ -32,7 +32,46 @@ func RunDockerExecCommand(container string, cmd string, workdir string) (
 ) {
 	args := make([]string, 0)
 	args = append(args, "exec", "-w", workdir, "-t", container)
-	args = append(args, strings.Fields(cmd)...)
+	if strings.Contains(cmd, "/bin/sh") {
+		// Just split in to "/bin/sh" "-c" and "actual_cmd"
+		// This is useful for passing piped commands in to os/exec interface.
+		args = append(args, strings.SplitN(cmd, " ", 3)...)
+	} else {
+		args = append(args, strings.Fields(cmd)...)
+	}
+	dockerCmd := exec.Command("docker", args...)
+	stdoutPipe, err := dockerCmd.StdoutPipe()
+	if err != nil {
+		return 0, "", "", fmt.Errorf("error when connecting to stdout: %v", err)
+	}
+	stderrPipe, err := dockerCmd.StderrPipe()
+	if err != nil {
+		return 0, "", "", fmt.Errorf("error when connecting to stderr: %v", err)
+	}
+	if err := dockerCmd.Start(); err != nil {
+		return 0, "", "", fmt.Errorf("error when starting command: %v", err)
+	}
+
+	stdoutBytes, _ := ioutil.ReadAll(stdoutPipe)
+	stderrBytes, _ := ioutil.ReadAll(stderrPipe)
+
+	if err := dockerCmd.Wait(); err != nil {
+		if e, ok := err.(*exec.ExitError); ok {
+			return e.ExitCode(), string(stdoutBytes), string(stderrBytes), nil
+		}
+		return 0, "", "", err
+	}
+
+	// command is successful
+	return 0, string(stdoutBytes), string(stderrBytes), nil
+}
+
+// RunDockerPsFilterCommand runs the provided command on the specified host using "docker ps filter". Returns
+// the exit code of the command, along with the contents of stdout and stderr as strings.
+func RunDockerPsFilterCommand(filter string) (
+	code int, stdout string, stderr string, err error,
+) {
+	args := []string{"ps", "--filter", filter}
 	dockerCmd := exec.Command("docker", args...)
 	stdoutPipe, err := dockerCmd.StdoutPipe()
 	if err != nil {

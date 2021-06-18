@@ -17,18 +17,21 @@
 set +e
 
 THIS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
-PROJECT_DIR=$(dirname "$THIS_DIR")
 
-pushd "$THIS_DIR" >/dev/null || exit
+pushd "$(dirname "$THIS_DIR")" >/dev/null || exit
+
+
+PROJECT_RELATIVE_DIR=${1:-.}
+PROJECT_DIR=$(dirname "$THIS_DIR")/$PROJECT_RELATIVE_DIR
+TIDY_COMMAND="cd $PROJECT_RELATIVE_DIR && go mod tidy >> /dev/null 2>&1"
 
 MOD_FILE="$PROJECT_DIR/go.mod"
 SUM_FILE="$PROJECT_DIR/go.sum"
 TMP_DIR="$THIS_DIR/.tmp.tidy-check"
 TMP_MOD_FILE="$TMP_DIR/go.mod"
 TMP_SUM_FILE="$TMP_DIR/go.sum"
-TARGET_GO_VERSION="1.13"
-TARGET_GO_VERSION_PATTERN="go$TARGET_GO_VERSION.*"
-TARGET_OCTANT="github.com/vmware/octant v0.8.0"
+TARGET_GO_VERSION="1.15"
+TARGET_GO_VERSION_PATTERN="go$TARGET_GO_VERSION*"
 
 # if Go environment variable is set, use it as it is, otherwise default to "go"
 : "${GO:=go}"
@@ -65,14 +68,14 @@ function tidy {
   mv "$SUM_FILE" "$TMP_SUM_FILE"
 
   if [ -n "$GO" ] && [[ "$($GO version|awk '{print $3}')" == $TARGET_GO_VERSION_PATTERN ]]; then
-    /usr/bin/env bash -c "$GO mod tidy" >>/dev/null 2>&1
+    /usr/bin/env bash -c "$TIDY_COMMAND"
   else
     docker run --rm -u "$(id -u):$(id -g)" \
       -e "GOCACHE=/tmp/gocache" \
       -e "GOPATH=/tmp/gopath" \
-      -w /usr/src/github.com/vmware-tanzu/antrea \
-      -v "$PROJECT_DIR:/usr/src/github.com/vmware-tanzu/antrea" \
-      golang:$TARGET_GO_VERSION bash -c "go mod tidy >> /dev/null 2>&1"
+      -w /usr/src/antrea.io/antrea \
+      -v "$(dirname "$THIS_DIR"):/usr/src/antrea.io/antrea" \
+      golang:$TARGET_GO_VERSION bash -c "$TIDY_COMMAND"
   fi
 }
 
@@ -92,15 +95,8 @@ function failed {
 function check {
   MOD_DIFF=$(diff "$MOD_FILE" "$TMP_MOD_FILE")
   SUM_DIFF=$(diff "$SUM_FILE" "$TMP_SUM_FILE")
-  OCTANT_VERSION_CHECK=$(grep -c "$TARGET_OCTANT" "$MOD_FILE")
   if [ -n "$MOD_DIFF" ] || [ -n "$SUM_DIFF" ]; then
     echoerr "dependencies are not tidy"
-    general_help
-    clean
-    exit 1
-  # TODO: Remove Octant version check after finding another compatible Octant release.
-  elif [ $OCTANT_VERSION_CHECK -eq 0 ]; then
-    echoerr "cannot find expected Octant version v0.8.0"
     general_help
     clean
     exit 1

@@ -1,0 +1,8 @@
+[Unit]
+Description=Socat DNS proxy TCP
+
+[Service]
+ExecStart=/usr/bin/socat TCP6-LISTEN:5353,fork TCP4-CONNECT:127.0.0.53:53
+
+[Install]
+WantedBy=multi-user.target

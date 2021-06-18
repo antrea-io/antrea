@@ -2,74 +2,122 @@ name: Go
 on:
   pull_request:
     branches:
-    - master
+    - main
     - release-*
   push:
     branches:
-    - master
+    - main
     - release-*
 jobs:
 
 
   test-unit:
     name: Unit test
-    runs-on: [ubuntu-18.04]
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-2019]
+    runs-on: ${{ matrix.os }}
     steps:
 
-    - name: Set up Go 1.13
+    - name: Set up Go 1.15
       uses: actions/setup-go@v1
       with:
-        go-version: 1.13
+        go-version: 1.15
 
     - name: Check-out code
-      uses: actions/checkout@v1
+      uses: actions/checkout@v2
 
     - name: Run unit tests
       run: make test-unit
 
+    - name: Codecov
+      uses: codecov/codecov-action@v1
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
+        file: .coverage/coverage-unit.txt
+        flags: unit-tests
+        name: codecov-unit-test
+
 
   golangci-lint:
     name: Golangci-lint
-    runs-on: [ubuntu-18.04]
+    strategy:
+      matrix:
+        platform: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.platform }}
     steps:
-    - name: Set up Go 1.13
+    - name: Set up Go 1.15
       uses: actions/setup-go@v1
       with:
-        go-version: 1.13
+        go-version: 1.15
     - name: Check-out code
-      uses: actions/checkout@v1
+      uses: actions/checkout@v2
     - name: Run golangci-lint
+      run: make golangci
+
+
+  golangci-lint-netpol-tmp:
+    name: Golangci-lint for netpol code
+    runs-on: [ubuntu-latest]
+    steps:
+    - name: Set up Go 1.15
+      uses: actions/setup-go@v1
+      with:
+        go-version: 1.15
+    - name: Check-out code
+      uses: actions/checkout@v2
+    - name: Run golangci-lint
+      working-directory: hack/netpol
       run: make golangci
 
 
   bin:
     name: Build Antrea binaries
-    runs-on: [ubuntu-18.04]
+    runs-on: [ubuntu-latest]
+    strategy:
+      matrix:
+        arch: [amd64, arm64, arm]
     steps:
 
-    - name: Set up Go 1.13
+    - name: Set up Go 1.15
       uses: actions/setup-go@v1
       with:
-        go-version: 1.13
+        go-version: 1.15
 
     - name: Check-out code
-      uses: actions/checkout@v1
+      uses: actions/checkout@v2
 
     - name: Build Antrea binaries
-      run: make bin
+      run: GOARCH=${{ matrix.arch }} make bin
+
+  windows-bin:
+    name: Build Antrea Windows binaries
+    runs-on: [ubuntu-latest]
+    steps:
+
+    - name: Set up Go 1.15
+      uses: actions/setup-go@v1
+      with:
+        go-version: 1.15
+
+    - name: Check-out code
+      uses: actions/checkout@v2
+
+    - name: Build Antrea windows binaries
+      run: make windows-bin
 
   antctl:
     name: Build antctl for macOS, Linux and Windows
-    runs-on: [ubuntu-18.04]
+    runs-on: [ubuntu-latest]
     steps:
 
-      - name: Set up Go 1.13
+      - name: Set up Go 1.15
         uses: actions/setup-go@v1
         with:
-          go-version: 1.13
+          go-version: 1.15
 
       - name: Check-out code
-        uses: actions/checkout@v1
+        uses: actions/checkout@v2
 
       - name: Build antctl binaries
         run: make antctl
@@ -77,16 +125,16 @@ jobs:
 
   codegen:
     name: Check code generation
-    runs-on: [ubuntu-18.04]
+    runs-on: [ubuntu-latest]
     steps:
 
-    - name: Set up Go 1.13
+    - name: Set up Go 1.15
       uses: actions/setup-go@v1
       with:
-        go-version: 1.13
+        go-version: 1.15
 
     - name: Check-out code
-      uses: actions/checkout@v1
+      uses: actions/checkout@v2
 
     - name: Check code generation
       run: ./ci/check-codegen.sh
@@ -94,16 +142,16 @@ jobs:
 
   manifest:
     name: Check manifest
-    runs-on: [ubuntu-18.04]
+    runs-on: [ubuntu-latest]
     steps:
 
-    - name: Set up Go 1.13
+    - name: Set up Go 1.15
       uses: actions/setup-go@v1
       with:
-        go-version: 1.13
+        go-version: 1.15
 
     - name: Check-out code
-      uses: actions/checkout@v1
+      uses: actions/checkout@v2
 
     - name: Check manifest
       run: ./ci/check-manifest.sh
@@ -111,16 +159,44 @@ jobs:
 
   tidy:
     name: Check go.mod tidy
-    runs-on: [ubuntu-18.04]
+    runs-on: [ubuntu-latest]
     steps:
 
-    - name: Set up Go 1.13
+    - name: Set up Go 1.15
       uses: actions/setup-go@v1
       with:
-        go-version: 1.13
+        go-version: 1.15
 
     - name: Check-out code
-      uses: actions/checkout@v1
+      uses: actions/checkout@v2
 
     - name: Check tidy
       run: make test-tidy
+
+  verify:
+    name: Verify docs and spelling
+    runs-on: [ubuntu-latest]
+    steps:
+
+    - name: Set up Go 1.15
+      uses: actions/setup-go@v1
+      with:
+        go-version: 1.15
+
+    - name: Check-out code
+      uses: actions/checkout@v2
+
+    - name: Run verify scripts
+      run: make verify
+
+    - name: Checking for broken Markdown links
+      uses: antoninbas/github-action-markdown-link-check@1.0.9-pre
+      with:
+        folder-path: './docs'
+        file-path: './README.md, ./CHANGELOG.md, ./CONTRIBUTING.md, ./GOVERNANCE.md, ./MAINTAINERS.md, ./ROADMAP.md, ./SECURITY.md'
+        config-file: 'hack/.md_links_config.json'
+
+    - name: Markdownlint
+      run: |
+        sudo npm install -g markdownlint-cli
+        make markdownlint

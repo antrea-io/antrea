@@ -1,27 +1,27 @@
-FROM golang:1.13 as antrea-build
+FROM golang:1.15 as antrea-build
 
 COPY . /antrea
 
-WORKDIR /antrea
+WORKDIR /antrea/plugins/octant
 
-RUN make bin
+RUN make octant-plugins
 
 
-FROM ubuntu:18.04
+FROM ubuntu:20.04
 
 LABEL maintainer="Antrea <projectantrea-dev@googlegroups.com>"
-LABEL description="A docker image to deploy octant and antrea-octant-plugin."
+LABEL description="A docker image to deploy octant and antrea related octant plugins."
 
 USER root
 
-# Get and install octant v0.8.0
+# Get and install octant v0.16.1
 RUN apt-get update && \
     apt-get install -y --no-install-recommends wget ca-certificates && \
-    wget -q https://github.com/vmware-tanzu/octant/releases/download/v0.8.0/octant_0.8.0_Linux-64bit.deb && \
-    dpkg -i octant_0.8.0_Linux-64bit.deb && \
+    wget -q https://github.com/vmware-tanzu/octant/releases/download/v0.16.1/octant_0.16.1_Linux-64bit.deb && \
+    dpkg -i octant_0.16.1_Linux-64bit.deb && \
     apt-get remove -y wget ca-certificates && \
-    rm -rf octant_0.8.0_Linux-64bit.deb /var/cache/apt/* /var/lib/apt/lists/*
+    rm -rf octant_0.16.1_Linux-64bit.deb /var/cache/apt/* /var/lib/apt/lists/*
 
 # Install octant plugin for Antrea UI display
-RUN mkdir -p /root/.config/octant/plugins
-COPY --from=antrea-build /antrea/bin/antrea-octant-plugin /root/.config/octant/plugins
+RUN mkdir -p /root/.config/plugins/octant
+COPY --from=antrea-build /antrea/plugins/octant/bin/* /root/.config/octant/plugins/

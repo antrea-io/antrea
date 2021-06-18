@@ -1,0 +1,30 @@
+name: Kind Netpol Cyclonus
+on:
+  schedule:
+    # run once a day at midnight
+    - cron: '0 0 * * *'
+
+env:
+  KIND_VERSION: v0.11.0
+
+jobs:
+
+  test-netpol-cyclonus:
+    name: Run Cyclonus network policy generator tests on Kind cluster
+    runs-on: [ubuntu-latest]
+    steps:
+      - name: Free disk space
+        # https://github.com/actions/virtual-environments/issues/709
+        run: |
+          sudo apt-get clean
+          df -h
+      - uses: actions/checkout@v2
+      - run: make
+      - name: Install Kind
+        run: |
+          curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-$(uname)-amd64
+          chmod +x ./kind
+          sudo mv kind /usr/local/bin
+      - name: Run cyclonus tests
+        working-directory: hack/netpol-generator
+        run: ./test-kind.sh

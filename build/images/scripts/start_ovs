@@ -2,15 +2,102 @@
 
 source logging
 source daemon_status
+source /usr/share/openvswitch/scripts/ovs-lib
 
 CONTAINER_NAME="antrea-ovs"
-OVS_DB_FILE="/var/run/openvswitch/conf.db"
+OVS_RUN_DIR="/var/run/openvswitch"
+OVS_DB_FILE="${OVS_RUN_DIR}/conf.db"
+OVS_LOGROTATE_CONF="/etc/logrotate.d/openvswitch-switch"
 
-set -euo pipefail
+hw_offload="false"
+log_file_max_num=0
+log_file_max_size=0
+
+function usage {
+    echo "start_ovs"
+    echo -e "  -h|--help\t\t \tPrint help message"
+    echo -e "  --hw-offload\t\t \tEnable OVS hardware offload"
+    echo -e "  --log_file_max_num=<uint> \tMaximum number of log files to be kept for an OVS daemon. Value 0 means keeping the current value"
+    echo -e "  --log_file_max_size=<uint> \tMaximum size (in megabytes) of an OVS log file. Value 0 means keeping the current value"
+}
+
+while (( "$#" )); do
+  case "$1" in
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    --hw-offload)
+      hw_offload="true"
+      ;;
+    --log_file_max_num=*)
+      log_file_max_num=$1
+      log_file_max_num=${log_file_max_num#"--log_file_max_num="}
+      ;;
+    --log_file_max_size=*)
+      log_file_max_size=$1
+      log_file_max_size=${log_file_max_size#"--log_file_max_size="}
+      ;;
+    -*|--*) # unsupported flags
+      echo "Error: unsupported flag $1" >&2
+      exit 1
+      ;;
+    *) # standalone arguments are not supported
+      echo "Error: unsupported argument $1" >&2
+      exit 1
+      ;;
+  esac
+  shift
+done
+
+function update_logrotate_config_file {
+    if [ $log_file_max_num -gt 0 ]; then
+        sed -i "s/.*rotate .*/    rotate $log_file_max_num/" $OVS_LOGROTATE_CONF
+    fi
+    if [ $log_file_max_size -gt 0 ]; then
+        sed -i "s/.*size .*/    size $log_file_max_size\M/" $OVS_LOGROTATE_CONF
+    fi
+}
+
+# We once (issue #870) observed that ovsdb-server failed to restart with error:
+# "ovsdb-server: /var/run/openvswitch/ovsdb-server.pid: pidfile check failed
+# (No such process), aborting", until we deleted the stale OVS PID files.
+# So here we delete stale OVS PID, UDS, and OVSDB lock files before starting the
+# OVS daemons to avoid running into the failure.
+function cleanup_ovs_run_files {
+    rm -rf ${OVS_RUN_DIR}/ovs*.pid
+    rm -rf ${OVS_RUN_DIR}/ovs*.ctl
+    rm -rf ${OVS_RUN_DIR}/.conf.db.*~lock~
+}
 
 function start_ovs {
-    log_info $CONTAINER_NAME "Starting OVS"
-    /usr/share/openvswitch/scripts/ovs-ctl --system-id=random start --db-file=$OVS_DB_FILE
+    offload=$1
+    if daemon_is_running ovsdb-server; then
+        log_info $CONTAINER_NAME "ovsdb-server is already running"
+    else
+        log_info $CONTAINER_NAME "Starting ovsdb-server"
+        /usr/share/openvswitch/scripts/ovs-ctl --no-ovs-vswitchd --system-id=random start --db-file=$OVS_DB_FILE
+        log_info $CONTAINER_NAME "Started ovsdb-server"
+    fi
+
+    if daemon_is_running ovs-vswitchd; then
+        log_info $CONTAINER_NAME "ovs-vswitchd is already running"
+    else
+        log_info $CONTAINER_NAME "Starting ovs-vswitchd"
+        # Start ovs-vswitchd with flow-restore-wait set to true so that packets won't be
+        # mishandled in its default fashion, the config will be removed after antrea-agent
+        # restoring flows.
+        ovs-vsctl --no-wait set open_vswitch . other_config:flow-restore-wait="true"
+        log_info $CONTAINER_NAME "ovs-vswitchd set hw-offload to $offload"
+        ovs-vsctl --no-wait set open_vswitch . other_config:hw-offload=$offload
+        # Set max revalidator delay to 200ms to ensure that learned flows are added to the
+        # datapath flow cache faster, so that Service SessionAffinity "takes effect"
+        # faster in AntreaProxy. It should not have a significant impact on performance.
+        # See https://github.com/antrea-io/antrea/issues/1583
+        ovs-vsctl --no-wait set open_vswitch . other_config:max-revalidator=200
+        /usr/share/openvswitch/scripts/ovs-ctl --no-ovsdb-server --system-id=random start --db-file=$OVS_DB_FILE
+        log_info $CONTAINER_NAME "Started ovs-vswitchd"
+    fi
 }
 
 function stop_ovs {
@@ -28,25 +115,45 @@ function quit {
     exit 0
 }
 
+set -euo pipefail
+
 # Do not trap EXIT as it would then ignore the "exit 0" statement in quit and
 # exit with code 128 + SIGNAL
 trap "quit" INT TERM
 
-start_ovs
+update_logrotate_config_file
 
-log_info $CONTAINER_NAME "Started the loop that checks OVS status every 30 seconds"
+cleanup_ovs_run_files
+
+start_ovs $hw_offload
+
+# Restrict read permissions for "others"
+# See discussion in https://github.com/antrea-io/antrea/issues/1292
+chmod 0640 $OVS_DB_FILE
+
+# Check OVS status every 30 seconds
+CHECK_OVS_INTERVAL=30
+# Run logrotate every hour
+LOG_ROTATE_INTERVAL=60*60
+counter=0
+
+log_info $CONTAINER_NAME "Started the loop that checks OVS status every $CHECK_OVS_INTERVAL seconds"
 while true; do
     # we run sleep in the background so that we can immediately exit when we
     # receive SIGINT / SIGTERM
     # see https://stackoverflow.com/questions/32041674/linux-how-to-kill-sleep
-    sleep 30 &
+    sleep $CHECK_OVS_INTERVAL &
     SLEEP_PID=$!
     wait $SLEEP_PID
 
-    if ! check_ovs_status ; then
+    if ! check_ovs_status > /dev/null ; then
         # OVS was stopped in the container.
         log_warning $CONTAINER_NAME "OVS was stopped. Starting it again"
 
-        start_ovs
+        start_ovs $hw_offload
+    fi
+
+    if [ $((++counter % (LOG_ROTATE_INTERVAL / CHECK_OVS_INTERVAL))) == 0 ]; then
+       logrotate $OVS_LOGROTATE_CONF
     fi
 done

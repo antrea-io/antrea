@@ -19,16 +19,17 @@ import (
 	"os/exec"
 	"strings"
 	"testing"
+
+	binding "antrea.io/antrea/pkg/ovs/openflow"
+	"antrea.io/antrea/pkg/ovs/ovsctl"
 )
 
 func PrepareOVSBridge(brName string) error {
-	cmdStr := fmt.Sprintf("ovs-vsctl --may-exist add-br %s", brName)
+	// using the netdev datapath type does not impact test coverage but
+	// ensures that the integration tests can be run with Docker Desktop on
+	// macOS.
+	cmdStr := fmt.Sprintf("ovs-vsctl --may-exist add-br %s -- set Bridge %s protocols='OpenFlow10,OpenFlow13' datapath_type=netdev", brName, brName)
 	err := exec.Command("/bin/sh", "-c", cmdStr).Run()
-	if err != nil {
-		return err
-	}
-	cmdStr = fmt.Sprintf("ovs-vsctl set Bridge %s protocols='OpenFlow10,OpenFlow13'", brName)
-	err = exec.Command("/bin/sh", "-c", cmdStr).Run()
 	if err != nil {
 		return err
 	}
@@ -50,8 +51,8 @@ type ExpectFlow struct {
 	ActStr   string
 }
 
-func CheckFlowExists(t *testing.T, br string, tableID uint8, exist bool, flows []*ExpectFlow) []string {
-	flowList, _ := OfctlDumpTableFlows(br, tableID)
+func CheckFlowExists(t *testing.T, ovsCtlClient ovsctl.OVSCtlClient, tableID uint8, exist bool, flows []*ExpectFlow) []string {
+	flowList, _ := OfctlDumpTableFlows(ovsCtlClient, tableID)
 	if exist {
 		for _, flow := range flows {
 			if !OfctlFlowMatch(flowList, tableID, flow) {
@@ -68,6 +69,32 @@ func CheckFlowExists(t *testing.T, br string, tableID uint8, exist bool, flows [
 	return flowList
 }
 
+func CheckGroupExists(t *testing.T, ovsCtlClient ovsctl.OVSCtlClient, groupID binding.GroupIDType, groupType string, buckets []string, expectExists bool) {
+	// dump groups
+	groupList, err := OfCtlDumpGroups(ovsCtlClient)
+	if err != nil {
+		t.Errorf("Error dumping flows: Err %v", err)
+	}
+	var bucketStrs []string
+	for _, bucket := range buckets {
+		bucketStr := fmt.Sprintf("bucket=%s", bucket)
+		bucketStrs = append(bucketStrs, bucketStr)
+	}
+	groupStr := fmt.Sprintf("group_id=%d,type=%s,%s", groupID, groupType, strings.Join(bucketStrs, ","))
+	found := false
+	for _, groupElems := range groupList {
+		groupEntry := fmt.Sprintf("%s,bucket=", groupElems[0])
+		groupEntry = fmt.Sprintf("%s%s", groupEntry, strings.Join(groupElems[1:], ",bucket="))
+		if strings.Contains(groupEntry, groupStr) {
+			found = true
+			break
+		}
+	}
+	if found != expectExists {
+		t.Errorf("Failed to find group:\n%v\nExisting groups:\n%v", groupStr, groupList)
+	}
+}
+
 func OfctlFlowMatch(flowList []string, tableID uint8, flow *ExpectFlow) bool {
 	mtStr := fmt.Sprintf("table=%d, %s ", tableID, flow.MatchStr)
 	aStr := fmt.Sprintf("actions=%s", flow.ActStr)
@@ -80,45 +107,50 @@ func OfctlFlowMatch(flowList []string, tableID uint8, flow *ExpectFlow) bool {
 	return false
 }
 
-func OfctlDumpFlows(brName string, args ...string) ([]string, error) {
-	flowDump, err := runOfctlCmd("dump-flows", brName, args...)
-	if err != nil {
-		return nil, err
-	}
-
-	flowOutStr := string(flowDump)
-	flowDb := strings.Split(flowOutStr, "\n")[1:]
-
-	var flowList []string
-	for _, flow := range flowDb {
+func formatFlowDump(rawFlows []string) []string {
+	flowList := []string{}
+	for _, flow := range rawFlows {
 		felem := strings.Fields(flow)
 		if len(felem) > 2 {
-			felem = append(felem[:1], felem[2:]...)
-			felem = append(felem[:2], felem[4:]...)
+			felem = append(felem[:1], felem[3:]...)
 			fstr := strings.Join(felem, " ")
 			flowList = append(flowList, fstr)
 		}
 	}
-
-	return flowList, nil
+	return flowList
 }
 
-func OfctlDumpTableFlows(brName string, table uint8) ([]string, error) {
-	return OfctlDumpFlows(brName, fmt.Sprintf("table=%d", table))
+func OfctlDumpFlows(ovsCtlClient ovsctl.OVSCtlClient, args ...string) ([]string, error) {
+	rawFlows, err := ovsCtlClient.DumpFlows(args...)
+	if err != nil {
+		return nil, err
+	}
+	return formatFlowDump(rawFlows), nil
 }
 
-func OfctlDeleteFlows(brName string) error {
-	_, err := runOfctlCmd("del-flows", brName)
+func OfctlDumpTableFlows(ovsCtlClient ovsctl.OVSCtlClient, table uint8) ([]string, error) {
+	rawFlows, err := ovsCtlClient.DumpTableFlows(table)
+	if err != nil {
+		return nil, err
+	}
+	return formatFlowDump(rawFlows), nil
+}
+
+func OfctlDeleteFlows(ovsCtlClient ovsctl.OVSCtlClient) error {
+	_, err := ovsCtlClient.RunOfctlCmd("del-flows")
 	return err
 }
 
-func runOfctlCmd(cmd, brName string, args ...string) ([]byte, error) {
-	cmdStr := fmt.Sprintf("ovs-ofctl -O Openflow13 %s %s", cmd, brName)
-	cmdStr = cmdStr + " " + strings.Join(args, " ")
-	out, err := exec.Command("/bin/sh", "-c", cmdStr).Output()
+func OfCtlDumpGroups(ovsCtlClient ovsctl.OVSCtlClient) ([][]string, error) {
+	rawGroupItems, err := ovsCtlClient.DumpGroups()
 	if err != nil {
 		return nil, err
 	}
 
-	return out, nil
+	var groupList [][]string
+	for _, item := range rawGroupItems {
+		elems := strings.Split(item, ",bucket=")
+		groupList = append(groupList, elems)
+	}
+	return groupList, nil
 }

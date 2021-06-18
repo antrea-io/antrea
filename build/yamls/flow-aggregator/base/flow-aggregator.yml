@@ -1,0 +1,153 @@
+# Create a namespace for Flow Aggregator service
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: flow-aggregator
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: flow-aggregator
+  namespace: flow-aggregator
+---
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: flow-aggregator-role
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    resourceNames: ["flow-aggregator-ca"]
+    verbs: ["get", "update"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["create"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: ["flow-aggregator-client-tls"]
+    verbs: ["get", "update"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["create"]
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: flow-aggregator-cluster-role-binding
+subjects:
+  - kind: ServiceAccount
+    name: flow-aggregator
+    namespace: flow-aggregator
+roleRef:
+  kind: ClusterRole
+  name: flow-aggregator-role
+  apiGroup: rbac.authorization.k8s.io
+---
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: flow-exporter-role
+  namespace: flow-aggregator
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    resourceNames: ["flow-aggregator-ca"]
+    verbs: ["get"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: ["flow-aggregator-client-tls"]
+    verbs: ["get"]
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: flow-exporter-role-binding
+  namespace: flow-aggregator
+subjects:
+- kind: ServiceAccount
+  name: antrea-agent
+  namespace: kube-system
+roleRef:
+  kind: Role
+  name: flow-exporter-role
+  apiGroup: rbac.authorization.k8s.io
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: flow-aggregator-cluster-id-reader
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: antrea-cluster-identity-reader
+subjects:
+  - kind: ServiceAccount
+    name: flow-aggregator
+    namespace: flow-aggregator
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: flow-aggregator
+  namespace: flow-aggregator
+spec:
+  selector:
+    app: flow-aggregator
+  ports:
+  - name: ipfix-udp
+    port: 4739
+    protocol: UDP
+    targetPort: 4739
+  - name: ipfix-tcp
+    port: 4739
+    protocol: TCP
+    targetPort: 4739
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: flow-aggregator
+  namespace: flow-aggregator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: flow-aggregator
+  template:
+    spec:
+      containers:
+      - args:
+        - --config
+        - /etc/flow-aggregator/flow-aggregator.conf
+        - --logtostderr=false
+        - --log_dir=/var/log/antrea/flow-aggregator
+        - --alsologtostderr
+        - --log_file_max_size=100
+        - --log_file_max_num=4
+        - --v=0
+        name: flow-aggregator
+        image: flow-aggregator
+        ports:
+          - containerPort: 4739
+        volumeMounts:
+        - mountPath: /etc/flow-aggregator/flow-aggregator.conf
+          name: flow-aggregator-config
+          readOnly: true
+          subPath: flow-aggregator.conf
+        - mountPath: /var/log/antrea/flow-aggregator
+          name: host-var-log-antrea-flow-aggregator
+      nodeSelector:
+        kubernetes.io/os: linux
+        kubernetes.io/arch: amd64
+      serviceAccountName: flow-aggregator
+      volumes:
+      - name: flow-aggregator-config
+        configMap:
+          name: flow-aggregator-configmap
+      - name: host-var-log-antrea-flow-aggregator
+        hostPath:
+          path: /var/log/antrea/flow-aggregator
+          type: DirectoryOrCreate

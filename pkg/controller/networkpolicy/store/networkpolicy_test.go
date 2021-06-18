@@ -25,46 +25,52 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/watch"
 
-	"github.com/vmware-tanzu/antrea/pkg/apis/networking"
-	"github.com/vmware-tanzu/antrea/pkg/apiserver/storage"
-	"github.com/vmware-tanzu/antrea/pkg/controller/types"
+	"antrea.io/antrea/pkg/apis/controlplane"
+	"antrea.io/antrea/pkg/apiserver/storage"
+	"antrea.io/antrea/pkg/controller/types"
 )
 
 func TestWatchNetworkPolicyEvent(t *testing.T) {
-	protocolTCP := networking.ProtocolTCP
-	policyV1 := &types.NetworkPolicy{
+	protocolTCP := controlplane.ProtocolTCP
+	npRef := controlplane.NetworkPolicyReference{
+		Type:      controlplane.K8sNetworkPolicy,
 		Namespace: "foo",
 		Name:      "bar",
-		SpanMeta:  types.SpanMeta{sets.NewString("node1", "node2")},
-		Rules: []networking.NetworkPolicyRule{{
-			Direction: networking.DirectionIn,
-			From:      networking.NetworkPolicyPeer{AddressGroups: []string{"addressGroup1"}},
-			To:        networking.NetworkPolicyPeer{},
-			Services:  []networking.Service{{Protocol: &protocolTCP}},
+		UID:       "id1",
+	}
+	policyV1 := &types.NetworkPolicy{
+		Name:      "bar",
+		SourceRef: &npRef,
+		SpanMeta:  types.SpanMeta{NodeNames: sets.NewString("node1", "node2")},
+		Rules: []controlplane.NetworkPolicyRule{{
+			Direction: controlplane.DirectionIn,
+			From:      controlplane.NetworkPolicyPeer{AddressGroups: []string{"addressGroup1"}},
+			To:        controlplane.NetworkPolicyPeer{},
+			Services:  []controlplane.Service{{Protocol: &protocolTCP}},
 		}},
 		AppliedToGroups: []string{"appliedToGroup1"},
 	}
 	policyV2 := &types.NetworkPolicy{
-		Namespace: "foo",
 		Name:      "bar",
-		SpanMeta:  types.SpanMeta{sets.NewString("node1", "node3")},
-		Rules: []networking.NetworkPolicyRule{{
-			Direction: networking.DirectionIn,
-			From:      networking.NetworkPolicyPeer{AddressGroups: []string{"addressGroup1"}},
-			To:        networking.NetworkPolicyPeer{},
-			Services:  []networking.Service{{Protocol: &protocolTCP}},
+		SourceRef: &npRef,
+		SpanMeta:  types.SpanMeta{NodeNames: sets.NewString("node1", "node3")},
+		Rules: []controlplane.NetworkPolicyRule{{
+			Direction: controlplane.DirectionIn,
+			From:      controlplane.NetworkPolicyPeer{AddressGroups: []string{"addressGroup1"}},
+			To:        controlplane.NetworkPolicyPeer{},
+			Services:  []controlplane.Service{{Protocol: &protocolTCP}},
 		}},
 		AppliedToGroups: []string{"appliedToGroup1"},
 	}
 	policyV3 := &types.NetworkPolicy{
-		Namespace: "foo",
 		Name:      "bar",
-		SpanMeta:  types.SpanMeta{sets.NewString("node1", "node3")},
-		Rules: []networking.NetworkPolicyRule{{
-			Direction: networking.DirectionIn,
-			From:      networking.NetworkPolicyPeer{AddressGroups: []string{"addressGroup2"}},
-			To:        networking.NetworkPolicyPeer{},
-			Services:  []networking.Service{{Protocol: &protocolTCP}},
+		SourceRef: &npRef,
+		SpanMeta:  types.SpanMeta{NodeNames: sets.NewString("node1", "node3")},
+		Rules: []controlplane.NetworkPolicyRule{{
+			Direction: controlplane.DirectionIn,
+			From:      controlplane.NetworkPolicyPeer{AddressGroups: []string{"addressGroup2"}},
+			To:        controlplane.NetworkPolicyPeer{},
+			Services:  []controlplane.Service{{Protocol: &protocolTCP}},
 		}},
 		AppliedToGroups: []string{"appliedToGroup1"},
 	}
@@ -84,13 +90,16 @@ func TestWatchNetworkPolicyEvent(t *testing.T) {
 				store.Update(policyV2)
 			},
 			expected: []watch.Event{
-				{watch.Added, &networking.NetworkPolicy{
-					ObjectMeta:      metav1.ObjectMeta{Namespace: "foo", Name: "bar"},
+				{Type: watch.Bookmark, Object: &controlplane.NetworkPolicy{}},
+				{Type: watch.Added, Object: &controlplane.NetworkPolicy{
+					ObjectMeta:      metav1.ObjectMeta{Name: "bar"},
+					SourceRef:       &npRef,
 					Rules:           policyV1.Rules,
 					AppliedToGroups: policyV1.AppliedToGroups,
 				}},
-				{watch.Modified, &networking.NetworkPolicy{
-					ObjectMeta:      metav1.ObjectMeta{Namespace: "foo", Name: "bar"},
+				{Type: watch.Modified, Object: &controlplane.NetworkPolicy{
+					ObjectMeta:      metav1.ObjectMeta{Name: "bar"},
+					SourceRef:       &npRef,
 					Rules:           policyV2.Rules,
 					AppliedToGroups: policyV2.AppliedToGroups,
 				}},
@@ -110,18 +119,22 @@ func TestWatchNetworkPolicyEvent(t *testing.T) {
 				store.Update(policyV1)
 			},
 			expected: []watch.Event{
-				{watch.Added, &networking.NetworkPolicy{
-					ObjectMeta:      metav1.ObjectMeta{Namespace: "foo", Name: "bar"},
+				{Type: watch.Bookmark, Object: &controlplane.NetworkPolicy{}},
+				{Type: watch.Added, Object: &controlplane.NetworkPolicy{
+					ObjectMeta:      metav1.ObjectMeta{Name: "bar"},
+					SourceRef:       &npRef,
 					Rules:           policyV2.Rules,
 					AppliedToGroups: policyV2.AppliedToGroups,
 				}},
-				{watch.Modified, &networking.NetworkPolicy{
-					ObjectMeta:      metav1.ObjectMeta{Namespace: "foo", Name: "bar"},
+				{Type: watch.Modified, Object: &controlplane.NetworkPolicy{
+					ObjectMeta:      metav1.ObjectMeta{Name: "bar"},
+					SourceRef:       &npRef,
 					Rules:           policyV3.Rules,
 					AppliedToGroups: policyV3.AppliedToGroups,
 				}},
-				{watch.Deleted, &networking.NetworkPolicy{
-					ObjectMeta: metav1.ObjectMeta{Namespace: "foo", Name: "bar"},
+				{Type: watch.Deleted, Object: &controlplane.NetworkPolicy{
+					ObjectMeta: metav1.ObjectMeta{Name: "bar"},
+					SourceRef:  &npRef,
 				}},
 			},
 		},
@@ -152,22 +165,34 @@ func TestWatchNetworkPolicyEvent(t *testing.T) {
 
 func TestGetNetworkPolicyByIndex(t *testing.T) {
 	policy1 := &types.NetworkPolicy{
-		Namespace: "foo",
-		Name:      "bar",
-		Rules: []networking.NetworkPolicyRule{{
-			Direction: networking.DirectionIn,
-			From:      networking.NetworkPolicyPeer{AddressGroups: []string{"addressGroup1"}},
-			To:        networking.NetworkPolicyPeer{},
+		Name: "bar",
+		UID:  "uid-1",
+		SourceRef: &controlplane.NetworkPolicyReference{
+			Type:      controlplane.K8sNetworkPolicy,
+			Namespace: "foo",
+			Name:      "bar",
+			UID:       "uid-1",
+		},
+		Rules: []controlplane.NetworkPolicyRule{{
+			Direction: controlplane.DirectionIn,
+			From:      controlplane.NetworkPolicyPeer{AddressGroups: []string{"addressGroup1"}},
+			To:        controlplane.NetworkPolicyPeer{},
 		}},
 		AppliedToGroups: []string{"appliedToGroup1"},
 	}
 	policy2 := &types.NetworkPolicy{
-		Namespace: "foo2",
-		Name:      "bar2",
-		Rules: []networking.NetworkPolicyRule{{
-			Direction: networking.DirectionIn,
-			From:      networking.NetworkPolicyPeer{AddressGroups: []string{"addressGroup1", "addressGroup2"}},
-			To:        networking.NetworkPolicyPeer{},
+		Name: "bar2",
+		UID:  "uid-2",
+		SourceRef: &controlplane.NetworkPolicyReference{
+			Type:      controlplane.K8sNetworkPolicy,
+			Namespace: "foo2",
+			Name:      "bar2",
+			UID:       "uid-2",
+		},
+		Rules: []controlplane.NetworkPolicyRule{{
+			Direction: controlplane.DirectionIn,
+			From:      controlplane.NetworkPolicyPeer{AddressGroups: []string{"addressGroup1", "addressGroup2"}},
+			To:        controlplane.NetworkPolicyPeer{},
 		}},
 		AppliedToGroups: []string{"appliedToGroup1", "appliedToGroup2"},
 	}

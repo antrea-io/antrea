@@ -28,27 +28,18 @@ secondary_ctas:
   cta1:
     title: View Latest Release
     url: https://github.com/vmware-tanzu/antrea/releases
-    content: Antrea v0.3.0 is now available.
+    content: Antrea {{ site.latest }} is now available.
   cta2:
-    title: Get involved and start contributing today.
-    url: https://github.com/vmware-tanzu/antrea
-    content: Antrea is hosted on GitHub. Get involved and start contributing today.
-#reference:
-#  title: Getting Sonobuoy
-#  content: Lorem ipsum dolor sit amet....
-#  links: 
-#    ISO: http://www.example.com
-#    OVA: http://www.example.com
-#    Amazon Machine Image: http://www.example.com
-#    Google Compute Engine Image: http://www.example.com
-#    Azure VHD: http://www.example.com
+    title: CNCF Webinar
+    url: https://www.cncf.io/webinars/securing-and-accelerating-the-kubernetes-cni-data-plane-with-project-antrea-and-nvidia-mellanox-connectx-smartnics/
+    content: We recently presented a deep-dive on Antrea and demonstrated hardware offload with NVIDIA Mellanox ConnectX SmartNICs.
 ---
 <div class="home-hero bg-color-{{ site.hero.background-color }}" style="background-image: url('{{ page.hero.banner }}')">
   <div class="section">
     <div class="section-content">
       <div class="hero-content">
         <h1 class="mb-3">{{ page.hero.headline }}</h1>
-        <p>{{ page.hero.content }}</p>        
+        <p>{{ page.hero.content }}</p>
       </div>
       {% if page.hero.cta_link1 or page.hero.cta_link2 %}
       <div class="hero-cta mt-4">
@@ -122,7 +113,7 @@ secondary_ctas:
         <h6 class="mb-1">
           <a href="{{ page.secondary_ctas.cta1.url }}" class="color-white">{{ page.secondary_ctas.cta1.title }}</a>
         </h6>
-        <p class="mb-0">{{ page.secondary_ctas.cta1.content }}</p>
+        <p class="mb-0">{{ page.secondary_ctas.cta1.content | flatify}}</p>
       </div>
       <div class="col-sm-5 offset-sm-2">
         <h6 class="mb-1">

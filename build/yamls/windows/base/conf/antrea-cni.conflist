@@ -1,0 +1,13 @@
+{
+    "cniVersion":"0.3.0",
+    "name": "antrea",
+    "plugins": [
+        {
+            "type": "antrea",
+            "ipam": {
+                "type": "host-local"
+            },
+            "capabilities": {"dns": true}
+        }
+    ]
+}

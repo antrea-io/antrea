@@ -16,11 +16,13 @@ package main
 
 import (
 	"errors"
-
 	"io/ioutil"
 
 	"github.com/spf13/pflag"
 	"gopkg.in/yaml.v2"
+
+	"antrea.io/antrea/pkg/apis"
+	"antrea.io/antrea/pkg/features"
 )
 
 type Options struct {
@@ -32,7 +34,11 @@ type Options struct {
 
 func newOptions() *Options {
 	return &Options{
-		config: new(ControllerConfig),
+		config: &ControllerConfig{
+			EnablePrometheusMetrics: true,
+			SelfSignedCert:          true,
+			LegacyCRDMirroring:      true,
+		},
 	}
 }
 
@@ -44,33 +50,33 @@ func (o *Options) addFlags(fs *pflag.FlagSet) {
 // complete completes all the required options.
 func (o *Options) complete(args []string) error {
 	if len(o.configFile) > 0 {
-		c, err := o.loadConfigFromFile(o.configFile)
-		if err != nil {
+		if err := o.loadConfigFromFile(); err != nil {
 			return err
 		}
-		o.config = c
 	}
-	return nil
+	o.setDefaults()
+	return features.DefaultMutableFeatureGate.SetFromMap(o.config.FeatureGates)
 }
 
 // validate validates all the required options.
 func (o *Options) validate(args []string) error {
 	if len(args) != 0 {
-		return errors.New("No arguments are supported")
+		return errors.New("no positional arguments are supported")
 	}
 	return nil
 }
 
-func (o *Options) loadConfigFromFile(file string) (*ControllerConfig, error) {
-	data, err := ioutil.ReadFile(file)
+func (o *Options) loadConfigFromFile() error {
+	data, err := ioutil.ReadFile(o.configFile)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	var c ControllerConfig
-	err = yaml.UnmarshalStrict(data, &c)
-	if err != nil {
-		return nil, err
+	return yaml.UnmarshalStrict(data, &o.config)
+}
+
+func (o *Options) setDefaults() {
+	if o.config.APIPort == 0 {
+		o.config.APIPort = apis.AntreaControllerAPIPort
 	}
-	return &c, nil
 }

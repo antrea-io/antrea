@@ -1,0 +1,1 @@
+Package proxy is copied from [k8s.io/kubernetes@/v1.17.6](https://github.com/kubernetes/kubernetes/tree/v1.17.6) to avoid importing the whole kubernetes repo.
