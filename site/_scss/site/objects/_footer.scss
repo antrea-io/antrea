@@ -29,10 +29,19 @@
     font-weight: $font-weight-light;
     color: $footer-copyright;
   }
+  small {
+    color: $footer-copyright;
+    &.xs {
+      font-size: .75rem;
+    }
+    @include media-breakpoint-down(sm) {
+      display: block;
+    }
+  }
   .logo {
-    max-width: 146px;
+    max-width: 160px;
     height: auto;
-    margin-left: 30px;
+    margin-right: 15px;
   }
   .vm-logo {
     font-size: .75rem;
@@ -40,5 +49,10 @@
       max-width: 75px;
       margin-left: 30px;
     }
+  }
+  .cncf-logo {
+    height: auto;
+    width: 150px;
+    margin-right: 10px;
   }
 }
