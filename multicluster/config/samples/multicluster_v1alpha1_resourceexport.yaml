@@ -1,0 +1,7 @@
+apiVersion: multicluster.crd.antrea.io/v1alpha1
+kind: ResourceExport
+metadata:
+  name: resourceexport-sample
+spec:
+  # Add fields here
+  foo: bar
