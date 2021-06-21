@@ -3,22 +3,34 @@ VAGRANTFILE_API_VERSION = "2"
 NUM_WORKERS = 1
 
 MODE = ENV['K8S_IP_FAMILY'] || "v4"
-if MODE != "v4" && MODE != "v6"
-  raise "K8S_IP_FAMILY env variable should be one of 'v4' or 'v6'"
+if MODE != "v4" && MODE != "v6" && MODE != "dual"
+  raise "K8S_IP_FAMILY env variable should be one of 'v4', 'v6' or 'dual'"
 end
 
 K8S_POD_NETWORK_V4_CIDR = "10.10.0.0/16"
 K8S_POD_NETWORK_V6_CIDR = "fd02::/48"
-K8S_POD_NETWORK_CIDR = (MODE == "v4") ? K8S_POD_NETWORK_V4_CIDR : K8S_POD_NETWORK_V6_CIDR
+if MODE == "v4"
+  K8S_POD_NETWORK_CIDR = K8S_POD_NETWORK_V4_CIDR
+elsif MODE == "v6"
+  K8S_POD_NETWORK_CIDR = K8S_POD_NETWORK_V6_CIDR
+else
+  K8S_POD_NETWORK_CIDR = K8S_POD_NETWORK_V4_CIDR + "," + K8S_POD_NETWORK_V6_CIDR
+end
 
 # Only used for IPv6 clusters
 K8S_NODE_CP_GW_V4_IP = "10.10.0.1"
 K8S_NODE_CP_GW_V6_IP = "fd02::1"
-K8S_NODE_CP_GW_IP = (MODE == "v4") ? K8S_NODE_CP_GW_V4_IP : K8S_NODE_CP_GW_V6_IP
+K8S_NODE_CP_GW_IP = (MODE == "v6") ? K8S_NODE_CP_GW_V6_IP : K8S_NODE_CP_GW_V4_IP
 
 K8S_SERVICE_NETWORK_V4_CIDR = "10.96.0.0/12"
 K8S_SERVICE_NETWORK_V6_CIDR = "fd03::/112"
-K8S_SERVICE_NETWORK_CIDR = (MODE == "v4") ? K8S_SERVICE_NETWORK_V4_CIDR : K8S_SERVICE_NETWORK_V6_CIDR
+if MODE == "v4"
+  K8S_SERVICE_NETWORK_CIDR = K8S_SERVICE_NETWORK_V4_CIDR
+elsif MODE == "v6"
+  K8S_SERVICE_NETWORK_CIDR = K8S_SERVICE_NETWORK_V6_CIDR
+else
+  K8S_SERVICE_NETWORK_CIDR = K8S_SERVICE_NETWORK_V4_CIDR + "," + K8S_SERVICE_NETWORK_V6_CIDR
+end
 
 NODE_NETWORK_V4_PREFIX = "192.168.77."
 NODE_NETWORK_V6_PREFIX = "fd3b:fcf5:3e92:d732::"
@@ -46,10 +58,21 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     node.vm.hostname = "k8s-node-control-plane"
     node_ipv4 = NODE_NETWORK_V4_PREFIX + "100"
     node_ipv6 = NODE_NETWORK_V6_PREFIX + "100"
-    node_ip = (MODE == "v4") ? node_ipv4 : node_ipv6
-    node.vm.network "private_network", ip: node_ip
+    if MODE != "v6"
+      node.vm.network "private_network", ip: node_ipv4
+    end
+    if MODE != "v4"
+      node.vm.network "private_network", ip: node_ipv6
+    end
+    if MODE == "v4"
+      node_ip = node_ipv4
+    elsif MODE == "v6"
+      node_ip = node_ipv6
+    else
+      node_ip = node_ipv4 + "," + node_ipv6
+    end
 
-    if MODE == "v6"
+    if MODE != "v4"
       # add a fake default route for IPv6: required for ClusterIP traffic even though it is DNATed
       node.vm.provision :shell, privileged: true, inline: "ip -6 route replace default via " + NODE_NETWORK_V6_PREFIX + "200"
     end
@@ -64,7 +87,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
         node_name: "k8s-node-control-plane",
         k8s_pod_network_cidr: K8S_POD_NETWORK_CIDR,
         k8s_service_network_cidr: K8S_SERVICE_NETWORK_CIDR,
-        k8s_api_server_ip: node_ip,
+        k8s_api_server_ip: (MODE == "v6") ? node_ipv6 : node_ipv4,
         k8s_ip_family: MODE,
         k8s_antrea_gw_ip: K8S_NODE_CP_GW_IP,
       }
@@ -76,10 +99,21 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
       node.vm.hostname = "k8s-node-worker-#{node_id}"
       node_ipv4 = NODE_NETWORK_V4_PREFIX + "#{100 + node_id}"
       node_ipv6 = NODE_NETWORK_V6_PREFIX + "#{100 + node_id}"
-      node_ip = (MODE == "v4") ? node_ipv4 : node_ipv6
-      node.vm.network "private_network", ip: node_ip
+      if MODE != "v6"
+        node.vm.network "private_network", ip: node_ipv4
+      end
+      if MODE != "v4"
+        node.vm.network "private_network", ip: node_ipv6
+      end
+      if MODE == "v4"
+        node_ip = node_ipv4
+      elsif MODE == "v6"
+        node_ip = node_ipv6
+      else
+        node_ip = node_ipv4 + "," + node_ipv6
+      end
 
-      if MODE == "v6"
+      if MODE != "v4"
         # add a fake default route for IPv6: required for ClusterIP traffic even though it is DNATed
         node.vm.provision :shell, privileged: true, inline: "ip -6 route replace default via " + NODE_NETWORK_V6_PREFIX + "200"
       end
