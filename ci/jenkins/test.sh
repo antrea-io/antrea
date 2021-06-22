@@ -374,6 +374,8 @@ function run_e2e {
 
     set +e
     mkdir -p `pwd`/antrea-test-logs
+    # HACK: see https://github.com/antrea-io/antrea/issues/2292
+    go mod edit -replace github.com/moby/spdystream=github.com/antoninbas/spdystream@v0.2.1 && go mod tidy
     go test -v antrea.io/antrea/test/e2e --logs-export-dir `pwd`/antrea-test-logs --provider remote -timeout=100m --prometheus
     if [[ "$?" != "0" ]]; then
         TEST_FAILURE=true
