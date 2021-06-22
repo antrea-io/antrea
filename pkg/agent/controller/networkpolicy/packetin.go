@@ -59,7 +59,7 @@ const (
 
 var (
 	AntreaPolicyLogger *log.Logger
-	logDeduplication map[string]*logDedup
+	logDeduplication   map[string]*logDedup
 )
 
 // logInfo will be set by retrieving info from packetin and register
@@ -74,12 +74,12 @@ type logInfo struct {
 	protocolStr string // protocol of the traffic logged
 }
 
-// TODO
+// logDedup will be used as 1 sec buffer for log deduplication
 type logDedup struct {
-	count		int64
-	dupLogInfo	string
-	initTime	time.Time
-	bufferTimer	*time.Timer
+	count       int64       // record count of duplicate log
+	dupLogInfo  string      // initial log used for deleting buffer
+	initTime    time.Time   // initial time upon receiving packet log
+	bufferTimer *time.Timer // 1 sec buffer for each log
 }
 
 // initLogger is called while newing Antrea network policy agent controller.
@@ -157,28 +157,30 @@ func (c *Controller) logPacket(pktIn *ofctrl.PacketIn) error {
 		return fmt.Errorf("received error while handling packetin for NetworkPolicy: %v", err)
 	}
 
-	// TODO
+	// Create 1 sec buffers for deduplicating non-Allow packet log.
 	logMsg := fmt.Sprintf("%s %s %s %s SRC: %s DEST: %s %d %s", ob.tableName, ob.npRef, ob.disposition, ob.ofPriority, ob.srcIP, ob.destIP, ob.pktLength, ob.protocolStr)
 	if ob.disposition == openflow.DispositionToString[openflow.DispositionAllow] {
 		AntreaPolicyLogger.Printf(logMsg)
 	} else {
 		_, ok := logDeduplication[logMsg]
+		// Increase count and renew buffer if duplicated within 1 sec, create buffer otherwise.
 		if ok {
 			logDeduplication[logMsg].count++
 			logDeduplication[logMsg].bufferTimer.Reset(time.Second)
 		} else {
-			record := logDedup{1,logMsg, time.Now(), time.NewTimer(time.Second)}
+			record := logDedup{1, logMsg, time.Now(), time.NewTimer(time.Second)}
+			logDeduplication[logMsg] = &record
 
+			// Go routine for logging when buffer timer stops.
 			go func(r *logDedup) {
-				<- r.bufferTimer.C
+				<-r.bufferTimer.C
 				if r.count == 1 {
 					AntreaPolicyLogger.Printf(logMsg)
 				} else {
-					AntreaPolicyLogger.Printf("<-%d %d-> %s", r.count, time.Since(r.initTime), logDeduplication[r.dupLogInfo])
+					AntreaPolicyLogger.Printf("<-%d %s-> %s", r.count, time.Since(r.initTime), r.dupLogInfo)
 				}
+				delete(logDeduplication, r.dupLogInfo)
 			}(&record)
-
-			logDeduplication[logMsg] = &record
 		}
 	}
 	return nil
