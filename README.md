@@ -101,7 +101,7 @@ Also check out [@ProjectAntrea](https://twitter.com/ProjectAntrea) on Twitter!
 * **Easy deployment**: Antrea is deployed by applying a single YAML manifest
   file.
 
-Refer to the [Changelog](CHANGELOG.md) for a detailed list of features
+Refer to the [Changelogs](CHANGELOG/README.md) for a detailed list of features
 introduced for each version release.
 
 ## Adopters
