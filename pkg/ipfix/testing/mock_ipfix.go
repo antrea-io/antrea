@@ -225,6 +225,20 @@ func (m *MockIPFIXAggregationProcess) EXPECT() *MockIPFIXAggregationProcessMockR
 	return m.recorder
 }
 
+// AreCorrelatedFieldsFilled mocks base method
+func (m *MockIPFIXAggregationProcess) AreCorrelatedFieldsFilled(arg0 intermediate.AggregationFlowRecord) bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AreCorrelatedFieldsFilled", arg0)
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// AreCorrelatedFieldsFilled indicates an expected call of AreCorrelatedFieldsFilled
+func (mr *MockIPFIXAggregationProcessMockRecorder) AreCorrelatedFieldsFilled(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AreCorrelatedFieldsFilled", reflect.TypeOf((*MockIPFIXAggregationProcess)(nil).AreCorrelatedFieldsFilled), arg0)
+}
+
 // ForAllExpiredFlowRecordsDo mocks base method
 func (m *MockIPFIXAggregationProcess) ForAllExpiredFlowRecordsDo(arg0 intermediate.FlowKeyRecordMapCallBack) error {
 	m.ctrl.T.Helper()
@@ -253,18 +267,32 @@ func (mr *MockIPFIXAggregationProcessMockRecorder) GetExpiryFromExpirePriorityQu
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetExpiryFromExpirePriorityQueue", reflect.TypeOf((*MockIPFIXAggregationProcess)(nil).GetExpiryFromExpirePriorityQueue))
 }
 
-// IsMetadataFilled mocks base method
-func (m *MockIPFIXAggregationProcess) IsMetadataFilled(arg0 intermediate.AggregationFlowRecord) bool {
+// IsAggregatedRecordIPv4 mocks base method
+func (m *MockIPFIXAggregationProcess) IsAggregatedRecordIPv4(arg0 intermediate.AggregationFlowRecord) bool {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "IsMetadataFilled", arg0)
+	ret := m.ctrl.Call(m, "IsAggregatedRecordIPv4", arg0)
 	ret0, _ := ret[0].(bool)
 	return ret0
 }
 
-// IsMetadataFilled indicates an expected call of IsMetadataFilled
-func (mr *MockIPFIXAggregationProcessMockRecorder) IsMetadataFilled(arg0 interface{}) *gomock.Call {
+// IsAggregatedRecordIPv4 indicates an expected call of IsAggregatedRecordIPv4
+func (mr *MockIPFIXAggregationProcessMockRecorder) IsAggregatedRecordIPv4(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsMetadataFilled", reflect.TypeOf((*MockIPFIXAggregationProcess)(nil).IsMetadataFilled), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsAggregatedRecordIPv4", reflect.TypeOf((*MockIPFIXAggregationProcess)(nil).IsAggregatedRecordIPv4), arg0)
+}
+
+// IsExporterOfAggregatedRecordIPv4 mocks base method
+func (m *MockIPFIXAggregationProcess) IsExporterOfAggregatedRecordIPv4(arg0 intermediate.AggregationFlowRecord) bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IsExporterOfAggregatedRecordIPv4", arg0)
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// IsExporterOfAggregatedRecordIPv4 indicates an expected call of IsExporterOfAggregatedRecordIPv4
+func (mr *MockIPFIXAggregationProcessMockRecorder) IsExporterOfAggregatedRecordIPv4(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsExporterOfAggregatedRecordIPv4", reflect.TypeOf((*MockIPFIXAggregationProcess)(nil).IsExporterOfAggregatedRecordIPv4), arg0)
 }
 
 // ResetStatElementsInRecord mocks base method
@@ -281,16 +309,16 @@ func (mr *MockIPFIXAggregationProcessMockRecorder) ResetStatElementsInRecord(arg
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResetStatElementsInRecord", reflect.TypeOf((*MockIPFIXAggregationProcess)(nil).ResetStatElementsInRecord), arg0)
 }
 
-// SetMetadataFilled mocks base method
-func (m *MockIPFIXAggregationProcess) SetMetadataFilled(arg0 intermediate.AggregationFlowRecord) {
+// SetCorrelatedFieldsFilled mocks base method
+func (m *MockIPFIXAggregationProcess) SetCorrelatedFieldsFilled(arg0 *intermediate.AggregationFlowRecord) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "SetMetadataFilled", arg0)
+	m.ctrl.Call(m, "SetCorrelatedFieldsFilled", arg0)
 }
 
-// SetMetadataFilled indicates an expected call of SetMetadataFilled
-func (mr *MockIPFIXAggregationProcessMockRecorder) SetMetadataFilled(arg0 interface{}) *gomock.Call {
+// SetCorrelatedFieldsFilled indicates an expected call of SetCorrelatedFieldsFilled
+func (mr *MockIPFIXAggregationProcessMockRecorder) SetCorrelatedFieldsFilled(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetMetadataFilled", reflect.TypeOf((*MockIPFIXAggregationProcess)(nil).SetMetadataFilled), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetCorrelatedFieldsFilled", reflect.TypeOf((*MockIPFIXAggregationProcess)(nil).SetCorrelatedFieldsFilled), arg0)
 }
 
 // Start mocks base method
