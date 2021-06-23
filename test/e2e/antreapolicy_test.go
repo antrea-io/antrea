@@ -17,6 +17,7 @@ package e2e
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -1685,7 +1686,7 @@ func testACNPPriorityConflictingRule(t *testing.T) {
 
 // testACNPPriorityConflictingRule tests that if there are two rules in the cluster that conflicts with
 // each other, the rule with higher precedence will prevail.
-func testACNPRulePrioirty(t *testing.T) {
+func testACNPRulePriority(t *testing.T) {
 	builder1 := &ClusterNetworkPolicySpecBuilder{}
 	// acnp-deny will apply to all pods in namespace x
 	builder1 = builder1.SetName("acnp-deny").
@@ -1910,7 +1911,7 @@ func testANPBasic(t *testing.T) {
 // testANPMultipleAppliedTo tests traffic from X/B to Y/A on port 80 will be dropped, after applying Antrea
 // NetworkPolicy that applies to multiple AppliedTos, one of which doesn't select any Pod. It also ensures the Policy is
 // updated correctly when one of its AppliedToGroup starts and stops selecting Pods.
-func testANPMultipleAppliedTo(t *testing.T, singleRule bool) {
+func testANPMultipleAppliedTo(t *testing.T, data *TestData, singleRule bool) {
 	tempLabel := randName("temp-")
 	builder := &AntreaNetworkPolicySpecBuilder{}
 	builder = builder.SetName("y", "np-multiple-appliedto").SetPriority(1.0)
@@ -1930,9 +1931,9 @@ func testANPMultipleAppliedTo(t *testing.T, singleRule bool) {
 	reachability := NewReachability(allPods, Connected)
 	reachability.Expect(Pod("x/b"), Pod("y/a"), Dropped)
 
-	_, err := k8sUtils.CreateOrUpdateANP(builder.Get())
+	anp, err := k8sUtils.CreateOrUpdateANP(builder.Get())
 	failOnError(err, t)
-	time.Sleep(networkPolicyDelay)
+	failOnError(data.waitForANPRealized(t, anp.Namespace, anp.Name), t)
 	k8sUtils.Validate(allPods, reachability, 80, v1.ProtocolTCP)
 	_, wrong, _ := reachability.Summary()
 	if wrong != 0 {
@@ -1986,15 +1987,23 @@ func testAuditLoggingBasic(t *testing.T, data *TestData) {
 		nil, nil, false, nil, crdv1alpha1.RuleActionDrop, "", "")
 	builder.AddEgressLogging()
 
-	_, err := k8sUtils.CreateOrUpdateACNP(builder.Get())
+	acnp, err := k8sUtils.CreateOrUpdateACNP(builder.Get())
 	failOnError(err, t)
-	time.Sleep(networkPolicyDelay)
+	failOnError(data.waitForACNPRealized(t, acnp.Name), t)
 
 	// generate some traffic that will be dropped by test-log-acnp-deny
-	k8sUtils.Probe("x", "a", "z", "a", p80, v1.ProtocolTCP)
-	k8sUtils.Probe("x", "a", "z", "b", p80, v1.ProtocolTCP)
-	k8sUtils.Probe("x", "a", "z", "c", p80, v1.ProtocolTCP)
-	time.Sleep(networkPolicyDelay)
+	var wg sync.WaitGroup
+	oneProbe := func(ns1, pod1, ns2, pod2 string) {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			k8sUtils.Probe(ns1, pod1, ns2, pod2, p80, v1.ProtocolTCP)
+		}()
+	}
+	oneProbe("x", "a", "z", "a")
+	oneProbe("x", "a", "z", "b")
+	oneProbe("x", "a", "z", "c")
+	wg.Wait()
 
 	podXA, err := k8sUtils.GetPodByLabel("x", "a")
 	if err != nil {
@@ -2004,30 +2013,55 @@ func testAuditLoggingBasic(t *testing.T, data *TestData) {
 	nodeName := podXA.Spec.NodeName
 	antreaPodName, err := data.getAntreaPodOnNode(nodeName)
 	if err != nil {
-		t.Errorf("error occurred when trying to get the Antrea Agent pod running on node %s: %v", nodeName, err)
+		t.Errorf("Error occurred when trying to get the Antrea Agent Pod running on Node %s: %v", nodeName, err)
 	}
 	cmd := []string{"cat", logDir + logfileName}
-	stdout, stderr, err := data.runCommandFromPod(antreaNamespace, antreaPodName, "antrea-agent", cmd)
-	if err != nil || stderr != "" {
-		t.Errorf("error occurred when inspecting the audit log file. err: %v, stderr: %v", err, stderr)
-	}
-	assert.Equalf(t, true, strings.Contains(stdout, "test-log-acnp-deny"), "audit log does not contain entries for test-log-acnp-deny")
 
-	destinations := []string{"z/a", "z/b", "z/c"}
-	srcIPs, _ := podIPs["x/a"]
-	for _, d := range destinations {
-		dstIPs, _ := podIPs[d]
-		for i := 0; i < len(srcIPs); i++ {
-			for j := 0; j < len(dstIPs); j++ {
-				if strings.Contains(srcIPs[i], ".") == strings.Contains(dstIPs[j], ".") {
+	if err := wait.Poll(1*time.Second, 10*time.Second, func() (bool, error) {
+		stdout, stderr, err := data.runCommandFromPod(antreaNamespace, antreaPodName, "antrea-agent", cmd)
+		if err != nil || stderr != "" {
+			// file may not exist yet
+			t.Logf("Error when printing the audit log file, err: %v, stderr: %v", err, stderr)
+			return false, nil
+		}
+		if !strings.Contains(stdout, "test-log-acnp-deny") {
+			t.Logf("Audit log file does not contain entries for 'test-log-acnp-deny' yet")
+			return false, nil
+		}
+
+		destinations := []string{"z/a", "z/b", "z/c"}
+		srcIPs, _ := podIPs["x/a"]
+		var expectedNumEntries, actualNumEntries int
+		for _, d := range destinations {
+			dstIPs, _ := podIPs[d]
+			for i := 0; i < len(srcIPs); i++ {
+				for j := 0; j < len(dstIPs); j++ {
+					// only look for an entry in the audit log file if srcIP and
+					// dstIP are of the same family
+					if strings.Contains(srcIPs[i], ".") != strings.Contains(dstIPs[j], ".") {
+						continue
+					}
+					expectedNumEntries += 1
 					// The audit log should contain log entry `... Drop <ofPriority> SRC: <x/a IP> DEST: <z/* IP> ...`
-					pattern := `Drop [0-9]+ SRC: ` + srcIPs[i] + ` DEST: ` + dstIPs[j]
-					assert.Regexp(t, pattern, stdout, "audit log does not contain expected entry for x/a to %s", d)
+					re := regexp.MustCompile(`Drop [0-9]+ SRC: ` + srcIPs[i] + ` DEST: ` + dstIPs[j])
+					if re.MatchString(stdout) {
+						actualNumEntries += 1
+					} else {
+						t.Logf("Audit log does not contain expected entry for x/a (%s) to %s (%s)", srcIPs[i], d, dstIPs[j])
+					}
 					break
 				}
 			}
 		}
+		if actualNumEntries != expectedNumEntries {
+			t.Logf("Missing entries in audit log: expected %d but found %d", expectedNumEntries, actualNumEntries)
+			return false, nil
+		}
+		return true, nil
+	}); err != nil {
+		t.Errorf("Error when polling audit log files for required entries: %v", err)
 	}
+
 	failOnError(k8sUtils.CleanACNPs(), t)
 }
 
@@ -2669,15 +2703,15 @@ func TestAntreaPolicy(t *testing.T) {
 		t.Run("Case=ACNPRejectIngressUDP", func(t *testing.T) { testACNPRejectIngress(t, data, v1.ProtocolUDP) })
 		t.Run("Case=ACNPNoEffectOnOtherProtocols", func(t *testing.T) { testACNPNoEffectOnOtherProtocols(t) })
 		t.Run("Case=ACNPBaselinePolicy", func(t *testing.T) { testBaselineNamespaceIsolation(t) })
-		t.Run("Case=ACNPPrioirtyOverride", func(t *testing.T) { testACNPPriorityOverride(t) })
+		t.Run("Case=ACNPPriorityOverride", func(t *testing.T) { testACNPPriorityOverride(t) })
 		t.Run("Case=ACNPTierOverride", func(t *testing.T) { testACNPTierOverride(t) })
 		t.Run("Case=ACNPCustomTiers", func(t *testing.T) { testACNPCustomTiers(t) })
 		t.Run("Case=ACNPPriorityConflictingRule", func(t *testing.T) { testACNPPriorityConflictingRule(t) })
-		t.Run("Case=ACNPRulePriority", func(t *testing.T) { testACNPRulePrioirty(t) })
+		t.Run("Case=ACNPRulePriority", func(t *testing.T) { testACNPRulePriority(t) })
 		t.Run("Case=ANPPortRange", func(t *testing.T) { testANPPortRange(t) })
 		t.Run("Case=ANPBasic", func(t *testing.T) { testANPBasic(t) })
-		t.Run("Case=testANPMultipleAppliedToSingleRule", func(t *testing.T) { testANPMultipleAppliedTo(t, true) })
-		t.Run("Case=testANPMultipleAppliedToMultipleRules", func(t *testing.T) { testANPMultipleAppliedTo(t, false) })
+		t.Run("Case=testANPMultipleAppliedToSingleRule", func(t *testing.T) { testANPMultipleAppliedTo(t, data, true) })
+		t.Run("Case=testANPMultipleAppliedToMultipleRules", func(t *testing.T) { testANPMultipleAppliedTo(t, data, false) })
 		t.Run("Case=AppliedToPerRule", func(t *testing.T) { testAppliedToPerRule(t) })
 		t.Run("Case=ACNPNamespaceIsolation", func(t *testing.T) { testACNPNamespaceIsolation(t, data) })
 		t.Run("Case=ACNPClusterGroupEgressRulePodsAToCGWithNsZ", func(t *testing.T) { testACNPEgressRulePodsAToCGWithNsZ(t) })
@@ -2765,8 +2799,8 @@ func TestAntreaPolicyStatus(t *testing.T) {
 }
 
 // waitForANPRealized waits untils an ANP is realized and returns, or times out. A policy is
-// considered realized when its Status has been updated with DesiredNodesRealized > 0 and
-// CurrentNodesRealized == DesiredNodesRealized.
+// considered realized when its Status has been updated so that the ObservedGeneration matches the
+// resource's Generation and the Phase is set to Realized.
 func (data *TestData) waitForANPRealized(t *testing.T, namespace string, name string) error {
 	t.Logf("Waiting for ANP '%s/%s' to be realized", namespace, name)
 	if err := wait.Poll(100*time.Millisecond, policyRealizedTimeout, func() (bool, error) {
@@ -2774,7 +2808,7 @@ func (data *TestData) waitForANPRealized(t *testing.T, namespace string, name st
 		if err != nil {
 			return false, err
 		}
-		return anp.Status.DesiredNodesRealized > 0 && anp.Status.CurrentNodesRealized == anp.Status.DesiredNodesRealized, nil
+		return anp.Status.ObservedGeneration == anp.Generation && anp.Status.Phase == crdv1alpha1.NetworkPolicyRealized, nil
 	}); err != nil {
 		return fmt.Errorf("error when waiting for ANP '%s/%s' to be realized: %v", namespace, name, err)
 	}
@@ -2782,8 +2816,8 @@ func (data *TestData) waitForANPRealized(t *testing.T, namespace string, name st
 }
 
 // waitForACNPRealized waits untils an ACNP is realized and returns, or times out. A policy is
-// considered realized when its Status has been updated with DesiredNodesRealized > 0 and
-// CurrentNodesRealized == DesiredNodesRealized.
+// considered realized when its Status has been updated so that the ObservedGeneration matches the
+// resource's Generation and the Phase is set to Realized.
 func (data *TestData) waitForACNPRealized(t *testing.T, name string) error {
 	t.Logf("Waiting for ACNP '%s' to be realized", name)
 	if err := wait.Poll(100*time.Millisecond, policyRealizedTimeout, func() (bool, error) {
@@ -2791,7 +2825,7 @@ func (data *TestData) waitForACNPRealized(t *testing.T, name string) error {
 		if err != nil {
 			return false, err
 		}
-		return acnp.Status.DesiredNodesRealized > 0 && acnp.Status.CurrentNodesRealized == acnp.Status.DesiredNodesRealized, nil
+		return acnp.Status.ObservedGeneration == acnp.Generation && acnp.Status.Phase == crdv1alpha1.NetworkPolicyRealized, nil
 	}); err != nil {
 		return fmt.Errorf("error when waiting for ACNP '%s' to be realized: %v", name, err)
 	}
