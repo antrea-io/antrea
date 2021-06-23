@@ -725,6 +725,9 @@ func getUnit64FieldFromRecord(t *testing.T, record string, field string) uint64 
 
 func getCollectorOutput(t *testing.T, srcIP string, dstIP string, timeStart time.Time, checkAllRecords bool) string {
 	var collectorOutput string
+
+	t.Log(timeStart.Unix() + iperfTimeSec)
+
 	err := wait.PollImmediate(500*time.Millisecond, aggregatorInactiveFlowRecordTimeout, func() (bool, error) {
 		var rc int
 		var err error
@@ -740,6 +743,7 @@ func getCollectorOutput(t *testing.T, srcIP string, dstIP string, timeStart time
 				exportTime := int64(getUnit64FieldFromRecord(t, record, "flowEndSeconds"))
 				if strings.Contains(record, srcIP) && strings.Contains(record, dstIP) {
 					if exportTime >= timeStart.Unix()+iperfTimeSec {
+						t.Log(recordSlices)
 						return true, nil
 					}
 				}
