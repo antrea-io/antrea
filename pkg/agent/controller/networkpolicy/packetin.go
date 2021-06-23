@@ -21,6 +21,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"antrea.io/libOpenflow/openflow13"
@@ -59,8 +60,14 @@ const (
 
 var (
 	AntreaPolicyLogger *log.Logger
-	logDeduplication   map[string]*logDedup
+	logDeduplication   logSafeGuard
 )
+
+// TODO
+type logSafeGuard struct {
+	logMutex  sync.Mutex
+	logRecord map[string]*logDedup
+}
 
 // logInfo will be set by retrieving info from packetin and register
 type logInfo struct {
@@ -77,7 +84,6 @@ type logInfo struct {
 // logDedup will be used as 1 sec buffer for log deduplication
 type logDedup struct {
 	count       int64       // record count of duplicate log
-	dupLogInfo  string      // initial log used for deleting buffer
 	initTime    time.Time   // initial time upon receiving packet log
 	bufferTimer *time.Timer // 1 sec buffer for each log
 }
@@ -101,7 +107,7 @@ func initLogger() error {
 	}
 	AntreaPolicyLogger = log.New(logOutput, "", log.Ldate|log.Lmicroseconds)
 	klog.V(2).Infof("Initialized Antrea-native Policy Logger for audit logging with log file '%s'", logFile)
-	logDeduplication = make(map[string]*logDedup)
+	logDeduplication = logSafeGuard{logRecord: make(map[string]*logDedup)}
 	return nil
 }
 
@@ -162,25 +168,29 @@ func (c *Controller) logPacket(pktIn *ofctrl.PacketIn) error {
 	if ob.disposition == openflow.DispositionToString[openflow.DispositionAllow] {
 		AntreaPolicyLogger.Printf(logMsg)
 	} else {
-		_, ok := logDeduplication[logMsg]
-		// Increase count and renew buffer if duplicated within 1 sec, create buffer otherwise.
+		logDeduplication.logMutex.Lock()
+		_, ok := logDeduplication.logRecord[logMsg]
+		// Increase count if duplicated within 1 sec, create buffer otherwise.
 		if ok {
-			logDeduplication[logMsg].count++
-			logDeduplication[logMsg].bufferTimer.Reset(time.Second)
+			logDeduplication.logRecord[logMsg].count++
+			logDeduplication.logMutex.Unlock()
 		} else {
-			record := logDedup{1, logMsg, time.Now(), time.NewTimer(time.Second)}
-			logDeduplication[logMsg] = &record
+			record := logDedup{1, time.Now(), time.NewTimer(time.Second)}
+			logDeduplication.logRecord[logMsg] = &record
+			logDeduplication.logMutex.Unlock()
 
 			// Go routine for logging when buffer timer stops.
-			go func(r *logDedup) {
-				<-r.bufferTimer.C
-				if r.count == 1 {
-					AntreaPolicyLogger.Printf(logMsg)
+			go func(logKey string) {
+				logDeduplication.logMutex.Lock()
+				<-logDeduplication.logRecord[logKey].bufferTimer.C
+				if logDeduplication.logRecord[logKey].count == 1 {
+					AntreaPolicyLogger.Printf(logKey)
 				} else {
-					AntreaPolicyLogger.Printf("<-%d %s-> %s", r.count, time.Since(r.initTime), r.dupLogInfo)
+					AntreaPolicyLogger.Printf("%s [%d packets in %s]", logKey, logDeduplication.logRecord[logKey].count, time.Since(logDeduplication.logRecord[logKey].initTime))
 				}
-				delete(logDeduplication, r.dupLogInfo)
-			}(&record)
+				delete(logDeduplication.logRecord, logKey)
+				logDeduplication.logMutex.Unlock()
+			}(logMsg)
 		}
 	}
 	return nil
