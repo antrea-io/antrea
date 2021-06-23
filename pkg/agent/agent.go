@@ -42,6 +42,7 @@ import (
 	"antrea.io/antrea/pkg/agent/route"
 	"antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/agent/util"
+	"antrea.io/antrea/pkg/agent/wireguard"
 	"antrea.io/antrea/pkg/features"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 	"antrea.io/antrea/pkg/ovs/ovsctl"
@@ -72,6 +73,7 @@ type Initializer struct {
 	ovsBridgeClient ovsconfig.OVSBridgeClient
 	ofClient        openflow.Client
 	routeClient     route.Interface
+	wireGuardClient wireguard.Interface
 	ifaceStore      interfacestore.InterfaceStore
 	ovsBridge       string
 	hostGateway     string // name of gateway port on the OVS bridge
@@ -80,6 +82,7 @@ type Initializer struct {
 	serviceCIDRv6   *net.IPNet // K8s Service ClusterIP CIDR in IPv6
 	networkConfig   *config.NetworkConfig
 	nodeConfig      *config.NodeConfig
+	wireGuardConfig *config.WireGuardConfig
 	enableProxy     bool
 	// networkReadyCh should be closed once the Node's network is ready.
 	// The CNI server will wait for it before handling any CNI Add requests.
@@ -99,6 +102,7 @@ func NewInitializer(
 	serviceCIDR *net.IPNet,
 	serviceCIDRv6 *net.IPNet,
 	networkConfig *config.NetworkConfig,
+	wireGuardConfig *config.WireGuardConfig,
 	networkReadyCh chan<- struct{},
 	stopCh <-chan struct{},
 	enableProxy bool) *Initializer {
@@ -114,6 +118,7 @@ func NewInitializer(
 		serviceCIDR:     serviceCIDR,
 		serviceCIDRv6:   serviceCIDRv6,
 		networkConfig:   networkConfig,
+		wireGuardConfig: wireGuardConfig,
 		networkReadyCh:  networkReadyCh,
 		stopCh:          stopCh,
 		enableProxy:     enableProxy,
@@ -123,6 +128,11 @@ func NewInitializer(
 // GetNodeConfig returns the NodeConfig.
 func (i *Initializer) GetNodeConfig() *config.NodeConfig {
 	return i.nodeConfig
+}
+
+// GetNodeConfig returns the NodeConfig.
+func (i *Initializer) GetWireGuardClient() wireguard.Interface {
+	return i.wireGuardClient
 }
 
 // setupOVSBridge sets up the OVS bridge and create host gateway interface and tunnel port
@@ -259,8 +269,15 @@ func (i *Initializer) Initialize() error {
 		return err
 	}
 
-	if err := i.initializeIPSec(); err != nil {
-		return err
+	switch i.networkConfig.TrafficEncryptionMode {
+	case config.TrafficEncryptionModeIPSec:
+		if err := i.initializeIPSec(); err != nil {
+			return err
+		}
+	case config.TrafficEncryptionModeWireGuard:
+		if err := i.initializeWireGuard(); err != nil {
+			return err
+		}
 	}
 
 	if err := i.prepareHostNetwork(); err != nil {
@@ -337,7 +354,7 @@ func (i *Initializer) initOpenFlowPipeline() error {
 	roundInfo := getRoundInfo(i.ovsBridgeClient)
 
 	// Set up all basic flows.
-	ofConnCh, err := i.ofClient.Initialize(roundInfo, i.nodeConfig, i.networkConfig.TrafficEncapMode)
+	ofConnCh, err := i.ofClient.Initialize(roundInfo, i.nodeConfig, i.networkConfig)
 	if err != nil {
 		klog.Errorf("Failed to initialize openflow client: %v", err)
 		return err
@@ -737,7 +754,10 @@ func (i *Initializer) initNodeLocalConfig() error {
 		NodeIPv6Addr:          nodeIPv6Addr,
 		NodeTransportIPv4Addr: transportIPv4Addr,
 		NodeTransportIPv6Addr: transportIPv6Addr,
-		UplinkNetConfig:       new(config.AdapterNetConfig)}
+		UplinkNetConfig:       new(config.AdapterNetConfig),
+		NodeLocalInterfaceMTU: localIntf.MTU,
+		WireGuardConfig:       i.wireGuardConfig,
+	}
 
 	mtu, err := i.getNodeMTU(localIntf)
 	if err != nil {
@@ -797,10 +817,6 @@ func (i *Initializer) initNodeLocalConfig() error {
 
 // initializeIPSec checks if preconditions are met for using IPsec and reads the IPsec PSK value.
 func (i *Initializer) initializeIPSec() error {
-	if !i.networkConfig.EnableIPSecTunnel {
-		return nil
-	}
-
 	// At the time the agent is initialized and this code is executed, the
 	// OVS daemons are already running given that we have successfully
 	// connected to OVSDB. Given that the start_ovs script deletes existing
@@ -828,6 +844,18 @@ func (i *Initializer) initializeIPSec() error {
 		return err
 	}
 	return nil
+}
+
+// initializeWireguard checks if preconditions are met for using WireGuard and initializes WireGuard client or cleans up.
+func (i *Initializer) initializeWireGuard() error {
+	i.wireGuardConfig.MTU = i.nodeConfig.NodeLocalInterfaceMTU - config.WireGuardOverhead
+	wgClient, err := wireguard.New(i.client, i.nodeConfig, i.wireGuardConfig)
+	if err != nil {
+		return err
+	}
+
+	i.wireGuardClient = wgClient
+	return i.wireGuardClient.Init()
 }
 
 // readIPSecPSK reads the IPsec PSK value from environment variable ANTREA_IPSEC_PSK
@@ -914,7 +942,7 @@ func (i *Initializer) getNodeMTU(localIntf *net.Interface) (int, error) {
 			mtu -= config.IPv6ExtraOverhead
 		}
 	}
-	if i.networkConfig.EnableIPSecTunnel {
+	if i.networkConfig.TrafficEncryptionMode == config.TrafficEncryptionModeIPSec {
 		mtu -= config.IPSecESPOverhead
 	}
 	return mtu, nil

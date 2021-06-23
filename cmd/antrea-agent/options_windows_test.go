@@ -66,8 +66,13 @@ func TestCheckUnsupportedFeatures(t *testing.T) {
 			false,
 		},
 		{
-			"IPsec tunnel",
-			AgentConfig{EnableIPSecTunnel: true},
+			"IPsec encryption",
+			AgentConfig{TrafficEncryptionMode: config.TrafficEncryptionModeIPSec.String()},
+			false,
+		},
+		{
+			"WireGuard encryption",
+			AgentConfig{TrafficEncryptionMode: config.TrafficEncryptionModeWireGuard.String()},
 			false,
 		},
 		{

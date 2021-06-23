@@ -605,7 +605,16 @@ func (c *Client) AddRoutes(podCIDR *net.IPNet, nodeName string, nodeIP, nodeGwIP
 		Dst: podCIDR,
 	}
 	var routes []*netlink.Route
-	if c.networkConfig.TrafficEncapMode.NeedsEncapToPeer(nodeIP, nodeTransportIPAddr) {
+	// If WireGuard is enabled, create a route via WireGuard device regardless of the traffic encapsulation modes.
+	if c.networkConfig.TrafficEncryptionMode == config.TrafficEncryptionModeWireGuard {
+		route.LinkIndex = c.nodeConfig.WireGuardConfig.LinkIndex
+		route.Scope = netlink.SCOPE_LINK
+		if podCIDR.IP.To4() != nil {
+			route.Src = c.nodeConfig.GatewayConfig.IPv4
+		} else {
+			route.Src = c.nodeConfig.GatewayConfig.IPv6
+		}
+	} else if c.networkConfig.NeedsTunnelToPeer(nodeIP, nodeTransportIPAddr) {
 		if podCIDR.IP.To4() == nil {
 			// "on-link" is not identified in IPv6 route entries, so split the configuration into 2 entries.
 			routes = []*netlink.Route{
@@ -619,7 +628,7 @@ func (c *Client) AddRoutes(podCIDR *net.IPNet, nodeName string, nodeIP, nodeGwIP
 		}
 		route.LinkIndex = c.nodeConfig.GatewayConfig.LinkIndex
 		route.Gw = nodeGwIP
-	} else if c.networkConfig.TrafficEncapMode.NeedsDirectRoutingToPeer(nodeIP, nodeTransportIPAddr) {
+	} else if c.networkConfig.NeedsDirectRoutingToPeer(nodeIP, nodeTransportIPAddr) {
 		// NoEncap traffic to Node on the same subnet.
 		// Set the peerNodeIP as next hop.
 		route.Gw = nodeIP

@@ -15,7 +15,6 @@
 package config
 
 import (
-	"net"
 	"strings"
 )
 
@@ -76,14 +75,4 @@ func (m TrafficEncapModeType) SupportsNoEncap() bool {
 // SupportsEncap returns true if TrafficEncapModeType supports encap.
 func (m TrafficEncapModeType) SupportsEncap() bool {
 	return m == TrafficEncapModeEncap || m == TrafficEncapModeHybrid
-}
-
-// NeedsEncapToPeer returns true if Pod traffic to peer Node needs to be encapsulated.
-func (m TrafficEncapModeType) NeedsEncapToPeer(peerIP net.IP, localIP *net.IPNet) bool {
-	return (m == TrafficEncapModeEncap) || (m == TrafficEncapModeHybrid && !localIP.Contains(peerIP))
-}
-
-// NeedsDirectRoutingToPeer returns true if Pod traffic to peer Node needs a direct route installed to the routing table.
-func (m TrafficEncapModeType) NeedsDirectRoutingToPeer(peerIP net.IP, localIP *net.IPNet) bool {
-	return (m == TrafficEncapModeNoEncap || m == TrafficEncapModeHybrid) && localIP.Contains(peerIP)
 }

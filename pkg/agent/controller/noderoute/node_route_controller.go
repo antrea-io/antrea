@@ -38,6 +38,7 @@ import (
 	"antrea.io/antrea/pkg/agent/route"
 	"antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/agent/util"
+	"antrea.io/antrea/pkg/agent/wireguard"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 	utilip "antrea.io/antrea/pkg/util/ip"
 	"antrea.io/antrea/pkg/util/k8s"
@@ -74,7 +75,8 @@ type Controller struct {
 	// installedNodes records routes and flows installation states of Nodes.
 	// The key is the host name of the Node, the value is the nodeRouteInfo of the Node.
 	// A node will be in the map after its flows and routes are installed successfully.
-	installedNodes cache.Indexer
+	installedNodes  cache.Indexer
+	wireGuardClient wireguard.Interface
 }
 
 // NewNodeRouteController instantiates a new Controller object which will process Node events
@@ -87,7 +89,9 @@ func NewNodeRouteController(
 	routeClient route.Interface,
 	interfaceStore interfacestore.InterfaceStore,
 	networkConfig *config.NetworkConfig,
-	nodeConfig *config.NodeConfig) *Controller {
+	nodeConfig *config.NodeConfig,
+	wireguardClient wireguard.Interface,
+) *Controller {
 	nodeInformer := informerFactory.Core().V1().Nodes()
 	controller := &Controller{
 		kubeClient:       kubeClient,
@@ -102,6 +106,7 @@ func NewNodeRouteController(
 		nodeListerSynced: nodeInformer.Informer().HasSynced,
 		queue:            workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "noderoute"),
 		installedNodes:   cache.NewIndexer(nodeRouteInfoKeyFunc, cache.Indexers{nodeRouteInfoPodCIDRIndexName: nodeRouteInfoPodCIDRIndexFunc}),
+		wireGuardClient:  wireguardClient,
 	}
 	nodeInformer.Informer().AddEventHandlerWithResyncPeriod(
 		cache.ResourceEventHandlerFuncs{
@@ -134,11 +139,12 @@ func nodeRouteInfoPodCIDRIndexFunc(obj interface{}) ([]string, error) {
 
 // nodeRouteInfo is the route related information extracted from corev1.Node.
 type nodeRouteInfo struct {
-	nodeName   string
-	podCIDRs   []*net.IPNet
-	nodeIPs    *utilip.DualStackIPs
-	gatewayIPs *utilip.DualStackIPs
-	nodeMAC    net.HardwareAddr
+	nodeName           string
+	podCIDRs           []*net.IPNet
+	nodeIPs            *utilip.DualStackIPs
+	gatewayIPs         *utilip.DualStackIPs
+	nodeMAC            net.HardwareAddr
+	wireGuardPublicKey string
 }
 
 // enqueueNode adds an object to the controller work queue
@@ -208,7 +214,7 @@ func (c *Controller) removeStaleTunnelPorts() error {
 	// knownInterfaces is the list of interfaces currently in the local cache.
 	knownInterfaces := c.interfaceStore.GetInterfaceKeysByType(interfacestore.TunnelInterface)
 
-	if c.networkConfig.EnableIPSecTunnel {
+	if c.networkConfig.TrafficEncryptionMode == config.TrafficEncryptionModeIPSec {
 		for _, node := range nodes {
 			interfaceConfig, found := c.interfaceStore.GetNodeTunnelInterface(node.Name)
 			if !found {
@@ -276,7 +282,28 @@ func (c *Controller) reconcile() error {
 	if err := c.removeStaleTunnelPorts(); err != nil {
 		return fmt.Errorf("error when removing stale tunnel ports: %v", err)
 	}
+	if err := c.removeStaleWireGuardPeers(); err != nil {
+		return fmt.Errorf("error when removing stale WireGuard peers: %v", err)
+	}
 	return nil
+}
+
+// removeStaleWireGuardPeers deletes stale WireGuard peers if necessary.
+func (c *Controller) removeStaleWireGuardPeers() error {
+	if c.networkConfig.TrafficEncryptionMode != config.TrafficEncryptionModeWireGuard {
+		return nil
+	}
+	nodes, err := c.nodeLister.List(labels.Everything())
+	if err != nil {
+		return fmt.Errorf("error when listing Nodes: %v", err)
+	}
+	currentPeerPublicKeys := make(map[string]string)
+	for _, n := range nodes {
+		if pubkey, ok := n.Annotations[types.NodeWireGuardPublicAnnotationKey]; ok {
+			currentPeerPublicKeys[n.Name] = pubkey
+		}
+	}
+	return c.wireGuardClient.RemoveStalePeers(currentPeerPublicKeys)
 }
 
 // Run will create defaultWorkers workers (go routines) which will process the Node events from the
@@ -300,7 +327,7 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 	}
 
 	if err := c.reconcile(); err != nil {
-		klog.Errorf("Error during %s reconciliation", controllerName)
+		klog.ErrorS(err, "Error during reconciliation", "controller", controllerName)
 	}
 
 	for i := 0; i < defaultWorkers; i++ {
@@ -399,7 +426,7 @@ func (c *Controller) deleteNodeRoute(nodeName string) error {
 	}
 	c.installedNodes.Delete(obj)
 
-	if c.networkConfig.EnableIPSecTunnel {
+	if c.networkConfig.TrafficEncryptionMode == config.TrafficEncryptionModeIPSec {
 		interfaceConfig, ok := c.interfaceStore.GetNodeTunnelInterface(nodeName)
 		if !ok {
 			// Tunnel port not created for this Node.
@@ -411,6 +438,12 @@ func (c *Controller) deleteNodeRoute(nodeName string) error {
 			return fmt.Errorf("failed to delete OVS tunnel port for Node %s", nodeName)
 		}
 		c.interfaceStore.DeleteInterface(interfaceConfig)
+	}
+
+	if c.networkConfig.TrafficEncryptionMode == config.TrafficEncryptionModeWireGuard {
+		if err := c.wireGuardClient.DeletePeer(nodeName); err != nil {
+			return fmt.Errorf("delete WireGuard peer %s failed: %v", nodeName, err)
+		}
 	}
 	return nil
 }
@@ -425,10 +458,14 @@ func (c *Controller) addNodeRoute(nodeName string, node *corev1.Node) error {
 	if err != nil {
 		return err
 	}
+	peerWireGuardPublicKey := node.Annotations[types.NodeWireGuardPublicAnnotationKey]
 
 	nrInfo, installed, _ := c.installedNodes.GetByKey(nodeName)
-	if installed && nrInfo.(*nodeRouteInfo).nodeMAC.String() == peerNodeMAC.String() && peerNodeIPs.Equal(*nrInfo.(*nodeRouteInfo).nodeIPs) {
-		// Route is already added for this Node and both Node MAC and transport IP are not changed.
+	// Route is already added for this Node and Node MAC, transport IP
+	// and WireGuard public key are not changed.
+	if installed && nrInfo.(*nodeRouteInfo).nodeMAC.String() == peerNodeMAC.String() &&
+		peerNodeIPs.Equal(*nrInfo.(*nodeRouteInfo).nodeIPs) &&
+		nrInfo.(*nodeRouteInfo).wireGuardPublicKey == peerWireGuardPublicKey {
 		return nil
 	}
 
@@ -485,7 +522,7 @@ func (c *Controller) addNodeRoute(nodeName string, node *corev1.Node) error {
 	}
 
 	var ipsecTunOFPort uint32
-	if c.networkConfig.EnableIPSecTunnel {
+	if c.networkConfig.TrafficEncryptionMode == config.TrafficEncryptionModeIPSec {
 		// Create a separate tunnel port for the Node, as OVS IPSec monitor needs to
 		// read PSK and remote IP from the Node's tunnel interface to create IPSec
 		// security policies.
@@ -498,6 +535,16 @@ func (c *Controller) addNodeRoute(nodeName string, node *corev1.Node) error {
 			return err
 		}
 		ipsecTunOFPort = uint32(port)
+	}
+
+	if c.networkConfig.TrafficEncryptionMode == config.TrafficEncryptionModeWireGuard && peerWireGuardPublicKey != "" {
+		peerNodeIP := peerNodeIPs.IPv4
+		if peerNodeIP == nil {
+			peerNodeIP = peerNodeIPs.IPv6
+		}
+		if err := c.wireGuardClient.UpdatePeer(nodeName, peerWireGuardPublicKey, peerNodeIP, peerPodCIDRs); err != nil {
+			return err
+		}
 	}
 
 	if err = c.ofClient.InstallNodeFlows(
@@ -523,12 +570,14 @@ func (c *Controller) addNodeRoute(nodeName string, node *corev1.Node) error {
 			peerGatewayIPs.IPv4 = peerGatewayIP
 		}
 	}
+
 	c.installedNodes.Add(&nodeRouteInfo{
-		nodeName:   nodeName,
-		podCIDRs:   peerPodCIDRs,
-		nodeIPs:    peerNodeIPs,
-		gatewayIPs: peerGatewayIPs,
-		nodeMAC:    peerNodeMAC,
+		nodeName:           nodeName,
+		podCIDRs:           peerPodCIDRs,
+		nodeIPs:            peerNodeIPs,
+		gatewayIPs:         peerGatewayIPs,
+		nodeMAC:            peerNodeMAC,
+		wireGuardPublicKey: peerWireGuardPublicKey,
 	})
 
 	return err

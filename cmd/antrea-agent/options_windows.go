@@ -49,10 +49,10 @@ func (o *Options) checkUnsupportedFeatures() error {
 	if o.config.TunnelType == ovsconfig.GRETunnel {
 		unsupported = append(unsupported, "TunnelType: "+o.config.TunnelType)
 	}
-	if o.config.EnableIPSecTunnel {
-		unsupported = append(unsupported, "IPsecTunnel")
+	_, encryptionMode := config.GetTrafficEncryptionModeFromStr(o.config.TrafficEncryptionMode)
+	if encryptionMode != config.TrafficEncryptionModeNone {
+		unsupported = append(unsupported, "TrafficEncryptionMode: "+encryptionMode.String())
 	}
-
 	if unsupported != nil {
 		return fmt.Errorf("unsupported features on Windows: {%s}", strings.Join(unsupported, ", "))
 	}

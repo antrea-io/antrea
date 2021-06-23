@@ -20,4 +20,7 @@ const (
 
 	// NodeTransportAddressAnnotationKey represents the key of the interface's IP addresses on which the Node transfers Pod traffic in the Annotations of the Node.
 	NodeTransportAddressAnnotationKey string = "node.antrea.io/transport-addresses"
+
+	// NodeWireGuardPublicAnnotationKey represents the key of the Node's WireGuard public key in the Annotations of the Node.
+	NodeWireGuardPublicAnnotationKey string = "node.antrea.io/wireguard-public-key"
 )

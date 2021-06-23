@@ -295,6 +295,7 @@ type client struct {
 	enableAntreaPolicy bool
 	enableDenyTracking bool
 	enableEgress       bool
+	enableWireGuard    bool
 	roundInfo          types.RoundInfo
 	cookieAllocator    cookie.Allocator
 	bridge             binding.Bridge
@@ -320,7 +321,7 @@ type client struct {
 	// replayMutex provides exclusive access to the OFSwitch to the ReplayFlows method.
 	replayMutex   sync.RWMutex
 	nodeConfig    *config.NodeConfig
-	encapMode     config.TrafficEncapModeType
+	networkConfig *config.NetworkConfig
 	gatewayOFPort uint32
 	// ovsDatapathType is the type of the datapath used by the bridge.
 	ovsDatapathType ovsconfig.OVSDatapathType
@@ -876,7 +877,7 @@ func (c *client) traceflowL2ForwardOutputFlows(dataplaneTag uint8, liveTraffic, 
 	flows := []binding.Flow{}
 	l2FwdOutTable := c.pipeline[L2ForwardingOutTable]
 	for _, ipProtocol := range c.ipProtocols {
-		if c.encapMode.SupportsEncap() {
+		if c.networkConfig.TrafficEncapMode.SupportsEncap() {
 			// SendToController and Output if output port is tunnel port.
 			fb1 := l2FwdOutTable.BuildFlow(priorityNormal+3).
 				MatchRegFieldWithValue(TargetOFPortField, config.DefaultTunOFPort).
