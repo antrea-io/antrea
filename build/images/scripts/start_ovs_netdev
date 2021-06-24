@@ -4,6 +4,7 @@ source logging
 source daemon_status
 
 CONTAINER_NAME="antrea-ovs"
+OVS_RUN_DIR="/var/run/openvswitch"
 OVS_DB_FILE="/var/run/openvswitch/conf.db"
 
 if ! ip addr show eth0 > /dev/null 2>&1; then
@@ -52,7 +53,18 @@ function del_br_phy {
     iptables -t raw -D PREROUTING -i eth0 -j DROP
 }
 
+# While working on https://github.com/antrea-io/antrea/pull/2215, we sometimes
+# observed a few leftover .ctl files across OVS restarts, causing failures in
+# the agent when trying to run ovs-appctl commands. This impacted testing on
+# Kind, so we started deleting these files before starting OVS.
+function cleanup_ovs_run_files {
+    rm -rf ${OVS_RUN_DIR}/ovs*.pid
+    rm -rf ${OVS_RUN_DIR}/ovs*.ctl
+    rm -rf ${OVS_RUN_DIR}/.conf.db.*~lock~
+}
+
 function start_ovs {
+    cleanup_ovs_run_files
     log_info $CONTAINER_NAME "Starting OVS"
     # Unlike the start_ovs script, we don't set flow-restore-wait when starting OVS
     # with the netdev datapath. This is because the Node's network relies on the

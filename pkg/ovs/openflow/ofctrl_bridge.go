@@ -168,6 +168,40 @@ func (b *OFBridge) DeleteGroup(id GroupIDType) bool {
 	return true
 }
 
+func (b *OFBridge) CreateMeter(id MeterIDType, flags ofctrl.MeterFlag) Meter {
+	ofctrlMeter, err := b.ofSwitch.NewMeter(uint32(id), flags)
+
+	if err != nil {
+		ofctrlMeter = b.ofSwitch.GetMeter(uint32(id))
+	}
+	m := &ofMeter{bridge: b, ofctrl: ofctrlMeter}
+	return m
+}
+
+func (b *OFBridge) DeleteMeter(id MeterIDType) bool {
+	m := b.ofSwitch.GetMeter(uint32(id))
+	if m == nil {
+		return true
+	}
+	if err := m.Delete(); err != nil {
+		return false
+	}
+	return true
+}
+
+func (b *OFBridge) DeleteMeterAll() error {
+	// Clear all existing meter entries
+	// TODO: this should be defined in libOpenflow
+	const OFPM_ALL = 0xffffffff // Represents all meters
+	meterMod := openflow13.NewMeterMod()
+	meterMod.MeterId = OFPM_ALL
+	meterMod.Command = openflow13.OFPMC_DELETE
+	if err := b.ofSwitch.Send(meterMod); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (b *OFBridge) CreateTable(id, next TableIDType, missAction MissActionType) Table {
 	t := newOFTable(id, next, missAction)
 
