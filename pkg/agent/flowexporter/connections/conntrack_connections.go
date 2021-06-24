@@ -226,7 +226,9 @@ func (cs *ConntrackConnectionStore) AddOrUpdateConn(conn *flowexporter.Connectio
 			}
 		}
 		cs.addNetworkPolicyMetadata(conn)
-
+		if conn.StartTime.IsZero() {
+			conn.StartTime = time.Now()
+		}
 		metrics.TotalAntreaConnectionsInConnTrackTable.Inc()
 		klog.V(4).Infof("New Antrea flow added: %v", conn)
 		// Add new antrea connection to connection store
