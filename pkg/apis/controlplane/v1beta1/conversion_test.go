@@ -128,6 +128,7 @@ var (
 	v1b1TCP     = ProtocolTCP
 	cpTCP       = controlplane.ProtocolTCP
 	int80       = intstr.FromInt(80)
+	int81       = intstr.FromInt(81)
 	v1b1Service = Service{
 		Protocol: &v1b1TCP,
 		Port:     &int80,
@@ -281,4 +282,27 @@ func TestConvertBetweenV1beta1AndControlplaneService(t *testing.T) {
 	require.NoError(t,
 		Convert_v1beta1_Service_To_controlplane_Service(&v1b1Service, &convertedCPService, nil))
 	assert.Equal(t, cpService, convertedCPService, "v1beta1.GroupMember -> controlplane.GroupMember")
+}
+
+func TestConvertBetweenV1beta1NetworkPolicyRuleAndControlplaneNetworkPolicyRule(t *testing.T) {
+	scheme := runtime.NewScheme()
+	assert.NoError(t, RegisterConversions(scheme))
+
+	cpRule := controlplane.NetworkPolicyRule{
+		Direction: controlplane.DirectionIn,
+		Services: []controlplane.Service{
+			{Protocol: &cpTCP, Port: &int80},
+			{Protocol: &cpTCP, Port: &int81},
+		},
+		From: controlplane.NetworkPolicyPeer{
+			AddressGroups: []string{"abc", "bcd"},
+		},
+	}
+	var convertedCPRule controlplane.NetworkPolicyRule
+	var convertedV1beta1Rule NetworkPolicyRule
+	require.NoError(t,
+		Convert_controlplane_NetworkPolicyRule_To_v1beta1_NetworkPolicyRule(&cpRule, &convertedV1beta1Rule, nil))
+	require.NoError(t,
+		Convert_v1beta1_NetworkPolicyRule_To_controlplane_NetworkPolicyRule(&convertedV1beta1Rule, &convertedCPRule, nil))
+	assert.Equal(t, cpRule, convertedCPRule)
 }
