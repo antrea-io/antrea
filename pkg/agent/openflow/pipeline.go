@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/contiv/libOpenflow/protocol"
+	"github.com/contiv/ofnet/ofctrl"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 
@@ -413,6 +414,8 @@ type client struct {
 	gatewayOFPort uint32
 	// ovsDatapathType is the type of the datapath used by the bridge.
 	ovsDatapathType ovsconfig.OVSDatapathType
+	// ovsMetersAreSupported indicates whether the OVS datapath supports OpenFlow meters.
+	ovsMetersAreSupported bool
 	// packetInHandlers stores handler to process PacketIn event. Each packetin reason can have multiple handlers registered.
 	// When a packetin arrives, openflow send packet to registered handlers in this map.
 	packetInHandlers map[uint8]map[string]PacketInHandler
@@ -838,12 +841,18 @@ func (c *client) traceflowNetworkPolicyFlows(dataplaneTag uint8, timeout uint16,
 			if ctx.dropFlow.FlowProtocol() == "" {
 				copyFlowBuilderIPv6 := ctx.dropFlow.CopyToBuilder(priorityNormal+2, false)
 				copyFlowBuilderIPv6 = copyFlowBuilderIPv6.MatchProtocol(binding.ProtocolIPv6)
+				if c.ovsMetersAreSupported {
+					copyFlowBuilderIPv6 = copyFlowBuilderIPv6.Action().Meter(PacketInMeterIDTF)
+				}
 				flows = append(flows, copyFlowBuilderIPv6.MatchIPDSCP(dataplaneTag).
 					SetHardTimeout(timeout).
 					Cookie(c.cookieAllocator.Request(category).Raw()).
 					Action().SendToController(uint8(PacketInReasonTF)).
 					Done())
 				copyFlowBuilder = copyFlowBuilder.MatchProtocol(binding.ProtocolIP)
+			}
+			if c.ovsMetersAreSupported {
+				copyFlowBuilder = copyFlowBuilder.Action().Meter(PacketInMeterIDTF)
 			}
 			flows = append(flows, copyFlowBuilder.MatchIPDSCP(dataplaneTag).
 				SetHardTimeout(timeout).
@@ -862,12 +871,18 @@ func (c *client) traceflowNetworkPolicyFlows(dataplaneTag uint8, timeout uint16,
 				if flow.FlowProtocol() == "" {
 					copyFlowBuilderIPv6 := flow.CopyToBuilder(priorityNormal+2, false)
 					copyFlowBuilderIPv6 = copyFlowBuilderIPv6.MatchProtocol(binding.ProtocolIPv6)
+					if c.ovsMetersAreSupported {
+						copyFlowBuilderIPv6 = copyFlowBuilderIPv6.Action().Meter(PacketInMeterIDTF)
+					}
 					flows = append(flows, copyFlowBuilderIPv6.MatchIPDSCP(dataplaneTag).
 						SetHardTimeout(timeout).
 						Cookie(c.cookieAllocator.Request(category).Raw()).
 						Action().SendToController(uint8(PacketInReasonTF)).
 						Done())
 					copyFlowBuilder = copyFlowBuilder.MatchProtocol(binding.ProtocolIP)
+				}
+				if c.ovsMetersAreSupported {
+					copyFlowBuilder = copyFlowBuilder.Action().Meter(PacketInMeterIDTF)
 				}
 				flows = append(flows, copyFlowBuilder.MatchIPDSCP(dataplaneTag).
 					SetHardTimeout(timeout).
@@ -1004,6 +1019,10 @@ func (c *client) traceflowL2ForwardOutputFlows(dataplaneTag uint8, liveTraffic, 
 
 			// Do not send to controller if captures only dropped packet.
 			if !droppedOnly {
+				if c.ovsMetersAreSupported {
+					fb1 = fb1.Action().Meter(PacketInMeterIDTF)
+					fb2 = fb2.Action().Meter(PacketInMeterIDTF)
+				}
 				fb1 = fb1.Action().SendToController(uint8(PacketInReasonTF))
 				fb2 = fb2.Action().SendToController(uint8(PacketInReasonTF))
 			}
@@ -1026,6 +1045,9 @@ func (c *client) traceflowL2ForwardOutputFlows(dataplaneTag uint8, liveTraffic, 
 				Action().OutputRegRange(int(PortCacheReg), ofPortRegRange).
 				Cookie(c.cookieAllocator.Request(category).Raw())
 			if !droppedOnly {
+				if c.ovsMetersAreSupported {
+					fb1 = fb1.Action().Meter(PacketInMeterIDTF)
+				}
 				fb1 = fb1.Action().SendToController(uint8(PacketInReasonTF))
 			}
 			flows = append(flows, fb1.Done())
@@ -1045,6 +1067,9 @@ func (c *client) traceflowL2ForwardOutputFlows(dataplaneTag uint8, liveTraffic, 
 				MatchRegRange(int(marksReg), portFoundMark, ofPortMarkRange).
 				Cookie(c.cookieAllocator.Request(category).Raw())
 			if !droppedOnly {
+				if c.ovsMetersAreSupported {
+					fb = fb.Action().Meter(PacketInMeterIDTF)
+				}
 				fb = fb.Action().SendToController(uint8(PacketInReasonTF))
 			}
 			if liveTraffic {
@@ -1061,6 +1086,9 @@ func (c *client) traceflowL2ForwardOutputFlows(dataplaneTag uint8, liveTraffic, 
 			MatchRegRange(int(marksReg), portFoundMark, ofPortMarkRange).
 			Cookie(c.cookieAllocator.Request(category).Raw())
 		if !droppedOnly {
+			if c.ovsMetersAreSupported {
+				fb = fb.Action().Meter(PacketInMeterIDTF)
+			}
 			fb = fb.Action().SendToController(uint8(PacketInReasonTF))
 		}
 		if liveTraffic {
@@ -1078,6 +1106,9 @@ func (c *client) traceflowL2ForwardOutputFlows(dataplaneTag uint8, liveTraffic, 
 				MatchRegRange(int(marksReg), hairpinMark, hairpinMarkRange).
 				Cookie(c.cookieAllocator.Request(cookie.Service).Raw())
 			if !droppedOnly {
+				if c.ovsMetersAreSupported {
+					fbHairpin = fbHairpin.Action().Meter(PacketInMeterIDTF)
+				}
 				fbHairpin = fbHairpin.Action().SendToController(uint8(PacketInReasonTF))
 			}
 			if liveTraffic {
@@ -1522,8 +1553,12 @@ func (c *client) conjunctionActionFlow(conjunctionID uint32, tableID binding.Tab
 			ctZone = CtZoneV6
 		}
 		if enableLogging {
-			return c.pipeline[tableID].BuildFlow(ofPriority).MatchProtocol(proto).
-				MatchConjID(conjunctionID).
+			fb := c.pipeline[tableID].BuildFlow(ofPriority).MatchProtocol(proto).
+				MatchConjID(conjunctionID)
+			if c.ovsMetersAreSupported {
+				fb = fb.Action().Meter(PacketInMeterIDNP)
+			}
+			return fb.
 				Action().LoadRegRange(int(conjReg), conjunctionID, binding.Range{0, 31}).         // Traceflow.
 				Action().LoadRegRange(int(marksReg), DispositionAllow, APDispositionMarkRange).   // AntreaPolicy.
 				Action().LoadRegRange(int(marksReg), CustomReasonLogging, CustomReasonMarkRange). // Enable logging.
@@ -1582,6 +1617,9 @@ func (c *client) conjunctionActionDenyFlow(conjunctionID uint32, tableID binding
 	}
 
 	if enableLogging || c.enableDenyTracking || disposition == DispositionRej {
+		if c.ovsMetersAreSupported {
+			flowBuilder = flowBuilder.Action().Meter(PacketInMeterIDNP)
+		}
 		flowBuilder = flowBuilder.
 			Action().LoadRegRange(int(marksReg), uint32(customReason), CustomReasonMarkRange).
 			Action().SendToController(uint8(PacketInReasonNP))
@@ -2126,6 +2164,19 @@ func priorityIndexFunc(obj interface{}) ([]string, error) {
 	return conj.ActionFlowPriorities(), nil
 }
 
+// genPacketInMeter generates a meter entry with specific meterID and rate.
+// `rate` is represented as number of packets per second.
+// Packets which exceed the rate will be dropped.
+func (c *client) genPacketInMeter(meterID binding.MeterIDType, rate uint32) binding.Meter {
+	meter := c.bridge.CreateMeter(meterID, ofctrl.MeterBurst|ofctrl.MeterPktps).ResetMeterBands()
+	meter = meter.MeterBand().
+		MeterType(ofctrl.MeterDrop).
+		Rate(rate).
+		Burst(2 * rate).
+		Done()
+	return meter
+}
+
 func (c *client) generatePipeline() {
 	bridge := c.bridge
 	c.pipeline = map[binding.TableIDType]binding.Table{
@@ -2197,6 +2248,7 @@ func NewClient(bridgeName, mgmtAddr string, ovsDatapathType ovsconfig.OVSDatapat
 		packetInHandlers:         map[uint8]map[string]PacketInHandler{},
 		ovsctlClient:             ovsctl.NewClient(bridgeName),
 		ovsDatapathType:          ovsDatapathType,
+		ovsMetersAreSupported:    ovsMetersAreSupported(ovsDatapathType),
 	}
 	c.ofEntryOperations = c
 	if enableAntreaPolicy {
