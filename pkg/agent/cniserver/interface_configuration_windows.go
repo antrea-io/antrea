@@ -322,7 +322,7 @@ func (ic *ifConfigurator) removeHNSEndpoint(endpoint *hcsshim.HNSEndpoint, conta
 	// Remove HNSEndpoint.
 	go func() {
 		hcnEndpoint, _ := hcn.GetEndpointByID(endpoint.Id)
-		if hcnEndpoint != nil && hcnEndpoint.HostComputeNamespace != "" {
+		if hcnEndpoint != nil && isValidHostNamespace(hcnEndpoint.HostComputeNamespace) {
 			err := hcn.RemoveNamespaceEndpoint(hcnEndpoint.HostComputeNamespace, hcnEndpoint.Id)
 			if err != nil {
 				klog.Errorf("Failed to remove HostComputeEndpoint %s from HostComputeNameSpace %s: %v", hcnEndpoint.Name, hcnEndpoint.HostComputeNamespace, err)
@@ -357,6 +357,13 @@ func (ic *ifConfigurator) removeHNSEndpoint(endpoint *hcsshim.HNSEndpoint, conta
 	// Delete HNSEndpoint from local cache.
 	ic.delEndpoint(epName)
 	return nil
+}
+
+// isValidHostNamespace checks if the hostNamespace is valid or not. When the runtime is docker, the hostNamespace
+// is not set, and Windows HCN should use a default value "00000000-0000-0000-0000-000000000000". An error returns
+// when removing HostComputeEndpoint in this namespace. This field is set with a valid value when containerd is used.
+func isValidHostNamespace(hostNamespace string) bool {
+	return hostNamespace != "" && hostNamespace != "00000000-0000-0000-0000-000000000000"
 }
 
 func parseContainerIfaceFromResults(cfgArgs *cnipb.CniCmdArgs, prevResult *current.Result) *current.Interface {
