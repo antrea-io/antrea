@@ -63,12 +63,6 @@ var (
 	logDeduplication   logSafeGuard
 )
 
-// TODO
-type logSafeGuard struct {
-	logMutex  sync.Mutex
-	logRecord map[string]*logDedup
-}
-
 // logInfo will be set by retrieving info from packetin and register
 type logInfo struct {
 	tableName   string // name of the table sending packetin
@@ -86,6 +80,38 @@ type logDedup struct {
 	count       int64       // record count of duplicate log
 	initTime    time.Time   // initial time upon receiving packet log
 	bufferTimer *time.Timer // 1 sec buffer for each log
+}
+
+// logSafeGuard includes a map of log buffers and a r/w mutex for accessing the map
+type logSafeGuard struct {
+	logMutex sync.Mutex
+	logMap   map[string]*logDedup
+}
+
+// deleteLogKey logs and deletes the log record in logDeduplication by logMsg.
+func (l *logSafeGuard) terminateLogKey(logMsg string) {
+	l.logMutex.Lock()
+	defer l.logMutex.Unlock()
+	if l.logMap[logMsg].count == 1 {
+		AntreaPolicyLogger.Printf(logMsg)
+	} else {
+		AntreaPolicyLogger.Printf("%s [%d packets in %s]", logMsg, l.logMap[logMsg].count, time.Since(l.logMap[logMsg].initTime))
+	}
+	delete(l.logMap, logMsg)
+}
+
+// updateLogKey initiates record or increases the count in logDeduplication corresponding to given logMsg.
+func (l *logSafeGuard) updateLogKey(logMsg string) bool {
+	l.logMutex.Lock()
+	defer l.logMutex.Unlock()
+	_, exists := l.logMap[logMsg]
+	if exists {
+		l.logMap[logMsg].count++
+	} else {
+		record := logDedup{1, time.Now(), time.NewTimer(time.Second)}
+		l.logMap[logMsg] = &record
+	}
+	return exists
 }
 
 // initLogger is called while newing Antrea network policy agent controller.
@@ -107,7 +133,7 @@ func initLogger() error {
 	}
 	AntreaPolicyLogger = log.New(logOutput, "", log.Ldate|log.Lmicroseconds)
 	klog.V(2).Infof("Initialized Antrea-native Policy Logger for audit logging with log file '%s'", logFile)
-	logDeduplication = logSafeGuard{logRecord: make(map[string]*logDedup)}
+	logDeduplication = logSafeGuard{logMap: make(map[string]*logDedup)}
 	return nil
 }
 
@@ -147,7 +173,8 @@ func (c *Controller) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
 }
 
 // logPacket retrieves information from openflow reg, controller cache, packet-in
-// packet to log.
+// packet to log. Log is deduplicated for non-Allow packets from record in logDeduplication.
+// Deduplication is safe guarded by logSafeGuard mutex.
 func (c *Controller) logPacket(pktIn *ofctrl.PacketIn) error {
 	ob := new(logInfo)
 
@@ -163,33 +190,18 @@ func (c *Controller) logPacket(pktIn *ofctrl.PacketIn) error {
 		return fmt.Errorf("received error while handling packetin for NetworkPolicy: %v", err)
 	}
 
-	// Create 1 sec buffers for deduplicating non-Allow packet log.
+	// Deduplicate non-Allow packet log.
 	logMsg := fmt.Sprintf("%s %s %s %s SRC: %s DEST: %s %d %s", ob.tableName, ob.npRef, ob.disposition, ob.ofPriority, ob.srcIP, ob.destIP, ob.pktLength, ob.protocolStr)
 	if ob.disposition == openflow.DispositionToString[openflow.DispositionAllow] {
 		AntreaPolicyLogger.Printf(logMsg)
 	} else {
-		logDeduplication.logMutex.Lock()
-		_, ok := logDeduplication.logRecord[logMsg]
 		// Increase count if duplicated within 1 sec, create buffer otherwise.
-		if ok {
-			logDeduplication.logRecord[logMsg].count++
-			logDeduplication.logMutex.Unlock()
-		} else {
-			record := logDedup{1, time.Now(), time.NewTimer(time.Second)}
-			logDeduplication.logRecord[logMsg] = &record
-			logDeduplication.logMutex.Unlock()
-
+		exists := logDeduplication.updateLogKey(logMsg)
+		if !exists {
 			// Go routine for logging when buffer timer stops.
 			go func(logKey string) {
-				logDeduplication.logMutex.Lock()
-				<-logDeduplication.logRecord[logKey].bufferTimer.C
-				if logDeduplication.logRecord[logKey].count == 1 {
-					AntreaPolicyLogger.Printf(logKey)
-				} else {
-					AntreaPolicyLogger.Printf("%s [%d packets in %s]", logKey, logDeduplication.logRecord[logKey].count, time.Since(logDeduplication.logRecord[logKey].initTime))
-				}
-				delete(logDeduplication.logRecord, logKey)
-				logDeduplication.logMutex.Unlock()
+				<-logDeduplication.logMap[logKey].bufferTimer.C
+				logDeduplication.terminateLogKey(logKey)
 			}(logMsg)
 		}
 	}
