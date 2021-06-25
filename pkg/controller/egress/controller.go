@@ -329,7 +329,7 @@ func (c *EgressController) syncEgressIP(egress *egressv1alpha2.Egress) (net.IP, 
 		return net.ParseIP(egress.Spec.EgressIP), nil
 	}
 
-	ipAllocator, exists := c.ipAllocatorMap[egress.Spec.ExternalIPPool]
+	ipAllocator, exists := c.getIPAllocator(egress.Spec.ExternalIPPool)
 	if !exists {
 		// The IP pool has been deleted, reclaim the IP from the Egress API.
 		if egress.Spec.EgressIP != "" {
