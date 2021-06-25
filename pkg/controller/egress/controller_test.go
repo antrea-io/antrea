@@ -285,6 +285,8 @@ func TestAddEgress(t *testing.T) {
 			controller := newController(fakeObjects, fakeCRDObjects)
 			controller.informerFactory.Start(stopCh)
 			controller.crdInformerFactory.Start(stopCh)
+			controller.informerFactory.WaitForCacheSync(stopCh)
+			controller.crdInformerFactory.WaitForCacheSync(stopCh)
 			go controller.groupingController.Run(stopCh)
 			go controller.Run(stopCh)
 
@@ -330,6 +332,8 @@ func TestUpdateEgress(t *testing.T) {
 	controller := newController([]runtime.Object{nsDefault, podFoo1}, []runtime.Object{eipFoo1, eipFoo2})
 	controller.informerFactory.Start(stopCh)
 	controller.crdInformerFactory.Start(stopCh)
+	controller.informerFactory.WaitForCacheSync(stopCh)
+	controller.crdInformerFactory.WaitForCacheSync(stopCh)
 	go controller.groupingController.Run(stopCh)
 	go controller.Run(stopCh)
 
@@ -644,6 +648,8 @@ func TestSyncEgressIP(t *testing.T) {
 			controller := newController(nil, fakeObjects)
 			controller.informerFactory.Start(stopCh)
 			controller.crdInformerFactory.Start(stopCh)
+			controller.informerFactory.WaitForCacheSync(stopCh)
+			controller.crdInformerFactory.WaitForCacheSync(stopCh)
 			controller.createOrUpdateIPAllocator(tt.existingExternalIPPool)
 			for _, egress := range tt.existingEgresses {
 				controller.updateIPAllocation(egress)
