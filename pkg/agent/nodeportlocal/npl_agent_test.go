@@ -76,11 +76,7 @@ func getTestPod() *corev1.Pod {
 			NodeName: defaultNodeName,
 			Containers: []corev1.Container{
 				{
-					Ports: []corev1.ContainerPort{
-						{
-							ContainerPort: int32(defaultPort),
-						},
-					},
+					Ports: []corev1.ContainerPort{},
 				},
 			},
 		},
@@ -91,7 +87,46 @@ func getTestPod() *corev1.Pod {
 	}
 }
 
-func getTestSvc() *corev1.Service {
+func getTestSvc(targetPorts ...int32) *corev1.Service {
+	var ports []corev1.ServicePort
+	if len(targetPorts) == 0 {
+		port := corev1.ServicePort{
+			Port:     80,
+			Protocol: "TCP",
+			TargetPort: intstr.IntOrString{
+				Type:   intstr.Int,
+				IntVal: defaultPort,
+			},
+		}
+		ports = append(ports, port)
+	} else {
+		for i := range targetPorts {
+			port := corev1.ServicePort{
+				Port:     80,
+				Protocol: "TCP",
+				TargetPort: intstr.IntOrString{
+					Type:   intstr.Int,
+					IntVal: targetPorts[i],
+				},
+			}
+			ports = append(ports, port)
+		}
+	}
+	return &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        defaultSvcName,
+			Namespace:   defaultNS,
+			Annotations: map[string]string{nplk8s.NPLEnabledAnnotationKey: "true"},
+		},
+		Spec: corev1.ServiceSpec{
+			Type:     corev1.ServiceTypeClusterIP,
+			Selector: map[string]string{defaultAppSelectorKey: defaultAppSelectorVal},
+			Ports:    ports,
+		},
+	}
+}
+
+func getTestSvcWithPortName(portName string) *corev1.Service {
 	return &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        defaultSvcName,
@@ -105,8 +140,8 @@ func getTestSvc() *corev1.Service {
 				Port:     80,
 				Protocol: "TCP",
 				TargetPort: intstr.IntOrString{
-					Type:   intstr.Int,
-					IntVal: defaultPort,
+					Type:   intstr.String,
+					StrVal: portName,
 				},
 			}},
 		},
@@ -388,16 +423,12 @@ func TestPodDelete(t *testing.T) {
 	assert.NoError(t, err, "Error when polling for port table update")
 }
 
-// TestPodAddMultiPort creates a Pod with multiple ports and verifies that the Pod's NPL annotation
-// and the local port table are updated correctly.
-func TestPodAddMultiPort(t *testing.T) {
-	testSvc := getTestSvc()
-	testPod := getTestPod()
+// TestPodAddMultiPort creates a Pod and a Service with two target ports.
+// It verifies that the Pod's NPL annotation and the local port table are updated with both ports.
+func TestAddMultiPortPodSvc(t *testing.T) {
 	newPort := 90
-	testPod.Spec.Containers[0].Ports = append(
-		testPod.Spec.Containers[0].Ports,
-		corev1.ContainerPort{ContainerPort: int32(newPort)},
-	)
+	testSvc := getTestSvc(defaultPort, int32(newPort))
+	testPod := getTestPod()
 	testData := setUp(t, testSvc, testPod)
 	defer testData.tearDown()
 
@@ -409,6 +440,33 @@ func TestPodAddMultiPort(t *testing.T) {
 	assert.True(t, testData.portTable.RuleExists(defaultPodIP, newPort))
 }
 
+// TestPodAddMultiPort creates a Pod with multiple ports and a Service with only one target port.
+// It verifies that the Pod's NPL annotation and the local port table are updated correctly,
+// with only one port corresponding to the Service's single target port.
+func TestAddMultiPortPodSinglePortSvc(t *testing.T) {
+	testSvc := getTestSvc()
+	testPod := getTestPod()
+	newPort1 := defaultPort
+	newPort2 := 81
+	testPod.Spec.Containers[0].Ports = append(
+		testPod.Spec.Containers[0].Ports,
+		corev1.ContainerPort{ContainerPort: int32(newPort1)},
+	)
+	testPod.Spec.Containers[0].Ports = append(
+		testPod.Spec.Containers[0].Ports,
+		corev1.ContainerPort{ContainerPort: int32(newPort2)},
+	)
+	testData := setUp(t, testSvc, testPod)
+	defer testData.tearDown()
+
+	value, err := testData.pollForPodAnnotation(testPod.Name, true)
+	require.NoError(t, err, "Poll for annotation check failed")
+	nplData := testData.checkAnnotationValue(value, defaultPort)
+	assert.Len(t, nplData, 1)
+	assert.True(t, testData.portTable.RuleExists(defaultPodIP, defaultPort))
+	assert.False(t, testData.portTable.RuleExists(defaultPodIP, newPort2))
+}
+
 // TestPodAddHostPort creates a Pod with host ports and verifies that the Pod's NPL annotation
 // is updated with host port, without allocating extra port from NPL pool.
 // No rule is required for this case.
@@ -416,7 +474,10 @@ func TestPodAddHostPort(t *testing.T) {
 	testSvc := getTestSvc()
 	testPod := getTestPod()
 	hostPort := 4001
-	testPod.Spec.Containers[0].Ports[0].HostPort = int32(hostPort)
+	testPod.Spec.Containers[0].Ports = append(
+		testPod.Spec.Containers[0].Ports,
+		corev1.ContainerPort{ContainerPort: int32(defaultPort), HostPort: int32(hostPort), Protocol: corev1.ProtocolTCP},
+	)
 	testData := setUp(t, testSvc, testPod)
 	defer testData.tearDown()
 
@@ -425,6 +486,76 @@ func TestPodAddHostPort(t *testing.T) {
 	nplData := testData.checkAnnotationValue(value, defaultPort)
 	assert.Equal(t, nplData[0].NodePort, hostPort)
 	assert.False(t, testData.portTable.RuleExists(defaultPodIP, defaultPort))
+}
+
+// TestPodAddHostPort creates a Pod with multiple host ports having same value but different protocol.
+// It verifies that the Pod's NPL annotation is updated with host port, without allocating extra port
+// from NPL pool. No NPL rule is required for this case.
+func TestPodAddHostPortMultiProtocol(t *testing.T) {
+	testSvc := getTestSvc()
+	testPod := getTestPod()
+	hostPort := 4001
+	testPod.Spec.Containers[0].Ports = append(
+		testPod.Spec.Containers[0].Ports,
+		corev1.ContainerPort{ContainerPort: int32(defaultPort), HostPort: int32(hostPort), Protocol: corev1.ProtocolTCP},
+	)
+	testPod.Spec.Containers[0].Ports = append(
+		testPod.Spec.Containers[0].Ports,
+		corev1.ContainerPort{ContainerPort: int32(defaultPort), HostPort: int32(hostPort), Protocol: corev1.ProtocolUDP},
+	)
+	testData := setUp(t, testSvc, testPod)
+	defer testData.tearDown()
+
+	value, err := testData.pollForPodAnnotation(testPod.Name, true)
+	require.NoError(t, err, "Poll for annotation check failed")
+	nplData := testData.checkAnnotationValue(value, defaultPort)
+	assert.Equal(t, nplData[0].NodePort, hostPort)
+	assert.False(t, testData.portTable.RuleExists(defaultPodIP, defaultPort))
+}
+
+// TestPodAddHostPortWrongProtocol creates a Pod with a host port but with protocol UDP instead of TCP.
+// In this case, instead of using host port, a new port should be allocated from NPL port pool.
+func TestPodAddHostPortWrongProtocol(t *testing.T) {
+	testSvc := getTestSvc()
+	testPod := getTestPod()
+	hostPort := 4001
+	testPod.Spec.Containers[0].Ports = append(
+		testPod.Spec.Containers[0].Ports,
+		corev1.ContainerPort{ContainerPort: int32(defaultPort), HostPort: int32(hostPort), Protocol: corev1.ProtocolUDP},
+	)
+	testData := setUp(t, testSvc, testPod)
+	defer testData.tearDown()
+
+	value, err := testData.pollForPodAnnotation(testPod.Name, true)
+	require.NoError(t, err, "Poll for annotation check failed")
+	nplData := testData.checkAnnotationValue(value, defaultPort)
+	assert.NotEqual(t, nplData[0].NodePort, hostPort)
+	assert.True(t, testData.portTable.RuleExists(defaultPodIP, defaultPort))
+}
+
+// TestTargetPortWithName creates a Service with target port name in string.
+// A Pod with matching container port name is also created and it is verified that
+// the port table is updated with desired NPL rule.
+func TestTargetPortWithName(t *testing.T) {
+	portName := "abcPort"
+	testSvc := getTestSvcWithPortName(portName)
+	testPod := getTestPod()
+	testPod.Spec.Containers[0].Ports = append(
+		testPod.Spec.Containers[0].Ports,
+		corev1.ContainerPort{ContainerPort: int32(defaultPort), Name: portName, Protocol: corev1.ProtocolTCP},
+	)
+	testData := setUp(t, testSvc, testPod)
+	defer testData.tearDown()
+
+	_, err := testData.pollForPodAnnotation(testPod.Name, true)
+	require.NoError(t, err, "Poll for annotation check failed")
+	assert.True(t, testData.portTable.RuleExists(testPod.Status.PodIP, defaultPort))
+
+	testSvc = getTestSvcWithPortName("wrongPort")
+	testData.updateServiceOrFail(testSvc)
+	_, err = testData.pollForPodAnnotation(testPod.Name, false)
+	require.NoError(t, err, "Poll for annotation check failed")
+	assert.False(t, testData.portTable.RuleExists(testPod.Status.PodIP, defaultPort))
 }
 
 // TestMultiplePods creates multiple Pods and verifies that NPL annotations for both Pods are
@@ -451,6 +582,22 @@ func TestMultiplePods(t *testing.T) {
 	assert.True(t, testData.portTable.RuleExists(testPod2.Status.PodIP, defaultPort))
 
 	assert.NotEqual(t, nplData1[0].NodePort, nplData2[0].NodePort)
+}
+
+func TestMultipleServicesSameBackendPod(t *testing.T) {
+	testSvc1 := getTestSvc()
+	testPod := getTestPod()
+	testSvc2 := getTestSvc(9090)
+	testSvc2.Name = "svc2"
+	testData := setUp(t, testSvc1, testSvc2, testPod)
+	defer testData.tearDown()
+
+	value, err := testData.pollForPodAnnotation(testPod.Name, true)
+	require.NoError(t, err, "Poll for annotation check failed")
+	nplData := testData.checkAnnotationValue(value, defaultPort, 9090)
+	assert.True(t, testData.portTable.RuleExists(testPod.Status.PodIP, defaultPort))
+	assert.True(t, testData.portTable.RuleExists(testPod.Status.PodIP, 9090))
+	assert.NotEqual(t, nplData[0].NodePort, nplData[1].NodePort)
 }
 
 // TestInitInvalidPod simulates an agent reboot case. A Pod with an invalid NPL annotation is
