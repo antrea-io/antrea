@@ -575,7 +575,7 @@ func NewProxier(
 		endpointReferenceCounter: map[string]int{},
 		serviceStringMap:         map[string]k8sproxy.ServicePortName{},
 		oversizeServiceSet:       sets.NewString(),
-		groupCounter:             types.NewGroupCounter(),
+		groupCounter:             types.NewGroupCounter(isIPv6),
 		ofClient:                 ofClient,
 		isIPv6:                   isIPv6,
 	}
