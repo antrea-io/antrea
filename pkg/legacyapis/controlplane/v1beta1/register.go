@@ -19,7 +19,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
-	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta2"
+	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane/v1beta1"
 )
 
 // GroupName is the group name used in this package.
@@ -44,15 +44,15 @@ var (
 // Adds the list of known types to the given scheme.
 func addKnownTypes(scheme *runtime.Scheme) error {
 	scheme.AddKnownTypes(SchemeGroupVersion,
-		&v1beta2.AppliedToGroup{},
-		&v1beta2.AppliedToGroupPatch{},
-		&v1beta2.AppliedToGroupList{},
-		&v1beta2.AddressGroup{},
-		&v1beta2.AddressGroupPatch{},
-		&v1beta2.AddressGroupList{},
-		&v1beta2.NetworkPolicy{},
-		&v1beta2.NetworkPolicyList{},
-		&v1beta2.NodeStatsSummary{},
+		&v1beta1.AppliedToGroup{},
+		&v1beta1.AppliedToGroupPatch{},
+		&v1beta1.AppliedToGroupList{},
+		&v1beta1.AddressGroup{},
+		&v1beta1.AddressGroupPatch{},
+		&v1beta1.AddressGroupList{},
+		&v1beta1.NetworkPolicy{},
+		&v1beta1.NetworkPolicyList{},
+		&v1beta1.NodeStatsSummary{},
 	)
 
 	metav1.AddToGroupVersion(scheme, SchemeGroupVersion)
