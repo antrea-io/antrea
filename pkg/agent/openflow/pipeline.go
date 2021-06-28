@@ -633,18 +633,6 @@ func (c *client) connectionTrackFlows(category cookie.Category) []binding.Flow {
 			ctZone = CtZoneV6
 		}
 		flows = append(flows,
-			// If a connection was initiated through the gateway (i.e. has gatewayCTMark) and
-			// the packet is received on the gateway port, go to the next table directly. This
-			// is to bypass the flow which is installed by ctRewriteDstMACFlow in the same
-			// table, and which will rewrite the destination MAC address for traffic with the
-			// gatewayCTMark, but which is flowing in the opposite direction.
-			connectionTrackStateTable.BuildFlow(priorityHigh).MatchProtocol(proto).
-				MatchRegRange(int(marksReg), markTrafficFromGateway, binding.Range{0, 15}).
-				MatchCTMark(gatewayCTMark, nil).
-				MatchCTStateNew(false).MatchCTStateTrk(true).
-				Action().GotoTable(connectionTrackStateTable.GetNext()).
-				Cookie(c.cookieAllocator.Request(category).Raw()).
-				Done(),
 			// Connections initiated through the gateway are marked with gatewayCTMark.
 			connectionTrackCommitTable.BuildFlow(priorityNormal).MatchProtocol(proto).
 				MatchRegRange(int(marksReg), markTrafficFromGateway, binding.Range{0, 15}).
@@ -876,36 +864,6 @@ func (c *client) traceflowNetworkPolicyFlows(dataplaneTag uint8, timeout uint16,
 					Done())
 			}
 		}
-	}
-	return flows
-}
-
-// ctRewriteDstMACFlow rewrites the destination MAC address with the local host gateway MAC if the
-// packet is marked with gatewayCTMark but was not received on the host gateway. In other words, it
-// rewrites the destination MAC address for reply traffic for connections which were initiated
-// through the gateway, to ensure that this reply traffic gets forwarded correctly (back to the host
-// network namespace, through the gateway). In particular, it is necessary in the following 2 cases:
-//  1) reply traffic for connections from a local Pod to a ClusterIP Service (when AntreaProxy is
-//  disabled and kube-proxy is used). In this case the destination IP address of the reply traffic
-//  is the Pod which initiated the connection to the Service (no SNAT). We need to make sure that
-//  these packets are sent back through the gateway so that the source IP can be rewritten (Service
-//  backend IP -> Service ClusterIP).
-//  2) when hair-pinning is involved, i.e. for connections between 2 local Pods belonging to this
-//  Node and for which NAT is performed. This applies regardless of whether AntreaProxy is enabled
-//  or not, and thus also applies to Windows Nodes (for which AntreaProxy is enabled by default).
-//  One example is a Pod accessing a NodePort Service for which externalTrafficPolicy is set to
-//  Local, using the local Node's IP address.
-func (c *client) ctRewriteDstMACFlows(gatewayMAC net.HardwareAddr, category cookie.Category) []binding.Flow {
-	connectionTrackStateTable := c.pipeline[conntrackStateTable]
-	var flows []binding.Flow
-	for _, proto := range c.ipProtocols {
-		flows = append(flows, connectionTrackStateTable.BuildFlow(priorityNormal).MatchProtocol(proto).
-			MatchCTMark(gatewayCTMark, nil).
-			MatchCTStateNew(false).MatchCTStateTrk(true).
-			Action().SetDstMAC(gatewayMAC).
-			Action().GotoTable(connectionTrackStateTable.GetNext()).
-			Cookie(c.cookieAllocator.Request(category).Raw()).
-			Done())
 	}
 	return flows
 }
@@ -1178,7 +1136,7 @@ func (c *client) l3FwdFlowRouteToGW(gwMAC net.HardwareAddr, category cookie.Cate
 }
 
 // l3FwdFlowToGateway generates the L3 forward flows to rewrite the destination MAC of the packets to the gateway interface
-// MAC if the destination IP is the gateway IP.
+// MAC if the destination IP is the gateway IP or the connection was initiated through the gateway interface.
 func (c *client) l3FwdFlowToGateway(localGatewayIPs []net.IP, localGatewayMAC net.HardwareAddr, category cookie.Category) []binding.Flow {
 	l3FwdTable := c.pipeline[l3ForwardingTable]
 	var flows []binding.Flow
@@ -1187,6 +1145,27 @@ func (c *client) l3FwdFlowToGateway(localGatewayIPs []net.IP, localGatewayMAC ne
 		flows = append(flows, l3FwdTable.BuildFlow(priorityNormal).MatchProtocol(ipProtocol).
 			MatchRegRange(int(marksReg), macRewriteMark, macRewriteMarkRange).
 			MatchDstIP(ip).
+			Action().SetDstMAC(localGatewayMAC).
+			Action().GotoTable(l3FwdTable.GetNext()).
+			Cookie(c.cookieAllocator.Request(category).Raw()).
+			Done())
+	}
+	// Rewrite the destination MAC address with the local host gateway MAC if the packet is in the reply direction and
+	// is marked with gatewayCTMark. This is for connections which were initiated through the gateway, to ensure that
+	// this reply traffic gets forwarded correctly (back to the host network namespace, through the gateway). In
+	// particular, it is necessary in the following 2 cases:
+	//  1) reply traffic for connections from a local Pod to a ClusterIP Service (when AntreaProxy is disabled and
+	//  kube-proxy is used). In this case the destination IP address of the reply traffic is the Pod which initiated the
+	//  connection to the Service (no SNAT). We need to make sure that these packets are sent back through the gateway
+	//  so that the source IP can be rewritten (Service backend IP -> Service ClusterIP).
+	//  2) when hair-pinning is involved, i.e. connections between 2 local Pods, for which NAT is performed. This
+	//  applies regardless of whether AntreaProxy is enabled or not, and thus also applies to Windows Nodes (for which
+	//  AntreaProxy is enabled by default). One example is a Pod accessing a NodePort Service for which
+	//  externalTrafficPolicy is set to Local, using the local Node's IP address.
+	for _, proto := range c.ipProtocols {
+		flows = append(flows, l3FwdTable.BuildFlow(priorityHigh).MatchProtocol(proto).
+			MatchCTMark(gatewayCTMark, nil).
+			MatchCTStateRpl(true).MatchCTStateTrk(true).
 			Action().SetDstMAC(localGatewayMAC).
 			Action().GotoTable(l3FwdTable.GetNext()).
 			Cookie(c.cookieAllocator.Request(category).Raw()).
