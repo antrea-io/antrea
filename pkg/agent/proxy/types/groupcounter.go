@@ -41,8 +41,12 @@ type groupCounter struct {
 	groupMap map[k8sproxy.ServicePortName]binding.GroupIDType
 }
 
-func NewGroupCounter() *groupCounter {
-	return &groupCounter{groupMap: map[k8sproxy.ServicePortName]binding.GroupIDType{}}
+func NewGroupCounter(isIPv6 bool) *groupCounter {
+	var groupIDCounter binding.GroupIDType
+	if isIPv6 {
+		groupIDCounter = 0x10000000
+	}
+	return &groupCounter{groupMap: map[k8sproxy.ServicePortName]binding.GroupIDType{}, groupIDCounter: groupIDCounter}
 }
 
 func (c *groupCounter) Get(svcPortName k8sproxy.ServicePortName) (binding.GroupIDType, bool) {
