@@ -337,46 +337,16 @@ This table handles all "tracked" packets (all packets are moved to the tracked
 state by the previous table, [ConntrackTable]). It serves the following
 purposes:
 
-* keeps track of connections initiated through the gateway port, i.e. for which
-  the first packet of the connection (SYN packet for TCP) was received through
-  the gateway. For all reply packets belonging to such connections we overwrite
-  the destination MAC to the local gateway MAC to ensure that they get forwarded
-  though the gateway port. This is required to handle the following cases:
-  - reply traffic for connections from a local Pod to a ClusterIP Service, which
-    are handled by kube-proxy and go through DNAT. In this case the destination
-    IP address of the reply traffic is the Pod which initiated the connection to
-    the Service (no SNAT by kube-proxy). We need to make sure that these packets
-    are sent back through the gateway so that the source IP can be rewritten to
-    the ClusterIP ("undo" DNAT). If we do not use connection tracking and do not
-    rewrite the destination MAC, reply traffic from the backend will go directly
-    to the originating Pod without going first through the gateway and
-    kube-proxy.  This means that the reply traffic will arrive at the
-    originating Pod with the incorrect source IP (it will be set to the
-    backend's IP instead of the Service IP).
-  - when hair-pinning is involved, i.e. for connections between 2 local Pods and
-    for which NAT is performed. One example is a Pod accessing a NodePort
-    Service for which `externalTrafficPolicy` is set to `Local` using the local
-    Node's IP address, as there will be no SNAT for such traffic. Another
-    example could be `hostPort` support, depending on how the feature is
-    implemented.
 * drop packets reported as invalid by conntrack
 
 If you dump the flows for this table, you should see the following:
 
 ```text
-1. table=31, priority=210,ct_state=-new+trk,ct_mark=0x20,ip,reg0=0x1/0xffff actions=goto_table:40
-2. table=31, priority=200,ct_state=+inv+trk,ip actions=drop
-3. table=31, priority=200,ct_state=-new+trk,ct_mark=0x20,ip actions=mod_dl_dst:e2:e5:a4:9b:1c:b1,goto_table:40
-4. table=31, priority=0 actions=goto_table:40
+1. table=31, priority=190,ct_state=+inv+trk,ip actions=drop
+2. table=31, priority=0 actions=goto_table:40
 ```
 
-Flows 1 and 3 implement the destination MAC rewrite described above. Note that
-at this stage we have not committed any connection yet. We commit all
-connections after enforcing Network Policies, in [ConntrackCommitTable]. This is
-also when we set the `ct_mark` to `0x20` for connections initiated through the
-gateway.
-
-Flow 2 drops invalid traffic. All non-dropped traffic finally goes to the
+Flow 1 drops invalid traffic. All non-dropped traffic finally goes to the
 [DNATTable].
 
 ### DNATTable (40)
@@ -588,6 +558,35 @@ table=70, priority=200,ip,reg0=0x80000/0x80000,nw_dst=10.10.0.2 actions=mod_dl_s
 
 ```text
 table=70, priority=200,ip,reg0=0x80000/0x80000,nw_dst=10.10.0.1 actions=mod_dl_dst:e2:e5:a4:9b:1c:b1,goto_table:80
+```
+
+* All reply traffic of connections initiated through the gateway port, i.e. for
+  which the first packet of the connection (SYN packet for TCP) was received
+  through the gateway. Such packets can be identified by the packet's direction
+  in `ct_state` and the `ct_mark` value `0x20` which is committed in
+  [ConntrackCommitTable] when the first packet of the connection was handled.
+  A flow will overwrite the destination MAC to the local gateway MAC to ensure
+  that they get forwarded through the gateway port. This is required to handle
+  the following cases:
+  - reply traffic for connections from a local Pod to a ClusterIP Service, which
+    are handled by kube-proxy and go through DNAT. In this case the destination
+    IP address of the reply traffic is the Pod which initiated the connection to
+    the Service (no SNAT by kube-proxy). We need to make sure that these packets
+    are sent back through the gateway so that the source IP can be rewritten to
+    the ClusterIP ("undo" DNAT). If we do not use connection tracking and do not
+    rewrite the destination MAC, reply traffic from the backend will go directly
+    to the originating Pod without going first through the gateway and
+    kube-proxy. This means that the reply traffic will arrive at the originating
+    Pod with the incorrect source IP (it will be set to the backend's IP instead
+    of the Service IP).
+  - when hair-pinning is involved, i.e. connections between 2 local Pods, for
+    which NAT is performed. One example is a Pod accessing a NodePort Service
+    for which `externalTrafficPolicy` is set to `Local` using the local Node's
+    IP address, as there will be no SNAT for such traffic. Another example could
+    be `hostPort` support, depending on how the feature is implemented.
+
+```text
+table=70, priority=210,ct_state=+rpl+trk,ct_mark=0x20,ip actions=mod_dl_dst:e2:e5:a4:9b:1c:b1,goto_table:80
 ```
 
 * All traffic destined to a remote Pod is forwarded through the appropriate
