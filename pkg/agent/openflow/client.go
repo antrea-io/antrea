@@ -619,7 +619,6 @@ func (c *client) InstallGatewayFlows() error {
 
 	// Add flow to ensure the liveness check packet could be forwarded correctly.
 	flows = append(flows, c.localProbeFlow(gatewayIPs, cookie.Default)...)
-	flows = append(flows, c.ctRewriteDstMACFlows(gatewayConfig.MAC, cookie.Default)...)
 	flows = append(flows, c.l3FwdFlowToGateway(gatewayIPs, gatewayConfig.MAC, cookie.Default)...)
 
 	if err := c.ofEntryOperations.AddAll(flows); err != nil {
