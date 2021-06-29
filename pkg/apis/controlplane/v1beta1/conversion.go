@@ -22,7 +22,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 
 	"github.com/vmware-tanzu/antrea/pkg/apis/controlplane"
-	"github.com/vmware-tanzu/antrea/pkg/apis/security/v1alpha1"
 )
 
 func init() {
@@ -402,18 +401,7 @@ func Convert_controlplane_NetworkPolicy_To_v1beta1_NetworkPolicy(in *controlplan
 }
 
 func Convert_controlplane_NetworkPolicyRule_To_v1beta1_NetworkPolicyRule(in *controlplane.NetworkPolicyRule, out *NetworkPolicyRule, s conversion.Scope) error {
-	out.Direction = Direction(in.Direction)
-	if err := Convert_controlplane_NetworkPolicyPeer_To_v1beta1_NetworkPolicyPeer(&in.From, &out.From, s); err != nil {
-		return err
-	}
-	if err := Convert_controlplane_NetworkPolicyPeer_To_v1beta1_NetworkPolicyPeer(&in.To, &out.To, s); err != nil {
-		return err
-	}
-	out.Services = *(*[]Service)(unsafe.Pointer(&in.Services))
-	out.Priority = in.Priority
-	out.Action = (*v1alpha1.RuleAction)(unsafe.Pointer(in.Action))
-	out.EnableLogging = in.EnableLogging
-	return nil
+	return autoConvert_controlplane_NetworkPolicyRule_To_v1beta1_NetworkPolicyRule(in, out, s)
 }
 
 func Convert_v1beta1_Service_To_controlplane_Service(in *Service, out *controlplane.Service, s conversion.Scope) error {
