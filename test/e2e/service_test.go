@@ -16,6 +16,7 @@ package e2e
 
 import (
 	"fmt"
+	"net"
 	"strings"
 	"testing"
 
@@ -23,8 +24,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 )
 
-// TestClusterIPHostAccess tests traffic from host to ClusterIP Service.
-func TestClusterIPHostAccess(t *testing.T) {
+// TestClusterIP tests traffic from Nodes and Pods to ClusterIP Service.
+func TestClusterIP(t *testing.T) {
 	// TODO: Support for dual-stack and IPv6-only clusters
 	skipIfIPv6Cluster(t)
 
@@ -35,35 +36,56 @@ func TestClusterIPHostAccess(t *testing.T) {
 	defer teardownTest(t, data)
 
 	svcName := "nginx"
-	node := nodeName(0)
-	svc, cleanup := data.createClusterIPServiceAndBackendPods(t, svcName, node)
+	serverPodNode := nodeName(0)
+	svc, cleanup := data.createClusterIPServiceAndBackendPods(t, svcName, serverPodNode)
 	defer cleanup()
 	t.Logf("%s Service is ready", svcName)
 
-	var linNode, winNode string
-	linNode = node
-	if len(clusterInfo.windowsNodes) != 0 {
-		idx := clusterInfo.windowsNodes[0]
-		winNode = clusterInfo.nodes[idx].name
-	}
-
-	curlSvc := func(node string) {
+	testFromNode := func(node string) {
 		// Retry is needed for rules to be installed by kube-proxy/antrea-proxy.
 		cmd := fmt.Sprintf("curl --connect-timeout 1 --retry 5 --retry-connrefused %s:80", svc.Spec.ClusterIP)
 		rc, stdout, stderr, err := RunCommandOnNode(node, cmd)
 		if rc != 0 || err != nil {
 			t.Errorf("Error when running command '%s' on Node '%s', rc: %d, stdout: %s, stderr: %s, error: %v",
 				cmd, node, rc, stdout, stderr, err)
-		} else {
-			t.Logf("curl from Node '%s' succeeded", node)
 		}
 	}
-	t.Logf("Try to curl ClusterIP Service from a Linux host")
-	curlSvc(linNode)
-	if winNode != "" {
-		t.Logf("Try to curl Cluster IP Service from a Windows host")
-		curlSvc(winNode)
+
+	testFromPod := func(podName, nodeName string) {
+		require.NoError(t, data.createBusyboxPodOnNode(podName, nodeName))
+		defer data.deletePodAndWait(defaultTimeout, podName)
+		require.NoError(t, data.podWaitForRunning(defaultTimeout, podName, testNamespace))
+		err := data.runNetcatCommandFromTestPod(podName, svc.Spec.ClusterIP, 80)
+		require.NoError(t, err, "Pod %s should be able to connect %s, but was not able to connect", podName, net.JoinHostPort(svc.Spec.ClusterIP, fmt.Sprint(80)))
 	}
+
+	t.Run("ClusterIP", func(t *testing.T) {
+		t.Run("Same Linux Node can access the Service", func(t *testing.T) {
+			t.Parallel()
+			testFromNode(serverPodNode)
+		})
+		t.Run("Different Linux Node can access the Service", func(t *testing.T) {
+			t.Parallel()
+			skipIfNumNodesLessThan(t, 2)
+			testFromNode(nodeName(1))
+		})
+		t.Run("Windows host can access the Service", func(t *testing.T) {
+			t.Parallel()
+			skipIfNoWindowsNodes(t)
+			idx := clusterInfo.windowsNodes[0]
+			winNode := clusterInfo.nodes[idx].name
+			testFromNode(winNode)
+		})
+		t.Run("Linux Pod on same Node can access the Service", func(t *testing.T) {
+			t.Parallel()
+			testFromPod("client-on-same-node", serverPodNode)
+		})
+		t.Run("Linux Pod on different Node can access the Service", func(t *testing.T) {
+			t.Parallel()
+			skipIfNumNodesLessThan(t, 2)
+			testFromPod("client-on-different-node", nodeName(1))
+		})
+	})
 }
 
 func (data *TestData) createClusterIPServiceAndBackendPods(t *testing.T, name string, node string) (*corev1.Service, func()) {
