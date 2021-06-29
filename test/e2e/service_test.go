@@ -17,6 +17,7 @@ package e2e
 import (
 	"fmt"
 	"net"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -51,8 +52,8 @@ func TestClusterIP(t *testing.T) {
 		}
 	}
 
-	testFromPod := func(podName, nodeName string) {
-		require.NoError(t, data.createBusyboxPodOnNode(podName, nodeName))
+	testFromPod := func(podName, nodeName string, hostNetwork bool) {
+		require.NoError(t, data.createPodOnNode(podName, nodeName, busyboxImage, []string{"sleep", strconv.Itoa(3600)}, nil, nil, nil, hostNetwork, nil))
 		defer data.deletePodAndWait(defaultTimeout, podName)
 		require.NoError(t, data.podWaitForRunning(defaultTimeout, podName, testNamespace))
 		err := data.runNetcatCommandFromTestPod(podName, svc.Spec.ClusterIP, 80)
@@ -62,12 +63,12 @@ func TestClusterIP(t *testing.T) {
 	t.Run("ClusterIP", func(t *testing.T) {
 		t.Run("Same Linux Node can access the Service", func(t *testing.T) {
 			t.Parallel()
-			testFromNode(serverPodNode)
+			testFromPod("hostnetwork-client-on-same-node", serverPodNode, true)
 		})
 		t.Run("Different Linux Node can access the Service", func(t *testing.T) {
 			t.Parallel()
 			skipIfNumNodesLessThan(t, 2)
-			testFromNode(nodeName(1))
+			testFromPod("hostnetwork-client-on-different-node", nodeName(1), true)
 		})
 		t.Run("Windows host can access the Service", func(t *testing.T) {
 			t.Parallel()
@@ -78,12 +79,12 @@ func TestClusterIP(t *testing.T) {
 		})
 		t.Run("Linux Pod on same Node can access the Service", func(t *testing.T) {
 			t.Parallel()
-			testFromPod("client-on-same-node", serverPodNode)
+			testFromPod("client-on-same-node", serverPodNode, false)
 		})
 		t.Run("Linux Pod on different Node can access the Service", func(t *testing.T) {
 			t.Parallel()
 			skipIfNumNodesLessThan(t, 2)
-			testFromPod("client-on-different-node", nodeName(1))
+			testFromPod("client-on-different-node", nodeName(1), false)
 		})
 	})
 }
