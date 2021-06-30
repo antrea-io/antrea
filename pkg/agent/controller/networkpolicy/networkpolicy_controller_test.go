@@ -53,9 +53,10 @@ func newTestController() (*Controller, *fake.Clientset, *mockReconciler) {
 	clientset := &fake.Clientset{}
 	ch := make(chan agenttypes.EntityReference, 100)
 	controller, _ := NewNetworkPolicyController(&antreaClientGetter{clientset}, nil, nil, "node1", ch,
-		true, true, true, nil, testAsyncDeleteInterval)
+		true, true, nil, testAsyncDeleteInterval)
 	reconciler := newMockReconciler()
 	controller.reconciler = reconciler
+	controller.antreaPolicyLogger = nil
 	return controller, clientset, reconciler
 }
 

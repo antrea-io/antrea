@@ -58,10 +58,16 @@ const (
 	ICMPv6DstAdminProhibitedCode uint8 = 1
 )
 
-var (
-	AntreaPolicyLogger *log.Logger
-	logDeduplication   logSafeGuard
-)
+type AntreaPolicyLogger struct {
+	anpLogger        *log.Logger
+	logDeduplication logRecordDedupMap
+}
+
+//TODO
+//var (
+//	AntreaPolicyLogger *log.Logger
+//	logDeduplication   logRecordDedupMap
+//)
 
 // logInfo will be set by retrieving info from packetin and register
 type logInfo struct {
@@ -75,48 +81,48 @@ type logInfo struct {
 	protocolStr string // protocol of the traffic logged
 }
 
-// logDedup will be used as 1 sec buffer for log deduplication
-type logDedup struct {
+// logDedupRecord will be used as 1 sec buffer for log deduplication
+type logDedupRecord struct {
 	count       int64       // record count of duplicate log
 	initTime    time.Time   // initial time upon receiving packet log
 	bufferTimer *time.Timer // 1 sec buffer for each log
 }
 
 // logSafeGuard includes a map of log buffers and a r/w mutex for accessing the map
-type logSafeGuard struct {
+type logRecordDedupMap struct {
 	logMutex sync.Mutex
-	logMap   map[string]*logDedup
+	logMap   map[string]*logDedupRecord
 }
 
 // deleteLogKey logs and deletes the log record in logDeduplication by logMsg.
-func (l *logSafeGuard) terminateLogKey(logMsg string) {
-	l.logMutex.Lock()
-	defer l.logMutex.Unlock()
-	if l.logMap[logMsg].count == 1 {
-		AntreaPolicyLogger.Printf(logMsg)
+func (a *AntreaPolicyLogger) terminateLogKey(logMsg string) {
+	a.logDeduplication.logMutex.Lock()
+	defer a.logDeduplication.logMutex.Unlock()
+	if a.logDeduplication.logMap[logMsg].count == 1 {
+		a.anpLogger.Printf(logMsg)
 	} else {
-		AntreaPolicyLogger.Printf("%s [%d packets in %s]", logMsg, l.logMap[logMsg].count, time.Since(l.logMap[logMsg].initTime))
+		a.anpLogger.Printf("%s [%d packets in %s]", logMsg, a.logDeduplication.logMap[logMsg].count, time.Since(a.logDeduplication.logMap[logMsg].initTime))
 	}
-	delete(l.logMap, logMsg)
+	delete(a.logDeduplication.logMap, logMsg)
 }
 
 // updateLogKey initiates record or increases the count in logDeduplication corresponding to given logMsg.
-func (l *logSafeGuard) updateLogKey(logMsg string) bool {
-	l.logMutex.Lock()
-	defer l.logMutex.Unlock()
-	_, exists := l.logMap[logMsg]
+func (a *AntreaPolicyLogger) updateLogKey(logMsg string) bool {
+	a.logDeduplication.logMutex.Lock()
+	defer a.logDeduplication.logMutex.Unlock()
+	_, exists := a.logDeduplication.logMap[logMsg]
 	if exists {
-		l.logMap[logMsg].count++
+		a.logDeduplication.logMap[logMsg].count++
 	} else {
-		record := logDedup{1, time.Now(), time.NewTimer(time.Second)}
-		l.logMap[logMsg] = &record
+		record := logDedupRecord{1, time.Now(), time.NewTimer(time.Second)}
+		a.logDeduplication.logMap[logMsg] = &record
 	}
 	return exists
 }
 
 // initLogger is called while newing Antrea network policy agent controller.
 // Customize AntreaPolicyLogger specifically for Antrea Policies audit logging.
-func initLogger() error {
+func initLogger() *AntreaPolicyLogger {
 	logDir := filepath.Join(logdir.GetLogDir(), logfileSubdir)
 	logFile := filepath.Join(logDir, logfileName)
 	if _, err := os.Stat(logDir); os.IsNotExist(err) {
@@ -131,10 +137,13 @@ func initLogger() error {
 		MaxAge:     28,   // allow max 28 days maintenance of old log files
 		Compress:   true, // compress the old log files for backup
 	}
-	AntreaPolicyLogger = log.New(logOutput, "", log.Ldate|log.Lmicroseconds)
+
+	cAntreaPolicyLogger := &AntreaPolicyLogger{
+		anpLogger:        log.New(logOutput, "", log.Ldate|log.Lmicroseconds),
+		logDeduplication: logRecordDedupMap{logMap: make(map[string]*logDedupRecord)},
+	}
 	klog.V(2).Infof("Initialized Antrea-native Policy Logger for audit logging with log file '%s'", logFile)
-	logDeduplication = logSafeGuard{logMap: make(map[string]*logDedup)}
-	return nil
+	return cAntreaPolicyLogger
 }
 
 // HandlePacketIn is the packetin handler registered to openflow by Antrea network
@@ -174,7 +183,7 @@ func (c *Controller) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
 
 // logPacket retrieves information from openflow reg, controller cache, packet-in
 // packet to log. Log is deduplicated for non-Allow packets from record in logDeduplication.
-// Deduplication is safe guarded by logSafeGuard mutex.
+// Deduplication is safe guarded by logRecordDedupMap mutex.
 func (c *Controller) logPacket(pktIn *ofctrl.PacketIn) error {
 	ob := new(logInfo)
 
@@ -193,15 +202,15 @@ func (c *Controller) logPacket(pktIn *ofctrl.PacketIn) error {
 	// Deduplicate non-Allow packet log.
 	logMsg := fmt.Sprintf("%s %s %s %s SRC: %s DEST: %s %d %s", ob.tableName, ob.npRef, ob.disposition, ob.ofPriority, ob.srcIP, ob.destIP, ob.pktLength, ob.protocolStr)
 	if ob.disposition == openflow.DispositionToString[openflow.DispositionAllow] {
-		AntreaPolicyLogger.Printf(logMsg)
+		c.antreaPolicyLogger.anpLogger.Printf(logMsg)
 	} else {
 		// Increase count if duplicated within 1 sec, create buffer otherwise.
-		exists := logDeduplication.updateLogKey(logMsg)
+		exists := c.antreaPolicyLogger.updateLogKey(logMsg)
 		if !exists {
 			// Go routine for logging when buffer timer stops.
 			go func(logKey string) {
-				<-logDeduplication.logMap[logKey].bufferTimer.C
-				logDeduplication.terminateLogKey(logKey)
+				<-c.antreaPolicyLogger.logDeduplication.logMap[logKey].bufferTimer.C
+				c.antreaPolicyLogger.terminateLogKey(logKey)
 			}(logMsg)
 		}
 	}
