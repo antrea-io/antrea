@@ -124,7 +124,7 @@ func (fr *FlowRecords) ForAllFlowRecordsDo(callback flowexporter.FlowRecordCallB
 	for k, v := range fr.recordsMap {
 		err := callback(k, v)
 		if err != nil {
-			klog.Errorf("Error when executing callback for flow record")
+			klog.Errorf("Error when executing callback for flow record: %v", err)
 			return err
 		}
 	}

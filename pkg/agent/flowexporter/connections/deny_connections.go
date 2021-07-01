@@ -71,8 +71,7 @@ func (ds *DenyConnectionStore) AddOrUpdateConn(conn *flowexporter.Connection, ti
 
 // ResetConnStatsWithoutLock resets DeltaBytes and DeltaPackets of connection
 // after exporting without grabbing the lock. Caller is expected to grab lock.
-func (ds *DenyConnectionStore) ResetConnStatsWithoutLock(conn *flowexporter.Connection) {
-	connKey := flowexporter.NewConnectionKey(conn)
+func (ds *DenyConnectionStore) ResetConnStatsWithoutLock(connKey flowexporter.ConnectionKey) {
 	conn, exist := ds.connections[connKey]
 	if !exist {
 		klog.Warningf("Connection with key %s does not exist in deny connection store.", connKey)
