@@ -218,7 +218,7 @@ func NPLTestMultiplePods(t *testing.T) {
 	for i := 0; i < 4; i++ {
 		testPodName := randName("test-pod-")
 		testPods = append(testPods, testPodName)
-		err := testData.createNginxPod(testPodName, node)
+		err := testData.createNginxPodOnNode(testPodName, node)
 		r.NoError(err, "Error creating test Pod: %v", err)
 	}
 
@@ -320,7 +320,7 @@ func NPLTestLocalAccess(t *testing.T) {
 	node := nodeName(0)
 
 	testPodName := randName("test-pod-")
-	err := testData.createNginxPod(testPodName, node)
+	err := testData.createNginxPodOnNode(testPodName, node)
 	r.NoError(err, "Error creating test Pod: %v", err)
 
 	clientName := randName("test-client-")
@@ -371,7 +371,7 @@ func TestNPLMultiplePodsAgentRestart(t *testing.T) {
 	for i := 0; i < 4; i++ {
 		testPodName := randName("test-pod-")
 		testPods = append(testPods, testPodName)
-		err = testData.createNginxPod(testPodName, node)
+		err = testData.createNginxPodOnNode(testPodName, node)
 		r.NoError(err, "Error creating test Pod: %v", err)
 	}
 
@@ -443,7 +443,7 @@ func TestNPLChangePortRangeAgentRestart(t *testing.T) {
 	for i := 0; i < 4; i++ {
 		testPodName := randName("test-pod-")
 		testPods = append(testPods, testPodName)
-		err = testData.createNginxPod(testPodName, node)
+		err = testData.createNginxPodOnNode(testPodName, node)
 		r.NoError(err, "Error Creating test Pod: %v", err)
 	}
 
