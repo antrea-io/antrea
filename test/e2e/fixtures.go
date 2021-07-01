@@ -93,18 +93,14 @@ func skipIfEncapModeIsNot(tb testing.TB, data *TestData, encapMode config.Traffi
 	}
 }
 
-func skipIfEncapModeIsNotAndProviderIs(tb testing.TB, data *TestData, encapMode config.TrafficEncapModeType, name string) {
-	currentEncapMode, err := data.GetEncapMode()
-	if err != nil {
-		tb.Fatalf("Failed to get encap mode: %v", err)
-	}
-	if currentEncapMode != encapMode && testOptions.providerName == name {
-		tb.Skipf("Skipping test when encap mode is '%s' and provider is '%s', test requires '%s'", currentEncapMode.String(), name, encapMode.String())
+func skipIfHasWindowsNodes(tb testing.TB) {
+	if len(clusterInfo.windowsNodes) != 0 {
+		tb.Skipf("Skipping test as the cluster has Windows Nodes")
 	}
 }
 
-func skipIfHasWindowsNodes(tb testing.TB) {
-	if len(clusterInfo.windowsNodes) != 0 {
+func skipIfNoWindowsNodes(tb testing.TB) {
+	if len(clusterInfo.windowsNodes) == 0 {
 		tb.Skipf("Skipping test as the cluster has Windows Nodes")
 	}
 }

@@ -31,8 +31,12 @@ type IPFIXAggregationProcess interface {
 	ForAllExpiredFlowRecordsDo(callback ipfixintermediate.FlowKeyRecordMapCallBack) error
 	GetExpiryFromExpirePriorityQueue() time.Duration
 	ResetStatElementsInRecord(record ipfixentities.Record) error
-	SetMetadataFilled(record ipfixintermediate.AggregationFlowRecord)
-	IsMetadataFilled(record ipfixintermediate.AggregationFlowRecord) bool
+	SetCorrelatedFieldsFilled(record *ipfixintermediate.AggregationFlowRecord)
+	AreCorrelatedFieldsFilled(record ipfixintermediate.AggregationFlowRecord) bool
+	IsAggregatedRecordIPv4(record ipfixintermediate.AggregationFlowRecord) bool
+	IsExporterOfAggregatedRecordIPv4(record ipfixintermediate.AggregationFlowRecord) bool
+	SetExternalFieldsFilled(record *ipfixintermediate.AggregationFlowRecord)
+	AreExternalFieldsFilled(record ipfixintermediate.AggregationFlowRecord) bool
 }
 
 type ipfixAggregationProcess struct {
@@ -71,10 +75,26 @@ func (ap *ipfixAggregationProcess) ResetStatElementsInRecord(record ipfixentitie
 	return ap.AggregationProcess.ResetStatElementsInRecord(record)
 }
 
-func (ap *ipfixAggregationProcess) SetMetadataFilled(record ipfixintermediate.AggregationFlowRecord) {
-	ap.AggregationProcess.SetMetadataFilled(record, true)
+func (ap *ipfixAggregationProcess) SetCorrelatedFieldsFilled(record *ipfixintermediate.AggregationFlowRecord) {
+	ap.AggregationProcess.SetCorrelatedFieldsFilled(record, true)
 }
 
-func (ap *ipfixAggregationProcess) IsMetadataFilled(record ipfixintermediate.AggregationFlowRecord) bool {
-	return ap.AggregationProcess.IsMetadataFilled(record)
+func (ap *ipfixAggregationProcess) AreCorrelatedFieldsFilled(record ipfixintermediate.AggregationFlowRecord) bool {
+	return ap.AggregationProcess.AreCorrelatedFieldsFilled(record)
+}
+
+func (ap *ipfixAggregationProcess) IsAggregatedRecordIPv4(record ipfixintermediate.AggregationFlowRecord) bool {
+	return ap.AggregationProcess.IsAggregatedRecordIPv4(record)
+}
+
+func (ap *ipfixAggregationProcess) IsExporterOfAggregatedRecordIPv4(record ipfixintermediate.AggregationFlowRecord) bool {
+	return ap.AggregationProcess.IsExporterOfAggregatedRecordIPv4(record)
+}
+
+func (ap *ipfixAggregationProcess) SetExternalFieldsFilled(record *ipfixintermediate.AggregationFlowRecord) {
+	ap.AggregationProcess.SetExternalFieldsFilled(record, true)
+}
+
+func (ap *ipfixAggregationProcess) AreExternalFieldsFilled(record ipfixintermediate.AggregationFlowRecord) bool {
+	return ap.AggregationProcess.AreExternalFieldsFilled(record)
 }

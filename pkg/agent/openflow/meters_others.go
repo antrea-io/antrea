@@ -1,4 +1,6 @@
-// Copyright 2020 Antrea Authors
+// +build !linux
+
+// Copyright 2021 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,19 +14,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package install
+package openflow
 
 import (
-	"k8s.io/apimachinery/pkg/runtime"
-	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
-
-	"antrea.io/antrea/pkg/legacyapis/networking"
-	"antrea.io/antrea/pkg/legacyapis/networking/v1beta1"
+	"antrea.io/antrea/pkg/ovs/ovsconfig"
 )
 
-// Install registers the API group and adds types to a scheme
-func Install(scheme *runtime.Scheme) {
-	utilruntime.Must(networking.AddToScheme(scheme))
-	utilruntime.Must(v1beta1.AddToScheme(scheme))
-	utilruntime.Must(scheme.SetVersionPriority(v1beta1.SchemeGroupVersion))
+func ovsMetersAreSupported(ovsDatapathType ovsconfig.OVSDatapathType) bool {
+	// TODO: revisit after Windows OVS supports OpenFlow meters.
+	return false
 }

@@ -16,6 +16,7 @@ running in two different modes:
 - [Installation](#installation)
 - [Usage](#usage)
   - [Showing or changing log verbosity level](#showing-or-changing-log-verbosity-level)
+  - [Showing feature gates status](#showing-feature-gates-status)
   - [Collecting support information](#collecting-support-information)
   - [controllerinfo and agentinfo commands](#controllerinfo-and-agentinfo-commands)
   - [NetworkPolicy commands](#networkpolicy-commands)
@@ -94,6 +95,18 @@ integer):
 
 ```bash
 antctl log-level LEVEL
+```
+
+### Showing feature gates status
+
+The feature gates of Antrea Controller and Agent can be shown using the `antctl get featuregates` command.
+The command can run locally inside the `antrea-controller` or `antrea-agent` container or out-of-cluster,
+when it is running out-of-cluster or in Controller Pod, it will print both Controller and Agent's feature gates list.
+
+The following command prints the current feature gates:
+
+```bash
+antctl get featuregates
 ```
 
 ### Collecting support information

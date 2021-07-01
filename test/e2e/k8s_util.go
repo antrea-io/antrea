@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/pkg/errors"
@@ -38,6 +39,7 @@ import (
 type KubernetesUtils struct {
 	*TestData
 	podCache map[string][]v1.Pod
+	podLock  sync.Mutex
 }
 
 func NewKubernetesUtils(data *TestData) (*KubernetesUtils, error) {
@@ -50,11 +52,8 @@ func NewKubernetesUtils(data *TestData) (*KubernetesUtils, error) {
 // GetPodByLabel returns a Pod with the matching Namespace and "pod" label.
 func (k *KubernetesUtils) GetPodByLabel(ns string, name string) (*v1.Pod, error) {
 	pods, err := k.getPodsUncached(ns, "pod", name)
-	if err != nil {
+	if err != nil || len(pods) == 0 {
 		return nil, errors.WithMessagef(err, "unable to get Pod in Namespace %s with label pod=%s", ns, name)
-	}
-	if len(pods) == 0 {
-		return nil, nil
 	}
 	return &pods[0], nil
 }
@@ -71,6 +70,8 @@ func (k *KubernetesUtils) getPodsUncached(ns string, key, val string) ([]v1.Pod,
 
 // GetPodsByLabel returns an array of all Pods in the given Namespace having a k/v label pair.
 func (k *KubernetesUtils) GetPodsByLabel(ns string, key string, val string) ([]v1.Pod, error) {
+	k.podLock.Lock()
+	defer k.podLock.Unlock()
 	if p, ok := k.podCache[fmt.Sprintf("%v_%v_%v", ns, key, val)]; ok {
 		return p, nil
 	}

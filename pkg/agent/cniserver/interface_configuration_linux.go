@@ -83,8 +83,58 @@ func moveIfToNetns(ifname string, netns ns.NetNS) error {
 	return nil
 }
 
-// configureContainerLinkSriov move VF to the container namesapce
-func (ic *ifConfigurator) configureContainerLinkSriov(
+func moveVFtoContainerNS(vfNetDevice string, containerID string, containerNetNS string, containerIfaceName string, mtu int, result *current.Result) error {
+	hostIface := result.Interfaces[0]
+	containerIface := result.Interfaces[1]
+
+	// Move VF to Container namespace
+	netns, err := ns.GetNS(containerNetNS)
+	if err != nil {
+		return fmt.Errorf("failed to open container netns %s: %v", containerNetNS, err)
+	}
+	err = moveIfToNetns(vfNetDevice, netns)
+	if err != nil {
+		return fmt.Errorf("failed to move VF %s to container netns %s: %v", vfNetDevice, containerNetNS, err)
+	}
+	netns.Close()
+
+	if err := ns.WithNetNSPath(containerNetNS, func(hostNS ns.NetNS) error {
+		err = renameLink(vfNetDevice, containerIfaceName)
+		if err != nil {
+			return fmt.Errorf("failed to rename VF netdevice as containerIfaceName %s: %v", containerIfaceName, err)
+		}
+		link, err := netlink.LinkByName(containerIfaceName)
+		if err != nil {
+			return fmt.Errorf("failed to find VF netdevice %s: %v", containerIfaceName, err)
+		}
+		err = netlink.LinkSetMTU(link, mtu)
+		if err != nil {
+			return fmt.Errorf("failed to set MTU for VF netdevice %s: %v", containerIfaceName, err)
+		}
+		err = netlink.LinkSetUp(link)
+		if err != nil {
+			return fmt.Errorf("failed to set link up to VF netdevice %s: %v", containerIfaceName, err)
+		}
+		containerIface.Name = containerIfaceName
+		containerIface.Mac = link.Attrs().HardwareAddr.String()
+		containerIface.Sandbox = netns.Path()
+		klog.V(2).Infof("hostIface: %+v, containerIface: %+v", hostIface, containerIface)
+		klog.V(2).Infof("Configuring IP address for container %s", containerID)
+		// result.Interfaces must be set before this.
+		if err := ipam.ConfigureIface(containerIface.Name, result); err != nil {
+			return fmt.Errorf("failed to configure IP address for container %s: %v", containerID, err)
+		}
+		klog.V(2).Infof("ipam.ConfigureIface result: %+v, err: %v", result, err)
+		return nil
+	}); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// configureContainerSriovLinkOnBridge moves the VF to the container namespace for OVS offload.
+func (ic *ifConfigurator) configureContainerSriovLinkOnBridge(
 	podName string,
 	podNamespace string,
 	containerID string,
@@ -135,47 +185,53 @@ func (ic *ifConfigurator) configureContainerLinkSriov(
 		return err
 	}
 	hostIface.Mac = link.Attrs().HardwareAddr.String()
-	// 6. Move VF to Container namespace
-	netns, err := ns.GetNS(containerNetNS)
+
+	return moveVFtoContainerNS(vfNetdevice, containerID, containerNetNS, containerIfaceName, mtu, result)
+}
+
+// configureContainerSriovLink moves the VF to the container namespace for Pod link SR-IOV interface;
+// intended for multiple interfaces other than the primary interface.
+func (ic *ifConfigurator) configureContainerSriovLink(
+	podName string,
+	podNamespace string,
+	containerID string,
+	containerNetNS string,
+	containerIfaceName string,
+	mtu int,
+	pciAddress string,
+	result *current.Result,
+) error {
+	hostIface := &current.Interface{Name: containerIfaceName}
+	containerIface := &current.Interface{Name: containerIfaceName, Sandbox: containerNetNS}
+	result.Interfaces = []*current.Interface{hostIface, containerIface}
+
+	if pciAddress != "" {
+		// Get rest of the VF information
+		pfName, vfID, err := getVFInfo(pciAddress)
+		klog.V(2).Infof("pfName and vfID of pciAddress: %v, %v, %s", pfName, vfID, pciAddress)
+		if err != nil {
+			return fmt.Errorf("failed to get VF information: %v", err)
+		}
+	} else {
+		return fmt.Errorf("VF PCI address is required")
+	}
+
+	vfIFName, err := getVFLinkName(pciAddress)
+	if err != nil || vfIFName == "" {
+		return fmt.Errorf("VF interface not found for pciAddress %s: %v", pciAddress, err)
+	}
+
+	link, err := netlink.LinkByName(vfIFName)
+	klog.V(2).Infof("Get link of vfIFName: %s, link: %+v", vfIFName, link)
 	if err != nil {
-		return fmt.Errorf("failed to open netns %s: %v", containerNetNS, err)
+		return fmt.Errorf("error getting VF link: %v", err)
 	}
-	err = moveIfToNetns(vfNetdevice, netns)
-	if err != nil {
-		return err
-	}
-	netns.Close()
-	if err := ns.WithNetNSPath(containerNetNS, func(hostNS ns.NetNS) error {
-		err = renameLink(vfNetdevice, containerIfaceName)
-		if err != nil {
-			return fmt.Errorf("failed to rename VF netdevice %s: %v", containerIfaceName, err)
-		}
-		link, err = netlink.LinkByName(containerIfaceName)
-		if err != nil {
-			return fmt.Errorf("failed to find VF netdevice %s: %v", containerIfaceName, err)
-		}
-		err = netlink.LinkSetMTU(link, mtu)
-		if err != nil {
-			return fmt.Errorf("failed to set MTU for VF netdevice %s: %v", containerIfaceName, err)
-		}
-		err = netlink.LinkSetUp(link)
-		if err != nil {
-			return fmt.Errorf("failed to set link up to VF netdevice %s: %v", containerIfaceName, err)
-		}
-		klog.V(2).Infof("Setup interfaces host: %s, container %s", repPortName, containerIfaceName)
-		containerIface.Name = containerIfaceName
-		containerIface.Mac = link.Attrs().HardwareAddr.String()
-		containerIface.Sandbox = netns.Path()
-		klog.V(2).Infof("Configuring IP address for container %s", containerID)
-		// result.Interfaces must be set before this.
-		if err := ipam.ConfigureIface(containerIface.Name, result); err != nil {
-			return fmt.Errorf("failed to configure IP address for container %s: %v", containerID, err)
-		}
-		return nil
-	}); err != nil {
-		return err
-	}
-	return nil
+
+	hostIface.Mac = link.Attrs().HardwareAddr.String()
+	hostIface.Name = vfIFName
+	klog.V(2).Infof("hostIface.Name: %s, hostIface.Mac: %s, vfIFName: %s", hostIface.Name, hostIface.Mac, vfIFName)
+
+	return moveVFtoContainerNS(vfIFName, containerID, containerNetNS, containerIfaceName, mtu, result)
 }
 
 // configureContainerLinkVeth creates a veth pair: one in the container netns and one in the host netns, and configures IP
@@ -281,16 +337,21 @@ func (ic *ifConfigurator) configureContainerLink(
 	containerNetNS string,
 	containerIfaceName string,
 	mtu int,
-	sriovVFDeviceID string,
+	brSriovVFDeviceID string,
+	podSriovVFDeviceID string,
 	result *current.Result,
 ) error {
-	if sriovVFDeviceID != "" {
+	if brSriovVFDeviceID != "" {
 		if !ic.isOvsHardwareOffloadEnabled {
 			return fmt.Errorf("OVS is configured with hardware offload disabled, but SR-IOV VF was requested; please set hardware offload to true via antrea yaml")
 		}
-		klog.V(2).Infof("Moving SR-IOV %s device to network namespace of container %s", sriovVFDeviceID, containerID)
+		klog.V(2).Infof("Moving SR-IOV %s device to network namespace of container %s", brSriovVFDeviceID, containerID)
 		// Move SR-IOV VF to network namespace
-		return ic.configureContainerLinkSriov(podName, podNamespace, containerID, containerNetNS, containerIfaceName, mtu, sriovVFDeviceID, result)
+		return ic.configureContainerSriovLinkOnBridge(podName, podNamespace, containerID, containerNetNS, containerIfaceName, mtu, brSriovVFDeviceID, result)
+	} else if podSriovVFDeviceID != "" {
+		// For Pod link SR-IOV interface not attached to the OVS bridge
+		klog.V(2).Infof("Moving SR-IOV %s device to network namespace of container %s", podSriovVFDeviceID, containerID)
+		return ic.configureContainerSriovLink(podName, podNamespace, containerID, containerNetNS, containerIfaceName, mtu, podSriovVFDeviceID, result)
 	} else {
 		klog.V(2).Infof("Create veth pair for container %s", containerID)
 		// Create veth pair and link up

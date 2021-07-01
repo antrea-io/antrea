@@ -3,9 +3,9 @@
 function usage() {
     echo "Usage: provision.sh [--ip-family <v4|v6>] [-l|--large] [-h|--help]
     Provisions the Vagrant VMs.
-    --ip-family <v4|v6>  Deploy IPv4 or IPv6 Kubernetes cluster.
-    --large              Deploy large vagrant VMs with 2 vCPUs and 4096MB memory.
-                         By default, we deploy VMs with 2 vCPUs and 2048MB memory."
+    --ip-family <v4|v6|dual>  Deploy IPv4, IPv6 or dual-stack Kubernetes cluster.
+    --large                   Deploy large vagrant VMs with 2 vCPUs and 4096MB memory.
+                              By default, we deploy VMs with 2 vCPUs and 2048MB memory."
 }
 
 K8S_IP_FAMILY="v4"
@@ -64,3 +64,10 @@ export K8S_IP_FAMILY
 time vagrant up --provision
 echo "Writing Vagrant ssh config to file"
 vagrant ssh-config > ssh-config
+
+# TODO: use Kubeconfig contexts to add new cluster to existing Kubeconfig file
+echo "******************************"
+echo "Kubeconfig file written to $THIS_DIR/playbook/kube/config"
+echo "To use kubectl, you can run the following:"
+echo "$ export KUBECONFIG=$THIS_DIR/playbook/kube/config"
+echo "******************************"

@@ -31,3 +31,7 @@ type ExternalEntityListerExpansion interface{}
 // ExternalEntityNamespaceListerExpansion allows custom methods to be added to
 // ExternalEntityNamespaceLister.
 type ExternalEntityNamespaceListerExpansion interface{}
+
+// ExternalIPPoolListerExpansion allows custom methods to be added to
+// ExternalIPPoolLister.
+type ExternalIPPoolListerExpansion interface{}

@@ -101,7 +101,7 @@ const (
 	busyboxImage        = "projects.registry.vmware.com/library/busybox"
 	nginxImage          = "projects.registry.vmware.com/antrea/nginx"
 	perftoolImage       = "projects.registry.vmware.com/antrea/perftool"
-	ipfixCollectorImage = "projects.registry.vmware.com/antrea/ipfix-collector:v0.5.2"
+	ipfixCollectorImage = "projects.registry.vmware.com/antrea/ipfix-collector:v0.5.3"
 	ipfixCollectorPort  = "4739"
 
 	nginxLBService = "nginx-loadbalancer"
@@ -399,7 +399,7 @@ func collectClusterInfo() error {
 
 	retrieveCIDRs := func(cmd string, reg string) ([]string, error) {
 		res := make([]string, 2)
-		rc, stdout, _, err := RunCommandOnNode(clusterInfo.controlPlaneNodeName, cmd)
+		rc, stdout, _, err := RunCommandOnNode(controlPlaneNodeName(), cmd)
 		if err != nil || rc != 0 {
 			return res, fmt.Errorf("error when running the following command `%s` on control-plane Node: %v, %s", cmd, err, stdout)
 		}
@@ -948,9 +948,7 @@ func (data *TestData) createBusyboxPodOnNode(name string, nodeName string) error
 // The Pod will be scheduled on the specified Node (if nodeName is not empty).
 func (data *TestData) createHostNetworkBusyboxPodOnNode(name string, nodeName string) error {
 	sleepDuration := 3600 // seconds
-	return data.createPodOnNode(name, nodeName, busyboxImage, []string{"sleep", strconv.Itoa(sleepDuration)}, nil, nil, nil, false, func(pod *corev1.Pod) {
-		pod.Spec.HostNetwork = true
-	})
+	return data.createPodOnNode(name, nodeName, busyboxImage, []string{"sleep", strconv.Itoa(sleepDuration)}, nil, nil, nil, true, nil)
 }
 
 // createBusyboxPod creates a Pod in the test namespace with a single busybox container.
@@ -976,7 +974,7 @@ func (data *TestData) createNginxPod(name, nodeName string) error {
 }
 
 // createServerPod creates a Pod that can listen to specified port and have named port set.
-func (data *TestData) createServerPod(name string, portName string, portNum int32, setHostPort bool) error {
+func (data *TestData) createServerPod(name string, portName string, portNum int32, setHostPort bool, hostNetwork bool) error {
 	// See https://github.com/kubernetes/kubernetes/blob/master/test/images/agnhost/porter/porter.go#L17 for the image's detail.
 	cmd := "porter"
 	env := corev1.EnvVar{Name: fmt.Sprintf("SERVE_PORT_%d", portNum), Value: "foo"}
@@ -985,7 +983,7 @@ func (data *TestData) createServerPod(name string, portName string, portNum int3
 		// If hostPort is to be set, it must match the container port number.
 		port.HostPort = int32(portNum)
 	}
-	return data.createPodOnNode(name, "", agnhostImage, nil, []string{cmd}, []corev1.EnvVar{env}, []corev1.ContainerPort{port}, false, nil)
+	return data.createPodOnNode(name, "", agnhostImage, nil, []string{cmd}, []corev1.EnvVar{env}, []corev1.ContainerPort{port}, hostNetwork, nil)
 }
 
 // createCustomPod creates a Pod in given Namespace with custom labels.
@@ -1562,15 +1560,15 @@ func (data *TestData) runPingCommandFromTestPod(podInfo podInfo, targetPodIPs *P
 		cmd = append(cmd, sizeOption, strconv.Itoa(size))
 	}
 	if targetPodIPs.ipv4 != nil {
-		cmd = append(cmd, targetPodIPs.ipv4.String())
-		if stdout, stderr, err := data.runCommandFromPod(testNamespace, podInfo.name, ctrName, cmd); err != nil {
-			return fmt.Errorf("error when running ping command: %v - stdout: %s - stderr: %s", err, stdout, stderr)
+		cmdV4 := append(cmd, "-4", targetPodIPs.ipv4.String())
+		if stdout, stderr, err := data.runCommandFromPod(testNamespace, podInfo.name, ctrName, cmdV4); err != nil {
+			return fmt.Errorf("error when running ping command '%s': %v - stdout: %s - stderr: %s", strings.Join(cmdV4, " "), err, stdout, stderr)
 		}
 	}
 	if targetPodIPs.ipv6 != nil {
-		cmd = append(cmd, "-6", targetPodIPs.ipv6.String())
-		if stdout, stderr, err := data.runCommandFromPod(testNamespace, podInfo.name, ctrName, cmd); err != nil {
-			return fmt.Errorf("error when running ping command: %v - stdout: %s - stderr: %s", err, stdout, stderr)
+		cmdV6 := append(cmd, "-6", targetPodIPs.ipv6.String())
+		if stdout, stderr, err := data.runCommandFromPod(testNamespace, podInfo.name, ctrName, cmdV6); err != nil {
+			return fmt.Errorf("error when running ping command '%s': %v - stdout: %s - stderr: %s", strings.Join(cmdV6, " "), err, stdout, stderr)
 		}
 	}
 	return nil

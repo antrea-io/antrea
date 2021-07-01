@@ -16,10 +16,44 @@
 
 package ovsctl
 
-import "os/exec"
+import (
+	"fmt"
+	"os"
+	"os/exec"
 
-// File path of the ovs-vswitchd control UNIX domain socket.
-const ovsVSwitchdUDS = "/var/run/openvswitch/ovs-vswitchd.*.ctl"
+	"k8s.io/klog/v2"
+)
+
+const ovsVSwitchdPIDFile = "/var/run/openvswitch/ovs-vswitchd.pid"
+
+func readOVSVSwitchdPID() (int, error) {
+	pidFile, err := os.Open(ovsVSwitchdPIDFile)
+	if err != nil {
+		return -1, fmt.Errorf("cannot open ovs-vswitchd pidfile '%s': %v", ovsVSwitchdPIDFile, err)
+	}
+	defer pidFile.Close()
+	// probably the simplest way to read a single integer from a file
+	var pid int
+	if _, err := fmt.Fscanf(pidFile, "%d", &pid); err != nil {
+		return -1, fmt.Errorf("cannot read PID from ovs-vswitchd pidfile '%s': %v", ovsVSwitchdPIDFile, err)
+	}
+	return pid, nil
+}
+
+// ovsVSwitchdUDS returns the file path of the ovs-vswitchd control UNIX domain socket.
+func ovsVSwitchdUDS() string {
+	// It is a bit sub-optimal to read the PID every time we need it, but ovs-vswitchd restarts
+	// are possible. Besides, this value is only used when invoking ovs-appctl (as a new
+	// process) at the moment, so the overhead of reading the PID from file should not be a
+	// concern.
+	pid, err := readOVSVSwitchdPID()
+	if err != nil {
+		klog.ErrorS(err, "Failed to read ovs-vswitchd PID")
+		// that seems like a reasonable value to return if we cannot read the PID
+		return "/var/run/openvswitch/ovs-vswitchd.*.ctl"
+	}
+	return fmt.Sprintf("/var/run/openvswitch/ovs-vswitchd.%d.ctl", pid)
+}
 
 func getOVSCommand(cmdStr string) *exec.Cmd {
 	return exec.Command("/bin/sh", "-c", cmdStr) // lgtm[go/command-injection]

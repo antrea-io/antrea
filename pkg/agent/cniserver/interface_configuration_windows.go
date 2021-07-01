@@ -45,10 +45,13 @@ const (
 type ifConfigurator struct {
 	hnsNetwork *hcsshim.HNSNetwork
 	epCache    *sync.Map
-	ifCache    *sync.Map
 }
 
 func newInterfaceConfigurator(ovsDatapathType ovsconfig.OVSDatapathType, isOvsHardwareOffloadEnabled bool) (*ifConfigurator, error) {
+	hnsNetwork, err := hcsshim.GetHNSNetworkByName(util.LocalHNSNetwork)
+	if err != nil {
+		return nil, err
+	}
 	eps, err := hcsshim.HNSListEndpointRequest()
 	if err != nil {
 		return nil, err
@@ -59,27 +62,13 @@ func newInterfaceConfigurator(ovsDatapathType ovsconfig.OVSDatapathType, isOvsHa
 		epCache.Store(hnsEP.Name, hnsEP)
 	}
 	return &ifConfigurator{
-		epCache: epCache,
+		hnsNetwork: hnsNetwork,
+		epCache:    epCache,
 	}, nil
-
 }
 
 func (ic *ifConfigurator) addEndpoint(ep *hcsshim.HNSEndpoint) {
 	ic.epCache.Store(ep.Name, ep)
-}
-
-// ensureHNSNetwork checks if the target HNSNetwork is created on the node or not. If the HNSNetwork does not exit,
-// return error.
-func (ic *ifConfigurator) ensureHNSNetwork() error {
-	if ic.hnsNetwork != nil {
-		return nil
-	}
-	hnsNetwork, err := hcsshim.GetHNSNetworkByName(util.LocalHNSNetwork)
-	if err != nil {
-		return err
-	}
-	ic.hnsNetwork = hnsNetwork
-	return nil
 }
 
 func (ic *ifConfigurator) getEndpoint(name string) (*hcsshim.HNSEndpoint, bool) {
@@ -113,11 +102,15 @@ func (ic *ifConfigurator) configureContainerLink(
 	containerNetNS string,
 	containerIFDev string,
 	mtu int,
-	sriovVFDeviceID string,
+	brSriovVFDeviceID string,
+	podSriovVFDeviceID string,
 	result *current.Result,
 ) error {
-	if sriovVFDeviceID != "" {
+	if brSriovVFDeviceID != "" {
 		return fmt.Errorf("OVS hardware offload is not supported on windows")
+	}
+	if podSriovVFDeviceID != "" {
+		return fmt.Errorf("Pod SR-IOV interface is not supported on windows")
 	}
 	// We must use the infra container to generate the endpoint name to ensure infra and workload containers use the
 	// same HNSEndpoint.
@@ -167,10 +160,6 @@ func (ic *ifConfigurator) configureContainerLink(
 
 // createContainerLink creates HNSEndpoint using the IP configuration in the IPAM result.
 func (ic *ifConfigurator) createContainerLink(endpointName string, result *current.Result, containerID, podName, podNamespace string) (hostLink *hcsshim.HNSEndpoint, err error) {
-	// Create a new Endpoint if not found.
-	if err := ic.ensureHNSNetwork(); err != nil {
-		return nil, err
-	}
 	containerIP, err := findContainerIPConfig(result.IPs)
 	if err != nil {
 		return nil, err
@@ -337,7 +326,7 @@ func (ic *ifConfigurator) removeHNSEndpoint(endpoint *hcsshim.HNSEndpoint, conta
 	// Remove HNSEndpoint.
 	go func() {
 		hcnEndpoint, _ := hcn.GetEndpointByID(endpoint.Id)
-		if hcnEndpoint != nil && hcnEndpoint.HostComputeNamespace != "" {
+		if hcnEndpoint != nil && isValidHostNamespace(hcnEndpoint.HostComputeNamespace) {
 			err := hcn.RemoveNamespaceEndpoint(hcnEndpoint.HostComputeNamespace, hcnEndpoint.Id)
 			if err != nil {
 				klog.Errorf("Failed to remove HostComputeEndpoint %s from HostComputeNameSpace %s: %v", hcnEndpoint.Name, hcnEndpoint.HostComputeNamespace, err)
@@ -372,6 +361,13 @@ func (ic *ifConfigurator) removeHNSEndpoint(endpoint *hcsshim.HNSEndpoint, conta
 	// Delete HNSEndpoint from local cache.
 	ic.delEndpoint(epName)
 	return nil
+}
+
+// isValidHostNamespace checks if the hostNamespace is valid or not. When the runtime is docker, the hostNamespace
+// is not set, and Windows HCN should use a default value "00000000-0000-0000-0000-000000000000". An error returns
+// when removing HostComputeEndpoint in this namespace. This field is set with a valid value when containerd is used.
+func isValidHostNamespace(hostNamespace string) bool {
+	return hostNamespace != "" && hostNamespace != "00000000-0000-0000-0000-000000000000"
 }
 
 func parseContainerIfaceFromResults(cfgArgs *cnipb.CniCmdArgs, prevResult *current.Result) *current.Interface {

@@ -375,10 +375,8 @@ function deliver_antrea {
         docker save -o flow-aggregator.tar projects.registry.vmware.com/antrea/flow-aggregator:${DOCKER_IMG_VERSION}
     fi
 
-
-    kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 == role {print $6}' | while read control_plane_ip; do
-        ${SCP_WITH_ANTREA_CI_KEY} $GIT_CHECKOUT_DIR/build/yamls/*.yml capv@${control_plane_ip}:~
-    done
+    control_plane_ip="$(kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 == role {print $6}')"
+    ${SCP_WITH_ANTREA_CI_KEY} $GIT_CHECKOUT_DIR/build/yamls/*.yml capv@${control_plane_ip}:~
 
     IPs=($(kubectl get nodes -o wide --no-headers=true | awk '{print $6}' | xargs))
     for i in "${!IPs[@]}"
@@ -448,28 +446,37 @@ function run_e2e {
     export KUBECONFIG=$GIT_CHECKOUT_DIR/jenkins/out/kubeconfig
 
     mkdir -p $GIT_CHECKOUT_DIR/test/e2e/infra/vagrant/playbook/kube
-    cp -f $GIT_CHECKOUT_DIR/jenkins/out/kubeconfig $GIT_CHECKOUT_DIR/test/e2e/infra/vagrant/playbook/kube/config
+    CLUSTER_KUBECONFIG="${GIT_CHECKOUT_DIR}/jenkins/out/kubeconfig"
+    CLUSTER_SSHCONFIG="${GIT_CHECKOUT_DIR}/jenkins/out/ssh-config"
 
     echo "=== Generate ssh-config ==="
-    cp -f $GIT_CHECKOUT_DIR/ci/jenkins/ssh-config $GIT_CHECKOUT_DIR/test/e2e/infra/vagrant/ssh-config
-    control_plane_name="$(kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 == role {print $1}')"
-    control_plane_ip="$(kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 == role {print $6}')"
-    echo "=== Control-plane Node ip: ${control_plane_ip} ==="
-    sed -i "s/CONTROLPLANENODEIP/${control_plane_ip}/g" $GIT_CHECKOUT_DIR/test/e2e/infra/vagrant/ssh-config
+    kubectl get nodes -o wide --no-headers=true | awk '{print $1}' | while read sshconfig_nodename; do
+        echo "Generating ssh-config for Node ${sshconfig_nodename}"
+        sshconfig_nodeip="$(kubectl get node "${sshconfig_nodename}" -o jsonpath='{.status.addresses[0].address}')"
+        cp "${GIT_CHECKOUT_DIR}/ci/jenkins/ssh-config" "${CLUSTER_SSHCONFIG}.new"
+        sed -i "s/SSHCONFIGNODEIP/${sshconfig_nodeip}/g" "${CLUSTER_SSHCONFIG}.new"
+        sed -i "s/SSHCONFIGNODENAME/${sshconfig_nodename}/g" "${CLUSTER_SSHCONFIG}.new"
+        echo "    IdentityFile ${GIT_CHECKOUT_DIR}/jenkins/key/antrea-ci-key" >> "${CLUSTER_SSHCONFIG}.new"
+        cat "${CLUSTER_SSHCONFIG}.new" >> "${CLUSTER_SSHCONFIG}"
+    done
+
     echo "=== Move kubeconfig to control-plane Node ==="
+    control_plane_ip="$(kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 == role {print $6}')"
     ${SSH_WITH_ANTREA_CI_KEY} -n capv@${control_plane_ip} "if [ ! -d ".kube" ]; then mkdir .kube; fi"
     ${SCP_WITH_ANTREA_CI_KEY} $GIT_CHECKOUT_DIR/jenkins/out/kubeconfig capv@${control_plane_ip}:~/.kube/config
-    sed -i "s/CONTROLPLANENODE/${control_plane_name}/g" $GIT_CHECKOUT_DIR/test/e2e/infra/vagrant/ssh-config
-    echo "    IdentityFile ${GIT_CHECKOUT_DIR}/jenkins/key/antrea-ci-key" >> $GIT_CHECKOUT_DIR/test/e2e/infra/vagrant/ssh-config
 
     set +e
     mkdir -p ${GIT_CHECKOUT_DIR}/antrea-test-logs
     if [[ "$COVERAGE" == true ]]; then
         rm -rf ${GIT_CHECKOUT_DIR}/e2e-coverage
         mkdir -p ${GIT_CHECKOUT_DIR}/e2e-coverage
-        go test -v -timeout=100m antrea.io/antrea/test/e2e --logs-export-dir ${GIT_CHECKOUT_DIR}/antrea-test-logs --prometheus --coverage --coverage-dir ${GIT_CHECKOUT_DIR}/e2e-coverage
+        # HACK: see https://github.com/antrea-io/antrea/issues/2292
+        go mod edit -replace github.com/moby/spdystream=github.com/antoninbas/spdystream@v0.2.1 && go mod tidy
+        go test -v -timeout=100m antrea.io/antrea/test/e2e --logs-export-dir ${GIT_CHECKOUT_DIR}/antrea-test-logs --prometheus --coverage --coverage-dir ${GIT_CHECKOUT_DIR}/e2e-coverage --provider remote --remote.sshconfig "${CLUSTER_SSHCONFIG}" --remote.kubeconfig "${CLUSTER_KUBECONFIG}"
     else
-        go test -v -timeout=100m antrea.io/antrea/test/e2e --logs-export-dir ${GIT_CHECKOUT_DIR}/antrea-test-logs --prometheus
+        # HACK: see https://github.com/antrea-io/antrea/issues/2292
+        go mod edit -replace github.com/moby/spdystream=github.com/antoninbas/spdystream@v0.2.1 && go mod tidy
+        go test -v -timeout=100m antrea.io/antrea/test/e2e --logs-export-dir ${GIT_CHECKOUT_DIR}/antrea-test-logs --prometheus --provider remote --remote.sshconfig "${CLUSTER_SSHCONFIG}" --remote.kubeconfig "${CLUSTER_KUBECONFIG}"
     fi
 
     test_rc=$?
@@ -604,6 +611,18 @@ function garbage_collection() {
     echo "=== Auto cleanup finished ==="
 }
 
+function clean_tmp() {
+    echo "===== Clean up stale files & folders older than 7 days under /tmp ====="
+    CLEAN_LIST=(
+        "*codecov*"
+        "kustomize-*"
+        "*antrea*"
+        "go-build*"
+    )
+    for item in "${CLEAN_LIST[@]}"; do
+        find /tmp -name "${item}" -mtime +7 -exec rm -rf {} \; 2>&1 | grep -v "Permission denied" || true
+    done
+}
 
 # ensures that the script can be run from anywhere
 THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
@@ -614,6 +633,7 @@ SCP_WITH_ANTREA_CI_KEY="scp -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyC
 SSH_WITH_ANTREA_CI_KEY="ssh -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i ${GIT_CHECKOUT_DIR}/jenkins/key/antrea-ci-key"
 SSH_WITH_UTILS_KEY="ssh -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i ${WORKDIR}/utils/key"
 
+clean_tmp
 if [[ "$RUN_GARBAGE_COLLECTION" == true ]]; then
     garbage_collection
     exit 0
@@ -635,26 +655,32 @@ if [[ "$TESTCASE" != "e2e" && "$TESTCASE" != "conformance" && "$TESTCASE" != "al
     exit 1
 fi
 
+if [[ "$RUN_TEST_ONLY" == true ]]; then
+    if [[ "$TESTCASE" == "e2e" ]]; then
+        run_e2e
+    else
+        run_conformance
+    fi
+    if [[ "$TEST_FAILURE" == true ]]; then
+        exit 1
+    fi
+    exit 0
+fi
+
 if [[ "$TESTCASE" == "integration" ]]; then
     run_integration
-elif [[ "$TESTCASE" == "e2e" ]]; then
-    if [[ "$RUN_TEST_ONLY" == true ]]; then
-        run_e2e
-    else
-        setup_cluster
-        deliver_antrea
-        run_e2e
-        cleanup_cluster
-    fi
+    exit 0
+fi
+
+trap cleanup_cluster EXIT
+if [[ "$TESTCASE" == "e2e" ]]; then
+    setup_cluster
+    deliver_antrea
+    run_e2e
 else
-    if [[ "$RUN_TEST_ONLY" == true ]]; then
-        run_conformance
-    else
-        setup_cluster
-        deliver_antrea
-        run_conformance
-        cleanup_cluster
-    fi
+    setup_cluster
+    deliver_antrea
+    run_conformance
 fi
 
 if [[ "$TEST_FAILURE" == true ]]; then

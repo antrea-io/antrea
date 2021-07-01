@@ -224,7 +224,7 @@
                   credential-id: CODECOV_TOKEN # Jenkins secret that stores codecov token
                   variable: CODECOV_TOKEN
           publishers: []
-      - '{name}-{test_name}-for-pull-request':
+      - '{name}-{test_name}-no-scm':
           test_name: e2e-pending-label
           node: null
           description: 'This is for marking PR as pending for e2e test.'
@@ -305,7 +305,7 @@
               default-excludes: true
               fingerprint: false
               only-if-success: false
-      - '{name}-{test_name}-for-pull-request':
+      - '{name}-{test_name}-no-scm':
           test_name: e2e-skip
           node: null
           description: 'This is for marking PR as passed.'
@@ -329,7 +329,7 @@
           started_status: null
           wrappers: []
           publishers: []
-      - '{name}-{test_name}-for-pull-request':
+      - '{name}-{test_name}-no-scm':
           test_name: conformance-pending-label
           node: null
           description: 'This is for marking PR as pending for conformance test.'
@@ -411,7 +411,7 @@
               default-excludes: true
               fingerprint: false
               only-if-success: false
-      - '{name}-{test_name}-for-pull-request':
+      - '{name}-{test_name}-no-scm':
           test_name: conformance-skip
           node: null
           description: 'This is for marking PR as passed.'
@@ -435,7 +435,7 @@
           started_status: null
           wrappers: []
           publishers: []
-      - '{name}-{test_name}-for-pull-request':
+      - '{name}-{test_name}-no-scm':
           test_name: all-features-conformance-pending-label
           node: null
           description: 'This is for marking PR as pending for conformance test with all alpha features enabled.'
@@ -501,7 +501,7 @@
               default-excludes: true
               fingerprint: false
               only-if-success: false
-      - '{name}-{test_name}-for-pull-request':
+      - '{name}-{test_name}-no-scm':
           test_name: all-features-conformance-skip
           node: null
           description: 'This is for marking PR as passed.'
@@ -582,7 +582,7 @@
               default-excludes: true
               fingerprint: false
               only-if-success: false
-      - '{name}-{test_name}-for-pull-request':
+      - '{name}-{test_name}-no-scm':
           test_name: whole-conformance-skip
           node: null
           description: 'This is for marking PR as passed.'
@@ -606,7 +606,7 @@
           started_status: null
           wrappers: []
           publishers: []
-      - '{name}-{test_name}-for-pull-request':
+      - '{name}-{test_name}-no-scm':
           test_name: networkpolicy-pending-label
           node: null
           description: 'This is for marking PR as pending for networkpolicy test.'
@@ -662,7 +662,7 @@
                 variable: CODECOV_TOKEN
           - timeout:
               fail: true
-              timeout: 80
+              timeout: 120
               type: absolute
           - credentials-binding:
             - text:
@@ -688,7 +688,7 @@
               default-excludes: true
               fingerprint: false
               only-if-success: false
-      - '{name}-{test_name}-for-pull-request':
+      - '{name}-{test_name}-no-scm':
           test_name: networkpolicy-skip
           node: null
           description: 'This is for marking PR as passed.'

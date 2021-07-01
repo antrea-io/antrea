@@ -17,7 +17,7 @@ require (
 	github.com/confluentinc/bincover v0.1.0
 	github.com/containernetworking/cni v0.8.0
 	github.com/containernetworking/plugins v0.8.7
-	github.com/contiv/libOpenflow v0.0.0-20210312221048-1d504242120d
+	github.com/contiv/libOpenflow v0.0.0-20210521033357-6b49eccb12e0
 	github.com/contiv/ofnet v0.0.0-00010101000000-000000000000
 	github.com/coreos/go-iptables v0.4.5
 	github.com/elazarl/goproxy v0.0.0-20190911111923-ecfe977594f1 // indirect
@@ -26,6 +26,7 @@ require (
 	github.com/golang/mock v1.5.0
 	github.com/golang/protobuf v1.5.0
 	github.com/google/uuid v1.1.2
+	github.com/k8snetworkplumbingwg/sriov-cni v2.1.0+incompatible
 	github.com/kevinburke/ssh_config v0.0.0-20190725054713-01f96b0aa0cd
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822
 	github.com/pkg/errors v0.9.1
@@ -41,7 +42,7 @@ require (
 	github.com/stretchr/testify v1.6.1
 	github.com/ti-mo/conntrack v0.3.0
 	github.com/vishvananda/netlink v1.1.0
-	github.com/vmware/go-ipfix v0.5.2
+	github.com/vmware/go-ipfix v0.5.3
 	golang.org/x/crypto v0.0.0-20210220033148-5ea612d1eb83
 	golang.org/x/exp v0.0.0-20200224162631-6cc2880d07d6
 	golang.org/x/mod v0.4.0
@@ -62,6 +63,7 @@ require (
 	k8s.io/kube-aggregator v0.21.0
 	k8s.io/kube-openapi v0.0.0-20210305164622-f622666832c1
 	k8s.io/kubectl v0.21.0
+	k8s.io/kubelet v0.21.0
 	k8s.io/utils v0.0.0-20210305010621-2afb4311ab10
 )
 
@@ -71,5 +73,5 @@ replace (
 	github.com/Microsoft/hcsshim v0.8.9 => github.com/ruicao93/hcsshim v0.8.10-0.20210114035434-63fe00c1b9aa
 	// antrea/plugins/octant/go.mod also has this replacement since replace statement in dependencies
 	// were ignored. We need to change antrea/plugins/octant/go.mod if there is any change here.
-	github.com/contiv/ofnet => github.com/wenyingd/ofnet v0.0.0-20210318032909-171b6795a2da
+	github.com/contiv/ofnet => github.com/wenyingd/ofnet v0.0.0-20210526054554-3e71e19fd0cf
 )

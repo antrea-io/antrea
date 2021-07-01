@@ -63,7 +63,11 @@ func (cl *commandList) applyToRootCommand(root *cobra.Command, client AntctlClie
 	for _, cmd := range cl.rawCommands {
 		if (runtime.Mode == runtime.ModeAgent && cmd.supportAgent) ||
 			(runtime.Mode == runtime.ModeController && cmd.supportController) {
-			root.AddCommand(cmd.cobraCommand)
+			if groupCommand, ok := groupCommands[cmd.commandGroup]; ok {
+				groupCommand.AddCommand(cmd.cobraCommand)
+			} else {
+				root.AddCommand(cmd.cobraCommand)
+			}
 		}
 	}
 
@@ -122,6 +126,7 @@ func (cl *commandList) GetDebugCommands(mode string) [][]string {
 			// log-level command does not support remote execution.
 			continue
 		}
+
 		if mode == runtime.ModeAgent && def.agentEndpoint != nil ||
 			mode == runtime.ModeController && def.controllerEndpoint != nil {
 			var currentCommand []string
@@ -140,7 +145,12 @@ func (cl *commandList) GetDebugCommands(mode string) [][]string {
 		}
 		if mode == runtime.ModeController && cmd.supportController ||
 			mode == runtime.ModeAgent && cmd.supportAgent {
-			allCommands = append(allCommands, strings.Split(cmd.cobraCommand.Use, " ")[:1])
+			var currentCommand []string
+			if group, ok := groupCommands[cmd.commandGroup]; ok {
+				currentCommand = append(currentCommand, group.Use)
+			}
+			currentCommand = append(currentCommand, strings.Split(cmd.cobraCommand.Use, " ")[0])
+			allCommands = append(allCommands, currentCommand)
 		}
 	}
 	return allCommands

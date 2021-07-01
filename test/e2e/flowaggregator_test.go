@@ -16,6 +16,7 @@ package e2e
 
 import (
 	"fmt"
+	"net"
 	"regexp"
 	"strconv"
 	"strings"
@@ -69,12 +70,12 @@ DATA SET:
     ingressNetworkPolicyNamespace: antrea-test
     ingressNetworkPolicyType: 2
     ingressNetworkPolicyRuleName: test-ingress-rule-name
-	ingressNetworkPolicyRuleAction: 1
+    ingressNetworkPolicyRuleAction: 1
     egressNetworkPolicyName: test-flow-aggregator-networkpolicy-egress
     egressNetworkPolicyNamespace: antrea-test
     egressNetworkPolicyType: 2
     egressNetworkPolicyRuleName: test-egress-rule-name
-	egressNetworkPolicyRuleAction: 1
+    egressNetworkPolicyRuleAction: 1
     flowType: 1
     destinationClusterIPv4: 0.0.0.0
     originalExporterIPv4Address: 10.10.0.1
@@ -95,6 +96,8 @@ DATA SET:
     reverseOctetTotalCountFromDestinationNode: 23108308
     reversePacketDeltaCountFromDestinationNode: 0
     reversePacketTotalCountFromDestinationNode: 444320
+	sourcePodLabels: {"antrea-e2e":"perftest-a","app":"perftool"}
+	destinationPodLabels: {"antrea-e2e":"perftest-b","app":"perftool"}
 
 Intra-Node: Flow record information is complete for source and destination e.g. sourcePodName, destinationPodName
 Inter-Node: Flow record from destination Node is ignored, so only flow record from the source Node has its K8s info e.g., sourcePodName, sourcePodNamespace, sourceNodeName etc.
@@ -108,14 +111,13 @@ const (
 	ingressDropANPName             = "test-flow-aggregator-anp-ingress-drop"
 	ingressDenyNPName              = "test-flow-aggregator-np-ingress-deny"
 	egressAllowNetworkPolicyName   = "test-flow-aggregator-networkpolicy-egress-allow"
-	egressRejectANPName            = "test-flow-aggregator-anp-engress-reject"
-	egressDropANPName              = "test-flow-aggregator-anp-engress-drop"
+	egressRejectANPName            = "test-flow-aggregator-anp-egress-reject"
+	egressDropANPName              = "test-flow-aggregator-anp-egress-drop"
 	egressDenyNPName               = "test-flow-aggregator-np-egress-deny"
 	ingressAntreaNetworkPolicyName = "test-flow-aggregator-antrea-networkpolicy-ingress"
 	egressAntreaNetworkPolicyName  = "test-flow-aggregator-antrea-networkpolicy-egress"
 	testIngressRuleName            = "test-ingress-rule-name"
 	testEgressRuleName             = "test-egress-rule-name"
-	collectorCheckTimeout          = 12 * time.Second
 	iperfTimeSec                   = 12
 	// Single iperf run results in two connections with separate ports (control connection and actual data connection).
 	// As 2s is the export active timeout of flow exporter and iperf traffic runs for 12s, we expect totally 12 records
@@ -427,23 +429,55 @@ func testHelper(t *testing.T, data *TestData, podAIPs, podBIPs, podCIPs, podDIPs
 		}
 	})
 
+	// ToExternalFlows tests the export of IPFIX flow records when a source Pod
+	// sends traffic to an external IP
+	t.Run("ToExternalFlows", func(t *testing.T) {
+		// Creating an agnhost server as a host network Pod
+		serverPodPort := int32(80)
+		_, serverIPs, cleanupFunc := createAndWaitForPod(t, data, func(name string, nodeName string) error {
+			return data.createServerPod(name, "", serverPodPort, false, true)
+		}, "test-server-", "")
+		defer cleanupFunc()
+
+		clientName, clientIPs, cleanupFunc := createAndWaitForPod(t, data, data.createBusyboxPodOnNode, "test-client-", nodeName(0))
+		defer cleanupFunc()
+
+		if !isIPv6 {
+			if clientIPs.ipv4 != nil && serverIPs.ipv4 != nil {
+				checkRecordsForToExternalFlows(t, data, nodeName(0), clientName, clientIPs.ipv4.String(), serverIPs.ipv4.String(), serverPodPort, isIPv6)
+			}
+		} else {
+			if clientIPs.ipv6 != nil && serverIPs.ipv6 != nil {
+				checkRecordsForToExternalFlows(t, data, nodeName(0), clientName, clientIPs.ipv6.String(), serverIPs.ipv6.String(), serverPodPort, isIPv6)
+			}
+		}
+	})
+
 	// LocalServiceAccess tests the case, where Pod and Service are deployed on the same Node and their flow information is exported as IPFIX flow records.
 	t.Run("LocalServiceAccess", func(t *testing.T) {
 		skipIfProxyDisabled(t, data)
-		if !isIPv6 {
-			checkRecordsForFlows(t, data, podAIPs.ipv4.String(), svcB.Spec.ClusterIP, isIPv6, true, true, false, false, checkBandwidth)
+		// In dual stack cluster, Service IP can be assigned as different IP family from specified.
+		// In that case, source IP and destination IP will align with IP family of Service IP.
+		// For IPv4-only and IPv6-only cluster, IP family of Service IP will be same as Pod IPs.
+		isServiceIPv6 := net.ParseIP(svcB.Spec.ClusterIP).To4() == nil
+		if isServiceIPv6 {
+			checkRecordsForFlows(t, data, podAIPs.ipv6.String(), svcB.Spec.ClusterIP, isServiceIPv6, true, true, false, false, checkBandwidth)
 		} else {
-			checkRecordsForFlows(t, data, podAIPs.ipv6.String(), svcB.Spec.ClusterIP, isIPv6, true, true, false, false, checkBandwidth)
+			checkRecordsForFlows(t, data, podAIPs.ipv4.String(), svcB.Spec.ClusterIP, isServiceIPv6, true, true, false, false, checkBandwidth)
 		}
 	})
 
 	// RemoteServiceAccess tests the case, where Pod and Service are deployed on different Nodes and their flow information is exported as IPFIX flow records.
 	t.Run("RemoteServiceAccess", func(t *testing.T) {
 		skipIfProxyDisabled(t, data)
-		if !isIPv6 {
-			checkRecordsForFlows(t, data, podAIPs.ipv4.String(), svcC.Spec.ClusterIP, isIPv6, false, true, false, false, checkBandwidth)
+		// In dual stack cluster, Service IP can be assigned as different IP family from specified.
+		// In that case, source IP and destination IP will align with IP family of Service IP.
+		// For IPv4-only and IPv6-only cluster, IP family of Service IP will be same as Pod IPs.
+		isServiceIPv6 := net.ParseIP(svcC.Spec.ClusterIP).To4() == nil
+		if isServiceIPv6 {
+			checkRecordsForFlows(t, data, podAIPs.ipv6.String(), svcC.Spec.ClusterIP, isServiceIPv6, false, true, false, false, checkBandwidth)
 		} else {
-			checkRecordsForFlows(t, data, podAIPs.ipv6.String(), svcC.Spec.ClusterIP, isIPv6, false, true, false, false, checkBandwidth)
+			checkRecordsForFlows(t, data, podAIPs.ipv4.String(), svcC.Spec.ClusterIP, isServiceIPv6, false, true, false, false, checkBandwidth)
 		}
 	})
 }
@@ -475,31 +509,7 @@ func checkRecordsForFlows(t *testing.T, data *TestData, srcIP string, dstIP stri
 		t.Fatalf("Unit of the traffic bandwidth reported by iperf should either be Mbits or Gbits, failing the test.")
 	}
 
-	// Polling to make sure all the data records corresponding to the iperf flow
-	// are received.
-	err = wait.PollImmediate(500*time.Millisecond, aggregatorInactiveFlowRecordTimeout, func() (bool, error) {
-		// `pod-running-timeout` option is added to cover scenarios where ipfix flow-collector has crashed after being deployed.
-		rc, collectorOutput, _, err := provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl logs --since=%v --pod-running-timeout=%v ipfix-collector -n antrea-test", time.Since(timeStart).String(), aggregatorInactiveFlowRecordTimeout.String()))
-		if err != nil || rc != 0 {
-			return false, err
-		}
-		recordSlices := getRecordsFromOutput(collectorOutput)
-		for _, record := range recordSlices {
-			exportTime := int64(getUnit64FieldFromRecord(t, record, "flowEndSeconds"))
-			if strings.Contains(record, srcIP) && strings.Contains(record, dstIP) {
-				if exportTime >= timeStartSec+iperfTimeSec {
-					return true, nil
-				}
-			}
-		}
-		return false, nil
-	})
-	require.NoErrorf(t, err, "IPFIX collector did not receive the expected records and timed out with error: %v", err)
-
-	rc, collectorOutput, _, err := provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl logs --since=%v ipfix-collector -n antrea-test", time.Since(timeStart).String()))
-	if err != nil || rc != 0 {
-		t.Errorf("Error when getting logs %v, rc: %v", err, rc)
-	}
+	collectorOutput := getCollectorOutput(t, srcIP, dstIP, timeStart, true)
 	// Iterate over recordSlices and build some results to test with expected results
 	recordSlices := getRecordsFromOutput(collectorOutput)
 	dataRecordsCount := 0
@@ -515,51 +525,37 @@ func checkRecordsForFlows(t *testing.T, data *TestData, srcIP string, dstIP stri
 				checkPodAndNodeData(t, record, "perftest-a", controlPlaneNodeName(), "perftest-c", workerNodeName(1))
 				checkFlowType(t, record, ipfixregistry.FlowTypeInterNode)
 			}
-
+			assert := assert.New(t)
 			if checkService {
 				if isIntraNode {
-					if !strings.Contains(record, "antrea-test/perftest-b") {
-						t.Errorf("Record with ServiceIP does not have Service name")
-					}
+					assert.Contains(record, "antrea-test/perftest-b", "Record with ServiceIP does not have Service name")
 				} else {
-					checkPodAndNodeData(t, record, "perftest-a", controlPlaneNodeName(), "perftest-c", workerNodeName(1))
-					checkFlowType(t, record, ipfixregistry.FlowTypeInterNode)
-				}
-				assert := assert.New(t)
-				if checkService {
-					if isIntraNode {
-						if !strings.Contains(record, "antrea-test/perftest-b") {
-							t.Errorf("Record with ServiceIP does not have Service name")
-						}
-					} else {
-						if !strings.Contains(record, "antrea-test/perftest-c") {
-							t.Errorf("Record with ServiceIP does not have Service name")
-						}
-					}
-				}
-				if checkK8sNetworkPolicy {
-					// Check if records have both ingress and egress network policies.
-					assert.Contains(record, fmt.Sprintf("ingressNetworkPolicyName: %s", ingressAllowNetworkPolicyName), "Record does not have the correct NetworkPolicy name with the ingress rule")
-					assert.Contains(record, fmt.Sprintf("ingressNetworkPolicyNamespace: %s", testNamespace), "Record does not have the correct NetworkPolicy Namespace with the ingress rule")
-					assert.Contains(record, fmt.Sprintf("ingressNetworkPolicyType: %d", ipfixregistry.PolicyTypeK8sNetworkPolicy), "Record does not have the correct NetworkPolicy Type with the ingress rule")
-					assert.Contains(record, fmt.Sprintf("egressNetworkPolicyName: %s", egressAllowNetworkPolicyName), "Record does not have the correct NetworkPolicy name with the egress rule")
-					assert.Contains(record, fmt.Sprintf("egressNetworkPolicyNamespace: %s", testNamespace), "Record does not have the correct NetworkPolicy Namespace with the egress rule")
-					assert.Contains(record, fmt.Sprintf("egressNetworkPolicyType: %d", ipfixregistry.PolicyTypeK8sNetworkPolicy), "Record does not have the correct NetworkPolicy Type with the egress rule")
-				}
-				if checkAntreaNetworkPolicy {
-					// Check if records have both ingress and egress network policies.
-					assert.Contains(record, fmt.Sprintf("ingressNetworkPolicyName: %s", ingressAntreaNetworkPolicyName), "Record does not have the correct NetworkPolicy name with the ingress rule")
-					assert.Contains(record, fmt.Sprintf("ingressNetworkPolicyNamespace: %s", testNamespace), "Record does not have the correct NetworkPolicy Namespace with the ingress rule")
-					assert.Contains(record, fmt.Sprintf("ingressNetworkPolicyType: %d", ipfixregistry.PolicyTypeAntreaNetworkPolicy), "Record does not have the correct NetworkPolicy Type with the ingress rule")
-					assert.Contains(record, fmt.Sprintf("ingressNetworkPolicyRuleName: %s", testIngressRuleName), "Record does not have the correct NetworkPolicy RuleName with the ingress rule")
-					assert.Contains(record, fmt.Sprintf("ingressNetworkPolicyRuleAction: %d", ipfixregistry.NetworkPolicyRuleActionAllow), "Record does not have the correct NetworkPolicy RuleAction with the ingress rule")
-					assert.Contains(record, fmt.Sprintf("egressNetworkPolicyName: %s", egressAntreaNetworkPolicyName), "Record does not have the correct NetworkPolicy name with the egress rule")
-					assert.Contains(record, fmt.Sprintf("egressNetworkPolicyNamespace: %s", testNamespace), "Record does not have the correct NetworkPolicy Namespace with the egress rule")
-					assert.Contains(record, fmt.Sprintf("egressNetworkPolicyType: %d", ipfixregistry.PolicyTypeAntreaNetworkPolicy), "Record does not have the correct NetworkPolicy Type with the egress rule")
-					assert.Contains(record, fmt.Sprintf("egressNetworkPolicyRuleName: %s", testEgressRuleName), "Record does not have the correct NetworkPolicy RuleName with the egress rule")
-					assert.Contains(record, fmt.Sprintf("egressNetworkPolicyRuleAction: %d", ipfixregistry.NetworkPolicyRuleActionAllow), "Record does not have the correct NetworkPolicy RuleAction with the egress rule")
+					assert.Contains(record, "antrea-test/perftest-c", "Record with ServiceIP does not have Service name")
 				}
 			}
+			if checkK8sNetworkPolicy {
+				// Check if records have both ingress and egress network policies.
+				assert.Contains(record, fmt.Sprintf("ingressNetworkPolicyName: %s", ingressAllowNetworkPolicyName), "Record does not have the correct NetworkPolicy name with the ingress rule")
+				assert.Contains(record, fmt.Sprintf("ingressNetworkPolicyNamespace: %s", testNamespace), "Record does not have the correct NetworkPolicy Namespace with the ingress rule")
+				assert.Contains(record, fmt.Sprintf("ingressNetworkPolicyType: %d", ipfixregistry.PolicyTypeK8sNetworkPolicy), "Record does not have the correct NetworkPolicy Type with the ingress rule")
+				assert.Contains(record, fmt.Sprintf("egressNetworkPolicyName: %s", egressAllowNetworkPolicyName), "Record does not have the correct NetworkPolicy name with the egress rule")
+				assert.Contains(record, fmt.Sprintf("egressNetworkPolicyNamespace: %s", testNamespace), "Record does not have the correct NetworkPolicy Namespace with the egress rule")
+				assert.Contains(record, fmt.Sprintf("egressNetworkPolicyType: %d", ipfixregistry.PolicyTypeK8sNetworkPolicy), "Record does not have the correct NetworkPolicy Type with the egress rule")
+			}
+			if checkAntreaNetworkPolicy {
+				// Check if records have both ingress and egress network policies.
+				assert.Contains(record, fmt.Sprintf("ingressNetworkPolicyName: %s", ingressAntreaNetworkPolicyName), "Record does not have the correct NetworkPolicy name with the ingress rule")
+				assert.Contains(record, fmt.Sprintf("ingressNetworkPolicyNamespace: %s", testNamespace), "Record does not have the correct NetworkPolicy Namespace with the ingress rule")
+				assert.Contains(record, fmt.Sprintf("ingressNetworkPolicyType: %d", ipfixregistry.PolicyTypeAntreaNetworkPolicy), "Record does not have the correct NetworkPolicy Type with the ingress rule")
+				assert.Contains(record, fmt.Sprintf("ingressNetworkPolicyRuleName: %s", testIngressRuleName), "Record does not have the correct NetworkPolicy RuleName with the ingress rule")
+				assert.Contains(record, fmt.Sprintf("ingressNetworkPolicyRuleAction: %d", ipfixregistry.NetworkPolicyRuleActionAllow), "Record does not have the correct NetworkPolicy RuleAction with the ingress rule")
+				assert.Contains(record, fmt.Sprintf("egressNetworkPolicyName: %s", egressAntreaNetworkPolicyName), "Record does not have the correct NetworkPolicy name with the egress rule")
+				assert.Contains(record, fmt.Sprintf("egressNetworkPolicyNamespace: %s", testNamespace), "Record does not have the correct NetworkPolicy Namespace with the egress rule")
+				assert.Contains(record, fmt.Sprintf("egressNetworkPolicyType: %d", ipfixregistry.PolicyTypeAntreaNetworkPolicy), "Record does not have the correct NetworkPolicy Type with the egress rule")
+				assert.Contains(record, fmt.Sprintf("egressNetworkPolicyRuleName: %s", testEgressRuleName), "Record does not have the correct NetworkPolicy RuleName with the egress rule")
+				assert.Contains(record, fmt.Sprintf("egressNetworkPolicyRuleAction: %d", ipfixregistry.NetworkPolicyRuleActionAllow), "Record does not have the correct NetworkPolicy RuleAction with the egress rule")
+			}
+
 			// Skip the bandwidth check for the iperf control flow records which have 0 delta count.
 			if checkBandwidth && !strings.Contains(record, "octetDeltaCount: 0") {
 				exportTime := int64(getUnit64FieldFromRecord(t, record, "flowEndSeconds"))
@@ -588,6 +584,32 @@ func checkRecordsForFlows(t *testing.T, data *TestData, srcIP string, dstIP stri
 	assert.GreaterOrEqualf(t, dataRecordsCount, expectedNumDataRecords, "IPFIX collector should receive expected number of flow records. Considered records: ", len(recordSlices))
 }
 
+func checkRecordsForToExternalFlows(t *testing.T, data *TestData, srcNodeName string, srcPodName string, srcIP string, dstIP string, dstPort int32, isIPv6 bool) {
+	timeStart := time.Now()
+	var cmd string
+	if !isIPv6 {
+		cmd = fmt.Sprintf("wget -O- %s:%d", dstIP, dstPort)
+	} else {
+		cmd = fmt.Sprintf("wget -O- [%s]:%d", dstIP, dstPort)
+	}
+	stdout, stderr, err := data.runCommandFromPod(testNamespace, srcPodName, busyboxContainerName, strings.Fields(cmd))
+	require.NoErrorf(t, err, "Error when running wget command, stdout: %s, stderr: %s", stdout, stderr)
+
+	collectorOutput := getCollectorOutput(t, srcIP, dstIP, timeStart, false)
+	recordSlices := getRecordsFromOutput(collectorOutput)
+	for _, record := range recordSlices {
+		if strings.Contains(record, srcIP) && strings.Contains(record, dstIP) {
+			checkPodAndNodeData(t, record, srcPodName, srcNodeName, "", "")
+			checkFlowType(t, record, ipfixregistry.FlowTypeToExternal)
+			// Since the OVS userspace conntrack implementation doesn't maintain
+			// packet or byte counter statistics, skip the check for Kind clusters
+			if testOptions.providerName != "kind" {
+				assert.NotContains(t, record, "octetDeltaCount: 0", "octetDeltaCount should be non-zero")
+			}
+		}
+	}
+}
+
 func checkRecordsForDenyFlows(t *testing.T, data *TestData, testFlow1, testFlow2 testFlow, isIPv6 bool, isIntraNode bool, isANP bool) {
 	timeStart := time.Now()
 	var cmdStr1, cmdStr2 string
@@ -603,20 +625,7 @@ func checkRecordsForDenyFlows(t *testing.T, data *TestData, testFlow1, testFlow2
 	_, _, err = data.runCommandFromPod(testNamespace, testFlow2.srcPodName, "", []string{"timeout", "2", "bash", "-c", cmdStr2})
 	assert.Error(t, err)
 
-	err = wait.Poll(250*time.Millisecond, collectorCheckTimeout, func() (bool, error) {
-		rc, collectorOutput, _, err := provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl logs --since=%v ipfix-collector -n antrea-test", time.Since(timeStart).String()))
-		if err != nil || rc != 0 {
-			return false, err
-		}
-		return strings.Contains(collectorOutput, testFlow1.srcIP) && strings.Contains(collectorOutput, testFlow2.srcIP), nil
-	})
-	require.NoErrorf(t, err, "IPFIX collector did not receive the expected records and timed out with error: %v", err)
-
-	rc, collectorOutput, _, err := provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl logs --since=%v ipfix-collector -n antrea-test", time.Since(timeStart).String()))
-	if err != nil || rc != 0 {
-		t.Errorf("Error when getting logs %v, rc: %v", err, rc)
-	}
-
+	collectorOutput := getCollectorOutput(t, testFlow1.srcIP, testFlow2.srcIP, timeStart, false)
 	// Iterate over recordSlices and build some results to test with expected results
 	recordSlices := getRecordsFromOutput(collectorOutput)
 	for _, record := range recordSlices {
@@ -687,12 +696,28 @@ func checkPodAndNodeData(t *testing.T, record, srcPod, srcNode, dstPod, dstNode 
 	assert.Contains(record, srcPod, "Record with srcIP does not have Pod name")
 	assert.Contains(record, fmt.Sprintf("sourcePodNamespace: %s", testNamespace), "Record does not have correct sourcePodNamespace")
 	assert.Contains(record, fmt.Sprintf("sourceNodeName: %s", srcNode), "Record does not have correct sourceNodeName")
-	assert.Contains(record, dstPod, "Record with dstIP does not have Pod name")
-	assert.Contains(record, fmt.Sprintf("destinationPodNamespace: %s", testNamespace), "Record does not have correct destinationPodNamespace")
-	assert.Contains(record, fmt.Sprintf("destinationNodeName: %s", dstNode), "Record does not have correct destinationNodeName")
+	// For Pod-To-External flow type, we send traffic to an external address,
+	// so we skip the verification of destination Pod info.
+	// Also, source Pod labels are different for Pod-To-External flow test.
+	if dstPod != "" {
+		assert.Contains(record, dstPod, "Record with dstIP does not have Pod name")
+		assert.Contains(record, fmt.Sprintf("destinationPodNamespace: %s", testNamespace), "Record does not have correct destinationPodNamespace")
+		assert.Contains(record, fmt.Sprintf("destinationNodeName: %s", dstNode), "Record does not have correct destinationNodeName")
+		assert.Contains(record, fmt.Sprintf("{\"antrea-e2e\":\"%s\",\"app\":\"perftool\"}", srcPod), "Record does not have correct label for source Pod")
+		assert.Contains(record, fmt.Sprintf("{\"antrea-e2e\":\"%s\",\"app\":\"perftool\"}", dstPod), "Record does not have correct label for destination Pod")
+	} else {
+		assert.Contains(record, fmt.Sprintf("{\"antrea-e2e\":\"%s\",\"app\":\"busybox\"}", srcPod), "Record does not have correct label for source Pod")
+	}
+}
+
+func checkFlowType(t *testing.T, record string, flowType uint8) {
+	assert.Containsf(t, record, fmt.Sprintf("flowType: %d", flowType), "Record does not have correct flowType")
 }
 
 func getUnit64FieldFromRecord(t *testing.T, record string, field string) uint64 {
+	if strings.Contains(record, "TEMPLATE SET") {
+		return 0
+	}
 	splitLines := strings.Split(record, "\n")
 	for _, line := range splitLines {
 		if strings.Contains(line, field) {
@@ -705,9 +730,34 @@ func getUnit64FieldFromRecord(t *testing.T, record string, field string) uint64 
 	return 0
 }
 
-// TODO: Add a test that checks the functionality of Pod-To-External flow.
-func checkFlowType(t *testing.T, record string, flowType uint8) {
-	assert.Containsf(t, record, fmt.Sprintf("flowType: %d", flowType), "Record does not have correct flowType")
+func getCollectorOutput(t *testing.T, srcIP string, dstIP string, timeStart time.Time, checkAllRecords bool) string {
+	var collectorOutput string
+	err := wait.PollImmediate(500*time.Millisecond, aggregatorInactiveFlowRecordTimeout, func() (bool, error) {
+		var rc int
+		var err error
+		// `pod-running-timeout` option is added to cover scenarios where ipfix flow-collector has crashed after being deployed
+		rc, collectorOutput, _, err = provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl logs --since=%v --pod-running-timeout=%v ipfix-collector -n antrea-test", time.Since(timeStart).String(), aggregatorInactiveFlowRecordTimeout.String()))
+		if err != nil || rc != 0 {
+			return false, err
+		}
+		// Checking that all the data records which correspond to the iperf flow are received
+		if checkAllRecords {
+			recordSlices := getRecordsFromOutput(collectorOutput)
+			for _, record := range recordSlices {
+				exportTime := int64(getUnit64FieldFromRecord(t, record, "flowEndSeconds"))
+				if strings.Contains(record, srcIP) && strings.Contains(record, dstIP) {
+					if exportTime >= timeStart.Unix()+iperfTimeSec {
+						return true, nil
+					}
+				}
+			}
+			return false, nil
+		} else {
+			return strings.Contains(collectorOutput, srcIP) && strings.Contains(collectorOutput, dstIP), nil
+		}
+	})
+	require.NoErrorf(t, err, "IPFIX collector did not receive the expected records and timed out with error")
+	return collectorOutput
 }
 
 func getRecordsFromOutput(output string) []string {

@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"strconv"
 	"strings"
 	"time"
 
@@ -45,6 +46,20 @@ const (
 
 func GetNSPath(containerNetNS string) (string, error) {
 	return containerNetNS, nil
+}
+
+// IsVirtualAdapter checks if the provided adapter is virtual.
+func IsVirtualAdapter(name string) (bool, error) {
+	cmd := fmt.Sprintf(`Get-NetAdapter -InterfaceAlias "%s" | Select-Object -Property Virtual | Format-Table -HideTableHeaders`, name)
+	out, err := CallPSCommand(cmd)
+	if err != nil {
+		return false, err
+	}
+	isVirtual, err := strconv.ParseBool(strings.TrimSpace(out))
+	if err != nil {
+		return false, err
+	}
+	return isVirtual, nil
 }
 
 func GetHostInterfaceStatus(ifaceName string) (string, error) {
@@ -357,9 +372,10 @@ func ConfigureLinkAddresses(idx int, ipNets []*net.IPNet) error {
 
 // PrepareHNSNetwork creates HNS Network for containers.
 func PrepareHNSNetwork(subnetCIDR *net.IPNet, nodeIPNet *net.IPNet, uplinkAdapter *net.Interface) error {
+	klog.InfoS("Creating HNSNetwork", "name", LocalHNSNetwork, "subnet", subnetCIDR, "nodeIP", nodeIPNet, "adapter", uplinkAdapter)
 	hnsNet, err := CreateHNSNetwork(LocalHNSNetwork, subnetCIDR, nodeIPNet, uplinkAdapter)
 	if err != nil {
-		return err
+		return fmt.Errorf("error creating HNSNetwork: %v", err)
 	}
 
 	// Enable OVS Extension on the HNS Network. If an error occurs, delete the HNS Network and return the error.

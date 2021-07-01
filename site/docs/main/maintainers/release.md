@@ -11,7 +11,10 @@ release. We use `<TAG>` as a placeholder for the release tag (e.g. `v0.1.0`).
      changes and all bug fixes since the first version of the previous minor
      release should be mentioned. The commit message must be *exactly* `"Update
      CHANGELOG for <TAG> release"`, as a bot will look for this commit and
-     cherry-pick it to update the main branch (starting with Antrea v1.0).
+     cherry-pick it to update the main branch (starting with Antrea v1.0). The
+     [process-changelog.go](../../hack/release/process-changelog.go) script
+     should be used to easily generate links to PRs and the Github profiles of
+     PR authors.
   2. a commit to update [VERSION](https://github.com/antrea-io/antrea/blob/master/VERSION) as needed.
 
 * Make the release on Github with the release branch as the target: copy the
