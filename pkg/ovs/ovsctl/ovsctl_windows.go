@@ -18,8 +18,10 @@ package ovsctl
 
 import "os/exec"
 
-// File path of the ovs-vswitchd control named pipe.
-const ovsVSwitchdUDS = "c:/openvswitch/var/run/openvswitch/ovs-vswitchd.ctl"
+// ovsVSwitchdUDS returns the file path of the ovs-vswitchd control named pipe.
+func ovsVSwitchdUDS() string {
+	return "c:/openvswitch/var/run/openvswitch/ovs-vswitchd.ctl"
+}
 
 func getOVSCommand(cmdStr string) *exec.Cmd {
 	return exec.Command("cmd.exe", "/c", cmdStr)

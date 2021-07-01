@@ -106,7 +106,7 @@ func (data *TestData) testHostPortPodConnectivity(t *testing.T) {
 	// Create a server Pod with hostPort set to 80.
 	hpPodName := randName("test-host-port-pod-")
 	hpPodPort := int32(80)
-	if err := data.createServerPod(hpPodName, "", hpPodPort, true); err != nil {
+	if err := data.createServerPod(hpPodName, "", hpPodPort, true, false); err != nil {
 		t.Fatalf("Error when creating HostPort server Pod: %v", err)
 	}
 	defer deletePodWrapper(t, data, hpPodName)

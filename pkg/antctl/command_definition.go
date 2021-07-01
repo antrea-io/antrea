@@ -184,6 +184,7 @@ type rawCommand struct {
 	cobraCommand      *cobra.Command
 	supportAgent      bool
 	supportController bool
+	commandGroup      commandGroup
 }
 
 // commandDefinition defines options to create a cobra.Command for an antctl client.

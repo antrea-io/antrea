@@ -21,12 +21,12 @@ import (
 	"k8s.io/klog/v2"
 )
 
-// NodeNameEnvKey is environment variable.
 const (
-	NodeNameEnvKey     = "NODE_NAME"
-	podNameEnvKey      = "POD_NAME"
-	podNamespaceEnvKey = "POD_NAMESPACE"
-	svcAcctNameEnvKey  = "SERVICEACCOUNT_NAME"
+	NodeNameEnvKey        = "NODE_NAME"
+	podNameEnvKey         = "POD_NAME"
+	podNamespaceEnvKey    = "POD_NAMESPACE"
+	svcAcctNameEnvKey     = "SERVICEACCOUNT_NAME"
+	antreaConfigMapEnvKey = "ANTREA_CONFIG_MAP_NAME"
 
 	antreaCloudEKSEnvKey = "ANTREA_CLOUD_EKS"
 
@@ -58,6 +58,15 @@ func GetPodName() string {
 		klog.Warningf("Environment variable %s not found", podNameEnvKey)
 	}
 	return podName
+}
+
+// GetAntreaConfigMapName returns the configMap name of Antrea config.
+func GetAntreaConfigMapName() string {
+	configMapName := os.Getenv(antreaConfigMapEnvKey)
+	if configMapName == "" {
+		klog.Warningf("Environment variable %s not found", antreaConfigMapEnvKey)
+	}
+	return configMapName
 }
 
 // GetPodNamespace returns Namespace of the Pod where the code executes.

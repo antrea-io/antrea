@@ -210,6 +210,8 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: spec.serviceAccountName
+            - name: ANTREA_CONFIG_MAP_NAME
+              value: "$(ANTREA_CONFIG_MAP_NAME)"
           ports:
             - containerPort: 10349
               name: api
@@ -278,20 +280,6 @@ metadata:
   name: v1beta1.controlplane.antrea.tanzu.vmware.com
 spec:
   group: controlplane.antrea.tanzu.vmware.com
-  groupPriorityMinimum: 100
-  version: v1beta1
-  versionPriority: 100
-  service:
-    name: antrea
-    namespace: kube-system
----
-# Deprecated in v0.10
-apiVersion: apiregistration.k8s.io/v1
-kind: APIService
-metadata:
-  name: v1beta1.networking.antrea.tanzu.vmware.com
-spec:
-  group: networking.antrea.tanzu.vmware.com
   groupPriorityMinimum: 100
   version: v1beta1
   versionPriority: 100

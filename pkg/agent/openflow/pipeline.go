@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/contiv/libOpenflow/protocol"
+	"github.com/contiv/ofnet/ofctrl"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 
@@ -413,6 +414,8 @@ type client struct {
 	gatewayOFPort uint32
 	// ovsDatapathType is the type of the datapath used by the bridge.
 	ovsDatapathType ovsconfig.OVSDatapathType
+	// ovsMetersAreSupported indicates whether the OVS datapath supports OpenFlow meters.
+	ovsMetersAreSupported bool
 	// packetInHandlers stores handler to process PacketIn event. Each packetin reason can have multiple handlers registered.
 	// When a packetin arrives, openflow send packet to registered handlers in this map.
 	packetInHandlers map[uint8]map[string]PacketInHandler
@@ -633,18 +636,6 @@ func (c *client) connectionTrackFlows(category cookie.Category) []binding.Flow {
 			ctZone = CtZoneV6
 		}
 		flows = append(flows,
-			// If a connection was initiated through the gateway (i.e. has gatewayCTMark) and
-			// the packet is received on the gateway port, go to the next table directly. This
-			// is to bypass the flow which is installed by ctRewriteDstMACFlow in the same
-			// table, and which will rewrite the destination MAC address for traffic with the
-			// gatewayCTMark, but which is flowing in the opposite direction.
-			connectionTrackStateTable.BuildFlow(priorityHigh).MatchProtocol(proto).
-				MatchRegRange(int(marksReg), markTrafficFromGateway, binding.Range{0, 15}).
-				MatchCTMark(gatewayCTMark, nil).
-				MatchCTStateNew(false).MatchCTStateTrk(true).
-				Action().GotoTable(connectionTrackStateTable.GetNext()).
-				Cookie(c.cookieAllocator.Request(category).Raw()).
-				Done(),
 			// Connections initiated through the gateway are marked with gatewayCTMark.
 			connectionTrackCommitTable.BuildFlow(priorityNormal).MatchProtocol(proto).
 				MatchRegRange(int(marksReg), markTrafficFromGateway, binding.Range{0, 15}).
@@ -838,12 +829,18 @@ func (c *client) traceflowNetworkPolicyFlows(dataplaneTag uint8, timeout uint16,
 			if ctx.dropFlow.FlowProtocol() == "" {
 				copyFlowBuilderIPv6 := ctx.dropFlow.CopyToBuilder(priorityNormal+2, false)
 				copyFlowBuilderIPv6 = copyFlowBuilderIPv6.MatchProtocol(binding.ProtocolIPv6)
+				if c.ovsMetersAreSupported {
+					copyFlowBuilderIPv6 = copyFlowBuilderIPv6.Action().Meter(PacketInMeterIDTF)
+				}
 				flows = append(flows, copyFlowBuilderIPv6.MatchIPDSCP(dataplaneTag).
 					SetHardTimeout(timeout).
 					Cookie(c.cookieAllocator.Request(category).Raw()).
 					Action().SendToController(uint8(PacketInReasonTF)).
 					Done())
 				copyFlowBuilder = copyFlowBuilder.MatchProtocol(binding.ProtocolIP)
+			}
+			if c.ovsMetersAreSupported {
+				copyFlowBuilder = copyFlowBuilder.Action().Meter(PacketInMeterIDTF)
 			}
 			flows = append(flows, copyFlowBuilder.MatchIPDSCP(dataplaneTag).
 				SetHardTimeout(timeout).
@@ -862,12 +859,18 @@ func (c *client) traceflowNetworkPolicyFlows(dataplaneTag uint8, timeout uint16,
 				if flow.FlowProtocol() == "" {
 					copyFlowBuilderIPv6 := flow.CopyToBuilder(priorityNormal+2, false)
 					copyFlowBuilderIPv6 = copyFlowBuilderIPv6.MatchProtocol(binding.ProtocolIPv6)
+					if c.ovsMetersAreSupported {
+						copyFlowBuilderIPv6 = copyFlowBuilderIPv6.Action().Meter(PacketInMeterIDTF)
+					}
 					flows = append(flows, copyFlowBuilderIPv6.MatchIPDSCP(dataplaneTag).
 						SetHardTimeout(timeout).
 						Cookie(c.cookieAllocator.Request(category).Raw()).
 						Action().SendToController(uint8(PacketInReasonTF)).
 						Done())
 					copyFlowBuilder = copyFlowBuilder.MatchProtocol(binding.ProtocolIP)
+				}
+				if c.ovsMetersAreSupported {
+					copyFlowBuilder = copyFlowBuilder.Action().Meter(PacketInMeterIDTF)
 				}
 				flows = append(flows, copyFlowBuilder.MatchIPDSCP(dataplaneTag).
 					SetHardTimeout(timeout).
@@ -876,36 +879,6 @@ func (c *client) traceflowNetworkPolicyFlows(dataplaneTag uint8, timeout uint16,
 					Done())
 			}
 		}
-	}
-	return flows
-}
-
-// ctRewriteDstMACFlow rewrites the destination MAC address with the local host gateway MAC if the
-// packet is marked with gatewayCTMark but was not received on the host gateway. In other words, it
-// rewrites the destination MAC address for reply traffic for connections which were initiated
-// through the gateway, to ensure that this reply traffic gets forwarded correctly (back to the host
-// network namespace, through the gateway). In particular, it is necessary in the following 2 cases:
-//  1) reply traffic for connections from a local Pod to a ClusterIP Service (when AntreaProxy is
-//  disabled and kube-proxy is used). In this case the destination IP address of the reply traffic
-//  is the Pod which initiated the connection to the Service (no SNAT). We need to make sure that
-//  these packets are sent back through the gateway so that the source IP can be rewritten (Service
-//  backend IP -> Service ClusterIP).
-//  2) when hair-pinning is involved, i.e. for connections between 2 local Pods belonging to this
-//  Node and for which NAT is performed. This applies regardless of whether AntreaProxy is enabled
-//  or not, and thus also applies to Windows Nodes (for which AntreaProxy is enabled by default).
-//  One example is a Pod accessing a NodePort Service for which externalTrafficPolicy is set to
-//  Local, using the local Node's IP address.
-func (c *client) ctRewriteDstMACFlows(gatewayMAC net.HardwareAddr, category cookie.Category) []binding.Flow {
-	connectionTrackStateTable := c.pipeline[conntrackStateTable]
-	var flows []binding.Flow
-	for _, proto := range c.ipProtocols {
-		flows = append(flows, connectionTrackStateTable.BuildFlow(priorityNormal).MatchProtocol(proto).
-			MatchCTMark(gatewayCTMark, nil).
-			MatchCTStateNew(false).MatchCTStateTrk(true).
-			Action().SetDstMAC(gatewayMAC).
-			Action().GotoTable(connectionTrackStateTable.GetNext()).
-			Cookie(c.cookieAllocator.Request(category).Raw()).
-			Done())
 	}
 	return flows
 }
@@ -1004,6 +977,10 @@ func (c *client) traceflowL2ForwardOutputFlows(dataplaneTag uint8, liveTraffic, 
 
 			// Do not send to controller if captures only dropped packet.
 			if !droppedOnly {
+				if c.ovsMetersAreSupported {
+					fb1 = fb1.Action().Meter(PacketInMeterIDTF)
+					fb2 = fb2.Action().Meter(PacketInMeterIDTF)
+				}
 				fb1 = fb1.Action().SendToController(uint8(PacketInReasonTF))
 				fb2 = fb2.Action().SendToController(uint8(PacketInReasonTF))
 			}
@@ -1026,6 +1003,9 @@ func (c *client) traceflowL2ForwardOutputFlows(dataplaneTag uint8, liveTraffic, 
 				Action().OutputRegRange(int(PortCacheReg), ofPortRegRange).
 				Cookie(c.cookieAllocator.Request(category).Raw())
 			if !droppedOnly {
+				if c.ovsMetersAreSupported {
+					fb1 = fb1.Action().Meter(PacketInMeterIDTF)
+				}
 				fb1 = fb1.Action().SendToController(uint8(PacketInReasonTF))
 			}
 			flows = append(flows, fb1.Done())
@@ -1045,6 +1025,9 @@ func (c *client) traceflowL2ForwardOutputFlows(dataplaneTag uint8, liveTraffic, 
 				MatchRegRange(int(marksReg), portFoundMark, ofPortMarkRange).
 				Cookie(c.cookieAllocator.Request(category).Raw())
 			if !droppedOnly {
+				if c.ovsMetersAreSupported {
+					fb = fb.Action().Meter(PacketInMeterIDTF)
+				}
 				fb = fb.Action().SendToController(uint8(PacketInReasonTF))
 			}
 			if liveTraffic {
@@ -1061,6 +1044,9 @@ func (c *client) traceflowL2ForwardOutputFlows(dataplaneTag uint8, liveTraffic, 
 			MatchRegRange(int(marksReg), portFoundMark, ofPortMarkRange).
 			Cookie(c.cookieAllocator.Request(category).Raw())
 		if !droppedOnly {
+			if c.ovsMetersAreSupported {
+				fb = fb.Action().Meter(PacketInMeterIDTF)
+			}
 			fb = fb.Action().SendToController(uint8(PacketInReasonTF))
 		}
 		if liveTraffic {
@@ -1078,6 +1064,9 @@ func (c *client) traceflowL2ForwardOutputFlows(dataplaneTag uint8, liveTraffic, 
 				MatchRegRange(int(marksReg), hairpinMark, hairpinMarkRange).
 				Cookie(c.cookieAllocator.Request(cookie.Service).Raw())
 			if !droppedOnly {
+				if c.ovsMetersAreSupported {
+					fbHairpin = fbHairpin.Action().Meter(PacketInMeterIDTF)
+				}
 				fbHairpin = fbHairpin.Action().SendToController(uint8(PacketInReasonTF))
 			}
 			if liveTraffic {
@@ -1178,7 +1167,7 @@ func (c *client) l3FwdFlowRouteToGW(gwMAC net.HardwareAddr, category cookie.Cate
 }
 
 // l3FwdFlowToGateway generates the L3 forward flows to rewrite the destination MAC of the packets to the gateway interface
-// MAC if the destination IP is the gateway IP.
+// MAC if the destination IP is the gateway IP or the connection was initiated through the gateway interface.
 func (c *client) l3FwdFlowToGateway(localGatewayIPs []net.IP, localGatewayMAC net.HardwareAddr, category cookie.Category) []binding.Flow {
 	l3FwdTable := c.pipeline[l3ForwardingTable]
 	var flows []binding.Flow
@@ -1187,6 +1176,27 @@ func (c *client) l3FwdFlowToGateway(localGatewayIPs []net.IP, localGatewayMAC ne
 		flows = append(flows, l3FwdTable.BuildFlow(priorityNormal).MatchProtocol(ipProtocol).
 			MatchRegRange(int(marksReg), macRewriteMark, macRewriteMarkRange).
 			MatchDstIP(ip).
+			Action().SetDstMAC(localGatewayMAC).
+			Action().GotoTable(l3FwdTable.GetNext()).
+			Cookie(c.cookieAllocator.Request(category).Raw()).
+			Done())
+	}
+	// Rewrite the destination MAC address with the local host gateway MAC if the packet is in the reply direction and
+	// is marked with gatewayCTMark. This is for connections which were initiated through the gateway, to ensure that
+	// this reply traffic gets forwarded correctly (back to the host network namespace, through the gateway). In
+	// particular, it is necessary in the following 2 cases:
+	//  1) reply traffic for connections from a local Pod to a ClusterIP Service (when AntreaProxy is disabled and
+	//  kube-proxy is used). In this case the destination IP address of the reply traffic is the Pod which initiated the
+	//  connection to the Service (no SNAT). We need to make sure that these packets are sent back through the gateway
+	//  so that the source IP can be rewritten (Service backend IP -> Service ClusterIP).
+	//  2) when hair-pinning is involved, i.e. connections between 2 local Pods, for which NAT is performed. This
+	//  applies regardless of whether AntreaProxy is enabled or not, and thus also applies to Windows Nodes (for which
+	//  AntreaProxy is enabled by default). One example is a Pod accessing a NodePort Service for which
+	//  externalTrafficPolicy is set to Local, using the local Node's IP address.
+	for _, proto := range c.ipProtocols {
+		flows = append(flows, l3FwdTable.BuildFlow(priorityHigh).MatchProtocol(proto).
+			MatchCTMark(gatewayCTMark, nil).
+			MatchCTStateRpl(true).MatchCTStateTrk(true).
 			Action().SetDstMAC(localGatewayMAC).
 			Action().GotoTable(l3FwdTable.GetNext()).
 			Cookie(c.cookieAllocator.Request(category).Raw()).
@@ -1522,8 +1532,12 @@ func (c *client) conjunctionActionFlow(conjunctionID uint32, tableID binding.Tab
 			ctZone = CtZoneV6
 		}
 		if enableLogging {
-			return c.pipeline[tableID].BuildFlow(ofPriority).MatchProtocol(proto).
-				MatchConjID(conjunctionID).
+			fb := c.pipeline[tableID].BuildFlow(ofPriority).MatchProtocol(proto).
+				MatchConjID(conjunctionID)
+			if c.ovsMetersAreSupported {
+				fb = fb.Action().Meter(PacketInMeterIDNP)
+			}
+			return fb.
 				Action().LoadRegRange(int(conjReg), conjunctionID, binding.Range{0, 31}).         // Traceflow.
 				Action().LoadRegRange(int(marksReg), DispositionAllow, APDispositionMarkRange).   // AntreaPolicy.
 				Action().LoadRegRange(int(marksReg), CustomReasonLogging, CustomReasonMarkRange). // Enable logging.
@@ -1582,6 +1596,9 @@ func (c *client) conjunctionActionDenyFlow(conjunctionID uint32, tableID binding
 	}
 
 	if enableLogging || c.enableDenyTracking || disposition == DispositionRej {
+		if c.ovsMetersAreSupported {
+			flowBuilder = flowBuilder.Action().Meter(PacketInMeterIDNP)
+		}
 		flowBuilder = flowBuilder.
 			Action().LoadRegRange(int(marksReg), uint32(customReason), CustomReasonMarkRange).
 			Action().SendToController(uint8(PacketInReasonNP))
@@ -1865,7 +1882,7 @@ func (c *client) snatIPFromTunnelFlow(snatIP net.IP, mark uint32) binding.Flow {
 }
 
 // snatRuleFlow generates a flow that applies the SNAT rule for a local Pod. If
-// the SNAT IP exists on the lcoal Node, it sets the packet mark with the ID of
+// the SNAT IP exists on the local Node, it sets the packet mark with the ID of
 // the SNAT IP, for the traffic from the ofPort to external; if the SNAT IP is
 // on a remote Node, it tunnels the packets to the SNAT IP.
 func (c *client) snatRuleFlow(ofPort uint32, snatIP net.IP, snatMark uint32, localGatewayMAC net.HardwareAddr) binding.Flow {
@@ -2126,6 +2143,19 @@ func priorityIndexFunc(obj interface{}) ([]string, error) {
 	return conj.ActionFlowPriorities(), nil
 }
 
+// genPacketInMeter generates a meter entry with specific meterID and rate.
+// `rate` is represented as number of packets per second.
+// Packets which exceed the rate will be dropped.
+func (c *client) genPacketInMeter(meterID binding.MeterIDType, rate uint32) binding.Meter {
+	meter := c.bridge.CreateMeter(meterID, ofctrl.MeterBurst|ofctrl.MeterPktps).ResetMeterBands()
+	meter = meter.MeterBand().
+		MeterType(ofctrl.MeterDrop).
+		Rate(rate).
+		Burst(2 * rate).
+		Done()
+	return meter
+}
+
 func (c *client) generatePipeline() {
 	bridge := c.bridge
 	c.pipeline = map[binding.TableIDType]binding.Table{
@@ -2197,6 +2227,7 @@ func NewClient(bridgeName, mgmtAddr string, ovsDatapathType ovsconfig.OVSDatapat
 		packetInHandlers:         map[uint8]map[string]PacketInHandler{},
 		ovsctlClient:             ovsctl.NewClient(bridgeName),
 		ovsDatapathType:          ovsDatapathType,
+		ovsMetersAreSupported:    ovsMetersAreSupported(ovsDatapathType),
 	}
 	c.ofEntryOperations = c
 	if enableAntreaPolicy {

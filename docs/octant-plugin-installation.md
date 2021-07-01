@@ -32,7 +32,7 @@ your environment and preference.
     kubectl create secret generic octant-kubeconfig --from-file=admin.conf=<path to kubeconfig file> -n kube-system
     ```
 
-2. You can change the sample yaml[build/yamls/antrea-octant.yml](/build/yamls/antrea-octant.yml)
+2. You can change the sample yaml [build/yamls/antrea-octant.yml](/build/yamls/antrea-octant.yml)
 according to your requirements and environment, then apply the yaml to create both Deployment and NodePort Service.
 
     ```bash

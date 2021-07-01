@@ -1350,6 +1350,11 @@ spec:
       openAPIV3Schema:
         properties:
           spec:
+            anyOf:
+            - required:
+              - egressIP
+            - required:
+              - externalIPPool
             properties:
               appliedTo:
                 properties:
@@ -1405,9 +1410,10 @@ spec:
                 - format: ipv4
                 - format: ipv6
                 type: string
+              externalIPPool:
+                type: string
             required:
             - appliedTo
-            - egressIP
             type: object
         required:
         - spec
@@ -1530,6 +1536,85 @@ spec:
         type: object
     served: false
     storage: false
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  labels:
+    app: antrea
+  name: externalippools.crd.antrea.io
+spec:
+  group: crd.antrea.io
+  names:
+    kind: ExternalIPPool
+    plural: externalippools
+    shortNames:
+    - eip
+    singular: externalippool
+  scope: Cluster
+  versions:
+  - name: v1alpha2
+    schema:
+      openAPIV3Schema:
+        properties:
+          spec:
+            properties:
+              ipRanges:
+                items:
+                  oneOf:
+                  - required:
+                    - cidr
+                  - required:
+                    - start
+                    - end
+                  properties:
+                    cidr:
+                      format: cidr
+                      type: string
+                    end:
+                      oneOf:
+                      - format: ipv4
+                      - format: ipv6
+                      type: string
+                    start:
+                      oneOf:
+                      - format: ipv4
+                      - format: ipv6
+                      type: string
+                  type: object
+                type: array
+              nodeSelector:
+                properties:
+                  matchExpressions:
+                    items:
+                      properties:
+                        key:
+                          type: string
+                        operator:
+                          enum:
+                          - In
+                          - NotIn
+                          - Exists
+                          - DoesNotExist
+                          type: string
+                        values:
+                          items:
+                            type: string
+                          type: array
+                      type: object
+                    type: array
+                  matchLabels:
+                    x-kubernetes-preserve-unknown-fields: true
+                type: object
+            required:
+            - ipRanges
+            - nodeSelector
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
 ---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
@@ -3003,7 +3088,6 @@ metadata:
 rules:
 - apiGroups:
   - controlplane.antrea.tanzu.vmware.com
-  - networking.antrea.tanzu.vmware.com
   - controlplane.antrea.io
   resources:
   - networkpolicies
@@ -3054,6 +3138,7 @@ rules:
   - /ovsflows
   - /ovstracing
   - /podinterfaces
+  - /featuregates
   verbs:
   - get
 ---
@@ -3111,7 +3196,6 @@ rules:
   - delete
 - apiGroups:
   - controlplane.antrea.tanzu.vmware.com
-  - networking.antrea.tanzu.vmware.com
   - controlplane.antrea.io
   resources:
   - networkpolicies
@@ -3229,6 +3313,7 @@ rules:
   - pods
   - namespaces
   - services
+  - configmaps
   verbs:
   - get
   - watch
@@ -3293,7 +3378,6 @@ rules:
   - v1beta1.system.antrea.tanzu.vmware.com
   - v1beta2.controlplane.antrea.tanzu.vmware.com
   - v1beta1.controlplane.antrea.tanzu.vmware.com
-  - v1beta1.networking.antrea.tanzu.vmware.com
   - v1alpha1.stats.antrea.io
   - v1beta1.system.antrea.io
   - v1beta2.controlplane.antrea.io
@@ -3302,6 +3386,14 @@ rules:
   verbs:
   - get
   - update
+- apiGroups:
+  - apiregistration.k8s.io
+  resourceNames:
+  - v1beta1.networking.antrea.tanzu.vmware.com
+  resources:
+  - apiservices
+  verbs:
+  - delete
 - apiGroups:
   - admissionregistration.k8s.io
   resourceNames:
@@ -3400,6 +3492,15 @@ rules:
   - crd.antrea.io
   resources:
   - egresses
+  verbs:
+  - get
+  - watch
+  - list
+  - update
+- apiGroups:
+  - crd.antrea.io
+  resources:
+  - externalippools
   verbs:
   - get
   - watch
@@ -3830,6 +3931,8 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: spec.serviceAccountName
+        - name: ANTREA_CONFIG_MAP_NAME
+          value: antrea-config-t9hc8tf75d
         image: projects.registry.vmware.com/antrea/antrea-ubuntu:latest
         imagePullPolicy: IfNotPresent
         livenessProbe:
@@ -3930,21 +4033,6 @@ metadata:
   name: v1beta1.controlplane.antrea.tanzu.vmware.com
 spec:
   group: controlplane.antrea.tanzu.vmware.com
-  groupPriorityMinimum: 100
-  service:
-    name: antrea
-    namespace: kube-system
-  version: v1beta1
-  versionPriority: 100
----
-apiVersion: apiregistration.k8s.io/v1
-kind: APIService
-metadata:
-  labels:
-    app: antrea
-  name: v1beta1.networking.antrea.tanzu.vmware.com
-spec:
-  group: networking.antrea.tanzu.vmware.com
   groupPriorityMinimum: 100
   service:
     name: antrea

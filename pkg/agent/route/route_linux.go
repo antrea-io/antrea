@@ -590,8 +590,9 @@ func (c *Client) AddRoutes(podCIDR *net.IPNet, nodeName string, nodeIP, nodeGwIP
 		}
 		route.LinkIndex = c.nodeConfig.GatewayConfig.LinkIndex
 		route.Gw = nodeGwIP
-	} else if !c.networkConfig.TrafficEncapMode.NeedsRoutingToPeer(nodeIP, c.nodeConfig.NodeIPAddr) {
-		// NoEncap traffic need routing help.
+	} else if c.networkConfig.TrafficEncapMode.NeedsDirectRoutingToPeer(nodeIP, c.nodeConfig.NodeIPAddr) {
+		// NoEncap traffic to Node on the same subnet.
+		// Set the peerNodeIP as next hop.
 		route.Gw = nodeIP
 	} else {
 		// NoEncap traffic to Node on the same subnet. It is handled by host default route.

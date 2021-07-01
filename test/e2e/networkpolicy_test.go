@@ -205,13 +205,13 @@ func (data *TestData) setupDifferentNamedPorts(t *testing.T) (checkFn func(), cl
 
 	server0Port := int32(80)
 	server0Name, server0IPs, cleanupFunc := createAndWaitForPod(t, data, func(name string, nodeName string) error {
-		return data.createServerPod(name, "http", server0Port, false)
+		return data.createServerPod(name, "http", server0Port, false, false)
 	}, "test-server-", "")
 	cleanupFuncs = append(cleanupFuncs, cleanupFunc)
 
 	server1Port := int32(8080)
 	server1Name, server1IPs, cleanupFunc := createAndWaitForPod(t, data, func(name string, nodeName string) error {
-		return data.createServerPod(name, "http", server1Port, false)
+		return data.createServerPod(name, "http", server1Port, false, false)
 	}, "test-server-", "")
 	cleanupFuncs = append(cleanupFuncs, cleanupFunc)
 

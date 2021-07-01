@@ -4142,4 +4142,9 @@
   142:
     - :string
     - :egressNetworkPolicyRuleName
-
+  143:
+    - :string
+    - :sourcePodLabels
+  144:
+    - :string
+    - :destinationPodLabels

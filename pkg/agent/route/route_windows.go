@@ -115,7 +115,7 @@ func (c *Client) AddRoutes(podCIDR *net.IPNet, nodeName string, peerNodeIP, peer
 	if c.networkConfig.TrafficEncapMode.NeedsEncapToPeer(peerNodeIP, c.nodeConfig.NodeIPAddr) {
 		route.LinkIndex = c.nodeConfig.GatewayConfig.LinkIndex
 		route.GatewayAddress = peerGwIP
-	} else if !c.networkConfig.TrafficEncapMode.NeedsRoutingToPeer(peerNodeIP, c.nodeConfig.NodeIPAddr) {
+	} else if c.networkConfig.TrafficEncapMode.NeedsDirectRoutingToPeer(peerNodeIP, c.nodeConfig.NodeIPAddr) {
 		// NoEncap traffic to Node on the same subnet.
 		// Set the peerNodeIP as next hop.
 		route.LinkIndex = c.bridgeInfIndex

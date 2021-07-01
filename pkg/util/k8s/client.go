@@ -30,30 +30,10 @@ import (
 // CreateClients creates kube clients from the given config.
 func CreateClients(config componentbaseconfig.ClientConnectionConfiguration, kubeAPIServerOverride string) (
 	clientset.Interface, aggregatorclientset.Interface, crdclientset.Interface, apiextensionclientset.Interface, error) {
-	var kubeConfig *rest.Config
-	var err error
-
-	if len(config.Kubeconfig) == 0 {
-		klog.Info("No kubeconfig file was specified. Falling back to in-cluster config")
-		kubeConfig, err = rest.InClusterConfig()
-	} else {
-		kubeConfig, err = clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
-			&clientcmd.ClientConfigLoadingRules{ExplicitPath: config.Kubeconfig},
-			&clientcmd.ConfigOverrides{}).ClientConfig()
-	}
-
-	if len(kubeAPIServerOverride) != 0 {
-		kubeConfig.Host = kubeAPIServerOverride
-	}
-
+	kubeConfig, err := createRestConfig(config, kubeAPIServerOverride)
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
-
-	kubeConfig.AcceptContentTypes = config.AcceptContentTypes
-	kubeConfig.ContentType = config.ContentType
-	kubeConfig.QPS = config.QPS
-	kubeConfig.Burst = int(config.Burst)
 
 	client, err := clientset.NewForConfig(kubeConfig)
 	if err != nil {
@@ -79,6 +59,19 @@ func CreateClients(config componentbaseconfig.ClientConnectionConfiguration, kub
 
 // CreateLegacyCRDClient creates legacyCRD client from the given config.
 func CreateLegacyCRDClient(config componentbaseconfig.ClientConnectionConfiguration, kubeAPIServerOverride string) (legacycrdclientset.Interface, error) {
+	kubeConfig, err := createRestConfig(config, kubeAPIServerOverride)
+	if err != nil {
+		return nil, err
+	}
+
+	legacyCrdClient, err := legacycrdclientset.NewForConfig(kubeConfig)
+	if err != nil {
+		return nil, err
+	}
+	return legacyCrdClient, nil
+}
+
+func createRestConfig(config componentbaseconfig.ClientConnectionConfiguration, kubeAPIServerOverride string) (*rest.Config, error) {
 	var kubeConfig *rest.Config
 	var err error
 
@@ -104,9 +97,6 @@ func CreateLegacyCRDClient(config componentbaseconfig.ClientConnectionConfigurat
 	kubeConfig.QPS = config.QPS
 	kubeConfig.Burst = int(config.Burst)
 
-	legacyCrdClient, err := legacycrdclientset.NewForConfig(kubeConfig)
-	if err != nil {
-		return nil, err
-	}
-	return legacyCrdClient, nil
+	return kubeConfig, nil
+
 }

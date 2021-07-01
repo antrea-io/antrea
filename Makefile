@@ -235,24 +235,32 @@ fmt:
 
 .PHONY: golangci
 golangci: .golangci-bin
-	@echo "===> Running golangci for linux <==="
-	@GOOS=linux .golangci-bin/golangci-lint run -c .golangci.yml
-	@echo "===> Running golangci for windows <==="
-	@GOOS=windows .golangci-bin/golangci-lint run -c .golangci.yml
+	@echo "===> Running golangci (linux) <==="
+	@GOOS=linux $(CURDIR)/.golangci-bin/golangci-lint run -c $(CURDIR)/.golangci.yml
+	@echo "===> Running golangci (windows) <==="
+	@GOOS=windows $(CURDIR)/.golangci-bin/golangci-lint run -c $(CURDIR)/.golangci.yml
+	@echo "===> Running golangci for Octant plugin (linux) <==="
+	@cd plugins/octant && GOOS=linux $(CURDIR)/.golangci-bin/golangci-lint run -c $(CURDIR)/.golangci.yml
+	@echo "===> Running golangci for Octant plugin (windows) <==="
+	@cd plugins/octant && GOOS=windows $(CURDIR)/.golangci-bin/golangci-lint run -c $(CURDIR)/.golangci.yml
 
 .PHONY: golangci-fix
 golangci-fix: .golangci-bin
-	@echo "===> Running golangci-fix for linux <==="
-	@GOOS=linux .golangci-bin/golangci-lint run -c .golangci.yml --fix
-	@echo "===> Running golangci-fix for windows <==="
-	@GOOS=windows .golangci-bin/golangci-lint run -c .golangci.yml --fix
+	@echo "===> Running golangci (linux) <==="
+	@GOOS=linux $(CURDIR)/.golangci-bin/golangci-lint run -c $(CURDIR)/.golangci.yml --fix
+	@echo "===> Running golangci (windows) <==="
+	@GOOS=windows $(CURDIR)/.golangci-bin/golangci-lint run -c $(CURDIR)/.golangci.yml --fix
+	@echo "===> Running golangci for Octant plugin (linux) <==="
+	@cd plugins/octant && GOOS=linux $(CURDIR)/.golangci-bin/golangci-lint run -c $(CURDIR)/.golangci.yml --fix
+	@echo "===> Running golangci for Octant plugin (windows) <==="
+	@cd plugins/octant && GOOS=windows $(CURDIR)/.golangci-bin/golangci-lint run -c $(CURDIR)/.golangci.yml --fix
 
 .PHONY: lint
 lint: .golangci-bin
-	@echo "===> Running lint for linux <==="
-	@GOOS=linux .golangci-bin/golangci-lint run -c .golangci-golint.yml
-	@echo "===> Running lint for windows <==="
-	@GOOS=windows .golangci-bin/golangci-lint run -c .golangci-golint.yml
+	@echo "===> Running golangci (linux) <==="
+	@GOOS=linux $(CURDIR)/.golangci-bin/golangci-lint run -c $(CURDIR)/.golangci-golint.yml
+	@echo "===> Running golangci (windows) <==="
+	@GOOS=windows $(CURDIR)/.golangci-bin/golangci-lint run -c $(CURDIR)/.golangci-golint.yml
 
 .PHONY: clean
 clean:

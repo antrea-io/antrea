@@ -25,6 +25,7 @@ import (
 	"k8s.io/apiserver/pkg/registry/rest"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	"k8s.io/client-go/informers"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 	"k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 
@@ -36,6 +37,7 @@ import (
 	system "antrea.io/antrea/pkg/apis/system/v1beta1"
 	"antrea.io/antrea/pkg/apiserver/certificate"
 	"antrea.io/antrea/pkg/apiserver/handlers/endpoint"
+	"antrea.io/antrea/pkg/apiserver/handlers/featuregates"
 	"antrea.io/antrea/pkg/apiserver/handlers/loglevel"
 	"antrea.io/antrea/pkg/apiserver/handlers/webhook"
 	"antrea.io/antrea/pkg/apiserver/registry/controlplane/egressgroup"
@@ -57,8 +59,6 @@ import (
 	"antrea.io/antrea/pkg/features"
 	legacycontrolplane "antrea.io/antrea/pkg/legacyapis/controlplane"
 	legacycpinstall "antrea.io/antrea/pkg/legacyapis/controlplane/install"
-	legacynetworking "antrea.io/antrea/pkg/legacyapis/networking"
-	legacynetworkinginstall "antrea.io/antrea/pkg/legacyapis/networking/install"
 	legacyapistats "antrea.io/antrea/pkg/legacyapis/stats"
 	legacystatsinstall "antrea.io/antrea/pkg/legacyapis/stats/install"
 	legacysysteminstall "antrea.io/antrea/pkg/legacyapis/system/install"
@@ -82,7 +82,6 @@ func init() {
 
 	legacycpinstall.Install(Scheme)
 	legacysysteminstall.Install(Scheme)
-	legacynetworkinginstall.Install(Scheme)
 	legacystatsinstall.Install(Scheme)
 
 	// We need to add the options to empty v1, see sample-apiserver/pkg/apiserver/apiserver.go.
@@ -91,6 +90,7 @@ func init() {
 
 // ExtraConfig holds custom apiserver config.
 type ExtraConfig struct {
+	k8sClient                     kubernetes.Interface
 	addressGroupStore             storage.Interface
 	appliedToGroupStore           storage.Interface
 	networkPolicyStore            storage.Interface
@@ -132,6 +132,7 @@ type completedConfig struct {
 
 func NewConfig(
 	genericConfig *genericapiserver.Config,
+	k8sClient kubernetes.Interface,
 	addressGroupStore, appliedToGroupStore, networkPolicyStore, groupStore, egressGroupStore storage.Interface,
 	caCertController *certificate.CACertController,
 	statsAggregator *stats.Aggregator,
@@ -142,6 +143,7 @@ func NewConfig(
 	return &Config{
 		genericConfig: genericConfig,
 		extraConfig: ExtraConfig{
+			k8sClient:                     k8sClient,
 			addressGroupStore:             addressGroupStore,
 			appliedToGroupStore:           appliedToGroupStore,
 			networkPolicyStore:            networkPolicyStore,
@@ -216,15 +218,6 @@ func installAPIGroup(s *APIServer, c completedConfig) error {
 	legacyCPv1beta2Storage["clustergroupmembers"] = clusterGroupMembershipStorage
 	legacyCPGroup.VersionedResourcesStorageMap["v1beta2"] = legacyCPv1beta2Storage
 
-	legacyNetworkingGroup := genericapiserver.NewDefaultAPIGroupInfo(legacynetworking.GroupName, Scheme, metav1.ParameterCodec, Codecs)
-	// TODO: networkingGroup is the legacy group of controlplane NetworkPolicy APIs. To allow live upgrades from up to
-	// two minor versions, the APIs must be kept for two minor releases before it can be deleted.
-	legacyNetworkingStorage := map[string]rest.Storage{}
-	legacyNetworkingStorage["addressgroups"] = addressGroupStorage
-	legacyNetworkingStorage["appliedtogroups"] = appliedToGroupStorage
-	legacyNetworkingStorage["networkpolicies"] = networkPolicyStorage
-	legacyNetworkingGroup.VersionedResourcesStorageMap["v1beta1"] = legacyNetworkingStorage
-
 	legacySystemGroup := genericapiserver.NewDefaultAPIGroupInfo(legacysystem.GroupName, Scheme, metav1.ParameterCodec, Codecs)
 	legacySystemGroup.VersionedResourcesStorageMap["v1beta1"] = systemStorage
 
@@ -232,7 +225,7 @@ func installAPIGroup(s *APIServer, c completedConfig) error {
 	legacyStatsGroup.VersionedResourcesStorageMap["v1alpha1"] = statsStorage
 
 	// legacy API groups
-	groups = append(groups, &legacyCPGroup, &legacyNetworkingGroup, &legacySystemGroup, &legacyStatsGroup)
+	groups = append(groups, &legacyCPGroup, &legacySystemGroup, &legacyStatsGroup)
 
 	for _, apiGroupInfo := range groups {
 		if err := s.GenericAPIServer.InstallAPIGroup(apiGroupInfo); err != nil {
@@ -269,7 +262,9 @@ func CleanupDeprecatedAPIServices(aggregatorClient clientset.Interface) error {
 	// deprecates a registered APIService, the APIService should be deleted,
 	// otherwise K8s will fail to delete an existing Namespace.
 	// Also check: https://github.com/antrea-io/antrea/issues/494
-	deprecatedAPIServices := []string{}
+	deprecatedAPIServices := []string{
+		"v1beta1.networking.antrea.tanzu.vmware.com",
+	}
 	for _, as := range deprecatedAPIServices {
 		err := aggregatorClient.ApiregistrationV1().APIServices().Delete(context.TODO(), as, metav1.DeleteOptions{})
 		if err == nil {
@@ -283,6 +278,7 @@ func CleanupDeprecatedAPIServices(aggregatorClient clientset.Interface) error {
 
 func installHandlers(c *ExtraConfig, s *genericapiserver.GenericAPIServer) {
 	s.Handler.NonGoRestfulMux.HandleFunc("/loglevel", loglevel.HandleFunc())
+	s.Handler.NonGoRestfulMux.HandleFunc("/featuregates", featuregates.HandleFunc(c.k8sClient))
 	s.Handler.NonGoRestfulMux.HandleFunc("/endpoint", endpoint.HandleFunc(c.endpointQuerier))
 	// Webhook to mutate Namespace labels and add its metadata.name as a label
 	s.Handler.NonGoRestfulMux.HandleFunc("/mutate/namespace", webhook.HandleMutationLabels())

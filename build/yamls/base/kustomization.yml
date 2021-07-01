@@ -20,5 +20,12 @@ namespace: kube-system
 replicas:
 - count: 1
   name: antrea-controller
+vars:
+  - name: ANTREA_CONFIG_MAP_NAME
+    objref:
+      kind: ConfigMap
+      name: antrea-config
+      apiVersion: v1
+
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization

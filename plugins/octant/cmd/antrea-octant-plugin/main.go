@@ -18,11 +18,12 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sync"
 
 	"github.com/vmware-tanzu/octant/pkg/navigation"
 	"github.com/vmware-tanzu/octant/pkg/plugin"
 	"github.com/vmware-tanzu/octant/pkg/plugin/service"
-	"k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/clientcmd"
 
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
@@ -39,8 +40,12 @@ const (
 
 type antreaOctantPlugin struct {
 	client *clientset.Clientset
-	graph  string
-	lastTf *crdv1alpha1.Traceflow
+	// tfMutex protects the Traceflow state in case of multiple client
+	// sessions concurrently accessing the Traceflow functionality of the
+	// Antrea plugin.
+	tfMutex sync.Mutex
+	graph   string
+	lastTf  *crdv1alpha1.Traceflow
 }
 
 func newAntreaOctantPlugin() *antreaOctantPlugin {
@@ -62,7 +67,7 @@ func newAntreaOctantPlugin() *antreaOctantPlugin {
 		client: client,
 		graph:  "",
 		lastTf: &crdv1alpha1.Traceflow{
-			ObjectMeta: v1.ObjectMeta{Name: ""},
+			ObjectMeta: metav1.ObjectMeta{Name: ""},
 		},
 	}
 }
@@ -73,7 +78,7 @@ func main() {
 	a := newAntreaOctantPlugin()
 
 	capabilities := &plugin.Capabilities{
-		ActionNames: []string{addTfAction, addLiveTfAction, showGraphAction},
+		ActionNames: []string{addTfAction, addLiveTfAction, showGraphAction, runTraceAgainAction},
 		IsModule:    true,
 	}
 

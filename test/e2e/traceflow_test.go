@@ -1425,6 +1425,7 @@ func TestTraceflowInterNode(t *testing.T) {
 						{
 							Component:       v1alpha1.ComponentLB,
 							Pod:             fmt.Sprintf("%s/%s", testNamespace, nginxPodName),
+							TranslatedSrcIP: "169.254.169.252",
 							TranslatedDstIP: nginxIPv4Str,
 							Action:          v1alpha1.ActionForwarded,
 						},
@@ -1802,6 +1803,7 @@ func TestTraceflowInterNode(t *testing.T) {
 						{
 							Component:       v1alpha1.ComponentLB,
 							Pod:             fmt.Sprintf("%s/%s", testNamespace, nginxPodName),
+							TranslatedSrcIP: "fc00::aabb:ccdd:eeff",
 							TranslatedDstIP: nginxIPv6Str,
 							Action:          v1alpha1.ActionForwarded,
 						},

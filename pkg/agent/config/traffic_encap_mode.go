@@ -83,7 +83,7 @@ func (m TrafficEncapModeType) NeedsEncapToPeer(peerIP net.IP, localIP *net.IPNet
 	return (m == TrafficEncapModeEncap) || (m == TrafficEncapModeHybrid && !localIP.Contains(peerIP))
 }
 
-// NeedsRoutingToPeer returns true if Pod traffic to peer Node needs underlying routing support.
-func (m TrafficEncapModeType) NeedsRoutingToPeer(peerIP net.IP, localIP *net.IPNet) bool {
-	return m == TrafficEncapModeNoEncap && !localIP.Contains(peerIP)
+// NeedsDirectRoutingToPeer returns true if Pod traffic to peer Node needs a direct route installed to the routing table.
+func (m TrafficEncapModeType) NeedsDirectRoutingToPeer(peerIP net.IP, localIP *net.IPNet) bool {
+	return (m == TrafficEncapModeNoEncap || m == TrafficEncapModeHybrid) && localIP.Contains(peerIP)
 }

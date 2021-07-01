@@ -153,13 +153,15 @@ func (c *ovsCtlClient) runTracing(flow string) (string, error) {
 
 func (c *ovsCtlClient) RunAppctlCmd(cmd string, needsBridge bool, args ...string) ([]byte, *ExecError) {
 	// Use the control UNIX domain socket to connect to ovs-vswitchd, as Agent can
-	// run in a different PID namespace from ovs-vswitchd, and so might not be able
-	// to reach ovs-vswitchd using the PID.
+	// run in a different PID namespace from ovs-vswitchd. Relying on ovs-appctl to
+	// determine the control socket based on the pidfile will then give a "stale
+	// pidfile" error, as it tries to validate that the PID read from the pidfile
+	// corresponds to a valid process in the current PID namespace.
 	var cmdStr string
 	if needsBridge {
-		cmdStr = fmt.Sprintf("ovs-appctl -t %s %s %s", ovsVSwitchdUDS, cmd, c.bridge)
+		cmdStr = fmt.Sprintf("ovs-appctl -t %s %s %s", ovsVSwitchdUDS(), cmd, c.bridge)
 	} else {
-		cmdStr = fmt.Sprintf("ovs-appctl -t %s %s", ovsVSwitchdUDS, cmd)
+		cmdStr = fmt.Sprintf("ovs-appctl -t %s %s", ovsVSwitchdUDS(), cmd)
 	}
 	cmdStr = cmdStr + " " + strings.Join(args, " ")
 	out, err := getOVSCommand(cmdStr).CombinedOutput()

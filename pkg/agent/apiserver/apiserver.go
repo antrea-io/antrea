@@ -35,6 +35,7 @@ import (
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/addressgroup"
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/agentinfo"
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/appliedtogroup"
+	"antrea.io/antrea/pkg/agent/apiserver/handlers/featuregates"
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/networkpolicy"
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/ovsflows"
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/ovstracing"
@@ -73,6 +74,7 @@ func (s *agentAPIServer) Run(stopCh <-chan struct{}) error {
 
 func installHandlers(aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolicyInfoQuerier, s *genericapiserver.GenericAPIServer) {
 	s.Handler.NonGoRestfulMux.HandleFunc("/loglevel", loglevel.HandleFunc())
+	s.Handler.NonGoRestfulMux.HandleFunc("/featuregates", featuregates.HandleFunc())
 	s.Handler.NonGoRestfulMux.HandleFunc("/agentinfo", agentinfo.HandleFunc(aq))
 	s.Handler.NonGoRestfulMux.HandleFunc("/podinterfaces", podinterface.HandleFunc(aq))
 	s.Handler.NonGoRestfulMux.HandleFunc("/networkpolicies", networkpolicy.HandleFunc(aq))

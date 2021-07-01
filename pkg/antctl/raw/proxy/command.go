@@ -15,7 +15,6 @@
 package proxy
 
 import (
-	"context"
 	"fmt"
 	"net"
 	"os"
@@ -23,16 +22,12 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 	"k8s.io/kubectl/pkg/proxy"
 
+	"antrea.io/antrea/pkg/antctl/raw"
 	"antrea.io/antrea/pkg/antctl/runtime"
-	clusterinformationv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
-	antrea "antrea.io/antrea/pkg/client/clientset/versioned"
-	"antrea.io/antrea/pkg/util/k8s"
 )
 
 const (
@@ -155,66 +150,6 @@ func init() {
 	Command.Flags().StringVar(&o.agentNodeName, "agent-node", "", "Run proxy for Antrea Agent API on the provided K8s Node.")
 }
 
-// TODO: enable secure connection. For the Antrea Controller, we can do it by using the CA
-// certificate published in the antrea-ca ConfigMap. For Antrea Agents, this is not possible at the
-// moment (CA not available).
-func setupKubeconfig(kubeconfig *rest.Config) {
-	kubeconfig.Insecure = true
-	kubeconfig.CAFile = ""
-	kubeconfig.CAData = nil
-}
-
-func createAgentClientCfg(k8sClientset kubernetes.Interface, antreaClientset antrea.Interface, cfgTmpl *rest.Config, nodeName string) (*rest.Config, error) {
-	node, err := k8sClientset.CoreV1().Nodes().Get(context.TODO(), nodeName, metav1.GetOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("error when looking up Node %s: %w", nodeName, err)
-	}
-	// TODO: filter by Node name, but that would require API support
-	agentInfoList, err := antreaClientset.CrdV1beta1().AntreaAgentInfos().List(context.TODO(), metav1.ListOptions{ResourceVersion: "0"})
-	if err != nil {
-		return nil, err
-	}
-	var agentInfo *clusterinformationv1beta1.AntreaAgentInfo
-	for i := range agentInfoList.Items {
-		ai := agentInfoList.Items[i]
-		if ai.NodeRef.Name == nodeName {
-			agentInfo = &ai
-			break
-		}
-	}
-	if agentInfo == nil {
-		return nil, fmt.Errorf("no Antrea Agent found for Node name %s", nodeName)
-	}
-	nodeIP, err := k8s.GetNodeAddr(node)
-	if err != nil {
-		return nil, fmt.Errorf("error when parsing IP of Node %s", nodeName)
-	}
-	cfg := rest.CopyConfig(cfgTmpl)
-	cfg.Host = fmt.Sprintf("https://%s", net.JoinHostPort(nodeIP.String(), fmt.Sprint(agentInfo.APIPort)))
-	return cfg, nil
-}
-
-func createControllerClientCfg(k8sClientset kubernetes.Interface, antreaClientset antrea.Interface, cfgTmpl *rest.Config) (*rest.Config, error) {
-	controllerInfo, err := antreaClientset.CrdV1beta1().AntreaControllerInfos().Get(context.TODO(), "antrea-controller", metav1.GetOptions{})
-	if err != nil {
-		return nil, err
-	}
-
-	controllerNode, err := k8sClientset.CoreV1().Nodes().Get(context.TODO(), controllerInfo.NodeRef.Name, metav1.GetOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("error when searching the Node of the controller: %w", err)
-	}
-	var controllerNodeIP net.IP
-	controllerNodeIP, err = k8s.GetNodeAddr(controllerNode)
-	if err != nil {
-		return nil, fmt.Errorf("error when parsing controller IP: %w", err)
-	}
-
-	cfg := rest.CopyConfig(cfgTmpl)
-	cfg.Host = fmt.Sprintf("https://%s", net.JoinHostPort(controllerNodeIP.String(), fmt.Sprint(controllerInfo.APIPort)))
-	return cfg, nil
-}
-
 func runE(cmd *cobra.Command, _ []string) error {
 	if runtime.Mode != runtime.ModeController || runtime.InPod {
 		return fmt.Errorf("only remote mode is supported for this command")
@@ -224,37 +159,29 @@ func runE(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	kubeconfigPath, err := cmd.Flags().GetString("kubeconfig")
-	if err != nil {
-		return err
-	}
-	kubeconfig, err := runtime.ResolveKubeconfig(kubeconfigPath)
+	kubeconfig, err := raw.ResolveKubeconfig(cmd)
 	if err != nil {
 		return err
 	}
 	restconfigTmpl := rest.CopyConfig(kubeconfig)
-	setupKubeconfig(restconfigTmpl)
+	raw.SetupKubeconfig(restconfigTmpl)
 	if server, err := Command.Flags().GetString("server"); err != nil {
 		kubeconfig.Host = server
 	}
 
-	k8sClientset, err := kubernetes.NewForConfig(kubeconfig)
+	k8sClientset, antreaClientset, err := raw.SetupClients(kubeconfig)
 	if err != nil {
-		return fmt.Errorf("failed to create K8s clientset: %w", err)
-	}
-	antreaClientset, err := antrea.NewForConfig(kubeconfig)
-	if err != nil {
-		return fmt.Errorf("error when creating Antrea clientset: %w", err)
+		return fmt.Errorf("failed to create clientset: %w", err)
 	}
 
 	var clientCfg *rest.Config
 	if options.controller {
-		clientCfg, err = createControllerClientCfg(k8sClientset, antreaClientset, restconfigTmpl)
+		clientCfg, err = raw.CreateControllerClientCfg(k8sClientset, antreaClientset, restconfigTmpl)
 		if err != nil {
 			return fmt.Errorf("error when creating Controller client config: %w", err)
 		}
 	} else {
-		clientCfg, err = createAgentClientCfg(k8sClientset, antreaClientset, restconfigTmpl, options.agentNodeName)
+		clientCfg, err = raw.CreateAgentClientCfg(k8sClientset, antreaClientset, restconfigTmpl, options.agentNodeName)
 		if err != nil {
 			return fmt.Errorf("error when creating Agent client config: %w", err)
 		}

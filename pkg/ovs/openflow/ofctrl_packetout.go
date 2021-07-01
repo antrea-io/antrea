@@ -377,7 +377,16 @@ func (b *ofPacketOutBuilder) udpHeaderChecksum() uint16 {
 	udpHeader.Checksum = 0
 	data, _ := udpHeader.MarshalBinary()
 	checksumData := append(b.generatePseudoHeader(uint16(len(data))), data...)
-	return checksum(checksumData)
+	checksum := checksum(checksumData)
+	// From RFC 768:
+	// If the computed checksum is zero, it is transmitted as all ones (the
+	// equivalent in one's complement arithmetic). An all zero transmitted
+	// checksum value means that the transmitter generated no checksum (for
+	// debugging or for higher level protocols that don't care).
+	if checksum == 0 {
+		checksum = 0xffff
+	}
+	return checksum
 }
 
 func (b *ofPacketOutBuilder) generatePseudoHeader(length uint16) []byte {
@@ -403,17 +412,15 @@ func (b *ofPacketOutBuilder) generatePseudoHeader(length uint16) []byte {
 }
 
 func checksum(data []byte) uint16 {
-	var sum uint32
-	var index int
-	length := len(data)
-	for length > 1 {
-		sum += uint32(data[index])<<8 + uint32(data[index+1])
-		index += 2
-		length -= 2
+	sum := uint32(0)
+	for ; len(data) >= 2; data = data[2:] {
+		sum += uint32(data[0])<<8 | uint32(data[1])
 	}
-	if length > 0 {
-		sum += uint32(data[index])
+	if len(data) > 0 {
+		sum += uint32(data[0]) << 8
 	}
-	sum += (sum >> 16)
-	return uint16(^sum)
+	for sum > 0xffff {
+		sum = (sum >> 16) + (sum & 0xffff)
+	}
+	return ^uint16(sum)
 }

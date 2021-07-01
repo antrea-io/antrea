@@ -31,7 +31,7 @@ DOCKER_REGISTRY=$(head -n1 "${WORKSPACE}/ci/docker-registry")
 IMAGE_PULL_POLICY="Always"
 
 WINDOWS_CONFORMANCE_FOCUS="\[sig-network\].+\[Conformance\]|\[sig-windows\]"
-WINDOWS_CONFORMANCE_SKIP="\[LinuxOnly\]|\[Slow\]|\[Serial\]|\[Disruptive\]|\[Flaky\]|\[Feature:.+\]|\[sig-cli\]|\[sig-storage\]|\[sig-auth\]|\[sig-api-machinery\]|\[sig-apps\]|\[sig-node\]|\[Privileged\]|should be able to change the type from|\[sig-network\] Services should be able to create a functioning NodePort service \[Conformance\]|Service endpoints latency should not be very high"
+WINDOWS_CONFORMANCE_SKIP="\[LinuxOnly\]|\[Slow\]|\[Serial\]|\[Disruptive\]|\[Flaky\]|\[Feature:.+\]|\[sig-cli\]|\[sig-storage\]|\[sig-auth\]|\[sig-api-machinery\]|\[sig-apps\]|\[sig-node\]|\[Privileged\]|should be able to change the type from|\[sig-network\] Services should be able to create a functioning NodePort service \[Conformance\]|Service endpoints latency should not be very high|should be able to create a functioning NodePort service for Windows"
 WINDOWS_NETWORKPOLICY_FOCUS="\[Feature:NetworkPolicy\]"
 WINDOWS_NETWORKPOLICY_SKIP="SKIP_NO_TESTCASE"
 CONFORMANCE_SKIP="\[Slow\]|\[Serial\]|\[Disruptive\]|\[Flaky\]|\[Feature:.+\]|\[sig-cli\]|\[sig-storage\]|\[sig-auth\]|\[sig-api-machinery\]|\[sig-apps\]|\[sig-node\]"
@@ -39,6 +39,8 @@ NETWORKPOLICY_SKIP="should allow egress access to server in CIDR block|should en
 
 # TODO: change to "control-plane" when testbeds are updated to K8s v1.20
 CONTROL_PLANE_NODE_ROLE="master"
+
+CLEAN_STALE_IMAGES="docker system prune --force --all --filter until=48h"
 
 _usage="Usage: $0 [--kubeconfig <KubeconfigSavePath>] [--workdir <HomePath>]
                   [--testcase <windows-install-ovs|windows-conformance|windows-networkpolicy|windows-e2e|e2e|conformance|networkpolicy>]
@@ -218,8 +220,7 @@ function deliver_antrea_windows {
 
     git show --numstat
     make clean
-    docker images | grep 'antrea-ubuntu' | awk '{print $3}' | xargs -r docker rmi -f || true
-    docker images | grep '<none>' | awk '{print $3}' | xargs -r docker rmi || true
+    ${CLEAN_STALE_IMAGES}
     chmod -R g-w build/images/ovs
     chmod -R g-w build/images/base
     DOCKER_REGISTRY="${DOCKER_REGISTRY}" ./hack/build-antrea-ubuntu-all.sh --pull
@@ -234,21 +235,36 @@ function deliver_antrea_windows {
     cp -f build/yamls/*.yml $WORKDIR
     docker save -o antrea-ubuntu.tar projects.registry.vmware.com/antrea/antrea-ubuntu:latest
 
-    echo "===== Deliver Antrea to Linux nodes ====="
+    echo "===== Pull necessary images on Control-Plane node ====="
+    harbor_images=("agnhost:2.13" "nginx:1.15-alpine")
+    antrea_images=("e2eteam/agnhost:2.13" "docker.io/library/nginx:1.15-alpine")
+    for i in "${!harbor_images[@]}"; do
+        docker pull -q "${DOCKER_REGISTRY}/antrea/${harbor_images[i]}"
+        docker tag "${DOCKER_REGISTRY}/antrea/${harbor_images[i]}" "${antrea_images[i]}"
+    done
+    echo "===== Deliver Antrea to Linux worker nodes and pull necessary images on worker nodes ====="
     kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 != role && $1 !~ /win/ {print $6}' | while read IP; do
         rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no" antrea-ubuntu.tar jenkins@${IP}:${WORKDIR}/antrea-ubuntu.tar
-        ssh -o StrictHostKeyChecking=no -n jenkins@${IP} "docker images | grep 'antrea-ubuntu' | awk '{print \$3}' | xargs -r docker rmi ; docker load -i ${WORKDIR}/antrea-ubuntu.tar ; docker images | grep '<none>' | awk '{print \$3}' | xargs -r docker rmi" || true
+        ssh -o StrictHostKeyChecking=no -n jenkins@${IP} "${CLEAN_STALE_IMAGES}; docker load -i ${WORKDIR}/antrea-ubuntu.tar" || true
+
+        harbor_images=("agnhost:2.13" "nginx:1.15-alpine")
+        antrea_images=("e2eteam/agnhost:2.13" "docker.io/library/nginx:1.15-alpine")
+        for i in "${!harbor_images[@]}"; do
+            ssh -o StrictHostKeyChecking=no -n jenkins@${IP} "docker pull -q ${DOCKER_REGISTRY}/antrea/${harbor_images[i]} && docker tag ${DOCKER_REGISTRY}/antrea/${harbor_images[i]} ${antrea_images[i]}" || true
+        done
     done
 
-    echo "===== Deliver Antrea Windows to Windows nodes ====="
+    echo "===== Deliver Antrea Windows to Windows worker nodes and pull necessary images on Windows worker nodes ====="
     rm -f antrea-windows.tar.gz
     sed -i 's/if (!(Test-Path $AntreaAgentConfigPath))/if ($true)/' hack/windows/Helper.psm1
     kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 != role && $1 ~ /win/ {print $6}' | while read IP; do
         govc snapshot.revert -vm.ip ${IP} win-initial
-        harbor_images=("sigwindowstools-kube-proxy:v1.18.0" "e2eteam-agnhost:2.13" "e2eteam-jessie-dnsutils:1.0" "e2eteam-pause:3.2")
-        antrea_images=("sigwindowstools/kube-proxy:v1.18.0" "e2eteam/agnhost:2.13" "e2eteam/jessie-dnsutils:1.0" "e2eteam/pause:3.2")
+        # Some tests need us.gcr.io/k8s-artifacts-prod/e2e-test-images/agnhost:2.13 image but it is not for windows/amd64 10.0.17763
+        # Use e2eteam/agnhost:2.13 instead
+        harbor_images=("sigwindowstools-kube-proxy:v1.18.0" "agnhost:2.13" "agnhost:2.13" "e2eteam-jessie-dnsutils:1.0" "e2eteam-pause:3.2")
+        antrea_images=("sigwindowstools/kube-proxy:v1.18.0" "e2eteam/agnhost:2.13" "us.gcr.io/k8s-artifacts-prod/e2e-test-images/agnhost:2.13" "e2eteam/jessie-dnsutils:1.0" "e2eteam/pause:3.2")
         for i in "${!harbor_images[@]}"; do
-            ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "docker pull ${DOCKER_REGISTRY}/antrea/${harbor_images[i]} && docker tag ${DOCKER_REGISTRY}/antrea/${harbor_images[i]} ${antrea_images[i]}" || true
+            ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "docker pull -q ${DOCKER_REGISTRY}/antrea/${harbor_images[i]} && docker tag ${DOCKER_REGISTRY}/antrea/${harbor_images[i]} ${antrea_images[i]}" || true
         done
 
         # Use a script to run antrea agent in windows Network Policy cases
@@ -314,8 +330,7 @@ function deliver_antrea {
 
     git show --numstat
     make clean
-    docker images | grep 'antrea-ubuntu' | awk '{print $3}' | xargs -r docker rmi -f || true
-    docker images | grep '<none>' | awk '{print $3}' | xargs -r docker rmi || true
+    ${CLEAN_STALE_IMAGES}
     if [[ "${DOCKER_REGISTRY}" != "" ]]; then
         docker pull "${DOCKER_REGISTRY}/antrea/sonobuoy-systemd-logs:v0.3"
         docker tag "${DOCKER_REGISTRY}/antrea/sonobuoy-systemd-logs:v0.3" "sonobuoy/systemd-logs:v0.3"
@@ -351,8 +366,7 @@ function deliver_antrea {
     kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 != role {print $6}' | while read IP; do
         rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no" antrea-ubuntu.tar jenkins@[${IP}]:${WORKDIR}/antrea-ubuntu.tar
         rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no" flow-aggregator.tar jenkins@[${IP}]:${WORKDIR}/flow-aggregator.tar
-        ssh -o StrictHostKeyChecking=no -n jenkins@${IP} "docker images | grep 'antrea-ubuntu' | awk '{print \$3}' | xargs -r docker rmi ; docker load -i ${WORKDIR}/antrea-ubuntu.tar ; docker images | grep '<none>' | awk '{print \$3}' | xargs -r docker rmi" || true
-        ssh -o StrictHostKeyChecking=no -n jenkins@${IP} "docker images | grep 'flow-aggregator' | awk '{print \$3}' | xargs -r docker rmi ; docker load -i ${WORKDIR}/flow-aggregator.tar ; docker images | grep '<none>' | awk '{print \$3}' | xargs -r docker rmi" || true
+        ssh -o StrictHostKeyChecking=no -n jenkins@${IP} "${CLEAN_STALE_IMAGES}; docker load -i ${WORKDIR}/antrea-ubuntu.tar; docker load -i ${WORKDIR}/flow-aggregator.tar" || true
         if [[ "${DOCKER_REGISTRY}" != "" ]]; then
             ssh -o StrictHostKeyChecking=no -n jenkins@${IP} "docker pull ${DOCKER_REGISTRY}/antrea/sonobuoy-systemd-logs:v0.3 ; docker tag ${DOCKER_REGISTRY}/antrea/sonobuoy-systemd-logs:v0.3 sonobuoy/systemd-logs:v0.3"
         fi
@@ -375,6 +389,8 @@ function run_e2e {
 
     set +e
     mkdir -p `pwd`/antrea-test-logs
+    # HACK: see https://github.com/antrea-io/antrea/issues/2292
+    go mod edit -replace github.com/moby/spdystream=github.com/antoninbas/spdystream@v0.2.1 && go mod tidy
     go test -v antrea.io/antrea/test/e2e --logs-export-dir `pwd`/antrea-test-logs --provider remote -timeout=100m --prometheus
     if [[ "$?" != "0" ]]; then
         TEST_FAILURE=true
@@ -429,7 +445,22 @@ function run_e2e_windows {
     mkdir -p "${WORKDIR}/.kube"
     mkdir -p "${WORKDIR}/.ssh"
     cp -f "${WORKDIR}/kube.conf" "${WORKDIR}/.kube/config"
-    cp -f "${WORKDIR}/ssh-config" "${WORKDIR}/.ssh/config"
+    echo "=== Generate ssh-config ==="
+    SSH_CONFIG_DST="${WORKDIR}/.ssh/config"
+    kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 != role {print $1}' | while read sshconfig_nodename; do
+        echo "Generating ssh-config for Node ${sshconfig_nodename}"
+        sshconfig_nodeip="$(kubectl get node "${sshconfig_nodename}" -o jsonpath='{.status.addresses[0].address}')"
+        cp ci/jenkins/ssh-config "${SSH_CONFIG_DST}.new"
+        sed -i "s/SSHCONFIGNODEIP/${sshconfig_nodeip}/g" "${SSH_CONFIG_DST}.new"
+        sed -i "s/SSHCONFIGNODENAME/${sshconfig_nodename}/g" "${SSH_CONFIG_DST}.new"
+        if [[ "${sshconfig_nodename}" =~ "win" ]]; then
+            sed -i "s/capv/administrator/g" "${SSH_CONFIG_DST}.new"
+        else
+            sed -i "s/capv/jenkins/g" "${SSH_CONFIG_DST}.new"
+        fi
+        echo "    IdentityFile ${WORKDIR}/.ssh/id_rsa" >> "${SSH_CONFIG_DST}.new"
+        cat "${SSH_CONFIG_DST}.new" >> "${SSH_CONFIG_DST}"
+    done
 
     set +e
     mkdir -p `pwd`/antrea-test-logs
@@ -500,24 +531,42 @@ function run_install_windows_ovs {
     fi
 }
 
+function clean_tmp() {
+    echo "===== Clean up stale files & folders older than 7 days under /tmp ====="
+    CLEAN_LIST=(
+        "*codecov*"
+        "kustomize-*"
+        "*antrea*"
+        "go-build*"
+    )
+    for item in "${CLEAN_LIST[@]}"; do
+        find /tmp -name "${item}" -mtime +7 -exec rm -rf {} \; 2>&1 | grep -v "Permission denied" || true
+    done
+}
+
+clean_tmp
 if [[ ${TESTCASE} == "windows-install-ovs" ]]; then
     run_install_windows_ovs
-elif [[ ${TESTCASE} =~ "windows" ]]; then
+    if [[ ${TEST_FAILURE} == true ]]; then
+        exit 1
+    fi
+    exit 0
+fi
+
+trap clean_antrea EXIT
+if [[ ${TESTCASE} =~ "windows" ]]; then
     deliver_antrea_windows
     if [[ ${TESTCASE} =~ "e2e" ]]; then
         run_e2e_windows
     else
         run_conformance_windows
     fi
-    clean_antrea
 elif [[ ${TESTCASE} =~ "e2e" ]]; then
     deliver_antrea
     run_e2e
-    clean_antrea
 else
     deliver_antrea
     run_conformance
-    clean_antrea
 fi
 
 if [[ ${TEST_FAILURE} == true ]]; then

@@ -12,7 +12,6 @@ metadata:
 rules:
   - apiGroups:
       - controlplane.antrea.tanzu.vmware.com
-      - networking.antrea.tanzu.vmware.com
       - controlplane.antrea.io
     resources:
       - networkpolicies
@@ -63,6 +62,7 @@ rules:
       - /ovsflows
       - /ovstracing
       - /podinterfaces
+      - /featuregates
     verbs:
       - get
 ---
