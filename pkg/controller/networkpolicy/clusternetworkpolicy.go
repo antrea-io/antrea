@@ -29,10 +29,10 @@ import (
 	utilsets "antrea.io/antrea/pkg/util/sets"
 )
 
-// addCNP receives ClusterNetworkPolicy ADD events and creates resources
+// addACNP receives ClusterNetworkPolicy ADD events and creates resources
 // which can be consumed by agents to configure corresponding rules on the Nodes.
-func (n *NetworkPolicyController) addCNP(obj interface{}) {
-	defer n.heartbeat("addCNP")
+func (n *NetworkPolicyController) addACNP(obj interface{}) {
+	defer n.heartbeat("addACNP")
 	cnp := obj.(*crdv1alpha1.ClusterNetworkPolicy)
 	klog.Infof("Processing ClusterNetworkPolicy %s ADD event", cnp.Name)
 	// Create an internal NetworkPolicy object corresponding to this

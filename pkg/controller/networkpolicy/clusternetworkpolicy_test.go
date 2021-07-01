@@ -1414,7 +1414,7 @@ func TestAddCNP(t *testing.T) {
 			_, npc := newController()
 			npc.tierStore.Add(&appTier)
 			npc.tierStore.Add(&emergencyTier)
-			npc.addCNP(tt.inputPolicy)
+			npc.addACNP(tt.inputPolicy)
 			key := internalNetworkPolicyKeyFunc(tt.inputPolicy)
 			actualPolicyObj, _, _ := npc.internalNetworkPolicyStore.Get(key)
 			actualPolicy := actualPolicyObj.(*antreatypes.NetworkPolicy)
@@ -1425,7 +1425,7 @@ func TestAddCNP(t *testing.T) {
 	}
 	_, npc := newController()
 	for _, tt := range tests {
-		npc.addCNP(tt.inputPolicy)
+		npc.addACNP(tt.inputPolicy)
 	}
 	assert.Equal(t, 7, npc.GetNetworkPolicyNum(), "number of NetworkPolicies do not match")
 	assert.Equal(t, 3, npc.GetAddressGroupNum(), "number of AddressGroups do not match")
@@ -1437,7 +1437,7 @@ func TestDeleteCNP(t *testing.T) {
 	cnpObj := getCNP()
 	apgID := getNormalizedUID(toGroupSelector("", &selectorA, nil, nil).NormalizedName)
 	_, npc := newController()
-	npc.addCNP(cnpObj)
+	npc.addACNP(cnpObj)
 	npc.deleteCNP(cnpObj)
 	_, found, _ := npc.appliedToGroupStore.Get(apgID)
 	assert.False(t, found, "expected AppliedToGroup to be deleted")

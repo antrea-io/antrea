@@ -360,7 +360,7 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 		)
 		cnpInformer.Informer().AddEventHandlerWithResyncPeriod(
 			cache.ResourceEventHandlerFuncs{
-				AddFunc:    n.addCNP,
+				AddFunc:    n.addACNP,
 				UpdateFunc: n.updateCNP,
 				DeleteFunc: n.deleteCNP,
 			},
