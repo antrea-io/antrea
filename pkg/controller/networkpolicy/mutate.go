@@ -91,12 +91,16 @@ func (m *NetworkPolicyMutator) Mutate(ar *admv1.AdmissionReview) *admv1.Admissio
 			Message: msg,
 		}
 	}
-	return &admv1.AdmissionResponse{
-		Allowed:   allowed,
-		Result:    result,
-		PatchType: &patchType,
-		Patch:     patch,
+	response := &admv1.AdmissionResponse{
+		Allowed: allowed,
+		Result:  result,
 	}
+	// For a mutating webhook, patch and patchType must be provided together only when patch exists
+	if len(patch) > 0 {
+		response.PatchType = &patchType
+		response.Patch = patch
+	}
+	return response
 }
 
 // mutateAntreaPolicy mutates names of rules of an Antrea NetworkPolicy CRD.
