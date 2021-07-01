@@ -35,6 +35,8 @@ type IPFIXAggregationProcess interface {
 	AreCorrelatedFieldsFilled(record ipfixintermediate.AggregationFlowRecord) bool
 	IsAggregatedRecordIPv4(record ipfixintermediate.AggregationFlowRecord) bool
 	IsExporterOfAggregatedRecordIPv4(record ipfixintermediate.AggregationFlowRecord) bool
+	SetExternalFieldsFilled(record *ipfixintermediate.AggregationFlowRecord)
+	AreExternalFieldsFilled(record ipfixintermediate.AggregationFlowRecord) bool
 }
 
 type ipfixAggregationProcess struct {
@@ -87,4 +89,12 @@ func (ap *ipfixAggregationProcess) IsAggregatedRecordIPv4(record ipfixintermedia
 
 func (ap *ipfixAggregationProcess) IsExporterOfAggregatedRecordIPv4(record ipfixintermediate.AggregationFlowRecord) bool {
 	return ap.AggregationProcess.IsExporterOfAggregatedRecordIPv4(record)
+}
+
+func (ap *ipfixAggregationProcess) SetExternalFieldsFilled(record *ipfixintermediate.AggregationFlowRecord) {
+	ap.AggregationProcess.SetExternalFieldsFilled(record, true)
+}
+
+func (ap *ipfixAggregationProcess) AreExternalFieldsFilled(record ipfixintermediate.AggregationFlowRecord) bool {
+	return ap.AggregationProcess.AreExternalFieldsFilled(record)
 }
