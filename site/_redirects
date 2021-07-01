@@ -2,3 +2,4 @@
 # See https://github.com/knative/website/tree/main/tools/redir-gen
 
 /antrea/* go-get=1 /golang/antrea.html 200
+/libOpenflow/* go-get=1 /golang/libOpenflow.html 200
