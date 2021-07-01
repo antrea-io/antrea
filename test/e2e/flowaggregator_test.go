@@ -96,6 +96,8 @@ DATA SET:
     reverseOctetTotalCountFromDestinationNode: 23108308
     reversePacketDeltaCountFromDestinationNode: 0
     reversePacketTotalCountFromDestinationNode: 444320
+	sourcePodLabels: {"antrea-e2e":"perftest-a","app":"perftool"}
+	destinationPodLabels: {"antrea-e2e":"perftest-b","app":"perftool"}
 
 Intra-Node: Flow record information is complete for source and destination e.g. sourcePodName, destinationPodName
 Inter-Node: Flow record from destination Node is ignored, so only flow record from the source Node has its K8s info e.g., sourcePodName, sourcePodNamespace, sourceNodeName etc.
@@ -696,10 +698,15 @@ func checkPodAndNodeData(t *testing.T, record, srcPod, srcNode, dstPod, dstNode 
 	assert.Contains(record, fmt.Sprintf("sourceNodeName: %s", srcNode), "Record does not have correct sourceNodeName")
 	// For Pod-To-External flow type, we send traffic to an external address,
 	// so we skip the verification of destination Pod info.
+	// Also, source Pod labels are different for Pod-To-External flow test.
 	if dstPod != "" {
 		assert.Contains(record, dstPod, "Record with dstIP does not have Pod name")
 		assert.Contains(record, fmt.Sprintf("destinationPodNamespace: %s", testNamespace), "Record does not have correct destinationPodNamespace")
 		assert.Contains(record, fmt.Sprintf("destinationNodeName: %s", dstNode), "Record does not have correct destinationNodeName")
+		assert.Contains(record, fmt.Sprintf("{\"antrea-e2e\":\"%s\",\"app\":\"perftool\"}", srcPod), "Record does not have correct label for source Pod")
+		assert.Contains(record, fmt.Sprintf("{\"antrea-e2e\":\"%s\",\"app\":\"perftool\"}", dstPod), "Record does not have correct label for destination Pod")
+	} else {
+		assert.Contains(record, fmt.Sprintf("{\"antrea-e2e\":\"%s\",\"app\":\"busybox\"}", srcPod), "Record does not have correct label for source Pod")
 	}
 }
 

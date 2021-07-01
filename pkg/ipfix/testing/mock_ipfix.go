@@ -239,6 +239,20 @@ func (mr *MockIPFIXAggregationProcessMockRecorder) AreCorrelatedFieldsFilled(arg
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AreCorrelatedFieldsFilled", reflect.TypeOf((*MockIPFIXAggregationProcess)(nil).AreCorrelatedFieldsFilled), arg0)
 }
 
+// AreExternalFieldsFilled mocks base method
+func (m *MockIPFIXAggregationProcess) AreExternalFieldsFilled(arg0 intermediate.AggregationFlowRecord) bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AreExternalFieldsFilled", arg0)
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// AreExternalFieldsFilled indicates an expected call of AreExternalFieldsFilled
+func (mr *MockIPFIXAggregationProcessMockRecorder) AreExternalFieldsFilled(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AreExternalFieldsFilled", reflect.TypeOf((*MockIPFIXAggregationProcess)(nil).AreExternalFieldsFilled), arg0)
+}
+
 // ForAllExpiredFlowRecordsDo mocks base method
 func (m *MockIPFIXAggregationProcess) ForAllExpiredFlowRecordsDo(arg0 intermediate.FlowKeyRecordMapCallBack) error {
 	m.ctrl.T.Helper()
@@ -319,6 +333,18 @@ func (m *MockIPFIXAggregationProcess) SetCorrelatedFieldsFilled(arg0 *intermedia
 func (mr *MockIPFIXAggregationProcessMockRecorder) SetCorrelatedFieldsFilled(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetCorrelatedFieldsFilled", reflect.TypeOf((*MockIPFIXAggregationProcess)(nil).SetCorrelatedFieldsFilled), arg0)
+}
+
+// SetExternalFieldsFilled mocks base method
+func (m *MockIPFIXAggregationProcess) SetExternalFieldsFilled(arg0 *intermediate.AggregationFlowRecord) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SetExternalFieldsFilled", arg0)
+}
+
+// SetExternalFieldsFilled indicates an expected call of SetExternalFieldsFilled
+func (mr *MockIPFIXAggregationProcessMockRecorder) SetExternalFieldsFilled(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetExternalFieldsFilled", reflect.TypeOf((*MockIPFIXAggregationProcess)(nil).SetExternalFieldsFilled), arg0)
 }
 
 // Start mocks base method
