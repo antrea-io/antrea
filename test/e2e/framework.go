@@ -135,6 +135,8 @@ type ClusterInfo struct {
 	nodesOS              map[string]string
 	windowsNodes         []int
 	k8sServerVersion     string
+	k8sServiceHost       string
+	k8sServicePort       int32
 }
 
 var clusterInfo ClusterInfo
@@ -460,6 +462,14 @@ func collectClusterInfo() error {
 		return err
 	}
 	clusterInfo.k8sServerVersion = serverVersion.String()
+
+	// Retrieve kubernetes Service host and Port
+	svc, err := testData.clientset.CoreV1().Services("default").Get(context.TODO(), "kubernetes", metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("unable to get Service kubernetes: %v", err)
+	}
+	clusterInfo.k8sServiceHost = svc.Spec.ClusterIP
+	clusterInfo.k8sServicePort = svc.Spec.Ports[0].Port
 
 	return nil
 }
@@ -1598,6 +1608,17 @@ func (data *TestData) doesOVSPortExist(antreaPodName string, portName string) (b
 		return false, nil
 	}
 	return false, fmt.Errorf("error when running ovs-vsctl command on Pod '%s': %v", antreaPodName, err)
+}
+
+func (data *TestData) doesOVSPortExistOnWindows(nodeName, portName string) (bool, error) {
+	cmd := fmt.Sprintf("ovs-vsctl port-to-br %s", portName)
+	_, _, stderr, err := RunCommandOnNode(nodeName, cmd)
+	if strings.Contains(stderr, "no port named") {
+		return false, nil
+	} else if err == nil {
+		return true, nil
+	}
+	return false, fmt.Errorf("error when running ovs-vsctl command on Windows Node '%s': %v", nodeName, err)
 }
 
 func (data *TestData) GetEncapMode() (config.TrafficEncapModeType, error) {

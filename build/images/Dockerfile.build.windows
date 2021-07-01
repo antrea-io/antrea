@@ -35,6 +35,8 @@ COPY . /antrea
 
 RUN sh -c 'make windows-bin'
 
+RUN sh -c 'make antctl-windows'
+
 
 FROM mcr.microsoft.com/powershell:lts-nanoserver-1809
 SHELL ["pwsh", "-NoLogo", "-Command", "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue';"]
@@ -48,6 +50,7 @@ RUN mkdir -Force C:\k\antrea\bin
 COPY --from=cni-binaries-windows  /opt/cni/bin /k/antrea/cni
 COPY --from=antrea-build-windows  /antrea/build/images/scripts/Install-WindowsCNI.ps1 /k/antrea/
 COPY --from=antrea-build-windows  /antrea/bin/antrea-agent.exe /k/antrea/bin/
+COPY --from=antrea-build-windows  /antrea/bin/antctl-windows.exe /k/antrea/bin/antctl.exe
 COPY --from=antrea-build-windows  /antrea/bin/antrea-cni.exe /k/antrea/cni/antrea.exe
 
 RUN mkdir C:\k\antrea\utils; \

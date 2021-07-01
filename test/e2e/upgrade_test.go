@@ -116,5 +116,5 @@ func TestUpgrade(t *testing.T) {
 		t.Errorf("Namespace deletion failed: %v", err)
 	}
 
-	data.testDeletePod(t, podName, nodeName)
+	data.testDeletePod(t, podName, nodeName, false)
 }
