@@ -15,9 +15,15 @@
 
 <footer class="section site-footer">
     <div class="section-content">
-        <div class="row justify-content-between align-items-center">
+        <div class="row justify-content-between align-items-center border-bottom pb-3">
+            <div class="col-12 col-md-7 text-center text-md-left">
+                <a href="/" alt="Homepage"><img src="/img/{{ site.logo }}" class="logo" /></a>
+                <small class="m-2 m-md-0">
+                    &copy; {{ site.time | date: '%Y' }} The Antrea Contributors
+                  </small>
+              </div>
             <div class="col-12 col-md-5 mb-3 mb-md-0">
-                <ul class="social-links text-center text-md-left">
+                <ul class="social-links text-center text-md-right">
                     {% for link in site.footer_social_links %}
                     <li>
                       {% if(link[1].fa_icon != false) %}
@@ -27,12 +33,16 @@
                     {% endfor %}
                 </ul>
             </div>
-            <div class="col-12 col-md-7 text-center text-md-right">
-              <small>
-                &copy; {{ site.time | date: '%Y' }} {{ site.author }}.
-                <a href="{{ site.footer.vm-link }}">A VMware-backed project. </a>
-              </small>
-              <a href="/" alt="Homepage"><img src="/img/{{ site.logo }}" class="logo" /></a>
+        </div>
+        <div class="row pt-3">
+            <div class="col-12 col-md-8 mb-4">
+                <a href="https://www.cncf.io/sandbox-projects/" target="_blank"><img src="/img/cncf-color-logo.svg" class="cncf-logo" /></a>
+                <small class="xs mt-2 mt-md-0">We are a <a href="https://www.cncf.io/sandbox-projects/" target="_blank">Cloud Native Computing Foundation</a> sandbox project.</small>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col-12 col-md-8">
+                <small class="xs">&copy; {{ site.time | date: '%Y' }} The Linux Foundation. All Rights Reserved. The Linux Foundation has registered trademarks and uses trademarks. For a list of trademarks of the Linux Foundation, please see our <a href="https://www.linuxfoundation.org/trademark-usage" target="_blank">Trademarks Usage</a> page.</a></small>
             </div>
         </div>
     </div>
