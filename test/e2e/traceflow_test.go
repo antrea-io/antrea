@@ -1069,7 +1069,7 @@ func TestTraceflowInterNode(t *testing.T) {
 	// Create Service backend Pod. The "hairpin" testcases require the Service to have a single backend Pod,
 	// and no more, in order to be deterministic.
 	nginxPodName := "nginx"
-	require.NoError(t, data.createNginxPod(nginxPodName, node2))
+	require.NoError(t, data.createNginxPodOnNode(nginxPodName, node2))
 	nginxIP, err := data.podWaitForIPs(defaultTimeout, nginxPodName, testNamespace)
 	require.NoError(t, err)
 

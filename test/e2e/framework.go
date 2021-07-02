@@ -951,11 +951,6 @@ func (data *TestData) createHostNetworkBusyboxPodOnNode(name string, nodeName st
 	return data.createPodOnNode(name, nodeName, busyboxImage, []string{"sleep", strconv.Itoa(sleepDuration)}, nil, nil, nil, true, nil)
 }
 
-// createBusyboxPod creates a Pod in the test namespace with a single busybox container.
-func (data *TestData) createBusyboxPod(name string) error {
-	return data.createBusyboxPodOnNode(name, "")
-}
-
 // createNginxPodOnNode creates a Pod in the test namespace with a single nginx container. The
 // Pod will be scheduled on the specified Node (if nodeName is not empty).
 func (data *TestData) createNginxPodOnNode(name string, nodeName string) error {
@@ -966,11 +961,6 @@ func (data *TestData) createNginxPodOnNode(name string, nodeName string) error {
 			Protocol:      corev1.ProtocolTCP,
 		},
 	}, false, nil)
-}
-
-// createNginxPod creates a Pod in the test namespace with a single nginx container.
-func (data *TestData) createNginxPod(name, nodeName string) error {
-	return data.createNginxPodOnNode(name, nodeName)
 }
 
 // createServerPod creates a Pod that can listen to specified port and have named port set.

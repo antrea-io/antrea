@@ -60,7 +60,7 @@ func TestPodAssignIP(t *testing.T) {
 	podName := randName("test-pod-")
 
 	t.Logf("Creating a busybox test Pod")
-	if err := data.createBusyboxPod(podName); err != nil {
+	if err := data.createBusyboxPodOnNode(podName, ""); err != nil {
 		t.Fatalf("Error when creating busybox test Pod: %v", err)
 	}
 	defer deletePodWrapper(t, data, podName)
