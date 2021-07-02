@@ -67,7 +67,7 @@ func TestProxyServiceSessionAffinity(t *testing.T) {
 func testProxyServiceSessionAffinity(ipFamily *corev1.IPFamily, ingressIPs []string, data *TestData, t *testing.T) {
 	nodeName := nodeName(1)
 	nginx := "nginx"
-	require.NoError(t, data.createNginxPod(nginx, nodeName))
+	require.NoError(t, data.createNginxPodOnNode(nginx, nodeName))
 	nginxIP, err := data.podWaitForIPs(defaultTimeout, nginx, testNamespace)
 	defer data.deletePodAndWait(defaultTimeout, nginx)
 	require.NoError(t, err)
@@ -176,7 +176,7 @@ func TestProxyEndpointLifeCycle(t *testing.T) {
 func testProxyEndpointLifeCycle(ipFamily *corev1.IPFamily, data *TestData, t *testing.T) {
 	nodeName := nodeName(1)
 	nginx := "nginx"
-	require.NoError(t, data.createNginxPod(nginx, nodeName))
+	require.NoError(t, data.createNginxPodOnNode(nginx, nodeName))
 	nginxIPs, err := data.podWaitForIPs(defaultTimeout, nginx, testNamespace)
 	require.NoError(t, err)
 	_, err = data.createNginxClusterIPService("", false, ipFamily)
@@ -237,7 +237,7 @@ func TestProxyServiceLifeCycle(t *testing.T) {
 func testProxyServiceLifeCycle(ipFamily *corev1.IPFamily, ingressIPs []string, data *TestData, t *testing.T) {
 	nodeName := nodeName(1)
 	nginx := "nginx"
-	require.NoError(t, data.createNginxPod(nginx, nodeName))
+	require.NoError(t, data.createNginxPodOnNode(nginx, nodeName))
 	defer data.deletePodAndWait(defaultTimeout, nginx)
 	nginxIPs, err := data.podWaitForIPs(defaultTimeout, nginx, testNamespace)
 	require.NoError(t, err)

@@ -90,7 +90,7 @@ func TestClusterIP(t *testing.T) {
 
 func (data *TestData) createClusterIPServiceAndBackendPods(t *testing.T, name string, node string) (*corev1.Service, func()) {
 	ipv4Protocol := corev1.IPv4Protocol
-	require.NoError(t, data.createNginxPod(name, node))
+	require.NoError(t, data.createNginxPodOnNode(name, node))
 	_, err := data.podWaitForIPs(defaultTimeout, name, testNamespace)
 	require.NoError(t, err)
 	require.NoError(t, data.podWaitForRunning(defaultTimeout, name, testNamespace))
