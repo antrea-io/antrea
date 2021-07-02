@@ -65,7 +65,7 @@ const (
 
 	egressIPIndex = "egressIP"
 
-	defaultEgressRunDir = "/var/run/antrea/egress"
+	DefaultEgressRunDir = "/var/run/antrea/egress"
 )
 
 var emptyWatch = watch.NewEmptyWatch()
@@ -172,7 +172,7 @@ func NewEgressController(
 		localIPDetector:      localIPDetector,
 		idAllocator:          newIDAllocator(minEgressMark, maxEgressMark),
 	}
-	ipAssigner, err := NewIPAssigner(nodeIP, defaultEgressRunDir)
+	ipAssigner, err := NewIPAssigner(nodeIP, DefaultEgressRunDir)
 	if err != nil {
 		return nil, fmt.Errorf("initializing egressIP assigner failed: %v", err)
 	}
@@ -180,7 +180,7 @@ func NewEgressController(
 
 	cluster, err := memberlist.NewCluster(clusterPort, nodeIP, nodeName, nodeInformer, externalIPPoolInformer)
 	if err != nil {
-		return nil, fmt.Errorf("initializing Egress node memberlist cluster failed: %v", err)
+		return nil, fmt.Errorf("initializing memberlist cluster failed: %v", err)
 	}
 	c.cluster = cluster
 

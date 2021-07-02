@@ -69,7 +69,7 @@ func (a *ipAssigner) initAssignedIPFiles() (err error) {
 	files, err := ioutil.ReadDir(a.egressRunDir)
 	if err != nil {
 		if err := os.MkdirAll(a.egressRunDir, os.ModeDir); err != nil {
-			return fmt.Errorf("error when creating egress run dir: %v", err)
+			return fmt.Errorf("error when creating Egress run dir: %v", err)
 		}
 		return nil
 	}
@@ -97,16 +97,16 @@ func (a *ipAssigner) AssignEgressIP(egressIP, egressName string) error {
 		return fmt.Errorf("failed to add ip %v to interface %s: %v", addr, ifaceName, err)
 	}
 	if err := a.saveIPAssignFile(egressIP, egressName); err != nil {
-		return fmt.Errorf("failed to save egress ip assign, egress %s, ip: %s: %v", egressName, egressIP, err)
+		return fmt.Errorf("failed to save Egress IP assign, Egress %s, IP: %s: %v", egressName, egressIP, err)
 	}
 	isIPv4 := egressSpecIP.To4()
 	if isIPv4 != nil {
 		if err := arping.GratuitousARPOverIface(isIPv4, a.egressInterface); err != nil {
-			return fmt.Errorf("Failed to send gratuitous ARP: %v", err)
+			return fmt.Errorf("failed to send gratuitous ARP: %v", err)
 		}
-		klog.InfoS("Sent gratuitous ARP", "ip", isIPv4)
+		klog.V(2).InfoS("Sent gratuitous ARP", "ip", isIPv4)
 	} else if isIPv6 := egressSpecIP.To16(); isIPv6 != nil {
-		return fmt.Errorf("Failed to send Advertisement: %v", ipv6NotSupportErr)
+		return fmt.Errorf("failed to send Advertisement: %v", ipv6NotSupportErr)
 	}
 	klog.V(2).InfoS("Added ip", "ip", addr, "interface", ifaceName)
 	return nil
@@ -125,7 +125,7 @@ func (a *ipAssigner) UnassignEgressIP(egressName string) error {
 		return fmt.Errorf("failed to delete ip %v from interface %s: %v", addr, ifaceName, err)
 	}
 	if err := a.removeAssignedIPFile(egressName); err != nil {
-		return fmt.Errorf("failed to remove egress ip assign file, egressName: %s, egressIP: %s: %v", egressName, egressIP, err)
+		return fmt.Errorf("failed to remove Egress IP assign file, egressName: %s, egressIP: %s: %v", egressName, egressIP, err)
 	}
 	klog.V(2).InfoS("Deleted ip", "ip", addr, "interface", ifaceName)
 	return nil

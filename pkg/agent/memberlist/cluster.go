@@ -87,18 +87,19 @@ type Cluster struct {
 	nodeName string
 
 	mList *memberlist.Memberlist
-	// consistentHash hold the consistenthash.Map, when a Node join cluster, use method Add() to add a key to the hash.
-	// when a Node leave the cluster, the consistenthash.Map should update.
+	// consistentHash hold the consistentHashMap, when a Node join cluster, use method Add() to add a key to the hash.
+	// when a Node leave the cluster, the consistentHashMap should be update.
 	consistentHashMap     map[string]*consistenthash.Map
 	consistentHashRWMutex sync.RWMutex
 	// nodeEventsCh, the Node join/leave events will be notified via it.
 	nodeEventsCh chan memberlist.NodeEvent
 
-	// clusterNodeEventHandlers contains eventHandler which will run when consistenHashMap is updated,
+	// clusterNodeEventHandlers contains eventHandler which will run when consistentHashMap is updated,
 	// which caused by an ExternalIPPool or Node event, such as cluster Node status update(leave of join cluster),
-	// ExternalIPPool events(create/update/delete)
-	// for example, when a new Node join the cluster, each Node should recalculate that if it should still hold the existing Egresses owned by itself
-	// when a Node leave cluster, each Node may get some new Egresses from the left Node.
+	// ExternalIPPool events(create/update/delete).
+	// For example, when a new Node joins the cluster, each Node should compute whether it should still hold all
+	// its existing Egresses, and when a Node leaves the cluster,
+	// each Node should check whether it is now responsible for some of the Egresses from that Node.
 	clusterNodeEventHandlers []clusterNodeEventHandler
 
 	nodeInformer     coreinformers.NodeInformer
@@ -248,7 +249,8 @@ func (c *Cluster) enqueueExternalIPPool(obj interface{}) {
 	c.queue.Add(eip.Name)
 }
 
-// newClusterMember get Node ip and return a cluster member(ip:clusterMemberlistPort) for joining.
+// newClusterMember gets the Node's IP and returns a cluster member "<IP>:<clusterMemberlistPort>"
+// representing that Node in the memberlist cluster.
 func (c *Cluster) newClusterMember(node *corev1.Node) (string, error) {
 	nodeAddr, err := k8s.GetNodeAddr(node)
 	if err != nil {
@@ -291,7 +293,7 @@ func (c *Cluster) filterEIPsFromNodeLabels(node *corev1.Node) sets.String {
 	return pools
 }
 
-// Run will join other clusters if there are any Node in nodeLister,
+// Run will join all the other K8s Nodes in a memberlist cluster
 // and will create defaultWorkers workers (go routines) which will process the ExternalIPPool or Node events
 // from the work queue.
 func (c *Cluster) Run(stopCh <-chan struct{}) {
@@ -344,9 +346,9 @@ func (c *Cluster) processNextWorkItem() bool {
 	}
 	defer c.queue.Done(obj)
 
-	// We expect strings (ExternalIPPool name) to come off the workqueue.
+	// We expect strings (ExternalIPPool name) to come off the work queue.
 	if key, ok := obj.(string); !ok {
-		// As the item in the workqueue is actually invalid, we call Forget here else we'd
+		// As the item in the work queue is actually invalid, we call Forget here else we'd
 		// go into a loop of attempting to process a work item that is invalid.
 		// This should not happen.
 		c.queue.Forget(obj)
@@ -357,7 +359,7 @@ func (c *Cluster) processNextWorkItem() bool {
 		// another change happens.
 		c.queue.Forget(key)
 	} else {
-		// Put the item back on the workqueue to handle any transient errors.
+		// Put the item back on the work queue to handle any transient errors.
 		c.queue.AddRateLimited(key)
 		klog.ErrorS(err, "Syncing consistentHash by ExternalIPPool failed, requeue", "ExternalIPPool", key)
 	}
@@ -478,7 +480,7 @@ func (c *Cluster) notify(objName string) {
 	}
 }
 
-// AddClusterEventHandler adds a clusterNodeEventHandler, which will run when consistenHashMap is updated,
+// AddClusterEventHandler adds a clusterNodeEventHandler, which will run when consistentHashMap is updated,
 // due to an ExternalIPPool or Node event.
 func (c *Cluster) AddClusterEventHandler(handler clusterNodeEventHandler) {
 	c.clusterNodeEventHandlers = append(c.clusterNodeEventHandlers, handler)

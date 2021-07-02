@@ -26,7 +26,7 @@ import (
 	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
 )
 
-const defaultEgressRunDir = "/var/run/antrea/egress"
+const defaultEgressRunDir = egress.DefaultEgressRunDir
 
 func TestEgressIPAssigner(t *testing.T) {
 	ipAssigner, err := egress.NewIPAssigner(nodeIP.IP, defaultEgressRunDir)

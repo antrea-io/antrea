@@ -194,7 +194,7 @@ func (o *Options) setDefaults() {
 	}
 
 	if o.config.ClusterMembershipPort == 0 {
-		o.config.ClusterMembershipPort = apis.AntreaAgentClusterPort
+		o.config.ClusterMembershipPort = apis.AntreaAgentClusterMembershipPort
 	}
 
 	if features.DefaultFeatureGate.Enabled(features.FlowExporter) {

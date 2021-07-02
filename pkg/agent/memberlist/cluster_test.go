@@ -16,7 +16,6 @@ package memberlist
 
 import (
 	"context"
-	"crypto/rand"
 	"fmt"
 	"net"
 	"reflect"
@@ -93,7 +92,7 @@ func TestCluster_Run(t *testing.T) {
 			stopCh := make(chan struct{})
 			defer close(stopCh)
 
-			port := apis.AntreaAgentClusterPort + i
+			port := apis.AntreaAgentClusterMembershipPort + i
 
 			cs := fake.NewSimpleClientset()
 			informerFactory := informers.NewSharedInformerFactory(cs, 0)
@@ -104,15 +103,11 @@ func TestCluster_Run(t *testing.T) {
 			crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, 0)
 			ipPoolInformer := crdInformerFactory.Crd().V1alpha2().ExternalIPPools()
 
-			createAndCheckNode := func(node *v1.Node) {
+			createNode := func(node *v1.Node) {
 				_, err := cs.CoreV1().Nodes().Create(context.TODO(), node, metav1.CreateOptions{})
 				if err != nil {
 					t.Fatalf("Add Node error: %v", err)
 				}
-				assert.NoError(t, wait.Poll(time.Millisecond*100, time.Second, func() (done bool, err error) {
-					newNode, _ := cs.CoreV1().Nodes().Get(context.TODO(), node.Name, metav1.GetOptions{})
-					return reflect.DeepEqual(newNode, node), nil
-				}))
 			}
 
 			createAndCheckEIP := func(eip *crdv1a2.ExternalIPPool) {
@@ -120,10 +115,6 @@ func TestCluster_Run(t *testing.T) {
 				if err != nil {
 					t.Fatalf("Create ExternalIPPool error: %v", err)
 				}
-				assert.NoError(t, wait.Poll(time.Millisecond*100, time.Second, func() (done bool, err error) {
-					newEIP, _ := crdClient.CrdV1alpha2().ExternalIPPools().Get(context.TODO(), eip.Name, metav1.GetOptions{})
-					return reflect.DeepEqual(eip, newEIP), nil
-				}))
 			}
 
 			s, err := NewCluster(port, nodeConfig.NodeIPAddr.IP, nodeConfig.Name, nodeInformer, ipPoolInformer)
@@ -139,7 +130,7 @@ func TestCluster_Run(t *testing.T) {
 			cache.WaitForCacheSync(stopCh, ipPoolInformer.Informer().HasSynced)
 
 			createAndCheckEIP(tCase.externalIPPool)
-			createAndCheckNode(localNode)
+			createNode(localNode)
 
 			go s.Run(stopCh)
 
@@ -149,7 +140,8 @@ func TestCluster_Run(t *testing.T) {
 			}))
 
 			res, _ := s.ShouldSelectEgress(tCase.egress)
-			allMembers, _ := s.allClusterMembers()
+			allMembers, err := s.allClusterMembers()
+			assert.NoError(t, err)
 			assert.Equal(t, 1, len(allMembers), "expected Node member num is 1")
 			assert.Equal(t, 1, s.mList.NumMembers(), "expected alive Node num is 1")
 			assert.Equal(t, tCase.expectEgressSelectResult, res, "select Node for Egress result not match")
@@ -161,7 +153,7 @@ func TestCluster_RunClusterEvents(t *testing.T) {
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 
-	port := apis.AntreaAgentClusterPort + 10
+	port := apis.AntreaAgentClusterMembershipPort + 10
 	nodeName := "local_node_name"
 	nodeConfig := &config.NodeConfig{
 		Name:       nodeName,
@@ -187,15 +179,11 @@ func TestCluster_RunClusterEvents(t *testing.T) {
 	cache.WaitForCacheSync(stopCh, nodeInformer.Informer().HasSynced)
 	cache.WaitForCacheSync(stopCh, ipPoolInformer.Informer().HasSynced)
 
-	createAndCheckNode := func(node *v1.Node) {
+	createNode := func(node *v1.Node) {
 		_, err := cs.CoreV1().Nodes().Create(context.TODO(), node, metav1.CreateOptions{})
 		if err != nil {
 			t.Fatalf("Add Node error: %v", err)
 		}
-		assert.NoError(t, wait.Poll(time.Millisecond*100, time.Second, func() (done bool, err error) {
-			newNode, _ := cs.CoreV1().Nodes().Get(context.TODO(), node.Name, metav1.GetOptions{})
-			return reflect.DeepEqual(newNode, node), nil
-		}))
 	}
 	createAndCheckEIP := func(eip *crdv1a2.ExternalIPPool) {
 		_, err := crdClient.CrdV1alpha2().ExternalIPPools().Create(context.TODO(), eip, metav1.CreateOptions{})
@@ -215,7 +203,7 @@ func TestCluster_RunClusterEvents(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Name: "fake_ip_pool"},
 		Spec:       crdv1a2.ExternalIPPoolSpec{NodeSelector: metav1.LabelSelector{MatchLabels: map[string]string{"env": "pro"}}},
 	}
-	createAndCheckNode(localNode)
+	createNode(localNode)
 	createAndCheckEIP(eip)
 
 	s.AddClusterEventHandler(func(objName string) {
@@ -391,7 +379,7 @@ func TestCluster_RunClusterEvents(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Name: "fake-node0"},
 		Status:     v1.NodeStatus{Addresses: []v1.NodeAddress{{Type: v1.NodeInternalIP, Address: "x"}}},
 	}
-	createAndCheckNode(fakeNode)
+	createNode(fakeNode)
 	assertEgressSelectResult(egEnvTest, false)
 	assertEgressSelectResult(eg, false)
 
@@ -401,10 +389,6 @@ func TestCluster_RunClusterEvents(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Delete Node error: %v", err)
 		}
-		assert.NoError(t, wait.Poll(time.Millisecond*100, time.Second, func() (done bool, err error) {
-			delNode, _ := cs.CoreV1().Nodes().Get(context.TODO(), node.Name, metav1.GetOptions{})
-			return delNode == nil, nil
-		}))
 	}
 	deleteAndCheckNode(localNode)
 	assertEgressSelectResult(egEnvTest, false)
@@ -415,7 +399,7 @@ func TestCluster_RunClusterEvents(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Name: "fake-node1"},
 		Status:     v1.NodeStatus{Addresses: []v1.NodeAddress{{Type: v1.NodeInternalIP, Address: "1.1.1.1"}}},
 	}
-	createAndCheckNode(fakeNode1)
+	createNode(fakeNode1)
 	assertEgressSelectResult(egEnvTest, false)
 	assertEgressSelectResult(eg, false)
 }
@@ -583,63 +567,91 @@ func TestCluster_ShouldSelectNodeFailedOrAddedByConsistentHash(t *testing.T) {
 // --- PASS: TestCluster_ShouldSelectByConsistentHash (0.10s)
 // https://github.com/golang/groupcache/issues/29
 func TestCluster_ShouldSelectEgress(t *testing.T) {
-	nodes := []string{"node1", "node2", "node3"}
-	consistentHash := consistenthash.New(defaultVirtualNodeReplicas, nil)
-	consistentHash.Add(nodes...)
-
-	nodeSelectedForEgress := func(consistentHash *consistenthash.Map, egressName, nodeName string) bool {
-		return consistentHash.Get(egressName) == nodeName
-	}
-
-	checkNum := func(count int, localNode string) int {
-		totalNum := 0
-		for i := 0; i < count; i++ {
-			egressName := fmt.Sprintf("egress-%d", i)
-			if nodeSelectedForEgress(consistentHash, egressName, localNode) {
-				totalNum++
-			}
-		}
-		return totalNum
-	}
-
-	checkSum := func(egressNum int) int {
-		count := 0
-		for _, node := range nodes {
-			num := checkNum(egressNum, node)
-			count += num
-			t.Logf("Node: %s, egressNum: %d", node, num)
-		}
-		return count
-	}
-
 	testCases := []struct {
-		name      string
-		egressNum int
+		name         string
+		nodeNum      int
+		egressIP     string
+		expectedNode string
 	}{
 		{
-			name:      "select Node from alive nodes",
-			egressNum: 3,
+			name:         "select Node from alive nodes",
+			nodeNum:      0,
+			egressIP:     "1.1.1.1",
+			expectedNode: "",
 		},
 		{
-			name:      "select Node from alive nodes",
-			egressNum: 10,
+			name:         "select Node from alive nodes",
+			nodeNum:      1,
+			egressIP:     "1.1.1.1",
+			expectedNode: "node-0",
 		},
 		{
-			name:      "select Node from alive nodes",
-			egressNum: 100,
+			name:         "select Node from alive nodes",
+			nodeNum:      3,
+			egressIP:     "1.1.1.1",
+			expectedNode: "node-1",
 		},
 		{
-			name:      "select Node from alive nodes",
-			egressNum: 1000,
+			name:         "select Node from alive nodes",
+			nodeNum:      10,
+			egressIP:     "1.1.1.1",
+			expectedNode: "node-1",
 		},
 		{
-			name:      "select Node from alive nodes",
-			egressNum: 10000,
+			name:         "select Node from alive nodes",
+			nodeNum:      100,
+			egressIP:     "1.1.1.1",
+			expectedNode: "node-79",
 		},
 	}
 	for _, tCase := range testCases {
-		t.Run(fmt.Sprintf("%s-%d-Egresses", tCase.name, tCase.egressNum), func(t *testing.T) {
-			assert.Equal(t, tCase.egressNum, checkSum(tCase.egressNum))
+		t.Run(fmt.Sprintf("%s-nodeNum-%d", tCase.name, tCase.nodeNum), func(t *testing.T) {
+			genLocalNodeCluster := func(nodeNme string) *Cluster {
+				cluster := &Cluster{
+					mList:             &memberlist.Memberlist{},
+					nodeName:          nodeNme,
+					consistentHashMap: make(map[string]*consistenthash.Map),
+				}
+				return cluster
+			}
+
+			genNodes := func(n int) []string {
+				nodes := make([]string, n)
+				for i := 0; i < n; i++ {
+					nodes[i] = fmt.Sprintf("node-%d", i)
+				}
+				return nodes
+			}
+
+			fakeEgressName := "fake-Egress-Name"
+			fakeEIPName := "fake-EIP-Name"
+			fakeEgress := &crdv1a2.Egress{
+				ObjectMeta: metav1.ObjectMeta{Name: fakeEgressName},
+				Spec:       crdv1a2.EgressSpec{ExternalIPPool: fakeEIPName, EgressIP: tCase.egressIP},
+			}
+
+			if tCase.nodeNum == 0 {
+				fakeCluster := genLocalNodeCluster("local-Node-Name")
+				fakeCluster.consistentHashMap[fakeEIPName] = consistenthash.New(defaultVirtualNodeReplicas, nil)
+				selected, err := fakeCluster.ShouldSelectEgress(fakeEgress)
+				assert.NoError(t, err)
+				assert.Equal(t, false, selected, "Select Node for Egress not match")
+			} else {
+				nodes := genNodes(tCase.nodeNum)
+				var actualNodes []string
+				for _, node := range nodes {
+					fakeCluster := genLocalNodeCluster(node)
+					fakeCluster.consistentHashMap[fakeEIPName] = consistenthash.New(defaultVirtualNodeReplicas, nil)
+					fakeCluster.consistentHashMap[fakeEIPName].Add(nodes...)
+					selected, err := fakeCluster.ShouldSelectEgress(fakeEgress)
+					assert.NoError(t, err)
+					if selected {
+						actualNodes = append(actualNodes, node)
+					}
+				}
+				assert.Equal(t, 1, len(actualNodes), "Selected Node num for Egress not match")
+				assert.Equal(t, []string{tCase.expectedNode}, actualNodes, "Select Node for Egress not match")
+			}
 		})
 	}
 }
@@ -706,40 +718,4 @@ func BenchmarkCluster_ShouldSelect(b *testing.B) {
 			}
 		})
 	}
-}
-
-func genRandomStr(num int) string {
-	buf := make([]byte, num)
-	_, err := rand.Read(buf)
-	if err != nil {
-		return ""
-	}
-	return fmt.Sprintf("%016x", buf)
-}
-
-func TestCluster_ShouldSelect(t *testing.T) {
-	nodes := []string{"node1"}
-
-	genLocalNodeCluster := func(nodeNme string) *Cluster {
-		cluster := &Cluster{
-			mList:             &memberlist.Memberlist{},
-			nodeName:          nodeNme,
-			consistentHashMap: make(map[string]*consistenthash.Map),
-		}
-		return cluster
-	}
-
-	node1Cluster := genLocalNodeCluster("node1")
-	node1Cluster.consistentHashMap["default"] = consistenthash.New(defaultVirtualNodeReplicas, nil)
-	node1Cluster.consistentHashMap["default"].Add(nodes...)
-
-	egressNum := 3
-	hitCount := 0
-	for i := 0; i < egressNum; i++ {
-		egressName := fmt.Sprintf("%s-%d", genRandomStr(10), i)
-		if node1Cluster.consistentHashMap["default"].Get(egressName) == nodes[0] {
-			hitCount++
-		}
-	}
-	assert.Equal(t, egressNum, hitCount, "Egress total num should be equal")
 }

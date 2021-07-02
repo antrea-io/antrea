@@ -21,6 +21,8 @@ import (
 	"testing"
 	"time"
 
+	mock_egress "antrea.io/antrea/pkg/agent/controller/egress/testing"
+
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -70,21 +72,6 @@ func (d *fakeLocalIPDetector) HasSynced() bool {
 	return true
 }
 
-type fakeIPAssigner struct {
-}
-
-func (a *fakeIPAssigner) AssignEgressIP(egressIP, egressName string) error {
-	return nil
-}
-
-func (a *fakeIPAssigner) UnassignEgressIP(egressName string) error {
-	return nil
-}
-
-func (a *fakeIPAssigner) AssignedIPs() (ips map[string]string) {
-	return
-}
-
 var _ LocalIPDetector = &fakeLocalIPDetector{}
 
 type antreaClientGetter struct {
@@ -102,6 +89,7 @@ type fakeController struct {
 	mockRouteClient    *routetest.MockInterface
 	crdClient          *fakeversioned.Clientset
 	crdInformerFactory crdinformers.SharedInformerFactory
+	mockIPAssigner     *mock_egress.MockIPAssigner
 }
 
 func newFakeController(t *testing.T, initObjects []runtime.Object) *fakeController {
@@ -109,6 +97,7 @@ func newFakeController(t *testing.T, initObjects []runtime.Object) *fakeControll
 
 	mockOFClient := openflowtest.NewMockClient(controller)
 	mockRouteClient := routetest.NewMockInterface(controller)
+	mockIPAssigner := mock_egress.NewMockIPAssigner(controller)
 
 	clientset := &fake.Clientset{}
 	crdClient := fakeversioned.NewSimpleClientset(initObjects...)
@@ -139,7 +128,7 @@ func newFakeController(t *testing.T, initObjects []runtime.Object) *fakeControll
 		egressBindings:       map[string]*egressBinding{},
 		egressStates:         map[string]*egressState{},
 		egressIPStates:       map[string]*egressIPState{},
-		ipAssigner:           &fakeIPAssigner{},
+		ipAssigner:           mockIPAssigner,
 	}
 	return &fakeController{
 		EgressController:   egressController,
@@ -148,6 +137,7 @@ func newFakeController(t *testing.T, initObjects []runtime.Object) *fakeControll
 		mockRouteClient:    mockRouteClient,
 		crdClient:          crdClient,
 		crdInformerFactory: crdInformerFactory,
+		mockIPAssigner:     mockIPAssigner,
 	}
 }
 func TestSyncEgress(t *testing.T) {
@@ -573,6 +563,7 @@ func TestSyncOverlappingEgress(t *testing.T) {
 		_, err := c.egressLister.Get(egress2.Name)
 		return err != nil, nil
 	}))
+	c.mockIPAssigner.EXPECT().UnassignEgressIP(egress2.Name)
 	err = c.syncEgress(egress2.Name)
 	assert.NoError(t, err)
 	require.Equal(t, 0, c.queue.Len())
@@ -587,6 +578,7 @@ func TestSyncOverlappingEgress(t *testing.T) {
 		_, err := c.egressLister.Get(egress3.Name)
 		return err != nil, nil
 	}))
+	c.mockIPAssigner.EXPECT().UnassignEgressIP(egress3.Name)
 	err = c.syncEgress(egress3.Name)
 	assert.NoError(t, err)
 	require.Equal(t, 0, c.queue.Len())

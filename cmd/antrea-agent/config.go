@@ -99,7 +99,7 @@ type AgentConfig struct {
 	// Defaults to 10350.
 	APIPort int `yaml:"apiPort,omitempty"`
 
-	// ClusterMembershipPort is the server port used by the antrea-agent to run a gossip-based cluster membership protocol.
+	// ClusterMembershipPort is the TCP port used by the antrea-agent to run a gossip-based cluster membership protocol.
 	// Defaults to 10351.
 	ClusterMembershipPort int `yaml:"clusterPort,omitempty"`
 
