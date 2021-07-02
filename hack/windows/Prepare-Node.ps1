@@ -18,7 +18,7 @@ Kubernetes version to download and use
 .PARAMETER InstallOVS
 Install OVS
 
-.PARAMETER InstallOVS
+.PARAMETER NodeIP
 The node ip used by kubelet
 
 .EXAMPLE
