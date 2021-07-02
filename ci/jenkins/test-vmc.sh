@@ -171,7 +171,7 @@ function saveLogs() {
 function setup_cluster() {
     export KUBECONFIG=$KUBECONFIG_PATH
     if [ -z $K8S_VERSION ]; then
-      export K8S_VERSION=v1.19.1
+      export K8S_VERSION=v1.20.1
     fi
     if [ -z $TEST_OS ]; then
       export TEST_OS=ubuntu-1804
@@ -375,7 +375,7 @@ function deliver_antrea {
         docker save -o flow-aggregator.tar projects.registry.vmware.com/antrea/flow-aggregator:${DOCKER_IMG_VERSION}
     fi
 
-    control_plane_ip="$(kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 == role {print $6}')"
+    control_plane_ip="$(kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 ~ role {print $6}')"
     ${SCP_WITH_ANTREA_CI_KEY} $GIT_CHECKOUT_DIR/build/yamls/*.yml capv@${control_plane_ip}:~
 
     IPs=($(kubectl get nodes -o wide --no-headers=true | awk '{print $6}' | xargs))
@@ -461,7 +461,7 @@ function run_e2e {
     done
 
     echo "=== Move kubeconfig to control-plane Node ==="
-    control_plane_ip="$(kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 == role {print $6}')"
+    control_plane_ip="$(kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 ~ role {print $6}')"
     ${SSH_WITH_ANTREA_CI_KEY} -n capv@${control_plane_ip} "if [ ! -d ".kube" ]; then mkdir .kube; fi"
     ${SCP_WITH_ANTREA_CI_KEY} $GIT_CHECKOUT_DIR/jenkins/out/kubeconfig capv@${control_plane_ip}:~/.kube/config
 
@@ -527,7 +527,7 @@ function run_conformance {
     kubectl rollout status --timeout=5m deployment.apps/antrea-controller -n kube-system
     kubectl rollout status --timeout=5m daemonset/antrea-agent -n kube-system
 
-    control_plane_ip="$(kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 == role {print $6}')"
+    control_plane_ip="$(kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 ~ role {print $6}')"
     echo "=== Move kubeconfig to control-plane Node ==="
     ${SSH_WITH_ANTREA_CI_KEY} -n capv@${control_plane_ip} "if [ ! -d ".kube" ]; then mkdir .kube; fi"
     ${SCP_WITH_ANTREA_CI_KEY} $GIT_CHECKOUT_DIR/jenkins/out/kubeconfig capv@${control_plane_ip}:~/.kube/config

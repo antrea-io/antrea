@@ -353,7 +353,7 @@ func TestOVSRestartSameNode(t *testing.T) {
 	time.Sleep(3 * time.Second)
 
 	t.Logf("Restarting antrea-agent on Node '%s'", workerNode)
-	if _, err := data.deleteAntreaAgentOnNode(workerNode, 30 /* grace period in seconds */, defaultTimeout); err != nil {
+	if _, err := data.deleteAntreaAgentOnNode(workerNode, 15 /* grace period in seconds */, defaultTimeout); err != nil {
 		t.Fatalf("Error when restarting antrea-agent on Node '%s': %v", workerNode, err)
 	}
 

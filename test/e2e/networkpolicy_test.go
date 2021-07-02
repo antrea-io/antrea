@@ -988,7 +988,7 @@ func createAndWaitForPodWithLabels(t *testing.T, data *TestData, createFunc func
 		t.Fatalf("Error when creating busybox test Pod: %v", err)
 	}
 	cleanupFunc := func() error {
-		if err := data.deletePod(ns, name); err != nil {
+		if err := data.deletePodAndWaitInNS(defaultTimeout, ns, name); err != nil {
 			return fmt.Errorf("error when deleting Pod: %v", err)
 		}
 		return nil

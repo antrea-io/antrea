@@ -41,7 +41,7 @@ KUBE_CONFORMANCE_IMAGE=""
 KUBE_CONFORMANCE_IMAGE_VERSION="$(head -n1 $THIS_DIR/k8s-conformance-image-version)"
 IMAGE_PULL_POLICY="Always"
 CONFORMANCE_IMAGE_CONFIG_PATH="${THIS_DIR}/conformance-image-config.yaml"
-SONOBUOY_IMAGE="projects.registry.vmware.com/sonobuoy/sonobuoy:v0.19.0"
+SONOBUOY_IMAGE="projects.registry.vmware.com/sonobuoy/sonobuoy:v0.20.0"
 
 _usage="Usage: $0 [--e2e-conformance] [--e2e-network-policy] [--e2e-focus <TestRegex>] [--e2e-skip <SkipRegex>]
                   [--kubeconfig <Kubeconfig>] [--kube-conformance-image-version <ConformanceImageVersion>]

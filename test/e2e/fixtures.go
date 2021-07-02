@@ -143,13 +143,13 @@ func setupTest(tb testing.TB) (*TestData, error) {
 		tb.Errorf("Error creating logs directory '%s': %v", testData.logsDirForTestCase, err)
 		return nil, err
 	}
-	tb.Logf("Creating '%s' K8s Namespace", testNamespace)
 	if err := ensureAntreaRunning(tb, testData); err != nil {
 		return nil, err
 	}
 	if err := testData.createTestNamespace(); err != nil {
 		return nil, err
 	}
+	tb.Logf("K8s Namespace '%s' is created", testNamespace)
 	return testData, nil
 }
 
@@ -350,7 +350,7 @@ func teardownTest(tb testing.TB, data *TestData) {
 
 func deletePodWrapper(tb testing.TB, data *TestData, name string) {
 	tb.Logf("Deleting Pod '%s'", name)
-	if err := data.deletePod(testNamespace, name); err != nil {
+	if err := data.deletePodAndWait(defaultTimeout, name); err != nil {
 		tb.Logf("Error when deleting Pod: %v", err)
 	}
 }

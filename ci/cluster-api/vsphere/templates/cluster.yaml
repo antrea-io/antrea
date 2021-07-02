@@ -44,7 +44,7 @@ spec:
       devices:
       - dhcp4: true
         networkName: NETWORKNAME
-    numCPUs: 2
+    numCPUs: 3
     resourcePool: RESOURCEPOOLPATH
     server: VCENTERNAME
     template: capv-haproxy-v0.6.3
@@ -106,7 +106,7 @@ spec:
         devices:
         - dhcp4: true
           networkName: NETWORKNAME
-      numCPUs: 2
+      numCPUs: 3
       resourcePool: RESOURCEPOOLPATH
       server: VCENTERNAME
       template: OVATEMPLATENAME

@@ -995,7 +995,7 @@ func (data *TestData) createServerPodWithLabels(name, ns string, portNum int32, 
 
 // deletePod deletes a Pod in the test namespace.
 func (data *TestData) deletePod(namespace, name string) error {
-	var gracePeriodSeconds int64 = 5
+	var gracePeriodSeconds int64 = 3
 	deleteOptions := metav1.DeleteOptions{
 		GracePeriodSeconds: &gracePeriodSeconds,
 	}
@@ -1007,15 +1007,13 @@ func (data *TestData) deletePod(namespace, name string) error {
 	return nil
 }
 
-// Deletes a Pod in the test namespace then waits us to timeout for the Pod not to be visible to the
-// client any more.
-func (data *TestData) deletePodAndWait(timeout time.Duration, name string) error {
-	if err := data.deletePod(testNamespace, name); err != nil {
+func (data *TestData) deletePodAndWaitInNS(timeout time.Duration, namespace string, name string) error {
+	if err := data.deletePod(namespace, name); err != nil {
 		return err
 	}
 
 	if err := wait.Poll(defaultInterval, timeout, func() (bool, error) {
-		if _, err := data.clientset.CoreV1().Pods(testNamespace).Get(context.TODO(), name, metav1.GetOptions{}); err != nil {
+		if _, err := data.clientset.CoreV1().Pods(namespace).Get(context.TODO(), name, metav1.GetOptions{}); err != nil {
 			if errors.IsNotFound(err) {
 				return true, nil
 			}
@@ -1028,6 +1026,12 @@ func (data *TestData) deletePodAndWait(timeout time.Duration, name string) error
 	} else {
 		return err
 	}
+}
+
+// Deletes a Pod in the test namespace then waits us to timeout for the Pod not to be visible to the
+// client any more.
+func (data *TestData) deletePodAndWait(timeout time.Duration, name string) error {
+	return data.deletePodAndWaitInNS(timeout, testNamespace, name)
 }
 
 type PodCondition func(*corev1.Pod) (bool, error)
@@ -2009,7 +2013,19 @@ func (data *TestData) createDaemonSet(name string, ns string, ctrName string, im
 		if err := data.clientset.AppsV1().DaemonSets(ns).Delete(context.TODO(), name, metav1.DeleteOptions{}); err != nil {
 			return err
 		}
-		return nil
+		err := wait.Poll(defaultInterval, 120 * time.Second, func() (bool, error) {
+			pl, err := data.clientset.CoreV1().Pods(ns).List(context.TODO(), metav1.ListOptions{
+				LabelSelector: "antrea-e2e=" + name,
+			})
+			if err != nil {
+				return false, err
+			}
+			if len(pl.Items) != 0 {
+				return false, nil
+			}
+			return true, nil
+		})
+		return err
 	}
 
 	return resDS, cleanup, nil

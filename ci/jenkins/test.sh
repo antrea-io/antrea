@@ -258,7 +258,10 @@ function deliver_antrea_windows {
     rm -f antrea-windows.tar.gz
     sed -i 's/if (!(Test-Path $AntreaAgentConfigPath))/if ($true)/' hack/windows/Helper.psm1
     kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 != role && $1 ~ /win/ {print $6}' | while read IP; do
+        WORKER_NAME=$(govc vm.info -vm.ip ${IP} -json | jq -r '.VirtualMachines[0].Name')
+        echo "==== Reverting Windows VM ${WORKER_NAME} ====="
         govc snapshot.revert -vm.ip ${IP} win-initial
+        govc vm.power -on ${WORKER_NAME} || true
         # Some tests need us.gcr.io/k8s-artifacts-prod/e2e-test-images/agnhost:2.13 image but it is not for windows/amd64 10.0.17763
         # Use e2eteam/agnhost:2.13 instead
         harbor_images=("sigwindowstools-kube-proxy:v1.18.0" "agnhost:2.13" "agnhost:2.13" "e2eteam-jessie-dnsutils:1.0" "e2eteam-pause:3.2")
@@ -298,7 +301,7 @@ function deliver_antrea_windows {
                 done
                 echo "=== Build Windows on Windows Node==="
                 ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "docker pull ${DOCKER_REGISTRY}/antrea/golang:1.15 && docker tag ${DOCKER_REGISTRY}/antrea/golang:1.15 golang:1.15"
-                ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "rm -rf antrea && mkdir antrea && cd antrea && tar -xzf ../antrea_repo.tar.gz && sed -i \"s|build/images/Dockerfile.build.windows .|build/images/Dockerfile.build.windows . --network host|g\" Makefile && NO_PULL=${NO_PULL} make build-windows && docker save -o antrea-windows.tar ${DOCKER_REGISTRY}/antrea/antrea-windows:latest && gzip -f antrea-windows.tar" || true
+                ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "rm -rf antrea && mkdir antrea && cd antrea && tar -xzf ../antrea_repo.tar.gz > /dev/null && sed -i \"s|build/images/Dockerfile.build.windows .|build/images/Dockerfile.build.windows . --network host|g\" Makefile && NO_PULL=${NO_PULL} make build-windows && docker save -o antrea-windows.tar ${DOCKER_REGISTRY}/antrea/antrea-windows:latest && gzip -f antrea-windows.tar" || true
                 for i in `seq 2`; do
                     timeout 2m scp -o StrictHostKeyChecking=no -T Administrator@${IP}:antrea/antrea-windows.tar.gz . && break
                 done
@@ -513,8 +516,10 @@ function run_install_windows_ovs {
     export_govc_env_var
     OVS_VM_NAME="antrea-microsoft-ovs"
 
-    IP=$(govc vm.ip $OVS_VM_NAME)
     govc snapshot.revert -vm $OVS_VM_NAME initial
+    govc vm.power -on $OVS_VM_NAME || true
+    echo "===== Testing VM has been reverted and powered on ====="
+    IP=$(govc vm.ip $OVS_VM_NAME)
     scp -o StrictHostKeyChecking=no -i ${WORKDIR}/.ssh/id_rsa -T hack/windows/Install-OVS.ps1 Administrator@${IP}:
     ssh -o StrictHostKeyChecking=no -i ${WORKDIR}/.ssh/id_rsa -n Administrator@${IP} '/bin/bash -lc "cp Install-OVS.ps1 C:/k && powershell.exe -File C:/k/Install-OVS.ps1"'
 
