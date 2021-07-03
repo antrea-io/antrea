@@ -115,9 +115,8 @@ provide under `infra/vagrant` to provision your Kubernetes cluster, you will
 therefore need the following steps:
 
 1. `./infra/vagrant/provision.sh`
-2. `make`
-3. `./infra/vagrant/push_antrea.sh`
-4. `go test -v -timeout=30m antrea.io/antrea/test/e2e`
+2. `./infra/vagrant/push_antrea.sh`
+3. `go test -v -timeout=30m antrea.io/antrea/test/e2e`
 
 If you need to test an updated version of Antrea, just run
 `./infra/vagrant/push_antrea.sh` and then run the tests again.

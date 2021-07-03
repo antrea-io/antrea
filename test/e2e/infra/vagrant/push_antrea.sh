@@ -99,6 +99,7 @@ function pushImgToNodes() {
     IMG_NAME=$1
     SAVED_IMG=$2
 
+    docker pull --quiet $IMG_NAME
     docker inspect $IMG_NAME > /dev/null
     if [ $? -ne 0 ]; then
         echo "Docker image $IMG_NAME was not found"
