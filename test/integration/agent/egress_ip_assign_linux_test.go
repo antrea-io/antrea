@@ -23,13 +23,14 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"antrea.io/antrea/pkg/agent/controller/egress"
+	"antrea.io/antrea/pkg/agent/controller/egress/ipassigner"
 	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
 )
 
 const defaultEgressRunDir = egress.DefaultEgressRunDir
 
 func TestEgressIPAssigner(t *testing.T) {
-	ipAssigner, err := egress.NewIPAssigner(nodeIP.IP, defaultEgressRunDir)
+	ipAssigner, err := ipassigner.NewIPAssigner(nodeIP.IP, defaultEgressRunDir)
 	if err != nil {
 		t.Fatalf("Initializing egressIP assigner failed: %v", err)
 	}

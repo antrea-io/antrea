@@ -36,6 +36,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent"
+	"antrea.io/antrea/pkg/agent/controller/egress/ipassigner"
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/memberlist"
 	"antrea.io/antrea/pkg/agent/openflow"
@@ -137,7 +138,7 @@ type EgressController struct {
 	egressIPStatesMutex sync.Mutex
 
 	cluster    *memberlist.Cluster
-	ipAssigner IPAssigner
+	ipAssigner ipassigner.IPAssigner
 }
 
 func NewEgressController(
@@ -172,7 +173,7 @@ func NewEgressController(
 		localIPDetector:      localIPDetector,
 		idAllocator:          newIDAllocator(minEgressMark, maxEgressMark),
 	}
-	ipAssigner, err := NewIPAssigner(nodeIP, DefaultEgressRunDir)
+	ipAssigner, err := ipassigner.NewIPAssigner(nodeIP, DefaultEgressRunDir)
 	if err != nil {
 		return nil, fmt.Errorf("initializing egressIP assigner failed: %v", err)
 	}
@@ -277,8 +278,9 @@ func (c *EgressController) Run(stopCh <-chan struct{}) {
 				if err := c.ipAssigner.UnassignEgressIP(egressName); err != nil {
 					klog.ErrorS(err, "Unassign EgressIP failed")
 				}
+			} else {
+				klog.ErrorS(err, "Get Egress error", "egressName", egressName)
 			}
-			klog.ErrorS(err, "Get Egress error", "egressName", egressName)
 		}
 	}
 
