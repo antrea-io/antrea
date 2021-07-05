@@ -101,7 +101,7 @@ func skipIfHasWindowsNodes(tb testing.TB) {
 
 func skipIfNoWindowsNodes(tb testing.TB) {
 	if len(clusterInfo.windowsNodes) == 0 {
-		tb.Skipf("Skipping test as the cluster has Windows Nodes")
+		tb.Skipf("Skipping test as the cluster has no Windows Nodes")
 	}
 }
 
