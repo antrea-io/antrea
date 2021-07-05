@@ -142,7 +142,7 @@ addresses. It is implemented using OpenFlow.
 
 To support this feature, two additional marks are introduced:
 
-* The 17th bit of NXM Register0 is set  for Pod-to-external traffic. This bit is set in the `L3Forwarding` table,
+* The 17th bit of NXM Register0 is set for Pod-to-external traffic. This bit is set in the `L3Forwarding` table,
  and is consumed in the `ConntrackCommit` table.
 * The SNATed traffic is marked with **0x40** in the ct context. This mark is set in the `ConntrackCommit`
  table when committing the new connection into the ct zone, and is consumed in the `ConntrackState` table
@@ -163,8 +163,8 @@ The following changes in the OVS pipeline are needed:
  This is to ensure the reply packets from the external address to the Pod will be "unSNAT'd".
 * Ensure that the packet is translated based on the NAT information provided when committing the connection by
  using the `nat` argument with the `ct` action.
-* Rewrite the destination MAC with the global virtual MAC (aa:bb:cc:dd:ee:ff) in the `ConntrackState` table if
- the packet is from the uplink interface and has the SNAT ct_mark.
+* Set the macRewrite bit in the register (reg0[19]) in the `ConntrackState` table if the packet is from the uplink
+ interface and has the SNAT ct_mark.
 
 Following is an example for SNAT relevant OpenFlow entries.
 
@@ -179,16 +179,16 @@ Conntrack Table: 30
 table=30, priority=200, ip actions=ct(table=31,zone=65520,nat)
 
 ConntrackState Table: 31
-table=31, priority=210,ct_state=-new+trk,ct_mark=0x40,ip,reg0=0x4/0xffff actions=mod_dl_dst:aa:bb:cc:dd:ee:ff,goto_table:40
+table=31, priority=210, ct_state=-new+trk,ct_mark=0x40,ip,reg0=0x4/0xffff actions=load:0x1->NXM_NX_REG0[19],goto_table:40
 table=31, priority=200, ip,reg0=0x4/0xffff actions=output:br-int
 
 L3Forwarding Table: 70
-// Forward the packet to L2ForwardingCalculation table if it is traffic to the local Pods.
-table=70, priority=200, ip,reg0=0x2/0xffff,nw_dst=10.10.0.0/24 actions=goto_table:80
+// Forward the packet to L2ForwardingCalculation table if it is traffic to the local Pods and doesn't require MAC rewriting.
+table=70, priority=200, ip,reg0=0/0x80000,nw_dst=10.10.0.0/24 actions=goto_table:80
 // Forward the packet to L2ForwardingCalculation table if it is Pod-to-Node traffic.
 table=70, priority=200, ip,reg0=0x2/0xffff,nw_dst=$local_nodeIP actions=goto_table:80
 // Forward the packet to L2ForwardingCalculation table if it is return traffic of an external-to-Pod connection.
-table=70, priority=200, ip,reg0=0x2/0xffff,ct_mark=0x20 actions=goto_table:80
+table=70, priority=210, ct_state=+rpl+trk,ct_mark=0x20,ip actions=mod_dl_dst:0e:6d:42:66:92:46,resubmit(,80)
 // Add SNAT mark if it is Pod-to-external traffic.
 table=70, priority=190, ct_state=+new+trk,ip,reg0=0x2/0xffff actions=load:0x1->NXM_NX_REG0[17], goto_table:80
 
