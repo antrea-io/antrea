@@ -527,7 +527,7 @@ func (data *TestData) deleteTestNamespace(timeout time.Duration) error {
 }
 
 // deployAntreaCommon deploys Antrea using kubectl on the control-plane Node.
-func (data *TestData) deployAntreaCommon(yamlFile string, extraOptions string) error {
+func (data *TestData) deployAntreaCommon(yamlFile string, extraOptions string, waitForAgentRollout bool) error {
 	// TODO: use the K8s apiserver when server side apply is available?
 	// See https://kubernetes.io/docs/reference/using-api/api-concepts/#server-side-apply
 	rc, _, _, err := provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl apply %s -f %s", extraOptions, yamlFile))
@@ -538,9 +538,11 @@ func (data *TestData) deployAntreaCommon(yamlFile string, extraOptions string) e
 	if err != nil || rc != 0 {
 		return fmt.Errorf("error when waiting for antrea-controller rollout to complete")
 	}
-	rc, _, _, err = provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl -n %s rollout status ds/%s --timeout=%v", antreaNamespace, antreaDaemonSet, defaultTimeout))
-	if err != nil || rc != 0 {
-		return fmt.Errorf("error when waiting for antrea-agent rollout to complete")
+	if waitForAgentRollout {
+		rc, _, _, err = provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl -n %s rollout status ds/%s --timeout=%v", antreaNamespace, antreaDaemonSet, defaultTimeout))
+		if err != nil || rc != 0 {
+			return fmt.Errorf("error when waiting for antrea-agent rollout to complete")
+		}
 	}
 
 	return nil
@@ -549,17 +551,17 @@ func (data *TestData) deployAntreaCommon(yamlFile string, extraOptions string) e
 // deployAntrea deploys Antrea with the standard manifest.
 func (data *TestData) deployAntrea() error {
 	if testOptions.enableCoverage {
-		return data.deployAntreaCommon(antreaCovYML, "")
+		return data.deployAntreaCommon(antreaCovYML, "", true)
 	}
-	return data.deployAntreaCommon(antreaYML, "")
+	return data.deployAntreaCommon(antreaYML, "", true)
 }
 
 // deployAntreaIPSec deploys Antrea with IPSec tunnel enabled.
 func (data *TestData) deployAntreaIPSec() error {
 	if testOptions.enableCoverage {
-		return data.deployAntreaCommon(antreaIPSecCovYML, "")
+		return data.deployAntreaCommon(antreaIPSecCovYML, "", true)
 	}
-	return data.deployAntreaCommon(antreaIPSecYML, "")
+	return data.deployAntreaCommon(antreaIPSecYML, "", true)
 }
 
 // deployAntreaFlowExporter deploys Antrea with flow exporter config params enabled.
