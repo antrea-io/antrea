@@ -16,23 +16,25 @@ package ipassigner
 
 import (
 	"net"
+
+	"k8s.io/apimachinery/pkg/util/sets"
 )
 
 type ipAssigner struct {
 }
 
-func NewIPAssigner(nodeIPAddr net.IP, dir string) (*ipAssigner, error) {
+func NewIPAssigner(nodeIPAddr net.IP, dummyDeviceName string) (*ipAssigner, error) {
 	return nil, nil
 }
 
-func (a *ipAssigner) AssignEgressIP(egressIP, egressName string) error {
+func (a *ipAssigner) AssignIP(ip string) error {
 	return nil
 }
 
-func (a *ipAssigner) UnassignEgressIP(egressName string) error {
+func (a *ipAssigner) UnassignIP(ip string) error {
 	return nil
 }
 
-func (a *ipAssigner) AssignedIPs() (ips map[string]string) {
-	return
+func (a *ipAssigner) AssignedIPs() sets.String {
+	return nil
 }

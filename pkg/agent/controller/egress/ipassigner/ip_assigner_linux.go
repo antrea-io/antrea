@@ -15,17 +15,13 @@
 package ipassigner
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
-	"io"
-	"io/ioutil"
 	"net"
-	"os"
-	"path/filepath"
 	"sync"
 
 	"github.com/vishvananda/netlink"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent/util"
@@ -34,153 +30,146 @@ import (
 
 var ipv6NotSupportErr = errors.New("IPv6 not supported")
 
+// ipAssigner creates a dummy device and assigns IPs to it.
+// It's supposed to be used in the cases that external IPs should be configured on the system so that they can be used
+// for SNAT (egress scenario) or DNAT (ingress scenario). A dummy device is used because the IPs just need to be present
+// in any device to be functional, and using dummy device avoids touching system managed devices and is easy to know IPs
+// that are assigned by antrea-agent.
 type ipAssigner struct {
-	egressInterface *net.Interface
-	egressLink      netlink.Link
-	egressRunDir    string
-	mutex           sync.RWMutex
-	assignedEgress  map[string]string
+	// externalInterface is the device that GARP (IPv4) and Unsolicited NA (IPv6) will be sent from.
+	externalInterface *net.Interface
+	// dummyDevice is the device that IPs will be assigned to.
+	dummyDevice netlink.Link
+	// assignIPs caches the IPs that are assigned to the dummy device.
+	// TODO: Add a goroutine to ensure that the cache is in sync with the IPs assigned to the dummy device in case the
+	// IPs are removed by users accidentally.
+	assignedIPs sets.String
+	mutex       sync.RWMutex
 }
 
 // NewIPAssigner returns an *ipAssigner.
-func NewIPAssigner(nodeIPAddr net.IP, dir string) (*ipAssigner, error) {
+func NewIPAssigner(nodeIPAddr net.IP, dummyDeviceName string) (*ipAssigner, error) {
 	_, egressInterface, err := util.GetIPNetDeviceFromIP(nodeIPAddr)
 	if err != nil {
 		return nil, fmt.Errorf("get IPNetDevice from ip %v error: %+v", nodeIPAddr, err)
 	}
-	ifaceName := egressInterface.Name
-	egressLink, err := netlink.LinkByName(ifaceName)
+
+	dummyDevice, err := ensureDummyDevice(dummyDeviceName)
 	if err != nil {
-		return nil, fmt.Errorf("get netlink by name(%s) error: %+v", ifaceName, err)
+		return nil, fmt.Errorf("error when ensuring dummy device exist: %v", err)
 	}
+
 	a := &ipAssigner{
-		egressInterface: egressInterface,
-		egressLink:      egressLink,
-		egressRunDir:    dir,
-		assignedEgress:  make(map[string]string),
+		externalInterface: egressInterface,
+		dummyDevice:       dummyDevice,
+		assignedIPs:       sets.NewString(),
 	}
-	if err := a.initAssignedIPFiles(); err != nil {
-		return nil, err
+	if err := a.loadIPAddresses(); err != nil {
+		return nil, fmt.Errorf("error when loading IP addresses from the system: %v", err)
 	}
 	return a, nil
 }
 
-func (a *ipAssigner) initAssignedIPFiles() (err error) {
-	files, err := ioutil.ReadDir(a.egressRunDir)
-	if err != nil {
-		if err := os.MkdirAll(a.egressRunDir, os.ModeDir); err != nil {
-			return fmt.Errorf("error when creating Egress run dir: %v", err)
-		}
-		return nil
+// ensureDummyDevice creates the dummy device if it doesn't exist.
+func ensureDummyDevice(deviceName string) (netlink.Link, error) {
+	link, err := netlink.LinkByName(deviceName)
+	if err == nil {
+		return link, nil
 	}
-	a.mutex.Lock()
-	defer a.mutex.Unlock()
-	for _, file := range files {
-		egressName := file.Name()
-		fileName := ipSavedFile(a.egressRunDir, egressName)
-		if ip, err := ioutil.ReadFile(fileName); err == nil {
-			a.assignedEgress[egressName] = string(ip)
-		}
+	dummy := &netlink.Dummy{
+		LinkAttrs: netlink.LinkAttrs{Name: deviceName},
 	}
-	return
+	if err = netlink.LinkAdd(dummy); err != nil {
+		return nil, err
+	}
+	return dummy, nil
 }
 
-// AssignEgressIP assign an egressIP and save persistent files.
-func (a *ipAssigner) AssignEgressIP(egressIP, egressName string) error {
-	egressSpecIP := net.ParseIP(egressIP)
-	if egressSpecIP == nil {
-		return fmt.Errorf("invalid IP %s", egressIP)
-	}
-	addr := netlink.Addr{IPNet: &net.IPNet{IP: egressSpecIP, Mask: net.CIDRMask(32, 32)}}
-	ifaceName := a.egressInterface.Name
-	if err := netlink.AddrAdd(a.egressLink, &addr); err != nil {
-		return fmt.Errorf("failed to add ip %v to interface %s: %v", addr, ifaceName, err)
-	}
-	if err := a.saveIPAssignFile(egressIP, egressName); err != nil {
-		return fmt.Errorf("failed to save Egress IP assign, Egress %s, IP: %s: %v", egressName, egressIP, err)
-	}
-	isIPv4 := egressSpecIP.To4()
-	if isIPv4 != nil {
-		if err := arping.GratuitousARPOverIface(isIPv4, a.egressInterface); err != nil {
-			return fmt.Errorf("failed to send gratuitous ARP: %v", err)
-		}
-		klog.V(2).InfoS("Sent gratuitous ARP", "ip", isIPv4)
-	} else if isIPv6 := egressSpecIP.To16(); isIPv6 != nil {
-		return fmt.Errorf("failed to send Advertisement: %v", ipv6NotSupportErr)
-	}
-	klog.V(2).InfoS("Added ip", "ip", addr, "interface", ifaceName)
-	return nil
-}
-
-// UnassignEgressIP unassign an egressIP and delete the persistent files.
-func (a *ipAssigner) UnassignEgressIP(egressName string) error {
-	egressIP, has := a.isAssignedIP(egressName)
-	if !has {
-		return nil
-	}
-	egressSpecIP := net.ParseIP(egressIP)
-	addr := netlink.Addr{IPNet: &net.IPNet{IP: egressSpecIP, Mask: net.CIDRMask(32, 32)}}
-	ifaceName := a.egressLink.Attrs().Name
-	if err := netlink.AddrDel(a.egressLink, &addr); err != nil {
-		return fmt.Errorf("failed to delete ip %v from interface %s: %v", addr, ifaceName, err)
-	}
-	if err := a.removeAssignedIPFile(egressName); err != nil {
-		return fmt.Errorf("failed to remove Egress IP assign file, egressName: %s, egressIP: %s: %v", egressName, egressIP, err)
-	}
-	klog.V(2).InfoS("Deleted ip", "ip", addr, "interface", ifaceName)
-	return nil
-}
-
-// isAssignedIP check that if an IP address has been assigned with a specific egressName.
-func (a *ipAssigner) isAssignedIP(egressName string) (egressIP string, has bool) {
-	a.mutex.RLock()
-	defer a.mutex.RUnlock()
-	if ip, ok := a.assignedEgress[egressName]; ok {
-		return ip, true
-	}
-	return
-}
-
-func ipSavedFile(dir, name string) string {
-	return filepath.Join(dir, name)
-}
-
-func (a *ipAssigner) saveIPAssignFile(egressIP, egressName string) error {
-	var buffer bytes.Buffer
-	buffer.WriteString(egressIP)
-	f, err := os.Create(ipSavedFile(a.egressRunDir, egressName))
+// loadIPAddresses gets the IP addresses on the dummy device and caches them in memory.
+func (a *ipAssigner) loadIPAddresses() error {
+	addresses, err := netlink.AddrList(a.dummyDevice, netlink.FAMILY_ALL)
 	if err != nil {
 		return err
 	}
-	defer f.Close()
-	_, err = io.Copy(f, &buffer)
-	if err == nil {
+	newAssignIPs := sets.NewString()
+	for _, address := range addresses {
+		newAssignIPs.Insert(address.IP.String())
+	}
+	a.mutex.Lock()
+	defer a.mutex.Unlock()
+	a.assignedIPs = newAssignIPs
+	return nil
+}
+
+// AssignIP ensures the provided IP is assigned to the dummy device.
+func (a *ipAssigner) AssignIP(ip string) error {
+	parsedIP := net.ParseIP(ip)
+	if parsedIP == nil {
+		return fmt.Errorf("invalid IP %s", ip)
+	}
+
+	if err := func() error {
 		a.mutex.Lock()
 		defer a.mutex.Unlock()
-		a.assignedEgress[egressName] = egressIP
-		return nil
-	}
-	return err
-}
 
-func (a *ipAssigner) removeAssignedIPFile(egressName string) error {
-	fileName := ipSavedFile(a.egressRunDir, egressName)
-	if err := os.Remove(fileName); err != nil && !os.IsNotExist(err) {
+		if a.assignedIPs.Has(ip) {
+			klog.V(2).InfoS("The IP is already assigned", "ip", ip)
+			return nil
+		}
+
+		addr := netlink.Addr{IPNet: &net.IPNet{IP: parsedIP, Mask: net.CIDRMask(32, 32)}}
+		if err := netlink.AddrAdd(a.dummyDevice, &addr); err != nil {
+			return fmt.Errorf("failed to add IP %v to interface %s: %v", ip, a.dummyDevice.Attrs().Name, err)
+		}
+		klog.InfoS("Assigned IP to interface", "ip", parsedIP, "interface", a.dummyDevice.Attrs().Name)
+
+		a.assignedIPs.Insert(ip)
+		return nil
+	}(); err != nil {
 		return err
 	}
-	a.mutex.Lock()
-	defer a.mutex.Unlock()
-	delete(a.assignedEgress, egressName)
+
+	isIPv4 := parsedIP.To4()
+	if isIPv4 != nil {
+		if err := arping.GratuitousARPOverIface(isIPv4, a.externalInterface); err != nil {
+			return fmt.Errorf("failed to send gratuitous ARP: %v", err)
+		}
+		klog.V(2).InfoS("Sent gratuitous ARP", "ip", parsedIP)
+	} else {
+		klog.ErrorS(ipv6NotSupportErr, "Failed to send Advertisement", "ip", parsedIP)
+	}
 	return nil
 }
 
-// AssignedIPs returns a map of the allocated IPs ([egressName]IP).
-func (a *ipAssigner) AssignedIPs() map[string]string {
-	ips := make(map[string]string)
+// UnassignIP ensures the provided IP is not assigned to the dummy device.
+func (a *ipAssigner) UnassignIP(ip string) error {
+	parsedIP := net.ParseIP(ip)
+	if parsedIP == nil {
+		return fmt.Errorf("invalid IP %s", ip)
+	}
+
+	a.mutex.Lock()
+	defer a.mutex.Unlock()
+
+	if !a.assignedIPs.Has(ip) {
+		klog.V(2).InfoS("The IP is not assigned", "ip", ip)
+		return nil
+	}
+
+	addr := netlink.Addr{IPNet: &net.IPNet{IP: parsedIP, Mask: net.CIDRMask(32, 32)}}
+	if err := netlink.AddrDel(a.dummyDevice, &addr); err != nil {
+		return fmt.Errorf("failed to delete IP %v from interface %s: %v", ip, a.dummyDevice.Attrs().Name, err)
+	}
+	klog.InfoS("Deleted IP from interface", "ip", ip, "interface", a.dummyDevice.Attrs().Name)
+
+	a.assignedIPs.Delete(ip)
+	return nil
+}
+
+// AssignedIPs return the IPs that are assigned to the dummy device.
+func (a *ipAssigner) AssignedIPs() sets.String {
 	a.mutex.RLock()
 	defer a.mutex.RUnlock()
-	for k, v := range a.assignedEgress {
-		ips[k] = v
-	}
-	return ips
+	// Return a copy.
+	return a.assignedIPs.Union(nil)
 }
