@@ -53,6 +53,7 @@ import (
 	"antrea.io/antrea/pkg/apiserver/registry/system/controllerinfo"
 	"antrea.io/antrea/pkg/apiserver/registry/system/supportbundle"
 	"antrea.io/antrea/pkg/apiserver/storage"
+	"antrea.io/antrea/pkg/controller/egress"
 	controllernetworkpolicy "antrea.io/antrea/pkg/controller/networkpolicy"
 	"antrea.io/antrea/pkg/controller/querier"
 	"antrea.io/antrea/pkg/controller/stats"
@@ -98,6 +99,7 @@ type ExtraConfig struct {
 	controllerQuerier             querier.ControllerQuerier
 	endpointQuerier               controllernetworkpolicy.EndpointQuerier
 	networkPolicyController       *controllernetworkpolicy.NetworkPolicyController
+	egressController              *egress.EgressController
 	caCertController              *certificate.CACertController
 	statsAggregator               *stats.Aggregator
 	networkPolicyStatusController *controllernetworkpolicy.StatusController
@@ -139,7 +141,8 @@ func NewConfig(
 	controllerQuerier querier.ControllerQuerier,
 	networkPolicyStatusController *controllernetworkpolicy.StatusController,
 	endpointQuerier controllernetworkpolicy.EndpointQuerier,
-	npController *controllernetworkpolicy.NetworkPolicyController) *Config {
+	npController *controllernetworkpolicy.NetworkPolicyController,
+	egressController *egress.EgressController) *Config {
 	return &Config{
 		genericConfig: genericConfig,
 		extraConfig: ExtraConfig{
@@ -154,6 +157,7 @@ func NewConfig(
 			endpointQuerier:               endpointQuerier,
 			networkPolicyController:       npController,
 			networkPolicyStatusController: networkPolicyStatusController,
+			egressController:              egressController,
 		},
 	}
 }
@@ -292,10 +296,10 @@ func installHandlers(c *ExtraConfig, s *genericapiserver.GenericAPIServer) {
 		// Get new NetworkPolicyValidator
 		v := controllernetworkpolicy.NewNetworkPolicyValidator(c.networkPolicyController)
 		// Install handlers for NetworkPolicy related validation
-		s.Handler.NonGoRestfulMux.HandleFunc("/validate/tier", webhook.HandleValidationNetworkPolicy(v))
-		s.Handler.NonGoRestfulMux.HandleFunc("/validate/acnp", webhook.HandleValidationNetworkPolicy(v))
-		s.Handler.NonGoRestfulMux.HandleFunc("/validate/anp", webhook.HandleValidationNetworkPolicy(v))
-		s.Handler.NonGoRestfulMux.HandleFunc("/validate/clustergroup", webhook.HandleValidationNetworkPolicy(v))
+		s.Handler.NonGoRestfulMux.HandleFunc("/validate/tier", webhook.HandlerForValidateFunc(v.Validate))
+		s.Handler.NonGoRestfulMux.HandleFunc("/validate/acnp", webhook.HandlerForValidateFunc(v.Validate))
+		s.Handler.NonGoRestfulMux.HandleFunc("/validate/anp", webhook.HandlerForValidateFunc(v.Validate))
+		s.Handler.NonGoRestfulMux.HandleFunc("/validate/clustergroup", webhook.HandlerForValidateFunc(v.Validate))
 
 		// Install handlers for CRD conversion between versions
 		s.Handler.NonGoRestfulMux.HandleFunc("/convert/clustergroup", webhook.HandleCRDConversion(controllernetworkpolicy.ConvertClusterGroupCRD))
@@ -305,5 +309,10 @@ func installHandlers(c *ExtraConfig, s *genericapiserver.GenericAPIServer) {
 			go c.networkPolicyController.InitializeTiers()
 			return nil
 		})
+	}
+
+	if features.DefaultFeatureGate.Enabled(features.Egress) {
+		s.Handler.NonGoRestfulMux.HandleFunc("/validate/externalippool", webhook.HandlerForValidateFunc(c.egressController.ValidateExternalIPPool))
+		s.Handler.NonGoRestfulMux.HandleFunc("/validate/egress", webhook.HandlerForValidateFunc(c.egressController.ValidateEgress))
 	}
 }
