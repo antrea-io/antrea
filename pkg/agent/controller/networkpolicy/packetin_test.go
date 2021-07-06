@@ -16,6 +16,7 @@ package networkpolicy
 
 import (
 	"net"
+	"sync"
 	"testing"
 
 	"antrea.io/libOpenflow/protocol"
@@ -23,6 +24,74 @@ import (
 	"antrea.io/ofnet/ofctrl"
 	"github.com/stretchr/testify/assert"
 )
+
+// mockLogger implements PolicyCustomLogger.
+type mockLogger struct {
+	sync.Mutex
+	logged chan string
+}
+
+func (l *mockLogger) Printf(format string, v ...interface{}) {
+	l.Lock()
+	defer l.Unlock()
+	l.logged <- format
+}
+
+func newAntreaPolicyLogger() *AntreaPolicyLogger {
+	return &AntreaPolicyLogger{
+		logDeduplication: logRecordDedupMap{logMap: make(map[string]*logDedupRecord)},
+	}
+}
+
+func newLogInfo(disposition string) (*logInfo, string) {
+	expected := "AntreaPolicyIngressRule AntreaNetworkPolicy:default/test " + disposition + " 0 SRC: 0.0.0.0 DEST: 1.1.1.1 60 TCP"
+	return &logInfo{
+		tableName:   "AntreaPolicyIngressRule",
+		npRef:       "AntreaNetworkPolicy:default/test",
+		ofPriority:  "0",
+		disposition: disposition,
+		srcIP:       "0.0.0.0",
+		destIP:      "1.1.1.1",
+		pktLength:   60,
+		protocolStr: "TCP",
+	}, expected
+}
+
+func TestAllowPacketLog(t *testing.T) {
+	mockAnpLogger := &mockLogger{logged: make(chan string, 100)}
+	antreaLogger := newAntreaPolicyLogger()
+	antreaLogger.anpLogger = mockAnpLogger
+	ob, expected := newLogInfo("Allow")
+
+	antreaLogger.logDedupPacket(ob)
+	actual := <-mockAnpLogger.logged
+	assert.Contains(t, actual, expected)
+}
+
+func TestDropPacketLog(t *testing.T) {
+	mockAnpLogger := &mockLogger{logged: make(chan string, 100)}
+	antreaLogger := newAntreaPolicyLogger()
+	antreaLogger.anpLogger = mockAnpLogger
+	ob, expected := newLogInfo("Drop")
+
+	antreaLogger.logDedupPacket(ob)
+	actual := <-mockAnpLogger.logged
+	assert.Contains(t, actual, expected)
+}
+
+func TestDropPacketDedupLog(t *testing.T) {
+	mockAnpLogger := &mockLogger{logged: make(chan string, 100)}
+	antreaLogger := newAntreaPolicyLogger()
+	antreaLogger.anpLogger = mockAnpLogger
+	ob, expected := newLogInfo("Drop")
+	// add the additional log info for duplicate packets
+	expected += " ["
+
+	go antreaLogger.logDedupPacket(ob)
+	go antreaLogger.logDedupPacket(ob)
+	actual := <-mockAnpLogger.logged
+	assert.Contains(t, actual, expected)
+}
 
 func TestGetPacketInfo(t *testing.T) {
 	type args struct {

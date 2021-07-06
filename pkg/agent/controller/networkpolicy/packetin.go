@@ -58,16 +58,18 @@ const (
 	ICMPv6DstAdminProhibitedCode uint8 = 1
 )
 
+//AntreaPolicyLogger is used for antrea policy audit logging.
+// Includes a lumberjack logger and a map used for log deduplication.
 type AntreaPolicyLogger struct {
-	anpLogger        *log.Logger
+	anpLogger        PolicyCustomLogger
 	logDeduplication logRecordDedupMap
 }
 
-//TODO
-//var (
-//	AntreaPolicyLogger *log.Logger
-//	logDeduplication   logRecordDedupMap
-//)
+// PolicyCustomLogger is the base logger interface.
+// log.Logger implements PolicyCustomLogger.
+type PolicyCustomLogger interface {
+	Printf(format string, v ...interface{})
+}
 
 // logInfo will be set by retrieving info from packetin and register
 type logInfo struct {
@@ -98,10 +100,11 @@ type logRecordDedupMap struct {
 func (a *AntreaPolicyLogger) terminateLogKey(logMsg string) {
 	a.logDeduplication.logMutex.Lock()
 	defer a.logDeduplication.logMutex.Unlock()
+	<-a.logDeduplication.logMap[logMsg].bufferTimer.C
 	if a.logDeduplication.logMap[logMsg].count == 1 {
 		a.anpLogger.Printf(logMsg)
 	} else {
-		a.anpLogger.Printf("%s [%d packets in %s]", logMsg, a.logDeduplication.logMap[logMsg].count, time.Since(a.logDeduplication.logMap[logMsg].initTime))
+		a.anpLogger.Printf(fmt.Sprintf("%s [%d packets in %s]", logMsg, a.logDeduplication.logMap[logMsg].count, time.Since(a.logDeduplication.logMap[logMsg].initTime)))
 	}
 	delete(a.logDeduplication.logMap, logMsg)
 }
@@ -146,6 +149,23 @@ func initLogger() *AntreaPolicyLogger {
 	return cAntreaPolicyLogger
 }
 
+func (a *AntreaPolicyLogger) logDedupPacket(ob *logInfo) {
+	// Deduplicate non-Allow packet log.
+	logMsg := fmt.Sprintf("%s %s %s %s SRC: %s DEST: %s %d %s", ob.tableName, ob.npRef, ob.disposition, ob.ofPriority, ob.srcIP, ob.destIP, ob.pktLength, ob.protocolStr)
+	if ob.disposition == openflow.DispositionToString[openflow.DispositionAllow] {
+		a.anpLogger.Printf(logMsg)
+	} else {
+		// Increase count if duplicated within 1 sec, create buffer otherwise.
+		exists := a.updateLogKey(logMsg)
+		if !exists {
+			// Go routine for logging when buffer timer stops.
+			go func(logKey string) {
+				a.terminateLogKey(logKey)
+			}(logMsg)
+		}
+	}
+}
+
 // HandlePacketIn is the packetin handler registered to openflow by Antrea network
 // policy agent controller. It performs the appropriate operations based on which
 // bits are set in the "custom reasons" field of the packet received from OVS.
@@ -176,42 +196,6 @@ func (c *Controller) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
 	if customReasons&openflow.CustomReasonDeny == openflow.CustomReasonDeny {
 		if err := c.storeDenyConnection(pktIn); err != nil {
 			return err
-		}
-	}
-	return nil
-}
-
-// logPacket retrieves information from openflow reg, controller cache, packet-in
-// packet to log. Log is deduplicated for non-Allow packets from record in logDeduplication.
-// Deduplication is safe guarded by logRecordDedupMap mutex.
-func (c *Controller) logPacket(pktIn *ofctrl.PacketIn) error {
-	ob := new(logInfo)
-
-	// Get Network Policy log info
-	err := getNetworkPolicyInfo(pktIn, c, ob)
-	if err != nil {
-		return fmt.Errorf("received error while retrieving NetworkPolicy info: %v", err)
-	}
-
-	// Get packet log info
-	err = getPacketInfo(pktIn, ob)
-	if err != nil {
-		return fmt.Errorf("received error while handling packetin for NetworkPolicy: %v", err)
-	}
-
-	// Deduplicate non-Allow packet log.
-	logMsg := fmt.Sprintf("%s %s %s %s SRC: %s DEST: %s %d %s", ob.tableName, ob.npRef, ob.disposition, ob.ofPriority, ob.srcIP, ob.destIP, ob.pktLength, ob.protocolStr)
-	if ob.disposition == openflow.DispositionToString[openflow.DispositionAllow] {
-		c.antreaPolicyLogger.anpLogger.Printf(logMsg)
-	} else {
-		// Increase count if duplicated within 1 sec, create buffer otherwise.
-		exists := c.antreaPolicyLogger.updateLogKey(logMsg)
-		if !exists {
-			// Go routine for logging when buffer timer stops.
-			go func(logKey string) {
-				<-c.antreaPolicyLogger.logDeduplication.logMap[logKey].bufferTimer.C
-				c.antreaPolicyLogger.terminateLogKey(logKey)
-			}(logMsg)
 		}
 	}
 	return nil
@@ -304,6 +288,28 @@ func getPacketInfo(pktIn *ofctrl.PacketIn, ob *logInfo) error {
 
 	ob.protocolStr = ip.IPProtocolNumberToString(prot, "UnknownProtocol")
 
+	return nil
+}
+
+// logPacket retrieves information from openflow reg, controller cache, packet-in
+// packet to log. Log is deduplicated for non-Allow packets from record in logDeduplication.
+// Deduplication is safe guarded by logRecordDedupMap mutex.
+func (c *Controller) logPacket(pktIn *ofctrl.PacketIn) error {
+	ob := new(logInfo)
+
+	// Get Network Policy log info
+	err := getNetworkPolicyInfo(pktIn, c, ob)
+	if err != nil {
+		return fmt.Errorf("received error while retrieving NetworkPolicy info: %v", err)
+	}
+	// Get packet log info
+	err = getPacketInfo(pktIn, ob)
+	if err != nil {
+		return fmt.Errorf("received error while retrieving NetworkPolicy info: %v", err)
+	}
+
+	// Log the ob info to corresponding file w/ deduplication
+	c.antreaPolicyLogger.logDedupPacket(ob)
 	return nil
 }
 
