@@ -1693,10 +1693,11 @@ func (c *client) snatCommonFlows(nodeIP net.IP, localSubnet net.IPNet, localGate
 	ipProto := getIPProtocol(localSubnet.IP)
 	flows := []binding.Flow{
 		// First install flows for traffic that should bypass SNAT.
-		// This flow is for traffic to the local Pod subnet.
+		// This flow is for traffic to the local Pod subnet that don't need MAC rewriting (L2 forwarding case). Other
+		// traffic to the local Pod subnet will be handled by L3 forwarding rules.
 		l3FwdTable.BuildFlow(priorityNormal).
 			MatchProtocol(ipProto).
-			MatchRegRange(int(marksReg), markTrafficFromLocal, binding.Range{0, 15}).
+			MatchRegRange(int(marksReg), 0, macRewriteMarkRange).
 			MatchDstIPNet(localSubnet).
 			Action().GotoTable(nextTable).
 			Cookie(c.cookieAllocator.Request(category).Raw()).
@@ -1709,22 +1710,9 @@ func (c *client) snatCommonFlows(nodeIP net.IP, localSubnet net.IPNet, localGate
 			Action().GotoTable(nextTable).
 			Cookie(c.cookieAllocator.Request(category).Raw()).
 			Done(),
-		// This flow is for the return traffic of connections to a local
-		// Pod through the gateway interface (so gatewayCTMark is set).
-		// For example, the return traffic of a connection from an IP
-		// address (not the Node's management IP or gateway interface IP
-		// which are covered by other flows already) of the local Node
-		// to a local Pod. It might also catch the Service return
-		// traffic from a local server Pod, but this case is also
-		// covered by other flows (the flows matching the local and
-		// remote Pod subnets) anyway.
-		l3FwdTable.BuildFlow(priorityNormal).
-			MatchProtocol(ipProto).
-			MatchRegRange(int(marksReg), markTrafficFromLocal, binding.Range{0, 15}).
-			MatchCTMark(gatewayCTMark, nil).
-			Action().GotoTable(nextTable).
-			Cookie(c.cookieAllocator.Request(category).Raw()).
-			Done(),
+		// The return traffic of connections to a local Pod through the gateway interface (so gatewayCTMark is set)
+		// should bypass SNAT too. But it has been covered by the gatewayCT related flow generated in l3FwdFlowToGateway
+		// which forwards all reply traffic for such connections back to the gateway interface with the high priority.
 
 		// Send the traffic to external to snatTable.
 		l3FwdTable.BuildFlow(priorityLow).

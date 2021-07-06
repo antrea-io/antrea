@@ -1295,15 +1295,11 @@ func prepareExternalFlows(nodeIP net.IP, localSubnet *net.IPNet, gwMAC net.Hardw
 			uint8(70),
 			[]*ofTestUtils.ExpectFlow{
 				{
-					MatchStr: fmt.Sprintf("priority=200,%s,reg0=0x2/0xffff,%s=%s", ipProtoStr, nwDstFieldName, localSubnet.String()),
+					MatchStr: fmt.Sprintf("priority=200,%s,reg0=0/0x80000,%s=%s", ipProtoStr, nwDstFieldName, localSubnet.String()),
 					ActStr:   "goto_table:80",
 				},
 				{
 					MatchStr: fmt.Sprintf("priority=200,%s,reg0=0x2/0xffff,%s=%s", ipProtoStr, nwDstFieldName, nodeIP.String()),
-					ActStr:   "goto_table:80",
-				},
-				{
-					MatchStr: fmt.Sprintf("priority=200,ct_mark=0x20,%s,reg0=0x2/0xffff", ipProtoStr),
 					ActStr:   "goto_table:80",
 				},
 				{
