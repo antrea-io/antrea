@@ -155,11 +155,11 @@ func initialize(t *testing.T, data *TestData) {
 }
 
 func skipIfAntreaPolicyDisabled(tb testing.TB, data *TestData) {
-	if featureGate, err := data.GetControllerFeatures(antreaNamespace); err != nil {
-		tb.Fatalf("Cannot determine if ACNP enabled: %v", err)
-	} else if !featureGate.Enabled(features.AntreaPolicy) {
-		tb.Skipf("Skipping test as it required ACNP to be enabled")
-	}
+	skipIfFeatureDisabled(tb, data, features.AntreaPolicy, true, true)
+}
+
+func skipIfNetworkPolicyStatsDisabled(tb testing.TB, data *TestData) {
+	skipIfFeatureDisabled(tb, data, features.NetworkPolicyStats, true, true)
 }
 
 func applyDefaultDenyToAllNamespaces(k8s *KubernetesUtils, namespaces []string) error {
@@ -2843,16 +2843,7 @@ func TestANPNetworkPolicyStatsWithDropAction(t *testing.T) {
 	}
 	defer teardownTest(t, data)
 	skipIfAntreaPolicyDisabled(t, data)
-
-	cc := []configChange{
-		{"NetworkPolicyStats", "true", true},
-	}
-	ac := []configChange{
-		{"NetworkPolicyStats", "true", true},
-	}
-	if err := testData.mutateAntreaConfigMap(cc, ac, true, true); err != nil {
-		t.Fatalf("Failed to enable NetworkPolicyStats feature: %v", err)
-	}
+	skipIfNetworkPolicyStatsDisabled(t, data)
 
 	serverName, serverIPs, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "test-server-", "")
 	defer cleanupFunc()
@@ -2996,16 +2987,8 @@ func TestAntreaClusterNetworkPolicyStats(t *testing.T) {
 	}
 	defer teardownTest(t, data)
 	skipIfAntreaPolicyDisabled(t, data)
+	skipIfNetworkPolicyStatsDisabled(t, data)
 
-	cc := []configChange{
-		{"NetworkPolicyStats", "true", true},
-	}
-	ac := []configChange{
-		{"NetworkPolicyStats", "true", true},
-	}
-	if err := testData.mutateAntreaConfigMap(cc, ac, true, true); err != nil {
-		t.Fatalf("Failed to enable NetworkPolicyStats feature: %v", err)
-	}
 	serverName, serverIPs, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "test-server-", "")
 	defer cleanupFunc()
 

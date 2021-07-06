@@ -23,6 +23,8 @@ import (
 	"testing"
 	"time"
 
+	"k8s.io/component-base/featuregate"
+
 	"antrea.io/antrea/pkg/agent/config"
 )
 
@@ -102,6 +104,23 @@ func skipIfHasWindowsNodes(tb testing.TB) {
 func skipIfNoWindowsNodes(tb testing.TB) {
 	if len(clusterInfo.windowsNodes) == 0 {
 		tb.Skipf("Skipping test as the cluster has no Windows Nodes")
+	}
+}
+
+func skipIfFeatureDisabled(tb testing.TB, data *TestData, feature featuregate.Feature, checkAgent bool, checkController bool) {
+	if checkAgent {
+		if featureGate, err := data.GetAgentFeatures(antreaNamespace); err != nil {
+			tb.Fatalf("Cannot determine if %s is enabled in the Agent: %v", feature, err)
+		} else if !featureGate.Enabled(feature) {
+			tb.Skipf("Skipping test because %s is not enabled in the Agent", feature)
+		}
+	}
+	if checkController {
+		if featureGate, err := data.GetControllerFeatures(antreaNamespace); err != nil {
+			tb.Fatalf("Cannot determine if %s is enabled in the Controller: %v", feature, err)
+		} else if !featureGate.Enabled(feature) {
+			tb.Skipf("Skipping test because %s is not enabled in the Controller", feature)
+		}
 	}
 }
 
