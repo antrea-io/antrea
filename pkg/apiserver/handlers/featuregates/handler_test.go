@@ -50,7 +50,7 @@ func Test_getGatesResponse(t *testing.T) {
 				{Component: "agent", Name: "Egress", Status: "Disabled", Version: "ALPHA"},
 				{Component: "agent", Name: "EndpointSlice", Status: "Disabled", Version: "ALPHA"},
 				{Component: "agent", Name: "Traceflow", Status: "Enabled", Version: "BETA"},
-				{Component: "agent", Name: "FlowExporter", Status: "Disabled", Version: "ALPHA"},
+				{Component: "agent", Name: "FlowExporter", Status: "Enabled", Version: "BETA"},
 				{Component: "agent", Name: "NetworkPolicyStats", Status: "Enabled", Version: "BETA"},
 				{Component: "agent", Name: "NodePortLocal", Status: "Disabled", Version: "ALPHA"},
 			},

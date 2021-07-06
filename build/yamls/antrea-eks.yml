@@ -3686,7 +3686,7 @@ data:
 
     # Enable flowexporter which exports polled conntrack connections as IPFIX flow records from each
     # agent to a configured collector.
-    #  FlowExporter: false
+    #  FlowExporter: true
 
     # Enable collecting and exposing NetworkPolicy statistics.
     #  NetworkPolicyStats: true
@@ -3887,7 +3887,7 @@ metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-gb8bgg4d2m
+  name: antrea-config-m7d4mhcd9g
   namespace: kube-system
 ---
 apiVersion: v1
@@ -3958,7 +3958,7 @@ spec:
             fieldRef:
               fieldPath: spec.serviceAccountName
         - name: ANTREA_CONFIG_MAP_NAME
-          value: antrea-config-gb8bgg4d2m
+          value: antrea-config-m7d4mhcd9g
         image: projects.registry.vmware.com/antrea/antrea-ubuntu:latest
         imagePullPolicy: IfNotPresent
         livenessProbe:
@@ -4009,7 +4009,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-gb8bgg4d2m
+          name: antrea-config-m7d4mhcd9g
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -4307,7 +4307,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-gb8bgg4d2m
+          name: antrea-config-m7d4mhcd9g
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d

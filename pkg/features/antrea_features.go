@@ -52,6 +52,7 @@ const (
 	Traceflow featuregate.Feature = "Traceflow"
 
 	// alpha: v0.9
+	// beta: v1.2
 	// Flow exporter exports IPFIX flow records of Antrea flows seen in conntrack module.
 	FlowExporter featuregate.Feature = "FlowExporter"
 
@@ -86,7 +87,7 @@ var (
 		Egress:             {Default: false, PreRelease: featuregate.Alpha},
 		EndpointSlice:      {Default: false, PreRelease: featuregate.Alpha},
 		Traceflow:          {Default: true, PreRelease: featuregate.Beta},
-		FlowExporter:       {Default: false, PreRelease: featuregate.Alpha},
+		FlowExporter:       {Default: true, PreRelease: featuregate.Beta},
 		NetworkPolicyStats: {Default: true, PreRelease: featuregate.Beta},
 		NodePortLocal:      {Default: false, PreRelease: featuregate.Alpha},
 	}

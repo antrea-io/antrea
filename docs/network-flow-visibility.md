@@ -69,15 +69,16 @@ library.
 
 ### Configuration
 
-To enable the Flow Exporter feature at the Antrea Agent, the following config
-parameters have to be set in the Antrea Agent ConfigMap:
+Flow Exporter feature is enabled by default. To configure the feature at the
+Antrea agent, set following parameters in the Antrea Agent ConfigMap:
 
 ```yaml
   antrea-agent.conf: |
     # FeatureGates is a map of feature names to bools that enable or disable experimental features.
     featureGates:
-    # Enable flowexporter which exports polled conntrack connections as IPFIX flow records from each agent to a configured collector.
-      FlowExporter: true
+    # Enable flowexporter which exports polled conntrack connections as IPFIX flow records from each
+    # agent to a configured collector.
+    #  FlowExporter: true
 
     # Provide the IPFIX collector address as a string with format <HOST>:[<PORT>][:<PROTO>].
     # HOST can either be the DNS name or the IP of the Flow Collector. For example,

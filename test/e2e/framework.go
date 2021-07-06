@@ -568,7 +568,6 @@ func (data *TestData) deployAntreaIPSec() error {
 func (data *TestData) deployAntreaFlowExporter(ipfixCollector string) error {
 	// Enable flow exporter feature and add related config params to antrea agent configmap.
 	ac := []configChange{
-		{"FlowExporter", "true", true},
 		{"flowPollInterval", "\"1s\"", false},
 		{"activeFlowExportTimeout", fmt.Sprintf("\"%v\"", exporterActiveFlowExportTimeout), false},
 		{"idleFlowExportTimeout", fmt.Sprintf("\"%v\"", exporterIdleFlowExportTimeout), false},
