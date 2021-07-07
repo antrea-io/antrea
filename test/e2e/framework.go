@@ -107,7 +107,7 @@ const (
 	nginxLBService = "nginx-loadbalancer"
 
 	exporterActiveFlowExportTimeout     = 2 * time.Second
-	exporterInactiveFlowExportTimeout   = 1 * time.Second
+	exporterIdleFlowExportTimeout       = 1 * time.Second
 	aggregatorActiveFlowRecordTimeout   = 3500 * time.Millisecond
 	aggregatorInactiveFlowRecordTimeout = 6 * time.Second
 )
@@ -571,7 +571,7 @@ func (data *TestData) deployAntreaFlowExporter(ipfixCollector string) error {
 		{"FlowExporter", "true", true},
 		{"flowPollInterval", "\"1s\"", false},
 		{"activeFlowExportTimeout", fmt.Sprintf("\"%v\"", exporterActiveFlowExportTimeout), false},
-		{"inactiveFlowExportTimeout", fmt.Sprintf("\"%v\"", exporterInactiveFlowExportTimeout), false},
+		{"idleFlowExportTimeout", fmt.Sprintf("\"%v\"", exporterIdleFlowExportTimeout), false},
 	}
 	if ipfixCollector != "" {
 		ac = append(ac, configChange{"flowCollectorAddr", fmt.Sprintf("\"%s\"", ipfixCollector), false})

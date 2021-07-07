@@ -313,6 +313,7 @@ func (exp *flowExporter) sendFlowRecords() error {
 			} else {
 				exp.flowRecords.ValidateAndUpdateStats(key, record)
 			}
+			klog.V(4).InfoS("Record sent successfully", "flowKey", key, "record", record)
 		}
 		return nil
 	}
@@ -330,6 +331,7 @@ func (exp *flowExporter) sendFlowRecords() error {
 				return err
 			}
 			exp.numDataSetsSent = exp.numDataSetsSent + 1
+			klog.V(4).InfoS("Record for deny connection sent successfully", "flowKey", connKey, "connection", conn)
 			exp.denyConnStore.ResetConnStatsWithoutLock(connKey)
 		}
 		if time.Since(conn.LastExportTime) >= exp.idleFlowTimeout {
@@ -340,6 +342,7 @@ func (exp *flowExporter) sendFlowRecords() error {
 				return err
 			}
 			exp.numDataSetsSent = exp.numDataSetsSent + 1
+			klog.V(4).InfoS("Record for deny connection sent successfully", "flowKey", connKey, "connection", conn)
 			exp.denyConnStore.DeleteConnWithoutLock(connKey)
 		}
 		return nil
