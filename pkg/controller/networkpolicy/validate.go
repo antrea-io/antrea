@@ -34,6 +34,7 @@ import (
 
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	crdv1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
+	crdv1alpha3 "antrea.io/antrea/pkg/apis/crd/v1alpha3"
 	"antrea.io/antrea/pkg/controller/networkpolicy/store"
 	"antrea.io/antrea/pkg/features"
 	"antrea.io/antrea/pkg/util/env"
@@ -144,7 +145,7 @@ func NewNetworkPolicyValidator(networkPolicyController *NetworkPolicyController)
 	return &vr
 }
 
-// Validate function validates a ClusterGroup, Tier or Antrea Policy object
+// Validate function validates a Group, ClusterGroup, Tier or Antrea Policy object
 func (v *NetworkPolicyValidator) Validate(ar *admv1.AdmissionReview) *admv1.AdmissionResponse {
 	var result *metav1.Status
 	var msg string
@@ -186,6 +187,22 @@ func (v *NetworkPolicyValidator) Validate(ar *admv1.AdmissionReview) *admv1.Admi
 			}
 		}
 		msg, allowed = v.validateAntreaGroup(&curCG, &oldCG, op, ui)
+	case "Group":
+		klog.V(2).Info("Validating Group CRD")
+		var curG, oldG crdv1alpha3.Group
+		if curRaw != nil {
+			if err := json.Unmarshal(curRaw, &curG); err != nil {
+				klog.Errorf("Error de-serializing current Group")
+				return GetAdmissionResponseForErr(err)
+			}
+		}
+		if oldRaw != nil {
+			if err := json.Unmarshal(oldRaw, &oldG); err != nil {
+				klog.Errorf("Error de-serializing old Group")
+				return GetAdmissionResponseForErr(err)
+			}
+		}
+		msg, allowed = v.validateAntreaGroup(&curG, &oldG, op, ui)
 	case "ClusterNetworkPolicy":
 		klog.V(2).Info("Validating Antrea ClusterNetworkPolicy CRD")
 		var curCNP, oldCNP crdv1alpha1.ClusterNetworkPolicy
@@ -292,8 +309,8 @@ func (v *antreaPolicyValidator) validatePort(ingress, egress []crdv1alpha1.Rule)
 	return nil
 }
 
-// validateAntreaGroup validates the admission of a ClusterGroup resource
-func (v *NetworkPolicyValidator) validateAntreaGroup(curCG, oldCG *crdv1alpha2.ClusterGroup, op admv1.Operation, userInfo authenticationv1.UserInfo) (string, bool) {
+// validateAntreaGroup validates the admission of a Group, ClusterGroup resource
+func (v *NetworkPolicyValidator) validateAntreaGroup(curCG, oldCG interface{}, op admv1.Operation, userInfo authenticationv1.UserInfo) (string, bool) {
 	allowed := true
 	reason := ""
 	switch op {
@@ -867,9 +884,9 @@ func (t *tierValidator) deleteValidate(oldObj interface{}, userInfo authenticati
 	return "", true
 }
 
-// validateAntreaGroupSpec ensures that an IPBlock is not set along with namespaceSelector and/or a
+// validateAntreaClusterGroupSpec ensures that an IPBlock is not set along with namespaceSelector and/or a
 // podSelector. Similarly, ExternalEntitySelector cannot be set with PodSelector.
-func validateAntreaGroupSpec(s crdv1alpha2.GroupSpec) (string, bool) {
+func validateAntreaClusterGroupSpec(s crdv1alpha2.GroupSpec) (string, bool) {
 	errMsg := "At most one of podSelector, externalEntitySelector, serviceReference, ipBlock, ipBlocks or childGroups can be set for a ClusterGroup"
 	if s.PodSelector != nil && s.ExternalEntitySelector != nil {
 		return errMsg, false
@@ -915,7 +932,31 @@ func validateAntreaGroupSpec(s crdv1alpha2.GroupSpec) (string, bool) {
 	return "", true
 }
 
-func (g *groupValidator) validateChildGroup(s *crdv1alpha2.ClusterGroup) (string, bool) {
+func validateAntreaGroupSpec(s crdv1alpha3.GroupSpec) (string, bool) {
+	errMsg := "At most one of podSelector, externalEntitySelector, serviceReference, ipBlocks or childGroups can be set for a Group"
+	if s.PodSelector != nil && s.ExternalEntitySelector != nil {
+		return errMsg, false
+	}
+	selector, serviceRef, ipBlocks, childGroups := 0, 0, 0, 0
+	if s.NamespaceSelector != nil || s.ExternalEntitySelector != nil || s.PodSelector != nil {
+		selector = 1
+	}
+	if len(s.IPBlocks) > 0 {
+		ipBlocks = 1
+	}
+	if s.ServiceReference != nil {
+		serviceRef = 1
+	}
+	if len(s.ChildGroups) > 0 {
+		childGroups = 1
+	}
+	if selector+serviceRef+ipBlocks+childGroups > 1 {
+		return errMsg, false
+	}
+	return "", true
+}
+
+func (g *groupValidator) validateChildClusterGroup(s *crdv1alpha2.ClusterGroup) (string, bool) {
 	if len(s.Spec.ChildGroups) > 0 {
 		parentGrps, err := g.networkPolicyController.internalGroupStore.GetByIndex(store.ChildGroupIndex, s.Name)
 		if err != nil {
@@ -940,27 +981,84 @@ func (g *groupValidator) validateChildGroup(s *crdv1alpha2.ClusterGroup) (string
 	return "", true
 }
 
-// createValidate validates the CREATE events of ClusterGroup resources.
+func (g *groupValidator) validateChildGroup(s *crdv1alpha3.Group) (string, bool) {
+	if len(s.Spec.ChildGroups) > 0 {
+		parentGrps, err := g.networkPolicyController.internalGroupStore.GetByIndex(store.ChildGroupIndex, s.Namespace+"/"+s.Name)
+		if err != nil {
+			return fmt.Sprintf("error retrieving parents of Group %s/%s: %v", s.Namespace, s.Name, err), false
+		}
+		// TODO: relax this constraint when max group nesting level increases.
+		if len(parentGrps) > 0 {
+			return fmt.Sprintf("cannot set childGroups for Group %s/%s, who has %d parents", s.Namespace, s.Name, len(parentGrps)), false
+		}
+		for _, groupname := range s.Spec.ChildGroups {
+			childGrp, err := g.networkPolicyController.grpLister.Groups(s.Namespace).Get(string(groupname))
+			if err != nil {
+				// the childGroup has not been created yet.
+				continue
+			}
+			// TODO: relax this constraint when max group nesting level increases.
+			if len(childGrp.Spec.ChildGroups) > 0 {
+				return fmt.Sprintf("cannot set Group %s/%s as childGroup, who has %d childGroups itself", s.Namespace, string(groupname), len(childGrp.Spec.ChildGroups)), false
+			}
+		}
+	}
+	return "", true
+}
+
+func (g *groupValidator) validateCG(cg *crdv1alpha2.ClusterGroup) (string, bool) {
+	reason, allowed := validateAntreaClusterGroupSpec(cg.Spec)
+	if !allowed {
+		return reason, allowed
+	}
+	// TODO: validate child groups for Group
+	return g.validateChildClusterGroup(cg)
+}
+
+func (g *groupValidator) validateG(grp *crdv1alpha3.Group) (string, bool) {
+	reason, allowed := validateAntreaGroupSpec(grp.Spec)
+	if !allowed {
+		return reason, allowed
+	}
+	// TODO: validate child groups for Group
+	return g.validateChildGroup(grp)
+}
+
+// createValidate validates the CREATE events of Group, ClusterGroup resources.
 func (g *groupValidator) createValidate(curObj interface{}, userInfo authenticationv1.UserInfo) (string, bool) {
-	curCG := curObj.(*crdv1alpha2.ClusterGroup)
-	reason, allowed := validateAntreaGroupSpec(curCG.Spec)
-	if !allowed {
-		return reason, allowed
+	var curCG *crdv1alpha2.ClusterGroup
+	var curG *crdv1alpha3.Group
+	var reason string
+	var allowed bool
+	switch curObj.(type) {
+	case *crdv1alpha2.ClusterGroup:
+		curCG = curObj.(*crdv1alpha2.ClusterGroup)
+		reason, allowed = g.validateCG(curCG)
+	case *crdv1alpha3.Group:
+		curG = curObj.(*crdv1alpha3.Group)
+		reason, allowed = g.validateG(curG)
 	}
-	return g.validateChildGroup(curCG)
+	return reason, allowed
 }
 
-// updateValidate validates the UPDATE events of ClusterGroup resources.
+// updateValidate validates the UPDATE events of Group, ClusterGroup resources.
 func (g *groupValidator) updateValidate(curObj, oldObj interface{}, userInfo authenticationv1.UserInfo) (string, bool) {
-	curCG := curObj.(*crdv1alpha2.ClusterGroup)
-	reason, allowed := validateAntreaGroupSpec(curCG.Spec)
-	if !allowed {
-		return reason, allowed
+	var curCG *crdv1alpha2.ClusterGroup
+	var curG *crdv1alpha3.Group
+	var reason string
+	var allowed bool
+	switch curObj.(type) {
+	case *crdv1alpha2.ClusterGroup:
+		curCG = curObj.(*crdv1alpha2.ClusterGroup)
+		reason, allowed = g.validateCG(curCG)
+	case *crdv1alpha3.Group:
+		curG = curObj.(*crdv1alpha3.Group)
+		reason, allowed = g.validateG(curG)
 	}
-	return g.validateChildGroup(curCG)
+	return reason, allowed
 }
 
-// deleteValidate validates the DELETE events of ClusterGroup resources.
+// deleteValidate validates the DELETE events of Group, ClusterGroup resources.
 func (g *groupValidator) deleteValidate(oldObj interface{}, userInfo authenticationv1.UserInfo) (string, bool) {
 	return "", true
 }

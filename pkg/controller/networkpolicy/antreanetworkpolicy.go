@@ -130,10 +130,7 @@ func (n *NetworkPolicyController) processAntreaNetworkPolicy(np *crdv1alpha1.Net
 	// The span calculation and stale appliedToGroup cleanup logic would work seamlessly for both cases.
 	appliedToGroupNamesSet := sets.String{}
 	// Create AppliedToGroup for each AppliedTo present in AntreaNetworkPolicy spec.
-	for _, at := range np.Spec.AppliedTo {
-		appliedToGroupNamesSet.Insert(n.createAppliedToGroup(
-			np.Namespace, at.PodSelector, at.NamespaceSelector, at.ExternalEntitySelector))
-	}
+	n.processAppliedTo(np.Namespace, np.Spec.AppliedTo, appliedToGroupNamesSet)
 	rules := make([]controlplane.NetworkPolicyRule, 0, len(np.Spec.Ingress)+len(np.Spec.Egress))
 	// Compute NetworkPolicyRule for Ingress Rule.
 	for idx, ingressRule := range np.Spec.Ingress {
@@ -141,11 +138,8 @@ func (n *NetworkPolicyController) processAntreaNetworkPolicy(np *crdv1alpha1.Net
 		services, namedPortExists := toAntreaServicesForCRD(ingressRule.Ports, ingressRule.Protocols)
 		var appliedToGroupNamesForRule []string
 		// Create AppliedToGroup for each AppliedTo present in the ingress rule.
-		for _, at := range ingressRule.AppliedTo {
-			atGroup := n.createAppliedToGroup(np.Namespace, at.PodSelector, at.NamespaceSelector, at.ExternalEntitySelector)
-			appliedToGroupNamesForRule = append(appliedToGroupNamesForRule, atGroup)
-			appliedToGroupNamesSet.Insert(atGroup)
-		}
+		atGroups := n.processAppliedTo(np.Namespace, ingressRule.AppliedTo, appliedToGroupNamesSet)
+		appliedToGroupNamesForRule = append(appliedToGroupNamesForRule, atGroups...)
 		rules = append(rules, controlplane.NetworkPolicyRule{
 			Direction:       controlplane.DirectionIn,
 			From:            *n.toAntreaPeerForCRD(ingressRule.From, np, controlplane.DirectionIn, namedPortExists),
@@ -162,12 +156,9 @@ func (n *NetworkPolicyController) processAntreaNetworkPolicy(np *crdv1alpha1.Net
 		// Set default action to ALLOW to allow traffic.
 		services, namedPortExists := toAntreaServicesForCRD(egressRule.Ports, egressRule.Protocols)
 		var appliedToGroupNamesForRule []string
-		// Create AppliedToGroup for each AppliedTo present in the ingress rule.
-		for _, at := range egressRule.AppliedTo {
-			atGroup := n.createAppliedToGroup(np.Namespace, at.PodSelector, at.NamespaceSelector, at.ExternalEntitySelector)
-			appliedToGroupNamesForRule = append(appliedToGroupNamesForRule, atGroup)
-			appliedToGroupNamesSet.Insert(atGroup)
-		}
+		// Create AppliedToGroup for each AppliedTo present in the egress rule.
+		atGroups := n.processAppliedTo(np.Namespace, egressRule.AppliedTo, appliedToGroupNamesSet)
+		appliedToGroupNamesForRule = append(appliedToGroupNamesForRule, atGroups...)
 		var peers *controlplane.NetworkPolicyPeer
 		if egressRule.ToServices != nil {
 			peers = n.svcRefToPeerForCRD(egressRule.ToServices, np.Namespace)
@@ -203,4 +194,45 @@ func (n *NetworkPolicyController) processAntreaNetworkPolicy(np *crdv1alpha1.Net
 		AppliedToPerRule: appliedToPerRule,
 	}
 	return internalNetworkPolicy
+}
+
+func (n *NetworkPolicyController) processAppliedTo(namespace string, appliedTo []crdv1alpha1.NetworkPolicyPeer, appliedToGroupNamesSet sets.String) []string {
+	var appliedToGroupNames []string
+	for _, at := range appliedTo {
+		var atg string
+		if at.Group != "" {
+			atg = n.processAppliedToGroupForNamespacedGroup(namespace, at.Group)
+		} else {
+			atg = n.createAppliedToGroup(namespace, at.PodSelector, at.NamespaceSelector, at.ExternalEntitySelector)
+		}
+		if atg != "" {
+			appliedToGroupNames = append(appliedToGroupNames, atg)
+			appliedToGroupNamesSet.Insert(atg)
+		}
+	}
+	return appliedToGroupNames
+}
+
+func (n *NetworkPolicyController) processAppliedToGroupForNamespacedGroup(namespace, groupName string) string {
+	// Retrieve Group for corresponding entry in the AppliedToGroup.
+	g, err := n.grpLister.Groups(namespace).Get(groupName)
+	if err != nil {
+		// The Group referred to has not been created yet.
+		return ""
+	}
+	key := internalGroupKeyFunc(g)
+	// Find the internal Group corresponding to this Group
+	ig, found, _ := n.internalGroupStore.Get(key)
+	if !found {
+		// Internal Group was not found. Once the internal Group is created, the sync
+		// worker for internal group will re-enqueue the ClusterNetworkPolicy processing
+		// which will trigger the creation of AddressGroup.
+		return ""
+	}
+	intGrp := ig.(*antreatypes.Group)
+	if len(intGrp.IPBlocks) > 0 || intGrp.Selector.NamespaceSelector != nil {
+		klog.V(2).Infof("Group %s with IPBlocks or NamespaceSelector will not be processed as AppliedTo", g)
+		return ""
+	}
+	return n.createAppliedToGroupForInternalGroup(intGrp)
 }

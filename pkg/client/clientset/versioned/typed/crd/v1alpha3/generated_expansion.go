@@ -17,3 +17,5 @@
 package v1alpha3
 
 type ClusterGroupExpansion interface{}
+
+type GroupExpansion interface{}

@@ -253,7 +253,7 @@ func testMutateANPNoRuleName(t *testing.T) {
 		SetAppliedToGroup([]ANPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}}}).
 		SetPriority(10.0).
 		AddIngress(ProtocolTCP, &p80, nil, nil, nil, nil, nil, nil, nil, map[string]string{"pod": "b"}, map[string]string{"ns": namespaces["x"]},
-			nil, nil, nil, crdv1alpha1.RuleActionAllow, "")
+			nil, nil, nil, crdv1alpha1.RuleActionAllow, "", "")
 	anp := builder.Get()
 	log.Debugf("creating ANP %v", anp.Name)
 	anp, err := k8sUtils.CreateOrUpdateANP(anp)
@@ -284,6 +284,51 @@ func testInvalidACNPNoPriority(t *testing.T) {
 	}
 }
 
+func testInvalidANPIngressPeerGroupSetWithPodSelector(t *testing.T) {
+	gA := "gA"
+	namespace := "x"
+	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
+	ruleAppTo := ANPAppliedToSpec{
+		PodSelector: map[string]string{"pod": "b"},
+	}
+	k8sUtils.CreateGroup(namespace, gA, &selectorA, nil, nil)
+	invalidNpErr := fmt.Errorf("invalid Antrea NetworkPolicy with group and podSelector in NetworkPolicyPeer set")
+	builder := &AntreaNetworkPolicySpecBuilder{}
+	builder = builder.SetName(namespace, "anp-ingress-group-podselector-set").
+		SetPriority(1.0)
+	builder = builder.AddIngress(ProtocolTCP, &p80, nil, nil, nil, nil, nil, nil, nil, map[string]string{"pod": "b"}, nil,
+		nil, nil, []ANPAppliedToSpec{ruleAppTo}, crdv1alpha1.RuleActionAllow, gA, "")
+	anp := builder.Get()
+	log.Debugf("creating ANP %v", anp.Name)
+	if _, err := k8sUtils.CreateOrUpdateANP(anp); err == nil {
+		// Above creation of ANP must fail as it is an invalid spec.
+		failOnError(invalidNpErr, t)
+	}
+	failOnError(k8sUtils.CleanGroups(namespace), t)
+}
+
+func testInvalidANPIngressPeerGroupSetWithIPBlock(t *testing.T) {
+	gA := "gA"
+	namespace := "x"
+	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
+	k8sUtils.CreateGroup(namespace, gA, &selectorA, nil, nil)
+	invalidNpErr := fmt.Errorf("invalid Antrea NetworkPolicy with group and ipBlock in NetworkPolicyPeer set")
+	cidr := "10.0.0.10/32"
+	builder := &AntreaNetworkPolicySpecBuilder{}
+	builder = builder.SetName(namespace, "anp-ingress-group-ipblock-set").
+		SetPriority(1.0).
+		SetAppliedToGroup([]ANPAppliedToSpec{{Group: "gA"}})
+	builder = builder.AddIngress(ProtocolTCP, &p80, nil, nil, nil, nil, nil, nil, &cidr, map[string]string{"pod": "b"}, map[string]string{"ns": "x"},
+		nil, nil, nil, crdv1alpha1.RuleActionAllow, gA, "")
+	anp := builder.Get()
+	log.Debugf("creating ANP %v", anp.Name)
+	if _, err := k8sUtils.CreateOrUpdateANP(anp); err == nil {
+		// Above creation of ANP must fail as it is an invalid spec.
+		failOnError(invalidNpErr, t)
+	}
+	failOnError(k8sUtils.CleanGroups(namespace), t)
+}
+
 func testInvalidANPNoPriority(t *testing.T) {
 	invalidNpErr := fmt.Errorf("invalid Antrea NetworkPolicy without a priority accepted")
 	builder := &AntreaNetworkPolicySpecBuilder{}
@@ -303,9 +348,9 @@ func testInvalidANPRuleNameNotUnique(t *testing.T) {
 	builder = builder.SetName(namespaces["x"], "anp-rule-name-not-unique").
 		SetAppliedToGroup([]ANPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}}}).
 		AddIngress(ProtocolTCP, &p80, nil, nil, nil, nil, nil, nil, nil, map[string]string{"pod": "b"}, map[string]string{"ns": namespaces["x"]},
-			nil, nil, nil, crdv1alpha1.RuleActionAllow, "not-unique").
+			nil, nil, nil, crdv1alpha1.RuleActionAllow, "", "not-unique").
 		AddIngress(ProtocolTCP, &p81, nil, nil, nil, nil, nil, nil, nil, map[string]string{"pod": "c"}, map[string]string{"ns": namespaces["x"]},
-			nil, nil, nil, crdv1alpha1.RuleActionAllow, "not-unique")
+			nil, nil, nil, crdv1alpha1.RuleActionAllow, "", "not-unique")
 	anp := builder.Get()
 	log.Debugf("creating ANP %v", anp.Name)
 	if _, err := k8sUtils.CreateOrUpdateANP(anp); err == nil {
@@ -335,7 +380,7 @@ func testInvalidANPPortRangePortUnset(t *testing.T) {
 		SetPriority(1.0).
 		SetAppliedToGroup([]ANPAppliedToSpec{{PodSelector: map[string]string{"pod": "b"}}})
 	builder.AddEgress(ProtocolTCP, nil, nil, &p8085, nil, nil, nil, nil, nil, map[string]string{"pod": "c"}, map[string]string{"ns": namespaces["x"]},
-		nil, nil, nil, crdv1alpha1.RuleActionDrop, "anp-port-range")
+		nil, nil, nil, crdv1alpha1.RuleActionDrop, "", "anp-port-range")
 
 	anp := builder.Get()
 	log.Debugf("creating ANP %v", anp.Name)
@@ -352,7 +397,7 @@ func testInvalidANPPortRangeEndPortSmall(t *testing.T) {
 		SetPriority(1.0).
 		SetAppliedToGroup([]ANPAppliedToSpec{{PodSelector: map[string]string{"pod": "b"}}})
 	builder.AddEgress(ProtocolTCP, &p8082, nil, &p8081, nil, nil, nil, nil, nil, map[string]string{"pod": "c"}, map[string]string{"ns": namespaces["x"]},
-		nil, nil, nil, crdv1alpha1.RuleActionDrop, "anp-port-range")
+		nil, nil, nil, crdv1alpha1.RuleActionDrop, "", "anp-port-range")
 
 	anp := builder.Get()
 	log.Debugf("creating ANP %v", anp.Name)
@@ -438,14 +483,14 @@ func testInvalidTierACNPRefDelete(t *testing.T) {
 
 func testInvalidTierANPRefDelete(t *testing.T) {
 	invalidErr := fmt.Errorf("tier deleted with referenced ANPs")
-	tr, err := k8sUtils.CreateNewTier("tier-anp", 10)
+	tr, err := k8sUtils.CreateNewTier("tier-anp-ref", 11)
 	if err != nil {
 		failOnError(fmt.Errorf("create Tier failed for tier tier-anp: %v", err), t)
 	}
 	builder := &AntreaNetworkPolicySpecBuilder{}
 	builder = builder.SetName(namespaces["x"], "anp-for-tier").
 		SetAppliedToGroup([]ANPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}}}).
-		SetTier("tier-anp").
+		SetTier("tier-anp-ref").
 		SetPriority(13.0)
 	anp := builder.Get()
 	log.Debugf("creating ANP %v", anp.Name)
@@ -1808,8 +1853,8 @@ func testANPPortRange(t *testing.T) {
 	builder = builder.SetName(namespaces["y"], "anp-deny-yb-to-xc-egress-port-range").
 		SetPriority(1.0).
 		SetAppliedToGroup([]ANPAppliedToSpec{{PodSelector: map[string]string{"pod": "b"}}})
-	builder.AddEgress(ProtocolTCP, &p8080, nil, &p8082, nil, nil, nil, nil, nil, map[string]string{"pod": "c"}, map[string]string{"ns": namespaces["x"]},
-		nil, nil, nil, crdv1alpha1.RuleActionDrop, "anp-port-range")
+	builder.AddEgress(ProtocolTCP, &p8080, nil, &p8085, nil, nil, nil, nil, nil, map[string]string{"pod": "c"}, map[string]string{"ns": namespaces["x"]},
+		nil, nil, nil, crdv1alpha1.RuleActionDrop, "", "anp-port-range")
 
 	reachability := NewReachability(allPods, Connected)
 	reachability.Expect(Pod(namespaces["y"]+"/b"), Pod(namespaces["x"]+"/c"), Dropped)
@@ -1839,7 +1884,7 @@ func testANPBasic(t *testing.T) {
 		SetPriority(1.0).
 		SetAppliedToGroup([]ANPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}}})
 	builder.AddIngress(ProtocolTCP, &p80, nil, nil, nil, nil, nil, nil, nil, map[string]string{"pod": "b"}, map[string]string{"ns": namespaces["x"]},
-		nil, nil, nil, crdv1alpha1.RuleActionDrop, "")
+		nil, nil, nil, crdv1alpha1.RuleActionDrop, "", "")
 
 	reachability := NewReachability(allPods, Connected)
 	reachability.Expect(Pod(namespaces["x"]+"/b"), Pod(namespaces["y"]+"/a"), Dropped)
@@ -1890,12 +1935,12 @@ func testANPMultipleAppliedTo(t *testing.T, data *TestData, singleRule bool) {
 	if singleRule {
 		builder.SetAppliedToGroup([]ANPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}}, {PodSelector: map[string]string{tempLabel: ""}}})
 		builder.AddIngress(ProtocolTCP, &p80, nil, nil, nil, nil, nil, nil, nil, map[string]string{"pod": "b"}, map[string]string{"ns": namespaces["x"]},
-			nil, nil, nil, crdv1alpha1.RuleActionDrop, "")
+			nil, nil, nil, crdv1alpha1.RuleActionDrop, "", "")
 	} else {
 		builder.AddIngress(ProtocolTCP, &p80, nil, nil, nil, nil, nil, nil, nil, map[string]string{"pod": "b"}, map[string]string{"ns": namespaces["x"]},
-			nil, nil, []ANPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}}}, crdv1alpha1.RuleActionDrop, "")
+			nil, nil, []ANPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}}}, crdv1alpha1.RuleActionDrop, "", "")
 		builder.AddIngress(ProtocolTCP, &p80, nil, nil, nil, nil, nil, nil, nil, map[string]string{"pod": "b"}, map[string]string{"ns": namespaces["x"]},
-			nil, nil, []ANPAppliedToSpec{{PodSelector: map[string]string{tempLabel: ""}}}, crdv1alpha1.RuleActionDrop, "")
+			nil, nil, []ANPAppliedToSpec{{PodSelector: map[string]string{tempLabel: ""}}}, crdv1alpha1.RuleActionDrop, "", "")
 	}
 
 	reachability := NewReachability(allPods, Connected)
@@ -2134,9 +2179,9 @@ func testAppliedToPerRule(t *testing.T) {
 	anpATGrp1 := ANPAppliedToSpec{PodSelector: map[string]string{"pod": "a"}, PodSelectorMatchExp: nil}
 	anpATGrp2 := ANPAppliedToSpec{PodSelector: map[string]string{"pod": "b"}, PodSelectorMatchExp: nil}
 	builder.AddIngress(ProtocolTCP, &p80, nil, nil, nil, nil, nil, nil, nil, map[string]string{"pod": "b"}, map[string]string{"ns": namespaces["x"]},
-		nil, nil, []ANPAppliedToSpec{anpATGrp1}, crdv1alpha1.RuleActionDrop, "")
+		nil, nil, []ANPAppliedToSpec{anpATGrp1}, crdv1alpha1.RuleActionDrop, "", "")
 	builder.AddIngress(ProtocolTCP, &p80, nil, nil, nil, nil, nil, nil, nil, map[string]string{"pod": "b"}, map[string]string{"ns": namespaces["z"]},
-		nil, nil, []ANPAppliedToSpec{anpATGrp2}, crdv1alpha1.RuleActionDrop, "")
+		nil, nil, []ANPAppliedToSpec{anpATGrp2}, crdv1alpha1.RuleActionDrop, "", "")
 
 	reachability := NewReachability(allPods, Connected)
 	reachability.Expect(Pod(namespaces["x"]+"/b"), Pod(namespaces["y"]+"/a"), Dropped)
@@ -3567,6 +3612,8 @@ func TestAntreaPolicy(t *testing.T) {
 		t.Run("Case=ANPTierDoesNotExistDenied", func(t *testing.T) { testInvalidANPTierDoesNotExist(t) })
 		t.Run("Case=ANPPortRangePortUnsetDenied", func(t *testing.T) { testInvalidANPPortRangePortUnset(t) })
 		t.Run("Case=ANPPortRangePortEndPortSmallDenied", func(t *testing.T) { testInvalidANPPortRangeEndPortSmall(t) })
+		t.Run("Case=ANPIngressPeerGroupSetWithIPBlock", func(t *testing.T) { testInvalidANPIngressPeerGroupSetWithIPBlock(t) })
+		t.Run("Case=ANPIngressPeerGroupSetWithPodSelector", func(t *testing.T) { testInvalidANPIngressPeerGroupSetWithPodSelector(t) })
 		t.Run("Case=ACNPInvalidPodSelectorNsSelectorMatchExpressions", func(t *testing.T) { testInvalidACNPPodSelectorNsSelectorMatchExpressions(t, data) })
 	})
 
@@ -3683,7 +3730,7 @@ func TestAntreaPolicyStatus(t *testing.T) {
 		SetPriority(1.0).
 		SetAppliedToGroup([]ANPAppliedToSpec{{PodSelector: map[string]string{"app": "nginx"}}})
 	anpBuilder.AddIngress(ProtocolTCP, &p80, nil, nil, nil, nil, nil, nil, nil, map[string]string{"pod": "b"}, map[string]string{"ns": namespaces["x"]},
-		nil, nil, nil, crdv1alpha1.RuleActionAllow, "")
+		nil, nil, nil, crdv1alpha1.RuleActionAllow, "", "")
 	anp := anpBuilder.Get()
 	log.Debugf("creating ANP %v", anp.Name)
 	_, err = data.crdClient.CrdV1alpha1().NetworkPolicies(anp.Namespace).Create(context.TODO(), anp, metav1.CreateOptions{})
@@ -3731,9 +3778,9 @@ func TestAntreaPolicyStatusWithAppliedToPerRule(t *testing.T) {
 	anpBuilder = anpBuilder.SetName(data.testNamespace, "anp-applied-to-per-rule").
 		SetPriority(1.0)
 	anpBuilder.AddIngress(ProtocolTCP, &p80, nil, nil, nil, nil, nil, nil, nil, map[string]string{"pod": "b"}, map[string]string{"ns": namespaces["x"]},
-		nil, nil, []ANPAppliedToSpec{{PodSelector: map[string]string{"antrea-e2e": server0Name}}}, crdv1alpha1.RuleActionAllow, "")
+		nil, nil, []ANPAppliedToSpec{{PodSelector: map[string]string{"antrea-e2e": server0Name}}}, crdv1alpha1.RuleActionAllow, "", "")
 	anpBuilder.AddIngress(ProtocolTCP, &p80, nil, nil, nil, nil, nil, nil, nil, map[string]string{"pod": "b"}, map[string]string{"ns": namespaces["x"]},
-		nil, nil, []ANPAppliedToSpec{{PodSelector: map[string]string{"antrea-e2e": server1Name}}}, crdv1alpha1.RuleActionAllow, "")
+		nil, nil, []ANPAppliedToSpec{{PodSelector: map[string]string{"antrea-e2e": server1Name}}}, crdv1alpha1.RuleActionAllow, "", "")
 	anp := anpBuilder.Get()
 	log.Debugf("creating ANP %v", anp.Name)
 	anp, err = data.crdClient.CrdV1alpha1().NetworkPolicies(anp.Namespace).Create(context.TODO(), anp, metav1.CreateOptions{})

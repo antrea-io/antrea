@@ -81,8 +81,12 @@ const (
 	PriorityIndex = "priority"
 	// ClusterGroupIndex is used to index ClusterNetworkPolicies by ClusterGroup names.
 	ClusterGroupIndex = "clustergroup"
+	// GroupIndex is used to index Antrea NetworkPolicies by Group names.
+	GroupIndex = "group"
+
 	// EnableNPLoggingAnnotationKey can be added to Namespace to enable logging K8s NP.
 	EnableNPLoggingAnnotationKey = "networkpolicy.antrea.io/enable-logging"
+
 
 	appliedToGroupType grouping.GroupType = "appliedToGroup"
 	addressGroupType   grouping.GroupType = "addressGroup"
@@ -182,6 +186,14 @@ type NetworkPolicyController struct {
 	nodeLister corelisters.NodeLister
 	// nodeListerSynced is a function which returns true if the Node shared informer has been synced at least once.
 	nodeListerSynced cache.InformerSynced
+
+	grpInformer crdv1a3informers.GroupInformer
+	// grpLister is able to list/get Groups and is populated by the shared informer passed to
+	// NewGroupController.
+	grpLister crdv1a3listers.GroupLister
+	// grpListerSynced is a function which returns true if the Group shared informer has been synced at least
+	// once.
+	grpListerSynced cache.InformerSynced
 
 	// addressGroupStore is the storage where the populated Address Groups are stored.
 	addressGroupStore storage.Interface
@@ -290,6 +302,45 @@ var anpIndexers = cache.Indexers{
 		}
 		return []string{anp.Spec.Tier}, nil
 	},
+	GroupIndex: func(obj interface{}) ([]string, error) {
+		anp, ok := obj.(*secv1alpha1.NetworkPolicy)
+		if !ok {
+			return []string{}, nil
+		}
+		groupNames := sets.String{}
+		for _, appTo := range anp.Spec.AppliedTo {
+			if appTo.Group != "" {
+				groupNames.Insert(appTo.Group)
+			}
+		}
+		if len(anp.Spec.Ingress) == 0 && len(anp.Spec.Egress) == 0 {
+			return groupNames.List(), nil
+		}
+		appendGroups := func(rule secv1alpha1.Rule) {
+			for _, peer := range rule.To {
+				if peer.Group != "" {
+					groupNames.Insert(peer.Group)
+				}
+			}
+			for _, peer := range rule.From {
+				if peer.Group != "" {
+					groupNames.Insert(peer.Group)
+				}
+			}
+			for _, appTo := range rule.AppliedTo {
+				if appTo.Group != "" {
+					groupNames.Insert(appTo.Group)
+				}
+			}
+		}
+		for _, rule := range anp.Spec.Egress {
+			appendGroups(rule)
+		}
+		for _, rule := range anp.Spec.Ingress {
+			appendGroups(rule)
+		}
+		return groupNames.List(), nil
+	},
 }
 
 // NewNetworkPolicyController returns a new *NetworkPolicyController.
@@ -304,6 +355,7 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 	anpInformer secinformers.NetworkPolicyInformer,
 	tierInformer secinformers.TierInformer,
 	cgInformer crdv1a3informers.ClusterGroupInformer,
+	grpInformer crdv1a3informers.GroupInformer,
 	addressGroupStore storage.Interface,
 	appliedToGroupStore storage.Interface,
 	internalNetworkPolicyStore storage.Interface,
@@ -360,6 +412,9 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 		n.cgInformer = cgInformer
 		n.cgLister = cgInformer.Lister()
 		n.cgListerSynced = cgInformer.Informer().HasSynced
+		n.grpInformer = grpInformer
+		n.grpLister = grpInformer.Lister()
+		n.grpListerSynced = grpInformer.Informer().HasSynced
 		// Add handlers for Namespace events.
 		n.namespaceInformer.Informer().AddEventHandlerWithResyncPeriod(
 			cache.ResourceEventHandlerFuncs{
@@ -411,6 +466,15 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 				AddFunc:    n.addClusterGroup,
 				UpdateFunc: n.updateClusterGroup,
 				DeleteFunc: n.deleteClusterGroup,
+			},
+			resyncPeriod,
+		)
+		// Add event handlers for Group notification.
+		grpInformer.Informer().AddEventHandlerWithResyncPeriod(
+			cache.ResourceEventHandlerFuncs{
+				AddFunc:    n.addGroup,
+				UpdateFunc: n.updateGroup,
+				DeleteFunc: n.deleteGroup,
 			},
 			resyncPeriod,
 		)
@@ -1123,7 +1187,7 @@ func (n *NetworkPolicyController) getClusterGroupMembers(group *antreatypes.Grou
 	if len(group.IPBlocks) > 0 {
 		return nil, group.IPBlocks
 	} else if len(group.ChildGroups) == 0 {
-		return n.getMemberSetForGroupType(clusterGroupType, group.Name), nil
+		return n.getMemberSetForGroupType(clusterGroupType, group.SourceReference.ToGroupName()), nil
 	}
 	var ipBlocks []controlplane.IPBlock
 	groupMemberSet := controlplane.GroupMemberSet{}
@@ -1353,13 +1417,15 @@ func (n *NetworkPolicyController) getAppliedToWorkloads(g *antreatypes.AppliedTo
 // For ClusterGroup that has childGroups, the workloads are computed as the union of all its childGroup's workloads.
 func (n *NetworkPolicyController) getClusterGroupWorkloads(group *antreatypes.Group) ([]*v1.Pod, []*v1alpha2.ExternalEntity) {
 	if len(group.ChildGroups) == 0 {
-		return n.groupingInterface.GetEntities(clusterGroupType, group.Name)
+		return n.groupingInterface.GetEntities(clusterGroupType, group.SourceReference.ToGroupName())
 	}
 	podNameSet, eeNameSet := sets.String{}, sets.String{}
 	var pods []*v1.Pod
 	var ees []*v1alpha2.ExternalEntity
 	for _, childName := range group.ChildGroups {
-		childPods, childEEs := n.groupingInterface.GetEntities(clusterGroupType, childName)
+		// childNameString will either be name of the child ClusterGroup or Namespaced name of the child Group.
+		childNameString := k8s.NamespacedName(group.SourceReference.Namespace, childName)
+		childPods, childEEs := n.groupingInterface.GetEntities(clusterGroupType, childNameString)
 		for _, pod := range childPods {
 			podString := k8s.NamespacedName(pod.Namespace, pod.Name)
 			if !podNameSet.Has(podString) {
@@ -1483,7 +1549,11 @@ func internalNetworkPolicyKeyFunc(obj metav1.Object) string {
 }
 
 // internalGroupKeyFunc knows how to generate the key for an internal Group based on the object metadata
-// of the corresponding ClusterGroup resource. Currently the Name of the ClusterGroup is used to ensure uniqueness.
+// of the corresponding Group and ClusterGroup resource. Currently the Name of the ClusterGroup is used to ensure
+// uniqueness. Similarly, the Namespaced Name of the Group is used to ensure uniqueness for the Group resource.
 func internalGroupKeyFunc(obj metav1.Object) string {
+	if len(obj.GetNamespace()) > 0 {
+		return obj.GetNamespace() + "/" + obj.GetName()
+	}
 	return obj.GetName()
 }

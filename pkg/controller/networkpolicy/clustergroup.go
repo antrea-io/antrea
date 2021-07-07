@@ -118,8 +118,8 @@ func (c *NetworkPolicyController) deleteClusterGroup(oldObj interface{}) {
 
 func (c *NetworkPolicyController) processClusterGroup(cg *crdv1alpha3.ClusterGroup) *antreatypes.Group {
 	internalGroup := antreatypes.Group{
-		Name: cg.Name,
-		UID:  cg.UID,
+		SourceReference: getClusterGroupSourceRef(cg),
+		UID:             cg.UID,
 	}
 	if len(cg.Spec.ChildGroups) > 0 {
 		for _, childCGName := range cg.Spec.ChildGroups {
@@ -197,29 +197,19 @@ func (c *NetworkPolicyController) processNextInternalGroupWorkItem() bool {
 	return true
 }
 
-func (c *NetworkPolicyController) syncInternalGroup(key string) error {
-	defer c.triggerCNPUpdates(key)
-	defer c.triggerParentGroupSync(key)
-	// Retrieve the internal Group corresponding to this key.
-	grpObj, found, _ := c.internalGroupStore.Get(key)
-	if !found {
-		klog.V(2).Infof("Internal group %s not found.", key)
-		c.groupingInterface.DeleteGroup(clusterGroupType, key)
-		return nil
-	}
-	grp := grpObj.(*antreatypes.Group)
+func (c *NetworkPolicyController) syncInternalClusterGroup(grp *antreatypes.Group) error {
 	originalMembersComputedStatus := grp.MembersComputed
 	// Retrieve the ClusterGroup corresponding to this key.
-	cg, err := c.cgLister.Get(grp.Name)
+	cg, err := c.cgLister.Get(grp.SourceReference.ToGroupName())
 	if err != nil {
-		klog.Infof("Didn't find the ClusterGroup %s, skip processing of internal group", grp.Name)
+		klog.Infof("Didn't find %s, skip processing of internal group", grp.SourceReference.ToTypedString())
 		return nil
 	}
 	selectorUpdated := c.processServiceReference(grp)
 	if grp.Selector != nil {
-		c.groupingInterface.AddGroup(clusterGroupType, grp.Name, grp.Selector)
+		c.groupingInterface.AddGroup(clusterGroupType, grp.SourceReference.ToGroupName(), grp.Selector)
 	} else {
-		c.groupingInterface.DeleteGroup(clusterGroupType, grp.Name)
+		c.groupingInterface.DeleteGroup(clusterGroupType, grp.SourceReference.ToGroupName())
 	}
 
 	membersComputed, membersComputedStatus := true, v1.ConditionFalse
@@ -238,8 +228,8 @@ func (c *NetworkPolicyController) syncInternalGroup(key string) error {
 		}
 	}
 	if membersComputed {
-		klog.V(4).Infof("Updating GroupMembersComputed Status for group %s", cg.Name)
-		err = c.updateGroupStatus(cg, v1.ConditionTrue)
+		klog.V(4).Infof("Updating GroupMembersComputed Status for ClusterGroup %s", cg.Name)
+		err = c.updateClusterGroupStatus(cg, v1.ConditionTrue)
 		if err != nil {
 			klog.Errorf("Failed to update ClusterGroup %s GroupMembersComputed condition to %s: %v", cg.Name, v1.ConditionTrue, err)
 		} else {
@@ -250,17 +240,25 @@ func (c *NetworkPolicyController) syncInternalGroup(key string) error {
 		// Update the internal Group object in the store with the new selector and status.
 		updatedGrp := &antreatypes.Group{
 			UID:              grp.UID,
-			Name:             grp.Name,
+			SourceReference:  grp.SourceReference,
 			MembersComputed:  membersComputedStatus,
 			Selector:         grp.Selector,
 			IPBlocks:         grp.IPBlocks,
 			ServiceReference: grp.ServiceReference,
 			ChildGroups:      grp.ChildGroups,
 		}
-		klog.V(2).Infof("Updating existing internal Group %s", key)
+		klog.V(2).Infof("Updating existing internal Group %s", grp.SourceReference.ToGroupName())
 		c.internalGroupStore.Update(updatedGrp)
 	}
 	return err
+}
+
+func getClusterGroupSourceRef(cg *crdv1alpha3.ClusterGroup) *controlplane.GroupReference {
+	return &controlplane.GroupReference{
+		Name:      cg.GetName(),
+		Namespace: cg.GetNamespace(),
+		UID:       cg.GetUID(),
+	}
 }
 
 func (c *NetworkPolicyController) triggerParentGroupSync(grp string) {
@@ -273,7 +271,7 @@ func (c *NetworkPolicyController) triggerParentGroupSync(grp string) {
 	}
 	for _, p := range parentGroupObjs {
 		parentGrp := p.(*antreatypes.Group)
-		c.enqueueInternalGroup(parentGrp.Name)
+		c.enqueueInternalGroup(parentGrp.SourceReference.ToGroupName())
 	}
 }
 
@@ -291,13 +289,13 @@ func (c *NetworkPolicyController) triggerCNPUpdates(cg string) {
 	}
 }
 
-// updateGroupStatus updates the Status subresource for a ClusterGroup.
-func (c *NetworkPolicyController) updateGroupStatus(cg *crdv1alpha3.ClusterGroup, cStatus v1.ConditionStatus) error {
+// updateClusterGroupStatus updates the Status subresource for a ClusterGroup.
+func (c *NetworkPolicyController) updateClusterGroupStatus(cg *crdv1alpha3.ClusterGroup, cStatus v1.ConditionStatus) error {
 	condStatus := crdv1alpha3.GroupCondition{
 		Status: cStatus,
 		Type:   crdv1alpha3.GroupMembersComputed,
 	}
-	if groupMembersComputedConditionEqual(cg.Status.Conditions, condStatus) {
+	if clusterGroupMembersComputedConditionEqual(cg.Status.Conditions, condStatus) {
 		// There is no change in conditions.
 		return nil
 	}
@@ -312,9 +310,9 @@ func (c *NetworkPolicyController) updateGroupStatus(cg *crdv1alpha3.ClusterGroup
 	return err
 }
 
-// groupMembersComputedConditionEqual checks whether the condition status for GroupMembersComputed condition
+// clusterGroupMembersComputedConditionEqual checks whether the condition status for GroupMembersComputed condition
 // is same. Returns true if equal, otherwise returns false. It disregards the lastTransitionTime field.
-func groupMembersComputedConditionEqual(conds []crdv1alpha3.GroupCondition, condition crdv1alpha3.GroupCondition) bool {
+func clusterGroupMembersComputedConditionEqual(conds []crdv1alpha3.GroupCondition, condition crdv1alpha3.GroupCondition) bool {
 	for _, c := range conds {
 		if c.Type == crdv1alpha3.GroupMembersComputed {
 			if c.Status == condition.Status {
@@ -336,7 +334,7 @@ func (c *NetworkPolicyController) processServiceReference(group *antreatypes.Gro
 	originalSelectorName := getNormalizedNameForSelector(group.Selector)
 	svc, err := c.serviceLister.Services(svcRef.Namespace).Get(svcRef.Name)
 	if err != nil {
-		klog.V(2).Infof("Error getting Service object %s/%s: %v, setting empty selector for Group %s", svcRef.Namespace, svcRef.Name, err, group.Name)
+		klog.V(2).Infof("Error getting Service object %s/%s: %v, setting empty selector for %s", svcRef.Namespace, svcRef.Name, err, group.SourceReference.ToTypedString())
 		group.Selector = nil
 		return originalSelectorName == getNormalizedNameForSelector(nil)
 	}
@@ -382,8 +380,8 @@ func (c *NetworkPolicyController) GetAssociatedGroups(name, namespace string) ([
 	// Remove duplicates in the groupObj slice.
 	groupKeys, j := make(map[string]bool), 0
 	for _, g := range groupObjs {
-		if _, exists := groupKeys[g.Name]; !exists {
-			groupKeys[g.Name] = true
+		if _, exists := groupKeys[g.SourceReference.ToGroupName()]; !exists {
+			groupKeys[g.SourceReference.ToGroupName()] = true
 			groupObjs[j] = g
 			j++
 		}
@@ -401,9 +399,9 @@ func (c *NetworkPolicyController) getAssociatedGroupsByName(grpName string) []an
 	}
 	grp := groupObj.(*antreatypes.Group)
 	groups = append(groups, *grp)
-	parentGroupObjs, err := c.internalGroupStore.GetByIndex(store.ChildGroupIndex, grp.Name)
+	parentGroupObjs, err := c.internalGroupStore.GetByIndex(store.ChildGroupIndex, grp.SourceReference.ToGroupName())
 	if err != nil {
-		klog.Errorf("Error retrieving parents of ClusterGroup %s: %v", grp.Name, err)
+		klog.Errorf("Error retrieving parents of %s: %v", grp.SourceReference.ToTypedString(), err)
 	}
 	for _, p := range parentGroupObjs {
 		parentGrp := p.(*antreatypes.Group)

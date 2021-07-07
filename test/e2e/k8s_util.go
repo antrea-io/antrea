@@ -688,6 +688,26 @@ func (data *TestData) GetV1Alpha2CG(cgName string) (*crdv1alpha2.ClusterGroup, e
 	return data.crdClient.CrdV1alpha2().ClusterGroups().Get(context.TODO(), cgName, metav1.GetOptions{})
 }
 
+// CreateOrUpdateV1Alpha3Group is a convenience function for idempotent setup of crd/v1alpha3 Groups
+func (k *KubernetesUtils) CreateOrUpdateV1Alpha3Group(g *crdv1alpha3.Group) (*crdv1alpha3.Group, error) {
+	log.Infof("Creating/updating Group %s/%s", g.Namespace, g.Name)
+	gReturned, err := k.crdClient.CrdV1alpha3().Groups(g.Namespace).Get(context.TODO(), g.Name, metav1.GetOptions{})
+	if err != nil {
+		gr, err := k.crdClient.CrdV1alpha3().Groups(g.Namespace).Create(context.TODO(), g, metav1.CreateOptions{})
+		if err != nil {
+			log.Infof("Unable to create group %s/%s: %v", g.Namespace, g.Name, err)
+			return nil, err
+		}
+		return gr, nil
+	} else if gReturned.Name != "" {
+		log.Debugf("Group %s/%s already exists, updating", g.Namespace, g.Name)
+		gReturned.Spec = g.Spec
+		gr, err := k.crdClient.CrdV1alpha3().Groups(g.Namespace).Update(context.TODO(), gReturned, metav1.UpdateOptions{})
+		return gr, err
+	}
+	return nil, fmt.Errorf("error occurred in creating/updating Group %s/%s", g.Namespace, g.Name)
+}
+
 func (data *TestData) GetV1Alpha3CG(cgName string) (*crdv1alpha3.ClusterGroup, error) {
 	return data.crdClient.CrdV1alpha3().ClusterGroups().Get(context.TODO(), cgName, metav1.GetOptions{})
 }
@@ -720,6 +740,53 @@ func (data *TestData) CreateCG(name string, pSelector, nSelector *metav1.LabelSe
 	return nil, fmt.Errorf("clustergroup with name %s already exists", name)
 }
 
+// GetCG is a convenience function for getting ClusterGroups
+func (k *KubernetesUtils) GetCG(name string) (*crdv1alpha2.ClusterGroup, error) {
+	res, err := k.crdClient.CrdV1alpha2().ClusterGroups().Get(context.TODO(), name, metav1.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+	return res, nil
+}
+
+// CreateGroup is a convenience function for creating an Antrea Group by namespace,  name and selector.
+func (k *KubernetesUtils) CreateGroup(namespace, name string, pSelector, nSelector *metav1.LabelSelector, ipBlocks []crdv1alpha1.IPBlock) (*crdv1alpha3.Group, error) {
+	log.Infof("Creating group %s/%s", namespace, name)
+	_, err := k.crdClient.CrdV1alpha3().Groups(namespace).Get(context.TODO(), name, metav1.GetOptions{})
+	if err != nil {
+		g := &crdv1alpha3.Group{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: namespace,
+				Name:      name,
+			},
+		}
+		if pSelector != nil {
+			g.Spec.PodSelector = pSelector
+		}
+		if nSelector != nil {
+			g.Spec.NamespaceSelector = nSelector
+		}
+		if len(ipBlocks) > 0 {
+			g.Spec.IPBlocks = ipBlocks
+		}
+		g, err = k.crdClient.CrdV1alpha3().Groups(namespace).Create(context.TODO(), g, metav1.CreateOptions{})
+		if err != nil {
+			log.Debugf("Unable to create group %s/%s: %s", namespace, name, err)
+		}
+		return g, err
+	}
+	return nil, fmt.Errorf("group with name %s/%s already exists", namespace, name)
+}
+
+// GetGroup is a convenience function for getting Groups
+func (k *KubernetesUtils) GetGroup(namespace, name string) (*crdv1alpha3.Group, error) {
+	res, err := k.crdClient.CrdV1alpha3().Groups(namespace).Get(context.TODO(), name, metav1.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+	return res, nil
+}
+
 // DeleteV1Alpha2CG is a convenience function for deleting crd/v1alpha2 ClusterGroup by name.
 func (data *TestData) DeleteV1Alpha2CG(name string) error {
 	log.Infof("Deleting ClusterGroup %s", name)
@@ -736,6 +803,16 @@ func (data *TestData) DeleteV1Alpha3CG(name string) error {
 	err := data.crdClient.CrdV1alpha3().ClusterGroups().Delete(context.TODO(), name, metav1.DeleteOptions{})
 	if err != nil {
 		return errors.Wrapf(err, "unable to delete ClusterGroup %s", name)
+	}
+	return nil
+}
+
+// DeleteV1Alpha3Group is a convenience function for deleting core/v1alpha3 Group by namespace and name.
+func (k *KubernetesUtils) DeleteV1Alpha3Group(namespace, name string) error {
+	log.Infof("deleting Group %s/%s", namespace, name)
+	err := k.crdClient.CrdV1alpha3().Groups(namespace).Delete(context.TODO(), name, metav1.DeleteOptions{})
+	if err != nil {
+		return errors.Wrapf(err, "unable to delete Group %s/%s", namespace, name)
 	}
 	return nil
 }
@@ -757,6 +834,20 @@ func (data *TestData) CleanCGs() error {
 	}
 	for _, cg := range l2.Items {
 		if err := data.DeleteV1Alpha3CG(cg.Name); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// CleanGroups is a convenience function for deleting all Groups in the namespace.
+func (k *KubernetesUtils) CleanGroups(namespace string) error {
+	l, err := k.crdClient.CrdV1alpha3().Groups(namespace).List(context.TODO(), metav1.ListOptions{})
+	if err != nil {
+		return errors.Wrapf(err, "unable to list Groups in v1alpha3")
+	}
+	for _, g := range l.Items {
+		if err := k.DeleteV1Alpha3Group(namespace, g.Name); err != nil {
 			return err
 		}
 	}

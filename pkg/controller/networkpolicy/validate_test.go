@@ -24,6 +24,7 @@ import (
 
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	crdv1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
+	crdv1alpha3 "antrea.io/antrea/pkg/apis/crd/v1alpha3"
 )
 
 func TestValidateAntreaPolicy(t *testing.T) {
@@ -1239,7 +1240,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 	}
 }
 
-func TestValidateClusterAntreaGroup(t *testing.T) {
+func TestValidateAntreaClusterGroup(t *testing.T) {
 	tests := []struct {
 		name           string
 		group          *crdv1alpha2.ClusterGroup
@@ -1272,6 +1273,46 @@ func TestValidateClusterAntreaGroup(t *testing.T) {
 				},
 			},
 			expectedReason: "Invalid label value: bar=: a valid label must be an empty string or consist of alphanumeric characters, '-', '_' or '.', and must start and end with an alphanumeric character (e.g. 'MyValue',  or 'my_value',  or '12345', regex used for validation is '(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?')",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, c := newController()
+			v := NewNetworkPolicyValidator(c.NetworkPolicyController)
+			actualReason, allowed := v.validateAntreaGroup(tt.group, nil, admv1.Create, authenticationv1.UserInfo{})
+			assert.Equal(t, tt.expectedReason, actualReason)
+			if tt.expectedReason == "" {
+				assert.True(t, allowed)
+			} else {
+				assert.False(t, allowed)
+			}
+		})
+	}
+}
+
+func TestValidateAntreaGroup(t *testing.T) {
+	tests := []struct {
+		name           string
+		group          *crdv1alpha3.Group
+		expectedReason string
+	}{
+		{
+			name: "anp-group-set-with-podselector-and-ipblock",
+			group: &crdv1alpha3.Group{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "anp-group-set-with-podselector-and-ipblock",
+					Namespace: "x",
+				},
+				Spec: crdv1alpha3.GroupSpec{
+					PodSelector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{"foo=": "bar"},
+					},
+					IPBlocks: []crdv1alpha1.IPBlock{
+						{CIDR: "10.0.0.10/32"},
+					},
+				},
+			},
+			expectedReason: "At most one of podSelector, externalEntitySelector, serviceReference, ipBlocks or childGroups can be set for a Group",
 		},
 	}
 	for _, tt := range tests {

@@ -63,7 +63,7 @@ func (r *REST) Get(ctx context.Context, name string, options *metav1.GetOptions)
 	items := make([]controlplane.GroupReference, 0, len(groups))
 	for i := range groups {
 		item := controlplane.GroupReference{
-			Name: groups[i].Name,
+			Name: groups[i].SourceReference.Name,
 			UID:  groups[i].UID,
 		}
 		items = append(items, item)

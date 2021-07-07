@@ -127,7 +127,7 @@ func (n *NetworkPolicyController) toAntreaPeerForCRD(peers []v1alpha1.NetworkPol
 			}
 			ipBlocks = append(ipBlocks, *ipBlock)
 		} else if peer.Group != "" {
-			normalizedUID, groupIPBlocks := n.processRefCG(peer.Group)
+			normalizedUID, groupIPBlocks := n.processRefGroupOrClusterGroup(peer.Group, np.GetNamespace())
 			if normalizedUID != "" {
 				addressGroups = append(addressGroups, normalizedUID)
 			}
@@ -179,11 +179,11 @@ func (n *NetworkPolicyController) svcRefToPeerForCRD(svcRefs []v1alpha1.Namespac
 	return &controlplane.NetworkPolicyPeer{ToServices: controlplaneSvcRefs}
 }
 
-// createAppliedToGroupForClusterGroupCRD creates an AppliedToGroup object corresponding to a
+// createAppliedToGroupForInternalGroup creates an AppliedToGroup object corresponding to an
 // internal Group. If the AppliedToGroup already exists, it returns the key
 // otherwise it copies the internal Group contents to an AppliedToGroup resource and returns
 // its key.
-func (n *NetworkPolicyController) createAppliedToGroupForClusterGroupCRD(intGrp *antreatypes.Group) string {
+func (n *NetworkPolicyController) createAppliedToGroupForInternalGroup(intGrp *antreatypes.Group) string {
 	key, err := store.GroupKeyFunc(intGrp)
 	if err != nil {
 		return ""
@@ -198,7 +198,7 @@ func (n *NetworkPolicyController) createAppliedToGroupForClusterGroupCRD(intGrp 
 		UID:  intGrp.UID,
 		Name: key,
 	}
-	klog.V(2).Infof("Creating new AppliedToGroup %v corresponding to ClusterGroup CRD %s", appliedToGroup.UID, intGrp.Name)
+	klog.V(2).Infof("Creating new AppliedToGroup %v corresponding to %s", appliedToGroup.UID, intGrp.SourceReference.ToTypedString())
 	n.appliedToGroupStore.Create(appliedToGroup)
 	n.enqueueAppliedToGroup(key)
 	return key
@@ -231,7 +231,7 @@ func (n *NetworkPolicyController) createAppliedToGroupForService(service *v1alph
 // ClusterGroup spec. If the AddressGroup already exists, it returns the key
 // otherwise it copies the ClusterGroup CRD contents to an AddressGroup resource and returns
 // its key. If the corresponding internal Group is not found return empty.
-func (n *NetworkPolicyController) createAddressGroupForClusterGroupCRD(intGrp *antreatypes.Group) string {
+func (n *NetworkPolicyController) createAddressGroupForInternalGroup(intGrp *antreatypes.Group) string {
 	key, err := store.GroupKeyFunc(intGrp)
 	if err != nil {
 		return ""
@@ -247,7 +247,7 @@ func (n *NetworkPolicyController) createAddressGroupForClusterGroupCRD(intGrp *a
 		Name: key,
 	}
 	n.addressGroupStore.Create(addressGroup)
-	klog.V(2).Infof("Created new AddressGroup %v corresponding to ClusterGroup CRD %s", addressGroup.UID, intGrp.Name)
+	klog.V(2).Infof("Created new AddressGroup %v corresponding to %s", addressGroup.UID, intGrp.SourceReference.ToTypedString())
 	return key
 }
 
@@ -283,4 +283,23 @@ func getNormalizedNameForSelector(sel *antreatypes.GroupSelector) string {
 		return sel.NormalizedName
 	}
 	return ""
+}
+
+func (n *NetworkPolicyController) syncInternalGroup(key string) error {
+	defer n.triggerANPUpdates(key)
+	defer n.triggerCNPUpdates(key)
+	defer n.triggerParentGroupSync(key)
+	// Retrieve the internal Group corresponding to this key.
+	grpObj, found, _ := n.internalGroupStore.Get(key)
+	if !found {
+		klog.V(2).Infof("Internal group %s not found.", key)
+		n.groupingInterface.DeleteGroup(clusterGroupType, key)
+		return nil
+	}
+	grp := grpObj.(*antreatypes.Group)
+	if grp.SourceReference.Namespace != "" {
+		// Sync the Group as a Namespaced Group.
+		return n.syncInternalNamespacedGroup(grp)
+	}
+	return n.syncInternalClusterGroup(grp)
 }

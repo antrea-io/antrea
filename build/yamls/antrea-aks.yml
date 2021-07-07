@@ -2992,6 +2992,136 @@ data:
       #   tls.key: <CA private key>
       selfSignedCA: true
 ---
+# Source: antrea/templates/crds/group.yaml
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: groups.crd.antrea.io
+spec:
+  group: crd.antrea.io
+  versions:
+    - name: v1alpha3
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                childGroups:
+                  type: array
+                  items:
+                    type: string
+                podSelector:
+                  type: object
+                  properties:
+                    matchExpressions:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          key:
+                            type: string
+                          operator:
+                            enum:
+                              - In
+                              - NotIn
+                              - Exists
+                              - DoesNotExist
+                            type: string
+                          values:
+                            type: array
+                            items:
+                              type: string
+                    matchLabels:
+                      x-kubernetes-preserve-unknown-fields: true
+                namespaceSelector:
+                  type: object
+                  properties:
+                    matchExpressions:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          key:
+                            type: string
+                          operator:
+                            enum:
+                              - In
+                              - NotIn
+                              - Exists
+                              - DoesNotExist
+                            type: string
+                          values:
+                            type: array
+                            items:
+                              type: string
+                    matchLabels:
+                      x-kubernetes-preserve-unknown-fields: true
+                externalEntitySelector:
+                  type: object
+                  properties:
+                    matchExpressions:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          key:
+                            type: string
+                          operator:
+                            enum:
+                              - In
+                              - NotIn
+                              - Exists
+                              - DoesNotExist
+                            type: string
+                          values:
+                            type: array
+                            items:
+                              type: string
+                    matchLabels:
+                      x-kubernetes-preserve-unknown-fields: true
+                ipBlocks:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      cidr:
+                        type: string
+                        format: cidr
+                serviceReference:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                    namespace:
+                      type: string
+            status:
+              type: object
+              properties:
+                conditions:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      type:
+                        type: string
+                      status:
+                        type: string
+                      lastTransitionTime:
+                        type: string
+      subresources:
+        status: {}
+  scope: Namespaced
+  names:
+    plural: groups
+    singular: group
+    kind: Group
+    shortNames:
+      - grp
+---
 # Source: antrea/templates/agent/clusterrole.yaml
 kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1
@@ -3511,6 +3641,7 @@ rules:
     resources:
       - externalentities
       - clustergroups
+      - groups
     verbs:
       - get
       - watch
@@ -3523,6 +3654,7 @@ rules:
       - crd.antrea.io
     resources:
       - clustergroups/status
+      - groups/status
     verbs:
       - update
   - apiGroups:
@@ -4232,6 +4364,21 @@ webhooks:
         resources: ["clustergroups"]
         scope: "Cluster"
     admissionReviewVersions: ["v1", "v1beta1"]
+    sideEffects: None
+    timeoutSeconds: 5
+  - name: "groupvalidator.antrea.io"
+    clientConfig:
+      service:
+        name: "antrea"
+        namespace: "kube-system"
+        path: "/validate/group"
+    rules:
+      - operations: [ "CREATE", "UPDATE" ]
+        apiGroups: [ "crd.antrea.io" ]
+        apiVersions: [ "v1alpha3" ]
+        resources: [ "groups" ]
+        scope: "Namespaced"
+    admissionReviewVersions: [ "v1", "v1beta1" ]
     sideEffects: None
     timeoutSeconds: 5
   - name: "externalippoolvalidator.antrea.io"
