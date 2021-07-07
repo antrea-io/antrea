@@ -158,10 +158,6 @@ func skipIfAntreaPolicyDisabled(tb testing.TB, data *TestData) {
 	skipIfFeatureDisabled(tb, data, features.AntreaPolicy, true, true)
 }
 
-func skipIfNetworkPolicyStatsDisabled(tb testing.TB, data *TestData) {
-	skipIfFeatureDisabled(tb, data, features.NetworkPolicyStats, true, true)
-}
-
 func applyDefaultDenyToAllNamespaces(k8s *KubernetesUtils, namespaces []string) error {
 	if err := k8s.CleanNetworkPolicies(namespaces); err != nil {
 		return err
