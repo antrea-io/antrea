@@ -8,8 +8,11 @@ footer {
         display: flex;
         align-items: center;
         justify-content: space-between;
+        border-bottom: 1px solid $lightgrey;
+        padding-bottom: 5px;
+        margin-bottom: 10px;
     }
-    .left-links {
+    .right-links {
         padding: 0px;
         li {
             img {
@@ -27,7 +30,7 @@ footer {
             display: none;
         }
     }
-    .right-links {
+    .left-links {
         p {
             margin: 0px;
         }
@@ -44,24 +47,29 @@ footer {
             vertical-align: middle;
         }
         img {
-            height: 45px;
+            height: 46px;
             width: auto;
+            margin-right: 20px;
         }
     }
     .bottom-links {
-        margin: 10px 0px 30px 0px;
-        float: right;
-        p {
+        width: 60%;
+        small {
             font-size: 12px;
+            vertical-align: middle;
+        }
+        p {
+            line-height: 16px;
         }
         a {
             font-size: 12px;
             font-family: $metropolis-light;
+            vertical-align: middle;
         }
         img {
-            max-width: 75px;
-            vertical-align: middle;
-            margin-left: 30px;
+            height: 30px;
+            width: auto;
+            margin-right: 20px;
         }
     }
     @include breakpoint(small) {
@@ -87,7 +95,7 @@ footer {
         }
         .bottom-links {
             margin: 10px 0px 20px 0px;
-            float: none;
+            width: 100%;
             img {
                 margin-left: 0px;
                 display: block;

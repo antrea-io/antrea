@@ -1,17 +1,22 @@
 <footer>
 	<div class="wrapper footer-links">
 		<div class="top-links">
-			<ul class="left-links">
+			<div class="left-links">
+				<a href="/"> <img src="/img/antrea-logo.svg" alt="Antrea logo" /></a>
+				<span class="copywrite">&copy; {{ now.Year }} The Antrea Contributors.</span>
+			</div>
+			<ul class="right-links">
 				<li><a href="{{ .Site.Params.twitter_url }}"><img src="/img/twitter.png" alt="Twitter logo" />Twitter</a></li>
 				<li><a href="{{ .Site.Params.github_url }}"><img src="/img/github.svg" alt="Github logo" />Github</a></li>
 				<li><a href="{{ .Site.Params.slack_url }}"><img src="/img/slack.png" alt="Slack logo" /><span class="desktop">#Slack</span><span class="mobile">Slack</span></a></li>
 			</ul>
-			<div class="right-links">
-				<a href="/"> <img src="/img/antrea-logo.svg" alt="Antrea logo" /></a>
-			</div>
 		</div>
 		<div class="bottom-links">
-			<p class="copywrite">&copy; {{ now.Year }} Antrea Authors. <a href="http://vmware.github.io/">A VMware-backed project. <img src="/img/vm-logo.svg" alt="VMware logo" /></a></p>
+			<a href="https://www.cncf.io/sandbox-projects/" target="_blank"><img src="/img/cncf-color-logo.svg" alt="Cloud Native Computing Foundation" /></a>
+			<small class="copright">We are a <a href="https://www.cncf.io/sandbox-projects/">Cloud Native Computing Foundation</a> sandbox project.</small>
+			<p>
+				<small class="copright">&copy; {{ now.Year }} The Linux Foundation. All Rights Reserved. The Linux Foundation has registered trademarks and uses trademarks. For a list of trademarks of the Linux Foundation, please see our <a href="https://www.linuxfoundation.org/trademark-usage" target="_blank">Trademarks Usage</a> page.</a></small>
+			</p>
 		</div>
 	</div>
 </footer>
