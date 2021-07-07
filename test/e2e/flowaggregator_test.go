@@ -119,6 +119,9 @@ const (
 	testIngressRuleName            = "test-ingress-rule-name"
 	testEgressRuleName             = "test-egress-rule-name"
 	iperfTimeSec                   = 12
+)
+
+var (
 	// Single iperf run results in two connections with separate ports (control connection and actual data connection).
 	// As 2s is the export active timeout of flow exporter and iperf traffic runs for 12s, we expect totally 12 records
 	// exporting to the flow aggregator at time 2s, 4s, 6s, 8s, 10s, and 12s after iperf traffic begins.
@@ -143,6 +146,21 @@ func TestFlowAggregator(t *testing.T) {
 	}
 	defer teardownTest(t, data)
 	defer teardownFlowAggregator(t, data)
+
+	if testOptions.providerName == "kind" {
+		// Currently, in Kind clusters, OVS userspace datapath does not support
+		// packet statistics in the conntrack entries. Because of that Flow Exporter
+		// at Antrea agent cannot consider flows to be active and keep sending active
+		// records. Currently, Flow Exporter sends two records for a iperf flow
+		// in kind cluster with a duration of 12s: 1. A new iperf connection gets
+		// idled out after exporter idle timeout, which is after 1s in the test.
+		// In this case, flow aggregator sends the record after 4.5s 2. When the
+		// connection dies and TCP state becomes TIME_WAIT, which is
+		// at 12s in the test. Here, Flow Aggregator sends the record at 15.5s.
+		// We will remove this workaround once OVS userspace datapath supports packet
+		// statistics in conntrack entries.
+		expectedNumDataRecords = 2
+	}
 
 	k8sUtils, err = NewKubernetesUtils(data)
 	if err != nil {
@@ -487,16 +505,15 @@ func checkRecordsForFlows(t *testing.T, data *TestData, srcIP string, dstIP stri
 	timeStartSec := timeStart.Unix()
 	var cmdStr string
 	if !isIPv6 {
-		cmdStr = fmt.Sprintf("iperf3 -c %s -t %d|grep sender|awk '{print $7,$8}'", dstIP, iperfTimeSec)
+		cmdStr = fmt.Sprintf("iperf3 -c %s -t %d", dstIP, iperfTimeSec)
 	} else {
-		cmdStr = fmt.Sprintf("iperf3 -6 -c %s -t %d|grep sender|awk '{print $7,$8}'", dstIP, iperfTimeSec)
+		cmdStr = fmt.Sprintf("iperf3 -6 -c %s -t %d", dstIP, iperfTimeSec)
 	}
 	stdout, _, err := data.runCommandFromPod(testNamespace, "perftest-a", "perftool", []string{"bash", "-c", cmdStr})
 	if err != nil {
 		t.Errorf("Error when running iperf3 client: %v", err)
 	}
-	bandwidth := strings.TrimSpace(stdout)
-	bwSlice := strings.Split(bandwidth, " ")
+	bwSlice, srcPort := getBandwidthAndSourcePort(stdout)
 	// bandwidth from iperf output
 	bandwidthInFloat, err := strconv.ParseFloat(bwSlice[0], 64)
 	require.NoErrorf(t, err, "Error when converting iperf bandwidth %s to float64 type", bwSlice[0])
@@ -509,13 +526,15 @@ func checkRecordsForFlows(t *testing.T, data *TestData, srcIP string, dstIP stri
 		t.Fatalf("Unit of the traffic bandwidth reported by iperf should either be Mbits or Gbits, failing the test.")
 	}
 
-	collectorOutput := getCollectorOutput(t, srcIP, dstIP, timeStart, true)
+	collectorOutput, recordSlices := getCollectorOutput(t, srcIP, dstIP, srcPort, timeStart, true)
 	// Iterate over recordSlices and build some results to test with expected results
-	recordSlices := getRecordsFromOutput(collectorOutput)
 	dataRecordsCount := 0
 	var octetTotalCount uint64
 	for _, record := range recordSlices {
-		if strings.Contains(record, srcIP) && strings.Contains(record, dstIP) {
+		// Check the source port along with source and destination IPs as there
+		// are flow records for control flows during the iperf  with same IPs
+		// and destination port.
+		if strings.Contains(record, srcIP) && strings.Contains(record, dstIP) && strings.Contains(record, srcPort) {
 			dataRecordsCount = dataRecordsCount + 1
 			// Check if record has both Pod name of source and destination Pod.
 			if isIntraNode {
@@ -581,7 +600,7 @@ func checkRecordsForFlows(t *testing.T, data *TestData, srcIP string, dstIP stri
 	}
 	// Checking only data records as data records cannot be decoded without template
 	// record.
-	assert.GreaterOrEqualf(t, dataRecordsCount, expectedNumDataRecords, "IPFIX collector should receive expected number of flow records. Considered records: ", len(recordSlices))
+	assert.GreaterOrEqualf(t, dataRecordsCount, expectedNumDataRecords, "IPFIX collector should receive expected number of flow records. Considered records: %s \n Collector output: %s", recordSlices, collectorOutput)
 }
 
 func checkRecordsForToExternalFlows(t *testing.T, data *TestData, srcNodeName string, srcPodName string, srcIP string, dstIP string, dstPort int32, isIPv6 bool) {
@@ -595,8 +614,7 @@ func checkRecordsForToExternalFlows(t *testing.T, data *TestData, srcNodeName st
 	stdout, stderr, err := data.runCommandFromPod(testNamespace, srcPodName, busyboxContainerName, strings.Fields(cmd))
 	require.NoErrorf(t, err, "Error when running wget command, stdout: %s, stderr: %s", stdout, stderr)
 
-	collectorOutput := getCollectorOutput(t, srcIP, dstIP, timeStart, false)
-	recordSlices := getRecordsFromOutput(collectorOutput)
+	_, recordSlices := getCollectorOutput(t, srcIP, dstIP, "", timeStart, false)
 	for _, record := range recordSlices {
 		if strings.Contains(record, srcIP) && strings.Contains(record, dstIP) {
 			checkPodAndNodeData(t, record, srcPodName, srcNodeName, "", "")
@@ -625,9 +643,8 @@ func checkRecordsForDenyFlows(t *testing.T, data *TestData, testFlow1, testFlow2
 	_, _, err = data.runCommandFromPod(testNamespace, testFlow2.srcPodName, "", []string{"timeout", "2", "bash", "-c", cmdStr2})
 	assert.Error(t, err)
 
-	collectorOutput := getCollectorOutput(t, testFlow1.srcIP, testFlow2.srcIP, timeStart, false)
+	_, recordSlices := getCollectorOutput(t, testFlow1.srcIP, testFlow2.srcIP, "", timeStart, false)
 	// Iterate over recordSlices and build some results to test with expected results
-	recordSlices := getRecordsFromOutput(collectorOutput)
 	for _, record := range recordSlices {
 		var srcPodName, dstPodName string
 		if strings.Contains(record, testFlow1.srcIP) && strings.Contains(record, testFlow1.dstIP) {
@@ -730,22 +747,27 @@ func getUnit64FieldFromRecord(t *testing.T, record string, field string) uint64 
 	return 0
 }
 
-func getCollectorOutput(t *testing.T, srcIP string, dstIP string, timeStart time.Time, checkAllRecords bool) string {
+// getCollectorOutput polls the output of go-ipfix collector and checks if we have
+// received all the expected records for a given flow with source IP, destination IP
+// and source port. We send source port to ignore the control flows during the
+// iperf test.
+func getCollectorOutput(t *testing.T, srcIP, dstIP, srcPort string, timeStart time.Time, checkAllRecords bool) (string, []string) {
 	var collectorOutput string
+	var recordSlices []string
 	err := wait.PollImmediate(500*time.Millisecond, aggregatorInactiveFlowRecordTimeout, func() (bool, error) {
 		var rc int
 		var err error
 		// `pod-running-timeout` option is added to cover scenarios where ipfix flow-collector has crashed after being deployed
-		rc, collectorOutput, _, err = provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl logs --since=%v --pod-running-timeout=%v ipfix-collector -n antrea-test", time.Since(timeStart).String(), aggregatorInactiveFlowRecordTimeout.String()))
+		rc, collectorOutput, _, err = provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl logs --pod-running-timeout=%v ipfix-collector -n antrea-test", aggregatorInactiveFlowRecordTimeout.String()))
 		if err != nil || rc != 0 {
 			return false, err
 		}
 		// Checking that all the data records which correspond to the iperf flow are received
+		recordSlices = getRecordsFromOutput(collectorOutput)
 		if checkAllRecords {
-			recordSlices := getRecordsFromOutput(collectorOutput)
 			for _, record := range recordSlices {
 				exportTime := int64(getUnit64FieldFromRecord(t, record, "flowEndSeconds"))
-				if strings.Contains(record, srcIP) && strings.Contains(record, dstIP) {
+				if strings.Contains(record, srcIP) && strings.Contains(record, dstIP) && strings.Contains(record, srcPort) {
 					if exportTime >= timeStart.Unix()+iperfTimeSec {
 						return true, nil
 					}
@@ -753,11 +775,11 @@ func getCollectorOutput(t *testing.T, srcIP string, dstIP string, timeStart time
 			}
 			return false, nil
 		} else {
-			return strings.Contains(collectorOutput, srcIP) && strings.Contains(collectorOutput, dstIP), nil
+			return strings.Contains(collectorOutput, srcIP) && strings.Contains(collectorOutput, dstIP) && strings.Contains(collectorOutput, srcPort), nil
 		}
 	})
-	require.NoErrorf(t, err, "IPFIX collector did not receive the expected records and timed out with error")
-	return collectorOutput
+	require.NoErrorf(t, err, "IPFIX collector did not receive the expected records in collector output: %v time start: %s iperf source port: %s", collectorOutput, timeStart.String(), srcPort)
+	return collectorOutput, recordSlices
 }
 
 func getRecordsFromOutput(output string) []string {
@@ -765,10 +787,6 @@ func getRecordsFromOutput(output string) []string {
 	output = re.ReplaceAllString(output, "")
 	output = strings.TrimSpace(output)
 	recordSlices := strings.Split(output, "IPFIX-HDR:")
-	// Delete the first element from recordSlices
-	recordSlices[0] = recordSlices[len(recordSlices)-1]
-	recordSlices[len(recordSlices)-1] = ""
-	recordSlices = recordSlices[:len(recordSlices)-1]
 	return recordSlices
 }
 
@@ -1000,4 +1018,24 @@ func deletePerftestServices(t *testing.T, data *TestData) {
 			t.Logf("Error when deleting %s Service: %v", serviceName, err)
 		}
 	}
+}
+
+// getBandwidthAndSourcePort parses iperf commands output and returns bandwidth
+// and source port. Bandwidth is returned as a slice containing two strings (bandwidth
+// value and bandwidth unit).
+func getBandwidthAndSourcePort(iperfStdout string) ([]string, string) {
+	var bandwidth []string
+	var srcPort string
+	outputLines := strings.Split(iperfStdout, "\n")
+	for _, line := range outputLines {
+		if strings.Contains(line, "sender") {
+			fields := strings.Fields(line)
+			bandwidth = fields[6:8]
+		}
+		if strings.Contains(line, "connected") {
+			fields := strings.Fields(line)
+			srcPort = fields[5]
+		}
+	}
+	return bandwidth, srcPort
 }
