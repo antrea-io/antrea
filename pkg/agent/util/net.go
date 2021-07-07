@@ -123,6 +123,26 @@ func GetIPNetDeviceFromIP(localIP net.IP) (*net.IPNet, *net.Interface, error) {
 	return nil, nil, fmt.Errorf("unable to find local IP and device")
 }
 
+func GetIPNetDeviceByName(ifaceName string) (*net.IPNet, *net.Interface, error) {
+	link, err := net.InterfaceByName(ifaceName)
+	if err != nil {
+		return nil, nil, err
+	}
+	addrList, err := link.Addrs()
+	if err != nil {
+		return nil, nil, err
+	}
+	for _, addr := range addrList {
+		if ipNet, ok := addr.(*net.IPNet); ok {
+			if ipNet.IP.IsGlobalUnicast() {
+				return ipNet, link, nil
+			}
+		}
+		continue
+	}
+	return nil, nil, fmt.Errorf("unable to find local IP and device")
+}
+
 func GetIPv4Addr(ips []net.IP) net.IP {
 	for _, ip := range ips {
 		if ip.To4() != nil {

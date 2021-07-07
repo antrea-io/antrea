@@ -3810,6 +3810,11 @@ data:
 
     # TLS min version from: VersionTLS10, VersionTLS11, VersionTLS12, VersionTLS13.
     #tlsMinVersion:
+
+    # The name of the interface on Node which is used for tunneling or routing the traffic across Nodes.
+    # If there are multiple IP addresses configured on the interface, the first one is used.
+    # The interface configured with Node IP is used if this parameter is not set.
+    #transportInterface:
   antrea-cni.conflist: |
     {
         "cniVersion":"0.3.0",
@@ -3892,7 +3897,7 @@ metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-5mt4h4g8tk
+  name: antrea-config-cccf8b2ggf
   namespace: kube-system
 ---
 apiVersion: v1
@@ -3972,7 +3977,7 @@ spec:
             fieldRef:
               fieldPath: spec.serviceAccountName
         - name: ANTREA_CONFIG_MAP_NAME
-          value: antrea-config-5mt4h4g8tk
+          value: antrea-config-cccf8b2ggf
         image: projects.registry.vmware.com/antrea/antrea-ubuntu:latest
         imagePullPolicy: IfNotPresent
         livenessProbe:
@@ -4023,7 +4028,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-5mt4h4g8tk
+          name: antrea-config-cccf8b2ggf
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -4354,7 +4359,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-5mt4h4g8tk
+          name: antrea-config-cccf8b2ggf
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d

@@ -85,6 +85,8 @@ type NodeConfig struct {
 	PodIPv6CIDR *net.IPNet
 	// The Node's IP used in Kubernetes. It has the network mask information.
 	NodeIPAddr *net.IPNet
+	// The IP on the Node's transport interface. It is used for tunneling or routing the Pod traffic across Nodes.
+	NodeTransportIPAddr *net.IPNet
 	// Set either via defaultMTU config in antrea.yaml or auto discovered.
 	// Auto discovery will use MTU value of the Node's primary interface.
 	// For Encap and Hybrid mode, Node MTU will be adjusted to account for encap header.
@@ -96,8 +98,8 @@ type NodeConfig struct {
 }
 
 func (n *NodeConfig) String() string {
-	return fmt.Sprintf("NodeName: %s, OVSBridge: %s, PodIPv4CIDR: %s, PodIPv6CIDR: %s, NodeIP: %s, Gateway: %s",
-		n.Name, n.OVSBridge, n.PodIPv4CIDR, n.PodIPv6CIDR, n.NodeIPAddr, n.GatewayConfig)
+	return fmt.Sprintf("NodeName: %s, OVSBridge: %s, PodIPv4CIDR: %s, PodIPv6CIDR: %s, NodeIP: %s, TransportIP: %s, Gateway: %s",
+		n.Name, n.OVSBridge, n.PodIPv4CIDR, n.PodIPv6CIDR, n.NodeIPAddr, n.NodeTransportIPAddr, n.GatewayConfig)
 }
 
 // User provided network configuration parameters.
@@ -106,6 +108,7 @@ type NetworkConfig struct {
 	TunnelType        ovsconfig.TunnelType
 	EnableIPSecTunnel bool
 	IPSecPSK          string
+	TransportIface    string
 }
 
 // IsIPv4Enabled returns true if the cluster network supports IPv4.
