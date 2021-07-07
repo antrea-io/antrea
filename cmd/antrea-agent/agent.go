@@ -33,7 +33,7 @@ import (
 	"antrea.io/antrea/pkg/agent/controller/traceflow"
 	"antrea.io/antrea/pkg/agent/flowexporter/connections"
 	"antrea.io/antrea/pkg/agent/flowexporter/exporter"
-	"antrea.io/antrea/pkg/agent/flowexporter/flowrecords"
+	"antrea.io/antrea/pkg/agent/flowexporter/priorityqueue"
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/metrics"
 	npl "antrea.io/antrea/pkg/agent/nodeportlocal"
@@ -199,10 +199,13 @@ func run(o *Options) error {
 	statusManagerEnabled := antreaPolicyEnabled
 
 	var denyConnStore *connections.DenyConnectionStore
+	var denyPriorityQueue *priorityqueue.ExpirePriorityQueue
 	if features.DefaultFeatureGate.Enabled(features.FlowExporter) {
-		denyConnStore = connections.NewDenyConnectionStore(ifaceStore, proxier, o.staleConnectionTimeout)
+		denyPriorityQueue = priorityqueue.NewExpirePriorityQueue(o.activeFlowTimeout, o.idleFlowTimeout)
+		denyConnStore = connections.NewDenyConnectionStore(ifaceStore, proxier, denyPriorityQueue, o.staleConnectionTimeout)
 		go denyConnStore.RunPeriodicDeletion(stopCh)
 	}
+
 	networkPolicyController, err := networkpolicy.NewNetworkPolicyController(
 		antreaClientProvider,
 		ofClient,
@@ -367,37 +370,37 @@ func run(o *Options) error {
 	}
 
 	// Initialize flow exporter to start go routines to poll conntrack flows and export IPFIX flow records
+	var conntrackPriorityQueue *priorityqueue.ExpirePriorityQueue
 	if features.DefaultFeatureGate.Enabled(features.FlowExporter) {
 		v4Enabled := config.IsIPv4Enabled(nodeConfig, networkConfig.TrafficEncapMode)
 		v6Enabled := config.IsIPv6Enabled(nodeConfig, networkConfig.TrafficEncapMode)
 		isNetworkPolicyOnly := networkConfig.TrafficEncapMode.IsNetworkPolicyOnly()
 
-		flowRecords := flowrecords.NewFlowRecords()
+		conntrackPriorityQueue = priorityqueue.NewExpirePriorityQueue(o.activeFlowTimeout, o.idleFlowTimeout)
 		conntrackConnStore := connections.NewConntrackConnectionStore(
 			connections.InitializeConnTrackDumper(nodeConfig, serviceCIDRNet, serviceCIDRNetv6, ovsDatapathType, features.DefaultFeatureGate.Enabled(features.AntreaProxy)),
-			flowRecords,
 			ifaceStore,
 			v4Enabled,
 			v6Enabled,
 			proxier,
 			networkPolicyController,
 			o.pollInterval,
+			conntrackPriorityQueue,
 			o.staleConnectionTimeout)
 		go conntrackConnStore.Run(stopCh)
 
 		flowExporter, err := exporter.NewFlowExporter(
 			conntrackConnStore,
-			flowRecords,
 			denyConnStore,
 			o.flowCollectorAddr,
 			o.flowCollectorProto,
-			o.activeFlowTimeout,
-			o.idleFlowTimeout,
 			v4Enabled,
 			v6Enabled,
 			k8sClient,
 			nodeRouteController,
-			isNetworkPolicyOnly)
+			isNetworkPolicyOnly,
+			conntrackPriorityQueue,
+			denyPriorityQueue)
 		if err != nil {
 			return fmt.Errorf("error when creating IPFIX flow exporter: %v", err)
 		}

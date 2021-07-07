@@ -15,6 +15,7 @@
 package connections
 
 import (
+	"container/heap"
 	"fmt"
 	"sync"
 	"time"
@@ -23,6 +24,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent/flowexporter"
+	"antrea.io/antrea/pkg/agent/flowexporter/priorityqueue"
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/proxy"
 )
@@ -35,6 +37,7 @@ type connectionStore struct {
 	connections            map[flowexporter.ConnectionKey]*flowexporter.Connection
 	ifaceStore             interfacestore.InterfaceStore
 	antreaProxier          proxy.Proxier
+	expirePriorityQueue    *priorityqueue.ExpirePriorityQueue
 	staleConnectionTimeout time.Duration
 	mutex                  sync.Mutex
 }
@@ -42,12 +45,14 @@ type connectionStore struct {
 func NewConnectionStore(
 	ifaceStore interfacestore.InterfaceStore,
 	proxier proxy.Proxier,
+	expirePriorityQueue *priorityqueue.ExpirePriorityQueue,
 	staleConnectionTimeout time.Duration,
 ) connectionStore {
 	return connectionStore{
 		connections:            make(map[flowexporter.ConnectionKey]*flowexporter.Connection),
 		ifaceStore:             ifaceStore,
 		antreaProxier:          proxier,
+		expirePriorityQueue:    expirePriorityQueue,
 		staleConnectionTimeout: staleConnectionTimeout,
 	}
 }
@@ -125,4 +130,44 @@ func lookupServiceProtocol(protoID uint8) (corev1.Protocol, error) {
 		return "", fmt.Errorf("unknown protocol identifier: %d", protoID)
 	}
 	return serviceProto, nil
+}
+
+func (cs *connectionStore) addItemToQueue(connKey flowexporter.ConnectionKey, conn *flowexporter.Connection) {
+	currTime := time.Now()
+	pqItem := &flowexporter.ItemToExpire{
+		Conn:             conn,
+		ActiveExpireTime: currTime.Add(cs.expirePriorityQueue.ActiveFlowTimeout),
+		IdleExpireTime:   currTime.Add(cs.expirePriorityQueue.IdleFlowTimeout),
+	}
+	heap.Push(cs.expirePriorityQueue, pqItem)
+	cs.expirePriorityQueue.KeyToItem[connKey] = pqItem
+}
+
+func (cs *connectionStore) AcquireConnStoreLock() {
+	cs.mutex.Lock()
+}
+
+func (cs *connectionStore) ReleaseConnStoreLock() {
+	cs.mutex.Unlock()
+}
+
+// UpdateConnAndQueue deletes the inactive connection from keyToItem map,
+// without adding it back to the PQ. In this way, we can avoid to reset the
+// item's expire time every time we encounter it in the PQ. The method also
+// updates active connection's stats fields and adds it back to the PQ.
+func (cs *connectionStore) UpdateConnAndQueue(pqItem *flowexporter.ItemToExpire, currTime time.Time) {
+	conn := pqItem.Conn
+	conn.LastExportTime = currTime
+	if conn.ReadyToDelete || !conn.IsActive {
+		cs.expirePriorityQueue.RemoveItemFromMap(conn)
+	} else {
+		// For active connections, we update their "prev" stats fields,
+		// reset active expire time and push back into the PQ.
+		conn.PrevBytes = conn.OriginalBytes
+		conn.PrevPackets = conn.OriginalPackets
+		conn.PrevTCPState = conn.TCPState
+		conn.PrevReverseBytes = conn.ReverseBytes
+		conn.PrevReversePackets = conn.ReversePackets
+		cs.expirePriorityQueue.ResetActiveExpireTimeAndPush(pqItem, currTime)
+	}
 }

@@ -32,7 +32,7 @@ import (
 
 	"antrea.io/antrea/pkg/agent/flowexporter"
 	connectionstest "antrea.io/antrea/pkg/agent/flowexporter/connections/testing"
-	"antrea.io/antrea/pkg/agent/flowexporter/flowrecords"
+	"antrea.io/antrea/pkg/agent/flowexporter/priorityqueue"
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	interfacestoretest "antrea.io/antrea/pkg/agent/interfacestore/testing"
 	"antrea.io/antrea/pkg/agent/openflow"
@@ -104,8 +104,9 @@ func setupConntrackConnStore(b *testing.B) (*ConntrackConnectionStore, *connecti
 	mockProxier.EXPECT().GetServiceByIP(serviceStr).Return(servicePortName, true).AnyTimes()
 
 	npQuerier := queriertest.NewMockAgentNetworkPolicyInfoQuerier(ctrl)
-
-	return NewConntrackConnectionStore(mockConnDumper, flowrecords.NewFlowRecords(), mockIfaceStore, true, false, mockProxier, npQuerier, testPollInterval, testStaleConnectionTimeout), mockConnDumper
+	pq := priorityqueue.NewExpirePriorityQueue(testActiveFlowTimeout, testIdleFlowTimeout)
+	return NewConntrackConnectionStore(mockConnDumper, mockIfaceStore, true, false, mockProxier,
+		npQuerier, testPollInterval, pq, testStaleConnectionTimeout), mockConnDumper
 }
 
 func generateConns() []*flowexporter.Connection {
@@ -121,7 +122,7 @@ func generateUpdatedConns(conns []*flowexporter.Connection) []*flowexporter.Conn
 	updatedConns := make([]*flowexporter.Connection, length)
 	for i := 0; i < len(conns); i++ {
 		// replace deleted connection with new connection
-		if conns[i].DyingAndDoneExport == true {
+		if conns[i].ReadyToDelete == true {
 			conns[i] = getNewConn()
 		} else { // update rest of connections
 			conns[i].OriginalPackets += 5
@@ -138,7 +139,7 @@ func generateUpdatedConns(conns []*flowexporter.Connection) []*flowexporter.Conn
 	for i := randomNum; i < testNumOfDeletedConns+randomNum; i++ {
 		// hardcode DyingAndDoneExport here for testing deletion of connections
 		// not valid for testing update and export of records
-		updatedConns[i].DyingAndDoneExport = true
+		updatedConns[i].ReadyToDelete = true
 	}
 	return updatedConns
 }
@@ -154,7 +155,7 @@ func getNewConn() *flowexporter.Connection {
 		StartTime:                 time.Now().Add(-time.Duration(randomNum1) * time.Second),
 		StopTime:                  time.Now(),
 		IsPresent:                 true,
-		DyingAndDoneExport:        false,
+		ReadyToDelete:             false,
 		FlowKey:                   flowKey,
 		OriginalPackets:           10,
 		OriginalBytes:             100,

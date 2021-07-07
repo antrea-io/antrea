@@ -371,7 +371,6 @@ func (c *Controller) storeDenyConnection(pktIn *ofctrl.PacketIn) error {
 			}
 		}
 	}
-
 	c.denyConnStore.AddOrUpdateConn(&denyConn, time.Now(), uint64(packet.IPLength))
 	return nil
 }
