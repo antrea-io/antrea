@@ -65,9 +65,37 @@ type ResourceImportSpec struct {
 	Raw *RawResourceImport `json:"raw,omitempty"`
 }
 
+type ResourceImportConditionType string
+
+const (
+	ResourceImportSucceeded ResourceImportConditionType = "ResourceImportSucceeded"
+)
+
+// ResourceImportClusterCondition indicates the condition of the ResourceImport in a cluster
+type ResourceImportClusterCondition struct {
+	Type ResourceImportConditionType `json:"type,omitempty"`
+	// Status of the condition, one of True, False, Unknown
+	Status    v1.ConditionStatus `json:"status,omitempty"`
+	ClusterID string             `json:"clusterID,omitempty"`
+	// +optional
+	// Last time the condition transit from one status to another
+	LastTransitionTime metav1.Time `json:"lastTransitionTime,omitempty"`
+	// +optional
+	// A human readable message indicating details about the transition
+	Message string `json:"message,omitempty"`
+	// +optional
+	// Unique, one-word, CamelCase reason for the condition's last transition.
+	Reason string `json:"reason,omitempty"`
+}
+
+// ResourceImportClusterStatus indicates the readiness status of the ResourceImport in clusters
+type ResourceImportClusterStatus struct {
+	Conditions []ResourceImportClusterCondition `json:"conditions,omitempty"`
+}
+
 // ResourceImportStatus defines the observed state of ResourceImport
 type ResourceImportStatus struct {
-	// TBD
+	ClusterStatuses []ResourceImportClusterStatus `json:"clusterStatuses,omitempty"`
 }
 
 //+kubebuilder:object:root=true
