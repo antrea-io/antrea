@@ -149,6 +149,20 @@ rules:
       - get
       - watch
       - list
+  - apiGroups:
+      - crd.antrea.io
+    resources:
+      - egresses/status
+    verbs:
+      - update
+  - apiGroups:
+      - crd.antrea.io
+    resources:
+      - externalippools
+    verbs:
+      - get
+      - watch
+      - list
 ---
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1

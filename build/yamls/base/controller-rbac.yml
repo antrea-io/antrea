@@ -207,6 +207,7 @@ rules:
       - watch
       - list
       - update
+      - patch
   - apiGroups:
       - crd.antrea.io
     resources:

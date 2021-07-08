@@ -167,6 +167,7 @@ MOCKGEN_TARGETS=(
   "pkg/agent/proxy Proxier testing"
   "pkg/agent/querier AgentQuerier testing"
   "pkg/agent/route Interface testing"
+  "pkg/agent/controller/egress/ipassigner IPAssigner testing"
   "pkg/antctl AntctlClient ."
   "pkg/controller/networkpolicy EndpointQuerier testing"
   "pkg/controller/querier ControllerQuerier testing"

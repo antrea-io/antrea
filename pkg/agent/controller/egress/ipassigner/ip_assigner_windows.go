@@ -1,4 +1,4 @@
-// Copyright 2020 Antrea Authors
+// Copyright 2021 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,14 +12,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package apis
+package ipassigner
 
-const (
-	// AntreaControllerAPIPort is the default port for the antrea-controller APIServer.
-	AntreaControllerAPIPort = 10349
-	// AntreaAgentAPIPort is the default port for the antrea-agent APIServer.
-	AntreaAgentAPIPort = 10350
-	// AntreaAgentClusterMembershipPort is the default port for the antrea-agent cluster.
-	// A gossip-based cluster will be created in the background when the egress feature is turned on.
-	AntreaAgentClusterMembershipPort = 10351
+import (
+	"net"
 )
+
+type ipAssigner struct {
+}
+
+func NewIPAssigner(nodeIPAddr net.IP, dir string) (*ipAssigner, error) {
+	return nil, nil
+}
+
+func (a *ipAssigner) AssignEgressIP(egressIP, egressName string) error {
+	return nil
+}
+
+func (a *ipAssigner) UnassignEgressIP(egressName string) error {
+	return nil
+}
+
+func (a *ipAssigner) AssignedIPs() (ips map[string]string) {
+	return
+}

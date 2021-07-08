@@ -190,7 +190,6 @@ type AppliedTo struct {
 
 // +genclient
 // +genclient:nonNamespaced
-// +genclient:noStatus
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // Egress defines which egress (SNAT) IP the traffic from the selected Pods to
@@ -202,6 +201,15 @@ type Egress struct {
 
 	// Specification of the desired behavior of Egress.
 	Spec EgressSpec `json:"spec"`
+
+	// EgressStatus represents the current status of an Egress.
+	Status EgressStatus `json:"status"`
+}
+
+// EgressStatus represents the current status of an Egress.
+type EgressStatus struct {
+	// The name of the Node that holds the Egress IP.
+	EgressNode string `json:"egressNode"`
 }
 
 // EgressSpec defines the desired state for Egress.

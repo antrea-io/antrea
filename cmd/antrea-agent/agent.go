@@ -77,6 +77,8 @@ func run(o *Options) error {
 	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, informerDefaultResync)
 	traceflowInformer := crdInformerFactory.Crd().V1alpha1().Traceflows()
 	egressInformer := crdInformerFactory.Crd().V1alpha2().Egresses()
+	nodeInformer := informerFactory.Core().V1().Nodes()
+	externalIPPoolInformer := crdInformerFactory.Crd().V1alpha2().ExternalIPPools()
 
 	// Create Antrea Clientset for the given config.
 	antreaClientProvider := agent.NewAntreaClientProvider(o.config.AntreaClientConnection, k8sClient)
@@ -223,7 +225,13 @@ func run(o *Options) error {
 
 	var egressController *egress.EgressController
 	if features.DefaultFeatureGate.Enabled(features.Egress) {
-		egressController = egress.NewEgressController(ofClient, egressInformer, antreaClientProvider, ifaceStore, routeClient, nodeConfig.Name)
+		egressController, err = egress.NewEgressController(
+			ofClient, antreaClientProvider, crdClient, ifaceStore, routeClient, nodeConfig.Name, nodeConfig.NodeIPAddr.IP,
+			o.config.ClusterMembershipPort, egressInformer, nodeInformer, externalIPPoolInformer,
+		)
+		if err != nil {
+			return fmt.Errorf("error creating new Egress controller: %v", err)
+		}
 	}
 
 	isChaining := false
