@@ -7,7 +7,6 @@ require (
 	github.com/Microsoft/go-winio v0.4.16-0.20201130162521-d1ffc52c7331
 	github.com/Microsoft/hcsshim v0.8.9
 	github.com/TomCodeLV/OVSDB-golang-lib v0.0.0-20200116135253-9bbdfadcd881
-	github.com/antoninbas/go-powershell v0.1.0
 	github.com/awalterschulze/gographviz v2.0.1+incompatible
 	github.com/blang/semver v3.5.1+incompatible
 	github.com/cenk/hub v1.0.1 // indirect
@@ -31,7 +30,6 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.7.1
 	github.com/prometheus/common v0.10.0
-	github.com/rakelkar/gonetsh v0.0.0-20210226024844-dfffed138500
 	github.com/satori/go.uuid v1.2.0
 	github.com/sirupsen/logrus v1.7.0
 	github.com/spf13/afero v1.4.1
