@@ -1089,7 +1089,7 @@ func (n *NetworkPolicyController) syncAddressGroup(key string) error {
 	addrGroupNodeNames := sets.String{}
 	for _, internalNPObj := range nps {
 		internalNP := internalNPObj.(*antreatypes.NetworkPolicy)
-		utilsets.Merge(addrGroupNodeNames, internalNP.SpanMeta.NodeNames)
+		utilsets.MergeString(addrGroupNodeNames, internalNP.SpanMeta.NodeNames)
 	}
 	memberSet := n.getAddressGroupMemberSet(addressGroup)
 	updatedAddressGroup := &antreatypes.AddressGroup{
@@ -1363,7 +1363,7 @@ func (n *NetworkPolicyController) syncInternalNetworkPolicy(key string) error {
 			continue
 		}
 		appGroup := appGroupObj.(*antreatypes.AppliedToGroup)
-		utilsets.Merge(nodeNames, appGroup.SpanMeta.NodeNames)
+		utilsets.MergeString(nodeNames, appGroup.SpanMeta.NodeNames)
 	}
 	updatedNetworkPolicy := &antreatypes.NetworkPolicy{
 		UID:                   internalNP.UID,

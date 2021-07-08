@@ -2436,6 +2436,21 @@ func schema_pkg_apis_controlplane_v1beta2_NetworkPolicyPeer(ref common.Reference
 							},
 						},
 					},
+					"fqdns": {
+						SchemaProps: spec.SchemaProps{
+							Description: "A list of exact FQDN names or FQDN wildcard expressions. This field can only be possibly set for NetworkPolicyPeer of egress rules.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: "",
+										Type:    []string{"string"},
+										Format:  "",
+									},
+								},
+							},
+						},
+					},
 				},
 			},
 		},

@@ -52,15 +52,17 @@ var (
 	DispositionAllowRegMark = binding.NewRegMark(APDispositionField, DispositionAllow)
 	DispositionDropRegMark  = binding.NewRegMark(APDispositionField, DispositionDrop)
 	DispositionRejRegMark   = binding.NewRegMark(APDispositionField, DispositionRej)
-	// reg0[24..26]: Field to indicate the reasons of sending packet to the controller.
+	// reg0[24..27]: Field to indicate the reasons of sending packet to the controller.
 	// Marks in this field include,
-	//   - 0b001: logging
-	//   - 0b010: reject
-	//   - 0b100: deny (used by Flow Exporter)
-	CustomReasonField          = binding.NewRegField(0, 24, 26, "PacketInReason")
+	//   - 0b0001: logging
+	//   - 0b0010: reject
+	//   - 0b0100: deny (used by Flow Exporter)
+	//   - 0b1000: DNS packet (used by FQDN)
+	CustomReasonField          = binding.NewRegField(0, 24, 27, "PacketInReason")
 	CustomReasonLoggingRegMark = binding.NewRegMark(CustomReasonField, CustomReasonLogging)
 	CustomReasonRejectRegMark  = binding.NewRegMark(CustomReasonField, CustomReasonReject)
 	CustomReasonDenyRegMark    = binding.NewRegMark(CustomReasonField, CustomReasonDeny)
+	CustomReasonDNSRegMark     = binding.NewRegMark(CustomReasonField, CustomReasonDNS)
 
 	// reg1(NXM_NX_REG1)
 	// Field to cache the ofPort of the OVS interface where to output packet.

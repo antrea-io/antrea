@@ -412,6 +412,13 @@ type NetworkPolicyPeer struct {
 	// a stand-alone selector. A Group cannot be set with any other
 	// selector.
 	Group string `json:"group,omitempty"`
+	// Restrict egress access to the Fully Qualified Domain Names prescribed
+	// by name or by wildcard match patterns. This field can only be set for
+	// NetworkPolicyPeer of egress rules.
+	// Supported formats are:
+	//  Exact FQDNs, i.e. "google.com", "db-svc.default.svc.cluster.local"
+	//  Wildcard expressions, i.e. "*wayfair.com".
+	FQDN string `json:"fqdn,omitempty"`
 }
 
 type PeerNamespaces struct {
