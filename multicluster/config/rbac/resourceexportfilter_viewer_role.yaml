@@ -1,0 +1,20 @@
+# permissions for end users to view resourceexportfilters.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: resourceexportfilter-viewer-role
+rules:
+- apiGroups:
+  - multicluster.crd.antrea.io
+  resources:
+  - resourceexportfilters
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - multicluster.crd.antrea.io
+  resources:
+  - resourceexportfilters/status
+  verbs:
+  - get

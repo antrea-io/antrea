@@ -1,0 +1,24 @@
+# permissions for end users to edit clustersets.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: clusterset-editor-role
+rules:
+- apiGroups:
+  - cluster.crd.antrea.io
+  resources:
+  - clustersets
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - cluster.crd.antrea.io
+  resources:
+  - clustersets/status
+  verbs:
+  - get
