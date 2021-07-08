@@ -1,0 +1,24 @@
+# permissions for end users to edit resourceexports.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: resourceexport-editor-role
+rules:
+- apiGroups:
+  - multicluster.crd.antrea.io
+  resources:
+  - resourceexports
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - multicluster.crd.antrea.io
+  resources:
+  - resourceexports/status
+  verbs:
+  - get
