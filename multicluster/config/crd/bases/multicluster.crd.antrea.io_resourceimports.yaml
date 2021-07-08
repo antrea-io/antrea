@@ -1,0 +1,448 @@
+
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.4.1
+  creationTimestamp: null
+  name: resourceimports.multicluster.crd.antrea.io
+spec:
+  group: multicluster.crd.antrea.io
+  names:
+    kind: ResourceImport
+    listKind: ResourceImportList
+    plural: resourceimports
+    singular: resourceimport
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: ResourceImport is the Schema for the resourceimports API
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: ResourceImportSpec defines the desired state of ResourceImport
+            properties:
+              clusterID:
+                description: ClusterIDs specifies the member clusters this resource
+                  to import to. When not specified, import to all member clusters.
+                items:
+                  type: string
+                type: array
+              endpoints:
+                description: If imported resource is EndPoints.
+                properties:
+                  subsets:
+                    items:
+                      description: 'EndpointSubset is a group of addresses with a
+                        common set of ports. The expanded set of endpoints is the
+                        Cartesian product of Addresses x Ports. For example, given:   {     Addresses:
+                        [{"ip": "10.10.1.1"}, {"ip": "10.10.2.2"}],     Ports:     [{"name":
+                        "a", "port": 8675}, {"name": "b", "port": 309}]   } The resulting
+                        set of endpoints can be viewed as:     a: [ 10.10.1.1:8675,
+                        10.10.2.2:8675 ],     b: [ 10.10.1.1:309, 10.10.2.2:309 ]'
+                      properties:
+                        addresses:
+                          description: IP addresses which offer the related ports
+                            that are marked as ready. These endpoints should be considered
+                            safe for load balancers and clients to utilize.
+                          items:
+                            description: EndpointAddress is a tuple that describes
+                              single IP address.
+                            properties:
+                              hostname:
+                                description: The Hostname of this endpoint
+                                type: string
+                              ip:
+                                description: 'The IP of this endpoint. May not be
+                                  loopback (127.0.0.0/8), link-local (169.254.0.0/16),
+                                  or link-local multicast ((224.0.0.0/24). IPv6 is
+                                  also accepted but not fully supported on all platforms.
+                                  Also, certain kubernetes components, like kube-proxy,
+                                  are not IPv6 ready. TODO: This should allow hostname
+                                  or IP, See #4447.'
+                                type: string
+                              nodeName:
+                                description: 'Optional: Node hosting this endpoint.
+                                  This can be used to determine endpoints local to
+                                  a node.'
+                                type: string
+                              targetRef:
+                                description: Reference to object providing the endpoint.
+                                properties:
+                                  apiVersion:
+                                    description: API version of the referent.
+                                    type: string
+                                  fieldPath:
+                                    description: 'If referring to a piece of an object
+                                      instead of an entire object, this string should
+                                      contain a valid JSON/Go field access statement,
+                                      such as desiredState.manifest.containers[2].
+                                      For example, if the object reference is to a
+                                      container within a pod, this would take on a
+                                      value like: "spec.containers{name}" (where "name"
+                                      refers to the name of the container that triggered
+                                      the event) or if no container name is specified
+                                      "spec.containers[2]" (container with index 2
+                                      in this pod). This syntax is chosen only to
+                                      have some well-defined way of referencing a
+                                      part of an object. TODO: this design is not
+                                      final and this field is subject to change in
+                                      the future.'
+                                    type: string
+                                  kind:
+                                    description: 'Kind of the referent. More info:
+                                      https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+                                    type: string
+                                  name:
+                                    description: 'Name of the referent. More info:
+                                      https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names'
+                                    type: string
+                                  namespace:
+                                    description: 'Namespace of the referent. More
+                                      info: https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/'
+                                    type: string
+                                  resourceVersion:
+                                    description: 'Specific resourceVersion to which
+                                      this reference is made, if any. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#concurrency-control-and-consistency'
+                                    type: string
+                                  uid:
+                                    description: 'UID of the referent. More info:
+                                      https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids'
+                                    type: string
+                                type: object
+                            required:
+                            - ip
+                            type: object
+                          type: array
+                        notReadyAddresses:
+                          description: IP addresses which offer the related ports
+                            but are not currently marked as ready because they have
+                            not yet finished starting, have recently failed a readiness
+                            check, or have recently failed a liveness check.
+                          items:
+                            description: EndpointAddress is a tuple that describes
+                              single IP address.
+                            properties:
+                              hostname:
+                                description: The Hostname of this endpoint
+                                type: string
+                              ip:
+                                description: 'The IP of this endpoint. May not be
+                                  loopback (127.0.0.0/8), link-local (169.254.0.0/16),
+                                  or link-local multicast ((224.0.0.0/24). IPv6 is
+                                  also accepted but not fully supported on all platforms.
+                                  Also, certain kubernetes components, like kube-proxy,
+                                  are not IPv6 ready. TODO: This should allow hostname
+                                  or IP, See #4447.'
+                                type: string
+                              nodeName:
+                                description: 'Optional: Node hosting this endpoint.
+                                  This can be used to determine endpoints local to
+                                  a node.'
+                                type: string
+                              targetRef:
+                                description: Reference to object providing the endpoint.
+                                properties:
+                                  apiVersion:
+                                    description: API version of the referent.
+                                    type: string
+                                  fieldPath:
+                                    description: 'If referring to a piece of an object
+                                      instead of an entire object, this string should
+                                      contain a valid JSON/Go field access statement,
+                                      such as desiredState.manifest.containers[2].
+                                      For example, if the object reference is to a
+                                      container within a pod, this would take on a
+                                      value like: "spec.containers{name}" (where "name"
+                                      refers to the name of the container that triggered
+                                      the event) or if no container name is specified
+                                      "spec.containers[2]" (container with index 2
+                                      in this pod). This syntax is chosen only to
+                                      have some well-defined way of referencing a
+                                      part of an object. TODO: this design is not
+                                      final and this field is subject to change in
+                                      the future.'
+                                    type: string
+                                  kind:
+                                    description: 'Kind of the referent. More info:
+                                      https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+                                    type: string
+                                  name:
+                                    description: 'Name of the referent. More info:
+                                      https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names'
+                                    type: string
+                                  namespace:
+                                    description: 'Namespace of the referent. More
+                                      info: https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/'
+                                    type: string
+                                  resourceVersion:
+                                    description: 'Specific resourceVersion to which
+                                      this reference is made, if any. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#concurrency-control-and-consistency'
+                                    type: string
+                                  uid:
+                                    description: 'UID of the referent. More info:
+                                      https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids'
+                                    type: string
+                                type: object
+                            required:
+                            - ip
+                            type: object
+                          type: array
+                        ports:
+                          description: Port numbers available on the related IP addresses.
+                          items:
+                            description: EndpointPort is a tuple that describes a
+                              single port.
+                            properties:
+                              appProtocol:
+                                description: The application protocol for this port.
+                                  This field follows standard Kubernetes label syntax.
+                                  Un-prefixed names are reserved for IANA standard
+                                  service names (as per RFC-6335 and http://www.iana.org/assignments/service-names).
+                                  Non-standard protocols should use prefixed names
+                                  such as mycompany.com/my-custom-protocol. This is
+                                  a beta field that is guarded by the ServiceAppProtocol
+                                  feature gate and enabled by default.
+                                type: string
+                              name:
+                                description: The name of this port.  This must match
+                                  the 'name' field in the corresponding ServicePort.
+                                  Must be a DNS_LABEL. Optional only if one port is
+                                  defined.
+                                type: string
+                              port:
+                                description: The port number of the endpoint.
+                                format: int32
+                                type: integer
+                              protocol:
+                                default: TCP
+                                description: The IP protocol for this port. Must be
+                                  UDP, TCP, or SCTP. Default is TCP.
+                                type: string
+                            required:
+                            - port
+                            type: object
+                          type: array
+                      type: object
+                    type: array
+                type: object
+              externalentity:
+                description: If imported resource is ExternalEntity.
+                properties:
+                  externalentityspec:
+                    description: ExternalEntitySpec defines the desired state for
+                      ExternalEntity.
+                    properties:
+                      endpoints:
+                        description: Endpoints is a list of external endpoints associated
+                          with this entity.
+                        items:
+                          description: Endpoint refers to an endpoint associated with
+                            the ExternalEntity.
+                          properties:
+                            ip:
+                              description: IP associated with this endpoint.
+                              type: string
+                            name:
+                              description: Name identifies this endpoint. Could be
+                                the network interface name in case of VMs.
+                              type: string
+                          type: object
+                        type: array
+                      externalNode:
+                        description: ExternalNode is the opaque identifier of the
+                          agent/controller responsible for additional processing or
+                          handling of this external entity.
+                        type: string
+                      ports:
+                        description: Ports maintain the list of named ports.
+                        items:
+                          description: NamedPort describes the port and protocol to
+                            match in a rule.
+                          properties:
+                            name:
+                              description: Name associated with the Port.
+                              type: string
+                            port:
+                              description: The port on the given protocol.
+                              format: int32
+                              type: integer
+                            protocol:
+                              default: TCP
+                              description: The protocol (TCP, UDP, or SCTP) which
+                                traffic must match. If not specified, this field defaults
+                                to TCP.
+                              type: string
+                          type: object
+                        type: array
+                    type: object
+                type: object
+              kind:
+                description: Kind of imported resource.
+                type: string
+              name:
+                description: Name of imported resource.
+                type: string
+              namespace:
+                description: Namespace of imported resource.
+                type: string
+              raw:
+                description: 'If imported resource is ANP. TODO: ANP uses float64
+                  as priority.  Type float64 is discouraged by k8s, and is not supported
+                  by controller-gen tools. NetworkPolicy *v1alpha1.NetworkPolicySpec
+                  `json:"networkpolicy,omitempty"` If imported resource Kind is unknown.'
+                properties:
+                  data:
+                    format: byte
+                    type: string
+                type: object
+              serviceImport:
+                description: If imported resource is ServiceImport.
+                properties:
+                  apiVersion:
+                    description: 'APIVersion defines the versioned schema of this
+                      representation of an object. Servers should convert recognized
+                      schemas to the latest internal value, and may reject unrecognized
+                      values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+                    type: string
+                  kind:
+                    description: 'Kind is a string value representing the REST resource
+                      this object represents. Servers may infer this from the endpoint
+                      the client submits requests to. Cannot be updated. In CamelCase.
+                      More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+                    type: string
+                  metadata:
+                    type: object
+                  spec:
+                    description: spec defines the behavior of a ServiceImport.
+                    properties:
+                      ips:
+                        description: ip will be used as the VIP for this service when
+                          type is ClusterSetIP.
+                        items:
+                          type: string
+                        maxItems: 1
+                        type: array
+                      ports:
+                        items:
+                          description: ServicePort represents the port on which the
+                            service is exposed
+                          properties:
+                            appProtocol:
+                              description: The application protocol for this port.
+                                This field follows standard Kubernetes label syntax.
+                                Un-prefixed names are reserved for IANA standard service
+                                names (as per RFC-6335 and http://www.iana.org/assignments/service-names).
+                                Non-standard protocols should use prefixed names such
+                                as mycompany.com/my-custom-protocol. Field can be
+                                enabled with ServiceAppProtocol feature gate.
+                              type: string
+                            name:
+                              description: The name of this port within the service.
+                                This must be a DNS_LABEL. All ports within a ServiceSpec
+                                must have unique names. When considering the endpoints
+                                for a Service, this must match the 'name' field in
+                                the EndpointPort. Optional if only one ServicePort
+                                is defined on this service.
+                              type: string
+                            port:
+                              description: The port that will be exposed by this service.
+                              format: int32
+                              type: integer
+                            protocol:
+                              default: TCP
+                              description: The IP protocol for this port. Supports
+                                "TCP", "UDP", and "SCTP". Default is TCP.
+                              type: string
+                          required:
+                          - port
+                          type: object
+                        type: array
+                        x-kubernetes-list-type: atomic
+                      sessionAffinity:
+                        description: 'Supports "ClientIP" and "None". Used to maintain
+                          session affinity. Enable client IP based session affinity.
+                          Must be ClientIP or None. Defaults to None. Ignored when
+                          type is Headless More info: https://kubernetes.io/docs/concepts/services-networking/service/#virtual-ips-and-service-proxies'
+                        type: string
+                      sessionAffinityConfig:
+                        description: sessionAffinityConfig contains session affinity
+                          configuration.
+                        properties:
+                          clientIP:
+                            description: clientIP contains the configurations of Client
+                              IP based session affinity.
+                            properties:
+                              timeoutSeconds:
+                                description: timeoutSeconds specifies the seconds
+                                  of ClientIP type session sticky time. The value
+                                  must be >0 && <=86400(for 1 day) if ServiceAffinity
+                                  == "ClientIP". Default value is 10800(for 3 hours).
+                                format: int32
+                                type: integer
+                            type: object
+                        type: object
+                      type:
+                        description: type defines the type of this service. Must be
+                          ClusterSetIP or Headless.
+                        enum:
+                        - ClusterSetIP
+                        - Headless
+                        type: string
+                    required:
+                    - ports
+                    - type
+                    type: object
+                  status:
+                    description: status contains information about the exported services
+                      that form the multi-cluster service referenced by this ServiceImport.
+                    properties:
+                      clusters:
+                        description: clusters is the list of exporting clusters from
+                          which this service was derived.
+                        items:
+                          description: ClusterStatus contains service configuration
+                            mapped to a specific source cluster
+                          properties:
+                            cluster:
+                              description: cluster is the name of the exporting cluster.
+                                Must be a valid RFC-1123 DNS label.
+                              type: string
+                          required:
+                          - cluster
+                          type: object
+                        type: array
+                        x-kubernetes-list-map-keys:
+                        - cluster
+                        x-kubernetes-list-type: map
+                    type: object
+                type: object
+            type: object
+          status:
+            description: ResourceImportStatus defines the observed state of ResourceImport
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []
