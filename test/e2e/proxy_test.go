@@ -35,11 +35,7 @@ type expectTableFlows struct {
 }
 
 func skipIfProxyDisabled(t *testing.T, data *TestData) {
-	if featureGate, err := data.GetAgentFeatures(antreaNamespace); err != nil {
-		t.Fatalf("Error when detecting proxy: %v", err)
-	} else if !featureGate.Enabled(features.AntreaProxy) {
-		t.Skip("Skipping test because AntreaProxy is not enabled")
-	}
+	skipIfFeatureDisabled(t, data, features.AntreaProxy, true /* checkAgent */, false /* checkController */)
 }
 
 func TestProxyServiceSessionAffinity(t *testing.T) {

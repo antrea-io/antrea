@@ -50,16 +50,7 @@ type testcase struct {
 }
 
 func skipIfTraceflowDisabled(t *testing.T, data *TestData) {
-	if featureGate, err := data.GetAgentFeatures(antreaNamespace); err != nil {
-		t.Fatalf("Error when detecting traceflow: %v", err)
-	} else if !featureGate.Enabled(features.AntreaProxy) {
-		t.Skip("Skipping test because Traceflow is not enabled in the Agent")
-	}
-	if featureGate, err := data.GetControllerFeatures(antreaNamespace); err != nil {
-		t.Fatalf("Error when detecting traceflow: %v", err)
-	} else if !featureGate.Enabled(features.AntreaProxy) {
-		t.Skip("Skipping test because Traceflow is not enabled in the Controller")
-	}
+	skipIfFeatureDisabled(t, data, features.Traceflow, true, true)
 }
 
 var (
