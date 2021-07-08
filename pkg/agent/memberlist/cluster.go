@@ -383,7 +383,7 @@ func (c *Cluster) syncConsistentHash(eipName string) error {
 		return err
 	}
 
-	// updateConsistentHash refresh the consistentHashMap.
+	// updateConsistentHash refreshes the consistentHashMap.
 	updateConsistentHash := func(eip *v1alpha2.ExternalIPPool) error {
 		nodeSel, err := metav1.LabelSelectorAsSelector(&eip.Spec.NodeSelector)
 		if err != nil {
@@ -394,7 +394,7 @@ func (c *Cluster) syncConsistentHash(eipName string) error {
 			return err
 		}
 		aliveNodes := c.aliveNodes()
-		// Node alive and Node labels matches with ExternalIPPool nodeSelector.
+		// Node alive and Node labels match ExternalIPPool nodeSelector.
 		var aliveAndMatchedNodes []string
 		for _, node := range nodes {
 			nodeName := node.Name
@@ -425,14 +425,14 @@ func (c *Cluster) handleClusterNodeEvents(nodeEvent *memberlist.NodeEvent) {
 	node, event := nodeEvent.Node, nodeEvent.Event
 	switch event {
 	case memberlist.NodeJoin, memberlist.NodeLeave:
-		// When a Node joins cluster, all matched ExternalIPPools consistentHash should be updated.
-		// when a Node leave cluster, the Node may failed or deleted,
-		// if Node has been deleted, affected ExternalIPPool should enqueue, deleteNode handler has processed
-		// if the Node failed, ExternalIPPools consistentHash maybe changed, affected ExternalIPPool should enqueue.
+		// When a Node joins cluster, all matched ExternalIPPools consistentHash should be updated;
+		// when a Node leaves cluster, the Node may have failed or have been deleted,
+		// if the Node has been deleted, affected ExternalIPPool should be enqueued, and deleteNode handler has been executed,
+		// if the Node has failed, ExternalIPPools consistentHash maybe changed, and affected ExternalIPPool should be enqueued.
 		coreNode, err := c.nodeLister.Get(node.Name)
 		if err != nil {
 			if errors.IsNotFound(err) {
-				// Node has been deleted, deleteNode handler has processed.
+				// Node has been deleted, and deleteNode handler has been executed.
 				klog.ErrorS(err, "Processing Node event, not found", "eventType", event)
 				return
 			}
@@ -456,8 +456,8 @@ func (c *Cluster) aliveNodes() sets.String {
 	return nodes
 }
 
-// ShouldSelectEgress the local Node in the cluster holds the same consistent hash ring for each ExternalIPPool,
-// when selecting an owner Node for an Egress, the local Node labels must match an ExternalIPPool nodeSelectors.
+// ShouldSelectEgress returns true if the local Node selected as the owner Node of the Egress,
+// the local Node in the cluster holds the same consistent hash ring for each ExternalIPPool,
 // consistentHash.Get gets the closest item (Node name) in the hash to the provided key(egressIP),
 // if the name of the local Node is equal to the name of the selected Node, returns true.
 func (c *Cluster) ShouldSelectEgress(egress *v1alpha2.Egress) (bool, error) {

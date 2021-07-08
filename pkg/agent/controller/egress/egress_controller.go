@@ -278,8 +278,7 @@ func (c *EgressController) Run(stopCh <-chan struct{}) {
 
 	go c.cluster.Run(stopCh)
 
-	// The Egress has been deleted but assigned IP has not been deleted,
-	// agent should delete those IPs when it starts.
+	// The Egress has been deleted but assigned IP has not been deleted, so agent should delete those IPs when it starts.
 	for egressName := range c.ipAssigner.AssignedIPs() {
 		if _, err := c.egressLister.Get(egressName); err != nil {
 			if errors.IsNotFound(err) {
