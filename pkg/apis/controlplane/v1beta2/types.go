@@ -268,6 +268,9 @@ type NetworkPolicyPeer struct {
 	AddressGroups []string `json:"addressGroups,omitempty" protobuf:"bytes,1,rep,name=addressGroups"`
 	// A list of IPBlock.
 	IPBlocks []IPBlock `json:"ipBlocks,omitempty" protobuf:"bytes,2,rep,name=ipBlocks"`
+	// A list of exact FQDN names or FQDN wildcard expressions.
+	// This field can only be possibly set for NetworkPolicyPeer of egress rules.
+	FQDNs []string `json:"fqdns,omitempty" protobuf:"bytes,3,rep,name=fqdns"`
 }
 
 // IPBlock describes a particular CIDR (Ex. "192.168.1.1/24"). The except entry describes CIDRs that should

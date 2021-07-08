@@ -148,14 +148,19 @@ type lastRealized struct {
 	// It's same in all Openflow rules, because named port is only for
 	// destination Pods.
 	podIPs sets.String
+	// fqdnIPaddresses tracks the last realized set of IP addresses resolved for
+	// the fqdn selector of this policy rule. It must be empty for policy rule
+	// that is not egress and does not have toFQDN field.
+	fqdnIPAddresses sets.String
 }
 
 func newLastRealized(rule *CompletedRule) *lastRealized {
 	return &lastRealized{
-		ofIDs:         map[servicesKey]uint32{},
-		CompletedRule: rule,
-		podOFPorts:    map[servicesKey]sets.Int32{},
-		podIPs:        nil,
+		ofIDs:           map[servicesKey]uint32{},
+		CompletedRule:   rule,
+		podOFPorts:      map[servicesKey]sets.Int32{},
+		podIPs:          nil,
+		fqdnIPAddresses: nil,
 	}
 }
 
@@ -190,10 +195,19 @@ type reconciler struct {
 	ipv4Enabled bool
 	// ipv6Enabled tells is IPv6 is supported on this Node or not.
 	ipv6Enabled bool
+
+	// fqdnController manages dns cache of FQDN rules. It provides interfaces for the
+	// reconciler to register FQDN policy rules and query the IP addresses corresponded
+	// to a FQDN.
+	fqdnController *fqdnController
 }
 
 // newReconciler returns a new *reconciler.
-func newReconciler(ofClient openflow.Client, ifaceStore interfacestore.InterfaceStore, asyncRuleDeleteInterval time.Duration) *reconciler {
+func newReconciler(ofClient openflow.Client,
+	ifaceStore interfacestore.InterfaceStore,
+	idAllocator *idAllocator,
+	fqdnController *fqdnController,
+) *reconciler {
 	priorityAssigners := map[binding.TableIDType]*tablePriorityAssigner{}
 	for _, table := range openflow.GetAntreaPolicyBaselineTierTables() {
 		priorityAssigners[table] = &tablePriorityAssigner{
@@ -209,8 +223,9 @@ func newReconciler(ofClient openflow.Client, ifaceStore interfacestore.Interface
 		ofClient:          ofClient,
 		ifaceStore:        ifaceStore,
 		lastRealizeds:     sync.Map{},
-		idAllocator:       newIDAllocator(asyncRuleDeleteInterval),
+		idAllocator:       idAllocator,
 		priorityAssigners: priorityAssigners,
+		fqdnController:    fqdnController,
 	}
 	// Check if ofClient is nil or not to be compatible with unit tests.
 	if ofClient != nil {
@@ -398,6 +413,9 @@ func (r *reconciler) add(rule *CompletedRule, ofPriority *uint16, table binding.
 			return fmt.Errorf("error allocating Openflow ID")
 		}
 		if err = r.installOFRule(ofRule); err != nil {
+			if r.fqdnController != nil {
+				lastRealized.fqdnIPAddresses = nil
+			}
 			return err
 		}
 		// Record ofID only if its Openflow is installed successfully.
@@ -438,6 +456,15 @@ func (r *reconciler) computeOFRulesForAdd(rule *CompletedRule, ofPriority *uint1
 			}
 		}
 	} else {
+		if r.fqdnController != nil && len(rule.To.FQDNs) > 0 {
+			// TODO: addFQDNRule installs new conjunctive flows, so maybe it doesn't
+			// belong in computeOFRulesForAdd. The error handling needs to be corrected
+			// as well: if the flows failed to install, there should be a retry
+			// mechanism.
+			if err := r.fqdnController.addFQDNRule(rule.ID, rule.To.FQDNs, r.getOFPorts(rule.TargetMembers)); err != nil {
+				klog.ErrorS(err, "Error when adding FQDN rule", "ruleID", rule.ID)
+			}
+		}
 		ips := r.getIPs(rule.TargetMembers)
 		lastRealized.podIPs = ips
 		from := ipsToOFAddresses(ips)
@@ -462,7 +489,7 @@ func (r *reconciler) computeOFRulesForAdd(rule *CompletedRule, ofPriority *uint1
 		// isolated, so we create a PolicyRule with the original services if it doesn't exist.
 		// If there are IPBlocks or Pods that cannot resolve any named port, they will share
 		// this PolicyRule. Antrea policies do not need this default isolation.
-		if !rule.isAntreaNetworkPolicyRule() || len(rule.To.IPBlocks) > 0 {
+		if !rule.isAntreaNetworkPolicyRule() || len(rule.To.IPBlocks) > 0 || len(rule.To.FQDNs) > 0 {
 			svcKey := normalizeServices(rule.Services)
 			ofRule, exists := ofRuleByServicesMap[svcKey]
 			// Create a new Openflow rule if the group doesn't exist.
@@ -485,6 +512,18 @@ func (r *reconciler) computeOFRulesForAdd(rule *CompletedRule, ofPriority *uint1
 				// Diff Addresses between To and Except of IPBlocks
 				to := ipBlocksToOFAddresses(rule.To.IPBlocks, r.ipv4Enabled, r.ipv6Enabled)
 				ofRule.To = append(ofRule.To, to...)
+			}
+			if r.fqdnController != nil && len(rule.To.FQDNs) > 0 {
+				var addresses []types.Address
+				addressSet := sets.NewString()
+				matchedIPs := r.fqdnController.getIPsForFQDNSelectors(rule.To.FQDNs)
+				for _, ipAddr := range matchedIPs {
+					addresses = append(addresses, openflow.NewIPAddress(ipAddr))
+					addressSet.Insert(ipAddr.String())
+				}
+				ofRule.To = append(ofRule.To, addresses...)
+				// If the rule installation fails, this will be reset
+				lastRealized.fqdnIPAddresses = addressSet
 			}
 		}
 	}
@@ -586,6 +625,11 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule, 
 			lastRealized.podOFPorts[svcKey] = newOFPorts
 		}
 	} else {
+		if r.fqdnController != nil && len(newRule.To.FQDNs) > 0 {
+			if err := r.fqdnController.addFQDNRule(newRule.ID, newRule.To.FQDNs, r.getOFPorts(newRule.TargetMembers)); err != nil {
+				return fmt.Errorf("error when adding FQDN rule %s: %w", newRule.ID, err)
+			}
+		}
 		newIPs := r.getIPs(newRule.TargetMembers)
 		from := ipsToOFAddresses(newIPs)
 		addedFrom := ipsToOFAddresses(newIPs.Difference(lastRealized.podIPs))
@@ -632,8 +676,32 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule, 
 			} else {
 				addedTo := groupMembersToOFAddresses(members.Difference(prevMembersByServicesMap[svcKey]))
 				deletedTo := groupMembersToOFAddresses(prevMembersByServicesMap[svcKey].Difference(members))
+				originalFQDNAddressSet, newFQDNAddressSet := sets.NewString(), sets.NewString()
+				if r.fqdnController != nil {
+					if lastRealized.fqdnIPAddresses != nil {
+						originalFQDNAddressSet = lastRealized.fqdnIPAddresses
+					}
+					if svcKey == originalSvcKey && len(newRule.To.FQDNs) > 0 {
+						matchedIPs := r.fqdnController.getIPsForFQDNSelectors(newRule.To.FQDNs)
+						for _, ipAddr := range matchedIPs {
+							newFQDNAddressSet.Insert(ipAddr.String())
+						}
+						addedFQDNAddress := newFQDNAddressSet.Difference(originalFQDNAddressSet)
+						removedFQDNAddress := originalFQDNAddressSet.Difference(newFQDNAddressSet)
+						for a := range addedFQDNAddress {
+							addedTo = append(addedTo, openflow.NewIPAddress(net.ParseIP(a)))
+						}
+						for r := range removedFQDNAddress {
+							deletedTo = append(deletedTo, openflow.NewIPAddress(net.ParseIP(r)))
+						}
+					}
+				}
 				if err := r.updateOFRule(ofID, addedFrom, addedTo, deletedFrom, deletedTo, ofPriority); err != nil {
 					return err
+				}
+				if r.fqdnController != nil {
+					// Update the FQDN address set if rule installation succeeds.
+					lastRealized.fqdnIPAddresses = newFQDNAddressSet
 				}
 				// Delete valid servicesKey from staleOFIDs.
 				delete(staleOFIDs, svcKey)
@@ -738,7 +806,9 @@ func (r *reconciler) Forget(ruleID string) error {
 		delete(lastRealized.ofIDs, svcKey)
 		delete(lastRealized.podOFPorts, svcKey)
 	}
-
+	if r.fqdnController != nil {
+		r.fqdnController.deleteFQDNRule(ruleID, lastRealized.To.FQDNs)
+	}
 	r.lastRealizeds.Delete(ruleID)
 	return nil
 }

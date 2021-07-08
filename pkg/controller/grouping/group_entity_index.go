@@ -455,7 +455,7 @@ func (i *GroupEntityIndex) addEntity(entityType entityType, entity metav1.Object
 		if entityUpdated {
 			affectedSelectorItemKeys = lItem.selectorItemKeys.Union(oldLabelItem.selectorItemKeys)
 		} else {
-			affectedSelectorItemKeys = utilsets.SymmetricDifference(lItem.selectorItemKeys, oldLabelItem.selectorItemKeys)
+			affectedSelectorItemKeys = utilsets.SymmetricDifferenceString(lItem.selectorItemKeys, oldLabelItem.selectorItemKeys)
 		}
 	} else {
 		affectedSelectorItemKeys = lItem.selectorItemKeys

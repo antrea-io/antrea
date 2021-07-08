@@ -425,3 +425,15 @@ func Convert_controlplane_Service_To_v1beta1_Service(in *controlplane.Service, o
 	}
 	return nil
 }
+
+func Convert_controlplane_NetworkPolicyPeer_To_v1beta1_NetworkPolicyPeer(in *controlplane.NetworkPolicyPeer, out *NetworkPolicyPeer, s conversion.Scope) error {
+	out.AddressGroups = *(*[]string)(unsafe.Pointer(&in.AddressGroups))
+	out.IPBlocks = *(*[]IPBlock)(unsafe.Pointer(&in.IPBlocks))
+	return nil
+}
+
+func Convert_v1beta1_NetworkPolicyPeer_To_controlplane_NetworkPolicyPeer(in *NetworkPolicyPeer, out *controlplane.NetworkPolicyPeer, s conversion.Scope) error {
+	out.AddressGroups = *(*[]string)(unsafe.Pointer(&in.AddressGroups))
+	out.IPBlocks = *(*[]controlplane.IPBlock)(unsafe.Pointer(&in.IPBlocks))
+	return nil
+}

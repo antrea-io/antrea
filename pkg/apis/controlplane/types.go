@@ -258,6 +258,9 @@ type NetworkPolicyPeer struct {
 	AddressGroups []string
 	// A list of IPBlock.
 	IPBlocks []IPBlock
+	// A list of exact FQDN names or FQDN wildcard expressions.
+	// This field can only be possibly set for NetworkPolicyPeer of egress rules.
+	FQDNs []string
 }
 
 // IPBlock describes a particular CIDR (Ex. "192.168.1.1/24"). The except entry describes CIDRs that should

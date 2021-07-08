@@ -679,6 +679,11 @@ func (in *NetworkPolicyPeer) DeepCopyInto(out *NetworkPolicyPeer) {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
 	}
+	if in.FQDNs != nil {
+		in, out := &in.FQDNs, &out.FQDNs
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
 	return
 }
 

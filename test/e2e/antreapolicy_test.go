@@ -132,6 +132,13 @@ type TestStep struct {
 	CustomProbes      []*CustomProbe
 }
 
+// fqdnTestStep is a single unit of testing spec for FQDN policy tests.
+type fqdnTestStep struct {
+	clientPod            Pod
+	fqdnToQuery          string
+	expectedConnectivity PodConnectivityMark
+}
+
 // CustomProbe will spin up (or update) SourcePod and DestPod such that Add event of Pods
 // can be tested against expected connectivity among those Pods.
 type CustomProbe struct {
@@ -2423,6 +2430,57 @@ func testACNPNamespaceIsolation(t *testing.T, data *TestData) {
 	executeTestsWithData(t, testCase, data)
 }
 
+func testFQDNPolicy(t *testing.T) {
+	builder := &ClusterNetworkPolicySpecBuilder{}
+	builder = builder.SetName("test-acnp-drop-all-google").
+		SetTier("application").
+		SetPriority(1.0).
+		SetAppliedToGroup([]ACNPAppliedToSpec{{NSSelector: map[string]string{}}})
+	builder.AddFQDNRule("*google.com", v1.ProtocolTCP, nil, nil, nil, "r1", nil, crdv1alpha1.RuleActionReject)
+	builder.AddFQDNRule("wayfair.com", v1.ProtocolTCP, nil, nil, nil, "r2", nil, crdv1alpha1.RuleActionDrop)
+
+	testcases := []fqdnTestStep{
+		{
+			"x/a",
+			"drive.google.com",
+			Rejected,
+		},
+		{
+			"x/b",
+			"maps.google.com",
+			Rejected,
+		},
+		{
+			"y/a",
+			"wayfair.com",
+			Dropped,
+		},
+		{
+			"y/b",
+			"facebook.com",
+			Connected,
+		},
+	}
+	_, err := k8sUtils.CreateOrUpdateACNP(builder.Get())
+	failOnError(err, t)
+	time.Sleep(networkPolicyDelay)
+	for _, tc := range testcases {
+		log.Tracef("Probing: %s -> %s", tc.clientPod.PodName(), tc.fqdnToQuery)
+		connectivity, err := k8sUtils.ProbeEgress(tc.clientPod.Namespace(), tc.clientPod.PodName(), tc.fqdnToQuery, 80, v1.ProtocolTCP)
+		if err != nil {
+			t.Errorf("failure -- could not complete probe: %v", err)
+		}
+		if connectivity != tc.expectedConnectivity {
+			t.Errorf("failure -- wrong results for probe: Source %s/%s --> Dest %s connectivity: %v, expected: %v",
+				tc.clientPod.Namespace(), tc.clientPod.PodName(), tc.fqdnToQuery, connectivity, tc.expectedConnectivity)
+		}
+	}
+	// cleanup test resources
+	failOnError(k8sUtils.DeleteACNP(builder.Name), t)
+	failOnError(waitForResourceDelete("", builder.Name, resourceACNP, timeout), t)
+	time.Sleep(networkPolicyDelay)
+}
+
 // executeTests runs all the tests in testList and prints results
 func executeTests(t *testing.T, testList []*TestCase) {
 	executeTestsWithData(t, testList, nil)
@@ -2798,6 +2856,7 @@ func TestAntreaPolicy(t *testing.T) {
 		t.Run("Case=ACNPClusterGroupIngressRuleDenyCGWithXBtoYA", func(t *testing.T) { testACNPIngressRuleDenyCGWithXBtoYA(t) })
 		t.Run("Case=ACNPClusterGroupServiceRef", func(t *testing.T) { testACNPClusterGroupServiceRefCreateAndUpdate(t, data) })
 		t.Run("Case=ACNPNestedClusterGroup", func(t *testing.T) { testACNPNestedClusterGroupCreateAndUpdate(t, data) })
+		t.Run("Case=ACNPFQDNPolicy", func(t *testing.T) { testFQDNPolicy(t) })
 	})
 	// print results for reachability tests
 	printResults()
