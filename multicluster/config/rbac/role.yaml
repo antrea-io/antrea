@@ -1,0 +1,190 @@
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  creationTimestamp: null
+  name: controller-role
+rules:
+- apiGroups:
+  - multicluster.crd.antrea.io
+  resources:
+  - clusterclaims
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - multicluster.crd.antrea.io
+  resources:
+  - clusterclaims/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - multicluster.crd.antrea.io
+  resources:
+  - clusterclaims/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - multicluster.crd.antrea.io
+  resources:
+  - clustersets
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - multicluster.crd.antrea.io
+  resources:
+  - clustersets/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - multicluster.crd.antrea.io
+  resources:
+  - clustersets/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - multicluster.crd.antrea.io
+  resources:
+  - memberclusterannounces
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - multicluster.crd.antrea.io
+  resources:
+  - memberclusterannounces/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - multicluster.crd.antrea.io
+  resources:
+  - memberclusterannounces/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - multicluster.crd.antrea.io
+  resources:
+  - resourceexportfilters
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - multicluster.crd.antrea.io
+  resources:
+  - resourceexportfilters/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - multicluster.crd.antrea.io
+  resources:
+  - resourceexportfilters/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - multicluster.crd.antrea.io
+  resources:
+  - resourceexports
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - multicluster.crd.antrea.io
+  resources:
+  - resourceexports/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - multicluster.crd.antrea.io
+  resources:
+  - resourceexports/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - multicluster.crd.antrea.io
+  resources:
+  - resourceimportfilters
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - multicluster.crd.antrea.io
+  resources:
+  - resourceimportfilters/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - multicluster.crd.antrea.io
+  resources:
+  - resourceimportfilters/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - multicluster.crd.antrea.io
+  resources:
+  - resourceimports
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - multicluster.crd.antrea.io
+  resources:
+  - resourceimports/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - multicluster.crd.antrea.io
+  resources:
+  - resourceimports/status
+  verbs:
+  - get
+  - patch
+  - update

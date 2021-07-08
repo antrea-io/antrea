@@ -1,0 +1,100 @@
+
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.4.1
+  creationTimestamp: null
+  name: clustersets.multicluster.crd.antrea.io
+spec:
+  group: multicluster.crd.antrea.io
+  names:
+    kind: ClusterSet
+    listKind: ClusterSetList
+    plural: clustersets
+    singular: clusterset
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: ClusterSet is the Schema for the clustersets API
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: ClusterSetSpec defines the desired state of ClusterSet
+            properties:
+              leaders:
+                description: Leaders include leader clusters known to the member clusters.
+                items:
+                  description: MemberCluster defines member cluster information.
+                  properties:
+                    clusterID:
+                      description: Identify member cluster in ClusterSet.
+                      type: string
+                    secret:
+                      description: Secret name to access API server of the member
+                        from the leader cluster.
+                      type: string
+                    server:
+                      description: API server of the destination cluster.
+                      type: string
+                    serviceAccount:
+                      description: ServiceAccount used by the member cluster to access
+                        into leader cluster.
+                      type: string
+                  type: object
+                type: array
+              members:
+                description: Members include member clusters known to the leader clusters.
+                  Used in leader cluster.
+                items:
+                  description: MemberCluster defines member cluster information.
+                  properties:
+                    clusterID:
+                      description: Identify member cluster in ClusterSet.
+                      type: string
+                    secret:
+                      description: Secret name to access API server of the member
+                        from the leader cluster.
+                      type: string
+                    server:
+                      description: API server of the destination cluster.
+                      type: string
+                    serviceAccount:
+                      description: ServiceAccount used by the member cluster to access
+                        into leader cluster.
+                      type: string
+                  type: object
+                type: array
+              namespace:
+                description: Namespace to connect to in leader clusters. Used in member
+                  cluster.
+                type: string
+            type: object
+          status:
+            description: ClusterSetStatus defines the observed state of ClusterSet
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []
