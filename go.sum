@@ -35,10 +35,6 @@ github.com/VividCortex/ewma v1.1.1/go.mod h1:2Tkkvm3sRDVXaiyucHiACn4cqf7DpdyLvmx
 github.com/alecthomas/template v0.0.0-20160405071501-a0175ee3bccc/go.mod h1:LOuyumcjzFXgccqObfd/Ljyb9UuFJ6TxHnclSeseNhc=
 github.com/alecthomas/units v0.0.0-20151022065526-2efee857e7cf/go.mod h1:ybxpYRFXyAe+OPACYpWeL0wqObRcbAqCMya13uyzqw0=
 github.com/alexflint/go-filemutex v0.0.0-20171022225611-72bdc8eae2ae/go.mod h1:CgnQgUtFrFz9mxFNtED3jI5tLDjKlOM+oUF/sTk6ps0=
-github.com/antoninbas/go-powershell v0.1.0 h1:LKwuZJt3loyr++Y2Qc+FZoUt8TwbrTWB3HublPoykxA=
-github.com/antoninbas/go-powershell v0.1.0/go.mod h1:01pgKhz1CJxGnCWqXVDgvmp/QmHgWgEdxdYP+1azopE=
-github.com/antoninbas/gonetsh v0.1.2 h1:twRwmATT+Xnj/0JD0UBY4tWeW0D4vcEWITlj8nItJbI=
-github.com/antoninbas/gonetsh v0.1.2/go.mod h1:CMmmf/2dAGQRmgWUDXf4Om/MBof1Emt1V0UH/sgw85c=
 github.com/antoninbas/libOpenflow v0.0.0-20210218001059-32f2e57d0435 h1:vVl9f3eDJm14Cyu9ye0ENw6j1Q++XYLEshV4KYBc9ac=
 github.com/antoninbas/libOpenflow v0.0.0-20210218001059-32f2e57d0435/go.mod h1:KqprRw1Mp8VGnGj0NzPeZQojUvT5X26DV7suLSM1iqM=
 github.com/armon/consul-api v0.0.0-20180202201655-eb2c6b5be1b6/go.mod h1:grANhF5doyWs3UAsr3K4I6qtAmlQcZDesFNEHPZAzj8=
@@ -387,7 +383,6 @@ github.com/stretchr/testify v1.2.2/go.mod h1:a8OnRcib4nhh0OaRAV+Yts87kKdq0PP7pXf
 github.com/stretchr/testify v1.3.0/go.mod h1:M5WIy9Dh21IEIfnGCwXGc5bZfKNJtfHm1UVUgZn+9EI=
 github.com/stretchr/testify v1.4.0/go.mod h1:j7eGeouHqKxXV5pUuKE4zz7dFj8WfuZ+81PSLYec5m4=
 github.com/stretchr/testify v1.5.1/go.mod h1:5W2xD1RspED5o8YsWQXVCued0rvSQ+mT+I5cxcmMvtA=
-github.com/stretchr/testify v1.6.0/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/h/Wwjteg=
 github.com/stretchr/testify v1.6.1 h1:hDPOHmpOpP40lSULcqw7IrRb/u7w6RpDC9399XyoNd0=
 github.com/stretchr/testify v1.6.1/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/h/Wwjteg=
 github.com/ti-mo/conntrack v0.3.0 h1:572/72R9la2FVvO6CbsLiCmR48U3pgCvIlLKoUrExDU=

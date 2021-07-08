@@ -21,7 +21,6 @@ import (
 	"net"
 	"sync"
 
-	"github.com/rakelkar/gonetsh/netroute"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog"
 
@@ -36,7 +35,6 @@ const (
 )
 
 type Client struct {
-	nr          netroute.Interface
 	nodeConfig  *config.NodeConfig
 	serviceCIDR *net.IPNet
 	hostRoutes  *sync.Map
@@ -46,9 +44,7 @@ type Client struct {
 // NewClient returns a route client.
 // Todo: remove param serviceCIDR after kube-proxy is replaced by Antrea Proxy completely.
 func NewClient(serviceCIDR *net.IPNet, networkConfig *config.NetworkConfig, noSNAT bool) (*Client, error) {
-	nr := netroute.New()
 	return &Client{
-		nr:          nr,
 		serviceCIDR: serviceCIDR,
 		hostRoutes:  &sync.Map{},
 		fwClient:    winfirewall.NewClient(),
@@ -88,7 +84,7 @@ func (c *Client) Reconcile(podCIDRs []string) error {
 			c.hostRoutes.Store(dst, rt)
 			continue
 		}
-		err := c.nr.RemoveNetRoute(rt.LinkIndex, rt.DestinationSubnet, rt.GatewayAddress)
+		err := util.RemoveNetRoute(rt)
 		if err != nil {
 			return err
 		}
@@ -101,21 +97,27 @@ func (c *Client) Reconcile(podCIDRs []string) error {
 func (c *Client) AddRoutes(podCIDR *net.IPNet, peerNodeIP, peerGwIP net.IP) error {
 	obj, found := c.hostRoutes.Load(podCIDR.String())
 	if found {
-		rt := obj.(*netroute.Route)
+		rt := obj.(*util.Route)
 		if rt.GatewayAddress.Equal(peerGwIP) {
 			klog.V(4).Infof("Route with destination %s already exists", podCIDR.String())
 			return nil
 		}
 		// Remove the existing route entry if the gateway address is not as expected.
-		if err := c.nr.RemoveNetRoute(rt.LinkIndex, rt.DestinationSubnet, rt.GatewayAddress); err != nil {
+		if err := util.RemoveNetRoute(rt); err != nil {
 			klog.Errorf("Failed to delete existing route entry with destination %s gateway %s", podCIDR.String(), peerGwIP.String())
 			return err
 		}
 	}
-	if err := c.nr.NewNetRoute(c.nodeConfig.GatewayConfig.LinkIndex, podCIDR, peerGwIP); err != nil {
+	route := util.Route{
+		LinkIndex:         c.nodeConfig.GatewayConfig.LinkIndex,
+		DestinationSubnet: podCIDR,
+		GatewayAddress:    peerGwIP,
+		RouteMetric:       util.DefaultMetric,
+	}
+	if err := util.NewNetRoute(&route); err != nil {
 		return err
 	}
-	c.hostRoutes.Store(podCIDR.String(), &netroute.Route{
+	c.hostRoutes.Store(podCIDR.String(), &util.Route{
 		LinkIndex:         c.nodeConfig.GatewayConfig.LinkIndex,
 		DestinationSubnet: podCIDR,
 		GatewayAddress:    peerGwIP,
@@ -133,8 +135,8 @@ func (c *Client) DeleteRoutes(podCIDR *net.IPNet) error {
 		return nil
 	}
 
-	rt := obj.(*netroute.Route)
-	if err := c.nr.RemoveNetRoute(rt.LinkIndex, rt.DestinationSubnet, rt.GatewayAddress); err != nil {
+	rt := obj.(*util.Route)
+	if err := util.RemoveNetRoute(rt); err != nil {
 		return err
 	}
 	c.hostRoutes.Delete(podCIDR.String())
@@ -157,12 +159,12 @@ func (c *Client) Run(stopCh <-chan struct{}) {
 	return
 }
 
-func (c *Client) listRoutes() (map[string]*netroute.Route, error) {
-	routes, err := c.nr.GetNetRoutesAll()
+func (c *Client) listRoutes() (map[string]*util.Route, error) {
+	routes, err := util.GetNetRoutesAll()
 	if err != nil {
 		return nil, err
 	}
-	rtMap := make(map[string]*netroute.Route)
+	rtMap := make(map[string]*util.Route)
 	for idx := range routes {
 		rt := routes[idx]
 		if rt.LinkIndex != c.nodeConfig.GatewayConfig.LinkIndex {
