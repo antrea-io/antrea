@@ -800,6 +800,10 @@ func (data *TestData) createClient() error {
 	if err != nil {
 		return fmt.Errorf("error when building kube config: %v", err)
 	}
+
+	kubeConfig.QPS = 20
+	kubeConfig.Burst = 50
+
 	clientset, err := kubernetes.NewForConfig(kubeConfig)
 	if err != nil {
 		return fmt.Errorf("error when creating kubernetes client: %v", err)
