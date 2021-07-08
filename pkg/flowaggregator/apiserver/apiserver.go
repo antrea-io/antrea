@@ -102,7 +102,7 @@ func newConfig(bindPort int) (*genericapiserver.CompletedConfig, error) {
 	secureServing.BindAddress = net.IPv4zero
 	secureServing.BindPort = bindPort
 
-	authentication.WithClientTimeout(authenticationTimeout)
+	authentication.WithRequestTimeout(authenticationTimeout)
 
 	if err := secureServing.MaybeDefaultWithSelfSignedCerts("localhost", nil, []net.IP{net.ParseIP("127.0.0.1"), net.IPv6loopback}); err != nil {
 		return nil, fmt.Errorf("error creating self-signed certificates: %v", err)
