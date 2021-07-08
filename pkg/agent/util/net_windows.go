@@ -17,6 +17,7 @@
 package util
 
 import (
+	"bufio"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
@@ -27,11 +28,11 @@ import (
 
 	"github.com/Microsoft/go-winio"
 	"github.com/Microsoft/hcsshim"
-	ps "github.com/antoninbas/go-powershell"
-	"github.com/antoninbas/go-powershell/backend"
 	"github.com/containernetworking/plugins/pkg/ip"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
+
+	ps "antrea.io/antrea/pkg/agent/util/powershell"
 )
 
 const (
@@ -42,7 +43,16 @@ const (
 	namedPipePrefix      = `\\.\pipe\`
 	commandRetryTimeout  = 5 * time.Second
 	commandRetryInterval = time.Second
+
+	DefaultMetric = 256
 )
+
+type Route struct {
+	LinkIndex         int
+	DestinationSubnet *net.IPNet
+	GatewayAddress    net.IP
+	RouteMetric       int
+}
 
 func GetNSPath(containerNetNS string) (string, error) {
 	return containerNetNS, nil
@@ -51,7 +61,7 @@ func GetNSPath(containerNetNS string) (string, error) {
 // IsVirtualAdapter checks if the provided adapter is virtual.
 func IsVirtualAdapter(name string) (bool, error) {
 	cmd := fmt.Sprintf(`Get-NetAdapter -InterfaceAlias "%s" | Select-Object -Property Virtual | Format-Table -HideTableHeaders`, name)
-	out, err := CallPSCommand(cmd)
+	out, err := ps.RunCommand(cmd)
 	if err != nil {
 		return false, err
 	}
@@ -64,7 +74,7 @@ func IsVirtualAdapter(name string) (bool, error) {
 
 func GetHostInterfaceStatus(ifaceName string) (string, error) {
 	cmd := fmt.Sprintf(`Get-NetAdapter -InterfaceAlias "%s" | Select-Object -Property Status | Format-Table -HideTableHeaders`, ifaceName)
-	out, err := CallPSCommand(cmd)
+	out, err := ps.RunCommand(cmd)
 	if err != nil {
 		return "", err
 	}
@@ -78,7 +88,7 @@ func EnableHostInterface(ifaceName string) error {
 	// It returns immediately no matter whether the interface has been enabled or not.
 	// So we need to check the interface status to ensure it is up before returning.
 	if err := wait.PollImmediate(commandRetryInterval, commandRetryTimeout, func() (done bool, err error) {
-		if err := InvokePSCommand(cmd); err != nil {
+		if _, err := ps.RunCommand(cmd); err != nil {
 			klog.Errorf("Failed to run command %s: %v", cmd, err)
 			return false, nil
 		}
@@ -102,7 +112,7 @@ func EnableHostInterface(ifaceName string) error {
 func ConfigureInterfaceAddress(ifaceName string, ipConfig *net.IPNet) error {
 	ipStr := strings.Split(ipConfig.String(), "/")
 	cmd := fmt.Sprintf(`New-NetIPAddress -InterfaceAlias "%s" -IPAddress %s -PrefixLength %s`, ifaceName, ipStr[0], ipStr[1])
-	err := InvokePSCommand(cmd)
+	_, err := ps.RunCommand(cmd)
 	// If the address already exists, ignore the error.
 	if err != nil && !strings.Contains(err.Error(), "already exists") {
 		return err
@@ -113,7 +123,7 @@ func ConfigureInterfaceAddress(ifaceName string, ipConfig *net.IPNet) error {
 // RemoveInterfaceAddress removes IPAddress from the specified interface.
 func RemoveInterfaceAddress(ifaceName string, ipAddr net.IP) error {
 	cmd := fmt.Sprintf(`Remove-NetIPAddress -InterfaceAlias "%s" -IPAddress %s -Confirm:$false`, ifaceName, ipAddr.String())
-	err := InvokePSCommand(cmd)
+	_, err := ps.RunCommand(cmd)
 	// If the address does not exist, ignore the error.
 	if err != nil && !strings.Contains(err.Error(), "No matching") {
 		return err
@@ -126,7 +136,7 @@ func RemoveInterfaceAddress(ifaceName string, ipAddr net.IP) error {
 func ConfigureInterfaceAddressWithDefaultGateway(ifaceName string, ipConfig *net.IPNet, gateway string) error {
 	ipStr := strings.Split(ipConfig.String(), "/")
 	cmd := fmt.Sprintf(`New-NetIPAddress -InterfaceAlias "%s" -IPAddress %s -PrefixLength %s -DefaultGateway %s`, ifaceName, ipStr[0], ipStr[1], gateway)
-	err := InvokePSCommand(cmd)
+	_, err := ps.RunCommand(cmd)
 	// If the address already exists, ignore the error.
 	if err != nil && !strings.Contains(err.Error(), "already exists") {
 		return err
@@ -137,35 +147,8 @@ func ConfigureInterfaceAddressWithDefaultGateway(ifaceName string, ipConfig *net
 // EnableIPForwarding enables the IP interface to forward packets that arrive on this interface to other interfaces.
 func EnableIPForwarding(ifaceName string) error {
 	cmd := fmt.Sprintf(`Set-NetIPInterface -InterfaceAlias "%s" -Forwarding Enabled`, ifaceName)
-	return InvokePSCommand(cmd)
-}
-
-func InvokePSCommand(cmd string) error {
-	_, err := CallPSCommand(cmd)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func CallPSCommand(cmd string) (string, error) {
-	// Create a backend shell.
-	back := &backend.Local{}
-
-	// start a local powershell process
-	shell, err := ps.New(back)
-	if err != nil {
-		return "", err
-	}
-	defer shell.Exit()
-	stdout, stderr, err := shell.Execute(cmd)
-	if err != nil {
-		return stdout, err
-	}
-	if stderr != "" {
-		return stdout, fmt.Errorf("%s", stderr)
-	}
-	return stdout, nil
+	_, err := ps.RunCommand(cmd)
+	return err
 }
 
 // RemoveManagementInterface removes the management interface of the HNS Network, and then the physical interface can be
@@ -177,7 +160,7 @@ func RemoveManagementInterface(networkName string) error {
 	cmd := fmt.Sprintf("Get-VMSwitch -Name %s  | Set-VMSwitch -AllowManagementOS $false ", networkName)
 	// Retry the operation here because an error is returned at the first invocation.
 	for i < maxRetry {
-		err = InvokePSCommand(cmd)
+		_, err = ps.RunCommand(cmd)
 		if err == nil {
 			return nil
 		}
@@ -191,7 +174,8 @@ func SetAdapterMACAddress(adapterName string, macConfig *net.HardwareAddr) error
 	macAddr := strings.Replace(macConfig.String(), ":", "", -1)
 	cmd := fmt.Sprintf("Set-NetAdapterAdvancedProperty -Name %s -RegistryKeyword NetworkAddress -RegistryValue %s",
 		adapterName, macAddr)
-	return InvokePSCommand(cmd)
+	_, err := ps.RunCommand(cmd)
+	return err
 }
 
 // WindowsHyperVEnabled checks if the Hyper-V is enabled on the host.
@@ -199,7 +183,7 @@ func SetAdapterMACAddress(adapterName string, macConfig *net.HardwareAddr) error
 // test, OVS requires "Microsoft-Hyper-V" feature to be enabled.
 func WindowsHyperVEnabled() (bool, error) {
 	cmd := "$(Get-WindowsOptionalFeature -Online -FeatureName Microsoft-Hyper-V).State"
-	result, err := CallPSCommand(cmd)
+	result, err := ps.RunCommand(cmd)
 	if err != nil {
 		return true, err
 	}
@@ -396,7 +380,7 @@ func PrepareHNSNetwork(subnetCIDR *net.IPNet, nodeIPNet *net.IPNet, uplinkAdapte
 // workloads by coalescing multiple TCP segments into fewer, but larger segments.
 func EnableRSCOnVSwitch(vSwitch string) error {
 	cmd := fmt.Sprintf("Get-VMSwitch -Name %s | Select-Object -Property SoftwareRscEnabled | Format-Table -HideTableHeaders", vSwitch)
-	stdout, err := CallPSCommand(cmd)
+	stdout, err := ps.RunCommand(cmd)
 	if err != nil {
 		return err
 	}
@@ -414,7 +398,7 @@ func EnableRSCOnVSwitch(vSwitch string) error {
 		return nil
 	}
 	cmd = fmt.Sprintf("Set-VMSwitch -Name %s -EnableSoftwareRsc $True", vSwitch)
-	err = InvokePSCommand(cmd)
+	_, err = ps.RunCommand(cmd)
 	if err != nil {
 		return err
 	}
@@ -454,7 +438,7 @@ func GetLocalBroadcastIP(ipNet *net.IPNet) net.IP {
 // GetDefaultGatewayByInterfaceIndex returns the default gateway configured on the specified interface.
 func GetDefaultGatewayByInterfaceIndex(ifIndex int) (string, error) {
 	cmd := fmt.Sprintf("$(Get-NetRoute -InterfaceIndex %d -DestinationPrefix 0.0.0.0/0 ).NextHop", ifIndex)
-	defaultGW, err := CallPSCommand(cmd)
+	defaultGW, err := ps.RunCommand(cmd)
 	if err != nil {
 		return "", err
 	}
@@ -465,7 +449,7 @@ func GetDefaultGatewayByInterfaceIndex(ifIndex int) (string, error) {
 // GetDNServersByInterfaceIndex returns the DNS servers configured on the specified interface.
 func GetDNServersByInterfaceIndex(ifIndex int) (string, error) {
 	cmd := fmt.Sprintf("$(Get-DnsClientServerAddress -InterfaceIndex %d -AddressFamily IPv4).ServerAddresses", ifIndex)
-	dnsServers, err := CallPSCommand(cmd)
+	dnsServers, err := ps.RunCommand(cmd)
 	if err != nil {
 		return "", err
 	}
@@ -477,7 +461,7 @@ func GetDNServersByInterfaceIndex(ifIndex int) (string, error) {
 // SetAdapterDNSServers configures DNSServers on network adapter.
 func SetAdapterDNSServers(adapterName, dnsServers string) error {
 	cmd := fmt.Sprintf("Set-DnsClientServerAddress -InterfaceAlias %s -ServerAddresses %s", adapterName, dnsServers)
-	if err := InvokePSCommand(cmd); err != nil {
+	if _, err := ps.RunCommand(cmd); err != nil {
 		return err
 	}
 	return nil
@@ -512,7 +496,7 @@ func HostInterfaceExists(ifaceName string) bool {
 	// So if a interface cannot be found by above function, use powershell command
 	// "Get-NetAdapter" to check if it exists.
 	cmd := fmt.Sprintf(`Get-NetAdapter -InterfaceAlias "%s"`, ifaceName)
-	if err := InvokePSCommand(cmd); err != nil {
+	if _, err := ps.RunCommand(cmd); err != nil {
 		return false
 	}
 	return true
@@ -524,5 +508,74 @@ func HostInterfaceExists(ifaceName string) bool {
 func SetInterfaceMTU(ifaceName string, mtu int) error {
 	cmd := fmt.Sprintf("Set-NetIPInterface -IncludeAllCompartments -InterfaceAlias \"%s\" -NlMtuBytes %d",
 		ifaceName, mtu)
-	return InvokePSCommand(cmd)
+	_, err := ps.RunCommand(cmd)
+	return err
+}
+
+func NewNetRoute(route *Route) error {
+	cmd := fmt.Sprintf("New-NetRoute -InterfaceIndex %v -DestinationPrefix %v -NextHop %v -RouteMetric %d -Verbose",
+		route.LinkIndex, route.DestinationSubnet.String(), route.GatewayAddress.String(), route.RouteMetric)
+	_, err := ps.RunCommand(cmd)
+	return err
+}
+
+func RemoveNetRoute(route *Route) error {
+	cmd := fmt.Sprintf("Remove-NetRoute -InterfaceIndex %v -DestinationPrefix %v -NextHop  %v -Verbose -Confirm:$false",
+		route.LinkIndex, route.DestinationSubnet.String(), route.GatewayAddress.String())
+	_, err := ps.RunCommand(cmd)
+	return err
+}
+
+func GetNetRoutes(linkIndex int, dstSubnet *net.IPNet) ([]Route, error) {
+	cmd := fmt.Sprintf("Get-NetRoute -InterfaceIndex %d -DestinationPrefix %s -erroraction Ignore | Format-Table -HideTableHeaders",
+		linkIndex, dstSubnet.String())
+	return getNetRoutes(cmd)
+}
+
+func GetNetRoutesAll() ([]Route, error) {
+	cmd := "Get-NetRoute -ErrorAction Ignore | Format-Table -HideTableHeaders"
+	return getNetRoutes(cmd)
+}
+
+func getNetRoutes(cmd string) ([]Route, error) {
+	routesStr, _ := ps.RunCommand(cmd)
+	routes, err := parseRoutes(routesStr)
+	if err != nil {
+		return nil, err
+	}
+	return routes, nil
+}
+
+func parseRoutes(routesStr string) ([]Route, error) {
+	scanner := bufio.NewScanner(strings.NewReader(routesStr))
+	var routes []Route
+	for scanner.Scan() {
+		items := strings.Fields(scanner.Text())
+		if len(items) < 6 {
+			// Skip if an empty line or something similar
+			continue
+		}
+
+		idx, err := strconv.Atoi(items[0])
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse the LinkIndex '%s': %v", items[0], err)
+		}
+		_, dstSubnet, err := net.ParseCIDR(items[1])
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse the DestinationSubnet '%s': %v", items[1], err)
+		}
+		gw := net.ParseIP(items[2])
+		metric, err := strconv.Atoi(items[3])
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse the RouteMetric '%s': %v", items[3], err)
+		}
+		route := Route{
+			LinkIndex:         idx,
+			DestinationSubnet: dstSubnet,
+			GatewayAddress:    gw,
+			RouteMetric:       metric,
+		}
+		routes = append(routes, route)
+	}
+	return routes, nil
 }
