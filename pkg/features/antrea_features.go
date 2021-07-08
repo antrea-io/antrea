@@ -56,6 +56,7 @@ const (
 	FlowExporter featuregate.Feature = "FlowExporter"
 
 	// alpha: v0.10
+	// beta: v1.2
 	// Enable collecting and exposing NetworkPolicy statistics.
 	NetworkPolicyStats featuregate.Feature = "NetworkPolicyStats"
 
@@ -86,7 +87,7 @@ var (
 		EndpointSlice:      {Default: false, PreRelease: featuregate.Alpha},
 		Traceflow:          {Default: true, PreRelease: featuregate.Beta},
 		FlowExporter:       {Default: false, PreRelease: featuregate.Alpha},
-		NetworkPolicyStats: {Default: false, PreRelease: featuregate.Alpha},
+		NetworkPolicyStats: {Default: true, PreRelease: featuregate.Beta},
 		NodePortLocal:      {Default: false, PreRelease: featuregate.Alpha},
 	}
 

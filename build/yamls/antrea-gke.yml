@@ -3663,7 +3663,7 @@ data:
     #  FlowExporter: false
 
     # Enable collecting and exposing NetworkPolicy statistics.
-    #  NetworkPolicyStats: false
+    #  NetworkPolicyStats: true
 
     # Enable controlling SNAT IPs of Pod egress traffic.
     #  Egress: false
@@ -3812,7 +3812,7 @@ data:
     #  AntreaPolicy: true
 
     # Enable collecting and exposing NetworkPolicy statistics.
-    #  NetworkPolicyStats: false
+    #  NetworkPolicyStats: true
 
     # Enable controlling SNAT IPs of Pod egress traffic.
     #  Egress: false
@@ -3861,7 +3861,7 @@ metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-9g829tktd6
+  name: antrea-config-4gm249hc95
   namespace: kube-system
 ---
 apiVersion: v1
@@ -3932,7 +3932,7 @@ spec:
             fieldRef:
               fieldPath: spec.serviceAccountName
         - name: ANTREA_CONFIG_MAP_NAME
-          value: antrea-config-9g829tktd6
+          value: antrea-config-4gm249hc95
         image: projects.registry.vmware.com/antrea/antrea-ubuntu:latest
         imagePullPolicy: IfNotPresent
         livenessProbe:
@@ -3983,7 +3983,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-9g829tktd6
+          name: antrea-config-4gm249hc95
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -4282,7 +4282,7 @@ spec:
           path: /home/kubernetes/bin
         name: host-cni-bin
       - configMap:
-          name: antrea-config-9g829tktd6
+          name: antrea-config-4gm249hc95
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d

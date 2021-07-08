@@ -32,7 +32,12 @@ import (
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/agentinfo"
 	"antrea.io/antrea/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/pkg/apis/stats/v1alpha1"
+	"antrea.io/antrea/pkg/features"
 )
+
+func skipIfNetworkPolicyStatsDisabled(tb testing.TB, data *TestData) {
+	skipIfFeatureDisabled(tb, data, features.NetworkPolicyStats, true, true)
+}
 
 func TestNetworkPolicyStats(t *testing.T) {
 	skipIfNotIPv4Cluster(t)
@@ -43,16 +48,7 @@ func TestNetworkPolicyStats(t *testing.T) {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
 	defer teardownTest(t, data)
-
-	cc := []configChange{
-		{"NetworkPolicyStats", "true", true},
-	}
-	ac := []configChange{
-		{"NetworkPolicyStats", "true", true},
-	}
-	if err := data.mutateAntreaConfigMap(cc, ac, true, true); err != nil {
-		t.Fatalf("Failed to enable NetworkPolicyStats feature: %v", err)
-	}
+	skipIfNetworkPolicyStatsDisabled(t, data)
 
 	serverName, serverIPs, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "test-server-", "")
 	defer cleanupFunc()
