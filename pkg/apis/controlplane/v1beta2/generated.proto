@@ -226,6 +226,10 @@ message NetworkPolicyPeer {
 
   // A list of IPBlock.
   repeated IPBlock ipBlocks = 2;
+
+  // A list of exact FQDN names or FQDN wildcard expressions.
+  // This field can only be possibly set for NetworkPolicyPeer of egress rules.
+  repeated string fqdns = 3;
 }
 
 message NetworkPolicyReference {

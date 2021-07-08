@@ -150,6 +150,17 @@ func (b *ofPacketOutBuilder) SetIPFlags(flags uint16) PacketOutBuilder {
 	return b
 }
 
+// SetIPFlags sets flags in the packet's IP header. IPv4 only.
+func (b *ofPacketOutBuilder) SetIPHeaderID(id uint16) PacketOutBuilder {
+	if b.pktOut.IPv6Header == nil {
+		if b.pktOut.IPHeader == nil {
+			b.pktOut.IPHeader = new(protocol.IPv4)
+		}
+		b.pktOut.IPHeader.Id = id
+	}
+	return b
+}
+
 // SetTCPSrcPort sets the source port in the packet's TCP header.
 func (b *ofPacketOutBuilder) SetTCPSrcPort(port uint16) PacketOutBuilder {
 	if b.pktOut.TCPHeader == nil {
@@ -254,6 +265,14 @@ func (b *ofPacketOutBuilder) SetICMPData(data []byte) PacketOutBuilder {
 	return b
 }
 
+func (b *ofPacketOutBuilder) SetUDPData(data []byte) PacketOutBuilder {
+	if b.pktOut.UDPHeader == nil {
+		b.pktOut.UDPHeader = new(protocol.UDP)
+	}
+	b.pktOut.UDPHeader.Data = data
+	return b
+}
+
 // SetInport sets the in_port field of the packetOut message.
 func (b *ofPacketOutBuilder) SetInport(inPort uint32) PacketOutBuilder {
 	b.pktOut.InPort = inPort
@@ -306,8 +325,10 @@ func (b *ofPacketOutBuilder) Done() *ofctrl.PacketOut {
 			b.pktOut.UDPHeader.Checksum = b.udpHeaderChecksum()
 			b.pktOut.IPHeader.Length = 20 + b.pktOut.UDPHeader.Len()
 		}
-		// #nosec G404: random number generator not used for security purposes
-		b.pktOut.IPHeader.Id = uint16(rand.Uint32())
+		if b.pktOut.IPHeader.Id == 0 {
+			// #nosec G404: random number generator not used for security purposes
+			b.pktOut.IPHeader.Id = uint16(rand.Uint32())
+		}
 		// Set IP version in the IP Header.
 		b.pktOut.IPHeader.Version = 0x4
 		b.pktOut.IPHeader.Checksum = b.ipHeaderChecksum()

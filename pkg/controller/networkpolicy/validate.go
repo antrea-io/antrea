@@ -17,6 +17,7 @@ package networkpolicy
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strconv"
 
 	admv1 "k8s.io/api/admission/v1"
@@ -73,6 +74,9 @@ var (
 	// reservedTierNames stores the set of Tier names which cannot be deleted
 	// since they are created by Antrea.
 	reservedTierNames = sets.NewString("baseline", "application", "platform", "networkops", "securityops", "emergency")
+	// allowedFQDNChars validates that the matchPattern field contains only valid DNS characters
+	// and the wildcard '*' character.
+	allowedFQDNChars = regexp.MustCompile("^[-0-9a-zA-Z.*]+$")
 )
 
 // RegisterAntreaPolicyValidator registers an Antrea-native policy validator
@@ -413,6 +417,11 @@ func (a *antreaPolicyValidator) createValidate(curObj interface{}, userInfo auth
 	if !allowed {
 		return reason, allowed
 	}
+	reason, allowed = a.validateFQDNSelectors(egress)
+	if !allowed {
+		return reason, allowed
+	}
+
 	if err := a.validatePort(ingress, egress); err != nil {
 		return err.Error(), false
 	}
@@ -538,6 +547,18 @@ func (v *antreaPolicyValidator) validateTierForPolicy(tier string) (string, bool
 	return "", true
 }
 
+// validateFQDNSelectors validates the toFQDN field set in Antrea-native policy egress rules are valid.
+func (a *antreaPolicyValidator) validateFQDNSelectors(egressRules []crdv1alpha1.Rule) (string, bool) {
+	for _, r := range egressRules {
+		for _, peer := range r.To {
+			if len(peer.FQDN) > 0 && !allowedFQDNChars.MatchString(peer.FQDN) {
+				return fmt.Sprintf("invalid characters in egress rule fqdn field: %s", peer.FQDN), false
+			}
+		}
+	}
+	return "", true
+}
+
 // updateValidate validates the UPDATE events of Antrea-native policies.
 func (a *antreaPolicyValidator) updateValidate(curObj, oldObj interface{}, userInfo authenticationv1.UserInfo) (string, bool) {
 	var tier string
@@ -565,6 +586,10 @@ func (a *antreaPolicyValidator) updateValidate(curObj, oldObj interface{}, userI
 		return fmt.Sprint("rules names must be unique within the policy"), false
 	}
 	reason, allowed = a.validatePeers(ingress, egress)
+	if !allowed {
+		return reason, allowed
+	}
+	reason, allowed = a.validateFQDNSelectors(egress)
 	if !allowed {
 		return reason, allowed
 	}

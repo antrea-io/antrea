@@ -839,6 +839,7 @@ func Convert_controlplane_NetworkPolicyNodeStatus_To_v1beta2_NetworkPolicyNodeSt
 func autoConvert_v1beta2_NetworkPolicyPeer_To_controlplane_NetworkPolicyPeer(in *NetworkPolicyPeer, out *controlplane.NetworkPolicyPeer, s conversion.Scope) error {
 	out.AddressGroups = *(*[]string)(unsafe.Pointer(&in.AddressGroups))
 	out.IPBlocks = *(*[]controlplane.IPBlock)(unsafe.Pointer(&in.IPBlocks))
+	out.FQDNs = *(*[]string)(unsafe.Pointer(&in.FQDNs))
 	return nil
 }
 
@@ -850,6 +851,7 @@ func Convert_v1beta2_NetworkPolicyPeer_To_controlplane_NetworkPolicyPeer(in *Net
 func autoConvert_controlplane_NetworkPolicyPeer_To_v1beta2_NetworkPolicyPeer(in *controlplane.NetworkPolicyPeer, out *NetworkPolicyPeer, s conversion.Scope) error {
 	out.AddressGroups = *(*[]string)(unsafe.Pointer(&in.AddressGroups))
 	out.IPBlocks = *(*[]IPBlock)(unsafe.Pointer(&in.IPBlocks))
+	out.FQDNs = *(*[]string)(unsafe.Pointer(&in.FQDNs))
 	return nil
 }
 

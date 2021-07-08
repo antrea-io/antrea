@@ -989,6 +989,8 @@ spec:
                                   format: cidr
                             group:
                               type: string
+                            fqdn:
+                              type: string
                       name:
                         type: string
                       enableLogging:
@@ -1360,6 +1362,8 @@ spec:
                                 cidr:
                                   type: string
                                   format: cidr
+                            fqdn:
+                              type: string
                       name:
                         type: string
                       enableLogging:

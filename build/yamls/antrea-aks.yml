@@ -727,6 +727,8 @@ spec:
                     to:
                       items:
                         properties:
+                          fqdn:
+                            type: string
                           group:
                             type: string
                           ipBlock:
@@ -1860,6 +1862,8 @@ spec:
                               matchLabels:
                                 x-kubernetes-preserve-unknown-fields: true
                             type: object
+                          fqdn:
+                            type: string
                           ipBlock:
                             properties:
                               cidr:

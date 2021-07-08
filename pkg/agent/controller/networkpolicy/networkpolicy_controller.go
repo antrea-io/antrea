@@ -44,6 +44,12 @@ const (
 	maxRetryDelay = 300 * time.Second
 	// Default number of workers processing a rule change.
 	defaultWorkers = 4
+	// Default number of workers for making DNS queries.
+	defaultDNSWorkers = 4
+	// Reserved OVS rule ID for installing the DNS response intercept rule.
+	// It is a special OVS rule which intercepts DNS query responses from DNS
+	// services to the workloads that have FQDN policy rules applied.
+	dnsInterceptRuleID = uint32(1)
 )
 
 var emptyWatch = watch.NewEmptyWatch()
@@ -88,6 +94,7 @@ type Controller struct {
 	// statusManager syncs NetworkPolicy statuses with the antrea-controller.
 	// It's only for Antrea NetworkPolicies.
 	statusManager         StatusManager
+	fqdnController        *fqdnController
 	networkPolicyWatcher  *watcher
 	appliedToGroupWatcher *watcher
 	addressGroupWatcher   *watcher
@@ -107,22 +114,32 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 	statusManagerEnabled bool,
 	loggingEnabled bool,
 	denyConnStore *connections.DenyConnectionStore,
-	asyncRuleDeleteInterval time.Duration) (*Controller, error) {
+	asyncRuleDeleteInterval time.Duration,
+	dnsServerOverride string) (*Controller, error) {
+	idAllocator := newIDAllocator(asyncRuleDeleteInterval, dnsInterceptRuleID)
 	c := &Controller{
 		antreaClientProvider: antreaClientGetter,
 		queue:                workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "networkpolicyrule"),
-		reconciler:           newReconciler(ofClient, ifaceStore, asyncRuleDeleteInterval),
 		ofClient:             ofClient,
 		antreaPolicyEnabled:  antreaPolicyEnabled,
 		statusManagerEnabled: statusManagerEnabled,
 		loggingEnabled:       loggingEnabled,
 		denyConnStore:        denyConnStore,
 	}
+	if antreaPolicyEnabled {
+		var err error
+		if c.fqdnController, err = newFQDNController(ofClient, idAllocator, dnsServerOverride, c.enqueueRule); err != nil {
+			return nil, err
+		}
+		if c.ofClient != nil {
+			c.ofClient.RegisterPacketInHandler(uint8(openflow.PacketInReasonNP), "dnsresponse", c.fqdnController)
+		}
+	}
+	c.reconciler = newReconciler(ofClient, ifaceStore, idAllocator, c.fqdnController)
 	c.ruleCache = newRuleCache(c.enqueueRule, entityUpdates)
 	if statusManagerEnabled {
 		c.statusManager = newStatusController(antreaClientGetter, nodeName, c.ruleCache)
 	}
-
 	// Create a WaitGroup that is used to block network policy workers from asynchronously processing
 	// NP rules until the events preceding bookmark are synced. It can also be used as part of the
 	// solution to a deterministic mechanism for when to cleanup flows from previous round.
@@ -411,6 +428,12 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 	go wait.NonSlidingUntil(c.addressGroupWatcher.watch, 5*time.Second, stopCh)
 	go wait.NonSlidingUntil(c.networkPolicyWatcher.watch, 5*time.Second, stopCh)
 
+	if c.antreaPolicyEnabled {
+		for i := 0; i < defaultDNSWorkers; i++ {
+			go wait.Until(c.fqdnController.worker, time.Second, stopCh)
+		}
+		go c.fqdnController.runRuleSyncTracker(stopCh)
+	}
 	klog.Infof("Waiting for all watchers to complete full sync")
 	c.fullSyncGroup.Wait()
 	klog.Infof("All watchers have completed full sync, installing flows for init events")
@@ -482,12 +505,11 @@ func (c *Controller) processAllItemsInQueue() {
 func (c *Controller) syncRule(key string) error {
 	startTime := time.Now()
 	defer func() {
-		klog.V(4).Infof("Finished syncing rule %q. (%v)", key, time.Since(startTime))
+		klog.V(4).InfoS("Finished syncing rule", "ruleID", key, "duration", time.Since(startTime))
 	}()
-
 	rule, effective, realizable := c.ruleCache.GetCompletedRule(key)
 	if !effective {
-		klog.V(2).Infof("Rule %v was not effective, removing its flows", key)
+		klog.V(2).InfoS("Rule was not effective, removing its flows", "ruleID", key)
 		if err := c.reconciler.Forget(key); err != nil {
 			return err
 		}
@@ -501,10 +523,17 @@ func (c *Controller) syncRule(key string) error {
 	// If the rule is not realizable, we can simply skip it as it will be marked as dirty
 	// and queued again when we receive the missing group it missed.
 	if !realizable {
-		klog.V(2).Infof("Rule %v was not realizable, skipping", key)
+		klog.V(2).InfoS("Rule is not realizable, skipping", "ruleID", key)
 		return nil
 	}
-	if err := c.reconciler.Reconcile(rule); err != nil {
+	err := c.reconciler.Reconcile(rule)
+	if c.fqdnController != nil {
+		// No matter whether the rule reconciliation succeeds or not, fqdnController
+		// needs to be notified of the status.
+		klog.V(2).InfoS("Rule realization was done", "ruleID", key)
+		c.fqdnController.notifyRuleUpdate(key, err)
+	}
+	if err != nil {
 		return err
 	}
 	if c.statusManagerEnabled && rule.SourceRef.Type != v1beta2.K8sNetworkPolicy {

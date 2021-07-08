@@ -355,6 +355,7 @@ type PacketOutBuilder interface {
 	SetIPProtocolValue(isIPv6 bool, protoValue uint8) PacketOutBuilder
 	SetTTL(ttl uint8) PacketOutBuilder
 	SetIPFlags(flags uint16) PacketOutBuilder
+	SetIPHeaderID(id uint16) PacketOutBuilder
 	SetTCPSrcPort(port uint16) PacketOutBuilder
 	SetTCPDstPort(port uint16) PacketOutBuilder
 	SetTCPFlags(flags uint8) PacketOutBuilder
@@ -362,6 +363,7 @@ type PacketOutBuilder interface {
 	SetTCPAckNum(ackNum uint32) PacketOutBuilder
 	SetUDPSrcPort(port uint16) PacketOutBuilder
 	SetUDPDstPort(port uint16) PacketOutBuilder
+	SetUDPData(data []byte) PacketOutBuilder
 	SetICMPType(icmpType uint8) PacketOutBuilder
 	SetICMPCode(icmpCode uint8) PacketOutBuilder
 	SetICMPID(id uint16) PacketOutBuilder

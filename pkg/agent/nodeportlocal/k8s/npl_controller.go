@@ -234,7 +234,7 @@ func (c *NPLController) enqueueSvcUpdate(oldObj, newObj interface{}) {
 		if !reflect.DeepEqual(oldSvc.Spec.Selector, newSvc.Spec.Selector) {
 			// Disjunctive union of Pods from both Service sets.
 			oldPodSet := sets.NewString(c.getPodsFromService(oldSvc)...)
-			podKeys = utilsets.SymmetricDifference(oldPodSet, newPodSet)
+			podKeys = utilsets.SymmetricDifferenceString(oldPodSet, newPodSet)
 		}
 		if !reflect.DeepEqual(oldSvc.Spec.Ports, newSvc.Spec.Ports) {
 			// If ports in a Service are changed, all the Pods selected by the Service have to be processed.

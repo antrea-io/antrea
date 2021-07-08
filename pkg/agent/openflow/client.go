@@ -277,6 +277,27 @@ type Client interface {
 		icmpCode uint8,
 		icmpData []byte,
 		isReject bool) error
+	// SendUDPPacketOut sends UDP packet as a packet-out to OVS.
+	SendUDPPacketOut(
+		srcMAC string,
+		dstMAC string,
+		srcIP string,
+		dstIP string,
+		inPort uint32,
+		outPort int32,
+		isIPv6 bool,
+		udpSrcPort uint16,
+		udpDstPort uint16,
+		udpData []byte,
+		isDNSResponse bool) error
+	// NewDNSpacketInConjunction creates a policyRuleConjunction for the dns response interception flows.
+	NewDNSpacketInConjunction(id uint32) error
+	// AddAddressToDNSConjunction adds addresses to the toAddresses of the dns packetIn conjunction,
+	// so that dns response packets sent towards these addresses will be intercepted and parsed by
+	// the fqdnController.
+	AddAddressToDNSConjunction(id uint32, addrs []types.Address) error
+	// DeleteAddressFromDNSConjunction removes addresses from the toAddresses of the dns packetIn conjunction.
+	DeleteAddressFromDNSConjunction(id uint32, addrs []types.Address) error
 }
 
 // GetFlowTableStatus returns an array of flow table status.
@@ -1087,6 +1108,42 @@ func (c *client) SendICMPPacketOut(
 		packetOutBuilder = packetOutBuilder.AddLoadRegMark(CustomReasonRejectRegMark)
 	}
 
+	packetOutObj := packetOutBuilder.Done()
+	return c.bridge.SendPacketOut(packetOutObj)
+}
+
+// SendUDPPacketOut generates UDP packet as a packet-out and sends it to OVS.
+func (c *client) SendUDPPacketOut(
+	srcMAC string,
+	dstMAC string,
+	srcIP string,
+	dstIP string,
+	inPort uint32,
+	outPort int32,
+	isIPv6 bool,
+	udpSrcPort uint16,
+	udpDstPort uint16,
+	udpData []byte,
+	isDNSResponse bool) error {
+	// Generate a base IP PacketOutBuilder.
+	packetOutBuilder, err := setBasePacketOutBuilder(c.bridge.BuildPacketOut(), srcMAC, dstMAC, srcIP, dstIP, inPort, outPort)
+	if err != nil {
+		return err
+	}
+	// Set protocol.
+	if isIPv6 {
+		packetOutBuilder = packetOutBuilder.SetIPProtocol(binding.ProtocolUDPv6)
+	} else {
+		packetOutBuilder = packetOutBuilder.SetIPProtocol(binding.ProtocolUDP)
+	}
+	// Set UDP header data.
+	packetOutBuilder = packetOutBuilder.SetUDPSrcPort(udpSrcPort).
+		SetUDPDstPort(udpDstPort).
+		SetUDPData(udpData)
+
+	if isDNSResponse {
+		packetOutBuilder = packetOutBuilder.AddLoadRegMark(CustomReasonDNSRegMark)
+	}
 	packetOutObj := packetOutBuilder.Done()
 	return c.bridge.SendPacketOut(packetOutObj)
 }
