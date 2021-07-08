@@ -34,7 +34,7 @@ spec:
           metadata:
             type: object
           spec:
-            description: ClusterSetSpec defines the desired state of ClusterSet
+            description: ClusterSetSpec defines the desired state of ClusterSet.
             properties:
               leaders:
                 description: Leaders include leader clusters known to the member clusters.
@@ -85,7 +85,82 @@ spec:
                 type: string
             type: object
           status:
-            description: ClusterSetStatus defines the observed state of ClusterSet
+            description: ClusterSetStatus defines the observed state of ClusterSet.
+            properties:
+              clusterStatuses:
+                description: The status of individual member clusters.
+                items:
+                  properties:
+                    conditions:
+                      items:
+                        description: ClusterCondition indicates the readiness condition
+                          of a cluster.
+                        properties:
+                          clusterID:
+                            description: ClusterID is the unique identifier of this
+                              cluster.
+                            type: string
+                          lastTransitionTime:
+                            description: Last time the condition transit from one
+                              status to another.
+                            format: date-time
+                            type: string
+                          message:
+                            description: A human readable message indicating details
+                              about the transition.
+                            type: string
+                          reason:
+                            description: Unique, one-word, CamelCase reason for the
+                              condition's last transition.
+                            type: string
+                          status:
+                            description: Status of the condition, one of True, False,
+                              Unknown.
+                            type: string
+                          type:
+                            type: string
+                        type: object
+                      type: array
+                  type: object
+                type: array
+              conditions:
+                description: The overall condition of the cluster set.
+                items:
+                  description: ClusterSetCondition indicates the readiness condition
+                    of the clusterSet.
+                  properties:
+                    lastTransitionTime:
+                      description: Last time the condition transit from one status
+                        to another.
+                      format: date-time
+                      type: string
+                    message:
+                      description: A human readable message indicating details about
+                        the transition.
+                      type: string
+                    reason:
+                      description: Unique, one-word, CamelCase reason for the condition's
+                        last transition.
+                      type: string
+                    status:
+                      description: Status of the condition, one of True, False, Unknown.
+                      type: string
+                    type:
+                      type: string
+                  type: object
+                type: array
+              observedGeneration:
+                description: The generation observed by the controller.
+                format: int64
+                type: integer
+              readyClusters:
+                description: Total number of clusters ready and connected.
+                format: int32
+                type: integer
+              totalClusters:
+                description: Total number of member clusters configured in the set.
+                format: int32
+                type: integer
             type: object
         type: object
     served: true
