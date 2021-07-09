@@ -175,6 +175,33 @@ func TestAllocateRelease(t *testing.T) {
 	}
 }
 
+func TestHas(t *testing.T) {
+	tests := []struct {
+		name        string
+		ipAllocator IPAllocator
+		ip          net.IP
+		expectedHas bool
+	}{
+		{
+			name:        "IPv4-single",
+			ipAllocator: newCIDRAllocator("10.10.10.0/24"),
+			ip:          net.ParseIP("10.10.10.0"),
+			expectedHas: false,
+		},
+		{
+			name:        "IPv4-multiple",
+			ipAllocator: MultiIPAllocator{newIPRangeAllocator("1.1.1.10", "1.1.1.20"), newCIDRAllocator("10.10.10.128/30")},
+			ip:          net.ParseIP("10.10.10.130"),
+			expectedHas: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expectedHas, tt.ipAllocator.Has(tt.ip))
+		})
+	}
+}
+
 func TestName(t *testing.T) {
 	ma := MultiIPAllocator{newIPRangeAllocator("1.1.1.10", "1.1.1.20"), newCIDRAllocator("10.10.10.128/30")}
 	assert.Equal(t, []string{"1.1.1.10-1.1.1.20", "10.10.10.128/30"}, ma.Names())
