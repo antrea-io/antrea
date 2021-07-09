@@ -21,6 +21,7 @@ package testing
 
 import (
 	gomock "github.com/golang/mock/gomock"
+	sets "k8s.io/apimachinery/pkg/util/sets"
 	reflect "reflect"
 )
 
@@ -47,25 +48,25 @@ func (m *MockIPAssigner) EXPECT() *MockIPAssignerMockRecorder {
 	return m.recorder
 }
 
-// AssignEgressIP mocks base method
-func (m *MockIPAssigner) AssignEgressIP(arg0, arg1 string) error {
+// AssignIP mocks base method
+func (m *MockIPAssigner) AssignIP(arg0 string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AssignEgressIP", arg0, arg1)
+	ret := m.ctrl.Call(m, "AssignIP", arg0)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// AssignEgressIP indicates an expected call of AssignEgressIP
-func (mr *MockIPAssignerMockRecorder) AssignEgressIP(arg0, arg1 interface{}) *gomock.Call {
+// AssignIP indicates an expected call of AssignIP
+func (mr *MockIPAssignerMockRecorder) AssignIP(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AssignEgressIP", reflect.TypeOf((*MockIPAssigner)(nil).AssignEgressIP), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AssignIP", reflect.TypeOf((*MockIPAssigner)(nil).AssignIP), arg0)
 }
 
 // AssignedIPs mocks base method
-func (m *MockIPAssigner) AssignedIPs() map[string]string {
+func (m *MockIPAssigner) AssignedIPs() sets.String {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "AssignedIPs")
-	ret0, _ := ret[0].(map[string]string)
+	ret0, _ := ret[0].(sets.String)
 	return ret0
 }
 
@@ -75,16 +76,16 @@ func (mr *MockIPAssignerMockRecorder) AssignedIPs() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AssignedIPs", reflect.TypeOf((*MockIPAssigner)(nil).AssignedIPs))
 }
 
-// UnassignEgressIP mocks base method
-func (m *MockIPAssigner) UnassignEgressIP(arg0 string) error {
+// UnassignIP mocks base method
+func (m *MockIPAssigner) UnassignIP(arg0 string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UnassignEgressIP", arg0)
+	ret := m.ctrl.Call(m, "UnassignIP", arg0)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// UnassignEgressIP indicates an expected call of UnassignEgressIP
-func (mr *MockIPAssignerMockRecorder) UnassignEgressIP(arg0 interface{}) *gomock.Call {
+// UnassignIP indicates an expected call of UnassignIP
+func (mr *MockIPAssignerMockRecorder) UnassignIP(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UnassignEgressIP", reflect.TypeOf((*MockIPAssigner)(nil).UnassignEgressIP), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UnassignIP", reflect.TypeOf((*MockIPAssigner)(nil).UnassignIP), arg0)
 }
