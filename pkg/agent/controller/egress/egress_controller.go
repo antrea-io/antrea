@@ -26,6 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/watch"
@@ -66,7 +67,8 @@ const (
 	egressIPIndex       = "egressIP"
 	externalIPPoolIndex = "externalIPPool"
 
-	DefaultEgressRunDir = "/var/run/antrea/egress"
+	// egressDummyDevice is the dummy device that holds the Egress IPs configured to the system by antrea-agent.
+	egressDummyDevice = "antrea-egress0"
 )
 
 var emptyWatch = watch.NewEmptyWatch()
@@ -173,7 +175,7 @@ func NewEgressController(
 		localIPDetector:      localIPDetector,
 		idAllocator:          newIDAllocator(minEgressMark, maxEgressMark),
 	}
-	ipAssigner, err := ipassigner.NewIPAssigner(nodeIP, DefaultEgressRunDir)
+	ipAssigner, err := ipassigner.NewIPAssigner(nodeIP, egressDummyDevice)
 	if err != nil {
 		return nil, fmt.Errorf("initializing egressIP assigner failed: %v", err)
 	}
@@ -276,20 +278,9 @@ func (c *EgressController) Run(stopCh <-chan struct{}) {
 		return
 	}
 
-	go c.cluster.Run(stopCh)
+	c.removeStaleEgressIPs()
 
-	// The Egress has been deleted but assigned IP has not been deleted, so agent should delete those IPs when it starts.
-	for egressName := range c.ipAssigner.AssignedIPs() {
-		if _, err := c.egressLister.Get(egressName); err != nil {
-			if errors.IsNotFound(err) {
-				if err := c.ipAssigner.UnassignEgressIP(egressName); err != nil {
-					klog.ErrorS(err, "Unassign EgressIP failed")
-				}
-			} else {
-				klog.ErrorS(err, "Get Egress error", "egressName", egressName)
-			}
-		}
-	}
+	go c.cluster.Run(stopCh)
 
 	go wait.NonSlidingUntil(c.watchEgressGroup, 5*time.Second, stopCh)
 
@@ -297,6 +288,25 @@ func (c *EgressController) Run(stopCh <-chan struct{}) {
 		go wait.Until(c.worker, time.Second, stopCh)
 	}
 	<-stopCh
+}
+
+// removeStaleEgressIPs unassigns stale Egress IPs that shouldn't be present on this Node.
+// These Egresses were either deleted from the Kubernetes API or migrated to other Nodes when the agent on this Node
+// was not running.
+func (c *EgressController) removeStaleEgressIPs() {
+	desiredLocalEgressIPs := sets.NewString()
+	egresses, _ := c.egressLister.List(labels.Everything())
+	for _, egress := range egresses {
+		if egress.Spec.EgressIP != "" && egress.Spec.ExternalIPPool != "" && egress.Status.EgressNode == c.nodeName {
+			desiredLocalEgressIPs.Insert(egress.Spec.EgressIP)
+		}
+	}
+	actualLocalEgressIPs := c.ipAssigner.AssignedIPs()
+	for ip := range actualLocalEgressIPs.Difference(desiredLocalEgressIPs) {
+		if err := c.ipAssigner.UnassignIP(ip); err != nil {
+			klog.ErrorS(err, "Failed to clean up stale Egress IP", "ip", ip)
+		}
+	}
 }
 
 // worker is a long-running function that will continually call the processNextWorkItem function in
@@ -534,7 +544,7 @@ func (c *EgressController) syncEgress(egressName string) error {
 
 	egress, err := c.egressLister.Get(egressName)
 	if err != nil {
-		// The Egress has been removed, clean up it.
+		// The Egress has been removed, clean it up.
 		if errors.IsNotFound(err) {
 			eState, exist := c.getEgressState(egressName)
 			// The Egress hasn't been installed, do nothing.
@@ -544,36 +554,9 @@ func (c *EgressController) syncEgress(egressName string) error {
 			if err := c.uninstallEgress(egressName, eState); err != nil {
 				return err
 			}
-			// Unassign the Egress IP (assigned by agent) from the local Node.
-			if err := c.ipAssigner.UnassignEgressIP(egressName); err != nil {
-				return err
-			}
 			return nil
 		}
 		return err
-	}
-
-	localNodeSelected, err := c.cluster.ShouldSelectEgress(egress)
-	if err != nil {
-		return err
-	}
-	if localNodeSelected {
-		// Assign Egress IP to the local Node.
-		if !c.localIPDetector.IsLocalIP(egress.Spec.EgressIP) {
-			err := c.ipAssigner.AssignEgressIP(egress.Spec.EgressIP, egressName)
-			if err != nil {
-				return err
-			}
-			if err := c.updateEgressStatus(egress, c.nodeName); err != nil {
-				return err
-			}
-			klog.InfoS("Assigned Egress IP", "Egress", egressName, "ip", egress.Spec.EgressIP, "nodeName", c.nodeName)
-		}
-	} else {
-		// Unassign the Egress IP (assigned by agent) from the local Node.
-		if err := c.ipAssigner.UnassignEgressIP(egressName); err != nil {
-			return err
-		}
 	}
 
 	eState, exist := c.getEgressState(egressName)
@@ -584,8 +567,31 @@ func (c *EgressController) syncEgress(egressName string) error {
 		}
 		exist = false
 	}
+	// Do not proceed if EgressIP is empty.
+	if egress.Spec.EgressIP == "" {
+		return nil
+	}
 	if !exist {
 		eState = c.newEgressState(egressName, egress.Spec.EgressIP)
+	}
+
+	localNodeSelected, err := c.cluster.ShouldSelectEgress(egress)
+	if err != nil {
+		return err
+	}
+	if localNodeSelected {
+		// Ensure the Egress IP is assigned to the system.
+		if err := c.ipAssigner.AssignIP(egress.Spec.EgressIP); err != nil {
+			return err
+		}
+		if err := c.updateEgressStatus(egress, c.nodeName); err != nil {
+			return err
+		}
+	} else {
+		// Unassign the Egress IP from the local Node if it was assigned by the agent.
+		if err := c.ipAssigner.UnassignIP(egress.Spec.EgressIP); err != nil {
+			return err
+		}
 	}
 
 	// Realize the latest EgressIP and get the desired mark.
@@ -664,6 +670,10 @@ func (c *EgressController) uninstallEgress(egressName string, eState *egressStat
 	}
 	// Release the EgressIP's mark if the Egress is the last one referring to it.
 	if err := c.unrealizeEgressIP(egressName, eState.egressIP); err != nil {
+		return err
+	}
+	// Unassign the Egress IP from the local Node if it was assigned by the agent.
+	if err := c.ipAssigner.UnassignIP(eState.egressIP); err != nil {
 		return err
 	}
 	// Remove the Egress's state.
