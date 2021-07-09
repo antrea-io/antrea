@@ -70,7 +70,7 @@ type ResourceExportSpec struct {
 type ResourceExportConditionType string
 
 const (
-	ResourceExportSucceeded ResourceExportConditionType = "ResourceExportSucceeded"
+	ResourceExportSucceeded ResourceExportConditionType = "Succeeded"
 )
 
 // ResourceExportCondition indicates the readiness condition of the ResourceExport
@@ -79,7 +79,7 @@ type ResourceExportCondition struct {
 	// Status of the condition, one of True, False, Unknown
 	Status v1.ConditionStatus `json:"status,omitempty"`
 	// +optional
-	// Last time the condition transit from one status to another
+	// Last time the condition transited from one status to another
 	LastTransitionTime metav1.Time `json:"lastTransitionTime,omitempty"`
 	// +optional
 	// A human readable message indicating details about the transition

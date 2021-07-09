@@ -91,17 +91,16 @@ spec:
                 description: The status of individual member clusters.
                 items:
                   properties:
+                    clusterID:
+                      description: ClusterID is the unique identifier of this cluster.
+                      type: string
                     conditions:
                       items:
                         description: ClusterCondition indicates the readiness condition
                           of a cluster.
                         properties:
-                          clusterID:
-                            description: ClusterID is the unique identifier of this
-                              cluster.
-                            type: string
                           lastTransitionTime:
-                            description: Last time the condition transit from one
+                            description: Last time the condition transited from one
                               status to another.
                             format: date-time
                             type: string
@@ -130,7 +129,7 @@ spec:
                     of the clusterSet.
                   properties:
                     lastTransitionTime:
-                      description: Last time the condition transit from one status
+                      description: Last time the condition transited from one status
                         to another.
                       format: date-time
                       type: string

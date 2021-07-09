@@ -49,7 +49,7 @@ type ClusterSetConditionType string
 
 const (
 	// ClusterSetReady indicates whether ClusterSet is ready.
-	ClusterSetReady ClusterSetConditionType = "ClusterSetReady"
+	ClusterSetReady ClusterSetConditionType = "Ready"
 )
 
 // ClusterSetCondition indicates the readiness condition of the clusterSet.
@@ -58,7 +58,7 @@ type ClusterSetCondition struct {
 	// Status of the condition, one of True, False, Unknown.
 	Status v1.ConditionStatus `json:"status,omitempty"`
 	// +optional
-	// Last time the condition transit from one status to another.
+	// Last time the condition transited from one status to another.
 	LastTransitionTime metav1.Time `json:"lastTransitionTime,omitempty"`
 	// +optional
 	// A human readable message indicating details about the transition.
@@ -72,9 +72,9 @@ type ClusterConditionType string
 
 const (
 	// ClusterReady indicates whether Cluster is ready and connected.
-	ClusterReady ClusterConditionType = "ClusterReady"
+	ClusterReady ClusterConditionType = "Ready"
 	// ClusterIsLeader indicates whether Cluster is leader.
-	ClusterIsLeader ClusterConditionType = "ClusterIsLeader"
+	ClusterIsLeader ClusterConditionType = "IsLeader"
 )
 
 // ClusterCondition indicates the readiness condition of a cluster.
@@ -82,11 +82,9 @@ type ClusterCondition struct {
 	Type ClusterConditionType `json:"type,omitempty"`
 	// Status of the condition, one of True, False, Unknown.
 	Status v1.ConditionStatus `json:"status,omitempty"`
-	// ClusterID is the unique identifier of this cluster.
-	ClusterID string `json:"clusterID,omitempty"`
 
 	// +optional
-	// Last time the condition transit from one status to another.
+	// Last time the condition transited from one status to another.
 	LastTransitionTime metav1.Time `json:"lastTransitionTime,omitempty"`
 	// +optional
 	// A human readable message indicating details about the transition.
@@ -97,6 +95,8 @@ type ClusterCondition struct {
 }
 
 type ClusterStatus struct {
+	// ClusterID is the unique identifier of this cluster.
+	ClusterID  string             `json:"clusterID,omitempty"`
 	Conditions []ClusterCondition `json:"conditions,omitempty"`
 }
 

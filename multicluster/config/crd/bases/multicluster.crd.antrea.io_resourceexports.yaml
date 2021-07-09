@@ -662,7 +662,7 @@ spec:
                     of the ResourceExport
                   properties:
                     lastTransitionTime:
-                      description: Last time the condition transit from one status
+                      description: Last time the condition transited from one status
                         to another
                       format: date-time
                       type: string
