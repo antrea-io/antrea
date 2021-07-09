@@ -295,20 +295,6 @@ func (mr *MockIPFIXAggregationProcessMockRecorder) IsAggregatedRecordIPv4(arg0 i
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsAggregatedRecordIPv4", reflect.TypeOf((*MockIPFIXAggregationProcess)(nil).IsAggregatedRecordIPv4), arg0)
 }
 
-// IsExporterOfAggregatedRecordIPv4 mocks base method
-func (m *MockIPFIXAggregationProcess) IsExporterOfAggregatedRecordIPv4(arg0 intermediate.AggregationFlowRecord) bool {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "IsExporterOfAggregatedRecordIPv4", arg0)
-	ret0, _ := ret[0].(bool)
-	return ret0
-}
-
-// IsExporterOfAggregatedRecordIPv4 indicates an expected call of IsExporterOfAggregatedRecordIPv4
-func (mr *MockIPFIXAggregationProcessMockRecorder) IsExporterOfAggregatedRecordIPv4(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsExporterOfAggregatedRecordIPv4", reflect.TypeOf((*MockIPFIXAggregationProcess)(nil).IsExporterOfAggregatedRecordIPv4), arg0)
-}
-
 // ResetStatElementsInRecord mocks base method
 func (m *MockIPFIXAggregationProcess) ResetStatElementsInRecord(arg0 entities.Record) error {
 	m.ctrl.T.Helper()
