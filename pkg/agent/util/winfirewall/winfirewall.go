@@ -23,7 +23,7 @@ import (
 
 	"k8s.io/klog/v2"
 
-	"antrea.io/antrea/pkg/agent/util"
+	ps "antrea.io/antrea/pkg/agent/util/powershell"
 )
 
 type FWRuleDirection string
@@ -66,7 +66,8 @@ type winFirewallRule struct {
 // add adds Firewall rule on the Windows host. The name and display name of the firewall rule are the same.
 func (r *winFirewallRule) add() error {
 	cmd := fmt.Sprintf("New-NetFirewallRule -Enabled True -Group %s %s", fwRuleGroup, r.getCommandString())
-	return util.InvokePSCommand(cmd)
+	_, err := ps.RunCommand(cmd)
+	return err
 }
 
 func (r *winFirewallRule) getCommandString() string {
@@ -109,7 +110,7 @@ func (c *Client) AddRuleBlockIP(name string, direction FWRuleDirection, ipNet *n
 
 func (c *Client) FirewallRuleExists(name string) (bool, error) {
 	cmd := fmt.Sprintf("Get-NetfirewallRule -DisplayName '%s'", name)
-	result, err := util.CallPSCommand(cmd)
+	result, err := ps.RunCommand(cmd)
 	if err != nil {
 		if strings.Contains(err.Error(), "No MSFT_NetFirewallRule objects found") {
 			return false, nil
@@ -131,13 +132,13 @@ func checkDeletionError(err error) error {
 
 func (c *Client) DelFirewallRuleByName(name string) error {
 	cmd := fmt.Sprintf("Remove-NetFirewallRule -DisplayName '%s'", name)
-	err := util.InvokePSCommand(cmd)
+	_, err := ps.RunCommand(cmd)
 	return checkDeletionError(err)
 }
 
 func (c *Client) DelAllFirewallRules() error {
 	cmd := fmt.Sprintf("Remove-NetFirewallRule -Group '%s'", fwRuleGroup)
-	err := util.InvokePSCommand(cmd)
+	_, err := ps.RunCommand(cmd)
 	return checkDeletionError(err)
 }
 
