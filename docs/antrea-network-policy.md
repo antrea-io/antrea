@@ -254,6 +254,26 @@ spec:
           port: 5978
       name: DropToThirdParty
       enableLogging: true
+---
+apiVersion: crd.antrea.io/v1alpha1
+kind: ClusterNetworkPolicy
+metadata:
+  name: isolate-all-pods-in-namespace
+spec:
+  priority: 1
+  tier: securityOps
+  appliedTo:
+    - namespaceSelector:
+        matchLabels:
+          app: no-network-access-required
+  ingress:
+    - action: Drop              # For all Pods in those Namespaces, drop and log all ingress traffic from anywhere
+      name: drop-all-ingress
+      enableLogging: true
+  egress:
+    - action: Drop              # For all Pods in those Namespaces, drop and log all egress traffic towards anywhere
+      name: drop-all-egress
+      enableLogging: true
 ```
 
 **spec**: The ClusterNetworkPolicy `spec` has all the information needed to
@@ -277,6 +297,8 @@ In the first example, the policy applies to Pods, which either match the labels
 labels "env=prod".
 The second example policy applies to all network endpoints selected by the
 "test-cg-with-db-selector" ClusterGroup.
+The third example policy applies to all Pods in the Namespaces that
+matches label "app=no-network-access-required".
 
 **priority**: The `priority` field determines the relative priority of the
 policy among all ClusterNetworkPolicies in the given cluster. This field is
@@ -313,7 +335,11 @@ and the second specified by a combination of a `podSelector` and a
 The second example policy contains a single rule, which allows matched traffic on
 multiple TCP ports (8000 through 9000 included, plus 6379) from all network endpoints
 selected by the "test-cg-with-frontend-selector" ClusterGroup.
-**Note**: The order in which the ingress rules are set matter, i.e. rules will
+The third example policy contains a single rule,
+which drops all ingress traffic towards any Pod in Namespaces that has label `app` set to
+`no-network-access-required`. Note that an empty `From` in the ingress rule means that
+this rule matches all ingress sources.
+**Note**: The order in which the ingress rules are specified matters, i.e., rules will
 be enforced in the order in which they are written.
 
 **egress**: Each ClusterNetworkPolicy may consist of zero or more ordered set
@@ -332,7 +358,11 @@ single port, to the 10.0.10.0/24 subnet specified by the `ipBlock` field.
 The second example policy contains a single rule, which drops matched traffic on
 TCP port 5978 to all network endpoints selected by the "test-cg-with-ip-block"
 ClusterGroup.
-**Note**: The order in which the egress rules are set matter, i.e. rules will
+The third example policy contains a single rule,
+which drops all egress traffic initiated by any Pod in Namespaces that has label `app` set to
+`no-network-access-required`. Note that an empty `To` in the egress rule means that
+this rule matches all egress destinations.
+**Note**: The order in which the egress rules are specified matters, i.e., rules will
 be enforced in the order in which they are written.
 
 **enableLogging**: A ClusterNetworkPolicy ingress or egress rule can be
