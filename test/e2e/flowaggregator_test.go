@@ -187,8 +187,9 @@ func testHelper(t *testing.T, data *TestData, podAIPs, podBIPs, podCIPs, podDIPs
 		t.Fatalf("Error when creating perftest Services: %v", err)
 	}
 	defer deletePerftestServices(t, data)
-	// Wait for the Service to be realized.
-	time.Sleep(3 * time.Second)
+	// Wait for the Services to be realized.
+	data.waitForServiceRealized(defaultTimeout, svcB.Name)
+	data.waitForServiceRealized(defaultTimeout, svcC.Name)
 
 	// OVS userspace implementation of conntrack doesn't maintain packet or byte counter statistics, so we ignore the bandwidth test in Kind cluster.
 	checkBandwidth := testOptions.providerName != "kind"

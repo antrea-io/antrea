@@ -1041,6 +1041,20 @@ func (data *TestData) deletePodAndWait(timeout time.Duration, name string, ns st
 	}
 }
 
+func (data *TestData) waitForServiceRealized(timeout time.Duration, name string) error {
+	if err := wait.Poll(defaultInterval, timeout, func() (bool, error) {
+		svc, err := data.clientset.CoreV1().Services(testNamespace).Get(context.TODO(), name, metav1.GetOptions{})
+		if svc != nil && err == nil {
+			return true, nil
+		}
+		return false, err
+	}); err == wait.ErrWaitTimeout {
+		return fmt.Errorf("service '%s' is not realized after %v", name, timeout)
+	} else {
+		return err
+	}
+}
+
 type PodCondition func(*corev1.Pod) (bool, error)
 
 // podWaitFor polls the K8s apiserver until the specified Pod is found (in the test Namespace) and
@@ -1376,6 +1390,14 @@ func (data *TestData) createNginxClusterIPService(name string, affinity bool, ip
 	return data.createService(name, 80, 80, map[string]string{"app": "nginx"}, affinity, corev1.ServiceTypeClusterIP, ipFamily)
 }
 
+// createBusyboxClusterIPService create a nginx service with the given name.
+func (data *TestData) createBusyboxClusterIPService(name string, affinity bool, ipFamily *corev1.IPFamily) (*corev1.Service, error) {
+	if name == "" {
+		name = "busybox"
+	}
+	return data.createService(name, 80, 80, map[string]string{"app": "busybox"}, affinity, corev1.ServiceTypeClusterIP, ipFamily)
+}
+
 func (data *TestData) createNginxLoadBalancerService(affinity bool, ingressIPs []string, ipFamily *corev1.IPFamily) (*corev1.Service, error) {
 	svc, err := data.createService(nginxLBService, 80, 80, map[string]string{"app": "nginx"}, affinity, corev1.ServiceTypeLoadBalancer, ipFamily)
 	if err != nil {
@@ -1419,7 +1441,7 @@ func (data *TestData) deleteServiceAndWait(timeout time.Duration, name string) e
 		// Keep trying
 		return false, nil
 	}); err == wait.ErrWaitTimeout {
-		return fmt.Errorf("Service '%s' still visible to client after %v", name, timeout)
+		return fmt.Errorf("service '%s' still visible to client after %v", name, timeout)
 	} else {
 		return err
 	}
@@ -1534,15 +1556,15 @@ func parseArpingStdout(out string) (sent uint32, received uint32, loss float32, 
 	re := regexp.MustCompile(`Sent\s+(\d+)\s+probe.*\nReceived\s+(\d+)\s+response`)
 	matches := re.FindStringSubmatch(out)
 	if len(matches) == 0 {
-		return 0, 0, 0.0, fmt.Errorf("Unexpected arping output")
+		return 0, 0, 0.0, fmt.Errorf("unexpected arping output")
 	}
 	if v, err := strconv.ParseUint(matches[1], 10, 32); err != nil {
-		return 0, 0, 0.0, fmt.Errorf("Error when retrieving 'sent probes' from arpping output: %v", err)
+		return 0, 0, 0.0, fmt.Errorf("error when retrieving 'sent probes' from arpping output: %v", err)
 	} else {
 		sent = uint32(v)
 	}
 	if v, err := strconv.ParseUint(matches[2], 10, 32); err != nil {
-		return 0, 0, 0.0, fmt.Errorf("Error when retrieving 'received responses' from arpping output: %v", err)
+		return 0, 0, 0.0, fmt.Errorf("error when retrieving 'received responses' from arpping output: %v", err)
 	} else {
 		received = uint32(v)
 	}
