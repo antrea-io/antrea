@@ -865,7 +865,7 @@ func testACNPAllowNoDefaultIsolation(t *testing.T, protocol v1.Protocol) {
 	executeTests(t, testCase)
 }
 
-// testACNPDropEgress tests that a ACNP is able to drop egress traffic from pods labelled A to namespace Z.
+// testACNPDropEgress tests that an ACNP is able to drop egress traffic from pods labelled A to namespace Z.
 func testACNPDropEgress(t *testing.T, protocol v1.Protocol) {
 	if protocol == v1.ProtocolSCTP {
 		skipIfProviderIs(t, "kind", "OVS userspace conntrack does not have the SCTP support for now.")
@@ -906,7 +906,41 @@ func testACNPDropEgress(t *testing.T, protocol v1.Protocol) {
 	executeTests(t, testCase)
 }
 
-// testACNPNoEffectOnOtherProtocols tests that a ACNP which drops TCP traffic won't affect other protocols (e.g. UDP).
+// testACNPDropIngressInNamespace tests that an ACNP is able to drop all ingress traffic towards a specific Namespace.
+// The ACNP is created by selecting the Namespace as an appliedTo, and adding an ingress rule with Drop action and
+// no `From` (which translate to drop ingress from everywhere).
+func testACNPDropIngressToNamespace(t *testing.T) {
+	builder := &ClusterNetworkPolicySpecBuilder{}
+	builder = builder.SetName("acnp-deny-ingress-to-x").
+		SetPriority(1.0).
+		SetAppliedToGroup([]ACNPAppliedToSpec{{NSSelector: map[string]string{"ns": "x"}}})
+	builder.AddIngress(v1.ProtocolTCP, &p80, nil, nil, nil, nil, nil, nil, nil, false, nil,
+		crdv1alpha1.RuleActionDrop, "", "drop-all-ingress")
+
+	reachability := NewReachability(allPods, Connected)
+	reachability.ExpectAllIngress("x/a", Dropped)
+	reachability.ExpectAllIngress("x/b", Dropped)
+	reachability.ExpectAllIngress("x/c", Dropped)
+	reachability.ExpectSelf(allPods, Connected)
+	testStep := []*TestStep{
+		{
+			"Port 80",
+			reachability,
+			[]metav1.Object{builder.Get()},
+			nil,
+			[]int32{80},
+			v1.ProtocolTCP,
+			0,
+			nil,
+		},
+	}
+	testCase := []*TestCase{
+		{"ACNP Drop all Ingress to Namespace x", testStep},
+	}
+	executeTests(t, testCase)
+}
+
+// testACNPNoEffectOnOtherProtocols tests that an ACNP which drops TCP traffic won't affect other protocols (e.g. UDP).
 func testACNPNoEffectOnOtherProtocols(t *testing.T) {
 	builder := &ClusterNetworkPolicySpecBuilder{}
 	builder = builder.SetName("acnp-deny-a-to-z-ingress").
@@ -1029,7 +1063,7 @@ func testACNPIngressRuleDenyCGWithXBtoYA(t *testing.T) {
 	executeTests(t, testCase)
 }
 
-// testACNPAppliedToRuleCGWithPodsAToNsZ tests that a ACNP is able to drop egress traffic from CG with pods labelled A namespace Z.
+// testACNPAppliedToRuleCGWithPodsAToNsZ tests that an ACNP is able to drop egress traffic from CG with pods labelled A namespace Z.
 func testACNPAppliedToRuleCGWithPodsAToNsZ(t *testing.T) {
 	cgName := "cg-pods-a"
 	cgBuilder := &ClusterGroupV1Alpha3SpecBuilder{}
@@ -1063,7 +1097,7 @@ func testACNPAppliedToRuleCGWithPodsAToNsZ(t *testing.T) {
 	executeTests(t, testCase)
 }
 
-// testACNPEgressRulePodsAToCGWithNsZ tests that a ACNP is able to drop egress traffic from pods labelled A to a CG with namespace Z.
+// testACNPEgressRulePodsAToCGWithNsZ tests that an ACNP is able to drop egress traffic from pods labelled A to a CG with namespace Z.
 func testACNPEgressRulePodsAToCGWithNsZ(t *testing.T) {
 	cgName := "cg-ns-z"
 	cgBuilder := &ClusterGroupV1Alpha3SpecBuilder{}
@@ -1368,7 +1402,7 @@ func testACNPClusterGroupRefRuleIPBlocks(t *testing.T) {
 	executeTests(t, testCase)
 }
 
-// testBaselineNamespaceIsolation tests that a ACNP in the baseline Tier is able to enforce default namespace isolation,
+// testBaselineNamespaceIsolation tests that an ACNP in the baseline Tier is able to enforce default namespace isolation,
 // which can be later overridden by developer K8s NetworkPolicies.
 func testBaselineNamespaceIsolation(t *testing.T) {
 	builder := &ClusterNetworkPolicySpecBuilder{}
@@ -1728,7 +1762,7 @@ func testACNPRulePriority(t *testing.T) {
 	executeTests(t, testCase)
 }
 
-// testACNPPortRange tests the port range in a ACNP can work.
+// testACNPPortRange tests the port range in an ACNP can work.
 func testACNPPortRange(t *testing.T) {
 	builder := &ClusterNetworkPolicySpecBuilder{}
 	builder = builder.SetName("acnp-deny-a-to-z-egress-port-range").
@@ -1761,7 +1795,7 @@ func testACNPPortRange(t *testing.T) {
 	executeTests(t, testCase)
 }
 
-// testACNPRejectEgress tests that a ACNP is able to reject egress traffic from pods labelled A to namespace Z.
+// testACNPRejectEgress tests that an ACNP is able to reject egress traffic from pods labelled A to namespace Z.
 func testACNPRejectEgress(t *testing.T) {
 	builder := &ClusterNetworkPolicySpecBuilder{}
 	builder = builder.SetName("acnp-reject-a-to-z-egress").
@@ -1793,8 +1827,8 @@ func testACNPRejectEgress(t *testing.T) {
 	executeTests(t, testCase)
 }
 
-// testACNPRejectIngress tests that a ACNP is able to reject egress traffic from pods labelled A to namespace Z.
-func testACNPRejectIngress(t *testing.T, data *TestData, protocol v1.Protocol) {
+// testACNPRejectIngress tests that an ACNP is able to reject egress traffic from pods labelled A to namespace Z.
+func testACNPRejectIngress(t *testing.T, protocol v1.Protocol) {
 	builder := &ClusterNetworkPolicySpecBuilder{}
 	builder = builder.SetName("acnp-reject-a-from-z-ingress").
 		SetPriority(1.0).
@@ -2693,10 +2727,11 @@ func TestAntreaPolicy(t *testing.T) {
 		t.Run("Case=ACNPDropEgress", func(t *testing.T) { testACNPDropEgress(t, v1.ProtocolTCP) })
 		t.Run("Case=ACNPDropEgressUDP", func(t *testing.T) { testACNPDropEgress(t, v1.ProtocolUDP) })
 		t.Run("Case=ACNPDropEgressSCTP", func(t *testing.T) { testACNPDropEgress(t, v1.ProtocolSCTP) })
+		t.Run("Case=ACNPDropIngressToNamespace", func(t *testing.T) { testACNPDropIngressToNamespace(t) })
 		t.Run("Case=ACNPPortRange", func(t *testing.T) { testACNPPortRange(t) })
 		t.Run("Case=ACNPRejectEgress", func(t *testing.T) { testACNPRejectEgress(t) })
-		t.Run("Case=ACNPRejectIngress", func(t *testing.T) { testACNPRejectIngress(t, data, v1.ProtocolTCP) })
-		t.Run("Case=ACNPRejectIngressUDP", func(t *testing.T) { testACNPRejectIngress(t, data, v1.ProtocolUDP) })
+		t.Run("Case=ACNPRejectIngress", func(t *testing.T) { testACNPRejectIngress(t, v1.ProtocolTCP) })
+		t.Run("Case=ACNPRejectIngressUDP", func(t *testing.T) { testACNPRejectIngress(t, v1.ProtocolUDP) })
 		t.Run("Case=ACNPNoEffectOnOtherProtocols", func(t *testing.T) { testACNPNoEffectOnOtherProtocols(t) })
 		t.Run("Case=ACNPBaselinePolicy", func(t *testing.T) { testBaselineNamespaceIsolation(t) })
 		t.Run("Case=ACNPPriorityOverride", func(t *testing.T) { testACNPPriorityOverride(t) })
