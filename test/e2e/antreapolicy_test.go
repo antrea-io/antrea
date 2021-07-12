@@ -906,10 +906,10 @@ func testACNPDropEgress(t *testing.T, protocol v1.Protocol) {
 	executeTests(t, testCase)
 }
 
-// testACNPDropIngressInNamespace tests that an ACNP is able to drop all ingress traffic towards a specific Namespace.
+// testACNPDropIngressInSelectedNamespace tests that an ACNP is able to drop all ingress traffic towards a specific Namespace.
 // The ACNP is created by selecting the Namespace as an appliedTo, and adding an ingress rule with Drop action and
 // no `From` (which translate to drop ingress from everywhere).
-func testACNPDropIngressToNamespace(t *testing.T) {
+func testACNPDropIngressInSelectedNamespace(t *testing.T) {
 	builder := &ClusterNetworkPolicySpecBuilder{}
 	builder = builder.SetName("acnp-deny-ingress-to-x").
 		SetPriority(1.0).
@@ -2727,7 +2727,7 @@ func TestAntreaPolicy(t *testing.T) {
 		t.Run("Case=ACNPDropEgress", func(t *testing.T) { testACNPDropEgress(t, v1.ProtocolTCP) })
 		t.Run("Case=ACNPDropEgressUDP", func(t *testing.T) { testACNPDropEgress(t, v1.ProtocolUDP) })
 		t.Run("Case=ACNPDropEgressSCTP", func(t *testing.T) { testACNPDropEgress(t, v1.ProtocolSCTP) })
-		t.Run("Case=ACNPDropIngressToNamespace", func(t *testing.T) { testACNPDropIngressToNamespace(t) })
+		t.Run("Case=ACNPDropIngressInNamespace", func(t *testing.T) { testACNPDropIngressInSelectedNamespace(t) })
 		t.Run("Case=ACNPPortRange", func(t *testing.T) { testACNPPortRange(t) })
 		t.Run("Case=ACNPRejectEgress", func(t *testing.T) { testACNPRejectEgress(t) })
 		t.Run("Case=ACNPRejectIngress", func(t *testing.T) { testACNPRejectIngress(t, v1.ProtocolTCP) })

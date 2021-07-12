@@ -12,7 +12,7 @@
   - [The Antrea ClusterNetworkPolicy resource](#the-antrea-clusternetworkpolicy-resource)
     - [ACNP with stand alone selectors](#acnp-with-stand-alone-selectors)
     - [ACNP with ClusterGroup reference](#acnp-with-clustergroup-reference)
-    - [ACNP for Pod-level isolation in Namespaces](#acnp-for-pod-level-isolation-in-namespaces)
+    - [ACNP for complete Pod isolation in selected Namespaces](#acnp-for-complete-pod-isolation-in-selected-namespaces)
     - [ACNP for default Namespace isolation](#acnp-for-default-namespace-isolation)
   - [Behavior of <em>to</em> and <em>from</em> selectors](#behavior-of-to-and-from-selectors)
   - [Key differences from K8s NetworkPolicy](#key-differences-from-k8s-networkpolicy)
@@ -266,7 +266,7 @@ spec:
       enableLogging: true
 ```
 
-#### ACNP for Pod-level isolation in Namespaces
+#### ACNP for complete Pod isolation in selected Namespaces
 
 ```yaml
 apiVersion: crd.antrea.io/v1alpha1
@@ -349,8 +349,8 @@ In the [first example](#acnp-with-stand-alone-selectors), the policy applies to 
 labels "env=prod".
 The [second example](#acnp-with-clustergroup-reference) policy applies to all network endpoints selected by the
 "test-cg-with-db-selector" ClusterGroup.
-The [third example](#acnp-for-pod-level-isolation-in-namespaces) policy applies to all Pods in the Namespaces that
-matches label "app=no-network-access-required".
+The [third example](#acnp-for-complete-pod-isolation-in-selected-namespaces) policy applies to all Pods in the
+Namespaces that matches label "app=no-network-access-required".
 
 **priority**: The `priority` field determines the relative priority of the
 policy among all ClusterNetworkPolicies in the given cluster. This field is
@@ -387,8 +387,8 @@ and the second specified by a combination of a `podSelector` and a
 The [second example](#acnp-with-clustergroup-reference) policy contains a single rule, which allows matched traffic on
 multiple TCP ports (8000 through 9000 included, plus 6379) from all network endpoints
 selected by the "test-cg-with-frontend-selector" ClusterGroup.
-The [third example](#acnp-for-pod-level-isolation-in-namespaces) policy contains a single rule,
-which drops all ingress traffic towards any Pod in Namespaces that has label `app` set to
+The [third example](#acnp-for-complete-pod-isolation-in-selected-namespaces) policy contains a single rule,
+which drops all ingress traffic towards any Pod in Namespaces that have label `app` set to
 `no-network-access-required`. Note that an empty `From` in the ingress rule means that
 this rule matches all ingress sources.
 **Note**: The order in which the ingress rules are specified matters, i.e., rules will
@@ -410,8 +410,8 @@ single port, to the 10.0.10.0/24 subnet specified by the `ipBlock` field.
 The [second example](#acnp-with-clustergroup-reference) policy contains a single rule, which drops matched traffic on
 TCP port 5978 to all network endpoints selected by the "test-cg-with-ip-block"
 ClusterGroup.
-The [third example](#acnp-for-pod-level-isolation-in-namespaces) policy contains a single rule,
-which drops all egress traffic initiated by any Pod in Namespaces that has label `app` set to
+The [third example](#acnp-for-complete-pod-isolation-in-selected-namespaces) policy contains a single rule,
+which drops all egress traffic initiated by any Pod in Namespaces that have `app` set to
 `no-network-access-required`. Note that an empty `To` in the egress rule means that
 this rule matches all egress destinations.
 **Note**: The order in which the egress rules are specified matters, i.e., rules will
