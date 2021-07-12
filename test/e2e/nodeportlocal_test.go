@@ -32,10 +32,10 @@ import (
 )
 
 const (
-	defaultStartPort  = 40000
-	defaultEndPort    = 41000
-	updatedStartPort  = 42000
-	updatedEndPort    = 43000
+	defaultStartPort  = 61000
+	defaultEndPort    = 62000
+	updatedStartPort  = 63000
+	updatedEndPort    = 64000
 	defaultTargetPort = 80
 )
 
