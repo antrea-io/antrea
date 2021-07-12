@@ -70,7 +70,7 @@ func InitController(kubeClient clientset.Interface, informerFactory informers.Sh
 		kubeClient,
 		metav1.NamespaceAll,
 		resyncPeriod,
-		cache.Indexers{},
+		cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, // NamespaceIndex is used in NPLController.
 		listOptions,
 	)
 
