@@ -99,35 +99,37 @@ func (pt *PortTable) getEntryByPodIPPort(ip string, port int) *NodePortData {
 	return nil
 }
 
-func (pt *PortTable) getFreePort(podIP string, podPort int) int {
+func (pt *PortTable) getFreePort(podIP string, podPort int) (int, Closeable, error) {
 	for i := pt.StartPort; i <= pt.EndPort; i++ {
 		if _, ok := pt.Table[i]; !ok {
 			socket, err := pt.LocalPortOpener.OpenLocalPort(i)
 			if err != nil {
 				continue
 			}
-			pt.Table[i] = NodePortData{
-				NodePort: i,
-				PodIP:    podIP,
-				PodPort:  podPort,
-				socket:   socket,
-			}
-			return i
+			return i, socket, nil
 		}
 	}
-	return -1
+	return 0, nil, fmt.Errorf("no free port found")
 }
 
 func (pt *PortTable) AddRule(podIP string, podPort int) (int, error) {
 	pt.tableLock.Lock()
 	defer pt.tableLock.Unlock()
-	nodePort := pt.getFreePort(podIP, podPort)
-	if nodePort < 0 {
-		return 0, fmt.Errorf("no free port found")
-	}
-	err := pt.PodPortRules.AddRule(nodePort, fmt.Sprintf("%s:%d", podIP, podPort))
+	nodePort, socket, err := pt.getFreePort(podIP, podPort)
 	if err != nil {
 		return 0, err
+	}
+	if err := pt.PodPortRules.AddRule(nodePort, fmt.Sprintf("%s:%d", podIP, podPort)); err != nil {
+		if err := socket.Close(); err != nil {
+			klog.ErrorS(err, "Unexpected error when closing socket")
+		}
+		return 0, err
+	}
+	pt.Table[nodePort] = NodePortData{
+		NodePort: nodePort,
+		PodIP:    podIP,
+		PodPort:  podPort,
+		socket:   socket,
 	}
 	return nodePort, nil
 }
@@ -161,7 +163,7 @@ func (pt *PortTable) SyncRules(allNPLPorts []rules.PodNodePort) error {
 	for _, nplPort := range allNPLPorts {
 		socket, err := pt.LocalPortOpener.OpenLocalPort(nplPort.NodePort)
 		if err != nil {
-			// This should be handled gracefully by the NPL controller: if there is an
+			// This will be handled gracefully by the NPL controller: if there is an
 			// annotation using this port, it will be removed and replaced with a new
 			// one with a valid port mapping.
 			klog.ErrorS(err, "Cannot bind to local port, skipping it", "port", nplPort.NodePort)
