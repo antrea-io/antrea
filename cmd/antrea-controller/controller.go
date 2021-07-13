@@ -309,6 +309,10 @@ func run(o *Options) error {
 
 	go controllerMonitor.Run(stopCh)
 
+	// It starts dispatching group updates to consumers, should start individually.
+	// If it's not running, adding Pods/Entities to groupEntityIndex may be blocked because of full channel.
+	go groupEntityIndex.Run(stopCh)
+
 	go groupEntityController.Run(stopCh)
 
 	go networkPolicyController.Run(stopCh)
