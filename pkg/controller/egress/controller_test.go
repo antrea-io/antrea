@@ -302,6 +302,7 @@ func TestAddEgress(t *testing.T) {
 			controller.crdInformerFactory.Start(stopCh)
 			controller.informerFactory.WaitForCacheSync(stopCh)
 			controller.crdInformerFactory.WaitForCacheSync(stopCh)
+			go controller.groupingInterface.Run(stopCh)
 			go controller.groupingController.Run(stopCh)
 			go controller.Run(stopCh)
 
@@ -349,6 +350,7 @@ func TestUpdateEgress(t *testing.T) {
 	controller.crdInformerFactory.Start(stopCh)
 	controller.informerFactory.WaitForCacheSync(stopCh)
 	controller.crdInformerFactory.WaitForCacheSync(stopCh)
+	go controller.groupingInterface.Run(stopCh)
 	go controller.groupingController.Run(stopCh)
 	go controller.Run(stopCh)
 

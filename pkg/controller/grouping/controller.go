@@ -15,9 +15,11 @@
 package grouping
 
 import (
+	"sync/atomic"
 	"time"
 
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
@@ -37,14 +39,20 @@ type GroupEntityController struct {
 	podInformer coreinformers.PodInformer
 	// podListerSynced is a function which returns true if the Pod shared informer has been synced at least once.
 	podListerSynced cache.InformerSynced
+	// podAddEvents is the number of Pod Add events that have been processed.
+	podAddEvents uint64
 
 	externalEntityInformer crdv1a2informers.ExternalEntityInformer
 	// externalEntityListerSynced is a function which returns true if the ExternalEntity shared informer has been synced at least once.
 	externalEntityListerSynced cache.InformerSynced
+	// externalEntityAddEvents is the number of ExternalEntity Add events that have been processed.
+	externalEntityAddEvents uint64
 
 	namespaceInformer coreinformers.NamespaceInformer
 	// namespaceListerSynced is a function which returns true if the Namespace shared informer has been synced at least once.
 	namespaceListerSynced cache.InformerSynced
+	// namespaceAddEvents is the number of Namespace Add events that have been processed.
+	namespaceAddEvents uint64
 
 	groupEntityIndex *GroupEntityIndex
 }
@@ -108,15 +116,30 @@ func (c *GroupEntityController) Run(stopCh <-chan struct{}) {
 	}
 	// Get the number of initial resources after all cache are synced. The numbers will be used to determine whether
 	// the groupEntityIndex has been initialized with the full list of each kind.
-	podCount := len(c.podInformer.Informer().GetStore().List())
-	namespaceCount := len(c.namespaceInformer.Informer().GetStore().List())
-	externalEntityCount := 0
+	initialPodCount := len(c.podInformer.Informer().GetStore().List())
+	initialNamespaceCount := len(c.namespaceInformer.Informer().GetStore().List())
+	initialExternalEntityCount := 0
 	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
-		externalEntityCount = len(c.externalEntityInformer.Informer().GetStore().List())
+		initialExternalEntityCount = len(c.externalEntityInformer.Informer().GetStore().List())
 	}
-	c.groupEntityIndex.setInitialCounts(namespaceCount, podCount, externalEntityCount)
 
-	go c.groupEntityIndex.Run(stopCh)
+	// Wait until all event handlers process the initial resources before setting groupEntityIndex as synced.
+	if err := wait.PollImmediateUntil(100*time.Millisecond, func() (done bool, err error) {
+		if uint64(initialPodCount) > atomic.LoadUint64(&c.podAddEvents) {
+			return false, nil
+		}
+		if uint64(initialNamespaceCount) > atomic.LoadUint64(&c.namespaceAddEvents) {
+			return false, nil
+		}
+		if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
+			if uint64(initialExternalEntityCount) > atomic.LoadUint64(&c.externalEntityAddEvents) {
+				return false, nil
+			}
+		}
+		return true, nil
+	}, stopCh); err == nil {
+		c.groupEntityIndex.setSynced(true)
+	}
 
 	<-stopCh
 }
@@ -125,6 +148,7 @@ func (c *GroupEntityController) addPod(obj interface{}) {
 	pod := obj.(*v1.Pod)
 	klog.V(2).Infof("Processing Pod %s/%s ADD event, labels: %v", pod.Namespace, pod.Name, pod.Labels)
 	c.groupEntityIndex.AddPod(pod)
+	atomic.AddUint64(&c.podAddEvents, 1)
 }
 
 func (c *GroupEntityController) updatePod(_, curObj interface{}) {
@@ -154,6 +178,7 @@ func (c *GroupEntityController) addNamespace(obj interface{}) {
 	namespace := obj.(*v1.Namespace)
 	klog.V(2).Infof("Processing Namespace %s ADD event, labels: %v", namespace.Name, namespace.Labels)
 	c.groupEntityIndex.AddNamespace(namespace)
+	atomic.AddUint64(&c.namespaceAddEvents, 1)
 }
 
 func (c *GroupEntityController) updateNamespace(_, curObj interface{}) {
@@ -184,6 +209,7 @@ func (c *GroupEntityController) addExternalEntity(obj interface{}) {
 	ee := obj.(*v1alpha2.ExternalEntity)
 	klog.V(2).Infof("Processing ExternalEntity %s/%s ADD event, labels: %v", ee.GetNamespace(), ee.GetName(), ee.GetLabels())
 	c.groupEntityIndex.AddExternalEntity(ee)
+	atomic.AddUint64(&c.externalEntityAddEvents, 1)
 }
 
 func (c *GroupEntityController) updateExternalEntity(_, curObj interface{}) {
