@@ -196,11 +196,11 @@ func (c *NPLController) checkDeletedSvc(obj interface{}) (*corev1.Service, error
 
 func validateNPLService(svc *corev1.Service) {
 	if svc.Spec.Type == corev1.ServiceTypeNodePort {
-		klog.InfoS("Service is of type NodePort and cannot be used for NodePortLocal, the NodePortLocal annotation will have no effect", "Service name", svc.Name)
+		klog.InfoS("Service is of type NodePort and cannot be used for NodePortLocal, the NodePortLocal annotation will have no effect", "service", klog.KObj(svc))
 	}
 	for _, port := range svc.Spec.Ports {
 		if port.Protocol != corev1.ProtocolTCP {
-			klog.InfoS("Service has NodePortLocal enabled but it includes a non-TCP Service port, which will be ignored", "Service name", svc.Name)
+			klog.InfoS("Service has NodePortLocal enabled but it includes a non-TCP Service port, which will be ignored", "service", klog.KObj(svc))
 		}
 	}
 }
