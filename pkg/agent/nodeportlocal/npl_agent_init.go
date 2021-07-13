@@ -17,7 +17,6 @@
 package nodeportlocal
 
 import (
-	"errors"
 	"fmt"
 	"time"
 
@@ -45,15 +44,9 @@ func InitializeNPLAgent(kubeClient clientset.Interface, informerFactory informer
 	if err != nil {
 		return nil, fmt.Errorf("error while fetching port range: %v", err)
 	}
-	var ok bool
-	portTable, ok := portcache.NewPortTable(start, end)
-	if !ok {
-		return nil, errors.New("error when initializing NodePortLocal port table")
-	}
-
-	err = portTable.PodPortRules.Init()
+	portTable, err := portcache.NewPortTable(start, end)
 	if err != nil {
-		return nil, fmt.Errorf("NPL rules for pod ports could not be initialized, error: %v", err)
+		return nil, fmt.Errorf("error when initializing NodePortLocal port table: %v", err)
 	}
 
 	return InitController(kubeClient, informerFactory, portTable, nodeName)
