@@ -137,7 +137,8 @@ func (b *AntreaNetworkPolicySpecBuilder) AddIngress(protoc v1.Protocol,
 	for _, at := range ruleAppliedToSpecs {
 		appliedTos = append(appliedTos, b.GetAppliedToPeer(at.PodSelector, at.PodSelectorMatchExp))
 	}
-	var policyPeer []crdv1alpha1.NetworkPolicyPeer
+	// An empty From/To in ANP rules evaluates to match all addresses.
+	policyPeer := make([]crdv1alpha1.NetworkPolicyPeer, 0)
 	if ps != nil || ns != nil || ipBlock != nil {
 		policyPeer = []crdv1alpha1.NetworkPolicyPeer{{
 			PodSelector:       ps,
