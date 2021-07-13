@@ -61,7 +61,6 @@ function Install-AntreaAgent {
 
     $kubectl = "$KubernetesHome\kubectl.exe"
     $KubeProxy = "$KubernetesHome\kube-proxy.exe"
-    $yq = "$KubernetesHome\yq.exe"
 
     $CNIPath = "c:\opt\cni\bin"
     $CNIConfigPath = "c:\etc\cni\net.d"
@@ -88,16 +87,12 @@ function Install-AntreaAgent {
     Write-Host "Installing AntreaAgent, Antrea version: $AntreaVersion"
     $AntreaRawUrlBase = "https://raw.githubusercontent.com/$Owner/$Repo/$AntreaVersion"
     $AntreaReleaseUrlBase = "https://github.com/$Owner/$Repo/releases/download"
-    $AntreaRawUrlBase = "https://raw.githubusercontent.com/$Owner/$Repo/$AntreaVersion"
-
 
     New-DirectoryIfNotExist $KubernetesHome
     # Download kubectl
     Get-WebFileIfNotExist $kubectl  "https://$KubernetesURL/$KubernetesVersion/bin/windows/amd64/kubectl.exe"
     # Download kube-proxy
     Get-WebFileIfNotExist $KubeProxy "https://$KubernetesURL/$KubernetesVersion/bin/windows/amd64/kube-proxy.exe"
-    # Download yq
-    Get-WebFileIfNotExist $yq "https://github.com/mikefarah/yq/releases/download/3.3.2/yq_windows_amd64.exe"
 
     New-DirectoryIfNotExist $AntreaHome
     New-DirectoryIfNotExist "$AntreaHome\bin"
@@ -119,8 +114,8 @@ function Install-AntreaAgent {
     New-DirectoryIfNotExist $AntreaEtc
     Get-WebFileIfNotExist $AntreaCNIConfigFile "$AntreaRawUrlBase/build/yamls/windows/base/conf/antrea-cni.conflist"
     Get-WebFileIfNotExist $AntreaAgentConfigPath "$AntreaRawUrlBase/build/yamls/windows/base/conf/antrea-agent.conf"
-    yq w -i $AntreaAgentConfigPath clientConnection.kubeconfig $AntreaEtc\antrea-agent.kubeconfig
-    yq w -i $AntreaAgentConfigPath antreaClientConnection.kubeconfig $AntreaEtc\antrea-agent.antrea.kubeconfig
+    Add-Content $AntreaAgentConfigPath "`nclientConnection:`n  kubeconfig: $AntreaEtc\antrea-agent.kubeconfig"
+    Add-Content $AntreaAgentConfigPath "`nantreaClientConnection:`n  kubeconfig: $AntreaEtc\antrea-agent.antrea.kubeconfig"
 
     # Create the kubeconfig file that contains the K8s APIServer service and the token of antrea ServiceAccount.
     $APIServer=$(kubectl --kubeconfig=$KubeConfig get service kubernetes -o jsonpath='{.spec.clusterIP}')
