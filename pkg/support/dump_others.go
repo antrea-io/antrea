@@ -17,21 +17,22 @@
 package support
 
 import (
-	"fmt"
-	"path"
-	"path/filepath"
-
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/util/iptables"
 	"antrea.io/antrea/pkg/util/logdir"
+	"fmt"
+	"path"
+	"path/filepath"
 )
 
 func (d *agentDumper) DumpLog(basedir string) error {
 	logDir := logdir.GetLogDir()
-	if err := fileCopy(d.fs, path.Join(basedir, "logs", "agent"), logDir, "antrea-agent"); err != nil {
+	timeFilter := daysFilter(d.days)
+
+	if err := directoryCopy(d.fs, path.Join(basedir, "logs", "agent"), logDir, "antrea-agent", timeFilter); err != nil {
 		return err
 	}
-	return fileCopy(d.fs, path.Join(basedir, "logs", "ovs"), logDir, "ovs")
+	return directoryCopy(d.fs, path.Join(basedir, "logs", "ovs"), logDir, "ovs", timeFilter)
 }
 
 func (d *agentDumper) DumpHostNetworkInfo(basedir string) error {

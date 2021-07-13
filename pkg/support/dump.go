@@ -23,6 +23,7 @@ import (
 	"path/filepath"
 	"runtime/pprof"
 	"strings"
+	"time"
 
 	"github.com/spf13/afero"
 	"k8s.io/utils/exec"
@@ -104,10 +105,20 @@ func dumpNetworkPolicyResources(fs afero.Fs, executor exec.Interface, basedir st
 	return dumpAntctlGet(fs, executor, "addressgroups", basedir)
 }
 
-// fileCopy copies files under the srcDir to the targetDir. Only files whose
-// name matches the prefixFilter will be copied. Copied files will be located
+func daysFilter(days uint32) *time.Time {
+	var timeFilter *time.Time
+	if days > 0 {
+		placeholder := time.Now().Add(-24 * time.Duration(days) * time.Hour)
+		timeFilter = &placeholder
+	}
+	return timeFilter
+}
+
+// directoryCopy copies files under the srcDir to the targetDir. Only files whose name matches
+// the prefixFilter will be copied. At the same time, if the timeFilter is set, only files
+// whose modTime is later than the timeFilter will be copied. Copied files will be located
 // under the same relative path.
-func fileCopy(fs afero.Fs, targetDir string, srcDir string, prefixFilter string) error {
+func directoryCopy(fs afero.Fs, targetDir string, srcDir string, prefixFilter string, timeFilter *time.Time) error {
 	err := fs.MkdirAll(targetDir, os.ModePerm)
 	if err != nil {
 		return fmt.Errorf("error when creating target dir: %w", err)
@@ -120,6 +131,9 @@ func fileCopy(fs afero.Fs, targetDir string, srcDir string, prefixFilter string)
 			return nil
 		}
 		if !strings.HasPrefix(info.Name(), prefixFilter) {
+			return nil
+		}
+		if timeFilter != nil && info.ModTime().Before(*timeFilter) {
 			return nil
 		}
 		targetPath := path.Join(targetDir, info.Name())
@@ -152,6 +166,7 @@ type controllerDumper struct {
 	fs       afero.Fs
 	executor exec.Interface
 	cq       controllerquerier.ControllerQuerier
+	days     uint32
 }
 
 func (d *controllerDumper) DumpControllerInfo(basedir string) error {
@@ -164,17 +179,18 @@ func (d *controllerDumper) DumpNetworkPolicyResources(basedir string) error {
 
 func (d *controllerDumper) DumpLog(basedir string) error {
 	logDir := logdir.GetLogDir()
-	return fileCopy(d.fs, path.Join(basedir, "logs", "controller"), logDir, "antrea-controller")
+	return directoryCopy(d.fs, path.Join(basedir, "logs", "controller"), logDir, "antrea-controller", daysFilter(d.days))
 }
 
 func (d *controllerDumper) DumpHeapPprof(basedir string) error {
 	return DumpHeapPprof(d.fs, basedir)
 }
 
-func NewControllerDumper(fs afero.Fs, executor exec.Interface) ControllerDumper {
+func NewControllerDumper(fs afero.Fs, executor exec.Interface, days uint32) ControllerDumper {
 	return &controllerDumper{
 		fs:       fs,
 		executor: executor,
+		days:     days,
 	}
 }
 
@@ -184,6 +200,8 @@ type agentDumper struct {
 	ovsCtlClient ovsctl.OVSCtlClient
 	aq           agentquerier.AgentQuerier
 	npq          querier.AgentNetworkPolicyInfoQuerier
+	// days is for log filter
+	days uint32
 }
 
 func (d *agentDumper) DumpAgentInfo(basedir string) error {
@@ -243,12 +261,13 @@ func (d *agentDumper) DumpOVSPorts(basedir string) error {
 	return writeFile(d.fs, filepath.Join(basedir, "ovsports"), "ports", []byte(strings.Join(portData, "\n")))
 }
 
-func NewAgentDumper(fs afero.Fs, executor exec.Interface, ovsCtlClient ovsctl.OVSCtlClient, aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolicyInfoQuerier) AgentDumper {
+func NewAgentDumper(fs afero.Fs, executor exec.Interface, ovsCtlClient ovsctl.OVSCtlClient, aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolicyInfoQuerier, days uint32) AgentDumper {
 	return &agentDumper{
 		fs:           fs,
 		executor:     executor,
 		ovsCtlClient: ovsCtlClient,
 		aq:           aq,
 		npq:          npq,
+		days:         days,
 	}
 }
