@@ -44,7 +44,7 @@ const (
 	defaultFlowPollInterval        = 5 * time.Second
 	defaultActiveFlowExportTimeout = 30 * time.Second
 	defaultIdleFlowExportTimeout   = 15 * time.Second
-	defaultNPLPortRange            = "40000-41000"
+	defaultNPLPortRange            = "61000-62000"
 )
 
 type Options struct {

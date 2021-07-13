@@ -41,7 +41,7 @@ import (
 )
 
 func newPortTable(c *gomock.Controller) *portcache.PortTable {
-	ptable := portcache.PortTable{StartPort: 40000, EndPort: 45000}
+	ptable := portcache.PortTable{StartPort: 61000, EndPort: 65000}
 	ptable.Table = make(map[int]portcache.NodePortData)
 
 	mockTable := npltest.NewMockPodPortRules(c)

@@ -27,22 +27,22 @@ func BenchmarkCompareNPLAnnotationLists(b *testing.B) {
 	a1 := NPLAnnotation{
 		PodPort:  80,
 		NodeIP:   nodeIP,
-		NodePort: 40000,
+		NodePort: 61000,
 	}
 	a2 := NPLAnnotation{
 		PodPort:  8080,
 		NodeIP:   nodeIP,
-		NodePort: 40001,
+		NodePort: 61001,
 	}
 	a3 := NPLAnnotation{
 		PodPort:  81,
 		NodeIP:   nodeIP,
-		NodePort: 40002,
+		NodePort: 61002,
 	}
 	a4 := NPLAnnotation{
 		PodPort:  8081,
 		NodeIP:   nodeIP,
-		NodePort: 40003,
+		NodePort: 61003,
 	}
 	benchmarkCases := []struct {
 		name         string

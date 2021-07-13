@@ -167,7 +167,7 @@ each port of a Pod can be reached from external network using a port in the Node
 on which the Pod is running. In addition to enabling NodePortLocal feature gate,
 the value of `nplPortRange` can be set in Antrea Agent configuration through ConfigMap.
 Ports from a Node will be allocated from the range of ports specified in `nplPortRange`.
-If the value of `nplPortRange` is not specified, the range `40000-41000` will be used as
+If the value of `nplPortRange` is not specified, the range `61000-62000` will be used as
 default.
 
 Pods can be selected for `NodePortLocal` by tagging a Service with Annotation:
@@ -183,11 +183,11 @@ apiVersion: v1
 kind: Pod
 metadata:
   annotations:
-    nodeportlocal.antrea.io: '[{"podPort":8080,"nodeIP":"10.10.10.10","nodePort":40002}]'
+    nodeportlocal.antrea.io: '[{"podPort":8080,"nodeIP":"10.10.10.10","nodePort":61002}]'
 
 ```
 
-This annotation denotes that the port 8080 of the Pod can be reached through port 40002 of the
+This annotation denotes that the port 8080 of the Pod can be reached through port 61002 of the
 Node with IP Address 10.10.10.10.
 
 #### Requirements for this Feature
