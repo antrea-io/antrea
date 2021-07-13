@@ -194,6 +194,17 @@ func (c *NPLController) checkDeletedSvc(obj interface{}) (*corev1.Service, error
 	return svc, nil
 }
 
+func validateNPLService(svc *corev1.Service) {
+	if svc.Spec.Type == corev1.ServiceTypeNodePort {
+		klog.InfoS("Service is of type NodePort and cannot be used for NodePortLocal, the NodePortLocal annotation will have no effect", "Service name", svc.Name)
+	}
+	for _, port := range svc.Spec.Ports {
+		if port.Protocol != corev1.ProtocolTCP {
+			klog.InfoS("Service has NodePortLocal enabled but it includes a non-TCP Service port, which will be ignored", "Service name", svc.Name)
+		}
+	}
+}
+
 func (c *NPLController) enqueueSvcUpdate(oldObj, newObj interface{}) {
 	// In case where the app selector in Service gets updated from one valid selector to another
 	// both sets of Pods (corresponding to old and new selector) need to be considered.
@@ -207,8 +218,8 @@ func (c *NPLController) enqueueSvcUpdate(oldObj, newObj interface{}) {
 		return
 	}
 
-	if newSvcAnnotation == "true" && newSvc.Spec.Type == corev1.ServiceTypeNodePort {
-		klog.Warningf("Service %s is of type NodePort and cannot be used for NodePortLocal, the '%s' annotation will have no effect", newSvc.Name, NPLEnabledAnnotationKey)
+	if newSvcAnnotation == "true" {
+		validateNPLService(newSvc)
 	}
 
 	podKeys := sets.String{}
@@ -253,6 +264,7 @@ func (c *NPLController) enqueueSvc(obj interface{}) {
 
 	// Process Pods corresponding to Service with valid NPL annotation.
 	if svc.Annotations[NPLEnabledAnnotationKey] == "true" {
+		validateNPLService(svc)
 		for _, podKey := range c.getPodsFromService(svc) {
 			c.queue.Add(podKey)
 		}
@@ -282,9 +294,14 @@ func buildPortProto(name, prototcol string) string {
 	return name + delim + prototcol
 }
 
-func parsePortProto(targetPort string) (int, error) {
+func parsePortProto(targetPort string) (int, string, error) {
 	portProto := strings.Split(targetPort, delim)
-	return strconv.Atoi(portProto[0])
+	if len(portProto) != 2 {
+		return 0, "", fmt.Errorf("invalid format for PortProto string '%s'", portProto)
+	}
+	port, err := strconv.Atoi(portProto[0])
+	protocol := portProto[1]
+	return port, protocol, err
 }
 
 func (c *NPLController) getTargetPortsForServicesOfPod(obj interface{}) (sets.String, sets.String) {
@@ -304,6 +321,11 @@ func (c *NPLController) getTargetPortsForServicesOfPod(obj interface{}) (sets.St
 			if pod.Namespace == svc.Namespace &&
 				matchSvcSelectorPodLabels(svc.Spec.Selector, pod.GetLabels()) {
 				for _, port := range svc.Spec.Ports {
+					if port.Protocol != corev1.ProtocolTCP {
+						// Not supported yet. A message is logged when the
+						// Service is processed.
+						continue
+					}
 					switch port.TargetPort.Type {
 					case intstr.Int:
 						// An entry of format <target-port>:<protocol> (e.g. 8080:TCP) is added for a target port in the set targetPortsInt.
@@ -481,9 +503,9 @@ func (c *NPLController) handleAddUpdatePod(key string, obj interface{}) error {
 	// (ignoring NPL annotations) and make sure they are present. As we do so, we build the expected list of
 	// NPL annotations for the Pod.
 	for _, targetPort := range targetPortsInt.List() {
-		port, err := parsePortProto(targetPort)
+		port, _, err := parsePortProto(targetPort)
 		if err != nil {
-			return fmt.Errorf("failed to parse port number from %s for pod %s: %v", targetPort, key, err)
+			return fmt.Errorf("failed to parse port number and protocol from %s for Pod %s: %v", targetPort, key, err)
 		}
 		podPorts[port] = struct{}{}
 		portData := c.portTable.GetEntryByPodIPPort(podIP, port)
