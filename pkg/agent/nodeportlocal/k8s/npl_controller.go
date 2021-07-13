@@ -588,14 +588,7 @@ func (c *NPLController) GetPodsAndGenRules() error {
 }
 
 func (c *NPLController) addRulesForNPLPorts(allNPLPorts []rules.PodNodePort) error {
-	for _, nplPort := range allNPLPorts {
-		c.portTable.AddUpdateEntry(nplPort.NodePort, nplPort.PodPort, nplPort.PodIP)
-	}
-
-	if err := c.portTable.PodPortRules.AddAllRules(allNPLPorts); err != nil {
-		return err
-	}
-	return nil
+	return c.portTable.SyncRules(allNPLPorts)
 }
 
 // cleanupNPLAnnotationForPod removes the NodePortLocal annotation from the Pod's annotations map entirely.
