@@ -15,9 +15,12 @@
 package networkpolicy
 
 import (
+	"errors"
+	"log"
 	"net"
 	"sync"
 	"testing"
+	"time"
 
 	"antrea.io/libOpenflow/protocol"
 	"antrea.io/libOpenflow/util"
@@ -27,20 +30,28 @@ import (
 
 // mockLogger implements PolicyCustomLogger.
 type mockLogger struct {
-	sync.Mutex
+	mu     sync.Mutex
 	logged chan string
 }
 
-func (l *mockLogger) Printf(format string, v ...interface{}) {
-	l.Lock()
-	defer l.Unlock()
-	l.logged <- format
+func (l *mockLogger) Write(p []byte) (n int, err error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if p == nil {
+		return 0, errors.New("error writing to mock Logger")
+	}
+	msg := string(p[:])
+	l.logged <- msg
+	return len(msg), nil
 }
 
-func newAntreaPolicyLogger() *AntreaPolicyLogger {
-	return &AntreaPolicyLogger{
+func newAntreaPolicyLogger() (*AntreaPolicyLogger, *mockLogger) {
+	mockAnpLogger := &mockLogger{logged: make(chan string, 100)}
+	antreaLogger := &AntreaPolicyLogger{
+		anpLogger:        log.New(mockAnpLogger, "", log.Ldate),
 		logDeduplication: logRecordDedupMap{logMap: make(map[string]*logDedupRecord)},
 	}
+	return antreaLogger, mockAnpLogger
 }
 
 func newLogInfo(disposition string) (*logInfo, string) {
@@ -57,47 +68,60 @@ func newLogInfo(disposition string) (*logInfo, string) {
 	}, expected
 }
 
+func sendMultiplePackets(antreaLogger *AntreaPolicyLogger, ob *logInfo, numPackets int) {
+	count := 0
+	for range time.Tick(12 * time.Millisecond) {
+		count += 1
+		antreaLogger.logDedupPacket(ob, 100*time.Millisecond)
+		if count == numPackets {
+			break
+		}
+	}
+}
+
 func TestAllowPacketLog(t *testing.T) {
-	mockAnpLogger := &mockLogger{logged: make(chan string, 100)}
-	antreaLogger := newAntreaPolicyLogger()
-	antreaLogger.anpLogger = mockAnpLogger
+	antreaLogger, mockAnpLogger := newAntreaPolicyLogger()
 	ob, expected := newLogInfo("Allow")
 
-	antreaLogger.logDedupPacket(ob)
+	antreaLogger.logDedupPacket(ob, 100*time.Millisecond)
 	actual := <-mockAnpLogger.logged
 	assert.Contains(t, actual, expected)
 }
 
 func TestDropPacketLog(t *testing.T) {
-	mockAnpLogger := &mockLogger{logged: make(chan string, 100)}
-	antreaLogger := newAntreaPolicyLogger()
-	antreaLogger.anpLogger = mockAnpLogger
+	antreaLogger, mockAnpLogger := newAntreaPolicyLogger()
 	ob, expected := newLogInfo("Drop")
 
-	antreaLogger.logDedupPacket(ob)
+	antreaLogger.logDedupPacket(ob, 100*time.Millisecond)
 	actual := <-mockAnpLogger.logged
 	assert.Contains(t, actual, expected)
 }
 
 func TestDropPacketDedupLog(t *testing.T) {
-	mockAnpLogger := &mockLogger{logged: make(chan string, 100)}
-	antreaLogger := newAntreaPolicyLogger()
-	antreaLogger.anpLogger = mockAnpLogger
+	antreaLogger, mockAnpLogger := newAntreaPolicyLogger()
 	ob, expected := newLogInfo("Drop")
 	// add the additional log info for duplicate packets
-	expected += " ["
+	expected += " [2"
 
-	go antreaLogger.logDedupPacket(ob)
-	go antreaLogger.logDedupPacket(ob)
+	go sendMultiplePackets(antreaLogger, ob, 2)
 	actual := <-mockAnpLogger.logged
 	assert.Contains(t, actual, expected)
 }
 
+func TestDropPacketMultiDedupLog(t *testing.T) {
+	antreaLogger, mockAnpLogger := newAntreaPolicyLogger()
+	ob, expected := newLogInfo("Drop")
+
+	go sendMultiplePackets(antreaLogger, ob, 10)
+	actual := <-mockAnpLogger.logged
+	t.Log(actual)
+	assert.Contains(t, actual, expected+" [9")
+	actual = <-mockAnpLogger.logged
+	t.Log(actual)
+	assert.Contains(t, actual, expected)
+}
+
 func TestGetPacketInfo(t *testing.T) {
-	type args struct {
-		pktIn *ofctrl.PacketIn
-		ob    *logInfo
-	}
 	tests := []struct {
 		name       string
 		pktIn      *ofctrl.PacketIn
