@@ -55,6 +55,7 @@ import (
 	"github.com/vmware-tanzu/antrea/pkg/version"
 )
 
+
 // informerDefaultResync is the default resync period if a handler doesn't specify one.
 // Use the same default value as kube-controller-manager:
 // https://github.com/kubernetes/kubernetes/blob/release-1.17/pkg/controller/apis/config/v1alpha1/defaults.go#L120
