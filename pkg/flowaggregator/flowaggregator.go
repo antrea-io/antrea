@@ -31,6 +31,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 
+	"antrea.io/antrea/pkg/agent/util"
 	"antrea.io/antrea/pkg/ipfix"
 )
 
@@ -336,9 +337,13 @@ func (fa *flowAggregator) initExportingProcess() error {
 			CollectorProtocol:   fa.externalFlowCollectorProto,
 			ObservationDomainID: fa.observationDomainID,
 			TempRefTimeout:      1800,
-			PathMTU:             0,
 			IsEncrypted:         false,
 		}
+		_, podInterface, err := util.GetIPNetDeviceByName("eth0")
+		if err != nil {
+			return err
+		}
+		expInput.PathMTU = podInterface.MTU
 	}
 	ep, err := ipfix.NewIPFIXExportingProcess(expInput)
 	if err != nil {
