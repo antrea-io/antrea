@@ -187,12 +187,13 @@ metadata:
 
 ```
 
-This annotation denotes that the port 8080 of the Pod can be reached through port 61002 of the
-Node with IP Address 10.10.10.10.
+This annotation denotes that the port 8080 of the Pod can be reached through
+port 61002 of the Node with IP Address 10.10.10.10.
 
 #### Requirements for this Feature
 
-This feature is currently only supported for Nodes running Linux with IPv4 addresses.
+This feature is currently only supported for Nodes running Linux with IPv4
+addresses. Only TCP Service ports are supported.
 
 ### Egress
 
