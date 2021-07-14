@@ -60,6 +60,7 @@ const (
 
 	// antreaNamespace is the K8s Namespace in which all Antrea resources are running.
 	antreaNamespace            string = "kube-system"
+	kubeNamespace              string = "kube-system"
 	flowAggregatorNamespace    string = "flow-aggregator"
 	antreaConfigVolume         string = "antrea-config"
 	flowAggregatorConfigVolume string = "flow-aggregator-config"
@@ -513,13 +514,13 @@ func (data *TestData) deployAntreaCommon(yamlFile string, extraOptions string) e
 	if err != nil || rc != 0 {
 		return fmt.Errorf("error when deploying Antrea; is %s available on the control-plane Node?", yamlFile)
 	}
-	rc, _, _, err = provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl -n %s rollout status deploy/%s --timeout=%v", antreaNamespace, antreaDeployment, defaultTimeout))
+	rc, stdout, stderr, err := provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl -n %s rollout status deploy/%s --timeout=%v", antreaNamespace, antreaDeployment, defaultTimeout))
 	if err != nil || rc != 0 {
-		return fmt.Errorf("error when waiting for antrea-controller rollout to complete")
+		return fmt.Errorf("error when waiting for antrea-controller rollout to complete - rc: %v - stdout: %v - stderr: %v - err: %v", rc, stdout, stderr, err)
 	}
 	rc, _, _, err = provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl -n %s rollout status ds/%s --timeout=%v", antreaNamespace, antreaDaemonSet, defaultTimeout))
 	if err != nil || rc != 0 {
-		return fmt.Errorf("error when waiting for antrea-agent rollout to complete")
+		return fmt.Errorf("error when waiting for antrea-agent rollout to complete - rc: %v - stdout: %v - stderr: %v - err: %v", rc, stdout, stderr, err)
 	}
 
 	return nil
