@@ -130,11 +130,7 @@ function setup_aks() {
 
     echo "=== Logging into Azure Cloud ==="
     az login --service-principal --username ${AZURE_APP_ID} --password ${AZURE_PASSWORD} --tenant ${AZURE_TENANT_ID}
-    # enable the 'Node Public IP' preview feature
-    az feature register --name NodePublicIPPreview --namespace Microsoft.ContainerService
-    az provider register -n Microsoft.ContainerService
 
-    printf "\n"
     echo "=== Using the following kubectl ==="
     which kubectl
 
@@ -146,11 +142,6 @@ function setup_aks() {
     fi
 
     echo '=== Creating a cluster in AKS ==='
-    # enable-node-public-ip is a preview feature and may be changed/removed in a future release. For more details, see
-    # https://docs.microsoft.com/en-us/azure/aks/use-multiple-node-pools#assign-a-public-ip-per-node-for-your-node-pools-preview
-    # without public node ip, ssh into worker nodes in the AKS cluster can only be done through a `jump` pod deployed
-    # in the cluster, which is very tedious and makes loading Antrea tarball into Nodes challenging.
-    # https://docs.microsoft.com/en-us/azure/aks/ssh
     az aks create \
         --resource-group ${RESOURCE_GROUP} \
         --name ${CLUSTER} \
@@ -254,7 +245,10 @@ function deliver_antrea_to_aks() {
 
 function run_conformance() {
     echo "=== Running Antrea Conformance and Network Policy Tests ==="
-    ${GIT_CHECKOUT_DIR}/ci/run-k8s-e2e-tests.sh --e2e-conformance --e2e-network-policy \
+    # Skip NodePort related cases for AKS since as Nodes in AKS cluster seem not accessible from other Nodes
+    # through public IPs by default. See https://github.com/antrea-io/antrea/issues/2409
+    skip_regex="\[Slow\]|\[Serial\]|\[Disruptive\]|\[Flaky\]|\[Feature:.+\]|\[sig-cli\]|\[sig-storage\]|\[sig-auth\]|\[sig-api-machinery\]|\[sig-apps\]|\[sig-node\]|NodePort"
+    ${GIT_CHECKOUT_DIR}/ci/run-k8s-e2e-tests.sh --e2e-conformance --e2e-network-policy --e2e-skip ${skip_regex} \
       --kube-conformance-image-version ${KUBE_CONFORMANCE_IMAGE_VERSION} \
       --log-mode ${MODE} > ${GIT_CHECKOUT_DIR}/aks-test.log || TEST_SCRIPT_RC=$?
 
