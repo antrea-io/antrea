@@ -162,6 +162,13 @@ func setupTest(tb testing.TB) (*TestData, error) {
 		tb.Errorf("Error creating logs directory '%s': %v", testData.logsDirForTestCase, err)
 		return nil, err
 	}
+	success := false
+	defer func() {
+		if !success {
+			tb.Fail()
+			exportLogs(tb, testData, "afterSetupTest", true)
+		}
+	}()
 	tb.Logf("Creating '%s' K8s Namespace", testNamespace)
 	if err := ensureAntreaRunning(tb, testData); err != nil {
 		return nil, err
@@ -169,6 +176,7 @@ func setupTest(tb testing.TB) (*TestData, error) {
 	if err := testData.createTestNamespace(); err != nil {
 		return nil, err
 	}
+	success = true
 	return testData, nil
 }
 
@@ -279,6 +287,8 @@ func exportLogs(tb testing.TB, data *TestData, logsSubDir string, writeNodeLogs 
 		w.WriteString(stdout)
 		return nil
 	}
+	data.forAllMatchingPodsInNamespace("k8s-app=kube-proxy", kubeNamespace, writePodLogs)
+
 	data.forAllMatchingPodsInNamespace("app=antrea", antreaNamespace, writePodLogs)
 
 	// dump the logs for monitoring Pods to disk.
