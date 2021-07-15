@@ -35,24 +35,45 @@ const (
 	resyncPeriod time.Duration = 0
 )
 
+// eventsCounter is used to keep track of the number of occurrences of an event type. It uses the
+// low-level atomic memory primitives from the sync/atomic package to provide atomic operations
+// (Increment and Load).
+// There is a known-bug on 32-bit architectures for sync/atomic:
+// On ARM, 386, and 32-bit MIPS, it is the caller's responsibility to arrange for 64-bit alignment
+// of 64-bit words accessed atomically. The first word in a variable or in an allocated struct,
+// array, or slice can be relied upon to be 64-bit aligned.
+// As a result, instances of eventsCounter should be allocated when using them in structs; they
+// should not be embedded directly.
+type eventsCounter struct {
+	count uint64
+}
+
+func (c *eventsCounter) Increment() {
+	atomic.AddUint64(&c.count, 1)
+}
+
+func (c *eventsCounter) Load() uint64 {
+	return atomic.LoadUint64(&c.count)
+}
+
 type GroupEntityController struct {
 	podInformer coreinformers.PodInformer
 	// podListerSynced is a function which returns true if the Pod shared informer has been synced at least once.
 	podListerSynced cache.InformerSynced
-	// podAddEvents is the number of Pod Add events that have been processed.
-	podAddEvents uint64
+	// podAddEvents tracks the number of Pod Add events that have been processed.
+	podAddEvents *eventsCounter
 
 	externalEntityInformer crdv1a2informers.ExternalEntityInformer
 	// externalEntityListerSynced is a function which returns true if the ExternalEntity shared informer has been synced at least once.
 	externalEntityListerSynced cache.InformerSynced
-	// externalEntityAddEvents is the number of ExternalEntity Add events that have been processed.
-	externalEntityAddEvents uint64
+	// externalEntityAddEvents tracks the number of ExternalEntity Add events that have been processed.
+	externalEntityAddEvents *eventsCounter
 
 	namespaceInformer coreinformers.NamespaceInformer
 	// namespaceListerSynced is a function which returns true if the Namespace shared informer has been synced at least once.
 	namespaceListerSynced cache.InformerSynced
-	// namespaceAddEvents is the number of Namespace Add events that have been processed.
-	namespaceAddEvents uint64
+	// namespaceAddEvents tracks the number of Namespace Add events that have been processed.
+	namespaceAddEvents *eventsCounter
 
 	groupEntityIndex *GroupEntityIndex
 }
@@ -65,10 +86,13 @@ func NewGroupEntityController(groupEntityIndex *GroupEntityIndex,
 		groupEntityIndex:           groupEntityIndex,
 		podInformer:                podInformer,
 		podListerSynced:            podInformer.Informer().HasSynced,
+		podAddEvents:               new(eventsCounter),
 		namespaceInformer:          namespaceInformer,
 		namespaceListerSynced:      namespaceInformer.Informer().HasSynced,
+		namespaceAddEvents:         new(eventsCounter),
 		externalEntityInformer:     externalEntityInformer,
 		externalEntityListerSynced: externalEntityInformer.Informer().HasSynced,
+		externalEntityAddEvents:    new(eventsCounter),
 	}
 	// Add handlers for Pod events.
 	podInformer.Informer().AddEventHandlerWithResyncPeriod(
@@ -125,14 +149,14 @@ func (c *GroupEntityController) Run(stopCh <-chan struct{}) {
 
 	// Wait until all event handlers process the initial resources before setting groupEntityIndex as synced.
 	if err := wait.PollImmediateUntil(100*time.Millisecond, func() (done bool, err error) {
-		if uint64(initialPodCount) > atomic.LoadUint64(&c.podAddEvents) {
+		if uint64(initialPodCount) > c.podAddEvents.Load() {
 			return false, nil
 		}
-		if uint64(initialNamespaceCount) > atomic.LoadUint64(&c.namespaceAddEvents) {
+		if uint64(initialNamespaceCount) > c.namespaceAddEvents.Load() {
 			return false, nil
 		}
 		if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
-			if uint64(initialExternalEntityCount) > atomic.LoadUint64(&c.externalEntityAddEvents) {
+			if uint64(initialExternalEntityCount) > c.externalEntityAddEvents.Load() {
 				return false, nil
 			}
 		}
@@ -148,7 +172,7 @@ func (c *GroupEntityController) addPod(obj interface{}) {
 	pod := obj.(*v1.Pod)
 	klog.V(2).Infof("Processing Pod %s/%s ADD event, labels: %v", pod.Namespace, pod.Name, pod.Labels)
 	c.groupEntityIndex.AddPod(pod)
-	atomic.AddUint64(&c.podAddEvents, 1)
+	c.podAddEvents.Increment()
 }
 
 func (c *GroupEntityController) updatePod(_, curObj interface{}) {
@@ -178,7 +202,7 @@ func (c *GroupEntityController) addNamespace(obj interface{}) {
 	namespace := obj.(*v1.Namespace)
 	klog.V(2).Infof("Processing Namespace %s ADD event, labels: %v", namespace.Name, namespace.Labels)
 	c.groupEntityIndex.AddNamespace(namespace)
-	atomic.AddUint64(&c.namespaceAddEvents, 1)
+	c.namespaceAddEvents.Increment()
 }
 
 func (c *GroupEntityController) updateNamespace(_, curObj interface{}) {
@@ -209,7 +233,7 @@ func (c *GroupEntityController) addExternalEntity(obj interface{}) {
 	ee := obj.(*v1alpha2.ExternalEntity)
 	klog.V(2).Infof("Processing ExternalEntity %s/%s ADD event, labels: %v", ee.GetNamespace(), ee.GetName(), ee.GetLabels())
 	c.groupEntityIndex.AddExternalEntity(ee)
-	atomic.AddUint64(&c.externalEntityAddEvents, 1)
+	c.externalEntityAddEvents.Increment()
 }
 
 func (c *GroupEntityController) updateExternalEntity(_, curObj interface{}) {
