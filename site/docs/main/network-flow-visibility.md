@@ -16,7 +16,6 @@
   - [Deployment](#deployment)
   - [Configuration](#configuration-1)
   - [IPFIX Information Elements (IEs) in an Aggregated Flow Record](#ipfix-information-elements-ies-in-an-aggregated-flow-record)
-    - [IEs from IANA-assigned IE registry](#ies-from-iana-assigned-ie-registry-1)
     - [IEs from Antrea IE Registry](#ies-from-antrea-ie-registry-1)
   - [Supported capabilities](#supported-capabilities-1)
     - [Storage of Flow Records](#storage-of-flow-records)
@@ -295,13 +294,6 @@ both sides or disabled for both sides. Please modify the parameters as per your 
 
 In addition to IPFIX information elements provided in the [above section](#ipfix-information-elements-ies-in-a-flow-record),
 the Flow Aggregator adds the following fields to the flow records.
-
-#### IEs from IANA-assigned IE registry
-
-| IPFIX Information Element  | Enterprise ID | Field ID | Type        |
-|----------------------------|---------------|----------|-------------|
-| originalExporterIPv4Address|      0        |   403    | ipv4Address |
-| originalObservationDomainId|      0        |   151    | unsigned32  |
 
 #### IEs from Antrea IE Registry
 

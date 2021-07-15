@@ -95,10 +95,7 @@ project's repository.
     git commit -s
     ```
 
-5. Update the "Unreleased" section of the [CHANGELOG](CHANGELOG.md) for any
-   significant change that impacts users.
-
-6. Keeping branch in sync with upstream.
+5. Keeping branch in sync with upstream.
 
     ```bash
     git checkout branchName
@@ -106,13 +103,13 @@ project's repository.
     git rebase upstream/main
     ```
 
-7. Push local branch to your forked repository.
+6. Push local branch to your forked repository.
 
     ```bash
     git push -f $remoteBranchName branchName
     ```
 
-8. Create a Pull request on GitHub.
+7. Create a Pull request on GitHub.
    Visit your fork at `https://github.com/antrea-io/antrea` and click
    `Compare & Pull Request` button next to your `remoteBranchName` branch.
 
