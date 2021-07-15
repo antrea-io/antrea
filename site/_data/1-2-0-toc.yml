@@ -47,7 +47,7 @@ toc:
         url: /traceflow-guide
       - page: NoEncap and Hybrid Traffic Modes
         url: /noencap-hybrid-modes
-      - page: Egress Guide
+      - page: Egress Guide test
         url: /egress
       - page: Versioning
         url: /versioning
