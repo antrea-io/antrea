@@ -40,7 +40,7 @@ example, to enable `AntreaProxy` on Linux, edit the Agent configuration in the
 | `AntreaPolicy`          | Agent + Controller | `true`  | Beta  | v0.8          | v1.0         | N/A        | No                 | Agent side config required from v0.9.0+. |
 | `Traceflow`             | Agent + Controller | `true`  | Beta  | v0.8          | v0.11        | N/A        | Yes                |       |
 | `FlowExporter`          | Agent              | `false` | Alpha | v0.9          | N/A          | N/A        | Yes                |       |
-| `NetworkPolicyStats`    | Agent + Controller | `false` | Alpha | v0.10         | N/A          | N/A        | No                 |       |
+| `NetworkPolicyStats`    | Agent + Controller | `true`  | Beta  | v0.10         | v1.2         | N/A        | No                 |       |
 | `NodePortLocal`         | Agent              | `false` | Alpha | v0.13         | N/A          | N/A        | Yes                |       |
 | `Egress`                | Agent + Controller | `false` | Alpha | v1.0          | N/A          | N/A        | Yes                |       |
 
@@ -167,7 +167,7 @@ each port of a Pod can be reached from external network using a port in the Node
 on which the Pod is running. In addition to enabling NodePortLocal feature gate,
 the value of `nplPortRange` can be set in Antrea Agent configuration through ConfigMap.
 Ports from a Node will be allocated from the range of ports specified in `nplPortRange`.
-If the value of `nplPortRange` is not specified, the range `40000-41000` will be used as
+If the value of `nplPortRange` is not specified, the range `61000-62000` will be used as
 default.
 
 Pods can be selected for `NodePortLocal` by tagging a Service with Annotation:
@@ -183,16 +183,17 @@ apiVersion: v1
 kind: Pod
 metadata:
   annotations:
-    nodeportlocal.antrea.io: '[{"podPort":8080,"nodeIP":"10.10.10.10","nodePort":40002}]'
+    nodeportlocal.antrea.io: '[{"podPort":8080,"nodeIP":"10.10.10.10","nodePort":61002}]'
 
 ```
 
-This annotation denotes that the port 8080 of the Pod can be reached through port 40002 of the
-Node with IP Address 10.10.10.10.
+This annotation denotes that the port 8080 of the Pod can be reached through
+port 61002 of the Node with IP Address 10.10.10.10.
 
 #### Requirements for this Feature
 
-This feature is currently only supported for Nodes running Linux with IPv4 addresses.
+This feature is currently only supported for Nodes running Linux with IPv4
+addresses. Only TCP Service ports are supported.
 
 ### Egress
 
@@ -201,42 +202,7 @@ This feature is currently only supported for Nodes running Linux with IPv4 addre
 When a selected Pod accesses the external network, the egress traffic will be
 tunneled to the Node that hosts the egress IP if it's different from the Node
 that the Pod runs on and will be SNATed to the egress IP when leaving that Node.
-Usage example:
-
-```yaml
-apiVersion: crd.antrea.io/v1alpha2
-kind: Egress
-metadata:
-  name: egress-web
-spec:
-  appliedTo:
-    podSelector:
-      matchLabels:
-        role: web
-    namespaceSelector:
-      matchLabels:
-        env: prod
-  egressIP: 10.0.10.8
-```
-
-The `appliedTo` field specifies the grouping criteria of Pods to which the
-Egress applies to. Pods can be selected cluster-wide using `podSelector`. If set
-with a `namespaceSelector`, Pods from Namespaces selected by the
-namespaceSelector will be selected. Empty `appliedTo` selects nothing. The field
-is mandatory.
-
-The `egressIP` field specifies the egress (SNAT) IP the traffic from the
-selected Pods to the external network should use. **The IP must be assigned to
-an arbitrary interface of one Node, and one Node only. It must be reachable from
-all Nodes.** For IPv4 cluster, it must be an IPv4 address; for IPv6 cluster, it
-must be an IPv6 address. The field is mandatory.
-
-**Note**: If more than one Egress applies to a Pod and they specify different
-`egressIP`, the effective egress IP will be selected randomly.
-
-In the above example, the Egress applies to Pods which match the labels
-"role=web" from Namespaces which match the labels "env=prod". The source IPs of
-their egress traffic to external network will be translated to 10.0.10.8.
+Refer to this [document](egress.md) for more information.
 
 #### Requirements for this Feature
 

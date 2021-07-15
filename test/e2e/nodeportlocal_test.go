@@ -19,6 +19,7 @@ package e2e
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -32,10 +33,10 @@ import (
 )
 
 const (
-	defaultStartPort  = 40000
-	defaultEndPort    = 41000
-	updatedStartPort  = 42000
-	updatedEndPort    = 43000
+	defaultStartPort  = 61000
+	defaultEndPort    = 62000
+	updatedStartPort  = 63000
+	updatedEndPort    = 64000
 	defaultTargetPort = 80
 )
 
@@ -96,6 +97,7 @@ func checkNPLRulesForPod(t *testing.T, data *TestData, r *require.Assertions, np
 		rules = append(rules, rule)
 	}
 	checkForNPLRuleInIPTables(t, data, r, antreaPod, rules, present)
+	checkForNPLListeningSockets(t, data, r, antreaPod, rules, present)
 }
 
 func buildRuleForPod(rule nplRuleData) []string {
@@ -133,6 +135,34 @@ func checkForNPLRuleInIPTables(t *testing.T, data *TestData, r *require.Assertio
 		return true, nil
 	})
 	r.NoError(err, "Poll for iptables rules check failed")
+}
+
+func checkForNPLListeningSockets(t *testing.T, data *TestData, r *require.Assertions, antreaPod string, rules []nplRuleData, present bool) {
+	cmd := []string{"ss", "--listening", "--tcp", "-H", "-n"}
+	t.Logf("Verifying NPL listening sockets")
+	const timeout = 30 * time.Second
+	err := wait.Poll(time.Second, timeout, func() (bool, error) {
+		stdout, _, err := data.runCommandFromPod(antreaNamespace, antreaPod, agentContainerName, cmd)
+		if err != nil {
+			return false, fmt.Errorf("error when running 'ss': %v", err)
+		}
+		for _, rule := range rules {
+			t.Logf("Checking if NPL is listening on %d", rule.nodePort)
+			found, err := regexp.MatchString(fmt.Sprintf(`(?m)^LISTEN.*0\.0\.0\.0:%d`, rule.nodePort), stdout)
+			if err != nil {
+				return false, fmt.Errorf("error when matching regex: %v", err)
+			}
+			if found && present {
+				t.Logf("NPL listening on %d", rule.nodePort)
+			} else if !found && !present {
+				t.Logf("NPL not listening on %d", rule.nodePort)
+			} else {
+				return false, nil
+			}
+		}
+		return true, nil
+	})
+	r.NoError(err, "Check for NPL listening sockets failed")
 }
 
 func deleteNPLRuleFromIPTables(t *testing.T, data *TestData, r *require.Assertions, antreaPod string, rule nplRuleData) {
@@ -218,7 +248,7 @@ func NPLTestMultiplePods(t *testing.T) {
 	for i := 0; i < 4; i++ {
 		testPodName := randName("test-pod-")
 		testPods = append(testPods, testPodName)
-		err := testData.createNginxPod(testPodName, node)
+		err := testData.createNginxPodOnNode(testPodName, node)
 		r.NoError(err, "Error creating test Pod: %v", err)
 	}
 
@@ -320,7 +350,7 @@ func NPLTestLocalAccess(t *testing.T) {
 	node := nodeName(0)
 
 	testPodName := randName("test-pod-")
-	err := testData.createNginxPod(testPodName, node)
+	err := testData.createNginxPodOnNode(testPodName, node)
 	r.NoError(err, "Error creating test Pod: %v", err)
 
 	clientName := randName("test-client-")
@@ -371,7 +401,7 @@ func TestNPLMultiplePodsAgentRestart(t *testing.T) {
 	for i := 0; i < 4; i++ {
 		testPodName := randName("test-pod-")
 		testPods = append(testPods, testPodName)
-		err = testData.createNginxPod(testPodName, node)
+		err = testData.createNginxPodOnNode(testPodName, node)
 		r.NoError(err, "Error creating test Pod: %v", err)
 	}
 
@@ -443,7 +473,7 @@ func TestNPLChangePortRangeAgentRestart(t *testing.T) {
 	for i := 0; i < 4; i++ {
 		testPodName := randName("test-pod-")
 		testPods = append(testPods, testPodName)
-		err = testData.createNginxPod(testPodName, node)
+		err = testData.createNginxPodOnNode(testPodName, node)
 		r.NoError(err, "Error Creating test Pod: %v", err)
 	}
 
@@ -482,4 +512,5 @@ func TestNPLChangePortRangeAgentRestart(t *testing.T) {
 	}
 
 	checkForNPLRuleInIPTables(t, data, r, antreaPod, rules, false)
+	checkForNPLListeningSockets(t, data, r, antreaPod, rules, false)
 }

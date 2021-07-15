@@ -87,7 +87,10 @@ func TestUpgrade(t *testing.T) {
 	if *pruneAll {
 		extraOptions = "--prune -l app=antrea --prune-whitelist=apiregistration.k8s.io/v1/APIService"
 	}
-	data.deployAntreaCommon(*upgradeToYML, extraOptions)
+	// Do not wait for agent rollout as its updateStrategy is set to OnDelete for upgrade test.
+	if err := data.deployAntreaCommon(*upgradeToYML, extraOptions, false); err != nil {
+		t.Fatalf("Error upgrading Antrea: %v", err)
+	}
 	if *controllerOnly == false {
 		t.Logf("Restarting all Antrea DaemonSet Pods")
 		if err := data.restartAntreaAgentPods(defaultTimeout); err != nil {
@@ -116,5 +119,5 @@ func TestUpgrade(t *testing.T) {
 		t.Errorf("Namespace deletion failed: %v", err)
 	}
 
-	data.testDeletePod(t, podName, nodeName)
+	data.testDeletePod(t, podName, nodeName, false)
 }

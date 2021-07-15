@@ -20,9 +20,9 @@ import (
 	"bytes"
 	"fmt"
 
-	"antrea.io/antrea/pkg/agent/util/iptables"
-
 	"k8s.io/klog/v2"
+
+	"antrea.io/antrea/pkg/agent/util/iptables"
 )
 
 // NodePortLocalChain is the name of the chain in IPTABLES for Node Port Local
@@ -46,16 +46,16 @@ func NewIPTableRules() *iptablesRules {
 
 // Init initializes IPTABLES rules for NPL. Currently it deletes existing rules to ensure that no stale entries are present.
 func (ipt *iptablesRules) Init() error {
-	if err := ipt.InitRules(); err != nil {
+	if err := ipt.initRules(); err != nil {
 		return fmt.Errorf("initialization of NPL iptables rules failed: %v", err)
 	}
 	return nil
 }
 
-// InitRules creates the NPL chain and links it to the PREROUTING (for incoming
+// initRules creates the NPL chain and links it to the PREROUTING (for incoming
 // traffic) and OUTPUT chain (for locally-generated traffic). All NPL DNAT rules
 // will be added to this chain.
-func (ipt *iptablesRules) InitRules() error {
+func (ipt *iptablesRules) initRules() error {
 	if err := ipt.table.EnsureChain(iptables.NATTable, NodePortLocalChain); err != nil {
 		return err
 	}

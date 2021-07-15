@@ -21,14 +21,15 @@ import (
 	"net/http"
 
 	admv1 "k8s.io/api/admission/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
-
-	"antrea.io/antrea/pkg/controller/networkpolicy"
 )
 
-func HandleValidationNetworkPolicy(v *networkpolicy.NetworkPolicyValidator) http.HandlerFunc {
+type validateFunc func(*admv1.AdmissionReview) *admv1.AdmissionResponse
+
+func HandlerForValidateFunc(fn validateFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		klog.V(2).Info("Received request to validate Antrea Policy/Tier CRD")
+		klog.V(2).Info("Received request to validate Antrea CRD")
 		var reqBody []byte
 		if r.Body != nil {
 			reqBody, _ = ioutil.ReadAll(r.Body)
@@ -51,9 +52,13 @@ func HandleValidationNetworkPolicy(v *networkpolicy.NetworkPolicyValidator) http
 		ar.TypeMeta.APIVersion = "admission.k8s.io/v1"
 		if err := json.Unmarshal(reqBody, &ar); err != nil {
 			klog.Errorf("CRD validation received incorrect body")
-			admissionResponse = networkpolicy.GetAdmissionResponseForErr(err)
+			admissionResponse = &admv1.AdmissionResponse{
+				Result: &metav1.Status{
+					Message: err.Error(),
+				},
+			}
 		} else {
-			admissionResponse = v.Validate(&ar)
+			admissionResponse = fn(&ar)
 		}
 		aReview := admv1.AdmissionReview{}
 		aReview.TypeMeta.Kind = "AdmissionReview"

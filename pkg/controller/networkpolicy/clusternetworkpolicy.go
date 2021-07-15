@@ -307,7 +307,9 @@ func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *crdv1alpha1.C
 				}
 				rules = append(rules, rule)
 			}
-			if len(clusterPeers) > 0 {
+			// When a rule's NetworkPolicyPeer is empty, a cluster level rule should be created
+			// with an Antrea peer matching all addresses.
+			if len(clusterPeers) > 0 || len(perNSPeers) == 0 {
 				ruleAppliedTos := cnpRule.AppliedTo
 				// For ACNPs that have per-namespace rules, cluster-level rules will be created with appliedTo
 				// set as the spec appliedTo for each rule.

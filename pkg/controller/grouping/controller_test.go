@@ -40,6 +40,7 @@ func TestGroupEntityControllerRun(t *testing.T) {
 		initialPods             []*v1.Pod
 		initialExternalEntities []*v1alpha2.ExternalEntity
 		initialNamespaces       []*v1.Namespace
+		initialGroups           []*group
 		antreaPolicyEnabled     bool
 	}{
 		{
@@ -47,17 +48,26 @@ func TestGroupEntityControllerRun(t *testing.T) {
 			initialPods:             []*v1.Pod{podFoo1, podFoo2, podBar1, podFoo1InOtherNamespace},
 			initialExternalEntities: []*v1alpha2.ExternalEntity{eeFoo1, eeFoo2, eeBar1, eeFoo1InOtherNamespace},
 			initialNamespaces:       []*v1.Namespace{nsDefault, nsOther},
+			initialGroups:           []*group{groupPodFooType1, groupPodFooType2, groupPodFooAllNamespaceType1, groupEEFooType1, groupEEFooType2, groupEEFooAllNamespaceType1},
 			antreaPolicyEnabled:     true,
 		},
 		{
 			name:                "AntreaPolicy disabled",
 			initialPods:         []*v1.Pod{podFoo1, podFoo2, podBar1, podFoo1InOtherNamespace},
 			initialNamespaces:   []*v1.Namespace{nsDefault, nsOther},
+			initialGroups:       []*group{groupPodFooType1, groupPodFooType2, groupPodFooAllNamespaceType1},
 			antreaPolicyEnabled: false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// Even with only 1 buffer, the code should work as expected - as opposed to hanging somewhere.
+			originalEventChanSize := eventChanSize
+			eventChanSize = 1
+			defer func() {
+				eventChanSize = originalEventChanSize
+			}()
+
 			defer featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.AntreaPolicy, tt.antreaPolicyEnabled)()
 			var objs []runtime.Object
 			for _, pod := range tt.initialPods {
@@ -71,6 +81,9 @@ func TestGroupEntityControllerRun(t *testing.T) {
 				crdObjs = append(crdObjs, externalEntity)
 			}
 			index := NewGroupEntityIndex()
+			for _, group := range tt.initialGroups {
+				index.AddGroup(group.groupType, group.groupName, group.groupSelector)
+			}
 			client := fake.NewSimpleClientset(objs...)
 			crdClient := fakeversioned.NewSimpleClientset(crdObjs...)
 			informerFactory := informers.NewSharedInformerFactory(client, informerDefaultResync)
@@ -83,20 +96,12 @@ func TestGroupEntityControllerRun(t *testing.T) {
 			informerFactory.Start(stopCh)
 			crdInformerFactory.Start(stopCh)
 			assert.False(t, index.HasSynced(), "GroupEntityIndex has been synced before starting GroupEntityController")
+			go c.groupEntityIndex.Run(stopCh)
 			go c.Run(stopCh)
 
 			assert.NoError(t, wait.Poll(10*time.Millisecond, time.Second, func() (done bool, err error) {
 				return index.HasSynced(), nil
 			}), "GroupEntityIndex hasn't been synced in 1 second after starting GroupEntityController")
-			assert.Len(t, tt.initialPods, index.initialPodCount)
-			assert.Len(t, tt.initialPods, index.accumulatedPodCount)
-			assert.Len(t, tt.initialPods, index.currentPodCount)
-			assert.Len(t, tt.initialNamespaces, index.initialNamespaceCount)
-			assert.Len(t, tt.initialNamespaces, index.accumulatedNamespaceCount)
-			assert.Len(t, tt.initialNamespaces, len(index.namespaceLabels))
-			assert.Len(t, tt.initialExternalEntities, index.initialExternalEntityCount)
-			assert.Len(t, tt.initialExternalEntities, index.accumulatedExternalEntityCount)
-			assert.Len(t, tt.initialExternalEntities, index.currentExternalEntityCount)
 		})
 	}
 }

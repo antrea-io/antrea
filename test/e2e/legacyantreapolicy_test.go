@@ -2310,16 +2310,7 @@ func TestLegacyANPNetworkPolicyStatsWithDropAction(t *testing.T) {
 	}
 	defer teardownTest(t, data)
 	skipIfAntreaPolicyDisabled(t, data)
-
-	cc := []configChange{
-		{"NetworkPolicyStats", "true", true},
-	}
-	ac := []configChange{
-		{"NetworkPolicyStats", "true", true},
-	}
-	if err := testData.mutateAntreaConfigMap(cc, ac, true, true); err != nil {
-		t.Fatalf("Failed to enable NetworkPolicyStats feature: %v", err)
-	}
+	skipIfNetworkPolicyStatsDisabled(t, data)
 
 	serverName, serverIPs, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "test-server-", "")
 	defer cleanupFunc()
@@ -2463,16 +2454,8 @@ func TestLegacyAntreaClusterNetworkPolicyStats(t *testing.T) {
 	}
 	defer teardownTest(t, data)
 	skipIfAntreaPolicyDisabled(t, data)
+	skipIfNetworkPolicyStatsDisabled(t, data)
 
-	cc := []configChange{
-		{"NetworkPolicyStats", "true", true},
-	}
-	ac := []configChange{
-		{"NetworkPolicyStats", "true", true},
-	}
-	if err := testData.mutateAntreaConfigMap(cc, ac, true, true); err != nil {
-		t.Fatalf("Failed to enable NetworkPolicyStats feature: %v", err)
-	}
 	serverName, serverIPs, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "test-server-", "")
 	defer cleanupFunc()
 

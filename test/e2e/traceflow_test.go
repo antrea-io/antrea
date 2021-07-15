@@ -50,16 +50,7 @@ type testcase struct {
 }
 
 func skipIfTraceflowDisabled(t *testing.T, data *TestData) {
-	if featureGate, err := data.GetAgentFeatures(antreaNamespace); err != nil {
-		t.Fatalf("Error when detecting traceflow: %v", err)
-	} else if !featureGate.Enabled(features.AntreaProxy) {
-		t.Skip("Skipping test because Traceflow is not enabled in the Agent")
-	}
-	if featureGate, err := data.GetControllerFeatures(antreaNamespace); err != nil {
-		t.Fatalf("Error when detecting traceflow: %v", err)
-	} else if !featureGate.Enabled(features.AntreaProxy) {
-		t.Skip("Skipping test because Traceflow is not enabled in the Controller")
-	}
+	skipIfFeatureDisabled(t, data, features.Traceflow, true, true)
 }
 
 var (
@@ -1069,7 +1060,7 @@ func TestTraceflowInterNode(t *testing.T) {
 	// Create Service backend Pod. The "hairpin" testcases require the Service to have a single backend Pod,
 	// and no more, in order to be deterministic.
 	nginxPodName := "nginx"
-	require.NoError(t, data.createNginxPod(nginxPodName, node2))
+	require.NoError(t, data.createNginxPodOnNode(nginxPodName, node2))
 	nginxIP, err := data.podWaitForIPs(defaultTimeout, nginxPodName, testNamespace)
 	require.NoError(t, err)
 
