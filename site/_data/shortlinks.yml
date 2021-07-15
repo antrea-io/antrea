@@ -58,6 +58,9 @@
 - title: Traceflow Guide
   key: traceflow
   destination: traceflow-guide
+- title: Egress Guide
+  key: egress
+  destination: egress
 - title: NoEncap and Hybrid Traffic Modes
   key: noencap-hybrid-modes
   destination: noencap-hybrid-modes
