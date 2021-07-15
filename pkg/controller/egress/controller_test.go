@@ -62,6 +62,21 @@ var (
 	eipFoo2 = newExternalIPPool("pool2", "", "2.2.2.10", "2.2.2.20")
 )
 
+func newEgress(name, egressIP, externalIPPool string, podSelector, namespaceSelector *metav1.LabelSelector) *v1alpha2.Egress {
+	egress := &v1alpha2.Egress{
+		ObjectMeta: metav1.ObjectMeta{Name: name},
+		Spec: v1alpha2.EgressSpec{
+			AppliedTo: corev1a2.AppliedTo{
+				PodSelector:       podSelector,
+				NamespaceSelector: namespaceSelector,
+			},
+			EgressIP:       egressIP,
+			ExternalIPPool: externalIPPool,
+		},
+	}
+	return egress
+}
+
 func newExternalIPPool(name, cidr, start, end string) *v1alpha2.ExternalIPPool {
 	pool := &v1alpha2.ExternalIPPool{
 		ObjectMeta: metav1.ObjectMeta{
@@ -287,6 +302,7 @@ func TestAddEgress(t *testing.T) {
 			controller.crdInformerFactory.Start(stopCh)
 			controller.informerFactory.WaitForCacheSync(stopCh)
 			controller.crdInformerFactory.WaitForCacheSync(stopCh)
+			go controller.groupingInterface.Run(stopCh)
 			go controller.groupingController.Run(stopCh)
 			go controller.Run(stopCh)
 
@@ -334,6 +350,7 @@ func TestUpdateEgress(t *testing.T) {
 	controller.crdInformerFactory.Start(stopCh)
 	controller.informerFactory.WaitForCacheSync(stopCh)
 	controller.crdInformerFactory.WaitForCacheSync(stopCh)
+	go controller.groupingInterface.Run(stopCh)
 	go controller.groupingController.Run(stopCh)
 	go controller.Run(stopCh)
 

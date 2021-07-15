@@ -162,7 +162,8 @@ func (b *ClusterNetworkPolicySpecBuilder) AddIngress(protoc v1.Protocol,
 	for _, at := range ruleAppliedToSpecs {
 		appliedTos = append(appliedTos, b.GetAppliedToPeer(at.PodSelector, at.NSSelector, at.PodSelectorMatchExp, at.NSSelectorMatchExp, at.Group))
 	}
-	var policyPeer []crdv1alpha1.NetworkPolicyPeer
+	// An empty From/To in ACNP rules evaluates to match all addresses.
+	policyPeer := make([]crdv1alpha1.NetworkPolicyPeer, 0)
 	if pSel != nil || nSel != nil || ns != nil || ipBlock != nil || ruleClusterGroup != "" {
 		policyPeer = []crdv1alpha1.NetworkPolicyPeer{{
 			PodSelector:       pSel,

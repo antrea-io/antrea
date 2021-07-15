@@ -66,6 +66,14 @@ func (cs *connectionStore) ForAllConnectionsDo(callback flowexporter.ConnectionM
 	return nil
 }
 
+// AddConnToMap adds the connection to connections map given connection key.
+// This is used only for unit tests.
+func (cs *connectionStore) AddConnToMap(connKey *flowexporter.ConnectionKey, conn *flowexporter.Connection) {
+	cs.mutex.Lock()
+	defer cs.mutex.Unlock()
+	cs.connections[*connKey] = conn
+}
+
 func (cs *connectionStore) fillPodInfo(conn *flowexporter.Connection) {
 	if cs.ifaceStore == nil {
 		klog.V(4).Info("Interface store is not available to retrieve local Pods information.")

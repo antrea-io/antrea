@@ -44,7 +44,7 @@ const (
 	defaultFlowPollInterval        = 5 * time.Second
 	defaultActiveFlowExportTimeout = 30 * time.Second
 	defaultIdleFlowExportTimeout   = 15 * time.Second
-	defaultNPLPortRange            = "40000-41000"
+	defaultNPLPortRange            = "61000-62000"
 )
 
 type Options struct {
@@ -191,6 +191,10 @@ func (o *Options) setDefaults() {
 	}
 	if o.config.APIPort == 0 {
 		o.config.APIPort = apis.AntreaAgentAPIPort
+	}
+
+	if o.config.ClusterMembershipPort == 0 {
+		o.config.ClusterMembershipPort = apis.AntreaAgentClusterMembershipPort
 	}
 
 	if features.DefaultFeatureGate.Enabled(features.FlowExporter) {

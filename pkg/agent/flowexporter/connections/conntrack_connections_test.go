@@ -137,6 +137,8 @@ func TestConntrackConnectionStore_AddOrUpdateConn(t *testing.T) {
 	// To test service name mapping.
 	tuple4 := flowexporter.Tuple{SourceAddress: net.IP{10, 10, 10, 10}, DestinationAddress: net.IP{20, 20, 20, 20}, Protocol: 6, SourcePort: 5000, DestinationPort: 80}
 	testFlow4 := flowexporter.Connection{
+		StartTime: refTime.Add(-(time.Second * 50)),
+		StopTime:  refTime,
 		FlowKey:   tuple4,
 		Mark:      openflow.ServiceCTMark,
 		IsPresent: true,

@@ -89,6 +89,8 @@ var allowedPaths = []string{
 	"/validate/acnp",
 	"/validate/anp",
 	"/validate/clustergroup",
+	"/validate/externalippool",
+	"/validate/egress",
 	"/convert/clustergroup",
 }
 
@@ -274,6 +276,7 @@ func run(o *Options) error {
 		endpointQuerier,
 		networkPolicyController,
 		networkPolicyStatusController,
+		egressController,
 		statsAggregator,
 		o.config.EnablePrometheusMetrics,
 		cipherSuites,
@@ -305,6 +308,10 @@ func run(o *Options) error {
 	go clusterIdentityAllocator.Run(stopCh)
 
 	go controllerMonitor.Run(stopCh)
+
+	// It starts dispatching group updates to consumers, should start individually.
+	// If it's not running, adding Pods/Entities to groupEntityIndex may be blocked because of full channel.
+	go groupEntityIndex.Run(stopCh)
 
 	go groupEntityController.Run(stopCh)
 
@@ -364,6 +371,7 @@ func createAPIServerConfig(kubeconfig string,
 	endpointQuerier networkpolicy.EndpointQuerier,
 	npController *networkpolicy.NetworkPolicyController,
 	networkPolicyStatusController *networkpolicy.StatusController,
+	egressController *egress.EgressController,
 	statsAggregator *stats.Aggregator,
 	enableMetrics bool,
 	cipherSuites []uint16,
@@ -424,5 +432,6 @@ func createAPIServerConfig(kubeconfig string,
 		controllerQuerier,
 		networkPolicyStatusController,
 		endpointQuerier,
-		npController), nil
+		npController,
+		egressController), nil
 }

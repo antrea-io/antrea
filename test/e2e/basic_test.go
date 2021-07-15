@@ -60,7 +60,7 @@ func TestPodAssignIP(t *testing.T) {
 	podName := randName("test-pod-")
 
 	t.Logf("Creating a busybox test Pod")
-	if err := data.createBusyboxPod(podName); err != nil {
+	if err := data.createBusyboxPodOnNode(podName, ""); err != nil {
 		t.Fatalf("Error when creating busybox test Pod: %v", err)
 	}
 	defer deletePodWrapper(t, data, podName)
@@ -92,7 +92,7 @@ func checkPodIP(t *testing.T, podNetworkCIDR string, podIP *net.IP) {
 	}
 }
 
-func (data *TestData) testDeletePod(t *testing.T, podName string, nodeName string) {
+func (data *TestData) testDeletePod(t *testing.T, podName string, nodeName string, isWindowsNode bool) {
 	var antreaPodName string
 	var err error
 	if antreaPodName, err = data.getAntreaPodOnNode(nodeName); err != nil {
@@ -100,11 +100,20 @@ func (data *TestData) testDeletePod(t *testing.T, podName string, nodeName strin
 	}
 	t.Logf("The Antrea Pod for Node '%s' is '%s'", nodeName, antreaPodName)
 
-	cmds := []string{"antctl", "get", "podinterface", podName, "-n", testNamespace, "-o", "json"}
-	stdout, _, err := runAntctl(antreaPodName, cmds, data)
+	var stdout string
+	if isWindowsNode {
+		antctlCmd := fmt.Sprintf("C:/k/antrea/bin/antctl.exe get podinterface %s -n %s -o json", podName, testNamespace)
+		envCmd := fmt.Sprintf("export POD_NAME=antrea-agent;export KUBERNETES_SERVICE_HOST=%s;export KUBERNETES_SERVICE_PORT=%d", clusterInfo.k8sServiceHost, clusterInfo.k8sServicePort)
+		cmd := fmt.Sprintf("%s && %s", envCmd, antctlCmd)
+		_, stdout, _, err = RunCommandOnNode(nodeName, cmd)
+	} else {
+		cmds := []string{"antctl", "get", "podinterface", podName, "-n", testNamespace, "-o", "json"}
+		stdout, _, err = runAntctl(antreaPodName, cmds, data)
+	}
 	if err != nil {
 		t.Fatalf("Error when running antctl: %v", err)
 	}
+
 	var podInterfaces []podinterface.Response
 	if err := json.Unmarshal([]byte(stdout), &podInterfaces); err != nil {
 		t.Fatalf("Error when querying the pod interface: %v", err)
@@ -116,33 +125,59 @@ func (data *TestData) testDeletePod(t *testing.T, podName string, nodeName strin
 	podIPs := podInterfaces[0].IPs
 	t.Logf("Host interface name for Pod is '%s'", ifName)
 
-	doesInterfaceExist := func() bool {
-		cmd := []string{"ip", "link", "show", ifName}
-		stdout, stderr, err := data.runCommandFromPod(antreaNamespace, antreaPodName, agentContainerName, cmd)
-		if err != nil {
-			if strings.Contains(stderr, "does not exist") {
+	var doesInterfaceExist, doesOVSPortExist func() bool
+	var doesIPAllocationExist func(podIP string) bool
+	if isWindowsNode {
+		doesInterfaceExist = func() bool {
+			cmd := fmt.Sprintf("powershell 'Get-HnsEndpoint | Where-Object Name -EQ %s | Select-Object ID | Format-Table -HideTableHeaders'", ifName)
+			_, stdout, _, err := RunCommandOnNode(nodeName, cmd)
+			if err != nil {
+				t.Fatalf("Error when querying HNSEndpoint with name %s: %s", ifName, err.Error())
+			}
+			return strings.TrimSpace(stdout) != ""
+		}
+		doesOVSPortExist = func() bool {
+			exists, err := data.doesOVSPortExistOnWindows(nodeName, ifName)
+			if err != nil {
+				t.Fatalf("Cannot determine if OVS port exists: %v", err)
+			}
+			return exists
+		}
+		doesIPAllocationExist = func(podIP string) bool {
+			cmd := fmt.Sprintf("powershell 'Test-Path /var/lib/cni/networks/antrea/%s'", podIP)
+			_, stdout, _, err := RunCommandOnNode(nodeName, cmd)
+			if err != nil {
+				t.Fatalf("Error when querying IPAM result: %s", err.Error())
+			}
+			return strings.EqualFold(strings.TrimRight(stdout, "\r\n"), "true")
+		}
+	} else {
+		doesInterfaceExist = func() bool {
+			cmd := []string{"ip", "link", "show", ifName}
+			stdout, stderr, err := data.runCommandFromPod(antreaNamespace, antreaPodName, agentContainerName, cmd)
+			if err != nil {
+				if strings.Contains(stderr, "does not exist") {
+					return false
+				}
+				t.Fatalf("Error when running ip command in Pod '%s': %v - stdout: %s - stderr: %s", antreaPodName, err, stdout, stderr)
+			}
+			return true
+		}
+		doesOVSPortExist = func() bool {
+			exists, err := data.doesOVSPortExist(antreaPodName, ifName)
+			if err != nil {
+				t.Fatalf("Cannot determine if OVS port exists: %v", err)
+			}
+			return exists
+		}
+		doesIPAllocationExist = func(podIP string) bool {
+			cmd := []string{"test", "-f", "/var/run/antrea/cni/networks/antrea/" + podIP}
+			_, _, err := data.runCommandFromPod(antreaNamespace, antreaPodName, agentContainerName, cmd)
+			if err != nil {
 				return false
 			}
-			t.Fatalf("Error when running ip command in Pod '%s': %v - stdout: %s - stderr: %s", antreaPodName, err, stdout, stderr)
+			return true
 		}
-		return true
-	}
-
-	doesOVSPortExist := func() bool {
-		exists, err := data.doesOVSPortExist(antreaPodName, ifName)
-		if err != nil {
-			t.Fatalf("Cannot determine if OVS port exists: %v", err)
-		}
-		return exists
-	}
-
-	doesIPAllocationExist := func(podIP string) bool {
-		cmd := []string{"test", "-f", "/var/run/antrea/cni/networks/antrea/" + podIP}
-		_, _, err := data.runCommandFromPod(antreaNamespace, antreaPodName, agentContainerName, cmd)
-		if err != nil {
-			return false
-		}
-		return true
 	}
 
 	t.Logf("Checking that the veth interface and the OVS port exist")
@@ -180,26 +215,32 @@ func (data *TestData) testDeletePod(t *testing.T, podName string, nodeName strin
 // TestDeletePod creates a Pod, then deletes it, and checks that the veth interface (in the Node
 // network namespace) and the OVS port for the container get removed.
 func TestDeletePod(t *testing.T) {
-	skipIfHasWindowsNodes(t)
-
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
 	defer teardownTest(t, data)
 
-	nodeName := nodeName(0)
+	isWindows := false
+	nodeIdx := 0
+
+	if len(clusterInfo.windowsNodes) > 0 {
+		isWindows = true
+		nodeIdx = clusterInfo.windowsNodes[0]
+	}
+
+	nodeName := nodeName(nodeIdx)
 	podName := randName("test-pod-")
 
-	t.Logf("Creating a busybox test Pod on '%s'", nodeName)
-	if err := data.createBusyboxPodOnNode(podName, nodeName); err != nil {
-		t.Fatalf("Error when creating busybox test Pod: %v", err)
+	t.Logf("Creating a agnhost test Pod on '%s'", nodeName)
+	if err := data.createAgnhostPodOnNode(podName, nodeName); err != nil {
+		t.Fatalf("Error when creating agnhost test Pod: %v", err)
 	}
 	if err := data.podWaitForRunning(defaultTimeout, podName, testNamespace); err != nil {
 		t.Fatalf("Error when waiting for Pod '%s' to be in the Running state", podName)
 	}
 
-	data.testDeletePod(t, podName, nodeName)
+	data.testDeletePod(t, podName, nodeName, isWindows)
 }
 
 // TestAntreaGracefulExit verifies that Antrea Pods can terminate gracefully.

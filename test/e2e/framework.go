@@ -61,6 +61,7 @@ const (
 
 	// antreaNamespace is the K8s Namespace in which all Antrea resources are running.
 	antreaNamespace            string = "kube-system"
+	kubeNamespace              string = "kube-system"
 	flowAggregatorNamespace    string = "flow-aggregator"
 	antreaConfigVolume         string = "antrea-config"
 	flowAggregatorConfigVolume string = "flow-aggregator-config"
@@ -101,13 +102,13 @@ const (
 	busyboxImage        = "projects.registry.vmware.com/library/busybox"
 	nginxImage          = "projects.registry.vmware.com/antrea/nginx"
 	perftoolImage       = "projects.registry.vmware.com/antrea/perftool"
-	ipfixCollectorImage = "projects.registry.vmware.com/antrea/ipfix-collector:v0.5.3"
+	ipfixCollectorImage = "projects.registry.vmware.com/antrea/ipfix-collector:v0.5.4"
 	ipfixCollectorPort  = "4739"
 
 	nginxLBService = "nginx-loadbalancer"
 
 	exporterActiveFlowExportTimeout     = 2 * time.Second
-	exporterInactiveFlowExportTimeout   = 1 * time.Second
+	exporterIdleFlowExportTimeout       = 1 * time.Second
 	aggregatorActiveFlowRecordTimeout   = 3500 * time.Millisecond
 	aggregatorInactiveFlowRecordTimeout = 6 * time.Second
 )
@@ -135,6 +136,8 @@ type ClusterInfo struct {
 	nodesOS              map[string]string
 	windowsNodes         []int
 	k8sServerVersion     string
+	k8sServiceHost       string
+	k8sServicePort       int32
 }
 
 var clusterInfo ClusterInfo
@@ -461,6 +464,14 @@ func collectClusterInfo() error {
 	}
 	clusterInfo.k8sServerVersion = serverVersion.String()
 
+	// Retrieve kubernetes Service host and Port
+	svc, err := testData.clientset.CoreV1().Services("default").Get(context.TODO(), "kubernetes", metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("unable to get Service kubernetes: %v", err)
+	}
+	clusterInfo.k8sServiceHost = svc.Spec.ClusterIP
+	clusterInfo.k8sServicePort = svc.Spec.Ports[0].Port
+
 	return nil
 }
 
@@ -527,20 +538,22 @@ func (data *TestData) deleteTestNamespace(timeout time.Duration) error {
 }
 
 // deployAntreaCommon deploys Antrea using kubectl on the control-plane Node.
-func (data *TestData) deployAntreaCommon(yamlFile string, extraOptions string) error {
+func (data *TestData) deployAntreaCommon(yamlFile string, extraOptions string, waitForAgentRollout bool) error {
 	// TODO: use the K8s apiserver when server side apply is available?
 	// See https://kubernetes.io/docs/reference/using-api/api-concepts/#server-side-apply
 	rc, _, _, err := provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl apply %s -f %s", extraOptions, yamlFile))
 	if err != nil || rc != 0 {
 		return fmt.Errorf("error when deploying Antrea; is %s available on the control-plane Node?", yamlFile)
 	}
-	rc, _, _, err = provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl -n %s rollout status deploy/%s --timeout=%v", antreaNamespace, antreaDeployment, defaultTimeout))
+	rc, stdout, stderr, err := provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl -n %s rollout status deploy/%s --timeout=%v", antreaNamespace, antreaDeployment, defaultTimeout))
 	if err != nil || rc != 0 {
-		return fmt.Errorf("error when waiting for antrea-controller rollout to complete")
+		return fmt.Errorf("error when waiting for antrea-controller rollout to complete - rc: %v - stdout: %v - stderr: %v - err: %v", rc, stdout, stderr, err)
 	}
-	rc, _, _, err = provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl -n %s rollout status ds/%s --timeout=%v", antreaNamespace, antreaDaemonSet, defaultTimeout))
-	if err != nil || rc != 0 {
-		return fmt.Errorf("error when waiting for antrea-agent rollout to complete")
+	if waitForAgentRollout {
+		rc, _, _, err = provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl -n %s rollout status ds/%s --timeout=%v", antreaNamespace, antreaDaemonSet, defaultTimeout))
+		if err != nil || rc != 0 {
+			return fmt.Errorf("error when waiting for antrea-agent rollout to complete - rc: %v - stdout: %v - stderr: %v - err: %v", rc, stdout, stderr, err)
+		}
 	}
 
 	return nil
@@ -549,17 +562,17 @@ func (data *TestData) deployAntreaCommon(yamlFile string, extraOptions string) e
 // deployAntrea deploys Antrea with the standard manifest.
 func (data *TestData) deployAntrea() error {
 	if testOptions.enableCoverage {
-		return data.deployAntreaCommon(antreaCovYML, "")
+		return data.deployAntreaCommon(antreaCovYML, "", true)
 	}
-	return data.deployAntreaCommon(antreaYML, "")
+	return data.deployAntreaCommon(antreaYML, "", true)
 }
 
 // deployAntreaIPSec deploys Antrea with IPSec tunnel enabled.
 func (data *TestData) deployAntreaIPSec() error {
 	if testOptions.enableCoverage {
-		return data.deployAntreaCommon(antreaIPSecCovYML, "")
+		return data.deployAntreaCommon(antreaIPSecCovYML, "", true)
 	}
-	return data.deployAntreaCommon(antreaIPSecYML, "")
+	return data.deployAntreaCommon(antreaIPSecYML, "", true)
 }
 
 // deployAntreaFlowExporter deploys Antrea with flow exporter config params enabled.
@@ -569,7 +582,7 @@ func (data *TestData) deployAntreaFlowExporter(ipfixCollector string) error {
 		{"FlowExporter", "true", true},
 		{"flowPollInterval", "\"1s\"", false},
 		{"activeFlowExportTimeout", fmt.Sprintf("\"%v\"", exporterActiveFlowExportTimeout), false},
-		{"inactiveFlowExportTimeout", fmt.Sprintf("\"%v\"", exporterInactiveFlowExportTimeout), false},
+		{"idleFlowExportTimeout", fmt.Sprintf("\"%v\"", exporterIdleFlowExportTimeout), false},
 	}
 	if ipfixCollector != "" {
 		ac = append(ac, configChange{"flowCollectorAddr", fmt.Sprintf("\"%s\"", ipfixCollector), false})
@@ -951,11 +964,6 @@ func (data *TestData) createHostNetworkBusyboxPodOnNode(name string, nodeName st
 	return data.createPodOnNode(name, nodeName, busyboxImage, []string{"sleep", strconv.Itoa(sleepDuration)}, nil, nil, nil, true, nil)
 }
 
-// createBusyboxPod creates a Pod in the test namespace with a single busybox container.
-func (data *TestData) createBusyboxPod(name string) error {
-	return data.createBusyboxPodOnNode(name, "")
-}
-
 // createNginxPodOnNode creates a Pod in the test namespace with a single nginx container. The
 // Pod will be scheduled on the specified Node (if nodeName is not empty).
 func (data *TestData) createNginxPodOnNode(name string, nodeName string) error {
@@ -966,11 +974,6 @@ func (data *TestData) createNginxPodOnNode(name string, nodeName string) error {
 			Protocol:      corev1.ProtocolTCP,
 		},
 	}, false, nil)
-}
-
-// createNginxPod creates a Pod in the test namespace with a single nginx container.
-func (data *TestData) createNginxPod(name, nodeName string) error {
-	return data.createNginxPodOnNode(name, nodeName)
 }
 
 // createServerPod creates a Pod that can listen to specified port and have named port set.
@@ -1598,6 +1601,17 @@ func (data *TestData) doesOVSPortExist(antreaPodName string, portName string) (b
 		return false, nil
 	}
 	return false, fmt.Errorf("error when running ovs-vsctl command on Pod '%s': %v", antreaPodName, err)
+}
+
+func (data *TestData) doesOVSPortExistOnWindows(nodeName, portName string) (bool, error) {
+	cmd := fmt.Sprintf("ovs-vsctl port-to-br %s", portName)
+	_, _, stderr, err := RunCommandOnNode(nodeName, cmd)
+	if strings.Contains(stderr, "no port named") {
+		return false, nil
+	} else if err == nil {
+		return true, nil
+	}
+	return false, fmt.Errorf("error when running ovs-vsctl command on Windows Node '%s': %v", nodeName, err)
 }
 
 func (data *TestData) GetEncapMode() (config.TrafficEncapModeType, error) {

@@ -19,6 +19,7 @@ package nodeportlocal
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"sync"
 	"testing"
@@ -37,19 +38,16 @@ import (
 
 	nplk8s "antrea.io/antrea/pkg/agent/nodeportlocal/k8s"
 	"antrea.io/antrea/pkg/agent/nodeportlocal/portcache"
-	npltest "antrea.io/antrea/pkg/agent/nodeportlocal/rules/testing"
+	portcachetesting "antrea.io/antrea/pkg/agent/nodeportlocal/portcache/testing"
+	"antrea.io/antrea/pkg/agent/nodeportlocal/rules"
+	rulestesting "antrea.io/antrea/pkg/agent/nodeportlocal/rules/testing"
 )
 
-func newPortTable(c *gomock.Controller) *portcache.PortTable {
-	ptable := portcache.PortTable{StartPort: 40000, EndPort: 45000}
+func newPortTable(mockIPTables rules.PodPortRules, mockPortOpener portcache.LocalPortOpener) *portcache.PortTable {
+	ptable := portcache.PortTable{StartPort: 61000, EndPort: 65000}
 	ptable.Table = make(map[int]portcache.NodePortData)
-
-	mockTable := npltest.NewMockPodPortRules(c)
-	mockTable.EXPECT().AddRule(gomock.Any(), gomock.Any()).AnyTimes()
-	mockTable.EXPECT().DeleteRule(gomock.Any(), gomock.Any()).AnyTimes()
-	mockTable.EXPECT().AddAllRules(gomock.Any()).AnyTimes()
-
-	ptable.PodPortRules = mockTable
+	ptable.PodPortRules = mockIPTables
+	ptable.LocalPortOpener = mockPortOpener
 	return &ptable
 }
 
@@ -64,6 +62,12 @@ const (
 	defaultAppSelectorKey = "foo"
 	defaultAppSelectorVal = "test-pod"
 )
+
+type fakeSocket struct{}
+
+func (m *fakeSocket) Close() error {
+	return nil
+}
 
 func getTestPod() *corev1.Pod {
 	return &corev1.Pod{
@@ -150,11 +154,12 @@ func getTestSvcWithPortName(portName string) *corev1.Service {
 
 type testData struct {
 	*testing.T
-	stopCh    chan struct{}
-	ctrl      *gomock.Controller
-	k8sClient *k8sfake.Clientset
-	portTable *portcache.PortTable
-	wg        sync.WaitGroup
+	stopCh         chan struct{}
+	ctrl           *gomock.Controller
+	k8sClient      *k8sfake.Clientset
+	portTable      *portcache.PortTable
+	mockPortOpener *portcachetesting.MockLocalPortOpener
+	wg             sync.WaitGroup
 }
 
 func (data *testData) runWrapper(c *nplk8s.NPLController) {
@@ -165,16 +170,43 @@ func (data *testData) runWrapper(c *nplk8s.NPLController) {
 	}()
 }
 
-func setUp(t *testing.T, objects ...runtime.Object) *testData {
+type testConfig struct {
+	defaultPortOpenerExpectations bool
+}
+
+func newTestConfig() *testConfig {
+	return &testConfig{
+		defaultPortOpenerExpectations: true,
+	}
+}
+
+func (tc *testConfig) withDefaultPortOpenerExpectations(v bool) *testConfig {
+	tc.defaultPortOpenerExpectations = false
+	return tc
+}
+
+func setUp(t *testing.T, tc *testConfig, objects ...runtime.Object) *testData {
 	os.Setenv("NODE_NAME", defaultNodeName)
 
 	mockCtrl := gomock.NewController(t)
+
+	mockIPTables := rulestesting.NewMockPodPortRules(mockCtrl)
+	mockIPTables.EXPECT().AddRule(gomock.Any(), gomock.Any()).AnyTimes()
+	mockIPTables.EXPECT().DeleteRule(gomock.Any(), gomock.Any()).AnyTimes()
+	mockIPTables.EXPECT().AddAllRules(gomock.Any()).AnyTimes()
+
+	mockPortOpener := portcachetesting.NewMockLocalPortOpener(mockCtrl)
+	if tc.defaultPortOpenerExpectations {
+		mockPortOpener.EXPECT().OpenLocalPort(gomock.Any()).AnyTimes().Return(&fakeSocket{}, nil)
+	}
+
 	data := &testData{
-		T:         t,
-		stopCh:    make(chan struct{}),
-		ctrl:      mockCtrl,
-		k8sClient: k8sfake.NewSimpleClientset(objects...),
-		portTable: newPortTable(mockCtrl),
+		T:              t,
+		stopCh:         make(chan struct{}),
+		ctrl:           mockCtrl,
+		k8sClient:      k8sfake.NewSimpleClientset(objects...),
+		portTable:      newPortTable(mockIPTables, mockPortOpener),
+		mockPortOpener: mockPortOpener,
 	}
 
 	// informerFactory is initialized and started from cmd/antrea-agent/agent.go
@@ -194,11 +226,11 @@ func setUp(t *testing.T, objects ...runtime.Object) *testData {
 	return data
 }
 
-func setUpWithTestServiceAndPod(t *testing.T) (*testData, *corev1.Service, *corev1.Pod) {
+func setUpWithTestServiceAndPod(t *testing.T, tc *testConfig) (*testData, *corev1.Service, *corev1.Pod) {
 	testSvc := getTestSvc()
 	testPod := getTestPod()
 
-	testData := setUp(t, testSvc, testPod)
+	testData := setUp(t, tc, testSvc, testPod)
 
 	defer func() {
 		if t.Failed() {
@@ -280,7 +312,7 @@ func TestSvcNamespaceUpdate(t *testing.T) {
 	testPodDefaultNS := getTestPod()
 	testSvcBlue := getTestSvc()
 	testSvcBlue.Namespace = "blue"
-	testData := setUp(t, testSvcDefaultNS, testPodDefaultNS, testSvcBlue)
+	testData := setUp(t, newTestConfig(), testSvcDefaultNS, testPodDefaultNS, testSvcBlue)
 	defer testData.tearDown()
 
 	// Remove Service testSvcDefaultNS.
@@ -297,7 +329,7 @@ func TestSvcNamespaceUpdate(t *testing.T) {
 // TestSvcTypeUpdate updates Service type from ClusterIP to NodePort
 // and checks whether Pod annotations are removed.
 func TestSvcTypeUpdate(t *testing.T) {
-	testData, testSvc, testPod := setUpWithTestServiceAndPod(t)
+	testData, testSvc, testPod := setUpWithTestServiceAndPod(t, newTestConfig())
 	defer testData.tearDown()
 
 	// Update Service type to NodePort.
@@ -321,7 +353,7 @@ func TestSvcTypeUpdate(t *testing.T) {
 // TestSvcUpdateAnnotation updates the Service spec to disabled NPL. It then verifies that the Pod's
 // NPL annotation is removed and that the port table is updated.
 func TestSvcUpdateAnnotation(t *testing.T) {
-	testData, testSvc, testPod := setUpWithTestServiceAndPod(t)
+	testData, testSvc, testPod := setUpWithTestServiceAndPod(t, newTestConfig())
 	defer testData.tearDown()
 
 	// Disable NPL.
@@ -345,7 +377,7 @@ func TestSvcUpdateAnnotation(t *testing.T) {
 // TestSvcRemoveAnnotation is the same as TestSvcUpdateAnnotation, but it deletes the NPL enabled
 // annotation, instead of setting its value to false.
 func TestSvcRemoveAnnotation(t *testing.T) {
-	testData, testSvc, testPod := setUpWithTestServiceAndPod(t)
+	testData, testSvc, testPod := setUpWithTestServiceAndPod(t, newTestConfig())
 	defer testData.tearDown()
 
 	testSvc.Annotations = nil
@@ -359,7 +391,7 @@ func TestSvcRemoveAnnotation(t *testing.T) {
 // TestSvcUpdateSelector updates the Service selector so that it no longer selects the Pod, and
 // verifies that the Pod annotation is removed.
 func TestSvcUpdateSelector(t *testing.T) {
-	testData, testSvc, testPod := setUpWithTestServiceAndPod(t)
+	testData, testSvc, testPod := setUpWithTestServiceAndPod(t, newTestConfig())
 	defer testData.tearDown()
 
 	testSvc.Spec.Selector = map[string]string{defaultAppSelectorKey: "invalid-selector"}
@@ -381,7 +413,7 @@ func TestSvcUpdateSelector(t *testing.T) {
 // Service. It then verifies that the Pod's NPL annotation is removed and that the port table is
 // updated.
 func TestPodUpdateSelectorLabel(t *testing.T) {
-	testData, _, testPod := setUpWithTestServiceAndPod(t)
+	testData, _, testPod := setUpWithTestServiceAndPod(t, newTestConfig())
 	defer testData.tearDown()
 
 	testPod.Labels = map[string]string{"invalid-label-key": defaultAppSelectorVal}
@@ -395,7 +427,7 @@ func TestPodUpdateSelectorLabel(t *testing.T) {
 // TestSvcDelete deletes the Service. It then verifies that the Pod's NPL annotation is removed and
 // that the port table is updated.
 func TestSvcDelete(t *testing.T) {
-	testData, testSvc, testPod := setUpWithTestServiceAndPod(t)
+	testData, testSvc, testPod := setUpWithTestServiceAndPod(t, newTestConfig())
 	defer testData.tearDown()
 
 	err := testData.k8sClient.CoreV1().Services(defaultNS).Delete(context.TODO(), testSvc.Name, metav1.DeleteOptions{})
@@ -410,7 +442,7 @@ func TestSvcDelete(t *testing.T) {
 // TestPodDelete verifies that when a Pod gets deleted, the corresponding entry gets deleted from
 // local port table as well.
 func TestPodDelete(t *testing.T) {
-	testData, _, testPod := setUpWithTestServiceAndPod(t)
+	testData, _, testPod := setUpWithTestServiceAndPod(t, newTestConfig())
 	defer testData.tearDown()
 
 	err := testData.k8sClient.CoreV1().Pods(defaultNS).Delete(context.TODO(), testPod.Name, metav1.DeleteOptions{})
@@ -429,7 +461,7 @@ func TestAddMultiPortPodSvc(t *testing.T) {
 	newPort := 90
 	testSvc := getTestSvc(defaultPort, int32(newPort))
 	testPod := getTestPod()
-	testData := setUp(t, testSvc, testPod)
+	testData := setUp(t, newTestConfig(), testSvc, testPod)
 	defer testData.tearDown()
 
 	value, err := testData.pollForPodAnnotation(testPod.Name, true)
@@ -456,7 +488,7 @@ func TestAddMultiPortPodSinglePortSvc(t *testing.T) {
 		testPod.Spec.Containers[0].Ports,
 		corev1.ContainerPort{ContainerPort: int32(newPort2)},
 	)
-	testData := setUp(t, testSvc, testPod)
+	testData := setUp(t, newTestConfig(), testSvc, testPod)
 	defer testData.tearDown()
 
 	value, err := testData.pollForPodAnnotation(testPod.Name, true)
@@ -478,7 +510,7 @@ func TestPodAddHostPort(t *testing.T) {
 		testPod.Spec.Containers[0].Ports,
 		corev1.ContainerPort{ContainerPort: int32(defaultPort), HostPort: int32(hostPort), Protocol: corev1.ProtocolTCP},
 	)
-	testData := setUp(t, testSvc, testPod)
+	testData := setUp(t, newTestConfig(), testSvc, testPod)
 	defer testData.tearDown()
 
 	value, err := testData.pollForPodAnnotation(testPod.Name, true)
@@ -503,7 +535,7 @@ func TestPodAddHostPortMultiProtocol(t *testing.T) {
 		testPod.Spec.Containers[0].Ports,
 		corev1.ContainerPort{ContainerPort: int32(defaultPort), HostPort: int32(hostPort), Protocol: corev1.ProtocolUDP},
 	)
-	testData := setUp(t, testSvc, testPod)
+	testData := setUp(t, newTestConfig(), testSvc, testPod)
 	defer testData.tearDown()
 
 	value, err := testData.pollForPodAnnotation(testPod.Name, true)
@@ -523,7 +555,7 @@ func TestPodAddHostPortWrongProtocol(t *testing.T) {
 		testPod.Spec.Containers[0].Ports,
 		corev1.ContainerPort{ContainerPort: int32(defaultPort), HostPort: int32(hostPort), Protocol: corev1.ProtocolUDP},
 	)
-	testData := setUp(t, testSvc, testPod)
+	testData := setUp(t, newTestConfig(), testSvc, testPod)
 	defer testData.tearDown()
 
 	value, err := testData.pollForPodAnnotation(testPod.Name, true)
@@ -544,7 +576,7 @@ func TestTargetPortWithName(t *testing.T) {
 		testPod.Spec.Containers[0].Ports,
 		corev1.ContainerPort{ContainerPort: int32(defaultPort), Name: portName, Protocol: corev1.ProtocolTCP},
 	)
-	testData := setUp(t, testSvc, testPod)
+	testData := setUp(t, newTestConfig(), testSvc, testPod)
 	defer testData.tearDown()
 
 	_, err := testData.pollForPodAnnotation(testPod.Name, true)
@@ -568,7 +600,7 @@ func TestMultiplePods(t *testing.T) {
 	testPod2 := getTestPod()
 	testPod2.Name = "pod2"
 	testPod2.Status.PodIP = "10.10.10.2"
-	testData := setUp(t, testSvc, testPod1, testPod2)
+	testData := setUp(t, newTestConfig(), testSvc, testPod1, testPod2)
 	defer testData.tearDown()
 
 	value, err := testData.pollForPodAnnotation(testPod1.Name, true)
@@ -589,7 +621,7 @@ func TestMultipleServicesSameBackendPod(t *testing.T) {
 	testPod := getTestPod()
 	testSvc2 := getTestSvc(9090)
 	testSvc2.Name = "svc2"
-	testData := setUp(t, testSvc1, testSvc2, testPod)
+	testData := setUp(t, newTestConfig(), testSvc1, testSvc2, testPod)
 	defer testData.tearDown()
 
 	value, err := testData.pollForPodAnnotation(testPod.Name, true)
@@ -611,11 +643,46 @@ func TestInitInvalidPod(t *testing.T) {
 		nplk8s.NPLAnnotationKey: "[{\"podPort\":53,\"nodeIP\":\"10.10.10.10\", \"nodePort\": 30000}]",
 	}
 	testPod.SetAnnotations(annotations)
-	testData := setUp(t, testSvc, testPod)
+	testData := setUp(t, newTestConfig(), testSvc, testPod)
 	defer testData.tearDown()
 
 	value, err := testData.pollForPodAnnotation(testPod.Name, true)
 	require.NoError(t, err, "Poll for annotation check failed")
 	testData.checkAnnotationValue(value, defaultPort)
 	assert.True(t, testData.portTable.RuleExists(testPod.Status.PodIP, defaultPort))
+}
+
+var (
+	portTakenError = fmt.Errorf("Port taken")
+)
+
+// TestNodePortAlreadyBoundTo validates that when a port is already bound to, a different port will
+// be selected for NPL.
+func TestNodePortAlreadyBoundTo(t *testing.T) {
+	testSvc := getTestSvc()
+	testPod := getTestPod()
+	testConfig := newTestConfig().withDefaultPortOpenerExpectations(false)
+	testData := setUp(t, testConfig)
+	defer testData.tearDown()
+
+	var nodePort int
+	gomock.InOrder(
+		testData.mockPortOpener.EXPECT().OpenLocalPort(gomock.Any()).Return(nil, portTakenError),
+		testData.mockPortOpener.EXPECT().OpenLocalPort(gomock.Any()).DoAndReturn(func(port int) (portcache.Closeable, error) {
+			nodePort = port
+			return &fakeSocket{}, nil
+		}),
+	)
+
+	_, err := testData.k8sClient.CoreV1().Services(defaultNS).Create(context.TODO(), testSvc, metav1.CreateOptions{})
+	require.NoError(t, err, "Service creation failed")
+
+	_, err = testData.k8sClient.CoreV1().Pods(defaultNS).Create(context.TODO(), testPod, metav1.CreateOptions{})
+	require.NoError(t, err, "Pod creation failed")
+
+	value, err := testData.pollForPodAnnotation(testPod.Name, true)
+	require.NoError(t, err, "Poll for annotation check failed")
+	annotation := testData.checkAnnotationValue(value, defaultPort)[0] // length of slice is guaranteed to be correct at this stage
+	assert.Equal(t, nodePort, annotation.NodePort)
+	assert.True(t, testData.portTable.RuleExists(defaultPodIP, defaultPort))
 }

@@ -31,9 +31,11 @@ type IPAllocator interface {
 	Release(ip net.IP) error
 
 	Used() int
+
+	Has(ip net.IP) bool
 }
 
-// IPAllocator is responsible for allocating IPs from a contiguous IP range.
+// SingleIPAllocator is responsible for allocating IPs from a contiguous IP range.
 type SingleIPAllocator struct {
 	// The string format of the IP range. e.g. 10.10.10.0/24, or 10.10.10.10-10.10.10.20.
 	ipRangeStr string
@@ -177,6 +179,12 @@ func (a *SingleIPAllocator) Used() int {
 	return a.count
 }
 
+// Has returns whether the provided IP is in the range or not.
+func (a *SingleIPAllocator) Has(ip net.IP) bool {
+	offset := int(big.NewInt(0).Sub(utilnet.BigForIP(ip), a.base).Int64())
+	return offset >= 0 && offset < a.max
+}
+
 // MultiIPAllocator is responsible for allocating IPs from multiple contiguous IP ranges.
 type MultiIPAllocator []*SingleIPAllocator
 
@@ -221,4 +229,13 @@ func (ma MultiIPAllocator) Used() int {
 		used += a.Used()
 	}
 	return used
+}
+
+func (ma MultiIPAllocator) Has(ip net.IP) bool {
+	for _, a := range ma {
+		if a.Has(ip) {
+			return true
+		}
+	}
+	return false
 }

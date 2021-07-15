@@ -77,13 +77,8 @@ var (
 		"tcpState",
 		"flowType",
 	}
-	antreaInfoElementsIPv4   = append(antreaInfoElementsCommon, []string{"destinationClusterIPv4"}...)
-	antreaInfoElementsIPv6   = append(antreaInfoElementsCommon, []string{"destinationClusterIPv6"}...)
-	aggregatorElementsCommon = []string{
-		"originalObservationDomainId",
-	}
-	aggregatorElementsIPv4 = append([]string{"originalExporterIPv4Address"}, aggregatorElementsCommon...)
-	aggregatorElementsIPv6 = append([]string{"originalExporterIPv6Address"}, aggregatorElementsCommon...)
+	antreaInfoElementsIPv4 = append(antreaInfoElementsCommon, []string{"destinationClusterIPv4"}...)
+	antreaInfoElementsIPv6 = append(antreaInfoElementsCommon, []string{"destinationClusterIPv6"}...)
 
 	nonStatsElementList = []string{
 		"flowEndSeconds",
@@ -182,10 +177,8 @@ type flowAggregator struct {
 	activeFlowRecordTimeout     time.Duration
 	inactiveFlowRecordTimeout   time.Duration
 	exportingProcess            ipfix.IPFIXExportingProcess
-	templateIDv4Expv4           uint16
-	templateIDv4Expv6           uint16
-	templateIDv6Expv4           uint16
-	templateIDv6Expv6           uint16
+	templateIDv4                uint16
+	templateIDv6                uint16
 	registry                    ipfix.IPFIXRegistry
 	set                         ipfixentities.Set
 	flowAggregatorAddress       string
@@ -305,28 +298,20 @@ func (fa *flowAggregator) InitAggregationProcess() error {
 	return err
 }
 
-func (fa *flowAggregator) createAndSendTemplate(isRecordIPv6, isOriginExporterIPv6 bool) (uint16, error) {
+func (fa *flowAggregator) createAndSendTemplate(isRecordIPv6 bool) (uint16, error) {
 	templateID := fa.exportingProcess.NewTemplateID()
-	// If Pod IPs (source and destination IP) in the flow record belong to IPv4 Family and
-	// original exporter IP belongs to IPv6 family, we will send template with ID templateIDv4Expv6,
-	// which has sourceIPv4Address, destinationIPv4Address and originalExporterIPv6Address.
-	// Same applies to other combinations.
 	recordIPFamily := "IPv4"
-	exporterIPFamily := "IPv4"
 	if isRecordIPv6 {
 		recordIPFamily = "IPv6"
 	}
-	if isOriginExporterIPv6 {
-		exporterIPFamily = "IPv6"
-	}
-	bytesSent, err := fa.sendTemplateSet(isRecordIPv6, isOriginExporterIPv6)
+	bytesSent, err := fa.sendTemplateSet(isRecordIPv6)
 	if err != nil {
 		fa.exportingProcess.CloseConnToCollector()
 		fa.exportingProcess = nil
 		fa.set.ResetSet()
-		return 0, fmt.Errorf("sending %s template set with %s original exporter ip failed, err: %v", recordIPFamily, exporterIPFamily, err)
+		return 0, fmt.Errorf("sending %s template set failed, err: %v", recordIPFamily, err)
 	}
-	klog.V(2).InfoS("Exporting process initialized", "bytesSent", bytesSent, "templateSetIPFamily", recordIPFamily, "originalExporterIPFamily", exporterIPFamily)
+	klog.V(2).InfoS("Exporting process initialized", "bytesSent", bytesSent, "templateSetIPFamily", recordIPFamily)
 	return templateID, nil
 }
 
@@ -345,10 +330,6 @@ func (fa *flowAggregator) initExportingProcess() error {
 			IsEncrypted:         false,
 		}
 	} else {
-		collector, err := net.ResolveUDPAddr("udp", fa.externalFlowCollectorAddr)
-		if err != nil {
-			return err
-		}
 		// For UDP transport, hardcoding tempRefTimeout value as 1800s. So we will send out template every 30 minutes.
 		expInput = exporter.ExporterInput{
 			CollectorAddress:    fa.externalFlowCollectorAddr,
@@ -364,18 +345,11 @@ func (fa *flowAggregator) initExportingProcess() error {
 		return fmt.Errorf("got error when initializing IPFIX exporting process: %v", err)
 	}
 	fa.exportingProcess = ep
-	// Currently, we send 4 templates for covering all the cases in dual-stack clusters, where Pod IPs
-	// and original exporter IP could belong to different IP families.
-	if fa.templateIDv4Expv4, err = fa.createAndSendTemplate(false, false); err != nil {
+	// Currently, we send two templates for IPv4 and IPv6 regardless of the IP families supported by cluster
+	if fa.templateIDv4, err = fa.createAndSendTemplate(false); err != nil {
 		return err
 	}
-	if fa.templateIDv4Expv6, err = fa.createAndSendTemplate(false, true); err != nil {
-		return err
-	}
-	if fa.templateIDv6Expv4, err = fa.createAndSendTemplate(true, false); err != nil {
-		return err
-	}
-	if fa.templateIDv6Expv6, err = fa.createAndSendTemplate(true, true); err != nil {
+	if fa.templateIDv6, err = fa.createAndSendTemplate(true); err != nil {
 		return err
 	}
 	return nil
@@ -431,20 +405,9 @@ func (fa *flowAggregator) flowRecordExpiryCheck(stopCh <-chan struct{}) {
 
 func (fa *flowAggregator) sendFlowKeyRecord(key ipfixintermediate.FlowKey, record *ipfixintermediate.AggregationFlowRecord) error {
 	isRecordIPv4 := fa.aggregationProcess.IsAggregatedRecordIPv4(*record)
-	isOriginExporterIPv4 := fa.aggregationProcess.IsExporterOfAggregatedRecordIPv4(*record)
-	var templateID uint16
-	if isRecordIPv4 {
-		if isOriginExporterIPv4 {
-			templateID = fa.templateIDv4Expv4
-		} else {
-			templateID = fa.templateIDv4Expv6
-		}
-	} else {
-		if isOriginExporterIPv4 {
-			templateID = fa.templateIDv6Expv4
-		} else {
-			templateID = fa.templateIDv6Expv6
-		}
+	templateID := fa.templateIDv4
+	if !isRecordIPv4 {
+		templateID = fa.templateIDv6
 	}
 	// TODO: more records per data set will be supported when go-ipfix supports size check when adding records
 	fa.set.ResetSet()
@@ -475,25 +438,15 @@ func (fa *flowAggregator) sendFlowKeyRecord(key ipfixintermediate.FlowKey, recor
 	return nil
 }
 
-func (fa *flowAggregator) sendTemplateSet(isFlowKeyIPv6 bool, isOriginalExporterIPv6 bool) (int, error) {
+func (fa *flowAggregator) sendTemplateSet(isIPv6 bool) (int, error) {
 	elements := make([]*ipfixentities.InfoElementWithValue, 0)
 	ianaInfoElements := ianaInfoElementsIPv4
 	antreaInfoElements := antreaInfoElementsIPv4
-	aggregatorElements := aggregatorElementsIPv4
-	templateID := fa.templateIDv4Expv4
-	if isOriginalExporterIPv6 {
-		aggregatorElements = aggregatorElementsIPv6
-		templateID = fa.templateIDv4Expv6
-	}
-	if isFlowKeyIPv6 {
+	templateID := fa.templateIDv4
+	if isIPv6 {
 		ianaInfoElements = ianaInfoElementsIPv6
 		antreaInfoElements = antreaInfoElementsIPv6
-		if isOriginalExporterIPv6 {
-			aggregatorElements = aggregatorElementsIPv6
-			templateID = fa.templateIDv6Expv6
-		} else {
-			templateID = fa.templateIDv6Expv4
-		}
+		templateID = fa.templateIDv6
 	}
 	for _, ie := range ianaInfoElements {
 		element, err := fa.registry.GetInfoElement(ie, ipfixregistry.IANAEnterpriseID)
@@ -513,14 +466,6 @@ func (fa *flowAggregator) sendTemplateSet(isFlowKeyIPv6 bool, isOriginalExporter
 	}
 	for _, ie := range antreaInfoElements {
 		element, err := fa.registry.GetInfoElement(ie, ipfixregistry.AntreaEnterpriseID)
-		if err != nil {
-			return 0, fmt.Errorf("%s not present. returned error: %v", ie, err)
-		}
-		ie := ipfixentities.NewInfoElementWithValue(element, nil)
-		elements = append(elements, ie)
-	}
-	for _, ie := range aggregatorElements {
-		element, err := fa.registry.GetInfoElement(ie, ipfixregistry.IANAEnterpriseID)
 		if err != nil {
 			return 0, fmt.Errorf("%s not present. returned error: %v", ie, err)
 		}

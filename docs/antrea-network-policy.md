@@ -12,6 +12,7 @@
   - [The Antrea ClusterNetworkPolicy resource](#the-antrea-clusternetworkpolicy-resource)
     - [ACNP with stand alone selectors](#acnp-with-stand-alone-selectors)
     - [ACNP with ClusterGroup reference](#acnp-with-clustergroup-reference)
+    - [ACNP for complete Pod isolation in selected Namespaces](#acnp-for-complete-pod-isolation-in-selected-namespaces)
     - [ACNP for default Namespace isolation](#acnp-for-default-namespace-isolation)
   - [Behavior of <em>to</em> and <em>from</em> selectors](#behavior-of-to-and-from-selectors)
   - [Key differences from K8s NetworkPolicy](#key-differences-from-k8s-networkpolicy)
@@ -265,6 +266,30 @@ spec:
       enableLogging: true
 ```
 
+#### ACNP for complete Pod isolation in selected Namespaces
+
+```yaml
+apiVersion: crd.antrea.io/v1alpha1
+kind: ClusterNetworkPolicy
+metadata:
+  name: isolate-all-pods-in-namespace
+spec:
+  priority: 1
+  tier: securityOps
+  appliedTo:
+    - namespaceSelector:
+        matchLabels:
+          app: no-network-access-required
+  ingress:
+    - action: Drop              # For all Pods in those Namespaces, drop and log all ingress traffic from anywhere
+      name: drop-all-ingress
+      enableLogging: true
+  egress:
+    - action: Drop              # For all Pods in those Namespaces, drop and log all egress traffic towards anywhere
+      name: drop-all-egress
+      enableLogging: true
+```
+
 #### ACNP for default Namespace isolation
 
 ```yaml
@@ -324,6 +349,8 @@ In the [first example](#acnp-with-stand-alone-selectors), the policy applies to 
 labels "env=prod".
 The [second example](#acnp-with-clustergroup-reference) policy applies to all network endpoints selected by the
 "test-cg-with-db-selector" ClusterGroup.
+The [third example](#acnp-for-complete-pod-isolation-in-selected-namespaces) policy applies to all Pods in the
+Namespaces that matches label "app=no-network-access-required".
 
 **priority**: The `priority` field determines the relative priority of the
 policy among all ClusterNetworkPolicies in the given cluster. This field is
@@ -360,7 +387,11 @@ and the second specified by a combination of a `podSelector` and a
 The [second example](#acnp-with-clustergroup-reference) policy contains a single rule, which allows matched traffic on
 multiple TCP ports (8000 through 9000 included, plus 6379) from all network endpoints
 selected by the "test-cg-with-frontend-selector" ClusterGroup.
-**Note**: The order in which the ingress rules are set matter, i.e. rules will
+The [third example](#acnp-for-complete-pod-isolation-in-selected-namespaces) policy contains a single rule,
+which drops all ingress traffic towards any Pod in Namespaces that have label `app` set to
+`no-network-access-required`. Note that an empty `From` in the ingress rule means that
+this rule matches all ingress sources.
+**Note**: The order in which the ingress rules are specified matters, i.e., rules will
 be enforced in the order in which they are written.
 
 **egress**: Each ClusterNetworkPolicy may consist of zero or more ordered set
@@ -379,7 +410,11 @@ single port, to the 10.0.10.0/24 subnet specified by the `ipBlock` field.
 The [second example](#acnp-with-clustergroup-reference) policy contains a single rule, which drops matched traffic on
 TCP port 5978 to all network endpoints selected by the "test-cg-with-ip-block"
 ClusterGroup.
-**Note**: The order in which the egress rules are set matter, i.e. rules will
+The [third example](#acnp-for-complete-pod-isolation-in-selected-namespaces) policy contains a single rule,
+which drops all egress traffic initiated by any Pod in Namespaces that have `app` set to
+`no-network-access-required`. Note that an empty `To` in the egress rule means that
+this rule matches all egress destinations.
+**Note**: The order in which the egress rules are specified matters, i.e., rules will
 be enforced in the order in which they are written.
 
 **enableLogging**: A ClusterNetworkPolicy ingress or egress rule can be
@@ -433,7 +468,7 @@ that the corresponding `podSelector` (or all Pods if `podSelector` is not set)
 should only select Pods belonging to the same Namespace as the workload targeted
 (either through a policy-level AppliedTo or a rule-level Applied-To) by the current
 ingress or egress rule. This enables policy writers to create per-Namespace rules within a
-single policy. See the [third example](#acnp-for-default-namespace-isolation) YAML above. This field is
+single policy. See the [example](#acnp-for-default-namespace-isolation) YAML above. This field is
 optional and cannot be set along with a `namespaceSelector` within the same peer.
 
 **group**: A `group` refers to a ClusterGroup to which this ingress/egress peer, or

@@ -23,6 +23,8 @@ import (
 	"testing"
 	"time"
 
+	"k8s.io/component-base/featuregate"
+
 	"antrea.io/antrea/pkg/agent/config"
 )
 
@@ -101,7 +103,24 @@ func skipIfHasWindowsNodes(tb testing.TB) {
 
 func skipIfNoWindowsNodes(tb testing.TB) {
 	if len(clusterInfo.windowsNodes) == 0 {
-		tb.Skipf("Skipping test as the cluster has Windows Nodes")
+		tb.Skipf("Skipping test as the cluster has no Windows Nodes")
+	}
+}
+
+func skipIfFeatureDisabled(tb testing.TB, data *TestData, feature featuregate.Feature, checkAgent bool, checkController bool) {
+	if checkAgent {
+		if featureGate, err := data.GetAgentFeatures(antreaNamespace); err != nil {
+			tb.Fatalf("Cannot determine if %s is enabled in the Agent: %v", feature, err)
+		} else if !featureGate.Enabled(feature) {
+			tb.Skipf("Skipping test because %s is not enabled in the Agent", feature)
+		}
+	}
+	if checkController {
+		if featureGate, err := data.GetControllerFeatures(antreaNamespace); err != nil {
+			tb.Fatalf("Cannot determine if %s is enabled in the Controller: %v", feature, err)
+		} else if !featureGate.Enabled(feature) {
+			tb.Skipf("Skipping test because %s is not enabled in the Controller", feature)
+		}
 	}
 }
 
@@ -143,6 +162,13 @@ func setupTest(tb testing.TB) (*TestData, error) {
 		tb.Errorf("Error creating logs directory '%s': %v", testData.logsDirForTestCase, err)
 		return nil, err
 	}
+	success := false
+	defer func() {
+		if !success {
+			tb.Fail()
+			exportLogs(tb, testData, "afterSetupTest", true)
+		}
+	}()
 	tb.Logf("Creating '%s' K8s Namespace", testNamespace)
 	if err := ensureAntreaRunning(tb, testData); err != nil {
 		return nil, err
@@ -150,6 +176,7 @@ func setupTest(tb testing.TB) (*TestData, error) {
 	if err := testData.createTestNamespace(); err != nil {
 		return nil, err
 	}
+	success = true
 	return testData, nil
 }
 
@@ -260,6 +287,8 @@ func exportLogs(tb testing.TB, data *TestData, logsSubDir string, writeNodeLogs 
 		w.WriteString(stdout)
 		return nil
 	}
+	data.forAllMatchingPodsInNamespace("k8s-app=kube-proxy", kubeNamespace, writePodLogs)
+
 	data.forAllMatchingPodsInNamespace("app=antrea", antreaNamespace, writePodLogs)
 
 	// dump the logs for monitoring Pods to disk.

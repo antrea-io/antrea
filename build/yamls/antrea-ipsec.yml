@@ -1345,6 +1345,10 @@ spec:
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
+    - description: The Owner Node of egress IP
+      jsonPath: .status.egressNode
+      name: Node
+      type: string
     name: v1alpha2
     schema:
       openAPIV3Schema:
@@ -1415,11 +1419,18 @@ spec:
             required:
             - appliedTo
             type: object
+          status:
+            properties:
+              egressNode:
+                type: string
+            type: object
         required:
         - spec
         type: object
     served: true
     storage: true
+    subresources:
+      status: {}
 ---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
@@ -3282,6 +3293,20 @@ rules:
   - get
   - watch
   - list
+- apiGroups:
+  - crd.antrea.io
+  resources:
+  - egresses/status
+  verbs:
+  - update
+- apiGroups:
+  - crd.antrea.io
+  resources:
+  - externalippools
+  verbs:
+  - get
+  - watch
+  - list
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -3497,6 +3522,7 @@ rules:
   - watch
   - list
   - update
+  - patch
 - apiGroups:
   - crd.antrea.io
   resources:
@@ -3663,7 +3689,7 @@ data:
     #  FlowExporter: false
 
     # Enable collecting and exposing NetworkPolicy statistics.
-    #  NetworkPolicyStats: false
+    #  NetworkPolicyStats: true
 
     # Enable controlling SNAT IPs of Pod egress traffic.
     #  Egress: false
@@ -3770,7 +3796,7 @@ data:
     # Provide the port range used by NodePortLocal. When the NodePortLocal feature is enabled, a port from that range will be assigned
     # whenever a Pod's container defines a specific port to be exposed (each container can define a list of ports as pod.spec.containers[].ports),
     # and all Node traffic directed to that port will be forwarded to the Pod.
-    #nplPortRange: 40000-41000
+    #nplPortRange: 61000-62000
 
     # Provide the address of Kubernetes apiserver, to override any value provided in kubeconfig or InClusterConfig.
     # Defaults to "". It must be a host string, a host:port pair, or a URL to the base of the apiserver.
@@ -3817,7 +3843,7 @@ data:
     #  AntreaPolicy: true
 
     # Enable collecting and exposing NetworkPolicy statistics.
-    #  NetworkPolicyStats: false
+    #  NetworkPolicyStats: true
 
     # Enable controlling SNAT IPs of Pod egress traffic.
     #  Egress: false
@@ -3866,7 +3892,7 @@ metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-h5kbhh859d
+  name: antrea-config-5mt4h4g8tk
   namespace: kube-system
 ---
 apiVersion: v1
@@ -3946,7 +3972,7 @@ spec:
             fieldRef:
               fieldPath: spec.serviceAccountName
         - name: ANTREA_CONFIG_MAP_NAME
-          value: antrea-config-h5kbhh859d
+          value: antrea-config-5mt4h4g8tk
         image: projects.registry.vmware.com/antrea/antrea-ubuntu:latest
         imagePullPolicy: IfNotPresent
         livenessProbe:
@@ -3997,7 +4023,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-h5kbhh859d
+          name: antrea-config-5mt4h4g8tk
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -4328,7 +4354,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-h5kbhh859d
+          name: antrea-config-5mt4h4g8tk
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d
@@ -4559,6 +4585,49 @@ webhooks:
     - DELETE
     resources:
     - clustergroups
+    scope: Cluster
+  sideEffects: None
+  timeoutSeconds: 5
+- admissionReviewVersions:
+  - v1
+  - v1beta1
+  clientConfig:
+    service:
+      name: antrea
+      namespace: kube-system
+      path: /validate/externalippool
+  name: externalippoolvalidator.antrea.io
+  rules:
+  - apiGroups:
+    - crd.antrea.io
+    apiVersions:
+    - v1alpha2
+    operations:
+    - UPDATE
+    resources:
+    - externalippools
+    scope: Cluster
+  sideEffects: None
+  timeoutSeconds: 5
+- admissionReviewVersions:
+  - v1
+  - v1beta1
+  clientConfig:
+    service:
+      name: antrea
+      namespace: kube-system
+      path: /validate/egress
+  name: egressvalidator.antrea.io
+  rules:
+  - apiGroups:
+    - crd.antrea.io
+    apiVersions:
+    - v1alpha2
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - egresses
     scope: Cluster
   sideEffects: None
   timeoutSeconds: 5
