@@ -3,4 +3,5 @@
 
 /antrea/* go-get=1 /golang/antrea.html 200
 /libOpenflow/* go-get=1 /golang/libOpenflow.html 200
+/ofnet/* go-get=1 /golang/ofnet.html 200
 /resource-auditing/* go-get=1 /golang/resource-auditing.html 200
