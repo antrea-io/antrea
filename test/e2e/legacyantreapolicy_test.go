@@ -2246,9 +2246,9 @@ func TestLegacyAntreaPolicyStatus(t *testing.T) {
 	defer teardownTest(t, data)
 	skipIfAntreaPolicyDisabled(t, data)
 
-	_, _, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "server-0", controlPlaneNodeName())
+	_, _, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "server-0", controlPlaneNodeName(), testNamespace)
 	defer cleanupFunc()
-	_, _, cleanupFunc = createAndWaitForPod(t, data, data.createNginxPodOnNode, "server-1", workerNodeName(1))
+	_, _, cleanupFunc = createAndWaitForPod(t, data, data.createNginxPodOnNode, "server-1", workerNodeName(1), testNamespace)
 	defer cleanupFunc()
 
 	anpBuilder := &AntreaNetworkPolicySpecBuilder{}
@@ -2312,10 +2312,10 @@ func TestLegacyANPNetworkPolicyStatsWithDropAction(t *testing.T) {
 	skipIfAntreaPolicyDisabled(t, data)
 	skipIfNetworkPolicyStatsDisabled(t, data)
 
-	serverName, serverIPs, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "test-server-", "")
+	serverName, serverIPs, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "test-server-", "", testNamespace)
 	defer cleanupFunc()
 
-	clientName, _, cleanupFunc := createAndWaitForPod(t, data, data.createBusyboxPodOnNode, "test-client-", "")
+	clientName, _, cleanupFunc := createAndWaitForPod(t, data, data.createBusyboxPodOnNode, "test-client-", "", testNamespace)
 	defer cleanupFunc()
 	k8sUtils, err = NewKubernetesUtils(data)
 	failOnError(err, t)
@@ -2456,10 +2456,10 @@ func TestLegacyAntreaClusterNetworkPolicyStats(t *testing.T) {
 	skipIfAntreaPolicyDisabled(t, data)
 	skipIfNetworkPolicyStatsDisabled(t, data)
 
-	serverName, serverIPs, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "test-server-", "")
+	serverName, serverIPs, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "test-server-", "", testNamespace)
 	defer cleanupFunc()
 
-	clientName, _, cleanupFunc := createAndWaitForPod(t, data, data.createBusyboxPodOnNode, "test-client-", "")
+	clientName, _, cleanupFunc := createAndWaitForPod(t, data, data.createBusyboxPodOnNode, "test-client-", "", testNamespace)
 	defer cleanupFunc()
 	k8sUtils, err = NewKubernetesUtils(data)
 	failOnError(err, t)

@@ -63,9 +63,9 @@ func TestProxyServiceSessionAffinity(t *testing.T) {
 func testProxyServiceSessionAffinity(ipFamily *corev1.IPFamily, ingressIPs []string, data *TestData, t *testing.T) {
 	nodeName := nodeName(1)
 	nginx := "nginx"
-	require.NoError(t, data.createNginxPodOnNode(nginx, nodeName))
+	require.NoError(t, data.createNginxPodOnNode(nginx, testNamespace, nodeName))
 	nginxIP, err := data.podWaitForIPs(defaultTimeout, nginx, testNamespace)
-	defer data.deletePodAndWait(defaultTimeout, nginx)
+	defer data.deletePodAndWait(defaultTimeout, nginx, testNamespace)
 	require.NoError(t, err)
 	require.NoError(t, data.podWaitForRunning(defaultTimeout, nginx, testNamespace))
 	svc, err := data.createNginxClusterIPService("", true, ipFamily)
@@ -76,8 +76,8 @@ func testProxyServiceSessionAffinity(ipFamily *corev1.IPFamily, ingressIPs []str
 	require.NoError(t, err)
 
 	busyboxPod := "busybox"
-	require.NoError(t, data.createBusyboxPodOnNode(busyboxPod, nodeName))
-	defer data.deletePodAndWait(defaultTimeout, busyboxPod)
+	require.NoError(t, data.createBusyboxPodOnNode(busyboxPod, testNamespace, nodeName))
+	defer data.deletePodAndWait(defaultTimeout, busyboxPod, testNamespace)
 	require.NoError(t, data.podWaitForRunning(defaultTimeout, busyboxPod, testNamespace))
 	stdout, stderr, err := data.runCommandFromPod(testNamespace, busyboxPod, busyboxContainerName, []string{"wget", "-O", "-", svc.Spec.ClusterIP, "-T", "1"})
 	require.NoError(t, err, fmt.Sprintf("ipFamily: %v\nstdout: %s\nstderr: %s\n", *ipFamily, stdout, stderr))
@@ -133,8 +133,8 @@ func TestProxyHairpin(t *testing.T) {
 func testProxyHairpin(ipFamily *corev1.IPFamily, data *TestData, t *testing.T) {
 	busybox := "busybox"
 	nodeName := nodeName(1)
-	err := data.createPodOnNode(busybox, nodeName, busyboxImage, []string{"nc", "-lk", "-p", "80"}, nil, nil, []corev1.ContainerPort{{ContainerPort: 80, Protocol: corev1.ProtocolTCP}}, false, nil)
-	defer data.deletePodAndWait(defaultTimeout, busybox)
+	err := data.createPodOnNode(busybox, testNamespace, nodeName, busyboxImage, []string{"nc", "-lk", "-p", "80"}, nil, nil, []corev1.ContainerPort{{ContainerPort: 80, Protocol: corev1.ProtocolTCP}}, false, nil)
+	defer data.deletePodAndWait(defaultTimeout, busybox, testNamespace)
 	require.NoError(t, err)
 	require.NoError(t, data.podWaitForRunning(defaultTimeout, busybox, testNamespace))
 	svc, err := data.createService(busybox, 80, 80, map[string]string{"antrea-e2e": "busybox"}, false, corev1.ServiceTypeClusterIP, ipFamily)
@@ -172,7 +172,7 @@ func TestProxyEndpointLifeCycle(t *testing.T) {
 func testProxyEndpointLifeCycle(ipFamily *corev1.IPFamily, data *TestData, t *testing.T) {
 	nodeName := nodeName(1)
 	nginx := "nginx"
-	require.NoError(t, data.createNginxPodOnNode(nginx, nodeName))
+	require.NoError(t, data.createNginxPodOnNode(nginx, testNamespace, nodeName))
 	nginxIPs, err := data.podWaitForIPs(defaultTimeout, nginx, testNamespace)
 	require.NoError(t, err)
 	_, err = data.createNginxClusterIPService("", false, ipFamily)
@@ -200,7 +200,7 @@ func testProxyEndpointLifeCycle(ipFamily *corev1.IPFamily, data *TestData, t *te
 		require.Contains(t, tableOutput, keyword)
 	}
 
-	require.NoError(t, data.deletePodAndWait(defaultTimeout, nginx))
+	require.NoError(t, data.deletePodAndWait(defaultTimeout, nginx, testNamespace))
 
 	for tableID, keyword := range keywords {
 		tableOutput, _, err := data.runCommandFromPod(metav1.NamespaceSystem, agentName, "antrea-agent", []string{"ovs-ofctl", "dump-flows", defaultBridgeName, fmt.Sprintf("table=%d", tableID)})
@@ -233,8 +233,8 @@ func TestProxyServiceLifeCycle(t *testing.T) {
 func testProxyServiceLifeCycle(ipFamily *corev1.IPFamily, ingressIPs []string, data *TestData, t *testing.T) {
 	nodeName := nodeName(1)
 	nginx := "nginx"
-	require.NoError(t, data.createNginxPodOnNode(nginx, nodeName))
-	defer data.deletePodAndWait(defaultTimeout, nginx)
+	require.NoError(t, data.createNginxPodOnNode(nginx, testNamespace, nodeName))
+	defer data.deletePodAndWait(defaultTimeout, nginx, testNamespace)
 	nginxIPs, err := data.podWaitForIPs(defaultTimeout, nginx, testNamespace)
 	require.NoError(t, err)
 	var nginxIP string

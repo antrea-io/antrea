@@ -895,11 +895,11 @@ func getImageName(uri string) string {
 // createPodOnNode creates a pod in the test namespace with a container whose type is decided by imageName.
 // Pod will be scheduled on the specified Node (if nodeName is not empty).
 // mutateFunc can be used to customize the Pod if the other parameters don't meet the requirements.
-func (data *TestData) createPodOnNode(name string, nodeName string, image string, command []string, args []string, env []corev1.EnvVar, ports []corev1.ContainerPort, hostNetwork bool, mutateFunc func(*corev1.Pod)) error {
+func (data *TestData) createPodOnNode(name string, ns string, nodeName string, image string, command []string, args []string, env []corev1.EnvVar, ports []corev1.ContainerPort, hostNetwork bool, mutateFunc func(*corev1.Pod)) error {
 	// image could be a fully qualified URI which can't be used as container name and label value,
 	// extract the image name from it.
 	imageName := getImageName(image)
-	return data.createPodOnNodeInNamespace(name, testNamespace, nodeName, imageName, image, command, args, env, ports, hostNetwork, mutateFunc)
+	return data.createPodOnNodeInNamespace(name, ns, nodeName, imageName, image, command, args, env, ports, hostNetwork, mutateFunc)
 }
 
 // createPodOnNodeInNamespace creates a pod in the provided namespace with a container whose type is decided by imageName.
@@ -952,22 +952,22 @@ func (data *TestData) createPodOnNodeInNamespace(name, ns string, nodeName, ctrN
 
 // createBusyboxPodOnNode creates a Pod in the test namespace with a single busybox container. The
 // Pod will be scheduled on the specified Node (if nodeName is not empty).
-func (data *TestData) createBusyboxPodOnNode(name string, nodeName string) error {
+func (data *TestData) createBusyboxPodOnNode(name string, ns string, nodeName string) error {
 	sleepDuration := 3600 // seconds
-	return data.createPodOnNode(name, nodeName, busyboxImage, []string{"sleep", strconv.Itoa(sleepDuration)}, nil, nil, nil, false, nil)
+	return data.createPodOnNode(name, ns, nodeName, busyboxImage, []string{"sleep", strconv.Itoa(sleepDuration)}, nil, nil, nil, false, nil)
 }
 
 // createHostNetworkBusyboxPodOnNode creates a host network Pod in the test namespace with a single busybox container.
 // The Pod will be scheduled on the specified Node (if nodeName is not empty).
-func (data *TestData) createHostNetworkBusyboxPodOnNode(name string, nodeName string) error {
+func (data *TestData) createHostNetworkBusyboxPodOnNode(name string, ns string, nodeName string) error {
 	sleepDuration := 3600 // seconds
-	return data.createPodOnNode(name, nodeName, busyboxImage, []string{"sleep", strconv.Itoa(sleepDuration)}, nil, nil, nil, true, nil)
+	return data.createPodOnNode(name, ns, nodeName, busyboxImage, []string{"sleep", strconv.Itoa(sleepDuration)}, nil, nil, nil, true, nil)
 }
 
 // createNginxPodOnNode creates a Pod in the test namespace with a single nginx container. The
 // Pod will be scheduled on the specified Node (if nodeName is not empty).
-func (data *TestData) createNginxPodOnNode(name string, nodeName string) error {
-	return data.createPodOnNode(name, nodeName, nginxImage, []string{}, nil, nil, []corev1.ContainerPort{
+func (data *TestData) createNginxPodOnNode(name string, ns string, nodeName string) error {
+	return data.createPodOnNode(name, ns, nodeName, nginxImage, []string{}, nil, nil, []corev1.ContainerPort{
 		{
 			Name:          "http",
 			ContainerPort: 80,
@@ -977,7 +977,7 @@ func (data *TestData) createNginxPodOnNode(name string, nodeName string) error {
 }
 
 // createServerPod creates a Pod that can listen to specified port and have named port set.
-func (data *TestData) createServerPod(name string, portName string, portNum int32, setHostPort bool, hostNetwork bool) error {
+func (data *TestData) createServerPod(name string, ns string, portName string, portNum int32, setHostPort bool, hostNetwork bool) error {
 	// See https://github.com/kubernetes/kubernetes/blob/master/test/images/agnhost/porter/porter.go#L17 for the image's detail.
 	cmd := "porter"
 	env := corev1.EnvVar{Name: fmt.Sprintf("SERVE_PORT_%d", portNum), Value: "foo"}
@@ -986,7 +986,7 @@ func (data *TestData) createServerPod(name string, portName string, portNum int3
 		// If hostPort is to be set, it must match the container port number.
 		port.HostPort = int32(portNum)
 	}
-	return data.createPodOnNode(name, "", agnhostImage, nil, []string{cmd}, []corev1.EnvVar{env}, []corev1.ContainerPort{port}, hostNetwork, nil)
+	return data.createPodOnNode(name, ns, "", agnhostImage, nil, []string{cmd}, []corev1.EnvVar{env}, []corev1.ContainerPort{port}, hostNetwork, nil)
 }
 
 // createCustomPod creates a Pod in given Namespace with custom labels.
@@ -1020,13 +1020,13 @@ func (data *TestData) deletePod(namespace, name string) error {
 
 // Deletes a Pod in the test namespace then waits us to timeout for the Pod not to be visible to the
 // client any more.
-func (data *TestData) deletePodAndWait(timeout time.Duration, name string) error {
-	if err := data.deletePod(testNamespace, name); err != nil {
+func (data *TestData) deletePodAndWait(timeout time.Duration, name string, ns string) error {
+	if err := data.deletePod(ns, name); err != nil {
 		return err
 	}
 
 	if err := wait.Poll(defaultInterval, timeout, func() (bool, error) {
-		if _, err := data.clientset.CoreV1().Pods(testNamespace).Get(context.TODO(), name, metav1.GetOptions{}); err != nil {
+		if _, err := data.clientset.CoreV1().Pods(ns).Get(context.TODO(), name, metav1.GetOptions{}); err != nil {
 			if errors.IsNotFound(err) {
 				return true, nil
 			}
@@ -1550,7 +1550,7 @@ func parseArpingStdout(out string) (sent uint32, received uint32, loss float32, 
 	return sent, received, loss, nil
 }
 
-func (data *TestData) runPingCommandFromTestPod(podInfo podInfo, targetPodIPs *PodIPs, ctrName string, count int, size int) error {
+func (data *TestData) runPingCommandFromTestPod(podInfo podInfo, ns string, targetPodIPs *PodIPs, ctrName string, count int, size int) error {
 	countOption, sizeOption := "-c", "-s"
 	if podInfo.os == "windows" {
 		countOption = "-n"
@@ -1564,20 +1564,20 @@ func (data *TestData) runPingCommandFromTestPod(podInfo podInfo, targetPodIPs *P
 	}
 	if targetPodIPs.ipv4 != nil {
 		cmdV4 := append(cmd, "-4", targetPodIPs.ipv4.String())
-		if stdout, stderr, err := data.runCommandFromPod(testNamespace, podInfo.name, ctrName, cmdV4); err != nil {
+		if stdout, stderr, err := data.runCommandFromPod(ns, podInfo.name, ctrName, cmdV4); err != nil {
 			return fmt.Errorf("error when running ping command '%s': %v - stdout: %s - stderr: %s", strings.Join(cmdV4, " "), err, stdout, stderr)
 		}
 	}
 	if targetPodIPs.ipv6 != nil {
 		cmdV6 := append(cmd, "-6", targetPodIPs.ipv6.String())
-		if stdout, stderr, err := data.runCommandFromPod(testNamespace, podInfo.name, ctrName, cmdV6); err != nil {
+		if stdout, stderr, err := data.runCommandFromPod(ns, podInfo.name, ctrName, cmdV6); err != nil {
 			return fmt.Errorf("error when running ping command '%s': %v - stdout: %s - stderr: %s", strings.Join(cmdV6, " "), err, stdout, stderr)
 		}
 	}
 	return nil
 }
 
-func (data *TestData) runNetcatCommandFromTestPod(podName string, server string, port int32) error {
+func (data *TestData) runNetcatCommandFromTestPod(podName string, ns string, server string, port int32) error {
 	// Retrying several times to avoid flakes as the test may involve DNS (coredns) and Service/Endpoints (kube-proxy).
 	cmd := []string{
 		"/bin/sh",
@@ -1585,7 +1585,7 @@ func (data *TestData) runNetcatCommandFromTestPod(podName string, server string,
 		fmt.Sprintf("for i in $(seq 1 5); do nc -vz -w 4 %s %d && exit 0 || sleep 1; done; exit 1",
 			server, port),
 	}
-	stdout, stderr, err := data.runCommandFromPod(testNamespace, podName, busyboxContainerName, cmd)
+	stdout, stderr, err := data.runCommandFromPod(ns, podName, busyboxContainerName, cmd)
 	if err == nil {
 		return nil
 	}
@@ -1974,9 +1974,9 @@ func (data *TestData) copyNodeFiles(nodeName string, fileName string, covDir str
 
 // createAgnhostPodOnNode creates a Pod in the test namespace with a single agnhost container. The
 // Pod will be scheduled on the specified Node (if nodeName is not empty).
-func (data *TestData) createAgnhostPodOnNode(name string, nodeName string) error {
+func (data *TestData) createAgnhostPodOnNode(name string, ns string, nodeName string) error {
 	sleepDuration := 3600 // seconds
-	return data.createPodOnNode(name, nodeName, agnhostImage, []string{"sleep", strconv.Itoa(sleepDuration)}, nil, nil, nil, false, nil)
+	return data.createPodOnNode(name, ns, nodeName, agnhostImage, []string{"sleep", strconv.Itoa(sleepDuration)}, nil, nil, nil, false, nil)
 }
 
 func (data *TestData) createDaemonSet(name string, ns string, ctrName string, image string, cmd []string, args []string) (*appsv1.DaemonSet, func() error, error) {
@@ -2022,7 +2022,6 @@ func (data *TestData) createDaemonSet(name string, ns string, ctrName string, im
 		},
 		Spec: dsSpec,
 	}
-
 	resDS, err := data.clientset.AppsV1().DaemonSets(ns).Create(context.TODO(), ds, metav1.CreateOptions{})
 	if err != nil {
 		return nil, nil, err

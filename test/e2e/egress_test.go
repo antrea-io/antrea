@@ -82,7 +82,7 @@ ip netns exec %[1]s ip link set dev %[1]s-a up && \
 ip netns exec %[1]s ip route replace default via %[3]s && \
 ip netns exec %[1]s /agnhost netexec
 `, fakeServer, serverIP, localIP0, localIP1)
-	if err := data.createPodOnNode(fakeServer, egressNode, agnhostImage, []string{"sh", "-c", cmd}, nil, nil, nil, true, func(pod *v1.Pod) {
+	if err := data.createPodOnNode(fakeServer, testNamespace, egressNode, agnhostImage, []string{"sh", "-c", cmd}, nil, nil, nil, true, func(pod *v1.Pod) {
 		privileged := true
 		pod.Spec.Containers[0].SecurityContext = &v1.SecurityContext{Privileged: &privileged}
 	}); err != nil {
@@ -95,14 +95,14 @@ ip netns exec %[1]s /agnhost netexec
 
 	localPod := "localpod"
 	remotePod := "remotepod"
-	if err := data.createBusyboxPodOnNode(localPod, egressNode); err != nil {
+	if err := data.createBusyboxPodOnNode(localPod, testNamespace, egressNode); err != nil {
 		t.Fatalf("Failed to create local Pod: %v", err)
 	}
 	defer deletePodWrapper(t, data, localPod)
 	if err := data.podWaitForRunning(defaultTimeout, localPod, testNamespace); err != nil {
 		t.Fatalf("Error when waiting for Pod '%s' to be in the Running state", localPod)
 	}
-	if err := data.createBusyboxPodOnNode(remotePod, workerNodeName(1)); err != nil {
+	if err := data.createBusyboxPodOnNode(remotePod, testNamespace, workerNodeName(1)); err != nil {
 		t.Fatalf("Failed to create remote Pod: %v", err)
 	}
 	defer deletePodWrapper(t, data, remotePod)
