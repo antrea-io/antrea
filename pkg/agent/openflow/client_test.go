@@ -34,6 +34,7 @@ import (
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 	ovsoftest "antrea.io/antrea/pkg/ovs/openflow/testing"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
+	utilip "antrea.io/antrea/pkg/util/ip"
 )
 
 const bridgeName = "dummy-br"
@@ -54,10 +55,10 @@ var (
 func installNodeFlows(ofClient Client, cacheKey string) (int, error) {
 	hostName := cacheKey
 	peerNodeIP := net.ParseIP("192.168.1.1")
-	peerConfig := map[*net.IPNet]net.IP{
+	peerConfigs := map[*net.IPNet]net.IP{
 		ipNet: gwIP,
 	}
-	err := ofClient.InstallNodeFlows(hostName, peerConfig, peerNodeIP, 0, nil)
+	err := ofClient.InstallNodeFlows(hostName, peerConfigs, &utilip.DualStackIPs{IPv4: peerNodeIP}, 0, nil)
 	client := ofClient.(*client)
 	fCacheI, ok := client.nodeFlowCache.Load(hostName)
 	if ok {

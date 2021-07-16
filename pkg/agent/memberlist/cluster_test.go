@@ -58,7 +58,7 @@ func newFakeCluster(nodeConfig *config.NodeConfig, stopCh <-chan struct{}, i int
 	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, 0)
 	ipPoolInformer := crdInformerFactory.Crd().V1alpha2().ExternalIPPools()
 
-	cluster, err := NewCluster(port, nodeConfig.NodeIPAddr.IP, nodeConfig.Name, nodeInformer, ipPoolInformer)
+	cluster, err := NewCluster(port, nodeConfig.NodeIPv4Addr.IP, nodeConfig.Name, nodeInformer, ipPoolInformer)
 	if err != nil {
 		return nil, err
 	}
@@ -137,8 +137,8 @@ func TestCluster_Run(t *testing.T) {
 	for i, tCase := range testCases {
 		t.Run(tCase.name, func(t *testing.T) {
 			nodeConfig := &config.NodeConfig{
-				Name:       localNodeName,
-				NodeIPAddr: &net.IPNet{IP: net.IPv4(127, 0, 0, 1), Mask: net.IPv4Mask(255, 255, 255, 255)},
+				Name:         localNodeName,
+				NodeIPv4Addr: &net.IPNet{IP: net.IPv4(127, 0, 0, 1), Mask: net.IPv4Mask(255, 255, 255, 255)},
 			}
 			stopCh := make(chan struct{})
 			defer close(stopCh)
@@ -177,8 +177,8 @@ func TestCluster_RunClusterEvents(t *testing.T) {
 
 	nodeName := "localNodeName"
 	nodeConfig := &config.NodeConfig{
-		Name:       nodeName,
-		NodeIPAddr: &net.IPNet{IP: net.IPv4(127, 0, 0, 1)},
+		Name:         nodeName,
+		NodeIPv4Addr: &net.IPNet{IP: net.IPv4(127, 0, 0, 1)},
 	}
 	localNode := &v1.Node{
 		ObjectMeta: metav1.ObjectMeta{Name: nodeName},

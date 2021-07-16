@@ -30,7 +30,7 @@ import (
 const dummyDeviceName = "antrea-dummy0"
 
 func TestIPAssigner(t *testing.T) {
-	nodeIPAddr := nodeIP.IP
+	nodeIPAddr := nodeIPv4.IP
 	require.NotNil(t, nodeIPAddr, "Get Node IP failed")
 
 	ipAssigner, err := ipassigner.NewIPAssigner(nodeIPAddr, dummyDeviceName)

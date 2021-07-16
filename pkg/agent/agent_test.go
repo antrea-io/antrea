@@ -36,6 +36,7 @@ import (
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 	ovsconfigtest "antrea.io/antrea/pkg/ovs/ovsconfig/testing"
 	"antrea.io/antrea/pkg/util/env"
+	"antrea.io/antrea/pkg/util/ip"
 )
 
 func newAgentInitializer(ovsBridgeClient ovsconfig.OVSBridgeClient, ifaceStore interfacestore.InterfaceStore) *Initializer {
@@ -278,14 +279,14 @@ func TestInitNodeLocalConfig(t *testing.T) {
 			client := fake.NewSimpleClientset(node)
 			ifaceStore := interfacestore.NewInterfaceStore()
 			expectedNodeConfig := config.NodeConfig{
-				Name:                nodeName,
-				OVSBridge:           ovsBridge,
-				DefaultTunName:      defaultTunInterfaceName,
-				PodIPv4CIDR:         podCIDR,
-				NodeIPAddr:          nodeIPNet,
-				NodeTransportIPAddr: nodeIPNet,
-				NodeMTU:             tt.expectedMTU,
-				UplinkNetConfig:     new(config.AdapterNetConfig),
+				Name:                  nodeName,
+				OVSBridge:             ovsBridge,
+				DefaultTunName:        defaultTunInterfaceName,
+				PodIPv4CIDR:           podCIDR,
+				NodeIPv4Addr:          nodeIPNet,
+				NodeTransportIPv4Addr: nodeIPNet,
+				NodeMTU:               tt.expectedMTU,
+				UplinkNetConfig:       new(config.AdapterNetConfig),
 			}
 
 			initializer := &Initializer{
@@ -300,7 +301,7 @@ func TestInitNodeLocalConfig(t *testing.T) {
 			}
 			if tt.transportInterface != nil {
 				initializer.networkConfig.TransportIface = tt.transportInterface.iface.Name
-				expectedNodeConfig.NodeTransportIPAddr = tt.transportInterface.ipNet
+				expectedNodeConfig.NodeTransportIPv4Addr = tt.transportInterface.ipNet
 				defer mockGetTransportIPNetDeviceByName(tt.transportInterface.ipNet, tt.transportInterface.iface)()
 			}
 			defer mockGetIPNetDeviceFromIP(nodeIPNet, ipDevice)()
@@ -317,8 +318,8 @@ func TestInitNodeLocalConfig(t *testing.T) {
 
 func mockGetIPNetDeviceFromIP(ipNet *net.IPNet, ipDevice *net.Interface) func() {
 	prevGetIPNetDeviceFromIP := getIPNetDeviceFromIP
-	getIPNetDeviceFromIP = func(localIP net.IP) (*net.IPNet, *net.Interface, error) {
-		return ipNet, ipDevice, nil
+	getIPNetDeviceFromIP = func(localIP *ip.DualStackIPs) (*net.IPNet, *net.IPNet, *net.Interface, error) {
+		return ipNet, nil, ipDevice, nil
 	}
 	return func() { getIPNetDeviceFromIP = prevGetIPNetDeviceFromIP }
 }
@@ -330,8 +331,8 @@ func mockNodeNameEnv(name string) func() {
 
 func mockGetTransportIPNetDeviceByName(ipNet *net.IPNet, ipDevice *net.Interface) func() {
 	prevGetIPNetDeviceByName := getTransportIPNetDeviceByName
-	getTransportIPNetDeviceByName = func(ifName, brName string) (*net.IPNet, *net.Interface, error) {
-		return ipNet, ipDevice, nil
+	getTransportIPNetDeviceByName = func(ifName, brName string) (*net.IPNet, *net.IPNet, *net.Interface, error) {
+		return ipNet, nil, ipDevice, nil
 	}
 	return func() { getTransportIPNetDeviceByName = prevGetIPNetDeviceByName }
 }
