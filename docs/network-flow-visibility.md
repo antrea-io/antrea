@@ -263,7 +263,7 @@ then please use the address:
 `<Ipfix-Collector Cluster IP>:<port>:<TCP|UDP>`
 * If you have deployed the [ELK
 flow collector](#deployment-steps-1), then please use the address:  
-`<Logstash Cluster IP>:4739:UDP`
+`<Logstash Cluster IP>:4739:<TCP|UDP>`
 
 ```yaml
 flow-aggregator.conf: |
