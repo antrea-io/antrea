@@ -148,7 +148,7 @@ func TestRESTList(t *testing.T) {
 		{
 			name:                      "NetworkPolicyStats feature disabled",
 			networkPolicyStatsEnabled: false,
-			expectedErr:               true,
+			expectedObj:               &statsv1alpha1.NetworkPolicyStatsList{},
 		},
 		{
 			name:                      "all namespaces",
