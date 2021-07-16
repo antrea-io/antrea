@@ -118,7 +118,7 @@ function export_govc_env_var {
 
 function clean_antrea {
     echo "====== Cleanup Antrea Installation ======"
-    kubectl delete ns antrea-test || true
+    clean_up_one_ns "antrea-test"
     kubectl get pod -n kube-system -l component=antrea-agent --no-headers=true | awk '{print $1}' | while read AGENTNAME; do
         kubectl exec $AGENTNAME -c antrea-agent -n kube-system -- ovs-vsctl del-port br-int gw0 || true
     done
@@ -202,10 +202,18 @@ function wait_for_antrea_windows_processes_ready {
     done
 }
 
+function clean_up_one_ns {
+    ns=$1
+    kubectl get pod -n "${ns}" --no-headers=true | awk '{print $1}' | while read pod_name; do
+        kubectl delete pod "${pod_name}" -n "${ns}" --force --grace-period 0
+    done
+    kubectl delete ns "${ns}" --ignore-not-found=true || true
+}
+
 function deliver_antrea_windows {
     echo "====== Cleanup Antrea Installation ======"
     export KUBECONFIG=$KUBECONFIG_PATH
-    kubectl delete ns antrea-test --ignore-not-found=true || true
+    clean_up_one_ns "antrea-test"
     kubectl delete -f ${WORKDIR}/antrea-windows.yml --ignore-not-found=true || true
     kubectl delete -f ${WORKDIR}/kube-proxy-windows.yml --ignore-not-found=true || true
     kubectl delete daemonset antrea-agent -n kube-system --ignore-not-found=true || true
@@ -321,7 +329,7 @@ function deliver_antrea_windows {
 function deliver_antrea {
     echo "====== Cleanup Antrea Installation ======"
     export KUBECONFIG=$KUBECONFIG_PATH
-    kubectl delete ns antrea-test || true
+    clean_up_one_ns "antrea-test"
     kubectl delete daemonset antrea-agent -n kube-system || true
     kubectl delete -f ${WORKDIR}/antrea.yml || true
 
