@@ -11,6 +11,12 @@ Some experimental features can be enabled / disabled using [Feature Gates](docs/
 
 ## Unreleased
 
+## 0.13.4 - 2021-07-16
+
+### Fixed
+
+- Use "os/exec" package instead of third-party modules to run PowerShell commands and configure host networking on Windows; this change prevents Agent goroutines from getting stuck when configuring routes. ([#2363](https://github.com/antrea-io/antrea/pull/2363), [@lzhecheng]) [Windows]
+
 ## 0.13.3 - 2021-06-29
 
 ### Fixed
