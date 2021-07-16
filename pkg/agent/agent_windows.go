@@ -22,7 +22,6 @@ import (
 	"strings"
 
 	"github.com/Microsoft/hcsshim"
-	"github.com/rakelkar/gonetsh/netroute"
 	"k8s.io/klog"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/config"
@@ -211,9 +210,7 @@ func (i *Initializer) getTunnelPortLocalIP() net.IP {
 // The routes will be restored on OVS bridge interface after the IP configuration
 // is moved to the OVS bridge.
 func (i *Initializer) saveHostRoutes() error {
-	nr := netroute.New()
-	defer nr.Exit()
-	routes, err := nr.GetNetRoutesAll()
+	routes, err := util.GetNetRoutesAll()
 	if err != nil {
 		return err
 	}
@@ -244,15 +241,19 @@ func (i *Initializer) saveHostRoutes() error {
 // the antrea network initialize stage.
 // The backup routes are restored after the IP configuration change.
 func (i *Initializer) restoreHostRoutes() error {
-	nr := netroute.New()
-	defer nr.Exit()
 	brInterface, err := net.InterfaceByName(i.ovsBridge)
 	if err != nil {
 		return nil
 	}
 	for _, route := range i.nodeConfig.UplinkNetConfig.Routes {
-		rt := route.(netroute.Route)
-		if err := nr.NewNetRoute(brInterface.Index, rt.DestinationSubnet, rt.GatewayAddress); err != nil {
+		rt := route.(util.Route)
+		newRt := util.Route{
+			LinkIndex:         brInterface.Index,
+			DestinationSubnet: rt.DestinationSubnet,
+			GatewayAddress:    rt.GatewayAddress,
+			RouteMetric:       rt.RouteMetric,
+		}
+		if err := util.NewNetRoute(&newRt); err != nil {
 			return err
 		}
 	}

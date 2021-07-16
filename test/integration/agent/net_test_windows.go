@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/vmware-tanzu/antrea/pkg/agent/util"
+	ps "github.com/vmware-tanzu/antrea/pkg/agent/util/powershell"
 )
 
 func adapterName(name string) string {
@@ -39,7 +40,8 @@ func createTestInterface(t *testing.T, name string) string {
 	}
 	t.Logf("Creating test vSwitch and adapter '%s'", name)
 	cmd := fmt.Sprintf("New-VMSwitch %s -SwitchType Internal", name)
-	require.NoError(t, util.InvokePSCommand(cmd))
+	_, err = ps.RunCommand(cmd)
+	require.NoError(t, err)
 	return adapterName(name)
 }
 
@@ -52,7 +54,8 @@ func setTestInterfaceUp(t *testing.T, name string) int {
 func deleteTestInterface(t *testing.T, name string) {
 	t.Logf("Deleting test vSwitch '%s'", name)
 	cmd := fmt.Sprintf(`Remove-VMSwitch "%s" -Force`, name)
-	assert.NoError(t, util.InvokePSCommand(cmd))
+	_, err := ps.RunCommand(cmd)
+	assert.NoError(t, err)
 }
 
 func getTestInterfaceAddresses(t *testing.T, name string) []*net.IPNet {
@@ -72,5 +75,6 @@ func getTestInterfaceAddresses(t *testing.T, name string) []*net.IPNet {
 func addTestInterfaceAddress(t *testing.T, name string, addr *net.IPNet) {
 	ipStr := strings.Split(addr.String(), "/")
 	cmd := fmt.Sprintf(`New-NetIPAddress -InterfaceAlias "%s" -IPAddress %s -PrefixLength %s`, adapterName(name), ipStr[0], ipStr[1])
-	require.NoError(t, util.InvokePSCommand(cmd))
+	_, err := ps.RunCommand(cmd)
+	require.NoError(t, err)
 }
