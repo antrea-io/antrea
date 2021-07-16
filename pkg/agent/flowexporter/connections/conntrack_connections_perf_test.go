@@ -121,7 +121,7 @@ func generateUpdatedConns(conns []*flowexporter.Connection) []*flowexporter.Conn
 	updatedConns := make([]*flowexporter.Connection, length)
 	for i := 0; i < len(conns); i++ {
 		// replace deleted connection with new connection
-		if conns[i].DoneExport == true {
+		if conns[i].DyingAndDoneExport == true {
 			conns[i] = getNewConn()
 		} else { // update rest of connections
 			conns[i].OriginalPackets += 5
@@ -136,9 +136,9 @@ func generateUpdatedConns(conns []*flowexporter.Connection) []*flowexporter.Conn
 	}
 	randomNum := getRandomNum(int64(length - testNumOfDeletedConns))
 	for i := randomNum; i < testNumOfDeletedConns+randomNum; i++ {
-		// hardcode DoneExport here for testing deletion of connections
+		// hardcode DyingAndDoneExport here for testing deletion of connections
 		// not valid for testing update and export of records
-		updatedConns[i].DoneExport = true
+		updatedConns[i].DyingAndDoneExport = true
 	}
 	return updatedConns
 }
@@ -154,7 +154,7 @@ func getNewConn() *flowexporter.Connection {
 		StartTime:                 time.Now().Add(-time.Duration(randomNum1) * time.Second),
 		StopTime:                  time.Now(),
 		IsPresent:                 true,
-		DoneExport:                false,
+		DyingAndDoneExport:        false,
 		FlowKey:                   flowKey,
 		OriginalPackets:           10,
 		OriginalBytes:             100,

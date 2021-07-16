@@ -43,9 +43,9 @@ type Connection struct {
 	StopTime time.Time
 	// IsPresent flag helps in cleaning up connections when they are not in conntrack table anymore.
 	IsPresent bool
-	// DoneExport marks whether the related flow records are already exported or not so that we can
+	// DyingAndDoneExport marks whether the related flow records are already exported or not so that we can
 	// safely delete the connection from the connection map.
-	DoneExport         bool
+	DyingAndDoneExport bool
 	Zone               uint16
 	Mark               uint32
 	StatusFlag         uint32
@@ -88,5 +88,6 @@ type FlowRecord struct {
 	PrevReverseBytes   uint64
 	IsIPv6             bool
 	LastExportTime     time.Time
+	DyingAndDoneExport bool
 	IsActive           bool
 }
