@@ -322,7 +322,7 @@ Antrea supports encrypting GRE tunnel traffic with IPsec ESP. The IPsec
 implementation leverages [OVS IPsec](http://docs.openvswitch.org/en/latest/tutorials/ipsec)
 and leverages [strongSwan](https://www.strongswan.org) as the IKE daemon.
 
-To enable IPsec, an extra container -`antrea-ovs-ipsec` - must be added to the
+To enable IPsec, an extra container -`antrea-ipsec` - must be added to the
 Antrea Agent DaemonSet, which runs the `ovs-monitor-ipsec` and strongSwan
 daemons. Antrea now supports only using pre-shared key (PSK) for IKE
 authentication, and the PSK string must be passed to Antrea Agent using an
