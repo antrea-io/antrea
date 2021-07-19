@@ -15,6 +15,7 @@
 package e2e
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"regexp"
@@ -119,6 +120,7 @@ const (
 	testIngressRuleName            = "test-ingress-rule-name"
 	testEgressRuleName             = "test-egress-rule-name"
 	iperfTimeSec                   = 12
+	connCheckInterval              = 10 * time.Second
 )
 
 var (
@@ -173,11 +175,15 @@ func TestFlowAggregator(t *testing.T) {
 	}
 
 	if v4Enabled {
-		t.Run("IPv4", func(t *testing.T) { testHelper(t, data, podAIPs, podBIPs, podCIPs, podDIPs, podEIPs, false) })
+		t.Run("IPv4", func(t *testing.T) {
+			testHelper(t, data, podAIPs, podBIPs, podCIPs, podDIPs, podEIPs, false)
+		})
 	}
 
 	if v6Enabled {
-		t.Run("IPv6", func(t *testing.T) { testHelper(t, data, podAIPs, podBIPs, podCIPs, podDIPs, podEIPs, true) })
+		t.Run("IPv6", func(t *testing.T) {
+			testHelper(t, data, podAIPs, podBIPs, podCIPs, podDIPs, podEIPs, true)
+		})
 	}
 }
 
@@ -450,25 +456,7 @@ func testHelper(t *testing.T, data *TestData, podAIPs, podBIPs, podCIPs, podDIPs
 	// ToExternalFlows tests the export of IPFIX flow records when a source Pod
 	// sends traffic to an external IP
 	t.Run("ToExternalFlows", func(t *testing.T) {
-		// Creating an agnhost server as a host network Pod
-		serverPodPort := int32(80)
-		_, serverIPs, cleanupFunc := createAndWaitForPod(t, data, func(name string, ns string, nodeName string) error {
-			return data.createServerPod(name, testNamespace, "", serverPodPort, false, true)
-		}, "test-server-", "", testNamespace)
-		defer cleanupFunc()
-
-		clientName, clientIPs, cleanupFunc := createAndWaitForPod(t, data, data.createBusyboxPodOnNode, "test-client-", nodeName(0), testNamespace)
-		defer cleanupFunc()
-
-		if !isIPv6 {
-			if clientIPs.ipv4 != nil && serverIPs.ipv4 != nil {
-				checkRecordsForToExternalFlows(t, data, nodeName(0), clientName, clientIPs.ipv4.String(), serverIPs.ipv4.String(), serverPodPort, isIPv6)
-			}
-		} else {
-			if clientIPs.ipv6 != nil && serverIPs.ipv6 != nil {
-				checkRecordsForToExternalFlows(t, data, nodeName(0), clientName, clientIPs.ipv6.String(), serverIPs.ipv6.String(), serverPodPort, isIPv6)
-			}
-		}
+		runToExternalFlowsTest(t, data, isIPv6)
 	})
 
 	// LocalServiceAccess tests the case, where Pod and Service are deployed on the same Node and their flow information is exported as IPFIX flow records.
@@ -498,6 +486,54 @@ func testHelper(t *testing.T, data *TestData, podAIPs, podBIPs, podCIPs, podDIPs
 			checkRecordsForFlows(t, data, podAIPs.ipv4.String(), svcC.Spec.ClusterIP, isServiceIPv6, false, true, false, false, checkBandwidth)
 		}
 	})
+
+	// RestartFlowAggregator tests the case where the Flow Aggregator stops: the Flow Exporter should
+	// be able to detect and stop sending records until the Flow Aggregator restarts.
+	t.Run("RestartFlowAggregator", func(t *testing.T) {
+		deleteFlowAggregatorPod(t, testData)
+		antreaPodName, err := data.getAntreaPodOnNode(nodeName(0))
+		if err != nil {
+			t.Errorf("Error when getting Antrea Pod name %v", err)
+		}
+		// Connection error should be detected either during periodical read check or when
+		// sending message to the collector.
+		errMsg1 := "Error when connecting to collector because connection is closed."
+		errMsg2 := "error when sending message on the connection"
+		err = wait.PollImmediate(500*time.Millisecond, connCheckInterval, func() (bool, error) {
+			command := fmt.Sprintf("kubectl logs --pod-running-timeout=%v %s -n kube-system -c antrea-agent --since=%s", connCheckInterval.String(), antreaPodName, connCheckInterval)
+			rc, agentOutput, _, err := provider.RunCommandOnNode(controlPlaneNodeName(), command)
+			if err != nil || rc != 0 {
+				return false, nil
+			}
+			return strings.Contains(agentOutput, errMsg1) || strings.Contains(agentOutput, errMsg2), nil
+		})
+		assert.NoError(t, err)
+		// Run a ToExternalFlowsTest to check whether data is collected correctly after
+		// restarting the Flow Aggregator
+		runToExternalFlowsTest(t, data, isIPv6)
+	})
+}
+
+func runToExternalFlowsTest(t *testing.T, data *TestData, isIPv6 bool) {
+	// Creating an agnhost server as a host network Pod
+	serverPodPort := int32(80)
+	_, serverIPs, cleanupFunc := createAndWaitForPod(t, data, func(name string, ns string, nodeName string) error {
+		return data.createServerPod(name, testNamespace, "", serverPodPort, false, true)
+	}, "test-server-", "", testNamespace)
+	defer cleanupFunc()
+
+	clientName, clientIPs, cleanupFunc := createAndWaitForPod(t, data, data.createBusyboxPodOnNode, "test-client-", nodeName(0), testNamespace)
+	defer cleanupFunc()
+
+	if !isIPv6 {
+		if clientIPs.ipv4 != nil && serverIPs.ipv4 != nil {
+			checkRecordsForToExternalFlows(t, data, nodeName(0), clientName, clientIPs.ipv4.String(), serverIPs.ipv4.String(), serverPodPort, isIPv6)
+		}
+	} else {
+		if clientIPs.ipv6 != nil && serverIPs.ipv6 != nil {
+			checkRecordsForToExternalFlows(t, data, nodeName(0), clientName, clientIPs.ipv6.String(), serverIPs.ipv6.String(), serverPodPort, isIPv6)
+		}
+	}
 }
 
 func checkRecordsForFlows(t *testing.T, data *TestData, srcIP string, dstIP string, isIPv6 bool, isIntraNode bool, checkService bool, checkK8sNetworkPolicy bool, checkAntreaNetworkPolicy bool, checkBandwidth bool) {
@@ -788,6 +824,17 @@ func getRecordsFromOutput(output string) []string {
 	output = strings.TrimSpace(output)
 	recordSlices := strings.Split(output, "IPFIX-HDR:")
 	return recordSlices
+}
+
+func deleteFlowAggregatorPod(t *testing.T, data *TestData) {
+	pods, err := data.clientset.CoreV1().Pods(flowAggregatorNamespace).List(context.TODO(), metav1.ListOptions{})
+	if err != nil || len(pods.Items) != 1 {
+		t.Error("Error when getting the Flow Aggregator Pod.")
+	}
+	err = testData.deletePod(flowAggregatorNamespace, pods.Items[0].Name)
+	if err != nil {
+		t.Errorf("Error when deleting the Flow Aggregator Pod: %v", err)
+	}
 }
 
 func deployK8sNetworkPolicies(t *testing.T, data *TestData, srcPod, dstPod string) (np1 *networkingv1.NetworkPolicy, np2 *networkingv1.NetworkPolicy) {
