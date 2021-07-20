@@ -146,6 +146,10 @@ def filter(event)
        startTime = DateTime.strptime(event.get("[ipfix][flowStartSeconds]").to_s, '%Y-%m-%dT%H:%M:%S').to_time.to_i
        endTime = DateTime.strptime(event.get("[ipfix][flowEndSeconds]").to_s, '%Y-%m-%dT%H:%M:%S').to_time.to_i
        duration = endTime-startTime
+       # if startTime equals endTime, just set throughput to current octetDeltaCount
+       if duration == 0
+         duration = 1
+       end
        event.set("[ipfix][throughput]", event.get("[ipfix][octetDeltaCountFromSourceNode]").to_i / duration.to_i)
        event.set("[ipfix][reverseThroughput]", event.get("[ipfix][reverseOctetDeltaCountFromSourceNode]").to_i / duration.to_i)
        @@time_map[key] = endTime
