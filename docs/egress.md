@@ -1,5 +1,7 @@
 # Egress
 
+[中文指南](egress_zh.md)
+
 ## Table of Contents
 
 <!-- toc -->
@@ -284,7 +286,7 @@ egress-staging       10.10.0.105    1m    node-5
 Now, the packets from the Pods with in the `prod` Namespace to the external
 network will be redirected to the `node-4` Node and SNATed to `10.10.0.104`
 while the packets from the Pods in the `staging` Namespace to the external
-network will be redirected to the `node-5` Node and SNATed to `10.10.0.12`.
+network will be redirected to the `node-5` Node and SNATed to `10.10.0.105`.
 
 In this configuration, if the `node-4` Node powers off, re-configuring
 `10.10.0.104` to another Node or updating the `egressIP` of `egress-prod` to
