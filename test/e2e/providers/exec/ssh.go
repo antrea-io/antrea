@@ -44,7 +44,7 @@ func RunSSHCommand(host string, config *ssh.ClientConfig, cmd string) (code int,
 			return 0, "", "", fmt.Errorf("did not get an exit status for SSH command: %v", e)
 		case *ssh.ExitError:
 			// SSH operation successful, but command returned error code
-			return e.ExitStatus(), stdoutB.String(), stderrB.String(), nil
+			return e.ExitStatus(), stdoutB.String(), stderrB.String(), err
 		default:
 			return 0, "", "", fmt.Errorf("unknown error when executing SSH command: %v", err)
 		}

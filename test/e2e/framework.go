@@ -402,9 +402,10 @@ func collectClusterInfo() error {
 
 	retrieveCIDRs := func(cmd string, reg string) ([]string, error) {
 		res := make([]string, 2)
-		rc, stdout, _, err := RunCommandOnNode(controlPlaneNodeName(), cmd)
+		controlPlaneNode := controlPlaneNodeName()
+		rc, stdout, _, err := RunCommandOnNode(controlPlaneNode, cmd)
 		if err != nil || rc != 0 {
-			return res, fmt.Errorf("error when running the following command `%s` on control-plane Node: %v, %s", cmd, err, stdout)
+			return res, fmt.Errorf("error when running the following command `%s` on control-plane Node %s: %d, %v, %s", cmd, controlPlaneNode, rc, err, stdout)
 		}
 		re := regexp.MustCompile(reg)
 		if matches := re.FindStringSubmatch(stdout); len(matches) == 0 {
