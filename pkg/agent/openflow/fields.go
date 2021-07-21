@@ -72,6 +72,8 @@ var (
 	TargetOFPortField = binding.NewRegField(1, 0, 31, "TargetOFPort")
 	// ToGatewayRegMark marks that the output interface is Antrea gateway.
 	ToGatewayRegMark = binding.NewRegMark(TargetOFPortField, config.HostGatewayOFPort)
+	// ToBridgeRegMark marks that the output interface is OVS bridge.
+	ToBridgeRegMark = binding.NewRegMark(TargetOFPortField, config.BridgeOFPort)
 
 	// reg2(NXM_NX_REG2)
 	// Field to help swap values in two different flow fields in the OpenFlow actions. This field is only used in func
@@ -109,6 +111,10 @@ var (
 	ServiceNeedSNATRegMark = binding.NewRegMark(ServiceSNATField, 0b1)
 	// reg4[16..19]: Field to store the union value of Endpoint state and the mark of whether Service type is NodePort.
 	NodePortUnionField = binding.NewRegField(4, 16, 19, "NodePortUnion")
+	// reg4[21]: Mark to indicate the packet is from local AntreaFlexibleIPAM Pod.
+	// NotAntreaFlexibleIPAMRegMark will be used with RewriteMACRegMark, thus the reg id must not be same due to the limitation of ofnet library.
+	AntreaFlexibleIPAMRegMark    = binding.NewOneBitRegMark(4, 21, "AntreaFlexibleIPAM")
+	NotAntreaFlexibleIPAMRegMark = binding.NewOneBitZeroRegMark(4, 21, "AntreaFlexibleIPAM")
 
 	// reg5(NXM_NX_REG5)
 	// Field to cache the Egress conjunction ID hit by TraceFlow packet.

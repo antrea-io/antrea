@@ -330,7 +330,12 @@ func testOVSRestartSameNode(t *testing.T, data *TestData) {
 			return err
 		}
 		t.Logf("Arping loss rate: %f%%", lossRate)
-		if lossRate > 0 {
+		maxLossRate := float32(0)
+		if testOptions.enableAntreaIPAM {
+			// Enable AntreaIPAM will lose connectivity when OVS restart, and will recover after initialize.
+			maxLossRate = 10
+		}
+		if lossRate > maxLossRate {
 			t.Logf(stdout)
 			return fmt.Errorf("arping loss rate is %f%%", lossRate)
 		}
@@ -409,22 +414,30 @@ func testOVSFlowReplay(t *testing.T, data *TestData) {
 	// This is necessary because "ovs-ctl restart" saves and restores OpenFlow flows for the
 	// bridge. An alternative may be to kill the antrea-ovs container running on that Node.
 	t.Logf("Deleting flows / groups and restarting OVS daemons on Node '%s'", workerNode)
-	delFlowsAndGroups := func() {
-		cmd := []string{"ovs-ofctl", "del-flows", defaultBridgeName}
-		_, stderr, err := data.runCommandFromPod(antreaNamespace, antreaPodName, ovsContainerName, cmd)
-		if err != nil {
-			t.Fatalf("error when deleting flows: <%v>, err: <%v>", stderr, err)
+	var restartCmd []string
+	if !testOptions.enableAntreaIPAM {
+		delFlowsAndGroups := func() {
+			cmd := []string{"ovs-ofctl", "del-flows", defaultBridgeName}
+			_, stderr, err := data.runCommandFromPod(antreaNamespace, antreaPodName, ovsContainerName, cmd)
+			if err != nil {
+				t.Fatalf("error when deleting flows: <%v>, err: <%v>", stderr, err)
+			}
+			cmd = []string{"ovs-ofctl", "del-groups", defaultBridgeName}
+			_, stderr, err = data.runCommandFromPod(antreaNamespace, antreaPodName, ovsContainerName, cmd)
+			if err != nil {
+				t.Fatalf("error when deleting groups: <%v>, err: <%v>", stderr, err)
+			}
 		}
-		cmd = []string{"ovs-ofctl", "del-groups", defaultBridgeName}
-		_, stderr, err = data.runCommandFromPod(antreaNamespace, antreaPodName, ovsContainerName, cmd)
-		if err != nil {
-			t.Fatalf("error when deleting groups: <%v>, err: <%v>", stderr, err)
-		}
+		delFlowsAndGroups()
+		restartCmd = []string{"/usr/share/openvswitch/scripts/ovs-ctl", "--system-id=random", "restart", "--db-file=/var/run/openvswitch/conf.db"}
+	} else {
+		// run one command to delete flows and groups and to restart OVS to avoid connectivity issue
+		restartCmd = []string{"bash", "-c", fmt.Sprintf("ovs-ofctl del-flows %s ; ovs-ofctl del-groups %s ; /usr/share/openvswitch/scripts/ovs-ctl --system-id=random restart --db-file=/var/run/openvswitch/conf.db", defaultBridgeName, defaultBridgeName)}
 	}
-	delFlowsAndGroups()
-	restartCmd := []string{"/usr/share/openvswitch/scripts/ovs-ctl", "--system-id=random", "restart", "--db-file=/var/run/openvswitch/conf.db"}
 	if stdout, stderr, err := data.runCommandFromPod(antreaNamespace, antreaPodName, ovsContainerName, restartCmd); err != nil {
 		t.Fatalf("Error when restarting OVS with ovs-ctl: %v - stdout: %s - stderr: %s", err, stdout, stderr)
+	} else {
+		t.Logf("Restarted OVS with ovs-ctl: stdout: %s - stderr: %s", stdout, stderr)
 	}
 
 	// This should give Antrea ~10s to restore flows, since we generate 10 "pings" with a 1s

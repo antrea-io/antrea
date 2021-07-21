@@ -74,21 +74,22 @@ var (
 
 // Initializer knows how to setup host networking, OpenVSwitch, and Openflow.
 type Initializer struct {
-	client          clientset.Interface
-	ovsBridgeClient ovsconfig.OVSBridgeClient
-	ofClient        openflow.Client
-	routeClient     route.Interface
-	wireGuardClient wireguard.Interface
-	ifaceStore      interfacestore.InterfaceStore
-	ovsBridge       string
-	hostGateway     string // name of gateway port on the OVS bridge
-	mtu             int
-	serviceCIDR     *net.IPNet // K8s Service ClusterIP CIDR
-	serviceCIDRv6   *net.IPNet // K8s Service ClusterIP CIDR in IPv6
-	networkConfig   *config.NetworkConfig
-	nodeConfig      *config.NodeConfig
-	wireGuardConfig *config.WireGuardConfig
-	enableProxy     bool
+	client                clientset.Interface
+	ovsBridgeClient       ovsconfig.OVSBridgeClient
+	ofClient              openflow.Client
+	routeClient           route.Interface
+	wireGuardClient       wireguard.Interface
+	ifaceStore            interfacestore.InterfaceStore
+	ovsBridge             string
+	hostGateway           string // name of gateway port on the OVS bridge
+	mtu                   int
+	serviceCIDR           *net.IPNet // K8s Service ClusterIP CIDR
+	serviceCIDRv6         *net.IPNet // K8s Service ClusterIP CIDR in IPv6
+	networkConfig         *config.NetworkConfig
+	nodeConfig            *config.NodeConfig
+	wireGuardConfig       *config.WireGuardConfig
+	enableProxy           bool
+	connectUplinkToBridge bool
 	// networkReadyCh should be closed once the Node's network is ready.
 	// The CNI server will wait for it before handling any CNI Add requests.
 	proxyAll              bool
@@ -117,8 +118,8 @@ func NewInitializer(
 	proxyAll bool,
 	nodePortAddressesIPv4 []net.IP,
 	nodePortAddressesIPv6 []net.IP,
+	connectUplinkToBridge bool,
 ) *Initializer {
-
 	return &Initializer{
 		ovsBridgeClient:       ovsBridgeClient,
 		client:                k8sClient,
@@ -138,6 +139,7 @@ func NewInitializer(
 		proxyAll:              proxyAll,
 		nodePortAddressesIPv4: nodePortAddressesIPv4,
 		nodePortAddressesIPv6: nodePortAddressesIPv6,
+		connectUplinkToBridge: connectUplinkToBridge,
 	}
 }
 

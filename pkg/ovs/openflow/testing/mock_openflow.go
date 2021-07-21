@@ -876,7 +876,7 @@ func (mr *MockActionMockRecorder) Note(arg0 interface{}) *gomock.Call {
 }
 
 // Output mocks base method
-func (m *MockAction) Output(arg0 int) openflow.FlowBuilder {
+func (m *MockAction) Output(arg0 uint32) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Output", arg0)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
