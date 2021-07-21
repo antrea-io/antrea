@@ -32,6 +32,7 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/util/retry"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 
@@ -521,15 +522,34 @@ func (c *EgressController) unbindPodEgress(pod, egress string) (string, bool) {
 	return "", false
 }
 
-func (c *EgressController) updateEgressStatus(egress *crdv1a2.Egress, nodeName string) error {
-	if egress.Status.EgressNode == nodeName {
-		return nil
-	}
-	klog.V(2).InfoS("Updating Egress status", "Egress", egress.Name, "oldNode", egress.Status.EgressNode, "newNode", nodeName)
+func (c *EgressController) updateEgressStatus(egress *crdv1a2.Egress, isLocal bool) error {
 	toUpdate := egress.DeepCopy()
-	toUpdate.Status.EgressNode = nodeName
-	if _, err := c.crdClient.CrdV1alpha2().Egresses().UpdateStatus(context.TODO(), toUpdate, metav1.UpdateOptions{}); err != nil {
-		return fmt.Errorf("updating Egress %s status error: %v", egress.Name, err)
+	var updateErr, getErr error
+	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		if isLocal {
+			// Do nothing if the current EgressNode in status is already this Node.
+			if toUpdate.Status.EgressNode == c.nodeName {
+				return nil
+			}
+			toUpdate.Status.EgressNode = c.nodeName
+		} else {
+			// Do nothing if the current EgressNode in status is not this Node.
+			if toUpdate.Status.EgressNode != c.nodeName {
+				return nil
+			}
+			toUpdate.Status.EgressNode = ""
+		}
+		klog.V(2).InfoS("Updating Egress status", "Egress", egress.Name, "oldNode", egress.Status.EgressNode, "newNode", toUpdate.Status.EgressNode)
+		_, updateErr = c.crdClient.CrdV1alpha2().Egresses().UpdateStatus(context.TODO(), toUpdate, metav1.UpdateOptions{})
+		if updateErr != nil && errors.IsConflict(updateErr) {
+			if toUpdate, getErr = c.crdClient.CrdV1alpha2().Egresses().Get(context.TODO(), egress.Name, metav1.GetOptions{}); getErr != nil {
+				return getErr
+			}
+		}
+		// Return the error from UPDATE.
+		return updateErr
+	}); err != nil {
+		return err
 	}
 	klog.V(2).InfoS("Updated Egress status", "Egress", egress.Name)
 	metrics.AntreaEgressStatusUpdates.Inc()
@@ -584,9 +604,6 @@ func (c *EgressController) syncEgress(egressName string) error {
 		if err := c.ipAssigner.AssignIP(egress.Spec.EgressIP); err != nil {
 			return err
 		}
-		if err := c.updateEgressStatus(egress, c.nodeName); err != nil {
-			return err
-		}
 	} else {
 		// Unassign the Egress IP from the local Node if it was assigned by the agent.
 		if err := c.ipAssigner.UnassignIP(egress.Spec.EgressIP); err != nil {
@@ -608,6 +625,10 @@ func (c *EgressController) syncEgress(egressName string) error {
 			return err
 		}
 		eState.mark = mark
+	}
+
+	if err := c.updateEgressStatus(egress, c.localIPDetector.IsLocalIP(egress.Spec.EgressIP)); err != nil {
+		return fmt.Errorf("update Egress %s status error: %v", egressName, err)
 	}
 
 	// Copy the previous ofPorts and Pods. They will be used to identify stale ofPorts and Pods.
