@@ -72,6 +72,8 @@ func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Crd().V1alpha2().ExternalEntities().Informer()}, nil
 	case v1alpha2.SchemeGroupVersion.WithResource("externalippools"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Crd().V1alpha2().ExternalIPPools().Informer()}, nil
+	case v1alpha2.SchemeGroupVersion.WithResource("ippools"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Crd().V1alpha2().IPPools().Informer()}, nil
 
 		// Group=crd.antrea.io, Version=v1alpha3
 	case v1alpha3.SchemeGroupVersion.WithResource("clustergroups"):

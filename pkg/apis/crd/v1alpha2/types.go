@@ -261,16 +261,6 @@ type ExternalIPPoolSpec struct {
 	NodeSelector metav1.LabelSelector `json:"nodeSelector"`
 }
 
-// IPRange is a set of contiguous IP addresses, represented by a CIDR or a pair of start and end IPs.
-type IPRange struct {
-	// The CIDR of this range, e.g. 10.10.10.0/24.
-	CIDR string `json:"cidr,omitempty"`
-	// The start IP of the range, e.g. 10.10.20.5, inclusive.
-	Start string `json:"start,omitempty"`
-	// The end IP of the range, e.g. 10.10.20.20, inclusive.
-	End string `json:"end,omitempty"`
-}
-
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 type ExternalIPPoolList struct {
@@ -279,4 +269,64 @@ type ExternalIPPoolList struct {
 	metav1.ListMeta `json:"metadata,omitempty"`
 
 	Items []ExternalIPPool `json:"items"`
+}
+
+// +genclient
+// +genclient:nonNamespaced
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// IPPool defines one or multiple IP sets that can be used for flexible IPAM feature. For instance, the IPs can be
+// allocated to pods according to IP pool specified in deployment annotation.
+type IPPool struct {
+	metav1.TypeMeta `json:",inline"`
+	// Standard metadata of the object.
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	// Specification of the ExternalIPPool.
+	Spec IPPoolSpec `json:"spec"`
+
+	// Most recently observed status of the pool.
+	Status IPPoolStatus `json:"status"`
+}
+
+type IPPoolSpec struct {
+	// IP Version for this IP pool - either 4 or 6
+	IPVersion int `json:"ipVersion"`
+	// The IP ranges of this IP pool, e.g. 10.10.0.0/24, 10.10.10.2-10.10.10.20, 4001::12-4001::30.
+	IPRanges []IPRange `json:"ipRanges"`
+	// Vlan ID for this IP pool. Default is 0. String-typed for sake of potential autoselect option.
+	Vlan string `json:"vlan"`
+}
+
+type IPPoolStatus struct {
+	Usage []IPPoolUsage `json:"usage,omitempty"`
+}
+
+type IPPoolUsage struct {
+	// IP Address this entry is tracking
+	IPAddress string `json:"ipAddress"`
+	// Allocation state - either Allocated or Preallocated
+	State string `json:"state"`
+	// Resource this IP Address is allocated to
+	Resource string `json:"resource"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+type IPPoolList struct {
+	metav1.TypeMeta `json:",inline"`
+	// +optional
+	metav1.ListMeta `json:"metadata,omitempty"`
+
+	Items []IPPool `json:"items"`
+}
+
+// IPRange is a set of contiguous IP addresses, represented by a CIDR or a pair of start and end IPs.
+type IPRange struct {
+	// The CIDR of this range, e.g. 10.10.10.0/24.
+	CIDR string `json:"cidr,omitempty"`
+	// The start IP of the range, e.g. 10.10.20.5, inclusive.
+	Start string `json:"start,omitempty"`
+	// The end IP of the range, e.g. 10.10.20.20, inclusive.
+	End string `json:"end,omitempty"`
 }
