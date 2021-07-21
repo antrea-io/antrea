@@ -1,5 +1,5 @@
 ---
-title: "Antrea – Yet Another CNI Plug-in for Kubernetes"
+title: "GKE Networking with Antrea"
 image: /img/posts/2021/07/14/gke-networking-with-antrea.png
 excerpt: Post by Ali Al Idrees
 author_name: Ali Al Idrees
