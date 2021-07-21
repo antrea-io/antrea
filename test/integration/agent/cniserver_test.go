@@ -572,7 +572,7 @@ func newTester() *cmdAddDelTester {
 		testNodeConfig,
 		k8sFake.NewSimpleClientset(),
 		false,
-		nil,
+		routeMock,
 		tester.networkReadyCh)
 	tester.server.Initialize(ovsServiceMock, ofServiceMock, ifaceStore, make(chan antreatypes.EntityReference, 100))
 	ctx := context.Background()
@@ -654,6 +654,7 @@ func TestAntreaServerFunc(t *testing.T) {
 	_ = ipam.RegisterIPAMDriver("mock", ipamMock)
 	ovsServiceMock = ovsconfigtest.NewMockOVSBridgeClient(controller)
 	ofServiceMock = openflowtest.NewMockClient(controller)
+	routeMock = routetest.NewMockInterface(controller)
 
 	var originalNS ns.NetNS
 	var dataDir string
@@ -675,6 +676,9 @@ func TestAntreaServerFunc(t *testing.T) {
 		ovsServiceMock.EXPECT().GetPortList().Return([]ovsconfig.OVSPortData{}, nil).AnyTimes()
 		ovsServiceMock.EXPECT().IsHardwareOffloadEnabled().Return(false).AnyTimes()
 		ovsServiceMock.EXPECT().GetOVSDatapathType().Return(ovsconfig.OVSDatapathSystem).AnyTimes()
+
+		routeMock.EXPECT().AddLocalAntreaFlexibleIPAMPodRule([]net.IP{net.ParseIP("10.1.2.100")}).Return(nil).Times(1)
+		routeMock.EXPECT().DeleteLocalAntreaFlexibleIPAMPodRule([]net.IP{net.ParseIP("10.1.2.100")}).Return(nil).Times(1)
 	}
 
 	teardown := func() {

@@ -47,10 +47,16 @@ const (
 	genevePort = 6081
 
 	// Antrea managed ipset.
-	// antreaPodIPSet contains all Pod CIDRs of this cluster.
+	// antreaPodIPSet contains all Per-Node IPAM Pod CIDRs of this cluster.
 	antreaPodIPSet = "ANTREA-POD-IP"
-	// antreaPodIP6Set contains all IPv6 Pod CIDRs of this cluster.
+	// antreaPodIP6Set contains all Per-Node IPAM IPv6 Pod CIDRs of this cluster.
 	antreaPodIP6Set = "ANTREA-POD-IP6"
+
+	// Antrea managed ipset. Max name length is 31 chars.
+	// localAntreaFlexibleIPAMPodIPSet contains all AntreaFlexibleIPAM Pod IPs of this Node.
+	localAntreaFlexibleIPAMPodIPSet = "LOCAL-FLEXIBLE-IPAM-POD-IP"
+	// localAntreaFlexibleIPAMPodIP6Set contains all AntreaFlexibleIPAM Pod IPv6s of this Node.
+	localAntreaFlexibleIPAMPodIP6Set = "LOCAL-FLEXIBLE-IPAM-POD-IP6"
 
 	// Antrea proxy NodePort IP
 	antreaNodePortIPSet  = "ANTREA-NODEPORT-IP"
@@ -93,8 +99,9 @@ type Client struct {
 	// markToSNATIP caches marks to SNAT IPs. It's used in Egress feature.
 	markToSNATIP sync.Map
 	// iptablesInitialized is used to notify when iptables initialization is done.
-	iptablesInitialized chan struct{}
-	proxyAll            bool
+	iptablesInitialized   chan struct{}
+	proxyAll              bool
+	connectUplinkToBridge bool
 	// serviceRoutes caches ip routes about Services.
 	serviceRoutes sync.Map
 	// serviceNeighbors caches neighbors.
@@ -112,12 +119,13 @@ type Client struct {
 // NewClient returns a route client.
 // TODO: remove param serviceCIDR after kube-proxy is replaced by Antrea Proxy. This param is not used in this file;
 // leaving it here is to be compatible with the implementation on Windows.
-func NewClient(serviceCIDR *net.IPNet, networkConfig *config.NetworkConfig, noSNAT, proxyAll bool) (*Client, error) {
+func NewClient(serviceCIDR *net.IPNet, networkConfig *config.NetworkConfig, noSNAT, proxyAll, connectUplinkToBridge bool) (*Client, error) {
 	return &Client{
-		serviceCIDR:   serviceCIDR,
-		networkConfig: networkConfig,
-		noSNAT:        noSNAT,
-		proxyAll:      proxyAll,
+		serviceCIDR:           serviceCIDR,
+		networkConfig:         networkConfig,
+		noSNAT:                noSNAT,
+		proxyAll:              proxyAll,
+		connectUplinkToBridge: connectUplinkToBridge,
 	}, nil
 }
 
@@ -302,6 +310,15 @@ func (c *Client) syncIPSet() error {
 		})
 	}
 
+	if c.connectUplinkToBridge {
+		if err := ipset.CreateIPSet(localAntreaFlexibleIPAMPodIPSet, ipset.HashIP, false); err != nil {
+			return err
+		}
+		if err := ipset.CreateIPSet(localAntreaFlexibleIPAMPodIP6Set, ipset.HashIP, true); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -317,6 +334,14 @@ func getNodePortIPSetName(isIPv6 bool) string {
 		return antreaNodePortIP6Set
 	} else {
 		return antreaNodePortIPSet
+	}
+}
+
+func getLocalAntreaFlexibleIPAMPodIPSetName(isIPv6 bool) string {
+	if isIPv6 {
+		return localAntreaFlexibleIPAMPodIP6Set
+	} else {
+		return localAntreaFlexibleIPAMPodIPSet
 	}
 }
 
@@ -397,7 +422,7 @@ func (c *Client) syncIPTables() error {
 	})
 	// Use iptables-restore to configure IPv4 settings.
 	if v4Enabled {
-		iptablesData := c.restoreIptablesData(c.nodeConfig.PodIPv4CIDR, antreaPodIPSet, antreaNodePortIPSet, config.VirtualServiceIPv4, snatMarkToIPv4)
+		iptablesData := c.restoreIptablesData(c.nodeConfig.PodIPv4CIDR, antreaPodIPSet, localAntreaFlexibleIPAMPodIPSet, antreaNodePortIPSet, config.VirtualServiceIPv4, snatMarkToIPv4)
 		// Setting --noflush to keep the previous contents (i.e. non antrea managed chains) of the tables.
 		if err := c.ipt.Restore(iptablesData.Bytes(), false, false); err != nil {
 			return err
@@ -406,7 +431,7 @@ func (c *Client) syncIPTables() error {
 
 	// Use ip6tables-restore to configure IPv6 settings.
 	if v6Enabled {
-		iptablesData := c.restoreIptablesData(c.nodeConfig.PodIPv6CIDR, antreaPodIP6Set, antreaNodePortIP6Set, config.VirtualServiceIPv6, snatMarkToIPv6)
+		iptablesData := c.restoreIptablesData(c.nodeConfig.PodIPv6CIDR, antreaPodIP6Set, localAntreaFlexibleIPAMPodIP6Set, antreaNodePortIP6Set, config.VirtualServiceIPv6, snatMarkToIPv6)
 		// Setting --noflush to keep the previous contents (i.e. non antrea managed chains) of the tables.
 		if err := c.ipt.Restore(iptablesData.Bytes(), false, true); err != nil {
 			return err
@@ -415,7 +440,7 @@ func (c *Client) syncIPTables() error {
 	return nil
 }
 
-func (c *Client) restoreIptablesData(podCIDR *net.IPNet, podIPSet, nodePortIPSet string, serviceVirtualIP net.IP, snatMarkToIP map[uint32]net.IP) *bytes.Buffer {
+func (c *Client) restoreIptablesData(podCIDR *net.IPNet, podIPSet, localAntreaFlexibleIPAMPodIPSet, nodePortIPSet string, serviceVirtualIP net.IP, snatMarkToIP map[uint32]net.IP) *bytes.Buffer {
 	// Create required rules in the antrea chains.
 	// Use iptables-restore as it flushes the involved chains and creates the desired rules
 	// with a single call, instead of string matching to clean up stale rules.
@@ -476,6 +501,15 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet, podIPSet, nodePortIPSet
 		"-o", c.nodeConfig.GatewayConfig.Name,
 		"-j", iptables.MarkTarget, "--or-mark", fmt.Sprintf("%#08x", types.HostLocalSourceMark),
 	}...)
+	if c.connectUplinkToBridge {
+		writeLine(iptablesData, []string{
+			"-A", antreaOutputChain,
+			"-m", "comment", "--comment", `"Antrea: mark LOCAL output packets"`,
+			"-m", "addrtype", "--src-type", "LOCAL",
+			"-o", c.nodeConfig.OVSBridge,
+			"-j", iptables.MarkTarget, "--or-mark", fmt.Sprintf("%#08x", types.HostLocalSourceMark),
+		}...)
+	}
 	writeLine(iptablesData, "COMMIT")
 
 	writeLine(iptablesData, "*filter")
@@ -492,6 +526,23 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet, podIPSet, nodePortIPSet
 		"-o", c.nodeConfig.GatewayConfig.Name,
 		"-j", iptables.AcceptTarget,
 	}...)
+	if c.connectUplinkToBridge {
+		// Add accept rules for local AntreaFlexibleIPAM
+		// AntreaFlexibleIPAM Pods -> HostPort Pod
+		// AntreaFlexibleIPAM Pods -> NodePort Service -> Backend Pod
+		writeLine(iptablesData, []string{
+			"-A", antreaForwardChain,
+			"-m", "comment", "--comment", `"Antrea: accept packets from local AntreaFlexibleIPAM Pods"`,
+			"-m", "set", "--match-set", localAntreaFlexibleIPAMPodIPSet, "src",
+			"-j", iptables.AcceptTarget,
+		}...)
+		writeLine(iptablesData, []string{
+			"-A", antreaForwardChain,
+			"-m", "comment", "--comment", `"Antrea: accept packets to local AntreaFlexibleIPAM Pods"`,
+			"-m", "set", "--match-set", localAntreaFlexibleIPAMPodIPSet, "dst",
+			"-j", iptables.AcceptTarget,
+		}...)
+	}
 	writeLine(iptablesData, "COMMIT")
 
 	writeLine(iptablesData, "*nat")
@@ -1163,6 +1214,49 @@ func (c *Client) DeleteLoadBalancer(externalIPs []string) error {
 		}
 	}
 
+	return nil
+}
+
+// AddLocalAntreaFlexibleIPAMPodRule is used to add IP to target ip set when an AntreaFlexibleIPAM Pod is added. An entry is added
+// for every Pod IP.
+func (c *Client) AddLocalAntreaFlexibleIPAMPodRule(podAddresses []net.IP) error {
+	if !c.connectUplinkToBridge {
+		return nil
+	}
+	for i := range podAddresses {
+		isIPv6 := podAddresses[i].To4() == nil
+		// Skip Per-Node IPAM Pod
+		if isIPv6 {
+			if c.nodeConfig.PodIPv6CIDR.Contains(podAddresses[i]) {
+				continue
+			}
+		} else {
+			if c.nodeConfig.PodIPv4CIDR.Contains(podAddresses[i]) {
+				continue
+			}
+		}
+		ipSetEntry := podAddresses[i].String()
+		ipSetName := getLocalAntreaFlexibleIPAMPodIPSetName(isIPv6)
+		if err := ipset.AddEntry(ipSetName, ipSetEntry); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// DeletLocaleAntreaFlexibleIPAMPodRule is used to delete related IP set entries when an AntreaFlexibleIPAM Pod is deleted.
+func (c *Client) DeleteLocalAntreaFlexibleIPAMPodRule(podAddresses []net.IP) error {
+	if !c.connectUplinkToBridge {
+		return nil
+	}
+	for i := range podAddresses {
+		isIPv6 := podAddresses[i].To4() == nil
+		ipSetEntry := podAddresses[i].String()
+		ipSetName := getLocalAntreaFlexibleIPAMPodIPSetName(isIPv6)
+		if err := ipset.DelEntry(ipSetName, ipSetEntry); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

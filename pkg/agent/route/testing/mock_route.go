@@ -78,6 +78,20 @@ func (mr *MockInterfaceMockRecorder) AddLoadBalancer(arg0 interface{}) *gomock.C
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddLoadBalancer", reflect.TypeOf((*MockInterface)(nil).AddLoadBalancer), arg0)
 }
 
+// AddLocalAntreaFlexibleIPAMPodRule mocks base method
+func (m *MockInterface) AddLocalAntreaFlexibleIPAMPodRule(arg0 []net.IP) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddLocalAntreaFlexibleIPAMPodRule", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AddLocalAntreaFlexibleIPAMPodRule indicates an expected call of AddLocalAntreaFlexibleIPAMPodRule
+func (mr *MockInterfaceMockRecorder) AddLocalAntreaFlexibleIPAMPodRule(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddLocalAntreaFlexibleIPAMPodRule", reflect.TypeOf((*MockInterface)(nil).AddLocalAntreaFlexibleIPAMPodRule), arg0)
+}
+
 // AddNodePort mocks base method
 func (m *MockInterface) AddNodePort(arg0 []net.IP, arg1 uint16, arg2 openflow.Protocol) error {
 	m.ctrl.T.Helper()
@@ -132,6 +146,20 @@ func (m *MockInterface) DeleteLoadBalancer(arg0 []string) error {
 func (mr *MockInterfaceMockRecorder) DeleteLoadBalancer(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteLoadBalancer", reflect.TypeOf((*MockInterface)(nil).DeleteLoadBalancer), arg0)
+}
+
+// DeleteLocalAntreaFlexibleIPAMPodRule mocks base method
+func (m *MockInterface) DeleteLocalAntreaFlexibleIPAMPodRule(arg0 []net.IP) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteLocalAntreaFlexibleIPAMPodRule", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteLocalAntreaFlexibleIPAMPodRule indicates an expected call of DeleteLocalAntreaFlexibleIPAMPodRule
+func (mr *MockInterfaceMockRecorder) DeleteLocalAntreaFlexibleIPAMPodRule(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteLocalAntreaFlexibleIPAMPodRule", reflect.TypeOf((*MockInterface)(nil).DeleteLocalAntreaFlexibleIPAMPodRule), arg0)
 }
 
 // DeleteNodePort mocks base method
