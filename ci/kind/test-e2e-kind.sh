@@ -22,8 +22,9 @@ function echoerr {
     >&2 echo "$@"
 }
 
-_usage="Usage: $0 [--encap-mode <mode>] [--no-proxy] [--np] [--coverage] [--help|-h]
+_usage="Usage: $0 [--encap-mode <mode>] [--ip-family <v4|v6>] [--no-proxy] [--np] [--coverage] [--help|-h]
         --encap-mode                  Traffic encapsulation mode. (default is 'encap').
+        --ip-family                   Configures the ipFamily for the KinD cluster.
         --no-proxy                    Disables Antrea proxy.
         --endpointslice               Enables Antrea proxy and EndpointSlice support.
         --no-np                       Disables Antrea-native policies.
@@ -49,6 +50,7 @@ function quit {
 trap "quit" INT EXIT
 
 mode=""
+ipfamily="v4"
 proxy=true
 endpointslice=false
 np=true
@@ -61,6 +63,10 @@ case $key in
     --no-proxy)
     proxy=false
     shift
+    ;;
+    --ip-family)
+    ipfamily="$2"
+    shift 2
     ;;
     --endpointslice)
     endpointslice=true
@@ -124,6 +130,13 @@ printf -v COMMON_IMAGES "%s " "${COMMON_IMAGES_LIST[@]}"
 function run_test {
   current_mode=$1
   args=$2
+
+  if [[ "$ipfamily" == "v6" ]]; then
+    args="$args --ip-family ipv6 --pod-cidr fd00:10:244::/56"
+  elif [[ "$ipfamily" != "v4" ]]; then
+    echoerr "invalid value for --ip-family \"$ipfamily\", expected \"v4\" or \"v6\""
+    exit 1
+  fi
 
   echo "creating test bed with args $args"
   eval "timeout 600 $TESTBED_CMD create kind --antrea-cni false $args"
