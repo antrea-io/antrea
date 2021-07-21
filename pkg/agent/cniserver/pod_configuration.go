@@ -239,6 +239,10 @@ func (pc *podConfigurator) configureInterfaces(
 		}
 	}()
 
+	if err := pc.routeClient.AddLocalAntreaFlexibleIPAMPodRule(containerConfig.IPs); err != nil {
+		return err
+	}
+
 	// Note that the IP address should be advertised after Pod OpenFlow entries are installed, otherwise the packet might
 	// be dropped by OVS.
 	if err = pc.ifConfigurator.advertiseContainerAddr(containerNetNS, containerIface.Name, result); err != nil {
@@ -288,6 +292,10 @@ func (pc *podConfigurator) removeInterfaces(containerID string) error {
 	}
 
 	if err := pc.ifConfigurator.removeContainerLink(containerID, containerConfig.InterfaceName); err != nil {
+		return err
+	}
+
+	if err := pc.routeClient.DeleteLocalAntreaFlexibleIPAMPodRule(containerConfig.IPs); err != nil {
 		return err
 	}
 	return nil
