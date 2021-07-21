@@ -80,7 +80,7 @@ const (
 )
 
 // IPDSCPToSRange stores the DSCP bits in ToS field of IP header.
-var IPDSCPToSRange = Range{2, 7}
+var IPDSCPToSRange = &Range{2, 7}
 
 // Bridge defines operations on an openflow bridge.
 type Bridge interface {
@@ -178,10 +178,11 @@ type Flow interface {
 
 type Action interface {
 	LoadARPOperation(value uint16) FlowBuilder
-	LoadRegRange(regID int, value uint32, to Range) FlowBuilder
-	LoadPktMarkRange(value uint32, to Range) FlowBuilder
+	LoadToRegField(field *RegField, value uint32) FlowBuilder
+	LoadRegMark(mark *RegMark) FlowBuilder
+	LoadPktMarkRange(value uint32, to *Range) FlowBuilder
 	LoadIPDSCP(value uint8) FlowBuilder
-	LoadRange(name string, addr uint64, to Range) FlowBuilder
+	LoadRange(name string, addr uint64, to *Range) FlowBuilder
 	Move(from, to string) FlowBuilder
 	MoveRange(fromName, toName string, from, to Range) FlowBuilder
 	Resubmit(port uint16, table TableIDType) FlowBuilder
@@ -189,8 +190,8 @@ type Action interface {
 	CT(commit bool, tableID TableIDType, zone int) CTAction
 	Drop() FlowBuilder
 	Output(port int) FlowBuilder
-	OutputFieldRange(from string, rng Range) FlowBuilder
-	OutputRegRange(regID int, rng Range) FlowBuilder
+	OutputFieldRange(from string, rng *Range) FlowBuilder
+	OutputToRegField(field *RegField) FlowBuilder
 	OutputInPort() FlowBuilder
 	SetDstMAC(addr net.HardwareAddr) FlowBuilder
 	SetSrcMAC(addr net.HardwareAddr) FlowBuilder
@@ -216,9 +217,9 @@ type FlowBuilder interface {
 	MatchPriority(uint16) FlowBuilder
 	MatchProtocol(name Protocol) FlowBuilder
 	MatchIPProtocolValue(isIPv6 bool, protoValue uint8) FlowBuilder
-	MatchReg(regID int, data uint32) FlowBuilder
 	MatchXXReg(regID int, data []byte) FlowBuilder
-	MatchRegRange(regID int, data uint32, rng Range) FlowBuilder
+	MatchRegMark(mark *RegMark) FlowBuilder
+	MatchRegFieldWithValue(field *RegField, data uint32) FlowBuilder
 	MatchInPort(inPort uint32) FlowBuilder
 	MatchDstIP(ip net.IP) FlowBuilder
 	MatchDstIPNet(ipNet net.IPNet) FlowBuilder
@@ -240,8 +241,8 @@ type FlowBuilder interface {
 	MatchCTStateInv(isSet bool) FlowBuilder
 	MatchCTStateDNAT(isSet bool) FlowBuilder
 	MatchCTStateSNAT(isSet bool) FlowBuilder
-	MatchCTMark(value uint32, mask *uint32) FlowBuilder
-	MatchCTLabelRange(high, low uint64, bitRange Range) FlowBuilder
+	MatchCTMark(mark *CtMark) FlowBuilder
+	MatchCTLabelField(high, low uint64, field *CtLabel) FlowBuilder
 	MatchPktMark(value uint32, mask *uint32) FlowBuilder
 	MatchConjID(value uint32) FlowBuilder
 	MatchDstPort(port uint16, portMask *uint16) FlowBuilder
@@ -285,10 +286,10 @@ type LearnAction interface {
 	MatchLearnedDstIP() LearnAction
 	MatchLearnedSrcIPv6() LearnAction
 	MatchLearnedDstIPv6() LearnAction
-	MatchReg(regID int, data uint32, rng Range) LearnAction
-	LoadReg(regID int, data uint32, rng Range) LearnAction
-	LoadRegToReg(fromRegID, toRegID int, fromRng, toRng Range) LearnAction
-	LoadXXRegToXXReg(fromRegID, toRegID int, fromRng, toRng Range) LearnAction
+	MatchRegMark(mark *RegMark) LearnAction
+	LoadRegMark(mark *RegMark) LearnAction
+	LoadFieldToField(fromField, toField *RegField) LearnAction
+	LoadXXRegToXXReg(fromXXField, toXXField *XXRegField) LearnAction
 	SetDstMAC(mac net.HardwareAddr) LearnAction
 	Done() FlowBuilder
 }
@@ -301,9 +302,12 @@ type Group interface {
 
 type BucketBuilder interface {
 	Weight(val uint16) BucketBuilder
+	// Deprecated.
 	LoadReg(regID int, data uint32) BucketBuilder
 	LoadXXReg(regID int, data []byte) BucketBuilder
-	LoadRegRange(regID int, data uint32, rng Range) BucketBuilder
+	// Deprecated.
+	LoadRegRange(regID int, data uint32, rng *Range) BucketBuilder
+	LoadToRegField(field *RegField, data uint32) BucketBuilder
 	ResubmitToTable(tableID TableIDType) BucketBuilder
 	Done() Group
 }
@@ -325,7 +329,8 @@ type MeterBandBuilder interface {
 
 type CTAction interface {
 	LoadToMark(value uint32) CTAction
-	LoadToLabelRange(value uint64, rng *Range) CTAction
+	LoadToCtMark(mark *CtMark) CTAction
+	LoadToLabelField(value uint64, labelField *CtLabel) CTAction
 	MoveToLabel(fromName string, fromRng, labelRng *Range) CTAction
 	// NAT action translates the packet in the way that the connection was committed into the conntrack zone, e.g., if
 	// a connection was committed with SNAT, the later packets would be translated with the earlier SNAT configurations.
@@ -364,7 +369,8 @@ type PacketOutBuilder interface {
 	SetICMPData(data []byte) PacketOutBuilder
 	SetInport(inPort uint32) PacketOutBuilder
 	SetOutport(outport uint32) PacketOutBuilder
-	AddLoadAction(name string, data uint64, rng Range) PacketOutBuilder
+	AddLoadAction(name string, data uint64, rng *Range) PacketOutBuilder
+	AddLoadRegMark(mark *RegMark) PacketOutBuilder
 	Done() *ofctrl.PacketOut
 }
 
@@ -402,4 +408,33 @@ type Packet struct {
 	ICMPCode        uint8
 	ICMPEchoID      uint16
 	ICMPEchoSeq     uint16
+}
+
+// RegField specifies a bit range of a register. regID is the register number, and rng is the range of bits
+// taken by the field. The OF client could use a RegField to cache or match varied value.
+type RegField struct {
+	regID int
+	rng   *Range
+	name  string
+}
+
+// RegMark is a value saved in a RegField. A RegMark is used to indicate the traffic
+// has some expected characteristics.
+type RegMark struct {
+	field *RegField
+	value uint32
+}
+
+// XXRegField specifies a xxreg with a required bit range.
+type XXRegField RegField
+
+// CtMark is used to indicate the connection characteristics.
+type CtMark struct {
+	rng   *Range
+	value uint32
+}
+
+type CtLabel struct {
+	rng  *Range
+	name string
 }

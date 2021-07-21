@@ -66,7 +66,7 @@ that Node and `<BRIDGE_NAME>` is the name of the bridge created by Antrea
 We use 2 32-bit OVS registers to carry information throughout the pipeline:
 
 * reg0 (NXM_NX_REG0):
-  - bits [0..15] are used to store the traffic source (from tunnel: 0, from
+  - bits [0..3] are used to store the traffic source (from tunnel: 0, from
     local gateway: 1, from local Pod: 2). It is set in the [ClassifierTable].
   - bit 16 is used to indicate whether the destination MAC address of a packet
     is "known", i.e. corresponds to an entry in [L2ForwardingCalcTable], which
@@ -621,8 +621,8 @@ be SNAT'd with a SNAT IP configured on the Node. In the latter case, the flow
 also rewrites the destination MAC to the local gateway interface MAC.
 
 ```text
-table=70, priority=190,ip,reg0=0x2/0xffff actions=goto_table:71
-table=70, priority=190,ip,reg0=0/0xffff actions=mod_dl_dst:e2:e5:a4:9b:1c:b1,goto_table:71
+table=70, priority=190,ip,reg0=0x2/0xf actions=goto_table:71
+table=70, priority=190,ip,reg0=0/0xf actions=mod_dl_dst:e2:e5:a4:9b:1c:b1,goto_table:71
 ```
 
 ### SNATTable (71)
@@ -639,7 +639,7 @@ Egress applied, to [L2ForwardingCalcTable]. Such traffic will be SNAT'd with
 the default SNAT IP (by an iptables masquerade rule).
 
 ```text
-table=71, priority=190,ct_state=+new+trk,ip,reg0=0/0xffff actions=drop
+table=71, priority=190,ct_state=+new+trk,ip,reg0=0/0xf actions=drop
 table=71, priority=0 actions=goto_table:80
 ```
 
@@ -685,7 +685,7 @@ IP stack should have already decremented TTL if that is needed.
 If you dump the flows for this table, you should see flows like the following:
 
 ```text
-1. table=72, priority=210,ip,reg0=0x1/0xffff, actions=goto_table:80
+1. table=72, priority=210,ip,reg0=0x1/0xf, actions=goto_table:80
 2. table=72, priority=200,ip, actions=dec_ttl,goto_table:80
 3. table=72, priority=0, actions=goto_table:80
 ```
@@ -884,7 +884,7 @@ which are not dropped because of Network Policies. If you dump the flows for thi
 table, you should see something like this:
 
 ```text
-1. table=105, priority=200,ct_state=+new+trk,ip,reg0=0x1/0xffff actions=ct(commit,table=110,zone=65520,exec(load:0x20->NXM_NX_CT_MARK[]))
+1. table=105, priority=200,ct_state=+new+trk,ip,reg0=0x1/0xf actions=ct(commit,table=110,zone=65520,exec(load:0x20->NXM_NX_CT_MARK[]))
 2. table=105, priority=190,ct_state=+new+trk,ip actions=ct(commit,table=110,zone=65520)
 3. table=105, priority=0 actions=goto_table:110
 ```
