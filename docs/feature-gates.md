@@ -209,3 +209,49 @@ Refer to this [document](egress.md) for more information.
 This feature is currently only supported for Nodes running Linux and "encap"
 mode. The support for Windows and other traffic modes will be added in the
 future.
+
+#### Requirements for this Feature
+
+None
+
+### FlexibleIPAM
+
+`FlexibleIPAM` is a feature that allows flexible control over pod IP Addressing. This can
+be achieved my configuring custom resource `IPPool` can be configured with desired set of
+subnets, and then annotated to deployment or stateful set. Antrea will use this annotation
+to manage IP address assignment for corresponding pods.
+
+Note that IP pool annotation can not be updated, but rather re-created. IP Pool can be
+extended, but can not be shrunk if already assigned to a resource.
+
+Traditional `Subnet per Node` IPAM will continue to be used for resources that do not have
+pool annotation specified.
+
+Usage example:
+
+```yaml
+apiVersion: "crd.antrea.io/v1alpha2"
+kind: IPPool
+metadata:
+  name: pool1
+spec:
+  ipVersion: 4
+  ipRanges:
+  - start: "10.2.0.12"
+    end: "10.2.0.20"
+  - cidr: "10.2.1.0/28"
+```
+
+```yaml
+kind: Deployment
+metadata:
+  annotations:
+    ipam.antrea.io/ippools: '["pool1"]'
+
+```
+
+#### Requirements for this Feature
+
+This feature is currently supported on Linux Nodes only. Annotation of single IP pool
+is supported. In future, annotation of up to two pools of different IP versions will be
+supported.

@@ -1632,6 +1632,85 @@ kind: CustomResourceDefinition
 metadata:
   labels:
     app: antrea
+  name: ippools.crd.antrea.io
+spec:
+  group: crd.antrea.io
+  names:
+    kind: IPPool
+    plural: ippools
+    shortNames:
+    - ipp
+    singular: ippool
+  scope: Cluster
+  versions:
+  - name: v1alpha2
+    schema:
+      openAPIV3Schema:
+        properties:
+          spec:
+            properties:
+              ipRanges:
+                items:
+                  oneOf:
+                  - required:
+                    - cidr
+                  - required:
+                    - start
+                    - end
+                  properties:
+                    cidr:
+                      format: cidr
+                      type: string
+                    end:
+                      oneOf:
+                      - format: ipv4
+                      - format: ipv6
+                      type: string
+                    start:
+                      oneOf:
+                      - format: ipv4
+                      - format: ipv6
+                      type: string
+                  type: object
+                type: array
+              ipVersion:
+                type: integer
+            required:
+            - ipVersion
+            - ipRanges
+            type: object
+          status:
+            properties:
+              ipAddress:
+                oneOf:
+                - format: ipv4
+                - format: ipv6
+                type: string
+              resource:
+                type: string
+              state:
+                enum:
+                - Allocated
+                - Preallocated
+                type: string
+            required:
+            - ipAddress
+            - state
+            - resource
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  labels:
+    app: antrea
   name: networkpolicies.crd.antrea.io
 spec:
   group: crd.antrea.io
@@ -3532,6 +3611,14 @@ rules:
   - watch
   - list
 - apiGroups:
+  - crd.antrea.io
+  resources:
+  - ippools
+  verbs:
+  - get
+  - watch
+  - list
+- apiGroups:
   - clusterinformation.antrea.tanzu.vmware.com
   resources:
   - antreacontrollerinfos
@@ -3887,12 +3974,16 @@ data:
     # API groups. After adding the annotation, legacy CRDs can be deleted safely without impacting
     # new CRDs.
     #legacyCRDMirroring: true
+
+    # Enable flexible IPAM mode for Antrea. This mode allows to assign subnets to deployments and
+    # stateful sets via IP Pool annotation.
+    # flexibleIPAM: false
 kind: ConfigMap
 metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-2567tcm8ck
+  name: antrea-config-ch8kddfg94
   namespace: kube-system
 ---
 apiVersion: v1
@@ -3963,7 +4054,7 @@ spec:
             fieldRef:
               fieldPath: spec.serviceAccountName
         - name: ANTREA_CONFIG_MAP_NAME
-          value: antrea-config-2567tcm8ck
+          value: antrea-config-ch8kddfg94
         image: projects.registry.vmware.com/antrea/antrea-ubuntu:latest
         imagePullPolicy: IfNotPresent
         livenessProbe:
@@ -4014,7 +4105,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-2567tcm8ck
+          name: antrea-config-ch8kddfg94
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -4310,7 +4401,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-2567tcm8ck
+          name: antrea-config-ch8kddfg94
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d
