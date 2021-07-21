@@ -2246,16 +2246,20 @@ func testACNPClusterGroupServiceRefCreateAndUpdate(t *testing.T, data *TestData)
 
 func testACNPNestedClusterGroupCreateAndUpdate(t *testing.T, data *TestData) {
 	svc1 := k8sUtils.BuildService("svc1", "x", 80, 80, map[string]string{"app": "a"}, nil)
-	cg1Name, cg2Name := "cg-svc-x-a", "cg-select-y-b"
+	cg1Name, cg2Name, cg3Name := "cg-svc-x-a", "cg-select-y-b", "cg-select-y-c"
 	cgBuilder1 := &ClusterGroupV1Alpha3SpecBuilder{}
 	cgBuilder1 = cgBuilder1.SetName(cg1Name).SetServiceReference("x", "svc1")
 	cgBuilder2 := &ClusterGroupV1Alpha3SpecBuilder{}
 	cgBuilder2 = cgBuilder2.SetName(cg2Name).
 		SetNamespaceSelector(map[string]string{"ns": "y"}, nil).
 		SetPodSelector(map[string]string{"pod": "b"}, nil)
+	cgBuilder3 := &ClusterGroupV1Alpha3SpecBuilder{}
+	cgBuilder3 = cgBuilder3.SetName(cg3Name).
+		SetNamespaceSelector(map[string]string{"ns": "y"}, nil).
+		SetPodSelector(map[string]string{"pod": "c"}, nil)
 	cgNestedName := "cg-nested"
 	cgBuilderNested := &ClusterGroupV1Alpha3SpecBuilder{}
-	cgBuilderNested = cgBuilderNested.SetName(cgNestedName).SetChildGroups([]string{cg1Name})
+	cgBuilderNested = cgBuilderNested.SetName(cgNestedName).SetChildGroups([]string{cg1Name, cg3Name})
 
 	builder := &ClusterNetworkPolicySpecBuilder{}
 	builder = builder.SetName("cnp-nested-cg").SetPriority(1.0).
@@ -2263,11 +2267,11 @@ func testACNPNestedClusterGroupCreateAndUpdate(t *testing.T, data *TestData) {
 		AddIngress(v1.ProtocolTCP, &p80, nil, nil, nil, nil, nil, nil, nil,
 			false, nil, crdv1alpha1.RuleActionDrop, cgNestedName, "")
 
-	// Pods in Namespace z should not allow ingress from Pods backing svc1 (label pod=a) in Namespace x.
+	// Pods in Namespace z should not allow traffic from Pods backing svc1 (label pod=a) in Namespace x.
+	// Note that in this testStep cg3 will not be created yet, so even though cg-nested selects cg1 and
+	// cg3 as childGroups, only members of cg1 will be included as this time.
 	reachability := NewReachability(allPods, Connected)
-	reachability.Expect(Pod("x/a"), Pod("z/a"), Dropped)
-	reachability.Expect(Pod("x/a"), Pod("z/b"), Dropped)
-	reachability.Expect(Pod("x/a"), Pod("z/c"), Dropped)
+	reachability.ExpectEgressToNamespace("x/a", "z", Dropped)
 
 	testStep1 := &TestStep{
 		"Port 80",
@@ -2281,15 +2285,11 @@ func testACNPNestedClusterGroupCreateAndUpdate(t *testing.T, data *TestData) {
 	}
 
 	// Test update "cg-nested" to include "cg-select-y-b" as well.
-	cgBuilderNested = cgBuilderNested.SetChildGroups([]string{cg1Name, cg2Name})
+	cgBuilderNested = cgBuilderNested.SetChildGroups([]string{cg1Name, cg2Name, cg3Name})
 	// In addition to x/a, all traffic from y/b to Namespace z should also be denied.
 	reachability2 := NewReachability(allPods, Connected)
-	reachability2.Expect(Pod("x/a"), Pod("z/a"), Dropped)
-	reachability2.Expect(Pod("x/a"), Pod("z/b"), Dropped)
-	reachability2.Expect(Pod("x/a"), Pod("z/c"), Dropped)
-	reachability2.Expect(Pod("y/b"), Pod("z/a"), Dropped)
-	reachability2.Expect(Pod("y/b"), Pod("z/b"), Dropped)
-	reachability2.Expect(Pod("y/b"), Pod("z/c"), Dropped)
+	reachability2.ExpectEgressToNamespace("x/a", "z", Dropped)
+	reachability2.ExpectEgressToNamespace("y/b", "z", Dropped)
 	// New member in cg-svc-x-a should be reflected in cg-nested as well.
 	cp := []*CustomProbe{
 		{
@@ -2316,7 +2316,24 @@ func testACNPNestedClusterGroupCreateAndUpdate(t *testing.T, data *TestData) {
 		cp,
 	}
 
-	testSteps := []*TestStep{testStep1, testStep2}
+	// In this testStep cg3 is created. It's members should reflect in cg-nested
+	// and as a result, all traffic from y/c to Namespace z should be denied as well.
+	reachability3 := NewReachability(allPods, Connected)
+	reachability3.ExpectEgressToNamespace("x/a", "z", Dropped)
+	reachability3.ExpectEgressToNamespace("y/b", "z", Dropped)
+	reachability3.ExpectEgressToNamespace("y/c", "z", Dropped)
+	testStep3 := &TestStep{
+		"Port 80 updated",
+		reachability3,
+		nil,
+		[]metav1.Object{cgBuilder3.Get()},
+		[]int32{80},
+		v1.ProtocolTCP,
+		0,
+		nil,
+	}
+
+	testSteps := []*TestStep{testStep1, testStep2, testStep3}
 	testCase := []*TestCase{
 		{"ACNP nested ClusterGroup create and update", testSteps},
 	}
