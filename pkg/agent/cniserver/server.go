@@ -434,6 +434,7 @@ func (s *CNIServer) CmdAdd(ctx context.Context, request *cnipb.CniCmdRequest) (*
 			return s.ipamFailureResponse(err), nil
 		}
 	}
+
 	klog.Infof("Requested ip addresses for container %v: %v", cniConfig.ContainerId, ipamResult)
 	result.IPs = ipamResult.IPs
 	result.Routes = ipamResult.Routes

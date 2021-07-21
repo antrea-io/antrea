@@ -93,8 +93,9 @@ type Client struct {
 	// markToSNATIP caches marks to SNAT IPs. It's used in Egress feature.
 	markToSNATIP sync.Map
 	// iptablesInitialized is used to notify when iptables initialization is done.
-	iptablesInitialized chan struct{}
-	proxyAll            bool
+	iptablesInitialized   chan struct{}
+	proxyAll              bool
+	connectUplinkToBridge bool
 	// serviceRoutes caches ip routes about Services.
 	serviceRoutes sync.Map
 	// serviceNeighbors caches neighbors.
@@ -112,12 +113,13 @@ type Client struct {
 // NewClient returns a route client.
 // TODO: remove param serviceCIDR after kube-proxy is replaced by Antrea Proxy. This param is not used in this file;
 // leaving it here is to be compatible with the implementation on Windows.
-func NewClient(serviceCIDR *net.IPNet, networkConfig *config.NetworkConfig, noSNAT, proxyAll bool) (*Client, error) {
+func NewClient(serviceCIDR *net.IPNet, networkConfig *config.NetworkConfig, noSNAT, proxyAll, connectUplinkToBridge bool) (*Client, error) {
 	return &Client{
-		serviceCIDR:   serviceCIDR,
-		networkConfig: networkConfig,
-		noSNAT:        noSNAT,
-		proxyAll:      proxyAll,
+		serviceCIDR:           serviceCIDR,
+		networkConfig:         networkConfig,
+		noSNAT:                noSNAT,
+		proxyAll:              proxyAll,
+		connectUplinkToBridge: connectUplinkToBridge,
 	}, nil
 }
 
@@ -492,6 +494,20 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet, podIPSet, nodePortIPSet
 		"-o", c.nodeConfig.GatewayConfig.Name,
 		"-j", iptables.AcceptTarget,
 	}...)
+	if c.connectUplinkToBridge {
+		writeLine(iptablesData, []string{
+			"-A", antreaForwardChain,
+			"-m", "comment", "--comment", `"Antrea: accept packets from local Pods for AntreaIPAM"`,
+			"-i", c.nodeConfig.OVSBridge,
+			"-j", iptables.AcceptTarget,
+		}...)
+		writeLine(iptablesData, []string{
+			"-A", antreaForwardChain,
+			"-m", "comment", "--comment", `"Antrea: accept packets to local Pods for AntreaIPAM"`,
+			"-o", c.nodeConfig.OVSBridge,
+			"-j", iptables.AcceptTarget,
+		}...)
+	}
 	writeLine(iptablesData, "COMMIT")
 
 	writeLine(iptablesData, "*nat")

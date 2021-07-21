@@ -304,18 +304,19 @@ func portToUint16(port int) uint16 {
 }
 
 type client struct {
-	enableProxy        bool
-	proxyAll           bool
-	enableAntreaPolicy bool
-	enableDenyTracking bool
-	enableEgress       bool
-	enableWireGuard    bool
-	roundInfo          types.RoundInfo
-	cookieAllocator    cookie.Allocator
-	bridge             binding.Bridge
-	egressEntryTable   binding.TableIDType
-	ingressEntryTable  binding.TableIDType
-	pipeline           map[binding.TableIDType]binding.Table
+	enableProxy           bool
+	proxyAll              bool
+	enableAntreaPolicy    bool
+	enableDenyTracking    bool
+	enableEgress          bool
+	enableWireGuard       bool
+	connectUplinkToBridge bool
+	roundInfo             types.RoundInfo
+	cookieAllocator       cookie.Allocator
+	bridge                binding.Bridge
+	egressEntryTable      binding.TableIDType
+	ingressEntryTable     binding.TableIDType
+	pipeline              map[binding.TableIDType]binding.Table
 	// Flow caches for corresponding deletions.
 	nodeFlowCache, podFlowCache, serviceFlowCache, snatFlowCache, tfFlowCache *flowCategoryCache
 	// "fixed" flows installed by the agent after initialization and which do not change during
@@ -500,14 +501,38 @@ func (c *client) gatewayClassifierFlow(category cookie.Category) binding.Flow {
 }
 
 // podClassifierFlow generates the flow to mark traffic comes from the podOFPort.
-func (c *client) podClassifierFlow(podOFPort uint32, category cookie.Category) binding.Flow {
+func (c *client) podClassifierFlow(podOFPort uint32, category cookie.Category, isAntreaIPAM bool) binding.Flow {
 	classifierTable := c.pipeline[ClassifierTable]
-	return classifierTable.BuildFlow(priorityLow).
+	flowBuilder := classifierTable.BuildFlow(priorityLow).
 		MatchInPort(podOFPort).
 		Action().LoadRegMark(FromLocalRegMark).
-		Action().GotoTable(classifierTable.GetNext()).
+		Action().GotoTable(classifierTable.GetNext())
+	if isAntreaIPAM {
+		// mark traffic from local AntreaIPAM Pod
+		flowBuilder = flowBuilder.Action().LoadRegMark(AntreaIPAMRegMark)
+	}
+	return flowBuilder.Cookie(c.cookieAllocator.Request(category).Raw()).Done()
+}
+
+// podUplinkClassifierFlow generates the flows to mark traffic from uplink and bridge ports, which are needed when
+// uplink is connected to OVS bridge when AntreaFlexibleIPAM is configured.
+func (c *client) podUplinkClassifierFlows(dstMAC net.HardwareAddr, category cookie.Category) (flows []binding.Flow) {
+	classifierTable := c.pipeline[ClassifierTable]
+	flows = append(flows, classifierTable.BuildFlow(priorityHigh).
+		MatchInPort(config.UplinkOFPort).
+		MatchDstMAC(dstMAC).
+		Action().LoadRegMark(FromUplinkRegMark).
+		Action().GotoTable(serviceHairpinTable).
 		Cookie(c.cookieAllocator.Request(category).Raw()).
-		Done()
+		Done())
+	flows = append(flows, classifierTable.BuildFlow(priorityHigh).
+		MatchInPort(config.BridgeOFPort).
+		MatchDstMAC(dstMAC).
+		Action().LoadRegMark(FromBridgeRegMark).
+		Action().GotoTable(serviceHairpinTable).
+		Cookie(c.cookieAllocator.Request(category).Raw()).
+		Done())
+	return
 }
 
 // connectionTrackFlows generates flows that redirect traffic to ct_zone and handle traffic according to ct_state:
@@ -1166,15 +1191,19 @@ func (c *client) l3FwdFlowToPod(localGatewayMAC net.HardwareAddr, podInterfaceIP
 	var flows []binding.Flow
 	for _, ip := range podInterfaceIPs {
 		ipProtocol := getIPProtocol(ip)
-		flows = append(flows, l3FwdTable.BuildFlow(priorityNormal).MatchProtocol(ipProtocol).
-			MatchRegMark(RewriteMACRegMark).
-			MatchDstIP(ip).
+		flowBuilder := l3FwdTable.BuildFlow(priorityNormal).MatchProtocol(ipProtocol)
+		if !c.connectUplinkToBridge {
+			// dstMAC will be overwritten always for AntreaIPAM
+			flowBuilder = flowBuilder.MatchRegMark(RewriteMACRegMark)
+		}
+		flow := flowBuilder.MatchDstIP(ip).
 			Action().SetSrcMAC(localGatewayMAC).
 			// Rewrite src MAC to local gateway MAC, and rewrite dst MAC to pod MAC
 			Action().SetDstMAC(podInterfaceMAC).
 			Action().GotoTable(l3DecTTLTable).
 			Cookie(c.cookieAllocator.Request(category).Raw()).
-			Done())
+			Done()
+		flows = append(flows, flow)
 	}
 	return flows
 }
@@ -1281,12 +1310,21 @@ func (c *client) l3FwdFlowToRemote(
 func (c *client) l3FwdFlowToRemoteViaGW(
 	localGatewayMAC net.HardwareAddr,
 	peerSubnet net.IPNet,
-	category cookie.Category) binding.Flow {
+	category cookie.Category,
+	isAntreaIPAM bool) binding.Flow {
 	ipProto := getIPProtocol(peerSubnet.IP)
 	l3FwdTable := c.pipeline[l3ForwardingTable]
-	return l3FwdTable.BuildFlow(priorityNormal).MatchProtocol(ipProto).
-		MatchDstIPNet(peerSubnet).
-		Action().SetDstMAC(localGatewayMAC).
+	priority := priorityNormal
+	// AntreaIPAM Pod -> Per-Node IPAM Pod traffic will be sent to remote Gw directly.
+	if isAntreaIPAM {
+		priority = priorityHigh
+	}
+	flowBuilder := l3FwdTable.BuildFlow(priority).MatchProtocol(ipProto).
+		MatchDstIPNet(peerSubnet)
+	if isAntreaIPAM {
+		flowBuilder = flowBuilder.MatchRegMark(AntreaIPAMRegMark)
+	}
+	return flowBuilder.Action().SetDstMAC(localGatewayMAC).
 		Action().GotoTable(l3FwdTable.GetNext()).
 		Cookie(c.cookieAllocator.Request(category).Raw()).
 		Done()
@@ -1305,10 +1343,12 @@ func (c *client) l3FwdServiceDefaultFlowsViaGW(ipProto binding.Protocol, categor
 		//  - NodePort/LoadBalancer/ClusterIP response packets.
 		// The matched packets should leave through Antrea gateway, however, they also enter through Antrea gateway. This
 		// is hairpin traffic.
+		// Skip traffic from AntreaIPAM Pods.
 		c.pipeline[l3ForwardingTable].BuildFlow(priorityLow).MatchProtocol(ipProto).
 			MatchCTMark(ServiceCTMark).
 			MatchCTStateTrk(true).
 			MatchRegMark(RewriteMACRegMark).
+			MatchRegMark(NotAntreaIPAMRegMark).
 			Action().SetDstMAC(gatewayMAC).
 			Action().GotoTable(l3DecTTLTable).
 			Cookie(c.cookieAllocator.Request(category).Raw()).
@@ -1428,14 +1468,24 @@ func (c *client) serviceHairpinRegSetFlows(ipProtocol binding.Protocol) binding.
 }
 
 // gatewayARPSpoofGuardFlow generates the flow to check ARP traffic sent out from the local gateway interface.
-func (c *client) gatewayARPSpoofGuardFlow(gatewayIP net.IP, gatewayMAC net.HardwareAddr, category cookie.Category) binding.Flow {
-	return c.pipeline[spoofGuardTable].BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolARP).
+func (c *client) gatewayARPSpoofGuardFlows(gatewayIP net.IP, gatewayMAC net.HardwareAddr, category cookie.Category) (flows []binding.Flow) {
+	flows = append(flows, c.pipeline[spoofGuardTable].BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolARP).
 		MatchInPort(config.HostGatewayOFPort).
 		MatchARPSha(gatewayMAC).
 		MatchARPSpa(gatewayIP).
 		Action().GotoTable(arpResponderTable).
 		Cookie(c.cookieAllocator.Request(category).Raw()).
-		Done()
+		Done())
+	if c.connectUplinkToBridge {
+		flows = append(flows, c.pipeline[spoofGuardTable].BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolARP).
+			MatchInPort(config.HostGatewayOFPort).
+			MatchARPSha(gatewayMAC).
+			MatchARPSpa(c.nodeConfig.NodeIPv4Addr.IP).
+			Action().GotoTable(arpResponderTable).
+			Cookie(c.cookieAllocator.Request(category).Raw()).
+			Done())
+	}
+	return
 }
 
 // arpSpoofGuardFlow generates the flow to check ARP traffic sent out from local pods interfaces.
@@ -1507,6 +1557,29 @@ func (c *client) serviceNeedLBFlow() binding.Flow {
 		Cookie(c.cookieAllocator.Request(cookie.Service).Raw()).
 		Action().LoadRegMark(EpToSelectRegMark).
 		Done()
+}
+
+// arpResponderLocalFlows generates the ARP responder flow entry that replies request from local Pods for local
+// gateway MAC.
+// Only used in AntreaIPAM to aviod multiple ARP replies from antrea-gw0 and uplink.
+// TODO(gran): use better method to process ARP and support IPv6.
+func (c *client) arpResponderLocalFlows(category cookie.Category) (flows []binding.Flow) {
+	if c.connectUplinkToBridge && c.nodeConfig.GatewayConfig.IPv4 != nil {
+		flows = append(flows, c.pipeline[arpResponderTable].BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolARP).
+			MatchARPOp(1).
+			MatchARPTpa(c.nodeConfig.GatewayConfig.IPv4).
+			Action().Move(binding.NxmFieldSrcMAC, binding.NxmFieldDstMAC).
+			Action().SetSrcMAC(c.nodeConfig.GatewayConfig.MAC).
+			Action().LoadARPOperation(2).
+			Action().Move(binding.NxmFieldARPSha, binding.NxmFieldARPTha).
+			Action().SetARPSha(c.nodeConfig.GatewayConfig.MAC).
+			Action().Move(binding.NxmFieldARPSpa, binding.NxmFieldARPTpa).
+			Action().SetARPSpa(c.nodeConfig.GatewayConfig.IPv4).
+			Action().OutputInPort().
+			Cookie(c.cookieAllocator.Request(category).Raw()).
+			Done())
+	}
+	return
 }
 
 // arpNormalFlow generates the flow to response arp in normal way if no flow in arpResponderTable is matched.
@@ -2504,7 +2577,7 @@ func (c *client) generatePipeline() {
 	if c.enableEgress || runtime.IsWindowsPlatform() {
 		c.pipeline[snatTable] = bridge.CreateTable(snatTable, l2ForwardingCalcTable, binding.TableMissActionNext)
 	}
-	if runtime.IsWindowsPlatform() {
+	if runtime.IsWindowsPlatform() || c.connectUplinkToBridge {
 		c.pipeline[uplinkTable] = bridge.CreateTable(uplinkTable, spoofGuardTable, binding.TableMissActionNone)
 	}
 	if c.enableAntreaPolicy {
@@ -2521,7 +2594,8 @@ func NewClient(bridgeName string,
 	enableAntreaPolicy bool,
 	enableEgress bool,
 	enableDenyTracking bool,
-	proxyAll bool) Client {
+	proxyAll bool,
+	connectUplinkToBridge bool) Client {
 	bridge := binding.NewOFBridge(bridgeName, mgmtAddr)
 	policyCache := cache.NewIndexer(
 		policyConjKeyFunc,
@@ -2534,6 +2608,7 @@ func NewClient(bridgeName string,
 		enableAntreaPolicy:       enableAntreaPolicy,
 		enableDenyTracking:       enableDenyTracking,
 		enableEgress:             enableEgress,
+		connectUplinkToBridge:    connectUplinkToBridge,
 		nodeFlowCache:            newFlowCategoryCache(),
 		podFlowCache:             newFlowCategoryCache(),
 		serviceFlowCache:         newFlowCategoryCache(),

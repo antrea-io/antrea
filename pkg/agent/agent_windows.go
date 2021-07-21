@@ -287,3 +287,7 @@ func GetTransportIPNetDeviceByName(ifaceName string, ovsBridgeName string) (*net
 	}
 	return nil, nil, nil, fmt.Errorf("unable to find local IP and device")
 }
+
+// RestoreOVSBridge returns immediately in Windows.
+// OVS is managed by system in Windows, network config can be retained after Antrea shutdown.
+func (i *Initializer) RestoreOVSBridge() {}

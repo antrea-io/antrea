@@ -24,8 +24,8 @@ func (a *ofFlowAction) Drop() FlowBuilder {
 }
 
 // Output is an action to output packets to the specified ofport.
-func (a *ofFlowAction) Output(port int) FlowBuilder {
-	outputAction := ofctrl.NewOutputPort(uint32(port))
+func (a *ofFlowAction) Output(port uint32) FlowBuilder {
+	outputAction := ofctrl.NewOutputPort(port)
 	a.builder.ApplyAction(outputAction)
 	return a.builder
 }

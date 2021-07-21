@@ -978,7 +978,7 @@ func prepareFlows(table binding.Table) ([]binding.Flow, []*ExpectFlow) {
 			Done(), table.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
 			Cookie(getCookieID()).
 			MatchDstIPNet(*serviceCIDR).
-			Action().Output(int(gwOFPort)).
+			Action().Output(gwOFPort).
 			Done(),
 		table.BuildFlow(priorityNormal).
 			Cookie(getCookieID()).

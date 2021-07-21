@@ -55,6 +55,9 @@ var (
 	DispositionAllowRegMark = binding.NewRegMark(APDispositionField, DispositionAllow)
 	DispositionDropRegMark  = binding.NewRegMark(APDispositionField, DispositionDrop)
 	DispositionRejRegMark   = binding.NewRegMark(APDispositionField, DispositionRej)
+	// reg0[23]: Mark to indicate the packet is from local AntreaIPAM Pod.
+	AntreaIPAMRegMark    = binding.NewOneBitRegMark(0, 23, "AntreaIPAM")
+	NotAntreaIPAMRegMark = binding.NewOneBitZeroRegMark(0, 23, "AntreaIPAM")
 	// reg0[24..27]: Field to indicate the reasons of sending packet to the controller.
 	// Marks in this field include,
 	//   - 0b0001: logging
@@ -72,6 +75,8 @@ var (
 	TargetOFPortField = binding.NewRegField(1, 0, 31, "TargetOFPort")
 	// ToGatewayRegMark marks that the output interface is Antrea gateway.
 	ToGatewayRegMark = binding.NewRegMark(TargetOFPortField, config.HostGatewayOFPort)
+	// ToBridgeRegMark marks that the output interface is OVS bridge.
+	ToBridgeRegMark = binding.NewRegMark(TargetOFPortField, config.BridgeOFPort)
 
 	// reg2(NXM_NX_REG2)
 	// Field to help swap values in two different flow fields in the OpenFlow actions. This field is only used in func

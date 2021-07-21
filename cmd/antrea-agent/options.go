@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net"
+	"strings"
 	"time"
 
 	"github.com/spf13/pflag"
@@ -304,7 +305,7 @@ func (o *Options) validateAntreaIPAMConfig() error {
 			return fmt.Errorf("AntreaIPAM requires 'system' OVSDatapathType, current: %s",
 				o.config.OVSDatapathType)
 		}
-		if o.config.TrafficEncapMode != config.TrafficEncapModeNoEncap.String() {
+		if !strings.EqualFold(o.config.TrafficEncapMode, config.TrafficEncapModeNoEncap.String()) {
 			return fmt.Errorf("AntreaIPAM requires 'noEncap' TrafficEncapMode, current: %s",
 				o.config.TrafficEncapMode)
 		}

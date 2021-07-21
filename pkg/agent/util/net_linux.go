@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
 
 	"github.com/containernetworking/plugins/pkg/ip"
@@ -220,4 +221,18 @@ func ListenLocalSocket(address string) (net.Listener, error) {
 // DialLocalSocket connects to a Unix domain socket.
 func DialLocalSocket(address string) (net.Conn, error) {
 	return dialUnix(address)
+}
+
+// SetAdapterMACAddress set specified MAC address on interface.
+func SetAdapterMACAddress(adapterName string, macConfig *net.HardwareAddr) error {
+	link, err := netlink.LinkByName(adapterName)
+	if err != nil {
+		return err
+	}
+	return netlink.LinkSetHardwareAddr(link, *macConfig)
+}
+
+func DeleteOVSPort(brName, portName string) error {
+	cmd := exec.Command("ovs-vsctl", "--if-exists", "del-port", brName, portName)
+	return cmd.Run()
 }

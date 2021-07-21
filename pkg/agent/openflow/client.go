@@ -447,6 +447,10 @@ func (c *client) InstallNodeFlows(hostname string,
 		if c.enableEgress {
 			flows = append(flows, c.snatSkipNodeFlow(tunnelPeerIP, cookie.Node))
 		}
+		if c.connectUplinkToBridge {
+			// flow to catch traffic from AntreaIPAM Pod to remote Per-Node IPAM Pod
+			flows = append(flows, c.l3FwdFlowToRemoteViaGW(remoteGatewayMAC, *peerPodCIDR, cookie.Node, true))
+		}
 	}
 	if ipsecTunOFPort != 0 {
 		// When IPSec tunnel is enabled, packets received from the remote Node are
@@ -470,14 +474,17 @@ func (c *client) InstallPodFlows(interfaceName string, podInterfaceIPs []net.IP,
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
 
+	podInterfaceIPv4 := util.GetIPv4Addr(podInterfaceIPs)
+	// TODO(gran): support IPv6
+	isAntreaIPAM := c.connectUplinkToBridge && c.nodeConfig.PodIPv4CIDR != nil && !c.nodeConfig.PodIPv4CIDR.Contains(podInterfaceIPv4)
+
 	localGatewayMAC := c.nodeConfig.GatewayConfig.MAC
 	flows := []binding.Flow{
-		c.podClassifierFlow(ofPort, cookie.Pod),
+		c.podClassifierFlow(ofPort, cookie.Pod, isAntreaIPAM),
 		c.l2ForwardCalcFlow(podInterfaceMAC, ofPort, false, cookie.Pod),
 	}
 
 	// Add support for IPv4 ARP responder.
-	podInterfaceIPv4 := util.GetIPv4Addr(podInterfaceIPs)
 	if podInterfaceIPv4 != nil {
 		flows = append(flows, c.arpSpoofGuardFlow(podInterfaceIPv4, podInterfaceMAC, ofPort, cookie.Pod))
 	}
@@ -492,6 +499,12 @@ func (c *client) InstallPodFlows(interfaceName string, podInterfaceIPs []net.IP,
 			c.l3FwdFlowRouteToPod(podInterfaceIPs, podInterfaceMAC, cookie.Pod)...,
 		)
 	}
+
+	if isAntreaIPAM {
+		// Add Pod uplink classifier flows for AntreaIPAM Pods.
+		flows = append(flows, c.podUplinkClassifierFlows(podInterfaceMAC, cookie.Pod)...)
+	}
+
 	return c.addFlows(c.podFlowCache, interfaceName, flows)
 }
 
@@ -678,7 +691,7 @@ func (c *client) InstallGatewayFlows() error {
 	// Add ARP SpoofGuard flow for local gateway interface.
 	if gatewayConfig.IPv4 != nil {
 		gatewayIPs = append(gatewayIPs, gatewayConfig.IPv4)
-		flows = append(flows, c.gatewayARPSpoofGuardFlow(gatewayConfig.IPv4, gatewayConfig.MAC, cookie.Default))
+		flows = append(flows, c.gatewayARPSpoofGuardFlows(gatewayConfig.IPv4, gatewayConfig.MAC, cookie.Default)...)
 	}
 	if gatewayConfig.IPv6 != nil {
 		gatewayIPs = append(gatewayIPs, gatewayConfig.IPv6)
@@ -710,6 +723,9 @@ func (c *client) InstallDefaultTunnelFlows() error {
 func (c *client) initialize() error {
 	if err := c.ofEntryOperations.AddAll(c.defaultFlows()); err != nil {
 		return fmt.Errorf("failed to install default flows: %v", err)
+	}
+	if err := c.ofEntryOperations.AddAll(c.arpResponderLocalFlows(cookie.Default)); err != nil {
+		return fmt.Errorf("failed to install arp responder local flows: %v", err)
 	}
 	if err := c.ofEntryOperations.Add(c.arpNormalFlow(cookie.Default)); err != nil {
 		return fmt.Errorf("failed to install arp normal flow: %v", err)

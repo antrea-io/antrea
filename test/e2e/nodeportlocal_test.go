@@ -71,30 +71,42 @@ func getNPLAnnotation(t *testing.T, data *TestData, r *require.Assertions, testP
 	var testPodIP *PodIPs
 	var found bool
 
-	_, err := data.podWaitFor(defaultTimeout, testPodName, testNamespace, func(pod *corev1.Pod) (bool, error) {
-		var err error
-		if pod.Status.Phase != corev1.PodRunning {
-			return false, nil
-		}
-
-		podIPStrings := sets.NewString(pod.Status.PodIP)
-		for _, podIP := range pod.Status.PodIPs {
-			ipStr := strings.TrimSpace(podIP.IP)
-			if ipStr != "" {
-				podIPStrings.Insert(ipStr)
+	var err error
+	maxRetries := 0
+	if testOptions.enableAntreaIPAM {
+		maxRetries = 4
+	}
+	for i := 0; i <= maxRetries; i++ {
+		_, err = data.podWaitFor(defaultTimeout, testPodName, testNamespace, func(pod *corev1.Pod) (bool, error) {
+			var err error
+			if pod.Status.Phase != corev1.PodRunning {
+				return false, nil
 			}
-		}
 
-		testPodIP, err = parsePodIPs(podIPStrings)
-		if err != nil || testPodIP.ipv4 == nil {
-			return false, nil
-		}
+			podIPStrings := sets.NewString(pod.Status.PodIP)
+			for _, podIP := range pod.Status.PodIPs {
+				ipStr := strings.TrimSpace(podIP.IP)
+				if ipStr != "" {
+					podIPStrings.Insert(ipStr)
+				}
+			}
 
-		ann := pod.GetAnnotations()
-		t.Logf("Got annotations %v for Pod with IP %v", ann, testPodIP.ipv4.String())
-		nplAnn, found = ann[k8s.NPLAnnotationKey]
-		return found, nil
-	})
+			testPodIP, err = parsePodIPs(podIPStrings)
+			if err != nil || testPodIP.ipv4 == nil {
+				return false, nil
+			}
+
+			ann := pod.GetAnnotations()
+			t.Logf("Got annotations %v for Pod with IP %v", ann, testPodIP.ipv4.String())
+			nplAnn, found = ann[k8s.NPLAnnotationKey]
+			return found, nil
+		})
+		if err == nil {
+			break
+		}
+		t.Logf("Got error when get Pod annotations, err=%+v", err)
+		time.Sleep(time.Millisecond * 100)
+	}
 	r.NoError(err, "Poll for Pod check failed")
 	return nplAnn, testPodIP.ipv4.String()
 }

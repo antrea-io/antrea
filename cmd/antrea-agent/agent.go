@@ -101,6 +101,10 @@ func run(o *Options) error {
 	}
 	defer ovsdbConnection.Close()
 
+	// Enable AntreaIPAM will set connectUplinkToBridge to True. Currently only Linux+IPv4 is supported.
+	// AntreaIPAM works with system OVSDatapathType and noEncap, noSNAT mode. Egress feature is not supported.
+	connectUplinkToBridge := features.DefaultFeatureGate.Enabled(features.AntreaIPAM)
+
 	ovsDatapathType := ovsconfig.OVSDatapathType(o.config.OVSDatapathType)
 	ovsBridgeClient := ovsconfig.NewOVSBridge(o.config.OVSBridge, ovsDatapathType, ovsdbConnection)
 	ovsBridgeMgmtAddr := ofconfig.GetMgmtAddress(o.config.OVSRunDir, o.config.OVSBridge)
@@ -109,7 +113,8 @@ func run(o *Options) error {
 		features.DefaultFeatureGate.Enabled(features.AntreaPolicy),
 		features.DefaultFeatureGate.Enabled(features.Egress),
 		features.DefaultFeatureGate.Enabled(features.FlowExporter),
-		o.config.AntreaProxy.ProxyAll)
+		o.config.AntreaProxy.ProxyAll,
+		connectUplinkToBridge)
 
 	_, serviceCIDRNet, _ := net.ParseCIDR(o.config.ServiceCIDR)
 	var serviceCIDRNetv6 *net.IPNet
@@ -135,7 +140,7 @@ func run(o *Options) error {
 	wireguardConfig := &config.WireGuardConfig{
 		Port: o.config.WireGuard.Port,
 	}
-	routeClient, err := route.NewClient(serviceCIDRNet, networkConfig, o.config.NoSNAT, o.config.AntreaProxy.ProxyAll)
+	routeClient, err := route.NewClient(serviceCIDRNet, networkConfig, o.config.NoSNAT, o.config.AntreaProxy.ProxyAll, connectUplinkToBridge)
 	if err != nil {
 		return fmt.Errorf("error creating route client: %v", err)
 	}
@@ -179,8 +184,17 @@ func run(o *Options) error {
 		features.DefaultFeatureGate.Enabled(features.AntreaProxy),
 		o.config.AntreaProxy.ProxyAll,
 		nodePortAddressesIPv4,
-		nodePortAddressesIPv6)
-
+		nodePortAddressesIPv6,
+		connectUplinkToBridge)
+	if connectUplinkToBridge {
+		// Restore network config before shutdown. ovsdbConnection must be alive when restore.
+		defer agentInitializer.RestoreOVSBridge()
+		// remove "flow-restore-wait" config immediately when connectUplinkToBridge=true to enable Node network.
+		// Otherwise cniServer.Initialize will fail.
+		if err := agentInitializer.FlowRestoreComplete(); err != nil {
+			return err
+		}
+	}
 	err = agentInitializer.Initialize()
 	if err != nil {
 		return fmt.Errorf("error initializing agent: %v", err)
@@ -316,8 +330,10 @@ func run(o *Options) error {
 
 	// TODO: we should call this after installing flows for initial node routes
 	//  and initial NetworkPolicies so that no packets will be mishandled.
-	if err := agentInitializer.FlowRestoreComplete(); err != nil {
-		return err
+	if !connectUplinkToBridge {
+		if err := agentInitializer.FlowRestoreComplete(); err != nil {
+			return err
+		}
 	}
 
 	if err := antreaClientProvider.RunOnce(); err != nil {
