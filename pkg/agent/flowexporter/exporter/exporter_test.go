@@ -452,7 +452,7 @@ func runSendFlowRecordTests(t *testing.T, flowExp *flowExporter, isIPv6 bool) {
 			connKey := flowexporter.NewConnectionKey(conn)
 			flowExp.conntrackConnStore.AddOrUpdateConn(conn)
 			flowExp.flowRecords = flowrecords.NewFlowRecords()
-			err := flowExp.flowRecords.AddOrUpdateFlowRecord(connKey, conn)
+			err := flowExp.conntrackConnStore.ForAllConnectionsDo(flowExp.flowRecords.AddOrUpdateFlowRecord)
 			assert.NoError(t, err)
 			flowExp.numDataSetsSent = 0
 
@@ -498,10 +498,12 @@ func runSendFlowRecordTests(t *testing.T, flowExp *flowExporter, isIPv6 bool) {
 				assert.Equal(t, getNumOfConnections(flowExp.denyConnStore), 0)
 			}
 			if tt.isRecordActive && flowexporter.IsConnectionDying(conn) {
+				err = flowExp.conntrackConnStore.ForAllConnectionsDo(flowExp.flowRecords.AddOrUpdateFlowRecord)
+				assert.NoError(t, err)
 				_, recPresent := flowExp.flowRecords.GetFlowRecordFromMap(&connKey)
 				assert.Falsef(t, recPresent, "record should not be in the map")
 				connection, _ := flowExp.conntrackConnStore.GetConnByKey(connKey)
-				assert.True(t, connection.DoneExport)
+				assert.True(t, connection.DyingAndDoneExport)
 			}
 		})
 	}
