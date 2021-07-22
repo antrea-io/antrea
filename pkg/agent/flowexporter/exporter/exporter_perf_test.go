@@ -187,7 +187,7 @@ func addConnsAndGetRecords(connStore *connections.ConntrackConnectionStore) *flo
 			StopTime:                   time.Now(),
 			LastExportTime:             time.Now().Add(-time.Duration(randomNum1)*time.Millisecond - testActiveFlowTimeout),
 			IsPresent:                  true,
-			DoneExport:                 false,
+			DyingAndDoneExport:         false,
 			FlowKey:                    flowKey,
 			OriginalPackets:            100,
 			OriginalBytes:              10,
