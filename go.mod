@@ -20,9 +20,8 @@ require (
 	github.com/contiv/ofnet v0.0.0-00010101000000-000000000000
 	github.com/coreos/go-iptables v0.4.5
 	github.com/elazarl/goproxy v0.0.0-20190911111923-ecfe977594f1 // indirect
-	github.com/evanphx/json-patch v4.5.0+incompatible // indirect
 	github.com/go-openapi/spec v0.19.3
-	github.com/gogo/protobuf v1.3.1
+	github.com/gogo/protobuf v1.3.2
 	github.com/golang/mock v1.4.4
 	github.com/golang/protobuf v1.3.2
 	github.com/google/uuid v1.1.1
@@ -43,23 +42,23 @@ require (
 	golang.org/x/crypto v0.0.0-20200820211705-5c72a883971a
 	golang.org/x/exp v0.0.0-20190312203227-4b39c73a6495
 	golang.org/x/mod v0.4.0
-	golang.org/x/net v0.0.0-20200904194848-62affa334b73
-	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
+	golang.org/x/net v0.0.0-20201110031124-69a78807bb2b
+	golang.org/x/sync v0.0.0-20201020160332-67f06af15bc9
 	golang.org/x/sys v0.0.0-20201201145000-ef89a241ccb3
 	golang.org/x/time v0.0.0-20190308202827-9d24e82272b4
 	google.golang.org/grpc v1.26.0
 	gopkg.in/check.v1 v1.0.0-20200902074654-038fdea0a05b // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
 	gopkg.in/yaml.v2 v2.3.0
-	k8s.io/api v0.18.4
-	k8s.io/apimachinery v0.18.4
-	k8s.io/apiserver v0.18.4
-	k8s.io/client-go v0.18.4
-	k8s.io/component-base v0.18.4
+	k8s.io/api v0.18.19
+	k8s.io/apimachinery v0.18.19
+	k8s.io/apiserver v0.18.19
+	k8s.io/client-go v0.18.19
+	k8s.io/component-base v0.18.19
 	k8s.io/klog v1.0.0
-	k8s.io/kube-aggregator v0.18.4
+	k8s.io/kube-aggregator v0.18.19
 	k8s.io/kube-openapi v0.0.0-20200410145947-61e04a5be9a6
-	k8s.io/kubectl v0.18.4
+	k8s.io/kubectl v0.18.19
 	k8s.io/utils v0.0.0-20200410111917-5770800c2500
 )
 
@@ -76,5 +75,5 @@ replace (
 	// There is an optimization https://github.com/kubernetes/kubernetes/pull/89575 but will only be
 	// available from 1.19.0 and later releases. Use this commit before Antrea bumps up its K8s
 	// dependency version.
-	k8s.io/client-go => github.com/tnqn/client-go v0.18.4-1
+	k8s.io/client-go => github.com/antrea-io/client-go v0.18.19
 )
