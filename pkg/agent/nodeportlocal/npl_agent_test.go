@@ -65,7 +65,6 @@ const (
 	defaultAppSelectorKey = "foo"
 	defaultAppSelectorVal = "test-pod"
 	protocolTCP           = "TCP"
-	protocolUDP           = "UDP"
 )
 
 type fakeSocket struct{}
