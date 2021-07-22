@@ -15,7 +15,7 @@ jobs:
       env:
         DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
         DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
-        OVS_VERSION: 2.14.0
+        OVS_VERSION: 2.14.2
       run: |
         cd build/images/ovs/
         docker pull antrea/openvswitch-debs:$OVS_VERSION || true

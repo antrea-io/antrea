@@ -102,8 +102,8 @@ fi
 E2ETEST_PATH=${WORKDIR}/kubernetes/_output/dockerized/bin/linux/amd64/e2e.test
 
 function pull_antrea_ubuntu_image {
-    harbor_images=("base-ubuntu:2.14.0" "golang:1.15")
-    antrea_images=("antrea/base-ubuntu:2.14.0" "golang:1.15")
+    harbor_images=("base-ubuntu:2.14.2" "golang:1.15")
+    antrea_images=("antrea/base-ubuntu:2.14.2" "golang:1.15")
     for i in {0..4}; do
         docker pull ${DOCKER_REGISTRY}/antrea/${harbor_images[i]} && docker tag ${DOCKER_REGISTRY}/antrea/${harbor_images[i]} ${antrea_images[i]} || true
     done

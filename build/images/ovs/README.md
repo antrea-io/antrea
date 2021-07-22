@@ -19,7 +19,7 @@ directory. For example:
 
 ```bash
 cd build/images/ovs
-OVS_VERSION=2.14.0 ./build.sh --pull --push
+OVS_VERSION=2.14.2 ./build.sh --pull --push
 ```
 
 The image will be pushed to Dockerhub as `antrea/openvswitch:$OVS_VERSION`.

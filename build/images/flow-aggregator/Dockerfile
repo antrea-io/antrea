@@ -6,7 +6,7 @@ COPY . /antrea
 
 RUN make flow-aggregator
 
-FROM antrea/base-ubuntu:2.14.0
+FROM antrea/base-ubuntu:2.14.2
 
 LABEL maintainer="Antrea <projectantrea-dev@googlegroups.com>"
 LABEL description="The docker image for the flow aggregator"

@@ -1,7 +1,7 @@
 FROM ubuntu:20.04 as ovs-debs
 
 # Some patches may not apply cleanly if another version is provided.
-ARG OVS_VERSION=2.14.0
+ARG OVS_VERSION=2.14.2
 
 # Install dependencies for building OVS deb packages
 # We only install python3 packages and we only support building OVS >= 2.13.0.
