@@ -35,8 +35,8 @@ function version_let() { test "$(printf '%s\n' "$@" | sort -V | head -n 1)" == "
 # greater than or equal to
 function version_get() { test "$(printf '%s\n' "$@" | sort -rV | head -n 1)" == "$1"; }
 
-if version_lt "$OVS_VERSION" "2.13.0" || version_gt "$OVS_VERSION" "2.14.0"; then
-    echoerr "OVS_VERSION $OVS_VERSION is not supported (must be >= 2.13.0 and <= 2.14.0)"
+if version_lt "$OVS_VERSION" "2.13.0" || version_get "$OVS_VERSION" "2.15.0"; then
+    echoerr "OVS_VERSION $OVS_VERSION is not supported (must be >= 2.13.0 and < 2.15.0)"
     exit 1
 fi
 
@@ -83,10 +83,10 @@ fi
 # Starting from version 5.7.0, strongSwan no longer supports specifying a configuration parameter
 # with the path delimited by dots in a configuration file. This patch fixes the strongSwan
 # configuration parameters that ovs-monitor-ipsec writes, to comply with the new strongSwan format.
-# After a new OVS release with the fix is available, we should switch to use that OVS release, and
-# remove the workaround to apply the patch here.
-curl https://github.com/openvswitch/ovs/commit/b424becaac58d8cb08fb19ea839be6807d3ed57f.patch | \
-    git apply
+if version_lt "$OVS_VERSION" "2.14.1" ; then
+    curl https://github.com/openvswitch/ovs/commit/b424becaac58d8cb08fb19ea839be6807d3ed57f.patch | \
+        git apply
+fi
 
 # OVS hardcodes the installation path to /usr/lib/python3.7/dist-packages/ but this location
 # does not seem to be in the Python path in Ubuntu 20.04. There may be a better way to do this,
