@@ -1029,9 +1029,9 @@ func (data *TestData) createPodOnNodeInNamespace(name, ns string, nodeName, ctrN
 
 // createBusyboxPodOnNode creates a Pod in the test namespace with a single busybox container. The
 // Pod will be scheduled on the specified Node (if nodeName is not empty).
-func (data *TestData) createBusyboxPodOnNode(name string, ns string, nodeName string, hostNetowrk bool) error {
+func (data *TestData) createBusyboxPodOnNode(name string, ns string, nodeName string, hostNetwork bool) error {
 	sleepDuration := 3600 // seconds
-	return data.createPodOnNode(name, ns, nodeName, busyboxImage, []string{"sleep", strconv.Itoa(sleepDuration)}, nil, nil, nil, hostNetowrk, nil)
+	return data.createPodOnNode(name, ns, nodeName, busyboxImage, []string{"sleep", strconv.Itoa(sleepDuration)}, nil, nil, nil, hostNetwork, nil)
 }
 
 // createNginxPodOnNode creates a Pod in the test namespace with a single nginx container. The
@@ -1394,11 +1394,11 @@ func validatePodIP(podNetworkCIDR string, ip net.IP) (bool, error) {
 func (data *TestData) createService(serviceName string, port, targetPort int32, selector map[string]string, affinity, nodeLocalExternal bool,
 	serviceType corev1.ServiceType, ipFamily *corev1.IPFamily) (*corev1.Service, error) {
 	annotation := make(map[string]string)
-	return data.createServiceWithAnnotations(serviceName, port, targetPort, selector, affinity, nodeLocalExternal, serviceType, ipFamily, annotation)
+	return data.createServiceWithAnnotations(serviceName, port, targetPort, corev1.ProtocolTCP, selector, affinity, serviceType, ipFamily, annotation)
 }
 
 // createService creates a service with Annotation
-func (data *TestData) createServiceWithAnnotations(serviceName string, port, targetPort int32, selector map[string]string, affinity, nodeLocalExternal bool,
+func (data *TestData) createServiceWithAnnotations(serviceName string, port, targetPort int32, protocol corev1.Protocol, selector map[string]string, affinity bool,
 	serviceType corev1.ServiceType, ipFamily *corev1.IPFamily, annotations map[string]string) (*corev1.Service, error) {
 	affinityType := corev1.ServiceAffinityNone
 	var ipFamilies []corev1.IPFamily
@@ -1423,6 +1423,7 @@ func (data *TestData) createServiceWithAnnotations(serviceName string, port, tar
 			Ports: []corev1.ServicePort{{
 				Port:       port,
 				TargetPort: intstr.FromInt(int(targetPort)),
+				Protocol:   protocol,
 			}},
 			Type:       serviceType,
 			Selector:   selector,
@@ -1437,7 +1438,7 @@ func (data *TestData) createServiceWithAnnotations(serviceName string, port, tar
 
 // createNginxClusterIPServiceWithAnnotations creates nginx service with Annotation
 func (data *TestData) createNginxClusterIPServiceWithAnnotations(affinity bool, ipFamily *corev1.IPFamily, annotation map[string]string) (*corev1.Service, error) {
-	return data.createServiceWithAnnotations("nginx", 80, 80, map[string]string{"app": "nginx"}, affinity, false, corev1.ServiceTypeClusterIP, ipFamily, annotation)
+	return data.createServiceWithAnnotations("nginx", 80, 80, corev1.ProtocolTCP, map[string]string{"app": "nginx"}, affinity, corev1.ServiceTypeClusterIP, ipFamily, annotation)
 }
 
 // createNginxClusterIPService creates a nginx service with the given name.
@@ -1683,6 +1684,27 @@ func (data *TestData) runNetcatCommandFromTestPod(podName string, ns string, ser
 			server, port),
 	}
 	stdout, stderr, err := data.runCommandFromPod(ns, podName, busyboxContainerName, cmd)
+	if err == nil {
+		return nil
+	}
+	return fmt.Errorf("nc stdout: <%v>, stderr: <%v>, err: <%v>", stdout, stderr, err)
+}
+
+func (data *TestData) runNetcatCommandFromTestPodWithProtocol(podName string, server string, port int32, protocol string) error {
+	// No parameter required for TCP connections.
+	protocolOption := ""
+	if protocol == "udp" {
+		protocolOption = "-u"
+	}
+	// Retrying several times to avoid flakes as the test may involve DNS (coredns) and Service/Endpoints (kube-proxy).
+	cmd := []string{
+		"/bin/sh",
+		"-c",
+		fmt.Sprintf("for i in $(seq 1 5); do nc -vz -w 4 %s %s %d && exit 0 || sleep 1; done; exit 1",
+			protocolOption, server, port),
+	}
+
+	stdout, stderr, err := data.runCommandFromPod(testNamespace, podName, busyboxContainerName, cmd)
 	if err == nil {
 		return nil
 	}

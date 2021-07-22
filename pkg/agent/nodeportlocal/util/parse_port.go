@@ -20,6 +20,10 @@ import (
 	"strings"
 )
 
+const (
+	delim = ":"
+)
+
 // ParsePortsRange parses port range and checks if valid.
 func ParsePortsRange(portRangeConfig string) (start, end int, err error) {
 	portsRange := strings.Split(portRangeConfig, "-")
@@ -40,4 +44,20 @@ func ParsePortsRange(portRangeConfig string) (start, end int, err error) {
 	}
 
 	return start, end, nil
+}
+
+// BuildPortProto creates a single string using port and protocol separated by a delimiter.
+func BuildPortProto(port, prototcol string) string {
+	return port + delim + strings.ToLower(prototcol)
+}
+
+// ParsePortProto separates out port and protocol from a string generated using BuildPortProto.
+func ParsePortProto(portProtocol string) (int, string, error) {
+	portProtoSlice := strings.Split(portProtocol, delim)
+	if len(portProtoSlice) != 2 {
+		return 0, "", fmt.Errorf("invalid format for PortProto string '%s'", portProtoSlice)
+	}
+	port, err := strconv.Atoi(portProtoSlice[0])
+	protocol := portProtoSlice[1]
+	return port, protocol, err
 }
