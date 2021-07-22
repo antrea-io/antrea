@@ -790,6 +790,15 @@ spec:
                             type: object
                         type: object
                       type: array
+                    toService:
+                      items:
+                        properties:
+                          name:
+                            type: string
+                          namespace:
+                            type: string
+                        type: object
+                      type: array
                   required:
                   - action
                   type: object
@@ -3424,6 +3433,7 @@ rules:
   - pods
   - namespaces
   - services
+  - endpoints
   - configmaps
   verbs:
   - get

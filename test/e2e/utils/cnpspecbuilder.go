@@ -274,6 +274,21 @@ func (b *ClusterNetworkPolicySpecBuilder) AddFQDNRule(fqdn string,
 	return b
 }
 
+func (b *ClusterNetworkPolicySpecBuilder) AddEgressToService(action crdv1alpha1.RuleAction, serviceReferences []*crdv1alpha1.ServiceReference, name string, ruleAppliedToSpecs []ACNPAppliedToSpec) *ClusterNetworkPolicySpecBuilder {
+	var appliedTos []crdv1alpha1.NetworkPolicyPeer
+	for _, at := range ruleAppliedToSpecs {
+		appliedTos = append(appliedTos, b.GetAppliedToPeer(at.PodSelector, at.NSSelector, at.PodSelectorMatchExp, at.NSSelectorMatchExp, at.Group))
+	}
+
+	b.Spec.Egress = append(b.Spec.Egress, crdv1alpha1.Rule{
+		Action:    &action,
+		Name:      name,
+		ToService: serviceReferences,
+		AppliedTo: appliedTos,
+	})
+	return b
+}
+
 // AddEgressDNS mutates the nth policy rule to allow DNS, convenience method
 func (b *ClusterNetworkPolicySpecBuilder) WithEgressDNS() *ClusterNetworkPolicySpecBuilder {
 	protocolUDP := v1.ProtocolUDP

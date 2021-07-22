@@ -17,6 +17,7 @@ rules:
       - pods
       - namespaces
       - services
+      - endpoints
       - configmaps
     verbs:
       - get

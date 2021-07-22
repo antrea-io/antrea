@@ -22,6 +22,7 @@ import (
 
 	admv1 "k8s.io/api/admission/v1"
 	authenticationv1 "k8s.io/api/authentication/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -513,15 +514,49 @@ func (v *antreaPolicyValidator) validatePeers(ingress, egress []crdv1alpha1.Rule
 		return "", true
 	}
 	for _, rule := range ingress {
+		if rule.To != nil || rule.ToService != nil {
+			return "`to` and `toService` can't be used in an ingress rule", false
+		}
+
 		msg, isValid := checkPeers(rule.From)
 		if !isValid {
 			return msg, false
 		}
 	}
 	for _, rule := range egress {
+		if rule.From != nil {
+			return "`from` can't be used in an egress rule", false
+		}
+
+		if rule.ToService != nil && (rule.To != nil || rule.Ports != nil) {
+			return fmt.Sprintf("`toService` can't be used with `to` or `ports`"), false
+		}
+
 		msg, isValid := checkPeers(rule.To)
 		if !isValid {
 			return msg, false
+		}
+
+		msg, isValid = a.validateToService(rule.ToService)
+		if !isValid {
+			return msg, false
+		}
+	}
+	return "", true
+}
+
+func (a *antreaPolicyValidator) validateToService(toService []*crdv1alpha1.ServiceReference) (string, bool) {
+	supportServiceTypeInToService := sets.NewString(
+		string(v1.ServiceTypeClusterIP),
+		string(v1.ServiceTypeNodePort),
+	)
+	for _, eachToService := range toService {
+		service, err := a.networkPolicyController.serviceLister.Services(eachToService.Namespace).Get(eachToService.Name)
+		if err != nil || service == nil {
+			return fmt.Sprintf("the Service referred in `toService` is invalid"), false
+		}
+		if !supportServiceTypeInToService.Has(string(service.Spec.Type)) {
+			return fmt.Sprintf("%s type Service is not supported in `toService`", string(service.Spec.Type)), false
 		}
 	}
 	return "", true
@@ -642,7 +677,7 @@ func (t *tierValidator) deleteValidate(oldObj interface{}, userInfo authenticati
 		return fmt.Sprintf("cannot delete reserved tier %s", oldTier.Name), false
 	}
 	// Tier with existing ACNPs/ANPs cannot be deleted.
-	cnps, err := t.networkPolicyController.cnpInformer.Informer().GetIndexer().ByIndex(TierIndex, oldTier.Name)
+	cnps, err := t.networkPolicyController.acnpInformer.Informer().GetIndexer().ByIndex(TierIndex, oldTier.Name)
 	if err != nil || len(cnps) > 0 {
 		return fmt.Sprintf("tier %s is referenced by %d Antrea ClusterNetworkPolicies", oldTier.Name, len(cnps)), false
 	}
@@ -731,7 +766,7 @@ func (g *groupValidator) updateValidate(curObj, oldObj interface{}, userInfo aut
 func (g *groupValidator) deleteValidate(oldObj interface{}, userInfo authenticationv1.UserInfo) (string, bool) {
 	oldCG := oldObj.(*crdv1alpha2.ClusterGroup)
 	// ClusterGroup with existing ACNP references cannot be deleted.
-	cnps, err := g.networkPolicyController.cnpInformer.Informer().GetIndexer().ByIndex(ClusterGroupIndex, oldCG.Name)
+	cnps, err := g.networkPolicyController.acnpInformer.Informer().GetIndexer().ByIndex(ClusterGroupIndex, oldCG.Name)
 	if err != nil {
 		return fmt.Sprintf("error occurred when retrieving Antrea ClusterNetworkPolicies that refer to ClusterGroup %s: %v", oldCG.Name, err), false
 	}

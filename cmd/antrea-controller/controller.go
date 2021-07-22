@@ -109,6 +109,7 @@ func run(o *Options) error {
 	podInformer := informerFactory.Core().V1().Pods()
 	namespaceInformer := informerFactory.Core().V1().Namespaces()
 	serviceInformer := informerFactory.Core().V1().Services()
+	endpointsInformer := informerFactory.Core().V1().Endpoints()
 	networkPolicyInformer := informerFactory.Networking().V1().NetworkPolicies()
 	nodeInformer := informerFactory.Core().V1().Nodes()
 	cnpInformer := crdInformerFactory.Crd().V1alpha1().ClusterNetworkPolicies()
@@ -152,8 +153,10 @@ func run(o *Options) error {
 	networkPolicyController := networkpolicy.NewNetworkPolicyController(client,
 		crdClient,
 		groupEntityIndex,
+		nodeInformer,
 		namespaceInformer,
 		serviceInformer,
+		endpointsInformer,
 		networkPolicyInformer,
 		cnpInformer,
 		anpInformer,

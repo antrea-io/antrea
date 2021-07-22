@@ -350,14 +350,27 @@ type Rule struct {
 	// +optional
 	Ports []NetworkPolicyPort `json:"ports,omitempty"`
 	// Rule is matched if traffic originates from workloads selected by
-	// this field. If this field is empty, this rule matches all sources.
+	// this field. If this field is empty and this is an ingress rule,
+	// this rule matches all sources.
 	// +optional
 	From []NetworkPolicyPeer `json:"from"`
 	// Rule is matched if traffic is intended for workloads selected by
-	// this field. If this field is empty or missing, this rule matches all
-	// destinations.
+	// this field. This field can't be used with ToService. If this field
+	// and ToService are both empty or missing and this is an egress rule,
+	// this rule matches all destinations.
 	// +optional
 	To []NetworkPolicyPeer `json:"to"`
+	// Rule is matched if traffic is intended for workloads selected by
+	// the Service listed on Service ports. Currently only ClusterIP and
+	// NodePort types Services are supported in this field.
+	// Workloads selected by this field are backend Endpoints+targetPorts
+	// of Services referred in this field. If the ServiceType is NodePort,
+	// workloads selected by this field also include the all Nodes+nodePort.
+	// This field can't be used with To or Ports. If this field and To are
+	// both empty or missing and this is an egress rule, this rule matches
+	// all destinations.
+	// +optional
+	ToService []*ServiceReference `json:"toService"`
 	// Name describes the intention of this rule.
 	// Name should be unique within the policy.
 	// +optional
@@ -455,6 +468,14 @@ type NetworkPolicyPort struct {
 	// It can only be specified when a numerical `port` is specified.
 	// +optional
 	EndPort *int32 `json:"endPort,omitempty"`
+}
+
+// ServiceReference represent reference to a v1.Service.
+type ServiceReference struct {
+	// Name of the Service
+	Name string `json:"name,omitempty"`
+	// Namespace of the Service
+	Namespace string `json:"namespace,omitempty"`
 }
 
 // RuleAction describes the action to be applied on traffic matching a rule.

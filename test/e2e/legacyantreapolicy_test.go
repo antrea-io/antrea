@@ -1084,7 +1084,7 @@ func testLegacyACNPClusterGroupAppliedToPodAdd(t *testing.T, data *TestData) {
 				Pod:    NewPod("z", "j"),
 				Labels: map[string]string{"pod": "j"},
 			},
-			DestPod: CustomPod{
+			DestPod: &CustomPod{
 				Pod:    NewPod("x", "j"),
 				Labels: map[string]string{"pod": "j"},
 			},
@@ -1129,7 +1129,7 @@ func testLegacyACNPClusterGroupRefRulePodAdd(t *testing.T, data *TestData) {
 				Pod:    NewPod("x", "k"),
 				Labels: map[string]string{"pod": "k"},
 			},
-			DestPod: CustomPod{
+			DestPod: &CustomPod{
 				Pod:    NewPod("z", "k"),
 				Labels: map[string]string{"pod": "k"},
 			},
@@ -1844,8 +1844,8 @@ func testLegacyAppliedToPerRule(t *testing.T) {
 }
 
 func testLegacyACNPClusterGroupServiceRefCreateAndUpdate(t *testing.T, data *TestData) {
-	svc1 := k8sUtils.BuildService("svc1", "x", 80, 80, map[string]string{"app": "a"}, nil)
-	svc2 := k8sUtils.BuildService("svc2", "y", 80, 80, map[string]string{"app": "b"}, nil)
+	svc1 := k8sUtils.BuildService("svc1", "x", 80, 80, map[string]string{"app": "a"}, nil, nil)
+	svc2 := k8sUtils.BuildService("svc2", "y", 80, 80, map[string]string{"app": "b"}, nil, nil)
 
 	cg1Name, cg2Name := "cg-svc1", "cg-svc2"
 	cgBuilder1 := &ClusterGroupV1Alpha2SpecBuilder{}
@@ -1873,8 +1873,8 @@ func testLegacyACNPClusterGroupServiceRefCreateAndUpdate(t *testing.T, data *Tes
 	}
 
 	// Test update selector of Service referred in cg-svc1, and update serviceReference of cg-svc2.
-	svc1Updated := k8sUtils.BuildService("svc1", "x", 80, 80, map[string]string{"app": "b"}, nil)
-	svc3 := k8sUtils.BuildService("svc3", "y", 80, 80, map[string]string{"app": "a"}, nil)
+	svc1Updated := k8sUtils.BuildService("svc1", "x", 80, 80, map[string]string{"app": "b"}, nil, nil)
+	svc3 := k8sUtils.BuildService("svc3", "y", 80, 80, map[string]string{"app": "a"}, nil, nil)
 	cgBuilder2Updated := cgBuilder2.SetServiceReference("y", "svc3")
 	cp := []*CustomProbe{
 		{
@@ -1882,7 +1882,7 @@ func testLegacyACNPClusterGroupServiceRefCreateAndUpdate(t *testing.T, data *Tes
 				Pod:    NewPod("y", "test-add-pod-svc3"),
 				Labels: map[string]string{"pod": "test-add-pod-svc3", "app": "a"},
 			},
-			DestPod: CustomPod{
+			DestPod: &CustomPod{
 				Pod:    NewPod("x", "test-add-pod-svc1"),
 				Labels: map[string]string{"pod": "test-add-pod-svc1", "app": "b"},
 			},
@@ -1931,7 +1931,7 @@ func testLegacyACNPClusterGroupServiceRefCreateAndUpdate(t *testing.T, data *Tes
 }
 
 func testLegacyACNPNestedClusterGroupCreateAndUpdate(t *testing.T, data *TestData) {
-	svc1 := k8sUtils.BuildService("svc1", "x", 80, 80, map[string]string{"app": "a"}, nil)
+	svc1 := k8sUtils.BuildService("svc1", "x", 80, 80, map[string]string{"app": "a"}, nil, nil)
 	cg1Name, cg2Name := "cg-svc-x-a", "cg-select-y-b"
 	cgBuilder1 := &ClusterGroupV1Alpha2SpecBuilder{}
 	cgBuilder1 = cgBuilder1.SetName(cg1Name).SetServiceReference("x", "svc1")
@@ -1983,7 +1983,7 @@ func testLegacyACNPNestedClusterGroupCreateAndUpdate(t *testing.T, data *TestDat
 				Pod:    NewPod("x", "test-add-pod-svc1"),
 				Labels: map[string]string{"pod": "test-add-pod-svc1", "app": "a"},
 			},
-			DestPod: CustomPod{
+			DestPod: &CustomPod{
 				Pod:    NewPod("z", "test-add-pod-ns-z"),
 				Labels: map[string]string{"pod": "test-add-pod-ns-z"},
 			},

@@ -108,7 +108,7 @@ func (n *NetworkPolicyController) deleteCNP(old interface{}) {
 	defer n.heartbeat("deleteCNP")
 	klog.Infof("Processing ClusterNetworkPolicy %s DELETE event", cnp.Name)
 	key := internalNetworkPolicyKeyFunc(cnp)
-	// Lock access to internal NetworkPolicy store so that concurrent reprocessCNP
+	// Lock access to internal NetworkPolicy store so that concurrent reprocessACNP
 	// calls will not re-process and add a CNP that has already been deleted.
 	n.internalNetworkPolicyMutex.Lock()
 	oldInternalNPObj, _, _ := n.internalNetworkPolicyStore.Get(key)
@@ -126,18 +126,21 @@ func (n *NetworkPolicyController) deleteCNP(old interface{}) {
 	n.deleteDereferencedAddressGroups(oldInternalNP)
 }
 
-// reprocessCNP is triggered by Namespace ADD/UPDATE/DELETE events when they impact the
-// per-namespace rules of a CNP.
-func (n *NetworkPolicyController) reprocessCNP(cnp *crdv1alpha1.ClusterNetworkPolicy) {
+// reprocessACNP is triggered by
+// 1. Namespace ADD/UPDATE/DELETE events when they impact the per-namespace rules of a ACNP
+// 2. Service ADD/UPDATE/DELETE events when they impact the toService rules of a ACNP
+// 3. Endpoints ADD/UPDATE/DELETE events when they impact the toService rules of a ACNP
+// 3. Nodes ADD/UPDATE/DELETE events when they impact the toService rules of a ACNP
+func (n *NetworkPolicyController) reprocessACNP(cnp *crdv1alpha1.ClusterNetworkPolicy) {
 	key := internalNetworkPolicyKeyFunc(cnp)
 	n.internalNetworkPolicyMutex.Lock()
 	oldInternalNPObj, exist, _ := n.internalNetworkPolicyStore.Get(key)
 	if !exist {
-		klog.V(2).Infof("Cannot find the original internal NetworkPolicy, skip reprocessCNP")
+		klog.V(2).Infof("Cannot find the original internal NetworkPolicy, skip reprocessACNP")
 		n.internalNetworkPolicyMutex.Unlock()
 		return
 	}
-	defer n.heartbeat("reprocessCNP")
+	defer n.heartbeat("reprocessACNP")
 	klog.Infof("Processing ClusterNetworkPolicy %s REPROCESS event", cnp.Name)
 	oldInternalNP := oldInternalNPObj.(*antreatypes.NetworkPolicy)
 	curInternalNP := n.processClusterNetworkPolicy(cnp)
@@ -195,8 +198,8 @@ func (n *NetworkPolicyController) addNamespace(obj interface{}) {
 	klog.V(2).Infof("Processing Namespace %s ADD event, labels: %v", namespace.Name, namespace.Labels)
 	affectedACNPs := n.filterPerNamespaceRuleACNPsByNSLabels(namespace.Labels)
 	for cnpName := range affectedACNPs {
-		if cnp, err := n.cnpLister.Get(cnpName); err == nil {
-			n.reprocessCNP(cnp)
+		if cnp, err := n.acnpLister.Get(cnpName); err == nil {
+			n.reprocessACNP(cnp)
 		}
 	}
 }
@@ -212,8 +215,8 @@ func (n *NetworkPolicyController) updateNamespace(oldObj, curObj interface{}) {
 	affectedACNPsByCurLabels := n.filterPerNamespaceRuleACNPsByNSLabels(curLabelSet)
 	affectedACNPs := utilsets.SymmetricDifferenceString(affectedACNPsByOldLabels, affectedACNPsByCurLabels)
 	for cnpName := range affectedACNPs {
-		if cnp, err := n.cnpLister.Get(cnpName); err == nil {
-			n.reprocessCNP(cnp)
+		if cnp, err := n.acnpLister.Get(cnpName); err == nil {
+			n.reprocessACNP(cnp)
 		}
 	}
 }
@@ -238,12 +241,12 @@ func (n *NetworkPolicyController) deleteNamespace(old interface{}) {
 	klog.V(2).Infof("Processing Namespace %s DELETE event, labels: %v", namespace.Name, namespace.Labels)
 	affectedACNPs := n.filterPerNamespaceRuleACNPsByNSLabels(labels.Set(namespace.Labels))
 	for _, cnpName := range affectedACNPs.List() {
-		cnp, err := n.cnpLister.Get(cnpName)
+		cnp, err := n.acnpLister.Get(cnpName)
 		if err != nil {
 			klog.Errorf("Error getting Antrea ClusterNetworkPolicy %s", cnpName)
 			continue
 		}
-		n.reprocessCNP(cnp)
+		n.reprocessACNP(cnp)
 	}
 }
 
@@ -255,7 +258,7 @@ func (n *NetworkPolicyController) deleteNamespace(old interface{}) {
 // of an UPDATE event.
 func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *crdv1alpha1.ClusterNetworkPolicy) *antreatypes.NetworkPolicy {
 	hasPerNamespaceRule := hasPerNamespaceRule(cnp)
-	// If one of the ACNP rule is a per-namespace rule (a peer in that rule has namspaces.Match set
+	// If one of the ACNP rule is a per-namespace rule (a peer in that rule has namespaces.Match set
 	// to Self), the policy will need to be converted to appliedTo per rule policy, as the appliedTo
 	// will be different for rules created for each namespace.
 	appliedToPerRule := len(cnp.Spec.AppliedTo) == 0 || hasPerNamespaceRule
@@ -288,9 +291,8 @@ func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *crdv1alpha1.C
 	var rules []controlplane.NetworkPolicyRule
 	processRules := func(cnpRules []crdv1alpha1.Rule, direction controlplane.Direction) {
 		for idx, cnpRule := range cnpRules {
-			services, namedPortExists := toAntreaServicesForCRD(cnpRule.Ports)
-			clusterPeers, perNSPeers := splitPeersByScope(cnpRule, direction)
-			addRule := func(peer *controlplane.NetworkPolicyPeer, dir controlplane.Direction, ruleAppliedTos []string) {
+
+			addRule := func(peer *controlplane.NetworkPolicyPeer, services []controlplane.Service, dir controlplane.Direction, ruleAppliedTos []string) {
 				rule := controlplane.NetworkPolicyRule{
 					Direction:       dir,
 					Services:        services,
@@ -300,44 +302,85 @@ func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *crdv1alpha1.C
 					EnableLogging:   cnpRule.EnableLogging,
 					AppliedToGroups: ruleAppliedTos,
 				}
-				if dir == controlplane.DirectionIn {
+				if dir == controlplane.DirectionIn && peer != nil {
 					rule.From = *peer
-				} else if dir == controlplane.DirectionOut {
+				} else if dir == controlplane.DirectionOut && peer != nil {
 					rule.To = *peer
 				}
 				rules = append(rules, rule)
 			}
-			// When a rule's NetworkPolicyPeer is empty, a cluster level rule should be created
-			// with an Antrea peer matching all addresses.
-			if len(clusterPeers) > 0 || len(perNSPeers) == 0 {
+
+			if cnpRule.ToService == nil {
+				services, namedPortExists := toAntreaServicesForCRD(cnpRule.Ports)
+				clusterPeers, perNSPeers := splitPeersByScope(cnpRule, direction)
+
+				// When a rule's NetworkPolicyPeer is empty, a cluster level rule should be created
+				// with an Antrea peer matching all addresses.
+				if len(clusterPeers) > 0 || len(perNSPeers) == 0 {
+					ruleAppliedTos := cnpRule.AppliedTo
+					// For ACNPs that have per-namespace rules, cluster-level rules will be created with appliedTo
+					// set as the spec appliedTo for each rule.
+					if appliedToPerRule && len(cnp.Spec.AppliedTo) > 0 {
+						ruleAppliedTos = cnp.Spec.AppliedTo
+					}
+					ruleATGNames := n.processClusterAppliedTo(ruleAppliedTos, atgNamesSet)
+					klog.V(4).Infof("Adding a new cluster-level rule with appliedTos %v for %s", ruleATGNames, cnp.Name)
+					addRule(n.toAntreaPeerForCRD(clusterPeers, cnp, direction, namedPortExists), services, direction, ruleATGNames)
+				}
+				if len(perNSPeers) > 0 {
+					if len(cnp.Spec.AppliedTo) > 0 {
+						// Create a rule for each affected Namespace of appliedTo at spec level
+						for i := range clusterAppliedToAffectedNS {
+							klog.V(4).Infof("Adding a new per-namespace rule with appliedTo %v for rule %d of %s", clusterAppliedToAffectedNS[i], idx, cnp.Name)
+							addRule(n.toNamespacedPeerForCRD(perNSPeers, clusterAppliedToAffectedNS[i]), services, direction, []string{atgForNamespace[i]})
+						}
+					} else {
+						// Create a rule for each affected Namespace of appliedTo at rule level
+						for _, at := range cnpRule.AppliedTo {
+							affectedNS, selectors := n.getAffectedNamespacesForAppliedTo(at)
+							affectedNamespaceSelectors = append(affectedNamespaceSelectors, selectors...)
+							for _, ns := range affectedNS {
+								atg := n.createAppliedToGroup(ns, at.PodSelector, nil, at.ExternalEntitySelector)
+								atgNamesSet.Insert(atg)
+								klog.V(4).Infof("Adding a new per-namespace rule with appliedTo %v for rule %d of %s", atg, idx, cnp.Name)
+								addRule(n.toNamespacedPeerForCRD(perNSPeers, ns), services, direction, []string{atg})
+							}
+						}
+					}
+				}
+				klog.Infof("Checking cluster or perNSPeers: cluster:%d, perNS: %d", len(clusterPeers), len(perNSPeers))
+			} else {
+				// Handle toService rules.
 				ruleAppliedTos := cnpRule.AppliedTo
-				// For ACNPs that have per-namespace rules, cluster-level rules will be created with appliedTo
-				// set as the spec appliedTo for each rule.
-				if appliedToPerRule && len(cnp.Spec.AppliedTo) > 0 {
+				if len(cnp.Spec.AppliedTo) > 0 {
 					ruleAppliedTos = cnp.Spec.AppliedTo
 				}
 				ruleATGNames := n.processClusterAppliedTo(ruleAppliedTos, atgNamesSet)
-				klog.V(4).Infof("Adding a new cluster-level rule with appliedTos %v for %s", ruleATGNames, cnp.Name)
-				addRule(n.toAntreaPeerForCRD(clusterPeers, cnp, direction, namedPortExists), direction, ruleATGNames)
-			}
-			if len(perNSPeers) > 0 {
-				if len(cnp.Spec.AppliedTo) > 0 {
-					// Create a rule for each affected Namespace of appliedTo at spec level
-					for i := range clusterAppliedToAffectedNS {
-						klog.V(4).Infof("Adding a new per-namespace rule with appliedTo %v for rule %d of %s", clusterAppliedToAffectedNS[i], idx, cnp.Name)
-						addRule(n.toNamespacedPeerForCRD(perNSPeers, clusterAppliedToAffectedNS[i]), direction, []string{atgForNamespace[i]})
+				// Because each ServiceReference refer to their own combination of ports and
+				// Pods/IPBlocks，we need to add an individual rule for each ServiceReference.
+				for _, eachService := range cnpRule.ToService {
+					service, err := n.serviceLister.Services(eachService.Namespace).Get(eachService.Name)
+					if err != nil || service == nil || (service.Spec.Type != v1.ServiceTypeClusterIP && service.Spec.Type != v1.ServiceTypeNodePort) {
+						klog.V(2).Infof("Invalid Service to process for toService rule: %s/%s", eachService.Namespace, eachService.Name)
+						continue
 					}
-				} else {
-					// Create a rule for each affected Namespace of appliedTo at rule level
-					for _, at := range cnpRule.AppliedTo {
-						affectedNS, selectors := n.getAffectedNamespacesForAppliedTo(at)
-						affectedNamespaceSelectors = append(affectedNamespaceSelectors, selectors...)
-						for _, ns := range affectedNS {
-							atg := n.createAppliedToGroup(ns, at.PodSelector, nil, at.ExternalEntitySelector)
-							atgNamesSet.Insert(atg)
-							klog.V(4).Infof("Adding a new per-namespace rule with appliedTo %v for rule %d of %s", atg, idx, cnp.Name)
-							addRule(n.toNamespacedPeerForCRD(perNSPeers, ns), direction, []string{atg})
+					antreaServices, antreaPeers, err := n.toAntreaServicesAndPeersFromService(service)
+					if err != nil {
+						continue
+					}
+					klog.V(4).Infof("Adding a new cluster-level rule with appliedTos %v for %s", ruleATGNames, cnp.Name)
+					addRule(antreaPeers, antreaServices, direction, ruleATGNames)
+
+					// For NodePort Service, the Service load balance won't happen before the traffic
+					// hit the Node port. So add additional rules to control the traffic to NodePort as
+					// a workaround.
+					if service.Spec.Type == v1.ServiceTypeNodePort {
+						antreaServices, antreaPeers, err = n.toAntreaServicesAndPeersFromNodePortService(service)
+						if err != nil {
+							continue
 						}
+						klog.V(4).Infof("Adding a new cluster-level rule with appliedTos %v for %s", ruleATGNames, cnp.Name)
+						addRule(antreaPeers, antreaServices, direction, ruleATGNames)
 					}
 				}
 			}

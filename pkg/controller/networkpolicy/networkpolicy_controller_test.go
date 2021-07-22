@@ -71,6 +71,7 @@ type networkPolicyController struct {
 	*NetworkPolicyController
 	namespaceStore             cache.Store
 	serviceStore               cache.Store
+	endpointsStore             cache.Store
 	networkPolicyStore         cache.Store
 	cnpStore                   cache.Store
 	tierStore                  cache.Store
@@ -102,8 +103,10 @@ func newController(objects ...runtime.Object) (*fake.Clientset, *networkPolicyCo
 	npController := NewNetworkPolicyController(client,
 		crdClient,
 		groupEntityIndex,
+		informerFactory.Core().V1().Nodes(),
 		informerFactory.Core().V1().Namespaces(),
 		informerFactory.Core().V1().Services(),
+		informerFactory.Core().V1().Endpoints(),
 		informerFactory.Networking().V1().NetworkPolicies(),
 		crdInformerFactory.Crd().V1alpha1().ClusterNetworkPolicies(),
 		crdInformerFactory.Crd().V1alpha1().NetworkPolicies(),
@@ -116,7 +119,7 @@ func newController(objects ...runtime.Object) (*fake.Clientset, *networkPolicyCo
 	npController.namespaceLister = informerFactory.Core().V1().Namespaces().Lister()
 	npController.namespaceListerSynced = alwaysReady
 	npController.networkPolicyListerSynced = alwaysReady
-	npController.cnpListerSynced = alwaysReady
+	npController.acnpListerSynced = alwaysReady
 	npController.tierLister = crdInformerFactory.Crd().V1alpha1().Tiers().Lister()
 	npController.tierListerSynced = alwaysReady
 	npController.cgInformer = cgInformer
@@ -128,6 +131,7 @@ func newController(objects ...runtime.Object) (*fake.Clientset, *networkPolicyCo
 		npController,
 		informerFactory.Core().V1().Namespaces().Informer().GetStore(),
 		informerFactory.Core().V1().Services().Informer().GetStore(),
+		informerFactory.Core().V1().Endpoints().Informer().GetStore(),
 		informerFactory.Networking().V1().NetworkPolicies().Informer().GetStore(),
 		crdInformerFactory.Crd().V1alpha1().ClusterNetworkPolicies().Informer().GetStore(),
 		crdInformerFactory.Crd().V1alpha1().Tiers().Informer().GetStore(),
@@ -175,6 +179,7 @@ func newControllerWithoutEventHandler(objects ...runtime.Object) (*fake.Clientse
 		npController,
 		informerFactory.Core().V1().Namespaces().Informer().GetStore(),
 		informerFactory.Core().V1().Services().Informer().GetStore(),
+		informerFactory.Core().V1().Endpoints().Informer().GetStore(),
 		informerFactory.Networking().V1().NetworkPolicies().Informer().GetStore(),
 		crdInformerFactory.Crd().V1alpha1().ClusterNetworkPolicies().Informer().GetStore(),
 		crdInformerFactory.Crd().V1alpha1().Tiers().Informer().GetStore(),

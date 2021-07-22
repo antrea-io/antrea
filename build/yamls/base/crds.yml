@@ -991,6 +991,15 @@ spec:
                               type: string
                             fqdn:
                               type: string
+                      toService:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            name:
+                              type: string
+                            namespace:
+                              type: string
                       name:
                         type: string
                       enableLogging:
