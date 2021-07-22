@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -33,6 +34,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/informers"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
@@ -240,6 +242,10 @@ func setUp(t *testing.T, tc *testConfig, objects ...runtime.Object) *testData {
 	return data
 }
 
+func protocolToString(p corev1.Protocol) string {
+	return strings.ToLower(string(p))
+}
+
 func setUpWithTestServiceAndPod(t *testing.T, tc *testConfig) (*testData, *corev1.Service, *corev1.Pod) {
 	testSvc := getTestSvc()
 	testPod := getTestPod()
@@ -257,7 +263,7 @@ func setUpWithTestServiceAndPod(t *testing.T, tc *testConfig) (*testData, *corev
 	value, err := testData.pollForPodAnnotation(testPod.Name, true)
 	require.NoError(t, err, "Poll for annotation check failed")
 	testData.checkAnnotationValue(value, defaultPort)
-	require.True(t, testData.portTable.RuleExists(defaultPodIP, defaultPort, protocolTCP))
+	require.True(t, testData.portTable.RuleExists(defaultPodIP, defaultPort, protocolToString(protocolTCP)))
 
 	return testData, testSvc, testPod
 }
@@ -296,12 +302,17 @@ func (t *testData) checkAnnotationValue(value string, podPort ...int) []nplk8s.N
 	var nplValue []nplk8s.NPLAnnotation
 	err := json.Unmarshal([]byte(value), &nplValue)
 	require.NoError(t, err, "Error when unmarshalling NPL annotation")
-
-	require.Equal(t, len(podPort), len(nplValue))
-	for idx, port := range podPort {
-		assert.Equal(t, defaultHostIP, nplValue[idx].NodeIP)
-		assert.Equal(t, port, nplValue[idx].PodPort)
+	podPortSet := sets.NewInt(podPort...)
+	require.Equal(t, podPortSet.Len(), len(nplValue))
+	for port := range podPortSet {
+		for _, npl := range nplValue {
+			if port == npl.PodPort {
+				podPortSet.Delete(port)
+				assert.Equal(t, defaultHostIP, npl.NodeIP)
+			}
+		}
 	}
+	require.Empty(t, podPortSet.Len())
 	return nplValue
 }
 
@@ -336,7 +347,7 @@ func TestSvcNamespaceUpdate(t *testing.T) {
 	// Check that annotation and the rule are removed.
 	_, err = testData.pollForPodAnnotation(testPodDefaultNS.Name, false)
 	require.NoError(t, err, "Poll for annotation check failed")
-	assert.False(t, testData.portTable.RuleExists(defaultPodIP, defaultPort, protocolTCP))
+	assert.False(t, testData.portTable.RuleExists(defaultPodIP, defaultPort, protocolToString(protocolTCP)))
 }
 
 // TestSvcTypeUpdate updates Service type from ClusterIP to NodePort
@@ -352,7 +363,7 @@ func TestSvcTypeUpdate(t *testing.T) {
 	// Check that annotation and the rule are removed.
 	_, err := testData.pollForPodAnnotation(testPod.Name, false)
 	require.NoError(t, err, "Poll for annotation check failed")
-	assert.False(t, testData.portTable.RuleExists(defaultPodIP, defaultPort, protocolTCP))
+	assert.False(t, testData.portTable.RuleExists(defaultPodIP, defaultPort, protocolToString(protocolTCP)))
 
 	// Update Service type to ClusterIP.
 	testSvc.Spec.Type = "ClusterIP"
@@ -360,7 +371,7 @@ func TestSvcTypeUpdate(t *testing.T) {
 
 	_, err = testData.pollForPodAnnotation(testPod.Name, true)
 	require.NoError(t, err, "Poll for annotation check failed")
-	assert.True(t, testData.portTable.RuleExists(defaultPodIP, defaultPort, protocolTCP))
+	assert.True(t, testData.portTable.RuleExists(defaultPodIP, defaultPort, protocolToString(protocolTCP)))
 }
 
 // TestSvcUpdateAnnotation updates the Service spec to disabled NPL. It then verifies that the Pod's
@@ -376,7 +387,7 @@ func TestSvcUpdateAnnotation(t *testing.T) {
 	// Check that annotation and the rule is removed.
 	_, err := testData.pollForPodAnnotation(testPod.Name, false)
 	require.NoError(t, err, "Poll for annotation check failed")
-	assert.False(t, testData.portTable.RuleExists(defaultPodIP, defaultPort, protocolTCP))
+	assert.False(t, testData.portTable.RuleExists(defaultPodIP, defaultPort, protocolToString(protocolTCP)))
 
 	// Enable NPL back.
 	testSvc.Annotations = map[string]string{nplk8s.NPLEnabledAnnotationKey: "true"}
@@ -384,7 +395,7 @@ func TestSvcUpdateAnnotation(t *testing.T) {
 
 	_, err = testData.pollForPodAnnotation(testPod.Name, true)
 	require.NoError(t, err, "Poll for annotation check failed")
-	assert.True(t, testData.portTable.RuleExists(defaultPodIP, defaultPort, protocolTCP))
+	assert.True(t, testData.portTable.RuleExists(defaultPodIP, defaultPort, protocolToString(protocolTCP)))
 }
 
 // TestSvcRemoveAnnotation is the same as TestSvcUpdateAnnotation, but it deletes the NPL enabled
@@ -398,7 +409,7 @@ func TestSvcRemoveAnnotation(t *testing.T) {
 
 	_, err := testData.pollForPodAnnotation(testPod.Name, false)
 	require.NoError(t, err, "Poll for annotation check failed")
-	assert.False(t, testData.portTable.RuleExists(defaultPodIP, defaultPort, protocolTCP))
+	assert.False(t, testData.portTable.RuleExists(defaultPodIP, defaultPort, protocolToString(protocolTCP)))
 }
 
 // TestSvcUpdateSelector updates the Service selector so that it no longer selects the Pod, and
@@ -412,14 +423,14 @@ func TestSvcUpdateSelector(t *testing.T) {
 
 	_, err := testData.pollForPodAnnotation(testPod.Name, false)
 	require.NoError(t, err, "Poll for annotation check failed")
-	assert.False(t, testData.portTable.RuleExists(defaultPodIP, defaultPort, protocolTCP))
+	assert.False(t, testData.portTable.RuleExists(defaultPodIP, defaultPort, protocolToString(protocolTCP)))
 
 	testSvc.Spec.Selector = map[string]string{defaultAppSelectorKey: defaultAppSelectorVal}
 	testData.updateServiceOrFail(testSvc)
 
 	_, err = testData.pollForPodAnnotation(testPod.Name, true)
 	require.NoError(t, err, "Poll for annotation check failed")
-	assert.True(t, testData.portTable.RuleExists(defaultPodIP, defaultPort, protocolTCP))
+	assert.True(t, testData.portTable.RuleExists(defaultPodIP, defaultPort, protocolToString(protocolTCP)))
 }
 
 // TestPodUpdateSelectorLabel updates the Pod's labels so that the Pod is no longer selected by the
@@ -434,7 +445,7 @@ func TestPodUpdateSelectorLabel(t *testing.T) {
 
 	_, err := testData.pollForPodAnnotation(testPod.Name, false)
 	require.NoError(t, err, "Poll for annotation check failed")
-	assert.False(t, testData.portTable.RuleExists(defaultPodIP, defaultPort, protocolTCP))
+	assert.False(t, testData.portTable.RuleExists(defaultPodIP, defaultPort, protocolToString(protocolTCP)))
 }
 
 // TestSvcDelete deletes the Service. It then verifies that the Pod's NPL annotation is removed and
@@ -449,7 +460,7 @@ func TestSvcDelete(t *testing.T) {
 
 	_, err = testData.pollForPodAnnotation(testPod.Name, false)
 	require.NoError(t, err, "Poll for annotation check failed")
-	assert.False(t, testData.portTable.RuleExists(defaultPodIP, defaultPort, protocolTCP))
+	assert.False(t, testData.portTable.RuleExists(defaultPodIP, defaultPort, protocolToString(protocolTCP)))
 }
 
 // TestPodDelete verifies that when a Pod gets deleted, the corresponding entry gets deleted from
@@ -463,7 +474,7 @@ func TestPodDelete(t *testing.T) {
 	t.Logf("Successfully deleted Pod: %s", testPod.Name)
 
 	err = wait.Poll(time.Second, 20*time.Second, func() (bool, error) {
-		return !testData.portTable.RuleExists(defaultPodIP, defaultPort, protocolTCP), nil
+		return !testData.portTable.RuleExists(defaultPodIP, defaultPort, protocolToString(protocolTCP)), nil
 	})
 	assert.NoError(t, err, "Error when polling for port table update")
 }
@@ -481,8 +492,8 @@ func TestAddMultiPortPodSvc(t *testing.T) {
 	require.NoError(t, err, "Poll for annotation check failed")
 	nplData := testData.checkAnnotationValue(value, defaultPort, newPort)
 	assert.NotEqual(t, nplData[0].NodePort, nplData[1].NodePort)
-	assert.True(t, testData.portTable.RuleExists(defaultPodIP, defaultPort, protocolTCP))
-	assert.True(t, testData.portTable.RuleExists(defaultPodIP, newPort, protocolTCP))
+	assert.True(t, testData.portTable.RuleExists(defaultPodIP, defaultPort, protocolToString(protocolTCP)))
+	assert.True(t, testData.portTable.RuleExists(defaultPodIP, newPort, protocolToString(protocolTCP)))
 }
 
 // TestPodAddMultiPort creates a Pod with multiple ports and a Service with only one target port.
@@ -508,8 +519,8 @@ func TestAddMultiPortPodSinglePortSvc(t *testing.T) {
 	require.NoError(t, err, "Poll for annotation check failed")
 	nplData := testData.checkAnnotationValue(value, defaultPort)
 	assert.Len(t, nplData, 1)
-	assert.True(t, testData.portTable.RuleExists(defaultPodIP, defaultPort, protocolTCP))
-	assert.False(t, testData.portTable.RuleExists(defaultPodIP, newPort2, protocolTCP))
+	assert.True(t, testData.portTable.RuleExists(defaultPodIP, defaultPort, protocolToString(protocolTCP)))
+	assert.False(t, testData.portTable.RuleExists(defaultPodIP, newPort2, protocolToString(protocolTCP)))
 }
 
 // TestPodAddHostPort creates a Pod with host ports and verifies that the Pod's NPL annotation
@@ -530,7 +541,7 @@ func TestPodAddHostPort(t *testing.T) {
 	require.NoError(t, err, "Poll for annotation check failed")
 	nplData := testData.checkAnnotationValue(value, defaultPort)
 	assert.Equal(t, nplData[0].NodePort, hostPort)
-	assert.False(t, testData.portTable.RuleExists(defaultPodIP, defaultPort, protocolTCP))
+	assert.False(t, testData.portTable.RuleExists(defaultPodIP, defaultPort, protocolToString(protocolTCP)))
 }
 
 // TestPodAddHostPort creates a Pod with multiple host ports having same value but different protocol.
@@ -555,7 +566,7 @@ func TestPodAddHostPortMultiProtocol(t *testing.T) {
 	require.NoError(t, err, "Poll for annotation check failed")
 	nplData := testData.checkAnnotationValue(value, defaultPort)
 	assert.Equal(t, nplData[0].NodePort, hostPort)
-	assert.False(t, testData.portTable.RuleExists(defaultPodIP, defaultPort, protocolTCP))
+	assert.False(t, testData.portTable.RuleExists(defaultPodIP, defaultPort, protocolToString(protocolTCP)))
 }
 
 // TestPodAddHostPortWrongProtocol creates a Pod with a host port but with protocol UDP instead of TCP.
@@ -575,7 +586,7 @@ func TestPodAddHostPortWrongProtocol(t *testing.T) {
 	require.NoError(t, err, "Poll for annotation check failed")
 	nplData := testData.checkAnnotationValue(value, defaultPort)
 	assert.NotEqual(t, nplData[0].NodePort, hostPort)
-	assert.True(t, testData.portTable.RuleExists(defaultPodIP, defaultPort, protocolTCP))
+	assert.True(t, testData.portTable.RuleExists(defaultPodIP, defaultPort, protocolToString(protocolTCP)))
 }
 
 // TestTargetPortWithName creates a Service with target port name in string.
@@ -594,13 +605,13 @@ func TestTargetPortWithName(t *testing.T) {
 
 	_, err := testData.pollForPodAnnotation(testPod.Name, true)
 	require.NoError(t, err, "Poll for annotation check failed")
-	assert.True(t, testData.portTable.RuleExists(testPod.Status.PodIP, defaultPort, protocolTCP))
+	assert.True(t, testData.portTable.RuleExists(testPod.Status.PodIP, defaultPort, protocolToString(protocolTCP)))
 
 	testSvc = getTestSvcWithPortName("wrongPort")
 	testData.updateServiceOrFail(testSvc)
 	_, err = testData.pollForPodAnnotation(testPod.Name, false)
 	require.NoError(t, err, "Poll for annotation check failed")
-	assert.False(t, testData.portTable.RuleExists(testPod.Status.PodIP, defaultPort, protocolTCP))
+	assert.False(t, testData.portTable.RuleExists(testPod.Status.PodIP, defaultPort, protocolToString(protocolTCP)))
 }
 
 // TestMultiplePods creates multiple Pods and verifies that NPL annotations for both Pods are
@@ -619,12 +630,12 @@ func TestMultiplePods(t *testing.T) {
 	value, err := testData.pollForPodAnnotation(testPod1.Name, true)
 	require.NoError(t, err, "Poll for annotation check failed")
 	nplData1 := testData.checkAnnotationValue(value, defaultPort)
-	assert.True(t, testData.portTable.RuleExists(testPod1.Status.PodIP, defaultPort, protocolTCP))
+	assert.True(t, testData.portTable.RuleExists(testPod1.Status.PodIP, defaultPort, protocolToString(protocolTCP)))
 
 	value, err = testData.pollForPodAnnotation(testPod2.Name, true)
 	assert.NoError(t, err, "Poll for annotation check failed")
 	nplData2 := testData.checkAnnotationValue(value, defaultPort)
-	assert.True(t, testData.portTable.RuleExists(testPod2.Status.PodIP, defaultPort, protocolTCP))
+	assert.True(t, testData.portTable.RuleExists(testPod2.Status.PodIP, defaultPort, protocolToString(protocolTCP)))
 
 	assert.NotEqual(t, nplData1[0].NodePort, nplData2[0].NodePort)
 }
@@ -640,8 +651,8 @@ func TestMultipleServicesSameBackendPod(t *testing.T) {
 	value, err := testData.pollForPodAnnotation(testPod.Name, true)
 	require.NoError(t, err, "Poll for annotation check failed")
 	nplData := testData.checkAnnotationValue(value, defaultPort, 9090)
-	assert.True(t, testData.portTable.RuleExists(testPod.Status.PodIP, defaultPort, protocolTCP))
-	assert.True(t, testData.portTable.RuleExists(testPod.Status.PodIP, 9090, protocolTCP))
+	assert.True(t, testData.portTable.RuleExists(testPod.Status.PodIP, defaultPort, protocolToString(protocolTCP)))
+	assert.True(t, testData.portTable.RuleExists(testPod.Status.PodIP, 9090, protocolToString(protocolTCP)))
 	assert.NotEqual(t, nplData[0].NodePort, nplData[1].NodePort)
 }
 
@@ -662,7 +673,7 @@ func TestInitInvalidPod(t *testing.T) {
 	value, err := testData.pollForPodAnnotation(testPod.Name, true)
 	require.NoError(t, err, "Poll for annotation check failed")
 	testData.checkAnnotationValue(value, defaultPort)
-	assert.True(t, testData.portTable.RuleExists(testPod.Status.PodIP, defaultPort, protocolTCP))
+	assert.True(t, testData.portTable.RuleExists(testPod.Status.PodIP, defaultPort, protocolToString(protocolTCP)))
 }
 
 var (
