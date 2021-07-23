@@ -19,6 +19,7 @@ import (
 	"reflect"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -34,6 +35,11 @@ import (
 const (
 	// Cluster scoped selectors are stored under empty Namespace in the selectorItemIndex.
 	emptyNamespace = ""
+)
+
+var (
+	// eventChanSize is declared as a variable to allow overriding for testing.
+	eventChanSize = 1000
 )
 
 type eventHandler func(group string)
@@ -187,37 +193,26 @@ type GroupEntityIndex struct {
 	// eventChan is channel used for calling eventHandlers asynchronously.
 	eventChan chan string
 
-	// Numbers used to determine whether the GroupEntityIndex has been initialized with the full lists of Pods,
-	// Namespaces, and ExternalEntities.
-	// If a kind's accumulated count is greater than or equal to its initial count, it's considered synced.
-	// The initial counts are initialized to -1 which indicates not set.
-	accumulatedPodCount int
-	currentPodCount     int
-	initialPodCount     int
-
-	accumulatedExternalEntityCount int
-	currentExternalEntityCount     int
-	initialExternalEntityCount     int
-
-	accumulatedNamespaceCount int
-	initialNamespaceCount     int
+	// synced stores a boolean value, which tracks if the GroupEntityIndex has been initialized with the full lists of
+	// Pods, Namespaces, and ExternalEntities.
+	synced *atomic.Value
 }
 
 // NewGroupEntityIndex creates a GroupEntityIndex.
 func NewGroupEntityIndex() *GroupEntityIndex {
+	synced := &atomic.Value{}
+	synced.Store(false)
 	index := &GroupEntityIndex{
-		entityItems:                map[string]*entityItem{},
-		groupItems:                 map[string]*groupItem{},
-		labelItems:                 map[string]*labelItem{},
-		labelItemIndex:             map[entityType]map[string]sets.String{podEntityType: {}, externalEntityType: {}},
-		selectorItems:              map[string]*selectorItem{},
-		selectorItemIndex:          map[entityType]map[string]sets.String{podEntityType: {}, externalEntityType: {}},
-		namespaceLabels:            map[string]labels.Set{},
-		eventHandlers:              map[GroupType][]eventHandler{},
-		eventChan:                  make(chan string, 1000),
-		initialNamespaceCount:      -1,
-		initialPodCount:            -1,
-		initialExternalEntityCount: -1,
+		entityItems:       map[string]*entityItem{},
+		groupItems:        map[string]*groupItem{},
+		labelItems:        map[string]*labelItem{},
+		labelItemIndex:    map[entityType]map[string]sets.String{podEntityType: {}, externalEntityType: {}},
+		selectorItems:     map[string]*selectorItem{},
+		selectorItemIndex: map[entityType]map[string]sets.String{podEntityType: {}, externalEntityType: {}},
+		namespaceLabels:   map[string]labels.Set{},
+		eventHandlers:     map[GroupType][]eventHandler{},
+		eventChan:         make(chan string, eventChanSize),
+		synced:            synced,
 	}
 	return index
 }
@@ -299,9 +294,6 @@ func (i *GroupEntityIndex) AddNamespace(namespace *v1.Namespace) {
 	}
 
 	i.namespaceLabels[namespace.Name] = namespace.Labels
-	if len(i.namespaceLabels) > i.accumulatedNamespaceCount {
-		i.accumulatedNamespaceCount = len(i.namespaceLabels)
-	}
 
 	// Resync cluster scoped selectors as they may start or stop matching the Namespace because of the label update.
 	for _, namespaceToSelector := range i.selectorItemIndex {
@@ -446,7 +438,6 @@ func (i *GroupEntityIndex) addEntity(entityType entityType, entity metav1.Object
 			labelItemKey: lKey,
 		}
 		i.entityItems[eKey] = eItem
-		i.incEntityCount(entityType)
 	}
 
 	// Create a labelItem if it doesn't exist.
@@ -474,30 +465,6 @@ func (i *GroupEntityIndex) addEntity(entityType entityType, entity metav1.Object
 	}
 }
 
-func (i *GroupEntityIndex) incEntityCount(entityType entityType) {
-	switch entityType {
-	case podEntityType:
-		i.currentPodCount += 1
-		if i.currentPodCount > i.accumulatedPodCount {
-			i.accumulatedPodCount = i.currentPodCount
-		}
-	case externalEntityType:
-		i.currentExternalEntityCount += 1
-		if i.currentExternalEntityCount > i.accumulatedExternalEntityCount {
-			i.accumulatedExternalEntityCount = i.currentExternalEntityCount
-		}
-	}
-}
-
-func (i *GroupEntityIndex) decEntityCount(entityType entityType) {
-	switch entityType {
-	case podEntityType:
-		i.currentPodCount -= 1
-	case externalEntityType:
-		i.currentExternalEntityCount -= 1
-	}
-}
-
 func (i *GroupEntityIndex) DeletePod(pod *v1.Pod) {
 	i.deleteEntity(podEntityType, pod)
 }
@@ -520,7 +487,6 @@ func (i *GroupEntityIndex) deleteEntity(entityType entityType, entity metav1.Obj
 	// Delete the entity from its associated labelItem and entityItems.
 	lItem := i.deleteEntityFromLabelItem(eItem.labelItemKey, eKey)
 	delete(i.entityItems, eKey)
-	i.decEntityCount(entityType)
 
 	// All selectorItems that match the labelItem are affected.
 	for sKey := range lItem.selectorItemKeys {
@@ -709,26 +675,11 @@ func (i *GroupEntityIndex) AddEventHandler(groupType GroupType, handler eventHan
 }
 
 func (i *GroupEntityIndex) HasSynced() bool {
-	i.lock.RLock()
-	defer i.lock.RUnlock()
-	if i.initialPodCount < 0 || i.accumulatedPodCount < i.initialPodCount {
-		return false
-	}
-	if i.initialExternalEntityCount < 0 || i.accumulatedExternalEntityCount < i.initialExternalEntityCount {
-		return false
-	}
-	if i.initialNamespaceCount < 0 || i.accumulatedNamespaceCount < i.initialNamespaceCount {
-		return false
-	}
-	return true
+	return i.synced.Load().(bool)
 }
 
-func (i *GroupEntityIndex) setInitialCounts(initialNamespaceCount, initialPodCount, initialExternalEntityCount int) {
-	i.lock.Lock()
-	defer i.lock.Unlock()
-	i.initialNamespaceCount = initialNamespaceCount
-	i.initialPodCount = initialPodCount
-	i.initialExternalEntityCount = initialExternalEntityCount
+func (i *GroupEntityIndex) setSynced(synced bool) {
+	i.synced.Store(synced)
 }
 
 func (i *GroupEntityIndex) match(entityType entityType, label labels.Set, namespace string, sel *types.GroupSelector) bool {
