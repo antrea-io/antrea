@@ -251,6 +251,7 @@ func testComputeNetworkPolicy(t *testing.T, maxExecutionTime time.Duration, name
 	start := time.Now()
 	c.informerFactory.Start(stopCh)
 	c.informerFactory.WaitForCacheSync(stopCh)
+	go c.groupingInterface.Run(stopCh)
 	go c.groupingController.Run(stopCh)
 	go c.Run(stopCh)
 
