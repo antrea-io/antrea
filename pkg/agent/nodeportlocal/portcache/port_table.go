@@ -119,7 +119,7 @@ func (pt *PortTable) AddRule(podIP string, podPort int) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	if err := pt.PodPortRules.AddRule(nodePort, fmt.Sprintf("%s:%d", podIP, podPort)); err != nil {
+	if err := pt.PodPortRules.AddRule(nodePort, podIP, podPort); err != nil {
 		if err := socket.Close(); err != nil {
 			klog.ErrorS(err, "Unexpected error when closing socket")
 		}
@@ -138,7 +138,7 @@ func (pt *PortTable) DeleteRule(podIP string, podPort int) error {
 	pt.tableLock.Lock()
 	defer pt.tableLock.Unlock()
 	data := pt.getEntryByPodIPPort(podIP, podPort)
-	if err := pt.PodPortRules.DeleteRule(data.NodePort, fmt.Sprintf("%s:%d", podIP, podPort)); err != nil {
+	if err := pt.PodPortRules.DeleteRule(data.NodePort, podIP, podPort); err != nil {
 		return err
 	}
 	if err := data.socket.Close(); err != nil {
