@@ -80,5 +80,5 @@ replace (
 	// There is an optimization https://github.com/kubernetes/kubernetes/pull/89575 but will only be
 	// available from 1.19.0 and later releases. Use this commit before Antrea bumps up its K8s
 	// dependency version.
-	k8s.io/client-go => github.com/antrea-io/client-go v0.18.19
+	k8s.io/client-go => github.com/antrea-io/client-go v0.18.19-1
 )

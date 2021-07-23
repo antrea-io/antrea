@@ -37,8 +37,8 @@ github.com/alecthomas/units v0.0.0-20151022065526-2efee857e7cf/go.mod h1:ybxpYRF
 github.com/alexflint/go-filemutex v0.0.0-20171022225611-72bdc8eae2ae/go.mod h1:CgnQgUtFrFz9mxFNtED3jI5tLDjKlOM+oUF/sTk6ps0=
 github.com/antoninbas/libOpenflow v0.0.0-20210218001059-32f2e57d0435 h1:vVl9f3eDJm14Cyu9ye0ENw6j1Q++XYLEshV4KYBc9ac=
 github.com/antoninbas/libOpenflow v0.0.0-20210218001059-32f2e57d0435/go.mod h1:KqprRw1Mp8VGnGj0NzPeZQojUvT5X26DV7suLSM1iqM=
-github.com/antrea-io/client-go v0.18.19 h1:HPNE+cNAbGkbTarVVXfBaqYIcZLlem4LngN+YuHkKts=
-github.com/antrea-io/client-go v0.18.19/go.mod h1:lB+d4UqdzSjaU41VODLYm/oon3o05LAzsVpm6Me5XkY=
+github.com/antrea-io/client-go v0.18.19-1 h1:kZ99AfSw3dqn0n+scI8ektQwWgMo2iYpW9MKSGBYKa4=
+github.com/antrea-io/client-go v0.18.19-1/go.mod h1:lB+d4UqdzSjaU41VODLYm/oon3o05LAzsVpm6Me5XkY=
 github.com/armon/consul-api v0.0.0-20180202201655-eb2c6b5be1b6/go.mod h1:grANhF5doyWs3UAsr3K4I6qtAmlQcZDesFNEHPZAzj8=
 github.com/awalterschulze/gographviz v2.0.1+incompatible h1:XIECBRq9VPEQqkQL5pw2OtjCAdrtIgFKoJU8eT98AS8=
 github.com/awalterschulze/gographviz v2.0.1+incompatible/go.mod h1:GEV5wmg4YquNw7v1kkyoX9etIk8yVmXj+AkDHuuETHs=
