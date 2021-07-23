@@ -43,7 +43,7 @@ type RawResourceExport struct {
 	Data []byte `json:"data,omitempty"`
 }
 
-// ResourceExportSpec defines the desired state of ResourceExport
+// ResourceExportSpec defines the desired state of ResourceExport.
 type ResourceExportSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
@@ -73,23 +73,23 @@ const (
 	ResourceExportSucceeded ResourceExportConditionType = "Succeeded"
 )
 
-// ResourceExportCondition indicates the readiness condition of the ResourceExport
+// ResourceExportCondition indicates the readiness condition of the ResourceExport.
 type ResourceExportCondition struct {
 	Type ResourceExportConditionType `json:"type,omitempty"`
-	// Status of the condition, one of True, False, Unknown
+	// Status of the condition, one of True, False, Unknown.
 	Status v1.ConditionStatus `json:"status,omitempty"`
 	// +optional
-	// Last time the condition transited from one status to another
+	// Last time the condition transited from one status to another.
 	LastTransitionTime metav1.Time `json:"lastTransitionTime,omitempty"`
 	// +optional
-	// A human readable message indicating details about the transition
+	// A human readable message indicating details about the transition.
 	Message string `json:"message,omitempty"`
 	// +optional
 	// Unique, one-word, CamelCase reason for the condition's last transition.
 	Reason string `json:"reason,omitempty"`
 }
 
-// ResourceExportStatus defines the observed state of ResourceExport
+// ResourceExportStatus defines the observed state of ResourceExport.
 type ResourceExportStatus struct {
 	Conditions []ResourceExportCondition `json:"conditions,omitempty"`
 }
@@ -97,7 +97,7 @@ type ResourceExportStatus struct {
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
 
-// ResourceExport is the Schema for the resourceexports API
+// ResourceExport is the Schema for the resourceexports API.
 type ResourceExport struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -108,7 +108,7 @@ type ResourceExport struct {
 
 //+kubebuilder:object:root=true
 
-// ResourceExportList contains a list of ResourceExport
+// ResourceExportList contains a list of ResourceExport.
 type ResourceExportList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`

@@ -117,7 +117,7 @@ type ClusterSetStatus struct {
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
 
-// ClusterSet is the Schema for the clustersets API
+// ClusterSet is the Schema for the clustersets API.
 type ClusterSet struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -128,7 +128,7 @@ type ClusterSet struct {
 
 //+kubebuilder:object:root=true
 
-// ClusterSetList contains a list of ClusterSet
+// ClusterSetList contains a list of ClusterSet.
 type ClusterSetList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`

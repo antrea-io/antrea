@@ -39,7 +39,7 @@ type RawResourceImport struct {
 	Data []byte `json:"data,omitempty"`
 }
 
-// ResourceImportSpec defines the desired state of ResourceImport
+// ResourceImportSpec defines the desired state of ResourceImport.
 type ResourceImportSpec struct {
 	// ClusterIDs specifies the member clusters this resource to import to.
 	// When not specified, import to all member clusters.
@@ -71,30 +71,30 @@ const (
 	ResourceImportSucceeded ResourceImportConditionType = "Succeeded"
 )
 
-// ResourceImportCondition indicates the condition of the ResourceImport in a cluster
+// ResourceImportCondition indicates the condition of the ResourceImport in a cluster.
 type ResourceImportCondition struct {
 	Type ResourceImportConditionType `json:"type,omitempty"`
-	// Status of the condition, one of True, False, Unknown
+	// Status of the condition, one of True, False, Unknown.
 	Status v1.ConditionStatus `json:"status,omitempty"`
 	// +optional
-	// Last time the condition transited from one status to another
+	// Last time the condition transited from one status to another.
 	LastTransitionTime metav1.Time `json:"lastTransitionTime,omitempty"`
 	// +optional
-	// A human readable message indicating details about the transition
+	// A human readable message indicating details about the transition.
 	Message string `json:"message,omitempty"`
 	// +optional
 	// Unique, one-word, CamelCase reason for the condition's last transition.
 	Reason string `json:"reason,omitempty"`
 }
 
-// ResourceImportClusterStatus indicates the readiness status of the ResourceImport in clusters
+// ResourceImportClusterStatus indicates the readiness status of the ResourceImport in clusters.
 type ResourceImportClusterStatus struct {
 	// ClusterID is the unique identifier of this cluster.
 	ClusterID  string                    `json:"clusterID,omitempty"`
 	Conditions []ResourceImportCondition `json:"conditions,omitempty"`
 }
 
-// ResourceImportStatus defines the observed state of ResourceImport
+// ResourceImportStatus defines the observed state of ResourceImport.
 type ResourceImportStatus struct {
 	ClusterStatuses []ResourceImportClusterStatus `json:"clusterStatuses,omitempty"`
 }
@@ -102,7 +102,7 @@ type ResourceImportStatus struct {
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
 
-// ResourceImport is the Schema for the resourceimports API
+// ResourceImport is the Schema for the resourceimports API.
 type ResourceImport struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -113,7 +113,7 @@ type ResourceImport struct {
 
 //+kubebuilder:object:root=true
 
-// ResourceImportList contains a list of ResourceImport
+// ResourceImportList contains a list of ResourceImport.
 type ResourceImportList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
