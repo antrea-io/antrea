@@ -889,7 +889,6 @@ func (c *client) calculateMatchFlowChangesForRule(conj *policyRuleConjunction, r
 	ctxChanges := conj.calculateChangesForRuleCreation(c, rule)
 	// Update conjunctiveMatchContext if during batch flow install, otherwise the subsequent contextChange
 	// calculations will not be based on the previous flowChanges that have not been sent to OVS bridge.
-	// TODO: roll back if batch flow install fails?
 	if isBatchInstall {
 		for _, ctxChange := range ctxChanges {
 			ctxChange.updateContextStatus()
@@ -918,6 +917,12 @@ func (c *client) BatchInstallPolicyRuleFlows(ofPolicyRules []*types.PolicyRule) 
 	}
 	// Send the changed Openflow entries to the OVS bridge.
 	if err := c.sendConjunctiveFlows(allCtxChanges, allFlows); err != nil {
+		// Reset the global conjunctive match flow cache since the OpenFlow bundle, which contains
+		// all the match flows to be installed, was not applied successfully.
+		// Conjunction contexts need to be updated during flow change calculations for batch install,
+		// otherwise subsequent contextChanges would not be correct as they would not take into account
+		// the previous flowChanges that have not yet have been realized in the OVS bridge.
+		c.globalConjMatchFlowCache = map[string]*conjMatchFlowContext{}
 		return err
 	}
 	// Update conjMatchFlowContexts as the expected status.
