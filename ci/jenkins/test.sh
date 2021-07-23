@@ -33,7 +33,7 @@ IMAGE_PULL_POLICY="Always"
 WINDOWS_CONFORMANCE_FOCUS="\[sig-network\].+\[Conformance\]|\[sig-windows\]"
 WINDOWS_CONFORMANCE_SKIP="\[LinuxOnly\]|\[Slow\]|\[Serial\]|\[Disruptive\]|\[Flaky\]|\[Feature:.+\]|\[sig-cli\]|\[sig-storage\]|\[sig-auth\]|\[sig-api-machinery\]|\[sig-apps\]|\[sig-node\]|\[Privileged\]|should be able to change the type from|\[sig-network\] Services should be able to create a functioning NodePort service \[Conformance\]|Service endpoints latency should not be very high|should be able to create a functioning NodePort service for Windows"
 WINDOWS_NETWORKPOLICY_FOCUS="\[Feature:NetworkPolicy\]"
-WINDOWS_NETWORKPOLICY_SKIP="SKIP_NO_TESTCASE"
+WINDOWS_NETWORKPOLICY_SKIP="SCTP"
 CONFORMANCE_SKIP="\[Slow\]|\[Serial\]|\[Disruptive\]|\[Flaky\]|\[Feature:.+\]|\[sig-cli\]|\[sig-storage\]|\[sig-auth\]|\[sig-api-machinery\]|\[sig-apps\]|\[sig-node\]"
 NETWORKPOLICY_SKIP="should allow egress access to server in CIDR block|should enforce except clause while egress access to server in CIDR block"
 
@@ -224,7 +224,7 @@ function deliver_antrea_windows {
     chmod -R g-w build/images/ovs
     chmod -R g-w build/images/base
     DOCKER_REGISTRY="${DOCKER_REGISTRY}" ./hack/build-antrea-ubuntu-all.sh --pull
-    if [[ "$TESTCASE" =~ "networkpolicy" ]]; then
+    if [[ "$TESTCASE" == "windows-networkpolicy-process" ]]; then
         make windows-bin
     fi
 
@@ -262,6 +262,8 @@ function deliver_antrea_windows {
         echo "==== Reverting Windows VM ${WORKER_NAME} ====="
         govc snapshot.revert -vm.ip ${IP} win-initial
         govc vm.power -on ${WORKER_NAME} || true
+        # Windows VM is reverted to an old snapshot so computer date needs updating.
+        ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "powershell W32tm /resync /force"
         # Some tests need us.gcr.io/k8s-artifacts-prod/e2e-test-images/agnhost:2.13 image but it is not for windows/amd64 10.0.17763
         # Use e2eteam/agnhost:2.13 instead
         harbor_images=("sigwindowstools-kube-proxy:v1.18.0" "agnhost:2.13" "agnhost:2.13" "e2eteam-jessie-dnsutils:1.0" "e2eteam-pause:3.2")
@@ -271,13 +273,15 @@ function deliver_antrea_windows {
         done
 
         # Use a script to run antrea agent in windows Network Policy cases
-        if [ "$TESTCASE" == "windows-networkpolicy" ]; then
+        if [ "$TESTCASE" == "windows-networkpolicy-process" ]; then
             for i in `seq 24`; do
                 sleep 5
                 ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "W32tm /resync /force" | grep successfully && break
             done
             ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "powershell stop-service kubelet"
-            ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "powershell restart-service docker"
+            ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "powershell stop-service docker"
+            ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "powershell rm C:\ProgramData\docker\docker.pid" || true
+            ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "powershell start-service docker"
             ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "powershell start-service kubelet"
             ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "powershell start-service ovsdb-server"
             ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "powershell start-service ovs-vswitchd"
@@ -301,7 +305,7 @@ function deliver_antrea_windows {
                 done
                 echo "=== Build Windows on Windows Node==="
                 ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "docker pull ${DOCKER_REGISTRY}/antrea/golang:1.15 && docker tag ${DOCKER_REGISTRY}/antrea/golang:1.15 golang:1.15"
-                ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "rm -rf antrea && mkdir antrea && cd antrea && tar -xzf ../antrea_repo.tar.gz && sed -i \"s|build/images/Dockerfile.build.windows .|build/images/Dockerfile.build.windows . --network host|g\" Makefile && NO_PULL=${NO_PULL} make build-windows && docker save -o antrea-windows.tar ${DOCKER_REGISTRY}/antrea/antrea-windows:latest && gzip -f antrea-windows.tar" || true
+                ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "rm -rf antrea && mkdir antrea && cd antrea && tar -xzf ../antrea_repo.tar.gz > /dev/null && sed -i \"s|build/images/Dockerfile.build.windows .|build/images/Dockerfile.build.windows . --network host|g\" Makefile && NO_PULL=${NO_PULL} make build-windows && docker save -o antrea-windows.tar ${DOCKER_REGISTRY}/antrea/antrea-windows:latest && gzip -f antrea-windows.tar" || true
                 for i in `seq 2`; do
                     timeout 2m scp -o StrictHostKeyChecking=no -T Administrator@${IP}:antrea/antrea-windows.tar.gz . && break
                 done
@@ -485,13 +489,13 @@ function run_conformance_windows {
     export PATH=$GOROOT/bin:$PATH
     export KUBECONFIG=$KUBECONFIG_PATH
 
-    if [[ "$TESTCASE" == "windows-conformance" ]]; then
+    if [[ "$TESTCASE" == "windows-networkpolicy-process" ]]; then
+        # Antrea Windows agents are deployed with scripts as processes on host for Windows NetworkPolicy test
+        wait_for_antrea_windows_processes_ready
+    else
         # Antrea Windows agent Pods are deployed for Windows Conformance test
         clean_for_windows_install_cni
         wait_for_antrea_windows_pods_ready
-    else
-        # Antrea Windows agents are deployed with scripts as processes on host for Windows NetworkPolicy test
-        wait_for_antrea_windows_processes_ready
     fi
 
     echo "====== Run test with e2e.test ======"
