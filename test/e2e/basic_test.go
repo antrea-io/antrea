@@ -60,7 +60,7 @@ func TestPodAssignIP(t *testing.T) {
 	podName := randName("test-pod-")
 
 	t.Logf("Creating a busybox test Pod")
-	if err := data.createBusyboxPodOnNode(podName, ""); err != nil {
+	if err := data.createBusyboxPodOnNode(podName, testNamespace, ""); err != nil {
 		t.Fatalf("Error when creating busybox test Pod: %v", err)
 	}
 	defer deletePodWrapper(t, data, podName)
@@ -194,7 +194,7 @@ func (data *TestData) testDeletePod(t *testing.T, podName string, nodeName strin
 	}
 
 	t.Logf("Deleting Pod '%s'", podName)
-	if err := data.deletePodAndWait(defaultTimeout, podName); err != nil {
+	if err := data.deletePodAndWait(defaultTimeout, podName, testNamespace); err != nil {
 		t.Fatalf("Error when deleting Pod: %v", err)
 	}
 
@@ -233,7 +233,7 @@ func TestDeletePod(t *testing.T) {
 	podName := randName("test-pod-")
 
 	t.Logf("Creating a agnhost test Pod on '%s'", nodeName)
-	if err := data.createAgnhostPodOnNode(podName, nodeName); err != nil {
+	if err := data.createAgnhostPodOnNode(podName, testNamespace, nodeName); err != nil {
 		t.Fatalf("Error when creating agnhost test Pod: %v", err)
 	}
 	if err := data.podWaitForRunning(defaultTimeout, podName, testNamespace); err != nil {
@@ -301,7 +301,7 @@ func TestIPAMRestart(t *testing.T) {
 
 	createPodAndGetIP := func(podName string) (*PodIPs, error) {
 		t.Logf("Creating a busybox test Pod '%s' and waiting for IP", podName)
-		if err := data.createBusyboxPodOnNode(podName, nodeName); err != nil {
+		if err := data.createBusyboxPodOnNode(podName, testNamespace, nodeName); err != nil {
 			t.Fatalf("Error when creating busybox test Pod '%s': %v", podName, err)
 			return nil, err
 		}
@@ -757,7 +757,7 @@ func TestGratuitousARP(t *testing.T) {
 	nodeName := workerNodeName(1)
 
 	t.Logf("Creating Pod '%s' on '%s'", podName, nodeName)
-	if err := data.createBusyboxPodOnNode(podName, nodeName); err != nil {
+	if err := data.createBusyboxPodOnNode(podName, testNamespace, nodeName); err != nil {
 		t.Fatalf("Error when creating Pod '%s': %v", podName, err)
 	}
 	defer deletePodWrapper(t, data, podName)

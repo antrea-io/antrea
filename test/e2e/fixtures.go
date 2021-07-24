@@ -188,7 +188,7 @@ func setupTestWithIPFIXCollector(tb testing.TB) (*TestData, bool, bool, error) {
 		return testData, v4Enabled, v6Enabled, err
 	}
 	// Create pod using ipfix collector image
-	if err = testData.createPodOnNode("ipfix-collector", "", ipfixCollectorImage, nil, nil, nil, nil, true, nil); err != nil {
+	if err = testData.createPodOnNode("ipfix-collector", testNamespace, "", ipfixCollectorImage, nil, nil, nil, nil, true, nil); err != nil {
 		tb.Errorf("Error when creating the ipfix collector Pod: %v", err)
 	}
 	ipfixCollectorIP, err := testData.podWaitForIPs(defaultTimeout, "ipfix-collector", testNamespace)
@@ -391,7 +391,7 @@ func deletePodWrapper(tb testing.TB, data *TestData, name string) {
 // nodeName is the empty string, each Pod will be created on an arbitrary
 // Node. createTestBusyboxPods returns the cleanupFn function which can be used to delete the
 // created Pods. Pods are created in parallel to reduce the time required to run the tests.
-func createTestBusyboxPods(tb testing.TB, data *TestData, num int, nodeName string) (
+func createTestBusyboxPods(tb testing.TB, data *TestData, num int, ns string, nodeName string) (
 	podNames []string, podIPs []*PodIPs, cleanupFn func(),
 ) {
 	cleanupFn = func() {
@@ -414,14 +414,13 @@ func createTestBusyboxPods(tb testing.TB, data *TestData, num int, nodeName stri
 
 	createPodAndGetIP := func() (string, *PodIPs, error) {
 		podName := randName("test-pod-")
-
 		tb.Logf("Creating a busybox test Pod '%s' and waiting for IP", podName)
-		if err := data.createBusyboxPodOnNode(podName, nodeName); err != nil {
+		if err := data.createBusyboxPodOnNode(podName, ns, nodeName); err != nil {
 			tb.Errorf("Error when creating busybox test Pod '%s': %v", podName, err)
 			return "", nil, err
 		}
 
-		if podIP, err := data.podWaitForIPs(defaultTimeout, podName, testNamespace); err != nil {
+		if podIP, err := data.podWaitForIPs(defaultTimeout, podName, ns); err != nil {
 			tb.Errorf("Error when waiting for IP for Pod '%s': %v", podName, err)
 			return podName, nil, err
 		} else {
