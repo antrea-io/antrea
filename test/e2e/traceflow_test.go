@@ -75,7 +75,7 @@ func TestTraceflowIntraNodeANP(t *testing.T) {
 	failOnError(err, t)
 
 	node1 := nodeName(0)
-	node1Pods, _, node1CleanupFn := createTestBusyboxPods(t, data, 3, node1)
+	node1Pods, _, node1CleanupFn := createTestBusyboxPods(t, data, 3, testNamespace, node1)
 	defer node1CleanupFn()
 
 	var denyIngress *secv1alpha1.NetworkPolicy
@@ -270,7 +270,7 @@ func TestTraceflowIntraNode(t *testing.T) {
 
 	node1 := nodeName(0)
 
-	node1Pods, node1IPs, node1CleanupFn := createTestBusyboxPods(t, data, 3, node1)
+	node1Pods, node1IPs, node1CleanupFn := createTestBusyboxPods(t, data, 3, testNamespace, node1)
 	defer node1CleanupFn()
 	var pod0IPv4Str, pod1IPv4Str, dstPodIPv4Str, dstPodIPv6Str string
 	if node1IPs[0].ipv4 != nil {
@@ -1045,8 +1045,8 @@ func TestTraceflowInterNode(t *testing.T) {
 	node1 := nodeName(0)
 	node2 := nodeName(1)
 
-	node1Pods, _, node1CleanupFn := createTestBusyboxPods(t, data, 1, node1)
-	node2Pods, node2IPs, node2CleanupFn := createTestBusyboxPods(t, data, 2, node2)
+	node1Pods, _, node1CleanupFn := createTestBusyboxPods(t, data, 1, testNamespace, node1)
+	node2Pods, node2IPs, node2CleanupFn := createTestBusyboxPods(t, data, 2, testNamespace, node2)
 	defer node1CleanupFn()
 	defer node2CleanupFn()
 	var dstPodIPv4Str, dstPodIPv6Str string
@@ -1060,7 +1060,7 @@ func TestTraceflowInterNode(t *testing.T) {
 	// Create Service backend Pod. The "hairpin" testcases require the Service to have a single backend Pod,
 	// and no more, in order to be deterministic.
 	nginxPodName := "nginx"
-	require.NoError(t, data.createNginxPodOnNode(nginxPodName, node2))
+	require.NoError(t, data.createNginxPodOnNode(nginxPodName, testNamespace, node2))
 	nginxIP, err := data.podWaitForIPs(defaultTimeout, nginxPodName, testNamespace)
 	require.NoError(t, err)
 
@@ -1900,7 +1900,7 @@ func TestTraceflowExternalIP(t *testing.T) {
 
 	node := nodeName(0)
 	nodeIP := nodeIP(0)
-	podNames, _, cleanupFn := createTestBusyboxPods(t, data, 1, node)
+	podNames, _, cleanupFn := createTestBusyboxPods(t, data, 1, testNamespace, node)
 	defer cleanupFn()
 
 	testcase := testcase{
@@ -2124,7 +2124,7 @@ func runTestTraceflow(t *testing.T, data *TestData, tc testcase) {
 		// Give a little time for Nodes to install OVS flows.
 		time.Sleep(time.Second * 2)
 		// Send an ICMP echo packet from the source Pod to the destination.
-		if err := data.runPingCommandFromTestPod(podInfo{srcPod, "linux"}, dstPodIPs, busyboxContainerName, 2, 0); err != nil {
+		if err := data.runPingCommandFromTestPod(podInfo{srcPod, "linux"}, testNamespace, dstPodIPs, busyboxContainerName, 2, 0); err != nil {
 			t.Logf("Ping '%s' -> '%v' failed: ERROR (%v)", srcPod, *dstPodIPs, err)
 		}
 	}

@@ -175,7 +175,7 @@ func deleteNPLRuleFromIPTables(t *testing.T, data *TestData, r *require.Assertio
 
 func checkTrafficForNPL(data *TestData, r *require.Assertions, nplAnnotations []k8s.NPLAnnotation, clientName string) {
 	for i := range nplAnnotations {
-		err := data.runNetcatCommandFromTestPod(clientName, nplAnnotations[i].NodeIP, int32(nplAnnotations[i].NodePort))
+		err := data.runNetcatCommandFromTestPod(clientName, testNamespace, nplAnnotations[i].NodeIP, int32(nplAnnotations[i].NodePort))
 		r.NoError(err, "Traffic test failed for NodeIP: %s, NodePort: %d", nplAnnotations[i].NodeIP, nplAnnotations[i].NodePort)
 	}
 }
@@ -248,12 +248,12 @@ func NPLTestMultiplePods(t *testing.T) {
 	for i := 0; i < 4; i++ {
 		testPodName := randName("test-pod-")
 		testPods = append(testPods, testPodName)
-		err := testData.createNginxPodOnNode(testPodName, node)
+		err := testData.createNginxPodOnNode(testPodName, testNamespace, node)
 		r.NoError(err, "Error creating test Pod: %v", err)
 	}
 
 	clientName := randName("test-client-")
-	err := testData.createBusyboxPodOnNode(clientName, node)
+	err := testData.createBusyboxPodOnNode(clientName, testNamespace, node)
 	r.NoError(err, "Error creating Pod %s: %v", clientName)
 
 	err = testData.podWaitForRunning(defaultTimeout, clientName, testNamespace)
@@ -294,7 +294,7 @@ func NPLTestPodAddMultiPort(t *testing.T) {
 	podcmd := "porter"
 
 	// Creating a Pod using agnhost image to support multiple ports, instead of nginx.
-	err := testData.createPodOnNode(testPodName, node, agnhostImage, nil, []string{podcmd}, []corev1.EnvVar{
+	err := testData.createPodOnNode(testPodName, testNamespace, node, agnhostImage, nil, []string{podcmd}, []corev1.EnvVar{
 		{
 			Name: fmt.Sprintf("SERVE_PORT_%d", 80), Value: "foo",
 		},
@@ -319,7 +319,7 @@ func NPLTestPodAddMultiPort(t *testing.T) {
 	nplAnnotations, testPodIP := getNPLAnnotations(t, testData, r, testPodName)
 
 	clientName := randName("test-client-")
-	err = testData.createBusyboxPodOnNode(clientName, node)
+	err = testData.createBusyboxPodOnNode(clientName, testNamespace, node)
 	r.NoError(err, "Error when creating Pod %s", clientName)
 
 	err = testData.podWaitForRunning(defaultTimeout, clientName, testNamespace)
@@ -350,11 +350,11 @@ func NPLTestLocalAccess(t *testing.T) {
 	node := nodeName(0)
 
 	testPodName := randName("test-pod-")
-	err := testData.createNginxPodOnNode(testPodName, node)
+	err := testData.createNginxPodOnNode(testPodName, testNamespace, node)
 	r.NoError(err, "Error creating test Pod: %v", err)
 
 	clientName := randName("test-client-")
-	err = testData.createHostNetworkBusyboxPodOnNode(clientName, node)
+	err = testData.createHostNetworkBusyboxPodOnNode(clientName, testNamespace, node)
 	r.NoError(err, "Error creating hostNetwork Pod %s: %v", clientName)
 
 	err = testData.podWaitForRunning(defaultTimeout, clientName, testNamespace)
@@ -401,12 +401,12 @@ func TestNPLMultiplePodsAgentRestart(t *testing.T) {
 	for i := 0; i < 4; i++ {
 		testPodName := randName("test-pod-")
 		testPods = append(testPods, testPodName)
-		err = testData.createNginxPodOnNode(testPodName, node)
+		err = testData.createNginxPodOnNode(testPodName, testNamespace, node)
 		r.NoError(err, "Error creating test Pod: %v", err)
 	}
 
 	clientName := randName("test-client-")
-	err = data.createBusyboxPodOnNode(clientName, node)
+	err = data.createBusyboxPodOnNode(clientName, testNamespace, node)
 	r.NoError(err, "Error when creating Pod %s", clientName)
 
 	err = data.podWaitForRunning(defaultTimeout, clientName, testNamespace)
@@ -473,12 +473,12 @@ func TestNPLChangePortRangeAgentRestart(t *testing.T) {
 	for i := 0; i < 4; i++ {
 		testPodName := randName("test-pod-")
 		testPods = append(testPods, testPodName)
-		err = testData.createNginxPodOnNode(testPodName, node)
+		err = testData.createNginxPodOnNode(testPodName, testNamespace, node)
 		r.NoError(err, "Error Creating test Pod: %v", err)
 	}
 
 	clientName := randName("test-client-")
-	err = data.createBusyboxPodOnNode(clientName, node)
+	err = data.createBusyboxPodOnNode(clientName, testNamespace, node)
 	r.NoError(err, "Error when creating Pod %s", clientName)
 
 	err = data.podWaitForRunning(defaultTimeout, clientName, testNamespace)
