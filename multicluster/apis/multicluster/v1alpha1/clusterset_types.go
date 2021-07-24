@@ -17,6 +17,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -32,11 +33,8 @@ type MemberCluster struct {
 	ServiceAccount string `json:"serviceAccount,omitempty"`
 }
 
-// ClusterSetSpec defines the desired state of ClusterSet
+// ClusterSetSpec defines the desired state of ClusterSet.
 type ClusterSetSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-
 	// Members include member clusters known to the leader clusters.
 	// Used in leader cluster.
 	Members []MemberCluster `json:"members,omitempty"`
@@ -47,16 +45,79 @@ type ClusterSetSpec struct {
 	Namespace string `json:"namespace,omitempty"`
 }
 
-// ClusterSetStatus defines the observed state of ClusterSet
+type ClusterSetConditionType string
+
+const (
+	// ClusterSetReady indicates whether ClusterSet is ready.
+	ClusterSetReady ClusterSetConditionType = "Ready"
+)
+
+// ClusterSetCondition indicates the readiness condition of the clusterSet.
+type ClusterSetCondition struct {
+	Type ClusterSetConditionType `json:"type,omitempty"`
+	// Status of the condition, one of True, False, Unknown.
+	Status v1.ConditionStatus `json:"status,omitempty"`
+	// +optional
+	// Last time the condition transited from one status to another.
+	LastTransitionTime metav1.Time `json:"lastTransitionTime,omitempty"`
+	// +optional
+	// A human readable message indicating details about the transition.
+	Message string `json:"message,omitempty"`
+	// +optional
+	// Unique, one-word, CamelCase reason for the condition's last transition.
+	Reason string `json:"reason,omitempty"`
+}
+
+type ClusterConditionType string
+
+const (
+	// ClusterReady indicates whether Cluster is ready and connected.
+	ClusterReady ClusterConditionType = "Ready"
+	// ClusterIsLeader indicates whether Cluster is leader.
+	ClusterIsLeader ClusterConditionType = "IsLeader"
+)
+
+// ClusterCondition indicates the readiness condition of a cluster.
+type ClusterCondition struct {
+	Type ClusterConditionType `json:"type,omitempty"`
+	// Status of the condition, one of True, False, Unknown.
+	Status v1.ConditionStatus `json:"status,omitempty"`
+
+	// +optional
+	// Last time the condition transited from one status to another.
+	LastTransitionTime metav1.Time `json:"lastTransitionTime,omitempty"`
+	// +optional
+	// A human readable message indicating details about the transition.
+	Message string `json:"message,omitempty"`
+	// +optional
+	// Unique, one-word, CamelCase reason for the condition's last transition.
+	Reason string `json:"reason,omitempty"`
+}
+
+type ClusterStatus struct {
+	// ClusterID is the unique identifier of this cluster.
+	ClusterID  string             `json:"clusterID,omitempty"`
+	Conditions []ClusterCondition `json:"conditions,omitempty"`
+}
+
+// ClusterSetStatus defines the observed state of ClusterSet.
 type ClusterSetStatus struct {
-	// Important: Run "make" to regenerate code after modifying this file
-	// TBD
+	// Total number of member clusters configured in the set.
+	TotalClusters int32 `json:"totalClusters,omitempty"`
+	// Total number of clusters ready and connected.
+	ReadyClusters int32 `json:"readyClusters,omitempty"`
+	// The overall condition of the cluster set.
+	Conditions []ClusterSetCondition `json:"conditions,omitempty"`
+	// The status of individual member clusters.
+	ClusterStatuses []ClusterStatus `json:"clusterStatuses,omitempty"`
+	// The generation observed by the controller.
+	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 }
 
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
 
-// ClusterSet is the Schema for the clustersets API
+// ClusterSet is the Schema for the clustersets API.
 type ClusterSet struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -67,7 +128,7 @@ type ClusterSet struct {
 
 //+kubebuilder:object:root=true
 
-// ClusterSetList contains a list of ClusterSet
+// ClusterSetList contains a list of ClusterSet.
 type ClusterSetList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
