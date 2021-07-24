@@ -434,6 +434,43 @@ spec:
             type: object
           status:
             description: ResourceImportStatus defines the observed state of ResourceImport
+            properties:
+              clusterStatuses:
+                items:
+                  description: ResourceImportClusterStatus indicates the readiness
+                    status of the ResourceImport in clusters
+                  properties:
+                    clusterID:
+                      description: ClusterID is the unique identifier of this cluster.
+                      type: string
+                    conditions:
+                      items:
+                        description: ResourceImportCondition indicates the condition
+                          of the ResourceImport in a cluster
+                        properties:
+                          lastTransitionTime:
+                            description: Last time the condition transited from one
+                              status to another
+                            format: date-time
+                            type: string
+                          message:
+                            description: A human readable message indicating details
+                              about the transition
+                            type: string
+                          reason:
+                            description: Unique, one-word, CamelCase reason for the
+                              condition's last transition.
+                            type: string
+                          status:
+                            description: Status of the condition, one of True, False,
+                              Unknown
+                            type: string
+                          type:
+                            type: string
+                        type: object
+                      type: array
+                  type: object
+                type: array
             type: object
         type: object
     served: true
