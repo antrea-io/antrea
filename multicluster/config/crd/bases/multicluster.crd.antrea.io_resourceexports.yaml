@@ -655,6 +655,32 @@ spec:
             type: object
           status:
             description: ResourceExportStatus defines the observed state of ResourceExport
+            properties:
+              conditions:
+                items:
+                  description: ResourceExportCondition indicates the readiness condition
+                    of the ResourceExport
+                  properties:
+                    lastTransitionTime:
+                      description: Last time the condition transited from one status
+                        to another
+                      format: date-time
+                      type: string
+                    message:
+                      description: A human readable message indicating details about
+                        the transition
+                      type: string
+                    reason:
+                      description: Unique, one-word, CamelCase reason for the condition's
+                        last transition.
+                      type: string
+                    status:
+                      description: Status of the condition, one of True, False, Unknown
+                      type: string
+                    type:
+                      type: string
+                  type: object
+                type: array
             type: object
         type: object
     served: true
