@@ -1129,7 +1129,7 @@ func (n *NetworkPolicyController) getClusterGroupMemberSet(group *antreatypes.Gr
 		childGroup, found, _ := n.internalGroupStore.Get(childName)
 		if found {
 			child := childGroup.(*antreatypes.Group)
-			groupMemberSet = groupMemberSet.Union(n.getMemberSetForGroupType(clusterGroupType, child.Name))
+			groupMemberSet.Merge(n.getMemberSetForGroupType(clusterGroupType, child.Name))
 		}
 	}
 	return groupMemberSet
