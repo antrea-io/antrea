@@ -18,6 +18,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"net"
 )
 
 type TraceflowPhase string
@@ -556,4 +557,32 @@ type TierList struct {
 	metav1.ListMeta `json:"metadata,omitempty"`
 
 	Items []Tier `json:"items"`
+}
+
+type Multicast struct {
+	metav1.TypeMeta `json:",inline"`
+	// Standard metadata of the object.
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	// Specification of the desired behavior of Tier.
+	Spec MulticastSpec `json:"spec"`
+}
+
+type MulticastSpec struct {
+	// Specify the Multicast group Pods and external addresses need to join in.
+	Mgroup net.IP
+	// Select Pods to join the Multicast group.
+	PodSelector *metav1.LabelSelector `json:"podSelector,omitempty"`
+	// Specify the interfaces on which the Multicast traffic is forwarded to/from with external addresses.
+	ExternalInterfaces string
+	// Specify if Pod's source address is shown or translated. The default value is false.
+	Local bool
+}
+
+type MulticastList struct {
+	metav1.TypeMeta `json:",inline"`
+	// +optional
+	metav1.ListMeta `json:"metadata,omitempty"`
+
+	Items []Multicast `json:"items"`
 }

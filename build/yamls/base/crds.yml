@@ -2,6 +2,110 @@
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
+  name: multicasts.crd.antrea.io
+spec:
+  group: crd.antrea.io
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          required:
+            - spec
+          properties:
+            spec:
+              type: object
+              required:
+                - mgroup
+              properties:
+                mgroup:
+                  type: string
+                  oneOf:
+                    - format: ipv4
+                    - format: ipv6
+                members:
+                  type: object
+                  properties:
+                    podSelector:
+                      type: object
+                      properties:
+                        matchExpressions:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              key:
+                                type: string
+                              operator:
+                                enum:
+                                  - In
+                                  - NotIn
+                                  - Exists
+                                  - DoesNotExist
+                                type: string
+                              values:
+                                type: array
+                                items:
+                                  type: string
+                        matchLabels:
+                          x-kubernetes-preserve-unknown-fields: true
+                externalInterfaces:
+                  type: string
+                local:
+                  type: boolean
+            status:
+              type: object
+              properties:
+                memberStatus:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      node:
+                        type: string
+                      pods:
+                        type: object
+                        properties:
+                          name:
+                            type: string
+                          IPs:
+                            type: array
+                            items:
+                              type: string
+                              OneOf:
+                                - format: IPv4
+                                - format: IPv6
+      additionalPrinterColumns:
+        - description: The Multicast address for Pods to join.
+          jsonPath: .spec.mgroup
+          name: MulticastGroup
+          type: string
+        - jsonPath: .metadata.creationTimestamp
+          name: Age
+          type: date
+        - description: The interface on which the Multicast traffic is sent to the external clients
+          jsonPath: .spec.externalInterfaces
+          name: ExternalInterfaces
+          type: string
+        - description: The Nodes on which the Pods in the cluster have joined in the Mutlicast group
+          jsonPath: .status.memberStatus.node
+          name: Node
+          type: string
+      subresources:
+        status: {}
+  scope: Cluster
+  names:
+    plural: multicasts
+    singular: multicast
+    kind: Multicast
+    shortNames:
+      - mc
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
   name: egresses.crd.antrea.io
 spec:
   group: crd.antrea.io
