@@ -56,3 +56,34 @@ func NewEndpointInfo(baseInfo *k8sproxy.BaseEndpointInfo) k8sproxy.Endpoint {
 }
 
 type EndpointsMap map[k8sproxy.ServicePortName]map[string]k8sproxy.Endpoint
+
+func (m EndpointsMap) Equal(o EndpointsMap) bool {
+	if m == nil && o == nil {
+		return true
+	}
+	if m == nil || o == nil {
+		return false
+	}
+	if len(m) != len(o) {
+		return false
+	}
+	for svcPortName, endpoints := range m {
+		otherEndpoints, exists := o[svcPortName]
+		if !exists {
+			return false
+		}
+		if len(endpoints) != len(otherEndpoints) {
+			return false
+		}
+		for endpointKey, endpoint := range endpoints {
+			otherEndpoint, exists := otherEndpoints[endpointKey]
+			if !exists {
+				return false
+			}
+			if !endpoint.Equal(otherEndpoint) {
+				return false
+			}
+		}
+	}
+	return true
+}

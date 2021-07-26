@@ -17,7 +17,6 @@ package proxy
 import (
 	"fmt"
 	"net"
-	"reflect"
 	"sync"
 
 	corev1 "k8s.io/api/core/v1"
@@ -100,7 +99,7 @@ func (t *endpointsChangesTracker) OnEndpointUpdate(previous, current *corev1.End
 
 	change.current = t.endpointsToEndpointsMap(current)
 	// If change.previous equals to change.current, it means no change.
-	if reflect.DeepEqual(change.previous, change.current) {
+	if change.previous.Equal(change.current) {
 		delete(t.changes, namespacedName)
 	}
 
