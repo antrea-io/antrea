@@ -75,11 +75,11 @@ func (event *egressGroupEvent) ToWatchEvent(selectors *storage.Selectors, isInit
 		} else {
 			currMembers = controlplane.GroupMemberSet{}
 			for _, members := range event.CurrGroup.GroupMemberByNode {
-				currMembers = currMembers.Union(members)
+				currMembers.Merge(members)
 			}
 			prevMembers = controlplane.GroupMemberSet{}
 			for _, members := range event.PrevGroup.GroupMemberByNode {
-				prevMembers = prevMembers.Union(members)
+				prevMembers.Merge(members)
 			}
 		}
 		for _, member := range currMembers.Difference(prevMembers) {
