@@ -11,6 +11,12 @@ Some experimental features can be enabled / disabled using [Feature Gates](docs/
 
 ## Unreleased
 
+## 0.13.5 - 2021-07-27
+
+### Fixed
+
+- Upgrade OVS version to 2.14.2 to pick up security fixes for CVE-2015-8011, CVE-2020-27827 and CVE-2020-35498. ([#2451](https://github.com/antrea-io/antrea/pull/2451), [@antoninbas])
+
 ## 0.13.4 - 2021-07-16
 
 ### Fixed
