@@ -488,9 +488,7 @@ func (n *NetworkPolicyController) processRefCG(g string) (string, []controlplane
 	// Retrieve ClusterGroup for corresponding entry in the rule.
 	cg, err := n.cgLister.Get(g)
 	if err != nil {
-		// This error should not occur as we validate that a CG must exist before
-		// referencing it in an ACNP.
-		klog.Errorf("ClusterGroup %s not found: %v", g, err)
+		// The ClusterGroup referred to has not been created yet.
 		return "", nil
 	}
 	key := internalGroupKeyFunc(cg)
@@ -515,9 +513,7 @@ func (n *NetworkPolicyController) processAppliedToGroupForCG(g string) string {
 	// Retrieve ClusterGroup for corresponding entry in the AppliedToGroup.
 	cg, err := n.cgLister.Get(g)
 	if err != nil {
-		// This error should not occur as we validate that a CG must exist before
-		// referencing it in an ACNP.
-		klog.Errorf("ClusterGroup %s not found: %v", g, err)
+		// The ClusterGroup referred to has not been created yet.
 		return ""
 	}
 	key := internalGroupKeyFunc(cg)

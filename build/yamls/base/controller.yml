@@ -130,7 +130,7 @@ webhooks:
         namespace: "kube-system"
         path: "/validate/clustergroup"
     rules:
-      - operations: ["CREATE", "UPDATE", "DELETE"]
+      - operations: ["CREATE", "UPDATE"]
         apiGroups: ["crd.antrea.io"]
         apiVersions: ["v1alpha3", "v1alpha2"]
         resources: ["clustergroups"]

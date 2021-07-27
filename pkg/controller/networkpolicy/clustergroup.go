@@ -108,11 +108,24 @@ func (c *NetworkPolicyController) deleteClusterGroup(oldObj interface{}) {
 		}
 	}
 	key := internalGroupKeyFunc(og)
-	klog.V(2).Infof("Deleting internal Group %s", key)
-	err := c.internalGroupStore.Delete(key)
-	if err != nil {
-		klog.Errorf("Unable to delete internal Group %s from store: %v", key, err)
+	grpObj, found, _ := c.internalGroupStore.Get(key)
+	if found {
+		grp := grpObj.(*antreatypes.Group)
+		klog.V(2).Infof("Deleting internal Group %s", key)
+		err := c.internalGroupStore.Delete(key)
+		if err != nil {
+			klog.Errorf("Unable to delete internal Group %s from store: %v", key, err)
+		}
+		c.triggerParentGroupSync(grp)
 	}
+	// TODO: triggerCNPUpdates is done here rather than syncInternalGroup in case of deletion. If we
+	//  want to rely on syncInternalGroup for ACNP syncs, the internal group needs to be deleted from
+	//  the internal store after syncInternalGroup. However, at the time of ACNP sync, we also want to
+	//  ensure that the group is deleted from internal store already, so that we don't include outdated
+	//  members. Since this process is async, there's no guarantee which happens first. The drawback is
+	//  that all ACNPs that refers to this CG directly will be synchronously processed once as part of
+	//  deletion handler, which could cause perf issue in scale.
+	c.triggerCNPUpdates(og)
 	c.enqueueInternalGroup(key)
 }
 
