@@ -285,8 +285,8 @@ function deliver_antrea {
     docker image prune -f --filter "until=1h" || true > /dev/null
     cd $GIT_CHECKOUT_DIR
     if [[ ${DOCKER_REGISTRY} != "" ]]; then
-        docker pull ${DOCKER_REGISTRY}/antrea/base-ubuntu:2.14.0
-        docker tag ${DOCKER_REGISTRY}/antrea/base-ubuntu:2.14.0 antrea/base-ubuntu:2.14.0
+        docker pull ${DOCKER_REGISTRY}/antrea/base-ubuntu:2.14.2
+        docker tag ${DOCKER_REGISTRY}/antrea/base-ubuntu:2.14.2 antrea/base-ubuntu:2.14.2
         docker pull ${DOCKER_REGISTRY}/antrea/golang:1.15
         docker tag ${DOCKER_REGISTRY}/antrea/golang:1.15 golang:1.15
     fi
@@ -391,8 +391,8 @@ function run_integration {
     set -x
     echo "===== Run Integration test ====="
     if [[ ${DOCKER_REGISTRY} != "" ]]; then
-        docker pull ${DOCKER_REGISTRY}/antrea/openvswitch:2.14.0
-        docker tag ${DOCKER_REGISTRY}/antrea/openvswitch:2.14.0 antrea/openvswitch:2.14.0
+        docker pull ${DOCKER_REGISTRY}/antrea/openvswitch:2.14.2
+        docker tag ${DOCKER_REGISTRY}/antrea/openvswitch:2.14.2 antrea/openvswitch:2.14.2
     fi
     ssh -q -o StrictHostKeyChecking=no -i "${WORKDIR}/utils/key" -n jenkins@${VM_IP} "git clone ${ghprbAuthorRepoGitUrl} antrea && cd antrea && git checkout ${GIT_BRANCH} && DOCKER_REGISTRY=${DOCKER_REGISTRY} make docker-test-integration"
     if [[ "$COVERAGE" == true ]]; then
