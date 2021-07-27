@@ -16,6 +16,7 @@ package ip
 
 import (
 	"bytes"
+	"fmt"
 	"net"
 	"sort"
 
@@ -168,4 +169,13 @@ func IPProtocolNumberToString(protocolNum uint8, defaultValue string) string {
 	default:
 		return defaultValue
 	}
+}
+
+// MustParseCIDR turns the given string into IPNet or panics, for tests or other cases where the string must be valid.
+func MustParseCIDR(cidr string) *net.IPNet {
+	_, ipNet, err := net.ParseCIDR(cidr)
+	if err != nil {
+		panic(fmt.Errorf("cannot parse '%v': %v", cidr, err))
+	}
+	return ipNet
 }
