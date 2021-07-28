@@ -1091,19 +1091,13 @@ func (c *client) l2ForwardOutputServiceHairpinFlow() binding.Flow {
 
 // l2ForwardOutputFlows generates the flows that output packets to OVS port after L2 forwarding calculation.
 func (c *client) l2ForwardOutputFlows(category cookie.Category) []binding.Flow {
-	var flows []binding.Flow
-	flows = append(flows,
-		c.pipeline[L2ForwardingOutTable].BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
+	flows := []binding.Flow{
+		c.pipeline[L2ForwardingOutTable].BuildFlow(priorityNormal).
 			MatchRegRange(int(marksReg), portFoundMark, ofPortMarkRange).
 			Action().OutputRegRange(int(PortCacheReg), ofPortRegRange).
 			Cookie(c.cookieAllocator.Request(category).Raw()).
 			Done(),
-		c.pipeline[L2ForwardingOutTable].BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIPv6).
-			MatchRegRange(int(marksReg), portFoundMark, ofPortMarkRange).
-			Action().OutputRegRange(int(PortCacheReg), ofPortRegRange).
-			Cookie(c.cookieAllocator.Request(category).Raw()).
-			Done(),
-	)
+	}
 	return flows
 }
 
