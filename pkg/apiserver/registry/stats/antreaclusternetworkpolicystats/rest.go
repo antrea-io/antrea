@@ -63,10 +63,10 @@ func (r *REST) NewList() runtime.Object {
 
 func (r *REST) List(ctx context.Context, options *internalversion.ListOptions) (runtime.Object, error) {
 	if !features.DefaultFeatureGate.Enabled(features.NetworkPolicyStats) {
-		return nil, errors.NewBadRequest("feature NetworkPolicyStats disabled")
+		return &statsv1alpha1.AntreaClusterNetworkPolicyStatsList{}, nil
 	}
 	if !features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
-		return nil, errors.NewBadRequest("feature AntreaPolicy disabled")
+		return &statsv1alpha1.AntreaClusterNetworkPolicyStatsList{}, nil
 	}
 	labelSelector := labels.Everything()
 	if options != nil && options.LabelSelector != nil {
@@ -87,10 +87,10 @@ func (r *REST) List(ctx context.Context, options *internalversion.ListOptions) (
 
 func (r *REST) Get(ctx context.Context, name string, options *metav1.GetOptions) (runtime.Object, error) {
 	if !features.DefaultFeatureGate.Enabled(features.NetworkPolicyStats) {
-		return nil, errors.NewBadRequest("feature NetworkPolicyStats disabled")
+		return &statsv1alpha1.AntreaClusterNetworkPolicyStats{}, nil
 	}
 	if !features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
-		return nil, errors.NewBadRequest("feature AntreaPolicy disabled")
+		return &statsv1alpha1.AntreaClusterNetworkPolicyStats{}, nil
 	}
 	metric, exists := r.statsProvider.GetAntreaClusterNetworkPolicyStats(name)
 	if !exists {

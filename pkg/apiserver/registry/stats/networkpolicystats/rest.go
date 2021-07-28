@@ -64,7 +64,7 @@ func (r *REST) NewList() runtime.Object {
 
 func (r *REST) List(ctx context.Context, options *internalversion.ListOptions) (runtime.Object, error) {
 	if !features.DefaultFeatureGate.Enabled(features.NetworkPolicyStats) {
-		return nil, errors.NewBadRequest("feature NetworkPolicyStats disabled")
+		return &statsv1alpha1.NetworkPolicyStatsList{}, nil
 	}
 	labelSelector := labels.Everything()
 	if options != nil && options.LabelSelector != nil {

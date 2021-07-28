@@ -64,10 +64,10 @@ func (r *REST) NewList() runtime.Object {
 
 func (r *REST) List(ctx context.Context, options *internalversion.ListOptions) (runtime.Object, error) {
 	if !features.DefaultFeatureGate.Enabled(features.NetworkPolicyStats) {
-		return nil, errors.NewBadRequest("feature NetworkPolicyStats disabled")
+		return &statsv1alpha1.AntreaNetworkPolicyStatsList{}, nil
 	}
 	if !features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
-		return nil, errors.NewBadRequest("feature AntreaPolicy disabled")
+		return &statsv1alpha1.AntreaNetworkPolicyStatsList{}, nil
 	}
 	labelSelector := labels.Everything()
 	if options != nil && options.LabelSelector != nil {
@@ -89,10 +89,10 @@ func (r *REST) List(ctx context.Context, options *internalversion.ListOptions) (
 
 func (r *REST) Get(ctx context.Context, name string, options *metav1.GetOptions) (runtime.Object, error) {
 	if !features.DefaultFeatureGate.Enabled(features.NetworkPolicyStats) {
-		return nil, errors.NewBadRequest("feature NetworkPolicyStats disabled")
+		return &statsv1alpha1.AntreaNetworkPolicyStats{}, nil
 	}
 	if !features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
-		return nil, errors.NewBadRequest("feature AntreaPolicy disabled")
+		return &statsv1alpha1.AntreaNetworkPolicyStats{}, nil
 	}
 	ns, ok := request.NamespaceFrom(ctx)
 	if !ok || len(ns) == 0 {
