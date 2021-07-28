@@ -32,7 +32,9 @@ provided.
                                         Antrea) to the current version.
         --from-version-n-minus <COUNT>  Get all the released versions of Antrea and run the upgrade
                                         test from the latest bug fix release for *minor* version
-                                        N-{COUNT}. N-1 designates the latest minor release.
+                                        N-{COUNT}. N-1 designates the latest minor release. If this
+                                        script is run from a release branch, it will only consider
+                                        releases which predate that relase branch.
         --controller-only               Update antrea-controller only when upgrading.
         --help, -h                      Print this message and exit
 "
@@ -82,6 +84,31 @@ if [ -z "$FROM_TAG" ] && [ -z "$FROM_VERSION_N_MINUS" ]; then
     exit 1
 fi
 
+case $FROM_VERSION_N_MINUS in
+    ''|*[!0-9]*)
+    echoerr "--from-version-n-minus must be a number greater than 0"
+    print_help
+    exit 1
+    ;;
+    *)
+    ;;
+esac
+
+if [ ! "$FROM_VERSION_N_MINUS" -gt "0" ]; then
+    echoerr "--from-version-n-minus must be a number greater than 0"
+    print_help
+    exit 1
+fi
+
+function version_lt() { test "$(printf '%s\n' "$@" | sort -rV | head -n 1)" != "$1"; }
+
+# We want to ignore all minor versions greater than the current version, as an upgrade test implies
+# that we are upgrading from an *older* version. This is useful when running this script from a
+# release branch (e.g. when testing patch release candidates).
+CURRENT_VERSION=$(head -n1 $ROOT_DIR/VERSION)
+CURRENT_VERSION=${CURRENT_VERSION:1} # strip leading 'v'
+CURRENT_VERSION=${CURRENT_VERSION%-*} # strip "-dev" suffix if present
+
 # Exclude peeled tags and release candidates from the version list.
 VERSIONS=$(git ls-remote --tags --ref https://github.com/antrea-io/antrea.git | \
                grep -v rc | \
@@ -95,16 +122,17 @@ if [ ! -z "$FROM_TAG" ]; then
         echoerr "$FROM_TAG is not a valid Antrea tag"
         exit 1
     fi
-else
-    # Set FROM_TAG using the provided FROM_VERSION_N_MINUS value
-    minor_version=
+else # Set FROM_TAG using the provided FROM_VERSION_N_MINUS value
+    arr=( ${CURRENT_VERSION//./ } ) # x.y.z -> (x y z)
+    minor_version="${arr[0]}.${arr[1]}"
     count=
     for version in $VERSIONS; do
         version_nums=${version:1} # strip leading 'v'
         arr=( ${version_nums//./ } ) # x.y.z -> (x y z)
-        if [ "$minor_version" != "${arr[1]}" ]; then # change in minor version, increase $count
+        new_minor_version="${arr[0]}.${arr[1]}"
+        if version_lt $new_minor_version $minor_version; then # change in minor version, increase $count
             ((count+=1))
-            minor_version="${arr[1]}"
+            minor_version=$new_minor_version
             if [ "$count" == "$FROM_VERSION_N_MINUS" ]; then # we went back enough, use this version
                 FROM_TAG="$version"
                 break
