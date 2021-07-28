@@ -7,7 +7,7 @@ removal when appropriate. It is kept up-to-date as we evolve the Antrea API.
 Starting with the v1.0 release, we decided to group all the Custom Resource
 Definitions (CRDs) defined by Antrea in a single API group, `crd.antrea.io`,
 instead of grouping CRDs logically in different API groups based on their
-purposes. The rationale for this change was to avoid profileration of API
+purposes. The rationale for this change was to avoid proliferation of API
 groups. As a result, all resources in the `crd.antrea.io` are versioned
 individually, while before the v1.0 release, we used to have a single version
 number for all the CRDs in a given group: when introducing a new version of the
@@ -70,7 +70,7 @@ For the v1.0 release, we undertook to rename all Antrea API to use the
 information about the motivations behind this undertaking, please refer to
 [Github issue #1715](https://github.com/antrea-io/antrea/issues/1715).
 
-As part of this renaming, and to avoid profileration of API groups, we have
+As part of this renaming, and to avoid proliferation of API groups, we have
 decided to group all the Custom Resource Definitions (CRDs) defined by Antrea in
 a single API group: `crd.antrea.io`.
 
