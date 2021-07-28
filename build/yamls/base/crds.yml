@@ -177,6 +177,30 @@ spec:
                       type: array
                     matchLabels:
                       x-kubernetes-preserve-unknown-fields: true
+            status:
+              type: object
+              properties:
+                usage:
+                  type: object
+                  properties:
+                    total:
+                      type: integer
+                    used:
+                      type: integer
+      additionalPrinterColumns:
+        - description: The number of total IPs
+          jsonPath: .status.usage.total
+          name: Total
+          type: integer
+        - description: The number of allocated IPs
+          jsonPath: .status.usage.used
+          name: Used
+          type: integer
+        - jsonPath: .metadata.creationTimestamp
+          name: Age
+          type: date
+      subresources:
+        status: {}
   scope: Cluster
   names:
     plural: externalippools

@@ -231,6 +231,14 @@ func (ma MultiIPAllocator) Used() int {
 	return used
 }
 
+func (ma MultiIPAllocator) Total() int {
+	total := 0
+	for _, a := range ma {
+		total += a.max
+	}
+	return total
+}
+
 func (ma MultiIPAllocator) Has(ip net.IP) bool {
 	for _, a := range ma {
 		if a.Has(ip) {

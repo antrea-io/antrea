@@ -216,6 +216,12 @@ rules:
       - get
       - watch
       - list
+  - apiGroups:
+      - crd.antrea.io
+    resources:
+      - externalippools/status
+    verbs:
+      - update
   # Deprecated in v1.0.0.
   - apiGroups:
     - clusterinformation.antrea.tanzu.vmware.com
