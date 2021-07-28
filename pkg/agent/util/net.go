@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"strings"
 )
 
 const (
@@ -38,10 +39,15 @@ func generateInterfaceName(key string, name string, useHead bool) string {
 	interfaceKey := hex.EncodeToString(hash.Sum(nil))
 	prefix := name
 	if len(name) > interfacePrefixLength {
+		// We use Node/Pod name to generate the interface name,
+		// valid chars for Node/Pod name are ASCII letters from a to z,
+		// the digits from 0 to 9, and the hyphen (-).
+		// Hyphen (-) is the only char which will impact command-line interpretation
+		// if the interface name starts with one, so we remove it here.
 		if useHead {
-			prefix = name[:interfacePrefixLength]
+			prefix = strings.TrimLeft(name[:interfacePrefixLength], "-")
 		} else {
-			prefix = name[len(name)-interfacePrefixLength:]
+			prefix = strings.TrimLeft(name[len(name)-interfacePrefixLength:], "-")
 		}
 	}
 	return fmt.Sprintf("%s-%s", prefix, interfaceKey[:interfaceKeyLength])
