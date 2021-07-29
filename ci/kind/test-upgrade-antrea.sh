@@ -34,7 +34,7 @@ provided.
                                         test from the latest bug fix release for *minor* version
                                         N-{COUNT}. N-1 designates the latest minor release. If this
                                         script is run from a release branch, it will only consider
-                                        releases which predate that relase branch.
+                                        releases which predate that release branch.
         --controller-only               Update antrea-controller only when upgrading.
         --help, -h                      Print this message and exit
 "
