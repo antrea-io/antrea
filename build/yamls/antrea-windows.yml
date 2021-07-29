@@ -96,6 +96,11 @@ data:
     # hybrid:            noEncap if source and destination Nodes are on the same subnet, otherwise encap.
     #
     #trafficEncapMode: encap
+
+    # The name of the interface on Node which is used for tunneling or routing the traffic across Nodes.
+    # If there are multiple IP addresses configured on the interface, the first one is used.
+    # The interface configured with Node IP is used if this parameter is not set.
+    #transportInterface:
   antrea-cni.conflist: |
     {
         "cniVersion":"0.3.0",
@@ -114,7 +119,7 @@ kind: ConfigMap
 metadata:
   labels:
     app: antrea
-  name: antrea-windows-config-g5hmmkbh55
+  name: antrea-windows-config-74ctmgh7mf
   namespace: kube-system
 ---
 apiVersion: apps/v1
@@ -202,7 +207,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-windows-config-g5hmmkbh55
+          name: antrea-windows-config-74ctmgh7mf
         name: antrea-windows-config
       - configMap:
           defaultMode: 420

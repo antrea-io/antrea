@@ -24,14 +24,6 @@ import (
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 )
 
-// externalFlows returns the flows needed to enable SNAT for external traffic.
-func (c *client) externalFlows(nodeIP net.IP, localSubnet net.IPNet, localGatewayMAC net.HardwareAddr) []binding.Flow {
-	if !c.enableEgress {
-		return nil
-	}
-	return c.snatCommonFlows(nodeIP, localSubnet, localGatewayMAC, cookie.SNAT)
-}
-
 func (c *client) snatMarkFlows(snatIP net.IP, mark uint32) []binding.Flow {
 	return []binding.Flow{c.snatIPFromTunnelFlow(snatIP, mark)}
 }

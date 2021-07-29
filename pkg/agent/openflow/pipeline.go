@@ -906,25 +906,6 @@ func (c *client) serviceLBBypassFlows(ipProtocol binding.Protocol) []binding.Flo
 			Cookie(c.cookieAllocator.Request(cookie.Service).Raw()).
 			Done(),
 	}
-
-	if runtime.IsWindowsPlatform() && ipProtocol == binding.ProtocolIP {
-		// Handle the reply packets of the connection which are applied both DNAT and SNAT.
-		// The packets have following characteristics:
-		//   - Received from uplink
-		//   - ct_state is "-new+trk"
-		//   - ct_mark is set to 0x21(ServiceCTMark)
-		// This flow resubmits the packets to the following table to avoid being forwarded
-		// to the bridge port by default.
-		flows = append(flows, c.pipeline[conntrackStateTable].BuildFlow(priorityHigh).
-			MatchProtocol(ipProtocol).
-			MatchCTStateNew(false).MatchCTStateTrk(true).
-			MatchCTMark(ServiceCTMark, nil).
-			MatchRegRange(int(marksReg), markTrafficFromUplink, binding.Range{0, 15}).
-			Action().LoadRegRange(int(marksReg), macRewriteMark, macRewriteMarkRange).
-			Action().GotoTable(EgressRuleTable).
-			Cookie(c.cookieAllocator.Request(cookie.Service).Raw()).
-			Done())
-	}
 	return flows
 }
 
@@ -2116,6 +2097,14 @@ func (c *client) decTTLFlows(category cookie.Category) []binding.Flow {
 		)
 	}
 	return flows
+}
+
+// externalFlows returns the flows needed to enable SNAT for external traffic.
+func (c *client) externalFlows(nodeIP net.IP, localSubnet net.IPNet, localGatewayMAC net.HardwareAddr) []binding.Flow {
+	if !c.enableEgress {
+		return nil
+	}
+	return c.snatCommonFlows(nodeIP, localSubnet, localGatewayMAC, cookie.SNAT)
 }
 
 // policyConjKeyFuncKeyFunc knows how to get key of a *policyRuleConjunction.
