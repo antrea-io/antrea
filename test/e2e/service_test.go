@@ -42,16 +42,6 @@ func TestClusterIP(t *testing.T) {
 	defer cleanup()
 	t.Logf("%s Service is ready", svcName)
 
-	testFromNode := func(node string) {
-		// Retry is needed for rules to be installed by kube-proxy/antrea-proxy.
-		cmd := fmt.Sprintf("curl --connect-timeout 1 --retry 5 --retry-connrefused %s:80", svc.Spec.ClusterIP)
-		rc, stdout, stderr, err := RunCommandOnNode(node, cmd)
-		if rc != 0 || err != nil {
-			t.Errorf("Error when running command '%s' on Node '%s', rc: %d, stdout: %s, stderr: %s, error: %v",
-				cmd, node, rc, stdout, stderr, err)
-		}
-	}
-
 	testFromPod := func(podName, nodeName string, hostNetwork bool) {
 		require.NoError(t, data.createPodOnNode(podName, testNamespace, nodeName, busyboxImage, []string{"sleep", strconv.Itoa(3600)}, nil, nil, nil, hostNetwork, nil))
 		defer data.deletePodAndWait(defaultTimeout, podName, testNamespace)
@@ -75,7 +65,7 @@ func TestClusterIP(t *testing.T) {
 			skipIfNoWindowsNodes(t)
 			idx := clusterInfo.windowsNodes[0]
 			winNode := clusterInfo.nodes[idx].name
-			testFromNode(winNode)
+			testServicefromNode(t, svc, winNode)
 		})
 		t.Run("Linux Pod on same Node can access the Service", func(t *testing.T) {
 			t.Parallel()

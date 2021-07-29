@@ -20,6 +20,7 @@ import (
 	"net"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -85,8 +86,8 @@ func testProxyServiceSessionAffinity(ipFamily *corev1.IPFamily, ingressIPs []str
 		require.NoError(t, err, fmt.Sprintf("ipFamily: %v\nstdout: %s\nstderr: %s\n", *ipFamily, stdout, stderr))
 	}
 
-	data.waitForServiceRealized(defaultTimeout, svc.Name)
-	data.waitForServiceRealized(defaultTimeout, svc_lb.Name)
+	testServicefromNode(t, svc, nodeName)
+	testServicefromNode(t, svc_lb, nodeName)
 
 	agentName, err := data.getAntreaPodOnNode(nodeName)
 	require.NoError(t, err)
@@ -140,9 +141,13 @@ func testProxyHairpin(ipFamily *corev1.IPFamily, data *TestData, t *testing.T) {
 	defer data.deleteServiceAndWait(defaultTimeout, busybox)
 	require.NoError(t, err)
 
-	data.waitForServiceRealized(defaultTimeout, svc.Name)
-
-	stdout, stderr, err := data.runCommandFromPod(testNamespace, busybox, busyboxContainerName, []string{"nc", svc.Spec.ClusterIP, "80", "-w", "1", "-e", "ls", "/"})
+	cmd := []string{
+		"/bin/sh",
+		"-c",
+		fmt.Sprintf("for i in $(seq 1 5); do nc -vz -w 4 %s 80 -e ls && exit 0 || sleep 1; done; exit 1",
+			svc.Spec.ClusterIP),
+	}
+	stdout, stderr, err := data.runCommandFromPod(testNamespace, busybox, busyboxContainerName, cmd)
 	require.NoError(t, err, fmt.Sprintf("ipFamily: %v\nstdout: %s\nstderr: %s\n", *ipFamily, stdout, stderr))
 }
 
@@ -173,11 +178,12 @@ func testProxyEndpointLifeCycle(ipFamily *corev1.IPFamily, data *TestData, t *te
 	require.NoError(t, data.createNginxPodOnNode(nginx, testNamespace, nodeName))
 	nginxIPs, err := data.podWaitForIPs(defaultTimeout, nginx, testNamespace)
 	require.NoError(t, err)
-	svc, err := data.createNginxClusterIPService("", false, ipFamily)
+	_, err = data.createNginxClusterIPService("", false, ipFamily)
 	defer data.deleteServiceAndWait(defaultTimeout, nginx)
 	require.NoError(t, err)
 
-	data.waitForServiceRealized(defaultTimeout, svc.Name)
+	// Wait to make sure the Serivce is realized.
+	time.Sleep(3 * time.Second)
 
 	agentName, err := data.getAntreaPodOnNode(nodeName)
 	require.NoError(t, err)
@@ -247,8 +253,8 @@ func testProxyServiceLifeCycle(ipFamily *corev1.IPFamily, ingressIPs []string, d
 	agentName, err := data.getAntreaPodOnNode(nodeName)
 	require.NoError(t, err)
 
-	data.waitForServiceRealized(defaultTimeout, svc.Name)
-	data.waitForServiceRealized(defaultTimeout, svc_lb.Name)
+	// Wait to make sure the Serivce is realized.
+	time.Sleep(3 * time.Second)
 
 	svcLBflows := make([]string, len(ingressIPs)+1)
 	if *ipFamily == corev1.IPv6Protocol {

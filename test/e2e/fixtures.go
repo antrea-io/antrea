@@ -23,6 +23,7 @@ import (
 	"testing"
 	"time"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/component-base/featuregate"
 
 	"antrea.io/antrea/pkg/agent/config"
@@ -454,4 +455,14 @@ func createTestBusyboxPods(tb testing.TB, data *TestData, num int, ns string, no
 	}
 
 	return podNames, podIPs, cleanupFn
+}
+
+func testServicefromNode(tb testing.TB, svc *corev1.Service, node string) {
+	// Retry is needed for rules to be installed by kube-proxy/antrea-proxy.
+	cmd := fmt.Sprintf("curl --connect-timeout 1 --retry 5 --retry-connrefused %s:80", svc.Spec.ClusterIP)
+	rc, stdout, stderr, err := RunCommandOnNode(node, cmd)
+	if rc != 0 || err != nil {
+		tb.Errorf("Error when running command '%s' on Node '%s', rc: %d, stdout: %s, stderr: %s, error: %v",
+			cmd, node, rc, stdout, stderr, err)
+	}
 }

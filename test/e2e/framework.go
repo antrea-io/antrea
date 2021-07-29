@@ -1041,20 +1041,6 @@ func (data *TestData) deletePodAndWait(timeout time.Duration, name string, ns st
 	}
 }
 
-func (data *TestData) waitForServiceRealized(timeout time.Duration, name string) error {
-	if err := wait.Poll(defaultInterval, timeout, func() (bool, error) {
-		svc, err := data.clientset.CoreV1().Services(testNamespace).Get(context.TODO(), name, metav1.GetOptions{})
-		if svc != nil && err == nil {
-			return true, nil
-		}
-		return false, err
-	}); err == wait.ErrWaitTimeout {
-		return fmt.Errorf("service '%s' is not realized after %v", name, timeout)
-	} else {
-		return err
-	}
-}
-
 type PodCondition func(*corev1.Pod) (bool, error)
 
 // podWaitFor polls the K8s apiserver until the specified Pod is found (in the test Namespace) and
