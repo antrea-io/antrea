@@ -340,7 +340,7 @@ func TestCalculateRuleDiff(t *testing.T) {
 		name              string
 		lastStats         map[types.UID]map[string]*statsv1alpha1.TrafficStats
 		curStats          map[types.UID]map[string]*statsv1alpha1.TrafficStats
-		expectedstatsList []cpv1beta.NetworkPolicyStats
+		expectedStatsList []cpv1beta.NetworkPolicyStats
 	}{
 		{
 			name: "new networkpolicy and existing networkpolicy",
@@ -365,6 +365,11 @@ func TestCalculateRuleDiff(t *testing.T) {
 						Packets:  5,
 						Sessions: 5,
 					},
+					"rule3": {
+						Bytes:    0,
+						Packets:  0,
+						Sessions: 0,
+					},
 				},
 				"uid2": {
 					"rule3": {
@@ -374,7 +379,7 @@ func TestCalculateRuleDiff(t *testing.T) {
 					},
 				},
 			},
-			expectedstatsList: []cpv1beta.NetworkPolicyStats{
+			expectedStatsList: []cpv1beta.NetworkPolicyStats{
 				{
 					NetworkPolicy: cpv1beta.NetworkPolicyReference{UID: "uid1"},
 					RuleTrafficStats: []statsv1alpha1.RuleTrafficStats{
@@ -465,7 +470,7 @@ func TestCalculateRuleDiff(t *testing.T) {
 					},
 				},
 			},
-			expectedstatsList: []cpv1beta.NetworkPolicyStats{},
+			expectedStatsList: []cpv1beta.NetworkPolicyStats{},
 		},
 		{
 			name: "negative statistic",
@@ -499,7 +504,7 @@ func TestCalculateRuleDiff(t *testing.T) {
 					},
 				},
 			},
-			expectedstatsList: []cpv1beta.NetworkPolicyStats{
+			expectedStatsList: []cpv1beta.NetworkPolicyStats{
 				{
 					NetworkPolicy: cpv1beta.NetworkPolicyReference{UID: "uid1"},
 					RuleTrafficStats: []statsv1alpha1.RuleTrafficStats{
@@ -545,12 +550,12 @@ func TestCalculateRuleDiff(t *testing.T) {
 					return v.RuleTrafficStats[i].Name < v.RuleTrafficStats[j].Name
 				})
 			}
-			for _, v := range tt.expectedstatsList {
+			for _, v := range tt.expectedStatsList {
 				sort.SliceStable(v.RuleTrafficStats, func(i, j int) bool {
 					return v.RuleTrafficStats[i].Name < v.RuleTrafficStats[j].Name
 				})
 			}
-			assert.ElementsMatch(t, tt.expectedstatsList, actualMetrics)
+			assert.ElementsMatch(t, tt.expectedStatsList, actualMetrics)
 		})
 	}
 }
