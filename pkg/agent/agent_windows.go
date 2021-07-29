@@ -46,8 +46,10 @@ func (i *Initializer) prepareHostNetwork() error {
 	if _, ok := err.(hcsshim.NetworkNotFoundError); !ok {
 		return err
 	}
-	// Get uplink network configuration.
-	_, adapter, err := util.GetIPNetDeviceFromIP(i.nodeConfig.NodeIPAddr.IP)
+	// Get uplink network configuration. The uplink interface is the one used for transporting Pod traffic across Nodes.
+	// Use the interface specified with "transportInterface" in the configuration if configured, otherwise the interface
+	// configured with NodeIP is used as uplink.
+	_, adapter, err := util.GetIPNetDeviceFromIP(i.nodeConfig.NodeTransportIPAddr.IP)
 	if err != nil {
 		return err
 	}
@@ -66,11 +68,16 @@ func (i *Initializer) prepareHostNetwork() error {
 	}
 	i.nodeConfig.UplinkNetConfig.Name = adapter.Name
 	i.nodeConfig.UplinkNetConfig.MAC = adapter.HardwareAddr
-	i.nodeConfig.UplinkNetConfig.IP = i.nodeConfig.NodeIPAddr
+	i.nodeConfig.UplinkNetConfig.IP = i.nodeConfig.NodeTransportIPAddr
 	i.nodeConfig.UplinkNetConfig.Index = adapter.Index
 	defaultGW, err := util.GetDefaultGatewayByInterfaceIndex(adapter.Index)
 	if err != nil {
-		return err
+		if strings.Contains(err.Error(), "No matching MSFT_NetRoute objects found") {
+			klog.InfoS("No default gateway found on interface", "interface", adapter.Name)
+			defaultGW = ""
+		} else {
+			return err
+		}
 	}
 	i.nodeConfig.UplinkNetConfig.Gateway = defaultGW
 	dnsServers, err := util.GetDNServersByInterfaceIndex(adapter.Index)
@@ -89,7 +96,7 @@ func (i *Initializer) prepareHostNetwork() error {
 	if subnetCIDR == nil {
 		return fmt.Errorf("failed to find valid IPv4 PodCIDR")
 	}
-	return util.PrepareHNSNetwork(subnetCIDR, i.nodeConfig.NodeIPAddr, adapter)
+	return util.PrepareHNSNetwork(subnetCIDR, i.nodeConfig.NodeTransportIPAddr, adapter)
 }
 
 // prepareOVSBridge adds local port and uplink to ovs bridge.
@@ -206,7 +213,7 @@ func (i *Initializer) initHostNetworkFlows() error {
 
 // getTunnelLocalIP returns local_ip of tunnel port
 func (i *Initializer) getTunnelPortLocalIP() net.IP {
-	return i.nodeConfig.NodeIPAddr.IP
+	return i.nodeConfig.NodeTransportIPAddr.IP
 }
 
 // saveHostRoutes saves routes which are configured on uplink interface before
@@ -262,4 +269,19 @@ func (i *Initializer) restoreHostRoutes() error {
 		}
 	}
 	return nil
+}
+
+func GetTransportIPNetDeviceByName(ifaceName string, ovsBridgeName string) (*net.IPNet, *net.Interface, error) {
+	// Find transport Interface in the order: ifaceName -> "vEthernet (ifaceName)" -> br-int. Return immediately if
+	// an interface using the specified name exists. Using "vEthernet (ifaceName)" or br-int is for restart agent case.
+	for _, name := range []string{ifaceName, fmt.Sprintf("vEthernet (%s)", ifaceName), ovsBridgeName} {
+		ipNet, link, err := util.GetIPNetDeviceByName(name)
+		if err == nil {
+			return ipNet, link, nil
+		}
+		if !strings.Contains(err.Error(), "no such network interface") {
+			return nil, nil, err
+		}
+	}
+	return nil, nil, fmt.Errorf("unable to find local IP and device")
 }
