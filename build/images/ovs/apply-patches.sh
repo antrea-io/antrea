@@ -35,8 +35,8 @@ function version_let() { test "$(printf '%s\n' "$@" | sort -V | head -n 1)" == "
 # greater than or equal to
 function version_get() { test "$(printf '%s\n' "$@" | sort -rV | head -n 1)" == "$1"; }
 
-if version_lt "$OVS_VERSION" "2.13.0" || version_get "$OVS_VERSION" "2.15.0"; then
-    echoerr "OVS_VERSION $OVS_VERSION is not supported (must be >= 2.13.0 and < 2.15.0)"
+if version_lt "$OVS_VERSION" "2.13.0" || version_gt "$OVS_VERSION" "2.15.1"; then
+    echoerr "OVS_VERSION $OVS_VERSION is not supported (must be >= 2.13.0 and <= 2.15.1)"
     exit 1
 fi
 
