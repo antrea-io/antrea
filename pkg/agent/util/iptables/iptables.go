@@ -102,12 +102,12 @@ func isRestoreWaitSupported(ipt *iptables.IPTables) bool {
 func (c *Client) EnsureChain(table string, chain string) error {
 	for idx := range c.ipts {
 		ipt := c.ipts[idx]
-		oriChains, err := ipt.ListChains(table)
+		exists, err := ipt.ChainExists(table, chain)
 		if err != nil {
-			return fmt.Errorf("error listing existing chains in table %s: %v", table, err)
+			return fmt.Errorf("error checking if chain %s exists in table %s: %v", chain, table, err)
 		}
-		if contains(oriChains, chain) {
-			return nil
+		if exists {
+			continue
 		}
 		if err := ipt.NewChain(table, chain); err != nil {
 			return fmt.Errorf("error creating chain %s in table %s: %v", chain, table, err)
@@ -120,11 +120,11 @@ func (c *Client) EnsureChain(table string, chain string) error {
 // ChainExists checks if a chain already exists in a table
 func (c *Client) ChainExists(table string, chain string) (bool, error) {
 	for idx := range c.ipts {
-		allChains, err := c.ipts[idx].ListChains(table)
+		exists, err := c.ipts[idx].ChainExists(table, chain)
 		if err != nil {
-			return false, fmt.Errorf("error listing existing chains in table %s: %v", table, err)
+			return false, fmt.Errorf("error checking if chain %s exists in table %s: %v", chain, table, err)
 		}
-		if contains(allChains, chain) {
+		if exists {
 			return true, nil
 		}
 	}
@@ -290,15 +290,6 @@ func (c *Client) Save() ([]byte, error) {
 		output = append(output, data...)
 	}
 	return output, nil
-}
-
-func contains(chains []string, targetChain string) bool {
-	for _, val := range chains {
-		if val == targetChain {
-			return true
-		}
-	}
-	return false
 }
 
 func MakeChainLine(chain string) string {
