@@ -47,8 +47,8 @@ func ParsePortsRange(portRangeConfig string) (start, end int, err error) {
 }
 
 // BuildPortProto creates a single string using port and protocol separated by a delimiter.
-func BuildPortProto(port, prototcol string) string {
-	return port + delim + strings.ToLower(prototcol)
+func BuildPortProto(port, protocol string) string {
+	return port + delim + strings.ToLower(protocol)
 }
 
 // ParsePortProto separates out port and protocol from a string generated using BuildPortProto.

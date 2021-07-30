@@ -65,6 +65,7 @@ const (
 	defaultAppSelectorKey = "foo"
 	defaultAppSelectorVal = "test-pod"
 	protocolTCP           = "TCP"
+	protocolUDP           = "UDP"
 )
 
 type fakeSocket struct{}
@@ -637,6 +638,73 @@ func TestMultiplePods(t *testing.T) {
 	assert.True(t, testData.portTable.RuleExists(testPod2.Status.PodIP, defaultPort, protocolToString(protocolTCP)))
 
 	assert.NotEqual(t, nplData1[0].NodePort, nplData2[0].NodePort)
+}
+
+// TestMultipleProtocols creates multiple Pods with multiple protocols and verifies that
+// NPL annotations and iptable rules for both Pods and Protocols are updated correctly.
+func TestMultipleProtocols(t *testing.T) {
+	tcpUdpSvcLabel := map[string]string{"tcp": "true", "udp": "true"}
+	udpSvcLabel := map[string]string{"tcp": "false", "udp": "true"}
+
+	testPod1 := getTestPod()
+	testPod1.Name = "pod1"
+	testPod1.Status.PodIP = "10.10.10.1"
+	testPod1.Labels = tcpUdpSvcLabel
+
+	testPod2 := getTestPod()
+	testPod2.Name = "pod2"
+	testPod2.Status.PodIP = "10.10.10.2"
+	testPod2.Labels = udpSvcLabel
+
+	// Create TCP/80 testSvc1 for pod1.
+	testSvc1 := getTestSvc()
+	testSvc1.Name = "svc1"
+	testSvc1.Spec.Selector = tcpUdpSvcLabel
+
+	// Create UDP/81 testSvc2 for pod2.
+	testSvc2 := getTestSvc()
+	testSvc2.Name = "svc2"
+	testSvc2.Spec.Selector = udpSvcLabel
+	testSvc2.Spec.Ports[0].Port = 81
+	testSvc2.Spec.Ports[0].Protocol = protocolUDP
+	testData := setUp(t, newTestConfig(), testSvc1, testSvc2, testPod1, testPod2)
+	defer testData.tearDown()
+
+	value, err := testData.pollForPodAnnotation(testPod1.Name, true)
+	assert.NoError(t, err, "Poll for annotation check failed")
+	nplData1 := testData.checkAnnotationValue(value, defaultPort)
+
+	// Check for annotation in pod2, to have protococl specified as UDP,
+	// and that the NodePort assigned to pod2 is different from pod1.
+	value, err = testData.pollForPodAnnotation(testPod2.Name, true)
+	assert.NoError(t, err, "Poll for annotation check failed")
+	nplData2 := testData.checkAnnotationValue(value, defaultPort)
+	assert.Equal(t, nplData2[0].Protocols, []string{"udp"})
+	assert.True(t, testData.portTable.RuleExists(testPod2.Status.PodIP, defaultPort, protocolToString(protocolUDP)))
+	assert.NotEqual(t, nplData1[0].NodePort, nplData2[0].NodePort)
+
+	// Update testSvc2 to serve TCP/80 and UDP/81 both, so pod1 is
+	// exposed on both TCP and UDP, with the same NodePort.
+	testPod2.Labels = tcpUdpSvcLabel
+	testData.updatePodOrFail(testPod2)
+
+	testSvc2.Spec.Ports = append(testSvc2.Spec.Ports, corev1.ServicePort{
+		Port:     81,
+		Protocol: protocolUDP,
+		TargetPort: intstr.IntOrString{
+			Type:   intstr.Int,
+			IntVal: 80,
+		},
+	})
+	testSvc2.Spec.Selector = tcpUdpSvcLabel
+	testData.updateServiceOrFail(testSvc2)
+
+	value, err = testData.pollForPodAnnotation(testPod2.Name, true)
+	require.NoError(t, err, "Poll for annotation check failed")
+	nplData2 = testData.checkAnnotationValue(value, defaultPort)
+	assert.Len(t, nplData2, 1)
+	assert.Contains(t, nplData2[0].Protocols, "tcp")
+	assert.Contains(t, nplData2[0].Protocols, "udp")
 }
 
 func TestMultipleServicesSameBackendPod(t *testing.T) {

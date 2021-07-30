@@ -20,12 +20,14 @@ package portcache
 import (
 	"fmt"
 	"net"
+	"strings"
 	"sync"
 	"time"
 
 	"antrea.io/antrea/pkg/agent/nodeportlocal/rules"
 	"antrea.io/antrea/pkg/agent/nodeportlocal/util"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/klog/v2"
 )
 
@@ -103,9 +105,31 @@ func (pt *PortTable) getEntryByPodIPPortProtocol(ip string, port int, protocol s
 	return nil
 }
 
+func (pt *PortTable) isNodePortClaimedForPodIPProtocol(ip string, nodeport int, protocol string) bool {
+	var val NodePortData
+	ok := false
+	// Since NPL supports only TCP and UDP protocols, we can check if an entry corresponding to key `<nodeport>:udp`
+	// is present in the PortTable, if the protocol we want to serve is TCP, and vice versa.
+	switch protocol {
+	case strings.ToLower(string(corev1.ProtocolTCP)):
+		val, ok = pt.Table[util.BuildPortProto(fmt.Sprint(nodeport), strings.ToLower(string(corev1.ProtocolUDP)))]
+	case strings.ToLower(string(corev1.ProtocolUDP)):
+		val, ok = pt.Table[util.BuildPortProto(fmt.Sprint(nodeport), strings.ToLower(string(corev1.ProtocolTCP)))]
+	}
+	if ok && val.PodIP != ip {
+		return false
+	}
+	return true
+}
+
 func (pt *PortTable) getFreePort(podIP string, podPort int, protocol string) (int, Closeable, error) {
 	for i := pt.StartPort; i <= pt.EndPort; i++ {
 		if _, ok := pt.Table[util.BuildPortProto(fmt.Sprint(i), protocol)]; !ok {
+			// This ensures that the NodePort `i` is not taken by any other Pods,
+			// irrespective of the protocol.
+			if !pt.isNodePortClaimedForPodIPProtocol(podIP, i, protocol) {
+				continue
+			}
 			socket, err := pt.LocalPortOpener.OpenLocalPort(i, protocol)
 			if err != nil {
 				continue
