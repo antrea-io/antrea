@@ -215,7 +215,7 @@ jobs:
   artifact-cleanup:
     name: Delete uploaded images
     needs: [build-antrea-image, from-N-1, from-N-2, compatible-N-1, compatible-N-2]
-    if: ${{ always() }}
+    if: ${{ always() && needs.build-antrea-image.result == 'success' }}
     runs-on: [ubuntu-latest]
     steps:
     - name: Delete antrea-ubuntu
