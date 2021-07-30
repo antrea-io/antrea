@@ -279,6 +279,7 @@ func (fa *flowAggregator) InitCollectingProcess() error {
 			IsEncrypted:   false,
 		}
 	}
+	cpInput.NumExtraElements = len(antreaSourceStatsElementList) + len(antreaDestinationStatsElementList) + len(antreaLabelsElementList)
 	var err error
 	fa.collectingProcess, err = ipfix.NewIPFIXCollectingProcess(cpInput)
 	return err
@@ -427,10 +428,11 @@ func (fa *flowAggregator) sendFlowKeyRecord(key ipfixintermediate.FlowKey, recor
 		fa.fillPodLabels(key, record.Record)
 		fa.aggregationProcess.SetExternalFieldsFilled(record)
 	}
-	err := fa.set.AddRecord(record.Record.GetOrderedElementList(), templateID)
-	if err != nil {
+
+	if err := fa.set.AddRecord(record.Record.GetOrderedElementList(), templateID); err != nil {
 		return err
 	}
+
 	sentBytes, err := fa.exportingProcess.SendSet(fa.set)
 	if err != nil {
 		return err
@@ -444,7 +446,7 @@ func (fa *flowAggregator) sendFlowKeyRecord(key ipfixintermediate.FlowKey, recor
 }
 
 func (fa *flowAggregator) sendTemplateSet(isIPv6 bool) (int, error) {
-	elements := make([]*ipfixentities.InfoElementWithValue, 0)
+	elements := make([]ipfixentities.InfoElementWithValue, 0)
 	ianaInfoElements := ianaInfoElementsIPv4
 	antreaInfoElements := antreaInfoElementsIPv4
 	templateID := fa.templateIDv4
@@ -517,7 +519,7 @@ func (fa *flowAggregator) sendTemplateSet(isIPv6 bool) (int, error) {
 // that have incomplete info due to deny network policy.
 func (fa *flowAggregator) fillK8sMetadata(key ipfixintermediate.FlowKey, record ipfixentities.Record) {
 	// fill source Pod info when sourcePodName is empty
-	if sourcePodName, exist := record.GetInfoElementWithValue("sourcePodName"); exist {
+	if sourcePodName, index, exist := record.GetInfoElementWithValue("sourcePodName"); exist {
 		if sourcePodName.Value == "" {
 			pods, err := fa.podInformer.Informer().GetIndexer().ByIndex(podInfoIndex, key.SourceAddress)
 			if err == nil && len(pods) > 0 {
@@ -526,11 +528,14 @@ func (fa *flowAggregator) fillK8sMetadata(key ipfixintermediate.FlowKey, record 
 					klog.Warningf("Invalid Pod obj in cache")
 				}
 				sourcePodName.Value = pod.Name
-				if sourcePodNamespace, exist := record.GetInfoElementWithValue("sourcePodNamespace"); exist {
+				record.SetInfoElementWithValue(index, *sourcePodName)
+				if sourcePodNamespace, index, exist := record.GetInfoElementWithValue("sourcePodNamespace"); exist {
 					sourcePodNamespace.Value = pod.Namespace
+					record.SetInfoElementWithValue(index, *sourcePodNamespace)
 				}
-				if sourceNodeName, exist := record.GetInfoElementWithValue("sourceNodeName"); exist {
+				if sourceNodeName, index, exist := record.GetInfoElementWithValue("sourceNodeName"); exist {
 					sourceNodeName.Value = pod.Spec.NodeName
+					record.SetInfoElementWithValue(index, *sourceNodeName)
 				}
 			} else {
 				klog.Warning(err)
@@ -538,7 +543,7 @@ func (fa *flowAggregator) fillK8sMetadata(key ipfixintermediate.FlowKey, record 
 		}
 	}
 	// fill destination Pod info when destinationPodName is empty
-	if destinationPodName, exist := record.GetInfoElementWithValue("destinationPodName"); exist {
+	if destinationPodName, index, exist := record.GetInfoElementWithValue("destinationPodName"); exist {
 		if destinationPodName.Value == "" {
 			pods, err := fa.podInformer.Informer().GetIndexer().ByIndex(podInfoIndex, key.DestinationAddress)
 			if len(pods) > 0 && err == nil {
@@ -547,11 +552,14 @@ func (fa *flowAggregator) fillK8sMetadata(key ipfixintermediate.FlowKey, record 
 					klog.Warningf("Invalid Pod obj in cache")
 				}
 				destinationPodName.Value = pod.Name
-				if destinationPodNamespace, exist := record.GetInfoElementWithValue("destinationPodNamespace"); exist {
+				record.SetInfoElementWithValue(index, *destinationPodName)
+				if destinationPodNamespace, index, exist := record.GetInfoElementWithValue("destinationPodNamespace"); exist {
 					destinationPodNamespace.Value = pod.Namespace
+					record.SetInfoElementWithValue(index, *destinationPodNamespace)
 				}
-				if destinationNodeName, exist := record.GetInfoElementWithValue("destinationNodeName"); exist {
+				if destinationNodeName, index, exist := record.GetInfoElementWithValue("destinationNodeName"); exist {
 					destinationNodeName.Value = pod.Spec.NodeName
+					record.SetInfoElementWithValue(index, *destinationNodeName)
 				}
 			} else {
 				klog.Warning(err)
@@ -585,7 +593,7 @@ func (fa *flowAggregator) fillPodLabels(key ipfixintermediate.FlowKey, record ip
 	sourcePodLabelsElement, err := fa.registry.GetInfoElement("sourcePodLabels", ipfixregistry.AntreaEnterpriseID)
 	if err == nil {
 		sourcePodLabelsIE := ipfixentities.NewInfoElementWithValue(sourcePodLabelsElement, bytes.NewBufferString(podLabelString).Bytes())
-		err = record.AddInfoElement(sourcePodLabelsIE)
+		err = record.AddInfoElement(&sourcePodLabelsIE)
 		if err != nil {
 			klog.Warningf("Add sourcePodLabels InfoElementWithValue failed: %v", err)
 		}
@@ -596,7 +604,7 @@ func (fa *flowAggregator) fillPodLabels(key ipfixintermediate.FlowKey, record ip
 	destinationPodLabelsElement, err := fa.registry.GetInfoElement("destinationPodLabels", ipfixregistry.AntreaEnterpriseID)
 	if err == nil {
 		destinationPodLabelsIE := ipfixentities.NewInfoElementWithValue(destinationPodLabelsElement, bytes.NewBufferString(podLabelString).Bytes())
-		err = record.AddInfoElement(destinationPodLabelsIE)
+		err = record.AddInfoElement(&destinationPodLabelsIE)
 		if err != nil {
 			klog.Warningf("Add destinationPodLabels InfoElementWithValue failed: %v", err)
 		}

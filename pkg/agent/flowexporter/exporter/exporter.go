@@ -89,8 +89,8 @@ type flowExporter struct {
 	flowRecords         *flowrecords.FlowRecords
 	denyConnStore       *connections.DenyConnectionStore
 	process             ipfix.IPFIXExportingProcess
-	elementsListv4      []*ipfixentities.InfoElementWithValue
-	elementsListv6      []*ipfixentities.InfoElementWithValue
+	elementsListv4      []ipfixentities.InfoElementWithValue
+	elementsListv6      []ipfixentities.InfoElementWithValue
 	ipfixSet            ipfixentities.Set
 	numDataSetsSent     uint64 // used for unit tests.
 	templateIDv4        uint16
@@ -350,7 +350,7 @@ func (exp *flowExporter) sendFlowRecords() error {
 }
 
 func (exp *flowExporter) sendTemplateSet(isIPv6 bool) (int, error) {
-	elements := make([]*ipfixentities.InfoElementWithValue, 0)
+	elements := make([]ipfixentities.InfoElementWithValue, 0)
 
 	IANAInfoElements := IANAInfoElementsIPv4
 	AntreaInfoElements := AntreaInfoElementsIPv4
@@ -413,7 +413,8 @@ func (exp *flowExporter) addRecordToSet(record flowexporter.FlowRecord) error {
 	if record.IsIPv6 {
 		eL = exp.elementsListv6
 	}
-	for _, ie := range eL {
+	for i := range eL {
+		ie := &eL[i]
 		switch ieName := ie.Element.Name; ieName {
 		case "flowStartSeconds":
 			ie.Value = uint32(record.Conn.StartTime.Unix())
@@ -574,7 +575,8 @@ func (exp *flowExporter) addDenyConnToSet(conn *flowexporter.Connection, flowEnd
 		return err
 	}
 	// Iterate over all infoElements in the list
-	for _, ie := range eL {
+	for i := range eL {
+		ie := &eL[i]
 		switch ieName := ie.Element.Name; ieName {
 		case "flowStartSeconds":
 			ie.Value = uint32(conn.StartTime.Unix())
