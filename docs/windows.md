@@ -58,6 +58,8 @@ and daemons are pre-installed on the Windows Nodes in the demo.
     Antrea on Windows, Antrea provides a test-signed OVS package for you.
     See details in [Join Windows worker Nodes](#Join-Windows-worker-nodes)
     section.
+* Some manifests are from [sig-windows-tool](https://github.com/kubernetes-sigs/sig-windows-tools)
+  repo. Release version v0.1.5 has been verified.
 
 ### Installation as a Service (Containerd based runtimes)
 
@@ -87,16 +89,18 @@ $KubeletKubeconfigPath="<KubeletKubeconfigPath>"
 $KubeProxyKubeconfigPath="<KubeProxyKubeconfigPath>"
 $KubernetesHome="c:/k"
 $AntreaHome="c:/k/antrea"
+$KubeProxyLogPath="c:/var/log/kube-proxy"
 
 curl.exe -LO "https://raw.githubusercontent.com/antrea-io/antrea/${TAG}/hack/windows/Helper.psm1"
-
 Import-Module ./Helper.psm1
+
 Install-AntreaAgent -KubernetesVersion "$KubernetesVersion" -KubernetesHome "$KubernetesHome" -KubeConfig "$KubeConfig" -AntreaVersion "$TAG" -AntreaHome "$AntreaHome"
 New-KubeProxyServiceInterface
 
-mkdir "${AntreaHome}/logs"
-nssm install kube-proxy "${KubernetesHome}/kube-proxy.exe" "--proxy-mode=userspace --kubeconfig=$KubeProxyKubeconfigPath --log-dir=c:/var/log/kube-proxy --logtostderr=false --alsologtostderr"
-nssm install antrea-agent "${KubernetesHome}/antrea/bin/antrea-agent.exe" "--config=${KubernetesHome}/antrea/etc/antrea-agent.conf --logtostderr=false --log_dir=${KubernetesHome}/antrea/logs --alsologtostderr --log_file_max_size=100 --log_file_max_num=4"
+New-DirectoryIfNotExist "${AntreaHome}/logs"
+New-DirectoryIfNotExist "${KubeProxyLogPath}"
+nssm install kube-proxy "${KubernetesHome}/kube-proxy.exe" "--proxy-mode=userspace --kubeconfig=${KubeProxyKubeconfigPath} --log-dir=${KubeProxyLogPath} --logtostderr=false --alsologtostderr"
+nssm install antrea-agent "${AntreaHome}/bin/antrea-agent.exe" "--config=${AntreaHome}/etc/antrea-agent.conf --logtostderr=false --log_dir=${AntreaHome}/logs --alsologtostderr --log_file_max_size=100 --log_file_max_num=4"
 
 nssm set antrea-agent DependOnService kube-proxy ovs-vswitchd
 nssm set antrea-agent Start SERVICE_DELAYED_AUTO_START
@@ -130,7 +134,7 @@ kube-proxy version.
 
 ```bash
 # Example:
-curl -L https://github.com/kubernetes-sigs/sig-windows-tools/releases/latest/download/kube-proxy.yml | sed 's/VERSION/v1.18.0/g'  > kube-proxy.yml
+curl -L "https://github.com/kubernetes-sigs/sig-windows-tools/releases/download/v0.1.5/kube-proxy.yml" | sed 's/VERSION/v1.18.0/g' > kube-proxy.yml
 ```
 
 Replace the content of `run-script.ps1` in configmap named `kube-proxy-windows`
@@ -250,7 +254,7 @@ container.
 
 ```powershell
 # Example:
-curl.exe -LO https://github.com/kubernetes-sigs/sig-windows-tools/releases/latest/download/PrepareNode.ps1
+curl.exe -LO "https://github.com/kubernetes-sigs/sig-windows-tools/releases/download/v0.1.5/PrepareNode.ps1"
 .\PrepareNode.ps1 -KubernetesVersion v1.18.0
 ```
 
