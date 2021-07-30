@@ -118,6 +118,21 @@ func (s GroupMemberSet) Union(o GroupMemberSet) GroupMemberSet {
 	return result
 }
 
+// Merge merges the other set into the set.
+// For example:
+// s1 = {a1, a2, a3}
+// s2 = {a1, a2, a4, a5}
+// s1.Merge(s2) = {a1, a2, a3, a4, a5}
+// s1 = {a1, a2, a3, a4, a5}
+//
+// It should be used instead of s1.Union(s2) when constructing a new set is not required.
+func (s GroupMemberSet) Merge(o GroupMemberSet) GroupMemberSet {
+	for key, item := range o {
+		s[key] = item
+	}
+	return s
+}
+
 // IsSuperset returns true if and only if s1 is a superset of s2.
 func (s GroupMemberSet) IsSuperset(o GroupMemberSet) bool {
 	for key := range o {
