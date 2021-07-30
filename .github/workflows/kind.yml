@@ -470,7 +470,7 @@ jobs:
   artifact-cleanup:
     name: Delete uploaded images
     needs: [build-antrea-coverage-image, build-flow-aggregator-coverage-image, build-antrea-image, test-e2e-encap, test-e2e-encap-no-proxy, test-e2e-noencap, test-e2e-hybrid, test-e2e-encap-no-np, test-netpol-tmp, validate-prometheus-metrics-doc]
-    if: ${{ always() }}
+    if: ${{ always() &&  (needs.build-antrea-coverage-image.result == 'success' || needs.build-flow-aggregator-coverage-image.result == 'success' || needs.build-antrea-image.result == 'success') }}
     runs-on: [ubuntu-latest]
     steps:
     - name: Delete antrea-ubuntu-cov
