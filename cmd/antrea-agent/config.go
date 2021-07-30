@@ -148,4 +148,8 @@ type AgentConfig struct {
 	TLSCipherSuites string `yaml:"tlsCipherSuites,omitempty"`
 	// TLS min version.
 	TLSMinVersion string `yaml:"tlsMinVersion,omitempty"`
+	// The name of the interface on Node which is used for tunneling or routing the traffic across Nodes.
+	// If there are multiple IP addresses configured on the interface, the first one is used.
+	// The interface configured with Node IP is used if this parameter is not set.
+	TransportInterface string `yaml:"transportInterface,omitempty"`
 }

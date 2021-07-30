@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"math"
 	"net"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -423,6 +424,10 @@ type client struct {
 	ipProtocols []binding.Protocol
 	// ovsctlClient is the interface for executing OVS "ovs-ofctl" and "ovs-appctl" commands.
 	ovsctlClient ovsctl.OVSCtlClient
+	// deterministic represents whether to generate flows deterministically.
+	// For example, if a flow has multiple actions, setting it to true can get consistent flow.
+	// Enabling it may carry a performance impact. It's disabled by default and should only be used in testing.
+	deterministic bool
 }
 
 func (c *client) GetTunnelVirtualMAC() net.HardwareAddr {
@@ -905,25 +910,6 @@ func (c *client) serviceLBBypassFlows(ipProtocol binding.Protocol) []binding.Flo
 			Action().GotoTable(EgressRuleTable).
 			Cookie(c.cookieAllocator.Request(cookie.Service).Raw()).
 			Done(),
-	}
-
-	if runtime.IsWindowsPlatform() && ipProtocol == binding.ProtocolIP {
-		// Handle the reply packets of the connection which are applied both DNAT and SNAT.
-		// The packets have following characteristics:
-		//   - Received from uplink
-		//   - ct_state is "-new+trk"
-		//   - ct_mark is set to 0x21(ServiceCTMark)
-		// This flow resubmits the packets to the following table to avoid being forwarded
-		// to the bridge port by default.
-		flows = append(flows, c.pipeline[conntrackStateTable].BuildFlow(priorityHigh).
-			MatchProtocol(ipProtocol).
-			MatchCTStateNew(false).MatchCTStateTrk(true).
-			MatchCTMark(ServiceCTMark, nil).
-			MatchRegRange(int(marksReg), markTrafficFromUplink, binding.Range{0, 15}).
-			Action().LoadRegRange(int(marksReg), macRewriteMark, macRewriteMarkRange).
-			Action().GotoTable(EgressRuleTable).
-			Cookie(c.cookieAllocator.Request(cookie.Service).Raw()).
-			Done())
 	}
 	return flows
 }
@@ -1731,7 +1717,7 @@ func (c *client) conjunctionExceptionFlow(conjunctionID uint32, tableID binding.
 }
 
 // conjunctiveMatchFlow generates the flow to set conjunctive actions if the match condition is matched.
-func (c *client) conjunctiveMatchFlow(tableID binding.TableIDType, matchKey *types.MatchKey, matchValue interface{}, priority *uint16, actions ...*conjunctiveAction) binding.Flow {
+func (c *client) conjunctiveMatchFlow(tableID binding.TableIDType, matchKey *types.MatchKey, matchValue interface{}, priority *uint16, actions []*conjunctiveAction) binding.Flow {
 	var ofPriority uint16
 	if priority != nil {
 		ofPriority = *priority
@@ -1740,6 +1726,9 @@ func (c *client) conjunctiveMatchFlow(tableID binding.TableIDType, matchKey *typ
 	}
 	fb := c.pipeline[tableID].BuildFlow(ofPriority)
 	fb = c.addFlowMatch(fb, matchKey, matchValue)
+	if c.deterministic {
+		sort.Sort(conjunctiveActionsInOrder(actions))
+	}
 	for _, act := range actions {
 		fb.Action().Conjunction(act.conjID, act.clauseID, act.nClause)
 	}
@@ -2118,6 +2107,14 @@ func (c *client) decTTLFlows(category cookie.Category) []binding.Flow {
 	return flows
 }
 
+// externalFlows returns the flows needed to enable SNAT for external traffic.
+func (c *client) externalFlows(nodeIP net.IP, localSubnet net.IPNet, localGatewayMAC net.HardwareAddr) []binding.Flow {
+	if !c.enableEgress {
+		return nil
+	}
+	return c.snatCommonFlows(nodeIP, localSubnet, localGatewayMAC, cookie.SNAT)
+}
+
 // policyConjKeyFuncKeyFunc knows how to get key of a *policyRuleConjunction.
 func policyConjKeyFunc(obj interface{}) (string, error) {
 	conj := obj.(*policyRuleConjunction)
@@ -2228,4 +2225,18 @@ func NewClient(bridgeName, mgmtAddr string, ovsDatapathType ovsconfig.OVSDatapat
 	}
 	c.generatePipeline()
 	return c
+}
+
+type conjunctiveActionsInOrder []*conjunctiveAction
+
+func (sl conjunctiveActionsInOrder) Len() int      { return len(sl) }
+func (sl conjunctiveActionsInOrder) Swap(i, j int) { sl[i], sl[j] = sl[j], sl[i] }
+func (sl conjunctiveActionsInOrder) Less(i, j int) bool {
+	if sl[i].conjID != sl[j].conjID {
+		return sl[i].conjID < sl[j].conjID
+	}
+	if sl[i].clauseID != sl[j].clauseID {
+		return sl[i].clauseID < sl[j].clauseID
+	}
+	return sl[i].nClause < sl[j].nClause
 }

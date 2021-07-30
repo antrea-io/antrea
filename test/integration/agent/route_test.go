@@ -63,10 +63,11 @@ var (
 	gwName            = "antrea-gw0"
 	gwConfig          = &config.GatewayConfig{IPv4: gwIP, MAC: gwMAC, Name: gwName}
 	nodeConfig        = &config.NodeConfig{
-		Name:          "test",
-		PodIPv4CIDR:   podCIDR,
-		NodeIPAddr:    nodeIP,
-		GatewayConfig: gwConfig,
+		Name:                "test",
+		PodIPv4CIDR:         podCIDR,
+		NodeIPAddr:          nodeIP,
+		NodeTransportIPAddr: nodeIP,
+		GatewayConfig:       gwConfig,
 	}
 )
 

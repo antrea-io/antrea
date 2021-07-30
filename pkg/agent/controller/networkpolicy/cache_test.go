@@ -15,6 +15,7 @@
 package networkpolicy
 
 import (
+	"fmt"
 	"net"
 	"reflect"
 	"testing"
@@ -1184,5 +1185,30 @@ func TestRuleCacheProcessPodUpdates(t *testing.T) {
 				t.Errorf("Got dirty rules %v, expected %v", recorder.rules, tt.expectedDirtyRules)
 			}
 		})
+	}
+}
+
+func BenchmarkRuleCacheUnionAddressGroups(b *testing.B) {
+	var addressGroupMembers1, addressGroupMembers2 []*v1beta2.GroupMember
+	// addressGroup1 includes 10K members.
+	for i := 0; i < 100; i++ {
+		for j := 0; j < 100; j++ {
+			addressGroupMembers1 = append(addressGroupMembers1, newAddressGroupMember(fmt.Sprintf("1.1.%d.%d", i, j)))
+		}
+	}
+	addressGroup1 := v1beta2.NewGroupMemberSet(addressGroupMembers1...)
+	// addressGroup2 includes 10 members.
+	for i := 0; i < 10; i++ {
+		addressGroupMembers2 = append(addressGroupMembers2, newAddressGroupMember(fmt.Sprintf("2.2.2.%d", i)))
+	}
+	addressGroup2 := v1beta2.NewGroupMemberSet(addressGroupMembers2...)
+	c, _, _ := newFakeRuleCache()
+	c.addressSetByGroup["addressGroup1"] = addressGroup1
+	c.addressSetByGroup["addressGroup2"] = addressGroup2
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		c.unionAddressGroups([]string{"addressGroup1", "addressGroup2"})
 	}
 }

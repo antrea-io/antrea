@@ -3,7 +3,7 @@
 Create virtual netadapter for kube-proxy. The default full name of the virtual adapter is "vEthernet (HNS Internal NIC)"
 
 .DESCRIPTION
-This script creates virtual netadapter for kube-proxy. The created virtual adapter is used by kube-proxy to configure kubernetes Services IPs on it.
+This script creates virtual netadapter for kube-proxy. The created virtual adapter is used by kube-proxy to configure Kubernetes Services IPs on it.
 
 .PARAMETER KubernetesVersion
 Kubernetes version to download and use

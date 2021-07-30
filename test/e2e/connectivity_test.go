@@ -57,7 +57,7 @@ func (data *TestData) runPingMesh(t *testing.T, podInfos []podInfo, ctrname stri
 			if pi1.name == pi2.name {
 				continue
 			}
-			if err := data.runPingCommandFromTestPod(pi1, podIPs[pi2.name], ctrname, pingCount, 0); err != nil {
+			if err := data.runPingCommandFromTestPod(pi1, testNamespace, podIPs[pi2.name], ctrname, pingCount, 0); err != nil {
 				t.Errorf("Ping '%s' -> '%s': ERROR (%v)", pi1.name, pi2.name, err)
 			} else {
 				t.Logf("Ping '%s' -> '%s': OK", pi1.name, pi2.name)
@@ -81,7 +81,7 @@ func (data *TestData) testPodConnectivitySameNode(t *testing.T) {
 	t.Logf("Creating %d agnhost Pods on '%s'", numPods, workerNode)
 	for i := range podInfos {
 		podInfos[i].os = clusterInfo.nodesOS[workerNode]
-		if err := data.createAgnhostPodOnNode(podInfos[i].name, workerNode); err != nil {
+		if err := data.createAgnhostPodOnNode(podInfos[i].name, testNamespace, workerNode); err != nil {
 			t.Fatalf("Error when creating agnhost test Pod '%s': %v", podInfos[i], err)
 		}
 		defer deletePodWrapper(t, data, podInfos[i].name)
@@ -106,7 +106,7 @@ func (data *TestData) testHostPortPodConnectivity(t *testing.T) {
 	// Create a server Pod with hostPort set to 80.
 	hpPodName := randName("test-host-port-pod-")
 	hpPodPort := int32(80)
-	if err := data.createServerPod(hpPodName, "", hpPodPort, true, false); err != nil {
+	if err := data.createServerPod(hpPodName, testNamespace, "", hpPodPort, true, false); err != nil {
 		t.Fatalf("Error when creating HostPort server Pod: %v", err)
 	}
 	defer deletePodWrapper(t, data, hpPodName)
@@ -120,7 +120,7 @@ func (data *TestData) testHostPortPodConnectivity(t *testing.T) {
 	hpPodHostIP := hpPod.Status.HostIP
 	// Create client Pod to test connectivity.
 	clientName := randName("test-client-")
-	if err := data.createBusyboxPodOnNode(clientName, ""); err != nil {
+	if err := data.createBusyboxPodOnNode(clientName, testNamespace, ""); err != nil {
 		t.Fatalf("Error when creating test client Pod: %v", err)
 	}
 	defer deletePodWrapper(t, data, clientName)
@@ -128,7 +128,7 @@ func (data *TestData) testHostPortPodConnectivity(t *testing.T) {
 		t.Fatalf("Error when waiting for IP for Pod '%s': %v", clientName, err)
 	}
 
-	if err = data.runNetcatCommandFromTestPod(clientName, hpPodHostIP, hpPodPort); err != nil {
+	if err = data.runNetcatCommandFromTestPod(clientName, testNamespace, hpPodHostIP, hpPodPort); err != nil {
 		t.Fatalf("Pod %s should be able to connect %s, but was not able to connect", clientName, net.JoinHostPort(hpPodHostIP, fmt.Sprint(hpPodPort)))
 	}
 }
@@ -317,7 +317,7 @@ func TestOVSRestartSameNode(t *testing.T) {
 
 	workerNode := workerNodeName(1)
 	t.Logf("Creating two busybox test Pods on '%s'", workerNode)
-	podNames, podIPs, cleanupFn := createTestBusyboxPods(t, data, 2, workerNode)
+	podNames, podIPs, cleanupFn := createTestBusyboxPods(t, data, 2, testNamespace, workerNode)
 	defer cleanupFn()
 
 	resCh := make(chan error, 1)
@@ -386,7 +386,7 @@ func TestOVSFlowReplay(t *testing.T) {
 	t.Logf("Creating %d busybox test Pods on '%s'", numPods, workerNode)
 	for i := range podInfos {
 		podInfos[i].os = clusterInfo.nodesOS[workerNode]
-		if err := data.createBusyboxPodOnNode(podInfos[i].name, workerNode); err != nil {
+		if err := data.createBusyboxPodOnNode(podInfos[i].name, testNamespace, workerNode); err != nil {
 			t.Fatalf("Error when creating busybox test Pod '%s': %v", podInfos[i].name, err)
 		}
 		defer deletePodWrapper(t, data, podInfos[i].name)
@@ -473,7 +473,7 @@ func TestPingLargeMTU(t *testing.T) {
 
 	pingSize := 2000
 	t.Logf("Running ping with size %d between Pods %s and %s", pingSize, podInfos[0].name, podInfos[1].name)
-	if err := data.runPingCommandFromTestPod(podInfos[0], podIPs[podInfos[1].name], agnhostContainerName, pingCount, pingSize); err != nil {
+	if err := data.runPingCommandFromTestPod(podInfos[0], testNamespace, podIPs[podInfos[1].name], agnhostContainerName, pingCount, pingSize); err != nil {
 		t.Error(err)
 	}
 }

@@ -18,7 +18,7 @@ require (
 	github.com/containernetworking/plugins v0.8.7
 	github.com/contiv/libOpenflow v0.0.0-20210521033357-6b49eccb12e0
 	github.com/contiv/ofnet v0.0.0-00010101000000-000000000000
-	github.com/coreos/go-iptables v0.4.5
+	github.com/coreos/go-iptables v0.6.0
 	github.com/elazarl/goproxy v0.0.0-20190911111923-ecfe977594f1 // indirect
 	github.com/go-openapi/spec v0.19.5
 	github.com/gogo/protobuf v1.3.2

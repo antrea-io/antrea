@@ -390,7 +390,7 @@ func (c *client) InstallNodeFlows(hostname string,
 			// only work for IPv4 addresses.
 			flows = append(flows, c.arpResponderFlow(peerGatewayIP, cookie.Node))
 		}
-		if c.encapMode.NeedsEncapToPeer(tunnelPeerIP, c.nodeConfig.NodeIPAddr) {
+		if c.encapMode.NeedsEncapToPeer(tunnelPeerIP, c.nodeConfig.NodeTransportIPAddr) {
 			// tunnelPeerIP is the Node Internal Address. In a dual-stack setup, whether this address is an IPv4 address or an
 			// IPv6 one is decided by the address family of Node Internal Address.
 			flows = append(flows, c.l3FwdFlowToRemote(localGatewayMAC, *peerPodCIDR, tunnelPeerIP, cookie.Node))
