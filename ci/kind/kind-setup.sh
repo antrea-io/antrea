@@ -23,6 +23,7 @@ ANTREA_IMAGE="projects.registry.vmware.com/antrea/antrea-ubuntu:latest"
 IMAGES=$ANTREA_IMAGE
 ANTREA_CNI=true
 POD_CIDR="10.10.0.0/16"
+IP_FAMILY="ipv4"
 NUM_WORKERS=2
 SUBNETS=""
 ENCAP_MODE=""
@@ -37,7 +38,7 @@ function echoerr {
 }
 
 _usage="
-Usage: $0 create CLUSTER_NAME [--pod-cidr POD_CIDR] [--antrea-cni true|false ] [--num-workers NUM_WORKERS] [--images IMAGES] [--subnets SUBNETS]
+Usage: $0 create CLUSTER_NAME [--pod-cidr POD_CIDR] [--antrea-cni true|false ] [--num-workers NUM_WORKERS] [--images IMAGES] [--subnets SUBNETS] [--ip-family ipv4|ipv6]
                   destroy CLUSTER_NAME
                   modify-node NODE_NAME
                   help
@@ -54,6 +55,7 @@ where:
   --images: specifies images loaded to kind cluster, default is $IMAGES
   --subnets: a subnet creates a separate docker bridge network (named 'antrea-<idx>') with assigned subnet that worker nodes may connect to. Default is empty: all worker
     Node connected to default docker bridge network created by Kind.
+  --ip-family: specifies the ip-family for the kind cluster, default is $IP_FAMILY. A valid pod-cidr must be configured in the same family
 "
 
 function print_usage {
@@ -219,6 +221,11 @@ function create {
      exit 1
   fi
 
+  if [[ "$IP_FAMILY" != "ipv4" ]] && [[ "$IP_FAMILY" != "ipv6" ]]; then
+    echoerr "invalid value for --ip-family \"$IP_FAMILY\", expected \"ipv4\" or \"ipv6\""
+    exit 1
+  fi
+
   set +e
   kind get clusters | grep $CLUSTER_NAME > /dev/null 2>&1
   if [[ $? -eq 0 ]]; then
@@ -236,6 +243,7 @@ featureGates:
 networking:
   disableDefaultCNI: true
   podSubnet: $POD_CIDR
+  ipFamily: $IP_FAMILY
 nodes:
 - role: control-plane
 EOF
@@ -318,6 +326,10 @@ while [[ $# -gt 0 ]]
       ;;
     --pod-cidr)
       POD_CIDR="$2"
+      shift 2
+      ;;
+    --ip-family)
+      IP_FAMILY="$2"
       shift 2
       ;;
     --encap-mode)
