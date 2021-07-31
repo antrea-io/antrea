@@ -62,6 +62,8 @@ type Options struct {
 	activeFlowTimeout time.Duration
 	// Idle flow timeout to export records of inactive flows
 	idleFlowTimeout time.Duration
+	// Run the daemon as a Windows service (noop for Linux)
+	windowsService bool
 }
 
 func newOptions() *Options {
@@ -75,6 +77,7 @@ func newOptions() *Options {
 // addFlags adds flags to fs and binds them to options.
 func (o *Options) addFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&o.configFile, "config", o.configFile, "The path to the configuration file")
+	fs.BoolVar(&o.windowsService, "service", false, "Run the daemon as a windows service")
 }
 
 // complete completes all the required options.
