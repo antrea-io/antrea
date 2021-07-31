@@ -16,7 +16,9 @@ package env
 
 import (
 	"os"
+	"runtime"
 	"strconv"
+	"strings"
 
 	"k8s.io/klog/v2"
 )
@@ -47,6 +49,9 @@ func GetNodeName() (string, error) {
 	if err != nil {
 		klog.Errorf("Failed to get local hostname: %v", err)
 		return "", err
+	}
+	if runtime.GOOS == "windows" {
+		return strings.ToLower(nodeName), nil
 	}
 	return nodeName, nil
 }
