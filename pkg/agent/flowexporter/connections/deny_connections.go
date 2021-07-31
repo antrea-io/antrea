@@ -32,9 +32,31 @@ type DenyConnectionStore struct {
 }
 
 func NewDenyConnectionStore(ifaceStore interfacestore.InterfaceStore,
-	proxier proxy.Proxier) *DenyConnectionStore {
+	proxier proxy.Proxier, staleConnectionTimeout time.Duration) *DenyConnectionStore {
 	return &DenyConnectionStore{
-		connectionStore: NewConnectionStore(ifaceStore, proxier),
+		connectionStore: NewConnectionStore(ifaceStore, proxier, staleConnectionTimeout),
+	}
+}
+
+func (ds *DenyConnectionStore) RunPeriodicDeletion(stopCh <-chan struct{}) {
+	pollTicker := time.NewTicker(periodicDeleteInterval)
+	defer pollTicker.Stop()
+
+	for {
+		select {
+		case <-stopCh:
+			break
+		case <-pollTicker.C:
+			deleteIfStaleConn := func(key flowexporter.ConnectionKey, conn *flowexporter.Connection) error {
+				// Delete the connection if it was not exported in last five minutes.
+				if time.Since(conn.LastExportTime) >= ds.staleConnectionTimeout {
+					delete(ds.connections, key)
+				}
+				return nil
+			}
+			ds.ForAllConnectionsDo(deleteIfStaleConn)
+			klog.V(2).Infof("Stale connections in the Deny Connection Store are successfully deleted.")
+		}
 	}
 }
 

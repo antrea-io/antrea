@@ -44,6 +44,7 @@ const (
 	defaultFlowPollInterval        = 5 * time.Second
 	defaultActiveFlowExportTimeout = 30 * time.Second
 	defaultIdleFlowExportTimeout   = 15 * time.Second
+	defaultStaleConnectionTimeout  = 5 * time.Minute
 	defaultNPLPortRange            = "61000-62000"
 )
 
@@ -62,6 +63,8 @@ type Options struct {
 	activeFlowTimeout time.Duration
 	// Idle flow timeout to export records of inactive flows
 	idleFlowTimeout time.Duration
+	// Stale connection timeout to delete connections if they are not exported.
+	staleConnectionTimeout time.Duration
 }
 
 func newOptions() *Options {
@@ -254,9 +257,18 @@ func (o *Options) validateFlowExporterConfig() error {
 				return fmt.Errorf("IdleFlowExportTimeout is not provided in right format")
 			}
 			if o.idleFlowTimeout < o.pollInterval {
-				o.activeFlowTimeout = o.pollInterval
+				o.idleFlowTimeout = o.pollInterval
 				klog.Warningf("IdleFlowExportTimeout must be greater than or equal to FlowPollInterval")
 			}
+		}
+		if (o.activeFlowTimeout > defaultStaleConnectionTimeout) || (o.idleFlowTimeout > defaultStaleConnectionTimeout) {
+			if o.activeFlowTimeout > o.idleFlowTimeout {
+				o.staleConnectionTimeout = 2 * o.activeFlowTimeout
+			} else {
+				o.staleConnectionTimeout = 2 * o.idleFlowTimeout
+			}
+		} else {
+			o.staleConnectionTimeout = defaultStaleConnectionTimeout
 		}
 	}
 	return nil
