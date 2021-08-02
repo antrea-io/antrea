@@ -316,13 +316,13 @@ func testClusterGroupConversionV1A2AndV1A3(t *testing.T) {
 
 func TestClusterGroup(t *testing.T) {
 	skipIfHasWindowsNodes(t)
+	skipIfAntreaPolicyDisabled(t)
 
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
 	defer teardownTest(t, data)
-	skipIfAntreaPolicyDisabled(t, data)
 	initialize(t, data)
 
 	t.Run("TestGroupClusterGroupValidate", func(t *testing.T) {

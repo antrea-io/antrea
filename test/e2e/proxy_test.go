@@ -34,13 +34,11 @@ type expectTableFlows struct {
 	flows   []string
 }
 
-func skipIfProxyDisabled(t *testing.T, data *TestData) {
-	skipIfFeatureDisabled(t, data, features.AntreaProxy, true /* checkAgent */, false /* checkController */)
-}
-
-func TestProxyServiceSessionAffinity(t *testing.T) {
-	skipIfProviderIs(t, "kind", "#881 Does not work in Kind, needs to be investigated.")
+// TestProxy is the top-level test which contains all subtests for
+// Proxy related test cases so they can share setup, teardown.
+func TestProxy(t *testing.T) {
 	skipIfHasWindowsNodes(t)
+	skipIfProxyDisabled(t)
 
 	data, err := setupTest(t)
 	if err != nil {
@@ -48,8 +46,26 @@ func TestProxyServiceSessionAffinity(t *testing.T) {
 	}
 	defer teardownTest(t, data)
 
-	skipIfProxyDisabled(t, data)
+	t.Run("testProxyServiceSessionAffinityCase", func(t *testing.T) {
+		skipIfProviderIs(t, "kind", "#881 Does not work in Kind, needs to be investigated.")
+		testProxyServiceSessionAffinityCase(t, data)
+	})
+	t.Run("testProxyHairpinCase", func(t *testing.T) {
+		testProxyHairpinCase(t, data)
+	})
+	t.Run("testProxyEndpointLifeCycleCase", func(t *testing.T) {
+		testProxyEndpointLifeCycleCase(t, data)
+	})
+	t.Run("testProxyServiceLifeCycleCase", func(t *testing.T) {
+		testProxyServiceLifeCycleCase(t, data)
+	})
+}
 
+func skipIfProxyDisabled(t *testing.T) {
+	skipIfFeatureDisabled(t, features.AntreaProxy, true /* checkAgent */, false /* checkController */)
+}
+
+func testProxyServiceSessionAffinityCase(t *testing.T, data *TestData) {
 	if len(clusterInfo.podV4NetworkCIDR) != 0 {
 		ipFamily := corev1.IPv4Protocol
 		testProxyServiceSessionAffinity(&ipFamily, []string{"169.254.169.253", "169.254.169.254"}, data, t)
@@ -62,20 +78,20 @@ func TestProxyServiceSessionAffinity(t *testing.T) {
 
 func testProxyServiceSessionAffinity(ipFamily *corev1.IPFamily, ingressIPs []string, data *TestData, t *testing.T) {
 	nodeName := nodeName(1)
-	nginx := "nginx"
+	nginx := randName("nginx-")
 	require.NoError(t, data.createNginxPodOnNode(nginx, testNamespace, nodeName))
 	nginxIP, err := data.podWaitForIPs(defaultTimeout, nginx, testNamespace)
 	defer data.deletePodAndWait(defaultTimeout, nginx, testNamespace)
 	require.NoError(t, err)
 	require.NoError(t, data.podWaitForRunning(defaultTimeout, nginx, testNamespace))
-	svc, err := data.createNginxClusterIPService("", true, ipFamily)
+	svc, err := data.createNginxClusterIPService(nginx, true, ipFamily)
 	defer data.deleteServiceAndWait(defaultTimeout, nginx)
 	require.NoError(t, err)
 	_, err = data.createNginxLoadBalancerService(true, ingressIPs, ipFamily)
 	defer data.deleteServiceAndWait(defaultTimeout, nginxLBService)
 	require.NoError(t, err)
 
-	busyboxPod := "busybox"
+	busyboxPod := randName("busybox-")
 	require.NoError(t, data.createBusyboxPodOnNode(busyboxPod, testNamespace, nodeName))
 	defer data.deletePodAndWait(defaultTimeout, busyboxPod, testNamespace)
 	require.NoError(t, data.podWaitForRunning(defaultTimeout, busyboxPod, testNamespace))
@@ -109,17 +125,7 @@ func testProxyServiceSessionAffinity(ipFamily *corev1.IPFamily, ingressIPs []str
 	}
 }
 
-func TestProxyHairpin(t *testing.T) {
-	skipIfHasWindowsNodes(t)
-
-	data, err := setupTest(t)
-	if err != nil {
-		t.Fatalf("Error when setting up test: %v", err)
-	}
-	defer teardownTest(t, data)
-
-	skipIfProxyDisabled(t, data)
-
+func testProxyHairpinCase(t *testing.T, data *TestData) {
 	if len(clusterInfo.podV4NetworkCIDR) != 0 {
 		ipFamily := corev1.IPv4Protocol
 		testProxyHairpin(&ipFamily, data, t)
@@ -131,13 +137,13 @@ func TestProxyHairpin(t *testing.T) {
 }
 
 func testProxyHairpin(ipFamily *corev1.IPFamily, data *TestData, t *testing.T) {
-	busybox := "busybox"
+	busybox := randName("busybox-")
 	nodeName := nodeName(1)
 	err := data.createPodOnNode(busybox, testNamespace, nodeName, busyboxImage, []string{"nc", "-lk", "-p", "80"}, nil, nil, []corev1.ContainerPort{{ContainerPort: 80, Protocol: corev1.ProtocolTCP}}, false, nil)
 	defer data.deletePodAndWait(defaultTimeout, busybox, testNamespace)
 	require.NoError(t, err)
 	require.NoError(t, data.podWaitForRunning(defaultTimeout, busybox, testNamespace))
-	svc, err := data.createService(busybox, 80, 80, map[string]string{"antrea-e2e": "busybox"}, false, corev1.ServiceTypeClusterIP, ipFamily)
+	svc, err := data.createService(busybox, 80, 80, map[string]string{"antrea-e2e": busybox}, false, corev1.ServiceTypeClusterIP, ipFamily)
 	defer data.deleteServiceAndWait(defaultTimeout, busybox)
 	require.NoError(t, err)
 
@@ -148,17 +154,7 @@ func testProxyHairpin(ipFamily *corev1.IPFamily, data *TestData, t *testing.T) {
 	require.NoError(t, err, fmt.Sprintf("ipFamily: %v\nstdout: %s\nstderr: %s\n", *ipFamily, stdout, stderr))
 }
 
-func TestProxyEndpointLifeCycle(t *testing.T) {
-	skipIfHasWindowsNodes(t)
-
-	data, err := setupTest(t)
-	if err != nil {
-		t.Fatalf("Error when setting up test: %v", err)
-	}
-	defer teardownTest(t, data)
-
-	skipIfProxyDisabled(t, data)
-
+func testProxyEndpointLifeCycleCase(t *testing.T, data *TestData) {
 	if len(clusterInfo.podV4NetworkCIDR) != 0 {
 		ipFamily := corev1.IPv4Protocol
 		testProxyEndpointLifeCycle(&ipFamily, data, t)
@@ -171,11 +167,11 @@ func TestProxyEndpointLifeCycle(t *testing.T) {
 
 func testProxyEndpointLifeCycle(ipFamily *corev1.IPFamily, data *TestData, t *testing.T) {
 	nodeName := nodeName(1)
-	nginx := "nginx"
+	nginx := randName("nginx-")
 	require.NoError(t, data.createNginxPodOnNode(nginx, testNamespace, nodeName))
 	nginxIPs, err := data.podWaitForIPs(defaultTimeout, nginx, testNamespace)
 	require.NoError(t, err)
-	_, err = data.createNginxClusterIPService("", false, ipFamily)
+	_, err = data.createNginxClusterIPService(nginx, false, ipFamily)
 	defer data.deleteServiceAndWait(defaultTimeout, nginx)
 	require.NoError(t, err)
 
@@ -209,17 +205,7 @@ func testProxyEndpointLifeCycle(ipFamily *corev1.IPFamily, data *TestData, t *te
 	}
 }
 
-func TestProxyServiceLifeCycle(t *testing.T) {
-	skipIfHasWindowsNodes(t)
-
-	data, err := setupTest(t)
-	if err != nil {
-		t.Fatalf("Error when setting up test: %v", err)
-	}
-	defer teardownTest(t, data)
-
-	skipIfProxyDisabled(t, data)
-
+func testProxyServiceLifeCycleCase(t *testing.T, data *TestData) {
 	if len(clusterInfo.podV4NetworkCIDR) != 0 {
 		ipFamily := corev1.IPv4Protocol
 		testProxyServiceLifeCycle(&ipFamily, []string{"169.254.169.253", "169.254.169.254"}, data, t)
@@ -232,7 +218,7 @@ func TestProxyServiceLifeCycle(t *testing.T) {
 
 func testProxyServiceLifeCycle(ipFamily *corev1.IPFamily, ingressIPs []string, data *TestData, t *testing.T) {
 	nodeName := nodeName(1)
-	nginx := "nginx"
+	nginx := randName("nginx-")
 	require.NoError(t, data.createNginxPodOnNode(nginx, testNamespace, nodeName))
 	defer data.deletePodAndWait(defaultTimeout, nginx, testNamespace)
 	nginxIPs, err := data.podWaitForIPs(defaultTimeout, nginx, testNamespace)
@@ -243,7 +229,7 @@ func testProxyServiceLifeCycle(ipFamily *corev1.IPFamily, ingressIPs []string, d
 	} else {
 		nginxIP = nginxIPs.ipv4.String()
 	}
-	svc, err := data.createNginxClusterIPService("", false, ipFamily)
+	svc, err := data.createNginxClusterIPService(nginx, false, ipFamily)
 	defer data.deleteServiceAndWait(defaultTimeout, nginx)
 	require.NoError(t, err)
 	_, err = data.createNginxLoadBalancerService(false, ingressIPs, ipFamily)

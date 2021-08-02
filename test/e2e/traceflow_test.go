@@ -32,7 +32,6 @@ import (
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
-	secv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	"antrea.io/antrea/pkg/features"
 )
 
@@ -49,8 +48,38 @@ type testcase struct {
 	srcPod string
 }
 
-func skipIfTraceflowDisabled(t *testing.T, data *TestData) {
-	skipIfFeatureDisabled(t, data, features.Traceflow, true, true)
+// TestTraceflow is the top-level test which contains all subtests for
+// Traceflow related test cases so they can share setup, teardown.
+func TestTraceflow(t *testing.T) {
+	skipIfHasWindowsNodes(t)
+	skipIfTraceflowDisabled(t)
+
+	data, err := setupTest(t)
+	if err != nil {
+		t.Fatalf("Error when setting up test: %v", err)
+	}
+	defer teardownTest(t, data)
+
+	t.Run("testTraceflowIntraNodeANP", func(t *testing.T) {
+		skipIfAntreaPolicyDisabled(t)
+		testTraceflowIntraNodeANP(t, data)
+	})
+	t.Run("testTraceflowIntraNode", func(t *testing.T) {
+		skipIfAntreaPolicyDisabled(t)
+		testTraceflowIntraNode(t, data)
+	})
+	t.Run("testTraceflowInterNode", func(t *testing.T) {
+		skipIfNumNodesLessThan(t, 2)
+		testTraceflowInterNode(t, data)
+	})
+	t.Run("testTraceflowExternalIP", func(t *testing.T) {
+		skipIfEncapModeIsNot(t, data, config.TrafficEncapModeEncap)
+		testTraceflowExternalIP(t, data)
+	})
+}
+
+func skipIfTraceflowDisabled(t *testing.T) {
+	skipIfFeatureDisabled(t, features.Traceflow, true, true)
 }
 
 var (
@@ -60,17 +89,9 @@ var (
 	protocolICMPv6 = int32(58)
 )
 
-// TestTraceflowIntraNodeANP verifies if traceflow can trace intra node traffic with some Antrea NetworkPolicy sets.
-func TestTraceflowIntraNodeANP(t *testing.T) {
-	skipIfHasWindowsNodes(t)
-
-	data, err := setupTest(t)
-	if err != nil {
-		t.Fatalf("Error when setting up test: %v", err)
-	}
-	defer teardownTest(t, data)
-	skipIfAntreaPolicyDisabled(t, data)
-	skipIfTraceflowDisabled(t, data)
+// testTraceflowIntraNodeANP verifies if traceflow can trace intra node traffic with some Antrea NetworkPolicy sets.
+func testTraceflowIntraNodeANP(t *testing.T, data *TestData) {
+	var err error
 	k8sUtils, err = NewKubernetesUtils(data)
 	failOnError(err, t)
 
@@ -78,7 +99,7 @@ func TestTraceflowIntraNodeANP(t *testing.T) {
 	node1Pods, _, node1CleanupFn := createTestBusyboxPods(t, data, 3, testNamespace, node1)
 	defer node1CleanupFn()
 
-	var denyIngress *secv1alpha1.NetworkPolicy
+	var denyIngress *v1alpha1.NetworkPolicy
 	denyIngressName := "test-anp-deny-ingress"
 	if denyIngress, err = data.createANPDenyIngress("antrea-e2e", node1Pods[1], denyIngressName, false); err != nil {
 		t.Fatalf("Error when creating Antrea NetworkPolicy: %v", err)
@@ -88,7 +109,7 @@ func TestTraceflowIntraNodeANP(t *testing.T) {
 			t.Errorf("Error when deleting Antrea NetworkPolicy: %v", err)
 		}
 	}()
-	var rejectIngress *secv1alpha1.NetworkPolicy
+	var rejectIngress *v1alpha1.NetworkPolicy
 	rejectIngressName := "test-anp-reject-ingress"
 	if rejectIngress, err = data.createANPDenyIngress("antrea-e2e", node1Pods[2], rejectIngressName, true); err != nil {
 		t.Fatalf("Error when creating Antrea NetworkPolicy: %v", err)
@@ -250,24 +271,15 @@ func TestTraceflowIntraNodeANP(t *testing.T) {
 		for _, tc := range testcases {
 			tc := tc
 			t.Run(tc.name, func(t *testing.T) {
+				t.Parallel()
 				runTestTraceflow(t, data, tc)
 			})
 		}
 	})
 }
 
-// TestTraceflowIntraNode verifies if traceflow can trace intra node traffic with some NetworkPolicies set.
-func TestTraceflowIntraNode(t *testing.T) {
-	skipIfHasWindowsNodes(t)
-
-	data, err := setupTest(t)
-	if err != nil {
-		t.Fatalf("Error when setting up test: %v", err)
-	}
-	defer teardownTest(t, data)
-
-	skipIfTraceflowDisabled(t, data)
-
+// testTraceflowIntraNode verifies if traceflow can trace intra node traffic with some NetworkPolicies set.
+func testTraceflowIntraNode(t *testing.T, data *TestData) {
 	node1 := nodeName(0)
 
 	node1Pods, node1IPs, node1CleanupFn := createTestBusyboxPods(t, data, 3, testNamespace, node1)
@@ -291,6 +303,7 @@ func TestTraceflowIntraNode(t *testing.T) {
 	// 1. Allow all egress traffic.
 	// 2. Deny ingress traffic on pod with label antrea-e2e = node1Pods[1]. So flow node1Pods[0] -> node1Pods[1] will be dropped.
 	var allowAllEgress *networkingv1.NetworkPolicy
+	var err error
 	allowAllEgressName := "test-networkpolicy-allow-all-egress"
 	if allowAllEgress, err = data.createNPAllowAllEgress(allowAllEgressName); err != nil {
 		t.Fatalf("Error when creating network policy: %v", err)
@@ -1014,25 +1027,15 @@ func TestTraceflowIntraNode(t *testing.T) {
 		for _, tc := range testcases {
 			tc := tc
 			t.Run(tc.name, func(t *testing.T) {
-				// t.Parallel()
+				t.Parallel()
 				runTestTraceflow(t, data, tc)
 			})
 		}
 	})
 }
 
-// TestTraceflowInterNode verifies if traceflow can trace inter nodes traffic with some NetworkPolicies set.
-func TestTraceflowInterNode(t *testing.T) {
-	skipIfNumNodesLessThan(t, 2)
-	skipIfHasWindowsNodes(t)
-
-	data, err := setupTest(t)
-	if err != nil {
-		t.Fatalf("Error when setting up test: %v", err)
-	}
-	defer teardownTest(t, data)
-
-	skipIfTraceflowDisabled(t, data)
+// testTraceflowInterNode verifies if traceflow can trace inter nodes traffic with some NetworkPolicies set.
+func testTraceflowInterNode(t *testing.T, data *TestData) {
 	encapMode, err := data.GetEncapMode()
 	if err != nil {
 		t.Fatalf("Failed to retrieve encap mode: %v", err)
@@ -1880,24 +1883,14 @@ func TestTraceflowInterNode(t *testing.T) {
 		for _, tc := range testcases {
 			tc := tc
 			t.Run(tc.name, func(t *testing.T) {
+				t.Parallel()
 				runTestTraceflow(t, data, tc)
 			})
 		}
 	})
 }
 
-func TestTraceflowExternalIP(t *testing.T) {
-	skipIfHasWindowsNodes(t)
-
-	data, err := setupTest(t)
-	if err != nil {
-		t.Fatalf("Error when setting up test: %v", err)
-	}
-	defer teardownTest(t, data)
-
-	skipIfTraceflowDisabled(t, data)
-	skipIfEncapModeIsNot(t, data, config.TrafficEncapModeEncap)
-
+func testTraceflowExternalIP(t *testing.T, data *TestData) {
 	node := nodeName(0)
 	nodeIP := nodeIP(0)
 	podNames, _, cleanupFn := createTestBusyboxPods(t, data, 1, testNamespace, node)
@@ -1989,22 +1982,22 @@ func compareObservations(expected v1alpha1.NodeResult, actual v1alpha1.NodeResul
 }
 
 // createANPDenyIngress creates an Antrea NetworkPolicy that denies ingress traffic for pods of specific label.
-func (data *TestData) createANPDenyIngress(key string, value string, name string, isReject bool) (*secv1alpha1.NetworkPolicy, error) {
-	dropACT := secv1alpha1.RuleActionDrop
+func (data *TestData) createANPDenyIngress(key string, value string, name string, isReject bool) (*v1alpha1.NetworkPolicy, error) {
+	dropACT := v1alpha1.RuleActionDrop
 	if isReject {
-		dropACT = secv1alpha1.RuleActionReject
+		dropACT = v1alpha1.RuleActionReject
 	}
-	anp := secv1alpha1.NetworkPolicy{
+	anp := v1alpha1.NetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
 			Labels: map[string]string{
 				"antrea-e2e": name,
 			},
 		},
-		Spec: secv1alpha1.NetworkPolicySpec{
+		Spec: v1alpha1.NetworkPolicySpec{
 			Tier:     defaultTierName,
 			Priority: 250,
-			AppliedTo: []secv1alpha1.NetworkPolicyPeer{
+			AppliedTo: []v1alpha1.NetworkPolicyPeer{
 				{
 					PodSelector: &metav1.LabelSelector{
 						MatchLabels: map[string]string{
@@ -2013,15 +2006,15 @@ func (data *TestData) createANPDenyIngress(key string, value string, name string
 					},
 				},
 			},
-			Ingress: []secv1alpha1.Rule{
+			Ingress: []v1alpha1.Rule{
 				{
 					Action: &dropACT,
-					Ports:  []secv1alpha1.NetworkPolicyPort{},
-					From:   []secv1alpha1.NetworkPolicyPeer{},
-					To:     []secv1alpha1.NetworkPolicyPeer{},
+					Ports:  []v1alpha1.NetworkPolicyPort{},
+					From:   []v1alpha1.NetworkPolicyPeer{},
+					To:     []v1alpha1.NetworkPolicyPeer{},
 				},
 			},
-			Egress: []secv1alpha1.Rule{},
+			Egress: []v1alpha1.Rule{},
 		},
 	}
 	anpCreated, err := k8sUtils.crdClient.CrdV1alpha1().NetworkPolicies(testNamespace).Create(context.TODO(), &anp, metav1.CreateOptions{})
@@ -2032,7 +2025,7 @@ func (data *TestData) createANPDenyIngress(key string, value string, name string
 }
 
 // deleteAntreaNetworkpolicy deletes an Antrea NetworkPolicy.
-func (data *TestData) deleteAntreaNetworkpolicy(policy *secv1alpha1.NetworkPolicy) error {
+func (data *TestData) deleteAntreaNetworkpolicy(policy *v1alpha1.NetworkPolicy) error {
 	if err := k8sUtils.crdClient.CrdV1alpha1().NetworkPolicies(testNamespace).Delete(context.TODO(), policy.Name, metav1.DeleteOptions{}); err != nil {
 		return fmt.Errorf("unable to cleanup policy %v: %v", policy.Name, err)
 	}

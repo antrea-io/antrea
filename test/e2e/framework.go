@@ -150,6 +150,7 @@ type TestOptions struct {
 	withBench           bool
 	enableCoverage      bool
 	coverageDir         string
+	skipCases           string
 }
 
 var testOptions TestOptions
@@ -620,7 +621,7 @@ func (data *TestData) mutateFlowAggregatorConfigMap(ipfixCollector string, faClu
 	if err != nil {
 		return err
 	}
-	flowAggregatorConf, _ := configMap.Data[flowAggregatorConfName]
+	flowAggregatorConf := configMap.Data[flowAggregatorConfName]
 	flowAggregatorConf = strings.Replace(flowAggregatorConf, "#externalFlowCollectorAddr: \"\"", fmt.Sprintf("externalFlowCollectorAddr: \"%s\"", ipfixCollector), 1)
 	flowAggregatorConf = strings.Replace(flowAggregatorConf, "#activeFlowRecordTimeout: 60s", fmt.Sprintf("activeFlowRecordTimeout: %v", aggregatorActiveFlowRecordTimeout), 1)
 	flowAggregatorConf = strings.Replace(flowAggregatorConf, "#inactiveFlowRecordTimeout: 90s", fmt.Sprintf("inactiveFlowRecordTimeout: %v", aggregatorInactiveFlowRecordTimeout), 1)
@@ -1630,14 +1631,10 @@ func (data *TestData) GetEncapMode() (config.TrafficEncapModeType, error) {
 	return config.TrafficEncapModeEncap, nil
 }
 
-func (data *TestData) getFeatures(confName string, antreaNamespace string) (featuregate.FeatureGate, error) {
+func getFeatures(confName string, antreaNamespace string) (featuregate.FeatureGate, error) {
 	featureGate := features.DefaultMutableFeatureGate.DeepCopy()
-	cfgMap, err := data.GetAntreaConfigMap(antreaNamespace)
-	if err != nil {
-		return nil, err
-	}
 	var cfg interface{}
-	if err := yaml.Unmarshal([]byte(cfgMap.Data[confName]), &cfg); err != nil {
+	if err := yaml.Unmarshal([]byte(AntreaConfigMap.Data[confName]), &cfg); err != nil {
 		return nil, err
 	}
 	rawFeatureGateMap, ok := cfg.(map[interface{}]interface{})["featureGates"]
@@ -1654,12 +1651,12 @@ func (data *TestData) getFeatures(confName string, antreaNamespace string) (feat
 	return featureGate, nil
 }
 
-func (data *TestData) GetAgentFeatures(antreaNamespace string) (featuregate.FeatureGate, error) {
-	return data.getFeatures(antreaAgentConfName, antreaNamespace)
+func GetAgentFeatures(antreaNamespace string) (featuregate.FeatureGate, error) {
+	return getFeatures(antreaAgentConfName, antreaNamespace)
 }
 
-func (data *TestData) GetControllerFeatures(antreaNamespace string) (featuregate.FeatureGate, error) {
-	return data.getFeatures(antreaControllerConfName, antreaNamespace)
+func GetControllerFeatures(antreaNamespace string) (featuregate.FeatureGate, error) {
+	return getFeatures(antreaControllerConfName, antreaNamespace)
 }
 
 func (data *TestData) GetAntreaConfigMap(antreaNamespace string) (*corev1.ConfigMap, error) {
@@ -1704,12 +1701,12 @@ func (data *TestData) mutateAntreaConfigMap(controllerChanges []configChange, ag
 		return err
 	}
 
-	controllerConf, _ := configMap.Data["antrea-controller.conf"]
+	controllerConf := configMap.Data["antrea-controller.conf"]
 	for _, c := range controllerChanges {
 		controllerConf = replaceFieldValue(controllerConf, c)
 	}
 	configMap.Data["antrea-controller.conf"] = controllerConf
-	agentConf, _ := configMap.Data["antrea-agent.conf"]
+	agentConf := configMap.Data["antrea-agent.conf"]
 	for _, c := range agentChanges {
 		agentConf = replaceFieldValue(agentConf, c)
 	}
