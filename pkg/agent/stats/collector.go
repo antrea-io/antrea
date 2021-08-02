@@ -214,15 +214,17 @@ func calculateRuleDiff(curStatsMap, lastStatsMap map[types.UID]map[string]*stats
 			}
 		} else {
 			for name, curRuleStats := range curStats {
-				lastRuleStats, ruleStatsExists := lastStats[name]
+				lastRuleStats, lastRuleStatsExists := lastStats[name]
 				// curRuleStats.Bytes < lastRuleStats.Bytes could happen
 				// as rules with same name can be deleted and recreated later.
-				if (!ruleStatsExists || curRuleStats.Bytes < lastRuleStats.Bytes) && curRuleStats.Bytes != 0 {
-					ruleTrafficStats := statsv1alpha1.RuleTrafficStats{
-						Name:         name,
-						TrafficStats: *curRuleStats,
+				if !lastRuleStatsExists || curRuleStats.Bytes < lastRuleStats.Bytes {
+					if curRuleStats.Bytes != 0 {
+						ruleTrafficStats := statsv1alpha1.RuleTrafficStats{
+							Name:         name,
+							TrafficStats: *curRuleStats,
+						}
+						stats = append(stats, ruleTrafficStats)
 					}
-					stats = append(stats, ruleTrafficStats)
 				} else if curRuleStats.Bytes > lastRuleStats.Bytes {
 					ruleTrafficStats := statsv1alpha1.RuleTrafficStats{
 						Name: name,
