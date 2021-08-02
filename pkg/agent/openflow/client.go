@@ -293,23 +293,41 @@ func (c *client) IsConnected() bool {
 // it will return immediately, otherwise it will use Bundle to add all flows, and then add them into the flow cache.
 // If it fails to add the flows with Bundle, it will return the error and no flow cache is created.
 func (c *client) addFlows(cache *flowCategoryCache, flowCacheKey string, flows []binding.Flow) error {
-	_, ok := cache.Load(flowCacheKey)
-	// If a flow cache entry already exists for the key, return immediately. Otherwise, add the flows to the switch
-	// and populate the cache with them.
-	if ok {
-		klog.V(2).Infof("Flows with cache key %s are already installed", flowCacheKey)
+	return c.addFlowsWithMultipleKeys(cache, map[string][]binding.Flow{flowCacheKey: flows})
+}
+
+// addFlowsWithMultipleKeys installs the flows with different flowCache keys and adds them into the cache on success.
+// It will skip flows whose cache already exists. All flows will be installed via a bundle.
+func (c *client) addFlowsWithMultipleKeys(cache *flowCategoryCache, keyToFlows map[string][]binding.Flow) error {
+	// allFlows keeps the flows we will install via a bundle.
+	var allFlows []binding.Flow
+	// flowCacheMap keeps the flowCache items we will add to the cache on bundle success.
+	flowCacheMap := map[string]flowCache{}
+	for flowCacheKey, flows := range keyToFlows {
+		_, ok := cache.Load(flowCacheKey)
+		// If a flow cache entry already exists for the key, skip it.
+		if ok {
+			klog.V(2).InfoS("Flows with this cache key are already installed", "key", flowCacheKey)
+			continue
+		}
+		fCache := flowCache{}
+		for _, flow := range flows {
+			allFlows = append(allFlows, flow)
+			fCache[flow.MatchString()] = flow
+		}
+		flowCacheMap[flowCacheKey] = fCache
+	}
+	if len(allFlows) == 0 {
 		return nil
 	}
-	err := c.ofEntryOperations.AddAll(flows)
+	err := c.ofEntryOperations.AddAll(allFlows)
 	if err != nil {
 		return err
 	}
-	fCache := flowCache{}
-	// Add the successfully installed flows into the flow cache.
-	for _, flow := range flows {
-		fCache[flow.MatchString()] = flow
+	// Add the installed flows into the flow cache.
+	for flowCacheKey, flowCache := range flowCacheMap {
+		cache.Store(flowCacheKey, flowCache)
 	}
-	cache.Store(flowCacheKey, fCache)
 	return nil
 }
 
@@ -509,6 +527,8 @@ func (c *client) InstallEndpointFlows(protocol binding.Protocol, endpoints []pro
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
 
+	// keyToFlows is a map from the flows' cache key to the flows.
+	keyToFlows := map[string][]binding.Flow{}
 	for _, endpoint := range endpoints {
 		var flows []binding.Flow
 		endpointPort, _ := endpoint.Port()
@@ -519,11 +539,10 @@ func (c *client) InstallEndpointFlows(protocol binding.Protocol, endpoints []pro
 		if endpoint.GetIsLocal() {
 			flows = append(flows, c.hairpinSNATFlow(endpointIP))
 		}
-		if err := c.addFlows(c.serviceFlowCache, cacheKey, flows); err != nil {
-			return err
-		}
+		keyToFlows[cacheKey] = flows
 	}
-	return nil
+
+	return c.addFlowsWithMultipleKeys(c.serviceFlowCache, keyToFlows)
 }
 
 func (c *client) UninstallEndpointFlows(protocol binding.Protocol, endpoint proxy.Endpoint) error {
