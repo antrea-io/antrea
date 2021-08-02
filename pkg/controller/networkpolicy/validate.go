@@ -30,7 +30,6 @@ import (
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	crdv1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
 	"antrea.io/antrea/pkg/controller/networkpolicy/store"
-	"antrea.io/antrea/pkg/controller/types"
 	"antrea.io/antrea/pkg/util/env"
 )
 
@@ -664,22 +663,21 @@ func validateAntreaGroupSpec(s crdv1alpha2.GroupSpec) (string, bool) {
 	return "", true
 }
 
-func (g *groupValidator) validateChildGroup(s *crdv1alpha2.ClusterGroup, isUpdate bool) (string, bool) {
+func (g *groupValidator) validateChildGroup(s *crdv1alpha2.ClusterGroup) (string, bool) {
 	if len(s.Spec.ChildGroups) > 0 {
-		if isUpdate {
-			parentGrps, err := g.networkPolicyController.internalGroupStore.GetByIndex(store.ChildGroupIndex, s.Name)
-			if err != nil {
-				return fmt.Sprintf("error retrieving parents of ClusterGroup %s: %v", s.Name, err), false
-			}
-			// TODO: relax this constraint when max group nesting level increases.
-			if len(parentGrps) > 0 {
-				return fmt.Sprintf("cannot set childGroups for ClusterGroup %s, who has %d parents", s.Name, len(parentGrps)), false
-			}
+		parentGrps, err := g.networkPolicyController.internalGroupStore.GetByIndex(store.ChildGroupIndex, s.Name)
+		if err != nil {
+			return fmt.Sprintf("error retrieving parents of ClusterGroup %s: %v", s.Name, err), false
+		}
+		// TODO: relax this constraint when max group nesting level increases.
+		if len(parentGrps) > 0 {
+			return fmt.Sprintf("cannot set childGroups for ClusterGroup %s, who has %d parents", s.Name, len(parentGrps)), false
 		}
 		for _, groupname := range s.Spec.ChildGroups {
 			cg, err := g.networkPolicyController.cgLister.Get(string(groupname))
 			if err != nil {
-				return fmt.Sprintf("child group %s does not exist", string(groupname)), false
+				// the childGroup has not been created yet.
+				continue
 			}
 			// TODO: relax this constraint when max group nesting level increases.
 			if len(cg.Spec.ChildGroups) > 0 {
@@ -697,7 +695,7 @@ func (g *groupValidator) createValidate(curObj interface{}, userInfo authenticat
 	if !allowed {
 		return reason, allowed
 	}
-	return g.validateChildGroup(curCG, false)
+	return g.validateChildGroup(curCG)
 }
 
 // updateValidate validates the UPDATE events of ClusterGroup resources.
@@ -707,7 +705,7 @@ func (g *groupValidator) updateValidate(curObj, oldObj interface{}, userInfo aut
 	if !allowed {
 		return reason, allowed
 	}
-	return g.validateChildGroup(curCG, true)
+	return g.validateChildGroup(curCG)
 }
 
 // deleteValidate validates the DELETE events of ClusterGroup resources.
@@ -725,19 +723,6 @@ func (g *groupValidator) deleteValidate(oldObj interface{}, userInfo authenticat
 			cnpNameList[i] = cnpObj.Name
 		}
 		return fmt.Sprintf("ClusterGroup %s is referenced by %d Antrea ClusterNetworkPolicies: %v", oldCG.Name, len(cnps), cnpNameList), false
-	}
-	// ClusterGroup referenced by other ClusterGroups as childGroup cannot be deleted.
-	parentGrps, err := g.networkPolicyController.internalGroupStore.GetByIndex(store.ChildGroupIndex, oldCG.Name)
-	if err != nil {
-		return fmt.Sprintf("error retrieving parents of ClusterGroup %s: %v", oldCG.Name, err), false
-	}
-	if len(parentGrps) > 0 {
-		parentGrpNameList := make([]string, len(parentGrps))
-		for i := range parentGrps {
-			grpObject := parentGrps[i].(*types.Group)
-			parentGrpNameList[i] = grpObject.Name
-		}
-		return fmt.Sprintf("ClusterGroup %s is referenced by %d ClusterGroups as childGroup: %v", oldCG.Name, len(parentGrps), parentGrpNameList), false
 	}
 	return "", true
 }
