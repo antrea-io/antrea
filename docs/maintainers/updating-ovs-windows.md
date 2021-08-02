@@ -33,5 +33,5 @@ procedure.
   - `https://downloads.antrea.io/ovs/<NAME>.zip`
   - `https://downloads.antrea.io/ovs/<NAME>.zip.sha256`
 
-* Udate the Antrea Windows documentation and helper scripts as needed,
+* Update the Antrea Windows documentation and helper scripts as needed,
   e.g. `hack/windows/Install-OVS.ps1`.
