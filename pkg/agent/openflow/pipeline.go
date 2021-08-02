@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"math"
 	"net"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -391,6 +392,10 @@ type client struct {
 	ipProtocols []binding.Protocol
 	// ovsctlClient is the interface for executing OVS "ovs-ofctl" and "ovs-appctl" commands.
 	ovsctlClient ovsctl.OVSCtlClient
+	// deterministic represents whether to generate flows deterministically.
+	// For example, if a flow has multiple actions, setting it to true can get consistent flow.
+	// Enabling it may carry a performance impact. It's disabled by default and should only be used in testing.
+	deterministic bool
 }
 
 func (c *client) GetTunnelVirtualMAC() net.HardwareAddr {
@@ -1628,7 +1633,7 @@ func (c *client) conjunctionExceptionFlow(conjunctionID uint32, tableID binding.
 }
 
 // conjunctiveMatchFlow generates the flow to set conjunctive actions if the match condition is matched.
-func (c *client) conjunctiveMatchFlow(tableID binding.TableIDType, matchKey *types.MatchKey, matchValue interface{}, priority *uint16, actions ...*conjunctiveAction) binding.Flow {
+func (c *client) conjunctiveMatchFlow(tableID binding.TableIDType, matchKey *types.MatchKey, matchValue interface{}, priority *uint16, actions []*conjunctiveAction) binding.Flow {
 	var ofPriority uint16
 	if priority != nil {
 		ofPriority = *priority
@@ -1637,6 +1642,9 @@ func (c *client) conjunctiveMatchFlow(tableID binding.TableIDType, matchKey *typ
 	}
 	fb := c.pipeline[tableID].BuildFlow(ofPriority)
 	fb = c.addFlowMatch(fb, matchKey, matchValue)
+	if c.deterministic {
+		sort.Sort(conjunctiveActionsInOrder(actions))
+	}
 	for _, act := range actions {
 		fb.Action().Conjunction(act.conjID, act.clauseID, act.nClause)
 	}
@@ -2101,4 +2109,18 @@ func NewClient(bridgeName, mgmtAddr string, ovsDatapathType ovsconfig.OVSDatapat
 	}
 	c.generatePipeline()
 	return c
+}
+
+type conjunctiveActionsInOrder []*conjunctiveAction
+
+func (sl conjunctiveActionsInOrder) Len() int      { return len(sl) }
+func (sl conjunctiveActionsInOrder) Swap(i, j int) { sl[i], sl[j] = sl[j], sl[i] }
+func (sl conjunctiveActionsInOrder) Less(i, j int) bool {
+	if sl[i].conjID != sl[j].conjID {
+		return sl[i].conjID < sl[j].conjID
+	}
+	if sl[i].clauseID != sl[j].clauseID {
+		return sl[i].clauseID < sl[j].clauseID
+	}
+	return sl[i].nClause < sl[j].nClause
 }
