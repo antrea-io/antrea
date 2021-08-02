@@ -163,7 +163,7 @@ jobs:
       run: |
         mkdir log
         mkdir test-e2e-encap-no-proxy-coverage
-        ANTREA_LOG_DIR=$PWD/log ANTREA_COV_DIR=$PWD/test-e2e-encap-no-proxy-coverage ./ci/kind/test-e2e-kind.sh --encap-mode encap --no-proxy --coverage
+        ANTREA_LOG_DIR=$PWD/log ANTREA_COV_DIR=$PWD/test-e2e-encap-no-proxy-coverage ./ci/kind/test-e2e-kind.sh --encap-mode encap --no-proxy --coverage --skip mode-irrelevant
     - name: Tar coverage files
       run: tar -czf test-e2e-encap-no-proxy-coverage.tar.gz test-e2e-encap-no-proxy-coverage
     - name: Upload coverage for test-e2e-encap-no-proxy-coverage
@@ -226,7 +226,7 @@ jobs:
       run: |
         mkdir log
         mkdir test-e2e-noencap-coverage
-        ANTREA_LOG_DIR=$PWD/log ANTREA_COV_DIR=$PWD/test-e2e-noencap-coverage ./ci/kind/test-e2e-kind.sh --encap-mode noEncap --coverage
+        ANTREA_LOG_DIR=$PWD/log ANTREA_COV_DIR=$PWD/test-e2e-noencap-coverage ./ci/kind/test-e2e-kind.sh --encap-mode noEncap --coverage --skip mode-irrelevant
     - name: Tar coverage files
       run: tar -czf test-e2e-noencap-coverage.tar.gz test-e2e-noencap-coverage
     - name: Upload coverage for test-e2e-noencap-coverage
@@ -289,7 +289,7 @@ jobs:
       run: |
         mkdir log
         mkdir test-e2e-hybrid-coverage
-        ANTREA_LOG_DIR=$PWD/log ANTREA_COV_DIR=$PWD/test-e2e-hybrid-coverage ./ci/kind/test-e2e-kind.sh --encap-mode hybrid --coverage
+        ANTREA_LOG_DIR=$PWD/log ANTREA_COV_DIR=$PWD/test-e2e-hybrid-coverage ./ci/kind/test-e2e-kind.sh --encap-mode hybrid --coverage --skip mode-irrelevant
     - name: Tar coverage files
       run: tar -czf test-e2e-hybrid-coverage.tar.gz test-e2e-hybrid-coverage
     - name: Upload coverage for test-e2e-hybrid-coverage
@@ -355,7 +355,7 @@ jobs:
       run: |
         mkdir log
         mkdir test-e2e-encap-no-np-coverage
-        ANTREA_LOG_DIR=$PWD/log ANTREA_COV_DIR=$PWD/test-e2e-encap-no-np-coverage ./ci/kind/test-e2e-kind.sh --encap-mode encap --no-np --coverage
+        ANTREA_LOG_DIR=$PWD/log ANTREA_COV_DIR=$PWD/test-e2e-encap-no-np-coverage ./ci/kind/test-e2e-kind.sh --encap-mode encap --no-np --coverage --skip mode-irrelevant
     - name: Tar coverage files
       run: tar -czf test-e2e-encap-no-np-coverage.tar.gz test-e2e-encap-no-np-coverage
     - name: Upload coverage for test-e2e-encap-no-np-coverage
@@ -383,28 +383,9 @@ jobs:
         path: log.tar.gz
         retention-days: 30
 
-  build-antrea-image:
-    name: Build Antrea image to be used for Kind netpol tests
-    needs: check-changes
-    if: ${{ needs.check-changes.outputs.has_changes == 'yes' }}
-    runs-on: [ubuntu-latest]
-    steps:
-    - uses: actions/checkout@v2
-    - name: Build Antrea Docker image
-      run: |
-        ./hack/build-antrea-ubuntu-all.sh --pull
-    - name: Save Antrea image to tarball
-      run:  docker save -o antrea-ubuntu.tar projects.registry.vmware.com/antrea/antrea-ubuntu:latest
-    - name: Upload Antrea image for subsequent jobs
-      uses: actions/upload-artifact@v2
-      with:
-        name: antrea-ubuntu
-        path: antrea-ubuntu.tar
-        retention-days: 1 # minimum value, in case artifact deletion by 'artifact-cleanup' job fails
-
   test-netpol-tmp:
     name: Run experimental network policy tests (netpol) on Kind cluster
-    needs: build-antrea-image
+    needs: build-antrea-coverage-image
     runs-on: [ubuntu-latest]
     steps:
     - name: Free disk space
@@ -419,9 +400,12 @@ jobs:
     - name: Download Antrea image from previous job
       uses: actions/download-artifact@v1
       with:
-        name: antrea-ubuntu
+        name: antrea-ubuntu-cov
     - name: Load Antrea image
-      run:  docker load -i antrea-ubuntu/antrea-ubuntu.tar
+      run: |
+        docker load -i antrea-ubuntu-cov/antrea-ubuntu.tar
+        docker tag antrea/antrea-ubuntu-coverage:latest antrea/antrea-ubuntu:latest
+        docker tag antrea/antrea-ubuntu-coverage:latest projects.registry.vmware.com/antrea/antrea-ubuntu:latest
     - name: Install Kind
       run: |
         curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-$(uname)-amd64
@@ -436,7 +420,7 @@ jobs:
 
   validate-prometheus-metrics-doc:
     name: Validate metrics in Prometheus document match running deployment's
-    needs: build-antrea-image
+    needs: build-antrea-coverage-image
     runs-on: [ubuntu-latest]
     steps:
       - name: Free disk space
@@ -451,9 +435,12 @@ jobs:
       - name: Download Antrea image from previous job
         uses: actions/download-artifact@v1
         with:
-          name: antrea-ubuntu
+          name: antrea-ubuntu-cov
       - name: Load Antrea image
-        run:  docker load -i antrea-ubuntu/antrea-ubuntu.tar
+        run: |
+          docker load -i antrea-ubuntu-cov/antrea-ubuntu.tar
+          docker tag antrea/antrea-ubuntu-coverage:latest antrea/antrea-ubuntu:latest
+          docker tag antrea/antrea-ubuntu-coverage:latest projects.registry.vmware.com/antrea/antrea-ubuntu:latest
       - name: Install Kind
         run: |
           curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-$(uname)-amd64
@@ -469,8 +456,8 @@ jobs:
   # yet.
   artifact-cleanup:
     name: Delete uploaded images
-    needs: [build-antrea-coverage-image, build-flow-aggregator-coverage-image, build-antrea-image, test-e2e-encap, test-e2e-encap-no-proxy, test-e2e-noencap, test-e2e-hybrid, test-e2e-encap-no-np, test-netpol-tmp, validate-prometheus-metrics-doc]
-    if: ${{ always() &&  (needs.build-antrea-coverage-image.result == 'success' || needs.build-flow-aggregator-coverage-image.result == 'success' || needs.build-antrea-image.result == 'success') }}
+    needs: [build-antrea-coverage-image, build-flow-aggregator-coverage-image, test-e2e-encap, test-e2e-encap-no-proxy, test-e2e-noencap, test-e2e-hybrid, test-e2e-encap-no-np, test-netpol-tmp, validate-prometheus-metrics-doc]
+    if: ${{ always() &&  (needs.build-antrea-coverage-image.result == 'success' || needs.build-flow-aggregator-coverage-image.result == 'success') }}
     runs-on: [ubuntu-latest]
     steps:
     - name: Delete antrea-ubuntu-cov
@@ -483,9 +470,4 @@ jobs:
       uses: geekyeggo/delete-artifact@v1
       with:
         name: flow-aggregator-cov
-    - name: Delete antrea-ubuntu
-      if: ${{ needs.build-antrea-image.result == 'success' }}
-      uses: geekyeggo/delete-artifact@v1
-      with:
-        name: antrea-ubuntu
         failOnError: false

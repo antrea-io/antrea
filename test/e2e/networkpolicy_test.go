@@ -35,12 +35,13 @@ import (
 	"antrea.io/antrea/pkg/features"
 )
 
-func skipIfNetworkPolicyStatsDisabled(tb testing.TB, data *TestData) {
-	skipIfFeatureDisabled(tb, data, features.NetworkPolicyStats, true, true)
+func skipIfNetworkPolicyStatsDisabled(tb testing.TB) {
+	skipIfFeatureDisabled(tb, features.NetworkPolicyStats, true, true)
 }
 
-func TestNetworkPolicyStats(t *testing.T) {
-	skipIfNotIPv4Cluster(t)
+// TestNetworkPolicy is the top-level test which contains all subtests for
+// NetworkPolicy related test cases so they can share setup, teardown.
+func TestNetworkPolicy(t *testing.T) {
 	skipIfHasWindowsNodes(t)
 
 	data, err := setupTest(t)
@@ -48,8 +49,41 @@ func TestNetworkPolicyStats(t *testing.T) {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
 	defer teardownTest(t, data)
-	skipIfNetworkPolicyStatsDisabled(t, data)
 
+	t.Run("testNetworkPolicyStats", func(t *testing.T) {
+		skipIfNotIPv4Cluster(t)
+		skipIfNetworkPolicyStatsDisabled(t)
+		testNetworkPolicyStats(t, data)
+	})
+	t.Run("testDifferentNamedPorts", func(t *testing.T) {
+		testDifferentNamedPorts(t, data)
+	})
+	t.Run("testDefaultDenyIngressPolicy", func(t *testing.T) {
+		testDefaultDenyIngressPolicy(t, data)
+	})
+	t.Run("testDefaultDenyEgressPolicy", func(t *testing.T) {
+		testDefaultDenyEgressPolicy(t, data)
+	})
+	t.Run("testEgressToServerInCIDRBlock", func(t *testing.T) {
+		skipIfNotIPv6Cluster(t)
+		testEgressToServerInCIDRBlock(t, data)
+	})
+	t.Run("testEgressToServerInCIDRBlockWithException", func(t *testing.T) {
+		skipIfNotIPv6Cluster(t)
+		testEgressToServerInCIDRBlockWithException(t, data)
+	})
+	t.Run("testNetworkPolicyResyncAfterRestart", func(t *testing.T) {
+		testNetworkPolicyResyncAfterRestart(t, data)
+	})
+	t.Run("testIngressPolicyWithoutPortNumber", func(t *testing.T) {
+		testIngressPolicyWithoutPortNumber(t, data)
+	})
+	t.Run("testIngressPolicyWithEndPort", func(t *testing.T) {
+		testIngressPolicyWithEndPort(t, data)
+	})
+}
+
+func testNetworkPolicyStats(t *testing.T, data *TestData) {
 	serverName, serverIPs, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "test-server-", "", testNamespace)
 	defer cleanupFunc()
 
@@ -171,14 +205,7 @@ func TestNetworkPolicyStats(t *testing.T) {
 	}
 }
 
-func TestDifferentNamedPorts(t *testing.T) {
-	skipIfHasWindowsNodes(t)
-
-	data, err := setupTest(t)
-	if err != nil {
-		t.Fatalf("Error when setting up test: %v", err)
-	}
-	defer teardownTest(t, data)
+func testDifferentNamedPorts(t *testing.T, data *TestData) {
 	checkFn, cleanupFn := data.setupDifferentNamedPorts(t)
 	defer cleanupFn()
 	checkFn()
@@ -312,18 +339,10 @@ func (data *TestData) setupDifferentNamedPorts(t *testing.T) (checkFn func(), cl
 	return
 }
 
-// TestDefaultDenyIngressPolicy performs additional validation to the upstream test for deny-all policy:
+// testDefaultDenyIngressPolicy performs additional validation to the upstream test for deny-all policy:
 // 1. The traffic initiated from the host network namespace cannot be dropped.
 // 2. The traffic initiated externally that access the Pod via NodePort service can be dropped (skipped if provider is kind).
-func TestDefaultDenyIngressPolicy(t *testing.T) {
-	skipIfHasWindowsNodes(t)
-
-	data, err := setupTest(t)
-	if err != nil {
-		t.Fatalf("Error when setting up test: %v", err)
-	}
-	defer teardownTest(t, data)
-
+func testDefaultDenyIngressPolicy(t *testing.T, data *TestData) {
 	serverNode := workerNodeName(1)
 	serverNodeIP := workerNodeIP(1)
 	serverPort := int32(80)
@@ -388,15 +407,7 @@ func TestDefaultDenyIngressPolicy(t *testing.T) {
 	}
 }
 
-func TestDefaultDenyEgressPolicy(t *testing.T) {
-	skipIfHasWindowsNodes(t)
-
-	data, err := setupTest(t)
-	if err != nil {
-		t.Fatalf("Error when setting up test: %v", err)
-	}
-	defer teardownTest(t, data)
-
+func testDefaultDenyEgressPolicy(t *testing.T, data *TestData) {
 	serverPort := int32(80)
 	_, serverIPs, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "test-server-", "", testNamespace)
 	defer cleanupFunc()
@@ -405,7 +416,7 @@ func TestDefaultDenyEgressPolicy(t *testing.T) {
 	defer cleanupFunc()
 
 	preCheckFunc := func(serverIP string) {
-		if err = data.runNetcatCommandFromTestPod(clientName, testNamespace, serverIP, serverPort); err != nil {
+		if err := data.runNetcatCommandFromTestPod(clientName, testNamespace, serverIP, serverPort); err != nil {
 			t.Fatalf("Pod %s should be able to connect %s, but was not able to connect", clientName, net.JoinHostPort(serverIP, fmt.Sprint(serverPort)))
 		}
 	}
@@ -445,21 +456,12 @@ func TestDefaultDenyEgressPolicy(t *testing.T) {
 	}
 }
 
-// TestEgressToServerInCIDRBlock is a duplicate of upstream test case "should allow egress access to server in CIDR block
+// testEgressToServerInCIDRBlock is a duplicate of upstream test case "should allow egress access to server in CIDR block
 // [Feature:NetworkPolicy]", which is currently buggy in v1.19 release for clusters which use IPv6.
 // This should be deleted when upstream is updated.
 // https://github.com/kubernetes/kubernetes/blob/v1.20.0-alpha.0/test/e2e/network/network_policy.go#L1365
 // https://github.com/kubernetes/kubernetes/pull/93583
-func TestEgressToServerInCIDRBlock(t *testing.T) {
-	skipIfNotIPv6Cluster(t)
-	skipIfHasWindowsNodes(t)
-
-	data, err := setupTest(t)
-	if err != nil {
-		t.Fatalf("Error when setting up test: %v", err)
-	}
-	defer teardownTest(t, data)
-
+func testEgressToServerInCIDRBlock(t *testing.T, data *TestData) {
 	workerNode := workerNodeName(1)
 	serverAName, serverAIPs, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "test-server-", workerNode, testNamespace)
 	defer cleanupFunc()
@@ -521,21 +523,12 @@ func TestEgressToServerInCIDRBlock(t *testing.T) {
 	}
 }
 
-// TestEgressToServerInCIDRBlockWithException is a duplicate of upstream test case "should allow egress access to server
+// testEgressToServerInCIDRBlockWithException is a duplicate of upstream test case "should allow egress access to server
 // in CIDR block [Feature:NetworkPolicy]", which is currently buggy in v1.19 release for clusters which use IPv6.
 // This should be deleted when upstream is updated.
 // https://github.com/kubernetes/kubernetes/blob/v1.20.0-alpha.0/test/e2e/network/network_policy.go#L1444
 // https://github.com/kubernetes/kubernetes/pull/93583
-func TestEgressToServerInCIDRBlockWithException(t *testing.T) {
-	skipIfNotIPv6Cluster(t)
-	skipIfHasWindowsNodes(t)
-
-	data, err := setupTest(t)
-	if err != nil {
-		t.Fatalf("Error when setting up test: %v", err)
-	}
-	defer teardownTest(t, data)
-
+func testEgressToServerInCIDRBlockWithException(t *testing.T, data *TestData) {
 	workerNode := workerNodeName(1)
 	serverAName, serverAIPs, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "test-server-", workerNode, testNamespace)
 	defer cleanupFunc()
@@ -595,15 +588,7 @@ func TestEgressToServerInCIDRBlockWithException(t *testing.T) {
 	}
 }
 
-func TestNetworkPolicyResyncAfterRestart(t *testing.T) {
-	skipIfHasWindowsNodes(t)
-
-	data, err := setupTest(t)
-	if err != nil {
-		t.Fatalf("Error when setting up test: %v", err)
-	}
-	defer teardownTest(t, data)
-
+func testNetworkPolicyResyncAfterRestart(t *testing.T, data *TestData) {
 	workerNode := workerNodeName(1)
 	antreaPod, err := data.getAntreaPodOnNode(workerNode)
 	if err != nil {
@@ -716,15 +701,7 @@ func TestNetworkPolicyResyncAfterRestart(t *testing.T) {
 	}
 }
 
-func TestIngressPolicyWithoutPortNumber(t *testing.T) {
-	skipIfHasWindowsNodes(t)
-
-	data, err := setupTest(t)
-	if err != nil {
-		t.Fatalf("Error when setting up test: %v", err)
-	}
-	defer teardownTest(t, data)
-
+func testIngressPolicyWithoutPortNumber(t *testing.T, data *TestData) {
 	serverPort := int32(80)
 	_, serverIPs, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "test-server-", "", testNamespace)
 	defer cleanupFunc()
@@ -738,7 +715,7 @@ func TestIngressPolicyWithoutPortNumber(t *testing.T) {
 	preCheckFunc := func(serverIP string) {
 		// Both clients can connect to server.
 		for _, clientName := range []string{client0Name, client1Name} {
-			if err = data.runNetcatCommandFromTestPod(clientName, testNamespace, serverIP, serverPort); err != nil {
+			if err := data.runNetcatCommandFromTestPod(clientName, testNamespace, serverIP, serverPort); err != nil {
 				t.Fatalf("Pod %s should be able to connect %s, but was not able to connect", clientName, net.JoinHostPort(serverIP, fmt.Sprint(serverPort)))
 			}
 		}
@@ -802,15 +779,7 @@ func TestIngressPolicyWithoutPortNumber(t *testing.T) {
 	}
 }
 
-func TestIngressPolicyWithEndPort(t *testing.T) {
-	skipIfHasWindowsNodes(t)
-
-	data, err := setupTest(t)
-	if err != nil {
-		t.Fatalf("Error when setting up test: %v", err)
-	}
-	defer teardownTest(t, data)
-
+func testIngressPolicyWithEndPort(t *testing.T, data *TestData) {
 	serverPort := int32(80)
 	serverEndPort := int32(84)
 	policyPort := int32(81)
@@ -887,7 +856,7 @@ func TestIngressPolicyWithEndPort(t *testing.T) {
 	preCheck := func(serverIP string) {
 		// The client can connect to server on all ports.
 		for _, port := range serverPorts {
-			if err = data.runNetcatCommandFromTestPod(clientName, testNamespace, serverIP, port); err != nil {
+			if err := data.runNetcatCommandFromTestPod(clientName, testNamespace, serverIP, port); err != nil {
 				t.Fatalf("Pod %s should be able to connect %s, but was not able to connect", clientName, net.JoinHostPort(serverIP, fmt.Sprint(port)))
 			}
 		}

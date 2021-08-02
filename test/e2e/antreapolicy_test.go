@@ -76,6 +76,28 @@ const (
 	resourceTier          = "tier"
 )
 
+// TestAntreaPolicyStats is the top-level test which contains all subtests for
+// AntreaPolicyStats related test cases so they can share setup, teardown.
+func TestAntreaPolicyStats(t *testing.T) {
+	skipIfHasWindowsNodes(t)
+	skipIfAntreaPolicyDisabled(t)
+
+	data, err := setupTest(t)
+	if err != nil {
+		t.Fatalf("Error when setting up test: %v", err)
+	}
+	defer teardownTest(t, data)
+
+	t.Run("testANPNetworkPolicyStatsWithDropAction", func(t *testing.T) {
+		skipIfNetworkPolicyStatsDisabled(t)
+		testANPNetworkPolicyStatsWithDropAction(t, data)
+	})
+	t.Run("testAntreaClusterNetworkPolicyStats", func(t *testing.T) {
+		skipIfNetworkPolicyStatsDisabled(t)
+		testAntreaClusterNetworkPolicyStats(t, data)
+	})
+}
+
 func failOnError(err error, t *testing.T) {
 	if err != nil {
 		log.Errorf("%+v", err)
@@ -133,7 +155,7 @@ func initialize(t *testing.T, data *TestData) {
 	pods = []string{"a", "b", "c"}
 	namespaces = []string{"x", "y", "z"}
 	// This function "initialize" will be used more than once, and variable "allPods" is global.
-	// It should be empty every time when "initialize" is performed, otherwise there will be expected
+	// It should be empty every time when "initialize" is performed, otherwise there will be unexpected
 	// results.
 	allPods = []Pod{}
 	podsByNamespace = make(map[string][]Pod)
@@ -144,7 +166,8 @@ func initialize(t *testing.T, data *TestData) {
 			podsByNamespace[ns] = append(podsByNamespace[ns], NewPod(ns, podName))
 		}
 	}
-	skipIfAntreaPolicyDisabled(t, data)
+	skipIfAntreaPolicyDisabled(t)
+
 	var err error
 	// k8sUtils is a global var
 	k8sUtils, err = NewKubernetesUtils(data)
@@ -154,8 +177,8 @@ func initialize(t *testing.T, data *TestData) {
 	podIPs = *ips
 }
 
-func skipIfAntreaPolicyDisabled(tb testing.TB, data *TestData) {
-	skipIfFeatureDisabled(tb, data, features.AntreaPolicy, true, true)
+func skipIfAntreaPolicyDisabled(tb testing.TB) {
+	skipIfFeatureDisabled(tb, features.AntreaPolicy, true, true)
 }
 
 func applyDefaultDenyToAllNamespaces(k8s *KubernetesUtils, namespaces []string) error {
@@ -2662,14 +2685,18 @@ func waitForResourceDelete(namespace, name string, resource string, timeout time
 	return nil
 }
 
+// TestAntreaPolicy is the top-level test which contains all subtests for
+// AntreaPolicy related test cases so they can share setup, teardown.
 func TestAntreaPolicy(t *testing.T) {
 	skipIfHasWindowsNodes(t)
+	skipIfAntreaPolicyDisabled(t)
 
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
 	defer teardownTest(t, data)
+
 	initialize(t, data)
 
 	t.Run("TestGroupValidateAntreaNativePolicies", func(t *testing.T) {
@@ -2768,13 +2795,13 @@ func TestAntreaPolicy(t *testing.T) {
 
 func TestAntreaPolicyStatus(t *testing.T) {
 	skipIfHasWindowsNodes(t)
+	skipIfAntreaPolicyDisabled(t)
 
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
 	defer teardownTest(t, data)
-	skipIfAntreaPolicyDisabled(t, data)
 
 	_, _, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "server-0", controlPlaneNodeName(), testNamespace)
 	defer cleanupFunc()
@@ -2863,24 +2890,15 @@ func (data *TestData) waitForACNPRealized(t *testing.T, name string) error {
 	return nil
 }
 
-// TestANPNetworkPolicyStatsWithDropAction tests antreanetworkpolicystats can correctly collect dropped packets stats from ANP if
+// testANPNetworkPolicyStatsWithDropAction tests antreanetworkpolicystats can correctly collect dropped packets stats from ANP if
 // networkpolicystats feature is enabled
-func TestANPNetworkPolicyStatsWithDropAction(t *testing.T) {
-	skipIfHasWindowsNodes(t)
-
-	data, err := setupTest(t)
-	if err != nil {
-		t.Fatalf("Error when setting up test: %v", err)
-	}
-	defer teardownTest(t, data)
-	skipIfAntreaPolicyDisabled(t, data)
-	skipIfNetworkPolicyStatsDisabled(t, data)
-
+func testANPNetworkPolicyStatsWithDropAction(t *testing.T, data *TestData) {
 	serverName, serverIPs, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "test-server-", "", testNamespace)
 	defer cleanupFunc()
 
 	clientName, _, cleanupFunc := createAndWaitForPod(t, data, data.createBusyboxPodOnNode, "test-client-", "", testNamespace)
 	defer cleanupFunc()
+	var err error
 	k8sUtils, err = NewKubernetesUtils(data)
 	failOnError(err, t)
 	p10 := float64(10)
@@ -3009,22 +3027,13 @@ func TestANPNetworkPolicyStatsWithDropAction(t *testing.T) {
 	k8sUtils.Cleanup(namespaces)
 }
 
-func TestAntreaClusterNetworkPolicyStats(t *testing.T) {
-	skipIfHasWindowsNodes(t)
-
-	data, err := setupTest(t)
-	if err != nil {
-		t.Fatalf("Error when setting up test: %v", err)
-	}
-	defer teardownTest(t, data)
-	skipIfAntreaPolicyDisabled(t, data)
-	skipIfNetworkPolicyStatsDisabled(t, data)
-
+func testAntreaClusterNetworkPolicyStats(t *testing.T, data *TestData) {
 	serverName, serverIPs, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "test-server-", "", testNamespace)
 	defer cleanupFunc()
 
 	clientName, _, cleanupFunc := createAndWaitForPod(t, data, data.createBusyboxPodOnNode, "test-client-", "", testNamespace)
 	defer cleanupFunc()
+	var err error
 	k8sUtils, err = NewKubernetesUtils(data)
 	failOnError(err, t)
 	p10 := float64(10)

@@ -96,6 +96,11 @@ function check {
   MOD_DIFF=$(diff "$MOD_FILE" "$TMP_MOD_FILE")
   SUM_DIFF=$(diff "$SUM_FILE" "$TMP_SUM_FILE")
   if [ -n "$MOD_DIFF" ] || [ -n "$SUM_DIFF" ]; then
+    echo "=== go.mod diff ==="
+    echo $MOD_DIFF
+    echo "=== go.sum diff ==="
+    echo $SUM_DIFF
+
     echoerr "dependencies are not tidy"
     general_help
     clean
