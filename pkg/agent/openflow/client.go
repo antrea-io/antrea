@@ -19,7 +19,7 @@ import (
 	"math/rand"
 	"net"
 
-	"github.com/contiv/libOpenflow/protocol"
+	"antrea.io/libOpenflow/protocol"
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent/config"

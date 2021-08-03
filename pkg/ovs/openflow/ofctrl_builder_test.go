@@ -18,7 +18,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/contiv/ofnet/ofctrl"
+	"antrea.io/ofnet/ofctrl"
 	"github.com/stretchr/testify/require"
 )
 

@@ -23,9 +23,9 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/contiv/libOpenflow/openflow13"
-	"github.com/contiv/libOpenflow/protocol"
-	"github.com/contiv/ofnet/ofctrl"
+	"antrea.io/libOpenflow/openflow13"
+	"antrea.io/libOpenflow/protocol"
+	"antrea.io/ofnet/ofctrl"
 	"github.com/vmware/go-ipfix/pkg/registry"
 	"gopkg.in/natefinch/lumberjack.v2"
 	"k8s.io/klog/v2"

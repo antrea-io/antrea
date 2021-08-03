@@ -24,7 +24,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/contiv/ofnet/ofctrl"
+	"antrea.io/ofnet/ofctrl"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/time/rate"

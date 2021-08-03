@@ -3,6 +3,8 @@ module antrea.io/antrea
 go 1.15
 
 require (
+	antrea.io/libOpenflow v0.2.0
+	antrea.io/ofnet v0.1.0
 	github.com/Mellanox/sriovnet v1.0.2
 	github.com/Microsoft/go-winio v0.4.16-0.20201130162521-d1ffc52c7331
 	github.com/Microsoft/hcsshim v0.8.9
@@ -16,8 +18,6 @@ require (
 	github.com/confluentinc/bincover v0.1.0
 	github.com/containernetworking/cni v0.8.0
 	github.com/containernetworking/plugins v0.8.7
-	github.com/contiv/libOpenflow v0.0.0-20210521033357-6b49eccb12e0
-	github.com/contiv/ofnet v0.0.0-00010101000000-000000000000
 	github.com/coreos/go-iptables v0.6.0
 	github.com/elazarl/goproxy v0.0.0-20190911111923-ecfe977594f1 // indirect
 	github.com/go-openapi/spec v0.19.5
@@ -34,12 +34,12 @@ require (
 	github.com/prometheus/client_golang v1.7.1
 	github.com/prometheus/common v0.10.0
 	github.com/satori/go.uuid v1.2.0
-	github.com/sirupsen/logrus v1.7.0
+	github.com/sirupsen/logrus v1.8.1
 	github.com/spf13/afero v1.4.1
 	github.com/spf13/cobra v1.1.1
 	github.com/spf13/pflag v1.0.5
 	github.com/streamrail/concurrent-map v0.0.0-20160823150647-8bf1e9bacbf6 // indirect
-	github.com/stretchr/testify v1.6.1
+	github.com/stretchr/testify v1.7.0
 	github.com/ti-mo/conntrack v0.3.0
 	github.com/vishvananda/netlink v1.1.0
 	github.com/vmware/go-ipfix v0.5.4
@@ -67,11 +67,6 @@ require (
 	k8s.io/utils v0.0.0-20210305010621-2afb4311ab10
 )
 
-replace (
-	// hcshim repo is modifed to add "AdditionalParams" field to HNSEndpoint struct.
-	// We will use this replace before pushing the change to hcshim upstream repo.
-	github.com/Microsoft/hcsshim v0.8.9 => github.com/ruicao93/hcsshim v0.8.10-0.20210114035434-63fe00c1b9aa
-	// antrea/plugins/octant/go.mod also has this replacement since replace statement in dependencies
-	// were ignored. We need to change antrea/plugins/octant/go.mod if there is any change here.
-	github.com/contiv/ofnet => github.com/wenyingd/ofnet v0.0.0-20210526054554-3e71e19fd0cf
-)
+// hcshim repo is modifed to add "AdditionalParams" field to HNSEndpoint struct.
+// We will use this replace before pushing the change to hcshim upstream repo.
+replace github.com/Microsoft/hcsshim v0.8.9 => github.com/ruicao93/hcsshim v0.8.10-0.20210114035434-63fe00c1b9aa

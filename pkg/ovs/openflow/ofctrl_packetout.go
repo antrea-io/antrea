@@ -19,8 +19,8 @@ import (
 	"math/rand"
 	"net"
 
-	"github.com/contiv/libOpenflow/protocol"
-	"github.com/contiv/ofnet/ofctrl"
+	"antrea.io/libOpenflow/protocol"
+	"antrea.io/ofnet/ofctrl"
 	"k8s.io/klog/v2"
 )
 

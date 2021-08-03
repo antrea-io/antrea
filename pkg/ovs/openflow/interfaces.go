@@ -18,7 +18,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/contiv/ofnet/ofctrl"
+	"antrea.io/ofnet/ofctrl"
 )
 
 type Protocol string

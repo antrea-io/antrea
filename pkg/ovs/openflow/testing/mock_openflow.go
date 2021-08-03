@@ -21,7 +21,7 @@ package testing
 
 import (
 	openflow "antrea.io/antrea/pkg/ovs/openflow"
-	ofctrl "github.com/contiv/ofnet/ofctrl"
+	ofctrl "antrea.io/ofnet/ofctrl"
 	gomock "github.com/golang/mock/gomock"
 	net "net"
 	reflect "reflect"
