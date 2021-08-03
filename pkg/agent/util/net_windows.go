@@ -135,7 +135,10 @@ func RemoveInterfaceAddress(ifaceName string, ipAddr net.IP) error {
 // for the host.
 func ConfigureInterfaceAddressWithDefaultGateway(ifaceName string, ipConfig *net.IPNet, gateway string) error {
 	ipStr := strings.Split(ipConfig.String(), "/")
-	cmd := fmt.Sprintf(`New-NetIPAddress -InterfaceAlias "%s" -IPAddress %s -PrefixLength %s -DefaultGateway %s`, ifaceName, ipStr[0], ipStr[1], gateway)
+	cmd := fmt.Sprintf(`New-NetIPAddress -InterfaceAlias "%s" -IPAddress %s -PrefixLength %s`, ifaceName, ipStr[0], ipStr[1])
+	if gateway != "" {
+		cmd = fmt.Sprintf("%s -DefaultGateway %s", cmd, gateway)
+	}
 	_, err := ps.RunCommand(cmd)
 	// If the address already exists, ignore the error.
 	if err != nil && !strings.Contains(err.Error(), "already exists") {
@@ -578,4 +581,32 @@ func parseRoutes(routesStr string) ([]Route, error) {
 		routes = append(routes, route)
 	}
 	return routes, nil
+}
+
+func CreateNetNatOnHost(subnetCIDR *net.IPNet) error {
+	netNatName := "antrea-nat"
+	cmd := fmt.Sprintf(`Get-NetNat -Name %s | Select-Object InternalIPInterfaceAddressPrefix | Format-Table -HideTableHeaders`, netNatName)
+	if internalNet, err := ps.RunCommand(cmd); err != nil {
+		if !strings.Contains(err.Error(), "No MSFT_NetNat objects found") {
+			klog.ErrorS(err, "Failed to check the existing netnat", "name", netNatName)
+			return err
+		}
+	} else {
+		if strings.Contains(internalNet, subnetCIDR.String()) {
+			return nil
+		}
+		klog.InfoS("Removing the existing netnat", "name", netNatName, "internalIPInterfaceAddressPrefix", internalNet)
+		cmd = fmt.Sprintf("Remove-NetNat -Name %s", netNatName)
+		if _, err := ps.RunCommand(cmd); err != nil {
+			klog.ErrorS(err, "Failed to remove the existing netnat", "name", netNatName, "internalIPInterfaceAddressPrefix", internalNet)
+			return err
+		}
+	}
+	cmd = fmt.Sprintf(`New-NetNat -Name %s -InternalIPInterfaceAddressPrefix %s`, netNatName, subnetCIDR.String())
+	_, err := ps.RunCommand(cmd)
+	if err != nil {
+		klog.ErrorS(err, "Failed to add netnat", "name", netNatName, "internalIPInterfaceAddressPrefix", subnetCIDR.String())
+		return err
+	}
+	return nil
 }

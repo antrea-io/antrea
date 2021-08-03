@@ -60,6 +60,9 @@ const (
 // getIPNetDeviceFromIP is meant to be overridden for testing.
 var getIPNetDeviceFromIP = util.GetIPNetDeviceFromIP
 
+// getTransportIPNetDeviceByName is meant to be overridden for testing.
+var getTransportIPNetDeviceByName = GetTransportIPNetDeviceByName
+
 // Initializer knows how to setup host networking, OpenVSwitch, and Openflow.
 type Initializer struct {
 	client          clientset.Interface
@@ -534,11 +537,11 @@ func (i *Initializer) configureGatewayInterface(gatewayIface *interfacestore.Int
 		// Assign IP to gw as required by SpoofGuard.
 		// NodeIPAddr can be either IPv4 or IPv6.
 		if i.nodeConfig.NodeIPAddr.IP.To4() != nil {
-			i.nodeConfig.GatewayConfig.IPv4 = i.nodeConfig.NodeIPAddr.IP
+			i.nodeConfig.GatewayConfig.IPv4 = i.nodeConfig.NodeTransportIPAddr.IP
 		} else {
-			i.nodeConfig.GatewayConfig.IPv6 = i.nodeConfig.NodeIPAddr.IP
+			i.nodeConfig.GatewayConfig.IPv6 = i.nodeConfig.NodeTransportIPAddr.IP
 		}
-		gatewayIface.IPs = []net.IP{i.nodeConfig.NodeIPAddr.IP}
+		gatewayIface.IPs = []net.IP{i.nodeConfig.NodeTransportIPAddr.IP}
 		// No need to assign local CIDR to gw0 because local CIDR is not managed by Antrea
 		return nil
 	}
@@ -642,13 +645,34 @@ func (i *Initializer) initNodeLocalConfig() error {
 		return err
 	}
 
+	var nodeIPAddr, transportIPAddr *net.IPNet
+	var localIntf *net.Interface
+	// Find the interface configured with Node IP and use it for Pod traffic.
 	ipAddr, err := k8s.GetNodeAddr(node)
 	if err != nil {
 		return fmt.Errorf("failed to obtain local IP address from K8s: %w", err)
 	}
-	localAddr, localIntf, err := getIPNetDeviceFromIP(ipAddr)
+	nodeIPAddr, localIntf, err = getIPNetDeviceFromIP(ipAddr)
 	if err != nil {
 		return fmt.Errorf("failed to get local IPNet device with IP %v: %v", ipAddr, err)
+	}
+	transportIPAddr = nodeIPAddr
+	if i.networkConfig.TransportIface != "" {
+		// Find the configured transport interface, and update its IP address in Node's annotation.
+		transportIPAddr, localIntf, err = getTransportIPNetDeviceByName(i.networkConfig.TransportIface, i.ovsBridge)
+		if err != nil {
+			return fmt.Errorf("failed to get local IPNet device with transport interface %s: %v", i.networkConfig.TransportIface, err)
+		}
+		klog.InfoS("Updating Node transport address annotation")
+		if err := i.patchNodeAnnotations(nodeName, types.NodeTransportAddressAnnotationKey, transportIPAddr.IP.String()); err != nil {
+			return err
+		}
+	} else {
+		// Remove the existing annotation "transport-address" if transportInterface is not set in the configuration.
+		if node.Annotations[types.NodeTransportAddressAnnotationKey] != "" {
+			klog.InfoS("Removing Node transport address annotation")
+			i.patchNodeAnnotations(nodeName, types.NodeTransportAddressAnnotationKey, nil)
+		}
 	}
 
 	// Update the Node's MAC address in the annotations of the Node. The MAC address will be used for direct routing by
@@ -656,27 +680,18 @@ func (i *Initializer) initNodeLocalConfig() error {
 	// addresses should be reported too to make them discoverable for Windows Nodes.
 	if i.networkConfig.TrafficEncapMode.SupportsNoEncap() {
 		klog.Infof("Updating Node MAC annotation")
-		patch, _ := json.Marshal(map[string]interface{}{
-			"metadata": map[string]interface{}{
-				"annotations": map[string]string{
-					types.NodeMACAddressAnnotationKey: localIntf.HardwareAddr.String(),
-				},
-			},
-		})
-		if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-			_, err := i.client.CoreV1().Nodes().Patch(context.TODO(), nodeName, apitypes.MergePatchType, patch, metav1.PatchOptions{})
-			return err
-		}); err != nil {
+		if err := i.patchNodeAnnotations(nodeName, types.NodeMACAddressAnnotationKey, localIntf.HardwareAddr.String()); err != nil {
 			return err
 		}
 	}
 
 	i.nodeConfig = &config.NodeConfig{
-		Name:            nodeName,
-		OVSBridge:       i.ovsBridge,
-		DefaultTunName:  defaultTunInterfaceName,
-		NodeIPAddr:      localAddr,
-		UplinkNetConfig: new(config.AdapterNetConfig)}
+		Name:                nodeName,
+		OVSBridge:           i.ovsBridge,
+		DefaultTunName:      defaultTunInterfaceName,
+		NodeIPAddr:          nodeIPAddr,
+		NodeTransportIPAddr: transportIPAddr,
+		UplinkNetConfig:     new(config.AdapterNetConfig)}
 
 	mtu, err := i.getNodeMTU(localIntf)
 	if err != nil {
@@ -899,5 +914,23 @@ func (i *Initializer) allocateGatewayAddresses(localSubnets []*net.IPNet, gatewa
 		gatewayIface.IPs = append(gatewayIface.IPs, gwIP.IP)
 	}
 
+	return nil
+}
+
+func (i *Initializer) patchNodeAnnotations(nodeName, key string, value interface{}) error {
+	patch, _ := json.Marshal(map[string]interface{}{
+		"metadata": map[string]interface{}{
+			"annotations": map[string]interface{}{
+				key: value,
+			},
+		},
+	})
+	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		_, err := i.client.CoreV1().Nodes().Patch(context.TODO(), nodeName, apitypes.MergePatchType, patch, metav1.PatchOptions{})
+		return err
+	}); err != nil {
+		klog.ErrorS(err, "Failed to patch Node annotation", "key", key, "value", value)
+		return err
+	}
 	return nil
 }

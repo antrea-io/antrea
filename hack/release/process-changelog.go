@@ -28,6 +28,7 @@ import (
 	"os"
 	"regexp"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -57,7 +58,7 @@ func main() {
 	// Add links to all PRs: [#XXXX] -> [#XXXX](<link>)
 	// Gather all author names: [@<author>]
 	scanner := bufio.NewScanner(file)
-	prRef := regexp.MustCompile(`(\[#[0-9]+\])[^(]`)
+	prRef := regexp.MustCompile(`\[#([0-9]+)\]([^(])`)
 	authorRef := regexp.MustCompile(`\[@([a-zA-Z0-9-]+)\][^(]`)
 	allAuthors := make(map[string]bool)
 	for scanner.Scan() {
@@ -67,7 +68,7 @@ func main() {
 			out.WriteString("\n")
 			continue
 		}
-		line = prRef.ReplaceAllString(line, fmt.Sprintf("$1(%s/$1)", pullBaseURL))
+		line = prRef.ReplaceAllString(line, fmt.Sprintf("[#$1](%s/$1)$2", pullBaseURL))
 		matches := authorRef.FindAllStringSubmatch(line, -1)
 		for _, match := range matches {
 			allAuthors[match[1]] = true
@@ -88,11 +89,12 @@ func main() {
 	for author := range allAuthors {
 		sortedAuthors = append(sortedAuthors, author)
 	}
-	sort.Strings(sortedAuthors)
+	sort.Slice(sortedAuthors, func(i, j int) bool { return strings.ToLower(sortedAuthors[i]) < strings.ToLower(sortedAuthors[j]) })
 	timeout := time.Duration(3 * time.Second)
 	client := http.Client{
 		Timeout: timeout,
 	}
+	out.WriteString("\n")
 	for _, author := range sortedAuthors {
 		log.Printf("Checking %s", author)
 		url := fmt.Sprintf("%s/%s", authorBaseURL, author)

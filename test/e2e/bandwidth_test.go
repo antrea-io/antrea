@@ -26,24 +26,55 @@ import (
 
 const iperfPort = 5201
 
-// TestBenchmarkBandwidthIntraNode runs the bandwidth benchmark between Pods on same node.
-func TestBenchmarkBandwidthIntraNode(t *testing.T) {
-	skipIfNotBenchmarkTest(t)
-	skipIfNotIPv4Cluster(t)
+// TestBandwidth is the top-level test which contains all subtests for
+// Bandwidth related test cases so they can share setup, teardown.
+func TestBandwidth(t *testing.T) {
 	skipIfHasWindowsNodes(t)
+	skipIfNotRequired(t, "mode-irrelevant")
 
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
 	defer teardownTest(t, data)
-	if err := data.createPodOnNode("perftest-a", controlPlaneNodeName(), perftoolImage, nil, nil, nil, nil, false, nil); err != nil {
+
+	t.Run("testPodTrafficShaping", func(t *testing.T) { testPodTrafficShaping(t, data) })
+}
+
+// TestBenchmarkBandwidth is the top-level benchmark test which contains all subtests for
+// Bandwidth related test cases so they can share setup, teardown.
+func TestBenchmarkBandwidth(t *testing.T) {
+	skipIfNotBenchmarkTest(t)
+	skipIfHasWindowsNodes(t)
+	data, err := setupTest(t)
+	if err != nil {
+		t.Fatalf("Error when setting up test: %v", err)
+	}
+	defer teardownTest(t, data)
+
+	t.Run("testBenchmarkBandwidthServiceLocalAccess", func(t *testing.T) {
+		testBenchmarkBandwidthServiceLocalAccess(t, data)
+	})
+	t.Run("testBenchmarkBandwidthServiceRemoteAccess", func(t *testing.T) {
+		skipIfNumNodesLessThan(t, 2)
+		testBenchmarkBandwidthServiceRemoteAccess(t, data)
+	})
+	t.Run("testBenchmarkBandwidthIntraNode", func(t *testing.T) {
+		skipIfNotIPv4Cluster(t)
+		testBenchmarkBandwidthIntraNode(t, data)
+	})
+}
+
+// testBenchmarkBandwidthIntraNode runs the bandwidth benchmark between Pods on same node.
+func testBenchmarkBandwidthIntraNode(t *testing.T, data *TestData) {
+
+	if err := data.createPodOnNode("perftest-a", testNamespace, controlPlaneNodeName(), perftoolImage, nil, nil, nil, nil, false, nil); err != nil {
 		t.Fatalf("Error when creating the perftest client Pod: %v", err)
 	}
 	if err := data.podWaitForRunning(defaultTimeout, "perftest-a", testNamespace); err != nil {
 		t.Fatalf("Error when waiting for the perftest client Pod: %v", err)
 	}
-	if err := data.createPodOnNode("perftest-b", controlPlaneNodeName(), perftoolImage, nil, nil, nil, []v1.ContainerPort{{Protocol: v1.ProtocolTCP, ContainerPort: iperfPort}}, false, nil); err != nil {
+	if err := data.createPodOnNode("perftest-b", testNamespace, controlPlaneNodeName(), perftoolImage, nil, nil, nil, []v1.ContainerPort{{Protocol: v1.ProtocolTCP, ContainerPort: iperfPort}}, false, nil); err != nil {
 		t.Fatalf("Error when creating the perftest server Pod: %v", err)
 	}
 	podBIPs, err := data.podWaitForIPs(defaultTimeout, "perftest-b", testNamespace)
@@ -59,26 +90,18 @@ func TestBenchmarkBandwidthIntraNode(t *testing.T) {
 	t.Logf("Bandwidth: %s", stdout)
 }
 
-func benchmarkBandwidthService(t *testing.T, endpointNode, clientNode string) {
-	skipIfHasWindowsNodes(t)
-
-	data, err := setupTest(t)
-	if err != nil {
-		t.Fatalf("Error when setting up test: %v", err)
-	}
-	defer teardownTest(t, data)
-
+func benchmarkBandwidthService(t *testing.T, endpointNode, clientNode string, data *TestData) {
 	svc, err := data.createService("perftest-b", iperfPort, iperfPort, map[string]string{"antrea-e2e": "perftest-b"}, false, v1.ServiceTypeClusterIP, nil)
 	if err != nil {
 		t.Fatalf("Error when creating perftest service: %v", err)
 	}
-	if err := data.createPodOnNode("perftest-a", clientNode, perftoolImage, nil, nil, nil, nil, false, nil); err != nil {
+	if err := data.createPodOnNode("perftest-a", testNamespace, clientNode, perftoolImage, nil, nil, nil, nil, false, nil); err != nil {
 		t.Fatalf("Error when creating the perftest client Pod: %v", err)
 	}
 	if err := data.podWaitForRunning(defaultTimeout, "perftest-a", testNamespace); err != nil {
 		t.Fatalf("Error when waiting for the perftest client Pod: %v", err)
 	}
-	if err := data.createPodOnNode("perftest-b", endpointNode, perftoolImage, nil, nil, nil, []v1.ContainerPort{{Protocol: v1.ProtocolTCP, ContainerPort: iperfPort}}, false, nil); err != nil {
+	if err := data.createPodOnNode("perftest-b", testNamespace, endpointNode, perftoolImage, nil, nil, nil, []v1.ContainerPort{{Protocol: v1.ProtocolTCP, ContainerPort: iperfPort}}, false, nil); err != nil {
 		t.Fatalf("Error when creating the perftest server Pod: %v", err)
 	}
 	if err := data.podWaitForRunning(defaultTimeout, "perftest-b", testNamespace); err != nil {
@@ -92,22 +115,19 @@ func benchmarkBandwidthService(t *testing.T, endpointNode, clientNode string) {
 	t.Logf("Bandwidth: %s", stdout)
 }
 
-// TestBenchmarkBandwidthServiceLocalAccess runs the bandwidth benchmark of service
+// testBenchmarkBandwidthServiceLocalAccess runs the bandwidth benchmark of service
 // traffic between a Pod and an Endpoint on same Node.
-func TestBenchmarkBandwidthServiceLocalAccess(t *testing.T) {
-	skipIfNotBenchmarkTest(t)
-	benchmarkBandwidthService(t, controlPlaneNodeName(), controlPlaneNodeName())
+func testBenchmarkBandwidthServiceLocalAccess(t *testing.T, data *TestData) {
+	benchmarkBandwidthService(t, controlPlaneNodeName(), controlPlaneNodeName(), data)
 }
 
-// TestBenchmarkBandwidthServiceRemoteAccess runs the bandwidth benchmark of service
+// testBenchmarkBandwidthServiceRemoteAccess runs the bandwidth benchmark of service
 // traffic between a Pod and an Endpoint on different Node.
-func TestBenchmarkBandwidthServiceRemoteAccess(t *testing.T) {
-	skipIfNotBenchmarkTest(t)
-	skipIfNumNodesLessThan(t, 2)
-	benchmarkBandwidthService(t, controlPlaneNodeName(), workerNodeName(1))
+func testBenchmarkBandwidthServiceRemoteAccess(t *testing.T, data *TestData) {
+	benchmarkBandwidthService(t, controlPlaneNodeName(), workerNodeName(1), data)
 }
 
-func TestPodTrafficShaping(t *testing.T) {
+func testPodTrafficShaping(t *testing.T, data *TestData) {
 	// TODO: tc configuration succeeded, however it didn't take effect, need to understand the reason.
 	skipIfProviderIs(t, "kind", "tc does not work with Kind")
 	// Test is flaky on dual-stack clusters: https://github.com/antrea-io/antrea/issues/1543.
@@ -115,13 +135,7 @@ func TestPodTrafficShaping(t *testing.T) {
 	skipIfIPv6Cluster(t)
 	nodeName := controlPlaneNodeName()
 	skipIfMissingKernelModule(t, nodeName, []string{"ifb", "sch_tbf", "sch_ingress"})
-	skipIfHasWindowsNodes(t)
 
-	data, err := setupTest(t)
-	if err != nil {
-		t.Fatalf("Error when setting up test: %v", err)
-	}
-	defer teardownTest(t, data)
 	tests := []struct {
 		name string
 		// The bandwidths' unit is Mbits/sec.
@@ -146,7 +160,7 @@ func TestPodTrafficShaping(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			clientPodName := fmt.Sprintf("client-a-%d", i)
 			serverPodName := fmt.Sprintf("server-a-%d", i)
-			if err := data.createPodOnNode(clientPodName, nodeName, perftoolImage, nil, nil, nil, nil, false, func(pod *v1.Pod) {
+			if err := data.createPodOnNode(clientPodName, testNamespace, nodeName, perftoolImage, nil, nil, nil, nil, false, func(pod *v1.Pod) {
 				pod.Annotations = map[string]string{
 					"kubernetes.io/egress-bandwidth": fmt.Sprintf("%dM", tt.clientEgressBandwidth),
 				}
@@ -157,7 +171,7 @@ func TestPodTrafficShaping(t *testing.T) {
 			if err := data.podWaitForRunning(defaultTimeout, clientPodName, testNamespace); err != nil {
 				t.Fatalf("Error when waiting for the perftest client Pod: %v", err)
 			}
-			if err := data.createPodOnNode(serverPodName, nodeName, perftoolImage, nil, nil, nil, []v1.ContainerPort{{Protocol: v1.ProtocolTCP, ContainerPort: iperfPort}}, false, func(pod *v1.Pod) {
+			if err := data.createPodOnNode(serverPodName, testNamespace, nodeName, perftoolImage, nil, nil, nil, []v1.ContainerPort{{Protocol: v1.ProtocolTCP, ContainerPort: iperfPort}}, false, func(pod *v1.Pod) {
 				pod.Annotations = map[string]string{
 					"kubernetes.io/ingress-bandwidth": fmt.Sprintf("%dM", tt.serverIngressBandwidth),
 				}

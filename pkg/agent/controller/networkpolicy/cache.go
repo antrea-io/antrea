@@ -787,7 +787,7 @@ func (c *ruleCache) unionAddressGroups(groupNames []string) (v1beta.GroupMemberS
 			klog.V(2).Infof("AddressGroup %v was not found", groupName)
 			return nil, false
 		}
-		set = set.Union(curSet)
+		set.Merge(curSet)
 	}
 	return set, true
 }
@@ -807,7 +807,7 @@ func (c *ruleCache) unionAppliedToGroups(groupNames []string) (v1beta.GroupMembe
 			continue
 		}
 		anyExists = true
-		set = set.Union(curSet)
+		set.Merge(curSet)
 	}
 	return set, anyExists
 }

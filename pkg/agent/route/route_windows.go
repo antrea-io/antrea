@@ -42,6 +42,7 @@ type Client struct {
 	hostRoutes     *sync.Map
 	fwClient       *winfirewall.Client
 	bridgeInfIndex int
+	noSNAT         bool
 }
 
 // NewClient returns a route client.
@@ -52,6 +53,7 @@ func NewClient(serviceCIDR *net.IPNet, networkConfig *config.NetworkConfig, noSN
 		serviceCIDR:   serviceCIDR,
 		hostRoutes:    &sync.Map{},
 		fwClient:      winfirewall.NewClient(),
+		noSNAT:        noSNAT,
 	}, nil
 }
 
@@ -75,6 +77,12 @@ func (c *Client) Initialize(nodeConfig *config.NodeConfig, done func()) error {
 	// the uplink interface directly.
 	if err := util.EnableIPForwarding(nodeConfig.GatewayConfig.Name); err != nil {
 		return err
+	}
+	if !c.noSNAT {
+		err := util.CreateNetNatOnHost(nodeConfig.PodIPv4CIDR)
+		if err != nil {
+			return err
+		}
 	}
 	done()
 	return nil
@@ -109,10 +117,10 @@ func (c *Client) AddRoutes(podCIDR *net.IPNet, nodeName string, peerNodeIP, peer
 		DestinationSubnet: podCIDR,
 		RouteMetric:       util.DefaultMetric,
 	}
-	if c.networkConfig.TrafficEncapMode.NeedsEncapToPeer(peerNodeIP, c.nodeConfig.NodeIPAddr) {
+	if c.networkConfig.TrafficEncapMode.NeedsEncapToPeer(peerNodeIP, c.nodeConfig.NodeTransportIPAddr) {
 		route.LinkIndex = c.nodeConfig.GatewayConfig.LinkIndex
 		route.GatewayAddress = peerGwIP
-	} else if c.networkConfig.TrafficEncapMode.NeedsDirectRoutingToPeer(peerNodeIP, c.nodeConfig.NodeIPAddr) {
+	} else if c.networkConfig.TrafficEncapMode.NeedsDirectRoutingToPeer(peerNodeIP, c.nodeConfig.NodeTransportIPAddr) {
 		// NoEncap traffic to Node on the same subnet.
 		// Set the peerNodeIP as next hop.
 		route.LinkIndex = c.bridgeInfIndex
