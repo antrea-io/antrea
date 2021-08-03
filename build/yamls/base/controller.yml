@@ -307,20 +307,6 @@ spec:
 apiVersion: apiregistration.k8s.io/v1
 kind: APIService
 metadata:
-  name: v1beta1.controlplane.antrea.tanzu.vmware.com
-spec:
-  group: controlplane.antrea.tanzu.vmware.com
-  groupPriorityMinimum: 100
-  version: v1beta1
-  versionPriority: 100
-  service:
-    name: antrea
-    namespace: kube-system
----
-# Deprecated in v1.0.0.
-apiVersion: apiregistration.k8s.io/v1
-kind: APIService
-metadata:
   name: v1beta1.system.antrea.tanzu.vmware.com
 spec:
   group: system.antrea.tanzu.vmware.com

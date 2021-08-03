@@ -49,7 +49,6 @@ var (
 	// apiServiceNames contains all the APIServices backed by antrea-controller.
 	apiServiceNames = []string{
 		"v1alpha1.stats.antrea.tanzu.vmware.com",
-		"v1beta1.controlplane.antrea.tanzu.vmware.com",
 		"v1beta2.controlplane.antrea.tanzu.vmware.com",
 		"v1beta1.system.antrea.tanzu.vmware.com",
 		"v1alpha1.stats.antrea.io",

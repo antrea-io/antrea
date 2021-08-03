@@ -20,7 +20,6 @@ import (
 	"fmt"
 
 	clusterinformationv1beta1 "antrea.io/antrea/pkg/legacyclient/clientset/versioned/typed/clusterinformation/v1beta1"
-	controlplanev1beta1 "antrea.io/antrea/pkg/legacyclient/clientset/versioned/typed/controlplane/v1beta1"
 	controlplanev1beta2 "antrea.io/antrea/pkg/legacyclient/clientset/versioned/typed/controlplane/v1beta2"
 	corev1alpha2 "antrea.io/antrea/pkg/legacyclient/clientset/versioned/typed/core/v1alpha2"
 	opsv1alpha1 "antrea.io/antrea/pkg/legacyclient/clientset/versioned/typed/ops/v1alpha1"
@@ -35,7 +34,6 @@ import (
 type Interface interface {
 	Discovery() discovery.DiscoveryInterface
 	ClusterinformationV1beta1() clusterinformationv1beta1.ClusterinformationV1beta1Interface
-	ControlplaneV1beta1() controlplanev1beta1.ControlplaneV1beta1Interface
 	ControlplaneV1beta2() controlplanev1beta2.ControlplaneV1beta2Interface
 	CoreV1alpha2() corev1alpha2.CoreV1alpha2Interface
 	OpsV1alpha1() opsv1alpha1.OpsV1alpha1Interface
@@ -49,7 +47,6 @@ type Interface interface {
 type Clientset struct {
 	*discovery.DiscoveryClient
 	clusterinformationV1beta1 *clusterinformationv1beta1.ClusterinformationV1beta1Client
-	controlplaneV1beta1       *controlplanev1beta1.ControlplaneV1beta1Client
 	controlplaneV1beta2       *controlplanev1beta2.ControlplaneV1beta2Client
 	coreV1alpha2              *corev1alpha2.CoreV1alpha2Client
 	opsV1alpha1               *opsv1alpha1.OpsV1alpha1Client
@@ -61,11 +58,6 @@ type Clientset struct {
 // ClusterinformationV1beta1 retrieves the ClusterinformationV1beta1Client
 func (c *Clientset) ClusterinformationV1beta1() clusterinformationv1beta1.ClusterinformationV1beta1Interface {
 	return c.clusterinformationV1beta1
-}
-
-// ControlplaneV1beta1 retrieves the ControlplaneV1beta1Client
-func (c *Clientset) ControlplaneV1beta1() controlplanev1beta1.ControlplaneV1beta1Interface {
-	return c.controlplaneV1beta1
 }
 
 // ControlplaneV1beta2 retrieves the ControlplaneV1beta2Client
@@ -123,10 +115,6 @@ func NewForConfig(c *rest.Config) (*Clientset, error) {
 	if err != nil {
 		return nil, err
 	}
-	cs.controlplaneV1beta1, err = controlplanev1beta1.NewForConfig(&configShallowCopy)
-	if err != nil {
-		return nil, err
-	}
 	cs.controlplaneV1beta2, err = controlplanev1beta2.NewForConfig(&configShallowCopy)
 	if err != nil {
 		return nil, err
@@ -164,7 +152,6 @@ func NewForConfig(c *rest.Config) (*Clientset, error) {
 func NewForConfigOrDie(c *rest.Config) *Clientset {
 	var cs Clientset
 	cs.clusterinformationV1beta1 = clusterinformationv1beta1.NewForConfigOrDie(c)
-	cs.controlplaneV1beta1 = controlplanev1beta1.NewForConfigOrDie(c)
 	cs.controlplaneV1beta2 = controlplanev1beta2.NewForConfigOrDie(c)
 	cs.coreV1alpha2 = corev1alpha2.NewForConfigOrDie(c)
 	cs.opsV1alpha1 = opsv1alpha1.NewForConfigOrDie(c)
@@ -180,7 +167,6 @@ func NewForConfigOrDie(c *rest.Config) *Clientset {
 func New(c rest.Interface) *Clientset {
 	var cs Clientset
 	cs.clusterinformationV1beta1 = clusterinformationv1beta1.New(c)
-	cs.controlplaneV1beta1 = controlplanev1beta1.New(c)
 	cs.controlplaneV1beta2 = controlplanev1beta2.New(c)
 	cs.coreV1alpha2 = corev1alpha2.New(c)
 	cs.opsV1alpha1 = opsv1alpha1.New(c)
