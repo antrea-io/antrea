@@ -20,8 +20,6 @@ import (
 	clientset "antrea.io/antrea/pkg/legacyclient/clientset/versioned"
 	clusterinformationv1beta1 "antrea.io/antrea/pkg/legacyclient/clientset/versioned/typed/clusterinformation/v1beta1"
 	fakeclusterinformationv1beta1 "antrea.io/antrea/pkg/legacyclient/clientset/versioned/typed/clusterinformation/v1beta1/fake"
-	controlplanev1beta1 "antrea.io/antrea/pkg/legacyclient/clientset/versioned/typed/controlplane/v1beta1"
-	fakecontrolplanev1beta1 "antrea.io/antrea/pkg/legacyclient/clientset/versioned/typed/controlplane/v1beta1/fake"
 	controlplanev1beta2 "antrea.io/antrea/pkg/legacyclient/clientset/versioned/typed/controlplane/v1beta2"
 	fakecontrolplanev1beta2 "antrea.io/antrea/pkg/legacyclient/clientset/versioned/typed/controlplane/v1beta2/fake"
 	corev1alpha2 "antrea.io/antrea/pkg/legacyclient/clientset/versioned/typed/core/v1alpha2"
@@ -91,11 +89,6 @@ var _ clientset.Interface = &Clientset{}
 // ClusterinformationV1beta1 retrieves the ClusterinformationV1beta1Client
 func (c *Clientset) ClusterinformationV1beta1() clusterinformationv1beta1.ClusterinformationV1beta1Interface {
 	return &fakeclusterinformationv1beta1.FakeClusterinformationV1beta1{Fake: &c.Fake}
-}
-
-// ControlplaneV1beta1 retrieves the ControlplaneV1beta1Client
-func (c *Clientset) ControlplaneV1beta1() controlplanev1beta1.ControlplaneV1beta1Interface {
-	return &fakecontrolplanev1beta1.FakeControlplaneV1beta1{Fake: &c.Fake}
 }
 
 // ControlplaneV1beta2 retrieves the ControlplaneV1beta2Client

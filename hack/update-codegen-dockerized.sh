@@ -115,7 +115,6 @@ $GOPATH/bin/client-gen \
   --clientset-name versioned \
   --input-base "${ANTREA_PKG}/pkg/legacyapis/" \
   --input "clusterinformation/v1beta1" \
-  --input "controlplane/v1beta1" \
   --input "controlplane/v1beta2" \
   --input "system/v1beta1" \
   --input "security/v1alpha1" \

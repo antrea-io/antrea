@@ -18,7 +18,6 @@ package fake
 
 import (
 	clusterinformationv1beta1 "antrea.io/antrea/pkg/legacyapis/clusterinformation/v1beta1"
-	controlplanev1beta1 "antrea.io/antrea/pkg/legacyapis/controlplane/v1beta1"
 	controlplanev1beta2 "antrea.io/antrea/pkg/legacyapis/controlplane/v1beta2"
 	corev1alpha2 "antrea.io/antrea/pkg/legacyapis/core/v1alpha2"
 	opsv1alpha1 "antrea.io/antrea/pkg/legacyapis/ops/v1alpha1"
@@ -37,7 +36,6 @@ var codecs = serializer.NewCodecFactory(scheme)
 
 var localSchemeBuilder = runtime.SchemeBuilder{
 	clusterinformationv1beta1.AddToScheme,
-	controlplanev1beta1.AddToScheme,
 	controlplanev1beta2.AddToScheme,
 	corev1alpha2.AddToScheme,
 	opsv1alpha1.AddToScheme,

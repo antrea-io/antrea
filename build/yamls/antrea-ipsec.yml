@@ -3402,7 +3402,6 @@ rules:
   - v1alpha1.stats.antrea.tanzu.vmware.com
   - v1beta1.system.antrea.tanzu.vmware.com
   - v1beta2.controlplane.antrea.tanzu.vmware.com
-  - v1beta1.controlplane.antrea.tanzu.vmware.com
   - v1alpha1.stats.antrea.io
   - v1beta1.system.antrea.io
   - v1beta2.controlplane.antrea.io
@@ -3415,6 +3414,7 @@ rules:
   - apiregistration.k8s.io
   resourceNames:
   - v1beta1.networking.antrea.tanzu.vmware.com
+  - v1beta1.controlplane.antrea.tanzu.vmware.com
   resources:
   - apiservices
   verbs:
@@ -4063,21 +4063,6 @@ spec:
     name: antrea
     namespace: kube-system
   version: v1alpha1
-  versionPriority: 100
----
-apiVersion: apiregistration.k8s.io/v1
-kind: APIService
-metadata:
-  labels:
-    app: antrea
-  name: v1beta1.controlplane.antrea.tanzu.vmware.com
-spec:
-  group: controlplane.antrea.tanzu.vmware.com
-  groupPriorityMinimum: 100
-  service:
-    name: antrea
-    namespace: kube-system
-  version: v1beta1
   versionPriority: 100
 ---
 apiVersion: apiregistration.k8s.io/v1

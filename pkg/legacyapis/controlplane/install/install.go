@@ -19,14 +19,12 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 
 	"antrea.io/antrea/pkg/legacyapis/controlplane"
-	"antrea.io/antrea/pkg/legacyapis/controlplane/v1beta1"
 	"antrea.io/antrea/pkg/legacyapis/controlplane/v1beta2"
 )
 
 // Install registers the API group and adds types to a scheme
 func Install(scheme *runtime.Scheme) {
 	utilruntime.Must(controlplane.AddToScheme(scheme))
-	utilruntime.Must(v1beta1.AddToScheme(scheme))
 	utilruntime.Must(v1beta2.AddToScheme(scheme))
-	utilruntime.Must(scheme.SetVersionPriority(v1beta2.SchemeGroupVersion, v1beta1.SchemeGroupVersion))
+	utilruntime.Must(scheme.SetVersionPriority(v1beta2.SchemeGroupVersion))
 }

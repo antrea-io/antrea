@@ -206,12 +206,6 @@ func installAPIGroup(s *APIServer, c completedConfig) error {
 
 	// legacy groups
 	legacyCPGroup := genericapiserver.NewDefaultAPIGroupInfo(legacycontrolplane.GroupName, Scheme, metav1.ParameterCodec, Codecs)
-	legacyCPv1beta1Storage := map[string]rest.Storage{}
-	legacyCPv1beta1Storage["addressgroups"] = addressGroupStorage
-	legacyCPv1beta1Storage["appliedtogroups"] = appliedToGroupStorage
-	legacyCPv1beta1Storage["networkpolicies"] = networkPolicyStorage
-	legacyCPv1beta1Storage["nodestatssummaries"] = nodeStatsSummaryStorage
-	legacyCPGroup.VersionedResourcesStorageMap["v1beta1"] = legacyCPv1beta1Storage
 	legacyCPv1beta2Storage := map[string]rest.Storage{}
 	legacyCPv1beta2Storage["addressgroups"] = addressGroupStorage
 	legacyCPv1beta2Storage["appliedtogroups"] = appliedToGroupStorage
@@ -268,6 +262,7 @@ func CleanupDeprecatedAPIServices(aggregatorClient clientset.Interface) error {
 	// Also check: https://github.com/antrea-io/antrea/issues/494
 	deprecatedAPIServices := []string{
 		"v1beta1.networking.antrea.tanzu.vmware.com",
+		"v1beta1.controlplane.antrea.tanzu.vmware.com",
 	}
 	for _, as := range deprecatedAPIServices {
 		err := aggregatorClient.ApiregistrationV1().APIServices().Delete(context.TODO(), as, metav1.DeleteOptions{})
