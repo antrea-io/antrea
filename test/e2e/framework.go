@@ -1427,7 +1427,7 @@ func (data *TestData) deleteServiceAndWait(timeout time.Duration, name string) e
 }
 
 // createNetworkPolicy creates a network policy with spec.
-func (data *TestData) createNetworkPolicy(name string, spec *networkingv1.NetworkPolicySpec) (*networkingv1.NetworkPolicy, error) {
+func (data *TestData) createNetworkPolicy(namespace, name string, spec *networkingv1.NetworkPolicySpec) (*networkingv1.NetworkPolicy, error) {
 	policy := &networkingv1.NetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
@@ -1437,7 +1437,7 @@ func (data *TestData) createNetworkPolicy(name string, spec *networkingv1.Networ
 		},
 		Spec: *spec,
 	}
-	return data.clientset.NetworkingV1().NetworkPolicies(testNamespace).Create(context.TODO(), policy, metav1.CreateOptions{})
+	return data.clientset.NetworkingV1().NetworkPolicies(namespace).Create(context.TODO(), policy, metav1.CreateOptions{})
 }
 
 // deleteNetworkpolicy deletes the network policy.

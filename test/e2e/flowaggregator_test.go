@@ -793,7 +793,7 @@ func getRecordsFromOutput(output string) []string {
 func deployK8sNetworkPolicies(t *testing.T, data *TestData, srcPod, dstPod string) (np1 *networkingv1.NetworkPolicy, np2 *networkingv1.NetworkPolicy) {
 	// Add K8s NetworkPolicy between two iperf Pods.
 	var err error
-	np1, err = data.createNetworkPolicy(ingressAllowNetworkPolicyName, &networkingv1.NetworkPolicySpec{
+	np1, err = data.createNetworkPolicy(testNamespace, ingressAllowNetworkPolicyName, &networkingv1.NetworkPolicySpec{
 		PodSelector: metav1.LabelSelector{},
 		PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
 		Ingress: []networkingv1.NetworkPolicyIngressRule{{
@@ -809,7 +809,7 @@ func deployK8sNetworkPolicies(t *testing.T, data *TestData, srcPod, dstPod strin
 	if err != nil {
 		t.Errorf("Error when creating Network Policy: %v", err)
 	}
-	np2, err = data.createNetworkPolicy(egressAllowNetworkPolicyName, &networkingv1.NetworkPolicySpec{
+	np2, err = data.createNetworkPolicy(testNamespace, egressAllowNetworkPolicyName, &networkingv1.NetworkPolicySpec{
 		PodSelector: metav1.LabelSelector{},
 		PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeEgress},
 		Egress: []networkingv1.NetworkPolicyEgressRule{{
@@ -916,7 +916,7 @@ func deployDenyAntreaNetworkPolicies(t *testing.T, data *TestData, srcPod, podRe
 }
 
 func deployDenyNetworkPolicies(t *testing.T, data *TestData, pod1, pod2 string) (np1 *networkingv1.NetworkPolicy, np2 *networkingv1.NetworkPolicy) {
-	np1, err := data.createNetworkPolicy(ingressDenyNPName, &networkingv1.NetworkPolicySpec{
+	np1, err := data.createNetworkPolicy(testNamespace, ingressDenyNPName, &networkingv1.NetworkPolicySpec{
 		PodSelector: metav1.LabelSelector{
 			MatchLabels: map[string]string{
 				"antrea-e2e": pod1,
@@ -928,7 +928,7 @@ func deployDenyNetworkPolicies(t *testing.T, data *TestData, pod1, pod2 string) 
 	if err != nil {
 		t.Errorf("Error when creating Network Policy: %v", err)
 	}
-	np2, err = data.createNetworkPolicy(egressDenyNPName, &networkingv1.NetworkPolicySpec{
+	np2, err = data.createNetworkPolicy(testNamespace, egressDenyNPName, &networkingv1.NetworkPolicySpec{
 		PodSelector: metav1.LabelSelector{
 			MatchLabels: map[string]string{
 				"antrea-e2e": pod2,

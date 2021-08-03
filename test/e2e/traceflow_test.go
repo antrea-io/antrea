@@ -2042,7 +2042,7 @@ func (data *TestData) createNPDenyAllIngress(key string, value string, name stri
 		},
 		PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
 	}
-	return data.createNetworkPolicy(name, spec)
+	return data.createNetworkPolicy(testNamespace, name, spec)
 }
 
 // createNPAllowAllEgress creates a NetworkPolicy that allows all egress traffic.
@@ -2054,7 +2054,7 @@ func (data *TestData) createNPAllowAllEgress(name string) (*networkingv1.Network
 		},
 		PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeEgress},
 	}
-	return data.createNetworkPolicy(name, spec)
+	return data.createNetworkPolicy(testNamespace, name, spec)
 }
 
 // waitForNetworkpolicyRealized waits for the NetworkPolicy to be realized by the antrea-agent Pod.

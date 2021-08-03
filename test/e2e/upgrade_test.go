@@ -74,7 +74,7 @@ func TestUpgrade(t *testing.T) {
 	// We test NetworkPolicy with 2 scenarios:
 	// 1. The NetworkPolicy is created before upgrading controller.
 	// 2. The NetworkPolicy is created after upgrading controller.
-	checkFn, cleanupFn := data.setupDifferentNamedPorts(t)
+	checkFn, cleanupFn := data.setupDifferentNamedPorts(t, "test-upgrade-before-upgrade")
 	defer cleanupFn()
 	checkFn()
 
@@ -110,7 +110,7 @@ func TestUpgrade(t *testing.T) {
 	checkFn()
 	// Verify that the NetworkPolicy created after upgrading works.
 	// random resource names are used in the test so it's OK to call setupDifferentNamedPorts the second time.
-	checkFn, cleanupFn = data.setupDifferentNamedPorts(t)
+	checkFn, cleanupFn = data.setupDifferentNamedPorts(t, "test-upgrade-after-upgrade")
 	defer cleanupFn()
 	checkFn()
 

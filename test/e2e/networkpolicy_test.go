@@ -50,40 +50,55 @@ func TestNetworkPolicy(t *testing.T) {
 	}
 	defer teardownTest(t, data)
 
-	t.Run("testNetworkPolicyStats", func(t *testing.T) {
-		skipIfNotIPv4Cluster(t)
-		skipIfNetworkPolicyStatsDisabled(t)
-		testNetworkPolicyStats(t, data)
+	t.Run("TestNetworkPolicyParallel", func(t *testing.T) {
+		t.Run("testNetworkPolicyStats", func(t *testing.T) {
+			t.Parallel()
+			skipIfNotIPv4Cluster(t)
+			skipIfNetworkPolicyStatsDisabled(t)
+			testNetworkPolicyStats(t, data)
+		})
+		t.Run("testDifferentNamedPorts", func(t *testing.T) {
+			t.Parallel()
+			testDifferentNamedPorts(t, data)
+		})
+		t.Run("testDefaultDenyIngressPolicy", func(t *testing.T) {
+			t.Parallel()
+			testDefaultDenyIngressPolicy(t, data)
+		})
+		t.Run("testDefaultDenyEgressPolicy", func(t *testing.T) {
+			t.Parallel()
+			testDefaultDenyEgressPolicy(t, data)
+		})
+		t.Run("testEgressToServerInCIDRBlock", func(t *testing.T) {
+			t.Parallel()
+			skipIfNotIPv6Cluster(t)
+			testEgressToServerInCIDRBlock(t, data)
+		})
+		t.Run("testEgressToServerInCIDRBlockWithException", func(t *testing.T) {
+			t.Parallel()
+			skipIfNotIPv6Cluster(t)
+			testEgressToServerInCIDRBlockWithException(t, data)
+		})
+		t.Run("testIngressPolicyWithoutPortNumber", func(t *testing.T) {
+			t.Parallel()
+			testIngressPolicyWithoutPortNumber(t, data)
+		})
+		t.Run("testIngressPolicyWithEndPort", func(t *testing.T) {
+			t.Parallel()
+			testIngressPolicyWithEndPort(t, data)
+		})
 	})
-	t.Run("testDifferentNamedPorts", func(t *testing.T) {
-		testDifferentNamedPorts(t, data)
-	})
-	t.Run("testDefaultDenyIngressPolicy", func(t *testing.T) {
-		testDefaultDenyIngressPolicy(t, data)
-	})
-	t.Run("testDefaultDenyEgressPolicy", func(t *testing.T) {
-		testDefaultDenyEgressPolicy(t, data)
-	})
-	t.Run("testEgressToServerInCIDRBlock", func(t *testing.T) {
-		skipIfNotIPv6Cluster(t)
-		testEgressToServerInCIDRBlock(t, data)
-	})
-	t.Run("testEgressToServerInCIDRBlockWithException", func(t *testing.T) {
-		skipIfNotIPv6Cluster(t)
-		testEgressToServerInCIDRBlockWithException(t, data)
-	})
+
 	t.Run("testNetworkPolicyResyncAfterRestart", func(t *testing.T) {
 		testNetworkPolicyResyncAfterRestart(t, data)
-	})
-	t.Run("testIngressPolicyWithoutPortNumber", func(t *testing.T) {
-		testIngressPolicyWithoutPortNumber(t, data)
-	})
-	t.Run("testIngressPolicyWithEndPort", func(t *testing.T) {
-		testIngressPolicyWithEndPort(t, data)
 	})
 }
 
 func testNetworkPolicyStats(t *testing.T, data *TestData) {
+	testNamespace := "test-network-policy-stats"
+	data.createNamespace(testNamespace)
+	defer data.deleteNamespace(testNamespace, defaultTimeout)
+
 	serverName, serverIPs, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "test-server-", "", testNamespace)
 	defer cleanupFunc()
 
@@ -102,7 +117,7 @@ func testNetworkPolicyStats(t *testing.T, data *TestData) {
 		data.runCommandFromPod(testNamespace, clientName, busyboxContainerName, cmd)
 	}
 
-	np1, err := data.createNetworkPolicy("test-networkpolicy-ingress", &networkingv1.NetworkPolicySpec{
+	np1, err := data.createNetworkPolicy(testNamespace, "test-networkpolicy-ingress", &networkingv1.NetworkPolicySpec{
 		PodSelector: metav1.LabelSelector{},
 		PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
 		Ingress: []networkingv1.NetworkPolicyIngressRule{{
@@ -123,7 +138,7 @@ func testNetworkPolicyStats(t *testing.T, data *TestData) {
 			t.Fatalf("Error when deleting network policy: %v", err)
 		}
 	}()
-	np2, err := data.createNetworkPolicy("test-networkpolicy-egress", &networkingv1.NetworkPolicySpec{
+	np2, err := data.createNetworkPolicy(testNamespace, "test-networkpolicy-egress", &networkingv1.NetworkPolicySpec{
 		PodSelector: metav1.LabelSelector{},
 		PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeEgress},
 		Egress: []networkingv1.NetworkPolicyEgressRule{{
@@ -206,12 +221,13 @@ func testNetworkPolicyStats(t *testing.T, data *TestData) {
 }
 
 func testDifferentNamedPorts(t *testing.T, data *TestData) {
-	checkFn, cleanupFn := data.setupDifferentNamedPorts(t)
+	testNamespace := "test-different-named-ports"
+	checkFn, cleanupFn := data.setupDifferentNamedPorts(t, testNamespace)
 	defer cleanupFn()
 	checkFn()
 }
 
-func (data *TestData) setupDifferentNamedPorts(t *testing.T) (checkFn func(), cleanupFn func()) {
+func (data *TestData) setupDifferentNamedPorts(t *testing.T, testNamespace string) (checkFn func(), cleanupFn func()) {
 	var success bool
 	var cleanupFuncs []func()
 	cleanupFn = func() {
@@ -225,6 +241,11 @@ func (data *TestData) setupDifferentNamedPorts(t *testing.T) (checkFn func(), cl
 			cleanupFn()
 		}
 	}()
+
+	data.createNamespace(testNamespace)
+	cleanupFuncs = append(cleanupFuncs, func() {
+		data.deleteNamespace(testNamespace, defaultTimeout)
+	})
 
 	server0Port := int32(80)
 	server0Name, server0IPs, cleanupFunc := createAndWaitForPod(t, data, func(name string, ns string, nodeName string) error {
@@ -296,7 +317,7 @@ func (data *TestData) setupDifferentNamedPorts(t *testing.T) (checkFn func(), cl
 			},
 		}},
 	}
-	np, err := data.createNetworkPolicy(randName("test-networkpolicy-allow-client0-to-http"), spec)
+	np, err := data.createNetworkPolicy(testNamespace, randName("test-networkpolicy-allow-client0-to-http"), spec)
 	if err != nil {
 		t.Fatalf("Error when creating network policy: %v", err)
 	}
@@ -343,6 +364,10 @@ func (data *TestData) setupDifferentNamedPorts(t *testing.T) (checkFn func(), cl
 // 1. The traffic initiated from the host network namespace cannot be dropped.
 // 2. The traffic initiated externally that access the Pod via NodePort service can be dropped (skipped if provider is kind).
 func testDefaultDenyIngressPolicy(t *testing.T, data *TestData) {
+	testNamespace := "test-default-deny-ingress-policy"
+	data.createNamespace(testNamespace)
+	defer data.deleteNamespace(testNamespace, defaultTimeout)
+
 	serverNode := workerNodeName(1)
 	serverNodeIP := workerNodeIP(1)
 	serverPort := int32(80)
@@ -368,7 +393,7 @@ func testDefaultDenyIngressPolicy(t *testing.T, data *TestData) {
 		PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
 		Ingress:     []networkingv1.NetworkPolicyIngressRule{},
 	}
-	np, err := data.createNetworkPolicy("test-networkpolicy-deny-all-ingress", spec)
+	np, err := data.createNetworkPolicy(testNamespace, "test-networkpolicy-deny-all-ingress", spec)
 	if err != nil {
 		t.Fatalf("Error when creating network policy: %v", err)
 	}
@@ -408,6 +433,9 @@ func testDefaultDenyIngressPolicy(t *testing.T, data *TestData) {
 }
 
 func testDefaultDenyEgressPolicy(t *testing.T, data *TestData) {
+	testNamespace := "test-default-deny-egress-policy"
+	data.createNamespace(testNamespace)
+	defer data.deleteNamespace(testNamespace, defaultTimeout)
 	serverPort := int32(80)
 	_, serverIPs, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "test-server-", "", testNamespace)
 	defer cleanupFunc()
@@ -432,7 +460,7 @@ func testDefaultDenyEgressPolicy(t *testing.T, data *TestData) {
 		PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeEgress},
 		Egress:      []networkingv1.NetworkPolicyEgressRule{},
 	}
-	np, err := data.createNetworkPolicy("test-networkpolicy-deny-all-egress", spec)
+	np, err := data.createNetworkPolicy(testNamespace, "test-networkpolicy-deny-all-egress", spec)
 	if err != nil {
 		t.Fatalf("Error when creating network policy: %v", err)
 	}
@@ -462,6 +490,9 @@ func testDefaultDenyEgressPolicy(t *testing.T, data *TestData) {
 // https://github.com/kubernetes/kubernetes/blob/v1.20.0-alpha.0/test/e2e/network/network_policy.go#L1365
 // https://github.com/kubernetes/kubernetes/pull/93583
 func testEgressToServerInCIDRBlock(t *testing.T, data *TestData) {
+	testNamespace := "test-egress-to-server-in-cidr-block"
+	data.createNamespace(testNamespace)
+	defer data.deleteNamespace(testNamespace, defaultTimeout)
 	workerNode := workerNodeName(1)
 	serverAName, serverAIPs, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "test-server-", workerNode, testNamespace)
 	defer cleanupFunc()
@@ -486,7 +517,7 @@ func testEgressToServerInCIDRBlock(t *testing.T, data *TestData) {
 		t.Fatalf("%s should be able to netcat %s", clientA, serverBName)
 	}
 
-	np, err := data.createNetworkPolicy("allow-client-a-via-cidr-egress-rule", &networkingv1.NetworkPolicySpec{
+	np, err := data.createNetworkPolicy(testNamespace, "allow-client-a-via-cidr-egress-rule", &networkingv1.NetworkPolicySpec{
 		PodSelector: metav1.LabelSelector{
 			MatchLabels: map[string]string{
 				"antrea-e2e": clientA,
@@ -529,6 +560,9 @@ func testEgressToServerInCIDRBlock(t *testing.T, data *TestData) {
 // https://github.com/kubernetes/kubernetes/blob/v1.20.0-alpha.0/test/e2e/network/network_policy.go#L1444
 // https://github.com/kubernetes/kubernetes/pull/93583
 func testEgressToServerInCIDRBlockWithException(t *testing.T, data *TestData) {
+	testNamespace := "test-egress-to-server-in-cidr-block-with-exception"
+	data.createNamespace(testNamespace)
+	defer data.deleteNamespace(testNamespace, defaultTimeout)
 	workerNode := workerNodeName(1)
 	serverAName, serverAIPs, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "test-server-", workerNode, testNamespace)
 	defer cleanupFunc()
@@ -553,7 +587,7 @@ func testEgressToServerInCIDRBlockWithException(t *testing.T, data *TestData) {
 		t.Fatalf("%s should be able to netcat %s", clientA, serverAName)
 	}
 
-	np, err := data.createNetworkPolicy("deny-client-a-via-except-cidr-egress-rule", &networkingv1.NetworkPolicySpec{
+	np, err := data.createNetworkPolicy(testNamespace, "deny-client-a-via-except-cidr-egress-rule", &networkingv1.NetworkPolicySpec{
 		PodSelector: metav1.LabelSelector{
 			MatchLabels: map[string]string{
 				"antrea-e2e": clientA,
@@ -607,7 +641,7 @@ func testNetworkPolicyResyncAfterRestart(t *testing.T, data *TestData) {
 	client1Name, _, cleanupFunc := createAndWaitForPod(t, data, data.createBusyboxPodOnNode, "test-client-", workerNode, testNamespace)
 	defer cleanupFunc()
 
-	netpol0, err := data.createNetworkPolicy("test-isolate-server0", &networkingv1.NetworkPolicySpec{
+	netpol0, err := data.createNetworkPolicy(testNamespace, "test-isolate-server0", &networkingv1.NetworkPolicySpec{
 		PodSelector: metav1.LabelSelector{
 			MatchLabels: map[string]string{
 				"antrea-e2e": server0Name,
@@ -663,7 +697,7 @@ func testNetworkPolicyResyncAfterRestart(t *testing.T, data *TestData) {
 	// Remove netpol0, we expect client0 can connect server0 after antrea-controller is up.
 	cleanupNetpol0()
 	// Create netpol1, we expect client1 cannot connect server1 after antrea-controller is up.
-	netpol1, err := data.createNetworkPolicy("test-isolate-server1", &networkingv1.NetworkPolicySpec{
+	netpol1, err := data.createNetworkPolicy(testNamespace, "test-isolate-server1", &networkingv1.NetworkPolicySpec{
 		PodSelector: metav1.LabelSelector{
 			MatchLabels: map[string]string{
 				"antrea-e2e": server1Name,
@@ -702,6 +736,9 @@ func testNetworkPolicyResyncAfterRestart(t *testing.T, data *TestData) {
 }
 
 func testIngressPolicyWithoutPortNumber(t *testing.T, data *TestData) {
+	testNamespace := "test-ingress-policy-without-port-number"
+	data.createNamespace(testNamespace)
+	defer data.deleteNamespace(testNamespace, defaultTimeout)
 	serverPort := int32(80)
 	_, serverIPs, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "test-server-", "", testNamespace)
 	defer cleanupFunc()
@@ -749,7 +786,7 @@ func testIngressPolicyWithoutPortNumber(t *testing.T, data *TestData) {
 			},
 		},
 	}
-	np, err := data.createNetworkPolicy("test-networkpolicy-ingress-no-portnumber", spec)
+	np, err := data.createNetworkPolicy(testNamespace, "test-networkpolicy-ingress-no-portnumber", spec)
 	if err != nil {
 		t.Fatalf("Error when creating network policy: %v", err)
 	}
@@ -780,6 +817,10 @@ func testIngressPolicyWithoutPortNumber(t *testing.T, data *TestData) {
 }
 
 func testIngressPolicyWithEndPort(t *testing.T, data *TestData) {
+	testNamespace := "test-ingress-policy-with-end-port"
+	data.createNamespace(testNamespace)
+	defer data.deleteNamespace(testNamespace, defaultTimeout)
+
 	serverPort := int32(80)
 	serverEndPort := int32(84)
 	policyPort := int32(81)
@@ -896,7 +937,7 @@ func testIngressPolicyWithEndPort(t *testing.T, data *TestData) {
 			},
 		},
 	}
-	np, err := data.createNetworkPolicy("test-networkpolicy-ingress-with-endport", spec)
+	np, err := data.createNetworkPolicy(testNamespace, "test-networkpolicy-ingress-with-endport", spec)
 	if err != nil {
 		t.Fatalf("Error when creating NetworkPolicy: %v", err)
 	}
