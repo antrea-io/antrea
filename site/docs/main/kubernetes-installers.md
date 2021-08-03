@@ -5,9 +5,9 @@
 The table below is not comprehensive. Antrea should work with most K8s
 installers and distributions. The table refers to specific version combinations
 which are known to work and have been tested, but support is not limited to that
-list. Each Antrea version supports [multiple K8s minor
-versions](versioning.md#supported-k8s-versions), and installers / distributions
-based on any one of these K8s versions should work with that Antrea version.
+list. Each Antrea version supports [multiple K8s minor versions](versioning.md#supported-k8s-versions),
+and installers / distributions based on any one of these K8s versions should
+work with that Antrea version.
 
 | Antrea Version | Installer / Distribution | Cloud Infra | Node Info | Node Size | Conformance Results | Comments |
 |-|-|-|-|-|-|-|

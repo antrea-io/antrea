@@ -11,6 +11,8 @@
 - [Deprecation policies](#deprecation-policies)
   - [Prometheus metrics deprecation policy](#prometheus-metrics-deprecation-policy)
   - [APIs deprecation policy](#apis-deprecation-policy)
+- [Introducing new API resources](#introducing-new-api-resources)
+  - [Introducing new CRDs](#introducing-new-crds)
 
 ## Versioning scheme
 
@@ -212,6 +214,43 @@ the following rules:
 * For deprecated Beta and GA API versions, a [conversion webhook] must be
   provided along with each Antrea release, until the API version is removed
   altogether.
+
+## Introducing new API resources
+
+### Introducing new CRDs
+
+Starting with Antrea v1.0, all Custom Resource Definitions (CRDs) for Antrea are
+defined in the same API group, `crd.antrea.io`, and all CRDs in this group are
+versioned individually. For example, at the time of writing this (v1.3 release
+timeframe), the Antrea CRDs include:
+
+* `ClusterGroup` in `crd.antrea.io/v1alpha2`
+* `ClusterGroup` in `crd.antrea.io/v1alpha3`
+* `Egress` in `crd.antrea.io/v1alpha2`
+* etc.
+
+Notice how 2 versions of `ClusterGroup` are supported: the one in
+`crd.antrea.io/v1alpha2` was introduced in v1.0, and is being deprecated as it
+was replaced by the one in `crd.antrea.io/v1alpha3`, introduced in v1.1.
+
+When introducing a new version of a CRD, [the API deprecation policy should be
+followed](#apis-deprecation-policy).
+
+When introducing a CRD, the following rule should be followed in order to avoid
+potential dependency cyles (and thus import cycles in Go): if the CRD depends on
+other object types spread across potentially different versions of
+`crd.antrea.io`, the CRD should be defined in a group version greater or equal
+to all of these versions. For example, if we want to introduce a new CRD which
+depends on types `v1alpha1.X` and `v1alpha2.Y`, it needs to go into `v1alpha2`
+or a more recent version of `crd.antrea.io`. As a rule it should probably go
+into `v1alpha2` unless it is closely related to other CRDs in a later version,
+in which case it can be defined alongside these CRDs, in order to avoid user
+confusion.
+
+If a new CRD does not have dependencies and is not closely related to an
+existing CRD, it will typically be defined in `v1alpha1`. In some rare cases, a
+CRD can be defined in `v1beta1` directly if there is enough confidence in the
+stability of the API.
 
 [Semantic Versioning]: https://semver.org/
 [CHANGELOG]: ../CHANGELOG.md

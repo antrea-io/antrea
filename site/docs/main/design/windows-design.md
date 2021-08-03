@@ -108,93 +108,73 @@ The packets that are sent to/from the Windows host should be forwarded on this i
 is also a valid entry point into the OVS pipeline. A special ofport number 65534 (named as LOCAL) for the
 OVS bridge is used in OpenFlow spec.
 
-In the OVS `Classifier` table, new OpenFlow entries are needed to match the packets from this interface.
-There are two kinds of packets entering OVS pipeline from this interface:
-
- 1) the packet is sent from the Windows host to an external address
- 2) the packet is forwarded from the Windows host to the local Pod (e.g., this happens if the traffic is initiated
-  from a Pod to a NodePort Service, and the chosen Node is where the Pod is located)
-
-For 1, the packet is always output to the uplink interface directly. For 2, the packet is injected into
-the OVS pipeline and output to the backend Pod finally.
+In the OVS `Classifier` table, new OpenFlow entries are needed to match the packets from this interface. The
+packet entering OVS from this interface is output to the uplink interface directly.
 
 ### OVS uplink interface configuration
 
 After the OVS bridge is created, the original physical adapter is added to the OVS bridge as the uplink interface.
-The uplink interface is used to support traffic from Pods accessing external addresses. The packet is always
-output to the uplink interface if it is sent to an external address and is entering OVS from the bridge
-interface.
+The uplink interface is used to support traffic from Pods accessing the world outside current host.
 
 We should differentiate the traffic if it is entering OVS from the uplink interface in OVS `Classifier`
-table. There are two kinds of packets entering the OVS bridge from the uplink interface:
+table. In encap mode, the packets entering OVS from the uplink interface is output to the bridge interface directly.
+In noEncap mode, there are three kinds of packets entering OVS from the uplink interface:
 
- 1) reply traffic for the traffic that is sent from local Pods to external addresses,
- 2) traffic on the host network
+ 1) traffic that is sent to local Pods from Pod on a different Node,
+ 2) traffic that is sent to local Pods from a different Node according to the routing configuration,
+ 3) traffic on the host network
 
-For 1, the packets should enter the OVS pipeline and be re-written using SNAT information in connection tracking
-context first, and then processed by the OVS pipeline.
-For 2, the packets are output to the OVS bridge interface directly.
+For 1 and 2, the packet enters the OVS pipeline, and the `macRewriteMark` is set to ensure the destination MAC can be
+modified.
+For 3, the packet is output to the OVS bridge interface directly.
+
+The packet is always output to the uplink interface if it is entering OVS from the bridge interface. We
+also output the Pod traffic to the uplink interface in noEncap mode, if the destination is a Pod on a different Node,
+or if it is a reply packet to the request which is sent from a different Node. Then we can reduce the cost that the
+packet enters OVS twice (OVS -> Windows host -> OVS).
+
+Following are the OpenFlow entries for uplink interface in encap mode.
+
+```text
+Classifier Table: 0
+table=0, priority=200, in_port=$uplink actions=LOCAL
+table=0, priority=200, in_port=LOCAL actions=output:$uplink
+```
+
+Following is an example for the OpenFlow entries related with uplink interface in noEncap mode.
+
+```text
+Classifier Table: 0
+table=0, priority=210, ip, in_port=$uplink, nw_dst=$localPodSubnet, actions=load:0x4->NXM_NX_REG0[0..15],load:0x
+1->NXM_NX_REG0[19],resubmit(,29)
+table=0, priority=200, in_port=$uplink actions=LOCAL
+table=0, priority=200, in_port=LOCAL actions=output:$uplink
+
+L3Forwarding Table: 70
+// Rewrite the destination MAC with the Node's MAC on which target Pod is located.
+table=70, priority=200,ip,nw_dst=$peerPodSubnet actions=mod_dl_dst:$peerNodeMAC,resubmit(,80)
+// Rewrite the destination MAC with the Node's MAC if it is a reply for the access from the Node.
+table=70, priority=200,ct_state=+rpl+trk,ip,nw_dst=$peerNodeIP actions=mod_dl_dst:$peerNodeMAC,resubmit(,80)
+
+L2ForwardingCalcTable: 80
+table=80, priority=200,dl_dst=$peerNodeMAC actions=load:$uplink->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],resubmit(,105)
+```
 
 ### SNAT configuration
 
 SNAT is an important feature of the Antrea Agent on Windows Nodes, required to support Pods accessing external
-addresses. It is implemented using OpenFlow.
+addresses. It is implemented using the NAT capability of the Windows host.
 
-To support this feature, two additional marks are introduced:
-
-* The 17th bit of NXM Register0 is set for Pod-to-external traffic. This bit is set in the `L3Forwarding` table,
- and is consumed in the `ConntrackCommit` table.
-* The SNATed traffic is marked with **0x40** in the ct context. This mark is set in the `ConntrackCommit`
- table when committing the new connection into the ct zone, and is consumed in the `ConntrackState` table
- to identify SNAT relevant packets.
-
-The following changes in the OVS pipeline are needed:
-
-* Identify the packet that is sent from local Pod-to-external address and set the SNAT bit in the register
- in the `L3Forwarding` table. The packet should have these characteristics:
-  1) it enters the OVS pipeline from a local Pod;
-  2) the destination IP address is not in the cluster Pod CIDRs (Pod subnets of the local or any remote
-  Node), and is not the local Node's management IP;
-  3) the traffic is not for Services;
-  4) it is not the return traffic for a connection from an external IP to a local Pod.
-* Implement SNAT rules and commit the new connection to the ct context in the `ConntrackCommit` table. The SNAT
- rule should change the source address to the Node's internal IP.
-* Forward the IP packet to the `Conntrack` table if it is from the uplink interface in the `Uplink` table.
- This is to ensure the reply packets from the external address to the Pod will be "unSNAT'd".
-* Ensure that the packet is translated based on the NAT information provided when committing the connection by
- using the `nat` argument with the `ct` action.
-* Set the macRewrite bit in the register (reg0[19]) in the `ConntrackState` table if the packet is from the uplink
- interface and has the SNAT ct_mark.
-
-Following is an example for SNAT relevant OpenFlow entries.
+To support this feature, we configure NetNat on the Windows host for the Pod subnet:
 
 ```text
-Classifier Table: 0
-table=0, priority=200, in_port=$uplink,ip actions=load:0x4->NXM_NX_REG0[0..15],goto_table:5
-
-Uplink Table: 5
-table=5, priority=200, ip,reg0=0x4/0xffff actions=goto_table:30
-
-Conntrack Table: 30
-table=30, priority=200, ip actions=ct(table=31,zone=65520,nat)
-
-ConntrackState Table: 31
-table=31, priority=210, ct_state=-new+trk,ct_mark=0x40,ip,reg0=0x4/0xffff actions=load:0x1->NXM_NX_REG0[19],goto_table:40
-table=31, priority=200, ip,reg0=0x4/0xffff actions=output:br-int
-
-L3Forwarding Table: 70
-// Forward the packet to L2ForwardingCalculation table if it is traffic to the local Pods and doesn't require MAC rewriting.
-table=70, priority=200, ip,reg0=0/0x80000,nw_dst=10.10.0.0/24 actions=goto_table:80
-// Forward the packet to L2ForwardingCalculation table if it is Pod-to-Node traffic.
-table=70, priority=200, ip,reg0=0x2/0xffff,nw_dst=$local_nodeIP actions=goto_table:80
-// Forward the packet to L2ForwardingCalculation table if it is return traffic of an external-to-Pod connection.
-table=70, priority=210, ct_state=+rpl+trk,ct_mark=0x20,ip actions=mod_dl_dst:0e:6d:42:66:92:46,resubmit(,80)
-// Add SNAT mark if it is Pod-to-external traffic.
-table=70, priority=190, ct_state=+new+trk,ip,reg0=0x2/0xffff actions=load:0x1->NXM_NX_REG0[17], goto_table:80
-
-ConntrackCommit Table: 105
-table=105, priority=200, ct_state=+new+trk,ip,reg0=0x20000/0x20000, actions=ct(commit,table=110,zone=65520,nat(src=${nodeIP}:10000-20000),exec(load:0x40->NXM_NX_CT_MARK[])))
+New-NetNat -Name antrea-nat -InternalIPInterfaceAddressPrefix $localPodSubnet
 ```
+
+The packet that is sent from local Pod to an external address leaves OVS from `antrea-gw0` and enters Windows host,
+and SNAT action is performed. The SNATed address is chosen by Windows host according to the routing configuration.
+As for the reply packet of the Pod-to-external traffic, it enters Windows host and performs de-SNAT first, and then
+the packet enters OVS from `antrea-gw0` and is forwarded to the Pod finally.
 
 ### Using Windows named pipe for internal connections
 
@@ -235,25 +215,22 @@ to select the backend endpoint and performs DNAT on the traffic.
 
 ### External Traffic
 
-The Pod-to-external traffic is SNATed in OVS using the Node's internal IP first, and then it leaves
-the OVS pipeline on the gateway interface. As IP-Forwarding on the gateway interface is enabled, the packet
-is forwarded to the OVS bridge interface and enters OVS for the second time.
-When the packet enters OVS at the second time, the dMAC is changed to an appropriate value using the host
-network stack. And OVS outputs the packet to the uplink interface directly.
+The Pod-to-external traffic leaves the OVS pipeline from the gateway interface, and then is SNATed on the Windows
+host. If the packet should leave Windows host from OVS uplink interface according to the routing configuration on
+the Windows host, it is forwarded to OVS bridge first on which the host IP is configured, and then output to the
+uplink interface by OVS pipeline.
 
-The corresponding reply traffic will enter OVS on the uplink interface. It will access the ct zone, and
-the destination IP will be translated back to the original Pod's IP within the ct context. Then it will be
-output to the Pod.
-
+The corresponding reply traffic will enter OVS from the uplink interface first, and then enter the host from the
+OVS bridge interface. It is de-SNATed on the host and then back to OVS from `antre-gw0` and forwarded to the Pod
+finally.
 ![Traffic to external](../assets/windows_external_traffic.svg)
 
 ### Host Traffic
 
-In "Transparent" mode, the Antrea Agent should also process the host traffic when necessary, which includes
+In "Transparent" mode, the Antrea Agent should also support the host traffic when necessary, which includes
 packets sent from the host to external addresses, and the ones sent from external addresses to the host.
 
-The host traffic case is similar to Pod-to-external traffic, as the destination IP is not in the cluster
-CIDR, but we can differentiate based on the source IP. If the packet is sent from the OVS bridge interface,
-and if it is destined to a local Pod, it is output to the uplink interface directly. Reply traffic goes through
-conntrack first, then through the rest of the OVS pipeline if the ct_mark is set. If the packet is not set, it
-is output to the Windows host on the OVS bridge interface.
+The host traffic enters OVS bridge and output to the uplink interface if the destination is reachable from the
+network adapter which is plugged on OVS as uplink. For the reverse path, the packet enters OVS from the uplink
+interface first, and then directly output to the bridge interface and enters Windows host. For the traffic that
+is connected to the Windows network adapters other than the OVS uplink interface, it is managed by Windows host.
