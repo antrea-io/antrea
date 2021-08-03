@@ -11,7 +11,6 @@ require (
 
 replace (
 	antrea.io/antrea => ../../
-	github.com/contiv/ofnet => github.com/wenyingd/ofnet v0.0.0-20201109024835-6fd225d8c8d1
 	k8s.io/api => k8s.io/api v0.19.8
 	k8s.io/apimachinery => k8s.io/apimachinery v0.19.8
 	k8s.io/client-go => k8s.io/client-go v0.19.8

@@ -18,9 +18,9 @@ import (
 	"encoding/binary"
 	"errors"
 
-	"github.com/contiv/libOpenflow/protocol"
-	"github.com/contiv/libOpenflow/util"
-	"github.com/contiv/ofnet/ofctrl"
+	"antrea.io/libOpenflow/protocol"
+	"antrea.io/libOpenflow/util"
+	"antrea.io/ofnet/ofctrl"
 )
 
 const (
