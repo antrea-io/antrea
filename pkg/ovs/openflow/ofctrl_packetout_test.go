@@ -5,8 +5,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/contiv/libOpenflow/protocol"
-	"github.com/contiv/ofnet/ofctrl"
+	"antrea.io/libOpenflow/protocol"
+	"antrea.io/ofnet/ofctrl"
 )
 
 func Test_ofPacketOutBuilder_SetSrcIP(t *testing.T) {
