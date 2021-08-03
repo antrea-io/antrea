@@ -119,14 +119,14 @@ func skipIfNoWindowsNodes(tb testing.TB) {
 
 func skipIfFeatureDisabled(tb testing.TB, feature featuregate.Feature, checkAgent bool, checkController bool) {
 	if checkAgent {
-		if featureGate, err := GetAgentFeatures(antreaNamespace); err != nil {
+		if featureGate, err := GetAgentFeatures(); err != nil {
 			tb.Fatalf("Cannot determine if %s is enabled in the Agent: %v", feature, err)
 		} else if !featureGate.Enabled(feature) {
 			tb.Skipf("Skipping test because %s is not enabled in the Agent", feature)
 		}
 	}
 	if checkController {
-		if featureGate, err := GetControllerFeatures(antreaNamespace); err != nil {
+		if featureGate, err := GetControllerFeatures(); err != nil {
 			tb.Fatalf("Cannot determine if %s is enabled in the Controller: %v", feature, err)
 		} else if !featureGate.Enabled(feature) {
 			tb.Skipf("Skipping test because %s is not enabled in the Controller", feature)

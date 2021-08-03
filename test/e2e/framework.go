@@ -55,6 +55,8 @@ import (
 	"antrea.io/antrea/test/e2e/providers"
 )
 
+var AntreaConfigMap *corev1.ConfigMap
+
 const (
 	defaultTimeout  = 90 * time.Second
 	defaultInterval = 1 * time.Second
@@ -1631,7 +1633,7 @@ func (data *TestData) GetEncapMode() (config.TrafficEncapModeType, error) {
 	return config.TrafficEncapModeEncap, nil
 }
 
-func getFeatures(confName string, antreaNamespace string) (featuregate.FeatureGate, error) {
+func getFeatures(confName string) (featuregate.FeatureGate, error) {
 	featureGate := features.DefaultMutableFeatureGate.DeepCopy()
 	var cfg interface{}
 	if err := yaml.Unmarshal([]byte(AntreaConfigMap.Data[confName]), &cfg); err != nil {
@@ -1651,12 +1653,12 @@ func getFeatures(confName string, antreaNamespace string) (featuregate.FeatureGa
 	return featureGate, nil
 }
 
-func GetAgentFeatures(antreaNamespace string) (featuregate.FeatureGate, error) {
-	return getFeatures(antreaAgentConfName, antreaNamespace)
+func GetAgentFeatures() (featuregate.FeatureGate, error) {
+	return getFeatures(antreaAgentConfName)
 }
 
-func GetControllerFeatures(antreaNamespace string) (featuregate.FeatureGate, error) {
-	return getFeatures(antreaControllerConfName, antreaNamespace)
+func GetControllerFeatures() (featuregate.FeatureGate, error) {
+	return getFeatures(antreaControllerConfName)
 }
 
 func (data *TestData) GetAntreaConfigMap(antreaNamespace string) (*corev1.ConfigMap, error) {

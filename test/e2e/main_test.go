@@ -22,11 +22,7 @@ import (
 	"os"
 	"testing"
 	"time"
-
-	corev1 "k8s.io/api/core/v1"
 )
-
-var AntreaConfigMap *corev1.ConfigMap
 
 // setupLogging creates a temporary directory to export the test logs if necessary. If a directory
 // was provided by the user, it checks that the directory exists.

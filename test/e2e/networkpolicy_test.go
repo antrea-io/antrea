@@ -356,11 +356,11 @@ func testDefaultDenyIngressPolicy(t *testing.T, data *TestData) {
 	defer data.deleteService(service.Name)
 
 	// client1 is a host network Pod and is on the same node as the server Pod, simulating kubelet probe traffic.
-	client1Name, _, cleanupFunc := createAndWaitForPod(t, data, data.createHostNetworkBusyboxPodOnNode, "test-hostnetwork-client-", serverNode, testNamespace)
+	client1Name, _, cleanupFunc := createAndWaitForPod(t, data, data.createHostNetworkBusyboxPodOnNode, "test-hostnetwork-client-can-connect-", serverNode, testNamespace)
 	defer cleanupFunc()
 
 	// client2 is a host network Pod and is on a different node from the server Pod, accessing the server Pod via the NodePort service.
-	client2Name, _, cleanupFunc := createAndWaitForPod(t, data, data.createHostNetworkBusyboxPodOnNode, "test-hostnetwork-client-", controlPlaneNodeName(), testNamespace)
+	client2Name, _, cleanupFunc := createAndWaitForPod(t, data, data.createHostNetworkBusyboxPodOnNode, "test-hostnetwork-client-cannot-connect-", controlPlaneNodeName(), testNamespace)
 	defer cleanupFunc()
 
 	spec := &networkingv1.NetworkPolicySpec{
