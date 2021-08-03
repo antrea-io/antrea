@@ -8,9 +8,8 @@ on:
     branches:
     - main
     - release-*
+
 jobs:
-
-
   test-unit:
     name: Unit test
     strategy:
@@ -46,37 +45,25 @@ jobs:
         platform: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.platform }}
     steps:
+
     - name: Set up Go 1.15
       uses: actions/setup-go@v2
       with:
         go-version: 1.15
+
     - name: Check-out code
       uses: actions/checkout@v2
+
     - name: Run golangci-lint
       run: make golangci
 
-
-  golangci-lint-netpol-tmp:
-    name: Golangci-lint for netpol code
-    runs-on: [ubuntu-latest]
-    steps:
-    - name: Set up Go 1.15
-      uses: actions/setup-go@v2
-      with:
-        go-version: 1.15
-    - name: Check-out code
-      uses: actions/checkout@v2
-    - name: Run golangci-lint
+    - name: Run golangci-lint for netpol
       working-directory: hack/netpol
       run: make golangci
 
-
   bin:
-    name: Build Antrea binaries
+    name: Build Antrea and antctl binaries
     runs-on: [ubuntu-latest]
-    strategy:
-      matrix:
-        arch: [amd64, arm64, arm]
     steps:
 
     - name: Set up Go 1.15
@@ -87,8 +74,17 @@ jobs:
     - name: Check-out code
       uses: actions/checkout@v2
 
-    - name: Build Antrea binaries
-      run: GOARCH=${{ matrix.arch }} make bin
+    - name: Build Antrea binaries for amd64
+      run: GOARCH=amd64 make bin
+
+    - name: Build Antrea binaries for arm64
+      run: GOARCH=arm64 make bin
+
+    - name: Build Antrea binaries for arm
+      run: GOARCH=arm make bin
+
+    - name: Build antctl binaries
+      run: make antctl
 
   windows-bin:
     name: Build Antrea Windows binaries
@@ -106,25 +102,8 @@ jobs:
     - name: Build Antrea windows binaries
       run: make windows-bin
 
-  antctl:
-    name: Build antctl for macOS, Linux and Windows
-    runs-on: [ubuntu-latest]
-    steps:
-
-      - name: Set up Go 1.15
-        uses: actions/setup-go@v2
-        with:
-          go-version: 1.15
-
-      - name: Check-out code
-        uses: actions/checkout@v2
-
-      - name: Build antctl binaries
-        run: make antctl
-
-
-  codegen:
-    name: Check code generation
+  tidy-codegen-manifest:
+    name: Check tidy, code generation and manifest
     runs-on: [ubuntu-latest]
     steps:
 
@@ -135,43 +114,16 @@ jobs:
 
     - name: Check-out code
       uses: actions/checkout@v2
+
+    # tidy check need to be run before code generation which will regenerate codes.
+    - name: Check tidy
+      run: make test-tidy
 
     - name: Check code generation
       run: ./ci/check-codegen.sh
 
-
-  manifest:
-    name: Check manifest
-    runs-on: [ubuntu-latest]
-    steps:
-
-    - name: Set up Go 1.15
-      uses: actions/setup-go@v2
-      with:
-        go-version: 1.15
-
-    - name: Check-out code
-      uses: actions/checkout@v2
-
     - name: Check manifest
       run: ./ci/check-manifest.sh
-
-
-  tidy:
-    name: Check go.mod tidy
-    runs-on: [ubuntu-latest]
-    steps:
-
-    - name: Set up Go 1.15
-      uses: actions/setup-go@v2
-      with:
-        go-version: 1.15
-
-    - name: Check-out code
-      uses: actions/checkout@v2
-
-    - name: Check tidy
-      run: make test-tidy
 
   verify:
     name: Verify docs and spelling
