@@ -117,7 +117,9 @@ func run(o *Options) error {
 	networkConfig := &config.NetworkConfig{
 		TunnelType:        ovsconfig.TunnelType(o.config.TunnelType),
 		TrafficEncapMode:  encapMode,
-		EnableIPSecTunnel: o.config.EnableIPSecTunnel}
+		EnableIPSecTunnel: o.config.EnableIPSecTunnel,
+		TransportIface:    o.config.TransportInterface,
+	}
 
 	routeClient, err := route.NewClient(serviceCIDRNet, networkConfig, o.config.NoSNAT)
 	if err != nil {

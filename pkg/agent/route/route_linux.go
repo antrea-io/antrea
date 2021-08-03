@@ -438,7 +438,7 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet, podIPSet string, snatMa
 func (c *Client) initIPRoutes() error {
 	if c.networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {
 		gwLink := util.GetNetLink(c.nodeConfig.GatewayConfig.Name)
-		_, gwIP, _ := net.ParseCIDR(fmt.Sprintf("%s/32", c.nodeConfig.NodeIPAddr.IP.String()))
+		_, gwIP, _ := net.ParseCIDR(fmt.Sprintf("%s/32", c.nodeConfig.NodeTransportIPAddr.IP.String()))
 		if err := netlink.AddrReplace(gwLink, &netlink.Addr{IPNet: gwIP}); err != nil {
 			return fmt.Errorf("failed to add address %s to gw %s: %v", gwIP, gwLink.Attrs().Name, err)
 		}
@@ -576,7 +576,7 @@ func (c *Client) AddRoutes(podCIDR *net.IPNet, nodeName string, nodeIP, nodeGwIP
 		Dst: podCIDR,
 	}
 	var routes []*netlink.Route
-	if c.networkConfig.TrafficEncapMode.NeedsEncapToPeer(nodeIP, c.nodeConfig.NodeIPAddr) {
+	if c.networkConfig.TrafficEncapMode.NeedsEncapToPeer(nodeIP, c.nodeConfig.NodeTransportIPAddr) {
 		if podCIDR.IP.To4() == nil {
 			// "on-link" is not identified in IPv6 route entries, so split the configuration into 2 entries.
 			routes = []*netlink.Route{
@@ -590,7 +590,7 @@ func (c *Client) AddRoutes(podCIDR *net.IPNet, nodeName string, nodeIP, nodeGwIP
 		}
 		route.LinkIndex = c.nodeConfig.GatewayConfig.LinkIndex
 		route.Gw = nodeGwIP
-	} else if c.networkConfig.TrafficEncapMode.NeedsDirectRoutingToPeer(nodeIP, c.nodeConfig.NodeIPAddr) {
+	} else if c.networkConfig.TrafficEncapMode.NeedsDirectRoutingToPeer(nodeIP, c.nodeConfig.NodeTransportIPAddr) {
 		// NoEncap traffic to Node on the same subnet.
 		// Set the peerNodeIP as next hop.
 		route.Gw = nodeIP

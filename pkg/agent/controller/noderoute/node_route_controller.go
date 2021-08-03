@@ -414,11 +414,15 @@ func (c *Controller) addNodeRoute(nodeName string, node *corev1.Node) error {
 	if err != nil {
 		return fmt.Errorf("error when retrieving MAC of Node %s: %v", nodeName, err)
 	}
+	peerNodeIP, err := c.getNodeTransportAddress(node)
+	if err != nil {
+		return err
+	}
 
 	nrInfo, installed, _ := c.installedNodes.GetByKey(nodeName)
 
-	if installed && nrInfo.(*nodeRouteInfo).nodeMAC.String() == peerNodeMAC.String() {
-		// Route is already added for this Node and Node MAC isn't changed.
+	if installed && nrInfo.(*nodeRouteInfo).nodeMAC.String() == peerNodeMAC.String() && nrInfo.(*nodeRouteInfo).nodeIP.Equal(peerNodeIP) {
+		// Route is already added for this Node and both Node MAC and transport IP are not changed.
 		return nil
 	}
 
@@ -468,12 +472,6 @@ func (c *Controller) addNodeRoute(nodeName string, node *corev1.Node) error {
 		peerGatewayIP := ip.NextIP(peerPodCIDRAddr)
 		peerConfig[peerPodCIDR] = peerGatewayIP
 		podCIDRs = append(podCIDRs, peerPodCIDR)
-	}
-
-	peerNodeIP, err := k8s.GetNodeAddr(node)
-	if err != nil {
-		klog.Errorf("Failed to retrieve IP address of Node %s: %v", nodeName, err)
-		return nil
 	}
 
 	ipsecTunOFPort := int32(0)
@@ -656,4 +654,25 @@ func getNodeMAC(node *corev1.Node) (net.HardwareAddr, error) {
 		return nil, fmt.Errorf("failed to parse MAC `%s`: %v", macStr, err)
 	}
 	return mac, nil
+}
+
+func (c *Controller) getNodeTransportAddress(node *corev1.Node) (net.IP, error) {
+	if c.networkConfig.TransportIface != "" {
+		transportAddrStr := node.Annotations[types.NodeTransportAddressAnnotationKey]
+		if transportAddrStr != "" {
+			peerNodeAddr := net.ParseIP(transportAddrStr)
+			if peerNodeAddr == nil {
+				return nil, fmt.Errorf("invalid annotation for transport-address on Node %s: %s", node.Name, transportAddrStr)
+			}
+			return peerNodeAddr, nil
+		}
+		klog.InfoS("Transport address is not found, using NodeIP instead")
+	}
+	// Use NodeIP if the transport IP address is not set or not found.
+	peerNodeIP, err := k8s.GetNodeAddr(node)
+	if err != nil {
+		klog.ErrorS(err, "Failed to retrieve Node IP address", "node", node.Name)
+		return nil, err
+	}
+	return peerNodeIP, nil
 }

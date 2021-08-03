@@ -220,7 +220,7 @@ func testHelper(t *testing.T, data *TestData, podAIPs, podBIPs, podCIPs, podDIPs
 	// applied to destination Pod (one reject rule, one drop rule) and their flow information is exported as IPFIX flow records.
 	// perftest-a -> perftest-b (Ingress reject), perftest-a -> perftest-d (Ingress drop)
 	t.Run("IntraNodeDenyConnIngressANP", func(t *testing.T) {
-		skipIfAntreaPolicyDisabled(t, data)
+		skipIfAntreaPolicyDisabled(t)
 		anp1, anp2 := deployDenyAntreaNetworkPolicies(t, data, "perftest-a", "perftest-b", "perftest-d", true)
 		defer func() {
 			if anp1 != nil {
@@ -255,7 +255,7 @@ func testHelper(t *testing.T, data *TestData, podAIPs, podBIPs, podCIPs, podDIPs
 	// applied to source Pods (one reject rule, one drop rule) and their flow information is exported as IPFIX flow records.
 	// perftest-a (Egress reject) -> perftest-b , perftest-a (Egress drop) -> perftest-d
 	t.Run("IntraNodeDenyConnEgressANP", func(t *testing.T) {
-		skipIfAntreaPolicyDisabled(t, data)
+		skipIfAntreaPolicyDisabled(t)
 		anp1, anp2 := deployDenyAntreaNetworkPolicies(t, data, "perftest-a", "perftest-b", "perftest-d", false)
 		defer func() {
 			if anp1 != nil {
@@ -290,7 +290,7 @@ func testHelper(t *testing.T, data *TestData, podAIPs, podBIPs, podCIPs, podDIPs
 	// applied to one destination Pod, one source Pod, respectively and their flow information is exported as IPFIX flow records.
 	// perftest-a -> perftest-b (Ingress deny), perftest-d (Egress deny) -> perftest-a
 	t.Run("IntraNodeDenyConnNP", func(t *testing.T) {
-		skipIfAntreaPolicyDisabled(t, data)
+		skipIfAntreaPolicyDisabled(t)
 		np1, np2 := deployDenyNetworkPolicies(t, data, "perftest-b", "perftest-d")
 		defer func() {
 			if np1 != nil {
@@ -325,7 +325,7 @@ func testHelper(t *testing.T, data *TestData, podAIPs, podBIPs, podCIPs, podDIPs
 	// and their flow information is exported as IPFIX flow records.
 	// Antrea network policies are being tested here.
 	t.Run("InterNodeFlows", func(t *testing.T) {
-		skipIfAntreaPolicyDisabled(t, data)
+		skipIfAntreaPolicyDisabled(t)
 		anp1, anp2 := deployAntreaNetworkPolicies(t, data, "perftest-a", "perftest-c")
 		defer func() {
 			if anp1 != nil {
@@ -346,7 +346,7 @@ func testHelper(t *testing.T, data *TestData, podAIPs, podBIPs, podCIPs, podDIPs
 	// applied to destination Pod (one reject rule, one drop rule) and their flow information is exported as IPFIX flow records.
 	// perftest-a -> perftest-c (Ingress reject), perftest-a -> perftest-e (Ingress drop)
 	t.Run("InterNodeDenyConnIngressANP", func(t *testing.T) {
-		skipIfAntreaPolicyDisabled(t, data)
+		skipIfAntreaPolicyDisabled(t)
 		anp1, anp2 := deployDenyAntreaNetworkPolicies(t, data, "perftest-a", "perftest-c", "perftest-e", true)
 		defer func() {
 			if anp1 != nil {
@@ -381,7 +381,7 @@ func testHelper(t *testing.T, data *TestData, podAIPs, podBIPs, podCIPs, podDIPs
 	// applied to source Pod (one reject rule, one drop rule) and their flow information is exported as IPFIX flow records.
 	// perftest-a (Egress reject) -> perftest-c, perftest-a (Egress drop)-> perftest-e
 	t.Run("InterNodeDenyConnEgressANP", func(t *testing.T) {
-		skipIfAntreaPolicyDisabled(t, data)
+		skipIfAntreaPolicyDisabled(t)
 		anp1, anp2 := deployDenyAntreaNetworkPolicies(t, data, "perftest-a", "perftest-c", "perftest-e", false)
 		defer func() {
 			if anp1 != nil {
@@ -416,7 +416,7 @@ func testHelper(t *testing.T, data *TestData, podAIPs, podBIPs, podCIPs, podDIPs
 	// applied to one destination Pod, one source Pod, respectively and their flow information is exported as IPFIX flow records.
 	// perftest-a -> perftest-c (Ingress deny), perftest-b (Egress deny) -> perftest-e
 	t.Run("InterNodeDenyConnNP", func(t *testing.T) {
-		skipIfAntreaPolicyDisabled(t, data)
+		skipIfAntreaPolicyDisabled(t)
 		np1, np2 := deployDenyNetworkPolicies(t, data, "perftest-c", "perftest-b")
 		defer func() {
 			if np1 != nil {
@@ -452,12 +452,12 @@ func testHelper(t *testing.T, data *TestData, podAIPs, podBIPs, podCIPs, podDIPs
 	t.Run("ToExternalFlows", func(t *testing.T) {
 		// Creating an agnhost server as a host network Pod
 		serverPodPort := int32(80)
-		_, serverIPs, cleanupFunc := createAndWaitForPod(t, data, func(name string, nodeName string) error {
-			return data.createServerPod(name, "", serverPodPort, false, true)
-		}, "test-server-", "")
+		_, serverIPs, cleanupFunc := createAndWaitForPod(t, data, func(name string, ns string, nodeName string) error {
+			return data.createServerPod(name, testNamespace, "", serverPodPort, false, true)
+		}, "test-server-", "", testNamespace)
 		defer cleanupFunc()
 
-		clientName, clientIPs, cleanupFunc := createAndWaitForPod(t, data, data.createBusyboxPodOnNode, "test-client-", nodeName(0))
+		clientName, clientIPs, cleanupFunc := createAndWaitForPod(t, data, data.createBusyboxPodOnNode, "test-client-", nodeName(0), testNamespace)
 		defer cleanupFunc()
 
 		if !isIPv6 {
@@ -473,7 +473,7 @@ func testHelper(t *testing.T, data *TestData, podAIPs, podBIPs, podCIPs, podDIPs
 
 	// LocalServiceAccess tests the case, where Pod and Service are deployed on the same Node and their flow information is exported as IPFIX flow records.
 	t.Run("LocalServiceAccess", func(t *testing.T) {
-		skipIfProxyDisabled(t, data)
+		skipIfProxyDisabled(t)
 		// In dual stack cluster, Service IP can be assigned as different IP family from specified.
 		// In that case, source IP and destination IP will align with IP family of Service IP.
 		// For IPv4-only and IPv6-only cluster, IP family of Service IP will be same as Pod IPs.
@@ -487,7 +487,7 @@ func testHelper(t *testing.T, data *TestData, podAIPs, podBIPs, podCIPs, podDIPs
 
 	// RemoteServiceAccess tests the case, where Pod and Service are deployed on different Nodes and their flow information is exported as IPFIX flow records.
 	t.Run("RemoteServiceAccess", func(t *testing.T) {
-		skipIfProxyDisabled(t, data)
+		skipIfProxyDisabled(t)
 		// In dual stack cluster, Service IP can be assigned as different IP family from specified.
 		// In that case, source IP and destination IP will align with IP family of Service IP.
 		// For IPv4-only and IPv6-only cluster, IP family of Service IP will be same as Pod IPs.
@@ -949,7 +949,7 @@ func deployDenyNetworkPolicies(t *testing.T, data *TestData, pod1, pod2 string) 
 }
 
 func createPerftestPods(data *TestData) (podAIPs *PodIPs, podBIPs *PodIPs, podCIPs *PodIPs, podDIPs *PodIPs, podEIPs *PodIPs, err error) {
-	if err := data.createPodOnNode("perftest-a", controlPlaneNodeName(), perftoolImage, nil, nil, nil, nil, false, nil); err != nil {
+	if err := data.createPodOnNode("perftest-a", testNamespace, controlPlaneNodeName(), perftoolImage, nil, nil, nil, nil, false, nil); err != nil {
 		return nil, nil, nil, nil, nil, fmt.Errorf("Error when creating the perftest client Pod: %v", err)
 	}
 	podAIPs, err = data.podWaitForIPs(defaultTimeout, "perftest-a", testNamespace)
@@ -957,7 +957,7 @@ func createPerftestPods(data *TestData) (podAIPs *PodIPs, podBIPs *PodIPs, podCI
 		return nil, nil, nil, nil, nil, fmt.Errorf("Error when waiting for the perftest client Pod: %v", err)
 	}
 
-	if err := data.createPodOnNode("perftest-b", controlPlaneNodeName(), perftoolImage, nil, nil, nil, []corev1.ContainerPort{{Protocol: corev1.ProtocolTCP, ContainerPort: iperfPort}}, false, nil); err != nil {
+	if err := data.createPodOnNode("perftest-b", testNamespace, controlPlaneNodeName(), perftoolImage, nil, nil, nil, []corev1.ContainerPort{{Protocol: corev1.ProtocolTCP, ContainerPort: iperfPort}}, false, nil); err != nil {
 		return nil, nil, nil, nil, nil, fmt.Errorf("Error when creating the perftest server Pod: %v", err)
 	}
 	podBIPs, err = data.podWaitForIPs(defaultTimeout, "perftest-b", testNamespace)
@@ -965,7 +965,7 @@ func createPerftestPods(data *TestData) (podAIPs *PodIPs, podBIPs *PodIPs, podCI
 		return nil, nil, nil, nil, nil, fmt.Errorf("Error when getting the perftest server Pod's IPs: %v", err)
 	}
 
-	if err := data.createPodOnNode("perftest-c", workerNodeName(1), perftoolImage, nil, nil, nil, []corev1.ContainerPort{{Protocol: corev1.ProtocolTCP, ContainerPort: iperfPort}}, false, nil); err != nil {
+	if err := data.createPodOnNode("perftest-c", testNamespace, workerNodeName(1), perftoolImage, nil, nil, nil, []corev1.ContainerPort{{Protocol: corev1.ProtocolTCP, ContainerPort: iperfPort}}, false, nil); err != nil {
 		return nil, nil, nil, nil, nil, fmt.Errorf("Error when creating the perftest server Pod: %v", err)
 	}
 	podCIPs, err = data.podWaitForIPs(defaultTimeout, "perftest-c", testNamespace)
@@ -973,7 +973,7 @@ func createPerftestPods(data *TestData) (podAIPs *PodIPs, podBIPs *PodIPs, podCI
 		return nil, nil, nil, nil, nil, fmt.Errorf("Error when getting the perftest server Pod's IPs: %v", err)
 	}
 
-	if err := data.createPodOnNode("perftest-d", controlPlaneNodeName(), perftoolImage, nil, nil, nil, []corev1.ContainerPort{{Protocol: corev1.ProtocolTCP, ContainerPort: iperfPort}}, false, nil); err != nil {
+	if err := data.createPodOnNode("perftest-d", testNamespace, controlPlaneNodeName(), perftoolImage, nil, nil, nil, []corev1.ContainerPort{{Protocol: corev1.ProtocolTCP, ContainerPort: iperfPort}}, false, nil); err != nil {
 		return nil, nil, nil, nil, nil, fmt.Errorf("Error when creating the perftest server Pod: %v", err)
 	}
 	podDIPs, err = data.podWaitForIPs(defaultTimeout, "perftest-d", testNamespace)
@@ -981,7 +981,7 @@ func createPerftestPods(data *TestData) (podAIPs *PodIPs, podBIPs *PodIPs, podCI
 		return nil, nil, nil, nil, nil, fmt.Errorf("Error when getting the perftest server Pod's IPs: %v", err)
 	}
 
-	if err := data.createPodOnNode("perftest-e", workerNodeName(1), perftoolImage, nil, nil, nil, []corev1.ContainerPort{{Protocol: corev1.ProtocolTCP, ContainerPort: iperfPort}}, false, nil); err != nil {
+	if err := data.createPodOnNode("perftest-e", testNamespace, workerNodeName(1), perftoolImage, nil, nil, nil, []corev1.ContainerPort{{Protocol: corev1.ProtocolTCP, ContainerPort: iperfPort}}, false, nil); err != nil {
 		return nil, nil, nil, nil, nil, fmt.Errorf("Error when creating the perftest server Pod: %v", err)
 	}
 	podEIPs, err = data.podWaitForIPs(defaultTimeout, "perftest-e", testNamespace)

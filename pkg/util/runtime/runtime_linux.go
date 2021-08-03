@@ -17,6 +17,7 @@ package runtime
 import (
 	"bytes"
 	"fmt"
+	"strings"
 
 	"github.com/blang/semver"
 	"golang.org/x/sys/unix"
@@ -29,7 +30,14 @@ func parseKernelVersionStr(kernelVersionStr string) (semver.Version, error) {
 	// Patch: 0
 	// Pre: [72-generic]
 	// Build: []
-	return semver.Parse(kernelVersionStr)
+	verStrs := strings.Split(kernelVersionStr, ".")
+	switch {
+	case len(verStrs) < 2:
+		return semver.Version{}, fmt.Errorf("unable to get kernel version from %q", kernelVersionStr)
+	case len(verStrs) < 3:
+		verStrs = append(verStrs, "0")
+	}
+	return semver.Parse(strings.Join(verStrs[:3], "."))
 }
 
 // GetKernelVersion returns the Linux kernel version for the current host.

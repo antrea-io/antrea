@@ -35,6 +35,17 @@ type ofFlow struct {
 	isDropFlow bool
 }
 
+func (f *ofFlow) String() string {
+	s := strings.Join([]string{`&ofFlow{`,
+		`table:` + fmt.Sprintf("%v", f.table.id) + `,`,
+		`matchers:` + fmt.Sprintf("%v", f.matchers) + `,`,
+		`protocol:` + fmt.Sprintf("%v", f.protocol) + `,`,
+		`flow:` + fmt.Sprintf("%v", f.Flow) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+
 // Reset updates the ofFlow.Flow.Table field with ofFlow.table.Table.
 // In the case of reconnecting to OVS, the ofnet library creates new OFTable
 // objects. Reset() can be called to reset ofFlow.Flow.Table to the right value,

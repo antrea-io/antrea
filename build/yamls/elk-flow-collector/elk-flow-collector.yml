@@ -190,7 +190,12 @@ spec:
   ports:
     - port: 4739
       targetPort: 4739
+      protocol: TCP
+      name: logstash-tcp
+    - port: 4739
+      targetPort: 4739
       protocol: UDP
+      name: logstash-udp
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -226,6 +231,10 @@ spec:
           ports:
             - containerPort: 4739
               protocol: UDP
+              name: logstash-udp
+            - containerPort: 4739
+              protocol: TCP
+              name: logstash-tcp
       nodeSelector:
         kubernetes.io/os: linux
         kubernetes.io/arch: amd64

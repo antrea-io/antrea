@@ -696,7 +696,7 @@ without having to update individual policy rules.
 An example ClusterGroup might look like this:
 
 ```yaml
-apiVersion: crd.antrea.io/v1alpha2
+apiVersion: crd.antrea.io/v1alpha3
 kind: ClusterGroup
 metadata:
   name: test-cg-sel
@@ -713,7 +713,7 @@ status:
       status: "True"
       lastTransitionTime: "2021-01-29T19:59:39Z"
 ---
-apiVersion: crd.antrea.io/v1alpha2
+apiVersion: crd.antrea.io/v1alpha3
 kind: ClusterGroup
 metadata:
   name: test-cg-ip-block
@@ -727,7 +727,7 @@ status:
       status: "True"
       lastTransitionTime: "2021-01-29T19:59:39Z"
 ---
-apiVersion: crd.antrea.io/v1alpha2
+apiVersion: crd.antrea.io/v1alpha3
 kind: ClusterGroup
 metadata:
   name: test-cg-svc-ref
@@ -742,7 +742,7 @@ status:
       status: "True"
       lastTransitionTime: "2021-01-29T20:21:46Z"
 ---
-apiVersion: crd.antrea.io/v1alpha2
+apiVersion: crd.antrea.io/v1alpha3
 kind: ClusterGroup
 metadata:
   name: test-cg-nested

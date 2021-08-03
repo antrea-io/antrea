@@ -43,9 +43,11 @@ const (
 	caConfigMapNamespace = "kube-system"
 )
 
-// TestUserProvidedCert tests the selfSignedCert=false case. It covers dynamic server certificate.
-func TestUserProvidedCert(t *testing.T) {
+// TestSecurity is the top-level test which contains all subtests for
+// Security related test cases so they can share setup, teardown.
+func TestSecurity(t *testing.T) {
 	skipIfHasWindowsNodes(t)
+	skipIfNotRequired(t, "mode-irrelevant")
 
 	data, err := setupTest(t)
 	if err != nil {
@@ -53,6 +55,12 @@ func TestUserProvidedCert(t *testing.T) {
 	}
 	defer teardownTest(t, data)
 
+	t.Run("testUserProvidedCert", func(t *testing.T) { testUserProvidedCert(t, data) })
+	t.Run("testSelfSignedCert", func(t *testing.T) { testSelfSignedCert(t, data) })
+}
+
+// testUserProvidedCert tests the selfSignedCert=false case. It covers dynamic server certificate.
+func testUserProvidedCert(t *testing.T, data *TestData) {
 	// Re-configure antrea-controller to use user-provided cert.
 	// Note antrea-controller must be restarted to take effect.
 	cc := []configChange{
@@ -112,16 +120,8 @@ func TestUserProvidedCert(t *testing.T) {
 	testCert(t, data, string(certPem), false)
 }
 
-// TestSelfSignedCert tests the selfSignedCert=true case.
-func TestSelfSignedCert(t *testing.T) {
-	skipIfHasWindowsNodes(t)
-
-	data, err := setupTest(t)
-	if err != nil {
-		t.Fatalf("Error when setting up test: %v", err)
-	}
-	defer teardownTest(t, data)
-
+// testSelfSignedCert tests the selfSignedCert=true case.
+func testSelfSignedCert(t *testing.T, data *TestData) {
 	testCert(t, data, "", true)
 }
 

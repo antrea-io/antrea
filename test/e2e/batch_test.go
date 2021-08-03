@@ -25,6 +25,7 @@ import (
 // TestBatchCreatePods verifies there is no FD leak after batched Pod creation.
 func TestBatchCreatePods(t *testing.T) {
 	skipIfHasWindowsNodes(t)
+	skipIfNotRequired(t, "mode-irrelevant")
 
 	data, err := setupTest(t)
 	if err != nil {
@@ -53,7 +54,7 @@ func TestBatchCreatePods(t *testing.T) {
 
 	oldFDs := getFDs()
 
-	_, _, cleanupFn := createTestBusyboxPods(t, data, batchNum, node1)
+	_, _, cleanupFn := createTestBusyboxPods(t, data, batchNum, testNamespace, node1)
 	defer cleanupFn()
 
 	newFDs := getFDs()

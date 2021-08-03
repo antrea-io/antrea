@@ -103,7 +103,7 @@ func (cs *ConntrackConnectionStore) Poll() ([]int, error) {
 	// Reset IsPresent flag for all connections in connection map before dumping flows in conntrack module.
 	// if the connection does not exist in conntrack table and has been exported, we will delete it from connection map.
 	deleteIfStaleOrResetConn := func(key flowexporter.ConnectionKey, conn *flowexporter.Connection) error {
-		if !conn.IsPresent && conn.DoneExport {
+		if !conn.IsPresent && conn.DyingAndDoneExport {
 			if err := cs.DeleteConnWithoutLock(key); err != nil {
 				return err
 			}
@@ -228,6 +228,7 @@ func (cs *ConntrackConnectionStore) AddOrUpdateConn(conn *flowexporter.Connectio
 		cs.addNetworkPolicyMetadata(conn)
 		if conn.StartTime.IsZero() {
 			conn.StartTime = time.Now()
+			conn.StopTime = time.Now()
 		}
 		metrics.TotalAntreaConnectionsInConnTrackTable.Inc()
 		klog.V(4).Infof("New Antrea flow added: %v", conn)
@@ -246,17 +247,4 @@ func (cs *ConntrackConnectionStore) DeleteConnWithoutLock(connKey flowexporter.C
 	delete(cs.connections, connKey)
 	metrics.TotalAntreaConnectionsInConnTrackTable.Dec()
 	return nil
-}
-
-// SetExportDone sets DoneExport field of conntrack connection to true given the connection key.
-func (cs *ConntrackConnectionStore) SetExportDone(connKey flowexporter.ConnectionKey) error {
-	cs.mutex.Lock()
-	defer cs.mutex.Unlock()
-
-	if conn, found := cs.connections[connKey]; !found {
-		return fmt.Errorf("connection with key %v does not exist in connection map", connKey)
-	} else {
-		conn.DoneExport = true
-		return nil
-	}
 }

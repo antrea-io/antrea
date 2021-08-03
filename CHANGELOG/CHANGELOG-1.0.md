@@ -1,5 +1,17 @@
 # Changelog 1.0
 
+## 1.0.2 - 2021-07-06
+
+### Fixed
+
+- Fix inter-Node ClusterIP Service access when AntreaProxy is disabled. ([#2318](https://github.com/antrea-io/antrea/pull/2318), [@tnqn])
+- Fix duplicate group ID allocation in AntreaProxy when using a combination of IPv4 and IPv6 Services in dual-stack clusters; this was causing Service connectivity issues. ([#2317](https://github.com/antrea-io/antrea/pull/2317), [@hongliangl])
+- Fix intra-Node ClusterIP Service access when both the AntreaProxy and Egress features are enabled. ([#2332](https://github.com/antrea-io/antrea/pull/2332), [@tnqn])
+- Fix invalid clean-up of the HNS Endpoint during Pod deletion, when Docker is used as the container runtime. ([#2306](https://github.com/antrea-io/antrea/pull/2306), [@wenyingd]) [Windows]
+- Fix race condition on Windows when retrieving the local HNS Network created by Antrea for containers. ([#2253](https://github.com/antrea-io/antrea/pull/2253), [@tnqn]) [Windows]
+- Fix invalid conversion function between internal and versioned types for controlplane API, which was causing JSON marshalling errors. ([#2312](https://github.com/antrea-io/antrea/pull/2312), [@tnqn])
+- Fix implementation of the v1beta1 version of the legacy "controlplane.antrea.tanzu.vmware.com" API: the API was incorrectly using some v1beta2 types and it was missing some field selectors. ([#2305](https://github.com/antrea-io/antrea/pull/2305), [@tnqn])
+
 ## 1.0.1 - 2021-04-29
 
 ### Fixed
@@ -112,4 +124,5 @@ The AntreaPolicy feature is graduated from Alpha to Beta and is therefore enable
 [@shadowlan]: https://github.com/shadowlan
 [@srikartati]: https://github.com/srikartati
 [@tnqn]: https://github.com/tnqn
+[@wenyingd]: https://github.com/wenyingd
 [@zyiou]: https://github.com/zyiou

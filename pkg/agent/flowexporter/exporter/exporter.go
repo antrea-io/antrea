@@ -301,15 +301,10 @@ func (exp *flowExporter) sendFlowRecords() error {
 			exp.numDataSetsSent = exp.numDataSetsSent + 1
 
 			if flowexporter.IsConnectionDying(&record.Conn) {
-				// If the connection is in dying state or connection is not in conntrack table,
-				// we will delete the flow records from records map.
-				klog.V(2).Infof("Deleting the inactive flow records with key: %v from record map", key)
-				if err := exp.flowRecords.DeleteFlowRecordWithoutLock(key); err != nil {
-					return err
-				}
-				if err := exp.conntrackConnStore.SetExportDone(key); err != nil {
-					return err
-				}
+				// If the connection is in dying state or connection is not in conntrack
+				// table, we set the DyingAndDoneExport flag to do the deletion later.
+				record.DyingAndDoneExport = true
+				exp.flowRecords.AddFlowRecordWithoutLock(&key, &record)
 			} else {
 				exp.flowRecords.ValidateAndUpdateStats(key, record)
 			}

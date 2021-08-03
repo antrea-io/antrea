@@ -35,12 +35,13 @@ import (
 	"antrea.io/antrea/pkg/features"
 )
 
-func skipIfNetworkPolicyStatsDisabled(tb testing.TB, data *TestData) {
-	skipIfFeatureDisabled(tb, data, features.NetworkPolicyStats, true, true)
+func skipIfNetworkPolicyStatsDisabled(tb testing.TB) {
+	skipIfFeatureDisabled(tb, features.NetworkPolicyStats, true, true)
 }
 
-func TestNetworkPolicyStats(t *testing.T) {
-	skipIfNotIPv4Cluster(t)
+// TestNetworkPolicy is the top-level test which contains all subtests for
+// NetworkPolicy related test cases so they can share setup, teardown.
+func TestNetworkPolicy(t *testing.T) {
 	skipIfHasWindowsNodes(t)
 
 	data, err := setupTest(t)
@@ -48,12 +49,45 @@ func TestNetworkPolicyStats(t *testing.T) {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
 	defer teardownTest(t, data)
-	skipIfNetworkPolicyStatsDisabled(t, data)
 
-	serverName, serverIPs, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "test-server-", "")
+	t.Run("testNetworkPolicyStats", func(t *testing.T) {
+		skipIfNotIPv4Cluster(t)
+		skipIfNetworkPolicyStatsDisabled(t)
+		testNetworkPolicyStats(t, data)
+	})
+	t.Run("testDifferentNamedPorts", func(t *testing.T) {
+		testDifferentNamedPorts(t, data)
+	})
+	t.Run("testDefaultDenyIngressPolicy", func(t *testing.T) {
+		testDefaultDenyIngressPolicy(t, data)
+	})
+	t.Run("testDefaultDenyEgressPolicy", func(t *testing.T) {
+		testDefaultDenyEgressPolicy(t, data)
+	})
+	t.Run("testEgressToServerInCIDRBlock", func(t *testing.T) {
+		skipIfNotIPv6Cluster(t)
+		testEgressToServerInCIDRBlock(t, data)
+	})
+	t.Run("testEgressToServerInCIDRBlockWithException", func(t *testing.T) {
+		skipIfNotIPv6Cluster(t)
+		testEgressToServerInCIDRBlockWithException(t, data)
+	})
+	t.Run("testNetworkPolicyResyncAfterRestart", func(t *testing.T) {
+		testNetworkPolicyResyncAfterRestart(t, data)
+	})
+	t.Run("testIngressPolicyWithoutPortNumber", func(t *testing.T) {
+		testIngressPolicyWithoutPortNumber(t, data)
+	})
+	t.Run("testIngressPolicyWithEndPort", func(t *testing.T) {
+		testIngressPolicyWithEndPort(t, data)
+	})
+}
+
+func testNetworkPolicyStats(t *testing.T, data *TestData) {
+	serverName, serverIPs, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "test-server-", "", testNamespace)
 	defer cleanupFunc()
 
-	clientName, _, cleanupFunc := createAndWaitForPod(t, data, data.createBusyboxPodOnNode, "test-client-", "")
+	clientName, _, cleanupFunc := createAndWaitForPod(t, data, data.createBusyboxPodOnNode, "test-client-", "", testNamespace)
 	defer cleanupFunc()
 
 	// When using the userspace OVS datapath and tunneling,
@@ -171,14 +205,7 @@ func TestNetworkPolicyStats(t *testing.T) {
 	}
 }
 
-func TestDifferentNamedPorts(t *testing.T) {
-	skipIfHasWindowsNodes(t)
-
-	data, err := setupTest(t)
-	if err != nil {
-		t.Fatalf("Error when setting up test: %v", err)
-	}
-	defer teardownTest(t, data)
+func testDifferentNamedPorts(t *testing.T, data *TestData) {
 	checkFn, cleanupFn := data.setupDifferentNamedPorts(t)
 	defer cleanupFn()
 	checkFn()
@@ -200,30 +227,30 @@ func (data *TestData) setupDifferentNamedPorts(t *testing.T) (checkFn func(), cl
 	}()
 
 	server0Port := int32(80)
-	server0Name, server0IPs, cleanupFunc := createAndWaitForPod(t, data, func(name string, nodeName string) error {
-		return data.createServerPod(name, "http", server0Port, false, false)
-	}, "test-server-", "")
+	server0Name, server0IPs, cleanupFunc := createAndWaitForPod(t, data, func(name string, ns string, nodeName string) error {
+		return data.createServerPod(name, testNamespace, "http", server0Port, false, false)
+	}, "test-server-", "", testNamespace)
 	cleanupFuncs = append(cleanupFuncs, cleanupFunc)
 
 	server1Port := int32(8080)
-	server1Name, server1IPs, cleanupFunc := createAndWaitForPod(t, data, func(name string, nodeName string) error {
-		return data.createServerPod(name, "http", server1Port, false, false)
-	}, "test-server-", "")
+	server1Name, server1IPs, cleanupFunc := createAndWaitForPod(t, data, func(name string, ns string, nodeName string) error {
+		return data.createServerPod(name, testNamespace, "http", server1Port, false, false)
+	}, "test-server-", "", testNamespace)
 	cleanupFuncs = append(cleanupFuncs, cleanupFunc)
 
-	client0Name, _, cleanupFunc := createAndWaitForPod(t, data, data.createBusyboxPodOnNode, "test-client-", "")
+	client0Name, _, cleanupFunc := createAndWaitForPod(t, data, data.createBusyboxPodOnNode, "test-client-", "", testNamespace)
 	cleanupFuncs = append(cleanupFuncs, cleanupFunc)
 
-	client1Name, _, cleanupFunc := createAndWaitForPod(t, data, data.createBusyboxPodOnNode, "test-client-", "")
+	client1Name, _, cleanupFunc := createAndWaitForPod(t, data, data.createBusyboxPodOnNode, "test-client-", "", testNamespace)
 	cleanupFuncs = append(cleanupFuncs, cleanupFunc)
 
 	preCheckFunc := func(server0IP, server1IP string) {
 		// Both clients can connect to both servers.
 		for _, clientName := range []string{client0Name, client1Name} {
-			if err := data.runNetcatCommandFromTestPod(clientName, server0IP, server0Port); err != nil {
+			if err := data.runNetcatCommandFromTestPod(clientName, testNamespace, server0IP, server0Port); err != nil {
 				t.Fatalf("Pod %s should be able to connect %s, but was not able to connect", clientName, net.JoinHostPort(server0IP, fmt.Sprint(server0Port)))
 			}
-			if err := data.runNetcatCommandFromTestPod(clientName, server1IP, server1Port); err != nil {
+			if err := data.runNetcatCommandFromTestPod(clientName, testNamespace, server1IP, server1Port); err != nil {
 				t.Fatalf("Pod %s should be able to connect %s, but was not able to connect", clientName, net.JoinHostPort(server1IP, fmt.Sprint(server1Port)))
 			}
 		}
@@ -283,17 +310,17 @@ func (data *TestData) setupDifferentNamedPorts(t *testing.T) (checkFn func(), cl
 		server0Address := net.JoinHostPort(server0IP, fmt.Sprint(server0Port))
 		server1Address := net.JoinHostPort(server1IP, fmt.Sprint(server1Port))
 		// client0 can connect to both servers.
-		if err = data.runNetcatCommandFromTestPod(client0Name, server0IP, server0Port); err != nil {
+		if err = data.runNetcatCommandFromTestPod(client0Name, testNamespace, server0IP, server0Port); err != nil {
 			t.Fatalf("Pod %s should be able to connect %s, but was not able to connect", client0Name, server0Address)
 		}
-		if err = data.runNetcatCommandFromTestPod(client0Name, server1IP, server1Port); err != nil {
+		if err = data.runNetcatCommandFromTestPod(client0Name, testNamespace, server1IP, server1Port); err != nil {
 			t.Fatalf("Pod %s should be able to connect %s, but was not able to connect", client0Name, server1Address)
 		}
 		// client1 cannot connect to both servers.
-		if err = data.runNetcatCommandFromTestPod(client1Name, server0IP, server0Port); err == nil {
+		if err = data.runNetcatCommandFromTestPod(client1Name, testNamespace, server0IP, server0Port); err == nil {
 			t.Fatalf("Pod %s should not be able to connect %s, but was able to connect", client1Name, server0Address)
 		}
-		if err = data.runNetcatCommandFromTestPod(client1Name, server1IP, server1Port); err == nil {
+		if err = data.runNetcatCommandFromTestPod(client1Name, testNamespace, server1IP, server1Port); err == nil {
 			t.Fatalf("Pod %s should not be able to connect %s, but was able to connect", client1Name, server1Address)
 		}
 	}
@@ -312,22 +339,14 @@ func (data *TestData) setupDifferentNamedPorts(t *testing.T) (checkFn func(), cl
 	return
 }
 
-// TestDefaultDenyIngressPolicy performs additional validation to the upstream test for deny-all policy:
+// testDefaultDenyIngressPolicy performs additional validation to the upstream test for deny-all policy:
 // 1. The traffic initiated from the host network namespace cannot be dropped.
 // 2. The traffic initiated externally that access the Pod via NodePort service can be dropped (skipped if provider is kind).
-func TestDefaultDenyIngressPolicy(t *testing.T) {
-	skipIfHasWindowsNodes(t)
-
-	data, err := setupTest(t)
-	if err != nil {
-		t.Fatalf("Error when setting up test: %v", err)
-	}
-	defer teardownTest(t, data)
-
+func testDefaultDenyIngressPolicy(t *testing.T, data *TestData) {
 	serverNode := workerNodeName(1)
 	serverNodeIP := workerNodeIP(1)
 	serverPort := int32(80)
-	_, serverIPs, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "test-server-", serverNode)
+	_, serverIPs, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "test-server-", serverNode, testNamespace)
 	defer cleanupFunc()
 
 	service, err := data.createService("nginx", serverPort, serverPort, map[string]string{"app": "nginx"}, false, corev1.ServiceTypeNodePort, nil)
@@ -337,11 +356,11 @@ func TestDefaultDenyIngressPolicy(t *testing.T) {
 	defer data.deleteService(service.Name)
 
 	// client1 is a host network Pod and is on the same node as the server Pod, simulating kubelet probe traffic.
-	client1Name, _, cleanupFunc := createAndWaitForPod(t, data, data.createHostNetworkBusyboxPodOnNode, "test-hostnetwork-client-", serverNode)
+	client1Name, _, cleanupFunc := createAndWaitForPod(t, data, data.createHostNetworkBusyboxPodOnNode, "test-hostnetwork-client-", serverNode, testNamespace)
 	defer cleanupFunc()
 
 	// client2 is a host network Pod and is on a different node from the server Pod, accessing the server Pod via the NodePort service.
-	client2Name, _, cleanupFunc := createAndWaitForPod(t, data, data.createHostNetworkBusyboxPodOnNode, "test-hostnetwork-client-", controlPlaneNodeName())
+	client2Name, _, cleanupFunc := createAndWaitForPod(t, data, data.createHostNetworkBusyboxPodOnNode, "test-hostnetwork-client-", controlPlaneNodeName(), testNamespace)
 	defer cleanupFunc()
 
 	spec := &networkingv1.NetworkPolicySpec{
@@ -360,7 +379,7 @@ func TestDefaultDenyIngressPolicy(t *testing.T) {
 	}()
 
 	npCheck := func(clientName, serverIP string, serverPort int32, wantErr bool) {
-		if err = data.runNetcatCommandFromTestPod(clientName, serverIP, serverPort); wantErr && err == nil {
+		if err = data.runNetcatCommandFromTestPod(clientName, testNamespace, serverIP, serverPort); wantErr && err == nil {
 			t.Fatalf("Pod %s should not be able to connect %s, but was able to connect", clientName, net.JoinHostPort(serverIP, fmt.Sprint(serverPort)))
 		} else if !wantErr && err != nil {
 			t.Fatalf("Pod %s should be able to connect %s, but was not able to connect", clientName, net.JoinHostPort(serverIP, fmt.Sprint(serverPort)))
@@ -388,24 +407,16 @@ func TestDefaultDenyIngressPolicy(t *testing.T) {
 	}
 }
 
-func TestDefaultDenyEgressPolicy(t *testing.T) {
-	skipIfHasWindowsNodes(t)
-
-	data, err := setupTest(t)
-	if err != nil {
-		t.Fatalf("Error when setting up test: %v", err)
-	}
-	defer teardownTest(t, data)
-
+func testDefaultDenyEgressPolicy(t *testing.T, data *TestData) {
 	serverPort := int32(80)
-	_, serverIPs, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "test-server-", "")
+	_, serverIPs, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "test-server-", "", testNamespace)
 	defer cleanupFunc()
 
-	clientName, _, cleanupFunc := createAndWaitForPod(t, data, data.createBusyboxPodOnNode, "test-client-", "")
+	clientName, _, cleanupFunc := createAndWaitForPod(t, data, data.createBusyboxPodOnNode, "test-client-", "", testNamespace)
 	defer cleanupFunc()
 
 	preCheckFunc := func(serverIP string) {
-		if err = data.runNetcatCommandFromTestPod(clientName, serverIP, serverPort); err != nil {
+		if err := data.runNetcatCommandFromTestPod(clientName, testNamespace, serverIP, serverPort); err != nil {
 			t.Fatalf("Pod %s should be able to connect %s, but was not able to connect", clientName, net.JoinHostPort(serverIP, fmt.Sprint(serverPort)))
 		}
 	}
@@ -432,7 +443,7 @@ func TestDefaultDenyEgressPolicy(t *testing.T) {
 	}()
 
 	npCheck := func(serverIP string) {
-		if err = data.runNetcatCommandFromTestPod(clientName, serverIP, serverPort); err == nil {
+		if err = data.runNetcatCommandFromTestPod(clientName, testNamespace, serverIP, serverPort); err == nil {
 			t.Fatalf("Pod %s should not be able to connect %s, but was able to connect", clientName, net.JoinHostPort(serverIP, fmt.Sprint(serverPort)))
 		}
 	}
@@ -445,28 +456,19 @@ func TestDefaultDenyEgressPolicy(t *testing.T) {
 	}
 }
 
-// TestEgressToServerInCIDRBlock is a duplicate of upstream test case "should allow egress access to server in CIDR block
+// testEgressToServerInCIDRBlock is a duplicate of upstream test case "should allow egress access to server in CIDR block
 // [Feature:NetworkPolicy]", which is currently buggy in v1.19 release for clusters which use IPv6.
 // This should be deleted when upstream is updated.
 // https://github.com/kubernetes/kubernetes/blob/v1.20.0-alpha.0/test/e2e/network/network_policy.go#L1365
 // https://github.com/kubernetes/kubernetes/pull/93583
-func TestEgressToServerInCIDRBlock(t *testing.T) {
-	skipIfNotIPv6Cluster(t)
-	skipIfHasWindowsNodes(t)
-
-	data, err := setupTest(t)
-	if err != nil {
-		t.Fatalf("Error when setting up test: %v", err)
-	}
-	defer teardownTest(t, data)
-
+func testEgressToServerInCIDRBlock(t *testing.T, data *TestData) {
 	workerNode := workerNodeName(1)
-	serverAName, serverAIPs, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "test-server-", workerNode)
+	serverAName, serverAIPs, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "test-server-", workerNode, testNamespace)
 	defer cleanupFunc()
-	serverBName, serverBIPs, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "test-server-", workerNode)
+	serverBName, serverBIPs, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "test-server-", workerNode, testNamespace)
 	defer cleanupFunc()
 
-	clientA, _, cleanupFunc := createAndWaitForPod(t, data, data.createBusyboxPodOnNode, "test-client-", workerNode)
+	clientA, _, cleanupFunc := createAndWaitForPod(t, data, data.createBusyboxPodOnNode, "test-client-", workerNode, testNamespace)
 	defer cleanupFunc()
 	var serverCIDR string
 	var serverAIP, serverBIP string
@@ -477,10 +479,10 @@ func TestEgressToServerInCIDRBlock(t *testing.T) {
 	serverAIP = serverAIPs.ipv6.String()
 	serverBIP = serverBIPs.ipv6.String()
 
-	if err := data.runNetcatCommandFromTestPod(clientA, serverAIP, 80); err != nil {
+	if err := data.runNetcatCommandFromTestPod(clientA, testNamespace, serverAIP, 80); err != nil {
 		t.Fatalf("%s should be able to netcat %s", clientA, serverAName)
 	}
-	if err := data.runNetcatCommandFromTestPod(clientA, serverBIP, 80); err != nil {
+	if err := data.runNetcatCommandFromTestPod(clientA, testNamespace, serverBIP, 80); err != nil {
 		t.Fatalf("%s should be able to netcat %s", clientA, serverBName)
 	}
 
@@ -513,34 +515,25 @@ func TestEgressToServerInCIDRBlock(t *testing.T) {
 	}
 	defer cleanupNP()
 
-	if err := data.runNetcatCommandFromTestPod(clientA, serverAIP, 80); err != nil {
+	if err := data.runNetcatCommandFromTestPod(clientA, testNamespace, serverAIP, 80); err != nil {
 		t.Fatalf("%s should be able to netcat %s", clientA, serverAName)
 	}
-	if err := data.runNetcatCommandFromTestPod(clientA, serverBIP, 80); err == nil {
+	if err := data.runNetcatCommandFromTestPod(clientA, testNamespace, serverBIP, 80); err == nil {
 		t.Fatalf("%s should not be able to netcat %s", clientA, serverBName)
 	}
 }
 
-// TestEgressToServerInCIDRBlockWithException is a duplicate of upstream test case "should allow egress access to server
+// testEgressToServerInCIDRBlockWithException is a duplicate of upstream test case "should allow egress access to server
 // in CIDR block [Feature:NetworkPolicy]", which is currently buggy in v1.19 release for clusters which use IPv6.
 // This should be deleted when upstream is updated.
 // https://github.com/kubernetes/kubernetes/blob/v1.20.0-alpha.0/test/e2e/network/network_policy.go#L1444
 // https://github.com/kubernetes/kubernetes/pull/93583
-func TestEgressToServerInCIDRBlockWithException(t *testing.T) {
-	skipIfNotIPv6Cluster(t)
-	skipIfHasWindowsNodes(t)
-
-	data, err := setupTest(t)
-	if err != nil {
-		t.Fatalf("Error when setting up test: %v", err)
-	}
-	defer teardownTest(t, data)
-
+func testEgressToServerInCIDRBlockWithException(t *testing.T, data *TestData) {
 	workerNode := workerNodeName(1)
-	serverAName, serverAIPs, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "test-server-", workerNode)
+	serverAName, serverAIPs, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "test-server-", workerNode, testNamespace)
 	defer cleanupFunc()
 
-	clientA, _, cleanupFunc := createAndWaitForPod(t, data, data.createBusyboxPodOnNode, "test-client-", workerNode)
+	clientA, _, cleanupFunc := createAndWaitForPod(t, data, data.createBusyboxPodOnNode, "test-client-", workerNode, testNamespace)
 	defer cleanupFunc()
 	var serverAAllowCIDR string
 	var serverAExceptList []string
@@ -556,7 +549,7 @@ func TestEgressToServerInCIDRBlockWithException(t *testing.T) {
 	serverAExceptList = []string{fmt.Sprintf("%s/%d", serverAIPs.ipv6.String(), 128)}
 	serverAIP = serverAIPs.ipv6.String()
 
-	if err := data.runNetcatCommandFromTestPod(clientA, serverAIP, 80); err != nil {
+	if err := data.runNetcatCommandFromTestPod(clientA, testNamespace, serverAIP, 80); err != nil {
 		t.Fatalf("%s should be able to netcat %s", clientA, serverAName)
 	}
 
@@ -590,36 +583,28 @@ func TestEgressToServerInCIDRBlockWithException(t *testing.T) {
 	}
 	defer cleanupNP()
 
-	if err := data.runNetcatCommandFromTestPod(clientA, serverAIP, 80); err == nil {
+	if err := data.runNetcatCommandFromTestPod(clientA, testNamespace, serverAIP, 80); err == nil {
 		t.Fatalf("%s should not be able to netcat %s", clientA, serverAName)
 	}
 }
 
-func TestNetworkPolicyResyncAfterRestart(t *testing.T) {
-	skipIfHasWindowsNodes(t)
-
-	data, err := setupTest(t)
-	if err != nil {
-		t.Fatalf("Error when setting up test: %v", err)
-	}
-	defer teardownTest(t, data)
-
+func testNetworkPolicyResyncAfterRestart(t *testing.T, data *TestData) {
 	workerNode := workerNodeName(1)
 	antreaPod, err := data.getAntreaPodOnNode(workerNode)
 	if err != nil {
 		t.Fatalf("Error when getting antrea-agent pod name: %v", err)
 	}
 
-	server0Name, server0IPs, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "test-server-", workerNode)
+	server0Name, server0IPs, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "test-server-", workerNode, testNamespace)
 	defer cleanupFunc()
 
-	server1Name, server1IPs, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "test-server-", workerNode)
+	server1Name, server1IPs, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "test-server-", workerNode, testNamespace)
 	defer cleanupFunc()
 
-	client0Name, _, cleanupFunc := createAndWaitForPod(t, data, data.createBusyboxPodOnNode, "test-client-", workerNode)
+	client0Name, _, cleanupFunc := createAndWaitForPod(t, data, data.createBusyboxPodOnNode, "test-client-", workerNode, testNamespace)
 	defer cleanupFunc()
 
-	client1Name, _, cleanupFunc := createAndWaitForPod(t, data, data.createBusyboxPodOnNode, "test-client-", workerNode)
+	client1Name, _, cleanupFunc := createAndWaitForPod(t, data, data.createBusyboxPodOnNode, "test-client-", workerNode, testNamespace)
 	defer cleanupFunc()
 
 	netpol0, err := data.createNetworkPolicy("test-isolate-server0", &networkingv1.NetworkPolicySpec{
@@ -644,10 +629,10 @@ func TestNetworkPolicyResyncAfterRestart(t *testing.T) {
 	defer cleanupNetpol0()
 
 	preCheckFunc := func(server0IP, server1IP string) {
-		if err = data.runNetcatCommandFromTestPod(client0Name, server0IP, 80); err == nil {
+		if err = data.runNetcatCommandFromTestPod(client0Name, testNamespace, server0IP, 80); err == nil {
 			t.Fatalf("Pod %s should not be able to connect %s, but was able to connect", client0Name, server0Name)
 		}
-		if err = data.runNetcatCommandFromTestPod(client1Name, server1IP, 80); err != nil {
+		if err = data.runNetcatCommandFromTestPod(client1Name, testNamespace, server1IP, 80); err != nil {
 			t.Fatalf("Pod %s should be able to connect %s, but was not able to connect", client1Name, server1Name)
 		}
 	}
@@ -700,10 +685,10 @@ func TestNetworkPolicyResyncAfterRestart(t *testing.T) {
 	waitForAgentCondition(t, data, antreaPod, v1beta1.ControllerConnectionUp, corev1.ConditionTrue)
 
 	npCheck := func(server0IP, server1IP string) {
-		if err = data.runNetcatCommandFromTestPod(client0Name, server0IP, 80); err != nil {
+		if err = data.runNetcatCommandFromTestPod(client0Name, testNamespace, server0IP, 80); err != nil {
 			t.Fatalf("Pod %s should be able to connect %s, but was not able to connect", client0Name, server0Name)
 		}
-		if err = data.runNetcatCommandFromTestPod(client1Name, server1IP, 80); err == nil {
+		if err = data.runNetcatCommandFromTestPod(client1Name, testNamespace, server1IP, 80); err == nil {
 			t.Fatalf("Pod %s should not be able to connect %s, but was able to connect", client1Name, server1Name)
 		}
 	}
@@ -716,29 +701,21 @@ func TestNetworkPolicyResyncAfterRestart(t *testing.T) {
 	}
 }
 
-func TestIngressPolicyWithoutPortNumber(t *testing.T) {
-	skipIfHasWindowsNodes(t)
-
-	data, err := setupTest(t)
-	if err != nil {
-		t.Fatalf("Error when setting up test: %v", err)
-	}
-	defer teardownTest(t, data)
-
+func testIngressPolicyWithoutPortNumber(t *testing.T, data *TestData) {
 	serverPort := int32(80)
-	_, serverIPs, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "test-server-", "")
+	_, serverIPs, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "test-server-", "", testNamespace)
 	defer cleanupFunc()
 
-	client0Name, _, cleanupFunc := createAndWaitForPod(t, data, data.createBusyboxPodOnNode, "test-client-", "")
+	client0Name, _, cleanupFunc := createAndWaitForPod(t, data, data.createBusyboxPodOnNode, "test-client-", "", testNamespace)
 	defer cleanupFunc()
 
-	client1Name, _, cleanupFunc := createAndWaitForPod(t, data, data.createBusyboxPodOnNode, "test-client-", "")
+	client1Name, _, cleanupFunc := createAndWaitForPod(t, data, data.createBusyboxPodOnNode, "test-client-", "", testNamespace)
 	defer cleanupFunc()
 
 	preCheckFunc := func(serverIP string) {
 		// Both clients can connect to server.
 		for _, clientName := range []string{client0Name, client1Name} {
-			if err = data.runNetcatCommandFromTestPod(clientName, serverIP, serverPort); err != nil {
+			if err := data.runNetcatCommandFromTestPod(clientName, testNamespace, serverIP, serverPort); err != nil {
 				t.Fatalf("Pod %s should be able to connect %s, but was not able to connect", clientName, net.JoinHostPort(serverIP, fmt.Sprint(serverPort)))
 			}
 		}
@@ -785,11 +762,11 @@ func TestIngressPolicyWithoutPortNumber(t *testing.T) {
 	npCheck := func(serverIP string) {
 		serverAddress := net.JoinHostPort(serverIP, fmt.Sprint(serverPort))
 		// Client0 can access server.
-		if err = data.runNetcatCommandFromTestPod(client0Name, serverIP, serverPort); err != nil {
+		if err = data.runNetcatCommandFromTestPod(client0Name, testNamespace, serverIP, serverPort); err != nil {
 			t.Fatalf("Pod %s should be able to connect %s, but was not able to connect", client0Name, serverAddress)
 		}
 		// Client1 can't access server.
-		if err = data.runNetcatCommandFromTestPod(client1Name, serverIP, serverPort); err == nil {
+		if err = data.runNetcatCommandFromTestPod(client1Name, testNamespace, serverIP, serverPort); err == nil {
 			t.Fatalf("Pod %s should not be able to connect %s, but was able to connect", client1Name, serverAddress)
 		}
 	}
@@ -802,15 +779,7 @@ func TestIngressPolicyWithoutPortNumber(t *testing.T) {
 	}
 }
 
-func TestIngressPolicyWithEndPort(t *testing.T) {
-	skipIfHasWindowsNodes(t)
-
-	data, err := setupTest(t)
-	if err != nil {
-		t.Fatalf("Error when setting up test: %v", err)
-	}
-	defer teardownTest(t, data)
-
+func testIngressPolicyWithEndPort(t *testing.T, data *TestData) {
 	serverPort := int32(80)
 	serverEndPort := int32(84)
 	policyPort := int32(81)
@@ -842,7 +811,7 @@ func TestIngressPolicyWithEndPort(t *testing.T) {
 	// createAgnhostPodOnNodeWithMultiPort creates a Pod in the test namespace with
 	// multiple agnhost containers listening on multiple ports.
 	// The Pod will be scheduled on the specified Node (if nodeName is not empty).
-	createAgnhostPodOnNodeWithMultiPort := func(name string, nodeName string) error {
+	createAgnhostPodOnNodeWithMultiPort := func(name string, ns string, nodeName string) error {
 		var containers []corev1.Container
 		for _, port := range serverPorts {
 			containers = append(containers, makeContainerSpec(port))
@@ -872,22 +841,22 @@ func TestIngressPolicyWithEndPort(t *testing.T) {
 			},
 			Spec: podSpec,
 		}
-		if _, err := data.clientset.CoreV1().Pods(testNamespace).Create(context.TODO(), pod, metav1.CreateOptions{}); err != nil {
+		if _, err := data.clientset.CoreV1().Pods(ns).Create(context.TODO(), pod, metav1.CreateOptions{}); err != nil {
 			return err
 		}
 		return nil
 	}
 
-	serverName, serverIPs, cleanupFunc := createAndWaitForPod(t, data, createAgnhostPodOnNodeWithMultiPort, "test-server-", "")
+	serverName, serverIPs, cleanupFunc := createAndWaitForPod(t, data, createAgnhostPodOnNodeWithMultiPort, "test-server-", "", testNamespace)
 	defer cleanupFunc()
 
-	clientName, _, cleanupFunc := createAndWaitForPod(t, data, data.createBusyboxPodOnNode, "test-client-", "")
+	clientName, _, cleanupFunc := createAndWaitForPod(t, data, data.createBusyboxPodOnNode, "test-client-", "", testNamespace)
 	defer cleanupFunc()
 
 	preCheck := func(serverIP string) {
 		// The client can connect to server on all ports.
 		for _, port := range serverPorts {
-			if err = data.runNetcatCommandFromTestPod(clientName, serverIP, port); err != nil {
+			if err := data.runNetcatCommandFromTestPod(clientName, testNamespace, serverIP, port); err != nil {
 				t.Fatalf("Pod %s should be able to connect %s, but was not able to connect", clientName, net.JoinHostPort(serverIP, fmt.Sprint(port)))
 			}
 		}
@@ -944,7 +913,7 @@ func TestIngressPolicyWithEndPort(t *testing.T) {
 
 	npCheck := func(serverIP string) {
 		for _, port := range serverPorts {
-			err = data.runNetcatCommandFromTestPod(clientName, serverIP, port)
+			err = data.runNetcatCommandFromTestPod(clientName, testNamespace, serverIP, port)
 			if port >= policyPort && port <= policyEndPort {
 				if err != nil {
 					t.Errorf("Pod %s should be able to connect %s, but was not able to connect", clientName, net.JoinHostPort(serverIP, fmt.Sprint(port)))
@@ -963,15 +932,15 @@ func TestIngressPolicyWithEndPort(t *testing.T) {
 	}
 }
 
-func createAndWaitForPod(t *testing.T, data *TestData, createFunc func(name string, nodeName string) error, namePrefix string, nodeName string) (string, *PodIPs, func()) {
+func createAndWaitForPod(t *testing.T, data *TestData, createFunc func(name string, ns string, nodeName string) error, namePrefix string, nodeName string, ns string) (string, *PodIPs, func()) {
 	name := randName(namePrefix)
-	if err := createFunc(name, nodeName); err != nil {
+	if err := createFunc(name, ns, nodeName); err != nil {
 		t.Fatalf("Error when creating busybox test Pod: %v", err)
 	}
 	cleanupFunc := func() {
 		deletePodWrapper(t, data, name)
 	}
-	podIP, err := data.podWaitForIPs(defaultTimeout, name, testNamespace)
+	podIP, err := data.podWaitForIPs(defaultTimeout, name, ns)
 	if err != nil {
 		cleanupFunc()
 		t.Fatalf("Error when waiting for IP for Pod '%s': %v", name, err)

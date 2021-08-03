@@ -137,23 +137,6 @@ func testLegacyInvalidCGServiceRefWithIPBlock(t *testing.T) {
 	}
 }
 
-func testLegacyInvalidCGChildGroupDoesNotExist(t *testing.T) {
-	invalidErr := fmt.Errorf("clustergroup childGroup does not exist")
-	cgName := "child-group-not-exist"
-	cg := &legacycorev1alpha2.ClusterGroup{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: cgName,
-		},
-		Spec: crdv1alpha2.GroupSpec{
-			ChildGroups: []crdv1alpha2.ClusterGroupReference{crdv1alpha2.ClusterGroupReference("some-non-existing-cg")},
-		},
-	}
-	if _, err := k8sUtils.CreateOrUpdateLegacyCG(cg); err == nil {
-		// Above creation of CG must fail as it is an invalid spec.
-		failOnError(invalidErr, t)
-	}
-}
-
 func createLegacyChildCGForTest(t *testing.T) {
 	cg := &legacycorev1alpha2.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{
@@ -244,15 +227,18 @@ func testLegacyInvalidCGMaxNestedLevel(t *testing.T) {
 	}
 }
 
+// TestLegacyClusterGroup is the top-level test which contains all subtests for
+// LegacyClusterGroup related test cases so they can share setup, teardown.
 func TestLegacyClusterGroup(t *testing.T) {
 	skipIfProviderIs(t, "kind", "This test is for legacy API groups and is almost the same as new API groups'.")
 	skipIfHasWindowsNodes(t)
+	skipIfAntreaPolicyDisabled(t)
+
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
 	defer teardownTest(t, data)
-	skipIfAntreaPolicyDisabled(t, data)
 	initialize(t, data)
 
 	t.Run("TestLegacyGroupClusterGroupValidate", func(t *testing.T) {
@@ -261,7 +247,6 @@ func TestLegacyClusterGroup(t *testing.T) {
 		t.Run("Case=LegacyServiceRefWithPodSelectorDenied", func(t *testing.T) { testLegacyInvalidCGServiceRefWithPodSelector(t) })
 		t.Run("Case=LegacyServiceRefWithNamespaceSelectorDenied", func(t *testing.T) { testLegacyInvalidCGServiceRefWithNSSelector(t) })
 		t.Run("Case=LegacyServiceRefWithIPBlockDenied", func(t *testing.T) { testLegacyInvalidCGServiceRefWithIPBlock(t) })
-		t.Run("Case=LegacyInvalidChildGroupName", func(t *testing.T) { testLegacyInvalidCGChildGroupDoesNotExist(t) })
 	})
 
 	t.Run("TestLegacyGroupClusterGroupValidateChildGroup", func(t *testing.T) {

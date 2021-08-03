@@ -28,6 +28,7 @@ import (
 
 	"antrea.io/antrea/pkg/clusteridentity"
 	aggregator "antrea.io/antrea/pkg/flowaggregator"
+	"antrea.io/antrea/pkg/log"
 	"antrea.io/antrea/pkg/signals"
 )
 
@@ -76,6 +77,8 @@ func run(o *Options) error {
 	// cause the stopCh channel to be closed; if another signal is received before the program
 	// exits, we will force exit.
 	stopCh := signals.RegisterSignalHandlers()
+
+	log.StartLogFileNumberMonitor(stopCh)
 
 	k8sClient, err := createK8sClient()
 	if err != nil {
