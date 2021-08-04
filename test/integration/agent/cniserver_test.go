@@ -282,9 +282,8 @@ func (tc testCase) createCheckCmdArgs(targetNS ns.NetNS, config *Net, dataDir st
 func ipVersion(ip net.IP) string {
 	if ip.To4() != nil {
 		return "4"
-	} else {
-		return "6"
 	}
+	return "6"
 }
 
 type cmdAddDelTester struct {

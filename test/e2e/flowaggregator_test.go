@@ -774,9 +774,8 @@ func getCollectorOutput(t *testing.T, srcIP, dstIP, srcPort string, timeStart ti
 				}
 			}
 			return false, nil
-		} else {
-			return strings.Contains(collectorOutput, srcIP) && strings.Contains(collectorOutput, dstIP) && strings.Contains(collectorOutput, srcPort), nil
 		}
+		return strings.Contains(collectorOutput, srcIP) && strings.Contains(collectorOutput, dstIP) && strings.Contains(collectorOutput, srcPort), nil
 	})
 	require.NoErrorf(t, err, "IPFIX collector did not receive the expected records in collector output: %v time start: %s iperf source port: %s", collectorOutput, timeStart.String(), srcPort)
 	return collectorOutput, recordSlices

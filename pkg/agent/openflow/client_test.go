@@ -62,9 +62,8 @@ func installNodeFlows(ofClient Client, cacheKey string) (int, error) {
 	fCacheI, ok := client.nodeFlowCache.Load(hostName)
 	if ok {
 		return len(fCacheI.(flowCache)), err
-	} else {
-		return 0, err
 	}
+	return 0, err
 }
 
 func installPodFlows(ofClient Client, cacheKey string) (int, error) {
@@ -77,9 +76,8 @@ func installPodFlows(ofClient Client, cacheKey string) (int, error) {
 	fCacheI, ok := client.podFlowCache.Load(containerID)
 	if ok {
 		return len(fCacheI.(flowCache)), err
-	} else {
-		return 0, err
 	}
+	return 0, err
 }
 
 // TestIdempotentFlowInstallation checks that InstallNodeFlows and InstallPodFlows are idempotent.

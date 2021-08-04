@@ -201,7 +201,6 @@ func stateToString(state uint8) string {
 	}
 	if state > uint8(9) { // invalid state number
 		return ""
-	} else {
-		return stateList[state]
 	}
+	return stateList[state]
 }

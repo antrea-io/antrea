@@ -153,9 +153,8 @@ func getSrcNodeName(tf *crdv1alpha1.Traceflow) string {
 	if tf.Spec.LiveTraffic {
 		if len(tf.Spec.Source.IP) > 0 {
 			return getWrappedStr(tf.Spec.Source.IP)
-		} else {
-			return getWrappedStr(tf.Status.CapturedPacket.SrcIP)
 		}
+		return getWrappedStr(tf.Status.CapturedPacket.SrcIP)
 	}
 	return ""
 }

@@ -217,11 +217,11 @@ func workerNodeName(idx int) string {
 	if idx == 0 { // control-plane Node
 		return ""
 	}
-	if node, ok := clusterInfo.nodes[idx]; !ok {
+	node, ok := clusterInfo.nodes[idx]
+	if !ok {
 		return ""
-	} else {
-		return node.name
 	}
+	return node.name
 }
 
 // workerNodeIP returns an empty string if there is no worker Node with the provided idx
@@ -230,21 +230,21 @@ func workerNodeIP(idx int) string {
 	if idx == 0 { // control-plane Node
 		return ""
 	}
-	if node, ok := clusterInfo.nodes[idx]; !ok {
+	node, ok := clusterInfo.nodes[idx]
+	if !ok {
 		return ""
-	} else {
-		return node.ip
 	}
+	return node.ip
 }
 
 // nodeGatewayIPs returns the Antrea gateway's IPv4 address and IPv6 address for the provided Node
 // (if applicable), in that order.
 func nodeGatewayIPs(idx int) (string, string) {
-	if node, ok := clusterInfo.nodes[idx]; !ok {
+	node, ok := clusterInfo.nodes[idx]
+	if !ok {
 		return "", ""
-	} else {
-		return node.gwV4Addr, node.gwV6Addr
 	}
+	return node.gwV4Addr, node.gwV6Addr
 }
 
 func controlPlaneNodeName() string {
@@ -258,21 +258,21 @@ func controlPlaneNodeIP() string {
 // nodeName returns an empty string if there is no Node with the provided idx. If idx is 0, the name
 // of the control-plane Node will be returned.
 func nodeName(idx int) string {
-	if node, ok := clusterInfo.nodes[idx]; !ok {
+	node, ok := clusterInfo.nodes[idx]
+	if !ok {
 		return ""
-	} else {
-		return node.name
 	}
+	return node.name
 }
 
 // nodeIP returns an empty string if there is no Node with the provided idx. If idx is 0, the IP
 // of the control-plane Node will be returned.
 func nodeIP(idx int) string {
-	if node, ok := clusterInfo.nodes[idx]; !ok {
+	node, ok := clusterInfo.nodes[idx]
+	if !ok {
 		return ""
-	} else {
-		return node.ip
 	}
+	return node.ip
 }
 
 func labelNodeRoleControlPlane() string {
@@ -303,11 +303,11 @@ func initProvider() error {
 		"remote":  providers.NewRemoteProvider,
 	}
 	if fn, ok := providerFactory[testOptions.providerName]; ok {
-		if newProvider, err := fn(testOptions.providerConfigPath); err != nil {
+		newProvider, err := fn(testOptions.providerConfigPath)
+		if err != nil {
 			return err
-		} else {
-			provider = newProvider
 		}
+		provider = newProvider
 	} else {
 		return fmt.Errorf("unknown provider '%s'", testOptions.providerName)
 	}
@@ -408,35 +408,35 @@ func collectClusterInfo() error {
 			return res, fmt.Errorf("error when running the following command `%s` on control-plane Node: %v, %s", cmd, err, stdout)
 		}
 		re := regexp.MustCompile(reg)
-		if matches := re.FindStringSubmatch(stdout); len(matches) == 0 {
+		matches := re.FindStringSubmatch(stdout)
+		if len(matches) == 0 {
 			return res, fmt.Errorf("cannot retrieve CIDR, unexpected kubectl output: %s", stdout)
-		} else {
-			cidrs := strings.Split(matches[1], ",")
-			if len(cidrs) == 1 {
-				_, cidr, err := net.ParseCIDR(cidrs[0])
-				if err != nil {
-					return res, fmt.Errorf("CIDR cannot be parsed: %s", cidrs[0])
-				}
-				if cidr.IP.To4() != nil {
-					res[0] = cidrs[0]
-				} else {
-					res[1] = cidrs[0]
-				}
-			} else if len(cidrs) == 2 {
-				_, cidr, err := net.ParseCIDR(cidrs[0])
-				if err != nil {
-					return res, fmt.Errorf("CIDR cannot be parsed: %s", cidrs[0])
-				}
-				if cidr.IP.To4() != nil {
-					res[0] = cidrs[0]
-					res[1] = cidrs[1]
-				} else {
-					res[0] = cidrs[1]
-					res[1] = cidrs[0]
-				}
-			} else {
-				return res, fmt.Errorf("unexpected cluster CIDR: %s", matches[1])
+		}
+		cidrs := strings.Split(matches[1], ",")
+		if len(cidrs) == 1 {
+			_, cidr, err := net.ParseCIDR(cidrs[0])
+			if err != nil {
+				return res, fmt.Errorf("CIDR cannot be parsed: %s", cidrs[0])
 			}
+			if cidr.IP.To4() != nil {
+				res[0] = cidrs[0]
+			} else {
+				res[1] = cidrs[0]
+			}
+		} else if len(cidrs) == 2 {
+			_, cidr, err := net.ParseCIDR(cidrs[0])
+			if err != nil {
+				return res, fmt.Errorf("CIDR cannot be parsed: %s", cidrs[0])
+			}
+			if cidr.IP.To4() != nil {
+				res[0] = cidrs[0]
+				res[1] = cidrs[1]
+			} else {
+				res[0] = cidrs[1]
+				res[1] = cidrs[0]
+			}
+		} else {
+			return res, fmt.Errorf("unexpected cluster CIDR: %s", matches[1])
 		}
 		return res, nil
 	}
@@ -1025,8 +1025,7 @@ func (data *TestData) deletePodAndWait(timeout time.Duration, name string, ns st
 	if err := data.deletePod(ns, name); err != nil {
 		return err
 	}
-
-	if err := wait.Poll(defaultInterval, timeout, func() (bool, error) {
+	err := wait.Poll(defaultInterval, timeout, func() (bool, error) {
 		if _, err := data.clientset.CoreV1().Pods(ns).Get(context.TODO(), name, metav1.GetOptions{}); err != nil {
 			if errors.IsNotFound(err) {
 				return true, nil
@@ -1035,11 +1034,11 @@ func (data *TestData) deletePodAndWait(timeout time.Duration, name string, ns st
 		}
 		// Keep trying
 		return false, nil
-	}); err == wait.ErrWaitTimeout {
+	})
+	if err == wait.ErrWaitTimeout {
 		return fmt.Errorf("Pod '%s' still visible to client after %v", name, timeout)
-	} else {
-		return err
 	}
+	return err
 }
 
 type PodCondition func(*corev1.Pod) (bool, error)
@@ -1048,14 +1047,14 @@ type PodCondition func(*corev1.Pod) (bool, error)
 // the condition predicate is met (or until the provided timeout expires).
 func (data *TestData) podWaitFor(timeout time.Duration, name, namespace string, condition PodCondition) (*corev1.Pod, error) {
 	err := wait.Poll(defaultInterval, timeout, func() (bool, error) {
-		if pod, err := data.clientset.CoreV1().Pods(namespace).Get(context.TODO(), name, metav1.GetOptions{}); err != nil {
+		pod, err := data.clientset.CoreV1().Pods(namespace).Get(context.TODO(), name, metav1.GetOptions{})
+		if err != nil {
 			if errors.IsNotFound(err) {
 				return false, nil
 			}
 			return false, fmt.Errorf("error when getting Pod '%s': %v", name, err)
-		} else {
-			return condition(pod)
 		}
+		return condition(pod)
 	})
 	if err != nil {
 		return nil, err
@@ -1410,7 +1409,7 @@ func (data *TestData) deleteServiceAndWait(timeout time.Duration, name string) e
 		return err
 	}
 
-	if err := wait.Poll(defaultInterval, timeout, func() (bool, error) {
+	err := wait.Poll(defaultInterval, timeout, func() (bool, error) {
 		if _, err := data.clientset.CoreV1().Services(testNamespace).Get(context.TODO(), name, metav1.GetOptions{}); err != nil {
 			if errors.IsNotFound(err) {
 				return true, nil
@@ -1419,11 +1418,11 @@ func (data *TestData) deleteServiceAndWait(timeout time.Duration, name string) e
 		}
 		// Keep trying
 		return false, nil
-	}); err == wait.ErrWaitTimeout {
+	})
+	if err == wait.ErrWaitTimeout {
 		return fmt.Errorf("Service '%s' still visible to client after %v", name, timeout)
-	} else {
-		return err
 	}
+	return err
 }
 
 // createNetworkPolicy creates a network policy with spec.
@@ -1537,16 +1536,17 @@ func parseArpingStdout(out string) (sent uint32, received uint32, loss float32, 
 	if len(matches) == 0 {
 		return 0, 0, 0.0, fmt.Errorf("Unexpected arping output")
 	}
-	if v, err := strconv.ParseUint(matches[1], 10, 32); err != nil {
+	v, err := strconv.ParseUint(matches[1], 10, 32)
+	if err != nil {
 		return 0, 0, 0.0, fmt.Errorf("Error when retrieving 'sent probes' from arpping output: %v", err)
-	} else {
-		sent = uint32(v)
 	}
-	if v, err := strconv.ParseUint(matches[2], 10, 32); err != nil {
+	sent = uint32(v)
+
+	v, err = strconv.ParseUint(matches[2], 10, 32)
+	if err != nil {
 		return 0, 0, 0.0, fmt.Errorf("Error when retrieving 'received responses' from arpping output: %v", err)
-	} else {
-		received = uint32(v)
 	}
+	received = uint32(v)
 	loss = 100. * float32(sent-received) / float32(sent)
 	return sent, received, loss, nil
 }
@@ -2035,14 +2035,14 @@ func (data *TestData) createDaemonSet(name string, ns string, ctrName string, im
 
 func (data *TestData) waitForDaemonSetPods(timeout time.Duration, dsName string, namespace string) error {
 	err := wait.Poll(defaultInterval, timeout, func() (bool, error) {
-		if ds, err := data.clientset.AppsV1().DaemonSets(namespace).Get(context.TODO(), dsName, metav1.GetOptions{}); err != nil {
+		ds, err := data.clientset.AppsV1().DaemonSets(namespace).Get(context.TODO(), dsName, metav1.GetOptions{})
+		if err != nil {
 			return false, err
-		} else {
-			if ds.Status.NumberReady != int32(clusterInfo.numNodes) {
-				return false, nil
-			}
-			return true, nil
 		}
+		if ds.Status.NumberReady != int32(clusterInfo.numNodes) {
+			return false, nil
+		}
+		return true, nil
 	})
 	if err != nil {
 		return err

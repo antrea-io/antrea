@@ -429,13 +429,12 @@ func createTestBusyboxPods(tb testing.TB, data *TestData, num int, ns string, no
 			tb.Errorf("Error when creating busybox test Pod '%s': %v", podName, err)
 			return "", nil, err
 		}
-
-		if podIP, err := data.podWaitForIPs(defaultTimeout, podName, ns); err != nil {
+		podIP, err := data.podWaitForIPs(defaultTimeout, podName, ns)
+		if err != nil {
 			tb.Errorf("Error when waiting for IP for Pod '%s': %v", podName, err)
 			return podName, nil, err
-		} else {
-			return podName, podIP, nil
 		}
+		return podName, podIP, nil
 	}
 
 	podsCh := make(chan podData, num)

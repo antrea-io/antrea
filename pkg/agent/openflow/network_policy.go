@@ -63,15 +63,13 @@ func (a *IPAddress) GetMatchKey(addrType types.AddressType) *types.MatchKey {
 	case types.SrcAddress:
 		if ipArr.To4() != nil {
 			return MatchSrcIP
-		} else {
-			return MatchSrcIPv6
 		}
+		return MatchSrcIPv6
 	case types.DstAddress:
 		if ipArr.To4() != nil {
 			return MatchDstIP
-		} else {
-			return MatchDstIPv6
 		}
+		return MatchDstIPv6
 	default:
 		klog.Errorf("Unknown AddressType %d in IPAddress", addrType)
 		return Unsupported
@@ -101,15 +99,13 @@ func (a *IPNetAddress) GetMatchKey(addrType types.AddressType) *types.MatchKey {
 	case types.SrcAddress:
 		if ipAddr.IP.To4() != nil {
 			return MatchSrcIPNet
-		} else {
-			return MatchSrcIPNetv6
 		}
+		return MatchSrcIPNetv6
 	case types.DstAddress:
 		if ipAddr.IP.To4() != nil {
 			return MatchDstIPNet
-		} else {
-			return MatchDstIPNetv6
 		}
+		return MatchDstIPNetv6
 	default:
 		klog.Errorf("Unknown AddressType %d in IPNetAddress", addrType)
 		return Unsupported
@@ -335,16 +331,15 @@ func (ctx *conjMatchFlowContext) deleteAction(conjID uint32) *flowChange {
 			flow:       ctx.flow,
 			changeType: deletion,
 		}
-	} else {
-		// Modify the Openflow entry and reset the other conjunctive actions.
-		var actions []*conjunctiveAction
-		for _, act := range ctx.actions {
-			if act.conjID != conjID {
-				actions = append(actions, act)
-			}
-		}
-		return ctx.createOrUpdateConjunctiveMatchFlow(actions)
 	}
+	// Modify the Openflow entry and reset the other conjunctive actions.
+	var actions []*conjunctiveAction
+	for _, act := range ctx.actions {
+		if act.conjID != conjID {
+			actions = append(actions, act)
+		}
+	}
+	return ctx.createOrUpdateConjunctiveMatchFlow(actions)
 }
 
 // addAction adds the specified policyRuleConjunction into conjunctiveMatchFlow's actions, and then returns the flowChange.
@@ -1572,9 +1567,8 @@ func parseMetricFlow(flow string) (uint32, types.RuleMetric) {
 	// table=101, n_packets=9, n_bytes=666, priority=200,reg0=0x100000/0x100000,reg3=0x5 actions=drop
 	if _, ok := flowMap[dropIdentifier]; ok {
 		return parseDropFlow(flowMap)
-	} else {
-		return parseAllowFlow(flowMap)
 	}
+	return parseAllowFlow(flowMap)
 }
 
 func (c *client) NetworkPolicyMetrics() map[uint32]*types.RuleMetric {

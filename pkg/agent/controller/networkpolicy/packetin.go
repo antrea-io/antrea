@@ -305,34 +305,33 @@ func (c *Controller) rejectRequest(pktIn *ofctrl.PacketIn) error {
 			oriTCPSeqNum+1,
 			TCPAck|TCPRst,
 			true)
-	} else {
-		// Use ICMP host administratively prohibited for ICMP, UDP, SCTP reject.
-		icmpType := ICMPDstUnreachableType
-		icmpCode := ICMPDstHostAdminProhibitedCode
-		ipHdrLen := IPv4HdrLen
-		if isIPv6 {
-			icmpType = ICMPv6DstUnreachableType
-			icmpCode = ICMPv6DstAdminProhibitedCode
-			ipHdrLen = IPv6HdrLen
-		}
-		ipHdr, _ := pktIn.Data.Data.MarshalBinary()
-		icmpData := make([]byte, int(ICMPUnusedHdrLen+ipHdrLen+8))
-		// Put ICMP unused header in Data prop and set it to zero.
-		binary.BigEndian.PutUint32(icmpData[:ICMPUnusedHdrLen], 0)
-		copy(icmpData[ICMPUnusedHdrLen:], ipHdr[:ipHdrLen+8])
-		return c.ofClient.SendICMPPacketOut(
-			srcMAC.String(),
-			dstMAC.String(),
-			srcIP,
-			dstIP,
-			inPort,
-			-1,
-			isIPv6,
-			icmpType,
-			icmpCode,
-			icmpData,
-			true)
 	}
+	// Use ICMP host administratively prohibited for ICMP, UDP, SCTP reject.
+	icmpType := ICMPDstUnreachableType
+	icmpCode := ICMPDstHostAdminProhibitedCode
+	ipHdrLen := IPv4HdrLen
+	if isIPv6 {
+		icmpType = ICMPv6DstUnreachableType
+		icmpCode = ICMPv6DstAdminProhibitedCode
+		ipHdrLen = IPv6HdrLen
+	}
+	ipHdr, _ := pktIn.Data.Data.MarshalBinary()
+	icmpData := make([]byte, int(ICMPUnusedHdrLen+ipHdrLen+8))
+	// Put ICMP unused header in Data prop and set it to zero.
+	binary.BigEndian.PutUint32(icmpData[:ICMPUnusedHdrLen], 0)
+	copy(icmpData[ICMPUnusedHdrLen:], ipHdr[:ipHdrLen+8])
+	return c.ofClient.SendICMPPacketOut(
+		srcMAC.String(),
+		dstMAC.String(),
+		srcIP,
+		dstIP,
+		inPort,
+		-1,
+		isIPv6,
+		icmpType,
+		icmpCode,
+		icmpData,
+		true)
 }
 
 func (c *Controller) storeDenyConnection(pktIn *ofctrl.PacketIn) error {

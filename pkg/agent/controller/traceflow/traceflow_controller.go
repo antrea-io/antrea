@@ -472,9 +472,8 @@ func (c *Controller) preparePacket(tf *crdv1alpha1.Traceflow, intf *interfacesto
 		if packet.DestinationIP == nil {
 			if packet.IsIPv6 {
 				return nil, errors.New("destination Pod does not have an IPv6 address")
-			} else {
-				return nil, errors.New("destination Pod does not have an IPv4 address")
 			}
+			return nil, errors.New("destination Pod does not have an IPv4 address")
 		}
 	} else if tf.Spec.Destination.Service != "" {
 		dstSvc, err := c.serviceLister.Services(tf.Spec.Destination.Namespace).Get(tf.Spec.Destination.Service)

@@ -52,21 +52,20 @@ func (ds *DenyConnectionStore) AddOrUpdateConn(conn *flowexporter.Connection, ti
 		conn.StopTime = timeSeen
 		klog.V(2).Infof("Deny connection with flowKey %v has been updated.", connKey)
 		return
-	} else {
-		conn.StartTime = timeSeen
-		conn.StopTime = timeSeen
-		conn.LastExportTime = timeSeen
-		conn.DeltaBytes = bytes
-		conn.OriginalBytes = bytes
-		conn.DeltaPackets = uint64(1)
-		conn.OriginalPackets = uint64(1)
-		ds.fillPodInfo(conn)
-		protocolStr := ip.IPProtocolNumberToString(conn.FlowKey.Protocol, "UnknownProtocol")
-		serviceStr := fmt.Sprintf("%s:%d/%s", conn.DestinationServiceAddress, conn.DestinationServicePort, protocolStr)
-		ds.fillServiceInfo(conn, serviceStr)
-		metrics.TotalDenyConnections.Inc()
-		ds.connections[connKey] = conn
 	}
+	conn.StartTime = timeSeen
+	conn.StopTime = timeSeen
+	conn.LastExportTime = timeSeen
+	conn.DeltaBytes = bytes
+	conn.OriginalBytes = bytes
+	conn.DeltaPackets = uint64(1)
+	conn.OriginalPackets = uint64(1)
+	ds.fillPodInfo(conn)
+	protocolStr := ip.IPProtocolNumberToString(conn.FlowKey.Protocol, "UnknownProtocol")
+	serviceStr := fmt.Sprintf("%s:%d/%s", conn.DestinationServiceAddress, conn.DestinationServicePort, protocolStr)
+	ds.fillServiceInfo(conn, serviceStr)
+	metrics.TotalDenyConnections.Inc()
+	ds.connections[connKey] = conn
 }
 
 // ResetConnStatsWithoutLock resets DeltaBytes and DeltaPackets of connection
