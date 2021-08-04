@@ -110,7 +110,11 @@ spec:
             initialDelaySeconds: 5
             timeoutSeconds: 5
             periodSeconds: 10
-            failureThreshold: 5
+            # In large-scale clusters, it may take up to 40~50 seconds for the antrea-agent to reconnect to the antrea
+            # Service after the antrea-controller restarts. The antrea-agent shouldn't be reported as NotReady in this
+            # scenario, otherwise the DaemonSet controller would restart all agents at once, as opposed to performing a
+            # rolling update. Set failureThreshold to 8 so it can tolerate 70s of disconnection.
+            failureThreshold: 8
           securityContext:
             # antrea-agent needs to perform sysctl configuration.
             privileged: true
