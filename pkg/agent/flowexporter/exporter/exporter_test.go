@@ -377,7 +377,7 @@ func runSendFlowRecordTests(t *testing.T, flowExp *flowExporter, isIPv6 bool) {
 	flowExp.process = mockIPFIXExpProc
 	flowExp.ipfixSet = mockDataSet
 	mockConnDumper := connectionstest.NewMockConnTrackDumper(ctrl)
-	flowExp.conntrackConnStore = connections.NewConntrackConnectionStore(mockConnDumper, flowrecords.NewFlowRecords(), nil, !isIPv6, isIPv6, nil, nil, 1)
+	flowExp.conntrackConnStore = connections.NewConntrackConnectionStore(mockConnDumper, flowrecords.NewFlowRecords(), nil, !isIPv6, isIPv6, nil, nil, 1, 1)
 
 	tests := []struct {
 		name               string
@@ -457,7 +457,7 @@ func runSendFlowRecordTests(t *testing.T, flowExp *flowExporter, isIPv6 bool) {
 			flowExp.numDataSetsSent = 0
 
 			denyConn := getDenyConnection(isIPv6, tt.isDenyConnActive, tt.protoID)
-			flowExp.denyConnStore = connections.NewDenyConnectionStore(nil, nil)
+			flowExp.denyConnStore = connections.NewDenyConnectionStore(nil, nil, 0)
 			flowExp.denyConnStore.AddOrUpdateConn(denyConn, denyConn.LastExportTime, denyConn.DeltaBytes)
 			assert.Equal(t, getNumOfConnections(flowExp.denyConnStore), 1)
 

@@ -105,7 +105,7 @@ func setupConntrackConnStore(b *testing.B) (*ConntrackConnectionStore, *connecti
 
 	npQuerier := queriertest.NewMockAgentNetworkPolicyInfoQuerier(ctrl)
 
-	return NewConntrackConnectionStore(mockConnDumper, flowrecords.NewFlowRecords(), mockIfaceStore, true, false, mockProxier, npQuerier, testPollInterval), mockConnDumper
+	return NewConntrackConnectionStore(mockConnDumper, flowrecords.NewFlowRecords(), mockIfaceStore, true, false, mockProxier, npQuerier, testPollInterval, testStaleConnectionTimeout), mockConnDumper
 }
 
 func generateConns() []*flowexporter.Connection {
