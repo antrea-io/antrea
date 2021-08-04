@@ -449,7 +449,8 @@ type PeerNamespaces struct {
 type NamespaceMatchType string
 
 const (
-	NamespaceMatchSelf NamespaceMatchType = "Self"
+	NamespaceMatchSelf    NamespaceMatchType = "Self"
+	NamespaceMatchNotSelf NamespaceMatchType = "NotSelf"
 )
 
 // IPBlock describes a particular CIDR (Ex. "192.168.1.1/24") that is allowed

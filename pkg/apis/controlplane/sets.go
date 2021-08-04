@@ -106,6 +106,22 @@ func (s GroupMemberSet) IPDifference(o GroupMemberSet) sets.String {
 	return sIPs.Difference(oIPs)
 }
 
+// Subtract subtracts the other set from the current set.
+// For elements in the other set that's not in the current set, this is a no-op.
+// For example:
+// s1 = {a1, a2, a4, a5}
+// s2 = {a1, a2, a3}
+// s1.Subtract(s2) = {a4, a5}
+// s1 = {a4, a5}
+//
+// It should be used instead of s1.Difference(s2) when constructing a new set is not required.
+func (s GroupMemberSet) Subtract(o GroupMemberSet) GroupMemberSet {
+	for key := range o {
+		delete(s, key)
+	}
+	return s
+}
+
 // Union returns a new set which includes items in either m or o.
 func (s GroupMemberSet) Union(o GroupMemberSet) GroupMemberSet {
 	result := GroupMemberSet{}

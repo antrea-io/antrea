@@ -405,18 +405,27 @@ func serviceAccountNameToPodSelector(saName string) *metav1.LabelSelector {
 	}
 }
 
+//evalNamespaceMatch returns true if namespace match is specified.
+func evalNamespaceMatch(peer crdv1alpha1.NetworkPolicyPeer) bool {
+	if peer.Namespaces != nil &&
+		(peer.Namespaces.Match == crdv1alpha1.NamespaceMatchSelf || peer.Namespaces.Match == crdv1alpha1.NamespaceMatchNotSelf) {
+		return true
+	}
+	return false
+}
+
 // hasPerNamespaceRule returns true if there is at least one per-namespace rule
 func hasPerNamespaceRule(cnp *crdv1alpha1.ClusterNetworkPolicy) bool {
 	for _, ingress := range cnp.Spec.Ingress {
 		for _, peer := range ingress.From {
-			if peer.Namespaces != nil && peer.Namespaces.Match == crdv1alpha1.NamespaceMatchSelf {
+			if evalNamespaceMatch(peer) {
 				return true
 			}
 		}
 	}
 	for _, egress := range cnp.Spec.Egress {
 		for _, peer := range egress.To {
-			if peer.Namespaces != nil && peer.Namespaces.Match == crdv1alpha1.NamespaceMatchSelf {
+			if evalNamespaceMatch(peer) {
 				return true
 			}
 		}
@@ -454,7 +463,7 @@ func splitPeersByScope(rule crdv1alpha1.Rule, dir controlplane.Direction) ([]crd
 		peers = rule.To
 	}
 	for _, peer := range peers {
-		if peer.Namespaces != nil && peer.Namespaces.Match == crdv1alpha1.NamespaceMatchSelf {
+		if evalNamespaceMatch(peer) {
 			perNSPeers = append(perNSPeers, peer)
 		} else {
 			clusterPeers = append(clusterPeers, peer)

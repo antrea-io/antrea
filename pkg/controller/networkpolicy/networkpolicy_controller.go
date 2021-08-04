@@ -460,9 +460,13 @@ func (n *NetworkPolicyController) createAppliedToGroup(npNsName string, pSel, nS
 // NetworkPolicyPeer object in NetworkPolicyRule. This function simply
 // creates the object without actually populating the PodAddresses as the
 // affected GroupMembers are calculated during sync process.
-func (n *NetworkPolicyController) createAddressGroup(namespace string, podSelector, nsSelector, eeSelector *metav1.LabelSelector) string {
+func (n *NetworkPolicyController) createAddressGroup(namespace string, podSelector, nsSelector, eeSelector *metav1.LabelSelector, inverted bool) string {
 	groupSelector := antreatypes.NewGroupSelector(namespace, podSelector, nsSelector, eeSelector)
-	normalizedUID := getNormalizedUID(groupSelector.NormalizedName)
+	normalizedName := groupSelector.NormalizedName
+	if inverted {
+		normalizedName += ",inverted=true"
+	}
+	normalizedUID := getNormalizedUID(normalizedName)
 	// Get or create an AddressGroup for the generated UID.
 	_, found, _ := n.addressGroupStore.Get(normalizedUID)
 	if found {
@@ -473,6 +477,7 @@ func (n *NetworkPolicyController) createAddressGroup(namespace string, podSelect
 		UID:      types.UID(normalizedUID),
 		Name:     normalizedUID,
 		Selector: *groupSelector,
+		Inverted: inverted,
 	}
 	klog.V(2).Infof("Creating new AddressGroup %s with selector (%s)", addressGroup.Name, addressGroup.Selector.NormalizedName)
 	n.addressGroupStore.Create(addressGroup)
@@ -621,7 +626,7 @@ func (n *NetworkPolicyController) toAntreaPeer(peers []networkingv1.NetworkPolic
 		if dir == controlplane.DirectionIn || !namedPortExists {
 			return &matchAllPeer
 		}
-		allPodsGroupUID := n.createAddressGroup(np.Namespace, matchAllPodsPeer.PodSelector, matchAllPodsPeer.NamespaceSelector, nil)
+		allPodsGroupUID := n.createAddressGroup(np.Namespace, matchAllPodsPeer.PodSelector, matchAllPodsPeer.NamespaceSelector, nil, false)
 		podsPeer := matchAllPeer
 		podsPeer.AddressGroups = append(addressGroups, allPodsGroupUID)
 		return &podsPeer
@@ -638,7 +643,7 @@ func (n *NetworkPolicyController) toAntreaPeer(peers []networkingv1.NetworkPolic
 			}
 			ipBlocks = append(ipBlocks, *ipBlock)
 		} else {
-			normalizedUID := n.createAddressGroup(np.Namespace, peer.PodSelector, peer.NamespaceSelector, nil)
+			normalizedUID := n.createAddressGroup(np.Namespace, peer.PodSelector, peer.NamespaceSelector, nil, false)
 			addressGroups = append(addressGroups, normalizedUID)
 		}
 	}
@@ -1048,6 +1053,7 @@ func (n *NetworkPolicyController) syncAddressGroup(key string) error {
 		UID:          addressGroup.UID,
 		Selector:     addressGroup.Selector,
 		GroupMembers: memberSet,
+		Inverted:     addressGroup.Inverted,
 		SpanMeta:     antreatypes.SpanMeta{NodeNames: addrGroupNodeNames},
 	}
 	klog.V(2).Infof("Updating existing AddressGroup %s with %d Pods/ExternalEntities and %d Nodes", key, len(memberSet), addrGroupNodeNames.Len())

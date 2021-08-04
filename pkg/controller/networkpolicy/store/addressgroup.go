@@ -82,6 +82,7 @@ func (event *addressGroupEvent) GetResourceVersion() uint64 {
 func ToAddressGroupMsg(in *types.AddressGroup, out *controlplane.AddressGroup, includeBody bool) {
 	out.Name = in.Name
 	out.UID = in.UID
+	out.Inverted = in.Inverted
 	if !includeBody {
 		return
 	}

@@ -111,6 +111,83 @@ func TestMergeCIDRs(t *testing.T) {
 	assert.ElementsMatch(t, correctList4, ipNetList4)
 }
 
+func TestComplementAddressesInCIDR(t *testing.T) {
+	// Test edge cases of excluding 0.0.0.0 and 255.255.255.255
+	testList1 := []net.IP{
+		net.IPv4zero,
+		net.IPv4bcast,
+	}
+
+	correctList1 := []*net.IPNet{
+		newCIDR("0.0.0.1/32"), newCIDR("0.0.0.2/31"), newCIDR("0.0.0.4/30"),
+		newCIDR("0.0.0.8/29"), newCIDR("0.0.0.16/28"), newCIDR("0.0.0.32/27"),
+		newCIDR("0.0.0.64/26"), newCIDR("0.0.0.128/25"), newCIDR("0.0.1.0/24"),
+		newCIDR("0.0.2.0/23"), newCIDR("0.0.4.0/22"), newCIDR("0.0.8.0/21"),
+		newCIDR("0.0.16.0/20"), newCIDR("0.0.32.0/19"), newCIDR("0.0.64.0/18"),
+		newCIDR("0.0.128.0/17"), newCIDR("0.1.0.0/16"), newCIDR("0.2.0.0/15"),
+		newCIDR("0.4.0.0/14"), newCIDR("0.8.0.0/13"), newCIDR("0.16.0.0/12"),
+		newCIDR("0.32.0.0/11"), newCIDR("0.64.0.0/10"), newCIDR("0.128.0.0/9"),
+		newCIDR("1.0.0.0/8"), newCIDR("2.0.0.0/7"), newCIDR("4.0.0.0/6"),
+		newCIDR("8.0.0.0/5"), newCIDR("16.0.0.0/4"), newCIDR("32.0.0.0/3"),
+		newCIDR("64.0.0.0/2"), newCIDR("128.0.0.0/2"), newCIDR("192.0.0.0/3"),
+		newCIDR("224.0.0.0/4"), newCIDR("240.0.0.0/5"), newCIDR("248.0.0.0/6"),
+		newCIDR("252.0.0.0/7"), newCIDR("254.0.0.0/8"), newCIDR("255.0.0.0/9"),
+		newCIDR("255.128.0.0/10"), newCIDR("255.192.0.0/11"), newCIDR("255.224.0.0/12"),
+		newCIDR("255.240.0.0/13"), newCIDR("255.248.0.0/14"), newCIDR("255.252.0.0/15"),
+		newCIDR("255.254.0.0/16"), newCIDR("255.255.0.0/17"), newCIDR("255.255.128.0/18"),
+		newCIDR("255.255.192.0/19"), newCIDR("255.255.224.0/20"), newCIDR("255.255.240.0/21"),
+		newCIDR("255.255.248.0/22"), newCIDR("255.255.252.0/23"), newCIDR("255.255.254.0/24"),
+		newCIDR("255.255.255.0/25"), newCIDR("255.255.255.128/26"), newCIDR("255.255.255.192/27"),
+		newCIDR("255.255.255.224/28"), newCIDR("255.255.255.240/29"), newCIDR("255.255.255.248/30"),
+		newCIDR("255.255.255.252/31"), newCIDR("255.255.255.254/32"),
+	}
+
+	compCIDRs := ComplementAddressesInCIDR(testList1)
+	assert.ElementsMatch(t, correctList1, compCIDRs)
+
+	// Test general cases of excluding 10.0.0.1
+	testList2 := []net.IP{
+		net.ParseIP("10.0.0.1"),
+	}
+
+	correctList2 := []*net.IPNet{
+		newCIDR("0.0.0.0/5"), newCIDR("8.0.0.0/7"), newCIDR("10.0.0.0/32"),
+		newCIDR("10.0.0.2/31"), newCIDR("10.0.0.4/30"), newCIDR("10.0.0.8/29"),
+		newCIDR("10.0.0.16/28"), newCIDR("10.0.0.32/27"), newCIDR("10.0.0.64/26"),
+		newCIDR("10.0.0.128/25"), newCIDR("10.0.1.0/24"), newCIDR("10.0.2.0/23"),
+		newCIDR("10.0.4.0/22"), newCIDR("10.0.8.0/21"), newCIDR("10.0.16.0/20"),
+		newCIDR("10.0.32.0/19"), newCIDR("10.0.64.0/18"), newCIDR("10.0.128.0/17"),
+		newCIDR("10.1.0.0/16"), newCIDR("10.2.0.0/15"), newCIDR("10.4.0.0/14"),
+		newCIDR("10.8.0.0/13"), newCIDR("10.16.0.0/12"), newCIDR("10.32.0.0/11"),
+		newCIDR("10.64.0.0/10"), newCIDR("10.128.0.0/9"), newCIDR("11.0.0.0/8"),
+		newCIDR("12.0.0.0/6"), newCIDR("16.0.0.0/4"), newCIDR("32.0.0.0/3"),
+		newCIDR("64.0.0.0/2"), newCIDR("128.0.0.0/1"),
+	}
+
+	compCIDRs = ComplementAddressesInCIDR(testList2)
+	assert.ElementsMatch(t, correctList2, compCIDRs)
+
+	// Test general cases of excluding 2001:db8::1
+	testList3 := []net.IP{
+		net.ParseIP("2001:db8::1"),
+	}
+	correctList3Length := 128
+
+	compCIDRs = ComplementAddressesInCIDR(testList3)
+	assert.Equal(t, correctList3Length, len(compCIDRs))
+
+	// Test dual-stack case of excluding 10.0.0.1 and 2001:db8::1
+	testList4 := []net.IP{
+		net.ParseIP("10.0.0.1"),
+		net.ParseIP("2001:db8::1"),
+	}
+
+	correctList4Length := len(correctList2) + correctList3Length
+
+	compCIDRs = ComplementAddressesInCIDR(testList4)
+	assert.Equal(t, correctList4Length, len(compCIDRs))
+}
+
 func TestIPNetToNetIPNet(t *testing.T) {
 	tests := []struct {
 		name  string

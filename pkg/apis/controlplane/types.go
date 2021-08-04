@@ -132,6 +132,9 @@ type AddressGroup struct {
 	metav1.ObjectMeta
 	// GroupMembers is a list of GroupMember selected by this group.
 	GroupMembers []GroupMember
+	// Inverted describes whether the AddressGroup selects the complement of
+	// addresses listed in GroupMembers. Defaults to false.
+	Inverted bool
 }
 
 // IPAddress describes a single IP address. Either an IPv4 or IPv6 address must be set.

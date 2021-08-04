@@ -32,6 +32,8 @@ message AddressGroup {
   optional k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
 
   repeated GroupMember groupMembers = 2;
+
+  optional bool inverted = 3;
 }
 
 // AddressGroupList is a list of AddressGroup objects.

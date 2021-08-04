@@ -379,6 +379,12 @@ func schema_pkg_apis_controlplane_v1beta2_AddressGroup(ref common.ReferenceCallb
 							},
 						},
 					},
+					"inverted": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"boolean"},
+							Format: "",
+						},
+					},
 				},
 			},
 		},

@@ -17,6 +17,7 @@ package networkpolicy
 import (
 	"encoding/binary"
 	"fmt"
+
 	"net"
 	"strconv"
 	"strings"
@@ -156,6 +157,12 @@ type lastRealized struct {
 	// the toServices of this policy rule. It must be empty for policy rule
 	// that is not egress and does not have toServices field.
 	groupIDAddresses sets.Int64
+	// The peer addresses in CIDR format that we have computed previously, when
+	// at least one of the addressGroups of the rule is expressed as inverted
+	// GroupMembers. These addresses are cached so that in case of rule update,
+	// we can use them to compute the added/deleted CIDRs and add/delete those
+	// CIDRs from OVS respectively.
+	peerAddresses map[types.Address]struct{}
 }
 
 func newLastRealized(rule *CompletedRule) *lastRealized {
@@ -166,6 +173,7 @@ func newLastRealized(rule *CompletedRule) *lastRealized {
 		podIPs:           nil,
 		fqdnIPAddresses:  nil,
 		groupIDAddresses: nil,
+		peerAddresses:    map[types.Address]struct{}{},
 	}
 }
 
@@ -428,6 +436,7 @@ func (r *reconciler) add(rule *CompletedRule, ofPriority *uint16, table uint8) e
 				lastRealized.fqdnIPAddresses = nil
 			}
 			lastRealized.groupIDAddresses = nil
+			lastRealized.peerAddresses = map[types.Address]struct{}{}
 			return err
 		}
 		// Record ofID only if its Openflow is installed successfully.
@@ -446,10 +455,14 @@ func (r *reconciler) computeOFRulesForAdd(rule *CompletedRule, ofPriority *uint1
 
 	if rule.Direction == v1beta2.DirectionIn {
 		// Addresses got from source GroupMembers' IPs.
-		from1 := groupMembersToOFAddresses(rule.FromAddresses)
+		from1 := groupMembersToOFAddresses(rule.FromAddresses, rule.AddressGroupInverted)
 		// Get addresses that in From IPBlock but not in Except IPBlocks.
 		from2 := ipBlocksToOFAddresses(rule.From.IPBlocks, r.ipv4Enabled, r.ipv6Enabled)
-
+		if rule.AddressGroupInverted {
+			for _, cidr := range from1 {
+				lastRealized.peerAddresses[cidr] = struct{}{}
+			}
+		}
 		membersByServicesMap, servicesMap := groupMembersByServices(rule.Services, rule.TargetMembers)
 		for svcKey, members := range membersByServicesMap {
 			ofPorts := r.getOFPorts(members)
@@ -482,10 +495,11 @@ func (r *reconciler) computeOFRulesForAdd(rule *CompletedRule, ofPriority *uint1
 		from := ipsToOFAddresses(ips)
 		memberByServicesMap, servicesMap := groupMembersByServices(rule.Services, rule.ToAddresses)
 		for svcKey, members := range memberByServicesMap {
+			toAddresses := groupMembersToOFAddresses(members, rule.AddressGroupInverted)
 			ofRuleByServicesMap[svcKey] = &types.PolicyRule{
 				Direction:     v1beta2.DirectionOut,
 				From:          from,
-				To:            groupMembersToOFAddresses(members),
+				To:            toAddresses,
 				Service:       filterUnresolvablePort(servicesMap[svcKey]),
 				Action:        rule.Action,
 				Priority:      ofPriority,
@@ -493,6 +507,11 @@ func (r *reconciler) computeOFRulesForAdd(rule *CompletedRule, ofPriority *uint1
 				TableID:       table,
 				PolicyRef:     rule.SourceRef,
 				EnableLogging: rule.EnableLogging,
+			}
+			if rule.AddressGroupInverted {
+				for _, cidr := range toAddresses {
+					lastRealized.peerAddresses[cidr] = struct{}{}
+				}
 			}
 		}
 
@@ -584,6 +603,9 @@ func (r *reconciler) batchAdd(rules []*CompletedRule, ofPriorities []*uint16) er
 		for _, rule := range allOFRules {
 			r.idAllocator.forgetRule(rule.FlowID)
 		}
+		for _, lastRealized := range lastRealizeds {
+			lastRealized.peerAddresses = map[types.Address]struct{}{}
+		}
 		return err
 	}
 	for i, lastRealized := range lastRealizeds {
@@ -609,10 +631,9 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule, 
 	// As rule identifier is calculated from the rule's content, the update can
 	// only happen to Group members.
 	if newRule.Direction == v1beta2.DirectionIn {
-		from1 := groupMembersToOFAddresses(newRule.FromAddresses)
+		from1 := groupMembersToOFAddresses(newRule.FromAddresses, newRule.AddressGroupInverted)
 		from2 := ipBlocksToOFAddresses(newRule.From.IPBlocks, r.ipv4Enabled, r.ipv6Enabled)
-		addedFrom := ipsToOFAddresses(newRule.FromAddresses.IPDifference(lastRealized.FromAddresses))
-		deletedFrom := ipsToOFAddresses(lastRealized.FromAddresses.IPDifference(newRule.FromAddresses))
+		addedFrom, deletedFrom, newFrom := calcPeerAddressDifference(newRule.FromAddresses, lastRealized.FromAddresses, lastRealized, newRule.Direction, newRule.AddressGroupInverted)
 
 		membersByServicesMap, servicesMap := groupMembersByServices(newRule.Services, newRule.TargetMembers)
 		for svcKey, members := range membersByServicesMap {
@@ -646,6 +667,9 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule, 
 				if err := r.updateOFRule(ofID, addedFrom, addedTo, deletedFrom, deletedTo, ofPriority); err != nil {
 					return err
 				}
+				for _, cidr := range newFrom {
+					lastRealized.peerAddresses[cidr] = struct{}{}
+				}
 				// Delete valid servicesKey from staleOFIDs.
 				delete(staleOFIDs, svcKey)
 			}
@@ -677,7 +701,7 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule, 
 				ofRule := &types.PolicyRule{
 					Direction:     v1beta2.DirectionOut,
 					From:          from,
-					To:            groupMembersToOFAddresses(members),
+					To:            groupMembersToOFAddresses(members, newRule.AddressGroupInverted),
 					Service:       filterUnresolvablePort(servicesMap[svcKey]),
 					Action:        newRule.Action,
 					Priority:      ofPriority,
@@ -701,8 +725,7 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule, 
 				}
 				lastRealized.ofIDs[svcKey] = ofRule.FlowID
 			} else {
-				addedTo := groupMembersToOFAddresses(members.Difference(prevMembersByServicesMap[svcKey]))
-				deletedTo := groupMembersToOFAddresses(prevMembersByServicesMap[svcKey].Difference(members))
+				addedTo, deletedTo, newTo := calcPeerAddressDifference(members, prevMembersByServicesMap[svcKey], lastRealized, newRule.Direction, newRule.AddressGroupInverted)
 				originalFQDNAddressSet, newFQDNAddressSet := sets.NewString(), sets.NewString()
 				if r.fqdnController != nil {
 					if lastRealized.fqdnIPAddresses != nil {
@@ -751,6 +774,9 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule, 
 					// Update the FQDN address set if rule installation succeeds.
 					lastRealized.fqdnIPAddresses = newFQDNAddressSet
 				}
+				for _, cidr := range newTo {
+					lastRealized.peerAddresses[cidr] = struct{}{}
+				}
 				// Update the groupID address set if rule installation succeeds.
 				lastRealized.groupIDAddresses = newGroupIDAddressSet
 				// Delete valid servicesKey from staleOFIDs.
@@ -769,6 +795,40 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule, 
 	}
 	lastRealized.CompletedRule = newRule
 	return nil
+}
+
+func calcPeerAddressDifference(newMembers, prevMembers v1beta2.GroupMemberSet, lastRealized *lastRealized, direction v1beta2.Direction, inverted bool) ([]types.Address, []types.Address, []types.Address) {
+	var addedAddresses, deletedAddresses []types.Address
+	if !inverted {
+		if direction == v1beta2.DirectionIn {
+			addedAddresses = ipsToOFAddresses(newMembers.IPDifference(prevMembers))
+			deletedAddresses = ipsToOFAddresses(prevMembers.IPDifference(newMembers))
+			return addedAddresses, deletedAddresses, nil
+		} else {
+			addedAddresses = groupMembersToOFAddresses(newMembers.Difference(prevMembers), inverted)
+			deletedAddresses = groupMembersToOFAddresses(prevMembers.Difference(newMembers), inverted)
+			return addedAddresses, deletedAddresses, nil
+		}
+	} else {
+		originalCIDRs := lastRealized.peerAddresses
+		newCIDRs := groupMembersToOFAddresses(newMembers, inverted)
+		newCIDRMap := map[types.Address]struct{}{}
+		for _, n := range newCIDRs {
+			newCIDRMap[n] = struct{}{}
+			if _, exists := originalCIDRs[n]; !exists {
+				addedAddresses = append(addedAddresses, n)
+			}
+		}
+		for o := range originalCIDRs {
+			if _, exists := newCIDRMap[o]; !exists {
+				deletedAddresses = append(deletedAddresses, o)
+			}
+		}
+		for _, cidr := range newCIDRs {
+			lastRealized.peerAddresses[cidr] = struct{}{}
+		}
+		return addedAddresses, deletedAddresses, newCIDRs
+	}
 }
 
 func (r *reconciler) installOFRule(ofRule *types.PolicyRule) error {
@@ -966,13 +1026,18 @@ func ofPortsToOFAddresses(ofPorts sets.Int32) []types.Address {
 	return addresses
 }
 
-func groupMembersToOFAddresses(groupMemberSet v1beta2.GroupMemberSet) []types.Address {
+func groupMembersToOFAddresses(groupMemberSet v1beta2.GroupMemberSet, inverted bool) []types.Address {
 	// Must not return nil as it means not restricted by addresses in Openflow implementation.
-	addresses := make([]types.Address, 0, len(groupMemberSet))
+	ips := make([]net.IP, 0, len(groupMemberSet))
 	for _, member := range groupMemberSet {
 		for _, ip := range member.IPs {
-			addresses = append(addresses, openflow.NewIPAddress(net.IP(ip)))
+			ips = append(ips, net.IP(ip))
 		}
+	}
+	addresses := ipsToAddresses(ips)
+	if inverted {
+		invertedCIDRs := ip.ComplementAddressesInCIDR(ips)
+		addresses = ipNetsToAddresses(invertedCIDRs)
 	}
 	return addresses
 }
@@ -997,9 +1062,7 @@ func ipBlocksToOFAddresses(ipBlocks []v1beta2.IPBlock, ipv4Enabled, ipv6Enabled 
 			klog.Errorf("Error when determining diffCIDRs: %v", err)
 			continue
 		}
-		for _, d := range diffCIDRs {
-			addresses = append(addresses, openflow.NewIPNetAddress(*d))
-		}
+		addresses = ipNetsToAddresses(diffCIDRs)
 	}
 
 	return addresses
@@ -1019,6 +1082,22 @@ func ipsToOFAddresses(ips sets.String) []types.Address {
 		from = append(from, openflow.NewIPAddress(net.ParseIP(ipAddr)))
 	}
 	return from
+}
+
+func ipsToAddresses(ips []net.IP) []types.Address {
+	addresses := make([]types.Address, 0, len(ips))
+	for _, ip := range ips {
+		addresses = append(addresses, openflow.NewIPAddress(ip))
+	}
+	return addresses
+}
+
+func ipNetsToAddresses(ipnets []*net.IPNet) []types.Address {
+	addresses := make([]types.Address, 0, len(ipnets))
+	for _, ip := range ipnets {
+		addresses = append(addresses, openflow.NewIPNetAddress(*ip))
+	}
+	return addresses
 }
 
 func filterUnresolvablePort(in []v1beta2.Service) []v1beta2.Service {

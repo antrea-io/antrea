@@ -113,6 +113,8 @@ type CompletedRule struct {
 	ToAddresses v1beta.GroupMemberSet
 	// Target GroupMembers of this rule.
 	TargetMembers v1beta.GroupMemberSet
+	// Whether the ToAddresses and FromAddresses are expressed in a complemented addressSet.
+	AddressGroupInverted bool
 }
 
 // String returns the string representation of the CompletedRule.
@@ -144,6 +146,9 @@ type ruleCache struct {
 	// addressSetByGroup stores the AddressGroup members.
 	// It is a mapping from group name to a set of GroupMembers.
 	addressSetByGroup map[string]v1beta.GroupMemberSet
+	// invertedAddressGroups is the set of AddressGroups whose selected
+	// addresses are the complement of its GroupMembers.
+	invertedAddressGroups map[string]struct{}
 
 	policyMapLock sync.RWMutex
 	// policyMap is a map using NetworkPolicy UID as the key.
@@ -342,6 +347,7 @@ func newRuleCache(dirtyRuleHandler func(string), podUpdateSubscriber channel.Sub
 	cache := &ruleCache{
 		appliedToSetByGroup: make(map[string]v1beta.GroupMemberSet),
 		addressSetByGroup:   make(map[string]v1beta.GroupMemberSet),
+		invertedAddressGroups: make(map[string]struct{}),
 		policyMap:           make(map[string]*v1beta.NetworkPolicy),
 		rules:               rules,
 		dirtyRuleHandler:    dirtyRuleHandler,
@@ -452,6 +458,9 @@ func (c *ruleCache) addAddressGroupLocked(group *v1beta.AddressGroup) error {
 		return nil
 	}
 	c.addressSetByGroup[group.Name] = groupMemberSet
+	if group.Inverted {
+		c.invertedAddressGroups[group.Name] = struct{}{}
+	}
 	c.onAddressGroupUpdate(group.Name)
 	return nil
 }
@@ -485,6 +494,7 @@ func (c *ruleCache) DeleteAddressGroup(group *v1beta.AddressGroup) error {
 	defer c.addressSetLock.Unlock()
 
 	delete(c.addressSetByGroup, group.Name)
+	delete(c.invertedAddressGroups, group.Name)
 	return nil
 }
 
@@ -770,21 +780,22 @@ func (c *ruleCache) GetCompletedRule(ruleID string) (completedRule *CompletedRul
 	}
 
 	var fromAddresses, toAddresses v1beta.GroupMemberSet
-	var completed bool
+	var completed, inverted bool
 	if r.Direction == v1beta.DirectionIn {
-		fromAddresses, completed = c.unionAddressGroups(r.From.AddressGroups)
+		fromAddresses, completed, inverted = c.unionAddressGroups(r.From.AddressGroups)
 	} else {
-		toAddresses, completed = c.unionAddressGroups(r.To.AddressGroups)
+		toAddresses, completed, inverted = c.unionAddressGroups(r.To.AddressGroups)
 	}
 	if !completed {
 		return nil, true, false
 	}
 
 	completedRule = &CompletedRule{
-		rule:          r,
-		FromAddresses: fromAddresses,
-		ToAddresses:   toAddresses,
-		TargetMembers: groupMembers,
+		rule:                 r,
+		FromAddresses:        fromAddresses,
+		ToAddresses:          toAddresses,
+		TargetMembers:        groupMembers,
+		AddressGroupInverted: inverted,
 	}
 	return completedRule, true, true
 }
@@ -808,22 +819,48 @@ func (c *ruleCache) onAddressGroupUpdate(groupName string) {
 }
 
 // unionAddressGroups gets the union of addresses of the provided address groups.
-// If any group is not found, nil and false will be returned to indicate the
-// set is not complete yet.
-func (c *ruleCache) unionAddressGroups(groupNames []string) (v1beta.GroupMemberSet, bool) {
+// If any group is not found, false will be returned to indicate the set is not complete yet.
+// The third parameter indicates whether the union of addressGroups selects the address
+// complement of the returned group members.
+func (c *ruleCache) unionAddressGroups(groupNames []string) (v1beta.GroupMemberSet, bool, bool) {
 	c.addressSetLock.RLock()
 	defer c.addressSetLock.RUnlock()
 
-	set := v1beta.NewGroupMemberSet()
+	var regularAddrGroups, invertedAddrGroups []string
+	set, invertedSet := v1beta.NewGroupMemberSet(), v1beta.NewGroupMemberSet()
 	for _, groupName := range groupNames {
+		if _, exists := c.invertedAddressGroups[groupName]; exists {
+			invertedAddrGroups = append(invertedAddrGroups, groupName)
+		} else {
+			regularAddrGroups = append(regularAddrGroups, groupName)
+		}
+	}
+	for _, groupName := range regularAddrGroups {
 		curSet, exists := c.addressSetByGroup[groupName]
 		if !exists {
 			klog.V(2).Infof("AddressGroup %v was not found", groupName)
-			return nil, false
+			return nil, false, len(invertedAddrGroups) > 0
 		}
 		set.Merge(curSet)
 	}
-	return set, true
+	if len(invertedAddrGroups) == 0 {
+		return set, true, false
+	}
+	// If there is a least one inverted addressGroup to be unioned, the unioned addressGroup
+	// GroupMembers will be expressed as GroupMember complement. The resulting rule will read
+	// as, from/toAddress selected is everywhere except the GroupMembers listed.
+	for _, groupName := range invertedAddrGroups {
+		curSet, exists := c.addressSetByGroup[groupName]
+		if !exists {
+			klog.V(2).Infof("AddressGroup %v was not found", groupName)
+			return nil, false, true
+		}
+		invertedSet.Merge(curSet)
+	}
+	// Inverted addressGroup is expressed as all addresses except the GroupMembers excluded.
+	// Final GroupMembers excluded should be, the union of all excluded members in inverted
+	// addressGroups, subtracting the union of all members in regular addressGroups.
+	return invertedSet.Subtract(set), true, true
 }
 
 // unionAppliedToGroups gets the union of pods of the provided appliedTo groups.

@@ -71,6 +71,9 @@ type AddressGroup struct {
 	// It will be converted to a slice of GroupMember for transferring according
 	// to client's selection.
 	GroupMembers controlplane.GroupMemberSet
+	// Inverted describes whether the AddressGroup selects the complement of
+	// addresses listed in GroupMembers. Defaults to false.
+	Inverted bool
 }
 
 // NetworkPolicy describes what network traffic is allowed for a set of GroupMembers.

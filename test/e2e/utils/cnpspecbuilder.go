@@ -35,6 +35,14 @@ type ACNPAppliedToSpec struct {
 	Group               string
 }
 
+type SelfNSIndicator int
+
+const (
+	NoNSSpecifier SelfNSIndicator = iota
+	SelfNS
+	NotSelf
+)
+
 func (b *ClusterNetworkPolicySpecBuilder) Get() *crdv1alpha1.ClusterNetworkPolicy {
 	if b.Spec.Ingress == nil {
 		b.Spec.Ingress = []crdv1alpha1.Rule{}
@@ -107,14 +115,13 @@ func (b *ClusterNetworkPolicySpecBuilder) GetAppliedToPeer(podSelector map[strin
 func (b *ClusterNetworkPolicySpecBuilder) AddIngress(protoc v1.Protocol,
 	port *int32, portName *string, endPort *int32, cidr *string,
 	podSelector map[string]string, nsSelector map[string]string,
-	podSelectorMatchExp []metav1.LabelSelectorRequirement, nsSelectorMatchExp []metav1.LabelSelectorRequirement, selfNS bool,
+	podSelectorMatchExp []metav1.LabelSelectorRequirement, nsSelectorMatchExp []metav1.LabelSelectorRequirement, selfNS SelfNSIndicator,
 	ruleAppliedToSpecs []ACNPAppliedToSpec, action crdv1alpha1.RuleAction, ruleClusterGroup, name string, serviceAccount *crdv1alpha1.NamespacedName) *ClusterNetworkPolicySpecBuilder {
 
 	var pSel *metav1.LabelSelector
 	var nSel *metav1.LabelSelector
 	var ns *crdv1alpha1.PeerNamespaces
 	var appliedTos []crdv1alpha1.NetworkPolicyPeer
-	matchSelf := crdv1alpha1.NamespaceMatchSelf
 
 	if b.Spec.Ingress == nil {
 		b.Spec.Ingress = []crdv1alpha1.Rule{}
@@ -132,9 +139,13 @@ func (b *ClusterNetworkPolicySpecBuilder) AddIngress(protoc v1.Protocol,
 			MatchExpressions: nsSelectorMatchExp,
 		}
 	}
-	if selfNS == true {
+	if selfNS == SelfNS {
 		ns = &crdv1alpha1.PeerNamespaces{
-			Match: matchSelf,
+			Match: crdv1alpha1.NamespaceMatchSelf,
+		}
+	} else if selfNS == NotSelf {
+		ns = &crdv1alpha1.PeerNamespaces{
+			Match: crdv1alpha1.NamespaceMatchNotSelf,
 		}
 	}
 	var ipBlock *crdv1alpha1.IPBlock
@@ -198,7 +209,7 @@ func (b *ClusterNetworkPolicySpecBuilder) AddIngress(protoc v1.Protocol,
 func (b *ClusterNetworkPolicySpecBuilder) AddEgress(protoc v1.Protocol,
 	port *int32, portName *string, endPort *int32, cidr *string,
 	podSelector map[string]string, nsSelector map[string]string,
-	podSelectorMatchExp []metav1.LabelSelectorRequirement, nsSelectorMatchExp []metav1.LabelSelectorRequirement, selfNS bool,
+	podSelectorMatchExp []metav1.LabelSelectorRequirement, nsSelectorMatchExp []metav1.LabelSelectorRequirement, selfNS SelfNSIndicator,
 	ruleAppliedToSpecs []ACNPAppliedToSpec, action crdv1alpha1.RuleAction, ruleClusterGroup, name string, serviceAccount *crdv1alpha1.NamespacedName) *ClusterNetworkPolicySpecBuilder {
 
 	// For simplicity, we just reuse the Ingress code here.  The underlying data model for ingress/egress is identical

@@ -18,6 +18,8 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"math"
+	"math/big"
 	"net"
 	"sort"
 
@@ -141,6 +143,154 @@ func mergeCIDRs(cidrBlocks []*net.IPNet) []*net.IPNet {
 	return cidrBlocks
 }
 
+// ipRangeInfo stores the start and end IP addresses for an IP range.
+// As well as a boolean indicating IPv4 or IPv6.
+type ipRangeInfo struct {
+	startIP net.IP
+	endIP   net.IP
+	isIPv6  bool
+}
+
+func ComplementAddressesInCIDR(ips []net.IP) []*net.IPNet {
+	// Sort the IPs to get excluded IP ranges.
+	sort.Slice(ips, func(i, j int) bool { return bytes.Compare(ips[i], ips[j]) < 0 })
+	excludedIPRanges := excludeIPMultiForm(ips)
+	// For each IP range, represent it in CIDR.
+	excludedCIDRs := make([]*net.IPNet, 0)
+	for _, interval := range excludedIPRanges {
+		excludedCIDR := ipRangeToCIDR(interval)
+		excludedCIDRs = append(excludedCIDRs, excludedCIDR...)
+	}
+	return excludedCIDRs
+}
+
+// excludeIPMultiForm inputs IP addresses, mixture of IPv4/IPv6.
+// It outputs intervals within the entire IPv4/IPv6 range excluding the provided IP addresses.
+func excludeIPMultiForm(ips []net.IP) []ipRangeInfo {
+	excludedIPs := make([]ipRangeInfo, 0)
+	v4IPs := make([]net.IP, 0)
+	v6IPs := make([]net.IP, 0)
+	for _, ip := range ips {
+		if utilnet.IsIPv4(ip) {
+			v4IPs = append(v4IPs, ip)
+		} else {
+			v6IPs = append(v6IPs, ip)
+		}
+	}
+	excludedIPs = append(excludedIPs, excludeIPUniForm(v4IPs, false)...)
+	excludedIPs = append(excludedIPs, excludeIPUniForm(v6IPs, true)...)
+	return excludedIPs
+}
+
+// excludeIPRange inputs IP addresses of consistent IPv4/IPv6, and a boolean indicating IPv4/IPv6.
+// It outputs ipRangeInfos within the corresponding IPv4/IPv6 address space excluding the provided IP addresses.
+func excludeIPUniForm(ips []net.IP, isIPv6 bool) []ipRangeInfo {
+	if ips == nil || len(ips) == 0 {
+		return nil
+	}
+	excludedIPs := make([]ipRangeInfo, 0)
+	IPzero := net.IPv4zero
+	IPbcast := net.IPv4bcast
+	if isIPv6 {
+		IPzero = net.IPv6zero
+		IPbcast = net.IP{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
+	}
+	// Check if first interval starts from zero.
+	if bytes.Compare(ips[0], IPzero) != 0 {
+		excludedIPs = append(excludedIPs, ipRangeInfo{IPzero, prevIP(ips[0]), isIPv6})
+	}
+	// Calculate intermediate intervals.
+	for idx := 0; idx < len(ips)-1; idx++ {
+		if bytes.Compare(ips[idx], prevIP(ips[idx+1])) == 0 {
+			idx += 1
+			continue
+		}
+		excludedIPs = append(excludedIPs, ipRangeInfo{nextIP(ips[idx]), prevIP(ips[idx+1]), isIPv6})
+	}
+	// Check if last interval ends with all 1-bits.
+	if bytes.Compare(ips[len(ips)-1], IPbcast) != 0 {
+		excludedIPs = append(excludedIPs, ipRangeInfo{nextIP(ips[len(ips)-1]), IPbcast, isIPv6})
+	}
+	return excludedIPs
+}
+
+// ipRangeToCIDR inputs an IP address range of type ipRangeInfo.
+// It outputs CIDRs that cover the provided IP address ranges.
+func ipRangeToCIDR(ipRange ipRangeInfo) []*net.IPNet {
+	ipRangeInCIDRs := make([]*net.IPNet, 0)
+	ipRangeStartInt := ipToInt(ipRange.startIP)
+	ipRangeEndInt := ipToInt(ipRange.endIP)
+	// Calculate ipRangeLength = ipRangeEnd - ipRangeStart + 1.
+	ipRangeLength := new(big.Int)
+	ipRangeLength.Sub(ipRangeEndInt, ipRangeStartInt)
+	ipRangeLength.Add(ipRangeLength, big.NewInt(1))
+	ipRangeStartNeg := new(big.Int)
+	step := new(big.Int)
+
+	for ipRangeLength.Cmp(big.NewInt(0)) > 0 {
+		ipRangeStartNeg.Neg(ipRangeStartInt)
+		step.And(ipRangeStartInt, ipRangeStartNeg)
+		// Set default step as largest number for zero IP.
+		if step.Cmp(big.NewInt(0)) == 0 {
+			step = big.NewInt(1)
+			step.Lsh(step, V6BitLen+1)
+		}
+		for step.Cmp(ipRangeLength) > 0 {
+			// Divide step by 2 by shifting to the right.
+			step.Rsh(step, 1)
+		}
+		cidr := stepToCIDR(ipRangeStartInt, step, ipRange.isIPv6)
+		ipRangeInCIDRs = append(ipRangeInCIDRs, cidr)
+		ipRangeStartInt.Add(ipRangeStartInt, step)
+		ipRangeLength.Sub(ipRangeLength, step)
+	}
+	return ipRangeInCIDRs
+}
+
+// Convert IP address to big int. Accepts both IPv4/IPv6.
+func ipToInt(ip net.IP) *big.Int {
+	if v := ip.To4(); v != nil {
+		return big.NewInt(0).SetBytes(v)
+	}
+	return big.NewInt(0).SetBytes(ip.To16())
+}
+
+// Convert IP address in big Int to net IP type. Accepts both IPv4/IPv6.
+func bigIntToIP(bigIntIP *big.Int, isIPv6 bool) net.IP {
+	ip := make(net.IP, net.IPv4len)
+	if isIPv6 {
+		ip = make(net.IP, net.IPv6len)
+	}
+	return bigIntIP.FillBytes(ip)
+}
+
+// Return previous IP address. Accepts both IPv4/IPv6.
+func prevIP(ip net.IP) net.IP {
+	i := ipToInt(ip)
+	return bigIntToIP(i.Sub(i, big.NewInt(1)), utilnet.IsIPv6(ip))
+}
+
+// Return next IP address. Accepts both IPv4/IPv6.
+func nextIP(ip net.IP) net.IP {
+	i := ipToInt(ip)
+	return bigIntToIP(i.Add(i, big.NewInt(1)), utilnet.IsIPv6(ip))
+}
+
+// stepToCIDR inputs an IP address in big int format, and the step as mask length.
+// It outputs a CIDR in IPNet format.
+func stepToCIDR(ipRangeStartInt *big.Int, step *big.Int, isIPv6 bool) *net.IPNet {
+	maskMaxLength := V4BitLen
+	if isIPv6 {
+		maskMaxLength = V6BitLen
+	}
+	// Mask = mask max length - log2(step)
+	mask := maskMaxLength - int(math.Floor(math.Log(float64(step.Int64()))/math.Log(2)))
+	return &net.IPNet{
+		IP:   bigIntToIP(ipRangeStartInt, isIPv6),
+		Mask: net.CIDRMask(mask, maskMaxLength),
+	}
+}
+
 // IPNetToNetIPNet converts Antrea IPNet to *net.IPNet.
 // Note that K8s allows non-standard CIDRs to be specified (e.g. 10.0.1.1/16, fe80::7015:efff:fe9a:146b/64). However,
 // OVS will report OFPBMC_BAD_WILDCARDS error if using them in the OpenFlow messages. The function will normalize the
@@ -148,7 +298,7 @@ func mergeCIDRs(cidrBlocks []*net.IPNet) []*net.IPNet {
 func IPNetToNetIPNet(ipNet *v1beta2.IPNet) *net.IPNet {
 	ip := net.IP(ipNet.IP)
 	ipLen := net.IPv4len
-	if ip.To4() == nil {
+	if utilnet.IsIPv6(ip) {
 		ipLen = net.IPv6len
 	}
 	mask := net.CIDRMask(int(ipNet.PrefixLength), 8*ipLen)

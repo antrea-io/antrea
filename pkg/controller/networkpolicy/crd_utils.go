@@ -87,7 +87,7 @@ func (n *NetworkPolicyController) toAntreaPeerForCRD(peers []v1alpha1.NetworkPol
 		if dir == controlplane.DirectionIn || !namedPortExists {
 			return &matchAllPeer
 		}
-		allPodsGroupUID := n.createAddressGroup("", matchAllPodsPeerCrd.PodSelector, matchAllPodsPeerCrd.NamespaceSelector, nil)
+		allPodsGroupUID := n.createAddressGroup("", matchAllPodsPeerCrd.PodSelector, matchAllPodsPeerCrd.NamespaceSelector, nil, false)
 		podsPeer := matchAllPeer
 		podsPeer.AddressGroups = append(addressGroups, allPodsGroupUID)
 		return &podsPeer
@@ -114,10 +114,10 @@ func (n *NetworkPolicyController) toAntreaPeerForCRD(peers []v1alpha1.NetworkPol
 		} else if peer.FQDN != "" {
 			fqdns = append(fqdns, peer.FQDN)
 		} else if peer.ServiceAccount != nil {
-			normalizedUID := n.createAddressGroup(peer.ServiceAccount.Namespace, serviceAccountNameToPodSelector(peer.ServiceAccount.Name), nil, nil)
+			normalizedUID := n.createAddressGroup(peer.ServiceAccount.Namespace, serviceAccountNameToPodSelector(peer.ServiceAccount.Name), nil, nil, false)
 			addressGroups = append(addressGroups, normalizedUID)
 		} else {
-			normalizedUID := n.createAddressGroup(np.GetNamespace(), peer.PodSelector, peer.NamespaceSelector, peer.ExternalEntitySelector)
+			normalizedUID := n.createAddressGroup(np.GetNamespace(), peer.PodSelector, peer.NamespaceSelector, peer.ExternalEntitySelector, false)
 			addressGroups = append(addressGroups, normalizedUID)
 		}
 	}
@@ -130,8 +130,14 @@ func (n *NetworkPolicyController) toAntreaPeerForCRD(peers []v1alpha1.NetworkPol
 func (n *NetworkPolicyController) toNamespacedPeerForCRD(peers []v1alpha1.NetworkPolicyPeer, namespace string) *controlplane.NetworkPolicyPeer {
 	var addressGroups []string
 	for _, peer := range peers {
-		normalizedUID := n.createAddressGroup(namespace, peer.PodSelector, nil, peer.ExternalEntitySelector)
-		addressGroups = append(addressGroups, normalizedUID)
+		switch peer.Namespaces.Match {
+		case v1alpha1.NamespaceMatchSelf:
+			normalizedUID := n.createAddressGroup(namespace, peer.PodSelector, nil, peer.ExternalEntitySelector, false)
+			addressGroups = append(addressGroups, normalizedUID)
+		case v1alpha1.NamespaceMatchNotSelf:
+			normalizedUID := n.createAddressGroup(namespace, peer.PodSelector, nil, peer.ExternalEntitySelector, true)
+			addressGroups = append(addressGroups, normalizedUID)
+		}
 	}
 	return &controlplane.NetworkPolicyPeer{AddressGroups: addressGroups}
 }
@@ -196,8 +202,9 @@ func (n *NetworkPolicyController) createAddressGroupForClusterGroupCRD(intGrp *a
 	}
 	// Create an AddressGroup object for this Cluster Group.
 	addressGroup := &antreatypes.AddressGroup{
-		UID:  intGrp.UID,
-		Name: key,
+		UID:      intGrp.UID,
+		Name:     key,
+		Inverted: false,
 	}
 	n.addressGroupStore.Create(addressGroup)
 	klog.V(2).Infof("Created new AddressGroup %v corresponding to ClusterGroup CRD %s", addressGroup.UID, intGrp.Name)

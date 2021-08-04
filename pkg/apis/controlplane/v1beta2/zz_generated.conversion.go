@@ -350,6 +350,7 @@ func RegisterConversions(s *runtime.Scheme) error {
 func autoConvert_v1beta2_AddressGroup_To_controlplane_AddressGroup(in *AddressGroup, out *controlplane.AddressGroup, s conversion.Scope) error {
 	out.ObjectMeta = in.ObjectMeta
 	out.GroupMembers = *(*[]controlplane.GroupMember)(unsafe.Pointer(&in.GroupMembers))
+	out.Inverted = in.Inverted
 	return nil
 }
 
@@ -361,6 +362,7 @@ func Convert_v1beta2_AddressGroup_To_controlplane_AddressGroup(in *AddressGroup,
 func autoConvert_controlplane_AddressGroup_To_v1beta2_AddressGroup(in *controlplane.AddressGroup, out *AddressGroup, s conversion.Scope) error {
 	out.ObjectMeta = in.ObjectMeta
 	out.GroupMembers = *(*[]GroupMember)(unsafe.Pointer(&in.GroupMembers))
+	out.Inverted = in.Inverted
 	return nil
 }
 

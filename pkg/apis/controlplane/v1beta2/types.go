@@ -136,6 +136,7 @@ type AddressGroup struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
 	GroupMembers      []GroupMember `json:"groupMembers,omitempty" protobuf:"bytes,2,rep,name=groupMembers"`
+	Inverted          bool          `json:"inverted,omitempty" protobuf:"bytes,3,rep,name=inverted"`
 }
 
 // IPAddress describes a single IP address. Either an IPv4 or IPv6 address must be set.
