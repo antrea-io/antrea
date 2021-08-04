@@ -8,10 +8,10 @@ name: Dependabot Workflow
 # repository compromise.
 # See https://securitylab.github.com/research/github-actions-preventing-pwn-requests/
 # To prevent repository compromise, the workflow jobs must only execute on PRs
-# openened by Dependabot and which are labelled correctly (note that these two
+# opened by Dependabot and which are labelled correctly (note that these two
 # checks are somewhat redundant since labelling PRs require write access to the
 # repository).
-# An alternative is to use the "two workflow method" (see
+# An alternative is to use the "two-workflow method" (see
 # https://docs.github.com/en/code-security/supply-chain-security/keeping-your-dependencies-updated-automatically/automating-dependabot-with-github-actions#handling-push-events),
 # but that is more tedious to configure and should not be required here.
 

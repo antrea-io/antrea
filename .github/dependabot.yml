@@ -10,8 +10,6 @@ updates:
       update-types: ["version-update:semver-major", "version-update:semver-minor"] # ignore all except for patch updates
     - dependency-name: "github.com/vmware/go-ipfix"
     - dependency-name: "github.com/TomCodeLV/OVSDB-golang-lib"
-    - dependency-name: "github.com/contiv/libOpenflow"
-    - dependency-name: "github.com/ofnet/libOpenflow"
     - dependency-name: "github.com/vmware-tanzu/octant"
       update-types: ["version-update:semver-major", "version-update:semver-minor"] # ignore all except for patch updates
     - dependency-name: "github.com/Microsoft/hcsshim" # we use a replace directive for this dependency
