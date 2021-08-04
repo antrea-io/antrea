@@ -514,6 +514,7 @@ func checkRecordsForFlows(t *testing.T, data *TestData, srcIP string, dstIP stri
 		t.Errorf("Error when running iperf3 client: %v", err)
 	}
 	bwSlice, srcPort := getBandwidthAndSourcePort(stdout)
+	require.Equal(t, 2, len(bwSlice), "bandwidth value and / or bandwidth unit are not available")
 	// bandwidth from iperf output
 	bandwidthInFloat, err := strconv.ParseFloat(bwSlice[0], 64)
 	require.NoErrorf(t, err, "Error when converting iperf bandwidth %s to float64 type", bwSlice[0])
