@@ -15,6 +15,7 @@
 package flowrecords
 
 import (
+	"fmt"
 	"sync"
 	"time"
 
@@ -100,13 +101,24 @@ func (fr *FlowRecords) AddFlowRecordWithoutLock(connKey *flowexporter.Connection
 	fr.recordsMap[*connKey] = *record
 }
 
-// GetFlowRecordFromMap gets the flow record from record map given connection key.
-// This is used only for unit tests.
+// GetFlowRecordFromMap gets the flow record from record map given the connection key.
 func (fr *FlowRecords) GetFlowRecordFromMap(connKey *flowexporter.ConnectionKey) (*flowexporter.FlowRecord, bool) {
 	fr.mutex.Lock()
 	defer fr.mutex.Unlock()
 	record, exists := fr.recordsMap[*connKey]
 	return &record, exists
+}
+
+// DeleteFlowRecordFromMap deletes the flow record from record map given the connection key.
+func (fr *FlowRecords) DeleteFlowRecordFromMap(connKey *flowexporter.ConnectionKey) error {
+	fr.mutex.Lock()
+	defer fr.mutex.Unlock()
+	_, exists := fr.recordsMap[*connKey]
+	if !exists {
+		return fmt.Errorf("record with key %v doesn't exist in map", connKey)
+	}
+	delete(fr.recordsMap, *connKey)
+	return nil
 }
 
 // ValidateAndUpdateStats validates and updates the flow record given the connection
@@ -127,6 +139,19 @@ func (fr *FlowRecords) ValidateAndUpdateStats(connKey flowexporter.ConnectionKey
 func (fr *FlowRecords) ForAllFlowRecordsDo(callback flowexporter.FlowRecordCallBack) error {
 	fr.mutex.Lock()
 	defer fr.mutex.Unlock()
+	for k, v := range fr.recordsMap {
+		err := callback(k, v)
+		if err != nil {
+			klog.Errorf("Error when executing callback for flow record: %v", err)
+			return err
+		}
+	}
+	return nil
+}
+
+// ForAllFlowRecordsDoWithoutLock executes the callback for all records in the flow
+// record map. This is used in the perf testing.
+func (fr *FlowRecords) ForAllFlowRecordsDoWithoutLock(callback flowexporter.FlowRecordCallBack) error {
 	for k, v := range fr.recordsMap {
 		err := callback(k, v)
 		if err != nil {

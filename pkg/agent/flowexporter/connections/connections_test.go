@@ -26,7 +26,10 @@ import (
 	interfacestoretest "antrea.io/antrea/pkg/agent/interfacestore/testing"
 )
 
-const testPollInterval = 0 // Not used in these tests, hence 0.
+const (
+	testPollInterval           = 0 // Not used in these tests, hence 0.
+	testStaleConnectionTimeout = 5 * time.Minute
+)
 
 func TestConnectionStore_ForAllConnectionsDo(t *testing.T) {
 	ctrl := gomock.NewController(t)
@@ -65,7 +68,7 @@ func TestConnectionStore_ForAllConnectionsDo(t *testing.T) {
 	}
 	// Create connectionStore
 	mockIfaceStore := interfacestoretest.NewMockInterfaceStore(ctrl)
-	connStore := NewConnectionStore(mockIfaceStore, nil)
+	connStore := NewConnectionStore(mockIfaceStore, nil, testStaleConnectionTimeout)
 	// Add flows to the Connection store
 	for i, flow := range testFlows {
 		connStore.connections[*testFlowKeys[i]] = flow

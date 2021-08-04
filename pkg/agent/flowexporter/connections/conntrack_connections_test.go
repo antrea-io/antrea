@@ -200,7 +200,7 @@ func TestConntrackConnectionStore_AddOrUpdateConn(t *testing.T) {
 	mockProxier := proxytest.NewMockProxier(ctrl)
 	mockConnDumper := connectionstest.NewMockConnTrackDumper(ctrl)
 	npQuerier := queriertest.NewMockAgentNetworkPolicyInfoQuerier(ctrl)
-	conntrackConnStore := NewConntrackConnectionStore(mockConnDumper, flowrecords.NewFlowRecords(), mockIfaceStore, true, false, mockProxier, npQuerier, testPollInterval)
+	conntrackConnStore := NewConntrackConnectionStore(mockConnDumper, flowrecords.NewFlowRecords(), mockIfaceStore, true, false, mockProxier, npQuerier, testPollInterval, testStaleConnectionTimeout)
 
 	// Add flow1conn and flow3conn to the Connection map
 	testFlow1Tuple := flowexporter.NewConnectionKey(&testFlow1)
@@ -320,7 +320,7 @@ func TestConnectionStore_DeleteConnectionByKey(t *testing.T) {
 	metrics.TotalAntreaConnectionsInConnTrackTable.Set(float64(len(testFlows)))
 	// Create connectionStore
 	mockIfaceStore := interfacestoretest.NewMockInterfaceStore(ctrl)
-	connStore := NewConntrackConnectionStore(nil, flowrecords.NewFlowRecords(), mockIfaceStore, true, false, nil, nil, testPollInterval)
+	connStore := NewConntrackConnectionStore(nil, flowrecords.NewFlowRecords(), mockIfaceStore, true, false, nil, nil, testPollInterval, testStaleConnectionTimeout)
 	// Add flows to the connection store.
 	for i, flow := range testFlows {
 		connStore.connections[*testFlowKeys[i]] = flow
@@ -344,7 +344,7 @@ func TestConnectionStore_MetricSettingInPoll(t *testing.T) {
 	// Create connectionStore
 	mockIfaceStore := interfacestoretest.NewMockInterfaceStore(ctrl)
 	mockConnDumper := connectionstest.NewMockConnTrackDumper(ctrl)
-	conntrackConnStore := NewConntrackConnectionStore(mockConnDumper, flowrecords.NewFlowRecords(), mockIfaceStore, true, false, nil, nil, testPollInterval)
+	conntrackConnStore := NewConntrackConnectionStore(mockConnDumper, flowrecords.NewFlowRecords(), mockIfaceStore, true, false, nil, nil, testPollInterval, testStaleConnectionTimeout)
 	// Hard-coded conntrack occupancy metrics for test
 	TotalConnections := 0
 	MaxConnections := 300000

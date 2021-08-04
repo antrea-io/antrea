@@ -201,7 +201,8 @@ func run(o *Options) error {
 
 	var denyConnStore *connections.DenyConnectionStore
 	if features.DefaultFeatureGate.Enabled(features.FlowExporter) {
-		denyConnStore = connections.NewDenyConnectionStore(ifaceStore, proxier)
+		denyConnStore = connections.NewDenyConnectionStore(ifaceStore, proxier, o.staleConnectionTimeout)
+		go denyConnStore.RunPeriodicDeletion(stopCh)
 	}
 	networkPolicyController, err := networkpolicy.NewNetworkPolicyController(
 		antreaClientProvider,
@@ -382,7 +383,8 @@ func run(o *Options) error {
 			v6Enabled,
 			proxier,
 			networkPolicyController,
-			o.pollInterval)
+			o.pollInterval,
+			o.staleConnectionTimeout)
 		go conntrackConnStore.Run(stopCh)
 
 		flowExporter, err := exporter.NewFlowExporter(

@@ -128,6 +128,44 @@ func BenchmarkExportDenyConns(b *testing.B) {
 
 }
 
+/*
+go test -test.v -run=None -test.benchmem -bench=BenchmarkGetRecordAndDeleteFromMap -memprofile memprofile.out -cpuprofile profile.out
+goos: linux
+goarch: amd64
+pkg: antrea.io/antrea/pkg/agent/flowexporter/exporter
+cpu: Intel(R) Core(TM) i9-9980HK CPU @ 2.40GHz
+BenchmarkGetRecordAndDeleteFromMap
+    exporter_perf_test.go:150:
+        Summary:
+        Number of conntrack connections: 100000
+         Number of dying conntrack connections: 5000
+BenchmarkGetRecordAndDeleteFromMap-2   	168049232	         6.737 ns/op	       0 B/op	       0 allocs/op
+PASS
+ok  	antrea.io/antrea/pkg/agent/flowexporter/exporter	8.707s
+Reference value:
+	#conns
+	20000   168049232	 6.737 ns/op	  0 B/op   0 allocs/op
+*/
+func BenchmarkGetRecordAndDeleteFromMap(b *testing.B) {
+	disableLogToStderr()
+	ctrl := gomock.NewController(b)
+	defer ctrl.Finish()
+
+	conntrackConnStore := connections.NewConntrackConnectionStore(nil, flowrecords.NewFlowRecords(), nil, true, false, nil, nil, 1, 1)
+	records := addConnsAndGetRecords(conntrackConnStore)
+	b.ResetTimer()
+	for n := 0; n < b.N; n++ {
+		getFlowRecordAndDelete := func(key flowexporter.ConnectionKey, record flowexporter.FlowRecord) error {
+			if _, exists := records.GetFlowRecordFromMap(&key); exists {
+				return records.DeleteFlowRecordFromMap(&key)
+			}
+			return nil
+		}
+		records.ForAllFlowRecordsDoWithoutLock(getFlowRecordAndDelete)
+	}
+	b.Logf("\nSummary:\nNumber of conntrack connections: %d\n Number of dying conntrack connections: %d\n", testNumOfConns, testNumOfDyingConns)
+}
+
 func setupExporter(isConntrackConn bool) (*flowExporter, error) {
 	var err error
 	collectorAddr, err := startLocalServer()
@@ -137,8 +175,8 @@ func setupExporter(isConntrackConn bool) (*flowExporter, error) {
 
 	// create connection store and generate connections
 	records := flowrecords.NewFlowRecords()
-	denyConnStore := connections.NewDenyConnectionStore(nil, nil)
-	conntrackConnStore := connections.NewConntrackConnectionStore(nil, flowrecords.NewFlowRecords(), nil, true, false, nil, nil, 1)
+	denyConnStore := connections.NewDenyConnectionStore(nil, nil, 0)
+	conntrackConnStore := connections.NewConntrackConnectionStore(nil, flowrecords.NewFlowRecords(), nil, true, false, nil, nil, 1, 1)
 	if isConntrackConn {
 		records = addConnsAndGetRecords(conntrackConnStore)
 	} else {
