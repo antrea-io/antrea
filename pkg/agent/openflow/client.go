@@ -109,7 +109,7 @@ type Client interface {
 	// action to maintain the LB decision.
 	// The group with the groupID must be installed before, otherwise the
 	// installation will fail.
-	InstallServiceFlows(groupID binding.GroupIDType, svcIP net.IP, svcPort uint16, protocol binding.Protocol, affinityTimeout uint16) error
+	InstallServiceFlows(groupID binding.GroupIDType, conjID uint32, svcIP net.IP, svcPort uint16, protocol binding.Protocol, affinityTimeout uint16) error
 	// UninstallServiceFlows removes flows installed by InstallServiceFlows.
 	UninstallServiceFlows(svcIP net.IP, svcPort uint16, protocol binding.Protocol) error
 	// InstallLoadBalancerServiceFromOutsideFlows installs flows for LoadBalancer Service traffic from outside node.
@@ -120,11 +120,20 @@ type Client interface {
 	// UninstallLoadBalancerServiceFromOutsideFlows removes flows installed by InstallLoadBalancerServiceFromOutsideFlows.
 	UninstallLoadBalancerServiceFromOutsideFlows(svcIP net.IP, svcPort uint16, protocol binding.Protocol) error
 
-	// InstallServiceClassifierFlow installs flows to classify Service traffic from outside the cluster. For
-	// NodePort/LoadBalancer whose externalTrafficPolicy is Cluster, the flows will mark the traffic for SNAT. The flows
-	// will also generate a learned flow to rewrite the destination MAC of response packet whose request packet is from
-	// outside the cluster.
-	InstallServiceClassifierFlow(groupID binding.GroupIDType, svcType v1.ServiceType, svcIP net.IP, svcPort uint16, protocol binding.Protocol, nodeLocalExternal bool) error
+	// InstallNodePortIPFlows installs flows to match the NodePort IP addresses as destination IP address, as the first
+	// clause of all allocated conjunction IDs.
+	InstallNodePortIPFlows(conjIDs []uint32, nodePortIPMap map[int][]net.IP, protocol binding.Protocol) error
+
+	// InstallInitNodePortClassifierFlows installs the first clause flow of conjunction which is used to classify the first packet of
+	// Service NodePort, with every NodePort IP address as destination IP address.
+	InstallInitNodePortClassifierFlows(nodePortIPMap map[int][]net.IP, isIPv6 bool) error
+
+	// InstallServiceClassifierFlow installs flows to classify the first packet of Service. For NodePort/LoadBalancer
+	// whose externalTrafficPolicy is Cluster, or NodePort/LoadBalancer whose externalTrafficPolicy is Local and client
+	// is from localhost, the flow will set a register to indicate that the packet requires SNAT. The flow will also
+	// generate a learned flow to rewrite the destination MAC of response packet whose request packet is from remote
+	// client.
+	InstallServiceClassifierFlow(svcType v1.ServiceType, svcIP net.IP, svcPort uint16, protocol binding.Protocol, nodeLocalExternal bool) error
 	// UninstallServiceClassifierFlow removes flows installed by InstallServiceClassifierFlow.
 	UninstallServiceClassifierFlow(svcIP net.IP, svcPort uint16, protocol binding.Protocol) error
 
@@ -580,11 +589,20 @@ func (c *client) UninstallEndpointFlows(protocol binding.Protocol, endpoint prox
 	return c.deleteFlows(c.serviceFlowCache, cacheKey)
 }
 
-func (c *client) InstallServiceClassifierFlow(groupID binding.GroupIDType, svcType v1.ServiceType, svcIP net.IP, svcPort uint16, protocol binding.Protocol, nodeLocalExternal bool) error {
+func (c *client) InstallInitNodePortClassifierFlows(nodePortIPMap map[int][]net.IP, isIPv6 bool) error {
+	flows := c.initServiceClassifierFlows(nodePortIPMap, isIPv6)
+	if err := c.ofEntryOperations.AddAll(flows); err != nil {
+		return err
+	}
+	c.defaultServiceFlows = append(c.defaultServiceFlows, flows...)
+	return nil
+}
+
+func (c *client) InstallServiceClassifierFlow(svcType v1.ServiceType, svcIP net.IP, svcPort uint16, protocol binding.Protocol, nodeLocalExternal bool) error {
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
 
-	flows := c.serviceClassifierFlow(groupID, svcType, svcIP, svcPort, protocol, nodeLocalExternal)
+	flows := c.serviceClassifierFlow(svcType, svcIP, svcPort, protocol, nodeLocalExternal)
 	cacheKey := generateServiceClassifierFlowCacheKey(svcIP, svcPort, protocol)
 	return c.addFlows(c.serviceFlowCache, cacheKey, flows)
 }
@@ -596,13 +614,27 @@ func (c *client) UninstallServiceClassifierFlow(svcIP net.IP, svcPort uint16, pr
 	return c.deleteFlows(c.serviceFlowCache, cacheKey)
 }
 
-func (c *client) InstallServiceFlows(groupID binding.GroupIDType, svcIP net.IP, svcPort uint16, protocol binding.Protocol, affinityTimeout uint16) error {
+func (c *client) InstallNodePortIPFlows(conjIDs []uint32, nodePortIPMap map[int][]net.IP, protocol binding.Protocol) error {
+	c.replayMutex.RLock()
+	defer c.replayMutex.RUnlock()
+
+	var flows []binding.Flow
+	for _, nodeIPs := range nodePortIPMap {
+		for _, nodeIP := range nodeIPs {
+			flows = append(flows, c.serviceNodePortIPFlow(conjIDs, nodeIP, protocol))
+		}
+	}
+	cacheKey := fmt.Sprintf("NodePortIP/%s", protocol)
+	return c.modifyFlows(c.serviceFlowCache, cacheKey, flows)
+}
+
+func (c *client) InstallServiceFlows(groupID binding.GroupIDType, conjID uint32, svcIP net.IP, svcPort uint16, protocol binding.Protocol, affinityTimeout uint16) error {
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
 	var flows []binding.Flow
-	flows = append(flows, c.serviceLBFlow(groupID, svcIP, svcPort, protocol, affinityTimeout != 0))
+	flows = append(flows, c.serviceLBFlows(groupID, conjID, svcIP, svcPort, protocol, affinityTimeout != 0)...)
 	if affinityTimeout != 0 {
-		flows = append(flows, c.serviceLearnFlow(groupID, svcIP, svcPort, protocol, affinityTimeout))
+		flows = append(flows, c.serviceLearnFlow(groupID, conjID, svcIP, svcPort, protocol, affinityTimeout))
 	}
 	cacheKey := generateServicePortFlowCacheKey(svcIP, svcPort, protocol)
 	return c.addFlows(c.serviceFlowCache, cacheKey, flows)
@@ -652,7 +684,7 @@ func (c *client) InstallDefaultServiceFlows() error {
 	if err := c.ofEntryOperations.AddAll(flows); err != nil {
 		return err
 	}
-	c.defaultServiceFlows = flows
+	c.defaultServiceFlows = append(c.defaultServiceFlows, flows...)
 	return nil
 }
 

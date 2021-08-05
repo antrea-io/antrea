@@ -121,6 +121,7 @@ func NewFakeProxier(routeClient route.Interface, ofClient openflow.Client, nodeP
 		endpointReferenceCounter: map[string]int{},
 		endpointsMap:             types.EndpointsMap{},
 		groupCounter:             types.NewGroupCounter(isIPv6),
+		conjCounter:              types.NewConjCounter(isIPv6),
 		ofClient:                 ofClient,
 		routeClient:              routeClient,
 		serviceStringMap:         map[string]k8sproxy.ServicePortName{},
@@ -178,7 +179,7 @@ func testClusterIP(t *testing.T, svcIP net.IP, epIP net.IP, isIPv6 bool) {
 		bindingProtocol = binding.ProtocolTCPv6
 	}
 	mockOFClient.EXPECT().InstallEndpointFlows(bindingProtocol, gomock.Any()).Times(1)
-	mockOFClient.EXPECT().InstallServiceFlows(groupID, svcIP, uint16(svcPort), bindingProtocol, uint16(0)).Times(1)
+	mockOFClient.EXPECT().InstallServiceFlows(groupID, dummyConjID, svcIP, uint16(svcPort), bindingProtocol, uint16(0)).Times(1)
 	mockRouteClient.EXPECT().AddClusterIPRoute(svcIP, isIPv6).Times(1)
 
 	fp.syncProxyRules()
@@ -255,24 +256,22 @@ func testLoadBalancer(t *testing.T, nodePortIPMap map[int][]net.IP, svcIP, ep1IP
 
 	groupID, _ := fp.groupCounter.Get(svcPortName, false)
 	bindingProtocol := binding.ProtocolTCP
-	svcNodePortIP := svcNodePortIPv4
 	if isIPv6 {
 		bindingProtocol = binding.ProtocolTCPv6
-		svcNodePortIP = svcNodePortIPv6
 	}
 	mockOFClient.EXPECT().InstallServiceGroup(groupID, false, gomock.Any()).Times(1)
 	mockOFClient.EXPECT().InstallEndpointFlows(bindingProtocol, gomock.Any()).Times(1)
-	mockOFClient.EXPECT().InstallServiceFlows(groupID, svcIP, uint16(svcPort), bindingProtocol, uint16(0)).Times(1)
-
+	mockOFClient.EXPECT().InstallNodePortIPFlows(gomock.Any(), fp.nodePortIPMap, bindingProtocol).Times(1)
+	mockOFClient.EXPECT().InstallServiceFlows(groupID, dummyConjID, svcIP, uint16(svcPort), bindingProtocol, uint16(0)).Times(1)
 	if nodeLocalExternal {
 		groupID, _ = fp.groupCounter.Get(svcPortName, true)
 		mockOFClient.EXPECT().InstallServiceGroup(groupID, false, gomock.Any()).Times(1)
 	}
-	mockOFClient.EXPECT().InstallServiceFlows(groupID, loadBalancerIP, uint16(svcPort), bindingProtocol, uint16(0)).Times(1)
-	mockOFClient.EXPECT().InstallServiceFlows(groupID, svcNodePortIP, uint16(svcNodePort), bindingProtocol, uint16(0)).Times(1)
+	mockOFClient.EXPECT().InstallServiceFlows(groupID, dummyConjID, loadBalancerIP, uint16(svcPort), bindingProtocol, uint16(0)).Times(1)
+	mockOFClient.EXPECT().InstallServiceFlows(groupID, gomock.Any(), dummyNodePortIP, uint16(svcNodePort), bindingProtocol, uint16(0)).Times(1)
 	mockOFClient.EXPECT().InstallLoadBalancerServiceFromOutsideFlows(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
-	mockOFClient.EXPECT().InstallServiceClassifierFlow(groupID, corev1.ServiceTypeLoadBalancer, loadBalancerIP, uint16(svcPort), bindingProtocol, nodeLocalExternal).Times(1)
-	mockOFClient.EXPECT().InstallServiceClassifierFlow(groupID, corev1.ServiceTypeNodePort, svcNodePortIP, uint16(svcNodePort), bindingProtocol, nodeLocalExternal).Times(1)
+	mockOFClient.EXPECT().InstallServiceClassifierFlow(corev1.ServiceTypeLoadBalancer, loadBalancerIP, uint16(svcPort), bindingProtocol, nodeLocalExternal).Times(1)
+	mockOFClient.EXPECT().InstallServiceClassifierFlow(corev1.ServiceTypeNodePort, dummyNodePortIP, uint16(svcNodePort), bindingProtocol, nodeLocalExternal).Times(1)
 	mockRouteClient.EXPECT().AddClusterIPRoute(svcIP, isIPv6).Times(1)
 	mockRouteClient.EXPECT().AddLoadBalancer(uint16(svcPort), bindingProtocol, []string{loadBalancerIP.String()}, isIPv6).Times(1)
 	mockRouteClient.EXPECT().AddNodePort(nodePortIPMap, uint16(svcNodePort), bindingProtocol).Times(1)
@@ -348,21 +347,20 @@ func testNodePort(t *testing.T, nodePortIPMap map[int][]net.IP, svcIP, ep1IP, ep
 
 	groupID, _ := fp.groupCounter.Get(svcPortName, false)
 	bindingProtocol := binding.ProtocolTCP
-	svcNodePortIP := svcNodePortIPv4
 	if isIPv6 {
 		bindingProtocol = binding.ProtocolTCPv6
-		svcNodePortIP = svcNodePortIPv6
 	}
 	mockOFClient.EXPECT().InstallServiceGroup(groupID, false, gomock.Any()).Times(1)
 	mockOFClient.EXPECT().InstallEndpointFlows(bindingProtocol, gomock.Any()).Times(1)
-	mockOFClient.EXPECT().InstallServiceFlows(groupID, svcIP, uint16(svcPort), bindingProtocol, uint16(0)).Times(1)
-
+	mockOFClient.EXPECT().InstallNodePortIPFlows(gomock.Any(), fp.nodePortIPMap, bindingProtocol).Times(1)
+	mockOFClient.EXPECT().InstallServiceFlows(groupID, dummyConjID, svcIP, uint16(svcPort), bindingProtocol, uint16(0)).Times(1)
 	if nodeLocalExternal {
 		groupID, _ = fp.groupCounter.Get(svcPortName, true)
 		mockOFClient.EXPECT().InstallServiceGroup(groupID, false, gomock.Any()).Times(1)
 	}
-	mockOFClient.EXPECT().InstallServiceFlows(groupID, svcNodePortIP, uint16(svcNodePort), bindingProtocol, uint16(0)).Times(1)
-	mockOFClient.EXPECT().InstallServiceClassifierFlow(groupID, corev1.ServiceTypeNodePort, svcNodePortIP, uint16(svcNodePort), bindingProtocol, nodeLocalExternal).Times(1)
+
+	mockOFClient.EXPECT().InstallServiceFlows(groupID, gomock.Any(), dummyNodePortIP, uint16(svcNodePort), bindingProtocol, uint16(0)).Times(1)
+	mockOFClient.EXPECT().InstallServiceClassifierFlow(corev1.ServiceTypeNodePort, dummyNodePortIP, uint16(svcNodePort), bindingProtocol, nodeLocalExternal).Times(1)
 	mockRouteClient.EXPECT().AddClusterIPRoute(svcIP, isIPv6).Times(1)
 	mockRouteClient.EXPECT().AddNodePort(gomock.Any(), uint16(svcNodePort), bindingProtocol).Times(1)
 
@@ -475,11 +473,11 @@ func TestDualStackService(t *testing.T) {
 
 	mockOFClient.EXPECT().InstallServiceGroup(groupIDv4, false, gomock.Any()).Times(1)
 	mockOFClient.EXPECT().InstallEndpointFlows(binding.ProtocolTCP, gomock.Any()).Times(1)
-	mockOFClient.EXPECT().InstallServiceFlows(groupIDv4, svcIPv4, uint16(svcPort), binding.ProtocolTCP, uint16(0)).Times(1)
+	mockOFClient.EXPECT().InstallServiceFlows(groupIDv4, dummyConjID, svcIPv4, uint16(svcPort), binding.ProtocolTCP, uint16(0)).Times(1)
 
 	mockOFClient.EXPECT().InstallServiceGroup(groupIDv6, false, gomock.Any()).Times(1)
 	mockOFClient.EXPECT().InstallEndpointFlows(binding.ProtocolTCPv6, gomock.Any()).Times(1)
-	mockOFClient.EXPECT().InstallServiceFlows(groupIDv6, svcIPv6, uint16(svcPort), binding.ProtocolTCPv6, uint16(0)).Times(1)
+	mockOFClient.EXPECT().InstallServiceFlows(groupIDv6, dummyConjID, svcIPv6, uint16(svcPort), binding.ProtocolTCPv6, uint16(0)).Times(1)
 
 	fpv4.syncProxyRules()
 	fpv6.syncProxyRules()
@@ -530,7 +528,7 @@ func testClusterIPRemoval(t *testing.T, svcIP net.IP, epIP net.IP, isIPv6 bool) 
 	groupID, _ := fp.groupCounter.Get(svcPortName, false)
 	mockOFClient.EXPECT().InstallServiceGroup(groupID, false, gomock.Any()).Times(1)
 	mockOFClient.EXPECT().InstallEndpointFlows(bindingProtocol, gomock.Any()).Times(1)
-	mockOFClient.EXPECT().InstallServiceFlows(groupID, svcIP, uint16(svcPort), bindingProtocol, uint16(0)).Times(1)
+	mockOFClient.EXPECT().InstallServiceFlows(groupID, dummyConjID, svcIP, uint16(svcPort), bindingProtocol, uint16(0)).Times(1)
 	mockRouteClient.EXPECT().AddClusterIPRoute(svcIP, isIPv6).Times(1)
 	mockOFClient.EXPECT().UninstallServiceFlows(svcIP, uint16(svcPort), bindingProtocol).Times(1)
 	mockOFClient.EXPECT().UninstallEndpointFlows(bindingProtocol, gomock.Any()).Times(1)
@@ -664,8 +662,8 @@ func testClusterIPRemoveSamePortEndpoint(t *testing.T, svcIP net.IP, epIP net.IP
 	mockOFClient.EXPECT().InstallServiceGroup(groupIDUDP, false, gomock.Any()).Times(2)
 	mockOFClient.EXPECT().InstallEndpointFlows(protocolTCP, gomock.Any()).Times(1)
 	mockOFClient.EXPECT().InstallEndpointFlows(protocolUDP, gomock.Any()).Times(2)
-	mockOFClient.EXPECT().InstallServiceFlows(groupID, svcIP, uint16(svcPort), protocolTCP, uint16(0)).Times(1)
-	mockOFClient.EXPECT().InstallServiceFlows(groupIDUDP, svcIP, uint16(svcPort), protocolUDP, uint16(0)).Times(1)
+	mockOFClient.EXPECT().InstallServiceFlows(groupID, dummyConjID, svcIP, uint16(svcPort), protocolTCP, uint16(0)).Times(1)
+	mockOFClient.EXPECT().InstallServiceFlows(groupIDUDP, dummyConjID, svcIP, uint16(svcPort), protocolUDP, uint16(0)).Times(1)
 	mockOFClient.EXPECT().UninstallEndpointFlows(protocolUDP, gomock.Any()).Times(1)
 	fp.syncProxyRules()
 
@@ -725,7 +723,7 @@ func testClusterIPRemoveEndpoints(t *testing.T, svcIP net.IP, epIP net.IP, isIPv
 	groupID, _ := fp.groupCounter.Get(svcPortName, false)
 	mockOFClient.EXPECT().InstallServiceGroup(groupID, false, gomock.Any()).Times(2)
 	mockOFClient.EXPECT().InstallEndpointFlows(bindingProtocol, gomock.Any()).Times(2)
-	mockOFClient.EXPECT().InstallServiceFlows(groupID, svcIP, uint16(svcPort), bindingProtocol, uint16(0)).Times(1)
+	mockOFClient.EXPECT().InstallServiceFlows(groupID, dummyConjID, svcIP, uint16(svcPort), bindingProtocol, uint16(0)).Times(1)
 	mockOFClient.EXPECT().UninstallEndpointFlows(bindingProtocol, gomock.Any()).Times(1)
 	fp.syncProxyRules()
 
@@ -797,7 +795,7 @@ func testSessionAffinityNoEndpoint(t *testing.T, svcExternalIPs net.IP, svcIP ne
 	groupID, _ := fp.groupCounter.Get(svcPortName, false)
 	mockOFClient.EXPECT().InstallServiceGroup(groupID, true, gomock.Any()).Times(1)
 	mockOFClient.EXPECT().InstallEndpointFlows(bindingProtocol, gomock.Any()).Times(1)
-	mockOFClient.EXPECT().InstallServiceFlows(groupID, svcIP, uint16(svcPort), bindingProtocol, uint16(corev1.DefaultClientIPServiceAffinitySeconds)).Times(1)
+	mockOFClient.EXPECT().InstallServiceFlows(groupID, dummyConjID, svcIP, uint16(svcPort), bindingProtocol, uint16(corev1.DefaultClientIPServiceAffinitySeconds)).Times(1)
 
 	fp.syncProxyRules()
 }
@@ -904,9 +902,9 @@ func testPortChange(t *testing.T, svcIP net.IP, epIP net.IP, isIPv6 bool) {
 	groupID, _ := fp.groupCounter.Get(svcPortName, false)
 	mockOFClient.EXPECT().InstallServiceGroup(groupID, false, gomock.Any()).Times(1)
 	mockOFClient.EXPECT().InstallEndpointFlows(bindingProtocol, gomock.Any()).Times(1)
-	mockOFClient.EXPECT().InstallServiceFlows(groupID, svcIP, uint16(svcPort1), bindingProtocol, uint16(0))
+	mockOFClient.EXPECT().InstallServiceFlows(groupID, dummyConjID, svcIP, uint16(svcPort1), bindingProtocol, uint16(0))
 	mockOFClient.EXPECT().UninstallServiceFlows(svcIP, uint16(svcPort1), bindingProtocol)
-	mockOFClient.EXPECT().InstallServiceFlows(groupID, svcIP, uint16(svcPort2), bindingProtocol, uint16(0))
+	mockOFClient.EXPECT().InstallServiceFlows(groupID, dummyConjID, svcIP, uint16(svcPort2), bindingProtocol, uint16(0))
 
 	fp.syncProxyRules()
 
@@ -993,8 +991,8 @@ func TestServicesWithSameEndpoints(t *testing.T) {
 	mockOFClient.EXPECT().InstallServiceGroup(groupID2, false, gomock.Any()).Times(1)
 	bindingProtocol := binding.ProtocolTCP
 	mockOFClient.EXPECT().InstallEndpointFlows(bindingProtocol, gomock.Any()).Times(2)
-	mockOFClient.EXPECT().InstallServiceFlows(groupID1, svcIP1, uint16(svcPort), bindingProtocol, uint16(0)).Times(1)
-	mockOFClient.EXPECT().InstallServiceFlows(groupID2, svcIP2, uint16(svcPort), bindingProtocol, uint16(0)).Times(1)
+	mockOFClient.EXPECT().InstallServiceFlows(groupID1, dummyConjID, svcIP1, uint16(svcPort), bindingProtocol, uint16(0)).Times(1)
+	mockOFClient.EXPECT().InstallServiceFlows(groupID2, dummyConjID, svcIP2, uint16(svcPort), bindingProtocol, uint16(0)).Times(1)
 	mockOFClient.EXPECT().UninstallServiceFlows(svcIP1, uint16(svcPort), bindingProtocol).Times(1)
 	mockOFClient.EXPECT().UninstallServiceFlows(svcIP2, uint16(svcPort), bindingProtocol).Times(1)
 	mockOFClient.EXPECT().UninstallServiceGroup(groupID1).Times(1)

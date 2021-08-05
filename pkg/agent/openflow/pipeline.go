@@ -100,6 +100,13 @@ const (
 
 	// The default idle timeout of flows which is for rewriting destination MAC of Service traffic.
 	serviceDstMACRewriteIdleTimeOut = uint16(60)
+
+	clusterConjIPv4ID        = uint32(41)
+	localLocalhostConjIPv4ID = uint32(42)
+	localRemoteConjIPv4ID    = uint32(43)
+	clusterConjIPv6ID        = uint32(61)
+	localLocalhostConjIPv6ID = uint32(62)
+	localRemoteConjIPv6ID    = uint32(63)
 )
 
 type ofAction int32
@@ -2085,66 +2092,136 @@ func (c *client) snatRuleFlow(ofPort uint32, snatIP net.IP, snatMark uint32, loc
 
 //generateServiceResponseLearnedFlowBuilder is used to generate learned flow action for flowBuilder. The generated learned flow is used to
 // match Service response packet. The actions are: 1. rewrite destination MAC address; 2. Set output register and output interface register.
-func generateServiceResponseLearnedFlowBuilder(flowBuilder binding.FlowBuilder, cookieID uint64, protocol binding.Protocol) binding.FlowBuilder {
+func generateServiceResponseLearnedFlowBuilder(flowBuilder binding.FlowBuilder, cookieID uint64, isIPv6 bool) binding.FlowBuilder {
 	return flowBuilder.Action().
 		Learn(serviceResponseProcessTable, priorityNormal, serviceDstMACRewriteIdleTimeOut, 0, cookieID).
 		DeleteLearned().
-		MatchNetworkSrcAsDst(protocol).
+		MatchNetworkSrcAsDst(isIPv6).
 		SetLearnedSrcMACAsDstMAC().
 		LoadReg(int(PortCacheReg), config.HostGatewayOFPort, ofPortRegRange).
 		LoadReg(int(marksReg), portFoundMark, ofPortMarkRange).
 		Done()
 }
 
-func (c *client) serviceClassifierFlow(groupID binding.GroupIDType, svcType v1.ServiceType, svcIP net.IP, svcPort uint16, protocol binding.Protocol, nodeLocalExternal bool) []binding.Flow {
-	// Use unique cookie ID here to avoid learned flow cascade deletion.
-	cookieID := c.cookieAllocator.RequestWithObjectID(cookie.Service, uint32(groupID)).Raw()
+func (c *client) initServiceClassifierFlows(nodePortIPMap map[int][]net.IP, isIPv6 bool) []binding.Flow {
+	clusterConjID := clusterConjIPv4ID
+	localLocalhostConjID := localLocalhostConjIPv4ID
+	localRemoteConjID := localRemoteConjIPv4ID
+	ipProtocol := binding.ProtocolIP
+	if isIPv6 {
+		clusterConjID = clusterConjIPv6ID
+		localLocalhostConjID = localLocalhostConjIPv6ID
+		localRemoteConjID = localRemoteConjIPv6ID
+		ipProtocol = binding.ProtocolIPv6
+	}
 
-	// These flows are used to match the first packet of NodePort/LoadBalancer traffic from outside the cluster.
 	var flows []binding.Flow
-	if !nodeLocalExternal {
-		// This flow is used to match the first packet of NodePort/LoadBalancer whose externalTrafficPolicy is Cluster,
-		// and the packet requires SNAT.
+	for _, ips := range nodePortIPMap {
+		for _, ip := range ips {
+			flows = append(flows,
+				// This flow is used to match the first packet's destination IP address:
+				// 1. NodePort Service whose externalTrafficPolicy is Cluster, and client is from remote/localhost.
+				// 2. NodePort Service whose externalTrafficPolicy is Local, and client is from remote.
+				c.pipeline[serviceClassifierTable].BuildFlow(priorityNormal).
+					Cookie(c.cookieAllocator.Request(cookie.Service).Raw()).
+					MatchProtocol(ipProtocol).
+					MatchDstIP(ip).
+					Action().Conjunction(clusterConjID, 1, 2).
+					Action().Conjunction(localRemoteConjID, 1, 2).
+					Done(),
+				// This flow is used to match the first packet's source and destination IP address:
+				// NodePort Service whose externalTrafficPolicy is Local, and client is from localhost.
+				c.pipeline[serviceClassifierTable].BuildFlow(priorityHigh).
+					Cookie(c.cookieAllocator.Request(cookie.Service).Raw()).
+					MatchProtocol(ipProtocol).
+					MatchDstIP(ip).
+					MatchSrcIP(ip).
+					Action().Conjunction(localLocalhostConjID, 1, 2).
+					Done(),
+			)
+		}
+	}
+
+	cookieID := c.cookieAllocator.Request(cookie.Service).Raw()
+	flows = append(flows,
+		// This flow is used to perform actions for the first packet of NodePort Service whose externalTrafficPolicy is
+		// Cluster, and client is from remote/localhost.
+		generateServiceResponseLearnedFlowBuilder(
+			c.pipeline[serviceClassifierTable].BuildFlow(priorityNormal).MatchProtocol(ipProtocol).MatchConjID(clusterConjID), cookieID, isIPv6).
+			Action().LoadRegRange(int(serviceSNATReg), marksRegServiceNeedSNAT, serviceSNATMarkRange).
+			Done(),
+		// This flow is used to perform actions for the first packet of NodePort Service whose externalTrafficPolicy is
+		// Local, and client is from remote.
+		generateServiceResponseLearnedFlowBuilder(
+			c.pipeline[serviceClassifierTable].BuildFlow(priorityNormal).MatchProtocol(ipProtocol).MatchConjID(localRemoteConjID), cookieID, isIPv6).
+			Done(),
+		// This flow is used to perform actions for the first packet of NodePort Service whose externalTrafficPolicy is
+		// Local, and client is from localhost.
+		generateServiceResponseLearnedFlowBuilder(
+			c.pipeline[serviceClassifierTable].BuildFlow(priorityHigh).MatchProtocol(ipProtocol).MatchConjID(localLocalhostConjID), cookieID, isIPv6).
+			Action().LoadRegRange(int(serviceSNATReg), marksRegServiceNeedSNAT, serviceSNATMarkRange).
+			Done(),
+	)
+	return flows
+}
+
+func (c *client) serviceClassifierFlow(svcType v1.ServiceType, svcIP net.IP, svcPort uint16, protocol binding.Protocol, nodeLocalExternal bool) []binding.Flow {
+	var flows []binding.Flow
+	cookies := c.cookieAllocator.Request(cookie.Service).Raw()
+	isIPv6 := false
+	if protocol == binding.ProtocolTCPv6 || protocol == binding.ProtocolUDPv6 || protocol == binding.ProtocolSCTPv6 {
+		isIPv6 = true
+	}
+
+	if svcType == v1.ServiceTypeNodePort {
+		clusterConjID := clusterConjIPv4ID
+		localLocalhostConjID := localLocalhostConjIPv4ID
+		localRemoteConjID := localRemoteConjIPv4ID
+		if isIPv6 {
+			clusterConjID = clusterConjIPv6ID
+			localLocalhostConjID = localLocalhostConjIPv6ID
+			localRemoteConjID = localRemoteConjIPv6ID
+		}
+
+		if nodeLocalExternal {
+			flows = append(flows,
+				c.pipeline[serviceClassifierTable].BuildFlow(priorityHigh).
+					Cookie(c.cookieAllocator.Request(cookie.Service).Raw()).
+					MatchProtocol(protocol).
+					MatchDstPort(svcPort, nil).
+					Action().Conjunction(localLocalhostConjID, 2, 2).
+					Done(),
+				c.pipeline[serviceClassifierTable].BuildFlow(priorityNormal).
+					Cookie(c.cookieAllocator.Request(cookie.Service).Raw()).
+					MatchProtocol(protocol).
+					MatchDstPort(svcPort, nil).
+					Action().Conjunction(localRemoteConjID, 2, 2).
+					Done(),
+			)
+		} else {
+			flows = append(flows,
+				c.pipeline[serviceClassifierTable].BuildFlow(priorityNormal).
+					Cookie(c.cookieAllocator.Request(cookie.Service).Raw()).
+					MatchProtocol(protocol).
+					MatchDstPort(svcPort, nil).
+					Action().Conjunction(clusterConjID, 2, 2).
+					Done())
+		}
+	} else {
 		flowBuilder := c.pipeline[serviceClassifierTable].BuildFlow(priorityNormal).
 			MatchProtocol(protocol).
 			MatchDstIP(svcIP).
 			MatchDstPort(svcPort, nil).
 			Cookie(c.cookieAllocator.Request(cookie.Service).Raw())
-
-		flows = append(flows,
-			generateServiceResponseLearnedFlowBuilder(flowBuilder, cookieID, protocol).
-				Action().LoadRegRange(int(serviceSNATReg), marksRegServiceNeedSNAT, serviceSNATMarkRange).
-				Done(),
-		)
-	} else {
-		// This flow is used to match the first packet of NodePort whose externalTrafficPolicy is Local, and the packet is
-		// from localhost client. The packet requires SNAT. If the source IP and destination IP are the same, that is a
-		// packet which is from localhost client.
-		if svcType == v1.ServiceTypeNodePort {
-			flowBuilder := c.pipeline[serviceClassifierTable].BuildFlow(priorityHigh).
-				MatchProtocol(protocol).
-				MatchSrcIP(svcIP).
-				MatchDstIP(svcIP).
-				MatchDstPort(svcPort, nil).
-				Cookie(c.cookieAllocator.Request(cookie.Service).Raw())
-
+		if nodeLocalExternal {
 			flows = append(flows,
-				generateServiceResponseLearnedFlowBuilder(flowBuilder, cookieID, protocol).
-					Action().LoadRegRange(int(serviceSNATReg), marksRegServiceNeedSNAT, serviceSNATMarkRange).
+				generateServiceResponseLearnedFlowBuilder(flowBuilder, cookies, isIPv6).
 					Done(),
 			)
-		}
-		// This flow is used to match the first packet of NodePort/LoadBalancer whose externalTrafficPolicy is Local, and
-		// the packet is from remote client. The packet doesn't require SNAT.
-		if !svcIP.IsLoopback() {
-			flowBuilder := c.pipeline[serviceClassifierTable].BuildFlow(priorityNormal).
-				MatchProtocol(protocol).
-				MatchDstIP(svcIP).
-				MatchDstPort(svcPort, nil).
-				Cookie(c.cookieAllocator.Request(cookie.Service).Raw())
-
+		} else {
 			flows = append(flows,
-				generateServiceResponseLearnedFlowBuilder(flowBuilder, cookieID, protocol).
+				generateServiceResponseLearnedFlowBuilder(flowBuilder, cookies, isIPv6).
+					Action().LoadRegRange(int(serviceSNATReg), marksRegServiceNeedSNAT, serviceSNATMarkRange).
 					Done(),
 			)
 		}
@@ -2168,15 +2245,25 @@ func (c *client) loadBalancerServiceFromOutsideFlow(svcIP net.IP, svcPort uint16
 
 // serviceLearnFlow generates the flow with learn action which adds new flows in
 // sessionAffinityTable according to the Endpoint selection decision.
-func (c *client) serviceLearnFlow(groupID binding.GroupIDType, svcIP net.IP, svcPort uint16, protocol binding.Protocol, affinityTimeout uint16) binding.Flow {
+func (c *client) serviceLearnFlow(groupID binding.GroupIDType, conjID uint32, svcIP net.IP, svcPort uint16, protocol binding.Protocol, affinityTimeout uint16) binding.Flow {
 	// Using unique cookie ID here to avoid learned flow cascade deletion.
 	cookieID := c.cookieAllocator.RequestWithObjectID(cookie.Service, uint32(groupID)).Raw()
-	learnFlowBuilder := c.pipeline[serviceLBTable].BuildFlow(priorityLow).
-		MatchRegRange(int(serviceLearnReg), marksRegServiceNeedLearn, serviceLearnRegRange).
-		MatchDstIP(svcIP).
-		MatchProtocol(protocol).
-		MatchDstPort(svcPort, nil).
-		Cookie(cookieID)
+	var learnFlowBuilder binding.FlowBuilder
+	if conjID == 0 {
+		learnFlowBuilder = c.pipeline[serviceLBTable].BuildFlow(priorityLow).
+			MatchRegRange(int(serviceLearnReg), marksRegServiceNeedLearn, serviceLearnRegRange).
+			MatchDstIP(svcIP).
+			MatchProtocol(protocol).
+			MatchDstPort(svcPort, nil).
+			Cookie(cookieID)
+	} else {
+		learnFlowBuilder = c.pipeline[serviceLBTable].BuildFlow(priorityLow).
+			MatchRegRange(int(serviceLearnReg), marksRegServiceNeedLearn, serviceLearnRegRange).
+			MatchConjID(conjID).
+			MatchProtocol(protocol).
+			Cookie(cookieID)
+	}
+
 	// affinityTimeout is used as the OpenFlow "hard timeout": learned flow will be removed from
 	// OVS after that time regarding of whether traffic is still hitting the flow. This is the
 	// desired behavior based on the K8s spec. Note that existing connections will keep going to
@@ -2230,9 +2317,9 @@ func (c *client) serviceLearnFlow(groupID binding.GroupIDType, svcIP net.IP, svc
 	return nil
 }
 
-// serviceLBFlow generates the flow which uses the specific group to do Endpoint
+// serviceLBFlows generates the flow which uses the specific group to do Endpoint
 // selection.
-func (c *client) serviceLBFlow(groupID binding.GroupIDType, svcIP net.IP, svcPort uint16, protocol binding.Protocol, withSessionAffinity bool) binding.Flow {
+func (c *client) serviceLBFlows(groupID binding.GroupIDType, conjID uint32, svcIP net.IP, svcPort uint16, protocol binding.Protocol, withSessionAffinity bool) []binding.Flow {
 	var lbResultMark uint32
 	if withSessionAffinity {
 		lbResultMark = marksRegServiceNeedLearn
@@ -2240,16 +2327,55 @@ func (c *client) serviceLBFlow(groupID binding.GroupIDType, svcIP net.IP, svcPor
 		lbResultMark = marksRegServiceSelected
 	}
 
-	return c.pipeline[serviceLBTable].BuildFlow(priorityNormal).
+	var flows []binding.Flow
+	// This flow is used to match the first packet of non-NodePort.
+	if conjID == 0 {
+		flows = append(flows, c.pipeline[serviceLBTable].BuildFlow(priorityNormal).
+			MatchProtocol(protocol).
+			MatchDstPort(svcPort, nil).
+			MatchDstIP(svcIP).
+			MatchRegRange(int(serviceLearnReg), marksRegServiceNeedLB, serviceLearnRegRange).
+			Action().LoadRegRange(int(serviceLearnReg), lbResultMark, serviceLearnRegRange).
+			Action().LoadRegRange(int(marksReg), macRewriteMark, macRewriteMarkRange).
+			Action().Group(groupID).
+			Cookie(c.cookieAllocator.Request(cookie.Service).Raw()).
+			Done(),
+		)
+	} else {
+		flows = append(flows,
+			// This flow is used to match destination port of NodePort first packet, as the second clause of the conjunction ID.
+			c.pipeline[serviceLBTable].BuildFlow(priorityNormal).
+				MatchProtocol(protocol).
+				MatchDstPort(svcPort, nil).
+				Action().Conjunction(conjID, 2, 2).
+				Cookie(c.cookieAllocator.Request(cookie.Service).Raw()).
+				Done(),
+			// This flow is used to match the conjunction ID for a NodePort.
+			c.pipeline[serviceLBTable].BuildFlow(priorityNormal).
+				MatchProtocol(protocol).
+				MatchConjID(conjID).
+				MatchRegRange(int(serviceLearnReg), marksRegServiceNeedLB, serviceLearnRegRange).
+				Action().LoadRegRange(int(serviceLearnReg), lbResultMark, serviceLearnRegRange).
+				Action().LoadRegRange(int(marksReg), macRewriteMark, macRewriteMarkRange).
+				Action().Group(groupID).
+				Cookie(c.cookieAllocator.Request(cookie.Service).Raw()).
+				Done(),
+		)
+	}
+	return flows
+}
+
+// serviceNodePortIPFlow generate the flow which is the first clause of all conjunctions
+// which are used to match the first NodePort packet.
+func (c *client) serviceNodePortIPFlow(conjIDs []uint32, svcIP net.IP, protocol binding.Protocol) binding.Flow {
+	flowBuilder := c.pipeline[serviceLBTable].BuildFlow(priorityNormal).
 		MatchProtocol(protocol).
-		MatchDstPort(svcPort, nil).
 		MatchDstIP(svcIP).
-		MatchRegRange(int(serviceLearnReg), marksRegServiceNeedLB, serviceLearnRegRange).
-		Action().LoadRegRange(int(serviceLearnReg), lbResultMark, serviceLearnRegRange).
-		Action().LoadRegRange(int(marksReg), macRewriteMark, macRewriteMarkRange).
-		Action().Group(groupID).
-		Cookie(c.cookieAllocator.Request(cookie.Service).Raw()).
-		Done()
+		Cookie(c.cookieAllocator.Request(cookie.Service).Raw())
+	for _, conjID := range conjIDs {
+		flowBuilder = flowBuilder.Action().Conjunction(conjID, 1, 2)
+	}
+	return flowBuilder.Done()
 }
 
 // endpointDNATFlow generates the flow which transforms the Service Cluster IP

@@ -280,7 +280,7 @@ type LearnAction interface {
 	MatchEthernetProtocolIP(isIPv6 bool) LearnAction
 	MatchTransportDst(protocol Protocol) LearnAction
 	MatchTransportDstAsSrc(protocol Protocol) LearnAction
-	MatchNetworkSrcAsDst(protocol Protocol) LearnAction
+	MatchNetworkSrcAsDst(isIPv6 bool) LearnAction
 	MatchLearnedTCPDstPort() LearnAction
 	MatchLearnedUDPDstPort() LearnAction
 	MatchLearnedSCTPDstPort() LearnAction

@@ -571,13 +571,11 @@ func (a *ofLearnAction) MatchLearnedDstIPv6AsSrcIPv6() LearnAction {
 }
 
 // MatchNetworkSrcAsDst makes the learned flow to match the network nw_src/ipv6_src of current packet's nw_dst/ipv6_dst.
-func (a *ofLearnAction) MatchNetworkSrcAsDst(protocol Protocol) LearnAction {
-	isIPv6 := false
+func (a *ofLearnAction) MatchNetworkSrcAsDst(isIPv6 bool) LearnAction {
 	learnBits := uint16(32)
 	from := "NXM_OF_IP_SRC"
 	to := "NXM_OF_IP_DST"
-	if protocol == ProtocolTCPv6 || protocol == ProtocolUDPv6 || protocol == ProtocolSCTPv6 {
-		isIPv6 = true
+	if isIPv6 {
 		learnBits = 128
 		from = "NXM_NX_IPV6_SRC"
 		to = "NXM_NX_IPV6_DST"

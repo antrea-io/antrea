@@ -574,7 +574,7 @@ func installServiceFlows(t *testing.T, gid uint32, svc svcConfig, endpointList [
 	assert.NoError(t, err, "no error should return when installing flows for Endpoints")
 	err = c.InstallServiceGroup(groupID, svc.withSessionAffinity, endpointList)
 	assert.NoError(t, err, "no error should return when installing groups for Service")
-	err = c.InstallServiceFlows(groupID, svc.ip, svc.port, svc.protocol, stickyMaxAgeSeconds)
+	err = c.InstallServiceFlows(groupID, 0, svc.ip, svc.port, svc.protocol, stickyMaxAgeSeconds)
 	assert.NoError(t, err, "no error should return when installing flows for Service")
 }
 

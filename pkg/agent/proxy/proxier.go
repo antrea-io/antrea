@@ -49,7 +49,12 @@ const (
 	// of Endpoints that Antrea can support at the moment is 800. If the number of Endpoints for a given Service exceeds
 	// 800, extra Endpoints will be dropped.
 	maxEndpoints = 800
+
+	// for non-NodePort conjID
+	dummyConjID = uint32(0)
 )
+
+var dummyNodePortIP = net.ParseIP("0.0.0.0")
 
 // Proxier wraps proxy.Provider and adds extra methods. It is introduced for
 // extending the proxy.Provider implementations with extra methods, without
@@ -93,6 +98,8 @@ type proxier struct {
 	endpointReferenceCounter map[string]int
 	// groupCounter is used to allocate groupID.
 	groupCounter types.GroupCounter
+	// conjCounter is used to allocate conjunction ID.
+	conjCounter types.ConjCounter
 	// serviceStringMap provides map from serviceString(ClusterIP:Port/Proto) to ServicePortName.
 	serviceStringMap map[string]k8sproxy.ServicePortName
 	// serviceStringMapMutex protects serviceStringMap object.
@@ -154,7 +161,7 @@ func (p *proxier) removeStaleServices() {
 			}
 			// Remove NodePort flows and configurations.
 			if svcInfo.NodePort() > 0 {
-				if err := p.uninstallNodePortService(uint16(svcInfo.NodePort()), svcInfo.OFProtocol); err != nil {
+				if err := p.uninstallNodePortService(svcPortName, uint16(svcInfo.NodePort()), svcInfo.OFProtocol); err != nil {
 					klog.ErrorS(err, "Failed to remove flows and configurations of Service", "Service", svcPortName)
 					continue
 				}
@@ -266,16 +273,18 @@ func smallSliceDifference(s1, s2 []string) []string {
 	return diff
 }
 
-func (p *proxier) installNodePortService(groupID binding.GroupIDType, svcPort uint16, protocol binding.Protocol, affinityTimeout uint16, nodeLocalExternal bool) error {
-	for _, nodeIPs := range p.nodePortIPMap {
-		for _, nodeIP := range nodeIPs {
-			if err := p.ofClient.InstallServiceFlows(groupID, nodeIP, svcPort, protocol, affinityTimeout); err != nil {
-				return fmt.Errorf("failed to install Service NodePort load balancing flows: %w", err)
-			}
-			if err := p.ofClient.InstallServiceClassifierFlow(groupID, corev1.ServiceTypeNodePort, nodeIP, svcPort, protocol, nodeLocalExternal); err != nil {
-				return fmt.Errorf("failed to install Service NodePort classifying flows: %w", err)
-			}
+func (p *proxier) installNodePortService(svcName k8sproxy.ServicePortName, groupID binding.GroupIDType, svcPort uint16, protocol binding.Protocol, affinityTimeout uint16, nodeLocalExternal bool) error {
+	conjID, isNew := p.conjCounter.Get(svcName)
+	if isNew {
+		if err := p.ofClient.InstallNodePortIPFlows(p.conjCounter.GetAll(), p.nodePortIPMap, protocol); err != nil {
+			return fmt.Errorf("failed to install or update NodePort IP address clause flow of conjunction: %w", err)
 		}
+	}
+	if err := p.ofClient.InstallServiceFlows(groupID, conjID, dummyNodePortIP, svcPort, protocol, affinityTimeout); err != nil {
+		return fmt.Errorf("failed to install Service NodePort load balancing flows: %w", err)
+	}
+	if err := p.ofClient.InstallServiceClassifierFlow(corev1.ServiceTypeNodePort, dummyNodePortIP, svcPort, protocol, nodeLocalExternal); err != nil {
+		return fmt.Errorf("failed to install Service NodePort classifying flows: %w", err)
 	}
 	if err := p.routeClient.AddNodePort(p.nodePortIPMap, svcPort, protocol); err != nil {
 		return fmt.Errorf("failed to install Service NodePort traffic redirecting flows: %w", err)
@@ -283,20 +292,18 @@ func (p *proxier) installNodePortService(groupID binding.GroupIDType, svcPort ui
 	return nil
 }
 
-func (p *proxier) uninstallNodePortService(svcPort uint16, protocol binding.Protocol) error {
-	for _, nodeIPs := range p.nodePortIPMap {
-		for _, nodeIP := range nodeIPs {
-			if err := p.ofClient.UninstallServiceFlows(nodeIP, svcPort, protocol); err != nil {
-				return fmt.Errorf("failed to remove Service NodePort load balancing flows: %w", err)
-			}
-			if err := p.ofClient.UninstallServiceClassifierFlow(nodeIP, svcPort, protocol); err != nil {
-				return fmt.Errorf("failed to remove Service NodePort classifying flows: %w", err)
-			}
-		}
+func (p *proxier) uninstallNodePortService(svcName k8sproxy.ServicePortName, svcPort uint16, protocol binding.Protocol) error {
+	if err := p.ofClient.UninstallServiceFlows(dummyNodePortIP, svcPort, protocol); err != nil {
+		return fmt.Errorf("failed to remove Service NodePort NodePort load balancing flows: %w", err)
+	}
+	if err := p.ofClient.UninstallServiceClassifierFlow(dummyNodePortIP, svcPort, protocol); err != nil {
+		return fmt.Errorf("failed to remove Service NodePort classifying flows: %w", err)
 	}
 	if err := p.routeClient.DeleteNodePort(p.nodePortIPMap, svcPort, protocol); err != nil {
 		return fmt.Errorf("failed to remove Service NodePort traffic redirecting flows: %w", err)
 	}
+
+	p.conjCounter.Recycle(svcName)
 	return nil
 }
 
@@ -304,13 +311,13 @@ func (p *proxier) installLoadBalancerService(groupID binding.GroupIDType, loadBa
 	svcPort uint16, protocol binding.Protocol, affinityTimeout uint16, nodeLocalExternal bool) error {
 	for _, ingress := range loadBalancerIPStrings {
 		if ingress != "" {
-			if err := p.ofClient.InstallServiceFlows(groupID, net.ParseIP(ingress), svcPort, protocol, affinityTimeout); err != nil {
+			if err := p.ofClient.InstallServiceFlows(groupID, dummyConjID, net.ParseIP(ingress), svcPort, protocol, affinityTimeout); err != nil {
 				return fmt.Errorf("failed to install Service LoadBalancer load balancing flows: %w", err)
 			}
 			if err := p.ofClient.InstallLoadBalancerServiceFromOutsideFlows(net.ParseIP(ingress), svcPort, protocol); err != nil {
 				return fmt.Errorf("failed to install Service LoadBalancer flows: %w", err)
 			}
-			if err := p.ofClient.InstallServiceClassifierFlow(groupID, corev1.ServiceTypeLoadBalancer, net.ParseIP(ingress), svcPort, protocol, nodeLocalExternal); err != nil {
+			if err := p.ofClient.InstallServiceClassifierFlow(corev1.ServiceTypeLoadBalancer, net.ParseIP(ingress), svcPort, protocol, nodeLocalExternal); err != nil {
 				return fmt.Errorf("failed to install Service LoadBalancer classifying flows: %w", err)
 			}
 		}
@@ -481,7 +488,7 @@ func (p *proxier) installServices() {
 				if p.proxyFullEnabled {
 					// If previous Service which has NodePort should be removed, remove NodePort flows and configurations of previous Service.
 					if pSvcInfo.NodePort() > 0 {
-						if err := p.uninstallNodePortService(uint16(pSvcInfo.NodePort()), pSvcInfo.OFProtocol); err != nil {
+						if err := p.uninstallNodePortService(svcPortName, uint16(pSvcInfo.NodePort()), pSvcInfo.OFProtocol); err != nil {
 							klog.ErrorS(err, "Failed to remove flows and configurations of Service", "Service", svcPortName)
 							continue
 						}
@@ -490,7 +497,7 @@ func (p *proxier) installServices() {
 			}
 
 			// Install ClusterIP flows of current Service.
-			if err := p.ofClient.InstallServiceFlows(groupID, svcInfo.ClusterIP(), uint16(svcInfo.Port()), svcInfo.OFProtocol, uint16(svcInfo.StickyMaxAgeSeconds())); err != nil {
+			if err := p.ofClient.InstallServiceFlows(groupID, dummyConjID, svcInfo.ClusterIP(), uint16(svcInfo.Port()), svcInfo.OFProtocol, uint16(svcInfo.StickyMaxAgeSeconds())); err != nil {
 				klog.Errorf("Error when installing Service flows: %v", err)
 				continue
 			}
@@ -514,7 +521,7 @@ func (p *proxier) installServices() {
 				// If previous Service is nil or NodePort flows and configurations of previous Service have been removed,
 				// install NodePort flows and configurations for current Service.
 				if svcInfo.NodePort() > 0 && (pSvcInfo == nil || needRemoval) {
-					if err := p.installNodePortService(nGroupID, uint16(svcInfo.NodePort()), svcInfo.OFProtocol, uint16(svcInfo.StickyMaxAgeSeconds()), svcInfo.NodeLocalExternal()); err != nil {
+					if err := p.installNodePortService(svcPortName, nGroupID, uint16(svcInfo.NodePort()), svcInfo.OFProtocol, uint16(svcInfo.StickyMaxAgeSeconds()), svcInfo.NodeLocalExternal()); err != nil {
 						klog.ErrorS(err, "Failed to install NodePort flows and configurations of Service", "Service", svcPortName)
 						continue
 					}
@@ -712,6 +719,9 @@ func (p *proxier) Run(stopCh <-chan struct{}) {
 			if err := p.routeClient.InitService(p.nodePortIPMap, p.isIPv6); err != nil {
 				panic(err)
 			}
+			if err := p.ofClient.InstallInitNodePortClassifierFlows(p.nodePortIPMap, p.isIPv6); err != nil {
+				panic(err)
+			}
 		}
 		go p.serviceConfig.Run(stopCh)
 		if p.endpointSliceEnabled {
@@ -803,6 +813,7 @@ func NewProxier(
 		serviceStringMap:         map[string]k8sproxy.ServicePortName{},
 		oversizeServiceSet:       sets.NewString(),
 		groupCounter:             types.NewGroupCounter(isIPv6),
+		conjCounter:              types.NewConjCounter(isIPv6),
 		ofClient:                 ofClient,
 		routeClient:              routeClient,
 		nodePortIPMap:            nodePortIPMap,
