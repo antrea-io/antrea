@@ -1366,6 +1366,50 @@ func (data *TestData) createServiceWithAnnotations(serviceName string, port, tar
 	return data.clientset.CoreV1().Services(testNamespace).Create(context.TODO(), &service, metav1.CreateOptions{})
 }
 
+// createMultiPortService creates a service which contains multiple port pairs and protocols.
+func (data *TestData) createMultiPortService(serviceName string, ports map[int32]int32, selector map[string]string, affinity bool,
+	serviceType corev1.ServiceType, ipFamily *corev1.IPFamily, protocols []corev1.Protocol) (*corev1.Service, error) {
+	var svcPorts []corev1.ServicePort
+	for p, tp := range ports {
+		for _, proto := range protocols {
+			svcPorts = append(svcPorts, corev1.ServicePort{
+				Name:       strconv.Itoa(int(tp)) + "-" + strings.ToLower(string(proto)),
+				Port:       p,
+				TargetPort: intstr.FromInt(int(tp)),
+				Protocol:   proto,
+			})
+		}
+	}
+
+	affinityType := corev1.ServiceAffinityNone
+	var ipFamilies []corev1.IPFamily
+	if ipFamily != nil {
+		ipFamilies = append(ipFamilies, *ipFamily)
+	}
+	if affinity {
+		affinityType = corev1.ServiceAffinityClientIP
+	}
+
+	service := corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      serviceName,
+			Namespace: testNamespace,
+			Labels: map[string]string{
+				"antrea-e2e": serviceName,
+				"app":        serviceName,
+			},
+		},
+		Spec: corev1.ServiceSpec{
+			SessionAffinity: affinityType,
+			Ports:           svcPorts,
+			Type:            serviceType,
+			Selector:        selector,
+			IPFamilies:      ipFamilies,
+		},
+	}
+	return data.clientset.CoreV1().Services(testNamespace).Create(context.TODO(), &service, metav1.CreateOptions{})
+}
+
 // createNginxClusterIPServiceWithAnnotations creates nginx service with Annotation
 func (data *TestData) createNginxClusterIPServiceWithAnnotations(affinity bool, ipFamily *corev1.IPFamily, annotation map[string]string) (*corev1.Service, error) {
 	return data.createServiceWithAnnotations("nginx", 80, 80, map[string]string{"app": "nginx"}, affinity, corev1.ServiceTypeClusterIP, ipFamily, annotation)
