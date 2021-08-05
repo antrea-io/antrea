@@ -120,10 +120,13 @@ func (ipt *iptablesRules) DeleteRule(nodePort int, podIP string, podPort int) er
 
 // DeleteAllRules deletes all NPL rules programmed in the node
 func (ipt *iptablesRules) DeleteAllRules() error {
-	if err := ipt.table.DeleteChain(iptables.ProtocolIPv4, iptables.NATTable, NodePortLocalChain); err != nil {
-		return err
+	exists, err := ipt.table.ChainExists(iptables.ProtocolIPv4, iptables.NATTable, NodePortLocalChain)
+	if err != nil {
+		return fmt.Errorf("failed to check if NodePortLocal chain exists in NAT table: %v", err)
 	}
-
+	if !exists {
+		return nil
+	}
 	ruleSpec := []string{
 		"-p", "tcp", "-m", "addrtype", "--dst-type", "LOCAL", "-j", NodePortLocalChain,
 	}
@@ -131,6 +134,9 @@ func (ipt *iptablesRules) DeleteAllRules() error {
 		return err
 	}
 	if err := ipt.table.DeleteRule(iptables.ProtocolIPv4, iptables.NATTable, iptables.OutputChain, ruleSpec); err != nil {
+		return err
+	}
+	if err := ipt.table.DeleteChain(iptables.ProtocolIPv4, iptables.NATTable, NodePortLocalChain); err != nil {
 		return err
 	}
 	return nil
