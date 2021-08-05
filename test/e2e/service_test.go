@@ -81,13 +81,13 @@ func testClusterIPCases(t *testing.T, data *TestData, url, hostname, clientPodCp
 	t.Run("Host on different Node can access the Service", func(t *testing.T) {
 		t.Parallel()
 		skipIfKubeProxyEnabledOnLinux(t, data, nodeName(1))
-		skipIfProxyFullDisabled(t)
+		skipIfProxyFullDisabled(t, data)
 		testClusterIPFromNode(t, url, nodeName(1))
 	})
 	t.Run("Host on the same Node can access the Service", func(t *testing.T) {
 		t.Parallel()
 		skipIfKubeProxyEnabledOnLinux(t, data, nodeName(0))
-		skipIfProxyFullDisabled(t)
+		skipIfProxyFullDisabled(t, data)
 		testClusterIPFromNode(t, url, nodeName(0))
 	})
 	t.Run("Pod on same Node can access the Service", func(t *testing.T) {

@@ -29,6 +29,7 @@ Generate a YAML manifest for Antrea using Kustomize and print it to stdout.
         --ipsec                       Generate a manifest with IPSec encryption of tunnel traffic enabled
         --all-features                Generate a manifest with all alpha features enabled
         --no-proxy                    Generate a manifest with Antrea proxy disabled
+        --proxy-full                  Generate a manifest with Antrea proxy full support enabled
         --no-legacy-crd               Generate a manifest without legacy CRD mirroring support enabled
         --endpointslice               Generate a manifest with EndpointSlice support enabled
         --no-np                       Generate a manifest with Antrea-native policies disabled
@@ -69,6 +70,7 @@ KIND=false
 IPSEC=false
 ALLFEATURES=false
 PROXY=true
+PROXY_FULL=false
 LEGACY_CRD=true
 ENDPOINTSLICE=false
 NP=true
@@ -116,6 +118,11 @@ case $key in
     ;;
     --no-proxy)
     PROXY=false
+    shift
+    ;;
+    --proxy-full)
+    PROXY=true
+    PROXY_FULL=true
     shift
     ;;
     --no-legacy-crd)
@@ -183,7 +190,13 @@ esac
 done
 
 if [ "$PROXY" == false ] && [ "$ENDPOINTSLICE" == true ]; then
-    echoerr "--endpointslice requires AntreaProxy and therefore cannot be used with --no-proxy"
+    echoerr "--endpointslice requires AntreaProxy, so it cannot be used with --no-proxy"
+    print_help
+    exit 1
+fi
+
+if [ "$PROXY" == false ] && [ "$PROXY_FULL" == true ]; then
+    echoerr "--proxy-full requires AntreaProxy, so it cannot be used with --no-proxy"
     print_help
     exit 1
 fi
@@ -267,7 +280,7 @@ fi
 
 if $ALLFEATURES; then
     sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*AntreaPolicy[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  AntreaPolicy: true/" antrea-agent.conf
-    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*AntreaProxyFull[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  AntreaProxyFull: true/" antrea-agent.conf
+    sed -i.bak -E "s/^#antreaProxyFull[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/antreaProxyFull: true/" antrea-controller.conf
     sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*FlowExporter[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  FlowExporter: true/" antrea-agent.conf
     sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*NetworkPolicyStats[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  NetworkPolicyStats: true/" antrea-agent.conf
     sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*EndpointSlice[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  EndpointSlice: true/" antrea-agent.conf
@@ -275,6 +288,10 @@ fi
 
 if ! $PROXY; then
     sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*AntreaProxy[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  AntreaProxy: false/" antrea-agent.conf
+fi
+
+if $PROXY_FULL; then
+     sed -i.bak -E "s/^#antreaProxyFull[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/antreaProxyFull: true/" antrea-agent.conf
 fi
 
 if ! $LEGACY_CRD; then

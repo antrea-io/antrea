@@ -3668,10 +3668,6 @@ data:
     # Service traffic.
     #  AntreaProxy: true
 
-    # Enable full Service support in AntreaProxy in antrea-agent. Without KubeProxy, NodePort/LoadBalancer
-    # are supported, and ClusterIP can be accessed from host.
-    #  AntreaProxyFull: false
-
     # Enable EndpointSlice support in AntreaProxy. Don't enable this feature unless that EndpointSlice
     # API version v1beta1 is supported and set as enabled in Kubernetes. If AntreaProxy is not enabled,
     # this flag will not take effect.
@@ -3818,6 +3814,10 @@ data:
     # A string array of values which specifies the host IPv4/IPv6 addresses for NodePort. Values can be valid IP blocks.
     # (e.g. 1.2.3.0/24, 1.2.3.4/32). An empty string slice is meant to select all host IPv4/IPv6 addresses.
     #nodePortAddresses: []
+
+    # Whether or not to enable full Service support in AntreaProxy in antrea-agent. If this option is true, then without
+    # KubeProxy, NodePort/LoadBalancer are supported, and ClusterIP can be accessed from host.
+    #antreaProxyFull: false
   antrea-cni.conflist: |
     {
         "cniVersion":"0.3.0",
@@ -3900,7 +3900,7 @@ metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-59657dhdg6
+  name: antrea-config-mb96584t95
   namespace: kube-system
 ---
 apiVersion: v1
@@ -3971,7 +3971,7 @@ spec:
             fieldRef:
               fieldPath: spec.serviceAccountName
         - name: ANTREA_CONFIG_MAP_NAME
-          value: antrea-config-59657dhdg6
+          value: antrea-config-mb96584t95
         image: projects.registry.vmware.com/antrea/antrea-ubuntu:latest
         imagePullPolicy: IfNotPresent
         livenessProbe:
@@ -4022,7 +4022,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-59657dhdg6
+          name: antrea-config-mb96584t95
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -4303,7 +4303,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-59657dhdg6
+          name: antrea-config-mb96584t95
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d

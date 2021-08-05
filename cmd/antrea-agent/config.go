@@ -155,4 +155,7 @@ type AgentConfig struct {
 	// A string array of values which specifies the host IPv4/IPv6 addresses for NodePorts. Values may be valid IP blocks.
 	// (e.g. 1.2.3.0/24, 1.2.3.4/32). An empty string slice is meant to select all host IPv4/IPv6 addresses.
 	NodePortAddresses []string `yaml:"nodePortAddresses,omitempty"`
+	// Whether or not to enable full Service support in AntreaProxy in antrea-agent. If this option is true, then without
+	// KubeProxy, NodePort/LoadBalancer are supported, and ClusterIP can be accessed from host.
+	AntreaProxyFull bool `yaml:"antreaProxyFull,omitempty"`
 }

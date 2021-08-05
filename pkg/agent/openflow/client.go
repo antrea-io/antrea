@@ -679,9 +679,6 @@ func (c *client) InstallGatewayFlows() error {
 	if gatewayConfig.IPv4 != nil {
 		gatewayIPs = append(gatewayIPs, gatewayConfig.IPv4)
 		flows = append(flows, c.gatewayARPSpoofGuardFlow(gatewayConfig.IPv4, gatewayConfig.MAC, cookie.Default))
-		// This flow is used to allow the response Service packet whose Endpoint is on host network to get ARP resolution.
-		// The source IP of the ARP is Node IP, not Antrea gateway's IP.
-		flows = append(flows, c.gatewayARPSpoofGuardFlow(c.nodeConfig.NodeIPAddr.IP, gatewayConfig.MAC, cookie.Default))
 	}
 	if gatewayConfig.IPv6 != nil {
 		gatewayIPs = append(gatewayIPs, gatewayConfig.IPv6)

@@ -223,7 +223,7 @@ func (o *Options) setDefaults() {
 }
 
 func (o *Options) validateAntreaProxyConfig() error {
-	if features.DefaultFeatureGate.Enabled(features.AntreaProxyFull) {
+	if o.config.AntreaProxyFull {
 		for _, nodePortIP := range o.config.NodePortAddresses {
 			if _, _, err := net.ParseCIDR(nodePortIP); err != nil {
 				return fmt.Errorf("invalid NodePort IP address `%s`: %w", nodePortIP, err)

@@ -157,7 +157,7 @@ var (
 		{l3ForwardingTable, "L3Forwarding"},
 		{snatTable, "SNAT"},
 		{l3DecTTLTable, "IPTTLDec"},
-		{serviceResponseProcessTable, "serviceDstMACRewrite"},
+		{serviceResponseProcessTable, "ServiceResponseProcess"},
 		{l2ForwardingCalcTable, "L2Forwarding"},
 		{AntreaPolicyIngressRuleTable, "AntreaPolicyIngressRule"},
 		{IngressRuleTable, "IngressRule"},

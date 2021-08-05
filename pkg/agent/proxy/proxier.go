@@ -775,7 +775,8 @@ func NewProxier(
 	ofClient openflow.Client,
 	isIPv6 bool,
 	routeClient route.Interface,
-	nodePortIPMap map[int][]net.IP) *proxier {
+	nodePortIPMap map[int][]net.IP,
+	proxyFullEnabled bool) *proxier {
 	recorder := record.NewBroadcaster().NewRecorder(
 		runtime.NewScheme(),
 		corev1.EventSource{Component: componentName, Host: hostname},
@@ -784,7 +785,6 @@ func NewProxier(
 	klog.V(2).Infof("Creating proxier with IPv6 enabled=%t", isIPv6)
 
 	endpointSliceEnabled := features.DefaultFeatureGate.Enabled(features.EndpointSlice)
-	proxyFullEnabled := features.DefaultFeatureGate.Enabled(features.AntreaProxyFull)
 	ipFamily := corev1.IPv4Protocol
 	if isIPv6 {
 		ipFamily = corev1.IPv6Protocol
@@ -860,13 +860,14 @@ func NewDualStackProxier(
 	ofClient openflow.Client,
 	routeClient route.Interface,
 	nodePortIPMap map[int][]net.IP,
-	nodePortIPv6Map map[int][]net.IP) *metaProxierWrapper {
+	nodePortIPv6Map map[int][]net.IP,
+	proxyFullEnabled bool) *metaProxierWrapper {
 
 	// Create an ipv4 instance of the single-stack proxier.
-	ipv4Proxier := NewProxier(hostname, informerFactory, ofClient, false, routeClient, nodePortIPMap)
+	ipv4Proxier := NewProxier(hostname, informerFactory, ofClient, false, routeClient, nodePortIPMap, proxyFullEnabled)
 
 	// Create an ipv6 instance of the single-stack proxier.
-	ipv6Proxier := NewProxier(hostname, informerFactory, ofClient, true, routeClient, nodePortIPv6Map)
+	ipv6Proxier := NewProxier(hostname, informerFactory, ofClient, true, routeClient, nodePortIPv6Map, proxyFullEnabled)
 
 	// Create a meta-proxier that dispatch calls between the two
 	// single-stack proxier instances.

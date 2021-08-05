@@ -410,11 +410,18 @@ func testReconcileGatewayRoutesOnStartup(t *testing.T, data *TestData, isIPv6 bo
 	}
 	agentFeatures, err := GetAgentFeatures()
 	require.NoError(t, err)
-	if agentFeatures.Enabled(features.AntreaProxy) && agentFeatures.Enabled(features.AntreaProxyFull) {
-		if !isIPv6 {
-			expectedRtNumMin += 2
+
+	if agentFeatures.Enabled(features.AntreaProxy) {
+		isProxyFull, err := data.IsProxyFull()
+		if err != nil {
+			t.Fatalf("Error getting option antreaProxyFull value")
 		}
-		expectedRtNumMax += 2
+		if isProxyFull {
+			if !isIPv6 {
+				expectedRtNumMin += 2
+			}
+			expectedRtNumMax += 2
+		}
 	}
 
 	t.Logf("Retrieving gateway routes on Node '%s'", nodeName)

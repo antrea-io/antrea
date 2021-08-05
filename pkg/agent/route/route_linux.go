@@ -29,7 +29,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
-	netutils "k8s.io/utils/net"
 
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/types"
@@ -38,7 +37,6 @@ import (
 	"antrea.io/antrea/pkg/agent/util/iptables"
 	"antrea.io/antrea/pkg/agent/util/sysctl"
 	"antrea.io/antrea/pkg/agent/util/tc"
-	"antrea.io/antrea/pkg/features"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 	"antrea.io/antrea/pkg/util/env"
@@ -102,12 +100,13 @@ type Client struct {
 	iptablesInitialized      chan struct{}
 	tcClient                 *tc.Client
 	defaultRouteInterfaceMap map[int]int
+	proxyFull                bool
 }
 
 // NewClient returns a route client.
 // TODO: remove param serviceCIDR after kube-proxy is replaced by Antrea Proxy. This param is not used in this file;
 // leaving it here is to be compatible with the implementation on Windows.
-func NewClient(serviceCIDR *net.IPNet, networkConfig *config.NetworkConfig, noSNAT bool) (*Client, error) {
+func NewClient(serviceCIDR *net.IPNet, networkConfig *config.NetworkConfig, noSNAT, proxyFull bool) (*Client, error) {
 	defaultRouteMap, err := util.GetDefaultRouteInterfaces()
 	if err != nil {
 		return nil, err
@@ -118,6 +117,7 @@ func NewClient(serviceCIDR *net.IPNet, networkConfig *config.NetworkConfig, noSN
 		noSNAT:                   noSNAT,
 		tcClient:                 tc.NewTcClient(),
 		defaultRouteInterfaceMap: defaultRouteMap,
+		proxyFull:                proxyFull,
 	}, nil
 }
 
@@ -455,19 +455,19 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet, podIPSet string, snatMa
 		"-j", iptables.MasqueradeTarget, "--random-fully",
 	}...)
 
-	if features.DefaultFeatureGate.Enabled(features.AntreaProxyFull) {
-		if netutils.IsIPv6(podCIDR.IP) {
+	if c.proxyFull {
+		if podCIDR.IP.To4() != nil {
 			writeLine(iptablesData, []string{
 				"-A", antreaPostRoutingChain,
 				"-m", "comment", "--comment", `"Antrea: masquerade Service host network Endpoint traffic"`,
-				"-s", serviceGWHairpinIPv6.String(),
+				"-s", serviceGWHairpinIPv4.String(),
 				"-j", iptables.MasqueradeTarget,
 			}...)
 		} else {
 			writeLine(iptablesData, []string{
 				"-A", antreaPostRoutingChain,
 				"-m", "comment", "--comment", `"Antrea: masquerade Service host network Endpoint traffic"`,
-				"-s", serviceGWHairpinIPv4.String(),
+				"-s", serviceGWHairpinIPv6.String(),
 				"-j", iptables.MasqueradeTarget,
 			}...)
 		}

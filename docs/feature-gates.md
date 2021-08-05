@@ -36,7 +36,6 @@ example, to enable `AntreaProxy` on Linux, edit the Agent configuration in the
 | Feature Name            | Component          | Default | Stage | Alpha Release | Beta Release | GA Release | Extra Requirements | Notes |
 | ----------------------- | ------------------ | ------- | ----- | ------------- | ------------ | ---------- | ------------------ | ----- |
 | `AntreaProxy`           | Agent              | `true`  | Beta  | v0.8          | v0.11        | N/A        | Yes                | Must be enabled for Windows. |
-| `AntreaProxyFull`       | Agent              | `false` | Alpha | v1.3          | N/A          | N/A        | Yes                |       |
 | `EndpointSlice`         | Agent              | `false` | Alpha | v0.13.0       | N/A          | N/A        | Yes                |       |
 | `AntreaPolicy`          | Agent + Controller | `true`  | Beta  | v0.8          | v1.0         | N/A        | No                 | Agent side config required from v0.9.0+. |
 | `Traceflow`             | Agent + Controller | `true`  | Beta  | v0.8          | v0.11        | N/A        | Yes                |       |
@@ -62,17 +61,6 @@ Note that this feature must be enabled for Windows. The Antrea Windows YAML
 manifest provided as part of releases enables this feature by default. If you
 edit the manifest, make sure you do not disable it, as it is needed for correct
 NetworkPolicy implementation for Pod-to-Service traffic.
-
-### AntreaProxyFull
-
-`AntreaProxyFull` enables full Service support in AntreaProxy. After enabling this
-feature, without KubeProxy, NodePort/LoadBalancer are supported, and ClusterIP can
-be accessed from host.
-
-#### Requirements for this Feature
-
-This feature is currently only supported for Nodes running Linux.
-Windows support will be added in the future.
 
 ### EndpointSlice
 

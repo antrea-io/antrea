@@ -1690,6 +1690,20 @@ func (data *TestData) GetEncapMode() (config.TrafficEncapModeType, error) {
 	return config.TrafficEncapModeEncap, nil
 }
 
+func (data *TestData) IsProxyFull() (bool, error) {
+	configMap, err := data.GetAntreaConfigMap(antreaNamespace)
+	if err != nil {
+		return false, fmt.Errorf("failed to get Antrea ConfigMap: %v", err)
+	}
+	for _, antreaConfig := range configMap.Data {
+		searchStr := "antreaProxyFull: true"
+		if strings.Index(strings.ToLower(antreaConfig), strings.ToLower(searchStr)) != -1 {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 func getFeatures(confName string) (featuregate.FeatureGate, error) {
 	featureGate := features.DefaultMutableFeatureGate.DeepCopy()
 	var cfg interface{}

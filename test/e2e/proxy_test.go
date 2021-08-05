@@ -77,8 +77,14 @@ func testProxyServiceSessionAffinityCase(t *testing.T, data *TestData) {
 	}
 }
 
-func skipIfProxyFullDisabled(t *testing.T) {
-	skipIfFeatureDisabled(t, features.AntreaProxyFull, true /* checkAgent */, false /* checkController */)
+func skipIfProxyFullDisabled(t *testing.T, data *TestData) {
+	isProxyFull, err := data.IsProxyFull()
+	if err != nil {
+		t.Fatalf("Error getting option antreaProxyFull value")
+	}
+	if !isProxyFull {
+		t.Skipf("Skipping test because option antreaProxyFull is not enabled")
+	}
 }
 
 func skipIfKubeProxyEnabledOnLinux(t *testing.T, data *TestData, nodeName string) {
@@ -101,7 +107,7 @@ func TestProxyLoadBalancerService(t *testing.T) {
 	defer teardownTest(t, data)
 
 	skipIfProxyDisabled(t)
-	skipIfProxyFullDisabled(t)
+	skipIfProxyFullDisabled(t, data)
 	skipIfHasWindowsNodes(t)
 	skipIfNumNodesLessThan(t, 2)
 
@@ -217,7 +223,7 @@ func TestProxyNodePortService(t *testing.T) {
 	defer teardownTest(t, data)
 
 	skipIfProxyDisabled(t)
-	skipIfProxyFullDisabled(t)
+	skipIfProxyFullDisabled(t, data)
 	skipIfHasWindowsNodes(t)
 	skipIfNumNodesLessThan(t, 2)
 
@@ -460,6 +466,11 @@ func TestProxyServiceSessionAffinity(t *testing.T) {
 func testProxyServiceSessionAffinity(ipFamily *corev1.IPFamily, ingressIPs []string, data *TestData, t *testing.T) {
 	nodeName := nodeName(1)
 	nginx := randName("nginx-")
+	isProxyFull, err := data.IsProxyFull()
+	if err != nil {
+		t.Fatalf("Error getting option antreaProxyFull value")
+	}
+
 	require.NoError(t, data.createNginxPodOnNode(nginx, testNamespace, nodeName))
 	nginxIP, err := data.podWaitForIPs(defaultTimeout, nginx, testNamespace)
 	defer data.deletePodAndWait(defaultTimeout, nginx, testNamespace)
@@ -493,7 +504,7 @@ func testProxyServiceSessionAffinity(ipFamily *corev1.IPFamily, ingressIPs []str
 	if *ipFamily == corev1.IPv4Protocol {
 		require.Contains(t, table40Output, fmt.Sprintf("nw_dst=%s,tp_dst=80", svc.Spec.ClusterIP))
 		require.Contains(t, table40Output, fmt.Sprintf("load:0x%s->NXM_NX_REG3[]", strings.TrimLeft(hex.EncodeToString(nginxIP.ipv4.To4()), "0")))
-		if features.DefaultFeatureGate.Enabled(features.AntreaProxyFull) {
+		if isProxyFull {
 			for _, ingressIP := range ingressIPs {
 				require.Contains(t, table40Output, fmt.Sprintf("nw_dst=%s,tp_dst=80", ingressIP))
 			}
@@ -502,7 +513,7 @@ func testProxyServiceSessionAffinity(ipFamily *corev1.IPFamily, ingressIPs []str
 		require.Contains(t, table40Output, fmt.Sprintf("ipv6_dst=%s,tp_dst=80", svc.Spec.ClusterIP))
 		require.Contains(t, table40Output, fmt.Sprintf("load:0x%s->NXM_NX_XXREG3[0..63]", strings.TrimLeft(hex.EncodeToString([]byte(*nginxIP.ipv6)[8:16]), "0")))
 		require.Contains(t, table40Output, fmt.Sprintf("load:0x%s->NXM_NX_XXREG3[64..127]", strings.TrimLeft(hex.EncodeToString([]byte(*nginxIP.ipv6)[0:8]), "0")))
-		if features.DefaultFeatureGate.Enabled(features.AntreaProxyFull) {
+		if isProxyFull {
 			for _, ingressIP := range ingressIPs {
 				require.Contains(t, table40Output, fmt.Sprintf("ipv6_dst=%s,tp_dst=80", ingressIP))
 			}
@@ -688,6 +699,11 @@ func TestProxyServiceLifeCycle(t *testing.T) {
 func testProxyServiceLifeCycle(ipFamily *corev1.IPFamily, ingressIPs []string, data *TestData, t *testing.T) {
 	nodeName := nodeName(1)
 	nginx := randName("nginx-")
+	isProxyFull, err := data.IsProxyFull()
+	if err != nil {
+		t.Fatalf("Error getting option antreaProxyFull value")
+	}
+
 	require.NoError(t, data.createNginxPodOnNode(nginx, testNamespace, nodeName))
 	defer data.deletePodAndWait(defaultTimeout, nginx, testNamespace)
 	nginxIPs, err := data.podWaitForIPs(defaultTimeout, nginx, testNamespace)
@@ -713,14 +729,14 @@ func testProxyServiceLifeCycle(ipFamily *corev1.IPFamily, ingressIPs []string, d
 	var svcLBflows []string
 	if *ipFamily == corev1.IPv6Protocol {
 		svcLBflows = append(svcLBflows, fmt.Sprintf("ipv6_dst=%s,tp_dst=80", svc.Spec.ClusterIP))
-		if features.DefaultFeatureGate.Enabled(features.AntreaProxyFull) {
+		if isProxyFull {
 			for _, ingressIP := range ingressIPs {
 				svcLBflows = append(svcLBflows, fmt.Sprintf("ipv6_dst=%s,tp_dst=80", ingressIP))
 			}
 		}
 	} else {
 		svcLBflows = append(svcLBflows, fmt.Sprintf("nw_dst=%s,tp_dst=80", svc.Spec.ClusterIP))
-		if features.DefaultFeatureGate.Enabled(features.AntreaProxyFull) {
+		if isProxyFull {
 			for _, ingressIP := range ingressIPs {
 				svcLBflows = append(svcLBflows, fmt.Sprintf("nw_dst=%s,tp_dst=80", ingressIP))
 			}
