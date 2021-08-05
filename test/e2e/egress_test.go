@@ -169,13 +169,23 @@ ip netns exec %[1]s /agnhost netexec
 	assertClientIP(localPod, egressNodeIP)
 	assertClientIP(remotePod, egressNodeIP)
 
+	var err error
+	err = wait.Poll(time.Millisecond*100, time.Second, func() (bool, error) {
+		egress, err = data.crdClient.CrdV1alpha2().Egresses().Get(context.TODO(), egress.Name, metav1.GetOptions{})
+		if err != nil {
+			return false, err
+		}
+		return egress.Status.EgressNode == egressNode, nil
+	})
+	assert.NoError(t, err, "Egress failed to reach expected status")
+
 	t.Log("Updating the Egress's AppliedTo to remotePod only")
 	egress.Spec.AppliedTo = v1alpha2.AppliedTo{
 		PodSelector: &metav1.LabelSelector{
 			MatchLabels: map[string]string{"antrea-e2e": remotePod},
 		},
 	}
-	egress, err := data.crdClient.CrdV1alpha2().Egresses().Update(context.TODO(), egress, metav1.UpdateOptions{})
+	egress, err = data.crdClient.CrdV1alpha2().Egresses().Update(context.TODO(), egress, metav1.UpdateOptions{})
 	if err != nil {
 		t.Fatalf("Failed to update Egress %v: %v", egress, err)
 	}
@@ -342,7 +352,7 @@ func testEgressUpdateEgressIP(t *testing.T, data *TestData) {
 			toUpdate.Spec.ExternalIPPool = newPool.Name
 			toUpdate.Spec.EgressIP = newIP
 			egress, err = data.crdClient.CrdV1alpha2().Egresses().Update(context.TODO(), toUpdate, metav1.UpdateOptions{})
-			require.NoError(t, err, "Failed to delete Egress")
+			require.NoError(t, err, "Failed to update Egress")
 
 			_, err = data.checkEgressState(egress.Name, newIP, tt.newNode, "", time.Second)
 			require.NoError(t, err)
