@@ -46,3 +46,16 @@
 # Install docker-py so that docker images can be pulled
 - pip:
     name: docker-py
+
+- name: Create Docker daemon configuration from template
+  template:
+    src: templates/docker.json.j2
+    dest: /etc/docker/daemon.json
+  register: docker_config
+
+- name: Restart Docker
+  service:
+    name: docker
+    daemon_reload: yes
+    state: restarted
+  when: docker_config.changed
