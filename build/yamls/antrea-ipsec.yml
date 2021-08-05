@@ -4229,7 +4229,7 @@ spec:
           name: api
           protocol: TCP
         readinessProbe:
-          failureThreshold: 5
+          failureThreshold: 8
           httpGet:
             host: localhost
             path: /readyz
