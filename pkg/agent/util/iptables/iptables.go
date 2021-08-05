@@ -325,15 +325,6 @@ func (c *Client) Save() ([]byte, error) {
 	return output, nil
 }
 
-func contains(chains []string, targetChain string) bool {
-	for _, val := range chains {
-		if val == targetChain {
-			return true
-		}
-	}
-	return false
-}
-
 func MakeChainLine(chain string) string {
 	return fmt.Sprintf(":%s - [0:0]", chain)
 }
