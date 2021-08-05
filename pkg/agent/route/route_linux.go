@@ -258,6 +258,7 @@ func (c *Client) syncIPTables() error {
 	var err error
 	v4Enabled := config.IsIPv4Enabled(c.nodeConfig, c.networkConfig.TrafficEncapMode)
 	v6Enabled := config.IsIPv6Enabled(c.nodeConfig, c.networkConfig.TrafficEncapMode)
+
 	c.ipt, err = iptables.New(v4Enabled, v6Enabled)
 	if err != nil {
 		return fmt.Errorf("error creating IPTables instance: %v", err)
@@ -274,11 +275,11 @@ func (c *Client) syncIPTables() error {
 		{iptables.MangleTable, iptables.OutputChain, antreaOutputChain, "Antrea: jump to Antrea output rules"},
 	}
 	for _, rule := range jumpRules {
-		if err := c.ipt.EnsureChain(rule.table, rule.dstChain); err != nil {
+		if err := c.ipt.EnsureChain(iptables.ProtocolDual, rule.table, rule.dstChain); err != nil {
 			return err
 		}
 		ruleSpec := []string{"-j", rule.dstChain, "-m", "comment", "--comment", rule.comment}
-		if err := c.ipt.EnsureRule(rule.table, rule.srcChain, ruleSpec); err != nil {
+		if err := c.ipt.AppendRule(iptables.ProtocolDual, rule.table, rule.srcChain, ruleSpec); err != nil {
 			return err
 		}
 	}
@@ -771,5 +772,5 @@ func (c *Client) DeleteSNATRule(mark uint32) error {
 	}
 	c.markToSNATIP.Delete(mark)
 	snatIP := value.(net.IP)
-	return c.ipt.DeleteRule(iptables.NATTable, antreaPostRoutingChain, c.snatRuleSpec(snatIP, mark))
+	return c.ipt.DeleteRule(iptables.ProtocolDual, iptables.NATTable, antreaPostRoutingChain, c.snatRuleSpec(snatIP, mark))
 }

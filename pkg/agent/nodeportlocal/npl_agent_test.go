@@ -191,8 +191,8 @@ func setUp(t *testing.T, tc *testConfig, objects ...runtime.Object) *testData {
 	mockCtrl := gomock.NewController(t)
 
 	mockIPTables := rulestesting.NewMockPodPortRules(mockCtrl)
-	mockIPTables.EXPECT().AddRule(gomock.Any(), gomock.Any()).AnyTimes()
-	mockIPTables.EXPECT().DeleteRule(gomock.Any(), gomock.Any()).AnyTimes()
+	mockIPTables.EXPECT().AddRule(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockIPTables.EXPECT().DeleteRule(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	mockIPTables.EXPECT().AddAllRules(gomock.Any()).AnyTimes()
 
 	mockPortOpener := portcachetesting.NewMockLocalPortOpener(mockCtrl)
