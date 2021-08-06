@@ -84,9 +84,9 @@ func (k *KubernetesUtils) GetPodsByLabel(ns string, key string, val string) ([]v
 	return v1PodList, nil
 }
 
-// Probe execs into a Pod and checks its connectivity to another Pod.  Of course it assumes
-// that the target Pod is serving on the input port, and also that agnhost is installed.
-func (k *KubernetesUtils) Probe(ns1, pod1, ns2, pod2 string, port int32, protocol v1.Protocol) (PodConnectivityMark, error) {
+// Probe execs into a Pod and checks its connectivity to another Pod. Of course it assumes
+// that the target Pod is serving on input ports, and also that agnhost is installed.
+func (k *KubernetesUtils) Probe(ns1, pod1, ns2, pod2 string, ports []int32, protocol v1.Protocol) (PodConnectivityMark, error) {
 	fromPods, err := k.GetPodsByLabel(ns1, "pod", pod1)
 	if err != nil {
 		return Error, fmt.Errorf("unable to get Pods from Namespace %s: %v", ns1, err)
@@ -122,36 +122,38 @@ func (k *KubernetesUtils) Probe(ns1, pod1, ns2, pod2 string, port int32, protoco
 			"/bin/sh",
 			"-c",
 		}
-		switch protocol {
-		case v1.ProtocolTCP:
-			cmd = append(cmd, fmt.Sprintf("for i in $(seq 1 3); do /agnhost connect %s:%d --timeout=1s --protocol=tcp && exit 0 || true; done; exit 1", toIP, port))
-		case v1.ProtocolUDP:
-			cmd = append(cmd, fmt.Sprintf("for i in $(seq 1 3); do /agnhost connect %s:%d --timeout=1s --protocol=udp && exit 0 || true; done; exit 1", toIP, port))
-		case v1.ProtocolSCTP:
-			cmd = append(cmd, fmt.Sprintf("for i in $(seq 1 3); do /agnhost connect %s:%d --timeout=1s --protocol=sctp && exit 0 || true; done; exit 1", toIP, port))
-		}
-		// HACK: inferring container name as c80, c81, etc, for simplicity.
-		containerName := fmt.Sprintf("c%v", port)
-		log.Tracef("Running: kubectl exec %s -c %s -n %s -- %s", fromPod.Name, containerName, fromPod.Namespace, strings.Join(cmd, " "))
-		stdout, stderr, err := k.runCommandFromPod(fromPod.Namespace, fromPod.Name, containerName, cmd)
-		var curConnectivity PodConnectivityMark
-		if err != nil {
-			// log this error as trace since may be an expected failure
-			log.Tracef("%s/%s -> %s/%s: error when running command: err - %v /// stdout - %s /// stderr - %s", ns1, pod1, ns2, pod2, err, stdout, stderr)
-			// do not return an error
-			if strings.Contains(stderr, "TIMEOUT") {
-				curConnectivity = Dropped
-			} else {
-				curConnectivity = Rejected
+		for _, port := range ports {
+			switch protocol {
+			case v1.ProtocolTCP:
+				cmd = append(cmd, fmt.Sprintf("for i in $(seq 1 3); do /agnhost connect %s:%d --timeout=1s --protocol=tcp && exit 0 || true; done; exit 1", toIP, port))
+			case v1.ProtocolUDP:
+				cmd = append(cmd, fmt.Sprintf("for i in $(seq 1 3); do /agnhost connect %s:%d --timeout=1s --protocol=udp && exit 0 || true; done; exit 1", toIP, port))
+			case v1.ProtocolSCTP:
+				cmd = append(cmd, fmt.Sprintf("for i in $(seq 1 3); do /agnhost connect %s:%d --timeout=1s --protocol=sctp && exit 0 || true; done; exit 1", toIP, port))
 			}
-		} else {
-			curConnectivity = Connected
-		}
+			// HACK: inferring container name as c80, c81, etc, for simplicity.
+			containerName := fmt.Sprintf("c%v", port)
+			log.Tracef("Running: kubectl exec %s -c %s -n %s -- %s", fromPod.Name, containerName, fromPod.Namespace, strings.Join(cmd, " "))
+			stdout, stderr, err := k.runCommandFromPod(fromPod.Namespace, fromPod.Name, containerName, cmd)
+			var curConnectivity PodConnectivityMark
+			if err != nil {
+				// log this error as trace since may be an expected failure
+				log.Tracef("%s/%s -> %s/%s:%d: error when running command: err - %v /// stdout - %s /// stderr - %s", ns1, pod1, ns2, pod2, port, err, stdout, stderr)
+				// do not return an error
+				if strings.Contains(stderr, "TIMEOUT") {
+					curConnectivity = Dropped
+				} else {
+					curConnectivity = Rejected
+				}
+			} else {
+				curConnectivity = Connected
+			}
 
-		if connectivity == Unknown {
-			connectivity = curConnectivity
-		} else if connectivity != curConnectivity {
-			return Error, nil
+			if connectivity == Unknown {
+				connectivity = curConnectivity
+			} else if connectivity != curConnectivity {
+				return Error, nil
+			}
 		}
 	}
 	return connectivity, nil
@@ -700,20 +702,21 @@ func (k *KubernetesUtils) waitForPodInNamespace(ns string, pod string) ([]string
 func (k *KubernetesUtils) waitForHTTPServers(allPods []Pod) error {
 	const maxTries = 10
 	log.Infof("waiting for HTTP servers (ports 80, 81 and 8080:8085) to become ready")
-	log.Infof("Waiting for HTTP servers (ports 80, 81, 5000 and 8080:8085) to become ready")
 	var wrong int
 	for i := 0; i < maxTries; i++ {
 		reachability := NewReachability(allPods, Connected)
-		k.Validate(allPods, reachability, 80, v1.ProtocolTCP)
-		k.Validate(allPods, reachability, 80, v1.ProtocolUDP)
-		k.Validate(allPods, reachability, 80, v1.ProtocolSCTP)
-		k.Validate(allPods, reachability, 81, v1.ProtocolTCP)
-		k.Validate(allPods, reachability, 81, v1.ProtocolUDP)
-		k.Validate(allPods, reachability, 81, v1.ProtocolSCTP)
-		for j := 8080; j < 8086; j++ {
-			k.Validate(allPods, reachability, int32(j), v1.ProtocolTCP)
-		}
-		_, wrong, _ = reachability.Summary()
+		curWrong := 0
+
+		k.Validate(allPods, reachability, []int32{80, 81, 8080, 8081, 8082, 8083, 8084, 8085}, v1.ProtocolTCP)
+		_, curWrong, _ = reachability.Summary()
+		wrong += curWrong
+		k.Validate(allPods, reachability, []int32{80, 81}, v1.ProtocolUDP)
+		_, curWrong, _ = reachability.Summary()
+		wrong += curWrong
+		k.Validate(allPods, reachability, []int32{80, 81}, v1.ProtocolSCTP)
+		_, curWrong, _ = reachability.Summary()
+		wrong += curWrong
+
 		if wrong == 0 {
 			log.Infof("All HTTP servers are ready")
 			return nil
@@ -724,7 +727,7 @@ func (k *KubernetesUtils) waitForHTTPServers(allPods []Pod) error {
 	return errors.Errorf("after %d tries, %d HTTP servers are not ready", maxTries, wrong)
 }
 
-func (k *KubernetesUtils) Validate(allPods []Pod, reachability *Reachability, port int32, protocol v1.Protocol) {
+func (k *KubernetesUtils) Validate(allPods []Pod, reachability *Reachability, ports []int32, protocol v1.Protocol) {
 	type probeResult struct {
 		podFrom      Pod
 		podTo        Pod
@@ -736,7 +739,7 @@ func (k *KubernetesUtils) Validate(allPods []Pod, reachability *Reachability, po
 	// TODO: find better metrics, this is only for POC.
 	oneProbe := func(podFrom, podTo Pod) {
 		log.Tracef("Probing: %s -> %s", podFrom, podTo)
-		connectivity, err := k.Probe(podFrom.Namespace(), podFrom.PodName(), podTo.Namespace(), podTo.PodName(), port, protocol)
+		connectivity, err := k.Probe(podFrom.Namespace(), podFrom.PodName(), podTo.Namespace(), podTo.PodName(), ports, protocol)
 		resultsCh <- &probeResult{podFrom, podTo, connectivity, err}
 	}
 	for _, pod1 := range allPods {
@@ -751,7 +754,7 @@ func (k *KubernetesUtils) Validate(allPods []Pod, reachability *Reachability, po
 		}
 		reachability.Observe(r.podFrom, r.podTo, r.connectivity)
 		if r.connectivity != Connected && reachability.Expected.Get(r.podFrom.String(), r.podTo.String()) == Connected {
-			log.Warnf("FAILED CONNECTION FOR ALLOWED PODS %s -> %s !!!! ", r.podFrom, r.podTo)
+			log.Warnf("FAILED CONNECTION FOR ALLOWED PODS %s -> %s ON %s !!!!", r.podFrom, r.podTo, protocol)
 		}
 	}
 }

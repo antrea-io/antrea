@@ -1741,9 +1741,9 @@ func testLegacyAuditLoggingBasic(t *testing.T, data *TestData) {
 	time.Sleep(networkPolicyDelay)
 
 	// generate some traffic that will be dropped by test-log-acnp-deny
-	k8sUtils.Probe("x", "a", "z", "a", p80, v1.ProtocolTCP)
-	k8sUtils.Probe("x", "a", "z", "b", p80, v1.ProtocolTCP)
-	k8sUtils.Probe("x", "a", "z", "c", p80, v1.ProtocolTCP)
+	k8sUtils.Probe("x", "a", "z", "a", []int32{p80}, v1.ProtocolTCP)
+	k8sUtils.Probe("x", "a", "z", "b", []int32{p80}, v1.ProtocolTCP)
+	k8sUtils.Probe("x", "a", "z", "c", []int32{p80}, v1.ProtocolTCP)
 	time.Sleep(networkPolicyDelay)
 
 	podXA, err := k8sUtils.GetPodByLabel("x", "a")
@@ -2026,9 +2026,7 @@ func executeLegacyTestsWithData(t *testing.T, testList []*TestCase, data *TestDa
 			reachability := step.Reachability
 			if reachability != nil {
 				start := time.Now()
-				for _, port := range step.Port {
-					k8sUtils.Validate(allPods, reachability, port, step.Protocol)
-				}
+				k8sUtils.Validate(allPods, reachability, step.Port, step.Protocol)
 				step.Duration = time.Since(start)
 
 				_, wrong, _ := step.Reachability.Summary()

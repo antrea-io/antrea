@@ -195,7 +195,7 @@ func applyDefaultDenyToAllNamespaces(k8s *KubernetesUtils, namespaces []string) 
 	}
 	time.Sleep(networkPolicyDelay)
 	r := NewReachability(allPods, Dropped)
-	k8s.Validate(allPods, r, p80, v1.ProtocolTCP)
+	k8s.Validate(allPods, r, []int32{p80}, v1.ProtocolTCP)
 	_, wrong, _ := r.Summary()
 	if wrong != 0 {
 		return fmt.Errorf("error when creating default deny k8s NetworkPolicies")
@@ -209,7 +209,7 @@ func cleanupDefaultDenyNPs(k8s *KubernetesUtils, namespaces []string) error {
 	}
 	time.Sleep(networkPolicyDelay * 2)
 	r := NewReachability(allPods, Connected)
-	k8s.Validate(allPods, r, p80, v1.ProtocolTCP)
+	k8s.Validate(allPods, r, []int32{p80}, v1.ProtocolTCP)
 	_, wrong, _ := r.Summary()
 	if wrong != 0 {
 		return fmt.Errorf("error when cleaning default deny k8s NetworkPolicies")
@@ -1987,7 +1987,7 @@ func testANPMultipleAppliedTo(t *testing.T, data *TestData, singleRule bool) {
 	anp, err := k8sUtils.CreateOrUpdateANP(builder.Get())
 	failOnError(err, t)
 	failOnError(data.waitForANPRealized(t, anp.Namespace, anp.Name), t)
-	k8sUtils.Validate(allPods, reachability, 80, v1.ProtocolTCP)
+	k8sUtils.Validate(allPods, reachability, []int32{80}, v1.ProtocolTCP)
 	_, wrong, _ := reachability.Summary()
 	if wrong != 0 {
 		t.Errorf("failure -- %d wrong results", wrong)
@@ -2006,7 +2006,7 @@ func testANPMultipleAppliedTo(t *testing.T, data *TestData, singleRule bool) {
 	reachability.Expect(Pod("x/b"), Pod("y/a"), Dropped)
 	reachability.Expect(Pod("x/b"), Pod("y/c"), Dropped)
 	time.Sleep(networkPolicyDelay)
-	k8sUtils.Validate(allPods, reachability, 80, v1.ProtocolTCP)
+	k8sUtils.Validate(allPods, reachability, []int32{80}, v1.ProtocolTCP)
 	_, wrong, _ = reachability.Summary()
 	if wrong != 0 {
 		t.Errorf("failure -- %d wrong results", wrong)
@@ -2020,7 +2020,7 @@ func testANPMultipleAppliedTo(t *testing.T, data *TestData, singleRule bool) {
 	reachability = NewReachability(allPods, Connected)
 	reachability.Expect(Pod("x/b"), Pod("y/a"), Dropped)
 	time.Sleep(networkPolicyDelay)
-	k8sUtils.Validate(allPods, reachability, 80, v1.ProtocolTCP)
+	k8sUtils.Validate(allPods, reachability, []int32{80}, v1.ProtocolTCP)
 	_, wrong, _ = reachability.Summary()
 	if wrong != 0 {
 		t.Errorf("failure -- %d wrong results", wrong)
@@ -2050,7 +2050,7 @@ func testAuditLoggingBasic(t *testing.T, data *TestData) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			k8sUtils.Probe(ns1, pod1, ns2, pod2, p80, v1.ProtocolTCP)
+			k8sUtils.Probe(ns1, pod1, ns2, pod2, []int32{p80}, v1.ProtocolTCP)
 		}()
 	}
 	oneProbe("x", "a", "z", "a")
@@ -2440,9 +2440,7 @@ func executeTestsWithData(t *testing.T, testList []*TestCase, data *TestData) {
 			reachability := step.Reachability
 			if reachability != nil {
 				start := time.Now()
-				for _, port := range step.Port {
-					k8sUtils.Validate(allPods, reachability, port, step.Protocol)
-				}
+				k8sUtils.Validate(allPods, reachability, step.Port, step.Protocol)
 				step.Duration = time.Now().Sub(start)
 
 				_, wrong, _ := step.Reachability.Summary()
@@ -2474,7 +2472,7 @@ func doProbe(t *testing.T, data *TestData, p *CustomProbe, protocol v1.Protocol)
 	_, _, dstPodCleanupFunc := createAndWaitForPodWithLabels(t, data, data.createServerPodWithLabels, p.DestPod.Pod.PodName(), p.DestPod.Pod.Namespace(), p.Port, p.DestPod.Labels)
 	defer dstPodCleanupFunc()
 	log.Tracef("Probing: %s -> %s", p.SourcePod.Pod.PodName(), p.DestPod.Pod.PodName())
-	connectivity, err := k8sUtils.Probe(p.SourcePod.Pod.Namespace(), p.SourcePod.Pod.PodName(), p.DestPod.Pod.Namespace(), p.DestPod.Pod.PodName(), p.Port, protocol)
+	connectivity, err := k8sUtils.Probe(p.SourcePod.Pod.Namespace(), p.SourcePod.Pod.PodName(), p.DestPod.Pod.Namespace(), p.DestPod.Pod.PodName(), []int32{p.Port}, protocol)
 	if err != nil {
 		t.Errorf("failure -- could not complete probe: %v", err)
 	}
