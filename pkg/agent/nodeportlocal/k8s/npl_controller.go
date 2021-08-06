@@ -50,15 +50,16 @@ const (
 )
 
 type NPLController struct {
-	portTable   *portcache.PortTable
-	kubeClient  clientset.Interface
-	queue       workqueue.RateLimitingInterface
-	podInformer cache.SharedIndexInformer
-	podLister   corelisters.PodLister
-	svcInformer cache.SharedIndexInformer
-	podToIP     map[string]string
-	nodeName    string
-	podIPLock   sync.RWMutex
+	portTable        *portcache.PortTable
+	kubeClient       clientset.Interface
+	queue            workqueue.RateLimitingInterface
+	podInformer      cache.SharedIndexInformer
+	podLister        corelisters.PodLister
+	svcInformer      cache.SharedIndexInformer
+	podToIP          map[string]string
+	nodeName         string
+	podIPLock        sync.RWMutex
+	rulesInitialized chan struct{}
 }
 
 func NewNPLController(kubeClient clientset.Interface,
@@ -68,13 +69,14 @@ func NewNPLController(kubeClient clientset.Interface,
 	pt *portcache.PortTable,
 	nodeName string) *NPLController {
 	c := NPLController{
-		kubeClient:  kubeClient,
-		portTable:   pt,
-		podInformer: podInformer,
-		podLister:   corelisters.NewPodLister(podInformer.GetIndexer()),
-		svcInformer: svcInformer,
-		podToIP:     make(map[string]string),
-		nodeName:    nodeName,
+		kubeClient:       kubeClient,
+		portTable:        pt,
+		podInformer:      podInformer,
+		podLister:        corelisters.NewPodLister(podInformer.GetIndexer()),
+		svcInformer:      svcInformer,
+		podToIP:          make(map[string]string),
+		nodeName:         nodeName,
+		rulesInitialized: make(chan struct{}),
 	}
 
 	podInformer.AddEventHandlerWithResyncPeriod(
@@ -117,6 +119,14 @@ func podKeyFunc(pod *corev1.Pod) string {
 	return pod.Namespace + "/" + pod.Name
 }
 
+func (c *NPLController) Initialize() error {
+	klog.InfoS("Will fetch Pods and generate NodePortLocal rules for these Pods")
+	if err := c.GetPodsAndGenRules(); err != nil {
+		return fmt.Errorf("error when getting Pods and generating rules: %v", err)
+	}
+	return nil
+}
+
 // Run starts to watch and process Pod updates for the Node where Antrea Agent is running.
 // It starts a queue and a fixed number of workers to process the objects from the queue.
 func (c *NPLController) Run(stopCh <-chan struct{}) {
@@ -130,12 +140,9 @@ func (c *NPLController) Run(stopCh <-chan struct{}) {
 	if !cache.WaitForNamedCacheSync(controllerName, stopCh, c.podInformer.HasSynced, c.svcInformer.HasSynced) {
 		return
 	}
-	klog.Info("Will fetch Pods and generate NodePortLocal rules for these Pods")
-
-	if err := c.GetPodsAndGenRules(); err != nil {
-		klog.Errorf("Error in getting Pods and generating rules: %v", err)
-		return
-	}
+	klog.InfoS("Waiting for initialization of NodePortLocal rules to complete")
+	<-c.rulesInitialized
+	klog.InfoS("Initialization of NodePortLocal rules successful")
 
 	for i := 0; i < numWorkers; i++ {
 		go wait.Until(c.Worker, time.Second, stopCh)
@@ -610,7 +617,7 @@ func (c *NPLController) GetPodsAndGenRules() error {
 }
 
 func (c *NPLController) addRulesForNPLPorts(allNPLPorts []rules.PodNodePort) error {
-	return c.portTable.SyncRules(allNPLPorts)
+	return c.portTable.RestoreRules(allNPLPorts, c.rulesInitialized)
 }
 
 // cleanupNPLAnnotationForPod removes the NodePortLocal annotation from the Pod's annotations map entirely.
