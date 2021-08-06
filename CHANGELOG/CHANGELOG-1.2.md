@@ -1,5 +1,28 @@
 # Changelog 1.2
 
+## 1.2.1 - 2021-08-06
+
+### Changed
+
+- Install all Endpoint flows belonging to a Service via a single OpenFlow bundle, to reduce flow installation time when the Agent starts. ([#2476](https://github.com/antrea-io/antrea/pull/2476), [@tnqn])
+- Improve the batch installation of NetworkPolicy rules when the Agent starts: only generate flow operations based on final desired state instead of incrementally. ([#2479](https://github.com/antrea-io/antrea/pull/2479), [@tnqn])
+- Use GroupMemberSet.Merge instead of GroupMemberSet.Union to reduce CPU usage and memory footprint in the Agent's policy controller. ([#2467](https://github.com/antrea-io/antrea/pull/2467), [@tnqn])
+- When checking for the existence of an iptables chain, stop listing all the chains and searching through them; this change reduces the Agent's memory footprint. ([#2458](https://github.com/antrea-io/antrea/pull/2458), [@tnqn])
+- Tolerate more failures for the Agent's readiness probe, as the Agent may stay disconnected from the Controller for a long time in some scenarios. ([#2535](https://github.com/antrea-io/antrea/pull/2535), [@tnqn])
+- When listing NetworkPolicyStats through the Controller API, return an empty list if the `NetworkPolicyStats` Feature Gate is disabled, instead of returning an error. ([#2386](https://github.com/antrea-io/antrea/pull/2386), [@PeterEltgroth])
+
+### Fixed
+
+- Fix panic in Agent when calculating the stats for a rule newly added to an existing NetworkPolicy. ([#2495](https://github.com/antrea-io/antrea/pull/2495), [@tnqn])
+- Fix bug in iptables rule installation for dual-stack clusters: if a rule was already present for one protocol but not the other, its installation may have been skipped. ([#2469](https://github.com/antrea-io/antrea/pull/2469), [@lzhecheng])
+- Fix deadlock in the Agent's FlowExporter, between the export goroutine and the conntrack polling goroutine. ([#2429](https://github.com/antrea-io/antrea/pull/2429), [@srikartati])
+- Upgrade OVS version to 2.14.2 to pick up security fixes for CVE-2015-8011, CVE-2020-27827 and CVE-2020-35498. ([#2451](https://github.com/antrea-io/antrea/pull/2451), [@antoninbas])
+- Upgrade OVS version to 2.14.2-antrea.1 for Windows Nodes; this version of OVS is built on top of the upstream 2.14.2 release and also includes a patch to fix TCP checksum computation when the DNAT action is used. ([#2549](https://github.com/antrea-io/antrea/pull/2549), [@lzhecheng]) [Windows]
+- Periodically delete stale connections in the Flow Exporter if they cannot be exported (e.g. because the collector is not available), to avoid running out-of-memory. ([#2516](https://github.com/antrea-io/antrea/pull/2516), [@srikartati])
+- Clean up log files for the Flow Aggregator periodically: prior to this fix, the "--log_file_max_size" and "--log_file_max_num" command-line flags were ignore for the flow-aggregator Pod. ([#2522](https://github.com/antrea-io/antrea/pull/2522), [@srikartati])
+- Fix missing template ID when sending the first IPFIX flow record from the FlowAggregator. ([#2546](https://github.com/antrea-io/antrea/pull/2546), [@zyiou])
+- Fix reference Logstash configuration to avoid division by zero in throughput calculation. ([#2432](https://github.com/antrea-io/antrea/pull/2432), [@zyiou])
+
 ## 1.2.0 - 2021-07-14
 
 The NetworkPolicyStats feature is graduated from Alpha to Beta and is therefore enabled by default.
@@ -62,7 +85,9 @@ The NetworkPolicyStats feature is graduated from Alpha to Beta and is therefore 
 [@luolanzone]: https://github.com/luolanzone
 [@lzhecheng]: https://github.com/lzhecheng
 [@monotosh-avi]: https://github.com/monotosh-avi
+[@PeterEltgroth]: https://github.com/PeterEltgroth
 [@ramay1]: https://github.com/ramay1
+[@srikartati]: https://github.com/srikartati
 [@tnqn]: https://github.com/tnqn
 [@wenqiq]: https://github.com/wenqiq
 [@wenyingd]: https://github.com/wenyingd
