@@ -91,8 +91,8 @@ CONTROLLER_GEN = $(shell pwd)/bin/controller-gen
 controller-gen: ## Download controller-gen locally if necessary.
 	$(call go-get-tool,$(CONTROLLER_GEN),sigs.k8s.io/controller-tools/cmd/controller-gen@v0.4.1)
 
-#KUSTOMIZE = $(shell pwd)/bin/kustomize
-KUSTOMIZE = $(shell which kustomize)
+KUSTOMIZE = $(shell pwd)/bin/kustomize
+#KUSTOMIZE = $(shell which kustomize)
 
 kustomize: ## Download kustomize locally if necessary.
 	$(call go-get-tool,$(KUSTOMIZE),sigs.k8s.io/kustomize/kustomize/v3@v3.8.7)
