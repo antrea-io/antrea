@@ -513,16 +513,16 @@ func controllerRemoteRunE(cmd *cobra.Command, args []string) error {
 	bar := barTmpl.Start(amount)
 	defer bar.Finish()
 	defer bar.Set("prefix", "Finish ")
-	if reader, err := getClusterInfo(k8sClientset); err != nil {
+	reader, err := getClusterInfo(k8sClientset)
+	if err != nil {
 		return err
-	} else {
-		f, err := os.Create(filepath.Join(option.dir, "clusterinfo"))
-		if err != nil {
-			return err
-		}
-		defer f.Close()
-		io.Copy(f, reader)
 	}
+	f, err := os.Create(filepath.Join(option.dir, "clusterinfo"))
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	io.Copy(f, reader)
 	if err := requestAll(agentClients, controllerClient, bar); err != nil {
 		return err
 	}

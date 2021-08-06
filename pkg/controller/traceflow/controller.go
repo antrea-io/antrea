@@ -219,21 +219,21 @@ func (c *Controller) processTraceflowItem() bool {
 	defer c.queue.Done(obj)
 
 	// We expect strings (Traceflow name) to come off the workqueue.
-	if key, ok := obj.(string); !ok {
+	key, ok := obj.(string)
+	if !ok {
 		// As the item in the workqueue is actually invalid, we call Forget here else we'd
 		// go into a loop of attempting to process a work item that is invalid.
 		// This should not happen: enqueueTraceflow only enqueues strings.
 		c.queue.Forget(obj)
 		klog.Errorf("Expected string in work queue but got %#v", obj)
 		return true
+	}
+	err := c.syncTraceflow(key)
+	if err != nil {
+		klog.Errorf("Error syncing Traceflow %s, exiting. Error: %v", key, err)
+		c.queue.AddRateLimited(key)
 	} else {
-		err := c.syncTraceflow(key)
-		if err != nil {
-			klog.Errorf("Error syncing Traceflow %s, exiting. Error: %v", key, err)
-			c.queue.AddRateLimited(key)
-		} else {
-			c.queue.Forget(key)
-		}
+		c.queue.Forget(key)
 	}
 	return true
 }
@@ -364,9 +364,8 @@ func (c *Controller) occupyTag(tf *crdv1alpha1.Traceflow) error {
 	if existingTraceflowName, ok := c.runningTraceflows[tag]; ok {
 		if tf.Name == existingTraceflowName {
 			return nil
-		} else {
-			return errors.New("this Traceflow's CRD data plane tag is already taken")
 		}
+		return errors.New("this Traceflow's CRD data plane tag is already taken")
 	}
 
 	c.runningTraceflows[tag] = tf.Name

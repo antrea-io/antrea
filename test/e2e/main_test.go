@@ -43,14 +43,13 @@ func (tOptions *TestOptions) setupLogging() func() {
 				log.Printf("Logs exported under '%s', it is your responsibility to delete the directory when you no longer need it", name)
 			}
 		}
-	} else {
-		fInfo, err := os.Stat(tOptions.logsExportDir)
-		if err != nil {
-			log.Fatalf("Cannot stat provided directory '%s': %v", tOptions.logsExportDir, err)
-		}
-		if !fInfo.Mode().IsDir() {
-			log.Fatalf("'%s' is not a valid directory", tOptions.logsExportDir)
-		}
+	}
+	fInfo, err := os.Stat(tOptions.logsExportDir)
+	if err != nil {
+		log.Fatalf("Cannot stat provided directory '%s': %v", tOptions.logsExportDir, err)
+	}
+	if !fInfo.Mode().IsDir() {
+		log.Fatalf("'%s' is not a valid directory", tOptions.logsExportDir)
 	}
 	// no-op cleanup function
 	return func() {}

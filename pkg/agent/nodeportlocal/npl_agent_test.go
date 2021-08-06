@@ -267,9 +267,8 @@ func (t *testData) pollForPodAnnotation(podName string, found bool) (string, err
 		data, exists = ann[nplk8s.NPLAnnotationKey]
 		if found {
 			return exists, nil
-		} else {
-			return !exists, nil
 		}
+		return !exists, nil
 	})
 
 	return data, err

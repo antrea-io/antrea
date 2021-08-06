@@ -710,12 +710,10 @@ func (exp *flowExporter) findFlowType(conn flowexporter.Connection) uint8 {
 				return ipfixregistry.FlowTypeInterNode
 			}
 			return ipfixregistry.FlowTypeIntraNode
-		} else {
-			return ipfixregistry.FlowTypeToExternal
 		}
-	} else {
-		// We do not support External-To-Pod flows for now.
-		klog.Warningf("Source IP: %s doesn't exist in PodCIDRs", conn.FlowKey.SourceAddress.String())
-		return 0
+		return ipfixregistry.FlowTypeToExternal
 	}
+	// We do not support External-To-Pod flows for now.
+	klog.Warningf("Source IP: %s doesn't exist in PodCIDRs", conn.FlowKey.SourceAddress.String())
+	return 0
 }
