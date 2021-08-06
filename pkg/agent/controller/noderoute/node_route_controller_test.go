@@ -32,6 +32,8 @@ import (
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	oftest "antrea.io/antrea/pkg/agent/openflow/testing"
 	routetest "antrea.io/antrea/pkg/agent/route/testing"
+	"antrea.io/antrea/pkg/agent/util"
+	"antrea.io/antrea/pkg/ovs/ovsconfig"
 	ovsconfigtest "antrea.io/antrea/pkg/ovs/ovsconfig/testing"
 )
 
@@ -55,7 +57,7 @@ type fakeController struct {
 	interfaceStore  interfacestore.InterfaceStore
 }
 
-func newController(t *testing.T) (*fakeController, func()) {
+func newController(t *testing.T, networkConfig *config.NetworkConfig) (*fakeController, func()) {
 	clientset := fake.NewSimpleClientset()
 	informerFactory := informers.NewSharedInformerFactory(clientset, 12*time.Hour)
 	ctrl := gomock.NewController(t)
@@ -63,7 +65,8 @@ func newController(t *testing.T) (*fakeController, func()) {
 	ovsClient := ovsconfigtest.NewMockOVSBridgeClient(ctrl)
 	routeClient := routetest.NewMockInterface(ctrl)
 	interfaceStore := interfacestore.NewInterfaceStore()
-	c := NewNodeRouteController(clientset, informerFactory, ofClient, ovsClient, routeClient, interfaceStore, &config.NetworkConfig{}, &config.NodeConfig{GatewayConfig: &config.GatewayConfig{
+
+	c := NewNodeRouteController(clientset, informerFactory, ofClient, ovsClient, routeClient, interfaceStore, networkConfig, &config.NodeConfig{GatewayConfig: &config.GatewayConfig{
 		IPv4: nil,
 		MAC:  gatewayMAC,
 	}})
@@ -79,7 +82,7 @@ func newController(t *testing.T) (*fakeController, func()) {
 }
 
 func TestControllerWithDuplicatePodCIDR(t *testing.T) {
-	c, closeFn := newController(t)
+	c, closeFn := newController(t, &config.NetworkConfig{})
 	defer closeFn()
 	defer c.queue.ShutDown()
 
@@ -163,7 +166,7 @@ func TestControllerWithDuplicatePodCIDR(t *testing.T) {
 }
 
 func TestIPInPodSubnets(t *testing.T) {
-	c, closeFn := newController(t)
+	c, closeFn := newController(t, &config.NetworkConfig{})
 	defer closeFn()
 	defer c.queue.ShutDown()
 
@@ -227,4 +230,149 @@ func TestIPInPodSubnets(t *testing.T) {
 	assert.Equal(t, true, c.Controller.IPInPodSubnets(net.ParseIP("1.1.2.1")))
 	assert.Equal(t, false, c.Controller.IPInPodSubnets(net.ParseIP("10.10.10.10")))
 	assert.Equal(t, false, c.Controller.IPInPodSubnets(net.ParseIP("8.8.8.8")))
+}
+
+func setup(t *testing.T, ifaces []*interfacestore.InterfaceConfig) (*fakeController, func()) {
+	c, closeFn := newController(t, &config.NetworkConfig{
+		TrafficEncapMode:  0,
+		TunnelType:        ovsconfig.TunnelType("vxlan"),
+		EnableIPSecTunnel: true,
+		IPSecPSK:          "changeme",
+	})
+	for _, i := range ifaces {
+		c.interfaceStore.AddInterface(i)
+	}
+	return c, closeFn
+}
+
+func TestRemoveStaleTunnelPorts(t *testing.T) {
+	c, closeFn := setup(t, []*interfacestore.InterfaceConfig{
+		{
+			Type:          interfacestore.TunnelInterface,
+			InterfaceName: util.GenerateNodeTunnelInterfaceName("xyz-k8s-0-1"),
+			TunnelInterfaceConfig: &interfacestore.TunnelInterfaceConfig{
+				NodeName: "xyz-k8s-0-1",
+				Type:     ovsconfig.TunnelType("vxlan"),
+				PSK:      "mismatchpsk",
+				RemoteIP: nodeIP1,
+			},
+			OVSPortConfig: &interfacestore.OVSPortConfig{
+				PortUUID: "123",
+			},
+		},
+	})
+
+	defer closeFn()
+	defer c.queue.ShutDown()
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+	c.informerFactory.Start(stopCh)
+	c.informerFactory.WaitForCacheSync(stopCh)
+	node1 := &corev1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "xyz-k8s-0-1",
+		},
+		Spec: corev1.NodeSpec{
+			PodCIDR:  podCIDR.String(),
+			PodCIDRs: []string{podCIDR.String()},
+		},
+		Status: corev1.NodeStatus{
+			Addresses: []corev1.NodeAddress{
+				{
+					Type:    corev1.NodeInternalIP,
+					Address: nodeIP1.String(),
+				},
+			},
+		},
+	}
+
+	c.clientset.CoreV1().Nodes().Create(context.TODO(), node1, metav1.CreateOptions{})
+	c.ovsClient.EXPECT().DeletePort("123").Times(1)
+
+	err := c.removeStaleTunnelPorts()
+	assert.NoError(t, err)
+}
+
+func TestCreateIPSecTunnelPort(t *testing.T) {
+	c, closeFn := setup(t, []*interfacestore.InterfaceConfig{
+		{
+			Type:          interfacestore.TunnelInterface,
+			InterfaceName: "mismatchedname",
+			TunnelInterfaceConfig: &interfacestore.TunnelInterfaceConfig{
+				NodeName: "xyz-k8s-0-2",
+				Type:     "vxlan",
+				PSK:      "changeme",
+				RemoteIP: nodeIP2,
+			},
+			OVSPortConfig: &interfacestore.OVSPortConfig{
+				PortUUID: "123",
+			},
+		},
+		{
+			Type:          interfacestore.TunnelInterface,
+			InterfaceName: util.GenerateNodeTunnelInterfaceName("xyz-k8s-0-3"),
+			TunnelInterfaceConfig: &interfacestore.TunnelInterfaceConfig{
+				NodeName: "xyz-k8s-0-3",
+				Type:     "vxlan",
+				PSK:      "changeme",
+				RemoteIP: net.ParseIP("10.10.10.1"),
+			},
+			OVSPortConfig: &interfacestore.OVSPortConfig{
+				PortUUID: "abc",
+				OFPort:   int32(5),
+			},
+		},
+	})
+
+	defer closeFn()
+	defer c.queue.ShutDown()
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+	c.informerFactory.Start(stopCh)
+	c.informerFactory.WaitForCacheSync(stopCh)
+
+	node1PortName := util.GenerateNodeTunnelInterfaceName("xyz-k8s-0-1")
+	c.ovsClient.EXPECT().CreateTunnelPortExt(
+		node1PortName, ovsconfig.TunnelType("vxlan"), int32(0),
+		false, "", nodeIP1.String(), "changeme",
+		map[string]interface{}{ovsExternalIDNodeName: "xyz-k8s-0-1"}).Times(1)
+	c.ovsClient.EXPECT().GetOFPort(node1PortName).Return(int32(1), nil)
+
+	tests := []struct {
+		name       string
+		nodeName   string
+		peerNodeIP net.IP
+		wantErr    bool
+		want       int32
+	}{
+		{
+			name:       "create new port",
+			nodeName:   "xyz-k8s-0-1",
+			peerNodeIP: nodeIP1,
+			wantErr:    false,
+			want:       1,
+		},
+		{
+			name:       "hit cache but interface name changed for the same node",
+			nodeName:   "xyz-k8s-0-2",
+			peerNodeIP: nodeIP2,
+			wantErr:    true,
+		},
+		{
+			name:       "hit cache and return directly",
+			nodeName:   "xyz-k8s-0-3",
+			peerNodeIP: net.ParseIP("10.10.10.1"),
+			wantErr:    false,
+			want:       5,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := c.createIPSecTunnelPort(tt.nodeName, tt.peerNodeIP)
+			hasErr := err != nil
+			assert.Equal(t, tt.wantErr, hasErr)
+			assert.Equal(t, tt.want, got)
+		})
+	}
 }

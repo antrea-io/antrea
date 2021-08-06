@@ -222,10 +222,8 @@ func (c *Controller) removeStaleTunnelPorts() error {
 			}
 
 			ifaceID := util.GenerateNodeTunnelInterfaceKey(node.Name)
-			validConfiguration := interfaceConfig.PSK == c.networkConfig.IPSecPSK &&
-				interfaceConfig.RemoteIP.Equal(peerNodeIP) &&
-				interfaceConfig.TunnelInterfaceConfig.Type == c.networkConfig.TunnelType
-			if validConfiguration {
+			ifaceName := util.GenerateNodeTunnelInterfaceName(node.Name)
+			if c.compareInterfaceConfig(interfaceConfig, peerNodeIP, ifaceName) {
 				desiredInterfaces[ifaceID] = true
 			}
 		}
@@ -256,6 +254,14 @@ func (c *Controller) removeStaleTunnelPorts() error {
 	}
 
 	return nil
+}
+
+func (c *Controller) compareInterfaceConfig(interfaceConfig *interfacestore.InterfaceConfig,
+	peerNodeIP net.IP, interfaceName string) bool {
+	return interfaceConfig.InterfaceName == interfaceName &&
+		interfaceConfig.PSK == c.networkConfig.IPSecPSK &&
+		interfaceConfig.RemoteIP.Equal(peerNodeIP) &&
+		interfaceConfig.TunnelInterfaceConfig.Type == c.networkConfig.TunnelType
 }
 
 func (c *Controller) reconcile() error {
@@ -527,16 +533,20 @@ func getPodCIDRsOnNode(node *corev1.Node) []string {
 // createIPSecTunnelPort creates an IPSec tunnel port for the remote Node if the
 // tunnel does not exist, and returns the ofport number.
 func (c *Controller) createIPSecTunnelPort(nodeName string, nodeIP net.IP) (int32, error) {
+	portName := util.GenerateNodeTunnelInterfaceName(nodeName)
 	interfaceConfig, ok := c.interfaceStore.GetNodeTunnelInterface(nodeName)
+	// check if Node IP, PSK, or tunnel type changes. This can
+	// happen if removeStaleTunnelPorts fails to remove a "stale"
+	// tunnel port for which the configuration has changed, return error to requeue the Node.
 	if ok {
-		// TODO: check if Node IP, PSK, or tunnel type changes. This can
-		// happen if removeStaleTunnelPorts fails to remove a "stale"
-		// tunnel port for which the configuration has changed.
+		if !c.compareInterfaceConfig(interfaceConfig, nodeIP, portName) {
+			return 0, fmt.Errorf("IPSec tunnel interface config doesn't match cached one, stale IPSec tunnel port %s", interfaceConfig.InterfaceName)
+		}
+		klog.V(2).InfoS("Found cached IPSec tunnel interface", "interfaceName", interfaceConfig.InterfaceName, "port", interfaceConfig.OFPort, "nodeName", nodeName)
 		if interfaceConfig.OFPort != 0 {
 			return interfaceConfig.OFPort, nil
 		}
 	} else {
-		portName := util.GenerateNodeTunnelInterfaceName(nodeName)
 		ovsExternalIDs := map[string]interface{}{ovsExternalIDNodeName: nodeName}
 		portUUID, err := c.ovsBridgeClient.CreateTunnelPortExt(
 			portName,
