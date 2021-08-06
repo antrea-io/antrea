@@ -52,12 +52,12 @@ func genObservationDomainID(k8sClient kubernetes.Interface) uint32 {
 	)
 	var clusterUUID uuid.UUID
 	if err := wait.PollImmediate(retryInterval, timeout, func() (bool, error) {
-		if clusterIdentity, _, err := clusterIdentityProvider.Get(); err != nil {
+		clusterIdentity, _, err := clusterIdentityProvider.Get()
+		if err != nil {
 			return false, nil
-		} else {
-			clusterUUID = clusterIdentity.UUID
-			return true, nil
 		}
+		clusterUUID = clusterIdentity.UUID
+		return true, nil
 	}); err != nil {
 		klog.Warningf(
 			"Unable to retrieve cluster UUID after %v (does ConfigMap '%s/%s' exist?); will generate a random observation domain ID",

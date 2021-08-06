@@ -799,9 +799,8 @@ func getIPProtoStr(addr types.Address) (bool, string) {
 	}
 	if addrIP.To4() != nil {
 		return false, "ip"
-	} else {
-		return true, "ipv6"
 	}
+	return true, "ipv6"
 }
 
 func checkOVSFlowMetrics(t *testing.T, client ofClient.Client) {

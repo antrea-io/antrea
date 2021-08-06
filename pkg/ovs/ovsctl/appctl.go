@@ -80,9 +80,8 @@ func (c *ovsCtlClient) Trace(req *TracingRequest) (string, error) {
 		ipKey, nwSrcKey = getNwSrcKey(req.SrcIP)
 		if strings.Contains(req.Flow, fmt.Sprintf("%s=", nwSrcKey)) {
 			return "", newBadRequestError(fmt.Sprintf("duplicated '%s' in flow", nwSrcKey))
-		} else {
-			nwSrc = fmt.Sprintf("%s=%s,", nwSrcKey, req.SrcIP.String())
 		}
+		nwSrc = fmt.Sprintf("%s=%s,", nwSrcKey, req.SrcIP.String())
 	}
 	if req.DstIP != nil {
 		var nwDstKey string
@@ -90,9 +89,8 @@ func (c *ovsCtlClient) Trace(req *TracingRequest) (string, error) {
 		// Do not allow overriding destination IP.
 		if strings.Contains(req.Flow, fmt.Sprintf("%s=", nwDstKey)) {
 			return "", newBadRequestError(fmt.Sprintf("duplicated '%s' in flow", nwDstKey))
-		} else {
-			nwDst = fmt.Sprintf("%s=%s,", nwDstKey, req.DstIP.String())
 		}
+		nwDst = fmt.Sprintf("%s=%s,", nwDstKey, req.DstIP.String())
 	}
 
 	// Always allow overriding source and destination MACs.
@@ -128,17 +126,15 @@ func (c *ovsCtlClient) Trace(req *TracingRequest) (string, error) {
 func getNwSrcKey(ip net.IP) (string, string) {
 	if ip.To4() != nil {
 		return "ip", "nw_src"
-	} else {
-		return "ipv6", "ipv6_src"
 	}
+	return "ipv6", "ipv6_src"
 }
 
 func getNwDstKey(ip net.IP) (string, string) {
 	if ip.To4() != nil {
 		return "ip", "nw_dst"
-	} else {
-		return "ipv6", "ipv6_dst"
 	}
+	return "ipv6", "ipv6_dst"
 }
 
 func (c *ovsCtlClient) runTracing(flow string) (string, error) {

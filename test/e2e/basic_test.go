@@ -283,11 +283,11 @@ func testIPAMRestart(t *testing.T, data *TestData) {
 			return nil, err
 		}
 		pods = append(pods, podName)
-		if podIP, err := data.podWaitForIPs(defaultTimeout, podName, testNamespace); err != nil {
+		podIP, err := data.podWaitForIPs(defaultTimeout, podName, testNamespace)
+		if err != nil {
 			return nil, err
-		} else {
-			return podIP, nil
 		}
+		return podIP, nil
 	}
 
 	if podIP1, err = createPodAndGetIP(podName1); err != nil {
@@ -577,11 +577,11 @@ func getRoundNumber(data *TestData, podName string) (uint64, error) {
 		key := externalIDArray[0].(string)
 		value := externalIDArray[1].(string)
 		if key == "roundNum" {
-			if roundNum, err := strconv.ParseUint(value, 10, 64); err != nil {
+			roundNum, err := strconv.ParseUint(value, 10, 64)
+			if err != nil {
 				return 0, fmt.Errorf("cannot convert roundNum to uint64: %v", err)
-			} else {
-				return roundNum, nil
 			}
+			return roundNum, nil
 		}
 	}
 
@@ -768,13 +768,13 @@ func testClusterIdentity(t *testing.T, data *TestData) {
 	const timeout = 10 * time.Second
 	var clusterUUID uuid.UUID
 	err := wait.PollImmediate(retryInterval, timeout, func() (bool, error) {
-		if clusterIdentity, _, err := clusterIdentityProvider.Get(); err != nil {
+		clusterIdentity, _, err := clusterIdentityProvider.Get()
+		if err != nil {
 			return false, nil
-		} else {
-			clusterUUID = clusterIdentity.UUID
-			t.Logf("Cluster UUID: %v", clusterUUID)
-			return true, nil
 		}
+		clusterUUID = clusterIdentity.UUID
+		t.Logf("Cluster UUID: %v", clusterUUID)
+		return true, nil
 	})
 
 	assert.NoError(t, err, "Failed to retrieve cluster identity information within %v", timeout)

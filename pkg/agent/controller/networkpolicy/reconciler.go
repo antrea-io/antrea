@@ -268,9 +268,8 @@ func (r *reconciler) getOFRuleTable(rule *CompletedRule) binding.TableIDType {
 	if !rule.isAntreaNetworkPolicyRule() {
 		if rule.Direction == v1beta2.DirectionIn {
 			return openflow.IngressRuleTable
-		} else {
-			return openflow.EgressRuleTable
 		}
+		return openflow.EgressRuleTable
 	}
 	var ruleTables []binding.TableIDType
 	if rule.Direction == v1beta2.DirectionIn {

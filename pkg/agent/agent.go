@@ -589,9 +589,8 @@ func (i *Initializer) setupDefaultTunnelInterface() error {
 		if err := i.ovsBridgeClient.DeletePort(tunnelIface.PortUUID); err != nil {
 			if i.networkConfig.TrafficEncapMode.SupportsEncap() {
 				return fmt.Errorf("failed to remove tunnel port %s with wrong tunnel type: %s", tunnelPortName, err)
-			} else {
-				klog.Errorf("Failed to remove tunnel port %s in NoEncapMode: %v", tunnelPortName, err)
 			}
+			klog.Errorf("Failed to remove tunnel port %s in NoEncapMode: %v", tunnelPortName, err)
 		} else {
 			klog.Infof("Removed tunnel port %s with tunnel type: %s", tunnelPortName, tunnelIface.TunnelInterfaceConfig.Type)
 			i.ifaceStore.DeleteInterface(tunnelIface)

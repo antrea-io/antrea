@@ -1533,16 +1533,15 @@ func (c *client) conjunctionActionFlow(conjunctionID uint32, tableID binding.Tab
 				CTDone().
 				Cookie(c.cookieAllocator.Request(cookie.Policy).Raw()).
 				Done()
-		} else {
-			return c.pipeline[tableID].BuildFlow(ofPriority).MatchProtocol(proto).
-				MatchConjID(conjunctionID).
-				Action().LoadRegRange(int(conjReg), conjunctionID, binding.Range{0, 31}). // Traceflow.
-				Action().CT(true, nextTable, ctZone).                                     // CT action requires commit flag if actions other than NAT without arguments are specified.
-				LoadToLabelRange(uint64(conjunctionID), &labelRange).
-				CTDone().
-				Cookie(c.cookieAllocator.Request(cookie.Policy).Raw()).
-				Done()
 		}
+		return c.pipeline[tableID].BuildFlow(ofPriority).MatchProtocol(proto).
+			MatchConjID(conjunctionID).
+			Action().LoadRegRange(int(conjReg), conjunctionID, binding.Range{0, 31}). // Traceflow.
+			Action().CT(true, nextTable, ctZone).                                     // CT action requires commit flag if actions other than NAT without arguments are specified.
+			LoadToLabelRange(uint64(conjunctionID), &labelRange).
+			CTDone().
+			Cookie(c.cookieAllocator.Request(cookie.Policy).Raw()).
+			Done()
 	}
 	var flows []binding.Flow
 	for _, proto := range c.ipProtocols {
@@ -1875,19 +1874,18 @@ func (c *client) snatRuleFlow(ofPort uint32, snatIP net.IP, snatMark uint32, loc
 			Action().GotoTable(snatTable.GetNext()).
 			Cookie(c.cookieAllocator.Request(cookie.SNAT).Raw()).
 			Done()
-	} else {
-		// SNAT IP should be on a remote Node.
-		return snatTable.BuildFlow(priorityNormal).
-			MatchProtocol(ipProto).
-			MatchInPort(ofPort).
-			Action().SetSrcMAC(localGatewayMAC).
-			Action().SetDstMAC(globalVirtualMAC).
-			// Set tunnel destination to the SNAT IP.
-			Action().SetTunnelDst(snatIP).
-			Action().GotoTable(l3DecTTLTable).
-			Cookie(c.cookieAllocator.Request(cookie.SNAT).Raw()).
-			Done()
 	}
+	// SNAT IP should be on a remote Node.
+	return snatTable.BuildFlow(priorityNormal).
+		MatchProtocol(ipProto).
+		MatchInPort(ofPort).
+		Action().SetSrcMAC(localGatewayMAC).
+		Action().SetDstMAC(globalVirtualMAC).
+		// Set tunnel destination to the SNAT IP.
+		Action().SetTunnelDst(snatIP).
+		Action().GotoTable(l3DecTTLTable).
+		Cookie(c.cookieAllocator.Request(cookie.SNAT).Raw()).
+		Done()
 }
 
 // loadBalancerServiceFromOutsideFlow generates the flow to forward LoadBalancer service traffic from outside node

@@ -275,9 +275,8 @@ func (c *StatusController) syncHandler(key string) error {
 		}
 		if internalNP.SourceRef.Type == controlplane.AntreaNetworkPolicy {
 			return c.npControlInterface.UpdateAntreaNetworkPolicyStatus(internalNP.SourceRef.Namespace, internalNP.SourceRef.Name, status)
-		} else {
-			return c.npControlInterface.UpdateAntreaClusterNetworkPolicyStatus(internalNP.SourceRef.Name, status)
 		}
+		return c.npControlInterface.UpdateAntreaClusterNetworkPolicyStatus(internalNP.SourceRef.Name, status)
 	}
 	desiredNodes := len(internalNP.SpanMeta.NodeNames)
 	currentNodes := 0
@@ -307,9 +306,8 @@ func (c *StatusController) syncHandler(key string) error {
 	klog.V(2).Infof("Updating NetworkPolicy %s status: %v", internalNP.SourceRef.ToString(), status)
 	if internalNP.SourceRef.Type == controlplane.AntreaNetworkPolicy {
 		return c.npControlInterface.UpdateAntreaNetworkPolicyStatus(internalNP.SourceRef.Namespace, internalNP.SourceRef.Name, status)
-	} else {
-		return c.npControlInterface.UpdateAntreaClusterNetworkPolicyStatus(internalNP.SourceRef.Name, status)
 	}
+	return c.npControlInterface.UpdateAntreaClusterNetworkPolicyStatus(internalNP.SourceRef.Name, status)
 }
 
 // networkPolicyControlInterface is an interface that knows how to update Antrea NetworkPolicy status.

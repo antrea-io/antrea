@@ -44,9 +44,8 @@ func ResolveKubeconfig(path string) (*rest.Config, error) {
 	}
 	if _, err = os.Stat(path); path == clientcmd.RecommendedHomeFile && os.IsNotExist(err) {
 		return rest.InClusterConfig()
-	} else {
-		return clientcmd.BuildConfigFromFlags("", path)
 	}
+	return clientcmd.BuildConfigFromFlags("", path)
 }
 
 func init() {
