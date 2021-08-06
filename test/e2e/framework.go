@@ -505,7 +505,7 @@ func (data *TestData) createTestNamespace() error {
 
 // deleteNamespace deletes the provided namespace and waits for deletion to actually complete.
 func (data *TestData) deleteNamespace(namespace string, timeout time.Duration) error {
-	var gracePeriodSeconds int64 = 0
+	var gracePeriodSeconds int64
 	var propagationPolicy = metav1.DeletePropagationForeground
 	deleteOptions := metav1.DeleteOptions{
 		GracePeriodSeconds: &gracePeriodSeconds,

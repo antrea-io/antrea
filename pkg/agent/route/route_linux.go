@@ -719,7 +719,7 @@ func (c *Client) MigrateRoutesToGw(linkName string) error {
 // UnMigrateRoutesFromGw moves route from gw to link linkName if provided; otherwise route is deleted
 func (c *Client) UnMigrateRoutesFromGw(route *net.IPNet, linkName string) error {
 	gwLink := util.GetNetLink(c.nodeConfig.GatewayConfig.Name)
-	var link netlink.Link = nil
+	var link netlink.Link
 	var err error
 	if len(linkName) > 0 {
 		link, err = netlink.LinkByName(linkName)

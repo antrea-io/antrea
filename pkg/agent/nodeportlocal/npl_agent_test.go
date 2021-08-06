@@ -161,11 +161,11 @@ type testData struct {
 	wg        sync.WaitGroup
 }
 
-func (data *testData) runWrapper(c *nplk8s.NPLController) {
-	data.wg.Add(1)
+func (t *testData) runWrapper(c *nplk8s.NPLController) {
+	t.wg.Add(1)
 	go func() {
-		defer data.wg.Done()
-		c.Run(data.stopCh)
+		defer t.wg.Done()
+		c.Run(t.stopCh)
 	}()
 }
 

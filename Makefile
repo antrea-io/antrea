@@ -231,7 +231,7 @@ fmt:
 
 .golangci-bin:
 	@echo "===> Installing Golangci-lint <==="
-	@curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $@ v1.32.1
+	@curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $@ v1.41.1
 
 .PHONY: golangci
 golangci: .golangci-bin
@@ -254,13 +254,6 @@ golangci-fix: .golangci-bin
 	@cd plugins/octant && GOOS=linux $(CURDIR)/.golangci-bin/golangci-lint run -c $(CURDIR)/.golangci.yml --fix
 	@echo "===> Running golangci for Octant plugin (windows) <==="
 	@cd plugins/octant && GOOS=windows $(CURDIR)/.golangci-bin/golangci-lint run -c $(CURDIR)/.golangci.yml --fix
-
-.PHONY: lint
-lint: .golangci-bin
-	@echo "===> Running golangci (linux) <==="
-	@GOOS=linux $(CURDIR)/.golangci-bin/golangci-lint run -c $(CURDIR)/.golangci-golint.yml
-	@echo "===> Running golangci (windows) <==="
-	@GOOS=windows $(CURDIR)/.golangci-bin/golangci-lint run -c $(CURDIR)/.golangci-golint.yml
 
 .PHONY: clean
 clean:

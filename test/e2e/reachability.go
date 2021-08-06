@@ -18,7 +18,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -40,7 +39,7 @@ func (pod Pod) String() string {
 func (pod Pod) split() (string, string) {
 	pieces := strings.Split(string(pod), "/")
 	if len(pieces) != 2 {
-		panic(errors.New(fmt.Sprintf("expected ns/pod, found %+v", pieces)))
+		panic(fmt.Errorf("expected ns/pod, found %+v", pieces))
 	}
 	return pieces[0], pieces[1]
 }
@@ -117,10 +116,10 @@ func (tt *TruthTable) IsComplete() bool {
 func (ct *ConnectivityTable) Set(from string, to string, value PodConnectivityMark) {
 	dict, ok := ct.Values[from]
 	if !ok {
-		panic(errors.New(fmt.Sprintf("key %s not found in map", from)))
+		panic(fmt.Errorf("key %s not found in map", from))
 	}
 	if _, ok := ct.itemSet[to]; !ok {
-		panic(errors.New(fmt.Sprintf("key %s not allowed", to)))
+		panic(fmt.Errorf("key %s not allowed", to))
 	}
 	dict[to] = value
 }
@@ -128,7 +127,7 @@ func (ct *ConnectivityTable) Set(from string, to string, value PodConnectivityMa
 func (ct *ConnectivityTable) SetAllFrom(from string, value PodConnectivityMark) {
 	dict, ok := ct.Values[from]
 	if !ok {
-		panic(errors.New(fmt.Sprintf("key %s not found in map", from)))
+		panic(fmt.Errorf("key %s not found in map", from))
 	}
 	for _, to := range ct.Items {
 		dict[to] = value
@@ -137,7 +136,7 @@ func (ct *ConnectivityTable) SetAllFrom(from string, value PodConnectivityMark) 
 
 func (ct *ConnectivityTable) SetAllTo(to string, value PodConnectivityMark) {
 	if _, ok := ct.itemSet[to]; !ok {
-		panic(errors.New(fmt.Sprintf("key %s not found", to)))
+		panic(fmt.Errorf("key %s not found", to))
 	}
 	for _, from := range ct.Items {
 		ct.Values[from][to] = value
