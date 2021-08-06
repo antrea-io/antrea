@@ -298,21 +298,26 @@ func (fa *flowAggregator) InitAggregationProcess() error {
 	return err
 }
 
-func (fa *flowAggregator) createAndSendTemplate(isRecordIPv6 bool) (uint16, error) {
+func (fa *flowAggregator) createAndSendTemplate(isRecordIPv6 bool) error {
 	templateID := fa.exportingProcess.NewTemplateID()
 	recordIPFamily := "IPv4"
 	if isRecordIPv6 {
 		recordIPFamily = "IPv6"
+	}
+	if isRecordIPv6 {
+		fa.templateIDv6 = templateID
+	} else {
+		fa.templateIDv4 = templateID
 	}
 	bytesSent, err := fa.sendTemplateSet(isRecordIPv6)
 	if err != nil {
 		fa.exportingProcess.CloseConnToCollector()
 		fa.exportingProcess = nil
 		fa.set.ResetSet()
-		return 0, fmt.Errorf("sending %s template set failed, err: %v", recordIPFamily, err)
+		return fmt.Errorf("sending %s template set failed, err: %v", recordIPFamily, err)
 	}
 	klog.V(2).InfoS("Exporting process initialized", "bytesSent", bytesSent, "templateSetIPFamily", recordIPFamily)
-	return templateID, nil
+	return nil
 }
 
 func (fa *flowAggregator) initExportingProcess() error {
@@ -346,10 +351,10 @@ func (fa *flowAggregator) initExportingProcess() error {
 	}
 	fa.exportingProcess = ep
 	// Currently, we send two templates for IPv4 and IPv6 regardless of the IP families supported by cluster
-	if fa.templateIDv4, err = fa.createAndSendTemplate(false); err != nil {
+	if err = fa.createAndSendTemplate(false); err != nil {
 		return err
 	}
-	if fa.templateIDv6, err = fa.createAndSendTemplate(true); err != nil {
+	if err = fa.createAndSendTemplate(true); err != nil {
 		return err
 	}
 	return nil
