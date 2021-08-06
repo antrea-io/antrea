@@ -73,11 +73,11 @@ func convertConfig(inConfig *ssh_config.Config, name string) (string, *ssh.Clien
 	values := make(map[string]string)
 
 	for _, key := range keyList {
-		if value, err := getFromKeyStrict(key); err != nil {
+		value, err := getFromKeyStrict(key)
+		if err != nil {
 			return "", nil, err
-		} else {
-			values[key] = value
 		}
+		values[key] = value
 	}
 
 	identityFile := values["IdentityFile"]

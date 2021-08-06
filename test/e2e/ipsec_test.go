@@ -58,16 +58,16 @@ func (data *TestData) readSecurityAssociationsStatus(nodeName string) (up int, c
 	if len(matches) == 0 {
 		return 0, 0, fmt.Errorf("unexpected 'ipsec status' output: %s", stdout)
 	}
-	if v, err := strconv.ParseUint(matches[1], 10, 32); err != nil {
+	v, err := strconv.ParseUint(matches[1], 10, 32)
+	if err != nil {
 		return 0, 0, fmt.Errorf("error when retrieving 'up' SAs from 'ipsec status' output: %v", err)
-	} else {
-		up = int(v)
 	}
-	if v, err := strconv.ParseUint(matches[2], 10, 32); err != nil {
+	up = int(v)
+	v, err = strconv.ParseUint(matches[2], 10, 32)
+	if err != nil {
 		return 0, 0, fmt.Errorf("error when retrieving 'connecting' SAs from 'ipsec status' output: %v", err)
-	} else {
-		connecting = int(v)
 	}
+	connecting = int(v)
 	return up, connecting, nil
 }
 

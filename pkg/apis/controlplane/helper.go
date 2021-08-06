@@ -19,7 +19,6 @@ import "fmt"
 func (r *NetworkPolicyReference) ToString() string {
 	if r.Type == AntreaClusterNetworkPolicy {
 		return fmt.Sprintf("%s:%s", r.Type, r.Name)
-	} else {
-		return fmt.Sprintf("%s:%s/%s", r.Type, r.Namespace, r.Name)
 	}
+	return fmt.Sprintf("%s:%s/%s", r.Type, r.Namespace, r.Name)
 }
