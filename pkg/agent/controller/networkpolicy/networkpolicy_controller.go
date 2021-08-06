@@ -129,7 +129,11 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 		// Register packetInHandler
 		c.ofClient.RegisterPacketInHandler(uint8(openflow.PacketInReasonNP), "networkpolicy", c)
 		// Initiate logger for Antrea Policy audit logging
-		c.antreaPolicyLogger = initLogger()
+		antreaPolicyLogger, err := newAntreaPolicyLogger()
+		if err != nil {
+			return nil, err
+		}
+		c.antreaPolicyLogger = antreaPolicyLogger
 	}
 
 	// Use nodeName to filter resources when watching resources.
