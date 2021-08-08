@@ -165,12 +165,16 @@ data:
     # is not available), a value will be randomly generated, which may vary across restarts of the flow
     # aggregator.
     #observationDomainID:
+
+    # Provide format for records sent to the configured flow collector.
+    # Supported formats are IPFIX and JSON.
+    #recordFormat: "IPFIX"
 kind: ConfigMap
 metadata:
   annotations: {}
   labels:
     app: flow-aggregator
-  name: flow-aggregator-configmap-k85k525hc5
+  name: flow-aggregator-configmap-7kc5fdc4mc
   namespace: flow-aggregator
 ---
 apiVersion: v1
@@ -238,7 +242,7 @@ spec:
       serviceAccountName: flow-aggregator
       volumes:
       - configMap:
-          name: flow-aggregator-configmap-k85k525hc5
+          name: flow-aggregator-configmap-7kc5fdc4mc
         name: flow-aggregator-config
       - hostPath:
           path: /var/log/antrea/flow-aggregator
