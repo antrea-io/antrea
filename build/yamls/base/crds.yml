@@ -1695,7 +1695,7 @@ spec:
   scope: Cluster
   names:
     plural: clustergroups
-    singular: group
+    singular: clustergroup
     kind: ClusterGroup
     shortNames:
       - cg

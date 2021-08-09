@@ -255,7 +255,7 @@ spec:
     plural: clustergroups
     shortNames:
     - cg
-    singular: group
+    singular: clustergroup
   scope: Cluster
   versions:
   - name: v1alpha2
