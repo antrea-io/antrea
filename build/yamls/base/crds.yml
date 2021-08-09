@@ -212,6 +212,91 @@ spec:
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
+  name: ippools.crd.antrea.io
+spec:
+  group: crd.antrea.io
+  versions:
+    - name: v1alpha2
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          required:
+            - spec
+          properties:
+            spec:
+              required:
+                - ipVersion
+                - ipRanges
+              type: object
+              properties:
+                ipVersion:
+                  type: integer
+                ipRanges:
+                  items:
+                    oneOf:
+                      - required:
+                        - cidr
+                        - gateway
+                        - prefixLen
+                      - required:
+                        - start
+                        - end
+                        - gateway
+                        - prefixLen
+                    properties:
+                      cidr:
+                        format: cidr
+                        type: string
+                      start:
+                        oneOf:
+                          - format: ipv4
+                          - format: ipv6
+                        type: string
+                      end:
+                        oneOf:
+                          - format: ipv4
+                          - format: ipv6
+                        type: string
+                      gateway:
+                        oneOf:
+                          - format: ipv4
+                          - format: ipv6
+                        type: string
+                      prefixLen:
+                        type: integer
+                      vlan:
+                        type: string
+                    type: object
+                  type: array
+            status:
+              properties:
+                usage:
+                  items:
+                    properties:
+                      ipAddress:
+                        type: string
+                      resource:
+                        type: string
+                      state:
+                        type: string
+                    type: object
+                  type: array
+              type: object
+      subresources:
+        status: {}
+  scope: Cluster
+  names:
+    plural: ippools
+    singular: ippool
+    kind: IPPool
+    shortNames:
+      - ipp
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
   name: antreacontrollerinfos.crd.antrea.io
 spec:
   group: crd.antrea.io
