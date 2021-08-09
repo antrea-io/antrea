@@ -50,11 +50,11 @@ func (a *ofFlowAction) OutputInPort() FlowBuilder {
 }
 
 // CT is an action to set conntrack marks and return CTAction to add actions that is executed with conntrack context.
-func (a *ofFlowAction) CT(commit bool, tableID TableIDType, zone int) CTAction {
+func (a *ofFlowAction) CT(commit bool, tableID uint8, zone int) CTAction {
 	base := ctBase{
 		commit:  commit,
 		force:   false,
-		ctTable: uint8(tableID),
+		ctTable: tableID,
 		ctZone:  uint16(zone),
 	}
 	ct := &ofCTAction{
@@ -276,14 +276,14 @@ func (a *ofFlowAction) MoveRange(fromField, toField string, fromRange, toRange R
 
 // Resubmit is an action to resubmit packet to the specified table with the port as new in_port. If port is empty string,
 // the in_port field is not changed.
-func (a *ofFlowAction) Resubmit(ofPort uint16, tableID TableIDType) FlowBuilder {
-	table := uint8(tableID)
+func (a *ofFlowAction) Resubmit(ofPort uint16, tableID uint8) FlowBuilder {
+	table := tableID
 	resubmitAct := ofctrl.NewResubmit(&ofPort, &table)
 	a.builder.ApplyAction(resubmitAct)
 	return a.builder
 }
 
-func (a *ofFlowAction) ResubmitToTable(table TableIDType) FlowBuilder {
+func (a *ofFlowAction) ResubmitToTable(table uint8) FlowBuilder {
 	return a.Resubmit(openflow13.OFPP_IN_PORT, table)
 }
 
@@ -343,10 +343,10 @@ func (a *ofFlowAction) Meter(meterID uint32) FlowBuilder {
 }
 
 //  Learn is an action which adds or modifies a flow in an OpenFlow table.
-func (a *ofFlowAction) Learn(id TableIDType, priority uint16, idleTimeout, hardTimeout uint16, cookieID uint64) LearnAction {
+func (a *ofFlowAction) Learn(id uint8, priority uint16, idleTimeout, hardTimeout uint16, cookieID uint64) LearnAction {
 	la := &ofLearnAction{
 		flowBuilder: a.builder,
-		nxLearn:     ofctrl.NewLearnAction(uint8(id), priority, idleTimeout, hardTimeout, 0, 0, cookieID),
+		nxLearn:     ofctrl.NewLearnAction(id, priority, idleTimeout, hardTimeout, 0, 0, cookieID),
 	}
 	return la
 }
@@ -548,7 +548,7 @@ func getFieldRange(name string) (*openflow13.MatchField, Range, error) {
 }
 
 // GotoTable is an action to jump to the specified table.
-func (a *ofFlowAction) GotoTable(table TableIDType) FlowBuilder {
-	a.builder.ofFlow.Goto(uint8(table))
+func (a *ofFlowAction) GotoTable(tableID uint8) FlowBuilder {
+	a.builder.ofFlow.Goto(tableID)
 	return a.builder
 }

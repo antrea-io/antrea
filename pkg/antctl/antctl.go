@@ -460,8 +460,8 @@ var CommandList = &commandList{
 
 func generateFlowTableHelpMsg() string {
 	msg := ""
-	for _, t := range openflow.FlowTables {
-		msg += fmt.Sprintf("\n  %d\t%s", uint32(t.Number), t.Name)
+	for _, t := range openflow.GetTableList() {
+		msg += fmt.Sprintf("\n  %d\t%s", uint32(t.GetID()), t.GetName())
 	}
 	return msg
 }

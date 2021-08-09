@@ -22,7 +22,6 @@ import (
 )
 
 type Protocol string
-type TableIDType uint8
 type GroupIDType uint32
 type MeterIDType uint32
 
@@ -31,8 +30,8 @@ type Range [2]uint32
 type OFOperation int
 
 const (
-	LastTableID TableIDType = 0xff
-	TableIDAll              = LastTableID
+	LastTableID uint8 = 0xff
+	TableIDAll        = LastTableID
 )
 
 const (
@@ -88,8 +87,9 @@ var IPDSCPToSRange = &Range{2, 7}
 
 // Bridge defines operations on an openflow bridge.
 type Bridge interface {
-	CreateTable(id, next TableIDType, missAction MissActionType) Table
-	DeleteTable(id TableIDType) bool
+	CreateTable(table Table, next uint8, missAction MissActionType) Table
+	// AddTable adds table on the Bridge. Return true if the operation succeeds, otherwise return false.
+	DeleteTable(id uint8) bool
 	CreateGroup(id GroupIDType) Group
 	DeleteGroup(id GroupIDType) bool
 	CreateMeter(id MeterIDType, flags ofctrl.MeterFlag) Meter
@@ -132,16 +132,20 @@ type Bridge interface {
 // TableStatus represents the status of a specific flow table. The status is useful for debugging.
 type TableStatus struct {
 	ID         uint      `json:"id"`
+	Name       string    `json:"name"`
 	FlowCount  uint      `json:"flowCount"`
 	UpdateTime time.Time `json:"updateTime"`
 }
 
 type Table interface {
-	GetID() TableIDType
+	GetID() uint8
+	GetName() string
 	BuildFlow(priority uint16) FlowBuilder
 	GetMissAction() MissActionType
 	Status() TableStatus
-	GetNext() TableIDType
+	GetNext() uint8
+	SetNext(next uint8)
+	SetMissAction(action MissActionType)
 }
 
 type EntryType string
@@ -189,9 +193,9 @@ type Action interface {
 	LoadRange(name string, addr uint64, to *Range) FlowBuilder
 	Move(from, to string) FlowBuilder
 	MoveRange(fromName, toName string, from, to Range) FlowBuilder
-	Resubmit(port uint16, table TableIDType) FlowBuilder
-	ResubmitToTable(table TableIDType) FlowBuilder
-	CT(commit bool, tableID TableIDType, zone int) CTAction
+	Resubmit(port uint16, table uint8) FlowBuilder
+	ResubmitToTable(table uint8) FlowBuilder
+	CT(commit bool, tableID uint8, zone int) CTAction
 	Drop() FlowBuilder
 	Output(port int) FlowBuilder
 	OutputFieldRange(from string, rng *Range) FlowBuilder
@@ -210,8 +214,8 @@ type Action interface {
 	Normal() FlowBuilder
 	Conjunction(conjID uint32, clauseID uint8, nClause uint8) FlowBuilder
 	Group(id GroupIDType) FlowBuilder
-	Learn(id TableIDType, priority uint16, idleTimeout, hardTimeout uint16, cookieID uint64) LearnAction
-	GotoTable(table TableIDType) FlowBuilder
+	Learn(id uint8, priority uint16, idleTimeout, hardTimeout uint16, cookieID uint64) LearnAction
+	GotoTable(table uint8) FlowBuilder
 	SendToController(reason uint8) FlowBuilder
 	Note(notes string) FlowBuilder
 	Meter(meterID uint32) FlowBuilder
@@ -312,7 +316,7 @@ type BucketBuilder interface {
 	// Deprecated.
 	LoadRegRange(regID int, data uint32, rng *Range) BucketBuilder
 	LoadToRegField(field *RegField, data uint32) BucketBuilder
-	ResubmitToTable(tableID TableIDType) BucketBuilder
+	ResubmitToTable(tableID uint8) BucketBuilder
 	Done() Group
 }
 

@@ -67,6 +67,25 @@ func (mr *MockOVSCtlClientMockRecorder) DumpFlows(arg0 ...interface{}) *gomock.C
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DumpFlows", reflect.TypeOf((*MockOVSCtlClient)(nil).DumpFlows), arg0...)
 }
 
+// DumpFlowsWithoutTableNames mocks base method
+func (m *MockOVSCtlClient) DumpFlowsWithoutTableNames(arg0 ...string) ([]string, error) {
+	m.ctrl.T.Helper()
+	varargs := []interface{}{}
+	for _, a := range arg0 {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "DumpFlowsWithoutTableNames", varargs...)
+	ret0, _ := ret[0].([]string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// DumpFlowsWithoutTableNames indicates an expected call of DumpFlowsWithoutTableNames
+func (mr *MockOVSCtlClientMockRecorder) DumpFlowsWithoutTableNames(arg0 ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DumpFlowsWithoutTableNames", reflect.TypeOf((*MockOVSCtlClient)(nil).DumpFlowsWithoutTableNames), arg0...)
+}
+
 // DumpGroup mocks base method
 func (m *MockOVSCtlClient) DumpGroup(arg0 uint32) (string, error) {
 	m.ctrl.T.Helper()

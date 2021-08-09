@@ -205,8 +205,8 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1alpha1.Tracefl
 	}
 
 	// Get drop table.
-	if tableID == uint8(openflow.EgressMetricTable) || tableID == uint8(openflow.IngressMetricTable) {
-		ob := getNetworkPolicyObservation(tableID, tableID == uint8(openflow.IngressMetricTable))
+	if tableID == openflow.EgressMetricTable.GetID() || tableID == openflow.IngressMetricTable.GetID() {
+		ob := getNetworkPolicyObservation(tableID, tableID == openflow.IngressMetricTable.GetID())
 		if match := getMatchRegField(matchers, openflow.CNPDenyConjIDField); match != nil {
 			notAllowConjInfo, err := getRegValue(match, nil)
 			if err != nil {
@@ -222,13 +222,13 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1alpha1.Tracefl
 			}
 		}
 		obs = append(obs, *ob)
-	} else if tableID == uint8(openflow.EgressDefaultTable) || tableID == uint8(openflow.IngressDefaultTable) {
-		ob := getNetworkPolicyObservation(tableID, tableID == uint8(openflow.IngressDefaultTable))
+	} else if tableID == openflow.EgressDefaultTable.GetID() || tableID == openflow.IngressDefaultTable.GetID() {
+		ob := getNetworkPolicyObservation(tableID, tableID == openflow.IngressDefaultTable.GetID())
 		obs = append(obs, *ob)
 	}
 
 	// Get output table.
-	if tableID == uint8(openflow.L2ForwardingOutTable) {
+	if tableID == openflow.L2ForwardingOutTable.GetID() {
 		ob := new(crdv1alpha1.Observation)
 		tunnelDstIP := ""
 		isIPv6 := c.nodeConfig.NodeIPv6Addr != nil
@@ -262,7 +262,7 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1alpha1.Tracefl
 			// Output port is Pod port, packet is delivered.
 			ob.Action = crdv1alpha1.ActionDelivered
 		}
-		ob.ComponentInfo = openflow.GetFlowTableName(binding.TableIDType(tableID))
+		ob.ComponentInfo = openflow.L2ForwardingOutTable.GetName()
 		ob.Component = crdv1alpha1.ComponentForwarding
 		obs = append(obs, *ob)
 	}
@@ -340,22 +340,30 @@ func getNetworkPolicyObservation(tableID uint8, ingress bool) *crdv1alpha1.Obser
 	ob.Component = crdv1alpha1.ComponentNetworkPolicy
 	if ingress {
 		switch tableID {
-		case uint8(openflow.IngressMetricTable), uint8(openflow.IngressDefaultTable):
+		case openflow.IngressMetricTable.GetID():
 			// Packet dropped by ANP/default drop rule
-			ob.ComponentInfo = openflow.GetFlowTableName(binding.TableIDType(tableID))
+			ob.ComponentInfo = openflow.IngressMetricTable.GetName()
+			ob.Action = crdv1alpha1.ActionDropped
+		case openflow.IngressDefaultTable.GetID():
+			// Packet dropped by ANP/default drop rule
+			ob.ComponentInfo = openflow.IngressDefaultTable.GetName()
 			ob.Action = crdv1alpha1.ActionDropped
 		default:
-			ob.ComponentInfo = openflow.GetFlowTableName(openflow.IngressRuleTable)
+			ob.ComponentInfo = openflow.IngressRuleTable.GetName()
 			ob.Action = crdv1alpha1.ActionForwarded
 		}
 	} else {
 		switch tableID {
-		case uint8(openflow.EgressMetricTable), uint8(openflow.EgressDefaultTable):
+		case openflow.EgressMetricTable.GetID():
 			// Packet dropped by ANP/default drop rule
-			ob.ComponentInfo = openflow.GetFlowTableName(binding.TableIDType(tableID))
+			ob.ComponentInfo = openflow.EgressMetricTable.GetName()
+			ob.Action = crdv1alpha1.ActionDropped
+		case openflow.EgressDefaultTable.GetID():
+			// Packet dropped by ANP/default drop rule
+			ob.ComponentInfo = openflow.EgressDefaultTable.GetName()
 			ob.Action = crdv1alpha1.ActionDropped
 		default:
-			ob.ComponentInfo = openflow.GetFlowTableName(openflow.EgressRuleTable)
+			ob.ComponentInfo = openflow.EgressRuleTable.GetName()
 			ob.Action = crdv1alpha1.ActionForwarded
 		}
 	}

@@ -67,6 +67,12 @@ var (
 	vMAC, _          = net.ParseMAC("aa:bb:cc:dd:ee:ff")
 
 	ipDSCP = uint8(10)
+
+	t0 = binding.NewOFTable(0, "t0")
+	t1 = binding.NewOFTable(1, "t1")
+	t2 = binding.NewOFTable(2, "t2")
+	t3 = binding.NewOFTable(3, "t3")
+	t4 = binding.NewOFTable(4, "t4")
 )
 
 func newOFBridge(brName string) binding.Bridge {
@@ -88,7 +94,7 @@ func TestDeleteFlowStrict(t *testing.T) {
 	}()
 
 	bridge := newOFBridge(br)
-	table = bridge.CreateTable(3, 4, binding.TableMissActionNext)
+	table = bridge.CreateTable(t3, t4.GetID(), binding.TableMissActionNext)
 
 	err = bridge.Connect(maxRetry, make(chan struct{}))
 	if err != nil {
@@ -139,7 +145,7 @@ func testDeleteSingleFlow(t *testing.T, ovsCtlClient ovsctl.OVSCtlClient, table 
 			t.Fatalf("Failed to install flow%d: %v", id, err)
 		}
 	}
-	dumpTable := uint8(table.GetID())
+	dumpTable := table.GetID()
 	CheckFlowExists(t, ovsCtlClient, dumpTable, true, expectFlows)
 
 	err := flows[0].Delete()
@@ -177,8 +183,8 @@ func TestOFctrlFlow(t *testing.T) {
 	}()
 
 	bridge := newOFBridge(br)
-	table1 := bridge.CreateTable(1, 2, binding.TableMissActionNext)
-	table2 := bridge.CreateTable(2, 3, binding.TableMissActionNext)
+	table1 := bridge.CreateTable(t1, t2.GetID(), binding.TableMissActionNext)
+	table2 := bridge.CreateTable(t2, t3.GetID(), binding.TableMissActionNext)
 
 	err = bridge.Connect(maxRetry, make(chan struct{}))
 	if err != nil {
@@ -201,7 +207,7 @@ func TestOFctrlFlow(t *testing.T) {
 			}
 		}
 
-		dumpTable := uint8(myTable.GetID())
+		dumpTable := myTable.GetID()
 		flowList := CheckFlowExists(t, ovsCtlClient, dumpTable, true, expectflows)
 
 		// Test: DumpTableStatus
@@ -234,7 +240,7 @@ func TestOFctrlFlow(t *testing.T) {
 		if err != nil {
 			t.Errorf("Failed to DeleteFlowsByCookie: %v", err)
 		}
-		flowList, _ = OfctlDumpTableFlows(ovsCtlClient, uint8(myTable.GetID()))
+		flowList, _ = OfctlDumpTableFlows(ovsCtlClient, myTable.GetID())
 		if len(flowList) > 0 {
 			t.Errorf("Failed to delete flows by CookieID")
 		}
@@ -266,7 +272,7 @@ func TestOFctrlGroup(t *testing.T) {
 	for name, buckets := range map[string][]struct {
 		weight        uint16      // Must have non-zero value.
 		reg2reg       [][4]uint32 // regNum, data, startIndex, endIndex
-		resubmitTable binding.TableIDType
+		resubmitTable uint8
 	}{
 		"Normal": {
 			{weight: 100, reg2reg: [][4]uint32{{0, 1, 0, 31}, {1, 2, 15, 31}}, resubmitTable: 31},
@@ -328,7 +334,7 @@ func TestTransactions(t *testing.T) {
 	}()
 
 	bridge := newOFBridge(br)
-	table = bridge.CreateTable(2, 3, binding.TableMissActionNext)
+	table = bridge.CreateTable(t2, t3.GetID(), binding.TableMissActionNext)
 
 	err = bridge.Connect(maxRetry, make(chan struct{}))
 	require.Nil(t, err, "Failed to start OFService")
@@ -339,7 +345,7 @@ func TestTransactions(t *testing.T) {
 	flows, expectflows := prepareFlows(table)
 	err = bridge.AddFlowsInBundle(flows, nil, nil)
 	require.Nil(t, err, fmt.Sprintf("Failed to add flows in a transaction: %v", err))
-	dumpTable := uint8(table.GetID())
+	dumpTable := table.GetID()
 	flowList := CheckFlowExists(t, ovsCtlClient, dumpTable, true, expectflows)
 
 	// Test: DumpTableStatus
@@ -354,7 +360,7 @@ func TestTransactions(t *testing.T) {
 	// Delete flows in a bundle
 	err = bridge.AddFlowsInBundle(nil, nil, flows)
 	require.Nil(t, err, fmt.Sprintf("Failed to delete flows in a transaction: %v", err))
-	dumpTable = uint8(table.GetID())
+	dumpTable = table.GetID()
 	flowList = CheckFlowExists(t, ovsCtlClient, dumpTable, false, expectflows)
 
 	for _, tableStates := range bridge.DumpTableStatus() {
@@ -387,7 +393,7 @@ func TestBundleErrorWhenOVSRestart(t *testing.T) {
 	}()
 
 	bridge := newOFBridge(br)
-	table = bridge.CreateTable(2, 3, binding.TableMissActionNext)
+	table = bridge.CreateTable(t2, t3.GetID(), binding.TableMissActionNext)
 
 	err = bridge.Connect(maxRetry, make(chan struct{}))
 	require.Nil(t, err, "Failed to start OFService")
@@ -506,7 +512,7 @@ func TestBundleWithGroupAndFlow(t *testing.T) {
 	defer DeleteOVSBridge(br)
 
 	bridge := newOFBridge(br)
-	table = bridge.CreateTable(2, 3, binding.TableMissActionNext)
+	table = bridge.CreateTable(t2, t3.GetID(), binding.TableMissActionNext)
 
 	err = bridge.Connect(maxRetry, make(chan struct{}))
 	require.Nil(t, err, "Failed to start OFService")
@@ -550,12 +556,12 @@ func TestBundleWithGroupAndFlow(t *testing.T) {
 	expectedGroupBuckets := []string{bucket0, bucket1}
 	err = bridge.AddOFEntriesInBundle([]binding.OFEntry{flow, group}, nil, nil)
 	require.Nil(t, err)
-	CheckFlowExists(t, ovsCtlClient, uint8(table.GetID()), true, expectedFlows)
+	CheckFlowExists(t, ovsCtlClient, table.GetID(), true, expectedFlows)
 	CheckGroupExists(t, ovsCtlClient, groupID, "select", expectedGroupBuckets, true)
 
 	err = bridge.AddOFEntriesInBundle(nil, nil, []binding.OFEntry{flow, group})
 	require.Nil(t, err)
-	CheckFlowExists(t, ovsCtlClient, uint8(table.GetID()), false, expectedFlows)
+	CheckFlowExists(t, ovsCtlClient, table.GetID(), false, expectedFlows)
 	CheckGroupExists(t, ovsCtlClient, groupID, "select", expectedGroupBuckets, false)
 }
 
@@ -566,8 +572,8 @@ func TestPacketOutIn(t *testing.T) {
 	defer DeleteOVSBridge(br)
 
 	bridge := newOFBridge(br)
-	table0 := bridge.CreateTable(0, 1, binding.TableMissActionNext)
-	table1 := bridge.CreateTable(1, 2, binding.TableMissActionNext)
+	table0 := bridge.CreateTable(t0, t1.GetID(), binding.TableMissActionNext)
+	table1 := bridge.CreateTable(t1, t2.GetID(), binding.TableMissActionNext)
 
 	err = bridge.Connect(maxRetry, make(chan struct{}))
 	require.Nil(t, err, "Failed to start OFService")
@@ -659,7 +665,7 @@ func TestTLVMap(t *testing.T) {
 	defer DeleteOVSBridge(br)
 
 	bridge := newOFBridge(br)
-	table := bridge.CreateTable(0, 1, binding.TableMissActionNext)
+	table := bridge.CreateTable(t0, t1.GetID(), binding.TableMissActionNext)
 
 	ch := make(chan struct{})
 	err = bridge.Connect(maxRetry, ch)
@@ -685,7 +691,7 @@ func TestTLVMap(t *testing.T) {
 		},
 	}
 	ovsCtlClient := ovsctl.NewClient(br)
-	CheckFlowExists(t, ovsCtlClient, uint8(table.GetID()), true, expectedFlows)
+	CheckFlowExists(t, ovsCtlClient, table.GetID(), true, expectedFlows)
 }
 
 func TestMoveTunMetadata(t *testing.T) {
@@ -695,7 +701,7 @@ func TestMoveTunMetadata(t *testing.T) {
 	//defer DeleteOVSBridge(br)
 
 	bridge := newOFBridge(br)
-	table := bridge.CreateTable(0, 1, binding.TableMissActionNext)
+	table := bridge.CreateTable(t0, t1.GetID(), binding.TableMissActionNext)
 
 	err = bridge.Connect(maxRetry, make(chan struct{}))
 	require.Nil(t, err, "Failed to start OFService")
@@ -718,7 +724,7 @@ func TestMoveTunMetadata(t *testing.T) {
 		},
 	}
 	ovsCtlClient := ovsctl.NewClient(br)
-	CheckFlowExists(t, ovsCtlClient, uint8(table.GetID()), true, expectedFlows)
+	CheckFlowExists(t, ovsCtlClient, table.GetID(), true, expectedFlows)
 }
 
 func TestFlowWithCTMatchers(t *testing.T) {
@@ -728,7 +734,7 @@ func TestFlowWithCTMatchers(t *testing.T) {
 	defer DeleteOVSBridge(br)
 
 	bridge := newOFBridge(br)
-	table = bridge.CreateTable(2, 3, binding.TableMissActionNext)
+	table = bridge.CreateTable(t2, t3.GetID(), binding.TableMissActionNext)
 
 	err = bridge.Connect(maxRetry, make(chan struct{}))
 	require.Nil(t, err, "Failed to start OFService")
@@ -773,12 +779,12 @@ func TestFlowWithCTMatchers(t *testing.T) {
 		err = f.Add()
 		assert.Nil(t, err, "no error returned when adding flow")
 	}
-	CheckFlowExists(t, ofctlClient, uint8(table.GetID()), true, expectFlows)
+	CheckFlowExists(t, ofctlClient, table.GetID(), true, expectFlows)
 	for _, f := range []binding.Flow{flow1, flow2} {
 		err = f.Delete()
 		assert.Nil(t, err, "no error returned when deleting flow")
 	}
-	CheckFlowExists(t, ofctlClient, uint8(table.GetID()), false, expectFlows)
+	CheckFlowExists(t, ofctlClient, table.GetID(), false, expectFlows)
 }
 
 func TestNoteAction(t *testing.T) {
@@ -788,7 +794,7 @@ func TestNoteAction(t *testing.T) {
 	defer DeleteOVSBridge(br)
 
 	bridge := newOFBridge(br)
-	table = bridge.CreateTable(2, 3, binding.TableMissActionNext)
+	table = bridge.CreateTable(t2, t3.GetID(), binding.TableMissActionNext)
 
 	err = bridge.Connect(maxRetry, make(chan struct{}))
 	require.Nil(t, err, "Failed to start OFService")
@@ -826,10 +832,10 @@ func TestNoteAction(t *testing.T) {
 
 	err = flow1.Add()
 	assert.Nil(t, err, "expected no error when adding flow")
-	CheckFlowExists(t, ofctlClient, uint8(table.GetID()), true, expectFlows)
+	CheckFlowExists(t, ofctlClient, table.GetID(), true, expectFlows)
 	err = flow1.Delete()
 	assert.Nil(t, err, "expected no error when deleting flow")
-	CheckFlowExists(t, ofctlClient, uint8(table.GetID()), false, expectFlows)
+	CheckFlowExists(t, ofctlClient, table.GetID(), false, expectFlows)
 }
 
 func prepareFlows(table binding.Table) ([]binding.Flow, []*ExpectFlow) {

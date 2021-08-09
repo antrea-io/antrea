@@ -41,7 +41,7 @@ func Test_getNetworkPolicyObservation(t *testing.T) {
 		{
 			name: "ingress metric drop",
 			args: args{
-				tableID: uint8(openflow.IngressMetricTable),
+				tableID: openflow.IngressMetricTable.GetID(),
 				ingress: true,
 			},
 			want: &crdv1alpha1.Observation{
@@ -53,7 +53,7 @@ func Test_getNetworkPolicyObservation(t *testing.T) {
 		{
 			name: "ingress accept",
 			args: args{
-				tableID: uint8(openflow.L2ForwardingOutTable),
+				tableID: openflow.L2ForwardingOutTable.GetID(),
 				ingress: true,
 			},
 			want: &crdv1alpha1.Observation{
@@ -65,7 +65,7 @@ func Test_getNetworkPolicyObservation(t *testing.T) {
 		{
 			name: "egress default drop",
 			args: args{
-				tableID: uint8(openflow.EgressDefaultTable),
+				tableID: openflow.EgressDefaultTable.GetID(),
 				ingress: false,
 			},
 			want: &crdv1alpha1.Observation{
@@ -77,7 +77,7 @@ func Test_getNetworkPolicyObservation(t *testing.T) {
 		{
 			name: "egress accept",
 			args: args{
-				tableID: uint8(openflow.L2ForwardingOutTable),
+				tableID: openflow.L2ForwardingOutTable.GetID(),
 				ingress: false,
 			},
 			want: &crdv1alpha1.Observation{

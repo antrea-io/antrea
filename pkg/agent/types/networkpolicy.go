@@ -79,7 +79,7 @@ type PolicyRule struct {
 	Priority      *uint16
 	Name          string
 	FlowID        uint32
-	TableID       binding.TableIDType
+	TableID       uint8
 	PolicyRef     *v1beta2.NetworkPolicyReference
 	EnableLogging bool
 }

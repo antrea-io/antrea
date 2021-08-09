@@ -222,6 +222,8 @@ func TestTableFlows(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
+	getFlowTableName = mockGetFlowTableName
+	getFlowTableID = mockGetFlowTableID
 	testcases := []testCase{
 		{
 			test:           "Table 80",
@@ -244,6 +246,20 @@ func TestTableFlows(t *testing.T) {
 		runHTTPTest(t, &tc, q)
 	}
 
+}
+
+func mockGetFlowTableName(id uint8) string {
+	if id == 80 {
+		return "IngressRule"
+	}
+	return ""
+}
+
+func mockGetFlowTableID(tableName string) uint8 {
+	if tableName == "IngressRule" {
+		return 80
+	}
+	return binding.TableIDAll
 }
 
 func TestGroups(t *testing.T) {
