@@ -71,6 +71,10 @@ const (
 	// alpha: v1.4
 	// Run Kubernetes NodeIPAM with Antrea.
 	NodeIPAM featuregate.Feature = "NodeIPAM"
+
+	// alpha: v1.3
+	// Enable flexible IPAM for Pods.
+	FlexibleIPAM featuregate.Feature = "FlexibleIPAM"
 )
 
 var (
@@ -90,6 +94,7 @@ var (
 		Egress:             {Default: false, PreRelease: featuregate.Alpha},
 		EndpointSlice:      {Default: false, PreRelease: featuregate.Alpha},
 		Traceflow:          {Default: true, PreRelease: featuregate.Beta},
+		FlexibleIPAM:       {Default: false, PreRelease: featuregate.Alpha},
 		FlowExporter:       {Default: false, PreRelease: featuregate.Alpha},
 		NetworkPolicyStats: {Default: true, PreRelease: featuregate.Beta},
 		NodePortLocal:      {Default: false, PreRelease: featuregate.Alpha},
@@ -109,6 +114,7 @@ var (
 	unsupportedFeaturesOnWindows = map[featuregate.Feature]struct{}{
 		NodePortLocal: {},
 		Egress:        {},
+		FlexibleIPAM:  {},
 	}
 )
 
