@@ -52,6 +52,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&EgressList{},
 		&ExternalIPPool{},
 		&ExternalIPPoolList{},
+		&IPPool{},
+		&IPPoolList{},
 	)
 
 	metav1.AddToGroupVersion(scheme, SchemeGroupVersion)
