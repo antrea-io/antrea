@@ -15,6 +15,7 @@
 package interfacestore
 
 import (
+	"fmt"
 	"sync"
 
 	"k8s.io/client-go/tools/cache"
@@ -40,6 +41,8 @@ const (
 	// interfaceIPIndex is the index built with InterfaceConfig.IP
 	// Only the interfaces with IP get indexed.
 	interfaceIPIndex = "ip"
+	// ofPortIndex is the index built with InterfaceConfig.OFPort
+	ofPortIndex = "ofPort"
 )
 
 // Local cache for interfaces created on node, including container, host gateway, and tunnel
@@ -221,6 +224,18 @@ func (c *interfaceCache) GetNodeTunnelInterface(nodeName string) (*InterfaceConf
 	return obj.(*InterfaceConfig), true
 }
 
+// GetInterfaceByOFPort retrieves InterfaceConfig by the given ofPort number.
+func (c *interfaceCache) GetInterfaceByOFPort(ofPort uint32) (*InterfaceConfig, bool) {
+	c.RLock()
+	defer c.RUnlock()
+	ofportStr := fmt.Sprintf("%d", ofPort)
+	interfaceConfigs, _ := c.cache.ByIndex(ofPortIndex, ofportStr)
+	if len(interfaceConfigs) == 0 {
+		return nil, false
+	}
+	return interfaceConfigs[0].(*InterfaceConfig), true
+}
+
 func interfaceNameIndexFunc(obj interface{}) ([]string, error) {
 	interfaceConfig := obj.(*InterfaceConfig)
 	return []string{interfaceConfig.InterfaceName}, nil
@@ -260,6 +275,15 @@ func interfaceIPIndexFunc(obj interface{}) ([]string, error) {
 	return intfIPs, nil
 }
 
+func interfaceOFPortIndexFunc(obj interface{}) ([]string, error) {
+	interfaceConfig := obj.(*InterfaceConfig)
+	if interfaceConfig.OFPort < 0 {
+		// If interfaceConfig OFport is not valid, we return empty key.
+		return []string{}, nil
+	}
+	return []string{fmt.Sprintf("%d", interfaceConfig.OFPort)}, nil
+}
+
 func NewInterfaceStore() InterfaceStore {
 	return &interfaceCache{
 		cache: cache.NewIndexer(getInterfaceKey, cache.Indexers{
@@ -268,6 +292,7 @@ func NewInterfaceStore() InterfaceStore {
 			containerIDIndex:   containerIDIndexFunc,
 			podIndex:           podIndexFunc,
 			interfaceIPIndex:   interfaceIPIndexFunc,
+			ofPortIndex:        interfaceOFPortIndexFunc,
 		}),
 	}
 }

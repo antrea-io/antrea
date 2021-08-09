@@ -3989,6 +3989,9 @@ data:
     # Deployments and StatefulSets via IP Pool annotation.
     #  AntreaIPAM: false
 
+    # Enable multicast traffic. This feature is supported only with noEncap mode.
+    #  Multicast: false
+
     # Name of the OpenVSwitch bridge antrea-agent will create and use.
     # Make sure it doesn't conflict with your existing OpenVSwitch bridges.
     #ovsBridge: br-int
@@ -4274,7 +4277,7 @@ metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-tc6kb6tbkh
+  name: antrea-config-557h844gdh
   namespace: kube-system
 ---
 apiVersion: v1
@@ -4354,7 +4357,7 @@ spec:
             fieldRef:
               fieldPath: spec.serviceAccountName
         - name: ANTREA_CONFIG_MAP_NAME
-          value: antrea-config-tc6kb6tbkh
+          value: antrea-config-557h844gdh
         image: projects.registry.vmware.com/antrea/antrea-ubuntu:latest
         imagePullPolicy: IfNotPresent
         livenessProbe:
@@ -4405,7 +4408,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-tc6kb6tbkh
+          name: antrea-config-557h844gdh
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -4721,7 +4724,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-tc6kb6tbkh
+          name: antrea-config-557h844gdh
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d

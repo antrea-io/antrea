@@ -25,6 +25,7 @@ import (
 	openflow "antrea.io/antrea/pkg/ovs/openflow"
 	ip "antrea.io/antrea/pkg/util/ip"
 	proxy "antrea.io/antrea/third_party/proxy"
+	util "antrea.io/libOpenflow/util"
 	gomock "github.com/golang/mock/gomock"
 	v1 "k8s.io/api/core/v1"
 	net "net"
@@ -378,6 +379,34 @@ func (mr *MockClientMockRecorder) InstallLoadBalancerServiceFromOutsideFlows(arg
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallLoadBalancerServiceFromOutsideFlows", reflect.TypeOf((*MockClient)(nil).InstallLoadBalancerServiceFromOutsideFlows), arg0, arg1, arg2)
 }
 
+// InstallMulticastFlow mocks base method
+func (m *MockClient) InstallMulticastFlow(arg0 net.IP) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "InstallMulticastFlow", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// InstallMulticastFlow indicates an expected call of InstallMulticastFlow
+func (mr *MockClientMockRecorder) InstallMulticastFlow(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallMulticastFlow", reflect.TypeOf((*MockClient)(nil).InstallMulticastFlow), arg0)
+}
+
+// InstallMulticastInitialFlows mocks base method
+func (m *MockClient) InstallMulticastInitialFlows(arg0 byte) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "InstallMulticastInitialFlows", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// InstallMulticastInitialFlows indicates an expected call of InstallMulticastInitialFlows
+func (mr *MockClientMockRecorder) InstallMulticastInitialFlows(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallMulticastInitialFlows", reflect.TypeOf((*MockClient)(nil).InstallMulticastInitialFlows), arg0)
+}
+
 // InstallNodeFlows mocks base method
 func (m *MockClient) InstallNodeFlows(arg0 string, arg1 map[*net.IPNet]net.IP, arg2 *ip.DualStackIPs, arg3 uint32, arg4 net.HardwareAddr) error {
 	m.ctrl.T.Helper()
@@ -612,6 +641,20 @@ func (mr *MockClientMockRecorder) SendICMPPacketOut(arg0, arg1, arg2, arg3, arg4
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendICMPPacketOut", reflect.TypeOf((*MockClient)(nil).SendICMPPacketOut), arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10)
 }
 
+// SendIGMPQueryPacketOut mocks base method
+func (m *MockClient) SendIGMPQueryPacketOut(arg0 net.HardwareAddr, arg1 net.IP, arg2 uint32, arg3 util.Message) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SendIGMPQueryPacketOut", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SendIGMPQueryPacketOut indicates an expected call of SendIGMPQueryPacketOut
+func (mr *MockClientMockRecorder) SendIGMPQueryPacketOut(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendIGMPQueryPacketOut", reflect.TypeOf((*MockClient)(nil).SendIGMPQueryPacketOut), arg0, arg1, arg2, arg3)
+}
+
 // SendTCPPacketOut mocks base method
 func (m *MockClient) SendTCPPacketOut(arg0, arg1, arg2, arg3 string, arg4, arg5 uint32, arg6 bool, arg7, arg8 uint16, arg9 uint32, arg10 byte, arg11 func(openflow.PacketOutBuilder) openflow.PacketOutBuilder) error {
 	m.ctrl.T.Helper()
@@ -706,6 +749,20 @@ func (m *MockClient) UninstallLoadBalancerServiceFromOutsideFlows(arg0 net.IP, a
 func (mr *MockClientMockRecorder) UninstallLoadBalancerServiceFromOutsideFlows(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UninstallLoadBalancerServiceFromOutsideFlows", reflect.TypeOf((*MockClient)(nil).UninstallLoadBalancerServiceFromOutsideFlows), arg0, arg1, arg2)
+}
+
+// UninstallMulticastFlow mocks base method
+func (m *MockClient) UninstallMulticastFlow(arg0 net.IP) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UninstallMulticastFlow", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UninstallMulticastFlow indicates an expected call of UninstallMulticastFlow
+func (mr *MockClientMockRecorder) UninstallMulticastFlow(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UninstallMulticastFlow", reflect.TypeOf((*MockClient)(nil).UninstallMulticastFlow), arg0)
 }
 
 // UninstallNodeFlows mocks base method
