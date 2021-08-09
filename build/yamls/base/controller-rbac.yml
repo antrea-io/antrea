@@ -212,6 +212,7 @@ rules:
       - crd.antrea.io
     resources:
       - externalippools
+      - ippools
     verbs:
       - get
       - watch
