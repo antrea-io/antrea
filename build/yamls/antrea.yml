@@ -1760,6 +1760,93 @@ kind: CustomResourceDefinition
 metadata:
   labels:
     app: antrea
+  name: ippools.crd.antrea.io
+spec:
+  group: crd.antrea.io
+  names:
+    kind: IPPool
+    plural: ippools
+    shortNames:
+    - ipp
+    singular: ippool
+  scope: Cluster
+  versions:
+  - name: v1alpha2
+    schema:
+      openAPIV3Schema:
+        properties:
+          spec:
+            properties:
+              ipRanges:
+                items:
+                  oneOf:
+                  - required:
+                    - cidr
+                    - gateway
+                    - prefixLen
+                  - required:
+                    - start
+                    - end
+                    - gateway
+                    - prefixLen
+                  properties:
+                    cidr:
+                      format: cidr
+                      type: string
+                    end:
+                      oneOf:
+                      - format: ipv4
+                      - format: ipv6
+                      type: string
+                    gateway:
+                      oneOf:
+                      - format: ipv4
+                      - format: ipv6
+                      type: string
+                    prefixLen:
+                      type: integer
+                    start:
+                      oneOf:
+                      - format: ipv4
+                      - format: ipv6
+                      type: string
+                    vlan:
+                      type: string
+                  type: object
+                type: array
+              ipVersion:
+                type: integer
+            required:
+            - ipVersion
+            - ipRanges
+            type: object
+          status:
+            properties:
+              usage:
+                items:
+                  properties:
+                    ipAddress:
+                      type: string
+                    resource:
+                      type: string
+                    state:
+                      type: string
+                  type: object
+                type: array
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  labels:
+    app: antrea
   name: networkpolicies.crd.antrea.io
 spec:
   group: crd.antrea.io
@@ -3694,6 +3781,7 @@ rules:
   - crd.antrea.io
   resources:
   - externalippools
+  - ippools
   verbs:
   - get
   - watch
@@ -3866,6 +3954,10 @@ data:
 
     # Enable controlling SNAT IPs of Pod egress traffic.
     #  Egress: false
+
+    # Enable flexible IPAM mode for Antrea. This mode allows to assign IP Ranges to Namespaces,
+    # Deployments and StatefulSets via IP Pool annotation.
+    #  FlexibleIPAM: false
 
     # Name of the OpenVSwitch bridge antrea-agent will create and use.
     # Make sure it doesn't conflict with your existing OpenVSwitch bridges.
@@ -4081,6 +4173,11 @@ data:
     # Run Kubernetes NodeIPAMController with Antrea.
     #  NodeIPAM: false
 
+    # Enable flexible IPAM mode for Antrea. This mode allows to assign IP Ranges to Namespaces,
+    # Deployments and StatefulSets via IP Pool annotation.
+    #  FlexibleIPAM: false
+    #
+
     # The port for the antrea-controller APIServer to serve on.
     # Note that if it's set to another value, the `containerPort` of the `api` port of the
     # `antrea-controller` container must be set to the same value.
@@ -4146,7 +4243,7 @@ metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-7ddkdg8fcf
+  name: antrea-config-75t4bbg87d
   namespace: kube-system
 ---
 apiVersion: v1
@@ -4217,7 +4314,7 @@ spec:
             fieldRef:
               fieldPath: spec.serviceAccountName
         - name: ANTREA_CONFIG_MAP_NAME
-          value: antrea-config-7ddkdg8fcf
+          value: antrea-config-75t4bbg87d
         image: projects.registry.vmware.com/antrea/antrea-ubuntu:latest
         imagePullPolicy: IfNotPresent
         livenessProbe:
@@ -4268,7 +4365,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-7ddkdg8fcf
+          name: antrea-config-75t4bbg87d
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -4549,7 +4646,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-7ddkdg8fcf
+          name: antrea-config-75t4bbg87d
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d
