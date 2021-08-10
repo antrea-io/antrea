@@ -1,4 +1,4 @@
-// Copyright 2020 Antrea Authors
+// Copyright 2021 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,12 +22,11 @@ import (
 	"sync"
 	"time"
 
-	"antrea.io/antrea/pkg/util/logdir"
-
 	"gopkg.in/natefinch/lumberjack.v2"
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent/openflow"
+	"antrea.io/antrea/pkg/util/logdir"
 )
 
 const (
