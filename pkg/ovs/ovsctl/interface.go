@@ -54,6 +54,8 @@ type OVSCtlClient interface {
 	// RunAppctlCmd executes "ovs-appctl" command and returns the outputs.
 	// Some commands are bridge specific and some are not. Passing a bool to distinguish that.
 	RunAppctlCmd(cmd string, needsBridge bool, args ...string) ([]byte, *ExecError)
+	// GetDPFeatures executes "ovs-appctl dpif/show-dp-features" to check supported DP features.
+	GetDPFeatures() (map[DPFeature]bool, error)
 }
 
 type BadRequestError string
