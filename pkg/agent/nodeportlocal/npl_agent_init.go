@@ -76,9 +76,5 @@ func InitController(kubeClient clientset.Interface, informerFactory informers.Sh
 		portTable,
 		nodeName)
 
-	if err := c.Initialize(); err != nil {
-		return nil, fmt.Errorf("error when initializing NodePortLocal Controller: %v", err)
-	}
-
 	return c, nil
 }
