@@ -136,7 +136,7 @@ func (pt *PortTable) AddRule(podIP string, podPort int) (int, error) {
 	if nodeport < 0 {
 		return 0, fmt.Errorf("no free port found")
 	}
-	err := pt.PodPortRules.AddRule(nodeport, fmt.Sprintf("%s:%d", podIP, podPort))
+	err := pt.PodPortRules.AddRule(nodeport, podIP, podPort)
 	if err != nil {
 		return 0, err
 	}
@@ -146,7 +146,7 @@ func (pt *PortTable) AddRule(podIP string, podPort int) (int, error) {
 
 func (pt *PortTable) DeleteRule(podIP string, podPort int) error {
 	data := pt.GetEntryByPodIPPort(podIP, podPort)
-	err := pt.PodPortRules.DeleteRule(data.NodePort, fmt.Sprintf("%s:%d", podIP, podPort))
+	err := pt.PodPortRules.DeleteRule(data.NodePort, podIP, podPort)
 	if err != nil {
 		return err
 	}

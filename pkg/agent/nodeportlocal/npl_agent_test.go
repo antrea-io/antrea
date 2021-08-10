@@ -45,8 +45,8 @@ func newPortTable(c *gomock.Controller) *portcache.PortTable {
 	ptable.Table = make(map[int]portcache.NodePortData)
 
 	mockTable := npltest.NewMockPodPortRules(c)
-	mockTable.EXPECT().AddRule(gomock.Any(), gomock.Any()).AnyTimes()
-	mockTable.EXPECT().DeleteRule(gomock.Any(), gomock.Any()).AnyTimes()
+	mockTable.EXPECT().AddRule(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockTable.EXPECT().DeleteRule(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	mockTable.EXPECT().AddAllRules(gomock.Any()).AnyTimes()
 
 	ptable.PodPortRules = mockTable

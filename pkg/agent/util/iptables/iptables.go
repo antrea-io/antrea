@@ -52,6 +52,15 @@ const (
 
 type Protocol byte
 
+var protocolStrMap = map[Protocol]string{
+	ProtocolIPv4: "IPv4",
+	ProtocolIPv6: "IPv6",
+}
+
+func (p Protocol) String() string {
+	return protocolStrMap[p]
+}
+
 const (
 	ProtocolDual Protocol = iota
 	ProtocolIPv4
@@ -63,20 +72,20 @@ const (
 var restoreWaitSupportedMinVersion = semver.Version{Major: 1, Minor: 6, Patch: 2}
 
 type Client struct {
-	ipts []*iptables.IPTables
+	ipts map[Protocol]*iptables.IPTables
 	// restoreWaitSupported indicates whether iptables-restore (or ip6tables-restore) supports --wait flag.
 	restoreWaitSupported bool
 }
 
 func New(enableIPV4, enableIPV6 bool) (*Client, error) {
-	var ipts []*iptables.IPTables
+	ipts := make(map[Protocol]*iptables.IPTables)
 	var restoreWaitSupported bool
 	if enableIPV4 {
 		ipt, err := iptables.New()
 		if err != nil {
 			return nil, fmt.Errorf("error creating IPTables instance: %v", err)
 		}
-		ipts = append(ipts, ipt)
+		ipts[ProtocolIPv4] = ipt
 		restoreWaitSupported = isRestoreWaitSupported(ipt)
 	}
 	if enableIPV6 {
@@ -84,7 +93,7 @@ func New(enableIPV4, enableIPV6 bool) (*Client, error) {
 		if err != nil {
 			return nil, fmt.Errorf("error creating IPTables instance for IPv6: %v", err)
 		}
-		ipts = append(ipts, ip6t)
+		ipts[ProtocolIPv6] = ip6t
 		if !restoreWaitSupported {
 			restoreWaitSupported = isRestoreWaitSupported(ip6t)
 		}
@@ -99,61 +108,50 @@ func isRestoreWaitSupported(ipt *iptables.IPTables) bool {
 }
 
 // EnsureChain checks if target chain already exists, creates it if not.
-func (c *Client) EnsureChain(table string, chain string) error {
-	for idx := range c.ipts {
-		ipt := c.ipts[idx]
-		oriChains, err := ipt.ListChains(table)
-		if err != nil {
-			return fmt.Errorf("error listing existing chains in table %s: %v", table, err)
+func (c *Client) EnsureChain(protocol Protocol, table string, chain string) error {
+	for p := range c.ipts {
+		ipt := c.ipts[p]
+		if !matchProtocol(ipt, protocol) {
+			continue
 		}
-		if contains(oriChains, chain) {
-			return nil
+		exists, err := ipt.ChainExists(table, chain)
+		if err != nil {
+			return fmt.Errorf("error checking if chain %s exists in table %s: %v", chain, table, err)
+		}
+		if exists {
+			continue
 		}
 		if err := ipt.NewChain(table, chain); err != nil {
 			return fmt.Errorf("error creating chain %s in table %s: %v", chain, table, err)
 		}
-		klog.V(2).Infof("Created chain %s in table %s", chain, table)
+		klog.V(2).InfoS("Created a chain", "chain", chain, "table", table, "protocol", p)
 	}
 	return nil
 }
 
-// ChainExists checks if a chain already exists in a table
-func (c *Client) ChainExists(table string, chain string) (bool, error) {
-	for idx := range c.ipts {
-		allChains, err := c.ipts[idx].ListChains(table)
+// ChainExists checks if target chain already exists in a table
+func (c *Client) ChainExists(protocol Protocol, table string, chain string) (bool, error) {
+	for p := range c.ipts {
+		ipt := c.ipts[p]
+		if !matchProtocol(ipt, protocol) {
+			continue
+		}
+		exists, err := ipt.ChainExists(table, chain)
 		if err != nil {
-			return false, fmt.Errorf("error listing existing chains in table %s: %v", table, err)
+			return false, fmt.Errorf("error checking if chain %s exists in table %s: %v", chain, table, err)
 		}
-		if contains(allChains, chain) {
-			return true, nil
+		if !exists {
+			return false, nil
 		}
+		klog.V(2).InfoS("A chain exists", "chain", chain, "table", table, "protocol", p)
 	}
-	return false, nil
+	return true, nil
 }
 
-// EnsureRule checks if target rule already exists, appends it if not.
-func (c *Client) EnsureRule(table string, chain string, ruleSpec []string) error {
-	for idx := range c.ipts {
-		ipt := c.ipts[idx]
-		exist, err := ipt.Exists(table, chain, ruleSpec...)
-		if err != nil {
-			return fmt.Errorf("error checking if rule %v exists in table %s chain %s: %v", ruleSpec, table, chain, err)
-		}
-		if exist {
-			return nil
-		}
-		if err := ipt.Append(table, chain, ruleSpec...); err != nil {
-			return fmt.Errorf("error appending rule %v to table %s chain %s: %v", ruleSpec, table, chain, err)
-		}
-	}
-	klog.V(2).Infof("Appended rule %v to table %s chain %s", ruleSpec, table, chain)
-	return nil
-}
-
-// InsertRule checks if target rule already exists, inserts it if not.
-func (c *Client) InsertRule(protocol Protocol, table string, chain string, ruleSpec []string) error {
-	for idx := range c.ipts {
-		ipt := c.ipts[idx]
+// AppendRule checks if target rule already exists with the protocol, appends it if not.
+func (c *Client) AppendRule(protocol Protocol, table string, chain string, ruleSpec []string) error {
+	for p := range c.ipts {
+		ipt := c.ipts[p]
 		if !matchProtocol(ipt, protocol) {
 			continue
 		}
@@ -162,13 +160,35 @@ func (c *Client) InsertRule(protocol Protocol, table string, chain string, ruleS
 			return fmt.Errorf("error checking if rule %v exists in table %s chain %s: %v", ruleSpec, table, chain, err)
 		}
 		if exist {
-			return nil
+			continue
+		}
+		if err := ipt.Append(table, chain, ruleSpec...); err != nil {
+			return fmt.Errorf("error appending rule %v to table %s chain %s: %v", ruleSpec, table, chain, err)
+		}
+		klog.V(2).InfoS("Appended a rule", "rule", ruleSpec, "table", table, "chain", chain, "protocol", p)
+	}
+	return nil
+}
+
+// InsertRule checks if target rule already exists, inserts it if not.
+func (c *Client) InsertRule(protocol Protocol, table string, chain string, ruleSpec []string) error {
+	for p := range c.ipts {
+		ipt := c.ipts[p]
+		if !matchProtocol(ipt, protocol) {
+			continue
+		}
+		exist, err := ipt.Exists(table, chain, ruleSpec...)
+		if err != nil {
+			return fmt.Errorf("error checking if rule %v exists in table %s chain %s: %v", ruleSpec, table, chain, err)
+		}
+		if exist {
+			continue
 		}
 		if err := ipt.Insert(table, chain, 1, ruleSpec...); err != nil {
 			return fmt.Errorf("error inserting rule %v to table %s chain %s: %v", ruleSpec, table, chain, err)
 		}
+		klog.V(2).InfoS("Inserted a rule", "rule", ruleSpec, "table", table, "chain", chain)
 	}
-	klog.V(2).Infof("Inserted rule %v to table %s chain %s", ruleSpec, table, chain)
 	return nil
 }
 
@@ -185,46 +205,59 @@ func matchProtocol(ipt *iptables.IPTables, protocol Protocol) bool {
 }
 
 // DeleteRule checks if target rule already exists, deletes the rule if found.
-func (c *Client) DeleteRule(table string, chain string, ruleSpec []string) error {
-	for idx := range c.ipts {
-		exist, err := c.ipts[idx].Exists(table, chain, ruleSpec...)
+func (c *Client) DeleteRule(protocol Protocol, table string, chain string, ruleSpec []string) error {
+	for p := range c.ipts {
+		ipt := c.ipts[p]
+		if !matchProtocol(ipt, protocol) {
+			continue
+		}
+		exist, err := ipt.Exists(table, chain, ruleSpec...)
 		if err != nil {
 			return fmt.Errorf("error checking if rule %v exists in table %s chain %s: %v", ruleSpec, table, chain, err)
 		}
 		if !exist {
-			return nil
+			continue
 		}
-		if err := c.ipts[idx].Delete(table, chain, ruleSpec...); err != nil {
+		if err := ipt.Delete(table, chain, ruleSpec...); err != nil {
 			return fmt.Errorf("error deleting rule %v from table %s chain %s: %v", ruleSpec, table, chain, err)
 		}
-		klog.V(2).Infof("Deleted rule %v from table %s chain %s", ruleSpec, table, chain)
+		klog.V(2).InfoS("Deleted a rule", "rule", ruleSpec, "table", table, "chain", chain, "protocol", p)
 	}
 	return nil
 }
 
-// DeleteChain deletes all rules from a chain in a table and then delete the chain
-func (c *Client) DeleteChain(table string, chain string) error {
-	for idx := range c.ipts {
-		err := c.ipts[idx].ClearChain(table, chain)
+// DeleteChain deletes all rules from a chain in a table and then delete the chain.
+func (c *Client) DeleteChain(protocol Protocol, table string, chain string) error {
+	for p := range c.ipts {
+		ipt := c.ipts[p]
+		if !matchProtocol(ipt, protocol) {
+			continue
+		}
+		exists, err := ipt.ChainExists(table, chain)
 		if err != nil {
+			return fmt.Errorf("error checking if chain %s exists in table %s: %v", chain, table, err)
+		}
+		if !exists {
+			continue
+		}
+		if err = ipt.ClearChain(table, chain); err != nil {
 			return fmt.Errorf("error clearing rules from table %s chain %s: %v", table, chain, err)
 		}
-		err = c.ipts[idx].DeleteChain(table, chain)
-		if err != nil {
+		if err = ipt.DeleteChain(table, chain); err != nil {
 			return fmt.Errorf("error deleting chain %s from table %s: %v", chain, table, err)
 		}
-		klog.V(2).Infof("Deleted chain %s from table %s", chain, table)
+		klog.V(2).InfoS("Deleted a chain", "chain", chain, "table", table, "protocol", p)
 	}
 	return nil
 }
 
-// ListRules lists all rules from a chain in a table
+// ListRules lists all rules from a chain in a table.
 func (c *Client) ListRules(table string, chain string) ([]string, error) {
 	var allRules []string
-	for idx := range c.ipts {
-		rules, err := c.ipts[idx].List(table, chain)
+	for p := range c.ipts {
+		rules, err := c.ipts[p].List(table, chain)
 		if err != nil {
-			return rules, fmt.Errorf("error getting rules from table %s chain %s: %v", table, chain, err)
+			return rules, fmt.Errorf("error getting rules from table %s chain %s protocol %s: %v", table, chain, p, err)
 		}
 		allRules = append(allRules, rules...)
 	}
@@ -265,7 +298,7 @@ func (c *Client) Restore(data []byte, flush bool, useIPv6 bool) error {
 		defer unlockFunc()
 	}
 	if err := cmd.Run(); err != nil {
-		klog.Errorf("Failed to execute %s: %v\nstdin:\n%s\nstderr:\n%s", iptablesCmd, err, data, stderr)
+		klog.ErrorS(err, "Failed to execute iptables command", "iptablesCmd", iptablesCmd, "stdin", data, "stderr", stderr)
 		return fmt.Errorf("error executing %s: %v", iptablesCmd, err)
 	}
 	return nil
@@ -274,9 +307,9 @@ func (c *Client) Restore(data []byte, flush bool, useIPv6 bool) error {
 // Save calls iptables-saves to dump chains and tables in iptables.
 func (c *Client) Save() ([]byte, error) {
 	var output []byte
-	for idx := range c.ipts {
+	for p := range c.ipts {
 		var cmd string
-		ipt := c.ipts[idx]
+		ipt := c.ipts[p]
 		switch ipt.Proto() {
 		case iptables.ProtocolIPv6:
 			cmd = "ip6tables-save"
@@ -290,15 +323,6 @@ func (c *Client) Save() ([]byte, error) {
 		output = append(output, data...)
 	}
 	return output, nil
-}
-
-func contains(chains []string, targetChain string) bool {
-	for _, val := range chains {
-		if val == targetChain {
-			return true
-		}
-	}
-	return false
 }
 
 func MakeChainLine(chain string) string {
