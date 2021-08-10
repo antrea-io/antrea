@@ -197,7 +197,7 @@ func (pt *PortTable) RestoreRules(allNPLPorts []rules.PodNodePort, synced chan<-
 		pt.Table[nplPort.NodePort] = data
 	}
 	// retry mechanism as iptables-restore can fail if other components (in Antrea or other
-	// software) or accessing iptables.
+	// software) are accessing iptables.
 	go func() {
 		defer close(synced)
 		var backoffTime = 2 * time.Second
