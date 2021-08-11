@@ -5,10 +5,14 @@ on:
     branches:
       - main
       - release-*
+      # TODO(gran): remove this before merge feature branch to main
+      - feature/flexible-ipam
   push:
     branches:
       - main
       - release-*
+      # TODO(gran): remove this before merge feature branch to main
+      - feature/flexible-ipam
 
 jobs:
   check-changes:
