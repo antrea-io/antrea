@@ -74,11 +74,13 @@ message AppliedToGroupPatch {
   repeated GroupMember removedGroupMembers = 3;
 }
 
-// ClusterGroupMembers is a list of GroupMember objects that are currently selected by a ClusterGroup.
+// ClusterGroupMembers is a list of GroupMember objects or ipBlocks that are currently selected by a ClusterGroup.
 message ClusterGroupMembers {
   optional k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
 
   repeated GroupMember effectiveMembers = 2;
+
+  repeated IPNet effectiveIPBlocks = 3;
 }
 
 message EgressGroup {

@@ -1783,7 +1783,7 @@ func schema_pkg_apis_controlplane_v1beta2_ClusterGroupMembers(ref common.Referen
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "ClusterGroupMembers is a list of GroupMember objects that are currently selected by a ClusterGroup.",
+				Description: "ClusterGroupMembers is a list of GroupMember objects or ipBlocks that are currently selected by a ClusterGroup.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"kind": {
@@ -1819,12 +1819,25 @@ func schema_pkg_apis_controlplane_v1beta2_ClusterGroupMembers(ref common.Referen
 							},
 						},
 					},
+					"effectiveIPBlocks": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.IPNet"),
+									},
+								},
+							},
+						},
+					},
 				},
-				Required: []string{"effectiveMembers"},
+				Required: []string{"effectiveMembers", "effectiveIPBlocks"},
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.GroupMember", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.GroupMember", "antrea.io/antrea/pkg/apis/controlplane/v1beta2.IPNet", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
 	}
 }
 

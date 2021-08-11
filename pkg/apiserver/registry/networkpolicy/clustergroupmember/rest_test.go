@@ -30,7 +30,7 @@ type fakeQuerier struct {
 	members map[string]controlplane.GroupMemberSet
 }
 
-func (q fakeQuerier) GetGroupMembers(uid string) (controlplane.GroupMemberSet, error) {
+func (q fakeQuerier) GetGroupMembers(uid string) (interface{}, error) {
 	if memberList, ok := q.members[uid]; ok {
 		return memberList, nil
 	}
