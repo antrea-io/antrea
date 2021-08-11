@@ -681,6 +681,12 @@ func (c *client) initialize() error {
 	if err := c.ofEntryOperations.AddAll(c.establishedConnectionFlows(cookie.Default)); err != nil {
 		return fmt.Errorf("failed to install flows to skip established connections: %v", err)
 	}
+	if err := c.ofEntryOperations.AddAll(c.relatedConnectionFlows(cookie.Default)); err != nil {
+		return fmt.Errorf("failed to install flows to skip related connections: %v", err)
+	}
+	if err := c.ofEntryOperations.AddAll(c.rejectBypassNetworkpolicyFlows(cookie.Default)); err != nil {
+		return fmt.Errorf("failed to install flows to skip generated reject responses: %v", err)
+	}
 	if c.encapMode.IsNetworkPolicyOnly() {
 		if err := c.setupPolicyOnlyFlows(); err != nil {
 			return fmt.Errorf("failed to setup policy only flows: %w", err)

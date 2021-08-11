@@ -1677,6 +1677,115 @@ func (c *client) establishedConnectionFlows(category cookie.Category) (flows []b
 	return allEstFlows
 }
 
+// relatedConnectionFlows generates flows to ensure related connections skip the NetworkPolicy rules.
+func (c *client) relatedConnectionFlows(category cookie.Category) (flows []binding.Flow) {
+	// egressDropTable checks the source address of packets, and drops packets sent from the AppliedToGroup but not
+	// matching the NetworkPolicy rules. Packets in the related connections need not to be checked with the
+	// egressRuleTable or the egressDropTable.
+	egressDropTable := c.pipeline[EgressDefaultTable]
+	// ingressDropTable checks the destination address of packets, and drops packets sent to the AppliedToGroup but not
+	// matching the NetworkPolicy rules. Packets in the related connections need not to be checked with the
+	// ingressRuleTable or ingressDropTable.
+	ingressDropTable := c.pipeline[IngressDefaultTable]
+	var allRelFlows []binding.Flow
+	for _, ipProto := range c.ipProtocols {
+		egressRelFlow := c.pipeline[EgressRuleTable].BuildFlow(priorityHigh).MatchProtocol(ipProto).
+			MatchCTStateNew(false).MatchCTStateRel(true).
+			Action().GotoTable(egressDropTable.GetNext()).
+			Cookie(c.cookieAllocator.Request(category).Raw()).
+			Done()
+		ingressRelFlow := c.pipeline[IngressRuleTable].BuildFlow(priorityHigh).MatchProtocol(ipProto).
+			MatchCTStateNew(false).MatchCTStateRel(true).
+			Action().GotoTable(ingressDropTable.GetNext()).
+			Cookie(c.cookieAllocator.Request(category).Raw()).
+			Done()
+		allRelFlows = append(allRelFlows, egressRelFlow, ingressRelFlow)
+	}
+	if !c.enableAntreaPolicy {
+		return allRelFlows
+	}
+	apFlows := make([]binding.Flow, 0)
+	for _, tableID := range GetAntreaPolicyEgressTables() {
+		for _, ipProto := range c.ipProtocols {
+			apEgressRelFlow := c.pipeline[tableID].BuildFlow(priorityTopAntreaPolicy).MatchProtocol(ipProto).
+				MatchCTStateNew(false).MatchCTStateRel(true).
+				Action().GotoTable(egressDropTable.GetNext()).
+				Cookie(c.cookieAllocator.Request(category).Raw()).
+				Done()
+			apFlows = append(apFlows, apEgressRelFlow)
+		}
+
+	}
+	for _, tableID := range GetAntreaPolicyIngressTables() {
+		for _, ipProto := range c.ipProtocols {
+			apIngressRelFlow := c.pipeline[tableID].BuildFlow(priorityTopAntreaPolicy).MatchProtocol(ipProto).
+				MatchCTStateNew(false).MatchCTStateRel(true).
+				Action().GotoTable(ingressDropTable.GetNext()).
+				Cookie(c.cookieAllocator.Request(category).Raw()).
+				Done()
+			apFlows = append(apFlows, apIngressRelFlow)
+		}
+
+	}
+	allRelFlows = append(allRelFlows, apFlows...)
+	return allRelFlows
+}
+
+// rejectBypassNetworkpolicyFlows generates flows to ensure reject responses generated
+// by the controller skip the NetworkPolicy rules.
+func (c *client) rejectBypassNetworkpolicyFlows(category cookie.Category) (flows []binding.Flow) {
+	// egressDropTable checks the source address of packets, and drops packets sent from the AppliedToGroup but not
+	// matching the NetworkPolicy rules. Generated reject responses need not to be checked with the
+	// egressRuleTable or the egressDropTable.
+	egressDropTable := c.pipeline[EgressDefaultTable]
+	// ingressDropTable checks the destination address of packets, and drops packets sent to the AppliedToGroup but not
+	// matching the NetworkPolicy rules. Generated reject responses need not to be checked with the
+	// ingressRuleTable or ingressDropTable.
+	ingressDropTable := c.pipeline[IngressDefaultTable]
+	var allRejFlows []binding.Flow
+	for _, ipProto := range c.ipProtocols {
+		egressRejFlow := c.pipeline[EgressRuleTable].BuildFlow(priorityHigh).MatchProtocol(ipProto).
+			MatchRegRange(int(marksReg), CustomReasonReject, CustomReasonMarkRange).
+			Action().GotoTable(egressDropTable.GetNext()).
+			Cookie(c.cookieAllocator.Request(category).Raw()).
+			Done()
+		ingressRejFlow := c.pipeline[IngressRuleTable].BuildFlow(priorityHigh).MatchProtocol(ipProto).
+			MatchRegRange(int(marksReg), CustomReasonReject, CustomReasonMarkRange).
+			Action().GotoTable(ingressDropTable.GetNext()).
+			Cookie(c.cookieAllocator.Request(category).Raw()).
+			Done()
+		allRejFlows = append(allRejFlows, egressRejFlow, ingressRejFlow)
+	}
+	if !c.enableAntreaPolicy {
+		return allRejFlows
+	}
+	apFlows := make([]binding.Flow, 0)
+	for _, tableID := range GetAntreaPolicyEgressTables() {
+		for _, ipProto := range c.ipProtocols {
+			apEgressRejFlow := c.pipeline[tableID].BuildFlow(priorityTopAntreaPolicy).MatchProtocol(ipProto).
+				MatchRegRange(int(marksReg), CustomReasonReject, CustomReasonMarkRange).
+				Action().GotoTable(egressDropTable.GetNext()).
+				Cookie(c.cookieAllocator.Request(category).Raw()).
+				Done()
+			apFlows = append(apFlows, apEgressRejFlow)
+		}
+
+	}
+	for _, tableID := range GetAntreaPolicyIngressTables() {
+		for _, ipProto := range c.ipProtocols {
+			apIngressRejFlow := c.pipeline[tableID].BuildFlow(priorityTopAntreaPolicy).MatchProtocol(ipProto).
+				MatchRegRange(int(marksReg), CustomReasonReject, CustomReasonMarkRange).
+				Action().GotoTable(ingressDropTable.GetNext()).
+				Cookie(c.cookieAllocator.Request(category).Raw()).
+				Done()
+			apFlows = append(apFlows, apIngressRejFlow)
+		}
+
+	}
+	allRejFlows = append(allRejFlows, apFlows...)
+	return allRejFlows
+}
+
 func (c *client) addFlowMatch(fb binding.FlowBuilder, matchKey *types.MatchKey, matchValue interface{}) binding.FlowBuilder {
 	switch matchKey {
 	case MatchDstOFPort:
