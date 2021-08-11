@@ -1557,7 +1557,7 @@ func testLegacyACNPPortRange(t *testing.T) {
 
 	var testSteps []*TestStep
 	testSteps = append(testSteps, &TestStep{
-		fmt.Sprint("ACNP Drop Port 8080:8085"),
+		fmt.Sprint("ACNP Drop Ports 8080:8085"),
 		reachability,
 		[]metav1.Object{builder.GetLegacy()},
 		nil,
@@ -1661,7 +1661,7 @@ func testLegacyANPPortRange(t *testing.T) {
 
 	var testSteps []*TestStep
 	testSteps = append(testSteps, &TestStep{
-		fmt.Sprint("ANP Drop Port 8080:8085"),
+		fmt.Sprint("ANP Drop Ports 8080:8085"),
 		reachability,
 		[]metav1.Object{builder.GetLegacy()},
 		nil,
@@ -1741,9 +1741,9 @@ func testLegacyAuditLoggingBasic(t *testing.T, data *TestData) {
 	time.Sleep(networkPolicyDelay)
 
 	// generate some traffic that will be dropped by test-log-acnp-deny
-	k8sUtils.Probe("x", "a", "z", "a", []int32{p80}, v1.ProtocolTCP)
-	k8sUtils.Probe("x", "a", "z", "b", []int32{p80}, v1.ProtocolTCP)
-	k8sUtils.Probe("x", "a", "z", "c", []int32{p80}, v1.ProtocolTCP)
+	k8sUtils.Probe("x", "a", "z", "a", p80, v1.ProtocolTCP)
+	k8sUtils.Probe("x", "a", "z", "b", p80, v1.ProtocolTCP)
+	k8sUtils.Probe("x", "a", "z", "c", p80, v1.ProtocolTCP)
 	time.Sleep(networkPolicyDelay)
 
 	podXA, err := k8sUtils.GetPodByLabel("x", "a")
@@ -2026,7 +2026,7 @@ func executeLegacyTestsWithData(t *testing.T, testList []*TestCase, data *TestDa
 			reachability := step.Reachability
 			if reachability != nil {
 				start := time.Now()
-				k8sUtils.Validate(allPods, reachability, step.Port, step.Protocol)
+				k8sUtils.Validate(allPods, reachability, step.Ports, step.Protocol)
 				step.Duration = time.Since(start)
 
 				_, wrong, _ := step.Reachability.Summary()

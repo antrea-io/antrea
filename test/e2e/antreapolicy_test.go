@@ -126,7 +126,7 @@ type TestStep struct {
 	Reachability      *Reachability
 	Policies          []metav1.Object
 	ServicesAndGroups []metav1.Object
-	Port              []int32
+	Ports             []int32
 	Protocol          v1.Protocol
 	Duration          time.Duration
 	CustomProbes      []*CustomProbe
@@ -1801,7 +1801,7 @@ func testACNPPortRange(t *testing.T) {
 	reachability.Expect(Pod("z/a"), Pod("z/c"), Dropped)
 	testSteps := []*TestStep{
 		{
-			fmt.Sprintf("ACNP Drop Port 8080:8085"),
+			fmt.Sprintf("ACNP Drop Ports 8080:8085"),
 			reachability,
 			[]metav1.Object{builder.Get()},
 			nil,
@@ -1896,7 +1896,7 @@ func testANPPortRange(t *testing.T) {
 
 	var testSteps []*TestStep
 	testSteps = append(testSteps, &TestStep{
-		fmt.Sprintf("ANP Drop Port 8080:8085"),
+		fmt.Sprintf("ANP Drop Ports 8080:8085"),
 		reachability,
 		[]metav1.Object{builder.Get()},
 		nil,
@@ -2050,7 +2050,7 @@ func testAuditLoggingBasic(t *testing.T, data *TestData) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			k8sUtils.Probe(ns1, pod1, ns2, pod2, []int32{p80}, v1.ProtocolTCP)
+			k8sUtils.Probe(ns1, pod1, ns2, pod2, p80, v1.ProtocolTCP)
 		}()
 	}
 	oneProbe("x", "a", "z", "a")
@@ -2440,7 +2440,7 @@ func executeTestsWithData(t *testing.T, testList []*TestCase, data *TestData) {
 			reachability := step.Reachability
 			if reachability != nil {
 				start := time.Now()
-				k8sUtils.Validate(allPods, reachability, step.Port, step.Protocol)
+				k8sUtils.Validate(allPods, reachability, step.Ports, step.Protocol)
 				step.Duration = time.Now().Sub(start)
 
 				_, wrong, _ := step.Reachability.Summary()
@@ -2472,7 +2472,7 @@ func doProbe(t *testing.T, data *TestData, p *CustomProbe, protocol v1.Protocol)
 	_, _, dstPodCleanupFunc := createAndWaitForPodWithLabels(t, data, data.createServerPodWithLabels, p.DestPod.Pod.PodName(), p.DestPod.Pod.Namespace(), p.Port, p.DestPod.Labels)
 	defer dstPodCleanupFunc()
 	log.Tracef("Probing: %s -> %s", p.SourcePod.Pod.PodName(), p.DestPod.Pod.PodName())
-	connectivity, err := k8sUtils.Probe(p.SourcePod.Pod.Namespace(), p.SourcePod.Pod.PodName(), p.DestPod.Pod.Namespace(), p.DestPod.Pod.PodName(), []int32{p.Port}, protocol)
+	connectivity, err := k8sUtils.Probe(p.SourcePod.Pod.Namespace(), p.SourcePod.Pod.PodName(), p.DestPod.Pod.Namespace(), p.DestPod.Pod.PodName(), p.Port, protocol)
 	if err != nil {
 		t.Errorf("failure -- could not complete probe: %v", err)
 	}
@@ -2622,7 +2622,7 @@ func printResults() {
 				testFailed = true
 			}
 			fmt.Printf("\tStep %s on port %d, duration %d seconds, result: %s\n",
-				step.Name, step.Port, int(step.Duration.Seconds()), result)
+				step.Name, step.Ports, int(step.Duration.Seconds()), result)
 			if wrong != 0 {
 				fmt.Printf("\n%s\n", comparison.PrettyPrint("\t\t"))
 			}
