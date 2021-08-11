@@ -138,31 +138,59 @@ function clean_for_windows_install_cni {
 }
 
 function collect_windows_network_info_and_logs {
-    echo "=== Collecting network info after failure ==="
-    mkdir network_info
+    echo "=== Collecting information after failure ==="
+    DEBUG_LOG_PATH="debug_logs"
+    mkdir "${DEBUG_LOG_PATH}"
     kubectl get pod -n kube-system -l component=antrea-agent --no-headers=true | awk '{print $1}' | while read AGENTNAME; do
-        mkdir network_info/${AGENTNAME}
-        kubectl exec "$AGENTNAME" -c antrea-agent -n kube-system -- ovs-ofctl dump-flows br-int > "network_info/${AGENTNAME}/flows" || true
-        kubectl exec "$AGENTNAME" -c antrea-agent -n kube-system -- ovs-vsctl show > "network_info/$AGENTNAME/db" || true
-        kubectl exec "$AGENTNAME" -c antrea-agent -n kube-system -- ip a > "network_info/${AGENTNAME}/addrs" || true
-    done
-    kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 != role && $1 ~ /win/ {print $6}' | while read IP; do
-        mkdir network_info/${IP}
-        ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "powershell.exe get-NetAdapter" > "network_info/${IP}/adapters" || true
-        ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "ipconfig.exe" > "network_info/${IP}/ipconfig" || true
-        ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "powershell.exe Get-HNSNetwork" > "network_info/${IP}/hns_network" || true
-        ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "powershell.exe Get-HNSEndpoint" > "network_info/${IP}/hns_endpoint" || true
-    done
-    tar zcf network_info.tar.gz network_info
+        IP=$(kubectl get pod ${AGENTNAME} -n kube-system -o json | jq -r '.status.hostIP')
+        mkdir "${DEBUG_LOG_PATH}/${AGENTNAME}"
 
-    echo "=== Collecting antrea agent log after failure ==="
-    mkdir antrea_agent_log
-    kubectl get pod -n kube-system -l component=antrea-agent --no-headers=true | awk '{print $1}' | while read AGENTNAME; do
-        mkdir antrea_agent_log/$AGENTNAME
-        kubectl logs $AGENTNAME -n kube-system -c antrea-agent > antrea_agent_log/$AGENTNAME/antrea-agent.log || true
-        kubectl logs $AGENTNAME -n kube-system -c antrea-ovs > antrea_agent_log/$AGENTNAME/antrea-ovs.log || true
+        echo "=== Collecting '${AGENTNAME}' agent network info after failure ==="
+        AGENT_NETWORK_INFO_PATH="${DEBUG_LOG_PATH}/${AGENTNAME}/network_info"
+        mkdir "${AGENT_NETWORK_INFO_PATH}"
+        if [[ "${AGENTNAME}" =~ "windows" ]]; then
+            ssh -o StrictHostKeyChecking=no -n administrator@${IP} "ovs-ofctl dump-flows br-int" > "${AGENT_NETWORK_INFO_PATH}/flows" || true
+            ssh -o StrictHostKeyChecking=no -n administrator@${IP} "ovs-vsctl show" > "${AGENT_NETWORK_INFO_PATH}/db" || true
+            ssh -o StrictHostKeyChecking=no -n administrator@${IP} "ipconfig" > "${AGENT_NETWORK_INFO_PATH}/addrs" || true
+        else
+            kubectl exec "${AGENTNAME}" -c antrea-agent -n kube-system -- ovs-ofctl dump-flows br-int > "${AGENT_NETWORK_INFO_PATH}/flows" || true
+            kubectl exec "${AGENTNAME}" -c antrea-agent -n kube-system -- ovs-vsctl show > "${AGENT_NETWORK_INFO_PATH}/db" || true
+            kubectl exec "${AGENTNAME}" -c antrea-agent -n kube-system -- ip a > "${AGENT_NETWORK_INFO_PATH}/addrs" || true
+        fi
+
+        echo "=== Collecting '${AGENTNAME}' antrea agent log after failure ==="
+        ANTREA_AGENT_LOG_PATH="${DEBUG_LOG_PATH}/${AGENTNAME}/antrea_agent_log"
+        mkdir "${ANTREA_AGENT_LOG_PATH}"
+        kubectl logs "${AGENTNAME}" -n kube-system -c antrea-agent > "${ANTREA_AGENT_LOG_PATH}/antrea-agent.log" || true
+        if [[ "${AGENTNAME}" =~ "windows" ]]; then
+            echo "Windows agent doesn't have antrea-ovs container"
+        else
+            kubectl logs "${AGENTNAME}" -n kube-system -c antrea-ovs > "${ANTREA_AGENT_LOG_PATH}/antrea-ovs.log" || true
+        fi
     done
-    tar zcf antrea_agent_log.tar.gz antrea_agent_log
+
+    kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 != role && $1 ~ /win/ {print $1}' | while read NODENAME; do
+        IP=$(kubectl get node ${NODENAME} -o json | jq -r '.status.addresses[] | select(.type | test("InternalIP")).address')
+        mkdir "${DEBUG_LOG_PATH}/${NODENAME}"
+
+        echo "=== Collecting '${NODENAME}' Node network info after failure ==="
+        NODE_NETWORK_INFO_PATH="${DEBUG_LOG_PATH}/${NODENAME}/network_info"
+        mkdir "${NODE_NETWORK_INFO_PATH}"
+        ssh -o StrictHostKeyChecking=no -n administrator@${IP} "powershell.exe get-NetAdapter" > "${NODE_NETWORK_INFO_PATH}/adapters" || true
+        ssh -o StrictHostKeyChecking=no -n administrator@${IP} "ipconfig.exe" > "${NODE_NETWORK_INFO_PATH}/ipconfig" || true
+        ssh -o StrictHostKeyChecking=no -n administrator@${IP} "powershell.exe Get-HNSNetwork" > "${NODE_NETWORK_INFO_PATH}/hns_network" || true
+        ssh -o StrictHostKeyChecking=no -n administrator@${IP} "powershell.exe Get-HNSEndpoint" > "${NODE_NETWORK_INFO_PATH}/hns_endpoint" || true
+
+        echo "=== Collecting '${NODENAME}' kubelet and docker logs after failure ==="
+        KUBELET_LOG_PATH="${DEBUG_LOG_PATH}/${NODENAME}/kubelet"
+        mkdir "${KUBELET_LOG_PATH}"
+        scp -q -o StrictHostKeyChecking=no -T administrator@${IP}:/cygdrive/c/var/log/kubelet/* "${KUBELET_LOG_PATH}"
+
+        DOCKER_LOG_PATH="${DEBUG_LOG_PATH}/${NODENAME}/docker"
+        mkdir "${DOCKER_LOG_PATH}"
+        scp -q -o StrictHostKeyChecking=no -T administrator@${IP}:'/cygdrive/c/"Program Files"/Docker/dockerd.log*' "${DOCKER_LOG_PATH}"
+    done
+    tar zcf debug_logs.tar.gz "${DEBUG_LOG_PATH}"
 }
 
 function wait_for_antrea_windows_pods_ready {
