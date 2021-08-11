@@ -65,6 +65,8 @@ type Controller struct {
 	antreaPolicyEnabled bool
 	// statusManagerEnabled indicates whether a statusManager is configured.
 	statusManagerEnabled bool
+	// loggingEnabled indicates where Antrea policy audit logging is enabled.
+	loggingEnabled bool
 	// antreaClientProvider provides interfaces to get antreaClient, which can be
 	// used to watch Antrea AddressGroups, AppliedToGroups, and NetworkPolicies.
 	// We need to get antreaClient dynamically because the apiserver cert can be
@@ -103,6 +105,7 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 	entityUpdates <-chan types.EntityReference,
 	antreaPolicyEnabled bool,
 	statusManagerEnabled bool,
+	loggingEnabled bool,
 	denyConnStore *connections.DenyConnectionStore,
 	asyncRuleDeleteInterval time.Duration) (*Controller, error) {
 	c := &Controller{
@@ -112,6 +115,7 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 		ofClient:             ofClient,
 		antreaPolicyEnabled:  antreaPolicyEnabled,
 		statusManagerEnabled: statusManagerEnabled,
+		loggingEnabled:       loggingEnabled,
 		denyConnStore:        denyConnStore,
 	}
 	c.ruleCache = newRuleCache(c.enqueueRule, entityUpdates)
@@ -128,6 +132,9 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 	if c.ofClient != nil && antreaPolicyEnabled {
 		// Register packetInHandler
 		c.ofClient.RegisterPacketInHandler(uint8(openflow.PacketInReasonNP), "networkpolicy", c)
+	}
+
+	if loggingEnabled {
 		// Initiate logger for Antrea Policy audit logging
 		antreaPolicyLogger, err := newAntreaPolicyLogger()
 		if err != nil {

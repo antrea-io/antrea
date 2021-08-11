@@ -195,7 +195,7 @@ func (c *Controller) logPacket(pktIn *ofctrl.PacketIn) error {
 	}
 
 	// Log the ob info to corresponding file w/ deduplication
-	c.antreaPolicyLogger.logDedupPacket(ob, time.Second)
+	c.antreaPolicyLogger.LogDedupPacket(ob)
 	return nil
 }
 

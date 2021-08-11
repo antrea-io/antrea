@@ -37,6 +37,7 @@ const (
 // AntreaPolicyLogger is used for Antrea policy audit logging.
 // Includes a lumberjack logger and a map used for log deduplication.
 type AntreaPolicyLogger struct {
+	bufferLength     time.Duration
 	anpLogger        *log.Logger
 	logDeduplication logRecordDedupMap
 }
@@ -67,57 +68,58 @@ type logRecordDedupMap struct {
 }
 
 // getLogKey returns the log record in logDeduplication map by logMsg.
-func (a *AntreaPolicyLogger) getLogKey(logMsg string) *logDedupRecord {
-	a.logDeduplication.logMutex.Lock()
-	defer a.logDeduplication.logMutex.Unlock()
-	return a.logDeduplication.logMap[logMsg]
+func (l *AntreaPolicyLogger) getLogKey(logMsg string) *logDedupRecord {
+	l.logDeduplication.logMutex.Lock()
+	defer l.logDeduplication.logMutex.Unlock()
+	return l.logDeduplication.logMap[logMsg]
 }
 
 // logAfterTimer runs concurrently until buffer timer stops, then call terminateLogKey.
-func (a *AntreaPolicyLogger) logAfterTimer(logMsg string) {
-	logRecordTimer := a.getLogKey(logMsg).bufferTimer
+func (l *AntreaPolicyLogger) logAfterTimer(logMsg string) {
+	logRecordTimer := l.getLogKey(logMsg).bufferTimer
 	<-logRecordTimer.C
-	a.terminateLogKey(logMsg)
+	l.terminateLogKey(logMsg)
 }
 
 // terminateLogKey logs and deletes the log record in logDeduplication map by logMsg.
-func (a *AntreaPolicyLogger) terminateLogKey(logMsg string) {
-	a.logDeduplication.logMutex.Lock()
-	defer a.logDeduplication.logMutex.Unlock()
-	if a.logDeduplication.logMap[logMsg].count == 1 {
-		a.anpLogger.Printf(logMsg)
+func (l *AntreaPolicyLogger) terminateLogKey(logMsg string) {
+	l.logDeduplication.logMutex.Lock()
+	defer l.logDeduplication.logMutex.Unlock()
+	logRecord := l.logDeduplication.logMap[logMsg]
+	if logRecord.count == 1 {
+		l.anpLogger.Printf(logMsg)
 	} else {
-		a.anpLogger.Printf("%s [%d packets in %s]", logMsg, a.logDeduplication.logMap[logMsg].count, time.Since(a.logDeduplication.logMap[logMsg].initTime))
+		l.anpLogger.Printf("%s [%d packets in %s]", logMsg, logRecord.count, time.Since(logRecord.initTime))
 	}
-	delete(a.logDeduplication.logMap, logMsg)
+	delete(l.logDeduplication.logMap, logMsg)
 }
 
 // updateLogKey initiates record or increases the count in logDeduplication corresponding to given logMsg.
-func (a *AntreaPolicyLogger) updateLogKey(logMsg string, bufferLength time.Duration) bool {
-	a.logDeduplication.logMutex.Lock()
-	defer a.logDeduplication.logMutex.Unlock()
-	_, exists := a.logDeduplication.logMap[logMsg]
+func (l *AntreaPolicyLogger) updateLogKey(logMsg string, bufferLength time.Duration) bool {
+	l.logDeduplication.logMutex.Lock()
+	defer l.logDeduplication.logMutex.Unlock()
+	_, exists := l.logDeduplication.logMap[logMsg]
 	if exists {
-		a.logDeduplication.logMap[logMsg].count++
+		l.logDeduplication.logMap[logMsg].count++
 	} else {
 		record := logDedupRecord{1, time.Now(), time.NewTimer(bufferLength)}
-		a.logDeduplication.logMap[logMsg] = &record
+		l.logDeduplication.logMap[logMsg] = &record
 	}
 	return exists
 }
 
-// logDedupPacket logs information in ob based on disposition and duplication conditions.
-func (a *AntreaPolicyLogger) logDedupPacket(ob *logInfo, bufferLength time.Duration) {
+// LogDedupPacket logs information in ob based on disposition and duplication conditions.
+func (l *AntreaPolicyLogger) LogDedupPacket(ob *logInfo) {
 	// Deduplicate non-Allow packet log.
 	logMsg := fmt.Sprintf("%s %s %s %s SRC: %s DEST: %s %d %s", ob.tableName, ob.npRef, ob.disposition, ob.ofPriority, ob.srcIP, ob.destIP, ob.pktLength, ob.protocolStr)
 	if ob.disposition == openflow.DispositionToString[openflow.DispositionAllow] {
-		a.anpLogger.Printf(logMsg)
+		l.anpLogger.Printf(logMsg)
 	} else {
 		// Increase count if duplicated within 1 sec, create buffer otherwise.
-		exists := a.updateLogKey(logMsg, bufferLength)
+		exists := l.updateLogKey(logMsg, l.bufferLength)
 		if !exists {
 			// Go routine for logging when buffer timer stops.
-			go a.logAfterTimer(logMsg)
+			go l.logAfterTimer(logMsg)
 		}
 	}
 }
@@ -143,10 +145,11 @@ func newAntreaPolicyLogger() (*AntreaPolicyLogger, error) {
 		Compress:   true, // compress the old log files for backup
 	}
 
-	cAntreaPolicyLogger := &AntreaPolicyLogger{
+	antreaPolicyLogger := &AntreaPolicyLogger{
+		bufferLength:     time.Second,
 		anpLogger:        log.New(logOutput, "", log.Ldate|log.Lmicroseconds),
 		logDeduplication: logRecordDedupMap{logMap: make(map[string]*logDedupRecord)},
 	}
-	klog.V(2).Infof("Initialized Antrea-native Policy Logger for audit logging with log file '%s'", logFile)
-	return cAntreaPolicyLogger, nil
+	klog.InfoS("Initialized Antrea-native Policy Logger for audit logging with log file '%s'", logFile)
+	return antreaPolicyLogger, nil
 }
