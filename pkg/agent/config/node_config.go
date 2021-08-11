@@ -43,6 +43,14 @@ const (
 	IPv6ExtraOverhead = 20
 )
 
+var (
+	// ServiceGWHairpinIPv4/ServiceGWHairpinIPv6 is used to perform SNAT on Service hairpin packet. The hairpin packet comes
+	// from Antrea gateway and will be output through Antrea gateway. They are also used as the gateway IP address of
+	// host Service routing entry.
+	ServiceGWHairpinIPv4 = net.ParseIP("169.254.169.253")
+	ServiceGWHairpinIPv6 = net.ParseIP("fc01::aabb:ccdd:eeff")
+)
+
 type GatewayConfig struct {
 	// Name is the name of host gateway, e.g. antrea-gw0.
 	Name string

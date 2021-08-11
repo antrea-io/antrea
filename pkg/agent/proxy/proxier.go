@@ -716,7 +716,7 @@ func (p *proxier) deleteServiceByIP(serviceStr string) {
 func (p *proxier) Run(stopCh <-chan struct{}) {
 	p.once.Do(func() {
 		if p.proxyFullEnabled {
-			if err := p.routeClient.InitService(p.nodePortIPMap, p.isIPv6); err != nil {
+			if err := p.routeClient.InitServiceProxyConfig(p.nodePortIPMap, p.isIPv6); err != nil {
 				panic(err)
 			}
 			if err := p.ofClient.InstallInitNodePortClassifierFlows(p.nodePortIPMap, p.isIPv6); err != nil {

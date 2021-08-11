@@ -64,13 +64,13 @@ func getHandleGeneratorKey(ifIndex, priority int) string {
 	return fmt.Sprintf("%d-%d", ifIndex, priority)
 }
 
-func NewTcClient() *Client {
+func NewTCClient() *Client {
 	hgMap := make(map[string]types.HandleGenerator)
 	priorities := []int{filterIPv4PriorityNormal, filterIPv6PriorityNormal, filterIPv4PriorityHigh, filterIPv6PriorityHigh}
 	// Create a handle ID generator for every interface.
 	interfaces, _ := net.Interfaces()
 	// Antrea gateway interface is not in the list if this is a new machine. This function is called before creating Antrea
-	// gateway interface.
+	// gateway interface, and the handle ID generator for Antrea gateway will be created later.
 	for _, itf := range interfaces {
 		if addrs, _ := itf.Addrs(); len(addrs) != 0 {
 			for _, priority := range priorities {

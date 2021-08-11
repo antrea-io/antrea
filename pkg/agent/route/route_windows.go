@@ -249,7 +249,7 @@ func (c *Client) DeleteSNATRule(mark uint32) error {
 	return nil
 }
 
-func (c *Client) InitService(nodePortIPMap map[int][]net.IP, isIPv6 bool) error {
+func (c *Client) InitServiceProxyConfig(nodePortIPMap map[int][]net.IP, isIPv6 bool) error {
 	return nil
 }
 

@@ -52,22 +52,22 @@ type Interface interface {
 	// DeleteSNATRule should delete rule to SNAT outgoing traffic with the mark.
 	DeleteSNATRule(mark uint32) error
 
-	// InitService should add the basic TC configuration on Linux.
-	InitService(nodePortIPMap map[int][]net.IP, isIPv6 bool) error
+	// InitServiceProxyConfig adds the basic TC configuration on Linux.
+	InitServiceProxyConfig(nodePortIPMap map[int][]net.IP, isIPv6 bool) error
 
-	// AddNodePort should add related configuration about the NodePort Service to TC on Linux.
+	// AddNodePort adds related configuration about the NodePort Service to TC on Linux.
 	AddNodePort(nodePortIPMap map[int][]net.IP, port uint16, protocol binding.Protocol) error
 
-	// DeleteNodePort should delete related configuration about the NodePort Service to TC on Linux.
+	// DeleteNodePort deletes related configuration about the NodePort Service to TC on Linux.
 	DeleteNodePort(nodePortIPMap map[int][]net.IP, port uint16, protocol binding.Protocol) error
 
-	// AddClusterIPRoute should add route on k8s node for Service ClusterIP.
+	// AddClusterIPRoute adds route on K8s node for Service ClusterIP.
 	AddClusterIPRoute(svcIP net.IP, isIPv6 bool) error
 
-	// AddLoadBalancer should add related flows and configurations for LoadBalancer
+	// AddLoadBalancer adds related flows and configurations for LoadBalancer
 	AddLoadBalancer(port uint16, protocol binding.Protocol, externalIPs []string, isIPv6 bool) error
 
-	// DeleteLoadBalancer should delete related flows and configurations for LoadBalancer
+	// DeleteLoadBalancer deletes related flows and configurations for LoadBalancer
 	DeleteLoadBalancer(port uint16, protocol binding.Protocol, externalIPs []string, isIPv6 bool) error
 
 	// Run starts the sync loop.

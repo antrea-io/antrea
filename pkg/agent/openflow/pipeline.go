@@ -101,12 +101,17 @@ const (
 	// The default idle timeout of flows which is for rewriting destination MAC of Service traffic.
 	serviceDstMACRewriteIdleTimeOut = uint16(60)
 
-	clusterConjIPv4ID        = uint32(41)
-	localLocalhostConjIPv4ID = uint32(42)
-	localRemoteConjIPv4ID    = uint32(43)
-	clusterConjIPv6ID        = uint32(61)
-	localLocalhostConjIPv6ID = uint32(62)
-	localRemoteConjIPv6ID    = uint32(63)
+	// The conjunction IDs which are used to classify the first packet of NodePort/LoadBalance at table serviceClassifierTable.
+	// There are three cases:
+	// - For NodePort/LoadBalancer whose externalTrafficPolicy is Cluster, SNAT is required.
+	// - For NodePort/LoadBalancer whose externalTrafficPolicy is Local and client is from localhost, SNAT is required.
+	// - For NodePort/LoadBalancer whose externalTrafficPolicy is Local and client is from remote, SNAT is not required.
+	clusterConjIDIPv4        = uint32(41)
+	localLocalhostConjIDIPv4 = uint32(42)
+	localRemoteConjIDIPv4    = uint32(43)
+	clusterConjDIPv6         = uint32(61)
+	localLocalhostConjIDIPv6 = uint32(62)
+	localRemoteConjIDIPv6    = uint32(63)
 )
 
 type ofAction int32
@@ -388,12 +393,6 @@ var (
 	globalVirtualMAC, _ = net.ParseMAC("aa:bb:cc:dd:ee:ff")
 	hairpinIP           = net.ParseIP("169.254.169.252").To4()
 	hairpinIPv6         = net.ParseIP("fc00::aabb:ccdd:eeff").To16()
-
-	// serviceGWHairpinIPv4/serviceGWHairpinIPv6 is used to perform SNAT on Service hairpin packet. The hairpin packet comes
-	// from Antrea gateway and will be output through Antrea gateway. They are also used as the gateway IP address of
-	// host Service routing entry.
-	serviceGWHairpinIPv4 = net.ParseIP("169.254.169.253").To4()
-	serviceGWHairpinIPv6 = net.ParseIP("fc01::aabb:ccdd:eeff").To16()
 )
 
 type OFEntryOperations interface {
@@ -662,12 +661,12 @@ func (c *client) connectionTrackFlows(category cookie.Category) []binding.Flow {
 
 		for _, proto := range c.ipProtocols {
 			gatewayIP := c.nodeConfig.GatewayConfig.IPv4
-			serviceGWHairpinIP := serviceGWHairpinIPv4
+			serviceGWHairpinIP := config.ServiceGWHairpinIPv4.To4()
 			serviceCtZone := ServiceCtZone
 			ctZone := CtZone
 			if proto == binding.ProtocolIPv6 {
 				gatewayIP = c.nodeConfig.GatewayConfig.IPv6
-				serviceGWHairpinIP = serviceGWHairpinIPv6
+				serviceGWHairpinIP = config.ServiceGWHairpinIPv6.To16()
 				serviceCtZone = ServiceCtZoneV6
 				ctZone = CtZoneV6
 			}
@@ -2104,14 +2103,14 @@ func generateServiceResponseLearnedFlowBuilder(flowBuilder binding.FlowBuilder, 
 }
 
 func (c *client) initServiceClassifierFlows(nodePortIPMap map[int][]net.IP, isIPv6 bool) []binding.Flow {
-	clusterConjID := clusterConjIPv4ID
-	localLocalhostConjID := localLocalhostConjIPv4ID
-	localRemoteConjID := localRemoteConjIPv4ID
+	clusterConjID := clusterConjIDIPv4
+	localLocalhostConjID := localLocalhostConjIDIPv4
+	localRemoteConjID := localRemoteConjIDIPv4
 	ipProtocol := binding.ProtocolIP
 	if isIPv6 {
-		clusterConjID = clusterConjIPv6ID
-		localLocalhostConjID = localLocalhostConjIPv6ID
-		localRemoteConjID = localRemoteConjIPv6ID
+		clusterConjID = clusterConjDIPv6
+		localLocalhostConjID = localLocalhostConjIDIPv6
+		localRemoteConjID = localRemoteConjIDIPv6
 		ipProtocol = binding.ProtocolIPv6
 	}
 
@@ -2148,17 +2147,20 @@ func (c *client) initServiceClassifierFlows(nodePortIPMap map[int][]net.IP, isIP
 		// Cluster, and client is from remote/localhost.
 		generateServiceResponseLearnedFlowBuilder(
 			c.pipeline[serviceClassifierTable].BuildFlow(priorityNormal).MatchProtocol(ipProtocol).MatchConjID(clusterConjID), cookieID, isIPv6).
+			Cookie(c.cookieAllocator.Request(cookie.Service).Raw()).
 			Action().LoadRegRange(int(serviceSNATReg), marksRegServiceNeedSNAT, serviceSNATMarkRange).
 			Done(),
 		// This flow is used to perform actions for the first packet of NodePort Service whose externalTrafficPolicy is
 		// Local, and client is from remote.
 		generateServiceResponseLearnedFlowBuilder(
 			c.pipeline[serviceClassifierTable].BuildFlow(priorityNormal).MatchProtocol(ipProtocol).MatchConjID(localRemoteConjID), cookieID, isIPv6).
+			Cookie(c.cookieAllocator.Request(cookie.Service).Raw()).
 			Done(),
 		// This flow is used to perform actions for the first packet of NodePort Service whose externalTrafficPolicy is
 		// Local, and client is from localhost.
 		generateServiceResponseLearnedFlowBuilder(
 			c.pipeline[serviceClassifierTable].BuildFlow(priorityHigh).MatchProtocol(ipProtocol).MatchConjID(localLocalhostConjID), cookieID, isIPv6).
+			Cookie(c.cookieAllocator.Request(cookie.Service).Raw()).
 			Action().LoadRegRange(int(serviceSNATReg), marksRegServiceNeedSNAT, serviceSNATMarkRange).
 			Done(),
 	)
@@ -2174,13 +2176,13 @@ func (c *client) serviceClassifierFlow(svcType v1.ServiceType, svcIP net.IP, svc
 	}
 
 	if svcType == v1.ServiceTypeNodePort {
-		clusterConjID := clusterConjIPv4ID
-		localLocalhostConjID := localLocalhostConjIPv4ID
-		localRemoteConjID := localRemoteConjIPv4ID
+		clusterConjID := clusterConjIDIPv4
+		localLocalhostConjID := localLocalhostConjIDIPv4
+		localRemoteConjID := localRemoteConjIDIPv4
 		if isIPv6 {
-			clusterConjID = clusterConjIPv6ID
-			localLocalhostConjID = localLocalhostConjIPv6ID
-			localRemoteConjID = localRemoteConjIPv6ID
+			clusterConjID = clusterConjDIPv6
+			localLocalhostConjID = localLocalhostConjIDIPv6
+			localRemoteConjID = localRemoteConjIDIPv6
 		}
 
 		if nodeLocalExternal {
@@ -2367,9 +2369,9 @@ func (c *client) serviceLBFlows(groupID binding.GroupIDType, conjID uint32, svcI
 
 // serviceNodePortIPFlow generate the flow which is the first clause of all conjunctions
 // which are used to match the first NodePort packet.
-func (c *client) serviceNodePortIPFlow(conjIDs []uint32, svcIP net.IP, protocol binding.Protocol) binding.Flow {
+func (c *client) serviceNodePortIPFlow(conjIDs []uint32, svcIP net.IP, ipProtocol binding.Protocol) binding.Flow {
 	flowBuilder := c.pipeline[serviceLBTable].BuildFlow(priorityNormal).
-		MatchProtocol(protocol).
+		MatchProtocol(ipProtocol).
 		MatchDstIP(svcIP).
 		Cookie(c.cookieAllocator.Request(cookie.Service).Raw())
 	for _, conjID := range conjIDs {

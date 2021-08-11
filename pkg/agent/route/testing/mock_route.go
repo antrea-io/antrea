@@ -176,18 +176,18 @@ func (mr *MockInterfaceMockRecorder) DeleteSNATRule(arg0 interface{}) *gomock.Ca
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteSNATRule", reflect.TypeOf((*MockInterface)(nil).DeleteSNATRule), arg0)
 }
 
-// InitService mocks base method
-func (m *MockInterface) InitService(arg0 map[int][]net.IP, arg1 bool) error {
+// InitServiceProxyConfig mocks base method
+func (m *MockInterface) InitServiceProxyConfig(arg0 map[int][]net.IP, arg1 bool) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "InitService", arg0, arg1)
+	ret := m.ctrl.Call(m, "InitServiceProxyConfig", arg0, arg1)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// InitService indicates an expected call of InitService
-func (mr *MockInterfaceMockRecorder) InitService(arg0, arg1 interface{}) *gomock.Call {
+// InitServiceProxyConfig indicates an expected call of InitServiceProxyConfig
+func (mr *MockInterfaceMockRecorder) InitServiceProxyConfig(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InitService", reflect.TypeOf((*MockInterface)(nil).InitService), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InitServiceProxyConfig", reflect.TypeOf((*MockInterface)(nil).InitServiceProxyConfig), arg0, arg1)
 }
 
 // Initialize mocks base method

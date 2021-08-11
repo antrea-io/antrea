@@ -617,14 +617,18 @@ func (c *client) UninstallServiceClassifierFlow(svcIP net.IP, svcPort uint16, pr
 func (c *client) InstallNodePortIPFlows(conjIDs []uint32, nodePortIPMap map[int][]net.IP, protocol binding.Protocol) error {
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
+	ipProtocol := binding.ProtocolIP
+	if protocol == binding.ProtocolTCPv6 || protocol == binding.ProtocolUDPv6 || protocol == binding.ProtocolSCTPv6 {
+		ipProtocol = binding.ProtocolIPv6
+	}
 
 	var flows []binding.Flow
 	for _, nodeIPs := range nodePortIPMap {
 		for _, nodeIP := range nodeIPs {
-			flows = append(flows, c.serviceNodePortIPFlow(conjIDs, nodeIP, protocol))
+			flows = append(flows, c.serviceNodePortIPFlow(conjIDs, nodeIP, ipProtocol))
 		}
 	}
-	cacheKey := fmt.Sprintf("NodePortIP/%s", protocol)
+	cacheKey := fmt.Sprintf("NodePortIP/%s", ipProtocol)
 	return c.modifyFlows(c.serviceFlowCache, cacheKey, flows)
 }
 
@@ -670,7 +674,7 @@ func (c *client) InstallDefaultServiceFlows() error {
 		flows = append(flows, c.l3FwdServiceDefaultFlowsViaGW(binding.ProtocolIP, cookie.Service)...)
 		if c.enableProxyFull {
 			flows = append(flows, c.serviceHairpinRegSetFlows(binding.ProtocolIP))
-			flows = append(flows, c.arpResponderFlow(serviceGWHairpinIPv4, cookie.Service))
+			flows = append(flows, c.arpResponderFlow(config.ServiceGWHairpinIPv4.To4(), cookie.Service))
 		}
 	}
 	if c.IsIPv6Enabled() {

@@ -78,9 +78,6 @@ var (
 	// IPTablesSyncInterval is exported so that sync interval can be configured for running integration test with
 	// smaller values. It is meant to be used internally by Run.
 	IPTablesSyncInterval = 60 * time.Second
-
-	serviceGWHairpinIPv4 = net.ParseIP("169.254.169.253")
-	serviceGWHairpinIPv6 = net.ParseIP("fc01::aabb:ccdd:eeff")
 )
 
 // Client takes care of routing container packets in host network, coordinating ip route, ip rule, iptables and ipset.
@@ -115,7 +112,7 @@ func NewClient(serviceCIDR *net.IPNet, networkConfig *config.NetworkConfig, noSN
 		serviceCIDR:              serviceCIDR,
 		networkConfig:            networkConfig,
 		noSNAT:                   noSNAT,
-		tcClient:                 tc.NewTcClient(),
+		tcClient:                 tc.NewTCClient(),
 		defaultRouteInterfaceMap: defaultRouteMap,
 		proxyFull:                proxyFull,
 	}, nil
@@ -455,19 +452,23 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet, podIPSet string, snatMa
 		"-j", iptables.MasqueradeTarget, "--random-fully",
 	}...)
 
+	// If AntreaProxy full support is enabled, for packets of Service whose Endpoint is on host network, the source IP
+	// will be performed SNAT with ServiceGWHairpinIPv4/ServiceGWHairpinIPv6 within OVS pipeline. When the host Endpoint
+	// is not on current K8s node, without SNAT another time with iptables, the reply packets will not be routed back to
+	// current K8s node, as the destination IP is ServiceGWHairpinIPv4/ServiceGWHairpinIPv6.
 	if c.proxyFull {
 		if podCIDR.IP.To4() != nil {
 			writeLine(iptablesData, []string{
 				"-A", antreaPostRoutingChain,
 				"-m", "comment", "--comment", `"Antrea: masquerade Service host network Endpoint traffic"`,
-				"-s", serviceGWHairpinIPv4.String(),
+				"-s", config.ServiceGWHairpinIPv4.String(),
 				"-j", iptables.MasqueradeTarget,
 			}...)
 		} else {
 			writeLine(iptablesData, []string{
 				"-A", antreaPostRoutingChain,
 				"-m", "comment", "--comment", `"Antrea: masquerade Service host network Endpoint traffic"`,
-				"-s", serviceGWHairpinIPv6.String(),
+				"-s", config.ServiceGWHairpinIPv6.String(),
 				"-j", iptables.MasqueradeTarget,
 			}...)
 		}
@@ -532,9 +533,9 @@ func (c *Client) Reconcile(podCIDRs []string) error {
 			continue
 		}
 		// Don't delete the virtual Service IP route which is added by AntreaProxy.
-		if route.Gw.To4() != nil && route.Gw.Equal(serviceGWHairpinIPv4) ||
-			route.Gw.To16() != nil && route.Gw.Equal(serviceGWHairpinIPv6) ||
-			route.Dst.IP.To16() != nil && route.Dst.IP.Equal(serviceGWHairpinIPv6) {
+		if route.Gw.To4() != nil && route.Gw.Equal(config.ServiceGWHairpinIPv4) ||
+			route.Gw.To16() != nil && route.Gw.Equal(config.ServiceGWHairpinIPv6) ||
+			route.Dst.IP.To16() != nil && route.Dst.IP.Equal(config.ServiceGWHairpinIPv6) {
 			continue
 		}
 		klog.Infof("Deleting unknown route %v", route)
@@ -559,7 +560,7 @@ func (c *Client) Reconcile(podCIDRs []string) error {
 			continue
 		}
 		// Don't delete the virtual Service IP neigh which is added by AntreaProxy.
-		if actualNeigh.IP.Equal(serviceGWHairpinIPv6) {
+		if actualNeigh.IP.Equal(config.ServiceGWHairpinIPv6) {
 			continue
 		}
 		klog.V(4).Infof("Deleting orphaned IPv6 neighbor %v", actualNeigh)
@@ -826,9 +827,9 @@ func (c *Client) DeleteSNATRule(mark uint32) error {
 	return c.ipt.DeleteRule(iptables.NATTable, antreaPostRoutingChain, c.snatRuleSpec(snatIP, mark))
 }
 
-// cleanStaleGatewayRoutes is used to clean ClusterIP/LoadBalancer route entries on host. If Node routes are created,
-// this function will delete them. Since this function only runs once, and Node route controller can restore the Node
-// routes.
+// cleanStaleGatewayRoutes is used to clean ClusterIP/LoadBalancer routing entries on host. If Node routing entries are
+// created, this function will delete them. Since this function only runs once when AntreaProxy starts, and Node routing
+// controller can restore the Node routing entries.
 func (c *Client) cleanStaleGatewayRoutes() error {
 	routes, err := c.listIPRoutesOnGW()
 	if err != nil {
@@ -848,45 +849,22 @@ func (c *Client) cleanStaleGatewayRoutes() error {
 	return nil
 }
 
-func (c *Client) addServiceOnlinkRoute(svcIP *net.IP, isIPv6 bool) error {
-	linkIndex := c.nodeConfig.GatewayConfig.LinkIndex
-	var gw *net.IP
-	var mask int
-	if !isIPv6 {
-		gw = &serviceGWHairpinIPv4
-		mask = ipv4AddrLength
-	} else {
-		gw = &serviceGWHairpinIPv6
-		mask = ipv6AddrLength
-	}
-
-	route, err := generateOnlinkRoute(svcIP, mask, gw, linkIndex, defaultRouteTable)
-	if err != nil {
-		return fmt.Errorf("failed to generate route for Service IP %s: %w", svcIP.String(), err)
-	}
-	if err = netlink.RouteReplace(route); err != nil {
-		return fmt.Errorf("failed to install route for Service IP %s: %w", svcIP.String(), err)
-	}
-	klog.V(4).Infof("Adding Service IP route %v", route)
-	c.nodeRoutes.Store(svcIP.String(), []*netlink.Route{route})
-
-	return nil
-}
-
-func (c *Client) addVirtualServiceIPRoute(isIPv6 bool) error {
+// addServiceGWHairpinRoute is used to add routing entry which is used to route ServiceGWHairpinIPv4/ServiceGWHairpinIPv6
+// back to Antrea gateway on host.
+func (c *Client) addServiceGWHairpinRoute(isIPv6 bool) error {
 	linkIndex := c.nodeConfig.GatewayConfig.LinkIndex
 	var svcIP *net.IP
 	var route *netlink.Route
 	var neigh *netlink.Neigh
 	var err error
 	if !isIPv6 {
-		svcIP = &serviceGWHairpinIPv4
+		svcIP = &config.ServiceGWHairpinIPv4
 		route, err = generateOnlinkRoute(svcIP, ipv4AddrLength, svcIP, linkIndex, defaultRouteTable)
 		if err != nil {
 			return fmt.Errorf("failed to generate route for virtual Service IP %s: %w", svcIP.String(), err)
 		}
 	} else {
-		svcIP = &serviceGWHairpinIPv6
+		svcIP = &config.ServiceGWHairpinIPv6
 		route, neigh, err = generateIPv6RouteAndNeigh(svcIP, linkIndex)
 		if err != nil {
 			return fmt.Errorf("failed to generate route and neigh for virtual Service IP %s: %w", svcIP.String(), err)
@@ -903,21 +881,50 @@ func (c *Client) addVirtualServiceIPRoute(isIPv6 bool) error {
 	if err = netlink.RouteReplace(route); err != nil {
 		return fmt.Errorf("failed to install route for Service IP %s: %w", svcIP.String(), err)
 	}
-	klog.Infof("Adding virtual Service IP route %v", route)
+	klog.Infof("Adding Service hairpin IP route %v", route)
 	c.nodeRoutes.Store(svcIP.String(), []*netlink.Route{route})
 
 	return nil
 }
 
-func (c *Client) deleteServiceOnlinkRoute(svcIP *net.IP, isIPv6 bool) error {
+// addLoadBalancerIngressIPOnLinkRoute is used to add routing entry which is used route LoadBalancer ingress IP to Antrea
+// gateway on host.
+func (c *Client) addLoadBalancerIngressIPOnLinkRoute(svcIP *net.IP, isIPv6 bool) error {
 	linkIndex := c.nodeConfig.GatewayConfig.LinkIndex
 	var gw *net.IP
 	var mask int
 	if !isIPv6 {
-		gw = &serviceGWHairpinIPv4
+		gw = &config.ServiceGWHairpinIPv4
+		mask = ipv4AddrLength
+	} else {
+		gw = &config.ServiceGWHairpinIPv6
+		mask = ipv6AddrLength
+	}
+
+	route, err := generateOnlinkRoute(svcIP, mask, gw, linkIndex, defaultRouteTable)
+	if err != nil {
+		return fmt.Errorf("failed to generate route for Service IP %s: %w", svcIP.String(), err)
+	}
+	if err = netlink.RouteReplace(route); err != nil {
+		return fmt.Errorf("failed to install route for Service IP %s: %w", svcIP.String(), err)
+	}
+	klog.V(4).Infof("Adding LoadBalancer ingress IP route %v", route)
+	c.nodeRoutes.Store(svcIP.String(), []*netlink.Route{route})
+
+	return nil
+}
+
+// addLoadBalancerIngressIPOnLinkRoute is used to delete routing entry which is used route LoadBalancer ingress IP to Antrea
+// gateway on host.
+func (c *Client) deleteLoadBalancerIngressIPOnLinkRoute(svcIP *net.IP, isIPv6 bool) error {
+	linkIndex := c.nodeConfig.GatewayConfig.LinkIndex
+	var gw *net.IP
+	var mask int
+	if !isIPv6 {
+		gw = &config.ServiceGWHairpinIPv4
 		mask = 32
 	} else {
-		gw = &serviceGWHairpinIPv6
+		gw = &config.ServiceGWHairpinIPv6
 		mask = 128
 	}
 
@@ -928,13 +935,14 @@ func (c *Client) deleteServiceOnlinkRoute(svcIP *net.IP, isIPv6 bool) error {
 	if err = netlink.RouteDel(route); err != nil {
 		return fmt.Errorf("failed to delete route for Service IP %s: %w", svcIP.String(), err)
 	}
-	klog.V(4).Infof("Deleting Service IP route %v", route)
+	klog.V(4).Infof("Deleting LoadBalancer ingress IP route %v", route)
 	c.nodeRoutes.Delete(svcIP.String())
 
 	return nil
 }
 
-func (c *Client) InitService(nodePortIPMap map[int][]net.IP, isIPv6 bool) error {
+// InitServiceProxyConfig is used to add configurations for supporting Service.
+func (c *Client) InitServiceProxyConfig(nodePortIPMap map[int][]net.IP, isIPv6 bool) error {
 	if err := setupSysctlParameters(); err != nil {
 		return err
 	}
@@ -946,11 +954,11 @@ func (c *Client) InitService(nodePortIPMap map[int][]net.IP, isIPv6 bool) error 
 	if err := c.cleanStaleGatewayRoutes(); err != nil {
 		return err
 	}
-	if err := c.addVirtualServiceIPRoute(isIPv6); err != nil {
+	if err := c.addServiceGWHairpinRoute(isIPv6); err != nil {
 		return err
 	}
 
-	// Add a ingress qdisc to every interface which has available NodePort IP addresses. When a NodePort Service is
+	// Add an ingress qdisc to every interface which has available NodePort IP addresses. When a NodePort Service is
 	// created, for every interface which has available NodePort IP addresses, a filter matching destination IP address
 	// (NodePort IP address) and destination protocol/port(NodePort protocol/port) will be created and attached to
 	// the ingress qdisc, and its action is redirecting matched traffic to antrea gateway's egress. Note that, this
@@ -962,9 +970,7 @@ func (c *Client) InitService(nodePortIPMap map[int][]net.IP, isIPv6 bool) error 
 	// If current proxy is an IPv4 proxy, create the TC qdisc.
 	// If current proxy is an IPv6 proxy and IPv4 is enabled, don't create TC qdisc.
 	// If current proxy is an IPv6 Proxy and IPv4 is not enabled, create the TC qdisc.
-	if gatewayIPv4 != nil && !isIPv6 ||
-		gatewayIPv4 == nil && gatewayIPv6 != nil && isIPv6 {
-
+	if gatewayIPv4 != nil && !isIPv6 || gatewayIPv4 == nil && gatewayIPv6 != nil && isIPv6 {
 		for ifIndex := range nodePortIPMap {
 			handle := tc.QdiscHandleIngress
 			if ifIndex == tc.LoopbackIfIndex {
@@ -976,6 +982,17 @@ func (c *Client) InitService(nodePortIPMap map[int][]net.IP, isIPv6 bool) error 
 				return err
 			}
 		}
+
+		// If loopback interface index is not in nodePortIPMap, Linux TC qdisc for loopback will be also added, because
+		// NodePort Service should be accessible from K8s node, which requires loopback qdisc. Filters which are used to
+		// process NodePort traffic from K8s node will be attached to loopback qdisc.
+		if len(nodePortIPMap[tc.LoopbackIfIndex]) == 0 {
+			c.tcClient.QdiscDel(tc.QdiscHandleEgress, tc.LoopbackIfIndex)
+			if err := c.tcClient.QdiscAdd(tc.QdiscHandleEgress, tc.LoopbackIfIndex); err != nil {
+				return err
+			}
+		}
+
 		// Clean left qdisc and create new qidsc for the interface.
 		c.tcClient.QdiscDel(tc.QdiscHandleIngress, gatewayIfIndex)
 		if err := c.tcClient.QdiscAdd(tc.QdiscHandleIngress, gatewayIfIndex); err != nil {
@@ -1008,6 +1025,7 @@ func (c *Client) InitService(nodePortIPMap map[int][]net.IP, isIPv6 bool) error 
 	return nil
 }
 
+// AddNodePort is used to add Linux TC filters when a NodePort Service is added.
 func (c *Client) AddNodePort(nodePortIPMap map[int][]net.IP, port uint16, protocol binding.Protocol) error {
 	l3ProtocolVal, l4ProtocolVal := getProtocolVal(protocol)
 	gateway := c.nodeConfig.GatewayConfig.Name
@@ -1033,6 +1051,7 @@ func (c *Client) AddNodePort(nodePortIPMap map[int][]net.IP, port uint16, protoc
 	return nil
 }
 
+// DeleteNodePort is used to delete related Linux TC filters when a NodePort Service is deleted.
 func (c *Client) DeleteNodePort(nodePortIPMap map[int][]net.IP, port uint16, protocol binding.Protocol) error {
 	l3ProtocolVal, l4ProtocolVal := getProtocolVal(protocol)
 	gateway := c.nodeConfig.GatewayConfig.Name
@@ -1057,6 +1076,7 @@ func (c *Client) DeleteNodePort(nodePortIPMap map[int][]net.IP, port uint16, pro
 	return nil
 }
 
+// AddClusterIPRoute is used to add or update a routing entry which is used to route ClusterIP traffic to Antrea gateway.
 func (c *Client) AddClusterIPRoute(svcIP net.IP, isIPv6 bool) error {
 	routeKey := clusterIPv4FromNodeRouteKey
 	if isIPv6 {
@@ -1100,10 +1120,10 @@ func (c *Client) AddClusterIPRoute(svcIP net.IP, isIPv6 bool) error {
 		var gw *net.IP
 		if isIPv6 {
 			mask = ipv6AddrLength
-			gw = &serviceGWHairpinIPv6
+			gw = &config.ServiceGWHairpinIPv6
 		} else {
 			mask = ipv4AddrLength
-			gw = &serviceGWHairpinIPv4
+			gw = &config.ServiceGWHairpinIPv4
 		}
 
 		linkIndex := c.nodeConfig.GatewayConfig.LinkIndex
@@ -1121,6 +1141,7 @@ func (c *Client) AddClusterIPRoute(svcIP net.IP, isIPv6 bool) error {
 	return nil
 }
 
+// AddLoadBalancer is used to add Linux TC filters and routing entries when a LoadBalancer Service is added.
 func (c *Client) AddLoadBalancer(port uint16, protocol binding.Protocol, externalIPs []string, isIPv6 bool) error {
 	gateway := c.nodeConfig.GatewayConfig.Name
 	gatewayIP := c.nodeConfig.GatewayConfig.IPv4
@@ -1142,7 +1163,7 @@ func (c *Client) AddLoadBalancer(port uint16, protocol binding.Protocol, externa
 		return err
 	}
 	for i := range svcIPs {
-		if err := c.addServiceOnlinkRoute(&svcIPs[i], isIPv6); err != nil {
+		if err := c.addLoadBalancerIngressIPOnLinkRoute(&svcIPs[i], isIPv6); err != nil {
 			return err
 		}
 	}
@@ -1150,6 +1171,7 @@ func (c *Client) AddLoadBalancer(port uint16, protocol binding.Protocol, externa
 	return nil
 }
 
+// DeleteLoadBalancer is used to delete related Linux TC filters and routing entries when a LoadBalancer Service is deleted.
 func (c *Client) DeleteLoadBalancer(port uint16, protocol binding.Protocol, externalIPs []string, isIPv6 bool) error {
 	gateway := c.nodeConfig.GatewayConfig.Name
 	l3ProtocolVal, l4ProtocolVal := getProtocolVal(protocol)
@@ -1169,7 +1191,7 @@ func (c *Client) DeleteLoadBalancer(port uint16, protocol binding.Protocol, exte
 		return err
 	}
 	for i := range svcIPs {
-		if err := c.deleteServiceOnlinkRoute(&svcIPs[i], isIPv6); err != nil {
+		if err := c.deleteLoadBalancerIngressIPOnLinkRoute(&svcIPs[i], isIPv6); err != nil {
 			return err
 		}
 	}
