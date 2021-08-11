@@ -38,7 +38,36 @@ spec:
     singular: antreaagentinfo
   scope: Cluster
   versions:
-  - name: v1beta1
+  - additionalPrinterColumns:
+    - description: Health status of this Agent
+      jsonPath: .agentConditions[?(@.type=='AgentHealthy')].status
+      name: Healthy
+      type: string
+    - description: Last time the Healthy Condition was updated
+      jsonPath: .agentConditions[?(@.type=='AgentHealthy')].lastHeartbeatTime
+      name: Last Heartbeat
+      type: date
+    - description: Version of this Agent
+      jsonPath: .version
+      name: Version
+      priority: 1
+      type: string
+    - description: Node on which this Agent is running
+      jsonPath: .nodeRef.name
+      name: Node
+      priority: 1
+      type: string
+    - description: Number of local Pods managed by this Agent
+      jsonPath: .localPodNum
+      name: Num Pods
+      priority: 2
+      type: integer
+    - description: Subnets used by this Agent for Pod IPAM
+      jsonPath: .nodeSubnets
+      name: Subnets
+      priority: 2
+      type: string
+    name: v1beta1
     schema:
       openAPIV3Schema:
         type: object
@@ -86,7 +115,36 @@ spec:
     singular: antreacontrollerinfo
   scope: Cluster
   versions:
-  - name: v1beta1
+  - additionalPrinterColumns:
+    - description: Health status of the Controller
+      jsonPath: .controllerConditions[?(@.type=='ControllerHealthy')].status
+      name: Healthy
+      type: string
+    - description: Last time the Healthy Condition was updated
+      jsonPath: .controllerConditions[?(@.type=='ControllerHealthy')].lastHeartbeatTime
+      name: Last Heartbeat
+      type: date
+    - description: Version of the Controller
+      jsonPath: .version
+      name: Version
+      priority: 1
+      type: string
+    - description: Number of Agents connected to the Controller
+      jsonPath: .connectedAgentNum
+      name: Connected Agents
+      priority: 1
+      type: integer
+    - description: Node on which the Controller is running
+      jsonPath: .nodeRef.name
+      name: Node
+      priority: 1
+      type: string
+    - description: Number of Network Policies computed by Controller
+      jsonPath: .networkPolicyControllerInfo.networkPolicyNum
+      name: Num Network Policies
+      priority: 2
+      type: integer
+    name: v1beta1
     schema:
       openAPIV3Schema:
         type: object
