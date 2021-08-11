@@ -119,7 +119,7 @@ var (
 )
 
 // NetworkPolicyController is responsible for synchronizing the Namespaces and Pods
-// affected by a Network Policy.
+// affected by a K8s Network Policy and Antrea-native policies.
 type NetworkPolicyController struct {
 	// kubeClient is a standard Kubernetes clientset.
 	kubeClient clientset.Interface
@@ -149,7 +149,7 @@ type NetworkPolicyController struct {
 
 	cnpInformer secinformers.ClusterNetworkPolicyInformer
 	// cnpLister is able to list/get AntreaClusterNetworkPolicies and is populated by the shared informer passed to
-	// NewClusterNetworkPolicyController.
+	// NewNetworkPolicyController.
 	cnpLister seclisters.ClusterNetworkPolicyLister
 	// cnpListerSynced is a function which returns true if the AntreaClusterNetworkPolicies shared informer has been synced at least once.
 	cnpListerSynced cache.InformerSynced
@@ -170,7 +170,7 @@ type NetworkPolicyController struct {
 
 	cgInformer crdv1a3informers.ClusterGroupInformer
 	// cgLister is able to list/get ClusterGroups and is populated by the shared informer passed to
-	// NewClusterGroupController.
+	// NewNetworkPolicyController.
 	cgLister crdv1a3listers.ClusterGroupLister
 	// cgListerSynced is a function which returns true if the ClusterGroup shared informer has been synced at least
 	// once.
