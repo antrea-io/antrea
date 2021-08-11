@@ -197,7 +197,6 @@ func run(o *Options) error {
 	// In Antrea agent, status manager and audit logging will automatically be enabled
 	// if AntreaPolicy feature is enabled.
 	statusManagerEnabled := antreaPolicyEnabled
-	loggingEnabled := antreaPolicyEnabled
 
 	var denyConnStore *connections.DenyConnectionStore
 	if features.DefaultFeatureGate.Enabled(features.FlowExporter) {
@@ -212,7 +211,6 @@ func run(o *Options) error {
 		entityUpdates,
 		antreaPolicyEnabled,
 		statusManagerEnabled,
-		loggingEnabled,
 		denyConnStore,
 		asyncRuleDeleteInterval)
 	if err != nil {
