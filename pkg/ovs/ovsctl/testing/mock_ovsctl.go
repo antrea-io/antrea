@@ -142,6 +142,21 @@ func (mr *MockOVSCtlClientMockRecorder) DumpTableFlows(arg0 interface{}) *gomock
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DumpTableFlows", reflect.TypeOf((*MockOVSCtlClient)(nil).DumpTableFlows), arg0)
 }
 
+// GetDPFeatures mocks base method
+func (m *MockOVSCtlClient) GetDPFeatures() (map[ovsctl.DPFeature]bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetDPFeatures")
+	ret0, _ := ret[0].(map[ovsctl.DPFeature]bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetDPFeatures indicates an expected call of GetDPFeatures
+func (mr *MockOVSCtlClientMockRecorder) GetDPFeatures() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDPFeatures", reflect.TypeOf((*MockOVSCtlClient)(nil).GetDPFeatures))
+}
+
 // RunAppctlCmd mocks base method
 func (m *MockOVSCtlClient) RunAppctlCmd(arg0 string, arg1 bool, arg2 ...string) ([]byte, *ovsctl.ExecError) {
 	m.ctrl.T.Helper()
