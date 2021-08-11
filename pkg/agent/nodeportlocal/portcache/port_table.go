@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"net"
 	"sync"
+	"time"
 
 	"k8s.io/klog/v2"
 
@@ -156,8 +157,26 @@ func (pt *PortTable) RuleExists(podIP string, podPort int) bool {
 	return false
 }
 
-func (pt *PortTable) SyncRules(allNPLPorts []rules.PodNodePort) error {
-	validNPLPorts := make([]rules.PodNodePort, 0, len(allNPLPorts))
+// syncRules ensures that contents of the port table matches the iptables rules present on the Node.
+func (pt *PortTable) syncRules() error {
+	pt.tableLock.Lock()
+	defer pt.tableLock.Unlock()
+	nplPorts := make([]rules.PodNodePort, 0, len(pt.Table))
+	for _, data := range pt.Table {
+		nplPorts = append(nplPorts, rules.PodNodePort{
+			NodePort: data.NodePort,
+			PodPort:  data.PodPort,
+			PodIP:    data.PodIP,
+		})
+	}
+	return pt.PodPortRules.AddAllRules(nplPorts)
+}
+
+// RestoreRules should be called on startup to restore a set of NPL rules. It is non-blocking but
+// takes as a parameter a channel, synced, which will be closed when the necessary rules have been
+// restored successfully. No other operations should be performed on the PortTable until the channel
+// is closed.
+func (pt *PortTable) RestoreRules(allNPLPorts []rules.PodNodePort, synced chan<- struct{}) error {
 	pt.tableLock.Lock()
 	defer pt.tableLock.Unlock()
 	for _, nplPort := range allNPLPorts {
@@ -176,9 +195,22 @@ func (pt *PortTable) SyncRules(allNPLPorts []rules.PodNodePort) error {
 			socket:   socket,
 		}
 		pt.Table[nplPort.NodePort] = data
-		validNPLPorts = append(validNPLPorts, nplPort)
 	}
-	return pt.PodPortRules.AddAllRules(validNPLPorts)
+	// retry mechanism as iptables-restore can fail if other components (in Antrea or other
+	// software) are accessing iptables.
+	go func() {
+		defer close(synced)
+		var backoffTime = 2 * time.Second
+		for {
+			if err := pt.syncRules(); err != nil {
+				klog.ErrorS(err, "Failed to restore iptables rules", "backoff", backoffTime)
+				time.Sleep(backoffTime)
+				continue
+			}
+			break
+		}
+	}()
+	return nil
 }
 
 // openLocalPort binds to the provided port.
