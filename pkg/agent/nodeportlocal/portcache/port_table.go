@@ -203,7 +203,7 @@ func (pt *PortTable) RestoreRules(allNPLPorts []rules.PodNodePort, synced chan<-
 		var backoffTime = 2 * time.Second
 		for {
 			if err := pt.syncRules(); err != nil {
-				klog.Errorf("Failed to initialize iptables: %v - will retry in %v", err, backoffTime)
+				klog.ErrorS(err, "Failed to restore iptables rules", "backoff", backoffTime)
 				time.Sleep(backoffTime)
 				continue
 			}
