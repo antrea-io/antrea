@@ -385,11 +385,11 @@ func (c *Cluster) syncConsistentHash(eipName string) error {
 	updateConsistentHash := func(eip *v1alpha2.ExternalIPPool) error {
 		nodeSel, err := metav1.LabelSelectorAsSelector(&eip.Spec.NodeSelector)
 		if err != nil {
-			return err
+			return fmt.Errorf("labelSelectorAsSelector error: %v", err)
 		}
 		nodes, err := c.nodeLister.List(nodeSel)
 		if err != nil {
-			return err
+			return fmt.Errorf("listing Nodes error: %v", err)
 		}
 		aliveNodes := c.aliveNodes()
 		// Node alive and Node labels match ExternalIPPool nodeSelector.
