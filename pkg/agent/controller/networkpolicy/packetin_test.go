@@ -25,10 +25,6 @@ import (
 )
 
 func TestGetPacketInfo(t *testing.T) {
-	type args struct {
-		pktIn *ofctrl.PacketIn
-		ob    *logInfo
-	}
 	tests := []struct {
 		name       string
 		pktIn      *ofctrl.PacketIn
