@@ -18,16 +18,12 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"log"
-	"os"
-	"path/filepath"
 	"time"
 
 	"antrea.io/libOpenflow/openflow13"
 	"antrea.io/libOpenflow/protocol"
 	"antrea.io/ofnet/ofctrl"
 	"github.com/vmware/go-ipfix/pkg/registry"
-	"gopkg.in/natefinch/lumberjack.v2"
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent/config"
@@ -35,13 +31,9 @@ import (
 	"antrea.io/antrea/pkg/agent/openflow"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 	"antrea.io/antrea/pkg/util/ip"
-	"antrea.io/antrea/pkg/util/logdir"
 )
 
 const (
-	logfileSubdir string = "networkpolicy"
-	logfileName   string = "np.log"
-
 	IPv4HdrLen uint16 = 20
 	IPv6HdrLen uint16 = 40
 
@@ -56,44 +48,6 @@ const (
 	ICMPv6DstUnreachableType     uint8 = 1
 	ICMPv6DstAdminProhibitedCode uint8 = 1
 )
-
-var (
-	AntreaPolicyLogger *log.Logger
-)
-
-// logInfo will be set by retrieving info from packetin and register
-type logInfo struct {
-	tableName   string // name of the table sending packetin
-	npRef       string // Network Policy name reference for Antrea NetworkPolicy
-	disposition string // Allow/Drop of the rule sending packetin
-	ofPriority  string // openflow priority of the flow sending packetin
-	srcIP       string // source IP of the traffic logged
-	destIP      string // destination IP of the traffic logged
-	pktLength   uint16 // packet length of packetin
-	protocolStr string // protocol of the traffic logged
-}
-
-// initLogger is called while newing Antrea network policy agent controller.
-// Customize AntreaPolicyLogger specifically for Antrea Policies audit logging.
-func initLogger() error {
-	logDir := filepath.Join(logdir.GetLogDir(), logfileSubdir)
-	logFile := filepath.Join(logDir, logfileName)
-	if _, err := os.Stat(logDir); os.IsNotExist(err) {
-		os.Mkdir(logDir, 0755)
-	}
-
-	// Use lumberjack log file rot
-	logOutput := &lumberjack.Logger{
-		Filename:   logFile,
-		MaxSize:    500,  // allow max 500 megabytes for one log file
-		MaxBackups: 3,    // allow max 3 old log file backups
-		MaxAge:     28,   // allow max 28 days maintenance of old log files
-		Compress:   true, // compress the old log files for backup
-	}
-	AntreaPolicyLogger = log.New(logOutput, "", log.Ldate|log.Lmicroseconds)
-	klog.V(2).Infof("Initialized Antrea-native Policy Logger for audit logging with log file '%s'", logFile)
-	return nil
-}
 
 // HandlePacketIn is the packetin handler registered to openflow by Antrea network
 // policy agent controller. It performs the appropriate operations based on which
@@ -127,28 +81,6 @@ func (c *Controller) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
 			return err
 		}
 	}
-	return nil
-}
-
-// logPacket retrieves information from openflow reg, controller cache, packet-in
-// packet to log.
-func (c *Controller) logPacket(pktIn *ofctrl.PacketIn) error {
-	ob := new(logInfo)
-
-	// Get Network Policy log info
-	err := getNetworkPolicyInfo(pktIn, c, ob)
-	if err != nil {
-		return fmt.Errorf("received error while retrieving NetworkPolicy info: %v", err)
-	}
-
-	// Get packet log info
-	err = getPacketInfo(pktIn, ob)
-	if err != nil {
-		return fmt.Errorf("received error while handling packetin for NetworkPolicy: %v", err)
-	}
-
-	// Store log file
-	AntreaPolicyLogger.Printf("%s %s %s %s SRC: %s DEST: %s %d %s", ob.tableName, ob.npRef, ob.disposition, ob.ofPriority, ob.srcIP, ob.destIP, ob.pktLength, ob.protocolStr)
 	return nil
 }
 
@@ -239,6 +171,28 @@ func getPacketInfo(pktIn *ofctrl.PacketIn, ob *logInfo) error {
 
 	ob.protocolStr = ip.IPProtocolNumberToString(prot, "UnknownProtocol")
 
+	return nil
+}
+
+// logPacket retrieves information from openflow reg, controller cache, packet-in
+// packet to log. Log is deduplicated for non-Allow packets from record in logDeduplication.
+// Deduplication is safe guarded by logRecordDedupMap mutex.
+func (c *Controller) logPacket(pktIn *ofctrl.PacketIn) error {
+	ob := new(logInfo)
+
+	// Get Network Policy log info
+	err := getNetworkPolicyInfo(pktIn, c, ob)
+	if err != nil {
+		return fmt.Errorf("received error while retrieving NetworkPolicy info: %v", err)
+	}
+	// Get packet log info
+	err = getPacketInfo(pktIn, ob)
+	if err != nil {
+		return fmt.Errorf("received error while retrieving NetworkPolicy info: %v", err)
+	}
+
+	// Log the ob info to corresponding file w/ deduplication
+	c.antreaPolicyLogger.logDedupPacket(ob, time.Second)
 	return nil
 }
 
