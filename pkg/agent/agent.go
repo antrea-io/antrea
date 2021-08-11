@@ -41,7 +41,9 @@ import (
 	"antrea.io/antrea/pkg/agent/route"
 	"antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/agent/util"
+	"antrea.io/antrea/pkg/features"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
+	"antrea.io/antrea/pkg/ovs/ovsctl"
 	"antrea.io/antrea/pkg/util/env"
 	"antrea.io/antrea/pkg/util/k8s"
 )
@@ -129,6 +131,10 @@ func (i *Initializer) setupOVSBridge() error {
 		return err
 	}
 
+	if err := i.validateSupportedDPFeatures(); err != nil {
+		return err
+	}
+
 	if err := i.prepareOVSBridge(); err != nil {
 		return err
 	}
@@ -147,6 +153,35 @@ func (i *Initializer) setupOVSBridge() error {
 		return err
 	}
 
+	return nil
+}
+
+func (i *Initializer) validateSupportedDPFeatures() error {
+	gotFeatures, err := ovsctl.NewClient(i.ovsBridge).GetDPFeatures()
+	if err != nil {
+		return err
+	}
+	// Basic requirements.
+	requiredFeatures := []ovsctl.DPFeature{
+		ovsctl.CTStateFeature,
+		ovsctl.CTZoneFeature,
+		ovsctl.CTMarkFeature,
+		ovsctl.CTLabelFeature,
+	}
+	// AntreaProxy requires CTStateNAT feature.
+	if features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
+		requiredFeatures = append(requiredFeatures, ovsctl.CTStateNATFeature)
+	}
+
+	for _, feature := range requiredFeatures {
+		supported, found := gotFeatures[feature]
+		if !found {
+			return fmt.Errorf("the required OVS DP feature '%s' support is unknown", feature)
+		}
+		if !supported {
+			return fmt.Errorf("the required OVS DP feature '%s' is not supported", feature)
+		}
+	}
 	return nil
 }
 
