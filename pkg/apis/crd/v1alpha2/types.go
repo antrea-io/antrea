@@ -306,16 +306,21 @@ type IPPoolSpec struct {
 	IPRanges []SubnetIPRange `json:"ipRanges"`
 }
 
-// SubnetIPRange is a set of contiguous IP addresses, represented by a CIDR or a pair of start and end IPs,
-// along with subnet definition.
-type SubnetIPRange struct {
-	IPRange `json:",inline"`
+// SubnetSpec is subnet specification for IP Range
+type SubnetSpec struct {
 	// Gateway IP for this subnet, eg. 10.10.1.1
 	Gateway string `json:"gateway"`
 	// Prefix length for the subnet, eg. 24
-	PrefixLen string `json:"prefixLen"`
+	PrefixLength int32 `json:"prefixLength"`
 	// VLAN ID for this subnet. Default is 0. String-typed for sake of potential autoselect option.
 	VLAN string `json:"vlan,omitempty"`
+}
+
+// SubnetIPRange is a set of contiguous IP addresses, represented by a CIDR or a pair of start and end IPs,
+// along with subnet definition.
+type SubnetIPRange struct {
+	IPRange    `json:",inline"`
+	SubnetSpec `json:",inline"`
 }
 
 type IPPoolStatus struct {
@@ -323,11 +328,18 @@ type IPPoolStatus struct {
 	// TODO: add usage statistics
 }
 
+type IPPoolUsageState string
+
+const (
+	IPPoolUsageStateAllocated    IPPoolUsageState = "Allocated"
+	IPPoolUsageStatePreallocated IPPoolUsageState = "Preallocated"
+)
+
 type IPPoolUsage struct {
 	// IP Address this entry is tracking
 	IPAddress string `json:"ipAddress"`
 	// Allocation state - either Allocated or Preallocated
-	State string `json:"state"`
+	State IPPoolUsageState `json:"state"`
 	// Resource this IP Address is allocated to
 	Resource string `json:"resource"`
 	// TODO: add usage statistics (consistent with ExternalIPPool status)
