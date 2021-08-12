@@ -1,11 +1,9 @@
-- name: Pull busybox:latest docker image (Ansible < '2.8.0')
-  docker_image:
-    name: busybox:latest
-    pull: yes
-  when: ansible_version.full is version_compare('2.8.0', '<')
-
-- name: Pull busybox:latest docker image (Ansible >= '2.8.0')
-  docker_image:
-    name: busybox:latest
-    source: pull
-  when: ansible_version.full is version_compare('2.8.0', '>=')
+- name: Pull busybox:latest docker image
+  shell: |
+    ctr -n=k8s.io images check name==docker.io/library/busybox:latest > /tmp/busybox1
+    ctr -n=k8s.io image pull docker.io/library/busybox:latest
+    ctr -n=k8s.io images check name==docker.io/library/busybox:latest > /tmp/busybox2
+    diff /tmp/busybox1 /tmp/busybox2 || echo "Image updated"
+    rm -f /tmp/busybox1 /tmp/busybox2
+  register: busybox
+  changed_when: "'Image updated' in busybox.stdout"
