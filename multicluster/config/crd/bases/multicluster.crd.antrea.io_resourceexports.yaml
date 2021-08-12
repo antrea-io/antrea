@@ -19,7 +19,7 @@ spec:
   - name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: ResourceExport is the Schema for the resourceexports API
+        description: ResourceExport is the Schema for the resourceexports API.
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
@@ -34,7 +34,7 @@ spec:
           metadata:
             type: object
           spec:
-            description: ResourceExportSpec defines the desired state of ResourceExport
+            description: ResourceExportSpec defines the desired state of ResourceExport.
             properties:
               clusterID:
                 description: ClusterID specifies the member cluster this resource
@@ -654,28 +654,28 @@ spec:
                 type: object
             type: object
           status:
-            description: ResourceExportStatus defines the observed state of ResourceExport
+            description: ResourceExportStatus defines the observed state of ResourceExport.
             properties:
               conditions:
                 items:
                   description: ResourceExportCondition indicates the readiness condition
-                    of the ResourceExport
+                    of the ResourceExport.
                   properties:
                     lastTransitionTime:
                       description: Last time the condition transited from one status
-                        to another
+                        to another.
                       format: date-time
                       type: string
                     message:
                       description: A human readable message indicating details about
-                        the transition
+                        the transition.
                       type: string
                     reason:
                       description: Unique, one-word, CamelCase reason for the condition's
                         last transition.
                       type: string
                     status:
-                      description: Status of the condition, one of True, False, Unknown
+                      description: Status of the condition, one of True, False, Unknown.
                       type: string
                     type:
                       type: string
