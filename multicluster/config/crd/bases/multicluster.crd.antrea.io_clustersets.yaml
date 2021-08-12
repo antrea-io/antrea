@@ -19,7 +19,7 @@ spec:
   - name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: ClusterSet is the Schema for the clustersets API
+        description: ClusterSet is the Schema for the clustersets API.
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
