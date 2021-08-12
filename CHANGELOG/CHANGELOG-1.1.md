@@ -1,5 +1,19 @@
 # Changelog 1.1
 
+## 1.1.2 - 2021-08-11
+
+### Changed
+
+- Improve the batch installation of NetworkPolicy rules when the Agent starts: only generate flow operations based on final desired state instead of incrementally. ([#2479](https://github.com/antrea-io/antrea/pull/2479), [@tnqn])
+
+### Fixed
+
+- Fix deadlock when initializing the GroupEntityIndex (in the Antrea Controller) with many groups; this was preventing correct distribution and enforcement of NetworkPolicies. ([#2376](https://github.com/antrea-io/antrea/pull/2376), [@tnqn])
+- Use "os/exec" package instead of third-party modules to run PowerShell commands and configure host networking on Windows; this change prevents Agent goroutines from getting stuck when configuring routes. ([#2363](https://github.com/antrea-io/antrea/pull/2363), [@lzhecheng]) [Windows]
+- Fix panic in Agent when calculating the stats for a rule newly added to an existing NetworkPolicy. ([#2495](https://github.com/antrea-io/antrea/pull/2495), [@tnqn])
+- Fix bug in iptables rule installation for dual-stack clusters: if a rule was already present for one protocol but not the other, its installation may have been skipped. ([#2469](https://github.com/antrea-io/antrea/pull/2469), [@lzhecheng])
+- Upgrade OVS version to 2.14.2 to pick up security fixes for CVE-2015-8011, CVE-2020-27827 and CVE-2020-35498. ([#2451](https://github.com/antrea-io/antrea/pull/2451), [@antoninbas])
+
 ## 1.1.1 - 2021-07-07
 
 ### Fixed
