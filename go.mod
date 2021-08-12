@@ -16,7 +16,7 @@ require (
 	github.com/cenkalti/rpc2 v0.0.0-20180727162946-9642ea02d0aa // indirect
 	github.com/cheggaaa/pb/v3 v3.0.4
 	github.com/confluentinc/bincover v0.1.0
-	github.com/containernetworking/cni v0.8.0
+	github.com/containernetworking/cni v0.8.1
 	github.com/containernetworking/plugins v0.8.7
 	github.com/coreos/go-iptables v0.6.0
 	github.com/elazarl/goproxy v0.0.0-20190911111923-ecfe977594f1 // indirect
