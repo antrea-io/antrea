@@ -5,8 +5,8 @@ go 1.15
 require (
 	antrea.io/antrea v0.0.0
 	github.com/vmware-tanzu/octant v0.17.0
-	k8s.io/apimachinery v0.21.0
-	k8s.io/client-go v0.21.0
+	k8s.io/apimachinery v0.21.4
+	k8s.io/client-go v0.21.4
 )
 
 replace (
