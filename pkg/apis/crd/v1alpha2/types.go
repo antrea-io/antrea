@@ -331,8 +331,8 @@ type IPPoolStatus struct {
 type IPPoolUsageState string
 
 const (
-	IPPoolUsageStateAllocated   IPPoolUsageState = "Allocated"
-	IPPoolUsageStatePrellocated IPPoolUsageState = "Preallocated"
+	IPPoolUsageStateAllocated    IPPoolUsageState = "Allocated"
+	IPPoolUsageStatePreallocated IPPoolUsageState = "Preallocated"
 )
 
 type IPPoolUsage struct {
