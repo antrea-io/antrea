@@ -19,7 +19,7 @@ spec:
   - name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: ResourceImport is the Schema for the resourceimports API
+        description: ResourceImport is the Schema for the resourceimports API.
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
@@ -34,7 +34,7 @@ spec:
           metadata:
             type: object
           spec:
-            description: ResourceImportSpec defines the desired state of ResourceImport
+            description: ResourceImportSpec defines the desired state of ResourceImport.
             properties:
               clusterID:
                 description: ClusterIDs specifies the member clusters this resource
@@ -433,12 +433,12 @@ spec:
                 type: object
             type: object
           status:
-            description: ResourceImportStatus defines the observed state of ResourceImport
+            description: ResourceImportStatus defines the observed state of ResourceImport.
             properties:
               clusterStatuses:
                 items:
                   description: ResourceImportClusterStatus indicates the readiness
-                    status of the ResourceImport in clusters
+                    status of the ResourceImport in clusters.
                   properties:
                     clusterID:
                       description: ClusterID is the unique identifier of this cluster.
@@ -446,16 +446,16 @@ spec:
                     conditions:
                       items:
                         description: ResourceImportCondition indicates the condition
-                          of the ResourceImport in a cluster
+                          of the ResourceImport in a cluster.
                         properties:
                           lastTransitionTime:
                             description: Last time the condition transited from one
-                              status to another
+                              status to another.
                             format: date-time
                             type: string
                           message:
                             description: A human readable message indicating details
-                              about the transition
+                              about the transition.
                             type: string
                           reason:
                             description: Unique, one-word, CamelCase reason for the
@@ -463,7 +463,7 @@ spec:
                             type: string
                           status:
                             description: Status of the condition, one of True, False,
-                              Unknown
+                              Unknown.
                             type: string
                           type:
                             type: string
