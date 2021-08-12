@@ -841,9 +841,9 @@ as opposed to using the `labels` associated with the Namespaces.
 
 ### K8s clusters with version 1.21 and above
 
-Starting with K8s v1.21, all Namespaces will be labeled with `kubernetes.io/metadata.name: <namespaceName>` [label](https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/#automatic-labelling)
-provided that the `NamespaceDefaultLabelName` feature gate is enabled. K8s NetworkPolicy
-and Antrea-native policy users can take advantage of this reserved label
+Starting with K8s v1.21, all Namespaces are labeled with the `kubernetes.io/metadata.name: <namespaceName>` [label](https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/#automatic-labelling)
+provided that the `NamespaceDefaultLabelName` feature gate (enabled by default) is not disabled in K8s.
+K8s NetworkPolicy and Antrea-native policy users can take advantage of this reserved label
 to select Namespaces directly by their `name` in `namespaceSelectors` as follows:
 
 ```yaml
@@ -871,6 +871,9 @@ spec:
             port: 53
         name: AllowToCoreDNS
 ```
+
+**Note**: `NamespaceDefaultLabelName` feature gate is scheduled to be removed in K8s v1.24, thereby
+ensuring that labeling Namespaces by their name cannot be disabled.
 
 ### K8s clusters with version 1.20 and below
 
