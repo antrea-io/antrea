@@ -215,12 +215,12 @@ spec:
                       - required:
                         - cidr
                         - gateway
-                        - prefixLen
+                        - prefixLength
                       - required:
                         - start
                         - end
                         - gateway
-                        - prefixLen
+                        - prefixLength
                     properties:
                       cidr:
                         format: cidr
@@ -240,7 +240,7 @@ spec:
                           - format: ipv4
                           - format: ipv6
                         type: string
-                      prefixLen:
+                      prefixLength:
                         type: integer
                       vlan:
                         type: string
