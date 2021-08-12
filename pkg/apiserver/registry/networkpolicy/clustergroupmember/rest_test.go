@@ -15,6 +15,7 @@
 package clustergroupmember
 
 import (
+	"net"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -30,11 +31,17 @@ type fakeQuerier struct {
 	members map[string]controlplane.GroupMemberSet
 }
 
-func (q fakeQuerier) GetGroupMembers(uid string) (interface{}, error) {
+func (q fakeQuerier) GetGroupMembers(uid string) (controlplane.GroupMemberSet, []controlplane.IPBlock, error) {
 	if memberList, ok := q.members[uid]; ok {
-		return memberList, nil
+		return memberList, nil, nil
+	} else if uid == "cgIPBlock" {
+		testCIDR := controlplane.IPNet{
+			IP:           controlplane.IPAddress(net.ParseIP("10.0.0.1")),
+			PrefixLength: int32(24),
+		}
+		return nil, []controlplane.IPBlock{{CIDR: testCIDR}}, nil
 	}
-	return controlplane.GroupMemberSet{}, nil
+	return nil, nil, nil
 }
 
 func TestRESTGet(t *testing.T) {
@@ -118,6 +125,22 @@ func TestRESTGet(t *testing.T) {
 					Name: "cgC",
 				},
 				EffectiveMembers: []controlplane.GroupMember{},
+			},
+			expectedErr: false,
+		},
+		{
+			name:      "ipBlock-cg",
+			groupName: "cgIPBlock",
+			expectedObj: &controlplane.ClusterGroupMembers{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "cgIPBlock",
+				},
+				EffectiveIPBlocks: []controlplane.IPNet{
+					{
+						IP:           controlplane.IPAddress(net.ParseIP("10.0.0.1")),
+						PrefixLength: int32(24),
+					},
+				},
 			},
 			expectedErr: false,
 		},

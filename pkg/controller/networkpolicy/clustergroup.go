@@ -429,14 +429,14 @@ func (c *NetworkPolicyController) getAssociatedGroupsByName(grpName string) []an
 // GetGroupMembers returns the current members of a ClusterGroup.
 // If the ClusterGroup is defined by IPBlocks, the returned members will be []controlplane.IPBlock.
 // Otherwise, the returned members will be of type controlplane.GroupMemberSet.
-func (c *NetworkPolicyController) GetGroupMembers(cgName string) (interface{}, error) {
+func (c *NetworkPolicyController) GetGroupMembers(cgName string) (controlplane.GroupMemberSet, []controlplane.IPBlock, error) {
 	groupObj, found, _ := c.internalGroupStore.Get(cgName)
 	if found {
 		group := groupObj.(*antreatypes.Group)
 		if len(group.IPBlocks) > 0 {
-			return group.IPBlocks, nil
+			return nil, group.IPBlocks, nil
 		}
-		return c.getClusterGroupMemberSet(group), nil
+		return c.getClusterGroupMemberSet(group), nil, nil
 	}
-	return nil, fmt.Errorf("no internal Group with name %s is found", cgName)
+	return nil, nil, fmt.Errorf("no internal Group with name %s is found", cgName)
 }
