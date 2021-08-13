@@ -126,7 +126,7 @@ type TestStep struct {
 	Reachability      *Reachability
 	Policies          []metav1.Object
 	ServicesAndGroups []metav1.Object
-	Port              []int32
+	Ports             []int32
 	Protocol          v1.Protocol
 	Duration          time.Duration
 	CustomProbes      []*CustomProbe
@@ -195,7 +195,7 @@ func applyDefaultDenyToAllNamespaces(k8s *KubernetesUtils, namespaces []string) 
 	}
 	time.Sleep(networkPolicyDelay)
 	r := NewReachability(allPods, Dropped)
-	k8s.Validate(allPods, r, p80, v1.ProtocolTCP)
+	k8s.Validate(allPods, r, []int32{p80}, v1.ProtocolTCP)
 	_, wrong, _ := r.Summary()
 	if wrong != 0 {
 		return fmt.Errorf("error when creating default deny k8s NetworkPolicies")
@@ -209,7 +209,7 @@ func cleanupDefaultDenyNPs(k8s *KubernetesUtils, namespaces []string) error {
 	}
 	time.Sleep(networkPolicyDelay * 2)
 	r := NewReachability(allPods, Connected)
-	k8s.Validate(allPods, r, p80, v1.ProtocolTCP)
+	k8s.Validate(allPods, r, []int32{p80}, v1.ProtocolTCP)
 	_, wrong, _ := r.Summary()
 	if wrong != 0 {
 		return fmt.Errorf("error when cleaning default deny k8s NetworkPolicies")
@@ -1801,7 +1801,7 @@ func testACNPPortRange(t *testing.T) {
 	reachability.Expect(Pod("z/a"), Pod("z/c"), Dropped)
 	testSteps := []*TestStep{
 		{
-			fmt.Sprintf("ACNP Drop Port 8080:8085"),
+			fmt.Sprintf("ACNP Drop Ports 8080:8085"),
 			reachability,
 			[]metav1.Object{builder.Get()},
 			nil,
@@ -1896,7 +1896,7 @@ func testANPPortRange(t *testing.T) {
 
 	var testSteps []*TestStep
 	testSteps = append(testSteps, &TestStep{
-		fmt.Sprintf("ANP Drop Port 8080:8085"),
+		fmt.Sprintf("ANP Drop Ports 8080:8085"),
 		reachability,
 		[]metav1.Object{builder.Get()},
 		nil,
@@ -1987,7 +1987,7 @@ func testANPMultipleAppliedTo(t *testing.T, data *TestData, singleRule bool) {
 	anp, err := k8sUtils.CreateOrUpdateANP(builder.Get())
 	failOnError(err, t)
 	failOnError(data.waitForANPRealized(t, anp.Namespace, anp.Name), t)
-	k8sUtils.Validate(allPods, reachability, 80, v1.ProtocolTCP)
+	k8sUtils.Validate(allPods, reachability, []int32{80}, v1.ProtocolTCP)
 	_, wrong, _ := reachability.Summary()
 	if wrong != 0 {
 		t.Errorf("failure -- %d wrong results", wrong)
@@ -2006,7 +2006,7 @@ func testANPMultipleAppliedTo(t *testing.T, data *TestData, singleRule bool) {
 	reachability.Expect(Pod("x/b"), Pod("y/a"), Dropped)
 	reachability.Expect(Pod("x/b"), Pod("y/c"), Dropped)
 	time.Sleep(networkPolicyDelay)
-	k8sUtils.Validate(allPods, reachability, 80, v1.ProtocolTCP)
+	k8sUtils.Validate(allPods, reachability, []int32{80}, v1.ProtocolTCP)
 	_, wrong, _ = reachability.Summary()
 	if wrong != 0 {
 		t.Errorf("failure -- %d wrong results", wrong)
@@ -2020,7 +2020,7 @@ func testANPMultipleAppliedTo(t *testing.T, data *TestData, singleRule bool) {
 	reachability = NewReachability(allPods, Connected)
 	reachability.Expect(Pod("x/b"), Pod("y/a"), Dropped)
 	time.Sleep(networkPolicyDelay)
-	k8sUtils.Validate(allPods, reachability, 80, v1.ProtocolTCP)
+	k8sUtils.Validate(allPods, reachability, []int32{80}, v1.ProtocolTCP)
 	_, wrong, _ = reachability.Summary()
 	if wrong != 0 {
 		t.Errorf("failure -- %d wrong results", wrong)
@@ -2440,9 +2440,7 @@ func executeTestsWithData(t *testing.T, testList []*TestCase, data *TestData) {
 			reachability := step.Reachability
 			if reachability != nil {
 				start := time.Now()
-				for _, port := range step.Port {
-					k8sUtils.Validate(allPods, reachability, port, step.Protocol)
-				}
+				k8sUtils.Validate(allPods, reachability, step.Ports, step.Protocol)
 				step.Duration = time.Now().Sub(start)
 
 				_, wrong, _ := step.Reachability.Summary()
@@ -2624,7 +2622,7 @@ func printResults() {
 				testFailed = true
 			}
 			fmt.Printf("\tStep %s on port %d, duration %d seconds, result: %s\n",
-				step.Name, step.Port, int(step.Duration.Seconds()), result)
+				step.Name, step.Ports, int(step.Duration.Seconds()), result)
 			if wrong != 0 {
 				fmt.Printf("\n%s\n", comparison.PrettyPrint("\t\t"))
 			}

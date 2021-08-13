@@ -1557,7 +1557,7 @@ func testLegacyACNPPortRange(t *testing.T) {
 
 	var testSteps []*TestStep
 	testSteps = append(testSteps, &TestStep{
-		fmt.Sprint("ACNP Drop Port 8080:8085"),
+		fmt.Sprint("ACNP Drop Ports 8080:8085"),
 		reachability,
 		[]metav1.Object{builder.GetLegacy()},
 		nil,
@@ -1661,7 +1661,7 @@ func testLegacyANPPortRange(t *testing.T) {
 
 	var testSteps []*TestStep
 	testSteps = append(testSteps, &TestStep{
-		fmt.Sprint("ANP Drop Port 8080:8085"),
+		fmt.Sprint("ANP Drop Ports 8080:8085"),
 		reachability,
 		[]metav1.Object{builder.GetLegacy()},
 		nil,
@@ -2026,9 +2026,7 @@ func executeLegacyTestsWithData(t *testing.T, testList []*TestCase, data *TestDa
 			reachability := step.Reachability
 			if reachability != nil {
 				start := time.Now()
-				for _, port := range step.Port {
-					k8sUtils.Validate(allPods, reachability, port, step.Protocol)
-				}
+				k8sUtils.Validate(allPods, reachability, step.Ports, step.Protocol)
 				step.Duration = time.Since(start)
 
 				_, wrong, _ := step.Reachability.Summary()
