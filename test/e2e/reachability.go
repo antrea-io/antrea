@@ -147,11 +147,11 @@ func (ct *ConnectivityTable) SetAllTo(to string, value PodConnectivityMark) {
 func (ct *ConnectivityTable) Get(from string, to string) PodConnectivityMark {
 	dict, ok := ct.Values[from]
 	if !ok {
-		panic(errors.New(fmt.Sprintf("key %s not found in map", from)))
+		return Unknown
 	}
 	val, ok := dict[to]
 	if !ok {
-		panic(errors.New(fmt.Sprintf("key %s not found in map (%+v)", to, dict)))
+		return Unknown
 	}
 	return val
 }
