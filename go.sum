@@ -622,8 +622,8 @@ github.com/vishvananda/netlink v1.1.0/go.mod h1:cTgwzPIzzgDAYoQrMm0EdrjRUBkTqKYp
 github.com/vishvananda/netns v0.0.0-20180720170159-13995c7128cc/go.mod h1:ZjcWmFBXmLKZu9Nxj3WKYEafiSqer2rnvPr0en9UNpI=
 github.com/vishvananda/netns v0.0.0-20191106174202-0a2b9b5464df h1:OviZH7qLw/7ZovXvuNyL3XQl8UFofeikI1NW1Gypu7k=
 github.com/vishvananda/netns v0.0.0-20191106174202-0a2b9b5464df/go.mod h1:JP3t17pCcGlemwknint6hfoeCVQrEMVwxRLRjXpq+BU=
-github.com/vmware/go-ipfix v0.5.4 h1:n7TssKO8D4E3qpFmO6eDs7yU9Mr4fSbLFC+GstPU8kw=
-github.com/vmware/go-ipfix v0.5.4/go.mod h1:yzbG1rv+yJ8GeMrRm+MDhOV3akygNZUHLhC1pDoD2AY=
+github.com/vmware/go-ipfix v0.5.7 h1:twv8mrXwlXhlWdixogGmyKwLia/G7hsZM46xd8aO+rc=
+github.com/vmware/go-ipfix v0.5.7/go.mod h1:yzbG1rv+yJ8GeMrRm+MDhOV3akygNZUHLhC1pDoD2AY=
 github.com/wenyingd/ofnet v0.0.0-20210526054554-3e71e19fd0cf h1:EEGpnM6W07pq2nKdqk+lig1Qit5f8eUe+Vt1ditTLgk=
 github.com/wenyingd/ofnet v0.0.0-20210526054554-3e71e19fd0cf/go.mod h1:tZiqxY3POhek8GrqcmU+5bvVzDwY1zZ7Wh9+zwaoV3s=
 github.com/xdg/scram v0.0.0-20180814205039-7eeb5667e42c/go.mod h1:lB8K/P019DLNhemzwFU4jHLhdvlE6uDZjXFejJXr49I=
