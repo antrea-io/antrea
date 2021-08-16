@@ -168,29 +168,45 @@ func request(component string, client *rest.RESTClient) error {
 	return err
 }
 
-func mapClients(prefix string, agentClients map[string]*rest.RESTClient, controllerClient *rest.RESTClient, bar *pb.ProgressBar, af, cf func(nodeName string, c *rest.RESTClient) error) error {
+type result struct {
+	nodeName string
+	err      error
+}
+
+func mapClients(prefix string, agentClients map[string]*rest.RESTClient, controllerClient *rest.RESTClient, bar *pb.ProgressBar, af, cf func(nodeName string, c *rest.RESTClient) error) []result {
 	bar.Set("prefix", prefix)
 	rateLimiter := rate.NewLimiter(requestRate, requestBurst)
+	ch := make(chan result)
 	g, ctx := errgroup.WithContext(context.Background())
 	for nodeName, client := range agentClients {
 		rateLimiter.Wait(ctx)
 		nodeName, client := nodeName, client
 		g.Go(func() error {
 			defer bar.Increment()
-			return af(nodeName, client)
+			err := af(nodeName, client)
+			ch <- result{nodeName: nodeName, err: err}
+			return err
 		})
 	}
-	if err := g.Wait(); err != nil {
-		return err
+
+	results := make([]result, len(agentClients))
+	for i := range results {
+		results[i] = <-ch
 	}
+
+	g.Wait()
+
 	if controllerClient != nil {
 		defer bar.Increment()
-		return cf("", controllerClient)
+		err := cf("", controllerClient)
+		// use "*" so we can use it as a key for map
+		result := result{nodeName: "*", err: err}
+		results = append(results, result)
 	}
-	return nil
+	return results
 }
 
-func requestAll(agentClients map[string]*rest.RESTClient, controllerClient *rest.RESTClient, bar *pb.ProgressBar) error {
+func requestAll(agentClients map[string]*rest.RESTClient, controllerClient *rest.RESTClient, bar *pb.ProgressBar) []result {
 	return mapClients(
 		"Requesting",
 		agentClients,
@@ -245,19 +261,60 @@ func download(suffix, downloadPath string, client *rest.RESTClient, component st
 	return nil
 }
 
-func downloadAll(agentClients map[string]*rest.RESTClient, controllerClient *rest.RESTClient, downloadPath string, bar *pb.ProgressBar) error {
-	return mapClients(
+func writeFailedNodes(downloadPath string, nodes []string) error {
+	file, err := os.OpenFile(downloadPath+"/failed_nodes", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return fmt.Errorf("err create file for failed nodes: %w", err)
+	}
+	defer file.Close()
+
+	dataWriter := bufio.NewWriter(file)
+	for _, node := range nodes {
+		_, _ = dataWriter.WriteString(node + "\n")
+	}
+
+	err = dataWriter.Flush()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// downloadAll will downloads all supportBundles. preResults is the request results of node/controller supportBundle, if err happens for some node or controller info, the
+// download step will be skipped.
+func downloadAll(agentClients map[string]*rest.RESTClient, controllerClient *rest.RESTClient, downloadPath string, bar *pb.ProgressBar, preResults []result) map[string]error {
+	m := make(map[string]error, len(preResults))
+	for i := range preResults {
+		item := preResults[i]
+		m[item.nodeName] = item.err
+	}
+
+	results := mapClients(
 		"Downloading",
 		agentClients,
 		controllerClient,
 		bar,
 		func(nodeName string, c *rest.RESTClient) error {
-			return download(nodeName, downloadPath, c, runtime.ModeAgent)
+			if m[nodeName] == nil {
+				return download(nodeName, downloadPath, c, runtime.ModeAgent)
+			}
+			return m[nodeName]
+
 		},
 		func(nodeName string, c *rest.RESTClient) error {
-			return download("", downloadPath, c, runtime.ModeController)
+			if m["*"] == nil {
+				return download("", downloadPath, c, runtime.ModeController)
+			}
+			return m[nodeName]
 		},
 	)
+	for i := range results {
+		item := results[i]
+		if item.err != nil {
+			m[item.nodeName] = item.err
+		}
+	}
+	return m
 }
 
 // createAgentClients creates clients for agents on specified nodes. If nameList is set, then nameFilter will be ignored.
@@ -523,8 +580,54 @@ func controllerRemoteRunE(cmd *cobra.Command, args []string) error {
 	}
 	defer f.Close()
 	io.Copy(f, reader)
-	if err := requestAll(agentClients, controllerClient, bar); err != nil {
+
+	results := requestAll(agentClients, controllerClient, bar)
+	resultMap := downloadAll(agentClients, controllerClient, dir, bar, results)
+	return processResults(resultMap, dir)
+}
+
+func genErrorMsg(resultMap map[string]error) string {
+	msg := ""
+	for _, v := range resultMap {
+		msg += v.Error() + ";"
+	}
+	return msg
+}
+
+// processResults will output the failed nodes and their reasons if any. If no data was collected,
+// error is returned, otherwise will return nil.
+func processResults(resultMap map[string]error, dir string) error {
+	resultStr := ""
+	var failedNodes []string
+	allFailed := true
+	var err error
+
+	for k, v := range resultMap {
+		if k != "*" && v != nil {
+			resultStr += fmt.Sprintf("- %s: %s\n", k, v.Error())
+			failedNodes = append(failedNodes, k)
+		}
+		if v == nil {
+			allFailed = false
+		}
+	}
+
+	if resultMap["*"] != nil {
+		fmt.Println("Controller Info Failed Reason: " + resultMap["*"].Error())
+	}
+
+	if resultStr != "" {
+		fmt.Println("Failed nodes: ")
+		fmt.Print(resultStr)
+	}
+
+	if failedNodes != nil {
+		err = writeFailedNodes(dir, failedNodes)
+	}
+
+	if allFailed {
+		return fmt.Errorf("no data was collected: %s", genErrorMsg(resultMap))
+	} else {
 		return err
 	}
-	return downloadAll(agentClients, controllerClient, dir, bar)
 }
