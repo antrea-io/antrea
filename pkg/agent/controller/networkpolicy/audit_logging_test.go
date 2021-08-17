@@ -25,6 +25,10 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+const (
+	testBufferLength time.Duration = 100 * time.Millisecond
+)
+
 // mockLogger implements io.Writer.
 type mockLogger struct {
 	mu     sync.Mutex
@@ -53,7 +57,7 @@ func newTestAntreaPolicyLogger(bufferLength time.Duration) (*AntreaPolicyLogger,
 }
 
 func newLogInfo(disposition string) (*logInfo, string) {
-	expected := "AntreaPolicyIngressRule AntreaNetworkPolicy:default/test " + disposition + " 0 SRC: 0.0.0.0 DEST: 1.1.1.1 60 TCP"
+	expected := fmt.Sprintf("AntreaPolicyIngressRule AntreaNetworkPolicy:default/test %s 0 SRC: 0.0.0.0 DEST: 1.1.1.1 60 TCP", disposition)
 	return &logInfo{
 		tableName:   "AntreaPolicyIngressRule",
 		npRef:       "AntreaNetworkPolicy:default/test",
@@ -68,7 +72,7 @@ func newLogInfo(disposition string) (*logInfo, string) {
 
 func sendMultiplePackets(antreaLogger *AntreaPolicyLogger, ob *logInfo, numPackets int) {
 	count := 0
-	for range time.Tick(12 * time.Millisecond) {
+	for range time.Tick(time.Millisecond) {
 		count += 1
 		antreaLogger.LogDedupPacket(ob)
 		if count == numPackets {
@@ -82,7 +86,7 @@ func expectedLogWithCount(msg string, count int) string {
 }
 
 func TestAllowPacketLog(t *testing.T) {
-	antreaLogger, mockAnpLogger := newTestAntreaPolicyLogger(100 * time.Millisecond)
+	antreaLogger, mockAnpLogger := newTestAntreaPolicyLogger(testBufferLength)
 	ob, expected := newLogInfo("Allow")
 
 	antreaLogger.LogDedupPacket(ob)
@@ -91,7 +95,7 @@ func TestAllowPacketLog(t *testing.T) {
 }
 
 func TestDropPacketLog(t *testing.T) {
-	antreaLogger, mockAnpLogger := newTestAntreaPolicyLogger(100 * time.Millisecond)
+	antreaLogger, mockAnpLogger := newTestAntreaPolicyLogger(testBufferLength)
 	ob, expected := newLogInfo("Drop")
 
 	antreaLogger.LogDedupPacket(ob)
@@ -100,9 +104,9 @@ func TestDropPacketLog(t *testing.T) {
 }
 
 func TestDropPacketDedupLog(t *testing.T) {
-	antreaLogger, mockAnpLogger := newTestAntreaPolicyLogger(100 * time.Millisecond)
+	antreaLogger, mockAnpLogger := newTestAntreaPolicyLogger(testBufferLength)
 	ob, expected := newLogInfo("Drop")
-	// add the additional log info for duplicate packets
+	// Add the additional log info for duplicate packets.
 	expected = expectedLogWithCount(expected, 2)
 
 	go sendMultiplePackets(antreaLogger, ob, 2)
@@ -111,12 +115,18 @@ func TestDropPacketDedupLog(t *testing.T) {
 }
 
 func TestDropPacketMultiDedupLog(t *testing.T) {
-	antreaLogger, mockAnpLogger := newTestAntreaPolicyLogger(100 * time.Millisecond)
+	antreaLogger, mockAnpLogger := newTestAntreaPolicyLogger(testBufferLength)
 	ob, expected := newLogInfo("Drop")
 
-	go sendMultiplePackets(antreaLogger, ob, 10)
+	numPackets := 10
+	go func() {
+		sendMultiplePackets(antreaLogger, ob, numPackets)
+		time.Sleep(500 * time.Millisecond)
+		antreaLogger.LogDedupPacket(ob)
+	}()
+
 	actual := <-mockAnpLogger.logged
-	assert.Contains(t, actual, expectedLogWithCount(expected, 9))
+	assert.Contains(t, actual, expectedLogWithCount(expected, numPackets))
 	actual = <-mockAnpLogger.logged
 	assert.Contains(t, actual, expected)
 }
