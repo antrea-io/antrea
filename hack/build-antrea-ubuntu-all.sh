@@ -86,6 +86,7 @@ fi
 
 OVS_VERSION=$(head -n 1 build/images/deps/ovs-version)
 CNI_BINARIES_VERSION=$(head -n 1 build/images/deps/cni-binaries-version)
+GO_VERSION=$(head -n 1 build/images/deps/go-version)
 
 # We pull all images ahead of time, instead of calling the independent build.sh
 # scripts with "--pull". We do not want to overwrite the antrea/openvswitch
@@ -95,12 +96,12 @@ CNI_BINARIES_VERSION=$(head -n 1 build/images/deps/cni-binaries-version)
 if $PULL; then
     if [[ ${DOCKER_REGISTRY} == "" ]]; then
         docker pull $PLATFORM_ARG ubuntu:20.04
-        docker pull $PLATFORM_ARG golang:1.15
+        docker pull $PLATFORM_ARG golang:$GO_VERSION
     else
         docker pull ${DOCKER_REGISTRY}/antrea/ubuntu:20.04
         docker tag ${DOCKER_REGISTRY}/antrea/ubuntu:20.04 ubuntu:20.04
-        docker pull ${DOCKER_REGISTRY}/antrea/golang:1.15
-        docker tag ${DOCKER_REGISTRY}/antrea/golang:1.15 golang:1.15
+        docker pull ${DOCKER_REGISTRY}/antrea/golang:$GO_VERSION
+        docker tag ${DOCKER_REGISTRY}/antrea/golang:$GO_VERSION golang:$GO_VERSION
     fi
     IMAGES_LIST=(
         "antrea/openvswitch-debs:$OVS_VERSION"
