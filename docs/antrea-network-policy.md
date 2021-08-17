@@ -869,6 +869,8 @@ spec:
         ports:
           - protocol: TCP
             port: 53
+          - protocol: UDP
+            port: 53
         name: AllowToCoreDNS
 ```
 
@@ -937,6 +939,8 @@ spec:
                 antrea.io/metadata.name: kube-system
         ports:
           - protocol: TCP
+            port: 53
+          - protocol: UDP
             port: 53
         name: AllowToCoreDNS
 ```
