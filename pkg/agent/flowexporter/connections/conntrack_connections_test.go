@@ -140,7 +140,7 @@ func TestConntrackConnectionStore_AddOrUpdateConn(t *testing.T) {
 		StartTime: refTime.Add(-(time.Second * 50)),
 		StopTime:  refTime,
 		FlowKey:   tuple4,
-		Mark:      openflow.ServiceCTMark,
+		Mark:      openflow.ServiceCTMark.GetValue(),
 		IsPresent: true,
 	}
 	// Create copy of old conntrack flow for testing purposes.

@@ -59,24 +59,27 @@ func (c *Controller) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
 
 	matches := pktIn.GetMatches()
 	// Get custom reasons in this packet-in.
-	match := getMatchRegField(matches, uint32(openflow.CustomReasonMarkReg))
-	customReasons, err := getInfoInReg(match, openflow.CustomReasonMarkRange.ToNXRange())
+	match := getMatchRegField(matches, openflow.CustomReasonField)
+	customReasons, err := getInfoInReg(match, openflow.CustomReasonField.GetRange().ToNXRange())
 	if err != nil {
 		return fmt.Errorf("received error while unloading customReason from reg: %v", err)
 	}
 
 	// Use reasons to choose operations.
-	if customReasons&openflow.CustomReasonLogging == openflow.CustomReasonLogging {
+	var checkCustomReason = func(customReasonMark *binding.RegMark) bool {
+		return customReasons&customReasonMark.GetValue() == customReasonMark.GetValue()
+	}
+	if checkCustomReason(openflow.CustomReasonLoggingRegMark) {
 		if err := c.logPacket(pktIn); err != nil {
 			return err
 		}
 	}
-	if customReasons&openflow.CustomReasonReject == openflow.CustomReasonReject {
+	if checkCustomReason(openflow.CustomReasonRejectRegMark) {
 		if err := c.rejectRequest(pktIn); err != nil {
 			return err
 		}
 	}
-	if customReasons&openflow.CustomReasonDeny == openflow.CustomReasonDeny {
+	if checkCustomReason(openflow.CustomReasonDenyRegMark) {
 		if err := c.storeDenyConnection(pktIn); err != nil {
 			return err
 		}
@@ -85,8 +88,8 @@ func (c *Controller) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
 }
 
 // getMatchRegField returns match to the regNum register.
-func getMatchRegField(matchers *ofctrl.Matchers, regNum uint32) *ofctrl.MatchField {
-	return matchers.GetMatchByName(fmt.Sprintf("NXM_NX_REG%d", regNum))
+func getMatchRegField(matchers *ofctrl.Matchers, field *binding.RegField) *ofctrl.MatchField {
+	return matchers.GetMatchByName(field.GetNXFieldName())
 }
 
 // getMatch receives ofctrl matchers and table id, match field.
@@ -94,17 +97,17 @@ func getMatchRegField(matchers *ofctrl.Matchers, regNum uint32) *ofctrl.MatchFie
 func getMatch(matchers *ofctrl.Matchers, tableID binding.TableIDType, disposition uint32) *ofctrl.MatchField {
 	// Get match from CNPDenyConjIDReg if disposition is not allow.
 	if disposition != openflow.DispositionAllow {
-		return getMatchRegField(matchers, uint32(openflow.CNPDenyConjIDReg))
+		return getMatchRegField(matchers, openflow.CNPDenyConjIDField)
 	}
 	// Get match from ingress/egress reg if disposition is allow
 	for _, table := range append(openflow.GetAntreaPolicyEgressTables(), openflow.EgressRuleTable) {
 		if tableID == table {
-			return getMatchRegField(matchers, uint32(openflow.EgressReg))
+			return getMatchRegField(matchers, openflow.TFEgressConjIDField)
 		}
 	}
 	for _, table := range append(openflow.GetAntreaPolicyIngressTables(), openflow.IngressRuleTable) {
 		if tableID == table {
-			return getMatchRegField(matchers, uint32(openflow.IngressReg))
+			return getMatchRegField(matchers, openflow.TFIngressConjIDField)
 		}
 	}
 	return nil
@@ -131,8 +134,8 @@ func getNetworkPolicyInfo(pktIn *ofctrl.PacketIn, c *Controller, ob *logInfo) er
 	ob.tableName = openflow.GetFlowTableName(tableID)
 
 	// Get disposition Allow or Drop
-	match = getMatchRegField(matchers, uint32(openflow.DispositionMarkReg))
-	info, err := getInfoInReg(match, openflow.APDispositionMarkRange.ToNXRange())
+	match = getMatchRegField(matchers, openflow.APDispositionField)
+	info, err := getInfoInReg(match, openflow.APDispositionField.GetRange().ToNXRange())
 	if err != nil {
 		return fmt.Errorf("received error while unloading disposition from reg: %v", err)
 	}
@@ -325,8 +328,8 @@ func (c *Controller) storeDenyConnection(pktIn *ofctrl.PacketIn) error {
 	// Get table ID
 	tableID := binding.TableIDType(pktIn.TableId)
 	// Get disposition Allow, Drop or Reject
-	match = getMatchRegField(matchers, uint32(openflow.DispositionMarkReg))
-	id, err := getInfoInReg(match, openflow.APDispositionMarkRange.ToNXRange())
+	match = getMatchRegField(matchers, openflow.APDispositionField)
+	id, err := getInfoInReg(match, openflow.APDispositionField.GetRange().ToNXRange())
 	if err != nil {
 		return fmt.Errorf("error when getting disposition from reg: %v", err)
 	}
