@@ -280,8 +280,8 @@ func writeFailedNodes(downloadPath string, nodes []string) error {
 	return nil
 }
 
-// downloadAll will downloads all supportBundles. preResults is the request results of node/controller supportBundle, if err happens for some node or controller info, the
-// download step will be skipped.
+// downloadAll will download all supportBundles. preResults is the request results of node/controller supportBundle.
+// if err happens for some nodes or controller, the download step will be skipped for the failed nodes or the controller.
 func downloadAll(agentClients map[string]*rest.RESTClient, controllerClient *rest.RESTClient, downloadPath string, bar *pb.ProgressBar, preResults []result) map[string]error {
 	m := make(map[string]error, len(preResults))
 	for i := range preResults {
