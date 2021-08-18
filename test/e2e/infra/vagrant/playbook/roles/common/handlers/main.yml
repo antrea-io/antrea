@@ -1,6 +1,6 @@
-- name: docker status
+- name: containerd status
   service:
-    name: docker
+    name: containerd
     state: started
 
 - name: kubelet status
