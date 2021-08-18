@@ -4,7 +4,7 @@
 
 - import_tasks: base.yml
 
-- import_tasks: docker.yml
+- import_tasks: containerd.yml
 
 - import_tasks: busybox.yml
 

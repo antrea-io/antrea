@@ -1,0 +1,63 @@
+- name: Get ubuntu release
+  shell: lsb_release -cs
+  register: release
+  changed_when: False
+
+- name: Add an apt signing key for Docker
+  apt_key:
+    url: https://download.docker.com/linux/ubuntu/gpg
+    state: present
+
+- name: Add apt repository for stable version
+  apt_repository:
+    repo: deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ release.stdout }} stable
+    state: present
+
+- name: Loading required kernel modules on boot
+  template: 
+    src: templates/containerd_modules.conf.j2
+    dest: /etc/modules-load.d/containerd.conf
+
+- name: Load overlay kernel module
+  modprobe:
+    name: overlay
+    state: present
+
+- name: Load br_netfilter kernel module
+  modprobe:
+    name: br_netfilter
+    state: present
+
+- name: Configure sysctl
+  sysctl:
+    name: "{{ item.name }}"
+    value: "{{ item.value }}"
+    state: present
+    sysctl_file: /etc/sysctl.d/99-kubernetes-cri.conf
+    reload: yes
+  with_items: 
+    - { name: net.bridge.bridge-nf-call-iptables, value: 1 }
+    - { name: net.ipv4.ip_forward, value: 1 }
+    - { name: net.bridge.bridge-nf-call-ip6tables, value: 1 }
+
+- name: Install containerd
+  apt:
+    name: containerd.io
+    state: present
+    update_cache: yes
+    force_apt_get: yes
+  notify:
+    - containerd status
+
+- name: Create containerd daemon configuration from template
+  template:
+    src: templates/containerd.conf.j2
+    dest: /etc/containerd/config.toml
+  register: containerd_config
+
+- name: Restart containerd
+  service:
+    name: containerd
+    daemon_reload: yes
+    state: restarted
+  when: containerd_config.changed
