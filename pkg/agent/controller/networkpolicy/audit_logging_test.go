@@ -18,6 +18,8 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -70,15 +72,22 @@ func newLogInfo(disposition string) (*logInfo, string) {
 	}, expected
 }
 
-func sendMultiplePackets(antreaLogger *AntreaPolicyLogger, ob *logInfo, numPackets int) {
+func sendMultiplePackets(antreaLogger *AntreaPolicyLogger, ob *logInfo, numPackets int, sendInterval time.Duration) {
 	count := 0
-	for range time.Tick(time.Millisecond) {
+	for range time.Tick(sendInterval) {
 		count += 1
 		antreaLogger.LogDedupPacket(ob)
 		if count == numPackets {
 			break
 		}
 	}
+}
+
+func closePacketTransmit(mockAnpLogger *mockLogger, testWaitTime time.Duration) {
+	time.Sleep(testWaitTime)
+	mockAnpLogger.mu.Lock()
+	defer mockAnpLogger.mu.Unlock()
+	close(mockAnpLogger.logged)
 }
 
 func expectedLogWithCount(msg string, count int) string {
@@ -109,7 +118,7 @@ func TestDropPacketDedupLog(t *testing.T) {
 	// Add the additional log info for duplicate packets.
 	expected = expectedLogWithCount(expected, 2)
 
-	go sendMultiplePackets(antreaLogger, ob, 2)
+	go sendMultiplePackets(antreaLogger, ob, 2, time.Millisecond)
 	actual := <-mockAnpLogger.logged
 	assert.Contains(t, actual, expected)
 }
@@ -118,15 +127,27 @@ func TestDropPacketMultiDedupLog(t *testing.T) {
 	antreaLogger, mockAnpLogger := newTestAntreaPolicyLogger(testBufferLength)
 	ob, expected := newLogInfo("Drop")
 
-	numPackets := 10
-	go func() {
-		sendMultiplePackets(antreaLogger, ob, numPackets)
-		time.Sleep(500 * time.Millisecond)
-		antreaLogger.LogDedupPacket(ob)
-	}()
+	numPackets := 4
+	go sendMultiplePackets(antreaLogger, ob, numPackets, 50*time.Millisecond)
+	// Close the channel listening for logged msg after 1s.
+	go closePacketTransmit(mockAnpLogger, 500*time.Millisecond)
 
-	actual := <-mockAnpLogger.logged
-	assert.Contains(t, actual, expectedLogWithCount(expected, numPackets))
-	actual = <-mockAnpLogger.logged
-	assert.Contains(t, actual, expected)
+	receivedMsg, countMsg := 0, 0
+	for actual := range mockAnpLogger.logged {
+		t.Log(actual)
+		assert.Contains(t, actual, expected)
+		countMsg++
+		begin := strings.Index(actual, "[")
+		end := strings.Index(actual, " packets")
+		if begin == -1 {
+			receivedMsg += 1
+		} else {
+			countLoggedMsg, _ := strconv.Atoi(actual[(begin + 1):end])
+			receivedMsg += countLoggedMsg
+		}
+	}
+	// Test at least two messages are logged for all packets.
+	assert.GreaterOrEqual(t, countMsg, 2)
+	// Test all packets are logged correspondingly.
+	assert.Equal(t, numPackets, receivedMsg)
 }
