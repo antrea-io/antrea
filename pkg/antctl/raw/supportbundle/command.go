@@ -173,7 +173,7 @@ type result struct {
 	err      error
 }
 
-func mapClients(prefix string, agentClients map[string]*rest.RESTClient, controllerClient *rest.RESTClient, bar *pb.ProgressBar, af, cf func(nodeName string, c *rest.RESTClient) error) []result {
+func mapClients(prefix string, agentClients map[string]*rest.RESTClient, controllerClient *rest.RESTClient, bar *pb.ProgressBar, af, cf func(nodeName string, c *rest.RESTClient) error) map[string]error {
 	bar.Set("prefix", prefix)
 	rateLimiter := rate.NewLimiter(requestRate, requestBurst)
 	ch := make(chan result)
@@ -189,24 +189,22 @@ func mapClients(prefix string, agentClients map[string]*rest.RESTClient, control
 		})
 	}
 
-	results := make([]result, len(agentClients))
-	for i := range results {
-		results[i] = <-ch
+	results := make(map[string]error, len(agentClients))
+	for i := 0; i < len(agentClients); i++ {
+		result := <-ch
+		results[result.nodeName] = result.err
 	}
 
 	g.Wait()
 
 	if controllerClient != nil {
 		defer bar.Increment()
-		err := cf("", controllerClient)
-		// use "*" so we can use it as a key for map
-		result := result{nodeName: "*", err: err}
-		results = append(results, result)
+		results[""] = cf("", controllerClient)
 	}
 	return results
 }
 
-func requestAll(agentClients map[string]*rest.RESTClient, controllerClient *rest.RESTClient, bar *pb.ProgressBar) []result {
+func requestAll(agentClients map[string]*rest.RESTClient, controllerClient *rest.RESTClient, bar *pb.ProgressBar) map[string]error {
 	return mapClients(
 		"Requesting",
 		agentClients,
@@ -282,39 +280,32 @@ func writeFailedNodes(downloadPath string, nodes []string) error {
 
 // downloadAll will download all supportBundles. preResults is the request results of node/controller supportBundle.
 // if err happens for some nodes or controller, the download step will be skipped for the failed nodes or the controller.
-func downloadAll(agentClients map[string]*rest.RESTClient, controllerClient *rest.RESTClient, downloadPath string, bar *pb.ProgressBar, preResults []result) map[string]error {
-	m := make(map[string]error, len(preResults))
-	for i := range preResults {
-		item := preResults[i]
-		m[item.nodeName] = item.err
-	}
-
+func downloadAll(agentClients map[string]*rest.RESTClient, controllerClient *rest.RESTClient, downloadPath string, bar *pb.ProgressBar, preResults map[string]error) map[string]error {
 	results := mapClients(
 		"Downloading",
 		agentClients,
 		controllerClient,
 		bar,
 		func(nodeName string, c *rest.RESTClient) error {
-			if m[nodeName] == nil {
+			if preResults[nodeName] == nil {
 				return download(nodeName, downloadPath, c, runtime.ModeAgent)
 			}
-			return m[nodeName]
+			return preResults[nodeName]
 
 		},
 		func(nodeName string, c *rest.RESTClient) error {
-			if m["*"] == nil {
+			if preResults[""] == nil {
 				return download("", downloadPath, c, runtime.ModeController)
 			}
-			return m[nodeName]
+			return preResults[nodeName]
 		},
 	)
-	for i := range results {
-		item := results[i]
-		if item.err != nil {
-			m[item.nodeName] = item.err
+	for k, v := range results {
+		if v != nil {
+			preResults[k] = v
 		}
 	}
-	return m
+	return preResults
 }
 
 // createAgentClients creates clients for agents on specified nodes. If nameList is set, then nameFilter will be ignored.
@@ -582,8 +573,8 @@ func controllerRemoteRunE(cmd *cobra.Command, args []string) error {
 	io.Copy(f, reader)
 
 	results := requestAll(agentClients, controllerClient, bar)
-	resultMap := downloadAll(agentClients, controllerClient, dir, bar, results)
-	return processResults(resultMap, dir)
+	results = downloadAll(agentClients, controllerClient, dir, bar, results)
+	return processResults(results, dir)
 }
 
 func genErrorMsg(resultMap map[string]error) string {
@@ -603,7 +594,7 @@ func processResults(resultMap map[string]error, dir string) error {
 	var err error
 
 	for k, v := range resultMap {
-		if k != "*" && v != nil {
+		if k != "" && v != nil {
 			resultStr += fmt.Sprintf("- %s: %s\n", k, v.Error())
 			failedNodes = append(failedNodes, k)
 		}
@@ -612,8 +603,8 @@ func processResults(resultMap map[string]error, dir string) error {
 		}
 	}
 
-	if resultMap["*"] != nil {
-		fmt.Println("Controller Info Failed Reason: " + resultMap["*"].Error())
+	if resultMap[""] != nil {
+		fmt.Println("Controller Info Failed Reason: " + resultMap[""].Error())
 	}
 
 	if resultStr != "" {
