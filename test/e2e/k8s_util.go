@@ -731,18 +731,14 @@ func (k *KubernetesUtils) waitForHTTPServers(allPods []Pod) error {
 	return errors.Errorf("after %d tries, HTTP servers are not ready", maxTries)
 }
 
-// Validate checks the connectivity between all Pods in both directions with a
-// list of ports and a protocol. The connectivity from a Pod to another Pod should
-// be consistent across all provided ports. Otherwise, this connectivity will be
-// treated as Error.
-func (k *KubernetesUtils) Validate(allPods []Pod, reachability *Reachability, ports []int32, protocol v1.Protocol) {
+func (k *KubernetesUtils) validateOnePort(allPods []Pod, reachability *Reachability, port int32, protocol v1.Protocol) {
 	type probeResult struct {
 		podFrom      Pod
 		podTo        Pod
 		connectivity PodConnectivityMark
 		err          error
 	}
-	numProbes := len(allPods) * len(allPods) * len(ports)
+	numProbes := len(allPods) * len(allPods)
 	resultsCh := make(chan *probeResult, numProbes)
 	// TODO: find better metrics, this is only for POC.
 	oneProbe := func(podFrom, podTo Pod, port int32) {
@@ -752,9 +748,7 @@ func (k *KubernetesUtils) Validate(allPods []Pod, reachability *Reachability, po
 	}
 	for _, pod1 := range allPods {
 		for _, pod2 := range allPods {
-			for _, port := range ports {
-				go oneProbe(pod1, pod2, port)
-			}
+			go oneProbe(pod1, pod2, port)
 		}
 	}
 	for i := 0; i < numProbes; i++ {
@@ -763,7 +757,8 @@ func (k *KubernetesUtils) Validate(allPods []Pod, reachability *Reachability, po
 			log.Errorf("unable to perform probe %s -> %s: %v", r.podFrom, r.podTo, r.err)
 		}
 
-		// We will receive the connectivity from podFrom to podTo len(ports) times.
+		// We will receive the connectivity from podFrom to podTo len(ports) times, where
+		// ports is the parameter to the Validate method.
 		// If it's the first time we observe the connectivity from podFrom to podTo, just
 		// store the connectivity we received in reachability matrix.
 		// If the connectivity from podFrom to podTo has been observed and is different
@@ -777,8 +772,24 @@ func (k *KubernetesUtils) Validate(allPods []Pod, reachability *Reachability, po
 		}
 
 		if r.connectivity != Connected && reachability.Expected.Get(r.podFrom.String(), r.podTo.String()) == Connected {
-			log.Warnf("FAILED CONNECTION FOR ALLOWED PODS %s -> %s !!!! ", r.podFrom, r.podTo)
+			log.Warnf("FAILED CONNECTION FOR ALLOWED PODS %s -> %s:%d:%s !!!! ", r.podFrom, r.podTo, port, protocol)
 		}
+	}
+}
+
+// Validate checks the connectivity between all Pods in both directions with a
+// list of ports and a protocol. The connectivity from a Pod to another Pod should
+// be consistent across all provided ports. Otherwise, this connectivity will be
+// treated as Error.
+func (k *KubernetesUtils) Validate(allPods []Pod, reachability *Reachability, ports []int32, protocol v1.Protocol) {
+	for _, port := range ports {
+		// we do not run all the probes in parallel as we have experienced that on some
+		// machines, this can cause a fraction of the probes to always fail, despite the
+		// built-in retry (3x) mechanism. Probably because of the large number of probes,
+		// each one being executed in its own goroutine. For example, with 9 Pods and for
+		// ports 80, 81, 8080, 8081, 8082, 8083, 8084 and 8085, we would end up with
+		// potentisally 9*9*8 = 648 simultaneous probes.
+		k.validateOnePort(allPods, reachability, port, protocol)
 	}
 }
 
