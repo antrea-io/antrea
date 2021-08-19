@@ -3798,8 +3798,7 @@ data:
     # also adjust MTU to accommodate for tunnel encapsulation overhead (if applicable).
     #defaultMTU: 0
 
-    # Whether or not to enable IPsec encryption of tunnel traffic. IPsec encryption is only supported
-    # for the GRE tunnel type.
+    # Whether or not to enable IPsec encryption of tunnel traffic.
     #enableIPSecTunnel: false
 
     # ClusterIP CIDR range for IPv6 Services. It's required when using kube-proxy to provide IPv6 Service in a Dual-Stack
@@ -3950,7 +3949,7 @@ metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-gdgb98gmfd
+  name: antrea-config-66dt98cgtb
   namespace: kube-system
 ---
 apiVersion: v1
@@ -4021,7 +4020,7 @@ spec:
             fieldRef:
               fieldPath: spec.serviceAccountName
         - name: ANTREA_CONFIG_MAP_NAME
-          value: antrea-config-gdgb98gmfd
+          value: antrea-config-66dt98cgtb
         image: projects.registry.vmware.com/antrea/antrea-ubuntu:latest
         imagePullPolicy: IfNotPresent
         livenessProbe:
@@ -4072,7 +4071,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-gdgb98gmfd
+          name: antrea-config-66dt98cgtb
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -4355,7 +4354,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-gdgb98gmfd
+          name: antrea-config-66dt98cgtb
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d

@@ -89,8 +89,7 @@ type AgentConfig struct {
 	// --service-cluster-ip-range. When AntreaProxy is enabled, this parameter is not needed.
 	// No default value for this field.
 	ServiceCIDRv6 string `yaml:"serviceCIDRv6,omitempty"`
-	// Whether or not to enable IPSec (ESP) encryption for Pod traffic across Nodes. IPSec encryption
-	// is supported only for the GRE tunnel type. Antrea uses Preshared Key (PSK) for IKE
+	// Whether or not to enable IPSec (ESP) encryption for Pod traffic across Nodes. Antrea uses Preshared Key (PSK) for IKE
 	// authentication. When IPSec tunnel is enabled, the PSK value must be passed to Antrea Agent
 	// through an environment variable: ANTREA_IPSEC_PSK.
 	// Defaults to false.
