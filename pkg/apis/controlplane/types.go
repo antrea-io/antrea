@@ -15,8 +15,8 @@
 package controlplane
 
 import (
+	"fmt"
 	"net"
-	"strconv"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -135,7 +135,7 @@ type IPNet struct {
 }
 
 func (ipn IPNet) String() string {
-	return ipn.IP.String() + "/" + strconv.Itoa(int(ipn.PrefixLength))
+	return fmt.Sprintf("%s/%d", ipn.IP.String(), ipn.PrefixLength)
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

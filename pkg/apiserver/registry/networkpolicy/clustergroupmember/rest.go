@@ -57,7 +57,8 @@ func (r *REST) Get(ctx context.Context, name string, options *metav1.GetOptions)
 	if len(ipBlocks) > 0 {
 		effectiveIPBlocks := make([]controlplane.IPNet, 0, len(ipBlocks))
 		for _, ipb := range ipBlocks {
-			// ClusterGroup ipBlock cannot have except slices
+			// ClusterGroup ipBlock does not support Except slices, so no need to generate an effective
+			// list of IPs by removing Except slices from allowed CIDR.
 			effectiveIPBlocks = append(effectiveIPBlocks, ipb.CIDR)
 		}
 		memberList.EffectiveIPBlocks = effectiveIPBlocks
