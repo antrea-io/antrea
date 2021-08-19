@@ -20,6 +20,9 @@
         },
         {
             "pattern": "^https://app.fossa.com/api/*"
+        },
+        {
+            "pattern": "https://nssm.cc/"
         }
     ],
     "retryOn429": false,
