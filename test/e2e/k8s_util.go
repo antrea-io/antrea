@@ -788,7 +788,7 @@ func (k *KubernetesUtils) Validate(allPods []Pod, reachability *Reachability, po
 		// built-in retry (3x) mechanism. Probably because of the large number of probes,
 		// each one being executed in its own goroutine. For example, with 9 Pods and for
 		// ports 80, 81, 8080, 8081, 8082, 8083, 8084 and 8085, we would end up with
-		// potentisally 9*9*8 = 648 simultaneous probes.
+		// potentially 9*9*8 = 648 simultaneous probes.
 		k.validateOnePort(allPods, reachability, port, protocol)
 	}
 }
