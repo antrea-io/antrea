@@ -17,7 +17,6 @@ package main
 import (
 	"fmt"
 	"hash/fnv"
-	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -116,15 +115,12 @@ func run(o *Options) error {
 	if err != nil {
 		return fmt.Errorf("error when creating aggregation process: %v", err)
 	}
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go flowAggregator.Run(stopCh, &wg)
+	go flowAggregator.Run(stopCh)
 
 	informerFactory.Start(stopCh)
 
 	<-stopCh
 	klog.Infof("Stopping flow aggregator")
-	wg.Wait()
 	return nil
 }
 
