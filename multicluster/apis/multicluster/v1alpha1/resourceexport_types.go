@@ -94,6 +94,7 @@ type ResourceExportStatus struct {
 	Conditions []ResourceExportCondition `json:"conditions,omitempty"`
 }
 
+// +genclient
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
 
