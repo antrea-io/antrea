@@ -106,7 +106,7 @@ const (
 	busyboxImage        = "projects.registry.vmware.com/library/busybox"
 	nginxImage          = "projects.registry.vmware.com/antrea/nginx"
 	perftoolImage       = "projects.registry.vmware.com/antrea/perftool"
-	ipfixCollectorImage = "projects.registry.vmware.com/antrea/ipfix-collector:v0.5.4"
+	ipfixCollectorImage = "projects.registry.vmware.com/antrea/ipfix-collector:v0.5.7"
 	ipfixCollectorPort  = "4739"
 
 	nginxLBService = "nginx-loadbalancer"
@@ -625,7 +625,7 @@ func (data *TestData) deployAntreaFlowExporter(ipfixCollector string) error {
 	return data.mutateAntreaConfigMap(nil, ac, false, true)
 }
 
-// deployFlowAggregator deploys flow aggregator with ipfix collector address.
+// deployFlowAggregator deploys the Flow Aggregator with ipfix collector address.
 func (data *TestData) deployFlowAggregator(ipfixCollector string) (string, error) {
 	flowAggYaml := flowAggregatorYML
 	if testOptions.enableCoverage {
@@ -633,7 +633,7 @@ func (data *TestData) deployFlowAggregator(ipfixCollector string) (string, error
 	}
 	rc, _, _, err := provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl apply -f %s", flowAggYaml))
 	if err != nil || rc != 0 {
-		return "", fmt.Errorf("error when deploying flow aggregator; %s not available on the control-plane Node", flowAggYaml)
+		return "", fmt.Errorf("error when deploying the Flow Aggregator; %s not available on the control-plane Node", flowAggYaml)
 	}
 	svc, err := data.clientset.CoreV1().Services(flowAggregatorNamespace).Get(context.TODO(), flowAggregatorDeployment, metav1.GetOptions{})
 	if err != nil {
@@ -645,7 +645,7 @@ func (data *TestData) deployFlowAggregator(ipfixCollector string) (string, error
 	if rc, _, _, err = provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl -n %s rollout status deployment/%s --timeout=%v", flowAggregatorNamespace, flowAggregatorDeployment, 2*defaultTimeout)); err != nil || rc != 0 {
 		_, stdout, _, _ := provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl -n %s describe pod", flowAggregatorNamespace))
 		_, logStdout, _, _ := provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl -n %s logs -l app=flow-aggregator", flowAggregatorNamespace))
-		return stdout, fmt.Errorf("error when waiting for flow aggregator rollout to complete. kubectl describe output: %s, logs: %s", stdout, logStdout)
+		return stdout, fmt.Errorf("error when waiting for the Flow Aggregator rollout to complete. kubectl describe output: %s, logs: %s", stdout, logStdout)
 	}
 	return svc.Spec.ClusterIP, nil
 }
