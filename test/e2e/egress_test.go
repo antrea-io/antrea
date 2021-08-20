@@ -230,6 +230,7 @@ func testEgressCRUD(t *testing.T, data *TestData) {
 		nodeSelector     metav1.LabelSelector
 		expectedEgressIP string
 		expectedNodes    sets.String
+		expectedTotal    int
 	}{
 		{
 			name:    "single matching Node",
@@ -241,6 +242,7 @@ func testEgressCRUD(t *testing.T, data *TestData) {
 			},
 			expectedEgressIP: "169.254.100.1",
 			expectedNodes:    sets.NewString(nodeName(0)),
+			expectedTotal:    2,
 		},
 		{
 			name:    "two matching Nodes",
@@ -256,6 +258,7 @@ func testEgressCRUD(t *testing.T, data *TestData) {
 			},
 			expectedEgressIP: "169.254.101.10",
 			expectedNodes:    sets.NewString(nodeName(0), nodeName(1)),
+			expectedTotal:    2,
 		},
 		{
 			name:    "no matching Node",
@@ -267,6 +270,7 @@ func testEgressCRUD(t *testing.T, data *TestData) {
 			},
 			expectedEgressIP: "169.254.102.1",
 			expectedNodes:    sets.NewString(),
+			expectedTotal:    2,
 		},
 	}
 	for _, tt := range tests {
@@ -304,6 +308,15 @@ func testEgressCRUD(t *testing.T, data *TestData) {
 				assert.True(t, exists, "Didn't find desired IP on Node")
 			}
 
+			checkEIPStatus := func(expectedUsed int) {
+				pool, err = data.crdClient.CrdV1alpha2().ExternalIPPools().Get(context.TODO(), pool.Name, metav1.GetOptions{})
+				require.NoError(t, err, "Failed to get ExternalIPPool")
+				assert.Equal(t, expectedUsed, pool.Status.Usage.Used, "ExternalIPPool status usage used num not match")
+				assert.Equal(t, tt.expectedTotal, pool.Status.Usage.Total, "ExternalIPPool status usage total num not match")
+				t.Logf("ExternalIPPool %s status: %+v", pool.Name, pool.Status)
+			}
+			checkEIPStatus(1)
+
 			err = data.crdClient.CrdV1alpha2().Egresses().Delete(context.TODO(), egress.Name, metav1.DeleteOptions{})
 			require.NoError(t, err, "Failed to delete Egress")
 			if egress.Status.EgressNode != "" {
@@ -311,6 +324,7 @@ func testEgressCRUD(t *testing.T, data *TestData) {
 				require.NoError(t, err, "Failed to check if IP exists on Node")
 				assert.False(t, exists, "Found stale IP on Node")
 			}
+			checkEIPStatus(0)
 		})
 	}
 }

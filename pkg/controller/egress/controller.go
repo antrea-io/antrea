@@ -24,12 +24,14 @@ import (
 	"sync"
 	"time"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/util/retry"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 
@@ -41,6 +43,7 @@ import (
 	egresslisters "antrea.io/antrea/pkg/client/listers/crd/v1alpha2"
 	"antrea.io/antrea/pkg/controller/egress/ipallocator"
 	"antrea.io/antrea/pkg/controller/grouping"
+	"antrea.io/antrea/pkg/controller/metrics"
 	antreatypes "antrea.io/antrea/pkg/controller/types"
 )
 
@@ -92,6 +95,8 @@ type EgressController struct {
 	egressGroupStore storage.Interface
 	// queue maintains the EgressGroup objects that need to be synced.
 	queue workqueue.RateLimitingInterface
+	// poolQueue maintains the ExternalIPPool objects that need to be synced.
+	poolQueue workqueue.RateLimitingInterface
 	// groupingInterface knows Pods that a given group selects.
 	groupingInterface grouping.Interface
 	// Added as a member to the struct to allow injection for testing.
@@ -114,6 +119,7 @@ func NewEgressController(crdClient clientset.Interface,
 		externalIPPoolListerSynced: externalIPPoolInformer.Informer().HasSynced,
 		egressGroupStore:           egressGroupStore,
 		queue:                      workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "egress"),
+		poolQueue:                  workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "externalIPPool"),
 		groupingInterface:          groupingInterface,
 		groupingInterfaceSynced:    groupingInterface.HasSynced,
 		ipAllocatorMap:             map[string]ipallocator.MultiIPAllocator{},
@@ -154,6 +160,7 @@ func NewEgressController(crdClient clientset.Interface,
 // Run begins watching and syncing of the EgressController.
 func (c *EgressController) Run(stopCh <-chan struct{}) {
 	defer c.queue.ShutDown()
+	defer c.poolQueue.ShutDown()
 
 	klog.Infof("Starting %s", controllerName)
 	defer klog.Infof("Shutting down %s", controllerName)
@@ -175,6 +182,7 @@ func (c *EgressController) Run(stopCh <-chan struct{}) {
 
 	for i := 0; i < defaultWorkers; i++ {
 		go wait.Until(c.egressGroupWorker, time.Second, stopCh)
+		go wait.Until(c.externalIPPoolWorker, time.Second, stopCh)
 	}
 	<-stopCh
 }
@@ -243,6 +251,7 @@ func (c *EgressController) createOrUpdateIPAllocator(ipPool *egressv1alpha2.Exte
 		changed = true
 	}
 	c.ipAllocatorMap[ipPool.Name] = multiIPAllocator
+	c.poolQueue.Add(ipPool.Name)
 	return changed
 }
 
@@ -311,6 +320,46 @@ func (c *EgressController) setIPAllocation(egressName string, ip net.IP, poolNam
 	}
 }
 
+func (c *EgressController) updateExternalIPPoolStatus(poolName string) error {
+	eip, err := c.externalIPPoolLister.Get(poolName)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil
+		}
+		return err
+	}
+
+	ipAllocator, exists := c.getIPAllocator(eip.Name)
+	if !exists {
+		return externalIPPoolNotFound
+	}
+	total, used := ipAllocator.Total(), ipAllocator.Used()
+	toUpdate := eip.DeepCopy()
+	var getErr error
+	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		actualStatus := eip.Status
+		usage := egressv1alpha2.ExternalIPPoolUsage{Total: total, Used: used}
+		if actualStatus.Usage == usage {
+			return nil
+		}
+		klog.V(2).InfoS("Updating ExternalIPPool status", "ExternalIPPool", poolName, "usage", usage)
+		toUpdate.Status.Usage = usage
+		if _, updateErr := c.crdClient.CrdV1alpha2().ExternalIPPools().UpdateStatus(context.TODO(), toUpdate, metav1.UpdateOptions{}); updateErr != nil && apierrors.IsConflict(updateErr) {
+			toUpdate, getErr = c.crdClient.CrdV1alpha2().ExternalIPPools().Get(context.TODO(), poolName, metav1.GetOptions{})
+			if getErr != nil {
+				return getErr
+			}
+			return updateErr
+		}
+		return nil
+	}); err != nil {
+		return fmt.Errorf("updating ExternalIPPool %s status error: %v", poolName, err)
+	}
+	klog.V(2).InfoS("Updated ExternalIPPool status", "ExternalIPPool", poolName)
+	metrics.AntreaExternalIPPoolStatusUpdates.Inc()
+	return nil
+}
+
 // syncEgressIP is responsible for releasing stale EgressIP and allocating new EgressIP for an Egress if applicable.
 func (c *EgressController) syncEgressIP(egress *egressv1alpha2.Egress) (net.IP, error) {
 	prevIP, prevIPPool, exists := c.getIPAllocation(egress.Name)
@@ -361,6 +410,7 @@ func (c *EgressController) syncEgressIP(egress *egressv1alpha2.Egress) (net.IP, 
 		}
 	}
 	c.setIPAllocation(egress.Name, ip, egress.Spec.ExternalIPPool)
+	c.poolQueue.Add(egress.Spec.ExternalIPPool)
 	klog.InfoS("Allocated EgressIP", "egress", egress.Name, "ip", ip, "pool", egress.Spec.ExternalIPPool)
 	return ip, nil
 }
@@ -395,6 +445,7 @@ func (c *EgressController) releaseEgressIP(egressName string, egressIP net.IP, p
 		klog.ErrorS(err, "Failed to release EgressIP", "egress", egressName, "ip", egressIP, "pool", poolName)
 		return
 	}
+	c.poolQueue.Add(poolName)
 	klog.InfoS("Released EgressIP", "egress", egressName, "ip", egressIP, "pool", poolName)
 }
 
@@ -464,6 +515,31 @@ func (c *EgressController) syncEgress(key string) error {
 	klog.V(2).Infof("Updating existing EgressGroup %s with %d Pods on %d Nodes", key, podNum, nodeNames.Len())
 	c.egressGroupStore.Update(updatedEgressGroup)
 	return nil
+}
+
+func (c *EgressController) externalIPPoolWorker() {
+	for c.processNextExternalIPPoolWorkItem() {
+	}
+}
+
+func (c *EgressController) processNextExternalIPPoolWorkItem() bool {
+	key, quit := c.poolQueue.Get()
+	if quit {
+		return false
+	}
+	defer c.poolQueue.Done(key)
+
+	err := c.updateExternalIPPoolStatus(key.(string))
+	if err != nil {
+		// Put the item back in the workqueue to handle any transient errors.
+		c.poolQueue.AddRateLimited(key)
+		klog.ErrorS(err, "Failed to sync ExternalIPPool status", "ExternalIPPool", key)
+		return true
+	}
+	// If no error occurs we Forget this item so it does not get queued again until
+	// another change happens.
+	c.poolQueue.Forget(key)
+	return true
 }
 
 func (c *EgressController) enqueueEgressGroup(key string) {

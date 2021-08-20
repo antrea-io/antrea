@@ -94,6 +94,17 @@ func (c *FakeExternalIPPools) Update(ctx context.Context, externalIPPool *v1alph
 	return obj.(*v1alpha2.ExternalIPPool), err
 }
 
+// UpdateStatus was generated because the type contains a Status member.
+// Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
+func (c *FakeExternalIPPools) UpdateStatus(ctx context.Context, externalIPPool *v1alpha2.ExternalIPPool, opts v1.UpdateOptions) (*v1alpha2.ExternalIPPool, error) {
+	obj, err := c.Fake.
+		Invokes(testing.NewRootUpdateSubresourceAction(externalippoolsResource, "status", externalIPPool), &v1alpha2.ExternalIPPool{})
+	if obj == nil {
+		return nil, err
+	}
+	return obj.(*v1alpha2.ExternalIPPool), err
+}
+
 // Delete takes name of the externalIPPool and deletes it. Returns an error if one occurs.
 func (c *FakeExternalIPPools) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
