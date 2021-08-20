@@ -83,13 +83,6 @@ func sendMultiplePackets(antreaLogger *AntreaPolicyLogger, ob *logInfo, numPacke
 	}
 }
 
-func closePacketTransmit(mockAnpLogger *mockLogger, testWaitTime time.Duration) {
-	time.Sleep(testWaitTime)
-	mockAnpLogger.mu.Lock()
-	defer mockAnpLogger.mu.Unlock()
-	close(mockAnpLogger.logged)
-}
-
 func expectedLogWithCount(msg string, count int) string {
 	return fmt.Sprintf("%s [%d", msg, count)
 }
@@ -129,8 +122,12 @@ func TestDropPacketMultiDedupLog(t *testing.T) {
 
 	numPackets := 4
 	go sendMultiplePackets(antreaLogger, ob, numPackets, 40*time.Millisecond)
-	// Close the channel listening for logged msg after 1s.
-	go closePacketTransmit(mockAnpLogger, 500*time.Millisecond)
+	// Close the channel listening for logged msg after 500ms.
+	time.AfterFunc(500*time.Millisecond, func() {
+		mockAnpLogger.mu.Lock()
+		defer mockAnpLogger.mu.Unlock()
+		close(mockAnpLogger.logged)
+	})
 
 	receivedPacket, countLog := 0, 0
 	for actual := range mockAnpLogger.logged {
@@ -147,6 +144,6 @@ func TestDropPacketMultiDedupLog(t *testing.T) {
 	}
 	// Test two messages are logged for all packets.
 	assert.Equal(t, 2, countLog)
-	// Test all packets are logged correspondingly.
+	// Test all packets are accounted for.
 	assert.Equal(t, numPackets, receivedPacket)
 }
