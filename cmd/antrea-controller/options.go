@@ -79,4 +79,21 @@ func (o *Options) setDefaults() {
 	if o.config.APIPort == 0 {
 		o.config.APIPort = apis.AntreaControllerAPIPort
 	}
+
+	// These defaults override the client-go defaults of 5.0 for QPS and 20
+	// for Burst (https://pkg.go.dev/k8s.io/client-go@v0.21.1/rest#Config).
+	// These values will be used for all the Controller's clientsets, and in
+	// particular the CRD clientset. We have observed that these defaults
+	// work much better for the CRD mirroring controller when Antrea is
+	// upgraded in a cluster with a large number of existing Antrea-native
+	// policies. In this scenario, the mirroring controller needs to mirror
+	// many legacy (*.antrea.tanzu.vmware.com) CRDs to their crd.antrea.io
+	// replacement, which will take a very long time with client-go's QPS
+	// and Burst defaults.
+	if o.config.ClientConnection.QPS == 0.0 {
+		o.config.ClientConnection.QPS = 50
+	}
+	if o.config.ClientConnection.Burst == 0 {
+		o.config.ClientConnection.Burst = 200
+	}
 }
