@@ -18,11 +18,17 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+)
+
+const (
+	testBufferLength time.Duration = 100 * time.Millisecond
 )
 
 // mockLogger implements io.Writer.
@@ -42,9 +48,10 @@ func (l *mockLogger) Write(p []byte) (n int, err error) {
 	return len(msg), nil
 }
 
-func newTestAntreaPolicyLogger() (*AntreaPolicyLogger, *mockLogger) {
+func newTestAntreaPolicyLogger(bufferLength time.Duration) (*AntreaPolicyLogger, *mockLogger) {
 	mockAnpLogger := &mockLogger{logged: make(chan string, 100)}
 	antreaLogger := &AntreaPolicyLogger{
+		bufferLength:     bufferLength,
 		anpLogger:        log.New(mockAnpLogger, "", log.Ldate),
 		logDeduplication: logRecordDedupMap{logMap: make(map[string]*logDedupRecord)},
 	}
@@ -52,7 +59,7 @@ func newTestAntreaPolicyLogger() (*AntreaPolicyLogger, *mockLogger) {
 }
 
 func newLogInfo(disposition string) (*logInfo, string) {
-	expected := "AntreaPolicyIngressRule AntreaNetworkPolicy:default/test " + disposition + " 0 SRC: 0.0.0.0 DEST: 1.1.1.1 60 TCP"
+	expected := fmt.Sprintf("AntreaPolicyIngressRule AntreaNetworkPolicy:default/test %s 0 SRC: 0.0.0.0 DEST: 1.1.1.1 60 TCP", disposition)
 	return &logInfo{
 		tableName:   "AntreaPolicyIngressRule",
 		npRef:       "AntreaNetworkPolicy:default/test",
@@ -65,11 +72,11 @@ func newLogInfo(disposition string) (*logInfo, string) {
 	}, expected
 }
 
-func sendMultiplePackets(antreaLogger *AntreaPolicyLogger, ob *logInfo, numPackets int) {
+func sendMultiplePackets(antreaLogger *AntreaPolicyLogger, ob *logInfo, numPackets int, sendInterval time.Duration) {
 	count := 0
-	for range time.Tick(12 * time.Millisecond) {
+	for range time.Tick(sendInterval) {
 		count += 1
-		antreaLogger.logDedupPacket(ob, 100*time.Millisecond)
+		antreaLogger.LogDedupPacket(ob)
 		if count == numPackets {
 			break
 		}
@@ -81,41 +88,62 @@ func expectedLogWithCount(msg string, count int) string {
 }
 
 func TestAllowPacketLog(t *testing.T) {
-	antreaLogger, mockAnpLogger := newTestAntreaPolicyLogger()
+	antreaLogger, mockAnpLogger := newTestAntreaPolicyLogger(testBufferLength)
 	ob, expected := newLogInfo("Allow")
 
-	antreaLogger.logDedupPacket(ob, 100*time.Millisecond)
+	antreaLogger.LogDedupPacket(ob)
 	actual := <-mockAnpLogger.logged
 	assert.Contains(t, actual, expected)
 }
 
 func TestDropPacketLog(t *testing.T) {
-	antreaLogger, mockAnpLogger := newTestAntreaPolicyLogger()
+	antreaLogger, mockAnpLogger := newTestAntreaPolicyLogger(testBufferLength)
 	ob, expected := newLogInfo("Drop")
 
-	antreaLogger.logDedupPacket(ob, 100*time.Millisecond)
+	antreaLogger.LogDedupPacket(ob)
 	actual := <-mockAnpLogger.logged
 	assert.Contains(t, actual, expected)
 }
 
 func TestDropPacketDedupLog(t *testing.T) {
-	antreaLogger, mockAnpLogger := newTestAntreaPolicyLogger()
+	antreaLogger, mockAnpLogger := newTestAntreaPolicyLogger(testBufferLength)
 	ob, expected := newLogInfo("Drop")
-	// add the additional log info for duplicate packets
+	// Add the additional log info for duplicate packets.
 	expected = expectedLogWithCount(expected, 2)
 
-	go sendMultiplePackets(antreaLogger, ob, 2)
+	go sendMultiplePackets(antreaLogger, ob, 2, time.Millisecond)
 	actual := <-mockAnpLogger.logged
 	assert.Contains(t, actual, expected)
 }
 
 func TestDropPacketMultiDedupLog(t *testing.T) {
-	antreaLogger, mockAnpLogger := newTestAntreaPolicyLogger()
+	antreaLogger, mockAnpLogger := newTestAntreaPolicyLogger(testBufferLength)
 	ob, expected := newLogInfo("Drop")
 
-	go sendMultiplePackets(antreaLogger, ob, 10)
-	actual := <-mockAnpLogger.logged
-	assert.Contains(t, actual, expectedLogWithCount(expected, 9))
-	actual = <-mockAnpLogger.logged
-	assert.Contains(t, actual, expected)
+	numPackets := 4
+	go sendMultiplePackets(antreaLogger, ob, numPackets, 40*time.Millisecond)
+	// Close the channel listening for logged msg after 500ms.
+	time.AfterFunc(500*time.Millisecond, func() {
+		mockAnpLogger.mu.Lock()
+		defer mockAnpLogger.mu.Unlock()
+		close(mockAnpLogger.logged)
+	})
+
+	receivedPacket, countLog := 0, 0
+	for actual := range mockAnpLogger.logged {
+		assert.Contains(t, actual, expected)
+		countLog++
+		begin := strings.Index(actual, "[")
+		end := strings.Index(actual, " packets")
+		if begin == -1 {
+			receivedPacket += 1
+		} else {
+			countLoggedMsg, _ := strconv.Atoi(actual[(begin + 1):end])
+			receivedPacket += countLoggedMsg
+		}
+	}
+	// Test two messages are logged for all packets.
+	assert.Equal(t, 2, countLog)
+	// Test all packets are accounted for.
+	assert.Equal(t, numPackets, receivedPacket)
 }
