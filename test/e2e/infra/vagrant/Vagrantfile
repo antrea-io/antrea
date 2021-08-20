@@ -1,6 +1,6 @@
 VAGRANTFILE_API_VERSION = "2"
 
-NUM_WORKERS = 2
+NUM_WORKERS = 1
 
 MODE = ENV['K8S_IP_FAMILY'] || "v4"
 if MODE != "v4" && MODE != "v6" && MODE != "dual"

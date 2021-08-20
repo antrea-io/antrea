@@ -1084,7 +1084,7 @@ func testLegacyACNPClusterGroupAppliedToPodAdd(t *testing.T, data *TestData) {
 				Pod:    NewPod("z", "j"),
 				Labels: map[string]string{"pod": "j"},
 			},
-			DestPod: &CustomPod{
+			DestPod: CustomPod{
 				Pod:    NewPod("x", "j"),
 				Labels: map[string]string{"pod": "j"},
 			},
@@ -1129,7 +1129,7 @@ func testLegacyACNPClusterGroupRefRulePodAdd(t *testing.T, data *TestData) {
 				Pod:    NewPod("x", "k"),
 				Labels: map[string]string{"pod": "k"},
 			},
-			DestPod: &CustomPod{
+			DestPod: CustomPod{
 				Pod:    NewPod("z", "k"),
 				Labels: map[string]string{"pod": "k"},
 			},
@@ -1882,7 +1882,7 @@ func testLegacyACNPClusterGroupServiceRefCreateAndUpdate(t *testing.T, data *Tes
 				Pod:    NewPod("y", "test-add-pod-svc3"),
 				Labels: map[string]string{"pod": "test-add-pod-svc3", "app": "a"},
 			},
-			DestPod: &CustomPod{
+			DestPod: CustomPod{
 				Pod:    NewPod("x", "test-add-pod-svc1"),
 				Labels: map[string]string{"pod": "test-add-pod-svc1", "app": "b"},
 			},
@@ -1983,7 +1983,7 @@ func testLegacyACNPNestedClusterGroupCreateAndUpdate(t *testing.T, data *TestDat
 				Pod:    NewPod("x", "test-add-pod-svc1"),
 				Labels: map[string]string{"pod": "test-add-pod-svc1", "app": "a"},
 			},
-			DestPod: &CustomPod{
+			DestPod: CustomPod{
 				Pod:    NewPod("z", "test-add-pod-ns-z"),
 				Labels: map[string]string{"pod": "test-add-pod-ns-z"},
 			},
