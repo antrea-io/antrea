@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/vmware/go-ipfix/pkg/collector"
@@ -361,7 +362,8 @@ func (fa *flowAggregator) initExportingProcess() error {
 	return nil
 }
 
-func (fa *flowAggregator) Run(stopCh <-chan struct{}) {
+func (fa *flowAggregator) Run(stopCh <-chan struct{}, wg *sync.WaitGroup) {
+	defer wg.Done()
 	go fa.collectingProcess.Start()
 	defer fa.collectingProcess.Stop()
 	go fa.aggregationProcess.Start()
