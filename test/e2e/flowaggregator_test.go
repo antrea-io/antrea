@@ -144,8 +144,10 @@ func TestFlowAggregator(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
-	defer teardownTest(t, data)
+	// Execute teardownFlowAggregator later than teardownTest to ensure that the log
+	// of Flow Aggregator has been exported.
 	defer teardownFlowAggregator(t, data)
+	defer teardownTest(t, data)
 
 	if testOptions.providerName == "kind" {
 		// Currently, in Kind clusters, OVS userspace datapath does not support

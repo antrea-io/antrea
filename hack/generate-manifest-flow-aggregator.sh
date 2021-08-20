@@ -21,12 +21,14 @@ function echoerr {
 }
 
 _usage="Usage: $0 [--mode (dev|release)] [-fc|--flow-collector] [--keep] [--help|-h]
-Generate a YAML manifest for flow aggregator, using Kustomize, and print it to stdout.
+Generate a YAML manifest for the Flow Aggregator, using Kustomize, and print it to stdout.
         --mode (dev|release)  Choose the configuration variant that you need (default is 'dev')
         --flow-collector      Flow collector is the externalFlowCollectorAddr configMap parameter
                               It should be given in format IP:port:proto. Example: 192.168.1.100:4739:udp
         --keep                Debug flag which will preserve the generated kustomization.yml
-        --coverage            Generates a manifest which supports measuring code coverage of Flow Aggregator binaries.
+        --coverage            Generate a manifest which supports measuring code coverage of the Flow Aggregator binaries.
+        --verbose-log         Generate a manifest with increased log-level (level 4) for the Flow Aggregator. 
+                              This option will work only with 'dev' mode.
         --help, -h            Print this message and exit
 
 In 'release' mode, environment variables IMG_NAME and IMG_TAG must be set.
@@ -48,6 +50,7 @@ MODE="dev"
 KEEP=false
 FLOW_COLLECTOR=""
 COVERAGE=false
+VERBOSE_LOG=false
 
 while [[ $# -gt 0 ]]
 do
@@ -68,6 +71,10 @@ case $key in
     ;;
     --coverage)
     COVERAGE=true
+    shift
+    ;;
+    --verbose-log)
+    VERBOSE_LOG=true
     shift
     ;;
     -h|--help)
@@ -95,6 +102,12 @@ fi
 
 if [ "$MODE" == "release" ] && [ -z "$IMG_TAG" ]; then
     echoerr "In 'release' mode, environment variable IMG_TAG must be set"
+    print_help
+    exit 1
+fi
+
+if [ "$MODE" == "release" ] && $VERBOSE_LOG; then
+    echoerr "--verbose-log works only with 'dev' mode"
     print_help
     exit 1
 fi
@@ -160,6 +173,10 @@ if [ "$MODE" == "dev" ]; then
     fi
 
     $KUSTOMIZE edit add patch --path imagePullPolicy.yml
+
+    if $VERBOSE_LOG; then
+        $KUSTOMIZE edit add patch --path flowAggregatorVerboseLog.yml
+    fi
 fi
 
 if [ "$MODE" == "release" ]; then

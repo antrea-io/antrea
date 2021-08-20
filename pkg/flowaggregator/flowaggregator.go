@@ -574,6 +574,7 @@ func (fa *flowAggregator) fetchPodLabels(podAddress string) string {
 		klog.Warning(err)
 		return ""
 	} else if len(pods) == 0 {
+		klog.InfoS("No Pod objects found for Pod Address", "podAddress", podAddress)
 		return ""
 	}
 	pod, ok := pods[0].(*corev1.Pod)
