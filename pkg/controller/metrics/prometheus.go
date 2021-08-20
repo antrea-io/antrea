@@ -103,6 +103,13 @@ var (
 		Help:           "The total number of actual status updates performed for Antrea Egress Custom Resources",
 		StabilityLevel: metrics.ALPHA,
 	})
+	AntreaExternalIPPoolStatusUpdates = metrics.NewCounter(&metrics.CounterOpts{
+		Namespace:      metricNamespaceAntrea,
+		Subsystem:      metricSubsystemController,
+		Name:           "eip_status_updates",
+		Help:           "The total number of actual status updates performed for Antrea ExternalIPPool Custom Resources",
+		StabilityLevel: metrics.ALPHA,
+	})
 	AntreaClusterNetworkPolicyStatusUpdates = metrics.NewCounter(&metrics.CounterOpts{
 		Namespace:      metricNamespaceAntrea,
 		Subsystem:      metricSubsystemController,

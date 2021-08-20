@@ -1622,7 +1622,19 @@ spec:
     singular: externalippool
   scope: Cluster
   versions:
-  - name: v1alpha2
+  - additionalPrinterColumns:
+    - description: The number of total IPs
+      jsonPath: .status.usage.total
+      name: Total
+      type: integer
+    - description: The number of allocated IPs
+      jsonPath: .status.usage.used
+      name: Used
+      type: integer
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha2
     schema:
       openAPIV3Schema:
         properties:
@@ -1679,11 +1691,23 @@ spec:
             - ipRanges
             - nodeSelector
             type: object
+          status:
+            properties:
+              usage:
+                properties:
+                  total:
+                    type: integer
+                  used:
+                    type: integer
+                type: object
+            type: object
         required:
         - spec
         type: object
     served: true
     storage: true
+    subresources:
+      status: {}
 ---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
@@ -3589,6 +3613,12 @@ rules:
   - get
   - watch
   - list
+- apiGroups:
+  - crd.antrea.io
+  resources:
+  - externalippools/status
+  verbs:
+  - update
 - apiGroups:
   - clusterinformation.antrea.tanzu.vmware.com
   resources:
