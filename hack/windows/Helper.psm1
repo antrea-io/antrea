@@ -142,6 +142,12 @@ function Install-AntreaAgent {
     kubectl config --kubeconfig=$AntreaEtc\antrea-agent.antrea.kubeconfig set-credentials antrea-agent --token=$TOKEN
     kubectl config --kubeconfig=$AntreaEtc\antrea-agent.antrea.kubeconfig set-context antrea-agent@antrea --cluster=antrea --user=antrea-agent
     kubectl config --kubeconfig=$AntreaEtc\antrea-agent.antrea.kubeconfig use-context antrea-agent@antrea
+
+    $KUBE_DNS_SERVICE_HOST=$(kubectl --kubeconfig=$KubeConfig get service -n kube-system kube-dns -o jsonpath="{.spec.clusterIP}")
+    $KUBE_DNS_SERVICE_PORT=$(kubectl --kubeconfig=$KubeConfig get service -n kube-system kube-dns -o jsonpath="{.spec.ports[0].port}")
+    [System.Environment]::SetEnvironmentVariable('KUBE_DNS_SERVICE_HOST',$KUBE_DNS_SERVICE_HOST)
+    [System.Environment]::SetEnvironmentVariable('KUBE_DNS_SERVICE_PORT',$KUBE_DNS_SERVICE_PORT)
+
     return $true
 }
 

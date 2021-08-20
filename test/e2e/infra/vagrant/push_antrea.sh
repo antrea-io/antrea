@@ -165,7 +165,7 @@ if [ "$FLOW_AGGREGATOR" == "true" ]; then
             ssh -F ssh-config k8s-node-control-plane kubectl create namespace elk-flow-collector
             ssh -F ssh-config k8s-node-control-plane kubectl create configmap logstash-configmap -n elk-flow-collector --from-file=./elk-flow-collector/logstash/
             ssh -F ssh-config k8s-node-control-plane kubectl apply -f elk-flow-collector/elk-flow-collector.yml -n elk-flow-collector
-            LOGSTASH_CLUSTER_IP=$(ssh -F ssh-config k8s-node-control-plane kubectl get -n elk-flow-collector svc logstash -o=jsonpath='{.spec.clusterIP}')
+            LOGSTASH_CLUSTER_IP=$(ssh -F ssh-config k8s-node-control-plane kubectl get -n elk-flow-collector svc logstash -o jsonpath='{.spec.clusterIP}')
             ELK_ADDR="${LOGSTASH_CLUSTER_IP}:4739:udp"
 
             $THIS_DIR/../../../../hack/generate-manifest-flow-aggregator.sh --mode dev -fc $ELK_ADDR > "${FLOW_AGG_YML}"
