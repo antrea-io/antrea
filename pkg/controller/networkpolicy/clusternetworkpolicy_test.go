@@ -50,6 +50,32 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 			Labels: map[string]string{"foo2": "bar2"},
 		},
 	}
+	ipA := "10.10.1.1"
+	ipB := "10.10.1.2"
+	epA := v1.Endpoints{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "svcA",
+			Namespace: "nsA",
+		},
+		Subsets: []v1.EndpointSubset{
+			{
+				Addresses: []v1.EndpointAddress{
+					{
+						IP: ipA,
+					},
+					{
+						IP: ipB,
+					},
+				},
+				Ports: []v1.EndpointPort{
+					{
+						Port:     80,
+						Protocol: k8sProtocolTCP,
+					},
+				},
+			},
+		},
+	}
 
 	allowAction := crdv1alpha1.RuleActionAllow
 	dropAction := crdv1alpha1.RuleActionDrop
@@ -885,7 +911,74 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 			expectedAppliedToGroups: 2,
 			expectedAddressGroups:   2,
 		},
+		{
+			name: "rule-with-to-service",
+			inputPolicy: &crdv1alpha1.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "cnpK", UID: "uidK"},
+				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
+					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+						{PodSelector: &selectorA},
+					},
+					Priority: p10,
+					Egress: []crdv1alpha1.Rule{
+						{
+							ToService: []*crdv1alpha1.ServiceReference{
+								{
+									Name:      "svcA",
+									Namespace: "nsA",
+								},
+							},
+							Action: &dropAction,
+						},
+					},
+				},
+			},
+			expectedPolicy: &antreatypes.NetworkPolicy{
+				UID:  "uidK",
+				Name: "uidK",
+				SourceRef: &controlplane.NetworkPolicyReference{
+					Type: controlplane.AntreaClusterNetworkPolicy,
+					Name: "cnpK",
+					UID:  "uidK",
+				},
+				Priority:     &p10,
+				TierPriority: &DefaultTierPriority,
+				Rules: []controlplane.NetworkPolicyRule{
+					{
+						Direction: controlplane.DirectionOut,
+						To: controlplane.NetworkPolicyPeer{
+							IPBlocks: []controlplane.IPBlock{
+								{
+									CIDR: controlplane.IPNet{
+										IP:           ipStrToIPAddress(ipA),
+										PrefixLength: 32,
+									},
+								},
+								{
+									CIDR: controlplane.IPNet{
+										IP:           ipStrToIPAddress(ipB),
+										PrefixLength: 32,
+									},
+								},
+							},
+						},
+						Services: []controlplane.Service{
+							{
+								Protocol: &protocolTCP,
+								Port:     &int80,
+							},
+						},
+						Priority: 0,
+						Action:   &dropAction,
+					},
+				},
+				AppliedToGroups: []string{getNormalizedUID(toGroupSelector("", &selectorA, nil, nil).NormalizedName)},
+			},
+			expectedAppliedToGroups: 1,
+			expectedAddressGroups:   1,
+		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, c := newController()
@@ -895,6 +988,9 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 			c.namespaceStore.Add(&nsB)
 			if tt.inputPolicy.Spec.Tier != "" {
 				c.tierStore.Add(&tierA)
+			}
+			if tt.inputPolicy.Spec.Egress != nil && tt.inputPolicy.Spec.Egress[0].ToService != nil {
+				c.endpointsStore.Add(&epA)
 			}
 			actualPolicy := c.processClusterNetworkPolicy(tt.inputPolicy)
 			assert.Equal(t, tt.expectedPolicy.UID, actualPolicy.UID)
