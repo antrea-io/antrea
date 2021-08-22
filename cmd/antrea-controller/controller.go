@@ -153,7 +153,6 @@ func run(o *Options) error {
 	networkPolicyController := networkpolicy.NewNetworkPolicyController(client,
 		crdClient,
 		groupEntityIndex,
-		nodeInformer,
 		namespaceInformer,
 		serviceInformer,
 		endpointsInformer,

@@ -103,7 +103,6 @@ func newController(objects ...runtime.Object) (*fake.Clientset, *networkPolicyCo
 	npController := NewNetworkPolicyController(client,
 		crdClient,
 		groupEntityIndex,
-		informerFactory.Core().V1().Nodes(),
 		informerFactory.Core().V1().Namespaces(),
 		informerFactory.Core().V1().Services(),
 		informerFactory.Core().V1().Endpoints(),

@@ -85,9 +85,6 @@ const (
 	// ServiceIndex is used to index ClusterNetworkPolicies by ServiceReference in
 	// ToService field. Format is "[namespace]/[name]". For example "default/svc-1".
 	ServiceIndex = "service"
-	// ServiceTypeIndex is used to index ClusterNetworkPolicies by the type of the
-	// Service referred in ToService field.
-	ServiceTypeIndex = "serviceType"
 
 	appliedToGroupType grouping.GroupType = "appliedToGroup"
 	addressGroupType   grouping.GroupType = "addressGroup"
@@ -130,13 +127,6 @@ type NetworkPolicyController struct {
 	kubeClient clientset.Interface
 	// crdClient is the clientset for CRD API group.
 	crdClient versioned.Interface
-
-	nodeInformer coreinformers.NodeInformer
-	// nodeLister is able to list/get Node and is populated by the shared informer passed to
-	// NewNetworkPolicyController.
-	nodeLister corelisters.NodeLister
-	// nodeListerSynced is a function which returns true if the Node shared informer has been synced at least once.
-	nodeListerSynced cache.InformerSynced
 
 	namespaceInformer coreinformers.NamespaceInformer
 	// namespaceLister is able to list/get Namespaces and is populated by the shared informer passed to
@@ -239,7 +229,6 @@ type heartbeat struct {
 func NewNetworkPolicyController(kubeClient clientset.Interface,
 	crdClient versioned.Interface,
 	groupingInterface grouping.Interface,
-	nodeInformer coreinformers.NodeInformer,
 	namespaceInformer coreinformers.NamespaceInformer,
 	serviceInformer coreinformers.ServiceInformer,
 	endpointsInformer coreinformers.EndpointsInformer,
@@ -283,9 +272,6 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 	)
 	// Register Informer and add handlers for AntreaPolicy events only if the feature is enabled.
 	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
-		n.nodeInformer = nodeInformer
-		n.nodeLister = nodeInformer.Lister()
-		n.nodeListerSynced = nodeInformer.Informer().HasSynced
 		n.namespaceInformer = namespaceInformer
 		n.namespaceLister = namespaceInformer.Lister()
 		n.namespaceListerSynced = namespaceInformer.Informer().HasSynced
@@ -307,15 +293,7 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 		n.cgInformer = cgInformer
 		n.cgLister = cgInformer.Lister()
 		n.cgListerSynced = cgInformer.Informer().HasSynced
-		// Add handlers for Node events.
-		n.nodeInformer.Informer().AddEventHandlerWithResyncPeriod(
-			cache.ResourceEventHandlerFuncs{
-				AddFunc:    n.addNode,
-				UpdateFunc: n.updateNode,
-				DeleteFunc: n.deleteNode,
-			},
-			resyncPeriod,
-		)
+
 		// Add handlers for Namespace events.
 		n.namespaceInformer.Informer().AddEventHandlerWithResyncPeriod(
 			cache.ResourceEventHandlerFuncs{
@@ -414,24 +392,6 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 						}
 					}
 					return serviceNames.List(), nil
-				},
-				// This index function will only be invoked on Node ADD/UPDATE/DELETE which is quite rarely.
-				ServiceTypeIndex: func(obj interface{}) ([]string, error) {
-					acnp, ok := obj.(*secv1alpha1.ClusterNetworkPolicy)
-					if !ok {
-						return []string{}, nil
-					}
-					serviceTypes := sets.String{}
-					for _, egressRule := range acnp.Spec.Egress {
-						for _, serviceReference := range egressRule.ToService {
-							service, err := n.serviceLister.Services(serviceReference.Namespace).Get(serviceReference.Name)
-							if err != nil {
-								continue
-							}
-							serviceTypes.Insert(fmt.Sprintf("%s", service.Spec.Type))
-						}
-					}
-					return serviceTypes.List(), nil
 				},
 			},
 		)
@@ -871,57 +831,12 @@ func (n *NetworkPolicyController) deleteNetworkPolicy(old interface{}) {
 	n.deleteDereferencedAddressGroups(oldInternalNP)
 }
 
-// addNode receives Node ADD events and reprocesses the ClusterNetworkPolicy
-// with `toService` referred to NodePort type Services.
-func (n *NetworkPolicyController) addNode(obj interface{}) {
-	defer n.heartbeat("addNode")
-	// Find all ACNPs that are impacted by this Node and reprocess them.
-	affectedACNPsByService := n.filterACNPsByServiceType(v1.ServiceTypeNodePort)
-	for _, acnp := range affectedACNPsByService {
-		n.reprocessACNP(acnp)
-	}
-}
-
-// updateNode receives Node UPDATE events and reprocesses the ClusterNetworkPolicy
-// with `toService` referred to NodePort type Services.
-func (n *NetworkPolicyController) updateNode(oldObj, curObj interface{}) {
-	defer n.heartbeat("updateNode")
-	// Find all ACNPs that are impacted by this Node and reprocess them.
-	oldNode := oldObj.(*v1.Node)
-	curNode := curObj.(*v1.Node)
-	nodeReadyStatus := func(node *v1.Node) v1.ConditionStatus {
-		for _, condition := range node.Status.Conditions {
-			if condition.Type == v1.NodeReady {
-				return condition.Status
-			}
-		}
-		return v1.ConditionUnknown
-	}
-	// Only reprocess ACNP, if NodeIP or NodeReady status has been updated.
-	if !reflect.DeepEqual(oldNode.Status.Addresses, curNode.Status.Addresses) || nodeReadyStatus(oldNode) != nodeReadyStatus(curNode) {
-		affectedACNPsByService := n.filterACNPsByServiceType(v1.ServiceTypeNodePort)
-		for _, acnp := range affectedACNPsByService {
-			n.reprocessACNP(acnp)
-		}
-	}
-}
-
-// deleteNode receives Node DELETE events and reprocesses the ClusterNetworkPolicy
-// with `toService` referred to NodePort type Services.
-func (n *NetworkPolicyController) deleteNode(old interface{}) {
-	defer n.heartbeat("deleteNode")
-	affectedACNPsByService := n.filterACNPsByServiceType(v1.ServiceTypeNodePort)
-	for _, acnp := range affectedACNPsByService {
-		n.reprocessACNP(acnp)
-	}
-}
-
 // addService retrieves all internal Groups which refers to this Service
 // and enqueues the group keys for further processing.
 func (n *NetworkPolicyController) addService(obj interface{}) {
 	defer n.heartbeat("addService")
 	service := obj.(*v1.Service)
-	klog.V(2).Infof("Processing Service %s/%s ADD event", service.Namespace, service.Name)
+	klog.V(2).InfoS("Processing Service ADD event", "serviceNamespace", service.Namespace, "serviceName", service.Name)
 	// Find all internal Group keys which refers to this Service.
 	groupKeySet := n.filterInternalGroupsForService(service)
 	// Enqueue internal groups to its queue for group processing.
@@ -948,7 +863,7 @@ func (n *NetworkPolicyController) updateService(oldObj, curObj interface{}) {
 	defer n.heartbeat("updateService")
 	oldService := oldObj.(*v1.Service)
 	curService := curObj.(*v1.Service)
-	klog.V(2).Infof("Processing Service %s/%s UPDATE event, selectors: %v", curService.Namespace, curService.Name, curService.Spec.Selector)
+	klog.V(2).InfoS("Processing Service UPDATE event", "serviceNamespace", curService.Namespace, "serviceName", curService.Name)
 	// Only trigger processing of groups if there are changes in the Service selectors.
 	if !reflect.DeepEqual(oldService.Spec.Selector, curService.Spec.Selector) {
 		// Find all internal Group keys which refers to this Service.
@@ -993,7 +908,7 @@ func (n *NetworkPolicyController) deleteService(old interface{}) {
 	}
 	defer n.heartbeat("deleteService")
 
-	klog.V(2).Infof("Processing Service %s/%s DELETE event", service.Namespace, service.Name)
+	klog.V(2).InfoS("Processing Service DELETE event", "serviceNamespace", service.Namespace, "serviceName", service.Name)
 	// Find all internal Group keys which refers to this Service.
 	groupKeySet := n.filterInternalGroupsForService(service)
 	// Enqueue internal groups to its queue for group processing.
@@ -1019,6 +934,7 @@ func (n *NetworkPolicyController) deleteService(old interface{}) {
 func (n *NetworkPolicyController) addEndpoints(obj interface{}) {
 	defer n.heartbeat("addEndpoints")
 	endpoints := obj.(*v1.Endpoints)
+	klog.V(2).InfoS("Processing Endpoints ADD event", "endpointsNamespace", endpoints.Namespace, "endpointsName", endpoints.Name)
 	// Find all ACNPs that are impacted by this Endpoints and reprocess them.
 	// Because Service and its Endpoints use the same Namespace and Name, pass
 	// Namespace and Name of Endpoints into filterACNPsByService
@@ -1034,7 +950,7 @@ func (n *NetworkPolicyController) addEndpoints(obj interface{}) {
 func (n *NetworkPolicyController) updateEndpoints(oldObj, curObj interface{}) {
 	defer n.heartbeat("updateEndpoints")
 	curEndpoints := curObj.(*v1.Endpoints)
-	klog.V(2).Infof("Processing Endpoints %s/%s UPDATE event", curEndpoints.Namespace, curEndpoints.Name)
+	klog.V(2).InfoS("Processing Endpoints UPDATE event", "endpointsNamespace", curEndpoints.Namespace, "endpointsName", curEndpoints.Name)
 	// Find all ACNPs that are impacted by this Endpoints and reprocess them.
 	// Because Service and its Endpoints use the same Namespace and Name, pass
 	// Namespace and Name of Endpoints into filterACNPsByService
@@ -1063,6 +979,7 @@ func (n *NetworkPolicyController) deleteEndpoints(oldObj interface{}) {
 	}
 	defer n.heartbeat("deleteEndpoints")
 
+	klog.V(2).InfoS("Processing Endpoints DELETE event", "endpointsNamespace", endpoints.Namespace, "endpointsName", endpoints.Name)
 	// Find all ACNPs that are impacted by this Endpoints and reprocess them.
 	// Because Service and its Endpoints use the same Namespace and Name, pass
 	// Namespace and Name of Endpoints into filterACNPsByService
@@ -1078,23 +995,7 @@ func (n *NetworkPolicyController) filterACNPsByService(serviceNamespace string, 
 	var affectedPolicies []*secv1alpha1.ClusterNetworkPolicy
 	acnps, err := n.acnpInformer.Informer().GetIndexer().ByIndex(ServiceIndex, fmt.Sprintf("%s/%s", serviceNamespace, serviceName))
 	if err != nil {
-		klog.Errorf("Error fetching ClusterNetworkPolicies that have ToService rules: %v", err)
-		return nil
-	}
-	for _, acnpObj := range acnps {
-		acnp := acnpObj.(*secv1alpha1.ClusterNetworkPolicy)
-		affectedPolicies = append(affectedPolicies, acnp)
-	}
-	return affectedPolicies
-}
-
-// filterACNPsByServiceType gets all ClusterNetworkPolicy that will need to be
-// re-processed based on the serviceType when added/updated/deleted a Node.
-func (n *NetworkPolicyController) filterACNPsByServiceType(serviceType v1.ServiceType) []*secv1alpha1.ClusterNetworkPolicy {
-	var affectedPolicies []*secv1alpha1.ClusterNetworkPolicy
-	acnps, err := n.acnpInformer.Informer().GetIndexer().ByIndex(ServiceTypeIndex, string(serviceType))
-	if err != nil {
-		klog.Errorf("Error fetching ClusterNetworkPolicies with ServiceType:%s of Service in ToService rules: %v", serviceType, err)
+		klog.ErrorS(err, "Error fetching ClusterNetworkPolicies that have ToService rules")
 		return nil
 	}
 	for _, acnpObj := range acnps {

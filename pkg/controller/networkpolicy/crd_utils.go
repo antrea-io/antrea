@@ -15,12 +15,9 @@
 package networkpolicy
 
 import (
-	"fmt"
 	"strings"
 
-	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/klog/v2"
 
@@ -57,25 +54,14 @@ func toAntreaServicesForCRD(npPorts []v1alpha1.NetworkPolicyPort) ([]controlplan
 	return antreaServices, namedPortExists
 }
 
-// toAntreaServicesAndPeersFromService converts v1.Service object to a slice of
-// Antrea Service objects and a slice of Antrea controlplane NetworkPolicyPeer.
-// Service here will be treated as backend Endpoints IP + targetPort.
-func (n *NetworkPolicyController) toAntreaServicesAndPeersFromService(service *v1.Service) ([]controlplane.Service, *controlplane.NetworkPolicyPeer, error) {
-	if service == nil {
-		return nil, nil, fmt.Errorf("empty Service received")
-	}
-
+// toAntreaServicesAndPeersFromServiceReference converts v1alpha1.ServiceReference
+// object to a slice of Antrea Service objects and a slice of Antrea controlplane
+// NetworkPolicyPeer. Antrea Service here means backend Endpoints Ports.
+func (n *NetworkPolicyController) toAntreaServicesAndPeersFromServiceReference(serviceReference *v1alpha1.ServiceReference) ([]controlplane.Service, *controlplane.NetworkPolicyPeer, error) {
 	var antreaServices []controlplane.Service
 	var antreaPeers controlplane.NetworkPolicyPeer
 
-	for _, port := range service.Spec.Ports {
-		antreaServices = append(antreaServices, controlplane.Service{
-			Protocol: toAntreaProtocol(&port.Protocol),
-			Port:     &port.TargetPort,
-		})
-	}
-
-	endpoints, err := n.endpointsLister.Endpoints(service.Namespace).Get(service.Name)
+	endpoints, err := n.endpointsLister.Endpoints(serviceReference.Namespace).Get(serviceReference.Name)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -83,36 +69,12 @@ func (n *NetworkPolicyController) toAntreaServicesAndPeersFromService(service *v
 		for _, address := range subset.Addresses {
 			antreaPeers.IPBlocks = append(antreaPeers.IPBlocks, controlplane.IPBlock{CIDR: controlplane.IPNet{IP: ipStrToIPAddress(address.IP), PrefixLength: 32}})
 		}
-	}
-	return antreaServices, &antreaPeers, nil
-}
-
-// toAntreaServicesAndPeersFromNodePortService converts v1.Service object to a slice of
-// Antrea Service objects and a slice of Antrea controlplane NetworkPolicyPeer.
-// Service here will be treated as all Node IPs + nodePort.
-func (n *NetworkPolicyController) toAntreaServicesAndPeersFromNodePortService(service *v1.Service) ([]controlplane.Service, *controlplane.NetworkPolicyPeer, error) {
-
-	var antreaServices []controlplane.Service
-	var antreaPeers controlplane.NetworkPolicyPeer
-
-	if service.Spec.Type != v1.ServiceTypeNodePort {
-		return nil, nil, fmt.Errorf("expect serviceType: NodePort, received serviceType: %s", service.Spec.Type)
-	}
-
-	for _, port := range service.Spec.Ports {
-		antreaServices = append(antreaServices, controlplane.Service{
-			Protocol: toAntreaProtocol(&port.Protocol),
-			Port:     &intstr.IntOrString{IntVal: port.NodePort},
-		})
-	}
-
-	nodes, err := n.nodeLister.List(labels.NewSelector())
-	if err != nil {
-		return nil, nil, err
-	}
-	for _, node := range nodes {
-		for _, address := range node.Status.Addresses {
-			antreaPeers.IPBlocks = append(antreaPeers.IPBlocks, controlplane.IPBlock{CIDR: controlplane.IPNet{IP: ipStrToIPAddress(address.Address), PrefixLength: 32}})
+		for _, port := range subset.Ports {
+			intstrPort := intstr.FromInt(int(port.Port))
+			antreaServices = append(antreaServices, controlplane.Service{
+				Protocol: toAntreaProtocol(&port.Protocol),
+				Port:     &intstrPort,
+			})
 		}
 	}
 	return antreaServices, &antreaPeers, nil

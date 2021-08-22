@@ -548,7 +548,6 @@ func (v *antreaPolicyValidator) validatePeers(ingress, egress []crdv1alpha1.Rule
 func (a *antreaPolicyValidator) validateToService(toService []*crdv1alpha1.ServiceReference) (string, bool) {
 	supportServiceTypeInToService := sets.NewString(
 		string(v1.ServiceTypeClusterIP),
-		string(v1.ServiceTypeNodePort),
 	)
 	for _, eachToService := range toService {
 		service, err := a.networkPolicyController.serviceLister.Services(eachToService.Namespace).Get(eachToService.Name)

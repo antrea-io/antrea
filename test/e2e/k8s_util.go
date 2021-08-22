@@ -289,7 +289,7 @@ func (k *KubernetesUtils) CreateOrUpdateDeployment(ns, deploymentName string, re
 }
 
 // BuildService is a convenience function for building a corev1.Service spec.
-func (k *KubernetesUtils) BuildService(svcName, svcNS string, port, targetPort int, selector map[string]string, serviceType *v1.ServiceType, nodePort *int32) *v1.Service {
+func (k *KubernetesUtils) BuildService(svcName, svcNS string, port, targetPort int, selector map[string]string, serviceType *v1.ServiceType) *v1.Service {
 	service := &v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      svcName,
@@ -305,9 +305,6 @@ func (k *KubernetesUtils) BuildService(svcName, svcNS string, port, targetPort i
 	}
 	if serviceType != nil {
 		service.Spec.Type = *serviceType
-	}
-	if nodePort != nil {
-		service.Spec.Ports[0].NodePort = *nodePort
 	}
 	return service
 }
@@ -368,15 +365,6 @@ func (k *KubernetesUtils) CleanServices(namespaces []string) error {
 		}
 	}
 	return nil
-}
-
-// GetNodes is a convenience function for getting all Nodes in the cluster.
-func (k *KubernetesUtils) GetNodes() ([]v1.Node, error) {
-	nodes, err := k.clientset.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{})
-	if err != nil {
-		return nil, err
-	}
-	return nodes.Items, nil
 }
 
 // CreateOrUpdateNetworkPolicy is a convenience function for updating/creating netpols. Updating is important since
