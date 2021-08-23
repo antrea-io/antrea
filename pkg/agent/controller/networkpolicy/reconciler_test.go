@@ -93,8 +93,8 @@ var (
 )
 
 func newCIDR(cidrStr string) *net.IPNet {
-	_, tmpIpNet, _ := net.ParseCIDR(cidrStr)
-	return tmpIpNet
+	_, tmpIPNet, _ := net.ParseCIDR(cidrStr)
+	return tmpIPNet
 }
 
 func newTestReconciler(t *testing.T, controller *gomock.Controller, ifaceStore interfacestore.InterfaceStore, ofClient *openflowtest.MockClient) *reconciler {

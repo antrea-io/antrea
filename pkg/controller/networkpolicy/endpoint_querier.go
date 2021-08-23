@@ -15,7 +15,6 @@
 // Package networkpolicy provides NetworkPolicyController implementation to manage
 // and synchronize the Pods and Namespaces affected by Network Policies and enforce
 // their rules.
-
 package networkpolicy
 
 import (

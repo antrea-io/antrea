@@ -556,9 +556,8 @@ func (i *Initializer) configureGatewayInterface(gatewayIface *interfacestore.Int
 			klog.V(2).Infof("Not found host link for gateway %s, retry after 1s", i.hostGateway)
 			time.Sleep(1 * time.Second)
 			continue
-		} else {
-			return err
 		}
+		return err
 	}
 
 	if err != nil {

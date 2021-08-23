@@ -337,8 +337,8 @@ func (a *ofFlowAction) SendToController(reason uint8) FlowBuilder {
 	return a.builder
 }
 
-func (a *ofFlowAction) Meter(meterId uint32) FlowBuilder {
-	a.builder.ofFlow.Meter(meterId)
+func (a *ofFlowAction) Meter(meterID uint32) FlowBuilder {
+	a.builder.ofFlow.Meter(meterID)
 	return a.builder
 }
 

@@ -66,7 +66,7 @@ func (monitor *agentMonitor) Run(stopCh <-chan struct{}) {
 }
 
 func (monitor *agentMonitor) syncAgentCRD() {
-	var err error = nil
+	var err error
 	if monitor.agentCRD != nil {
 		if monitor.agentCRD, err = monitor.updateAgentCRD(true); err == nil {
 			return
@@ -123,7 +123,7 @@ func (monitor *agentMonitor) updateAgentCRD(partial bool) (*v1beta1.AntreaAgentI
 }
 
 func (monitor *agentMonitor) syncLegacyAgentCRD() {
-	var err error = nil
+	var err error
 	if monitor.legacyAgentCRD != nil {
 		if monitor.legacyAgentCRD, err = monitor.updateLegacyAgentCRD(true); err == nil {
 			return

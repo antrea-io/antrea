@@ -51,7 +51,7 @@ var (
 	}
 	IANAInfoElementsIPv4 = append(IANAInfoElementsCommon, []string{"sourceIPv4Address", "destinationIPv4Address"}...)
 	IANAInfoElementsIPv6 = append(IANAInfoElementsCommon, []string{"sourceIPv6Address", "destinationIPv6Address"}...)
-	// Substring "reverse" is an indication to get reverse element of go-ipfix library.
+	// IANAReverseInfoElements contain substring "reverse" which is an indication to get reverse element of go-ipfix library.
 	IANAReverseInfoElements = []string{
 		"reversePacketTotalCount",
 		"reverseOctetTotalCount",

@@ -11,12 +11,11 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package runtime
 
 import "runtime"
 
-// Not defined as a constant because we need to hack the value in integration test.
+// WindowsOS is not defined as a constant because we need to hack the value in integration test.
 var WindowsOS = "windows"
 
 func IsWindowsPlatform() bool {

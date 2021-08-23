@@ -258,7 +258,7 @@ func (v *NetworkPolicyValidator) validateAntreaPolicy(curObj, oldObj interface{}
 }
 
 // validatePort validates if ports is valid
-func (a *antreaPolicyValidator) validatePort(ingress, egress []crdv1alpha1.Rule) error {
+func (v *antreaPolicyValidator) validatePort(ingress, egress []crdv1alpha1.Rule) error {
 	isValid := func(rules []crdv1alpha1.Rule) error {
 		for _, rule := range rules {
 			for _, port := range rule.Ports {
@@ -356,18 +356,12 @@ func (v *NetworkPolicyValidator) validateTier(curTier, oldTier *crdv1alpha1.Tier
 
 func (v *antreaPolicyValidator) tierExists(name string) bool {
 	_, err := v.networkPolicyController.tierLister.Get(name)
-	if err != nil {
-		return false
-	}
-	return true
+	return err == nil
 }
 
 func (v *antreaPolicyValidator) clusterGroupExists(name string) bool {
 	_, err := v.networkPolicyController.cgLister.Get(name)
-	if err != nil {
-		return false
-	}
-	return true
+	return err == nil
 }
 
 // GetAdmissionResponseForErr returns an object of type AdmissionResponse with
@@ -384,7 +378,7 @@ func GetAdmissionResponseForErr(err error) *admv1.AdmissionResponse {
 }
 
 // createValidate validates the CREATE events of Antrea-native policies,
-func (a *antreaPolicyValidator) createValidate(curObj interface{}, userInfo authenticationv1.UserInfo) (string, bool) {
+func (v *antreaPolicyValidator) createValidate(curObj interface{}, userInfo authenticationv1.UserInfo) (string, bool) {
 	var tier string
 	var ingress, egress []crdv1alpha1.Rule
 	var specAppliedTo []crdv1alpha1.NetworkPolicyPeer
@@ -402,27 +396,27 @@ func (a *antreaPolicyValidator) createValidate(curObj interface{}, userInfo auth
 		egress = curANP.Spec.Egress
 		specAppliedTo = curANP.Spec.AppliedTo
 	}
-	reason, allowed := a.validateTierForPolicy(tier)
+	reason, allowed := v.validateTierForPolicy(tier)
 	if !allowed {
 		return reason, allowed
 	}
-	if ruleNameUnique := a.validateRuleName(ingress, egress); !ruleNameUnique {
-		return fmt.Sprint("rules names must be unique within the policy"), false
+	if ruleNameUnique := v.validateRuleName(ingress, egress); !ruleNameUnique {
+		return "rules names must be unique within the policy", false
 	}
-	reason, allowed = a.validateAppliedTo(ingress, egress, specAppliedTo)
+	reason, allowed = v.validateAppliedTo(ingress, egress, specAppliedTo)
 	if !allowed {
 		return reason, allowed
 	}
-	reason, allowed = a.validatePeers(ingress, egress)
+	reason, allowed = v.validatePeers(ingress, egress)
 	if !allowed {
 		return reason, allowed
 	}
-	reason, allowed = a.validateFQDNSelectors(egress)
+	reason, allowed = v.validateFQDNSelectors(egress)
 	if !allowed {
 		return reason, allowed
 	}
 
-	if err := a.validatePort(ingress, egress); err != nil {
+	if err := v.validatePort(ingress, egress); err != nil {
 		return err.Error(), false
 	}
 	return "", true
@@ -443,7 +437,7 @@ func (v *antreaPolicyValidator) validateRuleName(ingress, egress []crdv1alpha1.R
 	return isUnique(ingress) && isUnique(egress)
 }
 
-func (a *antreaPolicyValidator) validateAppliedTo(ingress, egress []crdv1alpha1.Rule, specAppliedTo []crdv1alpha1.NetworkPolicyPeer) (string, bool) {
+func (v *antreaPolicyValidator) validateAppliedTo(ingress, egress []crdv1alpha1.Rule, specAppliedTo []crdv1alpha1.NetworkPolicyPeer) (string, bool) {
 	appliedToInSpec := len(specAppliedTo) != 0
 	countAppliedToInRules := func(rules []crdv1alpha1.Rule) int {
 		num := 0
@@ -471,7 +465,7 @@ func (a *antreaPolicyValidator) validateAppliedTo(ingress, egress []crdv1alpha1.
 		for _, appTo := range specAppliedTo {
 			if appTo.Group != "" {
 				// Ensure that group exists
-				if !a.clusterGroupExists(appTo.Group) {
+				if !v.clusterGroupExists(appTo.Group) {
 					return false
 				}
 			}
@@ -480,17 +474,17 @@ func (a *antreaPolicyValidator) validateAppliedTo(ingress, egress []crdv1alpha1.
 	}
 	if appliedToInSpec {
 		if !checkAppTo(specAppliedTo) {
-			return fmt.Sprintf("cluster group referenced in appliedTo does not exist"), false
+			return "cluster group referenced in appliedTo does not exist", false
 		}
 	} else {
 		for _, rule := range ingress {
 			if !checkAppTo(rule.AppliedTo) {
-				return fmt.Sprintf("cluster group referenced in appliedTo does not exist"), false
+				return "cluster group referenced in appliedTo does not exist", false
 			}
 		}
 		for _, rule := range egress {
 			if !checkAppTo(rule.AppliedTo) {
-				return fmt.Sprintf("cluster group referenced in appliedTo does not exist"), false
+				return "cluster group referenced in appliedTo does not exist", false
 			}
 		}
 	}
@@ -499,7 +493,7 @@ func (a *antreaPolicyValidator) validateAppliedTo(ingress, egress []crdv1alpha1.
 
 // validatePeers ensures that the NetworkPolicyPeer object set in rules are valid, i.e.
 // currently it ensures that a Group cannot be set with other stand-alone selectors or IPBlock.
-func (a *antreaPolicyValidator) validatePeers(ingress, egress []crdv1alpha1.Rule) (string, bool) {
+func (v *antreaPolicyValidator) validatePeers(ingress, egress []crdv1alpha1.Rule) (string, bool) {
 	checkPeers := func(peers []crdv1alpha1.NetworkPolicyPeer) (string, bool) {
 		for _, peer := range peers {
 			if peer.NamespaceSelector != nil && peer.Namespaces != nil {
@@ -512,7 +506,7 @@ func (a *antreaPolicyValidator) validatePeers(ingress, egress []crdv1alpha1.Rule
 				return "group cannot be set with other peers in rules", false
 			}
 			// Ensure that group exists
-			if !a.clusterGroupExists(peer.Group) {
+			if !v.clusterGroupExists(peer.Group) {
 				return fmt.Sprintf("cluster group %s referenced in rules does not exist", peer.Group), false
 			}
 		}
@@ -548,7 +542,7 @@ func (v *antreaPolicyValidator) validateTierForPolicy(tier string) (string, bool
 }
 
 // validateFQDNSelectors validates the toFQDN field set in Antrea-native policy egress rules are valid.
-func (a *antreaPolicyValidator) validateFQDNSelectors(egressRules []crdv1alpha1.Rule) (string, bool) {
+func (v *antreaPolicyValidator) validateFQDNSelectors(egressRules []crdv1alpha1.Rule) (string, bool) {
 	for _, r := range egressRules {
 		for _, peer := range r.To {
 			if len(peer.FQDN) > 0 && !allowedFQDNChars.MatchString(peer.FQDN) {
@@ -560,7 +554,7 @@ func (a *antreaPolicyValidator) validateFQDNSelectors(egressRules []crdv1alpha1.
 }
 
 // updateValidate validates the UPDATE events of Antrea-native policies.
-func (a *antreaPolicyValidator) updateValidate(curObj, oldObj interface{}, userInfo authenticationv1.UserInfo) (string, bool) {
+func (v *antreaPolicyValidator) updateValidate(curObj, oldObj interface{}, userInfo authenticationv1.UserInfo) (string, bool) {
 	var tier string
 	var ingress, egress []crdv1alpha1.Rule
 	var specAppliedTo []crdv1alpha1.NetworkPolicyPeer
@@ -578,29 +572,29 @@ func (a *antreaPolicyValidator) updateValidate(curObj, oldObj interface{}, userI
 		egress = curANP.Spec.Egress
 		specAppliedTo = curANP.Spec.AppliedTo
 	}
-	reason, allowed := a.validateAppliedTo(ingress, egress, specAppliedTo)
+	reason, allowed := v.validateAppliedTo(ingress, egress, specAppliedTo)
 	if !allowed {
 		return reason, allowed
 	}
-	if ruleNameUnique := a.validateRuleName(ingress, egress); !ruleNameUnique {
-		return fmt.Sprint("rules names must be unique within the policy"), false
+	if ruleNameUnique := v.validateRuleName(ingress, egress); !ruleNameUnique {
+		return "rules names must be unique within the policy", false
 	}
-	reason, allowed = a.validatePeers(ingress, egress)
+	reason, allowed = v.validatePeers(ingress, egress)
 	if !allowed {
 		return reason, allowed
 	}
-	reason, allowed = a.validateFQDNSelectors(egress)
+	reason, allowed = v.validateFQDNSelectors(egress)
 	if !allowed {
 		return reason, allowed
 	}
-	if err := a.validatePort(ingress, egress); err != nil {
+	if err := v.validatePort(ingress, egress); err != nil {
 		return err.Error(), false
 	}
-	return a.validateTierForPolicy(tier)
+	return v.validateTierForPolicy(tier)
 }
 
 // deleteValidate validates the DELETE events of Antrea-native policies.
-func (a *antreaPolicyValidator) deleteValidate(oldObj interface{}, userInfo authenticationv1.UserInfo) (string, bool) {
+func (v *antreaPolicyValidator) deleteValidate(oldObj interface{}, userInfo authenticationv1.UserInfo) (string, bool) {
 	return "", true
 }
 

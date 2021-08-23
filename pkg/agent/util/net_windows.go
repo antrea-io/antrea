@@ -225,9 +225,8 @@ func DeleteHNSNetwork(hnsNetName string) error {
 	if err != nil {
 		if _, ok := err.(hcsshim.NetworkNotFoundError); !ok {
 			return nil
-		} else {
-			return err
 		}
+		return err
 	}
 	_, err = hnsNet.Delete()
 	return err
@@ -316,14 +315,14 @@ func ConfigureLinkAddresses(idx int, ipNets []*net.IPNet) error {
 	iface, _ := net.InterfaceByIndex(idx)
 	ifaceName := iface.Name
 	var addrs []*net.IPNet
-	if ifaceAddrs, err := iface.Addrs(); err != nil {
+	ifaceAddrs, err := iface.Addrs()
+	if err != nil {
 		return fmt.Errorf("failed to query IPv4 address list for interface %s: %v", ifaceName, err)
-	} else {
-		for _, addr := range ifaceAddrs {
-			if ipNet, ok := addr.(*net.IPNet); ok {
-				if ipNet.IP.To4() != nil && !ipNet.IP.IsLinkLocalUnicast() {
-					addrs = append(addrs, ipNet)
-				}
+	}
+	for _, addr := range ifaceAddrs {
+		if ipNet, ok := addr.(*net.IPNet); ok {
+			if ipNet.IP.To4() != nil && !ipNet.IP.IsLinkLocalUnicast() {
+				addrs = append(addrs, ipNet)
 			}
 		}
 	}
