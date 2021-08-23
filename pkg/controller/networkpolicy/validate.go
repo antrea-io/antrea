@@ -22,7 +22,6 @@ import (
 
 	admv1 "k8s.io/api/admission/v1"
 	authenticationv1 "k8s.io/api/authentication/v1"
-	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -535,27 +534,6 @@ func (v *antreaPolicyValidator) validatePeers(ingress, egress []crdv1alpha1.Rule
 		msg, isValid := checkPeers(rule.To)
 		if !isValid {
 			return msg, false
-		}
-
-		msg, isValid = a.validateToService(rule.ToService)
-		if !isValid {
-			return msg, false
-		}
-	}
-	return "", true
-}
-
-func (a *antreaPolicyValidator) validateToService(toService []*crdv1alpha1.ServiceReference) (string, bool) {
-	supportServiceTypeInToService := sets.NewString(
-		string(v1.ServiceTypeClusterIP),
-	)
-	for _, eachToService := range toService {
-		service, err := a.networkPolicyController.serviceLister.Services(eachToService.Namespace).Get(eachToService.Name)
-		if err != nil || service == nil {
-			return fmt.Sprintf("the Service referred in `toService` is invalid"), false
-		}
-		if !supportServiceTypeInToService.Has(string(service.Spec.Type)) {
-			return fmt.Sprintf("%s type Service is not supported in `toService`", string(service.Spec.Type)), false
 		}
 	}
 	return "", true
