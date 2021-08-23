@@ -159,7 +159,9 @@ func (r *supportBundleREST) Create(ctx context.Context, obj runtime.Object, _ re
 				r.cache = b
 			}
 		}()
-		r.clean(ctx, b.Filepath, bundleExpireDuration)
+		if err != nil {
+			r.clean(ctx, b.Filepath, bundleExpireDuration)
+		}
 	}()
 
 	return r.cache, nil
