@@ -126,8 +126,8 @@ func getMonitoringAuthToken(t *testing.T, data *TestData) string {
 	return token
 }
 
-// getMetricsFromApiServer retrieves Antrea metrics from Pod apiserver
-func getMetricsFromApiServer(t *testing.T, url string, token string) string {
+// getMetricsFromAPIServer retrieves Antrea metrics from Pod apiserver
+func getMetricsFromAPIServer(t *testing.T, url string, token string) string {
 	// #nosec G402: ignore insecure options in test code
 	config := &tls.Config{
 		InsecureSkipVerify: true,
@@ -173,7 +173,7 @@ func testPrometheusMetricsOnPods(t *testing.T, data *TestData, component string,
 	}
 
 	var hostIP = ""
-	var hostPort int32 = 0
+	var hostPort int32
 	var address = ""
 	var parser expfmt.TextParser
 
@@ -187,7 +187,7 @@ func testPrometheusMetricsOnPods(t *testing.T, data *TestData, component string,
 				hostPort = port.HostPort
 				address := net.JoinHostPort(hostIP, fmt.Sprint(hostPort))
 				t.Logf("Found %s", address)
-				respBody := getMetricsFromApiServer(t, fmt.Sprintf("https://%s/metrics", address), token)
+				respBody := getMetricsFromAPIServer(t, fmt.Sprintf("https://%s/metrics", address), token)
 
 				parsed, err := parser.TextToMetricFamilies(strings.NewReader(respBody))
 				if err != nil {
@@ -234,7 +234,7 @@ func getPrometheusEndpoint(t *testing.T, data *TestData) (string, int32) {
 		t.Fatalf("Error fetching monitoring Services: %v", err)
 	}
 
-	var nodePort int32 = 0
+	var nodePort int32
 	for _, service := range services.Items {
 		for _, port := range service.Spec.Ports {
 			nodePort = port.NodePort
@@ -269,12 +269,12 @@ func testMetricsFromPrometheusServer(t *testing.T, data *TestData, prometheusJob
 	// This API is still experimental in Prometheus v2.19.3.
 	path := url.PathEscape("match_target={job=\"" + prometheusJob + "\"}")
 	address := net.JoinHostPort(hostIP, fmt.Sprint(nodePort))
-	queryUrl := fmt.Sprintf("http://%s/api/v1/targets/metadata?%s", address, path)
+	queryURL := fmt.Sprintf("http://%s/api/v1/targets/metadata?%s", address, path)
 
 	client := &http.Client{}
-	resp, err := client.Get(queryUrl)
+	resp, err := client.Get(queryURL)
 	if err != nil {
-		t.Fatalf("Error fetching metrics from %s: %v", queryUrl, err)
+		t.Fatalf("Error fetching metrics from %s: %v", queryURL, err)
 	}
 	defer resp.Body.Close()
 

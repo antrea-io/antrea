@@ -735,16 +735,16 @@ func TestFlowWithCTMatchers(t *testing.T) {
 	defer bridge.Disconnect()
 
 	ofctlClient := ovsctl.NewClient(br)
-	ctIpSrc, ctIpSrcNet, _ := net.ParseCIDR("1.1.1.1/24")
-	ctIpDst, ctIpDstNet, _ := net.ParseCIDR("2.2.2.2/24")
+	ctIPSrc, ctIPSrcNet, _ := net.ParseCIDR("1.1.1.1/24")
+	ctIPDst, ctIPDstNet, _ := net.ParseCIDR("2.2.2.2/24")
 	ctPortSrc := uint16(10001)
 	ctPortDst := uint16(20002)
 	priority := uint16(200)
 	flow1 := table.BuildFlow(priority).
 		MatchProtocol(binding.ProtocolIP).
 		MatchCTStateNew(true).
-		MatchCTSrcIP(ctIpSrc).
-		MatchCTDstIP(ctIpDst).
+		MatchCTSrcIP(ctIPSrc).
+		MatchCTDstIP(ctIPDst).
 		MatchCTSrcPort(ctPortSrc).
 		MatchCTDstPort(ctPortDst).
 		MatchCTProtocol(binding.ProtocolTCP).
@@ -753,19 +753,19 @@ func TestFlowWithCTMatchers(t *testing.T) {
 	flow2 := table.BuildFlow(priority).
 		MatchProtocol(binding.ProtocolIP).
 		MatchCTStateEst(true).
-		MatchCTSrcIPNet(*ctIpSrcNet).
-		MatchCTDstIPNet(*ctIpDstNet).
+		MatchCTSrcIPNet(*ctIPSrcNet).
+		MatchCTDstIPNet(*ctIPDstNet).
 		MatchCTProtocol(binding.ProtocolTCP).
 		Action().ResubmitToTable(table.GetNext()).
 		Done()
 	expectFlows := []*ExpectFlow{
 		{fmt.Sprintf("priority=%d,ct_state=+new,ct_nw_src=%s,ct_nw_dst=%s,ct_nw_proto=6,ct_tp_src=%d,ct_tp_dst=%d,ip",
-			priority, ctIpSrc.String(), ctIpDst.String(), ctPortSrc, ctPortDst),
+			priority, ctIPSrc.String(), ctIPDst.String(), ctPortSrc, ctPortDst),
 			fmt.Sprintf("resubmit(,%d)", table.GetNext()),
 		},
 		{
 			fmt.Sprintf("priority=%d,ct_state=+est,ct_nw_src=%s,ct_nw_dst=%s,ct_nw_proto=6,ip",
-				priority, ctIpSrcNet.String(), ctIpDstNet.String()),
+				priority, ctIPSrcNet.String(), ctIPDstNet.String()),
 			fmt.Sprintf("resubmit(,%d)", table.GetNext()),
 		},
 	}

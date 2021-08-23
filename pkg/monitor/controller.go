@@ -93,7 +93,7 @@ func (monitor *controllerMonitor) Run(stopCh <-chan struct{}) {
 }
 
 func (monitor *controllerMonitor) syncControllerCRD() {
-	var err error = nil
+	var err error
 	if monitor.controllerCRD != nil {
 		if monitor.controllerCRD, err = monitor.updateControllerCRD(true); err == nil {
 			return
@@ -192,7 +192,7 @@ func (monitor *controllerMonitor) deleteAgentCRD(name string) {
 }
 
 func (monitor *controllerMonitor) syncLegacyControllerCRD() {
-	var err error = nil
+	var err error
 	if monitor.legacyControllerCRD != nil {
 		if monitor.legacyControllerCRD, err = monitor.updateLegacyControllerCRD(true); err == nil {
 			return

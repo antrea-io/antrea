@@ -55,7 +55,7 @@ func makeErrorResponse(cniErrorCode cnipb.ErrorCode, cniErrorMsg string) *cnipb.
 	}
 }
 
-func (c *testClient) cmdHandle(b testClientBehave, ctx context.Context, requestMsg *cnipb.CniCmdRequest) (*cnipb.CniCmdResponse, error) {
+func (c *testClient) cmdHandle(ctx context.Context, b testClientBehave, requestMsg *cnipb.CniCmdRequest) (*cnipb.CniCmdResponse, error) {
 	switch b {
 	case normal:
 		return &cnipb.CniCmdResponse{}, nil
@@ -74,15 +74,15 @@ func (c *testClient) cmdHandle(b testClientBehave, ctx context.Context, requestM
 }
 
 func (c *testClient) CmdAdd(ctx context.Context, requestMsg *cnipb.CniCmdRequest, opts ...grpc.CallOption) (*cnipb.CniCmdResponse, error) {
-	return c.cmdHandle(c.add, ctx, requestMsg)
+	return c.cmdHandle(ctx, c.add, requestMsg)
 }
 
 func (c *testClient) CmdCheck(ctx context.Context, requestMsg *cnipb.CniCmdRequest, opts ...grpc.CallOption) (*cnipb.CniCmdResponse, error) {
-	return c.cmdHandle(c.check, ctx, requestMsg)
+	return c.cmdHandle(ctx, c.check, requestMsg)
 }
 
 func (c *testClient) CmdDel(ctx context.Context, requestMsg *cnipb.CniCmdRequest, opts ...grpc.CallOption) (*cnipb.CniCmdResponse, error) {
-	return c.cmdHandle(c.del, ctx, requestMsg)
+	return c.cmdHandle(ctx, c.del, requestMsg)
 }
 
 func enableTestClient(t *testing.T, add, check, del testClientBehave) {

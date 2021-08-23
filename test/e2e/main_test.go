@@ -100,21 +100,20 @@ func testMain(m *testing.M) int {
 	log.Println("Collecting information about K8s cluster")
 	if err := collectClusterInfo(); err != nil {
 		log.Fatalf("Error when collecting information about K8s cluster: %v", err)
-	} else {
-		if clusterInfo.podV4NetworkCIDR != "" {
-			log.Printf("Pod IPv4 network: '%s'", clusterInfo.podV4NetworkCIDR)
-		}
-		if clusterInfo.podV6NetworkCIDR != "" {
-			log.Printf("Pod IPv6 network: '%s'", clusterInfo.podV6NetworkCIDR)
-		}
-		if clusterInfo.svcV4NetworkCIDR != "" {
-			log.Printf("Service IPv4 network: '%s'", clusterInfo.svcV4NetworkCIDR)
-		}
-		if clusterInfo.svcV6NetworkCIDR != "" {
-			log.Printf("Service IPv6 network: '%s'", clusterInfo.svcV6NetworkCIDR)
-		}
-		log.Printf("Num nodes: %d", clusterInfo.numNodes)
 	}
+	if clusterInfo.podV4NetworkCIDR != "" {
+		log.Printf("Pod IPv4 network: '%s'", clusterInfo.podV4NetworkCIDR)
+	}
+	if clusterInfo.podV6NetworkCIDR != "" {
+		log.Printf("Pod IPv6 network: '%s'", clusterInfo.podV6NetworkCIDR)
+	}
+	if clusterInfo.svcV4NetworkCIDR != "" {
+		log.Printf("Service IPv4 network: '%s'", clusterInfo.svcV4NetworkCIDR)
+	}
+	if clusterInfo.svcV6NetworkCIDR != "" {
+		log.Printf("Service IPv6 network: '%s'", clusterInfo.svcV6NetworkCIDR)
+	}
+	log.Printf("Num nodes: %d", clusterInfo.numNodes)
 	err := ensureAntreaRunning(testData)
 	if err != nil {
 		log.Fatalf("Error when deploying Antrea: %v", err)
