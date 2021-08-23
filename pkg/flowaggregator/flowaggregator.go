@@ -185,6 +185,7 @@ type flowAggregator struct {
 	k8sClient                   kubernetes.Interface
 	observationDomainID         uint32
 	podInformer                 coreinformers.PodInformer
+	sendJSONRecord              bool
 }
 
 func NewFlowAggregator(
@@ -197,6 +198,7 @@ func NewFlowAggregator(
 	k8sClient kubernetes.Interface,
 	observationDomainID uint32,
 	podInformer coreinformers.PodInformer,
+	sendJSONRecord bool,
 ) *flowAggregator {
 	registry := ipfix.NewIPFIXRegistry()
 	registry.LoadRegistry()
@@ -212,6 +214,7 @@ func NewFlowAggregator(
 		k8sClient:                   k8sClient,
 		observationDomainID:         observationDomainID,
 		podInformer:                 podInformer,
+		sendJSONRecord:              sendJSONRecord,
 	}
 	podInformer.Informer().AddIndexers(cache.Indexers{podInfoIndex: podInfoIndexFunc})
 	return fa
@@ -334,6 +337,7 @@ func (fa *flowAggregator) initExportingProcess() error {
 			TempRefTimeout:      0,
 			PathMTU:             0,
 			IsEncrypted:         false,
+			SendJSONRecord:      fa.sendJSONRecord,
 		}
 	} else {
 		// For UDP transport, hardcoding tempRefTimeout value as 1800s. So we will send out template every 30 minutes.
@@ -344,6 +348,7 @@ func (fa *flowAggregator) initExportingProcess() error {
 			TempRefTimeout:      1800,
 			PathMTU:             0,
 			IsEncrypted:         false,
+			SendJSONRecord:      fa.sendJSONRecord,
 		}
 	}
 	ep, err := ipfix.NewIPFIXExportingProcess(expInput)
@@ -358,6 +363,7 @@ func (fa *flowAggregator) initExportingProcess() error {
 	if err = fa.createAndSendTemplate(true); err != nil {
 		return err
 	}
+
 	return nil
 }
 

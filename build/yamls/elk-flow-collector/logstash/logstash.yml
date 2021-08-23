@@ -1,2 +1,4 @@
 http.host: "${POD_IP}"
 path.config: /usr/share/logstash/pipeline
+pipeline.workers: 1
+pipeline.batch.size: 125

@@ -48,4 +48,7 @@ type FlowAggregatorConfig struct {
 	// is not available), a value will be randomly generated, which may vary across restarts of the flow
 	// aggregator.
 	ObservationDomainID *uint32 `yaml:"observationDomainID,omitempty"`
+	// Provide format for records sent to the configured flow collector. Supported formats are IPFIX and JSON.
+	// Defaults to "IPFIX"
+	RecordFormat string `yaml:"recordFormat,omitempty"`
 }

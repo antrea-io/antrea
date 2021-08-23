@@ -263,7 +263,9 @@ then please use the address:
 `<Ipfix-Collector Cluster IP>:<port>:<TCP|UDP>`
 * If you have deployed the [ELK
 flow collector](#deployment-steps-1), then please use the address:  
-`<Logstash Cluster IP>:4739:<TCP|UDP>`
+`<Logstash Cluster IP>:4739:<TCP|UDP>` for sending IPFIX messages, or `<Logstash Cluster IP>:4736:<TCP|UDP>`
+for sending JSON format records. Record format is specified with `recordFormat` (defaults
+to IPFIX) and must match the format expected by the collector.
 
 ```yaml
 flow-aggregator.conf: |
@@ -283,6 +285,10 @@ flow-aggregator.conf: |
   # Provide DNS name or IP address of flow aggregator for generating TLS certificate. It must match
   # the flowCollectorAddr parameter in the antrea-agent config.    
   #flowAggregatorAddress: "flow-aggregator.flow-aggregator.svc"
+
+  # Provide format for records sent to the configured flow collector.
+  # Supported formats are IPFIX and JSON.
+  #recordFormat: "IPFIX"
 ```
 
 Please note that the default values for `flowExportInterval`, `aggregatorTransportProtocol`,

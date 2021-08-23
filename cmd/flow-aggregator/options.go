@@ -35,6 +35,7 @@ const (
 	defaultInactiveFlowRecordTimeout      = 90 * time.Second
 	defaultAggregatorTransportProtocol    = flowaggregator.AggregatorTransportProtocolTLS
 	defaultFlowAggregatorAddress          = "flow-aggregator.flow-aggregator.svc"
+	defaultRecordFormat                   = "IPFIX"
 )
 
 type Options struct {
@@ -54,6 +55,8 @@ type Options struct {
 	aggregatorTransportProtocol flowaggregator.AggregatorTransportProtocol
 	// DNS name or IP address of flow aggregator for generating TLS certificate
 	flowAggregatorAddress string
+	// Format for record sent to the configured flow collector
+	format string
 }
 
 func newOptions() *Options {
@@ -122,6 +125,13 @@ func (o *Options) validate(args []string) error {
 		o.flowAggregatorAddress = defaultFlowAggregatorAddress
 	} else {
 		o.flowAggregatorAddress = o.config.FlowAggregatorAddress
+	}
+	if o.config.RecordFormat == "" {
+		o.format = defaultRecordFormat
+	} else if o.config.RecordFormat != "IPFIX" && o.config.RecordFormat != "JSON" {
+		return fmt.Errorf("record format %s is not supported", o.config.RecordFormat)
+	} else {
+		o.format = o.config.RecordFormat
 	}
 	return nil
 }

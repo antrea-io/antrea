@@ -96,6 +96,13 @@ func run(o *Options) error {
 	}
 	klog.Infof("Flow aggregator Observation Domain ID: %d", observationDomainID)
 
+	var sendJSONRecord bool
+	if o.format == "JSON" {
+		sendJSONRecord = true
+	} else {
+		sendJSONRecord = false
+	}
+
 	flowAggregator := aggregator.NewFlowAggregator(
 		o.externalFlowCollectorAddr,
 		o.externalFlowCollectorProto,
@@ -106,6 +113,7 @@ func run(o *Options) error {
 		k8sClient,
 		observationDomainID,
 		podInformer,
+		sendJSONRecord,
 	)
 	err = flowAggregator.InitCollectingProcess()
 	if err != nil {
