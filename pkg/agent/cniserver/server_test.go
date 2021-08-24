@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//go:build linux
 // +build linux
+
 // TODO: fix the CNI ADD test for Windows.
 
 package cniserver
