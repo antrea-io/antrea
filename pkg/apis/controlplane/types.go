@@ -15,6 +15,9 @@
 package controlplane
 
 import (
+	"fmt"
+	"net"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -81,11 +84,12 @@ type GroupMember struct {
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// ClusterGroupMembers is a list of GroupMember objects that are currently selected by a ClusterGroup.
+// ClusterGroupMembers is a list of GroupMember objects or ipBlocks that are currently selected by a ClusterGroup.
 type ClusterGroupMembers struct {
 	metav1.TypeMeta
 	metav1.ObjectMeta
-	EffectiveMembers []GroupMember
+	EffectiveMembers  []GroupMember
+	EffectiveIPBlocks []IPNet
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -120,10 +124,18 @@ type AddressGroup struct {
 // IPAddress describes a single IP address. Either an IPv4 or IPv6 address must be set.
 type IPAddress []byte
 
+func (ip IPAddress) String() string {
+	return net.IP(ip).String()
+}
+
 // IPNet describes an IP network.
 type IPNet struct {
 	IP           IPAddress
 	PrefixLength int32
+}
+
+func (ipn IPNet) String() string {
+	return fmt.Sprintf("%s/%d", ipn.IP.String(), ipn.PrefixLength)
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

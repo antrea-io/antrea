@@ -249,6 +249,13 @@ func (in *ClusterGroupMembers) DeepCopyInto(out *ClusterGroupMembers) {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
 	}
+	if in.EffectiveIPBlocks != nil {
+		in, out := &in.EffectiveIPBlocks, &out.EffectiveIPBlocks
+		*out = make([]IPNet, len(*in))
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
+		}
+	}
 	return
 }
 
