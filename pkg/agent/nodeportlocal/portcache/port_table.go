@@ -166,7 +166,7 @@ func (pt *PortTable) AddRule(podIP string, podPort int, protocol string) (int, e
 func (pt *PortTable) DeleteRule(podIP string, podPort int, protocol string) error {
 	pt.tableLock.Lock()
 	defer pt.tableLock.Unlock()
-	data := pt.GetEntryByPodIPPortProtocol(podIP, podPort, protocol)
+	data := pt.getEntryByPodIPPortProtocol(podIP, podPort, protocol)
 	if err := pt.PodPortRules.DeleteRule(data.NodePort, podIP, podPort, protocol); err != nil {
 		return err
 	}

@@ -642,6 +642,8 @@ func TestMultiplePods(t *testing.T) {
 
 // TestMultipleProtocols creates multiple Pods with multiple protocols and verifies that
 // NPL annotations and iptable rules for both Pods and Protocols are updated correctly.
+// In particular we make sure that a given NodePort is never used by more than one Pod,
+// irrespective of which protocol is in use.
 func TestMultipleProtocols(t *testing.T) {
 	tcpUdpSvcLabel := map[string]string{"tcp": "true", "udp": "true"}
 	udpSvcLabel := map[string]string{"tcp": "false", "udp": "true"}
@@ -754,7 +756,7 @@ func TestNodePortAlreadyBoundTo(t *testing.T) {
 	testConfig := newTestConfig().withCustomPortOpenerExpectations(func(mockPortOpener *portcachetesting.MockLocalPortOpener) {
 		gomock.InOrder(
 			mockPortOpener.EXPECT().OpenLocalPort(gomock.Any(), gomock.Any()).Return(nil, portTakenError),
-			mockPortOpener.EXPECT().OpenLocalPort(gomock.Any(), gomock.Any()).DoAndReturn(func(port int) (portcache.Closeable, error) {
+			mockPortOpener.EXPECT().OpenLocalPort(gomock.Any(), gomock.Any()).DoAndReturn(func(port int, protocol string) (portcache.Closeable, error) {
 				nodePort = port
 				return &fakeSocket{}, nil
 			}),

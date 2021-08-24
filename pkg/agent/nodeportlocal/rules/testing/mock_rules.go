@@ -65,7 +65,7 @@ func (mr *MockPodPortRulesMockRecorder) AddAllRules(arg0 interface{}) *gomock.Ca
 // AddRule mocks base method
 func (m *MockPodPortRules) AddRule(arg0 int, arg1 string, arg2 int, arg3 string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AddRule", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "AddRule", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
@@ -93,7 +93,7 @@ func (mr *MockPodPortRulesMockRecorder) DeleteAllRules() *gomock.Call {
 // DeleteRule mocks base method
 func (m *MockPodPortRules) DeleteRule(arg0 int, arg1 string, arg2 int, arg3 string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteRule", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "DeleteRule", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(error)
 	return ret0
 }

@@ -1676,21 +1676,10 @@ func (data *TestData) runPingCommandFromTestPod(podInfo podInfo, ns string, targ
 }
 
 func (data *TestData) runNetcatCommandFromTestPod(podName string, ns string, server string, port int32) error {
-	// Retrying several times to avoid flakes as the test may involve DNS (coredns) and Service/Endpoints (kube-proxy).
-	cmd := []string{
-		"/bin/sh",
-		"-c",
-		fmt.Sprintf("for i in $(seq 1 5); do nc -vz -w 4 %s %d && exit 0 || sleep 1; done; exit 1",
-			server, port),
-	}
-	stdout, stderr, err := data.runCommandFromPod(ns, podName, busyboxContainerName, cmd)
-	if err == nil {
-		return nil
-	}
-	return fmt.Errorf("nc stdout: <%v>, stderr: <%v>, err: <%v>", stdout, stderr, err)
+	return data.runNetcatCommandFromTestPodWithProtocol(podName, ns, server, port, "")
 }
 
-func (data *TestData) runNetcatCommandFromTestPodWithProtocol(podName string, server string, port int32, protocol string) error {
+func (data *TestData) runNetcatCommandFromTestPodWithProtocol(podName string, ns string, server string, port int32, protocol string) error {
 	// No parameter required for TCP connections.
 	protocolOption := ""
 	if protocol == "udp" {
