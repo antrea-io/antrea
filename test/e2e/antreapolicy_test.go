@@ -123,7 +123,7 @@ type TestStep struct {
 	Name          string
 	Reachability  *Reachability
 	TestResources []metav1.Object
-	Ports          []int32
+	Ports         []int32
 	Protocol      v1.Protocol
 	Duration      time.Duration
 	CustomProbes  []*CustomProbe
