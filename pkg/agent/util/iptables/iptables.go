@@ -1,3 +1,4 @@
+//go:build !windows
 // +build !windows
 
 // Copyright 2020 Antrea Authors
@@ -26,6 +27,8 @@ import (
 	"github.com/blang/semver"
 	"github.com/coreos/go-iptables/iptables"
 	"k8s.io/klog/v2"
+
+	"antrea.io/antrea/pkg/agent/util/kmod"
 )
 
 const (
@@ -75,6 +78,8 @@ type Client struct {
 	ipts map[Protocol]*iptables.IPTables
 	// restoreWaitSupported indicates whether iptables-restore (or ip6tables-restore) supports --wait flag.
 	restoreWaitSupported bool
+	// noTrackTargetSupported indicates whether the NOTRACK target is supported.
+	noTrackTargetSupported bool
 }
 
 func New(enableIPV4, enableIPV6 bool) (*Client, error) {
@@ -98,13 +103,32 @@ func New(enableIPV4, enableIPV6 bool) (*Client, error) {
 			restoreWaitSupported = isRestoreWaitSupported(ip6t)
 		}
 	}
-	return &Client{ipts: ipts, restoreWaitSupported: restoreWaitSupported}, nil
+	noTrackTargetSupported := isNoTrackTargetSupported()
+	return &Client{
+		ipts:                   ipts,
+		restoreWaitSupported:   restoreWaitSupported,
+		noTrackTargetSupported: noTrackTargetSupported,
+	}, nil
 }
 
 func isRestoreWaitSupported(ipt *iptables.IPTables) bool {
 	major, minor, patch := ipt.GetIptablesVersion()
 	version := semver.Version{Major: uint64(major), Minor: uint64(minor), Patch: uint64(patch)}
 	return version.GE(restoreWaitSupportedMinVersion)
+}
+
+func isNoTrackTargetSupported() bool {
+	exists, err := kmod.CheckIfKernelModuleExists("xt_CT", "kernel/net/netfilter", true)
+	if err != nil {
+		klog.ErrorS(err, "Cannot determine if the iptables target is supported, assuming it isn't", "target", NoTrackTarget)
+		return false
+	}
+	klog.InfoS("Determining if iptables target is supported", "target", NoTrackTarget, "supported", exists)
+	return exists
+}
+
+func (c *Client) IsNoTrackTargetSupported() bool {
+	return c.noTrackTargetSupported
 }
 
 // EnsureChain checks if target chain already exists, creates it if not.

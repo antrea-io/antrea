@@ -325,11 +325,13 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet, podIPSet string, snatMa
 	writeLine(iptablesData, "*raw")
 	writeLine(iptablesData, iptables.MakeChainLine(antreaPreRoutingChain))
 	writeLine(iptablesData, iptables.MakeChainLine(antreaOutputChain))
-	if c.networkConfig.TrafficEncapMode.SupportsEncap() {
+	if c.networkConfig.TrafficEncapMode.SupportsEncap() && c.ipt.IsNoTrackTargetSupported() {
 		// For Geneve and VXLAN encapsulation packets, the request and response packets don't belong to a UDP connection
 		// so tracking them doesn't give the normal benefits of conntrack. Besides, kube-proxy may install great number
 		// of iptables rules in nat table. The first encapsulation packets of connections would have to go through all
 		// of the rules which wastes CPU and increases packet latency.
+		// Note that if the NOTRACK target is not supported, we simply skip the installation of these rules since this is
+		// a performance improvement and Antrea will still function correctly without them.
 		udpPort := 0
 		if c.networkConfig.TunnelType == ovsconfig.GeneveTunnel {
 			udpPort = genevePort

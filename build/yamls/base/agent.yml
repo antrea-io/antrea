@@ -150,6 +150,10 @@ spec:
             mountPropagation: HostToContainer
           - name: xtables-lock
             mountPath: /run/xtables.lock
+          # For checking availability of some kernel modules.
+          - name: host-lib-modules
+            mountPath: /lib/modules
+            readOnly: true
         - name: antrea-ovs
           image: antrea
           resources:

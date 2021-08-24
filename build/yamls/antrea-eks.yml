@@ -4311,6 +4311,9 @@ spec:
           readOnly: true
         - mountPath: /run/xtables.lock
           name: xtables-lock
+        - mountPath: /lib/modules
+          name: host-lib-modules
+          readOnly: true
       - args:
         - --log_file_max_size=100
         - --log_file_max_num=4
