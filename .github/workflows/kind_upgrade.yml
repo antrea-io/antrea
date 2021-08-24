@@ -63,7 +63,7 @@ jobs:
       with:
         go-version: 1.17
     - name: Download Antrea image from previous job
-      uses: actions/download-artifact@v1
+      uses: actions/download-artifact@v2.0.10
       with:
         name: antrea-ubuntu
     - name: Load Antrea image
@@ -103,7 +103,7 @@ jobs:
       with:
         go-version: 1.17
     - name: Download Antrea image from previous job
-      uses: actions/download-artifact@v1
+      uses: actions/download-artifact@v2.0.10
       with:
         name: antrea-ubuntu
     - name: Load Antrea image
@@ -143,7 +143,7 @@ jobs:
         with:
           go-version: 1.17
       - name: Download Antrea image from previous job
-        uses: actions/download-artifact@v1
+        uses: actions/download-artifact@v2.0.10
         with:
           name: antrea-ubuntu
       - name: Load Antrea image
@@ -183,7 +183,7 @@ jobs:
         with:
           go-version: 1.17
       - name: Download Antrea image from previous job
-        uses: actions/download-artifact@v1
+        uses: actions/download-artifact@v2.0.10
         with:
           name: antrea-ubuntu
       - name: Load Antrea image

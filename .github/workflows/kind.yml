@@ -78,13 +78,13 @@ jobs:
       with:
         go-version: 1.17
     - name: Download Antrea image from previous job
-      uses: actions/download-artifact@v1
+      uses: actions/download-artifact@v2.0.10
       with:
         name: antrea-ubuntu-cov
       # TODO: Create path to two image artifacts when uploading artifacts, so multiple
       # artifacts can be downloaded at once.
     - name: Download Flow Aggregator image from previous job
-      uses: actions/download-artifact@v1
+      uses: actions/download-artifact@v2.0.10
       with:
         name: flow-aggregator-cov
     - name: Load Antrea image
@@ -143,11 +143,11 @@ jobs:
       with:
         go-version: 1.17
     - name: Download Antrea image from previous job
-      uses: actions/download-artifact@v1
+      uses: actions/download-artifact@v2.0.10
       with:
         name: antrea-ubuntu-cov
     - name: Download Flow Aggregator image from previous job
-      uses: actions/download-artifact@v1
+      uses: actions/download-artifact@v2.0.10
       with:
         name: flow-aggregator-cov
     - name: Load Antrea image
@@ -206,11 +206,11 @@ jobs:
       with:
         go-version: 1.17
     - name: Download Antrea image from previous job
-      uses: actions/download-artifact@v1
+      uses: actions/download-artifact@v2.0.10
       with:
         name: antrea-ubuntu-cov
     - name: Download Flow Aggregator image from previous job
-      uses: actions/download-artifact@v1
+      uses: actions/download-artifact@v2.0.10
       with:
         name: flow-aggregator-cov
     - name: Load Antrea image
@@ -269,11 +269,11 @@ jobs:
       with:
         go-version: 1.17
     - name: Download Antrea image from previous job
-      uses: actions/download-artifact@v1
+      uses: actions/download-artifact@v2.0.10
       with:
         name: antrea-ubuntu-cov
     - name: Download Flow Aggregator image from previous job
-      uses: actions/download-artifact@v1
+      uses: actions/download-artifact@v2.0.10
       with:
         name: flow-aggregator-cov
     - name: Load Antrea image
@@ -335,11 +335,11 @@ jobs:
       with:
         go-version: 1.17
     - name: Download Antrea image from previous job
-      uses: actions/download-artifact@v1
+      uses: actions/download-artifact@v2.0.10
       with:
         name: antrea-ubuntu-cov
     - name: Download Flow Aggregator image from previous job
-      uses: actions/download-artifact@v1
+      uses: actions/download-artifact@v2.0.10
       with:
         name: flow-aggregator-cov
     - name: Load Antrea image
@@ -398,7 +398,7 @@ jobs:
       with:
         go-version: 1.17
     - name: Download Antrea image from previous job
-      uses: actions/download-artifact@v1
+      uses: actions/download-artifact@v2.0.10
       with:
         name: antrea-ubuntu-cov
     - name: Load Antrea image
@@ -433,7 +433,7 @@ jobs:
         with:
           go-version: 1.17
       - name: Download Antrea image from previous job
-        uses: actions/download-artifact@v1
+        uses: actions/download-artifact@v2.0.10
         with:
           name: antrea-ubuntu-cov
       - name: Load Antrea image
