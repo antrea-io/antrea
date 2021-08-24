@@ -1676,7 +1676,7 @@ func (data *TestData) runPingCommandFromTestPod(podInfo podInfo, ns string, targ
 }
 
 func (data *TestData) runNetcatCommandFromTestPod(podName string, ns string, server string, port int32) error {
-	return data.runNetcatCommandFromTestPodWithProtocol(podName, ns, server, port, "")
+	return data.runNetcatCommandFromTestPodWithProtocol(podName, ns, server, port, "tcp")
 }
 
 func (data *TestData) runNetcatCommandFromTestPodWithProtocol(podName string, ns string, server string, port int32, protocol string) error {
@@ -1693,7 +1693,7 @@ func (data *TestData) runNetcatCommandFromTestPodWithProtocol(podName string, ns
 			protocolOption, server, port),
 	}
 
-	stdout, stderr, err := data.runCommandFromPod(testNamespace, podName, busyboxContainerName, cmd)
+	stdout, stderr, err := data.runCommandFromPod(ns, podName, busyboxContainerName, cmd)
 	if err == nil {
 		return nil
 	}

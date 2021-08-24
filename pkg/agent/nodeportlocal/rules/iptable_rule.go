@@ -82,7 +82,7 @@ func buildRuleForPod(port int, podIP, protocol string) []string {
 // AddRule appends a DNAT rule in NodePortLocalChain chain of NAT table.
 func (ipt *iptablesRules) AddRule(nodePort int, podIP string, podPort int, protocol string) error {
 	podAddr := fmt.Sprintf("%s:%d", podIP, podPort)
-	rule := buildRuleForPod(nodePort, podIP, protocol)
+	rule := buildRuleForPod(nodePort, podAddr, protocol)
 	if err := ipt.table.AppendRule(iptables.ProtocolIPv4, iptables.NATTable, NodePortLocalChain, rule); err != nil {
 		return err
 	}

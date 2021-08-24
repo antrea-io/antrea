@@ -235,22 +235,22 @@ func updateNPLPortRangeInConfigmap(t *testing.T, data *TestData, newStartPort, n
 	}
 }
 
-func validatePortsInAnnotation(t *testing.T, r *require.Assertions, nplAnnotations []k8s.NPLAnnotation, start, end int, targetPortsProtocolsProtocols map[int]sets.String) {
-	require.Equal(t, len(targetPortsProtocolsProtocols), len(nplAnnotations))
+func validatePortsInAnnotation(t *testing.T, r *require.Assertions, nplAnnotations []k8s.NPLAnnotation, start, end int, targetPortsProtocols map[int]sets.String) {
+	require.Equal(t, len(targetPortsProtocols), len(nplAnnotations))
 	for i := range nplAnnotations {
 		podPort := nplAnnotations[i].PodPort
 		protocols := sets.NewString(nplAnnotations[i].Protocols...)
-		targetProtocols, podPortInTargetPort := targetPortsProtocolsProtocols[podPort]
-		r.True(podPortInTargetPort, "Port %d in Pod annotation not found in set target ports :%v from Services", podPort, targetPortsProtocolsProtocols)
+		targetProtocols, podPortInTargetPort := targetPortsProtocols[podPort]
+		r.True(podPortInTargetPort, "Port %d in Pod annotation not found in set target ports :%v from Services", podPort, targetPortsProtocols)
 		r.True(protocols.Equal(targetProtocols), "Protocols %v in Pod annotation not found in set target protocols :%v from Services", protocols, targetProtocols)
-		delete(targetPortsProtocolsProtocols, podPort)
+		delete(targetPortsProtocols, podPort)
 
 		nodePort := nplAnnotations[i].NodePort
 		if nodePort > end || nodePort < start {
 			t.Fatalf("Node port %d not in range: %d - %d", nodePort, start, end)
 		}
 	}
-	r.Emptyf(targetPortsProtocolsProtocols, "Target ports %v not found in Pod annotation", targetPortsProtocolsProtocols)
+	r.Emptyf(targetPortsProtocols, "Target ports %v not found in Pod annotation", targetPortsProtocols)
 }
 
 func testNPLAddPod(t *testing.T, data *TestData) {
@@ -296,11 +296,11 @@ func NPLTestMultiplePods(t *testing.T) {
 
 	targetProtocols := sets.NewString(protocolToString(defaultProtocolTCP))
 	for _, testPodName := range testPods {
-		targetPortsProtocolsProtocols := map[int]sets.String{defaultTargetPort: targetProtocols}
+		targetPortsProtocols := map[int]sets.String{defaultTargetPort: targetProtocols}
 		nplAnnotations, testPodIP := getNPLAnnotations(t, testData, r, testPodName)
 
 		checkNPLRulesForPod(t, testData, r, nplAnnotations, antreaPod, testPodIP, true)
-		validatePortsInAnnotation(t, r, nplAnnotations, defaultStartPort, defaultEndPort, targetPortsProtocolsProtocols)
+		validatePortsInAnnotation(t, r, nplAnnotations, defaultStartPort, defaultEndPort, targetPortsProtocols)
 		checkTrafficForNPL(testData, r, nplAnnotations, clientName)
 
 		testData.deletePod(testNamespace, testPodName)
