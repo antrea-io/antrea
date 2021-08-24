@@ -17,7 +17,6 @@
 package scheme
 
 import (
-	controlplanev1beta1 "antrea.io/antrea/pkg/apis/controlplane/v1beta1"
 	controlplanev1beta2 "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	crdv1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
@@ -36,7 +35,6 @@ var Scheme = runtime.NewScheme()
 var Codecs = serializer.NewCodecFactory(Scheme)
 var ParameterCodec = runtime.NewParameterCodec(Scheme)
 var localSchemeBuilder = runtime.SchemeBuilder{
-	controlplanev1beta1.AddToScheme,
 	controlplanev1beta2.AddToScheme,
 	crdv1alpha1.AddToScheme,
 	crdv1alpha2.AddToScheme,

@@ -18,8 +18,6 @@ package fake
 
 import (
 	clientset "antrea.io/antrea/pkg/client/clientset/versioned"
-	controlplanev1beta1 "antrea.io/antrea/pkg/client/clientset/versioned/typed/controlplane/v1beta1"
-	fakecontrolplanev1beta1 "antrea.io/antrea/pkg/client/clientset/versioned/typed/controlplane/v1beta1/fake"
 	controlplanev1beta2 "antrea.io/antrea/pkg/client/clientset/versioned/typed/controlplane/v1beta2"
 	fakecontrolplanev1beta2 "antrea.io/antrea/pkg/client/clientset/versioned/typed/controlplane/v1beta2/fake"
 	crdv1alpha1 "antrea.io/antrea/pkg/client/clientset/versioned/typed/crd/v1alpha1"
@@ -87,11 +85,6 @@ func (c *Clientset) Tracker() testing.ObjectTracker {
 }
 
 var _ clientset.Interface = &Clientset{}
-
-// ControlplaneV1beta1 retrieves the ControlplaneV1beta1Client
-func (c *Clientset) ControlplaneV1beta1() controlplanev1beta1.ControlplaneV1beta1Interface {
-	return &fakecontrolplanev1beta1.FakeControlplaneV1beta1{Fake: &c.Fake}
-}
 
 // ControlplaneV1beta2 retrieves the ControlplaneV1beta2Client
 func (c *Clientset) ControlplaneV1beta2() controlplanev1beta2.ControlplaneV1beta2Interface {

@@ -263,6 +263,7 @@ func CleanupDeprecatedAPIServices(aggregatorClient clientset.Interface) error {
 	deprecatedAPIServices := []string{
 		"v1beta1.networking.antrea.tanzu.vmware.com",
 		"v1beta1.controlplane.antrea.tanzu.vmware.com",
+		"v1beta1.controlplane.antrea.io",
 	}
 	for _, as := range deprecatedAPIServices {
 		err := aggregatorClient.ApiregistrationV1().APIServices().Delete(context.TODO(), as, metav1.DeleteOptions{})

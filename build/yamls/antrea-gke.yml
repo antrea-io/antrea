@@ -3501,6 +3501,7 @@ rules:
   resourceNames:
   - v1beta1.networking.antrea.tanzu.vmware.com
   - v1beta1.controlplane.antrea.tanzu.vmware.com
+  - v1beta1.controlplane.antrea.io
   resources:
   - apiservices
   verbs:
