@@ -77,12 +77,16 @@ EOF
         fi
         cp -rf "$antrea_scm_dir" $WORKSPACE/antrea-cni
         pushd $WORKSPACE/antrea-cni
+
+        local sed_match_reg='s/(@| |^|=|	)docker($| )/\1sudo docker\2/'
+
+        sed -ri "${sed_match_reg}" Makefile
         
-        sudo docker build -t "$ANTREA_CNI_HARBOR_IMAGE" -f build/images/Dockerfile.build.ubuntu --build-arg OVS_VERSION=$(head -n 1 build/images/deps/ovs-version) .
+        make build-ubuntu
         let status=status+$?
         popd
     else
-        build_github_project "antrea-cni" "sudo docker build -t "$ANTREA_CNI_HARBOR_IMAGE" -f build/images/Dockerfile.build.ubuntu --build-arg OVS_VERSION=$(head -n 1 build/images/deps/ovs-version) ."
+        build_github_project "antrea-cni" "make build-ubuntu"
         let status=status+$?
     fi
 
@@ -90,6 +94,8 @@ EOF
         echo "ERROR: Failed to build the antrea-cni project!"
         return $status
     fi
+
+    sudo docker tag antrea/antrea-ubuntu "$ANTREA_CNI_HARBOR_IMAGE"
 
     IMG_NAME="$ANTREA_CNI_HARBOR_IMAGE" bash $WORKSPACE/antrea-cni/hack/generate-manifest.sh --hw-offload > $ARTIFACTS/antrea.yml
     let status=status+$?
