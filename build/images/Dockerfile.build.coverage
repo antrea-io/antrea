@@ -1,5 +1,6 @@
+ARG GO_VERSION
 ARG OVS_VERSION
-FROM golang:1.15 as antrea-build
+FROM golang:${GO_VERSION} as antrea-build
 
 WORKDIR /antrea
 

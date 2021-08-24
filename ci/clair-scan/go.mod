@@ -1,6 +1,6 @@
 module antrea.io/antrea/ci/clair
 
-go 1.15
+go 1.17
 
 require (
 	github.com/aws/aws-sdk-go v1.30.23
