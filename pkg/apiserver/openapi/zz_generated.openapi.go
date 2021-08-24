@@ -3742,6 +3742,12 @@ func schema_pkg_apis_system_v1beta1_SupportBundle(ref common.ReferenceCallback) 
 							Format: "",
 						},
 					},
+					"since": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
 					"size": {
 						SchemaProps: spec.SchemaProps{
 							Type:   []string{"integer"},

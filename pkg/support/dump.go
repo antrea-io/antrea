@@ -15,6 +15,7 @@
 package support
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -22,7 +23,9 @@ import (
 	"path"
 	"path/filepath"
 	"runtime/pprof"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/spf13/afero"
 	"k8s.io/utils/exec"
@@ -104,10 +107,52 @@ func dumpNetworkPolicyResources(fs afero.Fs, executor exec.Interface, basedir st
 	return dumpAntctlGet(fs, executor, "addressgroups", basedir)
 }
 
-// fileCopy copies files under the srcDir to the targetDir. Only files whose
-// name matches the prefixFilter will be copied. Copied files will be located
-// under the same relative path.
-func fileCopy(fs afero.Fs, targetDir string, srcDir string, prefixFilter string) error {
+func timestampFilter(since string) *time.Time {
+	var timeFilter *time.Time
+	if since != "" {
+		duration, _ := time.ParseDuration(since)
+		start := time.Now().Add(-duration)
+		timeFilter = &start
+	}
+	return timeFilter
+
+}
+
+// parseTimeFromFileName parse time from log file name.
+// example log file format: <component>.<hostname>.<user>.log.<level>.<yyyymmdd>-<hhmmss>.1
+func parseTimeFromFileName(name string) (time.Time, error) {
+	ss := strings.Split(name, ".")
+	ts := ss[len(ss)-2]
+	return time.Parse("20060102-150405", ts)
+
+}
+
+// parseTimeFromLogLine parse timestamp from the log line.
+// example(kubelet/agent/controller): "I0817 06:55:10.804384       1 shared_informer.go:270] caches populated"
+// example(ovs): "2021-06-02T16:18:52.285Z|00004|reconnect|INFO|unix:/var/run/openvswitch/db.sock: connecting..."
+// the first char indicates the log level.
+func parseTimeFromLogLine(log string, year string, prefix string) (time.Time, error) {
+	ss := strings.Split(log, ".")
+	if ss[0] == "" {
+		return time.Time{}, fmt.Errorf("log line is empty")
+	}
+
+	dateStr := year + ss[0][1:]
+	layout := "20060102 15:04:05"
+	if prefix == "ovs" {
+		dateStr = ss[0]
+		layout = "2006-01-02T15:04:05"
+	}
+
+	return time.Parse(layout, dateStr)
+
+}
+
+// directoryCopy copies files under the srcDir to the targetDir. Only files whose name matches
+// the prefixFilter will be copied. If prefixFiler is "", no filter is performed. At the same time, if the timeFilter is set,
+// only files whose modTime is later than the timeFilter will be copied. If a file contains both older logs and matched logs, only
+// the matched logs will be copied. Copied files will be located under the same relative path.
+func directoryCopy(fs afero.Fs, targetDir string, srcDir string, prefixFilter string, timeFilter *time.Time) error {
 	err := fs.MkdirAll(targetDir, os.ModePerm)
 	if err != nil {
 		return fmt.Errorf("error when creating target dir: %w", err)
@@ -119,20 +164,53 @@ func fileCopy(fs afero.Fs, targetDir string, srcDir string, prefixFilter string)
 		if !info.Mode().IsRegular() {
 			return nil
 		}
-		if !strings.HasPrefix(info.Name(), prefixFilter) {
+		if prefixFilter != "" && !strings.HasPrefix(info.Name(), prefixFilter) {
 			return nil
 		}
+
+		if timeFilter != nil && info.ModTime().Before(*timeFilter) {
+			return nil
+		}
+
 		targetPath := path.Join(targetDir, info.Name())
 		targetFile, err := fs.Create(targetPath)
 		if err != nil {
 			return err
 		}
 		defer targetFile.Close()
+
 		srcFile, err := fs.Open(filePath)
 		if err != nil {
 			return err
 		}
 		defer srcFile.Close()
+
+		startTime, err := parseTimeFromFileName(info.Name())
+		if timeFilter != nil {
+			// if name contains timestamp, use it to find the first matched file. If not, such as ovs log file,
+			// just parse the log file (usually there is only one log file for each component)
+			if err == nil && startTime.Before(*timeFilter) || err != nil {
+				data := ""
+				scanner := bufio.NewScanner(srcFile)
+				for scanner.Scan() {
+					// the size limit of single log line is 64k. marked it as known issue and fix it if
+					// error occurs
+					line := scanner.Text()
+					if data != "" {
+						data += line + "\n"
+					} else {
+						ts, err := parseTimeFromLogLine(line, strconv.Itoa(timeFilter.Year()), prefixFilter)
+						if err == nil {
+							if !ts.Before(*timeFilter) {
+								data += line + "\n"
+							}
+						}
+					}
+				}
+				_, err = targetFile.WriteString(data)
+				return err
+			}
+		}
 		_, err = io.Copy(targetFile, srcFile)
 		return err
 	})
@@ -152,6 +230,7 @@ type controllerDumper struct {
 	fs       afero.Fs
 	executor exec.Interface
 	cq       controllerquerier.ControllerQuerier
+	since    string
 }
 
 func (d *controllerDumper) DumpControllerInfo(basedir string) error {
@@ -164,17 +243,18 @@ func (d *controllerDumper) DumpNetworkPolicyResources(basedir string) error {
 
 func (d *controllerDumper) DumpLog(basedir string) error {
 	logDir := logdir.GetLogDir()
-	return fileCopy(d.fs, path.Join(basedir, "logs", "controller"), logDir, "antrea-controller")
+	return directoryCopy(d.fs, path.Join(basedir, "logs", "controller"), logDir, "antrea-controller", timestampFilter(d.since))
 }
 
 func (d *controllerDumper) DumpHeapPprof(basedir string) error {
 	return DumpHeapPprof(d.fs, basedir)
 }
 
-func NewControllerDumper(fs afero.Fs, executor exec.Interface) ControllerDumper {
+func NewControllerDumper(fs afero.Fs, executor exec.Interface, since string) ControllerDumper {
 	return &controllerDumper{
 		fs:       fs,
 		executor: executor,
+		since:    since,
 	}
 }
 
@@ -184,6 +264,7 @@ type agentDumper struct {
 	ovsCtlClient ovsctl.OVSCtlClient
 	aq           agentquerier.AgentQuerier
 	npq          querier.AgentNetworkPolicyInfoQuerier
+	since        string
 }
 
 func (d *agentDumper) DumpAgentInfo(basedir string) error {
@@ -243,12 +324,13 @@ func (d *agentDumper) DumpOVSPorts(basedir string) error {
 	return writeFile(d.fs, filepath.Join(basedir, "ovsports"), "ports", []byte(strings.Join(portData, "\n")))
 }
 
-func NewAgentDumper(fs afero.Fs, executor exec.Interface, ovsCtlClient ovsctl.OVSCtlClient, aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolicyInfoQuerier) AgentDumper {
+func NewAgentDumper(fs afero.Fs, executor exec.Interface, ovsCtlClient ovsctl.OVSCtlClient, aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolicyInfoQuerier, since string) AgentDumper {
 	return &agentDumper{
 		fs:           fs,
 		executor:     executor,
 		ovsCtlClient: ovsCtlClient,
 		aq:           aq,
 		npq:          npq,
+		since:        since,
 	}
 }
