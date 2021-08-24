@@ -31,6 +31,7 @@
 - [Select Namespace by Name](#select-namespace-by-name)
   - [K8s clusters with version 1.21 and above](#k8s-clusters-with-version-121-and-above)
   - [K8s clusters with version 1.20 and below](#k8s-clusters-with-version-120-and-below)
+- [FQDN based filtering](#fqdn-based-filtering)
 - [RBAC](#rbac)
 - [Notes](#notes)
 <!-- /toc -->
@@ -416,6 +417,8 @@ The [third example](#acnp-for-complete-pod-isolation-in-selected-namespaces) pol
 which drops all egress traffic initiated by any Pod in Namespaces that have `app` set to
 `no-network-access-required`. Note that an empty `To` in the egress rule means that
 this rule matches all egress destinations.
+Egress `To` section also supports FQDN based filtering. This can be applied to exact FQDNs or
+wildcard expressions. More details can be found in the [FQDN](#fqdn-based-filtering) section.
 **Note**: The order in which the egress rules are specified matters, i.e., rules will
 be enforced in the order in which they are written.
 
@@ -479,6 +482,10 @@ an `appliedTo` must resolve to. More information on ClusterGroups can be found [
 **ipBlock**: This selects particular IP CIDR ranges to allow as `ingress`
 "sources" or `egress` "destinations". These should be cluster-external IPs,
 since Pod IPs are ephemeral and unpredictable.
+
+**fqdn**: This selector is applicable only to the `to` section in an `egress` block. It is used to
+select Fully Qualified Domain Names (FQDNs), specified either by exact name or wildcard
+expressions, when defining `egress` rules.
 
 ### Key differences from K8s NetworkPolicy
 
@@ -947,6 +954,71 @@ spec:
 
 The above example allows all Pods from Namespace "default" to connect to all "core-dns"
 Pods from Namespace "kube-system" on TCP port 53.
+
+## FQDN based filtering
+
+Antrea-native policy accepts a `fqdn` field to select Fully Qualified Domain Names (FQDNs),
+specified either by exact name or wildcard expressions, when defining `egress` rules.
+
+The standard `Allow`, `Drop` and `Reject` actions apply to FQDN egress rules.
+
+An example policy using FQDN based filtering could look like this:
+
+```yaml
+apiVersion: crd.antrea.io/v1alpha1
+kind: ClusterNetworkPolicy
+metadata:
+  name: acnp-fqdn-all-foobar
+spec:
+  priority: 1
+  appliedTo:
+  - podSelector:
+      matchLabels:
+        app: client
+  egress:
+  - action: Drop
+    to:
+      - fqdn: "*foobar.com"
+```
+
+The above example drops all traffic destined to any FQDN that matches the wildcard
+expression `*foobar.com` originating from any Pod with label `app` set to `client`
+across any Namespace. This feature only works at the L3/L4 level.
+
+FQDN based policies can also select in-cluster based services.
+
+```text
+kubectl get svc -o wide -A
+NAMESPACE     NAME          TYPE          CLUSTER-IP      EXTERNAL-IP   PORT(S)                   AGE   SELECTOR
+default       db-svc        ClusterIP     10.108.21.84    <none>        443/TCP                   2d    app=db
+default       kubernetes    ClusterIP     10.96.0.1       <none>        443/TCP                   2d    <none>
+kube-system   antrea        ClusterIP     10.98.109.50    <none>        443/TCP                   3d    <app=antrea,component=antrea-controller>
+kube-system   kube-dns      ClusterIP     10.96.0.10      <none>        53/UDP,53,TCP,9153/TCP    3d    k8s-app=kube-dns
+```
+
+In the above, there is a db service in the default namespace of type `ClusterIP`. A
+ClusterNetorkPolicy can be defined as follows:
+
+```yaml
+apiVersion: crd.antrea.io/v1alpha1
+kind: ClusterNetworkPolicy
+metadata:
+  name: acnp-fqdn-db-svc
+spec:
+  priority: 1
+  appliedTo:
+  - podSelector:
+      matchLabels:
+        app: client
+  egress:
+  - action: Drop
+    to:
+      - fqdn: "db-svc.default.svc"
+```
+
+In this example, an exact name matching policy is defined. When a client Pod talks to
+`db-svc` via ClusterIP, the traffic is dropped. It doesn't stop the client talking to the
+Pods directly.
 
 ## RBAC
 
