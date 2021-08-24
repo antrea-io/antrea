@@ -8,10 +8,10 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends iproute2 iptables ipset make wget gcc libc6-dev ca-certificates git && \
     rm -rf /var/cache/apt/* /var/lib/apt/lists/*
 
-ENV GO_VERSION=1.15.3
+ARG GO_VERSION
 ENV GOPATH /go
 
-RUN wget -q -O - https://golang.org/dl/go$GO_VERSION.linux-amd64.tar.gz | tar xz -C /usr/local/ && \
+RUN wget -q -O - https://golang.org/dl/go${GO_VERSION}.linux-amd64.tar.gz | tar xz -C /usr/local/ && \
     export PATH="/usr/local/go/bin:$PATH" && \
     mkdir -p "$GOPATH/src" "$GOPATH/bin" && chmod -R 777 "$GOPATH"
 
