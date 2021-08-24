@@ -83,7 +83,7 @@ const (
 	// ClusterGroupIndex is used to index ClusterNetworkPolicies by ClusterGroup names.
 	ClusterGroupIndex = "clustergroup"
 	// ServiceIndex is used to index ClusterNetworkPolicies by ServiceReference in
-	// ToService field. Format is "[namespace]/[name]". For example "default/svc-1".
+	// ToServices field. Format is "[namespace]/[name]". For example "default/svc-1".
 	ServiceIndex = "service"
 
 	appliedToGroupType grouping.GroupType = "appliedToGroup"
@@ -387,8 +387,8 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 					}
 					serviceNames := sets.String{}
 					for _, egressRule := range acnp.Spec.Egress {
-						for _, service := range egressRule.ToService {
-							serviceNames.Insert(fmt.Sprintf("%s/%s", service.Namespace, service.Name))
+						for _, service := range egressRule.ToServices {
+							serviceNames.Insert(k8s.NamespacedName(service.Namespace, service.Name))
 						}
 					}
 					return serviceNames.List(), nil
@@ -993,9 +993,9 @@ func (n *NetworkPolicyController) deleteEndpoints(oldObj interface{}) {
 // re-processed based on the "[Namespace]/[Name]" of an updated/deleted Service/Endpoints.
 func (n *NetworkPolicyController) filterACNPsByService(serviceNamespace string, serviceName string) []*secv1alpha1.ClusterNetworkPolicy {
 	var affectedPolicies []*secv1alpha1.ClusterNetworkPolicy
-	acnps, err := n.acnpInformer.Informer().GetIndexer().ByIndex(ServiceIndex, fmt.Sprintf("%s/%s", serviceNamespace, serviceName))
+	acnps, err := n.acnpInformer.Informer().GetIndexer().ByIndex(ServiceIndex, k8s.NamespacedName(serviceNamespace, serviceName))
 	if err != nil {
-		klog.ErrorS(err, "Error fetching ClusterNetworkPolicies that have ToService rules")
+		klog.ErrorS(err, "Error fetching ClusterNetworkPolicies that have ToServices rules")
 		return nil
 	}
 	for _, acnpObj := range acnps {

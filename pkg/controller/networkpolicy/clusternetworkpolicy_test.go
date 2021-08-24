@@ -922,7 +922,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 					Priority: p10,
 					Egress: []crdv1alpha1.Rule{
 						{
-							ToService: []*crdv1alpha1.ServiceReference{
+							ToServices: []*crdv1alpha1.ServiceReference{
 								{
 									Name:      "svcA",
 									Namespace: "nsA",
@@ -989,7 +989,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 			if tt.inputPolicy.Spec.Tier != "" {
 				c.tierStore.Add(&tierA)
 			}
-			if tt.inputPolicy.Spec.Egress != nil && tt.inputPolicy.Spec.Egress[0].ToService != nil {
+			if tt.inputPolicy.Spec.Egress != nil && tt.inputPolicy.Spec.Egress[0].ToServices != nil {
 				c.endpointsStore.Add(&epA)
 			}
 			actualPolicy := c.processClusterNetworkPolicy(tt.inputPolicy)

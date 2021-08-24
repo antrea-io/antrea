@@ -355,8 +355,8 @@ type Rule struct {
 	// +optional
 	From []NetworkPolicyPeer `json:"from"`
 	// Rule is matched if traffic is intended for workloads selected by
-	// this field. This field can't be used with ToService. If this field
-	// and ToService are both empty or missing and this is an egress rule,
+	// this field. This field can't be used with ToServices. If this field
+	// and ToServices are both empty or missing and this is an egress rule,
 	// this rule matches all destinations.
 	// +optional
 	To []NetworkPolicyPeer `json:"to"`
@@ -368,7 +368,7 @@ type Rule struct {
 	// both empty or missing and this is an egress rule, this rule matches
 	// all destinations.
 	// +optional
-	ToService []*ServiceReference `json:"toService"`
+	ToServices []*ServiceReference `json:"toServices"`
 	// Name describes the intention of this rule.
 	// Name should be unique within the policy.
 	// +optional

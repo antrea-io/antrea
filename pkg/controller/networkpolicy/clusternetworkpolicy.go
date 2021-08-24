@@ -351,7 +351,7 @@ func (n *NetworkPolicyController) processRules(
 			}
 			rules = append(rules, rule)
 		}
-		if acnpRule.ToService == nil {
+		if acnpRule.ToServices == nil {
 			services, namedPortExists := toAntreaServicesForCRD(acnpRule.Ports)
 			clusterPeers, perNSPeers := splitPeersByScope(acnpRule, direction)
 
@@ -399,7 +399,7 @@ func (n *NetworkPolicyController) processRules(
 			ruleATGNames := n.processClusterAppliedTo(ruleAppliedTos, atgNamesSet)
 			// Because each ServiceReference refers to its own combination of ports and
 			// Pods/IPBlocks，we need to add an individual rule for each ServiceReference.
-			for _, eachService := range acnpRule.ToService {
+			for _, eachService := range acnpRule.ToServices {
 				antreaServices, antreaPeers, err := n.toAntreaServicesAndPeersFromServiceReference(eachService)
 				if err != nil {
 					klog.V(2).InfoS("Can't get the Endpoints of this Service", "serviceNamespace", eachService.Namespace, "serviceName", eachService.Name)

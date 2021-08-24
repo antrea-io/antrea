@@ -790,13 +790,16 @@ spec:
                             type: object
                         type: object
                       type: array
-                    toService:
+                    toServices:
                       items:
                         properties:
                           name:
                             type: string
                           namespace:
                             type: string
+                        required:
+                        - name
+                        - namespace
                         type: object
                       type: array
                   required:

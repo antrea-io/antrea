@@ -513,21 +513,13 @@ func (v *antreaPolicyValidator) validatePeers(ingress, egress []crdv1alpha1.Rule
 		return "", true
 	}
 	for _, rule := range ingress {
-		if rule.To != nil || rule.ToService != nil {
-			return "`to` and `toService` can't be used in an ingress rule", false
-		}
-
 		msg, isValid := checkPeers(rule.From)
 		if !isValid {
 			return msg, false
 		}
 	}
 	for _, rule := range egress {
-		if rule.From != nil {
-			return "`from` can't be used in an egress rule", false
-		}
-
-		if rule.ToService != nil && (rule.To != nil || rule.Ports != nil) {
+		if rule.ToServices != nil && (rule.To != nil || rule.Ports != nil) {
 			return fmt.Sprintf("`toService` can't be used with `to` or `ports`"), false
 		}
 

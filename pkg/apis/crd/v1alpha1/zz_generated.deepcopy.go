@@ -499,8 +499,8 @@ func (in *Rule) DeepCopyInto(out *Rule) {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
 	}
-	if in.ToService != nil {
-		in, out := &in.ToService, &out.ToService
+	if in.ToServices != nil {
+		in, out := &in.ToServices, &out.ToServices
 		*out = make([]*ServiceReference, len(*in))
 		for i := range *in {
 			if (*in)[i] != nil {

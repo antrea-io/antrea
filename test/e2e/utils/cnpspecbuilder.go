@@ -281,10 +281,10 @@ func (b *ClusterNetworkPolicySpecBuilder) AddEgressToService(action crdv1alpha1.
 	}
 
 	b.Spec.Egress = append(b.Spec.Egress, crdv1alpha1.Rule{
-		Action:    &action,
-		Name:      name,
-		ToService: serviceReferences,
-		AppliedTo: appliedTos,
+		Action:     &action,
+		Name:       name,
+		ToServices: serviceReferences,
+		AppliedTo:  appliedTos,
 	})
 	return b
 }

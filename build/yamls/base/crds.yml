@@ -991,10 +991,13 @@ spec:
                               type: string
                             fqdn:
                               type: string
-                      toService:
+                      toServices:
                         type: array
                         items:
                           type: object
+                          required:
+                          - name
+                          - namespace
                           properties:
                             name:
                               type: string
