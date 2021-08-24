@@ -150,6 +150,8 @@ func checkLogFiles() {
 	infoLogFiles := []os.FileInfo{}
 	warningLogFiles := []os.FileInfo{}
 	errorLogFiles := []os.FileInfo{}
+	fatalLogFIles := []os.FileInfo{}
+
 	for _, file := range allFiles {
 		if !file.Mode().IsRegular() {
 			// Skip dir, symbol link, etc.
@@ -164,6 +166,8 @@ func checkLogFiles() {
 			warningLogFiles = append(warningLogFiles, file)
 		} else if strings.Contains(file.Name(), ".log.ERROR.") {
 			errorLogFiles = append(errorLogFiles, file)
+		} else if strings.Contains(file.Name(), ".log.FATAL.") {
+			fatalLogFIles = append(fatalLogFIles, file)
 		}
 	}
 
@@ -189,4 +193,5 @@ func checkLogFiles() {
 	checkFilesFn(infoLogFiles)
 	checkFilesFn(warningLogFiles)
 	checkFilesFn(errorLogFiles)
+	checkFilesFn(fatalLogFIles)
 }
