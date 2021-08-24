@@ -203,8 +203,8 @@ func (c *Controller) logPacket(pktIn *ofctrl.PacketIn) error {
 // packet-in message.
 func (c *Controller) rejectRequest(pktIn *ofctrl.PacketIn) error {
 	// Get ethernet data.
-	srcMAC := pktIn.Data.HWDst.String()
-	dstMAC := pktIn.Data.HWSrc.String()
+	srcMAC := pktIn.Data.HWDst
+	dstMAC := pktIn.Data.HWSrc
 
 	var (
 		srcIP  string
@@ -250,8 +250,8 @@ func (c *Controller) rejectRequest(pktIn *ofctrl.PacketIn) error {
 		// While sending TCP reject packet-out, switch original src/dst port,
 		// set the ackNum as original seqNum+1 and set the flag as ack+rst.
 		return c.ofClient.SendTCPPacketOut(
-			srcMAC,
-			dstMAC,
+			srcMAC.String(),
+			dstMAC.String(),
 			srcIP,
 			dstIP,
 			inPort,
@@ -278,8 +278,8 @@ func (c *Controller) rejectRequest(pktIn *ofctrl.PacketIn) error {
 	binary.BigEndian.PutUint32(icmpData[:ICMPUnusedHdrLen], 0)
 	copy(icmpData[ICMPUnusedHdrLen:], ipHdr[:ipHdrLen+8])
 	return c.ofClient.SendICMPPacketOut(
-		srcMAC,
-		dstMAC,
+		srcMAC.String(),
+		dstMAC.String(),
 		srcIP,
 		dstIP,
 		inPort,

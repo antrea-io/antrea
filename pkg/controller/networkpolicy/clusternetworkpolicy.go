@@ -400,6 +400,14 @@ func (n *NetworkPolicyController) processRules(
 			// Because each ServiceReference refers to its own combination of ports and
 			// Pods/IPBlocks，we need to add an individual rule for each ServiceReference.
 			for _, eachService := range acnpRule.ToServices {
+				svc, err := n.serviceLister.Services(eachService.Namespace).Get(eachService.Name)
+				if err != nil {
+					klog.V(2).InfoS("Service referred in `toServices` doesn't exist", "serviceNamespace", eachService.Namespace, "serviceName", eachService.Name)
+					continue
+				}
+				if svc.Spec.Type != v1.ServiceTypeNodePort {
+					klog.V(2).InfoS("Processing NodePort Service: still install rules matching the Endpoints IP+Ports, but no rule matching NodePort will be installed", "serviceNamespace", eachService.Namespace, "serviceName", eachService.Name)
+				}
 				antreaServices, antreaPeers, err := n.toAntreaServicesAndPeersFromServiceReference(eachService)
 				if err != nil {
 					klog.V(2).InfoS("Can't get the Endpoints of this Service", "serviceNamespace", eachService.Namespace, "serviceName", eachService.Name)

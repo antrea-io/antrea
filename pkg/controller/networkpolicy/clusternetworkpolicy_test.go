@@ -52,6 +52,20 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 	}
 	ipA := "10.10.1.1"
 	ipB := "10.10.1.2"
+	svcA := v1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "svcA",
+			Namespace: "nsA",
+		},
+		Spec: v1.ServiceSpec{
+			Ports: []v1.ServicePort{
+				{
+					Port:       80,
+					TargetPort: int80,
+				},
+			},
+		},
+	}
 	epA := v1.Endpoints{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "svcA",
@@ -990,6 +1004,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 				c.tierStore.Add(&tierA)
 			}
 			if tt.inputPolicy.Spec.Egress != nil && tt.inputPolicy.Spec.Egress[0].ToServices != nil {
+				c.serviceStore.Add(&svcA)
 				c.endpointsStore.Add(&epA)
 			}
 			actualPolicy := c.processClusterNetworkPolicy(tt.inputPolicy)
