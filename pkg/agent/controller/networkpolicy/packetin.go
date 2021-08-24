@@ -239,29 +239,6 @@ func (c *Controller) rejectRequest(pktIn *ofctrl.PacketIn) error {
 	inPort := uint32(config.HostGatewayOFPort)
 	if srcFound {
 		inPort = uint32(sIface.OFPort)
-		// We need to make sure that the combination of srcMAC and srcIP of a reject
-		// response is coherent. A mis-match of srcMAC and srcIP could happen when
-		// the controller sends packetOut for rejecting an Antrea policy `toService` rule.
-		// There are two possibilities for rejecting packets to a Service:
-		// 1. The client and Endpoints are on the same Node:
-		//    The srcMAC of the reject response should be the MAC of Endpoints.
-		//    The srcIP of the reject response should be the IP of the Endpoints.
-		// 2. The client and the Endpoints are not on the same Node:
-		//    The srcMAC of the reject response should be the MAC of antrea-gw0.
-		//    The srcIP of the reject response should be the IP of antrea-gw0.
-		// But when the client and Endpoints are on the same Node and the client accesses
-		// the Service via Service name or ClusterIP. The request packet received by the
-		// controller will have:
-		// 1. The dstIP of the request packet has been DNAT to the IP of Endpoints.
-		// 2. The dstMAC of the request packet is still the MAC of antrea-gw0. Because the
-		//    request packet is to ClusterIP and the modification of MAC hasn't been executed.p
-		// In this case, the reject response we generated will use the IP of the Endpoints
-		// as srcIP and the MAC of antrea-gw0 as srcMAC, which will cause this response
-		// dropped at spoofGuardTable. So for the reject response, we change the MAC
-		// according to the srcIP here.
-		if srcMAC != sIface.MAC.String() {
-			srcMAC = sIface.MAC.String()
-		}
 	}
 
 	if prot == protocol.Type_TCP {

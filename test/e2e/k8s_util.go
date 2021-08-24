@@ -367,6 +367,73 @@ func (k *KubernetesUtils) CleanServices(namespaces []string) error {
 	return nil
 }
 
+// BuildEndpoints is a convenience function for building a corev1.Endpoints spec.
+func (k *KubernetesUtils) BuildEndpoints(epName, epNS, ip string, port int32) *v1.Endpoints {
+	endpoints := &v1.Endpoints{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      epName,
+			Namespace: epNS,
+		},
+		Subsets: []v1.EndpointSubset{
+			{
+				Addresses: []v1.EndpointAddress{
+					{
+						IP: ip,
+					},
+				},
+				Ports: []v1.EndpointPort{
+					{
+						Port: port,
+					},
+				},
+			},
+		},
+	}
+
+	return endpoints
+}
+
+// CreateOrUpdateEndpoints is a convenience function for updating/creating Endpoints.
+func (k *KubernetesUtils) CreateOrUpdateEndpoints(ep *v1.Endpoints) (*v1.Endpoints, error) {
+	log.Infof("Creating/updating Endpoints %s in ns %s", ep.Name, ep.Namespace)
+	epReturned, err := k.clientset.CoreV1().Endpoints(ep.Namespace).Get(context.TODO(), ep.Name, metav1.GetOptions{})
+
+	if err != nil {
+		endpoints, err := k.clientset.CoreV1().Endpoints(ep.Namespace).Create(context.TODO(), ep, metav1.CreateOptions{})
+		if err != nil {
+			log.Infof("Unable to create Endpoints %s/%s: %s", ep.Namespace, ep.Name, err)
+			return nil, err
+		}
+		return endpoints, nil
+	} else if epReturned.Name != "" {
+		log.Debugf("Endpoints %s/%s already exists, updating", ep.Namespace, ep.Name)
+		epReturned.Subsets = ep.Subsets
+		endpoints, err := k.clientset.CoreV1().Endpoints(ep.Namespace).Update(context.TODO(), epReturned, metav1.UpdateOptions{})
+		return endpoints, err
+	}
+	return nil, fmt.Errorf("error occurred in creating/updating Endpoints %s", ep.Name)
+}
+
+// GetEndpoints is a convenience function for getting Endpoints
+func (k *KubernetesUtils) GetEndpoints(namespace, name string) (*v1.Endpoints, error) {
+	res, err := k.clientset.CoreV1().Endpoints(namespace).Get(context.TODO(), name, metav1.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+	return res, nil
+}
+
+// DeleteEndpoints is a convenience function for deleting a Endpoints by Namespace and name.
+func (k *KubernetesUtils) DeleteEndpoints(ns, name string) error {
+	log.Infof("Deleting Endpoints %s in ns %s", name, ns)
+	err := k.clientset.CoreV1().Endpoints(ns).Delete(context.TODO(), name, metav1.DeleteOptions{})
+	if err != nil {
+		log.Infof("%v", err)
+		return errors.Wrapf(err, "unable to delete Endpoints %s", name)
+	}
+	return nil
+}
+
 // CreateOrUpdateNetworkPolicy is a convenience function for updating/creating netpols. Updating is important since
 // some tests update a network policy to confirm that mutation works with a CNI.
 func (k *KubernetesUtils) CreateOrUpdateNetworkPolicy(netpol *v1net.NetworkPolicy) (*v1net.NetworkPolicy, error) {

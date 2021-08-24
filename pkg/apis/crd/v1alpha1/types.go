@@ -361,11 +361,9 @@ type Rule struct {
 	// +optional
 	To []NetworkPolicyPeer `json:"to"`
 	// Rule is matched if traffic is intended for workloads selected by
-	// the Service listed on Service ports. Currently only ClusterIP and
-	// NodePort types Services are supported in this field.
-	// Workloads selected by this field are backend Endpoints+targetPorts
-	// of Services referred in this field. If the ServiceType is NodePort,
-	// workloads selected by this field also include the all Nodes+nodePort.
+	// the Service listed on Service ports. Currently only ClusterIP types
+	// Services are supported in this field. Workloads selected by this field
+	// are backend Endpoints IPs+Ports of Services referred in this field.
 	// This field can't be used with To or Ports. If this field and To are
 	// both empty or missing and this is an egress rule, this rule matches
 	// all destinations.
@@ -470,7 +468,7 @@ type NetworkPolicyPort struct {
 	EndPort *int32 `json:"endPort,omitempty"`
 }
 
-// ServiceReference represent reference to a v1.Service.
+// ServiceReference represents a reference to a v1.Service.
 type ServiceReference struct {
 	// Name of the Service
 	Name string `json:"name,omitempty"`

@@ -130,7 +130,6 @@ func (n *NetworkPolicyController) deleteCNP(old interface{}) {
 // 1. Namespace ADD/UPDATE/DELETE events when they impact the per-Namespace rules of a ACNP
 // 2. Service ADD/UPDATE/DELETE events when they impact the toService rules of a ACNP
 // 3. Endpoints ADD/UPDATE/DELETE events when they impact the toService rules of a ACNP
-// 3. Nodes ADD/UPDATE/DELETE events when they impact the toService rules of a ACNP
 func (n *NetworkPolicyController) reprocessACNP(acnp *crdv1alpha1.ClusterNetworkPolicy) {
 	key := internalNetworkPolicyKeyFunc(acnp)
 	n.internalNetworkPolicyMutex.Lock()

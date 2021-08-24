@@ -73,6 +73,7 @@ const (
 	resourceNetworkPolicy = "networkPolicy"
 	resourceCG            = "clusterGroup"
 	resourceSVC           = "service"
+	resourceEP            = "endpoints"
 	resourceTier          = "tier"
 )
 
@@ -996,19 +997,16 @@ func testACNPToServiceEndpoints(t *testing.T) {
 	executeTests(t, testCase)
 }
 
-// testACNPToServiceClusterIP tests that an ACNP is able to reject toService
-// traffic from pods labelled A to the ClusterIP of the Service.
-func testACNPToServiceClusterIP(t *testing.T, data *TestData) {
-
-	svc := k8sUtils.BuildService("svc", "x", 80, 80, map[string]string{"app": "c"}, nil)
+// testACNPToServiceEndpointsNonSelector tests that an ACNP is able to reject
+// toService traffic from pods labelled A to all Endpoints of a non-selector
+// Service.
+func testACNPToServiceEndpointsNonSelector(t *testing.T) {
+	svc := k8sUtils.BuildService("svc", "x", 80, 80, nil, nil)
+	ep := k8sUtils.BuildEndpoints("svc", "x", "1.2.3.4", 80)
 	k8sUtils.CreateOrUpdateService(svc)
-	log.Debugf("Sleeping for %v for all services computed", groupDelay)
+	k8sUtils.CreateOrUpdateEndpoints(ep)
+	log.Debugf("Sleeping for %v for all Services and Endpoints computed", groupDelay)
 	time.Sleep(groupDelay)
-	builtSvc, err := k8sUtils.GetService(svc.Namespace, svc.Name)
-	if err != nil {
-		failOnError(fmt.Errorf("can't get Service %s/%s", svc.Namespace, svc.Name), t)
-	}
-	clusterIP := builtSvc.Spec.ClusterIP
 
 	serviceReferences := []*crdv1alpha1.ServiceReference{
 		{
@@ -1018,31 +1016,31 @@ func testACNPToServiceClusterIP(t *testing.T, data *TestData) {
 	}
 
 	builder := &ClusterNetworkPolicySpecBuilder{}
-	builder = builder.SetName("acnp-reject-a-to-svc-cluster-ip").
+	builder = builder.SetName("acnp-reject-a-to-svc-non-selector").
 		SetPriority(1.0).
 		SetAppliedToGroup([]ACNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}}})
 	builder.AddEgressToService(crdv1alpha1.RuleActionReject, serviceReferences, "", nil)
 
-	_, err = k8sUtils.CreateOrUpdateACNP(builder.Get())
+	_, err := k8sUtils.CreateOrUpdateACNP(builder.Get())
 	failOnError(err, t)
 	time.Sleep(networkPolicyDelay)
 
 	testcases := []podToAddrTestStep{
 		{
 			"x/a",
-			clusterIP,
+			"1.2.3.4",
 			80,
 			Rejected,
 		},
 		{
 			"y/a",
-			clusterIP,
+			"1.2.3.4",
 			80,
 			Rejected,
 		},
 		{
 			"z/a",
-			clusterIP,
+			"1.2.3.4",
 			80,
 			Rejected,
 		},
@@ -1060,7 +1058,81 @@ func testACNPToServiceClusterIP(t *testing.T, data *TestData) {
 		}
 	}
 	// cleanup test resources
+
+	failOnError(k8sUtils.DeleteEndpoints("x", "svc"), t)
+	failOnError(waitForResourceDelete("x", "svc", resourceEP, timeout), t)
 	failOnError(k8sUtils.DeleteService("x", "svc"), t)
+	failOnError(waitForResourceDelete("x", "svc", resourceSVC, timeout), t)
+	failOnError(k8sUtils.DeleteACNP(builder.Name), t)
+	failOnError(waitForResourceDelete("", builder.Name, resourceACNP, timeout), t)
+	time.Sleep(networkPolicyDelay)
+}
+
+// testACNPToServiceClusterIP tests that an ACNP is able to reject toService
+// traffic from pods labelled A to the ClusterIP of the Service.
+func testACNPToServiceClusterIP(t *testing.T) {
+
+	svc := k8sUtils.BuildService("svc", "x", 80, 80, map[string]string{"app": "c"}, nil)
+	builtSvc, err := k8sUtils.CreateOrUpdateService(svc)
+	log.Debugf("Sleeping for %v for all services computed", groupDelay)
+	time.Sleep(groupDelay)
+	if err != nil {
+		failOnError(fmt.Errorf("can't get Service %s/%s", svc.Namespace, svc.Name), t)
+	}
+	clusterIP := builtSvc.Spec.ClusterIP
+
+	serviceReferences := []*crdv1alpha1.ServiceReference{
+		{
+			Name:      "svc",
+			Namespace: "x",
+		},
+	}
+
+	builder := &ClusterNetworkPolicySpecBuilder{}
+	builder = builder.SetName("acnp-drop-a-to-svc-cluster-ip").
+		SetPriority(1.0).
+		SetAppliedToGroup([]ACNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}}})
+	builder.AddEgressToService(crdv1alpha1.RuleActionDrop, serviceReferences, "", nil)
+
+	_, err = k8sUtils.CreateOrUpdateACNP(builder.Get())
+	failOnError(err, t)
+	time.Sleep(networkPolicyDelay)
+
+	testcases := []podToAddrTestStep{
+		{
+			"x/a",
+			clusterIP,
+			80,
+			Dropped,
+		},
+		{
+			"y/a",
+			clusterIP,
+			80,
+			Dropped,
+		},
+		{
+			"z/a",
+			clusterIP,
+			80,
+			Dropped,
+		},
+	}
+
+	for _, tc := range testcases {
+		log.Tracef("Probing: %s -> %s:%d", tc.clientPod.PodName(), tc.destAddr, tc.destPort)
+		connectivity, err := k8sUtils.ProbeEgress(tc.clientPod.Namespace(), tc.clientPod.PodName(), tc.destAddr, tc.destPort, v1.ProtocolTCP)
+		if err != nil {
+			t.Errorf("failure -- could not complete probe: %v", err)
+		}
+		if connectivity != tc.expectedConnectivity {
+			t.Errorf("failure -- wrong results for probe: Source %s/%s --> Dest %s:%d connectivity: %v, expected: %v",
+				tc.clientPod.Namespace(), tc.clientPod.PodName(), tc.destAddr, tc.destPort, connectivity, tc.expectedConnectivity)
+		}
+	}
+	// cleanup test resources
+	failOnError(k8sUtils.DeleteService("x", "svc"), t)
+	failOnError(waitForResourceDelete("x", "svc", resourceSVC, timeout), t)
 	failOnError(k8sUtils.DeleteACNP(builder.Name), t)
 	failOnError(waitForResourceDelete("", builder.Name, resourceACNP, timeout), t)
 	time.Sleep(networkPolicyDelay)
@@ -2881,6 +2953,8 @@ func waitForResourceDelete(namespace, name string, resource string, timeout time
 			_, err = k8sUtils.GetNetworkPolicy(namespace, name)
 		case resourceSVC:
 			_, err = k8sUtils.GetService(namespace, name)
+		case resourceEP:
+			_, err = k8sUtils.GetEndpoints(namespace, name)
 		}
 		if err != nil && apierrors.IsNotFound(err) {
 			return true, nil
@@ -2967,7 +3041,8 @@ func TestAntreaPolicy(t *testing.T) {
 		t.Run("Case=ACNPRejectIngress", func(t *testing.T) { testACNPRejectIngress(t, v1.ProtocolTCP) })
 		t.Run("Case=ACNPRejectIngressUDP", func(t *testing.T) { testACNPRejectIngress(t, v1.ProtocolUDP) })
 		t.Run("Case=ACNPToServiceEndpoints", func(t *testing.T) { testACNPToServiceEndpoints(t) })
-		t.Run("Case=ACNPToServiceClusterIP", func(t *testing.T) { testACNPToServiceClusterIP(t, data) })
+		t.Run("Case=ACNPToServiceEndpointsNonSelector", func(t *testing.T) { testACNPToServiceEndpointsNonSelector(t) })
+		t.Run("Case=ACNPToServiceClusterIP", func(t *testing.T) { testACNPToServiceClusterIP(t) })
 		t.Run("Case=ACNPNoEffectOnOtherProtocols", func(t *testing.T) { testACNPNoEffectOnOtherProtocols(t) })
 		t.Run("Case=ACNPBaselinePolicy", func(t *testing.T) { testBaselineNamespaceIsolation(t) })
 		t.Run("Case=ACNPPriorityOverride", func(t *testing.T) { testACNPPriorityOverride(t) })
