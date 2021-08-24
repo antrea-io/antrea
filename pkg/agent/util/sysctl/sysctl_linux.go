@@ -1,4 +1,5 @@
-//+build linux
+//go:build linux
+// +build linux
 
 // Copyright 2020 Antrea Authors
 //

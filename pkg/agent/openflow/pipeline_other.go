@@ -1,4 +1,6 @@
+//go:build !windows
 // +build !windows
+
 // package openflow is needed by antctl which is compiled for macOS too.
 
 // Copyright 2021 Antrea Authors

@@ -18,12 +18,10 @@ jobs:
         os: [ubuntu-latest, windows-2019]
     runs-on: ${{ matrix.os }}
     steps:
-
-    - name: Set up Go 1.15
-      uses: actions/setup-go@v1
+    - name: Set up Go 1.17
+      uses: actions/setup-go@v2
       with:
-        go-version: 1.15
-
+        go-version: 1.17
     - name: Check-out code
       uses: actions/checkout@v2
 
@@ -46,10 +44,10 @@ jobs:
         platform: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.platform }}
     steps:
-    - name: Set up Go 1.15
-      uses: actions/setup-go@v1
+    - name: Set up Go 1.17
+      uses: actions/setup-go@v2
       with:
-        go-version: 1.15
+        go-version: 1.17
     - name: Check-out code
       uses: actions/checkout@v2
     - name: Run golangci-lint
@@ -60,10 +58,10 @@ jobs:
     name: Golangci-lint for netpol code
     runs-on: [ubuntu-latest]
     steps:
-    - name: Set up Go 1.15
+    - name: Set up Go 1.17
       uses: actions/setup-go@v1
       with:
-        go-version: 1.15
+        go-version: 1.17
     - name: Check-out code
       uses: actions/checkout@v2
     - name: Run golangci-lint
@@ -78,12 +76,10 @@ jobs:
       matrix:
         arch: [amd64, arm64, arm]
     steps:
-
-    - name: Set up Go 1.15
-      uses: actions/setup-go@v1
+    - name: Set up Go 1.17
+      uses: actions/setup-go@v2
       with:
-        go-version: 1.15
-
+        go-version: 1.17
     - name: Check-out code
       uses: actions/checkout@v2
 
@@ -94,12 +90,10 @@ jobs:
     name: Build Antrea Windows binaries
     runs-on: [ubuntu-latest]
     steps:
-
-    - name: Set up Go 1.15
-      uses: actions/setup-go@v1
+    - name: Set up Go 1.17
+      uses: actions/setup-go@v2
       with:
-        go-version: 1.15
-
+        go-version: 1.17
     - name: Check-out code
       uses: actions/checkout@v2
 
@@ -110,15 +104,12 @@ jobs:
     name: Build antctl for macOS, Linux and Windows
     runs-on: [ubuntu-latest]
     steps:
-
-      - name: Set up Go 1.15
+      - name: Set up Go 1.17
         uses: actions/setup-go@v1
         with:
-          go-version: 1.15
-
+          go-version: 1.17
       - name: Check-out code
         uses: actions/checkout@v2
-
       - name: Build antctl binaries
         run: make antctl
 
@@ -127,12 +118,10 @@ jobs:
     name: Check code generation
     runs-on: [ubuntu-latest]
     steps:
-
-    - name: Set up Go 1.15
-      uses: actions/setup-go@v1
+    - name: Set up Go 1.17
+      uses: actions/setup-go@v2
       with:
-        go-version: 1.15
-
+        go-version: 1.17
     - name: Check-out code
       uses: actions/checkout@v2
 
@@ -144,15 +133,12 @@ jobs:
     name: Check manifest
     runs-on: [ubuntu-latest]
     steps:
-
-    - name: Set up Go 1.15
+    - name: Set up Go 1.17
       uses: actions/setup-go@v1
       with:
-        go-version: 1.15
-
+        go-version: 1.17
     - name: Check-out code
       uses: actions/checkout@v2
-
     - name: Check manifest
       run: ./ci/check-manifest.sh
 
@@ -161,15 +147,12 @@ jobs:
     name: Check go.mod tidy
     runs-on: [ubuntu-latest]
     steps:
-
-    - name: Set up Go 1.15
+    - name: Set up Go 1.17
       uses: actions/setup-go@v1
       with:
-        go-version: 1.15
-
+        go-version: 1.17
     - name: Check-out code
       uses: actions/checkout@v2
-
     - name: Check tidy
       run: make test-tidy
 
@@ -177,12 +160,10 @@ jobs:
     name: Verify docs and spelling
     runs-on: [ubuntu-latest]
     steps:
-
-    - name: Set up Go 1.15
-      uses: actions/setup-go@v1
+    - name: Set up Go 1.17
+      uses: actions/setup-go@v2
       with:
-        go-version: 1.15
-
+        go-version: 1.17
     - name: Check-out code
       uses: actions/checkout@v2
 
