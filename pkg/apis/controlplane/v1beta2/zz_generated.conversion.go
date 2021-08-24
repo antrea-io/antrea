@@ -469,6 +469,7 @@ func Convert_controlplane_AppliedToGroupPatch_To_v1beta2_AppliedToGroupPatch(in 
 func autoConvert_v1beta2_ClusterGroupMembers_To_controlplane_ClusterGroupMembers(in *ClusterGroupMembers, out *controlplane.ClusterGroupMembers, s conversion.Scope) error {
 	out.ObjectMeta = in.ObjectMeta
 	out.EffectiveMembers = *(*[]controlplane.GroupMember)(unsafe.Pointer(&in.EffectiveMembers))
+	out.EffectiveIPBlocks = *(*[]controlplane.IPNet)(unsafe.Pointer(&in.EffectiveIPBlocks))
 	return nil
 }
 
@@ -480,6 +481,7 @@ func Convert_v1beta2_ClusterGroupMembers_To_controlplane_ClusterGroupMembers(in 
 func autoConvert_controlplane_ClusterGroupMembers_To_v1beta2_ClusterGroupMembers(in *controlplane.ClusterGroupMembers, out *ClusterGroupMembers, s conversion.Scope) error {
 	out.ObjectMeta = in.ObjectMeta
 	out.EffectiveMembers = *(*[]GroupMember)(unsafe.Pointer(&in.EffectiveMembers))
+	out.EffectiveIPBlocks = *(*[]IPNet)(unsafe.Pointer(&in.EffectiveIPBlocks))
 	return nil
 }
 

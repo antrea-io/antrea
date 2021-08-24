@@ -822,7 +822,7 @@ func TestGetGroupMembers(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			npc.internalGroupStore.Create(&tt.group)
 			npc.groupingInterface.AddGroup(clusterGroupType, tt.group.Name, tt.group.Selector)
-			members, err := npc.GetGroupMembers(tt.group.Name)
+			members, _, err := npc.GetGroupMembers(tt.group.Name)
 			assert.Equal(t, nil, err)
 			assert.Equal(t, tt.expectedMembers, members)
 		})

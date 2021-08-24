@@ -41,7 +41,7 @@ func NewREST(querier groupMembershipQuerier) *REST {
 }
 
 type groupMembershipQuerier interface {
-	GetGroupMembers(name string) (controlplane.GroupMemberSet, error)
+	GetGroupMembers(name string) (controlplane.GroupMemberSet, []controlplane.IPBlock, error)
 }
 
 func (r *REST) New() runtime.Object {
@@ -49,16 +49,25 @@ func (r *REST) New() runtime.Object {
 }
 
 func (r *REST) Get(ctx context.Context, name string, options *metav1.GetOptions) (runtime.Object, error) {
-	members, err := r.querier.GetGroupMembers(name)
+	groupMembers, ipBlocks, err := r.querier.GetGroupMembers(name)
 	if err != nil {
 		return nil, errors.NewInternalError(err)
 	}
-	effectiveMembers := make([]controlplane.GroupMember, 0, len(members))
-	for _, member := range members {
-		effectiveMembers = append(effectiveMembers, *member)
-	}
-	memberList := &controlplane.ClusterGroupMembers{
-		EffectiveMembers: effectiveMembers,
+	memberList := &controlplane.ClusterGroupMembers{}
+	if len(ipBlocks) > 0 {
+		effectiveIPBlocks := make([]controlplane.IPNet, 0, len(ipBlocks))
+		for _, ipb := range ipBlocks {
+			// ClusterGroup ipBlock does not support Except slices, so no need to generate an effective
+			// list of IPs by removing Except slices from allowed CIDR.
+			effectiveIPBlocks = append(effectiveIPBlocks, ipb.CIDR)
+		}
+		memberList.EffectiveIPBlocks = effectiveIPBlocks
+	} else {
+		effectiveMembers := make([]controlplane.GroupMember, 0, len(groupMembers))
+		for _, member := range groupMembers {
+			effectiveMembers = append(effectiveMembers, *member)
+		}
+		memberList.EffectiveMembers = effectiveMembers
 	}
 	memberList.Name = name
 	return memberList, nil

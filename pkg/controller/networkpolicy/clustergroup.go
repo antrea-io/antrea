@@ -66,10 +66,10 @@ func (c *NetworkPolicyController) updateClusterGroup(oldObj, curObj interface{})
 	ipBlocksUpdated := func() bool {
 		oldIPBs, newIPBs := sets.String{}, sets.String{}
 		for _, ipb := range oldGroup.IPBlocks {
-			oldIPBs.Insert(ipNetToCIDRStr(ipb.CIDR))
+			oldIPBs.Insert(ipb.CIDR.String())
 		}
 		for _, ipb := range newGroup.IPBlocks {
-			newIPBs.Insert(ipNetToCIDRStr(ipb.CIDR))
+			newIPBs.Insert(ipb.CIDR.String())
 		}
 		return oldIPBs.Equal(newIPBs)
 	}
@@ -427,11 +427,16 @@ func (c *NetworkPolicyController) getAssociatedGroupsByName(grpName string) []an
 }
 
 // GetGroupMembers returns the current members of a ClusterGroup.
-func (c *NetworkPolicyController) GetGroupMembers(cgName string) (controlplane.GroupMemberSet, error) {
+// If the ClusterGroup is defined with IPBlocks, the returned members will be []controlplane.IPBlock.
+// Otherwise, the returned members will be of type controlplane.GroupMemberSet.
+func (c *NetworkPolicyController) GetGroupMembers(cgName string) (controlplane.GroupMemberSet, []controlplane.IPBlock, error) {
 	groupObj, found, _ := c.internalGroupStore.Get(cgName)
 	if found {
 		group := groupObj.(*antreatypes.Group)
-		return c.getClusterGroupMemberSet(group), nil
+		if len(group.IPBlocks) > 0 {
+			return nil, group.IPBlocks, nil
+		}
+		return c.getClusterGroupMemberSet(group), nil, nil
 	}
-	return controlplane.GroupMemberSet{}, fmt.Errorf("no internal Group with name %s is found", cgName)
+	return nil, nil, fmt.Errorf("no internal Group with name %s is found", cgName)
 }
