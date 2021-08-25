@@ -108,24 +108,11 @@ func (c *NetworkPolicyController) deleteClusterGroup(oldObj interface{}) {
 		}
 	}
 	key := internalGroupKeyFunc(og)
-	grpObj, found, _ := c.internalGroupStore.Get(key)
-	if found {
-		grp := grpObj.(*antreatypes.Group)
-		klog.V(2).Infof("Deleting internal Group %s", key)
-		err := c.internalGroupStore.Delete(key)
-		if err != nil {
-			klog.Errorf("Unable to delete internal Group %s from store: %v", key, err)
-		}
-		c.triggerParentGroupSync(grp)
+	klog.V(2).Infof("Deleting internal Group %s", key)
+	err := c.internalGroupStore.Delete(key)
+	if err != nil {
+		klog.Errorf("Unable to delete internal Group %s from store: %v", key, err)
 	}
-	// TODO: triggerCNPUpdates is done here rather than syncInternalGroup in case of deletion. If we
-	//  want to rely on syncInternalGroup for ACNP syncs, the internal group needs to be deleted from
-	//  the internal store after syncInternalGroup. However, at the time of ACNP sync, we also want to
-	//  ensure that the group is deleted from internal store already, so that we don't include outdated
-	//  members. Since this process is async, there's no guarantee which happens first. The drawback is
-	//  that all ACNPs that refers to this CG directly will be synchronously processed once as part of
-	//  deletion handler, which could cause perf issue in scale.
-	c.triggerCNPUpdates(og)
 	c.enqueueInternalGroup(key)
 }
 
@@ -211,6 +198,8 @@ func (c *NetworkPolicyController) processNextInternalGroupWorkItem() bool {
 }
 
 func (c *NetworkPolicyController) syncInternalGroup(key string) error {
+	defer c.triggerCNPUpdates(key)
+	defer c.triggerParentGroupSync(key)
 	// Retrieve the internal Group corresponding to this key.
 	grpObj, found, _ := c.internalGroupStore.Get(key)
 	if !found {
@@ -250,32 +239,29 @@ func (c *NetworkPolicyController) syncInternalGroup(key string) error {
 		klog.Errorf("Failed to update ClusterGroup %s GroupMembersComputed condition to %s: %v", cg.Name, v1.ConditionTrue, err)
 		return err
 	}
-	c.triggerParentGroupSync(grp)
-	return c.triggerCNPUpdates(cg)
+	return nil
 }
 
-func (c *NetworkPolicyController) triggerParentGroupSync(grp *antreatypes.Group) {
+func (c *NetworkPolicyController) triggerParentGroupSync(grp string) {
 	// TODO: if the max supported group nesting level increases, a Group having children
 	//  will no longer be a valid indication that it cannot have parents.
-	if len(grp.ChildGroups) == 0 {
-		parentGroupObjs, err := c.internalGroupStore.GetByIndex(store.ChildGroupIndex, grp.Name)
-		if err != nil {
-			klog.Errorf("Error retrieving parents of ClusterGroup %s: %v", grp.Name, err)
-		}
-		for _, p := range parentGroupObjs {
-			parentGrp := p.(*antreatypes.Group)
-			c.enqueueInternalGroup(parentGrp.Name)
-		}
+	parentGroupObjs, err := c.internalGroupStore.GetByIndex(store.ChildGroupIndex, grp)
+	if err != nil {
+		klog.Errorf("Error retrieving parents of ClusterGroup %s: %v", grp, err)
+	}
+	for _, p := range parentGroupObjs {
+		parentGrp := p.(*antreatypes.Group)
+		c.enqueueInternalGroup(parentGrp.Name)
 	}
 }
 
 // triggerCNPUpdates triggers processing of ClusterNetworkPolicies associated with the input ClusterGroup.
-func (c *NetworkPolicyController) triggerCNPUpdates(cg *crdv1alpha3.ClusterGroup) error {
+func (c *NetworkPolicyController) triggerCNPUpdates(cg string) {
 	// If a ClusterGroup is added/updated, it might have a reference in ClusterNetworkPolicy.
-	cnps, err := c.cnpInformer.Informer().GetIndexer().ByIndex(ClusterGroupIndex, cg.Name)
+	cnps, err := c.cnpInformer.Informer().GetIndexer().ByIndex(ClusterGroupIndex, cg)
 	if err != nil {
-		klog.Errorf("Error retrieving ClusterNetworkPolicies corresponding to ClusterGroup %s", cg.Name)
-		return err
+		klog.Errorf("Error retrieving ClusterNetworkPolicies corresponding to ClusterGroup %s", cg)
+		return
 	}
 	for _, obj := range cnps {
 		cnp := obj.(*crdv1alpha1.ClusterNetworkPolicy)
@@ -315,7 +301,6 @@ func (c *NetworkPolicyController) triggerCNPUpdates(cg *crdv1alpha3.ClusterGroup
 			c.deleteDereferencedAppliedToGroup(atg)
 		}
 	}
-	return nil
 }
 
 // updateGroupStatus updates the Status subresource for a ClusterGroup.

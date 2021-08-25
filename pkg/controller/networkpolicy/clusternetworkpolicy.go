@@ -438,9 +438,6 @@ func (n *NetworkPolicyController) getAffectedNamespacesForAppliedTo(appliedTo cr
 	if appliedTo.Group != "" {
 		cg, err := n.cgLister.Get(appliedTo.Group)
 		if err != nil {
-			// This error should not occur as we validate that a CG must exist before
-			// referencing it in an ACNP.
-			klog.Errorf("ClusterGroup %s not found: %v", appliedTo.Group, err)
 			return affectedNS, affectedNamespaceSelectors
 		}
 		if cg.Spec.NamespaceSelector != nil || cg.Spec.PodSelector != nil {
