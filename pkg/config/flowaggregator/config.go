@@ -58,6 +58,9 @@ type FlowAggregatorConfig struct {
 	RecordContents RecordContentsConfig `yaml:"recordContents,omitempty"`
 	// apiServer contains APIServer related configuration options.
 	APIServer APIServerConfig `yaml:"apiServer,omitempty"`
+	// KafkaParams contains all configuration parameters required to export flow
+	// records to a Kafka broker.
+	KafkaParams KafkaConfig `yaml:"kafkaParams,omitempty"`
 }
 
 type RecordContentsConfig struct {
@@ -72,4 +75,28 @@ type APIServerConfig struct {
 	TLSCipherSuites string `yaml:"tlsCipherSuites,omitempty"`
 	// TLS min version.
 	TLSMinVersion string `yaml:"tlsMinVersion,omitempty"`
+}
+
+type KafkaConfig struct {
+	// Provide the Kafka broker address to send the aggregated flow records in the
+	// given protobuf format. Kafka flow export is only enabled
+	// if the broker address is provided.
+	// Defaults to ""
+	BrokerAddress string `yaml:"brokerAddress,omitempty"`
+	// Provide the Kafka proto schema name. Currently, Flow Aggregator supports only
+	// one Antrea proto format called AntreaFlowMsg. In the future, with support
+	// of multiple proto formats, this config parameter could take in multiple values.
+	// Defaults to "AntreaFlowMsg"
+	ProtoSchema string `yaml:"protoSchema,omitempty"`
+	// Provide the topic name on Kafka broker, where the flow messages are intended
+	// to be received.
+	// Defaults to "AntreaTopic"
+	Topic string `yaml:"topic,omitempty"`
+	// Enable TLS communication between the Kafka producer and the Kafka broker.
+	// Defaults to false
+	TLSEnable bool `yaml:"tlsEnable,omitempty"`
+	// Enable or disable the TLS certificate verification. This is to support the
+	// Kafka TLS certs that are either self-signed, mis-configured or expired.
+	// Defaults to false
+	TLSSkipVerify bool `yaml:"tlsSkipVerify,omitempty"`
 }

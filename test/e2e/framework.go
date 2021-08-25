@@ -67,33 +67,41 @@ const (
 	defaultInterval = 1 * time.Second
 
 	// antreaNamespace is the K8s Namespace in which all Antrea resources are running.
-	antreaNamespace            string = "kube-system"
-	kubeNamespace              string = "kube-system"
+	antreaNamespace         string = "kube-system"
+	kubeNamespace           string = "kube-system"
+	antreaConfigVolume      string = "antrea-config"
+	antreaDaemonSet         string = "antrea-agent"
+	antreaWindowsDaemonSet  string = "antrea-agent-windows"
+	antreaDeployment        string = "antrea-controller"
+	antreaDefaultGW         string = "antrea-gw0"
+	testNamespace           string = "antrea-test"
+	busyboxContainerName    string = "busybox"
+	agnhostContainerName    string = "agnhost"
+	controllerContainerName string = "antrea-controller"
+	ovsContainerName        string = "antrea-ovs"
+	agentContainerName      string = "antrea-agent"
+	antreaYML               string = "antrea.yml"
+	antreaIPSecYML          string = "antrea-ipsec.yml"
+	antreaWireGuardGoYML    string = "antrea-wireguard-go.yml"
+	antreaWireGuardGoCovYML string = "antrea-wireguard-go-coverage.yml"
+	antreaCovYML            string = "antrea-coverage.yml"
+	antreaIPSecCovYML       string = "antrea-ipsec-coverage.yml"
+	defaultBridgeName       string = "br-int"
+	monitoringNamespace     string = "monitoring"
+
 	flowAggregatorNamespace    string = "flow-aggregator"
-	antreaConfigVolume         string = "antrea-config"
+	ipfixNamespace             string = "ipfix"
+	kafkaNamespace             string = "kafka"
 	flowAggregatorConfigVolume string = "flow-aggregator-config"
-	antreaDaemonSet            string = "antrea-agent"
-	antreaWindowsDaemonSet     string = "antrea-agent-windows"
-	antreaDeployment           string = "antrea-controller"
 	flowAggregatorDeployment   string = "flow-aggregator"
-	antreaDefaultGW            string = "antrea-gw0"
-	testNamespace              string = "antrea-test"
-	testAntreaIPAMNamespace    string = "antrea-ipam-test"
-	busyboxContainerName       string = "busybox"
-	agnhostContainerName       string = "agnhost"
-	controllerContainerName    string = "antrea-controller"
-	ovsContainerName           string = "antrea-ovs"
-	agentContainerName         string = "antrea-agent"
-	antreaYML                  string = "antrea.yml"
-	antreaIPSecYML             string = "antrea-ipsec.yml"
-	antreaWireGuardGoYML       string = "antrea-wireguard-go.yml"
-	antreaWireGuardGoCovYML    string = "antrea-wireguard-go-coverage.yml"
-	antreaCovYML               string = "antrea-coverage.yml"
-	antreaIPSecCovYML          string = "antrea-ipsec-coverage.yml"
+	ipfixDeployment            string = "ipfix-collector"
+	ipfixService               string = "ipfix-collector"
+	kafkaDeployment            string = "kafka-consumer"
+	kafkaService               string = "kafka-service"
 	flowAggregatorYML          string = "flow-aggregator.yml"
 	flowAggregatorCovYML       string = "flow-aggregator-coverage.yml"
-	defaultBridgeName          string = "br-int"
-	monitoringNamespace        string = "monitoring"
+	ipfixFlowCollectorYML      string = "ipfix-collector.yaml"
+	kafkaFlowCollectorYML      string = "kafka-flow-collector.yaml"
 
 	antreaControllerCovBinary string = "antrea-controller-coverage"
 	antreaAgentCovBinary      string = "antrea-agent-coverage"
@@ -108,15 +116,24 @@ const (
 
 	nameSuffixLength int = 8
 
+<<<<<<< HEAD
 	agnhostImage        = "projects.registry.vmware.com/antrea/agnhost:2.26"
 	busyboxImage        = "projects.registry.vmware.com/library/busybox"
 	nginxImage          = "projects.registry.vmware.com/antrea/nginx"
 	perftoolImage       = "projects.registry.vmware.com/antrea/perftool"
 	ipfixCollectorImage = "projects.registry.vmware.com/antrea/ipfix-collector:v0.5.10"
 	ipfixCollectorPort  = "4739"
+=======
+	agnhostImage  = "projects.registry.vmware.com/antrea/agnhost:2.26"
+	busyboxImage  = "projects.registry.vmware.com/library/busybox"
+	nginxImage    = "projects.registry.vmware.com/antrea/nginx"
+	perftoolImage = "projects.registry.vmware.com/antrea/perftool"
+>>>>>>> Support Kafka flow export in the Flow Aggregator
 
 	nginxLBService = "nginx-loadbalancer"
 
+	ipfixCollectorPort                  = "4739"
+	kafkaCollectorPort                  = "9092"
 	exporterActiveFlowExportTimeout     = 2 * time.Second
 	exporterIdleFlowExportTimeout       = 1 * time.Second
 	aggregatorActiveFlowRecordTimeout   = 3500 * time.Millisecond
@@ -687,8 +704,8 @@ func (data *TestData) deployAntreaFlowExporter(ipfixCollector string) error {
 	return data.mutateAntreaConfigMap(nil, ac, false, true)
 }
 
-// deployFlowAggregator deploys the Flow Aggregator with ipfix collector address.
-func (data *TestData) deployFlowAggregator(ipfixCollector string) (string, error) {
+// deployFlowAggregator deploys flow aggregator with different collectors.
+func (data *TestData) deployFlowAggregator(ipfixCollector, kafkaCollector string) (string, error) {
 	flowAggYaml := flowAggregatorYML
 	if testOptions.enableCoverage {
 		flowAggYaml = flowAggregatorCovYML
@@ -701,7 +718,7 @@ func (data *TestData) deployFlowAggregator(ipfixCollector string) (string, error
 	if err != nil {
 		return "", fmt.Errorf("unable to get service %v: %v", flowAggregatorDeployment, err)
 	}
-	if err = data.mutateFlowAggregatorConfigMap(ipfixCollector, svc.Spec.ClusterIP); err != nil {
+	if err = data.mutateFlowAggregatorConfigMap(ipfixCollector, kafkaCollector, svc.Spec.ClusterIP); err != nil {
 		return "", err
 	}
 	if rc, _, _, err = provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl -n %s rollout status deployment/%s --timeout=%v", flowAggregatorNamespace, flowAggregatorDeployment, 2*defaultTimeout)); err != nil || rc != 0 {
@@ -712,11 +729,44 @@ func (data *TestData) deployFlowAggregator(ipfixCollector string) (string, error
 	return svc.Spec.ClusterIP, nil
 }
 
-func (data *TestData) mutateFlowAggregatorConfigMap(ipfixCollector string, faClusterIP string) error {
+// deployFlowCollector deploys a flow collector and returns the collector cluster IP.
+func (data *TestData) deployFlowCollector(name, namespace, service, manifest string) (string, error) {
+	var rc int
+	var err error
+	var stdout, stderr string
+	rc, _, _, err = provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl apply -f %s", manifest))
+	if err != nil || rc != 0 {
+		return "", fmt.Errorf("error when deploying the flow collector manifest %s: %v", manifest, err)
+	}
+
+	if namespace == "kafka" {
+		rc, stdout, stderr, err = provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl -n %s rollout status deploy/%s --timeout=%v", namespace, "kafka-broker", 3*defaultTimeout))
+		if err != nil || rc != 0 {
+			return "", fmt.Errorf("error when waiting for flow collector rollout to complete - rc: %v - stdout: %v - stderr: %v - err: %v", rc, stdout, stderr, err)
+		}
+		rc, stdout, stderr, err = provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl -n %s rollout status deploy/%s --timeout=%v", namespace, "zookeeper-deployment", 3*defaultTimeout))
+		if err != nil || rc != 0 {
+			return "", fmt.Errorf("error when waiting for flow collector rollout to complete - rc: %v - stdout: %v - stderr: %v - err: %v", rc, stdout, stderr, err)
+		}
+	}
+	rc, stdout, stderr, err = provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl -n %s rollout status deploy/%s --timeout=%v", namespace, name, 3*defaultTimeout))
+	if err != nil || rc != 0 {
+		return "", fmt.Errorf("error when waiting for flow collector rollout to complete - rc: %v - stdout: %v - stderr: %v - err: %v", rc, stdout, stderr, err)
+	}
+
+	svc, err := data.clientset.CoreV1().Services(namespace).Get(context.TODO(), service, metav1.GetOptions{})
+	if err != nil {
+		return "", fmt.Errorf("unable to get service %v: %v", name, err)
+	}
+	return svc.Spec.ClusterIP, nil
+}
+
+func (data *TestData) mutateFlowAggregatorConfigMap(ipfixCollector, kafkaCollector, faClusterIP string) error {
 	configMap, err := data.GetFlowAggregatorConfigMap()
 	if err != nil {
 		return err
 	}
+<<<<<<< HEAD
 
 	var flowAggregatorConf flowaggregatorconfig.FlowAggregatorConfig
 	if err := yaml.Unmarshal([]byte(configMap.Data[flowAggregatorConfName]), &flowAggregatorConf); err != nil {
@@ -727,6 +777,17 @@ func (data *TestData) mutateFlowAggregatorConfigMap(ipfixCollector string, faClu
 	flowAggregatorConf.ActiveFlowRecordTimeout = aggregatorActiveFlowRecordTimeout.String()
 	flowAggregatorConf.InactiveFlowRecordTimeout = aggregatorInactiveFlowRecordTimeout.String()
 	flowAggregatorConf.RecordContents.PodLabels = true
+=======
+	flowAggregatorConf := configMap.Data[flowAggregatorConfName]
+	flowAggregatorConf = strings.Replace(flowAggregatorConf, "#externalFlowCollectorAddr: \"\"", fmt.Sprintf("externalFlowCollectorAddr: \"%s\"", ipfixCollector), 1)
+	flowAggregatorConf = strings.Replace(flowAggregatorConf, "#activeFlowRecordTimeout: 60s", fmt.Sprintf("activeFlowRecordTimeout: %v", aggregatorActiveFlowRecordTimeout), 1)
+	flowAggregatorConf = strings.Replace(flowAggregatorConf, "#inactiveFlowRecordTimeout: 90s", fmt.Sprintf("inactiveFlowRecordTimeout: %v", aggregatorInactiveFlowRecordTimeout), 1)
+<<<<<<< HEAD
+	flowAggregatorConf = strings.Replace(flowAggregatorConf, "#podLabels: false", fmt.Sprintf("podLabels: %v", true), 1)
+=======
+	flowAggregatorConf = strings.Replace(flowAggregatorConf, "#kafkaBrokerAddress: \"\"", fmt.Sprintf("kafkaBrokerAddress: \"%s\"", kafkaCollector), 1)
+>>>>>>> Support Kafka flow export in the Flow Aggregator
+>>>>>>> Support Kafka flow export in the Flow Aggregator
 	if testOptions.providerName == "kind" {
 		// In Kind cluster, there are issues with DNS name resolution on worker nodes.
 		// We will use flow aggregator service cluster IP to generate the server certificate for tls communication

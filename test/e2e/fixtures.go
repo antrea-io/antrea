@@ -209,26 +209,24 @@ func setupTestWithIPFIXCollector(tb testing.TB) (*TestData, bool, bool, error) {
 	if err != nil {
 		return testData, v4Enabled, v6Enabled, err
 	}
-	// Create pod using ipfix collector image
-	if err = testData.createPodOnNode("ipfix-collector", testNamespace, "", ipfixCollectorImage, nil, nil, nil, nil, true, nil); err != nil {
-		tb.Errorf("Error when creating the ipfix collector Pod: %v", err)
+	// Deploy the IPFIX Flow Collector.
+	collectorIPStr, err := testData.deployFlowCollector(ipfixDeployment, ipfixNamespace, ipfixService, ipfixFlowCollectorYML)
+	if err != nil {
+		tb.Errorf("Error when deploying the IPFIX flow collector: %v", err)
+		return testData, v4Enabled, v6Enabled, err
 	}
-	ipfixCollectorIP, err := testData.podWaitForIPs(defaultTimeout, "ipfix-collector", testNamespace)
-	if err != nil || len(ipfixCollectorIP.ipStrings) == 0 {
-		tb.Errorf("Error when waiting to get ipfix collector Pod IP: %v", err)
-		return nil, v4Enabled, v6Enabled, err
+	ipfixCollectorAddr := fmt.Sprintf("%s:tcp", net.JoinHostPort(collectorIPStr, ipfixCollectorPort))
+	// Deploy the Kafka Flow Collector.
+	collectorIPStr, err = testData.deployFlowCollector(kafkaDeployment, kafkaNamespace, kafkaService, kafkaFlowCollectorYML)
+	if err != nil {
+		tb.Errorf("Error when deploying the Kafka flow collector: %v", err)
+		return testData, v4Enabled, v6Enabled, err
 	}
-	var ipStr string
-	if v6Enabled && ipfixCollectorIP.ipv6 != nil {
-		ipStr = ipfixCollectorIP.ipv6.String()
-	} else {
-		ipStr = ipfixCollectorIP.ipv4.String()
-	}
-	ipfixCollectorAddr := fmt.Sprintf("%s:tcp", net.JoinHostPort(ipStr, ipfixCollectorPort))
+	kafkaCollectorAddr := fmt.Sprintf("%s", net.JoinHostPort(collectorIPStr, kafkaCollectorPort))
 
 	faClusterIPAddr := ""
-	tb.Logf("Applying flow aggregator YAML with ipfix collector address: %s", ipfixCollectorAddr)
-	faClusterIP, err := testData.deployFlowAggregator(ipfixCollectorAddr)
+	tb.Logf("Applying flow aggregator YAML with ipfix collector address: %s and kafka collector address: %v", ipfixCollectorAddr, kafkaCollectorAddr)
+	faClusterIP, err := testData.deployFlowAggregator(ipfixCollectorAddr, kafkaCollectorAddr)
 	if err != nil {
 		return testData, v4Enabled, v6Enabled, err
 	}
@@ -384,6 +382,17 @@ func teardownFlowAggregator(tb testing.TB, data *TestData) {
 	}
 	tb.Logf("Deleting '%s' K8s Namespace", flowAggregatorNamespace)
 	if err := data.deleteNamespace(flowAggregatorNamespace, defaultTimeout); err != nil {
+		tb.Logf("Error when tearing down flow aggregator: %v", err)
+	}
+}
+
+func teardownFlowCollectors(tb testing.TB, data *TestData) {
+	tb.Logf("Deleting '%s' K8s Namespace", ipfixNamespace)
+	if err := data.deleteNamespace(ipfixNamespace, defaultTimeout); err != nil {
+		tb.Logf("Error when tearing down flow aggregator: %v", err)
+	}
+	tb.Logf("Deleting '%s' K8s Namespace", kafkaNamespace)
+	if err := data.deleteNamespace(kafkaNamespace, defaultTimeout); err != nil {
 		tb.Logf("Error when tearing down flow aggregator: %v", err)
 	}
 }

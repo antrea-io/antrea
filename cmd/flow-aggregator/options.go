@@ -27,6 +27,7 @@ import (
 	"antrea.io/antrea/pkg/apis"
 	flowaggregatorconfig "antrea.io/antrea/pkg/config/flowaggregator"
 	"antrea.io/antrea/pkg/flowaggregator"
+	"antrea.io/antrea/pkg/flowaggregator/kafka"
 	"antrea.io/antrea/pkg/util/flowexport"
 )
 
@@ -38,6 +39,8 @@ const (
 	defaultAggregatorTransportProtocol    = flowaggregator.AggregatorTransportProtocolTLS
 	defaultFlowAggregatorAddress          = "flow-aggregator.flow-aggregator.svc"
 	defaultRecordFormat                   = "IPFIX"
+	defaultKafkaProtoSchema               = kafka.AntreaFlowMsg
+	defaultKafkaTopic                     = kafka.AntreaTopic
 )
 
 type Options struct {
@@ -61,6 +64,11 @@ type Options struct {
 	format string
 	// includePodLabels indicates whether source and destination Pod labels are included or not
 	includePodLabels bool
+	// Kafka proto schema for the Flow Aggregator to send the Kafka flow records
+	kakfaProtoSchema string
+	// Kafka broker topic where the producer in the Flow Aggregator sends the Kafka
+	// flow records
+	kakfaBrokerTopic string
 }
 
 func newOptions() *Options {
@@ -140,6 +148,22 @@ func (o *Options) validate(args []string) error {
 	o.includePodLabels = o.config.RecordContents.PodLabels
 	if o.config.APIServer.APIPort == 0 {
 		o.config.APIServer.APIPort = apis.FlowAggregatorAPIPort
+	}
+	// Validate all parameters related to Kafka flow export. These are optional.
+	// We process the parameters only if the Kafka broker address is given.
+	if o.config.KafkaParams.KafkaBrokerAddress != "" {
+		if o.config.KafkaParams.KafkaProtoSchema == "" {
+			o.kakfaProtoSchema = defaultKafkaProtoSchema
+		} else if o.config.KafkaParams.KafkaProtoSchema != defaultKafkaProtoSchema {
+			return fmt.Errorf("kafka flow export supports only one proto schema: %v", defaultKafkaProtoSchema)
+		} else {
+			o.kakfaProtoSchema = o.config.KafkaParams.KafkaProtoSchema
+		}
+		if o.config.KafkaParams.KafkaBrokerTopic == "" {
+			o.kakfaBrokerTopic = defaultKafkaTopic
+		} else {
+			o.kakfaBrokerTopic = o.config.KafkaParams.KafkaBrokerTopic
+		}
 	}
 	return nil
 }

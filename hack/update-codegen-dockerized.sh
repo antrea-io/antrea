@@ -39,6 +39,9 @@ ANTREA_PROTO_PKG="antrea_io.antrea"
 # Generate protobuf code for CNI gRPC service with protoc.
 protoc --go_out=plugins=grpc:. pkg/apis/cni/v1beta1/cni.proto
 
+# Generate protobuf code for Flow Aggregator Kafka Flow Export with protoc.
+protoc --go_out=. --plugin="${GOPATH}/bin/protoc-gen-go" pkg/flowaggregator/kafka/protobuf/antrea.proto
+
 # Generate clientset and apis code with K8s codegen tools.
 $GOPATH/bin/client-gen \
   --clientset-name versioned \

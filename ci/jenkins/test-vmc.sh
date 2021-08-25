@@ -401,6 +401,11 @@ function deliver_antrea {
 
     control_plane_ip="$(kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 == role {print $6}')"
     ${SCP_WITH_ANTREA_CI_KEY} $GIT_CHECKOUT_DIR/build/yamls/*.yml capv@${control_plane_ip}:~
+    # Copy the IPFIX flow collector and Kafka flow collector manifests
+    wget https://raw.githubusercontent.com/vmware/go-ipfix/main/build/yamls/ipfix-collector.yaml -P /tmp/
+    wget https://raw.githubusercontent.com/vmware/go-ipfix/main/build/yamls/kafka-flow-collector.yaml -P /tmp/
+    ${SCP_WITH_ANTREA_CI_KEY} /tmp/*collector.yaml capv@${control_plane_ip}:~
+    rm /tmp/*collector.yaml
 
     IPs=($(kubectl get nodes -o wide --no-headers=true | awk '{print $6}' | xargs))
     for i in "${!IPs[@]}"

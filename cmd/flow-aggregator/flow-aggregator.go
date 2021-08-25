@@ -17,10 +17,14 @@ package main
 import (
 	"fmt"
 	"hash/fnv"
+	"os"
+	"path"
 	"sync"
 	"time"
 
+	"github.com/Shopify/sarama"
 	"github.com/google/uuid"
+	"github.com/vmware/go-ipfix/pkg/kafka/producer"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
@@ -30,12 +34,31 @@ import (
 	"antrea.io/antrea/pkg/clusteridentity"
 	aggregator "antrea.io/antrea/pkg/flowaggregator"
 	"antrea.io/antrea/pkg/flowaggregator/apiserver"
+	"antrea.io/antrea/pkg/flowaggregator/kafka"
 	"antrea.io/antrea/pkg/log"
 	"antrea.io/antrea/pkg/signals"
 	"antrea.io/antrea/pkg/util/cipher"
 )
 
-const informerDefaultResync = 12 * time.Hour
+var (
+	// certDir is the directory that the TLS Secret should be mounted to. Declaring it as a variable for testing.
+	certDir = "/var/run/antrea/flow-aggregator-kafka-tls"
+	// certReadyTimeout is the timeout we will wait for the TLS Secret being ready. Declaring it as a variable for testing.
+	certReadyTimeout = 2 * time.Minute
+)
+
+const (
+	// The names of the files that should contain the CA certificate and the TLS
+	// key pair. If the Kafka broker does not have any trust store, CA cert authenticates
+	// the broker and TLS key pair authenticates the communication between the Flow
+	// Aggregator and the Kafka broker. If the Kafka broker has the trust store,
+	// then we presume some bootstrap process generates the CA cert and TLS keys
+	// for the Flow Aggregator and mount them through Kubernetes secret.
+	CACertFile            = "ca.crt"
+	TLSCertFile           = "tls.crt"
+	TLSKeyFile            = "tls.key"
+	informerDefaultResync = 12 * time.Hour
+)
 
 // genObservationDomainID generates an IPFIX Observation Domain ID when one is not provided by the
 // user through the flow aggregator configuration. It will first try to generate one
@@ -98,6 +121,48 @@ func run(o *Options) error {
 		observationDomainID = genObservationDomainID(k8sClient)
 	}
 	klog.Infof("Flow aggregator Observation Domain ID: %d", observationDomainID)
+	var producerInput *producer.ProducerInput
+	if o.config.KafkaParams.KafkaBrokerAddress != "" {
+		// Retrieve TLS certificates from user provided K8s secrets.
+		var caCertPath, tlsCertPath, tlsKeyPath string
+		if o.config.KafkaParams.KafkaTLSEnable {
+			caCertPath = path.Join(certDir, CACertFile)
+			tlsCertPath = path.Join(certDir, TLSCertFile)
+			tlsKeyPath = path.Join(certDir, TLSKeyFile)
+			// The secret may be created after the Pod is created, for example, when cert-manager is used the secret
+			// is created asynchronously. It waits for a while before it's considered to be failed.
+			if err = wait.PollImmediate(2*time.Second, certReadyTimeout, func() (bool, error) {
+				for _, path := range []string{caCertPath, tlsCertPath, tlsKeyPath} {
+					f, err := os.Open(path)
+					if err != nil {
+						klog.Warningf("Couldn't read %s when applying the kafka TLS certificate, retrying", path)
+						return false, nil
+					}
+					f.Close()
+				}
+				return true, nil
+			}); err != nil {
+				return fmt.Errorf("error reading Kafka TLS CA cert (%s), cert (%s), and key (%s) files present at \"%s\"", CACertFile, TLSCertFile, TLSKeyFile, certDir)
+			}
+		}
+
+		producerInput = &producer.ProducerInput{
+			KafkaBrokers:       []string{o.config.KafkaParams.KafkaBrokerAddress},
+			KafkaLogErrors:     true,
+			KafkaTopic:         o.kakfaBrokerTopic,
+			KafkaTLSEnabled:    o.config.KafkaParams.KafkaTLSEnable,
+			KafkaCAFile:        caCertPath,
+			KafkaTLSCertFile:   tlsCertPath,
+			KafkaTLSKeyFile:    tlsKeyPath,
+			KafkaTLSSkipVerify: o.config.KafkaParams.KafkaTLSSkipVerify,
+			KafkaVersion:       sarama.DefaultVersion,
+		}
+		// Depending on the proto schema, pick a convertor. Currently supporting
+		// only AntreaFlowMsg proto schema.
+		if o.kakfaProtoSchema == kafka.AntreaFlowMsg {
+			producerInput.ProtoSchemaConvertor = kafka.NewAntreaFlowMsgConvertor()
+		}
+	}
 
 	var sendJSONRecord bool
 	if o.format == "JSON" {
@@ -106,7 +171,7 @@ func run(o *Options) error {
 		sendJSONRecord = false
 	}
 
-	flowAggregator := aggregator.NewFlowAggregator(
+	flowAggregator, err := aggregator.NewFlowAggregator(
 		o.externalFlowCollectorAddr,
 		o.externalFlowCollectorProto,
 		o.activeFlowRecordTimeout,
@@ -114,11 +179,15 @@ func run(o *Options) error {
 		o.aggregatorTransportProtocol,
 		o.flowAggregatorAddress,
 		o.includePodLabels,
+		producerInput,
 		k8sClient,
 		observationDomainID,
 		podInformer,
 		sendJSONRecord,
 	)
+	if err != nil {
+		return fmt.Errorf("error when initializing the Flow Aggregator: %v", err)
+	}
 	err = flowAggregator.InitCollectingProcess()
 	if err != nil {
 		return fmt.Errorf("error when creating collecting process: %v", err)

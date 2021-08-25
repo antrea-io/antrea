@@ -125,12 +125,17 @@ if ! $np; then
     manifest_args="$manifest_args --no-np"
 fi
 
-COMMON_IMAGES_LIST=("gcr.io/kubernetes-e2e-test-images/agnhost:2.8" \
-                    "projects.registry.vmware.com/library/busybox"  \
-                    "projects.registry.vmware.com/antrea/nginx" \
-                    "projects.registry.vmware.com/antrea/perftool" \
-                    "projects.registry.vmware.com/antrea/ipfix-collector:v0.5.10" \
-                    "projects.registry.vmware.com/antrea/wireguard-go:0.0.20210424")
+COMMON_IMAGES=("gcr.io/kubernetes-e2e-test-images/agnhost:2.8" \
+               "projects.registry.vmware.com/library/busybox"  \
+               "projects.registry.vmware.com/antrea/nginx" \
+               "projects.registry.vmware.com/antrea/perftool" \
+               "projects.registry.vmware.com/antrea/ipfix-collector:v0.5.8" \
+               "projects.registry.vmware.com/antrea/wireguard-go:0.0.20210424")
+FLOW_VISIBILITY_IMAGES_LIST=("projects.registry.vmware.com/antrea/ipfix-collector:latest" \
+                             "projects.registry.vmware.com/antrea/kafka-consumer:latest" \
+                             "projects.registry.vmware.com/antrea/confluentinc-zookeeper:6.2.0" \
+                             "projects.registry.vmware.com/antrea/confluentinc-kafka:6.2.0")
+COMMON_IMAGES_LIST=(${COMMON_IMAGES[@]} ${FLOW_VISIBILITY_IMAGES_LIST[@]})
 for image in "${COMMON_IMAGES_LIST[@]}"; do
     for i in `seq 3`; do
         docker pull $image && break
@@ -187,6 +192,13 @@ function run_test {
         docker exec -i kind-control-plane sed -i.bak -E "s/^[[:space:]]*#kubeAPIServerOverride[[:space:]]*:[[:space:]]*[a-z\"]+[[:space:]]*$/    kubeAPIServerOverride: \"$apiserver\"/" /root/antrea-wireguard-go.yml
       fi
   fi
+  # Copy the IPFIX flow collector and Kafka flow collector manifests
+  wget https://raw.githubusercontent.com/vmware/go-ipfix/main/build/yamls/ipfix-collector.yaml -P /tmp/
+  wget https://raw.githubusercontent.com/vmware/go-ipfix/main/build/yamls/kafka-flow-collector.yaml -P /tmp/
+  cat /tmp/ipfix-collector.yaml | docker exec -i kind-control-plane dd of=/root/ipfix-collector.yaml
+  cat /tmp/kafka-flow-collector.yaml | docker exec -i kind-control-plane dd of=/root/kafka-flow-collector.yaml
+  rm /tmp/*collector.yaml
+
   sleep 1
 
   if $coverage; then

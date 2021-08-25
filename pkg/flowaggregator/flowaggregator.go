@@ -25,6 +25,7 @@ import (
 	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
 	"github.com/vmware/go-ipfix/pkg/exporter"
 	ipfixintermediate "github.com/vmware/go-ipfix/pkg/intermediate"
+	"github.com/vmware/go-ipfix/pkg/kafka/producer"
 	ipfixregistry "github.com/vmware/go-ipfix/pkg/registry"
 	corev1 "k8s.io/api/core/v1"
 	coreinformers "k8s.io/client-go/informers/core/v1"
@@ -183,6 +184,7 @@ type flowAggregator struct {
 	templateIDv6                uint16
 	registry                    ipfix.IPFIXRegistry
 	set                         ipfixentities.Set
+	kafkaProducer               *producer.KafkaProducer
 	flowAggregatorAddress       string
 	includePodLabels            bool
 	k8sClient                   kubernetes.Interface
@@ -201,11 +203,12 @@ func NewFlowAggregator(
 	aggregatorTransportProtocol AggregatorTransportProtocol,
 	flowAggregatorAddress string,
 	includePodLabels bool,
+	producerInput *producer.ProducerInput,
 	k8sClient kubernetes.Interface,
 	observationDomainID uint32,
 	podInformer coreinformers.PodInformer,
 	sendJSONRecord bool,
-) *flowAggregator {
+) (*flowAggregator, error) {
 	registry := ipfix.NewIPFIXRegistry()
 	registry.LoadRegistry()
 	fa := &flowAggregator{
@@ -223,8 +226,15 @@ func NewFlowAggregator(
 		podInformer:                 podInformer,
 		sendJSONRecord:              sendJSONRecord,
 	}
+	if producerInput != nil {
+		var err error
+		fa.kafkaProducer, err = producer.NewKafkaProducer(*producerInput)
+		if err != nil {
+			return nil, err
+		}
+	}
 	podInformer.Informer().AddIndexers(cache.Indexers{podInfoIndex: podInfoIndexFunc})
-	return fa
+	return fa, nil
 }
 
 func podInfoIndexFunc(obj interface{}) ([]string, error) {
@@ -392,6 +402,9 @@ func (fa *flowAggregator) flowRecordExpiryCheck(stopCh <-chan struct{}) {
 			if fa.exportingProcess != nil {
 				fa.exportingProcess.CloseConnToCollector()
 			}
+			if fa.kafkaProducer != nil {
+				fa.kafkaProducer.Close()
+			}
 			expireTimer.Stop()
 			return
 		case <-expireTimer.C:
@@ -402,6 +415,17 @@ func (fa *flowAggregator) flowRecordExpiryCheck(stopCh <-chan struct{}) {
 					// Initializing exporting process fails, will retry in next cycle.
 					expireTimer.Reset(fa.activeFlowRecordTimeout)
 					continue
+				}
+			}
+			// Initialize sarama Kafka producer
+			if fa.kafkaProducer != nil {
+				if fa.kafkaProducer.GetSaramaProducer() == nil {
+					err := fa.kafkaProducer.InitSaramaProducer()
+					if err != nil {
+						klog.ErrorS(err, "Error when initializing kafka producer", "retry timeout", fa.activeFlowRecordTimeout)
+					} else {
+						klog.InfoS("Initialized the Kafka producer")
+					}
 				}
 			}
 			// Pop the flow record item from expire priority queue in the Aggregation
@@ -458,8 +482,15 @@ func (fa *flowAggregator) sendFlowKeyRecord(key ipfixintermediate.FlowKey, recor
 		return err
 	}
 
-	klog.V(4).Infof("Data set sent successfully: %d Bytes sent", sentBytes)
+	klog.V(4).InfoS("Data set sent successfully", "flow key", key, "Bytes sent", sentBytes)
 	fa.numRecordsExported = fa.numRecordsExported + 1
+
+	if fa.kafkaProducer != nil {
+		if fa.kafkaProducer.GetSaramaProducer() != nil {
+			klog.V(4).InfoS("Sending flow record over kafka channel")
+			fa.kafkaProducer.PublishRecord(record.Record)
+		}
+	}
 	return nil
 }
 

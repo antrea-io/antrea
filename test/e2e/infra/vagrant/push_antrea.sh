@@ -146,6 +146,8 @@ function copyManifestToNodes() {
 FLOW_AGG_YML="/tmp/flow-aggregator.yml"
 SAVED_FLOW_AGG_IMG=/tmp/flow-aggregator.tar
 FLOW_AGG_IMG_NAME=projects.registry.vmware.com/antrea/flow-aggregator:latest
+IPFIX_COLLECTOR_YML="/tmp/ipfix-collector.yaml"
+KAFKA_COLLECTOR_YML="/tmp/kafka-flow-collector.yaml"
 if [ "$FLOW_AGGREGATOR" == "true" ]; then
     pushImgToNodes "$FLOW_AGG_IMG_NAME" "$SAVED_FLOW_AGG_IMG"
 
@@ -175,8 +177,14 @@ if [ "$FLOW_AGGREGATOR" == "true" ]; then
     else
         $THIS_DIR/../../../../hack/generate-manifest-flow-aggregator.sh --mode dev > "${FLOW_AGG_YML}"
     fi
-
     copyManifestToNodes "$FLOW_AGG_YML"
+
+    # Copy the manifest of IPFIX flow collector and Kafka flow collector.
+    wget https://raw.githubusercontent.com/vmware/go-ipfix/main/build/yamls/ipfix-collector.yaml -P /tmp/
+    copyManifestToNodes "$IPFIX_COLLECTOR_YML"
+    wget https://raw.githubusercontent.com/vmware/go-ipfix/main/build/yamls/kafka-flow-collector.yaml -P /tmp/
+    copyManifestToNodes "$KAFKA_COLLECTOR_YML"
+
     if [[ $FLOW_COLLECTOR != "" ]]; then
         echo "Restarting Flow Aggregator deployment"
         ssh -F ssh-config k8s-node-control-plane kubectl -n flow-aggregator delete pod --all
@@ -184,6 +192,8 @@ if [ "$FLOW_AGGREGATOR" == "true" ]; then
     fi
 
     rm "${FLOW_AGG_YML}"
+    rm "${IPFIX_COLLECTOR_YML}"*
+    rm "${KAFKA_COLLECTOR_YML}"*
 fi
 
 # Push Antrea image and related manifest.

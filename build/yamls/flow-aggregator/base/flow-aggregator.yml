@@ -37,7 +37,7 @@ rules:
     verbs: ["get", "list", "watch"]
   - apiGroups: [""]
     resources: ["secrets"]
-    resourceNames: ["flow-aggregator-client-tls"]
+    resourceNames: ["flow-aggregator-client-tls", "flow-aggregator-kafka-tls"]
     verbs: ["get", "update"]
   - apiGroups: [""]
     resources: ["secrets"]
@@ -154,6 +154,8 @@ spec:
           subPath: flow-aggregator.conf
         - mountPath: /var/log/antrea/flow-aggregator
           name: host-var-log-antrea-flow-aggregator
+        - mountPath: /var/run/antrea/flow-aggregator-kafka-tls
+          name: flow-aggregator-kafka-tls
       nodeSelector:
         kubernetes.io/os: linux
         kubernetes.io/arch: amd64
@@ -166,3 +168,8 @@ spec:
         hostPath:
           path: /var/log/antrea/flow-aggregator
           type: DirectoryOrCreate
+      - name: flow-aggregator-kafka-tls
+        secret:
+          secretName: flow-aggregator-kafka-tls
+          defaultMode: 0400
+          optional: true

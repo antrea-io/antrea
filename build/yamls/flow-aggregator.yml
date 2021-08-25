@@ -85,6 +85,7 @@ rules:
   - ""
   resourceNames:
   - flow-aggregator-client-tls
+  - flow-aggregator-kafka-tls
   resources:
   - secrets
   verbs:
@@ -203,12 +204,36 @@ data:
 
       # TLS min version from: VersionTLS10, VersionTLS11, VersionTLS12, VersionTLS13.
       #tlsMinVersion:
+
+    # KafkaParams contains all configuration parameters required to export flow
+    # records to a Kafka broker.
+    kafkaParams:
+      # Provide the Kafka broker address to send the aggregated flow records in the
+      # given protobuf format. Kafka flow export is only enabled if the broker address
+      # is provided.
+      #kafkaBrokerAddress: ""
+
+      # Provide the Kafka proto schema name. Currently, Flow Aggregator supports only
+      # one Antrea proto format called AntreaFlowMsg. In the future, with support
+      # of multiple proto formats, this config parameter could take in multiple values.
+      #kafkaProtoSchema: "AntreaFlowMsg"
+
+      # Provide the topic name on Kafka Broker, where the flow messages are intended
+      # to be received.
+      #kafkaBrokerTopic: "AntreaTopic"
+
+      # Enable TLS communication between the Kafka producer and the Kafka broker.
+      #kafkaTLSEnable: false
+
+      # Enable or disable the TLS certificate verification. This is to support the
+      # Kafka TLS certs that are either self-signed, mis-configured or expired.
+      #kafkaTLSSkipVerify: false
 kind: ConfigMap
 metadata:
   annotations: {}
   labels:
     app: flow-aggregator
-  name: flow-aggregator-configmap-g28c52f9kg
+  name: flow-aggregator-configmap-bmg8bt89hg
   namespace: flow-aggregator
 ---
 apiVersion: v1
@@ -275,15 +300,22 @@ spec:
           subPath: flow-aggregator.conf
         - mountPath: /var/log/antrea/flow-aggregator
           name: host-var-log-antrea-flow-aggregator
+        - mountPath: /var/run/antrea/flow-aggregator-kafka-tls
+          name: flow-aggregator-kafka-tls
       nodeSelector:
         kubernetes.io/arch: amd64
         kubernetes.io/os: linux
       serviceAccountName: flow-aggregator
       volumes:
       - configMap:
-          name: flow-aggregator-configmap-g28c52f9kg
+          name: flow-aggregator-configmap-bmg8bt89hg
         name: flow-aggregator-config
       - hostPath:
           path: /var/log/antrea/flow-aggregator
           type: DirectoryOrCreate
         name: host-var-log-antrea-flow-aggregator
+      - name: flow-aggregator-kafka-tls
+        secret:
+          defaultMode: 256
+          optional: true
+          secretName: flow-aggregator-kafka-tls
