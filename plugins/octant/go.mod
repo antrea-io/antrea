@@ -5,7 +5,7 @@ go 1.17
 require (
 	antrea.io/antrea v0.0.0
 	github.com/vmware-tanzu/octant v0.17.0
-	k8s.io/apimachinery v0.21.0
+	k8s.io/apimachinery v0.21.4
 	k8s.io/client-go v0.21.0
 )
 
@@ -58,7 +58,7 @@ require (
 	github.com/peterbourgon/diskv v2.0.1+incompatible // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
-	github.com/spf13/afero v1.4.1 // indirect
+	github.com/spf13/afero v1.6.0 // indirect
 	github.com/spf13/cast v1.3.0 // indirect
 	github.com/spf13/jwalterweatherman v1.0.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
@@ -86,14 +86,14 @@ require (
 	gopkg.in/ini.v1 v1.51.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.0-20200615113413-eeeca48fe776 // indirect
-	k8s.io/api v0.21.0 // indirect
+	k8s.io/api v0.21.4 // indirect
 	k8s.io/apiextensions-apiserver v0.21.0 // indirect
 	k8s.io/klog/v2 v2.8.0 // indirect
 	k8s.io/kube-aggregator v0.21.0 // indirect
 	k8s.io/kube-openapi v0.0.0-20210305164622-f622666832c1 // indirect
 	k8s.io/metrics v0.21.0 // indirect
 	k8s.io/utils v0.0.0-20210305010621-2afb4311ab10 // indirect
-	sigs.k8s.io/structured-merge-diff/v4 v4.1.0 // indirect
+	sigs.k8s.io/structured-merge-diff/v4 v4.1.2 // indirect
 	sigs.k8s.io/yaml v1.2.0 // indirect
 )
 
