@@ -1000,12 +1000,10 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 			c.cgStore.Add(&cgA)
 			c.namespaceStore.Add(&nsA)
 			c.namespaceStore.Add(&nsB)
+			c.serviceStore.Add(&svcA)
+			c.endpointsStore.Add(&epA)
 			if tt.inputPolicy.Spec.Tier != "" {
 				c.tierStore.Add(&tierA)
-			}
-			if tt.inputPolicy.Spec.Egress != nil && tt.inputPolicy.Spec.Egress[0].ToServices != nil {
-				c.serviceStore.Add(&svcA)
-				c.endpointsStore.Add(&epA)
 			}
 			actualPolicy := c.processClusterNetworkPolicy(tt.inputPolicy)
 			assert.Equal(t, tt.expectedPolicy.UID, actualPolicy.UID)

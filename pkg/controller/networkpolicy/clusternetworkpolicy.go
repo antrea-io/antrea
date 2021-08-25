@@ -389,7 +389,6 @@ func (n *NetworkPolicyController) processRules(
 					}
 				}
 			}
-			klog.InfoS("Checking cluster or perNSPeers", "numberOfClusterPeers", len(clusterPeers), "numberOfPerNamespacePeers", len(perNSPeers))
 		} else {
 			// Handle toService rules.
 			ruleAppliedTos := acnpRule.AppliedTo
@@ -405,8 +404,12 @@ func (n *NetworkPolicyController) processRules(
 					klog.V(2).InfoS("Service referred in `toServices` doesn't exist", "serviceNamespace", eachService.Namespace, "serviceName", eachService.Name)
 					continue
 				}
-				if svc.Spec.Type != v1.ServiceTypeNodePort {
-					klog.V(2).InfoS("Processing NodePort Service: still install rules matching the Endpoints IP+Ports, but no rule matching NodePort will be installed", "serviceNamespace", eachService.Namespace, "serviceName", eachService.Name)
+				if svc.Spec.Type != v1.ServiceTypeClusterIP {
+					if svc.Spec.Type == v1.ServiceTypeNodePort {
+						klog.V(2).InfoS("Processing NodePort Service: still install rules matching the Endpoints IP+Ports, while no rule matching NodePort will be installed", "serviceNamespace", eachService.Namespace, "serviceName", eachService.Name, "serviceType", svc.Spec.Type)
+					} else {
+						klog.V(2).InfoS("Received unsupported ServiceType Service. Skip this Service", "serviceNamespace", eachService.Namespace, "serviceName", eachService.Name, "serviceType", svc.Spec.Type)
+					}
 				}
 				antreaServices, antreaPeers, err := n.toAntreaServicesAndPeersFromServiceReference(eachService)
 				if err != nil {

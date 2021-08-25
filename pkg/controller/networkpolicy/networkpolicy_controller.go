@@ -832,7 +832,8 @@ func (n *NetworkPolicyController) deleteNetworkPolicy(old interface{}) {
 }
 
 // addService retrieves all internal Groups which refers to this Service
-// and enqueues the group keys for further processing.
+// and enqueues the group keys for further processing. And reprocess the
+// ClusterNetworkPolicy for which `toServices` referred to this Service.
 func (n *NetworkPolicyController) addService(obj interface{}) {
 	defer n.heartbeat("addService")
 	service := obj.(*v1.Service)
@@ -848,6 +849,8 @@ func (n *NetworkPolicyController) addService(obj interface{}) {
 	// triggered by this Service ADD event. So find all ACNPs that are impacted by this
 	// Service and reprocess them here. Otherwise, an Endpoints ADD event will
 	// reprocess those ACNPs.
+	// This case will happen when an Endpoints resource is created before the
+	// corresponding non-selector Service resource.
 	if service.Spec.Selector == nil {
 		affectedACNPsByService := n.filterACNPsByService(service.Namespace, service.Name)
 		for _, acnp := range affectedACNPsByService {
@@ -858,7 +861,7 @@ func (n *NetworkPolicyController) addService(obj interface{}) {
 
 // updateService retrieves all internal Groups which refers to this Service
 // and enqueues the group keys for further processing. And reprocess the
-// ClusterNetworkPolicy with `toService` referred to this Service.
+// ClusterNetworkPolicy for which `toServices` referred to this Service.
 func (n *NetworkPolicyController) updateService(oldObj, curObj interface{}) {
 	defer n.heartbeat("updateService")
 	oldService := oldObj.(*v1.Service)
@@ -874,8 +877,10 @@ func (n *NetworkPolicyController) updateService(oldObj, curObj interface{}) {
 		}
 		// If the Selector of this Service has been updated, an Endpoints UPDATE event will
 		// reprocess all ACNPs that are impacted by this Service. No need to reprocess them
-		// here.
-		return
+		// here. Note: removal of the Selector won't trigger an Endpoints UPDATE event.
+		if curService.Spec.Selector != nil {
+			return
+		}
 	}
 
 	// If this Service doesn't have a Selector or both Selector and Ports haven't been
@@ -891,7 +896,8 @@ func (n *NetworkPolicyController) updateService(oldObj, curObj interface{}) {
 }
 
 // deleteService retrieves all internal Groups which refers to this Service
-// and enqueues the group keys for further processing.
+// and enqueues the group keys for further processing. And reprocess the
+// ClusterNetworkPolicy for which `toServices` referred to this Service.
 func (n *NetworkPolicyController) deleteService(old interface{}) {
 	service, ok := old.(*v1.Service)
 	if !ok {
@@ -929,8 +935,8 @@ func (n *NetworkPolicyController) deleteService(old interface{}) {
 }
 
 // addEndpoints receives Endpoints ADD events and reprocesses the
-// ClusterNetworkPolicy with `toService` referred to the Service which uses this
-// Endpoints as backend.
+// ClusterNetworkPolicy for which `toServices` referred to the Service which uses
+// this Endpoints as backend.
 func (n *NetworkPolicyController) addEndpoints(obj interface{}) {
 	defer n.heartbeat("addEndpoints")
 	endpoints := obj.(*v1.Endpoints)
@@ -945,8 +951,8 @@ func (n *NetworkPolicyController) addEndpoints(obj interface{}) {
 }
 
 // updateEndpoints receives Endpoints UPDATE events and reprocesses the
-// ClusterNetworkPolicy with `toService` referred to the Service which uses this
-// Endpoints as backend.
+// ClusterNetworkPolicy for which `toServices` referred to the Service which uses
+// this Endpoints as backend.
 func (n *NetworkPolicyController) updateEndpoints(oldObj, curObj interface{}) {
 	defer n.heartbeat("updateEndpoints")
 	curEndpoints := curObj.(*v1.Endpoints)
@@ -961,8 +967,8 @@ func (n *NetworkPolicyController) updateEndpoints(oldObj, curObj interface{}) {
 }
 
 // deleteEndpoints receives Endpoints DELETE events and reprocesses the
-// ClusterNetworkPolicy with `toService` referred to the Service which uses this
-// Endpoints as backend.
+// ClusterNetworkPolicy for which `toServices` referred to the Service which uses
+// this Endpoints as backend.
 func (n *NetworkPolicyController) deleteEndpoints(oldObj interface{}) {
 	endpoints, ok := oldObj.(*v1.Endpoints)
 	if !ok {
