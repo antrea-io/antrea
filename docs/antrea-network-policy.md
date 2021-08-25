@@ -1016,9 +1016,9 @@ spec:
       - fqdn: "db-svc.default.svc"
 ```
 
-In this example, an exact name matching policy is defined. When a client Pod talks to
-`db-svc` via ClusterIP, the traffic is dropped. It doesn't stop the client talking to the
-Pods directly.
+In this example, an exact name matching policy is defined. When a client Pod connects to
+`db-svc` via ClusterIP, the traffic is dropped. It doesn't however prevent clients from
+connecting to the backend Pods for the Service directly.
 
 ## RBAC
 
