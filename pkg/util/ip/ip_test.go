@@ -162,3 +162,27 @@ func TestIPProtocolNumberToString(t *testing.T) {
 	assert.Equal(t, "IPv6-ICMP", IPProtocolNumberToString(ICMPv6Protocol, defaultValue))
 	assert.Equal(t, defaultValue, IPProtocolNumberToString(44, defaultValue))
 }
+
+func TestMustIPv6(t *testing.T) {
+	tests := []struct {
+		name    string
+		ipv6Str string
+		wantIP  net.IP
+	}{
+		{
+			name:    "valid IPv6 local",
+			ipv6Str: "::1",
+			wantIP:  net.IP{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x1},
+		},
+		{
+			name:    "valid IPv6",
+			ipv6Str: "2021:4860:0000:2001:0000:0000:0000:0068",
+			wantIP:  net.IP{0x20, 0x21, 0x48, 0x60, 0, 0, 0x20, 0x01, 0, 0, 0, 0, 0, 0, 0x00, 0x68},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.wantIP, MustIPv6(tt.ipv6Str))
+		})
+	}
+}

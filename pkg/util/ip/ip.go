@@ -20,6 +20,8 @@ import (
 	"net"
 	"sort"
 
+	utilnet "k8s.io/utils/net"
+
 	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 )
 
@@ -178,4 +180,12 @@ func MustParseCIDR(cidr string) *net.IPNet {
 		panic(fmt.Errorf("cannot parse '%v': %v", cidr, err))
 	}
 	return ipNet
+}
+
+func MustIPv6(s string) net.IP {
+	ip := net.ParseIP(s)
+	if !utilnet.IsIPv6(ip) {
+		panic(fmt.Errorf("invalid IPv6 address: %s", s))
+	}
+	return ip
 }
