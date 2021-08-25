@@ -36,7 +36,7 @@ require (
 	github.com/prometheus/common v0.10.0
 	github.com/satori/go.uuid v1.2.0
 	github.com/sirupsen/logrus v1.8.1
-	github.com/spf13/afero v1.4.1
+	github.com/spf13/afero v1.6.0
 	github.com/spf13/cobra v1.1.1
 	github.com/spf13/pflag v1.0.5
 	github.com/streamrail/concurrent-map v0.0.0-20160823150647-8bf1e9bacbf6 // indirect
