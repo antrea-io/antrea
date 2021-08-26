@@ -267,38 +267,6 @@ func testLegacyInvalidACNPAppliedToNotSetInAllRules(t *testing.T) {
 	}
 }
 
-func testLegacyInvalidACNPAppliedToCGDoesNotExist(t *testing.T) {
-	invalidNpErr := fmt.Errorf("invalid Antrea ClusterNetworkPolicy AppliedTo with non-existent clustergroup")
-	builder := &ClusterNetworkPolicySpecBuilder{}
-	builder = builder.SetName("acnp-appliedto-group-not-exist").
-		SetPriority(1.0).
-		SetAppliedToGroup([]ACNPAppliedToSpec{{Group: "cgA"}}).
-		AddIngress(v1.ProtocolTCP, &p80, nil, nil, nil, map[string]string{"pod": "b"}, nil,
-			nil, nil, false, nil, crdv1alpha1.RuleActionAllow, "", "")
-	acnp := builder.GetLegacy()
-	log.Debugf("creating ACNP %v", acnp.Name)
-	if _, err := k8sUtils.CreateOrUpdateLegacyACNP(acnp); err == nil {
-		// Above creation of ACNP must fail as it is an invalid spec.
-		failOnError(invalidNpErr, t)
-	}
-}
-
-func testLegacyInvalidACNPCGDoesNotExist(t *testing.T) {
-	invalidNpErr := fmt.Errorf("invalid Antrea ClusterNetworkPolicy rules with non-existent clustergroup")
-	builder := &ClusterNetworkPolicySpecBuilder{}
-	builder = builder.SetName("acnp-ingress-group-not-exist").
-		SetPriority(1.0).
-		SetAppliedToGroup([]ACNPAppliedToSpec{{PodSelector: map[string]string{"pod": "b"}}}).
-		AddIngress(v1.ProtocolTCP, &p80, nil, nil, nil, map[string]string{"pod": "b"}, nil,
-			nil, nil, false, nil, crdv1alpha1.RuleActionAllow, "cgA", "")
-	acnp := builder.GetLegacy()
-	log.Debugf("creating ACNP %v", acnp.Name)
-	if _, err := k8sUtils.CreateOrUpdateLegacyACNP(acnp); err == nil {
-		// Above creation of ACNP must fail as it is an invalid spec.
-		failOnError(invalidNpErr, t)
-	}
-}
-
 func testLegacyInvalidACNPIngressPeerCGSetWithPodSelector(t *testing.T) {
 	cgA := "cgA"
 	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
@@ -559,7 +527,6 @@ func testLegacyACNPAllowXBtoA(t *testing.T) {
 			"Port 80",
 			reachability,
 			[]metav1.Object{builder.GetLegacy()},
-			nil,
 			[]int32{80},
 			v1.ProtocolTCP,
 			0,
@@ -592,7 +559,6 @@ func testLegacyACNPAllowXBtoYA(t *testing.T) {
 			"NamedPort 81",
 			reachability,
 			[]metav1.Object{builder.GetLegacy()},
-			nil,
 			[]int32{81},
 			v1.ProtocolTCP,
 			0,
@@ -638,7 +604,6 @@ func testLegacyACNPPriorityOverrideDefaultDeny(t *testing.T) {
 			"Both ACNP",
 			reachabilityBothACNP,
 			[]metav1.Object{builder1.GetLegacy(), builder2.GetLegacy()},
-			nil,
 			[]int32{80},
 			v1.ProtocolTCP,
 			0,
@@ -677,7 +642,6 @@ func testLegacyACNPAllowNoDefaultIsolation(t *testing.T, protocol v1.Protocol) {
 			"Port 81",
 			reachability,
 			[]metav1.Object{builder.GetLegacy()},
-			nil,
 			[]int32{81},
 			protocol,
 			0,
@@ -723,7 +687,6 @@ func testLegacyACNPDropEgress(t *testing.T, protocol v1.Protocol) {
 			"Port 80",
 			reachability,
 			[]metav1.Object{builder.GetLegacy()},
-			nil,
 			[]int32{80},
 			protocol,
 			0,
@@ -762,7 +725,6 @@ func testLegacyACNPNoEffectOnOtherProtocols(t *testing.T) {
 			"Port 80",
 			reachability1,
 			[]metav1.Object{builder.GetLegacy()},
-			nil,
 			[]int32{80},
 			v1.ProtocolTCP,
 			0,
@@ -772,7 +734,6 @@ func testLegacyACNPNoEffectOnOtherProtocols(t *testing.T) {
 			"Port 80",
 			reachability2,
 			[]metav1.Object{builder.GetLegacy()},
-			nil,
 			[]int32{80},
 			v1.ProtocolUDP,
 			0,
@@ -808,8 +769,7 @@ func testLegacyACNPAppliedToDenyXBtoCGWithYA(t *testing.T) {
 		{
 			"NamedPort 81",
 			reachability,
-			[]metav1.Object{builder.GetLegacy()},
-			[]metav1.Object{cgBuilder.GetLegacy()},
+			[]metav1.Object{cgBuilder.GetLegacy(), builder.GetLegacy()},
 			[]int32{81},
 			v1.ProtocolTCP,
 			0,
@@ -845,8 +805,7 @@ func testLegacyACNPIngressRuleDenyCGWithXBtoYA(t *testing.T) {
 		{
 			"NamedPort 81",
 			reachability,
-			[]metav1.Object{builder.GetLegacy()},
-			[]metav1.Object{cgBuilder.GetLegacy()},
+			[]metav1.Object{cgBuilder.GetLegacy(), builder.GetLegacy()},
 			[]int32{81},
 			v1.ProtocolTCP,
 			0,
@@ -885,8 +844,7 @@ func testLegacyACNPAppliedToRuleCGWithPodsAToNsZ(t *testing.T) {
 		{
 			"Port 80",
 			reachability,
-			[]metav1.Object{builder.GetLegacy()},
-			[]metav1.Object{cgBuilder.GetLegacy()},
+			[]metav1.Object{cgBuilder.GetLegacy(), builder.GetLegacy()},
 			[]int32{80},
 			v1.ProtocolTCP,
 			0,
@@ -926,8 +884,7 @@ func testLegacyACNPEgressRulePodsAToCGWithNsZ(t *testing.T) {
 		{
 			"Port 80",
 			reachability,
-			[]metav1.Object{builder.GetLegacy()},
-			[]metav1.Object{cgBuilder.GetLegacy()},
+			[]metav1.Object{cgBuilder.GetLegacy(), builder.GetLegacy()},
 			[]int32{80},
 			v1.ProtocolTCP,
 			0,
@@ -979,8 +936,7 @@ func testLegacyACNPClusterGroupUpdateAppliedTo(t *testing.T) {
 		{
 			"CG Pods A",
 			reachability,
-			[]metav1.Object{builder.GetLegacy()},
-			[]metav1.Object{cgBuilder.GetLegacy()},
+			[]metav1.Object{cgBuilder.GetLegacy(), builder.GetLegacy()},
 			[]int32{80},
 			v1.ProtocolTCP,
 			0,
@@ -989,8 +945,7 @@ func testLegacyACNPClusterGroupUpdateAppliedTo(t *testing.T) {
 		{
 			"CG Pods C - update",
 			updatedReachability,
-			[]metav1.Object{builder.GetLegacy()},
-			[]metav1.Object{updatedCgBuilder.GetLegacy()},
+			[]metav1.Object{updatedCgBuilder.GetLegacy(), builder.GetLegacy()},
 			[]int32{80},
 			v1.ProtocolTCP,
 			0,
@@ -1042,8 +997,7 @@ func testLegacyACNPClusterGroupUpdate(t *testing.T) {
 		{
 			"Port 80",
 			reachability,
-			[]metav1.Object{builder.GetLegacy()},
-			[]metav1.Object{cgBuilder.GetLegacy()},
+			[]metav1.Object{cgBuilder.GetLegacy(), builder.GetLegacy()},
 			[]int32{80},
 			v1.ProtocolTCP,
 			0,
@@ -1052,8 +1006,7 @@ func testLegacyACNPClusterGroupUpdate(t *testing.T) {
 		{
 			"Port 80 - update",
 			updatedReachability,
-			[]metav1.Object{builder.GetLegacy()},
-			[]metav1.Object{updatedCgBuilder.GetLegacy()},
+			[]metav1.Object{updatedCgBuilder.GetLegacy(), builder.GetLegacy()},
 			[]int32{80},
 			v1.ProtocolTCP,
 			0,
@@ -1096,8 +1049,7 @@ func testLegacyACNPClusterGroupAppliedToPodAdd(t *testing.T, data *TestData) {
 		{
 			"Port 80",
 			nil,
-			[]metav1.Object{builder.GetLegacy()},
-			[]metav1.Object{cgBuilder.GetLegacy()},
+			[]metav1.Object{cgBuilder.GetLegacy(), builder.GetLegacy()},
 			[]int32{80},
 			v1.ProtocolTCP,
 			0,
@@ -1141,8 +1093,7 @@ func testLegacyACNPClusterGroupRefRulePodAdd(t *testing.T, data *TestData) {
 		{
 			"Port 80",
 			nil,
-			[]metav1.Object{builder.GetLegacy()},
-			[]metav1.Object{cgBuilder.GetLegacy()},
+			[]metav1.Object{cgBuilder.GetLegacy(), builder.GetLegacy()},
 			[]int32{80},
 			v1.ProtocolTCP,
 			0,
@@ -1204,7 +1155,6 @@ func testLegacyBaselineNamespaceIsolation(t *testing.T) {
 			"Port 80",
 			reachability,
 			[]metav1.Object{builder.GetLegacy(), k8sNPBuilder.Get()},
-			nil,
 			[]int32{80},
 			v1.ProtocolTCP,
 			0,
@@ -1269,7 +1219,6 @@ func testLegacyACNPPriorityOverride(t *testing.T) {
 			"Two Policies with different priorities",
 			reachabilityTwoACNPs,
 			[]metav1.Object{builder3.GetLegacy(), builder2.GetLegacy()},
-			nil,
 			[]int32{80},
 			v1.ProtocolTCP,
 			0,
@@ -1282,7 +1231,6 @@ func testLegacyACNPPriorityOverride(t *testing.T) {
 			"All three Policies",
 			reachabilityAllACNPs,
 			[]metav1.Object{builder3.GetLegacy(), builder1.GetLegacy(), builder2.GetLegacy()},
-			nil,
 			[]int32{80},
 			v1.ProtocolTCP,
 			0,
@@ -1348,7 +1296,6 @@ func testLegacyACNPTierOverride(t *testing.T) {
 			"Two Policies in different tiers",
 			reachabilityTwoACNPs,
 			[]metav1.Object{builder3.GetLegacy(), builder2.GetLegacy()},
-			nil,
 			[]int32{80},
 			v1.ProtocolTCP,
 			0,
@@ -1360,7 +1307,6 @@ func testLegacyACNPTierOverride(t *testing.T) {
 			"All three Policies in different tiers",
 			reachabilityAllACNPs,
 			[]metav1.Object{builder3.GetLegacy(), builder1.GetLegacy(), builder2.GetLegacy()},
-			nil,
 			[]int32{80},
 			v1.ProtocolTCP,
 			0,
@@ -1416,7 +1362,6 @@ func testLegacyACNPCustomTiers(t *testing.T) {
 			"Two Policies in different tiers",
 			reachabilityTwoACNPs,
 			[]metav1.Object{builder2.GetLegacy(), builder1.GetLegacy()},
-			nil,
 			[]int32{80},
 			v1.ProtocolTCP,
 			0,
@@ -1468,7 +1413,6 @@ func testLegacyACNPPriorityConflictingRule(t *testing.T) {
 			"Both ACNP",
 			reachabilityBothACNP,
 			[]metav1.Object{builder1.GetLegacy(), builder2.GetLegacy()},
-			nil,
 			[]int32{80},
 			v1.ProtocolTCP,
 			0,
@@ -1523,7 +1467,6 @@ func testLegacyACNPRulePrioirty(t *testing.T) {
 			"Both ACNP",
 			reachabilityBothACNP,
 			[]metav1.Object{builder2.GetLegacy(), builder1.GetLegacy()},
-			nil,
 			[]int32{80},
 			v1.ProtocolTCP,
 			0,
@@ -1560,7 +1503,6 @@ func testLegacyACNPPortRange(t *testing.T) {
 		fmt.Sprint("ACNP Drop Ports 8080:8085"),
 		reachability,
 		[]metav1.Object{builder.GetLegacy()},
-		nil,
 		[]int32{8080, 8081, 8082, 8083, 8084, 8085},
 		v1.ProtocolTCP,
 		0,
@@ -1597,7 +1539,6 @@ func testLegacyACNPRejectEgress(t *testing.T) {
 			"Port 80",
 			reachability,
 			[]metav1.Object{builder.GetLegacy()},
-			nil,
 			[]int32{80},
 			v1.ProtocolTCP,
 			0,
@@ -1634,7 +1575,6 @@ func testLegacyACNPRejectIngress(t *testing.T, protocol v1.Protocol) {
 			"Port 80",
 			reachability,
 			[]metav1.Object{builder.GetLegacy()},
-			nil,
 			[]int32{80},
 			protocol,
 			0,
@@ -1664,7 +1604,6 @@ func testLegacyANPPortRange(t *testing.T) {
 		fmt.Sprint("ANP Drop Ports 8080:8085"),
 		reachability,
 		[]metav1.Object{builder.GetLegacy()},
-		nil,
 		[]int32{8080, 8081, 8082, 8083, 8084, 8085},
 		v1.ProtocolTCP,
 		0,
@@ -1694,7 +1633,6 @@ func testLegacyANPBasic(t *testing.T) {
 			"Port 80",
 			reachability,
 			[]metav1.Object{builder.GetLegacy()},
-			nil,
 			[]int32{80},
 			v1.ProtocolTCP,
 			0,
@@ -1712,7 +1650,6 @@ func testLegacyANPBasic(t *testing.T) {
 			"Port 80",
 			reachability,
 			[]metav1.Object{builder.GetLegacy(), k8sNPBuilder.Get()},
-			nil,
 			[]int32{80},
 			v1.ProtocolTCP,
 			0,
@@ -1799,7 +1736,6 @@ func testLegacyAppliedToPerRule(t *testing.T) {
 			"Port 80",
 			reachability,
 			[]metav1.Object{builder.GetLegacy()},
-			nil,
 			[]int32{80},
 			v1.ProtocolTCP,
 			0,
@@ -1828,7 +1764,6 @@ func testLegacyAppliedToPerRule(t *testing.T) {
 			"Port 80",
 			reachability2,
 			[]metav1.Object{builder2.GetLegacy()},
-			nil,
 			[]int32{80},
 			v1.ProtocolTCP,
 			0,
@@ -1864,8 +1799,7 @@ func testLegacyACNPClusterGroupServiceRefCreateAndUpdate(t *testing.T, data *Tes
 	testStep1 := &TestStep{
 		"Port 80",
 		reachability,
-		[]metav1.Object{builder.GetLegacy()},
-		[]metav1.Object{svc1, svc2, cgBuilder1.GetLegacy(), cgBuilder2.GetLegacy()},
+		[]metav1.Object{svc1, svc2, cgBuilder1.GetLegacy(), cgBuilder2.GetLegacy(), builder.GetLegacy()},
 		[]int32{80},
 		v1.ProtocolTCP,
 		0,
@@ -1897,8 +1831,7 @@ func testLegacyACNPClusterGroupServiceRefCreateAndUpdate(t *testing.T, data *Tes
 	testStep2 := &TestStep{
 		"Port 80 updated",
 		reachability2,
-		[]metav1.Object{builder.GetLegacy()},
-		[]metav1.Object{svc1Updated, svc3, cgBuilder1.GetLegacy(), cgBuilder2Updated.GetLegacy()},
+		[]metav1.Object{svc1Updated, svc3, cgBuilder1.GetLegacy(), cgBuilder2Updated.GetLegacy(), builder.GetLegacy()},
 		[]int32{80},
 		v1.ProtocolTCP,
 		0,
@@ -1916,7 +1849,6 @@ func testLegacyACNPClusterGroupServiceRefCreateAndUpdate(t *testing.T, data *Tes
 		"Port 80 ACNP spec updated to selector",
 		reachability,
 		[]metav1.Object{builderUpdated.GetLegacy()},
-		[]metav1.Object{},
 		[]int32{80},
 		v1.ProtocolTCP,
 		0,
@@ -1958,8 +1890,7 @@ func testLegacyACNPNestedClusterGroupCreateAndUpdate(t *testing.T, data *TestDat
 	testStep1 := &TestStep{
 		"Port 80",
 		reachability,
-		[]metav1.Object{builder.GetLegacy()},
-		[]metav1.Object{svc1, cgBuilder1.GetLegacy(), cgBuilderNested.GetLegacy()},
+		[]metav1.Object{svc1, cgBuilder1.GetLegacy(), cgBuilderNested.GetLegacy(), builder.GetLegacy()},
 		[]int32{80},
 		v1.ProtocolTCP,
 		0,
@@ -1994,7 +1925,6 @@ func testLegacyACNPNestedClusterGroupCreateAndUpdate(t *testing.T, data *TestDat
 	testStep2 := &TestStep{
 		"Port 80 updated",
 		reachability2,
-		nil,
 		[]metav1.Object{cgBuilder2.GetLegacy(), cgBuilderNested.GetLegacy()},
 		[]int32{80},
 		v1.ProtocolTCP,
@@ -2019,8 +1949,7 @@ func executeLegacyTestsWithData(t *testing.T, testList []*TestCase, data *TestDa
 		log.Infof("running test case %s", testCase.Name)
 		for _, step := range testCase.Steps {
 			log.Infof("running step %s of test case %s", step.Name, testCase.Name)
-			applyLegacyTestStepServicesAndGroups(t, step)
-			applyLegacyTestStepPolicies(t, step)
+			applyLegacyTestStepResources(t, step)
 			time.Sleep(networkPolicyDelay)
 
 			reachability := step.Reachability
@@ -2043,75 +1972,27 @@ func executeLegacyTestsWithData(t *testing.T, testList []*TestCase, data *TestDa
 				doProbe(t, data, p, step.Protocol)
 			}
 		}
-		cleanupLegacyTestCasePolicies(t, testCase)
-		cleanupLegacyTestCaseServicesAndGroups(t, testCase)
+		cleanupLegacyTestCaseResources(t, testCase)
 		time.Sleep(networkPolicyDelay)
 	}
 	allTestList = append(allTestList, testList...)
 }
 
-func applyLegacyTestStepPolicies(t *testing.T, step *TestStep) {
-	for _, policy := range step.Policies {
-		switch p := policy.(type) {
+// applyLegacyTestStepResources creates in the resources of a testStep in specified order.
+// The ordering can be used to test different scenarios, like creating an ACNP before
+// creating its referred ClusterGroup, and vice versa.
+func applyLegacyTestStepResources(t *testing.T, step *TestStep) {
+	for _, r := range step.TestResources {
+		switch o := r.(type) {
 		case *legacysecv1alpha1.ClusterNetworkPolicy:
-			_, err := k8sUtils.CreateOrUpdateLegacyACNP(p)
+			_, err := k8sUtils.CreateOrUpdateLegacyACNP(o)
 			failOnError(err, t)
 		case *legacysecv1alpha1.NetworkPolicy:
-			_, err := k8sUtils.CreateOrUpdateLegacyANP(p)
+			_, err := k8sUtils.CreateOrUpdateLegacyANP(o)
 			failOnError(err, t)
 		case *v1net.NetworkPolicy:
-			_, err := k8sUtils.CreateOrUpdateNetworkPolicy(p)
+			_, err := k8sUtils.CreateOrUpdateNetworkPolicy(o)
 			failOnError(err, t)
-		}
-		warningOnTimeoutError(waitForResourceReady(policy, timeout), t)
-	}
-	if len(step.Policies) > 0 {
-		log.Debugf("Sleeping for %v for all policies to take effect", networkPolicyDelay)
-		time.Sleep(networkPolicyDelay)
-	}
-}
-
-func cleanupLegacyTestCasePolicies(t *testing.T, c *TestCase) {
-	// TestSteps in a TestCase may first create and then update the same policy.
-	// Use sets to avoid duplicates.
-	acnpsToDelete, anpsToDelete, npsToDelete := sets.String{}, sets.String{}, sets.String{}
-	for _, step := range c.Steps {
-		for _, policy := range step.Policies {
-			switch p := policy.(type) {
-			case *legacysecv1alpha1.ClusterNetworkPolicy:
-				acnpsToDelete.Insert(p.Name)
-			case *legacysecv1alpha1.NetworkPolicy:
-				anpsToDelete.Insert(p.Namespace + "/" + p.Name)
-			case *v1net.NetworkPolicy:
-				npsToDelete.Insert(p.Namespace + "/" + p.Name)
-			}
-		}
-	}
-	for _, acnp := range acnpsToDelete.List() {
-		failOnError(k8sUtils.DeleteLegacyACNP(acnp), t)
-		warningOnTimeoutError(waitForResourceDelete("", acnp, resourceACNP, timeout), t)
-	}
-	for _, anp := range anpsToDelete.List() {
-		namespace := strings.Split(anp, "/")[0]
-		name := strings.Split(anp, "/")[1]
-		failOnError(k8sUtils.DeleteLegacyANP(namespace, name), t)
-		warningOnTimeoutError(waitForResourceDelete(namespace, name, resourceANP, timeout), t)
-	}
-	for _, np := range npsToDelete.List() {
-		namespace := strings.Split(np, "/")[0]
-		name := strings.Split(np, "/")[1]
-		failOnError(k8sUtils.DeleteNetworkPolicy(namespace, name), t)
-		warningOnTimeoutError(waitForResourceDelete(namespace, name, resourceNetworkPolicy, timeout), t)
-	}
-	if acnpsToDelete.Len()+anpsToDelete.Len()+npsToDelete.Len() > 0 {
-		log.Debugf("Sleeping for %v for all policy deletions to take effect", networkPolicyDelay)
-		time.Sleep(networkPolicyDelay)
-	}
-}
-
-func applyLegacyTestStepServicesAndGroups(t *testing.T, step *TestStep) {
-	for _, obj := range step.ServicesAndGroups {
-		switch o := obj.(type) {
 		case *legacycorev1a2.ClusterGroup:
 			_, err := k8sUtils.CreateOrUpdateLegacyCG(o)
 			failOnError(err, t)
@@ -2119,43 +2000,64 @@ func applyLegacyTestStepServicesAndGroups(t *testing.T, step *TestStep) {
 			_, err := k8sUtils.CreateOrUpdateService(o)
 			failOnError(err, t)
 		}
-		warningOnTimeoutError(waitForResourceReady(obj, timeout), t)
+		warningOnTimeoutError(waitForResourceReady(r, timeout), t)
 	}
-	if len(step.ServicesAndGroups) > 0 {
-		log.Debugf("Sleeping for %v for all groups to have members computed", groupDelay)
-		time.Sleep(groupDelay)
+	if len(step.TestResources) > 0 {
+		log.Debugf("Sleeping for %v for all policies to take effect", networkPolicyDelay)
+		time.Sleep(networkPolicyDelay)
 	}
 }
 
-func cleanupLegacyTestCaseServicesAndGroups(t *testing.T, c *TestCase) {
+func cleanupLegacyTestCaseResources(t *testing.T, c *TestCase) {
+	// TestSteps in a TestCase may first create and then update the same resource.
+	// Use sets to avoid duplicates.
+	acnpsToDelete, anpsToDelete, npsToDelete := sets.String{}, sets.String{}, sets.String{}
 	svcsToDelete, groupsToDelete := sets.String{}, sets.String{}
-	var orderedGroups []string
 	for _, step := range c.Steps {
-		for _, obj := range step.ServicesAndGroups {
-			switch o := obj.(type) {
+		for _, r := range step.TestResources {
+			switch o := r.(type) {
+			case *legacysecv1alpha1.ClusterNetworkPolicy:
+				acnpsToDelete.Insert(o.Name)
+			case *legacysecv1alpha1.NetworkPolicy:
+				anpsToDelete.Insert(o.Namespace + "/" + o.Name)
+			case *v1net.NetworkPolicy:
+				npsToDelete.Insert(o.Namespace + "/" + o.Name)
 			case *legacycorev1a2.ClusterGroup:
 				groupsToDelete.Insert(o.Name)
-				orderedGroups = append(orderedGroups, o.Name)
 			case *v1.Service:
 				svcsToDelete.Insert(o.Namespace + "/" + o.Name)
 			}
 		}
 	}
-
-	for i := len(orderedGroups) - 1; i >= 0; i-- {
-		cg := orderedGroups[i]
-		if groupsToDelete.Has(cg) {
-			failOnError(k8sUtils.DeleteLegacyCG(cg), t)
-			warningOnTimeoutError(waitForResourceDelete("", cg, resourceCG, timeout), t)
-			groupsToDelete.Delete(cg)
-		}
+	for acnp := range acnpsToDelete {
+		failOnError(k8sUtils.DeleteLegacyACNP(acnp), t)
+		warningOnTimeoutError(waitForResourceDelete("", acnp, resourceACNP, timeout), t)
 	}
-
-	for _, svc := range svcsToDelete.List() {
+	for anp := range anpsToDelete {
+		namespace := strings.Split(anp, "/")[0]
+		name := strings.Split(anp, "/")[1]
+		failOnError(k8sUtils.DeleteLegacyANP(namespace, name), t)
+		warningOnTimeoutError(waitForResourceDelete(namespace, name, resourceANP, timeout), t)
+	}
+	for np := range npsToDelete {
+		namespace := strings.Split(np, "/")[0]
+		name := strings.Split(np, "/")[1]
+		failOnError(k8sUtils.DeleteNetworkPolicy(namespace, name), t)
+		warningOnTimeoutError(waitForResourceDelete(namespace, name, resourceNetworkPolicy, timeout), t)
+	}
+	for cg := range groupsToDelete {
+		failOnError(k8sUtils.DeleteLegacyCG(cg), t)
+		warningOnTimeoutError(waitForResourceDelete("", cg, resourceCG, timeout), t)
+	}
+	for svc := range svcsToDelete {
 		namespace := strings.Split(svc, "/")[0]
 		name := strings.Split(svc, "/")[1]
 		failOnError(k8sUtils.DeleteService(namespace, name), t)
 		warningOnTimeoutError(waitForResourceDelete(namespace, name, resourceSVC, timeout), t)
+	}
+	if acnpsToDelete.Len()+anpsToDelete.Len()+npsToDelete.Len() > 0 {
+		log.Debugf("Sleeping for %v for all policy deletions to take effect", networkPolicyDelay)
+		time.Sleep(networkPolicyDelay)
 	}
 }
 
@@ -2181,8 +2083,6 @@ func TestLegacyAntreaPolicy(t *testing.T) {
 		t.Run("Case=LegacyACNPIngressPeerCGSetWithIPBlock", func(t *testing.T) { testLegacyInvalidACNPIngressPeerCGSetWithIPBlock(t) })
 		t.Run("Case=LegacyACNPIngressPeerCGSetWithPodSelector", func(t *testing.T) { testLegacyInvalidACNPIngressPeerCGSetWithPodSelector(t) })
 		t.Run("Case=LegacyACNPIngressPeerCGSetWithNSSelector", func(t *testing.T) { testLegacyInvalidACNPIngressPeerCGSetWithNSSelector(t) })
-		t.Run("Case=LegacyACNPCGDoesNotExist", func(t *testing.T) { testLegacyInvalidACNPCGDoesNotExist(t) })
-		t.Run("Case=LegacyACNPAppliedToCGDoesNotExist", func(t *testing.T) { testLegacyInvalidACNPAppliedToCGDoesNotExist(t) })
 		t.Run("Case=LegacyACNPSpecAppliedToRuleAppliedToSet", func(t *testing.T) { testLegacyInvalidACNPSpecAppliedToRuleAppliedToSet(t) })
 		t.Run("Case=LegacyACNPAppliedToNotSetInAllRules", func(t *testing.T) { testLegacyInvalidACNPAppliedToNotSetInAllRules(t) })
 		t.Run("Case=LegacyANPNoPriority", func(t *testing.T) { testLegacyInvalidANPNoPriority(t) })
