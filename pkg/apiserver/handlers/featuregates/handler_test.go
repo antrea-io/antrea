@@ -49,7 +49,7 @@ func Test_getGatesResponse(t *testing.T) {
 				{Component: "agent", Name: "AntreaProxy", Status: "Enabled", Version: "BETA"},
 				{Component: "agent", Name: "Egress", Status: "Disabled", Version: "ALPHA"},
 				{Component: "agent", Name: "EndpointSlice", Status: "Disabled", Version: "ALPHA"},
-				{Component: "agent", Name: "FlexibleIPAM", Status: "Disabled", Version: "ALPHA"},
+				{Component: "agent", Name: "AntreaIPAM", Status: "Disabled", Version: "ALPHA"},
 				{Component: "agent", Name: "Traceflow", Status: "Enabled", Version: "BETA"},
 				{Component: "agent", Name: "FlowExporter", Status: "Disabled", Version: "ALPHA"},
 				{Component: "agent", Name: "NetworkPolicyStats", Status: "Enabled", Version: "BETA"},
