@@ -2358,6 +2358,8 @@ func testACNPNamespaceIsolation(t *testing.T, data *TestData) {
 }
 
 func testFQDNPolicy(t *testing.T) {
+	// The ipv6-only test env doesn't have IPv6 access to the web.
+	skipIfNotIPv4Cluster(t)
 	builder := &ClusterNetworkPolicySpecBuilder{}
 	builder = builder.SetName("test-acnp-drop-all-google").
 		SetTier("application").
