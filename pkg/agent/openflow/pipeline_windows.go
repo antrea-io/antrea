@@ -111,7 +111,7 @@ func (c *client) hostBridgeUplinkFlows(localSubnet net.IPNet, category cookie.Ca
 
 func (c *client) l3FwdFlowToRemoteViaRouting(localGatewayMAC net.HardwareAddr, remoteGatewayMAC net.HardwareAddr,
 	category cookie.Category, peerIP net.IP, peerPodCIDR *net.IPNet) []binding.Flow {
-	if c.encapMode.NeedsDirectRoutingToPeer(peerIP, c.nodeConfig.NodeTransportIPAddr) && remoteGatewayMAC != nil {
+	if c.encapMode.NeedsDirectRoutingToPeer(peerIP, c.nodeConfig.NodeTransportIPv4Addr) && remoteGatewayMAC != nil {
 		ipProto := getIPProtocol(peerIP)
 		l3FwdTable := c.pipeline[l3ForwardingTable]
 		// It enhances Windows Noencap mode performance by bypassing host network.

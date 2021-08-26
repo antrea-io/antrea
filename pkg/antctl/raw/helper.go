@@ -32,6 +32,7 @@ import (
 	controllerapiserver "antrea.io/antrea/pkg/apiserver"
 	antrea "antrea.io/antrea/pkg/client/clientset/versioned"
 	"antrea.io/antrea/pkg/client/clientset/versioned/scheme"
+	"antrea.io/antrea/pkg/util/ip"
 	"antrea.io/antrea/pkg/util/k8s"
 )
 
@@ -97,12 +98,21 @@ func CreateAgentClientCfg(k8sClientset kubernetes.Interface, antreaClientset ant
 	if agentInfo == nil {
 		return nil, fmt.Errorf("no Antrea Agent found for Node name %s", nodeName)
 	}
-	nodeIP, err := k8s.GetNodeAddr(node)
+	nodeIPs, err := k8s.GetNodeAddrs(node)
 	if err != nil {
 		return nil, fmt.Errorf("error when parsing IP of Node %s", nodeName)
 	}
 	cfg := rest.CopyConfig(cfgTmpl)
-	cfg.Host = fmt.Sprintf("https://%s", net.JoinHostPort(nodeIP.String(), fmt.Sprint(agentInfo.APIPort)))
+
+	var nodeIP string
+	if nodeIPs.IPv4 != nil {
+		nodeIP = nodeIPs.IPv4.String()
+	} else if nodeIPs.IPv6 != nil {
+		nodeIP = nodeIPs.IPv6.String()
+	} else {
+		return nil, fmt.Errorf("there is no NodeIP on agent Node")
+	}
+	cfg.Host = fmt.Sprintf("https://%s", net.JoinHostPort(nodeIP, fmt.Sprint(agentInfo.APIPort)))
 	return cfg, nil
 }
 
@@ -116,13 +126,23 @@ func CreateControllerClientCfg(k8sClientset kubernetes.Interface, antreaClientse
 	if err != nil {
 		return nil, fmt.Errorf("error when searching the Node of the controller: %w", err)
 	}
-	var controllerNodeIP net.IP
-	controllerNodeIP, err = k8s.GetNodeAddr(controllerNode)
+	var controllerNodeIPs *ip.DualStackIPs
+	controllerNodeIPs, err = k8s.GetNodeAddrs(controllerNode)
 	if err != nil {
 		return nil, fmt.Errorf("error when parsing controller IP: %w", err)
 	}
 
 	cfg := rest.CopyConfig(cfgTmpl)
-	cfg.Host = fmt.Sprintf("https://%s", net.JoinHostPort(controllerNodeIP.String(), fmt.Sprint(controllerInfo.APIPort)))
+
+	var nodeIP string
+	if controllerNodeIPs.IPv4 != nil {
+		nodeIP = controllerNodeIPs.IPv4.String()
+	} else if controllerNodeIPs.IPv6 != nil {
+		nodeIP = controllerNodeIPs.IPv6.String()
+	} else {
+		return nil, fmt.Errorf("there is no NodeIP on controller Node")
+	}
+
+	cfg.Host = fmt.Sprintf("https://%s", net.JoinHostPort(nodeIP, fmt.Sprint(controllerInfo.APIPort)))
 	return cfg, nil
 }

@@ -230,7 +230,7 @@ func run(o *Options) error {
 	var egressController *egress.EgressController
 	if features.DefaultFeatureGate.Enabled(features.Egress) {
 		egressController, err = egress.NewEgressController(
-			ofClient, antreaClientProvider, crdClient, ifaceStore, routeClient, nodeConfig.Name, nodeConfig.NodeIPAddr.IP,
+			ofClient, antreaClientProvider, crdClient, ifaceStore, routeClient, nodeConfig.Name, nodeConfig.NodeIPv4Addr.IP,
 			o.config.ClusterMembershipPort, egressInformer, nodeInformer, externalIPPoolInformer,
 		)
 		if err != nil {

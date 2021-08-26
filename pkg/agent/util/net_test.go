@@ -19,6 +19,8 @@ import (
 	"net"
 	"strings"
 	"testing"
+
+	"antrea.io/antrea/pkg/util/ip"
 )
 
 func TestGenerateContainerInterfaceName(t *testing.T) {
@@ -53,11 +55,12 @@ func TestGetDefaultLocalNodeAddr(t *testing.T) {
 		t.Error(err)
 	}
 	defer conn.Close()
-	ip := conn.LocalAddr().(*net.UDPAddr).IP
+	localAddr := conn.LocalAddr().(*net.UDPAddr).IP
 
-	_, dev, err := GetIPNetDeviceFromIP(ip)
+	nodeIPs := &ip.DualStackIPs{IPv4: localAddr}
+	_, _, dev, err := GetIPNetDeviceFromIP(nodeIPs)
 	if err != nil {
 		t.Error(err)
 	}
-	t.Logf("IP obtained %s, %v", ip, dev)
+	t.Logf("IP obtained %s, %v", localAddr, dev)
 }

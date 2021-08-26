@@ -42,6 +42,7 @@ import (
 	ofconfig "antrea.io/antrea/pkg/ovs/openflow"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 	"antrea.io/antrea/pkg/ovs/ovsctl"
+	utilip "antrea.io/antrea/pkg/util/ip"
 	antrearuntime "antrea.io/antrea/pkg/util/runtime"
 	ofTestUtils "antrea.io/antrea/test/integration/ovs"
 	k8sproxy "antrea.io/antrea/third_party/proxy"
@@ -122,19 +123,33 @@ func TestConnectivityFlows(t *testing.T) {
 	}()
 
 	config := prepareConfiguration()
-	for _, f := range []func(t *testing.T, config *testConfig){
-		testInitialize,
-		testInstallGatewayFlows,
-		testInstallServiceFlows,
-		testInstallTunnelFlows,
-		testInstallNodeFlows,
-		testInstallPodFlows,
-		testUninstallPodFlows,
-		testUninstallNodeFlows,
-		testExternalFlows,
-	} {
-		f(t, config)
-	}
+	t.Run("testInitialize", func(t *testing.T) {
+		testInitialize(t, config)
+	})
+	t.Run("testInstallGatewayFlows", func(t *testing.T) {
+		testInstallGatewayFlows(t, config)
+	})
+	t.Run("testInstallServiceFlows", func(t *testing.T) {
+		testInstallServiceFlows(t, config)
+	})
+	t.Run("testInstallTunnelFlows", func(t *testing.T) {
+		testInstallTunnelFlows(t, config)
+	})
+	t.Run("testInstallNodeFlows", func(t *testing.T) {
+		testInstallNodeFlows(t, config)
+	})
+	t.Run("testInstallPodFlows", func(t *testing.T) {
+		testInstallPodFlows(t, config)
+	})
+	t.Run("testUninstallPodFlows", func(t *testing.T) {
+		testUninstallPodFlows(t, config)
+	})
+	t.Run("testUninstallNodeFlows", func(t *testing.T) {
+		testUninstallNodeFlows(t, config)
+	})
+	t.Run("testExternalFlows", func(t *testing.T) {
+		testExternalFlows(t, config)
+	})
 }
 
 func TestReplayFlowsConnectivityFlows(t *testing.T) {
@@ -150,18 +165,27 @@ func TestReplayFlowsConnectivityFlows(t *testing.T) {
 	}()
 
 	config := prepareConfiguration()
-	for _, f := range []func(t *testing.T, config *testConfig){
-		testInitialize,
-		testInstallGatewayFlows,
-		testInstallServiceFlows,
-		testInstallTunnelFlows,
-		testInstallNodeFlows,
-		testInstallPodFlows,
-	} {
-		f(t, config)
-	}
-
-	testReplayFlows(t)
+	t.Run("testInitialize", func(t *testing.T) {
+		testInitialize(t, config)
+	})
+	t.Run("testInstallGatewayFlows", func(t *testing.T) {
+		testInstallGatewayFlows(t, config)
+	})
+	t.Run("testInstallServiceFlows", func(t *testing.T) {
+		testInstallServiceFlows(t, config)
+	})
+	t.Run("testInstallTunnelFlows", func(t *testing.T) {
+		testInstallTunnelFlows(t, config)
+	})
+	t.Run("testInstallNodeFlows", func(t *testing.T) {
+		testInstallNodeFlows(t, config)
+	})
+	t.Run("testInstallPodFlows", func(t *testing.T) {
+		testInstallPodFlows(t, config)
+	})
+	t.Run("testInstallPodFlows", func(t *testing.T) {
+		testReplayFlows(t)
+	})
 }
 
 func TestReplayFlowsNetworkPolicyFlows(t *testing.T) {
@@ -217,20 +241,20 @@ func TestReplayFlowsNetworkPolicyFlows(t *testing.T) {
 }
 
 func testExternalFlows(t *testing.T, config *testConfig) {
-	nodeIP := config.nodeConfig.NodeIPAddr.IP
-	var localSubnet *net.IPNet
-	if config.nodeConfig.PodIPv4CIDR != nil {
-		localSubnet = config.nodeConfig.PodIPv4CIDR
-	} else {
-		localSubnet = config.nodeConfig.PodIPv6CIDR
-	}
-	gwMAC := config.nodeConfig.GatewayConfig.MAC
-
 	if err := c.InstallExternalFlows(); err != nil {
 		t.Errorf("Failed to install OpenFlow entries to allow Pod to communicate to the external addresses: %v", err)
 	}
-	for _, tableFlow := range prepareExternalFlows(nodeIP, localSubnet, gwMAC) {
-		ofTestUtils.CheckFlowExists(t, ovsCtlClient, tableFlow.tableID, true, tableFlow.flows)
+
+	gwMAC := config.nodeConfig.GatewayConfig.MAC
+	if config.nodeConfig.NodeIPv4Addr != nil && config.nodeConfig.PodIPv4CIDR != nil {
+		for _, tableFlow := range expectedExternalFlows(config.nodeConfig.NodeIPv4Addr.IP, config.nodeConfig.PodIPv4CIDR, gwMAC) {
+			ofTestUtils.CheckFlowExists(t, ovsCtlClient, tableFlow.tableID, true, tableFlow.flows)
+		}
+	}
+	if config.nodeConfig.NodeIPv6Addr != nil && config.nodeConfig.PodIPv6CIDR != nil {
+		for _, tableFlow := range expectedExternalFlows(config.nodeConfig.NodeIPv6Addr.IP, config.nodeConfig.PodIPv6CIDR, gwMAC) {
+			ofTestUtils.CheckFlowExists(t, ovsCtlClient, tableFlow.tableID, true, tableFlow.flows)
+		}
 	}
 }
 
@@ -288,10 +312,16 @@ func testInstallServiceFlows(t *testing.T, config *testConfig) {
 func testInstallNodeFlows(t *testing.T, config *testConfig) {
 	gatewayConfig := config.nodeConfig.GatewayConfig
 	for _, node := range config.peers {
-		peerConfig := map[*net.IPNet]net.IP{
+		peerConfigs := map[*net.IPNet]net.IP{
 			&node.subnet: node.gateway,
 		}
-		err := c.InstallNodeFlows(node.name, peerConfig, node.nodeAddress, 0, nil)
+		dsIPs := new(utilip.DualStackIPs)
+		if node.gateway.To4() == nil {
+			dsIPs.IPv6 = node.nodeAddress
+		} else {
+			dsIPs.IPv4 = node.nodeAddress
+		}
+		err := c.InstallNodeFlows(node.name, peerConfigs, dsIPs, 0, nil)
 		if err != nil {
 			t.Fatalf("Failed to install Openflow entries for node connectivity: %v", err)
 		}
@@ -465,17 +495,27 @@ func TestIPv6ConnectivityFlows(t *testing.T) {
 		assert.Nil(t, err, fmt.Sprintf("Error while deleting OVS bridge: %v", err))
 	}()
 	config := prepareIPv6Configuration()
-	for _, f := range []func(t *testing.T, config *testConfig){
-		testInitialize,
-		testInstallNodeFlows,
-		testInstallPodFlows,
-		testInstallGatewayFlows,
-		testUninstallPodFlows,
-		testUninstallNodeFlows,
-		testExternalFlows,
-	} {
-		f(t, config)
-	}
+	t.Run("testInitialize", func(t *testing.T) {
+		testInitialize(t, config)
+	})
+	t.Run("testInstallNodeFlows", func(t *testing.T) {
+		testInstallNodeFlows(t, config)
+	})
+	t.Run("testInstallPodFlows", func(t *testing.T) {
+		testInstallPodFlows(t, config)
+	})
+	t.Run("testInstallGatewayFlows", func(t *testing.T) {
+		testInstallGatewayFlows(t, config)
+	})
+	t.Run("testUninstallPodFlows", func(t *testing.T) {
+		testUninstallPodFlows(t, config)
+	})
+	t.Run("testUninstallNodeFlows", func(t *testing.T) {
+		testUninstallNodeFlows(t, config)
+	})
+	t.Run("testExternalFlows", func(t *testing.T) {
+		testExternalFlows(t, config)
+	})
 }
 
 type svcConfig struct {
@@ -855,7 +895,7 @@ func prepareConfiguration() *testConfig {
 		MAC:  gwMAC,
 	}
 	nodeConfig := &config1.NodeConfig{
-		NodeIPAddr:    nodeSubnet,
+		NodeIPv4Addr:  nodeSubnet,
 		GatewayConfig: gatewayConfig,
 		PodIPv4CIDR:   podIPv4CIDR,
 	}
@@ -900,7 +940,7 @@ func prepareIPv6Configuration() *testConfig {
 		MAC:  gwMAC,
 	}
 	nodeConfig := &config1.NodeConfig{
-		NodeIPAddr:    nodeSubnet,
+		NodeIPv4Addr:  nodeSubnet,
 		GatewayConfig: gatewayConfig,
 		PodIPv6CIDR:   podIPv6CIDR,
 	}
@@ -1280,7 +1320,7 @@ func prepareIPNetAddresses(addresses []string) []types.Address {
 	return ipAddresses
 }
 
-func prepareExternalFlows(nodeIP net.IP, localSubnet *net.IPNet, gwMAC net.HardwareAddr) []expectTableFlows {
+func expectedExternalFlows(nodeIP net.IP, localSubnet *net.IPNet, gwMAC net.HardwareAddr) []expectTableFlows {
 	var ipProtoStr, nwDstFieldName string
 	if localSubnet.IP.To4() != nil {
 		ipProtoStr = "ip"

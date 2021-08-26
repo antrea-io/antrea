@@ -29,6 +29,7 @@ import (
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/util"
 	"antrea.io/antrea/pkg/ovs/ovsctl"
+	"antrea.io/antrea/pkg/util/ip"
 )
 
 // prepareHostNetwork creates HNS Network for containers.
@@ -50,7 +51,7 @@ func (i *Initializer) prepareHostNetwork() error {
 	// Get uplink network configuration. The uplink interface is the one used for transporting Pod traffic across Nodes.
 	// Use the interface specified with "transportInterface" in the configuration if configured, otherwise the interface
 	// configured with NodeIP is used as uplink.
-	_, adapter, err := util.GetIPNetDeviceFromIP(i.nodeConfig.NodeTransportIPAddr.IP)
+	_, _, adapter, err := util.GetIPNetDeviceFromIP(&ip.DualStackIPs{IPv4: i.nodeConfig.NodeTransportIPv4Addr.IP})
 	if err != nil {
 		return err
 	}
@@ -69,7 +70,7 @@ func (i *Initializer) prepareHostNetwork() error {
 	}
 	i.nodeConfig.UplinkNetConfig.Name = adapter.Name
 	i.nodeConfig.UplinkNetConfig.MAC = adapter.HardwareAddr
-	i.nodeConfig.UplinkNetConfig.IP = i.nodeConfig.NodeTransportIPAddr
+	i.nodeConfig.UplinkNetConfig.IP = i.nodeConfig.NodeTransportIPv4Addr
 	i.nodeConfig.UplinkNetConfig.Index = adapter.Index
 	defaultGW, err := util.GetDefaultGatewayByInterfaceIndex(adapter.Index)
 	if err != nil {
@@ -97,7 +98,7 @@ func (i *Initializer) prepareHostNetwork() error {
 	if subnetCIDR == nil {
 		return fmt.Errorf("failed to find valid IPv4 PodCIDR")
 	}
-	return util.PrepareHNSNetwork(subnetCIDR, i.nodeConfig.NodeTransportIPAddr, adapter)
+	return util.PrepareHNSNetwork(subnetCIDR, i.nodeConfig.NodeTransportIPv4Addr, adapter)
 }
 
 // prepareOVSBridge adds local port and uplink to ovs bridge.
@@ -214,7 +215,7 @@ func (i *Initializer) initHostNetworkFlows() error {
 
 // getTunnelLocalIP returns local_ip of tunnel port
 func (i *Initializer) getTunnelPortLocalIP() net.IP {
-	return i.nodeConfig.NodeTransportIPAddr.IP
+	return i.nodeConfig.NodeTransportIPv4Addr.IP
 }
 
 // saveHostRoutes saves routes which are configured on uplink interface before
@@ -272,17 +273,17 @@ func (i *Initializer) restoreHostRoutes() error {
 	return nil
 }
 
-func GetTransportIPNetDeviceByName(ifaceName string, ovsBridgeName string) (*net.IPNet, *net.Interface, error) {
+func GetTransportIPNetDeviceByName(ifaceName string, ovsBridgeName string) (*net.IPNet, *net.IPNet, *net.Interface, error) {
 	// Find transport Interface in the order: ifaceName -> "vEthernet (ifaceName)" -> br-int. Return immediately if
 	// an interface using the specified name exists. Using "vEthernet (ifaceName)" or br-int is for restart agent case.
 	for _, name := range []string{ifaceName, fmt.Sprintf("vEthernet (%s)", ifaceName), ovsBridgeName} {
-		ipNet, link, err := util.GetIPNetDeviceByName(name)
+		ipNet, _, link, err := util.GetIPNetDeviceByName(name)
 		if err == nil {
-			return ipNet, link, nil
+			return ipNet, nil, link, nil
 		}
 		if !strings.Contains(err.Error(), "no such network interface") {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 	}
-	return nil, nil, fmt.Errorf("unable to find local IP and device")
+	return nil, nil, nil, fmt.Errorf("unable to find local IP and device")
 }

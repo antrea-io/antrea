@@ -17,6 +17,7 @@ package noderoute
 import (
 	"fmt"
 	"net"
+	"strings"
 	"time"
 
 	"github.com/containernetworking/plugins/pkg/ip"
@@ -133,11 +134,11 @@ func nodeRouteInfoPodCIDRIndexFunc(obj interface{}) ([]string, error) {
 
 // nodeRouteInfo is the route related information extracted from corev1.Node.
 type nodeRouteInfo struct {
-	nodeName  string
-	podCIDRs  []*net.IPNet
-	nodeIP    net.IP
-	gatewayIP []net.IP
-	nodeMAC   net.HardwareAddr
+	nodeName   string
+	podCIDRs   []*net.IPNet
+	nodeIPs    *utilip.DualStackIPs
+	gatewayIPs *utilip.DualStackIPs
+	nodeMAC    net.HardwareAddr
 }
 
 // enqueueNode adds an object to the controller work queue
@@ -215,7 +216,7 @@ func (c *Controller) removeStaleTunnelPorts() error {
 				continue
 			}
 
-			peerNodeIP, err := k8s.GetNodeAddr(node)
+			peerNodeIPs, err := k8s.GetNodeAddrs(node)
 			if err != nil {
 				klog.Errorf("Failed to retrieve IP address of Node %s: %v", node.Name, err)
 				continue
@@ -223,7 +224,7 @@ func (c *Controller) removeStaleTunnelPorts() error {
 
 			ifaceID := util.GenerateNodeTunnelInterfaceKey(node.Name)
 			ifaceName := util.GenerateNodeTunnelInterfaceName(node.Name)
-			if c.compareInterfaceConfig(interfaceConfig, peerNodeIP, ifaceName) {
+			if c.compareInterfaceConfig(interfaceConfig, peerNodeIPs.IPv4, ifaceName) || c.compareInterfaceConfig(interfaceConfig, peerNodeIPs.IPv6, ifaceName) {
 				desiredInterfaces[ifaceID] = true
 			}
 		}
@@ -420,14 +421,13 @@ func (c *Controller) addNodeRoute(nodeName string, node *corev1.Node) error {
 	if err != nil {
 		return fmt.Errorf("error when retrieving MAC of Node %s: %v", nodeName, err)
 	}
-	peerNodeIP, err := c.getNodeTransportAddress(node)
+	peerNodeIPs, err := c.getNodeTransportAddrs(node)
 	if err != nil {
 		return err
 	}
 
 	nrInfo, installed, _ := c.installedNodes.GetByKey(nodeName)
-
-	if installed && nrInfo.(*nodeRouteInfo).nodeMAC.String() == peerNodeMAC.String() && nrInfo.(*nodeRouteInfo).nodeIP.Equal(peerNodeIP) {
+	if installed && nrInfo.(*nodeRouteInfo).nodeMAC.String() == peerNodeMAC.String() && peerNodeIPs.Equal(*nrInfo.(*nodeRouteInfo).nodeIPs) {
 		// Route is already added for this Node and both Node MAC and transport IP are not changed.
 		return nil
 	}
@@ -437,15 +437,12 @@ func (c *Controller) addNodeRoute(nodeName string, node *corev1.Node) error {
 		// If no valid PodCIDR is configured in Node.Spec, return immediately.
 		return nil
 	}
-	klog.Infof("Adding routes and flows to Node %s, podCIDRs: %v, addresses: %v",
-		nodeName, podCIDRStrs, node.Status.Addresses)
+	klog.InfoS("Adding routes and flows to Node", "Node", nodeName, "podCIDRs", podCIDRStrs,
+		"addresses", node.Status.Addresses)
 
-	var podCIDRs []*net.IPNet
-	peerConfig := make(map[*net.IPNet]net.IP, len(podCIDRStrs))
+	var peerPodCIDRs []*net.IPNet
+	peerConfigs := make(map[*net.IPNet]net.IP, len(podCIDRStrs))
 	for _, podCIDR := range podCIDRStrs {
-		klog.Infof("Adding routes and flows to Node %s, podCIDR: %s, addresses: %v",
-			nodeName, podCIDR, node.Status.Addresses)
-
 		if podCIDR == "" {
 			klog.Errorf("PodCIDR is empty for Node %s", nodeName)
 			// Does not help to return an error and trigger controller retries.
@@ -476,44 +473,64 @@ func (c *Controller) addNodeRoute(nodeName string, node *corev1.Node) error {
 			return nil
 		}
 		peerGatewayIP := ip.NextIP(peerPodCIDRAddr)
-		peerConfig[peerPodCIDR] = peerGatewayIP
-		podCIDRs = append(podCIDRs, peerPodCIDR)
+		peerConfigs[peerPodCIDR] = peerGatewayIP
+		peerPodCIDRs = append(peerPodCIDRs, peerPodCIDR)
+		peerNodeIP := peerNodeIPs.IPv4
+		if peerGatewayIP.To4() == nil {
+			peerNodeIP = peerNodeIPs.IPv6
+		}
+
+		klog.InfoS("Adding route and flow to Node", "Node", nodeName, "podCIDR", podCIDR,
+			"peerNodeIP", peerNodeIP)
 	}
 
-	ipsecTunOFPort := int32(0)
+	var ipsecTunOFPort uint32
 	if c.networkConfig.EnableIPSecTunnel {
 		// Create a separate tunnel port for the Node, as OVS IPSec monitor needs to
 		// read PSK and remote IP from the Node's tunnel interface to create IPSec
 		// security policies.
-		if ipsecTunOFPort, err = c.createIPSecTunnelPort(nodeName, peerNodeIP); err != nil {
+		peerNodeIP := peerNodeIPs.IPv4
+		if peerNodeIP == nil {
+			peerNodeIP = peerNodeIPs.IPv6
+		}
+		port, err := c.createIPSecTunnelPort(nodeName, peerNodeIP)
+		if err != nil {
 			return err
 		}
+		ipsecTunOFPort = uint32(port)
 	}
 
-	err = c.ofClient.InstallNodeFlows(
+	if err = c.ofClient.InstallNodeFlows(
 		nodeName,
-		peerConfig,
-		peerNodeIP,
-		uint32(ipsecTunOFPort),
-		peerNodeMAC)
-	if err != nil {
+		peerConfigs,
+		peerNodeIPs,
+		ipsecTunOFPort,
+		peerNodeMAC); err != nil {
 		return fmt.Errorf("failed to install flows to Node %s: %v", nodeName, err)
 	}
 
-	var peerGatewayIPs []net.IP
-	for peerPodCIDR, peerGatewayIP := range peerConfig {
-		if err := c.routeClient.AddRoutes(peerPodCIDR, nodeName, peerNodeIP, peerGatewayIP); err != nil {
-			return err
+	peerGatewayIPs := new(utilip.DualStackIPs)
+	for peerPodCIDR, peerGatewayIP := range peerConfigs {
+		if peerGatewayIP.To4() == nil {
+			if err := c.routeClient.AddRoutes(peerPodCIDR, nodeName, peerNodeIPs.IPv6, peerGatewayIP); err != nil {
+				return err
+			}
+			peerGatewayIPs.IPv6 = peerGatewayIP
+		} else {
+			if err := c.routeClient.AddRoutes(peerPodCIDR, nodeName, peerNodeIPs.IPv4, peerGatewayIP); err != nil {
+				return err
+			}
+			peerGatewayIPs.IPv4 = peerGatewayIP
 		}
-		peerGatewayIPs = append(peerGatewayIPs, peerGatewayIP)
 	}
 	c.installedNodes.Add(&nodeRouteInfo{
-		nodeName:  nodeName,
-		podCIDRs:  podCIDRs,
-		nodeIP:    peerNodeIP,
-		gatewayIP: peerGatewayIPs,
-		nodeMAC:   peerNodeMAC,
+		nodeName:   nodeName,
+		podCIDRs:   peerPodCIDRs,
+		nodeIPs:    peerNodeIPs,
+		gatewayIPs: peerGatewayIPs,
+		nodeMAC:    peerNodeMAC,
 	})
+
 	return err
 }
 
@@ -666,23 +683,31 @@ func getNodeMAC(node *corev1.Node) (net.HardwareAddr, error) {
 	return mac, nil
 }
 
-func (c *Controller) getNodeTransportAddress(node *corev1.Node) (net.IP, error) {
+func (c *Controller) getNodeTransportAddrs(node *corev1.Node) (*utilip.DualStackIPs, error) {
+	var transportAddrs *utilip.DualStackIPs
 	if c.networkConfig.TransportIface != "" {
-		transportAddrStr := node.Annotations[types.NodeTransportAddressAnnotationKey]
-		if transportAddrStr != "" {
-			peerNodeAddr := net.ParseIP(transportAddrStr)
-			if peerNodeAddr == nil {
-				return nil, fmt.Errorf("invalid annotation for transport-address on Node %s: %s", node.Name, transportAddrStr)
+		transportAddrsStr := node.Annotations[types.NodeTransportAddressAnnotationKey]
+		if transportAddrsStr != "" {
+			for _, addr := range strings.Split(transportAddrsStr, ",") {
+				peerNodeAddr := net.ParseIP(addr)
+				if peerNodeAddr == nil {
+					return nil, fmt.Errorf("invalid annotation for transport-address on Node %s: %s", node.Name, transportAddrsStr)
+				}
+				if peerNodeAddr.To4() == nil {
+					transportAddrs.IPv6 = peerNodeAddr
+				} else {
+					transportAddrs.IPv4 = peerNodeAddr
+				}
 			}
-			return peerNodeAddr, nil
+			return transportAddrs, nil
 		}
 		klog.InfoS("Transport address is not found, using NodeIP instead")
 	}
 	// Use NodeIP if the transport IP address is not set or not found.
-	peerNodeIP, err := k8s.GetNodeAddr(node)
+	peerNodeIPs, err := k8s.GetNodeAddrs(node)
 	if err != nil {
-		klog.ErrorS(err, "Failed to retrieve Node IP address", "node", node.Name)
+		klog.ErrorS(err, "Failed to retrieve Node IP addresses", "node", node.Name)
 		return nil, err
 	}
-	return peerNodeIP, nil
+	return peerNodeIPs, nil
 }
