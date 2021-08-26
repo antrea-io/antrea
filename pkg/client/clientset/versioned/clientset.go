@@ -19,7 +19,6 @@ package versioned
 import (
 	"fmt"
 
-	controlplanev1beta1 "antrea.io/antrea/pkg/client/clientset/versioned/typed/controlplane/v1beta1"
 	controlplanev1beta2 "antrea.io/antrea/pkg/client/clientset/versioned/typed/controlplane/v1beta2"
 	crdv1alpha1 "antrea.io/antrea/pkg/client/clientset/versioned/typed/crd/v1alpha1"
 	crdv1alpha2 "antrea.io/antrea/pkg/client/clientset/versioned/typed/crd/v1alpha2"
@@ -34,7 +33,6 @@ import (
 
 type Interface interface {
 	Discovery() discovery.DiscoveryInterface
-	ControlplaneV1beta1() controlplanev1beta1.ControlplaneV1beta1Interface
 	ControlplaneV1beta2() controlplanev1beta2.ControlplaneV1beta2Interface
 	CrdV1alpha1() crdv1alpha1.CrdV1alpha1Interface
 	CrdV1alpha2() crdv1alpha2.CrdV1alpha2Interface
@@ -48,7 +46,6 @@ type Interface interface {
 // version included in a Clientset.
 type Clientset struct {
 	*discovery.DiscoveryClient
-	controlplaneV1beta1 *controlplanev1beta1.ControlplaneV1beta1Client
 	controlplaneV1beta2 *controlplanev1beta2.ControlplaneV1beta2Client
 	crdV1alpha1         *crdv1alpha1.CrdV1alpha1Client
 	crdV1alpha2         *crdv1alpha2.CrdV1alpha2Client
@@ -56,11 +53,6 @@ type Clientset struct {
 	crdV1beta1          *crdv1beta1.CrdV1beta1Client
 	statsV1alpha1       *statsv1alpha1.StatsV1alpha1Client
 	systemV1beta1       *systemv1beta1.SystemV1beta1Client
-}
-
-// ControlplaneV1beta1 retrieves the ControlplaneV1beta1Client
-func (c *Clientset) ControlplaneV1beta1() controlplanev1beta1.ControlplaneV1beta1Interface {
-	return c.controlplaneV1beta1
 }
 
 // ControlplaneV1beta2 retrieves the ControlplaneV1beta2Client
@@ -119,10 +111,6 @@ func NewForConfig(c *rest.Config) (*Clientset, error) {
 	}
 	var cs Clientset
 	var err error
-	cs.controlplaneV1beta1, err = controlplanev1beta1.NewForConfig(&configShallowCopy)
-	if err != nil {
-		return nil, err
-	}
 	cs.controlplaneV1beta2, err = controlplanev1beta2.NewForConfig(&configShallowCopy)
 	if err != nil {
 		return nil, err
@@ -163,7 +151,6 @@ func NewForConfig(c *rest.Config) (*Clientset, error) {
 // panics if there is an error in the config.
 func NewForConfigOrDie(c *rest.Config) *Clientset {
 	var cs Clientset
-	cs.controlplaneV1beta1 = controlplanev1beta1.NewForConfigOrDie(c)
 	cs.controlplaneV1beta2 = controlplanev1beta2.NewForConfigOrDie(c)
 	cs.crdV1alpha1 = crdv1alpha1.NewForConfigOrDie(c)
 	cs.crdV1alpha2 = crdv1alpha2.NewForConfigOrDie(c)
@@ -179,7 +166,6 @@ func NewForConfigOrDie(c *rest.Config) *Clientset {
 // New creates a new Clientset for the given RESTClient.
 func New(c rest.Interface) *Clientset {
 	var cs Clientset
-	cs.controlplaneV1beta1 = controlplanev1beta1.New(c)
 	cs.controlplaneV1beta2 = controlplanev1beta2.New(c)
 	cs.crdV1alpha1 = crdv1alpha1.New(c)
 	cs.crdV1alpha2 = crdv1alpha2.New(c)
