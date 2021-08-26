@@ -133,7 +133,7 @@ func TestNodePortWindows(t *testing.T) {
 	_, err = data.podWaitForIPs(defaultTimeout, clientName, testNamespace)
 	require.NoError(t, err)
 
-	nodeIP := clusterInfo.nodes[0].ip
+	nodeIP := clusterInfo.nodes[0].ip()
 	nodePort := int(svc.Spec.Ports[0].NodePort)
 	addr := fmt.Sprintf("http://%s:%d", nodeIP, nodePort)
 

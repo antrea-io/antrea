@@ -12,5 +12,5 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package ndp contains functions to send NDP advertisement on Linux.
+// Package ndp contains functions to send NDP neighbor advertisement on Linux.
 package ndp

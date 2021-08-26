@@ -76,7 +76,7 @@ func skipIfIPv6Cluster(tb testing.TB) {
 
 func skipIfNotIPv6Cluster(tb testing.TB) {
 	if clusterInfo.podV6NetworkCIDR == "" {
-		tb.Skipf("Skipping test as it is not needed in IPv4 cluster")
+		tb.Skipf("Skipping test as it requires IPv6 addresses but the IPv6 network CIDR is not set")
 	}
 }
 
