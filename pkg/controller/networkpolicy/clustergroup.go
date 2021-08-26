@@ -248,6 +248,7 @@ func (c *NetworkPolicyController) triggerParentGroupSync(grp string) {
 	parentGroupObjs, err := c.internalGroupStore.GetByIndex(store.ChildGroupIndex, grp)
 	if err != nil {
 		klog.Errorf("Error retrieving parents of ClusterGroup %s: %v", grp, err)
+		return
 	}
 	for _, p := range parentGroupObjs {
 		parentGrp := p.(*antreatypes.Group)
