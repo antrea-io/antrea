@@ -6,7 +6,7 @@
   OVS installation directory. It is the path argument when using Install-OVS.ps1. The default path is "C:\openvswitch".
 #>
 Param(
-    [parameter(Mandatory = $false)] [string] $OVSInstallDir = "C:\openvswitch",
+    [parameter(Mandatory = $false)] [string] $OVSInstallDir = "C:\openvswitch"
 )
 
 # Replace the path using the actual path where ovs-vswitchd.pid locates. It is always under path $OVSInstallDir\var\run\openvswitch.
