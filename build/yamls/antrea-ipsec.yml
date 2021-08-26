@@ -4663,7 +4663,6 @@ webhooks:
     operations:
     - CREATE
     - UPDATE
-    - DELETE
     resources:
     - clustergroups
     scope: Cluster

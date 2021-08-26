@@ -359,11 +359,6 @@ func (v *antreaPolicyValidator) tierExists(name string) bool {
 	return err == nil
 }
 
-func (v *antreaPolicyValidator) clusterGroupExists(name string) bool {
-	_, err := v.networkPolicyController.cgLister.Get(name)
-	return err == nil
-}
-
 // GetAdmissionResponseForErr returns an object of type AdmissionResponse with
 // the submitted error message.
 func GetAdmissionResponseForErr(err error) *admv1.AdmissionResponse {
@@ -460,34 +455,6 @@ func (v *antreaPolicyValidator) validateAppliedTo(ingress, egress []crdv1alpha1.
 	if numAppliedToInRules > 0 && (numAppliedToInRules != len(ingress)+len(egress)) {
 		return "appliedTo field should either be set in all rules or in none of them", false
 	}
-	// Ensure CG exists
-	checkAppTo := func(appTos []crdv1alpha1.NetworkPolicyPeer) bool {
-		for _, appTo := range specAppliedTo {
-			if appTo.Group != "" {
-				// Ensure that group exists
-				if !v.clusterGroupExists(appTo.Group) {
-					return false
-				}
-			}
-		}
-		return true
-	}
-	if appliedToInSpec {
-		if !checkAppTo(specAppliedTo) {
-			return "cluster group referenced in appliedTo does not exist", false
-		}
-	} else {
-		for _, rule := range ingress {
-			if !checkAppTo(rule.AppliedTo) {
-				return "cluster group referenced in appliedTo does not exist", false
-			}
-		}
-		for _, rule := range egress {
-			if !checkAppTo(rule.AppliedTo) {
-				return "cluster group referenced in appliedTo does not exist", false
-			}
-		}
-	}
 	return "", true
 }
 
@@ -504,10 +471,6 @@ func (v *antreaPolicyValidator) validatePeers(ingress, egress []crdv1alpha1.Rule
 			}
 			if peer.PodSelector != nil || peer.IPBlock != nil || peer.NamespaceSelector != nil {
 				return "group cannot be set with other peers in rules", false
-			}
-			// Ensure that group exists
-			if !v.clusterGroupExists(peer.Group) {
-				return fmt.Sprintf("cluster group %s referenced in rules does not exist", peer.Group), false
 			}
 		}
 		return "", true
@@ -729,19 +692,5 @@ func (g *groupValidator) updateValidate(curObj, oldObj interface{}, userInfo aut
 
 // deleteValidate validates the DELETE events of ClusterGroup resources.
 func (g *groupValidator) deleteValidate(oldObj interface{}, userInfo authenticationv1.UserInfo) (string, bool) {
-	oldCG := oldObj.(*crdv1alpha2.ClusterGroup)
-	// ClusterGroup with existing ACNP references cannot be deleted.
-	cnps, err := g.networkPolicyController.cnpInformer.Informer().GetIndexer().ByIndex(ClusterGroupIndex, oldCG.Name)
-	if err != nil {
-		return fmt.Sprintf("error occurred when retrieving Antrea ClusterNetworkPolicies that refer to ClusterGroup %s: %v", oldCG.Name, err), false
-	}
-	if len(cnps) > 0 {
-		cnpNameList := make([]string, len(cnps))
-		for i := range cnps {
-			cnpObj := cnps[i].(*crdv1alpha1.ClusterNetworkPolicy)
-			cnpNameList[i] = cnpObj.Name
-		}
-		return fmt.Sprintf("ClusterGroup %s is referenced by %d Antrea ClusterNetworkPolicies: %v", oldCG.Name, len(cnps), cnpNameList), false
-	}
 	return "", true
 }
