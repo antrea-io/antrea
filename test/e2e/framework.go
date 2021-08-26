@@ -47,6 +47,7 @@ import (
 	"k8s.io/client-go/tools/remotecommand"
 	"k8s.io/component-base/featuregate"
 	aggregatorclientset "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
+	utilnet "k8s.io/utils/net"
 
 	"antrea.io/antrea/pkg/agent/config"
 	crdclientset "antrea.io/antrea/pkg/client/clientset/versioned"
@@ -120,12 +121,20 @@ const (
 type ClusterNode struct {
 	idx              int // 0 for control-plane Node
 	name             string
-	ip               string
+	ipv4Addr         string
+	ipv6Addr         string
 	podV4NetworkCIDR string
 	podV6NetworkCIDR string
 	gwV4Addr         string
 	gwV6Addr         string
 	os               string
+}
+
+func (n ClusterNode) ip() string {
+	if n.ipv4Addr != "" {
+		return n.ipv4Addr
+	}
+	return n.ipv6Addr
 }
 
 type ClusterInfo struct {
@@ -135,7 +144,8 @@ type ClusterInfo struct {
 	svcV4NetworkCIDR     string
 	svcV6NetworkCIDR     string
 	controlPlaneNodeName string
-	controlPlaneNodeIP   string
+	controlPlaneNodeIPv4 string
+	controlPlaneNodeIPv6 string
 	nodes                map[int]ClusterNode
 	nodesOS              map[string]string
 	windowsNodes         []int
@@ -276,7 +286,7 @@ func workerNodeIP(idx int) string {
 	if !ok {
 		return ""
 	}
-	return node.ip
+	return node.ip()
 }
 
 // nodeGatewayIPs returns the Antrea gateway's IPv4 address and IPv6 address for the provided Node
@@ -293,8 +303,12 @@ func controlPlaneNodeName() string {
 	return clusterInfo.controlPlaneNodeName
 }
 
-func controlPlaneNodeIP() string {
-	return clusterInfo.controlPlaneNodeIP
+func controlPlaneNodeIPv4() string {
+	return clusterInfo.controlPlaneNodeIPv4
+}
+
+func controlPlaneNodeIPv6() string {
+	return clusterInfo.controlPlaneNodeIPv6
 }
 
 // nodeName returns an empty string if there is no Node with the provided idx. If idx is 0, the name
@@ -314,7 +328,7 @@ func nodeIP(idx int) string {
 	if !ok {
 		return ""
 	}
-	return node.ip
+	return node.ip()
 }
 
 func labelNodeRoleControlPlane() string {
@@ -376,11 +390,15 @@ func collectClusterInfo() error {
 			return ok
 		}()
 
-		var nodeIP string
+		var nodeIPv4 string
+		var nodeIPv6 string
 		for _, address := range node.Status.Addresses {
 			if address.Type == corev1.NodeInternalIP {
-				nodeIP = address.Address
-				break
+				if utilnet.IsIPv6String(address.Address) {
+					nodeIPv6 = address.Address
+				} else if utilnet.IsIPv4String(address.Address) {
+					nodeIPv4 = address.Address
+				}
 			}
 		}
 
@@ -389,7 +407,8 @@ func collectClusterInfo() error {
 		if isControlPlaneNode {
 			nodeIdx = 0
 			clusterInfo.controlPlaneNodeName = node.Name
-			clusterInfo.controlPlaneNodeIP = nodeIP
+			clusterInfo.controlPlaneNodeIPv4 = nodeIPv4
+			clusterInfo.controlPlaneNodeIPv6 = nodeIPv6
 		} else {
 			nodeIdx = workerIdx
 			workerIdx++
@@ -426,7 +445,8 @@ func collectClusterInfo() error {
 		clusterInfo.nodes[nodeIdx] = ClusterNode{
 			idx:              nodeIdx,
 			name:             node.Name,
-			ip:               nodeIP,
+			ipv4Addr:         nodeIPv4,
+			ipv6Addr:         nodeIPv6,
 			podV4NetworkCIDR: podV4NetworkCIDR,
 			podV6NetworkCIDR: podV6NetworkCIDR,
 			gwV4Addr:         gwV4Addr,
