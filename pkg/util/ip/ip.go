@@ -30,6 +30,15 @@ const (
 	V6BitLen = 8 * net.IPv6len
 )
 
+type DualStackIPs struct {
+	IPv4 net.IP
+	IPv6 net.IP
+}
+
+func (ips DualStackIPs) Equal(x DualStackIPs) bool {
+	return ips.IPv4.Equal(x.IPv4) && ips.IPv6.Equal(x.IPv6)
+}
+
 // This function takes in one allow CIDR and multiple except CIDRs and gives diff CIDRs
 // in allowCIDR eliminating except CIDRs. It currently supports only IPv4. except CIDR input
 // can be changed.

@@ -22,6 +22,8 @@ import (
 	"io"
 	"net"
 	"strings"
+
+	"antrea.io/antrea/pkg/util/ip"
 )
 
 const (
@@ -106,47 +108,74 @@ func dialUnix(address string) (net.Conn, error) {
 	return net.Dial("unix", address)
 }
 
-// GetIPNetDeviceFromIP returns a local IP/mask and associated device from IP.
-func GetIPNetDeviceFromIP(localIP net.IP) (*net.IPNet, *net.Interface, error) {
+// GetIPNetDeviceFromIP returns local IPs/masks and associated device from IP.
+func GetIPNetDeviceFromIP(localIPs *ip.DualStackIPs) (v4IPNet *net.IPNet, v6IPNet *net.IPNet, iface *net.Interface, err error) {
 	linkList, err := net.Interfaces()
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
-	for _, link := range linkList {
-		addrList, err := link.Addrs()
+	// localIPs includes at most one IPv4 address and one IPv6 address. For each device in linkList, all its addresses
+	// are compared with IPs in localIPs. If found, the iface is set to the device and v4IPNet, v6IPNet are set to
+	// the matching addresses.
+	saveIface := func(current *net.Interface) error {
+		if iface != nil && iface.Index != current.Index {
+			return fmt.Errorf("IPs of localIPs should be on the same device")
+		}
+		iface = current
+		return nil
+	}
+	for i := range linkList {
+		addrList, err := linkList[i].Addrs()
 		if err != nil {
 			continue
 		}
 		for _, addr := range addrList {
 			if ipNet, ok := addr.(*net.IPNet); ok {
-				if ipNet.IP.Equal(localIP) {
-					return ipNet, &link, nil
+				if ipNet.IP.Equal(localIPs.IPv4) {
+					if err := saveIface(&linkList[i]); err != nil {
+						return nil, nil, nil, err
+					}
+					v4IPNet = ipNet
+				} else if ipNet.IP.Equal(localIPs.IPv6) {
+					if err := saveIface(&linkList[i]); err != nil {
+						return nil, nil, nil, err
+					}
+					v6IPNet = ipNet
 				}
 			}
 		}
 	}
-	return nil, nil, fmt.Errorf("unable to find local IP and device")
+	if iface == nil {
+		return nil, nil, nil, fmt.Errorf("unable to find local IPs and device")
+	}
+	return v4IPNet, v6IPNet, iface, nil
 }
 
-func GetIPNetDeviceByName(ifaceName string) (*net.IPNet, *net.Interface, error) {
-	link, err := net.InterfaceByName(ifaceName)
+func GetIPNetDeviceByName(ifaceName string) (v4IPNet *net.IPNet, v6IPNet *net.IPNet, link *net.Interface, err error) {
+	link, err = net.InterfaceByName(ifaceName)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	addrList, err := link.Addrs()
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	for _, addr := range addrList {
 		if ipNet, ok := addr.(*net.IPNet); ok {
 			if ipNet.IP.IsGlobalUnicast() {
-				return ipNet, link, nil
+				if ipNet.IP.To4() != nil {
+					v6IPNet = ipNet
+				} else {
+					v4IPNet = ipNet
+				}
 			}
 		}
-		continue
 	}
-	return nil, nil, fmt.Errorf("unable to find local IP and device")
+	if v4IPNet != nil || v6IPNet != nil {
+		return v4IPNet, v6IPNet, link, nil
+	}
+	return nil, nil, nil, fmt.Errorf("unable to find local IP and device")
 }
 
 func GetIPv4Addr(ips []net.IP) net.IP {

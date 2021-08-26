@@ -21,6 +21,7 @@ import (
 	"net"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -567,15 +568,17 @@ func (i *Initializer) configureGatewayInterface(gatewayIface *interfacestore.Int
 
 	i.nodeConfig.GatewayConfig = &config.GatewayConfig{Name: i.hostGateway, MAC: gwMAC}
 	gatewayIface.MAC = gwMAC
+	gatewayIface.IPs = []net.IP{}
 	if i.networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {
 		// Assign IP to gw as required by SpoofGuard.
-		// NodeIPAddr can be either IPv4 or IPv6.
-		if i.nodeConfig.NodeIPAddr.IP.To4() != nil {
-			i.nodeConfig.GatewayConfig.IPv4 = i.nodeConfig.NodeTransportIPAddr.IP
-		} else {
-			i.nodeConfig.GatewayConfig.IPv6 = i.nodeConfig.NodeTransportIPAddr.IP
+		if i.nodeConfig.NodeIPv4Addr != nil {
+			i.nodeConfig.GatewayConfig.IPv4 = i.nodeConfig.NodeTransportIPv4Addr.IP
+			gatewayIface.IPs = append(gatewayIface.IPs, i.nodeConfig.NodeTransportIPv4Addr.IP)
 		}
-		gatewayIface.IPs = []net.IP{i.nodeConfig.NodeTransportIPAddr.IP}
+		if i.nodeConfig.NodeIPv6Addr != nil {
+			i.nodeConfig.GatewayConfig.IPv6 = i.nodeConfig.NodeTransportIPv6Addr.IP
+			gatewayIface.IPs = append(gatewayIface.IPs, i.nodeConfig.NodeTransportIPv6Addr.IP)
+		}
 		// No need to assign local CIDR to gw0 because local CIDR is not managed by Antrea
 		return nil
 	}
@@ -678,26 +681,34 @@ func (i *Initializer) initNodeLocalConfig() error {
 		return err
 	}
 
-	var nodeIPAddr, transportIPAddr *net.IPNet
+	var nodeIPv4Addr, nodeIPv6Addr, transportIPv4Addr, transportIPv6Addr *net.IPNet
 	var localIntf *net.Interface
 	// Find the interface configured with Node IP and use it for Pod traffic.
-	ipAddr, err := k8s.GetNodeAddr(node)
+	ipAddrs, err := k8s.GetNodeAddrs(node)
 	if err != nil {
-		return fmt.Errorf("failed to obtain local IP address from K8s: %w", err)
+		return fmt.Errorf("failed to obtain local IP addresses from K8s: %w", err)
 	}
-	nodeIPAddr, localIntf, err = getIPNetDeviceFromIP(ipAddr)
+	nodeIPv4Addr, nodeIPv6Addr, localIntf, err = getIPNetDeviceFromIP(ipAddrs)
 	if err != nil {
-		return fmt.Errorf("failed to get local IPNet device with IP %v: %v", ipAddr, err)
+		return fmt.Errorf("failed to get local IPNet device with IP %v: %v", ipAddrs, err)
 	}
-	transportIPAddr = nodeIPAddr
+	transportIPv4Addr = nodeIPv4Addr
+	transportIPv6Addr = nodeIPv6Addr
 	if i.networkConfig.TransportIface != "" {
 		// Find the configured transport interface, and update its IP address in Node's annotation.
-		transportIPAddr, localIntf, err = getTransportIPNetDeviceByName(i.networkConfig.TransportIface, i.ovsBridge)
+		transportIPv4Addr, transportIPv6Addr, localIntf, err = getTransportIPNetDeviceByName(i.networkConfig.TransportIface, i.ovsBridge)
 		if err != nil {
 			return fmt.Errorf("failed to get local IPNet device with transport interface %s: %v", i.networkConfig.TransportIface, err)
 		}
-		klog.InfoS("Updating Node transport address annotation")
-		if err := i.patchNodeAnnotations(nodeName, types.NodeTransportAddressAnnotationKey, transportIPAddr.IP.String()); err != nil {
+		klog.InfoS("Updating Node transport addresses annotation")
+		var ips []string
+		if transportIPv4Addr != nil {
+			ips = append(ips, transportIPv4Addr.IP.String())
+		}
+		if transportIPv6Addr != nil {
+			ips = append(ips, transportIPv6Addr.IP.String())
+		}
+		if err := i.patchNodeAnnotations(nodeName, types.NodeTransportAddressAnnotationKey, strings.Join(ips, ",")); err != nil {
 			return err
 		}
 	} else {
@@ -719,12 +730,14 @@ func (i *Initializer) initNodeLocalConfig() error {
 	}
 
 	i.nodeConfig = &config.NodeConfig{
-		Name:                nodeName,
-		OVSBridge:           i.ovsBridge,
-		DefaultTunName:      defaultTunInterfaceName,
-		NodeIPAddr:          nodeIPAddr,
-		NodeTransportIPAddr: transportIPAddr,
-		UplinkNetConfig:     new(config.AdapterNetConfig)}
+		Name:                  nodeName,
+		OVSBridge:             i.ovsBridge,
+		DefaultTunName:        defaultTunInterfaceName,
+		NodeIPv4Addr:          nodeIPv4Addr,
+		NodeIPv6Addr:          nodeIPv6Addr,
+		NodeTransportIPv4Addr: transportIPv4Addr,
+		NodeTransportIPv6Addr: transportIPv6Addr,
+		UplinkNetConfig:       new(config.AdapterNetConfig)}
 
 	mtu, err := i.getNodeMTU(localIntf)
 	if err != nil {
@@ -897,7 +910,7 @@ func (i *Initializer) getNodeMTU(localIntf *net.Interface) (int, error) {
 		} else if i.networkConfig.TunnelType == ovsconfig.GRETunnel {
 			mtu -= config.GREOverhead
 		}
-		if i.nodeConfig.NodeIPAddr.IP.To4() == nil {
+		if i.nodeConfig.NodeIPv6Addr != nil {
 			mtu -= config.IPv6ExtraOverhead
 		}
 	}

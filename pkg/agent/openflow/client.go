@@ -27,6 +27,7 @@ import (
 	"antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/agent/util"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
+	utilip "antrea.io/antrea/pkg/util/ip"
 	"antrea.io/antrea/third_party/proxy"
 )
 
@@ -67,7 +68,7 @@ type Client interface {
 	InstallNodeFlows(
 		hostname string,
 		peerConfigs map[*net.IPNet]net.IP,
-		tunnelPeerIP net.IP,
+		tunnelPeerIP *utilip.DualStackIPs,
 		ipsecTunOFPort uint32,
 		peerNodeMAC net.HardwareAddr) error
 
@@ -414,7 +415,7 @@ func (c *client) deleteFlows(cache *flowCategoryCache, flowCacheKey string) erro
 // InstallNodeFlows installs flows for peer Nodes. Parameter remoteGatewayMAC is only for Windows.
 func (c *client) InstallNodeFlows(hostname string,
 	peerConfigs map[*net.IPNet]net.IP,
-	tunnelPeerIP net.IP,
+	tunnelPeerIPs *utilip.DualStackIPs,
 	ipsecTunOFPort uint32,
 	remoteGatewayMAC net.HardwareAddr) error {
 	c.replayMutex.RLock()
@@ -424,20 +425,24 @@ func (c *client) InstallNodeFlows(hostname string,
 	localGatewayMAC := c.nodeConfig.GatewayConfig.MAC
 
 	for peerPodCIDR, peerGatewayIP := range peerConfigs {
-		if peerGatewayIP.To4() != nil {
+		isIPv6 := peerGatewayIP.To4() == nil
+		tunnelPeerIP := tunnelPeerIPs.IPv4
+		if isIPv6 {
+			tunnelPeerIP = tunnelPeerIPs.IPv6
+		} else {
 			// Since broadcast is not supported in IPv6, ARP should happen only with IPv4 address, and ARP responder flows
 			// only work for IPv4 addresses.
 			flows = append(flows, c.arpResponderFlow(peerGatewayIP, cookie.Node))
 		}
-		if c.encapMode.NeedsEncapToPeer(tunnelPeerIP, c.nodeConfig.NodeTransportIPAddr) {
-			// tunnelPeerIP is the Node Internal Address. In a dual-stack setup, whether this address is an IPv4 address or an
-			// IPv6 one is decided by the address family of Node Internal Address.
+		if (!isIPv6 && c.encapMode.NeedsEncapToPeer(tunnelPeerIPs.IPv4, c.nodeConfig.NodeTransportIPv4Addr)) ||
+			(isIPv6 && c.encapMode.NeedsEncapToPeer(tunnelPeerIPs.IPv6, c.nodeConfig.NodeTransportIPv6Addr)) {
+			// tunnelPeerIP is the Node Internal Address. In a dual-stack setup, one Node has 2 Node Internal
+			// Addresses (IPv4 and IPv6) .
 			flows = append(flows, c.l3FwdFlowToRemote(localGatewayMAC, *peerPodCIDR, tunnelPeerIP, cookie.Node))
 		} else {
 			flows = append(flows, c.l3FwdFlowToRemoteViaRouting(localGatewayMAC, remoteGatewayMAC, cookie.Node, tunnelPeerIP, peerPodCIDR)...)
 		}
 	}
-
 	if ipsecTunOFPort != 0 {
 		// When IPSec tunnel is enabled, packets received from the remote Node are
 		// input from the Node's IPSec tunnel port, not the default tunnel port. So,
@@ -770,17 +775,15 @@ func (c *client) Initialize(roundInfo types.RoundInfo, nodeConfig *config.NodeCo
 }
 
 func (c *client) InstallExternalFlows() error {
-	nodeIP := c.nodeConfig.NodeIPAddr.IP
 	localGatewayMAC := c.nodeConfig.GatewayConfig.MAC
 
 	var flows []binding.Flow
-	if c.nodeConfig.PodIPv4CIDR != nil {
-		flows = c.externalFlows(nodeIP, *c.nodeConfig.PodIPv4CIDR, localGatewayMAC)
+	if c.nodeConfig.NodeIPv4Addr != nil && c.nodeConfig.PodIPv4CIDR != nil {
+		flows = c.externalFlows(c.nodeConfig.NodeIPv4Addr.IP, *c.nodeConfig.PodIPv4CIDR, localGatewayMAC)
 	}
-	if c.nodeConfig.PodIPv6CIDR != nil {
-		flows = append(flows, c.externalFlows(nodeIP, *c.nodeConfig.PodIPv6CIDR, localGatewayMAC)...)
+	if c.nodeConfig.NodeIPv6Addr != nil && c.nodeConfig.PodIPv6CIDR != nil {
+		flows = append(flows, c.externalFlows(c.nodeConfig.NodeIPv6Addr.IP, *c.nodeConfig.PodIPv6CIDR, localGatewayMAC)...)
 	}
-
 	if err := c.ofEntryOperations.AddAll(flows); err != nil {
 		return fmt.Errorf("failed to install flows for external communication: %v", err)
 	}

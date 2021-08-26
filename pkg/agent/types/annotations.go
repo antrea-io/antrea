@@ -18,6 +18,6 @@ const (
 	// NodeMACAddressAnnotationKey represents the key of the Node's MAC address in the Annotations of the Node.
 	NodeMACAddressAnnotationKey string = "node.antrea.io/mac-address"
 
-	// NodeTransportAddressAnnotationKey represents the key of the interface's IP address on which the Node transfers Pod traffic in the Annotations of the Node.
-	NodeTransportAddressAnnotationKey string = "node.antrea.io/transport-address"
+	// NodeTransportAddressAnnotationKey represents the key of the interface's IP addresses on which the Node transfers Pod traffic in the Annotations of the Node.
+	NodeTransportAddressAnnotationKey string = "node.antrea.io/transport-addresses"
 )

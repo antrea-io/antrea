@@ -43,6 +43,7 @@ import (
 	"antrea.io/antrea/pkg/antctl/runtime"
 	systemv1beta1 "antrea.io/antrea/pkg/apis/system/v1beta1"
 	antrea "antrea.io/antrea/pkg/client/clientset/versioned"
+	"antrea.io/antrea/pkg/util/ip"
 	"antrea.io/antrea/pkg/util/k8s"
 )
 
@@ -352,13 +353,19 @@ func createAgentClients(k8sClientset kubernetes.Interface, antreaClientset antre
 		if !ok {
 			continue
 		}
-		ip, err := k8s.GetNodeAddr(&node)
+		ips, err := k8s.GetNodeAddrs(&node)
 		if err != nil {
 			klog.Warningf("Error when parsing IP of Node %s", node.Name)
 			continue
 		}
 		cfg := rest.CopyConfig(cfgTmpl)
-		cfg.Host = net.JoinHostPort(ip.String(), port)
+		var nodeIP string
+		if ips.IPv4 != nil {
+			nodeIP = ips.IPv4.String()
+		} else {
+			nodeIP = ips.IPv6.String()
+		}
+		cfg.Host = net.JoinHostPort(nodeIP, port)
 		client, err := rest.RESTClientFor(cfg)
 		if err != nil {
 			klog.Warningf("Error when creating agent client for node: %s", node.Name)
@@ -379,14 +386,20 @@ func createControllerClient(k8sClientset kubernetes.Interface, antreaClientset a
 	if err != nil {
 		return nil, fmt.Errorf("error when searching the Node of the controller: %w", err)
 	}
-	var controllerNodeIP net.IP
-	controllerNodeIP, err = k8s.GetNodeAddr(controllerNode)
+	var controllerNodeIPs *ip.DualStackIPs
+	controllerNodeIPs, err = k8s.GetNodeAddrs(controllerNode)
 	if err != nil {
 		return nil, fmt.Errorf("error when parsing controllre IP: %w", err)
 	}
 
 	cfg := rest.CopyConfig(cfgTmpl)
-	cfg.Host = net.JoinHostPort(controllerNodeIP.String(), fmt.Sprint(controllerInfo.APIPort))
+	var nodeIP string
+	if controllerNodeIPs.IPv4 != nil {
+		nodeIP = controllerNodeIPs.IPv4.String()
+	} else {
+		nodeIP = controllerNodeIPs.IPv6.String()
+	}
+	cfg.Host = net.JoinHostPort(nodeIP, fmt.Sprint(controllerInfo.APIPort))
 	controllerClient, err := rest.RESTClientFor(cfg)
 	if err != nil {
 		klog.Warningf("Error when creating controller client for node: %s", controllerInfo.NodeRef.Name)
