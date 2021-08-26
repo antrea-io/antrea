@@ -1739,12 +1739,12 @@ spec:
                   - required:
                     - cidr
                     - gateway
-                    - prefixLen
+                    - prefixLength
                   - required:
                     - start
                     - end
                     - gateway
-                    - prefixLen
+                    - prefixLength
                   properties:
                     cidr:
                       format: cidr
@@ -1759,7 +1759,7 @@ spec:
                       - format: ipv4
                       - format: ipv6
                       type: string
-                    prefixLen:
+                    prefixLength:
                       type: integer
                     start:
                       oneOf:
@@ -3884,7 +3884,7 @@ data:
 
     # Enable flexible IPAM mode for Antrea. This mode allows to assign IP Ranges to Namespaces,
     # Deployments and StatefulSets via IP Pool annotation.
-    #  FlexibleIPAM: false
+    #  AntreaIPAM: false
 
     # Name of the OpenVSwitch bridge antrea-agent will create and use.
     # Make sure it doesn't conflict with your existing OpenVSwitch bridges.
@@ -4088,7 +4088,7 @@ data:
 
     # Enable flexible IPAM mode for Antrea. This mode allows to assign IP Ranges to Namespaces,
     # Deployments and StatefulSets via IP Pool annotation.
-    #  FlexibleIPAM: false
+    #  AntreaIPAM: false
     #
 
     # The port for the antrea-controller APIServer to serve on.
@@ -4156,7 +4156,7 @@ metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-d65hm57d2m
+  name: antrea-config-446c27hb5h
   namespace: kube-system
 ---
 apiVersion: v1
@@ -4236,7 +4236,7 @@ spec:
             fieldRef:
               fieldPath: spec.serviceAccountName
         - name: ANTREA_CONFIG_MAP_NAME
-          value: antrea-config-d65hm57d2m
+          value: antrea-config-446c27hb5h
         image: projects.registry.vmware.com/antrea/antrea-ubuntu:latest
         imagePullPolicy: IfNotPresent
         livenessProbe:
@@ -4287,7 +4287,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-d65hm57d2m
+          name: antrea-config-446c27hb5h
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -4603,7 +4603,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-d65hm57d2m
+          name: antrea-config-446c27hb5h
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d
