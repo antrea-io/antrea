@@ -740,7 +740,7 @@ func getNodeMAC(node *corev1.Node) (net.HardwareAddr, error) {
 
 func (c *Controller) getNodeTransportAddrs(node *corev1.Node) (*utilip.DualStackIPs, error) {
 	var transportAddrs *utilip.DualStackIPs
-	if c.networkConfig.TransportIface != "" {
+	if c.networkConfig.TransportIface != "" || c.networkConfig.TransportV4CIDR != "" {
 		transportAddrsStr := node.Annotations[types.NodeTransportAddressAnnotationKey]
 		if transportAddrsStr != "" {
 			for _, addr := range strings.Split(transportAddrsStr, ",") {

@@ -159,9 +159,19 @@ type AgentConfig struct {
 	// TLS min version.
 	TLSMinVersion string `yaml:"tlsMinVersion,omitempty"`
 	// The name of the interface on Node which is used for tunneling or routing the traffic across Nodes.
-	// If there are multiple IP addresses configured on the interface, the first one is used.
-	// The interface configured with Node IP is used if this parameter is not set.
+	// If there are multiple IP addresses configured on the interface, the first one is used. The order for
+	// configuring tunneling or routing the traffic across Nodes is (from highest to lowest):
+	// 1.TransportInterface
+	// 2.TransportV4CIDR
+	// 3.The Node IP
 	TransportInterface string `yaml:"transportInterface,omitempty"`
+	// The network CIDR of the interface on Node which is used for tunneling or routing the traffic across
+	// Nodes. If there are multiple interfaces configured the same network CIDR, the first one is used. The
+	// order for configuring tunneling or routing the traffic across Nodes is (from highest to lowest):
+	// 1.TransportInterface
+	// 2.TransportV4CIDR
+	// 3.The Node IP
+	TransportV4CIDR string `yaml:"transportV4CIDR,omitempty"`
 }
 
 type WireGuardConfig struct {
