@@ -181,7 +181,10 @@ func (k *KubernetesUtils) ProbeEgress(ns, pod, dstAddr string, port int32, proto
 		return Error, fmt.Errorf("no Pod of label pod=%s in Namespace %s found", pod, ns)
 	}
 	fromPod := fromPods[0]
-
+	// If it's an IPv6 address, add "[]" around it.
+	if strings.Contains(dstAddr, ":") {
+		dstAddr = fmt.Sprintf("[%s]", dstAddr)
+	}
 	connectivity := k.probe(&fromPod, fmt.Sprintf("%s/%s", ns, pod), dstAddr, dstAddr, port, protocol)
 	return connectivity, nil
 }
