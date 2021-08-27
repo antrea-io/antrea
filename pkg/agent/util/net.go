@@ -165,9 +165,9 @@ func GetIPNetDeviceByName(ifaceName string) (v4IPNet *net.IPNet, v6IPNet *net.IP
 		if ipNet, ok := addr.(*net.IPNet); ok {
 			if ipNet.IP.IsGlobalUnicast() {
 				if ipNet.IP.To4() != nil {
-					v6IPNet = ipNet
-				} else {
 					v4IPNet = ipNet
+				} else {
+					v6IPNet = ipNet
 				}
 			}
 		}
@@ -176,6 +176,34 @@ func GetIPNetDeviceByName(ifaceName string) (v4IPNet *net.IPNet, v6IPNet *net.IP
 		return v4IPNet, v6IPNet, link, nil
 	}
 	return nil, nil, nil, fmt.Errorf("unable to find local IP and device")
+}
+
+func GetIPNetDeviceByV4CIDR(ifaceCIDR string) (*net.IPNet, *net.Interface, error) {
+	_, netCIDR, err := net.ParseCIDR(ifaceCIDR)
+	if err != nil {
+		return nil, nil, err
+	}
+	linkList, err := net.Interfaces()
+	if err != nil {
+		return nil, nil, err
+	}
+	for _, link := range linkList {
+		if link.Flags & net.FlagLoopback != 0 {
+			continue
+		}
+		addrList, err := link.Addrs()
+		if err != nil {
+			return nil, nil, err
+		}
+		for _, addr := range addrList {
+			if ipNet, ok := addr.(*net.IPNet); ok {
+				if netCIDR.Contains(ipNet.IP) && ipNet.IP.IsGlobalUnicast() {
+					return ipNet, &link, nil
+				}
+			}
+		}
+	}
+	return nil, nil, fmt.Errorf("unable to find local IP and device with CIDR: %s", ifaceCIDR)
 }
 
 func GetIPv4Addr(ips []net.IP) net.IP {

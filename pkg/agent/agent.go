@@ -61,11 +61,16 @@ const (
 	maxRetryForRoundNumSave = 5
 )
 
-// getIPNetDeviceFromIP is meant to be overridden for testing.
-var getIPNetDeviceFromIP = util.GetIPNetDeviceFromIP
+var (
+	// getIPNetDeviceFromIP is meant to be overridden for testing.
+	getIPNetDeviceFromIP = util.GetIPNetDeviceFromIP
 
-// getTransportIPNetDeviceByName is meant to be overridden for testing.
-var getTransportIPNetDeviceByName = GetTransportIPNetDeviceByName
+	// getIPNetDeviceByV4CIDR is meant to be overridden for testing.
+	getIPNetDeviceByV4CIDR = util.GetIPNetDeviceByV4CIDR
+
+	// getTransportIPNetDeviceByName is meant to be overridden for testing.
+	getTransportIPNetDeviceByName = GetTransportIPNetDeviceByName
+)
 
 // Initializer knows how to setup host networking, OpenVSwitch, and Openflow.
 type Initializer struct {
@@ -725,6 +730,16 @@ func (i *Initializer) initNodeLocalConfig() error {
 		if transportIPv6Addr != nil {
 			ips = append(ips, transportIPv6Addr.IP.String())
 		}
+		if err := i.patchNodeAnnotations(nodeName, types.NodeTransportAddressAnnotationKey, strings.Join(ips, ",")); err != nil {
+			return err
+		}
+	} else if i.networkConfig.TransportV4CIDR != "" {
+		transportIPv4Addr, localIntf, err = getIPNetDeviceByV4CIDR(i.networkConfig.TransportV4CIDR)
+		if err != nil {
+			return fmt.Errorf("failed to get local IPNet device with transport CIDR %s: %v", i.networkConfig.TransportV4CIDR, err)
+		}
+		ips := []string{transportIPv4Addr.IP.String()}
+		klog.InfoS("Updating Node transport addresses annotation")
 		if err := i.patchNodeAnnotations(nodeName, types.NodeTransportAddressAnnotationKey, strings.Join(ips, ",")); err != nil {
 			return err
 		}

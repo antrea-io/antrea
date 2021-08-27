@@ -3911,9 +3911,20 @@ data:
     #tlsMinVersion:
 
     # The name of the interface on Node which is used for tunneling or routing the traffic across Nodes.
-    # If there are multiple IP addresses configured on the interface, the first one is used.
-    # The interface configured with Node IP is used if this parameter is not set.
+    # If there are multiple IP addresses configured on the interface, the first one is used. The order for
+    # configuring tunneling or routing the traffic across Nodes is (from highest to lowest):
+    # 1.TransportInterface
+    # 2.TransportV4CIDR
+    # 3.The Node IP.
     #transportInterface:
+
+    # The network V4 CIDR of the interface on Node which is used for tunneling or routing the traffic across
+    # Nodes. If there are multiple interfaces configured the same network V4 CIDR, the first one is used. The
+    # order for configuring tunneling or routing the traffic across Nodes is (from highest to lowest):
+    # 1.TransportInterface
+    # 2.TransportV4CIDR
+    # 3.The Node IP
+    #transportV4CIDR:
   antrea-cni.conflist: |
     {
         "cniVersion":"0.3.0",
