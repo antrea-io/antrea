@@ -329,11 +329,18 @@ func TestCreateIPSecTunnelPort(t *testing.T) {
 	c.informerFactory.WaitForCacheSync(stopCh)
 
 	node1PortName := util.GenerateNodeTunnelInterfaceName("xyz-k8s-0-1")
+	node2PortName := util.GenerateNodeTunnelInterfaceName("xyz-k8s-0-2")
 	c.ovsClient.EXPECT().CreateTunnelPortExt(
 		node1PortName, ovsconfig.TunnelType("vxlan"), int32(0),
 		false, "", nodeIP1.String(), "changeme",
 		map[string]interface{}{ovsExternalIDNodeName: "xyz-k8s-0-1"}).Times(1)
+	c.ovsClient.EXPECT().CreateTunnelPortExt(
+		node2PortName, ovsconfig.TunnelType("vxlan"), int32(0),
+		false, "", nodeIP2.String(), "changeme",
+		map[string]interface{}{ovsExternalIDNodeName: "xyz-k8s-0-2"}).Times(1)
 	c.ovsClient.EXPECT().GetOFPort(node1PortName).Return(int32(1), nil)
+	c.ovsClient.EXPECT().GetOFPort(node2PortName).Return(int32(2), nil)
+	c.ovsClient.EXPECT().DeletePort("123").Times(1)
 
 	tests := []struct {
 		name       string
@@ -353,7 +360,8 @@ func TestCreateIPSecTunnelPort(t *testing.T) {
 			name:       "hit cache but interface name changed for the same node",
 			nodeName:   "xyz-k8s-0-2",
 			peerNodeIP: nodeIP2,
-			wantErr:    true,
+			wantErr:    false,
+			want:       2,
 		},
 		{
 			name:       "hit cache and return directly",
