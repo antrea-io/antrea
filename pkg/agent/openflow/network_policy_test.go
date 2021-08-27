@@ -156,6 +156,7 @@ func TestInstallPolicyRuleFlows(t *testing.T) {
 
 	c = prepareClient(ctrl)
 	c.nodeConfig = &config.NodeConfig{PodIPv4CIDR: podIPv4CIDR, PodIPv6CIDR: nil}
+	c.networkConfig = &config.NetworkConfig{}
 	c.ipProtocols = []binding.Protocol{binding.ProtocolIP}
 	defaultAction := crdv1alpha1.RuleActionAllow
 	ruleID1 := uint32(101)
@@ -511,6 +512,7 @@ func TestBatchInstallPolicyRuleFlows(t *testing.T) {
 			c.cookieAllocator = cookie.NewAllocator(0)
 			c.ofEntryOperations = mockOperations
 			c.nodeConfig = &config.NodeConfig{PodIPv4CIDR: podIPv4CIDR, PodIPv6CIDR: nil}
+			c.networkConfig = &config.NetworkConfig{}
 			c.ipProtocols = []binding.Protocol{binding.ProtocolIP}
 			c.deterministic = true
 
@@ -636,6 +638,7 @@ func TestInstallPolicyRuleFlowsInDualStackCluster(t *testing.T) {
 
 	c = prepareClient(ctrl)
 	c.nodeConfig = &config.NodeConfig{PodIPv4CIDR: podIPv4CIDR, PodIPv6CIDR: podIPv6CIDR}
+	c.networkConfig = &config.NetworkConfig{}
 	c.ipProtocols = []binding.Protocol{binding.ProtocolIP, binding.ProtocolIPv6}
 	defaultAction := crdv1alpha1.RuleActionAllow
 	ruleID1 := uint32(101)

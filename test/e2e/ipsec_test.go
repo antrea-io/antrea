@@ -76,7 +76,7 @@ func (data *TestData) readSecurityAssociationsStatus(nodeName string) (up int, c
 // them ping each other.
 func testIPSecTunnelConnectivity(t *testing.T, data *TestData) {
 	t.Logf("Redeploy Antrea with IPSec tunnel enabled")
-	data.redeployAntrea(t, true)
+	data.redeployAntrea(t, deployAntreaIPsec)
 
 	data.testPodConnectivityDifferentNodes(t)
 
@@ -92,7 +92,7 @@ func testIPSecTunnelConnectivity(t *testing.T, data *TestData) {
 	}
 
 	// Restore normal Antrea deployment with IPSec disabled.
-	data.redeployAntrea(t, false)
+	data.redeployAntrea(t, deployAntreaDefault)
 }
 
 // testIPSecDeleteStaleTunnelPorts checks that when switching from IPsec mode to
@@ -100,7 +100,7 @@ func testIPSecTunnelConnectivity(t *testing.T, data *TestData) {
 // correctly.
 func testIPSecDeleteStaleTunnelPorts(t *testing.T, data *TestData) {
 	t.Logf("Redeploy Antrea with IPSec tunnel enabled")
-	data.redeployAntrea(t, true)
+	data.redeployAntrea(t, deployAntreaIPsec)
 
 	nodeName0 := nodeName(0)
 	nodeName1 := nodeName(1)
@@ -132,7 +132,7 @@ func testIPSecDeleteStaleTunnelPorts(t *testing.T, data *TestData) {
 	}
 
 	t.Logf("Redeploy Antrea with IPSec tunnel disabled")
-	data.redeployAntrea(t, false)
+	data.redeployAntrea(t, deployAntreaDefault)
 
 	t.Logf("Checking that tunnel port has been deleted")
 	if err := wait.PollImmediate(defaultInterval, defaultTimeout, func() (found bool, err error) {

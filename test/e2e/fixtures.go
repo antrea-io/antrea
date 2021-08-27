@@ -136,7 +136,7 @@ func skipIfFeatureDisabled(tb testing.TB, feature featuregate.Feature, checkAgen
 
 func ensureAntreaRunning(data *TestData) error {
 	log.Println("Applying Antrea YAML")
-	if err := data.deployAntrea(); err != nil {
+	if err := data.deployAntrea(deployAntreaDefault); err != nil {
 		return err
 	}
 	log.Println("Waiting for all Antrea DaemonSet Pods")

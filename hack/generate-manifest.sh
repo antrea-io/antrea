@@ -44,6 +44,8 @@ Generate a YAML manifest for Antrea using Kustomize and print it to stdout.
         --custom-adm-controller       Generates a manifest with custom Antrea admission controller to validate/mutate resources.
         --hw-offload                  Generates a manifest with hw-offload enabled in the antrea-ovs container.
         --sriov                       Generates a manifest which enables use of Kubelet API for SR-IOV device info.
+        --wireguard-go                Generate a manifest with WireGuard (golang implementation) encryption enabled.
+                                      This option will work only for Kind clusters (when using '--kind').
         --help, -h                    Print this message and exit
 
 In 'release' mode, environment variables IMG_NAME and IMG_TAG must be set.
@@ -84,6 +86,7 @@ SIMULATOR=false
 CUSTOM_ADM_CONTROLLER=false
 HW_OFFLOAD=false
 SRIOV=false
+WIREGUARD_GO=false
 
 while [[ $# -gt 0 ]]
 do
@@ -170,6 +173,10 @@ case $key in
     --sriov)
     SRIOV=true
     shift
+    ;;   
+    --wireguard-go)
+    WIREGUARD_GO=true
+    shift
     ;;
     -h|--help)
     print_usage
@@ -229,6 +236,18 @@ if [[ "$ENCAP_MODE" != "" ]] && [[ "$ENCAP_MODE" != "encap" ]] && ! $PROXY; then
     exit 1
 fi
 
+if "$WIREGUARD_GO" && "$IPSEC"; then
+    echoerr "Cannot use '--wireguard-go' together with '--ipsec'"
+    print_help
+    exit 1
+fi
+
+if "$WIREGUARD_GO" && ! "$KIND"; then
+    echoerr "--wireguard-go works only for Kind clusters"
+    print_help
+    exit 1
+fi
+
 THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
 source $THIS_DIR/verify-kustomize.sh
@@ -260,9 +279,13 @@ if $KIND; then
 fi
 
 if $IPSEC; then
-    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*enableIPSecTunnel[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/enableIPSecTunnel: true/" antrea-agent.conf
+    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*trafficEncryptionMode[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/trafficEncryptionMode: ipsec/" antrea-agent.conf
     # change the tunnel type to GRE which works better with IPSec encryption than other types.
     sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*tunnelType[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/tunnelType: gre/" antrea-agent.conf
+fi
+
+if $WIREGUARD_GO; then
+    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*trafficEncryptionMode[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/trafficEncryptionMode: wireguard/" antrea-agent.conf
 fi
 
 if $ALLFEATURES; then
@@ -409,6 +432,11 @@ if $KIND; then
     fi
     # change initContainer script and remove SYS_MODULE capability
     $KUSTOMIZE edit add patch --path installCni.yml
+
+    # inject the wireguard-go container to run WireGuard in userspace
+    if $WIREGUARD_GO; then
+        $KUSTOMIZE edit add patch --path wireguardGo.yml
+    fi
 
     if $ON_DELETE; then
         $KUSTOMIZE edit add patch --path onDeleteUpdateStrategy.yml

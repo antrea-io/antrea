@@ -114,13 +114,21 @@ func run(o *Options) error {
 	}
 
 	_, encapMode := config.GetTrafficEncapModeFromStr(o.config.TrafficEncapMode)
+	_, encryptionMode := config.GetTrafficEncryptionModeFromStr(o.config.TrafficEncryptionMode)
+	if o.config.EnableIPSecTunnel {
+		klog.Warning("enableIPSecTunnel is deprecated, use trafficEncryptionMode instead.")
+		encryptionMode = config.TrafficEncryptionModeIPSec
+	}
 	networkConfig := &config.NetworkConfig{
-		TunnelType:        ovsconfig.TunnelType(o.config.TunnelType),
-		TrafficEncapMode:  encapMode,
-		EnableIPSecTunnel: o.config.EnableIPSecTunnel,
-		TransportIface:    o.config.TransportInterface,
+		TunnelType:            ovsconfig.TunnelType(o.config.TunnelType),
+		TrafficEncapMode:      encapMode,
+		TrafficEncryptionMode: encryptionMode,
+		TransportIface:        o.config.TransportInterface,
 	}
 
+	wireguardConfig := &config.WireGuardConfig{
+		Port: o.config.WireGuard.Port,
+	}
 	routeClient, err := route.NewClient(serviceCIDRNet, networkConfig, o.config.NoSNAT)
 	if err != nil {
 		return fmt.Errorf("error creating route client: %v", err)
@@ -149,6 +157,7 @@ func run(o *Options) error {
 		serviceCIDRNet,
 		serviceCIDRNetv6,
 		networkConfig,
+		wireguardConfig,
 		networkReadyCh,
 		stopCh,
 		features.DefaultFeatureGate.Enabled(features.AntreaProxy))
@@ -166,7 +175,8 @@ func run(o *Options) error {
 		routeClient,
 		ifaceStore,
 		networkConfig,
-		nodeConfig)
+		nodeConfig,
+		agentInitializer.GetWireGuardClient())
 
 	var proxier proxy.Proxier
 	if features.DefaultFeatureGate.Enabled(features.AntreaProxy) {

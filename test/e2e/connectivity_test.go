@@ -197,7 +197,7 @@ func createPodsOnDifferentNodes(t *testing.T, data *TestData, tag string) (podIn
 
 	for _, p := range pods.Items {
 		os := clusterInfo.nodesOS[p.Spec.NodeName]
-		piMap[os] = append(piMap[os], podInfo{p.Name, os})
+		piMap[os] = append(piMap[os], podInfo{p.Name, os, p.Spec.NodeName})
 	}
 	var linIdx, winIdx int
 	for linIdx != len(piMap["linux"]) && winIdx != len(piMap["windows"]) {
@@ -242,29 +242,19 @@ func testPodConnectivityDifferentNodes(t *testing.T, data *TestData) {
 	data.testPodConnectivityDifferentNodes(t)
 }
 
-func (data *TestData) redeployAntrea(t *testing.T, enableIPSec bool) {
+func (data *TestData) redeployAntrea(t *testing.T, option deployAntreaOptions) {
 	var err error
 	// export logs before deleting Antrea
-	if enableIPSec {
-		exportLogs(t, data, "beforeRedeployWithIPsec", false)
-	} else {
-		exportLogs(t, data, "beforeRedploy", false)
-	}
+	exportLogs(t, data, fmt.Sprintf("beforeRedeploy%s", option), false)
 	t.Logf("Deleting Antrea Agent DaemonSet")
 	if err = data.deleteAntrea(defaultTimeout); err != nil {
 		t.Fatalf("Error when deleting Antrea DaemonSet: %v", err)
 	}
-
 	t.Logf("Applying Antrea YAML")
-	if enableIPSec {
-		err = data.deployAntreaIPSec()
-	} else {
-		err = data.deployAntrea()
-	}
+	err = data.deployAntrea(option)
 	if err != nil {
 		t.Fatalf("Error when applying Antrea YAML: %v", err)
 	}
-
 	// After redeploying Antrea with / without IPsec, we wait for watchForRestartsDuration and
 	// count the number of container restarts. watchForRestartsDuration should be large enough
 	// to detect issues, e.g. if there is an issue with the antrea-ipsec container.
@@ -302,7 +292,7 @@ func testPodConnectivityAfterAntreaRestart(t *testing.T, data *TestData) {
 
 	data.runPingMesh(t, podInfos[:numPods], agnhostContainerName)
 
-	data.redeployAntrea(t, false)
+	data.redeployAntrea(t, deployAntreaDefault)
 
 	data.runPingMesh(t, podInfos[:numPods], agnhostContainerName)
 }
