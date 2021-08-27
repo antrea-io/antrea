@@ -600,19 +600,26 @@ func getPodCIDRsOnNode(node *corev1.Node) []string {
 // tunnel does not exist, and returns the ofport number.
 func (c *Controller) createIPSecTunnelPort(nodeName string, nodeIP net.IP) (int32, error) {
 	portName := util.GenerateNodeTunnelInterfaceName(nodeName)
-	interfaceConfig, ok := c.interfaceStore.GetNodeTunnelInterface(nodeName)
+	interfaceConfig, exists := c.interfaceStore.GetNodeTunnelInterface(nodeName)
 	// check if Node IP, PSK, or tunnel type changes. This can
 	// happen if removeStaleTunnelPorts fails to remove a "stale"
 	// tunnel port for which the configuration has changed, return error to requeue the Node.
-	if ok {
+	if exists {
 		if !c.compareInterfaceConfig(interfaceConfig, nodeIP, portName) {
-			return 0, fmt.Errorf("IPSec tunnel interface config doesn't match cached one, stale IPSec tunnel port %s", interfaceConfig.InterfaceName)
+			klog.InfoS("IPSec tunnel interface config doesn't match the cached one, deleting the stale IPSec tunnel port", "node", nodeName, "interface", interfaceConfig.InterfaceName)
+			if err := c.ovsBridgeClient.DeletePort(interfaceConfig.PortUUID); err != nil {
+				return 0, fmt.Errorf("fail to delete the stale IPSec tunnel port %s: %v", interfaceConfig.InterfaceName, err)
+			}
+			c.interfaceStore.DeleteInterface(interfaceConfig)
+			exists = false
+		} else {
+			if interfaceConfig.OFPort != 0 {
+				klog.V(2).InfoS("Found cached IPSec tunnel interface", "node", nodeName, "interface", interfaceConfig.InterfaceName, "port", interfaceConfig.OFPort)
+				return interfaceConfig.OFPort, nil
+			}
 		}
-		klog.V(2).InfoS("Found cached IPSec tunnel interface", "interfaceName", interfaceConfig.InterfaceName, "port", interfaceConfig.OFPort, "nodeName", nodeName)
-		if interfaceConfig.OFPort != 0 {
-			return interfaceConfig.OFPort, nil
-		}
-	} else {
+	}
+	if !exists {
 		ovsExternalIDs := map[string]interface{}{ovsExternalIDNodeName: nodeName}
 		portUUID, err := c.ovsBridgeClient.CreateTunnelPortExt(
 			portName,
@@ -638,7 +645,6 @@ func (c *Controller) createIPSecTunnelPort(nodeName string, nodeIP net.IP) (int3
 		interfaceConfig.OVSPortConfig = ovsPortConfig
 		c.interfaceStore.AddInterface(interfaceConfig)
 	}
-
 	// GetOFPort will wait for up to 1 second for OVSDB to report the OFPort number.
 	ofPort, err := c.ovsBridgeClient.GetOFPort(interfaceConfig.InterfaceName)
 	if err != nil {
