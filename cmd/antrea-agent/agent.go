@@ -128,6 +128,7 @@ func run(o *Options) error {
 		TrafficEncapMode:      encapMode,
 		TrafficEncryptionMode: encryptionMode,
 		TransportIface:        o.config.TransportInterface,
+		TransportIfaceCIDRs:   o.config.TransportInterfaceCIDRs,
 	}
 
 	wireguardConfig := &config.WireGuardConfig{
