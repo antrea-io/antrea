@@ -426,14 +426,18 @@ to a separate file (`/var/log/antrea/networkpolicy/np.log`) on the Node on
 which the rule is applied. These log files can then be retrieved for further
 analysis. By default, rules are not logged. The example policy logs all
 traffic that matches the "DropToThirdParty" egress rule, while the rule
-"AllowFromFrontend" is not logged. The rules are logged in the following
-format:
+"AllowFromFrontend" is not logged. Specifically for drop and reject rules, 
+deduplication is applied to simplify the logs. By default, the buffer length is 1 second.
+The rules are logged in the following format:
 
 ```text
-    <yyyy/mm/dd> <time> <ovs-table-name> <antrea-native-policy-reference> <action> <openflow-priority> SRC: <source-ip> DEST: <destination-ip> <packet-length> <protocol>
+    <yyyy/mm/dd> <time> <ovs-table-name> <antrea-native-policy-reference> <action> <openflow-priority> <source-ip> <destination-ip> <packet-length> <protocol>
+    Deduplication:
+    <yyyy/mm/dd> <time> <ovs-table-name> <antrea-native-policy-reference> <action> <openflow-priority> <source-ip> <destination-ip> <packet-length> <protocol> [<num of packets> packets in <duplicate duration>]
 
     Example:
-    2020/11/02 22:21:21.148395 AntreaPolicyAppTierIngressRule AntreaNetworkPolicy:default/test-anp Allow 61800 SRC: 10.0.0.4 DEST: 10.0.0.5 60 TCP
+    2020/11/02 22:21:21.148395 AntreaPolicyAppTierIngressRule AntreaNetworkPolicy:default/test-anp Allow 61800 10.0.0.4 10.0.0.5 60 TCP
+    2021/06/24 23:56:41.346165 AntreaPolicyEgressRule AntreaNetworkPolicy:default/test-anp Drop 44900 10.0.0.5 10.0.0.4 60 TCP [3 packets in 1.011379442s]
 ```
 
 **`appliedTo` per rule**: A ClusterNetworkPolicy ingress or egress rule may

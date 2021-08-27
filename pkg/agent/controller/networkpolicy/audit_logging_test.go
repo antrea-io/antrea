@@ -59,7 +59,7 @@ func newTestAntreaPolicyLogger(bufferLength time.Duration) (*AntreaPolicyLogger,
 }
 
 func newLogInfo(disposition string) (*logInfo, string) {
-	expected := fmt.Sprintf("AntreaPolicyIngressRule AntreaNetworkPolicy:default/test %s 0 SRC: 0.0.0.0 DEST: 1.1.1.1 60 TCP", disposition)
+	expected := fmt.Sprintf("AntreaPolicyIngressRule AntreaNetworkPolicy:default/test %s 0 0.0.0.0 1.1.1.1 60 TCP", disposition)
 	return &logInfo{
 		tableName:   "AntreaPolicyIngressRule",
 		npRef:       "AntreaNetworkPolicy:default/test",

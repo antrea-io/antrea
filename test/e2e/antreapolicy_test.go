@@ -2102,8 +2102,8 @@ func testAuditLoggingBasic(t *testing.T, data *TestData) {
 						continue
 					}
 					expectedNumEntries += 1
-					// The audit log should contain log entry `... Drop <ofPriority> SRC: <x/a IP> DEST: <z/* IP> ...`
-					re := regexp.MustCompile(`Drop [0-9]+ SRC: ` + srcIPs[i] + ` DEST: ` + dstIPs[j])
+					// The audit log should contain log entry `... Drop <ofPriority> <x/a IP> <z/* IP> ...`
+					re := regexp.MustCompile(`Drop [0-9]+ ` + srcIPs[i] + ` ` + dstIPs[j])
 					if re.MatchString(stdout) {
 						actualNumEntries += 1
 					} else {
