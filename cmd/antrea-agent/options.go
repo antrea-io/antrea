@@ -153,6 +153,9 @@ func (o *Options) validate(args []string) error {
 	if err := o.validateFlowExporterConfig(); err != nil {
 		return fmt.Errorf("failed to validate flow exporter config: %v", err)
 	}
+	if err := o.validateAntreaIPAMConfig(); err != nil {
+		return fmt.Errorf("failed to validate AntreaIPAM config: %v", err)
+	}
 	return nil
 }
 
@@ -275,6 +278,24 @@ func (o *Options) validateFlowExporterConfig() error {
 			}
 		} else {
 			o.staleConnectionTimeout = defaultStaleConnectionTimeout
+		}
+	}
+	return nil
+}
+
+func (o *Options) validateAntreaIPAMConfig() error {
+	if features.DefaultFeatureGate.Enabled(features.AntreaIPAM) {
+		// AntreaIPAM will bridge uplink to OVS bridge, which is not compatible with OVSDatapathSystem 'netdev'
+		if o.config.OVSDatapathType != string(ovsconfig.OVSDatapathSystem) {
+			return fmt.Errorf("AntreaIPAM requires 'system' OVSDatapathType")
+		}
+		if o.config.TrafficEncapMode != config.TrafficEncapModeNoEncap.String() {
+			return fmt.Errorf("AntreaIPAM requires 'NoEncap' TrafficEncapMode")
+		}
+		// TODO(gran): support SNAT for Per-Node IPAM Pods
+		// SNAT needs to be updated to bypass traffic from AntreaIPAM Pod to Per-Node IPAM Pod
+		if !o.config.NoSNAT {
+			return fmt.Errorf("AntreaIPAM requires NoSNAT")
 		}
 	}
 	return nil
