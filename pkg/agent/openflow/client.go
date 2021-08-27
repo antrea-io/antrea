@@ -40,7 +40,7 @@ type Client interface {
 	// be called to ensure that the set of OVS flows is correct. All flows programmed in the
 	// switch which match the current round number will be deleted before any new flow is
 	// installed.
-	Initialize(roundInfo types.RoundInfo, config *config.NodeConfig, encapMode config.TrafficEncapModeType) (<-chan struct{}, error)
+	Initialize(roundInfo types.RoundInfo, config *config.NodeConfig, networkconfig *config.NetworkConfig) (<-chan struct{}, error)
 
 	// InstallGatewayFlows sets up flows related to an OVS gateway port, the gateway must exist.
 	InstallGatewayFlows() error
@@ -417,13 +417,13 @@ func (c *client) InstallNodeFlows(hostname string,
 	peerConfigs map[*net.IPNet]net.IP,
 	tunnelPeerIPs *utilip.DualStackIPs,
 	ipsecTunOFPort uint32,
-	remoteGatewayMAC net.HardwareAddr) error {
+	remoteGatewayMAC net.HardwareAddr,
+) error {
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
 
 	var flows []binding.Flow
 	localGatewayMAC := c.nodeConfig.GatewayConfig.MAC
-
 	for peerPodCIDR, peerGatewayIP := range peerConfigs {
 		isIPv6 := peerGatewayIP.To4() == nil
 		tunnelPeerIP := tunnelPeerIPs.IPv4
@@ -434,10 +434,10 @@ func (c *client) InstallNodeFlows(hostname string,
 			// only work for IPv4 addresses.
 			flows = append(flows, c.arpResponderFlow(peerGatewayIP, cookie.Node))
 		}
-		if (!isIPv6 && c.encapMode.NeedsEncapToPeer(tunnelPeerIPs.IPv4, c.nodeConfig.NodeTransportIPv4Addr)) ||
-			(isIPv6 && c.encapMode.NeedsEncapToPeer(tunnelPeerIPs.IPv6, c.nodeConfig.NodeTransportIPv6Addr)) {
-			// tunnelPeerIP is the Node Internal Address. In a dual-stack setup, one Node has 2 Node Internal
-			// Addresses (IPv4 and IPv6) .
+		// tunnelPeerIP is the Node Internal Address. In a dual-stack setup, one Node has 2 Node Internal
+		// Addresses (IPv4 and IPv6) .
+		if (!isIPv6 && c.networkConfig.NeedsTunnelToPeer(tunnelPeerIPs.IPv4, c.nodeConfig.NodeTransportIPv4Addr)) ||
+			(isIPv6 && c.networkConfig.NeedsTunnelToPeer(tunnelPeerIPs.IPv6, c.nodeConfig.NodeTransportIPv6Addr)) {
 			flows = append(flows, c.l3FwdFlowToRemote(localGatewayMAC, *peerPodCIDR, tunnelPeerIP, cookie.Node))
 		} else {
 			flows = append(flows, c.l3FwdFlowToRemoteViaRouting(localGatewayMAC, remoteGatewayMAC, cookie.Node, tunnelPeerIP, peerPodCIDR)...)
@@ -481,7 +481,7 @@ func (c *client) InstallPodFlows(interfaceName string, podInterfaceIPs []net.IP,
 	// Add L3 Routing flows to rewrite Pod's dst MAC for all validate IPs.
 	flows = append(flows, c.l3FwdFlowToPod(localGatewayMAC, podInterfaceIPs, podInterfaceMAC, cookie.Pod)...)
 
-	if c.encapMode.IsNetworkPolicyOnly() {
+	if c.networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {
 		// In policy-only mode, traffic to local Pod is routed based on destination IP.
 		flows = append(flows,
 			c.l3FwdFlowRouteToPod(podInterfaceIPs, podInterfaceMAC, cookie.Pod)...,
@@ -713,7 +713,7 @@ func (c *client) initialize() error {
 	if err := c.ofEntryOperations.AddAll(c.rejectBypassNetworkpolicyFlows(cookie.Default)); err != nil {
 		return fmt.Errorf("failed to install flows to skip generated reject responses: %v", err)
 	}
-	if c.encapMode.IsNetworkPolicyOnly() {
+	if c.networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {
 		if err := c.setupPolicyOnlyFlows(); err != nil {
 			return fmt.Errorf("failed to setup policy only flows: %w", err)
 		}
@@ -729,14 +729,14 @@ func (c *client) initialize() error {
 	return nil
 }
 
-func (c *client) Initialize(roundInfo types.RoundInfo, nodeConfig *config.NodeConfig, encapMode config.TrafficEncapModeType) (<-chan struct{}, error) {
+func (c *client) Initialize(roundInfo types.RoundInfo, nodeConfig *config.NodeConfig, networkConfig *config.NetworkConfig) (<-chan struct{}, error) {
 	c.nodeConfig = nodeConfig
-	c.encapMode = encapMode
+	c.networkConfig = networkConfig
 
-	if config.IsIPv4Enabled(nodeConfig, encapMode) {
+	if config.IsIPv4Enabled(nodeConfig, c.networkConfig.TrafficEncapMode) {
 		c.ipProtocols = append(c.ipProtocols, binding.ProtocolIP)
 	}
-	if config.IsIPv6Enabled(nodeConfig, encapMode) {
+	if config.IsIPv6Enabled(nodeConfig, c.networkConfig.TrafficEncapMode) {
 		c.ipProtocols = append(c.ipProtocols, binding.ProtocolIPv6)
 	}
 
@@ -993,11 +993,11 @@ func (c *client) InitialTLVMap() error {
 }
 
 func (c *client) IsIPv4Enabled() bool {
-	return config.IsIPv4Enabled(c.nodeConfig, c.encapMode)
+	return config.IsIPv4Enabled(c.nodeConfig, c.networkConfig.TrafficEncapMode)
 }
 
 func (c *client) IsIPv6Enabled() bool {
-	return config.IsIPv6Enabled(c.nodeConfig, c.encapMode)
+	return config.IsIPv6Enabled(c.nodeConfig, c.networkConfig.TrafficEncapMode)
 }
 
 // setBasePacketOutBuilder sets base IP properties of a packetOutBuilder which can have more packet data added.

@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: antrea-agent
+spec:
+  template:
+    spec:
+      containers:
+      - name: wireguard
+        command: 
+        - wireguard-go
+        args: 
+        - -f
+        - antrea-wg0
+        image: projects.registry.vmware.com/antrea/wireguard-go:0.0.20210424
+        imagePullPolicy: IfNotPresent
+        resources:
+          requests:
+            cpu: 100m
+        securityContext:
+          capabilities:
+            add:
+            - NET_ADMIN
+        volumeMounts:
+        - mountPath: /var/run/wireguard
+          name: host-var-run-antrea
+          subPath: wireguard
+        - name: dev-tun
+          mountPath: /dev/net/tun
+      - name: antrea-agent
+        volumeMounts:
+        - mountPath: /var/run/wireguard
+          name: host-var-run-antrea
+          subPath: wireguard
+      volumes:
+      - name: dev-tun
+        hostPath:
+          path: /dev/net/tun
+          type: CharDevice

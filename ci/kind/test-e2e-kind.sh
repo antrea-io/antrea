@@ -112,7 +112,12 @@ if ! $np; then
     manifest_args="$manifest_args --no-np"
 fi
 
-COMMON_IMAGES_LIST=("gcr.io/kubernetes-e2e-test-images/agnhost:2.8" "projects.registry.vmware.com/library/busybox" "projects.registry.vmware.com/antrea/nginx" "projects.registry.vmware.com/antrea/perftool" "projects.registry.vmware.com/antrea/ipfix-collector:v0.5.4")
+COMMON_IMAGES_LIST=("gcr.io/kubernetes-e2e-test-images/agnhost:2.8" \
+                    "projects.registry.vmware.com/library/busybox"  \
+                    "projects.registry.vmware.com/antrea/nginx" \
+                    "projects.registry.vmware.com/antrea/perftool" \
+                    "projects.registry.vmware.com/antrea/ipfix-collector:v0.5.4" \
+                    "projects.registry.vmware.com/antrea/wireguard-go:0.0.20210424")
 for image in "${COMMON_IMAGES_LIST[@]}"; do
     for i in `seq 3`; do
         docker pull $image && break
@@ -147,11 +152,14 @@ function run_test {
 
   if $coverage; then
       $YML_CMD --kind --encap-mode $current_mode $manifest_args | docker exec -i kind-control-plane dd of=/root/antrea-coverage.yml
+      $YML_CMD --kind --encap-mode $current_mode --wireguard-go $manifest_args | docker exec -i kind-control-plane dd of=/root/antrea-wireguard-go-coverage.yml
       $FLOWAGGREGATOR_YML_CMD --coverage | docker exec -i kind-control-plane dd of=/root/flow-aggregator-coverage.yml
   else
       $YML_CMD --kind --encap-mode $current_mode $manifest_args | docker exec -i kind-control-plane dd of=/root/antrea.yml
+      $YML_CMD --kind --encap-mode $current_mode --wireguard-go $manifest_args | docker exec -i kind-control-plane dd of=/root/antrea-wireguard-go.yml
       $FLOWAGGREGATOR_YML_CMD | docker exec -i kind-control-plane dd of=/root/flow-aggregator.yml
   fi
+
   sleep 1
 
   if $coverage; then

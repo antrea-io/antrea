@@ -94,7 +94,7 @@ func (c *client) hostBridgeUplinkFlows(localSubnet net.IPNet, category cookie.Ca
 			Cookie(c.cookieAllocator.Request(category).Raw()).
 			Done(),
 	}
-	if c.encapMode.SupportsNoEncap() {
+	if c.networkConfig.TrafficEncapMode.SupportsNoEncap() {
 		// If NoEncap is enabled, the reply packets from remote Pod can be forwarded to local Pod directly.
 		// by explicitly resubmitting them to serviceHairpinTable and marking "macRewriteMark" at same time.
 		flows = append(flows, c.pipeline[ClassifierTable].BuildFlow(priorityHigh).MatchProtocol(binding.ProtocolIP).
@@ -111,7 +111,7 @@ func (c *client) hostBridgeUplinkFlows(localSubnet net.IPNet, category cookie.Ca
 
 func (c *client) l3FwdFlowToRemoteViaRouting(localGatewayMAC net.HardwareAddr, remoteGatewayMAC net.HardwareAddr,
 	category cookie.Category, peerIP net.IP, peerPodCIDR *net.IPNet) []binding.Flow {
-	if c.encapMode.NeedsDirectRoutingToPeer(peerIP, c.nodeConfig.NodeTransportIPv4Addr) && remoteGatewayMAC != nil {
+	if c.networkConfig.NeedsDirectRoutingToPeer(peerIP, c.nodeConfig.NodeTransportIPv4Addr) && remoteGatewayMAC != nil {
 		ipProto := getIPProtocol(peerIP)
 		l3FwdTable := c.pipeline[l3ForwardingTable]
 		// It enhances Windows Noencap mode performance by bypassing host network.

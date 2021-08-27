@@ -72,7 +72,7 @@ func newController(t *testing.T, networkConfig *config.NetworkConfig) (*fakeCont
 	c := NewNodeRouteController(clientset, informerFactory, ofClient, ovsClient, routeClient, interfaceStore, networkConfig, &config.NodeConfig{GatewayConfig: &config.GatewayConfig{
 		IPv4: nil,
 		MAC:  gatewayMAC,
-	}})
+	}}, nil)
 	return &fakeController{
 		Controller:      c,
 		clientset:       clientset,
@@ -231,10 +231,10 @@ func TestIPInPodSubnets(t *testing.T) {
 
 func setup(t *testing.T, ifaces []*interfacestore.InterfaceConfig) (*fakeController, func()) {
 	c, closeFn := newController(t, &config.NetworkConfig{
-		TrafficEncapMode:  0,
-		TunnelType:        ovsconfig.TunnelType("vxlan"),
-		EnableIPSecTunnel: true,
-		IPSecPSK:          "changeme",
+		TrafficEncapMode:      0,
+		TunnelType:            ovsconfig.TunnelType("vxlan"),
+		TrafficEncryptionMode: config.TrafficEncryptionModeIPSec,
+		IPSecPSK:              "changeme",
 	})
 	for _, i := range ifaces {
 		c.interfaceStore.AddInterface(i)

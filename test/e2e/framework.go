@@ -80,6 +80,8 @@ const (
 	agentContainerName         string = "antrea-agent"
 	antreaYML                  string = "antrea.yml"
 	antreaIPSecYML             string = "antrea-ipsec.yml"
+	antreaWireGuardGoYML       string = "antrea-wireguard-go.yml"
+	antreaWireGuardGoCovYML    string = "antrea-wireguard-go-coverage.yml"
 	antreaCovYML               string = "antrea-coverage.yml"
 	antreaIPSecCovYML          string = "antrea-ipsec-coverage.yml"
 	flowAggregatorYML          string = "flow-aggregator.yml"
@@ -161,8 +163,9 @@ var provider providers.ProviderInterface
 
 // podInfo combines OS info with a Pod name. It is useful when choosing commands and options on Pods of different OS (Windows, Linux).
 type podInfo struct {
-	name string
-	os   string
+	name     string
+	os       string
+	nodeName string
 }
 
 // TestData stores the state required for each test case.
@@ -188,6 +191,43 @@ type PodIPs struct {
 	ipv6      *net.IP
 	ipStrings []string
 }
+
+type deployAntreaOptions int
+
+const (
+	deployAntreaDefault deployAntreaOptions = iota
+	deployAntreaIPsec
+	deployAntreaWireGuardGo
+	deployAntreaCoverageOffset
+)
+
+func (o deployAntreaOptions) WithCoverage() deployAntreaOptions {
+	return o + deployAntreaCoverageOffset
+}
+
+func (o deployAntreaOptions) DeployYML() string {
+	return deployAntreaOptionsYML[o]
+}
+
+func (o deployAntreaOptions) String() string {
+	return deployAntreaOptionsString[o]
+}
+
+var (
+	deployAntreaOptionsString = [...]string{
+		"AntreaDefault",
+		"AntreaWithIPSec",
+		"AntreaWithWireGuardGo",
+	}
+	deployAntreaOptionsYML = [...]string{
+		antreaYML,
+		antreaIPSecYML,
+		antreaWireGuardGoYML,
+		antreaCovYML,
+		antreaIPSecCovYML,
+		antreaWireGuardGoCovYML,
+	}
+)
 
 func (p PodIPs) String() string {
 	res := ""
@@ -562,20 +602,12 @@ func (data *TestData) deployAntreaCommon(yamlFile string, extraOptions string, w
 	return nil
 }
 
-// deployAntrea deploys Antrea with the standard manifest.
-func (data *TestData) deployAntrea() error {
+// deployAntrea deploys Antrea with deploy options.
+func (data *TestData) deployAntrea(option deployAntreaOptions) error {
 	if testOptions.enableCoverage {
-		return data.deployAntreaCommon(antreaCovYML, "", true)
+		option = option.WithCoverage()
 	}
-	return data.deployAntreaCommon(antreaYML, "", true)
-}
-
-// deployAntreaIPSec deploys Antrea with IPSec tunnel enabled.
-func (data *TestData) deployAntreaIPSec() error {
-	if testOptions.enableCoverage {
-		return data.deployAntreaCommon(antreaIPSecCovYML, "", true)
-	}
-	return data.deployAntreaCommon(antreaIPSecYML, "", true)
+	return data.deployAntreaCommon(option.DeployYML(), "", true)
 }
 
 // deployAntreaFlowExporter deploys Antrea with flow exporter config params enabled.

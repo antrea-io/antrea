@@ -3820,20 +3820,33 @@ data:
     # performs SNAT and this option will be ignored; for other modes it must be set to false.
     #noSNAT: false
 
-    # Tunnel protocols used for encapsulating traffic across Nodes. Supported values:
+    # Tunnel protocols used for encapsulating traffic across Nodes. If WireGuard is enabled in trafficEncryptionMode,
+    # this option will not take effect. Supported values:
     # - geneve (default)
     # - vxlan
     # - gre
     # - stt
     #tunnelType: geneve
 
+    # Determines how tunnel traffic is encrypted. Currently encryption only works with encap mode.
+    # It has the following options:
+    # - none (default):  Inter-node Pod traffic will not be encrypted.
+    # - ipsec:           Enable IPSec (ESP) encryption for Pod traffic across Nodes. Antrea uses
+    #                    Preshared Key (PSK) for IKE authentication. When IPSec tunnel is enabled,
+    #                    the PSK value must be passed to Antrea Agent through an environment
+    #                    variable: ANTREA_IPSEC_PSK.
+    # - wireGuard:       Enable WireGuard for tunnel traffic encryption.
+    #trafficEncryptionMode: none
+
     # Default MTU to use for the host gateway interface and the network interface of each Pod.
     # If omitted, antrea-agent will discover the MTU of the Node's primary interface and
     # also adjust MTU to accommodate for tunnel encapsulation overhead (if applicable).
     #defaultMTU: 0
 
-    # Whether or not to enable IPsec encryption of tunnel traffic.
-    #enableIPSecTunnel: false
+    # wireGuard specifies WireGuard related configurations.
+    wireGuard:
+    #  The port for WireGuard to receive traffic.
+    #  port: 51820
 
     # ClusterIP CIDR range for IPv6 Services. It's required when using kube-proxy to provide IPv6 Service in a Dual-Stack
     # cluster or an IPv6 only cluster. The value should be the same as the configuration for kube-apiserver specified by
@@ -3983,7 +3996,7 @@ metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-66dt98cgtb
+  name: antrea-config-99c875tk88
   namespace: kube-system
 ---
 apiVersion: v1
@@ -4054,7 +4067,7 @@ spec:
             fieldRef:
               fieldPath: spec.serviceAccountName
         - name: ANTREA_CONFIG_MAP_NAME
-          value: antrea-config-66dt98cgtb
+          value: antrea-config-99c875tk88
         image: projects.registry.vmware.com/antrea/antrea-ubuntu:latest
         imagePullPolicy: IfNotPresent
         livenessProbe:
@@ -4105,7 +4118,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-66dt98cgtb
+          name: antrea-config-99c875tk88
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -4386,7 +4399,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-66dt98cgtb
+          name: antrea-config-99c875tk88
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d
