@@ -93,8 +93,14 @@ var (
 )
 
 func newCIDR(cidrStr string) *net.IPNet {
-	_, tmpIpNet, _ := net.ParseCIDR(cidrStr)
-	return tmpIpNet
+	_, tmpIPNet, _ := net.ParseCIDR(cidrStr)
+	return tmpIPNet
+}
+
+func newTestReconciler(t *testing.T, controller *gomock.Controller, ifaceStore interfacestore.InterfaceStore, ofClient *openflowtest.MockClient) *reconciler {
+	f, _ := newMockFQDNController(t, controller, nil)
+	r := newReconciler(ofClient, ifaceStore, newIDAllocator(testAsyncDeleteInterval), f)
+	return r
 }
 
 func TestReconcilerForget(t *testing.T) {
@@ -177,7 +183,7 @@ func TestReconcilerForget(t *testing.T) {
 					mockOFClient.EXPECT().UninstallPolicyRuleFlows(ofID)
 				}
 			}
-			r := newReconciler(mockOFClient, ifaceStore, testAsyncDeleteInterval)
+			r := newTestReconciler(t, controller, ifaceStore, mockOFClient)
 			for key, value := range tt.lastRealizeds {
 				r.lastRealizeds.Store(key, value)
 			}
@@ -521,7 +527,7 @@ func TestReconcilerReconcile(t *testing.T) {
 			for i := 0; i < len(tt.expectedOFRules); i++ {
 				mockOFClient.EXPECT().InstallPolicyRuleFlows(gomock.Any())
 			}
-			r := newReconciler(mockOFClient, ifaceStore, testAsyncDeleteInterval)
+			r := newTestReconciler(t, controller, ifaceStore, mockOFClient)
 			if err := r.Reconcile(tt.args); (err != nil) != tt.wantErr {
 				t.Fatalf("Reconcile() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -582,7 +588,7 @@ func TestReconcileWithTransientError(t *testing.T) {
 	mockOFClient := openflowtest.NewMockClient(controller)
 	mockOFClient.EXPECT().IsIPv4Enabled().Return(true).AnyTimes()
 	mockOFClient.EXPECT().IsIPv6Enabled().Return(true).AnyTimes()
-	r := newReconciler(mockOFClient, ifaceStore, testAsyncDeleteInterval)
+	r := newTestReconciler(t, controller, ifaceStore, mockOFClient)
 	// Set deleteInterval to verify openflow ID is released immediately.
 	r.idAllocator.deleteInterval = 0
 
@@ -743,7 +749,7 @@ func TestReconcilerBatchReconcile(t *testing.T) {
 			mockOFClient := openflowtest.NewMockClient(controller)
 			mockOFClient.EXPECT().IsIPv4Enabled().Return(true).AnyTimes()
 			mockOFClient.EXPECT().IsIPv6Enabled().Return(false).AnyTimes()
-			r := newReconciler(mockOFClient, ifaceStore, testAsyncDeleteInterval)
+			r := newTestReconciler(t, controller, ifaceStore, mockOFClient)
 			if tt.numInstalledRules > 0 {
 				// BatchInstall should skip rules already installed
 				r.lastRealizeds.Store(tt.args[0].ID, newLastRealized(tt.args[0]))
@@ -959,7 +965,7 @@ func TestReconcilerUpdate(t *testing.T) {
 			if len(tt.expectedDeletedTo) > 0 {
 				mockOFClient.EXPECT().DeletePolicyRuleAddress(gomock.Any(), types.DstAddress, gomock.Eq(tt.expectedDeletedTo), priority)
 			}
-			r := newReconciler(mockOFClient, ifaceStore, testAsyncDeleteInterval)
+			r := newTestReconciler(t, controller, ifaceStore, mockOFClient)
 			if err := r.Reconcile(tt.originalRule); (err != nil) != tt.wantErr {
 				t.Fatalf("Reconcile() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -1465,7 +1471,7 @@ func TestReconcilerReconcileIPv6Only(t *testing.T) {
 			for i := 0; i < len(tt.expectedOFRules); i++ {
 				mockOFClient.EXPECT().InstallPolicyRuleFlows(gomock.Any())
 			}
-			r := newReconciler(mockOFClient, ifaceStore, testAsyncDeleteInterval)
+			r := newTestReconciler(t, controller, ifaceStore, mockOFClient)
 			if err := r.Reconcile(tt.args); (err != nil) != tt.wantErr {
 				t.Fatalf("Reconcile() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -1868,7 +1874,7 @@ func TestReconcilerReconcileDualStack(t *testing.T) {
 			for i := 0; i < len(tt.expectedOFRules); i++ {
 				mockOFClient.EXPECT().InstallPolicyRuleFlows(gomock.Any())
 			}
-			r := newReconciler(mockOFClient, ifaceStore, testAsyncDeleteInterval)
+			r := newTestReconciler(t, controller, ifaceStore, mockOFClient)
 			if err := r.Reconcile(tt.args); (err != nil) != tt.wantErr {
 				t.Fatalf("Reconcile() error = %v, wantErr %v", err, tt.wantErr)
 			}

@@ -19,8 +19,8 @@ import (
 	"net"
 	"strings"
 
-	"github.com/contiv/libOpenflow/openflow13"
-	"github.com/contiv/ofnet/ofctrl"
+	"antrea.io/libOpenflow/openflow13"
+	"antrea.io/ofnet/ofctrl"
 )
 
 type ofFlowBuilder struct {
@@ -60,8 +60,8 @@ func (b *ofFlowBuilder) Done() Flow {
 	return &b.ofFlow
 }
 
-// MatchReg adds match condition for matching data in the target register.
-func (b *ofFlowBuilder) MatchReg(regID int, data uint32) FlowBuilder {
+// matchReg adds match condition for matching data in the target register.
+func (b *ofFlowBuilder) matchReg(regID int, data uint32) FlowBuilder {
 	b.matchers = append(b.matchers, fmt.Sprintf("reg%d=0x%x", regID, data))
 	reg := &ofctrl.NXRegister{
 		ID:   regID,
@@ -83,8 +83,8 @@ func (b *ofFlowBuilder) MatchXXReg(regID int, data []byte) FlowBuilder {
 	return b
 }
 
-// MatchRegRange adds match condition for matching data in the target register at specified range.
-func (b *ofFlowBuilder) MatchRegRange(regID int, data uint32, rng Range) FlowBuilder {
+// matchRegRange adds match condition for matching data in the target register at specified range.
+func (b *ofFlowBuilder) matchRegRange(regID int, data uint32, rng *Range) FlowBuilder {
 	s := fmt.Sprintf("reg%d[%d..%d]=0x%x", regID, rng[0], rng[1], data)
 	b.matchers = append(b.matchers, s)
 	if rng[0] > 0 {
@@ -97,6 +97,17 @@ func (b *ofFlowBuilder) MatchRegRange(regID int, data uint32, rng Range) FlowBui
 	}
 	b.Match.NxRegs = append(b.Match.NxRegs, reg)
 	return b
+}
+
+func (b *ofFlowBuilder) MatchRegMark(mark *RegMark) FlowBuilder {
+	return b.MatchRegFieldWithValue(mark.field, mark.value)
+}
+
+func (b *ofFlowBuilder) MatchRegFieldWithValue(field *RegField, data uint32) FlowBuilder {
+	if field.isFullRange() {
+		return b.matchReg(field.regID, data)
+	}
+	return b.matchRegRange(field.regID, data, field.rng)
 }
 
 func (b *ofFlowBuilder) addCTStateString(value string) {
@@ -219,12 +230,17 @@ func (b *ofFlowBuilder) MatchCTStateSNAT(set bool) FlowBuilder {
 	return b
 }
 
-// MatchCTMark adds match condition for matching ct_mark. If mask is nil, the mask should be not set in the OpenFlow
-// message which is sent to OVS, and OVS should match the value exactly.
-func (b *ofFlowBuilder) MatchCTMark(value uint32, mask *uint32) FlowBuilder {
-	b.matchers = append(b.matchers, fmt.Sprintf("ct_mark=%d", value))
-	b.ofFlow.Match.CtMark = value
-	b.ofFlow.Match.CtMarkMask = mask
+func (b *ofFlowBuilder) MatchCTMark(mark *CtMark) FlowBuilder {
+	ctmarkKey := fmt.Sprintf("ct_mark=0x%x", mark.value)
+	b.ofFlow.Match.CtMark = mark.value
+	if mark.isFullRange() {
+		b.ofFlow.Match.CtMarkMask = nil
+	} else {
+		mask := mark.rng.ToNXRange().ToUint32Mask()
+		ctmarkKey = fmt.Sprintf("%s/0x%x", ctmarkKey, mask)
+		b.ofFlow.Match.CtMarkMask = &mask
+	}
+	b.matchers = append(b.matchers, ctmarkKey)
 	return b
 }
 
@@ -262,7 +278,7 @@ func (b *ofFlowBuilder) MatchTunnelDst(dstIP net.IP) FlowBuilder {
 	return b
 }
 
-func ctLabelRange(high, low uint64, rng Range, match *ofctrl.FlowMatch) {
+func ctLabelRange(high, low uint64, rng *Range, match *ofctrl.FlowMatch) {
 	// [127..64] [63..0]
 	//   high     low
 	match.CtLabelHi = high
@@ -291,9 +307,9 @@ func ctLabelRange(high, low uint64, rng Range, match *ofctrl.FlowMatch) {
 	}
 }
 
-func (b *ofFlowBuilder) MatchCTLabelRange(high, low uint64, bitRange Range) FlowBuilder {
-	b.matchers = append(b.matchers, fmt.Sprintf("ct_label[%d..%d]=0x%x%x", bitRange[0], bitRange[1], high, low))
-	ctLabelRange(high, low, bitRange, &b.ofFlow.Match)
+func (b *ofFlowBuilder) MatchCTLabelField(high, low uint64, field *CtLabel) FlowBuilder {
+	b.matchers = append(b.matchers, fmt.Sprintf("ct_label[%d..%d]=0x%x%x", field.rng[0], field.rng[1], high, low))
+	ctLabelRange(high, low, field.GetRange(), &b.ofFlow.Match)
 	return b
 }
 

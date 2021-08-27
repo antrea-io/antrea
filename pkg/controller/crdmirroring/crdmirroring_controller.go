@@ -138,9 +138,8 @@ func (c *Controller) syncMirroring(key string) error {
 	if err != nil {
 		if !apierrors.IsNotFound(err) {
 			return fmt.Errorf("failed to get legacy %s %s/%s: %v", c.crdName, namespace, name, err)
-		} else {
-			legacyExist = false
 		}
+		legacyExist = false
 	}
 
 	// Get the new object, and if got an error that is not "IsNotFound", return the error
@@ -149,9 +148,8 @@ func (c *Controller) syncMirroring(key string) error {
 	if err != nil {
 		if !apierrors.IsNotFound(err) {
 			return fmt.Errorf("failed to get new %s %s/%s: %v", c.crdName, namespace, name, err)
-		} else {
-			newExist = false
 		}
+		newExist = false
 	}
 
 	// If neither the old object nor the new object exists, return

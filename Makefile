@@ -9,6 +9,10 @@ GOPATH             ?= $$($(GO) env GOPATH)
 DOCKER_CACHE       := $(CURDIR)/.cache
 ANTCTL_BINARY_NAME ?= antctl
 OVS_VERSION        := $(shell head -n 1 build/images/deps/ovs-version)
+GO_VERSION         := $(shell head -n 1 build/images/deps/go-version)
+
+DOCKER_BUILD_ARGS = --build-arg OVS_VERSION=$(OVS_VERSION)
+DOCKER_BUILD_ARGS += --build-arg GO_VERSION=$(GO_VERSION)
 
 .PHONY: all
 all: build
@@ -128,7 +132,7 @@ DOCKER_ENV := \
 		-v $(DOCKER_CACHE)/gopath:/tmp/gopath \
 		-v $(DOCKER_CACHE)/gocache:/tmp/gocache \
 		-v $(CURDIR):/usr/src/antrea.io/antrea \
-		golang:1.15
+		golang:1.17
 
 .PHONY: docker-bin
 docker-bin: $(DOCKER_CACHE)
@@ -148,9 +152,9 @@ docker-test-unit: $(DOCKER_CACHE)
 docker-test-integration: .coverage
 	@echo "===> Building Antrea Integration Test Docker image <==="
 ifneq ($(NO_PULL),)
-	docker build -t antrea/test -f build/images/test/Dockerfile --build-arg OVS_VERSION=$(OVS_VERSION) .
+	docker build -t antrea/test -f build/images/test/Dockerfile $(DOCKER_BUILD_ARGS) .
 else
-	docker build --pull -t antrea/test -f build/images/test/Dockerfile --build-arg OVS_VERSION=$(OVS_VERSION) .
+	docker build --pull -t antrea/test -f build/images/test/Dockerfile $(DOCKER_BUILD_ARGS) .
 endif
 	@docker run --privileged --rm \
 		-e "GOCACHE=/tmp/gocache" \
@@ -231,7 +235,7 @@ fmt:
 
 .golangci-bin:
 	@echo "===> Installing Golangci-lint <==="
-	@curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $@ v1.32.1
+	@curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $@ v1.41.1
 
 .PHONY: golangci
 golangci: .golangci-bin
@@ -255,13 +259,6 @@ golangci-fix: .golangci-bin
 	@echo "===> Running golangci for Octant plugin (windows) <==="
 	@cd plugins/octant && GOOS=windows $(CURDIR)/.golangci-bin/golangci-lint run -c $(CURDIR)/.golangci.yml --fix
 
-.PHONY: lint
-lint: .golangci-bin
-	@echo "===> Running golangci (linux) <==="
-	@GOOS=linux $(CURDIR)/.golangci-bin/golangci-lint run -c $(CURDIR)/.golangci-golint.yml
-	@echo "===> Running golangci (windows) <==="
-	@GOOS=windows $(CURDIR)/.golangci-bin/golangci-lint run -c $(CURDIR)/.golangci-golint.yml
-
 .PHONY: clean
 clean:
 	@rm -rf $(BINDIR)
@@ -280,9 +277,9 @@ codegen:
 ubuntu:
 	@echo "===> Building antrea/antrea-ubuntu Docker image <==="
 ifneq ($(NO_PULL),)
-	docker build -t antrea/antrea-ubuntu:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.ubuntu --build-arg OVS_VERSION=$(OVS_VERSION) .
+	docker build -t antrea/antrea-ubuntu:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.ubuntu $(DOCKER_BUILD_ARGS) .
 else
-	docker build --pull -t antrea/antrea-ubuntu:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.ubuntu --build-arg OVS_VERSION=$(OVS_VERSION) .
+	docker build --pull -t antrea/antrea-ubuntu:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.ubuntu $(DOCKER_BUILD_ARGS) .
 endif
 	docker tag antrea/antrea-ubuntu:$(DOCKER_IMG_VERSION) antrea/antrea-ubuntu
 	docker tag antrea/antrea-ubuntu:$(DOCKER_IMG_VERSION) projects.registry.vmware.com/antrea/antrea-ubuntu
@@ -293,9 +290,9 @@ endif
 build-ubuntu:
 	@echo "===> Building Antrea bins and antrea/antrea-ubuntu Docker image <==="
 ifneq ($(NO_PULL),)
-	docker build -t antrea/antrea-ubuntu:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.build.ubuntu --build-arg OVS_VERSION=$(OVS_VERSION) .
+	docker build -t antrea/antrea-ubuntu:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.build.ubuntu $(DOCKER_BUILD_ARGS) .
 else
-	docker build --pull -t antrea/antrea-ubuntu:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.build.ubuntu --build-arg OVS_VERSION=$(OVS_VERSION) .
+	docker build --pull -t antrea/antrea-ubuntu:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.build.ubuntu $(DOCKER_BUILD_ARGS) .
 endif
 	docker tag antrea/antrea-ubuntu:$(DOCKER_IMG_VERSION) antrea/antrea-ubuntu
 	docker tag antrea/antrea-ubuntu:$(DOCKER_IMG_VERSION) projects.registry.vmware.com/antrea/antrea-ubuntu
@@ -305,9 +302,9 @@ endif
 build-windows:
 	@echo "===> Building Antrea bins and antrea/antrea-windows Docker image <==="
 ifneq ($(NO_PULL),)
-	docker build -t antrea/antrea-windows:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.build.windows .
+	docker build -t antrea/antrea-windows:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.build.windows $(DOCKER_BUILD_ARGS) .
 else
-	docker build --pull -t antrea/antrea-windows:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.build.windows .
+	docker build --pull -t antrea/antrea-windows:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.build.windows $(DOCKER_BUILD_ARGS) .
 endif
 	docker tag antrea/antrea-windows:$(DOCKER_IMG_VERSION) antrea/antrea-windows
 	docker tag antrea/antrea-windows:$(DOCKER_IMG_VERSION) projects.registry.vmware.com/antrea/antrea-windows
@@ -317,16 +314,16 @@ endif
 build-ubuntu-coverage:
 	@echo "===> Building Antrea bins and antrea/antrea-ubuntu-coverage Docker image <==="
 ifneq ($(NO_PULL),)
-	docker build -t antrea/antrea-ubuntu-coverage:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.build.coverage --build-arg OVS_VERSION=$(OVS_VERSION) .
+	docker build -t antrea/antrea-ubuntu-coverage:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.build.coverage $(DOCKER_BUILD_ARGS) .
 else
-	docker build --pull -t antrea/antrea-ubuntu-coverage:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.build.coverage --build-arg OVS_VERSION=$(OVS_VERSION) .
+	docker build --pull -t antrea/antrea-ubuntu-coverage:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.build.coverage $(DOCKER_BUILD_ARGS) .
 endif
 	docker tag antrea/antrea-ubuntu-coverage:$(DOCKER_IMG_VERSION) antrea/antrea-ubuntu-coverage
 
 .PHONY: build-scale-simulator
 build-scale-simulator:
 	@echo "===> Building simulator bin and antrea-ubuntu-simulator image"
-	docker build -t antrea/antrea-ubuntu-simulator:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.simulator.build.ubuntu .
+	docker build -t antrea/antrea-ubuntu-simulator:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.simulator.build.ubuntu $(DOCKER_BUILD_ARGS) .
 	docker tag antrea/antrea-ubuntu-simulator:$(DOCKER_IMG_VERSION) antrea/antrea-ubuntu-simulator
 
 .PHONY: manifest
@@ -355,7 +352,7 @@ manifest-coverage:
 .PHONY: octant-antrea-ubuntu
 octant-antrea-ubuntu:
 	@echo "===> Building antrea/octant-antrea-ubuntu Docker image <==="
-	docker build --pull -t antrea/octant-antrea-ubuntu:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.octant.ubuntu .
+	docker build --pull -t antrea/octant-antrea-ubuntu:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.octant.ubuntu $(DOCKER_BUILD_ARGS) .
 	docker tag antrea/octant-antrea-ubuntu:$(DOCKER_IMG_VERSION) antrea/octant-antrea-ubuntu
 	docker tag antrea/octant-antrea-ubuntu:$(DOCKER_IMG_VERSION) projects.registry.vmware.com/antrea/octant-antrea-ubuntu
 	docker tag antrea/octant-antrea-ubuntu:$(DOCKER_IMG_VERSION) projects.registry.vmware.com/antrea/octant-antrea-ubuntu:$(DOCKER_IMG_VERSION)
@@ -364,9 +361,9 @@ octant-antrea-ubuntu:
 flow-aggregator-image:
 	@echo "===> Building antrea/flow-aggregator Docker image <==="
 ifneq ($(NO_PULL),)
-	docker build -t antrea/flow-aggregator:$(DOCKER_IMG_VERSION) -f build/images/flow-aggregator/Dockerfile .
+	docker build -t antrea/flow-aggregator:$(DOCKER_IMG_VERSION) -f build/images/flow-aggregator/Dockerfile $(DOCKER_BUILD_ARGS) .
 else
-	docker build --pull -t antrea/flow-aggregator:$(DOCKER_IMG_VERSION) -f build/images/flow-aggregator/Dockerfile .
+	docker build --pull -t antrea/flow-aggregator:$(DOCKER_IMG_VERSION) -f build/images/flow-aggregator/Dockerfile $(DOCKER_BUILD_ARGS) .
 endif
 	docker tag antrea/flow-aggregator:$(DOCKER_IMG_VERSION) antrea/flow-aggregator
 	docker tag antrea/flow-aggregator:$(DOCKER_IMG_VERSION) projects.registry.vmware.com/antrea/flow-aggregator
@@ -376,9 +373,9 @@ endif
 flow-aggregator-ubuntu-coverage:
 	@echo "===> Building antrea/flow-aggregator-coverage Docker image <==="
 ifneq ($(NO_PULL),)
-	docker build -t antrea/flow-aggregator-coverage:$(DOCKER_IMG_VERSION) -f build/images/flow-aggregator/Dockerfile.coverage .
+	docker build -t antrea/flow-aggregator-coverage:$(DOCKER_IMG_VERSION) -f build/images/flow-aggregator/Dockerfile.coverage $(DOCKER_BUILD_ARGS) .
 else
-	docker build --pull -t antrea/flow-aggregator-coverage:$(DOCKER_IMG_VERSION) -f build/images/flow-aggregator/Dockerfile.coverage .
+	docker build --pull -t antrea/flow-aggregator-coverage:$(DOCKER_IMG_VERSION) -f build/images/flow-aggregator/Dockerfile.coverage $(DOCKER_BUILD_ARGS) .
 endif
 	docker tag antrea/flow-aggregator-coverage:$(DOCKER_IMG_VERSION) antrea/flow-aggregator-coverage
 

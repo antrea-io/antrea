@@ -90,7 +90,7 @@ func run() error {
 			if err != nil {
 				return nil, fmt.Errorf("failed to get antrea client: %s", err.Error())
 			}
-			return antreaClient.ControlplaneV1beta1().NetworkPolicies("").Watch(context.TODO(), options)
+			return antreaClient.ControlplaneV1beta2().NetworkPolicies().Watch(context.TODO(), options)
 		},
 		"networkPolicy",
 	}
@@ -100,7 +100,7 @@ func run() error {
 			if err != nil {
 				return nil, fmt.Errorf("failed to get antrea client: %s", err.Error())
 			}
-			return antreaClient.ControlplaneV1beta1().AddressGroups().Watch(context.TODO(), options)
+			return antreaClient.ControlplaneV1beta2().AddressGroups().Watch(context.TODO(), options)
 		},
 		"addressGroup",
 	}
@@ -110,7 +110,7 @@ func run() error {
 			if err != nil {
 				return nil, fmt.Errorf("failed to get antrea client: %s", err.Error())
 			}
-			return antreaClient.ControlplaneV1beta1().AppliedToGroups().Watch(context.TODO(), options)
+			return antreaClient.ControlplaneV1beta2().AppliedToGroups().Watch(context.TODO(), options)
 		},
 		"appliedGroup",
 	}

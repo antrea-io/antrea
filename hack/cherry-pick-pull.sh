@@ -148,7 +148,7 @@ Cherry pick of ${PULLSUBJ} on ${rel}.
 
 ${numandtitle}
 
-For details on the cherry pick process, see the [cherry pick requests](https://git.k8s.io/community/contributors/devel/sig-release/cherry-picks.md) page.
+For details on the cherry pick process, see the [cherry pick requests](https://github.com/antrea-io/antrea/blob/main/docs/contributors/cherry-picks.md) page.
 EOF
 )
 

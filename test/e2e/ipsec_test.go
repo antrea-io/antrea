@@ -25,6 +25,24 @@ import (
 	"antrea.io/antrea/pkg/agent/util"
 )
 
+// TestIPSec is the top-level test which contains all subtests for
+// IPSec related test cases so they can share setup, teardown.
+func TestIPSec(t *testing.T) {
+	skipIfProviderIs(t, "kind", "IPSec tunnel does not work with Kind")
+	skipIfIPv6Cluster(t)
+	skipIfNumNodesLessThan(t, 2)
+	skipIfHasWindowsNodes(t)
+
+	data, err := setupTest(t)
+	if err != nil {
+		t.Fatalf("Error when setting up test: %v", err)
+	}
+	defer teardownTest(t, data)
+
+	t.Run("testIPSecTunnelConnectivity", func(t *testing.T) { testIPSecTunnelConnectivity(t, data) })
+	t.Run("testIPSecDeleteStaleTunnelPorts", func(t *testing.T) { testIPSecDeleteStaleTunnelPorts(t, data) })
+}
+
 func (data *TestData) readSecurityAssociationsStatus(nodeName string) (up int, connecting int, err error) {
 	antreaPodName, err := data.getAntreaPodOnNode(nodeName)
 	if err != nil {
@@ -40,36 +58,25 @@ func (data *TestData) readSecurityAssociationsStatus(nodeName string) (up int, c
 	if len(matches) == 0 {
 		return 0, 0, fmt.Errorf("unexpected 'ipsec status' output: %s", stdout)
 	}
-	if v, err := strconv.ParseUint(matches[1], 10, 32); err != nil {
+	v, err := strconv.ParseUint(matches[1], 10, 32)
+	if err != nil {
 		return 0, 0, fmt.Errorf("error when retrieving 'up' SAs from 'ipsec status' output: %v", err)
-	} else {
-		up = int(v)
 	}
-	if v, err := strconv.ParseUint(matches[2], 10, 32); err != nil {
+	up = int(v)
+	v, err = strconv.ParseUint(matches[2], 10, 32)
+	if err != nil {
 		return 0, 0, fmt.Errorf("error when retrieving 'connecting' SAs from 'ipsec status' output: %v", err)
-	} else {
-		connecting = int(v)
 	}
+	connecting = int(v)
 	return up, connecting, nil
 }
 
-// TestIPSecTunnelConnectivity checks that Pod traffic across two Nodes over
+// testIPSecTunnelConnectivity checks that Pod traffic across two Nodes over
 // the IPSec tunnel, by creating multiple Pods across distinct Nodes and having
 // them ping each other.
-func TestIPSecTunnelConnectivity(t *testing.T) {
-	skipIfProviderIs(t, "kind", "IPSec tunnel does not work with Kind")
-	skipIfIPv6Cluster(t)
-	skipIfNumNodesLessThan(t, 2)
-	skipIfHasWindowsNodes(t)
-
-	data, err := setupTest(t)
-	if err != nil {
-		t.Fatalf("Error when setting up test: %v", err)
-	}
-	defer teardownTest(t, data)
-
+func testIPSecTunnelConnectivity(t *testing.T, data *TestData) {
 	t.Logf("Redeploy Antrea with IPSec tunnel enabled")
-	data.redeployAntrea(t, true)
+	data.redeployAntrea(t, deployAntreaIPsec)
 
 	data.testPodConnectivityDifferentNodes(t)
 
@@ -85,26 +92,15 @@ func TestIPSecTunnelConnectivity(t *testing.T) {
 	}
 
 	// Restore normal Antrea deployment with IPSec disabled.
-	data.redeployAntrea(t, false)
+	data.redeployAntrea(t, deployAntreaDefault)
 }
 
-// TestIPSecDeleteStaleTunnelPorts checks that when switching from IPsec mode to
+// testIPSecDeleteStaleTunnelPorts checks that when switching from IPsec mode to
 // non-encrypted mode, the previously created tunnel ports are deleted
 // correctly.
-func TestIPSecDeleteStaleTunnelPorts(t *testing.T) {
-	skipIfProviderIs(t, "kind", "IPSec tunnel does not work with Kind")
-	skipIfIPv6Cluster(t)
-	skipIfNumNodesLessThan(t, 2)
-	skipIfHasWindowsNodes(t)
-
-	data, err := setupTest(t)
-	if err != nil {
-		t.Fatalf("Error when setting up test: %v", err)
-	}
-	defer teardownTest(t, data)
-
+func testIPSecDeleteStaleTunnelPorts(t *testing.T, data *TestData) {
 	t.Logf("Redeploy Antrea with IPSec tunnel enabled")
-	data.redeployAntrea(t, true)
+	data.redeployAntrea(t, deployAntreaIPsec)
 
 	nodeName0 := nodeName(0)
 	nodeName1 := nodeName(1)
@@ -136,7 +132,7 @@ func TestIPSecDeleteStaleTunnelPorts(t *testing.T) {
 	}
 
 	t.Logf("Redeploy Antrea with IPSec tunnel disabled")
-	data.redeployAntrea(t, false)
+	data.redeployAntrea(t, deployAntreaDefault)
 
 	t.Logf("Checking that tunnel port has been deleted")
 	if err := wait.PollImmediate(defaultInterval, defaultTimeout, func() (found bool, err error) {

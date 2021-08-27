@@ -89,12 +89,19 @@ type AgentConfig struct {
 	// --service-cluster-ip-range. When AntreaProxy is enabled, this parameter is not needed.
 	// No default value for this field.
 	ServiceCIDRv6 string `yaml:"serviceCIDRv6,omitempty"`
-	// Whether or not to enable IPSec (ESP) encryption for Pod traffic across Nodes. IPSec encryption
-	// is supported only for the GRE tunnel type. Antrea uses Preshared Key (PSK) for IKE
-	// authentication. When IPSec tunnel is enabled, the PSK value must be passed to Antrea Agent
-	// through an environment variable: ANTREA_IPSEC_PSK.
-	// Defaults to false.
+	// Deprecated. Use TrafficEncryptionMode instead.
 	EnableIPSecTunnel bool `yaml:"enableIPSecTunnel,omitempty"`
+	// Determines how tunnel traffic is encrypted.
+	// It has the following options:
+	// - none (default): Inter-node Pod traffic will not be encrypted.
+	// - ipsec:          Enable IPSec (ESP) encryption for Pod traffic across Nodes. Antrea uses
+	//                   Preshared Key (PSK) for IKE authentication. When IPSec tunnel is enabled,
+	//                   the PSK value must be passed to Antrea Agent through an environment
+	//                   variable: ANTREA_IPSEC_PSK.
+	// - wireguard:      Enable WireGuard for tunnel traffic encryption.
+	TrafficEncryptionMode string `yaml:"trafficEncryptionMode,omitempty"`
+	// WireGuerd related configurations.
+	WireGuard WireGuardConfig `yaml:"wireGuard"`
 	// APIPort is the port for the antrea-agent APIServer to serve on.
 	// Defaults to 10350.
 	APIPort int `yaml:"apiPort,omitempty"`
@@ -144,6 +151,9 @@ type AgentConfig struct {
 	// Provide the address of Kubernetes apiserver, to override any value provided in kubeconfig or InClusterConfig.
 	// Defaults to "". It must be a host string, a host:port pair, or a URL to the base of the apiserver.
 	KubeAPIServerOverride string `yaml:"kubeAPIServerOverride,omitempty"`
+	// Provide the address of DNS server, to override the kube-dns service. It's used to resolve hostname in FQDN policy.
+	// Defaults to "". It must be a host string or a host:port pair of the dns server.
+	DNSServerOverride string `yaml:"dnsServerOverride,omitempty"`
 	// Cipher suites to use.
 	TLSCipherSuites string `yaml:"tlsCipherSuites,omitempty"`
 	// TLS min version.
@@ -152,4 +162,9 @@ type AgentConfig struct {
 	// If there are multiple IP addresses configured on the interface, the first one is used.
 	// The interface configured with Node IP is used if this parameter is not set.
 	TransportInterface string `yaml:"transportInterface,omitempty"`
+}
+
+type WireGuardConfig struct {
+	// The port for the WireGuard to receive traffic. Defaults to 51820.
+	Port int `yaml:"port,omitempty"`
 }

@@ -17,7 +17,7 @@ package openflow
 import (
 	"fmt"
 
-	"github.com/contiv/ofnet/ofctrl"
+	"antrea.io/ofnet/ofctrl"
 	"golang.org/x/time/rate"
 	"k8s.io/klog/v2"
 

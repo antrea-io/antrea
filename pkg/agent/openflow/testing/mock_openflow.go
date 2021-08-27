@@ -23,6 +23,7 @@ import (
 	config "antrea.io/antrea/pkg/agent/config"
 	types "antrea.io/antrea/pkg/agent/types"
 	openflow "antrea.io/antrea/pkg/ovs/openflow"
+	ip "antrea.io/antrea/pkg/util/ip"
 	proxy "antrea.io/antrea/third_party/proxy"
 	gomock "github.com/golang/mock/gomock"
 	net "net"
@@ -52,6 +53,20 @@ func (m *MockClient) EXPECT() *MockClientMockRecorder {
 	return m.recorder
 }
 
+// AddAddressToDNSConjunction mocks base method
+func (m *MockClient) AddAddressToDNSConjunction(arg0 uint32, arg1 []types.Address) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddAddressToDNSConjunction", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AddAddressToDNSConjunction indicates an expected call of AddAddressToDNSConjunction
+func (mr *MockClientMockRecorder) AddAddressToDNSConjunction(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddAddressToDNSConjunction", reflect.TypeOf((*MockClient)(nil).AddAddressToDNSConjunction), arg0, arg1)
+}
+
 // AddPolicyRuleAddress mocks base method
 func (m *MockClient) AddPolicyRuleAddress(arg0 uint32, arg1 types.AddressType, arg2 []types.Address, arg3 *uint16) error {
 	m.ctrl.T.Helper()
@@ -78,6 +93,20 @@ func (m *MockClient) BatchInstallPolicyRuleFlows(arg0 []*types.PolicyRule) error
 func (mr *MockClientMockRecorder) BatchInstallPolicyRuleFlows(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BatchInstallPolicyRuleFlows", reflect.TypeOf((*MockClient)(nil).BatchInstallPolicyRuleFlows), arg0)
+}
+
+// DeleteAddressFromDNSConjunction mocks base method
+func (m *MockClient) DeleteAddressFromDNSConjunction(arg0 uint32, arg1 []types.Address) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteAddressFromDNSConjunction", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteAddressFromDNSConjunction indicates an expected call of DeleteAddressFromDNSConjunction
+func (mr *MockClientMockRecorder) DeleteAddressFromDNSConjunction(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteAddressFromDNSConjunction", reflect.TypeOf((*MockClient)(nil).DeleteAddressFromDNSConjunction), arg0, arg1)
 }
 
 // DeletePolicyRuleAddress mocks base method
@@ -222,7 +251,7 @@ func (mr *MockClientMockRecorder) InitialTLVMap() *gomock.Call {
 }
 
 // Initialize mocks base method
-func (m *MockClient) Initialize(arg0 types.RoundInfo, arg1 *config.NodeConfig, arg2 config.TrafficEncapModeType) (<-chan struct{}, error) {
+func (m *MockClient) Initialize(arg0 types.RoundInfo, arg1 *config.NodeConfig, arg2 *config.NetworkConfig) (<-chan struct{}, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Initialize", arg0, arg1, arg2)
 	ret0, _ := ret[0].(<-chan struct{})
@@ -349,7 +378,7 @@ func (mr *MockClientMockRecorder) InstallLoadBalancerServiceFromOutsideFlows(arg
 }
 
 // InstallNodeFlows mocks base method
-func (m *MockClient) InstallNodeFlows(arg0 string, arg1 map[*net.IPNet]net.IP, arg2 net.IP, arg3 uint32, arg4 net.HardwareAddr) error {
+func (m *MockClient) InstallNodeFlows(arg0 string, arg1 map[*net.IPNet]net.IP, arg2 *ip.DualStackIPs, arg3 uint32, arg4 net.HardwareAddr) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "InstallNodeFlows", arg0, arg1, arg2, arg3, arg4)
 	ret0, _ := ret[0].(error)
@@ -516,6 +545,20 @@ func (mr *MockClientMockRecorder) NetworkPolicyMetrics() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NetworkPolicyMetrics", reflect.TypeOf((*MockClient)(nil).NetworkPolicyMetrics))
 }
 
+// NewDNSpacketInConjunction mocks base method
+func (m *MockClient) NewDNSpacketInConjunction(arg0 uint32) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "NewDNSpacketInConjunction", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// NewDNSpacketInConjunction indicates an expected call of NewDNSpacketInConjunction
+func (mr *MockClientMockRecorder) NewDNSpacketInConjunction(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NewDNSpacketInConjunction", reflect.TypeOf((*MockClient)(nil).NewDNSpacketInConjunction), arg0)
+}
+
 // ReassignFlowPriorities mocks base method
 func (m *MockClient) ReassignFlowPriorities(arg0 map[uint16]uint16, arg1 openflow.TableIDType) error {
 	m.ctrl.T.Helper()
@@ -594,6 +637,20 @@ func (m *MockClient) SendTraceflowPacket(arg0 byte, arg1 *openflow.Packet, arg2 
 func (mr *MockClientMockRecorder) SendTraceflowPacket(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendTraceflowPacket", reflect.TypeOf((*MockClient)(nil).SendTraceflowPacket), arg0, arg1, arg2, arg3)
+}
+
+// SendUDPPacketOut mocks base method
+func (m *MockClient) SendUDPPacketOut(arg0, arg1, arg2, arg3 string, arg4 uint32, arg5 int32, arg6 bool, arg7, arg8 uint16, arg9 []byte, arg10 bool) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SendUDPPacketOut", arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SendUDPPacketOut indicates an expected call of SendUDPPacketOut
+func (mr *MockClientMockRecorder) SendUDPPacketOut(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendUDPPacketOut", reflect.TypeOf((*MockClient)(nil).SendUDPPacketOut), arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10)
 }
 
 // StartPacketInHandler mocks base method

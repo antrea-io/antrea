@@ -71,7 +71,7 @@ func TestDenyConnectionStore_AddOrUpdateConn(t *testing.T) {
 	mockIfaceStore.EXPECT().GetInterfaceByIP(tuple.SourceAddress.String()).Return(nil, false)
 	mockIfaceStore.EXPECT().GetInterfaceByIP(tuple.DestinationAddress.String()).Return(nil, false)
 
-	denyConnStore := NewDenyConnectionStore(mockIfaceStore, mockProxier)
+	denyConnStore := NewDenyConnectionStore(mockIfaceStore, mockProxier, testStaleConnectionTimeout)
 
 	denyConnStore.AddOrUpdateConn(&testFlow, refTime.Add(-(time.Second * 20)), uint64(60))
 	expConn := testFlow
@@ -99,7 +99,7 @@ func TestDenyConnectionStore_DeleteConnWithoutLock(t *testing.T) {
 	metrics.InitializeConnectionMetrics()
 	// Create denyConnectionStore
 	mockIfaceStore := interfacestoretest.NewMockInterfaceStore(ctrl)
-	connStore := NewDenyConnectionStore(mockIfaceStore, nil)
+	connStore := NewDenyConnectionStore(mockIfaceStore, nil, testStaleConnectionTimeout)
 	refTime := time.Now()
 	tuple1 := flowexporter.Tuple{SourceAddress: net.IP{1, 2, 3, 4}, DestinationAddress: net.IP{4, 3, 2, 1}, Protocol: 6, SourcePort: 65280, DestinationPort: 255}
 	tuple2 := flowexporter.Tuple{SourceAddress: net.IP{1, 2, 3, 4}, DestinationAddress: net.IP{8, 7, 6, 5}, Protocol: 6, SourcePort: 65280, DestinationPort: 255}

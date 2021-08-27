@@ -51,7 +51,7 @@ var (
 	}
 	IANAInfoElementsIPv4 = append(IANAInfoElementsCommon, []string{"sourceIPv4Address", "destinationIPv4Address"}...)
 	IANAInfoElementsIPv6 = append(IANAInfoElementsCommon, []string{"sourceIPv6Address", "destinationIPv6Address"}...)
-	// Substring "reverse" is an indication to get reverse element of go-ipfix library.
+	// IANAReverseInfoElements contain substring "reverse" which is an indication to get reverse element of go-ipfix library.
 	IANAReverseInfoElements = []string{
 		"reversePacketTotalCount",
 		"reverseOctetTotalCount",
@@ -89,8 +89,8 @@ type flowExporter struct {
 	flowRecords         *flowrecords.FlowRecords
 	denyConnStore       *connections.DenyConnectionStore
 	process             ipfix.IPFIXExportingProcess
-	elementsListv4      []*ipfixentities.InfoElementWithValue
-	elementsListv6      []*ipfixentities.InfoElementWithValue
+	elementsListv4      []ipfixentities.InfoElementWithValue
+	elementsListv6      []ipfixentities.InfoElementWithValue
 	ipfixSet            ipfixentities.Set
 	numDataSetsSent     uint64 // used for unit tests.
 	templateIDv4        uint16
@@ -350,7 +350,7 @@ func (exp *flowExporter) sendFlowRecords() error {
 }
 
 func (exp *flowExporter) sendTemplateSet(isIPv6 bool) (int, error) {
-	elements := make([]*ipfixentities.InfoElementWithValue, 0)
+	elements := make([]ipfixentities.InfoElementWithValue, 0)
 
 	IANAInfoElements := IANAInfoElementsIPv4
 	AntreaInfoElements := AntreaInfoElementsIPv4
@@ -413,7 +413,8 @@ func (exp *flowExporter) addRecordToSet(record flowexporter.FlowRecord) error {
 	if record.IsIPv6 {
 		eL = exp.elementsListv6
 	}
-	for _, ie := range eL {
+	for i := range eL {
+		ie := &eL[i]
 		switch ieName := ie.Element.Name; ieName {
 		case "flowStartSeconds":
 			ie.Value = uint32(record.Conn.StartTime.Unix())
@@ -574,7 +575,8 @@ func (exp *flowExporter) addDenyConnToSet(conn *flowexporter.Connection, flowEnd
 		return err
 	}
 	// Iterate over all infoElements in the list
-	for _, ie := range eL {
+	for i := range eL {
+		ie := &eL[i]
 		switch ieName := ie.Element.Name; ieName {
 		case "flowStartSeconds":
 			ie.Value = uint32(conn.StartTime.Unix())
@@ -705,17 +707,15 @@ func (exp *flowExporter) findFlowType(conn flowexporter.Connection) uint8 {
 		return 0
 	}
 	if exp.nodeRouteController.IPInPodSubnets(conn.FlowKey.SourceAddress) {
-		if conn.Mark == openflow.ServiceCTMark || exp.nodeRouteController.IPInPodSubnets(conn.FlowKey.DestinationAddress) {
+		if conn.Mark == openflow.ServiceCTMark.GetValue() || exp.nodeRouteController.IPInPodSubnets(conn.FlowKey.DestinationAddress) {
 			if conn.SourcePodName == "" || conn.DestinationPodName == "" {
 				return ipfixregistry.FlowTypeInterNode
 			}
 			return ipfixregistry.FlowTypeIntraNode
-		} else {
-			return ipfixregistry.FlowTypeToExternal
 		}
-	} else {
-		// We do not support External-To-Pod flows for now.
-		klog.Warningf("Source IP: %s doesn't exist in PodCIDRs", conn.FlowKey.SourceAddress.String())
-		return 0
+		return ipfixregistry.FlowTypeToExternal
 	}
+	// We do not support External-To-Pod flows for now.
+	klog.Warningf("Source IP: %s doesn't exist in PodCIDRs", conn.FlowKey.SourceAddress.String())
+	return 0
 }

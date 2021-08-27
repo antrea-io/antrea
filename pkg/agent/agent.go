@@ -21,6 +21,7 @@ import (
 	"net"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -41,7 +42,10 @@ import (
 	"antrea.io/antrea/pkg/agent/route"
 	"antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/agent/util"
+	"antrea.io/antrea/pkg/agent/wireguard"
+	"antrea.io/antrea/pkg/features"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
+	"antrea.io/antrea/pkg/ovs/ovsctl"
 	"antrea.io/antrea/pkg/util/env"
 	"antrea.io/antrea/pkg/util/k8s"
 )
@@ -69,6 +73,7 @@ type Initializer struct {
 	ovsBridgeClient ovsconfig.OVSBridgeClient
 	ofClient        openflow.Client
 	routeClient     route.Interface
+	wireGuardClient wireguard.Interface
 	ifaceStore      interfacestore.InterfaceStore
 	ovsBridge       string
 	hostGateway     string // name of gateway port on the OVS bridge
@@ -77,6 +82,7 @@ type Initializer struct {
 	serviceCIDRv6   *net.IPNet // K8s Service ClusterIP CIDR in IPv6
 	networkConfig   *config.NetworkConfig
 	nodeConfig      *config.NodeConfig
+	wireGuardConfig *config.WireGuardConfig
 	enableProxy     bool
 	// networkReadyCh should be closed once the Node's network is ready.
 	// The CNI server will wait for it before handling any CNI Add requests.
@@ -96,6 +102,7 @@ func NewInitializer(
 	serviceCIDR *net.IPNet,
 	serviceCIDRv6 *net.IPNet,
 	networkConfig *config.NetworkConfig,
+	wireGuardConfig *config.WireGuardConfig,
 	networkReadyCh chan<- struct{},
 	stopCh <-chan struct{},
 	enableProxy bool) *Initializer {
@@ -111,6 +118,7 @@ func NewInitializer(
 		serviceCIDR:     serviceCIDR,
 		serviceCIDRv6:   serviceCIDRv6,
 		networkConfig:   networkConfig,
+		wireGuardConfig: wireGuardConfig,
 		networkReadyCh:  networkReadyCh,
 		stopCh:          stopCh,
 		enableProxy:     enableProxy,
@@ -122,10 +130,19 @@ func (i *Initializer) GetNodeConfig() *config.NodeConfig {
 	return i.nodeConfig
 }
 
+// GetNodeConfig returns the NodeConfig.
+func (i *Initializer) GetWireGuardClient() wireguard.Interface {
+	return i.wireGuardClient
+}
+
 // setupOVSBridge sets up the OVS bridge and create host gateway interface and tunnel port
 func (i *Initializer) setupOVSBridge() error {
 	if err := i.ovsBridgeClient.Create(); err != nil {
 		klog.Error("Failed to create OVS bridge: ", err)
+		return err
+	}
+
+	if err := i.validateSupportedDPFeatures(); err != nil {
 		return err
 	}
 
@@ -147,6 +164,35 @@ func (i *Initializer) setupOVSBridge() error {
 		return err
 	}
 
+	return nil
+}
+
+func (i *Initializer) validateSupportedDPFeatures() error {
+	gotFeatures, err := ovsctl.NewClient(i.ovsBridge).GetDPFeatures()
+	if err != nil {
+		return err
+	}
+	// Basic requirements.
+	requiredFeatures := []ovsctl.DPFeature{
+		ovsctl.CTStateFeature,
+		ovsctl.CTZoneFeature,
+		ovsctl.CTMarkFeature,
+		ovsctl.CTLabelFeature,
+	}
+	// AntreaProxy requires CTStateNAT feature.
+	if features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
+		requiredFeatures = append(requiredFeatures, ovsctl.CTStateNATFeature)
+	}
+
+	for _, feature := range requiredFeatures {
+		supported, found := gotFeatures[feature]
+		if !found {
+			return fmt.Errorf("the required OVS DP feature '%s' support is unknown", feature)
+		}
+		if !supported {
+			return fmt.Errorf("the required OVS DP feature '%s' is not supported", feature)
+		}
+	}
 	return nil
 }
 
@@ -223,8 +269,15 @@ func (i *Initializer) Initialize() error {
 		return err
 	}
 
-	if err := i.initializeIPSec(); err != nil {
-		return err
+	switch i.networkConfig.TrafficEncryptionMode {
+	case config.TrafficEncryptionModeIPSec:
+		if err := i.initializeIPSec(); err != nil {
+			return err
+		}
+	case config.TrafficEncryptionModeWireGuard:
+		if err := i.initializeWireGuard(); err != nil {
+			return err
+		}
 	}
 
 	if err := i.prepareHostNetwork(); err != nil {
@@ -301,7 +354,7 @@ func (i *Initializer) initOpenFlowPipeline() error {
 	roundInfo := getRoundInfo(i.ovsBridgeClient)
 
 	// Set up all basic flows.
-	ofConnCh, err := i.ofClient.Initialize(roundInfo, i.nodeConfig, i.networkConfig.TrafficEncapMode)
+	ofConnCh, err := i.ofClient.Initialize(roundInfo, i.nodeConfig, i.networkConfig)
 	if err != nil {
 		klog.Errorf("Failed to initialize openflow client: %v", err)
 		return err
@@ -521,9 +574,8 @@ func (i *Initializer) configureGatewayInterface(gatewayIface *interfacestore.Int
 			klog.V(2).Infof("Not found host link for gateway %s, retry after 1s", i.hostGateway)
 			time.Sleep(1 * time.Second)
 			continue
-		} else {
-			return err
 		}
+		return err
 	}
 
 	if err != nil {
@@ -533,15 +585,17 @@ func (i *Initializer) configureGatewayInterface(gatewayIface *interfacestore.Int
 
 	i.nodeConfig.GatewayConfig = &config.GatewayConfig{Name: i.hostGateway, MAC: gwMAC}
 	gatewayIface.MAC = gwMAC
+	gatewayIface.IPs = []net.IP{}
 	if i.networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {
 		// Assign IP to gw as required by SpoofGuard.
-		// NodeIPAddr can be either IPv4 or IPv6.
-		if i.nodeConfig.NodeIPAddr.IP.To4() != nil {
-			i.nodeConfig.GatewayConfig.IPv4 = i.nodeConfig.NodeTransportIPAddr.IP
-		} else {
-			i.nodeConfig.GatewayConfig.IPv6 = i.nodeConfig.NodeTransportIPAddr.IP
+		if i.nodeConfig.NodeIPv4Addr != nil {
+			i.nodeConfig.GatewayConfig.IPv4 = i.nodeConfig.NodeTransportIPv4Addr.IP
+			gatewayIface.IPs = append(gatewayIface.IPs, i.nodeConfig.NodeTransportIPv4Addr.IP)
 		}
-		gatewayIface.IPs = []net.IP{i.nodeConfig.NodeTransportIPAddr.IP}
+		if i.nodeConfig.NodeIPv6Addr != nil {
+			i.nodeConfig.GatewayConfig.IPv6 = i.nodeConfig.NodeTransportIPv6Addr.IP
+			gatewayIface.IPs = append(gatewayIface.IPs, i.nodeConfig.NodeTransportIPv6Addr.IP)
+		}
 		// No need to assign local CIDR to gw0 because local CIDR is not managed by Antrea
 		return nil
 	}
@@ -589,9 +643,8 @@ func (i *Initializer) setupDefaultTunnelInterface() error {
 		if err := i.ovsBridgeClient.DeletePort(tunnelIface.PortUUID); err != nil {
 			if i.networkConfig.TrafficEncapMode.SupportsEncap() {
 				return fmt.Errorf("failed to remove tunnel port %s with wrong tunnel type: %s", tunnelPortName, err)
-			} else {
-				klog.Errorf("Failed to remove tunnel port %s in NoEncapMode: %v", tunnelPortName, err)
 			}
+			klog.Errorf("Failed to remove tunnel port %s in NoEncapMode: %v", tunnelPortName, err)
 		} else {
 			klog.Infof("Removed tunnel port %s with tunnel type: %s", tunnelPortName, tunnelIface.TunnelInterfaceConfig.Type)
 			i.ifaceStore.DeleteInterface(tunnelIface)
@@ -645,26 +698,34 @@ func (i *Initializer) initNodeLocalConfig() error {
 		return err
 	}
 
-	var nodeIPAddr, transportIPAddr *net.IPNet
+	var nodeIPv4Addr, nodeIPv6Addr, transportIPv4Addr, transportIPv6Addr *net.IPNet
 	var localIntf *net.Interface
 	// Find the interface configured with Node IP and use it for Pod traffic.
-	ipAddr, err := k8s.GetNodeAddr(node)
+	ipAddrs, err := k8s.GetNodeAddrs(node)
 	if err != nil {
-		return fmt.Errorf("failed to obtain local IP address from K8s: %w", err)
+		return fmt.Errorf("failed to obtain local IP addresses from K8s: %w", err)
 	}
-	nodeIPAddr, localIntf, err = getIPNetDeviceFromIP(ipAddr)
+	nodeIPv4Addr, nodeIPv6Addr, localIntf, err = getIPNetDeviceFromIP(ipAddrs)
 	if err != nil {
-		return fmt.Errorf("failed to get local IPNet device with IP %v: %v", ipAddr, err)
+		return fmt.Errorf("failed to get local IPNet device with IP %v: %v", ipAddrs, err)
 	}
-	transportIPAddr = nodeIPAddr
+	transportIPv4Addr = nodeIPv4Addr
+	transportIPv6Addr = nodeIPv6Addr
 	if i.networkConfig.TransportIface != "" {
 		// Find the configured transport interface, and update its IP address in Node's annotation.
-		transportIPAddr, localIntf, err = getTransportIPNetDeviceByName(i.networkConfig.TransportIface, i.ovsBridge)
+		transportIPv4Addr, transportIPv6Addr, localIntf, err = getTransportIPNetDeviceByName(i.networkConfig.TransportIface, i.ovsBridge)
 		if err != nil {
 			return fmt.Errorf("failed to get local IPNet device with transport interface %s: %v", i.networkConfig.TransportIface, err)
 		}
-		klog.InfoS("Updating Node transport address annotation")
-		if err := i.patchNodeAnnotations(nodeName, types.NodeTransportAddressAnnotationKey, transportIPAddr.IP.String()); err != nil {
+		klog.InfoS("Updating Node transport addresses annotation")
+		var ips []string
+		if transportIPv4Addr != nil {
+			ips = append(ips, transportIPv4Addr.IP.String())
+		}
+		if transportIPv6Addr != nil {
+			ips = append(ips, transportIPv6Addr.IP.String())
+		}
+		if err := i.patchNodeAnnotations(nodeName, types.NodeTransportAddressAnnotationKey, strings.Join(ips, ",")); err != nil {
 			return err
 		}
 	} else {
@@ -686,12 +747,17 @@ func (i *Initializer) initNodeLocalConfig() error {
 	}
 
 	i.nodeConfig = &config.NodeConfig{
-		Name:                nodeName,
-		OVSBridge:           i.ovsBridge,
-		DefaultTunName:      defaultTunInterfaceName,
-		NodeIPAddr:          nodeIPAddr,
-		NodeTransportIPAddr: transportIPAddr,
-		UplinkNetConfig:     new(config.AdapterNetConfig)}
+		Name:                  nodeName,
+		OVSBridge:             i.ovsBridge,
+		DefaultTunName:        defaultTunInterfaceName,
+		NodeIPv4Addr:          nodeIPv4Addr,
+		NodeIPv6Addr:          nodeIPv6Addr,
+		NodeTransportIPv4Addr: transportIPv4Addr,
+		NodeTransportIPv6Addr: transportIPv6Addr,
+		UplinkNetConfig:       new(config.AdapterNetConfig),
+		NodeLocalInterfaceMTU: localIntf.MTU,
+		WireGuardConfig:       i.wireGuardConfig,
+	}
 
 	mtu, err := i.getNodeMTU(localIntf)
 	if err != nil {
@@ -751,10 +817,6 @@ func (i *Initializer) initNodeLocalConfig() error {
 
 // initializeIPSec checks if preconditions are met for using IPsec and reads the IPsec PSK value.
 func (i *Initializer) initializeIPSec() error {
-	if !i.networkConfig.EnableIPSecTunnel {
-		return nil
-	}
-
 	// At the time the agent is initialized and this code is executed, the
 	// OVS daemons are already running given that we have successfully
 	// connected to OVSDB. Given that the start_ovs script deletes existing
@@ -782,6 +844,18 @@ func (i *Initializer) initializeIPSec() error {
 		return err
 	}
 	return nil
+}
+
+// initializeWireguard checks if preconditions are met for using WireGuard and initializes WireGuard client or cleans up.
+func (i *Initializer) initializeWireGuard() error {
+	i.wireGuardConfig.MTU = i.nodeConfig.NodeLocalInterfaceMTU - config.WireGuardOverhead
+	wgClient, err := wireguard.New(i.client, i.nodeConfig, i.wireGuardConfig)
+	if err != nil {
+		return err
+	}
+
+	i.wireGuardClient = wgClient
+	return i.wireGuardClient.Init()
 }
 
 // readIPSecPSK reads the IPsec PSK value from environment variable ANTREA_IPSEC_PSK
@@ -864,11 +938,11 @@ func (i *Initializer) getNodeMTU(localIntf *net.Interface) (int, error) {
 		} else if i.networkConfig.TunnelType == ovsconfig.GRETunnel {
 			mtu -= config.GREOverhead
 		}
-		if i.nodeConfig.NodeIPAddr.IP.To4() == nil {
+		if i.nodeConfig.NodeIPv6Addr != nil {
 			mtu -= config.IPv6ExtraOverhead
 		}
 	}
-	if i.networkConfig.EnableIPSecTunnel {
+	if i.networkConfig.TrafficEncryptionMode == config.TrafficEncryptionModeIPSec {
 		mtu -= config.IPSecESPOverhead
 	}
 	return mtu, nil

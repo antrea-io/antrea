@@ -87,11 +87,12 @@ type GroupMember struct {
 // +genclient:onlyVerbs=get
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// ClusterGroupMembers is a list of GroupMember objects that are currently selected by a ClusterGroup.
+// ClusterGroupMembers is a list of GroupMember objects or ipBlocks that are currently selected by a ClusterGroup.
 type ClusterGroupMembers struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
 	EffectiveMembers  []GroupMember `json:"effectiveMembers" protobuf:"bytes,2,rep,name=effectiveMembers"`
+	EffectiveIPBlocks []IPNet       `json:"effectiveIPBlocks" protobuf:"bytes,3,rep,name=effectiveIPBlocks"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -268,6 +269,9 @@ type NetworkPolicyPeer struct {
 	AddressGroups []string `json:"addressGroups,omitempty" protobuf:"bytes,1,rep,name=addressGroups"`
 	// A list of IPBlock.
 	IPBlocks []IPBlock `json:"ipBlocks,omitempty" protobuf:"bytes,2,rep,name=ipBlocks"`
+	// A list of exact FQDN names or FQDN wildcard expressions.
+	// This field can only be possibly set for NetworkPolicyPeer of egress rules.
+	FQDNs []string `json:"fqdns,omitempty" protobuf:"bytes,3,rep,name=fqdns"`
 }
 
 // IPBlock describes a particular CIDR (Ex. "192.168.1.1/24"). The except entry describes CIDRs that should

@@ -46,7 +46,6 @@ These are the API group versions which are curently available when using Antrea.
 |---|---|---|---|---|---|
 | `clusterinformation.antrea.tanzu.vmware.com` | `v1beta1` | No | v0.3.0 | v1.0.0 | Dec 2021 |
 | `core.antrea.tanzu.vmware.com` | `v1alpha2` | No | v0.11.0 | v1.0.0 | Dec 2021 |
-| `controlplane.antrea.tanzu.vmware.com` | `v1beta1` | Yes | v0.10.0 | v0.11.0 | Aug 2021 |
 | `controlplane.antrea.tanzu.vmware.com` | `v1beta2` | Yes | v0.11.0 | v1.0.0 | Dec 2021 |
 | `ops.antrea.tanzu.vmware.com` | `v1alpha1` | No | v0.8.0 | v1.0.0 | Dec 2021 |
 | `security.antrea.tanzu.vmware.com` | `v1alpha1` | No | v0.8.0 | v1.0.0 | Dec 2021 |
@@ -62,6 +61,7 @@ These are the API group versions which are curently available when using Antrea.
 |---|---|---|---|---|---|
 | `core.antrea.tanzu.vmware.com` | `v1alpha1` | No | v0.8.0 | v0.11.0 | v0.11.0 |
 | `networking.antrea.tanzu.vmware.com` | `v1beta1` | Yes | v0.3.0 | v0.10.0 | v1.2.0 |
+| `controlplane.antrea.tanzu.vmware.com` | `v1beta1` | Yes | v0.10.0 | v0.11.0 | v1.3.0 |
 
 ## API renaming from `*.antrea.tanzu.vmware.com` to `*.antrea.io`
 
@@ -136,8 +136,8 @@ the legacy Antrea CRDs:
    two lists.
 
    ```bash
-   kubectl get lanp.security.antrea.tanzu.vmware.com -o=jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}'
-   kubectl get anp.crd.antrea.io -o=jsonpath='{range .items[?(@.metadata.annotations.crd\.antrea\.io/managed-by=="crdmirroring-controller")]}{.metadata.name}{"\n"}{end}'
+   kubectl get lanp.security.antrea.tanzu.vmware.com -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}'
+   kubectl get anp.crd.antrea.io -o jsonpath='{range .items[?(@.metadata.annotations.crd\.antrea\.io/managed-by=="crdmirroring-controller")]}{.metadata.name}{"\n"}{end}'
    ```
 
 3. Stop the old version of the application, which uses the legacy CRDs.
@@ -159,13 +159,13 @@ the legacy Antrea CRDs:
    the same command as before should return an empty list:
 
    ```bash
-   kubectl get anp.crd.antrea.io -o=jsonpath='{range .items[?(@.metadata.annotations.crd\.antrea\.io/managed-by=="crdmirroring-controller")]}{.metadata.name}{"\n"}{end}'
+   kubectl get anp.crd.antrea.io -o jsonpath='{range .items[?(@.metadata.annotations.crd\.antrea\.io/managed-by=="crdmirroring-controller")]}{.metadata.name}{"\n"}{end}'
    ```
 
    If you remove the filter, all your ANPs should still exist:
 
    ```bash
-   kubectl get anp.crd.antrea.io -o=jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}'
+   kubectl get anp.crd.antrea.io -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}'
    ```
 
 6. Safely delete all legacy CRDs previously managed by the application. As an
@@ -179,7 +179,7 @@ the legacy Antrea CRDs:
    Once again, all new ANPs should still exist, which can be confirmed with:
 
    ```bash
-   kubectl get anp.crd.antrea.io -o=jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}'
+   kubectl get anp.crd.antrea.io -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}'
    ```
 
 7. Start the new version of the application, which uses the new CRDs. All

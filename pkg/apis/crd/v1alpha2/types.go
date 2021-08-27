@@ -240,7 +240,6 @@ type EgressList struct {
 
 // +genclient
 // +genclient:nonNamespaced
-// +genclient:noStatus
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // ExternalIPPool defines one or multiple IP sets that can be used in the external network. For instance, the IPs can be
@@ -252,6 +251,9 @@ type ExternalIPPool struct {
 
 	// Specification of the ExternalIPPool.
 	Spec ExternalIPPoolSpec `json:"spec"`
+
+	// The current status of the ExternalIPPool.
+	Status ExternalIPPoolStatus `json:"status"`
 }
 
 type ExternalIPPoolSpec struct {
@@ -269,6 +271,17 @@ type IPRange struct {
 	Start string `json:"start,omitempty"`
 	// The end IP of the range, e.g. 10.10.20.20, inclusive.
 	End string `json:"end,omitempty"`
+}
+
+type ExternalIPPoolStatus struct {
+	Usage ExternalIPPoolUsage `json:"usage,omitempty"`
+}
+
+type ExternalIPPoolUsage struct {
+	// Total number of IPs.
+	Total int `json:"total"`
+	// Number of allocated IPs.
+	Used int `json:"used"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

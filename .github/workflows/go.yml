@@ -8,9 +8,11 @@ on:
     branches:
     - main
     - release-*
+
+env:
+  go-cache-name: go
+
 jobs:
-
-
   test-unit:
     name: Unit test
     strategy:
@@ -18,18 +20,28 @@ jobs:
         os: [ubuntu-latest, windows-2019]
     runs-on: ${{ matrix.os }}
     steps:
-
-    - name: Set up Go 1.15
-      uses: actions/setup-go@v1
+    - name: Set up Go 1.17
+      uses: actions/setup-go@v2
       with:
-        go-version: 1.15
-
+        go-version: 1.17
     - name: Check-out code
       uses: actions/checkout@v2
-
+    - uses: actions/cache@v2
+      with:
+        # In order:
+        # * Module download cache
+        # * Build cache (Linux)
+        # * Build cache (Mac)
+        path: |
+          ~/go/pkg/mod
+          ~/.cache/go-build
+          ~/Library/Caches/go-build
+          %LocalAppData%\go-build
+        key: ${{ runner.os }}-${{ env.go-cache-name }}-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-${{ env.go-cache-name }}-
     - name: Run unit tests
       run: make test-unit
-
     - name: Codecov
       uses: codecov/codecov-action@v1
       with:
@@ -38,7 +50,6 @@ jobs:
         flags: unit-tests
         name: codecov-unit-test
 
-
   golangci-lint:
     name: Golangci-lint
     strategy:
@@ -46,156 +57,128 @@ jobs:
         platform: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.platform }}
     steps:
-    - name: Set up Go 1.15
-      uses: actions/setup-go@v1
+    - name: Set up Go 1.17
+      uses: actions/setup-go@v2
       with:
-        go-version: 1.15
+        go-version: 1.17
     - name: Check-out code
       uses: actions/checkout@v2
+    - uses: actions/cache@v2
+      with:
+        # In order:
+        # * Module download cache
+        # * Build cache (Linux)
+        # * Build cache (Mac)
+        path: |
+          ~/go/pkg/mod
+          ~/.cache/go-build
+          ~/Library/Caches/go-build
+          %LocalAppData%\go-build
+        key: ${{ runner.os }}-${{ env.go-cache-name }}-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-${{ env.go-cache-name }}-
     - name: Run golangci-lint
       run: make golangci
-
-
-  golangci-lint-netpol-tmp:
-    name: Golangci-lint for netpol code
-    runs-on: [ubuntu-latest]
-    steps:
-    - name: Set up Go 1.15
-      uses: actions/setup-go@v1
-      with:
-        go-version: 1.15
-    - name: Check-out code
-      uses: actions/checkout@v2
-    - name: Run golangci-lint
+    - name: Run golangci-lint for netpol
       working-directory: hack/netpol
       run: make golangci
 
-
   bin:
-    name: Build Antrea binaries
+    name: Build Antrea and antctl binaries
     runs-on: [ubuntu-latest]
-    strategy:
-      matrix:
-        arch: [amd64, arm64, arm]
     steps:
-
-    - name: Set up Go 1.15
-      uses: actions/setup-go@v1
+    - name: Set up Go 1.17
+      uses: actions/setup-go@v2
       with:
-        go-version: 1.15
-
+        go-version: 1.17
     - name: Check-out code
       uses: actions/checkout@v2
-
-    - name: Build Antrea binaries
-      run: GOARCH=${{ matrix.arch }} make bin
+    - uses: actions/cache@v2
+      with:
+        # In order:
+        # * Module download cache
+        # * Build cache (Linux)
+        # * Build cache (Mac)
+        path: |
+          ~/go/pkg/mod
+          ~/.cache/go-build
+          ~/Library/Caches/go-build
+          %LocalAppData%\go-build
+        key: ${{ runner.os }}-${{ env.go-cache-name }}-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-${{ env.go-cache-name }}-
+    - name: Build Antrea binaries for amd64
+      run: GOARCH=amd64 make bin
+    - name: Build Antrea binaries for arm64
+      run: GOARCH=arm64 make bin
+    - name: Build Antrea binaries for arm
+      run: GOARCH=arm make bin
+    - name: Build antctl binaries
+      run: make antctl
 
   windows-bin:
     name: Build Antrea Windows binaries
     runs-on: [ubuntu-latest]
     steps:
-
-    - name: Set up Go 1.15
-      uses: actions/setup-go@v1
+    - name: Set up Go 1.17
+      uses: actions/setup-go@v2
       with:
-        go-version: 1.15
-
+        go-version: 1.17
     - name: Check-out code
       uses: actions/checkout@v2
-
+    - uses: actions/cache@v2
+      with:
+        # In order:
+        # * Module download cache
+        # * Build cache (Linux)
+        # * Build cache (Mac)
+        path: |
+          ~/go/pkg/mod
+          ~/.cache/go-build
+          ~/Library/Caches/go-build
+          %LocalAppData%\go-build
+        key: ${{ runner.os }}-${{ env.go-cache-name }}-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-${{ env.go-cache-name }}-
     - name: Build Antrea windows binaries
       run: make windows-bin
 
-  antctl:
-    name: Build antctl for macOS, Linux and Windows
+  tidy-codegen-manifest:
+    name: Check tidy, code generation and manifest
     runs-on: [ubuntu-latest]
     steps:
-
-      - name: Set up Go 1.15
-        uses: actions/setup-go@v1
-        with:
-          go-version: 1.15
-
-      - name: Check-out code
-        uses: actions/checkout@v2
-
-      - name: Build antctl binaries
-        run: make antctl
-
-
-  codegen:
-    name: Check code generation
-    runs-on: [ubuntu-latest]
-    steps:
-
-    - name: Set up Go 1.15
-      uses: actions/setup-go@v1
+    - name: Set up Go 1.17
+      uses: actions/setup-go@v2
       with:
-        go-version: 1.15
-
+        go-version: 1.17
     - name: Check-out code
       uses: actions/checkout@v2
-
-    - name: Check code generation
-      run: ./ci/check-codegen.sh
-
-
-  manifest:
-    name: Check manifest
-    runs-on: [ubuntu-latest]
-    steps:
-
-    - name: Set up Go 1.15
-      uses: actions/setup-go@v1
-      with:
-        go-version: 1.15
-
-    - name: Check-out code
-      uses: actions/checkout@v2
-
-    - name: Check manifest
-      run: ./ci/check-manifest.sh
-
-
-  tidy:
-    name: Check go.mod tidy
-    runs-on: [ubuntu-latest]
-    steps:
-
-    - name: Set up Go 1.15
-      uses: actions/setup-go@v1
-      with:
-        go-version: 1.15
-
-    - name: Check-out code
-      uses: actions/checkout@v2
-
+    # tidy check need to be run before code generation which will regenerate codes.
     - name: Check tidy
       run: make test-tidy
+    - name: Check code generation
+      run: ./ci/check-codegen.sh
+    - name: Check manifest
+      run: ./ci/check-manifest.sh
 
   verify:
     name: Verify docs and spelling
     runs-on: [ubuntu-latest]
     steps:
-
-    - name: Set up Go 1.15
-      uses: actions/setup-go@v1
+    - name: Set up Go 1.17
+      uses: actions/setup-go@v2
       with:
-        go-version: 1.15
-
+        go-version: 1.17
     - name: Check-out code
       uses: actions/checkout@v2
-
     - name: Run verify scripts
       run: make verify
-
     - name: Checking for broken Markdown links
       uses: antoninbas/github-action-markdown-link-check@1.0.9-pre
       with:
         folder-path: './docs'
         file-path: './README.md, ./CHANGELOG.md, ./CONTRIBUTING.md, ./GOVERNANCE.md, ./MAINTAINERS.md, ./ROADMAP.md, ./SECURITY.md'
         config-file: 'hack/.md_links_config.json'
-
     - name: Markdownlint
       run: |
         sudo npm install -g markdownlint-cli

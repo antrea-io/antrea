@@ -160,23 +160,6 @@ func testInvalidCGServiceRefWithIPBlock(t *testing.T) {
 	}
 }
 
-func testInvalidCGChildGroupDoesNotExist(t *testing.T) {
-	invalidErr := fmt.Errorf("clustergroup childGroup does not exist")
-	cgName := "child-group-not-exist"
-	cg := &crdv1alpha3.ClusterGroup{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: cgName,
-		},
-		Spec: crdv1alpha3.GroupSpec{
-			ChildGroups: []crdv1alpha3.ClusterGroupReference{crdv1alpha3.ClusterGroupReference("some-non-existing-cg")},
-		},
-	}
-	if _, err := k8sUtils.CreateOrUpdateV1Alpha3CG(cg); err == nil {
-		// Above creation of CG must fail as it is an invalid spec.
-		failOnError(invalidErr, t)
-	}
-}
-
 var testChildCGName = "test-child-cg"
 
 func createChildCGForTest(t *testing.T) {
@@ -249,22 +232,38 @@ func testInvalidCGMaxNestedLevel(t *testing.T) {
 			ChildGroups: []crdv1alpha3.ClusterGroupReference{crdv1alpha3.ClusterGroupReference(testChildCGName)},
 		},
 	}
-	if _, err := k8sUtils.CreateOrUpdateV1Alpha3CG(cg1); err != nil {
-		// Above creation of CG must succeed as it is a valid spec.
-		failOnError(err, t)
-	}
 	cg2 := &crdv1alpha3.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{Name: cgName2},
 		Spec: crdv1alpha3.GroupSpec{
 			ChildGroups: []crdv1alpha3.ClusterGroupReference{crdv1alpha3.ClusterGroupReference(cgName1)},
 		},
 	}
+	// Try to create cg-nested-1 first and then cg-nested-2.
+	// The creation of cg-nested-2 should fail as it breaks the max nested level
+	if _, err := k8sUtils.CreateOrUpdateV1Alpha3CG(cg1); err != nil {
+		// Above creation of CG must succeed as it is a valid spec.
+		failOnError(err, t)
+	}
 	if _, err := k8sUtils.CreateOrUpdateV1Alpha3CG(cg2); err == nil {
-		// Above creation of CG must fail as it is an invalid spec.
+		// Above creation of CG must fail as cg-nested-2 cannot have cg-nested-1 as childGroup.
 		failOnError(invalidErr, t)
 	}
 	// cleanup cg-nested-1
 	if err := k8sUtils.DeleteV1Alpha3CG(cgName1); err != nil {
+		failOnError(err, t)
+	}
+	// Try to create cg-nested-2 first and then cg-nested-1.
+	// The creation of cg-nested-1 should fail as it breaks the max nested level
+	if _, err := k8sUtils.CreateOrUpdateV1Alpha3CG(cg2); err != nil {
+		// Above creation of CG must succeed as it is a valid spec.
+		failOnError(err, t)
+	}
+	if _, err := k8sUtils.CreateOrUpdateV1Alpha3CG(cg1); err == nil {
+		// Above creation of CG must fail as cg-nested-2 cannot have cg-nested-1 as childGroup.
+		failOnError(invalidErr, t)
+	}
+	// cleanup cg-nested-2
+	if err := k8sUtils.DeleteV1Alpha3CG(cgName2); err != nil {
 		failOnError(err, t)
 	}
 }
@@ -316,13 +315,13 @@ func testClusterGroupConversionV1A2AndV1A3(t *testing.T) {
 
 func TestClusterGroup(t *testing.T) {
 	skipIfHasWindowsNodes(t)
+	skipIfAntreaPolicyDisabled(t)
 
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
 	defer teardownTest(t, data)
-	skipIfAntreaPolicyDisabled(t, data)
 	initialize(t, data)
 
 	t.Run("TestGroupClusterGroupValidate", func(t *testing.T) {
@@ -332,7 +331,6 @@ func TestClusterGroup(t *testing.T) {
 		t.Run("Case=ServiceRefWithPodSelectorDenied", func(t *testing.T) { testInvalidCGServiceRefWithPodSelector(t) })
 		t.Run("Case=ServiceRefWithNamespaceSelectorDenied", func(t *testing.T) { testInvalidCGServiceRefWithNSSelector(t) })
 		t.Run("Case=ServiceRefWithIPBlockDenied", func(t *testing.T) { testInvalidCGServiceRefWithIPBlock(t) })
-		t.Run("Case=InvalidChildGroupName", func(t *testing.T) { testInvalidCGChildGroupDoesNotExist(t) })
 	})
 	t.Run("TestGroupClusterGroupValidateChildGroup", func(t *testing.T) {
 		createChildCGForTest(t)

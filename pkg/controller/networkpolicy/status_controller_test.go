@@ -120,13 +120,12 @@ func toAntreaNetworkPolicy(inp *types.NetworkPolicy) runtime.Object {
 				Generation: inp.Generation,
 			},
 		}
-	} else {
-		return &crdv1alpha1.ClusterNetworkPolicy{
-			ObjectMeta: v1.ObjectMeta{
-				Name:       inp.SourceRef.Name,
-				Generation: inp.Generation,
-			},
-		}
+	}
+	return &crdv1alpha1.ClusterNetworkPolicy{
+		ObjectMeta: v1.ObjectMeta{
+			Name:       inp.SourceRef.Name,
+			Generation: inp.Generation,
+		},
 	}
 }
 

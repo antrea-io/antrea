@@ -32,9 +32,31 @@ type DenyConnectionStore struct {
 }
 
 func NewDenyConnectionStore(ifaceStore interfacestore.InterfaceStore,
-	proxier proxy.Proxier) *DenyConnectionStore {
+	proxier proxy.Proxier, staleConnectionTimeout time.Duration) *DenyConnectionStore {
 	return &DenyConnectionStore{
-		connectionStore: NewConnectionStore(ifaceStore, proxier),
+		connectionStore: NewConnectionStore(ifaceStore, proxier, staleConnectionTimeout),
+	}
+}
+
+func (ds *DenyConnectionStore) RunPeriodicDeletion(stopCh <-chan struct{}) {
+	pollTicker := time.NewTicker(periodicDeleteInterval)
+	defer pollTicker.Stop()
+
+	for {
+		select {
+		case <-stopCh:
+			break
+		case <-pollTicker.C:
+			deleteIfStaleConn := func(key flowexporter.ConnectionKey, conn *flowexporter.Connection) error {
+				// Delete the connection if it was not exported in last five minutes.
+				if time.Since(conn.LastExportTime) >= ds.staleConnectionTimeout {
+					delete(ds.connections, key)
+				}
+				return nil
+			}
+			ds.ForAllConnectionsDo(deleteIfStaleConn)
+			klog.V(2).Infof("Stale connections in the Deny Connection Store are successfully deleted.")
+		}
 	}
 }
 
@@ -52,21 +74,20 @@ func (ds *DenyConnectionStore) AddOrUpdateConn(conn *flowexporter.Connection, ti
 		conn.StopTime = timeSeen
 		klog.V(2).Infof("Deny connection with flowKey %v has been updated.", connKey)
 		return
-	} else {
-		conn.StartTime = timeSeen
-		conn.StopTime = timeSeen
-		conn.LastExportTime = timeSeen
-		conn.DeltaBytes = bytes
-		conn.OriginalBytes = bytes
-		conn.DeltaPackets = uint64(1)
-		conn.OriginalPackets = uint64(1)
-		ds.fillPodInfo(conn)
-		protocolStr := ip.IPProtocolNumberToString(conn.FlowKey.Protocol, "UnknownProtocol")
-		serviceStr := fmt.Sprintf("%s:%d/%s", conn.DestinationServiceAddress, conn.DestinationServicePort, protocolStr)
-		ds.fillServiceInfo(conn, serviceStr)
-		metrics.TotalDenyConnections.Inc()
-		ds.connections[connKey] = conn
 	}
+	conn.StartTime = timeSeen
+	conn.StopTime = timeSeen
+	conn.LastExportTime = timeSeen
+	conn.DeltaBytes = bytes
+	conn.OriginalBytes = bytes
+	conn.DeltaPackets = uint64(1)
+	conn.OriginalPackets = uint64(1)
+	ds.fillPodInfo(conn)
+	protocolStr := ip.IPProtocolNumberToString(conn.FlowKey.Protocol, "UnknownProtocol")
+	serviceStr := fmt.Sprintf("%s:%d/%s", conn.DestinationServiceAddress, conn.DestinationServicePort, protocolStr)
+	ds.fillServiceInfo(conn, serviceStr)
+	metrics.TotalDenyConnections.Inc()
+	ds.connections[connKey] = conn
 }
 
 // ResetConnStatsWithoutLock resets DeltaBytes and DeltaPackets of connection

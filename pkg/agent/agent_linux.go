@@ -1,3 +1,4 @@
+//go:build linux
 // +build linux
 
 // Copyright 2020 Antrea Authors
@@ -43,6 +44,6 @@ func (i *Initializer) getTunnelPortLocalIP() net.IP {
 	return nil
 }
 
-func GetTransportIPNetDeviceByName(ifaceName string, ovsBridgeName string) (*net.IPNet, *net.Interface, error) {
+func GetTransportIPNetDeviceByName(ifaceName string, ovsBridgeName string) (*net.IPNet, *net.IPNet, *net.Interface, error) {
 	return util.GetIPNetDeviceByName(ifaceName)
 }

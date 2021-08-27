@@ -338,6 +338,13 @@ func TestAddEgress(t *testing.T) {
 			gotEgress, err := controller.crdClient.CrdV1alpha2().Egresses().Get(context.TODO(), tt.inputEgress.Name, metav1.GetOptions{})
 			require.NoError(t, err)
 			assert.Equal(t, tt.expectedEgressIP, gotEgress.Spec.EgressIP)
+			if gotEgress.Spec.ExternalIPPool != "" && gotEgress.Spec.EgressIP != "" {
+				poolName := gotEgress.Spec.ExternalIPPool
+				eip, err := controller.crdClient.CrdV1alpha2().ExternalIPPools().Get(context.TODO(), poolName, metav1.GetOptions{})
+				require.NoError(t, err)
+				usage := eip.Status.Usage
+				assert.Equal(t, 1, usage.Used, "Expected one used IP in EgressIPPool Status")
+			}
 		})
 	}
 }
@@ -661,7 +668,7 @@ func TestSyncEgressIP(t *testing.T) {
 			stopCh := make(chan struct{})
 			defer close(stopCh)
 			var fakeObjects []runtime.Object
-			fakeObjects = append(fakeObjects, tt.inputEgress)
+			fakeObjects = append(fakeObjects, tt.inputEgress, tt.existingExternalIPPool)
 			controller := newController(nil, fakeObjects)
 			controller.informerFactory.Start(stopCh)
 			controller.crdInformerFactory.Start(stopCh)

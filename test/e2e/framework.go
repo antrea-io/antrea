@@ -55,6 +55,8 @@ import (
 	"antrea.io/antrea/test/e2e/providers"
 )
 
+var AntreaConfigMap *corev1.ConfigMap
+
 const (
 	defaultTimeout  = 90 * time.Second
 	defaultInterval = 1 * time.Second
@@ -78,6 +80,8 @@ const (
 	agentContainerName         string = "antrea-agent"
 	antreaYML                  string = "antrea.yml"
 	antreaIPSecYML             string = "antrea-ipsec.yml"
+	antreaWireGuardGoYML       string = "antrea-wireguard-go.yml"
+	antreaWireGuardGoCovYML    string = "antrea-wireguard-go-coverage.yml"
 	antreaCovYML               string = "antrea-coverage.yml"
 	antreaIPSecCovYML          string = "antrea-ipsec-coverage.yml"
 	flowAggregatorYML          string = "flow-aggregator.yml"
@@ -150,6 +154,7 @@ type TestOptions struct {
 	withBench           bool
 	enableCoverage      bool
 	coverageDir         string
+	skipCases           string
 }
 
 var testOptions TestOptions
@@ -158,8 +163,9 @@ var provider providers.ProviderInterface
 
 // podInfo combines OS info with a Pod name. It is useful when choosing commands and options on Pods of different OS (Windows, Linux).
 type podInfo struct {
-	name string
-	os   string
+	name     string
+	os       string
+	nodeName string
 }
 
 // TestData stores the state required for each test case.
@@ -185,6 +191,43 @@ type PodIPs struct {
 	ipv6      *net.IP
 	ipStrings []string
 }
+
+type deployAntreaOptions int
+
+const (
+	deployAntreaDefault deployAntreaOptions = iota
+	deployAntreaIPsec
+	deployAntreaWireGuardGo
+	deployAntreaCoverageOffset
+)
+
+func (o deployAntreaOptions) WithCoverage() deployAntreaOptions {
+	return o + deployAntreaCoverageOffset
+}
+
+func (o deployAntreaOptions) DeployYML() string {
+	return deployAntreaOptionsYML[o]
+}
+
+func (o deployAntreaOptions) String() string {
+	return deployAntreaOptionsString[o]
+}
+
+var (
+	deployAntreaOptionsString = [...]string{
+		"AntreaDefault",
+		"AntreaWithIPSec",
+		"AntreaWithWireGuardGo",
+	}
+	deployAntreaOptionsYML = [...]string{
+		antreaYML,
+		antreaIPSecYML,
+		antreaWireGuardGoYML,
+		antreaCovYML,
+		antreaIPSecCovYML,
+		antreaWireGuardGoCovYML,
+	}
+)
 
 func (p PodIPs) String() string {
 	res := ""
@@ -216,11 +259,11 @@ func workerNodeName(idx int) string {
 	if idx == 0 { // control-plane Node
 		return ""
 	}
-	if node, ok := clusterInfo.nodes[idx]; !ok {
+	node, ok := clusterInfo.nodes[idx]
+	if !ok {
 		return ""
-	} else {
-		return node.name
 	}
+	return node.name
 }
 
 // workerNodeIP returns an empty string if there is no worker Node with the provided idx
@@ -229,21 +272,21 @@ func workerNodeIP(idx int) string {
 	if idx == 0 { // control-plane Node
 		return ""
 	}
-	if node, ok := clusterInfo.nodes[idx]; !ok {
+	node, ok := clusterInfo.nodes[idx]
+	if !ok {
 		return ""
-	} else {
-		return node.ip
 	}
+	return node.ip
 }
 
 // nodeGatewayIPs returns the Antrea gateway's IPv4 address and IPv6 address for the provided Node
 // (if applicable), in that order.
 func nodeGatewayIPs(idx int) (string, string) {
-	if node, ok := clusterInfo.nodes[idx]; !ok {
+	node, ok := clusterInfo.nodes[idx]
+	if !ok {
 		return "", ""
-	} else {
-		return node.gwV4Addr, node.gwV6Addr
 	}
+	return node.gwV4Addr, node.gwV6Addr
 }
 
 func controlPlaneNodeName() string {
@@ -257,21 +300,21 @@ func controlPlaneNodeIP() string {
 // nodeName returns an empty string if there is no Node with the provided idx. If idx is 0, the name
 // of the control-plane Node will be returned.
 func nodeName(idx int) string {
-	if node, ok := clusterInfo.nodes[idx]; !ok {
+	node, ok := clusterInfo.nodes[idx]
+	if !ok {
 		return ""
-	} else {
-		return node.name
 	}
+	return node.name
 }
 
 // nodeIP returns an empty string if there is no Node with the provided idx. If idx is 0, the IP
 // of the control-plane Node will be returned.
 func nodeIP(idx int) string {
-	if node, ok := clusterInfo.nodes[idx]; !ok {
+	node, ok := clusterInfo.nodes[idx]
+	if !ok {
 		return ""
-	} else {
-		return node.ip
 	}
+	return node.ip
 }
 
 func labelNodeRoleControlPlane() string {
@@ -302,11 +345,11 @@ func initProvider() error {
 		"remote":  providers.NewRemoteProvider,
 	}
 	if fn, ok := providerFactory[testOptions.providerName]; ok {
-		if newProvider, err := fn(testOptions.providerConfigPath); err != nil {
+		newProvider, err := fn(testOptions.providerConfigPath)
+		if err != nil {
 			return err
-		} else {
-			provider = newProvider
 		}
+		provider = newProvider
 	} else {
 		return fmt.Errorf("unknown provider '%s'", testOptions.providerName)
 	}
@@ -407,35 +450,35 @@ func collectClusterInfo() error {
 			return res, fmt.Errorf("error when running the following command `%s` on control-plane Node: %v, %s", cmd, err, stdout)
 		}
 		re := regexp.MustCompile(reg)
-		if matches := re.FindStringSubmatch(stdout); len(matches) == 0 {
+		matches := re.FindStringSubmatch(stdout)
+		if len(matches) == 0 {
 			return res, fmt.Errorf("cannot retrieve CIDR, unexpected kubectl output: %s", stdout)
-		} else {
-			cidrs := strings.Split(matches[1], ",")
-			if len(cidrs) == 1 {
-				_, cidr, err := net.ParseCIDR(cidrs[0])
-				if err != nil {
-					return res, fmt.Errorf("CIDR cannot be parsed: %s", cidrs[0])
-				}
-				if cidr.IP.To4() != nil {
-					res[0] = cidrs[0]
-				} else {
-					res[1] = cidrs[0]
-				}
-			} else if len(cidrs) == 2 {
-				_, cidr, err := net.ParseCIDR(cidrs[0])
-				if err != nil {
-					return res, fmt.Errorf("CIDR cannot be parsed: %s", cidrs[0])
-				}
-				if cidr.IP.To4() != nil {
-					res[0] = cidrs[0]
-					res[1] = cidrs[1]
-				} else {
-					res[0] = cidrs[1]
-					res[1] = cidrs[0]
-				}
-			} else {
-				return res, fmt.Errorf("unexpected cluster CIDR: %s", matches[1])
+		}
+		cidrs := strings.Split(matches[1], ",")
+		if len(cidrs) == 1 {
+			_, cidr, err := net.ParseCIDR(cidrs[0])
+			if err != nil {
+				return res, fmt.Errorf("CIDR cannot be parsed: %s", cidrs[0])
 			}
+			if cidr.IP.To4() != nil {
+				res[0] = cidrs[0]
+			} else {
+				res[1] = cidrs[0]
+			}
+		} else if len(cidrs) == 2 {
+			_, cidr, err := net.ParseCIDR(cidrs[0])
+			if err != nil {
+				return res, fmt.Errorf("CIDR cannot be parsed: %s", cidrs[0])
+			}
+			if cidr.IP.To4() != nil {
+				res[0] = cidrs[0]
+				res[1] = cidrs[1]
+			} else {
+				res[0] = cidrs[1]
+				res[1] = cidrs[0]
+			}
+		} else {
+			return res, fmt.Errorf("unexpected cluster CIDR: %s", matches[1])
 		}
 		return res, nil
 	}
@@ -502,7 +545,7 @@ func (data *TestData) createTestNamespace() error {
 
 // deleteNamespace deletes the provided namespace and waits for deletion to actually complete.
 func (data *TestData) deleteNamespace(namespace string, timeout time.Duration) error {
-	var gracePeriodSeconds int64 = 0
+	var gracePeriodSeconds int64
 	var propagationPolicy = metav1.DeletePropagationForeground
 	deleteOptions := metav1.DeleteOptions{
 		GracePeriodSeconds: &gracePeriodSeconds,
@@ -559,20 +602,12 @@ func (data *TestData) deployAntreaCommon(yamlFile string, extraOptions string, w
 	return nil
 }
 
-// deployAntrea deploys Antrea with the standard manifest.
-func (data *TestData) deployAntrea() error {
+// deployAntrea deploys Antrea with deploy options.
+func (data *TestData) deployAntrea(option deployAntreaOptions) error {
 	if testOptions.enableCoverage {
-		return data.deployAntreaCommon(antreaCovYML, "", true)
+		option = option.WithCoverage()
 	}
-	return data.deployAntreaCommon(antreaYML, "", true)
-}
-
-// deployAntreaIPSec deploys Antrea with IPSec tunnel enabled.
-func (data *TestData) deployAntreaIPSec() error {
-	if testOptions.enableCoverage {
-		return data.deployAntreaCommon(antreaIPSecCovYML, "", true)
-	}
-	return data.deployAntreaCommon(antreaIPSecYML, "", true)
+	return data.deployAntreaCommon(option.DeployYML(), "", true)
 }
 
 // deployAntreaFlowExporter deploys Antrea with flow exporter config params enabled.
@@ -620,7 +655,7 @@ func (data *TestData) mutateFlowAggregatorConfigMap(ipfixCollector string, faClu
 	if err != nil {
 		return err
 	}
-	flowAggregatorConf, _ := configMap.Data[flowAggregatorConfName]
+	flowAggregatorConf := configMap.Data[flowAggregatorConfName]
 	flowAggregatorConf = strings.Replace(flowAggregatorConf, "#externalFlowCollectorAddr: \"\"", fmt.Sprintf("externalFlowCollectorAddr: \"%s\"", ipfixCollector), 1)
 	flowAggregatorConf = strings.Replace(flowAggregatorConf, "#activeFlowRecordTimeout: 60s", fmt.Sprintf("activeFlowRecordTimeout: %v", aggregatorActiveFlowRecordTimeout), 1)
 	flowAggregatorConf = strings.Replace(flowAggregatorConf, "#inactiveFlowRecordTimeout: 90s", fmt.Sprintf("inactiveFlowRecordTimeout: %v", aggregatorInactiveFlowRecordTimeout), 1)
@@ -1024,8 +1059,7 @@ func (data *TestData) deletePodAndWait(timeout time.Duration, name string, ns st
 	if err := data.deletePod(ns, name); err != nil {
 		return err
 	}
-
-	if err := wait.Poll(defaultInterval, timeout, func() (bool, error) {
+	err := wait.Poll(defaultInterval, timeout, func() (bool, error) {
 		if _, err := data.clientset.CoreV1().Pods(ns).Get(context.TODO(), name, metav1.GetOptions{}); err != nil {
 			if errors.IsNotFound(err) {
 				return true, nil
@@ -1034,11 +1068,11 @@ func (data *TestData) deletePodAndWait(timeout time.Duration, name string, ns st
 		}
 		// Keep trying
 		return false, nil
-	}); err == wait.ErrWaitTimeout {
+	})
+	if err == wait.ErrWaitTimeout {
 		return fmt.Errorf("Pod '%s' still visible to client after %v", name, timeout)
-	} else {
-		return err
 	}
+	return err
 }
 
 type PodCondition func(*corev1.Pod) (bool, error)
@@ -1047,14 +1081,14 @@ type PodCondition func(*corev1.Pod) (bool, error)
 // the condition predicate is met (or until the provided timeout expires).
 func (data *TestData) podWaitFor(timeout time.Duration, name, namespace string, condition PodCondition) (*corev1.Pod, error) {
 	err := wait.Poll(defaultInterval, timeout, func() (bool, error) {
-		if pod, err := data.clientset.CoreV1().Pods(namespace).Get(context.TODO(), name, metav1.GetOptions{}); err != nil {
+		pod, err := data.clientset.CoreV1().Pods(namespace).Get(context.TODO(), name, metav1.GetOptions{})
+		if err != nil {
 			if errors.IsNotFound(err) {
 				return false, nil
 			}
 			return false, fmt.Errorf("error when getting Pod '%s': %v", name, err)
-		} else {
-			return condition(pod)
 		}
+		return condition(pod)
 	})
 	if err != nil {
 		return nil, err
@@ -1409,7 +1443,7 @@ func (data *TestData) deleteServiceAndWait(timeout time.Duration, name string) e
 		return err
 	}
 
-	if err := wait.Poll(defaultInterval, timeout, func() (bool, error) {
+	err := wait.Poll(defaultInterval, timeout, func() (bool, error) {
 		if _, err := data.clientset.CoreV1().Services(testNamespace).Get(context.TODO(), name, metav1.GetOptions{}); err != nil {
 			if errors.IsNotFound(err) {
 				return true, nil
@@ -1418,11 +1452,11 @@ func (data *TestData) deleteServiceAndWait(timeout time.Duration, name string) e
 		}
 		// Keep trying
 		return false, nil
-	}); err == wait.ErrWaitTimeout {
+	})
+	if err == wait.ErrWaitTimeout {
 		return fmt.Errorf("Service '%s' still visible to client after %v", name, timeout)
-	} else {
-		return err
 	}
+	return err
 }
 
 // createNetworkPolicy creates a network policy with spec.
@@ -1536,16 +1570,17 @@ func parseArpingStdout(out string) (sent uint32, received uint32, loss float32, 
 	if len(matches) == 0 {
 		return 0, 0, 0.0, fmt.Errorf("Unexpected arping output")
 	}
-	if v, err := strconv.ParseUint(matches[1], 10, 32); err != nil {
+	v, err := strconv.ParseUint(matches[1], 10, 32)
+	if err != nil {
 		return 0, 0, 0.0, fmt.Errorf("Error when retrieving 'sent probes' from arpping output: %v", err)
-	} else {
-		sent = uint32(v)
 	}
-	if v, err := strconv.ParseUint(matches[2], 10, 32); err != nil {
+	sent = uint32(v)
+
+	v, err = strconv.ParseUint(matches[2], 10, 32)
+	if err != nil {
 		return 0, 0, 0.0, fmt.Errorf("Error when retrieving 'received responses' from arpping output: %v", err)
-	} else {
-		received = uint32(v)
 	}
+	received = uint32(v)
 	loss = 100. * float32(sent-received) / float32(sent)
 	return sent, received, loss, nil
 }
@@ -1630,14 +1665,10 @@ func (data *TestData) GetEncapMode() (config.TrafficEncapModeType, error) {
 	return config.TrafficEncapModeEncap, nil
 }
 
-func (data *TestData) getFeatures(confName string, antreaNamespace string) (featuregate.FeatureGate, error) {
+func getFeatures(confName string) (featuregate.FeatureGate, error) {
 	featureGate := features.DefaultMutableFeatureGate.DeepCopy()
-	cfgMap, err := data.GetAntreaConfigMap(antreaNamespace)
-	if err != nil {
-		return nil, err
-	}
 	var cfg interface{}
-	if err := yaml.Unmarshal([]byte(cfgMap.Data[confName]), &cfg); err != nil {
+	if err := yaml.Unmarshal([]byte(AntreaConfigMap.Data[confName]), &cfg); err != nil {
 		return nil, err
 	}
 	rawFeatureGateMap, ok := cfg.(map[interface{}]interface{})["featureGates"]
@@ -1654,12 +1685,12 @@ func (data *TestData) getFeatures(confName string, antreaNamespace string) (feat
 	return featureGate, nil
 }
 
-func (data *TestData) GetAgentFeatures(antreaNamespace string) (featuregate.FeatureGate, error) {
-	return data.getFeatures(antreaAgentConfName, antreaNamespace)
+func GetAgentFeatures() (featuregate.FeatureGate, error) {
+	return getFeatures(antreaAgentConfName)
 }
 
-func (data *TestData) GetControllerFeatures(antreaNamespace string) (featuregate.FeatureGate, error) {
-	return data.getFeatures(antreaControllerConfName, antreaNamespace)
+func GetControllerFeatures() (featuregate.FeatureGate, error) {
+	return getFeatures(antreaControllerConfName)
 }
 
 func (data *TestData) GetAntreaConfigMap(antreaNamespace string) (*corev1.ConfigMap, error) {
@@ -1704,12 +1735,12 @@ func (data *TestData) mutateAntreaConfigMap(controllerChanges []configChange, ag
 		return err
 	}
 
-	controllerConf, _ := configMap.Data["antrea-controller.conf"]
+	controllerConf := configMap.Data["antrea-controller.conf"]
 	for _, c := range controllerChanges {
 		controllerConf = replaceFieldValue(controllerConf, c)
 	}
 	configMap.Data["antrea-controller.conf"] = controllerConf
-	agentConf, _ := configMap.Data["antrea-agent.conf"]
+	agentConf := configMap.Data["antrea-agent.conf"]
 	for _, c := range agentChanges {
 		agentConf = replaceFieldValue(agentConf, c)
 	}
@@ -2038,14 +2069,14 @@ func (data *TestData) createDaemonSet(name string, ns string, ctrName string, im
 
 func (data *TestData) waitForDaemonSetPods(timeout time.Duration, dsName string, namespace string) error {
 	err := wait.Poll(defaultInterval, timeout, func() (bool, error) {
-		if ds, err := data.clientset.AppsV1().DaemonSets(namespace).Get(context.TODO(), dsName, metav1.GetOptions{}); err != nil {
+		ds, err := data.clientset.AppsV1().DaemonSets(namespace).Get(context.TODO(), dsName, metav1.GetOptions{})
+		if err != nil {
 			return false, err
-		} else {
-			if ds.Status.NumberReady != int32(clusterInfo.numNodes) {
-				return false, nil
-			}
-			return true, nil
 		}
+		if ds.Status.NumberReady != int32(clusterInfo.numNodes) {
+			return false, nil
+		}
+		return true, nil
 	})
 	if err != nil {
 		return err

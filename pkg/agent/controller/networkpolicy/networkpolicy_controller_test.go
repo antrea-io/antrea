@@ -53,9 +53,10 @@ func newTestController() (*Controller, *fake.Clientset, *mockReconciler) {
 	clientset := &fake.Clientset{}
 	ch := make(chan agenttypes.EntityReference, 100)
 	controller, _ := NewNetworkPolicyController(&antreaClientGetter{clientset}, nil, nil, "node1", ch,
-		true, true, true, nil, testAsyncDeleteInterval)
+		true, true, true, nil, testAsyncDeleteInterval, "8.8.8.8:53")
 	reconciler := newMockReconciler()
 	controller.reconciler = reconciler
+	controller.antreaPolicyLogger = nil
 	return controller, clientset, reconciler
 }
 
@@ -64,9 +65,10 @@ func newTestController() (*Controller, *fake.Clientset, *mockReconciler) {
 // for testing.
 type mockReconciler struct {
 	sync.Mutex
-	lastRealized map[string]*CompletedRule
-	updated      chan string
-	deleted      chan string
+	lastRealized   map[string]*CompletedRule
+	updated        chan string
+	deleted        chan string
+	fqdnController *fqdnController
 }
 
 func newMockReconciler() *mockReconciler {
@@ -105,6 +107,10 @@ func (r *mockReconciler) Forget(ruleID string) error {
 
 func (r *mockReconciler) RunIDAllocatorWorker(_ <-chan struct{}) {
 	return
+}
+
+func (r *mockReconciler) RegisterFQDNController(fc *fqdnController) {
+	r.fqdnController = fc
 }
 
 func (r *mockReconciler) GetRuleByFlowID(_ uint32) (*agenttypes.PolicyRule, bool, error) {

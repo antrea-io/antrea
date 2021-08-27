@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/contiv/libOpenflow/openflow13"
-	"github.com/contiv/ofnet/ofctrl"
+	"antrea.io/libOpenflow/openflow13"
+	"antrea.io/ofnet/ofctrl"
 )
 
 type FlowStates struct {

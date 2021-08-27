@@ -77,7 +77,7 @@ var (
 	// The feature gate should be modified via DefaultMutableFeatureGate.
 	DefaultFeatureGate featuregate.FeatureGate = DefaultMutableFeatureGate
 
-	// defaultAntreaFeatureGates consists of all known Antrea-specific feature keys.
+	// DefaultAntreaFeatureGates consists of all known Antrea-specific feature keys.
 	// To add a new feature, define a key for it above and add it here. The features will be
 	// available throughout Antrea binaries.
 	DefaultAntreaFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{

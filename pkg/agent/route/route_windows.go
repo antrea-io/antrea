@@ -1,3 +1,4 @@
+//go:build windows
 // +build windows
 
 // Copyright 2020 Antrea Authors
@@ -117,10 +118,10 @@ func (c *Client) AddRoutes(podCIDR *net.IPNet, nodeName string, peerNodeIP, peer
 		DestinationSubnet: podCIDR,
 		RouteMetric:       util.DefaultMetric,
 	}
-	if c.networkConfig.TrafficEncapMode.NeedsEncapToPeer(peerNodeIP, c.nodeConfig.NodeTransportIPAddr) {
+	if c.networkConfig.NeedsTunnelToPeer(peerNodeIP, c.nodeConfig.NodeTransportIPv4Addr) {
 		route.LinkIndex = c.nodeConfig.GatewayConfig.LinkIndex
 		route.GatewayAddress = peerGwIP
-	} else if c.networkConfig.TrafficEncapMode.NeedsDirectRoutingToPeer(peerNodeIP, c.nodeConfig.NodeTransportIPAddr) {
+	} else if c.networkConfig.NeedsDirectRoutingToPeer(peerNodeIP, c.nodeConfig.NodeTransportIPv4Addr) {
 		// NoEncap traffic to Node on the same subnet.
 		// Set the peerNodeIP as next hop.
 		route.LinkIndex = c.bridgeInfIndex

@@ -15,10 +15,13 @@
 package ovsctl
 
 import (
+	"bufio"
 	"bytes"
 	"fmt"
 	"net"
 	"strings"
+
+	"k8s.io/klog/v2"
 )
 
 // Shell exits with 127 if the command to execute is not found.
@@ -33,12 +36,34 @@ var (
 	nonIPDLTypes = []string{"arp", "rarp", "dl_type="}
 )
 
+type DPFeature string
+
+const (
+	CTStateFeature    DPFeature = "CT state"
+	CTZoneFeature     DPFeature = "CT zone"
+	CTMarkFeature     DPFeature = "CT mark"
+	CTLabelFeature    DPFeature = "CT label"
+	CTStateNATFeature DPFeature = "CT state NAT"
+)
+
+var knownFeatures = map[DPFeature]struct{}{
+	CTStateFeature:    {},
+	CTZoneFeature:     {},
+	CTMarkFeature:     {},
+	CTLabelFeature:    {},
+	CTStateNATFeature: {},
+}
+
 type ovsCtlClient struct {
 	bridge string
+	// To allow injection for testing.
+	runAppCtl func(cmd string, needsBridge bool, args ...string) ([]byte, *ExecError)
 }
 
 func NewClient(bridge string) *ovsCtlClient {
-	return &ovsCtlClient{bridge}
+	client := &ovsCtlClient{bridge: bridge}
+	client.runAppCtl = client.RunAppctlCmd
+	return client
 }
 
 func newBadRequestError(msg string) BadRequestError {
@@ -80,9 +105,8 @@ func (c *ovsCtlClient) Trace(req *TracingRequest) (string, error) {
 		ipKey, nwSrcKey = getNwSrcKey(req.SrcIP)
 		if strings.Contains(req.Flow, fmt.Sprintf("%s=", nwSrcKey)) {
 			return "", newBadRequestError(fmt.Sprintf("duplicated '%s' in flow", nwSrcKey))
-		} else {
-			nwSrc = fmt.Sprintf("%s=%s,", nwSrcKey, req.SrcIP.String())
 		}
+		nwSrc = fmt.Sprintf("%s=%s,", nwSrcKey, req.SrcIP.String())
 	}
 	if req.DstIP != nil {
 		var nwDstKey string
@@ -90,9 +114,8 @@ func (c *ovsCtlClient) Trace(req *TracingRequest) (string, error) {
 		// Do not allow overriding destination IP.
 		if strings.Contains(req.Flow, fmt.Sprintf("%s=", nwDstKey)) {
 			return "", newBadRequestError(fmt.Sprintf("duplicated '%s' in flow", nwDstKey))
-		} else {
-			nwDst = fmt.Sprintf("%s=%s,", nwDstKey, req.DstIP.String())
 		}
+		nwDst = fmt.Sprintf("%s=%s,", nwDstKey, req.DstIP.String())
 	}
 
 	// Always allow overriding source and destination MACs.
@@ -128,21 +151,19 @@ func (c *ovsCtlClient) Trace(req *TracingRequest) (string, error) {
 func getNwSrcKey(ip net.IP) (string, string) {
 	if ip.To4() != nil {
 		return "ip", "nw_src"
-	} else {
-		return "ipv6", "ipv6_src"
 	}
+	return "ipv6", "ipv6_src"
 }
 
 func getNwDstKey(ip net.IP) (string, string) {
 	if ip.To4() != nil {
 		return "ip", "nw_dst"
-	} else {
-		return "ipv6", "ipv6_dst"
 	}
+	return "ipv6", "ipv6_dst"
 }
 
 func (c *ovsCtlClient) runTracing(flow string) (string, error) {
-	out, execErr := c.RunAppctlCmd("ofproto/trace", true, flow)
+	out, execErr := c.runAppCtl("ofproto/trace", true, flow)
 	if execErr != nil {
 		return "", execErr
 	}
@@ -169,4 +190,40 @@ func (c *ovsCtlClient) RunAppctlCmd(cmd string, needsBridge bool, args ...string
 		return nil, newExecError(err, string(out))
 	}
 	return out, nil
+}
+
+func (c *ovsCtlClient) GetDPFeatures() (map[DPFeature]bool, error) {
+	cmd := "dpif/show-dp-features"
+	out, err := c.runAppCtl(cmd, true)
+	if err != nil {
+		return nil, fmt.Errorf("error listing DP features: %v", err)
+	}
+	scanner := bufio.NewScanner(strings.NewReader(string(out)))
+	scanner.Split(bufio.ScanLines)
+	features := map[DPFeature]bool{}
+	for scanner.Scan() {
+		line := scanner.Text()
+		fields := strings.Split(line, ":")
+		if len(fields) != 2 {
+			klog.InfoS("Unexpected output from dpif/show-dp-features", "line", line)
+			continue
+		}
+		feature := DPFeature(strings.TrimSpace(fields[0]))
+		_, known := knownFeatures[feature]
+		if !known {
+			continue
+		}
+		value := strings.TrimSpace(fields[1])
+		var supported bool
+		if value == "Yes" {
+			supported = true
+		} else if value == "No" {
+			supported = false
+		} else {
+			klog.InfoS("Unexpected non boolean value", "feature", feature, "value", value)
+			continue
+		}
+		features[feature] = supported
+	}
+	return features, nil
 }

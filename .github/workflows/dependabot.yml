@@ -1,0 +1,55 @@
+name: Dependabot Workflow
+
+# This workflow commits to Dependabot branches to ensure that the corresponding
+# PRs can satisfy all status checks.
+
+# WARNING: Combining pull_request_target workflow trigger with an explicit
+# checkout of an untrusted PR is a dangerous practice that may lead to
+# repository compromise.
+# See https://securitylab.github.com/research/github-actions-preventing-pwn-requests/
+# To prevent repository compromise, the workflow jobs must only execute on PRs
+# opened by Dependabot and which are labelled correctly (note that these two
+# checks are somewhat redundant since labelling PRs require write access to the
+# repository).
+# An alternative is to use the "two-workflow method" (see
+# https://docs.github.com/en/code-security/supply-chain-security/keeping-your-dependencies-updated-automatically/automating-dependabot-with-github-actions#handling-push-events),
+# but that is more tedious to configure and should not be required here.
+
+on:
+  pull_request_target:
+    types: [labeled, synchronize]
+
+permissions:
+  contents: write
+
+jobs:
+  # This job ensures that "go mod tidy" is run for all Go modules included in
+  # this repository.
+  tidy:
+    name: Go tidiness for Dependabot PR
+    # 'dependencies' and 'go' are the default labels used by Dependabot when updating Go dependencies
+    if: ${{ github.actor == 'dependabot[bot]' && contains(github.event.pull_request.labels.*.name, 'dependencies') && contains(github.event.pull_request.labels.*.name, 'go') }}
+    runs-on: [ubuntu-latest]
+    steps:
+    - name: Set up Go 1.17
+      uses: actions/setup-go@v2
+      with:
+        go-version: 1.17
+    - uses: actions/checkout@v2
+      with:
+        # Check out the pull request HEAD
+        ref: ${{ github.event.pull_request.head.sha }}
+    - name: Run go mod tidy
+      # the checks above (Github actor and PR labels) ensure that a malicious
+      # actor cannot open a PR with a modified "tidy" Makefile target and
+      # execute arbitrary code with write access and access to secrets. In
+      # particular, someone would need write access to the repo to add the
+      # "dependencies" and "go" labels.
+      run: make tidy
+    - name: Commit changes
+      uses: stefanzweifel/git-auto-commit-action@v4
+      with:
+        commit_message: Go tidiness for Dependabot PR
+        commit_options: '--no-verify'
+        file_pattern: '**/go.mod **/go.sum'
+        disable_globbing: false

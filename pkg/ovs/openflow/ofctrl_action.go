@@ -8,8 +8,8 @@ import (
 
 	utilnet "k8s.io/utils/net"
 
-	"github.com/contiv/libOpenflow/openflow13"
-	"github.com/contiv/ofnet/ofctrl"
+	"antrea.io/libOpenflow/openflow13"
+	"antrea.io/ofnet/ofctrl"
 )
 
 type ofFlowAction struct {
@@ -31,16 +31,15 @@ func (a *ofFlowAction) Output(port int) FlowBuilder {
 }
 
 // OutputFieldRange is an action to output packets to the port located in the specified NXM field with rng.
-func (a *ofFlowAction) OutputFieldRange(name string, rng Range) FlowBuilder {
+func (a *ofFlowAction) OutputFieldRange(name string, rng *Range) FlowBuilder {
 	outputAction, _ := ofctrl.NewNXOutput(name, int(rng[0]), int(rng[1]))
 	a.builder.ApplyAction(outputAction)
 	return a.builder
 }
 
-// OutputFieldRange is an action to output packets to a port which is located in the specified NXM register[rng[0]..rng[1]].
-func (a *ofFlowAction) OutputRegRange(regID int, rng Range) FlowBuilder {
-	name := fmt.Sprintf("%s%d", NxmFieldReg, regID)
-	return a.OutputFieldRange(name, rng)
+func (a *ofFlowAction) OutputToRegField(field *RegField) FlowBuilder {
+	name := field.GetNXFieldName()
+	return a.OutputFieldRange(name, field.rng)
 }
 
 // OutputInPort is an action to output packets to the ofport from where the packet enters the OFSwitch.
@@ -79,10 +78,15 @@ func (a *ofCTAction) LoadToMark(value uint32) CTAction {
 	return a
 }
 
-// LoadToLabelRange is an action to load data into ct_label at specified range.
-func (a *ofCTAction) LoadToLabelRange(value uint64, rng *Range) CTAction {
+func (a *ofCTAction) LoadToCtMark(mark *CtMark) CTAction {
+	field, _, _ := getFieldRange(NxmFieldCtMark)
+	a.load(field, uint64(mark.value), mark.rng)
+	return a
+}
+
+func (a *ofCTAction) LoadToLabelField(value uint64, labelField *CtLabel) CTAction {
 	field, _, _ := getFieldRange(NxmFieldCtLabel)
-	a.load(field, value, rng)
+	a.load(field, value, labelField.rng)
 	return a
 }
 
@@ -222,7 +226,7 @@ func (a *ofFlowAction) LoadARPOperation(value uint16) FlowBuilder {
 }
 
 // LoadRange is an action to Load data to the target field at specified range.
-func (a *ofFlowAction) LoadRange(name string, value uint64, rng Range) FlowBuilder {
+func (a *ofFlowAction) LoadRange(name string, value uint64, rng *Range) FlowBuilder {
 	loadAct, _ := ofctrl.NewNXLoadAction(name, value, rng.ToNXRange())
 	if a.builder.ofFlow.Table != nil && a.builder.ofFlow.Table.Switch != nil {
 		loadAct.ResetFieldLength(a.builder.ofFlow.Table.Switch)
@@ -231,16 +235,19 @@ func (a *ofFlowAction) LoadRange(name string, value uint64, rng Range) FlowBuild
 	return a.builder
 }
 
-// LoadRegRange is an action to Load data to the target register at specified range.
-func (a *ofFlowAction) LoadRegRange(regID int, value uint32, rng Range) FlowBuilder {
-	name := fmt.Sprintf("%s%d", NxmFieldReg, regID)
-	loadAct, _ := ofctrl.NewNXLoadAction(name, uint64(value), rng.ToNXRange())
+func (a *ofFlowAction) LoadToRegField(field *RegField, value uint32) FlowBuilder {
+	name := field.GetNXFieldName()
+	loadAct, _ := ofctrl.NewNXLoadAction(name, uint64(value), field.rng.ToNXRange())
 	a.builder.ApplyAction(loadAct)
 	return a.builder
 }
 
+func (a *ofFlowAction) LoadRegMark(mark *RegMark) FlowBuilder {
+	return a.LoadToRegField(mark.field, mark.value)
+}
+
 // LoadToPktMarkRange is an action to load data into pkt_mark at specified range.
-func (a *ofFlowAction) LoadPktMarkRange(value uint32, rng Range) FlowBuilder {
+func (a *ofFlowAction) LoadPktMarkRange(value uint32, rng *Range) FlowBuilder {
 	return a.LoadRange(NxmFieldPktMark, uint64(value), rng)
 }
 
@@ -330,8 +337,8 @@ func (a *ofFlowAction) SendToController(reason uint8) FlowBuilder {
 	return a.builder
 }
 
-func (a *ofFlowAction) Meter(meterId uint32) FlowBuilder {
-	a.builder.ofFlow.Meter(meterId)
+func (a *ofFlowAction) Meter(meterID uint32) FlowBuilder {
+	a.builder.ofFlow.Meter(meterID)
 	return a.builder
 }
 
@@ -469,16 +476,15 @@ func (a *ofLearnAction) MatchLearnedDstIPv6() LearnAction {
 	return a
 }
 
-// MatchReg makes the learned flow to match the data in the reg of specific range.
-func (a *ofLearnAction) MatchReg(regID int, data uint32, rng Range) LearnAction {
-	toField := &ofctrl.LearnField{Name: fmt.Sprintf("NXM_NX_REG%d", regID), Start: uint16(rng[0])}
+func (a *ofLearnAction) MatchRegMark(mark *RegMark) LearnAction {
+	toField := &ofctrl.LearnField{Name: mark.field.GetNXFieldName(), Start: uint16(mark.field.rng[0])}
 	valBuf := make([]byte, 4)
-	binary.BigEndian.PutUint32(valBuf, data)
-	offset := (rng.Length()-1)/8 + 1
+	binary.BigEndian.PutUint32(valBuf, mark.value)
+	offset := (mark.field.rng.Length()-1)/8 + 1
 	if offset < 2 {
 		offset = 2
 	}
-	a.nxLearn.AddMatch(toField, uint16(rng.Length()), nil, valBuf[4-offset:])
+	a.nxLearn.AddMatch(toField, uint16(mark.field.rng.Length()), nil, valBuf[4-offset:])
 	return a
 }
 
@@ -494,34 +500,31 @@ func (a *ofLearnAction) MatchXXReg(regID int, data []byte, rng Range) LearnActio
 	return a
 }
 
-// LoadRegToReg makes the learned flow to load reg[fromRegID] to reg[toRegID]
-// with specific ranges.
-func (a *ofLearnAction) LoadRegToReg(fromRegID, toRegID int, fromRng, toRng Range) LearnAction {
-	fromField := &ofctrl.LearnField{Name: fmt.Sprintf("NXM_NX_REG%d", fromRegID), Start: uint16(fromRng[0])}
-	toField := &ofctrl.LearnField{Name: fmt.Sprintf("NXM_NX_REG%d", toRegID), Start: uint16(toRng[0])}
-	a.nxLearn.AddLoadAction(toField, uint16(toRng.Length()), fromField, nil)
+func (a *ofLearnAction) LoadFieldToField(fromField, toField *RegField) LearnAction {
+	from := &ofctrl.LearnField{Name: fromField.GetNXFieldName(), Start: uint16(fromField.rng[0])}
+	to := &ofctrl.LearnField{Name: toField.GetNXFieldName(), Start: uint16(toField.rng[0])}
+	a.nxLearn.AddLoadAction(to, uint16(toField.rng.Length()), from, nil)
 	return a
 }
 
-// LoadXXRegToXXReg makes the learned flow to load reg[fromXxRegID] to reg[toXxRegID]
+// LoadXXRegToXXReg makes the learned flow to load reg[fromXXField.regID] to reg[toXXField.regID]
 // with specific ranges.
-func (a *ofLearnAction) LoadXXRegToXXReg(fromXxRegID, toXxRegID int, fromRng, toRng Range) LearnAction {
-	fromField := &ofctrl.LearnField{Name: fmt.Sprintf("%s%d", NxmFieldXXReg, fromXxRegID), Start: uint16(fromRng[0])}
-	toField := &ofctrl.LearnField{Name: fmt.Sprintf("%s%d", NxmFieldXXReg, toXxRegID), Start: uint16(toRng[0])}
-	a.nxLearn.AddLoadAction(toField, uint16(toRng.Length()), fromField, nil)
+func (a *ofLearnAction) LoadXXRegToXXReg(fromXXField, toXXField *XXRegField) LearnAction {
+	from := &ofctrl.LearnField{Name: fromXXField.GetNXFieldName(), Start: uint16(fromXXField.rng[0])}
+	to := &ofctrl.LearnField{Name: toXXField.GetNXFieldName(), Start: uint16(toXXField.rng[0])}
+	a.nxLearn.AddLoadAction(to, uint16(toXXField.rng.Length()), from, nil)
 	return a
 }
 
-// LoadReg makes the learned flow to load data to reg[regID] with specific range.
-func (a *ofLearnAction) LoadReg(regID int, data uint32, rng Range) LearnAction {
-	toField := &ofctrl.LearnField{Name: fmt.Sprintf("NXM_NX_REG%d", regID), Start: uint16(rng[0])}
+func (a *ofLearnAction) LoadRegMark(mark *RegMark) LearnAction {
+	toField := &ofctrl.LearnField{Name: mark.field.GetNXFieldName(), Start: uint16(mark.field.rng[0])}
 	valBuf := make([]byte, 4)
-	binary.BigEndian.PutUint32(valBuf, data)
-	offset := (rng.Length()-1)/8 + 1
+	binary.BigEndian.PutUint32(valBuf, mark.value)
+	offset := (mark.field.rng.Length()-1)/8 + 1
 	if offset < 2 {
 		offset = 2
 	}
-	a.nxLearn.AddLoadAction(toField, uint16(rng.Length()), nil, valBuf[4-offset:])
+	a.nxLearn.AddLoadAction(toField, uint16(mark.field.rng.Length()), nil, valBuf[4-offset:])
 	return a
 }
 

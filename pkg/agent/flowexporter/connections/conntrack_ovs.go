@@ -224,10 +224,9 @@ func flowStringToAntreaConnection(flow string, zoneFilter uint16) (*flowexporter
 			}
 			if zoneFilter != uint16(val) {
 				break
-			} else {
-				inZone = true
-				conn.Zone = uint16(val)
 			}
+			inZone = true
+			conn.Zone = uint16(val)
 		case strings.Contains(fs, "mark"):
 			fields := strings.Split(fs, "=")
 			val, err := strconv.ParseUint(fields[len(fields)-1], 10, 32)

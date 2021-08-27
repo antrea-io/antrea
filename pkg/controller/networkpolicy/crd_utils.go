@@ -93,6 +93,7 @@ func (n *NetworkPolicyController) toAntreaPeerForCRD(peers []v1alpha1.NetworkPol
 		return &podsPeer
 	}
 	var ipBlocks []controlplane.IPBlock
+	var fqdns []string
 	for _, peer := range peers {
 		// A v1alpha1.NetworkPolicyPeer will either have an IPBlock or a
 		// podSelector and/or namespaceSelector set or a reference to the
@@ -111,12 +112,14 @@ func (n *NetworkPolicyController) toAntreaPeerForCRD(peers []v1alpha1.NetworkPol
 			} else if len(groupIPBlocks) > 0 {
 				ipBlocks = append(ipBlocks, groupIPBlocks...)
 			}
+		} else if peer.FQDN != "" {
+			fqdns = append(fqdns, peer.FQDN)
 		} else {
 			normalizedUID := n.createAddressGroup(np.GetNamespace(), peer.PodSelector, peer.NamespaceSelector, peer.ExternalEntitySelector)
 			addressGroups = append(addressGroups, normalizedUID)
 		}
 	}
-	return &controlplane.NetworkPolicyPeer{AddressGroups: addressGroups, IPBlocks: ipBlocks}
+	return &controlplane.NetworkPolicyPeer{AddressGroups: addressGroups, IPBlocks: ipBlocks, FQDNs: fqdns}
 }
 
 // toNamespacedPeerForCRD creates an Antrea controlplane NetworkPolicyPeer for crdv1alpha1 NetworkPolicyPeer

@@ -20,6 +20,7 @@ import (
 	"strconv"
 	"strings"
 
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent/types"
@@ -46,12 +47,19 @@ var (
 	MatchUDPv6DstPort  = types.NewMatchKey(binding.ProtocolUDPv6, types.L4PortAddr, "tp_dst")
 	MatchSCTPDstPort   = types.NewMatchKey(binding.ProtocolSCTP, types.L4PortAddr, "tp_dst")
 	MatchSCTPv6DstPort = types.NewMatchKey(binding.ProtocolSCTPv6, types.L4PortAddr, "tp_dst")
+	MatchTCPSrcPort    = types.NewMatchKey(binding.ProtocolTCP, types.L4PortAddr, "tp_src")
+	MatchTCPv6SrcPort  = types.NewMatchKey(binding.ProtocolTCPv6, types.L4PortAddr, "tp_src")
+	MatchUDPSrcPort    = types.NewMatchKey(binding.ProtocolUDP, types.L4PortAddr, "tp_src")
+	MatchUDPv6SrcPort  = types.NewMatchKey(binding.ProtocolUDPv6, types.L4PortAddr, "tp_src")
 	Unsupported        = types.NewMatchKey(binding.ProtocolIP, types.UnSupported, "unknown")
 
 	// metricFlowIdentifier is used to identify metric flows in metric table.
 	// There could be other flows like default flow and Traceflow flows in the table. Only metric flows are supposed to
 	// have normal priority.
 	metricFlowIdentifier = fmt.Sprintf("priority=%d,", priorityNormal)
+
+	protocolUDP = v1beta2.ProtocolUDP
+	dnsPort     = intstr.FromInt(53)
 )
 
 // IP address calculated from Pod's address.
@@ -63,15 +71,13 @@ func (a *IPAddress) GetMatchKey(addrType types.AddressType) *types.MatchKey {
 	case types.SrcAddress:
 		if ipArr.To4() != nil {
 			return MatchSrcIP
-		} else {
-			return MatchSrcIPv6
 		}
+		return MatchSrcIPv6
 	case types.DstAddress:
 		if ipArr.To4() != nil {
 			return MatchDstIP
-		} else {
-			return MatchDstIPv6
 		}
+		return MatchDstIPv6
 	default:
 		klog.Errorf("Unknown AddressType %d in IPAddress", addrType)
 		return Unsupported
@@ -101,15 +107,13 @@ func (a *IPNetAddress) GetMatchKey(addrType types.AddressType) *types.MatchKey {
 	case types.SrcAddress:
 		if ipAddr.IP.To4() != nil {
 			return MatchSrcIPNet
-		} else {
-			return MatchSrcIPNetv6
 		}
+		return MatchSrcIPNetv6
 	case types.DstAddress:
 		if ipAddr.IP.To4() != nil {
 			return MatchDstIPNet
-		} else {
-			return MatchDstIPNetv6
 		}
+		return MatchDstIPNetv6
 	default:
 		klog.Errorf("Unknown AddressType %d in IPNetAddress", addrType)
 		return Unsupported
@@ -335,16 +339,15 @@ func (ctx *conjMatchFlowContext) deleteAction(conjID uint32) *flowChange {
 			flow:       ctx.flow,
 			changeType: deletion,
 		}
-	} else {
-		// Modify the Openflow entry and reset the other conjunctive actions.
-		var actions []*conjunctiveAction
-		for _, act := range ctx.actions {
-			if act.conjID != conjID {
-				actions = append(actions, act)
-			}
-		}
-		return ctx.createOrUpdateConjunctiveMatchFlow(actions)
 	}
+	// Modify the Openflow entry and reset the other conjunctive actions.
+	var actions []*conjunctiveAction
+	for _, act := range ctx.actions {
+		if act.conjID != conjID {
+			actions = append(actions, act)
+		}
+	}
+	return ctx.createOrUpdateConjunctiveMatchFlow(actions)
 }
 
 // addAction adds the specified policyRuleConjunction into conjunctiveMatchFlow's actions, and then returns the flowChange.
@@ -525,6 +528,49 @@ type clause struct {
 	dropTable binding.Table
 }
 
+func (c *client) NewDNSpacketInConjunction(id uint32) error {
+	existingConj := c.getPolicyRuleConjunction(id)
+	if existingConj != nil {
+		klog.InfoS("DNS Conjunction has already been added to cache", "id", id)
+		return nil
+	}
+	conj := &policyRuleConjunction{
+		id:          id,
+		ruleTableID: AntreaPolicyIngressRuleTable,
+		actionFlows: []binding.Flow{c.dnsPacketInFlow(id), c.dnsResponseBypassPacketInFlow(), c.dnsResponseBypassConntrackFlow()},
+	}
+	if err := c.ofEntryOperations.AddAll(conj.actionFlows); err != nil {
+		return fmt.Errorf("error when adding action flows for the DNS conjunction: %w", err)
+	}
+	udpService := v1beta2.Service{
+		Protocol: &protocolUDP,
+		Port:     &dnsPort,
+	}
+	dnsPriority := priorityDNSIntercept
+	conj.serviceClause = conj.newClause(1, 2, c.pipeline[conj.ruleTableID], nil)
+	conj.toClause = conj.newClause(2, 2, c.pipeline[conj.ruleTableID], nil)
+
+	c.conjMatchFlowLock.Lock()
+	defer c.conjMatchFlowLock.Unlock()
+	ctxChanges := conj.serviceClause.addServiceFlows(c, []v1beta2.Service{udpService}, &dnsPriority, true)
+	if err := c.applyConjunctiveMatchFlows(ctxChanges); err != nil {
+		return err
+	}
+	// Add the policyRuleConjunction into policyCache
+	c.policyCache.Add(conj)
+	return nil
+}
+
+func (c *client) AddAddressToDNSConjunction(id uint32, addrs []types.Address) error {
+	dnsPriority := priorityDNSIntercept
+	return c.AddPolicyRuleAddress(id, types.DstAddress, addrs, &dnsPriority)
+}
+
+func (c *client) DeleteAddressFromDNSConjunction(id uint32, addrs []types.Address) error {
+	dnsPriority := priorityDNSIntercept
+	return c.DeletePolicyRuleAddress(id, types.DstAddress, addrs, &dnsPriority)
+}
+
 func (c *clause) addConjunctiveMatchFlow(client *client, match *conjunctiveMatch) *conjMatchFlowContextChange {
 	matcherKey := match.generateGlobalMapKey()
 	_, found := c.matches[matcherKey]
@@ -595,22 +641,40 @@ func generateAddressConjMatch(ruleTableID binding.TableIDType, addr types.Addres
 	return match
 }
 
-func getServiceMatchType(protocol *v1beta2.Protocol, ipv4Enabled, ipv6Enabled bool) []*types.MatchKey {
+func getServiceMatchType(protocol *v1beta2.Protocol, ipv4Enabled, ipv6Enabled, matchSrc bool) []*types.MatchKey {
 	var matchKeys []*types.MatchKey
 	switch *protocol {
 	case v1beta2.ProtocolTCP:
-		if ipv4Enabled {
-			matchKeys = append(matchKeys, MatchTCPDstPort)
-		}
-		if ipv6Enabled {
-			matchKeys = append(matchKeys, MatchTCPv6DstPort)
+		if !matchSrc {
+			if ipv4Enabled {
+				matchKeys = append(matchKeys, MatchTCPDstPort)
+			}
+			if ipv6Enabled {
+				matchKeys = append(matchKeys, MatchTCPv6DstPort)
+			}
+		} else {
+			if ipv4Enabled {
+				matchKeys = append(matchKeys, MatchTCPSrcPort)
+			}
+			if ipv6Enabled {
+				matchKeys = append(matchKeys, MatchTCPv6SrcPort)
+			}
 		}
 	case v1beta2.ProtocolUDP:
-		if ipv4Enabled {
-			matchKeys = append(matchKeys, MatchUDPDstPort)
-		}
-		if ipv6Enabled {
-			matchKeys = append(matchKeys, MatchUDPv6DstPort)
+		if !matchSrc {
+			if ipv4Enabled {
+				matchKeys = append(matchKeys, MatchUDPDstPort)
+			}
+			if ipv6Enabled {
+				matchKeys = append(matchKeys, MatchUDPv6DstPort)
+			}
+		} else {
+			if ipv4Enabled {
+				matchKeys = append(matchKeys, MatchUDPSrcPort)
+			}
+			if ipv6Enabled {
+				matchKeys = append(matchKeys, MatchUDPv6SrcPort)
+			}
 		}
 	case v1beta2.ProtocolSCTP:
 		if ipv4Enabled {
@@ -625,8 +689,8 @@ func getServiceMatchType(protocol *v1beta2.Protocol, ipv4Enabled, ipv6Enabled bo
 	return matchKeys
 }
 
-func generateServicePortConjMatches(ruleTableID binding.TableIDType, service v1beta2.Service, priority *uint16, ipv4Enabled, ipv6Enabled bool) []*conjunctiveMatch {
-	matchKeys := getServiceMatchType(service.Protocol, ipv4Enabled, ipv6Enabled)
+func generateServicePortConjMatches(ruleTableID binding.TableIDType, service v1beta2.Service, priority *uint16, ipv4Enabled, ipv6Enabled, matchSrc bool) []*conjunctiveMatch {
+	matchKeys := getServiceMatchType(service.Protocol, ipv4Enabled, ipv6Enabled, matchSrc)
 	ovsBitRanges := serviceToBitRanges(service)
 	var matches []*conjunctiveMatch
 	for _, matchKey := range matchKeys {
@@ -694,10 +758,10 @@ func (c *clause) addAddrFlows(client *client, addrType types.AddressType, addres
 
 // addServiceFlows translates the specified NetworkPolicyPorts to conjunctiveMatchFlow, and returns corresponding
 // conjMatchFlowContextChange.
-func (c *clause) addServiceFlows(client *client, ports []v1beta2.Service, priority *uint16) []*conjMatchFlowContextChange {
+func (c *clause) addServiceFlows(client *client, ports []v1beta2.Service, priority *uint16, matchSrc bool) []*conjMatchFlowContextChange {
 	var conjMatchFlowContextChanges []*conjMatchFlowContextChange
 	for _, port := range ports {
-		matches := generateServicePortConjMatches(c.ruleTable.GetID(), port, priority, client.IsIPv4Enabled(), client.IsIPv6Enabled())
+		matches := generateServicePortConjMatches(c.ruleTable.GetID(), port, priority, client.IsIPv4Enabled(), client.IsIPv6Enabled(), matchSrc)
 		for _, match := range matches {
 			ctxChange := c.addConjunctiveMatchFlow(client, match)
 			conjMatchFlowContextChanges = append(conjMatchFlowContextChanges, ctxChange)
@@ -908,7 +972,7 @@ func (c *client) addRuleToConjunctiveMatch(conj *policyRuleConjunction, rule *ty
 	}
 	if conj.serviceClause != nil {
 		for _, port := range rule.Service {
-			matches := generateServicePortConjMatches(conj.serviceClause.ruleTable.GetID(), port, rule.Priority, c.IsIPv4Enabled(), c.IsIPv6Enabled())
+			matches := generateServicePortConjMatches(conj.serviceClause.ruleTable.GetID(), port, rule.Priority, c.IsIPv4Enabled(), c.IsIPv6Enabled(), false)
 			for _, match := range matches {
 				c.addActionToConjunctiveMatch(conj.serviceClause, match)
 			}
@@ -1131,7 +1195,7 @@ func (c *policyRuleConjunction) calculateChangesForRuleCreation(clnt *client, ru
 		ctxChanges = append(ctxChanges, c.toClause.addAddrFlows(clnt, types.DstAddress, rule.To, rule.Priority)...)
 	}
 	if c.serviceClause != nil {
-		ctxChanges = append(ctxChanges, c.serviceClause.addServiceFlows(clnt, rule.Service, rule.Priority)...)
+		ctxChanges = append(ctxChanges, c.serviceClause.addServiceFlows(clnt, rule.Service, rule.Priority, false)...)
 	}
 	return ctxChanges
 }
@@ -1572,9 +1636,8 @@ func parseMetricFlow(flow string) (uint32, types.RuleMetric) {
 	// table=101, n_packets=9, n_bytes=666, priority=200,reg0=0x100000/0x100000,reg3=0x5 actions=drop
 	if _, ok := flowMap[dropIdentifier]; ok {
 		return parseDropFlow(flowMap)
-	} else {
-		return parseAllowFlow(flowMap)
 	}
+	return parseAllowFlow(flowMap)
 }
 
 func (c *client) NetworkPolicyMetrics() map[uint32]*types.RuleMetric {

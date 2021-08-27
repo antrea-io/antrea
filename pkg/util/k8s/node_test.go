@@ -22,13 +22,15 @@ import (
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"antrea.io/antrea/pkg/util/ip"
 )
 
 func TestGetNodeAddr(t *testing.T) {
 	tests := []struct {
 		name         string
 		node         *corev1.Node
-		expectedAddr net.IP
+		expectedAddr *ip.DualStackIPs
 		expectedErr  error
 	}{
 		{
@@ -54,7 +56,7 @@ func TestGetNodeAddr(t *testing.T) {
 					},
 				},
 			},
-			expectedAddr: net.ParseIP("192.168.10.10"),
+			expectedAddr: &ip.DualStackIPs{IPv4: net.ParseIP("192.168.10.10")},
 			expectedErr:  nil,
 		},
 		{
@@ -76,7 +78,7 @@ func TestGetNodeAddr(t *testing.T) {
 					},
 				},
 			},
-			expectedAddr: net.ParseIP("1.1.1.1"),
+			expectedAddr: &ip.DualStackIPs{IPv4: net.ParseIP("1.1.1.1")},
 			expectedErr:  nil,
 		},
 		{
@@ -100,7 +102,7 @@ func TestGetNodeAddr(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			addr, err := GetNodeAddr(tt.node)
+			addr, err := GetNodeAddrs(tt.node)
 			assert.Equal(t, tt.expectedErr, err)
 			assert.Equal(t, tt.expectedAddr, addr)
 		})

@@ -17,6 +17,7 @@ package noderoute
 import (
 	"fmt"
 	"net"
+	"strings"
 	"time"
 
 	"github.com/containernetworking/plugins/pkg/ip"
@@ -37,6 +38,7 @@ import (
 	"antrea.io/antrea/pkg/agent/route"
 	"antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/agent/util"
+	"antrea.io/antrea/pkg/agent/wireguard"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 	utilip "antrea.io/antrea/pkg/util/ip"
 	"antrea.io/antrea/pkg/util/k8s"
@@ -73,7 +75,8 @@ type Controller struct {
 	// installedNodes records routes and flows installation states of Nodes.
 	// The key is the host name of the Node, the value is the nodeRouteInfo of the Node.
 	// A node will be in the map after its flows and routes are installed successfully.
-	installedNodes cache.Indexer
+	installedNodes  cache.Indexer
+	wireGuardClient wireguard.Interface
 }
 
 // NewNodeRouteController instantiates a new Controller object which will process Node events
@@ -86,7 +89,9 @@ func NewNodeRouteController(
 	routeClient route.Interface,
 	interfaceStore interfacestore.InterfaceStore,
 	networkConfig *config.NetworkConfig,
-	nodeConfig *config.NodeConfig) *Controller {
+	nodeConfig *config.NodeConfig,
+	wireguardClient wireguard.Interface,
+) *Controller {
 	nodeInformer := informerFactory.Core().V1().Nodes()
 	controller := &Controller{
 		kubeClient:       kubeClient,
@@ -101,6 +106,7 @@ func NewNodeRouteController(
 		nodeListerSynced: nodeInformer.Informer().HasSynced,
 		queue:            workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "noderoute"),
 		installedNodes:   cache.NewIndexer(nodeRouteInfoKeyFunc, cache.Indexers{nodeRouteInfoPodCIDRIndexName: nodeRouteInfoPodCIDRIndexFunc}),
+		wireGuardClient:  wireguardClient,
 	}
 	nodeInformer.Informer().AddEventHandlerWithResyncPeriod(
 		cache.ResourceEventHandlerFuncs{
@@ -133,11 +139,12 @@ func nodeRouteInfoPodCIDRIndexFunc(obj interface{}) ([]string, error) {
 
 // nodeRouteInfo is the route related information extracted from corev1.Node.
 type nodeRouteInfo struct {
-	nodeName  string
-	podCIDRs  []*net.IPNet
-	nodeIP    net.IP
-	gatewayIP []net.IP
-	nodeMAC   net.HardwareAddr
+	nodeName           string
+	podCIDRs           []*net.IPNet
+	nodeIPs            *utilip.DualStackIPs
+	gatewayIPs         *utilip.DualStackIPs
+	nodeMAC            net.HardwareAddr
+	wireGuardPublicKey string
 }
 
 // enqueueNode adds an object to the controller work queue
@@ -207,7 +214,7 @@ func (c *Controller) removeStaleTunnelPorts() error {
 	// knownInterfaces is the list of interfaces currently in the local cache.
 	knownInterfaces := c.interfaceStore.GetInterfaceKeysByType(interfacestore.TunnelInterface)
 
-	if c.networkConfig.EnableIPSecTunnel {
+	if c.networkConfig.TrafficEncryptionMode == config.TrafficEncryptionModeIPSec {
 		for _, node := range nodes {
 			interfaceConfig, found := c.interfaceStore.GetNodeTunnelInterface(node.Name)
 			if !found {
@@ -215,17 +222,15 @@ func (c *Controller) removeStaleTunnelPorts() error {
 				continue
 			}
 
-			peerNodeIP, err := k8s.GetNodeAddr(node)
+			peerNodeIPs, err := k8s.GetNodeAddrs(node)
 			if err != nil {
 				klog.Errorf("Failed to retrieve IP address of Node %s: %v", node.Name, err)
 				continue
 			}
 
 			ifaceID := util.GenerateNodeTunnelInterfaceKey(node.Name)
-			validConfiguration := interfaceConfig.PSK == c.networkConfig.IPSecPSK &&
-				interfaceConfig.RemoteIP.Equal(peerNodeIP) &&
-				interfaceConfig.TunnelInterfaceConfig.Type == c.networkConfig.TunnelType
-			if validConfiguration {
+			ifaceName := util.GenerateNodeTunnelInterfaceName(node.Name)
+			if c.compareInterfaceConfig(interfaceConfig, peerNodeIPs.IPv4, ifaceName) || c.compareInterfaceConfig(interfaceConfig, peerNodeIPs.IPv6, ifaceName) {
 				desiredInterfaces[ifaceID] = true
 			}
 		}
@@ -258,6 +263,14 @@ func (c *Controller) removeStaleTunnelPorts() error {
 	return nil
 }
 
+func (c *Controller) compareInterfaceConfig(interfaceConfig *interfacestore.InterfaceConfig,
+	peerNodeIP net.IP, interfaceName string) bool {
+	return interfaceConfig.InterfaceName == interfaceName &&
+		interfaceConfig.PSK == c.networkConfig.IPSecPSK &&
+		interfaceConfig.RemoteIP.Equal(peerNodeIP) &&
+		interfaceConfig.TunnelInterfaceConfig.Type == c.networkConfig.TunnelType
+}
+
 func (c *Controller) reconcile() error {
 	klog.Infof("Reconciliation for %s", controllerName)
 	// reconciliation consists of removing stale routes and stale / invalid tunnel ports:
@@ -269,7 +282,28 @@ func (c *Controller) reconcile() error {
 	if err := c.removeStaleTunnelPorts(); err != nil {
 		return fmt.Errorf("error when removing stale tunnel ports: %v", err)
 	}
+	if err := c.removeStaleWireGuardPeers(); err != nil {
+		return fmt.Errorf("error when removing stale WireGuard peers: %v", err)
+	}
 	return nil
+}
+
+// removeStaleWireGuardPeers deletes stale WireGuard peers if necessary.
+func (c *Controller) removeStaleWireGuardPeers() error {
+	if c.networkConfig.TrafficEncryptionMode != config.TrafficEncryptionModeWireGuard {
+		return nil
+	}
+	nodes, err := c.nodeLister.List(labels.Everything())
+	if err != nil {
+		return fmt.Errorf("error when listing Nodes: %v", err)
+	}
+	currentPeerPublicKeys := make(map[string]string)
+	for _, n := range nodes {
+		if pubkey, ok := n.Annotations[types.NodeWireGuardPublicAnnotationKey]; ok {
+			currentPeerPublicKeys[n.Name] = pubkey
+		}
+	}
+	return c.wireGuardClient.RemoveStalePeers(currentPeerPublicKeys)
 }
 
 // Run will create defaultWorkers workers (go routines) which will process the Node events from the
@@ -293,7 +327,7 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 	}
 
 	if err := c.reconcile(); err != nil {
-		klog.Errorf("Error during %s reconciliation", controllerName)
+		klog.ErrorS(err, "Error during reconciliation", "controller", controllerName)
 	}
 
 	for i := 0; i < defaultWorkers; i++ {
@@ -392,7 +426,7 @@ func (c *Controller) deleteNodeRoute(nodeName string) error {
 	}
 	c.installedNodes.Delete(obj)
 
-	if c.networkConfig.EnableIPSecTunnel {
+	if c.networkConfig.TrafficEncryptionMode == config.TrafficEncryptionModeIPSec {
 		interfaceConfig, ok := c.interfaceStore.GetNodeTunnelInterface(nodeName)
 		if !ok {
 			// Tunnel port not created for this Node.
@@ -405,6 +439,12 @@ func (c *Controller) deleteNodeRoute(nodeName string) error {
 		}
 		c.interfaceStore.DeleteInterface(interfaceConfig)
 	}
+
+	if c.networkConfig.TrafficEncryptionMode == config.TrafficEncryptionModeWireGuard {
+		if err := c.wireGuardClient.DeletePeer(nodeName); err != nil {
+			return fmt.Errorf("delete WireGuard peer %s failed: %v", nodeName, err)
+		}
+	}
 	return nil
 }
 
@@ -414,15 +454,18 @@ func (c *Controller) addNodeRoute(nodeName string, node *corev1.Node) error {
 	if err != nil {
 		return fmt.Errorf("error when retrieving MAC of Node %s: %v", nodeName, err)
 	}
-	peerNodeIP, err := c.getNodeTransportAddress(node)
+	peerNodeIPs, err := c.getNodeTransportAddrs(node)
 	if err != nil {
 		return err
 	}
+	peerWireGuardPublicKey := node.Annotations[types.NodeWireGuardPublicAnnotationKey]
 
 	nrInfo, installed, _ := c.installedNodes.GetByKey(nodeName)
-
-	if installed && nrInfo.(*nodeRouteInfo).nodeMAC.String() == peerNodeMAC.String() && nrInfo.(*nodeRouteInfo).nodeIP.Equal(peerNodeIP) {
-		// Route is already added for this Node and both Node MAC and transport IP are not changed.
+	// Route is already added for this Node and Node MAC, transport IP
+	// and WireGuard public key are not changed.
+	if installed && nrInfo.(*nodeRouteInfo).nodeMAC.String() == peerNodeMAC.String() &&
+		peerNodeIPs.Equal(*nrInfo.(*nodeRouteInfo).nodeIPs) &&
+		nrInfo.(*nodeRouteInfo).wireGuardPublicKey == peerWireGuardPublicKey {
 		return nil
 	}
 
@@ -431,15 +474,12 @@ func (c *Controller) addNodeRoute(nodeName string, node *corev1.Node) error {
 		// If no valid PodCIDR is configured in Node.Spec, return immediately.
 		return nil
 	}
-	klog.Infof("Adding routes and flows to Node %s, podCIDRs: %v, addresses: %v",
-		nodeName, podCIDRStrs, node.Status.Addresses)
+	klog.InfoS("Adding routes and flows to Node", "Node", nodeName, "podCIDRs", podCIDRStrs,
+		"addresses", node.Status.Addresses)
 
-	var podCIDRs []*net.IPNet
-	peerConfig := make(map[*net.IPNet]net.IP, len(podCIDRStrs))
+	var peerPodCIDRs []*net.IPNet
+	peerConfigs := make(map[*net.IPNet]net.IP, len(podCIDRStrs))
 	for _, podCIDR := range podCIDRStrs {
-		klog.Infof("Adding routes and flows to Node %s, podCIDR: %s, addresses: %v",
-			nodeName, podCIDR, node.Status.Addresses)
-
 		if podCIDR == "" {
 			klog.Errorf("PodCIDR is empty for Node %s", nodeName)
 			// Does not help to return an error and trigger controller retries.
@@ -470,44 +510,76 @@ func (c *Controller) addNodeRoute(nodeName string, node *corev1.Node) error {
 			return nil
 		}
 		peerGatewayIP := ip.NextIP(peerPodCIDRAddr)
-		peerConfig[peerPodCIDR] = peerGatewayIP
-		podCIDRs = append(podCIDRs, peerPodCIDR)
+		peerConfigs[peerPodCIDR] = peerGatewayIP
+		peerPodCIDRs = append(peerPodCIDRs, peerPodCIDR)
+		peerNodeIP := peerNodeIPs.IPv4
+		if peerGatewayIP.To4() == nil {
+			peerNodeIP = peerNodeIPs.IPv6
+		}
+
+		klog.InfoS("Adding route and flow to Node", "Node", nodeName, "podCIDR", podCIDR,
+			"peerNodeIP", peerNodeIP)
 	}
 
-	ipsecTunOFPort := int32(0)
-	if c.networkConfig.EnableIPSecTunnel {
+	var ipsecTunOFPort uint32
+	if c.networkConfig.TrafficEncryptionMode == config.TrafficEncryptionModeIPSec {
 		// Create a separate tunnel port for the Node, as OVS IPSec monitor needs to
 		// read PSK and remote IP from the Node's tunnel interface to create IPSec
 		// security policies.
-		if ipsecTunOFPort, err = c.createIPSecTunnelPort(nodeName, peerNodeIP); err != nil {
+		peerNodeIP := peerNodeIPs.IPv4
+		if peerNodeIP == nil {
+			peerNodeIP = peerNodeIPs.IPv6
+		}
+		port, err := c.createIPSecTunnelPort(nodeName, peerNodeIP)
+		if err != nil {
+			return err
+		}
+		ipsecTunOFPort = uint32(port)
+	}
+
+	if c.networkConfig.TrafficEncryptionMode == config.TrafficEncryptionModeWireGuard && peerWireGuardPublicKey != "" {
+		peerNodeIP := peerNodeIPs.IPv4
+		if peerNodeIP == nil {
+			peerNodeIP = peerNodeIPs.IPv6
+		}
+		if err := c.wireGuardClient.UpdatePeer(nodeName, peerWireGuardPublicKey, peerNodeIP, peerPodCIDRs); err != nil {
 			return err
 		}
 	}
 
-	err = c.ofClient.InstallNodeFlows(
+	if err = c.ofClient.InstallNodeFlows(
 		nodeName,
-		peerConfig,
-		peerNodeIP,
-		uint32(ipsecTunOFPort),
-		peerNodeMAC)
-	if err != nil {
+		peerConfigs,
+		peerNodeIPs,
+		ipsecTunOFPort,
+		peerNodeMAC); err != nil {
 		return fmt.Errorf("failed to install flows to Node %s: %v", nodeName, err)
 	}
 
-	var peerGatewayIPs []net.IP
-	for peerPodCIDR, peerGatewayIP := range peerConfig {
-		if err := c.routeClient.AddRoutes(peerPodCIDR, nodeName, peerNodeIP, peerGatewayIP); err != nil {
-			return err
+	peerGatewayIPs := new(utilip.DualStackIPs)
+	for peerPodCIDR, peerGatewayIP := range peerConfigs {
+		if peerGatewayIP.To4() == nil {
+			if err := c.routeClient.AddRoutes(peerPodCIDR, nodeName, peerNodeIPs.IPv6, peerGatewayIP); err != nil {
+				return err
+			}
+			peerGatewayIPs.IPv6 = peerGatewayIP
+		} else {
+			if err := c.routeClient.AddRoutes(peerPodCIDR, nodeName, peerNodeIPs.IPv4, peerGatewayIP); err != nil {
+				return err
+			}
+			peerGatewayIPs.IPv4 = peerGatewayIP
 		}
-		peerGatewayIPs = append(peerGatewayIPs, peerGatewayIP)
 	}
+
 	c.installedNodes.Add(&nodeRouteInfo{
-		nodeName:  nodeName,
-		podCIDRs:  podCIDRs,
-		nodeIP:    peerNodeIP,
-		gatewayIP: peerGatewayIPs,
-		nodeMAC:   peerNodeMAC,
+		nodeName:           nodeName,
+		podCIDRs:           peerPodCIDRs,
+		nodeIPs:            peerNodeIPs,
+		gatewayIPs:         peerGatewayIPs,
+		nodeMAC:            peerNodeMAC,
+		wireGuardPublicKey: peerWireGuardPublicKey,
 	})
+
 	return err
 }
 
@@ -527,16 +599,27 @@ func getPodCIDRsOnNode(node *corev1.Node) []string {
 // createIPSecTunnelPort creates an IPSec tunnel port for the remote Node if the
 // tunnel does not exist, and returns the ofport number.
 func (c *Controller) createIPSecTunnelPort(nodeName string, nodeIP net.IP) (int32, error) {
-	interfaceConfig, ok := c.interfaceStore.GetNodeTunnelInterface(nodeName)
-	if ok {
-		// TODO: check if Node IP, PSK, or tunnel type changes. This can
-		// happen if removeStaleTunnelPorts fails to remove a "stale"
-		// tunnel port for which the configuration has changed.
-		if interfaceConfig.OFPort != 0 {
-			return interfaceConfig.OFPort, nil
+	portName := util.GenerateNodeTunnelInterfaceName(nodeName)
+	interfaceConfig, exists := c.interfaceStore.GetNodeTunnelInterface(nodeName)
+	// check if Node IP, PSK, or tunnel type changes. This can
+	// happen if removeStaleTunnelPorts fails to remove a "stale"
+	// tunnel port for which the configuration has changed, return error to requeue the Node.
+	if exists {
+		if !c.compareInterfaceConfig(interfaceConfig, nodeIP, portName) {
+			klog.InfoS("IPSec tunnel interface config doesn't match the cached one, deleting the stale IPSec tunnel port", "node", nodeName, "interface", interfaceConfig.InterfaceName)
+			if err := c.ovsBridgeClient.DeletePort(interfaceConfig.PortUUID); err != nil {
+				return 0, fmt.Errorf("fail to delete the stale IPSec tunnel port %s: %v", interfaceConfig.InterfaceName, err)
+			}
+			c.interfaceStore.DeleteInterface(interfaceConfig)
+			exists = false
+		} else {
+			if interfaceConfig.OFPort != 0 {
+				klog.V(2).InfoS("Found cached IPSec tunnel interface", "node", nodeName, "interface", interfaceConfig.InterfaceName, "port", interfaceConfig.OFPort)
+				return interfaceConfig.OFPort, nil
+			}
 		}
-	} else {
-		portName := util.GenerateNodeTunnelInterfaceName(nodeName)
+	}
+	if !exists {
 		ovsExternalIDs := map[string]interface{}{ovsExternalIDNodeName: nodeName}
 		portUUID, err := c.ovsBridgeClient.CreateTunnelPortExt(
 			portName,
@@ -562,7 +645,6 @@ func (c *Controller) createIPSecTunnelPort(nodeName string, nodeIP net.IP) (int3
 		interfaceConfig.OVSPortConfig = ovsPortConfig
 		c.interfaceStore.AddInterface(interfaceConfig)
 	}
-
 	// GetOFPort will wait for up to 1 second for OVSDB to report the OFPort number.
 	ofPort, err := c.ovsBridgeClient.GetOFPort(interfaceConfig.InterfaceName)
 	if err != nil {
@@ -656,23 +738,31 @@ func getNodeMAC(node *corev1.Node) (net.HardwareAddr, error) {
 	return mac, nil
 }
 
-func (c *Controller) getNodeTransportAddress(node *corev1.Node) (net.IP, error) {
+func (c *Controller) getNodeTransportAddrs(node *corev1.Node) (*utilip.DualStackIPs, error) {
+	var transportAddrs *utilip.DualStackIPs
 	if c.networkConfig.TransportIface != "" {
-		transportAddrStr := node.Annotations[types.NodeTransportAddressAnnotationKey]
-		if transportAddrStr != "" {
-			peerNodeAddr := net.ParseIP(transportAddrStr)
-			if peerNodeAddr == nil {
-				return nil, fmt.Errorf("invalid annotation for transport-address on Node %s: %s", node.Name, transportAddrStr)
+		transportAddrsStr := node.Annotations[types.NodeTransportAddressAnnotationKey]
+		if transportAddrsStr != "" {
+			for _, addr := range strings.Split(transportAddrsStr, ",") {
+				peerNodeAddr := net.ParseIP(addr)
+				if peerNodeAddr == nil {
+					return nil, fmt.Errorf("invalid annotation for transport-address on Node %s: %s", node.Name, transportAddrsStr)
+				}
+				if peerNodeAddr.To4() == nil {
+					transportAddrs.IPv6 = peerNodeAddr
+				} else {
+					transportAddrs.IPv4 = peerNodeAddr
+				}
 			}
-			return peerNodeAddr, nil
+			return transportAddrs, nil
 		}
 		klog.InfoS("Transport address is not found, using NodeIP instead")
 	}
 	// Use NodeIP if the transport IP address is not set or not found.
-	peerNodeIP, err := k8s.GetNodeAddr(node)
+	peerNodeIPs, err := k8s.GetNodeAddrs(node)
 	if err != nil {
-		klog.ErrorS(err, "Failed to retrieve Node IP address", "node", node.Name)
+		klog.ErrorS(err, "Failed to retrieve Node IP addresses", "node", node.Name)
 		return nil, err
 	}
-	return peerNodeIP, nil
+	return peerNodeIPs, nil
 }

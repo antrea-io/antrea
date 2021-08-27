@@ -171,6 +171,8 @@ spec:
               value: "dashboard/3b331b30-b987-11ea-b16e-fb06687c3589"
             - name: LOGGING_QUIET
               value: "true"
+            - name: KIBANA_AUTOCOMPLETETERMINATEAFTER
+              value: "100000"
           ports:
             - containerPort: 5601
               name: http
@@ -188,14 +190,22 @@ spec:
   selector:
     app: logstash
   ports:
+    - port: 4736
+      targetPort: 4736
+      protocol: TCP
+      name: tcp-json
+    - port: 4736
+      targetPort: 4736
+      protocol: UDP
+      name: udp-json
     - port: 4739
       targetPort: 4739
       protocol: TCP
-      name: logstash-tcp
+      name: tcp-ipfix
     - port: 4739
       targetPort: 4739
       protocol: UDP
-      name: logstash-udp
+      name: udp-ipfix
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -229,12 +239,18 @@ spec:
             - name: logstash-pipeline-volume
               mountPath: /usr/share/logstash/pipeline
           ports:
-            - containerPort: 4739
+            - containerPort: 4736
+              protocol: TCP
+              name: tcp-json
+            - containerPort: 4736
               protocol: UDP
-              name: logstash-udp
+              name: udp-json
             - containerPort: 4739
               protocol: TCP
-              name: logstash-tcp
+              name: tcp-ipfix
+            - containerPort: 4739
+              protocol: UDP
+              name: udp-ipfix
       nodeSelector:
         kubernetes.io/os: linux
         kubernetes.io/arch: amd64

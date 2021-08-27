@@ -29,6 +29,9 @@
   - [The ClusterGroup resource](#the-clustergroup-resource)
   - [kubectl commands for ClusterGroup](#kubectl-commands-for-clustergroup)
 - [Select Namespace by Name](#select-namespace-by-name)
+  - [K8s clusters with version 1.21 and above](#k8s-clusters-with-version-121-and-above)
+  - [K8s clusters with version 1.20 and below](#k8s-clusters-with-version-120-and-below)
+- [FQDN based filtering](#fqdn-based-filtering)
 - [RBAC](#rbac)
 - [Notes](#notes)
 <!-- /toc -->
@@ -414,6 +417,8 @@ The [third example](#acnp-for-complete-pod-isolation-in-selected-namespaces) pol
 which drops all egress traffic initiated by any Pod in Namespaces that have `app` set to
 `no-network-access-required`. Note that an empty `To` in the egress rule means that
 this rule matches all egress destinations.
+Egress `To` section also supports FQDN based filtering. This can be applied to exact FQDNs or
+wildcard expressions. More details can be found in the [FQDN](#fqdn-based-filtering) section.
 **Note**: The order in which the egress rules are specified matters, i.e., rules will
 be enforced in the order in which they are written.
 
@@ -477,6 +482,10 @@ an `appliedTo` must resolve to. More information on ClusterGroups can be found [
 **ipBlock**: This selects particular IP CIDR ranges to allow as `ingress`
 "sources" or `egress` "destinations". These should be cluster-external IPs,
 since Pod IPs are ephemeral and unpredictable.
+
+**fqdn**: This selector is applicable only to the `to` section in an `egress` block. It is used to
+select Fully Qualified Domain Names (FQDNs), specified either by exact name or wildcard
+expressions, when defining `egress` rules.
 
 ### Key differences from K8s NetworkPolicy
 
@@ -835,8 +844,49 @@ The following kubectl commands can be used to retrieve CG resources:
 Kubernetes NetworkPolicies and Antrea-native policies allow selecting
 workloads from Namespaces with the use of a label selector (i.e. `namespaceSelector`).
 However, it is often desirable to be able to select Namespaces directly by their `name`
-as opposed to using the `labels` associated with the Namespaces. In order to select
-Namespaces by name, Antrea labels Namespaces with a reserved label `antrea.io/metadata.name`,
+as opposed to using the `labels` associated with the Namespaces.
+
+### K8s clusters with version 1.21 and above
+
+Starting with K8s v1.21, all Namespaces are labeled with the `kubernetes.io/metadata.name: <namespaceName>` [label](https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/#automatic-labelling)
+provided that the `NamespaceDefaultLabelName` feature gate (enabled by default) is not disabled in K8s.
+K8s NetworkPolicy and Antrea-native policy users can take advantage of this reserved label
+to select Namespaces directly by their `name` in `namespaceSelectors` as follows:
+
+```yaml
+apiVersion: crd.antrea.io/v1alpha1
+kind: NetworkPolicy
+metadata:
+  name: test-anp-by-name
+  namespace: default
+spec:
+    priority: 5
+    tier: application
+    appliedTo:
+      - podSelector: {}
+    egress:
+      - action: Allow
+        to:
+          - podSelector:
+              matchLabels:
+                app: core-dns
+            namespaceSelector:
+              matchLabels:
+                kubernetes.io/metadata.name: kube-system
+        ports:
+          - protocol: TCP
+            port: 53
+          - protocol: UDP
+            port: 53
+        name: AllowToCoreDNS
+```
+
+**Note**: `NamespaceDefaultLabelName` feature gate is scheduled to be removed in K8s v1.24, thereby
+ensuring that labeling Namespaces by their name cannot be disabled.
+
+### K8s clusters with version 1.20 and below
+
+In order to select Namespaces by name, Antrea labels Namespaces with a reserved label `antrea.io/metadata.name`,
 whose value is set to the Namespace's name. Users can then use this label in the
 `namespaceSelector` field, in both K8s NetworkPolicies and Antrea-native policies to
 select Namespaces by name. By default, Namespaces are not labeled with the reserved name label.
@@ -897,18 +947,78 @@ spec:
         ports:
           - protocol: TCP
             port: 53
+          - protocol: UDP
+            port: 53
         name: AllowToCoreDNS
 ```
 
 The above example allows all Pods from Namespace "default" to connect to all "core-dns"
 Pods from Namespace "kube-system" on TCP port 53.
 
-**Note**: A similar [effort](https://github.com/kubernetes/enhancements/tree/master/keps/sig-api-machinery/2161-apiserver-default-labels) is currently underway in Kubernetes to label all Namespaces
-with `kubernetes.io/metadata.name: <namespaceName>` label. By introducing the
-`antrea.io/metadata.name` label, we give our users early access to this feature.
-When `kubernetes.io/metadata.name` is introduced upstream, we recommend updating
-your policies to use the new label, but we will also keep providing our custom
-admission controller for backwards-compatibility.
+## FQDN based filtering
+
+Antrea-native policy accepts a `fqdn` field to select Fully Qualified Domain Names (FQDNs),
+specified either by exact name or wildcard expressions, when defining `egress` rules.
+
+The standard `Allow`, `Drop` and `Reject` actions apply to FQDN egress rules.
+
+An example policy using FQDN based filtering could look like this:
+
+```yaml
+apiVersion: crd.antrea.io/v1alpha1
+kind: ClusterNetworkPolicy
+metadata:
+  name: acnp-fqdn-all-foobar
+spec:
+  priority: 1
+  appliedTo:
+  - podSelector:
+      matchLabels:
+        app: client
+  egress:
+  - action: Drop
+    to:
+      - fqdn: "*foobar.com"
+```
+
+The above example drops all traffic destined to any FQDN that matches the wildcard
+expression `*foobar.com` originating from any Pod with label `app` set to `client`
+across any Namespace. This feature only works at the L3/L4 level.
+
+FQDN based policies can also select in-cluster based services.
+
+```text
+kubectl get svc -o wide -A
+NAMESPACE     NAME          TYPE          CLUSTER-IP      EXTERNAL-IP   PORT(S)                   AGE   SELECTOR
+default       db-svc        ClusterIP     10.108.21.84    <none>        443/TCP                   2d    app=db
+default       kubernetes    ClusterIP     10.96.0.1       <none>        443/TCP                   2d    <none>
+kube-system   antrea        ClusterIP     10.98.109.50    <none>        443/TCP                   3d    <app=antrea,component=antrea-controller>
+kube-system   kube-dns      ClusterIP     10.96.0.10      <none>        53/UDP,53,TCP,9153/TCP    3d    k8s-app=kube-dns
+```
+
+In the above, there is a db service in the default namespace of type `ClusterIP`. A
+ClusterNetorkPolicy can be defined as follows:
+
+```yaml
+apiVersion: crd.antrea.io/v1alpha1
+kind: ClusterNetworkPolicy
+metadata:
+  name: acnp-fqdn-db-svc
+spec:
+  priority: 1
+  appliedTo:
+  - podSelector:
+      matchLabels:
+        app: client
+  egress:
+  - action: Drop
+    to:
+      - fqdn: "db-svc.default.svc"
+```
+
+In this example, an exact name matching policy is defined. When a client Pod connects to
+`db-svc` via ClusterIP, the traffic is dropped. It doesn't however prevent clients from
+connecting to the backend Pods for the Service directly.
 
 ## RBAC
 

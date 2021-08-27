@@ -17,8 +17,8 @@ package openflow
 import (
 	"testing"
 
-	"github.com/contiv/libOpenflow/protocol"
-	"github.com/contiv/libOpenflow/util"
+	"antrea.io/libOpenflow/protocol"
+	"antrea.io/libOpenflow/util"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

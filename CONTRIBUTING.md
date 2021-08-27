@@ -11,10 +11,10 @@ to effectively get it merged upstream.
 - [Contribute](#contribute)
   - [GitHub Workflow](#github-workflow)
   - [Getting reviewers](#getting-reviewers)
+  - [Getting your PR verified by CI](#getting-your-pr-verified-by-ci)
   - [Cherry-picks to release branches](#cherry-picks-to-release-branches)
   - [Inclusive Naming](#inclusive-naming)
   - [Building and testing your change](#building-and-testing-your-change)
-  - [CI testing](#ci-testing)
   - [Reverting a commit](#reverting-a-commit)
   - [Sign-off Your Work](#sign-off-your-work)
 - [Issue and PR Management](#issue-and-pr-management)
@@ -136,6 +136,54 @@ cases to our [automated test suite](ci/README.md) to guarantee enough
 coverage. A PR that makes significant code changes without contributing new test
 cases will be flagged by reviewers and will not be accepted.
 
+### Getting your PR verified by CI
+
+It is a requirement to get your PR verified with CI checks before it gets merged.
+Also, it helps to find possible bugs before the review work starts. Once you create
+a PR, or you push new commits, CI checks at the bottom of a PR page will be refreshed.
+Checks include Github Action ones and Jenkins ones. Github Action ones will be
+triggered automatically when you push to the head branch of the PR but Jenkins ones
+need to be triggered manually with comments. Please note that if you are a first-time
+contributor, the Github workflows need approval from someone with write access to
+the repo. It's a Github security mechanism.
+
+Here are the trigger phrases for individual checks:
+
+* `/test-integration`: Integration tests
+* `/test-e2e`: Linux IPv4 e2e tests
+* `/test-conformance`: Linux IPv4 conformance tests
+* `/test-networkpolicy`: Linux IPv4 networkpolicy tests
+* `/test-all-features-conformance`: Linux IPv4 conformance tests with all features enabled
+* `/test-windows-e2e`: Windows IPv4 e2e tests
+* `/test-windows-conformance`: Windows IPv4 conformance tests
+* `/test-windows-networkpolicy`: Windows IPv4 networkpolicy tests
+* `/test-ipv6-e2e`: Linux dual stack e2e tests
+* `/test-ipv6-conformance`: Linux dual stack conformance tests
+* `/test-ipv6-networkpolicy`: dLinux ual stack networkpolicy tests
+* `/test-ipv6-only-e2e`: Linux IPv6 only e2e tests
+* `/test-ipv6-only-conformance`: Linux IPv6 only conformance tests
+* `/test-ipv6-only-networkpolicy`: Linux IPv6 only networkpolicy tests
+
+Here are the trigger phrases for groups of checks:
+
+* `/test-all`: Linux IPv4 and Windows tests
+* `/test-ipv6-all`: Linux dual stack tests
+* `/test-ipv6-only-all`: Linux IPv6 only tests
+
+Besides, you can skip a check with `/skip-*`, e.g. `/skip-e2e`: skip Linux IPv4
+e2e tests. Integration check cannot be skipped.
+
+Skipping a check should be used only when the change doesn't influence the
+specific function. For example:
+
+* doc change: skip all checks
+* comment change: skip all checks
+* test/e2e/* change: skip conformance and networkpolicy checks
+* *_windows.go change: skip Linux checks
+
+For more information about the tests we run as part of CI, please refer to
+[ci/README.md](ci/README.md).
+
 ### Cherry-picks to release branches
 
 If your PR fixes a critical bug, it may need to be backported to older release
@@ -175,16 +223,11 @@ the `$GOPATH`.
 
 To develop locally, you can follow these steps:
 
- 1. [Install Go 1.15](https://golang.org/doc/install)
+ 1. [Install Go 1.17](https://golang.org/doc/install)
  2. Checkout your feature branch and `cd` into it.
  3. To build all Go files and install them under `bin`, run `make bin`
  4. To run all Go unit tests, run `make test-unit`
  5. To build the Antrea Ubuntu Docker image separately with the binaries generated in step 2, run `make ubuntu`
-
-### CI testing
-
-For more information about the tests we run as part of CI, please refer to
-[ci/README.md](ci/README.md).
 
 ### Reverting a commit
 

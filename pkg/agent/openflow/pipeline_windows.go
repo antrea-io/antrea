@@ -1,3 +1,4 @@
+//go:build windows
 // +build windows
 
 // Copyright 2021 Antrea Authors
@@ -39,9 +40,11 @@ const (
 	// Pod --> DNAT(CtZone) --> SNAT(ctZoneSNAT) --> Endpoint(API server NodeIP)
 	// Pod <-- unDNAT(CtZone) <-- unSNAT(ctZoneSNAT) <-- Endpoint(API server NodeIP)
 	ctZoneSNAT = 0xffdc
+)
 
+var (
 	// snatCTMark indicates SNAT is performed for packets of the connection.
-	snatCTMark = 0x40
+	snatCTMark = binding.NewCTMark(0x40, 0, 31)
 )
 
 func (c *client) snatMarkFlows(snatIP net.IP, mark uint32) []binding.Flow {
@@ -56,7 +59,7 @@ func (c *client) snatMarkFlows(snatIP net.IP, mark uint32) []binding.Flow {
 			MatchPktMark(mark, &types.SNATIPMarkMask).
 			Action().CT(true, nextTable, CtZone).
 			SNAT(snatIPRange, nil).
-			LoadToMark(snatCTMark).CTDone().
+			LoadToCtMark(snatCTMark).CTDone().
 			Cookie(c.cookieAllocator.Request(cookie.SNAT).Raw()).
 			Done(),
 	}
@@ -68,7 +71,7 @@ func (c *client) snatMarkFlows(snatIP net.IP, mark uint32) []binding.Flow {
 			MatchPktMark(mark, &types.SNATIPMarkMask).
 			Action().CT(true, nextTable, ctZoneSNAT).
 			SNAT(snatIPRange, nil).
-			LoadToMark(snatCTMark).CTDone().
+			LoadToCtMark(snatCTMark).CTDone().
 			Cookie(c.cookieAllocator.Request(cookie.SNAT).Raw()).
 			Done())
 	}
@@ -91,14 +94,14 @@ func (c *client) hostBridgeUplinkFlows(localSubnet net.IPNet, category cookie.Ca
 			Cookie(c.cookieAllocator.Request(category).Raw()).
 			Done(),
 	}
-	if c.encapMode.SupportsNoEncap() {
+	if c.networkConfig.TrafficEncapMode.SupportsNoEncap() {
 		// If NoEncap is enabled, the reply packets from remote Pod can be forwarded to local Pod directly.
 		// by explicitly resubmitting them to serviceHairpinTable and marking "macRewriteMark" at same time.
 		flows = append(flows, c.pipeline[ClassifierTable].BuildFlow(priorityHigh).MatchProtocol(binding.ProtocolIP).
 			MatchInPort(config.UplinkOFPort).
 			MatchDstIPNet(localSubnet).
-			Action().LoadRegRange(int(marksReg), markTrafficFromUplink, binding.Range{0, 15}).
-			Action().LoadRegRange(int(marksReg), macRewriteMark, macRewriteMarkRange).
+			Action().LoadRegMark(FromUplinkRegMark).
+			Action().LoadRegMark(RewriteMACRegMark).
 			Action().GotoTable(serviceHairpinTable).
 			Cookie(c.cookieAllocator.Request(category).Raw()).
 			Done())
@@ -108,14 +111,14 @@ func (c *client) hostBridgeUplinkFlows(localSubnet net.IPNet, category cookie.Ca
 
 func (c *client) l3FwdFlowToRemoteViaRouting(localGatewayMAC net.HardwareAddr, remoteGatewayMAC net.HardwareAddr,
 	category cookie.Category, peerIP net.IP, peerPodCIDR *net.IPNet) []binding.Flow {
-	if c.encapMode.NeedsDirectRoutingToPeer(peerIP, c.nodeConfig.NodeTransportIPAddr) && remoteGatewayMAC != nil {
+	if c.networkConfig.NeedsDirectRoutingToPeer(peerIP, c.nodeConfig.NodeTransportIPv4Addr) && remoteGatewayMAC != nil {
 		ipProto := getIPProtocol(peerIP)
 		l3FwdTable := c.pipeline[l3ForwardingTable]
 		// It enhances Windows Noencap mode performance by bypassing host network.
 		flows := []binding.Flow{c.pipeline[l2ForwardingCalcTable].BuildFlow(priorityNormal).
 			MatchDstMAC(remoteGatewayMAC).
-			Action().LoadRegRange(int(PortCacheReg), config.UplinkOFPort, ofPortRegRange).
-			Action().LoadRegRange(int(marksReg), macRewriteMark, ofPortMarkRange).
+			Action().LoadToRegField(TargetOFPortField, config.UplinkOFPort).
+			Action().LoadRegMark(OFPortFoundRegMark).
 			Action().GotoTable(conntrackCommitTable).
 			Cookie(c.cookieAllocator.Request(category).Raw()).
 			Done(),

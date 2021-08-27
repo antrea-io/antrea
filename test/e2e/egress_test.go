@@ -37,6 +37,7 @@ func TestEgress(t *testing.T) {
 	skipIfProviderIs(t, "kind", "pkt_mark field is not properly supported for OVS userspace (netdev) datapath.")
 	// TODO: remove this after making the test support IPv6 and dual-stack.
 	skipIfIPv6Cluster(t)
+
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
@@ -168,13 +169,23 @@ ip netns exec %[1]s /agnhost netexec
 	assertClientIP(localPod, egressNodeIP)
 	assertClientIP(remotePod, egressNodeIP)
 
+	var err error
+	err = wait.Poll(time.Millisecond*100, time.Second, func() (bool, error) {
+		egress, err = data.crdClient.CrdV1alpha2().Egresses().Get(context.TODO(), egress.Name, metav1.GetOptions{})
+		if err != nil {
+			return false, err
+		}
+		return egress.Status.EgressNode == egressNode, nil
+	})
+	assert.NoError(t, err, "Egress failed to reach expected status")
+
 	t.Log("Updating the Egress's AppliedTo to remotePod only")
 	egress.Spec.AppliedTo = v1alpha2.AppliedTo{
 		PodSelector: &metav1.LabelSelector{
 			MatchLabels: map[string]string{"antrea-e2e": remotePod},
 		},
 	}
-	egress, err := data.crdClient.CrdV1alpha2().Egresses().Update(context.TODO(), egress, metav1.UpdateOptions{})
+	egress, err = data.crdClient.CrdV1alpha2().Egresses().Update(context.TODO(), egress, metav1.UpdateOptions{})
 	if err != nil {
 		t.Fatalf("Failed to update Egress %v: %v", egress, err)
 	}
@@ -219,6 +230,7 @@ func testEgressCRUD(t *testing.T, data *TestData) {
 		nodeSelector     metav1.LabelSelector
 		expectedEgressIP string
 		expectedNodes    sets.String
+		expectedTotal    int
 	}{
 		{
 			name:    "single matching Node",
@@ -230,6 +242,7 @@ func testEgressCRUD(t *testing.T, data *TestData) {
 			},
 			expectedEgressIP: "169.254.100.1",
 			expectedNodes:    sets.NewString(nodeName(0)),
+			expectedTotal:    2,
 		},
 		{
 			name:    "two matching Nodes",
@@ -245,6 +258,7 @@ func testEgressCRUD(t *testing.T, data *TestData) {
 			},
 			expectedEgressIP: "169.254.101.10",
 			expectedNodes:    sets.NewString(nodeName(0), nodeName(1)),
+			expectedTotal:    2,
 		},
 		{
 			name:    "no matching Node",
@@ -256,6 +270,7 @@ func testEgressCRUD(t *testing.T, data *TestData) {
 			},
 			expectedEgressIP: "169.254.102.1",
 			expectedNodes:    sets.NewString(),
+			expectedTotal:    2,
 		},
 	}
 	for _, tt := range tests {
@@ -293,6 +308,15 @@ func testEgressCRUD(t *testing.T, data *TestData) {
 				assert.True(t, exists, "Didn't find desired IP on Node")
 			}
 
+			checkEIPStatus := func(expectedUsed int) {
+				pool, err = data.crdClient.CrdV1alpha2().ExternalIPPools().Get(context.TODO(), pool.Name, metav1.GetOptions{})
+				require.NoError(t, err, "Failed to get ExternalIPPool")
+				assert.Equal(t, expectedUsed, pool.Status.Usage.Used, "ExternalIPPool status usage used num not match")
+				assert.Equal(t, tt.expectedTotal, pool.Status.Usage.Total, "ExternalIPPool status usage total num not match")
+				t.Logf("ExternalIPPool %s status: %+v", pool.Name, pool.Status)
+			}
+			checkEIPStatus(1)
+
 			err = data.crdClient.CrdV1alpha2().Egresses().Delete(context.TODO(), egress.Name, metav1.DeleteOptions{})
 			require.NoError(t, err, "Failed to delete Egress")
 			if egress.Status.EgressNode != "" {
@@ -300,6 +324,7 @@ func testEgressCRUD(t *testing.T, data *TestData) {
 				require.NoError(t, err, "Failed to check if IP exists on Node")
 				assert.False(t, exists, "Found stale IP on Node")
 			}
+			checkEIPStatus(0)
 		})
 	}
 }
@@ -341,7 +366,7 @@ func testEgressUpdateEgressIP(t *testing.T, data *TestData) {
 			toUpdate.Spec.ExternalIPPool = newPool.Name
 			toUpdate.Spec.EgressIP = newIP
 			egress, err = data.crdClient.CrdV1alpha2().Egresses().Update(context.TODO(), toUpdate, metav1.UpdateOptions{})
-			require.NoError(t, err, "Failed to delete Egress")
+			require.NoError(t, err, "Failed to update Egress")
 
 			_, err = data.checkEgressState(egress.Name, newIP, tt.newNode, "", time.Second)
 			require.NoError(t, err)

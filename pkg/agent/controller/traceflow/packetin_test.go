@@ -19,9 +19,9 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/contiv/libOpenflow/protocol"
-	"github.com/contiv/libOpenflow/util"
-	"github.com/contiv/ofnet/ofctrl"
+	"antrea.io/libOpenflow/protocol"
+	"antrea.io/libOpenflow/util"
+	"antrea.io/ofnet/ofctrl"
 	"github.com/stretchr/testify/assert"
 
 	"antrea.io/antrea/pkg/agent/openflow"

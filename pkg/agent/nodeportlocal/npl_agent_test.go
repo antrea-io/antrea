@@ -1,3 +1,4 @@
+//go:build !windows
 // +build !windows
 
 // Copyright 2019 Antrea Authors
@@ -154,34 +155,40 @@ func getTestSvcWithPortName(portName string) *corev1.Service {
 
 type testData struct {
 	*testing.T
-	stopCh         chan struct{}
-	ctrl           *gomock.Controller
-	k8sClient      *k8sfake.Clientset
-	portTable      *portcache.PortTable
-	mockPortOpener *portcachetesting.MockLocalPortOpener
-	wg             sync.WaitGroup
+	stopCh    chan struct{}
+	ctrl      *gomock.Controller
+	k8sClient *k8sfake.Clientset
+	portTable *portcache.PortTable
+	wg        sync.WaitGroup
 }
 
-func (data *testData) runWrapper(c *nplk8s.NPLController) {
-	data.wg.Add(1)
+func (t *testData) runWrapper(c *nplk8s.NPLController) {
+	t.wg.Add(1)
 	go func() {
-		defer data.wg.Done()
-		c.Run(data.stopCh)
+		defer t.wg.Done()
+		c.Run(t.stopCh)
 	}()
 }
 
+type customizePortOpenerExpectations func(*portcachetesting.MockLocalPortOpener)
+type customizePodPortRulesExpectations func(*rulestesting.MockPodPortRules)
+
 type testConfig struct {
-	defaultPortOpenerExpectations bool
+	customPortOpenerExpectations   customizePortOpenerExpectations
+	customPodPortRulesExpectations customizePodPortRulesExpectations
 }
 
 func newTestConfig() *testConfig {
-	return &testConfig{
-		defaultPortOpenerExpectations: true,
-	}
+	return &testConfig{}
 }
 
-func (tc *testConfig) withDefaultPortOpenerExpectations(v bool) *testConfig {
-	tc.defaultPortOpenerExpectations = false
+func (tc *testConfig) withCustomPortOpenerExpectations(fn customizePortOpenerExpectations) *testConfig {
+	tc.customPortOpenerExpectations = fn
+	return tc
+}
+
+func (tc *testConfig) withCustomPodPortRulesExpectations(fn customizePodPortRulesExpectations) *testConfig {
+	tc.customPodPortRulesExpectations = fn
 	return tc
 }
 
@@ -191,22 +198,27 @@ func setUp(t *testing.T, tc *testConfig, objects ...runtime.Object) *testData {
 	mockCtrl := gomock.NewController(t)
 
 	mockIPTables := rulestesting.NewMockPodPortRules(mockCtrl)
-	mockIPTables.EXPECT().AddRule(gomock.Any(), gomock.Any()).AnyTimes()
-	mockIPTables.EXPECT().DeleteRule(gomock.Any(), gomock.Any()).AnyTimes()
-	mockIPTables.EXPECT().AddAllRules(gomock.Any()).AnyTimes()
+	if tc.customPodPortRulesExpectations != nil {
+		tc.customPodPortRulesExpectations(mockIPTables)
+	} else {
+		mockIPTables.EXPECT().AddRule(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+		mockIPTables.EXPECT().DeleteRule(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+		mockIPTables.EXPECT().AddAllRules(gomock.Any()).AnyTimes()
+	}
 
 	mockPortOpener := portcachetesting.NewMockLocalPortOpener(mockCtrl)
-	if tc.defaultPortOpenerExpectations {
+	if tc.customPortOpenerExpectations != nil {
+		tc.customPortOpenerExpectations(mockPortOpener)
+	} else {
 		mockPortOpener.EXPECT().OpenLocalPort(gomock.Any()).AnyTimes().Return(&fakeSocket{}, nil)
 	}
 
 	data := &testData{
-		T:              t,
-		stopCh:         make(chan struct{}),
-		ctrl:           mockCtrl,
-		k8sClient:      k8sfake.NewSimpleClientset(objects...),
-		portTable:      newPortTable(mockIPTables, mockPortOpener),
-		mockPortOpener: mockPortOpener,
+		T:         t,
+		stopCh:    make(chan struct{}),
+		ctrl:      mockCtrl,
+		k8sClient: k8sfake.NewSimpleClientset(objects...),
+		portTable: newPortTable(mockIPTables, mockPortOpener),
 	}
 
 	// informerFactory is initialized and started from cmd/antrea-agent/agent.go
@@ -267,9 +279,8 @@ func (t *testData) pollForPodAnnotation(podName string, found bool) (string, err
 		data, exists = ann[nplk8s.NPLAnnotationKey]
 		if found {
 			return exists, nil
-		} else {
-			return !exists, nil
 		}
+		return !exists, nil
 	})
 
 	return data, err
@@ -659,30 +670,35 @@ var (
 // TestNodePortAlreadyBoundTo validates that when a port is already bound to, a different port will
 // be selected for NPL.
 func TestNodePortAlreadyBoundTo(t *testing.T) {
-	testSvc := getTestSvc()
-	testPod := getTestPod()
-	testConfig := newTestConfig().withDefaultPortOpenerExpectations(false)
-	testData := setUp(t, testConfig)
-	defer testData.tearDown()
-
 	var nodePort int
-	gomock.InOrder(
-		testData.mockPortOpener.EXPECT().OpenLocalPort(gomock.Any()).Return(nil, portTakenError),
-		testData.mockPortOpener.EXPECT().OpenLocalPort(gomock.Any()).DoAndReturn(func(port int) (portcache.Closeable, error) {
-			nodePort = port
-			return &fakeSocket{}, nil
-		}),
-	)
-
-	_, err := testData.k8sClient.CoreV1().Services(defaultNS).Create(context.TODO(), testSvc, metav1.CreateOptions{})
-	require.NoError(t, err, "Service creation failed")
-
-	_, err = testData.k8sClient.CoreV1().Pods(defaultNS).Create(context.TODO(), testPod, metav1.CreateOptions{})
-	require.NoError(t, err, "Pod creation failed")
+	testConfig := newTestConfig().withCustomPortOpenerExpectations(func(mockPortOpener *portcachetesting.MockLocalPortOpener) {
+		gomock.InOrder(
+			mockPortOpener.EXPECT().OpenLocalPort(gomock.Any()).Return(nil, portTakenError),
+			mockPortOpener.EXPECT().OpenLocalPort(gomock.Any()).DoAndReturn(func(port int) (portcache.Closeable, error) {
+				nodePort = port
+				return &fakeSocket{}, nil
+			}),
+		)
+	})
+	testData, _, testPod := setUpWithTestServiceAndPod(t, testConfig)
+	defer testData.tearDown()
 
 	value, err := testData.pollForPodAnnotation(testPod.Name, true)
 	require.NoError(t, err, "Poll for annotation check failed")
 	annotation := testData.checkAnnotationValue(value, defaultPort)[0] // length of slice is guaranteed to be correct at this stage
 	assert.Equal(t, nodePort, annotation.NodePort)
-	assert.True(t, testData.portTable.RuleExists(defaultPodIP, defaultPort))
+}
+
+func TestSyncRulesError(t *testing.T) {
+	testConfig := newTestConfig().withCustomPodPortRulesExpectations(func(mockIPTables *rulestesting.MockPodPortRules) {
+		mockIPTables.EXPECT().AddRule(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+		mockIPTables.EXPECT().DeleteRule(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+		gomock.InOrder(
+			mockIPTables.EXPECT().AddAllRules(gomock.Any()).Return(fmt.Errorf("iptables failure")),
+			mockIPTables.EXPECT().AddAllRules(gomock.Any()).Return(nil).AnyTimes(),
+		)
+	})
+
+	testData, _, _ := setUpWithTestServiceAndPod(t, testConfig)
+	defer testData.tearDown()
 }

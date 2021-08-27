@@ -156,6 +156,7 @@ func TestInstallPolicyRuleFlows(t *testing.T) {
 
 	c = prepareClient(ctrl)
 	c.nodeConfig = &config.NodeConfig{PodIPv4CIDR: podIPv4CIDR, PodIPv6CIDR: nil}
+	c.networkConfig = &config.NetworkConfig{}
 	c.ipProtocols = []binding.Protocol{binding.ProtocolIP}
 	defaultAction := crdv1alpha1.RuleActionAllow
 	ruleID1 := uint32(101)
@@ -336,12 +337,12 @@ func TestBatchInstallPolicyRuleFlows(t *testing.T) {
 				return []binding.Flow{
 					c.pipeline[EgressRuleTable].BuildFlow(priorityLow).Cookie(cookiePolicy).
 						MatchProtocol(binding.ProtocolIP).MatchConjID(10).
-						Action().LoadRegRange(int(EgressReg), 10, binding.Range{0, 31}).
-						Action().CT(true, EgressMetricTable, CtZone).LoadToLabelRange(10, &metricEgressRuleIDRange).CTDone().Done(),
+						Action().LoadToRegField(TFEgressConjIDField, 10).
+						Action().CT(true, EgressMetricTable, CtZone).LoadToLabelField(10, EgressRuleCTLabel).CTDone().Done(),
 					c.pipeline[EgressRuleTable].BuildFlow(priorityLow).Cookie(cookiePolicy).
 						MatchProtocol(binding.ProtocolIP).MatchConjID(11).
-						Action().LoadRegRange(int(EgressReg), 11, binding.Range{0, 31}).
-						Action().CT(true, EgressMetricTable, CtZone).LoadToLabelRange(11, &metricEgressRuleIDRange).CTDone().Done(),
+						Action().LoadToRegField(TFEgressConjIDField, 11).
+						Action().CT(true, EgressMetricTable, CtZone).LoadToLabelField(11, EgressRuleCTLabel).CTDone().Done(),
 					c.pipeline[EgressRuleTable].BuildFlow(priorityNormal).Cookie(cookiePolicy).
 						MatchProtocol(binding.ProtocolIP).MatchSrcIP(net.ParseIP("192.168.1.40")).
 						Action().Conjunction(10, 1, 2).
@@ -369,16 +370,16 @@ func TestBatchInstallPolicyRuleFlows(t *testing.T) {
 						MatchProtocol(binding.ProtocolIP).MatchSrcIP(net.ParseIP("192.168.1.51")).
 						Action().Drop().Done(),
 					c.pipeline[EgressMetricTable].BuildFlow(priorityNormal).Cookie(cookiePolicy).
-						MatchProtocol(binding.ProtocolIP).MatchCTStateNew(true).MatchCTLabelRange(0, uint64(10)<<32, metricEgressRuleIDRange).
+						MatchProtocol(binding.ProtocolIP).MatchCTStateNew(true).MatchCTLabelField(0, uint64(10)<<32, EgressRuleCTLabel).
 						Action().GotoTable(l3ForwardingTable).Done(),
 					c.pipeline[EgressMetricTable].BuildFlow(priorityNormal).Cookie(cookiePolicy).
-						MatchProtocol(binding.ProtocolIP).MatchCTStateNew(false).MatchCTLabelRange(0, uint64(10)<<32, metricEgressRuleIDRange).
+						MatchProtocol(binding.ProtocolIP).MatchCTStateNew(false).MatchCTLabelField(0, uint64(10)<<32, EgressRuleCTLabel).
 						Action().GotoTable(l3ForwardingTable).Done(),
 					c.pipeline[EgressMetricTable].BuildFlow(priorityNormal).Cookie(cookiePolicy).
-						MatchProtocol(binding.ProtocolIP).MatchCTStateNew(true).MatchCTLabelRange(0, uint64(11)<<32, metricEgressRuleIDRange).
+						MatchProtocol(binding.ProtocolIP).MatchCTStateNew(true).MatchCTLabelField(0, uint64(11)<<32, EgressRuleCTLabel).
 						Action().GotoTable(l3ForwardingTable).Done(),
 					c.pipeline[EgressMetricTable].BuildFlow(priorityNormal).Cookie(cookiePolicy).
-						MatchProtocol(binding.ProtocolIP).MatchCTStateNew(false).MatchCTLabelRange(0, uint64(11)<<32, metricEgressRuleIDRange).
+						MatchProtocol(binding.ProtocolIP).MatchCTStateNew(false).MatchCTLabelField(0, uint64(11)<<32, EgressRuleCTLabel).
 						Action().GotoTable(l3ForwardingTable).Done(),
 				}
 			},
@@ -441,17 +442,17 @@ func TestBatchInstallPolicyRuleFlows(t *testing.T) {
 				return []binding.Flow{
 					c.pipeline[AntreaPolicyIngressRuleTable].BuildFlow(priority100).Cookie(cookiePolicy).
 						MatchProtocol(binding.ProtocolIP).MatchConjID(10).
-						Action().LoadRegRange(int(IngressReg), 10, binding.Range{0, 31}).
-						Action().CT(true, IngressMetricTable, CtZone).LoadToLabelRange(10, &metricIngressRuleIDRange).CTDone().Done(),
+						Action().LoadToRegField(TFIngressConjIDField, 10).
+						Action().CT(true, IngressMetricTable, CtZone).LoadToLabelField(10, IngressRuleCTLabel).CTDone().Done(),
 					c.pipeline[AntreaPolicyIngressRuleTable].BuildFlow(priority100).Cookie(cookiePolicy).
 						MatchConjID(11).
-						Action().LoadRegRange(int(CNPDenyConjIDReg), 11, binding.Range{0, 31}).
-						Action().LoadRegRange(int(marksReg), cnpDenyMark, cnpDenyMarkRange).
+						Action().LoadToRegField(CNPDenyConjIDField, 11).
+						Action().LoadRegMark(CnpDenyRegMark).
 						Action().GotoTable(IngressMetricTable).Done(),
 					c.pipeline[AntreaPolicyIngressRuleTable].BuildFlow(priority200).Cookie(cookiePolicy).
 						MatchConjID(12).
-						Action().LoadRegRange(int(CNPDenyConjIDReg), 12, binding.Range{0, 31}).
-						Action().LoadRegRange(int(marksReg), cnpDenyMark, cnpDenyMarkRange).
+						Action().LoadToRegField(CNPDenyConjIDField, 12).
+						Action().LoadRegMark(CnpDenyRegMark).
 						Action().GotoTable(IngressMetricTable).Done(),
 					c.pipeline[AntreaPolicyIngressRuleTable].BuildFlow(priority100).Cookie(cookiePolicy).
 						MatchProtocol(binding.ProtocolIP).MatchSrcIP(net.ParseIP("192.168.1.40")).
@@ -467,17 +468,17 @@ func TestBatchInstallPolicyRuleFlows(t *testing.T) {
 						MatchProtocol(binding.ProtocolIP).MatchSrcIP(net.ParseIP("192.168.1.51")).
 						Action().Conjunction(11, 1, 3).Done(),
 					c.pipeline[AntreaPolicyIngressRuleTable].BuildFlow(priority100).Cookie(cookiePolicy).
-						MatchReg(int(PortCacheReg), uint32(1)).
+						MatchRegFieldWithValue(TargetOFPortField, uint32(1)).
 						Action().Conjunction(10, 2, 2).
 						Action().Conjunction(11, 2, 3).Done(),
 					c.pipeline[AntreaPolicyIngressRuleTable].BuildFlow(priority200).Cookie(cookiePolicy).
-						MatchReg(int(PortCacheReg), uint32(1)).
+						MatchRegFieldWithValue(TargetOFPortField, uint32(1)).
 						Action().Conjunction(12, 2, 3).Done(),
 					c.pipeline[AntreaPolicyIngressRuleTable].BuildFlow(priority100).Cookie(cookiePolicy).
-						MatchReg(int(PortCacheReg), uint32(2)).
+						MatchRegFieldWithValue(TargetOFPortField, uint32(2)).
 						Action().Conjunction(10, 2, 2).Done(),
 					c.pipeline[AntreaPolicyIngressRuleTable].BuildFlow(priority100).Cookie(cookiePolicy).
-						MatchReg(int(PortCacheReg), uint32(3)).
+						MatchRegFieldWithValue(TargetOFPortField, uint32(3)).
 						Action().Conjunction(11, 2, 3).Done(),
 					c.pipeline[AntreaPolicyIngressRuleTable].BuildFlow(priority100).Cookie(cookiePolicy).
 						MatchProtocol(binding.ProtocolTCP).MatchDstPort(8080, nil).
@@ -486,16 +487,16 @@ func TestBatchInstallPolicyRuleFlows(t *testing.T) {
 						MatchProtocol(binding.ProtocolTCP).MatchDstPort(8080, nil).
 						Action().Conjunction(12, 3, 3).Done(),
 					c.pipeline[IngressMetricTable].BuildFlow(priorityNormal).Cookie(cookiePolicy).
-						MatchProtocol(binding.ProtocolIP).MatchCTStateNew(true).MatchCTLabelRange(0, 10, metricIngressRuleIDRange).
+						MatchProtocol(binding.ProtocolIP).MatchCTStateNew(true).MatchCTLabelField(0, 10, IngressRuleCTLabel).
 						Action().GotoTable(conntrackCommitTable).Done(),
 					c.pipeline[IngressMetricTable].BuildFlow(priorityNormal).Cookie(cookiePolicy).
-						MatchProtocol(binding.ProtocolIP).MatchCTStateNew(false).MatchCTLabelRange(0, 10, metricIngressRuleIDRange).
+						MatchProtocol(binding.ProtocolIP).MatchCTStateNew(false).MatchCTLabelField(0, 10, IngressRuleCTLabel).
 						Action().GotoTable(conntrackCommitTable).Done(),
 					c.pipeline[IngressMetricTable].BuildFlow(priorityNormal).Cookie(cookiePolicy).
-						MatchRegRange(int(marksReg), cnpDenyMark, cnpDenyMarkRange).MatchReg(int(CNPDenyConjIDReg), 11).
+						MatchRegMark(CnpDenyRegMark).MatchRegFieldWithValue(CNPDenyConjIDField, 11).
 						Action().Drop().Done(),
 					c.pipeline[IngressMetricTable].BuildFlow(priorityNormal).Cookie(cookiePolicy).
-						MatchRegRange(int(marksReg), cnpDenyMark, cnpDenyMarkRange).MatchReg(int(CNPDenyConjIDReg), 12).
+						MatchRegMark(CnpDenyRegMark).MatchRegFieldWithValue(CNPDenyConjIDField, 12).
 						Action().Drop().Done(),
 				}
 			},
@@ -511,6 +512,7 @@ func TestBatchInstallPolicyRuleFlows(t *testing.T) {
 			c.cookieAllocator = cookie.NewAllocator(0)
 			c.ofEntryOperations = mockOperations
 			c.nodeConfig = &config.NodeConfig{PodIPv4CIDR: podIPv4CIDR, PodIPv6CIDR: nil}
+			c.networkConfig = &config.NetworkConfig{}
 			c.ipProtocols = []binding.Protocol{binding.ProtocolIP}
 			c.deterministic = true
 
@@ -636,6 +638,7 @@ func TestInstallPolicyRuleFlowsInDualStackCluster(t *testing.T) {
 
 	c = prepareClient(ctrl)
 	c.nodeConfig = &config.NodeConfig{PodIPv4CIDR: podIPv4CIDR, PodIPv6CIDR: podIPv6CIDR}
+	c.networkConfig = &config.NetworkConfig{}
 	c.ipProtocols = []binding.Protocol{binding.ProtocolIP, binding.ProtocolIPv6}
 	defaultAction := crdv1alpha1.RuleActionAllow
 	ruleID1 := uint32(101)
@@ -858,7 +861,6 @@ func newMockDropFlowBuilder(ctrl *gomock.Controller) *mocks.MockFlowBuilder {
 	dropFlowBuilder.EXPECT().MatchInPort(gomock.Any()).Return(dropFlowBuilder).AnyTimes()
 	dropFlowBuilder.EXPECT().MatchConjID(gomock.Any()).Return(ruleFlowBuilder).AnyTimes()
 	dropFlowBuilder.EXPECT().MatchPriority(gomock.Any()).Return(ruleFlowBuilder).AnyTimes()
-	dropFlowBuilder.EXPECT().MatchRegRange(gomock.Any(), gomock.Any(), gomock.Any()).Return(dropFlowBuilder).AnyTimes()
 	action := mocks.NewMockAction(ctrl)
 	action.EXPECT().Drop().Return(dropFlowBuilder).AnyTimes()
 	dropFlowBuilder.EXPECT().Action().Return(action).AnyTimes()
@@ -877,17 +879,16 @@ func newMockRuleFlowBuilder(ctrl *gomock.Controller) *mocks.MockFlowBuilder {
 	ruleFlowBuilder.EXPECT().MatchDstIP(gomock.Any()).Return(ruleFlowBuilder).AnyTimes()
 	ruleFlowBuilder.EXPECT().MatchSrcIP(gomock.Any()).Return(ruleFlowBuilder).AnyTimes()
 	ruleFlowBuilder.EXPECT().MatchInPort(gomock.Any()).Return(ruleFlowBuilder).AnyTimes()
-	ruleFlowBuilder.EXPECT().MatchRegRange(gomock.Any(), gomock.Any(), gomock.Any()).Return(ruleFlowBuilder).AnyTimes()
 	ruleFlowBuilder.EXPECT().MatchDstPort(gomock.Any(), gomock.Any()).Return(ruleFlowBuilder).AnyTimes()
 	ruleFlowBuilder.EXPECT().MatchConjID(gomock.Any()).Return(ruleFlowBuilder).AnyTimes()
 	ruleFlowBuilder.EXPECT().MatchPriority(gomock.Any()).Return(ruleFlowBuilder).AnyTimes()
 	ruleAction = mocks.NewMockAction(ctrl)
 	ruleCtAction := mocks.NewMockCTAction(ctrl)
-	ruleCtAction.EXPECT().LoadToLabelRange(gomock.Any(), gomock.Any()).Return(ruleCtAction).AnyTimes()
+	ruleCtAction.EXPECT().LoadToLabelField(gomock.Any(), gomock.Any()).Return(ruleCtAction).AnyTimes()
 	ruleCtAction.EXPECT().CTDone().Return(ruleFlowBuilder).AnyTimes()
 	ruleAction.EXPECT().CT(true, gomock.Any(), gomock.Any()).Return(ruleCtAction).AnyTimes()
 	ruleAction.EXPECT().GotoTable(gomock.Any()).Return(ruleFlowBuilder).AnyTimes()
-	ruleAction.EXPECT().LoadRegRange(gomock.Any(), gomock.Any(), gomock.Any()).Return(ruleFlowBuilder).AnyTimes()
+	ruleAction.EXPECT().LoadToRegField(gomock.Any(), gomock.Any()).Return(ruleFlowBuilder).AnyTimes()
 	ruleFlowBuilder.EXPECT().Action().Return(ruleAction).AnyTimes()
 	ruleFlow = mocks.NewMockFlow(ctrl)
 	ruleFlowBuilder.EXPECT().Done().Return(ruleFlow).AnyTimes()
@@ -901,13 +902,12 @@ func newMockMetricFlowBuilder(ctrl *gomock.Controller) *mocks.MockFlowBuilder {
 	metricFlowBuilder = mocks.NewMockFlowBuilder(ctrl)
 	metricFlowBuilder.EXPECT().Cookie(gomock.Any()).Return(metricFlowBuilder).AnyTimes()
 	metricFlowBuilder.EXPECT().MatchProtocol(gomock.Any()).Return(metricFlowBuilder).AnyTimes()
-	metricFlowBuilder.EXPECT().MatchRegRange(gomock.Any(), gomock.Any(), gomock.Any()).Return(metricFlowBuilder).AnyTimes()
 	metricFlowBuilder.EXPECT().MatchPriority(gomock.Any()).Return(metricFlowBuilder).AnyTimes()
 	metricFlowBuilder.EXPECT().MatchCTStateNew(gomock.Any()).Return(metricFlowBuilder).AnyTimes()
-	metricFlowBuilder.EXPECT().MatchCTLabelRange(gomock.Any(), gomock.Any(), gomock.Any()).Return(metricFlowBuilder).AnyTimes()
+	metricFlowBuilder.EXPECT().MatchCTLabelField(gomock.Any(), gomock.Any(), gomock.Any()).Return(metricFlowBuilder).AnyTimes()
 	metricAction = mocks.NewMockAction(ctrl)
 	metricAction.EXPECT().GotoTable(gomock.Any()).Return(metricFlowBuilder).AnyTimes()
-	metricAction.EXPECT().LoadRegRange(gomock.Any(), gomock.Any(), gomock.Any()).Return(metricFlowBuilder).AnyTimes()
+	metricAction.EXPECT().LoadToRegField(gomock.Any(), gomock.Any()).Return(metricFlowBuilder).AnyTimes()
 	metricAction.EXPECT().Drop().Return(metricFlowBuilder).AnyTimes()
 	metricFlowBuilder.EXPECT().Action().Return(metricAction).AnyTimes()
 	metricFlow = mocks.NewMockFlow(ctrl)

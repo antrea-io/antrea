@@ -123,7 +123,6 @@ func getControllerGatesResponse() []Response {
 func getStatus(status bool) string {
 	if status {
 		return "Enabled"
-	} else {
-		return "Disabled"
 	}
+	return "Disabled"
 }

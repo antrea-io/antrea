@@ -686,9 +686,8 @@ func (p *metaProxierWrapper) GetServiceByIP(serviceStr string) (k8sproxy.Service
 	lastColonIndex := strings.LastIndex(serviceStr, ":")
 	if utilnet.IsIPv6String(serviceStr[:lastColonIndex]) {
 		return p.ipv6Proxier.GetServiceByIP(serviceStr)
-	} else {
-		return p.ipv4Proxier.GetServiceByIP(serviceStr)
 	}
+	return p.ipv4Proxier.GetServiceByIP(serviceStr)
 }
 
 func NewDualStackProxier(

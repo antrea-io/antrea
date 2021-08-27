@@ -1434,7 +1434,7 @@ func TestAddPod(t *testing.T) {
 			updatedInAddrGroup := updatedInAddrGroupObj.(*antreatypes.AddressGroup)
 			updatedOutAddrGroupObj, _, _ := npc.addressGroupStore.Get(outGroupID)
 			updatedOutAddrGroup := updatedOutAddrGroupObj.(*antreatypes.AddressGroup)
-			groupMembers, _ := npc.GetGroupMembers(groupKey)
+			groupMembers, _, _ := npc.GetGroupMembers(groupKey)
 			if tt.appGroupMatch {
 				assert.Len(t, podsAdded, 1, "expected Pod to match AppliedToGroup")
 			} else {
@@ -1532,7 +1532,7 @@ func TestDeletePod(t *testing.T) {
 	updatedAddrGroup := updatedAddrGroupObj.(*antreatypes.AddressGroup)
 	// Ensure Pod2 IP is removed from AddressGroup.
 	memberPod2 := &controlplane.GroupMember{IPs: []controlplane.IPAddress{ipStrToIPAddress(p2IP)}}
-	groupMembers, _ := npc.GetGroupMembers(groupKey)
+	groupMembers, _, _ := npc.GetGroupMembers(groupKey)
 	assert.False(t, updatedAddrGroup.GroupMembers.Has(memberPod2))
 	assert.False(t, groupMembers.Has(memberPod2))
 }
@@ -1676,7 +1676,7 @@ func TestAddNamespace(t *testing.T) {
 			updatedInAddrGroup := updatedInAddrGroupObj.(*antreatypes.AddressGroup)
 			updatedOutAddrGroupObj, _, _ := npc.addressGroupStore.Get(outGroupID)
 			updatedOutAddrGroup := updatedOutAddrGroupObj.(*antreatypes.AddressGroup)
-			groupMembers, _ := npc.GetGroupMembers(groupKey)
+			groupMembers, _, _ := npc.GetGroupMembers(groupKey)
 			memberPod1 := &controlplane.GroupMember{
 				Pod: &controlplane.PodReference{Name: "p1", Namespace: "nsA"},
 				IPs: []controlplane.IPAddress{ipStrToIPAddress("1.2.3.4")},
@@ -1839,7 +1839,7 @@ func TestDeleteNamespace(t *testing.T) {
 			updatedInAddrGroup := updatedInAddrGroupObj.(*antreatypes.AddressGroup)
 			updatedOutAddrGroupObj, _, _ := npc.addressGroupStore.Get(outGroupID)
 			updatedOutAddrGroup := updatedOutAddrGroupObj.(*antreatypes.AddressGroup)
-			groupMembers, _ := npc.GetGroupMembers(groupKey)
+			groupMembers, _, _ := npc.GetGroupMembers(groupKey)
 			memberPod1 := &controlplane.GroupMember{IPs: []controlplane.IPAddress{ipStrToIPAddress("1.1.1.1")}}
 			memberPod2 := &controlplane.GroupMember{IPs: []controlplane.IPAddress{ipStrToIPAddress("1.1.1.2")}}
 			if tt.inAddressGroupMatch {
@@ -1969,16 +1969,16 @@ func TestAddAndUpdateService(t *testing.T) {
 		},
 		IPs: []controlplane.IPAddress{ipStrToIPAddress("4.3.2.1")},
 	}
-	groupMembers1, _ := npc.GetGroupMembers(testCG1.Name)
+	groupMembers1, _, _ := npc.GetGroupMembers(testCG1.Name)
 	assert.True(t, groupMembers1.Has(memberPod1))
 	assert.False(t, groupMembers1.Has(memberPod2))
-	groupMembers2, _ := npc.GetGroupMembers(testCG2.Name)
+	groupMembers2, _, _ := npc.GetGroupMembers(testCG2.Name)
 	assert.False(t, groupMembers2.Has(memberPod1))
 	assert.False(t, groupMembers2.Has(memberPod2))
 	// Update svc-1 to select app test-2 instead
 	npc.serviceStore.Update(testSvc1Updated)
 	npc.syncInternalGroup(testCG1.Name)
-	groupMembers1Updated, _ := npc.GetGroupMembers(testCG1.Name)
+	groupMembers1Updated, _, _ := npc.GetGroupMembers(testCG1.Name)
 	assert.False(t, groupMembers1Updated.Has(memberPod1))
 	assert.True(t, groupMembers1Updated.Has(memberPod2))
 }
@@ -2036,12 +2036,12 @@ func TestDeleteService(t *testing.T) {
 		},
 		IPs: []controlplane.IPAddress{ipStrToIPAddress("1.2.3.4")},
 	}
-	groupMembers, _ := npc.GetGroupMembers(testCG.Name)
+	groupMembers, _, _ := npc.GetGroupMembers(testCG.Name)
 	assert.True(t, groupMembers.Has(memberPod))
 	// Make sure that after Service deletion, the Pod member is removed from Group.
 	npc.serviceStore.Delete(testSvc)
 	npc.syncInternalGroup(testCG.Name)
-	groupMembersUpdated, _ := npc.GetGroupMembers(testCG.Name)
+	groupMembersUpdated, _, _ := npc.GetGroupMembers(testCG.Name)
 	assert.False(t, groupMembersUpdated.Has(memberPod))
 }
 
@@ -2940,7 +2940,7 @@ func TestIPNetToCIDRStr(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.expC, ipNetToCIDRStr(tt.inC))
+			assert.Equal(t, tt.expC, tt.inC.String())
 		})
 	}
 }

@@ -22,11 +22,13 @@ function echoerr {
     >&2 echo "$@"
 }
 
-_usage="Usage: $0 [--encap-mode <mode>] [--no-proxy] [--np] [--coverage] [--help|-h]
+_usage="Usage: $0 [--encap-mode <mode>] [--ip-family <v4|v6>] [--no-proxy] [--np] [--coverage] [--help|-h]
         --encap-mode                  Traffic encapsulation mode. (default is 'encap').
+        --ip-family                   Configures the ipFamily for the KinD cluster.
         --no-proxy                    Disables Antrea proxy.
         --endpointslice               Enables Antrea proxy and EndpointSlice support.
         --no-np                       Disables Antrea-native policies.
+        --skip                        A comma-separated list of keywords, with which tests should be skipped.
         --coverage                    Enables measure Antrea code coverage when run e2e tests on kind.
         --help, -h                    Print this message and exit.
 "
@@ -49,10 +51,12 @@ function quit {
 trap "quit" INT EXIT
 
 mode=""
+ipfamily="v4"
 proxy=true
 endpointslice=false
 np=true
 coverage=false
+skiplist=""
 while [[ $# -gt 0 ]]
 do
 key="$1"
@@ -62,6 +66,10 @@ case $key in
     proxy=false
     shift
     ;;
+    --ip-family)
+    ipfamily="$2"
+    shift 2
+    ;;
     --endpointslice)
     endpointslice=true
     shift
@@ -69,6 +77,10 @@ case $key in
     --no-np)
     np=false
     shift
+    ;;
+    --skip)
+    skiplist="$2"
+    shift 2
     ;;
     --encap-mode)
     mode="$2"
@@ -96,14 +108,16 @@ fi
 if $endpointslice; then
     manifest_args="$manifest_args --endpointslice"
 fi
-if $np; then
-    # See https://github.com/antrea-io/antrea/issues/897
-    manifest_args="$manifest_args --tun vxlan"
-else
+if ! $np; then
     manifest_args="$manifest_args --no-np"
 fi
 
-COMMON_IMAGES_LIST=("gcr.io/kubernetes-e2e-test-images/agnhost:2.8" "projects.registry.vmware.com/library/busybox" "projects.registry.vmware.com/antrea/nginx" "projects.registry.vmware.com/antrea/perftool" "projects.registry.vmware.com/antrea/ipfix-collector:v0.5.4")
+COMMON_IMAGES_LIST=("gcr.io/kubernetes-e2e-test-images/agnhost:2.8" \
+                    "projects.registry.vmware.com/library/busybox"  \
+                    "projects.registry.vmware.com/antrea/nginx" \
+                    "projects.registry.vmware.com/antrea/perftool" \
+                    "projects.registry.vmware.com/antrea/ipfix-collector:v0.5.4" \
+                    "projects.registry.vmware.com/antrea/wireguard-go:0.0.20210424")
 for image in "${COMMON_IMAGES_LIST[@]}"; do
     for i in `seq 3`; do
         docker pull $image && break
@@ -125,21 +139,33 @@ function run_test {
   current_mode=$1
   args=$2
 
+  if [[ "$ipfamily" == "v6" ]]; then
+    args="$args --ip-family ipv6 --pod-cidr fd00:10:244::/56"
+  elif [[ "$ipfamily" != "v4" ]]; then
+    echoerr "invalid value for --ip-family \"$ipfamily\", expected \"v4\" or \"v6\""
+    exit 1
+  fi
+
   echo "creating test bed with args $args"
   eval "timeout 600 $TESTBED_CMD create kind --antrea-cni false $args"
 
+
   if $coverage; then
       $YML_CMD --kind --encap-mode $current_mode $manifest_args | docker exec -i kind-control-plane dd of=/root/antrea-coverage.yml
+      $YML_CMD --kind --encap-mode $current_mode --wireguard-go $manifest_args | docker exec -i kind-control-plane dd of=/root/antrea-wireguard-go-coverage.yml
       $FLOWAGGREGATOR_YML_CMD --coverage | docker exec -i kind-control-plane dd of=/root/flow-aggregator-coverage.yml
   else
       $YML_CMD --kind --encap-mode $current_mode $manifest_args | docker exec -i kind-control-plane dd of=/root/antrea.yml
+      $YML_CMD --kind --encap-mode $current_mode --wireguard-go $manifest_args | docker exec -i kind-control-plane dd of=/root/antrea-wireguard-go.yml
       $FLOWAGGREGATOR_YML_CMD | docker exec -i kind-control-plane dd of=/root/flow-aggregator.yml
   fi
+
   sleep 1
+
   if $coverage; then
-      go test -v -timeout=70m antrea.io/antrea/test/e2e -provider=kind --logs-export-dir=$ANTREA_LOG_DIR --coverage --coverage-dir $ANTREA_COV_DIR
+      go test -v -timeout=70m antrea.io/antrea/test/e2e -provider=kind --logs-export-dir=$ANTREA_LOG_DIR --coverage --coverage-dir $ANTREA_COV_DIR --skip=$skiplist
   else
-      go test -v -timeout=65m antrea.io/antrea/test/e2e -provider=kind --logs-export-dir=$ANTREA_LOG_DIR
+      go test -v -timeout=65m antrea.io/antrea/test/e2e -provider=kind --logs-export-dir=$ANTREA_LOG_DIR --skip=$skiplist
   fi
   $TESTBED_CMD destroy kind
 }

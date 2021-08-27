@@ -24,7 +24,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/contiv/ofnet/ofctrl"
+	"antrea.io/ofnet/ofctrl"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/time/rate"
@@ -41,17 +41,15 @@ var (
 
 	priorityNormal = uint16(200)
 
-	portFoundMark = uint32(0x1)
-	portCacheReg  = 1
+	portFoundMark   = binding.NewOneBitRegMark(0, 16, "OFPortFound")
+	portCacheField  = binding.NewRegField(1, 0, 31, "OFPortCache")
+	sourceField     = binding.NewRegField(0, 0, 15, "PacketSourceField")
+	fromLocalMark   = binding.NewRegMark(sourceField, 2)
+	fromGatewayMark = binding.NewRegMark(sourceField, 1)
 
-	marksReg               = 0
-	markTrafficFromLocal   = uint32(2)
-	markTrafficFromGateway = uint32(1)
-	gatewayCTMark          = uint32(0x20)
-	ctZone                 = 0xfff0
-
-	ofportRegRange  = binding.Range{0, 31}
-	ofportMarkRange = binding.Range{16, 16}
+	marksReg      = 0
+	gatewayCTMark = binding.NewCTMark(0x20, 0, 7)
+	ctZone        = 0xfff0
 
 	count uint64
 
@@ -284,7 +282,8 @@ func TestOFctrlGroup(t *testing.T) {
 					bucketBuilder = bucketBuilder.ResubmitToTable(bucket.resubmitTable)
 				}
 				for _, loading := range bucket.reg2reg {
-					bucketBuilder = bucketBuilder.LoadRegRange(int(loading[0]), loading[1], [2]uint32{loading[2], loading[3]})
+					regField := binding.NewRegField(int(loading[0]), loading[2], loading[3], "field")
+					bucketBuilder = bucketBuilder.LoadToRegField(regField, loading[1])
 				}
 				group = bucketBuilder.Done()
 			}
@@ -516,24 +515,28 @@ func TestBundleWithGroupAndFlow(t *testing.T) {
 	ovsCtlClient := ovsctl.NewClient(br)
 
 	groupID := binding.GroupIDType(4)
+	field1 := binding.NewRegField(1, 0, 31, "field1")
+	field2 := binding.NewRegField(2, 0, 31, "field2")
+	field3 := binding.NewRegField(3, 0, 31, "field3")
 	group := bridge.CreateGroup(groupID).
 		Bucket().Weight(100).
-		LoadReg(1, uint32(0xa0a0002)).
-		LoadReg(2, uint32(0x35)).
-		LoadReg(3, uint32(0xfff1)).
+		LoadToRegField(field1, uint32(0xa0a0002)).
+		LoadToRegField(field2, uint32(0x35)).
+		LoadToRegField(field3, uint32(0xfff1)).
 		ResubmitToTable(table.GetNext()).Done().
 		Bucket().Weight(100).
-		LoadReg(1, uint32(0xa0a0202)).
-		LoadReg(2, uint32(0x35)).
-		LoadReg(3, uint32(0xfff1)).
+		LoadToRegField(field1, uint32(0xa0a0202)).
+		LoadToRegField(field2, uint32(0x35)).
+		LoadToRegField(field3, uint32(0xfff1)).
 		ResubmitToTable(table.GetNext()).Done()
 
+	reg3Field := binding.NewRegField(3, 0, 31, "reg3Field")
 	flow := table.BuildFlow(priorityNormal).
 		Cookie(getCookieID()).
 		MatchProtocol(binding.ProtocolTCP).
 		MatchDstIP(net.ParseIP("10.96.0.10")).
 		MatchDstPort(uint16(53), nil).
-		MatchReg(3, uint32(0xfff2)).
+		MatchRegFieldWithValue(reg3Field, uint32(0xfff2)).
 		Action().Group(groupID).Done()
 	expectedFlows := []*ExpectFlow{
 		{
@@ -583,9 +586,9 @@ func TestPacketOutIn(t *testing.T) {
 	srcPort := uint16(10001)
 	dstPort := uint16(8080)
 	reg2Data := uint32(0x1234)
-	reg2Range := binding.Range{0, 15}
+	reg2Field := binding.NewRegField(2, 0, 15, "reg2Field")
 	reg3Data := uint32(0x1234)
-	reg3Range := binding.Range{0, 31}
+	reg3Field := binding.NewRegField(3, 0, 31, "reg3Field")
 	stopCh := make(chan struct{})
 
 	go func() {
@@ -598,7 +601,7 @@ func TestPacketOutIn(t *testing.T) {
 		assert.NotNil(t, reg2Value)
 		value2, ok2 := reg2Value.(*ofctrl.NXRegister)
 		assert.True(t, ok2)
-		assert.Equal(t, reg2Data, ofctrl.GetUint32ValueWithRange(value2.Data, reg2Range.ToNXRange()))
+		assert.Equal(t, reg2Data, ofctrl.GetUint32ValueWithRange(value2.Data, reg2Field.GetRange().ToNXRange()))
 
 		reg3Match := matchers.GetMatchByName("NXM_NX_REG3")
 		assert.NotNil(t, reg3Match)
@@ -620,25 +623,26 @@ func TestPacketOutIn(t *testing.T) {
 	}()
 
 	pktBuilder := bridge.BuildPacketOut()
+	regField := binding.NewRegField(0, 18, 18, "field")
 	pkt := pktBuilder.SetSrcMAC(srcMAC).SetDstMAC(dstcMAC).
 		SetDstIP(dstIP).SetSrcIP(srcIP).SetIPProtocol(binding.ProtocolTCP).
 		SetTCPSrcPort(srcPort).SetTCPDstPort(dstPort).
-		AddLoadAction("NXM_NX_REG0", uint64(0x1), binding.Range{18, 18}).
+		AddLoadAction(regField.GetNXFieldName(), uint64(0x1), regField.GetRange()).
 		Done()
 	require.Nil(t, err)
 	flow0 := table0.BuildFlow(100).
 		MatchSrcMAC(srcMAC).MatchDstMAC(dstcMAC).
 		MatchSrcIP(srcIP).MatchDstIP(dstIP).MatchProtocol(binding.ProtocolTCP).
-		MatchRegRange(0, 0x1, binding.Range{18, 18}).
-		Action().LoadRegRange(2, reg2Data, reg2Range).
-		Action().LoadRegRange(3, reg3Data, reg3Range).
+		MatchRegFieldWithValue(regField, 0x1).
+		Action().LoadToRegField(reg2Field, reg2Data).
+		Action().LoadToRegField(reg3Field, reg3Data).
 		Action().SetTunnelDst(tunDst).
 		Action().ResubmitToTable(table0.GetNext()).
 		Done()
 	flow1 := table1.BuildFlow(100).
 		MatchSrcMAC(srcMAC).MatchDstMAC(dstcMAC).
 		MatchSrcIP(srcIP).MatchDstIP(dstIP).MatchProtocol(binding.ProtocolTCP).
-		MatchRegRange(0, 0x1, binding.Range{18, 18}).
+		MatchRegFieldWithValue(regField, 0x1).
 		Action().SendToController(0x1).
 		Done()
 	err = bridge.AddFlowsInBundle([]binding.Flow{flow0, flow1}, nil, nil)
@@ -731,16 +735,16 @@ func TestFlowWithCTMatchers(t *testing.T) {
 	defer bridge.Disconnect()
 
 	ofctlClient := ovsctl.NewClient(br)
-	ctIpSrc, ctIpSrcNet, _ := net.ParseCIDR("1.1.1.1/24")
-	ctIpDst, ctIpDstNet, _ := net.ParseCIDR("2.2.2.2/24")
+	ctIPSrc, ctIPSrcNet, _ := net.ParseCIDR("1.1.1.1/24")
+	ctIPDst, ctIPDstNet, _ := net.ParseCIDR("2.2.2.2/24")
 	ctPortSrc := uint16(10001)
 	ctPortDst := uint16(20002)
 	priority := uint16(200)
 	flow1 := table.BuildFlow(priority).
 		MatchProtocol(binding.ProtocolIP).
 		MatchCTStateNew(true).
-		MatchCTSrcIP(ctIpSrc).
-		MatchCTDstIP(ctIpDst).
+		MatchCTSrcIP(ctIPSrc).
+		MatchCTDstIP(ctIPDst).
 		MatchCTSrcPort(ctPortSrc).
 		MatchCTDstPort(ctPortDst).
 		MatchCTProtocol(binding.ProtocolTCP).
@@ -749,19 +753,19 @@ func TestFlowWithCTMatchers(t *testing.T) {
 	flow2 := table.BuildFlow(priority).
 		MatchProtocol(binding.ProtocolIP).
 		MatchCTStateEst(true).
-		MatchCTSrcIPNet(*ctIpSrcNet).
-		MatchCTDstIPNet(*ctIpDstNet).
+		MatchCTSrcIPNet(*ctIPSrcNet).
+		MatchCTDstIPNet(*ctIPDstNet).
 		MatchCTProtocol(binding.ProtocolTCP).
 		Action().ResubmitToTable(table.GetNext()).
 		Done()
 	expectFlows := []*ExpectFlow{
 		{fmt.Sprintf("priority=%d,ct_state=+new,ct_nw_src=%s,ct_nw_dst=%s,ct_nw_proto=6,ct_tp_src=%d,ct_tp_dst=%d,ip",
-			priority, ctIpSrc.String(), ctIpDst.String(), ctPortSrc, ctPortDst),
+			priority, ctIPSrc.String(), ctIPDst.String(), ctPortSrc, ctPortDst),
 			fmt.Sprintf("resubmit(,%d)", table.GetNext()),
 		},
 		{
 			fmt.Sprintf("priority=%d,ct_state=+est,ct_nw_src=%s,ct_nw_dst=%s,ct_nw_proto=6,ip",
-				priority, ctIpSrcNet.String(), ctIpDstNet.String()),
+				priority, ctIPSrcNet.String(), ctIPDstNet.String()),
 			fmt.Sprintf("resubmit(,%d)", table.GetNext()),
 		},
 	}
@@ -835,11 +839,16 @@ func prepareFlows(table binding.Table) ([]binding.Flow, []*ExpectFlow) {
 	gwMACData, _ := strconv.ParseUint(strings.Replace(gwMAC.String(), ":", "", -1), 16, 64)
 	_, peerSubnetIPv6, _ := net.ParseCIDR("fd74:ca9b:172:21::/64")
 	tunnelPeerIPv6 := net.ParseIP("20:ca9b:172:35::3")
+	regField0 := binding.NewRegField(0, 0, 15, "field0")
+	mark0 := binding.NewRegMark(regField0, 0x0fff)
+	regField1 := binding.NewRegField(0, 16, 31, "field1")
+	mark1 := binding.NewRegMark(regField1, 0x0ffe)
+	//gatewayCTMark := binding.NewCTMark()
 	flows = append(flows,
 		table.BuildFlow(priorityNormal-10).
 			Cookie(getCookieID()).
 			MatchInPort(podOFport).
-			Action().LoadRegRange(int(marksReg), markTrafficFromLocal, binding.Range{0, 15}).
+			Action().LoadRegMark(fromLocalMark).
 			Action().GotoTable(table.GetNext()).
 			Done(),
 		table.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolARP).
@@ -877,9 +886,9 @@ func prepareFlows(table binding.Table) ([]binding.Flow, []*ExpectFlow) {
 			Action().Learn(table.GetID(), priorityNormal-10, 10, 0, 1).
 			DeleteLearned().
 			MatchLearnedTCPDstPort().
-			MatchReg(0, 0x0fff, binding.Range{0, 15}).
-			LoadRegToReg(0, 0, binding.Range{0, 15}, binding.Range{0, 15}).
-			LoadReg(0, 0x0ffe, binding.Range{16, 31}).
+			MatchRegMark(mark0).
+			LoadFieldToField(regField0, regField0).
+			LoadRegMark(mark1).
 			Done(). // Finish learn action.
 			Action().ResubmitToTable(table.GetID()).
 			Done(),
@@ -889,26 +898,26 @@ func prepareFlows(table binding.Table) ([]binding.Flow, []*ExpectFlow) {
 			Done(),
 		table.BuildFlow(priorityNormal+10).MatchProtocol(binding.ProtocolIP).
 			Cookie(getCookieID()).
-			MatchRegRange(int(marksReg), markTrafficFromGateway, binding.Range{0, 15}).
-			MatchCTMark(gatewayCTMark, nil).
+			MatchRegMark(fromGatewayMark).
+			MatchCTMark(gatewayCTMark).
 			MatchCTStateNew(false).MatchCTStateTrk(true).
 			Action().GotoTable(table.GetNext()).
 			Done(),
 		table.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
 			Cookie(getCookieID()).
-			MatchRegRange(int(marksReg), markTrafficFromGateway, binding.Range{0, 15}).
+			MatchRegMark(fromGatewayMark).
 			MatchCTStateNew(true).MatchCTStateTrk(true).
 			Action().CT(
 			true,
 			table.GetNext(),
 			ctZone).
-			LoadToMark(uint32(gatewayCTMark)).CTDone().
+			LoadToCtMark(gatewayCTMark).CTDone().
 			Done(),
 		table.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
 			Cookie(getCookieID()).
-			MatchCTMark(gatewayCTMark, nil).
+			MatchCTMark(gatewayCTMark).
 			MatchCTStateNew(false).MatchCTStateTrk(true).
-			Action().LoadRange(binding.NxmFieldDstMAC, gwMACData, binding.Range{0, 47}).
+			Action().LoadRange(binding.NxmFieldDstMAC, gwMACData, &binding.Range{0, 47}).
 			Action().GotoTable(table.GetNext()).
 			Done(),
 		table.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
@@ -957,15 +966,15 @@ func prepareFlows(table binding.Table) ([]binding.Flow, []*ExpectFlow) {
 		table.BuildFlow(priorityNormal).
 			Cookie(getCookieID()).
 			MatchDstMAC(podMAC).
-			Action().LoadRegRange(portCacheReg, podOFport, ofportRegRange).
-			Action().LoadRegRange(int(marksReg), portFoundMark, ofportMarkRange).
+			Action().LoadToRegField(portCacheField, podOFport).
+			Action().LoadRegMark(portFoundMark).
 			Action().GotoTable(table.GetNext()).
 			Done(),
 		table.BuildFlow(priorityNormal).
 			Cookie(getCookieID()).
 			MatchProtocol(binding.ProtocolIP).
-			MatchRegRange(int(marksReg), portFoundMark, ofportMarkRange).
-			Action().OutputRegRange(int(portCacheReg), ofportRegRange).
+			MatchRegMark(portFoundMark).
+			Action().OutputToRegField(portCacheField).
 			Done(), table.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
 			Cookie(getCookieID()).
 			MatchDstIPNet(*serviceCIDR).
@@ -986,7 +995,7 @@ func prepareFlows(table binding.Table) ([]binding.Flow, []*ExpectFlow) {
 			Action().Conjunction(uint32(1001), uint8(2), uint8(3)).Done(),
 		table.BuildFlow(priorityNormal+20).MatchProtocol(binding.ProtocolIP).Cookie(getCookieID()).MatchSrcIPNet(*AllIPs).
 			Action().Conjunction(uint32(1001), uint8(1), uint8(3)).Done(),
-		table.BuildFlow(priorityNormal+20).MatchProtocol(binding.ProtocolIP).Cookie(getCookieID()).MatchRegRange(int(portCacheReg), podOFport, ofportRegRange).
+		table.BuildFlow(priorityNormal+20).MatchProtocol(binding.ProtocolIP).Cookie(getCookieID()).MatchRegFieldWithValue(portCacheField, podOFport).
 			Action().Conjunction(uint32(1001), uint8(2), uint8(3)).Done(),
 		table.BuildFlow(priorityNormal+20).MatchProtocol(binding.ProtocolIP).Cookie(getCookieID()).MatchConjID(1001).
 			Action().GotoTable(table.GetNext()).Done(),
@@ -1004,9 +1013,9 @@ func prepareFlows(table binding.Table) ([]binding.Flow, []*ExpectFlow) {
 		&ExpectFlow{"priority=190,arp", "NORMAL"},
 		&ExpectFlow{"priority=200,tcp", fmt.Sprintf("learn(table=%d,idle_timeout=10,priority=190,delete_learned,cookie=0x1,eth_type=0x800,nw_proto=6,NXM_OF_TCP_DST[],NXM_NX_REG0[0..15]=0xfff,load:NXM_NX_REG0[0..15]->NXM_NX_REG0[0..15],load:0xffe->NXM_NX_REG0[16..31]),resubmit(,%d)", table.GetID(), table.GetID())},
 		&ExpectFlow{"priority=200,ip", fmt.Sprintf("ct(table=%d,zone=65520)", table.GetNext())},
-		&ExpectFlow{"priority=210,ct_state=-new+trk,ct_mark=0x20,ip,reg0=0x1/0xffff", gotoTableAction},
-		&ExpectFlow{"priority=200,ct_state=+new+trk,ip,reg0=0x1/0xffff", fmt.Sprintf("ct(commit,table=%d,zone=65520,exec(load:0x20->NXM_NX_CT_MARK[])", table.GetNext())},
-		&ExpectFlow{"priority=200,ct_state=-new+trk,ct_mark=0x20,ip", fmt.Sprintf("load:0xaaaaaaaaaa11->NXM_OF_ETH_DST[],%s", gotoTableAction)},
+		&ExpectFlow{"priority=210,ct_state=-new+trk,ct_mark=0x20/0xff,ip,reg0=0x1/0xffff", gotoTableAction},
+		&ExpectFlow{"priority=200,ct_state=+new+trk,ip,reg0=0x1/0xffff", fmt.Sprintf("ct(commit,table=%d,zone=65520,exec(load:0x20->NXM_NX_CT_MARK[0..7])", table.GetNext())},
+		&ExpectFlow{"priority=200,ct_state=-new+trk,ct_mark=0x20/0xff,ip", fmt.Sprintf("load:0xaaaaaaaaaa11->NXM_OF_ETH_DST[],%s", gotoTableAction)},
 		&ExpectFlow{"priority=200,ct_state=+new+inv,ip", "drop"},
 		&ExpectFlow{"priority=190,ct_state=+new+trk,ip", fmt.Sprintf("ct(commit,table=%d,zone=65520)", table.GetNext())},
 		&ExpectFlow{"priority=200,ip,dl_dst=aa:bb:cc:dd:ee:ff,nw_dst=192.168.1.3", fmt.Sprintf("set_field:aa:aa:aa:aa:aa:11->eth_src,set_field:aa:aa:aa:aa:aa:13->eth_dst,dec_ttl,%s", gotoTableAction)},
@@ -1034,12 +1043,11 @@ func prepareNATflows(table binding.Table) ([]binding.Flow, []*ExpectFlow) {
 	natedIP2 := net.ParseIP("10.10.0.10")
 	natIPRange1 := &binding.IPRange{StartIP: natedIP1, EndIP: natedIP1}
 	natIPRange2 := &binding.IPRange{StartIP: natedIP1, EndIP: natedIP2}
-	snatCTMark := uint32(0x40)
-	natRequireMark := uint32(0x1)
-	snatMarkRange1 := binding.Range{17, 17}
-	snatMarkRange2 := binding.Range{18, 18}
-	dnatMarkRange1 := binding.Range{19, 19}
-	dnatMarkRange2 := binding.Range{20, 20}
+	snatCTMark := binding.NewCTMark(0x40, 0, 7)
+	snatMark1 := binding.NewOneBitRegMark(marksReg, 17, "SNATMark1")
+	snatMark2 := binding.NewOneBitRegMark(marksReg, 18, "SNATMark2")
+	dnatMark1 := binding.NewOneBitRegMark(marksReg, 19, "DNATMark1")
+	dnatMark2 := binding.NewOneBitRegMark(marksReg, 20, "DNATMark2")
 	flows := []binding.Flow{
 		table.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
 			Action().CT(false, table.GetNext(), ctZone).NAT().CTDone().
@@ -1047,34 +1055,34 @@ func prepareNATflows(table binding.Table) ([]binding.Flow, []*ExpectFlow) {
 			Done(),
 		table.BuildFlow(priorityNormal).
 			MatchProtocol(binding.ProtocolIP).
-			MatchRegRange(marksReg, natRequireMark, snatMarkRange1).
+			MatchRegMark(snatMark1).
 			Action().CT(true, table.GetNext(), ctZone).
 			SNAT(natIPRange1, nil).
-			LoadToMark(snatCTMark).CTDone().
+			LoadToCtMark(snatCTMark).CTDone().
 			Cookie(getCookieID()).
 			Done(),
 		table.BuildFlow(priorityNormal).
 			MatchProtocol(binding.ProtocolIP).
-			MatchRegRange(marksReg, natRequireMark, snatMarkRange2).
+			MatchRegMark(snatMark2).
 			Action().CT(true, table.GetNext(), ctZone).
 			SNAT(natIPRange2, nil).
-			LoadToMark(snatCTMark).CTDone().
+			LoadToCtMark(snatCTMark).CTDone().
 			Cookie(getCookieID()).
 			Done(),
 		table.BuildFlow(priorityNormal).
 			MatchProtocol(binding.ProtocolIP).
-			MatchRegRange(marksReg, natRequireMark, dnatMarkRange1).
+			MatchRegMark(dnatMark1).
 			Action().CT(true, table.GetNext(), ctZone).
 			DNAT(natIPRange1, nil).
-			LoadToMark(snatCTMark).CTDone().
+			LoadToCtMark(snatCTMark).CTDone().
 			Cookie(getCookieID()).
 			Done(),
 		table.BuildFlow(priorityNormal).
 			MatchProtocol(binding.ProtocolIP).
-			MatchRegRange(marksReg, natRequireMark, dnatMarkRange2).
+			MatchRegMark(dnatMark2).
 			Action().CT(true, table.GetNext(), ctZone).
 			DNAT(natIPRange2, nil).
-			LoadToMark(snatCTMark).CTDone().
+			LoadToCtMark(snatCTMark).CTDone().
 			Cookie(getCookieID()).
 			Done(),
 	}
@@ -1082,19 +1090,19 @@ func prepareNATflows(table binding.Table) ([]binding.Flow, []*ExpectFlow) {
 	flowStrs := []*ExpectFlow{
 		{"priority=200,ip", fmt.Sprintf("ct(table=%d,zone=65520,nat)", table.GetNext())},
 		{"priority=200,ip,reg0=0x20000/0x20000",
-			fmt.Sprintf("ct(commit,table=%d,zone=65520,nat(src=%s),exec(load:0x40->NXM_NX_CT_MARK[]))",
+			fmt.Sprintf("ct(commit,table=%d,zone=65520,nat(src=%s),exec(load:0x40->NXM_NX_CT_MARK[0..7]))",
 				table.GetNext(), natedIP1.String()),
 		},
 		{"priority=200,ip,reg0=0x40000/0x40000",
-			fmt.Sprintf("ct(commit,table=%d,zone=65520,nat(src=%s-%s),exec(load:0x40->NXM_NX_CT_MARK[]))",
+			fmt.Sprintf("ct(commit,table=%d,zone=65520,nat(src=%s-%s),exec(load:0x40->NXM_NX_CT_MARK[0..7]))",
 				table.GetNext(), natedIP1.String(), natedIP2.String()),
 		},
 		{"priority=200,ip,reg0=0x80000/0x80000",
-			fmt.Sprintf("ct(commit,table=%d,zone=65520,nat(dst=%s),exec(load:0x40->NXM_NX_CT_MARK[]))",
+			fmt.Sprintf("ct(commit,table=%d,zone=65520,nat(dst=%s),exec(load:0x40->NXM_NX_CT_MARK[0..7]))",
 				table.GetNext(), natedIP1.String()),
 		},
 		{"priority=200,ip,reg0=0x100000/0x100000",
-			fmt.Sprintf("ct(commit,table=%d,zone=65520,nat(dst=%s-%s),exec(load:0x40->NXM_NX_CT_MARK[]))",
+			fmt.Sprintf("ct(commit,table=%d,zone=65520,nat(dst=%s-%s),exec(load:0x40->NXM_NX_CT_MARK[0..7]))",
 				table.GetNext(), natedIP1.String(), natedIP2.String()),
 		},
 	}
