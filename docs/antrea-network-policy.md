@@ -427,7 +427,7 @@ which the rule is applied. These log files can then be retrieved for further
 analysis. By default, rules are not logged. The example policy logs all
 traffic that matches the "DropToThirdParty" egress rule, while the rule
 "AllowFromFrontend" is not logged. Specifically for drop and reject rules,
-deduplication is applied to simplify the logs. By default, the buffer length is 1 second.
+deduplication is applied to simplify multiple logs. Duplication buffer length is set as 1 second.
 The rules are logged in the following format:
 
 ```text
