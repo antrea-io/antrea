@@ -165,9 +165,11 @@ func GetIPNetDeviceByName(ifaceName string) (v4IPNet *net.IPNet, v6IPNet *net.IP
 		if ipNet, ok := addr.(*net.IPNet); ok {
 			if ipNet.IP.IsGlobalUnicast() {
 				if ipNet.IP.To4() != nil {
+					if v4IPNet == nil {
+						v4IPNet = ipNet
+					}
+				} else if v6IPNet == nil {
 					v6IPNet = ipNet
-				} else {
-					v4IPNet = ipNet
 				}
 			}
 		}
