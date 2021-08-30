@@ -989,25 +989,26 @@ The above example drops all traffic destined to any FQDN that matches the wildca
 expression `*foobar.com` originating from any Pod with label `app` set to `client`
 across any Namespace. This feature only works at the L3/L4 level.
 
-FQDN based policies can also select in-cluster based services.
-
-```text
-kubectl get svc -o wide -A
-NAMESPACE     NAME          TYPE          CLUSTER-IP      EXTERNAL-IP   PORT(S)                   AGE   SELECTOR
-default       db-svc        ClusterIP     10.108.21.84    <none>        443/TCP                   2d    app=db
-default       kubernetes    ClusterIP     10.96.0.1       <none>        443/TCP                   2d    <none>
-kube-system   antrea        ClusterIP     10.98.109.50    <none>        443/TCP                   3d    <app=antrea,component=antrea-controller>
-kube-system   kube-dns      ClusterIP     10.96.0.10      <none>        53/UDP,53,TCP,9153/TCP    3d    k8s-app=kube-dns
-```
-
-In the above, there is a db service in the default namespace of type `ClusterIP`. A
-ClusterNetorkPolicy can be defined as follows:
+Note that FQDN based policies do not work for [Service DNS names created by
+Kubernetes](https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/#services)
+(e.g. `kubernetes.default.svc` or `antrea.kube-system.svc`), except for headless
+Services. The reason is that Antrea will use the information included in A or
+AAAA DNS records to implement FQDN based policies. In the case of "normal" (not
+headless) Services, the DNS name resolves to the ClusterIP for the Service, but
+policy rules are enforced after AntreaProxy Service Load-Balancing and at that
+stage the destination IP address has already been rewritten to the address of an
+endpoint backing the Service. For headless Services, a ClusterIP is not
+allocated and, assuming the Service has a selector, the DNS server returns A /
+AAAA records that point directly to the endpoints. In that case, FQDN based
+policies can be used successfully. For example, the following policy, which
+specifies an exact match on a DNS name, will drop all egress traffic destined to
+headless Service `svcA` defined in the `default` Namespace:
 
 ```yaml
 apiVersion: crd.antrea.io/v1alpha1
 kind: ClusterNetworkPolicy
 metadata:
-  name: acnp-fqdn-db-svc
+  name: acnp-fqdn-headless-service
 spec:
   priority: 1
   appliedTo:
@@ -1017,12 +1018,8 @@ spec:
   egress:
   - action: Drop
     to:
-      - fqdn: "db-svc.default.svc"
+      - fqdn: "svcA.default.svc.cluster.local"
 ```
-
-In this example, an exact name matching policy is defined. When a client Pod connects to
-`db-svc` via ClusterIP, the traffic is dropped. It doesn't however prevent clients from
-connecting to the backend Pods for the Service directly.
 
 ## RBAC
 
