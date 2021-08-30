@@ -53,6 +53,7 @@ require (
 	golang.org/x/time v0.0.0-20210220033141-f8bda1e9f3ba
 	golang.zx2c4.com/wireguard/wgctrl v0.0.0-20210506160403-92e472f520a5
 	google.golang.org/grpc v1.27.1
+	google.golang.org/protobuf v1.27.1
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
 	gopkg.in/yaml.v2 v2.4.0
 	k8s.io/api v0.21.0
@@ -139,7 +140,6 @@ require (
 	golang.zx2c4.com/wireguard v0.0.0-20210427022245-097af6e1351b // indirect
 	google.golang.org/appengine v1.6.5 // indirect
 	google.golang.org/genproto v0.0.0-20201110150050-8816d57aaa9a // indirect
-	google.golang.org/protobuf v1.27.1 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v3 v3.0.0-20200615113413-eeeca48fe776 // indirect
 	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.0.15 // indirect
