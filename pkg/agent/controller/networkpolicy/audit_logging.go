@@ -111,7 +111,7 @@ func (l *AntreaPolicyLogger) updateLogKey(logMsg string, bufferLength time.Durat
 // LogDedupPacket logs information in ob based on disposition and duplication conditions.
 func (l *AntreaPolicyLogger) LogDedupPacket(ob *logInfo) {
 	// Deduplicate non-Allow packet log.
-	logMsg := fmt.Sprintf("%s %s %s %s SRC: %s DEST: %s %d %s", ob.tableName, ob.npRef, ob.disposition, ob.ofPriority, ob.srcIP, ob.destIP, ob.pktLength, ob.protocolStr)
+	logMsg := fmt.Sprintf("%s %s %s %s %s %s %d %s", ob.tableName, ob.npRef, ob.disposition, ob.ofPriority, ob.srcIP, ob.destIP, ob.pktLength, ob.protocolStr)
 	if ob.disposition == openflow.DispositionToString[openflow.DispositionAllow] {
 		l.anpLogger.Printf(logMsg)
 	} else {
