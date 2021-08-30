@@ -599,7 +599,7 @@ table=70, priority=210,ct_state=+rpl+trk,ct_mark=0x20,ip actions=mod_dl_dst:e2:e
   For a given peer Node, the flow may look like this:
 
 ```text
-table=70, priority=200,ip,nw_dst=10.10.1.0/24 actions=mod_dl_src:e2:e5:a4:9b:1c:b1,mod_dl_dst:aa:bb:cc:dd:ee:ff,load:0x1->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],load:0xc0a84d65->NXM_NX_TUN_IPV4_DST[],goto_table:72
+table=70, priority=200,ip,nw_dst=10.10.1.0/24 actions=mod_dl_src:e2:e5:a4:9b:1c:b1,mod_dl_dst:aa:bb:cc:dd:ee:ff,load:0x1->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],load:0xc0a80102->NXM_NX_TUN_IPV4_DST[],goto_table:72
 ```
 
 If none of the flows described above are hit, traffic goes directly to
@@ -612,10 +612,19 @@ is required), as well as for local Pod-to-Pod traffic.
 table=70, priority=0 actions=goto_table:80
 ```
 
-When the Egress feature is enabled, there will be two extra flows added into
+When the Egress feature is enabled, extra flows will be added to
 [L3ForwardingTable], which send the egress traffic from Pods to external network
-to [SNATTable] (rather than sending the traffic the [L2ForwardingCalcTable]
-directly). One of the flows is for egress traffic from local Pods; another
+to [SNATTable]. The following two flows match traffic to local Pods and traffic
+to the local Node IP respectively, and keep them in the normal forwarding path
+(to [L2ForwardingCalcTable]), so they will not be sent to [SNATTable]:
+
+```text
+table=70, priority=200,ip,reg0=0/0x80000,nw_dst=10.10.1.0/24 actions=goto_table:80
+table=70, priority=200,ip,reg0=0x2/0xffff,nw_dst=192.168.1.1 actions=goto_table:80
+```
+
+The following two flows send the traffic not matched by other flows to
+[SNATTable]. One of the flows is for egress traffic from local Pods; another
 one is for egress traffic from remote Pods, which is tunnelled to this Node to
 be SNAT'd with a SNAT IP configured on the Node. In the latter case, the flow
 also rewrites the destination MAC to the local gateway interface MAC.
@@ -662,7 +671,7 @@ destination MAC addresses, load the SNAT IP to NXM_NX_TUN_IPV4_DST, and send the
 packets to [L3DecTTLTable].
 
 ```text
-table=71, priority=200,ct_state=+new+trk,ip,in_port="pod2-357c21" actions=mod_dl_src:e2:e5:a4:9b:1c:b1,mod_dl_dst:aa:bb:cc:dd:ee:ff,load:0x1->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],load:0xc0a84d66->NXM_NX_TUN_IPV4_DST[],goto_table:72
+table=71, priority=200,ct_state=+new+trk,ip,in_port="pod2-357c21" actions=mod_dl_src:e2:e5:a4:9b:1c:b1,mod_dl_dst:aa:bb:cc:dd:ee:ff,load:0x1->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],load:0xc0a80a66->NXM_NX_TUN_IPV4_DST[],goto_table:72
 ```
 
 Last, when a SNAT IP configured for Egresses is on the local Node, an additional
@@ -671,7 +680,7 @@ use the SNAT IP. The flow matches the tunnel destination IP (which should be
 equal to the SNAT IP), and sets the 8 bits ID of the SNAT IP to pkt_mark.
 
 ```text
-table=71, priority=200,ct_state=+new+trk,ip,tun_dst="192.168.77.101" actions=load:0x1->NXM_NX_PKT_MARK[0..7],goto_table:80
+table=71, priority=200,ct_state=+new+trk,ip,tun_dst="192.168.10.101" actions=load:0x1->NXM_NX_PKT_MARK[0..7],goto_table:80
 ```
 
 ### L3DecTTLTable (72)
