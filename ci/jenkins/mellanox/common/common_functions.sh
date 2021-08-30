@@ -414,6 +414,8 @@ function build_github_project {
 
     git clone "${!repo_variable}" "$WORKSPACE"/"$project_name"
 
+    local sed_match_reg='s/(@| |^|=|	)docker($| )/\1sudo docker\2/'
+
     pushd $WORKSPACE/"$project_name"
     # Check if a pull request or a branch of the project is specified, if so build the image, otherwise pull
     # the image from the custom registry.
@@ -425,6 +427,9 @@ function build_github_project {
             echo "ERROR: Failed to checkout the $project_name pull request number ${!pr_variable}!"
             return "$status"
         fi
+
+        sed -ri "${sed_match_reg}" Makefile
+
         eval "$image_build_command"
         let status=$status+$?
     elif test ${!branch_variable}; then
@@ -434,6 +439,9 @@ function build_github_project {
             echo "ERROR: Failed to checkout the $project_name branch ${!branch_variable}!"
             return "$status"
         fi
+
+        sed -ri "${sed_match_reg}" Makefile
+
         eval "$image_build_command"
         let status=$status+$?
     else
