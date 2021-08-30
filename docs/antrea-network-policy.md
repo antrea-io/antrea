@@ -996,9 +996,9 @@ stage the destination IP address has already been rewritten to the address of an
 endpoint backing the Service. For headless Services, a ClusterIP is not
 allocated and, assuming the Service has a selector, the DNS server returns A /
 AAAA records that point directly to the endpoints. In that case, FQDN based
-policies can be used successfully. For example, the following policy will drop
-all egress traffic destined to headless Service `svcA` defined in the `default`
-Namespace:
+policies can be used successfully. For example, the following policy, which
+specifies an exact match on a DNS name, will drop all egress traffic destined to
+headless Service `svcA` defined in the `default` Namespace:
 
 ```yaml
 apiVersion: crd.antrea.io/v1alpha1
@@ -1014,7 +1014,7 @@ spec:
   egress:
   - action: Drop
     to:
-      - fqdn: "svcA.default.svc"
+      - fqdn: "svcA.default.svc.cluster.local"
 ```
 
 ## RBAC
