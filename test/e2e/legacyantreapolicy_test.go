@@ -1707,8 +1707,8 @@ func testLegacyAuditLoggingBasic(t *testing.T, data *TestData) {
 		for i := 0; i < len(srcIPs); i++ {
 			for j := 0; j < len(dstIPs); j++ {
 				if strings.Contains(srcIPs[i], ".") == strings.Contains(dstIPs[j], ".") {
-					// The audit log should contain log entry `... Drop <ofPriority> SRC: <x/a IP> DEST: <z/* IP> ...`
-					pattern := `Drop [0-9]+ SRC: ` + srcIPs[i] + ` DEST: ` + dstIPs[j]
+					// The audit log should contain log entry `... Drop <ofPriority> <x/a IP> <z/* IP> ...`
+					pattern := `Drop [0-9]+ ` + srcIPs[i] + ` ` + dstIPs[j]
 					assert.Regexp(t, pattern, stdout, "audit log does not contain expected entry for x/a to %s", d)
 					break
 				}
