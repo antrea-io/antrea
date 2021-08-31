@@ -29,7 +29,7 @@ import (
 	"antrea.io/antrea/pkg/apis"
 )
 
-// TestWireGuard checks that Pod traffic across two Nodes over the WireGuard tunnel  by creating
+// TestWireGuard checks that Pod traffic across two Nodes over the WireGuard tunnel by creating
 // multiple Pods across distinct Nodes and having them ping each other. It will also verify that
 // the handshake was established when the wg command line is available.
 func TestWireGuard(t *testing.T) {
