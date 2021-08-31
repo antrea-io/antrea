@@ -25,6 +25,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/core/v1"
 	v1net "k8s.io/api/networking/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -1830,6 +1831,94 @@ func testACNPRejectIngress(t *testing.T, protocol v1.Protocol) {
 	executeTests(t, testCase)
 }
 
+func testRejectServiceTraffic(t *testing.T, data *TestData) {
+
+	clientName := "agnhost-client"
+	require.NoError(t, data.createAgnhostPodOnNode(clientName, testNamespace, nodeName(0), false))
+	defer data.deletePodAndWait(defaultTimeout, clientName, testNamespace)
+	_, err := data.podWaitForIPs(defaultTimeout, clientName, testNamespace)
+	require.NoError(t, err)
+
+	svc1, cleanup1 := data.createAgnhostServiceAndBackendPods(t, "s1", nodeName(0), v1.ServiceTypeClusterIP)
+	defer cleanup1()
+
+	svc2, cleanup2 := data.createAgnhostServiceAndBackendPods(t, "s2", nodeName(1), v1.ServiceTypeClusterIP)
+	defer cleanup2()
+
+	testcases := []podToAddrTestStep{
+		{
+			"antrea-test/agnhost-client",
+			svc1.Spec.ClusterIP,
+			80,
+			Rejected,
+		},
+		{
+			"antrea-test/agnhost-client",
+			svc2.Spec.ClusterIP,
+			80,
+			Rejected,
+		},
+	}
+
+	// Test egress.
+	builder1 := &ClusterNetworkPolicySpecBuilder{}
+	builder1 = builder1.SetName("acnp-reject-egress-svc-traffic").
+		SetPriority(1.0).
+		SetAppliedToGroup([]ACNPAppliedToSpec{{PodSelector: map[string]string{"antrea-e2e": "agnhost-client"}}})
+	builder1.AddEgress(v1.ProtocolTCP, &p80, nil, nil, nil, map[string]string{"antrea-e2e": "s1"}, nil,
+		nil, nil, false, nil, crdv1alpha1.RuleActionReject, "", "")
+	builder1.AddEgress(v1.ProtocolTCP, &p80, nil, nil, nil, map[string]string{"antrea-e2e": "s2"}, nil,
+		nil, nil, false, nil, crdv1alpha1.RuleActionReject, "", "")
+
+	acnpEgress := builder1.Get()
+	k8sUtils.CreateOrUpdateACNP(acnpEgress)
+	failOnError(waitForResourceReady(acnpEgress, timeout), t)
+	time.Sleep(networkPolicyDelay)
+
+	for _, tc := range testcases {
+		log.Tracef("Probing: %s -> %s:%d", tc.clientPod.PodName(), tc.destAddr, tc.destPort)
+		connectivity, err := k8sUtils.ProbeAddr(tc.clientPod.Namespace(), "antrea-e2e", tc.clientPod.PodName(), tc.destAddr, tc.destPort, v1.ProtocolTCP)
+		if err != nil {
+			t.Errorf("failure -- could not complete probe: %v", err)
+		}
+		if connectivity != tc.expectedConnectivity {
+			t.Errorf("failure -- wrong results for probe: Source %s/%s --> Dest %s:%d connectivity: %v, expected: %v",
+				tc.clientPod.Namespace(), tc.clientPod.PodName(), tc.destAddr, tc.destPort, connectivity, tc.expectedConnectivity)
+		}
+	}
+	failOnError(k8sUtils.DeleteACNP(builder1.Name), t)
+	failOnError(waitForResourceDelete("", builder1.Name, resourceACNP, timeout), t)
+	time.Sleep(networkPolicyDelay)
+
+	// Test ingress.
+	builder2 := &ClusterNetworkPolicySpecBuilder{}
+	builder2 = builder2.SetName("acnp-reject-ingress-svc-traffic").
+		SetPriority(1.0).
+		SetAppliedToGroup([]ACNPAppliedToSpec{{PodSelector: map[string]string{"antrea-e2e": "s1"}}, {PodSelector: map[string]string{"antrea-e2e": "s2"}}})
+	builder2.AddIngress(v1.ProtocolTCP, &p80, nil, nil, nil, map[string]string{"antrea-e2e": "agnhost-client"}, nil,
+		nil, nil, false, nil, crdv1alpha1.RuleActionReject, "", "")
+
+	acnpIngress := builder2.Get()
+	k8sUtils.CreateOrUpdateACNP(acnpIngress)
+	failOnError(waitForResourceReady(acnpIngress, timeout), t)
+	time.Sleep(networkPolicyDelay)
+
+	for _, tc := range testcases {
+		log.Tracef("Probing: %s -> %s:%d", tc.clientPod.PodName(), tc.destAddr, tc.destPort)
+		connectivity, err := k8sUtils.ProbeAddr(tc.clientPod.Namespace(), "antrea-e2e", tc.clientPod.PodName(), tc.destAddr, tc.destPort, v1.ProtocolTCP)
+		if err != nil {
+			t.Errorf("failure -- could not complete probe: %v", err)
+		}
+		if connectivity != tc.expectedConnectivity {
+			t.Errorf("failure -- wrong results for probe: Source %s/%s --> Dest %s:%d connectivity: %v, expected: %v",
+				tc.clientPod.Namespace(), tc.clientPod.PodName(), tc.destAddr, tc.destPort, connectivity, tc.expectedConnectivity)
+		}
+	}
+	failOnError(k8sUtils.DeleteACNP(builder2.Name), t)
+	failOnError(waitForResourceDelete("", builder2.Name, resourceACNP, timeout), t)
+	time.Sleep(networkPolicyDelay)
+}
+
 // testANPPortRange tests the port range in a ANP can work.
 func testANPPortRange(t *testing.T) {
 	builder := &AntreaNetworkPolicySpecBuilder{}
@@ -2401,13 +2490,13 @@ func testFQDNPolicy(t *testing.T) {
 	time.Sleep(networkPolicyDelay)
 	for _, tc := range testcases {
 		log.Tracef("Probing: %s -> %s", tc.clientPod.PodName(), tc.destAddr)
-		connectivity, err := k8sUtils.ProbeEgress(tc.clientPod.Namespace(), tc.clientPod.PodName(), tc.destAddr, tc.destPort, v1.ProtocolTCP)
+		connectivity, err := k8sUtils.ProbeAddr(tc.clientPod.Namespace(), "pod", tc.clientPod.PodName(), tc.destAddr, tc.destPort, v1.ProtocolTCP)
 		if err != nil {
 			t.Errorf("failure -- could not complete probe: %v", err)
 		}
 		if connectivity != tc.expectedConnectivity {
-			t.Errorf("failure -- wrong results for probe: Source %s/%s --> Dest %s connectivity: %v, expected: %v",
-				tc.clientPod.Namespace(), tc.clientPod.PodName(), tc.destAddr, connectivity, tc.expectedConnectivity)
+			t.Errorf("failure -- wrong results for probe: Source %s/%s --> Dest %s:%d connectivity: %v, expected: %v",
+				tc.clientPod.Namespace(), tc.clientPod.PodName(), tc.destAddr, tc.destPort, connectivity, tc.expectedConnectivity)
 		}
 	}
 	// cleanup test resources
@@ -2488,13 +2577,13 @@ func testFQDNPolicyInClusterService(t *testing.T) {
 
 	for _, tc := range testcases {
 		log.Tracef("Probing: %s -> %s", tc.clientPod.PodName(), tc.destAddr)
-		connectivity, err := k8sUtils.ProbeEgress(tc.clientPod.Namespace(), tc.clientPod.PodName(), tc.destAddr, tc.destPort, v1.ProtocolTCP)
+		connectivity, err := k8sUtils.ProbeAddr(tc.clientPod.Namespace(), "pod", tc.clientPod.PodName(), tc.destAddr, tc.destPort, v1.ProtocolTCP)
 		if err != nil {
 			t.Errorf("failure -- could not complete probe: %v", err)
 		}
 		if connectivity != tc.expectedConnectivity {
-			t.Errorf("failure -- wrong results for probe: Source %s/%s --> Dest %s connectivity: %v, expected: %v",
-				tc.clientPod.Namespace(), tc.clientPod.PodName(), tc.destAddr, connectivity, tc.expectedConnectivity)
+			t.Errorf("failure -- wrong results for probe: Source %s/%s --> Dest %s:%d connectivity: %v, expected: %v",
+				tc.clientPod.Namespace(), tc.clientPod.PodName(), tc.destAddr, tc.destPort, connectivity, tc.expectedConnectivity)
 		}
 	}
 	// cleanup test resources
@@ -2565,7 +2654,7 @@ func testToServices(t *testing.T) {
 
 	for _, tc := range testcases {
 		log.Tracef("Probing: %s -> %s", tc.clientPod.PodName(), tc.destAddr)
-		connectivity, err := k8sUtils.ProbeEgress(tc.clientPod.Namespace(), tc.clientPod.PodName(), tc.destAddr, tc.destPort, v1.ProtocolTCP)
+		connectivity, err := k8sUtils.ProbeAddr(tc.clientPod.Namespace(), "pod", tc.clientPod.PodName(), tc.destAddr, tc.destPort, v1.ProtocolTCP)
 		if err != nil {
 			t.Errorf("failure -- could not complete probe: %v", err)
 		}
@@ -2902,6 +2991,7 @@ func TestAntreaPolicy(t *testing.T) {
 		t.Run("Case=ACNPRejectEgress", func(t *testing.T) { testACNPRejectEgress(t) })
 		t.Run("Case=ACNPRejectIngress", func(t *testing.T) { testACNPRejectIngress(t, v1.ProtocolTCP) })
 		t.Run("Case=ACNPRejectIngressUDP", func(t *testing.T) { testACNPRejectIngress(t, v1.ProtocolUDP) })
+		t.Run("Case=RejectServiceTraffic", func(t *testing.T) { testRejectServiceTraffic(t, data) })
 		t.Run("Case=ACNPNoEffectOnOtherProtocols", func(t *testing.T) { testACNPNoEffectOnOtherProtocols(t) })
 		t.Run("Case=ACNPBaselinePolicy", func(t *testing.T) { testBaselineNamespaceIsolation(t) })
 		t.Run("Case=ACNPPriorityOverride", func(t *testing.T) { testACNPPriorityOverride(t) })

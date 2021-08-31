@@ -170,10 +170,10 @@ func (k *KubernetesUtils) Probe(ns1, pod1, ns2, pod2 string, port int32, protoco
 	return connectivity, nil
 }
 
-// Probe execs into a Pod and checks its connectivity to an arbirary destination
+// ProbeAddr execs into a Pod and checks its connectivity to an arbitrary destination
 // address.
-func (k *KubernetesUtils) ProbeEgress(ns, pod, dstAddr string, port int32, protocol v1.Protocol) (PodConnectivityMark, error) {
-	fromPods, err := k.GetPodsByLabel(ns, "pod", pod)
+func (k *KubernetesUtils) ProbeAddr(ns, podLabel, pod, dstAddr string, port int32, protocol v1.Protocol) (PodConnectivityMark, error) {
+	fromPods, err := k.GetPodsByLabel(ns, podLabel, pod)
 	if err != nil {
 		return Error, fmt.Errorf("unable to get Pods from Namespace %s: %v", ns, err)
 	}

@@ -381,6 +381,7 @@ type PacketOutBuilder interface {
 	SetOutport(outport uint32) PacketOutBuilder
 	AddLoadAction(name string, data uint64, rng *Range) PacketOutBuilder
 	AddLoadRegMark(mark *RegMark) PacketOutBuilder
+	AddResubmitAction(inPort *uint16, table *uint8) PacketOutBuilder
 	Done() *ofctrl.PacketOut
 }
 

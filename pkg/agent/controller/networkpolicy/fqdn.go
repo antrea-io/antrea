@@ -816,7 +816,7 @@ func (f *fqdnController) sendDNSPacketout(pktIn *ofctrl.PacketIn) error {
 			srcIP,
 			dstIP,
 			uint32(config.HostGatewayOFPort),
-			-1,
+			0,
 			isIPv6,
 			udpSrcPort,
 			udpDstPort,

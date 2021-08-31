@@ -438,7 +438,7 @@ func Test_client_setBasePacketOutBuilder(t *testing.T) {
 		srcIP   string
 		dstIP   string
 		inPort  uint32
-		outPort int32
+		outPort uint32
 	}
 	tests := []struct {
 		name    string

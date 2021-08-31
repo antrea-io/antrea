@@ -28,6 +28,7 @@ import (
 
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/flowexporter"
+	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/openflow"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 	"antrea.io/antrea/pkg/util/ip"
@@ -203,8 +204,8 @@ func (c *Controller) logPacket(pktIn *ofctrl.PacketIn) error {
 // packet-in message.
 func (c *Controller) rejectRequest(pktIn *ofctrl.PacketIn) error {
 	// Get ethernet data.
-	srcMAC := pktIn.Data.HWDst
-	dstMAC := pktIn.Data.HWSrc
+	srcMAC := pktIn.Data.HWDst.String()
+	dstMAC := pktIn.Data.HWSrc.String()
 
 	var (
 		srcIP  string
@@ -227,19 +228,11 @@ func (c *Controller) rejectRequest(pktIn *ofctrl.PacketIn) error {
 		isIPv6 = true
 	}
 
-	// Get the OpenFlow ports.
-	// 1. If we found the Interface of the src, it means the server is on this node.
-	// 	  We set `in_port` to the OF port of the Interface we found to simulate the reject
-	// 	  response from the server.
-	// 2. If we didn't find the Interface of the src, it means the server is outside
-	//    this node. We set `in_port` to the OF port of `antrea-gw0` to simulate the reject
-	//    response from external.
-	// 3. We don't need to set the output port. The pipeline will take care of it.
 	sIface, srcFound := c.ifaceStore.GetInterfaceByIP(srcIP)
-	inPort := uint32(config.HostGatewayOFPort)
-	if srcFound {
-		inPort = uint32(sIface.OFPort)
-	}
+	dIface, dstFound := c.ifaceStore.GetInterfaceByIP(dstIP)
+	isSvcTraffic := c.isServiceTraffic(pktIn, c.antreaProxyEnabled, dstMAC, dstFound)
+	packetOutType := binding.GetPacketOutType(isSvcTraffic, c.antreaProxyEnabled, srcFound, dstFound)
+	inPort, outPort := getRejectOFPort(packetOutType, sIface, dIface)
 
 	if prot == protocol.Type_TCP {
 		// Get TCP data.
@@ -250,18 +243,18 @@ func (c *Controller) rejectRequest(pktIn *ofctrl.PacketIn) error {
 		// While sending TCP reject packet-out, switch original src/dst port,
 		// set the ackNum as original seqNum+1 and set the flag as ack+rst.
 		return c.ofClient.SendTCPPacketOut(
-			srcMAC.String(),
-			dstMAC.String(),
+			srcMAC,
+			dstMAC,
 			srcIP,
 			dstIP,
 			inPort,
-			-1,
+			outPort,
 			isIPv6,
 			oriTCPDstPort,
 			oriTCPSrcPort,
 			oriTCPSeqNum+1,
 			TCPAck|TCPRst,
-			true)
+			packetOutType)
 	}
 	// Use ICMP host administratively prohibited for ICMP, UDP, SCTP reject.
 	icmpType := ICMPDstUnreachableType
@@ -278,17 +271,62 @@ func (c *Controller) rejectRequest(pktIn *ofctrl.PacketIn) error {
 	binary.BigEndian.PutUint32(icmpData[:ICMPUnusedHdrLen], 0)
 	copy(icmpData[ICMPUnusedHdrLen:], ipHdr[:ipHdrLen+8])
 	return c.ofClient.SendICMPPacketOut(
-		srcMAC.String(),
-		dstMAC.String(),
+		srcMAC,
+		dstMAC,
 		srcIP,
 		dstIP,
 		inPort,
-		-1,
+		outPort,
 		isIPv6,
 		icmpType,
 		icmpCode,
 		icmpData,
-		true)
+		packetOutType)
+}
+
+// isServiceTraffic uses ServiceEPStateField to decide if this is a Service
+// traffic, when AntreaProxy is enabled. And when AntreaProxy is disabled, if the
+// destination IP of the reject response packet is on the local Node, but the
+// source MAC is antrea-gw's MAC, then this is a rejection of Service traffic.
+// Because this response is heading to kube-proxy.
+func (c *Controller) isServiceTraffic(pktIn *ofctrl.PacketIn, antreaProxyEnabled bool, dstMAC string, isDstLocal bool) bool {
+	if antreaProxyEnabled {
+		matches := pktIn.GetMatches()
+		match := getMatchRegField(matches, openflow.ServiceEPStateField)
+		if match != nil {
+			svcEpstate, err := getInfoInReg(match, openflow.ServiceEPStateField.GetRange().ToNXRange())
+			return err == nil && svcEpstate&openflow.EpSelectedRegMark.GetValue() == openflow.EpSelectedRegMark.GetValue()
+		}
+	}
+	gwIfaces := c.ifaceStore.GetInterfacesByType(interfacestore.GatewayInterface)
+	return isDstLocal && dstMAC == gwIfaces[0].MAC.String()
+}
+
+// getRejectOFPort sets the inPort and outPort of a packetOut based on the packetOutType.
+func getRejectOFPort(packetOutType binding.PacketOutType, sIface, dIface *interfacestore.InterfaceConfig) (uint32, uint32) {
+	inPort := uint32(config.HostGatewayOFPort)
+	outPort := uint32(0)
+	switch packetOutType {
+	case binding.RejectPodLocal:
+		inPort = uint32(sIface.OFPort)
+		outPort = uint32(dIface.OFPort)
+	case binding.RejectServiceLocal:
+		inPort = uint32(sIface.OFPort)
+	case binding.RejectPodRemoteToLocal:
+		inPort = config.HostGatewayOFPort
+		outPort = uint32(dIface.OFPort)
+	case binding.RejectServiceRemoteToLocal:
+		inPort = config.HostGatewayOFPort
+	case binding.RejectLocalToRemote:
+		inPort = uint32(sIface.OFPort)
+	case binding.RejectNoAPServiceLocal:
+		inPort = uint32(sIface.OFPort)
+		outPort = config.HostGatewayOFPort
+	case binding.RejectNoAPServiceRemoteToLocal:
+		inPort = config.DefaultTunOFPort
+		outPort = config.HostGatewayOFPort
+	}
+	return inPort, outPort
 }
 
 func (c *Controller) storeDenyConnection(pktIn *ofctrl.PacketIn) error {
