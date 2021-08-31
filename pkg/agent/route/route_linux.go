@@ -633,7 +633,8 @@ func (c *Client) AddRoutes(podCIDR *net.IPNet, nodeName string, nodeIP, nodeGwIP
 		// Set the peerNodeIP as next hop.
 		route.Gw = nodeIP
 	} else {
-		// NoEncap traffic to Node on the same subnet. It is handled by host default route.
+		// NetworkPolicyOnly mode or NoEncap traffic to a Node on a different subnet.
+		// Routing should be handled by a route which is already present on the host.
 		return nil
 	}
 	routes = append(routes, route)
