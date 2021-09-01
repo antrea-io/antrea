@@ -39,67 +39,74 @@ import (
 
 /* Sample output from the collector:
 IPFIX-HDR:
-  version: 10,  Message Length: 435
-  Exported Time: 1608338076 (2020-12-19 00:34:36 +0000 UTC)
-  Sequence No.: 3,  Observation Domain ID: 1350683189
+  version: 10,  Message Length: 617
+  Exported Time: 1637706974 (2021-11-23 22:36:14 +0000 UTC)
+  Sequence No.: 27,  Observation Domain ID: 2569248951
 DATA SET:
   DATA RECORD-0:
-    flowStartSeconds: 1608338066
-    flowEndSeconds: 1608338072
-    flowEndReason: 2
-    sourceTransportPort: 43600
+    flowStartSeconds: 1637706961
+    flowEndSeconds: 1637706973
+    flowEndReason: 3
+    sourceTransportPort: 44752
     destinationTransportPort: 5201
     protocolIdentifier: 6
-    packetTotalCount: 537924
-    octetTotalCount: 23459802093
-    packetDeltaCount: 0
-    octetDeltaCount: 0
-    sourceIPv4Address: 10.10.0.22
-    destinationIPv4Address: 10.10.0.23
-    reversePacketTotalCount: 444320
-    reverseOctetTotalCount: 23108308
-    reversePacketDeltaCount: 0
-    reverseOctetDeltaCount: 0
+    packetTotalCount: 823188
+    octetTotalCount: 30472817041
+    packetDeltaCount: 241333
+    octetDeltaCount: 8982624938
+    sourceIPv4Address: 10.10.0.79
+    destinationIPv4Address: 10.10.0.80
+    reversePacketTotalCount: 471111
+    reverseOctetTotalCount: 24500996
+    reversePacketDeltaCount: 136211
+    reverseOctetDeltaCount: 7083284
     sourcePodName: perftest-a
     sourcePodNamespace: antrea-test
     sourceNodeName: k8s-node-control-plane
     destinationPodName: perftest-b
     destinationPodNamespace: antrea-test
     destinationNodeName: k8s-node-control-plane
-    destinationServicePort: 5201
+    destinationServicePort: 0
     destinationServicePortName:
-    ingressNetworkPolicyName: test-flow-aggregator-networkpolicy-ingress
+    ingressNetworkPolicyName: test-flow-aggregator-networkpolicy-ingress-allow
     ingressNetworkPolicyNamespace: antrea-test
-    ingressNetworkPolicyType: 2
-    ingressNetworkPolicyRuleName: test-ingress-rule-name
+    ingressNetworkPolicyType: 1
+    ingressNetworkPolicyRuleName:
     ingressNetworkPolicyRuleAction: 1
-    egressNetworkPolicyName: test-flow-aggregator-networkpolicy-egress
+    egressNetworkPolicyName: test-flow-aggregator-networkpolicy-egress-allow
     egressNetworkPolicyNamespace: antrea-test
-    egressNetworkPolicyType: 2
-    egressNetworkPolicyRuleName: test-egress-rule-name
+    egressNetworkPolicyType: 1
+    egressNetworkPolicyRuleName:
     egressNetworkPolicyRuleAction: 1
+    tcpState: TIME_WAIT
     flowType: 1
     destinationClusterIPv4: 0.0.0.0
-    originalExporterIPv4Address: 10.10.0.1
-    originalObservationDomainId: 2134708971
-    octetDeltaCountFromSourceNode: 0
-    octetTotalCountFromSourceNode: 23459802093
-    packetDeltaCountFromSourceNode: 0
-    packetTotalCountFromSourceNode: 537924
-    reverseOctetDeltaCountFromSourceNode: 0
-    reverseOctetTotalCountFromSourceNode: 23108308
-    reversePacketDeltaCountFromSourceNode: 0
-    reversePacketTotalCountFromSourceNode: 444320
-    octetDeltaCountFromDestinationNode: 0
-    octetTotalCountFromDestinationNode: 23459802093
-    packetDeltaCountFromDestinationNode: 0
-    packetTotalCountFromDestinationNode: 537924
-    reverseOctetDeltaCountFromDestinationNode: 0
-    reverseOctetTotalCountFromDestinationNode: 23108308
-    reversePacketDeltaCountFromDestinationNode: 0
-    reversePacketTotalCountFromDestinationNode: 444320
-	sourcePodLabels: {"antrea-e2e":"perftest-a","app":"perftool"}
-	destinationPodLabels: {"antrea-e2e":"perftest-b","app":"perftool"}
+    octetDeltaCountFromSourceNode: 8982624938
+    octetDeltaCountFromDestinationNode: 8982624938
+    octetTotalCountFromSourceNode: 30472817041
+    octetTotalCountFromDestinationNode: 30472817041
+    packetDeltaCountFromSourceNode: 241333
+    packetDeltaCountFromDestinationNode: 241333
+    packetTotalCountFromSourceNode: 823188
+    packetTotalCountFromDestinationNode: 823188
+    reverseOctetDeltaCountFromSourceNode: 7083284
+    reverseOctetDeltaCountFromDestinationNode: 7083284
+    reverseOctetTotalCountFromSourceNode: 24500996
+    reverseOctetTotalCountFromDestinationNode: 24500996
+    reversePacketDeltaCountFromSourceNode: 136211
+    reversePacketDeltaCountFromDestinationNode: 136211
+    reversePacketTotalCountFromSourceNode: 471111
+    reversePacketTotalCountFromDestinationNode: 471111
+    flowEndSecondsFromSourceNode: 1637706973
+    flowEndSecondsFromDestinationNode: 1637706973
+    throughput: 15902813472
+    throughputFromSourceNode: 15902813472
+    throughputFromDestinationNode: 15902813472
+    reverseThroughput: 12381344
+    reverseThroughputFromSourceNode: 12381344
+    reverseThroughputFromDestinationNode: 12381344
+    sourcePodLabels: {"antrea-e2e":"perftest-a","app":"perftool"}
+    destinationPodLabels: {"antrea-e2e":"perftest-b","app":"perftool"}
 Intra-Node: Flow record information is complete for source and destination e.g. sourcePodName, destinationPodName
 Inter-Node: Flow record from destination Node is ignored, so only flow record from the source Node has its K8s info e.g., sourcePodName, sourcePodNamespace, sourceNodeName etc.
 AntreaProxy enabled (Intra-Node): Flow record information is complete for source and destination along with K8s service info such as destinationClusterIP, destinationServicePort, destinationServicePortName etc.
@@ -562,7 +569,6 @@ func checkRecordsForFlows(t *testing.T, data *TestData, srcIP string, dstIP stri
 	collectorOutput, recordSlices := getCollectorOutput(t, srcIP, dstIP, srcPort, checkService, true, isIPv6)
 	// Iterate over recordSlices and build some results to test with expected results
 	dataRecordsCount := 0
-	var octetTotalCount uint64
 	src, dst := matchSrcAndDstAddress(srcIP, dstIP, checkService, isIPv6)
 	for _, record := range recordSlices {
 		// Check the source port along with source and destination IPs as there
@@ -609,29 +615,25 @@ func checkRecordsForFlows(t *testing.T, data *TestData, srcIP string, dstIP stri
 				assert.Contains(record, fmt.Sprintf("egressNetworkPolicyRuleAction: %d", ipfixregistry.NetworkPolicyRuleActionAllow), "Record does not have the correct NetworkPolicy RuleAction with the egress rule")
 			}
 
-			// Skip the bandwidth check for the iperf control flow records which have 0 delta count.
-			if checkBandwidth && !strings.Contains(record, "octetDeltaCount: 0") {
-				exportTime := int64(getUnit64FieldFromRecord(t, record, "flowEndSeconds"))
-				curOctetTotalCount := getUnit64FieldFromRecord(t, record, "octetTotalCountFromSourceNode")
-				flowStartTime := int64(getUnit64FieldFromRecord(t, record, "flowStartSeconds"))
-				if curOctetTotalCount > octetTotalCount {
-					octetTotalCount = curOctetTotalCount
+			// Skip the bandwidth check for the iperf control flow records which have 0 throughput.
+			if checkBandwidth && !strings.Contains(record, "throughput: 0") {
+				flowStartTime := int64(getUint64FieldFromRecord(t, record, "flowStartSeconds"))
+				exportTime := int64(getUint64FieldFromRecord(t, record, "flowEndSeconds"))
+				var recBandwidth float64
+				// Check bandwidth with the field "throughput" except for the last record,
+				// as its throughput is significantly lower than the average Iperf throughput.
+				if exportTime < flowStartTime+iperfTimeSec {
+					throughput := getUint64FieldFromRecord(t, record, "throughput")
+					recBandwidth = float64(throughput) / 1000000
+				} else {
+					// Check average bandwidth after receiving all the records.
+					octetTotalCount := getUint64FieldFromRecord(t, record, "octetTotalCount")
+					recBandwidth = float64(octetTotalCount) * 8 / float64(exportTime-flowStartTime) / 1000000
 				}
-				curOctetDeltaCount := getUnit64FieldFromRecord(t, record, "octetDeltaCountFromSourceNode")
-				// Check the bandwidth using octetDeltaCountFromSourceNode, if this record
-				// is neither the first record nor the last in the stream of records.
-				if curOctetDeltaCount != curOctetTotalCount && exportTime < flowStartTime+iperfTimeSec {
-					t.Logf("Check the bandwidth using octetDeltaCountFromSourceNode %d in data record.", curOctetDeltaCount)
-					// This middle record should aggregate two records from Flow Exporter
-					checkBandwidthByInterval(t, bandwidthInMbps, curOctetDeltaCount, float64(2*exporterActiveFlowExportTimeout/time.Second), "octetDeltaCountFromSourceNode")
-				}
+				t.Logf("Iperf throughput: %.2f Mbits/s, IPFIX record throughput: %.2f Mbits/s", bandwidthInMbps, recBandwidth)
+				assert.InDeltaf(recBandwidth, bandwidthInMbps, bandwidthInMbps*0.15, "Difference between Iperf bandwidth and IPFIX record bandwidth should be lower than 15%%")
 			}
 		}
-	}
-	// Average bandwidth check is done after iterating through all records using the largest octetTotalCountFromSourceNode.
-	if checkBandwidth && octetTotalCount > 0 {
-		t.Logf("Check the average bandwidth using octetTotalCountFromSourceNode %d in data record.", octetTotalCount)
-		checkBandwidthByInterval(t, bandwidthInMbps, octetTotalCount, float64(iperfTimeSec), "octetTotalCountFromSourceNode")
 	}
 	// Checking only data records as data records cannot be decoded without template
 	// record.
@@ -739,12 +741,6 @@ func checkRecordsForDenyFlows(t *testing.T, data *TestData, testFlow1, testFlow2
 	}
 }
 
-func checkBandwidthByInterval(t *testing.T, bandwidthInMbps float64, octetCount uint64, interval float64, field string) {
-	recBandwidth := float64(octetCount) * 8 / 1000000 / interval
-	t.Logf("Iperf throughput: %.2f Mbits/s, IPFIX record throughput calculated through %s: %.2f Mbits/s", bandwidthInMbps, field, recBandwidth)
-	assert.InDeltaf(t, recBandwidth, bandwidthInMbps, bandwidthInMbps*0.15, "Difference between Iperf bandwidth and IPFIX record bandwidth calculated through %s should be lower than 15%%", field)
-}
-
 func checkPodAndNodeData(t *testing.T, record, srcPod, srcNode, dstPod, dstNode string) {
 	assert := assert.New(t)
 	assert.Contains(record, srcPod, "Record with srcIP does not have Pod name: %s", srcPod)
@@ -768,7 +764,7 @@ func checkFlowType(t *testing.T, record string, flowType uint8) {
 	assert.Containsf(t, record, fmt.Sprintf("flowType: %d", flowType), "Record does not have correct flowType")
 }
 
-func getUnit64FieldFromRecord(t *testing.T, record string, field string) uint64 {
+func getUint64FieldFromRecord(t *testing.T, record string, field string) uint64 {
 	if strings.Contains(record, "TEMPLATE SET") {
 		return 0
 	}
@@ -804,8 +800,8 @@ func getCollectorOutput(t *testing.T, srcIP, dstIP, srcPort string, isDstService
 		src, dst := matchSrcAndDstAddress(srcIP, dstIP, isDstService, isIPv6)
 		if checkAllRecords {
 			for _, record := range recordSlices {
-				flowStartTime := int64(getUnit64FieldFromRecord(t, record, "flowStartSeconds"))
-				exportTime := int64(getUnit64FieldFromRecord(t, record, "flowEndSeconds"))
+				flowStartTime := int64(getUint64FieldFromRecord(t, record, "flowStartSeconds"))
+				exportTime := int64(getUint64FieldFromRecord(t, record, "flowEndSeconds"))
 				if strings.Contains(record, src) && strings.Contains(record, dst) && strings.Contains(record, srcPort) {
 					if exportTime >= flowStartTime+iperfTimeSec {
 						return true, nil

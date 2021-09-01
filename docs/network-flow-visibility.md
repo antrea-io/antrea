@@ -7,7 +7,7 @@
 - [Flow Exporter](#flow-exporter)
   - [Configuration](#configuration)
   - [IPFIX Information Elements (IEs) in a Flow Record](#ipfix-information-elements-ies-in-a-flow-record)
-    - [IEs from IANA-assigned IE registry](#ies-from-iana-assigned-ie-registry)
+    - [IEs from IANA-assigned IE Registry](#ies-from-iana-assigned-ie-registry)
     - [IEs from Reverse IANA-assigned IE Registry](#ies-from-reverse-iana-assigned-ie-registry)
     - [IEs from Antrea IE Registry](#ies-from-antrea-ie-registry)
   - [Supported capabilities](#supported-capabilities)
@@ -131,62 +131,64 @@ Please modify them as per your requirements.
 There are 34 IPFIX IEs in each exported flow record, which are defined in the
 IANA-assigned IE registry, the Reverse IANA-assigned IE registry and the Antrea
 IE registry. The reverse IEs are used to provide bi-directional information about
-the flow. All the IEs used by the Antrea Flow Exporter are listed below:
+the flow. The Enterprise ID is 0 for IANA-assigned IE registry, 29305 for reverse
+IANA IE registry, 56505 for Antrea IE registry. All the IEs used by the Antrea
+Flow Exporter are listed below:
 
-#### IEs from IANA-assigned IE registry
+#### IEs from IANA-assigned IE Registry
 
-| IPFIX Information Element| Enterprise ID | Field ID | Type           |
-|--------------------------|---------------|----------|----------------|
-| flowStartSeconds         | 0             | 150      | dateTimeSeconds|
-| flowEndSeconds           | 0             | 151      | dateTimeSeconds|
-| flowEndReason            | 0             | 136      | unsigned8      |
-| sourceIPv4Address        | 0             | 8        | ipv4Address    |
-| destinationIPv4Address   | 0             | 12       | ipv4Address    |
-| sourceIPv6Address        | 0             | 27       | ipv6Address    |
-| destinationIPv6Address   | 0             | 28       | ipv6Address    |
-| sourceTransportPort      | 0             | 7        | unsigned16     |
-| destinationTransportPort | 0             | 11       | unsigned16     |
-| protocolIdentifier       | 0             | 4        | unsigned8      |
-| packetTotalCount         | 0             | 86       | unsigned64     |
-| octetTotalCount          | 0             | 85       | unsigned64     |
-| packetDeltaCount         | 0             | 2        | unsigned64     |
-| octetDeltaCount          | 0             | 1        | unsigned64     |
+| IPFIX Information Element| Field ID | Type           |
+|--------------------------|----------|----------------|
+| flowStartSeconds         | 150      | dateTimeSeconds|
+| flowEndSeconds           | 151      | dateTimeSeconds|
+| flowEndReason            | 136      | unsigned8      |
+| sourceIPv4Address        | 8        | ipv4Address    |
+| destinationIPv4Address   | 12       | ipv4Address    |
+| sourceIPv6Address        | 27       | ipv6Address    |
+| destinationIPv6Address   | 28       | ipv6Address    |
+| sourceTransportPort      | 7        | unsigned16     |
+| destinationTransportPort | 11       | unsigned16     |
+| protocolIdentifier       | 4        | unsigned8      |
+| packetTotalCount         | 86       | unsigned64     |
+| octetTotalCount          | 85       | unsigned64     |
+| packetDeltaCount         | 2        | unsigned64     |
+| octetDeltaCount          | 1        | unsigned64     |
 
 #### IEs from Reverse IANA-assigned IE Registry
 
-| IPFIX Information Element| Enterprise ID | Field ID | Type           |
-|--------------------------|---------------|----------|----------------|
-| reversePacketTotalCount  | 29305         | 86       | unsigned64     |
-| reverseOctetTotalCount   | 29305         | 85       | unsigned64     |
-| reversePacketDeltaCount  | 29305         | 2        | unsigned64     |
-| reverseOctetDeltaCount   | 29305         | 1        | unsigned64     |
+| IPFIX Information Element| Field ID | Type           |
+|--------------------------|----------|----------------|
+| reversePacketTotalCount  | 86       | unsigned64     |
+| reverseOctetTotalCount   | 85       | unsigned64     |
+| reversePacketDeltaCount  | 2        | unsigned64     |
+| reverseOctetDeltaCount   | 1        | unsigned64     |
 
 #### IEs from Antrea IE Registry
 
-| IPFIX Information Element        | Enterprise ID | Field ID | Type        |
-|----------------------------------|---------------|----------|-------------|
-| sourcePodNamespace               | 56506         | 100      | string      |
-| sourcePodName                    | 56506         | 101      | string      |
-| destinationPodNamespace          | 56506         | 102      | string      |
-| destinationPodName               | 56506         | 103      | string      |
-| sourceNodeName                   | 56506         | 104      | string      |
-| destinationNodeName              | 56506         | 105      | string      |
-| destinationClusterIPv4           | 56506         | 106      | ipv4Address |
-| destinationClusterIPv6           | 56506         | 107      | ipv6Address |
-| destinationServicePort           | 56506         | 108      | unsigned16  |
-| destinationServicePortName       | 56506         | 109      | string      |
-| ingressNetworkPolicyName         | 56506         | 110      | string      |
-| ingressNetworkPolicyNamespace    | 56506         | 111      | string      |
-| ingressNetworkPolicyType         | 56506         | 115      | unsigned8   |
-| ingressNetworkPolicyRuleName     | 56506         | 141      | string      |
-| egressNetworkPolicyName          | 56506         | 112      | string      |
-| egressNetworkPolicyNamespace     | 56506         | 113      | string      |
-| egressNetworkPolicyType          | 56506         | 118      | unsigned8   |
-| egressNetworkPolicyRuleName      | 56506         | 142      | string      |
-| ingressNetworkPolicyRuleAction   | 56506         | 139      | unsigned8   |
-| egressNetworkPolicyRuleAction    | 56506         | 140      | unsigned8   |
-| tcpState                         | 56506         | 136      | string      |
-| flowType                         | 56506         | 137      | unsigned8   |
+| IPFIX Information Element        | Field ID | Type        | Description |
+|----------------------------------|----------|-------------|-------------|
+| sourcePodNamespace               | 100      | string      |             |
+| sourcePodName                    | 101      | string      |             |
+| destinationPodNamespace          | 102      | string      |             |
+| destinationPodName               | 103      | string      |             |
+| sourceNodeName                   | 104      | string      |             |
+| destinationNodeName              | 105      | string      |             |
+| destinationClusterIPv4           | 106      | ipv4Address |             |
+| destinationClusterIPv6           | 107      | ipv6Address |             |
+| destinationServicePort           | 108      | unsigned16  |             |
+| destinationServicePortName       | 109      | string      |             |
+| ingressNetworkPolicyName         | 110      | string      | Name of the ingress network policy applied to the destination Pod for this flow. |
+| ingressNetworkPolicyNamespace    | 111      | string      | Namespace of the ingress network policy applied to the destination Pod for this flow. |
+| ingressNetworkPolicyType         | 115      | unsigned8   | 1 stands for Kubernetes Network Policy. 2 stands for Antrea Network Policy. 3 stands for Antrea Cluster Network Policy. |
+| ingressNetworkPolicyRuleName     | 141      | string      | Name of the ingress network policy Rule applied to the destination Pod for this flow. |
+| egressNetworkPolicyName          | 112      | string      | Name of the egress network policy applied to the source Pod for this flow. |
+| egressNetworkPolicyNamespace     | 113      | string      | Namespace of the egress network policy applied to the source Pod for this flow. |
+| egressNetworkPolicyType          | 118      | unsigned8   |             |
+| egressNetworkPolicyRuleName      | 142      | string      | Name of the egress network policy rule applied to the source Pod for this flow. |
+| ingressNetworkPolicyRuleAction   | 139      | unsigned8   | 1 stands for Allow. 2 stands for Drop. 3 stands for Reject. |
+| egressNetworkPolicyRuleAction    | 140      | unsigned8   |             |
+| tcpState                         | 136      | string      | The state of the TCP connection. The states are: LISTEN, SYN-SENT, SYN-RECEIVED, ESTABLISHED, FIN-WAIT-1, FIN-WAIT-2, CLOSE-WAIT, CLOSING, LAST-ACK, TIME-WAIT, and CLOSED. |
+| flowType                         | 137      | unsigned8   | 1 stands for Intra-Node. 2 stands for Inter-Node. 3 stands for To External. 4 stands for From External. |
 
 ### Supported capabilities
 
@@ -336,24 +338,34 @@ the Flow Aggregator adds the following fields to the flow records.
 
 #### IEs from Antrea IE Registry
 
-| IPFIX Information Element                 | Enterprise ID | Field ID | Type        |
-|-------------------------------------------|---------------|----------|-------------|
-| packetTotalCountFromSourceNode            | 56506         | 120      | unsigned64  |
-| octetTotalCountFromSourceNode             | 56506         | 121      | unsigned64  |
-| packetDeltaCountFromSourceNode            | 56506         | 122      | unsigned64  |
-| octetDeltaCountFromSourceNode             | 56506         | 123      | unsigned64  |
-| reversePacketTotalCountFromSourceNode     | 56506         | 124      | unsigned64  |
-| reverseOctetTotalCountFromSourceNode      | 56506         | 125      | unsigned64  |
-| reversePacketDeltaCountFromSourceNode     | 56506         | 126      | unsigned64  |
-| reverseOctetDeltaCountFromSourceNode      | 56506         | 127      | unsigned64  |
-| packetTotalCountFromDestinationNode       | 56506         | 128      | unsigned64  |
-| octetTotalCountFromDestinationNode        | 56506         | 129      | unsigned64  |
-| packetDeltaCountFromDestinationNode       | 56506         | 130      | unsigned64  |
-| octetDeltaCountFromDestinationNode        | 56506         | 131      | unsigned64  |
-| reversePacketTotalCountFromDestinationNode| 56506         | 132      | unsigned64  |
-| reverseOctetTotalCountFromDestinationNode | 56506         | 133      | unsigned64  |
-| reversePacketDeltaCountFromDestinationNode| 56506         | 134      | unsigned64  |
-| reverseOctetDeltaCountFromDestinationNode | 56506         | 135      | unsigned64  |
+| IPFIX Information Element                 | Field ID | Type        | Description |
+|-------------------------------------------|----------|-------------|-------------|
+| packetTotalCountFromSourceNode            | 120      | unsigned64  | The cumulative number of packets for this flow as reported by the source Node, since the flow started. |
+| octetTotalCountFromSourceNode             | 121      | unsigned64  | The cumulative number of octets for this flow as reported by the source Node, since the flow started. |
+| packetDeltaCountFromSourceNode            | 122      | unsigned64  | The number of packets for this flow as reported by the source Node, since the previous report for this flow at the observation point. |
+| octetDeltaCountFromSourceNode             | 123      | unsigned64  | The number of octets for this flow as reported by the source Node, since the previous report for this flow at the observation point. |
+| reversePacketTotalCountFromSourceNode     | 124      | unsigned64  | The cumulative number of reverse packets for this flow as reported by the source Node, since the flow started. |
+| reverseOctetTotalCountFromSourceNode      | 125      | unsigned64  | The cumulative number of reverse octets for this flow as reported by the source Node, since the flow started. |
+| reversePacketDeltaCountFromSourceNode     | 126      | unsigned64  | The number of reverse packets for this flow as reported by the source Node, since the previous report for this flow at the observation point. |
+| reverseOctetDeltaCountFromSourceNode      | 127      | unsigned64  | The number of reverse octets for this flow as reported by the source Node, since the previous report for this flow at the observation point. |
+| packetTotalCountFromDestinationNode       | 128      | unsigned64  | The cumulative number of packets for this flow as reported by the destination Node, since the flow started. |
+| octetTotalCountFromDestinationNode        | 129      | unsigned64  | The cumulative number of octets for this flow as reported by the destination Node, since the flow started. |
+| packetDeltaCountFromDestinationNode       | 130      | unsigned64  | The number of packets for this flow as reported by the destination Node, since the previous report for this flow at the observation point. |
+| octetDeltaCountFromDestinationNode        | 131      | unsigned64  | The number of octets for this flow as reported by the destination Node, since the previous report for this flow at the observation point. |
+| reversePacketTotalCountFromDestinationNode| 132      | unsigned64  | The cumulative number of reverse packets for this flow as reported by the destination Node, since the flow started. |
+| reverseOctetTotalCountFromDestinationNode | 133      | unsigned64  | The cumulative number of reverse octets for this flow as reported by the destination Node, since the flow started. |
+| reversePacketDeltaCountFromDestinationNode| 134      | unsigned64  | The number of reverse packets for this flow as reported by the destination Node, since the previous report for this flow at the observation point. |
+| reverseOctetDeltaCountFromDestinationNode | 135      | unsigned64  | The number of reverse octets for this flow as reported by the destination Node, since the previous report for this flow at the observation point. |
+| sourcePodLabels                           | 143      | string      |             |
+| destinationPodLabels                      | 144      | string      |             |
+| throughput                                | 145      | unsigned64  | The average amount of traffic flowing from source to destination, since the previous report for this flow at the observation point. The unit is bits per second. |
+| reverseThroughput                         | 146      | unsigned64  | The average amount of reverse traffic flowing from destination to source, since the previous report for this flow at the observation point. The unit is bits per second. |
+| throughputFromSourceNode                  | 147      | unsigned64  | The average amount of traffic flowing from source to destination, since the previous report for this flow at the observation point, based on the records sent from the source Node. The unit is bits per second. |
+| throughputFromDestinationNode             | 148      | unsigned64  | The average amount of traffic flowing from source to destination, since the previous report for this flow at the observation point, based on the records sent from the destination Node. The unit is bits per second. |
+| reverseThroughputFromSourceNode           | 149      | unsigned64  | The average amount of reverse traffic flowing from destination to source, since the previous report for this flow at the observation point, based on the records sent from the source Node. The unit is bits per second. |
+| reverseThroughputFromDestinationNode      | 150      | unsigned64  | The average amount of reverse traffic flowing from destination to source, since the previous report for this flow at the observation point, based on the records sent from the destination Node. The unit is bits per second. |
+| flowEndSecondsFromSourceNode              | 151      | unsigned32  | The absolute timestamp of the last packet of this flow, based on the records sent from the source Node. The unit is seconds. |
+| flowEndSecondsFromDestinationNode         | 152      | unsigned32  | The absolute timestamp of the last packet of this flow, based on the records sent from the destination Node. The unit is seconds. |
 
 ### Supported capabilities
 

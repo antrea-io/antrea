@@ -183,3 +183,27 @@
   144:
     - :string
     - :destinationPodLabels
+  145:
+    - :uint64
+    - :throughput
+  146:
+    - :uint64
+    - :reverseThroughput
+  147:
+    - :uint64
+    - :throughputFromSourceNode
+  148:
+    - :uint64
+    - :throughputFromDestinationNode
+  149:
+    - :uint64
+    - :reverseThroughputFromSourceNode
+  150:
+    - :uint64
+    - :reverseThroughputFromDestinationNode
+  151:
+    - :uint32
+    - :flowEndSecondsFromSourceNode
+  152:
+    - :uint32
+    - :flowEndSecondsFromDestinationNode
