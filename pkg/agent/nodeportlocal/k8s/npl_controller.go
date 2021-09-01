@@ -390,9 +390,11 @@ func (c *NPLController) deletePodIPFromCache(key string) {
 func (c *NPLController) deleteAllPortRulesIfAny(podIP string) error {
 	data := c.portTable.GetDataForPodIP(podIP)
 	for _, d := range data {
-		err := c.portTable.DeleteRule(d.PodIP, int(d.PodPort), d.Protocol)
-		if err != nil {
-			return err
+		for _, proto := range d.Protocols {
+			err := c.portTable.DeleteRule(d.PodIP, int(d.PodPort), proto.Protocol)
+			if err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -525,10 +527,11 @@ func (c *NPLController) handleAddUpdatePod(key string, obj interface{}) error {
 	entries := c.portTable.GetDataForPodIP(podIP)
 	if nplExists {
 		for _, data := range entries {
-			if _, exists := podPorts[util.BuildPortProto(fmt.Sprint(data.PodPort), data.Protocol)]; !exists {
-				err := c.portTable.DeleteRule(podIP, int(data.PodPort), data.Protocol)
-				if err != nil {
-					return fmt.Errorf("failed to delete rule for Pod IP %s, Pod Port %d: %v", podIP, data.PodPort, err)
+			for _, proto := range data.Protocols {
+				if _, exists := podPorts[util.BuildPortProto(fmt.Sprint(data.PodPort), proto.Protocol)]; !exists {
+					if err := c.portTable.DeleteRule(podIP, int(data.PodPort), proto.Protocol); err != nil {
+						return fmt.Errorf("failed to delete rule for Pod IP %s, Pod Port %d: %v", podIP, data.PodPort, err)
+					}
 				}
 			}
 		}

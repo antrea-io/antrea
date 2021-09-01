@@ -48,7 +48,7 @@ import (
 
 func newPortTable(mockIPTables rules.PodPortRules, mockPortOpener portcache.LocalPortOpener) *portcache.PortTable {
 	ptable := portcache.PortTable{StartPort: 61000, EndPort: 65000}
-	ptable.Table = make(map[string]portcache.NodePortData)
+	ptable.Table = make(map[int]portcache.NodePortData)
 	ptable.PodPortRules = mockIPTables
 	ptable.LocalPortOpener = mockPortOpener
 	return &ptable
@@ -620,10 +620,10 @@ func TestMultiplePods(t *testing.T) {
 	testSvc := getTestSvc()
 	testPod1 := getTestPod()
 	testPod1.Name = "pod1"
-	testPod1.Status.PodIP = "10.10.10.1"
+	testPod1.Status.PodIP = "192.168.32.1"
 	testPod2 := getTestPod()
 	testPod2.Name = "pod2"
-	testPod2.Status.PodIP = "10.10.10.2"
+	testPod2.Status.PodIP = "192.168.32.2"
 	testData := setUp(t, newTestConfig(), testSvc, testPod1, testPod2)
 	defer testData.tearDown()
 
@@ -650,12 +650,12 @@ func TestMultipleProtocols(t *testing.T) {
 
 	testPod1 := getTestPod()
 	testPod1.Name = "pod1"
-	testPod1.Status.PodIP = "10.10.10.1"
+	testPod1.Status.PodIP = "192.168.32.1"
 	testPod1.Labels = tcpUdpSvcLabel
 
 	testPod2 := getTestPod()
 	testPod2.Name = "pod2"
-	testPod2.Status.PodIP = "10.10.10.2"
+	testPod2.Status.PodIP = "192.168.32.2"
 	testPod2.Labels = udpSvcLabel
 
 	// Create TCP/80 testSvc1 for pod1.

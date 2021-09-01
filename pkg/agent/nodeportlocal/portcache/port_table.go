@@ -20,23 +20,46 @@ package portcache
 import (
 	"fmt"
 	"net"
-	"strings"
 	"sync"
 	"time"
 
 	"antrea.io/antrea/pkg/agent/nodeportlocal/rules"
-	"antrea.io/antrea/pkg/agent/nodeportlocal/util"
 
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/klog/v2"
 )
 
-type NodePortData struct {
-	NodePort int
-	PodPort  int
-	PodIP    string
+type ProtocolSocketData struct {
 	Protocol string
 	socket   Closeable
+}
+
+type NodePortData struct {
+	NodePort  int
+	PodPort   int
+	PodIP     string
+	Protocols []ProtocolSocketData
+}
+
+func (d *NodePortData) HasProtocol(protocol string) bool {
+	for _, p := range d.Protocols {
+		if p.Protocol == protocol {
+			return true
+		}
+	}
+	return false
+}
+
+func (d *NodePortData) DeleteProtocol(protocol string) error {
+	for i, p := range d.Protocols {
+		if p.Protocol == protocol {
+			d.Protocols = append(d.Protocols[:i], d.Protocols[i+1:]...)
+			if err := p.socket.Close(); err != nil {
+				return fmt.Errorf("Error when releasing local port %d: %v", d.NodePort, err)
+			}
+			return nil
+		}
+	}
+	return nil
 }
 
 type LocalPortOpener interface {
@@ -46,7 +69,7 @@ type LocalPortOpener interface {
 type localPortOpener struct{}
 
 type PortTable struct {
-	Table           map[string]NodePortData
+	Table           map[int]NodePortData
 	StartPort       int
 	EndPort         int
 	PodPortRules    rules.PodPortRules
@@ -56,7 +79,7 @@ type PortTable struct {
 
 func NewPortTable(start, end int) (*PortTable, error) {
 	ptable := PortTable{StartPort: start, EndPort: end}
-	ptable.Table = make(map[string]NodePortData)
+	ptable.Table = make(map[int]NodePortData)
 	ptable.PodPortRules = rules.InitRules()
 	ptable.LocalPortOpener = &localPortOpener{}
 	if err := ptable.PodPortRules.Init(); err != nil {
@@ -68,13 +91,13 @@ func NewPortTable(start, end int) (*PortTable, error) {
 func (pt *PortTable) CleanupAllEntries() {
 	pt.tableLock.Lock()
 	defer pt.tableLock.Unlock()
-	pt.Table = make(map[string]NodePortData)
+	pt.Table = make(map[int]NodePortData)
 }
 
-func (pt *PortTable) GetEntry(nodeportProtocol string) *NodePortData {
+func (pt *PortTable) GetEntry(nodeport int) *NodePortData {
 	pt.tableLock.RLock()
 	defer pt.tableLock.RUnlock()
-	data, _ := pt.Table[nodeportProtocol]
+	data, _ := pt.Table[nodeport]
 	return &data
 }
 
@@ -98,25 +121,22 @@ func (pt *PortTable) GetEntryByPodIPPortProtocol(ip string, port int, protocol s
 
 func (pt *PortTable) getEntryByPodIPPortProtocol(ip string, port int, protocol string) *NodePortData {
 	for _, data := range pt.Table {
-		if data.PodIP == ip && data.PodPort == port && data.Protocol == protocol {
+		if data.PodIP == ip && data.PodPort == port && data.HasProtocol(protocol) {
 			return &data
 		}
 	}
 	return nil
 }
 
-func (pt *PortTable) isNodePortClaimedForPodIPProtocol(ip string, nodeport int, protocol string) bool {
-	var val NodePortData
-	ok := false
-	// Since NPL supports only TCP and UDP protocols, we can check if an entry corresponding to key `<nodeport>:udp`
-	// is present in the PortTable, if the protocol we want to serve is TCP, and vice versa.
-	switch protocol {
-	case strings.ToLower(string(corev1.ProtocolTCP)):
-		val, ok = pt.Table[util.BuildPortProto(fmt.Sprint(nodeport), strings.ToLower(string(corev1.ProtocolUDP)))]
-	case strings.ToLower(string(corev1.ProtocolUDP)):
-		val, ok = pt.Table[util.BuildPortProto(fmt.Sprint(nodeport), strings.ToLower(string(corev1.ProtocolTCP)))]
-	}
-	if ok && val.PodIP != ip {
+func (pt *PortTable) isNodePortAvilableForPodIPProtocol(ip string, nodeport int, podPort int, protocol string) bool {
+	val, ok := pt.Table[nodeport]
+	// A given nodeport, is marked unavailable if an entry for it already exists in the PortTable Table and
+	// the nodeport suggested is being used by another Pod or,
+	// the nodeport suggested for a Pod has a different podPort binding or,
+	// the nodeport suggested for a Pod:podPort has the protocol already configured.
+	if ok && (val.PodIP != ip ||
+		(val.PodIP == ip && val.PodPort != podPort) ||
+		(val.PodIP == ip && val.PodPort == podPort && val.HasProtocol(protocol))) {
 		return false
 	}
 	return true
@@ -124,18 +144,16 @@ func (pt *PortTable) isNodePortClaimedForPodIPProtocol(ip string, nodeport int, 
 
 func (pt *PortTable) getFreePort(podIP string, podPort int, protocol string) (int, Closeable, error) {
 	for i := pt.StartPort; i <= pt.EndPort; i++ {
-		if _, ok := pt.Table[util.BuildPortProto(fmt.Sprint(i), protocol)]; !ok {
-			// This ensures that the NodePort `i` is not taken by any other Pods,
-			// irrespective of the protocol.
-			if !pt.isNodePortClaimedForPodIPProtocol(podIP, i, protocol) {
-				continue
-			}
-			socket, err := pt.LocalPortOpener.OpenLocalPort(i, protocol)
-			if err != nil {
-				continue
-			}
-			return i, socket, nil
+		// This ensures that the NodePort `i` is not taken by any other Pods,
+		// irrespective of the protocol.
+		if !pt.isNodePortAvilableForPodIPProtocol(podIP, i, podPort, protocol) {
+			continue
 		}
+		socket, err := pt.LocalPortOpener.OpenLocalPort(i, protocol)
+		if err != nil {
+			continue
+		}
+		return i, socket, nil
 	}
 	return 0, nil, fmt.Errorf("no free port found")
 }
@@ -153,12 +171,24 @@ func (pt *PortTable) AddRule(podIP string, podPort int, protocol string) (int, e
 		}
 		return 0, err
 	}
-	pt.Table[util.BuildPortProto(fmt.Sprint(nodePort), protocol)] = NodePortData{
-		NodePort: nodePort,
-		PodIP:    podIP,
-		PodPort:  podPort,
-		Protocol: protocol,
-		socket:   socket,
+	if entry, ok := pt.Table[nodePort]; ok {
+		if !entry.HasProtocol(protocol) {
+			entry.Protocols = append(entry.Protocols, ProtocolSocketData{
+				Protocol: protocol,
+				socket:   socket,
+			})
+		}
+		pt.Table[nodePort] = entry
+	} else {
+		pt.Table[nodePort] = NodePortData{
+			NodePort: nodePort,
+			PodIP:    podIP,
+			PodPort:  podPort,
+			Protocols: []ProtocolSocketData{{
+				Protocol: protocol,
+				socket:   socket,
+			}},
+		}
 	}
 	return nodePort, nil
 }
@@ -170,10 +200,12 @@ func (pt *PortTable) DeleteRule(podIP string, podPort int, protocol string) erro
 	if err := pt.PodPortRules.DeleteRule(data.NodePort, podIP, podPort, protocol); err != nil {
 		return err
 	}
-	if err := data.socket.Close(); err != nil {
-		return fmt.Errorf("Error when releasing local port %d: %v", data.NodePort, err)
+	if err := data.DeleteProtocol(protocol); err != nil {
+		return err
 	}
-	delete(pt.Table, util.BuildPortProto(fmt.Sprint(data.NodePort), data.Protocol))
+	if len(data.Protocols) == 0 {
+		delete(pt.Table, data.NodePort)
+	}
 	return nil
 }
 
@@ -191,11 +223,14 @@ func (pt *PortTable) syncRules() error {
 	defer pt.tableLock.Unlock()
 	nplPorts := make([]rules.PodNodePort, 0, len(pt.Table))
 	for _, data := range pt.Table {
-		nplPorts = append(nplPorts, rules.PodNodePort{
-			NodePort: data.NodePort,
-			PodPort:  data.PodPort,
-			PodIP:    data.PodIP,
-		})
+		for _, protocol := range data.Protocols {
+			nplPorts = append(nplPorts, rules.PodNodePort{
+				NodePort: data.NodePort,
+				PodPort:  data.PodPort,
+				PodIP:    data.PodIP,
+				Protocol: protocol.Protocol,
+			})
+		}
 	}
 	return pt.PodPortRules.AddAllRules(nplPorts)
 }
@@ -216,14 +251,25 @@ func (pt *PortTable) RestoreRules(allNPLPorts []rules.PodNodePort, synced chan<-
 			klog.ErrorS(err, "Cannot bind to local port, skipping it", "port", nplPort.NodePort)
 			continue
 		}
-		data := NodePortData{
-			NodePort: nplPort.NodePort,
-			PodPort:  nplPort.PodPort,
-			PodIP:    nplPort.PodIP,
-			Protocol: nplPort.Protocol,
-			socket:   socket,
+		if entry, ok := pt.Table[nplPort.NodePort]; ok {
+			if !entry.HasProtocol(nplPort.Protocol) {
+				entry.Protocols = append(entry.Protocols, ProtocolSocketData{
+					Protocol: nplPort.Protocol,
+					socket:   socket,
+				})
+			}
+			pt.Table[nplPort.NodePort] = entry
+		} else {
+			pt.Table[nplPort.NodePort] = NodePortData{
+				NodePort: nplPort.NodePort,
+				PodPort:  nplPort.PodPort,
+				PodIP:    nplPort.PodIP,
+				Protocols: []ProtocolSocketData{{
+					Protocol: nplPort.Protocol,
+					socket:   socket,
+				}},
+			}
 		}
-		pt.Table[util.BuildPortProto(fmt.Sprint(nplPort.NodePort), nplPort.Protocol)] = data
 	}
 	// retry mechanism as iptables-restore can fail if other components (in Antrea or other
 	// software) are accessing iptables.
