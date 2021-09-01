@@ -269,6 +269,15 @@ func (i *Initializer) Initialize() error {
 		return err
 	}
 
+	if err := i.prepareHostNetwork(); err != nil {
+		return err
+	}
+
+	if err := i.setupOVSBridge(); err != nil {
+		return err
+	}
+
+	// initializeWireGuard must be executed after setupOVSBridge as it requires gateway addresses on the OVS bridge.
 	switch i.networkConfig.TrafficEncryptionMode {
 	case config.TrafficEncryptionModeIPSec:
 		if err := i.initializeIPSec(); err != nil {
@@ -278,14 +287,6 @@ func (i *Initializer) Initialize() error {
 		if err := i.initializeWireGuard(); err != nil {
 			return err
 		}
-	}
-
-	if err := i.prepareHostNetwork(); err != nil {
-		return err
-	}
-
-	if err := i.setupOVSBridge(); err != nil {
-		return err
 	}
 
 	wg.Add(1)
