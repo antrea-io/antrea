@@ -2410,6 +2410,94 @@ func testFQDNPolicy(t *testing.T) {
 	time.Sleep(networkPolicyDelay)
 }
 
+// testFQDNPolicyInClusterService uses in-cluster headless Services to test FQDN
+// policies, to avoid having a dependency on external connectivity. The reason we
+// use headless Service is that FQDN will use the IP from DNS A/AAAA records to
+// implement flows in the egress policy table. For a non-headless Service, the DNS
+// name resolves to the ClusterIP for the Service. But when traffic arrives to the
+// egress table, the dstIP has already been DNATed to the Endpoints IP by
+// AntreaProxy Service Load-Balancing, and the policies are not enforced correctly.
+// For a headless Service, the Endpoints IP will be directly returned by the DNS
+// server. In this case, FQDN based policies can be enforced successfully.
+func testFQDNPolicyInClusterService(t *testing.T) {
+	var services []*v1.Service
+	if clusterInfo.podV4NetworkCIDR != "" {
+		ipv4Svc := k8sUtils.BuildService("ipv4-svc", "x", 80, 80, map[string]string{"pod": "a"}, nil)
+		ipv4Svc.Spec.ClusterIP = "None"
+		ipv4Svc.Spec.IPFamilies = []v1.IPFamily{v1.IPv4Protocol}
+		services = append(services, ipv4Svc)
+	}
+	if clusterInfo.podV6NetworkCIDR != "" {
+		ipv6Svc := k8sUtils.BuildService("ipv6-svc", "x", 80, 80, map[string]string{"pod": "b"}, nil)
+		ipv6Svc.Spec.ClusterIP = "None"
+		ipv6Svc.Spec.IPFamilies = []v1.IPFamily{v1.IPv6Protocol}
+		services = append(services, ipv6Svc)
+	}
+
+	for _, service := range services {
+		k8sUtils.CreateOrUpdateService(service)
+		failOnError(waitForResourceReady(service, timeout), t)
+	}
+
+	svcDNSName := func(service *v1.Service) string {
+		return fmt.Sprintf("%s.%s.svc.cluster.local", service.Name, service.Namespace)
+	}
+
+	builder := &ClusterNetworkPolicySpecBuilder{}
+	builder = builder.SetName("test-acnp-fqdn-cluster-svc").
+		SetTier("application").
+		SetPriority(1.0)
+	for idx, service := range services {
+		builder.AddFQDNRule(svcDNSName(service), v1.ProtocolTCP, nil, nil, nil, fmt.Sprintf("r%d", idx*2), []ACNPAppliedToSpec{{NSSelector: map[string]string{"ns": "y"}, PodSelector: map[string]string{"pod": "b"}}}, crdv1alpha1.RuleActionReject)
+		builder.AddFQDNRule(svcDNSName(service), v1.ProtocolTCP, nil, nil, nil, fmt.Sprintf("r%d", idx*2+1), []ACNPAppliedToSpec{{NSSelector: map[string]string{"ns": "z"}, PodSelector: map[string]string{"pod": "c"}}}, crdv1alpha1.RuleActionDrop)
+	}
+	acnp := builder.Get()
+	k8sUtils.CreateOrUpdateACNP(acnp)
+	failOnError(waitForResourceReady(acnp, timeout), t)
+
+	var testcases []fqdnTestStep
+	for _, service := range services {
+		eachServiceCases := []fqdnTestStep{
+			{
+				"y/b",
+				svcDNSName(service),
+				Rejected,
+			},
+			{
+				"z/c",
+				svcDNSName(service),
+				Dropped,
+			},
+			{
+				"x/c",
+				svcDNSName(service),
+				Connected,
+			},
+		}
+		testcases = append(testcases, eachServiceCases...)
+	}
+
+	for _, tc := range testcases {
+		log.Tracef("Probing: %s -> %s", tc.clientPod.PodName(), tc.fqdnToQuery)
+		connectivity, err := k8sUtils.ProbeEgress(tc.clientPod.Namespace(), tc.clientPod.PodName(), tc.fqdnToQuery, 80, v1.ProtocolTCP)
+		if err != nil {
+			t.Errorf("failure -- could not complete probe: %v", err)
+		}
+		if connectivity != tc.expectedConnectivity {
+			t.Errorf("failure -- wrong results for probe: Source %s/%s --> Dest %s connectivity: %v, expected: %v",
+				tc.clientPod.Namespace(), tc.clientPod.PodName(), tc.fqdnToQuery, connectivity, tc.expectedConnectivity)
+		}
+	}
+	// cleanup test resources
+	for _, service := range services {
+		failOnError(k8sUtils.DeleteService(service.Namespace, service.Name), t)
+		failOnError(waitForResourceDelete(service.Namespace, service.Name, resourceSVC, timeout), t)
+	}
+	failOnError(k8sUtils.DeleteACNP(builder.Name), t)
+	failOnError(waitForResourceDelete("", builder.Name, resourceACNP, timeout), t)
+	time.Sleep(networkPolicyDelay)
+}
+
 // executeTests runs all the tests in testList and prints results
 func executeTests(t *testing.T, testList []*TestCase) {
 	executeTestsWithData(t, testList, nil)
@@ -2753,6 +2841,7 @@ func TestAntreaPolicy(t *testing.T) {
 		t.Run("Case=ACNPClusterGroupServiceRef", func(t *testing.T) { testACNPClusterGroupServiceRefCreateAndUpdate(t, data) })
 		t.Run("Case=ACNPNestedClusterGroup", func(t *testing.T) { testACNPNestedClusterGroupCreateAndUpdate(t, data) })
 		t.Run("Case=ACNPFQDNPolicy", func(t *testing.T) { testFQDNPolicy(t) })
+		t.Run("Case=FQDNPolicyInCluster", func(t *testing.T) { testFQDNPolicyInClusterService(t) })
 	})
 	// print results for reachability tests
 	printResults()
