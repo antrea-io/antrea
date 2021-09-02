@@ -382,9 +382,9 @@ endif
 .PHONY: verify
 verify:
 	@echo "===> Verifying spellings <==="
-	$(CURDIR)/hack/verify-spelling.sh
+	GO=$(GO) $(CURDIR)/hack/verify-spelling.sh
 	@echo "===> Verifying Table of Contents <==="
-	$(CURDIR)/hack/verify-toc.sh
+	GO=$(GO) $(CURDIR)/hack/verify-toc.sh
 	@echo "===> Verifying documentation formatting for website <==="
 	$(CURDIR)/hack/verify-docs-for-website.sh
 
