@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 const (
@@ -48,10 +49,62 @@ func (l *mockLogger) Write(p []byte) (n int, err error) {
 	return len(msg), nil
 }
 
-func newTestAntreaPolicyLogger(bufferLength time.Duration) (*AntreaPolicyLogger, *mockLogger) {
+type timer struct {
+	ch    chan time.Time
+	when  time.Time
+	fired bool
+}
+
+type virtualClock struct {
+	currentTime time.Time
+	timers      []*timer
+}
+
+func NewVirtualClock(startTime time.Time) *virtualClock {
+	return &virtualClock{
+		currentTime: startTime,
+	}
+}
+
+func (c *virtualClock) fireTimers() {
+	for _, t := range c.timers {
+		if !t.fired && c.currentTime.After(t.when) {
+			t.ch <- t.when
+			t.fired = true
+		}
+	}
+}
+
+func (c *virtualClock) Advance(d time.Duration) {
+	c.currentTime = c.currentTime.Add(d)
+	c.fireTimers()
+}
+
+func (c *virtualClock) Stop() {
+	for _, t := range c.timers {
+		close(t.ch)
+	}
+}
+
+func (c *virtualClock) Now() time.Time {
+	return c.currentTime
+}
+
+func (c *virtualClock) After(d time.Duration) <-chan time.Time {
+	ch := make(chan time.Time, 1)
+	c.timers = append(c.timers, &timer{
+		ch:    ch,
+		when:  c.currentTime.Add(d),
+		fired: false,
+	})
+	return ch
+}
+
+func newTestAntreaPolicyLogger(bufferLength time.Duration, clock Clock) (*AntreaPolicyLogger, *mockLogger) {
 	mockAnpLogger := &mockLogger{logged: make(chan string, 100)}
 	antreaLogger := &AntreaPolicyLogger{
 		bufferLength:     bufferLength,
+		clock:            clock,
 		anpLogger:        log.New(mockAnpLogger, "", log.Ldate),
 		logDeduplication: logRecordDedupMap{logMap: make(map[string]*logDedupRecord)},
 	}
@@ -88,7 +141,7 @@ func expectedLogWithCount(msg string, count int) string {
 }
 
 func TestAllowPacketLog(t *testing.T) {
-	antreaLogger, mockAnpLogger := newTestAntreaPolicyLogger(testBufferLength)
+	antreaLogger, mockAnpLogger := newTestAntreaPolicyLogger(testBufferLength, &realClock{})
 	ob, expected := newLogInfo("Allow")
 
 	antreaLogger.LogDedupPacket(ob)
@@ -97,7 +150,7 @@ func TestAllowPacketLog(t *testing.T) {
 }
 
 func TestDropPacketLog(t *testing.T) {
-	antreaLogger, mockAnpLogger := newTestAntreaPolicyLogger(testBufferLength)
+	antreaLogger, mockAnpLogger := newTestAntreaPolicyLogger(testBufferLength, &realClock{})
 	ob, expected := newLogInfo("Drop")
 
 	antreaLogger.LogDedupPacket(ob)
@@ -106,7 +159,7 @@ func TestDropPacketLog(t *testing.T) {
 }
 
 func TestDropPacketDedupLog(t *testing.T) {
-	antreaLogger, mockAnpLogger := newTestAntreaPolicyLogger(testBufferLength)
+	antreaLogger, mockAnpLogger := newTestAntreaPolicyLogger(testBufferLength, &realClock{})
 	ob, expected := newLogInfo("Drop")
 	// Add the additional log info for duplicate packets.
 	expected = expectedLogWithCount(expected, 2)
@@ -116,34 +169,55 @@ func TestDropPacketDedupLog(t *testing.T) {
 	assert.Contains(t, actual, expected)
 }
 
+// TestDropPacketMultiDedupLog sends 3 packets, with a 60ms interval. The test
+// is meant to verify that any given packet is never buffered for more than the
+// configured bufferLength (100ms for this test). To avoid flakiness issues
+// while ensuring that the test can run fast, we use a virtual clock and advance
+// the time manually.
 func TestDropPacketMultiDedupLog(t *testing.T) {
-	antreaLogger, mockAnpLogger := newTestAntreaPolicyLogger(testBufferLength)
+	clock := NewVirtualClock(time.Now())
+	defer clock.Stop()
+	antreaLogger, mockAnpLogger := newTestAntreaPolicyLogger(testBufferLength, clock)
 	ob, expected := newLogInfo("Drop")
 
-	numPackets := 4
-	go sendMultiplePackets(antreaLogger, ob, numPackets, 40*time.Millisecond)
-	// Close the channel listening for logged msg after 500ms.
-	time.AfterFunc(500*time.Millisecond, func() {
-		mockAnpLogger.mu.Lock()
-		defer mockAnpLogger.mu.Unlock()
-		close(mockAnpLogger.logged)
-	})
-
-	receivedPacket, countLog := 0, 0
-	for actual := range mockAnpLogger.logged {
-		assert.Contains(t, actual, expected)
-		countLog++
-		begin := strings.Index(actual, "[")
-		end := strings.Index(actual, " packets")
-		if begin == -1 {
-			receivedPacket += 1
-		} else {
-			countLoggedMsg, _ := strconv.Atoi(actual[(begin + 1):end])
-			receivedPacket += countLoggedMsg
+	consumeLog := func() (int, error) {
+		select {
+		case l := <-mockAnpLogger.logged:
+			if !strings.Contains(l, expected) {
+				return 0, fmt.Errorf("unexpected log message received")
+			}
+			begin := strings.Index(l, "[")
+			end := strings.Index(l, " packets")
+			if begin == -1 {
+				return 1, nil
+			}
+			c, err := strconv.Atoi(l[(begin + 1):end])
+			if err != nil {
+				return 0, fmt.Errorf("malformed log entry")
+			}
+			return c, nil
+		case <-time.After(1 * time.Second):
+			break
 		}
+		return 0, fmt.Errorf("did not receive log message in time")
 	}
-	// Test two messages are logged for all packets.
-	assert.Equal(t, 2, countLog)
-	// Test all packets are accounted for.
-	assert.Equal(t, numPackets, receivedPacket)
+
+	// t=0ms
+	antreaLogger.LogDedupPacket(ob)
+	clock.Advance(60 * time.Millisecond)
+	// t=60ms
+	antreaLogger.LogDedupPacket(ob)
+	clock.Advance(50 * time.Millisecond)
+	// t=110ms, buffer is logged 100ms after the first packet
+	c1, err := consumeLog()
+	require.NoError(t, err)
+	assert.Equal(t, 2, c1)
+	clock.Advance(10 * time.Millisecond)
+	// t=120ms
+	antreaLogger.LogDedupPacket(ob)
+	clock.Advance(110 * time.Millisecond)
+	// t=230ms, buffer is logged
+	c2, err := consumeLog()
+	require.NoError(t, err)
+	assert.Equal(t, 1, c2)
 }
