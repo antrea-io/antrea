@@ -295,11 +295,25 @@ function deliver_antrea_windows {
     echo "===== Deliver Antrea Windows to Windows worker nodes and pull necessary images on Windows worker nodes ====="
     rm -f antrea-windows.tar.gz
     sed -i 's/if (!(Test-Path $AntreaAgentConfigPath))/if ($true)/' hack/windows/Helper.psm1
-    kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 != role && $1 ~ /win/ {print $6}' | while read IP; do
-        WORKER_NAME=$(govc vm.info -vm.ip ${IP} -json | jq -r '.VirtualMachines[0].Name')
+    kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 != role && $1 ~ /win/ {print $1}' | while read WORKER_NAME; do
         echo "==== Reverting Windows VM ${WORKER_NAME} ====="
-        govc snapshot.revert -vm.ip ${IP} win-initial
-        govc vm.power -on ${WORKER_NAME} || true
+        govc snapshot.revert -vm ${WORKER_NAME} win-initial
+        # If Windows VM fails to power on correctly in time, retry several times.
+        winVMIPs=""
+        for i in `seq 3`; do
+            winVMIPs=$(govc vm.ip -wait=1m -a ${WORKER_NAME})
+            if [[ $winVMIPs != "" ]]; then
+                echo "Windows VM ${WORKER_NAME} powers on"
+                break
+            fi
+            echo "Windows VM ${WORKER_NAME} fails to power on"
+            govc vm.power -on ${WORKER_NAME} || true
+        done
+        if [[ $winVMIPs == "" ]]; then
+            echo "Windows VM ${WORKER_NAME} didn't power on, exiting"
+            exit 1
+        fi
+        IP=$(kubectl get node "${WORKER_NAME}" -o jsonpath='{.status.addresses[0].address}')
         # Windows VM is reverted to an old snapshot so computer date needs updating.
         ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "powershell W32tm /resync /force"
         # Some tests need us.gcr.io/k8s-artifacts-prod/e2e-test-images/agnhost:2.13 image but it is not for windows/amd64 10.0.17763
@@ -372,12 +386,11 @@ function deliver_antrea {
     export GOROOT=/usr/local/go
     export GOCACHE="${WORKSPACE}/../gocache"
     export PATH=${GOROOT}/bin:$PATH
-    export KUBECONFIG=$KUBECONFIG_PATH
 
     git show --numstat
     make clean
     ${CLEAN_STALE_IMAGES}
-    if [[ "${DOCKER_REGISTRY}" != "" ]]; then
+    if [[ ! "${TESTCASE}" =~ "e2e" && "${DOCKER_REGISTRY}" != "" ]]; then
         docker pull "${DOCKER_REGISTRY}/antrea/sonobuoy-systemd-logs:v0.3"
         docker tag "${DOCKER_REGISTRY}/antrea/sonobuoy-systemd-logs:v0.3" "sonobuoy/systemd-logs:v0.3"
     fi
@@ -413,7 +426,7 @@ function deliver_antrea {
         rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no" antrea-ubuntu.tar jenkins@[${IP}]:${WORKDIR}/antrea-ubuntu.tar
         rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no" flow-aggregator.tar jenkins@[${IP}]:${WORKDIR}/flow-aggregator.tar
         ssh -o StrictHostKeyChecking=no -n jenkins@${IP} "${CLEAN_STALE_IMAGES}; docker load -i ${WORKDIR}/antrea-ubuntu.tar; docker load -i ${WORKDIR}/flow-aggregator.tar" || true
-        if [[ "${DOCKER_REGISTRY}" != "" ]]; then
+        if [[ ! "${TESTCASE}" =~ "e2e" && "${DOCKER_REGISTRY}" != "" ]]; then
             ssh -o StrictHostKeyChecking=no -n jenkins@${IP} "docker pull ${DOCKER_REGISTRY}/antrea/sonobuoy-systemd-logs:v0.3 ; docker tag ${DOCKER_REGISTRY}/antrea/sonobuoy-systemd-logs:v0.3 sonobuoy/systemd-logs:v0.3"
         fi
     done
@@ -590,6 +603,7 @@ function clean_tmp() {
     for item in "${CLEAN_LIST[@]}"; do
         find /tmp -name "${item}" -mtime +7 -exec rm -rf {} \; 2>&1 | grep -v "Permission denied" || true
     done
+    find ${WORKDIR} -name "support-bundles*" -mtime +7 -exec rm -rf {} \; 2>&1 | grep -v "Permission denied" || true
 }
 
 clean_tmp
