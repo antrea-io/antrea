@@ -16,11 +16,14 @@ package e2e
 
 import (
 	"fmt"
+	"net"
+	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	corev1 "k8s.io/api/core/v1"
 
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/apis"
@@ -66,7 +69,8 @@ func TestWireGuard(t *testing.T) {
 		defer data.redeployAntrea(t, deployAntreaDefault)
 	}
 
-	t.Run("testWireGuardTunnelConnectivity", func(t *testing.T) { testWireGuardTunnelConnectivity(t, data) })
+	t.Run("testPodConnectivity", func(t *testing.T) { testPodConnectivity(t, data) })
+	t.Run("testServiceConnectivity", func(t *testing.T) { testServiceConnectivity(t, data) })
 }
 
 func (data *TestData) getWireGuardPeerEndpointsWithHandshake(nodeName string) ([]string, error) {
@@ -101,7 +105,7 @@ func (data *TestData) getWireGuardPeerEndpointsWithHandshake(nodeName string) ([
 	return peerEndpoints, nil
 }
 
-func testWireGuardTunnelConnectivity(t *testing.T, data *TestData) {
+func testPodConnectivity(t *testing.T, data *TestData) {
 	podInfos, deletePods := createPodsOnDifferentNodes(t, data, "differentnodes")
 	defer deletePods()
 	numPods := 2
@@ -122,4 +126,25 @@ func testWireGuardTunnelConnectivity(t *testing.T, data *TestData) {
 		}
 		assert.Contains(t, endpoints, fmt.Sprintf("%s:%d", nodeIP, apis.WireGuardListenPort))
 	}
+}
+
+// testServiceConnectivity verifies host-to-service can be transferred through the encrypted tunnel correctly.
+func testServiceConnectivity(t *testing.T, data *TestData) {
+	clientPodName := "hostnetwork-pod"
+	svcName := "agnhost"
+	clientPodNode := nodeName(0)
+	serverPodNode := nodeName(1)
+	svc, cleanup := data.createAgnhostServiceAndBackendPods(t, svcName, serverPodNode, corev1.ServiceTypeNodePort)
+	defer cleanup()
+
+	// Create the a hostNetwork Pod on a Node different from the service's backend Pod, so the service traffic will be transferred across the tunnel.
+	require.NoError(t, data.createPodOnNode(clientPodName, testNamespace, clientPodNode, busyboxImage, []string{"sleep", strconv.Itoa(3600)}, nil, nil, nil, true, nil))
+	defer data.deletePodAndWait(defaultTimeout, clientPodName, testNamespace)
+	require.NoError(t, data.podWaitForRunning(defaultTimeout, clientPodName, testNamespace))
+
+	err := data.runNetcatCommandFromTestPod(clientPodName, testNamespace, svc.Spec.ClusterIP, 80)
+	require.NoError(t, err, "Pod %s should be able to connect the service's ClusterIP %s, but was not able to connect", clientPodName, net.JoinHostPort(svc.Spec.ClusterIP, fmt.Sprint(80)))
+
+	err = data.runNetcatCommandFromTestPod(clientPodName, testNamespace, "127.0.0.1", svc.Spec.Ports[0].NodePort)
+	require.NoError(t, err, "Pod %s should be able to connect the service's NodePort 127.0.0.1:%s, but was not able to connect", clientPodName, svc.Spec.Ports[0].NodePort)
 }
