@@ -115,13 +115,16 @@ func (c *client) uplinkSNATFlows(localSubnet net.IPNet, category cookie.Category
 // snatImplementationFlows installs flows that implement SNAT with OVS NAT.
 func (c *client) snatImplementationFlows(nodeIP net.IP, category cookie.Category) []binding.Flow {
 	snatIPRange := &binding.IPRange{StartIP: nodeIP, EndIP: nodeIP}
-	l3FwdTable := c.pipeline[l3ForwardingTable]
-	nextTable := l3FwdTable.GetNext()
+	snatTable := c.pipeline[snatTable]
+	// Do not decrement TTL on the SNATed packet on Windows. This is because the SNATed packet is output to antrea-gw0
+	// first to learn the destination MAC using the host ARP cache. And antrea-gw0 will decrement the TTL when it
+	// forwards the packet to the bridge interface on which the host IP address is configured.
+	nextTable := snatTable.GetNext()
 	ctCommitTable := c.pipeline[conntrackCommitTable]
 	ccNextTable := ctCommitTable.GetNext()
 	flows := []binding.Flow{
 		// Default to using Node IP as the SNAT IP for local Pods.
-		c.pipeline[snatTable].BuildFlow(priorityLow).
+		snatTable.BuildFlow(priorityNormal).
 			MatchProtocol(binding.ProtocolIP).
 			MatchCTStateNew(true).MatchCTStateTrk(true).
 			MatchRegRange(int(marksReg), markTrafficFromLocal, binding.Range{0, 15}).
@@ -158,7 +161,7 @@ func (c *client) snatImplementationFlows(nodeIP net.IP, category cookie.Category
 			// because this kind of packets need to enter ctZoneSNAT
 			// to make sure the SNAT can be applied before leaving
 			// the pipeline.
-			l3FwdTable.BuildFlow(priorityLow).
+			snatTable.BuildFlow(priorityNormal).
 				MatchProtocol(binding.ProtocolIP).
 				MatchCTStateNew(false).MatchCTStateTrk(true).MatchCTStateDNAT(true).
 				MatchRegRange(int(marksReg), markTrafficFromLocal, binding.Range{0, 15}).
