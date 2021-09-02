@@ -34,10 +34,26 @@ const (
 	logfileName   string = "np.log"
 )
 
+type Clock interface {
+	Now() time.Time
+	After(d time.Duration) <-chan time.Time
+}
+
+type realClock struct{}
+
+func (c realClock) Now() time.Time {
+	return time.Now()
+}
+
+func (c realClock) After(d time.Duration) <-chan time.Time {
+	return time.After(d)
+}
+
 // AntreaPolicyLogger is used for Antrea policy audit logging.
 // Includes a lumberjack logger and a map used for log deduplication.
 type AntreaPolicyLogger struct {
 	bufferLength     time.Duration
+	clock            Clock // enable the use of a "virtual" clock for unit tests
 	anpLogger        *log.Logger
 	logDeduplication logRecordDedupMap
 }
@@ -56,9 +72,9 @@ type logInfo struct {
 
 // logDedupRecord will be used as 1 sec buffer for log deduplication.
 type logDedupRecord struct {
-	count       int64       // record count of duplicate log
-	initTime    time.Time   // initial time upon receiving packet log
-	bufferTimer *time.Timer // 1 sec buffer for each log
+	count         int64            // record count of duplicate log
+	initTime      time.Time        // initial time upon receiving packet log
+	bufferTimerCh <-chan time.Time // 1 sec buffer for each log
 }
 
 // logRecordDedupMap includes a map of log buffers and a r/w mutex for accessing the map.
@@ -76,8 +92,8 @@ func (l *AntreaPolicyLogger) getLogKey(logMsg string) *logDedupRecord {
 
 // logAfterTimer runs concurrently until buffer timer stops, then call terminateLogKey.
 func (l *AntreaPolicyLogger) logAfterTimer(logMsg string) {
-	logRecordTimer := l.getLogKey(logMsg).bufferTimer
-	<-logRecordTimer.C
+	ch := l.getLogKey(logMsg).bufferTimerCh
+	<-ch
 	l.terminateLogKey(logMsg)
 }
 
@@ -102,7 +118,7 @@ func (l *AntreaPolicyLogger) updateLogKey(logMsg string, bufferLength time.Durat
 	if exists {
 		l.logDeduplication.logMap[logMsg].count++
 	} else {
-		record := logDedupRecord{1, time.Now(), time.NewTimer(bufferLength)}
+		record := logDedupRecord{1, l.clock.Now(), l.clock.After(bufferLength)}
 		l.logDeduplication.logMap[logMsg] = &record
 	}
 	return exists
@@ -147,6 +163,7 @@ func newAntreaPolicyLogger() (*AntreaPolicyLogger, error) {
 
 	antreaPolicyLogger := &AntreaPolicyLogger{
 		bufferLength:     time.Second,
+		clock:            &realClock{},
 		anpLogger:        log.New(logOutput, "", log.Ldate|log.Lmicroseconds),
 		logDeduplication: logRecordDedupMap{logMap: make(map[string]*logDedupRecord)},
 	}
