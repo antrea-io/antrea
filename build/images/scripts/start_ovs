@@ -112,6 +112,7 @@ function quit {
     stop_ovs
     # kill background sleep process
     if [ "$SLEEP_PID" != "" ]; then kill $SLEEP_PID > /dev/null 2>&1 || true; fi
+    cleanup_ovs_run_files
     exit 0
 }
 

@@ -14,6 +14,7 @@
 package ovsctl
 
 import (
+	"fmt"
 	"net"
 	"os/exec"
 )
@@ -84,4 +85,8 @@ func (e *ExecError) GetErrorOutput() string {
 		return ""
 	}
 	return e.errorOutput
+}
+
+func (e *ExecError) Error() string {
+	return fmt.Sprintf("ExecError: %v, output: %s", e.error, e.errorOutput)
 }
