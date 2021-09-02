@@ -40,6 +40,7 @@ import (
 	npl "antrea.io/antrea/pkg/agent/nodeportlocal"
 	"antrea.io/antrea/pkg/agent/openflow"
 	"antrea.io/antrea/pkg/agent/proxy"
+	proxytypes "antrea.io/antrea/pkg/agent/proxy/types"
 	"antrea.io/antrea/pkg/agent/querier"
 	"antrea.io/antrea/pkg/agent/route"
 	"antrea.io/antrea/pkg/agent/stats"
@@ -199,6 +200,11 @@ func run(o *Options) error {
 		agentInitializer.GetWireGuardClient(),
 		o.config.AntreaProxy.ProxyAll)
 
+	var groupCounters []proxytypes.GroupCounter
+	groupIDUpdates := make(chan string, 100)
+	v4GroupCounter := proxytypes.NewGroupCounter(false, groupIDUpdates)
+	v6GroupCounter := proxytypes.NewGroupCounter(true, groupIDUpdates)
+
 	var proxier proxy.Proxier
 	if features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
 		v4Enabled := config.IsIPv4Enabled(nodeConfig, networkConfig.TrafficEncapMode)
@@ -208,11 +214,14 @@ func run(o *Options) error {
 
 		switch {
 		case v4Enabled && v6Enabled:
-			proxier = proxy.NewDualStackProxier(nodeConfig.Name, informerFactory, ofClient, routeClient, nodePortAddressesIPv4, nodePortAddressesIPv6, proxyAll, skipServices)
+			proxier = proxy.NewDualStackProxier(nodeConfig.Name, informerFactory, ofClient, routeClient, nodePortAddressesIPv4, nodePortAddressesIPv6, proxyAll, skipServices, v4GroupCounter, v6GroupCounter)
+			groupCounters = append(groupCounters, v4GroupCounter, v6GroupCounter)
 		case v4Enabled:
-			proxier = proxy.NewProxier(nodeConfig.Name, informerFactory, ofClient, false, routeClient, nodePortAddressesIPv4, proxyAll, skipServices)
+			proxier = proxy.NewProxier(nodeConfig.Name, informerFactory, ofClient, false, routeClient, nodePortAddressesIPv4, proxyAll, skipServices, v4GroupCounter)
+			groupCounters = append(groupCounters, v4GroupCounter)
 		case v6Enabled:
-			proxier = proxy.NewProxier(nodeConfig.Name, informerFactory, ofClient, true, routeClient, nodePortAddressesIPv6, proxyAll, skipServices)
+			proxier = proxy.NewProxier(nodeConfig.Name, informerFactory, ofClient, true, routeClient, nodePortAddressesIPv6, proxyAll, skipServices, v6GroupCounter)
+			groupCounters = append(groupCounters, v6GroupCounter)
 		default:
 			return fmt.Errorf("at least one of IPv4 or IPv6 should be enabled")
 		}
@@ -247,6 +256,8 @@ func run(o *Options) error {
 		ifaceStore,
 		nodeConfig.Name,
 		entityUpdates,
+		groupCounters,
+		groupIDUpdates,
 		antreaPolicyEnabled,
 		statusManagerEnabled,
 		loggingEnabled,

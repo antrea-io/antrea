@@ -18,6 +18,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
@@ -35,6 +36,20 @@ var (
 
 func TestProcessAntreaNetworkPolicy(t *testing.T) {
 	p10 := float64(10)
+	svcA := v1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "svc1",
+			Namespace: "ns5",
+		},
+		Spec: v1.ServiceSpec{
+			Ports: []v1.ServicePort{
+				{
+					Port:       80,
+					TargetPort: int80,
+				},
+			},
+		},
+	}
 	allowAction := crdv1alpha1.RuleActionAllow
 	protocolTCP := controlplane.ProtocolTCP
 	tests := []struct {
@@ -379,10 +394,64 @@ func TestProcessAntreaNetworkPolicy(t *testing.T) {
 			expectedAppliedToGroups: 1,
 			expectedAddressGroups:   1,
 		},
+		{
+			name: "rules-with-to-services",
+			inputPolicy: &crdv1alpha1.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Namespace: "ns5", Name: "npE", UID: "uidE"},
+				Spec: crdv1alpha1.NetworkPolicySpec{
+					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+						{PodSelector: &selectorA},
+					},
+					Priority: p10,
+					Egress: []crdv1alpha1.Rule{
+						{
+							ToServices: []crdv1alpha1.ServiceReference{
+								{
+									Namespace: "ns5",
+									Name:      "svc1",
+								},
+							},
+							Action: &allowAction,
+						},
+					},
+				},
+			},
+			expectedPolicy: &antreatypes.NetworkPolicy{
+				UID:  "uidE",
+				Name: "uidE",
+				SourceRef: &controlplane.NetworkPolicyReference{
+					Type:      controlplane.AntreaNetworkPolicy,
+					Namespace: "ns5",
+					Name:      "npE",
+					UID:       "uidE",
+				},
+				Priority:     &p10,
+				TierPriority: &DefaultTierPriority,
+				Rules: []controlplane.NetworkPolicyRule{
+					{
+						Direction: controlplane.DirectionOut,
+						To: controlplane.NetworkPolicyPeer{
+							ToServices: []controlplane.ServiceReference{
+								{
+									Namespace: "ns5",
+									Name:      "svc1",
+								},
+							},
+						},
+						Priority: 0,
+						Action:   &allowAction,
+					},
+				},
+				AppliedToGroups: []string{getNormalizedUID(toGroupSelector("ns5", &selectorA, nil, nil).NormalizedName)},
+			},
+			expectedAppliedToGroups: 1,
+			expectedAddressGroups:   0,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, c := newController()
+			c.serviceStore.Add(&svcA)
 			assert.Equal(t, tt.expectedPolicy, c.processAntreaNetworkPolicy(tt.inputPolicy))
 			assert.Equal(t, tt.expectedAddressGroups, len(c.addressGroupStore.List()))
 			assert.Equal(t, tt.expectedAppliedToGroups, len(c.appliedToGroupStore.List()))

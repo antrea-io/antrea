@@ -134,6 +134,25 @@ func (n *NetworkPolicyController) toNamespacedPeerForCRD(peers []v1alpha1.Networ
 	return &controlplane.NetworkPolicyPeer{AddressGroups: addressGroups}
 }
 
+// svcRefToPeerForCRD creates an Antrea controlplane NetworkPolicyPeer from
+// ServiceReference in ToServices field. For ANP, we will use the
+// defaultNamespace(policy Namespace) as the Namespace of ServiceReference that
+// doesn't set Namespace.
+func (n *NetworkPolicyController) svcRefToPeerForCRD(svcRefs []v1alpha1.ServiceReference, defaultNamespace string) *controlplane.NetworkPolicyPeer {
+	var controlplaneSvcRefs []controlplane.ServiceReference
+	for _, svcRef := range svcRefs {
+		curNS := defaultNamespace
+		if svcRef.Namespace != "" {
+			curNS = svcRef.Namespace
+		}
+		controlplaneSvcRefs = append(controlplaneSvcRefs, controlplane.ServiceReference{
+			Namespace: curNS,
+			Name:      svcRef.Name,
+		})
+	}
+	return &controlplane.NetworkPolicyPeer{ToServices: controlplaneSvcRefs}
+}
+
 // createAppliedToGroupForClusterGroupCRD creates an AppliedToGroup object corresponding to a
 // internal Group. If the AppliedToGroup already exists, it returns the key
 // otherwise it copies the internal Group contents to an AppliedToGroup resource and returns

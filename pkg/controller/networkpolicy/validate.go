@@ -31,6 +31,7 @@ import (
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	crdv1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
 	"antrea.io/antrea/pkg/controller/networkpolicy/store"
+	"antrea.io/antrea/pkg/features"
 	"antrea.io/antrea/pkg/util/env"
 )
 
@@ -482,6 +483,14 @@ func (v *antreaPolicyValidator) validatePeers(ingress, egress []crdv1alpha1.Rule
 		}
 	}
 	for _, rule := range egress {
+		if rule.ToServices != nil {
+			if !features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
+				return fmt.Sprintf("`toServices` can only be used when AntreaProxy is enabled"), false
+			}
+			if rule.To != nil || rule.Ports != nil {
+				return fmt.Sprintf("`toServices` can't be used with `to` or `ports`"), false
+			}
+		}
 		msg, isValid := checkPeers(rule.To)
 		if !isValid {
 			return msg, false

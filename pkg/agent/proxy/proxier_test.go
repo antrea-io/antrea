@@ -120,7 +120,7 @@ func NewFakeProxier(routeClient route.Interface, ofClient openflow.Client, nodeP
 		endpointsInstalledMap:    types.EndpointsMap{},
 		endpointReferenceCounter: map[string]int{},
 		endpointsMap:             types.EndpointsMap{},
-		groupCounter:             types.NewGroupCounter(isIPv6),
+		groupCounter:             types.NewGroupCounter(isIPv6, make(chan string, 100)),
 		ofClient:                 ofClient,
 		routeClient:              routeClient,
 		serviceStringMap:         map[string]k8sproxy.ServicePortName{},

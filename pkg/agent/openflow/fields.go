@@ -112,9 +112,13 @@ var (
 	// Field to cache the Egress conjunction ID hit by TraceFlow packet.
 	TFEgressConjIDField = binding.NewRegField(5, 0, 31, "TFEgressConjunctionID")
 
-	// reg(N6XM_NX_REG6)
+	// reg6(NXM_NX_REG6)
 	// Field to store the Ingress conjunction ID hit by TraceFlow packet.
 	TFIngressConjIDField = binding.NewRegField(6, 0, 31, "TFIngressConjunctionID")
+
+	// reg7(NXM_NX_REG7)
+	// Field to store the GroupID corresponding to the Service
+	ServiceGroupIDField = binding.NewRegField(7, 0, 31, "ServiceGroupID")
 )
 
 // Fields using xxreg.

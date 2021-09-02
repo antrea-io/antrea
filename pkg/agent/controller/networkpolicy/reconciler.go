@@ -28,10 +28,12 @@ import (
 
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/openflow"
+	proxytypes "antrea.io/antrea/pkg/agent/proxy/types"
 	"antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 	"antrea.io/antrea/pkg/util/ip"
+	"antrea.io/antrea/pkg/util/k8s"
 )
 
 var (
@@ -150,15 +152,20 @@ type lastRealized struct {
 	// the fqdn selector of this policy rule. It must be empty for policy rule
 	// that is not egress and does not have toFQDN field.
 	fqdnIPAddresses sets.String
+	// groupIDAddresses tracks the last realized set of groupIDs resolved for
+	// the toServices of this policy rule. It must be empty for policy rule
+	// that is not egress and does not have toServices field.
+	groupIDAddresses sets.Int64
 }
 
 func newLastRealized(rule *CompletedRule) *lastRealized {
 	return &lastRealized{
-		ofIDs:           map[servicesKey]uint32{},
-		CompletedRule:   rule,
-		podOFPorts:      map[servicesKey]sets.Int32{},
-		podIPs:          nil,
-		fqdnIPAddresses: nil,
+		ofIDs:            map[servicesKey]uint32{},
+		CompletedRule:    rule,
+		podOFPorts:       map[servicesKey]sets.Int32{},
+		podIPs:           nil,
+		fqdnIPAddresses:  nil,
+		groupIDAddresses: nil,
 	}
 }
 
@@ -198,6 +205,10 @@ type reconciler struct {
 	// reconciler to register FQDN policy rules and query the IP addresses corresponded
 	// to a FQDN.
 	fqdnController *fqdnController
+
+	// groupCounters is a list of GroupCounter for v4 and v6 env. reconciler uses these
+	// GroupCounters to get the groupIDs of a specific Service.
+	groupCounters []proxytypes.GroupCounter
 }
 
 // newReconciler returns a new *reconciler.
@@ -205,6 +216,7 @@ func newReconciler(ofClient openflow.Client,
 	ifaceStore interfacestore.InterfaceStore,
 	idAllocator *idAllocator,
 	fqdnController *fqdnController,
+	groupCounters []proxytypes.GroupCounter,
 ) *reconciler {
 	priorityAssigners := map[uint8]*tablePriorityAssigner{}
 	for _, table := range openflow.GetAntreaPolicyBaselineTierTables() {
@@ -224,6 +236,7 @@ func newReconciler(ofClient openflow.Client,
 		idAllocator:       idAllocator,
 		priorityAssigners: priorityAssigners,
 		fqdnController:    fqdnController,
+		groupCounters:     groupCounters,
 	}
 	// Check if ofClient is nil or not to be compatible with unit tests.
 	if ofClient != nil {
@@ -412,6 +425,7 @@ func (r *reconciler) add(rule *CompletedRule, ofPriority *uint16, table uint8) e
 			if r.fqdnController != nil {
 				lastRealized.fqdnIPAddresses = nil
 			}
+			lastRealized.groupIDAddresses = nil
 			return err
 		}
 		// Record ofID only if its Openflow is installed successfully.
@@ -485,7 +499,7 @@ func (r *reconciler) computeOFRulesForAdd(rule *CompletedRule, ofPriority *uint1
 		// isolated, so we create a PolicyRule with the original services if it doesn't exist.
 		// If there are IPBlocks or Pods that cannot resolve any named port, they will share
 		// this PolicyRule. Antrea policies do not need this default isolation.
-		if !rule.isAntreaNetworkPolicyRule() || len(rule.To.IPBlocks) > 0 || len(rule.To.FQDNs) > 0 {
+		if !rule.isAntreaNetworkPolicyRule() || len(rule.To.IPBlocks) > 0 || len(rule.To.FQDNs) > 0 || len(rule.To.ToServices) > 0 {
 			svcKey := normalizeServices(rule.Services)
 			ofRule, exists := ofRuleByServicesMap[svcKey]
 			// Create a new Openflow rule if the group doesn't exist.
@@ -520,6 +534,21 @@ func (r *reconciler) computeOFRulesForAdd(rule *CompletedRule, ofPriority *uint1
 				ofRule.To = append(ofRule.To, addresses...)
 				// If the rule installation fails, this will be reset
 				lastRealized.fqdnIPAddresses = addressSet
+			}
+			if len(rule.To.ToServices) > 0 {
+				var addresses []types.Address
+				addressSet := sets.NewInt64()
+				for _, svcRef := range rule.To.ToServices {
+					for _, groupCounter := range r.groupCounters {
+						for _, groupID := range groupCounter.GetAllGroupIDs(k8s.NamespacedName(svcRef.Namespace, svcRef.Name)) {
+							addresses = append(addresses, openflow.NewServiceGroupIDAddress(groupID))
+							addressSet.Insert(int64(groupID))
+						}
+					}
+				}
+				ofRule.To = append(ofRule.To, addresses...)
+				// If the rule installation fails, this will be reset.
+				lastRealized.groupIDAddresses = addressSet
 			}
 		}
 	}
@@ -692,6 +721,27 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule, 
 						}
 					}
 				}
+				originalGroupIDAddressSet, newGroupIDAddressSet := sets.NewInt64(), sets.NewInt64()
+				if lastRealized.groupIDAddresses != nil {
+					originalGroupIDAddressSet = lastRealized.groupIDAddresses
+				}
+				if len(newRule.To.ToServices) > 0 {
+					for _, svcRef := range newRule.To.ToServices {
+						for _, groupCounter := range r.groupCounters {
+							for _, groupID := range groupCounter.GetAllGroupIDs(k8s.NamespacedName(svcRef.Namespace, svcRef.Name)) {
+								newGroupIDAddressSet.Insert(int64(groupID))
+							}
+						}
+					}
+					addedGroupIDAddress := newGroupIDAddressSet.Difference(originalGroupIDAddressSet)
+					removedGroupIDAddress := originalGroupIDAddressSet.Difference(newGroupIDAddressSet)
+					for a := range addedGroupIDAddress {
+						addedTo = append(addedTo, openflow.NewServiceGroupIDAddress(binding.GroupIDType(a)))
+					}
+					for r := range removedGroupIDAddress {
+						deletedTo = append(deletedTo, openflow.NewServiceGroupIDAddress(binding.GroupIDType(r)))
+					}
+				}
 				if err := r.updateOFRule(ofID, addedFrom, addedTo, deletedFrom, deletedTo, ofPriority); err != nil {
 					return err
 				}
@@ -699,6 +749,8 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule, 
 					// Update the FQDN address set if rule installation succeeds.
 					lastRealized.fqdnIPAddresses = newFQDNAddressSet
 				}
+				// Update the groupID address set if rule installation succeeds.
+				lastRealized.groupIDAddresses = newGroupIDAddressSet
 				// Delete valid servicesKey from staleOFIDs.
 				delete(staleOFIDs, svcKey)
 			}

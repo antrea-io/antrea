@@ -53,6 +53,7 @@ const (
 	IPNetAddr
 	OFPortAddr
 	L4PortAddr
+	ServiceGroupIDAddr
 	UnSupported
 )
 

@@ -31,27 +31,28 @@ import (
 )
 
 var (
-	MatchDstIP         = types.NewMatchKey(binding.ProtocolIP, types.IPAddr, "nw_dst")
-	MatchSrcIP         = types.NewMatchKey(binding.ProtocolIP, types.IPAddr, "nw_src")
-	MatchDstIPNet      = types.NewMatchKey(binding.ProtocolIP, types.IPNetAddr, "nw_dst")
-	MatchSrcIPNet      = types.NewMatchKey(binding.ProtocolIP, types.IPNetAddr, "nw_src")
-	MatchDstIPv6       = types.NewMatchKey(binding.ProtocolIPv6, types.IPAddr, "ipv6_dst")
-	MatchSrcIPv6       = types.NewMatchKey(binding.ProtocolIPv6, types.IPAddr, "ipv6_src")
-	MatchDstIPNetv6    = types.NewMatchKey(binding.ProtocolIPv6, types.IPNetAddr, "ipv6_dst")
-	MatchSrcIPNetv6    = types.NewMatchKey(binding.ProtocolIPv6, types.IPNetAddr, "ipv6_src")
-	MatchDstOFPort     = types.NewMatchKey(binding.ProtocolIP, types.OFPortAddr, "reg1[0..31]")
-	MatchSrcOFPort     = types.NewMatchKey(binding.ProtocolIP, types.OFPortAddr, "in_port")
-	MatchTCPDstPort    = types.NewMatchKey(binding.ProtocolTCP, types.L4PortAddr, "tp_dst")
-	MatchTCPv6DstPort  = types.NewMatchKey(binding.ProtocolTCPv6, types.L4PortAddr, "tp_dst")
-	MatchUDPDstPort    = types.NewMatchKey(binding.ProtocolUDP, types.L4PortAddr, "tp_dst")
-	MatchUDPv6DstPort  = types.NewMatchKey(binding.ProtocolUDPv6, types.L4PortAddr, "tp_dst")
-	MatchSCTPDstPort   = types.NewMatchKey(binding.ProtocolSCTP, types.L4PortAddr, "tp_dst")
-	MatchSCTPv6DstPort = types.NewMatchKey(binding.ProtocolSCTPv6, types.L4PortAddr, "tp_dst")
-	MatchTCPSrcPort    = types.NewMatchKey(binding.ProtocolTCP, types.L4PortAddr, "tp_src")
-	MatchTCPv6SrcPort  = types.NewMatchKey(binding.ProtocolTCPv6, types.L4PortAddr, "tp_src")
-	MatchUDPSrcPort    = types.NewMatchKey(binding.ProtocolUDP, types.L4PortAddr, "tp_src")
-	MatchUDPv6SrcPort  = types.NewMatchKey(binding.ProtocolUDPv6, types.L4PortAddr, "tp_src")
-	Unsupported        = types.NewMatchKey(binding.ProtocolIP, types.UnSupported, "unknown")
+	MatchDstIP          = types.NewMatchKey(binding.ProtocolIP, types.IPAddr, "nw_dst")
+	MatchSrcIP          = types.NewMatchKey(binding.ProtocolIP, types.IPAddr, "nw_src")
+	MatchDstIPNet       = types.NewMatchKey(binding.ProtocolIP, types.IPNetAddr, "nw_dst")
+	MatchSrcIPNet       = types.NewMatchKey(binding.ProtocolIP, types.IPNetAddr, "nw_src")
+	MatchDstIPv6        = types.NewMatchKey(binding.ProtocolIPv6, types.IPAddr, "ipv6_dst")
+	MatchSrcIPv6        = types.NewMatchKey(binding.ProtocolIPv6, types.IPAddr, "ipv6_src")
+	MatchDstIPNetv6     = types.NewMatchKey(binding.ProtocolIPv6, types.IPNetAddr, "ipv6_dst")
+	MatchSrcIPNetv6     = types.NewMatchKey(binding.ProtocolIPv6, types.IPNetAddr, "ipv6_src")
+	MatchDstOFPort      = types.NewMatchKey(binding.ProtocolIP, types.OFPortAddr, "reg1[0..31]")
+	MatchSrcOFPort      = types.NewMatchKey(binding.ProtocolIP, types.OFPortAddr, "in_port")
+	MatchTCPDstPort     = types.NewMatchKey(binding.ProtocolTCP, types.L4PortAddr, "tp_dst")
+	MatchTCPv6DstPort   = types.NewMatchKey(binding.ProtocolTCPv6, types.L4PortAddr, "tp_dst")
+	MatchUDPDstPort     = types.NewMatchKey(binding.ProtocolUDP, types.L4PortAddr, "tp_dst")
+	MatchUDPv6DstPort   = types.NewMatchKey(binding.ProtocolUDPv6, types.L4PortAddr, "tp_dst")
+	MatchSCTPDstPort    = types.NewMatchKey(binding.ProtocolSCTP, types.L4PortAddr, "tp_dst")
+	MatchSCTPv6DstPort  = types.NewMatchKey(binding.ProtocolSCTPv6, types.L4PortAddr, "tp_dst")
+	MatchTCPSrcPort     = types.NewMatchKey(binding.ProtocolTCP, types.L4PortAddr, "tp_src")
+	MatchTCPv6SrcPort   = types.NewMatchKey(binding.ProtocolTCPv6, types.L4PortAddr, "tp_src")
+	MatchUDPSrcPort     = types.NewMatchKey(binding.ProtocolUDP, types.L4PortAddr, "tp_src")
+	MatchUDPv6SrcPort   = types.NewMatchKey(binding.ProtocolUDPv6, types.L4PortAddr, "tp_src")
+	MatchServiceGroupID = types.NewMatchKey(binding.ProtocolIP, types.ServiceGroupIDAddr, "reg7[0..31]")
+	Unsupported         = types.NewMatchKey(binding.ProtocolIP, types.UnSupported, "unknown")
 
 	// metricFlowIdentifier is used to identify metric flows in metric table.
 	// There could be other flows like default flow and Traceflow flows in the table. Only metric flows are supposed to
@@ -161,6 +162,25 @@ func (a *OFPortAddress) GetValue() interface{} {
 
 func NewOFPortAddress(addr int32) *OFPortAddress {
 	a := OFPortAddress(addr)
+	return &a
+}
+
+type ServiceGroupIDAddress binding.GroupIDType
+
+func (a *ServiceGroupIDAddress) GetMatchKey(addrType types.AddressType) *types.MatchKey {
+	return MatchServiceGroupID
+}
+
+func (a *ServiceGroupIDAddress) GetMatchValue() string {
+	return fmt.Sprintf("%d", uint32(*a))
+}
+
+func (a *ServiceGroupIDAddress) GetValue() interface{} {
+	return uint32(*a)
+}
+
+func NewServiceGroupIDAddress(groupID binding.GroupIDType) *ServiceGroupIDAddress {
+	a := ServiceGroupIDAddress(groupID)
 	return &a
 }
 

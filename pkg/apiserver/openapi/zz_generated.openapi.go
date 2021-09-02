@@ -1340,11 +1340,25 @@ func schema_pkg_apis_controlplane_v1beta2_NetworkPolicyPeer(ref common.Reference
 							},
 						},
 					},
+					"toServices": {
+						SchemaProps: spec.SchemaProps{
+							Description: "A list of ServiceReference. This field can only be possibly set for NetworkPolicyPeer of egress rules.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.ServiceReference"),
+									},
+								},
+							},
+						},
+					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.IPBlock"},
+			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.IPBlock", "antrea.io/antrea/pkg/apis/controlplane/v1beta2.ServiceReference"},
 	}
 }
 

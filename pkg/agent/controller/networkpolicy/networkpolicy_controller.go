@@ -33,6 +33,7 @@ import (
 	"antrea.io/antrea/pkg/agent/flowexporter/connections"
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/openflow"
+	proxytypes "antrea.io/antrea/pkg/agent/proxy/types"
 	"antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	"antrea.io/antrea/pkg/querier"
@@ -110,6 +111,8 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 	ifaceStore interfacestore.InterfaceStore,
 	nodeName string,
 	entityUpdates <-chan types.EntityReference,
+	groupCounters []proxytypes.GroupCounter,
+	groupIDUpdates <-chan string,
 	antreaPolicyEnabled bool,
 	statusManagerEnabled bool,
 	loggingEnabled bool,
@@ -135,8 +138,8 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 			c.ofClient.RegisterPacketInHandler(uint8(openflow.PacketInReasonNP), "dnsresponse", c.fqdnController)
 		}
 	}
-	c.reconciler = newReconciler(ofClient, ifaceStore, idAllocator, c.fqdnController)
-	c.ruleCache = newRuleCache(c.enqueueRule, entityUpdates)
+	c.reconciler = newReconciler(ofClient, ifaceStore, idAllocator, c.fqdnController, groupCounters)
+	c.ruleCache = newRuleCache(c.enqueueRule, entityUpdates, groupIDUpdates)
 	if statusManagerEnabled {
 		c.statusManager = newStatusController(antreaClientGetter, nodeName, c.ruleCache)
 	}
