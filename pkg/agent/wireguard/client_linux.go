@@ -38,6 +38,7 @@ import (
 
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/types"
+	"antrea.io/antrea/pkg/agent/util"
 )
 
 const defaultWireGuardInterfaceName = "antrea-wg0"
@@ -61,6 +62,7 @@ type client struct {
 	privateKey              wgtypes.Key
 	peerPublicKeyByNodeName *sync.Map
 	wireGuardConfig         *config.WireGuardConfig
+	gatewayConfig           *config.GatewayConfig
 }
 
 func New(clientSet clientset.Interface, nodeConfig *config.NodeConfig, wireGuardConfig *config.WireGuardConfig) (Interface, error) {
@@ -77,6 +79,7 @@ func New(clientSet clientset.Interface, nodeConfig *config.NodeConfig, wireGuard
 		k8sClient:               clientSet,
 		wireGuardConfig:         wireGuardConfig,
 		peerPublicKeyByNodeName: &sync.Map{},
+		gatewayConfig:           nodeConfig.GatewayConfig,
 	}
 	return c, nil
 }
@@ -92,6 +95,27 @@ func (client *client) Init() error {
 		return err
 	}
 	if err := netlink.LinkSetUp(link); err != nil {
+		return err
+	}
+	// Configure the IP addresses same as Antrea gateway so iptables MASQUERADE target will select it as source address.
+	// It's necessary to make Service traffic requiring SNAT (e.g. host to ClusterIP, external to NodePort) accepted by
+	// peer Node and to make their response routed back correctly.
+	// It uses "/32" mask for IPv4 address and "/128" mask for IPv6 address to avoid impacting routes on Antrea gateway.
+	var gatewayIPs []*net.IPNet
+	if client.gatewayConfig.IPv4 != nil {
+		gatewayIPs = append(gatewayIPs, &net.IPNet{
+			IP:   client.gatewayConfig.IPv4,
+			Mask: net.CIDRMask(32, 32),
+		})
+	}
+	if client.gatewayConfig.IPv6 != nil {
+		gatewayIPs = append(gatewayIPs, &net.IPNet{
+			IP:   client.gatewayConfig.IPv6,
+			Mask: net.CIDRMask(128, 128),
+		})
+	}
+	// This must be executed after netlink.LinkSetUp as the latter ensures link.Attrs().Index is set.
+	if err := util.ConfigureLinkAddresses(link.Attrs().Index, gatewayIPs); err != nil {
 		return err
 	}
 	client.wireGuardConfig.LinkIndex = link.Attrs().Index
