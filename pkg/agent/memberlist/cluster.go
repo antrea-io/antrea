@@ -257,13 +257,10 @@ func (c *Cluster) newClusterMember(node *corev1.Node) (string, error) {
 		return "", fmt.Errorf("obtain IP addresses from K8s Node failed: %v", err)
 	}
 	nodeAddr := nodeAddrs.IPv4
-	fmtStr := "%s:%d"
 	if nodeAddr == nil {
 		nodeAddr = nodeAddrs.IPv6
-		fmtStr = "[%s]:%d"
 	}
-	member := fmt.Sprintf(fmtStr, nodeAddr, c.bindPort)
-	return member, nil
+	return nodeAddr.String(), nil
 }
 
 func (c *Cluster) allClusterMembers() (clusterNodes []string, err error) {
