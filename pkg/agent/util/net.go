@@ -90,6 +90,18 @@ func GenerateNodeTunnelInterfaceName(nodeName string) string {
 	return generateInterfaceName(GenerateNodeTunnelInterfaceKey(nodeName), nodeName, false)
 }
 
+// The GenerateMacAddr is guaranteed to be consistent: the same key will always yield the same
+// MAC address.
+func GenerateMacAddr(key string) net.HardwareAddr {
+	hash := sha1.New() // #nosec G401: not used for security purposes
+	io.WriteString(hash, key)
+	macKey := hash.Sum(nil)
+	// In the first byte of the MAC, the 'multicast' bit should be
+	// clear and 'locally administered' bit should be set.
+	macKey[0] = (macKey[0] & 0xFE) | 0x02
+	return net.HardwareAddr(macKey[:6])
+}
+
 type LinkNotFound struct {
 	error
 }

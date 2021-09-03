@@ -406,7 +406,7 @@ func (mr *MockClientMockRecorder) InstallPodFlows(arg0, arg1, arg2, arg3 interfa
 }
 
 // InstallPodSNATFlows mocks base method
-func (m *MockClient) InstallPodSNATFlows(arg0 uint32, arg1 net.IP, arg2 uint32) error {
+func (m *MockClient) InstallPodSNATFlows(arg0 uint32, arg1 net.HardwareAddr, arg2 net.IP, arg3 uint32) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "InstallPodSNATFlows", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
@@ -414,9 +414,9 @@ func (m *MockClient) InstallPodSNATFlows(arg0 uint32, arg1 net.IP, arg2 uint32) 
 }
 
 // InstallPodSNATFlows indicates an expected call of InstallPodSNATFlows
-func (mr *MockClientMockRecorder) InstallPodSNATFlows(arg0, arg1, arg2 interface{}) *gomock.Call {
+func (mr *MockClientMockRecorder) InstallPodSNATFlows(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallPodSNATFlows", reflect.TypeOf((*MockClient)(nil).InstallPodSNATFlows), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallPodSNATFlows", reflect.TypeOf((*MockClient)(nil).InstallPodSNATFlows), arg0, arg1, arg2, arg3)
 }
 
 // InstallPolicyRuleFlows mocks base method
@@ -434,17 +434,17 @@ func (mr *MockClientMockRecorder) InstallPolicyRuleFlows(arg0 interface{}) *gomo
 }
 
 // InstallSNATMarkFlows mocks base method
-func (m *MockClient) InstallSNATMarkFlows(arg0 net.IP, arg1 uint32) error {
+func (m *MockClient) InstallSNATMarkFlows(arg0 net.HardwareAddr, arg1 net.IP, arg2 uint32) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "InstallSNATMarkFlows", arg0, arg1)
+	ret := m.ctrl.Call(m, "InstallSNATMarkFlows", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // InstallSNATMarkFlows indicates an expected call of InstallSNATMarkFlows
-func (mr *MockClientMockRecorder) InstallSNATMarkFlows(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockClientMockRecorder) InstallSNATMarkFlows(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallSNATMarkFlows", reflect.TypeOf((*MockClient)(nil).InstallSNATMarkFlows), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallSNATMarkFlows", reflect.TypeOf((*MockClient)(nil).InstallSNATMarkFlows), arg0, arg1, arg2)
 }
 
 // InstallServiceFlows mocks base method

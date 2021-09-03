@@ -1915,12 +1915,12 @@ func (c *client) snatCommonFlows(nodeIP net.IP, localSubnet net.IPNet, localGate
 
 // snatIPFromTunnelFlow generates a flow that marks SNAT packets tunnelled from
 // remote Nodes. The SNAT IP matches the packet's tunnel destination IP.
-func (c *client) snatIPFromTunnelFlow(snatIP net.IP, mark uint32) binding.Flow {
+func (c *client) snatIPFromTunnelFlow(mac net.HardwareAddr, snatIP net.IP, mark uint32) binding.Flow {
 	ipProto := getIPProtocol(snatIP)
 	return c.pipeline[snatTable].BuildFlow(priorityNormal).
 		MatchProtocol(ipProto).
 		MatchCTStateNew(true).MatchCTStateTrk(true).
-		MatchTunnelDst(snatIP).
+		MatchSrcMAC(mac).
 		Action().LoadPktMarkRange(mark, snatPktMarkRange).
 		Action().GotoTable(l3DecTTLTable).
 		Cookie(c.cookieAllocator.Request(cookie.SNAT).Raw()).
@@ -1931,8 +1931,8 @@ func (c *client) snatIPFromTunnelFlow(snatIP net.IP, mark uint32) binding.Flow {
 // the SNAT IP exists on the local Node, it sets the packet mark with the ID of
 // the SNAT IP, for the traffic from the ofPort to external; if the SNAT IP is
 // on a remote Node, it tunnels the packets to the SNAT IP.
-func (c *client) snatRuleFlow(ofPort uint32, snatIP net.IP, snatMark uint32, localGatewayMAC net.HardwareAddr) binding.Flow {
-	ipProto := getIPProtocol(snatIP)
+func (c *client) snatRuleFlow(ofPort uint32, mac net.HardwareAddr, tunnelPeerIP net.IP, snatMark uint32) binding.Flow {
+	ipProto := getIPProtocol(tunnelPeerIP)
 	snatTable := c.pipeline[snatTable]
 	if snatMark != 0 {
 		// Local SNAT IP.
@@ -1949,10 +1949,10 @@ func (c *client) snatRuleFlow(ofPort uint32, snatIP net.IP, snatMark uint32, loc
 	return snatTable.BuildFlow(priorityNormal).
 		MatchProtocol(ipProto).
 		MatchInPort(ofPort).
-		Action().SetSrcMAC(localGatewayMAC).
+		Action().SetSrcMAC(mac).
 		Action().SetDstMAC(globalVirtualMAC).
-		// Set tunnel destination to the SNAT IP.
-		Action().SetTunnelDst(snatIP).
+		// Set tunnel destination to the destination node transport IP.
+		Action().SetTunnelDst(tunnelPeerIP).
 		Action().GotoTable(l3DecTTLTable).
 		Cookie(c.cookieAllocator.Request(cookie.SNAT).Raw()).
 		Done()

@@ -26,8 +26,8 @@ import (
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 )
 
-func (c *client) snatMarkFlows(snatIP net.IP, mark uint32) []binding.Flow {
-	return []binding.Flow{c.snatIPFromTunnelFlow(snatIP, mark)}
+func (c *client) snatMarkFlows(mac net.HardwareAddr, snatIP net.IP, mark uint32) []binding.Flow {
+	return []binding.Flow{c.snatIPFromTunnelFlow(mac, snatIP, mark)}
 }
 
 func (c *client) l3FwdFlowToRemoteViaRouting(localGatewayMAC net.HardwareAddr, remoteGatewayMAC net.HardwareAddr,

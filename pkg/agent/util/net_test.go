@@ -20,6 +20,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"antrea.io/antrea/pkg/util/ip"
 )
 
@@ -46,6 +48,28 @@ func TestGenerateContainerInterfaceName(t *testing.T) {
 	iface2 := GenerateContainerInterfaceName(podName1, podNamespace, containerID1)
 	if iface1 == iface2 {
 		t.Errorf("failed to differentiate interfaces with pods that have the same pod namespace and name")
+	}
+}
+
+func TestGenerateMacAddr(t *testing.T) {
+	testcases := []struct {
+		// input
+		key string
+		// expectations
+		expectedMac net.HardwareAddr
+	}{
+		{
+			key: "192.168.0.1",
+			expectedMac: net.HardwareAddr([]byte{0x26, 0xed, 0x8b, 0xba, 0xbb, 0x59}),
+		},
+		{
+			key: "pod1-abcde-12345",
+			expectedMac: net.HardwareAddr([]byte{0xba, 0x76, 0x6, 0x49, 0xfb, 0xf8}),
+		},
+	}
+	for _, tc := range testcases {
+		parsedMac := GenerateMacAddr(tc.key)
+		assert.Equal(t, tc.expectedMac, parsedMac)
 	}
 }
 

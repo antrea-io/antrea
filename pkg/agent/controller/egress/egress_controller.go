@@ -31,6 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/watch"
 	coreinformers "k8s.io/client-go/informers/core/v1"
+	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/client-go/util/workqueue"
@@ -42,12 +43,15 @@ import (
 	"antrea.io/antrea/pkg/agent/memberlist"
 	"antrea.io/antrea/pkg/agent/openflow"
 	"antrea.io/antrea/pkg/agent/route"
+	"antrea.io/antrea/pkg/agent/types"
+	"antrea.io/antrea/pkg/agent/util"
 	cpv1b2 "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	crdv1a2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
 	clientsetversioned "antrea.io/antrea/pkg/client/clientset/versioned"
 	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha2"
 	crdlisters "antrea.io/antrea/pkg/client/listers/crd/v1alpha2"
 	"antrea.io/antrea/pkg/controller/metrics"
+	utilip "antrea.io/antrea/pkg/util/ip"
 	"antrea.io/antrea/pkg/util/k8s"
 )
 
@@ -118,6 +122,8 @@ type EgressController struct {
 	egressInformer     cache.SharedIndexInformer
 	egressLister       crdlisters.EgressLister
 	egressListerSynced cache.InformerSynced
+	nodeLister         corelisters.NodeLister
+	nodeListerSynced   cache.InformerSynced
 	queue              workqueue.RateLimitingInterface
 
 	// Use an interface for IP detector to enable testing.
@@ -168,6 +174,8 @@ func NewEgressController(
 		egressLister:         egressInformer.Lister(),
 		egressListerSynced:   egressInformer.Informer().HasSynced,
 		nodeName:             nodeName,
+		nodeLister:           nodeInformer.Lister(),
+		nodeListerSynced:     nodeInformer.Informer().HasSynced,
 		ifaceStore:           ifaceStore,
 		egressGroups:         map[string]sets.String{},
 		egressStates:         map[string]*egressState{},
@@ -275,7 +283,8 @@ func (c *EgressController) Run(stopCh <-chan struct{}) {
 
 	go c.localIPDetector.Run(stopCh)
 
-	if !cache.WaitForNamedCacheSync(controllerName, stopCh, c.egressListerSynced, c.localIPDetector.HasSynced) {
+	cacheSyncs := []cache.InformerSynced{c.egressListerSynced, c.nodeListerSynced, c.localIPDetector.HasSynced}
+	if !cache.WaitForNamedCacheSync(controllerName, stopCh, cacheSyncs...) {
 		return
 	}
 
@@ -349,7 +358,7 @@ func (c *EgressController) processNextWorkItem() bool {
 // and iptables rule for this IP and the mark.
 // If the Egress IP is changed from local to non local, it uninstalls flows and iptables rule and releases the mark.
 // The method returns the mark on success. Non local Egresses use 0 as the mark.
-func (c *EgressController) realizeEgressIP(egressName, egressIP string) (uint32, error) {
+func (c *EgressController) realizeEgressIP(mac net.HardwareAddr, egressName, egressIP string) (uint32, error) {
 	isLocalIP := c.localIPDetector.IsLocalIP(egressIP)
 
 	c.egressIPStatesMutex.Lock()
@@ -378,7 +387,7 @@ func (c *EgressController) realizeEgressIP(egressName, egressIP string) (uint32,
 		}
 		// Ensure datapath is installed properly.
 		if !ipState.flowsInstalled {
-			if err := c.ofClient.InstallSNATMarkFlows(ipState.egressIP, ipState.mark); err != nil {
+			if err := c.ofClient.InstallSNATMarkFlows(mac, ipState.egressIP, ipState.mark); err != nil {
 				return 0, fmt.Errorf("error installing SNAT mark flows for IP %s: %v", ipState.egressIP, err)
 			}
 			ipState.flowsInstalled = true
@@ -578,7 +587,6 @@ func (c *EgressController) syncEgress(egressName string) error {
 		}
 		return err
 	}
-
 	eState, exist := c.getEgressState(egressName)
 	// If the EgressIP changes, uninstalls this Egress first.
 	if exist && eState.egressIP != egress.Spec.EgressIP {
@@ -611,8 +619,13 @@ func (c *EgressController) syncEgress(egressName string) error {
 		}
 	}
 
+	// Generate the mac by egress ip, and use the mac to identify the egress SNAT packets.
+	// Use the generated mac as packets source mac, and redirect the SNAT packets to the Egress nodes, if the packets
+	// source mac are generated mac, then add snat mark for them.
+	mac := util.GenerateMacAddr(egress.Spec.EgressIP)
+
 	// Realize the latest EgressIP and get the desired mark.
-	mark, err := c.realizeEgressIP(egressName, egress.Spec.EgressIP)
+	mark, err := c.realizeEgressIP(mac, egressName, egress.Spec.EgressIP)
 	if err != nil {
 		return err
 	}
@@ -631,6 +644,22 @@ func (c *EgressController) syncEgress(egressName string) error {
 		return fmt.Errorf("update Egress %s status error: %v", egressName, err)
 	}
 
+	nodeTransportAddrSet, err := c.getNodeTransportAddrSet()
+	if err!= nil {
+		return err
+	}
+	nodeTranportAddr, exists := nodeTransportAddrSet[egress.Status.EgressNode]
+	if !exists {
+		return fmt.Errorf("error when getting node %s tranport address: %v", egress.Status.EgressNode, err)
+	}
+
+	var transportIP net.IP
+	if net.ParseIP(egress.Spec.EgressIP).To4() != nil {
+		transportIP = nodeTranportAddr.IPv4
+	} else {
+		transportIP = nodeTranportAddr.IPv6
+	}
+
 	// Copy the previous ofPorts and Pods. They will be used to identify stale ofPorts and Pods.
 	staleOFPorts := eState.ofPorts.Union(nil)
 	stalePods := eState.pods.Union(nil)
@@ -646,7 +675,6 @@ func (c *EgressController) syncEgress(egressName string) error {
 		return pods.Union(nil)
 	}()
 
-	egressIP := net.ParseIP(eState.egressIP)
 	// Install SNAT flows for desired Pods.
 	for pod := range pods {
 		eState.pods.Insert(pod)
@@ -671,7 +699,7 @@ func (c *EgressController) syncEgress(egressName string) error {
 			staleOFPorts.Delete(ofPort)
 			continue
 		}
-		if err := c.ofClient.InstallPodSNATFlows(uint32(ofPort), egressIP, mark); err != nil {
+		if err := c.ofClient.InstallPodSNATFlows(uint32(ofPort), mac, transportIP, mark); err != nil {
 			return err
 		}
 		eState.ofPorts.Insert(ofPort)
@@ -682,6 +710,37 @@ func (c *EgressController) syncEgress(egressName string) error {
 		return err
 	}
 	return nil
+}
+
+func (c *EgressController) getNodeTransportAddrSet() (map[string]*utilip.DualStackIPs, error) {
+	nodes, err := c.nodeLister.List(labels.Everything())
+	if err != nil {
+		return nil, fmt.Errorf("error when listing Nodes: %v", err)
+	}
+
+	transportAddrSet := make(map[string]*utilip.DualStackIPs, len(nodes))
+
+	for _, node := range nodes {
+		var transportAddrs = new(utilip.DualStackIPs)
+		transportAddrsStr := node.Annotations[types.NodeTransportAddressAnnotationKey]
+		if transportAddrsStr != "" {
+			for _, addr := range strings.Split(transportAddrsStr, ",") {
+				nodeAddr := net.ParseIP(addr)
+				if nodeAddr == nil {
+					return nil, fmt.Errorf("invalid annotation for transport-address on Node %s: %s", node.Name, transportAddrsStr)
+				}
+				if nodeAddr.To4() != nil {
+					transportAddrs.IPv4 = nodeAddr
+				} else {
+					transportAddrs.IPv6 = nodeAddr
+				}
+			}
+		}
+		if transportAddrs != nil {
+			transportAddrSet[node.Name] = transportAddrs
+		}
+	}
+	return transportAddrSet, nil
 }
 
 func (c *EgressController) uninstallEgress(egressName string, eState *egressState) error {
