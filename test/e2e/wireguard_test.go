@@ -120,7 +120,7 @@ func testPodConnectivity(t *testing.T, data *TestData) {
 		var nodeIP string
 		for _, n := range clusterInfo.nodes {
 			if n.name == nodeName1 {
-				nodeIP = n.ip
+				nodeIP = n.ip()
 				break
 			}
 		}
