@@ -303,14 +303,14 @@ function deliver_antrea_windows {
         for i in `seq 3`; do
             winVMIPs=$(govc vm.ip -wait=1m -a ${WORKER_NAME})
             if [[ $winVMIPs != "" ]]; then
-                echo "Windows VM ${WORKER_NAME} powers on"
+                echo "Windows VM ${WORKER_NAME} powered on"
                 break
             fi
-            echo "Windows VM ${WORKER_NAME} fails to power on"
+            echo "Windows VM ${WORKER_NAME} failed to power on"
             govc vm.power -on ${WORKER_NAME} || true
         done
         if [[ $winVMIPs == "" ]]; then
-            echo "Windows VM ${WORKER_NAME} didn't power on, exiting"
+            echo "Windows VM ${WORKER_NAME} didn't power on after 3 tries, exiting"
             exit 1
         fi
         IP=$(kubectl get node "${WORKER_NAME}" -o jsonpath='{.status.addresses[0].address}')
