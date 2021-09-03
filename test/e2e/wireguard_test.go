@@ -133,6 +133,8 @@ func testServiceConnectivity(t *testing.T, data *TestData) {
 	clientPodName := "hostnetwork-pod"
 	svcName := "agnhost"
 	clientPodNode := nodeName(0)
+	// nodeIP() returns IPv6 address if this is a IPv6 cluster.
+	clientPodNodeIP := nodeIP(0)
 	serverPodNode := nodeName(1)
 	svc, cleanup := data.createAgnhostServiceAndBackendPods(t, svcName, serverPodNode, corev1.ServiceTypeNodePort)
 	defer cleanup()
@@ -145,6 +147,6 @@ func testServiceConnectivity(t *testing.T, data *TestData) {
 	err := data.runNetcatCommandFromTestPod(clientPodName, testNamespace, svc.Spec.ClusterIP, 80)
 	require.NoError(t, err, "Pod %s should be able to connect the service's ClusterIP %s, but was not able to connect", clientPodName, net.JoinHostPort(svc.Spec.ClusterIP, fmt.Sprint(80)))
 
-	err = data.runNetcatCommandFromTestPod(clientPodName, testNamespace, "127.0.0.1", svc.Spec.Ports[0].NodePort)
-	require.NoError(t, err, "Pod %s should be able to connect the service's NodePort 127.0.0.1:%s, but was not able to connect", clientPodName, svc.Spec.Ports[0].NodePort)
+	err = data.runNetcatCommandFromTestPod(clientPodName, testNamespace, clientPodNodeIP, svc.Spec.Ports[0].NodePort)
+	require.NoError(t, err, "Pod %s should be able to connect the service's NodePort %s:%d, but was not able to connect", clientPodName, clientPodNodeIP, svc.Spec.Ports[0].NodePort)
 }
