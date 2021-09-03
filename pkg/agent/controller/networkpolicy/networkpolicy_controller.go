@@ -171,9 +171,10 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 		c.l7RuleReconciler = l7engine.NewReconciler()
 		c.l7VlanIDAllocator = newL7VlanIDAllocator()
 	}
-
+	klog.Infof("======= NewNetworkPolicyController")
 	if antreaPolicyEnabled {
 		var err error
+		klog.Infof("=========== start fqdn controller")
 		if c.fqdnController, err = newFQDNController(ofClient, idAllocator, dnsServerOverride, c.enqueueRule, v4Enabled, v6Enabled, gwPort); err != nil {
 			return nil, err
 		}

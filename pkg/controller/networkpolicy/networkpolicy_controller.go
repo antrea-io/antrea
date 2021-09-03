@@ -411,6 +411,7 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 		labelIdentityInterface:     labelIdentityInterface,
 		stretchNPEnabled:           stretchedNPEnabled,
 	}
+	klog.Infof("======= in antrea controller new np controller")
 	n.groupingInterface.AddEventHandler(appliedToGroupType, n.enqueueAppliedToGroup)
 	n.groupingInterface.AddEventHandler(addressGroupType, n.enqueueAddressGroup)
 	n.groupingInterface.AddEventHandler(internalGroupType, n.enqueueInternalGroup)

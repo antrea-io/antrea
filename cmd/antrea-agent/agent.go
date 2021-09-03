@@ -427,7 +427,6 @@ func run(o *Options) error {
 		gwPort = nodeConfig.GatewayConfig.OFPort
 		tunPort = nodeConfig.TunnelOFPort
 	}
-
 	nodeKey := nodeConfig.Name
 	if o.nodeType == config.ExternalNode {
 		nodeKey = k8s.NamespacedName(o.config.ExternalNode.ExternalNodeNamespace, nodeKey)

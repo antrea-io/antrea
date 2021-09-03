@@ -275,7 +275,7 @@ function run_e2e_vms {
     configure_vm_agent
     echo "====== Running Antrea e2e Tests for VM ======"
     mkdir -p `pwd`/antrea-test-logs
-    go test -v -timeout=100m antrea.io/antrea/test/e2e -run=TestVMAgent --logs-export-dir `pwd`/antrea-test-logs -provider=remote -windowsVMs="${WIN_HOSTNAMES[*]}" -linuxVMs="${LIN_HOSTNAMES[*]}"
+    go test -v -timeout=100m antrea.io/antrea/test/e2e -run=TestVMAgent --logs-export-dir `pwd`/antrea-test-logs -provider=remote -windowsVMs="${WIN_HOSTNAMES[*]}" -linuxVMs="${LIN_HOSTNAMES[*]}" -run=TestAntreaPolicy
     if [[ "$?" != "0" ]]; then
         TEST_FAILURE=true
     fi

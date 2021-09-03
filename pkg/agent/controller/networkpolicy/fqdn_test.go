@@ -60,7 +60,7 @@ func TestAddFQDNRule(t *testing.T) {
 	tests := []struct {
 		name                       string
 		existingSelectorToRuleIDs  map[fqdnSelectorItem]sets.String
-		existingDNSCache           map[string]dnsMeta
+		existingDNSCache           map[string]map[dnsQueryScope]dnsMeta
 		existingFQDNToSelectorItem map[string]map[fqdnSelectorItem]struct{}
 		ruleID                     string
 		fqdns                      []string
@@ -92,7 +92,7 @@ func TestAddFQDNRule(t *testing.T) {
 			map[fqdnSelectorItem]sets.String{
 				selectorItem1: sets.NewString("mockRule1"),
 			},
-			map[string]dnsMeta{
+			map[string]map[dnsQueryScope]dnsMeta{
 				"test.antrea.io": {},
 			},
 			map[string]map[fqdnSelectorItem]struct{}{
@@ -160,7 +160,7 @@ func TestDeleteFQDNRule(t *testing.T) {
 	tests := []struct {
 		name                    string
 		previouslyAddedRules    []fqdnRuleAddArgs
-		existingDNSCache        map[string]dnsMeta
+		existingDNSCache        map[string]map[dnsQueryScope]dnsMeta
 		ruleID                  string
 		fqdns                   []string
 		finalSelectorToRuleIDs  map[fqdnSelectorItem]sets.String
@@ -176,7 +176,7 @@ func TestDeleteFQDNRule(t *testing.T) {
 					sets.NewInt32(1),
 				},
 			},
-			map[string]dnsMeta{
+			map[string]map[dnsQueryScope]dnsMeta{
 				"test.antrea.io": {},
 			},
 			"mockRule1",
@@ -199,7 +199,7 @@ func TestDeleteFQDNRule(t *testing.T) {
 					sets.NewInt32(2),
 				},
 			},
-			map[string]dnsMeta{
+			map[string]map[dnsQueryScope]dnsMeta{
 				"test.antrea.io": {},
 			},
 			"mockRule1",
@@ -228,7 +228,7 @@ func TestDeleteFQDNRule(t *testing.T) {
 					sets.NewInt32(2),
 				},
 			},
-			map[string]dnsMeta{
+			map[string]map[dnsQueryScope]dnsMeta{
 				"test.antrea.io": {},
 			},
 			"mockRule1",
@@ -257,7 +257,7 @@ func TestDeleteFQDNRule(t *testing.T) {
 					sets.NewInt32(2),
 				},
 			},
-			map[string]dnsMeta{
+			map[string]map[dnsQueryScope]dnsMeta{
 				"test.antrea.io":  {},
 				"maps.google.com": {},
 			},
@@ -303,7 +303,7 @@ func TestLookupIPFallback(t *testing.T) {
 	defer cancel()
 	// not ideal as a unit test because it requires the ability to resolve
 	// DNS names, but we don't expect this to be an actual problem.
-	err := f.lookupIP(ctx, "www.google.com")
+	err := f.lookupIP(ctx, "www.google.com", dnsScopeDualStack)
 	require.NoError(t, err, "Error when resolving name")
 }
 
@@ -345,7 +345,7 @@ func TestGetIPsForFQDNSelectors(t *testing.T) {
 		name                       string
 		fqdns                      []string
 		existingSelectorItemToFQDN map[fqdnSelectorItem]sets.String
-		existingDNSCache           map[string]dnsMeta
+		existingDNSCache           map[string]map[dnsQueryScope]dnsMeta
 		expectedMatchedIPs         []net.IP
 	}{
 		{
@@ -354,13 +354,14 @@ func TestGetIPsForFQDNSelectors(t *testing.T) {
 			existingSelectorItemToFQDN: map[fqdnSelectorItem]sets.String{
 				selectorItem: sets.NewString("test.antrea.io"),
 			},
-			existingDNSCache: map[string]dnsMeta{
+			existingDNSCache: map[string]map[dnsQueryScope]dnsMeta{
 				"test.antrea.io": {
-					responseIPs: map[string]net.IP{
-						"127.0.0.1":    net.ParseIP("127.0.0.1"),
-						"192.155.12.1": net.ParseIP("192.155.12.1"),
-						"192.158.1.38": net.ParseIP("192.158.1.38"),
-					},
+					dnsScopeIPv4: {
+						responseIPs: map[string]net.IP{
+							"127.0.0.1":    net.ParseIP("127.0.0.1"),
+							"192.155.12.1": net.ParseIP("192.155.12.1"),
+							"192.158.1.38": net.ParseIP("192.158.1.38"),
+						}},
 				},
 			},
 			expectedMatchedIPs: []net.IP{net.ParseIP("127.0.0.1"), net.ParseIP("192.155.12.1"), net.ParseIP("192.158.1.38")},
@@ -386,4 +387,55 @@ func TestGetIPsForFQDNSelectors(t *testing.T) {
 			assert.ElementsMatch(t, tc.expectedMatchedIPs, gotOutput)
 		})
 	}
+}
+func TestDualStackGetIPForSelectors(t *testing.T) {
+	controller := gomock.NewController(t)
+	defer controller.Finish()
+	f, _ := newMockFQDNController(t, controller, nil)
+	testFQDNSelector := fqdnSelectorItem{
+		matchRegex: "^.*antrea[.]io$",
+	}
+	f.dnsEntryCache = map[string]map[dnsQueryScope]dnsMeta{
+		"test.antrea.io": {},
+	}
+	f.fqdnToSelectorItem = map[string]map[fqdnSelectorItem]struct{}{
+		"test.antrea.io": {
+			testFQDNSelector: struct{}{},
+		},
+	}
+	f.selectorItemToFQDN = map[fqdnSelectorItem]sets.String{
+		testFQDNSelector: sets.NewString("test.antrea.io"),
+	}
+	f.selectorItemToRuleIDs = map[fqdnSelectorItem]sets.String{
+		testFQDNSelector: sets.NewString("r1"),
+	}
+	waitChPkt1, waitChPkt2 := make(chan error, 1), make(chan error, 1)
+	ipv4Address1, _, _ := net.ParseCIDR("10.0.0.1/32")
+	ipv4Address2, _, _ := net.ParseCIDR("10.0.0.2/32")
+	ipv6Address, _, _ := net.ParseCIDR("2001:db8:3333:4444:5555:6666:7777:8888/128")
+	responseV4IPs1 := map[string]net.IP{"10.0.0.1": ipv4Address1}
+	responseV4IPs2 := map[string]net.IP{"10.0.0.2": ipv4Address2}
+	responseV6IPs := map[string]net.IP{"2001:db8:3333:4444:5555:6666:7777:8888": ipv6Address}
+
+	f.onDNSResponse("test.antrea.io", dnsScopeIPv4, responseV4IPs1, 1, time.Now(), waitChPkt1)
+	// This simulates the reconciler, in reconciling a dirty rule r1 (which selects the fqdn test.antrea.io),
+	// tries to retrieve the latest IPs corresponding to that FQDN.
+	ip1 := f.getIPsForFQDNSelectors([]string{"*antrea.io"})
+	assert.Equal(t, []net.IP{ipv4Address1}, ip1)
+	f.ruleSyncTracker.dirtyRules = sets.NewString()
+
+	f.onDNSResponse("test.antrea.io", dnsScopeIPv6, responseV6IPs, 1, time.Now(), waitChPkt2)
+	ip2 := f.getIPsForFQDNSelectors([]string{"*antrea.io"})
+	assert.ElementsMatch(t, []net.IP{ipv4Address1, ipv6Address}, ip2)
+	f.ruleSyncTracker.dirtyRules = sets.NewString()
+
+	time.Sleep(time.Second)
+	f.onDNSResponse("test.antrea.io", dnsScopeIPv6, responseV6IPs, 1, time.Now(), waitChPkt1)
+	ip3 := f.getIPsForFQDNSelectors([]string{"*antrea.io"})
+	assert.ElementsMatch(t, []net.IP{ipv4Address1, ipv6Address}, ip3)
+	f.ruleSyncTracker.dirtyRules = sets.NewString()
+
+	f.onDNSResponse("test.antrea.io", dnsScopeIPv4, responseV4IPs2, 1, time.Now(), waitChPkt2)
+	ip4 := f.getIPsForFQDNSelectors([]string{"*antrea.io"})
+	assert.ElementsMatch(t, []net.IP{ipv4Address2, ipv6Address}, ip4)
 }

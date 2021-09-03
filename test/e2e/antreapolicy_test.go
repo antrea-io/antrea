@@ -73,24 +73,24 @@ const (
 
 // TestAntreaPolicyStats is the top-level test which contains all subtests for
 // AntreaPolicyStats related test cases so they can share setup, teardown.
-func TestAntreaPolicyStats(t *testing.T) {
-	skipIfHasWindowsNodes(t)
-	skipIfAntreaPolicyDisabled(t)
-	skipIfNetworkPolicyStatsDisabled(t)
-
-	data, err := setupTest(t)
-	if err != nil {
-		t.Fatalf("Error when setting up test: %v", err)
-	}
-	defer teardownTest(t, data)
-
-	t.Run("testANPNetworkPolicyStatsWithDropAction", func(t *testing.T) {
-		testANPNetworkPolicyStatsWithDropAction(t, data)
-	})
-	t.Run("testAntreaClusterNetworkPolicyStats", func(t *testing.T) {
-		testAntreaClusterNetworkPolicyStats(t, data)
-	})
-}
+//func TestAntreaPolicyStats(t *testing.T) {
+//	skipIfHasWindowsNodes(t)
+//	skipIfAntreaPolicyDisabled(t)
+//	skipIfNetworkPolicyStatsDisabled(t)
+//
+//	data, err := setupTest(t)
+//	if err != nil {
+//		t.Fatalf("Error when setting up test: %v", err)
+//	}
+//	defer teardownTest(t, data)
+//
+//	t.Run("testANPNetworkPolicyStatsWithDropAction", func(t *testing.T) {
+//		testANPNetworkPolicyStatsWithDropAction(t, data)
+//	})
+//	t.Run("testAntreaClusterNetworkPolicyStats", func(t *testing.T) {
+//		testAntreaClusterNetworkPolicyStats(t, data)
+//	})
+//}
 
 func failOnError(err error, t *testing.T) {
 	if err != nil {
@@ -3252,6 +3252,12 @@ func testFQDNPolicyInClusterService(t *testing.T) {
 		ipv6Svc.Spec.IPFamilies = []v1.IPFamily{v1.IPv6Protocol}
 		services = append(services, ipv6Svc)
 	}
+	if clusterInfo.podV6NetworkCIDR != "" && clusterInfo.podV4NetworkCIDR != "" {
+		dsSvc := k8sUtils.BuildService("ds-svc", namespaces["x"], 80, 80, map[string]string{"pod": "c"}, nil)
+		dsSvc.Spec.ClusterIP = "None"
+		dsSvc.Spec.IPFamilies = []v1.IPFamily{v1.IPv6Protocol, v1.IPv4Protocol}
+		services = append(services, dsSvc)
+	}
 
 	for _, service := range services {
 		k8sUtils.CreateOrUpdateService(service)
@@ -3262,13 +3268,17 @@ func testFQDNPolicyInClusterService(t *testing.T) {
 		return fmt.Sprintf("%s.%s.svc.cluster.local", service.Name, service.Namespace)
 	}
 
+	svcDNSWildcard := func(service *v1.Service) string {
+		return fmt.Sprintf("*%s.svc.cluster.local", service.Namespace)
+	}
+
 	builder := &ClusterNetworkPolicySpecBuilder{}
 	builder = builder.SetName("test-acnp-fqdn-cluster-svc").
 		SetTier("application").
 		SetPriority(1.0)
 	for idx, service := range services {
-		builder.AddFQDNRule(svcDNSName(service), ProtocolTCP, nil, nil, nil, fmt.Sprintf("r%d", idx*2), []ACNPAppliedToSpec{{NSSelector: map[string]string{"ns": namespaces["y"]}, PodSelector: map[string]string{"pod": "b"}}}, crdv1alpha1.RuleActionReject)
-		builder.AddFQDNRule(svcDNSName(service), ProtocolTCP, nil, nil, nil, fmt.Sprintf("r%d", idx*2+1), []ACNPAppliedToSpec{{NSSelector: map[string]string{"ns": namespaces["z"]}, PodSelector: map[string]string{"pod": "c"}}}, crdv1alpha1.RuleActionDrop)
+		builder.AddFQDNRule(svcDNSWildcard(service), ProtocolTCP, nil, nil, nil, fmt.Sprintf("r%d", idx*2), []ACNPAppliedToSpec{{NSSelector: map[string]string{"ns": namespaces["y"]}, PodSelector: map[string]string{"pod": "b"}}}, crdv1alpha1.RuleActionReject)
+		builder.AddFQDNRule(svcDNSWildcard(service), ProtocolTCP, nil, nil, nil, fmt.Sprintf("r%d", idx*2+1), []ACNPAppliedToSpec{{NSSelector: map[string]string{"ns": namespaces["z"]}, PodSelector: map[string]string{"pod": "c"}}}, crdv1alpha1.RuleActionDrop)
 	}
 	acnp := builder.Get()
 	k8sUtils.CreateOrUpdateACNP(acnp)
@@ -4240,121 +4250,155 @@ func TestAntreaPolicy(t *testing.T) {
 
 	initialize(t, data)
 
-	t.Run("TestGroupValidateAntreaNativePolicies", func(t *testing.T) {
-		t.Run("Case=ACNPNoPriority", func(t *testing.T) { testInvalidACNPNoPriority(t) })
-		t.Run("Case=ANPNoPriority", func(t *testing.T) { testInvalidANPNoPriority(t) })
-		t.Run("Case=ANPRuleNameNotUniqueDenied", func(t *testing.T) { testInvalidANPRuleNameNotUnique(t) })
-		t.Run("Case=ANPTierDoesNotExistDenied", func(t *testing.T) { testInvalidANPTierDoesNotExist(t) })
-		t.Run("Case=ANPPortRangePortUnsetDenied", func(t *testing.T) { testInvalidANPPortRangePortUnset(t) })
-		t.Run("Case=ANPPortRangePortEndPortSmallDenied", func(t *testing.T) { testInvalidANPPortRangeEndPortSmall(t) })
-		t.Run("Case=ANPIngressPeerGroupSetWithIPBlock", func(t *testing.T) { testInvalidANPIngressPeerGroupSetWithIPBlock(t) })
-		t.Run("Case=ANPIngressPeerGroupSetWithPodSelector", func(t *testing.T) { testInvalidANPIngressPeerGroupSetWithPodSelector(t) })
-		t.Run("Case=ACNPInvalidPodSelectorNsSelectorMatchExpressions", func(t *testing.T) { testInvalidACNPPodSelectorNsSelectorMatchExpressions(t, data) })
-	})
+	//t.Run("TestGroupValidateAntreaNativePolicies", func(t *testing.T) {
+	//	t.Run("Case=ACNPNoPriority", func(t *testing.T) { testInvalidACNPNoPriority(t) })
+	//	t.Run("Case=ANPNoPriority", func(t *testing.T) { testInvalidANPNoPriority(t) })
+	//	t.Run("Case=ANPRuleNameNotUniqueDenied", func(t *testing.T) { testInvalidANPRuleNameNotUnique(t) })
+	//	t.Run("Case=ANPTierDoesNotExistDenied", func(t *testing.T) { testInvalidANPTierDoesNotExist(t) })
+	//	t.Run("Case=ANPPortRangePortUnsetDenied", func(t *testing.T) { testInvalidANPPortRangePortUnset(t) })
+	//	t.Run("Case=ANPPortRangePortEndPortSmallDenied", func(t *testing.T) { testInvalidANPPortRangeEndPortSmall(t) })
+	//	t.Run("Case=ANPIngressPeerGroupSetWithIPBlock", func(t *testing.T) { testInvalidANPIngressPeerGroupSetWithIPBlock(t) })
+	//	t.Run("Case=ANPIngressPeerGroupSetWithPodSelector", func(t *testing.T) { testInvalidANPIngressPeerGroupSetWithPodSelector(t) })
+	//	t.Run("Case=ACNPInvalidPodSelectorNsSelectorMatchExpressions", func(t *testing.T) { testInvalidACNPPodSelectorNsSelectorMatchExpressions(t, data) })
+	//})
+	//
+	//t.Run("TestGroupValidateTiers", func(t *testing.T) {
+	//	t.Run("Case=TierOverlapPriorityDenied", func(t *testing.T) { testInvalidTierPriorityOverlap(t) })
+	//	t.Run("Case=TierOverlapReservedTierPriorityDenied", func(t *testing.T) { testInvalidTierReservedPriority(t) })
+	//	t.Run("Case=TierPriorityUpdateDenied", func(t *testing.T) { testInvalidTierPriorityUpdate(t) })
+	//	t.Run("Case=TierACNPReferencedDeleteDenied", func(t *testing.T) { testInvalidTierACNPRefDelete(t) })
+	//	t.Run("Case=TierANPRefDeleteDenied", func(t *testing.T) { testInvalidTierANPRefDelete(t) })
+	//	t.Run("Case=TierReservedDeleteDenied", func(t *testing.T) { testInvalidTierReservedDelete(t) })
+	//})
+	//
+	//t.Run("TestGroupMutateAntreaNativePolicies", func(t *testing.T) {
+	//	t.Run("Case=ACNPNoTierSetDefaultTier", func(t *testing.T) { testMutateACNPNoTier(t) })
+	//	t.Run("Case=ANPNoTierSetDefaultTier", func(t *testing.T) { testMutateANPNoTier(t) })
+	//	t.Run("Case=ANPNoRuleNameSetRuleName", func(t *testing.T) { testMutateANPNoRuleName(t) })
+	//	t.Run("Case=ACNPNoRuleNameSetRuleName", func(t *testing.T) { testMutateACNPNoRuleName(t) })
+	//})
+	//
+	//t.Run("TestGroupDefaultDENY", func(t *testing.T) {
+	//	// testcases below require default-deny k8s NetworkPolicies to work
+	//	applyDefaultDenyToAllNamespaces(k8sUtils, namespaces)
+	//	t.Run("Case=ACNPAllowXBtoA", func(t *testing.T) { testACNPAllowXBtoA(t) })
+	//	t.Run("Case=ACNPAllowXBtoYA", func(t *testing.T) { testACNPAllowXBtoYA(t) })
+	//	t.Run("Case=ACNPPriorityOverrideDefaultDeny", func(t *testing.T) { testACNPPriorityOverrideDefaultDeny(t) })
+	//	cleanupDefaultDenyNPs(k8sUtils, namespaces)
+	//})
+	//
+	//t.Run("TestGroupNoK8sNP", func(t *testing.T) {
+	//	// testcases below do not depend on underlying default-deny K8s NetworkPolicies.
+	//	t.Run("Case=ACNPAllowNoDefaultIsolationTCP", func(t *testing.T) { testACNPAllowNoDefaultIsolation(t, ProtocolTCP) })
+	//	t.Run("Case=ACNPAllowNoDefaultIsolationUDP", func(t *testing.T) { testACNPAllowNoDefaultIsolation(t, ProtocolUDP) })
+	//	t.Run("Case=ACNPAllowNoDefaultIsolationSCTP", func(t *testing.T) { testACNPAllowNoDefaultIsolation(t, ProtocolSCTP) })
+	//	t.Run("Case=ACNPDropEgress", func(t *testing.T) { testACNPDropEgress(t, ProtocolTCP) })
+	//	t.Run("Case=ACNPDropEgressUDP", func(t *testing.T) { testACNPDropEgress(t, ProtocolUDP) })
+	//	t.Run("Case=ACNPDropEgressSCTP", func(t *testing.T) { testACNPDropEgress(t, ProtocolSCTP) })
+	//	t.Run("Case=ACNPDropIngressInNamespace", func(t *testing.T) { testACNPDropIngressInSelectedNamespace(t) })
+	//	t.Run("Case=ACNPPortRange", func(t *testing.T) { testACNPPortRange(t) })
+	//	t.Run("Case=ACNPRejectEgress", func(t *testing.T) { testACNPRejectEgress(t) })
+	//	t.Run("Case=ACNPRejectIngress", func(t *testing.T) { testACNPRejectIngress(t, ProtocolTCP) })
+	//	t.Run("Case=ACNPRejectIngressUDP", func(t *testing.T) { testACNPRejectIngress(t, ProtocolUDP) })
+	//	t.Run("Case=RejectServiceTraffic", func(t *testing.T) { testRejectServiceTraffic(t, data) })
+	//	t.Run("Case=RejectNoInfiniteLoop", func(t *testing.T) { testRejectNoInfiniteLoop(t, data) })
+	//	t.Run("Case=ACNPNoEffectOnOtherProtocols", func(t *testing.T) { testACNPNoEffectOnOtherProtocols(t) })
+	//	t.Run("Case=ACNPBaselinePolicy", func(t *testing.T) { testBaselineNamespaceIsolation(t) })
+	//	t.Run("Case=ACNPPriorityOverride", func(t *testing.T) { testACNPPriorityOverride(t) })
+	//	t.Run("Case=ACNPTierOverride", func(t *testing.T) { testACNPTierOverride(t) })
+	//	t.Run("Case=ACNPCustomTiers", func(t *testing.T) { testACNPCustomTiers(t) })
+	//	t.Run("Case=ACNPPriorityConflictingRule", func(t *testing.T) { testACNPPriorityConflictingRule(t) })
+	//	t.Run("Case=ACNPRulePriority", func(t *testing.T) { testACNPRulePriority(t) })
+	//	t.Run("Case=ANPPortRange", func(t *testing.T) { testANPPortRange(t) })
+	//	t.Run("Case=ANPBasic", func(t *testing.T) { testANPBasic(t) })
+	//	t.Run("Case=testANPMultipleAppliedToSingleRule", func(t *testing.T) { testANPMultipleAppliedTo(t, data, true) })
+	//	t.Run("Case=testANPMultipleAppliedToMultipleRules", func(t *testing.T) { testANPMultipleAppliedTo(t, data, false) })
+	//	t.Run("Case=AppliedToPerRule", func(t *testing.T) { testAppliedToPerRule(t) })
+	//	t.Run("Case=ACNPNamespaceIsolation", func(t *testing.T) { testACNPNamespaceIsolation(t) })
+	//	t.Run("Case=ACNPStrictNamespaceIsolation", func(t *testing.T) { testACNPStrictNamespacesIsolation(t) })
+	//	t.Run("Case=ACNPClusterGroupEgressRulePodsAToCGWithNsZ", func(t *testing.T) { testACNPEgressRulePodsAToCGWithNsZ(t) })
+	//	t.Run("Case=ACNPClusterGroupUpdate", func(t *testing.T) { testACNPClusterGroupUpdate(t) })
+	//	t.Run("Case=ACNPClusterGroupAppliedToDenyXBToCGWithYA", func(t *testing.T) { testACNPAppliedToDenyXBtoCGWithYA(t) })
+	//	t.Run("Case=ACNPClusterGroupAppliedToRuleCGWithPodsAToNsZ", func(t *testing.T) { testACNPAppliedToRuleCGWithPodsAToNsZ(t) })
+	//	t.Run("Case=ACNPClusterGroupUpdateAppliedTo", func(t *testing.T) { testACNPClusterGroupUpdateAppliedTo(t) })
+	//	t.Run("Case=ACNPClusterGroupAppliedToPodAdd", func(t *testing.T) { testACNPClusterGroupAppliedToPodAdd(t, data) })
+	//	t.Run("Case=ACNPClusterGroupRefRulePodAdd", func(t *testing.T) { testACNPClusterGroupRefRulePodAdd(t, data) })
+	//	t.Run("Case=ACNPClusterGroupRefRuleIPBlocks", func(t *testing.T) { testACNPClusterGroupRefRuleIPBlocks(t) })
+	//	t.Run("Case=ACNPClusterGroupIngressRuleDenyCGWithXBtoYA", func(t *testing.T) { testACNPIngressRuleDenyCGWithXBtoYA(t) })
+	//	t.Run("Case=ACNPClusterGroupServiceRef", func(t *testing.T) { testACNPClusterGroupServiceRefCreateAndUpdate(t, data) })
+	//	t.Run("Case=ACNPNestedClusterGroup", func(t *testing.T) { testACNPNestedClusterGroupCreateAndUpdate(t, data) })
+	//	t.Run("Case=ACNPNestedIPBlockClusterGroup", func(t *testing.T) { testACNPNestedIPBlockClusterGroupCreateAndUpdate(t) })
+	//	t.Run("Case=ANPGroupEgressRulePodsAToGrpWithPodsC", func(t *testing.T) { testANPEgressRulePodsAToGrpWithPodsC(t) })
+	//	t.Run("Case=ANPIngressRuleDenyGrpWithXCtoXA", func(t *testing.T) { testANPIngressRuleDenyGrpWithXCtoXA(t) })
+	//	t.Run("Case=ANPGroupUpdate", func(t *testing.T) { testANPGroupUpdate(t) })
+	//	t.Run("Case=ANPGroupAppliedToDenyXBToGrpWithXA", func(t *testing.T) { testANPAppliedToDenyXBtoGrpWithXA(t) })
+	//	t.Run("Case=ANPGroupAppliedToRuleGrpWithPodsAToPodsC", func(t *testing.T) { testANPAppliedToRuleGrpWithPodsAToPodsC(t) })
+	//	t.Run("Case=ANPGroupUpdateAppliedTo", func(t *testing.T) { testANPGroupUpdateAppliedTo(t) })
+	//	t.Run("Case=ANPGroupAppliedToPodAdd", func(t *testing.T) { testANPGroupAppliedToPodAdd(t, data) })
+	//	t.Run("Case=ANPGroupServiceRefPodAdd", func(t *testing.T) { testANPGroupServiceRefPodAdd(t, data) })
+	//	t.Run("Case=ANPGroupServiceRefDelete", func(t *testing.T) { testANPGroupServiceRefDelete(t) })
+	//	t.Run("Case=ANPGroupServiceRef", func(t *testing.T) { testANPGroupServiceRefCreateAndUpdate(t) })
+	//	t.Run("Case=ANPGroupRefRuleIPBlocks", func(t *testing.T) { testANPGroupRefRuleIPBlocks(t) })
+	//	t.Run("Case=ANPNestedGroup", func(t *testing.T) { testANPNestedGroupCreateAndUpdate(t, data) })
+	//	t.Run("Case=ACNPFQDNPolicy", func(t *testing.T) { testFQDNPolicy(t) })
+	//	t.Run("Case=FQDNPolicyInCluster", func(t *testing.T) { testFQDNPolicyInClusterService(t) })
+	//  t.Run("Case=ACNPFQDNPolicyTCP", func(t *testing.T) { testFQDNPolicyTCP(t) })
+	//	t.Run("Case=ACNPToServices", func(t *testing.T) { testToServices(t) })
+	//	t.Run("Case=ACNPServiceAccountSelector", func(t *testing.T) { testServiceAccountSelector(t, data) })
+	//	t.Run("Case=ACNPNodeSelectorEgress", func(t *testing.T) { testACNPNodeSelectorEgress(t) })
+	//	t.Run("Case=ACNPNodeSelectorIngress", func(t *testing.T) { testACNPNodeSelectorIngress(t, data) })
+	//	t.Run("Case=ACNPICMPSupport", func(t *testing.T) { testACNPICMPSupport(t, data) })
+	//	t.Run("Case=ACNPNodePortServiceSupport", func(t *testing.T) { testACNPNodePortServiceSupport(t, data) })
+	//})
 
-	t.Run("TestGroupValidateTiers", func(t *testing.T) {
-		t.Run("Case=TierOverlapPriorityDenied", func(t *testing.T) { testInvalidTierPriorityOverlap(t) })
-		t.Run("Case=TierOverlapReservedTierPriorityDenied", func(t *testing.T) { testInvalidTierReservedPriority(t) })
-		t.Run("Case=TierPriorityUpdateDenied", func(t *testing.T) { testInvalidTierPriorityUpdate(t) })
-		t.Run("Case=TierACNPReferencedDeleteDenied", func(t *testing.T) { testInvalidTierACNPRefDelete(t) })
-		t.Run("Case=TierANPRefDeleteDenied", func(t *testing.T) { testInvalidTierANPRefDelete(t) })
-		t.Run("Case=TierReservedDeleteDenied", func(t *testing.T) { testInvalidTierReservedDelete(t) })
-	})
-
-	t.Run("TestGroupMutateAntreaNativePolicies", func(t *testing.T) {
-		t.Run("Case=ACNPNoTierSetDefaultTier", func(t *testing.T) { testMutateACNPNoTier(t) })
-		t.Run("Case=ANPNoTierSetDefaultTier", func(t *testing.T) { testMutateANPNoTier(t) })
-		t.Run("Case=ANPNoRuleNameSetRuleName", func(t *testing.T) { testMutateANPNoRuleName(t) })
-		t.Run("Case=ACNPNoRuleNameSetRuleName", func(t *testing.T) { testMutateACNPNoRuleName(t) })
-	})
-
-	t.Run("TestGroupDefaultDENY", func(t *testing.T) {
-		// testcases below require default-deny k8s NetworkPolicies to work
-		applyDefaultDenyToAllNamespaces(k8sUtils, namespaces)
-		t.Run("Case=ACNPAllowXBtoA", func(t *testing.T) { testACNPAllowXBtoA(t) })
-		t.Run("Case=ACNPAllowXBtoYA", func(t *testing.T) { testACNPAllowXBtoYA(t) })
-		t.Run("Case=ACNPPriorityOverrideDefaultDeny", func(t *testing.T) { testACNPPriorityOverrideDefaultDeny(t) })
-		cleanupDefaultDenyNPs(k8sUtils, namespaces)
-	})
-
-	t.Run("TestGroupNoK8sNP", func(t *testing.T) {
-		// testcases below do not depend on underlying default-deny K8s NetworkPolicies.
-		t.Run("Case=ACNPAllowNoDefaultIsolationTCP", func(t *testing.T) { testACNPAllowNoDefaultIsolation(t, ProtocolTCP) })
-		t.Run("Case=ACNPAllowNoDefaultIsolationUDP", func(t *testing.T) { testACNPAllowNoDefaultIsolation(t, ProtocolUDP) })
-		t.Run("Case=ACNPAllowNoDefaultIsolationSCTP", func(t *testing.T) { testACNPAllowNoDefaultIsolation(t, ProtocolSCTP) })
-		t.Run("Case=ACNPDropEgress", func(t *testing.T) { testACNPDropEgress(t, ProtocolTCP) })
-		t.Run("Case=ACNPDropEgressUDP", func(t *testing.T) { testACNPDropEgress(t, ProtocolUDP) })
-		t.Run("Case=ACNPDropEgressSCTP", func(t *testing.T) { testACNPDropEgress(t, ProtocolSCTP) })
-		t.Run("Case=ACNPDropIngressInNamespace", func(t *testing.T) { testACNPDropIngressInSelectedNamespace(t) })
-		t.Run("Case=ACNPPortRange", func(t *testing.T) { testACNPPortRange(t) })
-		t.Run("Case=ACNPRejectEgress", func(t *testing.T) { testACNPRejectEgress(t) })
-		t.Run("Case=ACNPRejectIngress", func(t *testing.T) { testACNPRejectIngress(t, ProtocolTCP) })
-		t.Run("Case=ACNPRejectIngressUDP", func(t *testing.T) { testACNPRejectIngress(t, ProtocolUDP) })
-		t.Run("Case=RejectServiceTraffic", func(t *testing.T) { testRejectServiceTraffic(t, data, data.testNamespace, data.testNamespace) })
-		t.Run("Case=RejectNoInfiniteLoop", func(t *testing.T) { testRejectNoInfiniteLoop(t, data, data.testNamespace, data.testNamespace) })
-		t.Run("Case=ACNPNoEffectOnOtherProtocols", func(t *testing.T) { testACNPNoEffectOnOtherProtocols(t) })
-		t.Run("Case=ACNPBaselinePolicy", func(t *testing.T) { testBaselineNamespaceIsolation(t) })
-		t.Run("Case=ACNPPriorityOverride", func(t *testing.T) { testACNPPriorityOverride(t) })
-		t.Run("Case=ACNPTierOverride", func(t *testing.T) { testACNPTierOverride(t) })
-		t.Run("Case=ACNPCustomTiers", func(t *testing.T) { testACNPCustomTiers(t) })
-		t.Run("Case=ACNPPriorityConflictingRule", func(t *testing.T) { testACNPPriorityConflictingRule(t) })
-		t.Run("Case=ACNPRulePriority", func(t *testing.T) { testACNPRulePriority(t) })
-		t.Run("Case=ANPPortRange", func(t *testing.T) { testANPPortRange(t) })
-		t.Run("Case=ANPBasic", func(t *testing.T) { testANPBasic(t) })
-		t.Run("Case=testANPMultipleAppliedToSingleRule", func(t *testing.T) { testANPMultipleAppliedTo(t, data, true) })
-		t.Run("Case=testANPMultipleAppliedToMultipleRules", func(t *testing.T) { testANPMultipleAppliedTo(t, data, false) })
-		t.Run("Case=AppliedToPerRule", func(t *testing.T) { testAppliedToPerRule(t) })
-		t.Run("Case=ACNPNamespaceIsolation", func(t *testing.T) { testACNPNamespaceIsolation(t) })
-		t.Run("Case=ACNPStrictNamespaceIsolation", func(t *testing.T) { testACNPStrictNamespacesIsolation(t) })
-		t.Run("Case=ACNPClusterGroupEgressRulePodsAToCGWithNsZ", func(t *testing.T) { testACNPEgressRulePodsAToCGWithNsZ(t) })
-		t.Run("Case=ACNPClusterGroupUpdate", func(t *testing.T) { testACNPClusterGroupUpdate(t) })
-		t.Run("Case=ACNPClusterGroupAppliedToDenyXBToCGWithYA", func(t *testing.T) { testACNPAppliedToDenyXBtoCGWithYA(t) })
-		t.Run("Case=ACNPClusterGroupAppliedToRuleCGWithPodsAToNsZ", func(t *testing.T) { testACNPAppliedToRuleCGWithPodsAToNsZ(t) })
-		t.Run("Case=ACNPClusterGroupUpdateAppliedTo", func(t *testing.T) { testACNPClusterGroupUpdateAppliedTo(t) })
-		t.Run("Case=ACNPClusterGroupAppliedToPodAdd", func(t *testing.T) { testACNPClusterGroupAppliedToPodAdd(t, data) })
-		t.Run("Case=ACNPClusterGroupRefRulePodAdd", func(t *testing.T) { testACNPClusterGroupRefRulePodAdd(t, data) })
-		t.Run("Case=ACNPClusterGroupRefRuleIPBlocks", func(t *testing.T) { testACNPClusterGroupRefRuleIPBlocks(t) })
-		t.Run("Case=ACNPClusterGroupIngressRuleDenyCGWithXBtoYA", func(t *testing.T) { testACNPIngressRuleDenyCGWithXBtoYA(t) })
-		t.Run("Case=ACNPClusterGroupServiceRef", func(t *testing.T) { testACNPClusterGroupServiceRefCreateAndUpdate(t, data) })
-		t.Run("Case=ACNPNestedClusterGroup", func(t *testing.T) { testACNPNestedClusterGroupCreateAndUpdate(t, data) })
-		t.Run("Case=ACNPNestedIPBlockClusterGroup", func(t *testing.T) { testACNPNestedIPBlockClusterGroupCreateAndUpdate(t) })
-		t.Run("Case=ANPGroupEgressRulePodsAToGrpWithPodsC", func(t *testing.T) { testANPEgressRulePodsAToGrpWithPodsC(t) })
-		t.Run("Case=ANPIngressRuleDenyGrpWithXCtoXA", func(t *testing.T) { testANPIngressRuleDenyGrpWithXCtoXA(t) })
-		t.Run("Case=ANPGroupUpdate", func(t *testing.T) { testANPGroupUpdate(t) })
-		t.Run("Case=ANPGroupAppliedToDenyXBToGrpWithXA", func(t *testing.T) { testANPAppliedToDenyXBtoGrpWithXA(t) })
-		t.Run("Case=ANPGroupAppliedToRuleGrpWithPodsAToPodsC", func(t *testing.T) { testANPAppliedToRuleGrpWithPodsAToPodsC(t) })
-		t.Run("Case=ANPGroupUpdateAppliedTo", func(t *testing.T) { testANPGroupUpdateAppliedTo(t) })
-		t.Run("Case=ANPGroupAppliedToPodAdd", func(t *testing.T) { testANPGroupAppliedToPodAdd(t, data) })
-		t.Run("Case=ANPGroupServiceRefPodAdd", func(t *testing.T) { testANPGroupServiceRefPodAdd(t, data) })
-		t.Run("Case=ANPGroupServiceRefDelete", func(t *testing.T) { testANPGroupServiceRefDelete(t) })
-		t.Run("Case=ANPGroupServiceRef", func(t *testing.T) { testANPGroupServiceRefCreateAndUpdate(t) })
-		t.Run("Case=ANPGroupRefRuleIPBlocks", func(t *testing.T) { testANPGroupRefRuleIPBlocks(t) })
-		t.Run("Case=ANPNestedGroup", func(t *testing.T) { testANPNestedGroupCreateAndUpdate(t, data) })
+	t.Run("Case=ACNPFQDNPolicyFlakeTest", func(t *testing.T) {
 		t.Run("Case=ACNPFQDNPolicy", func(t *testing.T) { testFQDNPolicy(t) })
-		t.Run("Case=ACNPFQDNPolicyInCluster", func(t *testing.T) { testFQDNPolicyInClusterService(t) })
+		t.Run("Case=ACNPFQDNPolicy", func(t *testing.T) { testFQDNPolicy(t) })
+		t.Run("Case=ACNPFQDNPolicy", func(t *testing.T) { testFQDNPolicy(t) })
+		t.Run("Case=ACNPFQDNPolicy", func(t *testing.T) { testFQDNPolicy(t) })
+		t.Run("Case=ACNPFQDNPolicy", func(t *testing.T) { testFQDNPolicy(t) })
+		t.Run("Case=ACNPFQDNPolicy", func(t *testing.T) { testFQDNPolicy(t) })
+		t.Run("Case=ACNPFQDNPolicy", func(t *testing.T) { testFQDNPolicy(t) })
+		t.Run("Case=ACNPFQDNPolicy", func(t *testing.T) { testFQDNPolicy(t) })
+		t.Run("Case=ACNPFQDNPolicy", func(t *testing.T) { testFQDNPolicy(t) })
+		t.Run("Case=ACNPFQDNPolicy", func(t *testing.T) { testFQDNPolicy(t) })
+		t.Run("Case=FQDNPolicyInCluster", func(t *testing.T) { testFQDNPolicyInClusterService(t) })
+		t.Run("Case=FQDNPolicyInCluster", func(t *testing.T) { testFQDNPolicyInClusterService(t) })
+		t.Run("Case=FQDNPolicyInCluster", func(t *testing.T) { testFQDNPolicyInClusterService(t) })
+		t.Run("Case=FQDNPolicyInCluster", func(t *testing.T) { testFQDNPolicyInClusterService(t) })
+		t.Run("Case=FQDNPolicyInCluster", func(t *testing.T) { testFQDNPolicyInClusterService(t) })
+		t.Run("Case=FQDNPolicyInCluster", func(t *testing.T) { testFQDNPolicyInClusterService(t) })
+		t.Run("Case=FQDNPolicyInCluster", func(t *testing.T) { testFQDNPolicyInClusterService(t) })
+		t.Run("Case=FQDNPolicyInCluster", func(t *testing.T) { testFQDNPolicyInClusterService(t) })
+		t.Run("Case=FQDNPolicyInCluster", func(t *testing.T) { testFQDNPolicyInClusterService(t) })
+		t.Run("Case=FQDNPolicyInCluster", func(t *testing.T) { testFQDNPolicyInClusterService(t) })
 		t.Run("Case=ACNPFQDNPolicyTCP", func(t *testing.T) { testFQDNPolicyTCP(t) })
-		t.Run("Case=ACNPToServices", func(t *testing.T) { testToServices(t) })
-		t.Run("Case=ACNPServiceAccountSelector", func(t *testing.T) { testServiceAccountSelector(t, data) })
-		t.Run("Case=ACNPNodeSelectorEgress", func(t *testing.T) { testACNPNodeSelectorEgress(t) })
-		t.Run("Case=ACNPNodeSelectorIngress", func(t *testing.T) { testACNPNodeSelectorIngress(t, data) })
-		t.Run("Case=ACNPICMPSupport", func(t *testing.T) { testACNPICMPSupport(t, data) })
-		t.Run("Case=ACNPNodePortServiceSupport", func(t *testing.T) { testACNPNodePortServiceSupport(t, data, data.testNamespace) })
+		t.Run("Case=ACNPFQDNPolicyTCP", func(t *testing.T) { testFQDNPolicyTCP(t) })
+		t.Run("Case=ACNPFQDNPolicyTCP", func(t *testing.T) { testFQDNPolicyTCP(t) })
+		t.Run("Case=ACNPFQDNPolicyTCP", func(t *testing.T) { testFQDNPolicyTCP(t) })
+		t.Run("Case=ACNPFQDNPolicyTCP", func(t *testing.T) { testFQDNPolicyTCP(t) })
+		t.Run("Case=ACNPFQDNPolicyTCP", func(t *testing.T) { testFQDNPolicyTCP(t) })
+		t.Run("Case=ACNPFQDNPolicyTCP", func(t *testing.T) { testFQDNPolicyTCP(t) })
+		t.Run("Case=ACNPFQDNPolicyTCP", func(t *testing.T) { testFQDNPolicyTCP(t) })
+		t.Run("Case=ACNPFQDNPolicyTCP", func(t *testing.T) { testFQDNPolicyTCP(t) })
+		t.Run("Case=ACNPFQDNPolicyTCP", func(t *testing.T) { testFQDNPolicyTCP(t) })
 	})
+
 	// print results for reachability tests
 	printResults()
 
-	t.Run("TestGroupAuditLogging", func(t *testing.T) {
-		t.Run("Case=AuditLoggingBasic", func(t *testing.T) { testAuditLoggingBasic(t, data) })
-		t.Run("Case=AuditLoggingEnableNP", func(t *testing.T) { testAuditLoggingEnableNP(t, data) })
-	})
-
-	t.Run("TestMulticastNP", func(t *testing.T) {
-		skipIfMulticastDisabled(t)
-		t.Run("Case=MulticastNPIGMPQueryAllow", func(t *testing.T) { testACNPIGMPQueryAllow(t, data) })
-		t.Run("Case=MulticastNPIGMPQueryDrop", func(t *testing.T) { testACNPIGMPQueryDrop(t, data) })
-		t.Run("Case=MulticastNPPolicyEgressAllow", func(t *testing.T) { testACNPMulticastEgressAllow(t, data) })
-		t.Run("Case=MulticastNPPolicyEgressDrop", func(t *testing.T) { testACNPMulticastEgressDrop(t, data) })
-	})
+	//t.Run("TestGroupAuditLogging", func(t *testing.T) {
+	//	t.Run("Case=AuditLoggingBasic", func(t *testing.T) { testAuditLoggingBasic(t, data) })
+	//	t.Run("Case=AuditLoggingEnableNP", func(t *testing.T) { testAuditLoggingEnableNP(t, data) })
+	//})
+	//
+	//t.Run("TestMulticastNP", func(t *testing.T) {
+	//	skipIfMulticastDisabled(t)
+	//	t.Run("Case=MulticastNPIGMPQueryAllow", func(t *testing.T) { testACNPIGMPQueryAllow(t, data) })
+	//	t.Run("Case=MulticastNPIGMPQueryDrop", func(t *testing.T) { testACNPIGMPQueryDrop(t, data) })
+	//	t.Run("Case=MulticastNPPolicyEgressAllow", func(t *testing.T) { testACNPMulticastEgressAllow(t, data) })
+	//	t.Run("Case=MulticastNPPolicyEgressDrop", func(t *testing.T) { testACNPMulticastEgressDrop(t, data) })
+	//})
 	k8sUtils.Cleanup(namespaces)
 }
 
