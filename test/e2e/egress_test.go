@@ -36,6 +36,8 @@ import (
 	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
 )
 
+const waitEgressRealizedTimeout = 3 * time.Second
+
 func TestEgress(t *testing.T) {
 	skipIfProviderIs(t, "kind", "pkt_mark field is not properly supported for OVS userspace (netdev) datapath.")
 	skipIfHasWindowsNodes(t)
@@ -292,13 +294,13 @@ func testEgressCRUD(t *testing.T, data *TestData) {
 		},
 		{
 			name:    "single matching Node with IPv6 range",
-			ipRange: v1alpha2.IPRange{CIDR: "2021::aaa0/124"},
+			ipRange: v1alpha2.IPRange{CIDR: "2021:1::aaa0/124"},
 			nodeSelector: metav1.LabelSelector{
 				MatchLabels: map[string]string{
 					v1.LabelHostname: nodeName(0),
 				},
 			},
-			expectedEgressIP: "2021::aaa1",
+			expectedEgressIP: "2021:1::aaa1",
 			expectedNodes:    sets.NewString(nodeName(0)),
 			expectedTotal:    15,
 		},
@@ -338,10 +340,10 @@ func testEgressCRUD(t *testing.T, data *TestData) {
 			} else {
 				skipIfNotIPv4Cluster(t)
 			}
-			pool := data.createExternalIPPool(t, "pool-", tt.ipRange, tt.nodeSelector.MatchExpressions, tt.nodeSelector.MatchLabels)
+			pool := data.createExternalIPPool(t, "crud-pool-", tt.ipRange, tt.nodeSelector.MatchExpressions, tt.nodeSelector.MatchLabels)
 			defer data.crdClient.CrdV1alpha2().ExternalIPPools().Delete(context.TODO(), pool.Name, metav1.DeleteOptions{})
 
-			egress := data.createEgress(t, "egress-", nil, map[string]string{"foo": "bar"}, pool.Name, "")
+			egress := data.createEgress(t, "crud-egress-", nil, map[string]string{"foo": "bar"}, pool.Name, "")
 			defer data.crdClient.CrdV1alpha2().Egresses().Delete(context.TODO(), egress.Name, metav1.DeleteOptions{})
 			// Use Poll to wait the interval before the first run to detect the case that the IP is assigned to any Node
 			// when it's not supposed to.
@@ -440,10 +442,10 @@ func testEgressUpdateEgressIP(t *testing.T, data *TestData) {
 			name:             "different Nodes in IPv6 cluster",
 			originalNode:     nodeName(0),
 			newNode:          nodeName(1),
-			originalIPRange:  v1alpha2.IPRange{CIDR: "2021::aaa0/124"},
-			originalEgressIP: "2021::aaa1",
-			newIPRange:       v1alpha2.IPRange{CIDR: "2021::bbb0/124"},
-			newEgressIP:      "2021::bbb1",
+			originalIPRange:  v1alpha2.IPRange{CIDR: "2021:2::aaa0/124"},
+			originalEgressIP: "2021:2::aaa1",
+			newIPRange:       v1alpha2.IPRange{CIDR: "2021:2::bbb0/124"},
+			newEgressIP:      "2021:2::bbb1",
 		},
 	}
 	for _, tt := range tests {
@@ -503,7 +505,7 @@ func testEgressUpdateNodeSelector(t *testing.T, data *TestData) {
 		},
 		{
 			name:      "IPv6 cluster",
-			ipRange:   v1alpha2.IPRange{CIDR: "2021::aaa1/124"},
+			ipRange:   v1alpha2.IPRange{CIDR: "2021:3::aaa1/124"},
 			ipVersion: 6,
 		},
 	}
@@ -556,7 +558,7 @@ func testEgressNodeFailure(t *testing.T, data *TestData) {
 		},
 		{
 			name:      "IPv6 cluster",
-			ipRange:   v1alpha2.IPRange{CIDR: "2021::aaa1/124"},
+			ipRange:   v1alpha2.IPRange{CIDR: "2021:4::aaa1/124"},
 			ipVersion: 6,
 		},
 	}
@@ -586,7 +588,7 @@ func testEgressNodeFailure(t *testing.T, data *TestData) {
 			}
 			// Egress IP migration may take a few seconds when it's caused by Node failure detection.
 			// Skip checking Egress IP on the evicted Node because Egress IP will be left on it (no running antrea-agent).
-			testEgressMigration(t, data, pauseAgent, restoreAgent, false, 5*time.Second, &tt.ipRange)
+			testEgressMigration(t, data, pauseAgent, restoreAgent, false, waitEgressRealizedTimeout, &tt.ipRange)
 		})
 	}
 }
@@ -600,10 +602,10 @@ func testEgressMigration(t *testing.T, data *TestData, triggerFunc, revertFunc f
 			Values:   nodeCandidates.List(),
 		},
 	}
-	externalIPPoolTwoNodes := data.createExternalIPPool(t, "pool-", *ipRange, matchExpressions, nil)
+	externalIPPoolTwoNodes := data.createExternalIPPool(t, "pool-with-two-nodes-", *ipRange, matchExpressions, nil)
 	defer data.crdClient.CrdV1alpha2().ExternalIPPools().Delete(context.TODO(), externalIPPoolTwoNodes.Name, metav1.DeleteOptions{})
 
-	egress := data.createEgress(t, "egress-", nil, map[string]string{"foo": "bar"}, externalIPPoolTwoNodes.Name, "")
+	egress := data.createEgress(t, "migration-egress-", nil, map[string]string{"foo": "bar"}, externalIPPoolTwoNodes.Name, "")
 	defer data.crdClient.CrdV1alpha2().Egresses().Delete(context.TODO(), egress.Name, metav1.DeleteOptions{})
 
 	var err error
@@ -717,21 +719,18 @@ func (data *TestData) createEgress(t *testing.T, generateName string, matchExpre
 }
 
 func (data *TestData) waitForEgressRealized(egress *v1alpha2.Egress) (*v1alpha2.Egress, error) {
-	err := wait.PollImmediate(200*time.Millisecond, 5*time.Second, func() (done bool, err error) {
+	err := wait.PollImmediate(200*time.Millisecond, waitEgressRealizedTimeout, func() (done bool, err error) {
 		egress, err = data.crdClient.CrdV1alpha2().Egresses().Get(context.TODO(), egress.Name, metav1.GetOptions{})
 		if err != nil {
 			return false, err
 		}
-		if egress.Spec.EgressIP == "" {
-			return false, nil
-		}
-		if egress.Status.EgressNode == "" {
+		if egress.Spec.EgressIP == "" || egress.Status.EgressNode == "" {
 			return false, nil
 		}
 		return true, nil
 	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("wait for Egress %#v realized failed: %v", egress, err)
 	}
 	return egress, nil
 }
