@@ -357,9 +357,19 @@ different Nodes can be preserved.
 
 If you would like to quickly try Network Flow Visibility feature, you can deploy
 Antrea, the Flow Aggregator Service and the ELK Flow Collector on the
-[Vagrant setup](../test/e2e/README.md). However, the ELK Flow Collector deployment
-requires the Vagrant Nodes to have higher memory than default, so we have to provision
-the Nodes with the `--large` option. You can use the following command:
+[Vagrant setup](../test/e2e/README.md). You can use the following command:
+
+```shell
+./infra/vagrant/provision.sh
+./infra/vagrant/push_antrea.sh --flow-collector ELK
+```
+
+If you would like to deploy elastic search with high resources, you can change
+the `ES_JAVA_OPTS` in the [ELK Flow Collector configuration](../build/yamls/elk-flow-collector/elk-flow-collector.yml)
+according to the [guide](https://www.elastic.co/guide/en/elasticsearch/reference/7.x/advanced-configuration.html#set-jvm-heap-size).
+A larger heap size, like `-Xms1g -Xmx2g`, requires the Vagrant Nodes to have
+higher memory than default. In this case, we need to provision the Nodes with
+the `--large` option as with the following command:
 
 ```shell
 ./infra/vagrant/provision.sh --large
