@@ -40,12 +40,25 @@
   learned destination MAC address to the appropriate egress port. It is often
   the same physical table as the "smac" table (which matches on the source MAC
   address and initiate MAC learning if the address is unknown).
+* *group action*: an action which is used to process forwarding decisions
+  on multiple OVS ports. Examples include: load-balancing, multicast, and active/standby.
+  See [OVS group action](https://docs.openvswitch.org/en/latest/ref/ovs-actions.7/?highlight=group#the-group-action)
+  for more information.
+* *IN_PORT action*: an action to output the packet to the port on which it was
+  received. This is the only standard way to output the packet to the input port.
+* *session affinity*: a load balancer feature that always selects the same backend
+  Pod for connections from a particular client. For a K8s Service, session
+  affinity can be enabled by setting `service.spec.sessionAffinity` to `ClientIP`
+  (default is `None`). See [K8s Service](https://kubernetes.io/docs/concepts/services-networking/service/)
+  for more information about session affinity.
 
 **This document currently makes the following assumptions:**
 
 * Antrea is used in encap mode (an overlay network is created between all Nodes)
-* AntreaProxy is disabled
 * All the Nodes are Linux Nodes
+* IPv6 is disabled
+* AntreaProxy is enabled
+* AntreaPolicy is enabled
 
 ## Dumping the Flows
 
@@ -67,21 +80,35 @@ We use 2 32-bit OVS registers to carry information throughout the pipeline:
 
 * reg0 (NXM_NX_REG0):
   - bits [0..3] are used to store the traffic source (from tunnel: 0, from
-    local gateway: 1, from local Pod: 2). It is set in the [ClassifierTable].
+    local gateway: 1, from local Pod: 2). It is set in [ClassifierTable].
   - bit 16 is used to indicate whether the destination MAC address of a packet
     is "known", i.e. corresponds to an entry in [L2ForwardingCalcTable], which
     is essentially a "dmac" table.
+  - bit 18 is used to indicate whether the packet should be output to the port
+    on which it was received. It is consumed in [L2ForwardingOutTable]
+    to output the packet with action `IN_PORT`.
   - bit 19 is used to indicate whether the destination and source MACs of the
-    packet should be rewritten in the [l3ForwardingTable]. The bit is set for
-    packets received from the tunnel port in the [ClassifierTable]. The
+    packet should be rewritten in [l3ForwardingTable]. The bit is set for
+    packets received from the tunnel port in [ClassifierTable]. The
     destination MAC of such packets is the Global Virtual MAC and should be
     rewritten to the destination port's MAC before output to the port. When such
     a packet is destined to a Pod, its source MAC should be rewritten to the
     local gateway port's MAC too.
 * reg1 (NXM_NX_REG1): it is used to store the egress OF port for the packet. It
-  is set by [DNATTable] for traffic destined to Services and by
-  [L2ForwardingCalcTable] otherwise. It is consumed by [L2ForwardingOutTable] to
+  is set in [DNATTable] for traffic destined to Services and in
+  [L2ForwardingCalcTable] otherwise. It is consumed in [L2ForwardingOutTable] to
   output each packet to the correct port.
+* reg3 (NXM_NX_REG3): it is used to store selected Service Endpoint IPv4 address
+  in OVS group entry. It is consumed in [EndpointDNATTable].
+* reg4 (NXM_NX_REG4):
+  * bits [0..16] are used to store selected Service Endpoint port number in OVS
+    group entry. They are consumed in [EndpointDNATTable].
+  * bits [17..18] are used to store the state of a Service request packet.
+    Marks in this field include,
+    * 0b001: packet needs to do Endpoint selection.
+    * 0b010: packet has done Endpoint selection.
+    * 0b011: packet has done Endpoint selection and the selection result needs to
+      be cached.
 
 ## Network Policy Implementation
 
@@ -192,32 +219,31 @@ on the same Node and they have the following IP addresses:
 
 ## Tables
 
-![OVS pipeline](../assets/ovs-pipeline.svg)
+![OVS pipeline](../assets/ovs-pipeline-antrea-proxy.svg)
 
 ### ClassifierTable (0)
 
 This table is used to determine which "category" of traffic (tunnel, local
 gateway or local Pod) the packet belongs to. This is done by matching on the
 ingress port for the packet. The appropriate value is then written to bits
-[0..15] of the NXM_NX_REG0 register: 0 for tunnel, 1 for local gateway and 2 for
-local Pod. This information is used by matches in subsequent tables. For a
-packet received from the tunnel port, bit 19 of the NXM_NX_REG0 is set to 1, to
-indicate MAC rewrite should be performed for the packet in the [L3ForwardingTable].
+[0..3] in NXM_NX_REG0: 0 for tunnel, 1 for local gateway and 2 for local Pod.
+This information is used by matches in subsequent tables. For a packet received
+from the tunnel port, bit 19 in NXM_NX_REG0 is set to 1, to indicate MAC rewrite
+should be performed for the packet in [L3ForwardingTable].
 
 If you dump the flows for this table, you may see the following:
 
 ```text
-1. table=0, priority=200,in_port=antrea-gw0 actions=load:0x1->NXM_NX_REG0[0..15],goto_table:10
-2. table=0, priority=200,in_port=antrea-tun0 actions=load:0->NXM_NX_REG0[0..15],load:0x1->NXM_NX_REG0[19],goto_table:30
-3. table=0, priority=190,in_port="coredns5-8ec607" actions=load:0x2->NXM_NX_REG0[0..15],goto_table:10
-4. table=0, priority=190,in_port="coredns5-9d9530" actions=load:0x2->NXM_NX_REG0[0..15],goto_table:10
+1. table=0, priority=200,in_port=2 actions=load:0x1->NXM_NX_REG0[0..3],resubmit(,10)
+2. table=0, priority=200,in_port=1 actions=load:0->NXM_NX_REG0[0..3],load:0x1->NXM_NX_REG0[19],resubmit(,30)
+3. table=0, priority=190,in_port=4 actions=load:0x2->NXM_NX_REG0[0..3],resubmit(,10)
+4. table=0, priority=190,in_port=3 actions=load:0x2->NXM_NX_REG0[0..3],resubmit(,10)
 5. table=0, priority=0 actions=drop
 ```
 
 Flow 1 is for traffic coming in on the local gateway. Flow 2 is for traffic
 coming in through an overlay tunnel (i.e. from another Node). The next two
-flows (3 and 4) are for local Pods (in this case Pods from the CoreDNS
-deployment).
+flows (3 and 4) are for local Pods.
 
 Local traffic then goes to [SpoofGuardTable], while tunnel traffic from other
 Nodes goes to [ConntrackTable]. The table-miss flow entry will drop all
@@ -249,17 +275,17 @@ the host to advertise a different MAC address on antrea-gw0.
 If you dump the flows for this table, you may see the following:
 
 ```text
-1. table=10, priority=200,ip,in_port=antrea-gw0 actions=goto_table:30
-2. table=10, priority=200,arp,in_port=antrea-gw0,arp_spa=10.10.0.1,arp_sha=e2:e5:a4:9b:1c:b1 actions=goto_table:20
-3. table=10, priority=200,ip,in_port="coredns5-8ec607",dl_src=12:9e:a6:47:d0:70,nw_src=10.10.0.2 actions=goto_table:30
-4. table=10, priority=200,ip,in_port="coredns5-9d9530",dl_src=ba:a8:13:ca:ed:cf,nw_src=10.10.0.3 actions=goto_table:30
-5. table=10, priority=200,arp,in_port="coredns5-8ec607",arp_spa=10.10.0.2,arp_sha=12:9e:a6:47:d0:70 actions=goto_table:20
-6. table=10, priority=200,arp,in_port="coredns5-9d9530",arp_spa=10.10.0.3,arp_sha=ba:a8:13:ca:ed:cf actions=goto_table:20
+1. table=10, priority=200,ip,in_port=2 actions=resubmit(,23)
+2. table=10, priority=200,arp,in_port=2,arp_spa=10.10.0.1,arp_sha=3a:dd:79:0f:55:4c actions=resubmit(,20)
+3. table=10, priority=200,arp,in_port=4,arp_spa=10.10.0.2,arp_sha=ce:99:ca:bd:62:c5 actions=resubmit(,20)
+4. table=10, priority=200,arp,in_port=3,arp_spa=10.10.0.3,arp_sha=3a:41:49:42:98:69 actions=resubmit(,20)
+5. table=10, priority=200,ip,in_port=4,dl_src=ce:99:ca:bd:62:c5,nw_src=10.10.0.2 actions=resubmit(,23)
+6. table=10, priority=200,ip,in_port=3,dl_src=3a:41:49:42:98:69,nw_src=10.10.0.3 actions=resubmit(,23)
 7. table=10, priority=0 actions=drop
 ```
 
 After this table, ARP traffic goes to [ARPResponderTable], while IP
-traffic goes to [ConntrackTable]. Traffic which does not match
+traffic goes to [ServiceHairpinTable]. Traffic which does not match
 any of the rules described above will be dropped by the table-miss flow entry.
 
 ### ARPResponderTable (20)
@@ -307,10 +333,33 @@ The table-miss flow entry (flow 3) will drop all other packets. This flow should
 never be used because only ARP traffic should go to this table, and
 ARP traffic will either match flow 1 or flow 2.
 
+### ServiceHairpinTable (23)
+
+When a backend Pod of a Service accesses the Service, and the Pod itself is selected
+as the destination, then we have the hairpin case, in which the source IP should be
+SNAT'd with a virtual hairpin IP in [hairpinSNATTable]. The source and destination
+IP addresses cannot be the same, otherwise the connection will be broken. It will be
+explained in detail in [hairpinSNATTable]. For response packets, the
+destination IP is the virtual hairpin IP, so the destination IP should be changed back
+to the IP of the backend Pod. Then the response packets can be forwarded back correctly.
+
+If you dump the flows for this table, you should see the flows:
+
+```text
+1. table=23, priority=200,ip,nw_dst=169.254.169.252 actions=move:NXM_OF_IP_SRC[]->NXM_OF_IP_DST[],load:0x1->NXM_NX_REG0[18],resubmit(,30)
+2. table=23, priority=0 actions=resubmit(,24)
+```
+
+Flow 1 is used to match packet whose destination IP is virtual hairpin IP and
+change the destination IP of the matched packet by loading register `NXM_OF_IP_SRC`
+to `NXM_OF_IP_DST`. Bit 18 in NXM_NX_REG0 is set to 0x1, which indicates that the
+packet should be output to the port on which it was received, which is done in
+[L2ForwardingOutTable].
+
 ### ConntrackTable (30)
 
 The sole purpose of this table is to invoke the `ct` action on all packets and
-set the `ct_zone` (connection tracking context) to an hard-coded value, then
+set the `ct_zone` (connection tracking context) to a hard-coded value, then
 forward traffic to [ConntrackStateTable]. If you dump the flows for this table,
 you should only see 1 flow:
 
@@ -333,58 +382,191 @@ more information on connection tracking in OVS.
 
 ### ConntrackStateTable (31)
 
-This table handles all "tracked" packets (all packets are moved to the tracked
-state by the previous table, [ConntrackTable]). It serves the following
-purposes:
+This table handles "tracked" packets (packets which are moved to the tracked
+state by the previous table [ConntrackTable]) and "untracked" packets (packets
+is not in tracked state).
 
-* drop packets reported as invalid by conntrack
+This table serves the following purposes:
+
+* For tracked Service packets, bit 19 in NXM_NX_REG0 will be set to 0x1, then
+  the tracked packet will be forwarded to [EgressRuleTable] directly.
+* Drop packets reported as invalid by conntrack.
+* Non-Service tracked packets goes to [EgressRuleTable] directly.
+* Untracked packets goes to [SessionAffinityTable] and [ServiceLBTable].
 
 If you dump the flows for this table, you should see the following:
 
 ```text
-1. table=31, priority=190,ct_state=+inv+trk,ip actions=drop
-2. table=31, priority=0 actions=goto_table:40
+1. table=31, priority=200,ct_state=-new+trk,ct_mark=0x21,ip actions=load:0x1->NXM_NX_REG0[19],resubmit(,50)
+2. table=31, priority=190,ct_state=+inv+trk,ip actions=drop
+3. table=31, priority=190,ct_state=-new+trk,ip actions=resubmit(,50)
+4. table=31, priority=0 actions=resubmit(,40),resubmit(,41)
 ```
 
-Flow 1 drops invalid traffic. All non-dropped traffic finally goes to the
-[DNATTable].
+Flow 1 is used to forward tracked Service packets to [EgressRuleTable] directly,
+without passing [SessionAffinityTable], [ServiceLBTable] and [EndpointDNATTable].
+The flow also sets bit 19 in NXM_NX_REG0 to 0x1, which indicates that the destination
+and source MACs of the matched packets should be rewritten in [l3ForwardingTable].
 
-### DNATTable (40)
+Flow 2 is used to drop packets which is reported as invalid by conntrack.
 
-At the moment this table's only job is to send traffic destined to Services
-through the local gateway, without any modifications. kube-proxy will then take
-care of load-balancing the connections across the different backends for each
-Service.
+Flow 3 is used to forward tracked non-Service packets to [EgressRuleTable] directly,
+without passing [SessionAffinityTable], [ServiceLBTable] and [EndpointDNATTable].
 
-If you dump the flows for this table, you should see something like this:
+Flow 4 is used to match the first packet of untracked connection and forward it to
+[SessionAffinityTable] and [ServiceLBTable].
+
+### SessionAffinityTable (40)
+
+If `service.spec.sessionAffinity` of a Service is `None`, this table will set the value
+of bits [16..18] in NXM_NX_REG4 to 0b001, which indicates that the Service needs to do
+Endpoint selection. If you dump the flow, you should see the flow:
 
 ```text
-1. table=40, priority=200,ip,nw_dst=10.96.0.0/12 actions=load:0x2->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],goto_table:105
-2. table=40, priority=0 actions=goto_table:45
+table=40, priority=0 actions=load:0x1->NXM_NX_REG4[16..18]
 ```
 
-In the example above, 10.96.0.0/12 is the Service CIDR (this is the default
-value used by `kubeadm init`). This flow is not actually required for
-forwarding, but to bypass [EgressRuleTable] and [EgressDefaultTable] for Service
-traffic on its way to kube-proxy through the gateway. If we omitted this flow,
-such traffic would be unconditionally dropped if a Network Policy is applied on
-the originating Pod. For such traffic, we instead enforce Network Policy egress
-rules when packets come back through the gateway and the destination IP has been
-rewritten by kube-proxy (DNAT to a backend for the Service). We cannot output
-the Service traffic to the gateway port directly as we haven't committed the
-connection yet; instead we store the port in NXM_NX_REG1 - similarly to how we
-process non-Service traffic in [L2ForwardingCalcTable] - and forward it to
-[ConntrackCommitTable]. By committing the connection we ensure that reply
-traffic (traffic from the Service backend which has already gone through
-kube-proxy for source IP rewrite) will not be dropped because of Network
-Policies.
+If `service.spec.sessionAffinity` of a Service is `ClientIP`, when a client accesses
+the Service for the first time, a learned flow with hard timeout which equals
+`service.spec.sessionAffinityConfig.clientIP.timeoutSeconds` of the Service will be
+generated in this table. This will be explained in detail in chapter [ServiceLBTable].
 
-The table-miss flow entry (flow 2) for this table forwards all non-Service
-traffic to the next table, [EgressRuleTable].
+### ServiceLBTable (41)
 
-In the future this table may support an additional mode of operations, in which
-it will implement kube-proxy functionality and take care of performing
-load-balancing / DNAT on traffic destined to Services.
+This table is used to implement Service Endpoint selection. Note that, currently, only
+ClusterIP Service request from Pods is supported. NodePort, LoadBalancer and ClusterIP
+whose client is from K8s Node will be supported in the future.
+
+When a ClusterIP Service is created with `service.spec.sessionAffinity` set to `None`, if you
+dump the flows, you should see the following flow:
+
+```text
+1. table=41, priority=200,tcp,reg4=0x10000/0x70000,nw_dst=10.107.100.231,tp_dst=443 actions=load:0x2->NXM_NX_REG4[16..18],load:0x1->NXM_NX_REG0[19],group:5
+```
+
+Among the match conditions of the above flow:
+
+* `reg4=0x10000/0x70000`, value of bits [16..18] in NXM_NX_REG4 is 0b001, which is used
+  to match Service packet whose state is to do Endpoint selection. The value of
+  bits [16..18] in NXM_NX_REG4 is set in [SessionAffinityTable] by flow `table=40, priority=0 actions=load:0x1->NXM_NX_REG4[16..18]`.
+
+The actions of the above flow:
+
+* `load:0x2->NXM_NX_REG4[16..18]` is used to set the value of bits [16..18] in NXM_NX_REG4
+  to 0b002, which indicates that Endpoint selection "is performed". Note that, Endpoint
+  selection has not really been done yet - it will be done by group action. The current
+  action should have been done in target OVS group entry after Endpoint selection. However,
+  we set the bits here, for the purpose of supporting more Endpoints in an OVS group.
+  Please check PR [#2101](https://github.com/antrea-io/antrea/pull/2101) to learn more information.
+* `load:0x1->NXM_NX_REG0[19]` is used to set the value of bit 19 in NXM_NX_REG0 to 0x1,
+  which means that the source and destination MACs need to be rewritten.
+* `group:5` is used to set the target OVS group. Note that, the target group needs to be
+  created first before the flow is created.
+
+Dump the group entry with command `ovs-ofctl dump-groups br-int 5`, you should see the
+following:
+
+```text
+group_id=5,type=select,\
+bucket=bucket_id:0,weight:100,actions=load:0xa0a0002->NXM_NX_REG3[],load:0x23c1->NXM_NX_REG4[0..15],resubmit(,42),\
+bucket=bucket_id:1,weight:100,actions=load:0xa0a0003->NXM_NX_REG3[],load:0x23c1->NXM_NX_REG4[0..15],resubmit(,42),\
+bucket=bucket_id:2,weight:100,actions=load:0xa0a0004->NXM_NX_REG3[],load:0x23c1->NXM_NX_REG4[0..15],resubmit(,42)
+```
+
+For the above OVS group, there are three buckets which have the same weight. Every bucket
+has the same chance to be selected since they have the same weight. The selected bucket
+will load Endpoint IPv4 address to NXM_NX_REG3, Endpoint port number to bits [0..15]
+in NXM_NX_REG4. Then the matched packet will be resubmitted to [EndpointDNATTable].
+
+When a ClusterIP Service is created with `service.spec.sessionAffinity` set to `ClientIP`, you may
+see the following flows:
+
+```text
+1. table=41, priority=200,tcp,reg4=0x10000/0x70000,nw_dst=10.107.100.231,tp_dst=443 actions=load:0x3->NXM_NX_REG4[16..18],load:0x1->NXM_NX_REG0[19],group:5
+2. table=41, priority=190,tcp,reg4=0x30000/0x70000,nw_dst=10.107.100.231,tp_dst=443 actions=\
+   learn(table=40,hard_timeout=300,priority=200,delete_learned,cookie=0x2040000000008, \
+     eth_type=0x800,nw_proto=6,NXM_OF_TCP_DST[],NXM_OF_IP_DST[],NXM_OF_IP_SRC[],\
+     load:NXM_NX_REG3[]->NXM_NX_REG3[],load:NXM_NX_REG4[0..15]->NXM_NX_REG4[0..15],load:0x2->NXM_NX_REG4[16..18],load:0x1->NXM_NX_REG0[19]),\
+   load:0x2->NXM_NX_REG4[16..18],\
+   resubmit(,42)
+```
+
+When a client (assumed that the source IP is 10.10.0.2) accesses the ClusterIP for the first
+time, the first packet of the connection will be matched by flow 1. Note that the action
+`load:0x3->NXM_NX_REG4[16..18]` indicates that the Service Endpoint selection result needs
+to be cached.
+
+Dump the group entry with command `ovs-ofctl dump-groups br-int 5`, you should see the
+following:
+
+```text
+group_id=5,type=select,\
+bucket=bucket_id:0,weight:100,actions=load:0xa0a0002->NXM_NX_REG3[],load:0x23c1->NXM_NX_REG4[0..15],resubmit(,41),\
+bucket=bucket_id:1,weight:100,actions=load:0xa0a0003->NXM_NX_REG3[],load:0x23c1->NXM_NX_REG4[0..15],resubmit(,41),\
+bucket=bucket_id:2,weight:100,actions=load:0xa0a0004->NXM_NX_REG3[],load:0x23c1->NXM_NX_REG4[0..15],resubmit(,41)
+```
+
+Note the action `resubmit(,41)` resubmits the first packet of a ClusterIP Service connection
+back to [ServiceLBTable], not resubmits the packet to [EndpointDNATTable]. Then the
+packet will be matched by flow 2 since value of bits [16..18] in NXM_NX_REG4 is 0b011. One
+action of the flow is to generate a learned flow in [SessionAffinityTable], the other
+action is to resubmit the packet to [EndpointDNATTable].
+
+Now if you dump flows of table [SessionAffinityTable], you may see the following flows:
+
+```text
+1. table=40, hard_timeout=300, priority=200,tcp,nw_src=10.10.0.2,nw_dst=10.107.100.231,tp_dst=443 \
+   actions=load:0xa0a0002->NXM_NX_REG3[],load:0x23c1->NXM_NX_REG4[0..15],load:0x2->NXM_NX_REG4[16..18],load:0x1->NXM_NX_REG0[19]
+2. table=40, priority=0 actions=load:0x1->NXM_NX_REG4[16..18]
+```
+
+Note that, flow 1 (the generated learned flow) has higher priority than flow 2 in table
+[SessionAffinityTable]. When a particular client accesses the ClusterIP once again, the first
+packet of the connection will be matched by flow 1 due to the match condition `nw_src=10.10.0.2`.
+
+The actions of flow 1:
+
+* `load:0xa0a0004->NXM_NX_REG3[]` is used to load Endpoint IPv4 address to NXM_NX_REG3.
+* `load:0x50->NXM_NX_REG4[0..15]` is used to load Endpoint port number to bits [0..15] in
+  NXM_NX_REG4.
+* `load:0x2->NXM_NX_REG4[16..18]` is used to set the value of bits [16..18] in NXM_NX_REG4 to
+  0b010, which indicates that the Service has done Endpoint selection.
+* `load:0x1->NXM_NX_REG0[18]` is used to set the value of bit 18 in NXM_NX_REG4 to 0x1, which
+  indicates that the source and destination MACs need to be rewritten.
+
+Note that, if the value of bits [16..18] in NXM_NX_REG4 is 0b010 (set by action `load:0x2->NXM_NX_REG4[16..18]`
+in table [SessionAffinityTable]), then packet will not be matched by any flows in table
+[ServiceLBTable] except the last one. The last one just forwards the packet to table
+[EndpointDNATTable] without selecting target OVS group. Then connections from a particular
+client will always access the same backend Pod within the session timeout setting by
+`service.spec.sessionAffinityConfig.clientIP.timeoutSeconds`.
+
+### EndpointDNATTable (42)
+
+The table implements DNAT for Service traffic after Endpoint selection for the first
+packet of a Service connection.
+
+If you dump the flows for this table, you should see flows like the following:
+
+```text
+1. table=42, priority=200,tcp,reg3=0xc0a84d64,reg4=0x2192b/0x7ffff actions=ct(commit,table=45,zone=65520,nat(dst=192.168.77.100:6443),exec(load:0x21->NXM_NX_CT_MARK[]))
+2. table=42, priority=200,tcp,reg3=0xc0a84d65,reg4=0x2286d/0x7ffff actions=ct(commit,table=45,zone=65520,nat(dst=192.168.77.101:10349),exec(load:0x21->NXM_NX_CT_MARK[]))
+3. table=42, priority=200,tcp,reg3=0xa0a0004,reg4=0x20050/0x7ffff actions=ct(commit,table=45,zone=65520,nat(dst=10.10.0.4:80),exec(load:0x21->NXM_NX_CT_MARK[]))
+4. table=42, priority=200,tcp,reg3=0xa0a0102,reg4=0x20050/0x7ffff actions=ct(commit,table=45,zone=65520,nat(dst=10.10.1.2:80),exec(load:0x21->NXM_NX_CT_MARK[]))
+5. table=42, priority=200,udp,reg3=0xa0a0002,reg4=0x20035/0x7ffff actions=ct(commit,table=45,zone=65520,nat(dst=10.10.0.2:53),exec(load:0x21->NXM_NX_CT_MARK[]))
+6. table=42, priority=190,reg4=0x20000/0x70000 actions=load:0x1->NXM_NX_REG4[16..18],resubmit(,41)
+7. table=42, priority=0 actions=resubmit(,45)
+```
+
+For flow 1-5, DNAT is performed with the IPv4 address stored in NXM_NX_REG3 and port number stored in
+bits[0..15] in NXM_NX_REG4 by `ct commit` action. Note that, the match condition `reg4=0x2192b/0x7ffff`
+is a union value. The value of bits [0..15] is port number. The value of bits [16..18] is 0b010,
+which indicates that Service has done Endpoint selection. Service ct_mark `0x21` is also marked.
+
+If none of the flows described above are hit, flow 6 is used to forward packet back to table [ServiceLBTable]
+to select Endpoint again.
+
+Flow 7 is used to match non-Service packet.
 
 ### AntreaPolicyEgressRuleTable (45)
 
@@ -474,7 +656,7 @@ in the previous section).
 The above example flows read as follow: if the source IP address is in set
 {10.10.1.2, 10.10.1.3}, and the destination IP address is in the set {10.10.1.2,
 10.10.1.3}, and the destination TCP port is in the set {80}, then use the
-`conjunction` action with id 2, which goes to EgressMetricsTable, and then
+`conjunction` action with id 2, which goes to [EgressMetricsTable], and then
 [L3ForwardingTable]. Otherwise, packet goes to [EgressDefaultTable].
 
 If the Network Policy specification includes exceptions (`except` field), then
@@ -893,9 +1075,9 @@ which are not dropped because of Network Policies. If you dump the flows for thi
 table, you should see something like this:
 
 ```text
-1. table=105, priority=200,ct_state=+new+trk,ip,reg0=0x1/0xf actions=ct(commit,table=110,zone=65520,exec(load:0x20->NXM_NX_CT_MARK[]))
-2. table=105, priority=190,ct_state=+new+trk,ip actions=ct(commit,table=110,zone=65520)
-3. table=105, priority=0 actions=goto_table:110
+1. table=105, priority=200,ct_state=+new+trk,ip,reg0=0x1/0xf actions=ct(commit,table=108,zone=65520,exec(load:0x20->NXM_NX_CT_MARK[]))
+2. table=105, priority=190,ct_state=+new+trk,ip actions=ct(commit,table=108,zone=65520)
+3. table=105, priority=0 actions=goto_table:108
 ```
 
 Flow 1 ensures that we commit connections initiated through the gateway
@@ -913,7 +1095,31 @@ but is also harmless, as the destination MAC is already correct.
 
 Flow 2 commits all other new connections.
 
-All traffic then goes to the next table ([L2ForwardingOutTable]).
+All traffic then goes to [HairpinSNATTable].
+
+### HairpinSNATTable (108)
+
+The table is used to handle Service hairpin case, which indicates that the
+packet should be output to the port on which it was received.
+
+If you dump the flows for this table, you should see the flows:
+
+```text
+1. table=108, priority=200,ip,nw_src=10.10.0.4,nw_dst=10.10.0.4 actions=mod_nw_src:169.254.169.252,load:0x1->NXM_NX_REG0[18],resubmit(,110)
+2. table=108, priority=200,ip,nw_src=10.10.0.2,nw_dst=10.10.0.2 actions=mod_nw_src:169.254.169.252,load:0x1->NXM_NX_REG0[18],resubmit(,110)
+3. table=108, priority=200,ip,nw_src=10.10.0.3,nw_dst=10.10.0.3 actions=mod_nw_src:169.254.169.252,load:0x1->NXM_NX_REG0[18],resubmit(,110)
+4. table=108, priority=0 actions=resubmit(,110)
+```
+
+Flow 1-3 are used to match Service packets from Pods. The source IP of the matched
+packets by flow 1-3 should be SNAT'd with a virtual hairpin IP since the source and
+destination IP addresses should not be the same. Without SNAT, response packets from
+a Pod will not be forwarded back to OVS pipeline as the destination IP is the Pod's
+own IP, then the connection is interrupted because the conntrack state is only stored
+in OVS ct zone, not in the Pod. With SNAT, the destination IP will be the virtual
+hairpin IP and forwarded back to OVS pipeline. Note that, bit 18 in NXM_NX_REG0 is
+set to 0x1, and it is consumed in [L2ForwardingOutTable] to output the packet
+to the port on which it was received with action `IN_PORT`.
 
 ### L2ForwardingOutTable (110)
 
@@ -929,12 +1135,53 @@ The first flow outputs all unicast packets to the correct port (the port was
 resolved by the "dmac" table, [L2ForwardingCalcTable]). IP packets for which
 [L2ForwardingCalcTable] did not set bit 16 of NXM_NX_REG0 will be dropped.
 
+## Tables (AntreaProxy is disabled)
+
+![OVS pipeline](../assets/ovs-pipeline.svg)
+
+### DNATTable (40)
+
+This table is created only when AntreaProxy is disabled. Its only job is to
+send traffic destined to Services through the local gateway interface, without any
+modifications. kube-proxy will then take care of load-balancing the connections
+across the different backends for each Service.
+
+If you dump the flows for this table, you should see something like this:
+
+```text
+1. table=40, priority=200,ip,nw_dst=10.96.0.0/12 actions=load:0x2->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],goto_table:105
+2. table=40, priority=0 actions=goto_table:45
+```
+
+In the example above, 10.96.0.0/12 is the Service CIDR (this is the default
+value used by `kubeadm init`). This flow is not actually required for
+forwarding, but to bypass [EgressRuleTable] and [EgressDefaultTable] for Service
+traffic on its way to kube-proxy through the gateway. If we omitted this flow,
+such traffic would be unconditionally dropped if a Network Policy is applied on
+the originating Pod. For such traffic, we instead enforce Network Policy egress
+rules when packets come back through the gateway and the destination IP has been
+rewritten by kube-proxy (DNAT to a backend for the Service). We cannot output
+the Service traffic to the gateway port directly as we haven't committed the
+connection yet; instead we store the port in NXM_NX_REG1 - similarly to how we
+process non-Service traffic in [L2ForwardingCalcTable] - and forward it to
+[ConntrackCommitTable]. By committing the connection we ensure that reply
+traffic (traffic from the Service backend which has already gone through
+kube-proxy for source IP rewrite) will not be dropped because of Network
+Policies.
+
+The table-miss flow entry (flow 2) for this table forwards all non-Service
+traffic to the next table, [AntreaPolicyEgressRuleTable].
+
 [ClassifierTable]: #classifiertable-0
 [SpoofGuardTable]: #spoofguardtable-10
 [ARPResponderTable]: #arprespondertable-20
+[ServiceHairpinTable]: #serviceHairpinTable-23
 [ConntrackTable]: #conntracktable-30
 [ConntrackStateTable]: #conntrackstatetable-31
 [DNATTable]: #dnattable-40
+[SessionAffinityTable]: #sessionAffinityTable-40
+[ServiceLBTable]: #serviceLBTable-41
+[EndpointDNATTable]: #endpointDNATTable-42
 [AntreaPolicyEgressRuleTable]: #antreapolicyegressruletable-45
 [EgressRuleTable]: #egressruletable-50
 [EgressDefaultTable]: #egressdefaulttable-60
@@ -946,4 +1193,5 @@ resolved by the "dmac" table, [L2ForwardingCalcTable]). IP packets for which
 [IngressRuleTable]: #ingressruletable-90
 [IngressDefaultTable]: #ingressdefaulttable-100
 [ConntrackCommitTable]: #conntrackcommittable-105
+[HairpinSNATTable]: #hairpinSNATTable-108
 [L2ForwardingOutTable]: #l2forwardingouttable-110
