@@ -163,6 +163,7 @@ type TestOptions struct {
 	logsExportOnSuccess bool
 	withBench           bool
 	enableCoverage      bool
+	enableAntreaIPAM    bool
 	coverageDir         string
 	skipCases           string
 }
