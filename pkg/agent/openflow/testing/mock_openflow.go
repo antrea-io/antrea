@@ -22,6 +22,7 @@ package testing
 import (
 	config "antrea.io/antrea/pkg/agent/config"
 	types "antrea.io/antrea/pkg/agent/types"
+	v1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
 	openflow "antrea.io/antrea/pkg/ovs/openflow"
 	ip "antrea.io/antrea/pkg/util/ip"
 	proxy "antrea.io/antrea/third_party/proxy"
@@ -406,17 +407,17 @@ func (mr *MockClientMockRecorder) InstallPodFlows(arg0, arg1, arg2, arg3 interfa
 }
 
 // InstallPodSNATFlows mocks base method
-func (m *MockClient) InstallPodSNATFlows(arg0 uint32, arg1 net.IP, arg2 uint32) error {
+func (m *MockClient) InstallPodSNATFlows(arg0 uint32, arg1 net.IP, arg2 uint32, arg3 []v1alpha2.Except) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "InstallPodSNATFlows", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "InstallPodSNATFlows", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // InstallPodSNATFlows indicates an expected call of InstallPodSNATFlows
-func (mr *MockClientMockRecorder) InstallPodSNATFlows(arg0, arg1, arg2 interface{}) *gomock.Call {
+func (mr *MockClientMockRecorder) InstallPodSNATFlows(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallPodSNATFlows", reflect.TypeOf((*MockClient)(nil).InstallPodSNATFlows), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallPodSNATFlows", reflect.TypeOf((*MockClient)(nil).InstallPodSNATFlows), arg0, arg1, arg2, arg3)
 }
 
 // InstallPolicyRuleFlows mocks base method

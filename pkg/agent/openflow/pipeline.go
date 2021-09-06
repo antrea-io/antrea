@@ -33,6 +33,7 @@ import (
 	"antrea.io/antrea/pkg/agent/metrics"
 	"antrea.io/antrea/pkg/agent/openflow/cookie"
 	"antrea.io/antrea/pkg/agent/types"
+	crdv1a2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 	"antrea.io/antrea/pkg/ovs/ovsctl"
@@ -1927,26 +1928,39 @@ func (c *client) snatIPFromTunnelFlow(snatIP net.IP, mark uint32) binding.Flow {
 		Done()
 }
 
-// snatRuleFlow generates a flow that applies the SNAT rule for a local Pod. If
+// snatRuleFlows generates flows that applies the SNAT rule for a local Pod. If
 // the SNAT IP exists on the local Node, it sets the packet mark with the ID of
 // the SNAT IP, for the traffic from the ofPort to external; if the SNAT IP is
 // on a remote Node, it tunnels the packets to the SNAT IP.
-func (c *client) snatRuleFlow(ofPort uint32, snatIP net.IP, snatMark uint32, localGatewayMAC net.HardwareAddr) binding.Flow {
+func (c *client) snatRuleFlows(ofPort uint32, snatIP net.IP, snatMark uint32, localGatewayMAC net.HardwareAddr, excepts []crdv1a2.Except) []binding.Flow {
 	ipProto := getIPProtocol(snatIP)
 	snatTable := c.pipeline[snatTable]
+	l3FwdTable := c.pipeline[l3ForwardingTable]
+	nextTable := l3FwdTable.GetNext()
+	snatFlows := []binding.Flow{}
+	for _, except := range excepts {
+		_, excidr, _ := net.ParseCIDR(except.CIDR)
+		snatFlows = append(snatFlows, l3FwdTable.BuildFlow(priorityNormal).
+		MatchInPort(ofPort).
+		MatchProtocol(ipProto).
+		MatchDstIPNet(*excidr).
+		Action().GotoTable(nextTable).
+		Cookie(c.cookieAllocator.Request(cookie.SNAT).Raw()).
+		Done())
+	}
 	if snatMark != 0 {
 		// Local SNAT IP.
-		return snatTable.BuildFlow(priorityNormal).
+		return append(snatFlows, snatTable.BuildFlow(priorityNormal).
 			MatchProtocol(ipProto).
 			MatchCTStateNew(true).MatchCTStateTrk(true).
 			MatchInPort(ofPort).
 			Action().LoadPktMarkRange(snatMark, snatPktMarkRange).
 			Action().GotoTable(snatTable.GetNext()).
 			Cookie(c.cookieAllocator.Request(cookie.SNAT).Raw()).
-			Done()
+			Done())
 	}
 	// SNAT IP should be on a remote Node.
-	return snatTable.BuildFlow(priorityNormal).
+	snatFlows = append(snatFlows, snatTable.BuildFlow(priorityNormal).
 		MatchProtocol(ipProto).
 		MatchInPort(ofPort).
 		Action().SetSrcMAC(localGatewayMAC).
@@ -1955,7 +1969,8 @@ func (c *client) snatRuleFlow(ofPort uint32, snatIP net.IP, snatMark uint32, loc
 		Action().SetTunnelDst(snatIP).
 		Action().GotoTable(l3DecTTLTable).
 		Cookie(c.cookieAllocator.Request(cookie.SNAT).Raw()).
-		Done()
+		Done())
+	return snatFlows
 }
 
 // loadBalancerServiceFromOutsideFlow generates the flow to forward LoadBalancer service traffic from outside node

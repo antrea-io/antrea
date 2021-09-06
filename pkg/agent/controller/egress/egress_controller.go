@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"net"
 	"reflect"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -81,6 +82,8 @@ type egressState struct {
 	egressIP string
 	// The actual datapath mark of this Egress. Used to check if the mark changes since last process.
 	mark uint32
+	// The except Info for bypass SNAT flows
+	excepts []crdv1a2.Except
 	// The actual openflow ports for which we have installed SNAT rules. Used to identify stale openflow ports when
 	// updating or deleting an Egress.
 	ofPorts sets.Int32
@@ -464,11 +467,12 @@ func (c *EgressController) deleteEgressState(egressName string) {
 	delete(c.egressStates, egressName)
 }
 
-func (c *EgressController) newEgressState(egressName string, egressIP string) *egressState {
+func (c *EgressController) newEgressState(egressName string, egressIP string, excepts []crdv1a2.Except) *egressState {
 	c.egressStatesMutex.Lock()
 	defer c.egressStatesMutex.Unlock()
 	state := &egressState{
 		egressIP: egressIP,
+		excepts: excepts,
 		ofPorts:  sets.NewInt32(),
 		pods:     sets.NewString(),
 	}
@@ -592,7 +596,7 @@ func (c *EgressController) syncEgress(egressName string) error {
 		return nil
 	}
 	if !exist {
-		eState = c.newEgressState(egressName, egress.Spec.EgressIP)
+		eState = c.newEgressState(egressName, egress.Spec.EgressIP, egress.Spec.Excepts)
 	}
 
 	localNodeSelected, err := c.cluster.ShouldSelectEgress(egress)
@@ -619,12 +623,13 @@ func (c *EgressController) syncEgress(egressName string) error {
 
 	// If the mark changes, uninstall all of the Egress's Pod flows first, then installs them with new mark.
 	// It could happen when the Egress IP is added to or removed from the Node.
-	if eState.mark != mark {
+	if eState.mark != mark || !Equal(eState.excepts, egress.Spec.Excepts) {
 		// Uninstall all of its Pod flows.
 		if err := c.uninstallPodFlows(egressName, eState, eState.ofPorts, eState.pods); err != nil {
 			return err
 		}
 		eState.mark = mark
+		eState.excepts = egress.Spec.Excepts
 	}
 
 	if err := c.updateEgressStatus(egress, c.localIPDetector.IsLocalIP(egress.Spec.EgressIP)); err != nil {
@@ -671,7 +676,7 @@ func (c *EgressController) syncEgress(egressName string) error {
 			staleOFPorts.Delete(ofPort)
 			continue
 		}
-		if err := c.ofClient.InstallPodSNATFlows(uint32(ofPort), egressIP, mark); err != nil {
+		if err := c.ofClient.InstallPodSNATFlows(uint32(ofPort), egressIP, mark, eState.excepts); err != nil {
 			return err
 		}
 		eState.ofPorts.Insert(ofPort)
@@ -871,4 +876,18 @@ func (c *EgressController) deleteEgressGroup(group *cpv1b2.EgressGroup) {
 
 	delete(c.egressGroups, group.Name)
 	c.queue.Add(group.Name)
+}
+
+func Equal(a, b []crdv1a2.Except) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	sort.Slice(a, func(i, j int) bool {return a[i].CIDR < a[j].CIDR})
+	sort.Slice(b, func(i, j int) bool {return b[i].CIDR < b[j].CIDR})
+	for i, v := range a {
+		if v != b[i] {
+			return false
+		}
+    	}
+	return true
 }

@@ -79,6 +79,14 @@ spec:
                 oneOf:
                 - format: ipv4
                 - format: ipv6
+              excepts:
+                items:
+                  properties:
+                    cidr:
+                      type: string
+                      format: cidr
+                  type: object
+                type: array
               externalIPPool:
                 type: string
           status:

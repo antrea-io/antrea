@@ -26,6 +26,7 @@ import (
 	"antrea.io/antrea/pkg/agent/openflow/cookie"
 	"antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/agent/util"
+	crdv1a2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 	utilip "antrea.io/antrea/pkg/util/ip"
 	"antrea.io/antrea/third_party/proxy"
@@ -176,7 +177,7 @@ type Client interface {
 	// tunnel destination, and the packets should be SNAT'd on the remote
 	// Node. As of now, a Pod can be configured to use only a single SNAT
 	// IP in a single address family (IPv4 or IPv6).
-	InstallPodSNATFlows(ofPort uint32, snatIP net.IP, snatMark uint32) error
+	InstallPodSNATFlows(ofPort uint32, snatIP net.IP, snatMark uint32, excepts []crdv1a2.Except) error
 
 	// UninstallPodSNATFlows removes the SNAT flows for the local Pod.
 	UninstallPodSNATFlows(ofPort uint32) error
@@ -806,8 +807,8 @@ func (c *client) UninstallSNATMarkFlows(mark uint32) error {
 	return c.deleteFlows(c.snatFlowCache, cacheKey)
 }
 
-func (c *client) InstallPodSNATFlows(ofPort uint32, snatIP net.IP, snatMark uint32) error {
-	flows := []binding.Flow{c.snatRuleFlow(ofPort, snatIP, snatMark, c.nodeConfig.GatewayConfig.MAC)}
+func (c *client) InstallPodSNATFlows(ofPort uint32, snatIP net.IP, snatMark uint32, excepts []crdv1a2.Except) error {
+	flows := c.snatRuleFlows(ofPort, snatIP, snatMark, c.nodeConfig.GatewayConfig.MAC, excepts)
 	cacheKey := fmt.Sprintf("p%x", ofPort)
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()

@@ -212,6 +212,10 @@ type EgressStatus struct {
 	EgressNode string `json:"egressNode"`
 }
 
+type Except struct {
+	CIDR string `json:"cidr"`
+}
+
 // EgressSpec defines the desired state for Egress.
 type EgressSpec struct {
 	// AppliedTo selects Pods to which the Egress will be applied.
@@ -226,6 +230,7 @@ type EgressSpec struct {
 	// If it is non-empty, the EgressIP will be assigned to a Node specified by the pool automatically and will failover
 	// to a different Node when the Node becomes unreachable.
 	ExternalIPPool string `json:"externalIPPool"`
+	Excepts []Except `json:"excepts"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

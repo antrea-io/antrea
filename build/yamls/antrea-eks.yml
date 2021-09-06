@@ -1474,6 +1474,14 @@ spec:
                 - format: ipv4
                 - format: ipv6
                 type: string
+              excepts:
+                items:
+                  properties:
+                    cidr:
+                      format: cidr
+                      type: string
+                  type: object
+                type: array
               externalIPPool:
                 type: string
             required:
