@@ -35,6 +35,7 @@ import (
 func TestWireGuard(t *testing.T) {
 	skipIfNumNodesLessThan(t, 2)
 	skipIfHasWindowsNodes(t)
+	skipIfAntreaIPAMTest(t)
 	providerIsKind := testOptions.providerName == "kind"
 	if !providerIsKind {
 		for _, node := range clusterInfo.nodes {
