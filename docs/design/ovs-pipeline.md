@@ -78,7 +78,9 @@ We use 2 32-bit OVS registers to carry information throughout the pipeline:
   - bit 16 is used to indicate whether the destination MAC address of a packet
     is "known", i.e. corresponds to an entry in [L2ForwardingCalcTable], which
     is essentially a "dmac" table.
-  - bit 18 is used to in
+  - bit 18 is used to indicate whether the packet should be output on the port
+    on which it was received. It is consumed by table [L2ForwardingOutTable]
+    to output the packet with action `IN_PORT`.
   - bit 19 is used to indicate whether the destination and source MACs of the
     packet should be rewritten in the [l3ForwardingTable]. The bit is set for
     packets received from the tunnel port in the [ClassifierTable]. The
@@ -348,8 +350,8 @@ If you dump the flows for this table, you should see the flows:
 
 Flow 1 is used to match the packet whose destination IP is virtual hairpin IP and
 set the destination IP by loading register `NXM_OF_IP_SRC` to `NXM_OF_IP_DST`.
-Register NXM_NX_REG0[18] is set as 0x1,  which indicates that the destination
-and source MACs of the packet should be rewritten in the [l3ForwardingTable]. 
+Register NXM_NX_REG0[18] is set as 0x1, which indicates the packet should be output
+on the port on which it was received, and it is consumed in table [L2ForwardingOutTable].
 
 ### ConntrackTable (30)
 
@@ -1106,9 +1108,11 @@ resolved by the "dmac" table, [L2ForwardingCalcTable]). IP packets for which
 [ClassifierTable]: #classifiertable-0
 [SpoofGuardTable]: #spoofguardtable-10
 [ARPResponderTable]: #arprespondertable-20
+[ServiceHairpinTable]: #serviceHairpinTable-23
 [ConntrackTable]: #conntracktable-30
 [ConntrackStateTable]: #conntrackstatetable-31
-[DNATTable]: #dnattable-40
+[SessionAffinityTable]: #sessionAffinityTable-40
+[ServiceLBTable]: #serviceLBTable-41
 [AntreaPolicyEgressRuleTable]: #antreapolicyegressruletable-45
 [EgressRuleTable]: #egressruletable-50
 [EgressDefaultTable]: #egressdefaulttable-60
@@ -1120,4 +1124,5 @@ resolved by the "dmac" table, [L2ForwardingCalcTable]). IP packets for which
 [IngressRuleTable]: #ingressruletable-90
 [IngressDefaultTable]: #ingressdefaulttable-100
 [ConntrackCommitTable]: #conntrackcommittable-105
+[HairpinSNATTable]: #hairpinSNATTable-108
 [L2ForwardingOutTable]: #l2forwardingouttable-110
