@@ -4001,7 +4001,7 @@ metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-mc8h75hbgg
+  name: antrea-config
   namespace: kube-system
 ---
 apiVersion: v1
@@ -4072,7 +4072,7 @@ spec:
             fieldRef:
               fieldPath: spec.serviceAccountName
         - name: ANTREA_CONFIG_MAP_NAME
-          value: antrea-config-mc8h75hbgg
+          value: antrea-config
         image: projects.registry.vmware.com/antrea/antrea-ubuntu:latest
         imagePullPolicy: IfNotPresent
         livenessProbe:
@@ -4123,7 +4123,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-mc8h75hbgg
+          name: antrea-config
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -4404,7 +4404,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-mc8h75hbgg
+          name: antrea-config
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d

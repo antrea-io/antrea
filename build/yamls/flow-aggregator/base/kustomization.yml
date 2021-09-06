@@ -1,5 +1,7 @@
 resources:
 - flow-aggregator.yml
+generatorOptions:
+  disableNameSuffixHash: true
 configMapGenerator:
 - files:
   - conf/flow-aggregator.conf
