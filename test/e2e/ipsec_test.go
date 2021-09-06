@@ -32,6 +32,7 @@ func TestIPSec(t *testing.T) {
 	skipIfIPv6Cluster(t)
 	skipIfNumNodesLessThan(t, 2)
 	skipIfHasWindowsNodes(t)
+	skipIfAntreaIPAMTest(t)
 
 	data, err := setupTest(t)
 	if err != nil {
