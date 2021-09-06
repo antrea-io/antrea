@@ -36,6 +36,18 @@ func skipIfNotBenchmarkTest(tb testing.TB) {
 	}
 }
 
+func skipIfNotAntreaIPAMTest(tb testing.TB) {
+	if !testOptions.enableAntreaIPAM {
+		tb.Skipf("Skipping AntreaIPAM test: %s", tb.Name())
+	}
+}
+
+func skipIfAntreaIPAMTest(tb testing.TB) {
+	if testOptions.enableAntreaIPAM {
+		tb.Skipf("Skipping test %s when run AntreaIPAM test", tb.Name())
+	}
+}
+
 func skipIfProviderIs(tb testing.TB, name string, reason string) {
 	if testOptions.providerName == name {
 		tb.Skipf("Skipping test for the '%s' provider: %s", name, reason)
