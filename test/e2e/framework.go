@@ -103,7 +103,7 @@ const (
 
 	nameSuffixLength int = 8
 
-	agnhostImage        = "projects.registry.vmware.com/antrea/agnhost:2.26"
+	agnhostImage        = "k8s.gcr.io/e2e-test-images/agnhost:2.29"
 	busyboxImage        = "projects.registry.vmware.com/library/busybox"
 	nginxImage          = "projects.registry.vmware.com/antrea/nginx"
 	perftoolImage       = "projects.registry.vmware.com/antrea/perftool"
@@ -1062,7 +1062,6 @@ func (data *TestData) createServerPod(name string, ns string, portName string, p
 // createCustomPod creates a Pod in given Namespace with custom labels.
 func (data *TestData) createServerPodWithLabels(name, ns string, portNum int32, labels map[string]string) error {
 	cmd := []string{"/agnhost", "serve-hostname", "--tcp", "--http=false", "--port", fmt.Sprintf("%d", portNum)}
-	image := "k8s.gcr.io/e2e-test-images/agnhost:2.29"
 	env := corev1.EnvVar{Name: fmt.Sprintf("SERVE_PORT_%d", portNum), Value: "foo"}
 	port := corev1.ContainerPort{ContainerPort: portNum}
 	containerName := fmt.Sprintf("c%v", portNum)
@@ -1071,7 +1070,7 @@ func (data *TestData) createServerPodWithLabels(name, ns string, portNum int32, 
 			pod.Labels[k] = v
 		}
 	}
-	return data.createPodOnNodeInNamespace(name, ns, "", containerName, image, cmd, nil, []corev1.EnvVar{env}, []corev1.ContainerPort{port}, false, mutateLabels)
+	return data.createPodOnNodeInNamespace(name, ns, "", containerName, agnhostImage, cmd, nil, []corev1.EnvVar{env}, []corev1.ContainerPort{port}, false, mutateLabels)
 }
 
 // deletePod deletes a Pod in the test namespace.
@@ -1441,6 +1440,7 @@ func (data *TestData) createNginxClusterIPServiceWithAnnotations(affinity bool, 
 }
 
 // createNginxClusterIPService creates a nginx service with the given name.
+// TODO: Service creation methods could return a cleanup function like createAndWaitForPod() does.
 func (data *TestData) createNginxClusterIPService(name string, affinity bool, ipFamily *corev1.IPFamily) (*corev1.Service, error) {
 	if name == "" {
 		name = "nginx"
@@ -2084,6 +2084,39 @@ func (data *TestData) copyNodeFiles(nodeName string, fileName string, covDir str
 func (data *TestData) createAgnhostPodOnNode(name string, ns string, nodeName string) error {
 	sleepDuration := 3600 // seconds
 	return data.createPodOnNode(name, ns, nodeName, agnhostImage, []string{"sleep", strconv.Itoa(sleepDuration)}, nil, nil, nil, false, nil)
+}
+
+func (data *TestData) createAgnhostServiceAndBackendPods(name string, node string, svcType corev1.ServiceType) (*corev1.Service, func(), error) {
+	ipv4Protocol := corev1.IPv4Protocol
+	args := []string{"netexec", "--http-port=80", "--udp-port=80"}
+	if err := data.createPodOnNode(name, testNamespace, node, agnhostImage, []string{}, args, nil, []corev1.ContainerPort{
+		{
+			Name:          "http",
+			ContainerPort: 80,
+			Protocol:      corev1.ProtocolTCP,
+		},
+	}, false, nil); err != nil {
+		return nil, nil, err
+	}
+
+	_, err := data.podWaitForIPs(defaultTimeout, name, testNamespace)
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := data.podWaitForRunning(defaultTimeout, name, testNamespace); err != nil {
+		return nil, nil, err
+	}
+	svc, err := data.createService(name, 80, 80, map[string]string{"app": "agnhost"}, false, false, svcType, &ipv4Protocol)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	cleanup := func() {
+		data.deletePodAndWait(defaultTimeout, name, testNamespace)
+		data.deleteServiceAndWait(defaultTimeout, name)
+	}
+
+	return svc, cleanup, nil
 }
 
 func (data *TestData) createDaemonSet(name string, ns string, ctrName string, image string, cmd []string, args []string) (*appsv1.DaemonSet, func() error, error) {

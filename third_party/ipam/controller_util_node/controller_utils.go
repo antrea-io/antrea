@@ -56,7 +56,7 @@ import (
 )
 
 // RecordNodeStatusChange records a event related to a node status change. (Common to lifecycle and ipam)
-func RecordNodeStatusChange(/*recorder record.EventRecorder,*/ node *v1.Node, newStatus string) {
+func RecordNodeStatusChange( /*recorder record.EventRecorder,*/ node *v1.Node, newStatus string) {
 	//ref := &v1.ObjectReference{
 	//	APIVersion: "v1",
 	//	Kind:       "Node",
