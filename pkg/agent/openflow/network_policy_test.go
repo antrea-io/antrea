@@ -1112,3 +1112,80 @@ func TestNetworkPolicyMetrics(t *testing.T) {
 		})
 	}
 }
+
+func TestGetMatchFlowUpdates(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	c = prepareClient(ctrl)
+	c.nodeConfig = &config.NodeConfig{PodIPv4CIDR: podIPv4CIDR, PodIPv6CIDR: nil}
+	c.networkConfig = &config.NetworkConfig{TrafficEncapMode: config.TrafficEncapModeEncap}
+	c.ipProtocols = []binding.Protocol{binding.ProtocolIP}
+	outDropTable.EXPECT().BuildFlow(gomock.Any()).Return(newMockDropFlowBuilder(ctrl)).AnyTimes()
+	cnpOutTable.EXPECT().BuildFlow(gomock.Any()).Return(newMockRuleFlowBuilder(ctrl)).AnyTimes()
+	ruleFlowBuilder.EXPECT().MatchRegFieldWithValue(gomock.Any(), gomock.Any()).Return(ruleFlowBuilder).AnyTimes()
+	ruleAction.EXPECT().LoadRegMark(gomock.Any()).Return(ruleFlowBuilder).AnyTimes()
+	ruleAction.EXPECT().Conjunction(gomock.Any(), gomock.Any(), gomock.Any()).Return(ruleFlowBuilder).AnyTimes()
+	metricTable.EXPECT().BuildFlow(gomock.Any()).Return(newMockMetricFlowBuilder(ctrl)).AnyTimes()
+	metricFlowBuilder.EXPECT().MatchRegMark(gomock.Any()).Return(metricFlowBuilder).AnyTimes()
+	metricFlowBuilder.EXPECT().MatchRegFieldWithValue(gomock.Any(), gomock.Any()).Return(metricFlowBuilder).AnyTimes()
+	rules := []*types.PolicyRule{
+		{
+			Direction: v1beta2.DirectionOut,
+			From:      parseAddresses([]string{"192.168.1.40", "192.168.1.50"}),
+			Action:    &actionAllow,
+			Priority:  &priority100,
+			To:        []types.Address{NewOFPortAddress(1), NewOFPortAddress(2)},
+			FlowID:    uint32(10),
+			TableID:   AntreaPolicyEgressRuleTable,
+			PolicyRef: &v1beta2.NetworkPolicyReference{
+				Type:      v1beta2.AntreaNetworkPolicy,
+				Namespace: "ns1",
+				Name:      "np1",
+				UID:       "id1",
+			},
+		},
+		{
+			Direction: v1beta2.DirectionOut,
+			// conjunctive match flow with priority 100 for nw_src=192.168.1.40 should tie to conjunction 10 and 11 but not 12.
+			From:     parseAddresses([]string{"192.168.1.40", "192.168.1.51"}),
+			Action:   &actionDrop,
+			Priority: &priority100,
+			To:       []types.Address{NewOFPortAddress(1), NewOFPortAddress(3)},
+			Service:  []v1beta2.Service{{Protocol: &protocolTCP, Port: &port8080}},
+			FlowID:   uint32(11),
+			TableID:  AntreaPolicyEgressRuleTable,
+			PolicyRef: &v1beta2.NetworkPolicyReference{
+				Type:      v1beta2.AntreaNetworkPolicy,
+				Namespace: "ns1",
+				Name:      "np2",
+				UID:       "id2",
+			},
+		},
+		{
+			Direction: v1beta2.DirectionOut,
+			// conjunctive match flow with priority 200 for nw_src=192.168.1.40 should tie to conjunction 12 only.
+			From:     parseAddresses([]string{"192.168.1.40"}),
+			Action:   &actionDrop,
+			Priority: &priority200,
+			To:       []types.Address{NewOFPortAddress(1)},
+			Service:  []v1beta2.Service{{Protocol: &protocolTCP, Port: &port8080}},
+			FlowID:   uint32(12),
+			TableID:  AntreaPolicyEgressRuleTable,
+			PolicyRef: &v1beta2.NetworkPolicyReference{
+				Type:      v1beta2.AntreaNetworkPolicy,
+				Namespace: "ns1",
+				Name:      "np3",
+				UID:       "id3",
+			},
+		},
+	}
+	err := c.BatchInstallPolicyRuleFlows(rules)
+	assert.Nil(t, err)
+	updatedPriorities := map[uint16]uint16{
+		priority100: 101,
+		priority200: 202,
+	}
+	err = c.ReassignFlowPriorities(updatedPriorities, AntreaPolicyEgressRuleTable)
+	assert.Nil(t, err)
+}
