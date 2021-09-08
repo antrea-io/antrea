@@ -3719,7 +3719,7 @@ data:
     # networkPolicyOnly: Antrea enforces NetworkPolicy only, and utilizes CNI chaining and delegates Pod
     #                    IPAM and connectivity to the primary CNI.
     #
-    #trafficEncapMode: encap
+    trafficEncapMode: encap
 
     # Whether or not to SNAT (using the Node IP) the egress traffic from a Pod to the external network.
     # This option is for the noEncap traffic mode only, and the default value is false. In the noEncap
@@ -3892,7 +3892,7 @@ metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-5mt4h4g8tk
+  name: antrea-config-844tmf4bbd
   namespace: kube-system
 ---
 apiVersion: v1
@@ -3972,7 +3972,7 @@ spec:
             fieldRef:
               fieldPath: spec.serviceAccountName
         - name: ANTREA_CONFIG_MAP_NAME
-          value: antrea-config-5mt4h4g8tk
+          value: antrea-config-844tmf4bbd
         image: projects.registry.vmware.com/antrea/antrea-ubuntu:latest
         imagePullPolicy: IfNotPresent
         livenessProbe:
@@ -4023,7 +4023,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-5mt4h4g8tk
+          name: antrea-config-844tmf4bbd
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -4354,7 +4354,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-5mt4h4g8tk
+          name: antrea-config-844tmf4bbd
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d

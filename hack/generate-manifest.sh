@@ -256,45 +256,46 @@ mkdir configMap && cd configMap
 cp $KUSTOMIZATION_DIR/base/conf/antrea-agent.conf antrea-agent.conf
 cp $KUSTOMIZATION_DIR/base/conf/antrea-controller.conf antrea-controller.conf
 if $KIND; then
-    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*ovsDatapathType[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/ovsDatapathType: netdev/" antrea-agent.conf
+    sed -i.bak -E "s/^[[:space:]]*#?[[:space:]]*ovsDatapathType[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/ovsDatapathType: netdev/" antrea-agent.conf
 fi
 
 if $IPSEC; then
-    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*enableIPSecTunnel[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/enableIPSecTunnel: true/" antrea-agent.conf
+    sed -i.bak -E "s/^[[:space:]]*#?[[:space:]]*enableIPSecTunnel[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/enableIPSecTunnel: true/" antrea-agent.conf
+    sed -i.bak -E "s/^[[:space:]]*#?[[:space:]]*trafficEncapMode[[:space:]]*:[[:space:]]*[A-Za-z]+[[:space:]]*$/trafficEncapMode: encap/" antrea-agent.conf
     # change the tunnel type to GRE which works better with IPSec encryption than other types.
     sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*tunnelType[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/tunnelType: gre/" antrea-agent.conf
 fi
 
 if $ALLFEATURES; then
-    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*AntreaPolicy[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  AntreaPolicy: true/" antrea-agent.conf
-    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*FlowExporter[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  FlowExporter: true/" antrea-agent.conf
-    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*NetworkPolicyStats[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  NetworkPolicyStats: true/" antrea-agent.conf
-    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*EndpointSlice[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  EndpointSlice: true/" antrea-agent.conf
+    sed -i.bak -E "s/^[[:space:]]*#?[[:space:]]*AntreaPolicy[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  AntreaPolicy: true/" antrea-agent.conf
+    sed -i.bak -E "s/^[[:space:]]*#?[[:space:]]*FlowExporter[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  FlowExporter: true/" antrea-agent.conf
+    sed -i.bak -E "s/^[[:space:]]*#?[[:space:]]*NetworkPolicyStats[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  NetworkPolicyStats: true/" antrea-agent.conf
+    sed -i.bak -E "s/^[[:space:]]*#?[[:space:]]*EndpointSlice[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  EndpointSlice: true/" antrea-agent.conf
 fi
 
 if ! $PROXY; then
-    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*AntreaProxy[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  AntreaProxy: false/" antrea-agent.conf
+    sed -i.bak -E "s/^[[:space:]]*#?[[:space:]]*AntreaProxy[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  AntreaProxy: false/" antrea-agent.conf
 fi
 
 if ! $LEGACY_CRD; then
-    sed -i.bak -E "s/^#legacyCRDMirroring[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/legacyCRDMirroring: false/" antrea-controller.conf
+    sed -i.bak -E "s/^#?legacyCRDMirroring[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/legacyCRDMirroring: false/" antrea-controller.conf
 fi
 
 if $ENDPOINTSLICE; then
-    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*EndpointSlice[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  EndpointSlice: true/" antrea-agent.conf
+    sed -i.bak -E "s/^[[:space:]]*#?[[:space:]]*EndpointSlice[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  EndpointSlice: true/" antrea-agent.conf
 fi
 
 if ! $NP; then
-    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*AntreaPolicy[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  AntreaPolicy: false/" antrea-controller.conf
-    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*AntreaPolicy[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  AntreaPolicy: false/" antrea-agent.conf
+    sed -i.bak -E "s/^[[:space:]]*#?[[:space:]]*AntreaPolicy[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  AntreaPolicy: false/" antrea-controller.conf
+    sed -i.bak -E "s/^[[:space:]]*#?[[:space:]]*AntreaPolicy[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  AntreaPolicy: false/" antrea-agent.conf
 fi
 
 if [[ $ENCAP_MODE != "" ]]; then
-    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*trafficEncapMode[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/trafficEncapMode: $ENCAP_MODE/" antrea-agent.conf
+    sed -i.bak -E "s/^[[:space:]]*#?[[:space:]]*trafficEncapMode[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/trafficEncapMode: $ENCAP_MODE/" antrea-agent.conf
 fi
 
 if [[ $TUN_TYPE != "geneve" ]]; then
-    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*tunnelType[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/tunnelType: $TUN_TYPE/" antrea-agent.conf
+    sed -i.bak -E "s/^[[:space:]]*#?[[:space:]]*tunnelType[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/tunnelType: $TUN_TYPE/" antrea-agent.conf
 fi
 
 if [[ $CLOUD != "" ]]; then
