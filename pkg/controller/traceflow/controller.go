@@ -27,6 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/wait"
 	coreinformers "k8s.io/client-go/informers/core/v1"
+	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
@@ -35,6 +36,7 @@ import (
 	"antrea.io/antrea/pkg/client/clientset/versioned"
 	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha1"
 	crdlisters "antrea.io/antrea/pkg/client/listers/crd/v1alpha1"
+	"antrea.io/antrea/pkg/util/k8s"
 )
 
 const (
@@ -75,6 +77,7 @@ var (
 type Controller struct {
 	client                 versioned.Interface
 	podInformer            coreinformers.PodInformer
+	podLister              corelisters.PodLister
 	traceflowInformer      crdinformers.TraceflowInformer
 	traceflowLister        crdlisters.TraceflowLister
 	traceflowListerSynced  cache.InformerSynced
@@ -88,6 +91,7 @@ func NewTraceflowController(client versioned.Interface, podInformer coreinformer
 	c := &Controller{
 		client:                client,
 		podInformer:           podInformer,
+		podLister:             podInformer.Lister(),
 		traceflowInformer:     traceflowInformer,
 		traceflowLister:       traceflowInformer.Lister(),
 		traceflowListerSynced: traceflowInformer.Informer().HasSynced,
@@ -265,6 +269,10 @@ func (c *Controller) syncTraceflow(traceflowName string) error {
 }
 
 func (c *Controller) startTraceflow(tf *crdv1alpha1.Traceflow) error {
+	if err := c.validateTraceflow(tf); err != nil {
+		klog.ErrorS(err, "Invalid Traceflow request", "request", tf)
+		return c.updateTraceflowStatus(tf, crdv1alpha1.Failed, fmt.Sprintf("Invalid Traceflow request, err: %+v", err), 0)
+	}
 	// Allocate data plane tag.
 	tag, err := c.allocateTag(tf.Name)
 	if err != nil {
@@ -409,4 +417,20 @@ func (c *Controller) deallocateTag(name string, tag uint8) {
 			delete(c.runningTraceflows, tag)
 		}
 	}
+}
+
+func (c *Controller) validateTraceflow(tf *crdv1alpha1.Traceflow) error {
+	if !tf.Spec.LiveTraffic {
+		srcPod, err := c.podLister.Pods(tf.Spec.Source.Namespace).Get(tf.Spec.Source.Pod)
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				err = fmt.Errorf("requested source Pod %s not found", k8s.NamespacedName(tf.Spec.Source.Namespace, tf.Spec.Source.Pod))
+			}
+			return err
+		}
+		if srcPod.Spec.HostNetwork {
+			return fmt.Errorf("using hostNetwork Pod as source in non-live-traffic Traceflow is not supported")
+		}
+	}
+	return nil
 }
