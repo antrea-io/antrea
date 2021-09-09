@@ -22,8 +22,10 @@ import (
 	"fmt"
 	"math/big"
 	"net"
+	goruntime "runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -40,72 +42,98 @@ import (
 	"antrea.io/antrea/pkg/agent/flowexporter/exporter"
 )
 
-var (
-	numMessages  = 0
-	numExporters = 100
-	testDuration = 2 * time.Minute
-)
+/*
+go test -v -run TestIntraNodeFlowRecordsTwoMinHundredExporter antrea.io/antrea/pkg/flowaggregator
+    flowaggregator_perf_test.go:120: Summary metrics:
+            EXPORTERS    MESSAGES    MEMORY(M)    SYS(M)    MALLOC    HEAP(M)
+        MAX 10           11002       12           28        1259606   14
+        AVG                          8            26        622205    11
+*/
+func TestIntraNodeFlowRecordsTwoMinHundredExporter(t *testing.T) {
+	numExporters := 100
+	testDuration := 2 * time.Minute
+	testIntraNodeFlowRecords(t, numExporters, testDuration)
+}
 
 /*
-Test result from latest run on ToT main.
-pkg/flowaggregator$ go test -test.v -run=none -test.benchmem  -bench=. -count=2 -memprofile memprofile.out -cpuprofile profile.out
-goos: linux
-goarch: amd64
-pkg: antrea.io/antrea/pkg/flowaggregator
-cpu: Intel(R) Core(TM) i9-9980HK CPU @ 2.40GHz
-BenchmarkIntraNodeFlowRecords
-    flowaggregator_perf_test.go:458: Num messages received: 1550264
-BenchmarkIntraNodeFlowRecords-2   	       1	120004095225 ns/op	8876354472 B/op	332625061 allocs/op
-PASS
+go test -v -run TestIntraNodeFlowRecordsTenSecTenExporter antrea.io/antrea/pkg/flowaggregator
+    flowaggregator_perf_test.go:127: Summary metrics:
+            EXPORTERS    MESSAGES    MEMORY(M)    SYS(M)    MALLOC    HEAP(M)
+        MAX 100          1554530     87           115       155265672 94
+        AVG                          62           113       77478570  70
 */
-func BenchmarkIntraNodeFlowRecords(b *testing.B) {
+func TestIntraNodeFlowRecordsTenSecTenExporter(t *testing.T) {
+	numExporters := 10
+	testDuration := 10 * time.Second
+	testIntraNodeFlowRecords(t, numExporters, testDuration)
+}
+
+func testIntraNodeFlowRecords(t *testing.T, numExporters int, testDuration time.Duration) {
 	disableLogToStderr()
 
 	ipfixregistry.LoadRegistry()
 	testActiveTimeout = time.Second
 	testInactiveTimeout = 1250 * time.Millisecond
-	for i := 0; i < b.N; i++ {
-		numMessages = 0
-		stopCh := make(chan struct{})
-		go testHandler(b, stopCh)
-		localCollector := startLocalCollector(b, stopCh)
-		k8sClient := clienttest.NewSimpleClientset()
-		informerFactory := informers.NewSharedInformerFactory(k8sClient, 0)
-		podInformer := informerFactory.Core().V1().Pods()
-		flowAgg := NewFlowAggregator(
-			localCollector.String(),
-			localCollector.Network(),
-			testActiveTimeout,
-			testInactiveTimeout,
-			AggregatorTransportProtocolTCP,
-			"127.0.0.1:0:tcp",
-			k8sClient,
-			testObservationDomainID,
-			podInformer,
-			false)
-		err := flowAgg.InitCollectingProcess()
-		if err != nil {
-			b.Fatalf("Error when creating collecting process in Flow Aggregator: %v", err)
-		}
-		err = flowAgg.InitAggregationProcess()
-		if err != nil {
-			b.Fatalf("Error when creating aggregation process in Flow Aggregator: %v", err)
-		}
 
-		go flowAgg.Run(stopCh)
-
-		waitForCollectorReady(b, flowAgg.collectingProcess.GetCollectingProcess())
-
-		// Start multiple exporters that simulate Antrea Agent Flow Exporters.
-		for j := 0; j < numExporters; j++ {
-			nodeName := "exporter-" + strconv.Itoa(j+1)
-			go startExporter(b, flowAgg.collectingProcess.GetCollectingProcess(), stopCh, nodeName, uint32(j))
-		}
-		<-stopCh
+	numMessages := 0
+	stopCh := make(chan struct{})
+	go testHandler(testDuration, stopCh)
+	localCollector := startLocalCollector(t, &numMessages, stopCh)
+	k8sClient := clienttest.NewSimpleClientset()
+	informerFactory := informers.NewSharedInformerFactory(k8sClient, 0)
+	podInformer := informerFactory.Core().V1().Pods()
+	flowAgg := NewFlowAggregator(
+		localCollector.String(),
+		localCollector.Network(),
+		testActiveTimeout,
+		testInactiveTimeout,
+		AggregatorTransportProtocolTCP,
+		"127.0.0.1:0:tcp",
+		k8sClient,
+		testObservationDomainID,
+		podInformer,
+		false)
+	err := flowAgg.InitCollectingProcess()
+	if err != nil {
+		t.Fatalf("Error when creating collecting process in Flow Aggregator: %v", err)
 	}
+	err = flowAgg.InitAggregationProcess()
+	if err != nil {
+		t.Fatalf("Error when creating aggregation process in Flow Aggregator: %v", err)
+	}
+
+	var wg sync.WaitGroup
+	// Stat the maximum heap allocation.
+	wg.Add(1)
+	var memRec *memRecords
+	go func() {
+		memRec = statMaxMemAlloc(500*time.Millisecond, stopCh)
+		wg.Done()
+	}()
+
+	wg.Add(1)
+	go flowAgg.Run(stopCh, &wg)
+
+	waitForCollectorReady(t, flowAgg.collectingProcess.GetCollectingProcess())
+
+	// Start multiple exporters that simulate Antrea Agent Flow Exporters.
+	for j := 0; j < numExporters; j++ {
+		nodeName := "exporter-" + strconv.Itoa(j+1)
+		go startExporter(t, flowAgg.collectingProcess.GetCollectingProcess(), stopCh, nodeName, uint32(j))
+	}
+	<-stopCh
+	wg.Wait()
+
+	t.Logf(`Summary metrics:
+    EXPORTERS    MESSAGES    MEMORY(M)    SYS(M)    MALLOC    HEAP(M)
+MAX %-12d %-11d %-12d %-9d %-9d %-10d
+AVG                          %-12d %-9d %-9d %-10d
+`, numExporters, numMessages, memRec.maxAlloc/1024/1024, memRec.maxSys/1024/1024, memRec.maxMalloc, memRec.maxHeap/1024/1024,
+		memRec.avgAlloc/1024/1024, memRec.avgSys/1024/1024, memRec.avgMalloc, memRec.avgHeap/1024/1024)
+
 }
 
-func startExporter(b *testing.B, cp *ipfixcollector.CollectingProcess, stopCh chan struct{}, nodeName string, nodeID uint32) {
+func startExporter(t *testing.T, cp *ipfixcollector.CollectingProcess, stopCh chan struct{}, nodeName string, nodeID uint32) {
 	epInput := ipfixexporter.ExporterInput{
 		CollectorAddress:    cp.GetAddress().String(),
 		CollectorProtocol:   cp.GetAddress().Network(),
@@ -118,19 +146,19 @@ func startExporter(b *testing.B, cp *ipfixcollector.CollectingProcess, stopCh ch
 
 	exportingProcess, err := ipfixexporter.InitExportingProcess(epInput)
 	if err != nil {
-		b.Errorf("Got error when connecting to %s", cp.GetAddress().String())
+		t.Errorf("Got error when connecting to %s", cp.GetAddress().String())
 		return
 	}
 	defer exportingProcess.CloseConnToCollector() // Close exporting process
 	set := ipfixentities.NewSet(false)
 	if err = set.PrepareSet(ipfixentities.Template, testTemplateIDv4); err != nil {
-		b.Errorf("Error when preparing the set: %v", err)
+		t.Errorf("Error when preparing the set: %v", err)
 		return
 	}
 	// Send template set.
 	elements, err := sendTemplateSet(exportingProcess, set, false)
 	if err != nil {
-		b.Errorf("Error when sending template set: %v", err)
+		t.Errorf("Error when sending template set: %v", err)
 		return
 	}
 	set.ResetSet()
@@ -148,12 +176,12 @@ func startExporter(b *testing.B, cp *ipfixcollector.CollectingProcess, stopCh ch
 				i = 0
 			}
 			if err = set.PrepareSet(ipfixentities.Data, testTemplateIDv4); err != nil {
-				b.Errorf("Error when preparing the set: %v", err)
+				t.Errorf("Error when preparing the set: %v", err)
 				return
 			}
 			err = sendDataSet(exportingProcess, set, elements, nodeName)
 			if err != nil {
-				b.Errorf("Error when sending data set: %v", err)
+				t.Errorf("Error when sending data set: %v", err)
 				return
 			}
 			set.ResetSet()
@@ -162,14 +190,14 @@ func startExporter(b *testing.B, cp *ipfixcollector.CollectingProcess, stopCh ch
 	}
 }
 
-func startLocalCollector(b *testing.B, stopCh chan struct{}) net.Addr {
+func startLocalCollector(t *testing.T, numMessages *int, stopCh chan struct{}) net.Addr {
 	address, err := net.ResolveUDPAddr("udp", "127.0.0.1:0")
 	if err != nil {
-		b.Error(err)
+		t.Error(err)
 	}
 	listener, err := net.ListenUDP("udp", address)
 	if err != nil {
-		b.Fatalf("Got error when creating a local udp server: %v", err)
+		t.Fatalf("Got error when creating a local udp server: %v", err)
 	}
 	go func() {
 		defer listener.Close()
@@ -184,10 +212,10 @@ func startLocalCollector(b *testing.B, stopCh chan struct{}) net.Addr {
 					if size == 0 { // received stop collector message
 						return
 					}
-					b.Errorf("Error in udp collecting process: %v", err)
+					t.Errorf("Error in udp collecting process: %v", err)
 					return
 				}
-				numMessages = numMessages + 1
+				*numMessages = *numMessages + 1
 			}
 		}
 	}()
@@ -452,7 +480,7 @@ func makeTuple(srcIP *net.IP, dstIP *net.IP, protoID uint8, srcPort uint16, dstP
 	return tuple
 }
 
-func waitForCollectorReady(b *testing.B, cp *ipfixcollector.CollectingProcess) {
+func waitForCollectorReady(t *testing.T, cp *ipfixcollector.CollectingProcess) {
 	checkConn := func() (bool, error) {
 		if strings.Split(cp.GetAddress().String(), ":")[1] == "0" {
 			return false, fmt.Errorf("random port is not resolved")
@@ -465,16 +493,15 @@ func waitForCollectorReady(b *testing.B, cp *ipfixcollector.CollectingProcess) {
 		return true, nil
 	}
 	if err := wait.Poll(100*time.Millisecond, 1*time.Second, checkConn); err != nil {
-		b.Errorf("Cannot establish connection to %s", cp.GetAddress().String())
+		t.Errorf("Cannot establish connection to %s", cp.GetAddress().String())
 	}
 }
 
-func testHandler(b *testing.B, stopCh chan struct{}) {
+func testHandler(testDuration time.Duration,stopCh chan struct{}) {
 	timer := time.NewTimer(testDuration)
 	for {
 		select {
 		case <-timer.C:
-			b.Logf("Num messages received: %v", numMessages)
 			close(stopCh)
 			return
 		}
@@ -485,4 +512,57 @@ func disableLogToStderr() {
 	klogFlagSet := flag.NewFlagSet("klog", flag.ContinueOnError)
 	klog.InitFlags(klogFlagSet)
 	klogFlagSet.Parse([]string{"-logtostderr=false"})
+}
+
+type memRecords struct {
+	alloc, sys, malloc, heap []uint64
+	maxAlloc, maxSys, maxMalloc, maxHeap uint64
+	avgAlloc, avgSys, avgMalloc, avgHeap uint64
+}
+
+func newMemRecords(alloc, sys, malloc, heap []uint64) *memRecords {
+	memRec := memRecords{alloc: alloc, sys: sys, malloc: malloc, heap: heap}
+	var sumAlloc, sumSys, sumMalloc, sumHeap uint64
+	for i := 0; i < len(alloc); i++ {
+		sumAlloc += alloc[i]
+		sumSys += sys[i]
+		sumMalloc += malloc[i]
+		sumHeap += heap[i]
+		if alloc[i] > memRec.maxAlloc {
+			memRec.maxAlloc = alloc[i]
+		}
+		if sys[i] > memRec.maxSys {
+			memRec.maxSys = sys[i]
+		}
+		if malloc[i] > memRec.maxMalloc {
+			memRec.maxMalloc = malloc[i]
+		}
+		if heap[i] > memRec.maxHeap {
+			memRec.maxHeap = heap[i]
+		}
+	}
+	memRec.avgAlloc = sumAlloc / uint64(len(memRec.alloc))
+	memRec.avgSys = sumSys / uint64(len(memRec.sys))
+	memRec.avgMalloc = sumMalloc / uint64(len(memRec.malloc))
+	memRec.avgHeap = sumHeap / uint64(len(memRec.heap))
+	return &memRec
+}
+
+func statMaxMemAlloc(interval time.Duration, stopCh chan struct{}) *memRecords{
+	var memStats goruntime.MemStats
+	var alloc, sys, malloc, heap []uint64
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			goruntime.ReadMemStats(&memStats)
+			alloc = append(alloc, memStats.Alloc)
+			sys = append(sys, memStats.Sys)
+			malloc = append(malloc, memStats.Mallocs)
+			heap = append(heap, memStats.HeapInuse)
+		case <-stopCh:
+			return newMemRecords(alloc, sys, malloc, heap)
+		}
+	}
 }
