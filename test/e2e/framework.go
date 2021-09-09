@@ -701,6 +701,7 @@ func (data *TestData) mutateFlowAggregatorConfigMap(ipfixCollector string, faClu
 	flowAggregatorConf = strings.Replace(flowAggregatorConf, "#externalFlowCollectorAddr: \"\"", fmt.Sprintf("externalFlowCollectorAddr: \"%s\"", ipfixCollector), 1)
 	flowAggregatorConf = strings.Replace(flowAggregatorConf, "#activeFlowRecordTimeout: 60s", fmt.Sprintf("activeFlowRecordTimeout: %v", aggregatorActiveFlowRecordTimeout), 1)
 	flowAggregatorConf = strings.Replace(flowAggregatorConf, "#inactiveFlowRecordTimeout: 90s", fmt.Sprintf("inactiveFlowRecordTimeout: %v", aggregatorInactiveFlowRecordTimeout), 1)
+	flowAggregatorConf = strings.Replace(flowAggregatorConf, "#podLabels: false", fmt.Sprintf("podLabels: %v", true), 1)
 	if testOptions.providerName == "kind" {
 		// In Kind cluster, there are issues with DNS name resolution on worker nodes.
 		// We will use flow aggregator service cluster IP to generate the server certificate for tls communication

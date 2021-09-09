@@ -111,6 +111,7 @@ func run(o *Options) error {
 		o.inactiveFlowRecordTimeout,
 		o.aggregatorTransportProtocol,
 		o.flowAggregatorAddress,
+		o.includePodLabels,
 		k8sClient,
 		observationDomainID,
 		podInformer,

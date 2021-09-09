@@ -57,6 +57,8 @@ type Options struct {
 	flowAggregatorAddress string
 	// Format for record sent to the configured flow collector
 	format string
+	// includePodLabels indicates whether source and destination Pod labels are included or not
+	includePodLabels bool
 }
 
 func newOptions() *Options {
@@ -132,6 +134,9 @@ func (o *Options) validate(args []string) error {
 		return fmt.Errorf("record format %s is not supported", o.config.RecordFormat)
 	} else {
 		o.format = o.config.RecordFormat
+	}
+	if includePodLabels, ok := o.config.RecordContents["podLabels"]; ok {
+		o.includePodLabels = includePodLabels
 	}
 	return nil
 }
