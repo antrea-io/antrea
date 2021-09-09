@@ -20,6 +20,7 @@
 package testing
 
 import (
+	types "antrea.io/antrea/pkg/agent/cniserver/types"
 	invoke "github.com/containernetworking/cni/pkg/invoke"
 	current "github.com/containernetworking/cni/pkg/types/current"
 	gomock "github.com/golang/mock/gomock"
@@ -90,4 +91,18 @@ func (m *MockIPAMDriver) Del(arg0 *invoke.Args, arg1 []byte) error {
 func (mr *MockIPAMDriverMockRecorder) Del(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Del", reflect.TypeOf((*MockIPAMDriver)(nil).Del), arg0, arg1)
+}
+
+// Owns mocks base method
+func (m *MockIPAMDriver) Owns(arg0 *invoke.Args, arg1 *types.K8sArgs, arg2 []byte) bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Owns", arg0, arg1, arg2)
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// Owns indicates an expected call of Owns
+func (mr *MockIPAMDriverMockRecorder) Owns(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Owns", reflect.TypeOf((*MockIPAMDriver)(nil).Owns), arg0, arg1, arg2)
 }

@@ -21,10 +21,17 @@ import (
 	"github.com/containernetworking/cni/pkg/invoke"
 	"github.com/containernetworking/cni/pkg/types/current"
 
+	argtypes "antrea.io/antrea/pkg/agent/cniserver/types"
 	cnipb "antrea.io/antrea/pkg/apis/cni/v1beta1"
 )
 
-var ipamDrivers map[string]IPAMDriver
+// List of ordered IPAM drivers
+// The first driver in list that claims to own this request will proceed to
+// handle allocation/release
+// This model is useful for antrea IPAM feature that should trigger antrea
+// IPAM only if corresponding annotation is specified for Pod/Namespace
+// Otherwise IPAM should be handled by host-local plugin.
+var ipamDrivers map[string][]IPAMDriver
 
 type Range struct {
 	Subnet  string `json:"subnet"`
@@ -39,6 +46,7 @@ type IPAMConfig struct {
 }
 
 type IPAMDriver interface {
+	Owns(args *invoke.Args, k8sArgs *argtypes.K8sArgs, networkConfig []byte) bool
 	Add(args *invoke.Args, networkConfig []byte) (*current.Result, error)
 	Del(args *invoke.Args, networkConfig []byte) error
 	Check(args *invoke.Args, networkConfig []byte) error
@@ -48,12 +56,9 @@ var ipamResults = sync.Map{}
 
 func RegisterIPAMDriver(ipamType string, ipamDriver IPAMDriver) error {
 	if ipamDrivers == nil {
-		ipamDrivers = make(map[string]IPAMDriver)
+		ipamDrivers = make(map[string][]IPAMDriver)
 	}
-	if _, existed := ipamDrivers[ipamType]; existed {
-		return fmt.Errorf("Already registered IPAM with type %s", ipamType)
-	}
-	ipamDrivers[ipamType] = ipamDriver
+	ipamDrivers[ipamType] = append(ipamDrivers[ipamType], ipamDriver)
 	return nil
 }
 
@@ -66,7 +71,7 @@ func argsFromEnv(cniArgs *cnipb.CniCmdArgs) *invoke.Args {
 	}
 }
 
-func ExecIPAMAdd(cniArgs *cnipb.CniCmdArgs, ipamType string, resultKey string) (*current.Result, error) {
+func ExecIPAMAdd(cniArgs *cnipb.CniCmdArgs, k8sArgs *argtypes.K8sArgs, ipamType string, resultKey string) (*current.Result, error) {
 	// Return the cached IPAM result for the same Pod. This cache helps to ensure CNIAdd is idempotent. There are two
 	// usages of CNIAdd message on Windows: 1) add container network configuration, and 2) query Pod network status.
 	// kubelet on Windows sends CNIAdd messages to query Pod status periodically before the sandbox container is ready.
@@ -79,30 +84,53 @@ func ExecIPAMAdd(cniArgs *cnipb.CniCmdArgs, ipamType string, resultKey string) (
 	}
 
 	args := argsFromEnv(cniArgs)
-	driver := ipamDrivers[ipamType]
-	result, err := driver.Add(args, cniArgs.NetworkConfiguration)
-	if err != nil {
-		return nil, err
+
+	drivers := ipamDrivers[ipamType]
+	for _, driver := range drivers {
+		// Detect a driver that owns this request(f.e. based on ipam annotation
+		// of namespace or pod that initiated the request
+		if driver.Owns(args, k8sArgs, cniArgs.NetworkConfiguration) {
+			result, err := driver.Add(args, cniArgs.NetworkConfiguration)
+			if err != nil {
+				return nil, err
+			}
+			ipamResults.Store(resultKey, result)
+			return result, nil
+		}
 	}
-	ipamResults.Store(resultKey, result)
-	return result, nil
+
+	return nil, fmt.Errorf("No suitable IPAM driver found")
 }
 
-func ExecIPAMDelete(cniArgs *cnipb.CniCmdArgs, ipamType string, resultKey string) error {
+func ExecIPAMDelete(cniArgs *cnipb.CniCmdArgs, k8sArgs *argtypes.K8sArgs, ipamType string, resultKey string) error {
 	args := argsFromEnv(cniArgs)
-	driver := ipamDrivers[ipamType]
-	err := driver.Del(args, cniArgs.NetworkConfiguration)
-	if err != nil {
-		return err
+	drivers := ipamDrivers[ipamType]
+	for _, driver := range drivers {
+		// Detect a driver that owns this request(f.e. based on ipam annotation
+		// of namespace or pod that initiated the request
+		if driver.Owns(args, k8sArgs, cniArgs.NetworkConfiguration) {
+			err := driver.Del(args, cniArgs.NetworkConfiguration)
+			if err != nil {
+				return err
+			}
+			ipamResults.Delete(resultKey)
+			return nil
+		}
 	}
-	ipamResults.Delete(resultKey)
-	return nil
+	return fmt.Errorf("No suitable IPAM driver found")
 }
 
-func ExecIPAMCheck(cniArgs *cnipb.CniCmdArgs, ipamType string) error {
+func ExecIPAMCheck(cniArgs *cnipb.CniCmdArgs, k8sArgs *argtypes.K8sArgs, ipamType string) error {
 	args := argsFromEnv(cniArgs)
-	driver := ipamDrivers[ipamType]
-	return driver.Check(args, cniArgs.NetworkConfiguration)
+	drivers := ipamDrivers[ipamType]
+	for _, driver := range drivers {
+		// Detect a driver that owns this request(f.e. based on ipam annotation
+		// of namespace or pod that initiated the request
+		if driver.Owns(args, k8sArgs, cniArgs.NetworkConfiguration) {
+			return driver.Check(args, cniArgs.NetworkConfiguration)
+		}
+	}
+	return fmt.Errorf("No suitable IPAM driver found")
 }
 
 func GetIPFromCache(resultKey string) (*current.Result, bool) {
