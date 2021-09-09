@@ -470,7 +470,7 @@ func benchmarkInit(b *testing.B, namespaces []*corev1.Namespace, networkPolicies
 	objs := toRunTimeObjects(namespaces, networkPolicies, pods)
 	stopCh := make(chan struct{})
 	defer close(stopCh)
-	_, c := newControllerWithoutEventHandler(objs...)
+	_, c := newControllerWithoutEventHandler(objs, nil)
 	c.informerFactory.Start(stopCh)
 	c.informerFactory.WaitForCacheSync(stopCh)
 

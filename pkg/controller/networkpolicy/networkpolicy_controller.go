@@ -216,6 +216,75 @@ type heartbeat struct {
 	timestamp time.Time
 }
 
+var tierIndexers = cache.Indexers{
+	PriorityIndex: func(obj interface{}) ([]string, error) {
+		tr, ok := obj.(*secv1alpha1.Tier)
+		if !ok {
+			return []string{}, nil
+		}
+		return []string{strconv.FormatInt(int64(tr.Spec.Priority), 10)}, nil
+	},
+}
+
+var cnpIndexers = cache.Indexers{
+	TierIndex: func(obj interface{}) ([]string, error) {
+		cnp, ok := obj.(*secv1alpha1.ClusterNetworkPolicy)
+		if !ok {
+			return []string{}, nil
+		}
+		return []string{cnp.Spec.Tier}, nil
+	},
+	ClusterGroupIndex: func(obj interface{}) ([]string, error) {
+		cnp, ok := obj.(*secv1alpha1.ClusterNetworkPolicy)
+		if !ok {
+			return []string{}, nil
+		}
+		groupNames := sets.String{}
+		for _, appTo := range cnp.Spec.AppliedTo {
+			if appTo.Group != "" {
+				groupNames.Insert(appTo.Group)
+			}
+		}
+		if len(cnp.Spec.Ingress) == 0 && len(cnp.Spec.Egress) == 0 {
+			return groupNames.List(), nil
+		}
+		appendGroups := func(rule secv1alpha1.Rule) {
+			for _, peer := range rule.To {
+				if peer.Group != "" {
+					groupNames.Insert(peer.Group)
+				}
+			}
+			for _, peer := range rule.From {
+				if peer.Group != "" {
+					groupNames.Insert(peer.Group)
+				}
+			}
+			for _, appTo := range rule.AppliedTo {
+				if appTo.Group != "" {
+					groupNames.Insert(appTo.Group)
+				}
+			}
+		}
+		for _, rule := range cnp.Spec.Egress {
+			appendGroups(rule)
+		}
+		for _, rule := range cnp.Spec.Ingress {
+			appendGroups(rule)
+		}
+		return groupNames.List(), nil
+	},
+}
+
+var anpIndexers = cache.Indexers{
+	TierIndex: func(obj interface{}) ([]string, error) {
+		anp, ok := obj.(*secv1alpha1.NetworkPolicy)
+		if !ok {
+			return []string{}, nil
+		}
+		return []string{anp.Spec.Tier}, nil
+	},
+}
+
 // NewNetworkPolicyController returns a new *NetworkPolicyController.
 func NewNetworkPolicyController(kubeClient clientset.Interface,
 	crdClient versioned.Interface,
@@ -297,67 +366,8 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 			},
 			resyncPeriod,
 		)
-		tierInformer.Informer().AddIndexers(
-			cache.Indexers{
-				PriorityIndex: func(obj interface{}) ([]string, error) {
-					tr, ok := obj.(*secv1alpha1.Tier)
-					if !ok {
-						return []string{}, nil
-					}
-					return []string{strconv.FormatInt(int64(tr.Spec.Priority), 10)}, nil
-				},
-			},
-		)
-		cnpInformer.Informer().AddIndexers(
-			cache.Indexers{
-				TierIndex: func(obj interface{}) ([]string, error) {
-					cnp, ok := obj.(*secv1alpha1.ClusterNetworkPolicy)
-					if !ok {
-						return []string{}, nil
-					}
-					return []string{cnp.Spec.Tier}, nil
-				},
-				ClusterGroupIndex: func(obj interface{}) ([]string, error) {
-					cnp, ok := obj.(*secv1alpha1.ClusterNetworkPolicy)
-					if !ok {
-						return []string{}, nil
-					}
-					groupNames := sets.String{}
-					for _, appTo := range cnp.Spec.AppliedTo {
-						if appTo.Group != "" {
-							groupNames.Insert(appTo.Group)
-						}
-					}
-					if len(cnp.Spec.Ingress) == 0 && len(cnp.Spec.Egress) == 0 {
-						return groupNames.List(), nil
-					}
-					appendGroups := func(rule secv1alpha1.Rule) {
-						for _, peer := range rule.To {
-							if peer.Group != "" {
-								groupNames.Insert(peer.Group)
-							}
-						}
-						for _, peer := range rule.From {
-							if peer.Group != "" {
-								groupNames.Insert(peer.Group)
-							}
-						}
-						for _, appTo := range rule.AppliedTo {
-							if appTo.Group != "" {
-								groupNames.Insert(appTo.Group)
-							}
-						}
-					}
-					for _, rule := range cnp.Spec.Egress {
-						appendGroups(rule)
-					}
-					for _, rule := range cnp.Spec.Ingress {
-						appendGroups(rule)
-					}
-					return groupNames.List(), nil
-				},
-			},
-		)
+		tierInformer.Informer().AddIndexers(tierIndexers)
+		cnpInformer.Informer().AddIndexers(cnpIndexers)
 		cnpInformer.Informer().AddEventHandlerWithResyncPeriod(
 			cache.ResourceEventHandlerFuncs{
 				AddFunc:    n.addCNP,
@@ -366,17 +376,7 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 			},
 			resyncPeriod,
 		)
-		anpInformer.Informer().AddIndexers(
-			cache.Indexers{
-				TierIndex: func(obj interface{}) ([]string, error) {
-					anp, ok := obj.(*secv1alpha1.NetworkPolicy)
-					if !ok {
-						return []string{}, nil
-					}
-					return []string{anp.Spec.Tier}, nil
-				},
-			},
-		)
+		anpInformer.Informer().AddIndexers(anpIndexers)
 		anpInformer.Informer().AddEventHandlerWithResyncPeriod(
 			cache.ResourceEventHandlerFuncs{
 				AddFunc:    n.addANP,
