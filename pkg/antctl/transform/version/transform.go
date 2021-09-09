@@ -27,9 +27,10 @@ import (
 )
 
 type Response struct {
-	AgentVersion      string `json:"agentVersion,omitempty"`
-	ControllerVersion string `json:"controllerVersion,omitempty"`
-	AntctlVersion     string `json:"antctlVersion,omitempty"`
+	AgentVersion          string `json:"agentVersion,omitempty"`
+	ControllerVersion     string `json:"controllerVersion,omitempty"`
+	FlowAggregatorVersion string `json:"flowAggregatorVersion,omitempty"`
+	AntctlVersion         string `json:"antctlVersion,omitempty"`
 }
 
 // AgentVersion is the AddonTransform for the version command. This function
@@ -74,6 +75,34 @@ func ControllerTransform(reader io.Reader, _ bool, _ map[string]string) (interfa
 	resp := &Response{
 		ControllerVersion: controllerInfo.Version,
 		AntctlVersion:     antreaversion.GetFullVersion(),
+	}
+	return resp, nil
+}
+
+// FlowAggregatorTransform is the AddonTransform for the flow aggregator version command.
+// This function will try to parse the response as a FlowAggregatorVersionResponse and
+// then populate it with the version of antctl to a transformedVersionResponse object.
+func FlowAggregatorTransform(reader io.Reader, _ bool, _ map[string]string) (interface{}, error) {
+	b, err := ioutil.ReadAll(reader)
+	if err != nil {
+		return nil, err
+	}
+	klog.Infof("version transform received: %s", string(b))
+	v := new(k8sversion.Info)
+	err = json.Unmarshal(b, v)
+	if err != nil {
+		return nil, err
+	}
+	flowAggregatorVersion := v.GitVersion
+	if len(v.GitCommit) > 0 {
+		flowAggregatorVersion += "-" + v.GitCommit
+	}
+	if len(v.GitTreeState) > 0 {
+		flowAggregatorVersion += "." + v.GitTreeState
+	}
+	resp := &Response{
+		FlowAggregatorVersion: flowAggregatorVersion,
+		AntctlVersion:         antreaversion.GetFullVersion(),
 	}
 	return resp, nil
 }

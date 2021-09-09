@@ -52,7 +52,8 @@ func (cl *commandList) applyToRootCommand(root *cobra.Command, client AntctlClie
 	for i := range cl.definitions {
 		def := &cl.definitions[i]
 		if (runtime.Mode == runtime.ModeAgent && def.agentEndpoint == nil) ||
-			(runtime.Mode == runtime.ModeController && def.controllerEndpoint == nil) {
+			(runtime.Mode == runtime.ModeController && def.controllerEndpoint == nil) ||
+			(runtime.Mode == runtime.ModeFlowAggregator && def.flowAggregatorEndpoint == nil) {
 			continue
 		}
 		def.applySubCommandToRoot(root, client, out)
@@ -126,9 +127,9 @@ func (cl *commandList) GetDebugCommands(mode string) [][]string {
 			// log-level command does not support remote execution.
 			continue
 		}
-
 		if mode == runtime.ModeAgent && def.agentEndpoint != nil ||
-			mode == runtime.ModeController && def.controllerEndpoint != nil {
+			mode == runtime.ModeController && def.controllerEndpoint != nil ||
+			mode == runtime.ModeFlowAggregator && def.flowAggregatorEndpoint != nil {
 			var currentCommand []string
 			if group, ok := groupCommands[def.commandGroup]; ok {
 				currentCommand = append(currentCommand, group.Use)

@@ -32,6 +32,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 
+	"antrea.io/antrea/pkg/flowaggregator/querier"
 	"antrea.io/antrea/pkg/ipfix"
 )
 
@@ -652,5 +653,18 @@ func (fa *flowAggregator) fillPodLabels(key ipfixintermediate.FlowKey, record ip
 		}
 	} else {
 		klog.Warningf("Get destinationPodLabels InfoElement failed: %v", err)
+	}
+}
+
+func (fa *flowAggregator) GetFlowRecords(flowKey *ipfixintermediate.FlowKey) []map[string]interface{} {
+	return fa.aggregationProcess.GetRecords(flowKey)
+}
+
+func (fa *flowAggregator) GetRecordMetrics() querier.Metrics {
+	return querier.Metrics{
+		NumRecordsExported: fa.numRecordsExported,
+		NumRecordsReceived: fa.collectingProcess.GetNumRecordsReceived(),
+		NumFlows:           fa.aggregationProcess.GetNumFlows(),
+		NumConnToCollector: fa.collectingProcess.GetNumConnToCollector(),
 	}
 }

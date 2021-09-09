@@ -29,8 +29,10 @@ import (
 
 	"antrea.io/antrea/pkg/clusteridentity"
 	aggregator "antrea.io/antrea/pkg/flowaggregator"
+	"antrea.io/antrea/pkg/flowaggregator/apiserver"
 	"antrea.io/antrea/pkg/log"
 	"antrea.io/antrea/pkg/signals"
+	"antrea.io/antrea/pkg/util/cipher"
 )
 
 const informerDefaultResync = 12 * time.Hour
@@ -128,6 +130,20 @@ func run(o *Options) error {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go flowAggregator.Run(stopCh, &wg)
+
+	cipherSuites, err := cipher.GenerateCipherSuitesList(o.config.APIServer.TLSCipherSuites)
+	if err != nil {
+		return fmt.Errorf("error generating Cipher Suite list: %v", err)
+	}
+	apiServer, err := apiserver.New(
+		flowAggregator,
+		o.config.APIServer.APIPort,
+		cipherSuites,
+		cipher.TLSVersionMap[o.config.APIServer.TLSMinVersion])
+	if err != nil {
+		return fmt.Errorf("error when creating flow aggregator API server: %v", err)
+	}
+	go apiServer.Run(stopCh)
 
 	informerFactory.Start(stopCh)
 

@@ -13,6 +13,9 @@
   - [Using antctl](#using-antctl-1)
   - [Using antctl proxy](#using-antctl-proxy-1)
   - [Directly accessing the antrea-agent API](#directly-accessing-the-antrea-agent-api)
+- [Accessing the flow-aggregator API](#accessing-the-flow-aggregator-api)
+  - [Using antctl](#using-antctl-2)
+  - [Directly accessing the flow-aggregator API](#directly-accessing-the-flow-aggregator-api)
 - [Troubleshooting Open vSwitch](#troubleshooting-open-vswitch)
 - [Troubleshooting with antctl](#troubleshooting-with-antctl)
 - [Profiling Antrea components](#profiling-antrea-components)
@@ -180,6 +183,37 @@ curl --insecure --header "Authorization: Bearer $TOKEN" https://<Node IP address
 
 However, in this case you will be limited to the endpoints that `antctl` is
 allowed to access, as defined [here](/build/yamls/base/antctl.yml).
+
+## Accessing the flow-aggregator API
+
+flow-aggregator runs as a Deployment and exposes its API via a local endpoint.
+There are two ways you can access it:
+
+### Using antctl
+
+To use `antctl` to access the flow-aggregator API, you need to exec into the
+flow-aggregator container first. `antctl` is embedded in the image so it can be
+used directly.
+
+For example, you can dump the flow records with this command:
+
+```bash
+# Get into the flow-aggregator container
+kubectl exec -it <flow-aggregator Pod name> -n flow-aggregator -- bash
+# View the flow records
+antctl get flowrecords
+```
+
+### Directly accessing the flow-aggregator API
+
+If you want to directly access the flow-aggregator API, you need to exec into
+the flow-aggregator container. Then access the local endpoint directly using the
+Bearer Token stored in the file system:
+
+```bash
+TOKEN=$(cat /var/run/antrea/apiserver/loopback-client-token)
+curl --insecure --header "Authorization: Bearer $TOKEN" https://127.0.0.1:10348/
+```
 
 ## Troubleshooting Open vSwitch
 

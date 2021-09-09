@@ -112,7 +112,7 @@ const (
 	busyboxImage        = "projects.registry.vmware.com/library/busybox"
 	nginxImage          = "projects.registry.vmware.com/antrea/nginx"
 	perftoolImage       = "projects.registry.vmware.com/antrea/perftool"
-	ipfixCollectorImage = "projects.registry.vmware.com/antrea/ipfix-collector:v0.5.9"
+	ipfixCollectorImage = "projects.registry.vmware.com/antrea/ipfix-collector:v0.5.10"
 	ipfixCollectorPort  = "4739"
 
 	nginxLBService = "nginx-loadbalancer"
@@ -1326,6 +1326,21 @@ func (data *TestData) getAntreaPodOnNode(nodeName string) (podName string, err e
 	return pods.Items[0].Name, nil
 }
 
+// getFlowAggregator retrieves the name of the Flow-Aggregator Pod (flow-aggregator-*) running on a specific Node.
+func (data *TestData) getFlowAggregator() (*corev1.Pod, error) {
+	listOptions := metav1.ListOptions{
+		LabelSelector: "app=flow-aggregator",
+	}
+	pods, err := data.clientset.CoreV1().Pods(flowAggregatorNamespace).List(context.TODO(), listOptions)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list Flow Aggregator Pod: %v", err)
+	}
+	if len(pods.Items) != 1 {
+		return nil, fmt.Errorf("expected *exactly* one Pod")
+	}
+	return &pods.Items[0], nil
+}
+
 // getAntreaController retrieves the name of the Antrea Controller (antrea-controller-*) running in the k8s cluster.
 func (data *TestData) getAntreaController() (*corev1.Pod, error) {
 	listOptions := metav1.ListOptions{
@@ -2031,18 +2046,12 @@ func (data *TestData) gracefulExitAntreaAgent(covDir string, nodeName string) er
 
 // gracefulExitFlowAggregator copies the Flow Aggregator binary coverage data file out before terminating the Pod.
 func (data *TestData) gracefulExitFlowAggregator(covDir string) error {
-	listOptions := metav1.ListOptions{
-		LabelSelector: "app=flow-aggregator",
-	}
-	pods, err := data.clientset.CoreV1().Pods(flowAggregatorNamespace).List(context.TODO(), listOptions)
+	flowAggPod, err := data.getFlowAggregator()
 	if err != nil {
-		return fmt.Errorf("failed to list Flow Aggregator Pod: %v", err)
+		return fmt.Errorf("error when getting flow-aggregator Pod: %v", err)
 	}
-	if len(pods.Items) != 1 {
-		return fmt.Errorf("expected *exactly* one Pod")
-	}
-	flowAggPod := &pods.Items[0]
 	podName := flowAggPod.Name
+
 	cmds := []string{"pgrep", "-f", flowAggregatorCovBinary, "-P", "1"}
 	stdout, stderr, err := data.runCommandFromPod(flowAggregatorNamespace, podName, "flow-aggregator", cmds)
 	if err != nil {

@@ -31,6 +31,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 
+	"antrea.io/antrea/pkg/antctl"
+	"antrea.io/antrea/pkg/antctl/runtime"
 	secv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	"antrea.io/antrea/test/e2e/utils"
 )
@@ -179,6 +181,37 @@ func TestFlowAggregator(t *testing.T) {
 
 	if v6Enabled {
 		t.Run("IPv6", func(t *testing.T) { testHelper(t, data, podAIPs, podBIPs, podCIPs, podDIPs, podEIPs, true) })
+	}
+
+	t.Run("testFlowAggregatorAntctl", func(t *testing.T) {
+		testFlowAggregatorAntctl(t, data)
+	})
+}
+
+// testFlowAggregatorAntctl ensures antctl is accessible in a Flow Aggregator Pod.
+func testFlowAggregatorAntctl(t *testing.T, data *TestData) {
+	flowAggPod, err := data.getFlowAggregator()
+	if err != nil {
+		t.Fatalf("Error when getting flow-aggregator Pod name: %v", err)
+	}
+	podName := flowAggPod.Name
+	for _, c := range antctl.CommandList.GetDebugCommands(runtime.ModeFlowAggregator) {
+		args := []string{}
+		if testOptions.enableCoverage {
+			antctlCovArgs := antctlCoverageArgs("antctl-coverage")
+			args = append(antctlCovArgs, c...)
+		} else {
+			args = append([]string{"antctl", "-v"}, c...)
+		}
+		t.Logf("args: %s", args)
+
+		cmd := strings.Join(args, " ")
+		t.Run(cmd, func(t *testing.T) {
+			stdout, stderr, err := runAntctl(podName, args, data)
+			if err != nil {
+				t.Fatalf("Error when running `antctl %s` from %s: %v\n%s", c, podName, err, antctlOutput(stdout, stderr))
+			}
+		})
 	}
 }
 

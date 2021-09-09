@@ -129,7 +129,7 @@ COMMON_IMAGES_LIST=("gcr.io/kubernetes-e2e-test-images/agnhost:2.8" \
                     "projects.registry.vmware.com/library/busybox"  \
                     "projects.registry.vmware.com/antrea/nginx" \
                     "projects.registry.vmware.com/antrea/perftool" \
-                    "projects.registry.vmware.com/antrea/ipfix-collector:v0.5.9" \
+                    "projects.registry.vmware.com/antrea/ipfix-collector:v0.5.10" \
                     "projects.registry.vmware.com/antrea/wireguard-go:0.0.20210424")
 for image in "${COMMON_IMAGES_LIST[@]}"; do
     for i in `seq 3`; do

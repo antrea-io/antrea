@@ -23,8 +23,9 @@ import (
 )
 
 const (
-	ModeController string = "controller"
-	ModeAgent      string = "agent"
+	ModeController     string = "controller"
+	ModeAgent          string = "agent"
+	ModeFlowAggregator string = "flowaggregator"
 )
 
 var (
@@ -50,9 +51,12 @@ func ResolveKubeconfig(path string) (*rest.Config, error) {
 
 func init() {
 	podName, found := os.LookupEnv("POD_NAME")
-	InPod = found && (strings.HasPrefix(podName, "antrea-agent") || strings.HasPrefix(podName, "antrea-controller"))
+	InPod = found && (strings.HasPrefix(podName, "antrea-agent") || strings.HasPrefix(podName, "antrea-controller") ||
+		strings.HasPrefix(podName, "flow-aggregator"))
 	if strings.HasPrefix(podName, "antrea-agent") {
 		Mode = ModeAgent
+	} else if strings.HasPrefix(podName, "flow-aggregator") {
+		Mode = ModeFlowAggregator
 	} else {
 		Mode = ModeController
 	}
