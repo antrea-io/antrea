@@ -23,6 +23,9 @@
         },
         {
             "pattern": "https://nssm.cc/"
+        },
+        {
+            "pattern": "https://www.virtualbox.org/*"
         }
     ],
     "retryOn429": false,
