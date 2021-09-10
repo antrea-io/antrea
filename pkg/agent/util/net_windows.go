@@ -596,7 +596,7 @@ func CreateNetNatOnHost(subnetCIDR *net.IPNet) error {
 			return nil
 		}
 		klog.InfoS("Removing the existing netnat", "name", netNatName, "internalIPInterfaceAddressPrefix", internalNet)
-		cmd = fmt.Sprintf("Remove-NetNat -Name %s", netNatName)
+		cmd = fmt.Sprintf("Remove-NetNat -Name %s -Confirm:$false", netNatName)
 		if _, err := ps.RunCommand(cmd); err != nil {
 			klog.ErrorS(err, "Failed to remove the existing netnat", "name", netNatName, "internalIPInterfaceAddressPrefix", internalNet)
 			return err
