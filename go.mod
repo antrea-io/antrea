@@ -41,7 +41,7 @@ require (
 	github.com/spf13/pflag v1.0.5
 	github.com/streamrail/concurrent-map v0.0.0-20160823150647-8bf1e9bacbf6 // indirect
 	github.com/stretchr/testify v1.7.0
-	github.com/ti-mo/conntrack v0.3.0
+	github.com/ti-mo/conntrack v0.4.0
 	github.com/vishvananda/netlink v1.1.1-0.20210510164352-d17758a128bf
 	github.com/vmware/go-ipfix v0.5.7
 	golang.org/x/crypto v0.0.0-20210503195802-e9a32991a82e
