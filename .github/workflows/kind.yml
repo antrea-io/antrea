@@ -134,7 +134,7 @@ jobs:
     - uses: actions/setup-go@v2
       with:
         go-version: 1.17
-    - name: Download Antrea images from previous job
+    - name: Download Antrea images from previous jobs
       uses: actions/download-artifact@v2
     - name: Load Antrea image
       run: |
@@ -191,7 +191,7 @@ jobs:
     - uses: actions/setup-go@v2
       with:
         go-version: 1.17
-    - name: Download Antrea images from previous job
+    - name: Download Antrea images from previous jobs
       uses: actions/download-artifact@v2
     - name: Load Antrea image
       run: |
@@ -248,7 +248,7 @@ jobs:
     - uses: actions/setup-go@v2
       with:
         go-version: 1.17
-    - name: Download Antrea images from previous job
+    - name: Download Antrea images from previous jobs
       uses: actions/download-artifact@v2
     - name: Load Antrea image
       run: |
@@ -308,7 +308,7 @@ jobs:
     - uses: actions/setup-go@v2
       with:
         go-version: 1.17
-    - name: Download Antrea images from previous job
+    - name: Download Antrea images from previous jobs
       uses: actions/download-artifact@v2
     - name: Load Antrea image
       run: |
