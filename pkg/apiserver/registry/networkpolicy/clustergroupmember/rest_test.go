@@ -15,6 +15,7 @@
 package clustergroupmember
 
 import (
+	"net"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -27,14 +28,18 @@ import (
 )
 
 type fakeQuerier struct {
-	members map[string]controlplane.GroupMemberSet
+	members   map[string]controlplane.GroupMemberSet
+	ipMembers map[string][]controlplane.IPBlock
 }
 
-func (q fakeQuerier) GetGroupMembers(uid string) (controlplane.GroupMemberSet, error) {
-	if memberList, ok := q.members[uid]; ok {
-		return memberList, nil
+func (q fakeQuerier) GetGroupMembers(uid string) (controlplane.GroupMemberSet, []controlplane.IPBlock, error) {
+	if ipMemberList, ok := q.ipMembers[uid]; ok {
+		return nil, ipMemberList, nil
 	}
-	return controlplane.GroupMemberSet{}, nil
+	if memberList, ok := q.members[uid]; ok {
+		return memberList, nil, nil
+	}
+	return nil, nil, nil
 }
 
 func TestRESTGet(t *testing.T) {
@@ -61,6 +66,14 @@ func TestRESTGet(t *testing.T) {
 				},
 			},
 		},
+	}
+	testCIDR := controlplane.IPNet{
+		IP:           controlplane.IPAddress(net.ParseIP("10.0.0.1")),
+		PrefixLength: int32(24),
+	}
+	ipb := []controlplane.IPBlock{{CIDR: testCIDR}}
+	ipMembers := map[string][]controlplane.IPBlock{
+		"cgIPBlock": ipb,
 	}
 	tests := []struct {
 		name        string
@@ -121,8 +134,24 @@ func TestRESTGet(t *testing.T) {
 			},
 			expectedErr: false,
 		},
+		{
+			name:      "ipBlock-cg",
+			groupName: "cgIPBlock",
+			expectedObj: &controlplane.ClusterGroupMembers{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "cgIPBlock",
+				},
+				EffectiveIPBlocks: []controlplane.IPNet{
+					{
+						IP:           controlplane.IPAddress(net.ParseIP("10.0.0.1")),
+						PrefixLength: int32(24),
+					},
+				},
+			},
+			expectedErr: false,
+		},
 	}
-	rest := NewREST(fakeQuerier{members: members})
+	rest := NewREST(fakeQuerier{members: members, ipMembers: ipMembers})
 	for _, tt := range tests {
 		actualGroupList, err := rest.Get(request.NewDefaultContext(), tt.groupName, &metav1.GetOptions{})
 		if tt.expectedErr {

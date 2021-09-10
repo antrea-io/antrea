@@ -22,7 +22,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 )
 
-func getSets(start, end int) sets.String {
+func getStringSets(start, end int) sets.String {
 	s := sets.NewString()
 	for i := start; i < end; i++ {
 		s.Insert(fmt.Sprintf("%v", i))
@@ -30,17 +30,17 @@ func getSets(start, end int) sets.String {
 	return s
 }
 
-func BenchmarkSymmetricDifference(b *testing.B) {
-	s1 := getSets(0, 2000)
-	s2 := getSets(1000, 3000)
+func BenchmarkSymmetricDifferenceString(b *testing.B) {
+	s1 := getStringSets(0, 2000)
+	s2 := getStringSets(1000, 3000)
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		SymmetricDifference(s1, s2)
+		SymmetricDifferenceString(s1, s2)
 	}
 }
 
-func TestMerge(t *testing.T) {
+func TestMergeString(t *testing.T) {
 	tests := []struct {
 		name string
 		src  sets.String
@@ -49,27 +49,27 @@ func TestMerge(t *testing.T) {
 	}{
 		{
 			name: "With common items",
-			src:  getSets(1, 10),
-			dst:  getSets(5, 15),
-			want: getSets(1, 15),
+			src:  getStringSets(1, 10),
+			dst:  getStringSets(5, 15),
+			want: getStringSets(1, 15),
 		},
 		{
 			name: "Without common items",
-			src:  getSets(1, 10),
-			dst:  getSets(10, 15),
-			want: getSets(1, 15),
+			src:  getStringSets(1, 10),
+			dst:  getStringSets(10, 15),
+			want: getStringSets(1, 15),
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := Merge(tt.dst, tt.src)
+			got := MergeString(tt.dst, tt.src)
 			assert.Equal(t, tt.want, got)
 			assert.Equal(t, tt.want, tt.dst)
 		})
 	}
 }
 
-func TestSymmetricDifference(t *testing.T) {
+func TestSymmetricDifferenceString(t *testing.T) {
 	tests := []struct {
 		name string
 		s1   sets.String
@@ -78,26 +78,26 @@ func TestSymmetricDifference(t *testing.T) {
 	}{
 		{
 			name: "Equivalent sets",
-			s1:   getSets(1, 4),
-			s2:   getSets(1, 4),
+			s1:   getStringSets(1, 4),
+			s2:   getStringSets(1, 4),
 			want: sets.NewString(),
 		},
 		{
 			name: "With common items",
-			s1:   getSets(1, 4),
-			s2:   getSets(3, 6),
+			s1:   getStringSets(1, 4),
+			s2:   getStringSets(3, 6),
 			want: sets.NewString("1", "2", "4", "5"),
 		},
 		{
 			name: "Without common items",
-			s1:   getSets(1, 4),
-			s2:   getSets(4, 8),
-			want: getSets(1, 8),
+			s1:   getStringSets(1, 4),
+			s2:   getStringSets(4, 8),
+			want: getStringSets(1, 8),
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := SymmetricDifference(tt.s1, tt.s2)
+			got := SymmetricDifferenceString(tt.s1, tt.s2)
 			assert.Equal(t, tt.want, got)
 		})
 	}

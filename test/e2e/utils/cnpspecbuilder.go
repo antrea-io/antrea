@@ -162,7 +162,8 @@ func (b *ClusterNetworkPolicySpecBuilder) AddIngress(protoc v1.Protocol,
 	for _, at := range ruleAppliedToSpecs {
 		appliedTos = append(appliedTos, b.GetAppliedToPeer(at.PodSelector, at.NSSelector, at.PodSelectorMatchExp, at.NSSelectorMatchExp, at.Group))
 	}
-	var policyPeer []crdv1alpha1.NetworkPolicyPeer
+	// An empty From/To in ACNP rules evaluates to match all addresses.
+	policyPeer := make([]crdv1alpha1.NetworkPolicyPeer, 0)
 	if pSel != nil || nSel != nil || ns != nil || ipBlock != nil || ruleClusterGroup != "" {
 		policyPeer = []crdv1alpha1.NetworkPolicyPeer{{
 			PodSelector:       pSel,
@@ -229,6 +230,47 @@ func (b *ClusterNetworkPolicySpecBuilder) AddEgress(protoc v1.Protocol,
 		Name:      theRule.Name,
 		AppliedTo: theRule.AppliedTo,
 	})
+	return b
+}
+
+func (b *ClusterNetworkPolicySpecBuilder) AddFQDNRule(fqdn string,
+	protoc v1.Protocol, port *int32, portName *string, endPort *int32, name string,
+	ruleAppliedToSpecs []ACNPAppliedToSpec, action crdv1alpha1.RuleAction) *ClusterNetworkPolicySpecBuilder {
+	var appliedTos []crdv1alpha1.NetworkPolicyPeer
+	for _, at := range ruleAppliedToSpecs {
+		appliedTos = append(appliedTos, b.GetAppliedToPeer(at.PodSelector, at.NSSelector, at.PodSelectorMatchExp, at.NSSelectorMatchExp, at.Group))
+	}
+	policyPeer := []crdv1alpha1.NetworkPolicyPeer{{FQDN: fqdn}}
+	var ports []crdv1alpha1.NetworkPolicyPort
+	if portName != nil {
+		ports = []crdv1alpha1.NetworkPolicyPort{
+			{
+				Port:     &intstr.IntOrString{Type: intstr.String, StrVal: *portName},
+				Protocol: &protoc,
+			},
+		}
+	}
+	if port != nil || endPort != nil {
+		var pVal *intstr.IntOrString
+		if port != nil {
+			pVal = &intstr.IntOrString{IntVal: *port}
+		}
+		ports = []crdv1alpha1.NetworkPolicyPort{
+			{
+				Port:     pVal,
+				EndPort:  endPort,
+				Protocol: &protoc,
+			},
+		}
+	}
+	newRule := crdv1alpha1.Rule{
+		To:        policyPeer,
+		Ports:     ports,
+		Action:    &action,
+		Name:      name,
+		AppliedTo: appliedTos,
+	}
+	b.Spec.Egress = append(b.Spec.Egress, newRule)
 	return b
 }
 

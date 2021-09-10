@@ -46,11 +46,9 @@ func filterAntreaConns(conns []*flowexporter.Connection, nodeConfig *config.Node
 
 		// Consider Pod-to-Pod, Pod-To-Service and Pod-To-External flows.
 		if srcIP.Equal(nodeConfig.GatewayConfig.IPv4) || dstIP.Equal(nodeConfig.GatewayConfig.IPv4) {
-			klog.V(4).Infof("Detected flow for which one of the endpoint is host gateway %s :%+v", nodeConfig.GatewayConfig.IPv4.String(), conn)
 			continue
 		}
 		if srcIP.Equal(nodeConfig.GatewayConfig.IPv6) || dstIP.Equal(nodeConfig.GatewayConfig.IPv6) {
-			klog.V(4).Infof("Detected flow for which one of the endpoint is host gateway %s :%+v", nodeConfig.GatewayConfig.IPv6.String(), conn)
 			continue
 		}
 

@@ -53,9 +53,10 @@ func newTestController() (*Controller, *fake.Clientset, *mockReconciler) {
 	clientset := &fake.Clientset{}
 	ch := make(chan agenttypes.EntityReference, 100)
 	controller, _ := NewNetworkPolicyController(&antreaClientGetter{clientset}, nil, nil, "node1", ch,
-		true, true, true, nil, testAsyncDeleteInterval)
+		true, true, true, nil, testAsyncDeleteInterval, "8.8.8.8:53")
 	reconciler := newMockReconciler()
 	controller.reconciler = reconciler
+	controller.antreaPolicyLogger = nil
 	return controller, clientset, reconciler
 }
 
@@ -64,9 +65,10 @@ func newTestController() (*Controller, *fake.Clientset, *mockReconciler) {
 // for testing.
 type mockReconciler struct {
 	sync.Mutex
-	lastRealized map[string]*CompletedRule
-	updated      chan string
-	deleted      chan string
+	lastRealized   map[string]*CompletedRule
+	updated        chan string
+	deleted        chan string
+	fqdnController *fqdnController
 }
 
 func newMockReconciler() *mockReconciler {
@@ -107,6 +109,10 @@ func (r *mockReconciler) RunIDAllocatorWorker(_ <-chan struct{}) {
 	return
 }
 
+func (r *mockReconciler) RegisterFQDNController(fc *fqdnController) {
+	r.fqdnController = fc
+}
+
 func (r *mockReconciler) GetRuleByFlowID(_ uint32) (*agenttypes.PolicyRule, bool, error) {
 	return nil, false, nil
 }
@@ -135,7 +141,11 @@ func newAppliedToGroup(name string, pods []v1beta2.GroupMember) *v1beta2.Applied
 }
 
 func newNetworkPolicy(name string, uid types.UID, from, to, appliedTo []string, services []v1beta2.Service) *v1beta2.NetworkPolicy {
-	networkPolicyRule1 := newPolicyRule(v1beta2.DirectionIn, from, to, services)
+	dir := v1beta2.DirectionIn
+	if len(from) == 0 && len(to) > 0 {
+		dir = v1beta2.DirectionOut
+	}
+	networkPolicyRule1 := newPolicyRule(dir, from, to, services)
 	return &v1beta2.NetworkPolicy{
 		ObjectMeta:      v1.ObjectMeta{UID: uid, Name: string(uid)},
 		Rules:           []v1beta2.NetworkPolicyRule{networkPolicyRule1},
@@ -432,33 +442,32 @@ func TestAddNetworkPolicyWithMultipleRules(t *testing.T) {
 			actualRule, _ := reconciler.getLastRealized(ruleID)
 			if actualRule.Direction == v1beta2.DirectionIn {
 				if !assert.ElementsMatch(t, actualRule.Services, desiredRule1.Services) {
-					t.Errorf("Expected Services %v, got %v", actualRule.Services, desiredRule1.Services)
+					t.Errorf("Expected Services %v, got %v", desiredRule1.Services, actualRule.Services)
 				}
 				if !actualRule.FromAddresses.Equal(desiredRule1.FromAddresses) {
-					t.Errorf("Expected FromAddresses %v, got %v", actualRule.FromAddresses, desiredRule1.FromAddresses)
+					t.Errorf("Expected FromAddresses %v, got %v", desiredRule1.FromAddresses, actualRule.FromAddresses)
 				}
 				if !actualRule.ToAddresses.Equal(desiredRule1.ToAddresses) {
-					t.Errorf("Expected ToAddresses %v, got %v", actualRule.ToAddresses, desiredRule1.ToAddresses)
+					t.Errorf("Expected ToAddresses %v, got %v", desiredRule1.ToAddresses, actualRule.ToAddresses)
 				}
 				if !actualRule.TargetMembers.Equal(desiredRule1.TargetMembers) {
-					t.Errorf("Expected Pods %v, got %v", actualRule.TargetMembers, desiredRule1.TargetMembers)
+					t.Errorf("Expected Pods %v, got %v", desiredRule1.TargetMembers, actualRule.TargetMembers)
 				}
 			}
 			if actualRule.Direction == v1beta2.DirectionOut {
 				if !assert.ElementsMatch(t, actualRule.Services, desiredRule2.Services) {
-					t.Errorf("Expected Services %v, got %v", actualRule.Services, desiredRule2.Services)
+					t.Errorf("Expected Services %v, got %v", desiredRule2.Services, actualRule.Services)
 				}
 				if !actualRule.FromAddresses.Equal(desiredRule2.FromAddresses) {
-					t.Errorf("Expected FromAddresses %v, got %v", actualRule.FromAddresses, desiredRule2.FromAddresses)
+					t.Errorf("Expected FromAddresses %v, got %v", desiredRule2.FromAddresses, actualRule.FromAddresses)
 				}
 				if !actualRule.ToAddresses.Equal(desiredRule2.ToAddresses) {
-					t.Errorf("Expected ToAddresses %v, got %v", actualRule.ToAddresses, desiredRule2.ToAddresses)
+					t.Errorf("Expected ToAddresses %v, got %v", desiredRule2.ToAddresses, actualRule.ToAddresses)
 				}
 				if !actualRule.TargetMembers.Equal(desiredRule2.TargetMembers) {
-					t.Errorf("Expected Pods %v, got %v", actualRule.TargetMembers, desiredRule2.TargetMembers)
+					t.Errorf("Expected Pods %v, got %v", desiredRule2.TargetMembers, actualRule.TargetMembers)
 				}
 			}
-
 		case <-time.After(time.Millisecond * 100):
 			t.Fatal("Expected two rule updates, got timeout")
 		}

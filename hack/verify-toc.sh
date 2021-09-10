@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# This script is a copy of script maintained in
+# This script is inspired by the one maintained in
 # https://github.com/kubernetes/enhancements
 
 set -o errexit
@@ -22,6 +22,15 @@ set -o nounset
 set -o pipefail
 
 TOOL_VERSION=$(head hack/mdtoc-version)
+
+GO_VERSION="$(${GO} version | awk '{print $3}')"
+function version_lt() { test "$(printf '%s\n' "$@" | sort -rV | head -n 1)" != "$1"; }
+
+if version_lt "${GO_VERSION}" "go1.16"; then
+    # See https://golang.org/doc/go-get-install-deprecation
+    echo "Running this script requires Go >= 1.16, please upgrade"
+    exit 1
+fi
 
 # cd to the root path
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
@@ -32,17 +41,13 @@ TMP_DIR=$(mktemp -d)
 
 # cleanup
 exitHandler() (
-  echo "Cleaning up..."
+  echo "Cleaning up temporary directory"
   rm -rf "${TMP_DIR}"
 )
 trap exitHandler EXIT
 
-# perform go get in a temp dir as we are not tracking this version in a go module
-# if we do the go get in the repo, it will create / update a go.mod and go.sum
-cd "${TMP_DIR}"
-GO111MODULE=on GOBIN="${TMP_DIR}" go get "github.com/tallclair/mdtoc@${TOOL_VERSION}"
+GOBIN="${TMP_DIR}" ${GO} install "github.com/tallclair/mdtoc@${TOOL_VERSION}"
 export PATH="${TMP_DIR}:${PATH}"
-cd "${ROOT}"
 
 echo "Checking table of contents are up to date..."
 # Verify tables of contents are up-to-date

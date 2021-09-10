@@ -1,3 +1,4 @@
+//go:build linux
 // +build linux
 
 // Copyright 2020 Antrea Authors
@@ -18,6 +19,8 @@ package agent
 
 import (
 	"net"
+
+	"antrea.io/antrea/pkg/agent/util"
 )
 
 // prepareHostNetwork returns immediately on Linux.
@@ -39,4 +42,8 @@ func (i *Initializer) initHostNetworkFlows() error {
 // On linux platform, local_ip option is not needed.
 func (i *Initializer) getTunnelPortLocalIP() net.IP {
 	return nil
+}
+
+func GetTransportIPNetDeviceByName(ifaceName string, ovsBridgeName string) (*net.IPNet, *net.IPNet, *net.Interface, error) {
+	return util.GetIPNetDeviceByName(ifaceName)
 }

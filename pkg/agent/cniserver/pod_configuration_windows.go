@@ -1,3 +1,4 @@
+//go:build windows
 // +build windows
 
 // Copyright 2021 Antrea Authors
@@ -95,9 +96,8 @@ func (pc *podConfigurator) connectInterfaceToOVS(
 	//   way to create OVS port.
 	if util.HostInterfaceExists(hostIfAlias) {
 		return containerConfig, pc.connectInterfaceToOVSCommon(ovsPortName, containerConfig)
-	} else {
-		return containerConfig, pc.connectInterfaceToOVSAsync(containerConfig, containerAccess)
 	}
+	return containerConfig, pc.connectInterfaceToOVSAsync(containerConfig, containerAccess)
 }
 
 func (pc *podConfigurator) reconcileMissingPods(pods sets.String, containerAccess *containerAccessArbitrator) {

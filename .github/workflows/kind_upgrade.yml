@@ -10,7 +10,7 @@ on:
     - release-*
 
 env:
-  KIND_VERSION: v0.11.0
+  KIND_VERSION: v0.11.1
 
 jobs:
   check-changes:
@@ -59,9 +59,9 @@ jobs:
         sudo apt-get clean
         df -h
     - uses: actions/checkout@v2
-    - uses: actions/setup-go@v1
+    - uses: actions/setup-go@v2
       with:
-        go-version: 1.15
+        go-version: 1.17
     - name: Download Antrea image from previous job
       uses: actions/download-artifact@v1
       with:
@@ -99,9 +99,9 @@ jobs:
         sudo apt-get clean
         df -h
     - uses: actions/checkout@v2
-    - uses: actions/setup-go@v1
+    - uses: actions/setup-go@v2
       with:
-        go-version: 1.15
+        go-version: 1.17
     - name: Download Antrea image from previous job
       uses: actions/download-artifact@v1
       with:
@@ -139,9 +139,9 @@ jobs:
           sudo apt-get clean
           df -h
       - uses: actions/checkout@v2
-      - uses: actions/setup-go@v1
+      - uses: actions/setup-go@v2
         with:
-          go-version: 1.15
+          go-version: 1.17
       - name: Download Antrea image from previous job
         uses: actions/download-artifact@v1
         with:
@@ -179,9 +179,9 @@ jobs:
           sudo apt-get clean
           df -h
       - uses: actions/checkout@v2
-      - uses: actions/setup-go@v1
+      - uses: actions/setup-go@v2
         with:
-          go-version: 1.15
+          go-version: 1.17
       - name: Download Antrea image from previous job
         uses: actions/download-artifact@v1
         with:
@@ -215,7 +215,7 @@ jobs:
   artifact-cleanup:
     name: Delete uploaded images
     needs: [build-antrea-image, from-N-1, from-N-2, compatible-N-1, compatible-N-2]
-    if: ${{ always() }}
+    if: ${{ always() && needs.build-antrea-image.result == 'success' }}
     runs-on: [ubuntu-latest]
     steps:
     - name: Delete antrea-ubuntu

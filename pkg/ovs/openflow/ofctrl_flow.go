@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/contiv/libOpenflow/openflow13"
-	"github.com/contiv/ofnet/ofctrl"
+	"antrea.io/libOpenflow/openflow13"
+	"antrea.io/ofnet/ofctrl"
 )
 
 type FlowStates struct {
@@ -33,6 +33,17 @@ type ofFlow struct {
 	ctStates *openflow13.CTStates
 	// isDropFlow is true if this flow actions contain "drop"
 	isDropFlow bool
+}
+
+func (f *ofFlow) String() string {
+	s := strings.Join([]string{`&ofFlow{`,
+		`table:` + fmt.Sprintf("%v", f.table.id) + `,`,
+		`matchers:` + fmt.Sprintf("%v", f.matchers) + `,`,
+		`protocol:` + fmt.Sprintf("%v", f.protocol) + `,`,
+		`flow:` + fmt.Sprintf("%v", f.Flow) + `,`,
+		`}`,
+	}, "")
+	return s
 }
 
 // Reset updates the ofFlow.Flow.Table field with ofFlow.table.Table.

@@ -4,13 +4,13 @@ source logging
 source daemon_status
 
 CONTAINER_NAME="antrea-ovs"
+OVS_RUN_DIR="/var/run/openvswitch"
 OVS_DB_FILE="/var/run/openvswitch/conf.db"
 
-set -euo pipefail
-
-hwaddr=$(ip link show eth0 | grep link/ether | awk '{print $2}')
-inet=$(ip addr show eth0 | grep "inet " | awk '{ print $2 }')
-gw=$(ip route | grep default | awk '{ print $3 }')
+if ! ip addr show eth0 > /dev/null 2>&1; then
+    log_error $CONTAINER_NAME "No eth0 uplink found, exiting"
+    exit 1
+fi
 
 # Modify ovs-ctl so that the kernel module is no longer loaded since it is not
 # needed when using OVS in userspace mode. It also enables running OVS with the
@@ -20,10 +20,25 @@ function fix_ovs_ctl {
     sed -i 's/\(\w*\)\(insert_mod_if_required || return 1\)/\1# \2/' /usr/share/openvswitch/scripts/ovs-ctl
 }
 
+# grep exits 1 if no matches are found. This function catches exit status 1 to
+# avoid failing if no matches are found. This still allows grep to return with
+# other exit status codes in the case of other failures.
+function grep_allow_no_match {
+  grep "$@" || test $? = 1;
+}
+
 # See http://docs.openvswitch.org/en/latest/howto/userspace-tunneling/
 function add_br_phy {
     log_info $CONTAINER_NAME "Creating OVS br-phy bridge for netdev datapath type"
-    ovs-vsctl --may-exist add-br br-phy \
+    hwaddr=$(ip link show eth0 | grep link/ether | awk '{print $2}')
+    inet=$(ip addr show eth0 | grep "inet " | awk '{ print $2 }')
+    inet6=$(ip -6 addr show eth0 | grep_allow_no_match global | awk '{ print $2 }')
+    gw=$(ip route | grep default | awk '{ print $3 }')
+    gw6=$(ip -6 route | grep_allow_no_match default | awk '{ print $3 }')
+    # eth0 may be assigned an IPv6 address even if IPv6 is disabled in the kernel
+    # we must ensure IPv6 is enabled before we can add IPv6 addresses
+    ipv6enabled=$(sysctl net.ipv6.conf.all.disable_ipv6 --values)
+    ovs-vsctl add-br br-phy \
               -- set Bridge br-phy datapath_type=netdev \
               -- br-set-external-id br-phy bridge-id br-phy \
               -- set bridge br-phy fail-mode=standalone \
@@ -31,22 +46,57 @@ function add_br_phy {
 
     ovs-vsctl --timeout 10 add-port br-phy eth0
     ip addr add "$inet" dev br-phy
+    if [[ "$ipv6enabled" -eq 0 ]] && [[ -n "$inet6" ]]; then
+      ip addr add "$inet6" dev br-phy
+    fi
     ip link set br-phy up
     ip addr flush dev eth0 2>/dev/null
     ip link set eth0 up
     ip route add default via "$gw" dev br-phy
+    iptables -t raw -A PREROUTING -i eth0 -j DROP
+    # While the below ip6tables rule should prevent duplicate packets, we
+    # observed that it caused connectivity to the API server to fail from
+    # outside the cluster. More investigation is required.
+    # ip6tables -t raw -A PREROUTING -i eth0 -j DROP
+    if [[ "$ipv6enabled" -eq 0 ]] && [[ -n "$gw6" ]]; then
+      ip -6 route replace default via "$gw6" dev br-phy
+    fi
 }
 
 function del_br_phy {
+    inet=$(ip addr show br-phy | grep "inet " | awk '{ print $2 }')
+    inet6=$(ip -6 addr show br-phy | grep_allow_no_match global | awk '{ print $2 }')
+    gw=$(ip route | grep default | awk '{ print $3 }')
+    gw6=$(ip -6 route | grep_allow_no_match default | awk '{ print $3 }')
+    # we must ensure IPv6 is enabled before we can add IPv6 addresses
+    ipv6enabled=$(sysctl net.ipv6.conf.all.disable_ipv6 --values)
     log_info $CONTAINER_NAME "Deleting OVS br-phy bridge"
     ovs-vsctl del-port br-phy eth0
     ovs-vsctl del-br br-phy
     ip addr add "$inet" dev eth0
+    if [[ "$ipv6enabled" -eq 0 ]] && [[ -n "$inet6" ]]; then
+      ip addr add "$inet6" dev eth0
+    fi
     ip link set eth0 up
     ip route add default via "$gw" dev eth0
+    iptables -t raw -D PREROUTING -i eth0 -j DROP
+    if [[ "$ipv6enabled" -eq 0 ]] && [[ -n "$gw6" ]]; then
+      ip -6 route replace default via "$gw6" dev eth0
+    fi
+}
+
+# While working on https://github.com/antrea-io/antrea/pull/2215, we sometimes
+# observed a few leftover .ctl files across OVS restarts, causing failures in
+# the agent when trying to run ovs-appctl commands. This impacted testing on
+# Kind, so we started deleting these files before starting OVS.
+function cleanup_ovs_run_files {
+    rm -rf ${OVS_RUN_DIR}/ovs*.pid
+    rm -rf ${OVS_RUN_DIR}/ovs*.ctl
+    rm -rf ${OVS_RUN_DIR}/.conf.db.*~lock~
 }
 
 function start_ovs {
+    cleanup_ovs_run_files
     log_info $CONTAINER_NAME "Starting OVS"
     # Unlike the start_ovs script, we don't set flow-restore-wait when starting OVS
     # with the netdev datapath. This is because the Node's network relies on the
@@ -73,6 +123,8 @@ function quit {
     exit 0
 }
 
+set -euo pipefail
+
 # Do not trap EXIT as it would then ignore the "exit 0" statement in quit and
 # exit with code 128 + SIGNAL
 trap "quit" INT TERM
@@ -86,6 +138,10 @@ chmod 0640 $OVS_DB_FILE
 
 if [[ "$#" -ge 1 ]] && [[ "$1" == "--start-ovs-only" ]]; then
   exit 0
+fi
+if ip addr show br-phy > /dev/null 2>&1; then
+    log_info $CONTAINER_NAME "OVS bridge br-phy already exists, attempting clean-up first"
+    del_br_phy || true
 fi
 add_br_phy
 

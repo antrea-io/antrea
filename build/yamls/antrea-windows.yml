@@ -5,12 +5,12 @@ data:
     # wins will rename the binary when executing it. So we need to copy the binary everytime before running it.
     mkdir -force /host/k/antrea/bin
     cp /k/antrea/bin/* /host/k/antrea/bin/
-    C:/k/antrea/utils/wins.exe cli process run --path /k/antrea/bin/antrea-agent.exe --args "--config=/k/antrea/etc/antrea-agent.conf --logtostderr=false --log_dir=/k/antrea/logs/ --alsologtostderr --log_file_max_size=100 --log_file_max_num=4" --envs "KUBERNETES_SERVICE_HOST=$env:KUBERNETES_SERVICE_HOST KUBERNETES_SERVICE_PORT=$env:KUBERNETES_SERVICE_PORT ANTREA_SERVICE_HOST=$env:ANTREA_SERVICE_HOST ANTREA_SERVICE_PORT=$env:ANTREA_SERVICE_PORT NODE_NAME=$env:NODE_NAME"
+    C:/k/antrea/utils/wins.exe cli process run --path /k/antrea/bin/antrea-agent.exe --args "--config=/k/antrea/etc/antrea-agent.conf --logtostderr=false --log_dir=/k/antrea/logs/ --alsologtostderr --log_file_max_size=100 --log_file_max_num=4" --envs "KUBERNETES_SERVICE_HOST=$env:KUBERNETES_SERVICE_HOST KUBERNETES_SERVICE_PORT=$env:KUBERNETES_SERVICE_PORT ANTREA_SERVICE_HOST=$env:ANTREA_SERVICE_HOST ANTREA_SERVICE_PORT=$env:ANTREA_SERVICE_PORT NODE_NAME=$env:NODE_NAME KUBE_DNS_SERVICE_HOST=$env:KUBE_DNS_SERVICE_HOST KUBE_DNS_SERVICE_PORT=$env:KUBE_DNS_SERVICE_PORT"
 kind: ConfigMap
 metadata:
   labels:
     app: antrea
-  name: antrea-agent-windows-h7td2mh9gm
+  name: antrea-agent-windows-5kkc4t55t4
   namespace: kube-system
 ---
 apiVersion: v1
@@ -96,6 +96,11 @@ data:
     # hybrid:            noEncap if source and destination Nodes are on the same subnet, otherwise encap.
     #
     #trafficEncapMode: encap
+
+    # The name of the interface on Node which is used for tunneling or routing the traffic across Nodes.
+    # If there are multiple IP addresses configured on the interface, the first one is used.
+    # The interface configured with Node IP is used if this parameter is not set.
+    #transportInterface:
   antrea-cni.conflist: |
     {
         "cniVersion":"0.3.0",
@@ -114,7 +119,7 @@ kind: ConfigMap
 metadata:
   labels:
     app: antrea
-  name: antrea-windows-config-g5hmmkbh55
+  name: antrea-windows-config-74ctmgh7mf
   namespace: kube-system
 ---
 apiVersion: apps/v1
@@ -202,11 +207,11 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-windows-config-g5hmmkbh55
+          name: antrea-windows-config-74ctmgh7mf
         name: antrea-windows-config
       - configMap:
           defaultMode: 420
-          name: antrea-agent-windows-h7td2mh9gm
+          name: antrea-agent-windows-5kkc4t55t4
         name: antrea-agent-windows
       - hostPath:
           path: /etc/cni/net.d

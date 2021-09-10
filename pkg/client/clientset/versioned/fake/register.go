@@ -17,7 +17,6 @@
 package fake
 
 import (
-	controlplanev1beta1 "antrea.io/antrea/pkg/apis/controlplane/v1beta1"
 	controlplanev1beta2 "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	crdv1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
@@ -36,7 +35,6 @@ var scheme = runtime.NewScheme()
 var codecs = serializer.NewCodecFactory(scheme)
 
 var localSchemeBuilder = runtime.SchemeBuilder{
-	controlplanev1beta1.AddToScheme,
 	controlplanev1beta2.AddToScheme,
 	crdv1alpha1.AddToScheme,
 	crdv1alpha2.AddToScheme,

@@ -8,7 +8,8 @@ can run the following:
 
 ```bash
 cd build/images/lichen
-docker build -t antrea/lichen .
+GO_VERSION=$(head -n 1 ../deps/go-version)
+docker build -t antrea/lichen --build-arg GO_VERSION=$GO_VERSION .
 docker push antrea/lichen
 ```
 

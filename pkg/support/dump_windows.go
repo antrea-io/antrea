@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//go:build windows
 // +build windows
 
 package support
@@ -33,15 +34,17 @@ const (
 // collecting them from a configurable path in the future.
 func (d *agentDumper) DumpLog(basedir string) error {
 	logDir := logdir.GetLogDir()
-	if err := fileCopy(d.fs, path.Join(basedir, "logs", "agent"), logDir, "rancher-wins-antrea-agent"); err != nil {
+	timeFilter := timestampFilter(d.since)
+
+	if err := directoryCopy(d.fs, path.Join(basedir, "logs", "agent"), logDir, "rancher-wins-antrea-agent", timeFilter); err != nil {
 		return err
 	}
 	// Dump OVS logs.
-	if err := fileCopy(d.fs, path.Join(basedir, "logs", "ovs"), antreaWindowsOVSLogDir, "ovs"); err != nil {
+	if err := directoryCopy(d.fs, path.Join(basedir, "logs", "ovs"), antreaWindowsOVSLogDir, "ovs", timeFilter); err != nil {
 		return err
 	}
 	// Dump kubelet logs.
-	if err := fileCopy(d.fs, path.Join(basedir, "logs", "kubelet"), antreaWindowsKubeletLogDir, "kubelet"); err != nil {
+	if err := directoryCopy(d.fs, path.Join(basedir, "logs", "kubelet"), antreaWindowsKubeletLogDir, "kubelet", timeFilter); err != nil {
 		return err
 	}
 	return nil

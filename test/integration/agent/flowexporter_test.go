@@ -1,3 +1,4 @@
+//go:build !windows
 // +build !windows
 
 // Copyright 2020 Antrea Authors
@@ -37,7 +38,10 @@ import (
 	queriertest "antrea.io/antrea/pkg/querier/testing"
 )
 
-const testPollInterval = 0 // Not used in the test, hence 0.
+const (
+	testPollInterval           = 0 // Not used in the test, hence 0.
+	testStaleConnectionTimeout = 5 * time.Minute
+)
 
 func createConnsForTest() ([]*flowexporter.Connection, []*flowexporter.ConnectionKey) {
 	// Reference for flow timestamp
@@ -108,7 +112,7 @@ func TestConnectionStoreAndFlowRecords(t *testing.T) {
 	ifStoreMock := interfacestoretest.NewMockInterfaceStore(ctrl)
 	npQuerier := queriertest.NewMockAgentNetworkPolicyInfoQuerier(ctrl)
 	// TODO: Enhance the integration test by testing service.
-	conntrackConnStore := connections.NewConntrackConnectionStore(connDumperMock, flowrecords.NewFlowRecords(), ifStoreMock, true, false, nil, npQuerier, testPollInterval)
+	conntrackConnStore := connections.NewConntrackConnectionStore(connDumperMock, flowrecords.NewFlowRecords(), ifStoreMock, true, false, nil, npQuerier, testPollInterval, testStaleConnectionTimeout)
 	// Expect calls for connStore.poll and other callees
 	connDumperMock.EXPECT().DumpFlows(uint16(openflow.CtZone)).Return(testConns, 0, nil)
 	connDumperMock.EXPECT().GetMaxConnections().Return(0, nil)

@@ -80,6 +80,23 @@ func init() {
 	flag.BoolVar(&prometheusEnabled, "prometheus", false, "Enables Prometheus tests")
 }
 
+// TestPrometheus is the top-level test which contains all subtests for
+// Prometheus related test cases so they can share setup, teardown.
+func TestPrometheus(t *testing.T) {
+	skipIfPrometheusDisabled(t)
+	skipIfHasWindowsNodes(t)
+
+	data, err := setupTest(t)
+	if err != nil {
+		t.Fatalf("Error when setting up test: %v", err)
+	}
+	defer teardownTest(t, data)
+	t.Run("testPrometheusMetricsOnController", func(t *testing.T) { testPrometheusMetricsOnController(t, data) })
+	t.Run("testPrometheusMetricsOnAgent", func(t *testing.T) { testPrometheusMetricsOnAgent(t, data) })
+	t.Run("testPrometheusServerControllerMetrics", func(t *testing.T) { testPrometheusServerControllerMetrics(t, data) })
+	t.Run("testPrometheusServerAgentMetrics", func(t *testing.T) { testPrometheusServerAgentMetrics(t, data) })
+}
+
 // skipIfPrometheusDisabled checks if Prometheus testing enabled, skip otherwise
 func skipIfPrometheusDisabled(t *testing.T) {
 	if !prometheusEnabled {
@@ -109,8 +126,8 @@ func getMonitoringAuthToken(t *testing.T, data *TestData) string {
 	return token
 }
 
-// getMetricsFromApiServer retrieves Antrea metrics from Pod apiserver
-func getMetricsFromApiServer(t *testing.T, url string, token string) string {
+// getMetricsFromAPIServer retrieves Antrea metrics from Pod apiserver
+func getMetricsFromAPIServer(t *testing.T, url string, token string) string {
 	// #nosec G402: ignore insecure options in test code
 	config := &tls.Config{
 		InsecureSkipVerify: true,
@@ -156,7 +173,7 @@ func testPrometheusMetricsOnPods(t *testing.T, data *TestData, component string,
 	}
 
 	var hostIP = ""
-	var hostPort int32 = 0
+	var hostPort int32
 	var address = ""
 	var parser expfmt.TextParser
 
@@ -170,7 +187,7 @@ func testPrometheusMetricsOnPods(t *testing.T, data *TestData, component string,
 				hostPort = port.HostPort
 				address := net.JoinHostPort(hostIP, fmt.Sprint(hostPort))
 				t.Logf("Found %s", address)
-				respBody := getMetricsFromApiServer(t, fmt.Sprintf("https://%s/metrics", address), token)
+				respBody := getMetricsFromAPIServer(t, fmt.Sprintf("https://%s/metrics", address), token)
 
 				parsed, err := parser.TextToMetricFamilies(strings.NewReader(respBody))
 				if err != nil {
@@ -217,7 +234,7 @@ func getPrometheusEndpoint(t *testing.T, data *TestData) (string, int32) {
 		t.Fatalf("Error fetching monitoring Services: %v", err)
 	}
 
-	var nodePort int32 = 0
+	var nodePort int32
 	for _, service := range services.Items {
 		for _, port := range service.Spec.Ports {
 			nodePort = port.NodePort
@@ -230,33 +247,15 @@ func getPrometheusEndpoint(t *testing.T, data *TestData) (string, int32) {
 	return hostIP, nodePort
 }
 
-// TestPrometheusMetricsOnController validates that metrics are returned from Prometheus client on the Antrea Controller
+// testPrometheusMetricsOnController validates that metrics are returned from Prometheus client on the Antrea Controller
 // and checks that metrics in antreaControllerMetrics exists in the controller output
-func TestPrometheusMetricsOnController(t *testing.T) {
-	skipIfPrometheusDisabled(t)
-	skipIfHasWindowsNodes(t)
-
-	data, err := setupTest(t)
-	if err != nil {
-		t.Fatalf("Error when setting up test: %v", err)
-	}
-	defer teardownTest(t, data)
-
+func testPrometheusMetricsOnController(t *testing.T, data *TestData) {
 	testPrometheusMetricsOnPods(t, data, "antrea-controller", antreaControllerMetrics)
 }
 
-// TestPrometheusMetricsOnAgent validates that metrics are returned from Prometheus client on the Antrea Agent
+// testPrometheusMetricsOnAgent validates that metrics are returned from Prometheus client on the Antrea Agent
 // and checks that metrics in antreaAgentMetrics exists in the agent's output
-func TestPrometheusMetricsOnAgent(t *testing.T) {
-	skipIfPrometheusDisabled(t)
-	skipIfHasWindowsNodes(t)
-
-	data, err := setupTest(t)
-	if err != nil {
-		t.Fatalf("Error when setting up test: %v", err)
-	}
-	defer teardownTest(t, data)
-
+func testPrometheusMetricsOnAgent(t *testing.T, data *TestData) {
 	testPrometheusMetricsOnPods(t, data, "antrea-agent", antreaAgentMetrics)
 }
 
@@ -270,12 +269,12 @@ func testMetricsFromPrometheusServer(t *testing.T, data *TestData, prometheusJob
 	// This API is still experimental in Prometheus v2.19.3.
 	path := url.PathEscape("match_target={job=\"" + prometheusJob + "\"}")
 	address := net.JoinHostPort(hostIP, fmt.Sprint(nodePort))
-	queryUrl := fmt.Sprintf("http://%s/api/v1/targets/metadata?%s", address, path)
+	queryURL := fmt.Sprintf("http://%s/api/v1/targets/metadata?%s", address, path)
 
 	client := &http.Client{}
-	resp, err := client.Get(queryUrl)
+	resp, err := client.Get(queryURL)
 	if err != nil {
-		t.Fatalf("Error fetching metrics from %s: %v", queryUrl, err)
+		t.Fatalf("Error fetching metrics from %s: %v", queryURL, err)
 	}
 	defer resp.Body.Close()
 
@@ -310,28 +309,10 @@ func testMetricsFromPrometheusServer(t *testing.T, data *TestData, prometheusJob
 	}
 }
 
-func TestPrometheusServerControllerMetrics(t *testing.T) {
-	skipIfPrometheusDisabled(t)
-	skipIfHasWindowsNodes(t)
-
-	data, err := setupTest(t)
-	if err != nil {
-		t.Fatalf("Error when setting up test: %v", err)
-	}
-	defer teardownTest(t, data)
-
+func testPrometheusServerControllerMetrics(t *testing.T, data *TestData) {
 	testMetricsFromPrometheusServer(t, data, "antrea-controllers", antreaControllerMetrics)
 }
 
-func TestPrometheusServerAgentMetrics(t *testing.T) {
-	skipIfPrometheusDisabled(t)
-	skipIfHasWindowsNodes(t)
-
-	data, err := setupTest(t)
-	if err != nil {
-		t.Fatalf("Error when setting up test: %v", err)
-	}
-	defer teardownTest(t, data)
-
+func testPrometheusServerAgentMetrics(t *testing.T, data *TestData) {
 	testMetricsFromPrometheusServer(t, data, "antrea-agents", antreaAgentMetrics)
 }

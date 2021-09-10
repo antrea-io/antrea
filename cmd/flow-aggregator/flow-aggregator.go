@@ -17,6 +17,7 @@ package main
 import (
 	"fmt"
 	"hash/fnv"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -28,6 +29,7 @@ import (
 
 	"antrea.io/antrea/pkg/clusteridentity"
 	aggregator "antrea.io/antrea/pkg/flowaggregator"
+	"antrea.io/antrea/pkg/log"
 	"antrea.io/antrea/pkg/signals"
 )
 
@@ -51,12 +53,12 @@ func genObservationDomainID(k8sClient kubernetes.Interface) uint32 {
 	)
 	var clusterUUID uuid.UUID
 	if err := wait.PollImmediate(retryInterval, timeout, func() (bool, error) {
-		if clusterIdentity, _, err := clusterIdentityProvider.Get(); err != nil {
+		clusterIdentity, _, err := clusterIdentityProvider.Get()
+		if err != nil {
 			return false, nil
-		} else {
-			clusterUUID = clusterIdentity.UUID
-			return true, nil
 		}
+		clusterUUID = clusterIdentity.UUID
+		return true, nil
 	}); err != nil {
 		klog.Warningf(
 			"Unable to retrieve cluster UUID after %v (does ConfigMap '%s/%s' exist?); will generate a random observation domain ID",
@@ -77,6 +79,8 @@ func run(o *Options) error {
 	// exits, we will force exit.
 	stopCh := signals.RegisterSignalHandlers()
 
+	log.StartLogFileNumberMonitor(stopCh)
+
 	k8sClient, err := createK8sClient()
 	if err != nil {
 		return fmt.Errorf("error when creating K8s client: %v", err)
@@ -93,6 +97,13 @@ func run(o *Options) error {
 	}
 	klog.Infof("Flow aggregator Observation Domain ID: %d", observationDomainID)
 
+	var sendJSONRecord bool
+	if o.format == "JSON" {
+		sendJSONRecord = true
+	} else {
+		sendJSONRecord = false
+	}
+
 	flowAggregator := aggregator.NewFlowAggregator(
 		o.externalFlowCollectorAddr,
 		o.externalFlowCollectorProto,
@@ -103,6 +114,7 @@ func run(o *Options) error {
 		k8sClient,
 		observationDomainID,
 		podInformer,
+		sendJSONRecord,
 	)
 	err = flowAggregator.InitCollectingProcess()
 	if err != nil {
@@ -112,12 +124,15 @@ func run(o *Options) error {
 	if err != nil {
 		return fmt.Errorf("error when creating aggregation process: %v", err)
 	}
-	go flowAggregator.Run(stopCh)
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go flowAggregator.Run(stopCh, &wg)
 
 	informerFactory.Start(stopCh)
 
 	<-stopCh
 	klog.Infof("Stopping flow aggregator")
+	wg.Wait()
 	return nil
 }
 

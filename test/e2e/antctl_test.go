@@ -33,6 +33,32 @@ type cmdAndReturnCode struct {
 	expectedReturnCode int
 }
 
+// TestAntctl is the top-level test which contains all subtests for
+// Antctl related test cases as they can share setup, teardown.
+func TestAntctl(t *testing.T) {
+	skipIfHasWindowsNodes(t)
+	skipIfNotRequired(t, "mode-irrelevant")
+
+	data, err := setupTest(t)
+	if err != nil {
+		t.Fatalf("Error when setting up test: %v", err)
+	}
+	defer teardownTest(t, data)
+
+	t.Run("testAntctlAgentLocalAccess", func(t *testing.T) {
+		testAntctlAgentLocalAccess(t, data)
+	})
+	t.Run("testAntctlControllerRemoteAccess", func(t *testing.T) {
+		testAntctlControllerRemoteAccess(t, data)
+	})
+	t.Run("testAntctlVerboseMode", func(t *testing.T) {
+		testAntctlVerboseMode(t, data)
+	})
+	t.Run("testAntctlProxy", func(t *testing.T) {
+		testAntctlProxy(t, data)
+	})
+}
+
 // antctlOutput is a helper function for generating antctl outputs.
 func antctlOutput(stdout, stderr string) string {
 	return fmt.Sprintf("antctl stdout:\n%s\nantctl stderr:\n%s", stdout, stderr)
@@ -63,15 +89,8 @@ func antctlCoverageArgs(antctlPath string) []string {
 	return []string{antctlPath, "-test.run=TestBincoverRunMain", fmt.Sprintf("-test.coverprofile=antctl-%s.out", timeStamp)}
 }
 
-// TestAntctlAgentLocalAccess ensures antctl is accessible in an agent Pod.
-func TestAntctlAgentLocalAccess(t *testing.T) {
-	skipIfHasWindowsNodes(t)
-
-	data, err := setupTest(t)
-	if err != nil {
-		t.Fatalf("Error when setting up test: %v", err)
-	}
-	defer teardownTest(t, data)
+// testAntctlAgentLocalAccess ensures antctl is accessible in an agent Pod.
+func testAntctlAgentLocalAccess(t *testing.T, data *TestData) {
 	podName, err := data.getAntreaPodOnNode(controlPlaneNodeName())
 	if err != nil {
 		t.Fatalf("Error when getting antrea-agent pod name: %v", err)
@@ -124,17 +143,10 @@ func copyAntctlToNode(data *TestData, nodeName string, antctlName string, nodeAn
 	return nil
 }
 
-// TestAntctlControllerRemoteAccess ensures antctl is able to be run outside of
+// testAntctlControllerRemoteAccess ensures antctl is able to be run outside of
 // the kubernetes cluster. It uses the antctl client binary copied from the controller
 // Pod.
-func TestAntctlControllerRemoteAccess(t *testing.T) {
-	skipIfHasWindowsNodes(t)
-
-	data, err := setupTest(t)
-	if err != nil {
-		t.Fatalf("Error when setting up test: %v", err)
-	}
-	defer teardownTest(t, data)
+func testAntctlControllerRemoteAccess(t *testing.T, data *TestData) {
 	antctlName := "antctl"
 	nodeAntctlPath := "~/antctl"
 	if testOptions.enableCoverage {
@@ -186,16 +198,9 @@ func TestAntctlControllerRemoteAccess(t *testing.T) {
 	}
 }
 
-// TestAntctlVerboseMode ensures no unexpected outputs during the execution of
+// testAntctlVerboseMode ensures no unexpected outputs during the execution of
 // the antctl client.
-func TestAntctlVerboseMode(t *testing.T) {
-	skipIfHasWindowsNodes(t)
-
-	data, err := setupTest(t)
-	if err != nil {
-		t.Fatalf("Error when setting up test: %v", err)
-	}
-	defer teardownTest(t, data)
+func testAntctlVerboseMode(t *testing.T, data *TestData) {
 	podName, err := data.getAntreaPodOnNode(controlPlaneNodeName())
 	require.Nil(t, err, "Error when retrieving antrea controller pod name")
 	for _, tc := range []struct {
@@ -208,7 +213,9 @@ func TestAntctlVerboseMode(t *testing.T) {
 		{name: "CommandNonVerbose", hasStderr: false, commands: []string{"antctl", "version"}},
 		{name: "CommandVerbose", hasStderr: true, commands: []string{"antctl", "-v", "version"}},
 	} {
+		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			t.Logf("Running commnand `%s` on pod %s", tc.commands, podName)
 			stdout, stderr, err := runAntctl(podName, tc.commands, data)
 			assert.Nil(t, err, antctlOutput(stdout, stderr))
@@ -263,18 +270,10 @@ func runAntctProxy(nodeName string, antctlName string, nodeAntctlPath string, pr
 	}, nil
 }
 
-// TestAntctlProxy validates "antctl proxy" for both the Antrea Controller and
+// testAntctlProxy validates "antctl proxy" for both the Antrea Controller and
 // Agent API.
-func TestAntctlProxy(t *testing.T) {
+func testAntctlProxy(t *testing.T, data *TestData) {
 	const proxyPort = 8001
-
-	skipIfHasWindowsNodes(t)
-
-	data, err := setupTest(t)
-	if err != nil {
-		t.Fatalf("Error when setting up test: %v", err)
-	}
-	defer teardownTest(t, data)
 	antctlName := "antctl"
 	nodeAntctlPath := "~/antctl"
 	if testOptions.enableCoverage {

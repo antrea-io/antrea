@@ -135,7 +135,7 @@ var CommandList = &commandList{
 			agentEndpoint: &endpoint{
 				nonResourceEndpoint: &nonResourceEndpoint{
 					path: "/networkpolicies",
-					params: []flagInfo{
+					params: append([]flagInfo{
 						{
 							name:  "name",
 							usage: "Get NetworkPolicy by name.",
@@ -161,7 +161,7 @@ var CommandList = &commandList{
 							usage:     "Get NetworkPolicies with specific type. Type means the type of its source network policy: K8sNP, ACNP, ANP",
 							shorthand: "T",
 						},
-					},
+					}, getSortByFlag()),
 					outputType: multiple,
 				},
 				addonTransform: networkpolicy.Transform,

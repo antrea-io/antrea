@@ -1,3 +1,4 @@
+//go:build windows
 // +build windows
 
 // Copyright 2020 Antrea Authors
@@ -20,12 +21,12 @@ import (
 	"net"
 	"testing"
 
-	"github.com/rakelkar/gonetsh/netroute"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/agent/util"
 )
 
 func getNetLinkIndex(dev string) int {
@@ -50,10 +51,7 @@ func TestRouteOperation(t *testing.T) {
 	gwIP2 := net.ParseIP("192.168.3.1")
 	_, destCIDR2, _ := net.ParseCIDR(dest2)
 
-	nr := netroute.New()
-	defer nr.Exit()
-
-	client, err := NewClient(serviceCIDR, &config.NetworkConfig{}, false)
+	client, err := NewClient(serviceCIDR, &config.NetworkConfig{}, true)
 	require.Nil(t, err)
 	nodeConfig := &config.NodeConfig{
 		OVSBridge: "Loopback Pseudo-Interface 1",
@@ -70,25 +68,25 @@ func TestRouteOperation(t *testing.T) {
 	// Add initial routes.
 	err = client.AddRoutes(destCIDR1, "node1", peerNodeIP1, gwIP1)
 	require.Nil(t, err)
-	routes1, err := nr.GetNetRoutes(gwLink, destCIDR1)
+	routes1, err := util.GetNetRoutes(gwLink, destCIDR1)
 	require.Nil(t, err)
 	assert.Equal(t, 1, len(routes1))
 
 	err = client.AddRoutes(destCIDR2, "node2", peerNodeIP2, gwIP2)
 	require.Nil(t, err)
-	routes2, err := nr.GetNetRoutes(gwLink, destCIDR2)
+	routes2, err := util.GetNetRoutes(gwLink, destCIDR2)
 	require.Nil(t, err)
 	assert.Equal(t, 1, len(routes2))
 
 	err = client.Reconcile([]string{dest2})
 	require.Nil(t, err)
-	routes3, err := nr.GetNetRoutes(gwLink, destCIDR1)
+	routes3, err := util.GetNetRoutes(gwLink, destCIDR1)
 	require.Nil(t, err)
 	assert.Equal(t, 0, len(routes3))
 
 	err = client.DeleteRoutes(destCIDR2)
 	require.Nil(t, err)
-	routes4, err := nr.GetNetRoutes(gwLink, destCIDR2)
+	routes4, err := util.GetNetRoutes(gwLink, destCIDR2)
 	require.Nil(t, err)
 	assert.Equal(t, 0, len(routes4))
 }

@@ -23,7 +23,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/contiv/ofnet/ofctrl"
+	"antrea.io/ofnet/ofctrl"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -34,6 +34,7 @@ import (
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 	ovsoftest "antrea.io/antrea/pkg/ovs/openflow/testing"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
+	utilip "antrea.io/antrea/pkg/util/ip"
 )
 
 const bridgeName = "dummy-br"
@@ -48,23 +49,26 @@ var (
 		IPv6: gwIPv6,
 		MAC:  gwMAC,
 	}
-	nodeConfig = &config.NodeConfig{GatewayConfig: gatewayConfig}
+	nodeConfig = &config.NodeConfig{
+		GatewayConfig:   gatewayConfig,
+		WireGuardConfig: &config.WireGuardConfig{},
+	}
+	networkConfig = &config.NetworkConfig{}
 )
 
 func installNodeFlows(ofClient Client, cacheKey string) (int, error) {
 	hostName := cacheKey
 	peerNodeIP := net.ParseIP("192.168.1.1")
-	peerConfig := map[*net.IPNet]net.IP{
+	peerConfigs := map[*net.IPNet]net.IP{
 		ipNet: gwIP,
 	}
-	err := ofClient.InstallNodeFlows(hostName, peerConfig, peerNodeIP, 0, nil)
+	err := ofClient.InstallNodeFlows(hostName, peerConfigs, &utilip.DualStackIPs{IPv4: peerNodeIP}, 0, nil)
 	client := ofClient.(*client)
 	fCacheI, ok := client.nodeFlowCache.Load(hostName)
 	if ok {
 		return len(fCacheI.(flowCache)), err
-	} else {
-		return 0, err
 	}
+	return 0, err
 }
 
 func installPodFlows(ofClient Client, cacheKey string) (int, error) {
@@ -77,9 +81,8 @@ func installPodFlows(ofClient Client, cacheKey string) (int, error) {
 	fCacheI, ok := client.podFlowCache.Load(containerID)
 	if ok {
 		return len(fCacheI.(flowCache)), err
-	} else {
-		return 0, err
 	}
+	return 0, err
 }
 
 // TestIdempotentFlowInstallation checks that InstallNodeFlows and InstallPodFlows are idempotent.
@@ -105,6 +108,7 @@ func TestIdempotentFlowInstallation(t *testing.T) {
 			client.cookieAllocator = cookie.NewAllocator(0)
 			client.ofEntryOperations = m
 			client.nodeConfig = nodeConfig
+			client.networkConfig = networkConfig
 
 			m.EXPECT().AddAll(gomock.Any()).Return(nil).Times(1)
 			// Installing the flows should succeed, and all the flows should be added into the cache.
@@ -133,6 +137,7 @@ func TestIdempotentFlowInstallation(t *testing.T) {
 			client.cookieAllocator = cookie.NewAllocator(0)
 			client.ofEntryOperations = m
 			client.nodeConfig = nodeConfig
+			client.networkConfig = networkConfig
 
 			errorCall := m.EXPECT().AddAll(gomock.Any()).Return(errors.New("Bundle error")).Times(1)
 			m.EXPECT().AddAll(gomock.Any()).Return(nil).After(errorCall)
@@ -174,6 +179,7 @@ func TestFlowInstallationFailed(t *testing.T) {
 			client.cookieAllocator = cookie.NewAllocator(0)
 			client.ofEntryOperations = m
 			client.nodeConfig = nodeConfig
+			client.networkConfig = networkConfig
 
 			// We generate an error for AddAll call.
 			m.EXPECT().AddAll(gomock.Any()).Return(errors.New("Bundle error"))
@@ -208,6 +214,7 @@ func TestConcurrentFlowInstallation(t *testing.T) {
 			client.cookieAllocator = cookie.NewAllocator(0)
 			client.ofEntryOperations = m
 			client.nodeConfig = nodeConfig
+			client.networkConfig = networkConfig
 
 			var concurrentCalls atomic.Value // set to true if we observe concurrent calls
 			timeoutCh := make(chan struct{})

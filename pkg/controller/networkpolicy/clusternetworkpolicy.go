@@ -210,7 +210,7 @@ func (n *NetworkPolicyController) updateNamespace(oldObj, curObj interface{}) {
 	oldLabelSet, curLabelSet := labels.Set(oldNamespace.Labels), labels.Set(curNamespace.Labels)
 	affectedACNPsByOldLabels := n.filterPerNamespaceRuleACNPsByNSLabels(oldLabelSet)
 	affectedACNPsByCurLabels := n.filterPerNamespaceRuleACNPsByNSLabels(curLabelSet)
-	affectedACNPs := utilsets.SymmetricDifference(affectedACNPsByOldLabels, affectedACNPsByCurLabels)
+	affectedACNPs := utilsets.SymmetricDifferenceString(affectedACNPsByOldLabels, affectedACNPsByCurLabels)
 	for cnpName := range affectedACNPs {
 		if cnp, err := n.cnpLister.Get(cnpName); err == nil {
 			n.reprocessCNP(cnp)
@@ -307,7 +307,9 @@ func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *crdv1alpha1.C
 				}
 				rules = append(rules, rule)
 			}
-			if len(clusterPeers) > 0 {
+			// When a rule's NetworkPolicyPeer is empty, a cluster level rule should be created
+			// with an Antrea peer matching all addresses.
+			if len(clusterPeers) > 0 || len(perNSPeers) == 0 {
 				ruleAppliedTos := cnpRule.AppliedTo
 				// For ACNPs that have per-namespace rules, cluster-level rules will be created with appliedTo
 				// set as the spec appliedTo for each rule.
@@ -436,9 +438,6 @@ func (n *NetworkPolicyController) getAffectedNamespacesForAppliedTo(appliedTo cr
 	if appliedTo.Group != "" {
 		cg, err := n.cgLister.Get(appliedTo.Group)
 		if err != nil {
-			// This error should not occur as we validate that a CG must exist before
-			// referencing it in an ACNP.
-			klog.Errorf("ClusterGroup %s not found: %v", appliedTo.Group, err)
 			return affectedNS, affectedNamespaceSelectors
 		}
 		if cg.Spec.NamespaceSelector != nil || cg.Spec.PodSelector != nil {
@@ -486,9 +485,7 @@ func (n *NetworkPolicyController) processRefCG(g string) (string, []controlplane
 	// Retrieve ClusterGroup for corresponding entry in the rule.
 	cg, err := n.cgLister.Get(g)
 	if err != nil {
-		// This error should not occur as we validate that a CG must exist before
-		// referencing it in an ACNP.
-		klog.Errorf("ClusterGroup %s not found: %v", g, err)
+		// The ClusterGroup referred to has not been created yet.
 		return "", nil
 	}
 	key := internalGroupKeyFunc(cg)
@@ -513,9 +510,7 @@ func (n *NetworkPolicyController) processAppliedToGroupForCG(g string) string {
 	// Retrieve ClusterGroup for corresponding entry in the AppliedToGroup.
 	cg, err := n.cgLister.Get(g)
 	if err != nil {
-		// This error should not occur as we validate that a CG must exist before
-		// referencing it in an ACNP.
-		klog.Errorf("ClusterGroup %s not found: %v", g, err)
+		// The ClusterGroup referred to has not been created yet.
 		return ""
 	}
 	key := internalGroupKeyFunc(cg)

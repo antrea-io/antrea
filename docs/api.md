@@ -1,13 +1,44 @@
 # Antrea API
 
-This document lists all the API group versions currently or previously supported
-by Antrea, along with information related to their deprecation and removal when
-appropriate. it is kept up-to-date as we evolve the Antrea API.
+This document lists all the API resource versions currently or previously
+supported by Antrea, along with information related to their deprecation and
+removal when appropriate. It is kept up-to-date as we evolve the Antrea API.
+
+Starting with the v1.0 release, we decided to group all the Custom Resource
+Definitions (CRDs) defined by Antrea in a single API group, `crd.antrea.io`,
+instead of grouping CRDs logically in different API groups based on their
+purposes. The rationale for this change was to avoid proliferation of API
+groups. As a result, all resources in the `crd.antrea.io` are versioned
+individually, while before the v1.0 release, we used to have a single version
+number for all the CRDs in a given group: when introducing a new version of the
+API group, we would "move" all CRDs from the earlier version to the new version
+together. This explains why the tables below are presented differently for
+`crd.antrea.io` and for other API groups.
 
 For information about the Antrea API versioning policy, please refer to this
 [document](versioning.md).
 
 ## Currently-supported
+
+### CRDs in `crd.antrea.io`
+
+These are the CRDs currently available in `crd.antrea.io`.
+
+| CRD | CRD version | Introduced in | Deprecated in / Planned Deprecation | Planned Removal |
+|---|---|---|---|---|
+| `AntreaAgentInfo` | v1beta1 | v1.0.0 | N/A | N/A |
+| `AntreaControllerInfo` | v1beta1 | v1.0.0 | N/A | N/A |
+| `ClusterGroup` | v1alpha2 | v1.0.0 | v1.1.0 | Feb 2022 |
+| `ClusterGroup` | v1alpha3 | v1.1.0 | N/A | N/A |
+| `ClusterNetworkPolicy` | v1alpha1 | v1.0.0 | N/A | N/A |
+| `Egress` | v1alpha2 | v1.0.0 | N/A | N/A |
+| `ExternalEntity` | v1alpha2 | v1.0.0 | N/A | N/A |
+| `ExternalIPPool` | v1alpha2 | v1.2.0 | N/A | N/A |
+| `NetworkPolicy` | v1alpha1 | v1.0.0 | N/A | N/A |
+| `Tier` | v1alpha1 | v1.0.0 | N/A | N/A |
+| `Traceflow` | v1alpha1 | v1.0.0 | N/A | N/A |
+
+### Other API groups
 
 These are the API group versions which are curently available when using Antrea.
 
@@ -15,15 +46,11 @@ These are the API group versions which are curently available when using Antrea.
 |---|---|---|---|---|---|
 | `clusterinformation.antrea.tanzu.vmware.com` | `v1beta1` | No | v0.3.0 | v1.0.0 | Dec 2021 |
 | `core.antrea.tanzu.vmware.com` | `v1alpha2` | No | v0.11.0 | v1.0.0 | Dec 2021 |
-| `controlplane.antrea.tanzu.vmware.com` | `v1beta1` | Yes | v0.10.0 | v0.11.0 | Aug 2021 |
 | `controlplane.antrea.tanzu.vmware.com` | `v1beta2` | Yes | v0.11.0 | v1.0.0 | Dec 2021 |
 | `ops.antrea.tanzu.vmware.com` | `v1alpha1` | No | v0.8.0 | v1.0.0 | Dec 2021 |
 | `security.antrea.tanzu.vmware.com` | `v1alpha1` | No | v0.8.0 | v1.0.0 | Dec 2021 |
 | `stats.antrea.tanzu.vmware.com` | `v1alpha1` | Yes | v0.10.0 | v1.0.0 | Dec 2021 |
 | `system.antrea.tanzu.vmware.com` | `v1beta1` | Yes | v0.5.0 | v1.0.0 | Dec 2021 |
-| `crd.antrea.io` | `v1alpha1` | No | v1.0.0 | N/A | N/A |
-| `crd.antrea.io` | `v1alpha2` | No | v1.0.0 | N/A | N/A |
-| `crd.antrea.io` | `v1beta1` | No | v1.0.0 | N/A | N/A |
 | `controlplane.antrea.io` | `v1beta2` | Yes | v1.0.0 | N/A | N/A |
 | `stats.antrea.io` | `v1alpha1` | Yes | v1.0.0 | N/A | N/A |
 | `system.antrea.io` | `v1beta1` | Yes | v1.0.0 | N/A | N/A |
@@ -34,6 +61,7 @@ These are the API group versions which are curently available when using Antrea.
 |---|---|---|---|---|---|
 | `core.antrea.tanzu.vmware.com` | `v1alpha1` | No | v0.8.0 | v0.11.0 | v0.11.0 |
 | `networking.antrea.tanzu.vmware.com` | `v1beta1` | Yes | v0.3.0 | v0.10.0 | v1.2.0 |
+| `controlplane.antrea.tanzu.vmware.com` | `v1beta1` | Yes | v0.10.0 | v0.11.0 | v1.3.0 |
 
 ## API renaming from `*.antrea.tanzu.vmware.com` to `*.antrea.io`
 
@@ -42,11 +70,9 @@ For the v1.0 release, we undertook to rename all Antrea API to use the
 information about the motivations behind this undertaking, please refer to
 [Github issue #1715](https://github.com/antrea-io/antrea/issues/1715).
 
-As part of this renaming, and to avoid profileration of API groups, we have
+As part of this renaming, and to avoid proliferation of API groups, we have
 decided to group all the Custom Resource Definitions (CRDs) defined by Antrea in
-a single API group: `crd.antrea.io`. In the future, resources within that group
-will be versioned individually as needed, and this will be reflected in the
-table above.
+a single API group: `crd.antrea.io`.
 
 To avoid disruptions to existing Antrea users, our requirements for this
 renaming process were as follows:
@@ -110,8 +136,8 @@ the legacy Antrea CRDs:
    two lists.
 
    ```bash
-   kubectl get lanp.security.antrea.tanzu.vmware.com -o=jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}'
-   kubectl get anp.crd.antrea.io -o=jsonpath='{range .items[?(@.metadata.annotations.crd\.antrea\.io/managed-by=="crdmirroring-controller")]}{.metadata.name}{"\n"}{end}'
+   kubectl get lanp.security.antrea.tanzu.vmware.com -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}'
+   kubectl get anp.crd.antrea.io -o jsonpath='{range .items[?(@.metadata.annotations.crd\.antrea\.io/managed-by=="crdmirroring-controller")]}{.metadata.name}{"\n"}{end}'
    ```
 
 3. Stop the old version of the application, which uses the legacy CRDs.
@@ -133,13 +159,13 @@ the legacy Antrea CRDs:
    the same command as before should return an empty list:
 
    ```bash
-   kubectl get anp.crd.antrea.io -o=jsonpath='{range .items[?(@.metadata.annotations.crd\.antrea\.io/managed-by=="crdmirroring-controller")]}{.metadata.name}{"\n"}{end}'
+   kubectl get anp.crd.antrea.io -o jsonpath='{range .items[?(@.metadata.annotations.crd\.antrea\.io/managed-by=="crdmirroring-controller")]}{.metadata.name}{"\n"}{end}'
    ```
 
    If you remove the filter, all your ANPs should still exist:
 
    ```bash
-   kubectl get anp.crd.antrea.io -o=jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}'
+   kubectl get anp.crd.antrea.io -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}'
    ```
 
 6. Safely delete all legacy CRDs previously managed by the application. As an
@@ -153,7 +179,7 @@ the legacy Antrea CRDs:
    Once again, all new ANPs should still exist, which can be confirmed with:
 
    ```bash
-   kubectl get anp.crd.antrea.io -o=jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}'
+   kubectl get anp.crd.antrea.io -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}'
    ```
 
 7. Start the new version of the application, which uses the new CRDs. All

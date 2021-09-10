@@ -17,7 +17,6 @@
   - [Deployment](#deployment)
   - [Configuration](#configuration-1)
   - [IPFIX Information Elements (IEs) in an Aggregated Flow Record](#ipfix-information-elements-ies-in-an-aggregated-flow-record)
-    - [IEs from IANA-assigned IE registry](#ies-from-iana-assigned-ie-registry-1)
     - [IEs from Antrea IE Registry](#ies-from-antrea-ie-registry-1)
   - [Supported capabilities](#supported-capabilities-1)
     - [Storage of Flow Records](#storage-of-flow-records)
@@ -264,7 +263,9 @@ then please use the address:
 `<Ipfix-Collector Cluster IP>:<port>:<TCP|UDP>`
 * If you have deployed the [ELK
 flow collector](#deployment-steps-1), then please use the address:  
-`<Logstash Cluster IP>:4739:UDP`
+`<Logstash Cluster IP>:4739:<TCP|UDP>` for sending IPFIX messages, or `<Logstash Cluster IP>:4736:<TCP|UDP>`
+for sending JSON format records. Record format is specified with `recordFormat` (defaults
+to IPFIX) and must match the format expected by the collector.
 
 ```yaml
 flow-aggregator.conf: |
@@ -284,6 +285,10 @@ flow-aggregator.conf: |
   # Provide DNS name or IP address of flow aggregator for generating TLS certificate. It must match
   # the flowCollectorAddr parameter in the antrea-agent config.    
   #flowAggregatorAddress: "flow-aggregator.flow-aggregator.svc"
+
+  # Provide format for records sent to the configured flow collector.
+  # Supported formats are IPFIX and JSON.
+  #recordFormat: "IPFIX"
 ```
 
 Please note that the default values for `flowExportInterval`, `aggregatorTransportProtocol`,
@@ -297,13 +302,6 @@ both sides or disabled for both sides. Please modify the parameters as per your 
 
 In addition to IPFIX information elements provided in the [above section](#ipfix-information-elements-ies-in-a-flow-record),
 the Flow Aggregator adds the following fields to the flow records.
-
-#### IEs from IANA-assigned IE registry
-
-| IPFIX Information Element  | Enterprise ID | Field ID | Type        |
-|----------------------------|---------------|----------|-------------|
-| originalExporterIPv4Address|      0        |   403    | ipv4Address |
-| originalObservationDomainId|      0        |   151    | unsigned32  |
 
 #### IEs from Antrea IE Registry
 
@@ -359,9 +357,19 @@ different Nodes can be preserved.
 
 If you would like to quickly try Network Flow Visibility feature, you can deploy
 Antrea, the Flow Aggregator Service and the ELK Flow Collector on the
-[Vagrant setup](../test/e2e/README.md). However, the ELK Flow Collector deployment
-requires the Vagrant Nodes to have higher memory than default, so we have to provision
-the Nodes with the `--large` option. You can use the following command:
+[Vagrant setup](../test/e2e/README.md). You can use the following command:
+
+```shell
+./infra/vagrant/provision.sh
+./infra/vagrant/push_antrea.sh --flow-collector ELK
+```
+
+If you would like to deploy elastic search with high resources, you can change
+the `ES_JAVA_OPTS` in the [ELK Flow Collector configuration](../build/yamls/elk-flow-collector/elk-flow-collector.yml)
+according to the [guide](https://www.elastic.co/guide/en/elasticsearch/reference/7.x/advanced-configuration.html#set-jvm-heap-size).
+A larger heap size, like `-Xms1g -Xmx2g`, requires the Vagrant Nodes to have
+higher memory than default. In this case, we need to provision the Nodes with
+the `--large` option as with the following command:
 
 ```shell
 ./infra/vagrant/provision.sh --large

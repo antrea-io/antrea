@@ -16,8 +16,11 @@ package ip
 
 import (
 	"bytes"
+	"fmt"
 	"net"
 	"sort"
+
+	utilnet "k8s.io/utils/net"
 
 	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 )
@@ -26,6 +29,15 @@ const (
 	V4BitLen = 8 * net.IPv4len
 	V6BitLen = 8 * net.IPv6len
 )
+
+type DualStackIPs struct {
+	IPv4 net.IP
+	IPv6 net.IP
+}
+
+func (ips DualStackIPs) Equal(x DualStackIPs) bool {
+	return ips.IPv4.Equal(x.IPv4) && ips.IPv6.Equal(x.IPv6)
+}
 
 // This function takes in one allow CIDR and multiple except CIDRs and gives diff CIDRs
 // in allowCIDR eliminating except CIDRs. It currently supports only IPv4. except CIDR input
@@ -168,4 +180,21 @@ func IPProtocolNumberToString(protocolNum uint8, defaultValue string) string {
 	default:
 		return defaultValue
 	}
+}
+
+// MustParseCIDR turns the given string into IPNet or panics, for tests or other cases where the string must be valid.
+func MustParseCIDR(cidr string) *net.IPNet {
+	_, ipNet, err := net.ParseCIDR(cidr)
+	if err != nil {
+		panic(fmt.Errorf("cannot parse '%v': %v", cidr, err))
+	}
+	return ipNet
+}
+
+func MustIPv6(s string) net.IP {
+	ip := net.ParseIP(s)
+	if !utilnet.IsIPv6(ip) {
+		panic(fmt.Errorf("invalid IPv6 address: %s", s))
+	}
+	return ip
 }

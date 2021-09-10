@@ -17,6 +17,7 @@ package connections
 import (
 	"fmt"
 	"sync"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/klog/v2"
@@ -26,21 +27,28 @@ import (
 	"antrea.io/antrea/pkg/agent/proxy"
 )
 
+const (
+	periodicDeleteInterval = time.Minute
+)
+
 type connectionStore struct {
-	connections   map[flowexporter.ConnectionKey]*flowexporter.Connection
-	ifaceStore    interfacestore.InterfaceStore
-	antreaProxier proxy.Proxier
-	mutex         sync.Mutex
+	connections            map[flowexporter.ConnectionKey]*flowexporter.Connection
+	ifaceStore             interfacestore.InterfaceStore
+	antreaProxier          proxy.Proxier
+	staleConnectionTimeout time.Duration
+	mutex                  sync.Mutex
 }
 
 func NewConnectionStore(
 	ifaceStore interfacestore.InterfaceStore,
 	proxier proxy.Proxier,
+	staleConnectionTimeout time.Duration,
 ) connectionStore {
 	return connectionStore{
-		connections:   make(map[flowexporter.ConnectionKey]*flowexporter.Connection),
-		ifaceStore:    ifaceStore,
-		antreaProxier: proxier,
+		connections:            make(map[flowexporter.ConnectionKey]*flowexporter.Connection),
+		ifaceStore:             ifaceStore,
+		antreaProxier:          proxier,
+		staleConnectionTimeout: staleConnectionTimeout,
 	}
 }
 
@@ -64,6 +72,14 @@ func (cs *connectionStore) ForAllConnectionsDo(callback flowexporter.ConnectionM
 		}
 	}
 	return nil
+}
+
+// AddConnToMap adds the connection to connections map given connection key.
+// This is used only for unit tests.
+func (cs *connectionStore) AddConnToMap(connKey *flowexporter.ConnectionKey, conn *flowexporter.Connection) {
+	cs.mutex.Lock()
+	defer cs.mutex.Unlock()
+	cs.connections[*connKey] = conn
 }
 
 func (cs *connectionStore) fillPodInfo(conn *flowexporter.Connection) {

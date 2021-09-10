@@ -190,7 +190,6 @@ type AppliedTo struct {
 
 // +genclient
 // +genclient:nonNamespaced
-// +genclient:noStatus
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // Egress defines which egress (SNAT) IP the traffic from the selected Pods to
@@ -202,6 +201,15 @@ type Egress struct {
 
 	// Specification of the desired behavior of Egress.
 	Spec EgressSpec `json:"spec"`
+
+	// EgressStatus represents the current status of an Egress.
+	Status EgressStatus `json:"status"`
+}
+
+// EgressStatus represents the current status of an Egress.
+type EgressStatus struct {
+	// The name of the Node that holds the Egress IP.
+	EgressNode string `json:"egressNode"`
 }
 
 // EgressSpec defines the desired state for Egress.
@@ -212,7 +220,7 @@ type EgressSpec struct {
 	// If ExternalIPPool is empty, it must be specified manually.
 	// If ExternalIPPool is non-empty, it can be empty and will be assigned by Antrea automatically.
 	// If both ExternalIPPool and EgressIP are non-empty, the IP must be in the pool.
-	EgressIP string `json:"egressIP"`
+	EgressIP string `json:"egressIP,omitempty"`
 	// ExternalIPPool specifies the IP Pool that the EgressIP should be allocated from.
 	// If it is empty, the specified EgressIP must be assigned to a Node manually.
 	// If it is non-empty, the EgressIP will be assigned to a Node specified by the pool automatically and will failover
@@ -232,7 +240,6 @@ type EgressList struct {
 
 // +genclient
 // +genclient:nonNamespaced
-// +genclient:noStatus
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // ExternalIPPool defines one or multiple IP sets that can be used in the external network. For instance, the IPs can be
@@ -244,6 +251,9 @@ type ExternalIPPool struct {
 
 	// Specification of the ExternalIPPool.
 	Spec ExternalIPPoolSpec `json:"spec"`
+
+	// The current status of the ExternalIPPool.
+	Status ExternalIPPoolStatus `json:"status"`
 }
 
 type ExternalIPPoolSpec struct {
@@ -256,11 +266,22 @@ type ExternalIPPoolSpec struct {
 // IPRange is a set of contiguous IP addresses, represented by a CIDR or a pair of start and end IPs.
 type IPRange struct {
 	// The CIDR of this range, e.g. 10.10.10.0/24.
-	CIDR string `json:"cidr"`
+	CIDR string `json:"cidr,omitempty"`
 	// The start IP of the range, e.g. 10.10.20.5, inclusive.
-	Start string `json:"start"`
+	Start string `json:"start,omitempty"`
 	// The end IP of the range, e.g. 10.10.20.20, inclusive.
-	End string `json:"end"`
+	End string `json:"end,omitempty"`
+}
+
+type ExternalIPPoolStatus struct {
+	Usage ExternalIPPoolUsage `json:"usage,omitempty"`
+}
+
+type ExternalIPPoolUsage struct {
+	// Total number of IPs.
+	Total int `json:"total"`
+	// Number of allocated IPs.
+	Used int `json:"used"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

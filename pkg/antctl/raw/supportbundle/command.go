@@ -43,6 +43,7 @@ import (
 	"antrea.io/antrea/pkg/antctl/runtime"
 	systemv1beta1 "antrea.io/antrea/pkg/apis/system/v1beta1"
 	antrea "antrea.io/antrea/pkg/client/clientset/versioned"
+	"antrea.io/antrea/pkg/util/ip"
 	"antrea.io/antrea/pkg/util/k8s"
 )
 
@@ -62,6 +63,7 @@ var option = &struct {
 	labelSelector  string
 	controllerOnly bool
 	nodeListFile   string
+	since          string
 }{}
 
 var remoteControllerLongDescription = strings.TrimSpace(`
@@ -73,6 +75,8 @@ var remoteControllerExample = strings.Trim(`
   $ antctl supportbundle
   Generate support bundle of the controller
   $ antctl supportbundle --controller-only
+  Generate support bundle of the controller and agents on all Nodes with only the logs generated during the last 1 hour
+  $ antctl supportbundle --since 1h
   Generate support bundles of agents on specific Nodes filtered by name list, no wildcard support
   $ antctl supportbundle node_a node_b node_c
   Generate support bundles of agents on specific Nodes filtered by names in a file (one Node name per line)
@@ -104,7 +108,8 @@ func init() {
 		Command.Flags().StringVarP(&option.dir, "dir", "d", "", "support bundles output dir, the path will be created if it doesn't exist")
 		Command.Flags().StringVarP(&option.labelSelector, "label-selector", "l", "", "selector (label query) to filter Nodes for agent bundles, supports '=', '==', and '!='.(e.g. -l key1=value1,key2=value2)")
 		Command.Flags().BoolVar(&option.controllerOnly, "controller-only", false, "only collect the support bundle of Antrea controller")
-		Command.Flags().StringVarP(&option.nodeListFile, "node-list-file", "f", "", "only collect the support bundle of Antrea controller")
+		Command.Flags().StringVarP(&option.nodeListFile, "node-list-file", "f", "", "only collect the support bundle of specific nodes filtered by names in a file (one node name per line)")
+		Command.Flags().StringVarP(&option.since, "since", "", "", "only return logs newer than a relative duration like 5s, 2m or 3h. Defaults to all logs")
 		Command.RunE = controllerRemoteRunE
 	}
 }
@@ -160,7 +165,7 @@ func request(component string, client *rest.RESTClient) error {
 	var err error
 	_, err = client.Post().
 		Resource("supportbundles").
-		Body(&systemv1beta1.SupportBundle{ObjectMeta: metav1.ObjectMeta{Name: component}}).
+		Body(&systemv1beta1.SupportBundle{ObjectMeta: metav1.ObjectMeta{Name: component}, Since: option.since}).
 		DoRaw(context.TODO())
 	if err == nil {
 		return nil
@@ -168,29 +173,43 @@ func request(component string, client *rest.RESTClient) error {
 	return err
 }
 
-func mapClients(prefix string, agentClients map[string]*rest.RESTClient, controllerClient *rest.RESTClient, bar *pb.ProgressBar, af, cf func(nodeName string, c *rest.RESTClient) error) error {
+type result struct {
+	nodeName string
+	err      error
+}
+
+func mapClients(prefix string, agentClients map[string]*rest.RESTClient, controllerClient *rest.RESTClient, bar *pb.ProgressBar, af, cf func(nodeName string, c *rest.RESTClient) error) map[string]error {
 	bar.Set("prefix", prefix)
 	rateLimiter := rate.NewLimiter(requestRate, requestBurst)
+	ch := make(chan result)
 	g, ctx := errgroup.WithContext(context.Background())
 	for nodeName, client := range agentClients {
 		rateLimiter.Wait(ctx)
 		nodeName, client := nodeName, client
 		g.Go(func() error {
 			defer bar.Increment()
-			return af(nodeName, client)
+			err := af(nodeName, client)
+			ch <- result{nodeName: nodeName, err: err}
+			return err
 		})
 	}
-	if err := g.Wait(); err != nil {
-		return err
+
+	results := make(map[string]error, len(agentClients))
+	for i := 0; i < len(agentClients); i++ {
+		result := <-ch
+		results[result.nodeName] = result.err
 	}
+
+	g.Wait()
+
 	if controllerClient != nil {
 		defer bar.Increment()
-		return cf("", controllerClient)
+		results[""] = cf("", controllerClient)
 	}
-	return nil
+	return results
 }
 
-func requestAll(agentClients map[string]*rest.RESTClient, controllerClient *rest.RESTClient, bar *pb.ProgressBar) error {
+func requestAll(agentClients map[string]*rest.RESTClient, controllerClient *rest.RESTClient, bar *pb.ProgressBar) map[string]error {
 	return mapClients(
 		"Requesting",
 		agentClients,
@@ -245,19 +264,53 @@ func download(suffix, downloadPath string, client *rest.RESTClient, component st
 	return nil
 }
 
-func downloadAll(agentClients map[string]*rest.RESTClient, controllerClient *rest.RESTClient, downloadPath string, bar *pb.ProgressBar) error {
-	return mapClients(
+func writeFailedNodes(downloadPath string, nodes []string) error {
+	file, err := os.OpenFile(downloadPath+"/failed_nodes", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return fmt.Errorf("err create file for failed nodes: %w", err)
+	}
+	defer file.Close()
+
+	dataWriter := bufio.NewWriter(file)
+	for _, node := range nodes {
+		_, _ = dataWriter.WriteString(node + "\n")
+	}
+
+	err = dataWriter.Flush()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// downloadAll will download all supportBundles. preResults is the request results of node/controller supportBundle.
+// if err happens for some nodes or controller, the download step will be skipped for the failed nodes or the controller.
+func downloadAll(agentClients map[string]*rest.RESTClient, controllerClient *rest.RESTClient, downloadPath string, bar *pb.ProgressBar, preResults map[string]error) map[string]error {
+	results := mapClients(
 		"Downloading",
 		agentClients,
 		controllerClient,
 		bar,
 		func(nodeName string, c *rest.RESTClient) error {
-			return download(nodeName, downloadPath, c, runtime.ModeAgent)
+			if preResults[nodeName] == nil {
+				return download(nodeName, downloadPath, c, runtime.ModeAgent)
+			}
+			return preResults[nodeName]
+
 		},
 		func(nodeName string, c *rest.RESTClient) error {
-			return download("", downloadPath, c, runtime.ModeController)
+			if preResults[""] == nil {
+				return download("", downloadPath, c, runtime.ModeController)
+			}
+			return preResults[nodeName]
 		},
 	)
+	for k, v := range results {
+		if v != nil {
+			preResults[k] = v
+		}
+	}
+	return preResults
 }
 
 // createAgentClients creates clients for agents on specified nodes. If nameList is set, then nameFilter will be ignored.
@@ -300,13 +353,19 @@ func createAgentClients(k8sClientset kubernetes.Interface, antreaClientset antre
 		if !ok {
 			continue
 		}
-		ip, err := k8s.GetNodeAddr(&node)
+		ips, err := k8s.GetNodeAddrs(&node)
 		if err != nil {
 			klog.Warningf("Error when parsing IP of Node %s", node.Name)
 			continue
 		}
 		cfg := rest.CopyConfig(cfgTmpl)
-		cfg.Host = net.JoinHostPort(ip.String(), port)
+		var nodeIP string
+		if ips.IPv4 != nil {
+			nodeIP = ips.IPv4.String()
+		} else {
+			nodeIP = ips.IPv6.String()
+		}
+		cfg.Host = net.JoinHostPort(nodeIP, port)
 		client, err := rest.RESTClientFor(cfg)
 		if err != nil {
 			klog.Warningf("Error when creating agent client for node: %s", node.Name)
@@ -327,14 +386,20 @@ func createControllerClient(k8sClientset kubernetes.Interface, antreaClientset a
 	if err != nil {
 		return nil, fmt.Errorf("error when searching the Node of the controller: %w", err)
 	}
-	var controllerNodeIP net.IP
-	controllerNodeIP, err = k8s.GetNodeAddr(controllerNode)
+	var controllerNodeIPs *ip.DualStackIPs
+	controllerNodeIPs, err = k8s.GetNodeAddrs(controllerNode)
 	if err != nil {
 		return nil, fmt.Errorf("error when parsing controllre IP: %w", err)
 	}
 
 	cfg := rest.CopyConfig(cfgTmpl)
-	cfg.Host = net.JoinHostPort(controllerNodeIP.String(), fmt.Sprint(controllerInfo.APIPort))
+	var nodeIP string
+	if controllerNodeIPs.IPv4 != nil {
+		nodeIP = controllerNodeIPs.IPv4.String()
+	} else {
+		nodeIP = controllerNodeIPs.IPv6.String()
+	}
+	cfg.Host = net.JoinHostPort(nodeIP, fmt.Sprint(controllerInfo.APIPort))
 	controllerClient, err := rest.RESTClientFor(cfg)
 	if err != nil {
 		klog.Warningf("Error when creating controller client for node: %s", controllerInfo.NodeRef.Name)
@@ -513,18 +578,64 @@ func controllerRemoteRunE(cmd *cobra.Command, args []string) error {
 	bar := barTmpl.Start(amount)
 	defer bar.Finish()
 	defer bar.Set("prefix", "Finish ")
-	if reader, err := getClusterInfo(k8sClientset); err != nil {
+	reader, err := getClusterInfo(k8sClientset)
+	if err != nil {
 		return err
-	} else {
-		f, err := os.Create(filepath.Join(option.dir, "clusterinfo"))
-		if err != nil {
-			return err
+	}
+	f, err := os.Create(filepath.Join(option.dir, "clusterinfo"))
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	io.Copy(f, reader)
+
+	results := requestAll(agentClients, controllerClient, bar)
+	results = downloadAll(agentClients, controllerClient, dir, bar, results)
+	return processResults(results, dir)
+}
+
+func genErrorMsg(resultMap map[string]error) string {
+	msg := ""
+	for _, v := range resultMap {
+		msg += v.Error() + ";"
+	}
+	return msg
+}
+
+// processResults will output the failed nodes and their reasons if any. If no data was collected,
+// error is returned, otherwise will return nil.
+func processResults(resultMap map[string]error, dir string) error {
+	resultStr := ""
+	var failedNodes []string
+	allFailed := true
+	var err error
+
+	for k, v := range resultMap {
+		if k != "" && v != nil {
+			resultStr += fmt.Sprintf("- %s: %s\n", k, v.Error())
+			failedNodes = append(failedNodes, k)
 		}
-		defer f.Close()
-		io.Copy(f, reader)
+		if v == nil {
+			allFailed = false
+		}
 	}
-	if err := requestAll(agentClients, controllerClient, bar); err != nil {
+
+	if resultMap[""] != nil {
+		fmt.Println("Controller Info Failed Reason: " + resultMap[""].Error())
+	}
+
+	if resultStr != "" {
+		fmt.Println("Failed nodes: ")
+		fmt.Print(resultStr)
+	}
+
+	if failedNodes != nil {
+		err = writeFailedNodes(dir, failedNodes)
+	}
+
+	if allFailed {
+		return fmt.Errorf("no data was collected: %s", genErrorMsg(resultMap))
+	} else {
 		return err
 	}
-	return downloadAll(agentClients, controllerClient, dir, bar)
 }

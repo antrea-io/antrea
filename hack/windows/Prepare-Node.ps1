@@ -4,7 +4,8 @@
 
 .DESCRIPTION
 This script is only used for test to assist with joining a Windows node to a cluster.
-For production environment please follow the antrea windows installation guide and use kubernetes official script: https://github.com/kubernetes-sigs/sig-windows-tools/blob/master/kubeadm/scripts/PrepareNode.ps1
+For production environment please follow the antrea windows installation guide and use Kubernetes official PrepareNode.ps1
+script from the sig-windows-tools repo release page: https://github.com/kubernetes-sigs/sig-windows-tools/releases
 - Downloads Kubernetes binaries (kubelet, kubeadm) at the version specified
 - Registers wins as a service in order to run kube-proxy and antrea-agent as DaemonSets.
 - Registers kubelet as an nssm service. More info on nssm: https://nssm.cc/
@@ -18,7 +19,7 @@ Kubernetes version to download and use
 .PARAMETER InstallOVS
 Install OVS
 
-.PARAMETER InstallOVS
+.PARAMETER NodeIP
 The node ip used by kubelet
 
 .EXAMPLE

@@ -15,7 +15,6 @@
 // Package networkpolicy provides NetworkPolicyController implementation to manage
 // and synchronize the GroupMembers and Namespaces affected by Network Policies and enforce
 // their rules.
-
 package networkpolicy
 
 import (
@@ -1089,7 +1088,7 @@ func (n *NetworkPolicyController) syncAddressGroup(key string) error {
 	addrGroupNodeNames := sets.String{}
 	for _, internalNPObj := range nps {
 		internalNP := internalNPObj.(*antreatypes.NetworkPolicy)
-		utilsets.Merge(addrGroupNodeNames, internalNP.SpanMeta.NodeNames)
+		utilsets.MergeString(addrGroupNodeNames, internalNP.SpanMeta.NodeNames)
 	}
 	memberSet := n.getAddressGroupMemberSet(addressGroup)
 	updatedAddressGroup := &antreatypes.AddressGroup{
@@ -1129,7 +1128,7 @@ func (n *NetworkPolicyController) getClusterGroupMemberSet(group *antreatypes.Gr
 		childGroup, found, _ := n.internalGroupStore.Get(childName)
 		if found {
 			child := childGroup.(*antreatypes.Group)
-			groupMemberSet = groupMemberSet.Union(n.getMemberSetForGroupType(clusterGroupType, child.Name))
+			groupMemberSet.Merge(n.getMemberSetForGroupType(clusterGroupType, child.Name))
 		}
 	}
 	return groupMemberSet
@@ -1363,7 +1362,7 @@ func (n *NetworkPolicyController) syncInternalNetworkPolicy(key string) error {
 			continue
 		}
 		appGroup := appGroupObj.(*antreatypes.AppliedToGroup)
-		utilsets.Merge(nodeNames, appGroup.SpanMeta.NodeNames)
+		utilsets.MergeString(nodeNames, appGroup.SpanMeta.NodeNames)
 	}
 	updatedNetworkPolicy := &antreatypes.NetworkPolicy{
 		UID:                   internalNP.UID,
@@ -1424,11 +1423,6 @@ func cidrStrToIPNet(cidr string) (*controlplane.IPNet, error) {
 		PrefixLength: int32(prefixLen64),
 	}
 	return ipNet, nil
-}
-
-// ipNetToCIDRStr returns the CIDR notation of a controlplane.IPNet.
-func ipNetToCIDRStr(ipNet controlplane.IPNet) string {
-	return net.IP(ipNet.IP).String() + "/" + strconv.Itoa(int(ipNet.PrefixLength))
 }
 
 // internalNetworkPolicyKeyFunc knows how to generate the key for an internal NetworkPolicy based on the object metadata

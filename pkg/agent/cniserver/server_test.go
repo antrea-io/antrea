@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//go:build linux
 // +build linux
+
 // TODO: fix the CNI ADD test for Windows.
 
 package cniserver
@@ -72,7 +74,7 @@ func TestLoadNetConfig(t *testing.T) {
 	cniService := newCNIServer(t)
 	networkCfg := generateNetworkConfiguration("testCfg", supportedCNIVersion)
 	requestMsg, containerID := newRequest(args, networkCfg, "", t)
-	netCfg, err := cniService.loadNetworkConfig(&requestMsg)
+	netCfg, err := cniService.loadNetworkConfig(requestMsg)
 
 	// just make sure that cniService.nodeConfig matches the testNodeConfig.
 	require.Equal(t, testNodeConfig, cniService.nodeConfig)
@@ -147,7 +149,7 @@ func TestIPAMService(t *testing.T) {
 	t.Run("Error on ADD", func(t *testing.T) {
 		ipamMock.EXPECT().Add(gomock.Any(), gomock.Any()).Return(nil, fmt.Errorf("IPAM add error"))
 		ipamMock.EXPECT().Del(gomock.Any(), gomock.Any()).Return(nil)
-		response, err := cniServer.CmdAdd(cxt, &requestMsg)
+		response, err := cniServer.CmdAdd(cxt, requestMsg)
 		require.Nil(t, err, "expected no rpc error")
 		checkErrorResponse(t, response, cnipb.ErrorCode_IPAM_FAILURE, "IPAM add error")
 	})
@@ -155,12 +157,12 @@ func TestIPAMService(t *testing.T) {
 	t.Run("Error on DEL", func(t *testing.T) {
 		// Prepare cached IPAM result which will be deleted later.
 		ipamMock.EXPECT().Add(gomock.Any(), gomock.Any()).Times(1)
-		cniConfig, _ := cniServer.checkRequestMessage(&requestMsg)
+		cniConfig, _ := cniServer.checkRequestMessage(requestMsg)
 		_, err := ipam.ExecIPAMAdd(cniConfig.CniCmdArgs, cniConfig.IPAM.Type, cniConfig.getInfraContainer())
 		require.Nil(t, err, "expected no Add error")
 
 		ipamMock.EXPECT().Del(gomock.Any(), gomock.Any()).Return(fmt.Errorf("IPAM delete error"))
-		response, err := cniServer.CmdDel(cxt, &requestMsg)
+		response, err := cniServer.CmdDel(cxt, requestMsg)
 		require.Nil(t, err, "expected no rpc error")
 		checkErrorResponse(t, response, cnipb.ErrorCode_IPAM_FAILURE, "IPAM delete error")
 
@@ -173,7 +175,7 @@ func TestIPAMService(t *testing.T) {
 
 	t.Run("Error on CHECK", func(t *testing.T) {
 		ipamMock.EXPECT().Check(gomock.Any(), gomock.Any()).Return(fmt.Errorf("IPAM check error"))
-		response, err := cniServer.CmdCheck(cxt, &requestMsg)
+		response, err := cniServer.CmdCheck(cxt, requestMsg)
 		require.Nil(t, err, "expected no rpc error")
 		checkErrorResponse(t, response, cnipb.ErrorCode_IPAM_FAILURE, "IPAM check error")
 	})
@@ -181,7 +183,7 @@ func TestIPAMService(t *testing.T) {
 	t.Run("Idempotent Call of IPAM ADD/DEL for the same Pod", func(t *testing.T) {
 		ipamMock.EXPECT().Add(gomock.Any(), gomock.Any()).Times(1)
 		ipamMock.EXPECT().Del(gomock.Any(), gomock.Any()).Times(2)
-		cniConfig, response := cniServer.checkRequestMessage(&requestMsg)
+		cniConfig, response := cniServer.checkRequestMessage(requestMsg)
 		require.Nil(t, response, "expected no rpc error")
 		ipamResult, err := ipam.ExecIPAMAdd(cniConfig.CniCmdArgs, cniConfig.IPAM.Type, cniConfig.getInfraContainer())
 		require.Nil(t, err, "expected no IPAM add error")
@@ -197,14 +199,14 @@ func TestIPAMService(t *testing.T) {
 	t.Run("Idempotent Call of IPAM ADD/DEL for the same Pod with different containers", func(t *testing.T) {
 		ipamMock.EXPECT().Add(gomock.Any(), gomock.Any()).Times(2)
 		ipamMock.EXPECT().Del(gomock.Any(), gomock.Any()).Times(2)
-		cniConfig, response := cniServer.checkRequestMessage(&requestMsg)
+		cniConfig, response := cniServer.checkRequestMessage(requestMsg)
 		require.Nil(t, response, "expected no rpc error")
 		_, err := ipam.ExecIPAMAdd(cniConfig.CniCmdArgs, cniConfig.IPAM.Type, cniConfig.getInfraContainer())
 		require.Nil(t, err, "expected no IPAM add error")
 		workerContainerID := "test-infra-2222222"
 		args2 := cniservertest.GenerateCNIArgs(testPodName, testPodNamespace, workerContainerID)
 		requestMsg2, _ := newRequest(args2, networkCfg, "", t)
-		cniConfig2, response := cniServer.checkRequestMessage(&requestMsg2)
+		cniConfig2, response := cniServer.checkRequestMessage(requestMsg2)
 		require.Nil(t, response, "expected no rpc error")
 		_, err = ipam.ExecIPAMAdd(cniConfig2.CniCmdArgs, cniConfig.IPAM.Type, cniConfig2.getInfraContainer())
 		require.Nil(t, err, "expected no IPAM add error")
@@ -221,7 +223,7 @@ func TestCheckRequestMessage(t *testing.T) {
 	t.Run("Incompatible CNI version", func(t *testing.T) {
 		networkCfg := generateNetworkConfiguration("testCfg", unsupportedCNIVersion)
 		requestMsg, _ := newRequest(args, networkCfg, "", t)
-		_, response := cniServer.checkRequestMessage(&requestMsg)
+		_, response := cniServer.checkRequestMessage(requestMsg)
 		checkErrorResponse(t, response, cnipb.ErrorCode_INCOMPATIBLE_CNI_VERSION, "")
 	})
 
@@ -229,7 +231,7 @@ func TestCheckRequestMessage(t *testing.T) {
 		networkCfg := generateNetworkConfiguration("testCfg", supportedCNIVersion)
 		networkCfg.IPAM.Type = "unknown"
 		requestMsg, _ := newRequest(args, networkCfg, "", t)
-		_, response := cniServer.checkRequestMessage(&requestMsg)
+		_, response := cniServer.checkRequestMessage(requestMsg)
 		checkErrorResponse(t, response, cnipb.ErrorCode_UNSUPPORTED_FIELD, "")
 	})
 }
@@ -582,14 +584,14 @@ func generateNetworkConfiguration(name string, cniVersion string) *NetworkConfig
 	return netCfg
 }
 
-func newRequest(args string, netCfg *NetworkConfig, path string, t *testing.T) (cnipb.CniCmdRequest, string) {
+func newRequest(args string, netCfg *NetworkConfig, path string, t *testing.T) (*cnipb.CniCmdRequest, string) {
 	containerID := generateUUID(t)
 	networkConfig, err := json.Marshal(netCfg)
 	if err != nil {
 		t.Error("Failed to generate Network configuration")
 	}
 
-	cmdRequest := cnipb.CniCmdRequest{
+	cmdRequest := &cnipb.CniCmdRequest{
 		CniArgs: &cnipb.CniCmdArgs{
 			ContainerId:          containerID,
 			Ifname:               ifname,

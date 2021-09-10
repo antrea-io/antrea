@@ -21,9 +21,9 @@ import (
 	"net"
 	"time"
 
-	"github.com/contiv/libOpenflow/openflow13"
-	"github.com/contiv/libOpenflow/protocol"
-	"github.com/contiv/ofnet/ofctrl"
+	"antrea.io/libOpenflow/openflow13"
+	"antrea.io/libOpenflow/protocol"
+	"antrea.io/ofnet/ofctrl"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2"
@@ -176,7 +176,7 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1alpha1.Tracefl
 			obs = append(obs, *ob)
 		}
 		// Collect egress conjunctionID and get NetworkPolicy from cache.
-		if match := getMatchRegField(matchers, uint32(openflow.EgressReg)); match != nil {
+		if match := getMatchRegField(matchers, openflow.TFEgressConjIDField); match != nil {
 			egressInfo, err := getRegValue(match, nil)
 			if err != nil {
 				return nil, nil, nil, err
@@ -191,7 +191,7 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1alpha1.Tracefl
 	}
 
 	// Collect ingress conjunctionID and get NetworkPolicy from cache.
-	if match := getMatchRegField(matchers, uint32(openflow.IngressReg)); match != nil {
+	if match := getMatchRegField(matchers, openflow.TFIngressConjIDField); match != nil {
 		ingressInfo, err := getRegValue(match, nil)
 		if err != nil {
 			return nil, nil, nil, err
@@ -207,7 +207,7 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1alpha1.Tracefl
 	// Get drop table.
 	if tableID == uint8(openflow.EgressMetricTable) || tableID == uint8(openflow.IngressMetricTable) {
 		ob := getNetworkPolicyObservation(tableID, tableID == uint8(openflow.IngressMetricTable))
-		if match := getMatchRegField(matchers, uint32(openflow.CNPDenyConjIDReg)); match != nil {
+		if match := getMatchRegField(matchers, openflow.CNPDenyConjIDField); match != nil {
 			notAllowConjInfo, err := getRegValue(match, nil)
 			if err != nil {
 				return nil, nil, nil, err
@@ -231,7 +231,7 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1alpha1.Tracefl
 	if tableID == uint8(openflow.L2ForwardingOutTable) {
 		ob := new(crdv1alpha1.Observation)
 		tunnelDstIP := ""
-		isIPv6 := c.nodeConfig.NodeIPAddr.IP.To4() == nil
+		isIPv6 := c.nodeConfig.NodeIPv6Addr != nil
 		if match := getMatchTunnelDstField(matchers, isIPv6); match != nil {
 			tunnelDstIP, err = getTunnelDstValue(match)
 			if err != nil {
@@ -239,7 +239,7 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1alpha1.Tracefl
 			}
 		}
 		var outputPort uint32
-		if match := getMatchRegField(matchers, uint32(openflow.PortCacheReg)); match != nil {
+		if match := getMatchRegField(matchers, openflow.TargetOFPortField); match != nil {
 			outputPort, err = getRegValue(match, nil)
 			if err != nil {
 				return nil, nil, nil, err
@@ -271,8 +271,8 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1alpha1.Tracefl
 	return tf, &nodeResult, capturedPacket, nil
 }
 
-func getMatchRegField(matchers *ofctrl.Matchers, regNum uint32) *ofctrl.MatchField {
-	return matchers.GetMatchByName(fmt.Sprintf("NXM_NX_REG%d", regNum))
+func getMatchRegField(matchers *ofctrl.Matchers, field *binding.RegField) *ofctrl.MatchField {
+	return matchers.GetMatchByName(field.GetNXFieldName())
 }
 
 func getMatchTunnelDstField(matchers *ofctrl.Matchers, isIPv6 bool) *ofctrl.MatchField {

@@ -37,11 +37,12 @@ func NewFlowRecords() *FlowRecords {
 
 // AddOrUpdateFlowRecord adds or updates the flow record in the record map given the connection.
 // It makes a copy of the connection object to record, to avoid race conditions between the
-// connection store and the flow exporter.
+// connection store and the flow exporter. We expect caller to hold the lock for
+// the connection store.
 func (fr *FlowRecords) AddOrUpdateFlowRecord(key flowexporter.ConnectionKey, conn *flowexporter.Connection) error {
-	// If the connection is in dying state and the corresponding flow records are already
-	// exported, then there is no need to add or update the record.
-	if flowexporter.IsConnectionDying(conn) && conn.DoneExport {
+	// If the connection is in dying state and is already exported, then there is
+	// no need to add or update the record.
+	if conn.DyingAndDoneExport {
 		return nil
 	}
 
@@ -63,8 +64,19 @@ func (fr *FlowRecords) AddOrUpdateFlowRecord(key flowexporter.ConnectionKey, con
 			IsIPv6:             isIPv6,
 			LastExportTime:     conn.StartTime,
 			IsActive:           true,
+			DyingAndDoneExport: false,
 		}
 	} else {
+		// If the connection is in dying state and the corresponding flow records are already
+		// exported, then update the DyingAndDoneExport flag on the connection.
+		if record.DyingAndDoneExport {
+			// It is safe to update the connection as we hold the connection map
+			// lock when calling this function.
+			conn.DyingAndDoneExport = true
+			delete(fr.recordsMap, key)
+			klog.V(2).InfoS("Deleting the inactive flow records in record map", "FlowKey", key)
+			return nil
+		}
 		// set IsActive flag to true when there are changes either in stats or TCP state
 		if (conn.OriginalPackets > record.PrevPackets) || (conn.ReversePackets > record.PrevReversePackets) || record.Conn.TCPState != conn.TCPState {
 			record.IsActive = true
@@ -83,8 +95,13 @@ func (fr *FlowRecords) AddFlowRecordToMap(connKey *flowexporter.ConnectionKey, r
 	fr.recordsMap[*connKey] = *record
 }
 
-// GetFlowRecordFromMap gets the flow record from record map given connection key.
-// This is used only for unit tests.
+// AddFlowRecordWithoutLock adds the flow record from record map given connection key.
+// Caller is expected to grab the lock the record map.
+func (fr *FlowRecords) AddFlowRecordWithoutLock(connKey *flowexporter.ConnectionKey, record *flowexporter.FlowRecord) {
+	fr.recordsMap[*connKey] = *record
+}
+
+// GetFlowRecordFromMap gets the flow record from record map given the connection key.
 func (fr *FlowRecords) GetFlowRecordFromMap(connKey *flowexporter.ConnectionKey) (*flowexporter.FlowRecord, bool) {
 	fr.mutex.Lock()
 	defer fr.mutex.Unlock()
@@ -92,14 +109,15 @@ func (fr *FlowRecords) GetFlowRecordFromMap(connKey *flowexporter.ConnectionKey)
 	return &record, exists
 }
 
-// DeleteFlowRecordWithoutLock deletes the record from the record map given
-// the connection key without grabbing the lock. Caller is expected to grab lock.
-func (fr *FlowRecords) DeleteFlowRecordWithoutLock(connKey flowexporter.ConnectionKey) error {
-	_, exists := fr.recordsMap[connKey]
+// DeleteFlowRecordFromMap deletes the flow record from record map given the connection key.
+func (fr *FlowRecords) DeleteFlowRecordFromMap(connKey *flowexporter.ConnectionKey) error {
+	fr.mutex.Lock()
+	defer fr.mutex.Unlock()
+	_, exists := fr.recordsMap[*connKey]
 	if !exists {
-		return fmt.Errorf("flow record with key %v doesn't exist in map", connKey)
+		return fmt.Errorf("record with key %v doesn't exist in map", connKey)
 	}
-	delete(fr.recordsMap, connKey)
+	delete(fr.recordsMap, *connKey)
 	return nil
 }
 
@@ -124,7 +142,20 @@ func (fr *FlowRecords) ForAllFlowRecordsDo(callback flowexporter.FlowRecordCallB
 	for k, v := range fr.recordsMap {
 		err := callback(k, v)
 		if err != nil {
-			klog.Errorf("Error when executing callback for flow record")
+			klog.Errorf("Error when executing callback for flow record: %v", err)
+			return err
+		}
+	}
+	return nil
+}
+
+// ForAllFlowRecordsDoWithoutLock executes the callback for all records in the flow
+// record map. This is used in the perf testing.
+func (fr *FlowRecords) ForAllFlowRecordsDoWithoutLock(callback flowexporter.FlowRecordCallBack) error {
+	for k, v := range fr.recordsMap {
+		err := callback(k, v)
+		if err != nil {
+			klog.Errorf("Error when executing callback for flow record: %v", err)
 			return err
 		}
 	}

@@ -35,6 +35,7 @@ import (
 	"antrea.io/antrea/pkg/agent/util"
 	"antrea.io/antrea/pkg/agent/util/ipset"
 	"antrea.io/antrea/pkg/agent/util/iptables"
+	"antrea.io/antrea/pkg/agent/util/sysctl"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 	"antrea.io/antrea/pkg/util/env"
 )
@@ -128,6 +129,18 @@ func (c *Client) Initialize(nodeConfig *config.NodeConfig, done func()) error {
 	// Sets up the IP routes and IP rule required to route packets in host network.
 	if err := c.initIPRoutes(); err != nil {
 		return fmt.Errorf("failed to initialize ip routes: %v", err)
+	}
+
+	// Ensure IPv6 forwarding is enabled if it is a dual-stack or IPv6-only cluster.
+	if c.nodeConfig.NodeIPv6Addr != nil {
+		sysctlFilename := "ipv6/conf/all/forwarding"
+		v, err := sysctl.GetSysctlNet(sysctlFilename)
+		if err != nil {
+			return fmt.Errorf("failed to read value of sysctl file: %s", sysctlFilename)
+		}
+		if v != 1 {
+			return fmt.Errorf("IPv6 forwarding is not enabled")
+		}
 	}
 
 	return nil
@@ -258,6 +271,7 @@ func (c *Client) syncIPTables() error {
 	var err error
 	v4Enabled := config.IsIPv4Enabled(c.nodeConfig, c.networkConfig.TrafficEncapMode)
 	v6Enabled := config.IsIPv6Enabled(c.nodeConfig, c.networkConfig.TrafficEncapMode)
+
 	c.ipt, err = iptables.New(v4Enabled, v6Enabled)
 	if err != nil {
 		return fmt.Errorf("error creating IPTables instance: %v", err)
@@ -274,11 +288,11 @@ func (c *Client) syncIPTables() error {
 		{iptables.MangleTable, iptables.OutputChain, antreaOutputChain, "Antrea: jump to Antrea output rules"},
 	}
 	for _, rule := range jumpRules {
-		if err := c.ipt.EnsureChain(rule.table, rule.dstChain); err != nil {
+		if err := c.ipt.EnsureChain(iptables.ProtocolDual, rule.table, rule.dstChain); err != nil {
 			return err
 		}
 		ruleSpec := []string{"-j", rule.dstChain, "-m", "comment", "--comment", rule.comment}
-		if err := c.ipt.EnsureRule(rule.table, rule.srcChain, ruleSpec); err != nil {
+		if err := c.ipt.AppendRule(iptables.ProtocolDual, rule.table, rule.srcChain, ruleSpec); err != nil {
 			return err
 		}
 	}
@@ -438,9 +452,17 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet, podIPSet string, snatMa
 func (c *Client) initIPRoutes() error {
 	if c.networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {
 		gwLink := util.GetNetLink(c.nodeConfig.GatewayConfig.Name)
-		_, gwIP, _ := net.ParseCIDR(fmt.Sprintf("%s/32", c.nodeConfig.NodeIPAddr.IP.String()))
-		if err := netlink.AddrReplace(gwLink, &netlink.Addr{IPNet: gwIP}); err != nil {
-			return fmt.Errorf("failed to add address %s to gw %s: %v", gwIP, gwLink.Attrs().Name, err)
+		if c.nodeConfig.NodeTransportIPv4Addr != nil {
+			_, gwIP, _ := net.ParseCIDR(fmt.Sprintf("%s/32", c.nodeConfig.NodeTransportIPv4Addr.IP.String()))
+			if err := netlink.AddrReplace(gwLink, &netlink.Addr{IPNet: gwIP}); err != nil {
+				return fmt.Errorf("failed to add address %s to gw %s: %v", gwIP, gwLink.Attrs().Name, err)
+			}
+		}
+		if c.nodeConfig.NodeTransportIPv6Addr != nil {
+			_, gwIP, _ := net.ParseCIDR(fmt.Sprintf("%s/128", c.nodeConfig.NodeTransportIPv6Addr.IP.String()))
+			if err := netlink.AddrReplace(gwLink, &netlink.Addr{IPNet: gwIP}); err != nil {
+				return fmt.Errorf("failed to add address %s to gw %s: %v", gwIP, gwLink.Attrs().Name, err)
+			}
 		}
 	}
 	return nil
@@ -565,6 +587,13 @@ func (c *Client) listIPv6NeighborsOnGateway() (map[string]*netlink.Neigh, error)
 
 // AddRoutes adds routes to a new podCIDR. It overrides the routes if they already exist.
 func (c *Client) AddRoutes(podCIDR *net.IPNet, nodeName string, nodeIP, nodeGwIP net.IP) error {
+	var nodeTransportIPAddr *net.IPNet
+	if podCIDR.IP.To4() == nil {
+		nodeTransportIPAddr = c.nodeConfig.NodeTransportIPv6Addr
+	} else {
+		nodeTransportIPAddr = c.nodeConfig.NodeTransportIPv4Addr
+	}
+
 	podCIDRStr := podCIDR.String()
 	ipsetName := getIPSetName(podCIDR.IP)
 	// Add this podCIDR to antreaPodIPSet so that packets to them won't be masqueraded when they leave the host.
@@ -576,7 +605,16 @@ func (c *Client) AddRoutes(podCIDR *net.IPNet, nodeName string, nodeIP, nodeGwIP
 		Dst: podCIDR,
 	}
 	var routes []*netlink.Route
-	if c.networkConfig.TrafficEncapMode.NeedsEncapToPeer(nodeIP, c.nodeConfig.NodeIPAddr) {
+	// If WireGuard is enabled, create a route via WireGuard device regardless of the traffic encapsulation modes.
+	if c.networkConfig.TrafficEncryptionMode == config.TrafficEncryptionModeWireGuard {
+		route.LinkIndex = c.nodeConfig.WireGuardConfig.LinkIndex
+		route.Scope = netlink.SCOPE_LINK
+		if podCIDR.IP.To4() != nil {
+			route.Src = c.nodeConfig.GatewayConfig.IPv4
+		} else {
+			route.Src = c.nodeConfig.GatewayConfig.IPv6
+		}
+	} else if c.networkConfig.NeedsTunnelToPeer(nodeIP, nodeTransportIPAddr) {
 		if podCIDR.IP.To4() == nil {
 			// "on-link" is not identified in IPv6 route entries, so split the configuration into 2 entries.
 			routes = []*netlink.Route{
@@ -590,7 +628,7 @@ func (c *Client) AddRoutes(podCIDR *net.IPNet, nodeName string, nodeIP, nodeGwIP
 		}
 		route.LinkIndex = c.nodeConfig.GatewayConfig.LinkIndex
 		route.Gw = nodeGwIP
-	} else if c.networkConfig.TrafficEncapMode.NeedsDirectRoutingToPeer(nodeIP, c.nodeConfig.NodeIPAddr) {
+	} else if c.networkConfig.NeedsDirectRoutingToPeer(nodeIP, nodeTransportIPAddr) {
 		// NoEncap traffic to Node on the same subnet.
 		// Set the peerNodeIP as next hop.
 		route.Gw = nodeIP
@@ -718,7 +756,7 @@ func (c *Client) MigrateRoutesToGw(linkName string) error {
 // UnMigrateRoutesFromGw moves route from gw to link linkName if provided; otherwise route is deleted
 func (c *Client) UnMigrateRoutesFromGw(route *net.IPNet, linkName string) error {
 	gwLink := util.GetNetLink(c.nodeConfig.GatewayConfig.Name)
-	var link netlink.Link = nil
+	var link netlink.Link
 	var err error
 	if len(linkName) > 0 {
 		link, err = netlink.LinkByName(linkName)
@@ -771,5 +809,5 @@ func (c *Client) DeleteSNATRule(mark uint32) error {
 	}
 	c.markToSNATIP.Delete(mark)
 	snatIP := value.(net.IP)
-	return c.ipt.DeleteRule(iptables.NATTable, antreaPostRoutingChain, c.snatRuleSpec(snatIP, mark))
+	return c.ipt.DeleteRule(iptables.ProtocolDual, iptables.NATTable, antreaPostRoutingChain, c.snatRuleSpec(snatIP, mark))
 }

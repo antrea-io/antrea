@@ -19,7 +19,7 @@ import (
 	"math/rand"
 	"net"
 
-	"github.com/contiv/libOpenflow/protocol"
+	"antrea.io/libOpenflow/protocol"
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent/config"
@@ -27,6 +27,7 @@ import (
 	"antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/agent/util"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
+	utilip "antrea.io/antrea/pkg/util/ip"
 	"antrea.io/antrea/third_party/proxy"
 )
 
@@ -39,7 +40,7 @@ type Client interface {
 	// be called to ensure that the set of OVS flows is correct. All flows programmed in the
 	// switch which match the current round number will be deleted before any new flow is
 	// installed.
-	Initialize(roundInfo types.RoundInfo, config *config.NodeConfig, encapMode config.TrafficEncapModeType) (<-chan struct{}, error)
+	Initialize(roundInfo types.RoundInfo, config *config.NodeConfig, networkconfig *config.NetworkConfig) (<-chan struct{}, error)
 
 	// InstallGatewayFlows sets up flows related to an OVS gateway port, the gateway must exist.
 	InstallGatewayFlows() error
@@ -67,7 +68,7 @@ type Client interface {
 	InstallNodeFlows(
 		hostname string,
 		peerConfigs map[*net.IPNet]net.IP,
-		tunnelPeerIP net.IP,
+		tunnelPeerIP *utilip.DualStackIPs,
 		ipsecTunOFPort uint32,
 		peerNodeMAC net.HardwareAddr) error
 
@@ -277,6 +278,27 @@ type Client interface {
 		icmpCode uint8,
 		icmpData []byte,
 		isReject bool) error
+	// SendUDPPacketOut sends UDP packet as a packet-out to OVS.
+	SendUDPPacketOut(
+		srcMAC string,
+		dstMAC string,
+		srcIP string,
+		dstIP string,
+		inPort uint32,
+		outPort int32,
+		isIPv6 bool,
+		udpSrcPort uint16,
+		udpDstPort uint16,
+		udpData []byte,
+		isDNSResponse bool) error
+	// NewDNSpacketInConjunction creates a policyRuleConjunction for the dns response interception flows.
+	NewDNSpacketInConjunction(id uint32) error
+	// AddAddressToDNSConjunction adds addresses to the toAddresses of the dns packetIn conjunction,
+	// so that dns response packets sent towards these addresses will be intercepted and parsed by
+	// the fqdnController.
+	AddAddressToDNSConjunction(id uint32, addrs []types.Address) error
+	// DeleteAddressFromDNSConjunction removes addresses from the toAddresses of the dns packetIn conjunction.
+	DeleteAddressFromDNSConjunction(id uint32, addrs []types.Address) error
 }
 
 // GetFlowTableStatus returns an array of flow table status.
@@ -293,23 +315,41 @@ func (c *client) IsConnected() bool {
 // it will return immediately, otherwise it will use Bundle to add all flows, and then add them into the flow cache.
 // If it fails to add the flows with Bundle, it will return the error and no flow cache is created.
 func (c *client) addFlows(cache *flowCategoryCache, flowCacheKey string, flows []binding.Flow) error {
-	_, ok := cache.Load(flowCacheKey)
-	// If a flow cache entry already exists for the key, return immediately. Otherwise, add the flows to the switch
-	// and populate the cache with them.
-	if ok {
-		klog.V(2).Infof("Flows with cache key %s are already installed", flowCacheKey)
+	return c.addFlowsWithMultipleKeys(cache, map[string][]binding.Flow{flowCacheKey: flows})
+}
+
+// addFlowsWithMultipleKeys installs the flows with different flowCache keys and adds them into the cache on success.
+// It will skip flows whose cache already exists. All flows will be installed via a bundle.
+func (c *client) addFlowsWithMultipleKeys(cache *flowCategoryCache, keyToFlows map[string][]binding.Flow) error {
+	// allFlows keeps the flows we will install via a bundle.
+	var allFlows []binding.Flow
+	// flowCacheMap keeps the flowCache items we will add to the cache on bundle success.
+	flowCacheMap := map[string]flowCache{}
+	for flowCacheKey, flows := range keyToFlows {
+		_, ok := cache.Load(flowCacheKey)
+		// If a flow cache entry already exists for the key, skip it.
+		if ok {
+			klog.V(2).InfoS("Flows with this cache key are already installed", "key", flowCacheKey)
+			continue
+		}
+		fCache := flowCache{}
+		for _, flow := range flows {
+			allFlows = append(allFlows, flow)
+			fCache[flow.MatchString()] = flow
+		}
+		flowCacheMap[flowCacheKey] = fCache
+	}
+	if len(allFlows) == 0 {
 		return nil
 	}
-	err := c.ofEntryOperations.AddAll(flows)
+	err := c.ofEntryOperations.AddAll(allFlows)
 	if err != nil {
 		return err
 	}
-	fCache := flowCache{}
-	// Add the successfully installed flows into the flow cache.
-	for _, flow := range flows {
-		fCache[flow.MatchString()] = flow
+	// Add the installed flows into the flow cache.
+	for flowCacheKey, flowCache := range flowCacheMap {
+		cache.Store(flowCacheKey, flowCache)
 	}
-	cache.Store(flowCacheKey, fCache)
 	return nil
 }
 
@@ -375,30 +415,34 @@ func (c *client) deleteFlows(cache *flowCategoryCache, flowCacheKey string) erro
 // InstallNodeFlows installs flows for peer Nodes. Parameter remoteGatewayMAC is only for Windows.
 func (c *client) InstallNodeFlows(hostname string,
 	peerConfigs map[*net.IPNet]net.IP,
-	tunnelPeerIP net.IP,
+	tunnelPeerIPs *utilip.DualStackIPs,
 	ipsecTunOFPort uint32,
-	remoteGatewayMAC net.HardwareAddr) error {
+	remoteGatewayMAC net.HardwareAddr,
+) error {
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
 
 	var flows []binding.Flow
 	localGatewayMAC := c.nodeConfig.GatewayConfig.MAC
-
 	for peerPodCIDR, peerGatewayIP := range peerConfigs {
-		if peerGatewayIP.To4() != nil {
+		isIPv6 := peerGatewayIP.To4() == nil
+		tunnelPeerIP := tunnelPeerIPs.IPv4
+		if isIPv6 {
+			tunnelPeerIP = tunnelPeerIPs.IPv6
+		} else {
 			// Since broadcast is not supported in IPv6, ARP should happen only with IPv4 address, and ARP responder flows
 			// only work for IPv4 addresses.
 			flows = append(flows, c.arpResponderFlow(peerGatewayIP, cookie.Node))
 		}
-		if c.encapMode.NeedsEncapToPeer(tunnelPeerIP, c.nodeConfig.NodeIPAddr) {
-			// tunnelPeerIP is the Node Internal Address. In a dual-stack setup, whether this address is an IPv4 address or an
-			// IPv6 one is decided by the address family of Node Internal Address.
+		// tunnelPeerIP is the Node Internal Address. In a dual-stack setup, one Node has 2 Node Internal
+		// Addresses (IPv4 and IPv6) .
+		if (!isIPv6 && c.networkConfig.NeedsTunnelToPeer(tunnelPeerIPs.IPv4, c.nodeConfig.NodeTransportIPv4Addr)) ||
+			(isIPv6 && c.networkConfig.NeedsTunnelToPeer(tunnelPeerIPs.IPv6, c.nodeConfig.NodeTransportIPv6Addr)) {
 			flows = append(flows, c.l3FwdFlowToRemote(localGatewayMAC, *peerPodCIDR, tunnelPeerIP, cookie.Node))
 		} else {
 			flows = append(flows, c.l3FwdFlowToRemoteViaRouting(localGatewayMAC, remoteGatewayMAC, cookie.Node, tunnelPeerIP, peerPodCIDR)...)
 		}
 	}
-
 	if ipsecTunOFPort != 0 {
 		// When IPSec tunnel is enabled, packets received from the remote Node are
 		// input from the Node's IPSec tunnel port, not the default tunnel port. So,
@@ -437,7 +481,7 @@ func (c *client) InstallPodFlows(interfaceName string, podInterfaceIPs []net.IP,
 	// Add L3 Routing flows to rewrite Pod's dst MAC for all validate IPs.
 	flows = append(flows, c.l3FwdFlowToPod(localGatewayMAC, podInterfaceIPs, podInterfaceMAC, cookie.Pod)...)
 
-	if c.encapMode.IsNetworkPolicyOnly() {
+	if c.networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {
 		// In policy-only mode, traffic to local Pod is routed based on destination IP.
 		flows = append(flows,
 			c.l3FwdFlowRouteToPod(podInterfaceIPs, podInterfaceMAC, cookie.Pod)...,
@@ -509,6 +553,8 @@ func (c *client) InstallEndpointFlows(protocol binding.Protocol, endpoints []pro
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
 
+	// keyToFlows is a map from the flows' cache key to the flows.
+	keyToFlows := map[string][]binding.Flow{}
 	for _, endpoint := range endpoints {
 		var flows []binding.Flow
 		endpointPort, _ := endpoint.Port()
@@ -519,11 +565,10 @@ func (c *client) InstallEndpointFlows(protocol binding.Protocol, endpoints []pro
 		if endpoint.GetIsLocal() {
 			flows = append(flows, c.hairpinSNATFlow(endpointIP))
 		}
-		if err := c.addFlows(c.serviceFlowCache, cacheKey, flows); err != nil {
-			return err
-		}
+		keyToFlows[cacheKey] = flows
 	}
-	return nil
+
+	return c.addFlowsWithMultipleKeys(c.serviceFlowCache, keyToFlows)
 }
 
 func (c *client) UninstallEndpointFlows(protocol binding.Protocol, endpoint proxy.Endpoint) error {
@@ -619,7 +664,6 @@ func (c *client) InstallGatewayFlows() error {
 
 	// Add flow to ensure the liveness check packet could be forwarded correctly.
 	flows = append(flows, c.localProbeFlow(gatewayIPs, cookie.Default)...)
-	flows = append(flows, c.ctRewriteDstMACFlows(gatewayConfig.MAC, cookie.Default)...)
 	flows = append(flows, c.l3FwdFlowToGateway(gatewayIPs, gatewayConfig.MAC, cookie.Default)...)
 
 	if err := c.ofEntryOperations.AddAll(flows); err != nil {
@@ -663,22 +707,36 @@ func (c *client) initialize() error {
 	if err := c.ofEntryOperations.AddAll(c.establishedConnectionFlows(cookie.Default)); err != nil {
 		return fmt.Errorf("failed to install flows to skip established connections: %v", err)
 	}
-	if c.encapMode.IsNetworkPolicyOnly() {
+	if err := c.ofEntryOperations.AddAll(c.relatedConnectionFlows(cookie.Default)); err != nil {
+		return fmt.Errorf("failed to install flows to skip related connections: %v", err)
+	}
+	if err := c.ofEntryOperations.AddAll(c.rejectBypassNetworkpolicyFlows(cookie.Default)); err != nil {
+		return fmt.Errorf("failed to install flows to skip generated reject responses: %v", err)
+	}
+	if c.networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {
 		if err := c.setupPolicyOnlyFlows(); err != nil {
 			return fmt.Errorf("failed to setup policy only flows: %w", err)
+		}
+	}
+	if c.ovsMetersAreSupported {
+		if err := c.genPacketInMeter(PacketInMeterIDNP, PacketInMeterRateNP).Add(); err != nil {
+			return fmt.Errorf("failed to install OpenFlow meter entry (meterID:%d, rate:%d) for NetworkPolicy packet-in rate limiting: %v", PacketInMeterIDNP, PacketInMeterRateNP, err)
+		}
+		if err := c.genPacketInMeter(PacketInMeterIDTF, PacketInMeterRateTF).Add(); err != nil {
+			return fmt.Errorf("failed to install OpenFlow meter entry (meterID:%d, rate:%d) for TraceFlow packet-in rate limiting: %v", PacketInMeterIDTF, PacketInMeterRateTF, err)
 		}
 	}
 	return nil
 }
 
-func (c *client) Initialize(roundInfo types.RoundInfo, nodeConfig *config.NodeConfig, encapMode config.TrafficEncapModeType) (<-chan struct{}, error) {
+func (c *client) Initialize(roundInfo types.RoundInfo, nodeConfig *config.NodeConfig, networkConfig *config.NetworkConfig) (<-chan struct{}, error) {
 	c.nodeConfig = nodeConfig
-	c.encapMode = encapMode
+	c.networkConfig = networkConfig
 
-	if config.IsIPv4Enabled(nodeConfig, encapMode) {
+	if config.IsIPv4Enabled(nodeConfig, c.networkConfig.TrafficEncapMode) {
 		c.ipProtocols = append(c.ipProtocols, binding.ProtocolIP)
 	}
-	if config.IsIPv6Enabled(nodeConfig, encapMode) {
+	if config.IsIPv6Enabled(nodeConfig, c.networkConfig.TrafficEncapMode) {
 		c.ipProtocols = append(c.ipProtocols, binding.ProtocolIPv6)
 	}
 
@@ -702,21 +760,30 @@ func (c *client) Initialize(roundInfo types.RoundInfo, nodeConfig *config.NodeCo
 		return nil, fmt.Errorf("error when deleting exiting flows for current round number: %v", err)
 	}
 
+	// In the normal case, there should be no existing meter entries. This is needed in case the
+	// antrea-agent container is restarted (but not the antrea-ovs one), which will add meter
+	// entries during initialization, but the meter entries added during the previous
+	// initialization still exist. Trying to add an existing meter entry will cause an
+	// OFPMMFC_METER_EXISTS error.
+	if c.ovsMetersAreSupported {
+		if err := c.bridge.DeleteMeterAll(); err != nil {
+			return nil, fmt.Errorf("error when deleting all meter entries: %v", err)
+		}
+	}
+
 	return connCh, c.initialize()
 }
 
 func (c *client) InstallExternalFlows() error {
-	nodeIP := c.nodeConfig.NodeIPAddr.IP
 	localGatewayMAC := c.nodeConfig.GatewayConfig.MAC
 
 	var flows []binding.Flow
-	if c.nodeConfig.PodIPv4CIDR != nil {
-		flows = c.externalFlows(nodeIP, *c.nodeConfig.PodIPv4CIDR, localGatewayMAC)
+	if c.nodeConfig.NodeIPv4Addr != nil && c.nodeConfig.PodIPv4CIDR != nil {
+		flows = c.externalFlows(c.nodeConfig.NodeIPv4Addr.IP, *c.nodeConfig.PodIPv4CIDR, localGatewayMAC)
 	}
-	if c.nodeConfig.PodIPv6CIDR != nil {
-		flows = append(flows, c.externalFlows(nodeIP, *c.nodeConfig.PodIPv6CIDR, localGatewayMAC)...)
+	if c.nodeConfig.NodeIPv6Addr != nil && c.nodeConfig.PodIPv6CIDR != nil {
+		flows = append(flows, c.externalFlows(c.nodeConfig.NodeIPv6Addr.IP, *c.nodeConfig.PodIPv6CIDR, localGatewayMAC)...)
 	}
-
 	if err := c.ofEntryOperations.AddAll(flows); err != nil {
 		return fmt.Errorf("failed to install flows for external communication: %v", err)
 	}
@@ -926,11 +993,11 @@ func (c *client) InitialTLVMap() error {
 }
 
 func (c *client) IsIPv4Enabled() bool {
-	return config.IsIPv4Enabled(c.nodeConfig, c.encapMode)
+	return config.IsIPv4Enabled(c.nodeConfig, c.networkConfig.TrafficEncapMode)
 }
 
 func (c *client) IsIPv6Enabled() bool {
-	return config.IsIPv6Enabled(c.nodeConfig, c.encapMode)
+	return config.IsIPv6Enabled(c.nodeConfig, c.networkConfig.TrafficEncapMode)
 }
 
 // setBasePacketOutBuilder sets base IP properties of a packetOutBuilder which can have more packet data added.
@@ -1003,8 +1070,7 @@ func (c *client) SendTCPPacketOut(
 
 	// Reject response packet should bypass ConnTrack
 	if isReject {
-		name := fmt.Sprintf("%s%d", binding.NxmFieldReg, marksReg)
-		packetOutBuilder = packetOutBuilder.AddLoadAction(name, uint64(CustomReasonReject), CustomReasonMarkRange)
+		packetOutBuilder = packetOutBuilder.AddLoadRegMark(CustomReasonRejectRegMark)
 	}
 
 	packetOutObj := packetOutBuilder.Done()
@@ -1042,10 +1108,45 @@ func (c *client) SendICMPPacketOut(
 
 	// Reject response packet should bypass ConnTrack
 	if isReject {
-		name := fmt.Sprintf("%s%d", binding.NxmFieldReg, marksReg)
-		packetOutBuilder = packetOutBuilder.AddLoadAction(name, uint64(CustomReasonReject), CustomReasonMarkRange)
+		packetOutBuilder = packetOutBuilder.AddLoadRegMark(CustomReasonRejectRegMark)
 	}
 
+	packetOutObj := packetOutBuilder.Done()
+	return c.bridge.SendPacketOut(packetOutObj)
+}
+
+// SendUDPPacketOut generates UDP packet as a packet-out and sends it to OVS.
+func (c *client) SendUDPPacketOut(
+	srcMAC string,
+	dstMAC string,
+	srcIP string,
+	dstIP string,
+	inPort uint32,
+	outPort int32,
+	isIPv6 bool,
+	udpSrcPort uint16,
+	udpDstPort uint16,
+	udpData []byte,
+	isDNSResponse bool) error {
+	// Generate a base IP PacketOutBuilder.
+	packetOutBuilder, err := setBasePacketOutBuilder(c.bridge.BuildPacketOut(), srcMAC, dstMAC, srcIP, dstIP, inPort, outPort)
+	if err != nil {
+		return err
+	}
+	// Set protocol.
+	if isIPv6 {
+		packetOutBuilder = packetOutBuilder.SetIPProtocol(binding.ProtocolUDPv6)
+	} else {
+		packetOutBuilder = packetOutBuilder.SetIPProtocol(binding.ProtocolUDP)
+	}
+	// Set UDP header data.
+	packetOutBuilder = packetOutBuilder.SetUDPSrcPort(udpSrcPort).
+		SetUDPDstPort(udpDstPort).
+		SetUDPData(udpData)
+
+	if isDNSResponse {
+		packetOutBuilder = packetOutBuilder.AddLoadRegMark(CustomReasonDNSRegMark)
+	}
 	packetOutObj := packetOutBuilder.Done()
 	return c.bridge.SendPacketOut(packetOutObj)
 }

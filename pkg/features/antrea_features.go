@@ -56,6 +56,7 @@ const (
 	FlowExporter featuregate.Feature = "FlowExporter"
 
 	// alpha: v0.10
+	// beta: v1.2
 	// Enable collecting and exposing NetworkPolicy statistics.
 	NetworkPolicyStats featuregate.Feature = "NetworkPolicyStats"
 
@@ -76,7 +77,7 @@ var (
 	// The feature gate should be modified via DefaultMutableFeatureGate.
 	DefaultFeatureGate featuregate.FeatureGate = DefaultMutableFeatureGate
 
-	// defaultAntreaFeatureGates consists of all known Antrea-specific feature keys.
+	// DefaultAntreaFeatureGates consists of all known Antrea-specific feature keys.
 	// To add a new feature, define a key for it above and add it here. The features will be
 	// available throughout Antrea binaries.
 	DefaultAntreaFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
@@ -86,7 +87,7 @@ var (
 		EndpointSlice:      {Default: false, PreRelease: featuregate.Alpha},
 		Traceflow:          {Default: true, PreRelease: featuregate.Beta},
 		FlowExporter:       {Default: false, PreRelease: featuregate.Alpha},
-		NetworkPolicyStats: {Default: false, PreRelease: featuregate.Alpha},
+		NetworkPolicyStats: {Default: true, PreRelease: featuregate.Beta},
 		NodePortLocal:      {Default: false, PreRelease: featuregate.Alpha},
 	}
 

@@ -133,17 +133,17 @@ func (r *supportBundleREST) Create(ctx context.Context, obj runtime.Object, _ re
 	ctx, cancelFunc := context.WithCancel(context.Background())
 	r.cache = &systemv1beta1.SupportBundle{
 		ObjectMeta: metav1.ObjectMeta{Name: r.mode},
+		Since:      requestBundle.Since,
 		Status:     systemv1beta1.SupportBundleStatusCollecting,
 	}
 	r.cancelFunc = cancelFunc
-
-	go func() {
+	go func(since string) {
 		var err error
 		var b *systemv1beta1.SupportBundle
 		if r.mode == modeAgent {
-			b, err = r.collectAgent(ctx)
+			b, err = r.collectAgent(ctx, since)
 		} else if r.mode == modeController {
-			b, err = r.collectController(ctx)
+			b, err = r.collectController(ctx, since)
 		}
 		func() {
 			r.statusLocker.Lock()
@@ -159,8 +159,11 @@ func (r *supportBundleREST) Create(ctx context.Context, obj runtime.Object, _ re
 				r.cache = b
 			}
 		}()
-		r.clean(ctx, b.Filepath, bundleExpireDuration)
-	}()
+
+		if err != nil {
+			r.clean(ctx, b.Filepath, bundleExpireDuration)
+		}
+	}(r.cache.Since)
 
 	return r.cache, nil
 }
@@ -249,8 +252,8 @@ func (r *supportBundleREST) collect(ctx context.Context, dumpers ...func(string)
 	}, nil
 }
 
-func (r *supportBundleREST) collectAgent(ctx context.Context) (*systemv1beta1.SupportBundle, error) {
-	dumper := support.NewAgentDumper(defaultFS, defaultExecutor, r.ovsCtlClient, r.aq, r.npq)
+func (r *supportBundleREST) collectAgent(ctx context.Context, since string) (*systemv1beta1.SupportBundle, error) {
+	dumper := support.NewAgentDumper(defaultFS, defaultExecutor, r.ovsCtlClient, r.aq, r.npq, since)
 	return r.collect(
 		ctx,
 		dumper.DumpLog,
@@ -263,8 +266,8 @@ func (r *supportBundleREST) collectAgent(ctx context.Context) (*systemv1beta1.Su
 	)
 }
 
-func (r *supportBundleREST) collectController(ctx context.Context) (*systemv1beta1.SupportBundle, error) {
-	dumper := support.NewControllerDumper(defaultFS, defaultExecutor)
+func (r *supportBundleREST) collectController(ctx context.Context, since string) (*systemv1beta1.SupportBundle, error) {
+	dumper := support.NewControllerDumper(defaultFS, defaultExecutor, since)
 	return r.collect(
 		ctx,
 		dumper.DumpLog,

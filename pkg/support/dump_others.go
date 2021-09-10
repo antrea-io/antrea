@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//go:build !windows
 // +build !windows
 
 package support
@@ -28,10 +29,12 @@ import (
 
 func (d *agentDumper) DumpLog(basedir string) error {
 	logDir := logdir.GetLogDir()
-	if err := fileCopy(d.fs, path.Join(basedir, "logs", "agent"), logDir, "antrea-agent"); err != nil {
+	timeFilter := timestampFilter(d.since)
+
+	if err := directoryCopy(d.fs, path.Join(basedir, "logs", "agent"), logDir, "antrea-agent", timeFilter); err != nil {
 		return err
 	}
-	return fileCopy(d.fs, path.Join(basedir, "logs", "ovs"), logDir, "ovs")
+	return directoryCopy(d.fs, path.Join(basedir, "logs", "ovs"), logDir, "ovs", timeFilter)
 }
 
 func (d *agentDumper) DumpHostNetworkInfo(basedir string) error {

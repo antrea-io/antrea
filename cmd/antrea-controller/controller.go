@@ -89,6 +89,8 @@ var allowedPaths = []string{
 	"/validate/acnp",
 	"/validate/anp",
 	"/validate/clustergroup",
+	"/validate/externalippool",
+	"/validate/egress",
 	"/convert/clustergroup",
 }
 
@@ -117,6 +119,7 @@ func run(o *Options) error {
 	cgv1a2Informer := crdInformerFactory.Crd().V1alpha2().ClusterGroups()
 	cgInformer := crdInformerFactory.Crd().V1alpha3().ClusterGroups()
 	egressInformer := crdInformerFactory.Crd().V1alpha2().Egresses()
+	externalIPPoolInformer := crdInformerFactory.Crd().V1alpha2().ExternalIPPools()
 
 	clusterIdentityAllocator := clusteridentity.NewClusterIdentityAllocator(
 		env.GetAntreaNamespace(),
@@ -226,7 +229,7 @@ func run(o *Options) error {
 
 	var egressController *egress.EgressController
 	if features.DefaultFeatureGate.Enabled(features.Egress) {
-		egressController = egress.NewEgressController(groupEntityIndex, egressInformer, egressGroupStore)
+		egressController = egress.NewEgressController(crdClient, groupEntityIndex, egressInformer, externalIPPoolInformer, egressGroupStore)
 	}
 
 	var traceflowController *traceflow.Controller
@@ -273,6 +276,7 @@ func run(o *Options) error {
 		endpointQuerier,
 		networkPolicyController,
 		networkPolicyStatusController,
+		egressController,
 		statsAggregator,
 		o.config.EnablePrometheusMetrics,
 		cipherSuites,
@@ -304,6 +308,10 @@ func run(o *Options) error {
 	go clusterIdentityAllocator.Run(stopCh)
 
 	go controllerMonitor.Run(stopCh)
+
+	// It starts dispatching group updates to consumers, should start individually.
+	// If it's not running, adding Pods/Entities to groupEntityIndex may be blocked because of full channel.
+	go groupEntityIndex.Run(stopCh)
 
 	go groupEntityController.Run(stopCh)
 
@@ -363,6 +371,7 @@ func createAPIServerConfig(kubeconfig string,
 	endpointQuerier networkpolicy.EndpointQuerier,
 	npController *networkpolicy.NetworkPolicyController,
 	networkPolicyStatusController *networkpolicy.StatusController,
+	egressController *egress.EgressController,
 	statsAggregator *stats.Aggregator,
 	enableMetrics bool,
 	cipherSuites []uint16,
@@ -423,5 +432,6 @@ func createAPIServerConfig(kubeconfig string,
 		controllerQuerier,
 		networkPolicyStatusController,
 		endpointQuerier,
-		npController), nil
+		npController,
+		egressController), nil
 }

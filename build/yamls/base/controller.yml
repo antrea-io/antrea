@@ -130,10 +130,40 @@ webhooks:
         namespace: "kube-system"
         path: "/validate/clustergroup"
     rules:
-      - operations: ["CREATE", "UPDATE", "DELETE"]
+      - operations: ["CREATE", "UPDATE"]
         apiGroups: ["crd.antrea.io"]
         apiVersions: ["v1alpha3", "v1alpha2"]
         resources: ["clustergroups"]
+        scope: "Cluster"
+    admissionReviewVersions: ["v1", "v1beta1"]
+    sideEffects: None
+    timeoutSeconds: 5
+  - name: "externalippoolvalidator.antrea.io"
+    clientConfig:
+      service:
+        name: "antrea"
+        namespace: "kube-system"
+        path: "/validate/externalippool"
+    rules:
+      - operations: ["UPDATE"]
+        apiGroups: ["crd.antrea.io"]
+        apiVersions: ["v1alpha2"]
+        resources: ["externalippools"]
+        scope: "Cluster"
+    admissionReviewVersions: ["v1", "v1beta1"]
+    sideEffects: None
+    timeoutSeconds: 5
+  - name: "egressvalidator.antrea.io"
+    clientConfig:
+      service:
+        name: "antrea"
+        namespace: "kube-system"
+        path: "/validate/egress"
+    rules:
+      - operations: ["CREATE", "UPDATE"]
+        apiGroups: ["crd.antrea.io"]
+        apiVersions: ["v1alpha2"]
+        resources: ["egresses"]
         scope: "Cluster"
     admissionReviewVersions: ["v1", "v1beta1"]
     sideEffects: None
@@ -268,20 +298,6 @@ spec:
   group: controlplane.antrea.tanzu.vmware.com
   groupPriorityMinimum: 100
   version: v1beta2
-  versionPriority: 100
-  service:
-    name: antrea
-    namespace: kube-system
----
-# Deprecated in v1.0.0.
-apiVersion: apiregistration.k8s.io/v1
-kind: APIService
-metadata:
-  name: v1beta1.controlplane.antrea.tanzu.vmware.com
-spec:
-  group: controlplane.antrea.tanzu.vmware.com
-  groupPriorityMinimum: 100
-  version: v1beta1
   versionPriority: 100
   service:
     name: antrea

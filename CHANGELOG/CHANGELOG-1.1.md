@@ -1,5 +1,31 @@
 # Changelog 1.1
 
+## 1.1.2 - 2021-08-11
+
+### Changed
+
+- Improve the batch installation of NetworkPolicy rules when the Agent starts: only generate flow operations based on final desired state instead of incrementally. ([#2479](https://github.com/antrea-io/antrea/pull/2479), [@tnqn])
+
+### Fixed
+
+- Fix deadlock when initializing the GroupEntityIndex (in the Antrea Controller) with many groups; this was preventing correct distribution and enforcement of NetworkPolicies. ([#2376](https://github.com/antrea-io/antrea/pull/2376), [@tnqn])
+- Use "os/exec" package instead of third-party modules to run PowerShell commands and configure host networking on Windows; this change prevents Agent goroutines from getting stuck when configuring routes. ([#2363](https://github.com/antrea-io/antrea/pull/2363), [@lzhecheng]) [Windows]
+- Fix panic in Agent when calculating the stats for a rule newly added to an existing NetworkPolicy. ([#2495](https://github.com/antrea-io/antrea/pull/2495), [@tnqn])
+- Fix bug in iptables rule installation for dual-stack clusters: if a rule was already present for one protocol but not the other, its installation may have been skipped. ([#2469](https://github.com/antrea-io/antrea/pull/2469), [@lzhecheng])
+- Upgrade OVS version to 2.14.2 to pick up security fixes for CVE-2015-8011, CVE-2020-27827 and CVE-2020-35498. ([#2451](https://github.com/antrea-io/antrea/pull/2451), [@antoninbas])
+
+## 1.1.1 - 2021-07-07
+
+### Fixed
+
+- Fix inter-Node ClusterIP Service access when AntreaProxy is disabled. ([#2318](https://github.com/antrea-io/antrea/pull/2318), [@tnqn])
+- Fix duplicate group ID allocation in AntreaProxy when using a combination of IPv4 and IPv6 Services in dual-stack clusters; this was causing Service connectivity issues. ([#2317](https://github.com/antrea-io/antrea/pull/2317), [@hongliangl])
+- Fix intra-Node ClusterIP Service access when both the AntreaProxy and Egress features are enabled. ([#2332](https://github.com/antrea-io/antrea/pull/2332), [@tnqn])
+- Fix invalid clean-up of the HNS Endpoint during Pod deletion, when Docker is used as the container runtime. ([#2306](https://github.com/antrea-io/antrea/pull/2306), [@wenyingd]) [Windows]
+- Fix race condition on Windows when retrieving the local HNS Network created by Antrea for containers. ([#2253](https://github.com/antrea-io/antrea/pull/2253), [@tnqn]) [Windows]
+- Fix invalid conversion function between internal and versioned types for controlplane API, which was causing JSON marshalling errors. ([#2312](https://github.com/antrea-io/antrea/pull/2312), [@tnqn])
+- Fix implementation of the v1beta1 version of the legacy "controlplane.antrea.tanzu.vmware.com" API: the API was incorrectly using some v1beta2 types and it was missing some field selectors. ([#2305](https://github.com/antrea-io/antrea/pull/2305), [@tnqn])
+
 ## 1.1.0 - 2021-05-28
 
 ### Added

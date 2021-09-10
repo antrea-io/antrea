@@ -51,7 +51,7 @@ var (
 	}
 	IANAInfoElementsIPv4 = append(IANAInfoElementsCommon, []string{"sourceIPv4Address", "destinationIPv4Address"}...)
 	IANAInfoElementsIPv6 = append(IANAInfoElementsCommon, []string{"sourceIPv6Address", "destinationIPv6Address"}...)
-	// Substring "reverse" is an indication to get reverse element of go-ipfix library.
+	// IANAReverseInfoElements contain substring "reverse" which is an indication to get reverse element of go-ipfix library.
 	IANAReverseInfoElements = []string{
 		"reversePacketTotalCount",
 		"reverseOctetTotalCount",
@@ -89,8 +89,8 @@ type flowExporter struct {
 	flowRecords         *flowrecords.FlowRecords
 	denyConnStore       *connections.DenyConnectionStore
 	process             ipfix.IPFIXExportingProcess
-	elementsListv4      []*ipfixentities.InfoElementWithValue
-	elementsListv6      []*ipfixentities.InfoElementWithValue
+	elementsListv4      []ipfixentities.InfoElementWithValue
+	elementsListv6      []ipfixentities.InfoElementWithValue
 	ipfixSet            ipfixentities.Set
 	numDataSetsSent     uint64 // used for unit tests.
 	templateIDv4        uint16
@@ -104,26 +104,20 @@ type flowExporter struct {
 	k8sClient           kubernetes.Interface
 	nodeRouteController *noderoute.Controller
 	isNetworkPolicyOnly bool
+	nodeName            string
 }
 
-func genObservationID() (uint32, error) {
-	name, err := env.GetNodeName()
-	if err != nil {
-		return 0, err
-	}
+func genObservationID(nodeName string) uint32 {
 	h := fnv.New32()
-	h.Write([]byte(name))
-	return h.Sum32(), nil
+	h.Write([]byte(nodeName))
+	return h.Sum32()
 }
 
-func prepareExporterInputArgs(collectorAddr, collectorProto string) (exporter.ExporterInput, error) {
+func prepareExporterInputArgs(collectorAddr, collectorProto, nodeName string) exporter.ExporterInput {
 	expInput := exporter.ExporterInput{}
-	var err error
 	// Exporting process requires domain observation ID.
-	expInput.ObservationDomainID, err = genObservationID()
-	if err != nil {
-		return expInput, err
-	}
+	expInput.ObservationDomainID = genObservationID(nodeName)
+
 	expInput.CollectorAddress = collectorAddr
 	if collectorProto == "tls" {
 		expInput.IsEncrypted = true
@@ -134,7 +128,7 @@ func prepareExporterInputArgs(collectorAddr, collectorProto string) (exporter.Ex
 	}
 	expInput.PathMTU = 0
 
-	return expInput, nil
+	return expInput
 }
 
 func NewFlowExporter(connStore *connections.ConntrackConnectionStore, records *flowrecords.FlowRecords, denyConnStore *connections.DenyConnectionStore,
@@ -146,10 +140,11 @@ func NewFlowExporter(connStore *connections.ConntrackConnectionStore, records *f
 	registry.LoadRegistry()
 
 	// Prepare input args for IPFIX exporting process.
-	expInput, err := prepareExporterInputArgs(collectorAddr, collectorProto)
+	nodeName, err := env.GetNodeName()
 	if err != nil {
 		return nil, err
 	}
+	expInput := prepareExporterInputArgs(collectorAddr, collectorProto, nodeName)
 
 	return &flowExporter{
 		conntrackConnStore:  connStore,
@@ -165,6 +160,7 @@ func NewFlowExporter(connStore *connections.ConntrackConnectionStore, records *f
 		k8sClient:           k8sClient,
 		nodeRouteController: nodeRouteController,
 		isNetworkPolicyOnly: isNetworkPolicyOnly,
+		nodeName:            nodeName,
 	}, nil
 }
 
@@ -305,18 +301,14 @@ func (exp *flowExporter) sendFlowRecords() error {
 			exp.numDataSetsSent = exp.numDataSetsSent + 1
 
 			if flowexporter.IsConnectionDying(&record.Conn) {
-				// If the connection is in dying state or connection is not in conntrack table,
-				// we will delete the flow records from records map.
-				klog.V(2).Infof("Deleting the inactive flow records with key: %v from record map", key)
-				if err := exp.flowRecords.DeleteFlowRecordWithoutLock(key); err != nil {
-					return err
-				}
-				if err := exp.conntrackConnStore.SetExportDone(key); err != nil {
-					return err
-				}
+				// If the connection is in dying state or connection is not in conntrack
+				// table, we set the DyingAndDoneExport flag to do the deletion later.
+				record.DyingAndDoneExport = true
+				exp.flowRecords.AddFlowRecordWithoutLock(&key, &record)
 			} else {
 				exp.flowRecords.ValidateAndUpdateStats(key, record)
 			}
+			klog.V(4).InfoS("Record sent successfully", "flowKey", key, "record", record)
 		}
 		return nil
 	}
@@ -334,7 +326,8 @@ func (exp *flowExporter) sendFlowRecords() error {
 				return err
 			}
 			exp.numDataSetsSent = exp.numDataSetsSent + 1
-			exp.denyConnStore.ResetConnStatsWithoutLock(conn)
+			klog.V(4).InfoS("Record for deny connection sent successfully", "flowKey", connKey, "connection", conn)
+			exp.denyConnStore.ResetConnStatsWithoutLock(connKey)
 		}
 		if time.Since(conn.LastExportTime) >= exp.idleFlowTimeout {
 			if err := exp.addDenyConnToSet(conn, ipfixregistry.IdleTimeoutReason); err != nil {
@@ -344,6 +337,7 @@ func (exp *flowExporter) sendFlowRecords() error {
 				return err
 			}
 			exp.numDataSetsSent = exp.numDataSetsSent + 1
+			klog.V(4).InfoS("Record for deny connection sent successfully", "flowKey", connKey, "connection", conn)
 			exp.denyConnStore.DeleteConnWithoutLock(connKey)
 		}
 		return nil
@@ -356,7 +350,7 @@ func (exp *flowExporter) sendFlowRecords() error {
 }
 
 func (exp *flowExporter) sendTemplateSet(isIPv6 bool) (int, error) {
-	elements := make([]*ipfixentities.InfoElementWithValue, 0)
+	elements := make([]ipfixentities.InfoElementWithValue, 0)
 
 	IANAInfoElements := IANAInfoElementsIPv4
 	AntreaInfoElements := AntreaInfoElementsIPv4
@@ -414,14 +408,13 @@ func (exp *flowExporter) sendTemplateSet(isIPv6 bool) (int, error) {
 }
 
 func (exp *flowExporter) addRecordToSet(record flowexporter.FlowRecord) error {
-	nodeName, _ := env.GetNodeName()
-
 	// Iterate over all infoElements in the list
 	eL := exp.elementsListv4
 	if record.IsIPv6 {
 		eL = exp.elementsListv6
 	}
-	for _, ie := range eL {
+	for i := range eL {
+		ie := &eL[i]
 		switch ieName := ie.Element.Name; ieName {
 		case "flowStartSeconds":
 			ie.Value = uint32(record.Conn.StartTime.Unix())
@@ -488,7 +481,7 @@ func (exp *flowExporter) addRecordToSet(record flowexporter.FlowRecord) error {
 		case "sourceNodeName":
 			// Add nodeName for only local pods whose pod names are resolved.
 			if record.Conn.SourcePodName != "" {
-				ie.Value = nodeName
+				ie.Value = exp.nodeName
 			} else {
 				ie.Value = ""
 			}
@@ -499,7 +492,7 @@ func (exp *flowExporter) addRecordToSet(record flowexporter.FlowRecord) error {
 		case "destinationNodeName":
 			// Add nodeName for only local pods whose pod names are resolved.
 			if record.Conn.DestinationPodName != "" {
-				ie.Value = nodeName
+				ie.Value = exp.nodeName
 			} else {
 				ie.Value = ""
 			}
@@ -570,7 +563,6 @@ func (exp *flowExporter) addRecordToSet(record flowexporter.FlowRecord) error {
 }
 
 func (exp *flowExporter) addDenyConnToSet(conn *flowexporter.Connection, flowEndReason uint8) error {
-	nodeName, _ := env.GetNodeName()
 	exp.ipfixSet.ResetSet()
 
 	eL := exp.elementsListv4
@@ -583,7 +575,8 @@ func (exp *flowExporter) addDenyConnToSet(conn *flowexporter.Connection, flowEnd
 		return err
 	}
 	// Iterate over all infoElements in the list
-	for _, ie := range eL {
+	for i := range eL {
+		ie := &eL[i]
 		switch ieName := ie.Element.Name; ieName {
 		case "flowStartSeconds":
 			ie.Value = uint32(conn.StartTime.Unix())
@@ -622,7 +615,7 @@ func (exp *flowExporter) addDenyConnToSet(conn *flowexporter.Connection, flowEnd
 		case "sourceNodeName":
 			// Add nodeName for only local pods whose pod names are resolved.
 			if conn.SourcePodName != "" {
-				ie.Value = nodeName
+				ie.Value = exp.nodeName
 			} else {
 				ie.Value = ""
 			}
@@ -633,7 +626,7 @@ func (exp *flowExporter) addDenyConnToSet(conn *flowexporter.Connection, flowEnd
 		case "destinationNodeName":
 			// Add nodeName for only local pods whose pod names are resolved.
 			if conn.DestinationPodName != "" {
-				ie.Value = nodeName
+				ie.Value = exp.nodeName
 			} else {
 				ie.Value = ""
 			}
@@ -714,17 +707,15 @@ func (exp *flowExporter) findFlowType(conn flowexporter.Connection) uint8 {
 		return 0
 	}
 	if exp.nodeRouteController.IPInPodSubnets(conn.FlowKey.SourceAddress) {
-		if conn.Mark == openflow.ServiceCTMark || exp.nodeRouteController.IPInPodSubnets(conn.FlowKey.DestinationAddress) {
+		if conn.Mark == openflow.ServiceCTMark.GetValue() || exp.nodeRouteController.IPInPodSubnets(conn.FlowKey.DestinationAddress) {
 			if conn.SourcePodName == "" || conn.DestinationPodName == "" {
 				return ipfixregistry.FlowTypeInterNode
 			}
 			return ipfixregistry.FlowTypeIntraNode
-		} else {
-			return ipfixregistry.FlowTypeToExternal
 		}
-	} else {
-		// We do not support External-To-Pod flows for now.
-		klog.Warningf("Source IP: %s doesn't exist in PodCIDRs", conn.FlowKey.SourceAddress.String())
-		return 0
+		return ipfixregistry.FlowTypeToExternal
 	}
+	// We do not support External-To-Pod flows for now.
+	klog.Warningf("Source IP: %s doesn't exist in PodCIDRs", conn.FlowKey.SourceAddress.String())
+	return 0
 }

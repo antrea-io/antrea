@@ -66,7 +66,7 @@ that Node and `<BRIDGE_NAME>` is the name of the bridge created by Antrea
 We use 2 32-bit OVS registers to carry information throughout the pipeline:
 
 * reg0 (NXM_NX_REG0):
-  - bits [0..15] are used to store the traffic source (from tunnel: 0, from
+  - bits [0..3] are used to store the traffic source (from tunnel: 0, from
     local gateway: 1, from local Pod: 2). It is set in the [ClassifierTable].
   - bit 16 is used to indicate whether the destination MAC address of a packet
     is "known", i.e. corresponds to an entry in [L2ForwardingCalcTable], which
@@ -337,46 +337,16 @@ This table handles all "tracked" packets (all packets are moved to the tracked
 state by the previous table, [ConntrackTable]). It serves the following
 purposes:
 
-* keeps track of connections initiated through the gateway port, i.e. for which
-  the first packet of the connection (SYN packet for TCP) was received through
-  the gateway. For all reply packets belonging to such connections we overwrite
-  the destination MAC to the local gateway MAC to ensure that they get forwarded
-  though the gateway port. This is required to handle the following cases:
-  - reply traffic for connections from a local Pod to a ClusterIP Service, which
-    are handled by kube-proxy and go through DNAT. In this case the destination
-    IP address of the reply traffic is the Pod which initiated the connection to
-    the Service (no SNAT by kube-proxy). We need to make sure that these packets
-    are sent back through the gateway so that the source IP can be rewritten to
-    the ClusterIP ("undo" DNAT). If we do not use connection tracking and do not
-    rewrite the destination MAC, reply traffic from the backend will go directly
-    to the originating Pod without going first through the gateway and
-    kube-proxy.  This means that the reply traffic will arrive at the
-    originating Pod with the incorrect source IP (it will be set to the
-    backend's IP instead of the Service IP).
-  - when hair-pinning is involved, i.e. for connections between 2 local Pods and
-    for which NAT is performed. One example is a Pod accessing a NodePort
-    Service for which `externalTrafficPolicy` is set to `Local` using the local
-    Node's IP address, as there will be no SNAT for such traffic. Another
-    example could be `hostPort` support, depending on how the feature is
-    implemented.
 * drop packets reported as invalid by conntrack
 
 If you dump the flows for this table, you should see the following:
 
 ```text
-1. table=31, priority=210,ct_state=-new+trk,ct_mark=0x20,ip,reg0=0x1/0xffff actions=goto_table:40
-2. table=31, priority=200,ct_state=+inv+trk,ip actions=drop
-3. table=31, priority=200,ct_state=-new+trk,ct_mark=0x20,ip actions=mod_dl_dst:e2:e5:a4:9b:1c:b1,goto_table:40
-4. table=31, priority=0 actions=goto_table:40
+1. table=31, priority=190,ct_state=+inv+trk,ip actions=drop
+2. table=31, priority=0 actions=goto_table:40
 ```
 
-Flows 1 and 3 implement the destination MAC rewrite described above. Note that
-at this stage we have not committed any connection yet. We commit all
-connections after enforcing Network Policies, in [ConntrackCommitTable]. This is
-also when we set the `ct_mark` to `0x20` for connections initiated through the
-gateway.
-
-Flow 2 drops invalid traffic. All non-dropped traffic finally goes to the
+Flow 1 drops invalid traffic. All non-dropped traffic finally goes to the
 [DNATTable].
 
 ### DNATTable (40)
@@ -590,6 +560,35 @@ table=70, priority=200,ip,reg0=0x80000/0x80000,nw_dst=10.10.0.2 actions=mod_dl_s
 table=70, priority=200,ip,reg0=0x80000/0x80000,nw_dst=10.10.0.1 actions=mod_dl_dst:e2:e5:a4:9b:1c:b1,goto_table:80
 ```
 
+* All reply traffic of connections initiated through the gateway port, i.e. for
+  which the first packet of the connection (SYN packet for TCP) was received
+  through the gateway. Such packets can be identified by the packet's direction
+  in `ct_state` and the `ct_mark` value `0x20` which is committed in
+  [ConntrackCommitTable] when the first packet of the connection was handled.
+  A flow will overwrite the destination MAC to the local gateway MAC to ensure
+  that they get forwarded through the gateway port. This is required to handle
+  the following cases:
+  - reply traffic for connections from a local Pod to a ClusterIP Service, which
+    are handled by kube-proxy and go through DNAT. In this case the destination
+    IP address of the reply traffic is the Pod which initiated the connection to
+    the Service (no SNAT by kube-proxy). We need to make sure that these packets
+    are sent back through the gateway so that the source IP can be rewritten to
+    the ClusterIP ("undo" DNAT). If we do not use connection tracking and do not
+    rewrite the destination MAC, reply traffic from the backend will go directly
+    to the originating Pod without going first through the gateway and
+    kube-proxy. This means that the reply traffic will arrive at the originating
+    Pod with the incorrect source IP (it will be set to the backend's IP instead
+    of the Service IP).
+  - when hair-pinning is involved, i.e. connections between 2 local Pods, for
+    which NAT is performed. One example is a Pod accessing a NodePort Service
+    for which `externalTrafficPolicy` is set to `Local` using the local Node's
+    IP address, as there will be no SNAT for such traffic. Another example could
+    be `hostPort` support, depending on how the feature is implemented.
+
+```text
+table=70, priority=210,ct_state=+rpl+trk,ct_mark=0x20,ip actions=mod_dl_dst:e2:e5:a4:9b:1c:b1,goto_table:80
+```
+
 * All traffic destined to a remote Pod is forwarded through the appropriate
   tunnel. This means that we install one flow for each peer Node, each one
   matching the destination IP address of the packet against the Pod subnet for
@@ -600,7 +599,7 @@ table=70, priority=200,ip,reg0=0x80000/0x80000,nw_dst=10.10.0.1 actions=mod_dl_d
   For a given peer Node, the flow may look like this:
 
 ```text
-table=70, priority=200,ip,nw_dst=10.10.1.0/24 actions=mod_dl_src:e2:e5:a4:9b:1c:b1,mod_dl_dst:aa:bb:cc:dd:ee:ff,load:0x1->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],load:0xc0a84d65->NXM_NX_TUN_IPV4_DST[],goto_table:72
+table=70, priority=200,ip,nw_dst=10.10.1.0/24 actions=mod_dl_src:e2:e5:a4:9b:1c:b1,mod_dl_dst:aa:bb:cc:dd:ee:ff,load:0x1->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],load:0xc0a80102->NXM_NX_TUN_IPV4_DST[],goto_table:72
 ```
 
 If none of the flows described above are hit, traffic goes directly to
@@ -613,17 +612,26 @@ is required), as well as for local Pod-to-Pod traffic.
 table=70, priority=0 actions=goto_table:80
 ```
 
-When the Egress feature is enabled, there will be two extra flows added into
+When the Egress feature is enabled, extra flows will be added to
 [L3ForwardingTable], which send the egress traffic from Pods to external network
-to [SNATTable] (rather than sending the traffic the [L2ForwardingCalcTable]
-directly). One of the flows is for egress traffic from local Pods; another
+to [SNATTable]. The following two flows match traffic to local Pods and traffic
+to the local Node IP respectively, and keep them in the normal forwarding path
+(to [L2ForwardingCalcTable]), so they will not be sent to [SNATTable]:
+
+```text
+table=70, priority=200,ip,reg0=0/0x80000,nw_dst=10.10.1.0/24 actions=goto_table:80
+table=70, priority=200,ip,reg0=0x2/0xffff,nw_dst=192.168.1.1 actions=goto_table:80
+```
+
+The following two flows send the traffic not matched by other flows to
+[SNATTable]. One of the flows is for egress traffic from local Pods; another
 one is for egress traffic from remote Pods, which is tunnelled to this Node to
 be SNAT'd with a SNAT IP configured on the Node. In the latter case, the flow
 also rewrites the destination MAC to the local gateway interface MAC.
 
 ```text
-table=70, priority=190,ip,reg0=0x2/0xffff actions=goto_table:71
-table=70, priority=190,ip,reg0=0/0xffff actions=mod_dl_dst:e2:e5:a4:9b:1c:b1,goto_table:71
+table=70, priority=190,ip,reg0=0x2/0xf actions=goto_table:71
+table=70, priority=190,ip,reg0=0/0xf actions=mod_dl_dst:e2:e5:a4:9b:1c:b1,goto_table:71
 ```
 
 ### SNATTable (71)
@@ -640,7 +648,7 @@ Egress applied, to [L2ForwardingCalcTable]. Such traffic will be SNAT'd with
 the default SNAT IP (by an iptables masquerade rule).
 
 ```text
-table=71, priority=190,ct_state=+new+trk,ip,reg0=0/0xffff actions=drop
+table=71, priority=190,ct_state=+new+trk,ip,reg0=0/0xf actions=drop
 table=71, priority=0 actions=goto_table:80
 ```
 
@@ -663,7 +671,7 @@ destination MAC addresses, load the SNAT IP to NXM_NX_TUN_IPV4_DST, and send the
 packets to [L3DecTTLTable].
 
 ```text
-table=71, priority=200,ct_state=+new+trk,ip,in_port="pod2-357c21" actions=mod_dl_src:e2:e5:a4:9b:1c:b1,mod_dl_dst:aa:bb:cc:dd:ee:ff,load:0x1->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],load:0xc0a84d66->NXM_NX_TUN_IPV4_DST[],goto_table:72
+table=71, priority=200,ct_state=+new+trk,ip,in_port="pod2-357c21" actions=mod_dl_src:e2:e5:a4:9b:1c:b1,mod_dl_dst:aa:bb:cc:dd:ee:ff,load:0x1->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],load:0xc0a80a66->NXM_NX_TUN_IPV4_DST[],goto_table:72
 ```
 
 Last, when a SNAT IP configured for Egresses is on the local Node, an additional
@@ -672,7 +680,7 @@ use the SNAT IP. The flow matches the tunnel destination IP (which should be
 equal to the SNAT IP), and sets the 8 bits ID of the SNAT IP to pkt_mark.
 
 ```text
-table=71, priority=200,ct_state=+new+trk,ip,tun_dst="192.168.77.101" actions=load:0x1->NXM_NX_PKT_MARK[0..7],goto_table:80
+table=71, priority=200,ct_state=+new+trk,ip,tun_dst="192.168.10.101" actions=load:0x1->NXM_NX_PKT_MARK[0..7],goto_table:80
 ```
 
 ### L3DecTTLTable (72)
@@ -686,7 +694,7 @@ IP stack should have already decremented TTL if that is needed.
 If you dump the flows for this table, you should see flows like the following:
 
 ```text
-1. table=72, priority=210,ip,reg0=0x1/0xffff, actions=goto_table:80
+1. table=72, priority=210,ip,reg0=0x1/0xf, actions=goto_table:80
 2. table=72, priority=200,ip, actions=dec_ttl,goto_table:80
 3. table=72, priority=0, actions=goto_table:80
 ```
@@ -885,7 +893,7 @@ which are not dropped because of Network Policies. If you dump the flows for thi
 table, you should see something like this:
 
 ```text
-1. table=105, priority=200,ct_state=+new+trk,ip,reg0=0x1/0xffff actions=ct(commit,table=110,zone=65520,exec(load:0x20->NXM_NX_CT_MARK[]))
+1. table=105, priority=200,ct_state=+new+trk,ip,reg0=0x1/0xf actions=ct(commit,table=110,zone=65520,exec(load:0x20->NXM_NX_CT_MARK[]))
 2. table=105, priority=190,ct_state=+new+trk,ip actions=ct(commit,table=110,zone=65520)
 3. table=105, priority=0 actions=goto_table:110
 ```

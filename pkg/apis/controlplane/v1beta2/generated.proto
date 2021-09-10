@@ -74,11 +74,13 @@ message AppliedToGroupPatch {
   repeated GroupMember removedGroupMembers = 3;
 }
 
-// ClusterGroupMembers is a list of GroupMember objects that are currently selected by a ClusterGroup.
+// ClusterGroupMembers is a list of GroupMember objects or ipBlocks that are currently selected by a ClusterGroup.
 message ClusterGroupMembers {
   optional k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
 
   repeated GroupMember effectiveMembers = 2;
+
+  repeated IPNet effectiveIPBlocks = 3;
 }
 
 message EgressGroup {
@@ -226,6 +228,10 @@ message NetworkPolicyPeer {
 
   // A list of IPBlock.
   repeated IPBlock ipBlocks = 2;
+
+  // A list of exact FQDN names or FQDN wildcard expressions.
+  // This field can only be possibly set for NetworkPolicyPeer of egress rules.
+  repeated string fqdns = 3;
 }
 
 message NetworkPolicyReference {

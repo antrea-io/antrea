@@ -107,9 +107,8 @@ func parseContainerIPs(ipcs []*current.IPConfig) ([]net.IP, error) {
 	}
 	if len(ips) > 0 {
 		return ips, nil
-	} else {
-		return nil, fmt.Errorf("failed to find a valid IP address")
 	}
+	return nil, fmt.Errorf("failed to find a valid IP address")
 }
 
 func buildContainerConfig(
@@ -240,9 +239,8 @@ func (pc *podConfigurator) configureInterfaces(
 	var containerConfig *interfacestore.InterfaceConfig
 	if containerConfig, err = pc.connectInterfaceToOVS(podName, podNameSpace, containerID, hostIface, containerIface, result.IPs, containerAccess); err != nil {
 		return fmt.Errorf("failed to connect to ovs for container %s: %v", containerID, err)
-	} else {
-		success = true
 	}
+	success = true
 	defer func() {
 		if !success {
 			_ = pc.disconnectInterfaceFromOVS(containerConfig)
@@ -272,9 +270,8 @@ func (pc *podConfigurator) createOVSPort(ovsPortName string, ovsAttachInfo map[s
 	if err != nil {
 		klog.Errorf("Failed to add OVS port %s, remove from local cache: %v", ovsPortName, err)
 		return "", err
-	} else {
-		return portUUID, nil
 	}
+	return portUUID, nil
 }
 
 func (pc *podConfigurator) removeInterfaces(containerID string) error {
@@ -380,9 +377,8 @@ func (pc *podConfigurator) validateOVSInterfaceConfig(containerID string, contai
 		}
 		return fmt.Errorf("interface IP %s does not match container %s IP",
 			getContainerIPsString(containerConfig.IPs), containerID)
-	} else {
-		return fmt.Errorf("container %s interface not found from local cache", containerID)
 	}
+	return fmt.Errorf("container %s interface not found from local cache", containerID)
 }
 
 func parsePrevResult(conf *NetworkConfig) error {

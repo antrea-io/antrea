@@ -17,8 +17,8 @@ package openflow
 import (
 	"fmt"
 
-	"github.com/contiv/libOpenflow/openflow13"
-	"github.com/contiv/ofnet/ofctrl"
+	"antrea.io/libOpenflow/openflow13"
+	"antrea.io/ofnet/ofctrl"
 )
 
 type ofGroup struct {
@@ -67,7 +67,7 @@ func (g *ofGroup) Bucket() BucketBuilder {
 	}
 }
 
-func (f *ofGroup) GetBundleMessage(entryOper OFOperation) (ofctrl.OpenFlowModMessage, error) {
+func (g *ofGroup) GetBundleMessage(entryOper OFOperation) (ofctrl.OpenFlowModMessage, error) {
 	var operation int
 	switch entryOper {
 	case AddMessage:
@@ -77,7 +77,7 @@ func (f *ofGroup) GetBundleMessage(entryOper OFOperation) (ofctrl.OpenFlowModMes
 	case DeleteMessage:
 		operation = openflow13.OFPGC_DELETE
 	}
-	message := f.ofctrl.GetBundleMessage(operation)
+	message := g.ofctrl.GetBundleMessage(operation)
 	return message, nil
 }
 
@@ -93,7 +93,7 @@ type bucketBuilder struct {
 
 // LoadReg makes the learned flow to load data to reg[regID] with specific range.
 func (b *bucketBuilder) LoadReg(regID int, data uint32) BucketBuilder {
-	return b.LoadRegRange(regID, data, Range{0, 31})
+	return b.LoadRegRange(regID, data, &Range{0, 31})
 }
 
 // LoadXXReg makes the learned flow to load data to xxreg[regID] with specific range.
@@ -104,11 +104,22 @@ func (b *bucketBuilder) LoadXXReg(regID int, data []byte) BucketBuilder {
 }
 
 // LoadRegRange is an action to Load data to the target register at specified range.
-func (b *bucketBuilder) LoadRegRange(regID int, data uint32, rng Range) BucketBuilder {
+func (b *bucketBuilder) LoadRegRange(regID int, data uint32, rng *Range) BucketBuilder {
 	reg := fmt.Sprintf("%s%d", NxmFieldReg, regID)
 	regField, _ := openflow13.FindFieldHeaderByName(reg, true)
 	b.bucket.AddAction(openflow13.NewNXActionRegLoad(rng.ToNXRange().ToOfsBits(), regField, uint64(data)))
 	return b
+}
+
+func (b *bucketBuilder) LoadToRegField(field *RegField, data uint32) BucketBuilder {
+	reg := field.GetNXFieldName()
+	regField, _ := openflow13.FindFieldHeaderByName(reg, true)
+	b.bucket.AddAction(openflow13.NewNXActionRegLoad(field.rng.ToNXRange().ToOfsBits(), regField, uint64(data)))
+	return b
+}
+
+func (b *bucketBuilder) LoadRegMark(mark *RegMark) BucketBuilder {
+	return b.LoadToRegField(mark.field, mark.value)
 }
 
 // ResubmitToTable is an action to resubmit packet to the specified table when the bucket is selected.

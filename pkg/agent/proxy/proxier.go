@@ -644,7 +644,7 @@ func NewProxier(
 		endpointReferenceCounter: map[string]int{},
 		serviceStringMap:         map[string]k8sproxy.ServicePortName{},
 		oversizeServiceSet:       sets.NewString(),
-		groupCounter:             types.NewGroupCounter(),
+		groupCounter:             types.NewGroupCounter(isIPv6),
 		ofClient:                 ofClient,
 		isIPv6:                   isIPv6,
 	}
@@ -686,9 +686,8 @@ func (p *metaProxierWrapper) GetServiceByIP(serviceStr string) (k8sproxy.Service
 	lastColonIndex := strings.LastIndex(serviceStr, ":")
 	if utilnet.IsIPv6String(serviceStr[:lastColonIndex]) {
 		return p.ipv6Proxier.GetServiceByIP(serviceStr)
-	} else {
-		return p.ipv4Proxier.GetServiceByIP(serviceStr)
 	}
+	return p.ipv4Proxier.GetServiceByIP(serviceStr)
 }
 
 func NewDualStackProxier(

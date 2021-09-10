@@ -38,7 +38,36 @@ spec:
     singular: antreaagentinfo
   scope: Cluster
   versions:
-  - name: v1beta1
+  - additionalPrinterColumns:
+    - description: Health status of this Agent
+      jsonPath: .agentConditions[?(@.type=='AgentHealthy')].status
+      name: Healthy
+      type: string
+    - description: Last time the Healthy Condition was updated
+      jsonPath: .agentConditions[?(@.type=='AgentHealthy')].lastHeartbeatTime
+      name: Last Heartbeat
+      type: date
+    - description: Version of this Agent
+      jsonPath: .version
+      name: Version
+      priority: 1
+      type: string
+    - description: Node on which this Agent is running
+      jsonPath: .nodeRef.name
+      name: Node
+      priority: 1
+      type: string
+    - description: Number of local Pods managed by this Agent
+      jsonPath: .localPodNum
+      name: Num Pods
+      priority: 2
+      type: integer
+    - description: Subnets used by this Agent for Pod IPAM
+      jsonPath: .nodeSubnets
+      name: Subnets
+      priority: 2
+      type: string
+    name: v1beta1
     schema:
       openAPIV3Schema:
         type: object
@@ -86,7 +115,36 @@ spec:
     singular: antreacontrollerinfo
   scope: Cluster
   versions:
-  - name: v1beta1
+  - additionalPrinterColumns:
+    - description: Health status of the Controller
+      jsonPath: .controllerConditions[?(@.type=='ControllerHealthy')].status
+      name: Healthy
+      type: string
+    - description: Last time the Healthy Condition was updated
+      jsonPath: .controllerConditions[?(@.type=='ControllerHealthy')].lastHeartbeatTime
+      name: Last Heartbeat
+      type: date
+    - description: Version of the Controller
+      jsonPath: .version
+      name: Version
+      priority: 1
+      type: string
+    - description: Number of Agents connected to the Controller
+      jsonPath: .connectedAgentNum
+      name: Connected Agents
+      priority: 1
+      type: integer
+    - description: Node on which the Controller is running
+      jsonPath: .nodeRef.name
+      name: Node
+      priority: 1
+      type: string
+    - description: Number of Network Policies computed by Controller
+      jsonPath: .networkPolicyControllerInfo.networkPolicyNum
+      name: Num Network Policies
+      priority: 2
+      type: integer
+    name: v1beta1
     schema:
       openAPIV3Schema:
         type: object
@@ -255,7 +313,7 @@ spec:
     plural: clustergroups
     shortNames:
     - cg
-    singular: group
+    singular: clustergroup
   scope: Cluster
   versions:
   - name: v1alpha2
@@ -669,6 +727,8 @@ spec:
                     to:
                       items:
                         properties:
+                          fqdn:
+                            type: string
                           group:
                             type: string
                           ipBlock:
@@ -1345,6 +1405,10 @@ spec:
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
+    - description: The Owner Node of egress IP
+      jsonPath: .status.egressNode
+      name: Node
+      type: string
     name: v1alpha2
     schema:
       openAPIV3Schema:
@@ -1415,11 +1479,18 @@ spec:
             required:
             - appliedTo
             type: object
+          status:
+            properties:
+              egressNode:
+                type: string
+            type: object
         required:
         - spec
         type: object
     served: true
     storage: true
+    subresources:
+      status: {}
 ---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
@@ -1553,7 +1624,19 @@ spec:
     singular: externalippool
   scope: Cluster
   versions:
-  - name: v1alpha2
+  - additionalPrinterColumns:
+    - description: The number of total IPs
+      jsonPath: .status.usage.total
+      name: Total
+      type: integer
+    - description: The number of allocated IPs
+      jsonPath: .status.usage.used
+      name: Used
+      type: integer
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha2
     schema:
       openAPIV3Schema:
         properties:
@@ -1610,11 +1693,23 @@ spec:
             - ipRanges
             - nodeSelector
             type: object
+          status:
+            properties:
+              usage:
+                properties:
+                  total:
+                    type: integer
+                  used:
+                    type: integer
+                type: object
+            type: object
         required:
         - spec
         type: object
     served: true
     storage: true
+    subresources:
+      status: {}
 ---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
@@ -1767,6 +1862,8 @@ spec:
                               matchLabels:
                                 x-kubernetes-preserve-unknown-fields: true
                             type: object
+                          fqdn:
+                            type: string
                           ipBlock:
                             properties:
                               cidr:
@@ -3282,6 +3379,20 @@ rules:
   - get
   - watch
   - list
+- apiGroups:
+  - crd.antrea.io
+  resources:
+  - egresses/status
+  verbs:
+  - update
+- apiGroups:
+  - crd.antrea.io
+  resources:
+  - externalippools
+  verbs:
+  - get
+  - watch
+  - list
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -3377,7 +3488,6 @@ rules:
   - v1alpha1.stats.antrea.tanzu.vmware.com
   - v1beta1.system.antrea.tanzu.vmware.com
   - v1beta2.controlplane.antrea.tanzu.vmware.com
-  - v1beta1.controlplane.antrea.tanzu.vmware.com
   - v1alpha1.stats.antrea.io
   - v1beta1.system.antrea.io
   - v1beta2.controlplane.antrea.io
@@ -3390,6 +3500,7 @@ rules:
   - apiregistration.k8s.io
   resourceNames:
   - v1beta1.networking.antrea.tanzu.vmware.com
+  - v1beta1.controlplane.antrea.tanzu.vmware.com
   resources:
   - apiservices
   verbs:
@@ -3497,6 +3608,7 @@ rules:
   - watch
   - list
   - update
+  - patch
 - apiGroups:
   - crd.antrea.io
   resources:
@@ -3505,6 +3617,12 @@ rules:
   - get
   - watch
   - list
+- apiGroups:
+  - crd.antrea.io
+  resources:
+  - externalippools/status
+  verbs:
+  - update
 - apiGroups:
   - clusterinformation.antrea.tanzu.vmware.com
   resources:
@@ -3663,7 +3781,7 @@ data:
     #  FlowExporter: false
 
     # Enable collecting and exposing NetworkPolicy statistics.
-    #  NetworkPolicyStats: false
+    #  NetworkPolicyStats: true
 
     # Enable controlling SNAT IPs of Pod egress traffic.
     #  Egress: false
@@ -3702,21 +3820,33 @@ data:
     # performs SNAT and this option will be ignored; for other modes it must be set to false.
     #noSNAT: false
 
-    # Tunnel protocols used for encapsulating traffic across Nodes. Supported values:
+    # Tunnel protocols used for encapsulating traffic across Nodes. If WireGuard is enabled in trafficEncryptionMode,
+    # this option will not take effect. Supported values:
     # - geneve (default)
     # - vxlan
     # - gre
     # - stt
     #tunnelType: geneve
 
+    # Determines how tunnel traffic is encrypted. Currently encryption only works with encap mode.
+    # It has the following options:
+    # - none (default):  Inter-node Pod traffic will not be encrypted.
+    # - ipsec:           Enable IPSec (ESP) encryption for Pod traffic across Nodes. Antrea uses
+    #                    Preshared Key (PSK) for IKE authentication. When IPSec tunnel is enabled,
+    #                    the PSK value must be passed to Antrea Agent through an environment
+    #                    variable: ANTREA_IPSEC_PSK.
+    # - wireGuard:       Enable WireGuard for tunnel traffic encryption.
+    #trafficEncryptionMode: none
+
     # Default MTU to use for the host gateway interface and the network interface of each Pod.
     # If omitted, antrea-agent will discover the MTU of the Node's primary interface and
     # also adjust MTU to accommodate for tunnel encapsulation overhead (if applicable).
     #defaultMTU: 0
 
-    # Whether or not to enable IPsec encryption of tunnel traffic. IPsec encryption is only supported
-    # for the GRE tunnel type.
-    #enableIPSecTunnel: false
+    # wireGuard specifies WireGuard related configurations.
+    wireGuard:
+    #  The port for WireGuard to receive traffic.
+    #  port: 51820
 
     # ClusterIP CIDR range for IPv6 Services. It's required when using kube-proxy to provide IPv6 Service in a Dual-Stack
     # cluster or an IPv6 only cluster. The value should be the same as the configuration for kube-apiserver specified by
@@ -3765,7 +3895,7 @@ data:
     # Provide the port range used by NodePortLocal. When the NodePortLocal feature is enabled, a port from that range will be assigned
     # whenever a Pod's container defines a specific port to be exposed (each container can define a list of ports as pod.spec.containers[].ports),
     # and all Node traffic directed to that port will be forwarded to the Pod.
-    #nplPortRange: 40000-41000
+    #nplPortRange: 61000-62000
 
     # Provide the address of Kubernetes apiserver, to override any value provided in kubeconfig or InClusterConfig.
     # Defaults to "". It must be a host string, a host:port pair, or a URL to the base of the apiserver.
@@ -3779,6 +3909,11 @@ data:
 
     # TLS min version from: VersionTLS10, VersionTLS11, VersionTLS12, VersionTLS13.
     #tlsMinVersion:
+
+    # The name of the interface on Node which is used for tunneling or routing the traffic across Nodes.
+    # If there are multiple IP addresses configured on the interface, the first one is used.
+    # The interface configured with Node IP is used if this parameter is not set.
+    #transportInterface:
   antrea-cni.conflist: |
     {
         "cniVersion":"0.3.0",
@@ -3812,7 +3947,7 @@ data:
     #  AntreaPolicy: true
 
     # Enable collecting and exposing NetworkPolicy statistics.
-    #  NetworkPolicyStats: false
+    #  NetworkPolicyStats: true
 
     # Enable controlling SNAT IPs of Pod egress traffic.
     #  Egress: false
@@ -3861,7 +3996,7 @@ metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-t9hc8tf75d
+  name: antrea-config-99c875tk88
   namespace: kube-system
 ---
 apiVersion: v1
@@ -3932,7 +4067,7 @@ spec:
             fieldRef:
               fieldPath: spec.serviceAccountName
         - name: ANTREA_CONFIG_MAP_NAME
-          value: antrea-config-t9hc8tf75d
+          value: antrea-config-99c875tk88
         image: projects.registry.vmware.com/antrea/antrea-ubuntu:latest
         imagePullPolicy: IfNotPresent
         livenessProbe:
@@ -3983,7 +4118,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-t9hc8tf75d
+          name: antrea-config-99c875tk88
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -4023,21 +4158,6 @@ spec:
     name: antrea
     namespace: kube-system
   version: v1alpha1
-  versionPriority: 100
----
-apiVersion: apiregistration.k8s.io/v1
-kind: APIService
-metadata:
-  labels:
-    app: antrea
-  name: v1beta1.controlplane.antrea.tanzu.vmware.com
-spec:
-  group: controlplane.antrea.tanzu.vmware.com
-  groupPriorityMinimum: 100
-  service:
-    name: antrea
-    namespace: kube-system
-  version: v1beta1
   versionPriority: 100
 ---
 apiVersion: apiregistration.k8s.io/v1
@@ -4166,7 +4286,7 @@ spec:
           name: api
           protocol: TCP
         readinessProbe:
-          failureThreshold: 5
+          failureThreshold: 8
           httpGet:
             host: localhost
             path: /readyz
@@ -4281,7 +4401,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-t9hc8tf75d
+          name: antrea-config-99c875tk88
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d
@@ -4509,9 +4629,51 @@ webhooks:
     operations:
     - CREATE
     - UPDATE
-    - DELETE
     resources:
     - clustergroups
+    scope: Cluster
+  sideEffects: None
+  timeoutSeconds: 5
+- admissionReviewVersions:
+  - v1
+  - v1beta1
+  clientConfig:
+    service:
+      name: antrea
+      namespace: kube-system
+      path: /validate/externalippool
+  name: externalippoolvalidator.antrea.io
+  rules:
+  - apiGroups:
+    - crd.antrea.io
+    apiVersions:
+    - v1alpha2
+    operations:
+    - UPDATE
+    resources:
+    - externalippools
+    scope: Cluster
+  sideEffects: None
+  timeoutSeconds: 5
+- admissionReviewVersions:
+  - v1
+  - v1beta1
+  clientConfig:
+    service:
+      name: antrea
+      namespace: kube-system
+      path: /validate/egress
+  name: egressvalidator.antrea.io
+  rules:
+  - apiGroups:
+    - crd.antrea.io
+    apiVersions:
+    - v1alpha2
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - egresses
     scope: Cluster
   sideEffects: None
   timeoutSeconds: 5

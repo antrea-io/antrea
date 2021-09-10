@@ -28,12 +28,13 @@ TESTCASE=""
 TEST_FAILURE=false
 MODE="report"
 DOCKER_REGISTRY=$(head -n1 "${WORKSPACE}/ci/docker-registry")
+GO_VERSION=$(head -n1 "${WORKSPACE}/build/images/deps/go-version")
 IMAGE_PULL_POLICY="Always"
 
 WINDOWS_CONFORMANCE_FOCUS="\[sig-network\].+\[Conformance\]|\[sig-windows\]"
-WINDOWS_CONFORMANCE_SKIP="\[LinuxOnly\]|\[Slow\]|\[Serial\]|\[Disruptive\]|\[Flaky\]|\[Feature:.+\]|\[sig-cli\]|\[sig-storage\]|\[sig-auth\]|\[sig-api-machinery\]|\[sig-apps\]|\[sig-node\]|\[Privileged\]|should be able to change the type from|\[sig-network\] Services should be able to create a functioning NodePort service \[Conformance\]|Service endpoints latency should not be very high"
+WINDOWS_CONFORMANCE_SKIP="\[LinuxOnly\]|\[Slow\]|\[Serial\]|\[Disruptive\]|\[Flaky\]|\[Feature:.+\]|\[sig-cli\]|\[sig-storage\]|\[sig-auth\]|\[sig-api-machinery\]|\[sig-apps\]|\[sig-node\]|\[Privileged\]|should be able to change the type from|\[sig-network\] Services should be able to create a functioning NodePort service \[Conformance\]|Service endpoints latency should not be very high|should be able to create a functioning NodePort service for Windows"
 WINDOWS_NETWORKPOLICY_FOCUS="\[Feature:NetworkPolicy\]"
-WINDOWS_NETWORKPOLICY_SKIP="SKIP_NO_TESTCASE"
+WINDOWS_NETWORKPOLICY_SKIP="SCTP"
 CONFORMANCE_SKIP="\[Slow\]|\[Serial\]|\[Disruptive\]|\[Flaky\]|\[Feature:.+\]|\[sig-cli\]|\[sig-storage\]|\[sig-auth\]|\[sig-api-machinery\]|\[sig-apps\]|\[sig-node\]"
 NETWORKPOLICY_SKIP="should allow egress access to server in CIDR block|should enforce except clause while egress access to server in CIDR block"
 
@@ -118,7 +119,7 @@ function export_govc_env_var {
 
 function clean_antrea {
     echo "====== Cleanup Antrea Installation ======"
-    kubectl delete ns antrea-test || true
+    clean_up_one_ns "antrea-test"
     kubectl get pod -n kube-system -l component=antrea-agent --no-headers=true | awk '{print $1}' | while read AGENTNAME; do
         kubectl exec $AGENTNAME -c antrea-agent -n kube-system -- ovs-vsctl del-port br-int gw0 || true
     done
@@ -138,31 +139,59 @@ function clean_for_windows_install_cni {
 }
 
 function collect_windows_network_info_and_logs {
-    echo "=== Collecting network info after failure ==="
-    mkdir network_info
+    echo "=== Collecting information after failure ==="
+    DEBUG_LOG_PATH="debug_logs"
+    mkdir "${DEBUG_LOG_PATH}"
     kubectl get pod -n kube-system -l component=antrea-agent --no-headers=true | awk '{print $1}' | while read AGENTNAME; do
-        mkdir network_info/${AGENTNAME}
-        kubectl exec "$AGENTNAME" -c antrea-agent -n kube-system -- ovs-ofctl dump-flows br-int > "network_info/${AGENTNAME}/flows" || true
-        kubectl exec "$AGENTNAME" -c antrea-agent -n kube-system -- ovs-vsctl show > "network_info/$AGENTNAME/db" || true
-        kubectl exec "$AGENTNAME" -c antrea-agent -n kube-system -- ip a > "network_info/${AGENTNAME}/addrs" || true
-    done
-    kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 != role && $1 ~ /win/ {print $6}' | while read IP; do
-        mkdir network_info/${IP}
-        ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "powershell.exe get-NetAdapter" > "network_info/${IP}/adapters" || true
-        ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "ipconfig.exe" > "network_info/${IP}/ipconfig" || true
-        ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "powershell.exe Get-HNSNetwork" > "network_info/${IP}/hns_network" || true
-        ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "powershell.exe Get-HNSEndpoint" > "network_info/${IP}/hns_endpoint" || true
-    done
-    tar zcf network_info.tar.gz network_info
+        IP=$(kubectl get pod ${AGENTNAME} -n kube-system -o json | jq -r '.status.hostIP')
+        mkdir "${DEBUG_LOG_PATH}/${AGENTNAME}"
 
-    echo "=== Collecting antrea agent log after failure ==="
-    mkdir antrea_agent_log
-    kubectl get pod -n kube-system -l component=antrea-agent --no-headers=true | awk '{print $1}' | while read AGENTNAME; do
-        mkdir antrea_agent_log/$AGENTNAME
-        kubectl logs $AGENTNAME -n kube-system -c antrea-agent > antrea_agent_log/$AGENTNAME/antrea-agent.log || true
-        kubectl logs $AGENTNAME -n kube-system -c antrea-ovs > antrea_agent_log/$AGENTNAME/antrea-ovs.log || true
+        echo "=== Collecting '${AGENTNAME}' agent network info after failure ==="
+        AGENT_NETWORK_INFO_PATH="${DEBUG_LOG_PATH}/${AGENTNAME}/network_info"
+        mkdir "${AGENT_NETWORK_INFO_PATH}"
+        if [[ "${AGENTNAME}" =~ "windows" ]]; then
+            ssh -o StrictHostKeyChecking=no -n administrator@${IP} "ovs-ofctl dump-flows br-int" > "${AGENT_NETWORK_INFO_PATH}/flows" || true
+            ssh -o StrictHostKeyChecking=no -n administrator@${IP} "ovs-vsctl show" > "${AGENT_NETWORK_INFO_PATH}/db" || true
+            ssh -o StrictHostKeyChecking=no -n administrator@${IP} "ipconfig" > "${AGENT_NETWORK_INFO_PATH}/addrs" || true
+        else
+            kubectl exec "${AGENTNAME}" -c antrea-agent -n kube-system -- ovs-ofctl dump-flows br-int > "${AGENT_NETWORK_INFO_PATH}/flows" || true
+            kubectl exec "${AGENTNAME}" -c antrea-agent -n kube-system -- ovs-vsctl show > "${AGENT_NETWORK_INFO_PATH}/db" || true
+            kubectl exec "${AGENTNAME}" -c antrea-agent -n kube-system -- ip a > "${AGENT_NETWORK_INFO_PATH}/addrs" || true
+        fi
+
+        echo "=== Collecting '${AGENTNAME}' antrea agent log after failure ==="
+        ANTREA_AGENT_LOG_PATH="${DEBUG_LOG_PATH}/${AGENTNAME}/antrea_agent_log"
+        mkdir "${ANTREA_AGENT_LOG_PATH}"
+        kubectl logs "${AGENTNAME}" -n kube-system -c antrea-agent > "${ANTREA_AGENT_LOG_PATH}/antrea-agent.log" || true
+        if [[ "${AGENTNAME}" =~ "windows" ]]; then
+            echo "Windows agent doesn't have antrea-ovs container"
+        else
+            kubectl logs "${AGENTNAME}" -n kube-system -c antrea-ovs > "${ANTREA_AGENT_LOG_PATH}/antrea-ovs.log" || true
+        fi
     done
-    tar zcf antrea_agent_log.tar.gz antrea_agent_log
+
+    kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 != role && $1 ~ /win/ {print $1}' | while read NODENAME; do
+        IP=$(kubectl get node ${NODENAME} -o json | jq -r '.status.addresses[] | select(.type | test("InternalIP")).address')
+        mkdir "${DEBUG_LOG_PATH}/${NODENAME}"
+
+        echo "=== Collecting '${NODENAME}' Node network info after failure ==="
+        NODE_NETWORK_INFO_PATH="${DEBUG_LOG_PATH}/${NODENAME}/network_info"
+        mkdir "${NODE_NETWORK_INFO_PATH}"
+        ssh -o StrictHostKeyChecking=no -n administrator@${IP} "powershell.exe get-NetAdapter" > "${NODE_NETWORK_INFO_PATH}/adapters" || true
+        ssh -o StrictHostKeyChecking=no -n administrator@${IP} "ipconfig.exe" > "${NODE_NETWORK_INFO_PATH}/ipconfig" || true
+        ssh -o StrictHostKeyChecking=no -n administrator@${IP} "powershell.exe Get-HNSNetwork" > "${NODE_NETWORK_INFO_PATH}/hns_network" || true
+        ssh -o StrictHostKeyChecking=no -n administrator@${IP} "powershell.exe Get-HNSEndpoint" > "${NODE_NETWORK_INFO_PATH}/hns_endpoint" || true
+
+        echo "=== Collecting '${NODENAME}' kubelet and docker logs after failure ==="
+        KUBELET_LOG_PATH="${DEBUG_LOG_PATH}/${NODENAME}/kubelet"
+        mkdir "${KUBELET_LOG_PATH}"
+        scp -q -o StrictHostKeyChecking=no -T administrator@${IP}:/cygdrive/c/var/log/kubelet/* "${KUBELET_LOG_PATH}"
+
+        DOCKER_LOG_PATH="${DEBUG_LOG_PATH}/${NODENAME}/docker"
+        mkdir "${DOCKER_LOG_PATH}"
+        scp -q -o StrictHostKeyChecking=no -T administrator@${IP}:'/cygdrive/c/"Program Files"/Docker/dockerd.log*' "${DOCKER_LOG_PATH}"
+    done
+    tar zcf debug_logs.tar.gz "${DEBUG_LOG_PATH}"
 }
 
 function wait_for_antrea_windows_pods_ready {
@@ -202,10 +231,18 @@ function wait_for_antrea_windows_processes_ready {
     done
 }
 
+function clean_up_one_ns {
+    ns=$1
+    kubectl get pod -n "${ns}" --no-headers=true | awk '{print $1}' | while read pod_name; do
+        kubectl delete pod "${pod_name}" -n "${ns}" --force --grace-period 0
+    done
+    kubectl delete ns "${ns}" --ignore-not-found=true || true
+}
+
 function deliver_antrea_windows {
     echo "====== Cleanup Antrea Installation ======"
     export KUBECONFIG=$KUBECONFIG_PATH
-    kubectl delete ns antrea-test --ignore-not-found=true || true
+    clean_up_one_ns "antrea-test"
     kubectl delete -f ${WORKDIR}/antrea-windows.yml --ignore-not-found=true || true
     kubectl delete -f ${WORKDIR}/kube-proxy-windows.yml --ignore-not-found=true || true
     kubectl delete daemonset antrea-agent -n kube-system --ignore-not-found=true || true
@@ -224,8 +261,9 @@ function deliver_antrea_windows {
     chmod -R g-w build/images/ovs
     chmod -R g-w build/images/base
     DOCKER_REGISTRY="${DOCKER_REGISTRY}" ./hack/build-antrea-ubuntu-all.sh --pull
-    if [[ "$TESTCASE" =~ "networkpolicy" ]]; then
+    if [[ "$TESTCASE" == "windows-networkpolicy-process" ]]; then
         make windows-bin
+        make antctl-windows
     fi
 
     echo "====== Delivering Antrea to all the Nodes ======"
@@ -235,31 +273,67 @@ function deliver_antrea_windows {
     cp -f build/yamls/*.yml $WORKDIR
     docker save -o antrea-ubuntu.tar projects.registry.vmware.com/antrea/antrea-ubuntu:latest
 
-    echo "===== Deliver Antrea to Linux nodes ====="
+    echo "===== Pull necessary images on Control-Plane node ====="
+    harbor_images=("agnhost:2.13" "nginx:1.15-alpine")
+    antrea_images=("e2eteam/agnhost:2.13" "docker.io/library/nginx:1.15-alpine")
+    for i in "${!harbor_images[@]}"; do
+        docker pull -q "${DOCKER_REGISTRY}/antrea/${harbor_images[i]}"
+        docker tag "${DOCKER_REGISTRY}/antrea/${harbor_images[i]}" "${antrea_images[i]}"
+    done
+    echo "===== Deliver Antrea to Linux worker nodes and pull necessary images on worker nodes ====="
     kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 != role && $1 !~ /win/ {print $6}' | while read IP; do
         rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no" antrea-ubuntu.tar jenkins@${IP}:${WORKDIR}/antrea-ubuntu.tar
         ssh -o StrictHostKeyChecking=no -n jenkins@${IP} "${CLEAN_STALE_IMAGES}; docker load -i ${WORKDIR}/antrea-ubuntu.tar" || true
+
+        harbor_images=("agnhost:2.13" "nginx:1.15-alpine")
+        antrea_images=("e2eteam/agnhost:2.13" "docker.io/library/nginx:1.15-alpine")
+        for i in "${!harbor_images[@]}"; do
+            ssh -o StrictHostKeyChecking=no -n jenkins@${IP} "docker pull -q ${DOCKER_REGISTRY}/antrea/${harbor_images[i]} && docker tag ${DOCKER_REGISTRY}/antrea/${harbor_images[i]} ${antrea_images[i]}" || true
+        done
     done
 
-    echo "===== Deliver Antrea Windows to Windows nodes ====="
+    echo "===== Deliver Antrea Windows to Windows worker nodes and pull necessary images on Windows worker nodes ====="
     rm -f antrea-windows.tar.gz
     sed -i 's/if (!(Test-Path $AntreaAgentConfigPath))/if ($true)/' hack/windows/Helper.psm1
-    kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 != role && $1 ~ /win/ {print $6}' | while read IP; do
-        govc snapshot.revert -vm.ip ${IP} win-initial
-        harbor_images=("sigwindowstools-kube-proxy:v1.18.0" "e2eteam-agnhost:2.13" "e2eteam-jessie-dnsutils:1.0" "e2eteam-pause:3.2")
-        antrea_images=("sigwindowstools/kube-proxy:v1.18.0" "e2eteam/agnhost:2.13" "e2eteam/jessie-dnsutils:1.0" "e2eteam/pause:3.2")
+    kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 != role && $1 ~ /win/ {print $1}' | while read WORKER_NAME; do
+        echo "==== Reverting Windows VM ${WORKER_NAME} ====="
+        govc snapshot.revert -vm ${WORKER_NAME} win-initial
+        # If Windows VM fails to power on correctly in time, retry several times.
+        winVMIPs=""
+        for i in `seq 3`; do
+            winVMIPs=$(govc vm.ip -wait=1m -a ${WORKER_NAME})
+            if [[ $winVMIPs != "" ]]; then
+                echo "Windows VM ${WORKER_NAME} powered on"
+                break
+            fi
+            echo "Windows VM ${WORKER_NAME} failed to power on"
+            govc vm.power -on ${WORKER_NAME} || true
+        done
+        if [[ $winVMIPs == "" ]]; then
+            echo "Windows VM ${WORKER_NAME} didn't power on after 3 tries, exiting"
+            exit 1
+        fi
+        IP=$(kubectl get node "${WORKER_NAME}" -o jsonpath='{.status.addresses[0].address}')
+        # Windows VM is reverted to an old snapshot so computer date needs updating.
+        ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "powershell W32tm /resync /force"
+        # Some tests need us.gcr.io/k8s-artifacts-prod/e2e-test-images/agnhost:2.13 image but it is not for windows/amd64 10.0.17763
+        # Use e2eteam/agnhost:2.13 instead
+        harbor_images=("sigwindowstools-kube-proxy:v1.18.0" "agnhost:2.13" "agnhost:2.13" "e2eteam-jessie-dnsutils:1.0" "e2eteam-pause:3.2")
+        antrea_images=("sigwindowstools/kube-proxy:v1.18.0" "e2eteam/agnhost:2.13" "us.gcr.io/k8s-artifacts-prod/e2e-test-images/agnhost:2.13" "e2eteam/jessie-dnsutils:1.0" "e2eteam/pause:3.2")
         for i in "${!harbor_images[@]}"; do
-            ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "docker pull ${DOCKER_REGISTRY}/antrea/${harbor_images[i]} && docker tag ${DOCKER_REGISTRY}/antrea/${harbor_images[i]} ${antrea_images[i]}" || true
+            ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "docker pull -q ${DOCKER_REGISTRY}/antrea/${harbor_images[i]} && docker tag ${DOCKER_REGISTRY}/antrea/${harbor_images[i]} ${antrea_images[i]}" || true
         done
 
         # Use a script to run antrea agent in windows Network Policy cases
-        if [ "$TESTCASE" == "windows-networkpolicy" ]; then
+        if [ "$TESTCASE" == "windows-networkpolicy-process" ]; then
             for i in `seq 24`; do
                 sleep 5
                 ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "W32tm /resync /force" | grep successfully && break
             done
             ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "powershell stop-service kubelet"
-            ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "powershell restart-service docker"
+            ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "powershell stop-service docker"
+            ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "powershell rm C:\ProgramData\docker\docker.pid" || true
+            ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "powershell start-service docker"
             ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "powershell start-service kubelet"
             ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "powershell start-service ovsdb-server"
             ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "powershell start-service ovs-vswitchd"
@@ -267,6 +341,7 @@ function deliver_antrea_windows {
             ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "rm -rf /cygdrive/c/k/antrea && mkdir -p /cygdrive/c/k/antrea/bin && mkdir -p /cygdrive/c/k/antrea/etc && rm -rf /cygdrive/c/opt/cni/bin && mkdir -p /cygdrive/c/opt/cni/bin && mkdir -p /cygdrive/c/etc/cni/net.d"
             scp -o StrictHostKeyChecking=no -T $KUBECONFIG Administrator@${IP}:/cygdrive/c/k/config
             scp -o StrictHostKeyChecking=no -T bin/antrea-agent.exe Administrator@${IP}:/cygdrive/c/k/antrea/bin/
+            scp -o StrictHostKeyChecking=no -T bin/antctl-windows.exe Administrator@${IP}:/cygdrive/c/k/antrea/bin/antctl.exe
             scp -o StrictHostKeyChecking=no -T bin/antrea-cni.exe Administrator@${IP}:/cygdrive/c/opt/cni/bin/antrea.exe
             scp -o StrictHostKeyChecking=no -T hack/windows/Start.ps1 Administrator@${IP}:/cygdrive/c/k/antrea/
             scp -o StrictHostKeyChecking=no -T hack/windows/Stop.ps1 Administrator@${IP}:/cygdrive/c/k/antrea/
@@ -282,8 +357,8 @@ function deliver_antrea_windows {
                     timeout 2m scp -o StrictHostKeyChecking=no -T jenkins/antrea_repo.tar.gz Administrator@${IP}: && break
                 done
                 echo "=== Build Windows on Windows Node==="
-                ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "docker pull ${DOCKER_REGISTRY}/antrea/golang:1.15 && docker tag ${DOCKER_REGISTRY}/antrea/golang:1.15 golang:1.15"
-                ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "rm -rf antrea && mkdir antrea && cd antrea && tar -xzf ../antrea_repo.tar.gz && sed -i \"s|build/images/Dockerfile.build.windows .|build/images/Dockerfile.build.windows . --network host|g\" Makefile && NO_PULL=${NO_PULL} make build-windows && docker save -o antrea-windows.tar ${DOCKER_REGISTRY}/antrea/antrea-windows:latest && gzip -f antrea-windows.tar" || true
+                ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "docker pull ${DOCKER_REGISTRY}/antrea/golang:${GO_VERSION} && docker tag ${DOCKER_REGISTRY}/antrea/golang:${GO_VERSION} golang:${GO_VERSION}"
+                ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "rm -rf antrea && mkdir antrea && cd antrea && tar -xzf ../antrea_repo.tar.gz > /dev/null && sed -i \"s|build/images/Dockerfile.build.windows|build/images/Dockerfile.build.windows --network host|g\" Makefile && NO_PULL=${NO_PULL} make build-windows && docker save -o antrea-windows.tar ${DOCKER_REGISTRY}/antrea/antrea-windows:latest && gzip -f antrea-windows.tar" || true
                 for i in `seq 2`; do
                     timeout 2m scp -o StrictHostKeyChecking=no -T Administrator@${IP}:antrea/antrea-windows.tar.gz . && break
                 done
@@ -301,7 +376,7 @@ function deliver_antrea_windows {
 function deliver_antrea {
     echo "====== Cleanup Antrea Installation ======"
     export KUBECONFIG=$KUBECONFIG_PATH
-    kubectl delete ns antrea-test || true
+    clean_up_one_ns "antrea-test"
     kubectl delete daemonset antrea-agent -n kube-system || true
     kubectl delete -f ${WORKDIR}/antrea.yml || true
 
@@ -311,12 +386,11 @@ function deliver_antrea {
     export GOROOT=/usr/local/go
     export GOCACHE="${WORKSPACE}/../gocache"
     export PATH=${GOROOT}/bin:$PATH
-    export KUBECONFIG=$KUBECONFIG_PATH
 
     git show --numstat
     make clean
     ${CLEAN_STALE_IMAGES}
-    if [[ "${DOCKER_REGISTRY}" != "" ]]; then
+    if [[ ! "${TESTCASE}" =~ "e2e" && "${DOCKER_REGISTRY}" != "" ]]; then
         docker pull "${DOCKER_REGISTRY}/antrea/sonobuoy-systemd-logs:v0.3"
         docker tag "${DOCKER_REGISTRY}/antrea/sonobuoy-systemd-logs:v0.3" "sonobuoy/systemd-logs:v0.3"
     fi
@@ -352,9 +426,33 @@ function deliver_antrea {
         rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no" antrea-ubuntu.tar jenkins@[${IP}]:${WORKDIR}/antrea-ubuntu.tar
         rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no" flow-aggregator.tar jenkins@[${IP}]:${WORKDIR}/flow-aggregator.tar
         ssh -o StrictHostKeyChecking=no -n jenkins@${IP} "${CLEAN_STALE_IMAGES}; docker load -i ${WORKDIR}/antrea-ubuntu.tar; docker load -i ${WORKDIR}/flow-aggregator.tar" || true
-        if [[ "${DOCKER_REGISTRY}" != "" ]]; then
+        if [[ ! "${TESTCASE}" =~ "e2e" && "${DOCKER_REGISTRY}" != "" ]]; then
             ssh -o StrictHostKeyChecking=no -n jenkins@${IP} "docker pull ${DOCKER_REGISTRY}/antrea/sonobuoy-systemd-logs:v0.3 ; docker tag ${DOCKER_REGISTRY}/antrea/sonobuoy-systemd-logs:v0.3 sonobuoy/systemd-logs:v0.3"
         fi
+    done
+}
+
+function generate_ssh_config {
+    echo "=== Generate ssh-config ==="
+    SSH_CONFIG_DST="${WORKDIR}/.ssh/config"
+    echo -n "" > "${SSH_CONFIG_DST}"
+    kubectl get nodes -o wide --no-headers=true | awk '{print $1}' | while read sshconfig_nodename; do
+        echo "Generating ssh-config for Node ${sshconfig_nodename}"
+        sshconfig_nodeip="$(kubectl get node "${sshconfig_nodename}" -o jsonpath='{.status.addresses[0].address}')"
+        # Add square brackets to ipv6 address
+        if [[ ! "${sshconfig_nodeip}" =~ ^[0-9]+(\.[0-9]+){3}$ ]];then
+            sshconfig_nodeip="[${sshconfig_nodeip}]"
+        fi
+        cp ci/jenkins/ssh-config "${SSH_CONFIG_DST}.new"
+        sed -i "s/SSHCONFIGNODEIP/${sshconfig_nodeip}/g" "${SSH_CONFIG_DST}.new"
+        sed -i "s/SSHCONFIGNODENAME/${sshconfig_nodename}/g" "${SSH_CONFIG_DST}.new"
+        if [[ "${sshconfig_nodename}" =~ "win" ]]; then
+            sed -i "s/capv/administrator/g" "${SSH_CONFIG_DST}.new"
+        else
+            sed -i "s/capv/jenkins/g" "${SSH_CONFIG_DST}.new"
+        fi
+        echo "    IdentityFile ${WORKDIR}/.ssh/id_rsa" >> "${SSH_CONFIG_DST}.new"
+        cat "${SSH_CONFIG_DST}.new" >> "${SSH_CONFIG_DST}"
     done
 }
 
@@ -370,10 +468,12 @@ function run_e2e {
     mkdir -p "${WORKDIR}/.kube"
     mkdir -p "${WORKDIR}/.ssh"
     cp -f "${WORKDIR}/kube.conf" "${WORKDIR}/.kube/config"
-    cp -f "${WORKDIR}/ssh-config" "${WORKDIR}/.ssh/config"
+    generate_ssh_config
 
     set +e
     mkdir -p `pwd`/antrea-test-logs
+    # HACK: see https://github.com/antrea-io/antrea/issues/2292
+    go mod edit -replace github.com/moby/spdystream=github.com/antoninbas/spdystream@v0.2.1 && go mod tidy
     go test -v antrea.io/antrea/test/e2e --logs-export-dir `pwd`/antrea-test-logs --provider remote -timeout=100m --prometheus
     if [[ "$?" != "0" ]]; then
         TEST_FAILURE=true
@@ -428,22 +528,7 @@ function run_e2e_windows {
     mkdir -p "${WORKDIR}/.kube"
     mkdir -p "${WORKDIR}/.ssh"
     cp -f "${WORKDIR}/kube.conf" "${WORKDIR}/.kube/config"
-    echo "=== Generate ssh-config ==="
-    SSH_CONFIG_DST="${WORKDIR}/.ssh/config"
-    kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 != role {print $1}' | while read sshconfig_nodename; do
-        echo "Generating ssh-config for Node ${sshconfig_nodename}"
-        sshconfig_nodeip="$(kubectl get node "${sshconfig_nodename}" -o jsonpath='{.status.addresses[0].address}')"
-        cp ci/jenkins/ssh-config "${SSH_CONFIG_DST}.new"
-        sed -i "s/SSHCONFIGNODEIP/${sshconfig_nodeip}/g" "${SSH_CONFIG_DST}.new"
-        sed -i "s/SSHCONFIGNODENAME/${sshconfig_nodename}/g" "${SSH_CONFIG_DST}.new"
-        if [[ "${sshconfig_nodename}" =~ "win" ]]; then
-            sed -i "s/capv/administrator/g" "${SSH_CONFIG_DST}.new"
-        else
-            sed -i "s/capv/jenkins/g" "${SSH_CONFIG_DST}.new"
-        fi
-        echo "    IdentityFile ${WORKDIR}/.ssh/id_rsa" >> "${SSH_CONFIG_DST}.new"
-        cat "${SSH_CONFIG_DST}.new" >> "${SSH_CONFIG_DST}"
-    done
+    generate_ssh_config
 
     set +e
     mkdir -p `pwd`/antrea-test-logs
@@ -465,13 +550,13 @@ function run_conformance_windows {
     export PATH=$GOROOT/bin:$PATH
     export KUBECONFIG=$KUBECONFIG_PATH
 
-    if [[ "$TESTCASE" == "windows-conformance" ]]; then
+    if [[ "$TESTCASE" == "windows-networkpolicy-process" ]]; then
+        # Antrea Windows agents are deployed with scripts as processes on host for Windows NetworkPolicy test
+        wait_for_antrea_windows_processes_ready
+    else
         # Antrea Windows agent Pods are deployed for Windows Conformance test
         clean_for_windows_install_cni
         wait_for_antrea_windows_pods_ready
-    else
-        # Antrea Windows agents are deployed with scripts as processes on host for Windows NetworkPolicy test
-        wait_for_antrea_windows_processes_ready
     fi
 
     echo "====== Run test with e2e.test ======"
@@ -496,8 +581,10 @@ function run_install_windows_ovs {
     export_govc_env_var
     OVS_VM_NAME="antrea-microsoft-ovs"
 
-    IP=$(govc vm.ip $OVS_VM_NAME)
     govc snapshot.revert -vm $OVS_VM_NAME initial
+    govc vm.power -on $OVS_VM_NAME || true
+    echo "===== Testing VM has been reverted and powered on ====="
+    IP=$(govc vm.ip $OVS_VM_NAME)
     scp -o StrictHostKeyChecking=no -i ${WORKDIR}/.ssh/id_rsa -T hack/windows/Install-OVS.ps1 Administrator@${IP}:
     ssh -o StrictHostKeyChecking=no -i ${WORKDIR}/.ssh/id_rsa -n Administrator@${IP} '/bin/bash -lc "cp Install-OVS.ps1 C:/k && powershell.exe -File C:/k/Install-OVS.ps1"'
 
@@ -525,6 +612,7 @@ function clean_tmp() {
     for item in "${CLEAN_LIST[@]}"; do
         find /tmp -name "${item}" -mtime +7 -exec rm -rf {} \; 2>&1 | grep -v "Permission denied" || true
     done
+    find ${WORKDIR} -name "support-bundles*" -mtime +7 -exec rm -rf {} \; 2>&1 | grep -v "Permission denied" || true
 }
 
 clean_tmp

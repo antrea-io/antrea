@@ -320,7 +320,7 @@ func withPerfTestSetup(fn func(data *TestData), b *testing.B) {
 		b.Fatalf("Error when deleting Antrea DaemonSet: %v", err)
 	}
 	b.Logf("Applying Antrea YAML")
-	if err := data.deployAntrea(); err != nil {
+	if err := data.deployAntrea(deployAntreaDefault); err != nil {
 		b.Fatalf("Error when restarting Antrea: %v", err)
 	}
 	b.Logf("Waiting for all Antrea DaemonSet Pods")

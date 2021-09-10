@@ -1,7 +1,6 @@
 package config
 
 import (
-	"net"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -73,120 +72,6 @@ func TestTrafficEncapModeTypeSupports(t *testing.T) {
 			actualEncap := tt.mode.SupportsEncap()
 			assert.Equal(t, tt.expNoEncap, actualNoEncap, "SupportsNoEncap did not return correct result")
 			assert.Equal(t, tt.expEncap, actualEncap, "SupportsEncap did not return correct result")
-		})
-	}
-}
-
-func TestTrafficEncapModeTypeNeedsEncapToPeer(t *testing.T) {
-	tests := []struct {
-		name    string
-		mode    TrafficEncapModeType
-		peerIP  net.IP
-		localIP *net.IPNet
-		expBool bool
-	}{
-		{
-			name:   "encap-mode",
-			mode:   0,
-			peerIP: net.ParseIP("192.168.0.5"),
-			localIP: &net.IPNet{
-				IP:   net.IPv4(192, 168, 0, 1),
-				Mask: net.IPv4Mask(255, 255, 255, 0),
-			},
-			expBool: true,
-		},
-		{
-			name:   "no-encap-mode",
-			mode:   1,
-			peerIP: net.ParseIP("192.168.0.5"),
-			localIP: &net.IPNet{
-				IP:   net.IPv4(192, 168, 0, 1),
-				Mask: net.IPv4Mask(255, 255, 255, 0),
-			},
-			expBool: false,
-		},
-		{
-			name:   "hybrid-mode-need-encapsulated",
-			mode:   2,
-			peerIP: net.ParseIP("10.0.0.0"),
-			localIP: &net.IPNet{
-				IP:   net.IPv4(192, 168, 0, 1),
-				Mask: net.IPv4Mask(255, 255, 255, 0),
-			},
-			expBool: true,
-		},
-		{
-			name:   "hybrid-mode-no-need-encapsulated",
-			mode:   2,
-			peerIP: net.ParseIP("192.168.0.5"),
-			localIP: &net.IPNet{
-				IP:   net.IPv4(192, 168, 0, 1),
-				Mask: net.IPv4Mask(255, 255, 255, 0),
-			},
-			expBool: false,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			actualBool := tt.mode.NeedsEncapToPeer(tt.peerIP, tt.localIP)
-			assert.Equal(t, tt.expBool, actualBool, "NeedsEncapToPeer did not return correct result")
-		})
-	}
-}
-
-func TestTrafficEncapModeTypeNeedsDirectRoutingToPeer(t *testing.T) {
-	tests := []struct {
-		name    string
-		mode    TrafficEncapModeType
-		peerIP  net.IP
-		localIP *net.IPNet
-		expBool bool
-	}{
-		{
-			name:   "encap-mode",
-			mode:   0,
-			peerIP: net.ParseIP("192.168.0.5"),
-			localIP: &net.IPNet{
-				IP:   net.IPv4(192, 168, 0, 1),
-				Mask: net.IPv4Mask(255, 255, 255, 0),
-			},
-			expBool: false,
-		},
-		{
-			name:   "no-encap-mode-need-direct-routing",
-			mode:   1,
-			peerIP: net.ParseIP("192.168.0.5"),
-			localIP: &net.IPNet{
-				IP:   net.IPv4(192, 168, 0, 1),
-				Mask: net.IPv4Mask(255, 255, 255, 0),
-			},
-			expBool: true,
-		},
-		{
-			name:   "no-encap-mode-no-need-direct-routing",
-			mode:   1,
-			peerIP: net.ParseIP("192.168.1.5"),
-			localIP: &net.IPNet{
-				IP:   net.IPv4(192, 168, 0, 1),
-				Mask: net.IPv4Mask(255, 255, 255, 0),
-			},
-			expBool: false,
-		},
-		{
-			name:   "hybrid-mode-need-direct-routing",
-			mode:   2,
-			peerIP: net.ParseIP("192.168.0.5"),
-			localIP: &net.IPNet{
-				IP:   net.IPv4(192, 168, 0, 1),
-				Mask: net.IPv4Mask(255, 255, 255, 0),
-			},
-			expBool: true,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			actualBool := tt.mode.NeedsDirectRoutingToPeer(tt.peerIP, tt.localIP)
-			assert.Equal(t, tt.expBool, actualBool, "NeedsDirectRoutingToPeer did not return correct result")
 		})
 	}
 }

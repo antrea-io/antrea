@@ -49,7 +49,6 @@ var (
 	// apiServiceNames contains all the APIServices backed by antrea-controller.
 	apiServiceNames = []string{
 		"v1alpha1.stats.antrea.tanzu.vmware.com",
-		"v1beta1.controlplane.antrea.tanzu.vmware.com",
 		"v1beta2.controlplane.antrea.tanzu.vmware.com",
 		"v1beta1.system.antrea.tanzu.vmware.com",
 		"v1alpha1.stats.antrea.io",
@@ -219,11 +218,10 @@ func (c *CACertController) patchWebhookWithCACert(webhookCfg *v1.MutatingWebhook
 	for idx, webhook := range webhookCfg.Webhooks {
 		if bytes.Equal(webhook.ClientConfig.CABundle, caCert) {
 			continue
-		} else {
-			updated = true
-			webhook.ClientConfig.CABundle = caCert
-			webhookCfg.Webhooks[idx] = webhook
 		}
+		updated = true
+		webhook.ClientConfig.CABundle = caCert
+		webhookCfg.Webhooks[idx] = webhook
 	}
 	if updated {
 		if _, err := c.client.AdmissionregistrationV1().MutatingWebhookConfigurations().Update(context.TODO(), webhookCfg, metav1.UpdateOptions{}); err != nil {
@@ -245,11 +243,10 @@ func (c *CACertController) syncValidatingWebhooks(caCert []byte) error {
 		for idx, webhook := range vWebhook.Webhooks {
 			if bytes.Equal(webhook.ClientConfig.CABundle, caCert) {
 				continue
-			} else {
-				updated = true
-				webhook.ClientConfig.CABundle = caCert
-				vWebhook.Webhooks[idx] = webhook
 			}
+			updated = true
+			webhook.ClientConfig.CABundle = caCert
+			vWebhook.Webhooks[idx] = webhook
 		}
 		if updated {
 			if _, err := c.client.AdmissionregistrationV1().ValidatingWebhookConfigurations().Update(context.TODO(), vWebhook, metav1.UpdateOptions{}); err != nil {

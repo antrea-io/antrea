@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//go:build linux
 // +build linux
 
 package util
@@ -116,9 +117,8 @@ func SetLinkUp(name string) (net.HardwareAddr, int, error) {
 	if err != nil {
 		if _, ok := err.(netlink.LinkNotFoundError); ok {
 			return nil, 0, newLinkNotFoundError(name)
-		} else {
-			return nil, 0, err
 		}
+		return nil, 0, err
 	}
 	// Set host gateway interface up.
 	if err := netlink.LinkSetUp(link); err != nil {

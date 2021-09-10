@@ -625,9 +625,9 @@ func buildMapFromOVSDBMap(data []interface{}) map[string]string {
 			ret[pair.([]interface{})[0].(string)] = pair.([]interface{})[1].(string)
 		}
 		return ret
-	} else { // Should not be possible
-		return map[string]string{}
 	}
+	// Should not be possible
+	return map[string]string{}
 }
 
 func buildPortDataCommon(port, intf map[string]interface{}, portData *OVSPortData) {
@@ -768,9 +768,8 @@ func (br *OVSBridge) GetOVSVersion() (string, Error) {
 	if len(res[0].Rows) == 0 {
 		klog.Warning("Could not find ovs_version in the OVS query result")
 		return "", NewTransactionError(fmt.Errorf("no results from OVS query"), false)
-	} else {
-		return parseOvsVersion(res[0].Rows[0])
 	}
+	return parseOvsVersion(res[0].Rows[0])
 }
 
 // parseOvsVersion parses the version from an interface type, which can be a map of string[interface] or string[string], and returns it as a string, we have special logic here so that a panic doesn't happen.

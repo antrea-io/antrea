@@ -77,6 +77,8 @@ func run(o *Options) error {
 	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, informerDefaultResync)
 	traceflowInformer := crdInformerFactory.Crd().V1alpha1().Traceflows()
 	egressInformer := crdInformerFactory.Crd().V1alpha2().Egresses()
+	nodeInformer := informerFactory.Core().V1().Nodes()
+	externalIPPoolInformer := crdInformerFactory.Crd().V1alpha2().ExternalIPPools()
 
 	// Create Antrea Clientset for the given config.
 	antreaClientProvider := agent.NewAntreaClientProvider(o.config.AntreaClientConnection, k8sClient)
@@ -112,11 +114,21 @@ func run(o *Options) error {
 	}
 
 	_, encapMode := config.GetTrafficEncapModeFromStr(o.config.TrafficEncapMode)
+	_, encryptionMode := config.GetTrafficEncryptionModeFromStr(o.config.TrafficEncryptionMode)
+	if o.config.EnableIPSecTunnel {
+		klog.Warning("enableIPSecTunnel is deprecated, use trafficEncryptionMode instead.")
+		encryptionMode = config.TrafficEncryptionModeIPSec
+	}
 	networkConfig := &config.NetworkConfig{
-		TunnelType:        ovsconfig.TunnelType(o.config.TunnelType),
-		TrafficEncapMode:  encapMode,
-		EnableIPSecTunnel: o.config.EnableIPSecTunnel}
+		TunnelType:            ovsconfig.TunnelType(o.config.TunnelType),
+		TrafficEncapMode:      encapMode,
+		TrafficEncryptionMode: encryptionMode,
+		TransportIface:        o.config.TransportInterface,
+	}
 
+	wireguardConfig := &config.WireGuardConfig{
+		Port: o.config.WireGuard.Port,
+	}
 	routeClient, err := route.NewClient(serviceCIDRNet, networkConfig, o.config.NoSNAT)
 	if err != nil {
 		return fmt.Errorf("error creating route client: %v", err)
@@ -145,6 +157,7 @@ func run(o *Options) error {
 		serviceCIDRNet,
 		serviceCIDRNetv6,
 		networkConfig,
+		wireguardConfig,
 		networkReadyCh,
 		stopCh,
 		features.DefaultFeatureGate.Enabled(features.AntreaProxy))
@@ -162,7 +175,8 @@ func run(o *Options) error {
 		routeClient,
 		ifaceStore,
 		networkConfig,
-		nodeConfig)
+		nodeConfig,
+		agentInitializer.GetWireGuardClient())
 
 	var proxier proxy.Proxier
 	if features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
@@ -197,7 +211,8 @@ func run(o *Options) error {
 
 	var denyConnStore *connections.DenyConnectionStore
 	if features.DefaultFeatureGate.Enabled(features.FlowExporter) {
-		denyConnStore = connections.NewDenyConnectionStore(ifaceStore, proxier)
+		denyConnStore = connections.NewDenyConnectionStore(ifaceStore, proxier, o.staleConnectionTimeout)
+		go denyConnStore.RunPeriodicDeletion(stopCh)
 	}
 	networkPolicyController, err := networkpolicy.NewNetworkPolicyController(
 		antreaClientProvider,
@@ -209,7 +224,8 @@ func run(o *Options) error {
 		statusManagerEnabled,
 		loggingEnabled,
 		denyConnStore,
-		asyncRuleDeleteInterval)
+		asyncRuleDeleteInterval,
+		o.config.DNSServerOverride)
 	if err != nil {
 		return fmt.Errorf("error creating new NetworkPolicy controller: %v", err)
 	}
@@ -222,8 +238,22 @@ func run(o *Options) error {
 	}
 
 	var egressController *egress.EgressController
+	var nodeIP net.IP
+	if nodeConfig.NodeIPv4Addr != nil {
+		nodeIP = nodeConfig.NodeIPv4Addr.IP
+	} else if nodeConfig.NodeIPv6Addr != nil {
+		nodeIP = nodeConfig.NodeIPv6Addr.IP
+	} else {
+		return fmt.Errorf("invalid NodeIPAddr in Node config: %v", nodeConfig)
+	}
 	if features.DefaultFeatureGate.Enabled(features.Egress) {
-		egressController = egress.NewEgressController(ofClient, egressInformer, antreaClientProvider, ifaceStore, routeClient, nodeConfig.Name)
+		egressController, err = egress.NewEgressController(
+			ofClient, antreaClientProvider, crdClient, ifaceStore, routeClient, nodeConfig.Name, nodeIP,
+			o.config.ClusterMembershipPort, egressInformer, nodeInformer, externalIPPoolInformer,
+		)
+		if err != nil {
+			return fmt.Errorf("error creating new Egress controller: %v", err)
+		}
 	}
 
 	isChaining := false
@@ -372,7 +402,8 @@ func run(o *Options) error {
 			v6Enabled,
 			proxier,
 			networkPolicyController,
-			o.pollInterval)
+			o.pollInterval,
+			o.staleConnectionTimeout)
 		go conntrackConnStore.Run(stopCh)
 
 		flowExporter, err := exporter.NewFlowExporter(

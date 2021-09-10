@@ -178,6 +178,12 @@ reference cookbook on how to visualize the exported network flows using Elastic
 Stack and Kibana dashboards. For more information, refer to the [network flow
 visibility document](network-flow-visibility.md).
 
+### Egress
+
+Antrea supports specifying which egress (SNAT) IP the traffic from the selected
+Pods to the external network should use and which Node the traffic should leave
+the cluster from. For more information, refer to the [Egress document](egress.md).
+
 ### NoEncap and Hybrid Traffic Modes
 
 Besides the default `Encap` mode, in which Pod traffic across Nodes will be

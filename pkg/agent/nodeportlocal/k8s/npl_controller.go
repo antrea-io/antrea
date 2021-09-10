@@ -1,3 +1,4 @@
+//go:build !windows
 // +build !windows
 
 // Copyright 2020 Antrea Authors
@@ -20,6 +21,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -29,6 +32,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	clientset "k8s.io/client-go/kubernetes"
@@ -43,6 +47,7 @@ const (
 	minRetryDelay  = 2 * time.Second
 	maxRetryDelay  = 120 * time.Second
 	numWorkers     = 4
+	delim          = ":"
 )
 
 type NPLController struct {
@@ -126,12 +131,8 @@ func (c *NPLController) Run(stopCh <-chan struct{}) {
 	if !cache.WaitForNamedCacheSync(controllerName, stopCh, c.podInformer.HasSynced, c.svcInformer.HasSynced) {
 		return
 	}
-	klog.Info("Will fetch Pods and generate NodePortLocal rules for these Pods")
 
-	if err := c.GetPodsAndGenRules(); err != nil {
-		klog.Errorf("Error in getting Pods and generating rules: %v", err)
-		return
-	}
+	c.waitForRulesInitialization()
 
 	for i := 0; i < numWorkers; i++ {
 		go wait.Until(c.Worker, time.Second, stopCh)
@@ -190,6 +191,17 @@ func (c *NPLController) checkDeletedSvc(obj interface{}) (*corev1.Service, error
 	return svc, nil
 }
 
+func validateNPLService(svc *corev1.Service) {
+	if svc.Spec.Type == corev1.ServiceTypeNodePort {
+		klog.InfoS("Service is of type NodePort and cannot be used for NodePortLocal, the NodePortLocal annotation will have no effect", "service", klog.KObj(svc))
+	}
+	for _, port := range svc.Spec.Ports {
+		if port.Protocol != corev1.ProtocolTCP {
+			klog.InfoS("Service has NodePortLocal enabled but it includes a non-TCP Service port, which will be ignored", "service", klog.KObj(svc))
+		}
+	}
+}
+
 func (c *NPLController) enqueueSvcUpdate(oldObj, newObj interface{}) {
 	// In case where the app selector in Service gets updated from one valid selector to another
 	// both sets of Pods (corresponding to old and new selector) need to be considered.
@@ -203,8 +215,8 @@ func (c *NPLController) enqueueSvcUpdate(oldObj, newObj interface{}) {
 		return
 	}
 
-	if newSvcAnnotation == "true" && newSvc.Spec.Type == corev1.ServiceTypeNodePort {
-		klog.Warningf("Service %s is of type NodePort and cannot be used for NodePortLocal, the '%s' annotation will have no effect", newSvc.Name, NPLEnabledAnnotationKey)
+	if newSvcAnnotation == "true" {
+		validateNPLService(newSvc)
 	}
 
 	podKeys := sets.String{}
@@ -218,11 +230,17 @@ func (c *NPLController) enqueueSvcUpdate(oldObj, newObj interface{}) {
 		} else if newNPLEnabled {
 			podKeys = sets.NewString(c.getPodsFromService(newSvc)...)
 		}
-	} else if oldNPLEnabled && newNPLEnabled && !reflect.DeepEqual(oldSvc.Spec.Selector, newSvc.Spec.Selector) {
-		// Disjunctive union of Pods from both Service sets.
-		oldPodSet := sets.NewString(c.getPodsFromService(oldSvc)...)
+	} else if oldNPLEnabled && newNPLEnabled {
 		newPodSet := sets.NewString(c.getPodsFromService(newSvc)...)
-		podKeys = utilsets.SymmetricDifference(oldPodSet, newPodSet)
+		if !reflect.DeepEqual(oldSvc.Spec.Selector, newSvc.Spec.Selector) {
+			// Disjunctive union of Pods from both Service sets.
+			oldPodSet := sets.NewString(c.getPodsFromService(oldSvc)...)
+			podKeys = utilsets.SymmetricDifferenceString(oldPodSet, newPodSet)
+		}
+		if !reflect.DeepEqual(oldSvc.Spec.Ports, newSvc.Spec.Ports) {
+			// If ports in a Service are changed, all the Pods selected by the Service have to be processed.
+			podKeys = podKeys.Union(newPodSet)
+		}
 	}
 
 	for podKey := range podKeys {
@@ -243,6 +261,7 @@ func (c *NPLController) enqueueSvc(obj interface{}) {
 
 	// Process Pods corresponding to Service with valid NPL annotation.
 	if svc.Annotations[NPLEnabledAnnotationKey] == "true" {
+		validateNPLService(svc)
 		for _, podKey := range c.getPodsFromService(svc) {
 			c.queue.Add(podKey)
 		}
@@ -268,12 +287,28 @@ func (c *NPLController) getPodsFromService(svc *corev1.Service) []string {
 	return pods
 }
 
-func (c *NPLController) isNPLEnabledForServiceOfPod(obj interface{}) bool {
+func buildPortProto(name, prototcol string) string {
+	return name + delim + prototcol
+}
+
+func parsePortProto(targetPort string) (int, string, error) {
+	portProto := strings.Split(targetPort, delim)
+	if len(portProto) != 2 {
+		return 0, "", fmt.Errorf("invalid format for PortProto string '%s'", portProto)
+	}
+	port, err := strconv.Atoi(portProto[0])
+	protocol := portProto[1]
+	return port, protocol, err
+}
+
+func (c *NPLController) getTargetPortsForServicesOfPod(obj interface{}) (sets.String, sets.String) {
+	targetPortsInt := sets.NewString()
+	targetPortsStr := sets.NewString()
 	pod := obj.(*corev1.Pod)
 	services, err := c.svcInformer.GetIndexer().ByIndex(NPLEnabledAnnotationIndex, "true")
 	if err != nil {
 		klog.Errorf("Got error while listing Services with annotation %s: %v", NPLEnabledAnnotationKey, err)
-		return false
+		return targetPortsInt, targetPortsStr
 	}
 
 	for _, service := range services {
@@ -282,11 +317,29 @@ func (c *NPLController) isNPLEnabledForServiceOfPod(obj interface{}) bool {
 		if isSvc && svc.Spec.Type != corev1.ServiceTypeNodePort {
 			if pod.Namespace == svc.Namespace &&
 				matchSvcSelectorPodLabels(svc.Spec.Selector, pod.GetLabels()) {
-				return true
+				for _, port := range svc.Spec.Ports {
+					if port.Protocol != corev1.ProtocolTCP {
+						// Not supported yet. A message is logged when the
+						// Service is processed.
+						continue
+					}
+					switch port.TargetPort.Type {
+					case intstr.Int:
+						// An entry of format <target-port>:<protocol> (e.g. 8080:TCP) is added for a target port in the set targetPortsInt.
+						// This is done to ensure that we can match with both port and protocol fields in container port of a Pod.
+						portProto := buildPortProto(fmt.Sprint(port.TargetPort.IntVal), string(port.Protocol))
+						klog.V(4).Infof("Added target port in targetPortsInt set: %v", portProto)
+						targetPortsInt.Insert(portProto)
+					case intstr.String:
+						portProto := buildPortProto(port.TargetPort.StrVal, string(port.Protocol))
+						klog.V(4).Infof("Added target port in targetPortsStr set: %v", portProto)
+						targetPortsStr.Insert(portProto)
+					}
+				}
 			}
 		}
 	}
-	return false
+	return targetPortsInt, targetPortsStr
 }
 
 // matchSvcSelectorPodLabels verifies that all key/value pairs present in Service's selector
@@ -393,18 +446,9 @@ func (c *NPLController) handleAddUpdatePod(key string, obj interface{}) error {
 	}
 	c.addPodIPToCache(key, podIP)
 
-	if !c.isNPLEnabledForServiceOfPod(obj) {
-		if err := c.deleteAllPortRulesIfAny(podIP); err != nil {
-			return err
-		}
-		if _, exists := pod.Annotations[NPLAnnotationKey]; exists {
-			return c.cleanupNPLAnnotationForPod(pod)
-		}
-		return nil
-	}
+	targetPortsInt, targetPortsStr := c.getTargetPortsForServicesOfPod(obj)
 	klog.V(2).Infof("Pod %s is selected by a Service for which NodePortLocal is enabled", key)
 
-	var err error
 	var nodePort int
 	podPorts := make(map[int]struct{})
 	podContainers := pod.Spec.Containers
@@ -420,33 +464,65 @@ func (c *NPLController) handleAddUpdatePod(key string, obj interface{}) error {
 
 	nplAnnotationsRequired := []NPLAnnotation{}
 
-	// first, check which rules are needed based on the Pod specification (ignoring NPL
-	// annotations) and make sure they are present. As we do so, we build the expected list of
-	// NPL annotations for the Pod.
+	hostPorts := make(map[string]int)
 	for _, container := range podContainers {
 		for _, cport := range container.Ports {
-			port := int(cport.ContainerPort)
-			podPorts[port] = struct{}{}
-			portData := c.portTable.GetEntryByPodIPPort(podIP, int(cport.ContainerPort))
-			if portData == nil { // rule does not exist
-				if int(cport.HostPort) > 0 {
-					klog.V(4).Infof("Host Port is defined for Container %s in Pod %s, thus extra NPL port is not allocated", container.Name, key)
-					nodePort = int(cport.HostPort)
-				} else {
-					nodePort, err = c.portTable.AddRule(podIP, port)
-					if err != nil {
-						return fmt.Errorf("failed to add rule for Pod %s: %v", key, err)
-					}
-				}
-			} else {
-				nodePort = portData.NodePort
+			portProtoInt := buildPortProto(fmt.Sprint(cport.ContainerPort), string(cport.Protocol))
+			if int(cport.HostPort) > 0 {
+				klog.V(4).Infof("Host Port is defined for Container %s in Pod %s, thus extra NPL port is not allocated", container.Name, key)
+				hostPorts[portProtoInt] = int(cport.HostPort)
 			}
-			nplAnnotationsRequired = append(nplAnnotationsRequired, NPLAnnotation{
-				PodPort:  port,
-				NodeIP:   pod.Status.HostIP,
-				NodePort: nodePort,
-			})
+			if cport.Name == "" {
+				continue
+			}
+			portProtoStr := buildPortProto(cport.Name, string(cport.Protocol))
+			if targetPortsStr.Has(portProtoStr) {
+				targetPortsInt.Insert(portProtoInt)
+			}
 		}
+	}
+
+	// targetPortsInt contains list of all ports that needs to be exposed for the Pod, including container ports
+	// for named ports present in targetPortsStr. If it is empty, then all existing rules and annotations for the
+	// Pod have to be cleaned up. If a Service uses a named target port that doesn't match any named container port
+	// for the current Pod, no corresponding entry will be added to the targetPortsInt set by the code above.
+	if len(targetPortsInt) == 0 {
+		if err := c.deleteAllPortRulesIfAny(podIP); err != nil {
+			return err
+		}
+		if _, exists := pod.Annotations[NPLAnnotationKey]; exists {
+			return c.cleanupNPLAnnotationForPod(pod)
+		}
+		return nil
+	}
+
+	// first, check which rules are needed based on the target ports of the Services selecting the Pod
+	// (ignoring NPL annotations) and make sure they are present. As we do so, we build the expected list of
+	// NPL annotations for the Pod.
+	for _, targetPort := range targetPortsInt.List() {
+		port, _, err := parsePortProto(targetPort)
+		if err != nil {
+			return fmt.Errorf("failed to parse port number and protocol from %s for Pod %s: %v", targetPort, key, err)
+		}
+		podPorts[port] = struct{}{}
+		portData := c.portTable.GetEntryByPodIPPort(podIP, port)
+		if portData == nil {
+			if hport, ok := hostPorts[targetPort]; ok {
+				nodePort = hport
+			} else {
+				nodePort, err = c.portTable.AddRule(podIP, port)
+				if err != nil {
+					return fmt.Errorf("failed to add rule for Pod %s: %v", key, err)
+				}
+			}
+		} else {
+			nodePort = portData.NodePort
+		}
+		nplAnnotationsRequired = append(nplAnnotationsRequired, NPLAnnotation{
+			PodPort:  port,
+			NodeIP:   pod.Status.HostIP,
+			NodePort: nodePort,
+		})
 	}
 
 	// second, delete any existing rule that is not needed based on the current Pod
@@ -472,18 +548,27 @@ func (c *NPLController) handleAddUpdatePod(key string, obj interface{}) error {
 	return nil
 }
 
-// GetPodsAndGenRules fetches all the Pods on this Node and looks for valid NodePortLocal
+// waitForRulesInitialization fetches all the Pods on this Node and looks for valid NodePortLocal
 // annotations. If they exist, with a valid Node port, it adds the Node port to the port table and
 // rules. If the NodePortLocal annotation is invalid (cannot be unmarshalled), the annotation is
 // cleared. If the Node port is invalid (maybe the port range was changed and the Agent was
 // restarted), the annotation is ignored and will be removed by the Pod event handlers. The Pod
 // event handlers will also take care of allocating a new Node port if required.
-func (c *NPLController) GetPodsAndGenRules() error {
+// The function is meant to be called during Controller initialization, after the caches have
+// synced. It will block until iptables rules have been synced successfully based on the listed
+// Pods. After it returns, the Controller should start handling events. In case of an unexpected
+// error, the function can return early or may not complete initialization. The Controller's event
+// handlers are able to recover from these errors.
+func (c *NPLController) waitForRulesInitialization() {
+	klog.InfoS("Will fetch Pods and generate NodePortLocal rules for these Pods")
+
 	podList, err := c.podLister.List(labels.Everything())
 	if err != nil {
-		return fmt.Errorf("error in fetching the Pods for Node %s: %v", c.nodeName, err)
+		klog.ErrorS(err, "Error when listing Pods for Node")
 	}
 
+	// in case of an error when listing Pods above, allNPLPorts will be
+	// empty and all NPL iptables rules will be deleted.
 	allNPLPorts := []rules.PodNodePort{}
 	for i := range podList {
 		// For each Pod:
@@ -497,12 +582,11 @@ func (c *NPLController) GetPodsAndGenRules() error {
 			continue
 		}
 		nplData := []NPLAnnotation{}
-		err := json.Unmarshal([]byte(nplAnnotation), &nplData)
-		if err != nil {
+		if err := json.Unmarshal([]byte(nplAnnotation), &nplData); err != nil {
+			klog.InfoS("Found invalid NodePortLocal annotation for Pod that cannot be parsed, cleaning it up", "pod", klog.KObj(pod))
 			// if there's an error in this NodePortLocal annotation, clean it up
-			err := c.cleanupNPLAnnotationForPod(pod)
-			if err != nil {
-				return err
+			if err := c.cleanupNPLAnnotationForPod(pod); err != nil {
+				klog.ErrorS(err, "Error when cleaning up NodePortLocal annotation for Pod", "pod", klog.KObj(pod))
 			}
 			continue
 		}
@@ -511,34 +595,30 @@ func (c *NPLController) GetPodsAndGenRules() error {
 			if npl.NodePort > c.portTable.EndPort || npl.NodePort < c.portTable.StartPort {
 				// ignoring annotation for now, it will be removed by the first call
 				// to handleAddUpdatePod
-				klog.V(2).Infof("Found invalid NodePortLocal annotation for Pod %s/%s: %s, ignoring it", pod.Namespace, pod.Name, nplAnnotation)
+				klog.V(2).InfoS("Found NodePortLocal annotation for which the allocated port doesn't fall into the configured range", "pod", klog.KObj(pod))
 				continue
-			} else {
-				allNPLPorts = append(allNPLPorts, rules.PodNodePort{
-					NodePort: npl.NodePort,
-					PodPort:  npl.PodPort,
-					PodIP:    pod.Status.PodIP,
-				})
 			}
+			allNPLPorts = append(allNPLPorts, rules.PodNodePort{
+				NodePort: npl.NodePort,
+				PodPort:  npl.PodPort,
+				PodIP:    pod.Status.PodIP,
+			})
 		}
 	}
 
-	if err := c.addRulesForNPLPorts(allNPLPorts); err != nil {
-		return err
+	rulesInitialized := make(chan struct{})
+	if err := c.addRulesForNPLPorts(allNPLPorts, rulesInitialized); err != nil {
+		klog.ErrorS(err, "Cannot install NodePortLocal rules")
+		return
 	}
 
-	return nil
+	klog.InfoS("Waiting for initialization of NodePortLocal rules to complete")
+	<-rulesInitialized
+	klog.InfoS("Initialization of NodePortLocal rules successful")
 }
 
-func (c *NPLController) addRulesForNPLPorts(allNPLPorts []rules.PodNodePort) error {
-	for _, nplPort := range allNPLPorts {
-		c.portTable.AddUpdateEntry(nplPort.NodePort, nplPort.PodPort, nplPort.PodIP)
-	}
-
-	if err := c.portTable.PodPortRules.AddAllRules(allNPLPorts); err != nil {
-		return err
-	}
-	return nil
+func (c *NPLController) addRulesForNPLPorts(allNPLPorts []rules.PodNodePort, synced chan<- struct{}) error {
+	return c.portTable.RestoreRules(allNPLPorts, synced)
 }
 
 // cleanupNPLAnnotationForPod removes the NodePortLocal annotation from the Pod's annotations map entirely.

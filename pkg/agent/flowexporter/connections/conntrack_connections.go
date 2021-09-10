@@ -57,6 +57,7 @@ func NewConntrackConnectionStore(
 	proxier proxy.Proxier,
 	npQuerier querier.AgentNetworkPolicyInfoQuerier,
 	pollInterval time.Duration,
+	staleConnectionTimeout time.Duration,
 ) *ConntrackConnectionStore {
 	return &ConntrackConnectionStore{
 		flowRecords:          flowRecords,
@@ -65,7 +66,7 @@ func NewConntrackConnectionStore(
 		v6Enabled:            v6Enabled,
 		networkPolicyQuerier: npQuerier,
 		pollInterval:         pollInterval,
-		connectionStore:      NewConnectionStore(ifaceStore, proxier),
+		connectionStore:      NewConnectionStore(ifaceStore, proxier, staleConnectionTimeout),
 	}
 }
 
@@ -100,12 +101,28 @@ func (cs *ConntrackConnectionStore) Run(stopCh <-chan struct{}) {
 // TODO: As optimization, only poll invalid/closed connections during every poll, and poll the established connections right before the export.
 func (cs *ConntrackConnectionStore) Poll() ([]int, error) {
 	klog.V(2).Infof("Polling conntrack")
-	// Reset IsPresent flag for all connections in connection map before dumping flows in conntrack module.
-	// if the connection does not exist in conntrack table and has been exported, we will delete it from connection map.
+	// Reset IsPresent flag for all connections in connection map before dumping
+	// flows in conntrack module. If the connection does not exist in conntrack
+	// table and has been exported, then we will delete it from connection map.
+	// In addition, if the connection was not exported for a specific time period,
+	// then we consider it to be stale and delete it.
 	deleteIfStaleOrResetConn := func(key flowexporter.ConnectionKey, conn *flowexporter.Connection) error {
-		if !conn.IsPresent && conn.DoneExport {
-			if err := cs.DeleteConnWithoutLock(key); err != nil {
-				return err
+		if !conn.IsPresent {
+			if conn.DyingAndDoneExport {
+				if err := cs.DeleteConnWithoutLock(key); err != nil {
+					return err
+				}
+			} else {
+				record, exists := cs.flowRecords.GetFlowRecordFromMap(&key)
+				if exists {
+					// Delete the connection if it was not exported for the time
+					// period as specified by the stale connection timeout.
+					if time.Since(record.LastExportTime) >= cs.staleConnectionTimeout {
+						// Ignore error if flow record not found.
+						cs.flowRecords.DeleteFlowRecordFromMap(&key)
+						delete(cs.connections, key)
+					}
+				}
 			}
 		} else {
 			conn.IsPresent = false
@@ -214,7 +231,7 @@ func (cs *ConntrackConnectionStore) AddOrUpdateConn(conn *flowexporter.Connectio
 		klog.V(4).Infof("Antrea flow updated: %v", existingConn)
 	} else {
 		cs.fillPodInfo(conn)
-		if conn.Mark == openflow.ServiceCTMark {
+		if conn.Mark == openflow.ServiceCTMark.GetValue() {
 			clusterIP := conn.DestinationServiceAddress.String()
 			svcPort := conn.DestinationServicePort
 			protocol, err := lookupServiceProtocol(conn.FlowKey.Protocol)
@@ -226,7 +243,10 @@ func (cs *ConntrackConnectionStore) AddOrUpdateConn(conn *flowexporter.Connectio
 			}
 		}
 		cs.addNetworkPolicyMetadata(conn)
-
+		if conn.StartTime.IsZero() {
+			conn.StartTime = time.Now()
+			conn.StopTime = time.Now()
+		}
 		metrics.TotalAntreaConnectionsInConnTrackTable.Inc()
 		klog.V(4).Infof("New Antrea flow added: %v", conn)
 		// Add new antrea connection to connection store
@@ -244,17 +264,4 @@ func (cs *ConntrackConnectionStore) DeleteConnWithoutLock(connKey flowexporter.C
 	delete(cs.connections, connKey)
 	metrics.TotalAntreaConnectionsInConnTrackTable.Dec()
 	return nil
-}
-
-// SetExportDone sets DoneExport field of conntrack connection to true given the connection key.
-func (cs *ConntrackConnectionStore) SetExportDone(connKey flowexporter.ConnectionKey) error {
-	cs.mutex.Lock()
-	defer cs.mutex.Unlock()
-
-	if conn, found := cs.connections[connKey]; !found {
-		return fmt.Errorf("connection with key %v does not exist in connection map", connKey)
-	} else {
-		conn.DoneExport = true
-		return nil
-	}
 }

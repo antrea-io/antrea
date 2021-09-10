@@ -18,9 +18,9 @@ import (
 	"encoding/binary"
 	"errors"
 
-	"github.com/contiv/libOpenflow/protocol"
-	"github.com/contiv/libOpenflow/util"
-	"github.com/contiv/ofnet/ofctrl"
+	"antrea.io/libOpenflow/protocol"
+	"antrea.io/libOpenflow/util"
+	"antrea.io/ofnet/ofctrl"
 )
 
 const (
@@ -51,7 +51,7 @@ func GetTCPHeaderData(ipPkt util.Message) (tcpSrcPort, tcpDstPort uint16, tcpSeq
 	return tcpIn.PortSrc, tcpIn.PortDst, tcpIn.SeqNum, tcpIn.AckNum, tcpIn.Code, nil
 }
 
-func getUDPHeaderData(ipPkt util.Message) (udpSrcPort, udpDstPort uint16, err error) {
+func GetUDPHeaderData(ipPkt util.Message) (udpSrcPort, udpDstPort uint16, err error) {
 	var udpIn *protocol.UDP
 	switch typedIPPkt := ipPkt.(type) {
 	case *protocol.IPv4:
@@ -113,7 +113,7 @@ func ParsePacketIn(pktIn *ofctrl.PacketIn) (*Packet, error) {
 	if packet.IPProto == protocol.Type_TCP {
 		packet.SourcePort, packet.DestinationPort, _, _, packet.TCPFlags, err = GetTCPHeaderData(pktIn.Data.Data)
 	} else if packet.IPProto == protocol.Type_UDP {
-		packet.SourcePort, packet.DestinationPort, err = getUDPHeaderData(pktIn.Data.Data)
+		packet.SourcePort, packet.DestinationPort, err = GetUDPHeaderData(pktIn.Data.Data)
 	} else if packet.IPProto == protocol.Type_ICMP || packet.IPProto == protocol.Type_IPv6ICMP {
 		_, _, packet.ICMPEchoID, packet.ICMPEchoSeq, err = getICMPHeaderData(pktIn.Data.Data)
 	}

@@ -35,6 +35,7 @@ type SupportBundle struct {
 
 	Status   BundleStatus `json:"status,omitempty"`
 	Sum      string       `json:"sum,omitempty"`
+	Since    string       `json:"since,omitempty"`
 	Size     uint32       `json:"size,omitempty"`
 	Filepath string       `json:"-"`
 }

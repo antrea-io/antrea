@@ -43,7 +43,6 @@ protoc --go_out=plugins=grpc:. pkg/apis/cni/v1beta1/cni.proto
 $GOPATH/bin/client-gen \
   --clientset-name versioned \
   --input-base "${ANTREA_PKG}/pkg/apis/" \
-  --input "controlplane/v1beta1" \
   --input "controlplane/v1beta2" \
   --input "system/v1beta1" \
   --input "crd/v1alpha1" \
@@ -80,7 +79,6 @@ $GOPATH/bin/informer-gen \
 
 $GOPATH/bin/deepcopy-gen \
   --input-dirs "${ANTREA_PKG}/pkg/apis/controlplane" \
-  --input-dirs "${ANTREA_PKG}/pkg/apis/controlplane/v1beta1" \
   --input-dirs "${ANTREA_PKG}/pkg/apis/controlplane/v1beta2" \
   --input-dirs "${ANTREA_PKG}/pkg/apis/system/v1beta1" \
   --input-dirs "${ANTREA_PKG}/pkg/apis/crd/v1alpha1" \
@@ -93,13 +91,12 @@ $GOPATH/bin/deepcopy-gen \
   --go-header-file hack/boilerplate/license_header.go.txt
 
 $GOPATH/bin/conversion-gen  \
-  --input-dirs "${ANTREA_PKG}/pkg/apis/controlplane/v1beta2,${ANTREA_PKG}/pkg/apis/controlplane/v1beta1,${ANTREA_PKG}/pkg/apis/controlplane/" \
+  --input-dirs "${ANTREA_PKG}/pkg/apis/controlplane/v1beta2,${ANTREA_PKG}/pkg/apis/controlplane/" \
   --input-dirs "${ANTREA_PKG}/pkg/apis/stats/v1alpha1,${ANTREA_PKG}/pkg/apis/stats/" \
   -O zz_generated.conversion \
   --go-header-file hack/boilerplate/license_header.go.txt
 
 $GOPATH/bin/openapi-gen  \
-  --input-dirs "${ANTREA_PKG}/pkg/apis/controlplane/v1beta1" \
   --input-dirs "${ANTREA_PKG}/pkg/apis/controlplane/v1beta2" \
   --input-dirs "${ANTREA_PKG}/pkg/apis/system/v1beta1" \
   --input-dirs "${ANTREA_PKG}/pkg/apis/stats/v1alpha1" \
@@ -115,7 +112,6 @@ $GOPATH/bin/client-gen \
   --clientset-name versioned \
   --input-base "${ANTREA_PKG}/pkg/legacyapis/" \
   --input "clusterinformation/v1beta1" \
-  --input "controlplane/v1beta1" \
   --input "controlplane/v1beta2" \
   --input "system/v1beta1" \
   --input "security/v1alpha1" \
@@ -162,11 +158,13 @@ MOCKGEN_TARGETS=(
   "pkg/agent/cniserver/ipam IPAMDriver testing"
   "pkg/agent/flowexporter/connections ConnTrackDumper,NetFilterConnTrack testing"
   "pkg/agent/interfacestore InterfaceStore testing"
+  "pkg/agent/nodeportlocal/portcache LocalPortOpener testing"
   "pkg/agent/nodeportlocal/rules PodPortRules testing"
   "pkg/agent/openflow Client,OFEntryOperations testing"
   "pkg/agent/proxy Proxier testing"
   "pkg/agent/querier AgentQuerier testing"
   "pkg/agent/route Interface testing"
+  "pkg/agent/controller/egress/ipassigner IPAssigner testing"
   "pkg/antctl AntctlClient ."
   "pkg/controller/networkpolicy EndpointQuerier testing"
   "pkg/controller/querier ControllerQuerier testing"
@@ -213,7 +211,6 @@ go mod vendor
 # renaming the vendor directory.
 mv vendor /tmp/includes
 PACKAGES="${ANTREA_PKG}/pkg/apis/stats/v1alpha1=${ANTREA_PROTO_PKG}.pkg.apis.stats.v1alpha1,\
-${ANTREA_PKG}/pkg/apis/controlplane/v1beta1=${ANTREA_PROTO_PKG}.pkg.apis.controlplane.v1beta1,\
 ${ANTREA_PKG}/pkg/apis/controlplane/v1beta2=${ANTREA_PROTO_PKG}.pkg.apis.controlplane.v1beta2"
 $GOPATH/bin/go-to-protobuf \
   --proto-import /tmp/includes \

@@ -1,3 +1,4 @@
+ARG GO_VERSION
 FROM ubuntu:20.04 as protoc
 
 RUN apt-get update && \
@@ -10,10 +11,10 @@ RUN PROTOBUF_VERSION=3.0.2; ZIPNAME="protoc-${PROTOBUF_VERSION}-linux-x86_64.zip
   chmod -R +rX /tmp/protoc
 
 
-FROM golang:1.15
+FROM golang:${GO_VERSION}
 
 LABEL maintainer="Antrea <projectantrea-dev@googlegroups.com>"
-LABEL description="A Docker image based on golang 1.15 which includes codegen tools."
+LABEL description="A Docker image based on the golang image, which includes codegen tools."
 
 ENV GO111MODULE=on
 
@@ -30,7 +31,7 @@ RUN go get k8s.io/code-generator/cmd/client-gen@kubernetes-$K8S_VERSION && \
     go get k8s.io/code-generator/cmd/go-to-protobuf@kubernetes-$K8S_VERSION && \
     go get k8s.io/code-generator/cmd/go-to-protobuf/protoc-gen-gogo@kubernetes-$K8S_VERSION && \
     go get github.com/golang/mock/mockgen@v1.4.4 && \
-    go get github.com/golang/protobuf/protoc-gen-go@v1.3.2 && \
+    go get github.com/golang/protobuf/protoc-gen-go@v1.5.2 && \
     go get golang.org/x/tools/cmd/goimports
 
 COPY --from=protoc /tmp/protoc/bin /usr/local/bin

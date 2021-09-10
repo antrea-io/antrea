@@ -1,3 +1,4 @@
+//go:build windows
 // +build windows
 
 // Copyright 2020 Antrea Authors
@@ -22,13 +23,13 @@ import (
 	"strings"
 
 	"github.com/Microsoft/hcsshim"
-	"github.com/rakelkar/gonetsh/netroute"
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/util"
 	"antrea.io/antrea/pkg/ovs/ovsctl"
+	"antrea.io/antrea/pkg/util/ip"
 )
 
 // prepareHostNetwork creates HNS Network for containers.
@@ -47,8 +48,10 @@ func (i *Initializer) prepareHostNetwork() error {
 	if _, ok := err.(hcsshim.NetworkNotFoundError); !ok {
 		return err
 	}
-	// Get uplink network configuration.
-	_, adapter, err := util.GetIPNetDeviceFromIP(i.nodeConfig.NodeIPAddr.IP)
+	// Get uplink network configuration. The uplink interface is the one used for transporting Pod traffic across Nodes.
+	// Use the interface specified with "transportInterface" in the configuration if configured, otherwise the interface
+	// configured with NodeIP is used as uplink.
+	_, _, adapter, err := util.GetIPNetDeviceFromIP(&ip.DualStackIPs{IPv4: i.nodeConfig.NodeTransportIPv4Addr.IP})
 	if err != nil {
 		return err
 	}
@@ -67,11 +70,16 @@ func (i *Initializer) prepareHostNetwork() error {
 	}
 	i.nodeConfig.UplinkNetConfig.Name = adapter.Name
 	i.nodeConfig.UplinkNetConfig.MAC = adapter.HardwareAddr
-	i.nodeConfig.UplinkNetConfig.IP = i.nodeConfig.NodeIPAddr
+	i.nodeConfig.UplinkNetConfig.IP = i.nodeConfig.NodeTransportIPv4Addr
 	i.nodeConfig.UplinkNetConfig.Index = adapter.Index
 	defaultGW, err := util.GetDefaultGatewayByInterfaceIndex(adapter.Index)
 	if err != nil {
-		return err
+		if strings.Contains(err.Error(), "No matching MSFT_NetRoute objects found") {
+			klog.InfoS("No default gateway found on interface", "interface", adapter.Name)
+			defaultGW = ""
+		} else {
+			return err
+		}
 	}
 	i.nodeConfig.UplinkNetConfig.Gateway = defaultGW
 	dnsServers, err := util.GetDNServersByInterfaceIndex(adapter.Index)
@@ -90,7 +98,7 @@ func (i *Initializer) prepareHostNetwork() error {
 	if subnetCIDR == nil {
 		return fmt.Errorf("failed to find valid IPv4 PodCIDR")
 	}
-	return util.PrepareHNSNetwork(subnetCIDR, i.nodeConfig.NodeIPAddr, adapter)
+	return util.PrepareHNSNetwork(subnetCIDR, i.nodeConfig.NodeTransportIPv4Addr, adapter)
 }
 
 // prepareOVSBridge adds local port and uplink to ovs bridge.
@@ -149,13 +157,13 @@ func (i *Initializer) prepareOVSBridge() error {
 		return err
 	}
 	// Create uplink port.
-	uplinkPortUUId, err := i.ovsBridgeClient.CreateUplinkPort(uplink, config.UplinkOFPort, nil)
+	uplinkPortUUID, err := i.ovsBridgeClient.CreateUplinkPort(uplink, config.UplinkOFPort, nil)
 	if err != nil {
 		klog.Errorf("Failed to add uplink port %s: %v", uplink, err)
 		return err
 	}
 	uplinkInterface := interfacestore.NewUplinkInterface(uplink)
-	uplinkInterface.OVSPortConfig = &interfacestore.OVSPortConfig{uplinkPortUUId, config.UplinkOFPort} //nolint: govet
+	uplinkInterface.OVSPortConfig = &interfacestore.OVSPortConfig{uplinkPortUUID, config.UplinkOFPort} //nolint: govet
 	i.ifaceStore.AddInterface(uplinkInterface)
 	ovsCtlClient := ovsctl.NewClient(i.ovsBridge)
 
@@ -207,7 +215,7 @@ func (i *Initializer) initHostNetworkFlows() error {
 
 // getTunnelLocalIP returns local_ip of tunnel port
 func (i *Initializer) getTunnelPortLocalIP() net.IP {
-	return i.nodeConfig.NodeIPAddr.IP
+	return i.nodeConfig.NodeTransportIPv4Addr.IP
 }
 
 // saveHostRoutes saves routes which are configured on uplink interface before
@@ -215,9 +223,7 @@ func (i *Initializer) getTunnelPortLocalIP() net.IP {
 // The routes will be restored on OVS bridge interface after the IP configuration
 // is moved to the OVS bridge.
 func (i *Initializer) saveHostRoutes() error {
-	nr := netroute.New()
-	defer nr.Exit()
-	routes, err := nr.GetNetRoutesAll()
+	routes, err := util.GetNetRoutesAll()
 	if err != nil {
 		return err
 	}
@@ -248,17 +254,36 @@ func (i *Initializer) saveHostRoutes() error {
 // the antrea network initialize stage.
 // The backup routes are restored after the IP configuration change.
 func (i *Initializer) restoreHostRoutes() error {
-	nr := netroute.New()
-	defer nr.Exit()
 	brInterface, err := net.InterfaceByName(i.ovsBridge)
 	if err != nil {
 		return nil
 	}
 	for _, route := range i.nodeConfig.UplinkNetConfig.Routes {
-		rt := route.(netroute.Route)
-		if err := nr.NewNetRoute(brInterface.Index, rt.DestinationSubnet, rt.GatewayAddress); err != nil {
+		rt := route.(util.Route)
+		newRt := util.Route{
+			LinkIndex:         brInterface.Index,
+			DestinationSubnet: rt.DestinationSubnet,
+			GatewayAddress:    rt.GatewayAddress,
+			RouteMetric:       rt.RouteMetric,
+		}
+		if err := util.NewNetRoute(&newRt); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func GetTransportIPNetDeviceByName(ifaceName string, ovsBridgeName string) (*net.IPNet, *net.IPNet, *net.Interface, error) {
+	// Find transport Interface in the order: ifaceName -> "vEthernet (ifaceName)" -> br-int. Return immediately if
+	// an interface using the specified name exists. Using "vEthernet (ifaceName)" or br-int is for restart agent case.
+	for _, name := range []string{ifaceName, fmt.Sprintf("vEthernet (%s)", ifaceName), ovsBridgeName} {
+		ipNet, _, link, err := util.GetIPNetDeviceByName(name)
+		if err == nil {
+			return ipNet, nil, link, nil
+		}
+		if !strings.Contains(err.Error(), "no such network interface") {
+			return nil, nil, nil, err
+		}
+	}
+	return nil, nil, nil, fmt.Errorf("unable to find local IP and device")
 }

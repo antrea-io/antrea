@@ -40,24 +40,6 @@ const (
 	testIdleFlowTimeout   = 1 * time.Second
 )
 
-func makeTuple(srcIP *net.IP, dstIP *net.IP, protoID uint8, srcPort uint16, dstPort uint16) (flowexporter.Tuple, flowexporter.Tuple) {
-	tuple := flowexporter.Tuple{
-		SourceAddress:      *srcIP,
-		DestinationAddress: *dstIP,
-		Protocol:           protoID,
-		SourcePort:         srcPort,
-		DestinationPort:    dstPort,
-	}
-	revTuple := flowexporter.Tuple{
-		SourceAddress:      *dstIP,
-		DestinationAddress: *srcIP,
-		Protocol:           protoID,
-		SourcePort:         dstPort,
-		DestinationPort:    srcPort,
-	}
-	return tuple, revTuple
-}
-
 func TestFlowExporter_sendTemplateSet(t *testing.T) {
 	for _, tc := range []struct {
 		v4Enabled bool
@@ -100,7 +82,7 @@ func sendTemplateSet(t *testing.T, ctrl *gomock.Controller, mockIPFIXExpProc *ip
 	flowExp.ipfixSet = mockTempSet
 	// Following consists of all elements that are in IANAInfoElements and AntreaInfoElements (globals)
 	// Only the element name is needed, other arguments have dummy values.
-	var elemList = make([]*ipfixentities.InfoElementWithValue, 0)
+	elemList := getElementList(isIPv6)
 	ianaIE := IANAInfoElementsIPv4
 	antreaIE := AntreaInfoElementsIPv4
 	if isIPv6 {
@@ -108,15 +90,12 @@ func sendTemplateSet(t *testing.T, ctrl *gomock.Controller, mockIPFIXExpProc *ip
 		antreaIE = AntreaInfoElementsIPv6
 	}
 	for i, ie := range ianaIE {
-		elemList = append(elemList, ipfixentities.NewInfoElementWithValue(ipfixentities.NewInfoElement(ie, 0, 0, ipfixregistry.IANAEnterpriseID, 0), nil))
 		mockIPFIXRegistry.EXPECT().GetInfoElement(ie, ipfixregistry.IANAEnterpriseID).Return(elemList[i].Element, nil)
 	}
 	for i, ie := range IANAReverseInfoElements {
-		elemList = append(elemList, ipfixentities.NewInfoElementWithValue(ipfixentities.NewInfoElement(ie, 0, 0, ipfixregistry.IANAReversedEnterpriseID, 0), nil))
 		mockIPFIXRegistry.EXPECT().GetInfoElement(ie, ipfixregistry.IANAReversedEnterpriseID).Return(elemList[i+len(ianaIE)].Element, nil)
 	}
 	for i, ie := range antreaIE {
-		elemList = append(elemList, ipfixentities.NewInfoElementWithValue(ipfixentities.NewInfoElement(ie, 0, 0, ipfixregistry.AntreaEnterpriseID, 0), nil))
 		mockIPFIXRegistry.EXPECT().GetInfoElement(ie, ipfixregistry.AntreaEnterpriseID).Return(elemList[i+len(ianaIE)+len(IANAReverseInfoElements)].Element, nil)
 	}
 	if !isIPv6 {
@@ -143,6 +122,26 @@ func sendTemplateSet(t *testing.T, ctrl *gomock.Controller, mockIPFIXExpProc *ip
 	assert.Len(t, eL, len(ianaIE)+len(IANAReverseInfoElements)+len(antreaIE), "flowExp.elementsList and template record should have same number of elements")
 }
 
+func getElementList(isIPv6 bool) []ipfixentities.InfoElementWithValue {
+	elemList := make([]ipfixentities.InfoElementWithValue, 0)
+	ianaIE := IANAInfoElementsIPv4
+	antreaIE := AntreaInfoElementsIPv4
+	if isIPv6 {
+		ianaIE = IANAInfoElementsIPv6
+		antreaIE = AntreaInfoElementsIPv6
+	}
+	for _, ie := range ianaIE {
+		elemList = append(elemList, ipfixentities.NewInfoElementWithValue(ipfixentities.NewInfoElement(ie, 0, 0, ipfixregistry.IANAEnterpriseID, 0), nil))
+	}
+	for _, ie := range IANAReverseInfoElements {
+		elemList = append(elemList, ipfixentities.NewInfoElementWithValue(ipfixentities.NewInfoElement(ie, 0, 0, ipfixregistry.IANAReversedEnterpriseID, 0), nil))
+	}
+	for _, ie := range antreaIE {
+		elemList = append(elemList, ipfixentities.NewInfoElementWithValue(ipfixentities.NewInfoElement(ie, 0, 0, ipfixregistry.AntreaEnterpriseID, 0), nil))
+	}
+	return elemList
+}
+
 // TestFlowExporter_sendDataRecord tests essentially if element names in the switch-case matches globals
 // IANAInfoElements and AntreaInfoElements.
 func TestFlowExporter_sendDataSet(t *testing.T) {
@@ -167,7 +166,7 @@ func testSendDataSet(t *testing.T, v4Enabled bool, v6Enabled bool) {
 	mockIPFIXRegistry := ipfixtest.NewMockIPFIXRegistry(ctrl)
 
 	var recordv4, recordv6 flowexporter.FlowRecord
-	var elemListv4, elemListv6 []*ipfixentities.InfoElementWithValue
+	var elemListv4, elemListv6 []ipfixentities.InfoElementWithValue
 	if v4Enabled {
 		recordv4 = getFlowRecord(getConnection(false, true, 302, 6, "ESTABLISHED"), false, true)
 		elemListv4 = getElemList(IANAInfoElementsIPv4, AntreaInfoElementsIPv4)
@@ -188,9 +187,9 @@ func testSendDataSet(t *testing.T, v4Enabled bool, v6Enabled bool) {
 		ipfixSet:       mockDataSet,
 	}
 
-	sendDataSet := func(elemList []*ipfixentities.InfoElementWithValue, templateID uint16, record flowexporter.FlowRecord) {
+	sendDataSet := func(elemList []ipfixentities.InfoElementWithValue, templateID uint16, record flowexporter.FlowRecord) {
 		mockDataSet.EXPECT().AddRecord(gomock.AssignableToTypeOf(elemList), templateID).DoAndReturn(
-			func(elements []*ipfixentities.InfoElementWithValue, templateID uint16) interface{} {
+			func(elements []ipfixentities.InfoElementWithValue, templateID uint16) interface{} {
 				for i, ieWithValue := range elements {
 					assert.Equal(t, ieWithValue.Element.Name, elemList[i].Element.Name)
 					assert.Equal(t, ieWithValue.Value, elemList[i].Value)
@@ -213,10 +212,10 @@ func testSendDataSet(t *testing.T, v4Enabled bool, v6Enabled bool) {
 	}
 }
 
-func getElemList(ianaIE []string, antreaIE []string) []*ipfixentities.InfoElementWithValue {
+func getElemList(ianaIE []string, antreaIE []string) []ipfixentities.InfoElementWithValue {
 	// Following consists of all elements that are in IANAInfoElements and AntreaInfoElements (globals)
 	// Need only element name and other fields are set to dummy values
-	elemList := make([]*ipfixentities.InfoElementWithValue, len(ianaIE)+len(IANAReverseInfoElements)+len(antreaIE))
+	elemList := make([]ipfixentities.InfoElementWithValue, len(ianaIE)+len(IANAReverseInfoElements)+len(antreaIE))
 	for i, ie := range ianaIE {
 		elemList[i] = ipfixentities.NewInfoElementWithValue(ipfixentities.NewInfoElement(ie, 0, 0, 0, 0), nil)
 	}
@@ -297,14 +296,14 @@ func getConnection(isIPv6 bool, isPresent bool, statusFlag uint32, protoID uint8
 	return conn
 }
 
-func getDenyConnection(isIPv6 bool, isActive bool) *flowexporter.Connection {
+func getDenyConnection(isIPv6 bool, isActive bool, protoID uint8) *flowexporter.Connection {
 	var tuple, _ flowexporter.Tuple
 	if !isIPv6 {
-		tuple, _ = makeTuple(&net.IP{1, 2, 3, 4}, &net.IP{4, 3, 2, 1}, 6, 65280, 255)
+		tuple = flowexporter.Tuple{SourceAddress: net.IP{1, 2, 3, 4}, DestinationAddress: net.IP{4, 3, 2, 1}, Protocol: 6, SourcePort: 65280, DestinationPort: 255}
 	} else {
 		srcIP := net.ParseIP("2001:0:3238:dfe1:63::fefb")
 		dstIP := net.ParseIP("2001:0:3238:dfe1:63::fefc")
-		tuple, _ = makeTuple(&srcIP, &dstIP, 6, 65280, 255)
+		tuple = flowexporter.Tuple{SourceAddress: srcIP, DestinationAddress: dstIP, Protocol: protoID, SourcePort: 65280, DestinationPort: 255}
 	}
 	conn := &flowexporter.Connection{
 		FlowKey:        tuple,
@@ -344,7 +343,7 @@ func TestFlowExporter_sendFlowRecords(t *testing.T) {
 }
 
 func testSendFlowRecords(t *testing.T, v4Enabled bool, v6Enabled bool) {
-	var elemListv4, elemListv6 []*ipfixentities.InfoElementWithValue
+	var elemListv4, elemListv6 []ipfixentities.InfoElementWithValue
 	if v4Enabled {
 		elemListv4 = getElemList(IANAInfoElementsIPv4, AntreaInfoElementsIPv4)
 	}
@@ -378,7 +377,7 @@ func runSendFlowRecordTests(t *testing.T, flowExp *flowExporter, isIPv6 bool) {
 	flowExp.process = mockIPFIXExpProc
 	flowExp.ipfixSet = mockDataSet
 	mockConnDumper := connectionstest.NewMockConnTrackDumper(ctrl)
-	flowExp.conntrackConnStore = connections.NewConntrackConnectionStore(mockConnDumper, flowrecords.NewFlowRecords(), nil, !isIPv6, isIPv6, nil, nil, 1)
+	flowExp.conntrackConnStore = connections.NewConntrackConnectionStore(mockConnDumper, flowrecords.NewFlowRecords(), nil, !isIPv6, isIPv6, nil, nil, 1, 1)
 
 	tests := []struct {
 		name               string
@@ -453,12 +452,12 @@ func runSendFlowRecordTests(t *testing.T, flowExp *flowExporter, isIPv6 bool) {
 			connKey := flowexporter.NewConnectionKey(conn)
 			flowExp.conntrackConnStore.AddOrUpdateConn(conn)
 			flowExp.flowRecords = flowrecords.NewFlowRecords()
-			err := flowExp.flowRecords.AddOrUpdateFlowRecord(connKey, conn)
+			err := flowExp.conntrackConnStore.ForAllConnectionsDo(flowExp.flowRecords.AddOrUpdateFlowRecord)
 			assert.NoError(t, err)
 			flowExp.numDataSetsSent = 0
 
-			denyConn := getDenyConnection(isIPv6, tt.isDenyConnActive)
-			flowExp.denyConnStore = connections.NewDenyConnectionStore(nil, nil)
+			denyConn := getDenyConnection(isIPv6, tt.isDenyConnActive, tt.protoID)
+			flowExp.denyConnStore = connections.NewDenyConnectionStore(nil, nil, 0)
 			flowExp.denyConnStore.AddOrUpdateConn(denyConn, denyConn.LastExportTime, denyConn.DeltaBytes)
 			assert.Equal(t, getNumOfConnections(flowExp.denyConnStore), 1)
 
@@ -499,10 +498,12 @@ func runSendFlowRecordTests(t *testing.T, flowExp *flowExporter, isIPv6 bool) {
 				assert.Equal(t, getNumOfConnections(flowExp.denyConnStore), 0)
 			}
 			if tt.isRecordActive && flowexporter.IsConnectionDying(conn) {
+				err = flowExp.conntrackConnStore.ForAllConnectionsDo(flowExp.flowRecords.AddOrUpdateFlowRecord)
+				assert.NoError(t, err)
 				_, recPresent := flowExp.flowRecords.GetFlowRecordFromMap(&connKey)
 				assert.Falsef(t, recPresent, "record should not be in the map")
 				connection, _ := flowExp.conntrackConnStore.GetConnByKey(connKey)
-				assert.True(t, connection.DoneExport)
+				assert.True(t, connection.DyingAndDoneExport)
 			}
 		})
 	}

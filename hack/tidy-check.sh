@@ -23,18 +23,19 @@ pushd "$(dirname "$THIS_DIR")" >/dev/null || exit
 
 PROJECT_RELATIVE_DIR=${1:-.}
 PROJECT_DIR=$(dirname "$THIS_DIR")/$PROJECT_RELATIVE_DIR
-TIDY_COMMAND="cd $PROJECT_RELATIVE_DIR && go mod tidy >> /dev/null 2>&1"
 
 MOD_FILE="$PROJECT_DIR/go.mod"
 SUM_FILE="$PROJECT_DIR/go.sum"
 TMP_DIR="$THIS_DIR/.tmp.tidy-check"
 TMP_MOD_FILE="$TMP_DIR/go.mod"
 TMP_SUM_FILE="$TMP_DIR/go.sum"
-TARGET_GO_VERSION="1.15"
+TARGET_GO_VERSION=$(head -n1 $THIS_DIR/../build/images/deps/go-version)
 TARGET_GO_VERSION_PATTERN="go$TARGET_GO_VERSION*"
 
 # if Go environment variable is set, use it as it is, otherwise default to "go"
 : "${GO:=go}"
+
+TIDY_COMMAND="cd $PROJECT_RELATIVE_DIR && $GO mod tidy >> /dev/null 2>&1"
 
 function echoerr {
   >&2 echo "$@"
@@ -96,6 +97,11 @@ function check {
   MOD_DIFF=$(diff "$MOD_FILE" "$TMP_MOD_FILE")
   SUM_DIFF=$(diff "$SUM_FILE" "$TMP_SUM_FILE")
   if [ -n "$MOD_DIFF" ] || [ -n "$SUM_DIFF" ]; then
+    echo "=== go.mod diff ==="
+    echo $MOD_DIFF
+    echo "=== go.sum diff ==="
+    echo $SUM_DIFF
+
     echoerr "dependencies are not tidy"
     general_help
     clean

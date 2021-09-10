@@ -18,23 +18,23 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/contiv/ofnet/ofctrl"
+	"antrea.io/ofnet/ofctrl"
 	"github.com/stretchr/testify/require"
 )
 
 func TestMatchCTLabelRange(t *testing.T) {
 	for _, tc := range []struct {
-		rng                               Range
+		rng                               *Range
 		expectedLowMask, expectedHighMask uint64
 	}{
-		{rng: Range{0, 0}, expectedLowMask: 0x1, expectedHighMask: 0x0},
-		{rng: Range{1, 1}, expectedLowMask: 0b10, expectedHighMask: 0x0},
-		{rng: Range{127, 127}, expectedLowMask: 0x0, expectedHighMask: 0x8000_0000_0000_0000},
-		{rng: Range{126, 127}, expectedLowMask: 0x0, expectedHighMask: 0xc000_0000_0000_0000},
-		{rng: Range{0, 127}, expectedLowMask: 0xffff_ffff_ffff_ffff, expectedHighMask: 0xffff_ffff_ffff_ffff},
-		{rng: Range{0, 64}, expectedLowMask: 0xffff_ffff_ffff_ffff, expectedHighMask: 0x1},
-		{rng: Range{0, 63}, expectedLowMask: 0xffff_ffff_ffff_ffff, expectedHighMask: 0x0},
-		{rng: Range{64, 127}, expectedLowMask: 0x0, expectedHighMask: 0xffff_ffff_ffff_ffff},
+		{rng: &Range{0, 0}, expectedLowMask: 0x1, expectedHighMask: 0x0},
+		{rng: &Range{1, 1}, expectedLowMask: 0b10, expectedHighMask: 0x0},
+		{rng: &Range{127, 127}, expectedLowMask: 0x0, expectedHighMask: 0x8000_0000_0000_0000},
+		{rng: &Range{126, 127}, expectedLowMask: 0x0, expectedHighMask: 0xc000_0000_0000_0000},
+		{rng: &Range{0, 127}, expectedLowMask: 0xffff_ffff_ffff_ffff, expectedHighMask: 0xffff_ffff_ffff_ffff},
+		{rng: &Range{0, 64}, expectedLowMask: 0xffff_ffff_ffff_ffff, expectedHighMask: 0x1},
+		{rng: &Range{0, 63}, expectedLowMask: 0xffff_ffff_ffff_ffff, expectedHighMask: 0x0},
+		{rng: &Range{64, 127}, expectedLowMask: 0x0, expectedHighMask: 0xffff_ffff_ffff_ffff},
 	} {
 		match := new(ofctrl.FlowMatch)
 		ctLabelRange(0, 0, tc.rng, match)

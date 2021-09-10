@@ -14,30 +14,40 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# This script checks commonly misspelled English words. This script is a
-# slight modification of the kubernetes/hack/verify-spelling.sh.
+# This script checks commonly misspelled English words. This script is inspired
+# by kubernetes/hack/verify-spelling.sh.
 
 set -o errexit
 set -o nounset
 set -o pipefail
 
+# if Go environment variable is set, use it as it is, otherwise default to "go"
+: "${GO:=go}"
 TOOL_VERSION="v0.3.4"
+
+GO_VERSION="$(${GO} version | awk '{print $3}')"
+function version_lt() { test "$(printf '%s\n' "$@" | sort -rV | head -n 1)" != "$1"; }
+
+if version_lt "${GO_VERSION}" "go1.16"; then
+    # See https://golang.org/doc/go-get-install-deprecation
+    echo "Running this script requires Go >= 1.16, please upgrade"
+    exit 1
+fi
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 cd "${ROOT}"
 
 TMP_DIR=$(mktemp -d)
 
+# cleanup
 exitHandler() (
   echo "Cleaning up temporary directory"
   rm -rf "${TMP_DIR}"
 )
 trap exitHandler EXIT
 
-cd "${TMP_DIR}"
-GO111MODULE=on GOBIN="${TMP_DIR}" go get "github.com/client9/misspell/cmd/misspell@${TOOL_VERSION}"
+GOBIN="${TMP_DIR}" ${GO} install "github.com/client9/misspell/cmd/misspell@${TOOL_VERSION}"
 export PATH="${TMP_DIR}:${PATH}"
-cd "${ROOT}"
 
 # Check spelling and ignore skipped files.
 RES=0

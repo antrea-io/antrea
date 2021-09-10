@@ -18,17 +18,13 @@ import (
 	"net"
 	"testing"
 
-	"github.com/contiv/libOpenflow/protocol"
-	"github.com/contiv/libOpenflow/util"
-	"github.com/contiv/ofnet/ofctrl"
+	"antrea.io/libOpenflow/protocol"
+	"antrea.io/libOpenflow/util"
+	"antrea.io/ofnet/ofctrl"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestGetPacketInfo(t *testing.T) {
-	type args struct {
-		pktIn *ofctrl.PacketIn
-		ob    *logInfo
-	}
 	tests := []struct {
 		name       string
 		pktIn      *ofctrl.PacketIn
