@@ -41,10 +41,10 @@ import (
 	clientset "antrea.io/antrea/pkg/client/clientset/versioned"
 	egressinformers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha2"
 	egresslisters "antrea.io/antrea/pkg/client/listers/crd/v1alpha2"
-	"antrea.io/antrea/pkg/controller/egress/ipallocator"
 	"antrea.io/antrea/pkg/controller/grouping"
 	"antrea.io/antrea/pkg/controller/metrics"
 	antreatypes "antrea.io/antrea/pkg/controller/types"
+	"antrea.io/antrea/pkg/ipam/ipallocator"
 )
 
 const (
