@@ -155,7 +155,7 @@ type Client interface {
 	// Pods to the external IP address, and mark the packets to be SNAT'd
 	// with the configured SNAT IPs. On Windows Node, the flows also perform
 	// SNAT with the Openflow NAT action.
-	InstallExternalFlows() error
+	InstallExternalFlows(exceptCIDRs []net.IPNet) error
 
 	// InstallSNATMarkFlows installs flows for a local SNAT IP. On Linux, a
 	// single flow is added to mark the packets tunnelled from remote Nodes
@@ -796,15 +796,24 @@ func (c *client) Initialize(roundInfo types.RoundInfo, nodeConfig *config.NodeCo
 	return connCh, c.initialize()
 }
 
-func (c *client) InstallExternalFlows() error {
+func (c *client) InstallExternalFlows(exceptCIDRs []net.IPNet) error {
 	localGatewayMAC := c.nodeConfig.GatewayConfig.MAC
 
 	var flows []binding.Flow
+	var ipv4CIDRs []net.IPNet
+	var ipv6CIDRs []net.IPNet
+	for _, cidr := range exceptCIDRs {
+		if cidr.IP.To4() == nil {
+			ipv6CIDRs = append(ipv6CIDRs, cidr)
+		} else {
+			ipv4CIDRs = append(ipv4CIDRs, cidr)
+		}
+	}
 	if c.nodeConfig.NodeIPv4Addr != nil && c.nodeConfig.PodIPv4CIDR != nil {
-		flows = c.externalFlows(c.nodeConfig.NodeIPv4Addr.IP, *c.nodeConfig.PodIPv4CIDR, localGatewayMAC)
+		flows = c.externalFlows(c.nodeConfig.NodeIPv4Addr.IP, *c.nodeConfig.PodIPv4CIDR, localGatewayMAC, ipv4CIDRs)
 	}
 	if c.nodeConfig.NodeIPv6Addr != nil && c.nodeConfig.PodIPv6CIDR != nil {
-		flows = append(flows, c.externalFlows(c.nodeConfig.NodeIPv6Addr.IP, *c.nodeConfig.PodIPv6CIDR, localGatewayMAC)...)
+		flows = append(flows, c.externalFlows(c.nodeConfig.NodeIPv6Addr.IP, *c.nodeConfig.PodIPv6CIDR, localGatewayMAC, ipv6CIDRs)...)
 	}
 	if err := c.ofEntryOperations.AddAll(flows); err != nil {
 		return fmt.Errorf("failed to install flows for external communication: %v", err)
