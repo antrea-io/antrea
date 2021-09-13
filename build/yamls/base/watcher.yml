@@ -1,0 +1,34 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: antrea-watcher
+  labels:
+    component: antrea-watcher
+spec:
+  strategy:
+    # Ensure the existing Pod is killed before the new one is created.
+    type: Recreate
+  selector:
+    matchLabels:
+      component: antrea-watcher
+  template:
+    metadata:
+      labels:
+        component: antrea-watcher
+    spec:
+      nodeSelector:
+        kubernetes.io/os: linux
+      serviceAccountName: antrea-watcher
+      containers:
+        - name: antrea-watcher
+          image: antrea
+          resources:
+            requests:
+              cpu: "50m"
+          command: ["antrea-watcher"]
+          env:
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+

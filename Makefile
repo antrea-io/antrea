@@ -50,6 +50,11 @@ antrea-controller:
 	@mkdir -p $(BINDIR)
 	GOOS=linux $(GO) build -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' antrea.io/antrea/cmd/antrea-controller
 
+.PHONY: antrea-watcher
+antrea-watcher:
+	@mkdir -p $(BINDIR)
+	GOOS=linux $(GO) build -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' antrea.io/antrea/cmd/antrea-watcher
+
 .PHONY: .coverage
 .coverage:
 	mkdir -p $(CURDIR)/.coverage

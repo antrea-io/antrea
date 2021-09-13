@@ -2995,6 +2995,14 @@ metadata:
   name: antrea-controller
   namespace: kube-system
 ---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  labels:
+    app: antrea
+  name: antrea-watcher
+  namespace: kube-system
+---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -3705,6 +3713,40 @@ rules:
   - update
 ---
 apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app: antrea
+  name: antrea-watcher
+rules:
+- apiGroups:
+  - apps
+  resourceNames:
+  - antrea-controller
+  resources:
+  - deployments
+  verbs:
+  - get
+  - update
+- apiGroups:
+  - apps
+  resourceNames:
+  - antrea-agent
+  resources:
+  - daemonsets
+  verbs:
+  - get
+  - update
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  verbs:
+  - get
+  - watch
+  - list
+---
+apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
   labels:
@@ -3748,6 +3790,21 @@ roleRef:
 subjects:
 - kind: ServiceAccount
   name: antrea-controller
+  namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    app: antrea
+  name: antrea-watcher
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: antrea-watcher
+subjects:
+- kind: ServiceAccount
+  name: antrea-watcher
   namespace: kube-system
 ---
 apiVersion: v1
@@ -3996,7 +4053,7 @@ metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-dbmkcb65c8
+  name: antrea-config
   namespace: kube-system
 ---
 apiVersion: v1
@@ -4067,7 +4124,7 @@ spec:
             fieldRef:
               fieldPath: spec.serviceAccountName
         - name: ANTREA_CONFIG_MAP_NAME
-          value: antrea-config-dbmkcb65c8
+          value: antrea-config
         image: projects.registry.vmware.com/antrea/antrea-ubuntu:latest
         imagePullPolicy: IfNotPresent
         livenessProbe:
@@ -4118,7 +4175,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-dbmkcb65c8
+          name: antrea-config
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -4129,6 +4186,44 @@ spec:
           path: /var/log/antrea
           type: DirectoryOrCreate
         name: host-var-log-antrea
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: antrea
+    component: antrea-watcher
+  name: antrea-watcher
+  namespace: kube-system
+spec:
+  selector:
+    matchLabels:
+      app: antrea
+      component: antrea-watcher
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: antrea
+        component: antrea-watcher
+    spec:
+      containers:
+      - command:
+        - antrea-watcher
+        env:
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        image: projects.registry.vmware.com/antrea/antrea-ubuntu:latest
+        name: antrea-watcher
+        resources:
+          requests:
+            cpu: 50m
+      nodeSelector:
+        kubernetes.io/os: linux
+      serviceAccountName: antrea-watcher
 ---
 apiVersion: apiregistration.k8s.io/v1
 kind: APIService
@@ -4402,7 +4497,7 @@ spec:
           path: /home/kubernetes/bin
         name: host-cni-bin
       - configMap:
-          name: antrea-config-dbmkcb65c8
+          name: antrea-config
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d

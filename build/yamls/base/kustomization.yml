@@ -6,7 +6,11 @@ resources:
 - controller.yml
 - agent-rbac.yml
 - agent.yml
+- watcher-rbac.yml
+- watcher.yml
 - cluster-identity-reader.yml
+generatorOptions:
+  disableNameSuffixHash: true
 configMapGenerator:
 - files:
   - conf/antrea-controller.conf
