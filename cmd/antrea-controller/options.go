@@ -16,13 +16,26 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"io/ioutil"
+	"net"
+	"strings"
 
 	"github.com/spf13/pflag"
 	"gopkg.in/yaml.v2"
+	netutils "k8s.io/utils/net"
 
 	"antrea.io/antrea/pkg/apis"
 	"antrea.io/antrea/pkg/features"
+)
+
+const (
+	ipamIPv4MaskLo      = 16
+	ipamIPv4MaskHi      = 30
+	ipamIPv4MaskDefault = 24
+	ipamIPv6MaskLo      = 64
+	ipamIPv6MaskHi      = 126
+	ipamIPv6MaskDefault = 64
 )
 
 type Options struct {
@@ -63,6 +76,59 @@ func (o *Options) validate(args []string) error {
 	if len(args) != 0 {
 		return errors.New("no positional arguments are supported")
 	}
+
+	if o.config.NodeIPAM.EnableNodeIPAM {
+		err := o.validateNodeIPAMControllerOptions()
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (o *Options) validateNodeIPAMControllerOptions() error {
+	// Validate ClusterCIDRs
+	cidrSplit := strings.Split(strings.TrimSpace(o.config.NodeIPAM.ClusterCIDRs), ",")
+	cidrs, err := netutils.ParseCIDRs(cidrSplit)
+	if err != nil {
+		return fmt.Errorf("cluster CIDRs %s is invalid", o.config.NodeIPAM.ClusterCIDRs)
+	}
+
+	hasIP4, hasIP6 := false, false
+	for _, cidr := range cidrs {
+		if cidr.IP.To4() == nil {
+			hasIP6 = true
+		} else {
+			hasIP4 = true
+		}
+	}
+	if hasIP4 {
+		if o.config.NodeIPAM.NodeCIDRMaskSizeIPv4 < ipamIPv4MaskLo || o.config.NodeIPAM.NodeCIDRMaskSizeIPv4 > ipamIPv4MaskHi {
+			return fmt.Errorf("node IPv4 CIDR mask size %d is invalid, should be between %d and %d",
+				o.config.NodeIPAM.NodeCIDRMaskSizeIPv4, ipamIPv4MaskLo, ipamIPv4MaskHi)
+		}
+	}
+
+	if hasIP6 {
+		if o.config.NodeIPAM.NodeCIDRMaskSizeIPv6 < ipamIPv6MaskLo || o.config.NodeIPAM.NodeCIDRMaskSizeIPv6 > ipamIPv6MaskHi {
+			return fmt.Errorf("node IPv6 CIDR mask size %d is invalid, should be between %d and %d",
+				o.config.NodeIPAM.NodeCIDRMaskSizeIPv6, ipamIPv6MaskLo, ipamIPv6MaskHi)
+		}
+	}
+
+	// Validate ServiceCIDR and SecondaryServiceCIDR. Service CIDRs can be empty when there is no overlap with ClusterCIDR
+	if o.config.NodeIPAM.ServiceCIDR != "" {
+		_, _, err = net.ParseCIDR(o.config.NodeIPAM.ServiceCIDR)
+		if err != nil {
+			return fmt.Errorf("service CIDR %s is invalid", o.config.NodeIPAM.ServiceCIDR)
+		}
+	}
+	if o.config.NodeIPAM.SecondaryServiceCIDR != "" {
+		_, _, err = net.ParseCIDR(o.config.NodeIPAM.SecondaryServiceCIDR)
+		if err != nil {
+			return fmt.Errorf("secondary service CIDR %s is invalid", o.config.NodeIPAM.SecondaryServiceCIDR)
+		}
+	}
 	return nil
 }
 
@@ -78,5 +144,12 @@ func (o *Options) loadConfigFromFile() error {
 func (o *Options) setDefaults() {
 	if o.config.APIPort == 0 {
 		o.config.APIPort = apis.AntreaControllerAPIPort
+	}
+	if o.config.NodeIPAM.NodeCIDRMaskSizeIPv4 == 0 {
+		o.config.NodeIPAM.NodeCIDRMaskSizeIPv4 = ipamIPv4MaskDefault
+	}
+
+	if o.config.NodeIPAM.NodeCIDRMaskSizeIPv6 == 0 {
+		o.config.NodeIPAM.NodeCIDRMaskSizeIPv6 = ipamIPv6MaskDefault
 	}
 }

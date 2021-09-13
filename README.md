@@ -32,6 +32,8 @@ Antrea has been tested with Kubernetes clusters running version 1.16 or later.
 * `NodeIPAMController` must be enabled in the Kubernetes cluster.\
   When deploying a cluster with kubeadm the `--pod-network-cidr <cidr>`
   option must be specified.
+  Alternately, NodeIPAM feature of Antrea Controller should be enabled and
+  configured.
 * Open vSwitch kernel module must be present on every Kubernetes node.
 
 ## Getting Started
