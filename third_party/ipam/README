@@ -1,0 +1,9 @@
+Packages below have been copied from [k8s.io/kubernetes@/v1.21.1](https://github.com/kubernetes/kubernetes/tree/v1.21.1) to avoid importing the whole kubernetes repo:
+
+k8s.io/kubernetes/pkg/controller/util/node/controller_utils.go -> antrea.io/antrea/third_party/ipam/controller_util_node.go
+k8s.io/kubernetes/pkg/controller/nodeipam/ipam/cidrset/cidr_set.go -> antrea.io/antrea/third_party/ipam/nodeipam/ipam/cidrset/cidr_set.go
+k8s.io/kubernetes/pkg/controller/nodeipam/ipam/cidrset/metrics.go -> antrea.io/antrea/third_party/ipam/nodeipam/ipam/cidrset/metrics.go
+k8s.io/kubernetes/pkg/controller/nodeipam/ipam/cidr_allocator.go -> antrea.io/antrea/third_party/nodeipam/ipam/cidr_allocator.go
+k8s.io/kubernetes/pkg/controller/nodeipam/ipam/range_allocator.go -> antrea.io/antrea/third_party/ipam/nodeipam/ipam/range_allocator.go
+k8s.io/kubernetes/pkg/controller/nodeipam/node_ipam_controller.go -> antrea.io/antrea/third_party/ipam/nodeipam/node_ipam_controller.go
+k8s.io/kubernetes/pkg/util/node/node.go -> antrea.io/antrea/third_party/ipam/util_node/node.go

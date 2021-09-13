@@ -3420,7 +3420,6 @@ rules:
 - apiGroups:
   - ""
   resources:
-  - nodes
   - pods
   - namespaces
   - services
@@ -3429,6 +3428,15 @@ rules:
   - get
   - watch
   - list
+- apiGroups:
+  - ""
+  resources:
+  - nodes
+  verbs:
+  - get
+  - watch
+  - list
+  - patch
 - apiGroups:
   - networking.k8s.io
   resources:
@@ -3957,6 +3965,9 @@ data:
     # Enable controlling SNAT IPs of Pod egress traffic.
     #  Egress: false
 
+    # Run Kubernetes NodeIPAMController with Antrea.
+    #  NodeIPAM: false
+
     # The port for the antrea-controller APIServer to serve on.
     # Note that if it's set to another value, the `containerPort` of the `api` port of the
     # `antrea-controller` container must be set to the same value.
@@ -3996,12 +4007,33 @@ data:
     # API groups. After adding the annotation, legacy CRDs can be deleted safely without impacting
     # new CRDs.
     #legacyCRDMirroring: true
+
+    nodeIPAM:
+    # Enable the integrated Node IPAM controller within the Antrea controller.
+    #  enableNodeIPAM: false
+
+    # CIDR Ranges for Pods in cluster. Value can contain a single CIDR range, or multiple ranges, separated by commas.
+    # The CIDRs could be either IPv4 or IPv6. Value ignored when enableNodeIPAM is false.
+    #  clusterCIDRs:
+
+    # CIDR Ranges for Services in cluster. It is not necessary to specify it when there is no overlap with clusterCIDRs.
+    # Value ignored when enableNodeIPAM is false.
+    #  serviceCIDR:
+    #  secondaryServiceCIDR:
+
+    # Mask size for IPv4 Node CIDR in IPv4 or dual-stack cluster. Value ignored when enableNodeIPAM is false
+    # or when IPv4 Pod CIDR is not configured. Valid range is 16 to 30.
+    #  nodeCIDRMaskSizeIPv4: 24
+
+    # Mask size for IPv6 Node CIDR in IPv6 or dual-stack cluster. Value ignored when enableNodeIPAM is false
+    # or when IPv6 Pod CIDR is not configured. Valid range is 64 to 126.
+    #  nodeCIDRMaskSizeIPv6: 64
 kind: ConfigMap
 metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-mc8h75hbgg
+  name: antrea-config-fhh5d26dg8
   namespace: kube-system
 ---
 apiVersion: v1
@@ -4072,7 +4104,7 @@ spec:
             fieldRef:
               fieldPath: spec.serviceAccountName
         - name: ANTREA_CONFIG_MAP_NAME
-          value: antrea-config-mc8h75hbgg
+          value: antrea-config-fhh5d26dg8
         image: projects.registry.vmware.com/antrea/antrea-ubuntu:latest
         imagePullPolicy: IfNotPresent
         livenessProbe:
@@ -4123,7 +4155,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-mc8h75hbgg
+          name: antrea-config-fhh5d26dg8
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -4404,7 +4436,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-mc8h75hbgg
+          name: antrea-config-fhh5d26dg8
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d

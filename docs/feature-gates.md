@@ -43,6 +43,7 @@ example, to enable `AntreaProxy` on Linux, edit the Agent configuration in the
 | `NetworkPolicyStats`    | Agent + Controller | `true`  | Beta  | v0.10         | v1.2         | N/A        | No                 |       |
 | `NodePortLocal`         | Agent              | `false` | Alpha | v0.13         | N/A          | N/A        | Yes                | Important user-facing change in v1.2.0 |
 | `Egress`                | Agent + Controller | `false` | Alpha | v1.0          | N/A          | N/A        | Yes                |       |
+| `NodeIPAM`              | Controller         | `false` | Alpha | v1.4          | N/A          | N/A        | Yes                |       |
 
 ## Description and Requirements of Features
 
@@ -191,3 +192,16 @@ Refer to this [document](egress.md) for more information.
 This feature is currently only supported for Nodes running Linux and "encap"
 mode. The support for Windows and other traffic modes will be added in the
 future.
+
+### NodeIPAM
+
+`NodeIPAM` runs a Node IPAM Controller similar to the one in Kubernetes that
+allocates Pod CIDRs for Nodes.  Running Node IPAM Controller with Antrea is
+useful in environments where Kubernetes Controller Manager does not run the
+Node IPAM Controller, and Antrea has to handle the CIDR allocation.
+
+#### Requirements for this Feature
+
+This feature requires the Node IPAM Controller to be disabled in Kubernetes
+Controller Manager. When Antrea and Kubernetes both run Node IPAM Controller
+there is a risk of conflicts in CIDR allocation between the two.

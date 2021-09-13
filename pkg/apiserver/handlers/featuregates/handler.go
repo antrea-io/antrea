@@ -29,7 +29,8 @@ import (
 	"antrea.io/antrea/pkg/util/env"
 )
 
-var controllerOnlyGates = sets.NewString("Traceflow", "AntreaPolicy", "Egress", "NetworkPolicyStats")
+var controllerGates = sets.NewString("Traceflow", "AntreaPolicy", "Egress", "NetworkPolicyStats", "NodeIPAM")
+var agentGates = sets.NewString("AntreaPolicy", "AntreaProxy", "Egress", "EndpointSlice", "Traceflow", "FlowExporter", "NetworkPolicyStats", "NodePortLocal")
 
 type (
 	Config struct {
@@ -88,6 +89,9 @@ func getAgentGatesResponse(cfg *Config) []Response {
 	gatesResp := []Response{}
 	for df := range features.DefaultAntreaFeatureGates {
 		dfs := string(df)
+		if !agentGates.Has(dfs) {
+			continue
+		}
 		status, ok := cfg.FeatureGates[dfs]
 		if !ok {
 			status = features.DefaultMutableFeatureGate.Enabled(df)
@@ -107,7 +111,7 @@ func getControllerGatesResponse() []Response {
 	gatesResp := []Response{}
 	for df := range features.DefaultAntreaFeatureGates {
 		dfs := string(df)
-		if !controllerOnlyGates.Has(dfs) {
+		if !controllerGates.Has(dfs) {
 			continue
 		}
 		gatesResp = append(gatesResp, Response{
