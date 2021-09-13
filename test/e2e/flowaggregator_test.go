@@ -190,7 +190,8 @@ func testHelper(t *testing.T, data *TestData, podAIPs, podBIPs, podCIPs, podDIPs
 	}
 	defer deletePerftestServices(t, data)
 	// Wait for the Service to be realized.
-	time.Sleep(3 * time.Second)
+	testPerfServiceRealized(t, data, svcB.Spec.ClusterIP, "perftest-a", isIPv6)
+	testPerfServiceRealized(t, data, svcC.Spec.ClusterIP, "perftest-a", isIPv6)
 
 	// OVS userspace implementation of conntrack doesn't maintain packet or byte counter statistics, so we ignore the bandwidth test in Kind cluster.
 	checkBandwidth := testOptions.providerName != "kind"
@@ -1040,4 +1041,17 @@ func getBandwidthAndSourcePort(iperfStdout string) ([]string, string) {
 		}
 	}
 	return bandwidth, srcPort
+}
+
+func testPerfServiceRealized(t *testing.T, data *TestData, dstIP string, testPodName string, isIPv6 bool) {
+	var cmdStr string
+	if !isIPv6 {
+		cmdStr = fmt.Sprintf("iperf3 -c %s -t %d", dstIP, 3)
+	} else {
+		cmdStr = fmt.Sprintf("iperf3 -6 -c %s -t %d", dstIP, 3)
+	}
+	stdout, stderr, err := data.runCommandFromPod(testNamespace, "perftest-a", "perftool", []string{"bash", "-c", cmdStr})
+	if stderr != "" || err != nil {
+		t.Errorf("Error when connecting to iPerf Services, stdout: %s, stderr: %s, error: %v", stdout, stderr, err)
+	}
 }
