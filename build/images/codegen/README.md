@@ -15,3 +15,14 @@ docker push antrea/codegen:<TAG>
 
 The `docker push` command will fail if you do not have permission to push to the
 `antrea` Dockerhub repository.
+
+Here is the table of codegen images that have been uploaded:
+
+| Tag                            | Change                                  |
+| :----------------------------- | --------------------------------------- |
+| kubernetes-1.21.0-build.1      | Upgraded protoc-gen-go to v1.5.2        |
+| kubernetes-1.21.0-build.0      | Upgraded Go to v1.17                    |
+| kubernetes-1.21.0              | Upgraded K8s libraries to v1.21.0       |
+| kubernetes-1.19.8              | Upgraded K8s libraries to v1.19.8       |
+| kubernetes-1.18.4              | Upgraded K8s libraries to v1.18.4       |
+| kubernetes-1.17.6              | Upgraded K8s libraries to v1.17.6       |
