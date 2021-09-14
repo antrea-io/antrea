@@ -43,6 +43,7 @@ The labels in this list originated within Kubernetes at
 | area/monitoring/logging            | Issues or PRs related to logging | Any |
 | area/monitoring/mirroring          | Issues or PRs related to mirroring | Any |
 | area/monitoring/traffic-analysis   | Issues or PRs related to traffic analysis | Any |
+| area/network-policy                | Issues or PRs related to network policy | Any |
 | area/network-policy/action         | Issues or PRs related to network policy actions | Any |
 | area/network-policy/agent          | Issues or PRs related to the network policy agents | Any |
 | area/network-policy/api            | Issues or PRs related to the network policy API | Any |
