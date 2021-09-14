@@ -30,10 +30,10 @@ const (
 
 var (
 	modeStrs = [...]string{
-		"Encap",
-		"NoEncap",
-		"Hybrid",
-		"NetworkPolicyOnly",
+		"encap",
+		"noEncap",
+		"hybrid",
+		"networkPolicyOnly",
 	}
 )
 

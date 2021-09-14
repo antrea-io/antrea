@@ -40,10 +40,10 @@ func TestTrafficEncapModeTypeString(t *testing.T) {
 		modeType TrafficEncapModeType
 		expMode  string
 	}{
-		{"encap-mode", 0, "Encap"},
-		{"no-encap-mode", 1, "NoEncap"},
-		{"hybrid-mode", 2, "Hybrid"},
-		{"policy-only-mode-valid", 3, "NetworkPolicyOnly"},
+		{"encap-mode", 0, "encap"},
+		{"no-encap-mode", 1, "noEncap"},
+		{"hybrid-mode", 2, "hybrid"},
+		{"policy-only-mode-valid", 3, "networkPolicyOnly"},
 	}
 
 	for _, tt := range tests {
