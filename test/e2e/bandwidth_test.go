@@ -91,7 +91,7 @@ func testBenchmarkBandwidthIntraNode(t *testing.T, data *TestData) {
 }
 
 func benchmarkBandwidthService(t *testing.T, endpointNode, clientNode string, data *TestData) {
-	svc, err := data.createService("perftest-b", iperfPort, iperfPort, map[string]string{"antrea-e2e": "perftest-b"}, false, false, v1.ServiceTypeClusterIP, nil)
+	svc, err := data.createService("perftest-b", testNamespace, iperfPort, iperfPort, map[string]string{"antrea-e2e": "perftest-b"}, false, false, v1.ServiceTypeClusterIP, nil)
 	if err != nil {
 		t.Fatalf("Error when creating perftest service: %v", err)
 	}
@@ -167,7 +167,7 @@ func testPodTrafficShaping(t *testing.T, data *TestData) {
 			}); err != nil {
 				t.Fatalf("Error when creating the perftest client Pod: %v", err)
 			}
-			defer deletePodWrapper(t, data, clientPodName)
+			defer deletePodWrapper(t, data, testNamespace, clientPodName)
 			if err := data.podWaitForRunning(defaultTimeout, clientPodName, testNamespace); err != nil {
 				t.Fatalf("Error when waiting for the perftest client Pod: %v", err)
 			}
@@ -178,7 +178,7 @@ func testPodTrafficShaping(t *testing.T, data *TestData) {
 			}); err != nil {
 				t.Fatalf("Error when creating the perftest server Pod: %v", err)
 			}
-			defer deletePodWrapper(t, data, serverPodName)
+			defer deletePodWrapper(t, data, testNamespace, serverPodName)
 			podIPs, err := data.podWaitForIPs(defaultTimeout, serverPodName, testNamespace)
 			if err != nil {
 				t.Fatalf("Error when getting the perftest server Pod's IP: %v", err)
