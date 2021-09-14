@@ -30,6 +30,7 @@ import (
 	cnitypes "github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types/current"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent/interfacestore"
@@ -43,9 +44,16 @@ const (
 	notFoundHNSEndpoint = "The endpoint was not found"
 )
 
+type asyncIfFunc struct {
+	ifName string
+	ifFunc func(ifName string, param interface{}) error
+	param  interface{}
+}
+
 type ifConfigurator struct {
 	hnsNetwork *hcsshim.HNSNetwork
 	epCache    *sync.Map
+	ifQueue    workqueue.RateLimitingInterface
 }
 
 func newInterfaceConfigurator(ovsDatapathType ovsconfig.OVSDatapathType, isOvsHardwareOffloadEnabled bool) (*ifConfigurator, error) {
@@ -62,10 +70,19 @@ func newInterfaceConfigurator(ovsDatapathType ovsconfig.OVSDatapathType, isOvsHa
 		hnsEP := &eps[i]
 		epCache.Store(hnsEP.Name, hnsEP)
 	}
-	return &ifConfigurator{
+	ic := &ifConfigurator{
 		hnsNetwork: hnsNetwork,
 		epCache:    epCache,
-	}, nil
+		ifQueue:    workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(time.Second*1, time.Second*10), "windowsIfConfigurator"),
+	}
+	// Start a separate goroutine to process the interface configuration async. This is because Antrea only creates the
+	// HNSEndpoint, and host interface is actually created by Window host. The configurations on the host interface
+	// are executed after the interface is created.
+	go func() {
+		for ic.processNextWorkItem() {
+		}
+	}()
+	return ic, nil
 }
 
 func (ic *ifConfigurator) addEndpoint(ep *hcsshim.HNSEndpoint) {
@@ -152,10 +169,7 @@ func (ic *ifConfigurator) configureContainerLink(
 	ifaceIdx := 1
 	containerIP.Interface = &ifaceIdx
 
-	ifaceName := fmt.Sprintf("vEthernet (%s)", endpoint.Name)
-	if err := util.SetInterfaceMTU(ifaceName, mtu); err != nil {
-		return fmt.Errorf("failed to configure MTU on container interface '%s': %v", ifaceName, err)
-	}
+	ic.addAsyncFuncRequest(epName, ic.configureMTU, mtu)
 	return nil
 }
 
@@ -503,4 +517,55 @@ func (ic *ifConfigurator) getInterceptedInterfaces(
 // getOVSInterfaceType returns "internal". Windows uses internal OVS interface for container vNIC.
 func (ic *ifConfigurator) getOVSInterfaceType() int {
 	return internalOVSInterfaceType
+}
+
+func (ic *ifConfigurator) addAsyncFuncRequest(ifName string, myFunc func(ifName string, param interface{}) error, param interface{}) {
+	ic.ifQueue.Add(&asyncIfFunc{ifName: ifName, ifFunc: myFunc, param: param})
+}
+
+func (ic *ifConfigurator) processNextWorkItem() bool {
+	obj, quit := ic.ifQueue.Get()
+	if quit {
+		return false
+	}
+	defer ic.ifQueue.Done(obj)
+	asyncFunc, ok := obj.(asyncIfFunc)
+	if !ok {
+		ic.ifQueue.Forget(obj)
+		klog.Errorf("Expected asyncIfFunc in work queue but got %#v", obj)
+		return true
+	}
+	// Complete the process on the item if it is already removed from the local cache.
+	epName := asyncFunc.ifName
+	if _, ok := ic.getEndpoint(epName); !ok {
+		ic.ifQueue.Forget(obj)
+		klog.InfoS("HNSEndpoint doesn't exist in cache, forget it", "HNSEndpoint Name", epName)
+		return true
+	}
+
+	ifaceName := fmt.Sprintf("vEthernet (%s)", epName)
+	if !util.HostInterfaceExists(ifaceName) {
+		// Put the item back on the workqueue to wait until the interface is created.
+		ic.ifQueue.AddRateLimited(asyncFunc)
+		klog.Errorf("Waiting for interface %s to be created", asyncFunc.ifName)
+		return true
+	}
+
+	if err := asyncFunc.ifFunc(asyncFunc.ifName, asyncFunc.param); err == nil {
+		ic.ifQueue.Forget(asyncFunc)
+	} else {
+		// Put the item back on the workqueue to handle any transient errors.
+		ic.ifQueue.AddRateLimited(asyncFunc)
+		klog.Errorf("Error executing async function on interface %s and requeuing: %v", err)
+	}
+	return true
+}
+
+func (ic *ifConfigurator) configureMTU(epName string, obj interface{}) error {
+	ifaceName := fmt.Sprintf("%s (%s)", util.ContainerVNICPrefix, epName)
+	mtu := obj.(int)
+	if err := util.SetInterfaceMTU(ifaceName, mtu); err != nil {
+		return fmt.Errorf("failed to configure MTU on container interface '%s': %v", ifaceName, err)
+	}
+	return nil
 }

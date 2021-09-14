@@ -19,16 +19,19 @@ package cniserver
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/containernetworking/cni/pkg/types/current"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/util"
 )
+
+type asyncConnectOVSParam struct {
+	ifConfig        *interfacestore.InterfaceConfig
+	containerAccess *containerAccessArbitrator
+}
 
 // connectInterfaceToOVSAsync waits for an interface to be created and connects it to OVS br-int asynchronously
 // in another goroutine. The function is for Containerd runtime. The host interface is created after
@@ -38,38 +41,26 @@ func (pc *podConfigurator) connectInterfaceToOVSAsync(ifConfig *interfacestore.I
 		return fmt.Errorf("container lock cannot be null")
 	}
 	ovsPortName := ifConfig.InterfaceName
-	expectedEp, ok := pc.ifConfigurator.getEndpoint(ovsPortName)
+	_, ok := pc.ifConfigurator.getEndpoint(ovsPortName)
 	if !ok {
 		return fmt.Errorf("failed to find HNSEndpoint %s", ovsPortName)
 	}
-	hostIfAlias := fmt.Sprintf("%s (%s)", util.ContainerVNICPrefix, ovsPortName)
+	param := asyncConnectOVSParam{ifConfig, containerAccess}
+	pc.ifConfigurator.addAsyncFuncRequest(ovsPortName, pc.asyncAttachOVSInterface, param)
+	return nil
+}
+
+func (pc *podConfigurator) asyncAttachOVSInterface(epName string, obj interface{}) error {
+	param := obj.(asyncConnectOVSParam)
+	ifConfig := param.ifConfig
+	containerAccess := param.containerAccess
+	ovsPortName := epName
 	containerID := ifConfig.ContainerID
-	go func() {
-		klog.Infof("Waiting for interface %s to be created", hostIfAlias)
-		err := wait.PollImmediate(time.Second, 60*time.Second, func() (bool, error) {
-			containerAccess.lockContainer(containerID)
-			defer containerAccess.unlockContainer(containerID)
-			curEp, ok := pc.ifConfigurator.getEndpoint(ovsPortName)
-			if !ok {
-				return true, fmt.Errorf("failed to find HNSEndpoint %s", ovsPortName)
-			}
-			if curEp.Id != expectedEp.Id {
-				klog.Warningf("Detected HNSEndpoint change for port %s, exiting current goroutine", ovsPortName)
-				return true, nil
-			}
-			if !util.HostInterfaceExists(hostIfAlias) {
-				klog.Infof("Waiting for interface %s to be created", hostIfAlias)
-				return false, nil
-			}
-			if err := pc.connectInterfaceToOVSCommon(ovsPortName, ifConfig); err != nil {
-				return true, fmt.Errorf("failed to connect to OVS for container %s: %v", containerID, err)
-			}
-			return true, nil
-		})
-		if err != nil {
-			klog.Errorf("Failed to create OVS port for container %s: %v", containerID, err)
-		}
-	}()
+	containerAccess.lockContainer(containerID)
+	defer containerAccess.unlockContainer(containerID)
+	if err := pc.connectInterfaceToOVSCommon(ovsPortName, ifConfig); err != nil {
+		return fmt.Errorf("failed to connect to OVS for container %s: %v", containerID, err)
+	}
 	return nil
 }
 
