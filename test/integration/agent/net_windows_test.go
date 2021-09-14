@@ -29,7 +29,7 @@ import (
 )
 
 func adapterName(name string) string {
-	return fmt.Sprintf("vEthernet (%s)", name)
+	return fmt.Sprintf("%s (%s)", util.ContainerVNICPrefix, name)
 }
 
 func skipIfHyperVDisabled(t *testing.T) {

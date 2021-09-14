@@ -37,7 +37,7 @@ by kube-proxy.
 
 HNS Network is created during the Antrea Agent initialization phase, and it should be created before
 the OVS bridge is created. This is because OVS is working as the Hyper-V Switch Extension, and the
-ovs-vswitchd process cannot work correctly until the OVS Extension is enabled on the new created
+ovs-vswitchd process cannot work correctly until the OVS Extension is enabled on the newly created
 Hyper-V Switch.
 
 When creating the HNS Network, the local subnet CIDR and the uplink network adapter are required.
@@ -120,9 +120,9 @@ We should differentiate the traffic if it is entering OVS from the uplink interf
 table. In encap mode, the packets entering OVS from the uplink interface is output to the bridge interface directly.
 In noEncap mode, there are three kinds of packets entering OVS from the uplink interface:
 
- 1) traffic that is sent to local Pods from Pod on a different Node,
- 2) traffic that is sent to local Pods from a different Node according to the routing configuration,
- 3) traffic on the host network
+ 1) Traffic that is sent to local Pods from Pod on a different Node
+ 2) Traffic that is sent to local Pods from a different Node according to the routing configuration
+ 3) Traffic on the host network
 
 For 1 and 2, the packet enters the OVS pipeline, and the `macRewriteMark` is set to ensure the destination MAC can be
 modified.

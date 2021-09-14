@@ -831,7 +831,7 @@ func TestCNIServerChaining(t *testing.T) {
 		testRequire.JSONEq(prevResult.String(), string(cniResp.CniResult))
 
 		// test cmdDel
-		containterHostRt := &net.IPNet{IP: podIP, Mask: net.CIDRMask(32, 32)}
+		containterHostRt := util.NewIPNet(podIP)
 		orderedCalls = nil
 		orderedCalls = append(orderedCalls,
 			routeMock.EXPECT().UnMigrateRoutesFromGw(containterHostRt, ""),

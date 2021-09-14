@@ -854,10 +854,10 @@ func NewDualStackProxier(
 	nodePortAddressesIPv6 []net.IP,
 	proxyAllEnabled bool) *metaProxierWrapper {
 
-	// Create an ipv4 instance of the single-stack proxier.
+	// Create an IPv4 instance of the single-stack proxier.
 	ipv4Proxier := NewProxier(hostname, informerFactory, ofClient, false, routeClient, nodePortAddressesIPv4, proxyAllEnabled)
 
-	// Create an ipv6 instance of the single-stack proxier.
+	// Create an IPv6 instance of the single-stack proxier.
 	ipv6Proxier := NewProxier(hostname, informerFactory, ofClient, true, routeClient, nodePortAddressesIPv6, proxyAllEnabled)
 
 	// Create a meta-proxier that dispatch calls between the two

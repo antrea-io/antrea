@@ -119,7 +119,7 @@ func newConfig(npq querier.AgentNetworkPolicyInfoQuerier, bindPort int, enableMe
 	authentication := genericoptions.NewDelegatingAuthenticationOptions()
 	authorization := genericoptions.NewDelegatingAuthorizationOptions().WithAlwaysAllowPaths("/healthz", "/livez", "/readyz")
 
-	// kubeconfig file is useful when antrea-agent isn't not running as a pod
+	// kubeconfig file is useful when antrea-agent isn't running as a Pod.
 	if len(kubeconfig) > 0 {
 		authentication.RemoteKubeConfigFile = kubeconfig
 		authorization.RemoteKubeConfigFile = kubeconfig
