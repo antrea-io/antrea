@@ -74,6 +74,7 @@ const (
 	flowAggregatorDeployment   string = "flow-aggregator"
 	antreaDefaultGW            string = "antrea-gw0"
 	testNamespace              string = "antrea-test"
+	testAntreaIPAMNamespace    string = "antrea-ipam-test"
 	busyboxContainerName       string = "busybox"
 	agnhostContainerName       string = "agnhost"
 	controllerContainerName    string = "antrea-controller"
@@ -174,9 +175,10 @@ var provider providers.ProviderInterface
 
 // podInfo combines OS info with a Pod name. It is useful when choosing commands and options on Pods of different OS (Windows, Linux).
 type podInfo struct {
-	name     string
-	os       string
-	nodeName string
+	name      string
+	os        string
+	nodeName  string
+	namespace string
 }
 
 // TestData stores the state required for each test case.
@@ -592,13 +594,16 @@ func collectClusterInfo() error {
 }
 
 // createNamespace creates the provided namespace.
-func (data *TestData) createNamespace(namespace string) error {
-	ns := corev1.Namespace{
+func (data *TestData) createNamespace(namespace string, mutateFunc func(*corev1.Namespace)) error {
+	ns := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: namespace,
 		},
 	}
-	if ns, err := data.clientset.CoreV1().Namespaces().Create(context.TODO(), &ns, metav1.CreateOptions{}); err != nil {
+	if mutateFunc != nil {
+		mutateFunc(ns)
+	}
+	if ns, err := data.clientset.CoreV1().Namespaces().Create(context.TODO(), ns, metav1.CreateOptions{}); err != nil {
 		// Ignore error if the namespace already exists
 		if !errors.IsAlreadyExists(err) {
 			return fmt.Errorf("error when creating '%s' Namespace: %v", namespace, err)
@@ -613,7 +618,23 @@ func (data *TestData) createNamespace(namespace string) error {
 
 // createTestNamespace creates the namespace used for tests.
 func (data *TestData) createTestNamespace() error {
-	return data.createNamespace(testNamespace)
+	return data.createNamespace(testNamespace, nil)
+}
+
+// createNamespaceWithAnnotations creates the namespace with Annotations.
+func (data *TestData) createNamespaceWithAnnotations(namespace string, annotations map[string]string) error {
+	var mutateFunc func(*corev1.Namespace)
+	if annotations != nil {
+		mutateFunc = func(namespace *corev1.Namespace) {
+			if namespace.Annotations == nil {
+				namespace.Annotations = map[string]string{}
+			}
+			for k := range annotations {
+				namespace.Annotations[k] = annotations[k]
+			}
+		}
+	}
+	return data.createNamespace(namespace, mutateFunc)
 }
 
 // deleteNamespace deletes the provided namespace and waits for deletion to actually complete.
@@ -1423,14 +1444,14 @@ func validatePodIP(podNetworkCIDR string, ip net.IP) (bool, error) {
 }
 
 // createService creates a service with port and targetPort.
-func (data *TestData) createService(serviceName string, port, targetPort int32, selector map[string]string, affinity, nodeLocalExternal bool,
+func (data *TestData) createService(serviceName, namespace string, port, targetPort int32, selector map[string]string, affinity, nodeLocalExternal bool,
 	serviceType corev1.ServiceType, ipFamily *corev1.IPFamily) (*corev1.Service, error) {
 	annotation := make(map[string]string)
-	return data.createServiceWithAnnotations(serviceName, port, targetPort, corev1.ProtocolTCP, selector, affinity, nodeLocalExternal, serviceType, ipFamily, annotation)
+	return data.createServiceWithAnnotations(serviceName, namespace, port, targetPort, corev1.ProtocolTCP, selector, affinity, nodeLocalExternal, serviceType, ipFamily, annotation)
 }
 
 // createService creates a service with Annotation
-func (data *TestData) createServiceWithAnnotations(serviceName string, port, targetPort int32, protocol corev1.Protocol, selector map[string]string, affinity, nodeLocalExternal bool,
+func (data *TestData) createServiceWithAnnotations(serviceName, namespace string, port, targetPort int32, protocol corev1.Protocol, selector map[string]string, affinity, nodeLocalExternal bool,
 	serviceType corev1.ServiceType, ipFamily *corev1.IPFamily, annotations map[string]string) (*corev1.Service, error) {
 	affinityType := corev1.ServiceAffinityNone
 	var ipFamilies []corev1.IPFamily
@@ -1443,7 +1464,7 @@ func (data *TestData) createServiceWithAnnotations(serviceName string, port, tar
 	service := corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      serviceName,
-			Namespace: testNamespace,
+			Namespace: namespace,
 			Labels: map[string]string{
 				"antrea-e2e": serviceName,
 				"app":        serviceName,
@@ -1465,30 +1486,30 @@ func (data *TestData) createServiceWithAnnotations(serviceName string, port, tar
 	if (serviceType == corev1.ServiceTypeNodePort || serviceType == corev1.ServiceTypeLoadBalancer) && nodeLocalExternal {
 		service.Spec.ExternalTrafficPolicy = corev1.ServiceExternalTrafficPolicyTypeLocal
 	}
-	return data.clientset.CoreV1().Services(testNamespace).Create(context.TODO(), &service, metav1.CreateOptions{})
+	return data.clientset.CoreV1().Services(namespace).Create(context.TODO(), &service, metav1.CreateOptions{})
 }
 
 // createNginxClusterIPServiceWithAnnotations creates nginx service with Annotation
 func (data *TestData) createNginxClusterIPServiceWithAnnotations(affinity bool, ipFamily *corev1.IPFamily, annotation map[string]string) (*corev1.Service, error) {
-	return data.createServiceWithAnnotations("nginx", 80, 80, corev1.ProtocolTCP, map[string]string{"app": "nginx"}, affinity, false, corev1.ServiceTypeClusterIP, ipFamily, annotation)
+	return data.createServiceWithAnnotations("nginx", testNamespace, 80, 80, corev1.ProtocolTCP, map[string]string{"app": "nginx"}, affinity, false, corev1.ServiceTypeClusterIP, ipFamily, annotation)
 }
 
 // createNginxClusterIPService creates a nginx service with the given name.
-func (data *TestData) createNginxClusterIPService(name string, affinity bool, ipFamily *corev1.IPFamily) (*corev1.Service, error) {
+func (data *TestData) createNginxClusterIPService(name, namespace string, affinity bool, ipFamily *corev1.IPFamily) (*corev1.Service, error) {
 	if name == "" {
 		name = "nginx"
 	}
-	return data.createService(name, 80, 80, map[string]string{"app": "nginx"}, affinity, false, corev1.ServiceTypeClusterIP, ipFamily)
+	return data.createService(name, namespace, 80, 80, map[string]string{"app": "nginx"}, affinity, false, corev1.ServiceTypeClusterIP, ipFamily)
 }
 
 // createAgnhostNodePortService creates a NodePort agnhost service with the given name.
 func (data *TestData) createAgnhostNodePortService(serviceName string, affinity, nodeLocalExternal bool, ipFamily *corev1.IPFamily) (*corev1.Service, error) {
-	return data.createService(serviceName, 8080, 8080, map[string]string{"app": "agnhost"}, affinity, nodeLocalExternal, corev1.ServiceTypeNodePort, ipFamily)
+	return data.createService(serviceName, testNamespace, 8080, 8080, map[string]string{"app": "agnhost"}, affinity, nodeLocalExternal, corev1.ServiceTypeNodePort, ipFamily)
 }
 
 // createAgnhostLoadBalancerService creates a LoadBalancer agnhost service with the given name.
 func (data *TestData) createAgnhostLoadBalancerService(serviceName string, affinity, nodeLocalExternal bool, ingressIPs []string, ipFamily *corev1.IPFamily) (*corev1.Service, error) {
-	svc, err := data.createService(serviceName, 8080, 8080, map[string]string{"app": "agnhost"}, affinity, nodeLocalExternal, corev1.ServiceTypeLoadBalancer, ipFamily)
+	svc, err := data.createService(serviceName, testNamespace, 8080, 8080, map[string]string{"app": "agnhost"}, affinity, nodeLocalExternal, corev1.ServiceTypeLoadBalancer, ipFamily)
 	if err != nil {
 		return svc, err
 	}
@@ -1506,7 +1527,7 @@ func (data *TestData) createAgnhostLoadBalancerService(serviceName string, affin
 }
 
 func (data *TestData) createNginxLoadBalancerService(affinity bool, ingressIPs []string, ipFamily *corev1.IPFamily) (*corev1.Service, error) {
-	svc, err := data.createService(nginxLBService, 80, 80, map[string]string{"app": "nginx"}, affinity, false, corev1.ServiceTypeLoadBalancer, ipFamily)
+	svc, err := data.createService(nginxLBService, testNamespace, 80, 80, map[string]string{"app": "nginx"}, affinity, false, corev1.ServiceTypeLoadBalancer, ipFamily)
 	if err != nil {
 		return svc, err
 	}
@@ -2127,6 +2148,16 @@ func (data *TestData) copyNodeFiles(nodeName string, fileName string, covDir str
 func (data *TestData) createAgnhostPodOnNode(name string, ns string, nodeName string, hostNetwork bool) error {
 	sleepDuration := 3600 // seconds
 	return data.createPodOnNode(name, ns, nodeName, agnhostImage, []string{"sleep", strconv.Itoa(sleepDuration)}, nil, nil, nil, hostNetwork, nil)
+}
+
+func (data *TestData) createAgnhostPodOnNodeWithAnnotations(name string, ns string, nodeName string, annotations map[string]string) error {
+	sleepDuration := 3600 // seconds
+	mutateFunc := func(pod *corev1.Pod) {
+		for k, v := range annotations {
+			pod.Annotations[k] = v
+		}
+	}
+	return data.createPodOnNode(name, ns, nodeName, agnhostImage, []string{"sleep", strconv.Itoa(sleepDuration)}, nil, nil, nil, false, mutateFunc)
 }
 
 func (data *TestData) createDaemonSet(name string, ns string, ctrName string, image string, cmd []string, args []string) (*appsv1.DaemonSet, func() error, error) {

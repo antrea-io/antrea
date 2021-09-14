@@ -308,6 +308,7 @@ if $WIREGUARD_GO; then
 fi
 
 if $FLEXIBLE_IPAM; then
+    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*AntreaIPAM[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  AntreaIPAM: true/" antrea-controller.conf
     sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*AntreaIPAM[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  AntreaIPAM: true/" antrea-agent.conf
     sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*trafficEncapMode[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/trafficEncapMode: noEncap/" antrea-agent.conf
     sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*noSNAT[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/noSNAT: true/" antrea-agent.conf
