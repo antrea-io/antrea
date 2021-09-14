@@ -124,7 +124,7 @@ func (pc *podConfigurator) configureSecondaryInterface(
 		return fmt.Errorf("error getting the Pod SR-IOV VF device ID")
 	}
 
-	err := pc.ifConfigurator.configureContainerLink(podName, podNameSpace, containerID, containerNetNS, containerIFDev, mtu, "", podSriovVFDeviceID, result)
+	err := pc.ifConfigurator.configureContainerLink(podName, podNameSpace, containerID, containerNetNS, containerIFDev, mtu, "", podSriovVFDeviceID, result, nil)
 	if err != nil {
 		return err
 	}

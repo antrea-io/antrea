@@ -205,7 +205,7 @@ func (pc *podConfigurator) configureInterfaces(
 	createOVSPort bool,
 	containerAccess *containerAccessArbitrator,
 ) error {
-	err := pc.ifConfigurator.configureContainerLink(podName, podNameSpace, containerID, containerNetNS, containerIFDev, mtu, sriovVFDeviceID, "", result)
+	err := pc.ifConfigurator.configureContainerLink(podName, podNameSpace, containerID, containerNetNS, containerIFDev, mtu, sriovVFDeviceID, "", result, containerAccess)
 	if err != nil {
 		return err
 	}

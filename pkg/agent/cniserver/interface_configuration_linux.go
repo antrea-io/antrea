@@ -340,6 +340,7 @@ func (ic *ifConfigurator) configureContainerLink(
 	brSriovVFDeviceID string,
 	podSriovVFDeviceID string,
 	result *current.Result,
+	containerAccess *containerAccessArbitrator,
 ) error {
 	if brSriovVFDeviceID != "" {
 		if !ic.isOvsHardwareOffloadEnabled {
